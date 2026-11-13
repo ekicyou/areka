@@ -393,7 +393,7 @@ fn construction_and_clone_emit_nothing() {
 // 待機を**効かせる**ために、台本は末尾を待機で終える形にしてある——待機の後ろに文字が
 // 続くと、その文字 cue の発火時刻に待機時間が畳み込まれてしまい、待機の duration を
 // 落としても占有終端が変わらない（=待機の検証にならない）。この落とし穴は
-// `frame_attach_tests.rs::talk_playback_reaches_emo2_wiring_lifecycle_receiver` の台本
+// `frame_attach_tests.rs::talk_playback_reaches_runtime_wiring_lifecycle_receiver` の台本
 // `\0あい\w9\1うえ\e` に実在する（末尾の文字 cue の終端 0.65 が待機の終端 0.55 を上回る）。
 //
 // 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし・Requirement 9.2/9.3）。

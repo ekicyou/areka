@@ -153,7 +153,7 @@ fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
 /// 表の担当のうち、`runtime` の 11 の受け口のどれか（外の担当は `None`）。
 ///
 /// 網羅の `match` にしておく——担当の種類を足した人は、ここで受け口か外かを決めることになる。
-fn emo2_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
+fn runtime_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
     match consumer {
         CommandConsumer::MoveSink
         | CommandConsumer::ZOrderSink
@@ -321,7 +321,7 @@ fn each_ledger_row_reaches_only_its_own_sink() {
         let consumer = ledger
             .consumer_of(name, args.first().copied())
             .unwrap_or_else(|| panic!("見本 ({name}, {selector:?}) は表に担当がある"));
-        let expected: Vec<CommandConsumer> = emo2_sink_of(consumer).into_iter().collect();
+        let expected: Vec<CommandConsumer> = runtime_sink_of(consumer).into_iter().collect();
         assert_eq!(
             reached(name, &args),
             expected,

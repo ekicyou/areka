@@ -29,12 +29,12 @@ use super::test_support::{
     FrameHarness, PerTargetSizes, SPAWN_SIZE_1, all_shown, capture_logs, pos_of, size_of,
     synth_assets, zero_clock,
 };
-use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};
+use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
 
 /// 位置の線の送り口と、それを受ける headless な結線（表示層は与えたもの）。
-fn wiring_with(presenter: EmoPresenter) -> (Sender<PositionCue>, Emo2Wiring) {
+fn wiring_with(presenter: EmoPresenter) -> (Sender<PositionCue>, RuntimeWiring) {
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         presenter,
         mpsc::channel::<PresentCommand>().1,
         rx,

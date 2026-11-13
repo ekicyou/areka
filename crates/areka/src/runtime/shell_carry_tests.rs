@@ -153,7 +153,7 @@ fn nothing_is_carried_without_a_ghost_reload() {
     let carry = capture_for_reload(&world);
     assert_eq!(carry, None);
     hand_over(&mut world, carry);
-    assert!(!world.contains_non_send::<Emo2Wiring>());
+    assert!(!world.contains_non_send::<RuntimeWiring>());
 }
 
 /// 控えを渡す先の結線が無ければ `warn!` を 1 件残して捨てる（panic しない）。
@@ -168,7 +168,7 @@ fn hand_over_without_wiring_warns_and_drops_the_carry() {
         .filter(|e| e.field_str("event") == Some("reload_shell_carry_unavailable"))
         .count();
     assert_eq!(warned, 1, "{events:?}");
-    assert!(!world.contains_non_send::<Emo2Wiring>());
+    assert!(!world.contains_non_send::<RuntimeWiring>());
 }
 
 /// ⑷ 着ていた着せ替え（既定に無い 101）は名前で着る。名前の無くなった着せ替え（999）は落とす。

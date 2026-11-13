@@ -208,7 +208,7 @@ pub enum Axis {
 ///
 /// dispatcher は talk ごとに sink を clone する（`GhostBootOptions.sinks` は
 /// `dola::cue::CueSink + Clone + Send + 'static`）。内側 [`Sender`] は常に `Clone` で、全 clone は
-/// 単一の受信端（`Emo2Wiring` の `Receiver`）への送信端＝配送意味は同一ゆえ、そのまま `derive(Clone)`
+/// 単一の受信端（`RuntimeWiring` の `Receiver`）への送信端＝配送意味は同一ゆえ、そのまま `derive(Clone)`
 /// が成り立つ（`PositionCue: Send` により `Sender<PositionCue>: Send`）。
 #[derive(Clone)]
 pub struct MoveCueSink {
@@ -217,7 +217,7 @@ pub struct MoveCueSink {
 }
 
 impl MoveCueSink {
-    /// mpsc 送信端（`Emo2Wiring` の `Receiver` と対・task 9.1 が生成）から sink を構築する。
+    /// mpsc 送信端（`RuntimeWiring` の `Receiver` と対・task 9.1 が生成）から sink を構築する。
     pub fn new(tx: Sender<PositionCue>) -> Self {
         Self { tx }
     }
@@ -343,7 +343,7 @@ impl MoveCueSink {
     /// 線へ 1 件送り、次の画面更新を起こす。envelope の `duration` には触れない（要件 5.2）。
     fn send(&self, cue: PositionCue) {
         if self.tx.send(cue).is_err() {
-            // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
+            // 受信端（RuntimeWiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
             warn!("MoveCueSink: PositionCue の送出に失敗（受信端切断）");
         }
         // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の

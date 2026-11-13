@@ -19,7 +19,7 @@ use super::check_script_judge::diagnose;
 use super::dump_surface::{Job, Step, start};
 use super::resolve::ActiveGhost;
 use crate::runtime::consumer_ledger::ConsumerLedger;
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::skin_facts_copy;
 use areka_placement::spawn::GhostWindows;
 
@@ -36,7 +36,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
 /// `Some` を返すのは 1 度だけなので、そこで台本を取り出す。
 fn answer(world: &World, script: &mut String) -> Option<Step> {
     // 表示の結線が無い＝窓の無いゴースト。surface とバルーンは診ない。
-    let facts = match world.get_non_send::<Emo2Wiring>() {
+    let facts = match world.get_non_send::<RuntimeWiring>() {
         None => None,
         Some(wiring) if !wiring.attached() => return None,
         Some(wiring) => {

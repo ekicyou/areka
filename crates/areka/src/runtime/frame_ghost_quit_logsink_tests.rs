@@ -1,7 +1,7 @@
 //! LogSink 側の起動でも停止通知が終了の指示まで届くことの確認（areka-P0-shiori-fault-notice
 //! タスク 3.3・要件 6.4・7.6・8.5）。
 //!
-//! 実 sink 結線（`Emo2Wiring`）の無い World に受け口 `KanadeNoticeRx` だけを挿し、接続に失敗する
+//! 実 sink 結線（`RuntimeWiring`）の無い World に受け口 `KanadeNoticeRx` だけを挿し、接続に失敗する
 //! SHIORI（`ShioriWiring::Custom` が `Err`）を停止通知の送出端つきで起動する。kanade が自分で
 //! 止まって送る停止通知を、終了相（`run_ghost_quit_phase`）を有界に回して受け取り、終了が
 //! 指示され、最初の出所が「接続できなかった」の Fault になることを見る。GPU も実窓も要らない。
@@ -54,7 +54,7 @@ fn connect_failure_reaches_quit_app_without_real_sink_wiring() {
     let temp = TempPath::new("areka-ghost-quit-logsink");
     write_ghost_fixture(temp.path());
 
-    // 実 sink 結線（`Emo2Wiring`）は挿さない。終了の受け口と停止通知の受け口だけ。
+    // 実 sink 結線（`RuntimeWiring`）は挿さない。終了の受け口と停止通知の受け口だけ。
     let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let mut world = World::new();
     world.insert_non_send(wintf::AppExit::new());

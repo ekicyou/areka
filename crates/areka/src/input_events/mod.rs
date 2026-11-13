@@ -32,7 +32,7 @@ use wintf::ecs::drag::{OnDragEnd, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
 use crate::app_exit::{ExitOrigin, quit_app};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::hit_region::{HitRegion, resolve_hit_region};
 use areka_placement::spawn::CharWindowMarker;
 use throttle::{MouseMoveThrottle, plan_mouse_move};
@@ -42,7 +42,7 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// kanade への投函端（[`Sender`] クローン・1.4）・per-scope 間引き状態・当たり判定 resolver の
 /// 供給源（実／mock の差し替えシーム・[`RegionSource`]・1.5）・注入可能な時刻源（`now_ms`）を
 /// 1 資源に束ねる。[`Sender`] 単体は `Send` だが、resolver（presenter 読み）と間引き状態が
-/// UI スレッド所有ゆえ NonSend 1 個に束ねる（`Emo2Wiring` 前例と同型・順序依存なし self-gating）。
+/// UI スレッド所有ゆえ NonSend 1 個に束ねる（`RuntimeWiring` 前例と同型・順序依存なし self-gating）。
 ///
 /// 本 struct と送出ヘルパは task 2.6 の範囲。ポインタハンドラ（`on_char_pointer_moved` /
 /// `on_char_pointer_pressed`）と強制退避（Ctrl+左ダブルクリック）は task 2.7。`wire_mouse_input`
@@ -152,7 +152,7 @@ impl MouseWiring {
     ///
     /// - [`RegionSource::Mock`] → `f(scope, x, y)`（presenter を無視・1.5）。
     /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(p, scope, x, y)`（1.3）。
-    ///   `presenter` 不在（`Emo2Wiring` 未挿入＝boot 前／失敗時）は `region: None` へ正常縮退する
+    ///   `presenter` 不在（`RuntimeWiring` 未挿入＝boot 前／失敗時）は `region: None` へ正常縮退する
     ///   （collision-geometry design の消費想定どおり・trace）。このとき `surface_point` は**無変換の
     ///   入力値**とする——presenter が居なければ実適用 k を知る術が無く、等倍相当（縮約は恒等）が
     ///   唯一整合する縮退規約である（presenter 側の k 不在縮退＝要件 1.6 と同じ扱い。座標空間の
@@ -186,7 +186,7 @@ impl MouseWiring {
                     tracing::trace!(
                         event = "mouse_region_degrade",
                         scope,
-                        "Emo2Wiring 不在（boot 前／失敗時）: region None へ正常縮退"
+                        "RuntimeWiring 不在（boot 前／失敗時）: region None へ正常縮退"
                     );
                     // k 不明ゆえ等倍相当（縮約は恒等）＝受領した client 物理 px をそのまま配信空間の値とする。
                     HitRegion {
@@ -357,11 +357,11 @@ impl MouseWiring {
 /// 登録しない・task 3.1・DD-IE-9）。
 ///
 /// kanade Sender クローンで `MouseWiring`（NonSend・`RegionSource::Presenter`）を World へ挿入する。
-/// `Emo2Wiring` 挿入（`wire_emo2_boot` の `insert_non_send`）と同型・self-gating＝窓 spawn と挿入の順序に
+/// `RuntimeWiring` 挿入（`wire_runtime` の `insert_non_send`）と同型・self-gating＝窓 spawn と挿入の順序に
 /// 依存しない（click-through 登録と同型）。窓へのポインタハンドラ登録は task 3.2（spawn.rs）。
 ///
-/// `wire_emo2_boot` 成功時（`wired=true`）に呼ばれる前提で `Presenter` を選ぶ。boot 成功時は
-/// `Emo2Wiring` 挿入済みゆえ presenter 経由の region 解決が成立する（万一 presenter 不在でも
+/// `wire_runtime` 成功時（`wired=true`）に呼ばれる前提で `Presenter` を選ぶ。boot 成功時は
+/// `RuntimeWiring` 挿入済みゆえ presenter 経由の region 解決が成立する（万一 presenter 不在でも
 /// `resolve_region` が region None へ正常縮退する・DD-IE-9）。
 pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
     world.insert_non_send(MouseWiring::new(sender, RegionSource::Presenter));
@@ -435,9 +435,9 @@ pub(crate) fn char_scope(world: &World, entity: Entity) -> Option<u32> {
 
 /// (scope, 窓 client 物理 px) → [`HitRegion`] を owned で解決する（DD-IE-9 の借用規律）。
 ///
-/// presenter 借用（`&Emo2Wiring`）と間引き状態（`&mut MouseWiring`）が同じ `&mut World` 上の別
+/// presenter 借用（`&RuntimeWiring`）と間引き状態（`&mut MouseWiring`）が同じ `&mut World` 上の別
 /// NonSend 資源であるため、**presenter を含む解決は共有借用のみで完結させ結果を owned で取り
-/// 出してから** `&mut MouseWiring` を取る（送出は呼び手が行う）。`Emo2Wiring` 不在（boot 前／失敗時）
+/// 出してから** `&mut MouseWiring` を取る（送出は呼び手が行う）。`RuntimeWiring` 不在（boot 前／失敗時）
 /// は presenter=None ゆえ `resolve_region` が `region: None` へ正常縮退する（RegionSource::Mock は
 /// presenter を無視）。呼び手は事前に `MouseWiring` 在を確認済み（self-gating）。
 ///
@@ -447,10 +447,10 @@ fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
     let wiring = world
         .get_non_send::<MouseWiring>()
         .expect("MouseWiring は呼び手が存在確認済み（self-gating）");
-    // 共有借用同士（&MouseWiring と &Emo2Wiring）ゆえ両立する。presenter は Emo2Wiring 不在で None。
+    // 共有借用同士（&MouseWiring と &RuntimeWiring）ゆえ両立する。presenter は RuntimeWiring 不在で None。
     let presenter = world
-        .get_non_send::<Emo2Wiring>()
-        .map(Emo2Wiring::presenter);
+        .get_non_send::<RuntimeWiring>()
+        .map(RuntimeWiring::presenter);
     wiring.resolve_region(presenter, scope, x, y)
 }
 

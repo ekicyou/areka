@@ -28,7 +28,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use super::frame::Emo2Wiring;
+use super::frame::RuntimeWiring;
 use super::ghost_switch::SwitchInFlight;
 use super::shell_balloon_resolve::{
     SkinCandidate, balloon_candidates, installed_for, resolve_skin_target, shell_candidates,
@@ -162,7 +162,7 @@ pub(crate) struct SwitchRx(Receiver<SkinRequestRaw>);
 
 /// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_switch_drain`]）。
 ///
-/// 呼び手は結線の成立後の `wire_emo2_boot`。前のゴーストの受信端は置き換わって落ちる。
+/// 呼び手は結線の成立後の `wire_runtime`。前のゴーストの受信端は置き換わって落ちる。
 pub(crate) fn wire_switch_rx(world: &mut World, rx: Receiver<SkinRequestRaw>) {
     world.insert_non_send(SwitchRx(rx));
 }
@@ -402,7 +402,7 @@ impl SwitchContext {
             missing("boot_context");
             return None;
         };
-        if world.get_non_send::<Emo2Wiring>().is_none() {
+        if world.get_non_send::<RuntimeWiring>().is_none() {
             missing("wiring");
             return None;
         }

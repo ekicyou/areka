@@ -5,7 +5,7 @@
 //! kanade へ `ExecutionState(Balloons(組))` を 1 件送る。表示の真実源は `EmoPresenter` のままで、
 //! 台帳が覚えるのは「最後に何を送ったか」「番号が取れない旨を警告済みの scope」「scope ごとに最後に
 //! 取れた番号（表示層の値の写し）」だけである。
-//! 台帳は `Emo2Wiring::balloon_status`（ゴーストごとに新品）にあり、`emo2_frame_system` が提示の相の
+//! 台帳は `RuntimeWiring::balloon_status`（ゴーストごとに新品）にあり、`frame_system` が提示の相の
 //! 直後に [`run_status_report_phase`] を呼ぶ。窓の可視（可視性の相が発行済み）と箱の写し（同じ
 //! フレームの提示で作り直し済み）がどちらもそのフレームの最終の姿になってから組を作るので、
 //! 届けは画面から遅れない（areka-P0-shell-balloon-frame-align 要件 2.3）。
@@ -26,12 +26,12 @@ use areka_seriko::StageNote;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
-use super::Emo2Wiring;
+use super::RuntimeWiring;
 use crate::ghost_session::GhostSlot;
 use crate::runtime::target_map::balloon_target;
 
 /// 最後に kanade へ送った組と、番号が取れない scope の警告済み集合と、最後に取れた番号
-/// （ゴーストごと・`Emo2Wiring` が持つ）。
+/// （ゴーストごと・`RuntimeWiring` が持つ）。
 #[derive(Default)]
 pub(in crate::runtime) struct BalloonStatusLedger {
     last_sent: Vec<BalloonBinding>,
@@ -100,7 +100,7 @@ pub(in crate::runtime) fn collect_bindings(
 /// 文字の層を借りる手前で、窓の知らせ（[`report_stages`]）を seriko へ送る。
 /// スコープの一覧は相の中で自分で作る（可視性の相の手元の一覧は使わない）。文字の層を借りられない
 /// フレームは誤りの段で 1 度だけ記録して届けを次のフレームへ回し、借りられたら記録の印を戻す。
-pub(in crate::runtime) fn run_status_report_phase(wiring: &mut Emo2Wiring, world: &World) {
+pub(in crate::runtime) fn run_status_report_phase(wiring: &mut RuntimeWiring, world: &World) {
     // `HashMap` の列挙順は不定なので、組の並びを決定論にするため昇順へ固定する。
     let mut scopes: Vec<u32> = wiring.balloon_models.keys().copied().collect();
     scopes.sort_unstable();

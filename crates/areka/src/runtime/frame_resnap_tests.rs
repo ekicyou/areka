@@ -363,7 +363,7 @@ fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
     }
 
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,

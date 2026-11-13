@@ -53,7 +53,7 @@ pub(crate) struct ChangeRx(Receiver<ChangeRequestRaw>);
 
 /// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_change_drain`]）。
 ///
-/// 呼び手は結線の成立後の `wire_emo2_boot`。前のゴーストの受信端は置き換わって落ちる。
+/// 呼び手は結線の成立後の `wire_runtime`。前のゴーストの受信端は置き換わって落ちる。
 pub(crate) fn wire_change_rx(world: &mut World, rx: Receiver<ChangeRequestRaw>) {
     world.insert_non_send(ChangeRx(rx));
 }

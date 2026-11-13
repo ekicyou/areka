@@ -27,7 +27,7 @@ use wintf::ecs::FrameTime;
 use crate::mcp::dump_surface::dump_surface_tests::is_picture;
 use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
 use crate::mcp::dump_surface::{Job, Step, finish};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::spine::RecordedCall;
 use crate::runtime::target_map::balloon_target;
 
@@ -52,7 +52,7 @@ fn ok_text(scope: u32) -> String {
 
 /// `scope` の普通のバルーンの文字の面の（大きさ, 読み戻した乗算済み BGRA）。面が無ければ `None`。
 fn text_surface(world: &World, scope: u32) -> Option<((u32, u32), Vec<u8>)> {
-    let runtime = world.get_non_send::<Emo2Wiring>()?.runtime().borrow();
+    let runtime = world.get_non_send::<RuntimeWiring>()?.runtime().borrow();
     let surface = runtime.surface(&ActorKey::from(scope.to_string()))?;
     Some((surface.size(), surface.read_back().ok()?))
 }
@@ -64,7 +64,7 @@ fn has_ink(bytes: &[u8]) -> bool {
 
 /// スコープ 0 の、届いた字の数と最後の字が現れる台詞の時刻（秒）。字が 1 つも無ければ `None`。
 fn reveals(world: &World) -> Option<(usize, f64)> {
-    let runtime = world.get_non_send::<Emo2Wiring>()?.runtime().borrow();
+    let runtime = world.get_non_send::<RuntimeWiring>()?.runtime().borrow();
     let times = runtime
         .state()
         .actor_state(&ActorKey::from("0".to_owned()))?
@@ -97,7 +97,7 @@ fn speak_words(gpu: &mut GpuRig, step_ms: u64, words: usize) -> bool {
 /// スコープ 0 のバルーンの可視。
 fn balloon_visible(world: &World) -> Option<bool> {
     world
-        .non_send::<Emo2Wiring>()
+        .non_send::<RuntimeWiring>()
         .presenter()
         .target_visible(balloon_target(0))
 }
@@ -622,7 +622,7 @@ fn balloon_with_arrows_shows_the_arrows_where_the_screen_does() {
     let actor = ActorKey::from("0".to_owned());
     gpu.rig
         .world
-        .non_send::<Emo2Wiring>()
+        .non_send::<RuntimeWiring>()
         .runtime()
         .borrow_mut()
         .set_balloon_markers(
@@ -635,7 +635,7 @@ fn balloon_with_arrows_shows_the_arrows_where_the_screen_does() {
     gpu.frames(3);
     let text = text_surface(&gpu.rig.world, 0);
     let marker = {
-        let runtime = gpu.rig.world.non_send::<Emo2Wiring>().runtime().borrow();
+        let runtime = gpu.rig.world.non_send::<RuntimeWiring>().runtime().borrow();
         runtime
             .marker_surface(&actor)
             .map(|m| (m.size(), m.read_back().expect("印の面を読める")))

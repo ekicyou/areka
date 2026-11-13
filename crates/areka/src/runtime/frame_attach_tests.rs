@@ -182,7 +182,7 @@ fn connect_balloon_text_skips_when_view_none() {
 /// （高々 1 回消費の `take` はゲート成立後にのみ行うため未消費）で、panic しないことを headless に固定する。
 #[test]
 fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -223,7 +223,7 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
 fn run_attach_phase_with_an_invalid_core_does_not_attach() {
     let (_gpu, mut world, _gw) = gpu_attach_world();
     world.resource_mut::<GraphicsCore>().invalidate();
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -291,7 +291,7 @@ fn attach_hands_the_boot_shell_cursors_to_the_world() {
         .rows
         .rows
         .insert(key.clone(), Shape::System(SystemCursor::Cross));
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -354,7 +354,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -431,7 +431,7 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
     let (_gpu, mut world, _gw) = gpu_attach_world();
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -475,9 +475,9 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
     }
 }
 
-/// task 2.5（Req 1.3）: UI 配線層（`Emo2Wiring`）の presenter 読み口から collision-geometry の
+/// task 2.5（Req 1.3）: UI 配線層（`RuntimeWiring`）の presenter 読み口から collision-geometry の
 /// `resolve_hit_region` を呼べることを固定する。`input-events` の第一消費者（task 2.6/2.7 の
-/// `RegionSource::Presenter`）が `Emo2Wiring::presenter()` を借りて resolver を叩く経路の縮図。
+/// `RegionSource::Presenter`）が `RuntimeWiring::presenter()` を借りて resolver を叩く経路の縮図。
 ///
 /// 未装着 `EmoPresenter`（現サーフェス無し）では collision-geometry の documented degrade により
 /// `region: None` へ正常縮退する（hit_region.rs 4.4/5.3）。GPU/表示なしで決定論的に成立する。
@@ -485,7 +485,7 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
 fn presenter_accessor_feeds_resolve_hit_region() {
     use crate::runtime::hit_region::{HitRegion, resolve_hit_region};
 
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -512,21 +512,21 @@ fn presenter_accessor_feeds_resolve_hit_region() {
     );
 }
 
-/// task 9.1 存在檻: `MoveCueSink`（送出端）→ `Emo2Wiring`（受信端 `move_rx`）の channel 配線が
-/// 到達可能であること（`wire_emo2_boot` が `mpsc::channel::<PositionCue>()` を生成し送出端を
-/// sinks 第 3 要素の `MoveCueSink` へ、受信端を `Emo2Wiring` へ渡す配線の縮図）。
+/// task 9.1 存在檻: `MoveCueSink`（送出端）→ `RuntimeWiring`（受信端 `move_rx`）の channel 配線が
+/// 到達可能であること（`wire_runtime` が `mpsc::channel::<PositionCue>()` を生成し送出端を
+/// sinks 第 3 要素の `MoveCueSink` へ、受信端を `RuntimeWiring` へ渡す配線の縮図）。
 ///
-/// 送出端を持つ `MoveCueSink` に `\![move]` キャリア cue を `emit` すると、`Emo2Wiring` が保持する
+/// 送出端を持つ `MoveCueSink` に `\![move]` キャリア cue を `emit` すると、`RuntimeWiring` が保持する
 /// 受信端から同一 `MoveDirective` が drain できる（frame 相 drain＝task 9.2 の適用は本檻の範囲外）。
 #[test]
-fn move_cue_sink_reaches_emo2_wiring_receiver() {
+fn move_cue_sink_reaches_runtime_wiring_receiver() {
     use super::super::move_cue::MoveCueSink;
     use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
-    // wire_emo2_boot 手順4 と同型: 単一 channel の送出端を sink へ、受信端を Emo2Wiring へ。
+    // wire_runtime 手順4 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
     let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
     let mut move_sink = MoveCueSink::new(move_tx);
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         move_rx,
@@ -539,7 +539,7 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
         synth_assets(&[(0, 0)]),
     );
 
-    // sink（talk スレッド相当）へ `\![move]` キャリアを emit → 受信端（Emo2Wiring）へ届く。
+    // sink（talk スレッド相当）へ `\![move]` キャリアを emit → 受信端（RuntimeWiring）へ届く。
     move_sink.emit(TalkCue {
         at: 0.0,
         actor: ActorKey::from("1"),
@@ -557,7 +557,7 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
     assert_eq!(
         drained.len(),
         1,
-        "sink→Emo2Wiring の受信端へちょうど 1 件届く"
+        "sink→RuntimeWiring の受信端へちょうど 1 件届く"
     );
     let PositionCue::Move(directive) = &drained[0] else {
         panic!("移動の指令が届く: {drained:?}");
@@ -570,11 +570,11 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
     );
 }
 
-/// task 4.1 完了状態の檻: **会話を再生すると**フレーム側（`Emo2Wiring`）が受信端
+/// task 4.1 完了状態の檻: **会話を再生すると**フレーム側（`RuntimeWiring`）が受信端
 /// `lifecycle_rx` から表示ライフサイクル信号を取り出せること（Requirements 4.1 / 4.5）。
 ///
-/// `wire_emo2_boot` の配線（`mpsc::channel::<TalkLifecycleSignal>()` を生成し、送出端を
-/// `GhostBootOptions.sinks` 4 本目の `BalloonLifecycleSink` へ、受信端を `Emo2Wiring` へ渡す）の
+/// `wire_runtime` の配線（`mpsc::channel::<TalkLifecycleSignal>()` を生成し、送出端を
+/// `GhostBootOptions.sinks` 4 本目の `BalloonLifecycleSink` へ、受信端を `RuntimeWiring` へ渡す）の
 /// 縮図を、実台本の再生経路（parse → compile → `CueSheet` → `CuePlayer` の broadcast）の上で
 /// 通す。受け取った信号の消費（計測の破棄・占有終端の更新）は task 4.4 の配線が担うため本檻の
 /// 範囲外で、ここで固定するのは「会話の再生が受信端へ届く」ことだけである。
@@ -583,14 +583,14 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
 /// 台本自身の発火時刻と占有終端から採るため、注入時刻が観測すべき時点を追い越さない
 /// （Requirement 9.3——反復回数による有界化もしない）。
 #[test]
-fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
+fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
     use super::super::talk_lifecycle::BalloonLifecycleSink;
     use areka_sakura::sysvar::SystemVarSnapshot;
     use dola::cue::CuePlayer;
 
-    // wire_emo2_boot 手順4/5 と同型: 単一 channel の送出端を sink へ、受信端を Emo2Wiring へ。
+    // wire_runtime 手順4/5 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -720,7 +720,7 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let kero = assets.balloons[1].definitions.face0().model.clone();
 
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
@@ -909,7 +909,7 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,

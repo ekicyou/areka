@@ -2,7 +2,7 @@
 // 絵と箱の置き場所の揃え（areka-P0-shell-balloon-frame-align・要件 4.1〜4.4）
 //
 // 親（`frame_shell_box_integration_tests.rs`）の `Cage`——実 emo2 fixture ＋ 実 GPU で本番の
-// `emo2_frame_system` を回す檻——に、シェルの文面と絵の差し替え（`present_tx` への
+// `frame_system` を回す檻——に、シェルの文面と絵の差し替え（`present_tx` への
 // `ShowSurface`／`Hide`）を渡して、台本の `\s` と絵が届く順を決定論で組む。
 //
 // 檻で使う面の番号（面 0・面 10）は emo2 の検体が合成できる面から選ぶ。ここではまず、

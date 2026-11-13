@@ -14,7 +14,7 @@ use areka_sakura::ActorKey;
 use bevy_ecs::world::World;
 use tracing::{debug, error};
 
-use super::{Emo2Wiring, balloon_target};
+use super::{RuntimeWiring, balloon_target};
 use areka_placement::face_windowposition::apply_face_windowposition;
 
 /// 書き手を呼んだ契機（記録の欄）。
@@ -32,7 +32,7 @@ pub(in crate::runtime) enum FaceCause {
 /// (3) 面の `windowposition` を配置へ届け（要件 1.7）、(4) `balloon_models[scope]` を面の
 /// モデルにし、(5) 面の番号を覚える。束が無い scope は `error!` で何もしない。
 pub(in crate::runtime) fn select_balloon_face(
-    wiring: &mut Emo2Wiring,
+    wiring: &mut RuntimeWiring,
     world: &mut World,
     scope: u32,
     face: u32,
@@ -77,7 +77,7 @@ pub(in crate::runtime) fn select_balloon_face(
 
 /// drain がこのフレームで `ShowSurface` を適用した target のうち、balloon の target で presenter の
 /// 今の面が覚えた面と違う scope だけ書き手を通す（動く絵のコマは面の番号が同じなので通さない）。
-pub(super) fn after_drain(wiring: &mut Emo2Wiring, world: &mut World, shown: &[TargetId]) {
+pub(super) fn after_drain(wiring: &mut RuntimeWiring, world: &mut World, shown: &[TargetId]) {
     let changed = changed_faces(shown, &wiring.balloon_faces, |target| {
         wiring.presenter.current_surface_id(target)
     });

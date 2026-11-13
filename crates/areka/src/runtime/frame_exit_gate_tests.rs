@@ -3,7 +3,7 @@
 //!
 //! 3 つの組み立てとも同じ: 既存の補助で結線を組んで装着済みにし、未登録の対象への `Hide` を
 //! 1 件送り、素の World に挿す。差は終了の受け口（`wintf::AppExit`）の有無と、指示済みかだけ。
-//! 記録の捕捉に入るのは `emo2_frame_system` の 1 回の呼び出しだけである。
+//! 記録の捕捉に入るのは `frame_system` の 1 回の呼び出しだけである。
 //!
 //! - 指示済み: 相を 1 つも回さない＝ERROR 0 件・WARN 0 件・読み飛ばしの記録 1 件（DEBUG）・
 //!   結線は World に残り・受信端に指令が 1 件残る。
@@ -28,7 +28,7 @@ enum ExitState {
     Absent,
 }
 
-/// 共通の組み立てで World を作り、`emo2_frame_system` を 1 回だけ捕捉の中で回して、
+/// 共通の組み立てで World を作り、`frame_system` を 1 回だけ捕捉の中で回して、
 /// 捕捉した行を返す。
 fn run_one_frame(exit: ExitState) -> (World, Vec<String>) {
     let (tx, rx) = mpsc::channel::<PresentCommand>();
@@ -55,7 +55,7 @@ fn run_one_frame(exit: ExitState) -> (World, Vec<String>) {
         ExitState::Absent => {}
     }
 
-    let logs = capture_logs(|| emo2_frame_system(&mut world));
+    let logs = capture_logs(|| frame_system(&mut world));
     (world, logs)
 }
 
@@ -67,7 +67,7 @@ fn skip_lines(logs: &[String]) -> Vec<&String> {
 /// 受信端に残っている指令の件数（確認の最後に 1 回だけ呼ぶ）。
 fn remaining_commands(world: &mut World) -> usize {
     world
-        .get_non_send_mut::<Emo2Wiring>()
+        .get_non_send_mut::<RuntimeWiring>()
         .expect("結線は World に残っている")
         .drain_received()
         .len()
@@ -96,7 +96,7 @@ fn frame_phases_are_skipped_once_exit_is_requested() {
         skips[0]
     );
     assert!(
-        world.get_non_send::<Emo2Wiring>().is_some(),
+        world.get_non_send::<RuntimeWiring>().is_some(),
         "結線は取り除かれず World に残る"
     );
     assert_eq!(
@@ -129,7 +129,7 @@ fn frame_phases_run_as_today_when_exit_is_not_requested_or_absent() {
             "{label}: 読み飛ばしの記録は 0 行: {logs:?}"
         );
         assert!(
-            world.get_non_send::<Emo2Wiring>().is_some(),
+            world.get_non_send::<RuntimeWiring>().is_some(),
             "{label}: 結線は World に戻っている"
         );
         assert_eq!(

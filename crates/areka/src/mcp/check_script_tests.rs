@@ -243,7 +243,7 @@ fn real_unit_answers_two_scripts_without_running_them() {
     rig.boot("A");
     // 窓を作らない土台では装着が起きず、預けた答えが届かない。表示の結線を外して窓の無いゴーストとして
     // 答えさせる（`shell_balloon_switch_tests.rs` と同じ外し方・判断の事実は 4.2 のテストが固定する）。
-    let unwired = rig.world.remove_non_send::<Emo2Wiring>().is_some();
+    let unwired = rig.world.remove_non_send::<RuntimeWiring>().is_some();
     let (tx, rx) = mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);
     let steady = rig.wait_steady();

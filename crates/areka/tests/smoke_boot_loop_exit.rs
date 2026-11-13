@@ -113,8 +113,8 @@ fn assert_real_windows_and_exit_zero(status: ExitStatus, all: &str) {
          \n--- child output ---\n{all}"
     );
     // wire 成立マーカーの存在 assert（task 7.1・R7.3 観測境界）: `main` は起動窓の後で
-    // `runtime::wire_emo2_boot` を呼び、実 fixture では `wired=true` で本マーカーを `info!` する。
-    // `emo2_frame_system` の schedule 登録が end-to-end で少なくとも 1 回踏まれたことを固定する。
+    // `runtime::wire_runtime` を呼び、実 fixture では `wired=true` で本マーカーを `info!` する。
+    // `frame_system` の schedule 登録が end-to-end で少なくとも 1 回踏まれたことを固定する。
     assert!(
         all.contains(WIRED),
         "実 fixture 経路は emo2-boot の実 sink 結線（wire 成立）マーカーを出すべき。\

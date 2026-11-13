@@ -22,7 +22,7 @@ use super::shell_balloon_switch_session_lap_tests::{
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
 use crate::boot_resolve::read_last_shell;
 use crate::input_events::user_break::on_left_press;
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, request_ghost_switch,
 };
@@ -85,7 +85,7 @@ fn outcomes(events: &[CapturedEvent]) -> [usize; 4] {
 /// scope 0 のバルーンの表示。
 fn balloon0_visible(rig: &SwitchRig) -> Option<bool> {
     rig.world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .and_then(|w| w.presenter().target_visible(balloon_target(0)))
 }
 

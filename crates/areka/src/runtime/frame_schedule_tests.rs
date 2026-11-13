@@ -1,6 +1,6 @@
 // =============================================================================
 // T-N10（areka-P0-present-gpu-transform-scale task 4.2・要件 2.4／6.5）
-// 毎フレームの相（`emo2_frame_system`）の**登録先**の決定論テスト
+// 毎フレームの相（`frame_system`）の**登録先**の決定論テスト
 //
 // 裁定（2026-09-12・設計ディスカッション 議題 1「描画の確定は Draw 前に終わらせる」）で
 // 登録先は 1 巡の末尾の段（`FrameFinalize`）から上流の `Update` へ移った。相がそこで挿した
@@ -8,7 +8,7 @@
 // （`RenderSurface`）が拾う——末尾の段に載せると絵の着地が次の巡へずれ、文字だけが 1 コマ
 // 先に出る（要件 2.4）。
 //
-// この移動は挙動の檻に映らない。相の本体は `Emo2Wiring` が挿さっていない World では丸ごと
+// この移動は挙動の檻に映らない。相の本体は `RuntimeWiring` が挿さっていない World では丸ごと
 // 無操作であり、実窓を持たない檻から見ると「絵が 1 コマ遅れる」は原理的に観測できない。
 // ゆえにここは 2 方向から押さえる。
 //
@@ -16,7 +16,7 @@
 // 2. その字面と同じ登録を実際に `Schedules` へ行い、当の相が `Update` に載り末尾の段には
 //    載らないという**構造**（GPU も窓も要らない）。対照として、登録の前は `Update` に無い。
 //
-// 2 が本番の `wire_emo2_boot` を呼ばないのは、あの関数が実ゴーストの資産・UI アクター・
+// 2 が本番の `wire_runtime` を呼ばないのは、あの関数が実ゴーストの資産・UI アクター・
 // SHIORI の子プロセスを要して決定論にならないためである。ゆえに登録の 1 行を写し取り、
 // 写しが本番と食い違わないことを 1 の字面が見張る（写しの原本は [`BOOT_REGISTRATION`]）。
 //
@@ -32,15 +32,15 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, IntoSystemSet, ScheduleLabel, Schedules};
 use wintf::ecs::{FrameFinalize, Update, update_typewriters};
 
-use super::frame::{KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
+use super::frame::{KanadeNoticeRx, frame_system, ghost_quit_system};
 use crate::app_exit::{ExitOrigin, FirstExit};
 use areka_placement::spawn::wire_zorder_pair;
 
 // ---------------------------------------------------------------- 道具立て
 
-/// 本番（`wire_emo2_boot` 手順 6）の登録の字面。下の [`register_like_the_boot`] はこの写しであり、
+/// 本番（`wire_runtime` 手順 6）の登録の字面。下の [`register_like_the_boot`] はこの写しであり、
 /// 両者が食い違っていないことを [`t_n10_the_boot_registers_the_frame_system_into_update`] が見張る。
-const BOOT_REGISTRATION: &str = "add_systems(Update, emo2_frame_system.after(update_typewriters));";
+const BOOT_REGISTRATION: &str = "add_systems(Update, frame_system.after(update_typewriters));";
 
 /// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
 fn code_only(source: &str) -> String {
@@ -69,7 +69,7 @@ fn schedule_holds_the_frame_system(world: &World, label: impl ScheduleLabel) -> 
             schedule
                 .graph()
                 .system_sets
-                .contains(emo2_frame_system.into_system_set())
+                .contains(frame_system.into_system_set())
         })
 }
 
@@ -77,7 +77,7 @@ fn schedule_holds_the_frame_system(world: &World, label: impl ScheduleLabel) -> 
 fn register_like_the_boot(world: &mut World) {
     world
         .resource_mut::<Schedules>()
-        .add_systems(Update, emo2_frame_system.after(update_typewriters));
+        .add_systems(Update, frame_system.after(update_typewriters));
 }
 
 /// 鎖の適用系（末尾の段の 4 本）を**先に**載せた World。
@@ -112,11 +112,11 @@ fn t_n10_the_boot_registers_the_frame_system_into_update() {
         "毎フレームの相の登録が `Update`＋上流の鎖の後という形になっていない（絵の着地が次の巡へずれる・要件 2.4）: {BOOT_REGISTRATION}"
     );
     assert!(
-        !squeezed.contains("add_systems(FrameFinalize, emo2_frame_system"),
+        !squeezed.contains("add_systems(FrameFinalize, frame_system"),
         "旧い登録先（1 巡の末尾の段）が残っている"
     );
     assert!(
-        !squeezed.contains("emo2_frame_system.before(apply_zorder_chain)"),
+        !squeezed.contains("frame_system.before(apply_zorder_chain)"),
         "旧い段内の順序指定（`.before(apply_zorder_chain)`）が残っている（段をまたぐ順序は指定できない）"
     );
     // 写し（`register_like_the_boot`）が原本の字面と食い違っていないこと——原本だけ更新して
@@ -128,7 +128,7 @@ fn t_n10_the_boot_registers_the_frame_system_into_update() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("pub fn wire_emo2_boot("),
+        code.contains("pub fn wire_runtime("),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
@@ -205,12 +205,12 @@ fn t_n10_before_the_registration_the_update_stage_holds_nothing() {
 // ---------------------------------------------------------------------------
 
 /// 本番（`wire_kanade_stop`）の終了相の登録の字面。下のテストはこの写しを素の World で行う。
-const QUIT_REGISTRATION: &str = "add_systems(Update, ghost_quit_system.before(emo2_frame_system));";
+const QUIT_REGISTRATION: &str = "add_systems(Update, ghost_quit_system.before(frame_system));";
 
 /// 毎フレームの相を登録しない World（順序の相手が居ない形）でも、終了相の登録は
 /// bevy に受け入れられ、停止通知 1 件 → `Update` 1 回で終了が指示され最初の出所が残る。
 ///
-/// 順序の相手（`emo2_frame_system`）が schedule に無い登録の形は bevy の挙動に依る 1 点なので、
+/// 順序の相手（`frame_system`）が schedule に無い登録の形は bevy の挙動に依る 1 点なので、
 /// 版が変わってこの形が拒まれたら（schedule の組み立てで落ちたら）ここが赤くなる。
 /// 本番の登録から行ごと消す・順序指定を外すと字面の確認が赤くなる。
 #[test]
@@ -227,7 +227,7 @@ fn ghost_quit_system_without_the_frame_system_quits_on_one_notice() {
     world.insert_non_send(KanadeNoticeRx(rx));
     world
         .resource_mut::<Schedules>()
-        .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
+        .add_systems(Update, ghost_quit_system.before(frame_system));
     assert_eq!(
         world
             .resource::<Schedules>()

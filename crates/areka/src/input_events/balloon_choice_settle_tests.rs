@@ -134,7 +134,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::pointer::{Phase, PointerState};
 use wintf::ecs::{GraphicsCore, Point, Visual, WucGraphicsResource};
 
-use super::test_support::headless_emo2_wiring;
+use super::test_support::headless_runtime_wiring;
 use super::{BalloonWiring, ChoiceSelection, on_balloon_pointer_pressed};
 use areka_placement::spawn::BalloonWindowMarker;
 
@@ -197,7 +197,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     let x = ((row.rect.left + row.rect.right) / 2.0) as i32;
     let y = ((row.rect.top + row.rect.bottom) / 2.0) as i32;
 
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
     let (tx, rx) = mpsc::channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
 

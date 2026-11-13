@@ -1,4 +1,4 @@
-//! 毎フレーム結線の NonSend 状態 [`Emo2Wiring`]（構築・アクセサ・test-support 読み口）。
+//! 毎フレーム結線の NonSend 状態 [`RuntimeWiring`]（構築・アクセサ・test-support 読み口）。
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, VecDeque};
@@ -8,7 +8,7 @@ use std::sync::{Mutex, Weak};
 use std::time::Duration;
 
 use bevy_ecs::system::SystemState;
-// `World` を使うのは下の `impl Emo2Wiring` 内の `#[cfg(test)]` メソッド `apply_present` だけ
+// `World` を使うのは下の `impl RuntimeWiring` 内の `#[cfg(test)]` メソッド `apply_present` だけ
 // （`areka` は lib target を持たない bin クレートゆえ非 test ビルド単位では未使用に見える）。
 #[allow(unused_imports)]
 use bevy_ecs::world::World;
@@ -36,16 +36,16 @@ use crate::ghost_session::ghost_session_scope_scale::SharedScopeScaleTable;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
-// Emo2Wiring＋attach フェーズ（tasks.md task 4.1・design「UI 毎フレーム結線 / frame」）
+// RuntimeWiring＋attach フェーズ（tasks.md task 4.1・design「UI 毎フレーム結線 / frame」）
 // ---------------------------------------------------------------------------
 
-/// 毎フレーム三相結線の NonSend 状態（design「Emo2Wiring＋emo2_frame_system」・State Management）。
+/// 毎フレーム三相結線の NonSend 状態（design「RuntimeWiring＋frame_system」・State Management）。
 ///
 /// `EmoPresenter`（`!Send`）・`Receiver`（`!Sync`）・`Rc<RefCell<TextLayerRuntime>>`（`!Send`）を
-/// 内包するため NonSend resource として `wire_emo2_boot`（task 5.1）が挿入する。本 task（4.1）は
-/// 構築（[`Emo2Wiring::new`]）と attach フェーズ（[`run_attach_phase`]）に加え、drain フェーズ
+/// 内包するため NonSend resource として `wire_runtime`（task 5.1）が挿入する。本 task（4.1）は
+/// 構築（[`RuntimeWiring::new`]）と attach フェーズ（[`run_attach_phase`]）に加え、drain フェーズ
 /// （[`run_drain_phase`]・`rx` を消費）・text フェーズ（[`run_text_phase`]・`clock` を消費）・排他
-/// system [`emo2_frame_system`]（3 フェーズを remove→insert で駆動）を所有する（task 4.1／4.2）。
+/// system [`frame_system`]（3 フェーズを remove→insert で駆動）を所有する（task 4.1／4.2）。
 ///
 /// # フィールドの可視性が 2 種類ある理由
 ///
@@ -56,7 +56,7 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 /// `clock`）と、届けの相の台帳 `balloon_status` を `pub(in crate::runtime)` へ広げてある。可視性の相は 5 つを**同時に**可変借用するため
 /// （表示層へ発行しながら状態を更新する）、読み口メソッドを並べる形では組めない。広げた先は
 /// runtime の内側どまりで、公開面は 1 つも増えない。
-pub struct Emo2Wiring {
+pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     pub(in crate::runtime) presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
@@ -64,8 +64,8 @@ pub struct Emo2Wiring {
     /// talk スレッド（`MoveCueSink`）からの窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`）
     /// 受信端（frame 相 drain＝[`run_move_drain_phase`] が消費）。
     ///
-    /// `PresentBridge` の `rx` と同型の配線: `wire_emo2_boot`（task 9.1）が
-    /// `mpsc::channel::<PositionCue>()` の受信端を受け渡し、frame 相の [`emo2_frame_system`] が
+    /// `PresentBridge` の `rx` と同型の配線: `wire_runtime`（task 9.1）が
+    /// `mpsc::channel::<PositionCue>()` の受信端を受け渡し、frame 相の [`frame_system`] が
     /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
     pub(super) move_rx: Receiver<PositionCue>,
     /// 対象か基準の窓が最初の面を表示するまで預かった位置の指令（順のまま・`move_hold.rs`）。
@@ -73,7 +73,7 @@ pub struct Emo2Wiring {
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
     /// （バルーン可視性相が消費・Requirements 4.1／4.5）。
     ///
-    /// `move_rx` と同型の配線: [`super::super::wire_emo2_boot`] が
+    /// `move_rx` と同型の配線: [`super::super::wire_runtime`] が
     /// `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の
     /// 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す（design 決定 D4＝α）。会話の開始
     /// （[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端
@@ -87,7 +87,7 @@ pub struct Emo2Wiring {
     /// talk スレッド（`ZOrderCueSink`）からの重なりの指令受信端（frame 相の取り出し
     /// ＝[`run_zorder_drain_phase`](super::zorder_drain::run_zorder_drain_phase) が消費）。
     ///
-    /// `move_rx` と同型の配線: [`super::super::wire_emo2_boot`] が
+    /// `move_rx` と同型の配線: [`super::super::wire_runtime`] が
     /// `mpsc::channel::<ZOrderDirective>()` を作り、送出端を `GhostBootOptions.sinks` の
     /// 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す（areka-P0-scope-zorder-pinning task 6.2）。
     /// `\![set,zorder,…]`／`\![reset,zorder]` の**解釈前のトークン列**が到着順に届く。
@@ -103,12 +103,12 @@ pub struct Emo2Wiring {
     /// あり二重帳簿にはしない（design「Data Models」）。
     ///
     /// 構築の時点では常に既定（グループ 0 本）から始まる。shell 設定由来の基底は、
-    /// 起動の段が [`Emo2Wiring::seed_zorder_descript_base`] で 1 度だけ据える
+    /// 起動の段が [`RuntimeWiring::seed_zorder_descript_base`] で 1 度だけ据える
     /// （取り出しの相が 1 度も走る前＝タグの実行より前・要件 5.1）。
     pub(super) zorder_ledger: ZOrderGroupLedger,
     /// ゴーストの常に手前の状態（既定＝受信端なし・オフ・stay-on-top-directives 要件 3.4）。
     ///
-    /// 受信端は起動の結線が [`Emo2Wiring::attach_window_state_rx`] で後から渡す。結線状態と
+    /// 受信端は起動の結線が [`RuntimeWiring::attach_window_state_rx`] で後から渡す。結線状態と
     /// 一緒に作り直される経路（ゴーストの切り替え・読み直し・終了）で消え、残る経路
     /// （SHIORI だけの読み直し・シェルとバルーンの切り替え）では保たれる。
     pub(super) window_state: StayOnTopState,
@@ -158,8 +158,8 @@ pub struct Emo2Wiring {
     /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]・emo-dpi-scaling task 4.2）。
     ///
     /// `anchor_changed_system` の `Local<Option<SystemState<..>>>` と同じ役割を担う。あちらは bevy の
-    /// system 引数として `Local` を受けられるが、本フェーズは排他 system [`emo2_frame_system`] から
-    /// 呼ばれる**素の関数**（design の署名 `run_dpi_phase(&mut Emo2Wiring, &mut World)`）ゆえ `Local`
+    /// system 引数として `Local` を受けられるが、本フェーズは排他 system [`frame_system`] から
+    /// 呼ばれる**素の関数**（design の署名 `run_dpi_phase(&mut RuntimeWiring, &mut World)`）ゆえ `Local`
     /// を取れない——run を跨いで `last_run` tick を保つ器がここに要る。毎 run で `SystemState::new`
     /// を作り直すと `last_run` が 0 のままとなり `Changed` が全窓へ誤マッチし続ける（＝毎フレーム
     /// 全窓 refresh の churn）ため、必ず使い回す。
@@ -174,7 +174,7 @@ pub struct Emo2Wiring {
     /// （降ろした後も World に残るので、持たせると seriko の join が戻らない＝持ち主は
     /// `GhostSession` だけ）。
     pub(in crate::runtime) swap_slot: Weak<Mutex<Option<SwapPayload>>>,
-    /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `emo2_frame_system` が
+    /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `frame_system` が
     /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
     /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
     pub(super) last_drain: Duration,
@@ -188,8 +188,8 @@ pub struct Emo2Wiring {
     pub(super) scope_scale: SharedScopeScaleTable,
 }
 
-impl Emo2Wiring {
-    /// 結線資源を構築する（`wire_emo2_boot`＝task 5.1／9.1／4.1 が呼ぶ）。`assets` は `Some` で
+impl RuntimeWiring {
+    /// 結線資源を構築する（`wire_runtime`＝task 5.1／9.1／4.1 が呼ぶ）。`assets` は `Some` で
     /// 保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
     /// `MoveCueSink`（talk スレッド）と対の受信端で、frame 相 drain（task 9.2）が消費する。
     /// `lifecycle_rx` は `BalloonLifecycleSink`（同じく talk スレッド）と対の受信端で、バルーン
@@ -254,7 +254,7 @@ impl Emo2Wiring {
 
     /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。
     ///
-    /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_emo2_boot`）はこの口から
+    /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_runtime`）はこの口から
     /// 触る。呼ぶのは結線状態 1 つにつき **`insert_non_send` より前**（その結線状態で走る最初の
     /// `Update` より前）の 1 回だけで（起こし直しでは `boot_ghost` が新しい結線状態で呼ぶ）、
     /// そのときこの結線状態の取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
@@ -268,7 +268,7 @@ impl Emo2Wiring {
         apply_descript_base(&mut self.zorder_ledger, zorder_raw);
     }
 
-    /// 常に手前の指令の受信端を渡す（起動の結線の口・`Emo2Wiring::new` の引数は変えない）。
+    /// 常に手前の指令の受信端を渡す（起動の結線の口・`RuntimeWiring::new` の引数は変えない）。
     pub(in crate::runtime) fn attach_window_state_rx(
         &mut self,
         rx: Receiver<WindowStateDirective>,
@@ -296,7 +296,7 @@ impl Emo2Wiring {
     /// 閉じたまま、UI 配線層へは read 口のみを開ける（本番表面を最小に保つ）。
     ///
     /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs` の `resolve_hit_owned` が
-    /// `.map(Emo2Wiring::presenter)` の関数パス形で借りて当たり判定へ渡す。到達の起点は
+    /// `.map(RuntimeWiring::presenter)` の関数パス形で借りて当たり判定へ渡す。到達の起点は
     /// `ghost_session::prepare_ghost_windows` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
     /// ハンドラ装着）と `ghost_session::boot_ghost` の `wire_mouse_input` 呼出。呼び出しがメソッド構文でないため
     /// `.presenter()` の grep では見つからないが、dead_code 判定上は live である。
@@ -317,7 +317,7 @@ impl Emo2Wiring {
     }
 
     /// 文字層 runtime への共有ハンドル読み口（design「アクセサ（runtime/frame.rs）」・
-    /// `Emo2Wiring::runtime()`・Req 4.1）。
+    /// `RuntimeWiring::runtime()`・Req 4.1）。
     ///
     /// choice-interact のバルーン選択肢対話配線（`super::super::input_events::balloon`）が、この借用を
     /// 経由して `TextLayerRuntime` を読み取り選択肢ハイライト／確定を橋渡しする。既存 [`presenter()`]
@@ -341,7 +341,7 @@ impl Emo2Wiring {
     /// `\![move]` 指令受信端への test-support アクセサ（task 9.1 の存在檻・9.3 の e2e で消費）。
     ///
     /// 本番の frame 相 drain（task 9.2）は `move_rx` を private に閉じて `apply_move_directive` へ
-    /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`Emo2Wiring` の受信端が届く）を
+    /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`RuntimeWiring` の受信端が届く）を
     /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
     #[cfg(test)]
     pub(crate) fn drain_move_directives(&self) -> Vec<PositionCue> {
@@ -352,7 +352,7 @@ impl Emo2Wiring {
     ///
     /// 本番の可視性相は `lifecycle_rx` を private に閉じたまま同じ全件取り出しを行い、
     /// 判断中核の観測スナップショットへ載せる。4.1 段階では channel 配線の到達性
-    /// （会話の再生が `BalloonLifecycleSink`→`Emo2Wiring` の受信端へ届く）を決定論に固定する
+    /// （会話の再生が `BalloonLifecycleSink`→`RuntimeWiring` の受信端へ届く）を決定論に固定する
     /// ための最小 read 口として `#[cfg(test)]` で開ける（`drain_move_directives` と同型・本番
     /// 表面は増やさない）。
     #[cfg(test)]
@@ -362,7 +362,7 @@ impl Emo2Wiring {
 
     // ── spine 観測用 test-support アクセサ（tasks.md task 6.2・spine S1/S3/S4） ──────────
     //
-    // 本番結線（`wire_emo2_boot`＝task 5.1／`emo2_frame_system`）は `presenter`/`rx` を private に
+    // 本番結線（`wire_runtime`＝task 5.1／`frame_system`）は `presenter`/`rx` を private に
     // 閉じ、drain/apply/readback は `run_attach_phase`／`run_drain_phase` 内で完結する。決定論 spine
     // （兄弟モジュール `super::spine`・`#[cfg(test)]`）は「受信 `PresentCommand` 列の形状記録」
     // （apply 前に値取り出し）と「apply 後の `read_back` 観測」（R8.2・観測境界をアダプタ記録に

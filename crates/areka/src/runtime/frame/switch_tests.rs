@@ -28,7 +28,7 @@ use tracing::Level;
 use super::run_switch_phase;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
@@ -43,7 +43,7 @@ type BuildResult = Result<SwapBuilt, SwitchBuildError>;
 
 struct Rig {
     world: World,
-    wiring: Emo2Wiring,
+    wiring: RuntimeWiring,
     /// kanade の代わり（置き場のゴーストの送出端の受信端）。
     kanade: Receiver<KanadeMsg>,
     /// 1 度目の切れ目の返事の送り手（落とせば「送り手が落ちた」）。

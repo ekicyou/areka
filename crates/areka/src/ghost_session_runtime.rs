@@ -17,7 +17,7 @@ use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
 use crate::input_events;
 use crate::menu;
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::runtime_boot;
 
 /// 実行系に結びつく窓側の結線をやり直す（`boot_wired` の boot 後の塊の純移動＋`ChoiceForwarder`）。
@@ -30,8 +30,8 @@ pub(crate) fn rewire_runtime_consumers(
 ) {
     // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
     // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
-    // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
-    // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
+    // 挿入は wire_runtime 成功後＝RuntimeWiring 挿入済みゆえ presenter 経由の region 解決が
+    // 成立する（RuntimeWiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
     let sender = runtime.kanade().clone();
     input_events::wire_mouse_input(world, sender);
     // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
@@ -70,8 +70,8 @@ pub(crate) fn rewire_runtime_consumers(
     // 倍率と DPI の読み手を毎フレームの配線の表で登録する（shell-scale-linkage 要件 4.5・D7）。
     // 配線が無い（LogSink の起動）ときは空の表で登録する。
     let table = world
-        .get_non_send::<Emo2Wiring>()
-        .map(Emo2Wiring::scope_scale_table);
+        .get_non_send::<RuntimeWiring>()
+        .map(RuntimeWiring::scope_scale_table);
     super::ghost_session_scope_scale::wire(runtime.sylphya_reader(), table);
 }
 

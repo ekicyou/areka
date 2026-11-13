@@ -34,7 +34,7 @@ use super::run_switch_phase;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
 use crate::runtime::shell_balloon_switch::{
@@ -68,7 +68,7 @@ impl PersistIo for SharedFakeIo {
 
 struct Rig {
     world: World,
-    wiring: Emo2Wiring,
+    wiring: RuntimeWiring,
     /// kanade の代わり（置き場のゴーストの送出端の受信端）。
     kanade: Receiver<KanadeMsg>,
     /// scope ごとの置き換えの返信の送り手（drain の代わり）。
@@ -379,9 +379,9 @@ fn reply_failure_records_one_error_and_writes_nothing() {
     );
 }
 
-/// 表示の橋渡しの代わりに置き場を持ち、起動の結線（`wire_emo2_boot`）と同じ形で結線状態へ渡す。
+/// 表示の橋渡しの代わりに置き場を持ち、起動の結線（`wire_runtime`）と同じ形で結線状態へ渡す。
 /// 返り値を落とすと、seriko のアクターと一緒に橋渡しが消えた形になる。
-fn wire_bridge_slot(wiring: &mut Emo2Wiring) -> SwapSlot {
+fn wire_bridge_slot(wiring: &mut RuntimeWiring) -> SwapSlot {
     let bridge = SwapSlot::default();
     wiring.swap_slot = Arc::downgrade(&bridge);
     bridge
@@ -826,7 +826,7 @@ fn cue(actor: &ActorKey, command: CueCommand) -> TalkCue {
 }
 
 /// スコープの文字を持つ場所（場所の名前・文字の数）。普通のバルーンは `balloon`。
-fn texts(wiring: &Emo2Wiring, actor: &ActorKey) -> Vec<(String, usize)> {
+fn texts(wiring: &RuntimeWiring, actor: &ActorKey) -> Vec<(String, usize)> {
     let runtime = wiring.runtime.borrow();
     runtime
         .state()

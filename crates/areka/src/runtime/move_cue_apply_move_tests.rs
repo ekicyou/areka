@@ -246,7 +246,7 @@ fn apply_non_scope_base_moves() {
 // 既存檻との差分（重複回避）:
 //   - 7.4 `apply_move_tests`: `apply_move_directive` を **単体**で駆動（directive を
 //     parse で直接構築・sink/channel を経ない apply-in-isolation）。
-//   - 9.1 `move_cue_sink_reaches_emo2_wiring_receiver`（frame.rs）: sink→channel→
+//   - 9.1 `move_cue_sink_reaches_runtime_wiring_receiver`（frame.rs）: sink→channel→
 //     `drain_move_directives` まで（**apply を呼ばない**＝窓を動かさない）。
 //   - 9.2 `run_move_drain_phase_applies_directive_when_ghost_windows_present`（frame.rs）:
 //     **生 `tx.send(directive)`**（sink を経ない）→drain→apply（channel→apply 結線）。

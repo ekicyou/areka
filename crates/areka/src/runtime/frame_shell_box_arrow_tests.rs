@@ -2,10 +2,10 @@
 // 箱の矢印の押下と箱の上のホイール（balloon-scroll-arrows task 6.3・要件 7.4〜7.6・11.1・11.2）
 //
 // 親（`frame_shell_box_integration_tests.rs`）の `Cage`——実 emo2 fixture ＋ 実 GPU で本番の
-// `emo2_frame_system` を回す檻——で箱 `talk` にあふれる行を流し、矢印を出す。箱の四角の写し
+// `frame_system` を回す檻——で箱 `talk` にあふれる行を流し、矢印を出す。箱の四角の写し
 // （`shown_boxes`）と矢印の当たりは提示（GPU）でしか埋まらないので、写しを作らず本物の提示で埋める。
 // 押下はシェルの窓の受け口（`on_char_pointer_pressed`）へ、ホイールはキャラ窓の見張り
-// （`char_watch_with`・OS の行数は注入）へ渡す。受け口が読む `Emo2Wiring` は呼ぶ間だけ world へ置く。
+// （`char_watch_with`・OS の行数は注入）へ渡す。受け口が読む `RuntimeWiring` は呼ぶ間だけ world へ置く。
 // =============================================================================
 
 use std::cell::Cell;
@@ -152,14 +152,14 @@ impl Cage {
             .expect("scope0 のシェルの窓")
     }
 
-    /// `Emo2Wiring` を world へ置いて `f` を回し、戻す。
+    /// `RuntimeWiring` を world へ置いて `f` を回し、戻す。
     fn with_wiring<R>(&mut self, f: impl FnOnce(&mut World) -> R) -> R {
         let wiring = std::mem::replace(&mut self.wiring, placeholder_wiring());
         self.world.insert_non_send(wiring);
         let out = f(&mut self.world);
         self.wiring = self
             .world
-            .remove_non_send::<Emo2Wiring>()
+            .remove_non_send::<RuntimeWiring>()
             .expect("置いた結線");
         out
     }

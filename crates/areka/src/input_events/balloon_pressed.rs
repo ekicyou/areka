@@ -12,7 +12,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
 use super::user_break::UserBreakWiring;
@@ -30,7 +30,7 @@ use super::{BalloonWiring, click_selection, selection_events, settle_after_selec
 /// 本ハンドラは 1 dispatch＝高々 1 send を守る（`Some` 選択 1 つにつき `send_selection` を高々 1 回・R2.4）。
 ///
 /// **借用規律（移動ハンドラと固定同順・design §204）**:
-/// 1. `Emo2Wiring` 共有借用→`runtime()` で `Rc` clone→world 側借用解放。`Emo2Wiring` 不在（boot 前／失敗）は
+/// 1. `RuntimeWiring` 共有借用→`runtime()` で `Rc` clone→world 側借用解放。`RuntimeWiring` 不在（boot 前／失敗）は
 ///    **正常縮退**＝`debug!(event = "choice_pressed_no_emo2")`＋no-op（donor presenter=None 同型・R4.1）。
 /// 2. `BalloonWiring` 存在確認（共有借用即解放）。不在は結線漏れ＝**構成異常**
 ///    `error!(event = "balloon_wiring_missing")`＋no-op。
@@ -93,16 +93,16 @@ pub(crate) fn on_balloon_pointer_pressed(
     let x = state.client_point.x as f32;
     let y = state.client_point.y as f32;
 
-    // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
-    // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
+    // ── 借用規律 ① RuntimeWiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
+    // RuntimeWiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
     let Some(runtime) = world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
             event = "choice_pressed_no_emo2",
             scope,
-            "Emo2Wiring 不在（boot 前／失敗）: クリック確定を no-op 縮退"
+            "RuntimeWiring 不在（boot 前／失敗）: クリック確定を no-op 縮退"
         );
         return false;
     };

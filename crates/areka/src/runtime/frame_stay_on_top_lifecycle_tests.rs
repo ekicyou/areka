@@ -12,7 +12,7 @@ use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use super::Emo2Wiring;
+use super::RuntimeWiring;
 use crate::runtime::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
@@ -43,7 +43,7 @@ fn running_a_on() -> SwitchRig {
     {
         let mut wiring = rig
             .world
-            .get_non_send_mut::<Emo2Wiring>()
+            .get_non_send_mut::<RuntimeWiring>()
             .expect("A の結線状態が据わっている");
         wiring.window_state.on = true;
         let (members, _) = parse_zorder_tokens(&["0", "1"]).expect("0,1 は読める");
@@ -58,7 +58,7 @@ fn running_a_on() -> SwitchRig {
 
 /// 今の結線状態の（常に手前か, 台本の組の数）。結線状態が無ければ `None`。
 fn state(rig: &SwitchRig) -> Option<(bool, usize)> {
-    rig.world.get_non_send::<Emo2Wiring>().map(|wiring| {
+    rig.world.get_non_send::<RuntimeWiring>().map(|wiring| {
         let tags = wiring
             .zorder_ledger
             .groups()

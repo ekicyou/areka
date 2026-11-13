@@ -513,10 +513,10 @@ fn a_shiori_rebuild_that_cannot_write_the_drop_memory_is_fatal() {
     );
 }
 
-/// 新しい結線が読み直しの前の面の控えを持つか（`Emo2Wiring` が無ければ `None`）。
+/// 新しい結線が読み直しの前の面の控えを持つか（`RuntimeWiring` が無ければ `None`）。
 fn carry_handed_over(rig: &SwitchRig) -> Option<bool> {
     rig.world
-        .get_non_send::<crate::runtime::frame::Emo2Wiring>()
+        .get_non_send::<crate::runtime::frame::RuntimeWiring>()
         .map(|w| w.shell_carry.is_some())
 }
 

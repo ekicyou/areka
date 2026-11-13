@@ -29,12 +29,12 @@ use areka_placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descri
 use areka_placement::test_support::{WA, with_com_initialized};
 
 use super::test_support::{all_shown, pos_of, resnap_world, synth_assets, zero_clock};
-use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};
+use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
 
 /// 位置の線の送り口を持つ受け口と、それを受ける headless な結線。
-fn sink_and_wiring() -> (MoveCueSink, Emo2Wiring) {
+fn sink_and_wiring() -> (MoveCueSink, RuntimeWiring) {
     let (tx, rx): (Sender<PositionCue>, _) = mpsc::channel();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,

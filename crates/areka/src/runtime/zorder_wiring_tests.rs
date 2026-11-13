@@ -14,8 +14,8 @@
 // 「是正が 1 心拍ぶん遅れる」だけなので、実窓を持たない檻には**原理的に**映らない。
 //
 // 相順は 2 で挙動としても測る——ただし測れるのは「確定段へ `.before` で載せた仕事が
-// 同じ巡のうちに適用系から見えるか」という**機構**であって、本番の `emo2_frame_system`
-// がその形で載っていることは 3 の字面が受け持つ（本番の相は `Emo2Wiring` が挿さっていない
+// 同じ巡のうちに適用系から見えるか」という**機構**であって、本番の `frame_system`
+// がその形で載っていることは 3 の字面が受け持つ（本番の相は `RuntimeWiring` が挿さっていない
 // World では丸ごと無操作なので、headless の檻からは観測できない）。
 //
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
@@ -306,12 +306,12 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     );
     assert!(
         squeezed.contains("lifecycle_rx, zorder_rx,"),
-        "受信端が受け渡し構造（Emo2Wiring::new）へ渡されていない＝取り出しの相が読む先が無い"
+        "受信端が受け渡し構造（RuntimeWiring::new）へ渡されていない＝取り出しの相が読む先が無い"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("pub fn wire_emo2_boot("),
+        code.contains("pub fn wire_runtime("),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
@@ -344,11 +344,11 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
     let squeezed = squeeze(&code);
 
     assert!(
-        squeezed.contains("add_systems(Update, emo2_frame_system.after(update_typewriters));"),
+        squeezed.contains("add_systems(Update, frame_system.after(update_typewriters));"),
         "相の登録先が `Update` ではない（末尾の段へ戻すと、相が公開した望む鎖を適用系が読むのは次の巡になる）"
     );
     assert!(
-        !squeezed.contains("emo2_frame_system.before(apply_zorder_chain)"),
+        !squeezed.contains("frame_system.before(apply_zorder_chain)"),
         "旧い段内の順序指定（`.before(apply_zorder_chain)`）が残っている（段をまたぐ順序は指定できない）"
     );
 
@@ -427,7 +427,7 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_after_the_size_reconcile() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("pub fn emo2_frame_system(world: &mut World) {"),
+        code.contains("pub fn frame_system(world: &mut World) {"),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
@@ -479,7 +479,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
         session.contains(
             "descript.author_dpi, descript.zorder_raw.as_deref(), kanade_stop.clone(), shell,"
         ),
-        "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {session}"
+        "重なりの生の値が結線（wire_runtime）へ渡されていない＝設定が台帳へ届かない: {session}"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。

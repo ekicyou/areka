@@ -18,16 +18,16 @@
 //! 兄弟が 1 水準でしか通していない腕（上限超過の警告・別モニタでの寸法追従・作業領域だけの
 //! 変化・定常フレームの窓書込 0・見送られた窓の隣で他窓の遷移が続くこと）である。
 //!
-//! # 本番入口（`emo2_frame_system`）を通す檻を 1 本持つ
+//! # 本番入口（`frame_system`）を通す檻を 1 本持つ
 //!
 //! 上の 19 本はいずれも [`FrameHarness::run_placement_phases`] を駆動する。これは本番の相順を
-//! **ハーネス側へ写した実装**であって `emo2_frame_system` を通らないので、本番の呼出が残った
+//! **ハーネス側へ写した実装**であって `frame_system` を通らないので、本番の呼出が残った
 //! まま**到達不能**になっても（`if false` で包む等）1 本も赤にならない——task 5.2 のレビューが
 //! 実演で確定させた穴であり、`frame_work_area_sync_tests.rs`／`frame_work_area_resnap_tests.rs`
 //! の本文走査は呼出の**存在と前後関係**しか押さえない。
 //!
 //! [`the_production_frame_system_reaches_all_three_placement_call_sites`] がその引受先である。
-//! 本番の相順所有者 `emo2_frame_system` をそのまま 2 フレーム回し、同期段・拡大率の相・作業
+//! 本番の相順所有者 `frame_system` をそのまま 2 フレーム回し、同期段・拡大率の相・作業
 //! 領域再スナップの 3 呼出が**到達可能**であることを、それぞれ固有の観測（源の作り直し／
 //! `origin=DpiReproject` の書込／`origin=WorkAreaResnap` の書込）で示す。
 //!
@@ -67,7 +67,7 @@ use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate}
 use areka_placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::emo2_frame_system;
+use super::frame_system;
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, dpi_world,
     headless_wiring_with, pos_of, s2_assert_work_area_bottom_moves, s2_monitors,
@@ -1060,10 +1060,10 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 }
 
 // ---------------------------------------------------------------------------
-// 本番入口（`emo2_frame_system`）の到達可能性（task 5.2 のレビューが名指しした申し送り）
+// 本番入口（`frame_system`）の到達可能性（task 5.2 のレビューが名指しした申し送り）
 // ---------------------------------------------------------------------------
 
-/// 本番の相順所有者 [`emo2_frame_system`] をそのまま回し、配置に関わる 3 呼出——同期段
+/// 本番の相順所有者 [`frame_system`] をそのまま回し、配置に関わる 3 呼出——同期段
 /// （`work_area_sync::sync_monitor_snapshot`）・拡大率の相（`run_dpi_phase`）・作業領域再スナップ
 /// （`work_area_sync::resnap_for_work_area_change`）——が**到達可能**であることを固定する。
 ///
@@ -1072,7 +1072,7 @@ fn a_window_without_a_re_derivation_result_keeps_its_size_at_192() {
 /// 本ファイルの他の 19 本と、兄弟の `frame_work_area_sync_tests.rs`／
 /// `frame_work_area_resnap_tests.rs`／`frame_dpi_sync_hold_tests.rs` はすべて
 /// [`FrameHarness::run_placement_phases`] を駆動する。あれは本番の相順を**ハーネス側へ写した
-/// 実装**であって [`emo2_frame_system`] を通らない。ゆえに本番の呼出を残したまま `if false` で
+/// 実装**であって [`frame_system`] を通らない。ゆえに本番の呼出を残したまま `if false` で
 /// 包んで**到達不能**にしても、挙動テストは 1 本も赤にならない（task 5.2 のレビューが実演で
 /// 確定させた）。本文走査（`the_resnap_is_called_after_the_scale_phase_in_the_frame_system` ほか）は
 /// 呼出の**存在と前後関係**しか押さえないので、到達可能性はどこにも掛かっていなかった。
@@ -1137,7 +1137,7 @@ fn the_production_frame_system_reaches_all_three_placement_call_sites() {
     world.insert_non_send(headless_wiring_with(rx, zero_clock()));
 
     // ── フレーム A: 本番入口をそのまま 1 度回す ──────────────────────────
-    emo2_frame_system(&mut world);
+    frame_system(&mut world);
     let writes_a = drain_window_pos_commands();
 
     // ⑴ 同期段が到達している——2 源とも実行時のモニタ表から作り直された。
@@ -1194,7 +1194,7 @@ fn the_production_frame_system_reaches_all_three_placement_call_sites() {
     for monitor in s2_monitors_with_work_area(dpi, s2_taskbar_hidden_work_area(dpi)) {
         world.spawn(monitor);
     }
-    emo2_frame_system(&mut world);
+    frame_system(&mut world);
     let writes_b = drain_window_pos_commands();
 
     // ⑶ 作業領域再スナップが到達している——`origin=WorkAreaResnap` の書込が出ている。

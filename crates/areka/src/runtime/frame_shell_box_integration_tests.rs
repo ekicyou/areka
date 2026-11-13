@@ -2,7 +2,7 @@
 // 箱の結線の通し（areka-P0-shell-balloon task 12.3）
 //
 // 親（`frame_visibility_integration_tests.rs`）と同じ檻——実 emo2 fixture ＋ 実 GPU（MTA）で
-// 本番の `emo2_frame_system` を回す——に、箱の束（サーフェス 0 にだけ箱 `talk`）を渡して、
+// 本番の `frame_system` を回す——に、箱の束（サーフェス 0 にだけ箱 `talk`）を渡して、
 // 可視性の相・文字の層の拡大率の相（`sync_boxes`）・提示（`shown_boxes` の写し）・`Status` の届けが
 // 本番の相順でつながっていることを確かめる。
 //
@@ -61,7 +61,7 @@ const HIDE_BOXES_MESSAGE: &str = "箱を隠す印を立てた（次の台詞の�
 /// `\s` 相当の表示で確立するので、`scopes` の分だけ面 0 の表示を送っておく（次のフレームの drain が適用する）。
 struct Cage {
     world: World,
-    wiring: Emo2Wiring,
+    wiring: RuntimeWiring,
     present_tx: mpsc::Sender<PresentCommand>,
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     reports: mpsc::Receiver<areka_kanade::KanadeMsg>,
@@ -204,7 +204,7 @@ impl Cage {
 }
 
 /// `advance_frame` へ渡している間だけ `Cage::wiring` に置く空の結線（相は回さない）。
-fn placeholder_wiring() -> Emo2Wiring {
+fn placeholder_wiring() -> RuntimeWiring {
     boot_wiring(mpsc::channel().1, mpsc::channel().1)
 }
 

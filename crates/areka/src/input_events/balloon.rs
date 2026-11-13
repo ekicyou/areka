@@ -18,7 +18,7 @@
 //! [`BalloonWiring::is_balloon_hovered`] で、こちらはバルーン可視性の相
 //! ——`runtime/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`——が読む）。
 //!
-//! 上流契約（collision-geometry の resolver・`Emo2Wiring::runtime()` の読み口）は消費のみ行い、
+//! 上流契約（collision-geometry の resolver・`RuntimeWiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
 
 use std::cell::RefCell;

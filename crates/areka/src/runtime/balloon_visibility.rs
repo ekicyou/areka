@@ -378,7 +378,7 @@ pub(crate) struct VisibilityObservations {
     pub(crate) scopes: BTreeMap<u32, ScopeObservation>,
     /// 本フレームに受け取った表示ライフサイクル信号（到着順＝FIFO）。
     ///
-    /// 本番では `Emo2Wiring` の受信端を配線層が全件取り出して渡す。受け取りは配線層の仕事だが、
+    /// 本番では `RuntimeWiring` の受信端を配線層が全件取り出して渡す。受け取りは配線層の仕事だが、
     /// 受け取った信号が計測へ及ぼす作用（会話開始での破棄・占有終端の更新）は判断であり、
     /// ここで扱う。
     pub(crate) lifecycle: Vec<TalkLifecycleSignal>,

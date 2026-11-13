@@ -357,7 +357,7 @@ fn scripted_inputs(
 ) -> (GhostBootInputs, ScriptedShioriHandle) {
     let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
     let inputs = GhostBootInputs {
-        wiring: runtime::Emo2BootInputs {
+        wiring: runtime::RuntimeInputs {
             ghost_root: sample.folder().to_path_buf(),
             balloon_root: emo2_balloon(sample),
             shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {

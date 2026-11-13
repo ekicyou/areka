@@ -24,7 +24,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use super::*;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::readme::ReadmeWiring;
-use crate::runtime::Emo2BootInputs;
+use crate::runtime::RuntimeInputs;
 use crate::runtime::adapter::PresentBridge;
 use crate::runtime::ghost_switch::ChangeRx;
 use crate::runtime::reload_cue::ReloadRx;
@@ -205,7 +205,7 @@ fn runtime_boot_options_carry_strict_judges() {
 fn failed_boot_leaves_world_unchanged() {
     let rig = rig();
     let mut world = World::new();
-    let inputs = Emo2BootInputs {
+    let inputs = RuntimeInputs {
         ghost_root: PathBuf::from("runtime_boot_tests/無い/ghost"),
         balloon_root: PathBuf::from("runtime_boot_tests/無い/balloon"),
         shiori: ShioriWiring::Helper {
@@ -230,7 +230,7 @@ fn successful_boot_installs_receivers() {
     let sample = acquire_emo2();
     let (backend, handle) = ScriptedShioriBackend::builder().build();
     let mut world = World::new();
-    let inputs = Emo2BootInputs {
+    let inputs = RuntimeInputs {
         ghost_root: sample.folder().to_path_buf(),
         balloon_root: sample
             .balloon("emo2-kakukaku")

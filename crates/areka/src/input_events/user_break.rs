@@ -17,7 +17,7 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::{DoubleClick, dispatch_pointer_events};
 
 use super::shell_box::{BoxPressVerdict, fold_talking, judge_box_press};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
 use crate::runtime::target_map::balloon_target;
 use crate::runtime::user_break_cue::NoUserBreakSignal;
@@ -202,7 +202,7 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
 /// 中断の持ち物を World へ入れる（`fn wire_readme`・`crates/areka/src/readme.rs` と同型）。
 /// 旗の取り出しの登録は [`register_user_break_drain`] が行う。
 ///
-/// 呼び手は boot 成功後の `wire_emo2_boot`（`ghost_session::boot_ghost` からゴーストごとに n 回＝
+/// 呼び手は boot 成功後の `wire_runtime`（`ghost_session::boot_ghost` からゴーストごとに n 回＝
 /// 状態の載せ替え。系の登録は `ghost_session::register_systems` からプロセスに 1 回）。
 pub(crate) fn wire_user_break(
     world: &mut World,
@@ -234,7 +234,7 @@ pub(crate) fn register_user_break_drain(world: &mut World) {
 /// 中断を受け入れたら `true`。
 ///
 /// 「バルーンが出ているか」を表示層へ照会し、残りを [`press_with_visibility`] に任せる。
-/// `Emo2Wiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる
+/// `RuntimeWiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる
 /// （要件 1.9）。
 pub(crate) fn on_left_press(
     world: &mut World,
@@ -244,7 +244,7 @@ pub(crate) fn on_left_press(
 ) -> bool {
     // 型合わせのみ（スコープの実値は小さい。隣の `fn to_choice_input`・`choice_drain.rs` と同じ流儀）。
     let balloon_visible = world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .and_then(|w| w.presenter().target_visible(balloon_target(scope as u32)));
     press_with_visibility(world, scope, double_click, selected_now, balloon_visible)
 }
@@ -321,11 +321,11 @@ fn press_with_visibility(
 }
 
 /// 押されたバルーンに出ている台詞のトークの番号（表示の側の可視の状態が持つ・audit-kanade #6）。
-/// `Emo2Wiring` が無い・番号を知らないは `None`（kanade は今のトークを止める）。
+/// `RuntimeWiring` が無い・番号を知らないは `None`（kanade は今のトークを止める）。
 fn shown_talk_id(world: &World) -> Option<TalkId> {
     world
-        .get_non_send::<Emo2Wiring>()
-        .and_then(Emo2Wiring::shown_talk_id)
+        .get_non_send::<RuntimeWiring>()
+        .and_then(RuntimeWiring::shown_talk_id)
 }
 
 /// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も記録し、もう一方の送出は

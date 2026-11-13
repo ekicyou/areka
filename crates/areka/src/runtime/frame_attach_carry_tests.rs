@@ -41,7 +41,7 @@ fn shows_after_attach(carry: impl FnOnce(&BootAssets) -> Option<ShellCarry>) -> 
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(None, PathBuf::from("ghost/emo2")).with_seriko_sink(sink),
     )));
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,

@@ -32,7 +32,7 @@
   - 完了の形: 警告 0 件で通り、文字列で読むテストと番人が新しいパスのファイルを見つけて緑（見つけられなければ赤になる今の作りは変えない）
   - _Requirements: 1.1, 2.6, 5.1, 5.2, 5.3, 5.4, 8.6, 8.7_
 
-- [ ] 2.2 型・関数・テストの結線の名前を改める
+- [x] 2.2 型・関数・テストの結線の名前を改める
   - `RuntimeWiring`・`RuntimeInputs`・`RuntimeOutcome`・`wire_runtime`・`register_frame_system`・`frame_system` と、テストの中の結線を指す名前（`headless_emo2_wiring` ほか）を改める
   - 既定のゴースト名とその使い手・実在のゴースト emo2 を指す名前・emo2 を含まない名前は変えない。名前だけで決まらないものは使われ方で判定し、判定と理由を `research.md` に書く
   - 名前を字面で照合するテスト（`frame_schedule_tests` の `pub fn wire_emo2_boot(` と毎フレームの相・終わる相の登録の字面）を改めた名前へ一緒に直す
@@ -194,3 +194,4 @@
 - 1.3: 9.1 で式 1〜3 を当て直すときは、インラインのテストのモジュールだけでなく、本番のファイルの中の `#[cfg(test)]` の fn・use・impl のメソッドに当たる行も見る。
 - 1.2: 9.6 で終わる道の行を比べるときは、`exitlines.ps1` の出力をファイルへ UTF-8（`Out-File -Encoding utf8NoBOM`）で出し、末尾の空白を落として diff を取る。メニューの道はカーソルを先に動かしてから `WindowFromPoint` で pid を確かめる（キャラの窓はカーソルが乗るまでクリックを素通しにする）。
 - 2.1: 改名で tracing の出所は `module_path!` に従って `areka::runtime::*` へ自動で変わる。振る舞いを保つため `log_history.rs` の決まり・照合するテスト・`log-convention.md` の 55・134 行は 2.1 で中間の値 `areka::runtime::*` にした（7.1・7.2 で最後の値へ）。`tests/stay_on_top_real_run.rs` 51〜54 行の `RUST_LOG` と `tests/emo2_real_run/common_tests.rs:28` は 7.2 で必ず直す（それまでその実機テストは赤になりうる）。`.claude/agents/perf-review.md:47` の古いパスは 8.1 で直す。
+- 2.2: 8.x の掃き出しで拾う: `input_events/balloon_pointer_handler_tests.rs:513`・`:540` のコメント「Emo2 不在」（→「Runtime 不在」）、本体の外の `Emo2Wiring` の言及（`areka-placement/src/persist.rs:633`・`persist_io_wiring_tests.rs:163`・`chain_finalize.rs`・`lib.rs`・`placement_prepare_tests.rs`・`doc/ukadoc-coverage/ledger/assets.toml:5980`）。

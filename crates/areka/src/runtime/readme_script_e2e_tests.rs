@@ -49,7 +49,7 @@ fn run(remove_readme: bool) -> Run {
     }
     let (backend, handle) = standard_script(ON_BOOT).build();
     let mut world = World::new();
-    let inputs = Emo2BootInputs {
+    let inputs = RuntimeInputs {
         ghost_root: root.clone(),
         balloon_root: sample
             .balloon("emo2-kakukaku")

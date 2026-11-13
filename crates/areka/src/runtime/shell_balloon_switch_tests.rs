@@ -37,7 +37,7 @@ use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::runtime::talk_clock::TalkClock;
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
@@ -75,8 +75,8 @@ fn test_seriko_sink() -> SerikoSink {
 }
 
 /// 窓も GPU も持たない結線（入口は有無だけを見る）。
-fn headless_wiring() -> Emo2Wiring {
-    Emo2Wiring::new(
+fn headless_wiring() -> RuntimeWiring {
+    RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel().1,
         mpsc::channel().1,
@@ -289,7 +289,7 @@ fn refusals_in_order_leave_one_warning_each_and_send_nothing() {
     plant_marker(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
     insert_running_desk_for_test(&mut rig.world);
-    rig.world.remove_non_send::<Emo2Wiring>();
+    rig.world.remove_non_send::<RuntimeWiring>();
     let unknown = || req(SkinKind::Shell, name("無い"), PLAIN);
 
     let mut got = Vec::new();

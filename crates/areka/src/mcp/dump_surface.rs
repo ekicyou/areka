@@ -18,7 +18,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, error};
 
 use super::resolve::{self, ActiveGhost};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::target_map::shell_target;
 use judge::SurfacePlan;
 
@@ -254,7 +254,7 @@ pub(in crate::mcp) fn send_back(tx: mpsc::Sender<ToolOutcome>, outcome: ToolOutc
 
 /// 今答えられるなら `Some`。装着の相がまだなら `None`（`later` が次のフレームでもう 1 度呼ぶ）。
 fn answer(world: &World, args: &Args) -> Option<Step> {
-    let Some(wiring) = world.get_non_send::<Emo2Wiring>() else {
+    let Some(wiring) = world.get_non_send::<RuntimeWiring>() else {
         return Some(Step::Now(refuse(TOOL, args.scope, judge::NO_WINDOW)));
     };
     if !wiring.attached() {

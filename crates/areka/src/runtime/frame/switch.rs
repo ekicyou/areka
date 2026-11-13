@@ -30,7 +30,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
 use super::balloon_face::{FaceCause, select_balloon_face};
-use super::{Emo2Wiring, reconcile_reported_sizes};
+use super::{RuntimeWiring, reconcile_reported_sizes};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell};
 use crate::ghost_session::{GhostSession, GhostSlot};
@@ -59,8 +59,8 @@ use areka_placement::sticky_group_ledger::replace_sticky_descript;
 /// 差し替えの世代（プロセスで単調に進む＝ゴーストをまたいでも置き場の荷物と合図を取り違えない）。
 static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
 
-/// 差し替えの相（`emo2_frame_system` の drain の直後に毎フレーム 1 回）。印が無ければ無操作。
-pub(super) fn run_switch_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+/// 差し替えの相（`frame_system` の drain の直後に毎フレーム 1 回）。印が無ければ無操作。
+pub(super) fn run_switch_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     let Some(mut flight) = world.remove_non_send::<SkinSwitchInFlight>() else {
         return;
     };
@@ -80,7 +80,11 @@ pub(super) fn run_switch_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 }
 
 /// 待ちの段の 1 フレーム。戻り値は印を残すか。
-fn step_waiting(flight: &mut SkinSwitchInFlight, wiring: &mut Emo2Wiring, world: &World) -> bool {
+fn step_waiting(
+    flight: &mut SkinSwitchInFlight,
+    wiring: &mut RuntimeWiring,
+    world: &World,
+) -> bool {
     let kind = flight.kind;
     let to = flight.target.folder.clone();
     let SkinSwitchStage::Waiting {
@@ -247,7 +251,7 @@ fn commit(
     flight: &mut SkinSwitchInFlight,
     built: SwapBuilt,
     marked: Option<MarkedEnd>,
-    wiring: &mut Emo2Wiring,
+    wiring: &mut RuntimeWiring,
     world: &World,
 ) -> bool {
     let kind = flight.kind;
@@ -338,7 +342,7 @@ fn commit(
 /// 頼んだ段の 1 フレーム。印を残すなら `Some`（返信待ち）、消すなら `None`（完了・失敗）。
 fn step_committed(
     flight: SkinSwitchInFlight,
-    wiring: &mut Emo2Wiring,
+    wiring: &mut RuntimeWiring,
     world: &mut World,
 ) -> Option<SkinSwitchInFlight> {
     let SkinSwitchInFlight {
@@ -448,7 +452,7 @@ fn poll_replies(
 /// 基底と並べ直しの材料と窓の組の descript の分を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
 #[allow(clippy::too_many_arguments)] // 後始末の残りの欄をそのまま受ける（箱の束とカーソルを足した形）
 fn finish_shell(
-    wiring: &mut Emo2Wiring,
+    wiring: &mut RuntimeWiring,
     world: &mut World,
     target: &SkinCandidate,
     source: &DescriptSource,
@@ -530,7 +534,7 @@ fn finish_shell(
 /// 面の定義を書き手 [`select_balloon_face`] で入れる・balloon-scroll-arrows 要件 1.7）と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
 /// `OnBalloonChange`。
 fn finish_balloon(
-    wiring: &mut Emo2Wiring,
+    wiring: &mut RuntimeWiring,
     world: &mut World,
     target: &SkinCandidate,
     scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,

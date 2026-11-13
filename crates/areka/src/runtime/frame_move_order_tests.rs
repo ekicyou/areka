@@ -36,15 +36,15 @@ use super::test_support::{
     FrameHarness, PerTargetSizes, SPAWN_SIZE_0, all_shown, capture_logs, pos_of, synth_assets,
     zero_clock,
 };
-use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};
+use super::{RuntimeWiring, run_move_drain_phase, run_move_drain_with};
 
 /// scope1 の新しい表示の面の物理寸（spawn 時の 278×357 から変わる）。
 const NEW_SIZE_1: (u32, u32) = (300, 400);
 
 /// 位置の線の送り口と、それを受ける headless な結線。
-fn wiring() -> (Sender<PositionCue>, Emo2Wiring) {
+fn wiring() -> (Sender<PositionCue>, RuntimeWiring) {
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,
@@ -88,10 +88,10 @@ fn steady_harness() -> FrameHarness {
     harness
 }
 
-/// `emo2_frame_system` の再スナップから連鎖の確定までを本番と同じ順で 1 フレームぶん回す。
+/// `frame_system` の再スナップから連鎖の確定までを本番と同じ順で 1 フレームぶん回す。
 fn run_resnap_move_finalize(
     harness: &mut FrameHarness,
-    wiring: &Emo2Wiring,
+    wiring: &RuntimeWiring,
     sizes: &PerTargetSizes,
 ) {
     harness.run_resnap(sizes);
@@ -216,7 +216,7 @@ fn a_script_reset_sends_nothing_to_kanade() {
     );
 }
 
-/// 本番の `emo2_frame_system` で、move drain は再スナップの後・連鎖の確定の前に 1 つだけ在る。
+/// 本番の `frame_system` で、move drain は再スナップの後・連鎖の確定の前に 1 つだけ在る。
 /// 重なりの指令の取り出しは置き場を変えない（報告寸の突合の後・再スナップの前）。
 #[test]
 fn the_frame_calls_the_move_drain_after_the_resnap_and_before_the_chain_finalize() {
@@ -254,7 +254,7 @@ fn the_frame_calls_the_move_drain_after_the_resnap_and_before_the_chain_finalize
 }
 
 /// 装置の作り直しで emo-present が控えを捨てて出し直す口（audit-wintf-graphics-world 6 番・要件 3.1）を、
-/// 本番の `emo2_frame_system` が毎フレーム 1 回、装着の相の後・拡大率の相の前に呼ぶ。
+/// 本番の `frame_system` が毎フレーム 1 回、装着の相の後・拡大率の相の前に呼ぶ。
 #[test]
 fn the_frame_calls_the_device_change_refresh_once_between_attach_and_dpi() {
     let code: String = include_str!("frame.rs")

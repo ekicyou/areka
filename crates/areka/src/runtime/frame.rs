@@ -1,7 +1,7 @@
 //! 毎フレーム結線（attach／dpi／drain／text）の排他 system と NonSend 配線状態。
 //!
-//! `Emo2Wiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
-//! 排他 system `emo2_frame_system(world: &mut World)`（donor パターン: remove→各フェーズ→insert）を
+//! `RuntimeWiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
+//! 排他 system `frame_system(world: &mut World)`（donor パターン: remove→各フェーズ→insert）を
 //! 所有する。各フェーズ:
 //! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーンの可視性を
 //!   外部所有へ→**不可視のままの確立**（`ShowSurface` 面0）→文字層スロット取得→`register_actor_view`
@@ -35,9 +35,9 @@
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数・DD-12）も本モジュールに属する。
 //!
 //! 本ファイルは task 3 の純関数 `plan_attachments`（＋`AttachPlan`／`PlannedAttach`）、task 4.1 の
-//! NonSend 結線資源 `Emo2Wiring` と attach フェーズ（`run_attach_phase`＋補助 `connect_balloon_text`）、
+//! NonSend 結線資源 `RuntimeWiring` と attach フェーズ（`run_attach_phase`＋補助 `connect_balloon_text`）、
 //! そして task 4.2 の drain フェーズ（`run_drain_phase`）・text フェーズ（`run_text_phase`＋純判断
-//! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→各フェーズ→insert）を実装する。
+//! `resolve_talk_time`）・排他 system `frame_system`（remove→各フェーズ→insert）を実装する。
 
 mod attach;
 // 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6）。
@@ -130,7 +130,7 @@ use super::target_map::{balloon_target, shell_target};
 // `AttachPlan`（`plan_attachments` の戻り値型ゆえ公開パスの維持が要件・参照は定義元の
 // サブモジュール内で完結する）と `plan_attachments`（`frame::` 経由で呼ぶのは
 // `#[cfg(test)]` の `attach_tests` だけ）の 2 名。`PlannedAttach` は `dpi` サブモジュールが、
-// `run_attach_phase` は下の `emo2_frame_system` が非 test ビルドでも使う。属性は use 文単位で
+// `run_attach_phase` は下の `frame_system` が非 test ビルドでも使う。属性は use 文単位で
 // 効くためグループ全体に付く（`areka` は lib target を持たない bin クレート）。
 #[allow(unused_imports)]
 pub use self::attach::{AttachPlan, PlannedAttach, plan_attachments, run_attach_phase};
@@ -143,7 +143,7 @@ pub use self::scale_text::{run_text_phase, run_text_scale_phase};
 // 窓がどれも表示した前提の読み口（spine の檻も同じものを使う）。
 #[cfg(test)]
 pub(crate) use self::test_support::all_shown;
-pub use self::wiring::Emo2Wiring;
+pub use self::wiring::RuntimeWiring;
 pub use self::zorder_drain::run_zorder_drain_phase;
 
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。サブモジュール間の
@@ -166,13 +166,13 @@ use self::dpi::{
 // 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with`・
 // `finalize_chain_once_with`・`realign_chain_once_with_source` の 5 名で、
 // `resnap_shell_targets`・`finalize_chain_once`・`realign_chain_once` は
-// 下の `emo2_frame_system` が呼ぶ。
+// 下の `frame_system` が呼ぶ。
 #[allow(unused_imports)]
 use self::drain_resnap::{
     PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, realign_chain_once,
     realign_chain_once_with_source, resnap_from_sizes, resnap_shell_targets, resnap_with,
 };
-// 同上。`reconcile_reported_sizes` は下の `emo2_frame_system` が非 test ビルドでも呼ぶ
+// 同上。`reconcile_reported_sizes` は下の `frame_system` が非 test ビルドでも呼ぶ
 // （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
 use self::scale_text::reconcile_reported_sizes;
 // バルーン可視性の相（兄弟モジュール `runtime::balloon_visibility`）が注入時刻の解決に用いる
@@ -186,16 +186,16 @@ pub(crate) use self::zorder_drain::ZOrderAbsentReports;
 /// kanade の運行の通知（停止・定常到達・切替の中止）の受け口（World の NonSend 資源・
 /// `Receiver` は `Sync` でない）。
 ///
-/// 実 sink 結線（`wire_emo2_boot`）と LogSink 側の起動とで同じ 1 つを共有する（要件 6.4）。
+/// 実 sink 結線（`wire_runtime`）と LogSink 側の起動とで同じ 1 つを共有する（要件 6.4）。
 /// 取り出すのは [`run_ghost_quit_phase`] の 1 か所だけ。
 pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
 
 /// 終了相: kanade の運行の通知を取り出して 1 件ずつ捌く（R15.4・design D15 の 4・
 /// areka-P0-ghost-shell-balloon-switch design「NoticePhase」）。
 ///
-/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。ここで終了が
-/// 指示されると全ゴースト窓はもう無く、同じ巡で続けて走る [`emo2_frame_system`] は入口の判定で
-/// 相を 1 つも回さずに戻る。他の相を止める判定は本関数ではなく [`emo2_frame_system`] の入口に在る。
+/// [`ghost_quit_system`] として毎フレームの相（[`frame_system`]）より前に走る。ここで終了が
+/// 指示されると全ゴースト窓はもう無く、同じ巡で続けて走る [`frame_system`] は入口の判定で
+/// 相を 1 つも回さずに戻る。他の相を止める判定は本関数ではなく [`frame_system`] の入口に在る。
 /// 返り値は「停止の通知を消化したか」。
 ///
 /// # 判断
@@ -272,14 +272,14 @@ fn quit_as_today(world: &mut World, stopped: KanadeStopped) {
 
 /// 終了相 [`run_ghost_quit_phase`] を呼ぶだけの排他 system（起動の 2 経路で共有する）。
 ///
-/// `Update` への登録は `wire_kanade_stop` の 1 か所（[`emo2_frame_system`] より前）。
+/// `Update` への登録は `wire_kanade_stop` の 1 か所（[`frame_system`] より前）。
 pub(super) fn ghost_quit_system(world: &mut World) {
     run_ghost_quit_phase(world);
 }
 
 /// `Update` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
-/// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
+/// `RuntimeWiring`（NonSend）を [`World::remove_non_send`] で取り出してから
 /// attach→dpi→drain→差し替え→balloon-visibility→窓寸 reconcile→zorder-drain→resnap→move-drain→連鎖確定→連鎖再解決→
 /// text-scale→text→status-report
 /// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
@@ -287,19 +287,19 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
 /// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
 ///
-/// アプリの終了が指示済み（World の `wintf::AppExit` が指示済みを返す）の巡では、`Emo2Wiring` を
+/// アプリの終了が指示済み（World の `wintf::AppExit` が指示済みを返す）の巡では、`RuntimeWiring` を
 /// 取り出すより前に判定し、作業領域の同期も含めて相を 1 つも回さずに戻る。記録は
 /// `debug!(event = "frame_phases_skipped_after_exit")` の 1 行。`wintf::AppExit` が World に無い構成は
 /// 未指示とみなす。
 ///
-/// `Emo2Wiring` 未挿入（`wire_emo2_boot`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
+/// `RuntimeWiring` 未挿入（`wire_runtime`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
 /// no-op（安全・panic しない）。schedule への登録
-/// （`add_systems(Update, emo2_frame_system.after(update_typewriters))`）は `register_emo2_frame_system`
+/// （`add_systems(Update, frame_system.after(update_typewriters))`）は `register_frame_system`
 /// （`ghost_session::register_systems` からプロセスに 1 回）が行い、本関数はここでは定義のみ（登録しない）。載せ先が `Update`＝上流の
 /// `Update` 鎖の最後の系より後なのは、本 system が挿した描画命令と配置を同じ巡の伝播
 /// （`PostLayout`）・面の生成（`PreRenderSurface`）・描画（`RenderSurface`）に拾わせるため
 /// である（裁定 2026-09-12・要件 2.4。末尾の段に載せると絵の着地が次の巡へずれる）。
-pub fn emo2_frame_system(world: &mut World) {
+pub fn frame_system(world: &mut World) {
     // 終了が指示済みの巡は結線を取り出さず、作業領域の同期も含めて何もしない（受け口は読むだけ・
     // 無ければ未指示）。窓は閉じる途中で、相を走らせても閉じる窓を描き直すだけである。
     if world
@@ -312,8 +312,8 @@ pub fn emo2_frame_system(world: &mut World) {
         );
         return;
     }
-    // Emo2Wiring 未挿入（wire_emo2_boot=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
-    let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
+    // RuntimeWiring 未挿入（wire_runtime=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
+    let Some(mut wiring) = world.remove_non_send::<RuntimeWiring>() else {
         return;
     };
     // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
@@ -367,7 +367,7 @@ pub fn emo2_frame_system(world: &mut World) {
     // 反映は自分でゲートされている——装着前は presenter に target が 1 つも無く、報告の取り出し
     // （`take_pending_resize`）が全 target で `None` を返すため、窓書込もログも発生しない。
     // 未装着 presenter で本 system を回して書込ゼロを主張する既存の検査
-    // （`frame_text_scale_tests.rs::emo2_frame_system_runs_dpi_phase_without_writes_when_unattached`）が
+    // （`frame_text_scale_tests.rs::frame_system_runs_dpi_phase_without_writes_when_unattached`）が
     // この経路をそのまま覆っている。
     reconcile_reported_sizes(&mut wiring.presenter, world);
     // 重なりの指令の取り出し（scope-zorder-pinning design「zorder drain 相」・要件 1.4／4.1／
@@ -378,7 +378,7 @@ pub fn emo2_frame_system(world: &mut World) {
     // 鎖の適用系（確定段の末尾）より**前**である必要がある——後ろだと、ここで公開した
     // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない
     // （要件 14.5）。その順序は**段そのものの並び**が担う——本 system は `Update` に載り
-    // （`wire_emo2_boot` 手順 6・裁定 2026-09-12）、適用系が載る確定段（`FrameFinalize`）は
+    // （`wire_runtime` 手順 6・裁定 2026-09-12）、適用系が載る確定段（`FrameFinalize`）は
     // 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので `.before` は使わない）。
     // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
@@ -665,7 +665,7 @@ mod diag_route_tests;
 mod text_scale_tests;
 
 // 相順そのものの検査（areka-P0-balloon-visibility task 6.6）。実 emo2 資産＋実 GPU で
-// `emo2_frame_system` をそのまま駆動し、相を並べ替えたときにだけ壊れる性質を主張する。
+// `frame_system` をそのまま駆動し、相を並べ替えたときにだけ壊れる性質を主張する。
 #[cfg(test)]
 #[path = "frame_visibility_integration_tests.rs"]
 mod visibility_integration_tests;

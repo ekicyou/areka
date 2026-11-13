@@ -19,7 +19,7 @@ use super::shell_balloon_switch_session_lap_tests::{
 };
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
 use crate::runtime::target_map::balloon_target;
 
@@ -117,7 +117,7 @@ impl BalloonLog {
 /// scope 0 のバルーンの今の見え方。
 fn balloon_of(rig: &SwitchRig) -> BalloonFrame {
     let world = &rig.world;
-    let Some(wiring) = world.get_non_send::<Emo2Wiring>() else {
+    let Some(wiring) = world.get_non_send::<RuntimeWiring>() else {
         return BalloonFrame {
             slot: None,
             size: None,
@@ -189,7 +189,7 @@ fn balloon_name(rig: &SwitchRig, folder: &str) -> String {
 /// scope 0 の文字の層に今載っている文字（グリフだけを連ねる）。
 pub(super) fn scope0_text(rig: &SwitchRig) -> String {
     rig.world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .and_then(|w| {
             w.runtime()
                 .borrow()

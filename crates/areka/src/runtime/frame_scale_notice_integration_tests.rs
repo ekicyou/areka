@@ -1,7 +1,7 @@
 // =============================================================================
 // 倍率の変わりの相の同じフレームの檻（shell-scale-linkage task 6.2・要件 4.1・4.2・5.1・5.5・5.7・7.3）
 //
-// 親の檻（実 emo2 fixture ＋ 実 GPU・本番の `emo2_frame_system`）で、窓の DPI の替わりから
+// 親の檻（実 emo2 fixture ＋ 実 GPU・本番の `frame_system`）で、窓の DPI の替わりから
 // 表の書き込みとイベントの送出までが**同じ 1 回**の中で起きることを見る。相を後ろへ動かすと
 // （次のフレームへ遅らせると）この檻が落ちる。
 //
@@ -29,7 +29,7 @@ use super::*;
 /// 檻: GPU の World・emo2 の結線・表示の指令の送出端。
 struct Cage {
     world: World,
-    wiring: Option<Emo2Wiring>,
+    wiring: Option<RuntimeWiring>,
     present_tx: mpsc::Sender<PresentCommand>,
     _lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     gw: areka_placement::spawn::GhostWindows,

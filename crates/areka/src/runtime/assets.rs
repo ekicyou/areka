@@ -197,7 +197,7 @@ pub struct BootAssets {
 ///
 /// # 事前条件
 /// - 呼び出しスレッドは COM 初期化済み（`WicDecoderArm` 前提・本番は MTA UI スレッド）。
-/// - `scopes` は呼び手（`wire_emo2_boot`）が placement と同じ入力から自前導出する（DD-12）。
+/// - `scopes` は呼び手（`wire_runtime`）が placement と同じ入力から自前導出する（DD-12）。
 /// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（task 2.1 の読取器出力）。
 ///
 /// # 事後条件

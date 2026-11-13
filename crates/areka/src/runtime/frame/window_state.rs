@@ -27,9 +27,9 @@ use crate::boot_config::BootContext;
 use crate::runtime::window_state_cue::WindowStateDirective;
 use areka_placement::spawn::GhostWindows;
 
-/// ゴーストごとの常に手前の状態（`Emo2Wiring` の欄・既定＝受信端なし・オフ）。
+/// ゴーストごとの常に手前の状態（`RuntimeWiring` の欄・既定＝受信端なし・オフ）。
 ///
-/// `Emo2Wiring` と一緒に作り直される（ゴーストの切り替え・読み直し・終了）ので、新しい
+/// `RuntimeWiring` と一緒に作り直される（ゴーストの切り替え・読み直し・終了）ので、新しい
 /// ゴーストはオフから始まる（要件 3.4）。
 #[derive(Default)]
 pub(in crate::runtime) struct StayOnTopState {
@@ -175,10 +175,10 @@ pub(crate) enum DiscardReason {
 
 /// オンのまま降ろすときだけ `info!` で残す（オフ・結線が無いなら何も書かない・状態は動かさない）。
 ///
-/// 状態そのものは `Emo2Wiring` と一緒に消える（要件 4.1・4.2・6.4）。
+/// 状態そのものは `RuntimeWiring` と一緒に消える（要件 4.1・4.2・6.4）。
 pub(crate) fn log_stay_on_top_discard(world: &World, reason: DiscardReason) {
     let on = world
-        .get_non_send::<super::Emo2Wiring>()
+        .get_non_send::<super::RuntimeWiring>()
         .is_some_and(|wiring| wiring.window_state.on);
     if !on {
         return;

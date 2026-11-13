@@ -3,7 +3,7 @@
 //
 // 既存の 2 本は鎖の別々の区間しか見ていない:
 //   - `talk_lifecycle_tests.rs`（task 6.3）は**送出側**——台本の占有終端が sink から出ること。
-//   - `frame_attach_tests.rs::talk_playback_reaches_emo2_wiring_lifecycle_receiver`（task 4.1）は
+//   - `frame_attach_tests.rs::talk_playback_reaches_runtime_wiring_lifecycle_receiver`（task 4.1）は
 //     **受信端まで**——信号がフレーム配線の受け口へ届くこと。
 // どちらも「届いた信号が判断中核の計測起点になる」ところを見ていない。ここが繋ぎ目である。
 //
@@ -37,7 +37,7 @@ use wintf::ecs::FrameTime;
 
 use crate::input_events::balloon::BalloonWiring;
 use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::move_cue::PositionCue;
 use crate::runtime::talk_clock::TalkClock;
 use crate::runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
@@ -81,7 +81,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     // 紛れ込む。どのテストが先に走るかは並行実行の都合で決まるため、捕捉窓の外で先に確定させる。
     let timeout_secs = configured_timeout_secs();
 
-    // ── 本番 `wire_emo2_boot` 手順 4/5 と同型: 単一 channel の送出端を sink へ、受信端を配線へ ──
+    // ── 本番 `wire_runtime` 手順 4/5 と同型: 単一 channel の送出端を sink へ、受信端を配線へ ──
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
@@ -92,7 +92,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         let wall = std::sync::Arc::clone(&wall);
         std::sync::Arc::new(move || *wall.lock().expect("時計の錠"))
     });
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel().1,
         mpsc::channel::<PositionCue>().1,

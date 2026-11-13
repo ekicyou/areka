@@ -13,7 +13,7 @@ use areka_ghost::BasewareRoot;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::super::Emo2Wiring;
+use super::super::RuntimeWiring;
 use super::super::test_support::spawn_resnap_windows;
 use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
@@ -414,7 +414,13 @@ fn discard_log_reports_reason_while_on() {
         assert_eq!(events[0].level, tracing::Level::INFO);
         assert_eq!(events[0].field_str("ghost"), Some("pasta"));
         assert_eq!(events[0].field_str("reason"), Some(text));
-        assert!(world.get_non_send::<Emo2Wiring>().unwrap().window_state.on);
+        assert!(
+            world
+                .get_non_send::<RuntimeWiring>()
+                .unwrap()
+                .window_state
+                .on
+        );
     }
 }
 

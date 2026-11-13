@@ -32,7 +32,7 @@
 //!
 //! design.md の File Structure は spine を外部結合テスト `tests/emo2_boot_spine_test.rs` に置くが、
 //! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
-//! （`crate::runtime::{PresentBridge, Emo2Wiring, run_attach_phase, ...}`）へ到達できない。
+//! （`crate::runtime::{PresentBridge, RuntimeWiring, run_attach_phase, ...}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
 //! （bin を起動する外部テストでは不能）、既存 repo 慣行（`runtime::wire_tests`・
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
@@ -86,7 +86,7 @@ use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    Emo2Wiring, KanadeNoticeRx, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with,
+    KanadeNoticeRx, RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with,
     run_text_phase, run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, PositionCue};
@@ -558,7 +558,7 @@ enum LoopDriver {
 
 /// scripted ghost boot＋実 sink 結線＋GPU World＋frame 結線状態を束ねた spine ハーネス。
 ///
-/// `wire_emo2_boot`（task 5.1・production）の結線を、headless GPU World＋合成 `GhostWindows`＋
+/// `wire_runtime`（task 5.1・production）の結線を、headless GPU World＋合成 `GhostWindows`＋
 /// scripted backend＋`TickerMode::Disabled` で**テスト内 in-process** に再現したもの。frame
 /// フェーズ（`run_attach_phase` 等）を直接駆動でき、`ghost`/`seriko`/`shiori_handle` で
 /// ライフサイクル・発火列を観測できる。
@@ -566,7 +566,7 @@ pub(crate) struct SpineHarness {
     /// GPU 資源（`GraphicsCore`/`WucGraphicsResource`）＋合成 `GhostWindows`＋装着スロットを持つ World。
     world: World,
     /// frame 三相結線状態（presenter/rx/runtime/clock/assets）。`run_attach_phase` の駆動対象。
-    wiring: Emo2Wiring,
+    wiring: RuntimeWiring,
     /// 文字層ランタイムの観測用クローン（6.2/6.3 が `present_frame`/`read_back` に使う）。
     #[allow(dead_code)] // 読むのは一部のテストだけ
     runtime: Rc<RefCell<TextLayerRuntime>>,
@@ -675,8 +675,8 @@ impl SpineHarness {
         let clocked_text_sink = ClockedTextSink::new(emo_text_sink, clock.clone());
 
         // ── mpsc＋PresentBridge→spawn_seriko（実 SurfaceOutput 経路）。SurfaceResolver は
-        //    非 Clone ゆえ spawn_seriko が値消費し、Emo2Wiring 側は空 alias のプレースホルダで埋める
-        //    （attach は resolver を読まない・Task 4.1 申し送り・wire_emo2_boot 手順4 と同型）。 ──
+        //    非 Clone ゆえ spawn_seriko が値消費し、RuntimeWiring 側は空 alias のプレースホルダで埋める
+        //    （attach は resolver を読まない・Task 4.1 申し送り・wire_runtime 手順4 と同型）。 ──
         let (tx, rx) = mpsc::channel::<PresentCommand>();
         let bridge = PresentBridge::new(tx);
         let BootAssets {
@@ -701,7 +701,7 @@ impl SpineHarness {
             shell: shell_table,
             balloon: balloon_scope_tables,
         } = loop_tables;
-        // バルーン表の転送（要件 5.6）: production `wire_emo2_boot` と同型で、`build_boot_assets` が
+        // バルーン表の転送（要件 5.6）: production `wire_runtime` と同型で、`build_boot_assets` が
         // scope ごとに導出済みの写像を、scope キーだけアクタ鍵語彙へ写して渡す（値移送）。
         let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
         let loop_config = match driver {
@@ -714,7 +714,7 @@ impl SpineHarness {
             },
         };
         // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）＋
-        // loop_config を seriko の起動へ値渡しで配線する（production wire_emo2_boot と同型・task 7.2/9.4）。
+        // loop_config を seriko の起動へ値渡しで配線する（production wire_runtime と同型・task 7.2/9.4）。
         let (surface_sink, seriko) = spawn_seriko(
             resolver,
             static_binds.clone(),
@@ -746,16 +746,16 @@ impl SpineHarness {
             cursors,
         };
 
-        // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
-        // talk スレッドの MoveCueSink が送出端、UI スレッドの Emo2Wiring が受信端 move_rx（frame 相
+        // ── move channel＋実 MoveCueSink（wire_runtime 手順4 と同型・S-3 形＝task 9.3） ──
+        // talk スレッドの MoveCueSink が送出端、UI スレッドの RuntimeWiring が受信端 move_rx（frame 相
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替え、production `wire_emo2_boot` の sink 構成（現在は 13 本＝`runtime_boot.rs` の `runtime_sinks`）を spine でも
+        // 差し替え、production `wire_runtime` の sink 構成（現在は 13 本＝`runtime_boot.rs` の `runtime_sinks`）を spine でも
         // 忠実に再現する。
         let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
         let move_sink = MoveCueSink::new(move_tx);
 
-        // ── lifecycle channel＋実 BalloonLifecycleSink（wire_emo2_boot 手順4 と同型・task 4.1） ──
-        // talk スレッドの BalloonLifecycleSink が送出端、UI スレッドの Emo2Wiring が受信端
+        // ── lifecycle channel＋実 BalloonLifecycleSink（wire_runtime 手順4 と同型・task 4.1） ──
+        // talk スレッドの BalloonLifecycleSink が送出端、UI スレッドの RuntimeWiring が受信端
         // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。production と同じ sink 構成を
         // spine でも忠実に再現するため、throwaway ではなく実 sink を登録する。
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
@@ -780,17 +780,17 @@ impl SpineHarness {
             None,
             TickerMode::Disabled,
         );
-        // 停止通知の channel（R15.4・本番 `wire_emo2_boot` と同型）: 送出端は kanade へ、受信端は
+        // 停止通知の channel（R15.4・本番 `wire_runtime` と同型）: 送出端は kanade へ、受信端は
         // World の受け口（`KanadeNoticeRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
         let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
         let ghost = boot_with_kanade_stop(options, Some(kanade_stop_tx))
             .expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
-        // ── frame 三相結線状態（wire_emo2_boot 手順6 相当・System 登録はせず直接駆動する） ──
-        // Emo2Wiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
+        // ── frame 三相結線状態（wire_runtime 手順6 相当・System 登録はせず直接駆動する） ──
+        // RuntimeWiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
         // 備える。move の spine e2e（task 9.3）は上の実 MoveCueSink 経由で cue→channel→drain を通す。
         // 表示ライフサイクルの受信端 lifecycle_rx も同様に保持し、可視性相（task 4.4）の drain に備える。
-        let wiring = Emo2Wiring::new(
+        let wiring = RuntimeWiring::new(
             presenter,
             rx,
             move_rx,

@@ -248,7 +248,7 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
 /// 観測可能な完了条件（tasks.md task 3.2・要件 5.6）: 起動シームの転送が **全 scope** を
 /// アクタ鍵語彙へ写して seriko へ渡す（単一エントリ暫定でない）。
 ///
-/// `wire_emo2_boot`（mod.rs）と spine ハーネス（spine.rs）が共有する転送
+/// `wire_runtime`（mod.rs）と spine ハーネス（spine.rs）が共有する転送
 /// [`actor_keyed_balloon_tables`] を実 fixture 由来の写像へ適用し、`SerikoLoopConfig.balloon_tables`
 /// のキー集合が `ActorKey::from(scope.to_string())` で `{"0","1"}` になることを固定する。
 /// 先頭 scope だけを載せる旧形（`{"0"}`）はこの檻で落ちる。

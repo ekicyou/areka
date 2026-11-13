@@ -21,7 +21,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Point, Window};
 
-use super::super::test_support::{capture_logs, headless_emo2_wiring};
+use super::super::test_support::{capture_logs, headless_runtime_wiring};
 use super::super::{BalloonWiring, ChoiceSelection};
 use super::on_balloon_pointer_pressed;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
@@ -91,7 +91,7 @@ fn rig() -> Rig {
         BalloonWindowMarker { scope: 0 },
         OnPointerPressed(on_balloon_pointer_pressed),
     ));
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (tx, selections) = mpsc::channel();
     world.insert_non_send(BalloonWiring::new(tx));
     let (flag_tx, flag_rx) = mpsc::channel();

@@ -32,7 +32,7 @@ use areka_placement::sticky_group_ledger::{
 };
 
 use super::move_hold::{ShownRatioSource, release_ready};
-use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
+use super::{PositionCue, RuntimeWiring, apply_move_directive, shell_target};
 
 // ---------------------------------------------------------------------------
 // drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
@@ -55,11 +55,11 @@ use super::{Emo2Wiring, PositionCue, apply_move_directive, shell_target};
 ///
 /// 本フェーズは**指令の適用だけ**を担う。表示成立点の状態照合報告（`take_pending_resize`）を
 /// 窓へ反映する `reconcile_reported_sizes` は、呼び出し順の所有者である
-/// [`emo2_frame_system`](super::emo2_frame_system) が本フェーズの**後**に直接呼ぶ
+/// [`frame_system`](super::frame_system) が本フェーズの**後**に直接呼ぶ
 /// （`areka-P0-balloon-visibility` design 決定 D5・task 4.3）。バルーン可視性の相を
 /// 「全 `\b` 指令の適用後」かつ「表示が積む窓寸要求の消化前」へ挟むための並べ替えであり、
 /// 適用と反映の順序（適用 → 反映）は移動前と変わらない。
-pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+pub fn run_drain_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する（DD-1）。
     if !wiring.attached {
         return;
@@ -156,13 +156,13 @@ pub(super) fn drain_present_commands(
 /// 作業領域/主モニタ/並べ直しの材料の不在はいずれも同関数内で `warn!`＋`false`（log-first・非 panic・R5.5）ゆえ、本フェーズは
 /// 戻り値を捨てて次 directive へ進む（1 件の縮退が他 directive・talk を巻き込まない）。`try_iter` は
 /// チャネルが空か全送信端 drop で尽きる（ブロックしない・empty/disconnected でも panic しない）。
-pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
+pub fn run_move_drain_phase(wiring: &RuntimeWiring, world: &mut World) {
     run_move_drain_with(wiring, &wiring.presenter, world);
 }
 
 /// [`run_move_drain_phase`] の本体（表示の拡大率を読み口で受ける形・GPU 無しの檻へ入れるためのシーム）。
 pub(crate) fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
-    wiring: &Emo2Wiring,
+    wiring: &RuntimeWiring,
     shown: &S,
     world: &mut World,
 ) {
@@ -609,7 +609,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
 // DPI 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）
 // ---------------------------------------------------------------------------
 
-/// 遷移後の連鎖の解き直しを 1 回試みる（`emo2_frame_system` が連鎖確定の**直後**に呼ぶ）。
+/// 遷移後の連鎖の解き直しを 1 回試みる（`frame_system` が連鎖確定の**直後**に呼ぶ）。
 ///
 /// 本番経路は [`finalize_chain_once`] と同じく本体を持たず
 /// [`realign_chain_once_with_source`] へ委譲する（実装を 2 つに割らない）。

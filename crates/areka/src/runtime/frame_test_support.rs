@@ -95,7 +95,7 @@ pub(super) fn synth_assets_with_balloons(
     }
 }
 
-// ── task 4.2: drain／text フェーズ＋emo2_frame_system の檻 ──────────────────────
+// ── task 4.2: drain／text フェーズ＋frame_system の檻 ──────────────────────
 //
 // ログ発火を目視でなく実行テストで決定論的に檻へ入れる。捕捉層そのものはここに持たず、
 // 硬化機構の唯一の定義元 `log-capture-kit` へ委譲する（行の形も呼出側の判定内容も移行前と
@@ -135,10 +135,13 @@ pub(super) fn zero_clock() -> TalkClock {
     TalkClock::new(Arc::new(|| 0.0))
 }
 
-/// headless な `Emo2Wiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を
+/// headless な `RuntimeWiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を
 /// 注入 `rx`／`clock` で組む（task 4.1 のゲートテストと同型・COM/GPU 不要）。
-pub(super) fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> Emo2Wiring {
-    Emo2Wiring::new(
+pub(super) fn headless_wiring_with(
+    rx: Receiver<PresentCommand>,
+    clock: TalkClock,
+) -> RuntimeWiring {
+    RuntimeWiring::new(
         EmoPresenter::new(),
         rx,
         mpsc::channel::<PositionCue>().1,
@@ -808,7 +811,7 @@ impl FrameHarness {
     /// 配置に関わる相を**本番と同じ順**で 1 フレームぶん回す
     /// （同期段 → 拡大率の相 → 作業領域再スナップ）。
     ///
-    /// 相を 1 つずつ呼ぶ形だと、本番（`emo2_frame_system`）の並びが入れ替わってもテストは
+    /// 相を 1 つずつ呼ぶ形だと、本番（`frame_system`）の並びが入れ替わってもテストは
     /// 自分の並びで緑になる。ここに順序を 1 箇所だけ写し、置き場を主題にするテストは
     /// この口から駆動する（本番の字面そのものは本文走査のテストが別に固定する）。
     ///

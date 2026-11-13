@@ -7,7 +7,7 @@
 //!
 //! 1. 降ろす前に、表示層が最後に確立した各スコープのシェルの面と着せ替えの集合を控える
 //!    （[`capture_for_reload`]）。
-//! 2. 起こし直しが成功したら、控えを新しい結線（`Emo2Wiring`）へ渡す（[`hand_over`]）。
+//! 2. 起こし直しが成功したら、控えを新しい結線（`RuntimeWiring`）へ渡す（[`hand_over`]）。
 //! 3. 装着の相が、読み直したシェルにその面が在るかを確かめ（[`decide`]）、無ければ descript の既定の面
 //!    （それも無ければ組み込みの既定の面）へ戻す（descript-window-keys 要件 3.1・3.3）。
 //!    着せ替えは、読み直しの前のシェルの既定との差（台本で着た・脱いだ分）だけを、読み直したシェルの
@@ -29,7 +29,7 @@ use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use tracing::{info, warn};
 
-use super::frame::Emo2Wiring;
+use super::frame::RuntimeWiring;
 use super::target_map::shell_target;
 use crate::ghost_session::GhostSlot;
 use areka_placement::descript_window_keys::{fallback_candidates, first_existing};
@@ -226,7 +226,7 @@ pub(crate) fn capture_for_reload(world: &World) -> Option<ShellCarry> {
         return None;
     }
     let (Some(wiring), Some(windows)) = (
-        world.get_non_send::<Emo2Wiring>(),
+        world.get_non_send::<RuntimeWiring>(),
         world.get_resource::<GhostWindows>(),
     ) else {
         warn!(
@@ -257,7 +257,7 @@ pub(crate) fn hand_over(world: &mut World, carry: Option<ShellCarry>) {
     let Some(carry) = carry else {
         return;
     };
-    match world.get_non_send_mut::<Emo2Wiring>() {
+    match world.get_non_send_mut::<RuntimeWiring>() {
         Some(mut wiring) => wiring.shell_carry = Some(carry),
         None => warn!(
             event = "reload_shell_carry_unavailable",

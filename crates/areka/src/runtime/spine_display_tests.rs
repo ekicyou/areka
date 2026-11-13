@@ -80,7 +80,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
     );
 
     // (a-2) 文字層 k 再追従の再利用源（emo-dpi-scaling D11-3・R8.1）: attach 相は装着した各 scope の
-    //       `BalloonModel` を `Emo2Wiring` へ記憶する。文字層スケール相（`run_text_scale_phase`）はこれを再利用して
+    //       `BalloonModel` を `RuntimeWiring` へ記憶する。文字層スケール相（`run_text_scale_phase`）はこれを再利用して
     //       binding を組み直す——記憶が無ければ再追従は model 不在で skip され、文字だけが旧 k に
     //       取り残される（6.5 一次実走の欠陥）。実 attach 経路で保持されることをここで固定する。
     assert_eq!(

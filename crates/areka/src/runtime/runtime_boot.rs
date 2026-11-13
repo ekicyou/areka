@@ -1,6 +1,6 @@
 //! 実行系の側の起動（design「RuntimeBoot と CueSinkSources」・要件 4.2・13.4）。
 //!
-//! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`Emo2Wiring`）と
+//! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`RuntimeWiring`）と
 //! 「実行系の側」（`GhostRuntime`）の 2 段に分かれる。窓の側が受け口の送出端の束
 //! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から 13 本の sink を組んで実行系を
 //! 起こす。受信端が窓の側に無い線（readme・中断を禁じる旗・ゴーストの切替・シェル／バルーンの
@@ -21,7 +21,7 @@ use areka_seriko::SerikoSink;
 use bevy_ecs::world::World;
 use tracing::{error, warn};
 
-use super::Emo2BootInputs;
+use super::RuntimeInputs;
 use super::change_cue::ChangeCueSink;
 use super::ghost_switch::{self, ChangeRequestRaw};
 use super::install_cue::InstallCueSink;
@@ -47,13 +47,13 @@ pub(crate) struct CueSinkSources {
     pub text: EmoTextSink,
     /// `ClockedTextSink`／`BalloonLifecycleSink` が共有する台本の時計。
     pub clock: TalkClock,
-    /// `\![move]` の線の送出端（受信端は `Emo2Wiring`）。
+    /// `\![move]` の線の送出端（受信端は `RuntimeWiring`）。
     pub move_tx: Sender<PositionCue>,
-    /// 表示ライフサイクルの線の送出端（受信端は `Emo2Wiring`）。
+    /// 表示ライフサイクルの線の送出端（受信端は `RuntimeWiring`）。
     pub lifecycle_tx: Sender<TalkLifecycleSignal>,
-    /// 重なりの線の送出端（受信端は `Emo2Wiring`）。
+    /// 重なりの線の送出端（受信端は `RuntimeWiring`）。
     pub zorder_tx: Sender<ZOrderDirective>,
-    /// 常に手前の線の送出端（受信端は `Emo2Wiring`・SHIORI だけの読み直しでも同じ線に届く）。
+    /// 常に手前の線の送出端（受信端は `RuntimeWiring`・SHIORI だけの読み直しでも同じ線に届く）。
     pub window_state_tx: Sender<WindowStateDirective>,
 }
 
@@ -136,12 +136,12 @@ pub(super) fn runtime_sinks(
 /// 起動の由来は kanade の起動の根（`OnBoot`／`OnGhostChanged`／読み直し）の選択へ渡る。
 pub(crate) fn boot_runtime(
     world: &mut World,
-    inputs: Emo2BootInputs,
+    inputs: RuntimeInputs,
     sources: &CueSinkSources,
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
 ) -> Result<GhostRuntime, RuntimeBootError> {
-    let Emo2BootInputs {
+    let RuntimeInputs {
         ghost_root,
         balloon_root: _,
         shiori,

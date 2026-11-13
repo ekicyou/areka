@@ -33,7 +33,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::Input;
 
-use super::Emo2BootInputs;
+use super::RuntimeInputs;
 use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
@@ -293,7 +293,7 @@ impl SwitchRig {
                     None => panic!("偽の SHIORI の台本が無いゴースト: {folder}"),
                 };
                 GhostBootInputs {
-                    wiring: Emo2BootInputs {
+                    wiring: RuntimeInputs {
                         ghost_root,
                         balloon_root,
                         shiori,

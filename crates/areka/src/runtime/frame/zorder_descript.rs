@@ -49,8 +49,8 @@ const SEPARATOR: char = ',';
 /// `raw` は `seriko.zorder` の値そのもの（`areka_placement::config` の `zorder_raw`）。`None` は
 /// 「設定が無い」であり、台帳にも記録にも一切触れない。
 ///
-/// 呼ぶのは起動の段でちょうど 1 回である（`wire_emo2_boot` →
-/// [`Emo2Wiring::seed_zorder_descript_base`](super::Emo2Wiring::seed_zorder_descript_base)）。
+/// 呼ぶのは起動の段でちょうど 1 回である（`wire_runtime` →
+/// [`RuntimeWiring::seed_zorder_descript_base`](super::RuntimeWiring::seed_zorder_descript_base)）。
 /// タグの取り出しの相はまだ 1 度も走っていないので、ここで据えた基底は**最初の維持の巡**から
 /// 効く（要件 5.1「タグの実行を待たずに」）。
 ///

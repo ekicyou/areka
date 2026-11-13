@@ -5,8 +5,8 @@
 // 埋まらないので、箱の中の操作は前段の本体（`move_with_point`・`press_with_point`）へ作った写しを
 // 渡して確かめる。シェルへ届く通知は、`mod.rs` のハンドラと同じ並び（前段が「処理した」なら
 // 落とさない）で既存の道を続けて呼んで数える（`Fixture::moved`・`Fixture::pressed`）。このとき
-// world に `Emo2Wiring` を置かないので、ハンドラの中の本物の前段は何もしない（写しを 2 度当てない）。
-// 箱の外は `Emo2Wiring` を置いた本物のハンドラ（写しが空の文字の層）で、本 spec の前と同じ通知に
+// world に `RuntimeWiring` を置かないので、ハンドラの中の本物の前段は何もしない（写しを 2 度当てない）。
+// 箱の外は `RuntimeWiring` を置いた本物のハンドラ（写しが空の文字の層）で、本 spec の前と同じ通知に
 // なることを確かめる。
 // =============================================================================
 
@@ -29,7 +29,7 @@ use wintf::ecs::{Input, Point, Window};
 
 use super::*;
 use crate::input_events::balloon::test_support::{
-    anchor_cues, anchor_row, headless_emo2_wiring, row,
+    anchor_cues, anchor_row, headless_runtime_wiring, row,
 };
 use crate::input_events::balloon::{ChoiceSelectionInbox, click_selection, wire_balloon_choice};
 use crate::input_events::shell_box::ShellBoxHover;
@@ -157,10 +157,10 @@ impl Fixture {
         }
     }
 
-    /// 文字の層を `Emo2Wiring` に載せる（本物の前段が写しを読む・写しは空＝箱の外）。
-    fn with_emo2(mut self) -> Self {
+    /// 文字の層を `RuntimeWiring` に載せる（本物の前段が写しを読む・写しは空＝箱の外）。
+    fn with_runtime(mut self) -> Self {
         self.world
-            .insert_non_send(headless_emo2_wiring(Rc::clone(&self.runtime)));
+            .insert_non_send(headless_runtime_wiring(Rc::clone(&self.runtime)));
         self
     }
 
@@ -328,7 +328,7 @@ fn not_talking_left_double_click_on_box_reaches_the_shell() {
 /// 要件 9.2・9.8）。
 #[test]
 fn press_outside_boxes_is_unchanged() {
-    let mut f = Fixture::new().with_emo2().talking();
+    let mut f = Fixture::new().with_runtime().talking();
     let ev = Phase::Bubble(pointer(BODY, DoubleClick::Left));
     assert!(on_char_pointer_pressed(
         &mut f.world,
@@ -403,7 +403,7 @@ fn move_to_another_box_and_outside() {
 /// 箱の外の移動は本 spec の前と同じ（本物のハンドラ・写しが空の文字の層・要件 9.2）。
 #[test]
 fn move_outside_boxes_is_unchanged() {
-    let mut f = Fixture::new().with_emo2();
+    let mut f = Fixture::new().with_runtime();
     let ev = Phase::Bubble(pointer(BODY, DoubleClick::None));
     assert!(on_char_pointer_moved(&mut f.world, f.entity, f.entity, &ev));
     assert!(matches!(
@@ -420,7 +420,7 @@ fn move_outside_boxes_is_unchanged() {
 fn leaving_the_shell_window_clears_hover_and_highlight() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
-    let mut f = f.with_emo2();
+    let mut f = f.with_runtime();
     // 強調を外す注入は「選択肢が出ている」ときだけ（普通のバルーンと同じ hover_action）。
     f.runtime
         .borrow_mut()
@@ -511,7 +511,7 @@ fn leaving_the_shell_window_clears_an_anchor_highlight() {
     let mut f = Fixture::new();
     assert!(f.moved(ROW, anchor_on_a()), "アンカーの上の移動は強調する");
     assert_eq!(f.hover(), (Some(name("a")), Some(0)));
-    let mut f = with_anchor_only(f.with_emo2());
+    let mut f = with_anchor_only(f.with_runtime());
     let win = f
         .world
         .spawn((CharWindowMarker { scope: 0 }, Window::default()))
@@ -541,7 +541,7 @@ fn snapshot_borrow_failures(events: &[log_capture_kit::CapturedEvent]) -> usize 
 /// 戻りより前に前段がある＝箱の選択肢の単押しでの確定が届く・要件 8.3・8.5）。
 #[test]
 fn real_handlers_call_the_prelude_before_the_existing_path() {
-    let mut f = Fixture::new().with_emo2();
+    let mut f = Fixture::new().with_runtime();
     let runtime = Rc::clone(&f.runtime);
     let _held = runtime.borrow_mut();
 

@@ -3,7 +3,7 @@
 //
 // `balloon_visibility_lifecycle_e2e_tests.rs`（台本の占有終端が判断中核の計測起点になる）の続き。
 // あちらは headless の表示層で相を回すのでバルーンが可視にならず、時間切れまで届かない。ここは
-// 親の檻（実 emo2 fixture ＋ 実 GPU・本番の `emo2_frame_system`）で、
+// 親の檻（実 emo2 fixture ＋ 実 GPU・本番の `frame_system`）で、
 //   台詞 → 本物の受け口（配送と同じく原本を複製して番号を渡す）→ トークの終わり → 時刻の注入
 //   → 隠す発行 → 置き場のゴーストの kanade への知らせ
 // までを 1 本で通す（要件 2.1・5.1・8.1・8.2・9.1）。可視性の相の中の知らせの送出の 1 行を
@@ -45,7 +45,7 @@ impl CueSink for Recorded {
 struct Cage {
     world: World,
     /// フレームの間だけ world へ預けるので `Option` で持つ。
-    wiring: Option<Emo2Wiring>,
+    wiring: Option<RuntimeWiring>,
     wall: Arc<Mutex<f64>>,
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     kanade: mpsc::Receiver<KanadeMsg>,
@@ -88,7 +88,7 @@ impl Cage {
         cage
     }
 
-    fn wiring(&self) -> &Emo2Wiring {
+    fn wiring(&self) -> &RuntimeWiring {
         self.wiring
             .as_ref()
             .expect("フレームの外では結線を持っている")

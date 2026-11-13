@@ -22,7 +22,7 @@ use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 use super::balloon_offset_follow::{
     OffsetFollowOutcome, converge_balloon_after_skipped_write, rescale_balloon_follow_offset,
 };
-use super::{Emo2Wiring, PlannedAttach, balloon_target, shell_target};
+use super::{PlannedAttach, RuntimeWiring, balloon_target, shell_target};
 
 // ---------------------------------------------------------------------------
 // DPI 追従フェーズ（areka-P0-emo-dpi-scaling task 4.2・design「areka / runtime（DPI 追従
@@ -564,7 +564,7 @@ pub(super) fn reproject_char_window_at_current_size(
 /// # 窓寸 reconcile の第 2 経路
 ///
 /// エッジ（`Changed<DPI>`）観測は「再表示のトリガ」に徹する。窓寸の整合そのものは**表示が成立
-/// したという状態**に紐づき、[`emo2_frame_system`](super::emo2_frame_system) が drain の後段で
+/// したという状態**に紐づき、[`frame_system`](super::frame_system) が drain の後段で
 /// 直接呼ぶ [`reconcile_reported_sizes`] が同一フレーム内で拾う（初回表示の k₀ 補正＝Flow 3
 /// 手順 5 はこちらの経路で landing する。呼び出し位置は `areka-P0-balloon-visibility` design
 /// 決定 D5・task 4.3 で `run_drain_phase` 末尾から相順の所有者へ移した）。両者は
@@ -576,9 +576,9 @@ pub(super) fn reproject_char_window_at_current_size(
 /// [`run_text_scale_phase`] である——適用 k の更新点は 1 フレームに 2 つ（本フェーズの
 /// `refresh_scale` と drain 相の `apply_show`）あり、本フェーズの戻り値だけを見ると後者を取り
 /// こぼすためである（詳細は [`run_text_scale_phase`] の doc）。
-pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+pub fn run_dpi_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // presenter（報告源）と dpi_state（永続観測器）は互いに素なフィールドゆえ同時に借りられる。
-    let Emo2Wiring {
+    let RuntimeWiring {
         presenter,
         dpi_state,
         ..

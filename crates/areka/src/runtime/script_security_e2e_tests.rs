@@ -85,7 +85,7 @@ fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
         on_boot_level,
     };
     let mut world = World::new();
-    let inputs = Emo2BootInputs {
+    let inputs = RuntimeInputs {
         ghost_root: sample.folder().to_path_buf(),
         balloon_root: sample
             .balloon("emo2-kakukaku")

@@ -1,12 +1,12 @@
 // =============================================================================
 // フレーム統合の検証（task 6.6）
 //
-// ここが押さえるのは**相順そのもの**——本番の `emo2_frame_system` が design 決定 D5 の順で
+// ここが押さえるのは**相順そのもの**——本番の `frame_system` が design 決定 D5 の順で
 // 各相を回したときにだけ成り立つ性質である。判断中核の分岐表・配線層の縮退・表示層の
 // 可視性能力は、それぞれ `balloon_visibility_tests.rs` 群・`balloon_visibility_phase_tests.rs`・
 // `areka-emo-present` の in-crate テストが所有しており、ここでは重ねない。
 //
-// 実 emo2 fixture ＋ 実 GPU（MTA）で本番の `emo2_frame_system` をそのまま駆動する。
+// 実 emo2 fixture ＋ 実 GPU（MTA）で本番の `frame_system` をそのまま駆動する。
 // 表示層の可視化（`show_target`）は「表示が一度も確立していない」と必ず失敗するため、確立が
 // 成立する実 attach を通さない限り、以下の性質はどれも観測できない。
 //
@@ -66,14 +66,14 @@ fn gpu_frame_world() -> (
     (gpu, world, gw)
 }
 
-/// 実 emo2 資産で結線資源を組む（本番 `wire_emo2_boot` 手順 6 と同じ構築点）。
+/// 実 emo2 資産で結線資源を組む（本番 `wire_runtime` 手順 6 と同じ構築点）。
 fn boot_wiring(
     rx: Receiver<PresentCommand>,
     lifecycle_rx: Receiver<TalkLifecycleSignal>,
-) -> Emo2Wiring {
+) -> RuntimeWiring {
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
-    Emo2Wiring::new(
+    RuntimeWiring::new(
         EmoPresenter::new(),
         rx,
         mpsc::channel::<PositionCue>().1,
@@ -87,16 +87,16 @@ fn boot_wiring(
     )
 }
 
-/// 本番の相順を 1 フレーム分回す（`emo2_frame_system` の donor 手順をそのまま通す）。
+/// 本番の相順を 1 フレーム分回す（`frame_system` の donor 手順をそのまま通す）。
 ///
 /// 相を個別に呼ばないのが要点である——相順の性質を見たい檻が相を自分で並べたら、檻は自分の
 /// 並べ方を検査するだけになる。
-fn advance_frame(world: &mut World, wiring: Emo2Wiring) -> Emo2Wiring {
+fn advance_frame(world: &mut World, wiring: RuntimeWiring) -> RuntimeWiring {
     world.insert_non_send(wiring);
-    emo2_frame_system(world);
+    frame_system(world);
     world
-        .remove_non_send::<Emo2Wiring>()
-        .expect("emo2_frame_system は取り出した結線資源を必ず戻す")
+        .remove_non_send::<RuntimeWiring>()
+        .expect("frame_system は取り出した結線資源を必ず戻す")
 }
 
 /// `[balloon-visibility]` を名乗る行だけを取り出す（他所のログは相順の関心事ではない）。
@@ -116,7 +116,7 @@ fn explicit_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 }
 
 /// 当該 scope へ可視グリフを流し込む（`at=0.0` 起点・注入時刻が進むほど文字がリビールされる）。
-fn reveal_text(wiring: &Emo2Wiring, scope: u32, text: &str) {
+fn reveal_text(wiring: &RuntimeWiring, scope: u32, text: &str) {
     wiring.runtime.borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
         actor: ActorKey::from(scope.to_string()),
@@ -142,7 +142,7 @@ fn bump_window_dpi(world: &mut World, window: Entity) -> u16 {
 /// `attach_target` 直後から `Some(false)` を返す）。確立の証跡——面 0 の記録・文字の配置先・
 /// 文字スロット entity の実値——を先に要求してから不可視を主張することで、確立が起きていない
 /// 縮退では不可視の主張へ到達する前に落ちる。
-fn assert_established_but_invisible(world: &World, wiring: &Emo2Wiring, scope: u32, at: &str) {
+fn assert_established_but_invisible(world: &World, wiring: &RuntimeWiring, scope: u32, at: &str) {
     let target = balloon_target(scope);
     assert_eq!(
         wiring.presenter.current_surface_id(target),
@@ -558,7 +558,7 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     );
     drop(old_wiring);
 
-    // 新しいゴースト: 新しい置き場と新しい結線状態（本番の切替と同じく `Emo2Wiring::new`）。
+    // 新しいゴースト: 新しい置き場と新しい結線状態（本番の切替と同じく `RuntimeWiring::new`）。
     let (_gpu, mut world, _gw) = gpu_frame_world();
     let reports = seat_ghost(&mut world);
     let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();

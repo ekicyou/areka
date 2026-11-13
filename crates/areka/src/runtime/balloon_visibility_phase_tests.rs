@@ -65,12 +65,12 @@ fn empty_assets() -> BootAssets {
     }
 }
 
-/// 檻の配線一式（相へ渡す `Emo2Wiring` と、その相手側の送信端・受信端）。
+/// 檻の配線一式（相へ渡す `RuntimeWiring` と、その相手側の送信端・受信端）。
 ///
 /// 送信端をここで保持し続けるのは、`mpsc` の受信端が「送信端が全て落ちたら切断」を返すためで
 /// ある——切断の縮退を見たいテストだけが明示的に落とす。
 struct Harness {
-    wiring: Emo2Wiring,
+    wiring: RuntimeWiring,
     lifecycle_tx: Option<Sender<TalkLifecycleSignal>>,
     /// 選択確定の受け口（`BalloonWiring` の送信端を生かしておくためだけに保持する）。
     _choice_rx: Option<mpsc::Receiver<ChoiceSelection>>,
@@ -84,7 +84,7 @@ impl Harness {
         // 決まるため、檻の組み立て時＝捕捉窓の外で先に確定させておく。
         let _ = super::super::configured_timeout_secs();
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
-        let wiring = Emo2Wiring::new(
+        let wiring = RuntimeWiring::new(
             EmoPresenter::new(),
             mpsc::channel().1,
             mpsc::channel().1,

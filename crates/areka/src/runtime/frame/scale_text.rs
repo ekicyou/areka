@@ -13,7 +13,7 @@ use areka_placement::dpi_sync::{self, HoldSite};
 use areka_placement::spawn::GhostWindows;
 
 use super::{
-    Emo2Wiring, GhostWindowKind, ScaleReportSource, TalkClock, balloon_target,
+    GhostWindowKind, RuntimeWiring, ScaleReportSource, TalkClock, balloon_target,
     reconcile_window_size, shell_target,
 };
 
@@ -23,7 +23,7 @@ use super::{
 
 /// 文字層 k 追従フェーズ（毎フレーム・R8.1/8.5/8.6・design D11-4）: 装着済み balloon scope の
 /// 文字層 binding を presenter の**現適用 k** へ合わせ直す。戻り値は実際に binding を再構築した
-/// scope（昇順・観測用。本番＝[`emo2_frame_system`] は捨てる）。
+/// scope（昇順・観測用。本番＝[`frame_system`] は捨てる）。
 ///
 /// バルーンの**文字**は emo-text の binding（装着時の k を焼き付ける）に載るため、窓とバルーン画像
 /// だけを再スケールすると文字だけが旧 k の寸法に取り残される（6.5 一次実走で実測した欠陥）。本
@@ -55,7 +55,7 @@ use super::{
 /// 「同値 k なら再構築しない」では相方側の領域変化を取りこぼす）。費用は balloon 1 枚あたり
 /// `ResolvedBalloonText` の再解決 1 回と、binding／解決済み領域の 2 構造体比較。
 ///
-/// # 呼ぶ位置（[`emo2_frame_system`] 内）
+/// # 呼ぶ位置（[`frame_system`] 内）
 ///
 /// 適用 k の更新点は 1 フレームに 2 つ——[`run_dpi_phase`] の `refresh_scale` と
 /// [`run_drain_phase`] の `apply_show`。本フェーズは**両者の下流**かつ [`run_text_phase`]
@@ -85,10 +85,10 @@ use super::{
 /// scope は `None` を渡す（箱の登録を外す・要件 1.3）。未確立は
 /// 起動直後の正常な状態ゆえ記録しない（毎フレーム鳴らさない）。`present_frame` の上流なので、
 /// 合わせた登録は同じフレームの描画に効く。
-pub fn run_text_scale_phase(wiring: &mut Emo2Wiring, world: &mut World) -> Vec<u32> {
+pub fn run_text_scale_phase(wiring: &mut RuntimeWiring, world: &mut World) -> Vec<u32> {
     // presenter（view 供給）／runtime（適用先）／balloon_models（再利用モデル）／warn ガードは
     // 互いに素なフィールドゆえ同時に借りられる。
-    let Emo2Wiring {
+    let RuntimeWiring {
         presenter,
         runtime,
         balloon_models,
@@ -289,7 +289,11 @@ pub(in crate::runtime) fn reveal_pending<'a>(
 /// 側で失敗源を log 済み・first error 返却）＋継続で、他 actor を巻き込まず次フレーム再試行へ委ねる
 /// （R2.3・emo-text 既存契約）。解決が `None`（epoch 未確立／`FrameTime` 不在かつ override なし）なら
 /// `present_frame` を呼ばず skip する（描くものがない・hang しない）。
-pub fn run_text_phase(wiring: &mut Emo2Wiring, world: &mut World, talk_time_override: Option<f64>) {
+pub fn run_text_phase(
+    wiring: &mut RuntimeWiring,
+    world: &mut World,
+    talk_time_override: Option<f64>,
+) {
     // 本番の frame 時刻源（headless では不在）。override が Some なら resolve_talk_time が優先採用する。
     let frame_now = world.get_resource::<FrameTime>().map(|ft| ft.0);
     let Some(talk_time) = resolve_talk_time(talk_time_override, frame_now, &wiring.clock) else {

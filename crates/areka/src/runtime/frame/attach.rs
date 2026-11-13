@@ -19,7 +19,7 @@ use areka_placement::spawn::GhostWindows;
 
 use super::balloon_face::{FaceCause, select_balloon_face};
 use super::{
-    AuthorDpis, BalloonScopeAssets, BootAssets, Emo2Wiring, ScopeAssets, balloon_target,
+    AuthorDpis, BalloonScopeAssets, BootAssets, RuntimeWiring, ScopeAssets, balloon_target,
     shell_target,
 };
 
@@ -161,7 +161,7 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
 /// 由来の窓解決へ一般化したもの。`apply` は同期実行のため balloon の `text_slot_view` は同一フレームで
 /// `Some` になるのが正常経路（DD-4）。万一 `None`（上流の遅延化）なら接続せず次フレーム再試行に委ねる
 /// （R4.2・[`connect_balloon_text`]）。
-pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // 高々 1 回: 装着済みなら以降 no-op（装着後の remove/insert churn を避ける donor 慣行）。
     if wiring.attached {
         return;
@@ -218,7 +218,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     let BootAssets {
         shells,
         balloons,
-        // resolver は attach では未使用（seriko へは wire_emo2_boot=task 5.1 が手渡す）。
+        // resolver は attach では未使用（seriko へは wire_runtime=task 5.1 が手渡す）。
         resolver: _,
         // static_binds はシェルの初回表示には使わない（defect #5・2026-07-13 実機#5）: シェル初回表示を attach で
         // 焼き付けなくなったため。起動時オンの bindgroup default は seriko が保持し（spawn_seriko へ

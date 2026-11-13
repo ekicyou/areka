@@ -614,11 +614,11 @@ pub(crate) fn shiori_wiring_for(
 ///
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
-/// 限られる。分類は `wire_emo2_boot` のフォールバックが使い続けるため残す。読取不能
+/// 限られる。分類は `wire_runtime` のフォールバックが使い続けるため残す。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///
-/// `pub(crate)`: `runtime::wire_emo2_boot`（task 5.1）が boot 失敗（`GhostBootError`）を
+/// `pub(crate)`: `runtime::wire_runtime`（task 5.1）が boot 失敗（`GhostBootError`）を
 /// 同一方針（起点不在＝良性 `warn!`・他＝`error!`・R7.4）で分類するため再利用する。
 pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
     match err {

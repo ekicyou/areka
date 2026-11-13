@@ -36,7 +36,7 @@ use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRou
 use crate::ghost_session::GhostSession;
 use crate::readme::ReadmeWiring;
 use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::reload_args::DescriptParts;
 use crate::runtime::talk_clock::TalkClock;
@@ -50,8 +50,8 @@ struct Rig {
 }
 
 /// 窓も GPU も持たない結線（入口は有無だけを見る）。
-fn headless_wiring() -> Emo2Wiring {
-    Emo2Wiring::new(
+fn headless_wiring() -> RuntimeWiring {
+    RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel().1,
         mpsc::channel().1,

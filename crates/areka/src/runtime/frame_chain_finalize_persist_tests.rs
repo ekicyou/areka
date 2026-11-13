@@ -404,7 +404,7 @@ fn restart_writes_once_more_to_the_new_store_only() {
 /// 書き込みが届くことで、失敗のあとも書き手が止まっていないことを確かめる。
 ///
 /// 「次のフレーム」は `resnap_with` → `finalize_chain_once_with` の 2 段で回す。毎フレームの処理
-/// `emo2_frame_system` は本物の表示側（`Emo2Wiring`）が無いと最初で戻るのでテストから回せず、
+/// `frame_system` は本物の表示側（`RuntimeWiring`）が無いと最初で戻るのでテストから回せず、
 /// その中の置き直しと並べ直しはこの 2 つへ委ねている（`resnap_shell_targets`・`finalize_chain_once`）。
 #[test]
 fn failed_write_keeps_marker_and_next_frame_continues() {

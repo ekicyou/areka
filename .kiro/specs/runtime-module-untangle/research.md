@@ -766,3 +766,42 @@ public struct RECT { public int L, T, R, B; }
     }
 }
 ```
+
+## 型・関数・テストの結線の名前の改め（2026-11-13・タスク 2.2・要件 1.1〜1.4・1.6）
+
+- 改めた所: `crates/areka` の中だけ（`src`・`examples`・`tests` の説明の文を含む・111 ファイル）。字面の置き換えの規則は次の 10 本で、残りが 0 件であることを `rg` で確かめた。
+  - `Emo2Wiring` → `RuntimeWiring`・`Emo2BootInputs` → `RuntimeInputs`・`Emo2BootOutcome` → `RuntimeOutcome`・`wire_emo2_boot` → `wire_runtime`・`emo2_frame_system` → `frame_system`（`register_emo2_frame_system` → `register_frame_system` もこれで改まる）・`emo2_wiring` → `runtime_wiring`（`headless_emo2_wiring` → `headless_runtime_wiring` を含む）・`with_emo2` → `with_runtime`・`emo2_absent` → `runtime_absent`・`Emo2Absent` → `RuntimeAbsent`・`emo2_sink_of` → `runtime_sink_of`
+- 字面で照合するテストは同じ規則で一緒に改まった: `frame_schedule_tests.rs` の `pub fn wire_runtime(`・`add_systems(Update, frame_system.after(update_typewriters));`・`add_systems(Update, ghost_quit_system.before(frame_system));`、`zorder_wiring_tests.rs` の `pub fn wire_runtime(`・`pub fn frame_system(world: &mut World) {`・`frame_system.before(apply_zorder_chain)`。
+- 型の名前を中に持つログの文 5 本（`input_events` の `balloon_exit.rs`・`balloon_moved.rs`・`balloon_pressed.rs`・`balloon_wheel.rs`・`mod.rs` の「`Emo2Wiring` 不在（boot 前／失敗）…」）は、型の改名と同じく `RuntimeWiring` の語だけが変わった（要件 1.6: 文の本体・欄・段は同じ）。これを照合するテストは無い。2.3 の文言（`emo2-boot:` ほか）とイベントの値（`*_no_emo2`）はここでは触らない。
+- 触らなかったもの: 本体の外の crate の説明の文（`areka-placement` の `chain_finalize.rs`・`lib.rs`・`persist.rs`・`persist_io_wiring_tests.rs`・`placement_prepare_tests.rs` と `doc/ukadoc-coverage/ledger/assets.toml`＝Out of scope・8.x の掃き出しで一覧に載せる）、`runtime/mod.rs` のテストの存在しない根の文字列 `areka-nonexistent-*-root-emo2boot-5v1`（名前ではなく、存在しないことだけが意味の値）。
+
+### 名前だけでは決まらないものの判定（要件 1.3・13 節の続き）
+
+| 名前 | 所 | 使われ方 | 判定 |
+|---|---|---|---|
+| `emo2()` | `src/install/judge_tests.rs` | フォルダ名・名前が `"emo2"` の `GhostFacts` を組む＝実在のゴースト emo2 の事実 | 変えない |
+| `emo2(rel)` | `examples/emo-present/fixture.rs` | 検体 emo2 のフォルダの下のパスを返す | 変えない |
+| `spawn_emo2` | `tests/emo2_real_run/common.rs` | 実機で検体 emo2 を起こす | 変えない |
+| `with_emo2` | `src/input_events/shell_box_handler_tests.rs` | `headless_emo2_wiring` を World に置く＝結線 | `with_runtime` |
+| `emo2_sink_of` | `src/runtime/consumer_ledger_agreement_tests.rs` | `runtime` の 11 の受け口かを返す＝結線 | `runtime_sink_of` |
+| `leave_/moved_/pressed_emo2_absent_degrades_*` | `src/input_events/balloon_leave_tests.rs`・`balloon_pointer_handler_tests.rs` | 「`Emo2Wiring` を置かない」縮退の試験＝結線の不在 | `*_runtime_absent_degrades_*` |
+| `Degrade::Emo2Absent` | `src/input_events/balloon_pointer_handler_tests.rs` | 同上（`Emo2Wiring` 不在の場合分け） | `Degrade::RuntimeAbsent` |
+
+### 名前を改めたテストの新旧の対応表（要件 1.4・9.4 の多重集合の差の説明）
+
+`#[test]` の fn だけ。12 本。名前の末尾（最後の `::` から後ろ）の新旧で、ほかのテストの名前は変わらない。
+
+| 旧 | 新 | 所 |
+|---|---|---|
+| `emo2_frame_system_drives_text_scale_phase_every_frame` | `frame_system_drives_text_scale_phase_every_frame` | `runtime/frame_text_scale_tests.rs` |
+| `emo2_frame_system_runs_dpi_phase_without_writes_when_unattached` | `frame_system_runs_dpi_phase_without_writes_when_unattached` | `runtime/frame_text_scale_tests.rs` |
+| `emo2_frame_system_removes_runs_and_reinserts_wiring` | `frame_system_removes_runs_and_reinserts_wiring` | `runtime/frame_drain_text_tests.rs` |
+| `wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root` | `wire_runtime_falls_back_to_unwired_on_missing_ghost_root` | `runtime/mod.rs` |
+| `move_cue_sink_reaches_emo2_wiring_receiver` | `move_cue_sink_reaches_runtime_wiring_receiver` | `runtime/frame_attach_tests.rs` |
+| `talk_playback_reaches_emo2_wiring_lifecycle_receiver` | `talk_playback_reaches_runtime_wiring_lifecycle_receiver` | `runtime/frame_attach_tests.rs` |
+| `without_emo2_wiring_does_nothing` | `without_runtime_wiring_does_nothing` | `input_events/balloon_wheel_tests.rs` |
+| `moved_without_emo2_wiring_does_not_record_hover` | `moved_without_runtime_wiring_does_not_record_hover` | `input_events/balloon_hover_flag_tests.rs` |
+| `leave_clears_balloon_hover_even_without_emo2_wiring` | `leave_clears_balloon_hover_even_without_runtime_wiring` | `input_events/balloon_hover_flag_tests.rs` |
+| `leave_emo2_absent_degrades_with_debug_and_leaves_hover` | `leave_runtime_absent_degrades_with_debug_and_leaves_hover` | `input_events/balloon_leave_tests.rs` |
+| `moved_emo2_absent_degrades_with_debug_not_error` | `moved_runtime_absent_degrades_with_debug_not_error` | `input_events/balloon_pointer_handler_tests.rs` |
+| `pressed_emo2_absent_degrades_with_debug_not_error` | `pressed_runtime_absent_degrades_with_debug_not_error` | `input_events/balloon_pointer_handler_tests.rs` |

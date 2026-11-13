@@ -60,7 +60,7 @@ pub(crate) struct ReadmeWiring {
 
 /// 説明書の持ち物を World へ入れる（取り出しの登録は [`register_readme_drain`]）。
 ///
-/// 呼び手は boot 成功後の `wire_emo2_boot`（ゴーストの根と `readme` キーを読める場所・task 4.3）。
+/// 呼び手は boot 成功後の `wire_runtime`（ゴーストの根と `readme` キーを読める場所・task 4.3）。
 pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
     world.insert_non_send(ReadmeWiring {
         path,

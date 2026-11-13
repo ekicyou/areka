@@ -450,9 +450,9 @@ fn t_zdb10_the_seated_base_takes_part_in_the_redesignation_refusal() {
 // 本番の口——結線状態の台帳へ届く
 // ---------------------------------------------------------------------------
 
-/// `Emo2Wiring::seed_zorder_descript_base` は**結線状態が持つ台帳**へ基底を据える。
+/// `RuntimeWiring::seed_zorder_descript_base` は**結線状態が持つ台帳**へ基底を据える。
 ///
-/// 起動の結線（`wire_emo2_boot`）が触れるのはこの口だけなので、ここが台帳へ届かなければ
+/// 起動の結線（`wire_runtime`）が触れるのはこの口だけなので、ここが台帳へ届かなければ
 /// 設定は本番で一切効かない。逆側（設定なし）も同じ口で確かめる。
 #[test]
 fn t_zdb11_the_boot_entry_point_seats_the_base_in_the_wired_ledger() {

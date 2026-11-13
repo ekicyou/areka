@@ -24,7 +24,7 @@ use crate::runtime::frame::balloon_runtime_test_support::{
     balloon_is_manual, manual_balloon_runtime,
 };
 use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
-use crate::runtime::frame::{Emo2Wiring, balloon_target, shell_target};
+use crate::runtime::frame::{RuntimeWiring, balloon_target, shell_target};
 
 /// 書き手が文字の層へ矢印の絵を入れたときに文字の層が残す 1 行（`actor_scroll.rs`）。
 const MARKERS_MESSAGE: &str = "普通のバルーンの矢印の絵を受け取った";
@@ -67,7 +67,7 @@ fn two_face_definitions() -> ScopeBalloonDefinitions {
 fn rig() -> (
     crate::runtime::spine::GpuPermit,
     World,
-    Emo2Wiring,
+    RuntimeWiring,
     ScopeBalloonDefinitions,
 ) {
     let (permit, world, runtime) = manual_balloon_runtime("0");
@@ -79,7 +79,7 @@ fn rig() -> (
 }
 
 /// 書き手を 1 回呼び、文字の層が受け取った上向きの矢印の絵の有無を返す。
-fn select(wiring: &mut Emo2Wiring, world: &mut World, face: u32, cause: FaceCause) -> Vec<bool> {
+fn select(wiring: &mut RuntimeWiring, world: &mut World, face: u32, cause: FaceCause) -> Vec<bool> {
     let ((), events) = capture(|| select_balloon_face(wiring, world, 0, face, cause));
     markers_up(&events)
 }
@@ -139,7 +139,7 @@ fn face_0_2_0_replaces_the_definition_and_markers_and_forgets_manual() {
 #[test]
 fn face_switch_hands_the_inline_marker_of_the_face() {
     let (_permit, mut world, mut wiring, _) = rig();
-    let inline = |wiring: &mut Emo2Wiring, world: &mut World, face| {
+    let inline = |wiring: &mut RuntimeWiring, world: &mut World, face| {
         let ((), events) =
             capture(|| select_balloon_face(wiring, world, 0, face, FaceCause::FaceChange));
         events
@@ -170,7 +170,7 @@ fn same_face_keeps_manual() {
 }
 
 /// 手動の位置へ入り直す（`balloon_is_manual` の確かめは手動を自動へ戻すので、次の段の前に戻す）。
-fn restart_manual(wiring: &Emo2Wiring) {
+fn restart_manual(wiring: &RuntimeWiring) {
     use areka_emo_text::place::PlaceKey;
     use areka_emo_text::scroll_marker::{ScrollChange, ScrollDir};
     use areka_sakura::ActorKey;

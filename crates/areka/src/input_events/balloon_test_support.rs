@@ -20,7 +20,7 @@ use wintf::ecs::Window;
 use wintf::ecs::pointer::PointerLeave;
 
 use crate::runtime::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::move_cue::PositionCue;
 use crate::runtime::talk_clock::TalkClock;
 use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
@@ -100,12 +100,12 @@ fn synth_boot_assets() -> BootAssets {
     }
 }
 
-/// headless な `Emo2Wiring`（実 `EmoPresenter`／与えた runtime／合成 `BootAssets`・COM/GPU 不要）。
+/// headless な `RuntimeWiring`（実 `EmoPresenter`／与えた runtime／合成 `BootAssets`・COM/GPU 不要）。
 ///
-/// ハンドラが `Emo2Wiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
+/// ハンドラが `RuntimeWiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
 /// 差し込むための最小結線（frame.rs の headless_wiring_with と同型）。
-pub(crate) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Emo2Wiring {
-    Emo2Wiring::new(
+pub(crate) fn headless_runtime_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> RuntimeWiring {
+    RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,

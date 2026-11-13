@@ -44,7 +44,7 @@ use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-use super::super::frame::{Emo2Wiring, resolve_talk_time};
+use super::super::frame::{RuntimeWiring, resolve_talk_time};
 use super::super::target_map::{balloon_target, shell_target};
 use super::{
     BalloonVisibilityState, GlyphObservation, MeasurementOrigin, ScopeObservation,
@@ -52,7 +52,7 @@ use super::{
     VisibilityTrigger, configured_timeout_secs, decide, hide_reaches_boxes,
 };
 
-/// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
+/// バルーン可視性の相（`frame_system` の相順から毎フレーム呼ばれる配線）。
 ///
 /// # 相順の中での位置（design 決定 D5）
 ///
@@ -67,13 +67,16 @@ use super::{
 ///
 /// # 事前条件
 ///
-/// `Emo2Wiring` を world から取り出した状態（`emo2_frame_system` の内側）で呼ぶ。装着が未了で
+/// `RuntimeWiring` を world から取り出した状態（`frame_system` の内側）で呼ぶ。装着が未了で
 /// `wiring.balloon_models` が空なら対象 scope がゼロ件となり、信号の取り出しだけを行って
 /// 何も発行しない。panic しない。
-pub(in crate::runtime) fn run_balloon_visibility_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+pub(in crate::runtime) fn run_balloon_visibility_phase(
+    wiring: &mut RuntimeWiring,
+    world: &mut World,
+) {
     // 文字層ランタイムは `Rc` を複製して受け取り、wiring の分解より前に借用を解く。
     let runtime = Rc::clone(wiring.runtime());
-    let Emo2Wiring {
+    let RuntimeWiring {
         presenter,
         lifecycle_rx,
         balloon_visibility: state,

@@ -144,7 +144,7 @@ use self::adapter::PresentBridge;
 use self::assets::{
     BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets_with_shell,
 };
-use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
+use self::frame::{KanadeNoticeRx, RuntimeWiring, frame_system, ghost_quit_system};
 use self::move_cue::PositionCue;
 use self::runtime_boot::CueSinkSources;
 use self::talk_clock::TalkClock;
@@ -154,16 +154,16 @@ use self::zorder_cue::ZOrderDirective;
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
 /// 各段（mount／shell 読み込み＝一覧＋読取＋parse＋bake／balloon 組立／UI アクター spawn）の失敗を
-/// `#[from]` 変換で集約し、呼び手（`wire_emo2_boot`）が `MountError::StartPointMissing` 系は
+/// `#[from]` 変換で集約し、呼び手（`wire_runtime`）が `MountError::StartPointMissing` 系は
 /// `warn!`・他は `error!` に分類して `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は
 /// `LogSink`×2 フォールバック boot へ倒し、`ghost_session::boot_ghost_strict` は `Err` を返す・
 /// design.md「Error Categories and Responses」）。
 ///
 /// load-time バリアント: 構築入力の組立（`build_boot_assets`・task 2.6）が返す
 /// `Mount`／`Decoder`／`ShellRead`／`ShellEmpty`／`Balloon` に加え、UI アクター spawn 失敗
-/// （`SpawnUi`・`wire_emo2_boot`＝task 5.1 が充填）を集約する。分類
+/// （`SpawnUi`・`wire_runtime`＝task 5.1 が充填）を集約する。分類
 /// （`MountError::StartPointMissing` 系＝想定内 `warn!`・他＝`error!`）は呼び手
-/// （`wire_emo2_boot`／`classify_wiring_error`・task 5.1）が担い、本型はバリアントを観測可能に
+/// （`wire_runtime`／`classify_wiring_error`・task 5.1）が担い、本型はバリアントを観測可能に
 /// するのみ（panic せず `Err` を返す・log-first R7.3）。
 ///
 /// `#[from]` は変換元が `std::error::Error` を実装する型のみに用いる。
@@ -213,7 +213,7 @@ pub enum BootWiringError {
     ///
     /// `spawn_emo_text` は UI（pump）スレッド外呼び出しを検出すると
     /// [`areka_actor::UiSpawnError::NotUiThread`] を返す。本番は `WinApp::new()` 済みの
-    /// UI スレッドで `wire_emo2_boot` を呼ぶため通常発生しないが、万一失敗した場合は
+    /// UI スレッドで `wire_runtime` を呼ぶため通常発生しないが、万一失敗した場合は
     /// 握り潰さず `error!`＋`wired=false` を呼び手へ返す（log-first・R7.3）。
     /// `UiSpawnError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[source]` で連鎖する。
     #[error("バルーン文字層 UI アクターの spawn に失敗")]
@@ -242,11 +242,11 @@ impl From<ShellLoadError> for BootWiringError {
 }
 
 // ===========================================================================
-// wire_emo2_boot 統合結線（tasks.md task 5.1・design「エントリポイント / main.rs＋
-// wire_emo2_boot」）— 完成済み 5 トラックを束ねる最後の一結線（M-boot の心臓部）。
+// wire_runtime 統合結線（tasks.md task 5.1・design「エントリポイント / main.rs＋
+// wire_runtime」）— 完成済み 5 トラックを束ねる最後の一結線（M-boot の心臓部）。
 // ===========================================================================
 
-/// `wire_emo2_boot` の結果（design「Service Interface」・`ghost_session` の結線ありの腕が
+/// `wire_runtime` の結果（design「Service Interface」・`ghost_session` の結線ありの腕が
 /// `GhostSession` へ束ね、終了処理（`GhostSession::shutdown`）で消費する）。
 ///
 /// - `ghost`: boot 成立時の [`areka_ghost::GhostRuntime`]（不成立時は `None`）。
@@ -256,7 +256,7 @@ impl From<ShellLoadError> for BootWiringError {
 /// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（不成立時 `None`）。
 /// - `seriko_sink`: seriko の送り手の複製（不成立時 `None`・持ち主は `GhostSession` だけ）。
 /// - `sources`: 受け口の送出端の束（不成立時 `None`）。
-pub struct Emo2BootOutcome {
+pub struct RuntimeOutcome {
     /// boot 成立時の ghost ランタイム（不成立時 `None`）。
     pub ghost: Option<areka_ghost::GhostRuntime>,
     /// seriko アクターの join ハンドル（不成立時 `None`）。
@@ -269,7 +269,7 @@ pub struct Emo2BootOutcome {
     pub loop_ticker: Option<std::sync::mpsc::Sender<TickerMsg>>,
     /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口・不成立時 `None`）。
     /// 持ち主は `GhostSession` だけで、降ろす最初の段（loop ticker の停止）で落ちる——降ろした後も
-    /// World に残る置き場（`Emo2Wiring` ほか）に持たせると、seriko の join が戻らない
+    /// World に残る置き場（`RuntimeWiring` ほか）に持たせると、seriko の join が戻らない
     /// （areka-P0-shell-balloon-switch 要件 8.5）。
     pub seriko_sink: Option<SerikoSink>,
     /// 受け口の送出端の束（実行系を組み直すたびに複製して sink を組む・不成立時 `None`・
@@ -277,13 +277,13 @@ pub struct Emo2BootOutcome {
     pub(crate) sources: Option<CueSinkSources>,
 }
 
-/// `wire_emo2_boot` の入力の束（ゴーストごとに変わる値と、SHIORI の結線の差し替え口）。
+/// `wire_runtime` の入力の束（ゴーストごとに変わる値と、SHIORI の結線の差し替え口）。
 ///
 /// `GhostBootOptions` には欄を足さず、`ghost_root`・`shiori`・`ticker`・`app_profile_dir` の
 /// 値の出所をここへ移すだけである（要件 5.7）。本番は `Helper { helper_exe }`・`Real` 既定・
 /// `Some(default_app_profile_dir())` を詰め、テストは偽の SHIORI（`Custom`）を差す。
 /// `ShioriWiring::Custom` は複製できないので値渡しで受ける。
-pub struct Emo2BootInputs {
+pub struct RuntimeInputs {
     /// ゴーストの根。
     pub ghost_root: PathBuf,
     /// バルーンの根。
@@ -319,7 +319,7 @@ fn derive_scopes() -> Vec<u32> {
 /// を取り、入れ替えてもコンパイルが通る——通ったまま「シェルだけバルーンの縮尺で描かれる」
 /// 静かな誤表示になる（`frame::AuthorDpis` が attach 側で防ぐのと同じ罠が、こちらは
 /// 構築側にある）。名前付きフィールドを持つ [`AuthorDpi`] から**この 1 箇所だけ**で
-/// 位置引数へ落とし、その 1 箇所を檻に入れる（`wire_emo2_boot` は生の `u16` を触らない）。
+/// 位置引数へ落とし、その 1 箇所を檻に入れる（`wire_runtime` は生の `u16` を触らない）。
 /// `shell` は起動のシェル（`None` は既定のシェル・areka-P0-shell-balloon-switch 要件 6.4）。
 fn build_boot_assets_for(
     ghost_root: &Path,
@@ -390,7 +390,7 @@ const _: fn() = || {
 /// （design「Service Interface」）。**新規機構は作らない**（R10.4）——構築入力の組立と各エンジンの
 /// 結線＋二段の観測に徹する。
 ///
-/// # 7 手順（design「wire_emo2_boot の統括」）
+/// # 7 手順（design「wire_runtime の統括」）
 /// 1. [`build_boot_assets_for`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
 ///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
 ///    task 4.3。シェルは引数 `shell`＝配置の準備が決めた起動のシェルで、手順5 の起動へも
@@ -401,42 +401,42 @@ const _: fn() = || {
 ///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false`）。
 /// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
-///    `Emo2Wiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
+///    `RuntimeWiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
 ///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko_clocked`
-///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
+///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`RuntimeWiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動 `runtime_boot::boot_runtime`
 ///    （束の複製から 13 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
-///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
+///    `shiori`／`ticker`／`app_profile_dir` は [`RuntimeInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
 ///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
-/// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
+/// 6. [`RuntimeWiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入（毎フレームの相の
-///    `Update` への登録は [`register_emo2_frame_system`] が `ghost_session::register_systems` から
+///    `Update` への登録は [`register_frame_system`] が `ghost_session::register_systems` から
 ///    プロセスに 1 回行う・self-gating）。成立時
 ///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
-/// 7. `Emo2BootOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
+/// 7. `RuntimeOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
 ///
 /// # 失敗（log-first・panic しない・R7.3）
-/// いずれの手順の失敗も `warn!`／`error!`＋`Emo2BootOutcome{ ghost: None, seriko: None,
+/// いずれの手順の失敗も `warn!`／`error!`＋`RuntimeOutcome{ ghost: None, seriko: None,
 /// wired: false }` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 boot（既存 smoke 温存）へ倒し、
 /// `ghost_session::boot_ghost_strict` は `Err` を返す）。boot 成立後の
 /// spawn 済み seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
 /// drop（非 RAII・detach）して打ち切る（hang させない）。
-pub fn wire_emo2_boot(
+pub fn wire_runtime(
     world: &mut World,
-    inputs: Emo2BootInputs,
+    inputs: RuntimeInputs,
     author_dpi: AuthorDpi,
     zorder_descript: Option<&str>,
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
     default_surfaces: &DefaultSurfaces,
-) -> Emo2BootOutcome {
+) -> RuntimeOutcome {
     /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
     /// boot へ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
-    fn fallback() -> Emo2BootOutcome {
-        Emo2BootOutcome {
+    fn fallback() -> RuntimeOutcome {
+        RuntimeOutcome {
             ghost: None,
             seriko: None,
             wired: false,
@@ -489,16 +489,16 @@ pub fn wire_emo2_boot(
 
     // 手順4: mpsc＋PresentBridge→spawn_seriko_clocked。SurfaceResolver 突き合わせ（!Clone・Task 4.1 申し送り）:
     // resolver（非 Clone）は spawn_seriko_clocked が値消費・static_binds（Clone）は clone して seriko と
-    // Emo2Wiring の双方へ配る。Emo2Wiring 側 BootAssets の resolver は attach で読まれない（Task 4.1）
+    // RuntimeWiring の双方へ配る。RuntimeWiring 側 BootAssets の resolver は attach で読まれない（Task 4.1）
     // ため空 alias 表のプレースホルダで埋める（実 resolver は seriko が保持）。
     let (tx, rx) = std::sync::mpsc::channel::<PresentCommand>();
     // 差し替えの荷物の置き場（areka-P0-shell-balloon-switch task 9.1）: 1 つ作り、表示の橋渡しに
-    // 持たせ、Emo2Wiring には弱い参照だけを渡す（置き場を強く持つのは橋渡しだけ＝seriko が倒れれば
-    // 荷物の返信の送り手も消える。seriko の送り手は Emo2Wiring に持たせない）。
+    // 持たせ、RuntimeWiring には弱い参照だけを渡す（置き場を強く持つのは橋渡しだけ＝seriko が倒れれば
+    // 荷物の返信の送り手も消える。seriko の送り手は RuntimeWiring に持たせない）。
     let swap_slot = switch_assets::SwapSlot::default();
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
     // 受信端が窓の側にある 4 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
-    // UI スレッドの Emo2Wiring が受信端を持つ。送出端は束（`CueSinkSources`）に載り、実行系を
+    // UI スレッドの RuntimeWiring が受信端を持つ。送出端は束（`CueSinkSources`）に載り、実行系を
     // 起こすたびに複製されて受け口になる（`runtime_boot::runtime_sinks`）。
     // - move（task 9.1）: frame 相 drain＝task 9.2 が消費。
     // - 表示ライフサイクル（task 4.1）: 会話の開始と、待機を含む占有区間の終端が talk 相対秒で
@@ -628,9 +628,9 @@ pub fn wire_emo2_boot(
         return fallback();
     };
 
-    // 手順6: Emo2Wiring を NonSend 挿入（emo2_frame_system の登録は [`register_emo2_frame_system`]）。
+    // 手順6: RuntimeWiring を NonSend 挿入（frame_system の登録は [`register_frame_system`]）。
     // 受け取った bevy World へ直接載せる。
-    let mut wiring = Emo2Wiring::new(
+    let mut wiring = RuntimeWiring::new(
         presenter,
         rx,
         move_rx,
@@ -667,7 +667,7 @@ pub fn wire_emo2_boot(
     info!("emo2-boot: 実 sink 結線が成立しました（wire 成立）");
 
     // 手順7: 実 sink 結線成立。ghost/seriko ハンドル＋loop ticker 停止端＋束を呼び手へ返す。
-    Emo2BootOutcome {
+    RuntimeOutcome {
         ghost: Some(ghost_runtime),
         seriko: Some(seriko_handle),
         wired: true,
@@ -692,7 +692,7 @@ fn loop_ticker_config(clock: &SerikoClock) -> LoopTickerConfig {
     }
 }
 
-/// 毎フレームの相（`emo2_frame_system`）を `Update` へ登録する（self-gating）。
+/// 毎フレームの相（`frame_system`）を `Update` へ登録する（self-gating）。
 ///
 /// 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
 /// 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
@@ -708,23 +708,23 @@ fn loop_ticker_config(clock: &SerikoClock) -> LoopTickerConfig {
 /// 上流の鎖より後に置くのは、拡大率の相が読むモニタ表がその巡の最新であるためで、DPI 遷移の
 /// 原子性（完了 spec `dpi-transition-atomicity`「モニタ表更新 → emo の相 → 窓書込の flush」）を
 /// 移動の前後で変えない。
-pub fn register_emo2_frame_system(world: &mut World) {
+pub fn register_frame_system(world: &mut World) {
     world
         .resource_mut::<Schedules>()
-        .add_systems(Update, emo2_frame_system.after(update_typewriters));
+        .add_systems(Update, frame_system.after(update_typewriters));
 }
 
 /// 運行の通知（停止ほか）の受け口を World に据え、終了相を `Update` に登録する（受け口はプロセスに 1 つ・
 /// 要件 6.4）。
 ///
-/// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_emo2_frame_system`] の
+/// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_frame_system`] の
 /// 直後に呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
 /// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
 pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {
     world.insert_non_send(KanadeNoticeRx(rx));
     world
         .resource_mut::<Schedules>()
-        .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
+        .add_systems(Update, ghost_quit_system.before(frame_system));
 }
 
 /// 実 entropy の種（`RandomState` はプロセスごとのランダム鍵で初期化され、作るたびに鍵が変わる）。
@@ -755,7 +755,7 @@ mod wire_tests {
     ///
     /// 入れ替えは型検査を通り抜けるため、この檻だけが誤りを検出できる
     /// （192 と 144 を入れ替えると両アサーションが落ちる）。
-    /// `wire_emo2_boot` 本体は生の `u16` を触らず、この関数だけが位置引数へ落とす。
+    /// `wire_runtime` 本体は生の `u16` を触らず、この関数だけが位置引数へ落とす。
     #[test]
     fn build_boot_assets_for_pairs_shell_and_balloon_author_dpi() {
         // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE 等は無視・assets.rs 同流儀）。
@@ -787,16 +787,16 @@ mod wire_tests {
     }
 
     /// 観測可能な完了条件（tasks.md task 5.1）: 存在しない ghost_root に対し
-    /// `wire_emo2_boot` は `wired=false`（帰結は呼び手が決める・R7.3）を返し、
+    /// `wire_runtime` は `wired=false`（帰結は呼び手が決める・R7.3）を返し、
     /// ghost／seriko ハンドルは `None` となる（実 sink 結線を成立させない決定分岐の檻）。
     ///
     /// 素の `World::new()` で足りる。`build_boot_assets` が `resolve` 起点不在で早期 `Err` を返すため、
     /// World には一切触れず、spawn_emo_text／spawn_seriko／boot へも到達しない（＝アクタースレッドを
     /// 起こさない）ので決定論的に判定できる。
     #[test]
-    fn wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root() {
+    fn wire_runtime_falls_back_to_unwired_on_missing_ghost_root() {
         let mut world = World::new();
-        let inputs = Emo2BootInputs {
+        let inputs = RuntimeInputs {
             ghost_root: PathBuf::from("C:/areka-nonexistent-ghost-root-emo2boot-5v1"),
             balloon_root: PathBuf::from("C:/areka-nonexistent-balloon-root-emo2boot-5v1"),
             shiori: ShioriWiring::Helper {
@@ -807,7 +807,7 @@ mod wire_tests {
             boot_origin: BootOrigin::Plain,
         };
 
-        let outcome = wire_emo2_boot(
+        let outcome = wire_runtime(
             &mut world,
             inputs,
             AuthorDpi::DEFAULT,

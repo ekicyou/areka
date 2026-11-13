@@ -16,7 +16,7 @@ use wintf::ecs::Input;
 use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::{PointerState, dispatch_pointer_events};
 
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// `SPI_GETWHEELSCROLLLINES` が「1 画面ずつ」を表す値（`WHEEL_PAGESCROLL`・windows クレートに無い）。
@@ -59,12 +59,12 @@ pub(super) fn balloon_wheel_with(world: &mut World, read_lines: impl FnOnce() ->
         return;
     }
     let Some(runtime) = world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
             event = "balloon_wheel_no_emo2",
-            "Emo2Wiring 不在（boot 前／失敗）: バルーンのホイールを no-op 縮退"
+            "RuntimeWiring 不在（boot 前／失敗）: バルーンのホイールを no-op 縮退"
         );
         return;
     };

@@ -3,7 +3,7 @@
 // Error Handling／System Flows・R1.1/1.2/1.3/1.4/1.6/3.1/3.3/4.1/4.2/8.4）
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 資源不在の縮退経路を
-// 正しい**ログレベル**（Emo2Wiring 不在=debug／BalloonWiring 不在=error）で、(c) 適用アーム
+// 正しい**ログレベル**（RuntimeWiring 不在=debug／BalloonWiring 不在=error）で、(c) 適用アーム
 // （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で決定的に檻へ入れる。判断分岐そのもの
 // （active×hit×last の全組合せ）は hover_action 純関数檻（task 3.2）が網羅済み。
 //
@@ -26,7 +26,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use super::test_support::{capture_logs, headless_emo2_wiring, runtime_with_active_choice};
+use super::test_support::{capture_logs, headless_runtime_wiring, runtime_with_active_choice};
 use super::*;
 use areka_placement::spawn::BalloonWindowMarker;
 
@@ -54,9 +54,9 @@ fn moved_tunnel_phase_is_noop_false() {
     );
 }
 
-/// Emo2Wiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** レベルで no-op・`false`。
+/// RuntimeWiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** レベルで no-op・`false`。
 #[test]
-fn moved_emo2_absent_degrades_with_debug_not_error() {
+fn moved_runtime_absent_degrades_with_debug_not_error() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let ev = bubble_move(10, 20);
@@ -64,32 +64,32 @@ fn moved_emo2_absent_degrades_with_debug_not_error() {
     let logs = capture_logs(|| {
         assert!(
             !on_balloon_pointer_moved(&mut world, e, e, &ev),
-            "Emo2Wiring 不在は no-op false"
+            "RuntimeWiring 不在は no-op false"
         );
     });
 
     assert!(
         logs.iter()
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_emo2")),
-        "Emo2Wiring 不在は DEBUG で正常縮退する（event=choice_moved_no_emo2）: {logs:?}"
+        "RuntimeWiring 不在は DEBUG で正常縮退する（event=choice_moved_no_emo2）: {logs:?}"
     );
     assert!(
         !logs.iter().any(|l| l.contains("level=ERROR")),
-        "Emo2Wiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
+        "RuntimeWiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
     );
 }
 
-/// BalloonWiring 不在＝構成異常（結線漏れ）: Emo2Wiring は present でも **ERROR** で no-op・`false`。
-/// （借用規律の固定順序＝Emo2Wiring→BalloonWiring ゆえ Emo2Wiring present が前提。）
+/// BalloonWiring 不在＝構成異常（結線漏れ）: RuntimeWiring は present でも **ERROR** で no-op・`false`。
+/// （借用規律の固定順序＝RuntimeWiring→BalloonWiring ゆえ RuntimeWiring present が前提。）
 #[test]
 fn moved_balloon_wiring_absent_degrades_with_error() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    // Emo2Wiring は present（空 runtime）・BalloonWiring は挿入しない。
+    // RuntimeWiring は present（空 runtime）・BalloonWiring は挿入しない。
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let ev = bubble_move(10, 20);
 
     let logs = capture_logs(|| {
@@ -140,7 +140,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
         runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=true（選択肢スパンあり）"
     );
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
     // 前回注入値 Some(2) を仕込む（遷移検出のため・現行 hit=None ゆえ Inject(None) へ遷移）。
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
@@ -188,7 +188,7 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
     let mut bw = BalloonWiring::new(tx);
@@ -224,7 +224,7 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx)); // hover 空（未注入）
@@ -253,7 +253,7 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 // Error Handling／System Flows・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）
 //
 // 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 非左押下（右/中 down）素通し、
-// (c) 資源不在の縮退経路を正しい**ログレベル**（Emo2Wiring 不在=debug／BalloonWiring 不在=error）で、
+// (c) 資源不在の縮退経路を正しい**ログレベル**（RuntimeWiring 不在=debug／BalloonWiring 不在=error）で、
 // (d) 棄却経路（非表示=inactive／非ヒット=no_hit の reason 弁別・零 send）を実 `TextLayerRuntime` で
 // 決定的に檻へ入れる。確定発行のフィールド一致・stale 棄却は click_selection 純関数檻（task 3.3）が
 // 網羅済み。
@@ -307,9 +307,9 @@ fn pressed_non_left_button_is_noop_false() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
-    // Emo2Wiring/BalloonWiring を present にしても、left_down=false なら手前で false 短絡する。
+    // RuntimeWiring/BalloonWiring を present にしても、left_down=false なら手前で false 短絡する。
     let runtime = runtime_with_active_choice("0");
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
     world.insert_non_send(bw);
 
@@ -337,9 +337,9 @@ fn pressed_non_left_button_is_noop_false() {
     );
 }
 
-/// Emo2Wiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** で no-op・`false`・零 send。
+/// RuntimeWiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** で no-op・`false`・零 send。
 #[test]
-fn pressed_emo2_absent_degrades_with_debug_not_error() {
+fn pressed_runtime_absent_degrades_with_debug_not_error() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let ev = bubble_left_press(10, 20);
@@ -347,23 +347,23 @@ fn pressed_emo2_absent_degrades_with_debug_not_error() {
     let logs = capture_logs(|| {
         assert!(
             !on_balloon_pointer_pressed(&mut world, e, e, &ev),
-            "Emo2Wiring 不在は no-op false"
+            "RuntimeWiring 不在は no-op false"
         );
     });
 
     assert!(
         logs.iter()
             .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")),
-        "Emo2Wiring 不在は DEBUG で正常縮退（event=choice_pressed_no_emo2）: {logs:?}"
+        "RuntimeWiring 不在は DEBUG で正常縮退（event=choice_pressed_no_emo2）: {logs:?}"
     );
     assert!(
         !logs.iter().any(|l| l.contains("level=ERROR")),
-        "Emo2Wiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
+        "RuntimeWiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
     );
 }
 
-/// BalloonWiring 不在＝構成異常（結線漏れ）: Emo2Wiring は present でも **ERROR** で no-op・`false`。
-/// （借用規律の固定順序＝Emo2Wiring→BalloonWiring ゆえ Emo2Wiring present が前提。）
+/// BalloonWiring 不在＝構成異常（結線漏れ）: RuntimeWiring は present でも **ERROR** で no-op・`false`。
+/// （借用規律の固定順序＝RuntimeWiring→BalloonWiring ゆえ RuntimeWiring present が前提。）
 #[test]
 fn pressed_balloon_wiring_absent_degrades_with_error() {
     let mut world = World::new();
@@ -371,7 +371,7 @@ fn pressed_balloon_wiring_absent_degrades_with_error() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let ev = bubble_left_press(10, 20);
 
     let logs = capture_logs(|| {
@@ -424,7 +424,7 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
     world.insert_non_send(bw);
 
@@ -471,7 +471,7 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
             .is_empty(),
         "前提: headless では choice_hit_rows は空（GPU 未実行）＝常に非ヒット"
     );
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
     world.insert_non_send(bw);
 
@@ -503,9 +503,9 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 // 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻（task 7.2・design Testing Strategy Integration
 // Tests item 3/4・Error Handling／R8.1/8.4）
 //
-// 判断分岐そのもの（Tunnel 短絡／Emo2Wiring 不在=debug 縮退／BalloonWiring 不在=error 縮退／
+// 判断分岐そのもの（Tunnel 短絡／RuntimeWiring 不在=debug 縮退／BalloonWiring 不在=error 縮退／
 // marker 不在=error）の**実行網羅**は task 4.1（moved）／4.2（pressed）の各縮退檻が既に閉じている
-// （moved_tunnel_phase_is_noop_false／moved_emo2_absent_degrades_with_debug_not_error／
+// （moved_tunnel_phase_is_noop_false／moved_runtime_absent_degrades_with_debug_not_error／
 // moved_balloon_wiring_absent_degrades_with_error ほか・pressed 側も同型）。ただしそれらは
 // 「戻り値 false＋ログレベル」までで、**観測資源を同居させた副作用ゼロ三点**——(a) send なし
 // （present の `ChoiceSelectionInbox.try_recv()==Empty`）、(b) `BalloonWiring.hover` 不変、
@@ -513,12 +513,12 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 // `choice_hover_inject` を出さない）——までは固定していない（Tunnel 檻は資源を一切挿入せず、Emo2 不在
 // 檻は BalloonWiring を挿入しないため観測点が無かった）。
 //
-// 本 7.2 檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, Emo2Wiring 不在, BalloonWiring 不在}**へ
+// 本 7.2 檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在}**へ
 // first-class に追試する（縮退時に対応ログ＝debug／error が出つつ、いかなる観測可能状態も動かない
 // ことを、観測資源を同居させて固定する）。判断分岐の重複網羅ではなく副作用ゼロ観測の追加ゆえ非重複。
 //
 // 8.4（スレッド親和・NonSend 借用は Input スケジュール排他システム内）: 本檻は各ハンドラを単一スレッドの
-// `&mut World` 排他呼出で直接叩く——NonSend 資源（`Emo2Wiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
+// `&mut World` 排他呼出で直接叩く——NonSend 資源（`RuntimeWiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
 // 排他システム内でのみ起きるという構造契約は、ハンドラの `&mut World` シグネチャ自体が強制する
 // （別途スレッドテストは不要）。
 // -------------------------------------------------------------------------
@@ -528,15 +528,15 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 enum Degrade {
     /// Tunnel 相（全資源 present でも即 false・一切触れない）。
     Tunnel,
-    /// `Emo2Wiring` 不在（`BalloonWiring` は present）＝debug 正常縮退。
-    Emo2Absent,
-    /// `BalloonWiring` 不在（`Emo2Wiring` は present）＝error 構成異常縮退。
+    /// `RuntimeWiring` 不在（`BalloonWiring` は present）＝debug 正常縮退。
+    RuntimeAbsent,
+    /// `BalloonWiring` 不在（`RuntimeWiring` は present）＝error 構成異常縮退。
     BalloonWiringAbsent,
 }
 
-/// moved: Tunnel／Emo2Wiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
+/// moved: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
 ///
-/// 各シナリオで観測資源（Emo2Wiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
+/// 各シナリオで観測資源（RuntimeWiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
 /// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・Emo2 不在=DEBUG・
 /// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ三点（choice_hover_inject なし／hover 不変／Inbox Empty／
 /// runtime 借用・active 不変）を固定する。判断分岐網羅は 4.1、本檻は副作用ゼロ観測を担う。
@@ -544,25 +544,25 @@ enum Degrade {
 fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
         Degrade::Tunnel,
-        Degrade::Emo2Absent,
+        Degrade::RuntimeAbsent,
         Degrade::BalloonWiringAbsent,
     ] {
         let mut world = World::new();
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
-        // Emo2Wiring（active choice runtime）は Tunnel／BalloonWiringAbsent で present。
+        // RuntimeWiring（active choice runtime）は Tunnel／BalloonWiringAbsent で present。
         let runtime = match scenario {
             Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
                 let rt = runtime_with_active_choice("0");
-                world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
+                world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
                 Some(rt)
             }
-            Degrade::Emo2Absent => None,
+            Degrade::RuntimeAbsent => None,
         };
 
-        // BalloonWiring（hover=Some(2) 仕込み）＋Inbox は Tunnel／Emo2Absent で present。
+        // BalloonWiring（hover=Some(2) 仕込み）＋Inbox は Tunnel／RuntimeAbsent で present。
         let inbox_rx = match scenario {
-            Degrade::Tunnel | Degrade::Emo2Absent => {
+            Degrade::Tunnel | Degrade::RuntimeAbsent => {
                 let (tx, rx) = mpsc::channel::<ChoiceSelection>();
                 let mut bw = BalloonWiring::new(tx);
                 bw.set_hover(0, Some(2));
@@ -596,15 +596,15 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
                     .any(|l| l.contains("choice_hover_inject") || l.contains("level=ERROR")),
                 "Tunnel は短絡ゆえ inject も error も出さない: {logs:?}"
             ),
-            Degrade::Emo2Absent => {
+            Degrade::RuntimeAbsent => {
                 assert!(
                     logs.iter()
                         .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_emo2")),
-                    "Emo2Wiring 不在は DEBUG で正常縮退（choice_moved_no_emo2）: {logs:?}"
+                    "RuntimeWiring 不在は DEBUG で正常縮退（choice_moved_no_emo2）: {logs:?}"
                 );
                 assert!(
                     !logs.iter().any(|l| l.contains("level=ERROR")),
-                    "Emo2Wiring 不在は構成異常でない＝ERROR を出さない: {logs:?}"
+                    "RuntimeWiring 不在は構成異常でない＝ERROR を出さない: {logs:?}"
                 );
             }
             Degrade::BalloonWiringAbsent => assert!(
@@ -647,7 +647,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
     }
 }
 
-/// pressed: Tunnel／Emo2Wiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
+/// pressed: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
 ///
 /// moved 版と対称。pressed の副作用は発行（send）ゆえ副作用ゼロ観測は choice_selected info の非発火＋
 /// present な Inbox の `try_recv()==Empty`＋BalloonWiring.hover 不変＋runtime 借用/active 不変で固定する。
@@ -656,7 +656,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
 fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
     for scenario in [
         Degrade::Tunnel,
-        Degrade::Emo2Absent,
+        Degrade::RuntimeAbsent,
         Degrade::BalloonWiringAbsent,
     ] {
         let mut world = World::new();
@@ -665,14 +665,14 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
         let runtime = match scenario {
             Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
                 let rt = runtime_with_active_choice("0");
-                world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
+                world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
                 Some(rt)
             }
-            Degrade::Emo2Absent => None,
+            Degrade::RuntimeAbsent => None,
         };
 
         let inbox_rx = match scenario {
-            Degrade::Tunnel | Degrade::Emo2Absent => {
+            Degrade::Tunnel | Degrade::RuntimeAbsent => {
                 let (tx, rx) = mpsc::channel::<ChoiceSelection>();
                 let mut bw = BalloonWiring::new(tx);
                 bw.set_hover(0, Some(2));
@@ -707,15 +707,15 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
                     .any(|l| l.contains("choice_selected") || l.contains("level=ERROR")),
                 "Tunnel は短絡ゆえ choice_selected も error も出さない: {logs:?}"
             ),
-            Degrade::Emo2Absent => {
+            Degrade::RuntimeAbsent => {
                 assert!(
                     logs.iter()
                         .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")),
-                    "Emo2Wiring 不在は DEBUG で正常縮退（choice_pressed_no_emo2）: {logs:?}"
+                    "RuntimeWiring 不在は DEBUG で正常縮退（choice_pressed_no_emo2）: {logs:?}"
                 );
                 assert!(
                     !logs.iter().any(|l| l.contains("level=ERROR")),
-                    "Emo2Wiring 不在は構成異常でない＝ERROR を出さない: {logs:?}"
+                    "RuntimeWiring 不在は構成異常でない＝ERROR を出さない: {logs:?}"
                 );
             }
             Degrade::BalloonWiringAbsent => assert!(
@@ -771,7 +771,7 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, _selection_rx) = wiring_with_inbox();
     world.insert_non_send(bw);
     let (_flag_tx, flag_rx) = mpsc::channel();
@@ -821,7 +821,7 @@ fn anchor_only_world(last: Option<usize>) -> (World, Entity, Receiver<ChoiceSele
         !runtime.borrow().choice_active(&actor) && runtime.borrow().hit_active(&actor),
         "前提: 選択肢は無く、押せる範囲（アンカー）だけがある"
     );
-    world.insert_non_send(headless_emo2_wiring(runtime));
+    world.insert_non_send(headless_runtime_wiring(runtime));
     let (mut bw, rx) = wiring_with_inbox();
     bw.set_hover(0, last);
     world.insert_non_send(bw);

@@ -1,5 +1,5 @@
 use super::test_support::{
-    headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
+    headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
 use areka_placement::follow::OffsetBase;
@@ -339,7 +339,7 @@ fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
     // バルーン所有 leave（scope 0）＋表示中 choice の実 runtime。
     spawn_balloon_leave_child(&mut world, 0);
     let runtime = runtime_with_active_choice("0");
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
 
     // wire で BalloonWiring／Inbox 挿入、続けて leave system 登録。
     wire_balloon_choice(&mut world);

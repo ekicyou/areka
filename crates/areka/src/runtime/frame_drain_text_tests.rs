@@ -163,45 +163,45 @@ fn run_text_phase_override_reaches_present_frame_without_panic() {
     );
 }
 
-/// 排他 system の疎通（DD-1/DD-4）: `emo2_frame_system` は NonSend `Emo2Wiring` を remove→3 フェーズ
+/// 排他 system の疎通（DD-1/DD-4）: `frame_system` は NonSend `RuntimeWiring` を remove→3 フェーズ
 /// →insert で駆動して**必ず戻す**、かつ未挿入 World では安全に no-op（panic しない）。
 ///
 /// GPU/GhostWindows を持たない World ではゲート不成立で attach は起きず、drain は attach 前ゆえ
 /// 走らず、text は FrameTime 不在で skip する（＝実質 no-op）。それでも system が wiring を取り出して
 /// 戻す配線（remove→insert）が働くことを、実行後に NonSend resource が再取得できることで反証する。
 #[test]
-fn emo2_frame_system_removes_runs_and_reinserts_wiring() {
+fn frame_system_removes_runs_and_reinserts_wiring() {
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
     let wiring = headless_wiring_with(rx, zero_clock());
     let mut world = World::new();
     world.insert_non_send(wiring);
 
     // remove→attach/drain/text（いずれもゲート不成立の no-op）→ re-insert。panic しない。
-    emo2_frame_system(&mut world);
+    frame_system(&mut world);
     assert!(
-        world.get_non_send::<Emo2Wiring>().is_some(),
-        "emo2_frame_system は wiring を取り出して駆動後に必ず戻す（配線の疎通）"
+        world.get_non_send::<RuntimeWiring>().is_some(),
+        "frame_system は wiring を取り出して駆動後に必ず戻す（配線の疎通）"
     );
 
     // 冪等: もう一度呼んでも remove→insert で wiring を保つ（panic しない）。
-    emo2_frame_system(&mut world);
+    frame_system(&mut world);
     assert!(
-        world.get_non_send::<Emo2Wiring>().is_some(),
+        world.get_non_send::<RuntimeWiring>().is_some(),
         "再実行でも wiring を保つ（remove→insert の冪等）"
     );
 
-    // 資源が無い World でも安全に no-op（wire_emo2_boot 前・LogSink フォールバック boot 経路）。
+    // 資源が無い World でも安全に no-op（wire_runtime 前・LogSink フォールバック boot 経路）。
     let mut empty_world = World::new();
-    emo2_frame_system(&mut empty_world); // panic しない
+    frame_system(&mut empty_world); // panic しない
     assert!(
-        empty_world.get_non_send::<Emo2Wiring>().is_none(),
+        empty_world.get_non_send::<RuntimeWiring>().is_none(),
         "未挿入なら no-op（何も挿入しない）"
     );
 }
 
 // ── task 9.2: run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
 //
-// 9.1 の channel 到達（`move_cue_sink_reaches_emo2_wiring_receiver`）と 7.4 の apply 単体
+// 9.1 の channel 到達（`move_cue_sink_reaches_runtime_wiring_receiver`）と 7.4 の apply 単体
 // （`move_cue_apply_move_tests.rs`・`move_cue_place_tests.rs`）を frame 相 drain で接ぐ結線の存在チェック。full spine
 // （cue→CueSheet→dispatch→sink→channel→frame）は task 9.3 が所有する。
 
@@ -225,7 +225,7 @@ fn fixture_move_directive() -> MoveDirective {
 #[test]
 fn run_move_drain_phase_buffers_until_ghost_windows_present() {
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,
@@ -274,7 +274,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
     );
 
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,
@@ -316,7 +316,7 @@ fn run_move_drain_phase_routes_reset_and_continues_after_its_failure() {
     let (mut world, gw) = resnap_world();
     let target = gw.char_window(1).unwrap();
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,
@@ -361,7 +361,7 @@ fn run_move_drain_phase_logs_ratio_unset_and_applied_scale_and_size() {
     let (mut world, gw) = resnap_world();
     let target = gw.char_window(1).unwrap();
     let (tx, rx) = mpsc::channel::<PositionCue>();
-    let wiring = Emo2Wiring::new(
+    let wiring = RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,

@@ -14,7 +14,7 @@ use super::*;
 // 限られること、(b) 表示未確立の縮退が **scope ごとに一度だけ** 鳴ること——を固定する。
 
 /// 素の結線資源（GPU/資産不要・`run_text_scale_phase` の headless 駆動用）。
-fn headless_wiring() -> Emo2Wiring {
+fn headless_wiring() -> RuntimeWiring {
     headless_wiring_with(mpsc::channel::<PresentCommand>().1, zero_clock())
 }
 
@@ -105,7 +105,7 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
     );
 }
 
-/// **排他 system への組み込み**（call-site の檻）: [`emo2_frame_system`] は毎フレーム
+/// **排他 system への組み込み**（call-site の檻）: [`frame_system`] は毎フレーム
 /// [`run_text_scale_phase`] を駆動する。
 ///
 /// 関数が正しくても system から呼ばれていなければ本番では何も起きない——その 1 行の欠落を
@@ -113,7 +113,7 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
 /// [`BalloonModel`] を持つ World で 1 フレーム回すと R8.6 の縮退警告がちょうど 1 回鳴り、
 /// 2 フレーム目は鳴らない（＝呼ばれている、かつエッジガードが system 越しに効いている）。
 #[test]
-fn emo2_frame_system_drives_text_scale_phase_every_frame() {
+fn frame_system_drives_text_scale_phase_every_frame() {
     let (mut world, _gw) = dpi_world();
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
     let mut wiring = headless_wiring_with(rx, zero_clock());
@@ -123,27 +123,27 @@ fn emo2_frame_system_drives_text_scale_phase_every_frame() {
         .insert(0, areka_parsers::balloon::parse_str("", None));
     world.insert_non_send(wiring);
 
-    let first = capture_logs(|| emo2_frame_system(&mut world));
+    let first = capture_logs(|| frame_system(&mut world));
     assert_eq!(
         count_level_containing(&first, "WARN", "text-scale"),
         1,
         "1 フレーム目で文字層 k 追従フェーズが駆動され縮退が 1 回鳴る（system 組み込みの証跡）: {first:?}"
     );
 
-    let second = capture_logs(|| emo2_frame_system(&mut world));
+    let second = capture_logs(|| frame_system(&mut world));
     assert_eq!(
         count_level_containing(&second, "WARN", "text-scale"),
         0,
         "2 フレーム目は同一状態ゆえ鳴らない（エッジガードが system 越しに効く）: {second:?}"
     );
     assert!(
-        world.get_non_send::<Emo2Wiring>().is_some(),
+        world.get_non_send::<RuntimeWiring>().is_some(),
         "wiring は remove→insert で必ず戻る"
     );
 }
 
 /// **本番経路**での `SystemState` 永続性（Flow 2 キー決定 (b)・churn 禁止）: `run_dpi_phase` は
-/// 観測器を `Emo2Wiring.dpi_state` へ**保持**し、run を跨いで `last_run` を進める。
+/// 観測器を `RuntimeWiring.dpi_state` へ**保持**し、run を跨いで `last_run` を進める。
 ///
 /// `dpi_phase_with` へテスト側の state を渡す檻では「本番が wiring のフィールドを使っている」
 /// ことを一切見ないため、ここでは `run_dpi_phase(&mut wiring, ..)` だけを叩き、その**副作用**
@@ -216,11 +216,11 @@ fn run_dpi_phase_persists_system_state_across_frames_in_production_path() {
     );
 }
 
-/// 結線の疎通（run_dpi_phase／emo2_frame_system）: 実 `EmoPresenter`（未装着）と `Changed<DPI>`
-/// のある World で `emo2_frame_system` を回しても、報告源が何も返さないため窓書込はゼロで
+/// 結線の疎通（run_dpi_phase／frame_system）: 実 `EmoPresenter`（未装着）と `Changed<DPI>`
+/// のある World で `frame_system` を回しても、報告源が何も返さないため窓書込はゼロで
 /// panic しない。フェーズが排他 system へ組み込まれていること自体を固定する。
 #[test]
-fn emo2_frame_system_runs_dpi_phase_without_writes_when_unattached() {
+fn frame_system_runs_dpi_phase_without_writes_when_unattached() {
     let (mut world, gw) = dpi_world();
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
     world.insert_non_send(headless_wiring_with(rx, zero_clock()));
@@ -229,11 +229,11 @@ fn emo2_frame_system_runs_dpi_phase_without_writes_when_unattached() {
     world
         .entity_mut(gw.char_window(0).unwrap())
         .insert(DPI::from_dpi(192, 192));
-    emo2_frame_system(&mut world);
-    emo2_frame_system(&mut world);
+    frame_system(&mut world);
+    frame_system(&mut world);
 
     assert!(
-        world.get_non_send::<Emo2Wiring>().is_some(),
+        world.get_non_send::<RuntimeWiring>().is_some(),
         "wiring は remove→insert で必ず戻る"
     );
     for scope in [0usize, 1] {

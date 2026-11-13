@@ -194,7 +194,7 @@ impl WindowsClosed {
 ///   `GhostBootInputsSource`・`AppExit`・`Schedules`・描画の装置（`GraphicsCore` ほか）・
 ///   `ZOrderPairStrategy`（系の登録と一緒にプロセスに 1 回）も同じ。
 /// - `MonitorSnapshot`・`MonitorDpiTable`: 画面の表。毎フレーム同期し、窓を開くたびにも据え直す。
-/// - ゴーストごとの結線（`Emo2Wiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
+/// - ゴーストごとの結線（`RuntimeWiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
 ///   `BalloonWiring`・メニュー・記憶の結線など）: 起こすたびに `insert_non_send` で差し替わる。
 /// - 環境変数の読み取りの控え（`OnceLock`）と系の `Local`: 窓の一式に依らない。
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {

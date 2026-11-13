@@ -8,7 +8,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
 use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
@@ -32,8 +32,8 @@ use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
 /// **常に `false`**。
 ///
 /// **借用規律（固定順序・design §204）**:
-/// 1. `Emo2Wiring` 共有借用→`runtime()` アクセサで `Rc` clone→world 側借用解放。
-///    `Emo2Wiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!`＋no-op（donor presenter=None 同型・R4.1）。
+/// 1. `RuntimeWiring` 共有借用→`runtime()` アクセサで `Rc` clone→world 側借用解放。
+///    `RuntimeWiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!`＋no-op（donor presenter=None 同型・R4.1）。
 /// 2. `BalloonWiring` へバルーン滞在（`balloon_hover`）を記録し `last_injected` を copy（可変借用即解放）。
 ///    `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋no-op
 ///    （配線存在檻が開発時に検出）。滞在の記録は選択肢の有無・行ヒットの有無に依存しない独立の軸
@@ -77,16 +77,16 @@ pub(crate) fn on_balloon_pointer_moved(
     let x = state.client_point.x as f32;
     let y = state.client_point.y as f32;
 
-    // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
-    // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
+    // ── 借用規律 ① RuntimeWiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
+    // RuntimeWiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
     let Some(runtime) = world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
             event = "choice_moved_no_emo2",
             scope,
-            "Emo2Wiring 不在（boot 前／失敗）: hover 追従を no-op 縮退"
+            "RuntimeWiring 不在（boot 前／失敗）: hover 追従を no-op 縮退"
         );
         return false;
     };

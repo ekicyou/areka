@@ -64,9 +64,9 @@ use super::talk_clock::TalkClock;
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
 // 判断側の消費は着地済み（`balloon_visibility.rs` の観測スナップショットが本型を運び、計測の
-// 破棄と占有終端の更新に使う）。送出側の構築点も着地済み——`wire_emo2_boot`（`runtime/mod.rs`）が
+// 破棄と占有終端の更新に使う）。送出側の構築点も着地済み——`wire_runtime`（`runtime/mod.rs`）が
 // channel を作り、送出端を `GhostBootOptions.sinks` 4 本目の [`BalloonLifecycleSink`] へ、受信端を
-// `Emo2Wiring::lifecycle_rx` へ渡す（task 4.1）。受信端から取り出す配線は task 4.4。
+// `RuntimeWiring::lifecycle_rx` へ渡す（task 4.1）。受信端から取り出す配線は task 4.4。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。
@@ -165,7 +165,7 @@ pub(crate) struct BalloonLifecycleSink {
 }
 
 impl BalloonLifecycleSink {
-    /// mpsc 送信端（コントローラ側の `Receiver` と対・`wire_emo2_boot` が生成）と時刻源から
+    /// mpsc 送信端（コントローラ側の `Receiver` と対・`wire_runtime` が生成）と時刻源から
     /// sink を構築する。
     pub(crate) fn new(tx: Sender<TalkLifecycleSignal>, clock: TalkClock) -> Self {
         Self {

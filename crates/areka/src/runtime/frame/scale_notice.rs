@@ -14,7 +14,7 @@ use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 
-use super::Emo2Wiring;
+use super::RuntimeWiring;
 use crate::ghost_session::GhostSlot;
 use crate::ghost_session::ghost_session_scope_scale::{percent_text, scaling_text};
 use crate::runtime::target_map::{TargetWindow, target_scope};
@@ -27,7 +27,7 @@ pub(crate) struct ScaleEventSeam(pub(crate) Sender<KanadeMsg>);
 ///
 /// 表を全部書いてから、イベントを計画の順に汎用の入口（`RaiseEvent`・GET）で送る。応答の台本の
 /// `\![get,property]` が変わった後の値を読むためである（要件 5.5）。送れないときも表は書いたまま。
-pub(super) fn run_scale_notice_phase(wiring: &mut Emo2Wiring, world: &World) {
+pub(super) fn run_scale_notice_phase(wiring: &mut RuntimeWiring, world: &World) {
     let changes = wiring.presenter.take_scale_changes();
     if changes.is_empty() {
         return;

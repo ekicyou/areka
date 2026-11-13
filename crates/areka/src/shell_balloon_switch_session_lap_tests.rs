@@ -5,7 +5,7 @@
 //! [`SampleRoot::add_shell_copy`] で `second` と名付けて写したものを A の 2 つ目のシェルとして足す。
 //! 2 つのシェルは絵の大きさが違うので、差し替えで窓寸が変わる。同じ World に GPU 資源（実 GPU）と、
 //! 本物の配置の準備（作業領域だけ合成）で組んだ窓の一式（偽 HWND）を据え、本番の `Input`・`Update` の
-//! 段（`emo2_frame_system`）をそのまま回す。台詞は置き場のゴーストの dispatcher へ合成の Tick を
+//! 段（`frame_system`）をそのまま回す。台詞は置き場のゴーストの dispatcher へ合成の Tick を
 //! 注入して進める（止めれば台詞の時計は進まない）。判定は集めてから 1 回・降ろすのは有界に行う。
 
 use std::cell::Cell;
@@ -33,7 +33,7 @@ use wintf::ecs::{
 use super::GhostSlot;
 use crate::boot_resolve::read_last_shell;
 use crate::input_events::user_break::UserBreakWiring;
-use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::ghost_switch::SwitchInFlight;
 use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::runtime::shell_balloon_switch::{
@@ -191,7 +191,7 @@ impl UiSeen {
     /// World から今の巡の観測を読んで [`UiSeen::note`] へ渡す。
     fn observe(&mut self, world: &World, moves: &Cell<u64>) {
         let text = world
-            .get_non_send::<Emo2Wiring>()
+            .get_non_send::<RuntimeWiring>()
             .map(|wiring| {
                 let runtime = wiring.runtime().borrow();
                 let state = runtime.state();
@@ -658,7 +658,7 @@ fn script_shell_switch_round_trips_with_raise_event() {
 /// 今の見え方（キャラ窓ごとの装着の子・窓寸・シェルの表示）。
 pub(super) fn look_of(rig: &SwitchRig, windows: &GhostWindows) -> Look {
     let world = &rig.world;
-    let presenter = world.get_non_send::<Emo2Wiring>().map(|w| w.presenter());
+    let presenter = world.get_non_send::<RuntimeWiring>().map(|w| w.presenter());
     let mut look = Look::default();
     for scope in windows.scopes() {
         let window = windows.char_window(scope).unwrap();
