@@ -29,11 +29,11 @@ use crate::boot_resolve::{
     BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, LastUsed, record_last_balloon,
     record_last_shell, running_name,
 };
-use crate::emo2_boot::ghost_switch::{
+use crate::ghost_session::{GhostSlot, StartupDescriptValues};
+use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::ghost_session::{GhostSlot, StartupDescriptValues};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::write_failure::sites_tests::{KINDS, drain_desk};
 use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
 use areka_placement::AuthorDpi;
@@ -109,7 +109,7 @@ fn reservation(rig: &SwitchRig, stage: SwitchStage) -> SwitchInFlight {
         },
         stage,
         boot_event: None,
-        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     }
 }
 

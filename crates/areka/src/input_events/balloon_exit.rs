@@ -10,7 +10,8 @@ use bevy_ecs::world::World;
 use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::PointerLeave;
 
-use crate::emo2_boot::frame::Emo2Wiring;
+use crate::runtime::balloon_hover::BalloonHover;
+use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
 use super::{BalloonWiring, HoverAction, hover_action};
@@ -33,12 +34,12 @@ use super::{BalloonWiring, HoverAction, hover_action};
 /// `hover_action(active, None, last_injected)` を再利用して hover 状態を解除する（hit は `None`＝ポインタが
 /// 窓外へ出た高速離脱ゆえエッジ非採取・R1.3）。
 ///
-/// 併せて当該 scope の**バルーン滞在**（`BalloonWiring::clear_balloon_hover`・
+/// 併せて当該 scope の**バルーン滞在**（`BalloonHover::clear_balloon_hover`・
 /// areka-P0-balloon-visibility 5.2）を解除する。滞在は選択肢行の追跡とは独立の軸であり、解除は
-/// `Emo2Wiring` の可否より前・選択肢機構の縮退に依らず行う（記録側との非対称は本文中コメント参照・5.5）。
+/// `RuntimeWiring` の可否より前・選択肢機構の縮退に依らず行う（記録側との非対称は本文中コメント参照・5.5）。
 ///
 /// **借用規律・縮退はハンドラ（task 4.1）と同一**:
-/// - `Emo2Wiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_emo2")`＋no-op
+/// - `RuntimeWiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_runtime")`＋no-op
 ///   （donor presenter=None 同型・R4.1）。runtime `Rc` は 1 度 clone し全 scope で共有する（同一資源）。
 /// - `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋skip。
 /// - runtime `try_borrow`（不変）で `hit_active` を控え、借用解放後に `try_borrow_mut` で
@@ -61,7 +62,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
         .iter(world)
         .collect();
     if leaving.is_empty() {
-        // マーカー不在フレームは完全 no-op（design Risks・Emo2Wiring にも触れない）。
+        // マーカー不在フレームは完全 no-op（design Risks・RuntimeWiring にも触れない）。
         return;
     }
 
@@ -85,12 +86,15 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
 
     // ── バルーン滞在の解除（areka-P0-balloon-visibility 5.2）——選択肢機構より前 ────────────────
     // 記録側（`on_balloon_pointer_moved` の借用規律 ②）と縮退方向を意図的に非対称にする: 記録は
-    // 上流 `Emo2Wiring` が揃うときだけ行い（抑止を増やす側は保守的）、解除はその可否に依らず行う
+    // 上流 `RuntimeWiring` が揃うときだけ行い（抑止を増やす側は保守的）、解除はその可否に依らず行う
     // （抑止を解く側は積極的）。滞在が真のまま残ると恒久抑止へ固着し Requirement 5.5 に反するため。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!＋no-op（silent failure 禁止）。
-    if let Some(mut bw) = world.get_non_send_mut::<BalloonWiring>() {
-        for &scope in &scopes {
-            bw.clear_balloon_hover(scope);
+    if world.get_non_send::<BalloonWiring>().is_some() {
+        // 滞在の集合は `BalloonWiring` と同じ時に置かれる runtime の型（不在は可視性の相が error! を 1 回出す）。
+        if let Some(mut balloon_hover) = world.get_non_send_mut::<BalloonHover>() {
+            for &scope in &scopes {
+                balloon_hover.clear_balloon_hover(scope);
+            }
         }
     } else {
         tracing::error!(
@@ -100,17 +104,17 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
         );
     }
 
-    // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
-    // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
+    // ── 借用規律 ① RuntimeWiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
+    // RuntimeWiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
     // runtime は単一グローバル資源ゆえ 1 度 clone して全 scope で共有する（ハンドラの per-event clone と
     // 等価・per-scope 再取得は不要）。
     let Some(runtime) = world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
-            event = "choice_leave_no_emo2",
-            "Emo2Wiring 不在（boot 前／失敗）: バルーン離脱 hover 解除を no-op 縮退"
+            event = "choice_leave_no_runtime",
+            "RuntimeWiring 不在（boot 前／失敗）: バルーン離脱 hover 解除を no-op 縮退"
         );
         return;
     };

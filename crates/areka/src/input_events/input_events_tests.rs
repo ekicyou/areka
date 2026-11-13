@@ -1,5 +1,5 @@
 use super::*;
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use std::sync::mpsc;
@@ -287,7 +287,7 @@ fn presenter_absent_degrades_to_region_none() {
             region: None,
             surface_point: (100, 200),
         },
-        "Emo2Wiring 不在は region None・座標は無変換へ正常縮退（scope はそのまま反映）"
+        "RuntimeWiring 不在は region None・座標は無変換へ正常縮退（scope はそのまま反映）"
     );
 }
 

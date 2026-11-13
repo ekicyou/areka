@@ -57,7 +57,7 @@ windows = { workspace = true, features = ["Win32_UI_Controls_Dialogs"] }
 # （areka-P0-window-placement design DD5・旧 dev-dependencies から移動）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
 areka-emo-compose = { path = "../areka-emo-compose" }
-# emo2-boot 統合結線（areka-P0-emo2-boot・R10.8）で実 sink・presenter・文字層・契約型・
+# runtime 統合結線（areka-P0-emo2-boot・R10.8）で実 sink・presenter・文字層・契約型・
 # clock を消費するための workspace path 依存昇格。外部（crates.io）依存の追加ではない統合結線
 # （R10.5 の「新規依存」に該当しない）。
 areka-seriko = { path = "../areka-seriko" }
@@ -65,13 +65,13 @@ areka-emo-text = { path = "../areka-emo-text" }
 areka-sakura = { path = "../areka-sakura" }
 areka-actor = { path = "../areka-actor" }
 dola = { path = "../dola" }
-# emo-present は placement 観測 example 用 dev-dependency だったが、emo2-boot の実 sink 結線
+# emo-present は placement 観測 example 用 dev-dependency だったが、runtime の実 sink 結線
 # （EmoPresenter・PresentCommand 契約正本）で通常依存へ昇格（areka-P0-emo2-boot design R10.8）。
 # examples/emo-present.rs は通常依存からも参照可能。
 areka-emo-present = { path = "../areka-emo-present" }
 
 [dev-dependencies]
-# 決定論 spine テスト（emo2_boot::spine・areka-P0-emo2-boot task 6.1）専用。scripted
+# 決定論 spine テスト（runtime::spine・areka-P0-emo2-boot task 6.1）専用。scripted
 # ShioriBackend が実装する ShioriBackend トレイトの戻り値型（RequestError/ExitKind/
 # ShutdownError/HelperStatus）を名前で参照するために追加する。areka-kanade はこれら host32 型を
 # re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で推移ビルド済み・

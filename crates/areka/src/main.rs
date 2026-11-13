@@ -16,7 +16,7 @@
 //!
 //! `main` は `WinApp` 構築／`ghost_session::open_ghost_windows` の後で `ghost_session::boot_ghost` を呼び、
 //! 実 sink boot（`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）の呼び分けはそこが
-//! 行う（task 5.2・design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
+//! 行う（task 5.2・design.md「エントリポイント / main.rs＋wire_runtime」・DD-7）。`run()` 復帰後は
 //! `GhostSession::shutdown(CloseReason::User { scope: 0 })`（DD-10・loop ticker → 終了統括 → seriko join）で
 //! 終了を総仕上げする。boot 失敗は非致命として扱い骨格起動を止めない（要件 7.3・8.2）。
 
@@ -51,11 +51,13 @@ mod placement_tests;
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
 
-/// emo2 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
+/// runtime 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
 /// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
-/// `wire_emo2_boot`）。
-mod emo2_boot;
+/// `wire_runtime`）。
+mod runtime;
+/// 本体に頼る切替・読み直し・起動・終わる相の層（runtime-module-untangle）。
+mod session;
 
 /// UI→kanade のマウス入力配信配線（areka-P0-input-events）。キャラ窓のポインタイベントを
 /// 捉え、当たり判定名を resolver で解決し、送出間引き（`throttle`）を通して kanade へ配信する
@@ -245,7 +247,7 @@ fn main() -> Result<()> {
     let helper_exe = default_helper_exe_path();
 
     // UI ランタイム起動（COM/DPI 初期化・World 生成・終了の受け口 `AppExit` の据え付け）（R2.4）。
-    // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp` 構築を
+    // DD-7/R7.1: 実 sink 結線（`wire_runtime`）は UI 基盤の後に行うため、`WinApp` 構築を
     // すべての boot より前へ移動した（旧・task 3.3 の boot 先行順序を再編）。
     // `Explicit`: 窓 0 では終了せず、`quit_app` の終了の指示でだけ `run()` が戻る（要件 1.1）。
     let app = WinApp::with_exit_policy(ExitPolicy::Explicit)?;
@@ -295,7 +297,7 @@ fn main() -> Result<()> {
     // 削除等）「起動窓を開けない」を告知して終了コード 1 で終える（baseware-root-layout
     // 要件 6.4）。窓 0 で居座る経路は作らない（要件 6.6）。
     // 戻り値は配置準備が **1 度だけ**読んだ descript 由来の 2 値（areka-P0-emo-dpi-scaling
-    // task 4.3・design Flow 3 手順1）。作者基準 DPI は採寸の k₀ と直下の `wire_emo2_boot`
+    // task 4.3・design Flow 3 手順1）。作者基準 DPI は採寸の k₀ と直下の `wire_runtime`
     // （→`attach_target`）の双方へ渡り、採寸と表示が別々の宣言を見る食い違いを構造的に
     // 排除する。shell の `seriko.zorder` も同じ搬送に乗せる（areka-P0-scope-zorder-pinning
     // 要件 5.1／5.2）——重なりの基底の出所を配置と同じ 1 度の読取に揃えるためである。
@@ -805,7 +807,7 @@ fn restore_merged_placements(
 ///
 /// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink`×2）の**両方**が、生きた
 /// ghost runtime が存在するときにこのヘルパで `runtime.sylphya_publisher().clone()` を World の
-/// NonSend リソースとして挿入する（`MouseWiring`／`Emo2Wiring` の NonSend 先例に倣う）。以降、
+/// NonSend リソースとして挿入する（`MouseWiring`／`RuntimeWiring` の NonSend 先例に倣う）。以降、
 /// follow.rs の DragEnd 観測点が [`areka_placement::persist::persist_entries`] 経由でこの publisher の
 /// clone 送信端から保存 entries を write-through 投函できる（World レベルの配線導管）。
 ///
@@ -905,7 +907,7 @@ pub(crate) fn record_last_used(
 /// # 2 源を同じ構築関数で作る（atom task 5.1・要件 5.1）
 ///
 /// 返すのは作業領域源と**モニタ別拡大率表**の組である。実行時の同期段
-/// （`emo2_boot::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
+/// （`runtime::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
 /// を通る——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 fn boot_monitor_snapshot(
     monitors: &[wintf::ecs::window::monitor::Monitor],

@@ -119,10 +119,8 @@ fn destination_over_puts_later_sibling_below() {
     let root = red_then_blue(&mut world);
     let over = render_tree_to_pixels(&mut world, root, 16, 16, Matrix3x2::identity());
     let blue = *world.get::<Children>(root).unwrap().last().unwrap();
-    world
-        .get_mut::<VisualDrawContent>(blue)
-        .unwrap()
-        .composite_mode = D2D1_COMPOSITE_MODE_DESTINATION_OVER;
+    world.get_mut::<VisualDrawContent>(blue).unwrap().mix_mode =
+        MixMode::Composite(D2D1_COMPOSITE_MODE_DESTINATION_OVER);
     let under = render_tree_to_pixels(&mut world, root, 16, 16, Matrix3x2::identity());
     pixel_near(&over, BLUE, 6, 6);
     pixel_near(&under, RED, 6, 6); // 重なりでは後の兄弟が下に入る

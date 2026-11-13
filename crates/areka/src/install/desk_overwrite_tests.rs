@@ -31,14 +31,14 @@ use super::overwrite::take;
 use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
-use crate::emo2_boot::ghost_switch::{
+use crate::install::procedure::Overwritten;
+use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::runtime::spine::{Progress, RecordedCall, run_bounded_watching};
+use crate::session::ghost_switch::{
     GhostSpec, LastInstalledGhost, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage,
     SwitchTarget, SwitchVerdict, request_ghost_switch,
 };
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::{Progress, RecordedCall, run_bounded_watching};
-use crate::install::procedure::Overwritten;
-use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_placement::persist::PersistWiring;
 
 /// 書庫が置くファイル（宛先のゴーストのフォルダからの相対）と中身。
@@ -365,7 +365,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     });
     let (reply, answer) = reply_channel();
     let mut got = None;

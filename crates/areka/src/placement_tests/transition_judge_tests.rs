@@ -26,7 +26,7 @@ use super::{
     RecordDefect, WindowKey, is_transition_origin, parse_transition_line, parse_transition_log,
     required_fields, split_transitions, summarize,
 };
-use crate::emo2_boot::target_map::{balloon_target, shell_target};
+use crate::runtime::target_map::{balloon_target, shell_target};
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::transition_diag::{
     CHAIN_STAGE_DEFERRED, CHAIN_STAGE_REALIGNED, HOLD_DECISION_HOLD, HOLD_DECISION_PROCEED,
@@ -444,7 +444,7 @@ fn summarize_counts_path_a_writes_by_origin_and_corroborates_with_the_stage() {
 
 #[test]
 fn summarize_maps_the_surface_target_id_to_a_scope_and_a_kind() {
-    // 採番の正本は `emo2_boot::target_map`（shell = 2·scope／balloon = 2·scope+1）であり、
+    // 採番の正本は `runtime::target_map`（shell = 2·scope／balloon = 2·scope+1）であり、
     // 判定器が持つのはその**逆写像**である。数値をここへ書き直すと、正本が
     // 採番を変えたときに判定器だけが反転したまま静かに緑になるので、正本の関数を呼んで往復させる。
     for scope in 0..3 {

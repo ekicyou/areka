@@ -22,8 +22,8 @@ use windows::Win32::Foundation::{HINSTANCE, HWND};
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
-use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
-use crate::emo2_boot::switch_assets::{SwapBuilt, SwitchBuildRequest, build_swap};
+use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::runtime::switch_assets::{SwapBuilt, SwitchBuildRequest, build_swap};
 use areka_placement::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
 use areka_placement::persist::PersistWiring;
 use areka_placement::prepare_ghost_windows_with_work_area;

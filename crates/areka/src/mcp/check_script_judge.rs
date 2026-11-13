@@ -15,7 +15,7 @@ use areka_sakura::strict::{self, CharCursor, DetectionPoint};
 use areka_sakura::{AnchorIssue, pair_anchors};
 use areka_seriko::{SkinLookup, balloon_missing, surface_missing};
 
-use crate::emo2_boot::consumer_ledger::ConsumerLedger;
+use crate::runtime::consumer_ledger::ConsumerLedger;
 
 // 文言の正本は `areka_sakura::strict`（strict の記録と同じ定数。文書の正本は `doc/ssp-mcp/areka-tools.md`）。
 pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = strict::MSG_UNKNOWN_TAG;

@@ -22,9 +22,9 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{BootShellChoice, GhostSlot, prepare_ghost_windows};
 use crate::boot_resolve::read_last_shell;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::RecordedCall;
+use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 写した 2 つ目のシェルのフォルダ名。
 const SECOND: &str = "second";

@@ -377,7 +377,7 @@ fn each_scope_dumps_its_own_default_binds_and_dump_bind() {
     com_init();
     let ghost = scope_bind_ghost();
     let decoder = WicDecoderArm::new().expect("WIC の工場が作れる");
-    let Ok(screen) = crate::emo2_boot::assets::build_shell_assets(
+    let Ok(screen) = crate::runtime::assets::build_shell_assets(
         ghost.path(),
         None,
         &[0, 1, 2, 3],

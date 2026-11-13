@@ -8,7 +8,9 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/emo2_boot/` の `ghost_switch*`・`switch_assets*`・`shell_balloon_switch*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`。
+- 受け持つファイル（2026-11-13 `runtime-module-untangle` で書き換えた＝前は `crates/areka/src/emo2_boot/` の `ghost_switch*`・`switch_assets*`・`shell_balloon_switch*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
+  - `crates/areka/src/session/` の `ghost_switch*`・`shell_balloon_switch*`。
+  - `crates/areka/src/runtime/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`、切替から runtime に残した `change_cue*`（`ChangeRequestRaw`）・`skin_switch.rs`（切替の型と `skin_ref_*`）、ホバーの `balloon_hover.rs`・`shell_box_hover.rs`（`input_events/` から移した）。runtime の分は `runtime-crate-split` で `crates/areka-runtime/src/` へもう一度移る。
 - 大きさ: 50 ファイル・コード 5,672 行・テスト 12,687 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
@@ -72,3 +74,9 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## runtime-module-untangle からの申し送り（2026-11-13）
+
+`runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
+
+- **要らない項目: `crates/areka/src/session/shell_balloon_switch.rs` 37〜40 行目の出し直しが設計より広い**。設計の 5 型（`SkinKind`・`SkinOrigin`・`SkinRequest`・`SkinSpec`・`SkinVerdict`）に加えて `SkinRequestRaw`・`SkinSwitchInFlight`・`SkinSwitchStage`・`skin_ref_name`・`skin_ref_path` を出し直している（テストが入口のパスで引くため）。引く所を `crate::runtime::skin_switch` へ直して、出し直しを 5 型へ絞る。
