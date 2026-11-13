@@ -1,6 +1,6 @@
 //! 道具と保管した書庫のずれの見張り（spec: default-balloon-selfmade 要件 8.2・設計で決めたこと 10）。
 //!
-//! 道具 `gen_default_balloon` の組み立て（`build`）と子の 3 つを `#[path]` の兄弟として読み、
+//! 道具 `gen_default_balloon` の組み立て（`build`）と子の 4 つ（`cli`・`draw`・`texts`・`webp`）を `#[path]` の兄弟として読み、
 //! 組んだ 23 ファイルと、窓口から取り出した `areka-balloon` の木の全ファイルを名前の集合と
 //! バイト列で比べる。道具を直して書庫を作り直し忘れた・`image` の版が上がって出力が
 //! 変わったときに赤になる。直し方は道具を回して書庫を作り直すこと。
@@ -9,6 +9,8 @@
 
 #[path = "../examples/gen_default_balloon/build.rs"]
 mod build;
+#[path = "../examples/gen_default_balloon/cli.rs"]
+mod cli;
 #[path = "../examples/gen_default_balloon/draw.rs"]
 mod draw;
 #[path = "../examples/gen_default_balloon/texts.rs"]

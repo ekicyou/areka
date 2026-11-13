@@ -17,8 +17,7 @@
 //! 列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表（design
 //! 「合成メソッド写像表」）の全ブレンドモードを最小の列挙で忠実に表現する。
 
-use std::borrow::Cow;
-
+use areka_parsers::shell::{canonical_method_name, same_canonical};
 use tracing::debug;
 
 /// ukadoc 由来の合成（描画）メソッド全量列挙。
@@ -128,26 +127,6 @@ pub enum BlendKind {
     Luminosity,
 }
 
-/// メソッド名の正規化（前後の空白を落とし・小文字にし・`-` と `_` を除く）。
-///
-/// [`ComposeMethod::from_name`]・[`is_known_name`]・[`crate::pattern_word::pattern_word`]（照会の
-/// [`crate::world::EmoWorld::dangling_pattern_targets`] もこれを通る）が**同じ規則**で語を比べるための唯一の
-/// 定義である。`from_name` は未知の語で `debug!` を出すので照会の側からは呼べない（要件 3.5）が、正規化だけは
-/// ここを共有する。合成のたびに引く [`is_implemented_name`] は確保しない [`same_canonical`] で同じ規則を当てる。
-///
-/// もう正規化済みの語（ふつうの `overlay` など）は写さずに借りて返す（指摘 29）。
-pub(crate) fn canonical_method_name(name: &str) -> Cow<'_, str> {
-    let name = name.trim();
-    if name
-        .bytes()
-        .any(|b| b.is_ascii_uppercase() || b == b'-' || b == b'_')
-    {
-        Cow::Owned(name.to_ascii_lowercase().replace(['-', '_'], ""))
-    } else {
-        Cow::Borrowed(name)
-    }
-}
-
 impl ComposeMethod {
     /// このメソッドが実挙動を持つ（実装済みである）か。
     ///
@@ -166,8 +145,8 @@ impl ComposeMethod {
     /// [`Overlay`]: ComposeMethod::Overlay
     /// [`Unknown`]: ComposeMethod::Unknown
     pub fn from_name(name: &str) -> ComposeMethod {
-        // 正規化は [`canonical_method_name`] 1 か所に置く（同じ規則を引く
-        // `EmoWorld::dangling_pattern_targets` と静かにずれないため）。
+        // 正規化は parsers の [`canonical_method_name`] 1 か所に置く（同じ規則で 8 語を見分ける
+        // `pattern_word`・`EmoWorld::dangling_pattern_targets` と静かにずれないため）。
         known_method(&canonical_method_name(name)).unwrap_or_else(|| {
             // 利用者向けの warn は読み込みの形の誤り（`ShapeIssue::UndrawnPattern`・未知の語は先が無くても数える）が
             // 1 件 1 行で出す。
@@ -193,15 +172,6 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
         "auto" => ComposeMethod::Auto,
         other => ComposeMethod::Blend(parse_blend(other)?),
     })
-}
-
-/// `name` を [`canonical_method_name`] と同じ規則で正規化した語が、正規化済みの語 `canon` と同じか（確保しない）。
-fn same_canonical(name: &str, canon: &str) -> bool {
-    name.trim()
-        .bytes()
-        .filter(|&b| b != b'-' && b != b'_')
-        .map(|b| b.to_ascii_lowercase())
-        .eq(canon.bytes())
 }
 
 /// [`ComposeMethod::Overlay`] へ写す語（正規化済み・[`known_method`] と [`is_implemented_name`] が共有する）。

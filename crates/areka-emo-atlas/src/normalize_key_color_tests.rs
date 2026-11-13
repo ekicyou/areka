@@ -3,54 +3,17 @@
 //! α チャンネルを持たない絵は、左上の 1 画素（座標 0,0）と同じ 4 バイトの画素を
 //! すべて完全に透明（`0,0,0,0`）にし、それ以外の画素を 1 バイトも変えない。
 //! 画素を決め打ちした小さな絵だけで走り、ファイルにも検体にも依存しない。
+//!
+//! 離れた同じ色が抜かれること・α 付きが素通しなこと・`plan` が抜く色を持つ場合は、
+//! `normalize_rule_tests.rs` の表の行（同じ入力と期待）が見るので、ここには置かない。
 
 use super::*;
 use crate::decode::DecodedImage;
-
-/// 画素の並び（4 バイト単位）と寸法から `DecodedImage` を組む。`stride` は `width * 4`。
-fn image(width: u32, height: u32, has_alpha: bool, pixels: &[[u8; 4]]) -> DecodedImage {
-    let stride = width * 4;
-    assert_eq!(
-        pixels.len(),
-        (width * height) as usize,
-        "画素数と寸法が合わない"
-    );
-    let bgra: Vec<u8> = pixels.iter().flat_map(|px| px.iter().copied()).collect();
-    DecodedImage {
-        width,
-        height,
-        stride,
-        bgra,
-        has_alpha,
-    }
-}
-
-fn params(use_self_alpha: UseSelfAlpha) -> AlphaParams {
-    AlphaParams { use_self_alpha }
-}
+use crate::test_support::{image, params};
 
 /// 抜き色の腕（`On` ＋ α なし）を通す。
 fn key_out(img: DecodedImage) -> NormalizedImage {
     Normalizer.normalize(img, params(UseSelfAlpha::On))
-}
-
-/// 要件 4.3: 左上とつながっていない離れた同じ色の画素も透明になる。
-/// 要件 4.6: 透明にした画素に元の色が残らない（`0,0,0,0`）。
-#[test]
-fn distant_pixels_of_the_key_color_become_transparent() {
-    // 左上＝地色。右下も同じ地色だが左上とつながっていない。
-    let key = [10u8, 20, 30, 255];
-    let other = [200u8, 100, 50, 255];
-    let out = key_out(image(2, 2, false, &[key, other, other, key]));
-
-    assert_eq!(&out.pbgra[0..4], &[0, 0, 0, 0], "左上は透明（要件 4.1）");
-    assert_eq!(&out.pbgra[4..8], &other, "違う色は 1 バイトも変えない");
-    assert_eq!(&out.pbgra[8..12], &other, "違う色は 1 バイトも変えない");
-    assert_eq!(
-        &out.pbgra[12..16],
-        &[0, 0, 0, 0],
-        "離れた同じ色も透明で、色を残さない（要件 4.3・4.6）"
-    );
 }
 
 /// 要件 4.2: 許容幅 0。1 成分だけ 1 違う色は不透明のまま 1 バイトも変わらない。
@@ -82,23 +45,6 @@ fn image_of_a_single_color_is_ok_and_fully_transparent() {
     assert_eq!(out.width, 3);
     assert_eq!(out.height, 2);
     assert_eq!(out.pbgra.len(), (out.stride * out.height) as usize);
-}
-
-/// 要件 4.4: α チャンネルを持つ絵は今日どおり素通しで 1 バイトも変わらない。
-#[test]
-fn image_with_alpha_channel_is_byte_identical() {
-    // 左上と同じ 4 バイトの画素を他にも置いた絵。α 腕なので抜かれてはならない。
-    let a = [0u8, 0, 128, 128];
-    let b = [255u8, 255, 255, 255];
-    let src = image(2, 2, true, &[a, b, a, b]);
-    let expected = src.bgra.clone();
-
-    let out = Normalizer.normalize(src, params(UseSelfAlpha::On));
-
-    assert_eq!(
-        out.pbgra, expected,
-        "α 付きは 1 バイトも変わらない（要件 4.4）"
-    );
 }
 
 /// 行の詰め物（`stride > width * 4`）を読まず、書きもしない。
@@ -169,52 +115,9 @@ fn trns_like_semi_transparent_pixels_survive() {
 /// 幅か高さが 0 の絵は抜き色を持てないので、そのまま渡す（失敗にしない）。
 #[test]
 fn zero_sized_image_passes_through() {
-    let src = DecodedImage {
-        width: 0,
-        height: 0,
-        stride: 0,
-        bgra: Vec::new(),
-        has_alpha: false,
-    };
+    let src = image(0, 0, false, &[]);
     let out = key_out(src);
     assert!(out.pbgra.is_empty());
     assert_eq!(out.width, 0);
     assert_eq!(out.height, 0);
-}
-
-/// `Normalizer::plan` が抜く色（`key`）を持つのは、抜き色の側に当たる宣言と絵のときだけで、
-/// その色は左上の 4 バイト（`0` は α を 255 にした後の左上）。α を使う側と `full` では持たない。
-#[test]
-fn plan_has_a_key_only_on_the_key_color_side() {
-    let key = [10u8, 20, 30, 255];
-    let px = [key, [200, 100, 50, 255], [0, 0, 0, 255], key];
-    let key_of = |has_alpha, decl| Normalizer::plan(&image(2, 2, has_alpha, &px), params(decl)).key;
-
-    // 抜き色の側（`1` ＋ α なし・`0`・宣言なし ＋ 全画素不透明）。
-    assert_eq!(key_of(false, UseSelfAlpha::On), Some(key), "要件 3.2");
-    assert_eq!(key_of(true, UseSelfAlpha::Off), Some(key), "要件 5.2");
-    assert_eq!(key_of(false, UseSelfAlpha::Off), Some(key), "要件 5.1");
-    assert_eq!(
-        key_of(true, UseSelfAlpha::Undeclared),
-        Some(key),
-        "要件 9.2"
-    );
-    assert_eq!(
-        key_of(false, UseSelfAlpha::Undeclared),
-        Some(key),
-        "要件 9.3"
-    );
-    // α を使う側と `full`。
-    assert_eq!(key_of(true, UseSelfAlpha::On), None, "要件 3.1");
-    assert_eq!(key_of(true, UseSelfAlpha::Full), None, "要件 4.1");
-    assert_eq!(key_of(false, UseSelfAlpha::Full), None, "要件 4.2");
-    // 左上の画素が無い（幅か高さが 0）絵は抜き色を持てない。
-    let empty = DecodedImage {
-        width: 0,
-        height: 0,
-        stride: 0,
-        bgra: Vec::new(),
-        has_alpha: false,
-    };
-    assert_eq!(Normalizer::plan(&empty, params(UseSelfAlpha::On)).key, None);
 }

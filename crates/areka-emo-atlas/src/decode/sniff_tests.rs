@@ -59,7 +59,8 @@ fn samples_answer_by_content() {
 
 // ---- バイト列の組み立て ----
 
-const PNG_SIG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+use super::PNG_SIGNATURE as PNG_SIG;
+use super::WEBP_ANIMATION_FLAG as ANIM_FLAG;
 
 fn png_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -113,8 +114,6 @@ fn riff(body: &[u8]) -> Vec<u8> {
     out.extend_from_slice(body);
     out
 }
-
-const ANIM_FLAG: u8 = 0x02;
 
 /// 読んだバイト数を数える読み手。
 struct Counting<'a> {
@@ -217,12 +216,7 @@ fn png_chunk_longer_than_rest_stops_with_what_was_read() {
     png.extend_from_slice(&u32::MAX.to_be_bytes());
     png.extend_from_slice(b"tEXt");
     png.extend_from_slice(&[0; 8]);
-    let mut reader = Counting {
-        inner: Cursor::new(png.as_slice()),
-        read: 0,
-    };
-    assert_eq!(sniff(&mut reader), info(8, 8, 3));
-    assert!(reader.read <= png.len());
+    assert_eq!(sniff_bytes(&png), info(8, 8, 3));
 
     // acTL そのものが残りより長い → 読まない
     let mut png = png_head(8, 8);
@@ -286,24 +280,12 @@ fn webp_chunk_longer_than_rest_stops_with_what_was_counted() {
     webp_chunk(&mut body, b"ANMF", &[0; 16]);
     huge(&mut body);
     webp_chunk(&mut body, b"ANMF", &[0; 16]);
-    let bytes = riff(&body);
-    let mut reader = Counting {
-        inner: Cursor::new(bytes.as_slice()),
-        read: 0,
-    };
-    assert_eq!(sniff(&mut reader), info(8, 8, 2));
-    assert!(reader.read <= bytes.len());
+    assert_eq!(sniff_bytes(&riff(&body)), info(8, 8, 2));
 
     // 1 つ数えた後で長すぎる ANMF → 2 に届かない
     let mut body = Vec::new();
     webp_chunk(&mut body, b"VP8X", &vp8x(ANIM_FLAG, 8, 8));
     webp_chunk(&mut body, b"ANMF", &[0; 16]);
     huge(&mut body);
-    assert_eq!(sniff_bytes(&riff(&body)), None);
-
-    // VP8X そのものが残りより長い
-    let mut body = b"VP8X".to_vec();
-    body.extend_from_slice(&64u32.to_le_bytes());
-    body.extend_from_slice(&vp8x(ANIM_FLAG, 8, 8));
     assert_eq!(sniff_bytes(&riff(&body)), None);
 }

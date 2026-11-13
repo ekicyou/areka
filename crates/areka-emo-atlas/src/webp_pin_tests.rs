@@ -62,7 +62,7 @@ fn git_head() -> String {
     )
 }
 
-/// 取り込み前（task 1.1 の前のコミット）の `Cargo.lock` の `image-webp` の項目の頭（公開版）。
+/// 固定コミットを取り込む前の `Cargo.lock` の `image-webp` の項目の頭（公開版）。
 const PUBLIC_HEAD: &str = "name = \"image-webp\"\nversion = \"0.2.4\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3\"";
 
 /// 今の `Cargo.lock` の一部を置き換えた文。置き換えが空振りしたら較正にならないので落とす。

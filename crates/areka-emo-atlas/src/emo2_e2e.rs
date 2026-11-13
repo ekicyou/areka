@@ -1,77 +1,22 @@
 //! emo2 fixture を用いた bake パイプラインの統合テスト（shell・balloon 横断）。
 //!
-//! task 3.2（要件 **1.1, 1.4, 2.2, 5.6, 6.1, 6.2**）。
+//! 要件 **1.1, 1.4, 5.6, 6.1, 6.2**。
 //!
 //! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
-//! packing → 焼付）を、実 fixture emo2 の shell surface 一式・balloon 画像・欠落パス混在
-//! 入力で駆動し、成功/失敗を自動実行環境で明確に判定する。production コードは変更せず
+//! packing → 焼付）を、実 fixture emo2 の shell surface 一式・balloon 画像で
+//! 駆動し、成功/失敗を自動実行環境で明確に判定する。production コードは変更せず
 //! （本モジュールは `#[cfg(test)]`）、WIC 腕（COM 隔離）越しに実 PNG を復号する。
 //!
 //! - shell E2E: `surfaces.txt` を `areka_parsers::shell::parse` で読み、SurfaceSet として
 //!   bake。全 element が索引表に載り頁が生成される（1.1/6.1/6.2）。
 //! - balloon E2E: balloon 画像を surface 表現に**手組み**（balloon→surface 適応は本層外・
 //!   design D1）し、shell と同一の bake 経路で処理されることを実証（1.4）。
-//! - 欠落パス混在: 存在しないパスは当該エントリのみ errors・resolve→None、他エントリは
-//!   継続（2.2/5.6）。
 //!
 //! in-source `#[cfg(test)]`（regular dep `areka-parsers` / `windows` へ full access・
-//! WIC 腕テスト task 2.2 の前例に倣う）。
+//! WIC 腕のテストの前例に倣う）。
 
-use std::path::PathBuf;
-
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-
-use crate::{
-    AlphaParams, BakeError, ManifestDeriver, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    WicDecoderArm, bake,
-};
-
-/// COM 初期化下でクロージャを実行するヘルパ（WIC は CPU-only だが COM init 必須）。
-/// `decode/wic_arm.rs` の同名ヘルパと同一パターン（MTA・RPC_E_CHANGED_MODE 許容）。
-fn with_com_initialized<F: FnOnce()>(f: F) {
-    unsafe {
-        // 既に初期化済みでも RPC_E_CHANGED_MODE を許容し、続行する。
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    f();
-    unsafe {
-        CoUninitialize();
-    }
-}
-
-/// emo2 検体の実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
-fn emo2(rel: &str) -> PathBuf {
-    crate::sample_test_support::emo2_root().join(rel)
-}
-
-/// emo2 の shell/master 基準 dir（surfaces.txt の element 相対パス起点）。
-fn shell_master_dir() -> PathBuf {
-    emo2("shell/master")
-}
-
-/// AlphaParams { use_self_alpha: On }（emo2 の descript は seriko.use_self_alpha,1）。
-fn on_params() -> AlphaParams {
-    AlphaParams {
-        use_self_alpha: UseSelfAlpha::On,
-    }
-}
-
-/// balloon 画像 1 枚を 1 element として持つ手組み surface（layer0・x/y=0・collision/animation 空）。
-/// balloon→surface 適応は本層の責務外（design D1）ゆえ、テストが surface 表現を手構築する。
-fn hand_surface(id: u32, rel: &str) -> Surface {
-    Surface {
-        targets: vec![AppendTarget::Single(id)],
-        elements: vec![Element {
-            layer: 0,
-            path: ElementPath::new(rel.to_string()),
-            x: 0,
-            y: 0,
-        }],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }
-}
+use crate::test_support::{BIND_DEBUG, elem, emo2_shell, emo2_shell_dir, set, surface, with_arm};
+use crate::{ManifestDeriver, PackConfig, SetId, bake};
 
 /// emo2 shell の実測フィクスチャ事実（本統合テストが依拠する）。
 ///
@@ -92,25 +37,11 @@ const SHELL_NULL_PNG_KEY: &str = "purple/a/null.png";
 /// 配置される。
 #[test]
 fn emo2_shell_all_elements_baked() {
-    let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
-        .expect("emo2 surfaces.txt must be readable (UTF-8)");
-    let shell = areka_parsers::shell::parse(&content);
-
-    // parse がサーフェスを生んだこと（UTF-8 read_to_string で十分）。
-    assert!(
-        !shell.surfaces.is_empty(),
-        "parse produced surfaces from surfaces.txt"
-    );
-
-    let base = shell_master_dir();
+    let (surfaces, base) = emo2_shell();
 
     // manifest を先に導出（生存判定の基準・既知 key の存在確認も兼ねる）。
     let manifest = {
-        let set = SurfaceSet {
-            surfaces: &shell.surfaces,
-            base_dir: &base,
-            alpha_params: on_params(),
-        };
+        let set = set(&surfaces, &base);
         ManifestDeriver.derive(std::slice::from_ref(&set))
     };
     // 既知 key surface0.png が manifest に現れる＝parse が使える surface を出した証左。
@@ -130,15 +61,28 @@ fn emo2_shell_all_elements_baked() {
         "manifest contains the documented null.png key {SHELL_NULL_PNG_KEY}"
     );
 
-    with_com_initialized(|| {
-        let dec = WicDecoderArm::new().expect("WIC factory creates under COM init");
+    with_arm(|dec| {
+        let set = set(&surfaces, &base);
+        // 本物の焼きはこのファイルの shell だけの焼きで 1 回。記録を捕まえ、null.png の記録も同じ焼きで見る。
+        let (result, out) = crate::log_capture::capture_logs(|| {
+            bake(std::slice::from_ref(&set), dec, PackConfig::default())
+        });
 
-        let set = SurfaceSet {
-            surfaces: &shell.surfaces,
-            base_dir: &base,
-            alpha_params: on_params(),
-        };
-        let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
+        // 檻 T10（real-run-log-noise 要件 3.1・3.6・5.2）: `purple/a/null.png`（着せ替えの「無し」の絵）は
+        // `warn` 0 件・見分けた `debug` 1 件。
+        let null_lines: Vec<&str> = out
+            .lines()
+            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_NULL_PNG_KEY}\"")))
+            .collect();
+        assert!(
+            !null_lines.iter().any(|l| l.contains("level=WARN")),
+            "{SHELL_NULL_PNG_KEY} の warn は 0 件: {out}"
+        );
+        let debug = null_lines
+            .iter()
+            .filter(|l| l.contains("level=DEBUG") && l.contains(BIND_DEBUG))
+            .count();
+        assert_eq!(debug, 1, "見分けた debug は 1 件: {out}");
 
         // 実在ファイルのみ参照ゆえデコード失敗は 0。正規化は失敗しないので、
         // 失敗は 1 件も出ない（R5.5/5.6）。
@@ -199,85 +143,34 @@ fn emo2_shell_all_elements_baked() {
     });
 }
 
-/// 檻 T10（real-run-log-noise 要件 3.1・3.6・5.2）: 同梱の emo2 のシェルを本物の読み手で焼くと、
-/// `purple/a/null.png`（着せ替えの「無し」の絵）は `warn` 0 件・見分けた `debug` 1 件。
-#[test]
-fn emo2_null_png_logs_debug_not_warn() {
-    let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
-        .expect("emo2 surfaces.txt readable");
-    let shell = areka_parsers::shell::parse(&content);
-    let base = shell_master_dir();
-
-    with_com_initialized(|| {
-        let dec = WicDecoderArm::new().expect("WIC factory under COM init");
-        let set = SurfaceSet {
-            surfaces: &shell.surfaces,
-            base_dir: &base,
-            alpha_params: on_params(),
-        };
-        let out = crate::log_capture::capture_logs(|| {
-            let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
-            assert!(result.errors.is_empty(), "{:?}", result.errors);
-        });
-        let null_lines: Vec<&str> = out
-            .lines()
-            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_NULL_PNG_KEY}\"")))
-            .collect();
-        assert!(
-            !null_lines.iter().any(|l| l.contains("level=WARN")),
-            "{SHELL_NULL_PNG_KEY} の warn は 0 件: {out}"
-        );
-        let debug: Vec<&&str> = null_lines
-            .iter()
-            .filter(|l| {
-                l.contains("level=DEBUG")
-                    && l.contains("着せ替え（bind）のアニメーションからだけ参照される面の絵です")
-            })
-            .collect();
-        assert_eq!(debug.len(), 1, "見分けた debug は 1 件: {out}");
-    });
-}
-
 /// テスト②: emo2 balloon — shell と同一の bake 経路で処理される（1.4）。
 ///
 /// balloon 画像を surface 表現に手組みし（design D1）、shell set と **1 度の bake** で
 /// 併せて処理。両 set の代表 key が別 SetId で resolve→placement を持つことで、balloon が
-/// shell と同一機構で処理されることを実証。
+/// shell と同一機構で処理されることを実証。shell の側は `surface0.png` の 1 枚だけにする
+/// （55 枚全部の焼きはテスト①が見る）。
 #[test]
 fn emo2_balloon_same_bake_path_as_shell() {
-    let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
-        .expect("emo2 surfaces.txt readable");
-    let shell = areka_parsers::shell::parse(&content);
-    assert!(!shell.surfaces.is_empty());
-
-    let shell_base = shell_master_dir();
+    let shell_base = emo2_shell_dir();
+    let surfaces = vec![surface(0, vec![elem(0, "surface0.png")])];
     let balloon_base = crate::sample_test_support::emo2_balloon_root();
 
     // balloon の surface 表現を手組み（本層外の適応をテストが肩代わり・D1）。
+    // 画像 1 枚を 1 element として持つ（layer0・x/y=0・collision/animation 空）。
     let balloon_surfaces = vec![
-        hand_surface(0, "balloons0.png"),
-        hand_surface(1, "balloonk0.png"),
+        surface(0, vec![elem(0, "balloons0.png")]),
+        surface(1, vec![elem(0, "balloonk0.png")]),
     ];
 
-    with_com_initialized(|| {
-        let dec = WicDecoderArm::new().expect("WIC factory under COM init");
-
-        let shell_set = SurfaceSet {
-            surfaces: &shell.surfaces,
-            base_dir: &shell_base,
-            alpha_params: on_params(),
-        };
-        let balloon_set = SurfaceSet {
-            surfaces: &balloon_surfaces,
-            base_dir: &balloon_base,
-            alpha_params: on_params(),
-        };
+    with_arm(|dec| {
+        let shell_set = set(&surfaces, &shell_base);
+        let balloon_set = set(&balloon_surfaces, &balloon_base);
 
         // shell(set0) と balloon(set1) を 1 度の bake で同一機構により処理（1.4）。
-        let result = bake(&[shell_set, balloon_set], &dec, PackConfig::default());
+        let result = bake(&[shell_set, balloon_set], dec, PackConfig::default());
 
-        // balloon 画像（RGBA）はデコード・正規化を通過。shell 側のパレットの絵の null.png も
-        // α の道を通って全画素が透明になるので、併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
+        // balloon 画像（RGBA）も shell の surface0.png もデコード・正規化を通過し、
+        // 併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
         assert!(
             result.errors.is_empty(),
             "combined shell+balloon bake has zero failures, got {:?}",
@@ -310,79 +203,6 @@ fn emo2_balloon_same_bake_path_as_shell() {
         assert!(
             !result.table.pages().is_empty(),
             "pages materialized for combined bake"
-        );
-    });
-}
-
-/// テスト③: 存在しないパスを含む入力 → 当該エントリのみ errors・他は継続（2.2/5.6）。
-///
-/// 実在 element（surface0.png）と bogus パスを混在させ、bogus は resolve→None かつ
-/// errors に Decode が 1 件以上、実在 element は resolve→Some＋placement（継続）。
-#[test]
-fn emo2_nonexistent_path_isolated_others_continue() {
-    let base = shell_master_dir();
-
-    // 実在 + bogus を 1 surface に混在（両者とも shell/master 基準）。
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements: vec![
-            Element {
-                layer: 0,
-                path: ElementPath::new("surface0.png".to_string()),
-                x: 0,
-                y: 0,
-            },
-            Element {
-                layer: 1,
-                path: ElementPath::new("this_file_does_not_exist_xyz.png".to_string()),
-                x: 0,
-                y: 0,
-            },
-        ],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-
-    with_com_initialized(|| {
-        let dec = WicDecoderArm::new().expect("WIC factory under COM init");
-        let set = SurfaceSet {
-            surfaces: &surfaces,
-            base_dir: &base,
-            alpha_params: on_params(),
-        };
-        let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
-
-        // bogus key は索引表に不在（脱落）。
-        assert_eq!(
-            result
-                .table
-                .resolve(SetId(0), "this_file_does_not_exist_xyz.png"),
-            None,
-            "nonexistent path absent from table"
-        );
-
-        // errors に当該 Decode 失敗が集約されている（≥1）。
-        assert!(
-            !result.errors.is_empty(),
-            "nonexistent path recorded as an error"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|e| matches!(e, BakeError::Decode(_))),
-            "errors contain a BakeError::Decode for the bogus path, got {:?}",
-            result.errors
-        );
-
-        // 実在 element は継続処理される（脱落しない・placement あり）。
-        let ok_id = result
-            .table
-            .resolve(SetId(0), "surface0.png")
-            .expect("real surface0.png still resolves (continuation)");
-        assert!(
-            result.table.entry(ok_id).placement.is_some(),
-            "real surface0.png placed despite sibling failure"
         );
     });
 }

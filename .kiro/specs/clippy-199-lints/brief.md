@@ -107,3 +107,9 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 
 - `shiori-host32-host/tests/lifecycle_{cyclic,kill}_e2e.rs` の `clippy::drop_non_drop` の 3 件（Drop を持たない `Shiori3Client` を `drop` していた・借りは最後に使った所で終わる）は `audit-shiori-host32` が `drop(client)` を消して直した。実測の「cyclic 4・kill 2」の残りは、同 spec のほかの直しで先に消えていた。この spec は shiori-host32 を直し直さなくてよい。
 - 着地の後は `cargo clippy -p shiori-host32-host -p shiori-host32-ipc --all-targets` と i686 の `cargo clippy -p shiori-host32-helper -p shiori-host32-ipc -p shiori-host32-testdll -p shiori-host32-testdll-loadu --all-targets --target i686-pc-windows-msvc` がどちらも警告 0。
+
+## 2026-11-14 `audit-emo-atlas` の記録: emo-compose のテストと areka-sakura の `drive.rs` の分は済んだ
+
+- `areka-emo-compose` のテストの `chunks_exact_to_as_chunks` の残り 3 件（`golden_tests_test_support.rs` の `opaque_pixel_count`・`composer_tests.rs` の 2 件）は、`audit-emo-atlas` が完了時の棚卸で `as_chunks::<4>()` に直した（`composer_tests.rs` の 2 件は clippy の勧めどおり `.contains(&[..])`）。`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs` の分は、それより前に消えていた。
+- `areka-sakura/src/drive.rs:325` の `drain_collect`（`self.sinks.drain(..).collect()`）は `std::mem::take(&mut self.sinks)` に直した。
+- 着地の後は `cargo clippy -p areka-emo-compose -p areka-sakura --all-targets -- -D warnings` が警告 0（ツールチェーンの clippy は rust-1.100.0 の版）。この spec は emo-compose と areka-sakura を直し直さなくてよい。

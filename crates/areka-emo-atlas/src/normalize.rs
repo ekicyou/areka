@@ -89,7 +89,7 @@ impl Normalizer {
         AlphaRule { opaque, key }
     }
 
-    /// [`Normalizer::plan`] で決めた扱いを [`apply`] で当てた絵を返す（失敗しない）。
+    /// `Normalizer::plan` で決めた扱いを `apply` で当てた絵を返す（失敗しない）。
     ///
     /// 入力も出力も乗算済みの BGRA で、色の乗算・割り戻しはしない（D8）。動く絵の
     /// 2 枚目以降のコマは、焼きの段が 1 枚目で決めた扱いを `apply` で直に当てる。

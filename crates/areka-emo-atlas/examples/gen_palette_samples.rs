@@ -1,11 +1,16 @@
 //! パレットの絵の検体を作る（spec: emo-atlas-palette-alpha 要件 3.5・5.4・5.7・5.8）。
 //!
 //! `cargo run -p areka-emo-atlas --example gen_palette_samples` で
-//! `src/testdata/palette/` に 6 本を書く。使うのは std だけ。
+//! `src/testdata/palette/` に 8 本を書く。使うのは std だけ。
 //! 圧縮しない（zlib の無圧縮の 1 ブロック）ので、何度走らせても同じバイト列になる。
 //! 中身の説明は同じフォルダの `README.md`。wintf の `tests/com/wic_test.rs` も同じ検体を読む。
 
 use std::path::Path;
+
+#[path = "common/png.rs"]
+mod png;
+
+use png::png_chunk;
 
 const RED: [u8; 3] = [255, 0, 0];
 const GREEN: [u8; 3] = [0, 255, 0];
@@ -13,21 +18,6 @@ const BLUE: [u8; 3] = [0, 0, 255];
 const WHITE: [u8; 3] = [255, 255, 255];
 
 // ---- PNG ----
-
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = !0u32;
-    for &b in bytes {
-        crc ^= u32::from(b);
-        for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
-        }
-    }
-    !crc
-}
 
 fn adler32(bytes: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
@@ -38,20 +28,11 @@ fn adler32(bytes: &[u8]) -> u32 {
     (b << 16) | a
 }
 
-fn png_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    let start = out.len();
-    out.extend_from_slice(kind);
-    out.extend_from_slice(data);
-    let crc = crc32(&out[start..]);
-    out.extend_from_slice(&crc.to_be_bytes());
-}
-
 const PNG_GRAY: u8 = 0;
 const PNG_PALETTE: u8 = 3;
 
 /// 2×2 の PNG。`values` は (0,0)・(1,0)・(0,1)・(1,1) の順の番号（グレーなら値）。
-/// `bit_depth` は 8 か 4。
+/// `bit_depth` は 8・4・2・1。
 fn png(
     bit_depth: u8,
     color_type: u8,
@@ -64,9 +45,9 @@ fn png(
         raw.push(0); // フィルタ 0（無し）
         match bit_depth {
             8 => raw.extend_from_slice(row),
-            // 2 画素で 1 バイト（上位の 4 ビットが左）。行は 1 バイトで割り切れる。
-            4 => raw.push((row[0] << 4) | row[1]),
-            _ => unreachable!("8 か 4 ビットだけ"),
+            // 2 画素で 1 バイトに収まる（左の画素が上位のビット・残りのビットは 0）。
+            d @ (1 | 2 | 4) => raw.push((row[0] << (8 - d)) | (row[1] << (8 - 2 * d))),
+            _ => unreachable!("bit depth is 8, 4, 2 or 1"),
         }
     }
     // zlib: 見出し 78 01・無圧縮の最後のブロック・Adler-32。
@@ -138,10 +119,10 @@ fn trans_gif() -> Vec<u8> {
 
 fn main() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/testdata/palette");
-    std::fs::create_dir_all(&dir).expect("検体のフォルダを作れない");
+    std::fs::create_dir_all(&dir).expect("cannot create the sample folder");
     let write = |name: &str, bytes: &[u8]| {
-        std::fs::write(dir.join(name), bytes).expect("検体を書けない");
-        println!("{name}: {} バイト", bytes.len());
+        std::fs::write(dir.join(name), bytes).expect("cannot write the sample");
+        println!("{name}: {} bytes", bytes.len());
     };
 
     let rgb = [RED, GREEN, BLUE];
@@ -173,6 +154,21 @@ fn main() {
     write(
         "gray8_trns.png",
         &png(8, PNG_GRAY, &[], Some(&[0x00, 0x00]), [255, 255, 0, 128]),
+    );
+    write(
+        "idx2_mixed.png",
+        &png(2, PNG_PALETTE, &rgb, Some(mixed), [0, 0, 1, 2]),
+    );
+    // 1 ビットは番号 2 つ: 0＝赤 透明度 255・1＝緑 透明度 0。
+    write(
+        "idx1_trns.png",
+        &png(
+            1,
+            PNG_PALETTE,
+            &[RED, GREEN],
+            Some(&[0xFF, 0x00]),
+            [0, 0, 1, 1],
+        ),
     );
     write("trans.gif", &trans_gif());
 }

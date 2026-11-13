@@ -5,26 +5,7 @@
 
 use super::*;
 use crate::decode::DecodedImage;
-
-/// 画素の並び（4 バイト単位）と寸法から `DecodedImage` を組む。`stride` は `width * 4`。
-fn image(width: u32, height: u32, has_alpha: bool, pixels: &[[u8; 4]]) -> DecodedImage {
-    assert_eq!(
-        pixels.len(),
-        (width * height) as usize,
-        "画素数と寸法が合わない"
-    );
-    DecodedImage {
-        width,
-        height,
-        stride: width * 4,
-        bgra: pixels.iter().flat_map(|px| px.iter().copied()).collect(),
-        has_alpha,
-    }
-}
-
-fn params(use_self_alpha: UseSelfAlpha) -> AlphaParams {
-    AlphaParams { use_self_alpha }
-}
+use crate::test_support::{image, params};
 
 /// `plan` で決めて `apply` で当てた画素と、決めた扱いを返す。
 fn plan_and_apply(img: &DecodedImage, decl: UseSelfAlpha) -> (AlphaRule, Vec<u8>) {
@@ -231,7 +212,7 @@ fn row7_undeclared_without_translucent_pixel_matches_on_without_alpha() {
 /// `apply` も詰め物を 1 バイトも変えない（`opaque` と `key` の両方で）。
 #[test]
 fn padding_is_neither_scanned_nor_written() {
-    // 1×2・stride 8（各行 4 バイトの詰め物）。詰め物は 0,0,0,0 で「透明」に見える。
+    // 1×2・stride 8（各行 4 バイトの詰め物）。詰め物は 9,9,9,0（α 0）で「透明」に見える。
     let pad = [9u8, 9, 9, 0];
     let bgra: Vec<u8> = [KEY, pad, OTHER, pad].concat();
     let img = DecodedImage {
@@ -264,13 +245,7 @@ fn padding_is_neither_scanned_nor_written() {
 /// 幅か高さが 0 の絵は `key` を持たない（今と同じ）。
 #[test]
 fn empty_image_has_no_key() {
-    let img = DecodedImage {
-        width: 0,
-        height: 0,
-        stride: 0,
-        bgra: Vec::new(),
-        has_alpha: false,
-    };
+    let img = image(0, 0, false, &[]);
     for decl in [
         UseSelfAlpha::On,
         UseSelfAlpha::Off,

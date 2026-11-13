@@ -6,25 +6,11 @@
 //! 色 ±1 を許す（`image-webp` の重ね算の丸め）。α と「重ねない」指定のコマは完全一致。
 
 use std::num::NonZeroU32;
-use std::path::PathBuf;
 
 use super::{delay_ms, premultiply, read_first_frame, read_frames};
 use crate::decode::{AnimatedImage, AnimationInfo, DecodedImage};
 use crate::table::LoopCount;
-
-fn sample(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/testdata/animated")
-        .join(name)
-}
-
-fn info(frame_count: u32) -> AnimationInfo {
-    AnimationInfo {
-        width: 8,
-        height: 8,
-        frame_count,
-    }
-}
+use crate::test_support::{animated_sample as sample, info, pixel};
 
 fn frames(name: &str, frame_count: u32) -> AnimatedImage {
     read_frames(&sample(name), info(frame_count))
@@ -43,9 +29,8 @@ const CLEAR: [u8; 4] = [0, 0, 0, 0];
 
 /// (x, y) の乗算済み BGRA を RGBA の順で返す。
 fn rgba(img: &DecodedImage, x: u32, y: u32) -> [u8; 4] {
-    let i = (y * img.stride + x * 4) as usize;
-    let p = &img.bgra[i..i + 4];
-    [p[2], p[1], p[0], p[3]]
+    let [b, g, r, a] = pixel(&img.bgra, img.stride, x, y);
+    [r, g, b, a]
 }
 
 /// 決め手の画素。`tol` は色だけに効く（α は完全一致）。
@@ -189,12 +174,12 @@ fn truncated_apng_fails_all_frames_but_reads_first() {
 
 #[test]
 fn deep16_apng_fails_both_entrances() {
-    // image の APNG の読み手は 16 ビットを 1 枚目で断る
+    // image の APNG の読み手は 16 ビットを 1 枚目で断る。image の文言は版で変わるので、こちらの文（コマの番号）だけを見る
     for err in [
         read_frames(&sample("deep16.apng"), info(2)).unwrap_err(),
         read_first_frame(&sample("deep16.apng"), info(2)).unwrap_err(),
     ] {
-        assert!(err.contains("frame 0") && err.contains("Rgba16"), "{err}");
+        assert!(err.starts_with("frame 0: "), "{err}");
     }
 }
 
@@ -276,6 +261,7 @@ fn delay_rounds_half_up_and_never_panics() {
     assert_eq!(delay_ms(0, 1), 0);
     assert_eq!(delay_ms(70, 1), 70);
     assert_eq!(delay_ms(5, 0), 0);
+    // 分子が `u32` の上限でも答えは分子を超えない（飽和は届かない）。
     assert_eq!(delay_ms(u32::MAX, 1), u32::MAX);
 }
 

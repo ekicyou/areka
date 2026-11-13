@@ -15,10 +15,9 @@ use image::codecs::png::PngDecoder;
 use image::codecs::webp::WebPDecoder;
 use image::{AnimationDecoder, Frame, Frames, ImageDecoder, RgbaImage};
 
+use super::sniff::{Format, format_of};
 use super::{AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage};
 use crate::table::LoopCount;
-
-const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// 開いた動く絵（重ね済みのコマの並び・透明度の有無・繰り返し回数）。
 struct Opened {
@@ -81,17 +80,19 @@ fn open(path: &Path) -> Result<Opened, String> {
         .read_exact(&mut head)
         .and_then(|_| reader.seek(SeekFrom::Start(0)))
         .map_err(|e| e.to_string())?;
-    if head[..8] == PNG_SIGNATURE {
-        let png = PngDecoder::new(reader).map_err(|e| e.to_string())?;
-        let has_alpha = png.color_type().has_alpha();
-        let apng = png.apng().map_err(|e| e.to_string())?;
-        Ok(opened(apng, has_alpha))
-    } else if &head[..4] == b"RIFF" && &head[8..] == b"WEBP" {
-        let webp = WebPDecoder::new(reader).map_err(|e| e.to_string())?;
-        let has_alpha = webp.color_type().has_alpha();
-        Ok(opened(webp, has_alpha))
-    } else {
-        Err("not an APNG or WebP file".into())
+    match format_of(&head) {
+        Some(Format::Png) => {
+            let png = PngDecoder::new(reader).map_err(|e| e.to_string())?;
+            let has_alpha = png.color_type().has_alpha();
+            let apng = png.apng().map_err(|e| e.to_string())?;
+            Ok(opened(apng, has_alpha))
+        }
+        Some(Format::Webp) => {
+            let webp = WebPDecoder::new(reader).map_err(|e| e.to_string())?;
+            let has_alpha = webp.color_type().has_alpha();
+            Ok(opened(webp, has_alpha))
+        }
+        None => Err("not an APNG or WebP file".into()),
     }
 }
 
@@ -137,13 +138,14 @@ fn premultiply(c: u8, a: u8) -> u8 {
 }
 
 /// 待ち時間の分数（ミリ秒）を四捨五入した整数のミリ秒にする。0 は 0。分母 0 は `image` が
-/// 作らない（作れば panic する）が、ここでは 0 として扱い panic しない。`u32` の上限で止める。
+/// 作らない（作れば panic する）が、ここでは 0 として扱い panic しない。
+/// 答えは `(2n+d)/(2d) <= n <= u32::MAX`（d ≥ 1）なので、`u32` へ戻す変換は飽和しない。
 fn delay_ms(numer: u32, denom: u32) -> u32 {
     if denom == 0 {
         return 0;
     }
     let (n, d) = (u64::from(numer), u64::from(denom));
-    u32::try_from((n * 2 + d) / (d * 2)).unwrap_or(u32::MAX)
+    ((n * 2 + d) / (d * 2)) as u32
 }
 
 #[cfg(test)]
