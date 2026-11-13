@@ -9,10 +9,11 @@
 //!    [`ShioriByteProxy::request`] へ流し、その結果（SHIORI/3.0 応答）を `Response` として親へ
 //!    **1 通だけ** 返送して即 return する（それ以上の跨プロセス `SendMessage` を発行しない）。
 //!    proxy 未確立なら明示エラーバイト列（`SHIORI/3.0 500`）を返送し crash させない（R3.1）。
-//!    不正フレーム／未知タグは crash させず観測カウンタに記録するのみ（要件 2.5・上位へ渡さない）。
+//!    不正フレーム／未知タグは crash させず観測カウンタに数え、`[helper]` の行に残すのみ
+//!    （要件 2.5・上位へ渡さない）。
 //! 3. **`main`**（要件 7.1）: 親 HWND を arg/env の u32 ワイヤ値で取得 → 窓生成 → HELLO 送出 →
-//!    `MessageLoop::run`。lifecycle は request 往復実証に必要な最小に留める（常駐 lifecycle は
-//!    Out of Boundary・下流 `host32-lifecycle`）。
+//!    `MessageLoop::run`。WndProc は LOAD（SHIORI のロードと ack 返送）・REQUEST・UNLOAD を受け、
+//!    UNLOAD で proxy を閉じてループを抜け、正常終了（exit 0）する（R5.6）。
 //!
 //! ## proxy 駆動の差し替え点（design.md §436 / §465-466）
 //! REQUEST は `classify_inbound`（純関数・proxy 非依存）で **request バイト列**として `Reply` に
@@ -28,9 +29,12 @@
 //! 本クレートは `shiori-host32-ipc`（proto）を一方向依存し、`shiori-host32-host` へは依存しない
 //! （host↔helper のコード依存は無く、プロセス境界で WM_COPYDATA のみ）。
 
-// ShioriByteProxy（unsafe FFI 一点集約・design §339）。Task 6 が WndProc の LOAD 結線から
-// consume するまで未使用ゆえ、モジュール側で dead_code を抑止している。宣言のみ（Task 5.1 の領分）。
+// ShioriByteProxy（unsafe FFI 一点集約・design §339）。WndProc の LOAD／REQUEST／UNLOAD が使う。
 mod shiori_proxy;
+
+// helper のテストの共通の道具（試験用の DLL の探し方・テストの根）。
+#[cfg(test)]
+mod proxy_test_support;
 
 use shiori_proxy::ShioriByteProxy;
 
@@ -40,11 +44,10 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use shiori_host32_ipc::{
-    FramingError, IpcError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, send_copydata,
-    send_copydata_response,
+    FramingError, IpcError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, read_copydata,
+    send_copydata, send_copydata_response,
 };
 use windows::Win32::Foundation::{GetLastError, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -54,6 +57,27 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 /// 無限待機の構造的排除（要件 5.3）。RESPONSE 返送は同期送出で即完了するため短めで足りるが、
 /// ハング peer でも上限時間で復帰することを保証する。
 const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// `[helper]` の行の出口（design.md「記録の口 `helper_log`」・指摘 9・12）。標準エラーへ 1 行書く。
+/// 行は host の読み手が `warn` で記録へ回す。テストのときだけ同じスレッドの記録の列にも積む。
+fn helper_log(line: &str) {
+    use std::io::Write;
+    // 書けない＝host の読み手が終わった。もう記録の行き先は無いので捨てる（eprintln! は窓の手続きの中で panic→abort）。
+    let _ = writeln!(std::io::stderr().lock(), "{line}");
+    #[cfg(test)]
+    HELPER_LOG.with(|log| log.borrow_mut().push(line.to_string()));
+}
+
+#[cfg(test)]
+thread_local! {
+    static HELPER_LOG: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// このスレッドで `helper_log` が書いた行を取り出す（取り出した行は列から消える）。
+#[cfg(test)]
+fn take_helper_log() -> Vec<String> {
+    HELPER_LOG.with(|log| std::mem::take(&mut *log.borrow_mut()))
+}
 
 /// load-ack の 1 byte 契約（design.md §330・要件 5.1）: 成功。
 ///
@@ -73,22 +97,32 @@ const REQUEST_ERROR_RESPONSE: &[u8] = b"SHIORI/3.0 500 Internal Server Error\r\n
 
 /// 応答（`MsgTag::Response`）の送出が失敗したときの観測ログ（要件 16.1・design.md D16）。
 ///
-/// `SendMessageTimeoutW` の戻り 0 には由来が 2 つある——**本当の送出失敗**（宛先の窓が既に無い等・
-/// last error が非 0）と、**「応答なし」判定による打ち切り**（戻り 0 かつ last error 0・待たずに
-/// 即座に返る）である。前者と後者は `IpcError::SendFailed` に潰れて見分けが付かないため、生の
-/// last error を必ず一緒に残す（もう 1 つの由来である期限切れ＝last error 1460 は
-/// `IpcError::Timeout` として別に届く・areka-P0-shiori-fault-notice 7.1）。応答方向からハング打ち切りの旗を外した後に last error 0 の失敗が
-/// 再発したら、旗以外の原因を疑う手がかりになる（log-first・silent swallow 禁止）。
+/// `SendMessageTimeoutW` の戻り 0 は `IpcError::SendFailed` に潰れて由来が見分けられないため、
+/// 生の last error を必ず一緒に残す（期限切れ＝last error 1460 は `IpcError::Timeout` として
+/// 別に届く・areka-P0-shiori-fault-notice 7.1）。この観測ログを置いた当初は、戻り 0 かつ
+/// last error 0 の失敗を「応答なし判定（`SMTO_ABORTIFHUNG`）による打ち切り」と見ていた。D16 で
+/// 応答方向からその旗を外したので、今 last error 0 の失敗が出たら旗以外の原因を疑う手がかりに
+/// なる（log-first・silent swallow 禁止）。
 fn log_response_send_failure(what: &str, e: &IpcError) {
     // SAFETY: Win32 境界。直前の送出呼び出しが残したスレッド局所のエラー値を読むだけ。
     let last_error = unsafe { GetLastError() }.0;
-    if last_error == 0 {
-        eprintln!(
-            "[helper] {what} 送出失敗（観測）: {e:?} / last_error=0 \
-             ＝戻り 0 かつ last error 0＝応答なし判定で打ち切られた"
-        );
-    } else {
-        eprintln!("[helper] {what} 送出失敗（観測）: {e:?} / last_error={last_error}");
+    helper_log(&format!(
+        "[helper] {what} 送出失敗（観測）: {e:?} / last_error={last_error}"
+    ));
+}
+
+/// 自窓へ `PostMessageW(WM_NULL)` を置き、メッセージループを起こす（指摘 12）。
+/// 置けなければ `[helper]` の行で書いて偽を返す。
+fn wake_self(hwnd: HWND) -> bool {
+    // SAFETY: WM_NULL(0) は無害な起こし用メッセージ。失敗は Err で返る。
+    match unsafe { PostMessageW(Some(hwnd), 0, WPARAM(0), LPARAM(0)) } {
+        Ok(()) => true,
+        Err(e) => {
+            helper_log(&format!(
+                "[helper] 自窓を起こせない（PostMessageW 失敗）: {e}"
+            ));
+            false
+        }
     }
 }
 
@@ -106,14 +140,15 @@ enum InboundAction {
     Reply(Vec<u8>),
     /// `Load` を受領＝SHIORI ロード実行のトリガ（要件 4.1）。従来の「既知だが無視」を置換する。
     /// **ペイロードを持たない**（wire でパスを運ばない・パスは arg/env の `load_dir` から得る）ため、
-    /// 受領フレームのペイロード有無を問わずこの動作へ写像される。実際のロード結線（proxy 確立・
-    /// `load` 呼出・ack 返送）は下流タスク（Task 6・WndProc の LOAD 結線）が担う。
+    /// 受領フレームのペイロード有無を問わずこの動作へ写像される。ロード（proxy 確立・`load` 呼出・
+    /// ack 返送）は `handle_message` の `TriggerLoad` の腕が行う。
     TriggerLoad,
     /// `Unload` を受領＝正規の正常終了経路のトリガ（R5.6）。従来の「既知だが無視」を置換する。
     /// **ペイロードを持たない**（wire で理由やパスを運ばない）ため、受領フレームのペイロード有無を
-    /// 問わずこの動作へ写像される。実際の終了結線（proxy drop → `quit_requested` セット → ack `[1]`
-    /// 返送 → `PostMessageW` 起こし → main ループ正常終了 → exit 0）は下流タスク（Task 3.2・WndProc の
-    /// UNLOAD 結線）が担う。本タスク（3.1）は分類と共有状態の追加までに留める。
+    /// 問わずこの動作へ写像される。終了（proxy の `close`＝unload → FreeLibrary → `quit_requested`
+    /// セット → ack `[1]` 返送 → `PostMessageW` 起こし → main ループ正常終了 → exit 0）は
+    /// `handle_message` の `TriggerUnload` の腕が行う。DLL の呼び出しの最中に来たときは ack `[1]` を
+    /// 先に返し、`close` 以降は呼び出しが戻ってから行う（指摘 8）。
     TriggerUnload,
     /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`）。crash させず無視する
     /// （記録のみ）。`Load` は `TriggerLoad`、`Unload` は `TriggerUnload` へ分離済みゆえ含まない。
@@ -128,16 +163,17 @@ enum InboundAction {
 /// **request バイト列**をそのまま `Reply` に載せる（echo でなく proxy 駆動対象・実駆動は `handle_message`
 /// の `Reply` アーム）。その他の既知タグは `IgnoreKnown`、不正フレームは `IgnoreBad` とする。副作用
 /// （送出・カウンタ・proxy 到達）は持たず、WndProc 側が結果を見て実行する（純粋・単体テスト可能性を保つ）。
-fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> InboundAction {
-    match copydata_payload(dw_data, declared_len, data) {
-        Ok((MsgTag::Request, payload)) => InboundAction::Reply(payload.to_vec()),
+fn classify_inbound(dw_data: usize, declared_len: usize, data: Vec<u8>) -> InboundAction {
+    // `copydata_payload` は渡したバイト列をそのまま返すので、受け取った Vec を写さずに渡す（指摘 44）。
+    match copydata_payload(dw_data, declared_len, &data).map(|(tag, _)| tag) {
+        Ok(MsgTag::Request) => InboundAction::Reply(data),
         // Load はロード実行トリガ（要件 4.1）。ペイロードは無視（有無を問わず TriggerLoad）。
         // IgnoreKnown の一般アームより先に分離して受ける。
-        Ok((MsgTag::Load, _)) => InboundAction::TriggerLoad,
+        Ok(MsgTag::Load) => InboundAction::TriggerLoad,
         // Unload は正規正常終了経路のトリガ（R5.6）。ペイロードは無視（有無を問わず TriggerUnload）。
         // IgnoreKnown の一般アームより先に分離して受ける（`Load` と同型・同位置）。
-        Ok((MsgTag::Unload, _)) => InboundAction::TriggerUnload,
-        Ok((tag, _)) => InboundAction::IgnoreKnown(tag),
+        Ok(MsgTag::Unload) => InboundAction::TriggerUnload,
+        Ok(tag) => InboundAction::IgnoreKnown(tag),
         Err(err) => InboundAction::IgnoreBad(err),
     }
 }
@@ -158,7 +194,8 @@ fn load_result_to_ack<T>(result: &Result<T, shiori_proxy::ProxyError>) -> u8 {
 ///
 /// `wintf-winmsg-executor` の `Window<S>` は `state: S` を窓と同居させ、WndProc へ `Pin<&S>` で
 /// 渡す（`Rc` 不要・GWLP_USERDATA 手詰め不要）。single-in-flight・単一 UI スレッドゆえ内部可変は
-/// [`Cell`] で足りる。lifecycle 状態機械は request 往復実証に必要な最小（観測カウンタのみ）に留める。
+/// [`Cell`] で足りる。lifecycle の状態は観測カウンタと、終了・再入の印（`quit_requested`・`in_dll_call`・
+/// `unload_pending`）に留める。
 struct HelperShared {
     /// 親のメッセージ窓 HWND（u32 ワイヤ値）。HELLO 送出先＆RESPONSE 返送先。
     parent_hwnd: u32,
@@ -195,6 +232,27 @@ struct HelperShared {
     quit_requested: Cell<bool>,
     /// UNLOAD 観測カウンタ: `TriggerUnload` 受領数（R5.6）。
     unloads_handled: Cell<u64>,
+    /// DLL を呼んでいる最中か（指摘 8・design「helper の再入」）。立っている間の REQUEST は 500、
+    /// UNLOAD は後回し（DLL を入れ子に呼ばず、`proxy` の借りも衝突させない）。
+    in_dll_call: Cell<bool>,
+    /// DLL の呼び出しの最中に UNLOAD が来た印。呼び出しが戻ったら遅れた応答を送らずに後始末する。
+    unload_pending: Cell<bool>,
+}
+
+/// `in_dll_call` を立て、戻り方によらず下ろす見張りの値（指摘 8）。
+struct InDllCall<'a>(&'a Cell<bool>);
+
+impl<'a> InDllCall<'a> {
+    fn enter(flag: &'a Cell<bool>) -> Self {
+        flag.set(true);
+        Self(flag)
+    }
+}
+
+impl Drop for InDllCall<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 
 impl HelperShared {
@@ -213,31 +271,37 @@ impl HelperShared {
             load_acks_fail: Cell::new(0),
             quit_requested: Cell::new(false),
             unloads_handled: Cell::new(0),
+            in_dll_call: Cell::new(false),
+            unload_pending: Cell::new(false),
         }
     }
 }
 
-/// 受領した WM_COPYDATA の `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す。
-///
-/// # Safety
-/// `lparam` は WM_COPYDATA の LPARAM であり `*const COPYDATASTRUCT` を指すこと（OS が
-/// WM_COPYDATA 配送時に保証）。`lpData` は `cbData` バイト分有効であること。
-unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
-    let cds = lparam.0 as *const COPYDATASTRUCT;
-    if cds.is_null() {
-        return None;
+/// UNLOAD の後始末: proxy を `close`（unload → FreeLibrary）してから終了要求を立てる。`close` の失敗は
+/// 行で書き、返事は [1] のまま（要件 10.11）。未確立(None)なら閉じる物は無い（design §182）。
+/// `quit_requested` は後始末が済んでから立てる（DLL のモーダルな窓のループの中で回しを止めない）。
+fn close_and_request_quit(s: &HelperShared) {
+    let taken = s.proxy.borrow_mut().take();
+    if let Some(Err(e)) = taken.map(ShioriByteProxy::close) {
+        helper_log(&format!(
+            "[helper] UNLOAD の後始末に失敗（観測・ack[1] のまま）: {e:?}"
+        ));
     }
-    // SAFETY: WM_COPYDATA 契約により lparam は有効な COPYDATASTRUCT を指す。
-    let cds = unsafe { &*cds };
-    let dw_data = cds.dwData;
-    let len = cds.cbData as usize;
-    let payload = if len == 0 || cds.lpData.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: lpData は cbData バイト有効（OS が marshal 済みの受信側コピー）。
-        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
-    };
-    Some((dw_data, len, payload))
+    s.quit_requested.set(true);
+}
+
+/// DLL の呼び出しが戻ったとき、最中に来た UNLOAD があれば後始末して真を返す（呼び手は遅れた応答を
+/// 送らない・host はもう待っていない）。ack [1] は UNLOAD の受領のときに返し済み。
+fn finish_deferred_unload(s: &HelperShared, self_hwnd: HWND, late: &str) -> bool {
+    if !s.unload_pending.get() {
+        return false;
+    }
+    helper_log(&format!(
+        "[helper] DLL の呼び出しの最中に来た UNLOAD を後始末する（遅れた {late} は送らない）"
+    ));
+    close_and_request_quit(s);
+    wake_self(self_hwnd);
+    true
 }
 
 /// WndProc 本体: WM_COPYDATA を [`classify_inbound`] で分類し、`Reply` なら request バイト列を
@@ -253,10 +317,13 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
 
     // SAFETY: WM_COPYDATA の lparam は COPYDATASTRUCT を指す（OS 契約）。
     let Some((dw_data, declared_len, payload)) = (unsafe { read_copydata(msg.lparam) }) else {
+        // lparam が空の WM_COPYDATA は不正なメッセージとして数える（指摘 12）。
+        s.bad_frames.set(s.bad_frames.get() + 1);
+        helper_log("[helper] lparam が空の WM_COPYDATA を受領（無視）");
         return Some(LRESULT(0));
     };
 
-    match classify_inbound(dw_data, declared_len, &payload) {
+    match classify_inbound(dw_data, declared_len, payload) {
         InboundAction::Reply(request_bytes) => {
             // REQUEST 駆動（design.md §436・要件 3.1/4.7/4.8）。`classify_inbound` は純関数ゆえ proxy へ
             // 到達しない。proxy に到達できるのはこの `Reply` アームのみ＝ここで確立済み proxy を実駆動する。
@@ -268,29 +335,46 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             // 再入 REQUEST が borrow を掴んでも `BorrowError` panic を起こさない（R6.4）。
             s.requests_handled.set(s.requests_handled.get() + 1);
 
-            // 1) scoped borrow で proxy を実駆動し response_bytes を確定（borrow は本ブロックで即終了）。
-            //    proxy 未確立（構造上起きないが crash 回避の最小防御・R3.1）／`request` の Err は
-            //    識別可能なエラーバイト列（500）へ写像し、観測ログを残す（log-first・silent swallow 禁止）。
-            let response_bytes: Vec<u8> = {
+            // DLL の呼び出しの最中（DLL が helper の窓へ送り返した）なら DLL を入れ子に呼ばず 500（指摘 8）。
+            let response_bytes: Vec<u8> = if s.in_dll_call.get() {
+                helper_log(
+                    "[helper] DLL の呼び出しの最中に REQUEST を受領（DLL を入れ子に呼ばず 500 返送）",
+                );
+                REQUEST_ERROR_RESPONSE.to_vec()
+            } else {
+                // 1) scoped borrow で proxy を実駆動し response_bytes を確定（borrow は本ブロックで即終了）。
+                //    proxy 未確立（構造上起きないが crash 回避の最小防御・R3.1）／`request` の Err は
+                //    識別可能なエラーバイト列（500）へ写像し、観測ログを残す（log-first・silent swallow 禁止）。
                 let guard = s.proxy.borrow();
                 match guard.as_ref() {
-                    Some(proxy) => match proxy.request(&request_bytes) {
-                        Ok(bytes) => bytes,
-                        Err(e) => {
-                            eprintln!("[helper] REQUEST 駆動失敗（観測・500 返送）: {e:?}");
-                            REQUEST_ERROR_RESPONSE.to_vec()
+                    Some(proxy) => {
+                        let result = {
+                            let _call = InDllCall::enter(&s.in_dll_call);
+                            proxy.request(&request_bytes)
+                        };
+                        match result {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                helper_log(&format!(
+                                    "[helper] REQUEST 駆動失敗（観測・500 返送）: {e:?}"
+                                ));
+                                REQUEST_ERROR_RESPONSE.to_vec()
+                            }
                         }
-                    },
+                    }
                     None => {
                         // Load-before-Request は構造的不変（設計上ここへは来ない）。来ても crash させず
                         // 識別可能なエラーバイト列を返し helper は生存継続（R3.1/R6.4）。
-                        eprintln!(
-                            "[helper] proxy 未確立で REQUEST 受領（観測・500 返送）: Load-before-Request 不変違反"
+                        helper_log(
+                            "[helper] proxy 未確立で REQUEST 受領（観測・500 返送）: Load-before-Request 不変違反",
                         );
                         REQUEST_ERROR_RESPONSE.to_vec()
                     }
                 }
             }; // ← ここで borrow が drop され、以後 RESPONSE 送出は borrow 非保持で行う。
+            if finish_deferred_unload(s, self_hwnd, "RESPONSE") {
+                return Some(LRESULT(0));
+            }
 
             // 2) borrow を一切保持しない状態で RESPONSE を親へ 1 通だけ返す（ブロッキング SMTO・再入可・§200）→
             //    即 return（それ以上の跨プロセス SendMessage 不可）。応答方向ゆえ
@@ -327,7 +411,10 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             } else {
                 // 絶対 DLL パス = load_dir\<shiori_name>（DLL 検索パス曖昧性の排除・design.md §321）。
                 let dll_path = s.load_dir.join(&s.shiori_name);
-                let result = ShioriByteProxy::load(&dll_path, &s.load_dir);
+                let result = {
+                    let _call = InDllCall::enter(&s.in_dll_call);
+                    ShioriByteProxy::load(&dll_path, &s.load_dir)
+                };
                 let ack = load_result_to_ack(&result);
                 match result {
                     Ok(proxy) => {
@@ -336,11 +423,15 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                     }
                     Err(e) => {
                         // 失敗は観測ログのみ・helper は生存継続（exit/panic しない・R6.4）。
-                        eprintln!("[helper] LOAD 失敗（観測・ack[0]）: {e:?}");
+                        helper_log(&format!("[helper] LOAD 失敗（観測・ack[0]）: {e:?}"));
                     }
                 }
                 ack
             };
+            // 最中に UNLOAD が来ていれば、読めた proxy をそのまま閉じ、遅れた ack は送らない（指摘 8）。
+            if finish_deferred_unload(s, self_hwnd, "load-ack") {
+                return Some(LRESULT(0));
+            }
 
             // 4) borrow を一切保持しない状態で ack 送出（ブロッキング SMTO・再入可・R5.2）。
             if ack == LOAD_ACK_OK {
@@ -361,15 +452,20 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             // 正規の正常終了経路（design §UNLOAD アーム・R5.1/R5.6）。RefCell 再入規律を LOAD/REQUEST と
             // 同格に厳守: borrow を send_copydata_response（ブロッキング SMTO・再入可）越しに保持しない。
             s.unloads_handled.set(s.unloads_handled.get() + 1);
-            // 1) proxy を take（borrow は文末で終了）。
-            let taken = s.proxy.borrow_mut().take();
-            // 2) borrow 非保持で drop = ShioriByteProxy の Drop（courtesy unload → FreeLibrary）。
-            //    未確立(None)なら no-op（未 LOAD UNLOAD も crash させず終了系列に入る・design §182）。
-            drop(taken);
-            // 3) 終了要求フラグを立てる。
-            s.quit_requested.set(true);
+            // DLL の呼び出しの最中なら proxy に触れず（借りの衝突の元を無くす）印だけ立て、後始末は
+            // 呼び出しが戻ってから（指摘 8）。返事 [1] は先に返す（host は [1] の後に終わりを待つ）。
+            let deferred = s.in_dll_call.get();
+            if deferred {
+                s.unload_pending.set(true);
+                helper_log(
+                    "[helper] DLL の呼び出しの最中に UNLOAD を受領（ack[1] を返し、後始末は呼び出しが戻ってから）",
+                );
+            } else {
+                // 1)〜3) proxy を閉じてから終了要求フラグを立てる（borrow は送出の前に終わる）。
+                close_and_request_quit(s);
+            }
             // 4) borrow 非保持で ack[1] を返送（LOAD ack と同型・MsgTag::Response 再入経路・新契約を発明
-            //    しない・ack[1]=「unload 完了・終了系列に入った」）。送出失敗は eprintln! 観測のみ
+            //    しない・ack[1]=「unload 完了・終了系列に入った」）。送出失敗は行で観測のみ
             //    （親は ack timeout で検出＝意図的逸脱・design §475/validation Issue 2）。
             let target = hwnd_from_u32(s.parent_hwnd);
             if let Err(e) = send_copydata_response(
@@ -383,21 +479,21 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             }
             // 5) 自窓へ PostMessageW(WM_NULL) — posted メッセージで MessageLoop を起こす
             //    （sent-message はフィルタに現れない）。main のフィルタが quit_requested を検知して
-            //    msg_loop.quit() → ループ正常終了 → exit 0（R5.6 正規正常終了経路）。
-            // SAFETY: self_hwnd は自窓（生存中）。WM_NULL(0) は無害な起こし用メッセージ。
-            unsafe {
-                let _ = PostMessageW(Some(self_hwnd), 0, WPARAM(0), LPARAM(0));
+            //    msg_loop.quit() → ループ正常終了 → exit 0（R5.6 正規正常終了経路）。後回しのときは
+            //    終了要求がまだ無いので、後始末の側で起こす。
+            if !deferred {
+                wake_self(self_hwnd);
             }
         }
         InboundAction::IgnoreKnown(tag) => {
             // Hello/Response は helper が能動応答しない。記録のみ（無応答）。
             // Load は TriggerLoad へ、Unload は TriggerUnload へ分離済みゆえここには来ない。
-            eprintln!("[helper] 応答対象外タグ受領（無視）: {tag:?}");
+            helper_log(&format!("[helper] 応答対象外タグ受領（無視）: {tag:?}"));
         }
         InboundAction::IgnoreBad(err) => {
             // 未知タグ・長さ不整合は crash させず記録のみ・上位へ渡さない（要件 2.5）。
             s.bad_frames.set(s.bad_frames.get() + 1);
-            eprintln!("[helper] 不正フレーム受領（無視）: {err}");
+            helper_log(&format!("[helper] 不正フレーム受領（無視）: {err}"));
         }
     }
     Some(LRESULT(0))
@@ -405,9 +501,7 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
 
 /// HelperMessageWindow: message-only 窓を生成し、起動時に親へ HELLO を送出する（design.md §437-484）。
 struct HelperMessageWindow {
-    /// 所有する窓ハンドル。Drop で `DestroyWindow`（RAII）ゆえ本体は保持のためだけに存在する
-    /// （非 test ビルドでは read されないが、生存＝窓生存の Drop guard）。観測は test 経由。
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 所有する窓ハンドル。Drop で `DestroyWindow`（RAII）。共有状態は `quit_requested` などが読む。
     window: Window<HelperShared>,
 }
 
@@ -520,10 +614,46 @@ fn shiori_name_arg_env() -> Option<String> {
     )
 }
 
+/// 自分の標準入力・標準出力・標準エラーの取っ手から受け継ぎの印を落とす（design.md U5・指摘 4）。
+///
+/// 親は helper の標準エラーを管にして読み手のスレッドで記録へ回す。SHIORI が取っ手を受け継ぐ形で
+/// 起こしたプロセスが管の書き口を持ったまま残ると、ゴーストを閉じるたびに親の Drop が読み手を待って
+/// 止まるため、その道をここで断つ。取っ手が無い・失敗は `[helper]` の行で書いて続ける。
+fn disinherit_std_handles() {
+    use windows::Win32::Foundation::{HANDLE_FLAG_INHERIT, HANDLE_FLAGS, SetHandleInformation};
+    use windows::Win32::System::Console::{
+        GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    };
+    for (name, which) in [
+        ("標準入力", STD_INPUT_HANDLE),
+        ("標準出力", STD_OUTPUT_HANDLE),
+        ("標準エラー", STD_ERROR_HANDLE),
+    ] {
+        // SAFETY: Win32 境界。自分の標準の取っ手を取るだけ。
+        match unsafe { GetStdHandle(which) } {
+            Ok(h) if !h.is_invalid() && !h.0.is_null() => {
+                // SAFETY: Win32 境界。自分の取っ手の受け継ぎの印を落とすだけ。
+                if let Err(e) =
+                    unsafe { SetHandleInformation(h, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) }
+                {
+                    helper_log(&format!(
+                        "[helper] {name}の取っ手の受け継ぎの印を落とせない: {e}"
+                    ));
+                }
+            }
+            Ok(_) => helper_log(&format!(
+                "[helper] {name}の取っ手が無い（受け継ぎの印は落とさない）"
+            )),
+            Err(e) => helper_log(&format!("[helper] {name}の取っ手を取れない: {e}")),
+        }
+    }
+}
+
 fn main() {
+    disinherit_std_handles();
     let Some(parent_hwnd) = parent_hwnd_arg_env() else {
-        eprintln!(
-            "[helper] 親 HWND（u32 ワイヤ値）が未指定です。arg1 または env HOST32_PARENT_HWND で渡してください。"
+        helper_log(
+            "[helper] 親 HWND（u32 ワイヤ値）が未指定です。arg1 または env HOST32_PARENT_HWND で渡してください。",
         );
         std::process::exit(2);
     };
@@ -531,14 +661,14 @@ fn main() {
     // load_dir・SHIORI 名は arg/env から取得（cwd 推測禁止・R3.4）。欠落は決定的な起動失敗＝
     // exit(2)（R3.5・parent_hwnd 前例と同型）。親は HELLO 不達＋プロセス終了で決定的に観測する。
     let Some(load_dir) = load_dir_arg_env() else {
-        eprintln!(
-            "[helper] load_dir が未指定です。arg2 または env HOST32_LOAD_DIR で渡してください。"
+        helper_log(
+            "[helper] load_dir が未指定です。arg2 または env HOST32_LOAD_DIR で渡してください。",
         );
         std::process::exit(2);
     };
     let Some(shiori_name) = shiori_name_arg_env() else {
-        eprintln!(
-            "[helper] SHIORI 名が未指定です。arg3 または env HOST32_SHIORI_NAME で渡してください。"
+        helper_log(
+            "[helper] SHIORI 名が未指定です。arg3 または env HOST32_SHIORI_NAME で渡してください。",
         );
         std::process::exit(2);
     };
@@ -548,7 +678,7 @@ fn main() {
     let win = match HelperMessageWindow::create(parent_hwnd, load_dir, shiori_name) {
         Ok(w) => w,
         Err(e) => {
-            eprintln!("[helper] 窓生成/HELLO 失敗: {e}");
+            helper_log(&format!("[helper] 窓生成/HELLO 失敗: {e}"));
             std::process::exit(2);
         }
     };
@@ -557,7 +687,8 @@ fn main() {
     // 終了は正規の正常終了経路（R5.6）: UNLOAD アームが quit_requested を立て自窓を起こす → 本フィルタが
     // それを検知して msg_loop.quit() → ループが正常終了 → main が return → プロセス exit 0
     // （stand-in exit(0) ではなく canonical な正常終了・memory「終了経路は正規実装」）。
-    // `win` は本フィルタが borrow して生存し続け、Drop（窓破棄・proxy の courtesy unload）は main 終了時。
+    // `win` は本フィルタが borrow して生存し続け、Drop（窓破棄）は main 終了時。proxy は UNLOAD の道で
+    // close 済み（ループを抜けるのはその後だけ）で、Drop が後始末するのは UNLOAD を経ない道だけ。
     MessageLoop::run(|msg_loop, _msg| {
         if win.quit_requested() {
             msg_loop.quit();
@@ -581,6 +712,10 @@ mod load_ack_tests;
 #[cfg(test)]
 #[path = "main_loopback_tests.rs"]
 mod loopback_tests;
+
+#[cfg(test)]
+#[path = "main_helper_log_tests.rs"]
+mod helper_log_tests;
 
 // 約 42 秒の檻。判定は OS の振る舞いで CPU の種類に依らないため、helper を配る i686 の段でだけ走らせる
 // （x64 のワークスペース全テストで同じ 42 秒を重ねて払わない）。

@@ -10,7 +10,6 @@ publish = false # areka 本体の部品・areka の中でしか意味を持た�
 repository.workspace = true
 
 [dependencies]
-windows-core = { workspace = true }
 thiserror = { workspace = true }
 
 [dependencies.windows]

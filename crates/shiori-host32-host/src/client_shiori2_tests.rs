@@ -1,6 +1,6 @@
 //! `client` の 2.x の結線の兄弟のテスト（shiori2-protocol 要件 3.3・3.5・3.6・4.1・4.5・7.2）。
 //!
-//! 2.x の前半（`encode2_and_note`）と後半（`parse2_and_note`）は `get_with_headers`・
+//! 2.x の前半と後半（`encode_for`・`parse_for` の 2.x の腕）は `get_with_headers`・
 //! `notify_with_headers` が実際に呼ぶ本番の関数そのもので、窓なしで結線を確かめられる。
 
 use super::*;
@@ -23,13 +23,26 @@ fn a_request(method: Method, id: &str) -> ShioriRequest<'_> {
 fn reply2(resp: &[u8]) -> Result<Option<ValueReply>, RequestError> {
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
     let req = a_request(Method::Get, "OnBoot");
-    map_get_reply(parse2_and_note(&mut negotiator, &req, resp, false)?)
+    map_get_reply(parse_for(
+        ShioriVersion::Shiori2,
+        &mut negotiator,
+        &req,
+        resp,
+        false,
+    )?)
 }
 
 /// 3.0 の答えを今の後半に通し、値の写像へ渡す。
 fn reply3(resp: &[u8]) -> Result<Option<ValueReply>, RequestError> {
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
-    map_get_reply(parse_and_note(&mut negotiator, resp)?)
+    let req = a_request(Method::Get, "OnBoot");
+    map_get_reply(parse_for(
+        ShioriVersion::Shiori3,
+        &mut negotiator,
+        &req,
+        resp,
+        false,
+    )?)
 }
 
 /// 2.x の `Sentence` 付き 200 は 3.0 の `Value` 付き 200 と同じ値の答えになる（要件 4.1・7.2）。
@@ -63,7 +76,8 @@ fn a_2x_get_reply_charset_is_adopted() {
 
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
     let req = a_request(Method::Get, "OnBoot");
-    let parsed = parse2_and_note(&mut negotiator, &req, &resp, false).expect("解析できる");
+    let parsed =
+        parse_for(ShioriVersion::Shiori2, &mut negotiator, &req, &resp, false).expect("解析できる");
     assert_eq!(parsed.value.as_deref(), Some("あ"));
     assert_eq!(negotiator.current(), euc_jp);
 }
@@ -72,8 +86,13 @@ fn a_2x_get_reply_charset_is_adopted() {
 #[test]
 fn the_resource_mark_reaches_the_2x_request() {
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
-    let bytes = encode2_and_note(&mut negotiator, &a_request(Method::Get, "username"), true)
-        .expect("資源の問い合わせは送る");
+    let bytes = encode_for(
+        ShioriVersion::Shiori2,
+        &mut negotiator,
+        &a_request(Method::Get, "username"),
+        true,
+    )
+    .expect("資源の問い合わせは送る");
     assert!(bytes.starts_with(b"GET String SHIORI/2.5\r\n"));
 }
 
@@ -82,8 +101,9 @@ fn the_resource_mark_reaches_the_2x_request() {
 fn an_event_not_sent_to_2x_logs_exactly_one_debug_line() {
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
     let req = a_request(Method::Notify, "basewareversion");
-    let (bytes, events) =
-        log_capture_kit::capture(|| encode2_and_note(&mut negotiator, &req, false));
+    let (bytes, events) = log_capture_kit::capture(|| {
+        encode_for(ShioriVersion::Shiori2, &mut negotiator, &req, false)
+    });
     assert_eq!(bytes, None, "2.x の相手へ送ってはならない");
     let lines: Vec<_> = events
         .iter()
@@ -96,19 +116,43 @@ fn an_event_not_sent_to_2x_logs_exactly_one_debug_line() {
 }
 
 /// 確かめの往復を窓なしで回す: 今の文字コードで要求を組み、送受の結果を判定の半分へ渡す。
-/// 交渉の状態は判定の前後で同じでなければならない（答えを採用の根拠にしない・要件 6.1）。
+/// 答えを採用の根拠にしないこと（要件 6.1）は [`the_probe_body_contains_no_adoption_path`] が縛る。
 fn probe_with(result: Result<Vec<u8>, SendError>) -> VersionVerdict {
     let negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
-    let before = negotiator.current();
     let req = shiori2::version_probe_request(negotiator.current(), DEFAULT_SENDER);
     assert!(req.starts_with(b"GET Version SHIORI/2.6\r\nCharset: UTF-8\r\n"));
-    let verdict = verdict_of_probe(result);
-    assert_eq!(
-        negotiator.current(),
-        before,
-        "確かめの後も文字コードは変わらない"
+    verdict_of_probe(result)
+}
+
+/// 確かめの本体が採用の経路を一切踏まないことを、`client.rs` の本文で機械的に確かめる
+/// （要件 6.1・先例 `the_one_way_event_body_contains_no_adoption_path`）。
+///
+/// 呼ばれていないことは実行では観測できないため、本文そのものを判定材料にする。採用の
+/// 経路を後から確かめの側へ繋ぐと赤になる。コメントも検査に入るので、確かめの側の説明
+/// では採用の経路を名指ししない。
+#[test]
+fn the_probe_body_contains_no_adoption_path() {
+    const SELF_SOURCE: &str = include_str!("client.rs");
+    // 改行の綴り（CRLF／LF）に依存しないよう CR を落としてから切り出す。
+    let source = SELF_SOURCE.replace('\r', "");
+    let after = source
+        .split_once("    pub fn probe_version(")
+        .expect("probe_version の定義行が見つからない")
+        .1;
+    let body = after
+        .split_once("\n    }\n")
+        .expect("probe_version の閉じ括弧が見つからない")
+        .0;
+    assert!(
+        body.contains("verdict_of_probe("),
+        "確かめは判定の半分を通るべき"
     );
-    verdict
+    for forbidden in ["parse_for", "note_response", "parse_response"] {
+        assert!(
+            !body.contains(forbidden),
+            "確かめの本体に採用の経路 `{forbidden}` がある（要件 6.1 が破れている）"
+        );
+    }
 }
 
 /// 2.x の答え（`Charset` 付きでも）は 2.x に決まる（要件 2.1・6.1）。

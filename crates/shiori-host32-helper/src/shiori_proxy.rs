@@ -7,8 +7,10 @@
 //! ## 確立シーケンス（`areka-P0-shiori-loadu` design「System Flows」）
 //! 正典の入口は 4 つ（`loadu`／`load`／`unload`／`request`）。初期化の入口は `loadu`／`load` の
 //! どちらか 1 つを選んで 1 回だけ呼ぶ。
-//! 1. `LoadLibraryW(dll_path)`（呼出側が `load_dir\<shiori_name>` を組んだ **絶対パス**を渡す＝
-//!    DLL 検索パス曖昧性の排除）。失敗→[`ProxyError::LoadLibraryFailed`]。
+//! 1. `LoadLibraryExW(dll_path, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)`
+//!    （呼出側が `load_dir\<shiori_name>` を組んだ **絶対パス**を渡す。依存の DLL は読む DLL のフォルダと
+//!    システムの既定から探し、作業フォルダと PATH は見ない。相対パスは OS が断る）。
+//!    失敗→[`ProxyError::LoadLibraryFailed`]。
 //! 2. `GetProcAddress` で初期化の入口 `loadu`・`load` を **任意で**引き、[`choose_init_entry`] で
 //!    1 つ選ぶ（`loadu` 優先・`load` だけでも `loadu` だけでも可）。両方無い→
 //!    [`ProxyError::EntryNotFound`]`("load")`。続けて `unload`・`request` を **必須で**引く。欠落→
@@ -29,15 +31,17 @@
 //! `loadu` の dir は **UTF-8**、`load` の dir は **ANSI(CP_ACP)**（pasta `to_ansi_str()`＝`MultiByteToWideChar` と対称ゆえ本
 //! モジュールは `WideCharToMultiByte(CP_ACP, ..)` で符号化）。`request` は**任意の文字コードのバイト列**（意味は x64 側＝`areka-P0-charset-canon` の交渉結果。本モジュールは解釈しない）。
 //!
-//! ## Drop teardown（design §358・R2.1/2.2/2.3）
-//! `load` 成功済みインスタンスの Drop で best-effort courtesy `unload()` → `FreeLibrary`。結果は
-//! 無視する（エラーとして扱わない）。**明示 teardown メソッドは公開しない**（Drop が唯一の経路・R2.1）。
-//! 確立途中（手順 2〜5）の失敗は内部で `FreeLibrary` してから `Err` を返す（半構築を露出しない）。
+//! ## 後始末（audit-shiori-host32 指摘 9・要件 10.11）
+//! [`ShioriByteProxy::close`] が `unload()` → `FreeLibrary` を行い、`unload` の偽と `FreeLibrary` の
+//! 失敗を種類で返す（UNLOAD の道）。UNLOAD を経ない道は Drop が同じ後始末を行い、失敗を
+//! `[helper]` の行で書く（二度閉じない）。確立途中（手順 2〜5）の失敗は内部で `FreeLibrary` してから
+//! `Err` を返し（半構築を露出しない）、`FreeLibrary` の失敗は行で書く。
 //!
 //! ## 観測契約（design §357・R4.7）
 //! 「初期化の入口の同期 1 バイト結果（0 か否か）＋無クラッシュ」のみ。DLL 内部スレッド等に前提を置かない。
-//! 本モジュールが出す行は入口名の 1 行と、`load` の枝の表せない字の警告 1 行だけ（`eprintln!`・
-//! 無条件）。失敗の種別の 1 行は `main.rs` が出す。
+//! 本モジュールが出す行（`crate::helper_log`・無条件）は入口名の 1 行、`load` の枝の表せない字の警告
+//! 1 行、応答を読めないとき（`GlobalLock` で開けない・長さが確保を超える）の 1 行、後始末の失敗の行。
+//! 確立の失敗の種別の 1 行は `main.rs` が出す。
 //!
 //! ## unsafe 集約
 //! SHIORI FFI の `unsafe` 境界は本モジュールへ集約し、各ブロックに Safety 根拠を文書化する
@@ -45,7 +49,8 @@
 //! で自然に閉じる）。
 //!
 //! ## consume 点
-//! WndProc（`main.rs`）が LOAD トリガ→proxy 確立→初期化の入口→ack 返送の順で本モジュールを使う。
+//! WndProc（`main.rs`）が LOAD トリガ→proxy 確立→初期化の入口→ack 返送の順で本モジュールを使い、
+//! REQUEST で [`ShioriByteProxy::request`]、UNLOAD で [`ShioriByteProxy::close`] を呼ぶ。
 
 use std::path::Path;
 
@@ -56,12 +61,18 @@ use windows::Win32::Globalization::{
 use windows::Win32::System::Diagnostics::Debug::{
     SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX, SetThreadErrorMode, THREAD_ERROR_MODE,
 };
-use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
+use windows::Win32::System::LibraryLoader::{
+    GetProcAddress, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+    LoadLibraryExW,
+};
+use windows::Win32::System::Memory::{
+    GLOBAL_ALLOC_FLAGS, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+};
 use windows::core::{HSTRING, PCSTR, s};
 
 /// `GlobalAlloc` の `GMEM_FIXED`（=0）。pasta と同値で確保する（research §9.3）。
 /// `GMEM_FIXED` ではハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書き込める。
+/// 同じ決まりの写し: testdll・loadu の `lib.rs` の `GMEM_FIXED`（決まりを変えるなら 3 か所とも）。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
 /// `loadu`／`load` 共通の flat-C cdecl 署名（design §351-355・research §9.2 でバイト正確に固定）。
@@ -70,13 +81,17 @@ const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 /// （0 = 失敗・0 以外 = 成功・`== 1` とは判定しない）。Rust `bool` で受けると 0／1 以外の値が未定義動作に
 /// なり、`i32` で受けると Rust `bool` を返す DLL（pasta）の不定な上位 24 bit を読むため、`u8` で受ける。
 type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> u8;
-/// `unload() -> u8`（引数なし・cdecl）。Drop の courtesy unload で呼び、戻りは捨てる（要件 5.4）。
+/// `unload() -> u8`（引数なし・cdecl）。後始末（`close`・Drop）で呼び、0 は `UnloadReturnedFalse`。
 type UnloadFn = unsafe extern "C" fn() -> u8;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
-/// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
+/// [`ShioriByteProxy::request`] が呼ぶ。
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 
-/// `LoadLibraryW` を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに呼ぶ。
+/// DLL を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに読む。
+///
+/// `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` で、依存の DLL は読む DLL の
+/// フォルダとシステムの既定から探し、作業フォルダと PATH は見ない（DLL の植え込みを塞ぐ）。
+/// このフラグは絶対パスを要り、相対パスは OS が断る。旗が効くのはこの 1 回の読み込みの静的な依存だけ。
 ///
 /// 既定では、壊れた DLL を読むと OS が利用者の画面に窓を出し、OK が押されるまでこのスレッドを止める。
 /// 失敗は `LoadLibraryFailed` として返るので、窓は要らない。呼ぶ間だけこのスレッドのエラーモードに
@@ -94,7 +109,13 @@ fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
     }
     .is_ok();
     // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16。失敗は Err で返る。
-    let result = unsafe { LoadLibraryW(wide) };
+    let result = unsafe {
+        LoadLibraryExW(
+            wide,
+            None,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+        )
+    };
     if set {
         // SAFETY: 直前に読み出した元のモードを戻すだけ。
         let _ = unsafe { SetThreadErrorMode(old, None) };
@@ -107,7 +128,7 @@ fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum ProxyError {
-    /// `LoadLibraryW` 失敗（DLL 不在・ロード失敗・ビットネス不一致など・R6.1）。
+    /// `LoadLibraryExW` 失敗（DLL 不在・相対パス・ロード失敗・ビットネス不一致など・R6.1）。
     LoadLibraryFailed(windows::core::Error),
     /// 入口が無い。名札は `"load"`（初期化の入口 `loadu`・`load` が **両方無い**とき・片方在れば
     /// この失敗にならない）・`"unload"`・`"request"` の 3 値（R6.2・`areka-P0-shiori-loadu` 要件 1.4・1.7）。
@@ -122,6 +143,13 @@ pub enum ProxyError {
     /// `request` が null／無効 HGLOBAL を返した（応答確保失敗等・クラッシュせず失敗を返した）。
     /// silent failure を避けるため他 variant と区別可能な形で返す（R3.2〜3.4 request 失敗面）。
     RequestFailed,
+    /// `request` が書いた応答の長さ `declared` が、応答 HGLOBAL の確保の大きさ `allocated`
+    /// （`GlobalSize`・0 は確かめられない）を超えた（指摘 7）。確保の外は読まずに解放して返す。
+    ResponseLengthMismatch { declared: usize, allocated: usize },
+    /// 後始末の `unload` が 0 を返した（[`ShioriByteProxy::close`]・要件 10.11）。
+    UnloadReturnedFalse,
+    /// 後始末の `FreeLibrary` が失敗した（[`ShioriByteProxy::close`]）。
+    FreeLibraryFailed(windows::core::Error),
 }
 
 /// 選ばれた初期化の入口（`loadu` 優先・要件 1.1〜1.3）。fn ポインタを 1 つだけ持つので、
@@ -162,23 +190,24 @@ fn choose_init_entry(loadu: Option<LoadFn>, load: Option<LoadFn>) -> Result<Init
 /// SHIORI DLL の常設プロキシ（design §339-388）。
 ///
 /// `Ok` = `unload`／`request` の fn ポインタ常設保持＋初期化の入口（`loadu`／`load`）が成功済み
-/// （＝「load 済み」プロキシ）。`request` fn は保持のみ（呼出 API は下流 host32-request が追加）。
-/// Drop が唯一の teardown 経路（明示メソッド非公開）。
+/// （＝「load 済み」プロキシ）。`request` fn は [`ShioriByteProxy::request`] が呼ぶ。
+/// 後始末は [`ShioriByteProxy::close`] か Drop の 1 回だけ。
 pub struct ShioriByteProxy {
-    /// ロード元モジュールハンドル。Drop の courtesy unload の後に `FreeLibrary` する。
+    /// ロード元モジュールハンドル。後始末の `unload` の後に `FreeLibrary` する。
     module: HMODULE,
-    /// 解決済み `unload` エントリ。Drop の courtesy unload で呼ぶ（R2.2）。
+    /// 解決済み `unload` エントリ。後始末で呼ぶ（R2.2）。
     unload: UnloadFn,
-    /// 解決済み `request` エントリ。**本仕様では保持のみ・呼出しない**（下流 host32-request が消費）。
+    /// 解決済み `request` エントリ。[`ShioriByteProxy::request`] が呼ぶ。
     request: RequestFn,
 }
 
 impl ShioriByteProxy {
-    /// `LoadLibraryW` → 入口の解決と選択 → 入口別の符号化 → 初期化の入口の呼出まで。成功時のみ
+    /// `LoadLibraryExW` → 入口の解決と選択 → 入口別の符号化 → 初期化の入口の呼出まで。成功時のみ
     /// `Self`（=load 済み）を返す（design §374-375）。
     ///
-    /// - `dll_path`: **絶対パス**（呼出側 Task 6 が `load_dir.join(shiori_name)` を渡す前提）。本
-    ///   モジュールは受け取った絶対パスを `LoadLibraryW` で開く＝DLL 検索パス曖昧性の排除（design §381）。
+    /// - `dll_path`: **絶対パス**（呼出側の WndProc が `load_dir.join(shiori_name)` を渡す前提）。本
+    ///   モジュールは受け取った絶対パスを、依存の探し先を絞った `LoadLibraryExW` で開く（相対パスは
+    ///   `LoadLibraryFailed`）。
     /// - `load_dir`: 初期化の入口の同期引数（リソース根）。`loadu` へは UTF-8、`load` へは
     ///   **ANSI(CP_ACP)** で符号化して渡す（[`init_bytes`]）。
     ///
@@ -187,7 +216,7 @@ impl ShioriByteProxy {
     ///
     /// Preconditions: `dll_path` は絶対パス。呼出は helper UI スレッド（WndProc）上。
     pub fn load(dll_path: &Path, load_dir: &Path) -> Result<Self, ProxyError> {
-        // --- 手順 1: LoadLibraryW（絶対パス・UTF-16 null 終端）---
+        // --- 手順 1: LoadLibraryExW（絶対パス・UTF-16 null 終端）---
         // HSTRING は NUL 終端の UTF-16 を保持する。失敗→LoadLibraryFailed（R6.1）。
         let wide = HSTRING::from(dll_path.as_os_str());
         // OS の窓は出さない（`load_library_quiet`）。失敗時は Err を返す（下で map）。
@@ -228,11 +257,7 @@ impl ShioriByteProxy {
             Ok(fns) => fns,
             Err(e) => {
                 // 半構築を残さない: module を解放してから Err（design §358）。
-                // SAFETY: `module` は本関数でロードした有効ハンドルで、まだ誰にも move していない。
-                // FreeLibrary の結果は best-effort で無視（確立失敗の後始末）。
-                unsafe {
-                    let _ = FreeLibrary(module);
-                }
+                free_after_failed_load(module);
                 return Err(e);
             }
         };
@@ -246,12 +271,9 @@ impl ShioriByteProxy {
                 request,
             }),
             Err(e) => {
-                // SAFETY: `module` は本関数でロードした有効ハンドルで、Ok を返すまで所有は本関数。
                 // 入力 HGLOBAL は encode_alloc_and_load 内で入口(callee) へ move 済み（自ら解放しない・
-                // R4.5）。ここで解放するのは module のみ。結果は best-effort で無視。
-                unsafe {
-                    let _ = FreeLibrary(module);
-                }
+                // R4.5）。ここで解放するのは module のみ。
+                free_after_failed_load(module);
                 Err(e)
             }
         }
@@ -270,7 +292,7 @@ impl ShioriByteProxy {
 
         // 手順 5: 入口名の行を呼ぶ直前に 1 回（成功・失敗を問わず・要件 4.1〜4.3）→
         // 選ばれた入口 (hdir, len) を 1 回だけ同期呼出（要件 1.5）。
-        eprintln!("{INIT_ENTRY_LOG_PREFIX}{}", entry.name());
+        crate::helper_log(&format!("{INIT_ENTRY_LOG_PREFIX}{}", entry.name()));
         // SAFETY: `hdir` は `len` バイトの有効 HGLOBAL（GMEM_FIXED ゆえハンドル＝先頭ポインタ）。
         // DLL(callee) は受領ハンドルを `GlobalFree` する規約（research §9.3・testdll の load が実演）
         // ＝ホストは以後 hdir に触れず・解放もしない（二重解放禁止・R4.5）。所有権は入口へ move する。
@@ -296,11 +318,12 @@ impl ShioriByteProxy {
     /// 3. `request(hreq, &mut len)` を呼出。**入力 HGLOBAL は callee(DLL) が `GlobalFree` する**規約ゆえ
     ///    ホストは `hreq` に以後触れず・自ら解放もしない（二重解放禁止・R3.3）。所有権は callee へ move。
     /// 4. 応答 HGLOBAL が null／無効なら [`ProxyError::RequestFailed`]（silent failure を避け区別可能に返す）。
-    /// 5. 応答 HGLOBAL から `*len` バイトを自前 `Vec<u8>` へコピー → `GlobalFree(hres)`（caller-free・R3.4）
-    ///    → bytes を返す。
+    /// 5. 応答 HGLOBAL を `GlobalLock` し、`GlobalSize` が 0 か `*len` より小さければ
+    ///    [`ProxyError::ResponseLengthMismatch`]（指摘 7）。そうでなければ `*len` バイトを自前 `Vec<u8>` へ
+    ///    コピー。どちらでも `GlobalUnlock` → `GlobalFree(hres)`（caller-free・R3.4）。
     ///
     /// `len` は in/out で 32bit `usize` として自然に閉じる（R7.6・i686 で ABI 一致）。`unload` は呼ばない
-    /// （Drop courtesy のみ・R3.7）。unsafe FFI は本モジュールへ一点集約する。
+    /// （呼ぶのは後始末＝UNLOAD の道の `close`、UNLOAD を経ない道の Drop・R3.7）。unsafe FFI は本モジュールへ一点集約する。
     ///
     /// Preconditions: proxy 確立済み（`load`→true）。呼出は helper UI スレッド（WndProc）上。
     /// Postconditions: 応答 HGLOBAL は `GlobalFree` 済み（リーク・二重解放なし）。入力 HGLOBAL は callee 解放。
@@ -323,37 +346,91 @@ impl ShioriByteProxy {
             return Err(ProxyError::RequestFailed);
         }
 
-        // 手順 5: 応答 HGLOBAL から len バイトをコピー → GlobalFree（caller-free・R3.4）。
-        // SAFETY: `hres` は DLL が `GlobalAlloc(GMEM_FIXED)` で確保した `len` バイトの有効領域
-        // （GMEM_FIXED ゆえ `hres.0` が先頭ポインタ）。上で is_invalid() を確認済み。ローカル Vec への
-        // コピーは非重複（別確保）。
-        let bytes = unsafe { std::slice::from_raw_parts(hres.0 as *const u8, len).to_vec() };
-        // 応答 HGLOBAL は caller(host) が解放する規約（R3.4）。best-effort で解放する。
-        // SAFETY: `hres` は callee(DLL) が alloc し所有権は caller へ移転済みの有効ハンドル。コピー後ゆえ
-        // 以後参照しない。GlobalFree の Result は best-effort で無視（解放漏れ・二重解放を起こさない）。
+        // 手順 5: 応答 HGLOBAL を `GlobalLock` で先頭の場所にし（動くメモリでも正しく読む）、確保の
+        // 大きさを確かめてから len バイトをコピー → GlobalUnlock → GlobalFree（caller-free・R3.4・指摘 7）。
+        // 応答を確保する側の写し: testdll・loadu の `lib.rs` の `request`。
+        // SAFETY: `hres` は DLL が `GlobalAlloc` で確保し所有権が caller へ移った有効ハンドル
+        // （上で is_invalid() を確認済み）。失敗は null／0 で返る。
+        let (ptr, allocated) = unsafe { (GlobalLock(hres) as *const u8, GlobalSize(hres)) };
+        let result = if ptr.is_null() || allocated == 0 || allocated < len {
+            // 錠が開かないときも読まずに解放し、種類は同じ Err で返す（呼び手は 500 を返すだけ）。
+            crate::helper_log(&if ptr.is_null() {
+                format!(
+                    "[helper] SHIORI の応答を GlobalLock で開けない（読まずに解放）: declared={len}"
+                )
+            } else {
+                format!(
+                    "[helper] SHIORI の応答の長さが確保を超える（読まずに解放）: declared={len} allocated={allocated}"
+                )
+            });
+            Err(ProxyError::ResponseLengthMismatch {
+                declared: len,
+                allocated,
+            })
+        } else {
+            // SAFETY: `ptr` は `allocated` バイトの確保の先頭で、`len <= allocated` を確かめた。
+            // ローカル Vec へのコピーは非重複（別確保）。
+            Ok(unsafe { std::slice::from_raw_parts(ptr, len).to_vec() })
+        };
+        // SAFETY: `hres` は上の有効ハンドル。コピー後ゆえ以後参照しない。GlobalUnlock の Err は
+        // ロックの数が 0 になった通知も含むので見ない。GlobalFree の Result は best-effort で無視
+        // （解放漏れ・二重解放を起こさない）。
         unsafe {
+            if !ptr.is_null() {
+                let _ = GlobalUnlock(hres);
+            }
             let _ = GlobalFree(Some(hres));
         }
-        Ok(bytes)
+        result
+    }
+}
+
+impl ShioriByteProxy {
+    /// 後始末: `unload()` → `FreeLibrary`（指摘 9・要件 10.11）。`unload` の偽は
+    /// [`ProxyError::UnloadReturnedFalse`]、`FreeLibrary` の失敗は [`ProxyError::FreeLibraryFailed`]
+    /// で返す（両方なら `FreeLibrary` の失敗を返し、`unload` の偽は `[helper]` の行で残す）。どちらでも DLL は解放を試みた後で、二度閉じない。
+    pub fn close(self) -> Result<(), ProxyError> {
+        // Drop に同じ後始末をさせない（二度閉じない）。中身は Copy の値だけなので漏れは無い。
+        std::mem::ManuallyDrop::new(self).teardown()
+    }
+
+    fn teardown(&self) -> Result<(), ProxyError> {
+        // SAFETY: `unload` は確立時に解決した有効な flat-C エントリ。引数なし cdecl。
+        // DLL 内部スレッドに前提を置かない（R4.7）。
+        let unloaded = unsafe { (self.unload)() } != 0;
+        // SAFETY: `module` は `load` でロードした有効ハンドル。呼ぶのは `close` か Drop の 1 回だけ。
+        if let Err(e) = unsafe { FreeLibrary(self.module) } {
+            // 返せる種類は 1 つなので、unload の偽は行で残す（要件 10.11）。
+            if !unloaded {
+                crate::helper_log("[helper] SHIORI の unload が偽を返した（FreeLibrary も失敗）");
+            }
+            return Err(ProxyError::FreeLibraryFailed(e));
+        }
+        if unloaded {
+            Ok(())
+        } else {
+            Err(ProxyError::UnloadReturnedFalse)
+        }
     }
 }
 
 impl Drop for ShioriByteProxy {
-    /// courtesy `unload()`（best-effort・結果無視）→ `FreeLibrary`（design §358・R2.1/2.2/2.3）。
-    ///
-    /// 明示 teardown メソッドを公開しないため、これが唯一の後始末経路。unload の 1 バイト整数の結果は
-    /// 無視し（エラーとして扱わない・ハングはプロセス lifecycle=下流の領分）、続けて DLL を解放する。
+    /// UNLOAD を経ない道の後始末（`close` と同じ・design「`ShioriByteProxy::close` と失敗の種類」）。
+    /// 失敗は `[helper]` の行で書く（エラーとして返す先は無い）。
     fn drop(&mut self) {
-        // SAFETY: `unload` は確立時に解決した有効な flat-C エントリ。引数なし cdecl。結果（`u8`）は
-        // best-effort で無視する（R2.2・courtesy unload）。DLL 内部スレッドに前提を置かない（R4.7）。
-        unsafe {
-            let _ = (self.unload)();
+        if let Err(e) = self.teardown() {
+            crate::helper_log(&format!("[helper] SHIORI の後始末に失敗（Drop）: {e:?}"));
         }
-        // SAFETY: `module` は `load` でロードした有効ハンドル。多重 Drop は型（所有）が防ぐ。
-        // FreeLibrary の結果は無視（best-effort teardown）。
-        unsafe {
-            let _ = FreeLibrary(self.module);
-        }
+    }
+}
+
+/// 確立の途中の失敗の後で DLL を放す。放せなければ `[helper]` の行で書く（指摘 9）。
+fn free_after_failed_load(module: HMODULE) {
+    // SAFETY: `module` は `load` でロードした有効ハンドルで、まだ誰にも move していない。
+    if let Err(e) = unsafe { FreeLibrary(module) } {
+        crate::helper_log(&format!(
+            "[helper] 確立の途中の失敗の後で SHIORI を放せない: {e:?}"
+        ));
     }
 }
 
@@ -361,6 +438,7 @@ impl Drop for ShioriByteProxy {
 ///
 /// `GMEM_FIXED` ゆえハンドル＝先頭ポインタで直接書き込める。確保失敗（Err／null）→[`ProxyError::EncodingFailed`]。
 /// 返した HGLOBAL の所有権は呼出側（→ `load` の callee へ move）にある。
+/// テストでの写し: testdll・loadu の `lib.rs` のテストの `alloc_input`。
 fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     // 空バッファでも 0 バイト確保は有効（len==0 の load_dir は運用上ないが防御的に許容）。
     // SAFETY: GlobalAlloc は失敗時 Err を返す（下で map）。GMEM_FIXED ゆえハンドル＝先頭ポインタ。
@@ -380,9 +458,9 @@ fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     Ok(h)
 }
 
-/// コードページ符号化の結果（design「`encode_with_codepage`／`CodepageEncoded`／`ansi_encode`」）。
+/// コードページ符号化の結果（design「`encode_with_codepage`／`CodepageEncoded`」）。
 struct CodepageEncoded {
-    /// 入口へ渡すバイト列（`cp = CP_ACP` なら今日の `ansi_encode` と同一・NUL 無し）。
+    /// 入口へ渡すバイト列（NUL 無し）。
     bytes: Vec<u8>,
     /// 往復で元に戻らない字が 1 つ以上あった（既定文字への置き換えも best-fit も含む・要件 3.1）。
     lossy: bool,
@@ -438,13 +516,6 @@ fn encode_with_codepage(cp: u32, path: &Path) -> Result<CodepageEncoded, ProxyEr
     Ok(CodepageEncoded { bytes: buf, lossy })
 }
 
-/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（既存の署名を保つ薄い包み・既存テストが固定）。
-/// `encode_with_codepage(CP_ACP, path).map(|e| e.bytes)`。
-#[cfg(test)]
-fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
-    encode_with_codepage(CP_ACP, path).map(|e| e.bytes)
-}
-
 /// 入口名の行の固定語句（実機確認の grep が判定に使う・要件 4.3）。後ろに `loadu`／`load` が付く。
 const INIT_ENTRY_LOG_PREFIX: &str = "[helper] SHIORI 初期化の入口: ";
 /// `load` の枝で表せない字があったときの警告の固定語句（要件 3.1）。後ろに元のパスが付く。
@@ -465,7 +536,7 @@ fn init_bytes(entry: &InitEntry, load_dir: &Path) -> Result<Vec<u8>, ProxyError>
         InitEntry::Load(_) => {
             let e = encode_with_codepage(CP_ACP, load_dir)?;
             if e.lossy {
-                eprintln!("{LOSSY_PATH_WARN_PREFIX}{}", load_dir.display());
+                crate::helper_log(&format!("{LOSSY_PATH_WARN_PREFIX}{}", load_dir.display()));
             }
             Ok(e.bytes)
         }
@@ -473,346 +544,8 @@ fn init_bytes(entry: &InitEntry, load_dir: &Path) -> Result<Vec<u8>, ProxyError>
 }
 
 #[cfg(test)]
-mod tests {
-    //! Task 5.2: プロキシの i686 単体テスト（design §387 Validation・Testing Strategy Unit #6・
-    //! 確定設計判断 (d)）。4 節立て:
-    //! 1. 純関数部（コードページ符号化）の決定的検証。
-    //! 2. `kernel32.dll` への load で `EntryNotFound` を決定的に証明（エクスポート欠落態様・R6.2）。
-    //! 3. testdll を直接 `load`→`drop` し、courtesy unload の実呼出（観測マーカー）と無 panic を確認
-    //!    （R2.2・E2E では Drop 経路が実行されない補完）。あわせて、別のフォルダから読んだ写しの
-    //!    unload がその印を書かないことを確認する。
-    //! 4. testdll 越しの `request` の往復（GET・NOTIFY）。
-    //!
-    //! 偽の DLL を load するテストを足すときの決まりは、錠 `TESTDLL_SERIAL` の説明にある。
-
-    use super::*;
-    use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
-
-    /// 印の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を差すテスト同士の直列化。
-    ///
-    /// 環境変数はプロセス全体で 1 つなので、差すテスト同士はこの錠で直列にする。偽の DLL の unload は、
-    /// 環境変数に値があり、印の親フォルダが自分の置き場と同じときだけ印を書く。汚れた錠は無視して続ける。
-    ///
-    /// 偽の DLL `shiori.dll` を load するテストを足すときの決まり:
-    /// 1. 偽の DLL `shiori.dll` を load するテストは、自分だけのフォルダへ写してから絶対パスで読む。
-    /// 2. 印の環境変数を差さないテストは、錠を取らなくてよい。そのテストの unload は、他のテストの印を
-    ///    書かない（偽の DLL が、自分の置き場と同じフォルダの印だけを書くため）。
-    /// 3. 印の環境変数を差すテストは、この錠を取る。印のパスは、読む DLL と同じフォルダに置く。
-    /// 4. 今、偽の DLL を load するテストは、`testdll_drop_invokes_courtesy_unload`・
-    ///    `testdll_unload_from_another_folder_leaves_marker_untouched`・
-    ///    `testdll_request_roundtrip_get_and_notify`・`main_loopback_tests.rs` の loopback のテスト。
-    ///    うち環境変数を差すのは `testdll_drop_invokes_courtesy_unload` と
-    ///    `testdll_unload_from_another_folder_leaves_marker_untouched`。
-    static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
-
-    // ---------------------------------------------------------------------
-    // 1. 純関数部の検証: コードページ符号化
-    // ---------------------------------------------------------------------
-
-    /// ASCII パスは CP_ACP でも同一バイト列に符号化される（NUL 終端は付けない＝正味長）。
-    /// 環境依存の少ない ASCII で決定的に検証する。
-    #[test]
-    fn ansi_encode_ascii_is_identity_no_nul() {
-        let p = Path::new(r"C:\ghost\master");
-        let bytes = ansi_encode(p).expect("ASCII path must encode");
-        // ASCII は CP_ACP でそのままの 1 バイト列。NUL 終端規約: ansi_encode は終端を付けない。
-        assert_eq!(bytes, br"C:\ghost\master".to_vec());
-        // 末尾に NUL が付いていないこと（正味長）。
-        assert_ne!(bytes.last(), Some(&0u8));
-        assert_eq!(bytes.len(), r"C:\ghost\master".len());
-    }
-
-    /// 空パスは空バイト列（防御的許容・確保 0 バイトも有効）。
-    #[test]
-    fn ansi_encode_empty_is_empty() {
-        let bytes = ansi_encode(Path::new("")).expect("empty path encodes to empty");
-        assert!(bytes.is_empty());
-    }
-
-    /// 日本語混じりは Shift_JIS（コードページ 932）の複数バイトへ符号化され、ASCII 部と混在する。
-    /// 機械の既定コードページ（CP_ACP）に依らないよう、932 を明示して渡す。
-    #[test]
-    fn mixed_japanese_encodes_to_shift_jis_multibyte() {
-        let p = Path::new(r"C:\ゴースト");
-        let encoded = encode_with_codepage(932, p).expect("mixed path must encode without panic");
-        assert_eq!(
-            encoded.bytes,
-            b"C:\\\x83\x53\x81\x5B\x83\x58\x83\x67".to_vec()
-        );
-        assert!(!encoded.lossy);
-    }
-
-    // ---------------------------------------------------------------------
-    // 2. kernel32.dll で EntryNotFound（R6.2・設計判断 (d)）
-    // ---------------------------------------------------------------------
-
-    /// `kernel32.dll` は必ず存在し LoadLibraryW は成功するが、`load`/`unload`/`request` の
-    /// SHIORI エクスポートを持たない。ゆえに `ShioriByteProxy::load` は解決段で
-    /// `ProxyError::EntryNotFound` を**決定的**に返す（エクスポート欠落態様の証明・R6.2）。
-    /// 半構築を残さないため内部で FreeLibrary 済み（Err = 状態残さず）。
-    #[test]
-    fn kernel32_yields_entry_not_found() {
-        let dll = Path::new(r"C:\Windows\System32\kernel32.dll");
-        let load_dir = std::env::temp_dir(); // 実在 dir（符号化・確保段には到達しない）。
-        let result = ShioriByteProxy::load(dll, &load_dir);
-        match result {
-            Err(ProxyError::EntryNotFound(sym)) => {
-                // 初期化の入口 `loadu`・`load` が両方無いときの名札は "load"。
-                assert_eq!(sym, "load", "kernel32 は SHIORI load を持たない");
-            }
-            // Ok は kernel32 が SHIORI エクスポートを持たない以上あり得ない。他 ProxyError も不可。
-            // ShioriByteProxy は Debug 非実装ゆえ Result 全体は整形せず、Err 変種のみ整形する。
-            Err(e) => panic!("expected EntryNotFound(\"load\"), got other error {e:?}"),
-            Ok(_) => panic!("expected EntryNotFound(\"load\"), but load unexpectedly succeeded"),
-        }
-    }
-
-    // ---------------------------------------------------------------------
-    // 3. testdll 直接 load→drop で courtesy unload 実証（R2.2・E2E 補完）
-    // ---------------------------------------------------------------------
-
-    /// testdll の `shiori.dll` を解決する。
-    /// 優先順: env `HOST32_TESTDLL_DLL` → `CARGO_MANIFEST_DIR` から target 探索。
-    /// **silent skip 禁止**: 見つからなければ明確に panic（設計判断 (d)）。
-    fn resolve_testdll() -> PathBuf {
-        if let Ok(p) = std::env::var("HOST32_TESTDLL_DLL") {
-            let path = PathBuf::from(p);
-            assert!(
-                path.is_file(),
-                "HOST32_TESTDLL_DLL={} が実ファイルでない",
-                path.display()
-            );
-            return path;
-        }
-        // crates/shiori-host32-helper から見た workspace target。
-        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let target_root = manifest.join("../../target/i686-pc-windows-msvc");
-        for profile in ["debug", "release"] {
-            let candidate = target_root.join(profile).join("shiori.dll");
-            if candidate.is_file() {
-                return candidate;
-            }
-        }
-        panic!(
-            "testdll shiori.dll not found. まず PowerShell で \
-             `cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` を実行するか、\
-             env HOST32_TESTDLL_DLL に絶対パスを設定すること（silent skip 禁止・設計判断 (d)）。\
-             探索した base: {}",
-            target_root.display()
-        );
-    }
-
-    /// testdll を直接 `load`→`drop` し、Drop の courtesy `unload` が実呼出されること
-    /// （unload 観測マーカーのファイル作成）と、Drop 全体が無 panic で完了することを確認する
-    /// （R2.2 の受入証拠・E2E は helper をプロセスごと落とすため Drop が走らない、その補完）。
-    ///
-    /// 印の環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` を差すので錠 `TESTDLL_SERIAL` を取る。他のテストの
-    /// unload は、偽の DLL の置き場の判定（印の親フォルダが自分の置き場と同じときだけ書く）によって、
-    /// この印を書かない。
-    #[test]
-    #[cfg_attr(
-        not(target_arch = "x86"),
-        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
-    )]
-    fn testdll_drop_invokes_courtesy_unload() {
-        // 印の環境変数を差すテスト同士を直列化。汚染ロックは無視して継続。
-        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        let src_dll = resolve_testdll();
-
-        // 一時 dir を load_dir とし、そこへ shiori.dll をコピー（絶対 dll_path＝load_dir\shiori.dll・
-        // cwd=load_dir 慣習の縮図）。テスト固有名で衝突を避ける。
-        let unique = format!(
-            "host32_proxy_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        );
-        let load_dir = std::env::temp_dir().join(&unique);
-        std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
-        let dll_path = load_dir.join("shiori.dll");
-        std::fs::copy(&src_dll, &dll_path).expect("copy shiori.dll into load_dir");
-
-        // unload 観測マーカーの一時パス（load 前に未作成であること）。
-        let marker = load_dir.join("unload.marker");
-        assert!(!marker.exists(), "marker は load 前に未作成");
-
-        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。環境変数を差すテストは
-        // 錠 `TESTDLL_SERIAL` で直列になっている。ほかのテストは、この環境変数を偽の DLL の unload の
-        // 中で読むだけである。set は load 前に行う。
-        unsafe {
-            std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker);
-        }
-
-        // load 成功（testdll の load は入力 HGLOBAL を GlobalFree し true 返し）。
-        let proxy = ShioriByteProxy::load(&dll_path, &load_dir).expect("testdll load must succeed");
-
-        // まだ Drop していないのでマーカーは未作成。
-        assert!(!marker.exists(), "unload はまだ呼ばれていない");
-
-        // Drop → courtesy unload 実呼出 → testdll が marker ファイルを作成。無 panic で完了。
-        drop(proxy);
-
-        assert!(
-            marker.exists(),
-            "Drop の courtesy unload が呼ばれ marker が作成されるはず（R2.2）"
-        );
-        let content = std::fs::read(&marker).expect("read marker");
-        assert_eq!(content, b"unloaded", "testdll unload が書くマーカー内容");
-
-        // 後始末（best-effort）: env・一時 dir を掃除。
-        // SAFETY: set_var と同じく unsafe。環境変数を差すテストは錠で直列になっており（錠の中で外す）、
-        // ほかのテストは、この環境変数を偽の DLL の unload の中で読むだけである。
-        unsafe {
-            std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
-        }
-        let _ = std::fs::remove_dir_all(&load_dir);
-    }
-
-    /// ワークスペースの `target\` の下に一意なフォルダを作り、偽の DLL を `shiori.dll` として写す。
-    /// 根は `CARGO_MANIFEST_DIR` の 2 つ上（ワークスペースの根）を `parent()` で引き、`..` を含めない。
-    /// 一意にするのはプロセス識別子・時刻のナノ秒・フォルダごとの札。OS の一時フォルダは使わない。
-    /// 返り値は（フォルダ、写した `shiori.dll` の絶対パス）。
-    fn copy_testdll_into_unique_target_dir(tag: &str) -> (PathBuf, PathBuf) {
-        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let workspace = manifest
-            .parent()
-            .and_then(Path::parent)
-            .expect("CARGO_MANIFEST_DIR の 2 つ上（ワークスペースの根）");
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        // パスが長くなりすぎないようフォルダ名は短く。
-        let name = format!("h32m_{}_{}_{}", std::process::id(), nanos, tag);
-        let dir = workspace.join("target").join(name);
-        std::fs::create_dir_all(&dir).expect("create load_dir under target");
-        let dll = dir.join("shiori.dll");
-        std::fs::copy(resolve_testdll(), &dll).expect("copy shiori.dll into load_dir");
-        (dir, dll)
-    }
-
-    /// 同じプロセスに読まれた別の写し（フォルダ Y）の unload が、フォルダ X 宛ての印を書かないこと。
-    /// 印のテストと往復のテストの間の順番に頼らず、競合の芯「別の写しの unload が印を書く」を
-    /// 1 本の中で切り出す（要件 3.2）。時間待ちは無く、1 つのスレッドで順に進む。
-    /// 印の環境変数を差すので錠 `TESTDLL_SERIAL` を取る。印のパスは X の DLL と同じフォルダに置く。
-    #[test]
-    #[cfg_attr(
-        not(target_arch = "x86"),
-        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
-    )]
-    fn testdll_unload_from_another_folder_leaves_marker_untouched() {
-        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        let (dir_x, dll_x) = copy_testdll_into_unique_target_dir("x");
-        let (dir_y, dll_y) = copy_testdll_into_unique_target_dir("y");
-        let marker_x = dir_x.join("unload.marker");
-        let marker_y = dir_y.join("unload.marker");
-
-        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。環境変数を差すテストは
-        // 錠 `TESTDLL_SERIAL` で直列になっている。ほかのテストは、この環境変数を偽の DLL の unload の
-        // 中で読むだけである。
-        unsafe {
-            std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker_x);
-        }
-
-        let proxy_x = ShioriByteProxy::load(&dll_x, &dir_x).expect("testdll X load must succeed");
-        let proxy_y = ShioriByteProxy::load(&dll_y, &dir_y).expect("testdll Y load must succeed");
-        drop(proxy_y);
-
-        assert!(
-            !marker_x.exists(),
-            "X has no marker: 別のフォルダ Y の写しの unload が X 宛ての印を書いた"
-        );
-        assert!(!marker_y.exists(), "Y has no marker");
-
-        drop(proxy_x);
-        let content = std::fs::read(&marker_x).expect("X の unload が印を書くはず");
-        assert_eq!(content, b"unloaded", "X の unload が書く印の中身");
-
-        // SAFETY: set_var と同じ（錠の中で外す）。
-        unsafe {
-            std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
-        }
-        let _ = std::fs::remove_dir_all(&dir_x);
-        let _ = std::fs::remove_dir_all(&dir_y);
-    }
-
-    // ---------------------------------------------------------------------
-    // 4. testdll 越し request loopback（R3.2/3.3/3.4/3.6・Task 4.1）
-    // ---------------------------------------------------------------------
-
-    /// testdll を直接 `load` した proxy に対し `request` を実呼出し、固定 SHIORI/3.0 応答が
-    /// 往復することを確認する（design §435 の HGLOBAL 非対称契約）。
-    ///
-    /// - GET(`OnTestValue`) → 200 OK＋固定 `Value`。
-    /// - NOTIFY(`OnTestNotify`) → 204 No Content。
-    ///
-    /// helper クレートには codec が無いため request バイト列は手書きする。無 panic 完了が
-    /// 「入力 callee-free／応答 caller-free」（二重解放なし）の観測証拠。印の環境変数
-    /// `HOST32_TESTDLL_UNLOAD_MARKER` を差さないので錠 `TESTDLL_SERIAL` を取らない。
-    #[test]
-    #[cfg_attr(
-        not(target_arch = "x86"),
-        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
-    )]
-    fn testdll_request_roundtrip_get_and_notify() {
-        let src_dll = resolve_testdll();
-
-        // 一意な一時 load_dir へ shiori.dll をコピー（絶対 dll_path＝load_dir\shiori.dll）。
-        let unique = format!(
-            "host32_proxy_request_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        );
-        let load_dir = std::env::temp_dir().join(&unique);
-        std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
-        let dll_path = load_dir.join("shiori.dll");
-        std::fs::copy(&src_dll, &dll_path).expect("copy shiori.dll into load_dir");
-
-        // load 成功（testdll の load は入力 HGLOBAL を callee-free し true 返し）。
-        let proxy = ShioriByteProxy::load(&dll_path, &load_dir).expect("testdll load must succeed");
-
-        // GET(OnTestValue) → 200 OK＋固定 Value。
-        let get_req =
-            b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
-        let get_resp = proxy
-            .request(get_req)
-            .expect("GET request must succeed via testdll");
-        let get_text = String::from_utf8(get_resp).expect("GET response must be valid UTF-8");
-        assert!(
-            get_text.contains("SHIORI/3.0 200 OK"),
-            "expected 200 OK, got: {get_text:?}"
-        );
-        assert!(
-            get_text.contains("Value: \\0\\s[0]host32 request roundtrip ok\\e"),
-            "expected fixed Value line, got: {get_text:?}"
-        );
-
-        // NOTIFY(OnTestNotify) → 204 No Content。
-        let notify_req =
-            b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
-        let notify_resp = proxy
-            .request(notify_req)
-            .expect("NOTIFY request must succeed via testdll");
-        let notify_text =
-            String::from_utf8(notify_resp).expect("NOTIFY response must be valid UTF-8");
-        assert!(
-            notify_text.contains("SHIORI/3.0 204 No Content"),
-            "expected 204 No Content, got: {notify_text:?}"
-        );
-
-        // Drop で courtesy unload→FreeLibrary。往復も Drop も無 panic＝二重解放なし（R3.3/3.4）。
-        drop(proxy);
-
-        // 後始末（best-effort）: 一時 dir を掃除。
-        let _ = std::fs::remove_dir_all(&load_dir);
-    }
-}
+#[path = "shiori_proxy_tests.rs"]
+mod tests;
 
 #[cfg(test)]
 #[path = "shiori_proxy_loadu_tests.rs"]

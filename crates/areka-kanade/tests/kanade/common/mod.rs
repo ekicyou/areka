@@ -77,4 +77,4 @@ pub use recording::{
     CallMethod, RecordedCall, binding, command_tag, expected_call, expected_translate,
     expected_unload, position_of, pumps, resumed_get_after_active_window, send, tick,
 };
-pub use window_actor::{WINDOW_CREATE_SERIAL, spawn_window_actor};
+pub use window_actor::spawn_window_actor;

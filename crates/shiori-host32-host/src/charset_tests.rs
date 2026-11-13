@@ -89,6 +89,15 @@ fn unmappable_char_becomes_a_decimal_numeric_character_reference() {
     assert_eq!(replaced, 1);
 }
 
+/// ISO-2022-JP は ASCII の制御字 ESC を表せない＝置き換えた数に入る（ASCII を飛ばすのは
+/// ASCII をそのまま通す文字コードだけ・指摘 42）。
+#[test]
+fn iso_2022_jp_counts_a_replaced_ascii_escape() {
+    let cs = Charset::for_label("ISO-2022-JP").expect("ISO-2022-JP は解決できる");
+    let (_bytes, replaced) = cs.encode("a\u{1b}b");
+    assert_eq!(replaced, 1);
+}
+
 /// 宣言された文字コードとして不正な並びは代替文字へ吸収され、置換の有無が返る（要件 10.2）。
 #[test]
 fn invalid_byte_sequence_decodes_to_the_replacement_char() {
@@ -422,4 +431,22 @@ fn policy_reflects_the_forced_flag() {
 fn negotiator_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<CharsetNegotiator>();
+}
+
+/// 警告済みの集まりは 64 で止まる（指摘 41）。壊れた SHIORI が応答ごとに違うラベルを返しても
+/// 集まりは育ち続けず、65 個目からの知らせは `DEBUG` だけになる。
+#[test]
+fn warned_labels_stop_growing_at_the_limit() {
+    let mut neg = CharsetNegotiator::new(Charset::SHIFT_JIS, false);
+    for i in 0..64 {
+        neg.note_response(Some(&format!("x-nope-{i}")), false);
+    }
+    assert_eq!(neg.warned.len(), 64);
+
+    let ((), events) = log_capture_kit::capture(|| neg.note_response(Some("x-nope-64"), false));
+
+    assert_eq!(neg.warned.len(), 64, "上限を越えた鍵は入れない");
+    let unresolved = named(&events, "charset_label_unresolved");
+    assert_eq!(unresolved.len(), 1, "{events:?}");
+    assert_eq!(unresolved[0].level, tracing::Level::DEBUG, "{events:?}");
 }

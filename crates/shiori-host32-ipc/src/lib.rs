@@ -6,14 +6,14 @@
 //!
 //! 設計制約（design.md §272-336・要件 2.1-2.5 / 7.2 / 7.3）:
 //! - `MsgTag` は `dwData` の**低 32bit のみ**に載る（跨ビットネス安全）。
-//! - payload は**生バイト列**（`cbData` = 長さ・固定ヘッダ長 0 = [`PAYLOAD_HEADER_LEN`]）。
+//! - payload は**生バイト列**（`cbData` = 長さ・in-band のヘッダを持たない）。
 //!   ポインタ・HANDLE・struct を境界を越えて共有しない。
 //! - HWND は**常に u32 LE 4 バイト**でワイヤ表現する。
 //! - shift/mask 評価は必ず `u64` cast で行い、i686 の `usize` = 32bit での
 //!   overflow を回避する（要件 7.2）。
 //!
 //! 送信プリミティブ（`send_copydata` / `send_copydata_response` / `send_request`）・
-//! `ResponseSlot`・`IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
+//! 受信の取り出し（`read_copydata`）・`ResponseSlot`・`IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
 //! 送信関数は `SendMessageTimeoutW` の上限時間で無限待機を構造的に排除する（要件 5.3）。
 //! 旗は**送出の向き**で分ける（[`SendFlavor`]・[`send_flags`]・要件 16.1/16.2）:
 //! 要求方向（ホスト → helper）は `SMTO_ABORTIFHUNG` ＋上限時間、応答方向
@@ -31,32 +31,24 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SEND_MESSAGE_TIMEOUT_FLAGS, SMTO_ABORTIFHUNG, SMTO_NORMAL, SendMessageTimeoutW, WM_COPYDATA,
 };
 
-/// 跨プロセス payload の固定ヘッダ長。
-///
-/// 本規約では payload は生バイト列そのものであり、長さ以外の in-band ヘッダを
-/// 持たない（要件 2.4）。`cbData` が payload 長そのものであることを明示する定数。
-pub const PAYLOAD_HEADER_LEN: usize = 0;
-
 /// WM_COPYDATA メッセージ種別タグ（`dwData` の低 32bit に載る）。
 ///
 /// 判別子は全て u32 の低 32bit に収まり、跨ビットネス安全である
 /// （`(tag.as_u32() as u64) >> 32 == 0`・要件 7.2）。
 ///
-/// 本ユニットが直接扱うのは `Hello` / `Request` / `Response`（echo）である。
-/// `Load` / `Unload` はワイヤ互換のため定義するが、本ユニットでは未処理で
-/// 下流ユニットが結線する。
+/// 本クレートはタグの規約だけを持ち、意味づけは使い手（host と helper）が行う。
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MsgTag {
     /// helper → 親: 自身のメッセージ窓 HWND を u32 LE で通知するハンドシェイク。
     Hello = 1,
-    /// pasta.dll ロード要求（本ユニット未処理・下流で結線）。
+    /// 親 → helper: SHIORI DLL のロード要求（ペイロードなし・helper が ack 1 バイトを返す）。
     Load = 2,
     /// 親 → helper: 生バイト request。
     Request = 3,
     /// helper → 親: 生バイト response。
     Response = 4,
-    /// pasta.dll アンロード要求（本ユニット未処理・下流で結線）。
+    /// 親 → helper: SHIORI DLL のアンロードと正常終了の要求（ペイロードなし・helper が ack を返す）。
     Unload = 5,
 }
 
@@ -137,7 +129,7 @@ pub fn copydata_payload(
     let tag = MsgTag::try_from_u32(raw_tag).map_err(FramingError::UnknownTag)?;
 
     // 宣言長 (cbData) と実 payload 長が一致しないフレームは破損として拒否する
-    // （要件 2.5・PAYLOAD_HEADER_LEN = 0 ゆえ cbData = payload 長）。
+    // （要件 2.5・payload は in-band のヘッダを持たないので cbData = payload 長）。
     if declared_len != data.len() {
         return Err(FramingError::LengthMismatch {
             declared: declared_len,
@@ -148,11 +140,36 @@ pub fn copydata_payload(
     Ok((tag, data))
 }
 
+/// 受領した WM_COPYDATA の LPARAM から `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す
+/// （host の親窓と helper の窓が共に使う）。`lparam` が空なら `None`（呼び手が記録して捨てる）。
+///
+/// # Safety
+/// `lparam` は 0 か、WM_COPYDATA の配送中に OS が渡した `*const COPYDATASTRUCT` であること。
+/// その `lpData` が空でなければ `cbData` バイト分読めること（OS が受け手の側へ写した領域）。
+/// どちらも WndProc が WM_COPYDATA を処理している間だけ有効なので、その中で呼ぶこと。
+pub unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
+    let cds = lparam.0 as *const COPYDATASTRUCT;
+    if cds.is_null() {
+        return None;
+    }
+    // SAFETY: 呼び手の約束により lparam は有効な COPYDATASTRUCT を指す。
+    let cds = unsafe { &*cds };
+    let dw_data = cds.dwData;
+    let len = cds.cbData as usize;
+    let payload = if len == 0 || cds.lpData.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: 呼び手の約束により lpData は cbData バイト読める。
+        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
+    };
+    Some((dw_data, len, payload))
+}
+
 /// framing レベルの不正フレーム表現（要件 2.5）。
 ///
-/// 本ユニットは framing ローカルな軽量エラーに留める。下流タスクの
-/// `IpcError`（thiserror enum）へは、この列挙の各バリアントを
-/// `IpcError::CorruptFrame` 等へ `From` で持ち上げて統合する想定。
+/// 本ユニットは framing ローカルな軽量エラーに留める。送信・往復層の
+/// [`IpcError`] へは `IpcError::CorruptFrame` として `From` で持ち上げる
+/// （下の `impl From<FramingError> for IpcError`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FramingError {
     /// `dwData` の低 32bit が既知の [`MsgTag`] でない（未知タグ）。
@@ -305,7 +322,7 @@ pub const fn send_flags(flavor: SendFlavor) -> SEND_MESSAGE_TIMEOUT_FLAGS {
 /// - `lpData`: `payload` を指す。ポインタ自体はワイヤに載らず OS が `cbData` バイトを marshal する。
 /// - `wParam`: 送信側自身の HWND（`self_hwnd`）。
 ///
-/// # Safety
+/// # 前提
 /// `SendMessageTimeoutW` は FFI。`target` は有効な HWND（ハンドシェイク確定済）であること、
 /// `payload` は本呼び出し中生存すること（`SendMessage` は同期ゆえ復帰まで生存が保証される）。
 pub fn send_copydata(
@@ -333,8 +350,8 @@ pub fn send_copydata(
 /// 長引けば OS からは「応答なし」に見えうるが、この向きではその判定を送出の打ち切り理由にしない。
 /// 時間上限は呼び出し側が渡す（helper は `REPLY_TIMEOUT`＝5 秒）。
 ///
-/// # Safety
-/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+/// # 前提
+/// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
 pub fn send_copydata_response(
     target: HWND,
     self_hwnd: HWND,
@@ -357,8 +374,8 @@ pub fn send_copydata_response(
 /// 旗以外は両方向で同一である（COPYDATASTRUCT の組み立て・timeout の飽和変換・戻り 0 の
 /// 写像＝期限切れは [`IpcError::Timeout`]・他は [`IpcError::SendFailed`]）。
 ///
-/// # Safety
-/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+/// # 前提
+/// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
 fn send_copydata_with(
     flavor: SendFlavor,
     target: HWND,
@@ -421,8 +438,8 @@ fn send_copydata_with(
 /// **注意**: 実際の再入往復は実窓を要すため統合 task（4.3 / 5.1）で検証する。本関数は
 /// timeout 契約と slot 消費ロジックの確立まで。
 ///
-/// # Safety
-/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+/// # 前提
+/// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
 pub fn send_request(
     target: HWND,
     self_hwnd: HWND,
@@ -592,12 +609,6 @@ mod framing_tests {
             copydata_payload(dw_data as usize, 0, payload),
             Ok((MsgTag::Hello, payload))
         );
-    }
-
-    // PAYLOAD_HEADER_LEN=0 の明示（要件 2.4・固定ヘッダ長 0）
-    #[test]
-    fn payload_header_len_is_zero() {
-        assert_eq!(PAYLOAD_HEADER_LEN, 0);
     }
 }
 

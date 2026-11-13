@@ -102,3 +102,8 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
   - 統合テストの 3 件: `assertions_on_constants`（`tests/cue/schedule_test.rs`・`const { assert!(..) }` にした）・`module_inception`（`tests/runtime/conflict_resolution_test/conflict_detection.rs` の入れ子の mod を外した）・`single_match`（`tests/runtime/facade_test/termination.rs`・`.expect(..)` と `assert_eq!` にした）。
   - lib test の 2 件: `runtime/loop_controller/tests.rs` の `manual_range_contains`（1 件は `contains` へ直し、1 件はテストごと消えた）。
 - 着地の後は `cargo clippy -p dola --all-targets --no-deps -- -D warnings` が警告 0。上の 10-07・10-31・11-01 の申し送りの「`dola` の 21 件」もこれで済み。
+
+## 2026-11-14 `audit-shiori-host32` の記録: shiori-host32 の分は済んだ
+
+- `shiori-host32-host/tests/lifecycle_{cyclic,kill}_e2e.rs` の `clippy::drop_non_drop` の 3 件（Drop を持たない `Shiori3Client` を `drop` していた・借りは最後に使った所で終わる）は `audit-shiori-host32` が `drop(client)` を消して直した。実測の「cyclic 4・kill 2」の残りは、同 spec のほかの直しで先に消えていた。この spec は shiori-host32 を直し直さなくてよい。
+- 着地の後は `cargo clippy -p shiori-host32-host -p shiori-host32-ipc --all-targets` と i686 の `cargo clippy -p shiori-host32-helper -p shiori-host32-ipc -p shiori-host32-testdll -p shiori-host32-testdll-loadu --all-targets --target i686-pc-windows-msvc` がどちらも警告 0。

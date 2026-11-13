@@ -2,7 +2,7 @@
 //! （task 5.1・design.md Testing Strategy #8「lifecycle_cyclic_e2e.rs::cyclic_run_and_clean_shutdown」）。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
-//! `LoadLibraryW` させたうえで、ハンドシェイク → LOAD 先行 → **固定応答の往復を 200 回連続
+//! `LoadLibraryExW` させたうえで、ハンドシェイク → LOAD 先行 → **固定応答の往復を 200 回連続
 //! （実時間 sleep なしの back-to-back）** で行い、各往復の成功と fixture 固定応答を確認する。
 //! 反復後も helper が生存継続していることを確認したうえで、**正規の正常終了経路**
 //! （UNLOAD → ループ正常終了 → `exit(0)`）を通じて **正常終了種別（`ExitKind::Clean`）**が
@@ -29,29 +29,18 @@
 //! env override 最優先 → `CARGO_MANIFEST_DIR` から `target/i686-pc-windows-msvc/{debug,release}/`
 //! を探索 → 不在は**明確な panic**（i686 未ビルドの指摘）。silent-skip（緑の偽装）を禁ずる。
 //!
-//! ## 二窓 discipline（R6.3・design Testing Strategy #10）
-//! 本ファイルには **windowed テストが 2 本**存在する:
-//! - `cyclic_run_and_clean_shutdown`（task 5.1・決定的・常に窓を作る）
-//! - `cyclic_real_pasta_optional`（task 5.2・env-gate・`HOST32_PASTA_DLL` **設定時のみ**窓を作る）
-//!
-//! 親 message-only 窓は同一プロセスで同時 2 組生成不可（既知の 1 窓＝2 組制約）。ゆえに
-//! **`HOST32_PASTA_DLL` を設定して実行する場合は必ず `--test-threads=1` で直列化**すること
-//! （下記 PowerShell 手順に明記）。CI（env 未設定）では `cyclic_real_pasta_optional` が
-//! **窓生成前に早期 return** するため、通常の並行 `cargo test` でも 2 窓が同時生存せず衝突しない。
-//!
 //! ## 実行前提（PowerShell・Git Bash 不可・2 段ビルド→x64 test）
 //! ```powershell
 //! cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc
 //! cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc
 //! cargo test  -p shiori-host32-host    --test lifecycle_cyclic_e2e
 //!
-//! # env-gate 実 pasta 追験（任意・R6）を含める場合は必ず --test-threads=1 で直列化（2 窓制約）:
+//! # env-gate 実 pasta 追験（任意・R6）を含める場合:
 //! $env:HOST32_PASTA_DLL="C:\path\to\pasta.dll"
-//! cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e -- --test-threads=1
+//! cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e
 //! ```
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::PathBuf;
 
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{
@@ -60,8 +49,8 @@ use shiori_host32_host::{
 };
 use shiori_host32_ipc::MsgTag;
 
-/// ハンドシェイク（HELLO 受領）の上限時間。i686 helper の起動＋窓生成＋HELLO 送出に十分な余裕。
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+mod common;
+use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
 /// 周期運転の反復回数（連打・back-to-back・sleep なし・R3.1/R7.5）。
 const REPETITIONS: usize = 200;
@@ -85,115 +74,12 @@ const TEST_GET_ID: &str = "OnTestValue";
 /// NOTIFY request の `ID`（testdll `TEST_NOTIFY_ID` と一致・ハードコード）。
 const TEST_NOTIFY_ID: &str = "OnTestNotify";
 
-/// helper exe（事前ビルドした i686 バイナリ）のパスを堅牢に解決する（shiori_request_e2e 同型）。
-///
-/// 優先順位:
-/// 1. env `HOST32_HELPER_EXE`（明示指定）。
-/// 2. `CARGO_MANIFEST_DIR`（= `crates/shiori-host32-host`）→ ワークスペースルート →
-///    `target/i686-pc-windows-msvc/{debug,release}/shiori-host32-helper.exe`。
-///
-/// いずれも見つからなければ**明確な panic で fail**（無言スキップで緑を偽装しない・R7.4）。
-fn resolve_helper_exe() -> PathBuf {
-    if let Ok(explicit) = std::env::var("HOST32_HELPER_EXE") {
-        let p = PathBuf::from(&explicit);
-        if p.is_file() {
-            return p;
-        }
-        panic!(
-            "HOST32_HELPER_EXE={explicit:?} が指すファイルが存在しません。\
-             i686 helper を先にビルドし正しいパスを指してください:\n  \
-             cargo build -p shiori-host32-helper --target i686-pc-windows-msvc"
-        );
-    }
-
-    let target_base = workspace_i686_target_base();
-    for profile in ["debug", "release"] {
-        let candidate = target_base.join(profile).join("shiori-host32-helper.exe");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-
-    panic!(
-        "i686 helper exe が見つかりません（探索先: {}\\{{debug,release}}\\shiori-host32-helper.exe）。\
-         PowerShell で先に i686 helper をビルドしてください（Git Bash 不可）:\n  \
-         cargo build -p shiori-host32-helper --target i686-pc-windows-msvc\n\
-         あるいは env HOST32_HELPER_EXE で exe パスを明示してください。",
-        target_base.display()
-    );
-}
-
-/// testdll（事前ビルドした i686 `shiori.dll` fixture）のパスを堅牢に解決する（shiori_request_e2e 同型）。
-///
-/// 優先順位:
-/// 1. env `HOST32_TESTDLL_DLL`（明示指定）。
-/// 2. `CARGO_MANIFEST_DIR` → ワークスペースルート →
-///    `target/i686-pc-windows-msvc/{debug,release}/shiori.dll`。
-///
-/// いずれも見つからなければ**明確な panic で fail**（i686 testdll 未ビルドの指摘・無言スキップ禁止・R7.4）。
-fn resolve_testdll() -> PathBuf {
-    if let Ok(explicit) = std::env::var("HOST32_TESTDLL_DLL") {
-        let p = PathBuf::from(&explicit);
-        if p.is_file() {
-            return p;
-        }
-        panic!(
-            "HOST32_TESTDLL_DLL={explicit:?} が指すファイルが存在しません。\
-             i686 testdll を先にビルドし正しいパスを指してください:\n  \
-             cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc"
-        );
-    }
-
-    let target_base = workspace_i686_target_base();
-    for profile in ["debug", "release"] {
-        let candidate = target_base.join(profile).join("shiori.dll");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-
-    panic!(
-        "i686 testdll（shiori.dll）が見つかりません（探索先: {}\\{{debug,release}}\\shiori.dll）。\
-         PowerShell で先に i686 testdll をビルドしてください（Git Bash 不可）:\n  \
-         cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc\n\
-         あるいは env HOST32_TESTDLL_DLL で DLL パスを明示してください。",
-        target_base.display()
-    );
-}
-
-/// `CARGO_MANIFEST_DIR`（= `crates/shiori-host32-host`）からワークスペースの
-/// `target/i686-pc-windows-msvc` ベースを求める。
-fn workspace_i686_target_base() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent() // crates/
-        .and_then(|p| p.parent()) // ワークスペースルート
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-    workspace_root.join("target").join("i686-pc-windows-msvc")
-}
-
-/// 一意な一時ディレクトリを作る（並行テスト・再実行での衝突回避）。
-///
-/// `std::env::temp_dir()` 配下に pid＋単調カウンタで一意名を作り、best-effort で作成する。
-fn make_unique_temp_dir(tag: &str) -> PathBuf {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "host32-cyclic-e2e-{tag}-{}-{n}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).expect("一時 dir の作成に失敗");
-    dir
-}
-
 /// 周期運転（200 回連打）＋正規 clean shutdown の E2E（task 5.1・design.md Testing Strategy #8）。
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を 200 回の GET/NOTIFY 往復で再利用し（back-to-back・sleep なし）、
 /// 反復後の helper 生存を確認したうえで正規の正常終了経路（UNLOAD → 正常終了 → exit0）を発行し、
-/// `ExitKind::Clean` を観測する。`HelperLifecycle` は handle を単独所有し、panic 経路では Drop で
-/// 冪等 terminate するため、別途 HelperGuard は不要（親窓は使用後に明示 drop）。
+/// `ExitKind::Clean` を観測する。`HelperLifecycle` は handle を単独所有し、panic 経路では中の
+/// `HelperHandle` の Drop が helper を終わらせて待つ（親窓は使用後に明示 drop）。
 ///
 /// bounded: pump は HANDSHAKE_TIMEOUT、LOAD/UNLOAD ack は各 ACK_TIMEOUT、request 往復は client の
 /// env timeout ＋SMTO_ABORTIFHUNG、終了観測は EXIT_OBSERVE_TIMEOUT で必ず有限復帰するため、
@@ -203,23 +89,24 @@ fn cyclic_run_and_clean_shutdown() {
     let helper_exe = resolve_helper_exe();
     let testdll = resolve_testdll();
 
-    // --- load_dir に testdll を shiori.dll としてコピー（helper の cwd＝DLL 探索起点）---
-    let load_dir = make_unique_temp_dir("cyclic");
+    // --- load_dir に testdll を shiori.dll としてコピー（helper は load_dir\shiori.dll を絶対パスで読む・作業フォルダも load_dir）---
+    let root = TestRoot::new("cyclic-e2e-cyclic");
+    let load_dir = root.path();
     let dll_path = load_dir.join("shiori.dll");
     std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・独立テストバイナリなので本プロセスで唯一）---
+    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
-    let handle = spawn(&helper_exe, &load_dir, "shiori.dll", parent_hwnd)
+    let handle = spawn(&helper_exe, load_dir, "shiori.dll", parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    // HelperLifecycle は handle を単独所有（by value）。Drop で冪等 terminate するため
-    // 別途 HelperGuard 不要（panic 経路でもプロセスリークしない）。
+    // HelperLifecycle は handle を単独所有（by value）。panic 経路でも中の `HelperHandle` の
+    // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
@@ -271,8 +158,7 @@ fn cyclic_run_and_clean_shutdown() {
         "全 {REPETITIONS} 反復後も helper は稼働継続している（連打を生き延びた・R3.4）"
     );
 
-    // --- client（`&parent` 借用）を解放してから shutdown へ進む（clean・借用終端の明示）---
-    drop(client);
+    // --- client（`&parent` 借用）は最後に使った所で終わっているので、そのまま shutdown へ進む（clean）---
 
     // --- ⑤ 正規の正常終了経路: UNLOAD → ループ正常終了 → exit(0) → ExitKind::Clean を観測（R5.1/R5.3）---
     let kind = lifecycle
@@ -284,9 +170,8 @@ fn cyclic_run_and_clean_shutdown() {
         "正規の正常終了経路が exit code 0（Clean）を生む（実 helper の UNLOAD arm 経由・R5.1/R5.3）"
     );
 
-    // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）→ best-effort cleanup ---
+    // --- 親窓を明示 drop → best-effort cleanup ---
     drop(parent);
-    let _ = std::fs::remove_dir_all(&load_dir);
 }
 
 /// 実 pasta.dll への周期連打 confidence テスト（env-gate・任意・R6.1〜6.3・design Testing Strategy #10）。
@@ -305,23 +190,16 @@ fn cyclic_run_and_clean_shutdown() {
 /// load_dir=DLL の親 dir・shiori_name=ファイル名（実 pasta は自身の dir に住むため。request 系
 /// `request_e2e_real_pasta_optional` と同じ流儀）＝load_dir は削除しない（本テストが作った temp ではない）。
 ///
-/// **2 窓 discipline**: 本テストは cyclic（`cyclic_run_and_clean_shutdown`）と同一バイナリの windowed
-/// テスト 2 本目にあたる。env `HOST32_PASTA_DLL` 設定時の実行は必ず `--test-threads=1` で直列化すること
-/// （1 窓＝2 組制約対処・ファイル冒頭 doc の PowerShell 手順に明記）。env 未設定（CI）では下記の早期
-/// return が窓生成の**前**に発火するため、通常の並行 `cargo test` でも 2 窓が同時生存せず衝突しない。
-///
 /// bounded: pump=HANDSHAKE_TIMEOUT・LOAD ack=LOAD_ACK_TIMEOUT・notify 往復=client の env timeout
 /// ＋SMTO_ABORTIFHUNG・終了観測=`request_clean_shutdown` 内 timeout で必ず有限復帰する（ハングしない）。
 #[test]
 fn cyclic_real_pasta_optional() {
     // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ明示 skip（R6.3・CI 必須ゲートにしない）---
-    //     この早期 return は「窓生成の前」に起きる。ゆえに CI（env 未設定）では本テストは窓を作らず、
-    //     並行実行中の `cyclic_run_and_clean_shutdown` と 2 窓が同時生存することはない（衝突しない）。
     let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
         eprintln!(
             "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・R6.3）。\
              実 pasta への周期連打＋正規 clean shutdown を検証するには env に pasta DLL の\
-             フルパスを設定し、`--test-threads=1` で直列実行してください（2 窓制約）。"
+             フルパスを設定してください。"
         );
         return;
     };
@@ -347,18 +225,18 @@ fn cyclic_real_pasta_optional() {
         .to_string_lossy()
         .into_owned();
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
+    // --- ① 親 message-only 窓（使用後に明示 drop）---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
     let handle = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    // HelperLifecycle は handle を単独所有（by value）。Drop で冪等 terminate するため
-    // 別途 HelperGuard 不要（panic 経路でもプロセスリークしない）。
+    // HelperLifecycle は handle を単独所有（by value）。panic 経路でも中の `HelperHandle` の
+    // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
@@ -404,8 +282,7 @@ fn cyclic_real_pasta_optional() {
         "全 {N_PASTA} 連打後も実 pasta helper は稼働継続している（R6.1）"
     );
 
-    // --- client（`&parent` 借用）を解放してから shutdown へ進む（clean・借用終端の明示）---
-    drop(client);
+    // --- client（`&parent` 借用）は最後に使った所で終わっているので、そのまま shutdown へ進む（clean）---
 
     // --- ⑤ 正規の clean shutdown: UNLOAD → 正常終了 → exit0 → ExitKind::Clean を観測（confidence・R6.1）---
     let kind = lifecycle
@@ -420,7 +297,7 @@ fn cyclic_real_pasta_optional() {
         "実 pasta 周期連打（{N_PASTA} 回 NOTIFY）＋正規 clean shutdown 完走（Clean・R6.1）: {pasta_dll:?}"
     );
 
-    // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）---
+    // --- 親窓を明示 drop ---
     //     load_dir は実 pasta 自身の dir ゆえ削除しない（本テストが作った temp ではない）。
     drop(parent);
 }

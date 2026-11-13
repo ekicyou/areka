@@ -36,8 +36,8 @@ pub enum HandshakeError {
     /// ハンドシェイク未完了（helper HWND 未確定）のまま往復送信が試みられた
     /// （要件 3.3・ハンドシェイクゲート）。
     ///
-    /// 本タスク（4.2）では定義のみで、実際に返すのは送信パスを実装する
-    /// task 4.3 のゲート（未確定 helper HWND での `send_request` を拒否）である。
+    /// 返すのは送信パスのゲート（未確定 helper HWND での `send_request` を拒否する
+    /// `ParentMessageWindow::send_request`）である。
     #[error("handshake incomplete: helper HWND not yet established")]
     Incomplete,
 }
@@ -55,8 +55,8 @@ pub enum ShioriError {
     /// SHIORI が非成功ステータスを返した（400 / 500・要件 2.4 / 2.5 / 5.2）。
     ///
     /// `error_level` / `error_description` は応答ヘッダ由来の付随情報で、
-    /// 欠落し得るため `Option`。
-    #[error("SHIORI error status {status}")]
+    /// 欠落し得るため `Option`。表示はあるものだけを括弧に添える（無ければ出さない）。
+    #[error("SHIORI error status {status}{}", status_detail(.error_level, .error_description))]
     Status {
         /// SHIORI/3.0 応答のステータスコード（例: 400 / 500）。
         status: u16,
@@ -65,6 +65,19 @@ pub enum ShioriError {
         /// `ErrorDescription` ヘッダ（存在する場合）。
         error_description: Option<String>,
     },
+}
+
+/// `Status` の表示に添える ` (ErrorLevel: x, ErrorDescription: y)`（どちらも無ければ空）。
+fn status_detail(level: &Option<String>, description: &Option<String>) -> String {
+    let parts: Vec<String> = [("ErrorLevel", level), ("ErrorDescription", description)]
+        .into_iter()
+        .filter_map(|(name, value)| value.as_ref().map(|v| format!("{name}: {v}")))
+        .collect();
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", parts.join(", "))
+    }
 }
 
 /// 出口 API（get / notify）の統合失敗（区別保持・単一不透明へ潰さない・要件 5.4・design.md §402-413）。
@@ -91,8 +104,8 @@ pub enum RequestError {
     /// transport 送出失敗（[`IpcError::SendFailed`] 等・helper 死活の一態様・要件 5.3）。
     ///
     /// 意図的に `#[from]` を持たない（型 doc の写像注意を参照）。
-    #[error("ipc transport failure")]
-    Ipc(IpcError),
+    #[error("ipc transport failure: {0}")]
+    Ipc(#[source] IpcError),
     /// SHIORI エラー応答（[`ShioriError`] 由来・要件 5.2）。
     #[error("shiori error: {0}")]
     Shiori(#[from] ShioriError),
@@ -118,7 +131,29 @@ mod request_error_tests {
             error_level: Some("critical".to_string()),
             error_description: Some("boom".to_string()),
         };
-        assert_eq!(format!("{err}"), "SHIORI error status 500");
+        assert_eq!(
+            format!("{err}"),
+            "SHIORI error status 500 (ErrorLevel: critical, ErrorDescription: boom)"
+        );
+    }
+
+    #[test]
+    fn shiori_error_status_display_omits_absent_headers() {
+        let bare = ShioriError::Status {
+            status: 400,
+            error_level: None,
+            error_description: None,
+        };
+        assert_eq!(format!("{bare}"), "SHIORI error status 400");
+        let level_only = ShioriError::Status {
+            status: 500,
+            error_level: Some("warning".to_string()),
+            error_description: None,
+        };
+        assert_eq!(
+            format!("{level_only}"),
+            "SHIORI error status 500 (ErrorLevel: warning)"
+        );
     }
 
     // RequestError 各 variant の Display 文字列（要件 5.1 / 5.2 / 5.3 / 5.4）
@@ -136,7 +171,18 @@ mod request_error_tests {
     #[test]
     fn request_error_ipc_display() {
         let err = RequestError::Ipc(IpcError::SendFailed);
-        assert_eq!(format!("{err}"), "ipc transport failure");
+        assert_eq!(format!("{err}"), "ipc transport failure: ipc send failed");
+    }
+
+    #[test]
+    fn request_error_ipc_keeps_the_inner_error_as_source() {
+        use std::error::Error as _;
+        let err = RequestError::Ipc(IpcError::SendFailed);
+        let source = err.source().expect("中の IpcError が原因として返る");
+        assert!(matches!(
+            source.downcast_ref::<IpcError>(),
+            Some(IpcError::SendFailed)
+        ));
     }
 
     #[test]

@@ -79,6 +79,10 @@ impl Charset {
         let replaced = if had_replacements {
             text.chars()
                 .filter(|c| {
+                    // ASCII をそのまま通す文字コードだけ飛ばす（ISO-2022-JP は ESC 等を表せない）。
+                    if c.is_ascii() && self.0.is_ascii_compatible() {
+                        return false;
+                    }
                     let mut buf = [0u8; 4];
                     self.0.encode(c.encode_utf8(&mut buf)).2
                 })
@@ -120,6 +124,9 @@ impl LabelError {
 /// 点かない）。
 const LOG_TARGET: &str = "shiori-charset";
 
+/// 警告済みの集まりの上限（壊れた SHIORI が応答ごとに違うラベルを返しても育ち続けない）。
+const WARNED_LIMIT: usize = 64;
+
 /// 初出なら警告、以後は開発者向け詳細ログ（要件 7.4——毎秒のイベントで同じ後退が
 /// 繰り返されても警告は 1 回）。
 macro_rules! warn_then_debug {
@@ -155,8 +162,8 @@ pub struct CharsetNegotiator {
     /// `shiori.forceencoding` が効いているか（効いていれば応答のヘッダで変わらない・要件 2.2）。
     forced: bool,
     /// 警告済みの「種別＋鍵」（`label:<x>`／`unmappable:<id>`／`invalid:<charset>`／
-    /// `forced-mismatch`）。鍵の種類は有限（ラベル・イベント名・文字コード名）で、
-    /// ラベルは正規化してから入れるので際限なく育たない。
+    /// `forced-mismatch`）。ラベルとイベント名は SHIORI が決めるので、数は
+    /// [`WARNED_LIMIT`] で止める（越えた鍵は入れず、その知らせは `debug` だけ）。
     warned: std::collections::BTreeSet<String>,
 }
 
@@ -188,8 +195,12 @@ impl CharsetNegotiator {
         }
     }
 
-    /// 「種別＋鍵」が初出かを返し、記録する。
+    /// 「種別＋鍵」が初出かを返し、記録する。集まりが [`WARNED_LIMIT`] に達したら
+    /// 新しい鍵も入れず `false`（＝`debug` だけ）を返す。
     fn first_time(&mut self, key: String) -> bool {
+        if self.warned.len() >= WARNED_LIMIT {
+            return false;
+        }
         self.warned.insert(key)
     }
 
