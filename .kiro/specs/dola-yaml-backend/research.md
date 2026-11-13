@@ -117,3 +117,76 @@
 - RustSec `serde_yml` の頁（`RUSTSEC-2025-0068`）: https://rustsec.org/packages/serde_yml.html
 - crates.io API: https://crates.io/api/v1/crates/serde-saphyr ・ https://crates.io/api/v1/crates/serde-saphyr/2.1.1 ・ https://crates.io/api/v1/crates/granit-parser ・ https://crates.io/api/v1/crates/noyalib ・ https://crates.io/api/v1/crates/dola
 - serde-saphyr 2.1.1 の説明書（`non_finite_float_policy`）: https://docs.rs/serde-saphyr/2.1.1/serde_saphyr/
+
+## 8. 設計の段の調べと決めごと（2026-11-13 `/kiro-spec-design -y`）
+
+### 8.1 まとめ
+
+- **調べの種類**: 軽い調べ（既存のクレートの手入れ・新しい外の依存 0）。使ったのはスキル `kiro-spec-design` の決まり（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、ひな形 `.kiro/settings/templates/specs/design.md`・`research.md`。セッションの決まり（ponytail＝いちばん小さく全部を満たす直し）に従い、包む型・新しいモジュール・docs.rs の設定は足さない形にした。
+- 6 章の「設計で確かめること」⑴〜⑸ は全部実測で答えが出た（下の 8.2）。どれも要件の形を変える必要は無かった。
+- 測るために、作業木に機能 `toml`・入口 2 つ・往復のテスト・調べのテスト（`crates/dola/tests/tmp_toml_probe.rs`）を仮に足し、`deny.toml` の 43〜46 行目を仮に消した。測った後は `git checkout --` と仮のファイルの削除で全部戻し、`git status` で spec のフォルダの外に差分が無いことを確かめた。調べのテストの写しと出力は作業木の外（セッションの一時フォルダ）に置いた。
+
+### 8.2 実測の記録（作業枝 `cd8a0763` の上・`toml` 1.1.6・rustc 1.100.0）
+
+**⑴ 往復**: `cargo test -p dola --features toml --test general` で `complete_document_toml_roundtrip`（`toml::to_string_pretty`→`toml::from_str`）と 2 回の書き出しの一致が緑。`#[serde(untagged)]` の `TransitionRef`（Named／Inline）・`TransitionValue`（Scalar／Dynamic）・`KeyframeRef::Single`・`EasingFunction::Named`、`#[serde(tag = "type")]` の `AnimationVariableDef`、`Option` の省略、表の入れ子、表の配列（`[[storyboard.greeting.entry]]`）が全部通った。値の欄が表の欄より先に出る並べ替えは `toml` 1 の書き手が自分で行う（`toml` 0.5 の `ValueAfterTable` の誤りは起きない）。`DynamicValue` の `[1, 1.0, true, "s"]` も整数と小数の区別を保って往復した。空の文書は `[variable]`・`[transition]`・`[storyboard]` の空の表として書かれ、読み戻せる。
+
+**⑵ NaN と無限大**（12 の欄 × `nan`・`inf`・`-inf`・`+nan`・`-nan`・`+inf`＝72 通り）:
+
+| 欄 | 読み込み | validate |
+|---|---|---|
+| 変数 `initial`（f64）・`max`（`Option<f64>`）・遷移 `delay`（f64）・`duration`（`Option<f64>`）・`time_scale`（f64） | 全部読める | 全部 `InvalidNumber`（`max = -inf` は `ValueOutOfRange` も・`loop_offset = -inf` は `LoopOffsetNegativeMax` も） |
+| 遷移 `to`（untagged の `TransitionValue::Scalar`）・ストーリーボードの中の遷移の `to`・`loop_offset`（untagged の `LoopOffset::Scalar`）・`at` の `offset`（untagged の `KeyframeRef::WithOffset`）・ベジェの `x1`（untagged の `EasingFunction::Parametric`） | 全部読める | 全部 `InvalidNumber` |
+| Object の変数の `initial = nan`・`initial = { a = nan }`（untagged の `DynamicValue::Float`） | 全部読める | **通る**（`validate_numbers` は `DynamicValue` を見ない） |
+
+- 追加: Object の変数と、遷移の `to = { a = inf, b = [nan, -inf] }` を持つストーリーボードは、validate も `compile_storyboard` も panic せずに通った（`ok=true`）。
+- `serde-saphyr` のような「型の決まらない読みで非有限を断る」既定は `toml` 1 には無い＝読み込みで断られる欄は 0。
+- 書き出し: f64 の NaN・無限大は `nan`・`inf` で書かれ、読み戻すと同じ値。`DynamicValue::Null` は `Err(UnsupportedType(Some("unit")))`（panic しない）。
+
+**⑶ 全体テストで常に回す道**: `tools/test-all.ps1` は任意の機能を有効にしない（`cargo test --workspace --no-fail-fast -j 4` だけ）。`cargo test -p dola --features toml --no-fail-fast -j 4` は依存がビルド済みのとき約 16 秒で、`dola` の全部のテスト（単体 219・compile 58・cue 58・general 62・runtime 119・trigger 44・validation 44）が緑。`target\` は機能の組ごとに `dola` の成果物を別に持つので、既定の機能のビルドを壊さない。
+
+**⑷ 依存の木**: `cargo tree -p dola --features toml -e normal` の `toml` の下は `serde_core`・`serde_spanned` 1.1.1・`toml_datetime` 1.1.1・`toml_parser` 1.1.3・`toml_writer` 1.1.2・`winnow` 1.0.4（全部 `Cargo.lock` に在る）。`Cargo.lock` の差分は `dola` の依存の行（`serde_yaml` → `toml`）と、`ryu`・`serde_yaml`・`unsafe-libyaml` の 3 項目の削除だけ（1 行足し 26 行消し）。増える項目 0。
+
+**⑸ 監査**: `deny.toml` の 43〜46 行目を消して `cargo deny check`（0.20.2）＝終了コード 0（`advisories ok, bans ok, licenses ok, sources ok`）。警告は `async-executor` の yanked と、`hashbrown`・`miniz_oxide`・`syn` の重複の版（どれも `warn`）。
+
+**誤りの文（実測）**: `"schema_version = "` → `TOML parse error at line 1, column 18 … string values must be quoted, expected literal string`。`""` → `TOML parse error at line 1, column 1 … missing field `schema_version``。
+
+### 8.3 決めごと
+
+#### 入口の形と名前
+
+- **背景**: 要件 2.2（機能 `toml` の下で読み書きの入口を持つ・名前と誤りの型は設計で決める）・2.3（panic せず理由つきの誤り）・3.1（既存の形は変えない）。
+- **比べた案**: ⑴ `DolaDocument` の関連関数 2 つ＋`toml` の誤りの型に名前を付けて公開 ⑵ 自前の誤りの型（`DolaTomlError` の enum）で包む ⑶ `DolaError` に枝を足す ⑷ `pub use toml;` でクレートごと公開。
+- **選んだ形**: ⑴。`DolaDocument::from_toml_str(&str) -> Result<DolaDocument, TomlReadError>`・`DolaDocument::to_toml_string(&self) -> Result<String, TomlWriteError>`。`lib.rs` で `pub use toml::{de::Error as TomlReadError, ser::Error as TomlWriteError};`（機能 `toml` の下）。書き出しは `toml::to_string_pretty`。読む入口は validate を呼ばない。
+- **理由**: `toml` の誤りが既に行・桁・理由を持ち、包んでも足す物が無い（⑵ は型が増えるだけ）。⑶ は `#[non_exhaustive]` でない公開の enum に枝を足す＝網羅の `match` を書いた利用者が壊れる（3.1 に反する）・機能の有無で枝の数が変わる。⑷ は公開の面が広すぎる。名前を付けて公開すれば、利用者は `toml` を自分の依存に書かずに誤りを持てる（2.2）。
+- **引き換え**: 誤りの正体が `toml` 1 の型なので、`toml` の大きな版上げで `dola` の公開の形が変わる（design の Revalidation Triggers）。
+
+#### 機能 `toml` のテストを全体テストで回す道
+
+- **比べた案**: ⑴ `tools/test-all.ps1` に段 `dola toml feature tests`（`cargo test -p dola --features toml --no-fail-fast -j 4`）を足す ⑵ `dola` の `[dev-dependencies]` に `dola = { path = ".", features = ["toml"] }` を書いて、テストのビルドで機能を常に有効にする ⑶ 機能の下のテストを `cfg` 無しにし、`toml` を開発専用の依存で直接呼ぶ。
+- **選んだ形**: ⑴。既存の `Step` 関数を使い（検体が要らないので `TestStep` でなく、取り寄せが赤でも回す）、`x64 workspace tests` の直後に置く。段の説明（スクリプトの `.DESCRIPTION`・`tech.md` のフルテストの節・`kiro-complete` の段の一覧）に 1 語ずつ足す。
+- **理由**: ⑵ は自分自身への依存という分かりにくい仕掛けで、`cargo test --workspace` の全部のテストのビルドで `dola` の機能が変わる。⑶ は入口のテストにならない（要件 2.4 は「2 の入口で」）。⑴ は 1 行の段で、何を回すかが一覧で見える。C19 のほかの spec は `tools/test-all.ps1` を回すだけで直さない（棚卸㊱の触るファイルの一覧）。
+
+#### NaN と無限大の境界（要件 4.2・4.3 の読み方）
+
+- **背景**: 6 章の 4.2 の見立て（「`DynamicValue::Float` に来た値は validate が拒む」）は誤りだった。validate の数値の規則は `DynamicValue` を見ないので、Object の値の中の NaN・無限大は読めて validate も通る（8.2 ⑵）。
+- **選んだ形**: 要件 4.2・4.3 の「数値の欄」を、compile と実行の時刻と補間に使う欄（型の決まった `f64` の欄と、untagged の `TransitionValue::Scalar`・`LoopOffset::Scalar`・`KeyframeRef::WithOffset` の欄）と読み、境界のテストはそこで `nan`・`inf`・`-inf` のそれぞれが validate に拒まれることを確かめる。Object の値は補間しない中身で数値の規則の外（`DynamicValue` の等しさとハッシュは NaN を 1 つの値として扱う作り）なので、panic しないことだけを 1 本で確かめ、`boundary_test.rs` の注記にこの扱いを書く。
+- **理由**: Object の値の中の数を拒むには validate の規則（`crates/dola/src/validate/rules.rs`）を直す必要があり、要件の Out of scope（`dola` のほかのモジュール）に当たる。今の作り（`float_key`）は NaN を値として持つことを前提にしている。
+- **残ること**: Object の値の中の非有限の数を拒むべきかは、設計の討議で開発者に確かめる候補（拒むなら別の直し＝validate の規則の追加）。
+
+#### `deny.toml` の残し方
+
+- 43〜46 行目（説明のコメント 3 行と項目）だけを消し、41 行目の決まりのコメント（「見逃す勧告は 1 件ずつ理由と持ち主の spec を書く」）と空の `ignore = [` `]` は残す（要件 1.4「ほかの行を変えない」・次に見逃しが要るときの書き場所）。
+
+### 8.4 まとめ方の 3 つの見方（synthesis）
+
+- **一般化**: TOML の入口は「書式ごとの入口」の一般の形（書式を引数にとる関数・トレイト）にしない。要件の書式は TOML の 1 つだけで、ほかの書式は serde の導出で利用者が選ぶ（README に書く）。
+- **作るか採るか**: TOML の読み書きはワークスペースの `toml` 1 を採る（既に `Cargo.lock` に在る・`areka-sylphya` が使う・保守されている・勧告 0）。作る物は関数 2 つと名前 2 つだけ。
+- **削る**: 包む誤りの型・新しいモジュール（`toml_io.rs` など）・docs.rs の設定（`[package.metadata.docs.rs]`）・入口の中の validate の呼び出しは足さない。docs.rs の既定のビルドは機能を有効にしないので、入口は docs.rs の頁に出ない（README が名前を書く。要件に無いので足さない）。
+
+### 8.5 危うさと手当て
+
+- `toml` の大きな版上げで `TomlReadError`・`TomlWriteError` の正体が変わる → Revalidation Triggers に書き、版上げの PR は往復と境界のテストを通す（段 `dola toml feature tests` が毎回回る）。
+- Object の値の中の NaN・無限大が validate を通る → この spec では今の扱いを注記とテストで明らかにし、拒むかどうかは設計の討議の候補として残す。
+- 着地までに RustSec の取り込みで新しい勧告が届く → 要件 1.5 のとおり、見逃しで黙らせず報告して開発者の判断を仰ぐ。
+- 申し送りの頭の版（「`v0.1.0` の後」）は書く時点の最新の公開版で決まる → 書く前に `product.md` の公開済みの版で確かめる。
+- `THIRD-PARTY-NOTICES.md` は差分 0 の見込みだが、作り直して確かめる（全体テストの `-License` の段）。
