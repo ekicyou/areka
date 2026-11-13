@@ -30,7 +30,8 @@
 //! 拡張キーが勝つのは、`vertical_lr` という正典キーでは表現できない値を持つ＝表現力で
 //! 上位だからである（要件の裁定 1）。値が壊れている宣言（`vertical` が `0`／`1` 以外か空・
 //! `writing_mode` が受理語彙外）は `warn!` のうえ「**指定なし**」として上表へ合流する
-//! （設計 DD6）。
+//! （設計 DD6）。表の記録は解決の中では出さず、登録口（普通のバルーンの装着・再追従と
+//! 箱の表の受け取り）が `note_direction_declarations` で書く。
 //!
 //! ## 予約キー（記録のみ・実装しない・R5.7）
 //!
@@ -168,8 +169,8 @@ pub enum DirectionSource {
 ///
 /// [`resolve`](Self::resolve) が 2 キーを独立に分類してから裁定し、結果とともに
 /// **なぜその結果になったか**（採用出所・両キーの分類・矛盾併記の有無）を保持する。
-/// 生の宣言文字列は持たない（[`Copy`] を保つため）——文字列を要する記録は
-/// [`resolve`](Self::resolve) の内側でその場で発行する。
+/// 生の宣言文字列は持たない（[`Copy`] を保つため）。解決は記録を出さない——
+/// 記録は登録口が `note_direction_declarations` で書く。
 ///
 /// 本型は `ResolvedBalloonText` へ配線していない（現時点で消費者が居ないため・
 /// design.md C2 Responsibilities）。
@@ -183,9 +184,10 @@ pub struct WritingDirectionDecision {
 }
 
 impl WritingDirectionDecision {
-    /// 2 層マージ済み `BalloonModel` から解決する（副作用はログのみ）。
+    /// 2 層マージ済み `BalloonModel` から解決する（副作用なし・記録は出さない）。
     ///
-    /// 記録水準（design.md「記録水準の割当」が正本）:
+    /// 記録は登録口が `note_direction_declarations` で書く（記録水準は design.md
+    /// 「記録水準の割当」が正本）:
     ///
     /// - `vertical` が `0`／`1` 以外または空 → `warn!` 1 件（R1.6／R1.7）
     /// - `writing_mode` が受理語彙外 → `warn!` 1 件（現行の文言のまま・R2.7）
@@ -210,17 +212,9 @@ impl WritingDirectionDecision {
             (Some(canon), None) => (canon, DirectionSource::CanonKey, false),
             // 拡張キー単独（`writing_mode` 単独指定時の結果は現行と 1 ビットも変わらない・R2.3）。
             (None, Some(extension)) => (extension, DirectionSource::ExtensionKey, false),
-            // 併記——優先順位は拡張キー（要件の裁定 1）。方向が異なるときだけ記録する。
+            // 併記——優先順位は拡張キー（要件の裁定 1）。方向が異なるときだけ矛盾とする。
             (Some(canon), Some(extension)) => {
-                let conflicting = canon != extension;
-                if conflicting {
-                    tracing::debug!(
-                        vertical = model.vertical_raw().unwrap_or_default(),
-                        writing_mode = model.writing_mode().unwrap_or_default(),
-                        "vertical と writing_mode が異なる書字方向を指すため areka 拡張キー writing_mode を採用する（正典キー vertical は採らない）"
-                    );
-                }
-                (extension, DirectionSource::ExtensionKey, conflicting)
+                (extension, DirectionSource::ExtensionKey, canon != extension)
             }
         };
 
@@ -279,57 +273,108 @@ impl WritingDirectionDecision {
     }
 }
 
-/// 正典キー `vertical` の生値を分類する（不正値はここで `warn!` 1 件・R1.6／R1.7）。
+/// 書字方向の宣言の生の値（前の装着・再追従の宣言と比べるため・要件 3.3）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DirectionDecl {
+    vertical: Option<String>,
+    writing_mode: Option<String>,
+}
+
+impl DirectionDecl {
+    /// 2 層マージ済み `BalloonModel` の 2 キーの生の値を写し取る。
+    pub(crate) fn of(model: &BalloonModel) -> DirectionDecl {
+        DirectionDecl {
+            vertical: model.vertical_raw().map(str::to_owned),
+            writing_mode: model.writing_mode().map(str::to_owned),
+        }
+    }
+}
+
+/// 宣言の誤りと矛盾併記を記録する（解決は記録しない・要件 3.1）。
+///
+/// `previous` は前の装着・再追従の宣言（装着と箱の表の受け取りは `None`＝必ず 1 回目）。
+/// キーごとに「前が無いか、生の値が前と違う」ときだけ、そのキーの警告を書く。
+/// 矛盾併記の `debug!` は、両キーが有効で方向が違い、前が無いかどちらかの生の値が違うときに書く。
+/// 分類と矛盾の判定は解決（[`WritingDirectionDecision::resolve`]）のものをそのまま使う。
+pub(crate) fn note_direction_declarations(model: &BalloonModel, previous: Option<&DirectionDecl>) {
+    let current = DirectionDecl::of(model);
+    let vertical_changed = previous.is_none_or(|p| p.vertical != current.vertical);
+    let writing_mode_changed = previous.is_none_or(|p| p.writing_mode != current.writing_mode);
+    let decision = WritingDirectionDecision::resolve(model);
+    if let (true, VerticalDecl::Invalid, Some(invalid)) = (
+        vertical_changed,
+        decision.vertical_declaration(),
+        model.vertical_raw(),
+    ) {
+        tracing::warn!(
+            value = invalid,
+            "vertical の値が 0／1 のいずれでもないため指定なしとして扱う（受理値: 0 / 1）"
+        );
+    }
+    if let (true, WritingModeDecl::Unknown, Some(unknown)) = (
+        writing_mode_changed,
+        decision.writing_mode_declaration(),
+        model.writing_mode(),
+    ) {
+        tracing::warn!(
+            value = unknown,
+            "未知の writing_mode 値のため指定なしとして扱う（受理語彙: horizontal_tb / vertical_rl / vertical_lr）"
+        );
+    }
+    if decision.conflicting() && (vertical_changed || writing_mode_changed) {
+        tracing::debug!(
+            vertical = model.vertical_raw().unwrap_or_default(),
+            writing_mode = model.writing_mode().unwrap_or_default(),
+            "vertical と writing_mode が異なる書字方向を指すため areka 拡張キー writing_mode を採用する（正典キー vertical は採らない）"
+        );
+    }
+}
+
+/// 正典キー `vertical` の生値を分類する（記録しない・不正値の `warn!` は [`note_direction_declarations`] が書く・R1.6／R1.7）。
 fn classify_vertical(raw: Option<&str>) -> VerticalDecl {
     match raw {
         None => VerticalDecl::Undeclared,
         Some(VALUE_VERTICAL_OFF) => VerticalDecl::Horizontal,
         Some(VALUE_VERTICAL_ON) => VerticalDecl::Vertical,
-        Some(invalid) => {
-            tracing::warn!(
-                value = invalid,
-                "vertical の値が 0／1 のいずれでもないため指定なしとして扱う（受理値: 0 / 1）"
-            );
-            VerticalDecl::Invalid
-        }
+        Some(_) => VerticalDecl::Invalid,
     }
 }
 
-/// 拡張キー `writing_mode` の生値を分類する（未知値はここで `warn!` 1 件・R5.4／R2.7）。
+/// 拡張キー `writing_mode` の生値を分類する（記録しない・未知値の `warn!` は [`note_direction_declarations`] が書く・R5.4／R2.7）。
 ///
 /// 語彙は snake_case 完全一致（trim は parser の kv 層で済んでいる前提・R5.1）。
-/// 警告は 1 件で、文言は実挙動どおり「指定なしとして扱う」（`vertical` の宣言と合流する）。
+/// 警告の文言は実挙動どおり「指定なしとして扱う」（`vertical` の宣言と合流する）。
 fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
     match raw {
         None => WritingModeDecl::Undeclared,
         Some(VALUE_HORIZONTAL_TB) => WritingModeDecl::Declared(WritingMode::HorizontalTb),
         Some(VALUE_VERTICAL_RL) => WritingModeDecl::Declared(WritingMode::VerticalRl),
         Some(VALUE_VERTICAL_LR) => WritingModeDecl::Declared(WritingMode::VerticalLr),
-        Some(unknown) => {
-            tracing::warn!(
-                value = unknown,
-                "未知の writing_mode 値のため指定なしとして扱う（受理語彙: horizontal_tb / vertical_rl / vertical_lr）"
-            );
-            WritingModeDecl::Unknown
-        }
+        Some(_) => WritingModeDecl::Unknown,
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use log_capture_kit::count_levels;
+    use log_capture_kit::{LevelCounts, count_levels};
 
     use crate::layout::test_support::model_writing;
 
-    use super::WritingMode;
+    use super::{DirectionDecl, WritingMode, note_direction_declarations};
 
-    /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
+    /// 対照イベント専用の宛先（本番コードがここへ発火することは無い）。
+    const CONTROL_TARGET: &str = "areka_emo_text::writing::tests::control";
+
+    /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, レベル別件数）を返す。
     ///
-    /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-    fn resolve_counting_warns(writing_mode: Option<&str>) -> (WritingMode, usize) {
-        let (mode, counts) = count_levels(|| WritingMode::resolve(&model_writing(writing_mode)));
-        (mode, counts.warn)
+    /// 窓の内側で対照イベント（`error!` 1 件）を出すので、`error == 1` で窓の生存を示せる
+    /// （0 件主張の前提）。件数の集計は `log-capture-kit` の [`count_levels`] に委ねる。
+    fn resolve_counting(writing_mode: Option<&str>) -> (WritingMode, LevelCounts) {
+        count_levels(|| {
+            tracing::error!(target: CONTROL_TARGET, "捕捉窓の対照イベント");
+            WritingMode::resolve(&model_writing(writing_mode))
+        })
     }
 
     // 3 語彙の受理・写像 1:1・既知語彙の無警告・宣言なし→横書き（R5.1/R5.3/R5.5）は
@@ -341,40 +386,76 @@ mod tests {
         assert_eq!(WritingMode::default(), WritingMode::HorizontalTb);
     }
 
-    // ── R5.4: 未知値→warn ログ＋横書きフォールバック ──
+    // ── R5.4: 未知値→横書き（解決は記録しない・記録は登録口が書く） ──
 
-    /// 未知値は横書きになり、警告はちょうど 1 件。文言は実挙動（「指定なし」として
-    /// `vertical` と合流）と一致する——横書きになるのは両キーとも無効なときだけなので
-    /// 「horizontal_tb へ」とは言わない。値は parsers 側の未知値素通しテストと同じ diagonal_bt。
+    /// 未知値は横書きになり、解決そのものは記録を出さない。値は parsers 側の未知値素通し
+    /// テストと同じ diagonal_bt。警告の件数と文言は登録口を通して
+    /// `actor_writing_warn_tests.rs` が確かめる。
     #[test]
-    fn unknown_value_warn_says_treated_as_undeclared() {
-        let (mode, events) =
-            log_capture_kit::capture(|| WritingMode::resolve(&model_writing(Some("diagonal_bt"))));
+    fn unknown_value_resolves_horizontal_without_records() {
+        let (mode, counts) = resolve_counting(Some("diagonal_bt"));
         assert_eq!(mode, WritingMode::HorizontalTb);
-        let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
-        assert_eq!(messages.len(), 1, "warn はちょうど 1 件: {messages:?}");
-        assert!(
-            messages[0].contains("指定なしとして扱う"),
-            "文言が実挙動を言う: {messages:?}"
-        );
-        assert!(
-            !messages[0].contains("フォールバック"),
-            "横書きへの固定を言わない: {messages:?}"
-        );
+        assert_eq!(counts.error, 1, "捕捉窓の対照イベントが数えられていない");
+        assert_eq!(counts.warn, 0, "解決は warn を出さない");
     }
 
     /// 語彙は snake_case 完全一致（R5.1）——ハイフン形（CSS 原表記）や大文字・空白は未知値扱い。
     #[test]
     fn near_miss_values_are_unknown_and_fall_back() {
         for value in ["vertical-rl", "VERTICAL_RL", "vertical_rl ", ""] {
-            let (mode, warns) = resolve_counting_warns(Some(value));
+            let (mode, counts) = resolve_counting(Some(value));
             assert_eq!(
                 mode,
                 WritingMode::HorizontalTb,
                 "value {value:?} は横書きへフォールバックする"
             );
-            assert_eq!(warns, 1, "value {value:?} は warn を記録する");
+            assert_eq!(counts.error, 1, "捕捉窓の対照イベントが数えられていない");
+            assert_eq!(counts.warn, 0, "value {value:?} でも解決は warn を出さない");
         }
+    }
+
+    /// 記録の関数はキーごとに「前が無いか、生の値が前と違う」ときだけ書く（要件 3.2・3.3・3.5）。
+    #[test]
+    fn note_compares_raw_values_per_key_with_previous() {
+        let model = |vertical: Option<&str>, writing_mode: Option<&str>| {
+            model_writing(writing_mode).with_vertical_raw(vertical.map(str::to_owned))
+        };
+        let note = |current: &areka_parsers::balloon::BalloonModel,
+                    previous: Option<&areka_parsers::balloon::BalloonModel>| {
+            let previous = previous.map(DirectionDecl::of);
+            count_levels(|| {
+                tracing::error!(target: CONTROL_TARGET, "捕捉窓の対照イベント");
+                note_direction_declarations(current, previous.as_ref())
+            })
+            .1
+        };
+        let both_broken = model(Some("2"), Some("diagonal_bt"));
+        let first = note(&both_broken, None);
+        assert_eq!(
+            (first.error, first.warn, first.debug),
+            (1, 2, 0),
+            "1 回目は 2 件"
+        );
+        let same = note(&both_broken, Some(&both_broken));
+        assert_eq!(
+            (same.error, same.warn, same.debug),
+            (1, 0, 0),
+            "同じ値なら 0 件"
+        );
+        let vertical_changed = note(&model(Some("3"), Some("diagonal_bt")), Some(&both_broken));
+        assert_eq!(vertical_changed.warn, 1, "変わったキーの 1 件だけ");
+        let now_valid = note(&model(Some("0"), None), Some(&both_broken));
+        assert_eq!(now_valid.warn, 0, "有効な値へ変わったら書かない");
+
+        let conflict = model(Some("0"), Some("vertical_rl"));
+        let first = note(&conflict, None);
+        assert_eq!((first.warn, first.debug), (0, 1), "矛盾の併記は debug 1 件");
+        let same = note(&conflict, Some(&conflict));
+        assert_eq!((same.error, same.debug), (1, 0), "同じ併記なら 0 件");
+        let changed = note(&conflict, Some(&model(Some("1"), Some("horizontal_tb"))));
+        assert_eq!(changed.debug, 1, "併記の生の値が変わったら 1 件");
+        let agreeing = note(&model(Some("1"), Some("vertical_rl")), None);
+        assert_eq!((agreeing.error, agreeing.warn, agreeing.debug), (1, 0, 0));
     }
 
     // ── R5.2: 2層マージ後の転記値を読むだけ（マージ済み単一値で解決） ──
