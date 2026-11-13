@@ -24,6 +24,29 @@ pub struct DolaDocument {
     pub storyboard: BTreeMap<String, Storyboard>,
 }
 
+#[cfg(feature = "toml")]
+impl DolaDocument {
+    /// TOML の文字列から読む（validate はしない）
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let doc = dola::DolaDocument::from_toml_str("schema_version = \"1.0\"")?;
+    /// assert_eq!(doc.schema_version, "1.0");
+    /// assert!(dola::DolaDocument::from_toml_str("schema_version = 1.0").is_err());
+    /// assert_eq!(dola::DolaDocument::from_toml_str(&doc.to_toml_string()?)?, doc);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_toml_str(s: &str) -> Result<DolaDocument, crate::TomlReadError> {
+        toml::from_str(s)
+    }
+
+    /// TOML の文字列へ書く（`toml::to_string_pretty`）
+    pub fn to_toml_string(&self) -> Result<String, crate::TomlWriteError> {
+        toml::to_string_pretty(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

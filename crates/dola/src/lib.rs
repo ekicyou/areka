@@ -29,6 +29,8 @@ pub use storyboard::{
     BetweenKeyframes, InterruptionPolicy, KeyframeNames, KeyframeRef, LoopOffset, LoopOffsetRange,
     Storyboard, StoryboardEntry,
 };
+#[cfg(feature = "toml")]
+pub use toml::{de::Error as TomlReadError, ser::Error as TomlWriteError};
 pub use transition::{TransitionDef, TransitionRef, TransitionValue};
 pub use value::DynamicValue;
 pub use variable::AnimationVariableDef;

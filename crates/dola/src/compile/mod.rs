@@ -69,7 +69,7 @@ pub fn compile_storyboard(
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 1: バリデーション (Task 3.1)
-    // doc は外部入力（JSON/TOML/YAML）か Builder の由来だが、どの経路でも compile_validated の前に
+    // doc は外部入力（JSON/TOML）か Builder の由来だが、どの経路でも compile_validated の前に
     // ここか compile_all で必ず validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
     // ネスト深度の制限は各フォーマットのパーサの責務。本モジュールも validate() の
     // トリガー循環の検出も再帰を持たない（どちらも明示のスタックか反復）。
