@@ -6,7 +6,7 @@
 //! BGRA の頁バッファ（[`crate::table::AtlasPage`]）を確保し stride を決定して、
 //! トリム済み矩形（[`crate::trim::Trimmed`]）を各頁へ blit する。空エントリ
 //! （全透明）は上流（Trimmer）が既に `pack.entries` から除外しているため、Baker は
-//! `pack.entries` に載る矩形のみを blit する（空エントリ統合は `bake` 入口＝task 3.1）。
+//! `pack.entries` に載る矩形のみを blit する（空エントリを索引表へ入れるのは `bake` の入口）。
 //!
 //! **設計決定 D8**: blit は premultiplied を素通しし、画素変換を一切行わない。
 //! **Critical Issue 3**（packing と焼付の分離）: Packer は座標のみ（`page`/`uv_rect`）を

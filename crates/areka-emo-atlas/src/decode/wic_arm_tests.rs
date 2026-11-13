@@ -1,9 +1,12 @@
-//! `WicDecoderArm` の動く絵の 3 メソッドの兄弟テスト（spec: areka-P0-animated-image-decode
-//! 要件 1.5・5.5）。
+//! `WicDecoderArm` の兄弟テスト。
 //!
-//! 本番の読み手で検体（`testdata/animated/`・中身は同じフォルダの README）の見出し・全コマ・
-//! 動きの 1 枚目が引けること、読めないときは `DecodeError::Decode`（パス付き）になることを判定する。
-//! 画素の細部は `image_arm` の兄弟テストが持つので、ここでは決め手の 1 画素だけを見る。
+//! - 動く絵の 3 メソッド（spec: areka-P0-animated-image-decode 要件 1.5・5.5）: 本番の読み手で
+//!   検体（`testdata/animated/`・中身は同じフォルダの README）の見出し・全コマ・動きの 1 枚目が
+//!   引けること、読めないときは `DecodeError::Decode`（パス付き）になること。画素の細部は
+//!   `image_arm` の兄弟テストが持つので、ここでは決め手の 1 画素だけを見る。
+//! - α の有無を WIC に尋ねること（`pixel_format_has_alpha_asks_wic`）。
+//! - 対になっていないサロゲートを含む名の絵を開けること（`decode_opens_name_with_lone_surrogate`）。
+//! - 一辺の上限: 上限を超える絵は確保の前に断り、上限ちょうどは読めること。
 
 use std::path::{Path, PathBuf};
 

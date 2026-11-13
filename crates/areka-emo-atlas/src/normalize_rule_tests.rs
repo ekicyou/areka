@@ -212,7 +212,7 @@ fn row7_undeclared_without_translucent_pixel_matches_on_without_alpha() {
 /// `apply` も詰め物を 1 バイトも変えない（`opaque` と `key` の両方で）。
 #[test]
 fn padding_is_neither_scanned_nor_written() {
-    // 1×2・stride 8（各行 4 バイトの詰め物）。詰め物は 0,0,0,0 で「透明」に見える。
+    // 1×2・stride 8（各行 4 バイトの詰め物）。詰め物は 9,9,9,0（α 0）で「透明」に見える。
     let pad = [9u8, 9, 9, 0];
     let bgra: Vec<u8> = [KEY, pad, OTHER, pad].concat();
     let img = DecodedImage {

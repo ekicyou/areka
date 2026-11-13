@@ -19,8 +19,7 @@ use std::sync::Arc;
 pub struct ElementId(pub u32);
 
 /// SurfaceSet の序数（出所の識別・重複排除キーの一部）。
-/// （設計では ManifestDeriver 節に記載されるが、`AtlasKey` が含むため契約層 table.rs に
-///  定義し、manifest.rs〔task 2.1〕はここから import する。）
+/// （`AtlasKey` が含むため契約層の table.rs に置き、manifest.rs はここから import する。）
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SetId(pub u32);
 

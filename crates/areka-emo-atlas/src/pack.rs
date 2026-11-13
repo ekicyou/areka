@@ -10,7 +10,7 @@
 //!
 //! Critical Issue 3（packing と焼付の分離）: 本 `Packer` は **座標のみ**（`page`/`uv_rect`）
 //! を返し、頁バッファの確保も画素 blit も一切行わない（`Trimmed.pbgra` を読まない）。
-//! 焼付は Baker（task 2.6）の責務。
+//! 焼付は Baker の責務。
 
 use rectangle_pack::{
     GroupedRectsToPlace, RectToInsert, TargetBin, contains_smallest_box, pack_rects,

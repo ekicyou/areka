@@ -121,7 +121,7 @@
   - 検体の作り手 2 つを走らせて検体の差分が 3.4 で足した 2 本のほか 0、`gen_default_balloon -- --check` が 0 で終わることを確かめる。`vendors/sample_ghost/` は書かない。新しい依存は足さない
   - 完了の状態: 写しが 1 つずつになり、道具の出力のバイト列が変わらない
   - _Requirements: 2.1, 6.4, 6.5, 6.7, 7.6_
-- [ ] 4.2 古くなった説明と要らない小さなコードを直す（指摘 14・15）
+- [x] 4.2 古くなった説明と要らない小さなコードを直す（指摘 14・15）
   - `research.md` 3 節の 14 の行のうち、前のタスクで直っていない説明を全部事実に合わせるか消す
   - 中身もテストも無い統合テストのファイルを、ツリー全体で参照が 0 であることを確かめてから消す。コマの遅れの飽和しない変換を素の変換にし（届かない説明と、動く絵の腕のテストの説明を「飽和は届かない」に直す）、焼きの入口の数えるだけの回し方を消して直に回す
   - 完了の状態: 14 と 15 の行が 1 つも残らず、クレートのテストが全部緑
@@ -154,3 +154,4 @@
 - 3.6（範囲の外・完了の棚卸で拾う）: `crates/areka-emo-compose/src/film_tests.rs:258` の説明「②⑤⑥は `with_frames` も作れない」は、3.6 で ①（0 番が親でない）も `with_frames` で作れなくなったので少し古い。テストの働きには関係しない。
 - 3.8（範囲の外・前からある赤・完了の棚卸で扱う）: 今のツールチェーンの clippy（`--all-targets -D warnings`）が `clippy::chunks_exact_to_as_chunks` で赤: `crates/areka-emo-compose/src/golden_tests_test_support.rs:129`・`composer_tests.rs:518,553`、`crates/areka-sakura/src/drive.rs:325`（seriko の依存先）。どれもこの spec の差分の外。
 - 4.1（5.1 の audit で拾う候補）: `examples/gen_animated_samples.rs`・`gen_palette_samples.rs` は、ファイルを書いたときの表示（「…: N バイト」など）を日本語で端末へ出す（道具の端末の文は ASCII だけの決まり）。4.1 の範囲の外として触っていない。
+- 4.2（5.1 の audit で拾う候補）: 前の spec の作業番号「task N」を指す説明がクレートに残る: `bake_entry_tests.rs:151,200,223`・`emo2_e2e.rs:3,18`・`emo2_golden.rs:1`・`lib.rs:348-356`・`manifest.rs:160`・`webp_pin_tests.rs:65`（research 3 節 14 の行には無い）。

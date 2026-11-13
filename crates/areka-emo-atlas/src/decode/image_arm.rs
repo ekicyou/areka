@@ -137,13 +137,14 @@ fn premultiply(c: u8, a: u8) -> u8 {
 }
 
 /// 待ち時間の分数（ミリ秒）を四捨五入した整数のミリ秒にする。0 は 0。分母 0 は `image` が
-/// 作らない（作れば panic する）が、ここでは 0 として扱い panic しない。`u32` の上限で止める。
+/// 作らない（作れば panic する）が、ここでは 0 として扱い panic しない。
+/// 答えは `(2n+d)/(2d) <= n <= u32::MAX`（d ≥ 1）なので、`u32` へ戻す変換は飽和しない。
 fn delay_ms(numer: u32, denom: u32) -> u32 {
     if denom == 0 {
         return 0;
     }
     let (n, d) = (u64::from(numer), u64::from(denom));
-    u32::try_from((n * 2 + d) / (d * 2)).unwrap_or(u32::MAX)
+    ((n * 2 + d) / (d * 2)) as u32
 }
 
 #[cfg(test)]

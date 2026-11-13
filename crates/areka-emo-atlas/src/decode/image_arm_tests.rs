@@ -261,6 +261,7 @@ fn delay_rounds_half_up_and_never_panics() {
     assert_eq!(delay_ms(0, 1), 0);
     assert_eq!(delay_ms(70, 1), 70);
     assert_eq!(delay_ms(5, 0), 0);
+    // 分子が `u32` の上限でも答えは分子を超えない（飽和は届かない）。
     assert_eq!(delay_ms(u32::MAX, 1), u32::MAX);
 }
 

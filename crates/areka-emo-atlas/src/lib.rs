@@ -278,18 +278,17 @@ fn bake_core(
         placements.into_iter().collect();
 
     // 7. 生存集合上に密な索引表を構築（final ElementId 順）。
-    let entries: Vec<AtlasEntry> = survivor_keys
-        .iter()
+    let entries: Vec<AtlasEntry> = survivor_originals
+        .into_iter()
         .enumerate()
-        .map(|(final_idx, _)| AtlasEntry {
-            original: survivor_originals[final_idx],
+        .map(|(final_idx, original)| AtlasEntry {
+            original,
             // Placed は Baker 由来 Placement・Empty（全透明）は None（転写スキップ）。
             placement: placement_of.get(&ElementId(final_idx as u32)).cloned(),
         })
         .collect();
 
-    let pages_vec: Vec<AtlasPage> = pages;
-    let table = AtlasTable::with_frames(survivor_keys, entries, pages_vec, animations);
+    let table = AtlasTable::with_frames(survivor_keys, entries, pages, animations);
 
     // 8. 値で直接返す（channel 非依存・R6.5）。
     BakeResult {
