@@ -1,46 +1,16 @@
 //! 動く WebP の組み立て（spec: default-balloon-selfmade 要件 3.2・3.3・3.4）。
 //!
 //! `image` の可逆の書き手で 1 コマずつ `VP8L` を作り、`VP8X`・`ANIM`・`ANMF` に包む。
-// 前例 `gen_animated_samples.rs` から写す（example 同士は共有できず、前例を直すと検体の testdata のバイト列が動くため）。
+
+#[path = "../common/riff.rs"]
+mod riff;
 
 use super::draw::Picture;
 use image::ExtendedColorType;
-use image::codecs::webp::WebPEncoder;
-
-const WEBP_DISPOSE_BACKGROUND: u8 = 0x01;
-const WEBP_NO_BLEND: u8 = 0x02;
-const WEBP_FLAG_ALPHA: u8 = 0x10;
-const WEBP_FLAG_ANIMATION: u8 = 0x02;
-
-/// RIFF のチャンク（奇数長なら 0 を 1 バイト詰める）。
-fn riff_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    out.extend_from_slice(kind);
-    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
-    out.extend_from_slice(data);
-    if data.len() % 2 == 1 {
-        out.push(0);
-    }
-}
-
-fn u24(v: u32) -> [u8; 3] {
-    let b = v.to_le_bytes();
-    [b[0], b[1], b[2]]
-}
-
-/// `image` の可逆の書き手で静止画を作り、`VP8L` のチャンク（見出しと詰めを含む）を返す。
-fn encode_vp8l(rgba: &[u8], w: u32, h: u32) -> Vec<u8> {
-    let mut webp = Vec::new();
-    WebPEncoder::new_lossless(&mut webp)
-        .encode(rgba, w, h, ExtendedColorType::Rgba8)
-        .expect("cannot encode WebP frame");
-    // 飾りの無い可逆の WebP は RIFF(12 バイト)＋VP8L の 1 チャンクだけ。
-    assert_eq!(
-        &webp[12..16],
-        b"VP8L",
-        "encoder output is not a single VP8L"
-    );
-    webp[12..].to_vec()
-}
+use riff::{
+    WEBP_DISPOSE_BACKGROUND, WEBP_FLAG_ALPHA, WEBP_FLAG_ANIMATION, WEBP_NO_BLEND, encode_vp8l,
+    riff_chunk, u24,
+};
 
 /// 同じ大きさの α 付き RGBA のコマを、繰り返し無限・各コマ `duration_ms`・全面 (0,0)・
 /// 重ねない・背景は透明で消す動く WebP にする。大きさは 1 コマ目から取る。
@@ -65,7 +35,7 @@ pub fn animated_webp(frames: &[Picture], duration_ms: u32) -> Vec<u8> {
             anmf.extend_from_slice(&u24(v));
         }
         anmf.push(WEBP_DISPOSE_BACKGROUND | WEBP_NO_BLEND);
-        anmf.extend_from_slice(&encode_vp8l(&f.rgba, w, h));
+        anmf.extend_from_slice(&encode_vp8l(&f.rgba, w, h, ExtendedColorType::Rgba8));
         riff_chunk(&mut body, b"ANMF", &anmf);
     }
     let mut out = b"RIFF".to_vec();

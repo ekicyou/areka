@@ -6,15 +6,25 @@
 //! 中身の説明は同じフォルダの `README.md`。
 //!
 //! - APNG: `image` の PNG の書き手で 1 コマずつ静止画を作り、`IHDR` と `IDAT` の中身を
-//!   取り出して `acTL`・`fcTL`・`IDAT`・`fdAT` に包み直す（CRC は下の数行）。
+//!   取り出して `acTL`・`fcTL`・`IDAT`・`fdAT` に包み直す（CRC は `common/png.rs`）。
 //! - WebP: `image` の可逆の書き手で 1 コマずつ作り、`VP8L` のチャンクを
 //!   `VP8X`・`ANIM`・`ANMF` に包む。
 //! - GIF: 手書きのバイト列。
 
 use image::codecs::png::PngEncoder;
-use image::codecs::webp::WebPEncoder;
 use image::{ExtendedColorType, ImageEncoder};
 use std::path::Path;
+
+#[path = "common/png.rs"]
+mod png;
+#[path = "common/riff.rs"]
+mod riff;
+
+use png::png_chunk;
+use riff::{
+    WEBP_DISPOSE_BACKGROUND, WEBP_FLAG_ALPHA, WEBP_FLAG_ANIMATION, WEBP_NO_BLEND, encode_vp8l,
+    riff_chunk, u24,
+};
 
 const RED: [u8; 4] = [255, 0, 0, 255];
 const GREEN: [u8; 4] = [0, 255, 0, 255];
@@ -44,30 +54,6 @@ fn widen16(rgba: &[u8]) -> Vec<u8> {
 }
 
 // ---- PNG / APNG ----
-
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = !0u32;
-    for &b in bytes {
-        crc ^= u32::from(b);
-        for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
-        }
-    }
-    !crc
-}
-
-fn png_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    let start = out.len();
-    out.extend_from_slice(kind);
-    out.extend_from_slice(data);
-    let crc = crc32(&out[start..]);
-    out.extend_from_slice(&crc.to_be_bytes());
-}
 
 /// `image` の PNG の書き手で静止画を作り、`IHDR` の中身と `IDAT` の中身（連結）を返す。
 fn encode_png(pixels: &[u8], w: u32, h: u32, color: ExtendedColorType) -> (Vec<u8>, Vec<u8>) {
@@ -197,37 +183,6 @@ fn truncate_in_second_frame(basic: &[u8]) -> Vec<u8> {
 }
 
 // ---- WebP ----
-
-/// RIFF のチャンク（奇数長なら 0 を 1 バイト詰める）。
-fn riff_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    out.extend_from_slice(kind);
-    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
-    out.extend_from_slice(data);
-    if data.len() % 2 == 1 {
-        out.push(0);
-    }
-}
-
-fn u24(v: u32) -> [u8; 3] {
-    let b = v.to_le_bytes();
-    [b[0], b[1], b[2]]
-}
-
-/// `image` の可逆の書き手で静止画を作り、`VP8L` のチャンク（見出しと詰めを含む）を返す。
-fn encode_vp8l(pixels: &[u8], w: u32, h: u32, color: ExtendedColorType) -> Vec<u8> {
-    let mut webp = Vec::new();
-    WebPEncoder::new_lossless(&mut webp)
-        .encode(pixels, w, h, color)
-        .expect("WebP を書けない");
-    // 飾りの無い可逆の WebP は RIFF(12 バイト)＋VP8L の 1 チャンクだけ。
-    assert_eq!(&webp[12..16], b"VP8L", "書き手の出力が VP8L 1 つでない");
-    webp[12..].to_vec()
-}
-
-const WEBP_DISPOSE_BACKGROUND: u8 = 0x01;
-const WEBP_NO_BLEND: u8 = 0x02;
-const WEBP_FLAG_ALPHA: u8 = 0x10;
-const WEBP_FLAG_ANIMATION: u8 = 0x02;
 
 /// WebP の 1 コマ。x・y は偶数（ファイルには半分の値で入る）。
 struct WebpFrame {

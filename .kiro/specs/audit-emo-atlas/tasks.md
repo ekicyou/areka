@@ -115,7 +115,7 @@
   - _Requirements: 2.1, 6.4_
 
 - [ ] 4. できれば（指摘 17・14・15・20・21）
-- [ ] 4.1 道具の中の写しを共有の部品にまとめる（指摘 17）
+- [x] 4.1 道具の中の写しを共有の部品にまとめる（指摘 17）
   - PNG の塊の部品（crc32・塊）と RIFF・WebP の部品（旗の定数・塊・24 ビット・ロスレスの書き出し）を、example として拾われない共有の置き場の 2 つのファイルに置き、3 つの道具がそれぞれ使うものだけを読む形にする（使わない項目を作らない）
   - ロスレスの書き出しは色の形式を受ける形に揃える
   - 検体の作り手 2 つを走らせて検体の差分が 3.4 で足した 2 本のほか 0、`gen_default_balloon -- --check` が 0 で終わることを確かめる。`vendors/sample_ghost/` は書かない。新しい依存は足さない
@@ -153,3 +153,4 @@
 - 3.5（範囲の外・完了の棚卸で起票）: `crates/areka-placement/src/measure_first_frame_tests.rs` の `fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake` は、動く絵の上限の環境変数（`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` か `AREKA_ANIMATED_IMAGE_MAX_PIXELS=1`）を立てると 258 行の `raw_warns == 0` で赤になる（本物の `bake` が環境の上限を読むため）。areka-placement はこの spec では触れない。`crates/areka/src/placement_tests/measure_bake_log_tests.rs` も動く絵を登録するが、環境変数を変えた走らせ方は未確認。
 - 3.6（範囲の外・完了の棚卸で拾う）: `crates/areka-emo-compose/src/film_tests.rs:258` の説明「②⑤⑥は `with_frames` も作れない」は、3.6 で ①（0 番が親でない）も `with_frames` で作れなくなったので少し古い。テストの働きには関係しない。
 - 3.8（範囲の外・前からある赤・完了の棚卸で扱う）: 今のツールチェーンの clippy（`--all-targets -D warnings`）が `clippy::chunks_exact_to_as_chunks` で赤: `crates/areka-emo-compose/src/golden_tests_test_support.rs:129`・`composer_tests.rs:518,553`、`crates/areka-sakura/src/drive.rs:325`（seriko の依存先）。どれもこの spec の差分の外。
+- 4.1（5.1 の audit で拾う候補）: `examples/gen_animated_samples.rs`・`gen_palette_samples.rs` は、ファイルを書いたときの表示（「…: N バイト」など）を日本語で端末へ出す（道具の端末の文は ASCII だけの決まり）。4.1 の範囲の外として触っていない。
