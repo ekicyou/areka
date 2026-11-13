@@ -135,20 +135,16 @@ enum Why {
 /// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs:58-60`
 /// が同じ理由で行数を書かないのと同型）。
 const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
-    // ── ⒜ 既にプロセス識別子で一意化している 2 件 ───────────────────────────
+    // ── ⒜ 既にプロセス識別子で一意化している 1 件 ───────────────────────────
     //
     // 設計 C8 が「例外表に載せるか窓口へ寄せるかを実装時に決め、根拠を記録する」と
-    // 定めた当の項目。**載せる**を採った。根拠は 3 点。
+    // 定めた当の項目。**載せる**を採った。根拠は 2 点。
     //
     // ⑴ 要件 12.2 の移行対象は「入口から組み立て、**かつ書込または削除を行う** 20 ファイル」
     //    で、これらは対象外（＝既に正しい）と要件そのものが定めている。窓口へ寄せる作業は
     //    要件が範囲外と宣言した変更であり、要件 12.3（既存の主張・期待値・本数を変えない）を
     //    負う移行を、直す必要のないファイルへ広げることになる。
-    // ⑵ これらのうち 1 件（`process_host.rs`）は
-    //    **本番ファイル**である。入口の呼出はいずれも `#[cfg(test)]` の内側だが（実測で確認）、
-    //    要件 12.3 は「本番コードの挙動は 1 行も変えない」を明示的に課しており、本番ファイルへ
-    //    dev-dependency の型を持ち込む判断は本タスクの境界（走査）を超える。
-    // ⑶ 表に載せても**素通りにはならない**——[`each_exception_declares_whether_it_uniquifies_by_process_identifier`]
+    // ⑵ 表に載せても**素通りにはならない**——[`each_exception_declares_whether_it_uniquifies_by_process_identifier`]
     //    が「一意化している」という主張をソースと突き合わせるので、後から一意化を外せば赤になる。
     // `crates/areka-sylphya/src/persist/io.rs` はかつてここに載っていたが、タスク 10.7 が
     // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
@@ -161,6 +157,10 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     // かつてここに載っていたが、audit-shiori-host32 のタスク 1.3 が helper の
     // `src/proxy_test_support.rs` の `TestRoot`（同じく `target\test-roots\` の下）と loadu の
     // 同じ形の根へ寄せたので表から落とした。
+    // 最後に残った `crates/shiori-host32-host/src/process_host.rs` も、audit-shiori-host32 の
+    // タスク 4.1 が `.bat` を手で組み直す写しのテストを消し（組み立ては `helper_command` の
+    // 中身を読むテストへ）、入口を使わなくなったので表から落とした。これで audit-shiori-host32 の
+    // 範囲の 10 件はすべて表から外れた。
     (
         "crates/areka-placement/src/measure_tests.rs",
         Why::ProcessUnique,
@@ -169,11 +169,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
          説明文に書いたが、本ファイルが残っているのでその説明は事実として成り立っていない \
          （レビュー所見）。**衝突の観点では既に正しい**ので移行対象（要件 12.2 の 20 ファイル）には \
          含まれず、ここへ載せることで「2 系統目が現に在る」ことを台帳として可視にする",
-    ),
-    (
-        "crates/shiori-host32-host/src/process_host.rs",
-        Why::ProcessUnique,
-        "本番ファイルの #[cfg(test)] 内。プロセス識別子で一意化済み（入口を素で読むだけの箇所も同居する）",
     ),
     // ── ⒜ の追加 1 件（2026-09-29・areka-P0-network-update）─────────────────────
     //
@@ -187,7 +182,7 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "本番の落とし場所 %TEMP%\\areka\\download\\（要件 6.6）。フォルダは 7 日の掃除のために固定、\
          中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
     ),
-    // ── ⒝ 読み出しのみの 2 件（要件 12.2・設計 C8 が名指しで対象外と定めた）───────
+    // ── ⒝ 読み出しのみの 1 件（要件 12.2・設計 C8 が名指しで対象外と定めた 2 件の残り）───
     // もう 1 件の `crates/shiori-host32-host/tests/error_paths.rs` は audit-shiori-host32 の
     // タスク 1.1 が `TestRoot` へ寄せたので表から落とした。
     (
@@ -199,13 +194,13 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 4;
+const ALLOWED_COUNT: usize = 3;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。種別ごとに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 3;
+const PROCESS_UNIQUE_COUNT: usize = 2;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 1;
 
@@ -388,17 +383,12 @@ fn the_allow_table_declares_the_size_of_each_category() {
 /// 2026-08-27 訂正・対象は 20 → 21 ファイル）。**つまり本検査は、自分を素通りした欠陥の存在を
 /// 知っている。**
 ///
-/// # 是正後に残る「入口が複数あるファイル」は 1 件（2026-08-27 実測・2026-11-13 改め）
+/// # 是正後に残る「入口が複数あるファイル」は 0 件（2026-08-27 実測・2026-11-13 改め）
 ///
-/// - `crates/shiori-host32-host/src/process_host.rs` — 入口 3・識別子 1
-///
-/// 2026-08-27 の実測では `crates/shiori-host32-helper/src/shiori_proxy.rs`（入口 3・識別子 2）も
-/// ここにあったが、audit-shiori-host32 のタスク 1.3 が入口を使わない形へ寄せて表から落ちた。
-///
-/// **安全であることを実測で確認済み**である。書込を伴う箇所はすべて識別子を織り込んだ
-/// 名前を組み立てており、識別子を持たない箇所は一時ディレクトリの根を「実在するディレクトリ」
-/// として読むだけ（そのまま作業ディレクトリとして渡す／`canonicalize` するだけ）で、その下に
-/// 何も作らず何も消さない。**この 1 件が将来どう変わるかまでは本検査は見ていない。**
+/// 2026-08-27 の実測では `crates/shiori-host32-helper/src/shiori_proxy.rs`（入口 3・識別子 2）と
+/// `crates/shiori-host32-host/src/process_host.rs`（入口 3・識別子 1）がここにあったが、
+/// audit-shiori-host32 のタスク 1.3 と 4.1 が入口を使わない形へ寄せて表から落ちた。
+/// **今の表の項目が将来入口を増やしたときに、この穴へ落ちるかどうかまでは本検査は見ていない。**
 ///
 /// # なぜ行単位へ強めないのか
 ///

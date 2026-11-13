@@ -240,6 +240,7 @@ impl HelperHandle {
 /// - **env（同値 fallback）**: [`PARENT_HWND_ENV`] = parent_hwnd 10進・
 ///   [`LOAD_DIR_ENV`] = load_dir・[`SHIORI_NAME_ENV`] = shiori_name。
 /// - **cwd**: `load_dir`（伺か慣習・R3.3）。
+/// - **`PASTA_DEBUG=0`**: 親の値を受け継がせない（[`helper_command`]）。
 ///
 /// Rust 関数の引数順（`helper_exe, load_dir, shiori_name, parent_hwnd`）と
 /// 子引数の並び（arg1=parent_hwnd 先頭）は別物である点に注意。`shiori_name` は
@@ -259,6 +260,25 @@ pub fn spawn(
     parent_hwnd: u32,
 ) -> Result<HelperHandle, SpawnError> {
     check_helper_image(helper_exe);
+    spawn_command(helper_command(
+        helper_exe,
+        load_dir,
+        shiori_name,
+        parent_hwnd,
+    ))
+}
+
+/// helper を起こす [`Command`] を 1 か所で組む（引数・環境・作業フォルダ）。中身はテストが
+/// `get_args`／`get_envs`／`get_current_dir` で読む。
+///
+/// `PASTA_DEBUG` は常に `0`（開ける口は無い＝要件 8.1・8.2・10.4）。親（areka）に立っていても
+/// helper の下の SHIORI（pasta）へは受け継がせない。
+fn helper_command(
+    helper_exe: &Path,
+    load_dir: &Path,
+    shiori_name: &str,
+    parent_hwnd: u32,
+) -> Command {
     let mut command = Command::new(helper_exe);
     let parent_hwnd_decimal = parent_hwnd.to_string();
     command
@@ -270,9 +290,10 @@ pub fn spawn(
         .env(PARENT_HWND_ENV, &parent_hwnd_decimal)
         .env(LOAD_DIR_ENV, load_dir)
         .env(SHIORI_NAME_ENV, shiori_name)
+        .env("PASTA_DEBUG", "0")
         // cwd=load_dir（伺か慣習・R3.3）。
         .current_dir(load_dir);
-    spawn_command(command)
+    command
 }
 
 /// 構築済み [`Command`] を起動して [`HelperHandle`] へ包むテスト可能な下位 seam。
@@ -620,100 +641,31 @@ pub(crate) mod tests {
         );
     }
 
-    /// spawn が起動パラメーターを子へ供給する契約を、`spawn` の実装が組み立てる
-    /// Command と同一手順の stand-in（バッチファイル）で**実際に観測**して検証する（R3.1〜3.3）。
-    ///
-    /// 観測対象:
-    /// - arg1 = parent_hwnd（10進）・arg2 = load_dir・arg3 = shiori_name（`%1`/`%2`/`%3`）
-    /// - env `HOST32_PARENT_HWND` = parent_hwnd 10進・`HOST32_LOAD_DIR` = load_dir・
-    ///   `HOST32_SHIORI_NAME` = shiori_name
-    /// - cwd = load_dir（`%CD%` 出力で確認）
-    ///
-    /// バッチファイルを stand-in にするのは `%1..%3`（位置引数）の展開がバッチ実行時のみ
-    /// 有効で、`cmd /c "..."` 単一コマンドでは展開されないため。`spawn` 本体と**同一順序**で
-    /// arg/env/cwd を積み、位置引数・env・cwd の三面が同値供給されることを assert する
-    /// （spawn は helper_exe を実行するため直接キャプチャできない＝同一規約の Command で観測）。
+    /// `spawn` が使う [`helper_command`] の中身（引数・環境・作業フォルダ）を読んで確かめる
+    /// （R3.1〜3.3・要件 8.1・8.2・10.4）。
     #[test]
-    fn spawn_supplies_hwnd_load_dir_and_shiori_name_via_arg_env_and_cwd() {
+    fn helper_command_sets_args_env_cwd_and_pasta_debug_zero() {
         let parent_hwnd: u32 = 4_294_967_295; // u32::MAX（10進境界値）
-        let decimal = parent_hwnd.to_string();
-        // cwd 一致を検証できる実在ディレクトリ。canonicalize で表記ゆれを吸収。
-        let load_dir =
-            std::fs::canonicalize(std::env::temp_dir()).expect("temp_dir を canonicalize できる");
-        let shiori_name = "shiori.dll";
+        let load_dir = Path::new(r"C:\ghost\master");
+        let command = helper_command(Path::new("helper.exe"), load_dir, "shiori.dll", parent_hwnd);
 
-        // 位置引数を観測するバッチ stand-in を一時ファイルへ書く（テスト後に削除）。
-        // 各面を "KEY=VALUE" 行で出力: %1..%3=位置引数・%VAR%=env・%CD%=cwd。
-        let unique = std::process::id();
-        let batch_path =
-            std::env::temp_dir().join(format!("areka_host32_spawn_contract_{unique}.bat"));
-        std::fs::write(
-            &batch_path,
-            "@echo off\r\n\
-             echo arg1=%1\r\n\
-             echo arg2=%2\r\n\
-             echo arg3=%3\r\n\
-             echo phwnd=%HOST32_PARENT_HWND%\r\n\
-             echo ldir=%HOST32_LOAD_DIR%\r\n\
-             echo sname=%HOST32_SHIORI_NAME%\r\n\
-             echo cwd=%CD%\r\n",
-        )
-        .expect("stand-in バッチを書ける");
-
-        // `spawn` と同一手順で Command を組む（arg1=hwnd・arg2=load_dir・arg3=name、
-        // env 3 種、cwd=load_dir）。cmd.exe /c <batch> で位置引数を渡す。
-        let mut command = Command::new("cmd.exe");
-        command
-            .arg("/c")
-            .arg(&batch_path)
-            .arg(&decimal) // arg1
-            .arg(&load_dir) // arg2
-            .arg(shiori_name) // arg3
-            .env(PARENT_HWND_ENV, &decimal)
-            .env(LOAD_DIR_ENV, &load_dir)
-            .env(SHIORI_NAME_ENV, shiori_name)
-            .current_dir(&load_dir);
-        let output = command.output().expect("stand-in を実行できる");
-        let _ = std::fs::remove_file(&batch_path); // 後始末（失敗は無視）。
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        let load_dir_str = load_dir.to_string_lossy();
-        // 期待表記の cwd（%CD% は `\\?\` 冗長プレフィクス無し・末尾セパレータ無しの正規表記）。
-        let expected_cwd = load_dir_str
-            .strip_prefix(r"\\?\")
-            .unwrap_or(&load_dir_str)
-            .trim_end_matches(['\\', '/']);
-
-        // arg1..3 同値供給（位置引数を %1..%3 で観測）。
-        assert!(
-            stdout.contains(&format!("arg1={decimal}")),
-            "arg1 に 10進 parent_hwnd が載る: got {stdout:?}"
+        let args: Vec<&std::ffi::OsStr> = command.get_args().collect();
+        assert_eq!(
+            args,
+            ["4294967295", r"C:\ghost\master", "shiori.dll"].map(std::ffi::OsStr::new)
         );
-        assert!(
-            stdout.contains(&format!("arg2={load_dir_str}")),
-            "arg2 に load_dir が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("arg3={shiori_name}")),
-            "arg3 に shiori_name が載る: got {stdout:?}"
-        );
-        // env 3 種同値供給。
-        assert!(
-            stdout.contains(&format!("phwnd={decimal}")),
-            "env HOST32_PARENT_HWND に 10進 parent_hwnd が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("ldir={load_dir_str}")),
-            "env HOST32_LOAD_DIR に load_dir が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("sname={shiori_name}")),
-            "env HOST32_SHIORI_NAME に shiori_name が載る: got {stdout:?}"
-        );
-        // cwd = load_dir。
-        assert!(
-            stdout.contains(&format!("cwd={expected_cwd}")),
-            "cwd が load_dir に設定される: expected cwd={expected_cwd:?} in {stdout:?}"
-        );
+        let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = command.get_envs().collect();
+        for (key, value) in [
+            (PARENT_HWND_ENV, "4294967295"),
+            (LOAD_DIR_ENV, r"C:\ghost\master"),
+            (SHIORI_NAME_ENV, "shiori.dll"),
+            ("PASTA_DEBUG", "0"),
+        ] {
+            assert!(
+                envs.contains(&(key.as_ref(), Some(value.as_ref()))),
+                "環境に ({key:?}, Some({value:?})) が無い: {envs:?}"
+            );
+        }
+        assert_eq!(command.get_current_dir(), Some(load_dir));
     }
 }
