@@ -468,5 +468,62 @@ fn malformed_font_tag_leaves_the_look_unchanged() {
     assert_eq!(st(&state, "0").current_look(), &before);
 }
 
+// ------------------------------- §7 系列の印と試験だけの数え（spec `emo-text-reveal-incremental`）
+
+/// 系列の印は場所が生まれるたび（2 つの作り口）と一括の戻しのたびに新しい番号になり、
+/// 比べには入らない（作りたてと同じかの判定を変えない・要件 2.6）。
+#[test]
+fn lineage_is_fresh_per_birth_and_reset_and_ignored_by_equality() {
+    let a = super::Decoration::default();
+    let b = super::Decoration::default();
+    let c = super::Decoration::with_layers(crate::look::LookLayers::default());
+    assert_ne!(a.lineage.0, b.lineage.0, "既定の作り口は毎回新しい番号");
+    assert_ne!(b.lineage.0, c.lineage.0, "2 層つきの作り口も新しい番号");
+    assert_eq!(a, b, "印は装飾状態の比べに入らない");
+
+    let mut state = ActorTextState::default();
+    let born = state.decor.lineage.0;
+    state.reset_look();
+    let after_default = state.decor.lineage.0;
+    state.reset_look_disabled();
+    assert_ne!(born, after_default, "\\f[default] の戻しで新しい番号");
+    assert_ne!(
+        after_default, state.decor.lineage.0,
+        "\\f[disable] の戻しで新しい番号"
+    );
+    state.reset_look();
+    assert_eq!(
+        state,
+        ActorTextState::default(),
+        "戻した後も作りたてと同じとみなす"
+    );
+}
+
+/// 写しで当てた指定と当て直しで当てた指定を別々に数える（要件 2.7・試験の作りだけ・要件 4.8）。
+#[test]
+fn copy_and_rebase_count_applied_specs() {
+    use super::{COPIED_SPECS, REBASED_SPECS, REPLAY_ALL};
+    COPIED_SPECS.with(|c| c.set(0));
+    REBASED_SPECS.with(|c| c.set(0));
+    assert!(!REPLAY_ALL.with(|c| c.get()), "切り替えの既定は偽");
+    let mut state = TextLayerState::default();
+    state.apply_cue(&font("0", &["bold", "1"]));
+    state.apply_cue(&font("0", &["italic", "1"]));
+    let actor = ActorKey::from("0");
+
+    state.set_look_layers(&actor, crate::look::LookLayers::default());
+    assert_eq!(REBASED_SPECS.with(|c| c.get()), 2, "当て直しは指定 2 件");
+    assert_eq!(COPIED_SPECS.with(|c| c.get()), 0);
+
+    let place = crate::place::TextPlace::Balloon;
+    state.copy_script(&actor, &place, &place);
+    assert_eq!(COPIED_SPECS.with(|c| c.get()), 2, "写しは指定 2 件");
+    assert_eq!(
+        REBASED_SPECS.with(|c| c.get()),
+        2,
+        "写しは当て直しに数えない"
+    );
+}
+
 #[path = "state_decoration_reset_tests.rs"]
 mod reset;

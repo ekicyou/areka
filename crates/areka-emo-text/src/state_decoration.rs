@@ -91,6 +91,51 @@ enum BaseLayer {
     Disable,
 }
 
+/// 台本の指定の系列の印（spec `emo-text-reveal-incremental` 要件 2.6）——一括の戻しのたびと場所が
+/// 生まれるときに、場所をまたいで一意の番号を振る（[`Lineage::fresh`]）。
+///
+/// 比べ（`PartialEq`）には入らない——同じ見た目と同じ指定の列を持つ装飾状態は同じとみなす
+/// （`forget_pristine_places` の「作りたてと同じか」を変えないため）。`PartialEq` は手書きで、
+/// いつも真を返す。写しの判定は中の番号を直に比べる。
+#[derive(Clone, Copy, Debug, Default)]
+struct Lineage(
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "写しの判定（task 3.2）が読むまでは本番の作りに読み手が無い"
+        )
+    )]
+    u64,
+);
+
+impl PartialEq for Lineage {
+    fn eq(&self, _: &Lineage) -> bool {
+        true
+    }
+}
+
+/// 次に振る系列の印（1 から・番号は比べにも結果にも出ないので空回しの写しが振っても構わない）。
+static NEXT_LINEAGE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+impl Lineage {
+    /// 場所をまたいで一意の新しい番号。
+    fn fresh() -> Lineage {
+        Lineage(NEXT_LINEAGE.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// 写しで当てた指定の数（[`Decoration::take_script`] が当てた指定の数の合計・要件 2.7）。
+    pub(super) static COPIED_SPECS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// 当て直しで当てた指定の数（[`Decoration::rebase`] が当てた `applied` の数の合計・要件 2.7）。
+    pub(super) static REBASED_SPECS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// 真なら、この spec の前の作りそのもの（写しは 4 欄を複製して当て直す・2 層の差し込みは値に
+    /// 依らず当て直す）で動く（前と後の比べの正・要件 2.8）。読むのは写しと差し込みの道（3.2・3.3）。
+    pub(super) static REPLAY_ALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// スコープ 1 つ分の装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値）。
 ///
 /// [`Decoration::default`] は ukadoc の既定（[`LookLayers::default`]）で、バルーンが装着される
@@ -124,6 +169,8 @@ pub struct Decoration {
     /// `\f[bold,x,y]`。よって鍵のどの要素も連結された綴りではない。
     /// 値を持たない記録（[`RECORD_SCRIPT_APPEND`]）は第 3 要素を空の列にする。
     warned: BTreeSet<(u8, String, Vec<String>)>,
+    /// 台本の指定の系列の印（比べには入らない・[`Lineage`]）。
+    lineage: Lineage,
 }
 
 impl Default for Decoration {
@@ -137,6 +184,7 @@ impl Default for Decoration {
             applied: Vec::new(),
             unowned: BTreeMap::new(),
             warned: BTreeSet::new(),
+            lineage: Lineage::fresh(),
         }
     }
 }
@@ -167,7 +215,9 @@ impl Decoration {
         self.applied = from.applied.clone();
         self.unowned = from.unowned.clone();
         self.warned = from.warned.clone();
-        self.rebase();
+        #[cfg(test)]
+        COPIED_SPECS.with(|c| c.set(c.get() + self.applied.len()));
+        self.replay();
     }
 
     /// いま土台にしている層の見た目。
@@ -193,6 +243,13 @@ impl Decoration {
     /// 記録は残さない——再生する命令は既に 1 度適用されており、そのとき記録すべきものは
     /// 記録済みだからである（[`Decoration::warned`] は台詞の寿命で、装着はそれを跨がない）。
     fn rebase(&mut self) {
+        #[cfg(test)]
+        REBASED_SPECS.with(|c| c.set(c.get() + self.applied.len()));
+        self.replay();
+    }
+
+    /// 土台の見た目から `applied` を順に当てる（写しと当て直しの共通の実体・数えは呼び手が持つ）。
+    fn replay(&mut self) {
         self.current = self.base_look();
         for tokens in &self.applied {
             let args: Vec<&str> = tokens.iter().map(String::as_str).collect();
@@ -317,6 +374,7 @@ impl ActorTextState {
         let layer = self.decor.base_look();
         self.decor.current = layer;
         self.decor.unowned.clear();
+        self.decor.lineage = Lineage::fresh();
     }
 
     /// 台本の先頭（`ClearAll`）の戻し——[`ActorTextState::reset_look`] に加えて記録済みの値も
