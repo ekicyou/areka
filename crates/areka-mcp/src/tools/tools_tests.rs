@@ -3,12 +3,10 @@
 use serde_json::{Value, json};
 
 use super::*;
-use crate::testkit::{SAVED_LIST, obj};
+use crate::testkit::{obj, saved_list};
 
 fn saved_tools() -> Vec<Value> {
-    let text = std::fs::read_to_string(SAVED_LIST).expect("保存した JSON が読めない");
-    let list: Value = serde_json::from_str(&text).expect("保存した JSON が JSON でない");
-    list["tools"]
+    saved_list()["tools"]
         .as_array()
         .expect("tools が配列でない")
         .clone()
@@ -243,13 +241,13 @@ fn parse_fills_typed_args() {
     }
 }
 
-/// 10 本の詰め替えの結果の `ToolCall::name` が、表のその行の定義の名前と一致する。
+/// 11 本（SSP の 10 本と独自のツール）の詰め替えの結果の `ToolCall::name` が、その行の定義の名前と一致する。
 #[test]
-fn tool_call_name_matches_definition_for_all_ten() {
+fn tool_call_name_matches_definition_for_every_row() {
     let full = json!({
         "property_name": "p", "script": "s", "event": "e", "target": "t",
     });
-    for (def, parse) in TABLE.iter() {
+    for (def, parse) in rows() {
         let spec = spec_from_definition(def).unwrap();
         assert_eq!(parse(&obj(full.clone())).name(), spec.name);
     }

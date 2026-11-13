@@ -1,14 +1,18 @@
 //! 実ソケットのテスト: `Origin`／`Host`・help・404／405・登録 1 本の往復（要件 4・6・7）。
 //!
-//! 拒否の `warn!` と要求ごとの `debug!` は mcp スレッドで出るので、ここでは数えない
-//! （実機確認の `RUST_LOG` で確かめる＝要件 9.6）。
+//! 拒否の `warn!` は mcp スレッドで出るが、`capture` の窓の中で起こしたサーバのスレッドは窓を受け継ぐので、
+//! 起こしてから畳むまでを窓に入れて数える。
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use log_capture_kit::{CapturedEvent, capture};
 use serde_json::{Value, json};
+use tracing::Level;
 
-use crate::testkit::{HELP, MCP_V1, RPC_ACCEPT, Response, post_rpc, request, rpc, send_raw, serve};
+use crate::testkit::{
+    HELP, MCP_V1, RPC_ACCEPT, Response, initialize_params, post_rpc, request, rpc, send_raw, serve,
+};
 use crate::{ToolContent, ToolHandler, ToolOutcome, ToolRegistry, ToolSpec};
 
 const EVIL_ORIGIN: &str = "http://evil.example";
@@ -22,38 +26,58 @@ fn assert_forbidden_before_mcp(response: &Response) {
     );
 }
 
+/// 拒んだ要求ごとの `warn!`（`key` の欄の値, `path`）を受けた順に取り出す。
+fn rejects(events: &[CapturedEvent], key: &str) -> Vec<(String, String)> {
+    events
+        .iter()
+        .filter(|e| e.level == Level::WARN)
+        .map(|e| {
+            let field = |name| e.field_str(name).or(e.field(name)).unwrap_or("").to_owned();
+            (field(key), field("path"))
+        })
+        .collect()
+}
+
 /// (要件 4.3・6.3) 悪い `Origin` は `initialize`・`ping`・help のどれも 403（MCP の処理に入らない）。
+/// 拒んだ要求ごとに `warn!` 1 件（`origin` と `path` つき）。
 #[test]
 fn bad_origin_is_403_before_mcp() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    let origin = [("Origin", EVIL_ORIGIN)];
-    let initialize = rpc(
-        "initialize",
-        Some(1),
-        Some(json!({
-            "protocolVersion": "2025-11-25",
-            "capabilities": {},
-            "clientInfo": { "name": "areka-test", "version": "0" }
-        })),
-    );
-    assert_forbidden_before_mcp(&post_rpc(addr, &origin, &initialize));
-    assert_forbidden_before_mcp(&post_rpc(addr, &origin, &rpc("ping", Some(2), None)));
-    let help = request(addr, "GET", HELP, &origin, b"");
-    assert_forbidden_before_mcp(&help);
-    assert!(
-        !String::from_utf8_lossy(&help.body).contains("<html"),
-        "{help:?}"
-    );
+    let ((), events) = capture(|| {
+        let (server, addr) = serve(ToolRegistry::default());
+        let origin = [("Origin", EVIL_ORIGIN)];
+        let initialize = rpc("initialize", Some(1), Some(initialize_params("2025-11-25")));
+        assert_forbidden_before_mcp(&post_rpc(addr, &origin, &initialize));
+        assert_forbidden_before_mcp(&post_rpc(addr, &origin, &rpc("ping", Some(2), None)));
+        let help = request(addr, "GET", HELP, &origin, b"");
+        assert_forbidden_before_mcp(&help);
+        assert!(
+            !String::from_utf8_lossy(&help.body).contains("<html"),
+            "{help:?}"
+        );
+        drop(server);
+    });
+    let want: Vec<(String, String)> = [MCP_V1, MCP_V1, HELP]
+        .map(|path| (EVIL_ORIGIN.to_owned(), path.to_owned()))
+        .into();
+    assert_eq!(rejects(&events, "origin"), want, "{events:?}");
 }
 
 /// (要件 4.4) ループバックでない `Host` は 403。受け口では rmcp の `allowed_hosts` も
 /// 同じく拒むので、rmcp を通らない help でも確かめて `gate` の検査を踏む。
+/// 拒んだ要求ごとに `warn!` 1 件（`host` と `path` つき）。
 #[test]
 fn bad_host_is_403() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    let host = [("Host", "evil.example")];
-    assert_forbidden_before_mcp(&post_rpc(addr, &host, &rpc("ping", Some(1), None)));
-    assert_forbidden_before_mcp(&request(addr, "GET", HELP, &host, b""));
+    let ((), events) = capture(|| {
+        let (server, addr) = serve(ToolRegistry::default());
+        let host = [("Host", "evil.example")];
+        assert_forbidden_before_mcp(&post_rpc(addr, &host, &rpc("ping", Some(1), None)));
+        assert_forbidden_before_mcp(&request(addr, "GET", HELP, &host, b""));
+        drop(server);
+    });
+    let want: Vec<(String, String)> = [MCP_V1, HELP]
+        .map(|path| ("evil.example".to_owned(), path.to_owned()))
+        .into();
+    assert_eq!(rejects(&events, "host"), want, "{events:?}");
 }
 
 /// `POST /api/mcp/v1` の生のバイト列を組む。`extra` は頭に足す行（`\r\n` で終わる）、

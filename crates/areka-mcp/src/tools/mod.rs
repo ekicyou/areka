@@ -120,26 +120,30 @@ pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String>
 /// spec: areka-P0-mcp-author-tools）。受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
 /// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる（要件 6.5）。
 pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
+    register_rows(rows(), reply_wait)
+}
+
+/// 本番の行の並び（SSP と同じ 10 本の [`TABLE`]、続けて独自の [`OWN_TABLE`]）。登録・定義の列・テストが
+/// この 1 か所から並びを取る。
+pub(crate) fn rows() -> impl Iterator<Item = (&'static str, Parse)> {
     let own = OWN_TABLE
         .iter()
         .map(|&(definition, parse, _)| (definition, parse));
-    register_rows(TABLE.into_iter().chain(own), reply_wait)
+    TABLE.into_iter().chain(own)
 }
 
 /// 本番の登録（[`all_entrances`]）と同じ行・同じ順の、ツールの定義の列（SSP と同じ 10 本、続けて独自の
 /// ツール）。中継（areka-mcp-bridge）が、areka が居ないときの組み込みの一覧をここから組む。
 /// 定義が読めない行は、登録と同じく `error!` 1 件で飛ばす（本番の表では起きない）。
 pub fn all_specs() -> Vec<ToolSpec> {
-    let own = OWN_TABLE.iter().map(|&(definition, _, _)| definition);
-    let rows = TABLE.iter().map(|&(definition, _)| definition).chain(own);
-    let read = |definition| match spec_from_definition(definition) {
+    let read = |(definition, _)| match spec_from_definition(definition) {
         Ok(spec) => Some(spec),
         Err(reason) => {
             error!(%reason, "MCP: ツールの定義が読めない。この行は列に入れない");
             None
         }
     };
-    rows.filter_map(read).collect()
+    rows().filter_map(read).collect()
 }
 
 /// 行を順に登録する（本番の [`all_entrances`] とテストが同じ道を通る）。定義が読めない行は `error!` 1 件で

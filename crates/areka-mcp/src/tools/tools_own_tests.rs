@@ -22,11 +22,8 @@ fn all_entrances_is_ssp_ten_then_own_rows() {
 /// (要件 1.1・4.3) 名前の重複 0（登録口は後勝ちで畳むので、表の全行の名前で見る）・独自の表の各行が登録表に在る。
 #[test]
 fn own_rows_are_registered_without_duplicate_names() {
-    let names: Vec<String> = TABLE
-        .iter()
-        .map(|(def, _)| *def)
-        .chain(OWN_TABLE.iter().map(|(def, _, _)| *def))
-        .map(|def| spec_from_definition(def).unwrap().name)
+    let names: Vec<String> = rows()
+        .map(|(def, _)| spec_from_definition(def).unwrap().name)
         .collect();
     let unique: BTreeSet<&String> = names.iter().collect();
     assert_eq!(unique.len(), names.len(), "名前が重なっている: {names:?}");

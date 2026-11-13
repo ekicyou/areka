@@ -92,8 +92,9 @@ use tracing::Level;
 use crate::ToolOutcome;
 use crate::tools::REPLY_WAIT;
 
-/// 終了の途中の枝が「待たずに返った」と言える経過の上限（長い上限 60 秒に比べて十分短い）。
+/// 返事を待つ長い上限（終了の途中の枝がこれを待たずに返ることを見る）。
 const LONG: Duration = Duration::from_secs(60);
+/// 終了の途中の枝が「待たずに返った」と言える経過の上限（長い上限 60 秒に比べて十分短い）。
 const QUICK: Duration = Duration::from_secs(5);
 
 fn count(events: &[CapturedEvent], level: Level) -> usize {

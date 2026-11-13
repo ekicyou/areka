@@ -15,8 +15,8 @@ use super::{
     get_log, get_property, get_status, outcome, raise_event, reload, sakurascript,
 };
 use crate::testkit::{
-    LONG_WAIT, RECV_WAIT, Response, SAVED_LIST, assert_invalid_params, assert_no_request,
-    call_params, post_legacy, post_stateless, serve,
+    LONG_WAIT, RECV_WAIT, Response, assert_invalid_params, assert_no_request, call_params,
+    initialize_params, post_legacy, post_stateless, saved_list, serve,
 };
 
 /// 両方の経路で同じ要求を送る（経路の名前, 応答）。`params` が None なら旧式は欄ごと省き、無状態版は `{}`。
@@ -38,8 +38,7 @@ fn post_both(
 /// （並び・欄の過不足を 1 度に見る）、11 本目は `check_script` の定義そのもので、欄は 4 つだけ。
 #[test]
 fn tools_list_is_ssp_ten_then_check_script() {
-    let text = std::fs::read_to_string(SAVED_LIST).expect("保存した JSON が読めない");
-    let saved: Value = serde_json::from_str(&text).expect("保存した JSON が JSON でない");
+    let saved = saved_list();
     let own: Value = serde_json::from_str(check_script::DEFINITION).expect("定義が JSON");
     let (registry, _rx) = all_entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
@@ -129,6 +128,24 @@ fn check_script_numeric_script_is_invalid_params() {
     );
 }
 
+/// `sakurascript` の必須の欄の欠落（`ghost_name` だけ）と型違い（`strict: "yes"`）は `-32602`・受け手へ届かない
+/// （`doc/ssp-mcp/transport-diff-areka.md` の「未知のツール名・必須引数の欠落」の行の値）。
+#[test]
+fn sakurascript_missing_script_and_string_strict_are_invalid_params() {
+    assert_invalid_params(
+        all_entrances(LONG_WAIT),
+        "sakurascript",
+        json!({ "ghost_name": "emo" }),
+        "missing required argument: script",
+    );
+    assert_invalid_params(
+        all_entrances(LONG_WAIT),
+        "sakurascript",
+        json!({ "script": "s", "strict": "yes" }),
+        "argument strict must be boolean",
+    );
+}
+
 /// (要件 1.7) 11 本のどれでもない名前は `-32602`・受け手へ届かない。
 #[test]
 fn name_outside_eleven_is_invalid_params() {
@@ -150,16 +167,7 @@ const THREE_SENTENCES: &str = "This server controls areka, a desktop mascot (Uka
 fn instructions_name_check_script_and_keep_existing_guidance() {
     let (registry, _rx) = all_entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
-    let initialize = post_legacy(
-        addr,
-        "initialize",
-        1,
-        Some(json!({
-            "protocolVersion": "2025-11-25",
-            "capabilities": {},
-            "clientInfo": { "name": "areka-test", "version": "0" }
-        })),
-    );
+    let initialize = post_legacy(addr, "initialize", 1, Some(initialize_params("2025-11-25")));
     let discover = post_stateless(addr, "server/discover", 2, json!({}));
     for (path, response) in [("旧式", initialize), ("無状態版", discover)] {
         let result = response.result();

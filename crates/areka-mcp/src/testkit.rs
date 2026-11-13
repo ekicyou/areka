@@ -23,7 +23,7 @@ pub(crate) const RPC_ACCEPT: &str = "application/json, text/event-stream";
 /// 無状態版の版。
 pub(crate) const STATELESS: &str = "2026-07-28";
 /// 保存した SSP の定義（テストだけが読む。本番はクレートの外のファイルを読まない＝要件 7.6）。
-pub(crate) const SAVED_LIST: &str = concat!(
+const SAVED_LIST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../doc/ssp-mcp/tools-list-ssp-2.9.05.json"
 );
@@ -112,6 +112,21 @@ pub(crate) fn post_rpc(addr: SocketAddr, extra: &[(&str, &str)], body: &str) -> 
     let mut headers = vec![("Content-Type", "application/json"), ("Accept", RPC_ACCEPT)];
     headers.extend_from_slice(extra);
     request(addr, "POST", MCP_V1, &headers, body.as_bytes())
+}
+
+/// 保存した SSP の定義（[`SAVED_LIST`]）を JSON 1 件として読む。
+pub(crate) fn saved_list() -> Value {
+    let text = std::fs::read_to_string(SAVED_LIST).expect("保存した JSON が読めない");
+    serde_json::from_str(&text).expect("保存した JSON が JSON でない")
+}
+
+/// 旧式の `initialize` の `params`（`protocolVersion` だけを変える）。
+pub(crate) fn initialize_params(version: &str) -> Value {
+    json!({
+        "protocolVersion": version,
+        "capabilities": {},
+        "clientInfo": { "name": "areka-test", "version": "0" }
+    })
 }
 
 /// 無状態版の要求に付ける本文の `_meta`。

@@ -7,7 +7,10 @@ use serde_json::{Value, json};
 
 use crate::ToolRegistry;
 use crate::dispatch::MAX_BODY_BYTES;
-use crate::testkit::{MCP_V1, RPC_ACCEPT, Response, post_rpc, request, rpc, serve, stateless_meta};
+use crate::testkit::{
+    MCP_V1, RPC_ACCEPT, Response, STATELESS, initialize_params, post_rpc, post_stateless, request,
+    rpc, serve, stateless_meta,
+};
 
 /// `initialize` を持つ旧式の 4 版（要件 3.1）。
 const LEGACY_VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -22,15 +25,7 @@ pub(super) const SUPPORTED_VERSIONS: [&str; 5] = [
 
 /// `initialize` の本文（`protocolVersion` だけを変える）。
 fn initialize(version: &str) -> String {
-    rpc(
-        "initialize",
-        Some(1),
-        Some(json!({
-            "protocolVersion": version,
-            "capabilities": {},
-            "clientInfo": { "name": "areka-test", "version": "0" }
-        })),
-    )
+    rpc("initialize", Some(1), Some(initialize_params(version)))
 }
 
 /// (要件 3.1) 旧式の 4 版は要求どおりの版・`tools` だけの能力・serverInfo・instructions。
@@ -376,8 +371,8 @@ fn a_body_of_exactly_the_limit_is_not_413() {
 }
 
 /// 版ごとの話し方で要求 1 件を送る。旧式の 4 版は `MCP-Protocol-Version` を付ける（`initialize` だけは
-/// 付けない＝クライアントの送り方どおり）。`2026-07-28` は `MCP-Protocol-Version`・`Mcp-Method` を付け、
-/// `params` に `_meta` を入れる（`name` が文字列なら `Mcp-Name` も付ける）。
+/// 付けない＝クライアントの送り方どおり）。`2026-07-28` は無状態版の経路（[`post_stateless`]・`params` が
+/// None なら `{}`）で送る。
 pub(super) fn speak(
     addr: std::net::SocketAddr,
     version: &str,
@@ -385,23 +380,15 @@ pub(super) fn speak(
     method: &str,
     params: Option<Value>,
 ) -> Response {
-    let mut headers: Vec<(&str, String)> = Vec::new();
-    if version == "2026-07-28" {
-        let mut params = params.unwrap_or_else(|| json!({}));
-        if let Some(name) = params.get("name").and_then(Value::as_str) {
-            headers.push(("Mcp-Name", name.to_owned()));
-        }
-        params["_meta"] = stateless_meta();
-        headers.push(("MCP-Protocol-Version", version.to_owned()));
-        headers.push(("Mcp-Method", method.to_owned()));
-        let extra: Vec<(&str, &str)> = headers.iter().map(|(n, v)| (*n, v.as_str())).collect();
-        return post_rpc(addr, &extra, &rpc(method, Some(id), Some(params)));
+    if version == STATELESS {
+        return post_stateless(addr, method, id, params.unwrap_or_else(|| json!({})));
     }
-    if method != "initialize" {
-        headers.push(("MCP-Protocol-Version", version.to_owned()));
-    }
-    let extra: Vec<(&str, &str)> = headers.iter().map(|(n, v)| (*n, v.as_str())).collect();
-    post_rpc(addr, &extra, &rpc(method, Some(id), params))
+    let headers: &[(&str, &str)] = if method == "initialize" {
+        &[]
+    } else {
+        &[("MCP-Protocol-Version", version)]
+    };
+    post_rpc(addr, headers, &rpc(method, Some(id), params))
 }
 
 /// (要件 1.1・1.2・1.4・2.1・2.3) `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
@@ -435,7 +422,7 @@ fn malformed_params_of_params_required_methods_are_invalid_params_in_every_versi
             ("initialize", Some(json!({ "protocolVersion": 7 }))),
             ("completion/complete", Some(json!({ "ref": 7 }))),
         ];
-        if version != "2026-07-28" {
+        if version != STATELESS {
             cases.push(("tools/call", None));
         }
         for (id, (method, params)) in (2..).zip(cases) {
@@ -469,7 +456,7 @@ fn methods_not_accepted_keep_method_not_found_and_list_methods_keep_passing_in_e
             json!({ "code": -32601, "message": "nope/unknown" }),
             "{version}: {response:?}"
         );
-        if version == "2026-07-28" {
+        if version == STATELESS {
             let response = speak(addr, version, 2, "ping", None);
             assert_eq!(response.status, 404, "{response:?}");
             assert_eq!(
