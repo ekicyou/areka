@@ -1,11 +1,8 @@
 //! `delete.txt` の固定入力（要件 6.1〜6.7・9.5）。
 
 use super::*;
-use crate::testkit::{hold, junction, sjis, tree, txt};
+use crate::testkit::{SHARING_VIOLATION, hold, junction, sjis, target_fixture, tree, txt};
 use sample_ghost_kit::WorkDir;
-
-/// `ERROR_SHARING_VIOLATION`（`hold` で掴まれた物を取り除こうとした）。
-const SHARING_VIOLATION: i32 = 32;
 
 struct Fixture {
     _work: WorkDir,
@@ -15,11 +12,8 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let work = WorkDir::new().expect("作業フォルダ");
+    let (work, target, target_real) = target_fixture();
     let root = work.path().to_path_buf();
-    let target = root.join("target");
-    fs::create_dir_all(&target).unwrap();
-    let target_real = fs::canonicalize(&target).unwrap();
     Fixture {
         _work: work,
         root,

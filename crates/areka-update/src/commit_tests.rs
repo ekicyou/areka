@@ -3,12 +3,9 @@
 
 use super::*;
 use crate::paths::WORK_DIR;
-use crate::testkit::{hold, junction, pe_image, pin, tree};
+use crate::testkit::{SHARING_VIOLATION, hold, junction, pe_image, pin, target_fixture, tree};
 use sample_ghost_kit::WorkDir;
 use std::collections::BTreeMap;
-
-/// `ERROR_SHARING_VIOLATION`（`hold` で掴まれた宛先を退避しようとした）。
-const SHARING_VIOLATION: i32 = 32;
 
 struct Fixture {
     _work: WorkDir,
@@ -19,11 +16,8 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let work = WorkDir::new().expect("作業フォルダ");
+    let (work, target, target_real) = target_fixture();
     let root = work.path().to_path_buf();
-    let target = root.join("target");
-    fs::create_dir_all(&target).unwrap();
-    let target_real = fs::canonicalize(&target).unwrap();
     let area = WorkArea::create(&target).unwrap();
     Fixture {
         _work: work,

@@ -1,7 +1,7 @@
 //! 区切りの正規化・作業場所の判定・「実パスが対象フォルダの配下か」（要件 1.13・5.6・6.3）。
 
 use super::*;
-use crate::testkit::junction;
+use crate::testkit::{junction, target_fixture};
 use sample_ghost_kit::WorkDir;
 use std::fs;
 
@@ -42,14 +42,12 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let work = WorkDir::new().expect("作業フォルダ");
-    let target = work.path().join("target");
+    let (work, target, target_real) = target_fixture();
     let outside = work.path().join("outside");
     fs::create_dir_all(target.join("sub")).unwrap();
     fs::create_dir_all(&outside).unwrap();
     fs::write(target.join("sub/a.txt"), b"a").unwrap();
     fs::write(outside.join("o.txt"), b"o").unwrap();
-    let target_real = fs::canonicalize(&target).unwrap();
     Fixture {
         _work: work,
         target,

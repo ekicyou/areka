@@ -1,13 +1,11 @@
 //! 作業場所の作成・書き込み・片付け・他の走行の残骸（要件 4.1・4.7・4.8・5.5・5.9・9.10）。
 
 use super::*;
-use crate::testkit::{hold, junction, tree};
+use crate::testkit::{hold, junction, target_fixture, tree};
 use sample_ghost_kit::WorkDir;
 
 fn fixture() -> (WorkDir, PathBuf) {
-    let work = WorkDir::new().expect("作業フォルダ");
-    let target = work.path().join("target");
-    fs::create_dir_all(&target).unwrap();
+    let (work, target, _) = target_fixture();
     (work, target)
 }
 

@@ -2,7 +2,6 @@
 
 use super::*;
 use sample_ghost_kit::WorkDir;
-use std::cell::Cell;
 use std::rc::Rc;
 
 // ---- FakeFetch ----
@@ -39,18 +38,6 @@ fn fake_fetch_calls_the_hook_before_answering_each_get() {
     let _ = fetch.get("http://x/none");
 
     assert_eq!(*seen.borrow(), ["http://x/a", "http://x/none"]);
-}
-
-#[test]
-fn fake_fetch_hook_runs_before_the_answer_is_returned() {
-    // 差し込みは「取得の最中」に木を書き換える口なので、戻りより先に走っていなければならない。
-    let ran = Rc::new(Cell::new(false));
-    let flag = Rc::clone(&ran);
-    let fetch = FakeFetch::new().on_get(move |_| flag.set(true));
-
-    assert!(!ran.get());
-    let _ = fetch.get("http://x/a");
-    assert!(ran.get());
 }
 
 // ---- tree ----

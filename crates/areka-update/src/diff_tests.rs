@@ -3,10 +3,9 @@
 use super::*;
 use crate::manifest::parse;
 use crate::outcome::ManifestName;
-use crate::testkit::{dau, junction, tree};
+use crate::testkit::{MD5_ABC, dau, junction, target_fixture, tree};
 use sample_ghost_kit::WorkDir;
 
-const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
 const MD5_EMPTY: &str = "d41d8cd98f00b204e9800998ecf8427e";
 
 struct Fixture {
@@ -17,12 +16,9 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let work = WorkDir::new().expect("作業フォルダ");
-    let target = work.path().join("target");
+    let (work, target, target_real) = target_fixture();
     let outside = work.path().join("outside");
-    fs::create_dir_all(&target).unwrap();
     fs::create_dir_all(&outside).unwrap();
-    let target_real = fs::canonicalize(&target).unwrap();
     Fixture {
         _work: work,
         target,
