@@ -45,14 +45,14 @@
   - _Depends: 3.1, 3.2_
   - _Requirements: 2.6, 3.3, 7.1_
 
-- [ ] 5. 説明と申し送りを直しの後の形に合わせる
+- [x] 5. 説明と申し送りを直しの後の形に合わせる
 - [x] 5.1 README と steering の dola の記述を直す
   - README の書式の 2 行から YAML を消し、機能 `toml` で TOML を読み書きできること・ほかの書式は serde の導出で利用者が選べることを英文で書く
   - `tech.md` の dola の依存の表の YAML の行を `toml` の行に替え、`toml` の行の dola の文を直す。`product.md`・`structure.md` の書式の機能の列挙を `toml` だけにする
   - 済んだ形: README と steering 3 本に dola の機能としての `yaml`・`json` の語が残らず（`serde_json` が開発専用の依存だという記述は残す）、`toml` の版・機能の名前・使い道が書かれている
   - _Depends: 4_
   - _Requirements: 3.3, 5.1, 5.2, 5.3_
-- [ ] 5.2 (P) roadmap の申し送りの dola の項目を正味の差の 1 項目に書き直す
+- [x] 5.2 (P) roadmap の申し送りの dola の項目を正味の差の 1 項目に書き直す
   - 書く前に `product.md` で公開済みの最新の版を確かめ、頭を「`v{その版}` の後」にする
   - 機能 `json` と既定の機能の削除（壊れる変更）、機能 `yaml` と `serde_yaml` の削除（壊れる変更・機能の指定を消せば直る）、機能 `toml` の継続と `toml` 0.8→1 と読み書きの入口（利用者は自分で `toml` を依存に書かなくてよい）を 1 項目に書き、未決の書き方を消す
   - 済んだ形: 申し送りに dola の項目が 1 つだけ在り、「`dola-yaml-backend` が決める」の文が無い
