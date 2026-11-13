@@ -1,6 +1,6 @@
 # 実装計画
 
-- [ ] 1. 依存の土台を替え、監査の見逃しを消す
+- [x] 1. 依存の土台を替え、監査の見逃しを消す
 - [x] 1.1 `dola` の任意の依存と機能を YAML から TOML に替える
   - 任意の依存の YAML のクレートを、ワークスペースの版の指定に従う任意の `toml` に替え、任意の機能を `toml` の 1 つだけにする（既定の機能は足さない）
   - docs.rs が機能 `toml` を有効にして説明書を作る指定を足す
@@ -8,7 +8,7 @@
   - `Cargo.lock` は `cargo` に作り直させ、手で直さない
   - 済んだ形: `cargo build -p dola` と `cargo build -p dola --features toml` が通り、`cargo tree --workspace --all-features` の出力に `unsafe-libyaml`・`serde_yaml` が 0 件、`Cargo.lock` から `serde_yaml`・`unsafe-libyaml`・`ryu` が消えて増えた項目が 0
   - _Requirements: 1.1, 2.1, 2.7, 5.4, 5.6_
-- [ ] 1.2 監査の設定から `RUSTSEC-2024-0449` の見逃しを消す
+- [x] 1.2 監査の設定から `RUSTSEC-2024-0449` の見逃しを消す
   - 見逃しの 1 項目と説明のコメント 3 行だけを消し、決まりのコメントと空の `ignore` の並び・ほかの行は残す
   - 新しい見逃し・機能の除外・クレートの除外を足さない。別の勧告で赤になったら黙らせず、勧告の番号と引いているクレートを報告に残して止まる
   - 済んだ形: `cargo deny check` が終了コード 0 で終わり、`deny.toml` の差分がその 4 行の削除だけ
