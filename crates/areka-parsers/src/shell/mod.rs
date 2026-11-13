@@ -61,6 +61,12 @@ mod surfacetable;
 #[cfg(test)]
 mod surfacetable_tests;
 
+// 描画メソッドの 8 語の表と綴りの比べ方（audit-emo-atlas 指摘 13）: emo-compose と emo-atlas が共有する唯一の正本。
+mod pattern_word;
+
+#[cfg(test)]
+mod pattern_word_tests;
+
 // 公開面一点集約（要件 11.1）: 下流は本モジュールからの import のみで
 // モデル型と公開 facade を消費でき、内部の model/lexer/decode/parse 分割へ
 // 直接依存しない。依存方向 `model ← lexer ← decode ← parse` は不変。
@@ -72,5 +78,6 @@ pub use model::{
     SurfaceAppend,
 };
 pub use parse::{ShellText, parse, parse_all};
+pub use pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};
 pub use surfacetable::{SurfaceTable, SurfaceTableRow, parse_surfacetable};
 pub use undrawn::{UndrawnElementLine, parse_undrawn_elements};

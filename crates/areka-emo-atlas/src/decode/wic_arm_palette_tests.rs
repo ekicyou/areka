@@ -1,26 +1,16 @@
 //! `WicDecoderArm` のパレットの絵の兄弟テスト（spec: emo-atlas-palette-alpha 要件 1・2・5）。
 //!
 //! 検体（`testdata/palette/`・中身は同じフォルダの README）を本番の読み手で読み、
-//! `has_alpha` の判定と、`Normalizer` に通した後の画素（設計の Data Models の 2 つの表）を見る。
+//! `Normalizer` に通した後の画素（設計の Data Models の 2 つの表）と、画素を見ない 1・2 ビットの
+//! 検体の `has_alpha` を見る。
 
-use std::path::PathBuf;
-
-use super::test_support::with_arm;
 use crate::decode::ElementDecoder;
-use crate::normalize::{AlphaParams, Normalizer, UseSelfAlpha};
-
-fn sample(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/testdata/palette")
-        .join(name)
-}
+use crate::normalize::{Normalizer, UseSelfAlpha};
+use crate::test_support::{palette_sample as sample, params, pixel, with_arm};
 
 /// 2×2 の乗算済み BGRA を (0,0) (1,0) (0,1) (1,1) の順に並べる。
 fn pixels(bgra: &[u8], stride: u32) -> [[u8; 4]; 4] {
-    let px = |x: u32, y: u32| {
-        let i = (y * stride + x * 4) as usize;
-        <[u8; 4]>::try_from(&bgra[i..i + 4]).unwrap()
-    };
+    let px = |x, y| pixel(bgra, stride, x, y);
     [px(0, 0), px(1, 0), px(0, 1), px(1, 1)]
 }
 
@@ -35,12 +25,7 @@ fn assert_baked(name: &str, decl: UseSelfAlpha, expected: [[u8; 4]; 4]) {
     with_arm(|arm| {
         let img = arm.decode(&sample(name)).expect("palette sample decodes");
         assert_eq!((img.width, img.height), (2, 2));
-        let out = Normalizer.normalize(
-            img,
-            AlphaParams {
-                use_self_alpha: decl,
-            },
-        );
+        let out = Normalizer.normalize(img, params(decl));
         assert_eq!(
             pixels(&out.pbgra, out.stride),
             expected,
@@ -58,36 +43,17 @@ const MIXED: [[u8; 4]; 4] = [RED, RED, CLEAR, SEMI_BLUE];
 /// 透明度を持たない絵を `On` で通した後（左上の赤が抜ける・下の行は緑）。
 const PLAIN_KEYED: [[u8; 4]; 4] = [CLEAR, CLEAR, GREEN, GREEN];
 
-// 判定の表（要件 1.1・1.5・1.6・2.1・2.2）。
+// 判定の表（要件 1.1・1.5・1.6・2.1・2.2）: 画素を見ない 1・2 ビットの 2 本だけを `has_alpha` で見る
+// （`INDEXED_FORMATS` の 1・2 ビットの項の檻）。ほかの検体は `has_alpha` を取り違えると下の画素のテストが赤になる。
 
 #[test]
-fn has_alpha_idx8_mixed() {
-    assert_has_alpha("idx8_mixed.png", true);
+fn has_alpha_idx2_mixed() {
+    assert_has_alpha("idx2_mixed.png", true);
 }
 
 #[test]
-fn has_alpha_idx4_mixed() {
-    assert_has_alpha("idx4_mixed.png", true);
-}
-
-#[test]
-fn has_alpha_gray8_trns() {
-    assert_has_alpha("gray8_trns.png", true);
-}
-
-#[test]
-fn has_alpha_trans_gif() {
-    assert_has_alpha("trans.gif", true);
-}
-
-#[test]
-fn has_alpha_idx8_plain() {
-    assert_has_alpha("idx8_plain.png", false);
-}
-
-#[test]
-fn has_alpha_idx8_opaque_trns() {
-    assert_has_alpha("idx8_opaque_trns.png", false);
+fn has_alpha_idx1_trns() {
+    assert_has_alpha("idx1_trns.png", true);
 }
 
 // `On`（`1`／`true`）は出る画素のまま（要件 1.2・1.4・5.1・5.4・5.8）。
@@ -152,19 +118,20 @@ fn palette_has_alpha_fails_on_non_indexed_image() {
     use windows::core::{HSTRING, Interface};
 
     with_arm(|arm| {
-        let png = crate::sample_test_support::emo2_balloon_root().join("online0.png");
+        // RGBA の PNG（番号つきでない）・WIC は 1 枚目を読む
+        let png = crate::test_support::animated_sample("basic.apng");
         assert!(png.exists(), "fixture must exist: {}", png.display());
         let frame: IWICBitmapSource = unsafe {
             arm.factory
                 .CreateDecoderFromFilename(
-                    &HSTRING::from(png.to_string_lossy().as_ref()),
+                    &HSTRING::from(png.as_path()),
                     None,
                     GENERIC_READ,
                     WICDecodeMetadataCacheOnDemand,
                 )
                 .and_then(|d| d.GetFrame(0))
                 .and_then(|f| f.cast())
-                .expect("online0.png frame 0")
+                .expect("basic.apng frame 0")
         };
         let err = super::palette_has_alpha(&arm.factory, &frame)
             .expect_err("non-indexed image has no palette");

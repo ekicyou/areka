@@ -5,8 +5,8 @@
 //! bake パイプラインの脱落エントリを診断可能に集約するエラー型を定義する。デコード
 //! 失敗は当該エントリを索引表に載せず（`resolve` が `None`）記録して継続し（1 element の
 //! 失敗が全体を止めない・R2.2）、`bake` は `BakeResult.errors: Vec<BakeError>` へ集約して
-//! 返す。正規化は失敗しない（spec: areka-P0-self-alpha-declaration）。失敗は error! ログ ＋
-//! Err 戻り値で扱い、安易な panic を避ける（記憶 areka-log-first-no-silent-failure）。
+//! 返す。正規化は失敗しない（spec: areka-P0-self-alpha-declaration）。読めなかった絵の記録は
+//! 呼び手が出す。このクレートは `errors` に集めて返す。
 //!
 //! `DecodeError` の正本は [`crate::decode`]（パス保持・不在/破損）で、ここでは
 //! 集約型 `BakeError` の一腕として参照するのみ（再定義・移設はしない）。
@@ -36,11 +36,5 @@ impl std::error::Error for BakeError {
         match self {
             BakeError::Decode(e) => Some(e),
         }
-    }
-}
-
-impl From<DecodeError> for BakeError {
-    fn from(e: DecodeError) -> Self {
-        BakeError::Decode(e)
     }
 }

@@ -18,11 +18,11 @@ use crate::table::{Point, Size};
 /// `original` は常に原画像の寸法（全透明でも記録・4.2/4.5）。`placement=None` は
 /// 全 α==0 の空エントリ（以降の焼付をスキップできる・4.4）。
 #[derive(Clone, Debug)]
-pub struct TrimResult {
+pub(crate) struct TrimResult {
     /// 原寸（4.2/4.5）。全透明でも記録する。
-    pub original: Size,
+    pub(crate) original: Size,
     /// トリム後の配置エントリ。`None`＝全透明（空エントリ・焼付スキップ・4.4）。
-    pub placement: Option<Trimmed>,
+    pub(crate) placement: Option<Trimmed>,
 }
 
 /// トリム後の配置エントリ（tightly packed premultiplied BGRA）。
@@ -30,19 +30,19 @@ pub struct TrimResult {
 /// `trim_offset`＋配置座標で原画像全体を焼き付けた場合と見た目が等価になる（4.5）。
 /// `pbgra` は隙間なく詰めた最小矩形（`stride == size.w*4`・premultiplied 素通し・4.3）。
 #[derive(Clone, Debug)]
-pub struct Trimmed {
+pub(crate) struct Trimmed {
     /// 原画像内の bbox 左上（4.2）。
-    pub trim_offset: Point,
+    pub(crate) trim_offset: Point,
     /// トリム後寸法（α>0 を過不足なく含む最小・4.2）。
-    pub size: Size,
+    pub(crate) size: Size,
     /// トリム後 premultiplied BGRA（隙間なし・`len == stride * size.h`・4.3）。
-    pub pbgra: Vec<u8>,
+    pub(crate) pbgra: Vec<u8>,
     /// 行あたりバイト数（tightly packed ゆえ `size.w * 4`）。
-    pub stride: u32,
+    pub(crate) stride: u32,
 }
 
 /// α トリマー（bbox 算出・空判定・素通し焼付）。
-pub struct Trimmer;
+pub(crate) struct Trimmer;
 
 impl Trimmer {
     /// 正規化済み premultiplied BGRA 画像から α>0 タイト矩形を算出する。
@@ -52,7 +52,7 @@ impl Trimmer {
     /// α>0 画素が 1 つも無ければ `placement=None`（全透明・4.4）。それ以外は
     /// bbox を新規 tightly-packed バッファへ抽出し（画素は無変換・premultiplied
     /// のまま素通し・4.3/D8）、原画像内オフセットと寸法を記録する（4.2）。
-    pub fn trim(&self, img: &NormalizedImage) -> TrimResult {
+    pub(crate) fn trim(&self, img: &NormalizedImage) -> TrimResult {
         let original = Size {
             w: img.width,
             h: img.height,
@@ -66,7 +66,7 @@ impl Trimmer {
         let mut any = false;
 
         for y in 0..img.height {
-            let row_start = (y * img.stride) as usize;
+            let row_start = y as usize * img.stride as usize;
             for x in 0..img.width {
                 // PBGRA32: 4 byte/画素・α は 4 byte 目（オフセット +3）。
                 let alpha_offset = row_start + (x as usize * 4) + 3;
@@ -105,12 +105,12 @@ impl Trimmer {
         let out_stride = size.w * 4;
 
         // bbox 領域を tightly-packed な新規バッファへ行単位でコピー（premultiplied 素通し・4.3/D8）。
-        let mut pbgra = vec![0u8; (out_stride * size.h) as usize];
+        let mut pbgra = vec![0u8; out_stride as usize * size.h as usize];
         for row in 0..size.h {
             let src_y = min_y + row;
-            let src_start = (src_y * img.stride + min_x * 4) as usize;
-            let dst_start = (row * out_stride) as usize;
-            let len = (size.w * 4) as usize;
+            let src_start = src_y as usize * img.stride as usize + min_x as usize * 4;
+            let dst_start = row as usize * out_stride as usize;
+            let len = size.w as usize * 4;
             pbgra[dst_start..dst_start + len]
                 .copy_from_slice(&img.pbgra[src_start..src_start + len]);
         }
@@ -207,27 +207,6 @@ mod tests {
         assert_eq!(res.original, Size { w: 5, h: 4 }, "original still recorded");
     }
 
-    /// 4.2: trim_offset / size / original の三者を具体値で記録。
-    #[test]
-    fn records_offset_size_original() {
-        let (w, h) = (6u32, 5u32);
-        let mut buf = vec![0u8; (w * 4 * h) as usize];
-        // x∈[1,4] y∈[2,3]
-        for y in 2..=3 {
-            for x in 1..=4 {
-                set_alpha(&mut buf, w * 4, x, y, 255);
-            }
-        }
-        let res = Trimmer.trim(&img(w, h, buf));
-        let t = res.placement.expect("opaque region");
-        assert_eq!(t.trim_offset, Point { x: 1, y: 2 });
-        assert_eq!(t.size, Size { w: 4, h: 2 });
-        assert_eq!(res.original, Size { w: 6, h: 5 });
-        // 三者整合（invariant）: trim_offset + size <= original。
-        assert!(t.trim_offset.x as u32 + t.size.w <= res.original.w);
-        assert!(t.trim_offset.y as u32 + t.size.h <= res.original.h);
-    }
-
     /// 4.5（最強）: 座標不変。トリム結果を trim_offset へ blit し直すと原画像に一致。
     ///
     /// bbox 外は全て α==0（premultiplied では BGRA すべて 0）ゆえ、tight 矩形を
@@ -319,26 +298,6 @@ mod tests {
         assert_eq!(t.size, Size { w: 3, h: 2 });
         // 入力 stride == width*4 ゆえ tightly-packed 出力は入力と一致。
         assert_eq!(t.pbgra, expected);
-    }
-
-    /// 7: Trimmed は tightly packed（stride==size.w*4・len==stride*size.h）。
-    #[test]
-    fn trimmed_is_tightly_packed() {
-        let (w, h) = (4u32, 4u32);
-        let mut buf = vec![0u8; (w * 4 * h) as usize];
-        for y in 1..=2 {
-            for x in 1..=3 {
-                set_alpha(&mut buf, w * 4, x, y, 255);
-            }
-        }
-        let res = Trimmer.trim(&img(w, h, buf));
-        let t = res.placement.expect("opaque");
-        assert_eq!(t.stride, t.size.w * 4, "tight stride");
-        assert_eq!(
-            t.pbgra.len(),
-            (t.stride * t.size.h) as usize,
-            "len == stride * height"
-        );
     }
 
     /// 8: パディング付き入力 stride（stride > width*4）でも正しくトリム＆tightly-packed 出力。

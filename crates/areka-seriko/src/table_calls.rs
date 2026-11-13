@@ -1,8 +1,8 @@
 //! 再生表のコマを描くコマと働きのコマに分ける（spec: seriko-pattern-calls 要件 1.1・1.3・1.5・2.4・
 //! 7.4）。
 //!
-//! 8 語の見分けと相手の欄の読みは `areka_emo_compose::pattern_word` が唯一の正本で、ここはその答えを
-//! 再生表のコマ（[`LoopFrame`]）の働き（[`FrameAct`]）へ写すだけ。働きのコマの合成メソッドは記録なしの
+//! 8 語の見分けと相手の欄の読みは `areka_parsers::shell::pattern_word` が唯一の正本（`areka_emo_compose::pattern_word`
+//! はその再公開）で、ここはその答えを再生表のコマ（[`LoopFrame`]）の働き（[`FrameAct`]）へ写すだけ。働きのコマの合成メソッドは記録なしの
 //! `ComposeMethod::Unknown`（使われない）で、絵の番号は持たない。
 //!
 //! 面ごとの表を作った後に 8 語の誤りを検査し、1 件ごとに 1 度だけ `warn!` を出す（[`check_calls`]・

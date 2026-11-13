@@ -20,10 +20,25 @@ const WEBP_ANIMATION_FLAG: u8 = 0x02;
 pub(crate) fn sniff<R: Read + Seek>(reader: &mut R) -> Option<AnimationInfo> {
     let total = reader.seek(SeekFrom::End(0)).ok()?;
     let head = read_at::<12, _>(reader, 0)?;
+    match format_of(&head)? {
+        Format::Png => sniff_png(reader, total),
+        Format::Webp => sniff_webp(reader, total),
+    }
+}
+
+/// 動く絵になりうる形式（先頭の署名で分ける）。
+pub(super) enum Format {
+    Png,
+    Webp,
+}
+
+/// ファイルの先頭 12 バイトの署名で形式を分ける。見分け（`sniff`）と読み手（`image_arm`）が
+/// 同じ判定を使うので、「動く絵と見分けたのに読み手が開けない」ずれが起きない。
+pub(super) fn format_of(head: &[u8; 12]) -> Option<Format> {
     if head[..8] == PNG_SIGNATURE {
-        sniff_png(reader, total)
+        Some(Format::Png)
     } else if &head[..4] == b"RIFF" && &head[8..] == b"WEBP" {
-        sniff_webp(reader, total)
+        Some(Format::Webp)
     } else {
         None
     }
@@ -67,7 +82,7 @@ fn sniff_png<R: Read + Seek>(reader: &mut R, total: u64) -> Option<AnimationInfo
 fn sniff_webp<R: Read + Seek>(reader: &mut R, total: u64) -> Option<AnimationInfo> {
     let header = read_at::<8, _>(reader, 12)?;
     let len = u64::from(le32(&header[4..]));
-    if &header[..4] != b"VP8X" || len < 10 || 20 + len > total {
+    if &header[..4] != b"VP8X" || len < 10 {
         return None;
     }
     let d = read_at::<10, _>(reader, 20)?;

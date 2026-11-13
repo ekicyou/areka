@@ -1,51 +1,10 @@
-//! pattern定義の描画メソッドの 8 語の見分けと、相手の欄（欄 2）の読み（seriko-pattern-calls
+//! pattern定義の描画メソッドの 8 語と、相手の欄（欄 2）の読み（seriko-pattern-calls
 //! 要件 1.1・1.2・2.1〜2.3）。
 //!
-//! 8 語（`start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・
-//! `parallelstop`・`insert`・`move`）の見分けはここだけが持つ唯一の正本である。上流の
-//! emo-atlas `manifest.rs` の `bind_only_paths` だけは emo-compose を引けないので語の写しを持つ
-//! （ここを変えたらそちらも直す）。照会だけで、記録は出さない。
+//! 8 語の表と綴りの比べ方の正本は `areka_parsers::shell::pattern_word`（emo-atlas のマニフェストと
+//! 共有する）。ここはその型と関数を再公開し、相手の欄の読みを持つ。照会だけで、記録は出さない。
 
-use crate::method::canonical_method_name;
-
-/// pattern定義の描画メソッドの語の種類。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PatternWord {
-    /// 8 語のどれでもない（重ね方の語・未知の語）。
-    Draw,
-    Start,
-    Stop,
-    AlternativeStart,
-    AlternativeStop,
-    ParallelStart,
-    ParallelStop,
-    Insert,
-    Move,
-}
-
-/// 描画メソッドの語が 8 語のどれかを答える（綴りの比べ方は合成メソッドと同じ
-/// [`canonical_method_name`]・記録は出さない）。
-pub fn pattern_word(method: &str) -> PatternWord {
-    match &*canonical_method_name(method) {
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#start_2cID:1
-        "start" => PatternWord::Start,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#stop_2cID:1
-        "stop" => PatternWord::Stop,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#alternativestart_2c_28ID1_2cID2..._29:1
-        "alternativestart" => PatternWord::AlternativeStart,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#alternativestop_2c_28ID1_2cID2..._29:1
-        "alternativestop" => PatternWord::AlternativeStop,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#parallelstart_2c_28ID1_2cID2..._29:1
-        "parallelstart" => PatternWord::ParallelStart,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#parallelstop_2c_28ID1_2cID2..._29:1
-        "parallelstop" => PatternWord::ParallelStop,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#insert_2cID:1
-        "insert" => PatternWord::Insert,
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#move:1
-        "move" => PatternWord::Move,
-        _ => PatternWord::Draw,
-    }
-}
+pub use areka_parsers::shell::{PatternWord, pattern_word};
 
 /// 相手の欄が読めなかった（空・数でない・名前を含む・負の数・並びが空）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

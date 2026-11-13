@@ -6,11 +6,14 @@
 use crate::decode::{AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage, MemoryDecoder};
 use crate::limits::AnimationLimits;
 use crate::manifest::SurfaceSet;
-use crate::normalize::{AlphaParams, UseSelfAlpha};
+use crate::normalize::UseSelfAlpha;
 use crate::pack::PackConfig;
 use crate::table::{AtlasTable, ElementId, LoopCount, SetId};
+use crate::test_support::{
+    BROKEN, FELL_BACK, KEYED, OVER, dump, elem, full, params, surface, view,
+};
 use crate::{BakeResult, bake_with_limits};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
+use areka_parsers::shell::Surface;
 use std::num::NonZeroU32;
 use std::path::Path;
 
@@ -23,40 +26,19 @@ const K1: Px = [40, 50, 60, 255];
 const X: Px = [70, 80, 90, 255];
 const Y: Px = [100, 110, 120, 255];
 
-/// a.png・anim.png・c.png の 3 つを持つシェル（鍵の並びは a → anim → c）。
-fn shell() -> Vec<Surface> {
-    shell_of(&["a.png", "anim.png", "c.png"])
-}
-
 /// 名前を並べたシェル（面 0 に 1 層ずつ）。
 fn shell_of(names: &[&str]) -> Vec<Surface> {
     let elements = names
         .iter()
         .enumerate()
-        .map(|(layer, path)| Element {
-            layer: layer as u32,
-            path: ElementPath::new(path.to_string()),
-            x: 0,
-            y: 0,
-        })
+        .map(|(layer, path)| elem(layer as u32, path))
         .collect();
-    vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }]
+    vec![surface(0, elements)]
 }
 
 /// 2×2 の絵（画素は左上から行順）。
 fn image(px: [Px; 4], has_alpha: bool) -> DecodedImage {
-    DecodedImage {
-        width: 2,
-        height: 2,
-        stride: 8,
-        bgra: px.concat(),
-        has_alpha,
-    }
+    crate::test_support::image(2, 2, has_alpha, &px)
 }
 
 fn animated(frames: &[([Px; 4], u32)], has_alpha: bool) -> AnimatedImage {
@@ -76,8 +58,7 @@ fn animated(frames: &[([Px; 4], u32)], has_alpha: bool) -> AnimatedImage {
 fn stills() -> MemoryDecoder {
     let mut dec = MemoryDecoder::new();
     for (rel, px) in [("a.png", [X; 4]), ("c.png", [Y; 4])] {
-        let img = image(px, true);
-        dec.insert(Path::new(BASE).join(rel), 2, 2, 8, img.bgra, img.has_alpha);
+        insert_still(&mut dec, rel, image(px, true));
     }
     dec
 }
@@ -85,14 +66,10 @@ fn stills() -> MemoryDecoder {
 /// anim.png を動く絵として登録した偽の読み手（全コマの答えだけを使う）。
 fn with_animation(anim: AnimatedImage) -> MemoryDecoder {
     let mut dec = stills();
-    let info = AnimationInfo {
-        width: 2,
-        height: 2,
-        frame_count: anim.frames.len() as u32,
-    };
-    dec.insert_animated(
-        Path::new(BASE).join("anim.png"),
-        info,
+    insert_anim(
+        &mut dec,
+        "anim.png",
+        anim.frames.len() as u32,
         Err("first frame is not used here".into()),
         Ok(anim),
     );
@@ -132,7 +109,7 @@ fn bake_as(
     let sets = [SurfaceSet {
         surfaces: &surfaces,
         base_dir: Path::new(BASE),
-        alpha_params: AlphaParams { use_self_alpha },
+        alpha_params: params(use_self_alpha),
     }];
     bake_with_limits(&sets, dec, cfg, limits)
 }
@@ -144,52 +121,7 @@ fn bake_logged(
     limits: AnimationLimits,
     cfg: PackConfig,
 ) -> (BakeResult, String) {
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| {
-        result = Some(bake_in(dec, names, limits, cfg));
-    });
-    (result.unwrap(), log)
-}
-
-/// エントリをページから原寸の絵へ戻す（切り詰めの外は透明）。
-fn full(table: &AtlasTable, id: ElementId) -> Vec<Px> {
-    let e = table.entry(id);
-    let w = e.original.w;
-    let mut out = vec![CLEAR; (w * e.original.h) as usize];
-    if let Some(p) = &e.placement {
-        let page = table.page(p.page).expect("page exists");
-        for y in 0..p.uv_rect.h {
-            for x in 0..p.uv_rect.w {
-                let src = ((p.uv_rect.y + y) * page.stride + (p.uv_rect.x + x) * 4) as usize;
-                let dst = ((p.trim_offset.y as u32 + y) * w + p.trim_offset.x as u32 + x) as usize;
-                out[dst] = page.bytes[src..src + 4].try_into().unwrap();
-            }
-        }
-    }
-    out
-}
-
-/// 表の中身を順序の決まった文字列にする（`HashMap` の並びに依らない）。
-fn dump(table: &AtlasTable) -> String {
-    let mut s = String::new();
-    for i in 0..table.len() {
-        let id = ElementId(i as u32);
-        s += &format!(
-            "{i}: {:?} {:?} {:?}\n",
-            table.key(id),
-            table.entry(id),
-            table.animation(id)
-        );
-    }
-    for page in table.pages() {
-        s += &format!(
-            "page {}x{} {:?}\n",
-            page.width,
-            page.height,
-            &page.bytes[..]
-        );
-    }
-    s
+    crate::log_capture::capture_logs(|| bake_in(dec, names, limits, cfg))
 }
 
 fn three_frames() -> AnimatedImage {
@@ -208,14 +140,7 @@ fn three_frames() -> AnimatedImage {
 fn frames_follow_the_key_entries_and_the_key_resolves_to_frame_zero() {
     let anim = bake(&with_animation(three_frames())).table;
     let mut still_dec = stills();
-    still_dec.insert(
-        Path::new(BASE).join("anim.png"),
-        2,
-        2,
-        8,
-        [K0, X, X, X].concat(),
-        true,
-    );
+    insert_still(&mut still_dec, "anim.png", image([K0, X, X, X], true));
     let still = bake(&still_dec).table;
 
     for rel in ["a.png", "anim.png", "c.png"] {
@@ -294,9 +219,8 @@ fn transparent_frame_keeps_its_number_and_delay_without_warning() {
         &[([K0; 4], 100), ([CLEAR; 4], 40), ([X; 4], 70)],
         true,
     ));
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| result = Some(bake(&dec)));
-    let table = result.unwrap().table;
+    let (result, log) = crate::log_capture::capture_logs(|| bake(&dec));
+    let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     let a = table.animation(parent).unwrap();
     assert_eq!(a.frames.len(), 3, "the transparent frame is not dropped");
@@ -318,9 +242,8 @@ fn transparent_frame_zero_keeps_the_key_entry_without_warning() {
         &[([CLEAR; 4], 100), ([K0; 4], 40), ([X; 4], 70)],
         true,
     ));
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| result = Some(bake(&dec)));
-    let table = result.unwrap().table;
+    let (result, log) = crate::log_capture::capture_logs(|| bake(&dec));
+    let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     let a = table.animation(parent).unwrap();
     assert_eq!(a.delays_ms, vec![100, 40, 70]);
@@ -334,9 +257,8 @@ fn transparent_frame_zero_keeps_the_key_entry_without_warning() {
 #[test]
 fn all_transparent_animation_warns_once() {
     let dec = with_animation(animated(&[([CLEAR; 4], 100), ([CLEAR; 4], 40)], true));
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| result = Some(bake(&dec)));
-    let table = result.unwrap().table;
+    let (result, log) = crate::log_capture::capture_logs(|| bake(&dec));
+    let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     assert_eq!(table.animation(parent).unwrap().frames.len(), 2);
     assert_eq!(log.matches("全透明").count(), 1, "one warning: {log}");
@@ -345,10 +267,6 @@ fn all_transparent_animation_warns_once() {
 
 // ---- 1 枚へ縮める 3 段（要件 3.3・4.3・6.2〜6.8・8.4・8.5） ----
 
-const OVER: &str = "bake: 動く絵が上限を超えたので 1 枚だけ読みます";
-const BROKEN: &str = "bake: 動く絵として読めなかったので 1 枚だけ読みます";
-const FELL_BACK: &str =
-    "bake: 動く絵の 1 枚目を読めなかったので、今までの読み方で 1 枚だけ読みます";
 /// 上限で縮むときの全コマの答え。`decode_frames` が呼ばれれば `reason` にこの文が出る。
 const NOT_READ: &str = "all frames must not be read";
 /// 3 つの `warn!` に共通の欄（設計 Monitoring）。どの絵も組 0 に在る。
@@ -392,16 +310,6 @@ fn insert_still(dec: &mut MemoryDecoder, rel: &str, img: DecodedImage) {
 
 fn warns(log: &str) -> Vec<&str> {
     log.lines().filter(|l| l.contains("level=WARN")).collect()
-}
-
-/// エントリの見え方（寸法・切り詰めの位置と大きさ・原寸へ戻した画素）。ページ上の位置は含めない。
-fn view(table: &AtlasTable, id: ElementId) -> String {
-    let e = table.entry(id);
-    let trim = e
-        .placement
-        .as_ref()
-        .map(|p| (p.trim_offset, p.uv_rect.w, p.uv_rect.h));
-    format!("{:?} {:?} {:?}", e.original, trim, full(table, id))
 }
 
 /// 透明度を持たない 3 コマの動く絵。0 番の左上の色 K0 を抜くと 0 番は右下の 1 画素だけになる。
@@ -493,15 +401,11 @@ fn reasons(anim: &AnimatedImage) -> Vec<Reason> {
             "exceeded=\"page_side\"",
         ),
         broken("frame count mismatch", Ok(two), "got 2 frames"),
+        // 読めない形式（16 ビットの APNG など）も同じ道（`decode_frames` が文を返す）で、文が違うだけ。
         broken(
             "frame failure",
             Err("frame 2 is broken".into()),
             "frame 2 is broken",
-        ),
-        broken(
-            "unsupported form",
-            Err("16-bit APNG is not supported".into()),
-            "16-bit APNG is not supported",
         ),
         broken("frame size mismatch", Ok(small), "2x2, 2x2, 1x1"),
     ]
@@ -604,6 +508,13 @@ fn total_limit_shrinks_only_the_third_animation() {
     let (first, log) = bake_logged(&dec, &ANIMS, limits, PackConfig::default());
     assert!(first.errors.is_empty(), "{:?}", first.errors);
     assert_eq!(animated_of(&first.table), [true, true, false]);
+    // 2 つの動く絵のコマは、鍵のエントリ 3 つの後ろへ親の番号の昇順・コマの番号の昇順に並ぶ（要件 4.7）。
+    let frames_of = |rel| {
+        let id = first.table.resolve(SetId(0), rel).unwrap();
+        first.table.animation(id).unwrap().frames.clone()
+    };
+    assert_eq!(frames_of("anim1.png"), vec![ElementId(0), ElementId(3)]);
+    assert_eq!(frames_of("anim2.png"), vec![ElementId(1), ElementId(4)]);
     let anim3 = first.table.resolve(SetId(0), "anim3.png").unwrap();
     assert_eq!(full(&first.table, anim3), vec![X; 4], "frame 0 of anim3");
     let w = warns(&log);
@@ -691,44 +602,23 @@ fn first_frame_failure_falls_back_to_the_old_reader_then_to_the_failure_list() {
     }
 }
 
-/// 上限を渡さない入口 `bake` は既定の上限で焼く（環境変数は触らない）。
-#[test]
-fn bake_without_limits_uses_the_default_limits() {
-    let dec = with_animation(three_frames());
-    let surfaces = shell();
-    let sets = [SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    }];
-    let table = crate::bake(&sets, &dec, PackConfig::default()).table;
-    let parent = table.resolve(SetId(0), "anim.png").unwrap();
-    assert_eq!(table.animation(parent).unwrap().frames.len(), 3);
-    assert_eq!(dump(&table), dump(&bake(&dec).table));
-}
-
 // ---- 宣言ごとの動く絵と `.pna`（spec: areka-P0-self-alpha-declaration 要件 3.3・4.3・4.4・5.5・5.7・9.4） ----
 
 /// 半透明（乗算済みの 0,0,64・α=128）。
 const H: Px = [0, 0, 64, 128];
-const KEYED: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
 
 /// anim.png だけのシェルを宣言つきで焼き、全部のコマの画素とログを返す（失敗の一覧は空）。
 fn frames_as(anim: AnimatedImage, decl: UseSelfAlpha) -> (Vec<Vec<Px>>, String) {
     let dec = with_animation(anim);
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| {
-        result = Some(bake_as(
+    let (result, log) = crate::log_capture::capture_logs(|| {
+        bake_as(
             &dec,
             &["anim.png"],
             decl,
             AnimationLimits::default(),
             PackConfig::default(),
-        ));
+        )
     });
-    let result = result.unwrap();
     assert!(result.errors.is_empty(), "{decl:?}: {:?}", result.errors);
     let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();

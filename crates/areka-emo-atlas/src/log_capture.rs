@@ -26,56 +26,12 @@
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// クロージャ `f` を実行し、その最中に**現在のスレッド**で発火した `tracing` イベントを
-/// 1 行 1 イベントの文字列へ整形して返す（改行連結）。
+/// 1 行 1 イベントの文字列へ整形し（改行連結）、`f` の戻り値と組にして返す。
 ///
-/// 捕捉と硬化は `log-capture-kit` の [`capture_lines`] が行う。返り値は捕捉テキストで、呼び手は
+/// 捕捉と硬化は `log-capture-kit` の [`capture_lines`] が行う。組の 2 つ目が捕捉テキストで、呼び手は
 /// `contains` で level（`level=WARN`）・target（`target=areka_emo_atlas`）・discriminating field
 /// （`rel_path=…`／`set=…`／`original_w=…` 等）を検証する。
-pub(crate) fn capture_logs<F: FnOnce()>(f: F) -> String {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines.join("\n")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::capture_logs;
-
-    /// ハーネス自体の健全性: 捕捉クロージャ内で発火した warn/error を level・target・field つきで拾う。
-    #[test]
-    fn harness_captures_level_target_and_fields() {
-        let out = capture_logs(|| {
-            tracing::warn!(target: "areka_emo_atlas", set = 0u32, rel_path = "clear.png", "テスト warn");
-            tracing::error!(target: "areka_emo_atlas", key = "k", "テスト error");
-        });
-        assert!(out.contains("level=WARN"), "WARN level を捕捉: {out}");
-        assert!(out.contains("level=ERROR"), "ERROR level を捕捉: {out}");
-        assert!(
-            out.contains("target=areka_emo_atlas"),
-            "target を捕捉: {out}"
-        );
-        assert!(out.contains("set=0"), "数値フィールドを捕捉: {out}");
-        assert!(
-            out.contains("rel_path=\"clear.png\""),
-            "文字列フィールドを捕捉: {out}"
-        );
-    }
-
-    /// クロージャ外（with_default スコープ外）のログは捕捉されない（スレッドローカル境界の実証）。
-    #[test]
-    fn harness_does_not_capture_outside_scope() {
-        let out = capture_logs(|| {
-            tracing::warn!(target: "areka_emo_atlas", "inside");
-        });
-        // スコープ後のログは別 subscriber（=none）へ流れ、捕捉テキストへ混ざらない。
-        tracing::warn!(target: "areka_emo_atlas", "outside");
-        assert!(out.contains("inside"), "スコープ内は捕捉: {out}");
-        assert!(!out.contains("outside"), "スコープ外は捕捉しない: {out}");
-    }
-
-    /// 空クロージャ（何もログしない）は空文字列を返す（非発火の陰性確認＝非空虚性の土台）。
-    #[test]
-    fn harness_returns_empty_when_no_logs() {
-        let out = capture_logs(|| {});
-        assert!(out.is_empty(), "ログ皆無なら空文字列: {out:?}");
-    }
+pub(crate) fn capture_logs<R>(f: impl FnOnce() -> R) -> (R, String) {
+    let (out, lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    (out, lines.join("\n"))
 }

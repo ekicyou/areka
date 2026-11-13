@@ -235,32 +235,8 @@ mod tests {
             .1
     }
 
-    #[test]
-    fn png_names_and_sizes_match_the_file_table() {
-        let all = png_pictures();
-        let got: Vec<(&str, u32, u32)> = all.iter().map(|(n, p)| (*n, p.width, p.height)).collect();
-        assert_eq!(
-            got,
-            vec![
-                ("arrow0", 11, 10),
-                ("arrow1", 11, 10),
-                ("balloonc0", 400, 63),
-                ("balloonc1", 400, 63),
-                ("balloonc2", 400, 63),
-                ("balloonc3", 400, 63),
-                ("balloonk0", 326, 96),
-                ("balloonk1", 326, 96),
-                ("balloons0", 326, 169),
-                ("balloons1", 326, 169),
-                ("balloons2", 326, 348),
-                ("balloons3", 326, 348),
-                ("sstp", 7, 9),
-            ]
-        );
-        for (n, p) in &all {
-            assert_eq!(p.rgba.len(), (p.width * p.height * 4) as usize, "{n}");
-        }
-    }
+    // 名前と大きさは `build.rs` の組み立てのテスト（大きさの表）が、
+    // 同じに描けることは `build.rs` の組み立てのテストとずれの見張り（tests/default_balloon_drift_test.rs）が見る。
 
     #[test]
     fn faces_have_opaque_clear_and_soft_pixels() {
@@ -350,12 +326,5 @@ mod tests {
             }
             assert_eq!(alpha(f, 2, 2), 0, "frame {k} outside");
         }
-    }
-
-    #[test]
-    fn drawing_is_repeatable() {
-        let a: Vec<Vec<u8>> = png_pictures().into_iter().map(|(_, p)| p.rgba).collect();
-        let b: Vec<Vec<u8>> = png_pictures().into_iter().map(|(_, p)| p.rgba).collect();
-        assert!(a == b);
     }
 }

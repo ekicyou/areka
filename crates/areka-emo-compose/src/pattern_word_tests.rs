@@ -1,6 +1,7 @@
-//! 8 語の見分けと相手の欄の読みの檻（seriko-pattern-calls 要件 1.2・2.1〜2.3・9.2）。
+//! 相手の欄の読みの檻（seriko-pattern-calls 要件 2.1〜2.3・9.2・8 語の見分けの檻は areka-parsers の
+//! `shell/pattern_word_tests.rs`）。
 
-use super::{PatternWord, UnreadableTarget, call_targets, pattern_word};
+use super::{PatternWord, UnreadableTarget, call_targets};
 
 const LISTS: [PatternWord; 4] = [
     PatternWord::AlternativeStart,
@@ -11,34 +12,6 @@ const LISTS: [PatternWord; 4] = [
 
 fn ok(ids: &[u32]) -> Result<Box<[u32]>, UnreadableTarget> {
     Ok(ids.into())
-}
-
-/// 8 語を大文字・`-`・`_`・前後の空白を問わずに見分ける（要件 1.2）。
-#[test]
-fn words_are_compared_like_compose_methods() {
-    let cases = [
-        ("start", PatternWord::Start),
-        (" STOP ", PatternWord::Stop),
-        ("Alternative-Start", PatternWord::AlternativeStart),
-        ("alternative_stop", PatternWord::AlternativeStop),
-        ("PARALLEL-START", PatternWord::ParallelStart),
-        ("parallel_Stop", PatternWord::ParallelStop),
-        ("\tInsert", PatternWord::Insert),
-        ("Mo-ve", PatternWord::Move),
-    ];
-    for (method, want) in cases {
-        assert_eq!(pattern_word(method), want, "{method:?}");
-    }
-}
-
-/// 8 語以外（重ね方の語・未知の語・空）は Draw（要件 1.5）。
-#[test]
-fn other_words_are_draw() {
-    for method in [
-        "overlay", "bind", "add", "base", "reduce", "starts", "", "blink",
-    ] {
-        assert_eq!(pattern_word(method), PatternWord::Draw, "{method:?}");
-    }
 }
 
 /// start・stop・insert は番号 1 つを読む（要件 2.1）。

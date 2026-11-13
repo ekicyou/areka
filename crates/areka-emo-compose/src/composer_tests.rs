@@ -515,7 +515,7 @@ fn transient_frame_replaces_same_id_bind_steps_and_preserves_painter_order() {
     );
     // 置換された青の手順は合成に 1 画素も現れない（コマが完全に肩代わり）。
     assert!(
-        !out.bytes().chunks_exact(4).any(|p| p == [200, 0, 0, 255]),
+        !out.bytes().as_chunks::<4>().0.contains(&[200, 0, 0, 255]),
         "置換された着せ替えの手順(青 surface1100)は合成へ寄与しない（要件 4.2・現在コマ 1 枚）"
     );
 
@@ -550,7 +550,7 @@ fn transient_merge_is_pattern_driven_not_static() {
     );
     // 赤(コマ surface1300)は空 pattern では 1 画素も現れない。
     assert!(
-        !out.bytes().chunks_exact(4).any(|p| p == [0, 0, 200, 255]),
+        !out.bytes().as_chunks::<4>().0.contains(&[0, 0, 200, 255]),
         "空 PatternState では transient コマ(赤 1300)は合成に現れない"
     );
 }

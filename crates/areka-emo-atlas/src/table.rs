@@ -19,8 +19,7 @@ use std::sync::Arc;
 pub struct ElementId(pub u32);
 
 /// SurfaceSet の序数（出所の識別・重複排除キーの一部）。
-/// （設計では ManifestDeriver 節に記載されるが、`AtlasKey` が含むため契約層 table.rs に
-///  定義し、manifest.rs〔task 2.1〕はここから import する。）
+/// （`AtlasKey` が含むため契約層の table.rs に置き、manifest.rs はここから import する。）
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SetId(pub u32);
 
@@ -109,7 +108,7 @@ pub struct Animation {
 /// 索引表＋頁群（bake の成果物・channel 非依存・6.5）。
 ///
 /// `entries`/`keys` は `ElementId`（= index）で整列した密 `Vec`（毎フレーム O(1)）。
-/// `bake` が一度構築し以後不変（immutable snapshot）。`Arc` 共有ゆえ `Clone` は安価。
+/// `bake` が一度構築し以後不変（immutable snapshot）。欄は全部 `Arc` で共有するので、`Clone` は `Arc` の写しだけ。
 #[derive(Clone, Debug)]
 pub struct AtlasTable {
     /// index == ElementId.0（デバッグ逆引き・ツリーダンプ用）。
@@ -117,41 +116,22 @@ pub struct AtlasTable {
     /// index == ElementId.0（ランタイム正準参照）。
     entries: Arc<[AtlasEntry]>,
     /// 構築時の一度きり用（(set, rel_path)→ElementId）。
-    resolve: HashMap<AtlasKey, ElementId>,
+    resolve: Arc<HashMap<AtlasKey, ElementId>>,
     pages: Arc<[AtlasPage]>,
     /// 動く絵の親の `ElementId`→コマの並び（静止画と 2 枚目以降のコマは載らない）。
     animations: Arc<HashMap<ElementId, Animation>>,
 }
 
 impl AtlasTable {
-    /// 索引表を構築する（`bake` とテストの入口）。
+    /// 動く絵の無い索引表を組む（テストの入口）。`with_frames` に空のコマを渡すのと同じ。
     ///
     /// `keys` と `entries` はともに `ElementId`（= index）で整列した密 `Vec` であり、
-    /// `keys.len() == entries.len()` を前提とする（両者は同一 ElementId で対応）。
-    /// `resolve` 逆引き表は `keys[i].clone() → ElementId(i)` として内部で構築する。
+    /// 同じ鍵が複数あるときは `with_frames` と同じく小さい方の番号を `resolve` の答えにする。
     ///
     /// # Panics
     /// `keys.len() != entries.len()` のとき panic する（契約違反・呼び出し側のバグ）。
     pub fn new(keys: Vec<AtlasKey>, entries: Vec<AtlasEntry>, pages: Vec<AtlasPage>) -> Self {
-        assert_eq!(
-            keys.len(),
-            entries.len(),
-            "AtlasTable::new: keys.len() ({}) != entries.len() ({}) — both are indexed by ElementId",
-            keys.len(),
-            entries.len(),
-        );
-        let resolve = keys
-            .iter()
-            .enumerate()
-            .map(|(i, k)| (k.clone(), ElementId(i as u32)))
-            .collect();
-        Self {
-            keys: keys.into(),
-            entries: entries.into(),
-            resolve,
-            pages: pages.into(),
-            animations: Arc::default(),
-        }
+        Self::with_frames(keys, entries, pages, Vec::new())
     }
 
     /// 動く絵つきの表を組む（`bake` とテストの入口・4.2〜4.5）。
@@ -162,7 +142,7 @@ impl AtlasTable {
     ///
     /// # Panics
     /// `keys.len() != entries.len()`、コマの並びが 2 未満か待ち時間と長さが違う、
-    /// コマの番号が表の外、のいずれかで panic する（契約違反・呼び出し側のバグ）。
+    /// コマの先頭が親でない、コマの番号が表の外、のいずれかで panic する（契約違反・呼び出し側のバグ）。
     pub fn with_frames(
         keys: Vec<AtlasKey>,
         entries: Vec<AtlasEntry>,
@@ -184,6 +164,11 @@ impl AtlasTable {
                 a.delays_ms.len(),
             );
             assert!(
+                a.frames[0] == *parent,
+                "AtlasTable::with_frames: animation {parent:?} frame 0 is not the parent ({:?})",
+                a.frames[0],
+            );
+            assert!(
                 a.frames.iter().all(|f| (f.0 as usize) < entries.len()),
                 "AtlasTable::with_frames: animation {parent:?} has a frame outside the table ({} entries)",
                 entries.len(),
@@ -197,7 +182,7 @@ impl AtlasTable {
         Self {
             keys: keys.into(),
             entries: entries.into(),
-            resolve,
+            resolve: Arc::new(resolve),
             pages: pages.into(),
             animations: Arc::new(animations.into_iter().collect()),
         }
@@ -375,19 +360,10 @@ mod tests {
 
     /// 6.4: AtlasTable / AtlasPage が Send + Sync（スレッド間安全手渡し）。
     #[test]
-    fn table_is_send_sync_and_cheap_clone() {
+    fn table_and_page_are_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<AtlasTable>();
         assert_send_sync::<AtlasPage>();
-
-        // Arc 共有ゆえ clone が安価・両方使える。
-        let t = sample_table();
-        let t2 = t.clone();
-        assert_eq!(t.len(), t2.len());
-        assert_eq!(
-            t.resolve(SetId(0), "surface0.png"),
-            t2.resolve(SetId(0), "surface0.png")
-        );
     }
 
     /// 6.3: page 取得・stride 明示・範囲外は None・pages() スライス長一致。

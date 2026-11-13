@@ -126,5 +126,10 @@ pub(super) fn compose_surface1000(
 
 /// α>0 の画素数を数える（非空虚性・重なり量の要点指標）。
 pub(super) fn opaque_pixel_count(s: &ComposedSurface) -> usize {
-    s.bytes().chunks_exact(4).filter(|px| px[3] > 0).count()
+    s.bytes()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|px| px[3] > 0)
+        .count()
 }

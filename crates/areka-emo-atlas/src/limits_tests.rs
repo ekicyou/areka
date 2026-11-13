@@ -171,6 +171,27 @@ fn from_lookup_not_unicode_falls_back_alone() {
     assert_eq!(warnings[0].name, MAX_TOTAL_PIXELS_ENV);
 }
 
+/// 指摘 6⑸: 読めない値を返す引き手では `WARN` が 1 行（変数の名と値を含む）で、その項目は既定。
+#[test]
+fn from_env_with_warns_once_for_the_unreadable_item() {
+    let (limits, log) = crate::log_capture::capture_logs(|| {
+        AnimationLimits::from_env_with(lookup_of(Some(Some("7")), Some(Some("x")), None))
+    });
+    assert_eq!(
+        limits,
+        AnimationLimits {
+            max_frames: 7,
+            ..AnimationLimits::default()
+        }
+    );
+    let warns: Vec<&str> = log.lines().filter(|l| l.contains("level=WARN")).collect();
+    assert_eq!(warns.len(), 1, "{log}");
+    assert!(
+        warns[0].contains(MAX_PIXELS_ENV) && warns[0].contains("value=x"),
+        "{log}"
+    );
+}
+
 // ---- judge の 5 分岐とちょうど上限 ----
 
 fn info(width: u32, height: u32, frame_count: u32) -> AnimationInfo {

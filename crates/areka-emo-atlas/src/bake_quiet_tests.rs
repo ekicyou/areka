@@ -5,45 +5,25 @@
 //! 0 行で、戻り値は等しいことを確かめる。行は宛先まるごとでなく文言ごとに数える。
 
 use super::*;
-use areka_parsers::shell::{
-    Animation, AppendTarget, DrawMethod, Element, ElementPath, Interval, Pattern, Surface,
+use crate::test_support::{
+    BIND_DEBUG, CLEAR_WARN, KEYED, ZERO_WARN, dressed_shell, dump, elem, opaque_2x2, register, set,
+    surface, transparent_2x2, zero_sized,
 };
+use areka_parsers::shell::{Interval, Surface};
 use std::path::Path;
 
 /// 黙らせる 4 本の文言（`lib.rs` の繰り返しの中）と、その絵の名前。
-const KEY_DEBUG: &str = "抜き色（左上の 1 画素と同じ色）で透過しました";
-const ZERO_WARN: &str = "元画像が 0 寸です";
-const BIND_DEBUG: &str = "着せ替え（bind）のアニメーションからだけ参照される面の絵です";
-const CLEAR_WARN: &str = "全透明（α=0）でトリム後 0 寸です";
 const QUIETED: [(&str, &str); 4] = [
-    (KEY_DEBUG, "key.png"),
+    (KEYED, "key.png"),
     (ZERO_WARN, "zero.png"),
     (BIND_DEBUG, "null.png"),
     (CLEAR_WARN, "clear.png"),
 ];
 
-fn elem(layer: u32, path: &str) -> Element {
-    Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x: 0,
-        y: 0,
-    }
-}
-
-fn surface(id: u32, elements: Vec<Element>) -> Surface {
-    Surface {
-        targets: vec![AppendTarget::Single(id)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }
-}
-
 /// 面 0 が見える絵・抜き色の絵・0 寸の絵・全透明の絵・読めない絵を持ち、着せ替えの
 /// アニメーションから面 3000（全透明の `null.png` だけ）を参照するシェル。
 fn shell() -> Vec<Surface> {
-    let mut base = surface(
+    let base = surface(
         0,
         vec![
             elem(0, "solid.png"),
@@ -53,33 +33,18 @@ fn shell() -> Vec<Surface> {
             elem(4, "missing.png"),
         ],
     );
-    base.animations = vec![Animation {
-        id: 0,
-        interval: Interval::Bind,
-        patterns: vec![Pattern {
-            index: 0,
-            method: DrawMethod::new("overlay".to_string()),
-            surface_id: 3000,
-            target: "3000".into(),
-            wait: 0,
-            x: 0,
-            y: 0,
-        }],
-    }];
-    vec![base, surface(3000, vec![elem(0, "null.png")])]
+    dressed_shell(base, Interval::Bind, "null.png")
 }
 
 fn decoder(base: &Path) -> MemoryDecoder {
     let mut dec = MemoryDecoder::new();
-    let opaque = vec![
-        10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255,
-    ];
-    dec.insert(base.join("solid.png"), 2, 2, 8, opaque.clone(), true);
+    register(&mut dec, base, "solid.png", opaque_2x2());
     // α の無い絵は左上の色で抜く（左上だけが抜け、残りは見える）。
-    dec.insert(base.join("key.png"), 2, 2, 8, opaque, false);
-    dec.insert(base.join("zero.png"), 0, 0, 0, Vec::new(), true);
-    dec.insert(base.join("clear.png"), 2, 2, 8, vec![0; 16], true);
-    dec.insert(base.join("null.png"), 2, 2, 8, vec![0; 16], true);
+    let (w, h, stride, bgra, _) = opaque_2x2();
+    register(&mut dec, base, "key.png", (w, h, stride, bgra, false));
+    register(&mut dec, base, "zero.png", zero_sized());
+    register(&mut dec, base, "clear.png", transparent_2x2());
+    register(&mut dec, base, "null.png", transparent_2x2());
     // "missing.png" は登録しない（読めない絵＝errors に 1 件）。
     dec.insert_pna(base.join("solid.png"));
     dec
@@ -92,40 +57,18 @@ fn bake_by(
     let base = Path::new("shell/master");
     let surfaces = shell();
     let dec = decoder(base);
-    let sets = [SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    }];
-    let mut captured: Option<BakeResult> = None;
-    let out = crate::log_capture::capture_logs(|| {
-        captured = Some(f(&sets, &dec, PackConfig::default()));
-    });
-    (out, captured.unwrap())
+    let sets = [set(&surfaces, base)];
+    let (result, out) = crate::log_capture::capture_logs(|| f(&sets, &dec, PackConfig::default()));
+    (out, result)
 }
 
 fn count(out: &str, text: &str) -> usize {
     out.lines().filter(|l| l.contains(text)).count()
 }
 
-/// 戻り値の指紋（索引表の鍵の並び・各エントリ・動く絵・頁・`errors`・`ignored_pna`）。
+/// 戻り値の指紋（索引表の中身と頁の画素・`errors`・`ignored_pna`）。
 fn fingerprint(r: &BakeResult) -> String {
-    let mut s = String::new();
-    for i in 0..r.table.len() as u32 {
-        let id = ElementId(i);
-        s += &format!(
-            "{:?} {:?} {:?}\n",
-            r.table.key(id),
-            r.table.entry(id),
-            r.table.animation(id)
-        );
-    }
-    for p in r.table.pages() {
-        s += &format!("{}x{} {} {:?}\n", p.width, p.height, p.stride, &p.bytes[..]);
-    }
-    s + &format!("{:?} pna={}", r.errors, r.ignored_pna)
+    format!("{}{:?} pna={}", dump(&r.table), r.errors, r.ignored_pna)
 }
 
 /// 対照: 出す入口は 4 種を絵ごとに 1 行ずつ出す。
@@ -150,4 +93,30 @@ fn bake_quiet_emits_none_of_the_quieted_records_and_same_result() {
     assert_eq!(quiet.errors.len(), 1, "読めない絵は errors に 1 件");
     assert_eq!(quiet.ignored_pna, 1, "`.pna` の数も同じ形で数える");
     assert_eq!(fingerprint(&quiet), fingerprint(&loud), "戻り値は等しい");
+}
+
+/// 指摘 6⑴: 動く絵の記録は黙らせない。全コマも 1 枚目も読めず 1 枚読みも無い動く絵を焼き、
+/// 「bake: 動く絵」の `WARN` の行が両入口で同じで 1 行以上（どの行かは比べないので、環境の上限に依らない）。
+#[test]
+fn bake_quiet_keeps_the_animation_warnings() {
+    let base = Path::new("shell/master");
+    let surfaces = vec![surface(0, vec![elem(0, "anim.png")])];
+    let sets = [set(&surfaces, base)];
+    let mut dec = MemoryDecoder::new();
+    dec.insert_animated(
+        base.join("anim.png"),
+        crate::test_support::info(2),
+        Err("first frame is broken".into()),
+        Err("frames are broken".into()),
+    );
+    let warns = |f: fn(&[SurfaceSet<'_>], &MemoryDecoder, PackConfig) -> BakeResult| {
+        let (_, out) = crate::log_capture::capture_logs(|| f(&sets, &dec, PackConfig::default()));
+        out.lines()
+            .filter(|l| l.contains("level=WARN") && l.contains("bake: 動く絵"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let loud = warns(bake);
+    assert!(!loud.is_empty(), "対照: 出す入口は動く絵の記録を出す");
+    assert_eq!(warns(bake_quiet), loud, "出さない入口も同じ行を出す");
 }

@@ -10,26 +10,26 @@
 //! 定義する。COM/WIC 依存はデコードポートの WIC 腕にのみ隔離し、正規化以降の
 //! 純粋コアは wintf 本体（ECS/D2D/GraphicsCore）へ依存しない。
 //!
-//! パイプライン各段はモジュールへ分割される（本タスクでは雛形のみ）:
-//! - [`manifest`] — マニフェスト導出（列挙・間接参照解決・重複排除）
-//! - [`decode`] — デコードポート（trait）＋既定 WIC 腕
-//! - [`normalize`] — 透過正規化（premultiplied 統一）
-//! - [`trim`] — α トリミング
-//! - [`pack`] — packing 座標算出
-//! - [`bake`] — 頁バッファへの焼付
-//! - [`table`] — 成果物契約型（正本）
-//! - [`error`] — 診断可能なエラー型
+//! パイプラインの各段と、外へ出す型（段のモジュールはクレートの中だけ）:
+//! - マニフェスト導出（全部の面の絵を直に数える・重複排除）— 入力は [`SurfaceSet`]
+//! - デコードポート（trait）＋既定 WIC 腕 — [`ElementDecoder`]・[`WicDecoderArm`]・[`MemoryDecoder`]
+//! - 透過正規化（premultiplied 統一）— [`Normalizer`]・[`AlphaParams`]
+//! - α トリミング（外へ出す型は無い）
+//! - packing 座標算出 — [`PackConfig`]
+//! - 頁バッファへの焼付 — 入口は [`bake`]
+//! - 成果物契約型（正本）— [`AtlasTable`] ほか
+//! - 診断可能なエラー型 — [`BakeError`]・[`DecodeError`]
 
 mod animated;
-pub mod bake;
-pub mod decode;
-pub mod error;
+mod bake;
+mod decode;
+mod error;
 mod limits;
-pub mod manifest;
-pub mod normalize;
-pub mod pack;
-pub mod table;
-pub mod trim;
+mod manifest;
+mod normalize;
+mod pack;
+mod table;
+mod trim;
 
 /// `bake` の成果物（索引表＋失敗集合・channel 非依存・R6.5）。
 ///
@@ -121,7 +121,7 @@ fn bake_core(
     limits: AnimationLimits,
     records: Records,
 ) -> BakeResult {
-    // 1. マニフェスト導出（列挙・重複排除・決定的採番）。
+    // マニフェスト導出（列挙・重複排除・決定的採番）。
     let manifest = ManifestDeriver.derive(sets);
     // 着せ替え（bind）のアニメーションからだけ参照される面の絵（全透明でも警告しない側・
     // real-run-log-noise 要件 3.7）。入口で 1 回だけ求める。
@@ -269,29 +269,28 @@ fn bake_core(
         &mut placed_items,
     );
 
-    // 5. packing（座標のみ・最終 ElementId で採番済み）。
+    // packing（座標のみ・最終 ElementId で採番済み）。
     let pack = Packer.pack(&placed_items, cfg);
 
-    // 6. 焼付（頁バッファ確保＋blit）。Placement は最終 ElementId キー。
-    let (pages, placements) = Baker.bake_pages(&placed_items, &pack, cfg.page_size);
+    // 焼付（頁バッファ確保＋blit）。Placement は最終 ElementId キー。
+    let (pages, placements) = Baker.bake_pages(&placed_items, &pack);
     let placement_of: std::collections::HashMap<ElementId, Placement> =
         placements.into_iter().collect();
 
-    // 7. 生存集合上に密な索引表を構築（final ElementId 順）。
-    let entries: Vec<AtlasEntry> = survivor_keys
-        .iter()
+    // 生存集合上に密な索引表を構築（final ElementId 順）。
+    let entries: Vec<AtlasEntry> = survivor_originals
+        .into_iter()
         .enumerate()
-        .map(|(final_idx, _)| AtlasEntry {
-            original: survivor_originals[final_idx],
+        .map(|(final_idx, original)| AtlasEntry {
+            original,
             // Placed は Baker 由来 Placement・Empty（全透明）は None（転写スキップ）。
             placement: placement_of.get(&ElementId(final_idx as u32)).cloned(),
         })
         .collect();
 
-    let pages_vec: Vec<AtlasPage> = pages;
-    let table = AtlasTable::with_frames(survivor_keys, entries, pages_vec, animations);
+    let table = AtlasTable::with_frames(survivor_keys, entries, pages, animations);
 
-    // 8. 値で直接返す（channel 非依存・R6.5）。
+    // 値で直接返す（channel 非依存・R6.5）。
     BakeResult {
         table,
         errors,
@@ -318,7 +317,7 @@ pub use limits::AnimationLimits;
 pub use decode::wic_arm::WicDecoderArm;
 
 // マニフェスト導出（列挙層・R1.1–1.6/5.6・D6）。
-pub use manifest::{Manifest, ManifestDeriver, SurfaceSet};
+pub use manifest::SurfaceSet;
 
 // 共有透過パラメータ型（normalize の設計本拠・SurfaceSet が運ぶ・3.6）。
 pub use normalize::{AlphaParams, UseSelfAlpha};
@@ -326,31 +325,35 @@ pub use normalize::{AlphaParams, UseSelfAlpha};
 // 正規化層（use_self_alpha 解釈・premultiplied BGRA 統一・R3・D5/D8）。
 pub use normalize::{NormalizedImage, Normalizer};
 
-// トリム層（α>0 タイト bbox・オフセット記録・全透明→空・R4・D8）。
-pub use trim::{TrimResult, Trimmed, Trimmer};
-
 // packing 層（決定的・複数頁・padding・座標のみ・R5・D7）。
-pub use pack::{PackConfig, PackOutput, PackedEntry, Packer};
-
-// 焼付層（頁確保・premultiplied 素通し blit・座標不変・R4.3/R6.3・D8・Critical Issue 3）。
-pub use bake::Baker;
+pub use pack::PackConfig;
 
 // 診断可能なエラー型（bake パイプラインの脱落集約・R2.2）。
 pub use error::BakeError;
+
+// 焼きの中の段（マニフェスト・トリム・packing・焼付）。クレートの外には出さない（spec: audit-emo-atlas 指摘 22）。
+pub(crate) use bake::Baker;
+pub(crate) use manifest::ManifestDeriver;
+pub(crate) use pack::Packer;
+pub(crate) use trim::{Trimmed, Trimmer};
 
 // 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
 #[cfg(test)]
 mod sample_test_support;
 
-// emo2 fixture を用いた統合テスト（shell・balloon 横断・task 3.2）。
+// クレートのテストが共有する部品の置き場（COM の手伝い・組み立て・読み出し・spec: audit-emo-atlas 指摘 4・10）。
+#[cfg(test)]
+pub(crate) mod test_support;
+
+// emo2 fixture を用いた統合テスト（shell・balloon 横断）。
 #[cfg(test)]
 mod emo2_e2e;
 
-// emo2 fixture の bake 出力に対する決定性（golden）テスト（task 4.1・5.5）。
+// emo2 fixture の bake 出力に対する決定性（golden）テスト（要件 5.5）。
 #[cfg(test)]
 mod emo2_golden;
 
-// テスト専用の tracing ログ捕捉ハーネス（0 寸/全透明 warn の決定論 assert 用・task 2.4）。
+// テスト専用の tracing ログ捕捉ハーネス（0 寸/全透明 warn の決定論 assert 用）。
 // `#[cfg(test)]` 限定ゆえ本番 bake 経路に現れない。
 #[cfg(test)]
 mod log_capture;
@@ -361,513 +364,16 @@ mod webp_pin_tests;
 
 // 記録を出さない焼きの入口の檻（spec: emo-bake-log-overlap 要件 1.1〜1.3・1.6・3.2・3.4）。
 #[cfg(test)]
-#[path = "bake_quiet_tests.rs"]
 mod bake_quiet_tests;
 
 // 本物の読み手で動く絵の検体のフォルダを焼く結合テスト（spec: areka-P0-animated-image-decode 要件 8.3〜8.6）。
 #[cfg(test)]
 mod samples_e2e_tests;
 
+// 焼きの入口 `bake` の檻（spec: audit-emo-atlas 指摘 19 で兄弟のファイルへ移した）。
 #[cfg(test)]
-mod bake_entry_tests {
-    use super::*;
-    use crate::decode::MemoryDecoder;
-    use crate::manifest::SurfaceSet;
-    use crate::normalize::{AlphaParams, UseSelfAlpha};
-    use crate::pack::PackConfig;
-    use crate::table::SetId;
-    use areka_parsers::shell::{
-        Animation, AppendTarget, DrawMethod, Element, ElementPath, Interval, Pattern, Surface,
-    };
-    use std::path::Path;
+mod bake_entry_tests;
 
-    // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
-
-    fn elem(layer: u32, path: &str) -> Element {
-        Element {
-            layer,
-            path: ElementPath::new(path.to_string()),
-            x: 0,
-            y: 0,
-        }
-    }
-
-    /// element のみを持つ最小 surface（collision/animation 空）。
-    fn surface(id: u32, elements: Vec<Element>) -> Surface {
-        Surface {
-            targets: vec![AppendTarget::Single(id)],
-            elements,
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        }
-    }
-
-    fn params() -> AlphaParams {
-        AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        }
-    }
-
-    fn set<'a>(surfaces: &'a [Surface], base: &'a Path) -> SurfaceSet<'a> {
-        SurfaceSet {
-            surfaces,
-            base_dir: base,
-            alpha_params: params(),
-        }
-    }
-
-    /// tightly-packed 2×2 の premultiplied BGRA・不透明（α=255）画像スペックを返す。
-    fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-        let (w, h) = (2u32, 2u32);
-        let stride = w * 4;
-        // 全画素 α=255・色は適当（premultiplied 適合: B,G,R <= A）。
-        let bgra = vec![
-            10, 20, 30, 255, //
-            40, 50, 60, 255, //
-            70, 80, 90, 255, //
-            100, 110, 120, 255,
-        ];
-        (w, h, stride, bgra, true)
-    }
-
-    /// tightly-packed 2×2 の完全透明（全 α=0）画像スペック（has_alpha=true で normalize 通過）。
-    fn transparent_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-        let (w, h) = (2u32, 2u32);
-        let stride = w * 4;
-        let bgra = vec![0u8; (stride * h) as usize];
-        (w, h, stride, bgra, true)
-    }
-
-    /// 0×0（元画像 0 寸）の画像スペック（has_alpha=true で normalize 通過・trim は空エントリ）。
-    fn zero_sized() -> (u32, u32, u32, Vec<u8>, bool) {
-        (0, 0, 0, Vec::new(), true)
-    }
-
-    /// MemoryDecoder へ base_dir.join(rel_path) の実パスで画像を登録する。
-    fn register(
-        dec: &mut MemoryDecoder,
-        base: &Path,
-        rel: &str,
-        spec: (u32, u32, u32, Vec<u8>, bool),
-    ) {
-        let (w, h, stride, bgra, has_alpha) = spec;
-        dec.insert(base.join(rel), w, h, stride, bgra, has_alpha);
-    }
-
-    /// テスト①: end-to-end 結線（複数セット）。shell + balloon の 2 セットを 1 度の bake で
-    /// 処理し、索引表＋頁バッファが**値で直接**得られる（channel 非依存・R6.5 ＋ 1.x/4.x/5.x/6.x）。
-    #[test]
-    fn end_to_end_wiring_multiple_sets() {
-        let shell_base = Path::new("shell/master");
-        let balloon_base = Path::new("balloon/foo");
-
-        let shell = vec![
-            surface(0, vec![elem(0, "surface0.png"), elem(1, "eye0.png")]),
-            surface(1, vec![elem(0, "surface1.png")]),
-        ];
-        let balloon = vec![surface(0, vec![elem(0, "balloon0.png")])];
-
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, shell_base, "surface0.png", opaque_2x2());
-        register(&mut dec, shell_base, "eye0.png", opaque_2x2());
-        register(&mut dec, shell_base, "surface1.png", opaque_2x2());
-        register(&mut dec, balloon_base, "balloon0.png", opaque_2x2());
-
-        let sets = [set(&shell, shell_base), set(&balloon, balloon_base)];
-
-        // BakeResult は素の値。channel/async を一切介さず直接受け取る（R6.5・構造的証明）。
-        let result: BakeResult = bake(&sets, &dec, PackConfig::default());
-
-        // 失敗なし。
-        assert!(
-            result.errors.is_empty(),
-            "no decode/normalize failures expected"
-        );
-
-        // 各セットの present key が resolve→Some・placement あり（非透明ゆえ焼かれる）。
-        for (set, rel) in [
-            (SetId(0), "surface0.png"),
-            (SetId(0), "eye0.png"),
-            (SetId(0), "surface1.png"),
-            (SetId(1), "balloon0.png"),
-        ] {
-            let id = result
-                .table
-                .resolve(set, rel)
-                .unwrap_or_else(|| panic!("{rel} in set {} must resolve", set.0));
-            assert!(
-                result.table.entry(id).placement.is_some(),
-                "{rel} is non-transparent → placement present"
-            );
-        }
-
-        // 頁バッファが値として得られている（焼付結果・非空）。
-        assert!(
-            !result.table.pages().is_empty(),
-            "pages materialized by value"
-        );
-        assert_eq!(result.table.len(), 4, "4 survivors densely indexed");
-    }
-
-    /// テスト②: デコード失敗は索引表に載せず・他エントリ継続（R2.2）。
-    /// 1 つだけ未登録（NotFound）にすると、その key は resolve が None・errors に Decode が
-    /// 1 件・他の全 key は present（継続の実証）。
-    #[test]
-    fn decode_failure_skipped_others_continue() {
-        let base = Path::new("shell/master");
-        let shell = vec![
-            surface(0, vec![elem(0, "ok_a.png"), elem(1, "missing.png")]),
-            surface(1, vec![elem(0, "ok_b.png")]),
-        ];
-
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "ok_a.png", opaque_2x2());
-        register(&mut dec, base, "ok_b.png", opaque_2x2());
-        // "missing.png" は登録しない → decode NotFound。
-
-        let sets = [set(&shell, base)];
-        let result = bake(&sets, &dec, PackConfig::default());
-
-        // 失敗 key は索引表に不在。
-        assert_eq!(
-            result.table.resolve(SetId(0), "missing.png"),
-            None,
-            "failed key absent from table"
-        );
-        // 生存 key は present。
-        assert!(result.table.resolve(SetId(0), "ok_a.png").is_some());
-        assert!(result.table.resolve(SetId(0), "ok_b.png").is_some());
-        assert_eq!(result.table.len(), 2, "only survivors indexed");
-
-        // errors はちょうど 1 件の Decode（欠落パス保持）。
-        assert_eq!(result.errors.len(), 1, "exactly one decode failure");
-        match &result.errors[0] {
-            BakeError::Decode(crate::decode::DecodeError::NotFound { path }) => {
-                assert_eq!(path, &base.join("missing.png") as &std::path::Path);
-            }
-            other => panic!("expected Decode(NotFound), got {other:?}"),
-        }
-    }
-
-    /// テスト③: 全透明 → 空エントリ（placement None）であって**エラーではない**（4.4/6.2）。
-    #[test]
-    fn all_transparent_is_empty_entry_not_error() {
-        let base = Path::new("shell/master");
-        let shell = vec![surface(0, vec![elem(0, "solid.png"), elem(1, "clear.png")])];
-
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "solid.png", opaque_2x2());
-        register(&mut dec, base, "clear.png", transparent_2x2());
-
-        let sets = [set(&shell, base)];
-        let result = bake(&sets, &dec, PackConfig::default());
-
-        // 全透明はエラーに載らない。
-        assert!(result.errors.is_empty(), "all-transparent is NOT an error");
-
-        // clear.png は resolve→Some だが placement None（空エントリ・転写スキップ）。
-        let clear_id = result
-            .table
-            .resolve(SetId(0), "clear.png")
-            .expect("empty entry still resolves");
-        assert!(
-            result.table.entry(clear_id).placement.is_none(),
-            "all-transparent → empty entry (placement None)"
-        );
-        // 原寸は記録される（4.2/4.5）。
-        assert_eq!(
-            result.table.entry(clear_id).original,
-            crate::table::Size { w: 2, h: 2 }
-        );
-
-        // solid.png は placement あり（対照）。
-        let solid_id = result.table.resolve(SetId(0), "solid.png").unwrap();
-        assert!(result.table.entry(solid_id).placement.is_some());
-    }
-
-    /// テスト④: 失敗後の密再採番・resolve/entry/key 往復整合（欠番/panic なし）。
-    /// manifest 上は 3 key（a,b,c 昇順）だが b を失敗させ、生存 a,c が密に 0..2 で番号付く。
-    #[test]
-    fn dense_renumbering_and_roundtrip_after_failure() {
-        let base = Path::new("shell/master");
-        // rel_path 昇順で a.png, b.png, c.png（manifest 採番順）。
-        let shell = vec![surface(
-            0,
-            vec![elem(0, "a.png"), elem(1, "b.png"), elem(2, "c.png")],
-        )];
-
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "a.png", opaque_2x2());
-        // b.png は登録しない → 脱落。
-        register(&mut dec, base, "c.png", opaque_2x2());
-
-        let sets = [set(&shell, base)];
-        let result = bake(&sets, &dec, PackConfig::default());
-
-        assert_eq!(result.errors.len(), 1, "b.png failed");
-        assert_eq!(result.table.len(), 2, "two survivors densely numbered");
-
-        // 生存 a,c は密 index 0..2 で resolve→entry/key 往復整合。
-        for rel in ["a.png", "c.png"] {
-            let id = result
-                .table
-                .resolve(SetId(0), rel)
-                .expect("survivor resolves");
-            assert!(
-                (id.0 as usize) < result.table.len(),
-                "id within dense range"
-            );
-            // key(id) 逆引きが同じ rel_path を返す（往復）。
-            assert_eq!(result.table.key(id).rel_path, rel);
-            assert_eq!(result.table.key(id).set, SetId(0));
-            // entry(id) は panic せず引ける。
-            let _ = result.table.entry(id);
-        }
-        // 失敗 key は不在。
-        assert_eq!(result.table.resolve(SetId(0), "b.png"), None);
-    }
-
-    /// テスト⑥（task 2.4・設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
-    /// 含む bake で `warn!` が発火する（tracing capture で決定論 assert・当該 element を名指し）。
-    /// **bake 結果自体は既存挙動不変**（全透明はエラーでなく空エントリ・placement None）。
-    #[test]
-    fn warn_fires_on_all_transparent_element() {
-        let base = Path::new("shell/master");
-        let shell = vec![surface(0, vec![elem(0, "solid.png"), elem(1, "clear.png")])];
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "solid.png", opaque_2x2());
-        register(&mut dec, base, "clear.png", transparent_2x2());
-        let sets = [set(&shell, base)];
-
-        let mut captured: Option<BakeResult> = None;
-        let out = crate::log_capture::capture_logs(|| {
-            captured = Some(bake(&sets, &dec, PackConfig::default()));
-        });
-
-        // warn が発火し、target・当該 element（rel_path）を名指ししている。
-        assert!(
-            out.contains("level=WARN"),
-            "全透明 element で warn 発火: {out}"
-        );
-        assert!(
-            out.contains("target=areka_emo_atlas"),
-            "target 正しい: {out}"
-        );
-        assert!(out.contains("clear.png"), "問題の element を名指し: {out}");
-
-        // bake 結果は既存挙動不変: 全透明はエラーでなく空エントリ（placement None・原寸記録）。
-        let result = captured.unwrap();
-        assert!(result.errors.is_empty(), "全透明は error ではない（不変）");
-        let clear_id = result
-            .table
-            .resolve(SetId(0), "clear.png")
-            .expect("空エントリも resolve");
-        assert!(
-            result.table.entry(clear_id).placement.is_none(),
-            "全透明 → 空エントリ（placement None・不変）"
-        );
-        assert_eq!(
-            result.table.entry(clear_id).original,
-            crate::table::Size { w: 2, h: 2 },
-            "原寸は記録される（不変）"
-        );
-        // 対照: solid.png は placement あり（焼付対象・不変）。
-        let solid_id = result.table.resolve(SetId(0), "solid.png").unwrap();
-        assert!(result.table.entry(solid_id).placement.is_some());
-    }
-
-    /// テスト⑦（task 2.4）: 元画像 0 寸（0×0）element を含む bake でも `warn!` が発火する。
-    #[test]
-    fn warn_fires_on_zero_sized_source_element() {
-        let base = Path::new("shell/master");
-        let shell = vec![surface(0, vec![elem(0, "zero.png")])];
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "zero.png", zero_sized());
-        let sets = [set(&shell, base)];
-
-        let out = crate::log_capture::capture_logs(|| {
-            let _ = bake(&sets, &dec, PackConfig::default());
-        });
-        assert!(
-            out.contains("level=WARN"),
-            "0 寸 element で warn 発火: {out}"
-        );
-        assert!(
-            out.contains("target=areka_emo_atlas"),
-            "target 正しい: {out}"
-        );
-        assert!(out.contains("zero.png"), "問題の element を名指し: {out}");
-    }
-
-    /// テスト⑧（task 2.4・不変性の陰性確認）: 正常（不透明・非零）element の bake では warn は
-    /// 発火せず、既知の bake 出力（placement 有り・非零 uv・原寸）が変わらない。
-    #[test]
-    fn no_warn_and_output_unchanged_for_normal_bake() {
-        let base = Path::new("shell/master");
-        let shell = vec![surface(0, vec![elem(0, "solid.png")])];
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "solid.png", opaque_2x2());
-        let sets = [set(&shell, base)];
-
-        let mut captured: Option<BakeResult> = None;
-        let out = crate::log_capture::capture_logs(|| {
-            captured = Some(bake(&sets, &dec, PackConfig::default()));
-        });
-
-        // 正常 element では warn 経路に入らない。
-        assert!(
-            !out.contains("level=WARN"),
-            "正常 element では warn 皆無: {out}"
-        );
-
-        // 既存の bake 出力は不変（placement 有り・非零 uv・原寸 2×2）。
-        let result = captured.unwrap();
-        assert!(result.errors.is_empty());
-        let id = result.table.resolve(SetId(0), "solid.png").unwrap();
-        let entry = result.table.entry(id);
-        assert_eq!(
-            entry.original,
-            crate::table::Size { w: 2, h: 2 },
-            "原寸不変"
-        );
-        let placement = entry
-            .placement
-            .as_ref()
-            .expect("非零 → placement 有り（不変）");
-        assert_eq!(placement.uv_rect.w, 2, "trim 幅不変");
-        assert_eq!(placement.uv_rect.h, 2, "trim 高不変");
-    }
-
-    // ---- 檻 T9: 着せ替えの「無し」の絵の全透明は debug・それ以外は今の warn（real-run-log-noise 要件 3.2〜3.6・5.2）----
-
-    /// 面 0（不透明の絵）の `interval` のアニメーションが面 3000 を参照し、面 3000 が `rel` だけを持つシェル。
-    fn shell_owned_by(interval: Interval, rel: &str) -> Vec<Surface> {
-        let mut base = surface(0, vec![elem(0, "solid.png")]);
-        base.animations = vec![Animation {
-            id: 0,
-            interval,
-            patterns: vec![Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 3000,
-                target: "3000".into(),
-                wait: 0,
-                x: 0,
-                y: 0,
-            }],
-        }];
-        vec![base, surface(3000, vec![elem(0, rel)])]
-    }
-
-    /// `shell_owned_by` のシェルを、`rel` に `spec` の絵を当てて焼き、捕捉した記録と結果を返す。
-    fn bake_owned(
-        interval: Interval,
-        rel: &str,
-        spec: (u32, u32, u32, Vec<u8>, bool),
-    ) -> (String, BakeResult) {
-        let base = Path::new("shell/master");
-        let shell = shell_owned_by(interval, rel);
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "solid.png", opaque_2x2());
-        register(&mut dec, base, rel, spec);
-        let sets = [set(&shell, base)];
-        let mut captured: Option<BakeResult> = None;
-        let out = crate::log_capture::capture_logs(|| {
-            captured = Some(bake(&sets, &dec, PackConfig::default()));
-        });
-        (out, captured.unwrap())
-    }
-
-    const BIND_DEBUG: &str = "着せ替え（bind）のアニメーションからだけ参照される面の絵です";
-    const CLEAR_WARN: &str = "全透明（α=0）でトリム後 0 寸です";
-
-    /// T9 ⑴: `bind` だけから参照される面の全透明の絵は `warn` 0 件・`debug` 1 件（欄は今の `warn` と同じ）。
-    /// 索引表は見分けの無い場合（同じ形を `runonce` で参照）と同じ。
-    #[test]
-    fn bind_only_all_transparent_logs_debug_not_warn() {
-        let (out, result) = bake_owned(Interval::Bind, "null.png", transparent_2x2());
-        assert!(
-            !out.contains("level=WARN"),
-            "bind だけの全透明は warn 0 件: {out}"
-        );
-        let debug: Vec<&str> = out.lines().filter(|l| l.contains(BIND_DEBUG)).collect();
-        assert_eq!(debug.len(), 1, "見分けた debug は 1 件: {out}");
-        let line = debug[0];
-        for want in [
-            "level=DEBUG",
-            "target=areka_emo_atlas",
-            "set=0",
-            "rel_path=\"null.png\"",
-            "original_w=2",
-            "original_h=2",
-        ] {
-            assert!(line.contains(want), "{want} を含む: {line}");
-        }
-        assert!(!line.contains("トリム後 0 寸"), "警告の文言と別: {line}");
-
-        let (_, plain) = bake_owned(Interval::Runonce, "null.png", transparent_2x2());
-        assert_eq!(result.errors.len(), plain.errors.len(), "失敗の集計は同じ");
-        assert_eq!(
-            result.table.len(),
-            plain.table.len(),
-            "索引表の大きさは同じ"
-        );
-        for rel in ["null.png", "solid.png"] {
-            let id = result.table.resolve(SetId(0), rel);
-            assert_eq!(id, plain.table.resolve(SetId(0), rel), "{rel} の番号は同じ");
-            let (got, want) = (
-                result.table.entry(id.unwrap()),
-                plain.table.entry(id.unwrap()),
-            );
-            assert_eq!(got.original, want.original, "{rel} の原寸は同じ");
-            assert_eq!(
-                format!("{:?}", got.placement),
-                format!("{:?}", want.placement),
-                "{rel} の配置・トリムの矩形は同じ"
-            );
-        }
-    }
-
-    /// T9 ⑵: `runonce` から参照される面の全透明の絵は今の `warn` 1 件（見分けない・debug 無し）。
-    #[test]
-    fn runonce_owned_all_transparent_keeps_warn() {
-        let (out, _) = bake_owned(Interval::Runonce, "null.png", transparent_2x2());
-        let warns: Vec<&str> = out.lines().filter(|l| l.contains("level=WARN")).collect();
-        assert_eq!(warns.len(), 1, "今の warn 1 件: {out}");
-        assert!(
-            warns[0].contains(CLEAR_WARN) && warns[0].contains("null.png"),
-            "{out}"
-        );
-        assert!(!out.contains(BIND_DEBUG), "見分けの debug は出ない: {out}");
-    }
-
-    /// T9 ⑶: `bind` だけから参照される面の 0 寸の絵は、見分けの前の 0 寸の `warn` 1 件。
-    #[test]
-    fn bind_only_zero_sized_keeps_zero_size_warn() {
-        let (out, _) = bake_owned(Interval::Bind, "zero.png", zero_sized());
-        let warns: Vec<&str> = out.lines().filter(|l| l.contains("level=WARN")).collect();
-        assert_eq!(warns.len(), 1, "0 寸の warn 1 件: {out}");
-        assert!(
-            warns[0].contains("元画像が 0 寸です") && warns[0].contains("zero.png"),
-            "{out}"
-        );
-        assert!(!out.contains(BIND_DEBUG), "0 寸は見分けに入らない: {out}");
-    }
-
-    /// テスト⑤（構造的）: channel 非依存（R6.5）。BakeResult は素の値であり、通信機構/async を
-    /// 一切介さずその場で分解・利用できる。本テスト全体が channel を使わない実証。
-    #[test]
-    fn bake_result_is_plain_value_channel_independent() {
-        let base = Path::new("shell/master");
-        let shell = vec![surface(0, vec![elem(0, "only.png")])];
-        let mut dec = MemoryDecoder::new();
-        register(&mut dec, base, "only.png", opaque_2x2());
-        let sets = [set(&shell, base)];
-
-        // 値としてそのまま move・分解（channel も Future も経由しない）。
-        let BakeResult { table, errors, .. } = bake(&sets, &dec, PackConfig::default());
-        assert!(errors.is_empty());
-        assert_eq!(table.len(), 1);
-        assert!(table.resolve(SetId(0), "only.png").is_some());
-    }
-}
+// 信用できない読み手の答えを焼きの段で断るテスト（spec: audit-emo-atlas 指摘 2・18）。
+#[cfg(test)]
+mod bake_guard_tests;

@@ -1,13 +1,13 @@
-//! emo2 fixture の bake 出力に対する決定性（golden）テスト（task 4.1・要件 **5.5**）。
+//! emo2 fixture の bake 出力に対する決定性（golden）テスト（要件 **5.5**）。
 //!
 //! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
 //! packing → 焼付）を、実 fixture emo2 の shell surface 一式で駆動し、その配置結果
 //! （各キーの `(page, uv_rect, trim_offset, original)`）が
+//! **固定 golden スナップショットに一致**すること（以降のリグレッションを検出）を検証する。
+//! 毎回の実行が固定の golden と一致すれば、実行ごとに同じ（run-to-run 決定性・5.5）も成り立つので、
+//! 2 回焼いて比べる別のテストは置かない。失敗 0 件は `emo2_e2e.rs` の最初のテストが見る。
 //!
-//! 1. **同一入力を複数回 bake しても常に同一**（run-to-run 決定性・5.5 中核）
-//! 2. **固定 golden スナップショットに一致**（以降のリグレッションを検出）
-//!
-//! であることを検証する。production コードは変更せず（本モジュールは `#[cfg(test)]`）、
+//! 本物の焼きはこのファイルで 1 回だけ。production コードは変更せず（本モジュールは `#[cfg(test)]`）、
 //! WIC 腕（COM 隔離）越しに実 PNG を復号する。
 //!
 //! ## golden が機械非依存で安定する理由（「継続的実行環境で安定して再現」）
@@ -32,67 +32,15 @@
 //! これが `src/testdata/emo2_shell_golden.txt` を上書きする。通常の `cargo test` では
 //! `#[ignore]` ゆえ実行されず、CI が golden を書き換えることはない。
 
-use std::path::PathBuf;
-
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-
-use crate::{
-    AlphaParams, AtlasTable, ElementId, PackConfig, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
-};
-
-/// COM 初期化下でクロージャを実行するヘルパ（WIC は CPU-only だが COM init 必須）。
-/// `emo2_e2e.rs` の同名ヘルパと同一パターン（MTA・RPC_E_CHANGED_MODE 許容）。
-fn with_com_initialized<F: FnOnce()>(f: F) {
-    unsafe {
-        // 既に初期化済みでも RPC_E_CHANGED_MODE を許容し、続行する。
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    f();
-    unsafe {
-        CoUninitialize();
-    }
-}
-
-/// emo2 検体の実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
-fn emo2(rel: &str) -> PathBuf {
-    crate::sample_test_support::emo2_root().join(rel)
-}
-
-/// emo2 の shell/master 基準 dir（surfaces.txt の element 相対パス起点）。
-fn shell_master_dir() -> PathBuf {
-    emo2("shell/master")
-}
-
-/// AlphaParams { use_self_alpha: On }（emo2 の descript は seriko.use_self_alpha,1）。
-fn on_params() -> AlphaParams {
-    AlphaParams {
-        use_self_alpha: UseSelfAlpha::On,
-    }
-}
+use crate::test_support::{emo2_shell, set, with_arm};
+use crate::{AtlasTable, ElementId, PackConfig, WicDecoderArm, bake};
 
 /// emo2 shell surfaces.txt をパースし、`SurfaceSet` として **1 度** bake した結果を返す。
 ///
-/// COM は呼び出し側で初期化済みであること（本関数は WIC 腕を生成し bake するのみ）。
-/// 毎回この関数を呼ぶことで「新規構築した同一入力」を得られ、run-to-run 決定性の
-/// 検証に用いる。
-fn bake_emo2_shell() -> crate::BakeResult {
-    let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
-        .expect("emo2 surfaces.txt must be readable (UTF-8)");
-    let shell = areka_parsers::shell::parse(&content);
-    assert!(
-        !shell.surfaces.is_empty(),
-        "parse produced surfaces from surfaces.txt"
-    );
-
-    let base = shell_master_dir();
-    let dec = WicDecoderArm::new().expect("WIC factory creates under COM init");
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: &base,
-        alpha_params: on_params(),
-    };
-    // freshly-constructed identical inputs + PackConfig::default()。
-    bake(std::slice::from_ref(&set), &dec, PackConfig::default())
+/// 読み手は呼び出し側が COM を張った下で組んで渡す（`with_arm`）。
+fn bake_emo2_shell(dec: &WicDecoderArm) -> crate::BakeResult {
+    let (surfaces, base) = emo2_shell();
+    bake(&[set(&surfaces, &base)], dec, PackConfig::default())
 }
 
 /// `&AtlasTable` の全エントリを **`AtlasKey`（set → rel_path）昇順**で並べた決定的
@@ -143,55 +91,7 @@ fn snapshot_table(table: &AtlasTable) -> String {
     out
 }
 
-/// エラー集合の決定的スナップショット（run-to-run 比較用）。`Debug` を行区切りで並べ、
-/// 安定比較のため整列する。
-fn snapshot_errors(errors: &[crate::error::BakeError]) -> String {
-    let mut lines: Vec<String> = errors.iter().map(|e| format!("{e:?}")).collect();
-    lines.sort();
-    lines.join("\n")
-}
-
-/// テスト①: run-to-run 決定性（5.5 中核・golden ファイル非依存で完全に堅牢）。
-///
-/// 同一 emo2 shell 入力を **2 回** 独立に bake し、配置結果スナップショットと
-/// エラー集合が**バイト等値**であることを確認する。ハードコード座標に依存せず、
-/// 2 つの独立実行の等値のみで決定性（5.5）を実証する。
-#[test]
-fn emo2_shell_bake_is_deterministic() {
-    with_com_initialized(|| {
-        let a = bake_emo2_shell();
-        let b = bake_emo2_shell();
-
-        let snap_a = snapshot_table(&a.table);
-        let snap_b = snapshot_table(&b.table);
-        assert_eq!(
-            snap_a, snap_b,
-            "same emo2 shell input must bake to an identical placement snapshot (5.5)"
-        );
-
-        // 失敗集合も同一。パレットの絵の `purple/a/null.png` も α の道を通って全透明の
-        // 絵として載るので、両実行とも**失敗 0 件**である（R5.5/5.6）。
-        let err_a = snapshot_errors(&a.errors);
-        let err_b = snapshot_errors(&b.errors);
-        assert_eq!(
-            err_a, err_b,
-            "same emo2 shell input must yield an identical error set run-to-run"
-        );
-        assert!(
-            a.errors.is_empty(),
-            "emo2 shell bakes with zero failures, got {:?}",
-            a.errors
-        );
-
-        // 空でない実配置が存在する（スナップショットが空文字列でない＝空虚な等値でない）。
-        assert!(
-            !snap_a.is_empty(),
-            "snapshot must contain entries (non-vacuous determinism)"
-        );
-    });
-}
-
-/// テスト②: golden スナップショット・リグレッション検出。
+/// golden スナップショット・リグレッション検出（決定性 5.5 も兼ねる）。
 ///
 /// emo2 shell を 1 度 bake し、その配置スナップショットをコミット済み golden
 /// （`src/testdata/emo2_shell_golden.txt`）と比較する。不一致（配置アルゴリズムの
@@ -213,8 +113,8 @@ fn emo2_shell_matches_golden() {
     // これがないと autocrlf 有効な新規クローン（Windows）で改行差だけで誤検出する。
     let expected = expected.replace("\r\n", "\n");
     let expected = expected.trim_end_matches('\n');
-    with_com_initialized(|| {
-        let result = bake_emo2_shell();
+    with_arm(|dec| {
+        let result = bake_emo2_shell(dec);
         let actual = snapshot_table(&result.table);
         assert_eq!(
             actual, expected,
@@ -234,8 +134,8 @@ fn emo2_shell_matches_golden() {
 #[test]
 #[ignore = "golden regeneration only; run explicitly with --ignored"]
 fn record_golden() {
-    with_com_initialized(|| {
-        let result = bake_emo2_shell();
+    with_arm(|dec| {
+        let result = bake_emo2_shell(dec);
         let snapshot = snapshot_table(&result.table);
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),

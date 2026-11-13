@@ -6,14 +6,11 @@
 //! 有無に依らない。そのため WIC の WebP の読み手が要る `single.webp` と、段 2（WIC）へ落ちる
 //! `deep16.apng` はここに入れない（どちらも偽の読み手・兄弟のテストが判定する）。
 
-use std::path::PathBuf;
-
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-
+use crate::test_support::{
+    BROKEN, FELL_BACK, OVER, elem, full, set, surface, testdata, view, with_arm,
+};
 use crate::{
-    AlphaParams, AnimationLimits, AtlasTable, BakeResult, ElementId, PackConfig, SetId, SurfaceSet,
-    UseSelfAlpha, WicDecoderArm, bake_with_limits,
+    AnimationLimits, AtlasTable, BakeResult, ElementId, PackConfig, SetId, bake_with_limits,
 };
 
 type Px = [u8; 4];
@@ -47,46 +44,27 @@ const ANIMATED: &[(&str, usize)] = &[
     ("trns.apng", 2),
 ];
 
-const OVER: &str = "bake: 動く絵が上限を超えたので 1 枚だけ読みます";
-const BROKEN: &str = "bake: 動く絵として読めなかったので 1 枚だけ読みます";
-const STAGE2: &str = "bake: 動く絵の 1 枚目を読めなかったので";
-
 /// 検体を面 0 に 1 層ずつ並べ、本物の読み手で焼く（COM を張った下で）。ログも返す。
 fn bake_samples(limits: AnimationLimits) -> (BakeResult, String) {
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/testdata/animated");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements: SAMPLES
+    let base = testdata("animated");
+    let surfaces = vec![surface(
+        0,
+        SAMPLES
             .iter()
             .enumerate()
-            .map(|(layer, name)| Element {
-                layer: layer as u32,
-                path: ElementPath::new(name.to_string()),
-                x: 0,
-                y: 0,
-            })
+            .map(|(layer, name)| elem(layer as u32, name))
             .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let sets = [SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: &base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    }];
+    )];
+    let sets = [set(&surfaces, &base)];
     let mut result = None;
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let log = crate::log_capture::capture_logs(|| {
-        let arm = WicDecoderArm::new().expect("WIC factory creates under COM init");
-        result = Some(bake_with_limits(&sets, &arm, PackConfig::default(), limits));
+    let mut log = String::new();
+    with_arm(|arm| {
+        let (baked, captured) = crate::log_capture::capture_logs(|| {
+            bake_with_limits(&sets, arm, PackConfig::default(), limits)
+        });
+        result = Some(baked);
+        log = captured;
     });
-    unsafe {
-        CoUninitialize();
-    }
     let result = result.unwrap();
     assert!(result.errors.is_empty(), "no failures: {:?}", result.errors);
     (result, log)
@@ -96,34 +74,6 @@ fn id(table: &AtlasTable, name: &str) -> ElementId {
     table
         .resolve(SetId(0), name)
         .unwrap_or_else(|| panic!("{name} is in the table"))
-}
-
-/// エントリをページから原寸の絵へ戻す（切り詰めの外は透明）。
-fn full(table: &AtlasTable, id: ElementId) -> Vec<Px> {
-    let e = table.entry(id);
-    let w = e.original.w;
-    let mut out = vec![CLEAR; (w * e.original.h) as usize];
-    if let Some(p) = &e.placement {
-        let page = table.page(p.page).expect("page exists");
-        for y in 0..p.uv_rect.h {
-            for x in 0..p.uv_rect.w {
-                let src = ((p.uv_rect.y + y) * page.stride + (p.uv_rect.x + x) * 4) as usize;
-                let dst = ((p.trim_offset.y as u32 + y) * w + p.trim_offset.x as u32 + x) as usize;
-                out[dst] = page.bytes[src..src + 4].try_into().unwrap();
-            }
-        }
-    }
-    out
-}
-
-/// エントリの見え方（寸法・切り詰めの位置と大きさ・原寸へ戻した画素）。ページ上の位置は含めない。
-fn view(table: &AtlasTable, id: ElementId) -> String {
-    let e = table.entry(id);
-    let trim = e
-        .placement
-        .as_ref()
-        .map(|p| (p.trim_offset, p.uv_rect.w, p.uv_rect.h));
-    format!("{:?} {:?} {:?}", e.original, trim, full(table, id))
 }
 
 /// `name` について出た `warn!` の行。
@@ -214,7 +164,7 @@ fn samples_folder_bakes_every_frame_and_single_pictures() {
     let w = warns_for(&log, "truncated.apng");
     assert_eq!(w.len(), 1, "truncated: one warning: {log}");
     assert!(w[0].contains(BROKEN), "truncated: broken warning: {log}");
-    assert!(!log.contains(STAGE2), "no fallback to WIC: {log}");
+    assert!(!log.contains(FELL_BACK), "no fallback to WIC: {log}");
 }
 
 /// 上限を 1 コマにして焼くと、どの動く絵も 1 枚へ縮み、その 1 枚は上限を広げて焼いたときの
@@ -267,5 +217,5 @@ fn one_frame_limit_shrinks_to_frame_zero_of_the_wide_bake() {
     let rgb = full(narrow, id(narrow, "rgb.webp"));
     assert_eq!(rgb[0], CLEAR, "rgb.webp: top-left color cleared");
     assert_eq!(rgb[63], RED, "rgb.webp: right half stays red");
-    assert!(!log.contains(STAGE2), "no fallback to WIC: {log}");
+    assert!(!log.contains(FELL_BACK), "no fallback to WIC: {log}");
 }

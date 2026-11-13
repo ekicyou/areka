@@ -322,7 +322,7 @@ where
                 match (self.strict_arm.take(), &self.strict_ledger) {
                     (Some((cue_spans, script)), Some(ledger)) => {
                         player.register_sink(Box::new(StrictTap::new(
-                            self.sinks.drain(..).collect(),
+                            std::mem::take(&mut self.sinks),
                             cue_spans,
                             &script,
                             Rc::clone(ledger),

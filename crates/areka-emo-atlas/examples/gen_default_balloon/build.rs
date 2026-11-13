@@ -92,14 +92,6 @@ mod tests {
     }
 
     #[test]
-    fn drawn_pictures_match_the_size_table() {
-        assert_eq!(
-            check_sizes(&draw::png_pictures(), &draw::online_frames()),
-            Ok(())
-        );
-    }
-
-    #[test]
     fn a_wrong_size_is_an_error() {
         let mut pngs = draw::png_pictures();
         pngs[0].1 = pic(12, 10);
