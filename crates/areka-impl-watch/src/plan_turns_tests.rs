@@ -4,13 +4,13 @@
 use super::super::test_support::{
     PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, desk_requested, give_back,
     granted, hold_load, hold_merge, hold_sole, hold_test, joined, load_done, load_running,
-    queue_load, queue_merge, queue_request, recorded_running, request, resumed, returned, run,
-    state_with, stop_for, stop_reported, stopped, test_freed, test_freed_record,
+    new_participant, queue_load, queue_merge, queue_request, recorded_running, request, resumed,
+    returned, run, state_with, stop_for, stop_reported, stopped, test_freed, test_freed_record,
 };
 use super::replan;
 use crate::plan::{Command, Event};
-use crate::state::{DeskSet, Participant, ParticipantStatus, SoleHolder, State, TestHolder};
-use crate::test_support::T0;
+use crate::state::{DeskSet, ParticipantStatus, State};
+use crate::test_support::{T0, sole_holder, test_holder};
 
 /// 出来事に机の番が 1 件も無い。
 fn no_grant(events: &[Event]) -> bool {
@@ -441,30 +441,11 @@ fn recording_a_running_load_test_needs_both_desks_free() {
     let mut state = state_with(&["A", "B"]);
     let mut expected = state.clone();
     let got = run(&mut state, &load_running("Z"), Some("Z"), T0 + 5);
-    expected.participants.insert(
-        "Z".to_owned(),
-        Participant {
-            id: "Z".to_owned(),
-            name: "Z".to_owned(),
-            repo: REPO.to_owned(),
-            since: T0 + 5,
-            ..Participant::default()
-        },
-    );
-    expected.test = Some(TestHolder {
-        id: "Z".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-    });
-    expected.sole = Some(SoleHolder {
-        id: "Z".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-        running: true,
-        stopped: Vec::new(),
-    });
+    expected
+        .participants
+        .insert("Z".to_owned(), new_participant("Z", "Z", REPO, T0 + 5));
+    expected.test = test_holder("Z", PURPOSE, T0 + 5, T0 + 5);
+    expected.sole = sole_holder("Z", PURPOSE, T0 + 5, T0 + 5, true, &[]);
     assert_eq!(state, expected);
     let events = vec![joined("Z"), recorded_running("Z")];
     assert_eq!(got, applied(true, events));

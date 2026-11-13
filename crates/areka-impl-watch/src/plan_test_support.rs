@@ -2,10 +2,10 @@
 
 use super::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{
-    DeskRequest, DeskSet, MergeHolder, MergeRequest, Participant, ParticipantStatus, Recent,
-    RecentKind, SoleHolder, State, StopReason, TestHolder, WaitKind, WaitRecord, WatchInfo,
+    DeskRequest, DeskSet, MergeRequest, Participant, ParticipantStatus, Recent, RecentKind, State,
+    StopReason, WaitKind, WaitRecord, WatchInfo,
 };
-use crate::test_support::T0;
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// 支えの組み立てる参加者のリポジトリ。
 pub(super) const REPO: &str = "areka";
@@ -50,20 +50,27 @@ pub(super) fn state_with(ids: &[&str]) -> State {
         state.participants.insert(
             (*id).to_owned(),
             Participant {
-                id: (*id).to_owned(),
-                name: (*id).to_owned(),
-                repo: REPO.to_owned(),
-                since: T0,
                 watch: Some(WatchInfo {
                     pid: PID,
                     since: T0,
                 }),
-                ..Participant::default()
+                ..new_participant(id, id, REPO, T0)
             },
         );
         state.waits.push(wait_record(id, WaitKind::Watch));
     }
     state
+}
+
+/// `since` に参加した直後の参加者（「作業中」・見張りも停止要請の訳も無い）。
+pub(super) fn new_participant(id: &str, name: &str, repo: &str, since: u64) -> Participant {
+    Participant {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        repo: repo.to_owned(),
+        since,
+        ..Participant::default()
+    }
 }
 
 /// 支えの定数（[`REPO`]・[`PID`]・[`T0`]）で作った待ちの記録。
@@ -88,18 +95,7 @@ pub(super) fn queue_merge(state: &mut State, repo: &str, id: &str, requested: u6
     });
 }
 
-/// `requested` に申し込み、`granted` に番の来たマージの持ち主（支えの申し込みと同じ綴り）。
-pub(super) fn merge_holder(id: &str, requested: u64, granted: u64) -> Option<MergeHolder> {
-    Some(MergeHolder {
-        id: id.to_owned(),
-        spec: format!("spec-{id}"),
-        bug: false,
-        requested,
-        granted,
-    })
-}
-
-/// マージの机の持ち主にする。
+/// マージの机の持ち主にする（持ち主は支えの申し込みと同じ綴り）。
 pub(super) fn hold_merge(state: &mut State, repo: &str, id: &str) {
     state.merge.entry(repo.to_owned()).or_default().holder = merge_holder(id, T0, T0);
 }
@@ -116,24 +112,12 @@ pub(super) fn queue_request(state: &mut State, id: &str, desks: DeskSet, request
 
 /// 排他テストの机の持ち主にする。
 pub(super) fn hold_test(state: &mut State, id: &str) {
-    state.test = Some(TestHolder {
-        id: id.to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0,
-        granted: T0,
-    });
+    state.test = test_holder(id, PURPOSE, T0, T0);
 }
 
 /// 番の来たひとり占めの持ち主にする。`stopped` は番が来たときに止まっていた識別。
 pub(super) fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
-    state.sole = Some(SoleHolder {
-        id: id.to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0,
-        granted: T0,
-        running: false,
-        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
-    });
+    state.sole = sole_holder(id, PURPOSE, T0, T0, false, stopped);
 }
 
 /// 負荷テスト（排他テストの机とひとり占めの 1 組）の番が来た持ち主にする（走っている印なし）。

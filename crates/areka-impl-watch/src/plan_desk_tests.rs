@@ -12,17 +12,17 @@
 use super::test_support::{
     PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled,
     desk_requested, give_back, granted, hold_load, hold_merge, hold_running_load, hold_test,
-    joined, leave, left, load_done, load_test, merge, merge_done, merge_granted, merge_holder,
-    merge_requested, merged, queue_load, queue_merge, queue_request, resumed, returned, run,
+    joined, leave, left, load_done, load_test, merge, merge_done, merge_granted, merge_requested,
+    merged, new_participant, queue_load, queue_merge, queue_request, resumed, returned, run,
     state_with, stop_for, stopped, test_freed, test_freed_record, wait_record, watch,
     watch_registered,
 };
 use super::{Command, Verdict};
 use crate::state::{
-    DeskSet, LastMerge, MergeDesk, MergeRequest, Participant, ParticipantStatus, SoleHolder, State,
-    TestHolder, WaitKind, WaitRecord, WatchInfo,
+    DeskSet, LastMerge, MergeDesk, MergeRequest, Participant, ParticipantStatus, State, WaitKind,
+    WaitRecord, WatchInfo,
 };
-use crate::test_support::T0;
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// マージの待ち行列の末尾へ、バグの申し込みを足す。
 fn queue_bug_merge(state: &mut State, repo: &str, id: &str, requested: u64) {
@@ -300,13 +300,8 @@ fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
 
         events.push(granted("B", DeskSet::Test, &[]));
         assert_eq!(got, applied(true, events), "{cmd:?}");
-        let holder = TestHolder {
-            id: "B".to_owned(),
-            purpose: PURPOSE.to_owned(),
-            requested: T0 + 1,
-            granted: T0 + 10,
-        };
-        assert_eq!(state.test, Some(holder), "{cmd:?}");
+        let holder = test_holder("B", PURPOSE, T0 + 1, T0 + 10);
+        assert_eq!(state.test, holder, "{cmd:?}");
         assert!(state.requests.is_empty(), "{cmd:?}");
         assert_eq!(state.merge[REPO].holder, None, "{cmd:?}");
         assert_eq!(state.recent, [test_freed_record("A", why, T0 + 10)]);
@@ -347,13 +342,7 @@ fn a_merge_request_joins_and_waits_behind_the_holder() {
     // 持ち主にならず、申し込みの時刻とともに待ち行列に並ぶ。
     expected.participants.insert(
         "A".to_owned(),
-        Participant {
-            id: "A".to_owned(),
-            name: "えー".to_owned(),
-            repo: "areka".to_owned(),
-            since: T0 + 5,
-            ..Participant::default()
-        },
+        new_participant("A", "えー", "areka", T0 + 5),
     );
     let desk = expected.merge.get_mut("areka").expect("机が在る");
     desk.queue.push(MergeRequest {
@@ -591,28 +580,10 @@ fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
     let mut expected = State::empty();
     expected.participants.insert(
         "A".to_owned(),
-        Participant {
-            id: "A".to_owned(),
-            name: "えー".to_owned(),
-            repo: "areka".to_owned(),
-            since: T0 + 5,
-            ..Participant::default()
-        },
+        new_participant("A", "えー", "areka", T0 + 5),
     );
-    expected.test = Some(TestHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-    });
-    expected.sole = Some(SoleHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-        running: false,
-        stopped: Vec::new(),
-    });
+    expected.test = test_holder("A", PURPOSE, T0 + 5, T0 + 5);
+    expected.sole = sole_holder("A", PURPOSE, T0 + 5, T0 + 5, false, &[]);
     assert_eq!(state, expected);
     let events = vec![
         joined("A"),
@@ -671,21 +642,9 @@ fn the_next_load_holder_is_the_earliest_request() {
     // 時刻が早い順。同じ時刻なら行列の前（B）が先。
     assert_eq!(order, ["B", "C", "A"]);
     // 番の時刻は「いま」。申し込みの中身はそのまま 2 つの机の持ち主へ写る。
-    let sole = SoleHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 3,
-        granted: T0 + 12,
-        running: false,
-        stopped: vec!["B".to_owned(), "C".to_owned(), "D".to_owned()],
-    };
-    let test = TestHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 3,
-        granted: T0 + 12,
-    };
-    assert_eq!((state.sole, state.test), (Some(sole), Some(test)));
+    let sole = sole_holder("A", PURPOSE, T0 + 3, T0 + 12, false, &["B", "C", "D"]);
+    let test = test_holder("A", PURPOSE, T0 + 3, T0 + 12);
+    assert_eq!((state.sole, state.test), (sole, test));
     assert!(state.requests.is_empty());
 }
 

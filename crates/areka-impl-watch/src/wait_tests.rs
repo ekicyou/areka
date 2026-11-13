@@ -7,9 +7,9 @@ use super::test_support::{merge, request, resume, watch};
 use super::{WaitEnd, WaitSpec, judge};
 use crate::state::{
     DeskRequest, DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant,
-    ParticipantStatus, SoleHolder, State, StopReason, TestHolder,
+    ParticipantStatus, State, StopReason,
 };
-use crate::test_support::T0;
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 const WORKING: ParticipantStatus = ParticipantStatus::Working;
 const STOP_REQUESTED: ParticipantStatus = ParticipantStatus::StopRequested;
@@ -77,14 +77,19 @@ fn merge_request(id: &str) -> MergeRequest {
     }
 }
 
-fn merge_holder(id: &str) -> Option<MergeHolder> {
-    Some(MergeHolder {
-        id: id.to_owned(),
-        spec: format!("spec-{id}"),
-        bug: false,
-        requested: T0 + 10,
-        granted: T0 + 11,
-    })
+/// `T0 + 10` に申し込み `T0 + 11` に番の来たマージの持ち主。
+fn merged_holder(id: &str) -> Option<MergeHolder> {
+    merge_holder(id, T0 + 10, T0 + 11)
+}
+
+/// 排他テストの机の持ち主にする。
+fn hold_test(state: &mut State, id: &str) {
+    state.test = test_holder(id, "全体テスト", T0 + 20, T0 + 30);
+}
+
+/// ひとり占めの持ち主にする（番が来たときに止まっていた識別つき）。
+fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
+    state.sole = sole_holder(id, "負荷の計測 5 回", T0 + 20, T0 + 30, false, stopped);
 }
 
 fn last_merge() -> Option<LastMerge> {
@@ -105,28 +110,6 @@ fn desk_request(id: &str, desks: DeskSet) -> DeskRequest {
     }
 }
 
-/// 排他テストの机の持ち主にする。
-fn hold_test(state: &mut State, id: &str) {
-    state.test = Some(TestHolder {
-        id: id.to_owned(),
-        purpose: "全体テスト".to_owned(),
-        requested: T0 + 20,
-        granted: T0 + 30,
-    });
-}
-
-/// ひとり占めの持ち主にする（番が来たときに止まっていた識別つき）。
-fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
-    state.sole = Some(SoleHolder {
-        id: id.to_owned(),
-        purpose: "負荷の計測 5 回".to_owned(),
-        requested: T0 + 20,
-        granted: T0 + 30,
-        running: false,
-        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
-    });
-}
-
 // ---- 見張り ----
 
 #[test]
@@ -135,7 +118,7 @@ fn watch_keeps_waiting_while_working() {
     assert_eq!(judged(&watch("A"), &state), None);
 
     // 机を持っていても・並んでいても、見張りは終わらない（要件 5.3）。
-    state.merge.entry("areka".to_owned()).or_default().holder = merge_holder("A");
+    state.merge.entry("areka".to_owned()).or_default().holder = merged_holder("A");
     state.requests.push(desk_request("A", DeskSet::Test));
     assert_eq!(judged(&watch("A"), &state), None);
     state.requests.clear();
@@ -188,7 +171,7 @@ fn merge_keeps_waiting_while_queued() {
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: merge_holder("B"),
+            holder: merged_holder("B"),
             queue: vec![merge_request("A")],
             last: last_merge(),
         },
@@ -207,7 +190,7 @@ fn merge_is_granted_with_the_last_merge_on_the_line() {
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: merge_holder("A"),
+            holder: merged_holder("A"),
             queue: vec![merge_request("B")],
             last: last_merge(),
         },
@@ -225,7 +208,7 @@ fn merge_is_granted_with_last_none_when_the_repo_has_no_merge_yet() {
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: merge_holder("A"),
+            holder: merged_holder("A"),
             ..MergeDesk::default()
         },
     );
@@ -254,7 +237,7 @@ fn merge_is_gone_when_neither_queued_nor_holding_in_this_repo() {
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: merge_holder("B"),
+            holder: merged_holder("B"),
             queue: vec![merge_request("C")],
             last: last_merge(),
         },
@@ -273,7 +256,7 @@ fn merge_is_gone_when_neither_queued_nor_holding_in_this_repo() {
     state.merge.insert(
         "pasta".to_owned(),
         MergeDesk {
-            holder: merge_holder("A"),
+            holder: merged_holder("A"),
             ..MergeDesk::default()
         },
     );
@@ -297,7 +280,7 @@ fn merge_is_gone_when_the_participant_record_is_missing() {
     );
     assert_eq!(judged(&merge("A", "areka"), &state), gone("request gone"));
 
-    state.merge.get_mut("areka").unwrap().holder = merge_holder("A");
+    state.merge.get_mut("areka").unwrap().holder = merged_holder("A");
     assert_eq!(judged(&merge("A", "areka"), &state), gone("request gone"));
 }
 
@@ -378,7 +361,7 @@ fn request_is_gone_when_neither_queued_nor_holding() {
     hold_test(&mut state, "D");
     hold_sole(&mut state, "D", &["C"]);
     state.requests.push(desk_request("A", DeskSet::Test));
-    state.merge.entry("areka".to_owned()).or_default().holder = merge_holder("C");
+    state.merge.entry("areka".to_owned()).or_default().holder = merged_holder("C");
     assert_eq!(judged(&request("C"), &state), gone("request gone"));
 }
 
@@ -473,7 +456,7 @@ fn lines_stay_ascii_when_hand_edited_values_are_not_ascii() {
     state.merge.insert(
         "倉".to_owned(),
         MergeDesk {
-            holder: merge_holder("A"),
+            holder: merged_holder("A"),
             queue: Vec::new(),
             last,
         },

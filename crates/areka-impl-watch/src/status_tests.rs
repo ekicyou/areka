@@ -4,10 +4,9 @@ use super::{render_markdown, render_terminal, utc, utc_compact};
 use crate::plan::Presence;
 use crate::state::{
     DeskRequest, DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant,
-    ParticipantStatus, Recent, RecentKind, SoleHolder, State, StopReason, TestHolder, WaitKind,
-    WaitRecord, WatchInfo,
+    ParticipantStatus, Recent, RecentKind, State, StopReason, WaitKind, WaitRecord, WatchInfo,
 };
-use crate::test_support::T0;
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// [`T0`] の UTC の綴り。
 const T0_UTC: &str = "2026-10-03T04:00:00Z";
@@ -74,26 +73,6 @@ fn desk_request(id: &str, desks: DeskSet, requested: u64) -> DeskRequest {
     }
 }
 
-fn test_holder(id: &str) -> TestHolder {
-    TestHolder {
-        id: id.to_owned(),
-        purpose: "排他のテスト".to_owned(),
-        requested: T0 + 2,
-        granted: T0 + 3,
-    }
-}
-
-fn sole_holder(id: &str) -> SoleHolder {
-    SoleHolder {
-        id: id.to_owned(),
-        purpose: "走っている計測".to_owned(),
-        requested: T0,
-        granted: T0 + 1,
-        running: true,
-        stopped: vec!["a".to_owned(), "b".to_owned()],
-    }
-}
-
 /// 設計の端末の要約の見本そのままの状態（a はマージの机・b は排他テストの机を持ち、
 /// a が排他テストの机を申し込んで待つ。全員が「作業中」で見張りも居る）。
 fn design_sample() -> State {
@@ -111,18 +90,12 @@ fn design_sample() -> State {
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: Some(MergeHolder {
-                id: "a".to_owned(),
-                spec: "impl-watch-2".to_owned(),
-                bug: false,
-                requested: T0 + 10,
-                granted: T0 + 11,
-            }),
+            holder: merge_holder("a", T0 + 10, T0 + 11),
             queue: Vec::new(),
             last: None,
         },
     );
-    state.test = Some(test_holder("b"));
+    state.test = test_holder("b", "排他のテスト", T0 + 2, T0 + 3);
     state
         .requests
         .push(desk_request("a", DeskSet::Test, T0 + 20));
@@ -254,7 +227,7 @@ test: holder=b queue=a
 #[test]
 fn terminal_summary_renders_the_full_sample() {
     let mut state = sample();
-    state.sole = Some(sole_holder("d"));
+    state.sole = sole_holder("d", "走っている計測", T0, T0 + 1, true, &["a", "b"]);
     let got = render_terminal(&state, &SAMPLE_PRESENCE);
     // 「停止要請中」の b は乗っていない（riding=2）。c の申し込みは両方の机の行に並ぶ。
     let want = "\
@@ -273,8 +246,8 @@ test: holder=none queue=c
 fn terminal_summary_is_ascii_while_markdown_carries_the_japanese_values() {
     let mut state = sample();
     // 持ち主の内容も日本語にする（見本の机は持ち主が居ない）。
-    state.sole = Some(sole_holder("d"));
-    state.test = Some(test_holder("e"));
+    state.sole = sole_holder("d", "走っている計測", T0, T0 + 1, true, &["a", "b"]);
+    state.test = test_holder("e", "排他のテスト", T0 + 2, T0 + 3);
     let terminal = render_terminal(&state, &SAMPLE_PRESENCE);
     assert!(terminal.is_ascii(), "{terminal}");
     // 名前と内容は逃がして出すのでもなく、出さない（逃がした字は 1 つも無い）。
@@ -432,8 +405,8 @@ none
 #[test]
 fn markdown_carries_every_item_of_the_status_report() {
     let mut state = sample();
-    state.sole = Some(sole_holder("d"));
-    state.test = Some(test_holder("e"));
+    state.sole = sole_holder("d", "走っている計測", T0, T0 + 1, true, &["a", "b"]);
+    state.test = test_holder("e", "排他のテスト", T0 + 2, T0 + 3);
     state.push_recent(Recent {
         at: T0 + 7,
         kind: RecentKind::TestFreed,
@@ -573,13 +546,7 @@ fn first_line_counts_desks_with_a_holder_and_participants_not_working() {
     state.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: Some(MergeHolder {
-                id: "a".to_owned(),
-                spec: "spec-a".to_owned(),
-                bug: false,
-                requested: T0,
-                granted: T0 + 1,
-            }),
+            holder: merge_holder("a", T0, T0 + 1),
             queue: Vec::new(),
             last: None,
         },
@@ -622,13 +589,7 @@ fn first_line_counts_every_merge_desk_with_a_holder_across_repos() {
         state.merge.insert(
             repo.to_owned(),
             MergeDesk {
-                holder: Some(MergeHolder {
-                    id: id.to_owned(),
-                    spec: format!("spec-{id}"),
-                    bug: false,
-                    requested: T0,
-                    granted: T0 + 1,
-                }),
+                holder: merge_holder(id, T0, T0 + 1),
                 queue: Vec::new(),
                 last: None,
             },

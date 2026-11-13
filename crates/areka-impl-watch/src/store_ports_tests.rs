@@ -681,12 +681,11 @@ fn the_wait_record_takes_its_start_time_from_the_clock_of_the_store() {
     let home = home_in(&root);
     let seen = Rc::new(RefCell::new(Vec::new()));
     let noted = Rc::clone(&seen);
-    let state_path = home.state_path();
+    let dir = home.dir.clone();
     let store = Store {
         log: Box::new(move |event| {
             if let Event::WaitRegistered { id, kind } = event {
-                let bytes = fs::read(&state_path).expect("状態ファイルが在る");
-                let state: State = serde_json::from_slice(&bytes).expect("状態として読める");
+                let state = read_state(&dir);
                 let record = state.waits.iter().find(|w| w.id == *id && w.kind == *kind);
                 noted.borrow_mut().push(record.map(|w| w.since));
             }

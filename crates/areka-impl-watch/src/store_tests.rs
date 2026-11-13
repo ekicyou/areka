@@ -564,6 +564,14 @@ fn open_fails_when_the_log_file_cannot_be_opened() {
 
 // ───────── 時計 ─────────
 
+/// 1970 年より前を指す時計（読むたびに失敗する）。
+fn failing_clock() -> Result<u64, WatchError> {
+    Err(WatchError::io(
+        "read the clock",
+        &std::io::Error::other("before 1970"),
+    ))
+}
+
 #[test]
 fn the_real_clock_core_fails_before_1970_and_counts_seconds_after() {
     let before = unix_seconds(UNIX_EPOCH - Duration::from_secs(1));
@@ -589,12 +597,7 @@ fn a_change_through_a_failing_clock_fails_and_writes_nothing() {
     let home = home_in(&root);
     let judged = Cell::new(false);
     let store = Store {
-        clock: Box::new(|| {
-            Err(WatchError::io(
-                "read the clock",
-                &std::io::Error::other("before 1970"),
-            ))
-        }),
+        clock: Box::new(failing_clock),
         ..store_in(&root)
     };
 
@@ -628,12 +631,7 @@ fn clear_through_a_failing_clock_fails_and_writes_nothing() {
     store_in(&root).with_state(watch("a")).expect("変えられる");
     let before = fs::read(home.state_path()).expect("読める");
     let store = Store {
-        clock: Box::new(|| {
-            Err(WatchError::io(
-                "read the clock",
-                &std::io::Error::other("before 1970"),
-            ))
-        }),
+        clock: Box::new(failing_clock),
         ..store_in(&root)
     };
 

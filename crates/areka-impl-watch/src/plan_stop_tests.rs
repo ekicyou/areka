@@ -13,7 +13,7 @@ use super::test_support::{
 };
 use super::{Command, Event};
 use crate::state::{DeskRequest, DeskSet, ParticipantStatus, SoleHolder, State, TestHolder};
-use crate::test_support::T0;
+use crate::test_support::{T0, sole_holder, test_holder};
 
 use ParticipantStatus::{StopRequested, Stopped, Working};
 
@@ -128,21 +128,9 @@ fn a_stop_round_trip_reports_one_event_per_change() {
     let got = run(&mut state, &stopped("B"), Some("B"), T0 + 7);
     let events = vec![stop_reported("B"), load_granted("C", &["A", "B"])];
     assert_eq!(got, applied(true, events));
-    let test = TestHolder {
-        id: "C".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 7,
-    };
-    let sole = SoleHolder {
-        id: "C".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 7,
-        running: false,
-        stopped: vec!["A".to_owned(), "B".to_owned()],
-    };
-    assert_eq!(desks(&state), (Some(test), Some(sole), Vec::new()));
+    let test = test_holder("C", PURPOSE, T0 + 5, T0 + 7);
+    let sole = sole_holder("C", PURPOSE, T0 + 5, T0 + 7, false, &["A", "B"]);
+    assert_eq!(desks(&state), (test, sole, Vec::new()));
     // 「作業中」のまま番を受けた持ち主は、何も変わらない（見張りは走り続けている）。
     assert_eq!(seen(&state, "C"), (Working, T0, None, None));
 
@@ -445,24 +433,9 @@ fn a_queued_requester_who_records_a_running_load_test_leaves_the_queue_and_goes_
     // B は待ち行列から外れて持ち主になり、自分の負荷テストのために「作業中」へ戻る。
     let events = vec![recorded_running("B"), resumed("B", "load-running")];
     assert_eq!(got, applied(true, events));
-    let test = TestHolder {
-        id: "B".to_owned(),
-        purpose: "走っている計測".to_owned(),
-        requested: T0 + 9,
-        granted: T0 + 9,
-    };
-    let sole = SoleHolder {
-        id: "B".to_owned(),
-        purpose: "走っている計測".to_owned(),
-        requested: T0 + 9,
-        granted: T0 + 9,
-        running: true,
-        stopped: Vec::new(),
-    };
-    assert_eq!(
-        (state.test.clone(), state.sole.clone()),
-        (Some(test), Some(sole))
-    );
+    let test = test_holder("B", "走っている計測", T0 + 9, T0 + 9);
+    let sole = sole_holder("B", "走っている計測", T0 + 9, T0 + 9, true, &[]);
+    assert_eq!((state.test.clone(), state.sole.clone()), (test, sole));
     let queued: Vec<_> = state.requests.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(queued, ["A"]);
     assert_eq!(seen(&state, "B"), (Working, T0 + 9, None, Some(T0 + 9)));

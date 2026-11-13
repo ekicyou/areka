@@ -5,15 +5,13 @@
 
 use super::test_support::{
     FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, granted, hold_load, hold_merge,
-    hold_running_load, hold_test, merge, merge_granted, merge_holder, merge_requested, queue_load,
-    queue_merge, queue_request, resumed, run, state_with, stop_for, test_freed, test_freed_record,
-    wait_record, wait_registered,
+    hold_running_load, hold_test, merge, merge_granted, merge_requested, queue_load, queue_merge,
+    queue_request, resumed, run, state_with, stop_for, test_freed, test_freed_record, wait_record,
+    wait_registered,
 };
 use super::{Applied, Command, Event, apply};
-use crate::state::{
-    DeskSet, MergeDesk, Recent, RecentKind, SoleHolder, State, TestHolder, WaitKind, WaitRecord,
-};
-use crate::test_support::T0;
+use crate::state::{DeskSet, MergeDesk, Recent, RecentKind, State, WaitKind, WaitRecord};
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// 周期の一回りを 1 回呼ぶ。
 fn tick(state: &mut State, caller: Option<&str>, now: u64, presence: &FakePresence) -> Applied {
@@ -161,21 +159,9 @@ fn reclaiming_the_merge_holder_lets_the_waiting_load_test_take_its_desk_in_the_s
     let got = tick(&mut state, Some("C"), T0 + 10, &no_watch(&["A"]));
 
     assert_eq!(ids(&state), ["B", "C"]);
-    let test = TestHolder {
-        id: "C".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 1,
-        granted: T0 + 10,
-    };
-    let sole = SoleHolder {
-        id: "C".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 1,
-        granted: T0 + 10,
-        running: false,
-        stopped: vec!["B".to_owned()],
-    };
-    assert_eq!((state.test, state.sole), (Some(test), Some(sole)));
+    let test = test_holder("C", PURPOSE, T0 + 1, T0 + 10);
+    let sole = sole_holder("C", PURPOSE, T0 + 1, T0 + 10, false, &["B"]);
+    assert_eq!((state.test, state.sole), (test, sole));
     assert!(state.requests.is_empty());
     let grant = granted("C", DeskSet::TestSole, &["B"]);
     assert_eq!(got, applied(true, vec![reclaimed("A"), grant]));
