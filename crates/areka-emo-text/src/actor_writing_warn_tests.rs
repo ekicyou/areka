@@ -223,6 +223,20 @@ fn attaching_unknown_writing_mode_warns_once_saying_treated_as_undeclared() {
     assert!(!warn.message().contains("フォールバック"));
 }
 
+/// 正典の綴りに近いだけの `writing_mode`（区切り・大小・空）も未知として WARN 1 件ずつ（後ろの空白は
+/// 設定ファイルの読み取りが落とすので、登録口では正典の値として届く）。
+#[test]
+fn attaching_near_miss_writing_mode_warns_once_each() {
+    for value in ["vertical-rl", "VERTICAL_RL", ""] {
+        let notes = attach_noting(Some("1"), Some(value));
+        assert_eq!(notes.counts(), (0, 1, 0), "{value:?}: {notes:?}");
+        assert_eq!(
+            notes.unknown_writing_mode[0].field_str("value"),
+            Some(value)
+        );
+    }
+}
+
 /// 不正な `vertical` ＋ 有効な `writing_mode` は WARN 1 件（矛盾の併記ではない）。
 #[test]
 fn attaching_invalid_vertical_with_valid_writing_mode_warns_once() {
