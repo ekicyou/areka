@@ -59,7 +59,7 @@
   - _Boundary: 申し送りの項目_
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 6. 全体を確かめる
+- [x] 6. 全体を確かめる
   - `crates/dola` の下のテスト・README・`Cargo.toml` に `yaml` の語が 0 件、`cargo tree --workspace --all-features` に `unsafe-libyaml`・`serde_yaml` が 0 件であることを確かめる
   - `cargo deny check` と `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` を回し、謝辞に差分が出たら道具が作った物をそのままコミットする（手で直さない）
   - 要件 7.1・7.2 はここでは満たさず、完了の段で満たす: 完了の全体テスト（`tools/test-all.ps1 -Format -License`）は手順の決まりで `/kiro-complete` がアーカイブの後に 1 回だけ回すため、実装の段で重ねて回さない。触っていないクレートだけ赤なら、そのクレートだけ 1 回回し直し、変化が無ければ申し送りを残す
@@ -69,3 +69,4 @@
 ## Implementation Notes
 
 - 1.1: `src/value.rs:7` と `src/compile/mod.rs:72` のコメントに「JSON/TOML/YAML」が残る。src を触るタスク 2 で YAML を外す（タスク 6 の yaml 0 件の確かめにも掛かる）。
+- 6（範囲外・申し送り）: `cargo test --workspace` で触っていない `areka-ghost`（lib 5・`--test ghost` 6）と `shiori4-testdll`（lib 1）の 12 本が赤。赤のクレートだけ 1 回回し直して同じ 12 本＝変化なし＝規則により申し送りで緑扱い。どれも「built test DLL が正準位置に不在」で、cargo 1.100.0（2026-11-05）の下でテストの exe が `target/debug/build/<pkg>/<hash>/out/` に置かれ、exe の隣を探すテスト（`crates/areka-ghost/src/shiori_inproc_tests.rs:30`・`tests/ghost/inproc_fixture.rs:50`・`crates/shiori4-testdll/src/lib.rs:269`）が `target/debug/deps/` の DLL を見つけられないと見ている（cargo の変更かは未確認）。`/kiro-complete` の棚卸で `/kiro-discovery` に起票する。dola の対象は全部緑。
