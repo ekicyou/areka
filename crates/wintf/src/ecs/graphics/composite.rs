@@ -7,7 +7,7 @@
 use super::visual::{DrawCommand, emit};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
@@ -16,7 +16,6 @@ use windows::core::Interface;
 use windows_numerics::{Matrix3x2, Vector2};
 
 /// 1 画素の読み戻しの写し先と控え（同じ錠の中に置く）。
-#[allow(dead_code)] // 読む手順（read_pixel）が入るまで（5.2）。
 struct PixelReadState {
     /// 1×1 の `CPU_READ | CANNOT_DRAW` の写し先。
     staging: ID2D1Bitmap1,
@@ -31,10 +30,8 @@ pub(crate) struct SurfaceComposite {
     /// 合成し終えた回数（0＝まだ）。
     generation: u64,
     /// 1×1 の写し先と控えを 1 つの錠に入れる（写し・Map・Unmap・控えの更新を錠を持ったまま行う）。
-    #[allow(dead_code)] // 読む手順が入るまで（5.2）。
     pixel: Mutex<PixelReadState>,
     /// GPU から読んだ回数（5.4 のテストの的）。
-    #[allow(dead_code)] // 読む手順が入るまで（5.2）。
     gpu_reads: AtomicU64,
 }
 
@@ -161,5 +158,70 @@ impl SurfaceComposite {
                 D2D1_COMPOSITE_MODE_SOURCE_OVER,
             );
         }
+    }
+
+    /// 1 画素（座標は呼び手が範囲の内と確かめ済み・世代は 1 以上）。`(x, y, 世代)` が控えと同じなら
+    /// GPU から読まない（5.4）。`Map(READ)` は GPU が合成を終えるまで待つ（5.2）。
+    pub(crate) fn read_pixel(&self, x: u32, y: u32) -> windows::core::Result<[u8; 4]> {
+        // 錠を持ったまま写し・Map・Unmap・控えの更新を行う（2 つの読みが写し先を取り合わない）。
+        let mut state = self.pixel.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((lx, ly, lg, value)) = state.last
+            && (lx, ly, lg) == (x, y, self.generation)
+        {
+            return Ok(value);
+        }
+        let src = D2D_RECT_U {
+            left: x,
+            top: y,
+            right: x + 1,
+            bottom: y + 1,
+        };
+        // SAFETY: Windows API 境界。`Map(READ)` の `bits` は少なくとも 4 バイトを指す。
+        let value = unsafe {
+            state
+                .staging
+                .CopyFromBitmap(None, &self.bitmap, Some(&src))?;
+            let mapped = state.staging.Map(D2D1_MAP_OPTIONS_READ)?;
+            let value = *(mapped.bits as *const [u8; 4]);
+            state.staging.Unmap()?;
+            value
+        };
+        self.gpu_reads.fetch_add(1, Ordering::Relaxed);
+        state.last = Some((x, y, self.generation, value));
+        Ok(value)
+    }
+
+    /// 全体（1 行＝幅×4 バイトに詰めた BGRA・5.9）。写し先は `device` の新しい DC で作って捨てる
+    /// （共有の DC と 1 画素の写し先に触らないので錠を要らない）。
+    pub(crate) fn read_all(&self, device: &ID2D1Device) -> windows::core::Result<Vec<u8>> {
+        let (width, height) = self.size;
+        let row = width as usize * 4;
+        let mut bytes = vec![0u8; row * height as usize];
+        // SAFETY: Windows API 境界。`Map(READ)` の `bits` は少なくとも `pitch * height` バイトを指す。
+        unsafe {
+            let dc = device.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
+            let staging = create_bitmap(
+                &dc,
+                self.size,
+                D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+            )?;
+            staging.CopyFromBitmap(None, &self.bitmap, None)?;
+            let mapped = staging.Map(D2D1_MAP_OPTIONS_READ)?;
+            for y in 0..height as usize {
+                std::ptr::copy_nonoverlapping(
+                    mapped.bits.add(y * mapped.pitch as usize),
+                    bytes.as_mut_ptr().add(y * row),
+                    row,
+                );
+            }
+            staging.Unmap()?;
+        }
+        Ok(bytes)
+    }
+
+    /// GPU から読んだ回数（5.4 のテストの的）。
+    #[cfg(test)]
+    pub(crate) fn gpu_reads(&self) -> u64 {
+        self.gpu_reads.load(Ordering::Relaxed)
     }
 }

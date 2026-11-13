@@ -221,3 +221,115 @@ fn generation_goes_up_per_compose() {
         "SurfaceComposite { size: (16, 16), generation: 2 }"
     );
 }
+
+// ---- 読みの手順（要件 5.1, 5.2, 5.4, 5.9, 7.8）----
+
+/// 根の列と木を拡大 `s` で合成した入れ物と、同じ絵を原点に直接描いた答えの画素。
+fn composed_with_answer(s: f32) -> (SurfaceComposite, Pixels) {
+    let mut world = World::new();
+    let root = tree(&mut world);
+    let commands = tree_commands(&mut world, root, None);
+    let list = root_list();
+    let size = (16.0 * s).ceil() as u32;
+    let dc = warp_dc();
+    let mut comp = SurfaceComposite::new(&dc, (size, size)).unwrap();
+    comp.compose(&dc, scale(s), Some(&list), &commands).unwrap();
+    let want = draw_to_pixels(size, size, scale(s), |dc| unsafe {
+        dc.DrawImage(
+            &list,
+            None,
+            None,
+            D2D1_INTERPOLATION_MODE_LINEAR,
+            D2D1_COMPOSITE_MODE_SOURCE_OVER,
+        );
+        let dc6 = dc.cast::<ID2D1DeviceContext6>().ok();
+        emit(dc, dc6.as_ref(), scale(s), &commands);
+    });
+    assert_not_degenerate(&want);
+    (comp, want)
+}
+
+#[test]
+fn read_pixel_matches_answer_pixel_at_every_point() {
+    let (comp, want) = composed_with_answer(1.25);
+    let (w, h) = comp.size();
+    for y in 0..h {
+        for x in 0..w {
+            assert_eq!(comp.read_pixel(x, y).unwrap(), want.at(x, y), "({x}, {y})");
+        }
+    }
+    // 較正: 色の違う点を読み分けている（緑・赤・青・透明）。
+    assert_eq!(comp.read_pixel(2, 2).unwrap(), [0, 255, 0, 255]);
+    pixel_near(&want, RED, 6, 6);
+    assert_eq!(comp.read_pixel(19, 19).unwrap(), CLEAR);
+}
+
+#[test]
+fn read_pixel_returns_new_answer_right_after_recompose() {
+    let dc = warp_dc();
+    let mut comp = SurfaceComposite::new(&dc, (16, 16)).unwrap();
+    let list = root_list();
+    comp.compose(&dc, scale(1.0), Some(&list), &[]).unwrap();
+    assert_eq!(comp.read_pixel(5, 5).unwrap(), [0, 255, 0, 255]);
+    comp.compose(&dc, scale(1.0), None, &[]).unwrap();
+    assert_eq!(comp.read_pixel(5, 5).unwrap(), CLEAR, "合成し直す前の値");
+    comp.compose(&dc, scale(1.0), Some(&list), &[]).unwrap();
+    assert_eq!(comp.read_pixel(5, 5).unwrap(), [0, 255, 0, 255]);
+    assert_eq!(comp.gpu_reads(), 3, "世代が変われば GPU から読み直す");
+}
+
+#[test]
+fn same_point_without_recompose_does_not_read_gpu() {
+    let (comp, want) = composed_with_answer(1.0);
+    assert_eq!(comp.gpu_reads(), 0);
+    assert_eq!(comp.read_pixel(5, 5).unwrap(), want.at(5, 5));
+    assert_eq!(comp.gpu_reads(), 1);
+    assert_eq!(comp.read_pixel(5, 5).unwrap(), want.at(5, 5));
+    assert_eq!(comp.gpu_reads(), 1, "同じ座標で GPU から読んだ");
+    assert_eq!(comp.read_pixel(6, 5).unwrap(), want.at(6, 5));
+    assert_eq!(comp.gpu_reads(), 2, "座標を変えても GPU から読まない");
+    assert_eq!(comp.read_pixel(5, 5).unwrap(), want.at(5, 5));
+    assert_eq!(comp.gpu_reads(), 3, "控えは最後の 1 点だけ");
+}
+
+#[test]
+fn read_all_returns_packed_rows_equal_to_answer() {
+    for s in [1.0, 1.25] {
+        let (comp, want) = composed_with_answer(s);
+        let (w, h) = comp.size();
+        let all = comp.read_all(warp_device()).unwrap();
+        assert_eq!(
+            all.len(),
+            (w * h * 4) as usize,
+            "1 行＝幅×4 バイトに詰めていない"
+        );
+        let got = Pixels {
+            width: w,
+            bytes: all,
+        };
+        for y in 0..h {
+            for x in 0..w {
+                assert_eq!(got.at(x, y), want.at(x, y), "拡大 {s}: ({x}, {y})");
+            }
+        }
+        assert_eq!(comp.gpu_reads(), 0, "全体の読みは 1 画素の控えに触らない");
+    }
+}
+
+#[test]
+fn two_threads_reading_different_points_get_their_own_values() {
+    let (comp, want) = composed_with_answer(1.0);
+    let points = [(2u32, 2u32), (13u32, 13u32)];
+    assert_ne!(want.at(2, 2), want.at(13, 13), "較正: 2 点の値が同じ");
+    std::thread::scope(|scope| {
+        for (x, y) in points {
+            let (comp, expected) = (&comp, want.at(x, y));
+            scope.spawn(move || {
+                for _ in 0..200 {
+                    assert_eq!(comp.read_pixel(x, y).unwrap(), expected, "({x}, {y})");
+                }
+            });
+        }
+    });
+    assert!(comp.gpu_reads() >= 2);
+}

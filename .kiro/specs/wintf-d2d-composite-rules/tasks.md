@@ -88,7 +88,7 @@
   - _Boundary: SurfaceComposite_
   - _Depends: 1.2_
   - _Requirements: 4.1, 4.2, 4.4, 4.8, 7.7_
-- [ ] 5.2 入れ物から 1 画素と全体を同期で読む手順を作る
+- [x] 5.2 入れ物から 1 画素と全体を同期で読む手順を作る
   - 1 画素の読みは、1×1 の写し先と控えを 1 つの錠に入れ、錠を持ったまま写し・写像・写像の解除・控えの更新を行い、`(x, y, 世代)` が控えと同じなら GPU から読まない。GPU から読んだ回数をテストから読めるようにする
   - 全体の読みは、呼び出しごとに装置から新しい DC と CPU で読める写し先を作り、1 行＝幅×4 バイトに詰めた BGRA を返す
   - 入れ物の兄弟のテストのファイルへ足し（入れ物の手順の層の確かめ）、読んだ 1 画素が同じ点の答えの画素と同じこと・合成し直した直後に新しい答えを返すこと・同じ座標で合成し直していないとき GPU から読んだ回数が増えず座標を変えれば増えること・全体の読みの各点の値・2 つのスレッドから違う座標を交互に読んでそれぞれ自分の座標の値になることを WARP で固定する
@@ -149,3 +149,4 @@
 - 3.3: 描く中身の無い節（グループ）は `VisualTransform` を持たせないと描画面の持ち主と見なされ訪れられない（`emit_layer_tests.rs` の `ident()`）。
 - 4.2: `emit_layer_tests.rs` の `render_with_unbounded_clip` は emit の図形の切り抜きの層の旗を写している。emit の層の旗を変えるときは一緒に変える。
 - 5.1: `composite.rs` の `#![cfg_attr(not(test), allow(dead_code))]` は 6.2 で外す。`pixel`／`gpu_reads` の欄と `PixelReadState` の `#[allow(dead_code)]` は 5.2 で外す。根の列の `DrawImage` は `render.rs` と重複（6.2 で `compose` へ一本化）。
+- 5.2: `read_pixel`／`read_all` は GPU の失敗を `Err` で返すだけで記録しない。座標の範囲・世代 0・失いの見分けと `error!` は 6.3 の `SurfaceReadback` が持つ。読み戻しのテストは `composite_tests.rs` に置いた（design の `readback_tests.rs` は 6.3 の口のテスト用）。
