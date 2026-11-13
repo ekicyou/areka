@@ -12,7 +12,7 @@
 
 - 51 件（Must fix 1・Should fix 38・Nice to have 12）を全部直す（要件の討議で確定・直さずに残す 0 件・後へ回す 0 件）。
 - 直したバグと危ない所の 1 件ごとに、壊れたら落ちるテストを 1 本ずつ持たせる（「指摘ごとの直し方」の「縛るテスト」の列）。テストは決定論で、外のネットワークに出ない。
-- 範囲の外のファイルは、`crates/areka-user-data/src/lib.rs` の `usable_profile_env` を `pub(crate)` から `pub` にする 1 語のほかは変えない（要件 6.7・議題 1）。
+- 範囲の外のファイルは、`crates/areka-user-data/src/lib.rs` の `usable_profile_env` を `pub(crate)` から `pub` にする 1 語（と、その説明の文の内部リンク 1 つ）と、消すテストの名を挙げている `doc/ssp-mcp/transport-diff-areka.md` のテスト名の欄のほかは変えない（要件 3.2・6.7・議題 1）。
 - タスクはファイルのまとまりで 14 本に束ねる（要件 2.6 の 20 以内）。
 - 最後に同じ作法で audit をかけ直し、新しい指摘 0 件・全体テストの緑・既定の枝との差分の確かめを記録する。
 
@@ -34,7 +34,7 @@
 
 ### 範囲の外（持たないもの）
 
-- 範囲の外のファイル全部。変えるのは `crates/areka-user-data/src/lib.rs` の `pub(crate) fn usable_profile_env` → `pub fn usable_profile_env` の 1 語だけ。同じ判定を中継に写さない（要件 6.7）。持ち主の `audit-ghost-catalog` は完了していて、C19 で `areka-user-data` に触る spec は無い（要件 6.6）。
+- 範囲の外のファイル全部。変えるのは `crates/areka-user-data/src/lib.rs` の `pub(crate) fn usable_profile_env` → `pub fn usable_profile_env` の 1 語（と説明の文の内部リンク 1 つ）と、`doc/ssp-mcp/transport-diff-areka.md` のテスト名の欄だけ（下の「範囲の外（2 つ）」）。同じ判定を中継に写さない（要件 6.7）。持ち主の `audit-ghost-catalog` は完了していて、C19 で `areka-user-data` に触る spec は無い（要件 6.6）。
 - `crates/areka/`（`log_history.rs`・`log_history_convention_tests.rs`・`main.rs`・`mcp/`・`update/` を含む）と、C19 のほかの 7 本が触るファイル（ロードマップの C19 の行。`log-capture-kit` の番人 `file_length_guard_test.rs`・`workspace_scan_test.rs` を含む）（要件 6.2）。
 - `crates/real-run-kit/`（`areka_mcp::server` の記録の出どころと 3 つの文・`areka_mcp_bridge::scan`・`config::Timeouts` を使う。どの直しもこれらを変えない）。
 - `vendors/`（要件 6.8）。
@@ -78,7 +78,7 @@ flowchart TD
 
 ## ファイルの構成
 
-範囲の外で変えるファイルは 1 つ（1 語）。新しいファイルは作らない（どの足しも今のファイルが 1,000 行の番人の内側に収まる＝「1,000 行の番人」）。消すファイルは 1 つ。
+範囲の外で変えるファイルは 2 つ（`areka-user-data` の 1 語と説明の 1 か所・`transport-diff-areka.md` のテスト名）。新しいファイルは作らない（どの足しも今のファイルが 1,000 行の番人の内側に収まる＝「1,000 行の番人」）。消すファイルは 1 つ。
 
 ### 消すファイル
 
@@ -101,7 +101,7 @@ flowchart TD
 - `tests/common/fake_server.rs` — #5（`Reply::Gated`・`Gate`）・#9（`start_on` の立て直しの輪と `connections()` を消す）・#10（`nobody()` を置く）・#50（`start_on` を「`nobody()` が握る番号の上で待ち受ける」口に）。
 - `tests/common/fake_server_tests.rs` — #9（`start_on` で立て直す節と `connections()` を使う所を書き直す）・#50 の較正のテスト。
 - `tests/exe_test.rs` — #4（`run` に「閉じる前の待ち」を渡す口）・#10（`held` の書き下しを `nobody()` へ）。
-- `tests/real_receiver_test.rs` — #10（`held` の書き下しを `nobody()` へ）。
+- `tests/real_receiver_test.rs` — #10（`held` の書き下しを `nobody()` へ。今は `tests/common/fake_server.rs` を読み込んでいないので、`exe_test.rs` と同じ形で読み込む行と `#[allow(dead_code)]` の理由つきの説明を足す）。
 
 **`crates/areka-mcp/`**
 - `src/testkit.rs` — #25（写しの道具を寄せる）・#11・#40 のための `send_raw`。
@@ -118,7 +118,7 @@ flowchart TD
 - `src/tools/mod.rs` — #14（`entrances` を消す・`register_rows` を行の列を受ける形にして `all_entrances` がそれを呼ぶ・`mod tools_socket_tests;` を消す）。
 - `src/tools/tools_tests.rs` — #14（`entrances(..)` を `register_rows(TABLE, ..)` へ）・#22（38〜43 行目）・#24（`reply_wait_is_ten_seconds`）を消す・#25。
 - `src/tools/tools_own_tests.rs` — #14（`entrances` との比べを `register_rows(TABLE, ..)` へ・`entrances_stays_ten` を消す＝#22）。
-- `src/tools/tools_own_socket_tests.rs` — #14（写しでない往復を受け入れる）・#23（258〜272 行目を消す）・#48（242〜254 行目を `assert_eq!` だけに）・#25。
+- `src/tools/tools_own_socket_tests.rs` — #14（写しでない往復を受け入れる・4 行目と 96 行目の注が名指す `tools_socket_tests.rs` を、消した後の形に直す）・#23（258〜272 行目を消す）・#48（242〜254 行目を `assert_eq!` だけに）・#25。
 - `src/tools/bridge_tests.rs` — #16。
 
 **`crates/areka-update/src/`**
@@ -136,8 +136,9 @@ flowchart TD
 - `diff_tests.rs` — #47・#39。
 - `error_tests.rs` — #32・#36・#37。
 
-**範囲の外（1 つだけ）**
-- `crates/areka-user-data/src/lib.rs` — `pub(crate) fn usable_profile_env` を `pub fn usable_profile_env` にする（`lib.rs` の根に在るので `pub use` は要らない）。説明の文は今のまま（「入口で 1 回だけ呼ぶ」は中継の `from_inputs` にも当たる）。
+**範囲の外（2 つ）**
+- `crates/areka-user-data/src/lib.rs` — `pub(crate) fn usable_profile_env` を `pub fn usable_profile_env` にする（`lib.rs` の根に在るので `pub use` は要らない）。説明の文の中身は今のまま（「入口で 1 回だけ呼ぶ」は中継の `from_inputs` にも当たる）。ただし説明の頭の内部リンク ``[`profile_env_dir`]`` は `pub(crate)` の関数を指すので、`pub` にすると `cargo doc` が `private_intra_doc_links` の警告を出す。リンクを外して `` `profile_env_dir` `` の字面にする（文は同じ）。
+- `doc/ssp-mcp/transport-diff-areka.md` — 「測ったテスト名」の欄が、この spec で消すテスト（#17 `forward_answers_after_rmcp_415_only_for_json_bodies`・#18 `tools_call_any_name_is_invalid_params`・#19 `unknown_method_is_jsonrpc_error_from_rmcp`・#20 `ping_returns_empty_object`・#14 `unknown_name_is_invalid_params`〔`tools_socket_tests.rs`〕）と 35 行目の `tools/tools_socket_tests.rs` を名指している。rmcp の版上げのときに回すテストの一覧なので、消すテストの名を、同じ値を確かめて残るテストの名へ差し替え（残るテストが既に同じ行に並んでいれば消すだけ）、35 行目のファイルの並びを消した後の形に直す。差し替え先は実装のときに grep で引く（表の値・状態・`message` を確かめているテスト）。表の値・判定の欄は変えない。C19 でこのファイルに触る spec は無い（`runtime-module-untangle` が触るのは `log-convention.md`）。`doc/ssp-mcp/areka-tools.md:173` は完了した `areka-P0-mcp-author-tools` の設計の写し（その spec の約束の記録）なので直さない。
 
 ## 新しい形を引く直し
 
@@ -383,7 +384,11 @@ fn over_limit(have: usize, available: u32) -> bool {
 
 ### 直さない・回した指摘（要件 2.5・6.5 の記録）
 
-なし（要件の討議で確定・直さずに残す 0 件・後の spec へ回す 0 件）。かけ直しの audit（T14）で出た指摘は全部数える（要件 7.2）。#45 のうち注で閉じた 2 つの枝が同じ形で再び出たときは、#45 の直し（「差し込みが無ければ記録に残して閉じる」）の中なので新しい指摘に数えず、`research.md` のかけ直しの結果にその旨を書く。
+- 直さずに残す指摘（要件 2.2）は 0 件・後の spec へ回す指摘（要件 6.4・6.5）は 0 件（要件の討議で確定）。かけ直しの audit（T14）で出た指摘は全部数える（要件 7.2）。
+- #45 の直しの中で、テストを足さず注で閉じる枝が 2 つある。これは「残す指摘」ではなく、要件の討議（2026-11-13 の一括承認）で直す対象として確定した #45 の直し方「安い差し込みの形が見つかったら足す・見つからなければ記録に残して閉じる」（`research.md` §3 の #45 の行・§10.3）そのものである。
+  - `commit.rs` の戻しで作ったフォルダを消せない枝（`:143-145`）: 確定がその場で作ったフォルダを途中で掴む差し込みが無い（`DirectoryNotEmpty`・`NotFound` は `commit_tests` が通る）。
+  - `delete.rs` の `symlink_metadata` の `Err`（`:144`）: 直前の `resolves_under` が同じパスを先に見るので、ここへ来るのはその間にほかのプロセスが木を変えたときだけ。
+  - T14 のかけ直しの audit がこの 2 つの枝を同じ形で挙げたら、新しい指摘に数えず、`research.md` のかけ直しの結果にこの節と §10.3 を指して書く。
 
 ## タスクの束と順
 
@@ -399,14 +404,14 @@ fn over_limit(have: usize, available: u32) -> bool {
 | T6 | 受け口のテストの道具: #25・`send_raw` | `testkit.rs`・`server_protocol_tests.rs`・`server_gate_help_tests.rs`・`server_params_shape_tests.rs`・`tools/tools_own_socket_tests.rs`・`tools/tools_tests.rs`・`check_tests.rs`・`tools/tools_socket_tests.rs`（T9 で消すまでの間も緑に保つ） | — |
 | T7 | 受け口の検査と本文: #11・#12・#40・#41 | `server_gate_help_tests.rs`・`server_protocol_tests.rs`・`server_params_shape_tests.rs` | T6 |
 | T8 | 受け口の待受と終了: #13・#42・#46・#49 | `server.rs`・`server_tests.rs`・`help.rs` | — |
-| T9 | 登録の道: #14・#21・#22・#23・#24・#48 | `tools/mod.rs`・`tools/tools_socket_tests.rs`（消す）・`tools/tools_tests.rs`・`tools/tools_own_tests.rs`・`tools/tools_own_socket_tests.rs` | T6 |
+| T9 | 登録の道: #14・#21・#22・#23・#24・#48 | `tools/mod.rs`・`tools/tools_socket_tests.rs`（消す）・`tools/tools_tests.rs`・`tools/tools_own_tests.rs`・`tools/tools_own_socket_tests.rs`・範囲の外の `doc/ssp-mcp/transport-diff-areka.md`（テスト名の欄・#14 と T10 で消す #17〜#20 の分もここでまとめて直す） | T6・T10 |
 | T10 | 受け口の重なったテスト: #15〜#20・#51（`dispatch_shape_tests` の注） | `registry_tests.rs`・`tools/bridge_tests.rs`・`dispatch_shape_tests.rs`・`server_protocol_tests.rs` | T6・T7 |
 | T11 | 更新の一周の道: #26・#27・#28・#29・#43・#51（`winhttp.rs` の注） | `winhttp.rs`・`winhttp_tests.rs`・`run_fail_tests.rs`・`run_tests.rs` | — |
 | T12 | 更新の確定・削除・パスのテスト: #30・#31・#33・#45・#47 | `commit.rs`（注 1 行）・`delete.rs`（注 1 行）・`commit_tests.rs`・`delete_tests.rs`・`paths_tests.rs`・`work_tests.rs`・`diff_tests.rs` | — |
 | T13 | 更新のテストの整理: #32・#34〜#39・#51（`testkit.rs`・`run_tests.rs` の注） | `testkit.rs`・`testkit_tests.rs`・`error_tests.rs`・`lib_tests.rs`・`run_tests.rs`・`commit_tests.rs`・`delete_tests.rs`・`diff_tests.rs`・`paths_tests.rs`・`work_tests.rs` | T11・T12 |
 | T14 | 仕上げ（下の「仕上げの確かめ」） | 範囲の全部 | T1〜T13 |
 
-- 並べて進められる組: 中継（T1、T2 → T3・T4・T5）・受け口（T6 → T7 → T10、T6 → T9、T8）・更新（T11・T12 → T13）。3 つの組は互いに独立（クレートが違う）。
+- 並べて進められる組: 中継（T1、T2 → T3・T4・T5）・受け口（T6 → T7 → T10 → T9、T8）・更新（T11・T12 → T13）。3 つの組は互いに独立（クレートが違う）。
 - 同じファイルを触る束（`exe_test.rs` の T2 と T3、`server_protocol_tests.rs` の T6・T7・T10、`tools_own_socket_tests.rs` の T6・T9、`run_tests.rs` の T11・T13、`commit_tests.rs` ほかの T12・T13）は「先に要るもの」の順で続けて行う。
 - 見立て 14 タスク（20 以内なので 2 本目の spec は要らない・要件 2.6）。
 
@@ -453,7 +458,7 @@ fn over_limit(have: usize, available: u32) -> bool {
 | 6.3 | `log_history_convention_tests.rs` | `fetch.rs`・`winhttp.rs` の名と在りかを変えない・`lib.rs` の記録の行を変えない（#26 は関数を足すだけ・#51 は注だけ） |
 | 6.4・6.5 | 約束を破らないと直せない指摘 | 0 件（`research.md` §3） |
 | 6.6 | 走っている相手と申し合わせ | 範囲の外で触る `areka-user-data` を受け持つ走っている spec は無い（C19 の行に無い・持ち主の `audit-ghost-catalog` は完了） |
-| 6.7 | 要る変更だけ | `usable_profile_env` の 1 語だけ（同じ判定を写さない） |
+| 6.7 | 要る変更だけ | `usable_profile_env` の 1 語と説明の内部リンク（同じ判定を写さない）・`transport-diff-areka.md` のテスト名の欄（消すテストの名の差し替え・要件 3.2） |
 | 6.8 | `vendors/` | 触らない |
 | 7.1・7.2・7.3 | かけ直し 0 件 | T14（「仕上げの確かめ」） |
 | 7.4 | 全体テスト | T14 |
@@ -485,7 +490,7 @@ fn over_limit(have: usize, available: u32) -> bool {
 3. `pwsh -NoProfile -File tools/test-all.ps1` が緑で終わる（要件 7.4）。
 4. 既定の枝との差分で約束を確かめ、結果を `research.md` に残す（要件 7.5）:
    - `git diff --stat origin/main...HEAD -- crates/areka/ crates/real-run-kit/ crates/log-capture-kit/ vendors/ Cargo.lock` が空（要件 6.2・6.8・5.5）。C19 のほかの 7 本の触るファイル（ロードマップの C19 の行）にも差分が無い。
-   - `git diff --name-only origin/main...HEAD` が範囲の 3 つのクレートと `.kiro/specs/audit-mcp-update-crates/` の下と `crates/areka-user-data/src/lib.rs` だけ。後者の差分は `usable_profile_env` の `pub(crate)` → `pub` の 1 行だけ（要件 6.7）。
+   - `git diff --name-only origin/main...HEAD` が範囲の 3 つのクレートと `.kiro/specs/audit-mcp-update-crates/` の下と `crates/areka-user-data/src/lib.rs` と `doc/ssp-mcp/transport-diff-areka.md` だけ。`areka-user-data` の差分は `usable_profile_env` の `pub(crate)` → `pub` と説明の内部リンクの 2 行だけ、`transport-diff-areka.md` の差分はテスト名の欄と 35 行目だけ（要件 6.7）。消したテストの名が `doc/` と範囲の注に残っていないことを grep で示す（要件 3.2・3.3）。
    - `crates/areka/src/log_history_convention_tests.rs` に差分が無く、全体テストで緑（要件 6.3）。`crates/areka-update/src/fetch.rs`・`winhttp.rs` が同じ名で在る。
    - 公開の形: 消した公開の物が `areka_mcp::tools::entrances` だけで、範囲の外で 0 か所であることを grep で示す。足した物が `areka_user_data::usable_profile_env` の `pub` だけであること。`server.rs` の 3 つの記録の文と `areka_update` の記録の行が同じ文で残っていること（要件 6.1）。
    - 3 つのクレートの `Cargo.toml` に差分が無い。
