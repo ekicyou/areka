@@ -176,7 +176,7 @@ fn unsafe_component_catches_what_windows_rewrites() {
     ] {
         assert!(unsafe_component(bad), "{bad:?} は危ないはず");
     }
-    // `..` そのものは呼び手が `DotDot` として先に拒む（ここでは数えない）。
+    // `..` そのものは数えない（呼び手が `DotDot` として拒む）。
     for ok in ["a", "a/b.txt", "..", "a/../b", ".hidden", "a.b/c d.txt"] {
         assert!(!unsafe_component(ok), "{ok:?} は通るはず");
     }

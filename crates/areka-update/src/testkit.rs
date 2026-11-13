@@ -114,7 +114,7 @@ fn walk(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
 const SHARE_READ: u32 = 1;
 
 /// `share_mode(FILE_SHARE_READ)` で開いたまま持ち、`rename`／`remove` を失敗させる
-/// （`install_commit_tests.rs` の `hold` と同じ・読み込まれた DLL と同じく読みは通る）。
+/// （`areka-nar` の `lib_tests.rs` の `hold` と同じ・読み込まれた DLL と同じく読みは通る）。
 pub(crate) fn hold(path: &Path) -> fs::File {
     fs::OpenOptions::new()
         .read(true)

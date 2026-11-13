@@ -146,7 +146,7 @@ fn committed_run_with_held_file_in_old_is_not_residue_and_goes_once_released() {
     fs::write(&retired, b"old").unwrap();
     let dir = area.dir().to_path_buf();
     let held = hold(&retired);
-    // 成功した確定の後片付け: 消せなかった自分のフォルダは今日どおり挙げ、印を置く。
+    // 成功した確定の後片付け（戻せた失敗も同じ道）: 消せなかった自分のフォルダは今日どおり挙げ、印を置く。
     assert_eq!(area.cleanup(), vec![dir.clone()]);
     assert!(dir.join(COMMITTED_MARK).is_file(), "印が置かれる");
     // 開いたままの間は何周しても残骸に挙がらない（消しにかかって消せなくても黙る）。
