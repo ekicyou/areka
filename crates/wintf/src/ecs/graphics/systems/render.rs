@@ -1,6 +1,6 @@
 use super::init::format_entity_name;
 use crate::com::wuc::DrawingSurfaceInteropExt;
-use crate::ecs::graphics::composite::SurfaceComposite;
+use crate::ecs::graphics::composite::{SurfaceComposite, compose_or_drop};
 use crate::ecs::graphics::{
     DrawTree, GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
 };
@@ -44,6 +44,11 @@ pub(crate) fn note_failure(
     log.insert(entity, (stage, hr)) != Some((stage, hr))
 }
 
+/// 装置の失いで係を抜けるとき控えを全部捨てる（作り直した装置での最初の失敗をまた `error!` にする）。
+pub(crate) fn forget_failures_on_device_lost(log: &mut FailureLog) {
+    log.clear();
+}
+
 /// 次の回で描き直す（41 番）。係が自分で立てた変化の印は次の回の自分に見えないので
 /// 命令で立てる。部品ごと消えていれば描き直しも要らない。
 fn request_redraw(commands: &mut Commands, entity: Entity) {
@@ -72,6 +77,7 @@ fn on_stage_failure(
         .note_draw_failure(err)
     {
         graphics_core.set_changed();
+        forget_failures_on_device_lost(log);
         return true;
     }
     let hresult = format_args!("0x{:08X}", err.code().0);
@@ -153,9 +159,6 @@ pub fn render_surface(
                 }
             }
         }
-        let Some(composite) = slot.as_mut() else {
-            continue;
-        };
         let scale = windows_numerics::Matrix3x2 {
             M11: global_arrangement.scale_x(),
             M12: 0.0,
@@ -166,7 +169,8 @@ pub fn render_surface(
         };
         let root_list = cmd_list_opt.and_then(|c| c.command_list());
         let tree_commands = tree.map_or(&[][..], |t| &t.commands[..]);
-        if let Err(err) = composite.compose(&shared_dc, scale, root_list, tree_commands) {
+        // 失敗した入れ物は捨てる（途中まで描いた絵を読ませない・5.5）。
+        if let Err(err) = compose_or_drop(slot, &shared_dc, scale, root_list, tree_commands) {
             let lost = on_stage_failure(
                 &mut graphics_core,
                 &mut commands,
@@ -181,6 +185,9 @@ pub fn render_surface(
             continue;
         }
 
+        let Some(composite) = slot.as_ref() else {
+            continue;
+        };
         // BeginDraw は必ず None＝全面（Some(部分矩形) は WUC で E_INVALIDARG になる・task 1.2 実測）。
         let (dc, offset) = match surface_interop.begin_draw(None) {
             Ok(result) => result,
@@ -192,6 +199,7 @@ pub fn render_surface(
                     .note_draw_failure(&err)
                 {
                     graphics_core.set_changed();
+                    forget_failures_on_device_lost(&mut log);
                     return;
                 }
                 error!(

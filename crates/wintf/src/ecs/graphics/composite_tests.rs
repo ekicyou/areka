@@ -1,7 +1,7 @@
 //! 入れ物の答え（WARP・要件 4.1, 4.2, 4.4, 4.8, 7.7）。入れ物へ合成して別の的の整数の offset へ
 //! 写した絵が、offset を変換に入れて直接描いた絵（`render_surface` の今の道）とビットで一致する。
 
-use super::composite::SurfaceComposite;
+use super::composite::{SurfaceComposite, compose_or_drop};
 use super::visual::emit_test_support::*;
 use super::visual::*;
 use crate::ecs::layout::Arrangement;
@@ -332,4 +332,17 @@ fn two_threads_reading_different_points_get_their_own_values() {
         }
     });
     assert!(comp.gpu_reads() >= 2);
+}
+
+#[test]
+fn failed_compose_drops_the_composite() {
+    let dc = warp_dc();
+    let mut slot = Some(SurfaceComposite::new(&dc, (16, 16)).unwrap());
+    let list = root_list();
+    compose_or_drop(&mut slot, &dc, scale(1.0), Some(&list), &[]).unwrap();
+    assert_eq!(slot.as_ref().map(|c| c.generation()), Some(1));
+    // 閉じていない命令の列は EndDraw で D2DERR_WRONG_STATE（合成の失敗を決まって起こす）。
+    let open = unsafe { dc.CreateCommandList().unwrap() };
+    assert!(compose_or_drop(&mut slot, &dc, scale(1.0), Some(&open), &[]).is_err());
+    assert!(slot.is_none(), "途中まで描いた入れ物を読ませない: {slot:?}");
 }

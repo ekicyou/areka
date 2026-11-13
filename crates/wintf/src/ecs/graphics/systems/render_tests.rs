@@ -1,6 +1,6 @@
 //! render_surface: 続く失敗の記録の間引き（設計討議 議題 1・要件 6.6）
 
-use super::render::{FailureLog, note_failure};
+use super::render::{FailureLog, forget_failures_on_device_lost, note_failure};
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{E_FAIL, E_INVALIDARG};
 
@@ -72,4 +72,18 @@ fn memo_is_per_surface() {
         !note_failure(&mut log, a, "composite", E_FAIL),
         "別の描画面の成功は控えを消さない"
     );
+}
+
+#[test]
+fn device_loss_clears_the_memo() {
+    let (a, b) = entities();
+    let mut log = FailureLog::default();
+    assert!(note_failure(&mut log, a, "composite", E_FAIL));
+    assert!(note_failure(&mut log, b, "EndDraw", E_FAIL));
+    forget_failures_on_device_lost(&mut log);
+    assert!(
+        note_failure(&mut log, a, "composite", E_FAIL),
+        "装置を作り直した後の最初の失敗はまた error!"
+    );
+    assert!(note_failure(&mut log, b, "EndDraw", E_FAIL));
 }

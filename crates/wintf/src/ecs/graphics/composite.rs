@@ -66,6 +66,25 @@ fn create_bitmap(
     unsafe { dc.CreateBitmap(D2D_SIZE_U { width, height }, None, 0, &props) }
 }
 
+/// 置き場の入れ物へ合成する（置き場が空なら何もしない）。失敗したら入れ物を捨てる
+/// （途中まで描いた絵を読ませない＝読みは `Unreadable`・5.5。次の回に作り直す）。
+pub(crate) fn compose_or_drop(
+    slot: &mut Option<SurfaceComposite>,
+    dc: &ID2D1DeviceContext,
+    scale: Matrix3x2,
+    root_list: Option<&ID2D1CommandList>,
+    tree: &[DrawCommand],
+) -> windows::core::Result<()> {
+    let Some(composite) = slot.as_mut() else {
+        return Ok(());
+    };
+    let result = composite.compose(dc, scale, root_list, tree);
+    if result.is_err() {
+        *slot = None;
+    }
+    result
+}
+
 impl SurfaceComposite {
     /// `dc` で入れ物と 1×1 の写し先を作る。
     pub(crate) fn new(dc: &ID2D1DeviceContext, size: (u32, u32)) -> windows::core::Result<Self> {
