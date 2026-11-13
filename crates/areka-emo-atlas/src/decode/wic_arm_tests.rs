@@ -1,9 +1,8 @@
 //! `WicDecoderArm` の兄弟テスト。
 //!
-//! - 動く絵の 3 メソッド（spec: areka-P0-animated-image-decode 要件 1.5・5.5）: 本番の読み手で
-//!   検体（`testdata/animated/`・中身は同じフォルダの README）の見出し・全コマ・動きの 1 枚目が
-//!   引けること、読めないときは `DecodeError::Decode`（パス付き）になること。画素の細部は
-//!   `image_arm` の兄弟テストが持つので、ここでは決め手の 1 画素だけを見る。
+//! - 動く絵の 3 メソッド（spec: areka-P0-animated-image-decode 要件 1.5・5.5）: 見分けは `sniff`、
+//!   コマの読みは `image_arm` の兄弟テストが検体（`testdata/animated/`）で見る。この腕は両方を包むだけ
+//!   なので、ここでは読めないときのパス付きの `DecodeError::Decode` と、無いファイルの見分けだけを見る。
 //! - α の有無を WIC に尋ねること（`pixel_format_has_alpha_asks_wic`）。
 //! - 対になっていないサロゲートを含む名の絵を開けること（`decode_opens_name_with_lone_surrogate`）。
 //! - 一辺の上限: 上限を超える絵は確保の前に断り、上限ちょうどは読めること。
@@ -11,9 +10,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::decode::{DecodeError, ElementDecoder};
-use crate::test_support::{animated_sample as sample, info, pixel, with_arm};
-
-const RED_BGRA: [u8; 4] = [0, 0, 255, 255];
+use crate::test_support::{animated_sample as sample, info, with_arm};
 
 fn assert_decode_error(result: Result<impl std::fmt::Debug, DecodeError>, path: &Path) {
     match result {
@@ -25,51 +22,13 @@ fn assert_decode_error(result: Result<impl std::fmt::Debug, DecodeError>, path: 
     }
 }
 
+/// 開けないファイルは `File::open` の失敗で動く絵でない（続く `decode` が `NotFound` を返す）。
 #[test]
-fn probe_answers_header_of_animated_samples() {
+fn probe_is_none_for_missing_file() {
     with_arm(|arm| {
-        assert_eq!(arm.probe_animation(&sample("basic.apng")), Some(info(4)));
-        assert_eq!(arm.probe_animation(&sample("alpha.webp")), Some(info(3)));
-        // 拡張子でなく中身で見分ける。
-        assert_eq!(
-            arm.probe_animation(&sample("webp_named.png")),
-            Some(info(3))
-        );
-        // 見出しだけで答えるので、途中で切れた絵・読めない 16 ビットも見出しは引ける。
-        assert_eq!(
-            arm.probe_animation(&sample("truncated.apng")),
-            Some(info(4))
-        );
-        assert_eq!(arm.probe_animation(&sample("deep16.apng")), Some(info(2)));
-    });
-}
-
-#[test]
-fn probe_is_none_for_single_gif_and_missing() {
-    with_arm(|arm| {
-        for name in ["single.apng", "single.webp", "two_frames.gif"] {
-            assert_eq!(arm.probe_animation(&sample(name)), None, "{name}");
-        }
         let missing = sample("does_not_exist_xyz.apng");
         assert!(!missing.exists());
         assert_eq!(arm.probe_animation(&missing), None);
-    });
-}
-
-#[test]
-fn decode_frames_reads_all_frames_with_probed_header() {
-    with_arm(|arm| {
-        for (name, count) in [("basic.apng", 4), ("alpha.webp", 3)] {
-            let path = sample(name);
-            let header = arm.probe_animation(&path).expect("animated");
-            let anim = arm
-                .decode_frames(&path, header)
-                .unwrap_or_else(|e| panic!("{name} should decode: {e}"));
-            assert_eq!(anim.frames.len(), count, "{name}");
-            let first = &anim.frames[0].image;
-            assert_eq!((first.width, first.height), (8, 8), "{name}");
-            assert_eq!(pixel(&first.bgra, first.stride, 0, 0), RED_BGRA, "{name}");
-        }
     });
 }
 

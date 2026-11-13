@@ -1,7 +1,8 @@
 //! `WicDecoderArm` のパレットの絵の兄弟テスト（spec: emo-atlas-palette-alpha 要件 1・2・5）。
 //!
 //! 検体（`testdata/palette/`・中身は同じフォルダの README）を本番の読み手で読み、
-//! `has_alpha` の判定と、`Normalizer` に通した後の画素（設計の Data Models の 2 つの表）を見る。
+//! `Normalizer` に通した後の画素（設計の Data Models の 2 つの表）と、画素を見ない 1・2 ビットの
+//! 検体の `has_alpha` を見る。
 
 use crate::decode::ElementDecoder;
 use crate::normalize::{Normalizer, UseSelfAlpha};
@@ -42,19 +43,8 @@ const MIXED: [[u8; 4]; 4] = [RED, RED, CLEAR, SEMI_BLUE];
 /// 透明度を持たない絵を `On` で通した後（左上の赤が抜ける・下の行は緑）。
 const PLAIN_KEYED: [[u8; 4]; 4] = [CLEAR, CLEAR, GREEN, GREEN];
 
-// 判定の表（要件 1.1・1.5・1.6・2.1・2.2）。
-
-#[test]
-fn has_alpha_idx8_mixed() {
-    assert_has_alpha("idx8_mixed.png", true);
-}
-
-#[test]
-fn has_alpha_idx4_mixed() {
-    assert_has_alpha("idx4_mixed.png", true);
-}
-
-// 1・2 ビットの番号つきの形式（`INDEXED_FORMATS` の 1・2 ビットの項の檻）。
+// 判定の表（要件 1.1・1.5・1.6・2.1・2.2）: 画素を見ない 1・2 ビットの 2 本だけを `has_alpha` で見る
+// （`INDEXED_FORMATS` の 1・2 ビットの項の檻）。ほかの検体は `has_alpha` を取り違えると下の画素のテストが赤になる。
 
 #[test]
 fn has_alpha_idx2_mixed() {
@@ -64,26 +54,6 @@ fn has_alpha_idx2_mixed() {
 #[test]
 fn has_alpha_idx1_trns() {
     assert_has_alpha("idx1_trns.png", true);
-}
-
-#[test]
-fn has_alpha_gray8_trns() {
-    assert_has_alpha("gray8_trns.png", true);
-}
-
-#[test]
-fn has_alpha_trans_gif() {
-    assert_has_alpha("trans.gif", true);
-}
-
-#[test]
-fn has_alpha_idx8_plain() {
-    assert_has_alpha("idx8_plain.png", false);
-}
-
-#[test]
-fn has_alpha_idx8_opaque_trns() {
-    assert_has_alpha("idx8_opaque_trns.png", false);
 }
 
 // `On`（`1`／`true`）は出る画素のまま（要件 1.2・1.4・5.1・5.4・5.8）。

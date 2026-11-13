@@ -198,7 +198,7 @@ mod tests {
         }
     }
 
-    /// 1（4.3/D8）: 2 矩形を既知 uv へ手組み配置し、頁画素が元 pbgra と byte 単位で一致。
+    /// （4.3/D8）: 2 矩形を既知 uv へ手組み配置し、頁画素が元 pbgra と byte 単位で一致。
     /// premultiplied を verbatim 転写する（無変換）ことを証明する。
     #[test]
     fn blit_verbatim_correctness() {
@@ -252,7 +252,7 @@ mod tests {
         assert_region_matches(page, &uv1, &t1);
     }
 
-    /// 2（4.3）: blit した uv_rect の外側画素（padding gap・隅）は 0（完全透明）のまま。
+    /// （4.3）: blit した uv_rect の外側画素（padding gap・隅）は 0（完全透明）のまま。
     /// 初期化 0 の保存＝bleed なしを証明する。
     #[test]
     fn padding_and_gaps_stay_transparent() {
@@ -330,7 +330,7 @@ mod tests {
         );
     }
 
-    /// 3（6.3）: 頁 2 枚で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
+    /// （6.3）: 頁 2 枚で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
     /// page 1 への blit が page[0] を汚さないことも確認。
     #[test]
     fn multi_page_allocation() {
@@ -393,7 +393,7 @@ mod tests {
         );
     }
 
-    /// 4（4.2/6.1）: 返る (id, Placement) が page/uv_rect（Packer 由来）・trim_offset
+    /// （4.2/6.1）: 返る (id, Placement) が page/uv_rect（Packer 由来）・trim_offset
     /// （Trimmed 由来）を正しく運ぶ。
     #[test]
     fn placement_mapping() {
@@ -460,34 +460,7 @@ mod tests {
         assert_eq!(p9.trim_offset, off1);
     }
 
-    /// 5（6.3）: stride == page_size*4 を明示的に検証。
-    #[test]
-    fn stride_is_page_size_times_four() {
-        let page_size = 48;
-        let items: Vec<(ElementId, Trimmed)> = vec![];
-        let pack = PackOutput {
-            pages: vec![
-                Size {
-                    w: page_size,
-                    h: page_size
-                };
-                1
-            ],
-            entries: vec![],
-        };
-        let (pages, placements) = Baker.bake_pages(&items, &pack);
-        assert_eq!(pages.len(), 1);
-        assert_eq!(pages[0].stride, page_size * 4);
-        assert_eq!(pages[0].bytes.len(), (page_size * 4 * page_size) as usize);
-        // 空頁は全透明。
-        assert!(
-            pages[0].bytes.iter().all(|&b| b == 0),
-            "empty page fully transparent"
-        );
-        assert!(placements.is_empty());
-    }
-
-    /// 6（統合・end-to-end blit sanity）: Packer::pack → bake_pages。
+    /// （統合・end-to-end blit sanity）: Packer::pack → bake_pages。
     /// 各 placed id の頁領域が元 pbgra と一致することを確認。
     #[test]
     fn integration_pack_then_bake() {
