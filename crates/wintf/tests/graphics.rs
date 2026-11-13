@@ -9,6 +9,8 @@ mod command_list_test;
 mod common;
 #[path = "graphics/components_test.rs"]
 mod components_test;
+#[path = "graphics/composite_systems_test.rs"]
+mod composite_systems_test;
 #[path = "graphics/core_accessor_test.rs"]
 mod core_accessor_test;
 #[path = "graphics/core_ecs_test.rs"]

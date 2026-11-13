@@ -121,7 +121,7 @@
   - _Requirements: 1.8, 2.7_
 
 - [ ] 7. 実 GPU の確かめと文書
-- [ ] 7.1 入れ物を通した描画面が実 GPU の描画面に出ることを確かめる
+- [x] 7.1 入れ物を通した描画面が実 GPU の描画面に出ることを確かめる
   - 実の装置と WUC の資源で、ブレンドの節と不透明度 0.5 の節を含む木を持つ持ち主を描き、`error!` が 0 で描き直しが続かないことを確かめる
   - WUC の描画面をビットマップへ写して読み、全体の読み戻しの入れ物の画素とバイトで一致することを確かめる。1 画素の読み戻しが実 GPU で答えの点の値を返すことを確かめる
   - 統合テストの入口にこのテストの行を足す
@@ -151,5 +151,5 @@
 - 5.1: `composite.rs` の `#![cfg_attr(not(test), allow(dead_code))]` は 6.2 で外す。`pixel`／`gpu_reads` の欄と `PixelReadState` の `#[allow(dead_code)]` は 5.2 で外す。根の列の `DrawImage` は `render.rs` と重複（6.2 で `compose` へ一本化）。
 - 5.2: `read_pixel`／`read_all` は GPU の失敗を `Err` で返すだけで記録しない。座標の範囲・世代 0・失いの見分けと `error!` は 6.3 の `SurfaceReadback` が持つ。読み戻しのテストは `composite_tests.rs` に置いた（design の `readback_tests.rs` は 6.3 の口のテスト用）。
 - 6.1: `SurfaceGraphics::composite()`／`composite_slot()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.2／6.3 で使い始めたら外す。入れ物を放す道は `set_surface` と `clear` の 2 つ（持ち主から外れる・装置の失いはどちらも `clear`）。
-- 6.2: 描画の係の実 GPU の既存テスト（`--ignored`）は 7.1 で回す。`composite.rs` の読み戻しの項目と `SurfaceGraphics::composite()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.3 で外す。`Local<FailureLog>` は装置の失いで係を抜けても消えない・消えた実体の控えも残る（振る舞いは変わらない）。
+- 6.2: 描画の係の実 GPU の既存テスト（`#[ignore]` なし・ふだんの `cargo test -p wintf` で回る）は 7.1 で緑を確かめた。`composite.rs` の読み戻しの項目と `SurfaceGraphics::composite()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.3 で外す。`Local<FailureLog>` は装置の失いで係を抜けても消えない・消えた実体の控えも残る（振る舞いは変わらない）。
 - 6.3: 設計に無い守りを 1 つ足した: 入れ物の大きさが `SurfaceGraphics.size` と違えば読み戻しは `Unreadable`（作り直す前の古い入れ物を読まない・5.1／5.5 の範囲内）。失いでない GPU の読みの失敗で `error!` へ進む道は WARP で起こせずテスト無し。
