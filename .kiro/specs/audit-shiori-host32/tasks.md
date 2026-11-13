@@ -80,7 +80,7 @@
   - 完了の姿: 表示・記録・上限のテストが緑で、`areka-kanade` の記録の文の変化が Revalidation Triggers のとおりである
   - _Requirements: 3.1, 4.1, 4.5, 5.2_
 
-- [ ] 6. helper の後始末と job（U7）
+- [x] 6. helper の後始末と job（U7）
   - job の旗に `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK` を足し、読み戻しのテスト `job_limits_let_grandchildren_break_away` を置く（指摘 13）。job のテストは `ping.exe` をじかに起こす（指摘 43）
   - `HelperHandle` に Drop を置く: 終わっていなければ終わらせ、5 秒まで終わりを待ち、標準エラーの読み手を 1 秒まで待つ。失敗と時間切れは `error!`。終わりを `WaitForSingleObject` 1 回で待つ内側の関数を足す。`HelperLifecycle` の Drop と結合テストの `HelperGuard` の 3 つの写しを消す（指摘 14）
   - テスト `dropping_a_handle_without_job_ends_the_child` を置く
@@ -200,3 +200,4 @@
 - 4.3: forward_helper_stderr は設計の () でなく io::Result<()> を返し（読みの失敗の error! に pid を載せるため呼び手で書く）、読み手のスレッドを起こせないときの error!（helper_stderr_reader_spawn_failed）を足した。審査で承認。
 - 4.4: 審査の指摘で helper_command に stdin・stdout の Stdio::null() を足した（窓だけの areka は標準の取っ手を持たず、受け継ぐと helper が起きるたびに「取っ手が無い」を書き warn になるため）。Command は stdio の設定を読み返せず、テストでは縛れない。
 - 5: 置き換えの数え直しで ASCII を飛ばすのは ASCII をそのまま通す文字コード（is_ascii_compatible）のときだけ。ISO-2022-JP は ESC・SO・SI を表せないので飛ばすと置き換えを 0 と数えて黙る（審査で差し戻し・直した）。
+- 6: process_host.rs の中のテストは process_host_tests.rs へ移した（901 行になったため）。wait_handle は WAIT_FAILED を時間切れと区別しない（記録は出る）。14 の audit で見る。

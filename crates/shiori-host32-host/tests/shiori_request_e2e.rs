@@ -17,7 +17,7 @@
 //!   (b) Value 抽出が働く、(c) HGLOBAL 所有権往復が二重解放なく完了した（さもなくばテストプロセス abort）。
 //! - ④ **NOTIFY** `client.notify("OnTestNotify", &[])` → `Ok(())` を assert（fixture は 204・client は破棄・R4.8/R6.9）。
 //! - ⑤ 往復後の helper 生存（`poll_exit_kind`→`None`）を assert（no-crash・R6.4）。
-//! - ⑥ guard／parent を明示 drop（同時生存親窓を高々 1 に保つ）。
+//! - ⑥ handle／parent を明示 drop（同時生存親窓を高々 1 に保つ）。
 //!
 //! fixture 契約値は testdll 側 `TEST_GET_ID`／`TEST_NOTIFY_ID`／固定 Value と一致するが、host
 //! テストクレートは testdll へ依存しないため、**文字列 ID と期待 Value をハードコード**する
@@ -61,20 +61,6 @@ const TEST_GET_ID: &str = "OnTestValue";
 /// NOTIFY request の `ID`（testdll `TEST_NOTIFY_ID` と一致・ハードコード）。
 const TEST_NOTIFY_ID: &str = "OnTestNotify";
 
-/// spawn した helper を Drop 時に必ず terminate する scope guard（panic 時もプロセスリークを防ぐ）。
-///
-/// [`HelperHandle::terminate`] は冪等（終了済みでも `Ok`）ゆえ、正常終了・panic のどちらでも安全に呼べる。
-struct HelperGuard {
-    handle: shiori_host32_host::HelperHandle,
-}
-
-impl Drop for HelperGuard {
-    fn drop(&mut self) {
-        // 冪等: 既に終了していても Ok。panic unwinding 中でも helper を確実に片付ける。
-        let _ = self.handle.terminate();
-    }
-}
-
 /// 決定的 request E2E: helper 越し fixture へ GET/NOTIFY を往復し、Value 抽出／204 破棄を観測する
 /// （task 6.1・design.md「#### shiori_request_e2e」・System Flows GET 往復・R6.3/6.4/6.9/7.2/7.3）。
 ///
@@ -98,9 +84,8 @@ fn request_e2e_get_value_and_notify_discard() {
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
-    let handle = spawn(&helper_exe, load_dir, "shiori.dll", parent_hwnd)
+    let mut handle = spawn(&helper_exe, load_dir, "shiori.dll", parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    let mut guard = HelperGuard { handle };
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（silent-skip 禁止: helper 不在は
     //     resolve_helper_exe が既に panic 済み）---
@@ -147,14 +132,14 @@ fn request_e2e_get_value_and_notify_discard() {
 
     // --- ⑤ 往復後も helper は生存継続（no-crash・所有権規約無違反の傍証・R6.4）---
     assert!(
-        poll_exit_kind(&mut guard.handle).is_none(),
+        poll_exit_kind(&mut handle).is_none(),
         "GET/NOTIFY 往復後も helper は稼働中である（クラッシュしていない・R6.4）"
     );
 
     // --- ⑥ 同時生存親窓を高々 1 に保つため、ここで明示 drop（helper も terminate）---
     //     client は `&parent` を借用するだけ（Drop 非実装）で、最後の使用（NOTIFY）以降 borrow は
-    //     終了している（NLL）。ゆえに parent を安全に drop できる。guard→parent の順で明示 drop する。
-    drop(guard);
+    //     終了している（NLL）。ゆえに parent を安全に drop できる。handle→parent の順で明示 drop する。
+    drop(handle);
     drop(parent);
 
     // best-effort cleanup（DLL ハンドルは helper terminate で解放済み）。
@@ -215,9 +200,8 @@ fn request_e2e_real_pasta_optional() {
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
-    let handle = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
+    let mut handle = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    let mut guard = HelperGuard { handle };
 
     // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
     let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
@@ -257,11 +241,11 @@ fn request_e2e_real_pasta_optional() {
 
     // --- ④ 往復後も helper は生存継続（no-crash の傍証）---
     assert!(
-        poll_exit_kind(&mut guard.handle).is_none(),
+        poll_exit_kind(&mut handle).is_none(),
         "OnBoot 往復後も helper は稼働中である（クラッシュしていない）"
     );
 
-    // --- ⑤ 同時生存親窓を高々 1 に保つため明示 drop（guard→parent の順）---
-    drop(guard);
+    // --- ⑤ 同時生存親窓を高々 1 に保つため明示 drop（handle→parent の順）---
+    drop(handle);
     drop(parent);
 }

@@ -80,8 +80,8 @@ const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(5);
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を用い、ベースライン往復成功を確認したうえで強制終了を注入し、
 /// 異常検出・有限復帰・統一報告分類・冪等二重終了要求のすべてを **1 つの `#[test]`** で実証する。
-/// `HelperLifecycle` は handle を単独所有し、panic 経路では Drop で冪等 terminate するため
-/// 別途 HelperGuard は不要（親窓は使用後に明示 drop）。
+/// `HelperLifecycle` は handle を単独所有し、panic 経路では中の `HelperHandle` の Drop が
+/// helper を終わらせて待つ（親窓は使用後に明示 drop）。
 ///
 /// bounded: pump=HANDSHAKE_TIMEOUT、LOAD ack=LOAD_ACK_TIMEOUT、kill 後 GET=env 3s timeout＋
 /// SMTO_ABORTIFHUNG（BOUNDED_LIMIT=10s で assert）、終了観測=EXIT_OBSERVE_LIMIT で必ず有限復帰する
@@ -111,8 +111,8 @@ fn kill_injection_detection_and_reporting() {
 
     let handle = spawn(&helper_exe, load_dir, "shiori.dll", parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    // HelperLifecycle は handle を単独所有（by value）。Drop で冪等 terminate するため
-    // 別途 HelperGuard 不要（panic 経路でもプロセスリークしない）。
+    // HelperLifecycle は handle を単独所有（by value）。panic 経路でも中の `HelperHandle` の
+    // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---

@@ -40,20 +40,6 @@ use shiori_host32_ipc::MsgTag;
 mod common;
 use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe, resolve_testdll};
 
-/// spawn した helper を Drop 時に必ず terminate する scope guard（panic 時もプロセスリークを防ぐ）。
-///
-/// [`HelperHandle::terminate`] は冪等（終了済みでも `Ok`）ゆえ、正常終了・panic のどちらでも安全に呼べる。
-struct HelperGuard {
-    handle: shiori_host32_host::HelperHandle,
-}
-
-impl Drop for HelperGuard {
-    fn drop(&mut self) {
-        // 冪等: 既に終了していても Ok。panic unwinding 中でも helper を確実に片付ける。
-        let _ = self.handle.terminate();
-    }
-}
-
 /// 1 ケース分の LOAD 往復を実行し、observed ack バイト列を返す。
 ///
 /// - `load_dir`: helper の cwd＝DLL 探索起点。呼び出し側が testdll コピー／空 dir を用意する。
@@ -62,7 +48,7 @@ impl Drop for HelperGuard {
 ///   spawn 後に即 remove する（子は生成時 env スナップショットを継承・親 global env 汚染を最小化）。
 ///
 /// 手順: `ParentMessageWindow::create` → `spawn` → HELLO pump → `send_request(Load, LOAD_ACK_TIMEOUT)`
-/// → **失敗後の helper 生存を `poll_exit_kind`→`None` で観測** → guard/parent を明示 drop
+/// → **失敗後の helper 生存を `poll_exit_kind`→`None` で観測** → handle/parent を明示 drop
 /// （同時生存親窓を高々 1 に保つ）。ack バイト列を返す。
 fn run_load_case(
     helper_exe: &Path,
@@ -83,9 +69,8 @@ fn run_load_case(
         }
     }
 
-    let handle = spawn(helper_exe, load_dir, shiori_name, parent_hwnd)
+    let mut handle = spawn(helper_exe, load_dir, shiori_name, parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    let mut guard = HelperGuard { handle };
 
     if set_load_fail {
         // 子は既に env スナップショットを継承済み。親 global env を即クリーンアップ。
@@ -109,12 +94,12 @@ fn run_load_case(
 
     // --- LOAD 後（成功・失敗いずれも）helper は生存継続（R6.4・no-crash）---
     assert!(
-        poll_exit_kind(&mut guard.handle).is_none(),
+        poll_exit_kind(&mut handle).is_none(),
         "LOAD 後も helper は稼働中である（クラッシュしていない・要件 6.4）"
     );
 
     // 同時生存親窓を高々 1 に保つため、ここで明示 drop（helper も terminate）。
-    drop(guard);
+    drop(handle);
     drop(parent);
 
     ack

@@ -252,17 +252,6 @@ impl HelperLifecycle {
     }
 }
 
-impl Drop for HelperLifecycle {
-    /// 冪等 `terminate`（panic 経路のプロセスリーク防止・HelperGuard パターンの昇格）。
-    ///
-    /// `Err` は `error!` のみ（Drop で panic しない・R7.6）。
-    fn drop(&mut self) {
-        if let Err(e) = self.handle.terminate() {
-            tracing::error!(error = ?e, "[HelperLifecycle::drop] helper terminate on drop failed");
-        }
-    }
-}
-
 /// shutdown 経路の失敗語彙（R5.5・error! と対で surface）。
 #[derive(thiserror::Error, Debug)]
 pub enum ShutdownError {

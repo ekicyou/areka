@@ -34,15 +34,6 @@ const VALUE_MARKER: &str = "HELPER_PASTA_DEBUG=";
 /// 試験用の DLL の試しの ID（testdll `TEST_ENV_ID` と一致・host のテストは testdll へ依存しないので写す）。
 const TEST_ENV_ID: &str = "OnTestEnv";
 
-/// panic しても helper を必ず終わらせる。
-struct HelperGuard(shiori_host32_host::HelperHandle);
-
-impl Drop for HelperGuard {
-    fn drop(&mut self) {
-        let _ = self.0.terminate();
-    }
-}
-
 /// 観測の本体。[`pasta_debug_is_zero_under_the_helper`] が子として起こす。
 #[test]
 #[ignore = "pasta_debug_is_zero_under_the_helper が子として起こす観測の本体"]
@@ -61,10 +52,9 @@ fn pasta_debug_probe_child() {
         .expect("testdll をテストの根へ写せない");
 
     let parent = ParentMessageWindow::create().expect("親 message-only 窓を作れない");
-    let guard = HelperGuard(
-        spawn(&helper_exe, root.path(), "shiori.dll", parent.hwnd_u32())
-            .expect("i686 helper を本番の起こし方で起こせない"),
-    );
+    // panic しても `HelperHandle` の Drop が helper を終わらせて待つ。
+    let handle = spawn(&helper_exe, root.path(), "shiori.dll", parent.hwnd_u32())
+        .expect("i686 helper を本番の起こし方で起こせない");
     assert!(
         parent.pump_until_hello_or(HANDSHAKE_TIMEOUT).is_some(),
         "上限時間内に helper から HELLO が届かない"
@@ -80,7 +70,7 @@ fn pasta_debug_probe_child() {
         .expect("GET OnTestEnv が Err");
     println!("{VALUE_MARKER}{}", value.unwrap_or_default());
 
-    drop(guard);
+    drop(handle);
     drop(parent);
 }
 

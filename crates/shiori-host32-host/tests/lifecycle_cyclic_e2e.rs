@@ -88,8 +88,8 @@ const TEST_NOTIFY_ID: &str = "OnTestNotify";
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を 200 回の GET/NOTIFY 往復で再利用し（back-to-back・sleep なし）、
 /// 反復後の helper 生存を確認したうえで正規の正常終了経路（UNLOAD → 正常終了 → exit0）を発行し、
-/// `ExitKind::Clean` を観測する。`HelperLifecycle` は handle を単独所有し、panic 経路では Drop で
-/// 冪等 terminate するため、別途 HelperGuard は不要（親窓は使用後に明示 drop）。
+/// `ExitKind::Clean` を観測する。`HelperLifecycle` は handle を単独所有し、panic 経路では中の
+/// `HelperHandle` の Drop が helper を終わらせて待つ（親窓は使用後に明示 drop）。
 ///
 /// bounded: pump は HANDSHAKE_TIMEOUT、LOAD/UNLOAD ack は各 ACK_TIMEOUT、request 往復は client の
 /// env timeout ＋SMTO_ABORTIFHUNG、終了観測は EXIT_OBSERVE_TIMEOUT で必ず有限復帰するため、
@@ -111,8 +111,8 @@ fn cyclic_run_and_clean_shutdown() {
 
     let handle = spawn(&helper_exe, load_dir, "shiori.dll", parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    // HelperLifecycle は handle を単独所有（by value）。Drop で冪等 terminate するため
-    // 別途 HelperGuard 不要（panic 経路でもプロセスリークしない）。
+    // HelperLifecycle は handle を単独所有（by value）。panic 経路でも中の `HelperHandle` の
+    // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
@@ -249,8 +249,8 @@ fn cyclic_real_pasta_optional() {
 
     let handle = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    // HelperLifecycle は handle を単独所有（by value）。Drop で冪等 terminate するため
-    // 別途 HelperGuard 不要（panic 経路でもプロセスリークしない）。
+    // HelperLifecycle は handle を単独所有（by value）。panic 経路でも中の `HelperHandle` の
+    // Drop が helper を終わらせて待つ（プロセスリークしない）。
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
