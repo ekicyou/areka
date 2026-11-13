@@ -234,3 +234,39 @@
 
 - 1 回目: 要件の 42 個の番号が全部 `design.md` に在ること、51 件が「指摘ごとの直し方」に 1 行ずつ在ることを、python で機械的に確かめた。中身の検めで 2 つ直した（`Gate::new` は clippy の `new_without_default` に当たるので `Gate::shut` へ・#44 ⑵ の記録の捕まえ方を `#[test]`＋`capture`＋`current_thread` の形と、順の根拠まで書いた）。
 - 2 回目: 直しの後に同じ検めで通った。要件の段へ戻す穴は無かった。
+
+## 11. かけ直しの結果（タスク 4.1・2026-11-13）
+
+- 前提: `main` に新しいコミットは無く、取り込みは要らなかった。測り直した範囲は areka-mcp 43 ファイル・.rs 6,075 行、areka-mcp-bridge 26 ファイル・.rs 7,645 行、areka-update 30 ファイル・.rs 6,256 行（かけ直しの前）。
+- 作法: クレートごとに `/ponytail:ponytail-audit` の手順を、上限 20 件を外し全部のファイルを 1 行目から最後まで読む形でかけた（読んだファイルと行数を毎回挙げさせた）。出た指摘は直しが生んだ物も含めて直し、レビューを通してから次の回へ進めた。
+- 区切り: 3 つのクレートとも 5 回目で区切った。開発者の決めごと（11-06・audit-seriko「必ず直すの組が 0 件で本番の振る舞いの直しが 0 件なら 5 回目で区切ってよい」）による。5 回目に出た指摘も全部直してから区切った（下の表）。
+- #45 の注で閉じた 2 つの枝（`commit.rs` の戻しのその他の `Err`・`delete.rs` の `apply_line` の `symlink_metadata` の `Err`）は、どの回でも同じ形で挙がり、設計の「直さない・回した指摘」のとおり数えていない。
+
+### 11.1 回ごとの件数と直し
+
+| クレート | 1 回目 | 2 回目 | 3 回目 | 4 回目 | 5 回目 |
+|---|---|---|---|---|---|
+| areka-update | 3（U-1・U-2 を直す・U-3 は誤り）`bf978a3f5` | 3（注）`7bd312957` | 4（注・説明）`a8300174f` | 3（2 件を直す・U4-3 は数えない）`cd93146de` | 0 |
+| areka-mcp | 9（8 件を直す・M-3 は数えない）`cf1e41379` | 3 `3c56d94bf` | 5（4 件を直す・M3-1 は数えない）`12f0ec868` | 2（注）`6623b9b9d` | 4（注・本番の振る舞い 0）`e40519cda` |
+| areka-mcp-bridge | 9（B-9(a) は数えない）`b5c7e0dba` | 2 `e8c81984f` | 2（B3-1 は本番の直し・B3-2 は数えない）`71bb00c65` | 3（注・記録の文・版の記録の条件）`d2f7039e1` | 1（テストだけ）`ad03ed309` |
+
+### 11.2 本番の振る舞いを変えた直し（かけ直しで見つけたもの）
+
+- 中継 B3-1: rmcp 3.9.0 のクライアントは、交渉済みの版と違う `_meta` の版の要求を「止める間」の要求として扱い、その答えまでほかの要求を送らない（`streamable_http_client.rs` の `is_ordering_barrier`・`barrier_in_flight`）。`2026-07-28` で話す Desktop の最初の長い `tools/call` が、ほかの要求を全部待たせていた（完了した `areka-P0-mcp-stdio-bridge` の設計 D-13 の例外）。`Bridge::align` が、つなぎ先ごとに最初の版付きの要求の前へ同じ `_meta` の `server/discover` を 1 回送り、待ちを短い往復へ移す。版を記録するのは discover の答え（エラーの答えも）が返ったときだけ。discover の失敗は `debug!` を残して捨て、続く本当の要求が今の読み分けを通る。縛るテストは `a_slow_stateless_request_first_on_a_link_does_not_hold_back_the_next`（discover が結果で答える形とエラーで答える形の 2 通り）。新しい依存・公開の形の変化は無い（`Linked` に非公開の欄を 1 つ足しただけ）。
+- 受け口 M-1: 拒否の `warn!` を縛るテストが無かった（`spawn_actor` が記録の窓を受け継ぐようになっていたので数えられる）。テストを足しただけで本番は変えていない。
+
+### 11.3 数えなかった指摘（理由つき）
+
+- 誤りと分かった物: 更新 U-3（`#[allow(clippy::result_large_err)]` の 2 か所は、外すと clippy が中のクロージャで赤になる＝要る）。
+- 設計で直さないと決めた物: 受け口 M-3（`doc/ssp-mcp/areka-tools.md:173` は完了した spec の設計の写し）。
+- 約束（要件 6.1・6.4・5.5）の外で、推奨案で裁定した物（audit 系の議題は推奨案で決めてよい＝開発者の決めごと 11-04）:
+  - 更新 U4-3: `pub use` の `UpdateWarning`・`InvalidWhy`・`DeleteWhy`・`MAX_BODY_BYTES` は外の使い手が 0 だが、公開の形を変えない約束なので残す。
+  - 中継 B-9(a): `default_timeouts_are_the_three_constants` は設計 #8 がわざと残した行（`Timeouts` の既定を縛る・`doc/ssp-mcp/bridge-diff-areka.md:57` が名指す）なので残す。
+- 範囲の外の物（完了の棚卸で起票する・`tasks.md` の Implementation Notes に記録）:
+  - 受け口 M3-1: `doc/ssp-mcp/transport-diff-areka.md` の「ping」「未知メソッド」の行は、`2026-07-28` で 404・`-32601` になることを書いていない（表の値を変えない約束・この spec より前からの書き漏れ）。
+  - 中継 B3-2: `crates/areka-mcp-bridge/Cargo.toml` の dev-dependencies の tokio `rt-multi-thread` とその注は使われていない（`Cargo.toml` は差分 0 の約束）。
+  - 更新の 5 回目の観察: `crates/areka/src/log_history.rs` の規則 `areka_update::winhttp`／`areka_update::fetch` は何の記録にも当たらない（`areka` クレートの持ち場）。
+
+### 11.4 設計の記述から変わった所
+
+- 中継の `patient()`・`Desk`・`stateless_meta()` は、1 回目の B-1・B-2 で `tests/common/desk.rs` の 1 か所へ移った（部品のテストは `src/lib.rs` の `#[cfg(test)]` の `mod desk`、通しのテストは `#[path]` で読む）。そのため `design.md` の「直すファイル」の `service.rs` の `pub(crate) mod failure_tests`（#10）と「`patient` は今どおり `service_failure_tests.rs` が共有元」は、今は当たらない（`service.rs` は `mod failure_tests` に戻った）。
