@@ -18,10 +18,8 @@ use tokio::net::TcpStream;
 
 use super::{HttpError, OwnHttp, check_request, read_reply, verify};
 use crate::config::Timeouts;
+use crate::desk::{WAIT, patient};
 use crate::fake_server::{Conn, FakeServer, Log, Reply, Script, nobody};
-
-/// 受け口が黙ったときにテストを止めずに赤にする上限。
-const DEADLINE: Duration = Duration::from_secs(10);
 
 /// 本物の受け口を空きポートに起こす（自分のスレッドと自分の tokio で回る）。探索のテストも使う。
 pub(crate) fn real_receiver() -> (McpServer, u16) {
@@ -78,7 +76,7 @@ async fn raw_reply(stream: &mut TcpStream) -> (String, Value) {
         let body = serde_json::from_slice(&raw[head_end..]).expect("本文は JSON");
         (head, body)
     };
-    tokio::time::timeout(DEADLINE, read)
+    tokio::time::timeout(WAIT, read)
         .await
         .expect("応答が上限のうちに届く")
 }
@@ -126,7 +124,7 @@ async fn real_receiver_answers_two_requests_on_one_connection_then_closes() {
 
     // 受け口の側から閉じる（読みが 0 バイトで戻る）。
     let mut rest = [0u8; 16];
-    let n = tokio::time::timeout(DEADLINE, stream.read(&mut rest))
+    let n = tokio::time::timeout(WAIT, stream.read(&mut rest))
         .await
         .expect("受け口が上限のうちに閉じる")
         .expect("閉じるまで読める");
@@ -144,7 +142,7 @@ fn no_headers() -> HashMap<HeaderName, HeaderValue> {
 /// rmcp が呼ぶのと同じ口で 1 件送る。`uri` には別の機械を、セッションと認証には値を渡す:
 /// 送り手はどれも使わず、自分の番号の `127.0.0.1` へつなぐ（要件 2.7）。
 async fn post(port: u16, message: &Value, headers: HashMap<HeaderName, HeaderValue>) -> Posted {
-    post_within(port, message, headers, Timeouts::default()).await
+    post_within(port, message, headers, patient()).await
 }
 
 /// [`post`] と同じ。待つ時間を差し替える。
@@ -396,7 +394,7 @@ async fn verify_returns_the_name_the_peer_gives() {
             .await
             .expect("偽の受け口へ接続できる");
 
-        let got = verify(stream, fake.port(), &Timeouts::default()).await;
+        let got = verify(stream, fake.port(), &patient()).await;
         assert_eq!(got.expect("名乗りが返る"), name);
 
         let log = finished(&fake).await;
@@ -464,15 +462,15 @@ async fn replies_that_are_not_http_are_invalid_data() {
 /// テストを止めずに赤にする。
 async fn failure_within(port: u16, message: &Value, timeouts: Timeouts) -> HttpError {
     let posted = post_within(port, message, no_headers(), timeouts);
-    match tokio::time::timeout(DEADLINE, posted).await {
+    match tokio::time::timeout(WAIT, posted).await {
         Ok(Err(StreamableHttpError::Client(error))) => error,
         Ok(other) => panic!("送り手の失敗でない: {other:?}"),
-        Err(_) => panic!("送り手が {DEADLINE:?} のうちに戻らない"),
+        Err(_) => panic!("送り手が {WAIT:?} のうちに戻らない"),
     }
 }
 
 async fn failure(port: u16, message: &Value) -> HttpError {
-    failure_within(port, message, Timeouts::default()).await
+    failure_within(port, message, patient()).await
 }
 
 fn is_not_areka(error: &HttpError, port: u16, name: &str) -> bool {
