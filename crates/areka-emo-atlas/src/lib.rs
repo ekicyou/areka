@@ -273,7 +273,7 @@ fn bake_core(
     let pack = Packer.pack(&placed_items, cfg);
 
     // 6. 焼付（頁バッファ確保＋blit）。Placement は最終 ElementId キー。
-    let (pages, placements) = Baker.bake_pages(&placed_items, &pack, cfg.page_size);
+    let (pages, placements) = Baker.bake_pages(&placed_items, &pack);
     let placement_of: std::collections::HashMap<ElementId, Placement> =
         placements.into_iter().collect();
 

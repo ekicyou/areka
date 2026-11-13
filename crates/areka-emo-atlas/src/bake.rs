@@ -29,20 +29,15 @@ impl Baker {
     ///
     /// 返り値は `AtlasPage` 群と、各キーの `Placement`（`page`/`uv_rect`/`trim_offset`）。
     ///
-    /// # `page_size` 引数について（承認済みシグネチャ調整）
-    /// 設計の Baker Service Interface は `bake_pages(&self, items, pack)` で `page_size` を
-    /// 持たないが、Baker は `page_size × page_size` の正方頁を確保する必要があり
-    /// （設計 Responsibilities: 「`page_size` 正方・`stride = page_size*4`」）、`PackOutput` は
-    /// `page_size` を運ばない。よって `page_size: u32` 引数を追加する（`bake` 入口＝task 3.1
-    /// が `PackConfig.page_size` から供給）。`PackOutput` を改変せず変更を bake.rs 内に閉じる。
+    /// 頁ごとの大きさ（`pack.pages`）で入れ物を確保して写す。stride は頁ごとに `width * 4`。
     ///
     /// # Preconditions
     /// - `pack.entries` の各 `id` は `items` に存在する。
-    /// - 各 `uv_rect` は `page_size` 内に収まる（`x+w <= page_size`・`y+h <= page_size`）。
+    /// - 各 `uv_rect` は自分の頁（`pack.pages[page]`）の内に収まる。
     /// - 各 `Trimmed.pbgra` は tightly packed（`stride == size.w*4`・premultiplied BGRA）。
     ///
     /// # Postconditions
-    /// - 各 `AtlasPage.bytes.len() == stride * height`（`stride == page_size*4`）。
+    /// - 各 `AtlasPage.bytes.len() == stride * height`（`stride == width*4`）。
     /// - blit は premultiplied を保存（無変換・D8）。
     ///
     /// # Invariants
@@ -52,15 +47,14 @@ impl Baker {
         &self,
         items: &[(ElementId, Trimmed)],
         pack: &PackOutput,
-        page_size: u32,
     ) -> (Vec<AtlasPage>, Vec<(ElementId, Placement)>) {
-        let stride = page_size * 4;
-        let page_len = stride as usize * page_size as usize;
-
-        // 1. 頁数分の可変バッファを確保（初期値 0＝完全透明 premultiplied・6.3）。
-        //    blit 後に Arc<[u8]> へ変換する。
-        let mut page_bufs: Vec<Vec<u8>> =
-            (0..pack.page_count).map(|_| vec![0u8; page_len]).collect();
+        // 1. 頁ごとの大きさで可変バッファを確保（初期値 0＝完全透明 premultiplied・6.3）。
+        //    長さは usize で掛ける。blit 後に Arc<[u8]> へ変換する。
+        let mut page_bufs: Vec<Vec<u8>> = pack
+            .pages
+            .iter()
+            .map(|sz| vec![0u8; sz.w as usize * 4 * sz.h as usize])
+            .collect();
 
         // 2. id→Trimmed 逆引き（blit と trim_offset 参照用）。
         let lookup: HashMap<ElementId, &Trimmed> = items.iter().map(|(id, t)| (*id, t)).collect();
@@ -89,7 +83,7 @@ impl Baker {
                     tracing::error!(
                         element_id = entry.id.0,
                         page = entry.page,
-                        page_count = pack.page_count,
+                        page_count = pack.pages.len(),
                         "bake: pack entry page out of range; skipping blit (precondition violated)"
                     );
                     continue;
@@ -100,10 +94,11 @@ impl Baker {
             // 元: src_offset = row * trimmed.stride（tightly packed・== uv.w*4）。
             // 先: dest_offset = (uv.y + row) * stride + uv.x * 4（頁 stride）。
             let src_stride = trimmed.stride as usize;
+            let stride = pack.pages[entry.page as usize].w as usize * 4;
             let dest_row_bytes = uv.w as usize * 4;
             for row in 0..uv.h {
                 let src_off = (row as usize) * src_stride;
-                let dest_off = (uv.y + row) as usize * stride as usize + uv.x as usize * 4;
+                let dest_off = (uv.y + row) as usize * stride + uv.x as usize * 4;
                 // in-range スライスへ copy_from_slice（premultiplied バイトを素通し）。
                 page_buf[dest_off..dest_off + dest_row_bytes]
                     .copy_from_slice(&trimmed.pbgra[src_off..src_off + dest_row_bytes]);
@@ -123,10 +118,11 @@ impl Baker {
         // 5. 可変バッファを AtlasPage（Arc 共有・stride 明示）へ確定。
         let pages: Vec<AtlasPage> = page_bufs
             .into_iter()
-            .map(|buf| AtlasPage {
-                width: page_size,
-                height: page_size,
-                stride,
+            .zip(&pack.pages)
+            .map(|(buf, sz)| AtlasPage {
+                width: sz.w,
+                height: sz.h,
+                stride: sz.w * 4,
                 bytes: Arc::from(buf),
             })
             .collect();
@@ -226,7 +222,13 @@ mod tests {
             h: 3,
         };
         let pack = PackOutput {
-            page_count: 1,
+            pages: vec![
+                Size {
+                    w: page_size,
+                    h: page_size
+                };
+                1
+            ],
             entries: vec![
                 PackedEntry {
                     id: ElementId(0),
@@ -241,7 +243,7 @@ mod tests {
             ],
         };
 
-        let (pages, _placements) = Baker.bake_pages(&items, &pack, page_size);
+        let (pages, _placements) = Baker.bake_pages(&items, &pack);
         assert_eq!(pages.len(), 1);
         let page = &pages[0];
 
@@ -273,7 +275,13 @@ mod tests {
             h: 4,
         }; // 覆う x:10..14
         let pack = PackOutput {
-            page_count: 1,
+            pages: vec![
+                Size {
+                    w: page_size,
+                    h: page_size
+                };
+                1
+            ],
             entries: vec![
                 PackedEntry {
                     id: ElementId(0),
@@ -288,7 +296,7 @@ mod tests {
             ],
         };
 
-        let (pages, _) = Baker.bake_pages(&items, &pack, page_size);
+        let (pages, _) = Baker.bake_pages(&items, &pack);
         let page = &pages[0];
 
         // gap 画素（x=7,y=3）は透明のまま。
@@ -322,7 +330,7 @@ mod tests {
         );
     }
 
-    /// 3（6.3）: page_count==2 で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
+    /// 3（6.3）: 頁 2 枚で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
     /// page 1 への blit が page[0] を汚さないことも確認。
     #[test]
     fn multi_page_allocation() {
@@ -345,7 +353,13 @@ mod tests {
             h: 3,
         };
         let pack = PackOutput {
-            page_count: 2,
+            pages: vec![
+                Size {
+                    w: page_size,
+                    h: page_size
+                };
+                2
+            ],
             entries: vec![
                 PackedEntry {
                     id: ElementId(0),
@@ -360,7 +374,7 @@ mod tests {
             ],
         };
 
-        let (pages, _) = Baker.bake_pages(&items, &pack, page_size);
+        let (pages, _) = Baker.bake_pages(&items, &pack);
         assert_eq!(pages.len(), 2, "two pages allocated");
         for p in &pages {
             assert_eq!(p.width, page_size);
@@ -403,7 +417,13 @@ mod tests {
             h: 2,
         };
         let pack = PackOutput {
-            page_count: 1,
+            pages: vec![
+                Size {
+                    w: page_size,
+                    h: page_size
+                };
+                1
+            ],
             entries: vec![
                 PackedEntry {
                     id: ElementId(7),
@@ -418,7 +438,7 @@ mod tests {
             ],
         };
 
-        let (_pages, placements) = Baker.bake_pages(&items, &pack, page_size);
+        let (_pages, placements) = Baker.bake_pages(&items, &pack);
         assert_eq!(placements.len(), 2);
 
         let p7 = placements
@@ -446,10 +466,16 @@ mod tests {
         let page_size = 48;
         let items: Vec<(ElementId, Trimmed)> = vec![];
         let pack = PackOutput {
-            page_count: 1,
+            pages: vec![
+                Size {
+                    w: page_size,
+                    h: page_size
+                };
+                1
+            ],
             entries: vec![],
         };
-        let (pages, placements) = Baker.bake_pages(&items, &pack, page_size);
+        let (pages, placements) = Baker.bake_pages(&items, &pack);
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].stride, page_size * 4);
         assert_eq!(pages[0].bytes.len(), (page_size * 4 * page_size) as usize);
@@ -480,9 +506,9 @@ mod tests {
         ];
 
         let pack = Packer.pack(&items, cfg);
-        let (pages, placements) = Baker.bake_pages(&items, &pack, page_size);
+        let (pages, placements) = Baker.bake_pages(&items, &pack);
 
-        assert_eq!(pages.len(), pack.page_count as usize);
+        assert_eq!(pages.len(), pack.pages.len());
         assert_eq!(placements.len(), pack.entries.len());
 
         // 各 placed id の頁領域が元 pbgra と一致（end-to-end verbatim blit）。

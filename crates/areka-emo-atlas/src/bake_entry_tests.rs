@@ -7,8 +7,8 @@ use crate::decode::MemoryDecoder;
 use crate::pack::PackConfig;
 use crate::table::SetId;
 use crate::test_support::{
-    BIND_DEBUG, CLEAR_WARN, ZERO_WARN, dressed_shell, elem, opaque_2x2, register, set, surface,
-    transparent_2x2, zero_sized,
+    BIND_DEBUG, CLEAR_WARN, ZERO_WARN, dressed_shell, elem, full, opaque_2x2, register, set,
+    surface, transparent_2x2, zero_sized,
 };
 use areka_parsers::shell::{Interval, Surface};
 use std::path::Path;
@@ -356,4 +356,44 @@ fn bind_only_zero_sized_keeps_zero_size_warn() {
         "{out}"
     );
     assert!(!out.contains(BIND_DEBUG), "0 寸は見分けに入らない: {out}");
+}
+
+/// 指摘 3: 余白込みで頁（2,048 四方）に入らない 1×2,100 の絵は、普通の絵と一緒に焼くと
+/// 普通の頁（0 番）の後ろの自頁（3×2,102）に載り、uv の画素は元の絵と同じ。
+#[test]
+fn tall_image_gets_own_page_after_normal_pages() {
+    let base = Path::new("shell/master");
+    let shell = vec![surface(0, vec![elem(0, "small.png"), elem(1, "tall.png")])];
+    // 行ごとに値の変わる不透明の 1×2,100（ずれを見つけるため）。
+    let tall: Vec<u8> = (0..2100u32)
+        .flat_map(|y| [(y % 256) as u8, (y / 256) as u8, 7, 255])
+        .collect();
+    let mut dec = MemoryDecoder::new();
+    register(&mut dec, base, "small.png", opaque_2x2());
+    register(&mut dec, base, "tall.png", (1, 2100, 4, tall.clone(), true));
+
+    let result = bake(&[set(&shell, base)], &dec, PackConfig::default());
+    assert!(result.errors.is_empty());
+    let table = &result.table;
+
+    let small = table.resolve(SetId(0), "small.png").unwrap();
+    assert_eq!(table.entry(small).placement.as_ref().unwrap().page, 0);
+    let id = table.resolve(SetId(0), "tall.png").unwrap();
+    let p = table.entry(id).placement.clone().expect("自頁に配置がある");
+    assert_eq!(p.page, 1, "自頁は普通の頁の後ろ");
+    assert_eq!(
+        p.uv_rect,
+        crate::table::Rect {
+            x: 1,
+            y: 1,
+            w: 1,
+            h: 2100
+        }
+    );
+    let page0 = table.page(0).unwrap();
+    assert_eq!((page0.width, page0.height), (2048, 2048));
+    let page = table.page(1).unwrap();
+    assert_eq!((page.width, page.height, page.stride), (3, 2102, 12));
+    assert_eq!(page.bytes.len(), 12 * 2102);
+    assert_eq!(full(table, id).concat(), tall, "uv の画素は元と同じ");
 }
