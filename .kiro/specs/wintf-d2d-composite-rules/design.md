@@ -465,7 +465,7 @@ impl Visual {
 ```
 
 - 持ち主（`visual_property_sync_system` の `SetOpacity`）・節（`build`）・当たり判定（`ecs/layout/hit_test` の `Bounds`）がこの関数を通るので、NaN の答えは全部 1.0 に揃う（1.0 にするのはこの共通の 1 か所）。
-- 記録の場所を分ける（設計討議 議題 2）: `set_opacity(NaN)` は呼び手の 1 回の誤りなので呼ばれるたびに `warn!`。欄へ直に書かれた NaN は、`fill_world_visuals` が `ReportedIssues` の `first_seen(e, TreeIssue::NanOpacity)` で実体ごとに 1 度だけ `warn!`（毎フレーム流れ続けない・黙って消さない・2.8）。`clamped_opacity` は実体を知らないので記録しない。
+- 記録の場所を分ける（設計討議 議題 2）: `set_opacity(NaN)` は呼び手の 1 回の誤りなので呼ばれるたびに `warn!`。欄へ直に書かれた NaN は、`fill_world_visuals` が `ReportedIssues` の `first_seen(e, TreeIssue::NanOpacity)` で実体ごとに 1 度だけ `warn!`（毎フレーム流れ続けない・黙って消さない・2.8）。`clamped_opacity` は実体を知らないので記録しない。描画面の持ち主は `fill_world_visuals` が訪れないので、持ち主の不透明度を写す `visual_property_sync_system` が、`Visual` が変わったときに欄の NaN を `warn!` で 1 度残す（位置が動くだけでは繰り返さない）。
 
 ### graphics（入れ物と読み戻し）
 

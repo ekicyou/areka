@@ -145,7 +145,7 @@
 - 1.2: `visual/mod.rs` の `#[cfg(test)] pub(crate) use draw::emit_test_support;` は使い手のテストが入るまで `#[allow(unused_imports)]` 付き。入れ物か読み戻しのテスト（5.1 以降）が使い始めたら外す。描画面ごとの DC6 の cast（`render.rs`）は 5.1／6.2 で SurfaceComposite の合成の回へ移す。
 - 2.1: 重ね方の範囲 0〜12 の上端は `MASK_INVERT`（design の「SOURCE_OVER〜XOR」の表記は誤り・XOR は 8）。emit の doc の層の行「変えるのは本 spec」は 4.1 で直す。
 - 2.2: 図形の切り抜きの下のブレンドのテスト（`emit_blend_tests.rs`）は下の画素が白と透明で、層の旗 NONE と INITIALIZE_FROM_BACKGROUND の区別がつかない。4.2 で色のある下の画素で固め直す。
-- 3.1: 描画面の持ち主（根）は fill_world_visuals が訪れないので、持ち主の欄へ直に書かれた NaN は記録されず 1.0 になる（要件 2.8 が持ち主にも及ぶかは最終検証で見る）。隠れた部分木の中の NaN の記録はコードでは行うがテストは無い。
+- 3.1: 描画面の持ち主（根）は fill_world_visuals が訪れない。持ち主の欄へ直に書かれた NaN は、最終検証の直しで `visual_property_sync_system` が `Visual` の変化ごとに `warn!` を残す（要件 2.8・6.3）。隠れた部分木の中の NaN の記録はコードでは行うがテストは無い。
 - 3.3: 描く中身の無い節（グループ）は `VisualTransform` を持たせないと描画面の持ち主と見なされ訪れられない（`emit_layer_tests.rs` の `ident()`）。
 - 4.2: `emit_layer_tests.rs` の `render_with_unbounded_clip` は emit の図形の切り抜きの層の旗を写している。emit の層の旗を変えるときは一緒に変える。
 - 5.1: `composite.rs` の `#![cfg_attr(not(test), allow(dead_code))]` は 6.2 で外す。`pixel`／`gpu_reads` の欄と `PixelReadState` の `#[allow(dead_code)]` は 5.2 で外す。根の列の `DrawImage` は `render.rs` と重複（6.2 で `compose` へ一本化）。
