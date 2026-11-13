@@ -1,13 +1,12 @@
 //! `ProcessHost`（要件 1.1〜1.5）: helper プロセスの起動と、IPC と直交する
 //! 非ブロッキング生存監視。
 //!
-//! 本モジュールの純ロジック（`ExitKind::classify`・`resolve_param`・
-//! `resolve_request_timeout` 等）は **std-only**（`windows` 非依存）で完結し、親ウィンドウ
-//! ハンドルは `windows` の `HWND` 型を引きずらず u32 ワイヤ値として子へ渡す。これにより
-//! ProcessHost の判定ロジックは x64/arm64 の別なく純粋な `std::process` 上のロジックとして
-//! 単体テスト可能である。唯一 [`spawn_command`] のみ、helper の**孤児化防止**として
-//! KILL_ON_JOB_CLOSE 付き Job Object を割り当てる（windows 依存は [`crate::job`] に隔離し、
-//! 割り当て失敗時は縮退＝現行挙動）。
+//! 判定の純ロジック（`ExitKind::classify`・`resolve_param`・`resolve_request_timeout` 等）は
+//! `std::process` の上だけで組み、実プロセスなしで単体テストできる。親ウィンドウのハンドルは
+//! `HWND` 型を引きずらず u32 ワイヤ値として子へ渡す。`windows` を使うのは起こし方と待ち方の所
+//! （`CREATE_NO_WINDOW`・終わりの待ち `WaitForSingleObject`・標準エラーの ANSI 読み
+//! `MultiByteToWideChar`）と、[`spawn_command`] が helper の**孤児化防止**として割り当てる
+//! KILL_ON_JOB_CLOSE 付き Job Object（[`crate::job`] に隔離し、割り当て失敗時は縮退＝現行挙動）。
 //!
 //! 子への起動パラメーター受け渡し規約（cross-task 契約・design §SpawnContract・R3.1〜3.3）:
 //! helper は起動パラメーターを **arg-n 優先・fallback env** の順で取得する。
@@ -38,13 +37,9 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::error::SpawnError;
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
-/// `CreateProcess` の作成フラグ `CREATE_NO_WINDOW`（コンソールの実行体を窓なしで起こす）。
-///
-/// `windows` crate の同名定数は `Win32_System_Threading` の機能に在り、この crate は有効に
-/// していない。値 1 つのために機能を足さず、Win32 の定義値（0x08000000）をここに置く。
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+use crate::error::SpawnError;
 
 /// helper が親 HWND を fallback で読む環境変数名（cross-task 契約）。
 ///
@@ -139,10 +134,10 @@ pub enum ExitKind {
     Clean,
     /// 異常終了（終了コードが非 0・要件 1.4）。保持値は当該終了コード。
     Abnormal(i32),
-    /// 終了コードを持たない終了（シグナル/強制終了など・要件 1.4）。
+    /// 終了コードを持たない終了（`ExitStatus::code()` が `None`・要件 1.4）。
     ///
-    /// Windows では `TerminateProcess` 等により終了コードが取得できない
-    /// 経路が該当する。`ExitStatus::code()` が `None` のときに分類される。
+    /// Windows の `ExitStatus::code()` はいつも値を持つので、この腕は Windows では起きない
+    /// （`TerminateProcess(..,1)` は [`ExitKind::Abnormal(1)`]）。公開の形を変えないために残す。
     Terminated,
 }
 
@@ -151,7 +146,7 @@ impl ExitKind {
     ///
     /// - `code() == Some(0)` → [`ExitKind::Clean`]
     /// - `code() == Some(n)`（n ≠ 0） → [`ExitKind::Abnormal(n)`]
-    /// - `code() == None` → [`ExitKind::Terminated`]
+    /// - `code() == None` → [`ExitKind::Terminated`]（Windows では起きない）
     ///
     /// 実プロセスに依存しないため、この関数単体でテスト可能。
     #[must_use]
@@ -174,8 +169,8 @@ impl ExitKind {
 /// **孤児化防止**: spawn 時に helper を `KILL_ON_JOB_CLOSE` 付き Job Object へ割り当て、
 /// その job ハンドルを `_job` として保持する（[`crate::job`]）。本ハンドルを保持する
 /// 親プロセスが終了（正常・異常・UNLOAD 未送出のいずれも）すると OS が job を閉じ、
-/// helper を確実に道連れにする。helper 側の親死亡検知（下流 host32-lifecycle 領分・未実装）に
-/// 依存しない安全網。job 割り当てに失敗した場合は `None`（縮退・現行挙動）。
+/// helper を確実に道連れにする。helper は親の死を自分では検知しないため、親が
+/// UNLOAD を送らずに終わったときの安全網はこれだけ。job 割り当てに失敗した場合は `None`（縮退・現行挙動）。
 #[derive(Debug)]
 pub struct HelperHandle {
     child: Child,
@@ -220,12 +215,8 @@ impl HelperHandle {
     /// # Errors
     /// `TerminateProcess` 相当の I/O 失敗時に [`std::io::Error`] を返す。
     pub fn terminate(&mut self) -> std::io::Result<()> {
-        match self.child.kill() {
-            Ok(()) => Ok(()),
-            // 既に終了しているプロセスへの kill は成功扱い（冪等）。
-            Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => Ok(()),
-            Err(err) => Err(err),
-        }
+        // Windows の std の kill は、もう終わったプロセスにも Ok を返す（冪等）。
+        self.child.kill()
     }
 
     /// helper の終わりを `timeout` まで待つ（`WaitForSingleObject` 1 回）。終わっていれば終了種別、
@@ -398,7 +389,7 @@ pub(crate) fn spawn_command_with(
     mut command: Command,
     mut sink: impl FnMut(u32, &str) + Send + 'static,
 ) -> Result<HelperHandle, SpawnError> {
-    let mut child = command.creation_flags(CREATE_NO_WINDOW).spawn()?;
+    let mut child = command.creation_flags(CREATE_NO_WINDOW.0).spawn()?;
     // 孤児化防止: spawn 直後に KILL_ON_JOB_CLOSE 付き job へ割り当てる（失敗は縮退＝None）。
     // これにより、親プロセスが UNLOAD を送らずに終了しても helper が OS 機構で kill される。
     // shortcut: 起こしてから job に入れるまでのあいだに areka が落ちると helper が残る。閉じるには CREATE_SUSPENDED か PROC_THREAD_ATTRIBUTE_JOB_LIST（std の Command の外）が要る。残った helper が実際に見つかったら上げる

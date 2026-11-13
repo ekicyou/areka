@@ -6,7 +6,8 @@
 //!
 //! # モジュール構成
 //! - [`process_host`] — `ProcessHost`（helper spawn / 非ブロッキング生存監視 /
-//!   終了分類）。**std-only**（`windows` 非依存）。
+//!   終了分類）。判定の純ロジックは `std::process` の上だけで組み、`windows` は起こし方
+//!   （`CREATE_NO_WINDOW`・Job Object）と待ち方・標準エラーの読みに使う。
 //! - [`parent_window`] — `ParentMessageWindow`（HELLO ハンドシェイク観測 /
 //!   `pump_until_hello_or`）。`wintf-winmsg-executor` の message-only 窓。
 //! - [`charset`] — `Charset`（任意の文字コードを列挙せず表す newtype）と `LabelError`、

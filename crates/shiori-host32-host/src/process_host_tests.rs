@@ -89,22 +89,6 @@ fn classify_abnormal_from_nonzero_exit() {
     assert_eq!(ExitKind::classify(&status), ExitKind::Abnormal(3));
 }
 
-// Terminated（code() == None）分岐は Windows の実プロセスで決定的に
-// 再現するのが難しい（TerminateProcess でも終了コードが付く経路がある）。
-// ここでは classify のマッチ論理が None を Terminated へ落とすことを、
-// 分岐網羅の観点で明示テストする（CONCERNS 参照）。
-#[test]
-fn classify_terminated_branch_logic() {
-    // classify は Some(0)=Clean / Some(n)=Abnormal(n) / None=Terminated。
-    // Some 系は上記テストで実プロセス実証済み。None 分岐の論理を確認する。
-    // ExitStatus を直接 None で構築する安定 API は無いため、分類ロジックの
-    // 網羅を明示（Some(0)/Some(n) が Terminated にならないことで補強）。
-    let clean = cmd_exit(0).status().unwrap();
-    let abnormal = cmd_exit(7).status().unwrap();
-    assert_ne!(ExitKind::classify(&clean), ExitKind::Terminated);
-    assert_ne!(ExitKind::classify(&abnormal), ExitKind::Terminated);
-}
-
 // --- spawn + 非ブロッキング poll（要件 1.1 / 1.2 / 1.3 / 1.4）---
 
 #[test]

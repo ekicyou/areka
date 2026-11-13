@@ -19,7 +19,8 @@ use areka_parsers::package::ShioriMount;
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{
     Charset, CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow,
-    RequestError, Shiori3Client, ShioriVersion, ShutdownError, VersionVerdict, spawn,
+    RequestError, Shiori3Client, ShioriVersion, ShutdownError, VersionVerdict, poll_exit_kind,
+    spawn,
 };
 use shiori_host32_ipc::MsgTag;
 
@@ -165,7 +166,7 @@ pub fn real_connect(
         let parent_hwnd = window.hwnd_u32();
 
         // 3. i686 helper を spawn（cwd=helper_dir）。
-        let helper = spawn(&helper_exe, &helper_dir, &shiori_name, parent_hwnd)
+        let mut helper = spawn(&helper_exe, &helper_dir, &shiori_name, parent_hwnd)
             .map_err(|e| format!("i686 helper の spawn に失敗: {e}"))?;
         // HELLO の送り手をこの子に縛る。ポンプの後に呼ぶと確かめが飛ぶので必ずここ（指摘 38）。
         window.expect_helper_pid(helper.pid());
@@ -173,10 +174,13 @@ pub fn real_connect(
         // 4. HELLO 受領＝ハンドシェイク完了を観測（上限時間内に来なければ失敗）。
         let helper_hwnd = window.pump_until_hello_or(HANDSHAKE_TIMEOUT);
         if helper_hwnd.is_none() {
-            return Err(
-                "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完）"
-                    .to_string(),
-            );
+            // すぐ終わった helper（引数の誤り・x64 の helper など）なら終わり方を添える（指摘 35）。
+            let exit = poll_exit_kind(&mut helper)
+                .map(|kind| format!("・helper は終わり方 {kind:?} で終わった"))
+                .unwrap_or_default();
+            return Err(format!(
+                "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完{exit}）"
+            ));
         }
 
         // 5. LOAD 先行（helper 内に proxy を確立＝REQUEST の構造的前提）→ ack[1] を確認。
@@ -411,3 +415,7 @@ mod shiori_wiring_empty_tests;
 #[cfg(test)]
 #[path = "shiori_wiring_version_tests.rs"]
 mod shiori_wiring_version_tests;
+
+#[cfg(test)]
+#[path = "shiori_wiring_handshake_tests.rs"]
+mod shiori_wiring_handshake_tests;

@@ -11,8 +11,8 @@
 //!    proxy 未確立なら明示エラーバイト列（`SHIORI/3.0 500`）を返送し crash させない（R3.1）。
 //!    不正フレーム／未知タグは crash させず観測カウンタに記録するのみ（要件 2.5・上位へ渡さない）。
 //! 3. **`main`**（要件 7.1）: 親 HWND を arg/env の u32 ワイヤ値で取得 → 窓生成 → HELLO 送出 →
-//!    `MessageLoop::run`。lifecycle は request 往復実証に必要な最小に留める（常駐 lifecycle は
-//!    Out of Boundary・下流 `host32-lifecycle`）。
+//!    `MessageLoop::run`。WndProc は LOAD（SHIORI のロードと ack 返送）・REQUEST・UNLOAD を受け、
+//!    UNLOAD で proxy を閉じてループを抜け、正常終了（exit 0）する（R5.6）。
 //!
 //! ## proxy 駆動の差し替え点（design.md §436 / §465-466）
 //! REQUEST は `classify_inbound`（純関数・proxy 非依存）で **request バイト列**として `Reply` に
@@ -28,8 +28,7 @@
 //! 本クレートは `shiori-host32-ipc`（proto）を一方向依存し、`shiori-host32-host` へは依存しない
 //! （host↔helper のコード依存は無く、プロセス境界で WM_COPYDATA のみ）。
 
-// ShioriByteProxy（unsafe FFI 一点集約・design §339）。Task 6 が WndProc の LOAD 結線から
-// consume するまで未使用ゆえ、モジュール側で dead_code を抑止している。宣言のみ（Task 5.1 の領分）。
+// ShioriByteProxy（unsafe FFI 一点集約・design §339）。WndProc の LOAD／REQUEST／UNLOAD が使う。
 mod shiori_proxy;
 
 // helper のテストの共通の道具（試験用の DLL の探し方・テストの根）。
@@ -146,14 +145,13 @@ enum InboundAction {
     Reply(Vec<u8>),
     /// `Load` を受領＝SHIORI ロード実行のトリガ（要件 4.1）。従来の「既知だが無視」を置換する。
     /// **ペイロードを持たない**（wire でパスを運ばない・パスは arg/env の `load_dir` から得る）ため、
-    /// 受領フレームのペイロード有無を問わずこの動作へ写像される。実際のロード結線（proxy 確立・
-    /// `load` 呼出・ack 返送）は下流タスク（Task 6・WndProc の LOAD 結線）が担う。
+    /// 受領フレームのペイロード有無を問わずこの動作へ写像される。ロード（proxy 確立・`load` 呼出・
+    /// ack 返送）は `handle_message` の `TriggerLoad` の腕が行う。
     TriggerLoad,
     /// `Unload` を受領＝正規の正常終了経路のトリガ（R5.6）。従来の「既知だが無視」を置換する。
     /// **ペイロードを持たない**（wire で理由やパスを運ばない）ため、受領フレームのペイロード有無を
-    /// 問わずこの動作へ写像される。実際の終了結線（proxy drop → `quit_requested` セット → ack `[1]`
-    /// 返送 → `PostMessageW` 起こし → main ループ正常終了 → exit 0）は下流タスク（Task 3.2・WndProc の
-    /// UNLOAD 結線）が担う。本タスク（3.1）は分類と共有状態の追加までに留める。
+    /// 問わずこの動作へ写像される。終了（proxy drop → `quit_requested` セット → ack `[1]` 返送 →
+    /// `PostMessageW` 起こし → main ループ正常終了 → exit 0）は `handle_message` の `TriggerUnload` の腕が行う。
     TriggerUnload,
     /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`）。crash させず無視する
     /// （記録のみ）。`Load` は `TriggerLoad`、`Unload` は `TriggerUnload` へ分離済みゆえ含まない。
@@ -528,9 +526,7 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
 
 /// HelperMessageWindow: message-only 窓を生成し、起動時に親へ HELLO を送出する（design.md §437-484）。
 struct HelperMessageWindow {
-    /// 所有する窓ハンドル。Drop で `DestroyWindow`（RAII）ゆえ本体は保持のためだけに存在する
-    /// （非 test ビルドでは read されないが、生存＝窓生存の Drop guard）。観測は test 経由。
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 所有する窓ハンドル。Drop で `DestroyWindow`（RAII）。共有状態は `quit_requested` などが読む。
     window: Window<HelperShared>,
 }
 

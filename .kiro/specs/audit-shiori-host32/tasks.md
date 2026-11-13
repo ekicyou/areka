@@ -160,7 +160,7 @@
   - 完了の姿: 2 本が緑で、旗を外すと panic か入れ子の呼び出しで赤になる
   - _Requirements: 4.1, 5.3_
 
-- [ ] 11. 説明と小さな形を今の姿に直す（U15）
+- [x] 11. 説明と小さな形を今の姿に直す（U15）
   - `ExitKind::Terminated` の腕を残して説明を直し、偽のテストを消す（指摘 25・要件 10.13）。`CREATE_NO_WINDOW` を `windows` から使い手の定義を消す（指摘 30）。`terminate` の `InvalidInput` の腕を消す（指摘 31）
   - helper のテストだけの `ansi_encode` を消し、テスト `load_gets_the_path_in_the_ansi_code_page` を置く（指摘 19）。helper の古い allow と説明を消す（指摘 33）。ipc の `PAYLOAD_HEADER_LEN` とそのテストを消す（指摘 45）
   - README・`lib.rs`・各ファイルの説明を研究の §4 の 32 の挙げたとおり今の姿に書き直す（指摘 32）
@@ -207,3 +207,4 @@
 - 7.4: 机で、emo2 自身の pasta.dll・PASTA_DEBUG=1・既定の並列で areka-ghost を回し、錠なしで実物の pasta のテスト 3 本が並んで緑（lib 234・ghost 39・real_pasta_online 8）。
 - 10.3（14 の再監査へ）: LOAD の腕の DLL 呼び出しの最中に別の LOAD が届くと、proxy が None のため ShioriByteProxy::load がもう一度呼ばれ（入れ子）、内側の InDllCall の Drop が外側の印を下ろす。設計の状態図は REQUEST と UNLOAD だけを扱い、testdll では LOAD の再入を起こせないので縛れていない。
 - 9.2: R5 を SSP で測り、値・Charset の重なりは後勝ち、値の見出しと Charset の値は頭の半角の空白とタブだけ削ると分かったので SSP に合わせた（案 B・測っていないヘッダ名と ErrorLevel・ErrorDescription・SecurityLevel は前後を削るまま）。テスト名は the_last_of_duplicated_headers_wins・a_sentence_keeps_full_width_spaces_and_the_last_wins に変えた（研究 §14.13）。範囲外: areka-parsers/src/charset/prescan.rs:6 の「scan_charset_header と同じ読み」は重なりの扱い（prescan は先勝ち）が違うので /kiro-complete の棚卸へ。
+- 11（範囲外・/kiro-complete の棚卸へ）: crates/pilot/examples/shiori-host-32/ に ansi_encode・PAYLOAD_HEADER_LEN の写しが残る。doc/COMPAT_ARCHITECTURE.md:84 は LoadLibraryW のまま。タスク 13 で依存を消すときは host の README の依存の一覧も直す。タスク 12 では lifecycle.rs の頭の説明と process_host.rs の helper_hwnd の説明も消す。

@@ -6,7 +6,7 @@
 //!
 //! 設計制約（design.md §272-336・要件 2.1-2.5 / 7.2 / 7.3）:
 //! - `MsgTag` は `dwData` の**低 32bit のみ**に載る（跨ビットネス安全）。
-//! - payload は**生バイト列**（`cbData` = 長さ・固定ヘッダ長 0 = [`PAYLOAD_HEADER_LEN`]）。
+//! - payload は**生バイト列**（`cbData` = 長さ・in-band のヘッダを持たない）。
 //!   ポインタ・HANDLE・struct を境界を越えて共有しない。
 //! - HWND は**常に u32 LE 4 バイト**でワイヤ表現する。
 //! - shift/mask 評価は必ず `u64` cast で行い、i686 の `usize` = 32bit での
@@ -31,32 +31,24 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SEND_MESSAGE_TIMEOUT_FLAGS, SMTO_ABORTIFHUNG, SMTO_NORMAL, SendMessageTimeoutW, WM_COPYDATA,
 };
 
-/// 跨プロセス payload の固定ヘッダ長。
-///
-/// 本規約では payload は生バイト列そのものであり、長さ以外の in-band ヘッダを
-/// 持たない（要件 2.4）。`cbData` が payload 長そのものであることを明示する定数。
-pub const PAYLOAD_HEADER_LEN: usize = 0;
-
 /// WM_COPYDATA メッセージ種別タグ（`dwData` の低 32bit に載る）。
 ///
 /// 判別子は全て u32 の低 32bit に収まり、跨ビットネス安全である
 /// （`(tag.as_u32() as u64) >> 32 == 0`・要件 7.2）。
 ///
-/// 本ユニットが直接扱うのは `Hello` / `Request` / `Response`（echo）である。
-/// `Load` / `Unload` はワイヤ互換のため定義するが、本ユニットでは未処理で
-/// 下流ユニットが結線する。
+/// 本クレートはタグの規約だけを持ち、意味づけは使い手（host と helper）が行う。
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MsgTag {
     /// helper → 親: 自身のメッセージ窓 HWND を u32 LE で通知するハンドシェイク。
     Hello = 1,
-    /// pasta.dll ロード要求（本ユニット未処理・下流で結線）。
+    /// 親 → helper: SHIORI DLL のロード要求（ペイロードなし・helper が ack 1 バイトを返す）。
     Load = 2,
     /// 親 → helper: 生バイト request。
     Request = 3,
     /// helper → 親: 生バイト response。
     Response = 4,
-    /// pasta.dll アンロード要求（本ユニット未処理・下流で結線）。
+    /// 親 → helper: SHIORI DLL のアンロードと正常終了の要求（ペイロードなし・helper が ack を返す）。
     Unload = 5,
 }
 
@@ -137,7 +129,7 @@ pub fn copydata_payload(
     let tag = MsgTag::try_from_u32(raw_tag).map_err(FramingError::UnknownTag)?;
 
     // 宣言長 (cbData) と実 payload 長が一致しないフレームは破損として拒否する
-    // （要件 2.5・PAYLOAD_HEADER_LEN = 0 ゆえ cbData = payload 長）。
+    // （要件 2.5・payload は in-band のヘッダを持たないので cbData = payload 長）。
     if declared_len != data.len() {
         return Err(FramingError::LengthMismatch {
             declared: declared_len,
@@ -150,9 +142,9 @@ pub fn copydata_payload(
 
 /// framing レベルの不正フレーム表現（要件 2.5）。
 ///
-/// 本ユニットは framing ローカルな軽量エラーに留める。下流タスクの
-/// `IpcError`（thiserror enum）へは、この列挙の各バリアントを
-/// `IpcError::CorruptFrame` 等へ `From` で持ち上げて統合する想定。
+/// 本ユニットは framing ローカルな軽量エラーに留める。送信・往復層の
+/// [`IpcError`] へは `IpcError::CorruptFrame` として `From` で持ち上げる
+/// （下の `impl From<FramingError> for IpcError`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FramingError {
     /// `dwData` の低 32bit が既知の [`MsgTag`] でない（未知タグ）。
@@ -592,12 +584,6 @@ mod framing_tests {
             copydata_payload(dw_data as usize, 0, payload),
             Ok((MsgTag::Hello, payload))
         );
-    }
-
-    // PAYLOAD_HEADER_LEN=0 の明示（要件 2.4・固定ヘッダ長 0）
-    #[test]
-    fn payload_header_len_is_zero() {
-        assert_eq!(PAYLOAD_HEADER_LEN, 0);
     }
 }
 

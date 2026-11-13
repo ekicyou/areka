@@ -1,8 +1,8 @@
 # host-32 IPC transport（`areka-P0-host32-ipc`）
 
-x64/arm64 親プロセスと i686 helper プロセスの間で **生バイト列を往復させる transport 層
-（bytes-over-wire）** を提供するユニット。SHIORI/3.0 セマンティクス・`pasta.dll` ロード・
-常駐 lifecycle は所有せず、下流ユニットの領分とする。
+x64/arm64 親プロセスから 32bit（i686）の SHIORI DLL を使うための、親と i686 helper プロセスの
+組み。WM_COPYDATA の transport に加え、SHIORI DLL のロード（helper）・SHIORI/3.0 と 2.x の
+組み立てと解析・文字コードの交渉（host）・helper の寿命（正常終了・強制終了・孤児化防止）を持つ。
 
 > このユニットの中核は 3 クレートに分割されている。本 README は
 > **host-32 トラック共通のビルド／テスト規律**（特に i686 helper のビルド手順）を固定する。
@@ -11,8 +11,8 @@ x64/arm64 親プロセスと i686 helper プロセスの間で **生バイト列
 
 | | 内容 |
 |---|---|
-| **owns** | bytes-over-wire transport（WM_COPYDATA framing・HWND u32 LE 符号化・HELLO ハンドシェイク・再入 RESPONSE 受領によるデッドロック回避・`SendMessageTimeout(SMTO_ABORTIFHUNG)` による timeout/wedge 検出・helper spawn と非ブロッキング生存監視・pasta 非依存の echo 往復・i686 ビルドと 32bit 可搬性） |
-| **does NOT own** | `pasta.dll` の `LoadLibraryW`/`GetProcAddress`/load・unload・request 解決（下流 `areka-P0-host32-shiori-load`）／SHIORI/3.0 の build・parse・charset 変換（下流 `-request`）／常駐メッセージループ・`OnSecondChange` ポーリング・unload・crash 監視 lifecycle（下流 `-lifecycle`）／`IShiori` ABI 実装本体（`shiori-abi` へは依存しない・下流で結線） |
+| **owns** | transport（WM_COPYDATA framing・HWND u32 LE 符号化・HELLO ハンドシェイク・再入 RESPONSE 受領によるデッドロック回避・`SendMessageTimeout` による timeout/wedge 検出）／helper の spawn・非ブロッキング生存監視・正常終了（UNLOAD）・強制終了・Job Object による孤児化防止・標準エラーの記録への転送（host）／SHIORI DLL の `LoadLibraryExW`（`LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR \| LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`）・`GetProcAddress`・`loadu`/`load`・`unload`・`request` の呼び出し（helper）／SHIORI/3.0 と 2.x の build・parse・charset の交渉と変換（host の `shiori3`・`shiori2`・`charset`・`client`） |
+| **does NOT own** | `IShiori` ABI の実装本体と、ゴーストの起動への結線（`areka-ghost`）／常駐の進行（`OnSecondChange` などのイベントの送り方・処分の判断）は使い手（`areka-ghost`・`areka-kanade`・`areka`）の領分／`shiori-abi` へは依存しない |
 
 この負の境界は要件 8.1〜8.4 の negative 基準であり、依存グラフ・grep で観測可能に保つ
 （下記「責務境界の確認」）。
@@ -22,8 +22,8 @@ x64/arm64 親プロセスと i686 helper プロセスの間で **生バイト列
 | クレート | ターゲット | 役割 |
 |---|---|---|
 | `shiori-host32-ipc` | x64 / arm64 / i686（全ターゲット可搬） | **proto**：`MsgTag`・framing・HWND u32 LE 符号化・`ResponseSlot`・`send_copydata`/`send_request`・`IpcError`。凍結する WM_COPYDATA ワイヤ規約の単一ソース。 |
-| `shiori-host32-host` | x64 / arm64（ネイティブ） | **host**：`ProcessHost`（spawn/生存監視）・`ParentMessageWindow`（HELLO 記録・RESPONSE 再入受領・送信パス `send_request`）。 |
-| `shiori-host32-helper` | i686 のみ | **helper**：`HelperMessageWindow`（HELLO 送出・REQUEST 受領・`respond` echo）。下流 `-shiori-load` が `respond` を pasta 駆動へ差し替える点。 |
+| `shiori-host32-host` | x64 / arm64（ネイティブ） | **host**：`ProcessHost`（spawn/生存監視）・`ParentMessageWindow`（HELLO 記録・RESPONSE 再入受領・送信パス `send_request`）・`HelperLifecycle`（正常終了・強制終了）・`Shiori3Client`（SHIORI/3.0 と 2.x の往復・文字コードの交渉）。 |
+| `shiori-host32-helper` | i686 のみ | **helper**：`HelperMessageWindow`（HELLO 送出・LOAD／REQUEST／UNLOAD 受領）・`ShioriByteProxy`（SHIORI DLL のロードと呼び出し）。 |
 
 `-host` / `-helper` は `-ipc` を **一方向依存**する。host↔helper 間のコード依存は無く、
 プロセス境界で WM_COPYDATA のみが跨ぐ。ターゲット分離は `cfg` でなく crate 境界で担保される。
@@ -87,8 +87,10 @@ cargo tree -p shiori-host32-host
 cargo tree -p shiori-host32-helper --target i686-pc-windows-msvc
 ```
 
-いずれも依存は `shiori-host32-ipc` / `wintf-winmsg-executor` / `event-listener`（host のみ）/
-`windows` / `windows-core` / `thiserror` に限られ、`shiori-abi`・pasta・pilot は現れない。
-また production コード（各クレートの `src/`）には `LoadLibraryW`/`GetProcAddress`・SHIORI3 の
-build/parse/charset 変換・常駐 lifecycle（`OnSecondChange` ポーリング/unload/crash 監視）を
-一切含まない（echo 往復に必要な最小のメッセージループのみ）。
+直接の依存は次のとおりで、`shiori-abi`・pasta・pilot は現れない。
+
+- `shiori-host32-ipc`: `windows` / `windows-core` / `thiserror`
+- `shiori-host32-host`: `shiori-host32-ipc` / `encoding_rs` / `wintf-winmsg-executor` / `event-listener` / `thiserror` / `tracing` / `windows`
+- `shiori-host32-helper`: `shiori-host32-ipc` / `wintf-winmsg-executor` / `thiserror` / `windows`
+
+SHIORI DLL を読むのは helper（`LoadLibraryExW`）だけで、host は DLL を読まない。

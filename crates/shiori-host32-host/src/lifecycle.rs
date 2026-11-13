@@ -1,15 +1,11 @@
 //! helper ライフサイクル管理（要件 R5〜R7）。
 //!
 //! 本モジュールは helper プロセスの正常終了要求（unload → ループ正常終了 →
-//! `exit(0)`）と、その結果の観測・分類を担う。将来的に以下を提供する予定
-//! （いずれも後続タスクで実装）:
-//! - `HelperLifecycle` — ライフサイクルの状態機械。
-//! - `classify_failure` — 終了コード/シグナルから `FailureClass` への分類。
-//! - `request_clean_shutdown` — 正常終了（Clean shutdown）要求の発行。
-//!
-//! 本タスク（1.2）では統一報告語彙・shutdown 失敗語彙の型骨格と定数を定義する:
+//! `exit(0)`）と、その結果の観測・分類を担う:
+//! - [`HelperLifecycle`] — 生存の観測（`status`）・強制終了（`terminate`／`terminator`）・
+//!   正常終了の要求（`request_clean_shutdown`）・失敗の報告（`report_failure`）。
 //! - [`HelperStatus`] — 現在の生存/終了ステータス。
-//! - [`FailureClass`] — 死活・request 失敗の突合分類。
+//! - [`classify_failure`]／[`FailureClass`] — 死活・request 失敗の突合分類。
 //! - [`LifecycleReport`] — 突合結果と原因を束ねる統一報告。
 //! - [`ShutdownError`] — shutdown 経路専用の失敗語彙。
 //! - [`UNLOAD_ACK_TIMEOUT`] / [`EXIT_OBSERVE_TIMEOUT`] / [`EXIT_POLL_INTERVAL`] — 関連定数。
@@ -100,9 +96,6 @@ pub fn classify_failure(error: &RequestError, observed_exit: Option<ExitKind>) -
 ///
 /// `Child` は `Send` ゆえ本型も `Send`（将来の shiori アクター inbox から移送可能・R7.7）。
 /// 窓（`!Send`）は保持しない。
-///
-/// `report_failure`（R2.1〜2.5・突合）は本タスク（2.3）で追加済み。
-/// `request_clean_shutdown`（R5.1・正常終了経路）は後続タスク（2.4）で追加する。
 pub struct HelperLifecycle {
     handle: HelperHandle,
     /// sticky 終了キャッシュ（一度 `Some` になったら以後 poll しない・R1.2）。
@@ -141,7 +134,7 @@ impl HelperLifecycle {
 
     /// 強制終了（冪等・二重 kill 安全・R5.2）。既存 [`HelperHandle::terminate`] へ委譲する。
     ///
-    /// `HelperHandle::terminate` は既終了プロセスへの kill（`InvalidInput`）を `Ok` へ畳むため、
+    /// Windows の std の kill は既終了プロセスにも `Ok` を返すため、
     /// 二重呼び出しでも成功扱いになる。`Err` は握り潰さず `error!` ＋そのまま返す（R4.4/R7.6）。
     ///
     /// # Errors

@@ -46,8 +46,8 @@ fn unload_classifies_to_trigger_unload() {
     assert_eq!(action, InboundAction::TriggerUnload);
 }
 
-// R5.6: 終了要求フラグ `quit_requested` は新規 HelperShared で既定 false（分類のみの本タスクで
-// は set しない＝task 3.2 が結線する）。フィールド追加とその既定値を単体で確認する。
+// R5.6: 終了要求フラグ `quit_requested` は新規 HelperShared で既定 false（立てるのは UNLOAD の腕）。
+// フィールドとその既定値を単体で確認する。
 #[test]
 fn new_helper_shared_defaults_quit_requested_false() {
     let s = HelperShared::new(0, PathBuf::new(), String::new());

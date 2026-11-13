@@ -48,7 +48,8 @@
 //! で自然に閉じる）。
 //!
 //! ## consume 点
-//! WndProc（`main.rs`）が LOAD トリガ→proxy 確立→初期化の入口→ack 返送の順で本モジュールを使う。
+//! WndProc（`main.rs`）が LOAD トリガ→proxy 確立→初期化の入口→ack 返送の順で本モジュールを使い、
+//! REQUEST で [`ShioriByteProxy::request`]、UNLOAD で [`ShioriByteProxy::close`] を呼ぶ。
 
 use std::path::Path;
 
@@ -82,7 +83,7 @@ type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> u8;
 /// `unload() -> u8`（引数なし・cdecl）。後始末（`close`・Drop）で呼び、0 は `UnloadReturnedFalse`。
 type UnloadFn = unsafe extern "C" fn() -> u8;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
-/// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
+/// [`ShioriByteProxy::request`] が呼ぶ。
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 
 /// DLL を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに読む。
@@ -188,14 +189,14 @@ fn choose_init_entry(loadu: Option<LoadFn>, load: Option<LoadFn>) -> Result<Init
 /// SHIORI DLL の常設プロキシ（design §339-388）。
 ///
 /// `Ok` = `unload`／`request` の fn ポインタ常設保持＋初期化の入口（`loadu`／`load`）が成功済み
-/// （＝「load 済み」プロキシ）。`request` fn は保持のみ（呼出 API は下流 host32-request が追加）。
+/// （＝「load 済み」プロキシ）。`request` fn は [`ShioriByteProxy::request`] が呼ぶ。
 /// 後始末は [`ShioriByteProxy::close`] か Drop の 1 回だけ。
 pub struct ShioriByteProxy {
     /// ロード元モジュールハンドル。後始末の `unload` の後に `FreeLibrary` する。
     module: HMODULE,
     /// 解決済み `unload` エントリ。後始末で呼ぶ（R2.2）。
     unload: UnloadFn,
-    /// 解決済み `request` エントリ。**本仕様では保持のみ・呼出しない**（下流 host32-request が消費）。
+    /// 解決済み `request` エントリ。[`ShioriByteProxy::request`] が呼ぶ。
     request: RequestFn,
 }
 
@@ -203,7 +204,7 @@ impl ShioriByteProxy {
     /// `LoadLibraryExW` → 入口の解決と選択 → 入口別の符号化 → 初期化の入口の呼出まで。成功時のみ
     /// `Self`（=load 済み）を返す（design §374-375）。
     ///
-    /// - `dll_path`: **絶対パス**（呼出側 Task 6 が `load_dir.join(shiori_name)` を渡す前提）。本
+    /// - `dll_path`: **絶対パス**（呼出側の WndProc が `load_dir.join(shiori_name)` を渡す前提）。本
     ///   モジュールは受け取った絶対パスを、依存の探し先を絞った `LoadLibraryExW` で開く（相対パスは
     ///   `LoadLibraryFailed`）。
     /// - `load_dir`: 初期化の入口の同期引数（リソース根）。`loadu` へは UTF-8、`load` へは
@@ -449,9 +450,9 @@ fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     Ok(h)
 }
 
-/// コードページ符号化の結果（design「`encode_with_codepage`／`CodepageEncoded`／`ansi_encode`」）。
+/// コードページ符号化の結果（design「`encode_with_codepage`／`CodepageEncoded`」）。
 struct CodepageEncoded {
-    /// 入口へ渡すバイト列（`cp = CP_ACP` なら今日の `ansi_encode` と同一・NUL 無し）。
+    /// 入口へ渡すバイト列（NUL 無し）。
     bytes: Vec<u8>,
     /// 往復で元に戻らない字が 1 つ以上あった（既定文字への置き換えも best-fit も含む・要件 3.1）。
     lossy: bool,
@@ -505,13 +506,6 @@ fn encode_with_codepage(cp: u32, path: &Path) -> Result<CodepageEncoded, ProxyEr
         got <= 0 || back[..got as usize] != wide[..]
     };
     Ok(CodepageEncoded { bytes: buf, lossy })
-}
-
-/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（既存の署名を保つ薄い包み・既存テストが固定）。
-/// `encode_with_codepage(CP_ACP, path).map(|e| e.bytes)`。
-#[cfg(test)]
-fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
-    encode_with_codepage(CP_ACP, path).map(|e| e.bytes)
 }
 
 /// 入口名の行の固定語句（実機確認の grep が判定に使う・要件 4.3）。後ろに `loadu`／`load` が付く。

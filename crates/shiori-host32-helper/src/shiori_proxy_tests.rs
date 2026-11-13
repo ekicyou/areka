@@ -36,24 +36,24 @@ static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
 // 1. 純関数部の検証: コードページ符号化
 // ---------------------------------------------------------------------
 
-/// ASCII パスは CP_ACP でも同一バイト列に符号化される（NUL 終端は付けない＝正味長）。
-/// 環境依存の少ない ASCII で決定的に検証する。
-#[test]
-fn ansi_encode_ascii_is_identity_no_nul() {
-    let p = Path::new(r"C:\ghost\master");
-    let bytes = ansi_encode(p).expect("ASCII path must encode");
-    // ASCII は CP_ACP でそのままの 1 バイト列。NUL 終端規約: ansi_encode は終端を付けない。
-    assert_eq!(bytes, br"C:\ghost\master".to_vec());
-    // 末尾に NUL が付いていないこと（正味長）。
-    assert_ne!(bytes.last(), Some(&0u8));
-    assert_eq!(bytes.len(), r"C:\ghost\master".len());
+/// `load` 役のダミー。呼ばれない（`init_bytes` は fn ポインタを呼ばない）。
+unsafe extern "C" fn dummy_load(_hdir: HGLOBAL, _len: usize) -> u8 {
+    1
 }
 
-/// 空パスは空バイト列（防御的許容・確保 0 バイトも有効）。
+/// `load` の枝は日本語の道を既定コードページ（CP_ACP）のバイト列で渡す（指摘 19）。UTF-8 で渡すと、
+/// CP932 の PC で YAYA や華和梨が日本語のフォルダの道を化かして読む。CP_ACP で表せない PC でも
+/// 両方が同じ結果になる（それでも UTF-8 に替えれば食い違う）。
 #[test]
-fn ansi_encode_empty_is_empty() {
-    let bytes = ansi_encode(Path::new("")).expect("empty path encodes to empty");
-    assert!(bytes.is_empty());
+fn load_gets_the_path_in_the_ansi_code_page() {
+    let p = Path::new(r"C:\ゴースト\master");
+    let got = init_bytes(&InitEntry::Load(dummy_load), p);
+    let want = encode_with_codepage(CP_ACP, p).map(|e| e.bytes);
+    match (got, want) {
+        (Ok(got), Ok(want)) => assert_eq!(got, want, "load の枝が CP_ACP のバイト列でない"),
+        (Err(ProxyError::EncodingFailed), Err(ProxyError::EncodingFailed)) => {}
+        (got, want) => panic!("load の枝と CP_ACP の結果が食い違う: {got:?} / {want:?}"),
+    }
 }
 
 /// 日本語混じりは Shift_JIS（コードページ 932）の複数バイトへ符号化され、ASCII 部と混在する。

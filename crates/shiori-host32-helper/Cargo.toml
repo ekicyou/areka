@@ -1,7 +1,7 @@
 [package]
 name = "shiori-host32-helper"
 workspace = "../.."
-description = "host-32 i686 helper binary (HelperMessageWindow / respond echo)"
+description = "host-32 i686 helper binary (HelperMessageWindow / SHIORI DLL proxy)"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
