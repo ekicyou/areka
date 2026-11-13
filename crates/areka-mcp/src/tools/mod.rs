@@ -119,7 +119,7 @@ pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String>
 
 /// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口・
 /// spec: areka-P0-mcp-author-tools）。受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
-/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる（要件 6.5）。
+/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる（spec: areka-P0-mcp-tool-entrances 要件 6.5）。
 pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
     register_rows(rows(), reply_wait)
 }

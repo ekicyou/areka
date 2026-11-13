@@ -1,4 +1,4 @@
-//! `help` の決定論テスト（要件 6.1・6.2 の 5 項目と番号・Claude Desktop の節の設定例）。
+//! `help` の決定論テスト（spec: areka-P0-mcp-server-core 要件 6.1・6.2 の 5 項目と番号・Claude Desktop の節の設定例）。
 
 use std::path::Path;
 
@@ -8,7 +8,7 @@ use super::{BRIDGE_EXE_FILE_NAME, help_html};
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value};
 use crate::tools::{OWN_TABLE, spec_from_definition};
 
-/// (要件 6.1, 6.2, 2.7) 既定でない番号で組むと 5 項目が実番号で載り、
+/// (spec: areka-P0-mcp-server-core 要件 6.1, 6.2, 2.7) 既定でない番号で組むと 5 項目が実番号で載り、
 /// 既定の番号（9801・9821）の URL は無く、⑷ は既定の順（先頭 2 つ → 隣 … 末尾 2 つ）を説明する。
 #[test]
 fn help_html_lists_five_items_with_actual_port() {

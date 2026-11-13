@@ -10,7 +10,7 @@ use crate::tools::{OWN_TABLE, spec_from_definition};
 /// （spec: areka-P0-mcp-stdio-bridge）。
 pub const BRIDGE_EXE_FILE_NAME: &str = "areka-mcp-bridge.exe";
 
-/// 登録手順の日本語 HTML を実際の番号 `port` で組む（要件 6.1・6.2）。
+/// 登録手順の日本語 HTML を実際の番号 `port` で組む（spec: areka-P0-mcp-server-core 要件 6.1・6.2）。
 ///
 /// 5 項目: ⑴ 待ち受けている URL、⑵ Claude Code の登録コマンド、⑶ Cursor の
 /// `mcpServers` の断片、⑷ ポートの決まり方と変え方（既定の順・早い者勝ち・隣への退避・

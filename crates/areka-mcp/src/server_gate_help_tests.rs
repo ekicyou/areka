@@ -1,4 +1,4 @@
-//! 実ソケットのテスト: `Origin`／`Host`・help・404／405・登録 1 本の往復（要件 4・6・7）。
+//! 実ソケットのテスト: `Origin`／`Host`・help・404／405・登録 1 本の往復（spec: areka-P0-mcp-server-core 要件 4・6・7）。
 //!
 //! 拒否の `warn!` は mcp スレッドで出るが、`capture` の窓の中で起こしたサーバのスレッドは窓を受け継ぐので、
 //! 起こしてから畳むまでを窓に入れて数える。
@@ -141,7 +141,7 @@ fn a_body_shorter_than_its_length_is_400() {
     assert_eq!(String::from_utf8_lossy(&response.body), "Bad Request");
 }
 
-/// (要件 6.1・6.2) help は 200・`text/html; charset=utf-8`・本文の URL は実番号。
+/// (spec: areka-P0-mcp-server-core 要件 6.1・6.2) help は 200・`text/html; charset=utf-8`・本文の URL は実番号。
 #[test]
 fn help_is_200_html_with_actual_port() {
     let (_server, addr) = serve(ToolRegistry::default());

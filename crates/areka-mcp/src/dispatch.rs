@@ -81,7 +81,7 @@ pub(crate) async fn handle(
     req: Request<Incoming>,
 ) -> Result<HttpResponse, Infallible> {
     let path = req.uri().path().to_owned();
-    // 検査は path によらず最初に（要件 4.3・6.3）。値が文字列として読めなくても
+    // 検査は path によらず最初に（spec: areka-P0-mcp-server-core 要件 4.3・6.3）。値が文字列として読めなくても
     // 「無し」へ倒さず、置換文字入りの値として gate に拒ませる。
     let header = |name: HeaderName| {
         req.headers()

@@ -336,7 +336,7 @@ fn non_object_arguments_are_read_as_empty() {
     );
 }
 
-/// (要件 6.5) 誰も汲まない間に届いた要求は受け口に溜まり、後から汲める。
+/// (spec: areka-P0-mcp-tool-entrances 要件 6.5) 誰も汲まない間に届いた要求は受け口に溜まり、後から汲める。
 #[test]
 fn requests_queue_until_someone_drains() {
     let (registry, rx) = register_rows(TABLE, Duration::from_millis(1));

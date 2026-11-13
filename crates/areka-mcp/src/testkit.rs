@@ -22,7 +22,7 @@ pub(crate) const HELP: &str = "/api/mcp/help";
 pub(crate) const RPC_ACCEPT: &str = "application/json, text/event-stream";
 /// 無状態版の版。
 pub(crate) const STATELESS: &str = "2026-07-28";
-/// 保存した SSP の定義（テストだけが読む。本番はクレートの外のファイルを読まない＝要件 7.6）。
+/// 保存した SSP の定義（テストだけが読む。本番はクレートの外のファイルを読まない＝spec: areka-P0-mcp-tool-entrances 要件 7.6）。
 const SAVED_LIST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../doc/ssp-mcp/tools-list-ssp-2.9.05.json"
