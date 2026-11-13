@@ -174,12 +174,12 @@ fn truncated_apng_fails_all_frames_but_reads_first() {
 
 #[test]
 fn deep16_apng_fails_both_entrances() {
-    // image の APNG の読み手は 16 ビットを 1 枚目で断る
+    // image の APNG の読み手は 16 ビットを 1 枚目で断る。image の文言は版で変わるので、こちらの文（コマの番号）だけを見る
     for err in [
         read_frames(&sample("deep16.apng"), info(2)).unwrap_err(),
         read_first_frame(&sample("deep16.apng"), info(2)).unwrap_err(),
     ] {
-        assert!(err.contains("frame 0") && err.contains("Rgba16"), "{err}");
+        assert!(err.starts_with("frame 0: "), "{err}");
     }
 }
 

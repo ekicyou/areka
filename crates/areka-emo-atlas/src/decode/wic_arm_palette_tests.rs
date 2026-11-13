@@ -148,19 +148,20 @@ fn palette_has_alpha_fails_on_non_indexed_image() {
     use windows::core::{HSTRING, Interface};
 
     with_arm(|arm| {
-        let png = crate::sample_test_support::emo2_balloon_root().join("online0.png");
+        // RGBA の PNG（番号つきでない）・WIC は 1 枚目を読む
+        let png = crate::test_support::animated_sample("basic.apng");
         assert!(png.exists(), "fixture must exist: {}", png.display());
         let frame: IWICBitmapSource = unsafe {
             arm.factory
                 .CreateDecoderFromFilename(
-                    &HSTRING::from(png.to_string_lossy().as_ref()),
+                    &HSTRING::from(png.as_path()),
                     None,
                     GENERIC_READ,
                     WICDecodeMetadataCacheOnDemand,
                 )
                 .and_then(|d| d.GetFrame(0))
                 .and_then(|f| f.cast())
-                .expect("online0.png frame 0")
+                .expect("basic.apng frame 0")
         };
         let err = super::palette_has_alpha(&arm.factory, &frame)
             .expect_err("non-indexed image has no palette");
