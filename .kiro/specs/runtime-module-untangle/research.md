@@ -306,3 +306,138 @@
    - **推奨**: Out of scope に足し、要件 6 の一覧に「本体の外の crate の説明だけ」の仲間として載せ、`runtime-crate-split` で直す。理由: C19 の約束で、この spec が本体の外で書き換えるのは要件 5 に挙げたファイルだけで、emo-text の名前は働きに響かない。
 7. **規模の見積もり 20〜23 タスク**を、brief の 15〜18 から改めて受け入れるか。
    - **推奨**: 受け入れて 1 本のまま進める。理由: 増えた分は要件の段で見つけた参照の切り離しそのもので、分けると改名と切り離しが別の PR にまたがり、各段階で main が緑のままという進め方（roadmap の「本体の crate 分け」）が崩れる。記憶の決めごと「一度切り出した spec を、上限 20 を少しまたぐ理由でさらに削らない」にも合う。
+
+## 設計の段の調べと決め（2026-11-13・`/kiro-spec-design -y`）
+
+- **測った木**: 枝 `claude/kiro-start-runtime-module-untangle-2bc9c5` の `b172cab8`（コードは main `4863cb66` と同じ）。
+- **調べの種類**: light（既存の本体の中の付け替え。新しい外の依存なし）。外の資料は要らない（前例はリポジトリの中にある）。
+- **使った手引き**: `.claude/skills/kiro-spec-design/rules/` の design-principles・design-discovery-light・design-synthesis・design-review-gate。ほかの skill（UI・アクセシビリティほか）は当たらない。
+
+### 9. 設計の段で確かめたこと
+
+#### 9.1 `GhostSlot`・`BootContext`・`SwitchInFlight`・`ReloadInFlight` を `runtime` が読む所（4.1・4.3・4.4 の測り直し）
+
+| 残るファイル | 読むもの | 使い方 |
+|---|---|---|
+| `frame/status_report.rs` 148・253 | `GhostSlot` → `seriko_sink()`・`kanade()` | 送るだけ |
+| `balloon_visibility_phase.rs` 764 | `GhostSlot` → `kanade()` | 送るだけ |
+| `frame/attach.rs` 456 | `GhostSlot` → `seriko_sink()` | 事実を seriko へ |
+| `frame/scale_notice.rs` 60 | `GhostSlot` → `kanade()` | 送り手の写し |
+| `shell_carry.rs` 325（`replay`） | `GhostSlot` → `seriko_sink()` | 面を出し直す |
+| `frame/window_state.rs` 200 | `BootContext.current.ghost.folder` | 記録の欄（無ければ `-`） |
+| `frame/switch.rs` | `kanade()`（218・599）・`seriko_sink()`（307）・`memory_publisher()`（586）・`set_shell_dir()`（500）・`ghost_name()`／`ghost_dir()`（621）・`SwitchInFlight` の有無（255）・`reload::{skin_is_reload, skin_applied}`（514・554）・`reload::skin_phase_ended`（78）・`BootContext.current.balloon` の書き換え（558）・`record_last_shell`／`record_last_balloon`（518・573） | 後始末の段と待ちの段 |
+
+`GhostSession` の読み口の形は `kanade(&self) -> Option<&Sender<KanadeMsg>>`・`seriko_sink(&self) -> Option<&SerikoSink>`・`memory_publisher(&self) -> Option<&SylphyaPublisher>`・`set_shell_dir(&mut self, PathBuf) -> bool`・`ghost_name(&self) -> Option<String>`・`ghost_dir(&self) -> &Path`（`ghost_session.rs` 477〜612 行目）。
+
+#### 9.2 前例 `CursorQuery`
+
+`crates/wintf/src/ecs/cursor/mod.rs` 53 行目 `#[derive(Resource, Clone, Copy)] pub struct CursorQuery(pub fn(&World, Entity, &CursorAsk) -> Option<CursorReply>);`。下の層が型を持ち、上の層（`input_events/cursor_answer.rs` 72 行目）が `insert_resource(CursorQuery(answer_char_cursor))` で据える。関数のポインタは `Send + Sync + Copy` なので、`NonSend` ではなく `Resource` で足りる。
+
+#### 9.3 終わる相の登録と記録の分け方
+
+- 登録は `ghost_session::register_systems`（67〜69 行目）が `register_emo2_frame_system` → `wire_kanade_stop` の順に呼ぶ。`wire_kanade_stop` は `ghost_quit_system.before(emo2_frame_system)` を `Update` へ足す。
+- 終わる相の記録（`ghost_quit`・`ghost_quit_no_windows`・`ghost_quit_extra`）の出所は今 `areka::emo2_boot::frame`。`log_history::RULES`（`log_history.rs` 115〜132 行目）のどの行にも当たらない（`areka` は完全一致だけ）ので、記録に残らない。
+- 相を `session` の別のモジュール `session::ghost_quit` へ移せば、出所は `areka::session::ghost_quit` で、やはりどの行にも当たらない（同じ分け方）。`session::ghost_switch` の中へ置くと、決まり `areka::…::ghost_switch`（Status）に当たって記録に残るようになる＝分け方が変わるので置かない。
+
+#### 9.4 cue の受け口を持ち主へ移したときの記録の分け方（要件 4.3 の確かめ）
+
+- `install_cue.rs` 65 行目の `info!(event = "readonly_refused", what = "install_url", …)` は、今の出所 `areka::emo2_boot::install_cue` では決まりに当たらず記録に残らない。`install/install_cue.rs` へ移すと出所は `areka::install::install_cue` になり、決まり `rule("areka::install", Kind::Update, false)` に当たって**更新の記録として残るようになる**。
+- `update_cue.rs`・`readme_cue.rs` は `warn!`・`debug!` だけで `info!` が無い（`warn!` は出所によらず誤りの種別・`debug!` は残らない）ので変わらない。`install_cue.rs` の `warn!`・`debug!` も同じ。
+- 決め: `log_history.rs` に「残さない出所」の完全一致の表（1 行 `areka::install::install_cue`）を足し、`RULES` を当てる前に引く。要件 4.2（決まりを移した先の出所の名前へ直す）の中で、要件 4.1（出所は移した先のモジュールのパス）と 4.3（同じ分け方）の両方を満たす。`RULES` の行の数（14）とテストの名前（`rules_table_is_the_designed_fourteen_rows_in_order`）は変わらない。
+- 手順書 `doc/pasta-real-run.md` 127・141 行目の `RUST_LOG` にある `areka::install=debug` は、移した後は `install_cue` の `debug!` も開く（出所の名前が変わることの帰結＝要件 4.1 のとおり）。手順書の目的（バルーンの決め方の分岐）には響かないので直さない。
+
+#### 9.5 部分を `runtime` へ下ろすもの・`runtime` に残すもの（要件 2.1 の原則の当てはめ）
+
+| 部分 | 今の場所 | 本体を引くか | 決め |
+|---|---|---|---|
+| `SkinKind`・`SkinRequestRaw`・`SkinSpec`・`SkinOrigin`・`SkinRequest`・`SkinVerdict`・`SkinSwitchInFlight`・`SkinSwitchStage`・`SwapFinish`（46〜158 行目）・`skin_ref_name`・`skin_ref_path`（444〜457 行目） | `shell_balloon_switch.rs` | 引かない | `runtime/skin_switch.rs`（新しいファイル・約 130 行）。残り（要求の入口 159〜443 行目・約 285 行）が行の多い側＝元のファイルの移動として `session/shell_balloon_switch.rs` へ |
+| `ChangeRequestRaw` | `ghost_switch.rs` 46 行目 | 引かない | `runtime/change_cue.rs` |
+| `CueSinkSources`（41〜58 行目）・`RuntimeBootError`（61〜66 行目） | `runtime_boot.rs` | 引かない（中身は下の crate と `runtime` の型） | `runtime/mod.rs`。残り（`runtime_sinks`・`boot_runtime`・`runtime_boot_options`・`install_lines`・`RuntimeLines`）が行の多い側＝元のファイルの移動 |
+| `capture_for_reload` の門（225 行目 `reload::carries_shell_state`） | `shell_carry.rs` | 門だけが引く | 門を呼び手（`session/ghost_switch.rs` 650 行目）へ出す。関数は `runtime` に残り、引数 `carries: bool` を受ける。`hand_over` は `RuntimeWiring` だけを触る＝本体を引かないので `runtime` に残す（要件 2.1 の「今の測りに当てはめると」の列は `capture_for_reload`・`hand_over` を移すと書くが、同じ要件の「設計の段の測り直しで頼る・頼らないが変わったものは、この原則で振り分ける」に従う） |
+| `ShellBoxHover`・`settle_box_hover` | `input_events/shell_box.rs` 138・163 行目 | 引かない（`areka_emo_compose`・`areka_emo_text` の型だけ） | `runtime/shell_box_hover.rs`。`shell_box.rs` は `pub(crate) use` で出し直す（呼び手とテストの書き換え 0） |
+| `BalloonWiring` のホバーの集合（`balloon_hover`）と読み書きの 3 つ | `input_events/balloon.rs` 149・202〜220 行目 | 引かない | `runtime/balloon_hover.rs` の `BalloonHover`（NonSend）。メソッドの名前は同じ（`is_balloon_hovered`・`set_balloon_hover`・`clear_balloon_hover`） |
+| `ScopeScaleTable`・`SharedScopeScaleTable`・`ScopeScales`・`percent_text`・`scaling_text` | `ghost_session_scope_scale.rs` 17〜48・146〜165 行目 | 引かない（`target_map::TargetWindow` と `areka_emo_present` の型だけ） | `runtime/scope_scale.rs`。`ghost_session_scope_scale.rs` は `wire`・`ScopeScaleSource`・`ScaleQuantity` を持ち、表と関数を `pub(crate) use` で出し直す |
+| `special_name.rs`・`reload_args.rs`・`shell_balloon_resolve.rs`・`shell_carry.rs`（門のほか） | `emo2_boot` | 引かない | `runtime` に残す（議題 1 の確定どおり） |
+
+#### 9.6 見える範囲の広げ（R3）
+
+- 移すファイル（本番とテスト）が `pub(in crate::emo2_boot)` の項目を触る所は **1 か所**（`ghost_switch_reload_tests.rs` が `RuntimeWiring` の欄 `shell_carry` を読む）。31 項目のほかは触らない（`grep` で確かめた）。
+- `mod` が私有で、移すファイルが引くもの: `change_cue`・`reload_cue`・`switch_cue`・`window_state_cue`・`special_name`。`pub(crate) mod` へ広げる。
+- 終わる相の試験 3 本（`frame_ghost_quit_tests.rs` 300 行・`frame_ghost_quit_logsink_tests.rs` 110 行・`frame_ghost_quit_switch_tests.rs` 290 行）は `use super::*;` で `frame` の名前の束を拾っている。移した先で要る `use` を足す。
+- 広げるのは `pub(crate)` までとし、コンパイルが求めた分だけにする。広げた項目は完了のときにこの記録へ一覧で足す。
+
+#### 9.7 口を据える所とテストの World（R2）
+
+- `GhostSlot` を置く所は 46 ファイル・65 か所、`BootContext`・`SwitchInFlight`・`ReloadInFlight` まで入れると 57 ファイル・109 か所（本番とテストの合計・`grep` の下限）。
+- 決め: 口の束（`SessionHooks`・`Resource`）は本番では `ghost_session::register_systems` の先頭で 1 度据える（`main.rs` 257 行目＝`GhostSlot` を置く 532 行目より前・最初の巡より前）。口が据わっていない World での読み口は、`#[cfg(test)]` では本体の口そのもの（`session::hooks::HOOKS`）、本番では「本体の状態が何も無い」と同じ答え（`None`・偽・空の文字・何もしない）に倒す。
+  - テストの World は今日と同じく本体の状態をそのまま読むので、57 ファイルに据え付けの 1 行を配らずに済み、振る舞いの差が出ない。
+  - 本番の倒れ先は、今日の「`GhostSlot` が無い」「読み直しの印が無い」「起動の文脈が無い」の答えと同じで、その先の記録（`skin_shell_dir_not_set` ほか）も同じ。ただし本番では据え付けが最初の巡より前に済むので、倒れ先へは来ない。据え付けを外していないことは、既存の試験 `boots_twice_in_one_process_without_double_registration`（`ghost_session_restart_tests.rs` 445 行目）に `contains_resource::<SessionHooks>()` の assert を 1 行足して固定する（テストの数は変えない）。
+  - `#[cfg(test)]` の側は `runtime` のテストのコードから本体を引く所として要件 3.5 の数に入れ、`runtime-crate-split` へ申し送る（crate が分かれると引けなくなる）。
+- ホバーの集合 `BalloonHover` は、`BalloonWiring` を置く所（本番は `input_events/balloon.rs` 450 行目の `wire_balloon_choice`・テストは 13 ファイル 45 か所）に並べて置く。置かないと `observe_hover_wiring` の `error!` の条件が変わる（R5）。置き忘れは `grep` で 0 を示す（`BalloonWiring` を置くファイルの集合 ⊆ `BalloonHover` を置くファイルの集合）。
+
+#### 9.8 `RuntimeInputs` の欄（R6）
+
+`ghost_root`・`balloon_root` は `wire_runtime` の手順 1（資産の組立）が使い、`shiori`・`ticker`・`app_profile_dir`・`boot_origin` は起動（session の `boot_runtime`）だけが使う。決め: 欄は 6 つとも残し（名前だけ改める）、`wire_runtime` は受けた `RuntimeInputs` を今と同じく値のまま起動の関数へ渡す。呼び手（`ghost_session.rs` の `GhostBootInputs.wiring` と試験）の形は変わらない。
+
+#### 9.9 1,000 行の見込み（R7）
+
+| ファイル | 今 | 見込み | 理由 |
+|---|---:|---:|---|
+| `main.rs` | 989 | 991 以下 | `mod session;` と説明 1 行 |
+| `ghost_session.rs` | 945 | 947 以下 | 口の据え付け 1 行・パスの書き換え |
+| `runtime/mod.rs` | 833 | 約 860 | `CueSinkSources`・`RuntimeBootError`・起動の関数の型が入り、移すモジュールの宣言と `wire_kanade_stop` が出る |
+| `session/ghost_switch.rs` | 934 | 934 以下 | `ChangeRequestRaw` が出て、門の 1 行が変わる |
+| `frame.rs` | 671 | 約 580 | 終わる相が出る |
+| `frame/switch.rs` | 703 | 約 690 | `session()` が口に替わる |
+| `balloon_visibility_phase.rs` | 852 | 852 前後 | 読む型が替わるだけ |
+
+テストのファイルで 1,000 行の近くのもの（例外表の `frame_transition_branch_tests.rs` ほか）に行を足すときは、足した後の行の数を完了の検証で数える。
+
+#### 9.10 要件 3.3 の数え方（R1）
+
+宣言の木をたどる道具は作らず、`rg`（PCRE2）の式 3 本と、本番のファイルの集合を決める除外の glob で数える。
+
+- 本番のファイルの集合: `crates/areka/src/runtime/` の `*.rs` から、`*_tests.rs`・`*test_support*.rs`・`spine*.rs`・`*_cases.rs` を除いたもの。着手の測りで、この集合が「親が `#[cfg(test)]` で宣言していないファイル」の集合と一致することを、`mod` の宣言の一覧と突き合わせて 1 度確かめる（一致しなければ glob を足す）。
+- 式 1（`crate::` で外を指す）: `rg -n --pcre2 <glob> '^(?!\s*//).*\bcrate::(?!runtime\b)' crates/areka/src/runtime`
+- 式 2（直下のファイルから外へ抜ける `super::`）: `rg -n --pcre2 --max-depth 1 <glob> '^(?!\s*//).*\bsuper::super::' crates/areka/src/runtime`
+- 式 3（`frame/` の下から外へ抜ける `super::`）: `rg -n --pcre2 <glob> '^(?!\s*//).*\bsuper::super::super::' crates/areka/src/runtime/frame`
+- 3 本の出力が 0 行であることを示す。0 行でなければ、残った行が全部 `#[cfg(test)]` の項目の中にあることを行ごとに示し、その行は要件 3.5 の数へ回す。`use crate::{…}` の束ねた形は式 1 に当たるので、`runtime` の本番では使わない。
+- 説明の文（要件 3.4）: 式 1〜3 の `^(?!\s*//)` を `^\s*//` に替えた 3 本で数えて一覧にする。
+- テストのコード（要件 3.5）: 同じ式をテストのファイルの集合（上の除外の glob で除いたもの）と、本番のファイルの中の `#[cfg(test)]` の項目に当て、`rg -c` でファイルごとの数にする。
+
+### 10. 合成（design-synthesis）
+
+- **一般化**: 本体の状態を `runtime` から読む所（9.1 節の 7 ファイル）は全部「World から本体の状態を同期で引く」同じ形なので、1 つの口の束（`SessionHooks`・関数のポインタ 10 本）にまとめた。終わりの段だけを口にする案（研究 4.3 の案 A の「後始末の口」2 本）より本数は増えるが、口の 1 本ずつが今の 1 か所の読み書きと同じ答えを返すので、記録の文と出所が `runtime` に残り（要件 4 の書き換えが増えない）、口の無い World での答えが今の「状態が無い」と一致する。
+- **作るか借りるか**: 前例 `wintf::ecs::cursor::CursorQuery`（`Resource` の関数のポインタ）をそのまま借りる。特性の箱（研究 4.1 の案 C）は採らない。知らせの線（研究 4.2 B・4.3 C）は 1 フレーム遅れるので採らない。
+- **削ったもの**: 口の据え付けを各テストへ配る案（57 ファイル）・`wire_runtime` を 2 つに分ける案・`RuntimeInputs` の欄を分ける案・新しい試験の関数（要件 8.1 の数を変えない。足すのは既存の試験の assert だけ）。
+
+### 11. 決め（Design Decisions）
+
+- **D1 終わる相は相ごと `session::ghost_quit` へ移す**（研究 4.2 A・議題 2）: system と `.before(frame_system)` の登録と呼ぶ順が今と同じ＝1 フレームの遅れも終わる段取りの順の変化も構造の上で起きない。モジュールを `ghost_switch` と分けるのは 9.3 節の記録の分け方のため。
+- **D2 差し替えの相は `runtime` に残し、本体の読み書きを口で引く**（研究 4.3 A・議題 3）: 口は今の 1 か所ごとの読み書きと 1 対 1（`set_shell_dir`・`set_current_balloon`・`record_last_skin`・`reload_skin_applied`・`skin_phase_ended`・`ghost_switch_in_flight`・`kanade`・`seriko_sink`・`ghost_ref_name`）。後始末の順は今の関数の中の並びのまま。
+- **D3 `GhostSlot`・`BootContext` は口で読む**（研究 4.1 A・4.4 A・議題 4）: 口は持たず毎回 World から借りる＝seriko の送り手の持ち主は `GhostSession` だけのまま（areka-P0-shell-balloon-switch 要件 8.5）。
+- **D4 `wire_runtime` は起動の関数を引数で受ける**（研究 4.7 A・議題 5）: 型は `fn(&mut World, RuntimeInputs, &CueSinkSources, Sender<KanadeNotice>, Option<&str>) -> Result<GhostRuntime, RuntimeBootError>`（関数のポインタ）。総称にしないのは、`frame_schedule_tests`・`zorder_wiring_tests` が字面 `pub fn wire_runtime(` を照合するため。
+- **D5 部分を分けるファイルと下ろす型**: 9.5 節の表のとおり。
+- **D6 `install_cue` の `info!` の分け方**: 9.4 節のとおり、`log_history` に「残さない出所」の完全一致の表を足す。
+- **D7 口の無い World**: 9.7 節のとおり、`#[cfg(test)]` は本体の口、本番は「状態が無い」の答え。
+
+### 12. 危うさと手当て
+
+- 口の束の本番の倒れ先は試験で踏まれない → 倒れ先の答えは今の「状態が無い」と同じ定数で、据え付けは既存の試験の assert で固定する。
+- `#[cfg(test)]` の倒れ先は crate が分かれると引けない → `runtime-crate-split` の brief へ申し送る（要件 7.2）。
+- ホバーの集合の置き忘れで `error!` の条件が変わる → 置く所の集合の包含を `grep` で示す。
+- 終わる相の試験 3 本は `use super::*;` に頼る → 移した後のコンパイルで要る `use` を足すだけ（テストの名前は変えない）。
+- `install_cue` の記録の分け方 → 9.4 節の表で同じに保ち、既存の試験 `unrelated_info_is_not_kept` に assert を足して固定する。
+
+### 13. 要件 1.3 の判定の下ごしらえ（`fn` の名前に emo2 を含むもの・`crates/areka`・設計の段の測り）
+
+- 結線を指す（`runtime` の語へ改める）: `emo2_frame_system_drives_text_scale_phase_every_frame`・`emo2_frame_system_removes_runs_and_reinserts_wiring`・`emo2_frame_system_runs_dpi_phase_without_writes_when_unattached`・`leave_clears_balloon_hover_even_without_emo2_wiring`・`move_cue_sink_reaches_emo2_wiring_receiver`・`moved_without_emo2_wiring_does_not_record_hover`・`talk_playback_reaches_emo2_wiring_lifecycle_receiver`・`wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root`・`without_emo2_wiring_does_nothing`・`headless_emo2_wiring`（支え）・`emo2_frame_system`・`register_emo2_frame_system`・`wire_emo2_boot`。
+- 実在のゴースト emo2 を指す（変えない）: `acquire_emo2`・`emo2_root`・`emo2_balloon`・`emo2_balloon_root`・`emo2_sample`・`emo2_first_load_repeat`・`emo2_real_run_boots_talks_and_exits_zero`・`both_cage_surfaces_compose_on_the_emo2_sample`・`build_boot_assets_*emo2*` 3 本・`emo2_adjust_aligns_bottom_right_to_bottom_left`・`emo2_bakes_each_still_image_once_per_stage`・`emo2_scripts_read_without_notes`・`ghost_default_emo2_when_listed_among_many`・`ghost_only_emo2_is_only_not_default`・`legacy_emo2_lands_where_it_did_before`・`stay_on_top_directives_on_emo2`。
+- 名前だけでは決まらない（実装のときに使われ方で判定し、ここへ理由を足す）: `emo2`（2 つ）・`with_emo2`・`spawn_emo2`・`emo2_sink_of`・`leave_emo2_absent_degrades_with_debug_and_leaves_hover`・`moved_emo2_absent_degrades_with_debug_not_error`・`pressed_emo2_absent_degrades_with_debug_not_error`（「emo2 が無い」が `Emo2Wiring` の不在なら結線）。
+- 本体の外の crate: `crates/areka-emo-text` の `EMO2_BOOT_TALK`・`EMO2_BOOT_FINAL`（emo2 の起動の台詞の写し＝実在のゴースト emo2 を指す検体）と `emo2_boot_talk_reveals_without_moving_glyphs`（本体の外の crate のテストの名前＝Out of scope）。
+
+### 14. 設計の見直しの門（design-review-gate）
+
+- 機械の確かめ: 要件の番号 52 個が全部 design.md の対応表に在る・境界の 4 節が埋まっている・File Structure Plan に具体のパスがある・部品は全部ファイルに当たる。
+- 1 回目の直し: 要件 2.1 の当てはめの列から外れる `shell_carry` の扱いの理由を design.md に書き足した・申し送り（7.1〜7.4）の節を足した・`super::` の深さの読み直しを数え方に足した・検証の記録の置き場（本書）を File Structure Plan に足した。2 回目で通った。
+- 要件の穴として差し戻すものは無い（`install_cue` の記録の分け方は要件 4.2 の中で 4.1 と 4.3 を両立させた＝9.4 節）。
