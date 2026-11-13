@@ -563,3 +563,206 @@ print('UNDECLARED', sorted(allf - set(out)), file=sys.stderr)
 ```
 
 - 読み手の限り: インラインの `mod … { }` の中の `mod x;` は解かない（出たら `INDENTED` を出す・今は 0 件）。`#[cfg(any(test, …))]` も「テスト」に数える。
+
+## 終わる道 3 つの記録の順（前）（2026-11-13・タスク 1.2・要件 3.6・8.5）
+
+### 17. 実機で取った終わる段取りの行の順（前）
+
+- 測った木: `9175b9e7c`（`crates/` は 15 節の土台 `4863cb66` のまま）。`cargo build -p areka` で作った `target\debug\areka.exe`（11-13 10:03）。隣に `shiori-host32-helper.exe` が在る。
+- 走らせた前に 127.0.0.1:9276 を握るものが無いことを `netstat -ano` で確かめた。
+- 3 つとも同じ `RUST_LOG` で走らせた:
+  ```
+  info,areka::app_exit=debug,areka::emo2_boot::frame=debug,areka::runtime::frame=debug,areka::session::ghost_quit=debug
+  ```
+  今の出所（`areka::emo2_boot::frame`）と移した後の出所（`areka::runtime::frame`・`areka::session::ghost_quit`）を両方名指しているので、9.6 でも同じ文字列のまま使う。名指した出所が木に無くても害は無い。
+- 実機の根・記憶の置き場・写しは、どれもワークツリーの `target\test-roots\rmu-<道>\` の下に置いた。パスは絶対パスで渡した。
+- 結果:
+
+| 道 | pid | 引き金 | 終わり（`app_exit` の `origin`） | 終了コード |
+|---|---|---|---|---|
+| 煙の自動終了 | 6516 | `AREKA_APP_SMOKE_EXIT_MS=15000`（窓が開いてから 15 秒） | `Smoke`（closed=4） | 0 |
+| 窓を閉じる | 33548 | 窓が開いてから 15 秒後に `taskkill /PID <pid>`（`/F` なし） | `KanadeStopped(Quit)`（closed=4） | 0 |
+| メニューの終了 | 29844 | 窓が開いてから 15 秒過ぎに右クリック →「終了」 | `KanadeStopped(Quit)`（closed=4） | 0 |
+
+#### 17.1 道ごとの行の順
+
+列は「段 | 出所 | 文言 | event」。出所は tracing の target で、`actor{…}` の span は外した。文言は欄（`key=value`）より前の本文。行の抜き出し方は 17.3 節のとおり。
+
+メニューの終了（`rmu-menu`）:
+
+```
+INFO | kanade | OnClose GET を発行し握手を開始 | close_handshake_begin
+INFO | kanade | OnClose 応答スクリプト——close talk を再生起動し完了を待機 | close_talk_start
+INFO | kanade | reason=Quit——終了系列（Quit）へ | talk_done_quit
+INFO | shiori-actor | 正規 clean shutdown 完了（unload が正常終了を返した） | unload_clean
+INFO | shiori-actor | 停止指示（Close）を受領——即時停止（接続資材を RAII teardown） | close
+INFO | areka::emo2_boot::frame | kanade の終了系列が完了した: 全ゴースト窓を閉じる | ghost_quit
+INFO | wintf::ecs::app | [App] Last window closed. |
+INFO | areka::app_exit | [quit_app] 全窓を閉じ、終了を指示した | app_exit
+INFO | wintf::runtime::message_loop | [AppExit] exit requested |
+DEBUG | areka::emo2_boot::frame | 終了が指示済み——毎フレームの処理を読み飛ばす | frame_phases_skipped_after_exit
+INFO | areka::ghost_session | seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止） |
+INFO | ghost-shutdown | persist flush confirmed |
+INFO | ghost-shutdown | ghost shutdown sequence completed |
+INFO | areka_mcp::server | MCP: 待受を閉じた |
+```
+
+窓を閉じる（`rmu-close`）:
+
+```
+INFO | wintf::ecs::window_proc::lifecycle | [WM_CLOSE] 閉鎖要求を利用側の関数へ渡す | os_close_request
+INFO | areka::app_exit | [os_close] OS の閉鎖要求をメニューの「終了」と同じ終了要求として kanade へ送る | os_close_request
+INFO | kanade | close 指示——active talk あり・保留記録（TalkDone を待つ） | steady_close_pending
+INFO | kanade | talk 完了——保留 close を消化し握手開始 | steady_talk_done_close
+INFO | kanade | OnClose GET を発行し握手を開始 | close_handshake_begin
+INFO | kanade | OnClose 応答スクリプト——close talk を再生起動し完了を待機 | close_talk_start
+INFO | kanade | reason=Quit——終了系列（Quit）へ | talk_done_quit
+INFO | shiori-actor | 正規 clean shutdown 完了（unload が正常終了を返した） | unload_clean
+INFO | shiori-actor | 停止指示（Close）を受領——即時停止（接続資材を RAII teardown） | close
+INFO | areka::emo2_boot::frame | kanade の終了系列が完了した: 全ゴースト窓を閉じる | ghost_quit
+INFO | wintf::ecs::app | [App] Last window closed. |
+INFO | areka::app_exit | [quit_app] 全窓を閉じ、終了を指示した | app_exit
+INFO | wintf::runtime::message_loop | [AppExit] exit requested |
+DEBUG | areka::emo2_boot::frame | 終了が指示済み——毎フレームの処理を読み飛ばす | frame_phases_skipped_after_exit
+INFO | areka::ghost_session | seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止） |
+INFO | ghost-shutdown | persist flush confirmed |
+INFO | ghost-shutdown | ghost shutdown sequence completed |
+INFO | areka_mcp::server | MCP: 待受を閉じた |
+```
+
+煙の自動終了（`rmu-smoke`）:
+
+```
+INFO | wintf::ecs::app | [App] Last window closed. |
+INFO | areka::app_exit | [quit_app] 全窓を閉じ、終了を指示した | app_exit
+INFO | wintf::runtime::message_loop | [AppExit] exit requested |
+INFO | areka::smoke_exit | smoke 自動 close: ゴースト窓を despawn しました |
+DEBUG | areka::emo2_boot::frame | 終了が指示済み——毎フレームの処理を読み飛ばす | frame_phases_skipped_after_exit
+INFO | areka::ghost_session | seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止） |
+WARN | kanade | 強制終了指示——終了系列（Forced）へ直行 | force_quit
+INFO | shiori-actor | 正規 clean shutdown 完了（unload が正常終了を返した） | unload_clean
+INFO | shiori-actor | 停止指示（Close）を受領——即時停止（接続資材を RAII teardown） | close
+INFO | ghost-shutdown | persist flush confirmed |
+INFO | ghost-shutdown | ghost shutdown sequence completed |
+INFO | areka_mcp::server | MCP: 待受を閉じた |
+```
+
+#### 17.2 9.6 で比べるときの読み方
+
+- 出所の読み替え（design.md「LogTargetFollow」）: 終わる相の 3 つの記録（`ghost_quit`・`ghost_quit_no_windows`・`ghost_quit_extra`）は `areka::emo2_boot::frame` から `areka::session::ghost_quit` へ移る。毎フレームの相の `frame_phases_skipped_after_exit` は `areka::emo2_boot::frame` から `areka::runtime::frame` へ移る。文言の改め（要件 1.1 の表）が終わる段取りの行に当たれば、ここに足して読む。
+- 1 つのスレッドの中の順はそのまま比べる。主のスレッドの行は `areka::*`・`wintf::*`・`ghost-shutdown`・`areka_mcp::server` で、kanade の行と shiori-actor の行もそれぞれの中で比べる。actor（`kanade`・`shiori-actor`）の行と主のスレッドの行の前後は、走りごとに入れ替わることがある。煙の道の `force_quit`／`unload_clean` が `loop ticker を Close` の後に来るのも、終わりの統括が kanade を止める順による。
+- 窓を閉じる道の `steady_close_pending`→`steady_talk_done_close` の 2 行は、閉じる要求が届いたときに台詞を再生中だった（起動の台詞が続いていた）から出た。再生中でなければこの 2 行は無く、`close_handshake_begin` から始まる（メニューの道がそうだった）。この 2 行の有る無しは段取りの順の違いではない。
+- メニューの「終了」は areka の側に行を残さない（`menu::request_close` は記録を持たない）。最初の行は kanade の `close_handshake_begin`（再生中なら `steady_close_pending`）になる。
+
+#### 17.3 抜き出し方（`exitlines.ps1`）
+
+`stdout.log` の全部の行に固定の正規表現を当て、当たった行を記録の順に並べる。隣り合う同じ行を 1 つに畳む処理は置いていない（この 3 走では同じ行の並びが出なかった）。起動の記録は 1 行も当たらなかったので、引き金の行から切る処理も置いていない。`stderr.log` には `[helper] SHIORI 初期化の入口: loadu` の 1 行しか無い（tracing は全部 `stdout.log` に出る）。
+
+```powershell
+#Requires -Version 7
+# Extract the exit-sequence lines of one exitrun.ps1 run: level | source | message | event, in log order.
+param([string]$Path)
+$run = "C:\home\maz\git\areka\.claude\worktrees\kiro-start-audit-emo-text-layout-draw-68feba\target\test-roots\rmu-$Path"
+$events = 'os_close_request|steady_close_pending|steady_talk_done_close|close_handshake_begin|close_talk_start|close_talk_done_quit|talk_done_quit|force_quit|unload_clean|unload_non_clean|unload_failed|close|ghost_quit|ghost_quit_no_windows|ghost_quit_extra|app_exit|app_exit_again|frame_phases_skipped_after_exit'
+$plain = '\[App\] Last window closed\.|\[AppExit\] exit requested|smoke 自動 close: ゴースト窓を despawn|loop ticker を Close|ghost-shutdown:|MCP: 待受を閉じた'
+$re = "event=`"($events)`"|$plain"
+foreach ($line in Get-Content "$run\stdout.log" -Encoding utf8) {
+    if ($line -notmatch $re) { continue }
+    # <time> <LEVEL> [span: ]<source>: <message> [fields]
+    if ($line -notmatch '^\S+\s+(\w+)\s+(?:actor\{[^}]*\}:\s+)?([^\s:]+(?:::[^\s:]+)*|[\w-]+):\s+(.*)$') { continue }
+    $level, $source, $rest = $Matches[1], $Matches[2], $Matches[3]
+    $event = if ($rest -match 'event="([^"]+)"') { $Matches[1] } else { '' }
+    $message = ($rest -replace '\s+\w+=.*$', '').Trim()
+    "$level | $source | $message | $event"
+}
+```
+
+走らせ方: `pwsh -NoProfile -File exitlines.ps1 -Path menu`（`close`・`smoke` も同じ）。9.6 で文言が改まった行は、`$plain` の綴りを改めた文言に合わせて読む。event の名前は変えない（要件 4）。
+
+#### 17.4 走らせた道具（`exitrun.ps1`）と手順
+
+煙の道と窓を閉じる道は、道具を前で走らせると終わりまで待って `exited pid=… code=…` を出す。メニューの道は道具を裏で走らせる。道具は窓が開いてから 15 秒待ち、その pid の見えている窓の矩形を出してから終わりを待つ。その間に手で次の操作をする。
+
+1. 窓の一覧のうち下端が作業領域の下端に着くものがキャラの窓（今回は `rect=1392,904,2064,1704`）。`tools/mouse-input.ps1 -Action shot` で撮り、体の画素の点を決める（今回は (1592,1304)）。
+2. **先にカーソルをその点へ動かす**（`-Action move`）。そのあと `WindowFromPoint` で窓の pid が子の pid と同じかを確かめる。キャラの窓はカーソルが乗るまでクリックを素通しにしているので、動かす前に確かめると下の窓（今回は explorer）が返る。
+3. pid が同じなら `-Action rightclick`。1 秒待って `-Action shot` でメニューを撮り、「終了」（いちばん下の項目）の点を決める（今回は (1684,1280)）。
+4. その点でも `WindowFromPoint` の pid が子の pid と同じか（メニューの窓も areka の窓）を確かめてから `-Action click`。
+
+pid を確かめるのに使った式（PowerShell）:
+
+```powershell
+Add-Type -Namespace P -Name W -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(System.Drawing.Point p); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);' -ReferencedAssemblies System.Drawing.Primitives
+[P.W]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
+$h = [P.W]::WindowFromPoint([System.Drawing.Point]::new(<X>, <Y>)); $p = [uint32]0; [P.W]::GetWindowThreadProcessId($h, [ref]$p) | Out-Null; "hwnd=$h pid=$p"
+```
+
+道具の全文（走らせた形のまま）:
+
+```powershell
+#Requires -Version 7
+# One exit-path real run of areka (runtime-module-untangle 1.2 / 9.6).
+# -Path smoke|close|menu. start: boots and (smoke) waits, (close) taskkill without /F, (menu) prints windows and returns.
+param([string]$Path)
+$ErrorActionPreference = 'Stop'
+$wt  = 'C:\home\maz\git\areka\.claude\worktrees\kiro-start-audit-emo-text-layout-draw-68feba'
+$run = "$wt\target\test-roots\rmu-$Path"
+$RustLog = 'info,areka::app_exit=debug,areka::emo2_boot::frame=debug,areka::runtime::frame=debug,areka::session::ghost_quit=debug'
+
+function Wait-Exit {
+    if (-not $child.WaitForExit(180000)) { Write-Output "timeout pid=$($child.Id)"; exit 1 }
+    Write-Output "exited pid=$($child.Id) code=$($child.ExitCode) at $(Get-Date -Format o)"
+}
+
+if (Test-Path $run) { Remove-Item -Recurse -Force $run }
+New-Item -ItemType Directory -Force "$run\root", "$run\profile" | Out-Null
+Copy-Item -Recurse "$wt\target\nar-samples\manual\emo2" "$run\s"
+$ghost   = "$run\s\ghost\emo2"
+$balloon = "$run\s\ghost\emo2\balloon\emo2-kakukaku"
+$l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0); $l.Start(); $port = $l.LocalEndpoint.Port; $l.Stop()
+
+$env:AREKA_ROOT = "$run\root"; $env:AREKA_PROFILE_DIR = "$run\profile"; $env:AREKA_MCP_PORT = "$port"
+$env:AREKA_USER_ROOT = $null
+$env:AREKA_NO_ALERT = '1'; $env:NO_COLOR = '1'; $env:PASTA_DEBUG = '0'; $env:RUST_LOG = $RustLog
+# smoke fires 15 s after the first windows; the other two keep it as a 120 s safety exit.
+$env:AREKA_APP_SMOKE_EXIT_MS = if ($Path -eq 'smoke') { '15000' } else { '120000' }
+
+$child = Start-Process -FilePath "$wt\target\debug\areka.exe" -ArgumentList "`"$ghost`"", "`"$balloon`"" -RedirectStandardOutput "$run\stdout.log" -RedirectStandardError "$run\stderr.log" -WindowStyle Hidden -PassThru
+$null = $child.Handle  # keep the handle so ExitCode is readable
+$child | Add-Member ProcessId $child.Id
+$child.Id | Set-Content "$run\pid.txt"
+Write-Output "started pid=$($child.ProcessId) port=$port run=$run"
+
+$deadline = (Get-Date).AddSeconds(60)
+while (-not (Select-String -Path "$run\stdout.log", "$run\stderr.log" -Pattern '本物のゴースト窓を開きました' -Quiet -ErrorAction SilentlyContinue)) {
+    if ((Get-Date) -gt $deadline) { Write-Output 'error no real windows in 60 s'; exit 1 }
+    Start-Sleep -Milliseconds 300
+}
+Write-Output 'real windows open'
+switch ($Path) {
+    'smoke' { Wait-Exit }
+    'close' { Start-Sleep -Seconds 15; taskkill /PID $child.ProcessId | Out-Null; Write-Output "taskkill sent at $(Get-Date -Format o)"; Wait-Exit }
+    'menu'  {
+        Start-Sleep -Seconds 15
+        Add-Type -Namespace RmuW32 -Name U -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
+public delegate bool EnumProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);
+public struct RECT { public int L, T, R, B; }
+'@
+        [RmuW32.U]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
+        $target = [uint32]$child.ProcessId; $found = [System.Collections.Generic.List[string]]::new()
+        [RmuW32.U]::EnumWindows({ param($h, $x)
+            $o = [uint32]0; [RmuW32.U]::GetWindowThreadProcessId($h, [ref]$o) | Out-Null
+            if ($o -eq $target -and [RmuW32.U]::IsWindowVisible($h)) {
+                $r = New-Object RmuW32.U+RECT; [RmuW32.U]::GetWindowRect($h, [ref]$r) | Out-Null
+                $found.Add("window hwnd=$h pid=$o rect=$($r.L),$($r.T),$($r.R),$($r.B)")
+            }
+            $true }, [IntPtr]::Zero) | Out-Null
+        $found | ForEach-Object { Write-Output $_ }
+        Wait-Exit
+    }
+}
+```
