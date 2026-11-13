@@ -32,14 +32,13 @@
 //! ```
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{ParentMessageWindow, poll_exit_kind, spawn};
 use shiori_host32_ipc::MsgTag;
 
-/// ハンドシェイク（HELLO 受領）の上限時間。i686 helper の起動＋窓生成＋HELLO 送出に十分な余裕。
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+mod common;
+use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe, resolve_testdll};
 
 /// spawn した helper を Drop 時に必ず terminate する scope guard（panic 時もプロセスリークを防ぐ）。
 ///
@@ -53,107 +52,6 @@ impl Drop for HelperGuard {
         // 冪等: 既に終了していても Ok。panic unwinding 中でも helper を確実に片付ける。
         let _ = self.handle.terminate();
     }
-}
-
-/// helper exe（事前ビルドした i686 バイナリ）のパスを堅牢に解決する（shiori_request_e2e 同型）。
-///
-/// 優先順位:
-/// 1. env `HOST32_HELPER_EXE`（明示指定）。
-/// 2. `CARGO_MANIFEST_DIR`（= `crates/shiori-host32-host`）→ ワークスペースルート →
-///    `target/i686-pc-windows-msvc/{debug,release}/shiori-host32-helper.exe`。
-///
-/// いずれも見つからなければ**明確な panic で fail**（無言スキップで緑を偽装しない）。
-fn resolve_helper_exe() -> PathBuf {
-    if let Ok(explicit) = std::env::var("HOST32_HELPER_EXE") {
-        let p = PathBuf::from(&explicit);
-        if p.is_file() {
-            return p;
-        }
-        panic!(
-            "HOST32_HELPER_EXE={explicit:?} が指すファイルが存在しません。\
-             i686 helper を先にビルドし正しいパスを指してください:\n  \
-             cargo build -p shiori-host32-helper --target i686-pc-windows-msvc"
-        );
-    }
-
-    let target_base = workspace_i686_target_base();
-    for profile in ["debug", "release"] {
-        let candidate = target_base.join(profile).join("shiori-host32-helper.exe");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-
-    panic!(
-        "i686 helper exe が見つかりません（探索先: {}\\{{debug,release}}\\shiori-host32-helper.exe）。\
-         PowerShell で先に i686 helper をビルドしてください（Git Bash 不可）:\n  \
-         cargo build -p shiori-host32-helper --target i686-pc-windows-msvc\n\
-         あるいは env HOST32_HELPER_EXE で exe パスを明示してください。",
-        target_base.display()
-    );
-}
-
-/// testdll（事前ビルドした i686 `shiori.dll` fixture）のパスを堅牢に解決する（task 5.2 と同型）。
-///
-/// 優先順位:
-/// 1. env `HOST32_TESTDLL_DLL`（明示指定）。
-/// 2. `CARGO_MANIFEST_DIR` → ワークスペースルート →
-///    `target/i686-pc-windows-msvc/{debug,release}/shiori.dll`。
-///
-/// いずれも見つからなければ**明確な panic で fail**（i686 testdll 未ビルドの指摘・無言スキップ禁止）。
-fn resolve_testdll() -> PathBuf {
-    if let Ok(explicit) = std::env::var("HOST32_TESTDLL_DLL") {
-        let p = PathBuf::from(&explicit);
-        if p.is_file() {
-            return p;
-        }
-        panic!(
-            "HOST32_TESTDLL_DLL={explicit:?} が指すファイルが存在しません。\
-             i686 testdll を先にビルドし正しいパスを指してください:\n  \
-             cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc"
-        );
-    }
-
-    let target_base = workspace_i686_target_base();
-    for profile in ["debug", "release"] {
-        let candidate = target_base.join(profile).join("shiori.dll");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-
-    panic!(
-        "i686 testdll（shiori.dll）が見つかりません（探索先: {}\\{{debug,release}}\\shiori.dll）。\
-         PowerShell で先に i686 testdll をビルドしてください（Git Bash 不可）:\n  \
-         cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc\n\
-         あるいは env HOST32_TESTDLL_DLL で DLL パスを明示してください。",
-        target_base.display()
-    );
-}
-
-/// `CARGO_MANIFEST_DIR`（= `crates/shiori-host32-host`）からワークスペースの
-/// `target/i686-pc-windows-msvc` ベースを求める。
-fn workspace_i686_target_base() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent() // crates/
-        .and_then(|p| p.parent()) // ワークスペースルート
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-    workspace_root.join("target").join("i686-pc-windows-msvc")
-}
-
-/// 一意な一時ディレクトリを作る（並行テスト・再実行での衝突回避）。
-///
-/// `std::env::temp_dir()` 配下に pid＋単調カウンタで一意名を作り、best-effort で作成する。
-fn make_unique_temp_dir(tag: &str) -> PathBuf {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir =
-        std::env::temp_dir().join(format!("host32-load-e2e-{tag}-{}-{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("一時 dir の作成に失敗");
-    dir
 }
 
 /// 1 ケース分の LOAD 往復を実行し、observed ack バイト列を返す。
@@ -237,50 +135,47 @@ fn load_e2e_success_fail_survival() {
 
     // --- ケース① 成功 ack[1]（testdll を load_dir\shiori.dll へコピー・cwd=load_dir 検証）---
     {
-        let load_dir = make_unique_temp_dir("ok");
+        let root = TestRoot::new("load-e2e-ok");
+        let load_dir = root.path();
         let dll_path = load_dir.join("shiori.dll");
         std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-        let ack = run_load_case(&helper_exe, &load_dir, "shiori.dll", false);
+        let ack = run_load_case(&helper_exe, load_dir, "shiori.dll", false);
         assert_eq!(
             ack,
             vec![1u8],
             "ケース①: 成功 LOAD は ack [1] を返す（要件 5.3/7.3）"
         );
-
-        let _ = std::fs::remove_dir_all(&load_dir); // best-effort cleanup
     }
 
     // --- ケース② env 強制失敗 ack[0]（testdll の load→false）---
     {
-        let load_dir = make_unique_temp_dir("fail");
+        let root = TestRoot::new("load-e2e-fail");
+        let load_dir = root.path();
         let dll_path = load_dir.join("shiori.dll");
         std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
         // set_load_fail=true: spawn 前に HOST32_TESTDLL_LOAD_FAIL=1 を set→spawn 後 remove。
-        let ack = run_load_case(&helper_exe, &load_dir, "shiori.dll", true);
+        let ack = run_load_case(&helper_exe, load_dir, "shiori.dll", true);
         assert_eq!(
             ack,
             vec![0u8],
             "ケース②: env 強制失敗（load→false）は ack [0] を返す（要件 6.3/7.3）"
         );
-
-        let _ = std::fs::remove_dir_all(&load_dir);
     }
 
     // --- ケース③ DLL 不在 ack[0]（空 load_dir・LoadLibraryW 失敗）---
     {
-        let load_dir = make_unique_temp_dir("absent");
+        let root = TestRoot::new("load-e2e-absent");
+        let load_dir = root.path();
         // shiori.dll を置かない＝LoadLibraryW が失敗する。
 
-        let ack = run_load_case(&helper_exe, &load_dir, "shiori.dll", false);
+        let ack = run_load_case(&helper_exe, load_dir, "shiori.dll", false);
         assert_eq!(
             ack,
             vec![0u8],
             "ケース③: DLL 不在（LoadLibraryW 失敗）は ack [0] を返す（要件 6.1）"
         );
-
-        let _ = std::fs::remove_dir_all(&load_dir);
     }
 }
 

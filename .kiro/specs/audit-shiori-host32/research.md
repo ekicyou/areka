@@ -486,3 +486,18 @@
 - 本 spec が触る予定のファイル（範囲の 5 クレート・`areka-ghost` の `shiori_wiring.rs` と錠の 4 ファイル・`temp_path_guard_test.rs`・`areka-kanade` のテスト）は、どれも取り込みで変わっていない。変わったのはワークスペースの `Cargo.toml`（`async-executor` の行が消えた）と `Cargo.lock` だけで、本 spec の直しには響かない。設計の前提は崩れていない。
 - 指摘 26 の 6 項目と `EXIT_POLL_INTERVAL` を、取り込んだ後のツリーで grep し直した（`crates`・`tools`・`doc`。範囲のクレートと `pilot` を除く）。使い手は 0 件。`helper_hwnd` に当たった `areka-ghost/src/shiori_wiring.rs:171` と `areka-kanade/tests/kanade/real_helper_test.rs:121` は、同じ名前の手元の変数で、消す口ではない。
 - 指摘 28: `dola-yaml-backend` が着地したので、`Cargo.lock` の席は空いた。タスク 13 は待たずに消す道を取る。取り込んだ後のソースでも、host の `event-listener`・helper の `thiserror`・ipc の `windows-core` を使う所は 0 件。host と ipc の `thiserror` は使われているので残す。
+
+### 14.10 clippy の基準（タスク 1.1・直しの前・`33400f539`）
+
+- 測り方: `cargo clippy -p shiori-host32-host -p shiori-host32-ipc --all-targets`（x64）と `cargo clippy -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu -p shiori-host32-ipc --all-targets --target i686-pc-windows-msvc`（i686）。どちらも直しを 1 行も入れる前に回した。
+- 警告は全部で 5 件（x64 が 4 件・i686 が 1 件）。helper・ipc・loadu は 0 件。
+
+| 段 | 場所 | lint | 中身 |
+|---|---|---|---|
+| x64 | `crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs:275` | `clippy::drop_non_drop` | Drop を持たない `client` を `drop` している |
+| x64 | `crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs:408` | `clippy::drop_non_drop` | 同上（実物の pasta のテスト） |
+| x64 | `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs:332` | `clippy::drop_non_drop` | 同上 |
+| x64 | `crates/shiori-host32-host/Cargo.toml`（manifest） | `unused dependency`（cargo の警告） | `event-listener` を使っていない（指摘 28・U17 で消す） |
+| i686 | `crates/shiori-host32-testdll/src/lib.rs:63` | `clippy::needless_bool` | `if` の守りが真偽の字をそのまま返す |
+
+- U18 では、この表の 5 件のうち消えた分と、audit の指摘と重なった所（`event-listener` は指摘 28）を書く。

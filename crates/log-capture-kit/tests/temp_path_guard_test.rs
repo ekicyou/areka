@@ -153,6 +153,9 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     // `crates/areka-sylphya/src/persist/io.rs` はかつてここに載っていたが、タスク 10.7 が
     // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
     // doc の「起草の 16 ファイルとの突合」を参照）。
+    // host の結合テスト 4 件（`lifecycle_cyclic_e2e`・`lifecycle_kill_e2e`・`shiori_load_e2e`・
+    // `shiori_request_e2e`）もかつてここに載っていたが、audit-shiori-host32 のタスク 1.1 が
+    // `tests/common/mod.rs` の `TestRoot`（`target\test-roots\` の下）へ寄せたので表から落とした。
     (
         "crates/areka-placement/src/measure_tests.rs",
         Why::ProcessUnique,
@@ -176,26 +179,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "crates/shiori-host32-host/src/process_host.rs",
         Why::ProcessUnique,
         "本番ファイルの #[cfg(test)] 内。プロセス識別子で一意化済み（入口を素で読むだけの箇所も同居する）",
-    ),
-    (
-        "crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs",
-        Why::ProcessUnique,
-        "プロセス識別子＋単調連番で一意化済み。要件 12.2 の移行対象外",
-    ),
-    (
-        "crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs",
-        Why::ProcessUnique,
-        "プロセス識別子＋単調連番で一意化済み。要件 12.2 の移行対象外",
-    ),
-    (
-        "crates/shiori-host32-host/tests/shiori_load_e2e.rs",
-        Why::ProcessUnique,
-        "プロセス識別子＋単調連番で一意化済み。要件 12.2 の移行対象外",
-    ),
-    (
-        "crates/shiori-host32-host/tests/shiori_request_e2e.rs",
-        Why::ProcessUnique,
-        "プロセス識別子＋単調連番で一意化済み。要件 12.2 の移行対象外",
     ),
     // ── ⒜ の追加 2 件（2026-09-24・areka-P0-shiori-loadu）─────────────────────
     //
@@ -229,30 +212,26 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
          中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
     ),
     // ── ⒝ 読み出しのみの 2 件（要件 12.2・設計 C8 が名指しで対象外と定めた）───────
+    // もう 1 件の `crates/shiori-host32-host/tests/error_paths.rs` は audit-shiori-host32 の
+    // タスク 1.1 が `TestRoot` へ寄せたので表から落とした。
     (
         "crates/areka-placement/src/placement_monitor_tests.rs",
         Why::ReadOnly,
         "不在パスを組み立てて「読めないこと」を確かめるだけで、書込も削除も行わない。実体を作らない \
          ので固定名でもプロセス間で奪い合いが起きない（要件 12.2 が名指しで対象外と定めた 2 件の 1 つ）",
     ),
-    (
-        "crates/shiori-host32-host/tests/error_paths.rs",
-        Why::ReadOnly,
-        "helper の作業ディレクトリとして一時ディレクトリの根をそのまま渡すだけで、その下に何も作らず \
-         何も消さない（設計 C8 が名指しで対象外と定めた 2 件の 1 つ）",
-    ),
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 13;
+const ALLOWED_COUNT: usize = 8;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。種別ごとに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 11;
+const PROCESS_UNIQUE_COUNT: usize = 7;
 /// 同上（読み出しのみ）。
-const READ_ONLY_COUNT: usize = 2;
+const READ_ONLY_COUNT: usize = 1;
 
 /// 要件 12.5 の自己テストで表から外す 1 件。表の項目でなければならない。
 ///
