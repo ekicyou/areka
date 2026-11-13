@@ -4,6 +4,8 @@ mod builder_tests;
 mod clip_geometry;
 pub mod command;
 mod emit;
+#[cfg(test)]
+mod emit_blend_tests;
 pub(crate) use emit::emit;
 #[cfg(test)]
 pub(crate) mod emit_test_support;
