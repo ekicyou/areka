@@ -3,13 +3,11 @@
 //! - 判断の中核（`plan.rs` と子の `plan_turns.rs`）の本文が、ファイル・時計・プロセス・ログを
 //!   読み込む綴りを持たない（設計「依存の向き」。走査はこの 2 本だけ。兄弟の `plan_*_tests.rs`・
 //!   `plan_test_support.rs` はテストで、時刻や偽の口を使ってよい）。
-//! - 端末へ出る文を持つファイルの文字列・文字のリテラルが ASCII だけ（要件 9.2）。対象は本番
-//!   ファイルの全部から、リテラルの無い起動ファイル `main.rs` を除いた 11 本: 入口 `cli.rs`・引数の
-//!   表と `--help` の本文 `cli_args.rs`・表示
-//!   `status.rs`・待ちの終わりの 1 行を作る `wait.rs`・失敗の本文を持つ `error.rs`・状態ファイルの
-//!   口 `store.rs`・置き場所 `home.rs`・居る印のファイル `presence.rs`・判断の中核 `plan.rs`
-//!   （「当てはまらなかった」の文）・番の決め直し `plan_turns.rs`・状態 `state.rs`（列挙の綴り）。どれも、リテラルがそのまま
-//!   端末へ出うる。兄弟のテストファイルは日本語の値（名前・内容）をわざと入れるので対象に入れない。
+//! - 端末へ出る文を持つファイルの文字列・文字のリテラルが ASCII だけ（要件 9.2）。対象は、テストの
+//!   たびに `src/` を読んで拾う本番のファイルの全部（名前が `.rs` で、`_tests.rs`・
+//!   `_test_support.rs` で終わらないもの。起動ファイル `main.rs` も `#[path = "…"]` のリテラルを
+//!   持つので入る）。手で持つ一覧は無く、足した本番のファイルも自動で見る。どれも、リテラルが
+//!   そのまま端末へ出うる。兄弟のテストファイルは日本語の値（名前・内容）をわざと入れるので外す。
 //!
 //! 走査は [`split`] の 1 本: 本文を 1 字ずつ読んで、コメントを捨て、文字列・文字のリテラルを
 //! 抜き出す。コメントを捨てるのは、ここのコメントが日本語で書かれ、「`std::fs` を読まない」の
@@ -122,6 +120,11 @@ fn non_ascii_literals(source: &str) -> Vec<(usize, String)> {
     literals.into_iter().filter(outside).collect()
 }
 
+/// 見張る本番のファイルの名前か: `.rs` で、テストの兄弟（`_tests.rs`・`_test_support.rs`）でない。
+fn is_production_file(name: &str) -> bool {
+    name.ends_with(".rs") && !name.ends_with("_tests.rs") && !name.ends_with("_test_support.rs")
+}
+
 fn literals(source: &str) -> Vec<String> {
     split(source).1.into_iter().map(|(_, text)| text).collect()
 }
@@ -148,28 +151,51 @@ fn the_judgement_core_spells_no_file_clock_process_or_log() {
 /// 端末へ出る文を持つファイルの文字列・文字のリテラルは ASCII だけ。
 #[test]
 fn files_that_write_to_the_terminal_have_ascii_only_literals() {
-    let sources = [
-        ("cli.rs", include_str!("cli.rs")),
-        ("cli_args.rs", include_str!("cli_args.rs")),
-        ("status.rs", include_str!("status.rs")),
-        ("wait.rs", include_str!("wait.rs")),
-        ("error.rs", include_str!("error.rs")),
-        ("store.rs", include_str!("store.rs")),
-        ("home.rs", include_str!("home.rs")),
-        ("presence.rs", include_str!("presence.rs")),
-        ("plan.rs", include_str!("plan.rs")),
-        ("plan_turns.rs", include_str!("plan_turns.rs")),
-        ("state.rs", include_str!("state.rs")),
-    ];
-    for (file, source) in sources {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut seen = Vec::new();
+    for entry in std::fs::read_dir(&src).expect("read src/") {
+        let path = entry.expect("read a src/ entry").path();
+        let file = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if !is_production_file(file) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).expect("read a production file");
         // 較正: リテラルを 1 つも拾えない走査は、何が書かれていても緑になる。
-        assert!(!literals(source).is_empty(), "{file}: no literal found");
-        let found = non_ascii_literals(source);
+        assert!(!literals(&source).is_empty(), "{file}: no literal found");
+        let found = non_ascii_literals(&source);
         assert!(found.is_empty(), "{file}: non-ASCII literals {found:?}");
+        seen.push(file.to_owned());
+    }
+    // 較正: 道筋を誤って 0 本を見る走査や、起動ファイル・入口を拾わない走査は緑にしない。
+    assert!(
+        !seen.is_empty(),
+        "no production file seen in {}",
+        src.display()
+    );
+    for must in ["main.rs", "cli.rs"] {
+        assert!(seen.iter().any(|f| f == must), "{must} not seen: {seen:?}");
     }
 }
 
 // ---- 走査の較正 ----
+
+#[test]
+fn the_name_filter_keeps_production_files_and_drops_test_siblings() {
+    for name in ["cli_args.rs", "plan_turns.rs", "main.rs"] {
+        assert!(is_production_file(name), "not kept: {name}");
+    }
+    for name in [
+        "plan_tests.rs",
+        "plan_test_support.rs",
+        "main_test_support.rs",
+        "main_layering_tests.rs",
+    ] {
+        assert!(!is_production_file(name), "not dropped: {name}");
+    }
+}
 
 #[test]
 fn the_scan_reads_strings_chars_and_comments_apart() {

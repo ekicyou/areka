@@ -139,7 +139,7 @@ pub(super) fn load_running(
     let participant = join(state, id, name, repo, now, events);
     events.push(Event::LoadRunning { id: id.to_owned() });
     // 止まっていた者も、自分の負荷テストのために「作業中」へ戻る（番を受けた持ち主と同じ）。
-    resume(participant, "load-running", now, events);
+    resume(id, participant, "load-running", now, events);
     drop_where(&mut state.requests, |request| request.id == id);
     state.test = Some(TestHolder {
         id: id.to_owned(),
@@ -189,8 +189,8 @@ pub(super) fn replan(state: &mut State, now: u64, events: &mut Vec<Event>) {
             }
         }
         None => {
-            for participant in state.participants.values_mut() {
-                resume(participant, "no-sole", now, events);
+            for (key, participant) in state.participants.iter_mut() {
+                resume(key, participant, "no-sole", now, events);
             }
         }
     }
@@ -290,7 +290,7 @@ fn grant_one(
     if sole {
         // 止まっていた者が番を受けたら、自分の負荷テストのために「作業中」へ戻る（決まり 5）。
         if let Some(participant) = state.participants.get_mut(&request.id) {
-            resume(participant, "sole-granted", now, events);
+            resume(&request.id, participant, "sole-granted", now, events);
         }
         state.sole = Some(SoleHolder {
             id: request.id.clone(),

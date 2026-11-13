@@ -1,10 +1,10 @@
-//! `store` のテストの支え: 時刻の定数・偽の生死・口の組み立て・置き場所の中身の読み取り。
+//! `store` のテストの支え: 偽の生死・口の組み立て・置き場所の中身の読み取り・ロックの握りと
+//! 書き込みの塞ぎ。
 //!
 //! 時計と、試しの間の待ちと、ログの口は [`Store`] の欄へ直に差し込む。
 
 use std::cell::RefCell;
-use std::fs;
-use std::path::Path;
+use std::fs::{self, File};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -14,9 +14,7 @@ use super::Store;
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{State, WaitKind};
-
-/// テストの「いま」（UNIX 秒）。UTC では 2026-10-03T04:00:00Z。
-pub(super) const T0: u64 = 1_791_000_000;
+use crate::test_support::{T0, home_in, read_state};
 
 /// [`T0`] に壊れた状態ファイルを退避したときの名前。
 pub(super) const BROKEN_AT_T0: &str = "state.json.broken-20261003T040000Z";
@@ -36,12 +34,6 @@ pub(super) struct Nobody;
 impl Presence for Nobody {
     fn is_present(&self, _id: &str, _kind: WaitKind) -> bool {
         false
-    }
-}
-
-pub(super) fn home_in(root: &TempPath) -> Home {
-    Home {
-        dir: root.path().to_path_buf(),
     }
 }
 
@@ -110,29 +102,15 @@ pub(super) fn tick(state: &mut State, now: u64, alive: &dyn Presence) -> (Applie
     (apply(state, &Command::Tick, None, now, alive), ())
 }
 
-/// フォルダの直下に在るものの名前（並べ替え済み）。
-pub(super) fn names(dir: &Path) -> Vec<String> {
-    let mut found: Vec<String> = fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| {
-            entry
-                .expect("項目を読める")
-                .file_name()
-                .to_string_lossy()
-                .into_owned()
-        })
-        .collect();
-    found.sort();
-    found
-}
-
-pub(super) fn read_state(home: &Home) -> State {
-    let bytes = fs::read(home.state_path()).expect("状態ファイルが在る");
-    serde_json::from_slice(&bytes).expect("状態ファイルが状態として読める")
-}
-
 pub(super) fn participants(home: &Home) -> Vec<String> {
-    read_state(home).participants.into_keys().collect()
+    read_state(&home.dir).participants.into_keys().collect()
+}
+
+/// `state.lock` を本番の開き方（[`Store::open_lock`]）の別のハンドルで握る（落とすと解ける）。
+pub(super) fn hold_state_lock(store: &Store) -> File {
+    let file = store.open_lock().expect("ロックファイルを開ける");
+    file.lock().expect("握れる");
+    file
 }
 
 /// 一時ファイルの名前（プロセス番号入り）をフォルダで塞ぐ: 状態ファイルが書けなくなる。

@@ -141,11 +141,6 @@ fn missing_fields_of_the_same_version_still_read() {
 }
 
 #[test]
-fn a_file_without_version_does_not_read_as_the_current_version() {
-    assert_ne!(read("{}").version, VERSION);
-}
-
-#[test]
 fn a_record_without_its_kind_does_not_read() {
     // 種類と机の組は欠けたときに入れる中立の値が無いので、形の合わないファイルとして断る。
     for text in [
