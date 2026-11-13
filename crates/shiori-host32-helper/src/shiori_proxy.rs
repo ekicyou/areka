@@ -31,15 +31,16 @@
 //! `loadu` の dir は **UTF-8**、`load` の dir は **ANSI(CP_ACP)**（pasta `to_ansi_str()`＝`MultiByteToWideChar` と対称ゆえ本
 //! モジュールは `WideCharToMultiByte(CP_ACP, ..)` で符号化）。`request` は**任意の文字コードのバイト列**（意味は x64 側＝`areka-P0-charset-canon` の交渉結果。本モジュールは解釈しない）。
 //!
-//! ## Drop teardown（design §358・R2.1/2.2/2.3）
-//! `load` 成功済みインスタンスの Drop で best-effort courtesy `unload()` → `FreeLibrary`。結果は
-//! 無視する（エラーとして扱わない）。**明示 teardown メソッドは公開しない**（Drop が唯一の経路・R2.1）。
-//! 確立途中（手順 2〜5）の失敗は内部で `FreeLibrary` してから `Err` を返す（半構築を露出しない）。
+//! ## 後始末（audit-shiori-host32 指摘 9・要件 10.11）
+//! [`ShioriByteProxy::close`] が `unload()` → `FreeLibrary` を行い、`unload` の偽と `FreeLibrary` の
+//! 失敗を種類で返す（UNLOAD の道）。UNLOAD を経ない道は Drop が同じ後始末を行い、失敗を
+//! `[helper]` の行で書く（二度閉じない）。確立途中（手順 2〜5）の失敗は内部で `FreeLibrary` してから
+//! `Err` を返し（半構築を露出しない）、`FreeLibrary` の失敗は行で書く。
 //!
 //! ## 観測契約（design §357・R4.7）
 //! 「初期化の入口の同期 1 バイト結果（0 か否か）＋無クラッシュ」のみ。DLL 内部スレッド等に前提を置かない。
-//! 本モジュールが出す行は入口名の 1 行と、`load` の枝の表せない字の警告 1 行だけ（`eprintln!`・
-//! 無条件）。失敗の種別の 1 行は `main.rs` が出す。
+//! 本モジュールが出す行（`crate::helper_log`・無条件）は入口名の 1 行、`load` の枝の表せない字の警告
+//! 1 行、後始末の失敗の行。確立の失敗の種別の 1 行は `main.rs` が出す。
 //!
 //! ## unsafe 集約
 //! SHIORI FFI の `unsafe` 境界は本モジュールへ集約し、各ブロックに Safety 根拠を文書化する
@@ -76,7 +77,7 @@ const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 /// （0 = 失敗・0 以外 = 成功・`== 1` とは判定しない）。Rust `bool` で受けると 0／1 以外の値が未定義動作に
 /// なり、`i32` で受けると Rust `bool` を返す DLL（pasta）の不定な上位 24 bit を読むため、`u8` で受ける。
 type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> u8;
-/// `unload() -> u8`（引数なし・cdecl）。Drop の courtesy unload で呼び、戻りは捨てる（要件 5.4）。
+/// `unload() -> u8`（引数なし・cdecl）。後始末（`close`・Drop）で呼び、0 は `UnloadReturnedFalse`。
 type UnloadFn = unsafe extern "C" fn() -> u8;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
 /// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
@@ -138,6 +139,10 @@ pub enum ProxyError {
     /// `request` が null／無効 HGLOBAL を返した（応答確保失敗等・クラッシュせず失敗を返した）。
     /// silent failure を避けるため他 variant と区別可能な形で返す（R3.2〜3.4 request 失敗面）。
     RequestFailed,
+    /// 後始末の `unload` が 0 を返した（[`ShioriByteProxy::close`]・要件 10.11）。
+    UnloadReturnedFalse,
+    /// 後始末の `FreeLibrary` が失敗した（[`ShioriByteProxy::close`]）。
+    FreeLibraryFailed(windows::core::Error),
 }
 
 /// 選ばれた初期化の入口（`loadu` 優先・要件 1.1〜1.3）。fn ポインタを 1 つだけ持つので、
@@ -179,11 +184,11 @@ fn choose_init_entry(loadu: Option<LoadFn>, load: Option<LoadFn>) -> Result<Init
 ///
 /// `Ok` = `unload`／`request` の fn ポインタ常設保持＋初期化の入口（`loadu`／`load`）が成功済み
 /// （＝「load 済み」プロキシ）。`request` fn は保持のみ（呼出 API は下流 host32-request が追加）。
-/// Drop が唯一の teardown 経路（明示メソッド非公開）。
+/// 後始末は [`ShioriByteProxy::close`] か Drop の 1 回だけ。
 pub struct ShioriByteProxy {
-    /// ロード元モジュールハンドル。Drop の courtesy unload の後に `FreeLibrary` する。
+    /// ロード元モジュールハンドル。後始末の `unload` の後に `FreeLibrary` する。
     module: HMODULE,
-    /// 解決済み `unload` エントリ。Drop の courtesy unload で呼ぶ（R2.2）。
+    /// 解決済み `unload` エントリ。後始末で呼ぶ（R2.2）。
     unload: UnloadFn,
     /// 解決済み `request` エントリ。**本仕様では保持のみ・呼出しない**（下流 host32-request が消費）。
     request: RequestFn,
@@ -245,11 +250,7 @@ impl ShioriByteProxy {
             Ok(fns) => fns,
             Err(e) => {
                 // 半構築を残さない: module を解放してから Err（design §358）。
-                // SAFETY: `module` は本関数でロードした有効ハンドルで、まだ誰にも move していない。
-                // FreeLibrary の結果は best-effort で無視（確立失敗の後始末）。
-                unsafe {
-                    let _ = FreeLibrary(module);
-                }
+                free_after_failed_load(module);
                 return Err(e);
             }
         };
@@ -263,12 +264,9 @@ impl ShioriByteProxy {
                 request,
             }),
             Err(e) => {
-                // SAFETY: `module` は本関数でロードした有効ハンドルで、Ok を返すまで所有は本関数。
                 // 入力 HGLOBAL は encode_alloc_and_load 内で入口(callee) へ move 済み（自ら解放しない・
-                // R4.5）。ここで解放するのは module のみ。結果は best-effort で無視。
-                unsafe {
-                    let _ = FreeLibrary(module);
-                }
+                // R4.5）。ここで解放するのは module のみ。
+                free_after_failed_load(module);
                 Err(e)
             }
         }
@@ -287,7 +285,7 @@ impl ShioriByteProxy {
 
         // 手順 5: 入口名の行を呼ぶ直前に 1 回（成功・失敗を問わず・要件 4.1〜4.3）→
         // 選ばれた入口 (hdir, len) を 1 回だけ同期呼出（要件 1.5）。
-        eprintln!("{INIT_ENTRY_LOG_PREFIX}{}", entry.name());
+        crate::helper_log(&format!("{INIT_ENTRY_LOG_PREFIX}{}", entry.name()));
         // SAFETY: `hdir` は `len` バイトの有効 HGLOBAL（GMEM_FIXED ゆえハンドル＝先頭ポインタ）。
         // DLL(callee) は受領ハンドルを `GlobalFree` する規約（research §9.3・testdll の load が実演）
         // ＝ホストは以後 hdir に触れず・解放もしない（二重解放禁止・R4.5）。所有権は入口へ move する。
@@ -356,22 +354,52 @@ impl ShioriByteProxy {
     }
 }
 
+impl ShioriByteProxy {
+    /// 後始末: `unload()` → `FreeLibrary`（指摘 9・要件 10.11）。`unload` の偽は
+    /// [`ProxyError::UnloadReturnedFalse`]、`FreeLibrary` の失敗は [`ProxyError::FreeLibraryFailed`]
+    /// で返す（両方なら `FreeLibrary` の失敗を返し、`unload` の偽は `[helper]` の行で残す）。どちらでも DLL は解放を試みた後で、二度閉じない。
+    pub fn close(self) -> Result<(), ProxyError> {
+        // Drop に同じ後始末をさせない（二度閉じない）。中身は Copy の値だけなので漏れは無い。
+        std::mem::ManuallyDrop::new(self).teardown()
+    }
+
+    fn teardown(&self) -> Result<(), ProxyError> {
+        // SAFETY: `unload` は確立時に解決した有効な flat-C エントリ。引数なし cdecl。
+        // DLL 内部スレッドに前提を置かない（R4.7）。
+        let unloaded = unsafe { (self.unload)() } != 0;
+        // SAFETY: `module` は `load` でロードした有効ハンドル。呼ぶのは `close` か Drop の 1 回だけ。
+        if let Err(e) = unsafe { FreeLibrary(self.module) } {
+            // 返せる種類は 1 つなので、unload の偽は行で残す（要件 10.11）。
+            if !unloaded {
+                crate::helper_log("[helper] SHIORI の unload が偽を返した（FreeLibrary も失敗）");
+            }
+            return Err(ProxyError::FreeLibraryFailed(e));
+        }
+        if unloaded {
+            Ok(())
+        } else {
+            Err(ProxyError::UnloadReturnedFalse)
+        }
+    }
+}
+
 impl Drop for ShioriByteProxy {
-    /// courtesy `unload()`（best-effort・結果無視）→ `FreeLibrary`（design §358・R2.1/2.2/2.3）。
-    ///
-    /// 明示 teardown メソッドを公開しないため、これが唯一の後始末経路。unload の 1 バイト整数の結果は
-    /// 無視し（エラーとして扱わない・ハングはプロセス lifecycle=下流の領分）、続けて DLL を解放する。
+    /// UNLOAD を経ない道の後始末（`close` と同じ・design「`ShioriByteProxy::close` と失敗の種類」）。
+    /// 失敗は `[helper]` の行で書く（エラーとして返す先は無い）。
     fn drop(&mut self) {
-        // SAFETY: `unload` は確立時に解決した有効な flat-C エントリ。引数なし cdecl。結果（`u8`）は
-        // best-effort で無視する（R2.2・courtesy unload）。DLL 内部スレッドに前提を置かない（R4.7）。
-        unsafe {
-            let _ = (self.unload)();
+        if let Err(e) = self.teardown() {
+            crate::helper_log(&format!("[helper] SHIORI の後始末に失敗（Drop）: {e:?}"));
         }
-        // SAFETY: `module` は `load` でロードした有効ハンドル。多重 Drop は型（所有）が防ぐ。
-        // FreeLibrary の結果は無視（best-effort teardown）。
-        unsafe {
-            let _ = FreeLibrary(self.module);
-        }
+    }
+}
+
+/// 確立の途中の失敗の後で DLL を放す。放せなければ `[helper]` の行で書く（指摘 9）。
+fn free_after_failed_load(module: HMODULE) {
+    // SAFETY: `module` は `load` でロードした有効ハンドルで、まだ誰にも move していない。
+    if let Err(e) = unsafe { FreeLibrary(module) } {
+        crate::helper_log(&format!(
+            "[helper] 確立の途中の失敗の後で SHIORI を放せない: {e:?}"
+        ));
     }
 }
 
@@ -484,7 +512,7 @@ fn init_bytes(entry: &InitEntry, load_dir: &Path) -> Result<Vec<u8>, ProxyError>
         InitEntry::Load(_) => {
             let e = encode_with_codepage(CP_ACP, load_dir)?;
             if e.lossy {
-                eprintln!("{LOSSY_PATH_WARN_PREFIX}{}", load_dir.display());
+                crate::helper_log(&format!("{LOSSY_PATH_WARN_PREFIX}{}", load_dir.display()));
             }
             Ok(e.bytes)
         }

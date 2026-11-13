@@ -2,6 +2,41 @@ use super::*;
 use crate::proxy_test_support::copy_testdll_into_unique_target_dir;
 use std::rc::Rc;
 
+/// 受けた HELLO の helper HWND・RESPONSE の数・最後の RESPONSE。
+type ParentRecord = (Rc<Cell<Option<u32>>>, Rc<Cell<u64>>, Rc<RefCell<Vec<u8>>>);
+
+/// stand-in parent（HELLO / RESPONSE の受け皿）。受けたものを [`ParentRecord`] に記録する。
+fn stand_in_parent() -> (Window<()>, ParentRecord) {
+    let record: ParentRecord = Default::default();
+    let (hello_helper_hwnd, responses, last_response) = record.clone();
+    let parent = Window::new(
+        WindowType::MessageOnly,
+        (),
+        move |_state: Pin<&()>, msg: WindowMessage| -> Option<LRESULT> {
+            if msg.msg != WM_COPYDATA {
+                return None;
+            }
+            // SAFETY: WM_COPYDATA 契約。
+            if let Some((dw, len, payload)) = unsafe { read_copydata(msg.lparam) } {
+                match copydata_payload(dw, len, &payload) {
+                    Ok((MsgTag::Hello, p)) if p.len() == 4 => {
+                        let bytes = [p[0], p[1], p[2], p[3]];
+                        hello_helper_hwnd.set(Some(shiori_host32_ipc::decode_hwnd_le(bytes)));
+                    }
+                    Ok((MsgTag::Response, p)) => {
+                        responses.set(responses.get() + 1);
+                        *last_response.borrow_mut() = p.to_vec();
+                    }
+                    _ => {}
+                }
+            }
+            Some(LRESULT(0))
+        },
+    )
+    .expect("stand-in parent 窓生成に失敗");
+    (parent, record)
+}
+
 /// 単一 loopback テスト（HELLO 送出・未確立 REQUEST→500・LOAD・proxy 駆動 REQUEST(GET/NOTIFY)・
 /// 不正フレーム記録・bounded 生存を同一窓で網羅）。
 ///
@@ -14,41 +49,7 @@ use std::rc::Rc;
 )]
 fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     // --- stand-in parent（HELLO / RESPONSE 受け皿）。受領を Rc<Cell> に記録 ---
-    let hello_helper_hwnd: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
-    let responses: Rc<Cell<u64>> = Rc::new(Cell::new(0));
-    let last_response: Rc<std::cell::RefCell<Vec<u8>>> =
-        Rc::new(std::cell::RefCell::new(Vec::new()));
-
-    let parent = {
-        let hello_helper_hwnd = hello_helper_hwnd.clone();
-        let responses = responses.clone();
-        let last_response = last_response.clone();
-        Window::new(
-            WindowType::MessageOnly,
-            (),
-            move |_state: Pin<&()>, msg: WindowMessage| -> Option<LRESULT> {
-                if msg.msg != WM_COPYDATA {
-                    return None;
-                }
-                // SAFETY: WM_COPYDATA 契約。
-                if let Some((dw, len, payload)) = unsafe { read_copydata(msg.lparam) } {
-                    match copydata_payload(dw, len, &payload) {
-                        Ok((MsgTag::Hello, p)) if p.len() == 4 => {
-                            let bytes = [p[0], p[1], p[2], p[3]];
-                            hello_helper_hwnd.set(Some(shiori_host32_ipc::decode_hwnd_le(bytes)));
-                        }
-                        Ok((MsgTag::Response, p)) => {
-                            responses.set(responses.get() + 1);
-                            *last_response.borrow_mut() = p.to_vec();
-                        }
-                        _ => {}
-                    }
-                }
-                Some(LRESULT(0))
-            },
-        )
-        .expect("stand-in parent 窓生成に失敗")
-    };
+    let (parent, (hello_helper_hwnd, responses, last_response)) = stand_in_parent();
     let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
 
     // --- helper 窓生成（HELLO は create 内で親へ送出）---
@@ -449,4 +450,94 @@ fn std_handles_are_not_inherited() {
         0,
         "disinherit_std_handles の後も標準エラーに受け継ぎの印が残っている"
     );
+}
+
+/// `[helper]` で始まり `needle` を含む行が記録にあるか（記録の口 `helper_log`・指摘 9・12）。
+fn assert_logged(log: &[String], needle: &str) {
+    assert!(
+        log.iter()
+            .any(|l| l.starts_with("[helper]") && l.contains(needle)),
+        "`{needle}` を含む [helper] の行が無い: {log:?}"
+    );
+}
+
+/// 指摘 9・要件 10.11: `unload` が偽でも UNLOAD の返事は [1] のままで、失敗は `[helper]` の行に残る。
+/// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
+#[test]
+#[cfg(target_arch = "x86")]
+fn unload_ack_stays_one_when_unload_returns_false() {
+    let (parent, (_, responses, last_response)) = stand_in_parent();
+    let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
+    let (root, _) = copy_testdll_into_unique_target_dir("unload-false");
+    let helper = HelperMessageWindow::create(
+        parent_hwnd_u32,
+        root.path().to_path_buf(),
+        "shiori.dll".to_string(),
+    )
+    .expect("HelperMessageWindow 生成に失敗");
+    let send = |tag: MsgTag, payload: &[u8]| {
+        send_copydata(helper.hwnd(), parent.hwnd(), tag, payload, REPLY_TIMEOUT)
+            .unwrap_or_else(|e| panic!("{tag:?} の送出に失敗: {e:?}"));
+    };
+
+    send(MsgTag::Load, &[]);
+    assert_eq!(&*last_response.borrow(), &[LOAD_ACK_OK], "LOAD は成功する");
+    send(
+        MsgTag::Request,
+        b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nID: OnTestUnloadFalse\r\n\r\n",
+    );
+    assert!(
+        last_response.borrow().starts_with(b"SHIORI/3.0 204"),
+        "OnTestUnloadFalse は 204"
+    );
+
+    take_helper_log();
+    send(MsgTag::Unload, &[]);
+    assert_eq!(responses.get(), 3, "UNLOAD の返事が 1 通届く");
+    assert_eq!(
+        &*last_response.borrow(),
+        &[LOAD_ACK_OK],
+        "unload が偽でも UNLOAD の返事は [1]（要件 10.11）"
+    );
+    assert!(helper.shared().proxy.borrow().is_none());
+    assert_logged(&take_helper_log(), "UnloadReturnedFalse");
+
+    drop(helper);
+    drop(parent);
+    drop(root);
+}
+
+/// 指摘 12: 自窓を起こす `PostMessageW` が失敗したら偽を返し、`[helper]` の行に残す。
+/// 壊した窓の値を渡して失敗させる。
+#[test]
+fn wake_self_logs_a_post_failure() {
+    let gone = Window::new(
+        WindowType::MessageOnly,
+        (),
+        |_state: Pin<&()>, _msg: WindowMessage| -> Option<LRESULT> { None },
+    )
+    .expect("窓生成に失敗");
+    let hwnd = gone.hwnd();
+    drop(gone);
+
+    take_helper_log();
+    assert!(!wake_self(hwnd), "壊した窓へは起こしのメッセージを置けない");
+    assert_logged(&take_helper_log(), "PostMessageW");
+}
+
+/// 指摘 12: `lparam` が空の `WM_COPYDATA` は不正なメッセージとして数え、`[helper]` の行に残す。
+#[test]
+fn an_empty_copydata_is_counted_as_bad() {
+    let s = HelperShared::new(0, PathBuf::new(), String::new());
+    let msg = WindowMessage {
+        hwnd: HWND::default(),
+        msg: WM_COPYDATA,
+        wparam: WPARAM(0),
+        lparam: LPARAM(0),
+    };
+
+    take_helper_log();
+    assert_eq!(handle_message(&s, HWND::default(), &msg), Some(LRESULT(0)));
+    assert_eq!(s.bad_frames.get(), 1, "空の lparam は不正なメッセージ");
+    assert_logged(&take_helper_log(), "lparam");
 }

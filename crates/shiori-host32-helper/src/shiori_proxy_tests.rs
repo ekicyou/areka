@@ -26,7 +26,8 @@ use std::sync::Mutex;
 /// 3. 印の環境変数を差すテストは、この錠を取る。印のパスは、読む DLL と同じフォルダに置く。
 /// 4. 今、偽の DLL を load するテストは、`testdll_drop_invokes_courtesy_unload`・
 ///    `testdll_unload_from_another_folder_leaves_marker_untouched`・
-///    `testdll_request_roundtrip_get_and_notify`・`a_relative_dll_path_is_refused`・`main_loopback_tests.rs` の loopback のテスト。
+///    `testdll_request_roundtrip_get_and_notify`・`a_relative_dll_path_is_refused`・
+///    `close_reports_unload_returning_false`・`main_loopback_tests.rs` の loopback のテスト。
 ///    うち環境変数を差すのは `testdll_drop_invokes_courtesy_unload` と
 ///    `testdll_unload_from_another_folder_leaves_marker_untouched`。
 static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
@@ -294,4 +295,29 @@ fn testdll_request_roundtrip_get_and_notify() {
 
     // Drop で courtesy unload→FreeLibrary。往復も Drop も無 panic＝二重解放なし（R3.3/3.4）。
     drop(proxy);
+}
+
+// ---------------------------------------------------------------------
+// 5. 後始末の失敗を種類で返す（指摘 9・要件 10.11）
+// ---------------------------------------------------------------------
+
+/// `OnTestUnloadFalse` の後の `unload` は偽を返すので、`close` は `UnloadReturnedFalse` を返す。
+/// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
+#[test]
+#[cfg(target_arch = "x86")]
+fn close_reports_unload_returning_false() {
+    let (root, dll) = copy_testdll_into_unique_target_dir("close");
+    let proxy = ShioriByteProxy::load(&dll, root.path()).expect("testdll load must succeed");
+    let resp = proxy
+        .request(b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nID: OnTestUnloadFalse\r\n\r\n")
+        .expect("OnTestUnloadFalse request must succeed");
+    assert!(
+        resp.starts_with(b"SHIORI/3.0 204"),
+        "{}",
+        String::from_utf8_lossy(&resp)
+    );
+    match proxy.close() {
+        Err(ProxyError::UnloadReturnedFalse) => {}
+        other => panic!("unload の偽は UnloadReturnedFalse のはず: {other:?}"),
+    }
 }
