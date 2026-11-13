@@ -547,3 +547,76 @@ fn without_boxes_owner_never_leaves_balloon() {
         "箱の場所は 1 つも生まれない"
     );
 }
+
+// ---- 差分の写し（spec `emo-text-reveal-incremental` 件 2・要件 2.1／2.5／2.6）
+
+/// 同じ手順を `REPLAY_ALL`（前の作り）の偽／真で流し、（状態, 写しで当てた指定の数）を返す。
+///
+/// 普通のバルーンで 2 件 → 箱 a へ写す → 普通のバルーンで所有外のキーと不正な指定を含む 3 件 →
+/// もう 1 度箱 a へ写す。
+fn copy_twice(replay_all: bool) -> (TextLayerState, usize) {
+    use super::{COPIED_SPECS, REPLAY_ALL};
+    REPLAY_ALL.with(|c| c.set(replay_all));
+    COPIED_SPECS.with(|c| c.set(0));
+    let mut state = TextLayerState::default();
+    font(&mut state, "0", &["bold", "1"]);
+    font(&mut state, "0", &["italic", "1"]);
+    state.copy_script(&key("0"), &TextPlace::Balloon, &bx("a"));
+    font(&mut state, "0", &["align", "right"]);
+    font(&mut state, "0", &["height", "+4"]);
+    font(&mut state, "0", &["bold", "x"]);
+    state.copy_script(&key("0"), &TextPlace::Balloon, &bx("a"));
+    let copied = COPIED_SPECS.with(|c| c.get());
+    REPLAY_ALL.with(|c| c.set(false));
+    (state, copied)
+}
+
+#[test]
+fn copy_applies_only_the_tail_and_matches_the_replay_all_copy() {
+    let (diff, diff_copied) = copy_twice(false);
+    let (all, all_copied) = copy_twice(true);
+    assert_eq!(diff_copied, 2 + 2, "2 回目の写しは後ろの 2 件だけを当てる");
+    assert_eq!(all_copied, 2 + 4, "前の作りは 2 回目も 4 件全部を当てる");
+
+    let a = at("0", bx("a"));
+    let (got, want) = (
+        &diff.place_state(&a).unwrap().decor,
+        &all.place_state(&a).unwrap().decor,
+    );
+    assert_eq!(
+        got, want,
+        "先の装飾状態（見た目・指定の列・所有外のキー・記録）は前の作りと同じ"
+    );
+    assert_eq!(got.unowned.get("align"), Some(&vec!["right".to_owned()]));
+    assert!(!got.warned.is_empty(), "記録済みの印は先へ届く");
+    let src = &diff
+        .place_state(&at("0", TextPlace::Balloon))
+        .unwrap()
+        .decor;
+    assert!(src.warned.is_empty(), "記録済みの印は動かす（複製しない）");
+    assert_eq!(src.applied, got.applied);
+    assert_eq!(src.current, got.current, "同じ 2 層なら同じ見た目");
+}
+
+/// 一括の戻しで系列が替わった後の写しは、先を元の土台から作り直して元の指定を全部当てる。
+#[test]
+fn copy_after_reset_rebuilds_from_the_base() {
+    use super::COPIED_SPECS;
+    let mut state = TextLayerState::default();
+    font(&mut state, "0", &["bold", "1"]);
+    state.copy_script(&key("0"), &TextPlace::Balloon, &bx("a"));
+    font(&mut state, "0", &["disable"]);
+    font(&mut state, "0", &["italic", "1"]);
+    COPIED_SPECS.with(|c| c.set(0));
+    state.copy_script(&key("0"), &TextPlace::Balloon, &bx("a"));
+    assert_eq!(COPIED_SPECS.with(|c| c.get()), 1, "新しい系列の 1 件だけ");
+    let got = &state.place_state(&at("0", bx("a"))).unwrap().decor;
+    let src = &state
+        .place_state(&at("0", TextPlace::Balloon))
+        .unwrap()
+        .decor;
+    assert_eq!(got.applied, src.applied);
+    assert_eq!(got.current, src.current);
+    assert!(!got.current.bold, "前の系列の指定は残らない");
+    assert!(got.current.italic);
+}

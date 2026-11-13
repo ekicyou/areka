@@ -515,8 +515,12 @@ fn copy_and_rebase_count_applied_specs() {
     assert_eq!(REBASED_SPECS.with(|c| c.get()), 2, "当て直しは指定 2 件");
     assert_eq!(COPIED_SPECS.with(|c| c.get()), 0);
 
-    let place = crate::place::TextPlace::Balloon;
-    state.copy_script(&actor, &place, &place);
+    // 写しの先はまだ無い箱の場所（同じ場所への写しは差分が 0 件になる・task 3.2）。
+    use crate::actor::test_support::{box_in, box_index, box_layout};
+    let layout =
+        box_layout("balloon.a\n{\nsize,10,10\n}\nsurface0\n{\nelement1,balloon,a,0,0\n}\n");
+    let to = crate::place::TextPlace::Box(box_in(&box_index(&layout, 0..=0), "a"));
+    state.copy_script(&actor, &crate::place::TextPlace::Balloon, &to);
     assert_eq!(COPIED_SPECS.with(|c| c.get()), 2, "写しは指定 2 件");
     assert_eq!(
         REBASED_SPECS.with(|c| c.get()),

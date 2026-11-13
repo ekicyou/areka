@@ -98,16 +98,7 @@ enum BaseLayer {
 /// （`forget_pristine_places` の「作りたてと同じか」を変えないため）。`PartialEq` は手書きで、
 /// いつも真を返す。写しの判定は中の番号を直に比べる。
 #[derive(Clone, Copy, Debug, Default)]
-struct Lineage(
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "写しの判定（task 3.2）が読むまでは本番の作りに読み手が無い"
-        )
-    )]
-    u64,
-);
+struct Lineage(u64);
 
 impl PartialEq for Lineage {
     fn eq(&self, _: &Lineage) -> bool {
@@ -173,6 +164,18 @@ pub struct Decoration {
     lineage: Lineage,
 }
 
+/// 写しの材料（持ち主から差分だけを取り出したもの・[`Decoration::delta_for`]）。
+struct ScriptDelta {
+    lineage: Lineage,
+    base: BaseLayer,
+    /// 真なら先を元の土台から作り直してから `specs` を当てる（全部の道）。
+    from_start: bool,
+    /// 先がまだ当てていない指定（元の `applied` の後ろの部分の複製）。
+    specs: Vec<Vec<String>>,
+    /// 元から動かした記録済みの印。
+    warned: BTreeSet<(u8, String, Vec<String>)>,
+}
+
 impl Default for Decoration {
     fn default() -> Decoration {
         let layers = LookLayers::default();
@@ -208,9 +211,56 @@ impl Decoration {
             || !self.warned.is_empty()
     }
 
-    /// 台本の指定の 4 欄を `from` から写し、自分の場所の既定（`layers`）の上で当て直す
-    /// （`areka-P0-shell-balloon` 要件 3.13・3.17）。場所の既定は動かさない。
-    fn take_script(&mut self, from: &Decoration) {
+    /// 先が持つ（系列の印, 当てた数）。
+    fn held(&self) -> (Lineage, usize) {
+        (self.lineage, self.applied.len())
+    }
+
+    /// 先が持つ `held` が自分（持ち主）の `applied` の頭か——同じ印で、数が 0 より大きく自分の数以下
+    /// （1 つの系列へ書き込むのは今の持ち主だけ・spec `emo-text-reveal-incremental` design.md 件 2）。
+    fn continues(&self, (lineage, count): (Lineage, usize)) -> bool {
+        count > 0 && lineage.0 == self.lineage.0 && count <= self.applied.len()
+    }
+
+    /// 持ち主から、先が持つ `held`（先が無ければ `None`）に足りない差分を取り出し、記録済みの印を動かす。
+    fn delta_for(&mut self, held: Option<(Lineage, usize)>) -> ScriptDelta {
+        let skip = held.filter(|h| self.continues(*h)).map(|(_, count)| count);
+        ScriptDelta {
+            lineage: self.lineage,
+            base: self.base,
+            from_start: skip.is_none(),
+            specs: self.applied[skip.unwrap_or(0)..].to_vec(),
+            warned: std::mem::take(&mut self.warned),
+        }
+    }
+
+    /// 差分を受け取る（全部の道なら元の土台から作り直す）。指定を今の見た目へ 1 度ずつ当て、
+    /// 所有外のキーはその場で入れる（`Note::Unowned` はキーだけで決まる）。記録は出さない
+    /// （元で 1 度記録済み）。場所の既定（`layers`）は動かさない（`areka-P0-shell-balloon` 要件 3.13・3.17）。
+    fn take_script(&mut self, delta: ScriptDelta) {
+        if delta.from_start {
+            self.base = delta.base;
+            self.applied.clear();
+            self.unowned.clear();
+            self.current = self.base_look();
+        }
+        self.lineage = delta.lineage;
+        self.warned = delta.warned;
+        #[cfg(test)]
+        COPIED_SPECS.with(|c| c.set(c.get() + delta.specs.len()));
+        for tokens in delta.specs {
+            let args: Vec<&str> = tokens.iter().map(String::as_str).collect();
+            if let Ok(Some(Note::Unowned)) = apply_font_tag(&mut self.current, &self.layers, &args)
+            {
+                self.unowned.insert(tokens[0].clone(), tokens[1..].to_vec());
+            }
+            self.applied.push(tokens);
+        }
+    }
+
+    /// 前の作りの写し（4 欄を `from` から複製して当て直す・`REPLAY_ALL` の比べの正・試験の作りだけ）。
+    #[cfg(test)]
+    fn take_script_replay_all(&mut self, from: &Decoration) {
         self.base = from.base;
         self.applied = from.applied.clone();
         self.unowned = from.unowned.clone();
@@ -603,7 +653,9 @@ impl TextLayerState {
         }
     }
 
-    /// 台本の指定の 4 欄を `from` の場所から `to` の場所へ写す。
+    /// 台本の指定を `from`（持ち主）の場所から `to` の場所へ写す——`to` が持つ系列の印と当てた数を読み、
+    /// 足りない後ろの指定だけを当てる（印が違うか数が合わなければ元の土台から全部当てる）。記録済みの印は
+    /// 動かし、所有外のキーは当てながら作る（spec `emo-text-reveal-incremental` 要件 2.1・2.5・2.6）。
     ///
     /// `from` の状態がまだ無ければ空の指定を写す。写すものが空で `to` の状態もまだ無ければ、
     /// 生まれたときの状態と同じなので作らない。
@@ -616,16 +668,44 @@ impl TextLayerState {
             actor: actor.clone(),
             place: to.clone(),
         };
-        let source = self
-            .actors
-            .get(&from_key)
-            .map(|state| state.decor.clone())
-            .unwrap_or_default();
-        if !source.has_script() && !self.actors.contains_key(&to_key) {
+        #[cfg(test)]
+        if REPLAY_ALL.with(std::cell::Cell::get) {
+            let source = self
+                .actors
+                .get(&from_key)
+                .map(|state| state.decor.clone())
+                .unwrap_or_default();
+            if !source.has_script() && !self.actors.contains_key(&to_key) {
+                return;
+            }
+            tracing::debug!(actor = %actor, ?from, ?to, "スコープの \\f の指定を新しい行き先へ写す（`areka-P0-shell-balloon` 要件 3.13）");
+            self.place_entry(&to_key)
+                .decor
+                .take_script_replay_all(&source);
             return;
         }
+        let source = self.actors.get(&from_key).map(|state| &state.decor);
+        let held = self.actors.get(&to_key).map(|state| state.decor.held());
+        if held.is_none() && !source.is_some_and(Decoration::has_script) {
+            return;
+        }
+        // 前提「同じ系列で短い方は長い方の頭」を試験の作りでだけ確かめる（最後の指定が元の同じ位置と同じ）。
+        debug_assert!(
+            match (source, self.actors.get(&to_key)) {
+                (Some(src), Some(dst)) if src.continues(dst.decor.held()) => {
+                    dst.decor.applied.last() == src.applied.get(dst.decor.applied.len() - 1)
+                }
+                _ => true,
+            },
+            "同じ系列の先の指定が元の指定の頭でない"
+        );
         tracing::debug!(actor = %actor, ?from, ?to, "スコープの \\f の指定を新しい行き先へ写す（`areka-P0-shell-balloon` 要件 3.13）");
-        self.place_entry(&to_key).decor.take_script(&source);
+        let delta = match self.actors.get_mut(&from_key) {
+            Some(state) => state.decor.delta_for(held),
+            // 元の場所が無いときは空の指定を写す（先を全部の道で空にする）。
+            None => Decoration::default().delta_for(held),
+        };
+        self.place_entry(&to_key).decor.take_script(delta);
     }
 
     /// バルーンの装着で 2 層を差し込む（要件 4.1・結線層の 1 点から呼ぶ）。
