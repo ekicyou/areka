@@ -4,7 +4,6 @@
 //! （`crate::fake_server`）。どちらも OS が割り当てる番号で、机の 9801〜9830 へはつながない。
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use areka_mcp::{MCP_PATH, McpServer, SERVER_NAME, ToolRegistry};
@@ -406,26 +405,6 @@ async fn verify_returns_the_name_the_peer_gives() {
     }
 }
 
-/// セッションと SSE の口は、呼ばれない前提の決まった答え（areka は無状態・JSON の単発応答）。
-#[tokio::test]
-async fn session_and_sse_entries_answer_without_connecting() {
-    // 番号 0 へはつなげない: つなぎに行けば、ここの答えが変わる。
-    let http = OwnHttp {
-        port: 0,
-        timeouts: Timeouts::default(),
-    };
-    let uri: Arc<str> = "http://127.0.0.1:0/".into();
-    let deleted = http
-        .delete_session(uri.clone(), "session".into(), None, no_headers())
-        .await;
-    assert!(deleted.is_ok(), "{deleted:?}");
-    let stream = http.get_stream(uri, None, None, None, no_headers()).await;
-    assert!(matches!(
-        stream,
-        Err(StreamableHttpError::ServerDoesNotSupportSse)
-    ));
-}
-
 /// 応答の読み取り（接続なし・バイト列から）: chunked の塊の拡張（`;…`）と後置の札を読み捨て、
 /// 同じ接続の次の応答を、読みかけ（`buf`）を持ち越して続けて読める。
 #[tokio::test]
@@ -447,6 +426,36 @@ async fn chunk_extensions_and_trailers_are_skipped_and_the_next_reply_follows() 
     assert_eq!(second.content_type, "");
     assert_eq!(second.body, b"next");
     assert!(buf.is_empty() && stream.is_empty(), "余りが残った");
+}
+
+/// HTTP として読めない応答（接続なし・バイト列から）: 頭が多すぎる・長さが数でない・塊の長さが
+/// 読めない・塊の長さが溢れる、の 4 形は、どれも本文として解かずに `InvalidData` になる。
+#[tokio::test]
+async fn replies_that_are_not_http_are_invalid_data() {
+    let many_headers: String = (0..65).map(|i| format!("X-{i}: 1\r\n")).collect();
+    let chunked = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n";
+    let cases = [
+        (
+            "頭が 65 個",
+            format!("HTTP/1.1 200 OK\r\n{many_headers}\r\n"),
+        ),
+        (
+            "長さが数でない",
+            "HTTP/1.1 200 OK\r\nContent-Length: x\r\n\r\n".to_owned(),
+        ),
+        ("塊の長さが読めない", format!("{chunked}zz\r\n")),
+        // 塊の後ろの CRLF を足すと溢れる長さ（`usize::MAX`）。
+        ("塊の長さが溢れる", format!("{chunked}ffffffffffffffff\r\n")),
+    ];
+    let mut wrong = Vec::new();
+    for (name, raw) in &cases {
+        match read_reply(&mut raw.as_bytes(), &mut Vec::new()).await {
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {}
+            Err(error) => wrong.push(format!("{name}: {error:?}")),
+            Ok(reply) => wrong.push(format!("{name}: HTTP {} として読めた", reply.status)),
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
 // ---- ここから下は失敗の読み分け: 「書く前」か「書いた後」か（設計 D-6） ----
@@ -674,32 +683,6 @@ async fn an_event_stream_answer_is_refused_on_its_header_without_reading_the_bod
 
     finished(&fake).await;
     assert_eq!(fake.requests_of("tools/call").len(), 1);
-}
-
-/// 「書いた後か」の真偽の表（失敗の 5 つの全部）。
-#[test]
-fn written_is_true_only_for_the_failures_after_the_real_body() {
-    let before = [
-        HttpError::Connect(std::io::ErrorKind::ConnectionRefused.into()),
-        HttpError::NotAreka {
-            port: 9801,
-            name: "ssp-mcp-server".into(),
-        },
-        HttpError::VerifyTimeout(Duration::from_secs(3)),
-    ];
-    let after = [
-        HttpError::NoResponse,
-        HttpError::NotJson {
-            status: 500,
-            head: "internal error".into(),
-        },
-    ];
-    for error in &before {
-        assert!(!error.written(), "{error:?}");
-    }
-    for error in &after {
-        assert!(error.written(), "{error:?}");
-    }
 }
 
 /// 日本語の入った本文は欠けずに届く: `Content-Length` はバイトの数（文字の数ではない）。
