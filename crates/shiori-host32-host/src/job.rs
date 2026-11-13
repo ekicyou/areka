@@ -8,8 +8,9 @@
 //!
 //! 孤児化の実害は 2 つ:
 //! 1. **プロセスリーク**（ゴースト起動のたびに zombie helper が残り得る）。
-//! 2. **継承した stdio パイプを握り続ける**ため、親を piped で起動した側の
-//!    `wait_with_output()` が EOF を得られず **無限ブロック**する（統合 smoke テストのハング源）。
+//! 2. **標準エラーの管の書き口を握り続ける**ため、host の標準エラーの読み手が管の終わりを得られず、
+//!    その読み手を待つ側が止まる（helper の標準入力・標準出力は NUL、標準エラーは host の管。
+//!    helper は始めに自分の標準の取っ手の受け継ぎの印を落とすので、書き口を持つのは helper だけ）。
 //!
 //! 本モジュールは Windows の **Job Object** による OS 公式の道連れ機構でこれを塞ぐ:
 //! helper を spawn 直後に `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 付き job へ割り当て、job
@@ -18,8 +19,8 @@
 //! kill される。**helper 側の協力にも UNLOAD 到達にも依存しない安全網**であり、下流の
 //! 正規 UNLOAD 終了経路と両立する（先に UNLOAD で正常終了していれば job には対象が残らず無害）。
 //!
-//! windows 依存はこのモジュールに隔離し、[`process_host`](crate::process_host) の
-//! 純ロジック（`ExitKind::classify`・`resolve_param` 等）の std-only 単体テスト可能性を保つ。
+//! Job Object の呼び出しはこのモジュールにまとめる（[`process_host`](crate::process_host) も
+//! 起こし方・待ち方・標準エラーの読みで `windows` を使う）。
 
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::process::Child;

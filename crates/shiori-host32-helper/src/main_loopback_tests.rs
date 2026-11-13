@@ -1,6 +1,7 @@
 use super::*;
 use crate::proxy_test_support::copy_testdll_into_unique_target_dir;
 use std::rc::Rc;
+use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 
 /// 受けた HELLO の helper HWND・RESPONSE の数・最後の RESPONSE・届いた順の全 RESPONSE。
 type ParentRecord = (
@@ -271,10 +272,10 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     );
 
     // --- UNLOAD（正規正常終了経路のアーム機構・R5.1/R5.6・Task 3.2）---
-    // MsgTag::Unload（空ペイロード）を helper へ送ると、helper は proxy を take して即 drop
-    // （courtesy unload → FreeLibrary）→ quit_requested セット → 既存 LOAD ack と同型の ack[1] を
-    // proxy drop 完了後・ループ終了前の順序で返送する。proxy は未確立へ戻る。
-    // （proxy を drop するため、以降 proxy 確立を前提とする REQUEST 検証は置かない・R5.1）。
+    // MsgTag::Unload（空ペイロード）を helper へ送ると、helper は proxy を take して `close`
+    // （unload → FreeLibrary）→ quit_requested セット → 既存 LOAD ack と同型の ack[1] を
+    // close 完了後・ループ終了前の順序で返送する。proxy は未確立へ戻る。
+    // （proxy を閉じるため、以降 proxy 確立を前提とする REQUEST 検証は置かない・R5.1）。
     // exit 0 の観測は x64 e2e（Task 5.1）の領分ゆえここでは扱わない。
     send_copydata(
         helper.hwnd(),

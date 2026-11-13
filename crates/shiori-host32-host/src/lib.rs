@@ -30,7 +30,7 @@ extern crate self as shiori_host32_host;
 pub mod charset;
 pub mod client;
 pub mod error;
-/// helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）。windows 依存をここへ隔離する。
+/// helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）。Job Object の呼び出しをここへまとめる。
 mod job;
 pub mod lifecycle;
 pub mod parent_window;
@@ -39,7 +39,7 @@ pub mod process_host;
 pub mod request_headers;
 pub mod shiori2;
 pub mod shiori3;
-/// `Child` を持たないスレッドから helper を終わらせる取っ手（windows 依存をここへ隔離する）。
+/// `Child` を持たないスレッドから helper を終わらせる取っ手（`TerminateProcess` の呼び出しをここへまとめる）。
 mod terminator;
 
 pub use charset::{Charset, CharsetNegotiator, CharsetPolicy, LabelError};

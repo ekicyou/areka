@@ -43,11 +43,10 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use shiori_host32_ipc::{
-    FramingError, IpcError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, send_copydata,
-    send_copydata_response,
+    FramingError, IpcError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, read_copydata,
+    send_copydata, send_copydata_response,
 };
 use windows::Win32::Foundation::{GetLastError, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -61,7 +60,9 @@ const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 /// `[helper]` の行の出口（design.md「記録の口 `helper_log`」・指摘 9・12）。標準エラーへ 1 行書く。
 /// 行は host の読み手が `warn` で記録へ回す。テストのときだけ同じスレッドの記録の列にも積む。
 fn helper_log(line: &str) {
-    eprintln!("{line}");
+    use std::io::Write;
+    // 書けない＝host の読み手が終わった。もう記録の行き先は無いので捨てる（eprintln! は窓の手続きの中で panic→abort）。
+    let _ = writeln!(std::io::stderr().lock(), "{line}");
     #[cfg(test)]
     HELPER_LOG.with(|log| log.borrow_mut().push(line.to_string()));
 }
@@ -304,29 +305,6 @@ fn finish_deferred_unload(s: &HelperShared, self_hwnd: HWND, late: &str) -> bool
     close_and_request_quit(s);
     wake_self(self_hwnd);
     true
-}
-
-/// 受領した WM_COPYDATA の `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す。
-///
-/// # Safety
-/// `lparam` は WM_COPYDATA の LPARAM であり `*const COPYDATASTRUCT` を指すこと（OS が
-/// WM_COPYDATA 配送時に保証）。`lpData` は `cbData` バイト分有効であること。
-unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
-    let cds = lparam.0 as *const COPYDATASTRUCT;
-    if cds.is_null() {
-        return None;
-    }
-    // SAFETY: WM_COPYDATA 契約により lparam は有効な COPYDATASTRUCT を指す。
-    let cds = unsafe { &*cds };
-    let dw_data = cds.dwData;
-    let len = cds.cbData as usize;
-    let payload = if len == 0 || cds.lpData.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: lpData は cbData バイト有効（OS が marshal 済みの受信側コピー）。
-        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
-    };
-    Some((dw_data, len, payload))
 }
 
 /// WndProc 本体: WM_COPYDATA を [`classify_inbound`] で分類し、`Reply` なら request バイト列を
@@ -736,6 +714,10 @@ mod load_ack_tests;
 #[cfg(test)]
 #[path = "main_loopback_tests.rs"]
 mod loopback_tests;
+
+#[cfg(test)]
+#[path = "main_helper_log_tests.rs"]
+mod helper_log_tests;
 
 // 約 42 秒の檻。判定は OS の振る舞いで CPU の種類に依らないため、helper を配る i686 の段でだけ走らせる
 // （x64 のワークスペース全テストで同じ 42 秒を重ねて払わない）。

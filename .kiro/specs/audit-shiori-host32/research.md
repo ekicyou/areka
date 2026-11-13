@@ -562,3 +562,16 @@
 ### 14.15 使っていない依存を消した（タスク 13・指摘 28・要件 10.10）
 
 - 2026-11-13、進め役が確かめた: `dola-yaml-backend` は `main` に着地して `.kiro/specs/completed/dola-yaml-backend` に退避済みで、このブランチにも取り込み済み（`e7fd67119`）。C20 へは回さず、host の `event-listener`・helper の `thiserror`・ipc の `windows-core` を消した（消す前に 3 クレートを grep し直し、使う所は 0 件）。host の README の依存の一覧も直した。
+
+### 14.16 かけ直し 1 回目（タスク 14）
+
+- 結果: 新しい指摘が 4 件出た。4 件とも直した。
+  1. 危うさ（本番）: helper の `helper_log` が `eprintln!` で書いており、標準エラーの管の読み手（host の `helper_stderr_read_failed`・`helper_stderr_reader_spawn_failed` の後）が居なくなると書けずに panic した。窓の手続き（`extern "system"`）の中なのでプロセスが落ち、unload が走らない。直し: `let _ = writeln!(std::io::stderr().lock(), ..)` で書き、書けなければ捨てる（記録の行き先がもう無いため）。縛るテスト: `crates/shiori-host32-helper/src/main_helper_log_tests.rs::helper_log_does_not_panic_when_stderr_reader_is_gone`（標準エラーはプロセスに 1 つで、libtest は `eprintln!` を自分で捕まえるため、子のプロセスの中で OS の取っ手を読み口の閉じた管へ差し替えて呼ぶ。管は `std::io::pipe`・差し替えは `SetStdHandle`・後で戻す）。直す前に赤を確かめた。host の 2 つの行の文（「ここから先の行は記録へ回らない」「helper の行は記録へ回らない」）は直した後の振る舞いと合うので変えていない。
+  2. 黙った失敗: host の親窓が `lparam` の空の WM_COPYDATA を記録せずに捨てていた。直し: `parent_frame_ignored` の WARN（`reason = "null_lparam"`）を出す。縛るテスト: `parent_window_tests.rs::ignored_frames_are_logged` に 1 件足した（直す前に赤を確かめた）。
+  3. 重なり: `read_copydata` が helper の `main.rs` と host の `parent_window.rs` に同じ形で 2 つあった。直し: `crates/shiori-host32-ipc` に `pub unsafe fn read_copydata`（`# Safety` 付き）を 1 つ置き、両方から呼ぶ。`Cargo.toml`・`Cargo.lock` は変えていない。振る舞いは既存のテストが縛る。
+  4. 説明の古さ: `ParsedResponse::charset_header`（頭の半角の空白とタブだけ落とす）・`job.rs`（helper の標準入力・標準出力は NUL、標準エラーは host の管・helper が受け継ぎの印を自分で落とす）・`windows` 依存を「隔離する」と書いた所（`job.rs`・`terminator.rs`・`lib.rs` の 2 か所・`process_host.rs` も `windows` を使う）・host の `resolve_param`（helper の関数）の名・`shiori_proxy.rs` の出す行の一覧・`error.rs` の「本タスク（4.2）では定義のみ」・`parent_window.rs` の `ParentShared` の持ち物・testdll の `TESTDLL_SERIAL` の置き場・`shiori_proxy_tests.rs` の DLL を読むテストの一覧・`main_loopback_tests.rs` の UNLOAD（今は `close`）・`tests/shiori_load_e2e.rs` の SAFETY（2 つのテストは並行に走る）を今の姿に直した。`shiori_proxy.rs` の応答を `GlobalLock` で開けないときは、長さの行と別の行（`GlobalLock で開けない`）を出すようにした。返す Err は `ResponseLengthMismatch` のまま（呼び手は 500 を返すだけで、種類を分けても振る舞いが変わらない）。
+- 見直して指摘にしなかったもの:
+  - (a) helper の LOAD の腕が DLL を呼んでいる最中に次の LOAD が来る道: 届く道が無い。本番で LOAD を送るのは `crates/areka-ghost/src/shiori_wiring.rs:188` の 1 か所で、helper 1 つにつき 1 度だけ送る。同じ利用者の別のプロセスが LOAD を偽って送るのは、14.8 の議題 1 のとおり脅威の見立ての外。よって欠陥ではない。
+  - (b) x64 の `clippy::drop_non_drop` の 3 件: 振る舞いに響かず、spec `clippy-199-lints` の持ち場。
+
+タスク 14 で、1.1 と同じ 2 つの命令（x64 の `cargo clippy -p shiori-host32-host -p shiori-host32-ipc --all-targets` と、i686 の `cargo clippy -p shiori-host32-helper -p shiori-host32-ipc -p shiori-host32-testdll -p shiori-host32-testdll-loadu --all-targets --target i686-pc-windows-msvc`）を回し直した。14.10 の基準 5 件のうち 2 件が消え、3 件が残った。消えたのは、i686 の `crates/shiori-host32-testdll/src/lib.rs:63` の `clippy::needless_bool`（タスク 2 で `load` の戻りを比べの式にした・指摘 29 の直しと同じ所）と、x64 の `crates/shiori-host32-host/Cargo.toml` の使っていない依存 `event-listener` の警告（タスク 13・指摘 28 で依存を消した）である。残ったのは x64 の `clippy::drop_non_drop` の 3 件で、場所は直しで行が動き、今は `crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs:162`・`:287` と `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs:212` にある。この 3 件は Drop を持たない `Shiori3Client` を `drop` しているだけで振る舞いに響かず、audit の指摘とも重ならないので、本 spec では直さず `clippy-199-lints` に残す。i686 の段の警告は 0 件になった。

@@ -36,8 +36,8 @@ pub enum HandshakeError {
     /// ハンドシェイク未完了（helper HWND 未確定）のまま往復送信が試みられた
     /// （要件 3.3・ハンドシェイクゲート）。
     ///
-    /// 本タスク（4.2）では定義のみで、実際に返すのは送信パスを実装する
-    /// task 4.3 のゲート（未確定 helper HWND での `send_request` を拒否）である。
+    /// 返すのは送信パスのゲート（未確定 helper HWND での `send_request` を拒否する
+    /// `ParentMessageWindow::send_request`）である。
     #[error("handshake incomplete: helper HWND not yet established")]
     Incomplete,
 }

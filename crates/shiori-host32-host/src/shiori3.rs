@@ -188,7 +188,7 @@ pub struct ParsedResponse {
     pub error_level: Option<String>,
     /// `ErrorDescription` ヘッダ（SSP 拡張・存在時のみ `Some`・要件 2.5）。
     pub error_description: Option<String>,
-    /// 応答の `Charset` ヘッダの生の値（前後空白を落とした値・省略時 `None`）。
+    /// 応答の `Charset` ヘッダの生の値（頭の半角の空白とタブだけを落とした値・後ろは残す・省略時 `None`）。
     ///
     /// **採用するかの判断はここでは行わない**——解決も正規化もせず生の綴りを返すだけで、
     /// 採用と後退の規則は `CharsetNegotiator::note_response`（`charset.rs`）が所有する

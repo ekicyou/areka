@@ -1,12 +1,12 @@
 //! `ProcessHost`（要件 1.1〜1.5）: helper プロセスの起動と、IPC と直交する
 //! 非ブロッキング生存監視。
 //!
-//! 判定の純ロジック（`ExitKind::classify`・`resolve_param`・`resolve_request_timeout` 等）は
+//! 判定の純ロジック（`ExitKind::classify`・`resolve_request_timeout` 等）は
 //! `std::process` の上だけで組み、実プロセスなしで単体テストできる。親ウィンドウのハンドルは
 //! `HWND` 型を引きずらず u32 ワイヤ値として子へ渡す。`windows` を使うのは起こし方と待ち方の所
 //! （`CREATE_NO_WINDOW`・終わりの待ち `WaitForSingleObject`・標準エラーの ANSI 読み
 //! `MultiByteToWideChar`）と、[`spawn_command`] が helper の**孤児化防止**として割り当てる
-//! KILL_ON_JOB_CLOSE 付き Job Object（[`crate::job`] に隔離し、割り当て失敗時は縮退＝現行挙動）。
+//! KILL_ON_JOB_CLOSE 付き Job Object（[`crate::job`] にまとめ、割り当て失敗時は縮退＝現行挙動）。
 //!
 //! 子への起動パラメーター受け渡し規約（cross-task 契約・design §SpawnContract・R3.1〜3.3）:
 //! helper は起動パラメーターを **arg-n 優先・fallback env** の順で取得する。

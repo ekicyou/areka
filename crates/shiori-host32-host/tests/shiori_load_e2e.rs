@@ -60,8 +60,10 @@ fn run_load_case(
 
     // env は spawn 直前に set・spawn 直後に remove（子は生成時スナップショットを保持）。
     if set_load_fail {
-        // SAFETY: edition 2024 の set_var は unsafe。テストは単一スレッドで env を
-        // 触っており、spawn 前 set→spawn 後 remove の窓を最小化している。
+        // SAFETY: edition 2024 の set_var は unsafe。この binary の 2 つのテストは並行に走るが、
+        // env を書くのはこの枝だけで、std の set_var・Command::spawn は std の env の錠で互いに
+        // 待つ（他方が起こす helper にこの値が写っても、読むのは testdll だけ）。spawn 前 set→
+        // spawn 後 remove の窓を最小化している。
         unsafe {
             std::env::set_var("HOST32_TESTDLL_LOAD_FAIL", "1");
         }

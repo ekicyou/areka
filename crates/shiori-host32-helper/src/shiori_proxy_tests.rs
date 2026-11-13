@@ -27,7 +27,8 @@ use std::sync::Mutex;
 /// 4. 今、偽の DLL を load するテストは、`testdll_drop_invokes_courtesy_unload`・
 ///    `testdll_unload_from_another_folder_leaves_marker_untouched`・
 ///    `testdll_request_roundtrip_get_and_notify`・`a_relative_dll_path_is_refused`・
-///    `close_reports_unload_returning_false`・`main_loopback_tests.rs` の loopback のテスト。
+///    `close_reports_unload_returning_false`・`a_response_longer_than_its_allocation_is_refused`・
+///    `a_null_response_is_request_failed`・`main_loopback_tests.rs` の loopback のテスト。
 ///    うち環境変数を差すのは `testdll_drop_invokes_courtesy_unload` と
 ///    `testdll_unload_from_another_folder_leaves_marker_untouched`。
 static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());

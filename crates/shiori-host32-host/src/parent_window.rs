@@ -38,13 +38,12 @@ use std::time::{Duration, Instant};
 
 use shiori_host32_ipc::{
     FramingError, IpcError, MsgTag, ResponseSlot, copydata_payload, decode_hwnd_le, encode_hwnd_le,
-    hwnd_from_u32, send_request as ipc_send_request,
+    hwnd_from_u32, read_copydata, send_request as ipc_send_request,
 };
 
 use crate::error::HandshakeError;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetWindowThreadProcessId, MSG, PM_REMOVE, PeekMessageW, PostMessageW,
     TranslateMessage, WM_COPYDATA,
@@ -119,9 +118,8 @@ fn resolve_send_target(helper_hwnd_wire: Option<u32>) -> Result<HWND, SendError>
 
 /// WndProc と外側（呼び出し側）で共有する親窓の状態（design.md §426-429）。
 ///
-/// single-in-flight・単一 UI スレッドゆえ内部可変は [`Cell`] で足りる。本タスク（4.2）では
-/// ハンドシェイク観測に必要な `helper_hwnd` のみを持つ。送信パス（`ResponseSlot`）は
-/// task 4.3 が追加する。
+/// single-in-flight・単一 UI スレッドゆえ内部可変は [`Cell`] で足りる。握手の `helper_hwnd`・
+/// 往復の受け皿 `response_slot`・HELLO を受けてよい子のプロセス番号 `expected_pid` を持つ。
 struct ParentShared {
     /// HELLO で受領した helper のメッセージ窓 HWND（u32 ワイヤ値）。確定でハンドシェイク完了。
     helper_hwnd: Cell<Option<u32>>,
@@ -170,29 +168,6 @@ fn hello_rejection(
     None
 }
 
-/// 受領した WM_COPYDATA の `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す。
-///
-/// # Safety
-/// `lparam` は WM_COPYDATA の LPARAM であり `*const COPYDATASTRUCT` を指すこと（OS が
-/// WM_COPYDATA 配送時に保証）。`lpData` は `cbData` バイト分有効であること。
-unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
-    let cds = lparam.0 as *const COPYDATASTRUCT;
-    if cds.is_null() {
-        return None;
-    }
-    // SAFETY: WM_COPYDATA 契約により lparam は有効な COPYDATASTRUCT を指す。
-    let cds = unsafe { &*cds };
-    let dw_data = cds.dwData;
-    let len = cds.cbData as usize;
-    let payload = if len == 0 || cds.lpData.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: lpData は cbData バイト有効（OS が marshal 済みの受信側コピー）。
-        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
-    };
-    Some((dw_data, len, payload))
-}
-
 /// 親 WndProc 本体: WM_COPYDATA を [`classify_inbound`] で分類し、`RecordHello` なら helper HWND を
 /// 記録＝ハンドシェイク完了、`StoreResponse` なら payload を `response_slot` へ store（再入受領・
 /// 要件 4.2）して即 return する（design.md §393-395）。
@@ -206,6 +181,12 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
 
     // SAFETY: WM_COPYDATA の lparam は COPYDATASTRUCT を指す（OS 契約）。
     let Some((dw_data, declared_len, payload)) = (unsafe { read_copydata(msg.lparam) }) else {
+        tracing::warn!(
+            target: "shiori-host32",
+            event = "parent_frame_ignored",
+            reason = "null_lparam",
+            "lparam が空の WM_COPYDATA を無視した"
+        );
         return Some(LRESULT(0));
     };
 

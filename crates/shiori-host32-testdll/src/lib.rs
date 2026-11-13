@@ -111,7 +111,7 @@ pub unsafe extern "C" fn load(hdir: HGLOBAL, _len: usize) -> bool {
 /// - 置き場を引けないときだけ、書かずに標準エラーへ 1 行出す。
 /// - 値が無いときは何も引かない。
 ///
-/// テストを足すときの決まりは、補助 exe の `shiori_proxy.rs` の錠 `TESTDLL_SERIAL` の説明にある。
+/// テストを足すときの決まりは、補助 exe の `shiori_proxy_tests.rs` の錠 `TESTDLL_SERIAL` の説明にある。
 ///
 /// # Safety
 /// 引数を取らない flat-C エクスポート。呼出側の ABI 契約（cdecl）にのみ依存する。

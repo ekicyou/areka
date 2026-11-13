@@ -40,7 +40,8 @@
 //! ## 観測契約（design §357・R4.7）
 //! 「初期化の入口の同期 1 バイト結果（0 か否か）＋無クラッシュ」のみ。DLL 内部スレッド等に前提を置かない。
 //! 本モジュールが出す行（`crate::helper_log`・無条件）は入口名の 1 行、`load` の枝の表せない字の警告
-//! 1 行、後始末の失敗の行。確立の失敗の種別の 1 行は `main.rs` が出す。
+//! 1 行、応答を読めないとき（`GlobalLock` で開けない・長さが確保を超える）の 1 行、後始末の失敗の行。
+//! 確立の失敗の種別の 1 行は `main.rs` が出す。
 //!
 //! ## unsafe 集約
 //! SHIORI FFI の `unsafe` 境界は本モジュールへ集約し、各ブロックに Safety 根拠を文書化する
@@ -352,9 +353,16 @@ impl ShioriByteProxy {
         // （上で is_invalid() を確認済み）。失敗は null／0 で返る。
         let (ptr, allocated) = unsafe { (GlobalLock(hres) as *const u8, GlobalSize(hres)) };
         let result = if ptr.is_null() || allocated == 0 || allocated < len {
-            crate::helper_log(&format!(
-                "[helper] SHIORI の応答の長さが確保を超える（読まずに解放）: declared={len} allocated={allocated}"
-            ));
+            // 錠が開かないときも読まずに解放し、種類は同じ Err で返す（呼び手は 500 を返すだけ）。
+            crate::helper_log(&if ptr.is_null() {
+                format!(
+                    "[helper] SHIORI の応答を GlobalLock で開けない（読まずに解放）: declared={len}"
+                )
+            } else {
+                format!(
+                    "[helper] SHIORI の応答の長さが確保を超える（読まずに解放）: declared={len} allocated={allocated}"
+                )
+            });
             Err(ProxyError::ResponseLengthMismatch {
                 declared: len,
                 allocated,

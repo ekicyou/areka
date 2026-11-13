@@ -134,6 +134,7 @@ mod gate_tests {
 
 mod window_tests {
     use super::super::*;
+    use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 
     /// 親窓 1 つへの loopback テスト（deterministic）。以下を順に検証する:
     ///
@@ -286,7 +287,7 @@ mod window_tests {
         }
     }
 
-    /// 無視したメッセージ（未知のタグ・形の崩れた HELLO・親が受けない既知の種類）は crash させず、
+    /// 無視したメッセージ（未知のタグ・形の崩れた HELLO・親が受けない既知の種類・lparam が空）は crash させず、
     /// それぞれ `parent_frame_ignored` の WARN を 1 行ずつ残す（指摘 11・要件 3.1 / 4.1）。
     /// 無視したメッセージは helper HWND を書き換えない。
     #[test]
@@ -297,6 +298,15 @@ mod window_tests {
             send_raw(&parent, 0xFF, b"");
             send_raw(&parent, MsgTag::Hello.as_u32() as usize, b"abc");
             send_raw(&parent, MsgTag::Load.as_u32() as usize, b"");
+            // SAFETY: parent.hwnd() は有効。lparam が空の WM_COPYDATA を同期送出するだけ。
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::SendMessageW(
+                    parent.hwnd(),
+                    WM_COPYDATA,
+                    Some(WPARAM(parent.hwnd_u32() as usize)),
+                    Some(LPARAM(0)),
+                );
+            }
         });
         let reasons: Vec<_> = events
             .iter()
@@ -310,7 +320,12 @@ mod window_tests {
             .collect();
         assert_eq!(
             reasons,
-            ["unknown_tag", "malformed_hello", "not_for_parent"],
+            [
+                "unknown_tag",
+                "malformed_hello",
+                "not_for_parent",
+                "null_lparam"
+            ],
             "{events:?}"
         );
         assert_eq!(parent.shared().helper_hwnd.get(), None);

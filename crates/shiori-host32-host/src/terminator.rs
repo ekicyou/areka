@@ -2,8 +2,8 @@
 //!
 //! `Child::kill` は `&mut Child` を要し、`Child` は shiori のスレッドの中に閉じている。
 //! 本型はプロセスの取っ手を複製して持ち、どのスレッドからでも `TerminateProcess` を呼べる。
-//! windows 依存は [`crate::job`] と同じ理由でこのファイルに隔離する（ワークスペースの
-//! `windows` 依存に既にある機能だけを使う）。
+//! `TerminateProcess` の呼び出しはこのファイルにまとめる（ワークスペースの `windows` 依存に
+//! 既にある機能だけを使う）。
 
 use std::os::windows::io::{AsHandle, AsRawHandle, OwnedHandle};
 use std::process::Child;

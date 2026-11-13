@@ -140,6 +140,31 @@ pub fn copydata_payload(
     Ok((tag, data))
 }
 
+/// 受領した WM_COPYDATA の LPARAM から `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す
+/// （host の親窓と helper の窓が共に使う）。`lparam` が空なら `None`（呼び手が記録して捨てる）。
+///
+/// # Safety
+/// `lparam` は 0 か、WM_COPYDATA の配送中に OS が渡した `*const COPYDATASTRUCT` であること。
+/// その `lpData` が空でなければ `cbData` バイト分読めること（OS が受け手の側へ写した領域）。
+/// どちらも WndProc が WM_COPYDATA を処理している間だけ有効なので、その中で呼ぶこと。
+pub unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
+    let cds = lparam.0 as *const COPYDATASTRUCT;
+    if cds.is_null() {
+        return None;
+    }
+    // SAFETY: 呼び手の約束により lparam は有効な COPYDATASTRUCT を指す。
+    let cds = unsafe { &*cds };
+    let dw_data = cds.dwData;
+    let len = cds.cbData as usize;
+    let payload = if len == 0 || cds.lpData.is_null() {
+        Vec::new()
+    } else {
+        // SAFETY: 呼び手の約束により lpData は cbData バイト読める。
+        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
+    };
+    Some((dw_data, len, payload))
+}
+
 /// framing レベルの不正フレーム表現（要件 2.5）。
 ///
 /// 本ユニットは framing ローカルな軽量エラーに留める。送信・往復層の
