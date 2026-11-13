@@ -137,3 +137,14 @@ fn panics_when_frame_outside_table() {
     a.frames[2] = ElementId(4);
     frames_table(a);
 }
+
+/// 同じ鍵を 2 つ渡すと、`new` も `with_frames` も小さい方の番号を返す（指摘 11・4.3）。
+#[test]
+fn new_and_with_frames_resolve_duplicate_key_to_smaller_id() {
+    let keys = || vec![key("dup.png"), key("dup.png")];
+    let entries = || vec![entry(10), entry(11)];
+    let by_new = AtlasTable::new(keys(), entries(), Vec::new());
+    let by_frames = AtlasTable::with_frames(keys(), entries(), Vec::new(), Vec::new());
+    assert_eq!(by_new.resolve(SetId(0), "dup.png"), Some(ElementId(0)));
+    assert_eq!(by_frames.resolve(SetId(0), "dup.png"), Some(ElementId(0)));
+}

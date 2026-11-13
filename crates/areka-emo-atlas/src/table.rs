@@ -109,7 +109,7 @@ pub struct Animation {
 /// 索引表＋頁群（bake の成果物・channel 非依存・6.5）。
 ///
 /// `entries`/`keys` は `ElementId`（= index）で整列した密 `Vec`（毎フレーム O(1)）。
-/// `bake` が一度構築し以後不変（immutable snapshot）。`Arc` 共有ゆえ `Clone` は安価。
+/// `bake` が一度構築し以後不変（immutable snapshot）。欄は全部 `Arc` で共有するので、`Clone` は `Arc` の写しだけ。
 #[derive(Clone, Debug)]
 pub struct AtlasTable {
     /// index == ElementId.0（デバッグ逆引き・ツリーダンプ用）。
@@ -117,41 +117,22 @@ pub struct AtlasTable {
     /// index == ElementId.0（ランタイム正準参照）。
     entries: Arc<[AtlasEntry]>,
     /// 構築時の一度きり用（(set, rel_path)→ElementId）。
-    resolve: HashMap<AtlasKey, ElementId>,
+    resolve: Arc<HashMap<AtlasKey, ElementId>>,
     pages: Arc<[AtlasPage]>,
     /// 動く絵の親の `ElementId`→コマの並び（静止画と 2 枚目以降のコマは載らない）。
     animations: Arc<HashMap<ElementId, Animation>>,
 }
 
 impl AtlasTable {
-    /// 索引表を構築する（`bake` とテストの入口）。
+    /// 動く絵の無い索引表を組む（テストの入口）。`with_frames` に空のコマを渡すのと同じ。
     ///
     /// `keys` と `entries` はともに `ElementId`（= index）で整列した密 `Vec` であり、
-    /// `keys.len() == entries.len()` を前提とする（両者は同一 ElementId で対応）。
-    /// `resolve` 逆引き表は `keys[i].clone() → ElementId(i)` として内部で構築する。
+    /// 同じ鍵が複数あるときは `with_frames` と同じく小さい方の番号を `resolve` の答えにする。
     ///
     /// # Panics
     /// `keys.len() != entries.len()` のとき panic する（契約違反・呼び出し側のバグ）。
     pub fn new(keys: Vec<AtlasKey>, entries: Vec<AtlasEntry>, pages: Vec<AtlasPage>) -> Self {
-        assert_eq!(
-            keys.len(),
-            entries.len(),
-            "AtlasTable::new: keys.len() ({}) != entries.len() ({}) — both are indexed by ElementId",
-            keys.len(),
-            entries.len(),
-        );
-        let resolve = keys
-            .iter()
-            .enumerate()
-            .map(|(i, k)| (k.clone(), ElementId(i as u32)))
-            .collect();
-        Self {
-            keys: keys.into(),
-            entries: entries.into(),
-            resolve,
-            pages: pages.into(),
-            animations: Arc::default(),
-        }
+        Self::with_frames(keys, entries, pages, Vec::new())
     }
 
     /// 動く絵つきの表を組む（`bake` とテストの入口・4.2〜4.5）。
@@ -197,7 +178,7 @@ impl AtlasTable {
         Self {
             keys: keys.into(),
             entries: entries.into(),
-            resolve,
+            resolve: Arc::new(resolve),
             pages: pages.into(),
             animations: Arc::new(animations.into_iter().collect()),
         }
