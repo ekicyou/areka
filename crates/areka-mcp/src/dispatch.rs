@@ -136,7 +136,7 @@ async fn forward(
         Err(err) if err.is::<LengthLimitError>() => {
             return (plain(StatusCode::PAYLOAD_TOO_LARGE), None);
         }
-        // 本文の途中でクライアントが切れたなど（応答は届かないが記録は残る）。
+        // 本文が約束の長さに届かないまま終わった（書きの側だけ閉じたなら 400 が届く。記録は `handle` の debug の 1 件）。
         Err(_) => return (plain(StatusCode::BAD_REQUEST), None),
     };
     let rpc = peek(&bytes);

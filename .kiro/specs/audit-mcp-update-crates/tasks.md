@@ -139,3 +139,6 @@
 - 1.1: 赤を見るために一時的に書き換えて戻したファイルは、時刻の都合で cargo が組み直さず古いビルドのまま赤が残ることがある。戻した後は `touch` してから回す。
 - 1.2: 偽の受け口の `start`／`start_on` は受け口のスレッドの tokio の中で `listen` するので、待ち受けの準備の知らせ（mpsc）を待ってから戻る。知らせを待たないと、起こした直後の接続が断られ Windows の送り直しで `Connect(TimedOut)` になる。
 - 3.2: `testkit::junction` の後の確かめは `symlink_metadata` で見る（`exists()` は先をたどるので自分を指すジャンクションで落ちる）。#31 の名前は設計の 4 つだけだと先頭の 0 の扱いを崩しても順が変わらないので `delete3.txt` を足した。
+- 4.1（範囲の外・完了の棚卸で起票）: `doc/ssp-mcp/transport-diff-areka.md` の「ping」「未知メソッド」の行は、`2026-07-28` の版で 404・`-32601` になることを書いていない（名指したテストはそれを固定している）。この spec は表の値を変えない約束なので直さない（この spec より前からの書き漏れ）。
+- 4.1（範囲の外・完了の棚卸で起票）: `crates/areka/src/log_history.rs` の規則 `areka_update::winhttp`／`areka_update::fetch` は何の記録にも当たらない（更新の記録はすべて `lib.rs`＝target `areka_update` から出る）。`areka` クレートの持ち場。
+- 4.1（裁定・数えない）: `areka-update` の `pub use` の `UpdateWarning`・`InvalidWhy`・`DeleteWhy`・`MAX_BODY_BYTES` は外の使い手が 0 だが、要件 6.1（公開の形を変えない）の外なので残す（要件 6.4・audit 系の議題は推奨案で決めてよい）。

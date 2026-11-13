@@ -1,4 +1,5 @@
-//! 実ソケットのテスト: `initialize`〜`server/discover`・`Accept`・本文の上限（要件 3・5）。
+//! 実ソケットのテスト: `initialize`〜`server/discover`・`Accept`・本文の上限（要件 3・5）、
+//! `params` の欠かせないメソッドの答え（spec: areka-P0-mcp-receiver-bugs）。
 //!
 //! 差の一覧（`doc/ssp-mcp/transport-diff-areka.md`）に写す値は、各テストの assert に
 //! 具体の値で固定する（別の記録は作らない）。測った版は rmcp 3.9.0。
@@ -373,7 +374,7 @@ pub(super) fn speak(
     post_rpc(addr, headers, &rpc(method, Some(id), params))
 }
 
-/// (要件 1.1・1.2・1.4・2.1・2.3) `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
+/// (spec: areka-P0-mcp-receiver-bugs 要件 1.1・1.2・1.4・2.1・2.3) `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
 /// 5 つの版のどれでも `{"code":-32602,"message":"invalid params for <m>"}`（`data`・`result` なし）。
 /// HTTP の状態は未登録の名前の `tools/call` と同じ（どの版も 200。rmcp 3.9.0 は `_meta` の揃った `-32602` を 200 で返す）。
 /// `params` なしは旧式の 4 版だけ（`2026-07-28` は `_meta` を `params` に入れるので送れない）。
@@ -424,7 +425,7 @@ fn malformed_params_of_params_required_methods_are_invalid_params_in_every_versi
     }
 }
 
-/// (要件 1.3・1.6・2.1・2.3) 受け付けないメソッドは 5 つの版のどれでも今のまま `-32601`（文は名前）。
+/// (spec: areka-P0-mcp-receiver-bugs 要件 1.3・1.6・2.1・2.3) 受け付けないメソッドは 5 つの版のどれでも今のまま `-32601`（文は名前）。
 /// `2026-07-28` の `ping` も `-32601`・404。`tools/list` の形の違う `cursor` は受け流して成功のまま。
 #[test]
 fn methods_not_accepted_keep_method_not_found_and_list_methods_keep_passing_in_every_version() {
