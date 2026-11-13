@@ -1,6 +1,8 @@
 //! 一周の入口・定義ファイル・差分 0・n 件の更新・確定の途中失敗・戻せなかった経路
 //! （要件 1.1〜1.4・1.16・1.17・2.5・2.6・4.2〜4.8・5.1・5.3・5.5・5.8・6.1・6.7・7.1・8.1〜8.4・9.3・9.4）。
-//! 残りの失敗の経路は `run_fail_tests.rs`（道具はここに 1 か所）。
+//! 残りの失敗の経路は `run_fail_tests.rs`。一周の道具（`fixture`・`go`・`Ran`・
+//! `three_ending_with_existing`・`pin_a_dll_when_b_is_fetched` ほか）はここに 1 か所で、
+//! `run_fail_tests.rs` と `lib_tests.rs` が使う。
 //!
 //! 各経路で、戻り値の形・観測者が受けた進捗の列・レベル別の記録件数・取得口の呼出・
 //! 木のバイト単位の同一性を同時に判定する（[`Ran::expect`]・[`Ran::failed`]）。
@@ -8,7 +10,9 @@
 use super::*;
 use crate::md5::md5_hex;
 use crate::paths::WORK_DIR;
-use crate::testkit::{FakeFetch, Pinned, dau, hold, pe_image, pin, tree, txt};
+use crate::testkit::{
+    FakeFetch, MD5_ABC, Pinned, dau, hold, pe_image, pin, target_fixture, tree, txt,
+};
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::WorkDir;
 use std::cell::RefCell;
@@ -18,7 +22,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 pub(super) const HOME: &str = "http://example.test/ghost/";
-pub(super) const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
 
 pub(super) struct Fixture {
     pub(super) work: WorkDir,
@@ -35,9 +38,7 @@ impl Fixture {
 }
 
 pub(super) fn fixture() -> Fixture {
-    let work = WorkDir::new().expect("作業フォルダ");
-    let target = work.path().join("target");
-    fs::create_dir_all(&target).unwrap();
+    let (work, target, _) = target_fixture();
     Fixture { work, target }
 }
 
@@ -426,6 +427,27 @@ fn non_http_homeurl_fails_at_entry_without_fetching() {
 }
 
 #[test]
+fn an_https_homeurl_runs() {
+    let f = fixture();
+    fs::write(f.target.join("a.txt"), b"abc").unwrap();
+    let before = tree(&f.target);
+    let home = "https://example.test/ghost/";
+    let manifest_url = format!("{home}updates2.dau");
+    let fetch = FakeFetch::new().serve(&manifest_url, &dau(&[&["a.txt", MD5_ABC]], true));
+
+    let ran = go(home, &f.target, &fetch);
+
+    let outcome = ran.result.as_ref().expect("https の更新先は通る");
+    assert!(
+        matches!(outcome, UpdateOutcome::Unchanged { .. }),
+        "{outcome:?}"
+    );
+    assert_eq!(fetch.calls(), vec![manifest_url]);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&head(&[]), [2, 0, 0]);
+}
+
+#[test]
 fn missing_trailing_slash_is_appended_and_warned_once() {
     let f = fixture();
     let before = tree(&f.target);
@@ -575,6 +597,27 @@ pub(super) fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> (FakeFe
     (fetch, manifest)
 }
 
+/// `b.txt` を取る時点で、置いた `new/a.dll`（PE）を写したまま持ち、置いた後の削除を拒ませる
+/// （較正は commit_tests）。作業場所の棚の `9-9`（他の走行の残骸）は選ばない。
+pub(super) fn pin_a_dll_when_b_is_fetched(
+    f: &Fixture,
+    fetch: FakeFetch,
+) -> (FakeFetch, Rc<RefCell<Option<Pinned>>>) {
+    let pinned: Rc<RefCell<Option<Pinned>>> = Rc::default();
+    let (slot, shelf, b_url) = (pinned.clone(), f.target.join(WORK_DIR), url("b.txt"));
+    let fetch = fetch.on_get(move |u| {
+        if u == b_url {
+            let dir = fs::read_dir(&shelf)
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .find(|p| !p.ends_with("9-9"))
+                .unwrap();
+            *slot.borrow_mut() = Some(pin(&dir.join("new").join("a.dll")));
+        }
+    });
+    (fetch, pinned)
+}
+
 /// [`three_ending_with_existing`] の 3 件を全部取って照合し終えるまでの進捗。
 fn three_fetched(a_bytes: &[u8]) -> Vec<Progress> {
     let mut seen = head(&["a.dll", "sub/x.txt", "b.txt"]);
@@ -613,27 +656,16 @@ fn failure_mid_commit_rolls_back_and_cleans_up_the_work_area() {
 #[test]
 fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let f = fixture();
-    // 1 件目は PE。3 件目を取る時点で `new/a.dll` を写したまま持ち、置いた後の削除を拒ませる
-    // （較正は commit_tests・tasks.md 4.2）。3 件目は掴まれていて確定が止まる。
+    // 1 件目は PE。3 件目を取る時点で `new/a.dll` を掴み、3 件目は掴まれていて確定が止まる。
     let pe = pe_image();
     let (fetch, manifest) = three_ending_with_existing(&f, &pe);
     let before = tree(&f.target);
-    let pinned: Rc<RefCell<Option<Pinned>>> = Rc::default();
     let shelf = f.target.join(WORK_DIR);
-    let fetch = {
-        let (pinned, shelf, b_url) = (pinned.clone(), shelf.clone(), url("b.txt"));
-        fetch.on_get(move |u| {
-            if u == b_url {
-                let dir = fs::read_dir(&shelf)
-                    .unwrap()
-                    .next()
-                    .unwrap()
-                    .unwrap()
-                    .path();
-                *pinned.borrow_mut() = Some(pin(&dir.join("new").join("a.dll")));
-            }
-        })
-    };
+    // 戻せなかった他の走行の元の内容＝残したまま報告する残骸（4.8・5.5）。
+    let other = shelf.join("9-9");
+    fs::create_dir_all(other.join("old")).unwrap();
+    fs::write(other.join("old/b.txt"), b"b").unwrap();
+    let (fetch, pinned) = pin_a_dll_when_b_is_fetched(&f, fetch);
     let held = hold(&f.target.join("b.txt"));
 
     let ran = go(HOME, &f.target, &fetch);
@@ -669,8 +701,8 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let work = err.work.as_ref().expect("作業場所のパスを返す");
     assert!(work.is_dir(), "{}", work.display());
     assert_eq!(work.parent(), Some(shelf.as_path()));
-    assert!(err.leftovers.is_empty(), "{err:?}");
-    ran.expect(&three_fetched(&pe), [1, 0, 1]);
+    assert_eq!(err.leftovers, [other]);
+    ran.expect(&three_fetched(&pe), [1, 1, 1]);
     // 作業場所の外は、消せなかった a.dll だけが開始前と違う（sub/x.txt と sub/ は戻した）。
     let mut expected = before;
     expected.insert("a.dll".into(), pe);

@@ -8,8 +8,9 @@
 //!
 //! 孤児化の実害は 2 つ:
 //! 1. **プロセスリーク**（ゴースト起動のたびに zombie helper が残り得る）。
-//! 2. **継承した stdio パイプを握り続ける**ため、親を piped で起動した側の
-//!    `wait_with_output()` が EOF を得られず **無限ブロック**する（統合 smoke テストのハング源）。
+//! 2. **標準エラーの管の書き口を握り続ける**ため、host の標準エラーの読み手が管の終わりを得られず、
+//!    その読み手を待つ側が止まる（helper の標準入力・標準出力は NUL、標準エラーは host の管。
+//!    helper は始めに自分の標準の取っ手の受け継ぎの印を落とすので、書き口を持つのは helper だけ）。
 //!
 //! 本モジュールは Windows の **Job Object** による OS 公式の道連れ機構でこれを塞ぐ:
 //! helper を spawn 直後に `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 付き job へ割り当て、job
@@ -18,8 +19,8 @@
 //! kill される。**helper 側の協力にも UNLOAD 到達にも依存しない安全網**であり、下流の
 //! 正規 UNLOAD 終了経路と両立する（先に UNLOAD で正常終了していれば job には対象が残らず無害）。
 //!
-//! windows 依存はこのモジュールに隔離し、[`process_host`](crate::process_host) の
-//! 純ロジック（`ExitKind::classify`・`resolve_param` 等）の std-only 単体テスト可能性を保つ。
+//! Job Object の呼び出しはこのモジュールにまとめる（[`process_host`](crate::process_host) も
+//! 起こし方・待ち方・標準エラーの読みで `windows` を使う）。
 
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::process::Child;
@@ -27,8 +28,8 @@ use std::process::Child;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-    SetInformationJobObject,
+    JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JobObjectExtendedLimitInformation, SetInformationJobObject,
 };
 
 /// spawn 済み `child`（helper）を `KILL_ON_JOB_CLOSE` 付き Job Object へ割り当て、その
@@ -50,21 +51,32 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
         let job: HANDLE = match CreateJobObjectW(None, None) {
             Ok(h) => h,
             Err(e) => {
-                tracing::error!(error = %e, "helper 孤児化防止: CreateJobObject 失敗（縮退）");
+                tracing::error!(
+                    target: crate::process_host::LOG_TARGET,
+                    error = %e,
+                    "helper 孤児化防止: CreateJobObject 失敗（縮退）"
+                );
                 return None;
             }
         };
 
-        // 2) KILL_ON_JOB_CLOSE を設定（job の最後のハンドルが閉じたら所属プロセスを全 kill）。
+        // 2) KILL_ON_JOB_CLOSE（job の最後のハンドルが閉じたら所属プロセスを全 kill）と
+        //    SILENT_BREAKAWAY_OK（helper が起こしたプロセス＝SHIORI の子は job に入らず、ゴーストを
+        //    閉じても残る＝SSP と同じ向き・要件 10.7）を設定する。helper 自身は job に残る。
         let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        info.BasicLimitInformation.LimitFlags =
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
         if let Err(e) = SetInformationJobObject(
             job,
             JobObjectExtendedLimitInformation,
             core::ptr::addr_of!(info) as *const core::ffi::c_void,
             core::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
         ) {
-            tracing::error!(error = %e, "helper 孤児化防止: SetInformationJobObject 失敗（縮退）");
+            tracing::error!(
+                target: crate::process_host::LOG_TARGET,
+                error = %e,
+                "helper 孤児化防止: SetInformationJobObject 失敗（縮退）"
+            );
             let _ = CloseHandle(job);
             return None;
         }
@@ -72,7 +84,11 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
         // 3) helper を job へ割り当て（child の OS プロセスハンドル）。
         let child_handle = HANDLE(child.as_raw_handle());
         if let Err(e) = AssignProcessToJobObject(job, child_handle) {
-            tracing::error!(error = %e, "helper 孤児化防止: AssignProcessToJobObject 失敗（縮退）");
+            tracing::error!(
+                target: crate::process_host::LOG_TARGET,
+                error = %e,
+                "helper 孤児化防止: AssignProcessToJobObject 失敗（縮退）"
+            );
             let _ = CloseHandle(job);
             return None;
         }
@@ -85,8 +101,52 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Command;
+    use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
+    use windows::Win32::System::JobObjects::{
+        JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK, QueryInformationJobObject,
+    };
+
+    /// 約 60 秒生きる子（`ping` をじかに起こす。`cmd /c` を挟むと孫が残る＝`terminator_tests.rs` と同じ）。
+    fn long_lived() -> std::process::Child {
+        Command::new("ping.exe")
+            .args(["-n", "60", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("ping stand-in を spawn できる")
+    }
+
+    /// job の旗を読み戻すと、道連れ（KILL_ON_JOB_CLOSE）と孫の抜け出し（SILENT_BREAKAWAY_OK）の
+    /// 2 つが立っている（要件 10.7・指摘 13）。
+    #[test]
+    fn job_limits_let_grandchildren_break_away() {
+        let mut child = long_lived();
+        let job = attach_kill_on_close_job(&child).expect("job 割り当てが成功する");
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        // SAFETY: `job` は生きている job の取っ手。`info` は渡す長さの書き込み先。
+        unsafe {
+            QueryInformationJobObject(
+                Some(HANDLE(job.as_raw_handle())),
+                JobObjectExtendedLimitInformation,
+                core::ptr::addr_of_mut!(info).cast(),
+                core::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                None,
+            )
+        }
+        .expect("job の旗を読み戻せる");
+        let flags = info.BasicLimitInformation.LimitFlags;
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(
+            flags.contains(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE),
+            "{flags:?}"
+        );
+        assert!(
+            flags.contains(JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK),
+            "{flags:?}"
+        );
+    }
 
     /// KILL_ON_JOB_CLOSE の実効性: 長時間走る子を job へ割り当て、job ハンドル（`OwnedHandle`）を
     /// drop すると子が OS により**速やかに終了させられる**（＝孤児化しない）ことを実プロセスで実証する。
@@ -97,14 +157,11 @@ mod tests {
     #[test]
     fn dropping_job_handle_terminates_child_promptly() {
         // ~60s 走る stand-in（ping）。job kill されなければ締切（10s）を大きく超えて生存する。
-        let mut child = Command::new("cmd.exe")
-            .args(["/c", "ping", "-n", "60", "127.0.0.1"])
-            .spawn()
-            .expect("ping stand-in を spawn できる");
+        let mut child = long_lived();
 
         let guard = attach_kill_on_close_job(&child).expect("job 割り当てが成功する");
 
-        // job ハンドルを閉じる → KILL_ON_JOB_CLOSE で所属プロセス（child とその子孫）を全 kill。
+        // job ハンドルを閉じる → KILL_ON_JOB_CLOSE で所属プロセス（helper 役の child 自身・子孫は SILENT_BREAKAWAY_OK で抜けている）を全 kill。
         drop(guard);
 
         // 締切内に子が終了する（＝kill された）ことを非ブロッキング poll で確認する。

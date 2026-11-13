@@ -39,7 +39,8 @@ const FAMILIES: &[(&str, &str, &[u8])] = &[
 /// 本仕様適用前の `build_request` が emo2 相当の GET に対して産んだバイト列の逐語写し
 /// （要件 9.6・12.1）。
 ///
-/// 出所: `git show 4db516fe:crates/shiori-host32-host/src/shiori3.rs` の `build_request`
+/// 出所: 当時のコミット `4db516fe` の `crates/shiori-host32-host/src/shiori3.rs` の `build_request`
+/// （そのコミットは squash で消え、今の履歴からは `git show` で引けない）
 /// ——組み立てた `String` をそのまま `out.into_bytes()` して返す版（`Charset` ヘッダ値は
 /// `header_value()` ＝ `"UTF-8"` 固定）。その組立順に従って書き下したものであり、
 /// **今日の符号化器を 1 度も通していない**（非 ASCII は UTF-8 のバイトを `\x` 表記で直書き）。
@@ -49,7 +50,7 @@ const FAMILIES: &[(&str, &str, &[u8])] = &[
 ///
 /// 要求の形は emo2 の OnBoot GET と同形にした——`sender` は `Shiori3Client` の既定
 /// `DEFAULT_SENDER`（`client.rs` の既定 sender の定義行）、`Reference0` は
-/// `areka/src/emo2_boot/spine_conformance_script.rs` の `SHELL_NAME`（emo2 のシェル名・
+/// `crates/areka/src/runtime/spine_conformance_script.rs` の `SHELL_NAME`（emo2 のシェル名・
 /// `検体 emo2 の shell/master/descript.txt` の
 /// `name` 行の逐語）で、非 ASCII を含むため
 /// 「UTF-8 経路のバイト列が 1 バイトも変わらない」を実際に検査できる。

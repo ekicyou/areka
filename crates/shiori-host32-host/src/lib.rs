@@ -6,7 +6,8 @@
 //!
 //! # モジュール構成
 //! - [`process_host`] — `ProcessHost`（helper spawn / 非ブロッキング生存監視 /
-//!   終了分類）。**std-only**（`windows` 非依存）。
+//!   終了分類）。判定の純ロジックは `std::process` の上だけで組み、`windows` は起こし方
+//!   （`CREATE_NO_WINDOW`・Job Object）と待ち方・標準エラーの読みに使う。
 //! - [`parent_window`] — `ParentMessageWindow`（HELLO ハンドシェイク観測 /
 //!   `pump_until_hello_or`）。`wintf-winmsg-executor` の message-only 窓。
 //! - [`charset`] — `Charset`（任意の文字コードを列挙せず表す newtype）と `LabelError`、
@@ -17,16 +18,19 @@
 //! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
 //!   parse → `RequestError` 統合を結線する。
 //! - [`error`] — 構造化エラー型（`thiserror`）。
-//! - [`lifecycle`] — helper のライフサイクル管理（`HelperLifecycle` による正常終了要求 /
-//!   `classify_failure` による統一終了分類 / `LifecycleReport` によるレポート /
+//! - [`lifecycle`] — helper のライフサイクル管理（`HelperLifecycle` による生存の観測と正常終了要求 /
 //!   `ShutdownError` shutdown 失敗語彙）。クレート直下に公開 re-export。
+
+// 単体テストが `#[path]` で引く結合テストの道具（`tests/common`）は自分を `shiori_host32_host` と呼ぶ。
+#[cfg(test)]
+extern crate self as shiori_host32_host;
 
 /// 通信の文字コード（`Charset`）・ラベル解決の失敗理由（`LabelError`）・
 /// セッションの交渉状態（`CharsetNegotiator`）と復号方針（`CharsetPolicy`）。
 pub mod charset;
 pub mod client;
 pub mod error;
-/// helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）。windows 依存をここへ隔離する。
+/// helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）。Job Object の呼び出しをここへまとめる。
 mod job;
 pub mod lifecycle;
 pub mod parent_window;
@@ -35,18 +39,16 @@ pub mod process_host;
 pub mod request_headers;
 pub mod shiori2;
 pub mod shiori3;
-/// `Child` を持たないスレッドから helper を終わらせる取っ手（windows 依存をここへ隔離する）。
+/// `Child` を持たないスレッドから helper を終わらせる取っ手（`TerminateProcess` の呼び出しをここへまとめる）。
 mod terminator;
 
 pub use charset::{Charset, CharsetNegotiator, CharsetPolicy, LabelError};
 pub use client::{Shiori3Client, map_get_reply};
 pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
-pub use lifecycle::{
-    FailureClass, HelperLifecycle, HelperStatus, LifecycleReport, ShutdownError, classify_failure,
-};
+pub use lifecycle::{HelperLifecycle, HelperStatus, ShutdownError};
 pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
 pub use process_host::{
-    ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
+    ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit_kind, spawn,
 };
 pub use request_headers::{RequestHeaders, ValueReply, request_of};
 pub use shiori2::{ShioriVersion, VersionVerdict};

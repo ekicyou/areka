@@ -1997,7 +1997,6 @@ name = "shiori-host32-helper"
 version = "0.1.0"
 dependencies = [
  "shiori-host32-ipc",
- "thiserror",
  "windows",
  "wintf-winmsg-executor",
 ]
@@ -2007,7 +2006,6 @@ name = "shiori-host32-host"
 version = "0.1.0"
 dependencies = [
  "encoding_rs",
- "event-listener",
  "log-capture-kit",
  "shiori-host32-ipc",
  "thiserror",
@@ -2022,7 +2020,6 @@ version = "0.1.0"
 dependencies = [
  "thiserror",
  "windows",
- "windows-core",
 ]
 
 [[package]]

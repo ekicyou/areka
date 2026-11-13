@@ -36,8 +36,8 @@
 //!   WndProc の中から本番の [`shiori_host32_ipc::send_copydata_response`] で応答を再入送出する
 //!   （helper 本体の 3 か所と同じ関数・同じ旗）。
 //!
-//! 実 DLL は要らない（proxy を駆動しない）ため x64 でも走る。`main_loopback_tests.rs` の i686 専用
-//! 檻とは別物で、あちらは無改変のままである。
+//! 実 DLL は要らない（proxy を駆動しない）。判定は CPU の種類に依らないが、約 42 秒かかるので
+//! i686 の段でだけ走らせる（`main.rs` の `#[cfg(all(test, target_arch = "x86"))]`）。
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;

@@ -1,7 +1,7 @@
 [package]
 name = "shiori-host32-helper"
 workspace = "../.."
-description = "host-32 i686 helper binary (HelperMessageWindow / respond echo)"
+description = "host-32 i686 helper binary (HelperMessageWindow / SHIORI DLL proxy)"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -12,7 +12,6 @@ repository.workspace = true
 [dependencies]
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }
 wintf-winmsg-executor = { workspace = true }
-thiserror = { workspace = true }
 
 [dependencies.windows]
 workspace = true
@@ -25,4 +24,6 @@ features = [
     "Win32_Globalization",
     # DLL を読むときだけ OS の「正しくないイメージ」等の窓を止める（`shiori_proxy.rs` の `load_library_quiet`）
     "Win32_System_Diagnostics_Debug",
+    # 始めに標準の取っ手を SHIORI の子へ受け継がせない（`main.rs` の `disinherit_std_handles`）
+    "Win32_System_Console",
 ]

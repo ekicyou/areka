@@ -1,8 +1,8 @@
 //! 一周の残りの失敗の経路（要件 4.1・4.5・5.6・8.1・8.4・9.3・9.4・9.6）: 取得失敗・MD5 不一致・
 //! 作業場所を作れない・差分の段と確定の段で配下の外。道具は親の `run_tests.rs`。
 //!
-//! ジャンクションを含む木は `tree` が辿れない（tasks.md 1.3）。木はジャンクションを作る前か
-//! 外した後に取る。
+//! `tree` はジャンクションをフォルダとして辿らずファイルとして読むので panic する（`testkit::walk`）。
+//! 木はジャンクションを作る前か外した後に取る。
 
 use super::*;
 use crate::testkit::junction;
@@ -235,4 +235,87 @@ fn parent_swapped_for_a_junction_after_the_diff_fails_at_commit_and_rolls_back()
     seen.extend(fetched("a.txt", b"new a", 0, 2));
     seen.extend(fetched("sub/b.txt", b"b", 1, 2));
     ran.expect(&seen, [1, 0, 1]);
+}
+
+#[test]
+fn updates_txt_failing_for_another_reason_is_a_manifest_fetch_failure() {
+    let f = fixture();
+    let before = tree(&f.target);
+    // updates2.dau は表に無い＝「無い」で後退し、updates.txt が無い以外の理由で失敗する。
+    let fetch = FakeFetch::new().fail(&url("updates.txt"), FetchError::Timeout);
+
+    let ran = go(HOME, &f.target, &fetch);
+
+    let err = ran.failed();
+    assert!(
+        matches!(
+            err.reason,
+            FailReason::ManifestFetch {
+                name: ManifestName::UpdatesTxt,
+                source: FetchError::Timeout
+            }
+        ),
+        "{err}"
+    );
+    assert_eq!(err.stage, Stage::Manifest);
+    assert_eq!(err.file(), Some("updates.txt"));
+    assert_eq!(fetch.calls(), vec![url("updates2.dau"), url("updates.txt")]);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&[], [1, 0, 1]);
+}
+
+#[test]
+fn a_failed_run_reports_another_runs_residue() {
+    let f = fixture();
+    let (fetch, _) = three_ending_with_existing(&f, b"A");
+    // 戻せなかった他の走行の元の内容＝棚に残す残骸（4.8・5.5）。
+    let other = f.target.join(WORK_DIR).join("9-9");
+    fs::create_dir_all(other.join("old")).unwrap();
+    fs::write(other.join("old/b.txt"), b"b").unwrap();
+    let before = tree(&f.target);
+    // 退避の `rename` が拒まれる＝3 件目で確定が止まり、戻す。
+    let held = hold(&f.target.join("b.txt"));
+
+    let ran = go(HOME, &f.target, &fetch);
+    drop(held);
+
+    let err = ran.failed();
+    assert_eq!(err.reason.kind(), "CommitWrite", "{err}");
+    assert!(err.rolled_back() && err.work.is_none(), "{err:?}");
+    assert_eq!(err.leftovers, [other]);
+    assert_eq!(tree(&f.target), before, "残骸ごと開始前と同一");
+    ran.expect(&three_fetched(b"A"), [1, 1, 1]);
+    let warn = ran
+        .records
+        .iter()
+        .find(|e| e.level == tracing::Level::WARN)
+        .unwrap();
+    assert_eq!(warn.field_str("kind"), Some("leftover"));
+}
+
+#[test]
+fn the_manifest_that_cannot_be_staged_fails_at_commit() {
+    let f = fixture();
+    let (fetch, _) = three_ending_with_existing(&f, b"A");
+    // 最後のファイルを取る最中に、作業場所の定義ファイルの書き先を同名のフォルダで塞ぐ。
+    let fetch = {
+        let (shelf, b_url) = (f.target.join(WORK_DIR), url("b.txt"));
+        fetch.on_get(move |u| {
+            if u == b_url {
+                let dir = fs::read_dir(&shelf).unwrap().next().unwrap().unwrap();
+                fs::create_dir_all(dir.path().join("new/updates2.dau")).unwrap();
+            }
+        })
+    };
+    let before = tree(&f.target);
+
+    let ran = go(HOME, &f.target, &fetch);
+
+    let err = ran.failed();
+    assert_eq!(err.reason.kind(), "WorkArea", "{err}");
+    assert_eq!(err.stage, Stage::Commit);
+    assert_eq!(err.file(), Some("updates2.dau"));
+    assert!(err.rolled_back() && err.work.is_none() && err.leftovers.is_empty());
+    assert_eq!(tree(&f.target), before, "作業場所まで開始前と同一");
+    ran.expect(&three_fetched(b"A"), [1, 0, 1]);
 }

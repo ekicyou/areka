@@ -1,13 +1,12 @@
 //! `ProcessHost`（要件 1.1〜1.5）: helper プロセスの起動と、IPC と直交する
 //! 非ブロッキング生存監視。
 //!
-//! 本モジュールの純ロジック（`ExitKind::classify`・`resolve_param`・
-//! `resolve_request_timeout` 等）は **std-only**（`windows` 非依存）で完結し、親ウィンドウ
-//! ハンドルは `windows` の `HWND` 型を引きずらず u32 ワイヤ値として子へ渡す。これにより
-//! ProcessHost の判定ロジックは x64/arm64 の別なく純粋な `std::process` 上のロジックとして
-//! 単体テスト可能である。唯一 [`spawn_command`] のみ、helper の**孤児化防止**として
-//! KILL_ON_JOB_CLOSE 付き Job Object を割り当てる（windows 依存は [`crate::job`] に隔離し、
-//! 割り当て失敗時は縮退＝現行挙動）。
+//! 判定の純ロジック（`ExitKind::classify`・`resolve_request_timeout` 等）は
+//! `std::process` の上だけで組み、実プロセスなしで単体テストできる。親ウィンドウのハンドルは
+//! `HWND` 型を引きずらず u32 ワイヤ値として子へ渡す。`windows` を使うのは起こし方と待ち方の所
+//! （`CREATE_NO_WINDOW`・終わりの待ち `WaitForSingleObject`・標準エラーの ANSI 読み
+//! `MultiByteToWideChar`）と、[`spawn_command`] が helper の**孤児化防止**として割り当てる
+//! KILL_ON_JOB_CLOSE 付き Job Object（[`crate::job`] にまとめ、割り当て失敗時は縮退＝現行挙動）。
 //!
 //! 子への起動パラメーター受け渡し規約（cross-task 契約・design §SpawnContract・R3.1〜3.3）:
 //! helper は起動パラメーターを **arg-n 優先・fallback env** の順で取得する。
@@ -30,18 +29,17 @@
 //! 変えない。見るのは渡されたパスだけ（探さない）。[`spawn_command`] では確かめない
 //! （helper でない子を起こすテストが記録を出さない）。
 
+use std::io::BufRead;
+use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::error::SpawnError;
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
-/// `CreateProcess` の作成フラグ `CREATE_NO_WINDOW`（コンソールの実行体を窓なしで起こす）。
-///
-/// `windows` crate の同名定数は `Win32_System_Threading` の機能に在り、この crate は有効に
-/// していない。値 1 つのために機能を足さず、Win32 の定義値（0x08000000）をここに置く。
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+use crate::error::SpawnError;
 
 /// helper が親 HWND を fallback で読む環境変数名（cross-task 契約）。
 ///
@@ -136,10 +134,10 @@ pub enum ExitKind {
     Clean,
     /// 異常終了（終了コードが非 0・要件 1.4）。保持値は当該終了コード。
     Abnormal(i32),
-    /// 終了コードを持たない終了（シグナル/強制終了など・要件 1.4）。
+    /// 終了コードを持たない終了（`ExitStatus::code()` が `None`・要件 1.4）。
     ///
-    /// Windows では `TerminateProcess` 等により終了コードが取得できない
-    /// 経路が該当する。`ExitStatus::code()` が `None` のときに分類される。
+    /// Windows の `ExitStatus::code()` はいつも値を持つので、この腕は Windows では起きない
+    /// （`TerminateProcess(..,1)` は [`ExitKind::Abnormal(1)`]）。公開の形を変えないために残す。
     Terminated,
 }
 
@@ -148,7 +146,7 @@ impl ExitKind {
     ///
     /// - `code() == Some(0)` → [`ExitKind::Clean`]
     /// - `code() == Some(n)`（n ≠ 0） → [`ExitKind::Abnormal(n)`]
-    /// - `code() == None` → [`ExitKind::Terminated`]
+    /// - `code() == None` → [`ExitKind::Terminated`]（Windows では起きない）
     ///
     /// 実プロセスに依存しないため、この関数単体でテスト可能。
     #[must_use]
@@ -163,24 +161,24 @@ impl ExitKind {
 
 /// spawn 済み helper プロセスへの参照（要件 1.1）。
 ///
-/// 起動した子プロセスの [`Child`] を保持し、[`poll_exit`] /
-/// [`poll_exit_kind`] による非ブロッキング生存監視の対象となる。
-/// `helper_hwnd` は HELLO ハンドシェイク受領後に確定する（本ユニット内で
-/// 結線・本タスクでは未使用）。
+/// 起動した子プロセスの [`Child`] を保持し、[`poll_exit_kind`] による非ブロッキング生存監視の
+/// 対象となる。
 ///
 /// **孤児化防止**: spawn 時に helper を `KILL_ON_JOB_CLOSE` 付き Job Object へ割り当て、
 /// その job ハンドルを `_job` として保持する（[`crate::job`]）。本ハンドルを保持する
 /// 親プロセスが終了（正常・異常・UNLOAD 未送出のいずれも）すると OS が job を閉じ、
-/// helper を確実に道連れにする。helper 側の親死亡検知（下流 host32-lifecycle 領分・未実装）に
-/// 依存しない安全網。job 割り当てに失敗した場合は `None`（縮退・現行挙動）。
+/// helper を確実に道連れにする。helper は親の死を自分では検知しないため、親が
+/// UNLOAD を送らずに終わったときの安全網はこれだけ。job 割り当てに失敗した場合は `None`（縮退・現行挙動）。
 #[derive(Debug)]
 pub struct HelperHandle {
     child: Child,
-    /// HELLO 受領後に確定する helper のウィンドウハンドル（u32 ワイヤ値）。
-    helper_hwnd: Option<u32>,
     /// KILL_ON_JOB_CLOSE 付き Job Object の RAII ハンドル（孤児化防止）。`Drop` で
     /// `CloseHandle`→job クローズ→helper kill。割り当て失敗時は `None`（縮退）。
     _job: Option<std::os::windows::io::OwnedHandle>,
+    /// helper の標準エラーの読み手のスレッド（標準エラーが管のときだけ `Some`）。管が閉じれば
+    /// （helper とその書き口を受け継いだ子がみな終われば）自分で終わる。`HelperHandle` の Drop が
+    /// helper の終わりの後にこれを 1 秒まで待つ（U7）ので、ここに持っておく。
+    stderr_reader: Option<JoinHandle<()>>,
 }
 
 impl HelperHandle {
@@ -190,22 +188,7 @@ impl HelperHandle {
         self.child.id()
     }
 
-    /// HELLO 受領後に確定した helper HWND（u32 ワイヤ値）を返す。
-    ///
-    /// 未確定（ハンドシェイク未完了）なら `None`。
-    #[must_use]
-    pub fn helper_hwnd(&self) -> Option<u32> {
-        self.helper_hwnd
-    }
-
-    /// HELLO 受領時に helper HWND（u32 ワイヤ値）を記録する。
-    ///
-    /// ハンドシェイクを担う別タスク（4.2）が受領時に呼ぶ結線点。
-    pub fn set_helper_hwnd(&mut self, hwnd: u32) {
-        self.helper_hwnd = Some(hwnd);
-    }
-
-    /// helper を強制終了する（検証用 additive・統合 5.2 の観測点）。
+    /// helper を強制終了する（本番の kill の経路: 本型の `Drop` と `HelperLifecycle::terminate` が使う）。
     ///
     /// 既に終了済みの場合も `Ok(())` として扱う（冪等）。強制終了後の
     /// 終了種別は [`poll_exit_kind`] で観測できる。
@@ -213,12 +196,16 @@ impl HelperHandle {
     /// # Errors
     /// `TerminateProcess` 相当の I/O 失敗時に [`std::io::Error`] を返す。
     pub fn terminate(&mut self) -> std::io::Result<()> {
-        match self.child.kill() {
-            Ok(()) => Ok(()),
-            // 既に終了しているプロセスへの kill は成功扱い（冪等）。
-            Err(err) if err.kind() == std::io::ErrorKind::InvalidInput => Ok(()),
-            Err(err) => Err(err),
-        }
+        // Windows の std の kill は、もう終わったプロセスにも Ok を返す（冪等）。
+        self.child.kill()
+    }
+
+    /// helper の終わりを `timeout` まで待つ（`WaitForSingleObject` 1 回）。終わっていれば終了種別、
+    /// 待ちきれなければ `None`。待つ長さはミリ秒へ切り上げ（短く待たない）、`u32::MAX - 1` で抑える
+    /// （`INFINITE` にしない）。
+    pub(crate) fn wait_for_exit(&mut self, timeout: Duration) -> Option<ExitKind> {
+        wait_handle(self.child.as_raw_handle(), timeout);
+        poll_exit_kind(self)
     }
 
     /// `Child` を持たないスレッドから helper を終わらせる取っ手を作る（プロセスの取っ手の複製）。
@@ -227,6 +214,63 @@ impl HelperHandle {
     /// 取っ手の複製（`DuplicateHandle`）の失敗を [`std::io::Error`] として返す。
     pub fn terminator(&self) -> std::io::Result<crate::HelperTerminator> {
         crate::HelperTerminator::from_child(&self.child)
+    }
+}
+
+/// Drop が helper の終わりを待つ上限。
+const DROP_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Drop が helper の終わりの後に標準エラーの読み手の終わりを待つ上限。
+const DROP_READER_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// 取っ手（プロセス・スレッド）がシグナル状態になるまで `timeout` まで待ち、なったら `true`。
+fn wait_handle(handle: std::os::windows::io::RawHandle, timeout: Duration) -> bool {
+    use windows::Win32::Foundation::{HANDLE, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::WaitForSingleObject;
+    let millis = timeout
+        .as_nanos()
+        .div_ceil(1_000_000)
+        .min(u128::from(u32::MAX - 1)) as u32;
+    // SAFETY: `handle` は呼び手が持つ生きた取っ手（`Child`／`JoinHandle` が借り元）。借りるだけ。
+    unsafe { WaitForSingleObject(HANDLE(handle), millis) == WAIT_OBJECT_0 }
+}
+
+/// 包む前に捨てられた helper も、job を持たない helper も残さない（指摘 14）。
+impl Drop for HelperHandle {
+    fn drop(&mut self) {
+        let pid = self.pid();
+        // 終わっていれば `terminate` は `Ok`（冪等）。
+        if let Err(error) = self.terminate() {
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "helper_kill_on_drop_failed",
+                pid,
+                %error,
+                "helper を終わらせられなかった"
+            );
+        }
+        if self.wait_for_exit(DROP_EXIT_TIMEOUT).is_none() {
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "helper_exit_timeout_on_drop",
+                pid,
+                "helper が上限時間内に終わらなかった"
+            );
+        }
+        // 終わった helper の最後の行を記録へ入れきってから戻る。書き口を受け継いだ孫が残れば管は
+        // 閉じないので、待ちは 1 秒で切り上げる。
+        if let Some(reader) = self.stderr_reader.take() {
+            if wait_handle(reader.as_raw_handle(), DROP_READER_TIMEOUT) {
+                let _ = reader.join();
+            } else {
+                tracing::debug!(
+                    target: LOG_TARGET,
+                    event = "helper_stderr_reader_detached",
+                    pid,
+                    "helper の標準エラーの読み手が 1 秒で終わらず、切り離した"
+                );
+            }
+        }
     }
 }
 
@@ -240,6 +284,8 @@ impl HelperHandle {
 /// - **env（同値 fallback）**: [`PARENT_HWND_ENV`] = parent_hwnd 10進・
 ///   [`LOAD_DIR_ENV`] = load_dir・[`SHIORI_NAME_ENV`] = shiori_name。
 /// - **cwd**: `load_dir`（伺か慣習・R3.3）。
+/// - **`PASTA_DEBUG=0`**: 親の値を受け継がせない（[`helper_command`]）。
+/// - **標準エラー**: 管にし、行ごとに `warn`（`event = "helper_stderr"`）で記録へ回す。
 ///
 /// Rust 関数の引数順（`helper_exe, load_dir, shiori_name, parent_hwnd`）と
 /// 子引数の並び（arg1=parent_hwnd 先頭）は別物である点に注意。`shiori_name` は
@@ -259,6 +305,25 @@ pub fn spawn(
     parent_hwnd: u32,
 ) -> Result<HelperHandle, SpawnError> {
     check_helper_image(helper_exe);
+    spawn_command(helper_command(
+        helper_exe,
+        load_dir,
+        shiori_name,
+        parent_hwnd,
+    ))
+}
+
+/// helper を起こす [`Command`] を 1 か所で組む（引数・環境・作業フォルダ・標準エラーの管）。中身はテストが
+/// `get_args`／`get_envs`／`get_current_dir` で読む。
+///
+/// `PASTA_DEBUG` は常に `0`（開ける口は無い＝要件 8.1・8.2・10.4）。親（areka）に立っていても
+/// helper の下の SHIORI（pasta）へは受け継がせない。
+fn helper_command(
+    helper_exe: &Path,
+    load_dir: &Path,
+    shiori_name: &str,
+    parent_hwnd: u32,
+) -> Command {
     let mut command = Command::new(helper_exe);
     let parent_hwnd_decimal = parent_hwnd.to_string();
     command
@@ -270,9 +335,15 @@ pub fn spawn(
         .env(PARENT_HWND_ENV, &parent_hwnd_decimal)
         .env(LOAD_DIR_ENV, load_dir)
         .env(SHIORI_NAME_ENV, shiori_name)
+        .env("PASTA_DEBUG", "0")
         // cwd=load_dir（伺か慣習・R3.3）。
         .current_dir(load_dir);
-    spawn_command(command)
+    // helper の `[helper]` の行を areka の記録へ回す（[`spawn_command`] が読み手を起こす）。
+    command.stderr(Stdio::piped());
+    // 窓だけの areka には標準の取っ手が無く、受け継ぐと helper が毎回「取っ手が無い」を書くので、
+    // helper が使わない標準入力・標準出力は NUL を渡す（`Command` は stdio の設定を読み返せず、テストでは縛れない）。
+    command.stdin(Stdio::null()).stdout(Stdio::null());
+    command
 }
 
 /// 構築済み [`Command`] を起動して [`HelperHandle`] へ包むテスト可能な下位 seam。
@@ -285,44 +356,113 @@ pub fn spawn(
 /// （GUI の `areka.exe` から窓の指定なしで起こすと新しいコンソール窓が開き、利用者が閉じると
 /// 補助プロセスが殺される）。`HelperHandle` に包む子の起こし方の決まり（job への割り当てと同じ
 /// 置き場）なので、`arg`／`env`／`cwd` の契約を組む [`spawn`] ではなくこの seam に置く。
-/// 標準入出力の扱いは変えない（受け取った `Command` の指定のまま）。
+/// 標準入出力の扱いは変えない（受け取った `Command` の指定のまま）。標準エラーが管なら、
+/// 行を `warn` で記録へ回す読み手のスレッドを起こす（[`log_helper_line`]）。
 ///
 /// # Errors
 /// `Command::spawn` の I/O 失敗を [`SpawnError`] として返す。
-pub fn spawn_command(mut command: Command) -> Result<HelperHandle, SpawnError> {
-    let child = command.creation_flags(CREATE_NO_WINDOW).spawn()?;
+pub fn spawn_command(command: Command) -> Result<HelperHandle, SpawnError> {
+    spawn_command_with(command, log_helper_line)
+}
+
+/// [`spawn_command`] の中身。標準エラーの行を渡す先 `sink(pid, 行)` を差し替えられる（テスト用）。
+pub(crate) fn spawn_command_with(
+    mut command: Command,
+    mut sink: impl FnMut(u32, &str) + Send + 'static,
+) -> Result<HelperHandle, SpawnError> {
+    let mut child = command.creation_flags(CREATE_NO_WINDOW.0).spawn()?;
     // 孤児化防止: spawn 直後に KILL_ON_JOB_CLOSE 付き job へ割り当てる（失敗は縮退＝None）。
     // これにより、親プロセスが UNLOAD を送らずに終了しても helper が OS 機構で kill される。
+    // shortcut: 起こしてから job に入れるまでのあいだに areka が落ちると helper が残る。閉じるには CREATE_SUSPENDED か PROC_THREAD_ATTRIBUTE_JOB_LIST（std の Command の外）が要る。残った helper が実際に見つかったら上げる
     let job = crate::job::attach_kill_on_close_job(&child);
+    let pid = child.id();
+    let stderr_reader = child.stderr.take().and_then(|stderr| {
+        std::thread::Builder::new()
+            .name("shiori-host32-stderr".into())
+            .spawn(move || {
+                if let Err(e) =
+                    forward_helper_stderr(std::io::BufReader::new(stderr), |line| sink(pid, line))
+                {
+                    tracing::error!(
+                        target: LOG_TARGET,
+                        event = "helper_stderr_read_failed",
+                        pid,
+                        error = %e,
+                        "helper の標準エラーを読めなかった——ここから先の行は記録へ回らない"
+                    );
+                }
+            })
+            .map_err(|e| {
+                tracing::error!(
+                    target: LOG_TARGET,
+                    event = "helper_stderr_reader_spawn_failed",
+                    pid,
+                    error = %e,
+                    "helper の標準エラーの読み手を起こせなかった——helper の行は記録へ回らない"
+                );
+            })
+            .ok()
+    });
     Ok(HelperHandle {
         child,
-        helper_hwnd: None,
         _job: job,
+        stderr_reader,
     })
 }
 
-/// helper の生死を非ブロッキングで問い合わせる（要件 1.2）。
+/// helper の標準エラーを LF で切り（行末の CR を落とす）、行ごとに `sink` を呼ぶ。管の終わりで
+/// `Ok`、読みの失敗で `Err` を返す（呼び手が記録して終わる）。
 ///
-/// 稼働中なら `None`、終了済みなら `Some(exit_code)`（終了コードを持たない
-/// 終了は `Some(-1)` 相当ではなく、種別の詳細が要るなら [`poll_exit_kind`] を
-/// 使う）。`try_wait` ベースゆえ呼び出し側スレッドをブロックしない。
-///
-/// 終了コードを持たない終了（[`ExitKind::Terminated`]）では `None` ではなく
-/// 「終了はしているがコード不明」を区別できないため、終了の有無だけを見るなら
-/// このシグネチャで、分類が要るなら [`poll_exit_kind`] を使うこと。
-///
-/// # Panics / Errors
-/// `try_wait` の I/O 失敗時は稼働中扱い（`None`）として握り、無限待機を
-/// 招かないようにする（生存監視は打ち切り可能・要件 1.2 の非ブロッキング
-/// 意図を優先）。
-#[must_use]
-pub fn poll_exit(handle: &mut HelperHandle) -> Option<i32> {
-    match handle.child.try_wait() {
-        Ok(Some(status)) => status.code(),
-        Ok(None) => None,
-        // try_wait の I/O エラーは稼働中扱い（非ブロッキング・無限待機回避）。
-        Err(_) => None,
+/// 行は UTF-8 で読み、UTF-8 でない行は OS の ANSI コードページで読む（文字化けは読む側で直す）。
+fn forward_helper_stderr(
+    mut reader: impl BufRead,
+    mut sink: impl FnMut(&str),
+) -> std::io::Result<()> {
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        // shortcut: 1 行の長さに上限なし（改行の無い大きな書き込みは丸ごと貯まる）、実害が出たら上限で切る
+        if reader.read_until(b'\n', &mut buf)? == 0 {
+            return Ok(());
+        }
+        let mut line = buf.as_slice();
+        line = line.strip_suffix(b"\n").unwrap_or(line);
+        line = line.strip_suffix(b"\r").unwrap_or(line);
+        match std::str::from_utf8(line) {
+            Ok(text) => sink(text),
+            Err(_) => sink(&decode_ansi(line)),
+        }
     }
+}
+
+/// ANSI コードページ（`CP_ACP`）のバイト列を読む。読めなければ置き換えの字で読む（行は落とさない）。
+fn decode_ansi(bytes: &[u8]) -> String {
+    use windows::Win32::Globalization::{
+        CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar,
+    };
+    // SAFETY: `bytes` は有効なバイト列。出力 None＝長さの問い合わせ。既定のフラグ(0)。
+    let len = unsafe { MultiByteToWideChar(CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, None) };
+    if len > 0 {
+        let mut wide = vec![0u16; len as usize];
+        // SAFETY: `wide` は `len` 要素の可変領域。`bytes` は有効なバイト列。既定のフラグ(0)。
+        let got = unsafe {
+            MultiByteToWideChar(
+                CP_ACP,
+                MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0),
+                bytes,
+                Some(&mut wide),
+            )
+        };
+        if got > 0 {
+            return String::from_utf16_lossy(&wide[..got as usize]);
+        }
+    }
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// 本番の行の渡し先: helper の 1 行を文を変えずに `warn` で書く（Display＝逃がしの字を入れない）。
+fn log_helper_line(pid: u32, line: &str) {
+    tracing::warn!(target: LOG_TARGET, event = "helper_stderr", pid, "{line}");
 }
 
 /// helper の終了を非ブロッキングで問い合わせ、終了種別を分類する（要件 1.2〜1.4）。
@@ -331,17 +471,31 @@ pub fn poll_exit(handle: &mut HelperHandle) -> Option<i32> {
 /// による分類）。`try_wait` ベースゆえ呼び出し側スレッドをブロックしない。
 #[must_use]
 pub fn poll_exit_kind(handle: &mut HelperHandle) -> Option<ExitKind> {
-    match handle.child.try_wait() {
+    note_try_wait(handle.child.try_wait())
+}
+
+/// `try_wait` の結果を終了種別へ写す。失敗は `error!` を書いてから稼働中（`None`）と
+/// みなす（非ブロッキングのまま・黙って握らない）。
+fn note_try_wait(result: std::io::Result<Option<ExitStatus>>) -> Option<ExitKind> {
+    match result {
         Ok(Some(status)) => Some(ExitKind::classify(&status)),
         Ok(None) => None,
-        Err(_) => None,
+        Err(error) => {
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "helper_try_wait_failed",
+                %error,
+                "helper の終了を問い合わせられなかった——動いているとみなす"
+            );
+            None
+        }
     }
 }
 
 /// helper の判定の記録の宛先（出す側＝`shiori-host32-host` の名前）。
 ///
 /// `RUST_LOG` は **target 名**で指定する（`shiori-host32=debug`）。
-const LOG_TARGET: &str = "shiori-host32";
+pub(crate) const LOG_TARGET: &str = "shiori-host32";
 
 /// PE の機械の種類 i386（32bit の SHIORI を読める helper の印）。
 const IMAGE_FILE_MACHINE_I386: u16 = 0x014C;
@@ -437,298 +591,9 @@ mod console_tests;
 mod image_tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::{Duration, Instant};
+#[path = "process_host_stderr_tests.rs"]
+mod stderr_tests;
 
-    /// stand-in（`cmd.exe /c exit N`）を組んだ Command を返す。
-    fn cmd_exit(code: i32) -> Command {
-        let mut command = Command::new("cmd.exe");
-        command.args(["/c", "exit", &code.to_string()]);
-        command
-    }
-
-    /// handle が終了するまで非ブロッキング poll を回して終了種別を得る。
-    ///
-    /// 各 poll がブロックしないこと（要件 1.2）を、poll 単体の所要時間が
-    /// ごく短いことで担保しつつ、全体は上限時間で bounded に待つ。
-    fn wait_kind(handle: &mut HelperHandle) -> ExitKind {
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            if let Some(kind) = poll_exit_kind(handle) {
-                return kind;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "helper が上限時間内に終了しなかった"
-            );
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    // --- ExitKind::classify 純関数（要件 1.3 / 1.4）---
-
-    #[test]
-    fn classify_clean_from_exit_zero() {
-        // 実プロセスで code() == Some(0) を作り Clean へ分類（要件 1.3）。
-        let status = cmd_exit(0)
-            .status()
-            .expect("cmd.exe /c exit 0 が起動できる");
-        assert_eq!(ExitKind::classify(&status), ExitKind::Clean);
-    }
-
-    #[test]
-    fn classify_abnormal_from_nonzero_exit() {
-        // 実プロセスで code() == Some(3) を作り Abnormal(3) へ分類（要件 1.4）。
-        let status = cmd_exit(3)
-            .status()
-            .expect("cmd.exe /c exit 3 が起動できる");
-        assert_eq!(ExitKind::classify(&status), ExitKind::Abnormal(3));
-    }
-
-    // Terminated（code() == None）分岐は Windows の実プロセスで決定的に
-    // 再現するのが難しい（TerminateProcess でも終了コードが付く経路がある）。
-    // ここでは classify のマッチ論理が None を Terminated へ落とすことを、
-    // 分岐網羅の観点で明示テストする（CONCERNS 参照）。
-    #[test]
-    fn classify_terminated_branch_logic() {
-        // classify は Some(0)=Clean / Some(n)=Abnormal(n) / None=Terminated。
-        // Some 系は上記テストで実プロセス実証済み。None 分岐の論理を確認する。
-        // ExitStatus を直接 None で構築する安定 API は無いため、分類ロジックの
-        // 網羅を明示（Some(0)/Some(n) が Terminated にならないことで補強）。
-        let clean = cmd_exit(0).status().unwrap();
-        let abnormal = cmd_exit(7).status().unwrap();
-        assert_ne!(ExitKind::classify(&clean), ExitKind::Terminated);
-        assert_ne!(ExitKind::classify(&abnormal), ExitKind::Terminated);
-    }
-
-    // --- spawn + 非ブロッキング poll（要件 1.1 / 1.2 / 1.3 / 1.4）---
-
-    #[test]
-    fn spawn_command_then_poll_classifies_clean() {
-        // stand-in を spawn（下位 seam）→ 終了後に Clean 分類（要件 1.1/1.3）。
-        let mut handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
-        assert!(handle.pid() > 0, "spawn 成功で helper への参照を保持する");
-        assert_eq!(wait_kind(&mut handle), ExitKind::Clean);
-    }
-
-    #[test]
-    fn spawn_command_then_poll_classifies_abnormal() {
-        // stand-in を spawn → 終了後に Abnormal(5) 分類（要件 1.4）。
-        let mut handle = spawn_command(cmd_exit(5)).expect("stand-in を spawn できる");
-        assert_eq!(wait_kind(&mut handle), ExitKind::Abnormal(5));
-    }
-
-    #[test]
-    fn poll_exit_is_nonblocking_and_reports_code() {
-        // poll がブロックしないこと（要件 1.2）を上限時間で担保しつつ、
-        // 終了後は exit code を返す。
-        let mut handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
-        // 少なくとも 1 回の poll は即座に返る（稼働中なら None・終了済みなら Some）。
-        let start = Instant::now();
-        let _first = poll_exit(&mut handle);
-        assert!(
-            start.elapsed() < Duration::from_secs(1),
-            "poll_exit は非ブロッキングで即座に返る"
-        );
-        // 終了まで bounded に待って code を確認。
-        let deadline = Instant::now() + Duration::from_secs(10);
-        let code = loop {
-            if let Some(code) = poll_exit(&mut handle) {
-                break code;
-            }
-            assert!(Instant::now() < deadline, "終了待ちが上限を超えた");
-            std::thread::sleep(Duration::from_millis(5));
-        };
-        assert_eq!(code, 0);
-    }
-
-    // --- spawn 失敗 → SpawnError（要件 1.5）---
-
-    #[test]
-    fn spawn_missing_exe_returns_spawn_error_and_no_handle() {
-        // 存在しない exe パスで spawn は Err(SpawnError) を返し、HelperHandle を
-        // 返さない（＝稼働中 helper が存在しない状態を保つ・要件 1.5）。
-        let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
-        let load_dir = std::env::temp_dir();
-        let result = spawn(missing, &load_dir, "shiori.dll", 0);
-        assert!(
-            matches!(result, Err(SpawnError::Spawn(_))),
-            "spawn 失敗は SpawnError::Spawn を返す"
-        );
-    }
-
-    // --- spawn の起動パラメーター契約（arg1..3・env 3 種・cwd＝design §SpawnContract）---
-
-    /// env キー名が design §SpawnContract どおりに固定されていること（契約回帰防止）。
-    #[test]
-    fn spawn_env_key_names_match_contract() {
-        assert_eq!(PARENT_HWND_ENV, "HOST32_PARENT_HWND");
-        assert_eq!(LOAD_DIR_ENV, "HOST32_LOAD_DIR");
-        assert_eq!(SHIORI_NAME_ENV, "HOST32_SHIORI_NAME");
-    }
-
-    /// LOAD 用 ack 待機の推奨既定 timeout が 30 秒であること（R5.2・design §Load timeout）。
-    #[test]
-    fn load_ack_timeout_default_is_30s() {
-        assert_eq!(LOAD_ACK_TIMEOUT, Duration::from_secs(30));
-    }
-
-    // --- request timeout 定数 + env seam 解決（R4.3 / R5.1・design §Shiori3Client）---
-
-    /// request 往復の既定 timeout が 60 秒で、env キー名が契約どおりであること（回帰防止）。
-    #[test]
-    fn request_timeout_default_is_60s_and_env_key_matches() {
-        assert_eq!(REQUEST_TIMEOUT, Duration::from_secs(60));
-        assert_eq!(REQUEST_TIMEOUT_ENV, "AREKA_SHIORI_REQUEST_TIMEOUT_MS");
-    }
-
-    /// env 不在／空／空白のみ／parse 不能 → 既定 60s へ安全側フォールバック（無限へ昇格させない）。
-    #[test]
-    fn resolve_request_timeout_defaults_to_60s_when_absent_or_garbage() {
-        // 不在。
-        assert_eq!(resolve_request_timeout(None), Some(REQUEST_TIMEOUT));
-        assert_eq!(resolve_request_timeout(None), Some(Duration::from_secs(60)));
-        // 空文字・空白のみ。
-        assert_eq!(
-            resolve_request_timeout(Some(String::new())),
-            Some(Duration::from_secs(60))
-        );
-        assert_eq!(
-            resolve_request_timeout(Some("   ".to_string())),
-            Some(Duration::from_secs(60))
-        );
-        // parse 不能（非数値・負値・小数）はすべて既定へ（無限待ちへ暗黙昇格しない）。
-        assert_eq!(
-            resolve_request_timeout(Some("abc".to_string())),
-            Some(Duration::from_secs(60))
-        );
-        assert_eq!(
-            resolve_request_timeout(Some("-1".to_string())),
-            Some(Duration::from_secs(60))
-        );
-        assert_eq!(
-            resolve_request_timeout(Some("1.5".to_string())),
-            Some(Duration::from_secs(60))
-        );
-    }
-
-    /// env `"0"` → `None`（無限待ち・デバッグ opt-in）。
-    #[test]
-    fn resolve_request_timeout_zero_means_infinite() {
-        assert_eq!(resolve_request_timeout(Some("0".to_string())), None);
-        // 前後空白付き "0" も trim 後に 0 として無限待ちへ。
-        assert_eq!(resolve_request_timeout(Some("  0  ".to_string())), None);
-    }
-
-    /// env `"<n>"`（n > 0・ミリ秒） → `Some(Duration::from_millis(n))`。
-    #[test]
-    fn resolve_request_timeout_positive_millis_are_used() {
-        assert_eq!(
-            resolve_request_timeout(Some("1500".to_string())),
-            Some(Duration::from_millis(1500))
-        );
-        // trim 済みで採用されること。
-        assert_eq!(
-            resolve_request_timeout(Some("  250  ".to_string())),
-            Some(Duration::from_millis(250))
-        );
-    }
-
-    /// spawn が起動パラメーターを子へ供給する契約を、`spawn` の実装が組み立てる
-    /// Command と同一手順の stand-in（バッチファイル）で**実際に観測**して検証する（R3.1〜3.3）。
-    ///
-    /// 観測対象:
-    /// - arg1 = parent_hwnd（10進）・arg2 = load_dir・arg3 = shiori_name（`%1`/`%2`/`%3`）
-    /// - env `HOST32_PARENT_HWND` = parent_hwnd 10進・`HOST32_LOAD_DIR` = load_dir・
-    ///   `HOST32_SHIORI_NAME` = shiori_name
-    /// - cwd = load_dir（`%CD%` 出力で確認）
-    ///
-    /// バッチファイルを stand-in にするのは `%1..%3`（位置引数）の展開がバッチ実行時のみ
-    /// 有効で、`cmd /c "..."` 単一コマンドでは展開されないため。`spawn` 本体と**同一順序**で
-    /// arg/env/cwd を積み、位置引数・env・cwd の三面が同値供給されることを assert する
-    /// （spawn は helper_exe を実行するため直接キャプチャできない＝同一規約の Command で観測）。
-    #[test]
-    fn spawn_supplies_hwnd_load_dir_and_shiori_name_via_arg_env_and_cwd() {
-        let parent_hwnd: u32 = 4_294_967_295; // u32::MAX（10進境界値）
-        let decimal = parent_hwnd.to_string();
-        // cwd 一致を検証できる実在ディレクトリ。canonicalize で表記ゆれを吸収。
-        let load_dir =
-            std::fs::canonicalize(std::env::temp_dir()).expect("temp_dir を canonicalize できる");
-        let shiori_name = "shiori.dll";
-
-        // 位置引数を観測するバッチ stand-in を一時ファイルへ書く（テスト後に削除）。
-        // 各面を "KEY=VALUE" 行で出力: %1..%3=位置引数・%VAR%=env・%CD%=cwd。
-        let unique = std::process::id();
-        let batch_path =
-            std::env::temp_dir().join(format!("areka_host32_spawn_contract_{unique}.bat"));
-        std::fs::write(
-            &batch_path,
-            "@echo off\r\n\
-             echo arg1=%1\r\n\
-             echo arg2=%2\r\n\
-             echo arg3=%3\r\n\
-             echo phwnd=%HOST32_PARENT_HWND%\r\n\
-             echo ldir=%HOST32_LOAD_DIR%\r\n\
-             echo sname=%HOST32_SHIORI_NAME%\r\n\
-             echo cwd=%CD%\r\n",
-        )
-        .expect("stand-in バッチを書ける");
-
-        // `spawn` と同一手順で Command を組む（arg1=hwnd・arg2=load_dir・arg3=name、
-        // env 3 種、cwd=load_dir）。cmd.exe /c <batch> で位置引数を渡す。
-        let mut command = Command::new("cmd.exe");
-        command
-            .arg("/c")
-            .arg(&batch_path)
-            .arg(&decimal) // arg1
-            .arg(&load_dir) // arg2
-            .arg(shiori_name) // arg3
-            .env(PARENT_HWND_ENV, &decimal)
-            .env(LOAD_DIR_ENV, &load_dir)
-            .env(SHIORI_NAME_ENV, shiori_name)
-            .current_dir(&load_dir);
-        let output = command.output().expect("stand-in を実行できる");
-        let _ = std::fs::remove_file(&batch_path); // 後始末（失敗は無視）。
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        let load_dir_str = load_dir.to_string_lossy();
-        // 期待表記の cwd（%CD% は `\\?\` 冗長プレフィクス無し・末尾セパレータ無しの正規表記）。
-        let expected_cwd = load_dir_str
-            .strip_prefix(r"\\?\")
-            .unwrap_or(&load_dir_str)
-            .trim_end_matches(['\\', '/']);
-
-        // arg1..3 同値供給（位置引数を %1..%3 で観測）。
-        assert!(
-            stdout.contains(&format!("arg1={decimal}")),
-            "arg1 に 10進 parent_hwnd が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("arg2={load_dir_str}")),
-            "arg2 に load_dir が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("arg3={shiori_name}")),
-            "arg3 に shiori_name が載る: got {stdout:?}"
-        );
-        // env 3 種同値供給。
-        assert!(
-            stdout.contains(&format!("phwnd={decimal}")),
-            "env HOST32_PARENT_HWND に 10進 parent_hwnd が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("ldir={load_dir_str}")),
-            "env HOST32_LOAD_DIR に load_dir が載る: got {stdout:?}"
-        );
-        assert!(
-            stdout.contains(&format!("sname={shiori_name}")),
-            "env HOST32_SHIORI_NAME に shiori_name が載る: got {stdout:?}"
-        );
-        // cwd = load_dir。
-        assert!(
-            stdout.contains(&format!("cwd={expected_cwd}")),
-            "cwd が load_dir に設定される: expected cwd={expected_cwd:?} in {stdout:?}"
-        );
-    }
-}
+#[cfg(test)]
+#[path = "process_host_tests.rs"]
+pub(crate) mod tests;

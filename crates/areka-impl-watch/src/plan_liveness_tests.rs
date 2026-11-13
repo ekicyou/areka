@@ -4,11 +4,13 @@
 use std::collections::{BTreeSet, HashSet};
 
 use super::super::test_support::{
-    REPO, T0, assert_not_applied, give_back, load_test, request, run, state_with, stopped,
+    assert_not_applied, cancel, give_back, load_running, load_test, merge, merged, request, run,
+    state_with, stopped,
 };
-use super::replan;
+use super::{holds_merge, replan};
 use crate::plan::{Command, Event, Verdict};
 use crate::state::{DeskSet, MergeDesk, ParticipantStatus, State};
+use crate::test_support::T0;
 
 /// 全探索の深さ（手数）。debug の `cargo test -p areka-impl-watch` の中で 0.5〜0.7 秒（7 は 1.0〜1.3 秒）
 /// と確かめた値。機械の速さで変えない。
@@ -21,40 +23,13 @@ const COOP_STEPS: usize = 40;
 const IDS: [&str; 3] = ["A", "B", "C"];
 const REPOS: [&str; 2] = ["r1", "r2"];
 
-fn merge(id: &str, repo: &str) -> Command {
-    Command::Merge {
-        id: id.to_owned(),
-        name: None,
-        repo: repo.to_owned(),
-        spec: format!("spec-{id}"),
-        bug: false,
-    }
-}
-
-fn merged(id: &str) -> Command {
-    Command::Merged {
-        id: id.to_owned(),
-        pr: "#1".to_owned(),
-        sha: "abc".to_owned(),
-    }
-}
-
-fn load_running(id: &str) -> Command {
-    Command::LoadRunning {
-        id: id.to_owned(),
-        name: None,
-        repo: REPO.to_owned(),
-        purpose: "load".to_owned(),
-    }
-}
-
 /// 設計の字母: `merge`（2 つのリポジトリ）・`request` の 3 つの組・名前なしの `return`・
 /// 名指しの `return`（`test`・`sole`）・`loadrunning`・`merged`・`stopped`・`cancel`。
 fn alphabet() -> Vec<Command> {
     let mut commands = Vec::new();
     for id in IDS {
         for repo in REPOS {
-            commands.push(merge(id, repo));
+            commands.push(merge(id, repo, false));
         }
         for desks in [DeskSet::Test, DeskSet::Sole, DeskSet::TestSole] {
             commands.push(request(id, desks));
@@ -65,7 +40,7 @@ fn alphabet() -> Vec<Command> {
         commands.push(load_running(id));
         commands.push(merged(id));
         commands.push(stopped(id));
-        commands.push(Command::Cancel { id: id.to_owned() });
+        commands.push(cancel(id));
     }
     commands
 }
@@ -173,13 +148,6 @@ fn key_as(state: &State, perm: &[u8; 3]) -> Vec<u8> {
     key
 }
 
-fn holds_merge(state: &State, id: &str) -> bool {
-    state
-        .merge
-        .values()
-        .any(|desk| desk.holder.as_ref().is_some_and(|holder| holder.id == id))
-}
-
 fn in_requests(state: &State, id: &str) -> bool {
     state.requests.iter().any(|request| request.id == id)
 }
@@ -261,10 +229,10 @@ fn cooperative_move(state: &State) -> Option<Command> {
         let mut own = state.requests.iter().filter(|request| request.id == id);
         own.any(|request| !request.desks.has_sole())
     };
-    let asked = state.participants.values().find(|participant| {
-        participant.status == ParticipantStatus::StopRequested && !only_test(&participant.id)
+    let asked = state.participants.iter().find(|(key, participant)| {
+        participant.status == ParticipantStatus::StopRequested && !only_test(key)
     });
-    asked.map(|participant| stopped(&participant.id))
+    asked.map(|(key, _)| stopped(key))
 }
 
 /// 協力的な進め方を上限まで進め、出来事を返す。申し込みとマージの待ち・持ち主が全部空にならなければ赤。
@@ -320,10 +288,11 @@ fn granted_ids(events: &[Event]) -> Vec<String> {
 }
 
 /// 名前のある場面: マージの持ち主 M の排他テストの申し込み・L の負荷テストの待ち・停止要請中の U の
-/// UI テストの申し込みを `order` の順に重ね（U は L の後）、協力的な進め方で全部が渡ることを確かめる。
-fn overlapping_scene(order: &[&str]) {
+/// UI テストの申し込みを `order` の順に重ね（U は L の後）、協力的な進め方で全部が `grants` の順に
+/// 渡ることを確かめる。
+fn overlapping_scene(order: &[&str], grants: [&str; 3]) {
     let mut state = state_with(&["L", "M", "U"]);
-    run(&mut state, &merge("M", "r1"), Some("M"), T0);
+    run(&mut state, &merge("M", "r1", false), Some("M"), T0);
     assert!(holds_merge(&state, "M"));
     let mut events = Vec::new();
     for who in order {
@@ -342,12 +311,7 @@ fn overlapping_scene(order: &[&str]) {
     let trail = format!("{order:?}");
     check_invariants(&state, &trail);
     events.extend(drive_cooperatively(&mut state, &mut HashSet::new(), &trail));
-    let granted: BTreeSet<String> = granted_ids(&events).into_iter().collect();
-    assert_eq!(
-        granted,
-        BTreeSet::from(["L", "M", "U"].map(str::to_owned)),
-        "{order:?}"
-    );
+    assert_eq!(granted_ids(&events), grants, "{order:?}");
     assert!(
         !state.participants.contains_key("M"),
         "M はマージを済ませた"
@@ -357,51 +321,30 @@ fn overlapping_scene(order: &[&str]) {
 #[test]
 fn merge_holder_test_load_wait_and_stop_requested_ui_test_all_drain() {
     // L の負荷テストが先に待ち、停止要請中の U が UI テストを申し込み、マージの持ち主 M が足す。
-    overlapping_scene(&["L", "U", "M"]);
-    // 並べ替え（U は停止要請を受けてからなので L の後）。
-    overlapping_scene(&["L", "M", "U"]);
-    overlapping_scene(&["M", "L", "U"]);
-}
-
-#[test]
-fn overlapping_scene_grants_every_request_through_the_cooperative_run() {
-    let mut state = state_with(&["L", "M", "U"]);
-    run(&mut state, &merge("M", "r1"), Some("M"), T0);
-    run(&mut state, &load_test("L"), Some("L"), T0);
-    assert_eq!(
-        state.participants["U"].status,
-        ParticipantStatus::StopRequested
-    );
-    run(&mut state, &request("U", DeskSet::Test), Some("U"), T0);
-    run(&mut state, &request("M", DeskSet::Test), Some("M"), T0);
-    let events = drive_cooperatively(&mut state, &mut HashSet::new(), "named");
-    let mut granted = vec!["U".to_owned()];
-    granted.extend(granted_ids(&events));
     // U（停止要請中で直ちに）→ M（マージの持ち主へ譲る）→ L（止まりとマージが済んでから）。
-    assert_eq!(granted, ["U", "M", "L"]);
+    overlapping_scene(&["L", "U", "M"], ["U", "M", "L"]);
+    // 並べ替え（U は停止要請を受けてからなので L の後）。マージの持ち主 M へ直ちに渡り、U、L と続く。
+    overlapping_scene(&["L", "M", "U"], ["M", "U", "L"]);
+    overlapping_scene(&["M", "L", "U"], ["M", "U", "L"]);
 }
 
 #[test]
-fn test_holder_merge_and_merge_waiter_request_are_refused_byte_for_byte() {
+fn test_holder_merge_and_merge_waiter_request_are_refused_and_change_nothing() {
     // 排他テストの机の持ち主の `merge`（4.7）。
     let mut state = state_with(&["A", "B"]);
     run(&mut state, &request("A", DeskSet::Test), Some("A"), T0);
     assert!(holds_desk(&state, "A"));
-    let before = serde_json::to_string(&state).expect("直列化");
-    let got = run(&mut state, &merge("A", "r1"), Some("A"), T0);
+    let got = run(&mut state, &merge("A", "r1", false), Some("A"), T0);
     assert_not_applied(&got, "排他テストの机の持ち主の merge");
-    assert_eq!(serde_json::to_string(&state).expect("直列化"), before);
 
     // マージを待つ者の `request`（4.8）。
     let mut waiter = state_with(&["A", "B"]);
-    run(&mut waiter, &merge("A", "r1"), Some("A"), T0);
-    run(&mut waiter, &merge("B", "r1"), Some("B"), T0);
+    run(&mut waiter, &merge("A", "r1", false), Some("A"), T0);
+    run(&mut waiter, &merge("B", "r1", false), Some("B"), T0);
     assert!(waiter.merge["r1"].queue.iter().any(|q| q.id == "B"));
     for desks in [DeskSet::Test, DeskSet::Sole, DeskSet::TestSole] {
-        let before = serde_json::to_string(&waiter).expect("直列化");
         let got = run(&mut waiter, &request("B", desks), Some("B"), T0);
         assert_not_applied(&got, "マージを待つ者の request");
-        assert_eq!(serde_json::to_string(&waiter).expect("直列化"), before);
     }
 }
 

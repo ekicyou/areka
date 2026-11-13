@@ -10,15 +10,16 @@ use std::time::Duration;
 
 use temp_path_kit::TempPath;
 
-use super::Store;
 use super::test_support::{
-    BROKEN_AT_T0, Nobody, T0, block_state_writes, home_in, names, participants, read_state,
-    refuse_poll, store_in, store_noting_events, store_noting_pauses, tick, watch,
+    BROKEN_AT_T0, Nobody, block_state_writes, hold_state_lock, participants, refuse_poll, store_in,
+    store_noting_events, store_noting_pauses, tick, watch,
 };
+use super::{Store, lossy};
 use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::State;
+use crate::test_support::{T0, home_in, names, read_state};
 use crate::wait::WaitPort;
 
 /// [`T0`] に `clear` が状態ファイルを退避したときの名前。
@@ -60,28 +61,12 @@ fn cleared_event(backup: Option<&Path>) -> Event {
     }
 }
 
-fn lossy(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
-}
-
 /// 一時ファイルの名前（プロセス番号入り）をフォルダで塞ぐ: 読み物だけが書けなくなる。
 fn block_status_writes(home: &Home) {
     let temp = home
         .dir
         .join(format!("status.md.{}.tmp", std::process::id()));
     fs::create_dir(temp).expect("作れる");
-}
-
-/// `state.lock` を別のハンドルで握る（落とすと解ける）。
-fn hold_state_lock(home: &Home) -> File {
-    let file = File::options()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(home.lock_path())
-        .expect("ロックファイルを開ける");
-    file.lock().expect("握れる");
-    file
 }
 
 // ───────── ログの口 ─────────
@@ -220,7 +205,7 @@ fn when_only_the_reading_matter_cannot_be_written_the_events_still_reach_the_log
     assert_eq!(fs::read(home.status_path()).expect("読める"), reading);
     // 状態ファイルはもう置き換わっている（変化は起きた）。
     assert_eq!(participants(&home), ["a"]);
-    let holder = read_state(&home).merge["areka"].holder.clone();
+    let holder = read_state(&home.dir).merge["areka"].holder.clone();
     assert_eq!(holder.map(|holder| holder.id), Some("a".to_owned()));
     // 起きた変化は、読み物が書けなくてもログの口へ渡っている。
     let (repo, id) = ("areka".to_owned(), "a".to_owned());
@@ -292,12 +277,12 @@ fn read_only_returns_the_state_without_taking_the_lock_or_writing() {
     fs::remove_file(home.status_path()).expect("消せる");
     let before = fs::read(home.state_path()).expect("読める");
     // 誰かが排他を握ったままでも、待たずに読める。
-    let _held = hold_state_lock(&home);
+    let _held = hold_state_lock(&store_in(&root));
     let (store, pauses) = store_noting_pauses(&root);
 
     let got = store.read_only().expect("読める");
 
-    assert_eq!(got, Some(read_state(&home)));
+    assert_eq!(got, Some(read_state(&home.dir)));
     let ids: Vec<String> = got.expect("在る").participants.into_keys().collect();
     assert_eq!(ids, ["a"]);
     assert_eq!(*pauses.borrow(), [], "ロックを待っていない");
@@ -314,7 +299,7 @@ fn broken_files() -> [(&'static str, Damage); 3] {
     [
         // JSON でない文。
         ("not json", Damage::NotJson { line: 1, column: 2 }),
-        // JSON で版も 1 だが、2 行目の欄の型が違う。位置は元のバイト列を読み直して取る。
+        // JSON で版は合うが、2 行目の欄の型が違う。位置は元のバイト列を読み直して取る。
         (
             "{ \"version\": 2,
   \"participants\": [] }",
@@ -430,6 +415,84 @@ fn summary_returns_the_terminal_summary_even_when_the_reading_matter_cannot_be_w
     assert!(!home.status_path().exists());
 }
 
+#[test]
+fn summary_writes_the_reading_matter_only_when_it_gets_the_lock() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let (store, pauses) = store_noting_pauses(&root);
+    store.with_state(watch("a")).expect("変えられる");
+    fs::remove_file(home.status_path()).expect("消せる");
+    let held = hold_state_lock(&store_in(&root));
+
+    let summary = store
+        .summary()
+        .expect("読める")
+        .expect("状態ファイルが在る");
+
+    assert!(summary.contains("a areka working\n"), "{summary}");
+    assert!(
+        !home.status_path().exists(),
+        "他人が握っている間は読み物を書かない"
+    );
+    assert_eq!(*pauses.borrow(), [], "ロックを待っていない");
+
+    drop(held);
+    assert_eq!(store.summary().expect("読める"), Some(summary));
+    // 較正: 放した後は書く。
+    assert!(home.status_path().is_file());
+}
+
+/// 排他を取れたときは、排他の中で読み直した状態から要約と読み物を作る: 最初の読みと試しの間
+/// （時計の口が 1 回呼ばれる所）で状態ファイルが替わっても、替わった後の参加者が載る。
+#[test]
+fn summary_renders_the_state_read_again_inside_the_exclusion() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    store_in(&root).with_state(watch("a")).expect("変えられる");
+    let only_a = fs::read(home.state_path()).expect("読める");
+    store_in(&root).with_state(watch("b")).expect("変えられる");
+    let with_b = fs::read(home.state_path()).expect("読める");
+    fs::write(home.state_path(), only_a).expect("書ける");
+    fs::remove_file(home.status_path()).expect("消せる");
+    let state_path = home.state_path();
+    let store = Store {
+        clock: Box::new(move || {
+            fs::write(&state_path, &with_b).expect("書ける");
+            Ok(T0)
+        }),
+        ..store_in(&root)
+    };
+
+    let summary = store
+        .summary()
+        .expect("読める")
+        .expect("状態ファイルが在る");
+
+    assert!(summary.contains("b areka working\n"), "{summary}");
+    let status = fs::read_to_string(home.status_path()).expect("読み物を書いた");
+    assert!(status.contains("| b |"), "{status}");
+}
+
+/// `state.lock` が開けない（同じ名前のフォルダが在る）ときも、要約は返り、読み物は書かない。
+#[test]
+fn summary_returns_the_summary_without_the_reading_matter_when_state_lock_cannot_be_opened() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let store = store_in(&root);
+    store.with_state(watch("a")).expect("変えられる");
+    fs::remove_file(home.status_path()).expect("消せる");
+    fs::remove_file(home.lock_path()).expect("消せる");
+    fs::create_dir(home.lock_path()).expect("作れる");
+
+    let summary = store
+        .summary()
+        .expect("開けなくても失敗にしない")
+        .expect("状態ファイルが在る");
+
+    assert!(summary.contains("a areka working\n"), "{summary}");
+    assert!(!home.status_path().exists(), "読み物は書かない");
+}
+
 // ───────── 全部消す ─────────
 
 #[test]
@@ -452,7 +515,7 @@ fn clear_sets_the_state_file_aside_and_leaves_only_the_cleared_record() {
         "消す前の状態ファイルが中身のまま残る"
     );
     // 状態は版と「消した記録」だけ（参加者・机・直前のマージ・待ちの記録は無い）。
-    let state = read_state(&home);
+    let state = read_state(&home.dir);
     assert_eq!(state, State::cleared(T0, &expected));
     let mut only_the_record = State::empty();
     only_the_record.recent = state.recent.clone();
@@ -480,7 +543,7 @@ fn clear_without_a_state_file_still_writes_the_empty_state_and_returns_none() {
     let backup = store.clear().expect("消せる");
 
     assert_eq!(backup, None);
-    assert_eq!(read_state(&home), State::cleared(T0, Path::new("none")));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, Path::new("none")));
     assert_eq!(names(&home.dir), ["state.json", "state.lock", "status.md"]);
     assert_eq!(*noted.borrow(), [cleared_event(None)], "作り直しではない");
 }
@@ -501,7 +564,7 @@ fn clear_does_not_read_the_old_file_so_it_works_over_an_unknown_version_and_a_br
 
         assert_eq!(backup, home.dir.join(CLEARED_AT_T0));
         assert_eq!(fs::read_to_string(&backup).expect("在る"), text, "{text}");
-        assert_eq!(read_state(&home), State::cleared(T0, &backup));
+        assert_eq!(read_state(&home.dir), State::cleared(T0, &backup));
         // 「壊れていた」の退避ではない。
         assert_eq!(
             names(&home.dir),
@@ -527,7 +590,7 @@ fn a_second_clear_in_the_same_second_does_not_overwrite_the_first_backup() {
     assert_eq!(second, home.dir.join(format!("{CLEARED_AT_T0}-1")));
     assert_eq!(fs::read(&first).expect("在る"), original);
     assert_eq!(fs::read(&second).expect("在る"), cleared);
-    assert_eq!(read_state(&home), State::cleared(T0, &second));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, &second));
 }
 
 #[test]
@@ -536,7 +599,7 @@ fn clear_runs_inside_the_exclusion() {
     let home = home_in(&root);
     store_in(&root).with_state(watch("a")).expect("変えられる");
     let before = fs::read(home.state_path()).expect("読める");
-    let held = hold_state_lock(&home);
+    let held = hold_state_lock(&store_in(&root));
     let (store, noted) = store_noting_events(&root);
 
     let got = store.clear();
@@ -567,7 +630,7 @@ fn when_only_the_reading_matter_cannot_be_written_clear_still_returns_the_backup
 
     let expected = home.dir.join(CLEARED_AT_T0);
     assert_eq!(backup.as_deref(), Some(expected.as_path()));
-    assert_eq!(read_state(&home), State::cleared(T0, &expected));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, &expected));
     assert_eq!(*noted.borrow(), [cleared_event(Some(&expected))]);
     // 較正: 読み物は本当に書けていない（塞ぐ前のまま）。
     assert_eq!(fs::read(home.status_path()).expect("読める"), reading);
@@ -618,12 +681,11 @@ fn the_wait_record_takes_its_start_time_from_the_clock_of_the_store() {
     let home = home_in(&root);
     let seen = Rc::new(RefCell::new(Vec::new()));
     let noted = Rc::clone(&seen);
-    let state_path = home.state_path();
+    let dir = home.dir.clone();
     let store = Store {
         log: Box::new(move |event| {
             if let Event::WaitRegistered { id, kind } = event {
-                let bytes = fs::read(&state_path).expect("状態ファイルが在る");
-                let state: State = serde_json::from_slice(&bytes).expect("状態として読める");
+                let state = read_state(&dir);
                 let record = state.waits.iter().find(|w| w.id == *id && w.kind == *kind);
                 noted.borrow_mut().push(record.map(|w| w.since));
             }
@@ -738,5 +800,5 @@ fn the_last_unregister_releases_the_presence_mark_inside_the_exclusion() {
 
     // (印が居るか, state.lock が握られているか)。
     assert_eq!(*seen.borrow(), [(false, true)]);
-    assert!(read_state(&home).waits.is_empty(), "記録は消えた");
+    assert!(read_state(&home.dir).waits.is_empty(), "記録は消えた");
 }

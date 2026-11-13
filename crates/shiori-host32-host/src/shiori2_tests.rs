@@ -287,6 +287,20 @@ fn sentence_200_reads_script() {
     assert_eq!(r.charset_header.as_deref(), Some("Shift_JIS"));
 }
 
+/// 2.x の `Sentence` も 3.0 と同じ読みを通る: 頭の半角だけ削り、2 つあれば後ろ（指摘 22・23）。
+#[test]
+fn a_sentence_keeps_full_width_spaces_and_the_last_wins() {
+    let r = parse2(
+        "SHIORI/2.2 200 OK\r\nCharset: UTF-8\r\nSentence: first\r\nSentence: \t\u{3000}こんにちは\u{3000} \r\n\r\n"
+            .as_bytes(),
+        Method::Get,
+        "OnBoot",
+        false,
+    )
+    .expect("読める");
+    assert_eq!(r.value.as_deref(), Some("\u{3000}こんにちは\u{3000} "));
+}
+
 #[test]
 fn translate_reads_sentence() {
     let r = parse2(

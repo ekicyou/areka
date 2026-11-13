@@ -1,13 +1,11 @@
-//! `plan` のテストの支え: 偽の生死・状態の組み立て・時刻の定数。
+//! `plan` のテストの支え: 偽の生死・状態とコマンドと出来事の組み立て。
 
 use super::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{
-    DeskRequest, DeskSet, MergeHolder, MergeRequest, Participant, ParticipantStatus, Recent,
-    RecentKind, SoleHolder, State, StopReason, TestHolder, WaitKind, WaitRecord, WatchInfo,
+    DeskRequest, DeskSet, MergeRequest, Participant, ParticipantStatus, Recent, RecentKind, State,
+    StopReason, WaitKind, WaitRecord, WatchInfo,
 };
-
-/// テストの「いま」の起点（UNIX 秒）。後の時刻は `T0 + n` と書く。
-pub(super) const T0: u64 = 1_791_000_000;
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// 支えの組み立てる参加者のリポジトリ。
 pub(super) const REPO: &str = "areka";
@@ -52,20 +50,27 @@ pub(super) fn state_with(ids: &[&str]) -> State {
         state.participants.insert(
             (*id).to_owned(),
             Participant {
-                id: (*id).to_owned(),
-                name: (*id).to_owned(),
-                repo: REPO.to_owned(),
-                since: T0,
                 watch: Some(WatchInfo {
                     pid: PID,
                     since: T0,
                 }),
-                ..Participant::default()
+                ..new_participant(id, id, REPO, T0)
             },
         );
         state.waits.push(wait_record(id, WaitKind::Watch));
     }
     state
+}
+
+/// `since` に参加した直後の参加者（「作業中」・見張りも停止要請の訳も無い）。
+pub(super) fn new_participant(id: &str, name: &str, repo: &str, since: u64) -> Participant {
+    Participant {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        repo: repo.to_owned(),
+        since,
+        ..Participant::default()
+    }
 }
 
 /// 支えの定数（[`REPO`]・[`PID`]・[`T0`]）で作った待ちの記録。
@@ -90,16 +95,9 @@ pub(super) fn queue_merge(state: &mut State, repo: &str, id: &str, requested: u6
     });
 }
 
-/// マージの机の持ち主にする。
+/// マージの机の持ち主にする（持ち主は支えの申し込みと同じ綴り）。
 pub(super) fn hold_merge(state: &mut State, repo: &str, id: &str) {
-    let desk = state.merge.entry(repo.to_owned()).or_default();
-    desk.holder = Some(MergeHolder {
-        id: id.to_owned(),
-        spec: format!("spec-{id}"),
-        bug: false,
-        requested: T0,
-        granted: T0,
-    });
+    state.merge.entry(repo.to_owned()).or_default().holder = merge_holder(id, T0, T0);
 }
 
 /// 机の申し込みの待ち行列の末尾へ、内容が [`PURPOSE`] の申し込みを足す。
@@ -114,24 +112,12 @@ pub(super) fn queue_request(state: &mut State, id: &str, desks: DeskSet, request
 
 /// 排他テストの机の持ち主にする。
 pub(super) fn hold_test(state: &mut State, id: &str) {
-    state.test = Some(TestHolder {
-        id: id.to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0,
-        granted: T0,
-    });
+    state.test = test_holder(id, PURPOSE, T0, T0);
 }
 
 /// 番の来たひとり占めの持ち主にする。`stopped` は番が来たときに止まっていた識別。
 pub(super) fn hold_sole(state: &mut State, id: &str, stopped: &[&str]) {
-    state.sole = Some(SoleHolder {
-        id: id.to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0,
-        granted: T0,
-        running: false,
-        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
-    });
+    state.sole = sole_holder(id, PURPOSE, T0, T0, false, stopped);
 }
 
 /// 負荷テスト（排他テストの机とひとり占めの 1 組）の番が来た持ち主にする（走っている印なし）。
@@ -203,16 +189,160 @@ pub(super) fn stopped(id: &str) -> Command {
     Command::Stopped { id: id.to_owned() }
 }
 
+/// 名前を省いた、spec が `spec-<識別>` のマージの申し込み（支えの組み立てる申し込みと同じ綴り）。
+pub(super) fn merge(id: &str, repo: &str, bug: bool) -> Command {
+    Command::Merge {
+        id: id.to_owned(),
+        name: None,
+        repo: repo.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+    }
+}
+
+/// マージが済んだ（PR は "281"・コミットは "414d43eb"）。
+pub(super) fn merged(id: &str) -> Command {
+    Command::Merged {
+        id: id.to_owned(),
+        pr: "281".to_owned(),
+        sha: "414d43eb".to_owned(),
+    }
+}
+
+/// 名前を省いた、内容が [`PURPOSE`] の「すでに走っている負荷テスト」の記録。
+pub(super) fn load_running(id: &str) -> Command {
+    Command::LoadRunning {
+        id: id.to_owned(),
+        name: None,
+        repo: REPO.to_owned(),
+        purpose: PURPOSE.to_owned(),
+    }
+}
+
 /// 全員が居る机で、判断を 1 回呼ぶ。
 pub(super) fn run(state: &mut State, cmd: &Command, caller: Option<&str>, now: u64) -> Applied {
     apply(state, cmd, caller, now, &FakePresence::all_present())
 }
 
-/// 見張りの記録が置かれた（置き換えを含む）出来事。
-pub(super) fn watch_registered(id: &str) -> Event {
+/// その種類の待ちの記録が置かれた（置き換えを含む）出来事。
+pub(super) fn wait_registered(id: &str, kind: WaitKind) -> Event {
     Event::WaitRegistered {
         id: id.to_owned(),
-        kind: WaitKind::Watch,
+        kind,
+    }
+}
+
+/// 見張りの記録が置かれた（置き換えを含む）出来事。
+pub(super) fn watch_registered(id: &str) -> Event {
+    wait_registered(id, WaitKind::Watch)
+}
+
+/// 机の申し込みが並んだ出来事。
+pub(super) fn desk_requested(id: &str, desks: DeskSet) -> Event {
+    Event::DeskRequested {
+        id: id.to_owned(),
+        desks,
+    }
+}
+
+/// 止まったと伝えた出来事。
+pub(super) fn stop_reported(id: &str) -> Event {
+    Event::Stopped { id: id.to_owned() }
+}
+
+/// 「すでに走っている負荷テスト」を記録した出来事。
+pub(super) fn recorded_running(id: &str) -> Event {
+    Event::LoadRunning { id: id.to_owned() }
+}
+
+/// 机の番が来た出来事。`stopped` は番が来たときに止まっていた識別。
+pub(super) fn granted(id: &str, desks: DeskSet, stopped: &[&str]) -> Event {
+    Event::DeskGranted {
+        id: id.to_owned(),
+        desks,
+        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
+    }
+}
+
+/// 見張りの開始。`name` を省くと名前は識別（初回）か元のまま。
+pub(super) fn watch(id: &str, name: Option<&str>, repo: &str, pid: u32) -> Command {
+    Command::Watch {
+        id: id.to_owned(),
+        name: name.map(str::to_owned),
+        repo: repo.to_owned(),
+        pid,
+    }
+}
+
+/// 参加した出来事。
+pub(super) fn joined(id: &str) -> Event {
+    Event::Joined { id: id.to_owned() }
+}
+
+/// [`merge`] の申し込みが並んだ出来事（spec は `spec-<識別>`）。
+pub(super) fn merge_requested(id: &str, repo: &str, bug: bool) -> Event {
+    Event::MergeRequested {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+    }
+}
+
+/// マージの机の番が来た出来事。
+pub(super) fn merge_granted(id: &str, repo: &str) -> Event {
+    Event::MergeGranted {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+    }
+}
+
+/// [`merged`] の出来事（PR とコミットも [`merged`] と同じ綴り）。
+pub(super) fn merge_done(id: &str, repo: &str) -> Event {
+    Event::Merged {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+        pr: "281".to_owned(),
+        sha: "414d43eb".to_owned(),
+    }
+}
+
+/// 離脱。
+pub(super) fn leave(id: &str) -> Command {
+    Command::Leave { id: id.to_owned() }
+}
+
+/// 取り下げ。
+pub(super) fn cancel(id: &str) -> Command {
+    Command::Cancel { id: id.to_owned() }
+}
+
+/// 参加を終えた出来事。`why` は終えた訳の綴り。
+pub(super) fn left(id: &str, why: &'static str) -> Event {
+    Event::Left {
+        id: id.to_owned(),
+        why,
+    }
+}
+
+/// 取り下げた出来事。
+pub(super) fn cancelled(id: &str) -> Event {
+    Event::Cancelled { id: id.to_owned() }
+}
+
+/// 机を返した出来事。
+pub(super) fn returned(id: &str, desks: DeskSet) -> Event {
+    Event::DeskReturned {
+        id: id.to_owned(),
+        desks,
+    }
+}
+
+/// 「作業中」へ戻った出来事。`why` は戻った訳の綴り。
+pub(super) fn resumed(id: &str, why: &'static str) -> Event {
+    Event::Resumed {
+        id: id.to_owned(),
+        why,
     }
 }
 
@@ -250,12 +380,4 @@ pub(super) fn assert_not_applied(got: &Applied, label: &str) {
         panic!("{label}: 当てはまらなかった、を返す: {:?}", got.verdict);
     };
     assert!(!text.is_empty() && text.is_ascii(), "{label}: {text}");
-}
-
-#[test]
-fn fake_presence_answers_present_unless_told_absent() {
-    let presence = FakePresence::all_present().absent("A", WaitKind::Merge);
-    assert!(presence.is_present("A", WaitKind::Watch));
-    assert!(presence.is_present("B", WaitKind::Merge));
-    assert!(!presence.is_present("A", WaitKind::Merge));
 }

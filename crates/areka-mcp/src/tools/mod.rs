@@ -1,6 +1,7 @@
 //! SSP 2.9.05 と同じ 10 本のツールの入口（spec: areka-P0-mcp-tool-entrances）。
 //!
-//! 10 本の表（SSP の並び）・検査を通った呼び出し・登録表を組む受け口を置く。
+//! 10 本の表（SSP の並び）・areka 独自のツールの表（`OWN_TABLE`・今は `check_script`）・
+//! 検査を通った呼び出し・登録表を組む受け口・中継へ渡す定義の列（[`all_specs`]）を置く。
 //! 各ツールの定義と引数の詰め替えはツールごとのファイルに持つ。
 
 pub mod bridge;
@@ -116,51 +117,45 @@ pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String>
     })
 }
 
-/// 10 本の登録表と、アプリ本体が汲む受け口を組む（要件 1.1・1.3・6.5）。
-///
-/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる。
-pub fn entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
-    register_rows(&TABLE, reply_wait)
-}
-
 /// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口・
 /// spec: areka-P0-mcp-author-tools）。受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
+/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる（spec: areka-P0-mcp-tool-entrances 要件 6.5）。
 pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
-    let (tx, rx) = mpsc::channel();
-    let mut registry = ToolRegistry::default();
-    for &(definition, parse) in &TABLE {
-        register_row(&mut registry, &tx, definition, parse, reply_wait);
-    }
-    for &(definition, parse, _) in &OWN_TABLE {
-        register_row(&mut registry, &tx, definition, parse, reply_wait);
-    }
-    (registry, rx)
+    register_rows(rows(), reply_wait)
+}
+
+/// 本番の行の並び（SSP と同じ 10 本の [`TABLE`]、続けて独自の [`OWN_TABLE`]）。登録・定義の列・テストが
+/// この 1 か所から並びを取る。
+pub(crate) fn rows() -> impl Iterator<Item = (&'static str, Parse)> {
+    let own = OWN_TABLE
+        .iter()
+        .map(|&(definition, parse, _)| (definition, parse));
+    TABLE.into_iter().chain(own)
 }
 
 /// 本番の登録（[`all_entrances`]）と同じ行・同じ順の、ツールの定義の列（SSP と同じ 10 本、続けて独自の
 /// ツール）。中継（areka-mcp-bridge）が、areka が居ないときの組み込みの一覧をここから組む。
 /// 定義が読めない行は、登録と同じく `error!` 1 件で飛ばす（本番の表では起きない）。
 pub fn all_specs() -> Vec<ToolSpec> {
-    let own = OWN_TABLE.iter().map(|&(definition, _, _)| definition);
-    let rows = TABLE.iter().map(|&(definition, _)| definition).chain(own);
-    let read = |definition| match spec_from_definition(definition) {
+    let read = |(definition, _)| match spec_from_definition(definition) {
         Ok(spec) => Some(spec),
         Err(reason) => {
             error!(%reason, "MCP: ツールの定義が読めない。この行は列に入れない");
             None
         }
     };
-    rows.filter_map(read).collect()
+    rows().filter_map(read).collect()
 }
 
-/// 表の行を順に登録する。定義が読めない行は `error!` 1 件で登録しない（本番の表では起きない）。
+/// 行を順に登録する（本番の [`all_entrances`] とテストが同じ道を通る）。定義が読めない行は `error!` 1 件で
+/// 登録しない（本番の表では起きない）。
 pub(crate) fn register_rows(
-    rows: &[(&str, Parse)],
+    rows: impl IntoIterator<Item = (&'static str, Parse)>,
     reply_wait: Duration,
 ) -> (ToolRegistry, Receiver<ToolRequest>) {
     let (tx, rx) = mpsc::channel();
     let mut registry = ToolRegistry::default();
-    for &(definition, parse) in rows {
+    for (definition, parse) in rows {
         register_row(&mut registry, &tx, definition, parse, reply_wait);
     }
     (registry, rx)
@@ -227,10 +222,6 @@ fn string_list(args: &Map<String, Value>, key: &str) -> Vec<String> {
 #[cfg(test)]
 #[path = "tools_tests.rs"]
 mod tools_tests;
-
-#[cfg(test)]
-#[path = "tools_socket_tests.rs"]
-mod tools_socket_tests;
 
 #[cfg(test)]
 #[path = "tools_own_tests.rs"]

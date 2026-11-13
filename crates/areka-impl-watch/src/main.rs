@@ -5,8 +5,9 @@
 //! [`cli::exit_code`] の 1 か所。設計「Error Handling / 終了コード」）。
 //!
 //! モジュールの読み込みの向きは `error` → `state` → `plan`（子 `turns`＝`plan_turns.rs` は番の
-//! 決め直しと待ち行列の順。外へは `plan` が出し直す）→ `home`／`presence`／`status` → `store` → `wait` → `cli`（子 `args`＝`cli_args.rs` は引数の表と読みで、`cli` だけが読む）
-//! → `main` の一方向だけ（逆向きは誤り）。
+//! 決め直しと待ち行列の順。外へは `plan` が出し直す）→ `home`／`presence`／`status` → `store` →
+//! `wait` → `cli`（子 `args`＝`cli_args.rs` は引数の表と読みで、`cli` だけが読む）
+//! → `main` の一方向だけ（逆向きは誤り）。テストだけのモジュールは向きの外。
 
 use std::process::ExitCode;
 
@@ -33,3 +34,7 @@ fn main() -> ExitCode {
 #[cfg(test)]
 #[path = "main_layering_tests.rs"]
 mod layering_tests;
+
+#[cfg(test)]
+#[path = "main_test_support.rs"]
+mod test_support;

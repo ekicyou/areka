@@ -1,5 +1,5 @@
 //! `areka-P0-shiori-loadu` のテスト（design「テスト → `shiori_proxy_loadu_tests.rs`」）。
-//! 既存 `mod tests`（`shiori_proxy.rs` 末尾）には触らず、本仕様のテストはここへ置く。
+//! 既存 `mod tests`（`shiori_proxy_tests.rs`）には触らず、本仕様のテストはここへ置く。
 //!
 //! 群 A（x64 常時）: 入口の選択の判断表 4 行（要件 1.1〜1.4・1.8・6.3）。DLL を読まない純関数の
 //! テストゆえ i686 に限らない（要件 9.5）。
@@ -8,6 +8,7 @@
 //! 群 D（i686 限定）: 2 本目の偽 DLL `shiori_loadu.dll` を実際に読む 2 本（要件 6.6・6.7・6.9・9.5）。
 
 use super::*;
+use crate::proxy_test_support::{TestRoot, i686_target_base};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -180,8 +181,7 @@ fn resolve_loadu_testdll() -> PathBuf {
         );
         return path;
     }
-    let target_root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/i686-pc-windows-msvc");
+    let target_root = i686_target_base();
     for profile in ["debug", "release"] {
         let candidate = target_root.join(profile).join("shiori_loadu.dll");
         if candidate.is_file() {
@@ -196,21 +196,14 @@ fn resolve_loadu_testdll() -> PathBuf {
     );
 }
 
-/// 既定コードページ（CP932 等）に無い字 `😀` を含む一時フォルダを `load_dir` として作り、記録と偽返却の
+/// 既定コードページ（CP932 等）に無い字 `😀` を名前に含むテストの根を `load_dir` として作り、記録と偽返却の
 /// env を設定して `ShioriByteProxy::load` を 1 回呼ぶ。戻りは (load の結果の Ok/Err, 記録の中身, load_dir)。
-/// proxy は結果を返す前に drop する（unload→FreeLibrary）。一時フォルダと env は後始末する。
+/// proxy は結果を返す前に drop する（unload→FreeLibrary）。根は Drop で消え、env は後始末する。
 fn load_loadu_testdll(fail: bool) -> (Result<(), ProxyError>, String, PathBuf) {
     let _serial = LOADU_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dll = resolve_loadu_testdll();
-    let load_dir = std::env::temp_dir().join(format!(
-        "host32_loadu_test_{}_{}_ゴースト😀",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
-    ));
-    std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
+    let root = TestRoot::new("loadu-ゴースト😀");
+    let load_dir = root.path().to_path_buf();
     // 毎回新しいフォルダの中に置くので、記録は必ずこの呼出の分だけになる（追記の持ち越し無し）。
     let record = load_dir.join("record.txt");
 
@@ -231,14 +224,14 @@ fn load_loadu_testdll(fail: bool) -> (Result<(), ProxyError>, String, PathBuf) {
         std::env::remove_var(ENV_LOADU_FAIL);
     }
     let text = std::fs::read_to_string(&record).unwrap_or_default();
-    let _ = std::fs::remove_dir_all(&load_dir);
+    drop(root);
     (result, text, load_dir)
 }
 
 /// `load_dir` の UTF-8 の小文字 16 進（fixture の記録の書式と同じ）。
 fn utf8_hex(p: &Path) -> String {
     p.to_str()
-        .expect("一時フォルダは UTF-8 で表せる")
+        .expect("テストの根は UTF-8 で表せる")
         .bytes()
         .map(|b| format!("{b:02x}"))
         .collect()

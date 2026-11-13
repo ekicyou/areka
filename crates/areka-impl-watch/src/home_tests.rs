@@ -11,16 +11,7 @@ use temp_path_kit::TempPath;
 use super::{Home, resolve};
 use crate::error::WatchError;
 use crate::state::WaitKind;
-
-/// フォルダの直下に在るものの一覧（並べ替え済み）。
-fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| entry.expect("項目を読める").path())
-        .collect();
-    found.sort();
-    found
-}
+use crate::test_support::entries;
 
 #[test]
 fn missing_or_empty_value_is_unset_and_creates_nothing() {
@@ -106,18 +97,6 @@ fn values_landing_in_a_temp_folder_are_refused_and_create_nothing(shapes: &[&str
         Vec::<PathBuf>::new(),
         "断った値のフォルダを作った"
     );
-}
-
-#[cfg(windows)]
-#[test]
-fn a_relative_value_is_refused_before_anything_is_created() {
-    values_landing_in_a_temp_folder_are_refused_and_create_nothing(&RELATIVE);
-}
-
-#[cfg(windows)]
-#[test]
-fn a_rooted_value_without_a_drive_is_refused_before_anything_is_created() {
-    values_landing_in_a_temp_folder_are_refused_and_create_nothing(&ROOTED);
 }
 
 /// 設計が名指す綴り（`foo`・`.`・`..\x`・`\foo`・`C:foo`・`/c/x`）。断られなければカレントや

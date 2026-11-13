@@ -17,10 +17,6 @@
 //! （`ParentMessageWindow::create` → `spawn` → `pump_until_hello_or` → `send_request(Load)`）を
 //! 忠実に写している。connect が成功すれば `Box<dyn ShioriBackend>`（実体は `ShioriConnection`）を
 //! 返し、失敗は `Err(String)`（→ `ShioriDown`）で返す。
-//!
-//! # 親窓の生成は直列化する
-//! 親 message-only 窓は同じ瞬間に 2 つ生成すると 2 つ目が失敗するため、生成の瞬間だけを
-//! [`WINDOW_CREATE_SERIAL`] で直列化する（生成後の共存は問題ない）。
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -33,9 +29,7 @@ use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{Charset, CharsetNegotiator, HelperLifecycle, ParentMessageWindow, spawn};
 use shiori_host32_ipc::MsgTag;
 
-use super::common::{
-    DEFAULT_TIMEOUT, QuitPolicy, WINDOW_CREATE_SERIAL, join_bounded, spawn_mock_sakura,
-};
+use super::common::{DEFAULT_TIMEOUT, QuitPolicy, join_bounded, spawn_mock_sakura};
 
 /// ハンドシェイク（HELLO 受領）の上限時間（既存 E2E の `HANDSHAKE_TIMEOUT` と同値）。
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -105,12 +99,8 @@ fn connect_real_helper(
     shiori_name: String,
 ) -> Result<Box<dyn ShioriBackend>, String> {
     // 1. 親 message-only 窓（!Send・アクタースレッド上で生成される）。
-    let window = {
-        let _guard = WINDOW_CREATE_SERIAL
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        ParentMessageWindow::create().map_err(|e| format!("親 message-only 窓生成に失敗: {e}"))?
-    };
+    let window =
+        ParentMessageWindow::create().map_err(|e| format!("親 message-only 窓生成に失敗: {e}"))?;
     let parent_hwnd = window.hwnd_u32();
 
     // 2. i686 helper を spawn（cwd=load_dir）。

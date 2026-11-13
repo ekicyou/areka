@@ -4,12 +4,17 @@
 //! 記録は `capture` で数える（`start` と `Drop` の記録は呼び出し側のスレッドで出る）。
 
 use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use areka_actor::spawn_actor;
 use log_capture_kit::{CapturedEvent, capture};
+use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use super::{SHUTDOWN_WAIT, start};
+use super::{
+    ACCEPT_RETRY_WAIT, Listening, McpServer, SHUTDOWN_WAIT, start, wait_after_accept_error,
+};
 use crate::ToolRegistry;
 use crate::testkit::{post_rpc, rpc, serve};
 
@@ -177,17 +182,8 @@ fn two_connections_interleave() {
     drop(idle);
 }
 
-/// (要件 1.7, 9.4) 畳んだ後は同じ番地へ接続できない。
-#[test]
-fn drop_closes_port() {
-    let (server, addr) = serve(ToolRegistry::default());
-    assert_ping(addr);
-    drop(server);
-    let result = TcpStream::connect_timeout(&addr, Duration::from_millis(500));
-    assert!(result.is_err(), "畳んだ後に接続できた: {result:?}");
-}
-
-/// (要件 1.8, 1.9, 9.4) 接続を開いたまま畳んでも `SHUTDOWN_WAIT` 以内に戻り、info 1 件（warn 0 件）。
+/// (要件 1.7, 1.8, 1.9, 9.4) 接続を開いたまま畳んでも `SHUTDOWN_WAIT` 以内に戻り、info 1 件（warn 0 件）。
+/// info は受付の口を落とした後の合図を受けて出るので、待受が閉じたこともこの 1 件で見る。
 #[test]
 fn drop_with_open_connection_returns_within_bound() {
     let (server, addr) = serve(ToolRegistry::default());
@@ -204,4 +200,60 @@ fn drop_with_open_connection_returns_within_bound() {
     assert_eq!(infos[0].field("addr"), Some(addr.to_string().as_str()));
     assert!(of_level(&events, Level::WARN).is_empty(), "{events:?}");
     drop(idle);
+}
+
+/// (要件 1.8) 終わりの合図が来ない取っ手を落とすと、`SHUTDOWN_WAIT` まで待って切り離し、
+/// warn 1 件・info 0 件。落とすのは別のスレッドで、テストは期限つきで待つ（待ちが期限なしなら赤）。
+#[test]
+fn drop_detaches_when_the_thread_does_not_finish_in_time() {
+    let (_inbox, thread) = spawn_actor::<(), _>("mcp-test", |_| {});
+    // 送り手はテストが持ったまま＝合図は来ない。
+    let (done_tx, done_rx) = mpsc::channel();
+    let addr = "127.0.0.1:1".parse().unwrap();
+    let server = McpServer {
+        listening: Some(Listening {
+            addr,
+            token: CancellationToken::new(),
+            done: done_rx,
+            _inbox,
+            _thread: thread,
+        }),
+    };
+    let (result_tx, result_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        let ((), events) = capture(|| drop(server));
+        let _ = result_tx.send((started.elapsed(), events));
+    });
+    let result = result_rx.recv_timeout(SHUTDOWN_WAIT + Duration::from_secs(5));
+    // 期限の後でも送り手を捨てて、止まった落とす側をほどく。
+    drop(done_tx);
+    let (elapsed, events) = result.expect("落とす側が期限までに戻らなかった");
+    assert!(elapsed >= SHUTDOWN_WAIT, "待たずに戻った: {elapsed:?}");
+    let warns = of_level(&events, Level::WARN);
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert_eq!(
+        warns[0].message(),
+        "MCP: 待受の終わりを待ちきれなかった（切り離して先へ進む）",
+        "{events:?}"
+    );
+    assert!(of_level(&events, Level::INFO).is_empty(), "{events:?}");
+}
+
+/// (要件 1.10) `accept` が失敗したら warn 1 件を残し、`ACCEPT_RETRY_WAIT` だけ待ってから戻る。
+#[test]
+fn an_accept_error_waits_before_the_next_try() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("ランタイムを作る");
+    let err = std::io::Error::other("x");
+    let started = Instant::now();
+    let ((), events) = capture(|| rt.block_on(wait_after_accept_error(&err)));
+    let elapsed = started.elapsed();
+    assert!(elapsed >= ACCEPT_RETRY_WAIT, "待たずに戻った: {elapsed:?}");
+    let warns = of_level(&events, Level::WARN);
+    assert_eq!(warns.len(), 1, "{events:?}");
+    assert_eq!(warns[0].field("error"), Some("x"), "{events:?}");
+    assert_eq!(events.len(), 1, "{events:?}");
 }

@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use super::*;
 use crate::ToolContent;
+use crate::testkit::obj;
 use crate::tools::spec_from_definition;
 
 fn diag(kind: Kind, start: usize, end: usize, text: &str) -> Diagnostic {
@@ -121,10 +122,6 @@ fn kind_names_are_spelled_as_documented() {
 /// (要件 1.7・2.1) 詰め替え: `script`・`ghost_name` を写す。`ghost_name` の省略と `null` は無し。
 #[test]
 fn parse_copies_script_and_ghost_name() {
-    let call = |v: Value| match v {
-        Value::Object(map) => parse(&map),
-        other => panic!("オブジェクトでない: {other}"),
-    };
     let want = |ghost: Option<&str>| {
         ToolCall::CheckScript(Args {
             script: r"\h\s[0]こんにちは\e".to_owned(),
@@ -132,15 +129,21 @@ fn parse_copies_script_and_ghost_name() {
         })
     };
     assert_eq!(
-        call(serde_json::json!({ "script": r"\h\s[0]こんにちは\e", "ghost_name": "emo2" })),
+        parse(&obj(
+            serde_json::json!({ "script": r"\h\s[0]こんにちは\e", "ghost_name": "emo2" })
+        )),
         want(Some("emo2"))
     );
     assert_eq!(
-        call(serde_json::json!({ "script": r"\h\s[0]こんにちは\e" })),
+        parse(&obj(
+            serde_json::json!({ "script": r"\h\s[0]こんにちは\e" })
+        )),
         want(None)
     );
     assert_eq!(
-        call(serde_json::json!({ "script": r"\h\s[0]こんにちは\e", "ghost_name": null })),
+        parse(&obj(
+            serde_json::json!({ "script": r"\h\s[0]こんにちは\e", "ghost_name": null })
+        )),
         want(None)
     );
 }
