@@ -259,7 +259,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 > - **`super::`／相対の intra-doc リンクは指す先が変わる**。doc コメントは項目本文の内側にあるため、直すと「本文がバイト単位で不変」という純移動の証明が崩れる。`cargo doc` はゲートではないので**一律未修正が正解**。
 > - **純移動であることは機械的に証明できる**——移設前ファイルを `git show <base>:<path>` で取り出し、属性と先行コメント塊つきの最上位項目へ括弧の釣り合いで分解して、移設後の連結と 1 対 1 突合する。許容してよい差分は「クレート内可視性キーワードの付与」と「意味の変わらない整形の折り返し」だけである。
 
-**Dependencies**: `serde` + feature flags (`json`, `toml`, `yaml`) ＋ `interpolation`, `rand`（`windows` は Windows ターゲットだけ・`runtime/clock.rs`）
+**Dependencies**: `serde` ＋任意の機能 `toml`（`toml`） ＋ `interpolation`, `rand`（`windows` は Windows ターゲットだけ・`runtime/clock.rs`）
 
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
