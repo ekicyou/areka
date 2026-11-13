@@ -1,16 +1,16 @@
 {
   "feature_name": "audit-mcp-update-crates",
   "created_at": "2026-11-12T23:04:04Z",
-  "updated_at": "2026-11-12T23:10:00Z",
+  "updated_at": "2026-11-13T00:10:11Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

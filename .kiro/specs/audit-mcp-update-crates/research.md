@@ -184,3 +184,53 @@
 - **R1（#4・#5）**: 偽の受け口の今の答え方（`Reply::Delayed` の展開・`fake_server.rs:407`）に「放すまで待つ」を足したとき、`fake_server_tests.rs` の自己確認と `exe_test.rs` の別のプロセスから使う形（`tests/common` を通しのテストと部品のテストの両方が読む）で同じに使えるか。
 - **R2（#12）**: rmcp 3.9.0 の 413 の本文と `Content-Type`（読み手の 1 人は `server_side_http.rs:225-235` で「`Payload Too Large: request body exceeds N bytes`・`Content-Type` なし」と読んだ）。設計の段で rmcp の源を開いて確かめる。
 - **R3（#1）**: `locate_app_profile` が使える `AREKA_PROFILE_DIR` を受けたとき、いつも `AppProfile::Ready(<その値>)` を返すか（`establish.rs:180-215`・`lib.rs:220-` の `app_profile_dir` は値を先に採る）。返すなら、隣に areka が居るときは `profile_dir` を渡さなくても置き場は変わらない。
+
+## 10. 設計の段の調べ（2026-11-13・`/kiro-spec-design -y`）
+
+- 調べの型: **light**（今あるクレートの中の直し・依存の追加なし）。読んだ物: `kiro-spec-design` の規則（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）・設計の雛形・完了した `audit-sylphya-actor` の設計（形の手本）・steering（`structure.md` のテストの置き方と 1,000 行・`tech.md` のテストの決まり・`roadmap.md` の C19 の行）。ponytail の「いちばん小さい完全な変更」を各直しの形に当てた（足す口は 1 つずつ・写しは 1 か所・消せる物は消す）。
+- 設計の正本は `design.md`。ここには調べの答えと、設計で決めた理由だけを残す。
+
+### 10.1 調べの答え（§9 の R1〜R3）
+
+- **R1（偽の受け口に「放すまで待つ」）**: 偽の受け口は自分のスレッドと自分の `current_thread` の tokio で回り、接続ごとにタスクを立てる。待つのを 1 つの要求のタスクの中の `Semaphore::acquire().await` にすれば、ほかの接続は止まらない。開ける口（`Semaphore::close`）は同期なので、部品のテスト（`#[tokio::test]`）からも通しのテスト（同期の `#[test]`・別のプロセスの exe を待つ）からも同じに呼べる。`Script`・`Reply` の `Clone`・`Debug` は `Arc` で保てる。→ `Reply::Gated`（`design.md` #4・#5）。
+- **R2（rmcp 3.9.0 の 413）**: `rmcp-3.9.0/src/transport/common/server_side_http.rs` の `expect_json` は、上限を越える塊を見ると状態 413・本文 `Payload Too Large: request body exceeds {max_bytes} bytes`（4 MiB なら `4194304`）を返し、`Content-Type` を付けない。比べは `data.remaining() > max_bytes.saturating_sub(collected.len())`＝上限ちょうどは通る。自前の `plain(413)` は本文 `Payload Too Large`・`text/plain; charset=utf-8` なので、本文と札で見分けられる（`design.md` #12）。
+- **R3（`locate_app_profile` と使える `AREKA_PROFILE_DIR`）**: `crates/areka-user-data/src/establish.rs` の `locate_app_profile` は、`usable_profile_env` が値を返すと `if profile_env.is_none()` の枝を飛ばし、`app_profile_dir(Some(値), ..)` が `profile_env_dir` の値を先に返す＝必ず `AppProfile::Ready(<その値>)`。だから隣に areka が居るときは、中継が `profile_dir` を渡さなくても置き場は同じで、捨てた値の `error!` は `locate_app_profile` の 1 件だけになる（`design.md` #1）。`usable_profile_env` は `lib.rs` の根に在る（`pub use` は要らない・`pub(crate)` → `pub` の 1 語）。範囲の外で今これを呼ぶのは `establish.rs` の 3 か所と `lib_tests.rs` だけ。
+
+### 10.2 #50 の機序の測り（この机・Windows 11・2026-11-13）
+
+- 「誰も待ち受けない番号」を覚えた先にするには、その番号で一度 areka（の偽物）が待ち受け、止めた後も番号がほかへ渡らないことが要る。PowerShell の `System.Net.Sockets.Socket`（Winsock を直に呼ぶ）で測った:
+  - 待ち受けている（`SO_REUSEADDR` 無しの）口と同じ番号へ、`SO_REUSEADDR` を付けて束ねると `WSAEACCES` で断られる（後から握る形は取れない）。止めた直後に `SO_REUSEADDR` 無しの束ねをすると通る（今の `keep_closed` の取り合いが本当に起きうる）。
+  - 先に `SO_REUSEADDR` を付けて束ねたまま待ち受けないソケット A を置き、同じ番号へ `SO_REUSEADDR` を付けたソケット B が束ねて待ち受けられる。B が居る間の接続は通り、B を閉じた後の接続は `ConnectionRefused`。A が居る間、`SO_REUSEADDR` 無しの束ねは断られ、`bind(0)` は別の番号を受け取る。
+- → `nobody()` に `SO_REUSEADDR` を付け、`FakeServer::start_on` は `nobody()` が握る番号の上で `SO_REUSEADDR` を付けて待ち受ける。止めた後の取り直しの輪（`keep_closed`・`start_on` の 10 秒の輪）が要らなくなる。較正のテスト `start_on_a_held_port_refuses_after_stop` が、この机の振る舞いが変わったら赤にする。本番の束ね（`areka_mcp::start`）は変えない。
+- 退けた案: ⑴ 覚えた先を差し込む口を中継に足す（`Linked` は rmcp の手順を通った `RunningService` で、テストから組めない・本番に口を足すことになる） ⑵ 止めた受け口を「接続をすぐ切る」形にする（確かめの途中で切れるのは `NotAreka`＝名乗りの違いと同じ道で、テストの的「接続できない」から外れる） ⑶ 揺れを受け入れる（議題 4 で取らないと確定）。
+
+### 10.3 #45・#42・#44 の起こしにくい枝（§8.1 D7）
+
+- 自分自身を指すジャンクション（`cmd /c mklink /J loop loop`）を開くと `ERROR_CANT_RESOLVE_FILENAME`（1921・PowerShell で HRESULT `0x80070781` を測った）。Rust はこれを `NotFound` にも `NotADirectory` にもしないので、`paths.rs` の `resolves_under` の 2 つの `Err`（`symlink_metadata`・`canonicalize`）・`delete.rs` の `resolves_under` の `Err` → 取り除けない・`work.rs` の `purge_committed` の棚を読めない枝、の 4 つを決定論で通せる。既にある道具 `testkit::junction` を使う（依存も新しい道具も要らない）。
+- 差し込みが見つからなかった 2 つ（#45 の直しの「見つからなければ記録に残して閉じる」）:
+  - `commit.rs` の戻しで、確定がその場で作ったフォルダを消せない枝（`NotFound`・`DirectoryNotEmpty` のほか）: 消す相手は確定の途中で作られ、確定の途中に手を入れる口が無い（取得口の差し込みは確定の前に終わる・`pin` は在るファイルにしか効かない・前もって作るとそのフォルダは「作ったフォルダ」にならない）。
+  - `delete.rs` の `symlink_metadata` の `Err`（`NotFound` のほか）: 直前の `resolves_under` が同じパスの `symlink_metadata` を先に見て、失敗ならそこで取り除けない一覧へ入る。ここに来るのは、その間にほかのプロセスが木を変えたときだけ。
+  - どちらもエラーの扱いは残し（要件 5.2）、その場に「試さない」の 1 行の注を置く。かけ直しの audit で同じ 2 つが出たら、#45 の直しの中として数えない（`design.md`「直さない・回した指摘」）。
+- #42（`accept` の失敗）: tokio の `TcpListener::accept` の失敗は決定論で起こせない。受付を差し替える口は本番に足さず、腕の中身（`warn!` と 100 ms の待ち）を関数に出して、その関数を直に試す（指摘の危なさ＝「待ちの行を消すと嵐」をそのまま縛る）。
+- #44 ⑵（通知を届けられなかった WARN）: 偽の受け口が通知に 500 の平文で答えると、自前の送り手は `NotJson` を返し、rmcp 3.9.0 の `Peer::send_notification` はその失敗を返す（`service.rs` の 834 行目・送り手の答えを `oneshot` で待つ）。通知は rmcp が別のタスクで回すが、`current_thread` の tokio では I/O を待たない道は次の I/O の待ちの前に回し切られるので、後に `ping` を 1 往復すれば記録は揃っている。
+
+### 10.4 設計で決めたこと（§8.1 D1〜D6）
+
+- **D1**: `from_inputs` だけを直す（`from_values` は値だけの判定のまま・`pub` の形も同じ）。隣に areka が居れば `profile_dir` は渡さず、居なければ `usable_profile_env` の答えを渡す。記録はどちらも `areka_user_data` の `error!` ちょうど 1 件。縛るテストは `config_prepare_tests.rs`（2 値 × 隣の有無）。
+- **D2**: `Reply::Gated(Gate, Box<Reply>)`（`Gate` は `Arc<Semaphore>`・開けたら閉じない）。#4 は門でなく「届いた後に閉じる」（`run` に `before_close` を渡す）で直す＝5 秒の見込みから exe の起動の時間を外すのが的で、答えの 1 秒の遅れは今のまま残せる。
+- **D3**: ヘッダの値をバイト列で渡す口でなく、組み上がった要求のバイト列をそのまま送る `send_raw` を 1 つ足す（#11 の UTF-8 でない値と #40 の短い本文の両方に使える・`request` は引数を変えずにその上に載せる）。
+- **D4**: `McpServer` を子のモジュールのテストで直に組む（`done` の送り手をテストが持つ・`spawn_actor` の何もしない取っ手）。落とすのは別のスレッドで行い、期限つきで待つ（`recv()` に直し間違えても止まらずに赤）。全体テストへの響きは約 2 秒（並んで走る）。
+- **D5**: `over_limit(have: usize, available: u32) -> bool` を `winhttp.rs` の中、`MAX_BODY_BYTES` の隣に置く。`unsafe` と WinHTTP の API の綴りを持たないので、`lib_tests.rs` の文字の検査に触れない。
+- **D6**: 寄せる先は各クレートの今の道具（`areka-mcp/src/testkit.rs`・`areka-mcp-bridge/tests/common/fake_server.rs`・`areka-update/src/testkit.rs`）。中継の部品のテストどうしで借りる道具（`real_receiver`・`only_the_check_arrived`・`patient`）は、`crate::` を使えない共有のファイルに入れず、`http.rs` の `mod tests` と `service.rs` の `mod failure_tests` を `pub(crate)` にして共有元にする（`cfg(test)` の中だけ）。寄せた後の行数は `design.md`「1,000 行の番人」（どれも 1,000 行の内側・新しいファイルは要らない）。
+- **#14**: `register_rows` を残して行の列（`IntoIterator`）を受ける形にし、`all_entrances` がそれを呼ぶ（登録の道が 1 本になる）。`entrances` だけを消す。`tools_tests.rs` の登録のテスト（読めない行を飛ばすテストを含む）は `register_rows` を使い続ける。
+
+### 10.5 合成（generalization・build vs adopt・simplification）
+
+- まとめた物: 「誰も待ち受けない番号」の 5 つの写しと、#50 の「止めた後も番号を握る」を、`nobody()` 1 つ（`SO_REUSEADDR` 付き）にまとめた。#11 と #40 の「普通でない要求を送る」を `send_raw` 1 つにまとめた。
+- 使った既存の物: 門は `tokio::sync::Semaphore`（既に依存にある）・握る番号は `tokio::net::TcpSocket::set_reuseaddr`・ジャンクションは既にある `testkit::junction`。作った物は無い（依存も足さない）。
+- 削った物: 受付を差し替える口（#42）・覚えた先を差し込む口（#50）・ヘッダの値のバイト列の口（#11）は作らない。`from_values` の形は変えない（#1）。新しいファイルは作らない。
+
+### 10.6 設計の検め（review gate）
+
+- 1 回目: 要件の 42 個の番号が全部 `design.md` に在ること、51 件が「指摘ごとの直し方」に 1 行ずつ在ることを、python で機械的に確かめた。中身の検めで 2 つ直した（`Gate::new` は clippy の `new_without_default` に当たるので `Gate::shut` へ・#44 ⑵ の記録の捕まえ方を `#[test]`＋`capture`＋`current_thread` の形と、順の根拠まで書いた）。
+- 2 回目: 直しの後に同じ検めで通った。要件の段へ戻す穴は無かった。
