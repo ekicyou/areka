@@ -142,7 +142,7 @@ mod window_tests {
     /// - (b) 同じ親窓へ自分の窓を名乗る HELLO を loopback 送出 → `pump_until_hello_or` が `Some(helper_hwnd)` を返し helper_hwnd が確定する（要件 3.2）。
     /// - (c) 無視したメッセージの記録は [`ignored_frames_are_logged`] が確かめる。
     /// - (d) RESPONSE を loopback 送出 → WndProc の Response アームが `response_slot` へ store する（要件 4.2）。
-    /// - (e) 無応答相手（親自身）へ `send_request` → 上限時間で `SendError::Ipc(Timeout)`・親はハングしない（要件 5.1/5.2/5.3）。
+    /// - (e) 無応答相手（親自身）へ `send_request` → slot が空 → `SendError::Ipc(Timeout)` に写る（要件 5.2）。同じスレッドの窓ゆえ WndProc は直に呼ばれ上限時間は効かない（上限時間は shiori-host32-ipc の send_timeout_tests）。
     ///
     /// bounded: いずれの pump / send_request も timeout / 受領 / quit で必ず抜ける（無限ループ禁止）。
     #[test]
@@ -209,10 +209,11 @@ mod window_tests {
             );
         }
 
-        // --- (e) 無応答相手への send_request は上限時間で Timeout（要件 5.1/5.2/5.3）---
+        // --- (e) 応答なし → slot が空 → Timeout に写る（要件 5.2）---
         // helper_hwnd は (b) で親自身。REQUEST を親 WndProc が受けても RESPONSE を
         // store しない（Request アームは IgnoreKnown）→ slot は空のまま → Timeout。
-        // SMTO_ABORTIFHUNG ＋短 timeout で有限復帰し親はハングしない。
+        // 宛先は同じスレッドの窓ゆえ SendMessageTimeoutW は WndProc を直に呼び、上限時間も
+        // SMTO_ABORTIFHUNG も効かない（上限時間は shiori-host32-ipc の send_timeout_tests）。
         {
             let before = Instant::now();
             let result = parent.send_request(MsgTag::Request, b"ping", Duration::from_millis(150));
@@ -221,12 +222,12 @@ mod window_tests {
                     result,
                     Err(SendError::Ipc(shiori_host32_ipc::IpcError::Timeout))
                 ),
-                "無応答時は Timeout で復帰する（要件 5.2）: got {result:?}"
+                "応答なし（slot が空）は Timeout に写る（要件 5.2）: got {result:?}"
             );
             // 的は「止まらずに返る」。混んだ PC でも揺れないよう上限は広く取る（指摘 48）。
             assert!(
                 before.elapsed() < Duration::from_secs(30),
-                "send_request は SMTO_ABORTIFHUNG ＋上限時間で有限復帰する（要件 5.3）"
+                "同じスレッドの窓への send_request は WndProc を直に呼んで返る"
             );
         }
 

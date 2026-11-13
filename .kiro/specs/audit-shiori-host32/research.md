@@ -617,3 +617,16 @@
 - 見直して指摘にしなかったもの:
   - (a) `crates/shiori-host32-helper/src/shiori_proxy_tests.rs` と `crates/shiori-host32-testdll/src/lib.rs` の「courtesy unload」の語: 正しい。UNLOAD を経ない道（no-UNLOAD）では `Drop` → 後始末 → `unload` が本当に走り、`testdll_drop_invokes_courtesy_unload` が testdll の書く印のファイルでそれを証す。14.17 の 5 で直したのは UNLOAD の道（今は `close`）の説明だけ。
 - clippy の回し直し: x64 は 14.16 と同じ `clippy::drop_non_drop` の 3 件だけ。6 の SAFETY の注で 2 行増えたので `tests/lifecycle_kill_e2e.rs` の 1 件は今 `:215`（`lifecycle_cyclic_e2e.rs:162`・`:287` は動いていない）。i686 は 0 件。
+
+### 14.19 かけ直し 4 回目（タスク 14）
+
+- 結果: 新しい指摘が 3 件出た。どれも説明とテストの文言で、本番の振る舞いを変えるものは 0 件。3 件とも直した（コードは変えていない）。
+  1. 言い分がテストの証すより大きい: `crates/shiori-host32-host/tests/error_paths.rs` の経路 2 と `src/parent_window_tests.rs` の (e) が「無応答の相手への `send_request` は `SMTO_ABORTIFHUNG` ＋上限時間で `Timeout` を返す（要件 5.2/5.3）」と名乗っていた。宛先は同じスレッドが作った窓（親自身）なので `SendMessageTimeoutW` は WndProc を直に呼び、上限時間も `SMTO_ABORTIFHUNG` も効かない。`Timeout` は `shiori-host32-ipc` の `send_request` の `slot.take().ok_or(IpcError::Timeout)`（slot が空）から来る。直し: 冒頭の注・関数の説明・段の注・断言の文を「応答なし → slot が空 → `Timeout` に写る（要件 5.2）」に直し、上限時間そのものは別スレッドの窓を使う `crates/shiori-host32-ipc/src/send_timeout_tests.rs` が確かめると書いた。冒頭の「wedge」の語も外した。テストの関数名も `window_error_paths_handshake_timeout_wedge_and_corrupt_frame_isolation` から `window_error_paths_handshake_timeout_no_response_and_corrupt_frame_isolation` に改めた（コードとテストにほかの参照は無い。残るのは `.kiro/specs/completed/` の過去の検証記録だけで、記録なので触らない）。
+  2. 説明の古さ: `crates/shiori-host32-host/Cargo.toml` の `log-capture-kit` の dev-dependency の注が「`CharsetNegotiator` のログを観測するためだけ」のままだった。今は lifecycle・`parent_window_tests`・`process_host_tests`・`process_host_stderr_tests`・`process_host_image_tests`・`client_tests`・`client_shiori2_tests` も使う。「host のテストが記録（件数・レベル・`event` の欄）を観測するための」に直した。注だけで、`Cargo.lock` は変わらない。
+  3. 説明の古さ: `crates/shiori-host32-host/README.md:68` の `--test error_paths` の注が「要件 1.4/2.5/3.4/5.x」だった。1.4 のテストは消した（14 の決め 7）。今 `error_paths.rs` に残る経路は 3.4・2.5・5.2 なので「（要件 2.5/3.4/5.x）」に直した。
+- 見直して数えなかったもの（4 回目の監査役の申し送り）:
+  - (a) testdll の「二重解放の検知」の語は言い過ぎ: `GlobalFree` の戻り値を捨てているので検知はしていない。テスト用 DLL の説明の語で、本番の振る舞いに関わらない。
+  - (b) helper の `std::env::args().nth(n)` は対にならないサロゲートを含む引数で panic する: panic は記録に残り、実際のフォルダ名では起きない。
+  - (c) `response_not_from_helper` の理由は、ハンドシェイク前に届いた応答にも付く: 捨てて記録する振る舞いは正しく、理由の語の幅の話。
+  - (d) 入れ子の LOAD: 14.16 の (a) で決着済み。
+- clippy の回し直し: x64（`-p shiori-host32-host -p shiori-host32-ipc --all-targets`）は 14.16 と同じ `clippy::drop_non_drop` の 3 件だけで、行は動いていない（`tests/lifecycle_kill_e2e.rs:215`・`lifecycle_cyclic_e2e.rs:162`・`:287`）。

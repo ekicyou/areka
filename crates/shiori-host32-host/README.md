@@ -65,7 +65,7 @@ cargo test -p shiori-host32-host
 #    個別に走らせる場合:
 cargo test -p shiori-host32-host --test shiori_load_e2e     # LOAD 往復（proxy 確立 ack）
 cargo test -p shiori-host32-host --test shiori_request_e2e  # request 往復（GET Value / NOTIFY 204）
-cargo test -p shiori-host32-host --test error_paths         # エラー経路（要件 1.4/2.5/3.4/5.x）
+cargo test -p shiori-host32-host --test error_paths         # エラー経路（要件 2.5/3.4/5.x）
 
 # ③ i686 でしか走らないテスト（ipc の 32bit 可搬性・要件 7.2/7.3 に加え、helper の proxy・
 #    loopback・再入・固まった窓のテスト。合わせて約 42 秒）

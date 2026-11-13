@@ -5,9 +5,12 @@
 //!
 //! 1. **ハンドシェイク timeout（要件 3.4）**: helper を spawn せず HELLO も送らない親窓で
 //!    `pump_until_hello_or(短 timeout)` が `None` を返し、上限時間で bounded に抜ける。
-//! 2. **応答 timeout / wedge（要件 5.2 / 5.3）**: ハンドシェイクを（loopback で）成立させた後、
+//! 2. **応答なしの写し（要件 5.2）**: ハンドシェイクを（loopback で）成立させた後、
 //!    **応答しない相手**（親自身の HWND＝REQUEST に RESPONSE を返さない）へ `send_request` すると
-//!    上限時間で `SendError::Ipc(IpcError::Timeout)` を返し、親がハングしない。
+//!    `SendError::Ipc(IpcError::Timeout)` を返す。宛先は同じスレッドが作った窓ゆえ
+//!    `SendMessageTimeoutW` は WndProc を直に呼び、上限時間も `SMTO_ABORTIFHUNG` も効かない。
+//!    ここで確かめるのは「応答なし → slot が空 → `Timeout` に写る」だけで、上限時間そのものは
+//!    crate `shiori-host32-ipc` の `send_timeout_tests` が別スレッドの窓で確かめる。
 //! 3. （消した: helper の強制終了の見つけ方は `lifecycle_kill_e2e` が本物の握手で確かめ、helper が
 //!    自分で終わる道の記録は `process_host_stderr_tests::real_helper_stderr_reaches_the_sink` が受ける）
 //! 4. **不正フレーム隔離（要件 2.5）**: 親窓へ**実 WM_COPYDATA** で「未知タグ」フレームを
@@ -102,10 +105,11 @@ unsafe fn send_raw_frame_with_tag(target_hwnd: u32, dw_data: usize, data: &[u8])
 // 経路 1・2・4: 窓を要する 3 経路を 1 つの親窓で順に確かめる
 // ---------------------------------------------------------------------------
 
-/// 窓を要する 3 経路（ハンドシェイク timeout / 不正フレーム隔離 / 応答 timeout・wedge）を
-/// **単一の親窓**で順に検証する（design.md Integration Tests 2・3・5・要件 3.4 / 5.2 / 5.3 / 2.5）。
+/// 窓を要する 3 経路（ハンドシェイク timeout / 不正フレーム隔離 / 応答なしの写し）を
+/// **単一の親窓**で順に検証する（design.md Integration Tests 2・3・5・要件 3.4 / 5.2 / 2.5）。
 ///
-/// すべての pump / send_request は上限時間で bounded に復帰する（無限待機しない）。
+/// pump は上限時間で bounded に復帰する。send_request は同じスレッドの窓へ送るため WndProc が
+/// 直に呼ばれて返る（上限時間の検証は shiori-host32-ipc の send_timeout_tests）。
 ///
 /// **経路 4 をハンドシェイク成立前に置く理由**: 不正フレーム隔離を**非盲目**に観測するため。
 /// ハンドシェイク前（helper_hwnd 未確定）に未知タグを注入し、直後の `pump_until_hello_or` が
@@ -113,7 +117,7 @@ unsafe fn send_raw_frame_with_tag(target_hwnd: u32, dw_data: usize, data: &[u8])
 /// 上位/ハンドシェイクへ漏れない」を公開 API のみで直接観測できる。この観測は `send_request` の
 /// `slot.clear()` に盲目化されない（ハンドシェイク自体が成立しないため）。
 #[test]
-fn window_error_paths_handshake_timeout_wedge_and_corrupt_frame_isolation() {
+fn window_error_paths_handshake_timeout_no_response_and_corrupt_frame_isolation() {
     // 親 message-only 窓。helper は spawn しない（HELLO は誰も送らない）。
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
@@ -178,13 +182,14 @@ fn window_error_paths_handshake_timeout_wedge_and_corrupt_frame_isolation() {
          （窓が生存＝crash していない）"
     );
 
-    // === 経路 2: 応答 timeout / wedge（要件 5.2 / 5.3） ===============================
+    // === 経路 2: 応答なしの写し（要件 5.2） ==========================================
     // 応答しない相手（親自身）へ REQUEST を送る。親 WndProc は REQUEST を記録のみで RESPONSE を
-    // store しない → slot 空 → 上限時間で Timeout。SMTO_ABORTIFHUNG ＋短 timeout で有限復帰。
+    // store しない → slot 空 → Timeout。同じスレッドの窓ゆえ WndProc は直に呼ばれ、上限時間は
+    // 効かない（上限時間は shiori-host32-ipc の send_timeout_tests が確かめる）。
     let result = parent.send_request(MsgTag::Request, b"ping", Duration::from_millis(200));
     assert!(
         matches!(result, Err(SendError::Ipc(IpcError::Timeout))),
-        "無応答相手への send_request は上限時間で Timeout を返す（要件 5.2）: got {result:?}"
+        "応答なし（slot が空）の send_request は Timeout に写る（要件 5.2）: got {result:?}"
     );
 
     drop(parent);
