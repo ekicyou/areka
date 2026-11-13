@@ -38,6 +38,38 @@ pub struct DecodedImage {
     pub has_alpha: bool,
 }
 
+/// 絵の一辺の上限（Direct3D 11 の機能水準 11 の 2D テクスチャの一辺・areka-emo-compose の MAX_EXTENT と同じ値）。
+pub(crate) const MAX_SIDE: u32 = 16_384;
+
+/// 一辺の上限を確かめ、BGRA の画素の入れ物の長さ（width * 4 * height）を usize で返す。
+/// 幅か高さが MAX_SIDE を越えたら Err（寸法と上限を書いた文）。掛け算はあふれない（最大 2^30）。
+pub(crate) fn pixel_len(width: u32, height: u32) -> Result<usize, String> {
+    if width > MAX_SIDE || height > MAX_SIDE {
+        return Err(format!(
+            "絵の寸法 {width}x{height} が一辺の上限 {MAX_SIDE} を越える"
+        ));
+    }
+    Ok(width as usize * 4 * height as usize)
+}
+
+/// 読み手の答えが約束を守るか: 一辺が MAX_SIDE 以下・stride >= width * 4・bgra.len() == stride * height
+/// （比べは u64）。破れば Err（寸法・stride・長さを書いた文）。
+pub(crate) fn check_image(img: &DecodedImage) -> Result<(), String> {
+    pixel_len(img.width, img.height)?;
+    let (w, h, stride, len) = (
+        u64::from(img.width),
+        u64::from(img.height),
+        u64::from(img.stride),
+        img.bgra.len() as u64,
+    );
+    if stride < w * 4 || len != stride * h {
+        return Err(format!(
+            "読み手の答えが約束を破る（寸法 {w}x{h}・stride {stride}・長さ {len}）"
+        ));
+    }
+    Ok(())
+}
+
 /// デコード失敗の診断可能なエラー（不在・破損）。失敗パスを常に保持する（2.2）。
 #[derive(Debug)]
 pub enum DecodeError {
@@ -376,5 +408,42 @@ mod tests {
         let img = takes_decoder(&dec, &known_path()).expect("decodes via dyn port");
         assert_eq!(img.has_alpha, has_alpha);
         assert_eq!(img.bgra.len(), (img.stride * img.height) as usize);
+    }
+
+    /// 指摘 2: 長さの関数は上限の端で u32 ならあふれる値も usize で正しく出し、越えたら寸法と上限を書いて断る。
+    #[test]
+    fn pixel_len_at_max_does_not_overflow_and_refuses_over() {
+        // 上限の端の長さは 2^30。u32 の掛け算ならあふれる寸法（u32::MAX 四方）は掛ける前に断る。
+        assert_eq!(pixel_len(MAX_SIDE, MAX_SIDE), Ok(1usize << 30));
+        assert_eq!(pixel_len(0, 0), Ok(0));
+        for (w, h) in [(MAX_SIDE + 1, 1), (1, MAX_SIDE + 1), (u32::MAX, u32::MAX)] {
+            let err = pixel_len(w, h).expect_err("over max side");
+            assert!(
+                err.contains(&format!("{w}x{h}")) && err.contains("16384"),
+                "{err}"
+            );
+        }
+    }
+
+    /// 指摘 18: 約束（一辺・stride・長さ）を破る答えは断り、守る答えは通す。
+    #[test]
+    fn check_image_rejects_broken_contract() {
+        let img = |width, height, stride, len| DecodedImage {
+            width,
+            height,
+            stride,
+            bgra: vec![0u8; len],
+            has_alpha: true,
+        };
+        assert_eq!(check_image(&img(2, 2, 8, 16)), Ok(()));
+        assert_eq!(check_image(&img(2, 2, 12, 24)), Ok(()));
+        assert!(check_image(&img(2, 2, 8, 15)).is_err(), "short buffer");
+        assert!(check_image(&img(2, 2, 4, 8)).is_err(), "stride < width * 4");
+        assert!(
+            check_image(&img(MAX_SIDE + 1, 0, 0, 0)).is_err(),
+            "side over max"
+        );
+        // stride * height が u32 であふれる答えも u64 で比べて断る（panic しない）。
+        assert!(check_image(&img(1, MAX_SIDE, u32::MAX, 0)).is_err());
     }
 }

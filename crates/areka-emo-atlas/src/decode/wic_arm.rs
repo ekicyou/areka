@@ -26,7 +26,8 @@ use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::core::{GUID, HSTRING, Interface};
 
 use crate::decode::{
-    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, image_arm, sniff,
+    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, check_image,
+    image_arm, pixel_len, sniff,
 };
 
 /// 既定デコード腕（WIC 経由）。COM/unsafe をこの腕へ隔離する（D4）。
@@ -50,12 +51,13 @@ impl WicDecoderArm {
         Ok(Self { factory })
     }
 
-    /// WIC 経路で PBGRA バッファと変換前 α 有無を抽出する（`windows` エラーをそのまま返す）。
+    /// WIC 経路で PBGRA への変換器と変換前 α 有無を作る（`windows` エラーをそのまま返す）。
+    /// 画素は読まない（寸法の確かめと写しは `copy_checked`）。
     ///
     /// wintf `com/wic.rs::load_bitmap_source` の手順を raw COM で再現する。
     /// `has_alpha` は **変換前**フレームの `GetPixelFormat`（Critical Issue 1）由来と、
     /// 番号つきの形式ならパレット由来の α 有無から取る。
-    fn decode_inner(&self, path: &Path) -> windows::core::Result<DecodedImage> {
+    fn open_source(&self, path: &Path) -> windows::core::Result<(IWICBitmapSource, bool)> {
         // UTF-16 のまま渡す（`to_string_lossy` は対のないサロゲートを U+FFFD に化かし別の名を開く）
         let path_hstring = HSTRING::from(path);
 
@@ -94,25 +96,31 @@ impl WicDecoderArm {
                 WICBitmapPaletteTypeMedianCut,
             )?;
         }
-        let source: IWICBitmapSource = converter.cast()?;
-
-        // 寸法取得
-        let mut width = 0u32;
-        let mut height = 0u32;
-        unsafe { source.GetSize(&mut width, &mut height)? };
-
-        let stride = width * 4;
-        let mut bgra = vec![0u8; (stride * height) as usize];
-        unsafe { source.CopyPixels(std::ptr::null(), stride, &mut bgra)? };
-
-        Ok(DecodedImage {
-            width,
-            height,
-            stride,
-            bgra,
-            has_alpha,
-        })
+        Ok((converter.cast()?, has_alpha))
     }
+}
+
+/// 変換器から寸法を聞き、一辺の上限（`pixel_len`）を通ったときだけ入れ物を確保して写す。
+/// 越えたら確保せずに寸法と上限を書いた文を返す。WIC の失敗の文は `e.to_string()`。
+fn copy_checked(source: &IWICBitmapSource, has_alpha: bool) -> Result<DecodedImage, String> {
+    let mut width = 0u32;
+    let mut height = 0u32;
+    unsafe { source.GetSize(&mut width, &mut height) }.map_err(|e| e.to_string())?;
+    let len = pixel_len(width, height)?;
+
+    let stride = width * 4;
+    let mut bgra = vec![0u8; len];
+    unsafe { source.CopyPixels(std::ptr::null(), stride, &mut bgra) }.map_err(|e| e.to_string())?;
+
+    let img = DecodedImage {
+        width,
+        height,
+        stride,
+        bgra,
+        has_alpha,
+    };
+    check_image(&img)?;
+    Ok(img)
 }
 
 impl ElementDecoder for WicDecoderArm {
@@ -124,9 +132,13 @@ impl ElementDecoder for WicDecoderArm {
             });
         }
         // 在るが復号不能（破損等）は Decode として返す（2.2・panic しない）。
-        self.decode_inner(path).map_err(|e| DecodeError::Decode {
+        let (source, has_alpha) = self.open_source(path).map_err(|e| DecodeError::Decode {
             path: path.to_path_buf(),
             source: e.to_string(),
+        })?;
+        copy_checked(&source, has_alpha).map_err(|source| DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
         })
     }
 

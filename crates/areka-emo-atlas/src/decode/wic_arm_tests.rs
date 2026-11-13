@@ -183,3 +183,42 @@ fn decode_opens_name_with_lone_surrogate() {
         assert!(decoded.is_ok(), "{:?}", decoded.err());
     });
 }
+
+/// 幅 `width`・高さ 1 の本物の PNG をワークツリーの `target` の下に作ってパスを返す。
+fn wide_png(width: u32) -> PathBuf {
+    let dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/emo_atlas_max_side_test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(format!("{width}x1.png"));
+    image::RgbaImage::new(width, 1).save(&path).unwrap();
+    path
+}
+
+/// 指摘 2: 一辺が上限（16,384）を越える絵は、画素の入れ物を確保する前に読めなかった絵になり、文に寸法と上限が出る。
+#[test]
+fn decode_refuses_side_over_max_before_alloc() {
+    let path = wide_png(16_385);
+    with_arm(
+        |arm| match arm.decode(&path).map(|img| (img.width, img.height)) {
+            Err(DecodeError::Decode { path: p, source }) => {
+                assert_eq!(p, path);
+                assert!(
+                    source.contains("16385") && source.contains("16384"),
+                    "{source}"
+                );
+            }
+            other => panic!("expected Decode, got {other:?}"),
+        },
+    );
+}
+
+/// 指摘 2: 一辺がちょうど上限の絵は今までどおり読める。
+#[test]
+fn decode_reads_side_at_max() {
+    let path = wide_png(16_384);
+    with_arm(|arm| {
+        let img = arm.decode(&path).expect("16384x1 reads");
+        assert_eq!((img.width, img.height, img.stride), (16_384, 1, 16_384 * 4));
+        assert_eq!(img.bgra.len(), 16_384 * 4);
+    });
+}
