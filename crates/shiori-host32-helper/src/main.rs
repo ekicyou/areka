@@ -524,7 +524,39 @@ fn shiori_name_arg_env() -> Option<String> {
     )
 }
 
+/// 自分の標準入力・標準出力・標準エラーの取っ手から受け継ぎの印を落とす（design.md U5・指摘 4）。
+///
+/// 親は helper の標準エラーを管にして読み手のスレッドで記録へ回す。SHIORI が取っ手を受け継ぐ形で
+/// 起こしたプロセスが管の書き口を持ったまま残ると、ゴーストを閉じるたびに親の Drop が読み手を待って
+/// 止まるため、その道をここで断つ。取っ手が無い・失敗は `[helper]` の行で書いて続ける。
+fn disinherit_std_handles() {
+    use windows::Win32::Foundation::{HANDLE_FLAG_INHERIT, HANDLE_FLAGS, SetHandleInformation};
+    use windows::Win32::System::Console::{
+        GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    };
+    for (name, which) in [
+        ("標準入力", STD_INPUT_HANDLE),
+        ("標準出力", STD_OUTPUT_HANDLE),
+        ("標準エラー", STD_ERROR_HANDLE),
+    ] {
+        // SAFETY: Win32 境界。自分の標準の取っ手を取るだけ。
+        match unsafe { GetStdHandle(which) } {
+            Ok(h) if !h.is_invalid() && !h.0.is_null() => {
+                // SAFETY: Win32 境界。自分の取っ手の受け継ぎの印を落とすだけ。
+                if let Err(e) =
+                    unsafe { SetHandleInformation(h, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) }
+                {
+                    eprintln!("[helper] {name}の取っ手の受け継ぎの印を落とせない: {e}");
+                }
+            }
+            Ok(_) => eprintln!("[helper] {name}の取っ手が無い（受け継ぎの印は落とさない）"),
+            Err(e) => eprintln!("[helper] {name}の取っ手を取れない: {e}"),
+        }
+    }
+}
+
 fn main() {
+    disinherit_std_handles();
     let Some(parent_hwnd) = parent_hwnd_arg_env() else {
         eprintln!(
             "[helper] 親 HWND（u32 ワイヤ値）が未指定です。arg1 または env HOST32_PARENT_HWND で渡してください。"

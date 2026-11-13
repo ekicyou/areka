@@ -400,3 +400,54 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     // 根（testdll の写し先）は Drop で消える。
     drop(root);
 }
+
+/// helper が始めに標準の取っ手から受け継ぎの印を落とす（design.md U5・指摘 4）。
+///
+/// 自分の標準エラーの取っ手に受け継ぎの印を立ててから `disinherit_std_handles()` を呼び、印が落ちた
+/// ことを `GetHandleInformation` で見る（呼ばなければ印は立ったまま＝赤）。印は取っ手ごとの値で、
+/// この crate で取っ手の印を触るテストはこの 1 本だけなので並走のテストと競らない。終わりに元の印へ戻す。
+#[test]
+#[cfg(target_arch = "x86")]
+fn std_handles_are_not_inherited() {
+    use windows::Win32::Foundation::{
+        GetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS, SetHandleInformation,
+    };
+    use windows::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE};
+
+    fn flags(h: HANDLE) -> u32 {
+        let mut f = 0u32;
+        // SAFETY: Win32 境界。生きている標準エラーの取っ手の印を読むだけ。
+        unsafe { GetHandleInformation(h, &mut f) }.expect("GetHandleInformation に失敗");
+        f
+    }
+
+    // SAFETY: Win32 境界。自分の標準エラーの取っ手を取るだけ。
+    let h = unsafe { GetStdHandle(STD_ERROR_HANDLE) }.expect("GetStdHandle に失敗");
+    assert!(
+        !h.is_invalid() && !h.0.is_null(),
+        "テストのプロセスに標準エラーの取っ手が無い"
+    );
+    let original = flags(h);
+    // SAFETY: Win32 境界。自分の取っ手の受け継ぎの印を立てるだけ。
+    unsafe { SetHandleInformation(h, HANDLE_FLAG_INHERIT.0, HANDLE_FLAG_INHERIT) }
+        .expect("受け継ぎの印を立てられない");
+    assert_ne!(flags(h) & HANDLE_FLAG_INHERIT.0, 0, "前提: 印が立っている");
+
+    disinherit_std_handles();
+    let after = flags(h);
+
+    // SAFETY: Win32 境界。元の印へ戻す。
+    unsafe {
+        SetHandleInformation(
+            h,
+            HANDLE_FLAG_INHERIT.0,
+            HANDLE_FLAGS(original & HANDLE_FLAG_INHERIT.0),
+        )
+    }
+    .expect("元の印へ戻せない");
+    assert_eq!(
+        after & HANDLE_FLAG_INHERIT.0,
+        0,
+        "disinherit_std_handles の後も標準エラーに受け継ぎの印が残っている"
+    );
+}

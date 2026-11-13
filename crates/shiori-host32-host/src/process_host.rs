@@ -302,6 +302,9 @@ fn helper_command(
         .current_dir(load_dir);
     // helper の `[helper]` の行を areka の記録へ回す（[`spawn_command`] が読み手を起こす）。
     command.stderr(Stdio::piped());
+    // 窓だけの areka には標準の取っ手が無く、受け継ぐと helper が毎回「取っ手が無い」を書くので、
+    // helper が使わない標準入力・標準出力は NUL を渡す（`Command` は stdio の設定を読み返せず、テストでは縛れない）。
+    command.stdin(Stdio::null()).stdout(Stdio::null());
     command
 }
 

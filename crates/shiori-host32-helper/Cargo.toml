@@ -25,4 +25,6 @@ features = [
     "Win32_Globalization",
     # DLL を読むときだけ OS の「正しくないイメージ」等の窓を止める（`shiori_proxy.rs` の `load_library_quiet`）
     "Win32_System_Diagnostics_Debug",
+    # 始めに標準の取っ手を SHIORI の子へ受け継がせない（`main.rs` の `disinherit_std_handles`）
+    "Win32_System_Console",
 ]

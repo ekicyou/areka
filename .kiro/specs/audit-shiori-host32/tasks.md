@@ -66,7 +66,7 @@
   - `process_host_stderr_tests.rs` に 3 本（行の切り方と 2 つの読み方・段と宛名と文がそのまま・実 helper の `[helper]` の行が届く）を置く。成果物が無ければ panic
   - 完了の姿: 3 本が緑で、`Cargo.lock` の差分が 0
   - _Requirements: 4.1, 4.4, 5.2, 5.4, 5.6, 10.12_
-- [ ] 4.4 helper の標準の取っ手を SHIORI の子へ受け継がせない
+- [x] 4.4 helper の標準の取っ手を SHIORI の子へ受け継がせない
   - helper は始めに自分の標準入力・標準出力・標準エラーの取っ手から受け継ぎの印を落とす。取っ手が無い・失敗は `[helper]` の行で書いて続ける。helper の `windows` の機能に `Win32_System_Console` を足す
   - i686 だけのテスト `std_handles_are_not_inherited` を置く（呼ばないと赤）
   - `error_paths.rs` の 3 本目（`:292-351`）を消す（指摘 18。helper が自分で終わる道の記録は 4.3 の実 helper のテストが受ける）
@@ -198,3 +198,4 @@
 - 4.2: helper_env_e2e の観測の本体（#[ignore] の pasta_debug_probe_child）は前提として自分の PASTA_DEBUG=1 を確かめるので、host のテストを --ignored／--include-ignored で回すとこの 1 本は赤になる（設計の「件 2 の試験」どおり）。
 - 4.3: 標準エラーの読み手の read_until に行の長さの上限が無い（SHIORI の DLL が改行なしで書き続けると host のメモリが伸びる）。設計・要件は上限を求めていない。14 の audit のかけ直しで見る。
 - 4.3: forward_helper_stderr は設計の () でなく io::Result<()> を返し（読みの失敗の error! に pid を載せるため呼び手で書く）、読み手のスレッドを起こせないときの error!（helper_stderr_reader_spawn_failed）を足した。審査で承認。
+- 4.4: 審査の指摘で helper_command に stdin・stdout の Stdio::null() を足した（窓だけの areka は標準の取っ手を持たず、受け継ぐと helper が起きるたびに「取っ手が無い」を書き warn になるため）。Command は stdio の設定を読み返せず、テストでは縛れない。

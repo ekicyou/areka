@@ -1,6 +1,6 @@
 //! エラー経路の統合テスト（task 5.2・design.md Testing Strategy / Integration Tests 2・3・4・5）。
 //!
-//! 4 経路それぞれが**観測可能な形で失敗を報告**し、**親が無限待機しない**（すべて bounded）
+//! 3 経路それぞれが**観測可能な形で失敗を報告**し、**親が無限待機しない**（すべて bounded）
 //! ことを、公開 API のみで検証する（`#[cfg(test)]` 限定の内部観測子には依存しない）:
 //!
 //! 1. **ハンドシェイク timeout（要件 3.4）**: helper を spawn せず HELLO も送らない親窓で
@@ -8,9 +8,8 @@
 //! 2. **応答 timeout / wedge（要件 5.2 / 5.3）**: ハンドシェイクを（loopback で）成立させた後、
 //!    **応答しない相手**（親自身の HWND＝REQUEST に RESPONSE を返さない）へ `send_request` すると
 //!    上限時間で `SendError::Ipc(IpcError::Timeout)` を返し、親がハングしない。
-//! 3. **helper 異常終了検出（要件 1.4）**: 実 i686 helper を `spawn` し、`terminate`（強制終了）後
-//!    `poll_exit_kind` が `Some(ExitKind::Abnormal(_))` または `Some(ExitKind::Terminated)`
-//!    （非 Clean）を**非ブロッキング**に返す。**この経路は親窓を作らない**（1 窓制約を消費しない）。
+//! 3. （消した: helper の強制終了の見つけ方は `lifecycle_kill_e2e` が本物の握手で確かめ、helper が
+//!    自分で終わる道の記録は `process_host_stderr_tests::real_helper_stderr_reaches_the_sink` が受ける）
 //! 4. **不正フレーム隔離（要件 2.5）**: 親窓へ**実 WM_COPYDATA** で「未知タグ」フレームを
 //!    **ハンドシェイク成立前**（helper_hwnd 未確定）に送り、破損フレームが HELLO と誤認されて
 //!    helper_hwnd を確定させることが無い＝上位（ハンドシェイク／`ResponseSlot`）へ渡らないことを、
@@ -43,23 +42,16 @@
 //! ## wintf 1 窓制約への対処（tasks.md Implementation Notes・design §77）
 //! `wintf-winmsg-executor` の message-only 窓は**同一プロセス内で 2 組独立生成すると 2 組目が
 //! `WindowCreationError`** になる。よって**窓が要る経路（1・2・4）を単一のテスト関数で 1 つの
-//! 親窓に集約**し、順に検証する（4.2 / 4.3 / 5.1 が採った方式）。**窓不要の経路 3（helper 異常終了）
-//! のみ別テスト関数**にする（窓を作らない＝1 窓制約を消費しない）。
+//! 親窓に集約**し、順に検証する（4.2 / 4.3 / 5.1 が採った方式）。
 //!
-//! ## helper exe の所在解決（無言スキップで緑を偽装しない）
-//! 経路 3 は事前ビルドした i686 helper を要する。env `HOST32_HELPER_EXE` 優先、無ければ
-//! ワークスペース `target/i686-pc-windows-msvc/{debug,release}/shiori-host32-helper.exe` を探索し、
-//! 見つからなければ「先に i686 helper をビルドせよ」という明確な panic で fail する。
-//!
-//! ## 実行前提（PowerShell・Git Bash 不可）
+//! ## 実行（PowerShell・Git Bash 不可）
 //! ```powershell
-//! cargo build -p shiori-host32-helper --target i686-pc-windows-msvc
-//! cargo test  -p shiori-host32-host   --test error_paths
+//! cargo test -p shiori-host32-host --test error_paths
 //! ```
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use shiori_host32_host::{ExitKind, ParentMessageWindow, SendError, poll_exit_kind, spawn};
+use shiori_host32_host::{ParentMessageWindow, SendError};
 use shiori_host32_ipc::{IpcError, MsgTag, hwnd_from_u32, send_copydata};
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};
@@ -67,23 +59,7 @@ use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_COPYDATA};
 
 mod common;
-use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe};
-
-// ---------------------------------------------------------------------------
-// helper exe の所在解決（経路 3 用・shiori_load_e2e.rs / shiori_request_e2e.rs と同一規約）
-// ---------------------------------------------------------------------------
-
-/// spawn した helper を Drop 時に必ず terminate する scope guard（panic 時もリーク防止）。
-struct HelperGuard {
-    handle: shiori_host32_host::HelperHandle,
-}
-
-impl Drop for HelperGuard {
-    fn drop(&mut self) {
-        // terminate は冪等（終了済みでも Ok）。
-        let _ = self.handle.terminate();
-    }
-}
+use common::HANDSHAKE_TIMEOUT;
 
 /// 任意 `dw_data`（種別タグ生値）の実 WM_COPYDATA フレームを `SendMessageW` で `target` へ
 /// **同期配送**する（**未知タグ**の不正フレームを実配送するために使う・要件 2.5 の WndProc 隔離検証）。
@@ -213,76 +189,4 @@ fn window_error_paths_handshake_timeout_wedge_and_corrupt_frame_isolation() {
     );
 
     drop(parent);
-}
-
-// ---------------------------------------------------------------------------
-// 経路 3: helper 異常終了検出（窓不要・別テスト関数）
-// ---------------------------------------------------------------------------
-
-/// 実 i686 helper を spawn し、強制終了後に `poll_exit_kind` が非 Clean を**非ブロッキング**に
-/// 返すことを検証する（design.md Integration Tests 4・要件 1.4）。
-///
-/// **窓を作らない**ため 1 窓制約を消費しない（helper へ渡す parent_hwnd は任意値でよい）。
-#[test]
-fn helper_abnormal_exit_is_detected_nonblocking() {
-    let helper_exe = resolve_helper_exe();
-    // テストの根は helper（guard）より先に作る＝helper が終わってから消える。
-    let root = TestRoot::new("error-paths-abnormal");
-    let ghostdir = root.path();
-
-    // 窓不要ゆえ parent_hwnd は任意値（helper は HELLO 送出に使うが、本テストは HELLO を観測しない）。
-    let arbitrary_parent_hwnd: u32 = 0;
-    // 本テストは実 LOAD をしないため shiori_name は妥当な既定でよい（契約上は必須引数）。
-    let handle = spawn(&helper_exe, ghostdir, "shiori.dll", arbitrary_parent_hwnd)
-        .expect("i686 helper の spawn に失敗（helper exe を確認）");
-    let mut guard = HelperGuard { handle };
-
-    // spawn 直後は稼働中＝poll は None（非ブロッキング）。
-    let start = Instant::now();
-    let alive = poll_exit_kind(&mut guard.handle);
-    assert!(
-        start.elapsed() < Duration::from_secs(1),
-        "poll_exit_kind は非ブロッキングで即座に返る（要件 1.2）"
-    );
-    assert_eq!(
-        alive, None,
-        "spawn 直後の helper は稼働中＝poll_exit_kind は None（要件 1.2）"
-    );
-
-    // 強制終了（TerminateProcess 相当）。
-    guard
-        .handle
-        .terminate()
-        .expect("helper の強制終了に失敗（terminate）");
-
-    // 強制終了後、非 Clean の ExitKind を非ブロッキング poll で観測する（bounded）。
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let kind = loop {
-        let before = Instant::now();
-        let polled = poll_exit_kind(&mut guard.handle);
-        assert!(
-            before.elapsed() < Duration::from_secs(1),
-            "各 poll_exit_kind は非ブロッキング（要件 1.2）"
-        );
-        if let Some(kind) = polled {
-            break kind;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "強制終了した helper が上限時間内に終了として観測されなかった"
-        );
-        std::thread::sleep(Duration::from_millis(5));
-    };
-
-    assert!(
-        matches!(kind, ExitKind::Abnormal(_) | ExitKind::Terminated),
-        "強制終了した helper は非 Clean（Abnormal/Terminated）として分類される（要件 1.4）: got {kind:?}"
-    );
-    assert_ne!(
-        kind,
-        ExitKind::Clean,
-        "強制終了は Clean ではない（要件 1.4）"
-    );
-
-    drop(guard);
 }
