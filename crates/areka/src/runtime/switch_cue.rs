@@ -11,7 +11,7 @@
 //!    仕事である。`raise-event` はシェルでだけ効き、バルーンでは知らない option と同じく
 //!    `warn!` を残して無視する（バルーンに「切り替え前」のイベントは無い・要件 1.4）。
 //!
-//! 依存は要求の型（`shell_balloon_switch::SkinRequestRaw`）だけに閉じる。
+//! 依存は要求の型（`skin_switch::SkinRequestRaw`）だけに閉じる。
 //!
 //! # 黙って諦めない
 //!
@@ -23,7 +23,7 @@ use std::sync::mpsc::Sender;
 use dola::cue::TalkCue;
 use tracing::{debug, warn};
 
-use super::shell_balloon_switch::{SkinKind, SkinRequestRaw};
+use super::skin_switch::{SkinKind, SkinRequestRaw};
 
 /// コマンド名（ゴースト・シェル・バルーンの切替の汎用の名前）。
 const NAME_CHANGE: &str = "change";

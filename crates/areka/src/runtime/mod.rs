@@ -51,6 +51,8 @@ pub(crate) mod shell_cursor_assets;
 pub(crate) mod shell_cursor_table;
 /// 表示の層から今のシェルとバルーンの事実を写す（mcp-strict-errors）。
 pub(crate) mod skin_facts_copy;
+/// シェル・バルーンの切替の型（入口から下ろした・runtime-module-untangle）。
+pub(crate) mod skin_switch;
 mod special_name;
 /// strict の記録の areka の判定（`\!` の台帳と `\f` の分類・mcp-strict-errors）。
 pub(crate) mod strict_judges;

@@ -29,9 +29,8 @@ use super::ghost_switch::{
 use super::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
 use super::reload_cue::ReloadRx;
 use super::shell_balloon_resolve::SkinCandidate;
-use super::shell_balloon_switch::{
-    SkinKind, SkinSwitchInFlight, SkinVerdict, SwitchContext, accept_skin,
-};
+use super::shell_balloon_switch::{SwitchContext, accept_skin};
+use super::skin_switch::{SkinKind, SkinSwitchInFlight, SkinVerdict};
 use crate::boot_config::BootContext;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;

@@ -17,7 +17,7 @@ use areka_ghost::{BasewareRoots, same_folder_name};
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
-use super::shell_balloon_switch::{SkinKind, SkinSpec};
+use super::skin_switch::{SkinKind, SkinSpec};
 
 /// 切替先の候補 1 つ（目録の項目の写し）。
 #[derive(Debug, Clone, PartialEq, Eq)]

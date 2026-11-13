@@ -47,7 +47,7 @@
   - _Requirements: 1.1, 1.5, 1.6_
 
 - [ ] 3. `runtime` に型を下ろす
-- [ ] 3.1 切替の型を `runtime` の新しいファイルへ下ろす
+- [x] 3.1 切替の型を `runtime` の新しいファイルへ下ろす
   - `SkinKind` ほかの切替の型と `skin_ref_name`・`skin_ref_path` を中身を変えずに切り出し、`runtime` の中は直に引き、入口のファイルは呼び手のために出し直す
   - 行の多い側（要求の入口）を元のファイルのまま残し、少ない側（型）を新しいファイルにする
   - 完了の形: `runtime` の中で切替の型を引く所が新しいファイルを指し、`menu/`・`mcp/`・テストの書き換えなしで警告 0 件で通る
@@ -196,3 +196,4 @@
 - 2.1: 改名で tracing の出所は `module_path!` に従って `areka::runtime::*` へ自動で変わる。振る舞いを保つため `log_history.rs` の決まり・照合するテスト・`log-convention.md` の 55・134 行は 2.1 で中間の値 `areka::runtime::*` にした（7.1・7.2 で最後の値へ）。`tests/stay_on_top_real_run.rs` 51〜54 行の `RUST_LOG` と `tests/emo2_real_run/common_tests.rs:28` は 7.2 で必ず直す（それまでその実機テストは赤になりうる）。`.claude/agents/perf-review.md:47` の古いパスは 8.1 で直す。
 - 2.2: 8.x の掃き出しで拾う: `input_events/balloon_pointer_handler_tests.rs:513`・`:540` のコメント「Emo2 不在」（→「Runtime 不在」）、本体の外の `Emo2Wiring` の言及（`areka-placement/src/persist.rs:633`・`persist_io_wiring_tests.rs:163`・`chain_finalize.rs`・`lib.rs`・`placement_prepare_tests.rs`・`doc/ukadoc-coverage/ledger/assets.toml:5980`）。
 - 2.3: `crates/ukadoc-survey/src/evidence/candidates_tests.rs:345` の `choice_pressed_no_emo2` は抽出器に食わせる見本の文字列（照合ではない・本体の外）として残した。9.2 の 4 区分で判定する。
+- 3.1: `runtime/skin_switch.rs:86` の説明の文の [`discard_for_exit`] は移した先で rustdoc のリンクが切れる（cargo doc は回していない）。8.x で `crate::runtime::shell_balloon_switch::discard_for_exit` へ。入口の出し直しは設計の 5 型より多い（テストが入口のパスで引くため）＝6.1 で `session` へ移すときに絞れる。
