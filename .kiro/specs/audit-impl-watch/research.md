@@ -190,3 +190,29 @@
 - 削る: #3 は比べる仕組みを足さずに一覧を消す。#9 は書き方を 2 組にせず引数 1 つ。#8 は待ちの上限や試しの回数の設定を足さない（1 回だけ）。
 
 **設計の討議の結果（2026-11-13・開発者「承認」）**: 検証の重い指摘 2 件は自明な直しとして設計へ入れた（#8 の文 6 か所・#3 の毎回回る較正 2 つ）。議題 1（着地の後の置き直しの記録の行き先）は推奨案で確定＝開発者への完了の報告と、着地した PR への一言（`gh pr comment`）の両方に残す（タスク 12）。
+
+## 10. かけ直しの audit（タスク 6.1・2026-11-13）
+
+作法は §1 と同じ（物差しは `ponytail-audit` 5.3.3・上限なし・全部読む・通し番号と「場所・何が起きるか・直し方」の組・外への約束に響くかを書く）。読み手は 4 本（本番 12 ファイル＋`Cargo.toml`／入口・置き場所・失敗の型・層のテスト／判断の核のテスト／口・読み物・居る印・待ち・実機テスト）に分け、範囲の 40 ファイル（＋新しい `main_test_support.rs`）を全行読ませた。重なりは 1 件に寄せた。
+
+### 10.1 1 回目（HEAD `0efe2f74`・テスト 305 本緑）＝新しい指摘 15 件（Must 0・Should 2・Nice 13）・外への約束に響くもの 0
+
+| # | 重さ | 場所 | 何が起きるか | 直し方 |
+|---|---|---|---|---|
+| R1-1 | Should | `store.rs` の `summary` の排他の中の読み直し・`store_ports_tests.rs` | #8 の芯（排他の中で読み直した状態から `status.md` を書く）を縛るテストが無い。最初の状態で書く形へ壊しても緑（直しが生んだ抜け） | 時計の口（最初の読みと試しの間に 1 回呼ばれる）で `state.json` を別の参加者入りに置き換え、要約と `status.md` にその参加者が載ることを見るテストを 1 本 |
+| R1-2 | Should | `plan_clear_tests`・`plan_reclaim_tests`・`plan_stop_tests`・`plan_turns_tests`・`plan_desk_tests` | `MergeGranted`・`MergeRequested`・`Merged`・`Left{merged}`・`Joined`・`DeskReturned`・`Command::Watch` の組み立てが手書きの写しで散る（#6 の残り）。`plan_reclaim_tests` の `let granted` が支えの `granted` を覆う | 組み立てを `plan_test_support.rs` へ寄せ、写しを置き換える |
+| R1-3 | Nice | `wait.rs:14-15` の doc | #8 の後、読み物の印の探りは常に排他の中。doc は「排他の外」のまま（直しが古くした） | 「端末の要約の探りだけが排他の外」に |
+| R1-4 | Nice | `wait_test_support.rs:1` の doc | `T0` は #7 で移ったのに「時刻の起点」と書く | 「待つもの（`WaitSpec`）の組み立て」に |
+| R1-5 | Nice | `store_ports_tests.rs:314` のコメント | 中身は版 2 なのに「版も 1」（#17 と同じ古い文） | 「版は合うが」に |
+| R1-6 | Nice | `cli_commands_tests.rs` の `loadrunning_records_the_holder_and_is_3_while_a_desk_is_held` | `cli_desk_tests.rs` の `refused_returns_and_running_records_are_3_and_change_nothing` と主張が同じ | 前者を消す |
+| R1-7 | Nice | `cli_wait_tests.rs:327-329` | `not applied:` の文を手で組む 3 か所目（#5 の残り） | 支えの `not_applied` を使う |
+| R1-8 | Nice | `cli_desk_tests.rs` の `request`・`merge`・`running` と `cli_commands_tests.rs` の `merge`・`request`・`running` | コマンドの組み立てが 2 ファイルに写る | `cli_test_support.rs` に 1 組 |
+| R1-9 | Nice | `cli_test_support.rs` の `home_in`（→ `PathBuf`）と `crate::test_support::home_in`（→ `Home`） | #7 の後、同じ名前で型と道筋が違う。紛らわしい | 入口の側を名前替え |
+| R1-10 | Nice | `plan_desk_tests.rs:1`・`plan_stop_tests.rs:1` の doc | #17 で外した「規則 N」の番号が残る | 番号を落とし、見る判断だけを書く |
+| R1-11 | Nice | `plan_test_support.rs:1` の doc | `T0` が移ったのに「時刻の定数」 | 消す |
+| R1-12 | Nice | `plan_stop_tests.rs` の `keyed_a_with_empty_field` の doc | 鍵は `a` なのに「参加者 A」 | 「参加者 `a`」に |
+| R1-13 | Nice | `store_ports_tests.rs` の `hold_state_lock`・`store_tests.rs` のスレッドの中の手書き・本番の `open_lock` | `state.lock` を開いて握る手が 3 組 | 支えへ移し、中身を `open_lock` に |
+| R1-14 | Nice | `store.rs` の `summary` の「開けない・試しが OS の失敗」の枝 | doc の「`warn!` を残して要約は返す」を縛るテストが無い | `state.lock` の名前でフォルダを置き、`summary` が `Some` を返し `status.md` を作らないことを見る |
+| R1-15 | Nice | `presence_tests.rs` の `a_held_file_is_present_for_probes_at_the_same_time` | 名前の「同時の探り」を作れておらず、主張は `held_is_present_and_dropped_is_absent_and_the_file_stays` と同じ | 消す（OS の振る舞いの 1 行は残す側へ移す） |
+
+- 確かめて落としたもの（読み手の報告の要約）: `tests/real.rs` の `status.md` を読む所は #8 の後も成り立つ（ほかの子プロセスが居ない場面か、直前に状態を変えた呼び出しが書いている）。#13 で消した 2 本の誤りの形は `cli_args_tests` の引数の読みのテストが文字どおり見ている。#16 のまとめで失われた主張は無い。`summary` の時刻が排他の前に取られるのは読み物の `generated:` が待ちの分だけ早いだけ。`status` が `state.lock` を作るのは §9.5 で受け入れ済み。
