@@ -240,7 +240,7 @@ flowchart TB
 | 1.4 | 指定しなければ今のまま | MixMode・emit | `MixMode::Composite`（既定 `SOURCE_OVER`） | 描く 1 件の混ぜ方 |
 | 1.5 | 両方を同時に効かせない | MixMode | 列挙で 1 つだけ持つ | — |
 | 1.6 | 変形と切り抜きの下で混ぜる | emit | `SetTransform(world * root)` の後に `BlendImage` | — |
-| 1.7 | ブレンドの描き方が無い Windows | emit | `draw_method`・`report_blend_unavailable` | 描く 1 件の混ぜ方 |
+| 1.7 | ブレンドの描き方が無い Windows | emit | `draw_method`・`report_once` | 描く 1 件の混ぜ方 |
 | 1.8 | 指定の変化で描き直す | fill_world_visuals・builder | `VisualVersion`・`hash_draw` に混ぜ方 | 既存の変化の道 |
 | 2.1 | まとめた 1 枚に不透明度 | builder・emit | `PushOpacity`（透明から始める層） | — |
 | 2.2 | 不透明度 0 は描かない | fill_world_visuals | 見えない節と同じ道 | — |
@@ -288,7 +288,7 @@ flowchart TB
 | 7.6 | 切り抜きの形ごとの効き先 | emit_layer_tests | — | Testing Strategy |
 | 7.7 | 入れ物と直接の一致・中身の保持 | composite_tests | — | Testing Strategy |
 | 7.8 | 読み戻し | readback_tests | — | Testing Strategy |
-| 7.9 | ブレンドが無い道の純粋なテスト | emit_blend_tests | `draw_method`・`report_blend_unavailable` | Testing Strategy |
+| 7.9 | ブレンドが無い道の純粋なテスト | emit_blend_tests | `draw_method`・`report_once` | Testing Strategy |
 | 7.10 | 実 GPU は画面に出るか | composite_systems_test | `CopySurface` | Testing Strategy |
 | 8.1 | tech.md の WARP の例外 | 文書 | — | — |
 | 8.2 | structure.md の描画の道 | 文書 | — | — |
@@ -350,7 +350,7 @@ impl VisualDrawContent {
 }
 ```
 
-- 不変条件: wintf は D2D の値をそのまま通す（範囲の外の値は D2D の答えに任せる・`EndDraw` の失敗に出る）。
+- 不変条件: 値の範囲は公開の欄から D2D へ渡す手前（`draw_method`）で確かめる。重ね方は 0〜12（`SOURCE_OVER`〜`XOR`）、ブレンドは 0〜25（`MULTIPLY`〜`DIVISION`）。範囲の外の値は D2D へ渡さず `SOURCE_OVER` で描き、`error!`（実体・値）をプロセスで 1 度だけ残す（決まって失敗する値で描画面の合成が毎回失敗し続けない・設計討議 議題 1）。
 - 型の文書（3.5・8.3）に書く決め: 切り抜きの形に依らず、重ね方とブレンドは切り抜きの内側の下の画素に効き、外側を変えない（3.1〜3.3）。不透明度の層の内側では同じ層の中で先に描かれた画素に効き、層の外の下の画素は層を重ねるときの不透明度でだけ変わる（3.4）。重ね方が `SOURCE_OVER` でないとき絵の外も切り抜きの範囲まで変わる（D2D の既定・今の文書のまま）。ブレンドは絵の外の画素を変えない（1.3）。
 
 #### 不透明度の層の命令（`visual/draw/command.rs`・`builder.rs`）
@@ -404,17 +404,20 @@ pub(crate) fn emit(dc: &ID2D1DeviceContext, dc6: Option<&ID2D1DeviceContext6>,
                    root: Matrix3x2, commands: &[DrawCommand]);
 
 /// 描く 1 件の描き方（純粋・7.9 のテストの的）。
-pub(crate) enum DrawMethod { Image(D2D1_COMPOSITE_MODE), Blend(D2D1_BLEND_MODE), BlendUnavailable }
+pub(crate) enum DrawMethod { Image(D2D1_COMPOSITE_MODE), Blend(D2D1_BLEND_MODE), BlendUnavailable, OutOfRange }
+/// 範囲の確かめ（重ね方 0〜12・ブレンド 0〜25）を先に行い、外なら OutOfRange。
 pub(crate) fn draw_method(mix: MixMode, blend_available: bool) -> DrawMethod;
-/// ブレンドが無いことを、プロセスで初めて見たときだけ true（`error!` を残す番）。
-pub(crate) fn report_blend_unavailable(reported: &AtomicBool) -> bool;
+/// その種類の誤りを、プロセスで初めて見たときだけ true（`error!` を残す番）。
+/// ブレンドが無いこと・範囲の外の値で、それぞれ別の旗を渡す。
+pub(crate) fn report_once(reported: &AtomicBool) -> bool;
 ```
 
 | 命令 | D2D の呼び出し |
 |------|----------------|
 | `Draw`（`Image`） | `SetTransform(world_mat * root)` → `DrawImage(list, None, None, interpolation, composite)`（今のまま） |
 | `Draw`（`Blend`） | `SetTransform(world_mat * root)` → `dc6.BlendImage(list, blend, None, None, interpolation)` |
-| `Draw`（`BlendUnavailable`） | `report_blend_unavailable(&BLEND_UNAVAILABLE)` が真なら `error!`（実体・ブレンドの値・「Windows 10 1903 より前」）→ `DrawImage(.., SOURCE_OVER)` |
+| `Draw`（`BlendUnavailable`） | `report_once(&BLEND_UNAVAILABLE)` が真なら `error!`（実体・ブレンドの値・「Windows 10 1903 より前」）→ `DrawImage(.., SOURCE_OVER)` |
+| `Draw`（`OutOfRange`） | `report_once(&MIX_OUT_OF_RANGE)` が真なら `error!`（実体・種類・値）→ `DrawImage(.., SOURCE_OVER)` |
 | `PushOpacity` | `SetTransform(identity)` → `PushLayer(contentBounds = world_aabb を root で物理へ写し外向きに整数へ丸めた矩形, geometricMask None, opacity, layerOptions NONE)` |
 | `PopOpacity` | `PopLayer()` |
 | `PushClipGeometry` | `SetTransform(identity)` → `SetPrimitiveBlend(COPY)` → `PushLayer(contentBounds = 図形の世界の外接矩形を root で物理へ写し外向きに整数へ丸めた矩形, geometricMask, maskTransform = world_mat * root, opacity 1.0, layerOptions INITIALIZE_FROM_BACKGROUND)` → `SetPrimitiveBlend(SOURCE_OVER)` |
@@ -453,15 +456,16 @@ pub(crate) fn report_blend_unavailable(reported: &AtomicBool) -> bool;
 
 ```rust
 impl Visual {
-    /// NaN は `warn!` を残して 1.0 を入れる。範囲外は今どおり `warn!` を残してクランプする。
+    /// NaN は呼ばれるたびに `warn!` を残して 1.0 を入れる。範囲外は今どおり `warn!` を残してクランプする。
     pub fn set_opacity(&mut self, value: f32);
-    /// NaN（欄へ直に書かれた値）は `warn!` を残して 1.0 を返す。ほかは 0〜1 にクランプする。
+    /// NaN（欄へ直に書かれた値）は黙って 1.0 を返す（記録は実体を知る fill_world_visuals が 1 度だけ）。
+    /// ほかは 0〜1 にクランプする。
     pub fn clamped_opacity(&self) -> f32;
 }
 ```
 
-- 持ち主（`visual_property_sync_system` の `SetOpacity`）・節（`build`）・当たり判定（`ecs/layout/hit_test` の `Bounds`）がこの関数を通るので、NaN の答えは全部 1.0 に揃う。
-- `clamped_opacity` の `warn!` は、欄へ直に NaN を書いた使い手の誤りのときだけ出る（`set_opacity` は NaN を入れない）。NaN が欄に残る間は呼ばれるたびに出る（黙って消さない・2.8）。
+- 持ち主（`visual_property_sync_system` の `SetOpacity`）・節（`build`）・当たり判定（`ecs/layout/hit_test` の `Bounds`）がこの関数を通るので、NaN の答えは全部 1.0 に揃う（1.0 にするのはこの共通の 1 か所）。
+- 記録の場所を分ける（設計討議 議題 2）: `set_opacity(NaN)` は呼び手の 1 回の誤りなので呼ばれるたびに `warn!`。欄へ直に書かれた NaN は、`fill_world_visuals` が `ReportedIssues` の `first_seen(e, TreeIssue::NanOpacity)` で実体ごとに 1 度だけ `warn!`（毎フレーム流れ続けない・黙って消さない・2.8）。`clamped_opacity` は実体を知らないので記録しない。
 
 ### graphics（入れ物と読み戻し）
 
@@ -562,6 +566,7 @@ impl SurfaceGraphics {
 - Trigger: `Changed<SurfaceGraphicsDirty>`（今のまま）。問いは `&mut SurfaceGraphics`（書き込みは `bypass_change_detection` の下だけ）。
 - 手順: 共有の DC を複製して持つ → 入れ物が無いか大きさが `SurfaceGraphics.size` と違えば `SurfaceComposite::new` → `compose` → WUC の `begin_draw(None)`（今の失敗の道）→ `copy_to(dc, offset)` → `end_draw`。
 - 失敗: どの段も「失いなら `note_draw_failure`（記録はそちら）→ `set_changed` → 係を抜ける」「失いでなければ `error!`（実体・段・HRESULT）→ 描き直しの印を命令で立てる → 次の描画面へ」。
+- 続く失敗の記録の間引き（設計討議 議題 1）: 失いでない失敗の記録は、描画面ごとに直前の失敗の `(段, HRESULT)` を係の `Local` に控え、同じ描画面で同じ `(段, HRESULT)` が続くなら 2 回目から `debug!` に落とす。成功した回か別の `(段, HRESULT)` で控えを消し、次の失敗はまた `error!`。描き直しの印を立て直すことは 4.6 のとおり残す（一時の失敗からは立ち直る）。
 - Idempotency & recovery: 描き直しは毎回全面の合成なので、何度回しても同じ答え。大きさの変化と装置の失いの後は入れ物が無いので、その回に作って全部を合成する（4.5）。
 
 #### SurfaceReadback（`graphics/readback.rs`）
@@ -636,9 +641,12 @@ impl SurfaceReadback<'_, '_> {
 | 写し（WUC の `EndDraw`） | 失いでない | 描き直しの印を立てる | `error!`（実体・HRESULT・"EndDraw"） |
 | 上の全部 | 装置の失い | `note_draw_failure` → `set_changed` → 係を抜ける（4.7） | `note_draw_failure` が 1 度 |
 | ブレンド | DC6 が無い | `SOURCE_OVER` で描く（1.7） | `error!` をプロセスで 1 度 |
+| 混ぜ方 | 範囲の外の値（重ね方 0〜12・ブレンド 0〜25 の外） | D2D へ渡さず `SOURCE_OVER` で描く | `error!` をプロセスで 1 度 |
+| 合成・写し | 同じ描画面で同じ `(段, HRESULT)` の失敗が続く | 描き直しの印を立て直す（4.6 のまま） | 1 回目は `error!`・2 回目から `debug!` |
 | 読み戻し（`CopyFromBitmap`・`Map`・`CreateBitmap`） | 失いでない | `Unreadable` | `error!`（実体・HRESULT） |
 | 読み戻し | 装置の失い | `Unreadable` | 記録しない（立ち直りの道が 1 度・5.6） |
-| 不透明度 | NaN | 1.0 | `warn!` |
+| 不透明度 | `set_opacity(NaN)` | 1.0 を入れる | 呼ばれるたびに `warn!` |
+| 不透明度 | 欄へ直に書かれた NaN | 1.0 として描く | 実体ごとに 1 度 `warn!`（`fill_world_visuals`） |
 
 - panic は使わない（6.6）。どの失敗も戻り値か答えの型で表す。
 
@@ -652,11 +660,12 @@ impl SurfaceReadback<'_, '_> {
 
 ### Unit Tests（WARP・`emit_test_support` の足場）
 
-- `emit_blend_tests.rs`（1.1〜1.4, 1.6, 1.7, 7.3, 7.4, 7.9）: 不透明な下の画素と半透明の下の画素の上に、26 種のブレンドを 1 種ずつ描き、各種 1 点の答えを固定する（dissolve は絵の α が 1 の点）。絵の外形の外の点が描く前と同じこと・`MixMode::Composite` の答えが今と同じこと。回転・負の拡大・拡大の下のブレンドが、白の上の `SOURCE_OVER` と同じ外形になること（research.md §10.3 の形）。矩形と図形の切り抜きの下のブレンド。`draw_method` の 3 つの答えと `report_blend_unavailable` が 2 度目に偽を返すこと（装置なし）。`dc6 = None` で描いたブレンドが `SOURCE_OVER` の答えになること。
+- `emit_blend_tests.rs`（1.1〜1.4, 1.6, 1.7, 7.3, 7.4, 7.9）: 不透明な下の画素と半透明の下の画素の上に、26 種のブレンドを 1 種ずつ描き、各種 1 点の答えを固定する（dissolve は絵の α が 1 の点）。絵の外形の外の点が描く前と同じこと・`MixMode::Composite` の答えが今と同じこと。回転・負の拡大・拡大の下のブレンドが、白の上の `SOURCE_OVER` と同じ外形になること（research.md §10.3 の形）。矩形と図形の切り抜きの下のブレンド。`draw_method` の 4 つの答え（範囲の境 12・13・25・26 を含む）と `report_once` が 2 度目に偽を返すこと（装置なし）。範囲の外の値で描いた答えが `SOURCE_OVER` の答えになり、合成の `EndDraw` が成功すること。`dc6 = None` で描いたブレンドが `SOURCE_OVER` の答えになること。
 - `emit_layer_tests.rs`（2.1〜2.3, 2.5, 3.1〜3.4, 7.5, 7.6）: 重なる 2 つの子を持つ不透明度 0.5 の節で、重なりの点が「まとめて 0.5」の値（互いに透けない）。0 で描かれない・1.0 で層なしと同じ・入れ子の 0.5×0.5。`DESTINATION_IN`・`DESTINATION_OUT`・`DESTINATION_OVER` と `MULTIPLY` を、矩形・角丸・回転した矩形・任意の図形（楕円）の切り抜きの中で描き、内側の点が切り抜き無しの答え・外側の点が描く前の値・形どうしで同じ答え。不透明度の層の中の `DESTINATION_OUT` と `MULTIPLY` が層の中で先に描いた画素に効くこと（§10.2 の形）。
 - `builder_opacity_tests.rs`（2.1, 2.3, 2.5, 6.3）: 層の命令の順（不透明度の push → 切り抜きの push → 描く → 逆順の pop）・1.0 で出ない・根に出ない・入れ子・範囲が空なら間引く・`hash_draw` が混ぜ方の種類と値で変わる。
-- `world_visual_opacity_tests.rs`（2.2, 2.6, 2.8）: 不透明度 0 の節と子孫が訪れられず版は上がる・1.0 でない不透明度で `warn!` が出ない・NaN の節が 1.0 として訪れられる。
+- `world_visual_opacity_tests.rs`（2.2, 2.6, 2.8）: 不透明度 0 の節と子孫が訪れられず版は上がる・1.0 でない不透明度で `warn!` が出ない・欄へ直に NaN を書いた節が 1.0 として訪れられ、`TreeIssue::NanOpacity` の記録が 2 フレーム続けても 1 度だけ。
 - `tests/visual/component_test.rs`（2.8）: `set_opacity(NaN)` が 1.0 を入れる・`clamped_opacity` が NaN で 1.0 を返す。
+- `systems/render.rs` の間引きの純粋なテスト（兄弟のファイル・6.6）: 控えの判定（同じ `(段, HRESULT)` の 2 回目は `debug!` の番・成功か別の失敗で控えが消える）を関数に分けて固定する。
 
 ### Integration Tests（WARP・入れ物と読み戻し）
 
