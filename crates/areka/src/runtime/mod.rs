@@ -181,13 +181,23 @@ pub(crate) struct CueSinkSources {
     pub window_state_tx: Sender<WindowStateDirective>,
 }
 
-/// 実行系の側の起動の失敗（分類した記録は [`boot_runtime`] が残す）。
+/// 実行系の側の起動の失敗（分類した記録は起動の関数［[`BootRuntimeFn`]］が残す）。
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum RuntimeBootError {
     /// `areka_ghost::boot_with_origin` の失敗。
     #[error("実行系の起動に失敗")]
     Boot(#[source] GhostBootError),
 }
+
+/// 実行系の側の起動（本番は `runtime_boot::boot_runtime`・[`wire_runtime`] の手順 5 で呼ぶ）。
+/// 同期の関数のポインタで受け、`wire_runtime` を総称にしない（字面 `pub fn wire_runtime(` を照合するテストのため）。
+pub(crate) type BootRuntimeFn = fn(
+    &mut World,
+    RuntimeInputs,
+    &CueSinkSources,
+    Sender<KanadeNotice>,
+    Option<&str>,
+) -> Result<areka_ghost::GhostRuntime, RuntimeBootError>;
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
@@ -443,7 +453,7 @@ const _: fn() = || {
 ///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko_clocked`
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`RuntimeWiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
-/// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動 `runtime_boot::boot_runtime`
+/// 5. 受け口の送出端の束（`CueSinkSources`）を組み、実行系の側の起動（引数 `boot_runtime`＝[`BootRuntimeFn`]）
 ///    （束の複製から 13 本の sink を組んで `areka_ghost::boot_with_origin`・成立後にだけ受信端を据える）を呼ぶ。
 ///    `shiori`／`ticker`／`app_profile_dir` は [`RuntimeInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
@@ -470,6 +480,7 @@ pub fn wire_runtime(
     kanade_stop: Sender<KanadeNotice>,
     shell: Option<&str>,
     default_surfaces: &DefaultSurfaces,
+    boot_runtime: BootRuntimeFn,
 ) -> RuntimeOutcome {
     /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
     /// boot へ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
@@ -537,7 +548,7 @@ pub fn wire_runtime(
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
     // 受信端が窓の側にある 4 本の線（PresentBridge と同型の配線）: talk スレッドの受け口が送出端、
     // UI スレッドの RuntimeWiring が受信端を持つ。送出端は束（`CueSinkSources`）に載り、実行系を
-    // 起こすたびに複製されて受け口になる（`runtime_boot::runtime_sinks`）。
+    // 起こすたびに複製されて受け口になる（起動の関数［引数 `boot_runtime`］の側）。
     // - move（task 9.1）: frame 相 drain＝task 9.2 が消費。
     // - 表示ライフサイクル（task 4.1）: 会話の開始と、待機を含む占有区間の終端が talk 相対秒で
     //   届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
@@ -648,13 +659,12 @@ pub fn wire_runtime(
         window_state_tx,
     };
 
-    // 手順5: 実行系の側の起動（`runtime_boot::boot_runtime`）。sink の並び・boot の失敗の分類と記録・
+    // 手順5: 実行系の側の起動（引数 `boot_runtime`）。sink の並び・boot の失敗の分類と記録・
     // 受信端が窓の側に無い線（readme・中断・ghost の切替・shell/balloon の切替・読み直し）の
     // 据え付けは向こうが持ち、Err のとき World は変わっていない。停止通知の送出端は引数
     // `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（受け口の据え付けは
     // [`wire_kanade_stop`](crate::session::ghost_quit::wire_kanade_stop)）。これが在ることで、終了挨拶を再生し終えてから窓が閉じる。
-    let Ok(ghost_runtime) = runtime_boot::boot_runtime(world, inputs, &sources, kanade_stop, shell)
-    else {
+    let Ok(ghost_runtime) = boot_runtime(world, inputs, &sources, kanade_stop, shell) else {
         // spawn 済み seriko の後始末: tick 用 clone（tick_sink）・セッションへ返す複製（session_sink）・
         // 束（sources）が inbox を生かし続けるため、ここで明示 drop する。全 Sender が消えると inbox
         // 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）ゆえ join せず drop で
@@ -840,6 +850,7 @@ mod wire_tests {
             std::sync::mpsc::channel().0,
             None,
             &DefaultSurfaces::builtin(),
+            runtime_boot::boot_runtime,
         );
 
         assert!(

@@ -98,7 +98,7 @@
   - 完了の形: `frame_schedule_tests` と終わる相の試験 3 本が緑で、終わる相の出所が `areka::session::ghost_quit` になる
   - _Requirements: 2.5, 3.1, 3.6, 3.8, 4.3_
 
-- [ ] 5.2 実行系の起動を引数で受ける継ぎ目を作る
+- [x] 5.2 実行系の起動を引数で受ける継ぎ目を作る
   - `runtime` に起動の関数の型を置き、`wire_runtime` の最後の引数で受けて手順 5 で呼ぶ。失敗のときに落とす順（tick の受け口・会話の受け口・源・seriko の握り）は今と同じ
   - 呼び手は本番の起動の関数を渡す。総称にはせず、`wire_runtime` の字面の照合を保つ
   - 完了の形: `runtime` の根と骨組みから起動の側への参照が消え、`zorder_wiring_tests`・起動の試験・再起動の試験が緑
@@ -200,3 +200,4 @@
 - 3.2: 8.x で直す文言: `runtime/mod.rs:176` の doc の [`boot_runtime`]（リンク切れ）と `change_cue.rs:14` の module doc「`ghost_switch::ChangeRequestRaw`」（型は change_cue へ移った）。
 - 4.1: 口は 9 本（kanade・seriko_sink・ghost_ref_name・set_shell_dir・set_current_balloon・record_last_skin・ghost_switch_in_flight・reload_skin_applied・skin_phase_ended）。4.2 で ghost_folder を足して 10 本。`session/hooks.rs` にはログのマクロを置かない（記録の出所を runtime に残すため）。`main.rs` は 991 行で 1,000 行の番人に近い。
 - 5.1: 見える範囲の広げ: `ghost_quit_system` を `pub(super)`→`pub(crate)`（`frame_schedule_tests` のため）＝6.1 か 9.x で research.md の広げの一覧に載せる。`runtime/mod.rs:451`・`:655` の doc のリンク `crate::session::ghost_quit::wire_kanade_stop` は要件 3.4 の説明の文の一覧に入る。`doc/COMPAT_ARCHITECTURE.md:283` の古いパスは 8.1 で。
+- 5.2: 3.2 の注の `runtime/mod.rs:176` の [`boot_runtime`] は [`BootRuntimeFn`] へ替わって解けた。6.1 で起動のファイルを移した後、`runtime/mod.rs` 184・192 行の doc の字面「`runtime_boot::boot_runtime`」を `session::runtime_boot::boot_runtime` へ合わせる。`spine.rs:770` の `runtime_boot_options` は 6.1 でパスを直す（テストの支え・7.2 の申し送りに載る）。

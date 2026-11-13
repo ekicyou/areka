@@ -871,6 +871,7 @@ fn boot_wired(
         kanade_stop.clone(),
         shell,
         &descript.default_surfaces,
+        runtime::runtime_boot::boot_runtime,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);
