@@ -316,10 +316,8 @@ fn blend_under_rectangle_clip() {
     pixel_near(&px, B2_PREMUL, 32, 10);
 }
 
-#[test]
-fn blend_under_geometry_clip() {
-    // 楕円の切り抜き（中心 (20,10)・半径 12×7）。下の画素は白と透明で、図形の層の旗に依らず答えが
-    // 絵の色になる形（色のある下の画素に効くことは要件 3 の作業で固定する）。
+/// 楕円の切り抜き（中心 (20,10)・半径 12×7）の push。
+fn push_ellipse_clip() -> DrawCommand {
     let ellipse: ID2D1Geometry = unsafe {
         warp_factory().CreateEllipseGeometry(&D2D1_ELLIPSE {
             point: Vector2 { X: 20.0, Y: 10.0 },
@@ -330,13 +328,19 @@ fn blend_under_geometry_clip() {
     .unwrap()
     .cast()
     .unwrap();
+    DrawCommand::PushClipGeometry(ClipGeometry {
+        world_mat: Matrix3x2::identity(),
+        geometry: ellipse,
+        world_aabb: Aabb::new(8.0, 3.0, 32.0, 17.0),
+    })
+}
+
+#[test]
+fn blend_under_geometry_clip() {
+    // 下の画素は白と透明で、図形の層の旗に依らず答えが絵の色になる形。
     let commands = [
         white_left(20.0),
-        DrawCommand::PushClipGeometry(ClipGeometry {
-            world_mat: Matrix3x2::identity(),
-            geometry: ellipse,
-            world_aabb: Aabb::new(8.0, 3.0, 32.0, 17.0),
-        }),
+        push_ellipse_clip(),
         source(MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY)),
         DrawCommand::PopClipGeometry,
     ];
@@ -345,4 +349,19 @@ fn blend_under_geometry_clip() {
     pixel_near(&px, F, 25, 10);
     pixel_near(&px, WHITE, 5, 10); // 絵の中・楕円の外
     pixel_near(&px, CLEAR, 34, 10);
+}
+
+#[test]
+fn blend_under_geometry_clip_mixes_with_colored_under_pixels() {
+    // 図形の切り抜きの中も矩形の切り抜きと同じく下の画素に効く（3.1）。外は下の画素のまま（3.2）。
+    let mut commands = under();
+    commands.push(push_ellipse_clip());
+    commands.push(source(MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY)));
+    commands.push(DrawCommand::PopClipGeometry);
+    let px = replay_to_pixels(&commands, 40, 20, Matrix3x2::identity());
+    let (_, on_opaque, on_half) = BLENDS[0];
+    pixel_near(&px, on_opaque, 15, 10);
+    pixel_near(&px, on_half, 25, 10);
+    pixel_near(&px, B1, 5, 10); // 絵の中・楕円の外
+    pixel_near(&px, B2_PREMUL, 35, 10);
 }

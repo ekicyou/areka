@@ -24,7 +24,11 @@ impl Default for MixMode {
 ///
 /// 重ね方（`MixMode::Composite`）が `SOURCE_OVER` でないとき、D2D の `DrawImage` は絵を今の軸に沿う
 /// 切り抜きまで透明で広げてから合成する（`DESTINATION_IN` などは絵の外の画素にも効く）。
-/// wintf は D2D の値をそのまま通す。
+/// wintf は D2D の値をそのまま通す。ブレンド（`MixMode::Blend`）は絵の外の画素を変えない。
+///
+/// 切り抜き（矩形・角丸・図形）の内側では、重ね方とブレンドは切り抜きの形に依らず切り抜きが無いときと
+/// 同じく下の画素に効き、切り抜きの外側は変わらない。不透明度の層の内側では、同じ層の中で先に描いた
+/// 画素に効き、層の外の下の画素は層を重ねるときの不透明度でだけ変わる。
 #[derive(Component, Clone, Debug, PartialEq)]
 #[require(super::WorldVisual, super::VisualVersion)]
 pub struct VisualDrawContent {

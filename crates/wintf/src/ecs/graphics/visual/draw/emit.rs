@@ -2,6 +2,7 @@
 
 use super::super::MixMode;
 use super::command::*;
+use crate::numerics::Aabb;
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::error;
@@ -53,10 +54,13 @@ static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 /// - ブレンドは世界の変形を効かせたあと `BlendImage` で描き、絵の外を変えない（1.3・1.6）。
 ///   ブレンドの描き方が無いときと範囲の外の値は、種類ごとにプロセスで 1 度だけ `error!` を残して
 ///   `SOURCE_OVER` で描く（1.7）。
-/// - 不透明度の層は変換を恒等にし、範囲を物理の整数の矩形へ外向きに丸めて積む。透明から始まり、
-///   降ろすとき `SOURCE_OVER` で不透明度を掛けて重なる（3.4）。
-/// - 層は透明から始まる（`D2D1_LAYER_OPTIONS1_NONE`）。層の中の `SOURCE_OVER` でない重ね方は
-///   層の中身に対して効く（D2D の既定・変えるのは `wintf-d2d-composite-rules`）。
+/// - 層はどれも変換を恒等にし、範囲を物理の整数の矩形へ外向きに丸めて積む。
+/// - 不透明度の層は透明から始まり、降ろすとき `SOURCE_OVER` で不透明度を掛けて重なる。層の中の
+///   重ね方とブレンドは、同じ層の中で先に描いた画素に効く（3.4）。
+/// - 図形の切り抜きの層は背景の写しから始まり（`INITIALIZE_FROM_BACKGROUND`）、積む時点だけ基本の
+///   混ぜ方を `COPY` にする。降ろすとき覆いの割合で層と的を線形に補間するので、中の重ね方と
+///   ブレンドは切り抜きの形に依らず下の画素に効き、外側は変わらない（3.1〜3.3）。基本の混ぜ方は
+///   積む時点の値が効き、積んだ直後に `SOURCE_OVER` へ戻す（降ろす直前だけ `COPY` にすると誤る）。
 /// - `dc6` はブレンドの描き方（`BlendImage`）を持つ同じ DC。持たない DC なら `None`。
 ///   呼び手が合成の回に 1 度 `dc.cast()` して渡す。
 /// - 戻ってきたとき DC の変換は `root` に戻してある。D2D の描画の呼び出しは HRESULT を返さず、
@@ -124,36 +128,27 @@ pub(crate) fn emit(
                 DrawCommand::PopClipRect => dc.PopAxisAlignedClip(),
                 DrawCommand::PushClipGeometry(clip) => {
                     dc.SetTransform(&identity);
+                    // 積む時点の基本の混ぜ方が降ろすときに効く（research.md §10.2）。
+                    dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_COPY);
                     let params = D2D1_LAYER_PARAMETERS1 {
-                        contentBounds: D2D_RECT_F {
-                            left: -f32::MAX,
-                            top: -f32::MAX,
-                            right: f32::MAX,
-                            bottom: f32::MAX,
-                        },
+                        contentBounds: outward_physical(clip.world_aabb, root),
                         geometricMask: ManuallyDrop::new(Some(clip.geometry.clone())),
                         maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
                         maskTransform: clip.world_mat * root,
                         opacity: 1.0,
                         opacityBrush: ManuallyDrop::new(None),
-                        layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+                        layerOptions: D2D1_LAYER_OPTIONS1_INITIALIZE_FROM_BACKGROUND,
                     };
                     dc.PushLayer(&params, None::<&ID2D1Layer>);
+                    dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
                     // 層が自分で AddRef する。ここで持った複製を返す。
                     drop(ManuallyDrop::into_inner(params.geometricMask));
                 }
                 DrawCommand::PopClipGeometry => dc.PopLayer(),
                 DrawCommand::PushOpacity(layer) => {
                     dc.SetTransform(&identity);
-                    // 物理の整数へ外向きに丸める（層の写しを画素の格子に揃える）。
-                    let b = layer.world_aabb.transform(root).0;
                     let params = D2D1_LAYER_PARAMETERS1 {
-                        contentBounds: D2D_RECT_F {
-                            left: b.left.floor(),
-                            top: b.top.floor(),
-                            right: b.right.ceil(),
-                            bottom: b.bottom.ceil(),
-                        },
+                        contentBounds: outward_physical(layer.world_aabb, root),
                         geometricMask: ManuallyDrop::new(None),
                         maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
                         maskTransform: identity,
@@ -169,4 +164,15 @@ pub(crate) fn emit(
     }
     // SAFETY: Windows API 境界。
     unsafe { dc.SetTransform(&root) };
+}
+
+/// DIP の矩形を `root` で物理へ写し、整数へ外向きに丸める（層の写しを画素の格子に揃える）。
+fn outward_physical(world_aabb: Aabb, root: Matrix3x2) -> D2D_RECT_F {
+    let b = world_aabb.transform(root).0;
+    D2D_RECT_F {
+        left: b.left.floor(),
+        top: b.top.floor(),
+        right: b.right.ceil(),
+        bottom: b.bottom.ceil(),
+    }
 }
