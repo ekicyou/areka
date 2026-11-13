@@ -134,7 +134,7 @@
   - 1 画素の読み戻しの待ちは設計の段で実 GPU で測り design.md の Performance の節に記録済み（実装の段では測り直さない）。その記録があることだけを確かめる
   - 完了の姿: 3 つの文書と型の文書に決めが書かれ、`cargo doc -p wintf` が警告を増やさない
   - _Requirements: 5.10, 8.1, 8.2, 8.3, 8.4_
-- [ ] 7.3 全体の退行と約束を確かめる
+- [x] 7.3 全体の退行と約束を確かめる
   - `tools/test-all.ps1` の全体テストを回し、緑であることを確かめる（既存のウィジェットと emo の画素のテストが答えを変えない）
   - 触ったファイルがどれも 1,000 行以内で、新しいテストが兄弟のファイルにあり、どの `Cargo.toml` と `crates/areka/`・CPU の画素の読み手に差分が無いことを確かめる
   - 完了の姿: 全体テストが緑で、行数と差分の確かめの結果が 0 件
@@ -153,3 +153,4 @@
 - 6.1: `SurfaceGraphics::composite()`／`composite_slot()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.2／6.3 で使い始めたら外す。入れ物を放す道は `set_surface` と `clear` の 2 つ（持ち主から外れる・装置の失いはどちらも `clear`）。
 - 6.2: 描画の係の実 GPU の既存テスト（`#[ignore]` なし・ふだんの `cargo test -p wintf` で回る）は 7.1 で緑を確かめた。`composite.rs` の読み戻しの項目と `SurfaceGraphics::composite()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.3 で外す。`Local<FailureLog>` は装置の失いで係を抜けても消えない・消えた実体の控えも残る（振る舞いは変わらない）。
 - 6.3: 設計に無い守りを 1 つ足した: 入れ物の大きさが `SurfaceGraphics.size` と違えば読み戻しは `Unreadable`（作り直す前の古い入れ物を読まない・5.1／5.5 の範囲内）。失いでない GPU の読みの失敗で `error!` へ進む道は WARP で起こせずテスト無し。
+- 7.3（範囲の外・`/kiro-complete` の棚卸で起票）: 全体テスト（commit 59c53fd18）は `x64 workspace tests` だけ赤。落ちたのは本 spec が触っていない `areka-ghost`（lib 5 本・tests/ghost 6 本の inproc 系）と `shiori4-testdll`（1 本）で、cargo 1.100.0（2026-11-05）からテストの実行ファイルが `target/debug/deps` でなく `target/debug/build/<crate>/<hash>/out/` に置かれ、テスト用 DLL の正準位置の前提（design D-1）が崩れたため。赤のクレートだけ 1 回回し直して同じ結果。wintf と他の段は全部緑。触ったファイルはどれも 1,000 行以内、`Cargo.toml` と `crates/areka/` の差分は 0 件。
