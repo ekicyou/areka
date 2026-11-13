@@ -64,8 +64,7 @@ fn animated(frames: &[([Px; 4], u32)], has_alpha: bool) -> AnimatedImage {
 fn stills() -> MemoryDecoder {
     let mut dec = MemoryDecoder::new();
     for (rel, px) in [("a.png", [X; 4]), ("c.png", [Y; 4])] {
-        let img = image(px, true);
-        dec.insert(Path::new(BASE).join(rel), 2, 2, 8, img.bgra, img.has_alpha);
+        insert_still(&mut dec, rel, image(px, true));
     }
     dec
 }
@@ -73,14 +72,10 @@ fn stills() -> MemoryDecoder {
 /// anim.png を動く絵として登録した偽の読み手（全コマの答えだけを使う）。
 fn with_animation(anim: AnimatedImage) -> MemoryDecoder {
     let mut dec = stills();
-    let info = AnimationInfo {
-        width: 2,
-        height: 2,
-        frame_count: anim.frames.len() as u32,
-    };
-    dec.insert_animated(
-        Path::new(BASE).join("anim.png"),
-        info,
+    insert_anim(
+        &mut dec,
+        "anim.png",
+        anim.frames.len() as u32,
         Err("first frame is not used here".into()),
         Ok(anim),
     );
@@ -155,14 +150,7 @@ fn three_frames() -> AnimatedImage {
 fn frames_follow_the_key_entries_and_the_key_resolves_to_frame_zero() {
     let anim = bake(&with_animation(three_frames())).table;
     let mut still_dec = stills();
-    still_dec.insert(
-        Path::new(BASE).join("anim.png"),
-        2,
-        2,
-        8,
-        [K0, X, X, X].concat(),
-        true,
-    );
+    insert_still(&mut still_dec, "anim.png", image([K0, X, X, X], true));
     let still = bake(&still_dec).table;
 
     for rel in ["a.png", "anim.png", "c.png"] {
