@@ -388,30 +388,15 @@ mod tests {
 
     // ── R5.4: 未知値→横書き（解決は記録しない・記録は登録口が書く） ──
 
-    /// 未知値は横書きになり、解決そのものは記録を出さない。記録の関数を 1 回目として呼ぶと
-    /// 警告はちょうど 1 件で、文言は実挙動（「指定なし」として `vertical` と合流）と一致する
-    /// ——横書きになるのは両キーとも無効なときだけなので「horizontal_tb へ」とは言わない。
-    /// 値は parsers 側の未知値素通しテストと同じ diagonal_bt。
+    /// 未知値は横書きになり、解決そのものは記録を出さない。値は parsers 側の未知値素通し
+    /// テストと同じ diagonal_bt。警告の件数と文言は登録口を通して
+    /// `actor_writing_warn_tests.rs` が確かめる。
     #[test]
-    fn unknown_value_warn_says_treated_as_undeclared() {
+    fn unknown_value_resolves_horizontal_without_records() {
         let (mode, counts) = resolve_counting(Some("diagonal_bt"));
         assert_eq!(mode, WritingMode::HorizontalTb);
         assert_eq!(counts.error, 1, "捕捉窓の対照イベントが数えられていない");
         assert_eq!(counts.warn, 0, "解決は warn を出さない");
-
-        let ((), events) = log_capture_kit::capture(|| {
-            note_direction_declarations(&model_writing(Some("diagonal_bt")), None)
-        });
-        let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
-        assert_eq!(messages.len(), 1, "warn はちょうど 1 件: {messages:?}");
-        assert!(
-            messages[0].contains("指定なしとして扱う"),
-            "文言が実挙動を言う: {messages:?}"
-        );
-        assert!(
-            !messages[0].contains("フォールバック"),
-            "横書きへの固定を言わない: {messages:?}"
-        );
     }
 
     /// 語彙は snake_case 完全一致（R5.1）——ハイフン形（CSS 原表記）や大文字・空白は未知値扱い。
