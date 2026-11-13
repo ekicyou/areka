@@ -234,3 +234,14 @@
 - 確かめて落としたもの（要約）: R1 の直しの値と主張は全部保たれている（読み手 4 本が差分を全部照らした）。本番のコードの新しい指摘は 0。`status` の排他の中の読み直しで状態ファイルが無い・壊れている枝は今どおり正しい。`TempPath::new` も `target\test-roots\` の下に作る。
 
 - 2 回目の直し（7 件すべて・本番のコードは差分 0）＝`26ec9739`。テストは 305 本緑。R2-4 の `tools/impl-watch-install.ps1:20-24` の注は範囲の外なので tasks.md の Implementation Notes へ申し送った。
+
+### 10.3 3 回目（HEAD `b15e3f32`・テスト 305 本緑）＝新しい指摘 4 件（Must 0・Should 0・Nice 4）・外への約束と実行ファイルの振る舞いに響くもの 0
+
+| # | 重さ | 場所 | 何が起きるか | 直し方 |
+|---|---|---|---|---|
+| R3-1 | Nice | `plan_turns_tests.rs:469-470` | R2-2 の置き換えで 1 回だけ使う一時の変数 `recorded` が残った（直しが生んだ形） | `vec![joined("Z"), recorded_running("Z")]` に |
+| R3-2 | Nice | `plan_reclaim_tests.rs` の `wait_registered(id, kind)` と `plan_test_support.rs` の `watch_registered(id)` | `Event::WaitRegistered` を作る手がファイルをまたいで 2 つ（R2-1 と同じ形） | `wait_registered` を支えへ移し、`watch_registered` はそれを呼ぶ |
+| R3-3 | Nice | `plan_desk_tests.rs` の `MergeHolder` の手書き 2 か所・`plan_reclaim_tests.rs` の `merge_holder`・支えの `hold_merge` | 同じ持ち主の組み立てが 3 ファイル 4 か所 | `merge_holder` を支えへ移し、ほかはそれを使う |
+| R3-4 | Nice | `main.rs:8`（約 176 桁）・`cli.rs:12`（約 123 桁）のモジュールの doc | R2-3 と同じ種類の長い行（前からの行の見落とし） | 2 行に折る（コメントだけ） |
+
+- 確かめて落としたもの: 入口の読み手が挙げた「`cli_wait_tests.rs` の `MERGE_A`・`SOLE_A`・`merge_b` と `cli_tests.rs:83` の引数の配列を支えの `merge`・`request` に」は、2 回目の読み手が同じ候補を落とした理由が今も成り立つので落とした（配列は `waiting`（`--wait` を足して待ちの口で走らせる）・`call_until_first_sleep`・`run_captured` に生の語の並びとして渡すもので、`call` まで走らせる支えの関数では役目を果たせない。寄せるには語の並びを返す別の手が要り、写しを減らすより手を増やす）。本番 12 ファイル・口と待ちのテストは新しい指摘 0。`doc/impl-watch.md:162` の直しはコードと合う。
