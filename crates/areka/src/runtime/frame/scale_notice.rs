@@ -16,7 +16,7 @@ use tracing::{debug, info, warn};
 
 use super::RuntimeWiring;
 use crate::ghost_session::GhostSlot;
-use crate::ghost_session::ghost_session_scope_scale::{percent_text, scaling_text};
+use crate::runtime::scope_scale::{percent_text, scaling_text};
 use crate::runtime::target_map::{TargetWindow, target_scope};
 
 /// テストだけが入れる送り先（本番は入れない＝置き場のゴーストの kanade へ送る）。

@@ -32,7 +32,7 @@ use super::status_report::BalloonStatusLedger;
 use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
-use crate::ghost_session::ghost_session_scope_scale::SharedScopeScaleTable;
+use crate::runtime::scope_scale::SharedScopeScaleTable;
 use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------

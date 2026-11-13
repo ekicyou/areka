@@ -66,7 +66,7 @@
   - 完了の形: ホバーの滞在・離脱・掃除・冪等の既存の試験が緑で、可視性の相が入力の層を引かない
   - _Requirements: 3.1_
 
-- [ ] 3.4 倍率の表と文字の関数を `runtime` へ下ろす
+- [x] 3.4 倍率の表と文字の関数を `runtime` へ下ろす
   - 表と `percent_text`・`scaling_text` を中身を変えずに移し、結線の側は `wire` と源の型だけを持って残りを出し直す
   - `frame/wiring.rs`・`frame/scale_notice.rs` が `runtime` の中の表を引く
   - 完了の形: 警告 0 件で通り、倍率の表を引く `runtime` の本番が本体の結線の側を名指さない
