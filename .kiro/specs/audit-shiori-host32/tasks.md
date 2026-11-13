@@ -17,7 +17,7 @@
   - `temp_path_guard_test.rs` の例外表から、ここで `temp_dir` を使わなくなった host の結合テストの分を外す（外さないと番人の `every_exception_still_has_a_real_hit` が赤になる）
   - 完了の姿: host の 5 本の e2e が共通の道具だけで組めて緑になり、host の結合テストに `std::env::temp_dir` の呼び出しが 0 件で、`temp_path_guard_test.rs` の 4 本が緑
   - _Requirements: 3.1, 3.5, 4.2, 4.3, 4.4, 4.5_
-- [ ] 1.2 host の中のテストを兄弟のファイルへ移し、テストの重複をまとめる
+- [x] 1.2 host の中のテストを兄弟のファイルへ移し、テストの重複をまとめる
   - client の中のテストを `client_tests.rs` へ、shiori3 の中のテストを `shiori3_tests.rs` へ、中身を変えずに移す
   - `cmd_exit` を `process_host` のテストの 1 つにし、`lifecycle` のテストがそれを使う。`process_host.rs:548-559` の重複のテストを消し `process_host_image_tests.rs` の 1 本に任せる（指摘 21）
   - host の単体テストのテストの根も 1.1 の決まりにそろえる（`process_host.rs` の `.bat` のテストは 4.1 で消えるので触らない）

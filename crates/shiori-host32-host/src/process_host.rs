@@ -437,12 +437,12 @@ mod console_tests;
 mod image_tests;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::time::{Duration, Instant};
 
-    /// stand-in（`cmd.exe /c exit N`）を組んだ Command を返す。
-    fn cmd_exit(code: i32) -> Command {
+    /// stand-in（`cmd.exe /c exit N`）を組んだ Command を返す。`lifecycle` のテストもこれを使う。
+    pub(crate) fn cmd_exit(code: i32) -> Command {
         let mut command = Command::new("cmd.exe");
         command.args(["/c", "exit", &code.to_string()]);
         command
@@ -541,21 +541,6 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         };
         assert_eq!(code, 0);
-    }
-
-    // --- spawn 失敗 → SpawnError（要件 1.5）---
-
-    #[test]
-    fn spawn_missing_exe_returns_spawn_error_and_no_handle() {
-        // 存在しない exe パスで spawn は Err(SpawnError) を返し、HelperHandle を
-        // 返さない（＝稼働中 helper が存在しない状態を保つ・要件 1.5）。
-        let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
-        let load_dir = std::env::temp_dir();
-        let result = spawn(missing, &load_dir, "shiori.dll", 0);
-        assert!(
-            matches!(result, Err(SpawnError::Spawn(_))),
-            "spawn 失敗は SpawnError::Spawn を返す"
-        );
     }
 
     // --- spawn の起動パラメーター契約（arg1..3・env 3 種・cwd＝design §SpawnContract）---

@@ -368,15 +368,9 @@ pub(crate) mod tests {
     // --- HelperLifecycle: 非ブロッキング・分類・sticky・冪等後始末（R1.1〜1.6, 5.2）---
 
     use crate::process_host::spawn_command;
+    use crate::process_host::tests::cmd_exit;
     use std::process::Command;
     use std::time::Instant;
-
-    /// stand-in（`cmd.exe /c exit N`）を組んだ Command を返す（process_host tests と同意匠）。
-    fn cmd_exit(code: i32) -> Command {
-        let mut command = Command::new("cmd.exe");
-        command.args(["/c", "exit", &code.to_string()]);
-        command
-    }
 
     /// stand-in が終了するまで非ブロッキング `status()` を bounded に回して `Exited` を得る。
     ///
