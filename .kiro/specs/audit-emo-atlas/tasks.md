@@ -156,3 +156,7 @@
 - 4.1（5.1 の audit で拾う候補）: `examples/gen_animated_samples.rs`・`gen_palette_samples.rs` は、ファイルを書いたときの表示（「…: N バイト」など）を日本語で端末へ出す（道具の端末の文は ASCII だけの決まり）。4.1 の範囲の外として触っていない。
 - 4.2（5.1 の audit で拾う候補）: 前の spec の作業番号「task N」を指す説明がクレートに残る: `bake_entry_tests.rs:151,200,223`・`emo2_e2e.rs:3,18`・`emo2_golden.rs:1`・`lib.rs:348-356`・`manifest.rs:160`・`webp_pin_tests.rs:65`（research 3 節 14 の行には無い）。
 - 最終の検証（範囲の外・完了の棚卸で扱う）: `crates/areka-seriko/src/table_calls.rs:4` の説明が、8 語の正本を `areka_emo_compose::pattern_word` と書いたまま（今の正本は `areka-parsers` の `shell::pattern_word`・compose は再公開だけ）。動きには関係しない。
+- 完了時にその場で解決（3.8）: 今のツールチェーンの clippy の赤 4 か所を直した（`areka-emo-compose` の `golden_tests_test_support.rs`・`composer_tests.rs` 2 か所を `as_chunks::<4>()` へ、`areka-sakura/src/drive.rs:325` の `drain(..).collect()` を `std::mem::take` へ）。`cargo clippy -p areka-emo-compose -p areka-sakura --all-targets -- -D warnings` が緑。
+- 完了時にその場で解決（3.6）: `areka-emo-compose/src/film_tests.rs` の説明を「①②⑤⑥は…作れない」に直した。
+- 完了時にその場で解決（最終の検証）: `areka-seriko/src/table_calls.rs` の頭の説明の正本を `areka_parsers::shell::pattern_word` に直した。
+- 完了時に起票（3.5）: `areka-placement` の環境変数で赤になるテストは、受け持ちが重なる `audit-placement-core` の brief へ「件 1」として足した（この spec は areka-placement に触らない約束）。

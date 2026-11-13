@@ -128,3 +128,8 @@
 - **要件定義のモデル**: Opus（今ある crate の中の直しで、新しい境目は作らない）。
 - **分割の案**: 今は無し（指摘を見てから決める）。
 - **古くなった記述**: ⑸ の「`crates/areka/examples/collision-probe.rs:90` の `../pilot/...` の記述は古い」は、もう当たらない（`placement-crate-split` が直し、今は `SampleRoot::acquire("emo2")` の説明になっている）。`audit-areka-app` の brief にもこの件は載っていない。
+
+## audit-emo-atlas からの申し送り（2026-11-14）
+
+- **件 1: 環境変数で赤になるテスト**: `crates/areka-placement/src/measure_first_frame_tests.rs` の `fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake` は、動く絵の上限の環境変数（`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` か `AREKA_ANIMATED_IMAGE_MAX_PIXELS=1`）を立てて走らせると、`raw_warns == 0` の確かめ（`audit-emo-atlas` の着地の時点で 258 行）で赤になる。本物の `bake` が `AnimationLimits::from_env()`（プロセスで 1 回だけ本物の環境を読む）の上限を使うため。テストが環境に左右されない形に直す（アトラスの側で環境を差し替える `from_env_with` は `pub(crate)` で、クレートの外からは使えない）。`crates/areka/src/placement_tests/measure_bake_log_tests.rs` も動く絵を登録するので、同じ走らせ方で確かめる。
+  - 起票の理由: 触るのは `crates/areka-placement/` で、この brief の受け持ちと重なる（`audit-emo-atlas` は areka-placement に触らない約束だった）。
