@@ -3,7 +3,8 @@
 //! 状態を変える呼び出しは [`Store::with_state`] か [`Store::clear`] を通る。状態ファイルとは別の
 //! ロックファイル `state.lock` の排他の中で「読む → 判断 → 変わっていれば置き換え書き → 読み物」を
 //! 行い、排他はこの読み書きの間だけ続く（机の保持は排他で表さない。要件 8.2）。
-//! [`Store::read_only`] は排他を取らず、何も書かない。
+//! [`Store::read_only`] は排他を取らず、何も書かない。[`Store::summary`] は排他を 1 回だけ試し、
+//! 取れたときだけその中で読み直して読み物を書く。
 //!
 //! - 読み: 版の数字だけを先に見る。無い → 空から始める。知らない版 → 読まず動かさず失敗。
 //!   JSON として読めない・形が合わない → 時刻入りの別名へ退避して空から始める。
@@ -197,14 +198,36 @@ impl Store {
         })
     }
 
-    /// 状態の確認。排他を取らずに読み（[`Store::read_only`]）、読み物を置き換え、端末向けの
-    /// 要約（ASCII）を返す。状態ファイルには触らない。状態ファイルが無ければ `None`（読み物も
-    /// 書かない）。読み物が書けなくても要約は返す。
+    /// 状態の確認。まず排他を取らずに読み（[`Store::read_only`]）、状態ファイルが無い・読めない
+    /// ときはロックのファイルにも読み物にも触らずに返す（無ければ `None`）。在れば `state.lock` を
+    /// 待たずに 1 回だけ試し、取れたら排他の中で読み直した状態から読み物を置き換えて端末向けの
+    /// 要約（ASCII）を返す。他人が握っていれば書かずに最初の状態から要約を返す（握っている側が
+    /// 書く）。開けない・試しが OS の失敗を返すときは読み物が書けなかったときと同じ `warn!` を
+    /// 1 行残す。状態ファイルには触らない。読み物が書けなくても要約は返す。
     pub fn summary(&self) -> Result<Option<String>, WatchError> {
         let Some(state) = self.read_only()? else {
             return Ok(None);
         };
-        self.write_status(&state, self.time()?);
+        let now = self.time()?;
+        let locked = self.open_lock().and_then(|file| match file.try_lock() {
+            Ok(()) => Ok(Some(StateLock(file))),
+            Err(TryLockError::WouldBlock) => Ok(None),
+            Err(TryLockError::Error(err)) => Err(WatchError::io("lock state.lock", &err)),
+        });
+        let state = match locked {
+            Ok(Some(_lock)) => {
+                let Some(fresh) = self.read_only()? else {
+                    return Ok(None);
+                };
+                self.write_status(&fresh, now);
+                fresh
+            }
+            Ok(None) => state,
+            Err(err) => {
+                tracing::warn!(error = %err, "[store] status.md not written; the result stands");
+                state
+            }
+        };
         let summary = status::render_terminal(&state, self.presence.as_ref());
         Ok(Some(summary))
     }
@@ -243,13 +266,7 @@ impl Store {
 
     /// `state.lock` を排他で握る。短い間隔で試し、上限まで取れなければ `LockBusy`。
     fn lock(&self) -> Result<StateLock, WatchError> {
-        // 中身は使わない。在るファイルはそのまま開く。
-        let file = File::options()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(self.home.lock_path())
-            .map_err(|err| WatchError::io("open state.lock", &err))?;
+        let file = self.open_lock()?;
         let mut waited = Duration::ZERO;
         loop {
             match file.try_lock() {
@@ -264,6 +281,16 @@ impl Store {
                 }
             }
         }
+    }
+
+    /// `state.lock` を開くだけ（無ければ作る）。中身は使わない。在るファイルはそのまま開く。
+    fn open_lock(&self) -> Result<File, WatchError> {
+        File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(self.home.lock_path())
+            .map_err(|err| WatchError::io("open state.lock", &err))
     }
 
     /// 状態ファイルの中身。無ければ `None`。

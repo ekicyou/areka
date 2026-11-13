@@ -350,7 +350,7 @@ fn granted(wait: &WaitSpec, state: &State) -> Option<String> {
     }
 }
 
-/// 状態の確認: 状態を変えずに読み、読み物を書き、ASCII の要約と読み物の道筋を出す。
+/// 状態の確認: 状態を変えずに読み、排他が取れたときだけ読み物を書き、ASCII の要約と読み物の道筋を出す。
 /// 状態ファイルが無ければ、その旨だけを出す（状態ファイルも読み物も作らない）。
 fn status(home: Home, name: &'static str, out: &mut dyn Write) -> Result<Outcome, WatchError> {
     let reading = home.status_path();

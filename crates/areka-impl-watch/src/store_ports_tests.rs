@@ -430,6 +430,33 @@ fn summary_returns_the_terminal_summary_even_when_the_reading_matter_cannot_be_w
     assert!(!home.status_path().exists());
 }
 
+#[test]
+fn summary_writes_the_reading_matter_only_when_it_gets_the_lock() {
+    let root = TempPath::under_target("impl-watch-store");
+    let home = home_in(&root);
+    let (store, pauses) = store_noting_pauses(&root);
+    store.with_state(watch("a")).expect("変えられる");
+    fs::remove_file(home.status_path()).expect("消せる");
+    let held = hold_state_lock(&home);
+
+    let summary = store
+        .summary()
+        .expect("読める")
+        .expect("状態ファイルが在る");
+
+    assert!(summary.contains("a areka working\n"), "{summary}");
+    assert!(
+        !home.status_path().exists(),
+        "他人が握っている間は読み物を書かない"
+    );
+    assert_eq!(*pauses.borrow(), [], "ロックを待っていない");
+
+    drop(held);
+    assert_eq!(store.summary().expect("読める"), Some(summary));
+    // 較正: 放した後は書く。
+    assert!(home.status_path().is_file());
+}
+
 // ───────── 全部消す ─────────
 
 #[test]
