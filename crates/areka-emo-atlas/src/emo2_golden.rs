@@ -3,11 +3,11 @@
 //! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
 //! packing → 焼付）を、実 fixture emo2 の shell surface 一式で駆動し、その配置結果
 //! （各キーの `(page, uv_rect, trim_offset, original)`）が
+//! **固定 golden スナップショットに一致**すること（以降のリグレッションを検出）を検証する。
+//! 毎回の実行が固定の golden と一致すれば、実行ごとに同じ（run-to-run 決定性・5.5）も成り立つので、
+//! 2 回焼いて比べる別のテストは置かない。失敗 0 件は `emo2_e2e.rs` の最初のテストが見る。
 //!
-//! 1. **同一入力を複数回 bake しても常に同一**（run-to-run 決定性・5.5 中核）
-//! 2. **固定 golden スナップショットに一致**（以降のリグレッションを検出）
-//!
-//! であることを検証する。production コードは変更せず（本モジュールは `#[cfg(test)]`）、
+//! 本物の焼きはこのファイルで 1 回だけ。production コードは変更せず（本モジュールは `#[cfg(test)]`）、
 //! WIC 腕（COM 隔離）越しに実 PNG を復号する。
 //!
 //! ## golden が機械非依存で安定する理由（「継続的実行環境で安定して再現」）
@@ -38,8 +38,6 @@ use crate::{AtlasTable, ElementId, PackConfig, WicDecoderArm, bake};
 /// emo2 shell surfaces.txt をパースし、`SurfaceSet` として **1 度** bake した結果を返す。
 ///
 /// 読み手は呼び出し側が COM を張った下で組んで渡す（`with_arm`）。
-/// 毎回この関数を呼ぶことで「新規構築した同一入力」を得られ、run-to-run 決定性の
-/// 検証に用いる。
 fn bake_emo2_shell(dec: &WicDecoderArm) -> crate::BakeResult {
     let (surfaces, base) = emo2_shell();
     // freshly-constructed identical inputs + PackConfig::default()。
@@ -94,55 +92,7 @@ fn snapshot_table(table: &AtlasTable) -> String {
     out
 }
 
-/// エラー集合の決定的スナップショット（run-to-run 比較用）。`Debug` を行区切りで並べ、
-/// 安定比較のため整列する。
-fn snapshot_errors(errors: &[crate::error::BakeError]) -> String {
-    let mut lines: Vec<String> = errors.iter().map(|e| format!("{e:?}")).collect();
-    lines.sort();
-    lines.join("\n")
-}
-
-/// テスト①: run-to-run 決定性（5.5 中核・golden ファイル非依存で完全に堅牢）。
-///
-/// 同一 emo2 shell 入力を **2 回** 独立に bake し、配置結果スナップショットと
-/// エラー集合が**バイト等値**であることを確認する。ハードコード座標に依存せず、
-/// 2 つの独立実行の等値のみで決定性（5.5）を実証する。
-#[test]
-fn emo2_shell_bake_is_deterministic() {
-    with_arm(|dec| {
-        let a = bake_emo2_shell(dec);
-        let b = bake_emo2_shell(dec);
-
-        let snap_a = snapshot_table(&a.table);
-        let snap_b = snapshot_table(&b.table);
-        assert_eq!(
-            snap_a, snap_b,
-            "same emo2 shell input must bake to an identical placement snapshot (5.5)"
-        );
-
-        // 失敗集合も同一。パレットの絵の `purple/a/null.png` も α の道を通って全透明の
-        // 絵として載るので、両実行とも**失敗 0 件**である（R5.5/5.6）。
-        let err_a = snapshot_errors(&a.errors);
-        let err_b = snapshot_errors(&b.errors);
-        assert_eq!(
-            err_a, err_b,
-            "same emo2 shell input must yield an identical error set run-to-run"
-        );
-        assert!(
-            a.errors.is_empty(),
-            "emo2 shell bakes with zero failures, got {:?}",
-            a.errors
-        );
-
-        // 空でない実配置が存在する（スナップショットが空文字列でない＝空虚な等値でない）。
-        assert!(
-            !snap_a.is_empty(),
-            "snapshot must contain entries (non-vacuous determinism)"
-        );
-    });
-}
-
-/// テスト②: golden スナップショット・リグレッション検出。
+/// golden スナップショット・リグレッション検出（決定性 5.5 も兼ねる）。
 ///
 /// emo2 shell を 1 度 bake し、その配置スナップショットをコミット済み golden
 /// （`src/testdata/emo2_shell_golden.txt`）と比較する。不一致（配置アルゴリズムの

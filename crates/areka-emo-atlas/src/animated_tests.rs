@@ -431,15 +431,11 @@ fn reasons(anim: &AnimatedImage) -> Vec<Reason> {
             "exceeded=\"page_side\"",
         ),
         broken("frame count mismatch", Ok(two), "got 2 frames"),
+        // 読めない形式（16 ビットの APNG など）も同じ道（`decode_frames` が文を返す）で、文が違うだけ。
         broken(
             "frame failure",
             Err("frame 2 is broken".into()),
             "frame 2 is broken",
-        ),
-        broken(
-            "unsupported form",
-            Err("16-bit APNG is not supported".into()),
-            "16-bit APNG is not supported",
         ),
         broken("frame size mismatch", Ok(small), "2x2, 2x2, 1x1"),
     ]

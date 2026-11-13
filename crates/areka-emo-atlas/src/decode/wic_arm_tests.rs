@@ -70,34 +70,8 @@ fn decode_frames_reads_all_frames_with_probed_header() {
     });
 }
 
-#[test]
-fn decode_first_frame_matches_frame_zero() {
-    with_arm(|arm| {
-        for name in ["basic.apng", "alpha.webp"] {
-            let path = sample(name);
-            let header = arm.probe_animation(&path).expect("animated");
-            let first = arm
-                .decode_first_frame(&path, header)
-                .unwrap_or_else(|e| panic!("{name} first frame: {e}"));
-            let all = arm.decode_frames(&path, header).expect("all frames");
-            assert_eq!(first.bgra, all.frames[0].image.bgra, "{name}");
-            assert_eq!(first.has_alpha, all.frames[0].image.has_alpha, "{name}");
-        }
-    });
-}
-
-#[test]
-fn truncated_fails_all_frames_but_reads_first() {
-    with_arm(|arm| {
-        let path = sample("truncated.apng");
-        assert_decode_error(arm.decode_frames(&path, info(4)), &path);
-        let first = arm
-            .decode_first_frame(&path, info(4))
-            .expect("first frame of truncated.apng reads");
-        assert_eq!(pixel(&first.bgra, first.stride, 0, 0), RED_BGRA);
-    });
-}
-
+// 1 枚目の口がコマ 0 と同じこと・切れた絵の答えは `image_arm_tests.rs` の同じ 2 本が見る
+// （WIC の腕は `image_arm` を 1 行で包むだけ）。ここではパス付きの包みだけを見る。
 #[test]
 fn deep16_fails_both_as_decode_error_with_path() {
     with_arm(|arm| {

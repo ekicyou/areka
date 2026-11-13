@@ -73,7 +73,28 @@ fn emo2_shell_all_elements_baked() {
 
     with_arm(|dec| {
         let set = set(&surfaces, &base);
-        let result = bake(std::slice::from_ref(&set), dec, PackConfig::default());
+        // 本物の焼きはこのファイルの shell だけの焼きで 1 回。記録を捕まえ、null.png の記録も同じ焼きで見る。
+        let mut result = None;
+        let out = crate::log_capture::capture_logs(|| {
+            result = Some(bake(std::slice::from_ref(&set), dec, PackConfig::default()));
+        });
+        let result = result.expect("bake ran inside capture_logs");
+
+        // 檻 T10（real-run-log-noise 要件 3.1・3.6・5.2）: `purple/a/null.png`（着せ替えの「無し」の絵）は
+        // `warn` 0 件・見分けた `debug` 1 件。
+        let null_lines: Vec<&str> = out
+            .lines()
+            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_NULL_PNG_KEY}\"")))
+            .collect();
+        assert!(
+            !null_lines.iter().any(|l| l.contains("level=WARN")),
+            "{SHELL_NULL_PNG_KEY} の warn は 0 件: {out}"
+        );
+        let debug = null_lines
+            .iter()
+            .filter(|l| l.contains("level=DEBUG") && l.contains(BIND_DEBUG))
+            .count();
+        assert_eq!(debug, 1, "見分けた debug は 1 件: {out}");
 
         // 実在ファイルのみ参照ゆえデコード失敗は 0。正規化は失敗しないので、
         // 失敗は 1 件も出ない（R5.5/5.6）。
@@ -131,34 +152,6 @@ fn emo2_shell_all_elements_baked() {
             result.table.entry(id).placement.is_some(),
             "surface0.png is a real non-transparent image → placed"
         );
-    });
-}
-
-/// 檻 T10（real-run-log-noise 要件 3.1・3.6・5.2）: 同梱の emo2 のシェルを本物の読み手で焼くと、
-/// `purple/a/null.png`（着せ替えの「無し」の絵）は `warn` 0 件・見分けた `debug` 1 件。
-#[test]
-fn emo2_null_png_logs_debug_not_warn() {
-    let (surfaces, base) = emo2_shell();
-
-    with_arm(|dec| {
-        let set = set(&surfaces, &base);
-        let out = crate::log_capture::capture_logs(|| {
-            let result = bake(std::slice::from_ref(&set), dec, PackConfig::default());
-            assert!(result.errors.is_empty(), "{:?}", result.errors);
-        });
-        let null_lines: Vec<&str> = out
-            .lines()
-            .filter(|l| l.contains(&format!("rel_path=\"{SHELL_NULL_PNG_KEY}\"")))
-            .collect();
-        assert!(
-            !null_lines.iter().any(|l| l.contains("level=WARN")),
-            "{SHELL_NULL_PNG_KEY} の warn は 0 件: {out}"
-        );
-        let debug: Vec<&&str> = null_lines
-            .iter()
-            .filter(|l| l.contains("level=DEBUG") && l.contains(BIND_DEBUG))
-            .collect();
-        assert_eq!(debug.len(), 1, "見分けた debug は 1 件: {out}");
     });
 }
 
