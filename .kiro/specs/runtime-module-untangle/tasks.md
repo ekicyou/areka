@@ -3,7 +3,7 @@
 各段のあいだで `cargo check --workspace --all-targets` が警告 0 件で通る順に並べる（design.md「Migration Strategy」の S0〜S8）。段の差分は混ぜない。新しい試験の関数は足さず、固定は既存の試験への assert で足す。振る舞いを変えたくなった所は直さず、受け持つ audit の brief へ申し送る（9.3 で記録する）。
 
 - [ ] 1. 着手の測り（コードを触る前の「前」を取る）
-- [ ] 1.1 テストの名前の一覧と警告の数を取る
+- [x] 1.1 テストの名前の一覧と警告の数を取る
   - `cargo test --workspace --no-fail-fast -- --list` の `: test$` の行から名前の末尾の多重集合を作り、`research.md` に置く（比べるための「前」）
   - `cargo check --workspace --all-targets` の警告が 0 件であることを記録する
   - 完了の形: `research.md` に着手の main の SHA・テストの数・名前の多重集合の置き場・警告 0 件が書かれている
@@ -188,3 +188,6 @@
   - 実機の走行はこの 2 つと 1.2 だけ
   - 完了の形: 2 つの実機テストが緑で、`research.md` に 3 つの道の前後が同じ順であることが書かれている
   - _Requirements: 3.6, 8.4, 8.5, 8.8_
+
+## Implementation Notes
+- 1.1: `cargo check` は rustc の警告 0 件だが、cargo のマニフェストの警告（使われない依存）が 3 件前からある（workspace の `async-executor`・`shiori-abi` の `windows`・`shiori-host32-host` の `event-listener`。どれも `crates/areka` の外）。要件 8.2 は「rustc 0 件・マニフェストはこの 3 件のまま」で比べる。消すのは範囲外（要件 8.7 が依存の変更を禁じる）＝完了の棚卸で起票する。

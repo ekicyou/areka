@@ -447,3 +447,27 @@
 - 検証の指摘 2 つ（式 2・3 の宣言の深さ・本番の倒れ先の記録）と、要件 2.1 の `shell_carry` の列の食い違いは、自明な修正として design.md と requirements.md を直した。
 - 議題 1（`runtime` のテストで口が据わっていないときの倒れ先）: 推奨案で確定。`#[cfg(test)]` の `FALLBACK` は `session::hooks::HOOKS`。57 ファイルへ据え付けを配らない。テストが本体を引く所は要件 3.5 の数に入れ、`runtime-crate-split` へ申し送る。
 - 議題 2（`install_cue` の記録の分け方）: 推奨案で確定。`log_history.rs` に完全一致の「残さない出所」の表 `UNKEPT_TARGETS`（`areka::install::install_cue` の 1 行）を足す。要件 4.1（出所はモジュールのパス）と 4.3（前と同じ分け方）を両立する唯一の形。
+
+## 着手の測り（2026-11-13・タスク 1.1・要件 8.1・8.2）
+
+### 15. テストの名前の多重集合と警告の数（前）
+
+- 測った木: ブランチの土台 `4863cb667b9dd62b6d8dad5375b2bb1c09151da4`（`git merge-base HEAD origin/main`）。着手のときの `origin/main` は `2f3e51040d369c20d42b9e2d8ce8c8488f6462a1` で土台より先へ進んでいるが、このブランチは土台から `crates/`・`tools/` を変えておらず（`git diff --stat origin/main...HEAD -- crates tools` が空）、測ったのは土台のコードそのもの。完了の測り（9.4 の比べ）は、取り込んだ後の土台との差をここに足して読む。
+- 道具: `cargo 1.100.0 (3acc79c0c 2026-11-05)`。
+- テストの名前の多重集合の置き場: `.kiro/specs/runtime-module-untangle/test-name-tails-before.txt`（1 行 1 名・重複はそのまま残す・バイト順に並べた）。
+  - 行の数（テストの数）: 13,926。異なる名前の数: 13,813。
+  - SHA-256: `c9c83edf36e384042924c2cca7f86287f4e46f3a5d862190cc5311fdc5f00bd8`
+  - 作り方（Git Bash・ワークツリーの根で）:
+    ```sh
+    cargo test --workspace --no-fail-fast -- --list > list.txt
+    tr -d '\r' < list.txt | grep ': test$' | sed 's/: test$//; s/.*:://' | LC_ALL=C sort > test-name-tails-before.txt
+    ```
+  - 末尾は最後の `::` から後ろ（要件 8.1）。doc テストの行（65 行・`crates\…\x.rs - a::b (line N)`）は `b (line N)` か、`::` を含まなければ行全体が残る。`crates/areka` に doc テストは 0 行なので、本仕様のパスの改めで doc テストの名前は変わらない（行の番号がずれる所は `crates/areka` の外だけ）。
+  - `: benchmark$` の行は 0 行。
+- 警告（要件 8.2）: `cargo check --workspace --all-targets` は成功（終わりの値 0）。rustc の警告（コードの警告）は **0 件**。
+  - ただし cargo のマニフェストの警告が 3 件出る（今の main のまま・本仕様の前からあるもの・cargo 1.100 の使われない依存の検査）:
+    - `unused workspace dependency async-executor`（ワークスペースの `Cargo.toml`）
+    - `unused dependency windows`（`shiori-abi`）
+    - `unused dependency event-listener`（`shiori-host32-host`）
+  - 本仕様が触るのは `crates/areka` の中なので、この 3 件は数を変えずに完了まで持つ（完了の比べでは「rustc の警告 0 件・マニフェストの警告はこの 3 件のまま」で読む）。この 3 件を消すかどうかは進行役の判断へ回す。
+- 整形: `cargo fmt --all -- --check` は差なし。
