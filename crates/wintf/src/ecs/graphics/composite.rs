@@ -1,9 +1,6 @@
 //! 描画面ごとの入れ物（要件 4.1, 4.2, 4.4, 4.8）。描画面 1 枚の合成の結果を持ち、合成と写しの
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
-// 本番の係が使い始めるまで（6.2）は、テストの外で使い手が無い。
-#![cfg_attr(not(test), allow(dead_code))]
-
 use super::visual::{DrawCommand, emit};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
@@ -16,6 +13,7 @@ use windows::core::Interface;
 use windows_numerics::{Matrix3x2, Vector2};
 
 /// 1 画素の読み戻しの写し先と控え（同じ錠の中に置く）。
+#[cfg_attr(not(test), allow(dead_code))] // 読み戻しの口（6.3）が使い始めたら外す
 struct PixelReadState {
     /// 1×1 の `CPU_READ | CANNOT_DRAW` の写し先。
     staging: ID2D1Bitmap1,
@@ -30,8 +28,10 @@ pub(crate) struct SurfaceComposite {
     /// 合成し終えた回数（0＝まだ）。
     generation: u64,
     /// 1×1 の写し先と控えを 1 つの錠に入れる（写し・Map・Unmap・控えの更新を錠を持ったまま行う）。
+    #[cfg_attr(not(test), allow(dead_code))] // 読み戻しの口（6.3）が使い始めたら外す
     pixel: Mutex<PixelReadState>,
     /// GPU から読んだ回数（5.4 のテストの的）。
+    #[cfg_attr(not(test), allow(dead_code))] // 読み戻しの口（6.3）が使い始めたら外す
     gpu_reads: AtomicU64,
 }
 
@@ -94,6 +94,7 @@ impl SurfaceComposite {
         self.size
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // 読み戻しの口（6.3）が使い始めたら外す
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
@@ -162,6 +163,7 @@ impl SurfaceComposite {
 
     /// 1 画素（座標は呼び手が範囲の内と確かめ済み・世代は 1 以上）。`(x, y, 世代)` が控えと同じなら
     /// GPU から読まない（5.4）。`Map(READ)` は GPU が合成を終えるまで待つ（5.2）。
+    #[cfg_attr(not(test), allow(dead_code))] // 読み戻しの口（6.3）が使い始めたら外す
     pub(crate) fn read_pixel(&self, x: u32, y: u32) -> windows::core::Result<[u8; 4]> {
         // 錠を持ったまま写し・Map・Unmap・控えの更新を行う（2 つの読みが写し先を取り合わない）。
         let mut state = self.pixel.lock().unwrap_or_else(|e| e.into_inner());
@@ -193,6 +195,7 @@ impl SurfaceComposite {
 
     /// 全体（1 行＝幅×4 バイトに詰めた BGRA・5.9）。写し先は `device` の新しい DC で作って捨てる
     /// （共有の DC と 1 画素の写し先に触らないので錠を要らない）。
+    #[cfg_attr(not(test), allow(dead_code))] // 読み戻しの口（6.3）が使い始めたら外す
     pub(crate) fn read_all(&self, device: &ID2D1Device) -> windows::core::Result<Vec<u8>> {
         let (width, height) = self.size;
         let row = width as usize * 4;

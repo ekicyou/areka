@@ -211,7 +211,6 @@ impl SurfaceGraphics {
     }
 
     /// 入れ物の置き場（係だけが `bypass_change_detection` の下で使う）
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn composite_slot(&mut self) -> &mut Option<SurfaceComposite> {
         &mut self.composite
     }

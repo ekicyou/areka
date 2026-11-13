@@ -101,7 +101,7 @@
   - 部品の `Send`／`Sync` の根拠の注記に、入れ物の資源と控えの錠を足す
   - 完了の姿: 描画面を入れ替えた後と放した後に入れ物が無いことを確かめるテストと、既存の描画面の係のテストが緑
   - _Requirements: 4.3, 4.5_
-- [ ] 6.2 描画の係を、入れ物へ合成してから描画面へ写す順にし、各段の失敗を今の立ち直りの道に乗せる
+- [x] 6.2 描画の係を、入れ物へ合成してから描画面へ写す順にし、各段の失敗を今の立ち直りの道に乗せる
   - 入れ物が無いか大きさが違えば作り、合成し、描画面の描き始め・写し・描き終わりの順にする。入れ物への書き込みは変化の印を立てない形で行う
   - 作成・合成・写しのどの段も、装置の失いなら今の失いの記録の道で印を立てて係を抜け、そうでなければ `error!`（実体・段・HRESULT）を残して描き直しの印を命令で立て直し次の描画面へ進む。描き終わりの失敗も同じ道に乗せる
   - 同じ描画面で同じ `(段, HRESULT)` の失敗が続くときは 2 回目から `debug!` に落とし、成功か別の失敗で控えを消す。この判定を関数に分け、新しい兄弟のテストのファイル（描画の係のテスト・`systems/render_tests.rs`）と係の `mod.rs` のその `mod` の行を足して固定する
@@ -151,3 +151,4 @@
 - 5.1: `composite.rs` の `#![cfg_attr(not(test), allow(dead_code))]` は 6.2 で外す。`pixel`／`gpu_reads` の欄と `PixelReadState` の `#[allow(dead_code)]` は 5.2 で外す。根の列の `DrawImage` は `render.rs` と重複（6.2 で `compose` へ一本化）。
 - 5.2: `read_pixel`／`read_all` は GPU の失敗を `Err` で返すだけで記録しない。座標の範囲・世代 0・失いの見分けと `error!` は 6.3 の `SurfaceReadback` が持つ。読み戻しのテストは `composite_tests.rs` に置いた（design の `readback_tests.rs` は 6.3 の口のテスト用）。
 - 6.1: `SurfaceGraphics::composite()`／`composite_slot()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.2／6.3 で使い始めたら外す。入れ物を放す道は `set_surface` と `clear` の 2 つ（持ち主から外れる・装置の失いはどちらも `clear`）。
+- 6.2: 描画の係の実 GPU の既存テスト（`--ignored`）は 7.1 で回す。`composite.rs` の読み戻しの項目と `SurfaceGraphics::composite()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.3 で外す。`Local<FailureLog>` は装置の失いで係を抜けても消えない・消えた実体の控えも残る（振る舞いは変わらない）。
