@@ -1258,3 +1258,9 @@ INFO | areka_mcp::server | MCP: 待受を閉じた |
 ```
 
 - 走らせ方: `pwsh -NoProfile -File exitrun-menu.ps1 -Path menu`（前で走らせると子が終わるまで戻らない）。座標は物理画素（主のモニタは 200%）で、窓の矩形もメニューの位置も 1.2 と同じだった。
+
+## 31. 最終の検証（kiro-validate-impl・2026-11-13）
+
+- 判定: GO。全体テスト `tools/test-all.ps1` は commit `ac4aaaac7`（main 取り込み後）で 14 段すべて緑（x64 workspace tests 650 s・`smoke_boot_loop_exit` を含む）。
+- タスクをまたぐ結線（口 10 本の使い手 7 相・据え付けの順・`BootRuntimeFn` の唯一の呼び手・終わる相の登録の順・記録の分け方）・要件 52 項目の網羅・File Structure Plan と依存の向き（式 1 は `#[cfg(test)]` の 2 行だけ）・境界（Cargo はコメント 3 行・Cargo.lock 差なし）はいずれも指摘 0。足した行に TBD/TODO・秘密の字面は 0。
+- 完了の棚卸で `/kiro-discovery` に起票するもの: 根の `Cargo.toml` の使われない依存 `async-executor` の警告、網羅台帳と briefing-*.md の前からの古い行番号（24 節の 7・8 番）。
