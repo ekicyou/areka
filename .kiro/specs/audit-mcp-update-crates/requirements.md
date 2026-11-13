@@ -117,7 +117,7 @@
 4. If 確定した指摘が 6.1〜6.3 の約束を破らないと直せないとき, then the 本 spec shall 約束を破って直さず、要件の討議でその指摘を議題にし、扱い（約束の中で直す形・`runtime-module-untangle` ほかのセッションとの申し合わせ・後のウェーブで直す受け持ちの spec）を開発者の裁定で決める
 5. If 指摘の直しを後の spec へ回すと裁定されたとき, then the 本 spec shall 受け持つ spec が実在することを確かめ、その spec の brief に件として書き足し、回した指摘と回し先を記録に残す
 6. While 範囲の外のファイルを受け持つ spec のセッションが走っているあいだ, when 直しがそのファイルへ及ぶとき, the 本 spec shall そのセッションと申し合わせてから触る
-7. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（件 1 の `crates/areka-user-data/src/lib.rs` は、判定の関数 `usable_profile_env` を `pub(crate)` から `pub` にする 1 行だけ＝要件の討議の議題 1 で確定。同じ判定を中継に写さない）
+7. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（件 1 の `crates/areka-user-data/src/lib.rs` は、判定の関数 `usable_profile_env` を `pub(crate)` から `pub` にする 1 語と、`pub` にすると `cargo doc` が警告する説明の内部リンク 1 つを字面にする 1 行だけ＝要件の討議の議題 1 で確定。同じ判定を中継に写さない。`doc/ssp-mcp/transport-diff-areka.md` は、この spec で消すテストの名を挙げる「測ったテスト名」の欄とファイルの並びだけ＝要件 3.2・設計の検証で追記）
 8. The 本 spec の直し shall `vendors/` の下に手を入れない
 
 ### Requirement 7: 仕上げの確かめ
