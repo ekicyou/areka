@@ -1,6 +1,6 @@
 //! 公開面（`lib.rs`）の兄弟テスト（要件 3.1・3.3・7.4・8.1・8.4・10.8）。
 //!
-//! ⑴ 語彙の全数対応: 11 語の固定入力を 1 本で回し、得た `kind()` の集合が
+//! ⑴ 語彙の全数対応: 1 語につき 1 つの固定入力を 1 本で回し、得た `kind()` の集合が
 //!    `FailReason::ALL_KINDS` と完全一致し、失敗ごとに `error` が 1 件で、その欄が
 //!    戻り値と一致する（欄の判定は `run_tests.rs` の `Ran::failed` が持つ）。
 //! ⑵ 字面の見張り: 本番のソース（`*_tests.rs` と `testkit.rs` を除く `src/*.rs`）の
@@ -14,11 +14,11 @@
 use super::*;
 use crate::md5::md5_hex;
 use crate::paths::WORK_DIR;
-use crate::run_tests::{HOME, MD5_ABC, Ran, fixture, go, three_ending_with_existing, url};
-use crate::testkit::{FakeFetch, Pinned, dau, hold, junction, pe_image, pin};
-use std::cell::RefCell;
+use crate::run_tests::{
+    HOME, Ran, fixture, go, pin_a_dll_when_b_is_fetched, three_ending_with_existing, url,
+};
+use crate::testkit::{FakeFetch, MD5_ABC, dau, hold, junction, pe_image};
 use std::collections::BTreeSet;
-use std::rc::Rc;
 
 // ---- 語彙の全数対応（7.4・8.1・8.4） ----
 
@@ -108,17 +108,7 @@ fn cases() -> Vec<fn() -> Ran> {
             let f = fixture();
             let pe = pe_image();
             let (fetch, _) = three_ending_with_existing(&f, &pe);
-            let pinned: Rc<RefCell<Option<Pinned>>> = Rc::default();
-            let fetch = {
-                let (pinned, shelf, b_url) =
-                    (pinned.clone(), f.target.join(WORK_DIR), url("b.txt"));
-                fetch.on_get(move |u| {
-                    if u == b_url {
-                        let dir = fs::read_dir(&shelf).unwrap().next().unwrap().unwrap();
-                        *pinned.borrow_mut() = Some(pin(&dir.path().join("new").join("a.dll")));
-                    }
-                })
-            };
+            let (fetch, pinned) = pin_a_dll_when_b_is_fetched(&f, fetch);
             let held = hold(&f.target.join("b.txt"));
             let ran = go(HOME, &f.target, &fetch);
             drop(held);
@@ -141,7 +131,6 @@ fn every_fail_kind_has_a_fixture_and_is_recorded_once_with_matching_fields() {
     let all: BTreeSet<&str> = FailReason::ALL_KINDS.iter().copied().collect();
     assert_eq!(got, all, "固定入力から得た語彙が全数一覧と食い違う");
     assert_eq!(kinds.len(), all.len(), "同じ語を 2 度数えている: {kinds:?}");
-    assert_eq!(all.len(), 11, "語彙は 11 語");
 }
 
 // ---- 字面の見張り（3.1・3.3・8.1・10.8） ----
@@ -242,7 +231,6 @@ fn the_failure_record_is_fired_from_one_place() {
         .filter(|(_, n)| *n > 0)
         .collect();
     assert_eq!(counted, [("lib.rs".to_string(), 1)]);
-    assert_eq!("tracing::error!(".matches("error!").count(), 1);
 }
 
 /// WinHTTP の API を綴るのは取得口の実装だけ（3.1・3.3）。

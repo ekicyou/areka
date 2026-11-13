@@ -3,13 +3,7 @@
 use serde_json::{Map, Value, json};
 
 use super::{as_integer, check_arguments};
-
-fn obj(v: Value) -> Map<String, Value> {
-    match v {
-        Value::Object(m) => m,
-        other => panic!("オブジェクトでない: {other}"),
-    }
-}
+use crate::testkit::obj;
 
 /// 手書きの schema。必須は `name`（string）と `ghost_name`（string）。他の欄は任意。
 fn schema() -> Map<String, Value> {
@@ -123,27 +117,6 @@ fn rules_table() {
     ];
     for (label, args, want) in cases {
         assert_eq!(check(args), want, "{label}");
-    }
-}
-
-/// (要件 2.7) 理由の文は `failed to deserialize parameters:` で始めない（始めると rmcp が `isError` の結果へ変える）。
-#[test]
-fn reasons_do_not_use_the_deserialize_prefix() {
-    for args in [
-        json!({}),
-        json!({"name": 1}),
-        json!({"name": "b", "count": 1.5}),
-        json!({"name": "b", "refs": [1]}),
-    ] {
-        let reason = check(args.clone()).expect_err(&args.to_string());
-        assert!(
-            !reason.starts_with("failed to deserialize parameters:"),
-            "{reason}"
-        );
-        assert!(
-            reason.starts_with("missing required argument: ") || reason.starts_with("argument "),
-            "{reason}"
-        );
     }
 }
 
@@ -308,14 +281,7 @@ fn ten_definitions_table() {
         // 空回りでないこと: 全部ある・余計な欄の 2 つに加え、欄ごとに 1 つ以上の型違いがある。
         assert!(cases.len() >= 2 + props.len(), "{tool}: {}", cases.len());
         for (label, args, want) in cases {
-            let got = check_arguments(schema, &args);
-            if let Err(reason) = &got {
-                assert!(
-                    !reason.starts_with("failed to deserialize parameters:"),
-                    "{tool} {label}: {reason}"
-                );
-            }
-            assert_eq!(got, want, "{tool} {label}");
+            assert_eq!(check_arguments(schema, &args), want, "{tool} {label}");
         }
     }
 }

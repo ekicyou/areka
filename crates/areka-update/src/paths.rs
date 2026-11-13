@@ -46,7 +46,7 @@ pub(crate) fn resolves_under(target_real: &Path, candidate: &Path) -> std::io::R
 
 /// `/` 区切りの相対パスに、Windows が綴りと違う物を開く区切り要素があるか。
 /// 空・`.`・末尾が `.` か空白（Win32 が落とすので `. ` は `.`、`.update-work.` は `.update-work`
-/// になる）・`:` を含む（NTFS のストリーム指定）。`..` そのものは数えない（呼び手が `DotDot` で先に拒む）。
+/// になる）・`:` を含む（NTFS のストリーム指定）。`..` そのものは数えない（呼び手が `DotDot` として拒む）。
 pub(crate) fn unsafe_component(rel: &str) -> bool {
     rel.split('/').any(|c| {
         c.is_empty() || c.contains(':') || (c != ".." && (c.ends_with('.') || c.ends_with(' ')))

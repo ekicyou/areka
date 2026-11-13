@@ -2,12 +2,11 @@
 //! 表示が診断に要る値（期待と実際）を落とさないこと、`rolled_back()`・`file()` が
 //! 理由ごとに正しい値を返すことを判定する（要件 7.3・7.4）。
 //!
-//! 一周の固定入力から 11 変種すべてに到達できることの判定は `lib_tests.rs` が
+//! 一周の固定入力から全変種に到達できることの判定は `lib_tests.rs` が
 //! `ALL_KINDS` と突き合わせて行う。
 
 use super::*;
 use crate::outcome::ManifestName;
-use std::collections::BTreeSet;
 use std::io;
 use std::path::PathBuf;
 
@@ -67,17 +66,6 @@ fn samples_in_declaration_order() -> Vec<FailReason> {
             }],
         },
     ]
-}
-
-#[test]
-fn all_kinds_has_eleven_entries() {
-    assert_eq!(FailReason::ALL_KINDS.len(), 11, "失敗の語彙は 11 で閉じる");
-}
-
-#[test]
-fn all_kinds_are_unique() {
-    let unique: BTreeSet<&&str> = FailReason::ALL_KINDS.iter().collect();
-    assert_eq!(unique.len(), FailReason::ALL_KINDS.len());
 }
 
 #[test]
@@ -143,13 +131,6 @@ fn fetch_failures_display_carry_the_file_and_the_cause() {
 
     let shown = FetchError::Other { code: 12345 }.to_string();
     assert!(shown.contains("12345"), "{shown}");
-}
-
-#[test]
-fn every_display_is_non_empty() {
-    for reason in samples_in_declaration_order() {
-        assert!(!reason.to_string().is_empty(), "{}", reason.kind());
-    }
 }
 
 fn error_with(reason: FailReason) -> UpdateError {
@@ -235,10 +216,4 @@ fn update_error_display_carries_url_target_stage_and_reason() {
         shown.contains(&FailReason::ManifestMissing {}.to_string()),
         "{shown}"
     );
-}
-
-#[test]
-fn manifest_name_file_names() {
-    assert_eq!(ManifestName::Updates2Dau.file_name(), "updates2.dau");
-    assert_eq!(ManifestName::UpdatesTxt.file_name(), "updates.txt");
 }

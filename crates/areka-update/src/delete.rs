@@ -141,6 +141,7 @@ fn apply_line(
     let is_dir = match fs::symlink_metadata(&path) {
         Ok(meta) => meta.is_dir(),
         Err(e) if e.kind() == ErrorKind::NotFound => return,
+        // 試さない: 直前の resolves_under が同じパスを先に見る（ここに来るのはその間に木が変わったときだけ）
         Err(source) => return report.undeletable.push(Undeletable { path, source }),
     };
     if is_dir != is_dir_line {

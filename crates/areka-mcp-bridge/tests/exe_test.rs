@@ -8,7 +8,7 @@
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -17,7 +17,7 @@ use areka_mcp_bridge::cache::Cache;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
 
-use fake_server::{FakeServer, Reply, Script};
+use fake_server::{FakeServer, Reply, Script, nobody};
 
 /// 部品のテスト（クレートの中）と同じ偽の受け口。ここで使わない部品の警告は止める。
 #[allow(dead_code)]
@@ -40,12 +40,19 @@ struct Finished {
 /// exe を引数なしで起こし、`input` を標準入力へ流して閉じ、終わるまで待つ。
 /// `RUST_LOG` は外す（記録の既定の絞りで回す）。
 fn run_bridge(port: u16, profile_dir: &Path, input: &str) -> Finished {
-    run(port, profile_dir, input, true)
+    run(port, profile_dir, input, true, Box::new(|| ()))
 }
 
 /// [`run_bridge`] の本体。`read_stdout` が偽なら、標準出力の管を開いたまま 1 バイトも読まない
-/// （標準入力だけ閉じて読まない相手。`Finished::stdout` は空）。
-fn run(port: u16, profile_dir: &Path, input: &str, read_stdout: bool) -> Finished {
+/// （標準入力だけ閉じて読まない相手。`Finished::stdout` は空）。`before_close` は書き終えた後、
+/// 標準入力を閉じる前に流すスレッドで呼ぶ（閉じる前に待つことがないなら何もしない `|| ()`）。
+fn run(
+    port: u16,
+    profile_dir: &Path,
+    input: &str,
+    read_stdout: bool,
+    before_close: Box<dyn FnOnce() + Send>,
+) -> Finished {
     let mut child = Command::new(env!("CARGO_BIN_EXE_areka-mcp-bridge"))
         .env(areka_mcp::PORT_ENV, port.to_string())
         .env("AREKA_PROFILE_DIR", profile_dir)
@@ -70,6 +77,7 @@ fn run(port: u16, profile_dir: &Path, input: &str, read_stdout: bool) -> Finishe
     let (fed, feeding) = mpsc::channel();
     std::thread::spawn(move || {
         let written = stdin.write_all(input.as_bytes());
+        before_close();
         // 閉じた時刻は閉じる直前にここで取る（主スレッドが起きるのが遅れても、待った長さが縮まない）。
         let closed = Instant::now();
         drop(stdin);
@@ -466,7 +474,7 @@ fn stdin_closed_while_stdout_is_never_read_exits_with_code_0_by_the_bound() {
         .map(|n| request(n, "ping", Value::Null))
         .collect();
 
-    let done = run(0, profile.path(), &input, false);
+    let done = run(0, profile.path(), &input, false, Box::new(|| ()));
 
     let stderr = &done.stderr;
     assert_eq!(done.code, Some(0), "stderr: {stderr}");
@@ -512,14 +520,26 @@ fn a_reply_coming_more_than_5s_after_stdin_closed_is_dropped_and_the_exit_code_i
 }
 
 /// 要件 5.2・5.3・5.4・8.1: 受け口へ届けた要求の応答が、標準入力が閉じてから 5 秒以内に来るなら、
-/// 中継はその応答を書いてから終了コード 0 で終わる。
+/// 中継はその応答を書いてから終了コード 0 で終わる。標準入力は要求が受け口へ届いてから閉じる
+/// （exe の起動・探索の時間が 5 秒の見込みに入らない）。
 #[test]
 fn a_reply_coming_within_5s_after_stdin_closed_is_written_before_exit_code_0() {
     let soon = Reply::Delayed(Duration::from_secs(1), Box::new(called()));
-    let areka = FakeServer::start(Script::areka().on("tools/call", soon));
+    let areka = Arc::new(FakeServer::start(Script::areka().on("tools/call", soon)));
     let profile = TempPath::under_target("bridge-exe");
 
-    let done = run_bridge(areka.port(), profile.path(), &call(1));
+    let arrived = Arc::clone(&areka);
+    let until_arrived = Box::new(move || {
+        let start = Instant::now();
+        while arrived.requests_of("tools/call").is_empty() {
+            assert!(
+                start.elapsed() < EXIT_WAIT,
+                "tools/call did not reach the receiver within {EXIT_WAIT:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    });
+    let done = run(areka.port(), profile.path(), &call(1), true, until_arrived);
 
     let Finished { stdout, stderr, .. } = &done;
     assert_eq!(done.code, Some(0), "stdout: {stdout}\nstderr: {stderr}");
@@ -537,10 +557,7 @@ fn a_reply_coming_within_5s_after_stdin_closed_is_written_before_exit_code_0() {
 #[test]
 fn without_areka_or_a_cache_the_built_in_definitions_answer_and_leave_a_record() {
     // 束ねたまま待ち受けないソケットの番号（落とすまで、並んで走るテストに取られない）。
-    let held = tokio::net::TcpSocket::new_v4().expect("make a socket");
-    let any_port = "127.0.0.1:0".parse().expect("an address");
-    held.bind(any_port).expect("bind a free port");
-    let port = held.local_addr().expect("the bound port").port();
+    let (_held, port) = nobody();
     let profile = TempPath::under_target("bridge-exe");
     let input = [initialize(1), request(2, "tools/list", Value::Null)];
 

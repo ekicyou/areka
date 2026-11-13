@@ -19,6 +19,12 @@ pub mod stdio;
 #[path = "../tests/common/fake_server.rs"]
 pub(crate) mod fake_server;
 
+/// テスト用の Desktop の役。通しのテスト（`tests/real_receiver_test.rs`）と同じ 1 つのファイルを
+/// 部品のテストからも使う。
+#[cfg(test)]
+#[path = "../tests/common/desk.rs"]
+pub(crate) mod desk;
+
 /// 偽の受け口の自己確認。この部品のテストの束でだけ走る（通しのテストの束では読まない）。
 #[cfg(test)]
 #[path = "../tests/common/fake_server_tests.rs"]

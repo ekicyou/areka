@@ -1,7 +1,7 @@
 //! 取得の境界の本物の実装＝WinHTTP（要件 3.3〜3.6）。
 //!
-//! `unsafe` と WinHTTP の綴りはこのファイルだけに置く。常時テストはこのファイルを呼ばず、
-//! 振る舞いは `#[ignore]` の実機の一周で確かめる。
+//! `unsafe` と WinHTTP の綴りはこのファイルだけに置く。常時テストは純粋な判定（`winhttp_tests.rs`）
+//! だけを呼び、OS とネットを呼ぶ振る舞いは `#[ignore]` の実機の一周で確かめる。
 
 use core::ffi::c_void;
 
@@ -20,6 +20,13 @@ use crate::fetch::Fetch;
 
 /// 1 件の本文の上限。`Content-Length` は信じず、実際に読んだ量で止める。
 pub const MAX_BODY_BYTES: usize = 256 * 1024 * 1024;
+
+/// 読みかけ have バイトに、次の available バイトを足すと MAX_BODY_BYTES を越えるか。
+/// `have <= MAX_BODY_BYTES` は前の回の判定が守るので引き算は溢れない。
+fn over_limit(have: usize, available: u32) -> bool {
+    available as usize > MAX_BODY_BYTES - have
+}
+
 /// 名前解決 10 s・接続 15 s・送信 30 s・受信 60 s（`WinHttpSetTimeouts` の 4 引数・ms）。
 const TIMEOUTS_MS: (i32, i32, i32, i32) = (10_000, 15_000, 30_000, 60_000);
 const USER_AGENT: &str = concat!("areka/", env!("CARGO_PKG_VERSION"));
@@ -188,7 +195,7 @@ impl Fetch for WinHttpFetch {
             if available == 0 {
                 break;
             }
-            if available as usize > MAX_BODY_BYTES - body.len() {
+            if over_limit(body.len(), available) {
                 return Err(FetchError::TooLarge {
                     limit: MAX_BODY_BYTES,
                 });

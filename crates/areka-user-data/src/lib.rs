@@ -201,8 +201,8 @@ pub(crate) fn profile_env_dir(profile_env: Option<&OsStr>) -> Option<PathBuf> {
     absolute(profile_env?).ok()
 }
 
-/// 入口で 1 回だけ呼ぶ [`profile_env_dir`]: 空・相対の値は `error!` を出して捨てる（次の決めへ進む）。
-pub(crate) fn usable_profile_env(profile_env: Option<&OsStr>) -> Option<PathBuf> {
+/// 入口で 1 回だけ呼ぶ `profile_env_dir`: 空・相対の値は `error!` を出して捨てる（次の決めへ進む）。
+pub fn usable_profile_env(profile_env: Option<&OsStr>) -> Option<PathBuf> {
     let dir = profile_env_dir(profile_env);
     if let (Some(value), None) = (profile_env, &dir) {
         tracing::error!(

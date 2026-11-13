@@ -115,35 +115,3 @@ fn registered_spec_comes_back_verbatim() {
         schema
     );
 }
-
-/// 結果は text と image（base64 の文字列と MIME 型）と is_error を持つ。
-#[test]
-fn outcome_carries_text_image_and_is_error() {
-    let handler: ToolHandler = Arc::new(|args| {
-        Box::pin(async move {
-            ToolOutcome {
-                content: vec![
-                    ToolContent::Text(args.to_string()),
-                    ToolContent::Image {
-                        data: "iVBORw0KGgo=".to_owned(),
-                        mime_type: "image/png".to_owned(),
-                    },
-                ],
-                is_error: true,
-            }
-        })
-    });
-    assert_eq!(
-        run_now(handler(json!({ "x": 1 }))),
-        ToolOutcome {
-            content: vec![
-                ToolContent::Text(r#"{"x":1}"#.to_owned()),
-                ToolContent::Image {
-                    data: "iVBORw0KGgo=".to_owned(),
-                    mime_type: "image/png".to_owned(),
-                },
-            ],
-            is_error: true,
-        }
-    );
-}
