@@ -479,3 +479,10 @@
 - 議題 1（指摘 38 の RESPONSE）: 確かめは残し、限界を書いた `shortcut:` の注を置く。要件 2.2 ⑵ の「わざと置いた先送りの印」として開発者が裁定した。理由＝`wParam` は送り手の自己申告で、同じ利用者のプロセスは DLL の差し込みなど、もっと強いことができる。本当に防ぐには起こすたびの合言葉を枠に載せる要があり、取り決めの形が変わる。
 - 議題 2（指摘 8 の再入）: 設計のまま。最中の UNLOAD には ack [1] を先に返し、DLL が戻ってから `close` する。最中の REQUEST には 500。DLL が 10 秒以内に戻らなければ host が終わらせる（そのとき `unload` は呼ばれない）。
 - 議題 3（指摘 22・23 の SSP での測り）: 設計のまま。U11 の始めに進行役が開発者に改めて許しを伺い、許しがあれば測る。無ければ既定（半角の空白とタブだけ削る・先勝ち）で直す。
+
+### 14.9 main の取り込み（2026-11-13・origin/main `343ec0350`）
+
+- 棚卸の知らせで取り込んだ。audit 系でない 4 本が着地した: `dola-yaml-backend`（PR#443）・`wintf-d2d-composite-rules`（PR#444）・`emo-text-reveal-incremental`（PR#445）・`runtime-module-untangle`（PR#447。本体の `emo2_boot/` は `runtime/` へ、本体に頼る所は `session/` へ移った）。
+- 本 spec が触る予定のファイル（範囲の 5 クレート・`areka-ghost` の `shiori_wiring.rs` と錠の 4 ファイル・`temp_path_guard_test.rs`・`areka-kanade` のテスト）は、どれも取り込みで変わっていない。変わったのはワークスペースの `Cargo.toml`（`async-executor` の行が消えた）と `Cargo.lock` だけで、本 spec の直しには響かない。設計の前提は崩れていない。
+- 指摘 26 の 6 項目と `EXIT_POLL_INTERVAL` を、取り込んだ後のツリーで grep し直した（`crates`・`tools`・`doc`。範囲のクレートと `pilot` を除く）。使い手は 0 件。`helper_hwnd` に当たった `areka-ghost/src/shiori_wiring.rs:171` と `areka-kanade/tests/kanade/real_helper_test.rs:121` は、同じ名前の手元の変数で、消す口ではない。
+- 指摘 28: `dola-yaml-backend` が着地したので、`Cargo.lock` の席は空いた。タスク 13 は待たずに消す道を取る。取り込んだ後のソースでも、host の `event-listener`・helper の `thiserror`・ipc の `windows-core` を使う所は 0 件。host と ipc の `thiserror` は使われているので残す。
