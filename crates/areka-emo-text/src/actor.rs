@@ -203,7 +203,7 @@ struct ActorRender {
     /// 前のフレームの配置の覚え（鍵と、行・区切り・帯・キャンバス・audit-emo-text-state-actor 指摘 8・`actor_present.rs` の
     /// `FrameMemo`）。拡大率と装置の作り直しでは `ActorRender` ごと捨てるので、覚えも一緒に消える。
     frame_memo: Option<present::FrameMemo>,
-    /// 届いた字の区切りの覚え（`actor_present.rs` の `BreakMemo`・audit-emo-text-state-actor 指摘 8）。
+    /// 届いた字の区切りの覚え（`segment.rs` の `BreakMemo`・`actor_present.rs` が再公開・audit-emo-text-state-actor 指摘 8）。
     break_memo: present::BreakMemo,
     /// 配置から装飾までを作り直した回数（テストだけの数・audit-emo-text-state-actor 指摘 8）。
     #[cfg(test)]
