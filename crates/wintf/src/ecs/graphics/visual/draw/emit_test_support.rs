@@ -234,8 +234,29 @@ pub(crate) fn replay_to_pixels(
     h: u32,
     root_transform: Matrix3x2,
 ) -> Pixels {
+    replay(commands, w, h, root_transform, true)
+}
+
+/// `replay_to_pixels` と同じだが DC6 を渡さない（ブレンドの描き方が無い Windows の道・1.7）。
+pub(crate) fn replay_to_pixels_without_blend(
+    commands: &[DrawCommand],
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+) -> Pixels {
+    replay(commands, w, h, root_transform, false)
+}
+
+fn replay(
+    commands: &[DrawCommand],
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+    with_blend: bool,
+) -> Pixels {
     draw_to_pixels(w, h, root_transform, |dc| {
-        emit(dc, dc.cast().ok().as_ref(), root_transform, commands);
+        let dc6 = if with_blend { dc.cast().ok() } else { None };
+        emit(dc, dc6.as_ref(), root_transform, commands);
         let mut after = Matrix3x2::default();
         // SAFETY: Windows API 境界。
         unsafe { dc.GetTransform(&mut after) };
