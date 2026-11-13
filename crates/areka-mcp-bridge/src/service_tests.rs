@@ -271,36 +271,46 @@ async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_
 /// `2026-07-28` で話す Desktop でも、新しいつなぎ先の最初の長い要求の間に次の要求は待たない（設計 D-13 の例外を
 /// 短い `server/discover` へ移す）。
 /// 版の札の付いた要求は、つないだときの版（`2025-11-25`）と違う間は rmcp が他の要求を止めて送る。
+/// `server/discover` の答えは、本番の areka の形（結果）と、偽の受け口の既定（エラー）の両方で確かめる。
 #[tokio::test]
 async fn a_slow_stateless_request_first_on_a_link_does_not_hold_back_the_next() {
-    let gate = Gate::shut();
-    let slow = Reply::Gated(
-        gate.clone(),
-        Box::new(Reply::Result(json!({"content": []}))),
-    );
-    let script = Script::areka()
-        .on("tools/call", slow)
-        .on("tools/list", Reply::Result(tools()));
-    let fake = FakeServer::start(script);
-    let mut desk = Desk::start(vec![fake.port()]);
+    let discover_replies = [
+        Some(Reply::Result(discovered("0.0.0"))),
+        None, // 台本に無い方法の既定の答え（-32601）
+    ];
+    for discover in discover_replies {
+        let gate = Gate::shut();
+        let slow = Reply::Gated(
+            gate.clone(),
+            Box::new(Reply::Result(json!({"content": []}))),
+        );
+        let mut script = Script::areka()
+            .on("tools/call", slow)
+            .on("tools/list", Reply::Result(tools()));
+        if let Some(reply) = discover {
+            script = script.on("server/discover", reply);
+        }
+        let fake = FakeServer::start(script);
+        let mut desk = Desk::start(vec![fake.port()]);
 
-    let call = json!({"name": "t", "_meta": stateless_meta()});
-    desk.send(request(json!("slow"), "tools/call", call)).await;
-    arrived(&fake, "tools/call", 1).await;
-    desk.send(request(json!("quick"), "tools/list", stateless()))
-        .await;
-    assert_eq!(desk.next().await, result(json!("quick"), tools()));
-    gate.open();
-    let reply = desk.next().await;
-    assert_eq!(reply, result(json!("slow"), json!({"content": []})));
+        let call = json!({"name": "t", "_meta": stateless_meta()});
+        desk.send(request(json!("slow"), "tools/call", call)).await;
+        arrived(&fake, "tools/call", 1).await;
+        desk.send(request(json!("quick"), "tools/list", stateless()))
+            .await;
+        assert_eq!(desk.next().await, result(json!("quick"), tools()));
+        gate.open();
+        let reply = desk.next().await;
+        assert_eq!(reply, result(json!("slow"), json!({"content": []})));
 
-    desk.close().await;
-    assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
-    // 版を揃える `server/discover` は、つなぎ先ごとに 1 つだけ（版は要求の `_meta` のもの）。
-    let [aligned] = &fake.requests_of("server/discover")[..] else {
-        panic!("1 度だけ届くはず: {:?}", fake.requests());
-    };
-    assert_eq!(aligned.header("MCP-Protocol-Version"), Some("2026-07-28"));
+        desk.close().await;
+        assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
+        // 版を揃える `server/discover` は、つなぎ先ごとに 1 つだけ（版は要求の `_meta` のもの）。
+        let [aligned] = &fake.requests_of("server/discover")[..] else {
+            panic!("1 度だけ届くはず: {:?}", fake.requests());
+        };
+        assert_eq!(aligned.header("MCP-Protocol-Version"), Some("2026-07-28"));
+    }
 }
 
 /// 要求の `_meta` は areka へそのまま届く（要件 1.10）。`2026-07-28` で話す Desktop の要求は、
