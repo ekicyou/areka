@@ -813,8 +813,8 @@ mod wire_tests {
     fn wire_runtime_falls_back_to_unwired_on_missing_ghost_root() {
         let mut world = World::new();
         let inputs = RuntimeInputs {
-            ghost_root: PathBuf::from("C:/areka-nonexistent-ghost-root-emo2boot-5v1"),
-            balloon_root: PathBuf::from("C:/areka-nonexistent-balloon-root-emo2boot-5v1"),
+            ghost_root: PathBuf::from("C:/areka-nonexistent-ghost-root-runtime-5v1"),
+            balloon_root: PathBuf::from("C:/areka-nonexistent-balloon-root-runtime-5v1"),
             shiori: ShioriWiring::Helper {
                 helper_exe: PathBuf::from("shiori-host32-helper.exe"),
             },

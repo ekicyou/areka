@@ -588,7 +588,7 @@ fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
     );
 }
 
-// 箱の結線の通し（areka-P0-shell-balloon task 12.3）。本ファイルの檻（GPU の World・emo2 の結線・
+// 箱の結線の通し（areka-P0-shell-balloon task 12.3）。本ファイルの檻（GPU の World・runtime の結線・
 // 置き場のゴースト）をそのまま使うため子に置く。
 #[path = "frame_shell_box_integration_tests.rs"]
 mod shell_box_integration_tests;
@@ -599,6 +599,6 @@ mod shell_box_integration_tests;
 mod balloon_timeout_notice_e2e_tests;
 
 // 倍率の変わりの相の同じフレームの檻（shell-scale-linkage task 6.2）。本ファイルの檻（GPU の World・
-// emo2 の結線・置き場のゴースト）をそのまま使うため子に置く。
+// runtime の結線・置き場のゴースト）をそのまま使うため子に置く。
 #[path = "frame_scale_notice_integration_tests.rs"]
 mod scale_notice_integration_tests;

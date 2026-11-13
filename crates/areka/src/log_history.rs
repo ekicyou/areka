@@ -131,7 +131,7 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka::readme", Kind::Status, false),
 ];
 
-/// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`install_cue` は emo2_boot から
+/// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`install_cue` は runtime から
 /// `areka::install` の下へ移したが、その info は移す前と同じく残さない（決まり `areka::install` に当てない）。
 pub(crate) const UNKEPT_TARGETS: &[&str] = &["areka::install::install_cue"];
 

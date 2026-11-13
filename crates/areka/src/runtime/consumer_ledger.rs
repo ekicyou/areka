@@ -212,7 +212,7 @@ pub enum CommandConsumer {
     /// 第 1 引数は書き込む key であって担当を分けないので、登記は選別子なしの 1 行である。
     PropertyWrite,
     /// プロパティの読み `\![get,property,イベント名,名前…]` の担当（`areka_ghost` の
-    /// `PropGetCueSink` が名前 `get` と第 1 引数 `property` で自己選別する）。emo2 の外の担当である
+    /// `PropGetCueSink` が名前 `get` と第 1 引数 `property` で自己選別する）。runtime の外の担当である
     /// （shell-scale-linkage 要件 1.8）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1
@@ -543,7 +543,7 @@ impl ConsumerLedger {
                 CommandConsumer::TextLayer,
             )
             .expect("正準台帳: '*'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        // プロパティの読み（shell-scale-linkage 要件 1.8）。受け口は emo2 の外（areka_ghost）。
+        // プロパティの読み（shell-scale-linkage 要件 1.8）。受け口は runtime の外（areka_ghost）。
         ledger
             .try_register("get", Some("property"), CommandConsumer::PropertyRead)
             .expect("正準台帳: ('get','property') は一意（重複・排他違反は編集ミス）");

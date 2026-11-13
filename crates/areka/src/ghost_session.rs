@@ -859,7 +859,7 @@ fn boot_wired(
 ) -> Result<GhostSession, BootWiringFailed> {
     let ghost_dir = wiring.ghost_root.clone();
 
-    // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_runtime」・DD-7）:
+    // runtime 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_runtime」・DD-7）:
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。

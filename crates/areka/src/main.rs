@@ -51,7 +51,7 @@ mod placement_tests;
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
 
-/// emo2 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
+/// runtime 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
 /// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
 /// `wire_runtime`）。

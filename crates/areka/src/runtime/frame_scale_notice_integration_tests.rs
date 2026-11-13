@@ -26,7 +26,7 @@ use crate::runtime::target_map::{TargetWindow, shell_target};
 use super::super::scale_notice::ScaleEventSeam;
 use super::*;
 
-/// 檻: GPU の World・emo2 の結線・表示の指令の送出端。
+/// 檻: GPU の World・runtime の結線・表示の指令の送出端。
 struct Cage {
     world: World,
     wiring: Option<RuntimeWiring>,

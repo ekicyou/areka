@@ -948,3 +948,153 @@ print('FILES', len(tot), 'CRATE', sum(v[1] for v in tot.values()), 'SUPER', sum(
 ```
 
 - 2 回目に回した結果も同じ（`SAME`・本番 57 本・D1 34・D2 22・式 1 は 2 行・式 2 と式 3 は 0 行・説明の版 16／0／0 行・テスト 40 本 77 行）。
+
+## 古い名前の掃き出しと emo2 の残りの一覧（2026-11-13・タスク 9.2・要件 1.2・4.6・5.9・6.1〜6.4）
+
+- 測った木: `5d2683753`（9.1 の後）に、20.5 で改めた 11 行を足した木。`rg` は 18 節と同じ VS Code 同梱の 15.0.0。
+
+### 19. 掃き出しの grep（要件 4.6・5.9）
+
+#### 19.1 古い出所 `areka::emo2_boot`（要件 4.6）
+
+`rg -n 'areka::emo2_boot' crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` ＝ **6 行・2 ファイル・どれも本体の外**。
+
+| ファイル | 行 | 分け |
+|---|---|---|
+| `crates/log-capture-kit/src/event_tests.rs` | 42・53・277・388・407 | Out of scope に挙げた出所の見本の値（`tracing` に食わせる target の文字列・照合の相手は本体ではない） |
+| `crates/areka-placement/src/diag.rs` | 136 | Out of scope に挙げた `areka-placement` の説明の文（字面は古い・`runtime-crate-split` で直す） |
+
+本体（`crates/areka`）・`tools/`・`doc/`・steering の 2 本は **0 行**。
+
+#### 19.2 古いパスと改める前の名前（要件 5.9）
+
+`rg -n 'emo2_boot|Emo2Wiring|Emo2BootInputs|Emo2BootOutcome|wire_emo2_boot|register_emo2_frame_system|emo2_frame_system|emo2-boot|emo2 attach:|emo2 text:|_no_emo2\b|headless_emo2_wiring'` を同じ 5 か所に当てた ＝ **104 行・58 ファイル**（20.5 で改める前は 106 行）。
+
+| 所 | ファイル・行 | 分け |
+|---|---|---|
+| 本体の外の crate（11 crate） | 52 ファイル・93 行（`areka-placement` 25 ファイル 56 行・`areka-emo-text` 8／11・`log-capture-kit` 2／6・`areka-kanade` 3／5・`areka-emo-present` 3／4・`areka-ghost` 2／2・`areka-parsers` 2／2・`areka-seriko` 1／2・`ukadoc-survey` 2／2・`wintf` 2／2・`shiori-host32-host` 1／1） | Out of scope の説明の文とテストの名前（`actor_lookahead_tests.rs` の `emo2_boot_talk_reveals_without_moving_glyphs`）と見本の値（`log-capture-kit` の出所・`ukadoc-survey/src/evidence/candidates_tests.rs:345` の `choice_pressed_no_emo2`＝抽出器に食わせる文字列・2.3 の注） |
+| 本体 `crates/areka` | 4 ファイル・7 行 | 歴史の名指しだけ（下の表） |
+| `.kiro/steering/structure.md` | 269・271 の 2 行 | 改名の記し（「旧名 `emo2_boot/`（`runtime-module-untangle` 2026-11 で改名）」「`emo2_boot/` から分けた」）。今のパスを指す文ではなく、古い名前で探した人を新しい名前へ渡す歴史の 1 句 |
+| `doc/` | `doc/archive/discussion-260702-m1-roadmap.md:126`・`doc/roadmap-overview-2026-10-16.html:70` | 歴史の文書 |
+| `tools/`・`.kiro/steering/tech.md` | 0 行 | — |
+
+本体に残る 7 行（どれも完了 spec の名前か、その設計の中のファイル名だけ）:
+
+| 行 | 当たる語 | 分け |
+|---|---|---|
+| `Cargo.toml:60`・`:69`・`:74` | `areka-P0-emo2-boot`（完了 spec の名） | 歴史の名指し（60 行目の頭の `emo2-boot 統合結線` は 20.5 で改めた） |
+| `src/main.rs:54` | `areka-P0-emo2-boot` | 同上（頭の `emo2 統合結線` は 20.5 で改めた） |
+| `src/runtime/mod.rs:1` | `areka-P0-emo2-boot`・「emo2 が起動して喋る」（M-boot の節目＝実在のゴースト emo2） | 歴史の名指し・実在の emo2 |
+| `src/runtime/mod.rs:69`・`src/runtime/spine.rs:33` | `tests/emo2_boot_spine_test.rs` | 完了 spec `areka-P0-emo2-boot` の設計の File Structure に書かれたファイル名（実在したことのない名・設計との差を説明する文） |
+
+### 20. emo2 の残りの一覧（要件 6.1・6.2）
+
+`rg -n -i 'emo2' crates tools doc` ＝ **2,134 行**（20.5 で改める前は 2,143 行・差の 9 行は 20.5 の 11 行のうち `emo2` の語が消えた行）。
+
+#### 20.1 分け方（上から順に当て、最初に当たったもの）
+
+1. `doc/archive/` と日付を名に持つ写し `doc/roadmap-overview-2026-10-16.html` → **④ 歴史の文書**。
+2. 完了 spec の名（`areka-P0-emo2-*`）と文書の名（`emo2-conformance-scope`・メモリの見出し `areka-emo2-signoff-needs-absolute-paths`）を除いて読み、本体の外の行に 19.2 の古い名前が残る → **③ 本体の外の crate の説明とテストの名前**（`areka-emo-text` のテストの `EMO2_BOOT_TALK`・`EMO2_BOOT_FINAL`＝emo2 の起動のトークの写しは古い名前ではないので ③ に入れない＝②）。
+3. 本体の行で古い名前が完了 spec の設計のファイル名 `emo2_boot_spine_test` だけ → **④**。
+4. 2 の除き方をした後に `emo2` が残らない（完了 spec の名・文書の名だけの行） → **④**。
+5. 本体の行でなお古い名前が残る → **分けられない**（20.5 で改める）。
+6. 既定のゴースト名とその使い手のファイル（20.3） → **① 既定のゴースト名とその使い手**。
+7. 残り → **② 実在のゴースト emo2 を指す検体**（検体 `SampleRoot::acquire("emo2")`・`emo2_root`・`acquire_emo2`・`emo2-kakukaku`・実機テスト `tests/emo2_real_run*`・`emo2_first_load_repeat`・環境変数 `AREKA_EMO2_*`・`EMO2_ADJUST`・`vendors/sample_ghost/emo2.nar`・emo2 の資産を写した期待値・emo2 の名を見本の値に使うテスト・emo2 を測りの的にした道具と文書）。
+
+1〜5 は機械で当て（読み手は 22 節）、6・7 の境と、② に紛れうる結線の語は目で読んで確かめた（20.4）。
+
+#### 20.2 結果（後・2,134 行）
+
+| 所 | ① 既定のゴースト | ② 実在の emo2 | ③ 外の crate の説明・テスト名 | ④ 歴史 | 分けられない |
+|---|---|---|---|---|---|
+| `crates/areka`（本体） | 55 | 518 | — | 17 | **0** |
+| 本体の外の crate（29 crate） | 2 | 1,181 | 93 | 55 | **0** |
+| `tools/` | 17 | 51 | — | — | **0** |
+| `doc/`（`archive/` の外） | — | 111 | — | 22 | **0** |
+| `doc/archive/` | — | — | — | 12 | **0** |
+| 計 | 74 | 1,861 | 93 | 106 | **0** |
+
+- 本体の外の crate の内訳（行）: `areka-placement` ②207・③56／`areka-emo-text` ②150・③11・④46／`areka-seriko` ②124・③2／`areka-parsers` ②106・③2／`areka-emo-compose` ②102／`areka-emo-atlas` ②87／`areka-nar` ②75／`areka-ghost` ②61・③2・④1／`areka-emo-present` ②59・③4／`sample-ghost-kit` ②59／`pilot` ②36／`areka-sylphya` ①2・②23／`areka-mcp` ②21／`real-run-kit` ②20／`areka-kanade` ②14・③5・④4／`areka-user-data` ②9／`shiori-host32-host` ②9・③1／`areka-update` ②8／`log-capture-kit` ②5・③6／`shiori4-testdll` ②3／`ukadoc-survey` ③2・④1／`shiori-host32-helper` ④2／`wintf` ②1・③2／`areka-sakura` ②1／`shiori-host32-testdll` ②1／`shiori-host32-testdll-loadu` ④1。
+- `doc/` の内訳（行）: `COMPAT_ARCHITECTURE.md` ②28・④2／`ukadoc-coverage/` ②27・④13／`emo2-conformance-scope.md` ②19・④1／`testing.md` ②19・④1／`ssp-mcp/` ②9／`pasta-real-run.md` ②5／`choice-cascade-compat.md` ②3・④4／`README.md` ②1／`roadmap-overview-2026-10-16.html` ④1／`archive/` ④12。どの行も実在のゴースト emo2（検体・SSP で測った emo2・適合の的）か完了 spec の名で、結線を指して emo2 の語を使う行は無い。
+- `tools/` は `package.ps1`（配布物に入れる既定のゴースト `ghost/emo2` と同梱バルーン・17 行＝①）と `tools/perf/`（測りの的のゴースト emo2 のアニメ定義と検体の窓口・51 行＝②）だけ。
+
+#### 20.3 ① 既定のゴースト名とその使い手（74 行）
+
+- 本番: `crates/areka/src/boot_resolve.rs:32` の `DEFAULT_GHOST_FOLDER = "emo2"` と、同じファイルの説明の文。
+- 既定のゴーストの判定を見るテスト: `boot_resolve_tests.rs`（`ghost_only_emo2_is_only_not_default`・`ghost_default_emo2_when_listed_among_many` ほか）・`boot_resolve_option_tests.rs`・`boot_config_roots_tests.rs`・`roots/user_root_tests.rs`（実行ファイルの隣の同梱の既定のゴースト）・`readonly_tests.rs`・`install/destination_tests.rs`・`ghost_session_switch_fallback_tests.rs`（落ちたときに戻る既定ゴーストの窓）。
+- 本体の外: `areka-sylphya/src/persist/format.rs`（`LastGhost` の書式の例と見本の値 `"emo2"`）・`tools/package.ps1`（配布物の既定のゴースト）。
+
+#### 20.4 目で読んで判定した行（要件 1.3 の使われ方の規則）
+
+- **② とした（実在のゴースト emo2 を指す）**:
+  - `src/main_ghost_wiring_tests.rs:48`「本番結線は emo2＝Helper 経路のまま」— 実在の emo2 の SHIORI（32bit の pasta.dll）が通る経路のこと。
+  - `src/runtime/spine.rs:460`・`:497`・`src/input_events/balloon_wiring_tests.rs:158`・`src/placement_tests/spawn_assembly_tests.rs:244` の「emo2 相当」— emo2 の検体と同じ値（2 スコープ・下端・窓の題）を写したテストの支え。
+  - `src/runtime/frame_visibility_integration_tests.rs:71`「実 emo2 資産で結線資源を組む」— 組む材料が emo2 の検体であること（結線の名は `RuntimeWiring`）。
+  - `update/`・`install/`・`readme/`・`log_history*_tests.rs`・`cli/parse_tests.rs`・`runtime/reload_args_tests.rs` の `"emo2"` — 実在のゴースト emo2 の名を見本の値に使うテスト（既定かどうかは判定していない）。
+  - `areka-emo-text` の `EMO2_BOOT_TALK`・`EMO2_BOOT_FINAL` — emo2 の起動のトークの写し（`emo2_boot` の結線ではない）。
+- **③ とした（本体の外・`runtime-crate-split` で直す）**: `ukadoc-survey/src/evidence/candidates_tests.rs:345` の `debug!(event = "choice_pressed_no_emo2")`（抽出器に食わせる見本の文字列・本体の値と照合しない・2.3 の注）・`log-capture-kit/src/event_tests.rs` の出所の見本の値・`areka-placement` の `Emo2Wiring`・`wire_emo2_boot` の言及（2.2 の注）。
+- **分けられなかった行（11 行・20.5 で改めた）**: 機械の 5 の段で 4 行（`Cargo.toml:60`・`log_history.rs:134`・`runtime/mod.rs:816`・`:817`）、目で読んで 7 行（`main.rs:54`・`ghost_session.rs:862`・`runtime/consumer_ledger.rs:215`・`:546`・`runtime/frame_scale_notice_integration_tests.rs:29`・`runtime/frame_visibility_integration_tests.rs:591`・`:602`）。どれも `emo2` の語で結線や実行系（モジュール `emo2_boot`・型 `Emo2Wiring`）を指していた。
+
+#### 20.5 改めた行（要件 6.3・要件 1 の規則で `emo2` の語を `runtime` の語へ）
+
+| 行 | 前 | 後 | 指していたもの |
+|---|---|---|---|
+| `crates/areka/Cargo.toml:60` | `# emo2-boot 統合結線（areka-P0-emo2-boot・R10.8）` | `# runtime 統合結線（…）` | 実行系の結線（spec の名は歴史として残す） |
+| `crates/areka/src/main.rs:54` | `/// emo2 統合結線（areka-P0-emo2-boot）` | `/// runtime 統合結線（…）` | モジュール `runtime` の宣言の説明 |
+| `crates/areka/src/ghost_session.rs:862` | `// emo2 統合結線（task 5.2・…wire_runtime…）` | `// runtime 統合結線（…）` | `wire_runtime` の呼び出し |
+| `crates/areka/src/log_history.rs:134` | `` `install_cue` は emo2_boot から `` | `` `install_cue` は runtime から `` | 移す前のモジュール（古いパス） |
+| `crates/areka/src/runtime/consumer_ledger.rs:215`・`:546` | `emo2 の外の担当`・`受け口は emo2 の外（areka_ghost）` | `runtime の外の…` | モジュールの外（受け口は `areka_ghost`） |
+| `crates/areka/src/runtime/mod.rs:816`・`:817`（テスト） | `C:/areka-nonexistent-{ghost,balloon}-root-emo2boot-5v1` | `…-runtime-5v1` | 結線の失敗を見る無いパスの名（照合する所は無い・この 2 行だけ） |
+| `crates/areka/src/runtime/frame_scale_notice_integration_tests.rs:29` | `檻: GPU の World・emo2 の結線・…` | `runtime の結線` | 檻が持つ `RuntimeWiring` |
+| `crates/areka/src/runtime/frame_visibility_integration_tests.rs:591`・`:602` | `（GPU の World・emo2 の結線・置き場のゴースト）` | `runtime の結線` | 同上 |
+
+どれも説明の文・コメント・テストの中の値で、本番の振る舞いは変わらない（ログの文言・イベントの値・テストの名前は変えていない＝9.4 の多重集合に差は出ない）。確かめ: `cargo check --workspace --all-targets`（rustc の警告 0・マニフェストの警告は前からの 3 件）・`cargo test -p areka -j 4`（全部 ok・FAILED 0・本体の単体 3,171 passed／6 ignored）・`cargo fmt --all -- --check`（差 0）。
+
+### 21. emo2 だけに向けた動き（要件 6.4）
+
+- 本体の本番で `"emo2"` の文字列を持つのは `boot_resolve.rs:32` の `DEFAULT_GHOST_FOLDER` だけ（`git grep -n -i '"emo2'` をテスト・支え・例・`tests/` を除いて当てた。`runtime/mod.rs:793`・`spine.rs:657`〜`:663` に当たる行は `#[cfg(test)]` のモジュールの中。本体の外は検体の台帳 `sample-ghost-kit` と説明の文とテストの値だけ）。
+- `DEFAULT_GHOST_FOLDER` の本番の使い手は 3 ファイルで、どれも「既定のゴーストかどうか／既定のゴーストへ戻す」の判定:
+  - `boot_resolve.rs:247`（起動のゴーストの決め方の段 4「既定」・この定数を引くのはこの段だけ）・`:519`〜`:543`（`LastGhost` を既定へ戻す記憶の書き込みとその記録）。
+  - `session/ghost_switch.rs:421`・`:458`・`:634`・`:701`・`:718`〜`:752`（切替先が落ちたとき既定のゴーストへ戻すか・戻す先が既定か・既定が目録に無い／起こせない記録）。
+  - `main.rs:619`〜`:627`（既定のゴーストへ戻すのに失敗して終わるときの告知の名と根）。
+- `runtime/` の本番は `DEFAULT_GHOST_FOLDER` も `"emo2"` も引かない（`runtime/` の本番で `emo2` に当たる行は、説明の文で実在の emo2 の資産を例に挙げる所だけ・20.4）。
+
+### 22. 測り直しのコマンド（Git Bash・ワークツリーの根で）
+
+```bash
+RG=".../ripgrep-universal/bin/win32-x64/rg.exe"   # 18 節と同じ
+"$RG" -n 'areka::emo2_boot' crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md
+"$RG" -n 'emo2_boot|Emo2Wiring|Emo2BootInputs|Emo2BootOutcome|wire_emo2_boot|register_emo2_frame_system|emo2_frame_system|emo2-boot|emo2 attach:|emo2 text:|_no_emo2\b|headless_emo2_wiring' crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md
+"$RG" -n -i 'emo2' crates tools doc > emo2.txt && python -I classify.py emo2.txt
+```
+
+分けの読み手 `classify.py`（一時フォルダに置いて回す・リポジトリには置かない）:
+
+```python
+import re, sys, collections
+OLD = re.compile(r'emo2_boot|emo2-boot|Emo2Wiring|Emo2Boot|emo2boot|wire_emo2_boot|emo2_frame_system|_no_emo2\b|headless_emo2_wiring')
+SPEC = re.compile(r'areka-P0-emo2-[a-z0-9-]+|emo2-conformance-scope|emo2-signoff-needs-absolute-paths')
+DEFAULT_FILES = ('crates/areka/src/boot_resolve.rs', 'crates/areka/src/boot_resolve_tests.rs',
+    'crates/areka/src/boot_resolve_option_tests.rs', 'crates/areka/src/boot_config_roots_tests.rs',
+    'crates/areka/src/roots/user_root_tests.rs', 'crates/areka/src/readonly_tests.rs',
+    'crates/areka/src/install/destination_tests.rs', 'crates/areka/src/ghost_session_switch_fallback_tests.rs',
+    'crates/areka-sylphya/src/persist/format.rs', 'tools/package.ps1')
+cats = collections.Counter(); unclassified = []
+for raw in open(sys.argv[1], encoding='utf-8'):
+    path, _, rest = raw.partition(':')
+    path = path.replace('\\', '/'); text = SPEC.sub('', rest.partition(':')[2])
+    inbody = path.startswith('crates/areka/')
+    if path.startswith('doc/archive/') or path == 'doc/roadmap-overview-2026-10-16.html': c = '4'
+    elif OLD.search(text) and not inbody: c = '3'
+    elif OLD.search(text) and 'emo2_boot_spine_test' in text: c = '4'
+    elif not re.search('emo2', text, re.I): c = '4'
+    elif OLD.search(text): c = '?'; unclassified.append(raw.rstrip())
+    elif path in DEFAULT_FILES: c = '1'
+    else: c = '2'
+    cats[c] += 1
+print(dict(sorted(cats.items())), sum(cats.values()))
+for u in unclassified: print('UNCLASSIFIED', u)
+```
+
+- 改める前の木（`5d2683753`）では `{'1': 74, '2': 1868, '3': 93, '4': 104, '?': 4}`（2,143 行・機械の 5 の段の 4 行）、後は `{'1': 74, '2': 1861, '3': 93, '4': 106}`（2,134 行・分けられない行 0）。
+- 機械の段は語の形で当てるので、`emo2` の語で結線を指す地の文（「emo2 統合結線」「emo2 の結線」「emo2 の外」）は ② に紛れる。20.4 の 7 行はそれを目で拾ったもの。次に測るときも、本体の ② の行のうち「結線」「統合」「の外」を含む行は目で読む。

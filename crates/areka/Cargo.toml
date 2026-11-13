@@ -57,7 +57,7 @@ windows = { workspace = true, features = ["Win32_UI_Controls_Dialogs"] }
 # （areka-P0-window-placement design DD5・旧 dev-dependencies から移動）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
 areka-emo-compose = { path = "../areka-emo-compose" }
-# emo2-boot 統合結線（areka-P0-emo2-boot・R10.8）で実 sink・presenter・文字層・契約型・
+# runtime 統合結線（areka-P0-emo2-boot・R10.8）で実 sink・presenter・文字層・契約型・
 # clock を消費するための workspace path 依存昇格。外部（crates.io）依存の追加ではない統合結線
 # （R10.5 の「新規依存」に該当しない）。
 areka-seriko = { path = "../areka-seriko" }
