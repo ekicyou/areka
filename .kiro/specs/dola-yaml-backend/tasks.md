@@ -70,3 +70,4 @@
 
 - 1.1: `src/value.rs:7` と `src/compile/mod.rs:72` のコメントに「JSON/TOML/YAML」が残る。src を触るタスク 2 で YAML を外す（タスク 6 の yaml 0 件の確かめにも掛かる）。
 - 6（範囲外・申し送り）: `cargo test --workspace` で触っていない `areka-ghost`（lib 5・`--test ghost` 6）と `shiori4-testdll`（lib 1）の 12 本が赤。赤のクレートだけ 1 回回し直して同じ 12 本＝変化なし＝規則により申し送りで緑扱い。どれも「built test DLL が正準位置に不在」で、cargo 1.100.0（2026-11-05）の下でテストの exe が `target/debug/build/<pkg>/<hash>/out/` に置かれ、exe の隣を探すテスト（`crates/areka-ghost/src/shiori_inproc_tests.rs:30`・`tests/ghost/inproc_fixture.rs:50`・`crates/shiori4-testdll/src/lib.rs:269`）が `target/debug/deps/` の DLL を見つけられないと見ている（cargo の変更かは未確認）。`/kiro-complete` の棚卸で `/kiro-discovery` に起票する。dola の対象は全部緑。
+- 完了時の棚卸（2026-11-13）: その場で解決 0 件・起票 1 件＝`shiori4-testdll-build-dir-locate`（上の 6 の赤。条件＝直し方が複数あり開発者の裁定が要る〔元の設計 D-1 の単一の正準位置・当て推量なし〕）。実測で cdylib も `target/debug/build/shiori4-testdll/<hash>/out/` に出来ており、`target/debug/deps/` の DLL は 11-10 作の古い残り。
