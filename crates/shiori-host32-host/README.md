@@ -89,8 +89,8 @@ cargo tree -p shiori-host32-helper --target i686-pc-windows-msvc
 
 直接の依存は次のとおりで、`shiori-abi`・pasta・pilot は現れない。
 
-- `shiori-host32-ipc`: `windows` / `windows-core` / `thiserror`
-- `shiori-host32-host`: `shiori-host32-ipc` / `encoding_rs` / `wintf-winmsg-executor` / `event-listener` / `thiserror` / `tracing` / `windows`
-- `shiori-host32-helper`: `shiori-host32-ipc` / `wintf-winmsg-executor` / `thiserror` / `windows`
+- `shiori-host32-ipc`: `windows` / `thiserror`
+- `shiori-host32-host`: `shiori-host32-ipc` / `encoding_rs` / `wintf-winmsg-executor` / `thiserror` / `tracing` / `windows`
+- `shiori-host32-helper`: `shiori-host32-ipc` / `wintf-winmsg-executor` / `windows`
 
 SHIORI DLL を読むのは helper（`LoadLibraryExW`）だけで、host は DLL を読まない。

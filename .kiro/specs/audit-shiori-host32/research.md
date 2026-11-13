@@ -558,3 +558,7 @@
 
 - 2026-11-13、進め役が確かめた: `runtime-module-untangle` は完了して `.kiro/specs/completed/runtime-module-untangle` に退避済みで、`main` に `343ec0350`（PR #447）として着地し、このブランチにも取り込み済み。そのセッションは動いていない（同日、走っている下請けの一覧で確かめた）。
 - 結論: 知らせる相手なし・異議なしとして消す。`EXIT_POLL_INTERVAL` は 14.3 の一覧の項目と一緒にタスク 12 で消した（消す前にツリー全体を grep し直し、`crates/shiori-host32-host` の外の使い手は 0。`crates/pilot/examples/shiori-host-32/` の同名の項目は pilot 自身の写しで、設計どおり響かない）。
+
+### 14.15 使っていない依存を消した（タスク 13・指摘 28・要件 10.10）
+
+- 2026-11-13、進め役が確かめた: `dola-yaml-backend` は `main` に着地して `.kiro/specs/completed/dola-yaml-backend` に退避済みで、このブランチにも取り込み済み（`e7fd67119`）。C20 へは回さず、host の `event-listener`・helper の `thiserror`・ipc の `windows-core` を消した（消す前に 3 クレートを grep し直し、使う所は 0 件）。host の README の依存の一覧も直した。

@@ -12,7 +12,6 @@ repository.workspace = true
 [dependencies]
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }
 wintf-winmsg-executor = { workspace = true }
-thiserror = { workspace = true }
 
 [dependencies.windows]
 workspace = true
