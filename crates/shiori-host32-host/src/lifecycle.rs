@@ -14,13 +14,13 @@
 //! - [`ShutdownError`] — shutdown 経路専用の失敗語彙。
 //! - [`UNLOAD_ACK_TIMEOUT`] / [`EXIT_OBSERVE_TIMEOUT`] / [`EXIT_POLL_INTERVAL`] — 関連定数。
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use shiori_host32_ipc::MsgTag;
 
 use crate::error::RequestError;
 use crate::parent_window::{ParentMessageWindow, SendError};
-use crate::process_host::{ExitKind, HelperHandle, poll_exit_kind};
+use crate::process_host::{ExitKind, HelperHandle, LOG_TARGET, poll_exit_kind};
 
 /// 死活監視の観測結果（Send・Copy な所有データ・R2.6）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,7 +57,7 @@ pub struct LifecycleReport {
 
 /// UNLOAD ack（unload 完了確認）待機の上限（LOAD_ACK_TIMEOUT と同値 30s）。
 pub const UNLOAD_ACK_TIMEOUT: Duration = Duration::from_secs(30);
-/// ack 受領後、プロセス終了（ExitKind 観測）までの bounded poll 上限。
+/// ack 受領後、プロセス終了（ExitKind 観測）を待つ上限。
 pub const EXIT_OBSERVE_TIMEOUT: Duration = Duration::from_secs(10);
 /// bounded poll の刻み（実時間 sleep はこれのみ・R7.5）。
 pub const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(5);
@@ -150,7 +150,11 @@ impl HelperLifecycle {
         match self.handle.terminate() {
             Ok(()) => Ok(()),
             Err(e) => {
-                tracing::error!(error = ?e, "[HelperLifecycle::terminate] helper terminate failed");
+                tracing::error!(
+                    target: LOG_TARGET,
+                    error = ?e,
+                    "[HelperLifecycle::terminate] helper terminate failed"
+                );
                 Err(e)
             }
         }
@@ -188,6 +192,7 @@ impl HelperLifecycle {
         // error は下で LifecycleReport へ move するため、ここで参照して先にログする。
         if let FailureClass::HelperDown(kind) = class {
             tracing::error!(
+                target: LOG_TARGET,
                 exit = ?kind,
                 error = ?error,
                 "[HelperLifecycle::report_failure] request failed due to helper death"
@@ -212,36 +217,64 @@ impl HelperLifecycle {
         &mut self,
         window: &ParentMessageWindow,
     ) -> Result<ExitKind, ShutdownError> {
+        self.request_clean_shutdown_within(window, UNLOAD_ACK_TIMEOUT, EXIT_OBSERVE_TIMEOUT)
+    }
+
+    /// [`Self::request_clean_shutdown`] の本体。待ちの長さを受け取る（テストが短い待ちで呼ぶ・指摘 17）。
+    pub(crate) fn request_clean_shutdown_within(
+        &mut self,
+        window: &ParentMessageWindow,
+        ack_timeout: Duration,
+        exit_timeout: Duration,
+    ) -> Result<ExitKind, ShutdownError> {
         // 手順1: 既終了なら送出せず短絡成功（既終了への終了要求を失敗させない）。
         if let HelperStatus::Exited(kind) = self.status() {
             return Ok(kind);
         }
         // 手順2: UNLOAD 送出（凍結 wire 語彙）。Err は error! + Err(ShutdownError::Unload)。
-        let ack = match window.send_request(MsgTag::Unload, &[], UNLOAD_ACK_TIMEOUT) {
+        let ack = match window.send_request(MsgTag::Unload, &[], ack_timeout) {
             Ok(a) => a,
             Err(e) => {
-                tracing::error!(error = ?e, "[request_clean_shutdown] unload send failed");
+                // 送りの最中に helper が終わっていれば、それは終わり（失敗ではない・指摘 24）。
+                if let HelperStatus::Exited(kind) = self.status() {
+                    tracing::info!(
+                        target: LOG_TARGET,
+                        exit = ?kind,
+                        error = ?e,
+                        "[request_clean_shutdown] 送りの最中に終わっていた"
+                    );
+                    return Ok(kind);
+                }
+                tracing::error!(
+                    target: LOG_TARGET,
+                    error = ?e,
+                    "[request_clean_shutdown] unload send failed"
+                );
                 return Err(ShutdownError::Unload(e));
             }
         };
         // 手順3: ack が厳密 [1] でなければ契約違反。error! + Err(UnexpectedAck)。
         if ack.as_slice() != [1u8] {
-            tracing::error!(ack = ?ack, "[request_clean_shutdown] unexpected unload ack");
+            tracing::error!(
+                target: LOG_TARGET,
+                ack = ?ack,
+                "[request_clean_shutdown] unexpected unload ack"
+            );
             return Err(ShutdownError::UnexpectedAck(ack));
         }
-        // 手順4: EXIT_OBSERVE_TIMEOUT を deadline に bounded poll で終了観測（刻み EXIT_POLL_INTERVAL）。
-        let deadline = Instant::now() + EXIT_OBSERVE_TIMEOUT;
-        loop {
-            if let HelperStatus::Exited(kind) = self.status() {
-                return Ok(kind); // 正常系列なら Clean。
-            }
-            if Instant::now() >= deadline {
+        // 手順4: `exit_timeout` まで終わりを待つ（`WaitForSingleObject` 1 回・指摘 36）。
+        if self.last_exit.is_none() {
+            self.last_exit = self.handle.wait_for_exit(exit_timeout);
+        }
+        match self.last_exit {
+            Some(kind) => Ok(kind), // 正常系列なら Clean。
+            None => {
                 tracing::error!(
+                    target: LOG_TARGET,
                     "[request_clean_shutdown] helper did not exit within bound after unload ack"
                 );
-                return Err(ShutdownError::ExitTimeout);
+                Err(ShutdownError::ExitTimeout)
             }
-            std::thread::sleep(EXIT_POLL_INTERVAL);
         }
     }
 
@@ -361,6 +394,16 @@ pub(crate) mod tests {
     use std::process::Command;
     use std::time::Instant;
 
+    /// 長く走る stand-in（`ping` をじかに起こす・終わらせなければ 60 秒ほど生きる）。
+    fn long_lived() -> Command {
+        let mut command = Command::new("ping.exe");
+        command
+            .args(["-n", "60", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        command
+    }
+
     /// stand-in が終了するまで非ブロッキング `status()` を bounded に回して `Exited` を得る。
     ///
     /// 各 `status()` はブロックしない（R1.1/1.2）。全体は上限 10s・刻み 5ms で待つ。
@@ -378,18 +421,18 @@ pub(crate) mod tests {
         }
     }
 
-    /// 性質①（非ブロッキング・R1.1/1.2）: 単一 `status()` 呼び出しが 1 秒未満で返る。
+    /// 性質①（非ブロッキング・R1.1/1.2）: 60 秒ほど生きる stand-in への `status()` が、その終わりを
+    /// 待たずに `Running` を返す。的は「止まらずに返る」なので、混んだ PC でも揺れないよう上限は
+    /// 30 秒と広く取る（指摘 48・待つ形なら 60 秒かかる）。
     #[test]
-    fn status_is_nonblocking_returns_under_one_second() {
-        // まだ終了していないかもしれない stand-in でも、status() は try_wait ベースで
-        // 即座に返る（稼働中なら Running・終了済みなら Exited のどちらでも可）。
-        let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
+    fn status_is_nonblocking_returns_while_running() {
+        let handle = spawn_command(long_lived()).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
         let start = Instant::now();
-        let _status = lc.status();
+        assert_eq!(lc.status(), HelperStatus::Running);
         assert!(
-            start.elapsed() < Duration::from_secs(1),
-            "status() は非ブロッキングで即座に返る（{:?}）",
+            start.elapsed() < Duration::from_secs(30),
+            "status() は非ブロッキングで返る（{:?}）",
             start.elapsed()
         );
     }
@@ -431,25 +474,14 @@ pub(crate) mod tests {
 
     // --- report_failure: request 失敗と死活の突合・統一報告（R2.1〜2.5, 4.4, 7.6）---
 
-    /// 生存中の stand-in を組む（`ping -n 3 127.0.0.1 >NUL` で ~2s 生存）。
-    ///
-    /// ALIVE 経路（`status() == Running` / `observed_exit == None`）を決定的に行使するため、
-    /// `cmd /c exit 0`（spawn 直後に既に死んでいる可能性がある）ではなく十分に長命な
-    /// stand-in を使う。`ping` は 1 秒間隔で 3 回試行し、その間プロセスは生存する。
-    fn cmd_alive() -> Command {
-        let mut command = Command::new("cmd.exe");
-        command.args(["/c", "ping", "-n", "3", "127.0.0.1", ">NUL"]);
-        command
-    }
-
     /// 性質（生存 → 非死活報告・R2.2/R2.4）: 生存中に `report_failure(Timeout)` を突合すると
     /// `class == Unresponsive`（死活起因でない）となり、原本 `error` が報告に保持される。
     ///
-    /// ALIVE 経路の決定性: 長命 stand-in を spawn 直後に突合し、`status()` が `Running`
+    /// ALIVE 経路の決定性: 60 秒ほど生きる stand-in（[`long_lived`]）を spawn 直後に突合し、`status()` が `Running`
     /// （`observed_exit == None`）である間に `report_failure` を呼ぶ。生存確認を assert で固定する。
     #[test]
     fn report_failure_alive_timeout_is_unresponsive_and_retains_error() {
-        let handle = spawn_command(cmd_alive()).expect("stand-in を spawn できる");
+        let handle = spawn_command(long_lived()).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
         // 生存確認: spawn 直後の長命 stand-in はまだ稼働中である（決定的）。
         assert_eq!(
@@ -545,5 +577,170 @@ pub(crate) mod tests {
         );
 
         drop(window);
+    }
+    // --- request_clean_shutdown_within: 失敗の道と送りの最中の終わり（指摘 17・24・34・36）---
+
+    use crate::HelperTerminator;
+    use shiori_host32_ipc::{encode_hwnd_le, hwnd_from_u32, send_copydata, send_copydata_response};
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use std::pin::Pin;
+    use windows::Win32::Foundation::{HANDLE, LRESULT};
+    use windows::Win32::System::DataExchange::COPYDATASTRUCT;
+    use windows::Win32::System::Threading::{
+        OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
+    use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+
+    /// 偽の helper が UNLOAD を受けたときのふるまい。
+    enum OnUnload {
+        /// この中身を RESPONSE で返す。
+        Ack(Vec<u8>),
+        /// 取っ手の複製で stand-in を終わらせ、終わりを待ち、返事をしない。
+        KillAndStaySilent(HelperTerminator, u32),
+    }
+
+    /// 同じスレッドに偽の helper の窓を立て、送り手の決まり（指摘 38）どおり自分の窓の値で
+    /// HELLO を送って握手を済ませる（`expect_helper_pid` は自分のプロセス番号）。
+    fn fake_helper(parent: &ParentMessageWindow, on_unload: OnUnload) -> Window<()> {
+        let parent_hwnd = hwnd_from_u32(parent.hwnd_u32());
+        let window = Window::new(
+            WindowType::MessageOnly,
+            (),
+            move |_: Pin<&()>, msg: WindowMessage| -> Option<LRESULT> {
+                if msg.msg != WM_COPYDATA {
+                    return None;
+                }
+                // SAFETY: WM_COPYDATA の lparam は COPYDATASTRUCT を指す（OS の約束）。
+                let tag = unsafe { (*(msg.lparam.0 as *const COPYDATASTRUCT)).dwData };
+                if tag == MsgTag::Unload.as_u32() as usize {
+                    match &on_unload {
+                        OnUnload::Ack(ack) => send_copydata_response(
+                            parent_hwnd,
+                            msg.hwnd,
+                            MsgTag::Response,
+                            ack,
+                            Duration::from_secs(5),
+                        )
+                        .expect("偽の helper の RESPONSE を送れる"),
+                        OnUnload::KillAndStaySilent(terminator, pid) => {
+                            terminator.terminate().expect("stand-in を終わらせられる");
+                            wait_process(*pid);
+                        }
+                    }
+                }
+                Some(LRESULT(0))
+            },
+        )
+        .expect("偽の helper の窓を作れる");
+        parent.expect_helper_pid(std::process::id());
+        send_copydata(
+            parent_hwnd,
+            window.hwnd(),
+            MsgTag::Hello,
+            &encode_hwnd_le(window.hwnd()),
+            Duration::from_secs(5),
+        )
+        .expect("HELLO を送れる");
+        assert_eq!(
+            parent.pump_until_hello_or(Duration::from_secs(5)),
+            Some(u32::from_le_bytes(encode_hwnd_le(window.hwnd()))),
+            "偽の helper の窓で握手が済む"
+        );
+        window
+    }
+
+    /// `pid` のプロセスの終わりを 30 秒まで待つ（終わらなければ赤）。
+    fn wait_process(pid: u32) {
+        // SAFETY: 開いた取っ手は OwnedHandle が閉じる。待つのは借りるだけ。
+        unsafe {
+            let process = OpenProcess(PROCESS_SYNCHRONIZE, false, pid).expect("stand-in を開ける");
+            let owned = OwnedHandle::from_raw_handle(process.0);
+            assert_eq!(
+                WaitForSingleObject(HANDLE(owned.as_raw_handle()), 30_000),
+                windows::Win32::Foundation::WAIT_OBJECT_0,
+                "stand-in が終わらなかった"
+            );
+        }
+    }
+
+    /// `ERROR` の行を集め、どれも宛名が `shiori-host32` であることを確かめて数を返す（指摘 34）。
+    fn error_count_on_host_target(events: &[log_capture_kit::CapturedEvent]) -> usize {
+        let errors: Vec<_> = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .collect();
+        for e in &errors {
+            assert_eq!(e.target, "shiori-host32", "error! の宛名: {e:?}");
+        }
+        errors.len()
+    }
+
+    const SHORT: Duration = Duration::from_millis(50);
+
+    /// 握手していない親の窓へは UNLOAD を送れない → `Unload(Handshake)`・`ERROR` 1 行。
+    #[test]
+    fn unload_send_failure_is_an_unload_error() {
+        let mut lc =
+            HelperLifecycle::new(spawn_command(long_lived()).expect("stand-in を起こせる"));
+        let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let (got, events) =
+            log_capture_kit::capture(|| lc.request_clean_shutdown_within(&window, SHORT, SHORT));
+        assert!(
+            matches!(got, Err(ShutdownError::Unload(SendError::Handshake(_)))),
+            "{got:?}"
+        );
+        assert_eq!(error_count_on_host_target(&events), 1, "{events:?}");
+    }
+
+    /// 偽の helper が UNLOAD に [0] を返す → `UnexpectedAck([0])`・`ERROR` 1 行。
+    #[test]
+    fn a_non_one_ack_is_unexpected() {
+        let mut lc =
+            HelperLifecycle::new(spawn_command(long_lived()).expect("stand-in を起こせる"));
+        let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let _helper = fake_helper(&window, OnUnload::Ack(vec![0]));
+        let (got, events) =
+            log_capture_kit::capture(|| lc.request_clean_shutdown_within(&window, SHORT, SHORT));
+        assert!(
+            matches!(&got, Err(ShutdownError::UnexpectedAck(ack)) if ack.as_slice() == [0]),
+            "{got:?}"
+        );
+        assert_eq!(error_count_on_host_target(&events), 1, "{events:?}");
+    }
+
+    /// 偽の helper が [1] を返しても stand-in が動き続ける → `ExitTimeout`・`ERROR` 1 行。
+    #[test]
+    fn no_exit_after_ack_is_exit_timeout() {
+        let mut lc =
+            HelperLifecycle::new(spawn_command(long_lived()).expect("stand-in を起こせる"));
+        let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let _helper = fake_helper(&window, OnUnload::Ack(vec![1]));
+        let (got, events) = log_capture_kit::capture(|| {
+            lc.request_clean_shutdown_within(&window, SHORT, Duration::from_millis(50))
+        });
+        assert!(matches!(got, Err(ShutdownError::ExitTimeout)), "{got:?}");
+        assert_eq!(error_count_on_host_target(&events), 1, "{events:?}");
+    }
+
+    /// UNLOAD を受けた偽の helper が stand-in を終わらせて返事をしない（送りは受け皿が空で失敗する）
+    /// → 送りの失敗の後に問い直して `Ok(Abnormal(_))`（指摘 24）。`ERROR` は出さない。
+    #[test]
+    fn a_helper_that_dies_during_unload_is_reported_as_exited() {
+        let mut lc =
+            HelperLifecycle::new(spawn_command(long_lived()).expect("stand-in を起こせる"));
+        let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let terminator = lc.terminator().expect("取っ手を複製できる");
+        let _helper = fake_helper(&window, OnUnload::KillAndStaySilent(terminator, lc.pid()));
+        let (got, events) =
+            log_capture_kit::capture(|| lc.request_clean_shutdown_within(&window, SHORT, SHORT));
+        assert!(matches!(got, Ok(ExitKind::Abnormal(_))), "{got:?}");
+        assert_eq!(error_count_on_host_target(&events), 0, "{events:?}");
+        assert!(
+            events.iter().any(|e| e.level == tracing::Level::INFO
+                && e.target == "shiori-host32"
+                && format!("{:?}", e.fields).contains("送りの最中に終わっていた")),
+            "{events:?}"
+        );
     }
 }

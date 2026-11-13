@@ -50,7 +50,11 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
         let job: HANDLE = match CreateJobObjectW(None, None) {
             Ok(h) => h,
             Err(e) => {
-                tracing::error!(error = %e, "helper 孤児化防止: CreateJobObject 失敗（縮退）");
+                tracing::error!(
+                    target: crate::process_host::LOG_TARGET,
+                    error = %e,
+                    "helper 孤児化防止: CreateJobObject 失敗（縮退）"
+                );
                 return None;
             }
         };
@@ -67,7 +71,11 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
             core::ptr::addr_of!(info) as *const core::ffi::c_void,
             core::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
         ) {
-            tracing::error!(error = %e, "helper 孤児化防止: SetInformationJobObject 失敗（縮退）");
+            tracing::error!(
+                target: crate::process_host::LOG_TARGET,
+                error = %e,
+                "helper 孤児化防止: SetInformationJobObject 失敗（縮退）"
+            );
             let _ = CloseHandle(job);
             return None;
         }
@@ -75,7 +83,11 @@ pub(crate) fn attach_kill_on_close_job(child: &Child) -> Option<OwnedHandle> {
         // 3) helper を job へ割り当て（child の OS プロセスハンドル）。
         let child_handle = HANDLE(child.as_raw_handle());
         if let Err(e) = AssignProcessToJobObject(job, child_handle) {
-            tracing::error!(error = %e, "helper 孤児化防止: AssignProcessToJobObject 失敗（縮退）");
+            tracing::error!(
+                target: crate::process_host::LOG_TARGET,
+                error = %e,
+                "helper 孤児化防止: AssignProcessToJobObject 失敗（縮退）"
+            );
             let _ = CloseHandle(job);
             return None;
         }

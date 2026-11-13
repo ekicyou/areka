@@ -112,7 +112,7 @@
   - 完了の姿: 新しいテストが緑で、錠と古い説明がツリーに 0 件、host と `areka-ghost` のテストが並べて回して緑（赤の道を取ったときは、議題を出したことが報告にある）
   - _Requirements: 3.1, 3.2, 4.2, 4.5, 6.1, 10.5_
 
-- [ ] 8. 正常終了の道（U9）
+- [x] 8. 正常終了の道（U9）
   - 待ちの長さを受け取る `request_clean_shutdown_within` を `pub(crate)` で置き、公開の `request_clean_shutdown` は定数でそれを呼ぶ（指摘 17）
   - UNLOAD の送りの失敗の後に状態を問い直し、終わっていれば `Ok(終わり方)` を返す（指摘 24）。ack の後の終わりの見張りを 6 の `WaitForSingleObject` 1 回の待ちにする（指摘 36）
   - `lifecycle.rs` と `job.rs` の記録の宛名を `shiori-host32` にそろえる（指摘 34）

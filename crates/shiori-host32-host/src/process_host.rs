@@ -547,7 +547,7 @@ fn note_try_wait(result: std::io::Result<Option<ExitStatus>>) -> Option<ExitKind
 /// helper の判定の記録の宛先（出す側＝`shiori-host32-host` の名前）。
 ///
 /// `RUST_LOG` は **target 名**で指定する（`shiori-host32=debug`）。
-const LOG_TARGET: &str = "shiori-host32";
+pub(crate) const LOG_TARGET: &str = "shiori-host32";
 
 /// PE の機械の種類 i386（32bit の SHIORI を読める helper の印）。
 const IMAGE_FILE_MACHINE_I386: u16 = 0x014C;
