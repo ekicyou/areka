@@ -265,7 +265,6 @@ impl Decoration {
         self.applied = from.applied.clone();
         self.unowned = from.unowned.clone();
         self.warned = from.warned.clone();
-        #[cfg(test)]
         COPIED_SPECS.with(|c| c.set(c.get() + self.applied.len()));
         self.replay();
     }
