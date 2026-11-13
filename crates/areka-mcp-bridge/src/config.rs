@@ -1,7 +1,7 @@
 //! 設定: 候補の列・控えの置き場・待つ時間。
 //!
 //! 環境と exe の場所を読むのは [`Config::from_env`] の 1 か所だけで、判断は値だけを受け取る
-//! [`Config::from_inputs`]（決めるだけの口と記録）と [`Config::from_values`]（I/O なし）が持つ
+//! `Config::from_inputs`（決めるだけの口と記録）と [`Config::from_values`]（I/O なし）が持つ
 //! （`areka_mcp::candidates_from_env_value` と同じ分け方）。
 
 use std::ffi::OsStr;
@@ -56,7 +56,7 @@ impl Config {
     /// 環境（`AREKA_MCP_PORT`・`AREKA_PROFILE_DIR`・exe の場所と隣の `areka.exe` の有無・
     /// `LOCALAPPDATA`）を読む唯一の口。exe の場所は `current_exe` のまま（リンクは辿らない）。
     ///
-    /// 読むだけで、判断と記録は [`Config::from_inputs`] に渡す。隣に `areka.exe` が在るときだけ、
+    /// 読むだけで、判断と記録は `Config::from_inputs` に渡す。隣に `areka.exe` が在るときだけ、
     /// areka と同じ `probe` で判断の入力を取る（置き場を作る準備は呼ばない＝作らない・写さない）。
     pub fn from_env() -> Config {
         let areka_dir = std::env::current_exe()
@@ -119,7 +119,7 @@ impl Config {
     /// `beside` は `None`＝隣に areka.exe が無い、`Some(Ready(dir))`＝その下、`Some(ほか)`＝控え無し
     /// （まだ置けない・決められない根の代わりに `local_app_data` の段へ落ちない）。
     /// `local_app_data` は絶対パスのときだけ使う（空・相対の値で、起こされた場所しだいの置き場に黙って書かない）。
-    /// `profile_dir` は使える（絶対の）値だけを受ける。判定は [`Config::from_inputs`]。
+    /// `profile_dir` は使える（絶対の）値だけを受ける。判定は `Config::from_inputs`。
     pub fn from_values(
         port_value: Option<&str>,
         profile_dir: Option<PathBuf>,

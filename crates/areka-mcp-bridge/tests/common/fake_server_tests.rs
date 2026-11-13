@@ -113,13 +113,13 @@ fn dechunk(mut raw: &[u8]) -> (Vec<u8>, usize) {
 }
 
 /// 完了の姿: 起こして 1 要求を投げ、台本どおりの応答と受けた要求の記録が取れる。
-/// 続けて、何も書かない接続の記録・止める、までを通す（`nobody()` の番号の上で起こすので、止めた後の
-/// 番号は必ず接続を断る）。
+/// 続けて、何も書かない接続の記録・止める、までを通す（止めた番号が接続を断ることは
+/// `start_on_a_held_port_refuses_after_stop` が見る）。
 #[tokio::test]
 async fn one_request_gets_the_scripted_reply_and_is_recorded() {
     let script = Script::areka().on("tools/call", Reply::Result(json!({"content": []})));
-    let (_held, port) = nobody();
-    let mut server = FakeServer::start_on(port, script);
+    let mut server = FakeServer::start(script);
+    let port = server.port();
     let request =
         json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "t"}});
 
@@ -159,18 +159,13 @@ async fn one_request_gets_the_scripted_reply_and_is_recorded() {
     assert_eq!(server.requests_of("tools/call").len(), 1);
     assert!(server.requests_of("ping").is_empty());
 
-    // 止めると、開いていた接続が閉じ、番号は接続を受けなくなる。記録は止めた後も読める。
+    // 止めると、開いていた接続が閉じる。記録は止めた後も読める。
     let mut idle = connect(port).await;
     server.wait(|log| log.connections.len() == 3).await;
     server.stop();
     assert!(
         matches!(idle.read(&mut [0u8; 1]).await, Ok(0) | Err(_)),
         "開いていた接続が閉じる"
-    );
-    let again = timeout(WAIT_REFUSED, TcpStream::connect(("127.0.0.1", port))).await;
-    assert!(
-        matches!(again, Ok(Err(_))),
-        "止めた番号は接続を断る: {again:?}"
     );
     assert_eq!(server.requests().len(), 1);
 }
@@ -480,7 +475,7 @@ async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
     );
 }
 
-/// 道具の較正（#50）: `nobody()` が握る番号の上で `start_on` が待ち受け、接続はこの受け口に届く。
+/// 道具の較正: `nobody()` が握る番号の上で `start_on` が待ち受け、接続はこの受け口に届く。
 /// 止めた後、その番号への接続は断られ（ほかの束ねにも渡らない）、`SO_REUSEADDR` の無い束ねも断られる。
 #[tokio::test]
 async fn start_on_a_held_port_refuses_after_stop() {

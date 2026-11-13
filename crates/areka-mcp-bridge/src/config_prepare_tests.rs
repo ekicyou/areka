@@ -348,7 +348,7 @@ fn second_start_after_areka_prepares_root_uses_cache() {
     assert!(bridge_lines(&events).is_empty());
 }
 
-/// #1: 空・相対の `AREKA_PROFILE_DIR` は areka 本体と同じく捨てて次の段へ進み、`areka-user-data` の
+/// 空・相対の `AREKA_PROFILE_DIR` は areka 本体と同じく捨てて次の段へ進み、`areka-user-data` の
 /// ERROR（`profile_dir_env_unusable`）がちょうど 1 件（隣に areka が居ても 2 度判定しない）。
 #[test]
 fn an_unusable_profile_env_is_dropped_with_one_error() {
@@ -384,7 +384,7 @@ fn an_unusable_profile_env_is_dropped_with_one_error() {
     }
 }
 
-/// #2: 置き場が 1 つも無い（`LOCALAPPDATA` が無い・相対）→ 控え無し・W3 の WARN がちょうど 1 件。
+/// 置き場が 1 つも無い（`LOCALAPPDATA` が無い・相対）→ 控え無し・W3 の WARN がちょうど 1 件。
 #[test]
 fn no_place_for_the_cache_is_warned_once() {
     for local_app_data in [None, Some(PathBuf::from("rel"))] {

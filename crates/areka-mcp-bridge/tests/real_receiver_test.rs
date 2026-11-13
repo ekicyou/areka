@@ -14,15 +14,10 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::Arc;
-use std::time::Duration;
 
 use areka_mcp::{McpServer, ToolContent, ToolOutcome, ToolRegistry, ToolSpec};
-use areka_mcp_bridge::cache::Cache;
-use areka_mcp_bridge::config::{Config, Timeouts};
-use areka_mcp_bridge::service::run;
+use areka_mcp_bridge::{cache, config, service};
 use serde_json::{Value, json};
-use temp_path_kit::TempPath;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream};
 
 /// 部品のテスト（クレートの中）と同じ偽の受け口。ここで使うのは誰も待ち受けない番号（`nobody`）だけなので、
 /// 使わない部品の警告は止める。
@@ -30,10 +25,16 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream};
 #[path = "common/fake_server.rs"]
 mod fake_server;
 
+/// 部品のテスト（クレートの中）と同じ Desktop の役（`desk.rs` が `super::` で引く `cache`・`config`・
+/// `service` は上の `use` が見せる）。使わない部品の警告は止める。
+#[allow(dead_code)]
+#[path = "common/desk.rs"]
+mod desk;
+
+use desk::{Desk, WAIT, stateless_meta};
+
 /// `initialize` を持たない版（`server/discover` で始め、要求ごとに `_meta` と札を付ける）。
 const STATELESS: &str = "2026-07-28";
-/// 待つ上限。過ぎたら panic でテストを赤にする。
-const WAIT: Duration = Duration::from_secs(10);
 /// 登録するツールの名前。
 const TOOL: &str = "probe";
 
@@ -111,49 +112,10 @@ fn direct(port: u16, version: &str, message: &Value) -> Value {
         .unwrap_or_else(|error| panic!("{version} {message}: HTTP {status} {body:?} ({error})"))
 }
 
-/// Desktop の役: 中継の標準入力へ行を書き、標準出力の行を読む。
-struct Desk {
-    stdin: DuplexStream,
-    stdout: BufReader<DuplexStream>,
-    /// 控えの置き場（落とすと消える）。
-    cache_dir: TempPath,
-}
-
-impl Desk {
-    /// 候補がこの番号だけの中継を回す。確かめの上限は長く取る（負荷の下で受け口の答えが遅れても
-    /// areka を飛ばさない）。
-    fn start(port: u16) -> Desk {
-        let cache_dir = TempPath::under_target("bridge-real-receiver");
-        let dir = Some(cache_dir.path().to_owned());
-        let timeouts = Timeouts {
-            verify: WAIT,
-            ..Timeouts::default()
-        };
-        let config = Config::from_parts(vec![port], dir, timeouts);
-        let (stdin, bridge_in) = tokio::io::duplex(64 * 1024);
-        let (bridge_out, stdout) = tokio::io::duplex(64 * 1024);
-        tokio::spawn(run(config, bridge_in, bridge_out));
-        Desk {
-            stdin,
-            stdout: BufReader::new(stdout),
-            cache_dir,
-        }
-    }
-
-    async fn send(&mut self, message: &Value) {
-        let line = format!("{message}\n");
-        let written = self.stdin.write_all(line.as_bytes()).await;
-        written.expect("標準入力へ書ける");
-    }
-
-    /// 要求を 1 行送り、標準出力の次の 1 行を返す（中継ごしの答え）。
-    async fn ask(&mut self, message: &Value) -> Value {
-        self.send(message).await;
-        let mut line = String::new();
-        let read = tokio::time::timeout(WAIT, self.stdout.read_line(&mut line)).await;
-        read.expect("期限内に 1 行出る").expect("1 行読める");
-        serde_json::from_str(&line).expect("標準出力の 1 行は JSON")
-    }
+/// 要求を 1 行送り、標準出力の次の 1 行を返す（中継ごしの答え）。
+async fn bridged(desk: &mut Desk, message: &Value) -> Value {
+    desk.send(message.clone()).await;
+    desk.next().await
 }
 
 /// その版のクライアントが送る要求 1 件。`2026-07-28` は `params._meta` に版・名乗り・できることを
@@ -165,11 +127,7 @@ fn request(version: &str, case: &Value) -> Value {
         message["params"] = params.clone();
     }
     if version == STATELESS && case.get("params").is_none_or(Value::is_object) {
-        message["params"]["_meta"] = json!({
-            "io.modelcontextprotocol/protocolVersion": version,
-            "io.modelcontextprotocol/clientCapabilities": {},
-            "io.modelcontextprotocol/clientInfo": {"name": "desktop", "version": "1"},
-        });
+        message["params"]["_meta"] = stateless_meta();
     }
     message
 }
@@ -179,7 +137,7 @@ fn request(version: &str, case: &Value) -> Value {
 /// 的外れの答え」で通らないための、直接の答えの中の 1 か所（JSON ポインタと値）。
 async fn compare(version: &str) {
     let (_server, port) = real_receiver();
-    let mut desk = Desk::start(port);
+    let mut desk = Desk::start(vec![port]);
     let stateless = version == STATELESS;
     let name = areka_mcp::SERVER_NAME;
 
@@ -226,7 +184,7 @@ async fn compare(version: &str) {
     for case in cases.as_array().expect("配列") {
         let message = request(version, case);
         let direct = direct(port, version, &message);
-        let bridged = desk.ask(&message).await;
+        let bridged = bridged(&mut desk, &message).await;
         assert_eq!(
             bridged, direct,
             "{version} {case}: 中継ごしの答え（左）が直接の答え（右）と違う"
@@ -239,12 +197,12 @@ async fn compare(version: &str) {
             // 中継は何も出さない（出せば、次の比較が `id` の違う行を読んで赤になる）。
             let initialized = json!({"jsonrpc": "2.0", "method": "notifications/initialized"});
             assert_eq!(post(port, version, &initialized), (202, String::new()));
-            desk.send(&initialized).await;
+            desk.send(initialized).await;
         }
     }
 
     // 中継は本当にこの受け口と話した: 控えに、受け口の名乗りと登録したツールが残っている。
-    let cache = Cache::new(Some(desk.cache_dir.path().to_owned()));
+    let cache = desk.cache();
     let info = cache.load_server_info().and_then(|info| info.server_info);
     assert_eq!(info.map(|info| info.name), Some(name.to_owned()));
     let tools = cache.load_tools().expect("ツールの一覧の控えがある").tools;
@@ -300,7 +258,7 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
         "2024-11-05",
     ] {
         // 中継は版ごとに新しく起こす（控えの置き場は空）。
-        let mut desk = Desk::start(nobody);
+        let mut desk = Desk::start(vec![nobody]);
         let first = if version == STATELESS {
             let at = "/result/_meta/io.modelcontextprotocol~1serverInfo/name";
             json!({"id": 1, "method": "server/discover", "at": at, "is": name})
@@ -317,7 +275,7 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
         for case in [first, listed] {
             let message = request(version, &case);
             let direct = direct(receiver, version, &message);
-            let built_in = desk.ask(&message).await;
+            let built_in = bridged(&mut desk, &message).await;
             assert_eq!(
                 built_in, direct,
                 "{version} {case}: 組み込みの答え（左）が受け口の直接の答え（右）と違う"
@@ -325,18 +283,14 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
             let at = case["at"].as_str().expect("ポインタ");
             assert_eq!(direct.pointer(at), Some(&case["is"]), "{version}: {direct}");
             if case["id"] == 1 {
-                // 組み込みの最初の答えの案内文は受け口と同じ定数で、「まだのツール」の 1 文は無い
-                // （spec: mcp-strict-errors 要件 5.2）。
+                // 組み込みの最初の答えの案内文は受け口と同じ定数（その定数に「まだのツール」の 1 文が
+                // 無いことは areka-mcp の側が縛る＝spec: mcp-strict-errors 要件 5.2）。
                 let instructions = built_in["result"]["instructions"].as_str();
                 assert_eq!(instructions, Some(areka_mcp::INSTRUCTIONS), "{version}");
-                assert!(
-                    !areka_mcp::INSTRUCTIONS.contains("not implemented yet"),
-                    "{version}"
-                );
             }
         }
         // 中継は受け口と話していない（控えは空のまま＝答えは自分で持っているもの）。
-        let cache = Cache::new(Some(desk.cache_dir.path().to_owned()));
+        let cache = desk.cache();
         assert!(cache.load_server_info().is_none() && cache.load_tools().is_none());
     }
 }

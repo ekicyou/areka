@@ -1,16 +1,16 @@
 //! 判断（`service.rs`）のテストのうち、届ける前の失敗の扱い（要件 2.10・2.11・設計 D-6）:
 //! 覚えた番号に areka が居なくなったら、覚えを捨てて探し直し、見つかれば同じ要求を 1 回だけ送る。
 //!
-//! 道具（`Desk` など）は `service_tests.rs` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
+//! 道具は `service_tests.rs` と `crate::desk` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
 
 use areka_mcp::SERVER_NAME;
 use rmcp::model::{ClientRequest, RequestMetaObject};
 use serde_json::{Value, json};
 
 use super::Bridge;
-use super::failure_tests::patient;
-use super::tests::{Desk, arrived, handshakes, request, result, stateless_meta, unavailable};
+use super::tests::{arrived, handshakes, result, unavailable};
 use crate::config::Config;
+use crate::desk::{Desk, patient, request, stateless_meta};
 use crate::fake_server::{FakeServer, Gate, Received, Reply, Script, nobody};
 
 /// 別の名乗り（SSP の MCP サーバー）。

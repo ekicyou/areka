@@ -1,117 +1,17 @@
 //! 判断（`service.rs`）のテスト: 偽の受け口（`crate::fake_server`）を相手に、入口 `run` を
-//! メモリ上の管（`tokio::io::duplex`）で回す。
+//! メモリ上の管（`tokio::io::duplex`）で回す（Desktop の役は `crate::desk`）。
 //!
 //! 候補の列はテストが差し込む偽の受け口の番号だけ（机の 9801〜9830 へはつながない）。控えの置き場は
 //! テストごとの一時フォルダ（`target` の下）。控えの書きは同期で、一時の名前がプロセス番号なので、
 //! ここのテストは `current_thread` の `#[tokio::test]` だけで書く。
 
-use std::time::Duration;
-
 use areka_mcp::tools::all_specs;
 use areka_mcp::{INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, ToolSpec};
-use rmcp::service::QuitReason;
 use serde_json::{Value, json};
-use temp_path_kit::TempPath;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, DuplexStream};
-use tokio::task::JoinHandle;
 
-use super::run;
 use crate::cache::Cache;
-use crate::config::{Config, Timeouts};
+use crate::desk::{CACHE_DIR, Desk, request, stateless_meta};
 use crate::fake_server::{FakeServer, Gate, Received, Reply, Script, nobody};
-
-const PIPE: usize = 64 * 1024;
-/// 待つ上限。過ぎたら panic でテストを赤にする。
-pub(super) const WAIT: Duration = Duration::from_secs(10);
-const CACHE_DIR: &str = "mcp-bridge";
-
-/// Desktop の役: 中継の標準入力へ行を書き、標準出力の行を読む。
-pub(super) struct Desk {
-    stdin: DuplexStream,
-    stdout: BufReader<DuplexStream>,
-    run: JoinHandle<QuitReason>,
-    /// 控えの置き場の根（落とすと消える）。
-    root: TempPath,
-}
-
-impl Desk {
-    /// この候補の列で中継を回す。確かめの上限は長く取る（負荷の下で偽の受け口の答えが遅れても
-    /// areka を飛ばさない）。
-    pub(super) fn start(candidates: Vec<u16>) -> Desk {
-        Desk::start_at(TempPath::under_target("bridge-service"), candidates)
-    }
-
-    /// 控えの置き場の根を受け取って回す（[`Desk::close`] が返した根を渡すと、起動し直した中継に
-    /// なる＝前の中継が残した控えを読む）。
-    fn start_at(root: TempPath, candidates: Vec<u16>) -> Desk {
-        let timeouts = Timeouts {
-            verify: WAIT,
-            ..Timeouts::default()
-        };
-        Desk::launch(root, candidates, timeouts)
-    }
-
-    /// 待つ時間を差し替えて回す（短い応答の上限など）。
-    pub(super) fn start_with(candidates: Vec<u16>, timeouts: Timeouts) -> Desk {
-        let root = TempPath::under_target("bridge-service");
-        Desk::launch(root, candidates, timeouts)
-    }
-
-    fn launch(root: TempPath, candidates: Vec<u16>, timeouts: Timeouts) -> Desk {
-        let config = Config::from_parts(candidates, Some(root.child(CACHE_DIR)), timeouts);
-        let (stdin, bridge_in) = tokio::io::duplex(PIPE);
-        let (bridge_out, stdout) = tokio::io::duplex(PIPE);
-        Desk {
-            stdin,
-            stdout: BufReader::new(stdout),
-            run: tokio::spawn(run(config, bridge_in, bridge_out)),
-            root,
-        }
-    }
-
-    /// 置き場にある控え（別の `Cache` で読む＝起動し直した中継が読むのと同じ）。
-    pub(super) fn cache(&self) -> Cache {
-        Cache::new(Some(self.root.child(CACHE_DIR)))
-    }
-
-    pub(super) async fn send(&mut self, message: Value) {
-        let line = format!("{message}\n");
-        let written = self.stdin.write_all(line.as_bytes()).await;
-        written.expect("標準入力へ書ける");
-    }
-
-    /// 標準出力の次の 1 行。
-    pub(super) async fn next(&mut self) -> Value {
-        let mut line = String::new();
-        let read = tokio::time::timeout(WAIT, self.stdout.read_line(&mut line)).await;
-        read.expect("期限内に 1 行出る").expect("1 行読める");
-        serde_json::from_str(&line).expect("標準出力の 1 行は JSON")
-    }
-
-    /// `id` 付きの要求を 1 つ送り、次の 1 行を返す。
-    pub(super) async fn ask(&mut self, id: Value, method: &str, params: Value) -> Value {
-        self.send(request(id, method, params)).await;
-        self.next().await
-    }
-
-    /// 標準入力を閉じる。中継は入力の終わりで終わり、標準出力に読んでいない行は残っていない
-    /// （出るのは応答の行だけ＝通知には何も出ない）。控えの置き場の根を返す。
-    pub(super) async fn close(mut self) -> TempPath {
-        drop(self.stdin);
-        let quit = tokio::time::timeout(WAIT, self.run).await;
-        let quit = quit.expect("期限内に終わる").expect("入口が panic しない");
-        assert!(matches!(quit, QuitReason::Closed), "{quit:?}");
-        let mut rest = String::new();
-        let read = self.stdout.read_to_string(&mut rest).await;
-        read.expect("標準出力を終わりまで読める");
-        assert_eq!(rest, "", "読んでいない行が残っている");
-        self.root
-    }
-}
-
-pub(super) fn request(id: Value, method: &str, params: Value) -> Value {
-    json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
-}
 
 fn notification(method: &str, params: Value) -> Value {
     json!({"jsonrpc": "2.0", "method": method, "params": params})
@@ -139,15 +39,6 @@ fn discovered(version: &str) -> Value {
         "ttlMs": 0,
         "cacheScope": "private",
         "_meta": {"io.modelcontextprotocol/serverInfo": {"name": SERVER_NAME, "version": version}},
-    })
-}
-
-/// `2026-07-28` で話す Desktop が要求ごとに `params` へ載せる `_meta`。
-pub(super) fn stateless_meta() -> Value {
-    json!({
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": {"name": "desktop", "version": "1"},
     })
 }
 
@@ -321,11 +212,12 @@ async fn notifications_reach_areka_without_any_output() {
 
 /// 取り消しの通知は areka へ届けない。通知の `requestId` は Desktop の番号で、areka が見るのは
 /// 中継の側のクライアントが振り直した番号だけ（届けると、同じ番号の別の要求が巻き添えになる）。
-/// 途中の要求の応答はそのまま返る。
+/// 途中の要求の応答はそのまま返る（長い要求は門で止めるので、取り消しの間も途中に居るのは負荷によらない）。
 #[tokio::test]
 async fn a_cancel_notification_is_not_forwarded_and_fails_no_request_in_flight() {
-    let slow = Reply::Delayed(
-        Duration::from_millis(500),
+    let gate = Gate::shut();
+    let slow = Reply::Gated(
+        gate.clone(),
         Box::new(Reply::Result(json!({"content": []}))),
     );
     let fake = FakeServer::start(Script::areka().on("tools/call", slow));
@@ -343,6 +235,7 @@ async fn a_cancel_notification_is_not_forwarded_and_fails_no_request_in_flight()
     desk.send(notification("notifications/x-after", json!({})))
         .await;
     arrived(&fake, "notifications/x-after", 1).await;
+    gate.open();
 
     let reply = desk.next().await;
     assert_eq!(reply, result(json!("slow"), json!({"content": []})));

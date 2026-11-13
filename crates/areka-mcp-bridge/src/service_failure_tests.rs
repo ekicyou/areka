@@ -1,6 +1,6 @@
 //! 判断（`service.rs`）のテストのうち、areka へ届ける途中の失敗（要件 4）。
 //!
-//! 道具（`Desk` など）は `service_tests.rs` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
+//! 道具は `service_tests.rs` と `crate::desk` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
 
 use std::any::TypeId;
 use std::io;
@@ -14,24 +14,16 @@ use rmcp::transport::DynamicTransportError;
 use rmcp::transport::streamable_http_client::StreamableHttpError;
 use serde_json::{Value, json};
 
-use super::tests::{Desk, WAIT, arrived, handshakes, result};
+use super::tests::{arrived, handshakes, result};
 use super::{Bridge, Failure, classify};
 use crate::config::{Config, REPLY_WAIT, Timeouts};
+use crate::desk::{Desk, WAIT, patient};
 use crate::fake_server::{FakeServer, Reply, Script};
 use crate::http::HttpError;
 
 /// 中継が自分で作るエラーの行（番号 `-1`）。
 fn failed(id: Value, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": -1, "message": message}})
-}
-
-/// 確かめの上限を長く取った時間（負荷の下で偽の受け口の答えが遅れても areka を飛ばさない）。
-/// 探索のテスト（`scan_tests.rs`）もこれを使う。
-pub(crate) fn patient() -> Timeouts {
-    Timeouts {
-        verify: WAIT,
-        ..Timeouts::default()
-    }
 }
 
 /// 書いた後の失敗は中継のエラーで答え、送り直さない（要件 4.5）: 壊れた本文・状態付きの平文・SSE は

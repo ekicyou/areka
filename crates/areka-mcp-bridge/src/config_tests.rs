@@ -65,17 +65,12 @@ fn cache_dir_follows_the_table() {
     let ready = under_target(r"Local\areka\profile\areka");
     let root = under_target(r"Local\areka");
 
-    // ⑴ `AREKA_PROFILE_DIR` があれば、隣の答えがどれでもその下（2.9）。
-    for beside in [
-        None,
-        Some(AppProfile::Ready(ready.clone())),
-        Some(AppProfile::Unlocatable),
-    ] {
-        assert_eq!(
-            cache_dir_of(Some(under_target("prof")), beside, Some(local.clone())),
-            Some(under_target(r"prof\mcp-bridge"))
-        );
-    }
+    // ⑴ `AREKA_PROFILE_DIR` があればその下（2.9）。隣に areka が居るときは `from_inputs` が渡さない
+    // （使える値は隣の答えが既に含む）ので、隣の答えは無い形だけ。
+    assert_eq!(
+        cache_dir_of(Some(under_target("prof")), None, Some(local.clone())),
+        Some(under_target(r"prof\mcp-bridge"))
+    );
     // ⑵ 使える形なら、その下の `mcp-bridge`（2.6・2.8）。
     assert_eq!(
         cache_dir_of(

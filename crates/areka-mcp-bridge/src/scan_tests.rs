@@ -10,9 +10,9 @@ use serde_json::{Value, json};
 
 use super::{Link, Scan, scan};
 use crate::config::Timeouts;
+use crate::desk::patient;
 use crate::fake_server::{Conn, FakeServer, Received, Reply, Script, nobody};
 use crate::http::tests::{only_the_check_arrived, real_receiver};
-use crate::service::failure_tests::patient;
 
 const SSP: &str = "ssp-mcp-server";
 
@@ -198,8 +198,8 @@ async fn connections_to_all_candidates_are_opened_side_by_side() {
     let (_link, port) = found(scan(&candidates, &timeouts).await);
     let elapsed = started.elapsed();
     assert_eq!(port, areka.port());
-    // 上の限りは負荷の分だけゆるく見る（並べて開けば 500 ms ほど）。
-    assert!(elapsed < connect * 6, "{elapsed:?}");
+    // 上の限りは順に開いたときの最小（10 回分）。並べて開けば 500 ms ほどで、負荷の分の余裕は大きい。
+    assert!(elapsed < connect * 10, "{elapsed:?}");
 }
 
 /// 確かめを通った番号で rmcp のクライアントを立てる手順が失敗したら（確かめの後で相手が替わった・
