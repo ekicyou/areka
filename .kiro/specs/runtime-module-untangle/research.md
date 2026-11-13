@@ -1098,3 +1098,45 @@ for u in unclassified: print('UNCLASSIFIED', u)
 
 - 改める前の木（`5d2683753`）では `{'1': 74, '2': 1868, '3': 93, '4': 104, '?': 4}`（2,143 行・機械の 5 の段の 4 行）、後は `{'1': 74, '2': 1861, '3': 93, '4': 106}`（2,134 行・分けられない行 0）。
 - 機械の段は語の形で当てるので、`emo2` の語で結線を指す地の文（「emo2 統合結線」「emo2 の結線」「emo2 の外」）は ② に紛れる。20.4 の 7 行はそれを目で拾ったもの。次に測るときも、本体の ② の行のうち「結線」「統合」「の外」を含む行は目で読む。
+
+## テストの支えの一覧と audit への申し送り（2026-11-13・タスク 9.3・要件 7.1・7.4）
+
+### 23. `runtime` の外のファイルが名指す `runtime` のテストの支え（要件 7.1）
+
+`crates/areka/src/` のうち `runtime/` の外（`session/` を含む）で、`runtime::<支え>` を名指す行を `rg -c` で数えた（`93aca049f`）。行の数なので、1 行の `use …::{A, B}` は 1 と数える。`crates/areka/` の外で名指すのは `crates/areka/Cargo.toml` 74 行目の注の 1 行だけ（コードではない）。
+
+```
+RG=<rg.exe>; cd crates/areka/src
+"$RG" -P -c 'runtime::spine\b(?!::hold_support)' . -g '!runtime/**'
+"$RG" -P -c 'runtime::spine::hold_support' . -g '!runtime/**'
+"$RG" -P -c 'runtime::sample_test_support' . -g '!runtime/**'
+"$RG" -P -c 'runtime::frame::balloon_runtime_test_support' . -g '!runtime/**'
+"$RG" -P -c 'runtime::(frame::(test_support|chain_finalize_persist_test_support|zorder_drain::test_support)|spine::(test_support|conformance_support)|balloon_visibility(_phase)?::test_support|crash_report_test_support)' . -g '!runtime/**'
+```
+
+| 支え | 行 | ファイル | 使う所（ファイル） | 使う項目 |
+|---|---:|---:|---|---|
+| `spine`（`hold_support` を除く） | 42 | 38 | `mcp/*` 10（`dump_surface.rs` 3・`dump_surface_tests.rs` 3・ほかの 4 ファイル 1 行ずつ）・`session/*` 7・`install/*` 4・`input_events/*` 3・`ghost_session_*` 6・`shell_balloon_switch_session_*` 4・`session_end_*` 3・`update/*` 2・`boot_shell_tests`・`main_session_mark_tests`・`readonly_run_tests` | `RecordedCall` 14・モジュールごと 13・`Progress` 5・`GpuPermit` 3・`join_thread_bounded` 2・`ScriptedShioriBackendBuilder` 2・`wait_until` 1・`wait_recv` 1・`WaitFailure` 1 |
+| `sample_test_support` | 6 | 6 | `ghost_session_reload_tests`・`ghost_session_restart_tests`・`session/ghost_switch_test_support`・`session/runtime_boot_tests`・`placement_tests/measure_bake_count_tests`・`placement_tests/reset_balloon_pos_tests` | `acquire_emo2` 4・モジュールごと 2 |
+| `spine::hold_support` | 2 | 2 | `session_end_deadline_tests`・`session_end_sync_send_tests` | `HoldAt` 2 |
+| `frame::balloon_runtime_test_support` | 2 | 2 | `input_events/balloon_pressed_tests`・`input_events/balloon_wheel_tests` | `manual_balloon_runtime` 1・モジュールごと 1 |
+| `frame::test_support`・`frame::chain_finalize_persist_test_support`・`frame::zorder_drain::test_support`・`spine::test_support`・`spine::conformance_support`・`balloon_visibility::test_support`・`balloon_visibility_phase::test_support`・`crash_report_test_support`（`#[path]` で付けたモジュールのパス） | 0 | 0 | — | — |
+
+- 合わせて 52 行・40 ファイル（支えごとのファイルの和は 48。`spine` と一緒に別の支えも引く次の 8 ファイルを重ねて数えない: `hold_support` の `session_end_deadline_tests`・`session_end_sync_send_tests`、`sample_test_support` の `ghost_session_reload_tests`・`ghost_session_restart_tests`・`session/ghost_switch_test_support`・`session/runtime_boot_tests`、`frame::balloon_runtime_test_support` の `input_events/balloon_pressed_tests`・`input_events/balloon_wheel_tests`）。
+- 設計の段（2.7 節・`use` の行・`emo2_boot` の外）からの増え: `spine` 35→42・`sample_test_support` 4→6。主に `ghost_switch`・`runtime_boot` とそのテストが `session/` へ移り、`runtime` の外になったため（`session/` の 9 行＝`spine` 7・`sample_test_support` 2）。2.7 節は `use` の行だけを数えた下限で、今回は名指す行を全部数えたので、数え方の差も入る。`mcp/dump_surface.rs`（本番のファイル）の 3 行は前と同じくその中の `#[cfg(test)]` の部分。
+- `session/ghost_switch_test_support.rs` は `session` の側の支えだが、それ自身が `runtime::spine` と `runtime::sample_test_support::acquire_emo2` を引く。`runtime-crate-split` で境をまたぐのは表の 4 つ（52 行）と、この支えの中の 2 行（表に含む）。
+
+### 24. audit への申し送り（要件 7.4）
+
+作業中に直したくなった不具合と要らない項目は直さず、受け持つ audit の brief の末尾の節「runtime-module-untangle からの申し送り（2026-11-13）」へ書いた（5 件）。受け持つ audit が無いもの（2 件）は、完了の棚卸で `/kiro-discovery` で起票する。本体の外の crate の説明の文（1 件）は `runtime-crate-split` が直す（brief には書かない）。
+
+| # | 中身 | 種類 | 申し送った先 |
+|---:|---|---|---|
+| 1 | `runtime/frame/wiring.rs` 322 行目の説明の文 `super::super::input_events::balloon` が古い（本当は `crate::input_events::balloon`） | 要らない項目 | `audit-emo2-boot-frame` |
+| 2 | 揺れるテスト `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`（`-j 4` の 1 回で赤） | 不具合の候補 | `audit-emo2-boot-spine` |
+| 3 | `session/shell_balloon_switch.rs` 37〜40 行目の出し直しが設計の 5 型より広い（10 個） | 要らない項目 | `audit-emo2-boot-switch` |
+| 4 | `update::update_cue`・`readme::readme_cue` が記録の決まり `areka::update`・`areka::readme` の前方一致の下に入った＝`info!` を足すと記録に残る | 気を付ける所 | `audit-areka-install-update` |
+| 5 | `crates/areka-placement/src/diag.rs` 136 行目の説明の文の古い出所 `areka::emo2_boot::frame` | 要らない項目 | `runtime-crate-split`（要件の Out of scope・本体の外の crate の説明の文はそこで直す） |
+| 6 | cargo のマニフェストの警告（使われない依存）: `shiori-abi` の `windows`・`shiori-host32-host` の `event-listener` | 要らない項目 | `audit-shiori-host32` |
+| 7 | cargo のマニフェストの警告（使われない依存）: workspace の `async-executor`（根の `Cargo.toml`・受け持つ audit が無い） | 要らない項目 | 完了の棚卸で `/kiro-discovery` 起票 |
+| 8 | 前からある古い行番号（`runtime/assets.rs:55`・`:82`・`:291`・`frame/zorder_descript.rs:61`・`spine_conformance_script.rs:589` ほか）が網羅台帳 `doc/ukadoc-coverage/ledger/` と手書きの briefing-*.md に残る（merge-base でも同じ・`doc/` を受け持つ audit が無い） | 要らない項目 | 完了の棚卸で `/kiro-discovery` 起票 |

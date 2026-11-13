@@ -81,3 +81,9 @@
 `audit-sylphya-actor` の audit の指摘のうち、ウェーブ C18 の約束（`areka-actor` の公開の形を変えない・`crates/areka/` に触らない）のために、その spec では直せない 1 件をこの spec へ回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の要件の討議 議題 3）。
 
 - **件（audit #16）**: `areka_actor::spawn_ui` はいつも `Ok` を返すのに、戻り値は `Result<_, UiSpawnError>` で、`UiSpawnError::NotUiThread` は返されない（`crates/areka-actor/src/ui.rs`）。戻り値を `(UiSender, JoinHandle)` にしてエラー型を消し、呼び手（`emo2_boot/mod.rs` の `SpawnUi`・`crates/areka-emo-text/src/actor.rs`）を全部直す。`areka-emo-text` を受け持つ見直しの spec が走っていれば申し合わせる。
+
+## runtime-module-untangle からの申し送り（2026-11-13）
+
+`runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
+
+- **不具合の候補: 揺れるテスト `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`**（`crates/areka/src/runtime/spine_third_scope_talk_tests.rs` 182 行目）。`cargo test -p areka -j 4` の 1 回で赤、単独 3 回と全体 1 回は緑。待ちの形（時刻か順序の前提）を調べ、テストの本質を外さずに直す。
