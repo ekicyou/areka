@@ -341,5 +341,41 @@
 8. 指摘 12 の効き目の測り（10 節の 4）を設計で要るとするか。
 9. 範囲の外の気づき（10 節の 5・`image-webp` 0.2.5 が crates.io に出たか）は確かめていない。出ていれば `/kiro-discovery` で起票する。
 
+## 13. 設計の段の調べと決め（2026-11-13・`/kiro-spec-design -y`）
+
+- 調べの種類: 軽い調べ（既存のクレートの直し・新しい依存なし）。使った決まり: `kiro-spec-design` の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md`。ponytail（full）の「いちばん小さい完全な直し」。型の手本は完了した `audit-emo-compose` の `design.md`。
+- 設計の正本は `design.md`。ここには調べた事実と、選ばなかった案の理由だけを残す。
+
+### 調べた事実
+
+| 項目 | 読んだ所 | 分かったこと | 設計への効き目 |
+|---|---|---|---|
+| `image` 0.25.10 の確保の上限 | `c:\rust\cargo\registry\src\index.crates.io-…\image-0.25.10\src\codecs\png.rs:42-43`・`src\codecs\webp\decoder.rs:23-28`・`src\io\limits.rs:49-56` | `PngDecoder::new` は `Limits::no_limits()` を渡す。`WebPDecoder::new` は上限を渡さない（`image-webp-0.2.4\src\decoder.rs:354` の `memory_limit` の既定は `usize::MAX`）。`Limits::default()` の 512 MiB は使われていない | 動く絵は見出しの寸法でアトラスが断る（12 節の 2） |
+| WIC が巨大な IHDR を `GetSize` まで通すか | — | 走らせないと分からない | テストはそれに依らない 16,385×1 の本物の PNG で上限の確かめを固定する |
+| `film_tests.rs:231` | `crates/areka-emo-compose/src/film_tests.rs:215-255` | 3 つの動く絵とも `frames[0]` が親（0・2・4）。親でない並びは表を作った後に入れ替えて作る | `with_frames` に確かめを足しても壊れない（12 節の 5） |
+| compose は着せ替えの中の 8 語を overlay として扱うか | `crates/areka-emo-compose/src/bind_steps.rs:37-82`・完了した `seriko-pattern-calls` の要件 5.3 | 扱わない。`insert` は差し込み、ほかの 6 語は手順に入れない（何もさせない）。要件 5.3 は ukadoc の手引きの版の「着せ替え・elementでの使用不可」に従った決め。ukadoc の定めの版は「無効である（overlayとして扱われる）」 | この spec では直さない。範囲の外の気づきとして `/kiro-discovery` で起票する（12 節の 4） |
+| `pattern_word` の範囲の外の使い手 | ツリー全体の grep | `areka-seriko` の `table_calls.rs`・`table_calls_dot_sakura_tests.rs` が `areka_emo_compose::{PatternWord, pattern_word}` を使う | compose は parsers の型と関数を再公開してパスを保つ |
+| `canonical_method_name` の使い手 | grep | compose の `method.rs` と `pattern_word.rs` だけ（`pub(crate)`） | parsers へ移して compose は取り込む＝綴りの比べ方が 1 つになる |
+| 指摘 22 の 9 つの型の使い手 | ツリー全体の grep（`areka_emo_atlas::モジュール::` のパスも） | コードの使い手は 0。名指しは `areka-emo-present` の説明の文 2 か所だけ。`dola` の `Trimmed` と `areka-update` の `Manifest` は別の型 | 下げられる（実装の頭でもう一度 grep・`runtime-module-untangle` へ知らせる） |
+| 頁の下流の引き方 | `crates/areka-emo-compose/src/blit.rs:133-200`・`crates/areka/src/emo2_boot/balloon_background.rs:50-56` | どちらも `AtlasPage` の `width`・`height`・`stride` で引く。頁を GPU へ上げる所は無い（CPU の転写だけ） | 自頁は正方でなくてよい・一辺が 16,386 でも構わない |
+| 範囲の外の `MemoryDecoder::insert` | grep（範囲の外 39 ファイル） | 行の詰め物つきの stride（`balloon_marker_load_tests.rs:198` の幅 2・stride 12）を使うテストがある | 約束の確かめは `stride == width * 4` にせず `stride >= width * 4` にする。実装で全部の呼び出しを確かめる |
+| `sniff.rs:70` の守り | `decode/sniff.rs:66-98` | `20 + len > total` なら続く `pos` が残りの外を指し、読みが失敗して `frames` が 0＝`None`。守りの有無で答えは変わらない | 守りとそのテストを消す（指摘 8・15） |
+| `image-webp` の版 | 2026-11-13 `cargo search image-webp` | crates.io の最新は 0.2.4 | 外す条件を満たさない・起票しない（12 節の 9） |
+| 道具の `[[example]] test = true` | `examples/gen_default_balloon/` の 5 ファイル | 子のファイルのテストは 20 本で、ずれの見張りのターゲットでもう走る | 関数を `cli.rs` へ移す形を取る（12 節の 1） |
+
+### まとめ方（synthesis）
+
+- **まとめる（generalization）**: 指摘 2（巨大な寸法）と 18（長さの約束）は、どちらも「読み手の答えを焼きの段が信じすぎる」の 1 つの問題。読み手ごとに確かめず、焼きの段の入口（`animated::load` の 3 つの道）で 1 つの確かめ（`check_image`）に通す。WIC の腕だけは確保の前に断る要があるので、同じ上限の関数（`pixel_len`）を `GetSize` の直後で呼ぶ。
+- **作るか借りるか（build vs adopt）**: `image` の `Limits`（`PngDecoder::with_limits`）を使う案は取らない。WIC の腕と `MemoryDecoder`・範囲の外の読み手を覆えず、見出しの確かめが要るのは変わらない。`crc32` を `areka-nar` から借りる案も取らない（依存の追加＝`Cargo.lock` が動く・要件 6.4）。
+- **減らす（simplification）**:
+  - pack と bake を 1 つにまとめる案（ギャップ分析の案 B）は取らない。指摘 22 を 3 の前に入れれば、`PackOutput` の欄を替えても公開の形に響かない。
+  - テストの部品の置き場は `src/test_support.rs` の 1 つ（`decode/` に 2 つ目を置かない）。
+  - 記録の文言の定数はテストの側に 1 つだけ（ギャップ分析は本番の側を推したが、本番の文言がうっかり変わったときにテストが赤にならなくなるので改めた）。
+  - 指摘 12 の効き目の測りはしない（出力が変わらず、悪くなる道が無い）。
+
+### 設計の段の判断の要る点（設計の討議へ）
+
+- 範囲の外の気づき 1 件（直さない）: compose が着せ替えの中の 6 語を overlay として描かない件（上の表）。外から見た描画が変わり、完了した spec の要件に反するので、`/kiro-discovery` で起票し、SSP の MCP で測ってから決めるのを推す。この spec の作業は変わらない。
+
 ---
 読まなかった所は無い（範囲の 63 ファイルを全部読んだ）。テストもビルドも走らせていない（「今のテストは緑」は読みからの前提）。
