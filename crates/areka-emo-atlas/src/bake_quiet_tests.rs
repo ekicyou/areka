@@ -6,18 +6,15 @@
 
 use super::*;
 use crate::test_support::{
-    dressed_shell, dump, elem, opaque_2x2, register, set, surface, transparent_2x2, zero_sized,
+    BIND_DEBUG, CLEAR_WARN, KEYED, ZERO_WARN, dressed_shell, dump, elem, opaque_2x2, register, set,
+    surface, transparent_2x2, zero_sized,
 };
 use areka_parsers::shell::{Interval, Surface};
 use std::path::Path;
 
 /// 黙らせる 4 本の文言（`lib.rs` の繰り返しの中）と、その絵の名前。
-const KEY_DEBUG: &str = "抜き色（左上の 1 画素と同じ色）で透過しました";
-const ZERO_WARN: &str = "元画像が 0 寸です";
-const BIND_DEBUG: &str = "着せ替え（bind）のアニメーションからだけ参照される面の絵です";
-const CLEAR_WARN: &str = "全透明（α=0）でトリム後 0 寸です";
 const QUIETED: [(&str, &str); 4] = [
-    (KEY_DEBUG, "key.png"),
+    (KEYED, "key.png"),
     (ZERO_WARN, "zero.png"),
     (BIND_DEBUG, "null.png"),
     (CLEAR_WARN, "clear.png"),

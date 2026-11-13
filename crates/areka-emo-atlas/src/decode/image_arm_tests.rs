@@ -6,25 +6,11 @@
 //! 色 ±1 を許す（`image-webp` の重ね算の丸め）。α と「重ねない」指定のコマは完全一致。
 
 use std::num::NonZeroU32;
-use std::path::PathBuf;
 
 use super::{delay_ms, premultiply, read_first_frame, read_frames};
 use crate::decode::{AnimatedImage, AnimationInfo, DecodedImage};
 use crate::table::LoopCount;
-
-fn sample(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/testdata/animated")
-        .join(name)
-}
-
-fn info(frame_count: u32) -> AnimationInfo {
-    AnimationInfo {
-        width: 8,
-        height: 8,
-        frame_count,
-    }
-}
+use crate::test_support::{animated_sample as sample, info, pixel};
 
 fn frames(name: &str, frame_count: u32) -> AnimatedImage {
     read_frames(&sample(name), info(frame_count))
@@ -43,9 +29,8 @@ const CLEAR: [u8; 4] = [0, 0, 0, 0];
 
 /// (x, y) の乗算済み BGRA を RGBA の順で返す。
 fn rgba(img: &DecodedImage, x: u32, y: u32) -> [u8; 4] {
-    let i = (y * img.stride + x * 4) as usize;
-    let p = &img.bgra[i..i + 4];
-    [p[2], p[1], p[0], p[3]]
+    let [b, g, r, a] = pixel(&img.bgra, img.stride, x, y);
+    [r, g, b, a]
 }
 
 /// 決め手の画素。`tol` は色だけに効く（α は完全一致）。

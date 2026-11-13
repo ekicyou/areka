@@ -6,28 +6,7 @@
 
 use super::*;
 use crate::decode::DecodedImage;
-
-/// 画素の並び（4 バイト単位）と寸法から `DecodedImage` を組む。`stride` は `width * 4`。
-fn image(width: u32, height: u32, has_alpha: bool, pixels: &[[u8; 4]]) -> DecodedImage {
-    let stride = width * 4;
-    assert_eq!(
-        pixels.len(),
-        (width * height) as usize,
-        "画素数と寸法が合わない"
-    );
-    let bgra: Vec<u8> = pixels.iter().flat_map(|px| px.iter().copied()).collect();
-    DecodedImage {
-        width,
-        height,
-        stride,
-        bgra,
-        has_alpha,
-    }
-}
-
-fn params(use_self_alpha: UseSelfAlpha) -> AlphaParams {
-    AlphaParams { use_self_alpha }
-}
+use crate::test_support::{image, params};
 
 /// 抜き色の腕（`On` ＋ α なし）を通す。
 fn key_out(img: DecodedImage) -> NormalizedImage {
@@ -169,13 +148,7 @@ fn trns_like_semi_transparent_pixels_survive() {
 /// 幅か高さが 0 の絵は抜き色を持てないので、そのまま渡す（失敗にしない）。
 #[test]
 fn zero_sized_image_passes_through() {
-    let src = DecodedImage {
-        width: 0,
-        height: 0,
-        stride: 0,
-        bgra: Vec::new(),
-        has_alpha: false,
-    };
+    let src = image(0, 0, false, &[]);
     let out = key_out(src);
     assert!(out.pbgra.is_empty());
     assert_eq!(out.width, 0);
@@ -209,12 +182,6 @@ fn plan_has_a_key_only_on_the_key_color_side() {
     assert_eq!(key_of(true, UseSelfAlpha::Full), None, "要件 4.1");
     assert_eq!(key_of(false, UseSelfAlpha::Full), None, "要件 4.2");
     // 左上の画素が無い（幅か高さが 0）絵は抜き色を持てない。
-    let empty = DecodedImage {
-        width: 0,
-        height: 0,
-        stride: 0,
-        bgra: Vec::new(),
-        has_alpha: false,
-    };
+    let empty = image(0, 0, false, &[]);
     assert_eq!(Normalizer::plan(&empty, params(UseSelfAlpha::On)).key, None);
 }

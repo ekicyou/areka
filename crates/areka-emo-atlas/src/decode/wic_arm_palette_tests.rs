@@ -3,24 +3,13 @@
 //! 検体（`testdata/palette/`・中身は同じフォルダの README）を本番の読み手で読み、
 //! `has_alpha` の判定と、`Normalizer` に通した後の画素（設計の Data Models の 2 つの表）を見る。
 
-use std::path::PathBuf;
-
 use crate::decode::ElementDecoder;
-use crate::normalize::{AlphaParams, Normalizer, UseSelfAlpha};
-use crate::test_support::with_arm;
-
-fn sample(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/testdata/palette")
-        .join(name)
-}
+use crate::normalize::{Normalizer, UseSelfAlpha};
+use crate::test_support::{palette_sample as sample, params, pixel, with_arm};
 
 /// 2×2 の乗算済み BGRA を (0,0) (1,0) (0,1) (1,1) の順に並べる。
 fn pixels(bgra: &[u8], stride: u32) -> [[u8; 4]; 4] {
-    let px = |x: u32, y: u32| {
-        let i = (y * stride + x * 4) as usize;
-        <[u8; 4]>::try_from(&bgra[i..i + 4]).unwrap()
-    };
+    let px = |x, y| pixel(bgra, stride, x, y);
     [px(0, 0), px(1, 0), px(0, 1), px(1, 1)]
 }
 
@@ -35,12 +24,7 @@ fn assert_baked(name: &str, decl: UseSelfAlpha, expected: [[u8; 4]; 4]) {
     with_arm(|arm| {
         let img = arm.decode(&sample(name)).expect("palette sample decodes");
         assert_eq!((img.width, img.height), (2, 2));
-        let out = Normalizer.normalize(
-            img,
-            AlphaParams {
-                use_self_alpha: decl,
-            },
-        );
+        let out = Normalizer.normalize(img, params(decl));
         assert_eq!(
             pixels(&out.pbgra, out.stride),
             expected,

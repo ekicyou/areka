@@ -379,7 +379,8 @@ mod bake_entry_tests {
     use crate::pack::PackConfig;
     use crate::table::SetId;
     use crate::test_support::{
-        dressed_shell, elem, opaque_2x2, register, set, surface, transparent_2x2, zero_sized,
+        BIND_DEBUG, CLEAR_WARN, ZERO_WARN, dressed_shell, elem, opaque_2x2, register, set, surface,
+        transparent_2x2, zero_sized,
     };
     use areka_parsers::shell::{Interval, Surface};
     use std::path::Path;
@@ -696,9 +697,6 @@ mod bake_entry_tests {
         (out, captured.unwrap())
     }
 
-    const BIND_DEBUG: &str = "着せ替え（bind）のアニメーションからだけ参照される面の絵です";
-    const CLEAR_WARN: &str = "全透明（α=0）でトリム後 0 寸です";
-
     /// T9 ⑴: `bind` だけから参照される面の全透明の絵は `warn` 0 件・`debug` 1 件（欄は今の `warn` と同じ）。
     /// 索引表は見分けの無い場合（同じ形を `runonce` で参照）と同じ。
     #[test]
@@ -766,7 +764,7 @@ mod bake_entry_tests {
         let warns: Vec<&str> = out.lines().filter(|l| l.contains("level=WARN")).collect();
         assert_eq!(warns.len(), 1, "0 寸の warn 1 件: {out}");
         assert!(
-            warns[0].contains("元画像が 0 寸です") && warns[0].contains("zero.png"),
+            warns[0].contains(ZERO_WARN) && warns[0].contains("zero.png"),
             "{out}"
         );
         assert!(!out.contains(BIND_DEBUG), "0 寸は見分けに入らない: {out}");

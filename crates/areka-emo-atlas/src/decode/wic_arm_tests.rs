@@ -7,28 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::decode::{AnimationInfo, DecodeError, ElementDecoder};
-use crate::test_support::with_arm;
-
-fn sample(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/testdata/animated")
-        .join(name)
-}
-
-fn info(frame_count: u32) -> AnimationInfo {
-    AnimationInfo {
-        width: 8,
-        height: 8,
-        frame_count,
-    }
-}
-
-/// 乗算済み BGRA の (x, y) の 1 画素。
-fn pixel(bgra: &[u8], stride: u32, x: u32, y: u32) -> [u8; 4] {
-    let i = (y * stride + x * 4) as usize;
-    bgra[i..i + 4].try_into().unwrap()
-}
+use crate::decode::{DecodeError, ElementDecoder};
+use crate::test_support::{animated_sample as sample, info, pixel, with_arm};
 
 const RED_BGRA: [u8; 4] = [0, 0, 255, 255];
 

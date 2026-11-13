@@ -6,9 +6,9 @@
 //! 有無に依らない。そのため WIC の WebP の読み手が要る `single.webp` と、段 2（WIC）へ落ちる
 //! `deep16.apng` はここに入れない（どちらも偽の読み手・兄弟のテストが判定する）。
 
-use std::path::PathBuf;
-
-use crate::test_support::{elem, full, set, surface, view, with_arm};
+use crate::test_support::{
+    BROKEN, FELL_BACK, OVER, elem, full, set, surface, testdata, view, with_arm,
+};
 use crate::{
     AnimationLimits, AtlasTable, BakeResult, ElementId, PackConfig, SetId, bake_with_limits,
 };
@@ -44,13 +44,9 @@ const ANIMATED: &[(&str, usize)] = &[
     ("trns.apng", 2),
 ];
 
-const OVER: &str = "bake: 動く絵が上限を超えたので 1 枚だけ読みます";
-const BROKEN: &str = "bake: 動く絵として読めなかったので 1 枚だけ読みます";
-const STAGE2: &str = "bake: 動く絵の 1 枚目を読めなかったので";
-
 /// 検体を面 0 に 1 層ずつ並べ、本物の読み手で焼く（COM を張った下で）。ログも返す。
 fn bake_samples(limits: AnimationLimits) -> (BakeResult, String) {
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/testdata/animated");
+    let base = testdata("animated");
     let surfaces = vec![surface(
         0,
         SAMPLES
@@ -166,7 +162,7 @@ fn samples_folder_bakes_every_frame_and_single_pictures() {
     let w = warns_for(&log, "truncated.apng");
     assert_eq!(w.len(), 1, "truncated: one warning: {log}");
     assert!(w[0].contains(BROKEN), "truncated: broken warning: {log}");
-    assert!(!log.contains(STAGE2), "no fallback to WIC: {log}");
+    assert!(!log.contains(FELL_BACK), "no fallback to WIC: {log}");
 }
 
 /// 上限を 1 コマにして焼くと、どの動く絵も 1 枚へ縮み、その 1 枚は上限を広げて焼いたときの
@@ -219,5 +215,5 @@ fn one_frame_limit_shrinks_to_frame_zero_of_the_wide_bake() {
     let rgb = full(narrow, id(narrow, "rgb.webp"));
     assert_eq!(rgb[0], CLEAR, "rgb.webp: top-left color cleared");
     assert_eq!(rgb[63], RED, "rgb.webp: right half stays red");
-    assert!(!log.contains(STAGE2), "no fallback to WIC: {log}");
+    assert!(!log.contains(FELL_BACK), "no fallback to WIC: {log}");
 }

@@ -19,7 +19,7 @@
 
 use areka_parsers::shell::Surface;
 
-use crate::test_support::{elem, emo2_shell, emo2_shell_dir, set, surface, with_arm};
+use crate::test_support::{BIND_DEBUG, elem, emo2_shell, emo2_shell_dir, set, surface, with_arm};
 use crate::{BakeError, ManifestDeriver, PackConfig, SetId, bake};
 
 /// balloon 画像 1 枚を 1 element として持つ手組み surface（layer0・x/y=0・collision/animation 空）。
@@ -156,10 +156,7 @@ fn emo2_null_png_logs_debug_not_warn() {
         );
         let debug: Vec<&&str> = null_lines
             .iter()
-            .filter(|l| {
-                l.contains("level=DEBUG")
-                    && l.contains("着せ替え（bind）のアニメーションからだけ参照される面の絵です")
-            })
+            .filter(|l| l.contains("level=DEBUG") && l.contains(BIND_DEBUG))
             .collect();
         assert_eq!(debug.len(), 1, "見分けた debug は 1 件: {out}");
     });

@@ -12,7 +12,7 @@ use areka_parsers::shell::{
 use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
-use crate::decode::MemoryDecoder;
+use crate::decode::{AnimationInfo, DecodedImage, MemoryDecoder};
 use crate::{AlphaParams, AtlasTable, ElementId, SurfaceSet, UseSelfAlpha, WicDecoderArm};
 
 // ---- COM ----
@@ -64,19 +64,17 @@ pub(crate) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     }
 }
 
-/// `use_self_alpha: On`（emo2 の descript は `seriko.use_self_alpha,1`）。
-pub(crate) fn params() -> AlphaParams {
-    AlphaParams {
-        use_self_alpha: UseSelfAlpha::On,
-    }
+/// 宣言 `use_self_alpha` の α の扱い。
+pub(crate) fn params(use_self_alpha: UseSelfAlpha) -> AlphaParams {
+    AlphaParams { use_self_alpha }
 }
 
-/// `params()` の集まり。
+/// `params(On)` の集まり（emo2 の descript は `seriko.use_self_alpha,1`）。
 pub(crate) fn set<'a>(surfaces: &'a [Surface], base: &'a Path) -> SurfaceSet<'a> {
     SurfaceSet {
         surfaces,
         base_dir: base,
-        alpha_params: params(),
+        alpha_params: params(UseSelfAlpha::On),
     }
 }
 
@@ -183,6 +181,77 @@ pub(crate) fn dump(table: &AtlasTable) -> String {
     }
     s
 }
+
+// ---- 読み手のテスト ----
+
+/// `src/testdata/<folder>`（`animated`・`palette` の検体のフォルダ）。
+pub(crate) fn testdata(folder: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/testdata")
+        .join(folder)
+}
+
+/// `testdata/animated/` の検体。
+pub(crate) fn animated_sample(name: &str) -> PathBuf {
+    testdata("animated").join(name)
+}
+
+/// `testdata/palette/` の検体。
+pub(crate) fn palette_sample(name: &str) -> PathBuf {
+    testdata("palette").join(name)
+}
+
+/// 動く絵の検体の見出し（どれも 8×8）。
+pub(crate) fn info(frame_count: u32) -> AnimationInfo {
+    AnimationInfo {
+        width: 8,
+        height: 8,
+        frame_count,
+    }
+}
+
+/// 乗算済み BGRA の (x, y) の 1 画素（BGRA の順のまま）。
+pub(crate) fn pixel(bgra: &[u8], stride: u32, x: u32, y: u32) -> [u8; 4] {
+    let i = (y * stride + x * 4) as usize;
+    bgra[i..i + 4].try_into().unwrap()
+}
+
+// ---- 正規化のテスト ----
+
+/// 画素の並び（4 バイト単位）と寸法から `DecodedImage` を組む。`stride` は `width * 4`。
+/// `image(0, 0, false, &[])` が空の絵。
+pub(crate) fn image(width: u32, height: u32, has_alpha: bool, pixels: &[[u8; 4]]) -> DecodedImage {
+    assert_eq!(
+        pixels.len(),
+        (width * height) as usize,
+        "画素数と寸法が合わない"
+    );
+    DecodedImage {
+        width,
+        height,
+        stride: width * 4,
+        bgra: pixels.concat(),
+        has_alpha,
+    }
+}
+
+// ---- 記録の文言（2 つ以上のテストファイルが比べる・本番の側には置かない） ----
+
+/// 動く絵が上限を超えて 1 枚へ縮むときの `warn!`。
+pub(crate) const OVER: &str = "bake: 動く絵が上限を超えたので 1 枚だけ読みます";
+/// 動く絵として読めずに 1 枚へ縮むときの `warn!`。
+pub(crate) const BROKEN: &str = "bake: 動く絵として読めなかったので 1 枚だけ読みます";
+/// 動く絵の 1 枚目も読めずに今までの読み方へ落ちるときの `warn!`。
+pub(crate) const FELL_BACK: &str =
+    "bake: 動く絵の 1 枚目を読めなかったので、今までの読み方で 1 枚だけ読みます";
+/// 抜き色で透過した絵の `debug!`。
+pub(crate) const KEYED: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
+/// 元画像が 0 寸の絵の `warn!`。
+pub(crate) const ZERO_WARN: &str = "元画像が 0 寸です";
+/// 着せ替えのアニメーションからだけ参照される面の全透明の絵の `debug!`。
+pub(crate) const BIND_DEBUG: &str = "着せ替え（bind）のアニメーションからだけ参照される面の絵です";
+/// 全透明でトリム後 0 寸の絵の `warn!`。
+pub(crate) const CLEAR_WARN: &str = "全透明（α=0）でトリム後 0 寸です";
 
 // ---- emo2 のシェル ----
 

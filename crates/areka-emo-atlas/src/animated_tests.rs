@@ -6,10 +6,12 @@
 use crate::decode::{AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage, MemoryDecoder};
 use crate::limits::AnimationLimits;
 use crate::manifest::SurfaceSet;
-use crate::normalize::{AlphaParams, UseSelfAlpha};
+use crate::normalize::UseSelfAlpha;
 use crate::pack::PackConfig;
 use crate::table::{AtlasTable, ElementId, LoopCount, SetId};
-use crate::test_support::{dump, elem, full, set, surface, view};
+use crate::test_support::{
+    BROKEN, FELL_BACK, KEYED, OVER, dump, elem, full, params, set, surface, view,
+};
 use crate::{BakeResult, bake_with_limits};
 use areka_parsers::shell::Surface;
 use std::num::NonZeroU32;
@@ -123,7 +125,7 @@ fn bake_as(
     let sets = [SurfaceSet {
         surfaces: &surfaces,
         base_dir: Path::new(BASE),
-        alpha_params: AlphaParams { use_self_alpha },
+        alpha_params: params(use_self_alpha),
     }];
     bake_with_limits(&sets, dec, cfg, limits)
 }
@@ -295,10 +297,6 @@ fn all_transparent_animation_warns_once() {
 
 // ---- 1 枚へ縮める 3 段（要件 3.3・4.3・6.2〜6.8・8.4・8.5） ----
 
-const OVER: &str = "bake: 動く絵が上限を超えたので 1 枚だけ読みます";
-const BROKEN: &str = "bake: 動く絵として読めなかったので 1 枚だけ読みます";
-const FELL_BACK: &str =
-    "bake: 動く絵の 1 枚目を読めなかったので、今までの読み方で 1 枚だけ読みます";
 /// 上限で縮むときの全コマの答え。`decode_frames` が呼ばれれば `reason` にこの文が出る。
 const NOT_READ: &str = "all frames must not be read";
 /// 3 つの `warn!` に共通の欄（設計 Monitoring）。どの絵も組 0 に在る。
@@ -647,7 +645,6 @@ fn bake_without_limits_uses_the_default_limits() {
 
 /// 半透明（乗算済みの 0,0,64・α=128）。
 const H: Px = [0, 0, 64, 128];
-const KEYED: &str = "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました";
 
 /// anim.png だけのシェルを宣言つきで焼き、全部のコマの画素とログを返す（失敗の一覧は空）。
 fn frames_as(anim: AnimatedImage, decl: UseSelfAlpha) -> (Vec<Vec<Px>>, String) {
