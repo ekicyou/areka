@@ -18,10 +18,11 @@
     5 areka-impl-watch.old*.exe（前の形の .old.exe も）を消してみる。走っていて消せなければ残す。
     6 置いたものの --help を呼んで確かめる。
     7 置いたものの status を呼ぶ。状態ファイルの版が合わない（標準エラーが state file version mismatch で
-      始まる）ときだけ、置いたもので clear を 1 回呼ぶ。版が合っていれば状態には触らない。
+      始まる）ときだけ、置いたもので clear を 1 回呼ぶ。版が合っていれば state.json には触らない。
 
   自分で触るのは置き場所の areka-impl-watch.exe・areka-impl-watch.new.exe・areka-impl-watch.old*.exe だけ。
-  state.json・ロック・居る印・ログ・status.md・退避のファイルは手 7 の clear（exe が行う）でだけ変わる。
+  state.json・居る印・退避のファイルは手 7 の clear（exe が行う）でだけ変わる。手 7 の status（exe が行う）は
+  status.md を書き直し、state.lock を一瞬握り、impl-watch.log を開く（無ければ作る）。
 
   出る行（ASCII だけ・端末の文字コードは読みも書きもしない）:
     FAIL home: AREKA_IMPL_WATCH_HOME is not set
