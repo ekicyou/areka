@@ -636,16 +636,22 @@ fn first_frame_failure_falls_back_to_the_old_reader_then_to_the_failure_list() {
     }
 }
 
-/// 上限を渡さない入口 `bake` は既定の上限で焼く（環境変数は触らない）。
+/// 上限を渡さない入口 `bake` は環境の上限（`AnimationLimits::from_env`）で焼く。
+/// 環境の値に依らないよう、同じ上限を渡した `bake_with_limits` と結果を比べる。
 #[test]
-fn bake_without_limits_uses_the_default_limits() {
+fn bake_without_limits_uses_the_env_limits() {
     let dec = with_animation(three_frames());
     let surfaces = shell();
     let sets = [set(&surfaces, Path::new(BASE))];
     let table = crate::bake(&sets, &dec, PackConfig::default()).table;
-    let parent = table.resolve(SetId(0), "anim.png").unwrap();
-    assert_eq!(table.animation(parent).unwrap().frames.len(), 3);
-    assert_eq!(dump(&table), dump(&bake(&dec).table));
+    let with_env = bake_with_limits(
+        &sets,
+        &dec,
+        PackConfig::default(),
+        AnimationLimits::from_env(),
+    )
+    .table;
+    assert_eq!(dump(&table), dump(&with_env));
 }
 
 // ---- 宣言ごとの動く絵と `.pna`（spec: areka-P0-self-alpha-declaration 要件 3.3・4.3・4.4・5.5・5.7・9.4） ----

@@ -81,7 +81,7 @@
   - 番号つきの形式の表から 1 ビットの項、次に 2 ビットの項を一時に外して、それぞれのテストが赤になるかを確かめて記録に残す。赤にならない項は届かないので表から消す直しに替える（テストは残す）
   - 完了の状態: 2 本のテストが緑、検体の差分が足した 2 本だけ、表の各項の要否が記録に残る
   - _Requirements: 2.1, 4.6, 4.7, 6.7_
-- [ ] 3.5 環境変数で赤になるテストを直す（指摘 7）
+- [x] 3.5 環境変数で赤になるテストを直す（指摘 7）
   - 上限を渡さない焼きのテストを、普通の焼きの結果と「環境の上限を渡した焼き」の結果が等しいことを確かめる形にし、名前と説明を事実に直す
   - 動く絵を登録して普通の焼き・静かな焼きを呼ぶほかのテストが、上限の値に依らない比べ方であることを grep で確かめる
   - 完了の状態: 上限の環境変数を変えて回しても、動く絵のテストが緑のまま
@@ -150,3 +150,4 @@
 - 2.2: `check_image` は本番の使い手が無いと clippy の dead_code で落ちるので、仮に `decode/wic_arm.rs::copy_checked` の最後で呼んでいる。2.3 で `animated::accept`/`fits` が使い始めたら、その 1 行を消す（設計どおり WIC の腕は `pixel_len` だけ）。
 - 2.3: 範囲の外で替え玉の読み手（`MemoryDecoder`）に絵を登録する呼び出しを grep で全部読んだ。39 ファイル・45 件（`insert` 35・`insert_animated` 10。内訳 areka 4・areka-emo-compose 17・areka-emo-present 16・areka-emo-text 1・areka-placement 1）、約束（stride ≥ 幅×4・長さ＝stride×高さ）を破るものは 0 件。`decode/wic_arm.rs::copy_checked` の仮の `check_image` は消した。
 - 2.4: `runtime-module-untangle` は PR#447 で着地済みのため、知らせの代わりに grep を記録する。9 つの型（Packer・PackOutput・PackedEntry・Baker・Trimmer・TrimResult・Trimmed・ManifestDeriver・Manifest）と 8 つのモジュール（bake・decode・error・manifest・normalize・pack・table・trim）の範囲の外のコードの使い手は 0 件（当たりは areka-emo-present の説明の文 2 か所と、別の同名の型だけ）。残り物（5.1 の audit で拾う候補）: `normalize.rs:92` の説明が非公開の `Normalizer::plan`/`apply` へリンクする `cargo doc` の警告 2 件（前からある）、`limits.rs` の外から届かない `pub const` 3 つ。
+- 3.5（範囲の外・完了の棚卸で起票）: `crates/areka-placement/src/measure_first_frame_tests.rs` の `fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake` は、動く絵の上限の環境変数（`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` か `AREKA_ANIMATED_IMAGE_MAX_PIXELS=1`）を立てると 258 行の `raw_warns == 0` で赤になる（本物の `bake` が環境の上限を読むため）。areka-placement はこの spec では触れない。`crates/areka/src/placement_tests/measure_bake_log_tests.rs` も動く絵を登録するが、環境変数を変えた走らせ方は未確認。
