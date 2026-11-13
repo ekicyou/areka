@@ -37,7 +37,7 @@
   - _Boundary: 境界のテスト_
   - _Requirements: 2.8, 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 4. 全体テストに機能 `toml` の段を足す
+- [x] 4. 全体テストに機能 `toml` の段を足す
   - 全体テストの `x64 workspace tests` の段の直後に、機能 `toml` を有効にした `dola` のテストの段 `dola toml feature tests` を、検体の取り寄せが赤でも飛ばさない形（`TestStep` でなく `Step`）で足す
   - スクリプトの `.DESCRIPTION` の段の一覧に 1 行足して後ろの番号を 1 つずつ振り直し、「`cargo test` を回す段（5・6）」を「5・7」に直して、新しい段は取り寄せが赤でも回ることを書き足す
   - `tech.md` のフルテストの節の段の一覧と取り寄せが赤のときの文、このワークツリーの `.claude/skills/kiro-complete/SKILL.md` の段の一覧（433 行目）に、この段を 1 つずつ足す

@@ -4,20 +4,21 @@
 
 .DESCRIPTION
   1. sample fetch: URL の行の検体の取り寄せ（tools/sample-fetch.ps1 を別のプロセスで・通信するのはこの段だけ）。
-     失敗したら cargo test を回す段（5・6）を skipped (sample fetch failed) として回さない（ほかの段は回す）
+     失敗したら cargo test を回す段（5・7）を skipped (sample fetch failed) として回さない（ほかの段は回す）
   2. i686 ターゲットの導入（入っていれば何もしない）
   3. i686 の成果物（helper・偽 DLL 2 つ）のビルド＝x64 の host32 e2e が spawn／load する
   4. cargo fmt --check（-Format のときは先に cargo fmt --all で整形する）
   5. x64 のワークスペース全テスト（--no-fail-fast・-j 4＝ページング不足 os error 1455 の回避）
-  6. i686 でしか走らないテスト（host-32 系）
-  7. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
-  8. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
-  9. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  10. 俯瞰の HTML の道具の自分の検査（.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  11. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  12. sample fetch check: 取り寄せの段の自分の検査（tools/sample-fetch.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  13. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
-  14. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
+  6. 機能 toml を有効にした dola のテスト（cargo test -p dola --features toml・検体を使わないので取り寄せが赤でも回す）
+  7. i686 でしか走らないテスト（host-32 系）
+  8. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
+  9. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
+  10. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  11. 俯瞰の HTML の道具の自分の検査（.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  12. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  13. sample fetch check: 取り寄せの段の自分の検査（tools/sample-fetch.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  14. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  15. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
   段が赤でも止めずに最後まで回し、段ごとの合否を一覧にして、1 つでも赤なら終了コード 1 で終わる。
   一覧には検査したコミットと、始めた時点の未コミットの変更の件数も出す（「直近の緑」で再実行を省けるかの証拠）。
 
@@ -64,6 +65,7 @@ Step 'build i686 artifacts' { cargo build -p shiori-host32-helper -p shiori-host
 if ($Format) { Step 'cargo fmt (format)' { cargo fmt --all } }
 Step 'fmt --check' { cargo fmt --all -- --check }
 TestStep 'x64 workspace tests' { cargo test --workspace --no-fail-fast -j 4 }
+Step 'dola toml feature tests' { cargo test -p dola --features toml --no-fail-fast -j 4 }
 TestStep 'i686 tests (host-32)' { cargo test -p shiori-host32-helper -p shiori-host32-ipc --target $i686 --no-fail-fast }
 Step 'crates.io pre-publish check (package only)' { pwsh -NoProfile -File tools/crates-io.ps1 }
 Step 'encoding check' { pwsh -NoProfile -File tools/encoding-check.ps1 }
