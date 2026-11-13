@@ -268,7 +268,8 @@ async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_
     assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
 }
 
-/// `2026-07-28` で話す Desktop でも、新しいつなぎ先の最初の長い要求の間に次の要求は待たない（設計 D-13）。
+/// `2026-07-28` で話す Desktop でも、新しいつなぎ先の最初の長い要求の間に次の要求は待たない（設計 D-13 の例外を
+/// 短い `server/discover` へ移す）。
 /// 版の札の付いた要求は、つないだときの版（`2025-11-25`）と違う間は rmcp が他の要求を止めて送る。
 #[tokio::test]
 async fn a_slow_stateless_request_first_on_a_link_does_not_hold_back_the_next() {

@@ -142,3 +142,5 @@
 - 4.1（範囲の外・完了の棚卸で起票）: `doc/ssp-mcp/transport-diff-areka.md` の「ping」「未知メソッド」の行は、`2026-07-28` の版で 404・`-32601` になることを書いていない（名指したテストはそれを固定している）。この spec は表の値を変えない約束なので直さない（この spec より前からの書き漏れ）。
 - 4.1（範囲の外・完了の棚卸で起票）: `crates/areka/src/log_history.rs` の規則 `areka_update::winhttp`／`areka_update::fetch` は何の記録にも当たらない（更新の記録はすべて `lib.rs`＝target `areka_update` から出る）。`areka` クレートの持ち場。
 - 4.1（裁定・数えない）: `areka-update` の `pub use` の `UpdateWarning`・`InvalidWhy`・`DeleteWhy`・`MAX_BODY_BYTES` は外の使い手が 0 だが、要件 6.1（公開の形を変えない）の外なので残す（要件 6.4・audit 系の議題は推奨案で決めてよい）。
+- 4.1（かけ直し 3〜4 回目・本番の直し）: rmcp 3.9.0 は交渉済みの版と違う `_meta` の版の要求を「止める間」として答えまでほかの要求を送らない。中継は、つなぎ先ごとに最初の版付きの要求の前へ同じ `_meta` の `server/discover` を 1 回送り、この待ちを短い往復へ移す（完了した `areka-P0-mcp-stdio-bridge` の設計 D-13 の例外の形を変える）。版を記録するのは discover の答え（エラーの答えも）が返ったときだけ。
+- 4.1（数えない・約束の外）: `crates/areka-mcp-bridge/Cargo.toml` の dev-dependencies の tokio `rt-multi-thread` とその注は使われていない。3 つのクレートの `Cargo.toml` は差分 0 の約束（要件 5.5）なので直さない。完了の棚卸で起票する。

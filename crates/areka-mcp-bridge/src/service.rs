@@ -275,8 +275,8 @@ impl Bridge {
 
     /// 要求の `_meta` の版が rmcp のクライアントの今の版と違えば、先に同じ `_meta` の `server/discover` を
     /// 1 つ送り、答えを捨てる。rmcp は版の変わる要求の答えが返るまでほかの要求を送らないので、その要求を
-    /// 短いものにする（長いツールの間も、ほかの要求は待たない＝設計 D-13）。届いたかは問わない（失敗は、
-    /// 続けて送る本当の要求が読み分ける）。
+    /// 短いものにする（設計 D-13 の例外＝版の違う最初の要求が止める間を、短い `server/discover` へ移す）。
+    /// 届いたかは問わない（失敗は、続けて送る本当の要求が読み分ける）。
     async fn align(&self, linked: &Linked, meta: &RequestMetaObject) {
         let Some(wanted) = meta.protocol_version() else {
             return;
@@ -289,19 +289,28 @@ impl Bridge {
             ClientRequest::DiscoverRequest(DiscoverRequest::new(DiscoverRequestParams {}));
         let wait = self.config.timeouts.reply;
         let options = PeerRequestOptions::with_timeout(wait).with_meta(meta.clone());
-        // 送り出せたら、rmcp のクライアントはその版に替わっている（答えを待つのは、止める間を終えるため）。
+        // rmcp は POST を始めた時に版を替える。答え（エラーの答えも）が返ったなら始まっていたので版を記録する。
+        // 列の中で上限が来て取り消された discover では替わらないので記録しない（次の要求がもう 1 度揃える）。
         // 失敗は捨てる（続く本当の要求が同じ道で失敗し、そちらが今の読み分けと記録を通る）。
         match linked
             .link
             .send_request_with_option(discover, options)
             .await
         {
-            Ok(sent) => {
-                if let Err(err) = sent.await_response().await {
+            Ok(sent) => match sent.await_response().await {
+                Ok(_) => *version = Some(wanted),
+                Err(ServiceError::McpError(error)) => {
+                    debug!(
+                        port = linked.port,
+                        code = error.code.0,
+                        "[bridge] the version discover was answered with an error"
+                    );
+                    *version = Some(wanted);
+                }
+                Err(err) => {
                     debug!(port = linked.port, error = ?err, "[bridge] the version discover got no answer");
                 }
-                *version = Some(wanted);
-            }
+            },
             Err(err) => {
                 debug!(port = linked.port, error = ?err, "[bridge] the version discover was not sent")
             }
