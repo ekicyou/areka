@@ -18,6 +18,7 @@
 // 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ（areka-P0-balloon-lifecycle-events task 5.2）。
 // =============================================================================
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -109,6 +110,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     // ── 表示層は headless（`attach_target` は GPU 資源を要さず、可視状態の照会はそのまま通る） ──
     let mut world = World::new();
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     let window = world.spawn_empty().id();
     wiring.presenter.attach_target(
         balloon_target(0),

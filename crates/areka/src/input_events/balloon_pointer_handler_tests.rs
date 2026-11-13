@@ -15,6 +15,7 @@
 // 実 runtime へ実際に呼び、BalloonWiring.hover の更新と debug marker を固定する）。
 // -------------------------------------------------------------------------
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -147,6 +148,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     let mut bw = BalloonWiring::new(tx);
     bw.set_hover(0, Some(2));
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -194,6 +196,7 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     let mut bw = BalloonWiring::new(tx);
     bw.set_hover(0, Some(3));
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -228,6 +231,7 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx)); // hover 空（未注入）
+    world.insert_non_send(BalloonHover::default());
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -312,6 +316,7 @@ fn pressed_non_left_button_is_noop_false() {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
 
     // 右ボタン down（left_down=false）——確定ではない。
     let right = Phase::Bubble(PointerState {
@@ -427,6 +432,7 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
 
     let ev = bubble_left_press(10, 20);
     let logs = capture_logs(|| {
@@ -474,6 +480,7 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
 
     let ev = bubble_left_press(10, 20);
     let logs = capture_logs(|| {
@@ -567,6 +574,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
                 let mut bw = BalloonWiring::new(tx);
                 bw.set_hover(0, Some(2));
                 world.insert_non_send(bw);
+                world.insert_non_send(BalloonHover::default());
                 Some(rx)
             }
             Degrade::BalloonWiringAbsent => None,
@@ -677,6 +685,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
                 let mut bw = BalloonWiring::new(tx);
                 bw.set_hover(0, Some(2));
                 world.insert_non_send(bw);
+                world.insert_non_send(BalloonHover::default());
                 Some(rx)
             }
             Degrade::BalloonWiringAbsent => None,
@@ -775,6 +784,7 @@ fn pressed_left_double_click_reaches_the_user_break_entry() {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (bw, _selection_rx) = wiring_with_inbox();
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
     let (_flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
     let (kanade_tx, kanade_rx) = mpsc::channel();
@@ -826,6 +836,7 @@ fn anchor_only_world(last: Option<usize>) -> (World, Entity, Receiver<ChoiceSele
     let (mut bw, rx) = wiring_with_inbox();
     bw.set_hover(0, last);
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
     (world, e, rx)
 }
 

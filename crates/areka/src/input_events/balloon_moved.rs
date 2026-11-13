@@ -8,6 +8,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
+use crate::runtime::balloon_hover::BalloonHover;
 use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
@@ -34,7 +35,7 @@ use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
 /// **借用規律（固定順序・design §204）**:
 /// 1. `RuntimeWiring` 共有借用→`runtime()` アクセサで `Rc` clone→world 側借用解放。
 ///    `RuntimeWiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!`＋no-op（donor presenter=None 同型・R4.1）。
-/// 2. `BalloonWiring` へバルーン滞在（`balloon_hover`）を記録し `last_injected` を copy（可変借用即解放）。
+/// 2. `BalloonWiring` から `last_injected` を copy し、`BalloonHover` へバルーン滞在を記録する（借用は即解放）。
 ///    `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋no-op
 ///    （配線存在檻が開発時に検出）。滞在の記録は選択肢の有無・行ヒットの有無に依存しない独立の軸
 ///    （areka-P0-balloon-visibility 5.2）。
@@ -95,13 +96,13 @@ pub(crate) fn on_balloon_pointer_moved(
     // 滞在の記録（areka-P0-balloon-visibility 5.2）は選択肢機構と**独立の軸**——選択肢の表示有無・
     // 行ヒットの有無に依らず、バルーン窓上の移動そのもので当該 scope を真にする（ゆえに選択肢
     // スナップショット ③ より前で行い、③ の縮退に巻き込まれない）。解除は窓外離脱
-    // （`clear_balloon_hover_on_leave`）と非表示遷移時の掃除（`BalloonWiring::clear_balloon_hover`）。
+    // （`clear_balloon_hover_on_leave`）と非表示遷移時の掃除（`BalloonHover::clear_balloon_hover`）。
     // 読み口 `is_balloon_hovered` はバルーン可視性の相が毎フレーム読む（抑止条件の観測）。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
-    let Some(last_injected) = world.get_non_send_mut::<BalloonWiring>().map(|mut bw| {
-        bw.set_balloon_hover(scope);
-        bw.hover(scope)
-    }) else {
+    let Some(last_injected) = world
+        .get_non_send::<BalloonWiring>()
+        .map(|bw| bw.hover(scope))
+    else {
         tracing::error!(
             event = "balloon_wiring_missing",
             scope,
@@ -109,6 +110,10 @@ pub(crate) fn on_balloon_pointer_moved(
         );
         return false;
     };
+    // 滞在の集合は `BalloonWiring` と同じ時に置かれる runtime の型（不在は可視性の相が error! を 1 回出す）。
+    if let Some(mut balloon_hover) = world.get_non_send_mut::<BalloonHover>() {
+        balloon_hover.set_balloon_hover(scope);
+    }
 
     // ── 借用規律 ③ runtime 不変借用でスナップショット（純関数評価・move はここで完結）────────────
     // 毎イベント現行 choice_hit_rows に対して hit 判定する（新選択肢集合へ持ち越さない・R3.3）。

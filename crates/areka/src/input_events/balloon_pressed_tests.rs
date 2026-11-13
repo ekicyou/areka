@@ -4,6 +4,7 @@
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
 //! で配る（印の面の上の押下が窓の受け口へ届くこと）。
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -94,6 +95,7 @@ fn rig() -> Rig {
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (tx, selections) = mpsc::channel();
     world.insert_non_send(BalloonWiring::new(tx));
+    world.insert_non_send(BalloonHover::default());
     let (flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, lifecycle) = mpsc::channel();
     let (kanade_tx, kanade) = mpsc::channel();

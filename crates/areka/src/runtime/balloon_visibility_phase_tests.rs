@@ -14,6 +14,7 @@
 // そのまま通る。
 // =============================================================================
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -208,6 +209,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
     let mut harness = Harness::new().with_balloon_scope(0).with_balloon_scope(1);
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     // scope 1 だけを表示層へ装着する（scope 0 は可視状態を引けない）。
     attach_headless(&mut harness.wiring.presenter, &mut world, 1);
     for scope in [0, 1] {
@@ -277,6 +279,7 @@ fn failed_show_is_logged_and_rolled_back() {
     let mut world = world_at(1.0);
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     reveal_text(&harness, 0, "あい");
 
     let (_, first) = capture(|| harness.frame(&mut world));
@@ -328,8 +331,9 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
     let mut world = world_at(1.0);
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     world
-        .get_non_send_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonHover>()
         .expect("挿入済み")
         .set_balloon_hover(0);
 
@@ -364,7 +368,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 
     assert!(
         !world
-            .get_non_send::<BalloonWiring>()
+            .get_non_send::<BalloonHover>()
             .expect("挿入済み")
             .is_balloon_hovered(0),
         "不可視へ落ちた scope の滞在記録は掃除する（恒久抑止への固着を断つ）"
@@ -382,6 +386,7 @@ fn lifecycle_signals_are_drained_in_full() {
     let mut world = world_at(1.0);
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
 
     harness.signal(TalkLifecycleSignal::TalkStarted { talk_id: None });
     harness.signal(TalkLifecycleSignal::DisplayEndAt(2.0));
@@ -410,6 +415,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
     let harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
     let mut world = world_at(1.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);
     reveal_text(&harness, 0, "あい");
@@ -490,6 +496,7 @@ fn glyphs_are_not_observed_without_injected_time() {
     let harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(1.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);
     reveal_text(&harness, 0, "あい");
@@ -558,8 +565,9 @@ fn pointer_residency_is_observed_per_scope() {
     let harness = Harness::new().with_balloon_scope(0).with_balloon_scope(1);
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     world
-        .get_non_send_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonHover>()
         .expect("挿入済み")
         .set_balloon_hover(1);
     let mut presenter = EmoPresenter::new();
@@ -619,6 +627,7 @@ fn dragging_requires_both_balloon_window_and_drag_marker() {
 fn hide_touches_only_the_balloon_target() {
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);
     // キャラクター窓の target は balloon target でないので共有の道具を通さず直に装着する。
@@ -703,15 +712,16 @@ fn hide_touches_only_the_balloon_target() {
 fn hover_residency_is_cleared_for_hidden_scopes_only() {
     let mut world = World::new();
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     {
-        let mut wiring = world.get_non_send_mut::<BalloonWiring>().expect("挿入済み");
+        let mut wiring = world.get_non_send_mut::<BalloonHover>().expect("挿入済み");
         wiring.set_balloon_hover(0);
         wiring.set_balloon_hover(1);
     }
 
     clear_hover_residency(&mut world, &[0]);
 
-    let wiring = world.get_non_send::<BalloonWiring>().expect("挿入済み");
+    let wiring = world.get_non_send::<BalloonHover>().expect("挿入済み");
     assert!(!wiring.is_balloon_hovered(0), "不可視へ落ちた scope は掃除");
     assert!(wiring.is_balloon_hovered(1), "他 scope の滞在は残る");
 }
@@ -836,6 +846,7 @@ fn disconnected_lifecycle_channel_is_logged_once() {
     let mut world = world_at(1.0);
     attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     harness.disconnect_lifecycle();
 
     let (_, events) = capture(|| {

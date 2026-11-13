@@ -12,6 +12,7 @@
 // （抑止を解く側は積極的）。この非対称は下 2 本のテスト（moved 側／leave 側）が明示的に固定する。
 // -------------------------------------------------------------------------
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -36,10 +37,11 @@ fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
     })
 }
 
-/// 空の `BalloonWiring` を World へ NonSend 挿入する（`Receiver` は檻の生存期間だけ保持する）。
+/// 空の `BalloonWiring`（と並べて置く `BalloonHover`）を World へ NonSend 挿入する（`Receiver` は檻の生存期間だけ保持する）。
 fn insert_wiring(world: &mut World) -> mpsc::Receiver<ChoiceSelection> {
     let (tx, rx) = mpsc::channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
+    world.insert_non_send(BalloonHover::default());
     rx
 }
 
@@ -50,19 +52,18 @@ fn empty_runtime() -> Rc<RefCell<TextLayerRuntime>> {
     )))
 }
 
-/// World 中の `BalloonWiring` へ滞在を照会する短縮形。
+/// World 中の `BalloonHover` へ滞在を照会する短縮形。
 fn hovered(world: &World, scope: usize) -> bool {
     world
-        .get_non_send::<BalloonWiring>()
-        .expect("BalloonWiring は檻が挿入済み")
+        .get_non_send::<BalloonHover>()
+        .expect("BalloonHover は檻が挿入済み")
         .is_balloon_hovered(scope)
 }
 
 /// 初期状態は全 scope 偽（未観測の scope を真と誤らない）。
 #[test]
 fn balloon_hover_defaults_to_false_for_every_scope() {
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    let bw = BalloonWiring::new(tx);
+    let bw = BalloonHover::default();
     assert!(!bw.is_balloon_hovered(0), "未観測 scope 0 は偽");
     assert!(!bw.is_balloon_hovered(7), "未観測 scope 7 は偽");
 }
@@ -128,21 +129,22 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
 fn choice_hover_ordinal_and_balloon_hover_are_independent_axes() {
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
     let mut bw = BalloonWiring::new(tx);
+    let mut balloon_hover = BalloonHover::default();
 
     bw.set_hover(0, Some(2));
     assert!(
-        !bw.is_balloon_hovered(0),
+        !balloon_hover.is_balloon_hovered(0),
         "選択肢行の hover 注入は滞在フラグを立てない"
     );
 
-    bw.set_balloon_hover(0);
+    balloon_hover.set_balloon_hover(0);
     assert_eq!(
         bw.hover(0),
         Some(2),
         "滞在の記録は選択肢 hover ordinal を消さない"
     );
 
-    bw.clear_balloon_hover(0);
+    balloon_hover.clear_balloon_hover(0);
     assert_eq!(
         bw.hover(0),
         Some(2),
@@ -223,7 +225,7 @@ fn leave_on_balloon_window_clears_balloon_hover() {
     world.insert_non_send(headless_runtime_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
     world
-        .get_non_send_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonHover>()
         .unwrap()
         .set_balloon_hover(0);
     assert!(hovered(&world, 0), "前提: 滞在は真");
@@ -241,7 +243,7 @@ fn leave_clears_balloon_hover_even_without_runtime_wiring() {
     spawn_balloon_leave_child(&mut world, 0);
     let _rx = insert_wiring(&mut world); // RuntimeWiring は挿入しない
     world
-        .get_non_send_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonHover>()
         .unwrap()
         .set_balloon_hover(0);
 
@@ -266,7 +268,7 @@ fn leave_on_non_balloon_window_keeps_balloon_hover() {
     world.insert_non_send(headless_runtime_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
     world
-        .get_non_send_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonHover>()
         .unwrap()
         .set_balloon_hover(0);
 
@@ -291,7 +293,7 @@ fn leave_clears_only_the_leaving_scope() {
     world.insert_non_send(headless_runtime_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
     {
-        let mut bw = world.get_non_send_mut::<BalloonWiring>().unwrap();
+        let mut bw = world.get_non_send_mut::<BalloonHover>().unwrap();
         bw.set_balloon_hover(0);
         bw.set_balloon_hover(1);
     }
@@ -306,8 +308,7 @@ fn leave_clears_only_the_leaving_scope() {
 /// みを偽にし、再呼出でも壊れない（不可視中は `PointerLeave` が届かないための明示掃除）。
 #[test]
 fn clear_balloon_hover_clears_that_scope_only_and_is_idempotent() {
-    let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    let mut bw = BalloonWiring::new(tx);
+    let mut bw = BalloonHover::default();
     bw.set_balloon_hover(0);
     bw.set_balloon_hover(1);
 

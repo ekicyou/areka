@@ -7,6 +7,7 @@
 // （`spawn_emo_text` の UI ドレイン）へ選択待ちの始まりを積んで、このスレッドの待ち行列を汲んでから押す。
 // =============================================================================
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -200,6 +201,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
     let (tx, rx) = mpsc::channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
+    world.insert_non_send(BalloonHover::default());
 
     // 1 回目: 選択を送り、その場所の選択肢が済む（アンカーは押せるまま）。
     assert!(on_balloon_pointer_pressed(

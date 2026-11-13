@@ -59,7 +59,7 @@
   - 完了の形: 残るファイルが 3 つの型を `runtime` の中から引き、警告 0 件で通る
   - _Requirements: 2.5_
 
-- [ ] 3.3 バルーンのホバーの集合と箱の滞在を `runtime` の型にする
+- [x] 3.3 バルーンのホバーの集合と箱の滞在を `runtime` の型にする
   - ホバーの集合を `BalloonWiring` から分けた `BalloonHover` にし、`BalloonWiring` を置く所と同じ所・同じ時に並べて置く（本番の結線 1 か所・テスト 13 ファイル）
   - 書く所（滞在・離脱）は `BalloonHover` へ書き、可視性の相は `BalloonHover` を読む。無いときの `error!`（1 回・文言そのまま）と掃除の扱いは今と同じ
   - `ShellBoxHover`・`settle_box_hover` を中身を変えずに `runtime` へ移し、入力の側は出し直しで呼び手とテストを変えない

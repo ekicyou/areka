@@ -2,6 +2,7 @@ use super::test_support::{
     headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
+use crate::runtime::balloon_hover::BalloonHover;
 use areka_placement::follow::OffsetBase;
 use bevy_ecs::world::World;
 use std::sync::mpsc;
@@ -76,6 +77,7 @@ fn wiring_inserts_non_send_and_selection_observed_via_inbox() {
 
     let mut world = World::new();
     world.insert_non_send(wiring);
+    world.insert_non_send(BalloonHover::default());
     world.insert_non_send(ChoiceSelectionInbox(rx));
 
     assert!(

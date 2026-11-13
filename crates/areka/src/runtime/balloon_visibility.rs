@@ -355,7 +355,7 @@ pub(crate) struct ScopeObservation {
     /// 現に可視か（本番では `EmoPresenter::target_visible`）。判断の真実源。
     pub(crate) visible: bool,
     /// この scope のバルーンの上にポインタが滞在しているか（本番では
-    /// `BalloonWiring::is_balloon_hovered`・Requirement 5.2）。
+    /// `BalloonHover::is_balloon_hovered`・Requirement 5.2）。
     ///
     /// `None` は**観測が取れなかった**ことを表す（本番ではポインタ配線そのものの不在）。
     /// その場合は抑止しない側として扱う（Requirement 5.5——消えないまま固着する側へ倒さない）。
@@ -427,7 +427,7 @@ pub(crate) struct ScopeVisibility {
 struct ObservationFailureLogged {
     /// 文字層ランタイムの借用に失敗した（グリフ数が観測できない）。
     runtime: bool,
-    /// ポインタ配線（`BalloonWiring`）が world に無い（滞在が観測できない）。
+    /// ポインタ滞在の集合（`BalloonHover`）が world に無い（滞在が観測できない）。
     hover_wiring: bool,
     /// 箱の上の滞在の記録（`ShellBoxHover`）が world に無く、文字の出ている箱への滞在が
     /// 観測できない（areka-P0-shell-balloon 要件 6.11）。

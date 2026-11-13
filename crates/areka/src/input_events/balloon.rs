@@ -14,15 +14,15 @@
 //! からプロセスに 1 回）・状態の載せ替え `wire_balloon_choice`（`ghost_session::boot_ghost` から
 //! ゴーストごとに n 回・同期呼出）・`attach_balloon_pointer_handlers`（`ghost_session::prepare_ghost_windows`
 //! の窓 spawn 直後クロージャ内）。
-//! 本 mod の公開項目はこの 3 入口のいずれかから到達する（唯一の例外は
-//! [`BalloonWiring::is_balloon_hovered`] で、こちらはバルーン可視性の相
-//! ——`runtime/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`——が読む）。
+//! 本 mod の公開項目はこの 3 入口のいずれかから到達する（バルーンの上の滞在の集合は runtime の型
+//! `BalloonHover`（`runtime/balloon_hover.rs`）へ分けた。書くのはこの mod・読むのはバルーン可視性の相
+//! ——`runtime/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`）。
 //!
 //! 上流契約（collision-geometry の resolver・`RuntimeWiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -136,17 +136,12 @@ pub(super) fn settle_after_selection(
 /// 消費はポインタハンドラ（[`on_balloon_pointer_moved`]／[`on_balloon_pointer_pressed`]・
 /// `ghost_session::prepare_ghost_windows` の
 /// [`attach_balloon_pointer_handlers`] で装着）と離脱システム [`clear_balloon_hover_on_leave`]。
-/// 3 フィールドはいずれもそれらの経路で読み書きされる。
+/// 2 フィールドはいずれもそれらの経路で読み書きされる（バルーンの上の滞在の集合は `BalloonHover` へ分けた）。
 pub(crate) struct BalloonWiring {
     /// [`ChoiceSelection`] 発行シンク（C-1・mpsc）。
     selection_tx: Sender<ChoiceSelection>,
     /// scope → 最後に注入した hover ordinal（getter 不在の自前追跡・B-2）。
     hover: HashMap<usize, Option<usize>>,
-    /// ポインタがバルーン窓の上に居る scope の集合（areka-P0-balloon-visibility 5.2）。
-    ///
-    /// `hover` とは**別概念の独立した軸**——`hover` は選択肢行の追跡（どの行を光らせたか）であり、
-    /// 本集合は「バルーンの上に居るか」だけを表す（選択肢の有無・行ヒットの有無に依存しない）。
-    balloon_hover: HashSet<usize>,
 }
 
 impl BalloonWiring {
@@ -155,7 +150,6 @@ impl BalloonWiring {
         Self {
             selection_tx,
             hover: HashMap::new(),
-            balloon_hover: HashSet::new(),
         }
     }
 
@@ -190,33 +184,6 @@ impl BalloonWiring {
     /// 注入は「本仕様が最後に注入した値」の記録であり表示状態の正本ではない（正本は上流）。
     pub(crate) fn set_hover(&mut self, scope: usize, ordinal: Option<usize>) {
         self.hover.insert(scope, ordinal);
-    }
-
-    /// scope のバルーン窓上にポインタが居るかを照会する（areka-P0-balloon-visibility 5.2）。
-    ///
-    /// タイムアウト抑止の判断側（バルーン可視性コントローラ）が読む口。未観測の scope は偽。
-    ///
-    /// 本番到達済み（実測）——バルーン可視性の相が毎フレームの観測収集で呼ぶ
-    /// （`runtime/balloon_visibility_phase.rs` の `collect_observations`）。到達の起点は
-    /// `runtime/frame.rs:170` の `run_balloon_visibility_phase` 呼び出しである。
-    pub(crate) fn is_balloon_hovered(&self, scope: usize) -> bool {
-        self.balloon_hover.contains(&scope)
-    }
-
-    /// scope のバルーン窓上へポインタが入った（居る）ことを記録する（5.2）。
-    ///
-    /// 選択肢行の追跡（[`set_hover`](Self::set_hover)）とは独立——行に当たっていなくても記録する。
-    pub(crate) fn set_balloon_hover(&mut self, scope: usize) {
-        self.balloon_hover.insert(scope);
-    }
-
-    /// scope のバルーン滞在の記録を落とす（離脱・非表示遷移時の掃除・5.2/5.5）。
-    ///
-    /// 窓外離脱（`PointerLeave`）のほか、可視性コントローラが非表示遷移で呼ぶ掃除口でもある——
-    /// 不可視の間は `PointerLeave` が届かず、放置すると滞在が真のまま固着して恒久抑止になる
-    /// （Requirement 5.5 が禁じる側）。未記録 scope への呼出は no-op（冪等）。
-    pub(crate) fn clear_balloon_hover(&mut self, scope: usize) {
-        self.balloon_hover.remove(&scope);
     }
 }
 
@@ -448,6 +415,8 @@ pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
 pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
+    // バルーンの上の滞在の集合は runtime の型（可視性の相が読む）。`BalloonWiring` と同じ時に入れ直す。
+    world.insert_non_send(crate::runtime::balloon_hover::BalloonHover::default());
     world.insert_non_send(ChoiceSelectionInbox(rx));
     // 箱の上の滞在（areka-P0-shell-balloon）もゴーストごとに入れ直す。
     world.insert_non_send(super::shell_box::ShellBoxHover::default());

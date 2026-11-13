@@ -10,6 +10,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::PointerLeave;
 
+use crate::runtime::balloon_hover::BalloonHover;
 use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
@@ -33,7 +34,7 @@ use super::{BalloonWiring, HoverAction, hover_action};
 /// `hover_action(active, None, last_injected)` を再利用して hover 状態を解除する（hit は `None`＝ポインタが
 /// 窓外へ出た高速離脱ゆえエッジ非採取・R1.3）。
 ///
-/// 併せて当該 scope の**バルーン滞在**（`BalloonWiring::clear_balloon_hover`・
+/// 併せて当該 scope の**バルーン滞在**（`BalloonHover::clear_balloon_hover`・
 /// areka-P0-balloon-visibility 5.2）を解除する。滞在は選択肢行の追跡とは独立の軸であり、解除は
 /// `RuntimeWiring` の可否より前・選択肢機構の縮退に依らず行う（記録側との非対称は本文中コメント参照・5.5）。
 ///
@@ -88,9 +89,12 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     // 上流 `RuntimeWiring` が揃うときだけ行い（抑止を増やす側は保守的）、解除はその可否に依らず行う
     // （抑止を解く側は積極的）。滞在が真のまま残ると恒久抑止へ固着し Requirement 5.5 に反するため。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!＋no-op（silent failure 禁止）。
-    if let Some(mut bw) = world.get_non_send_mut::<BalloonWiring>() {
-        for &scope in &scopes {
-            bw.clear_balloon_hover(scope);
+    if world.get_non_send::<BalloonWiring>().is_some() {
+        // 滞在の集合は `BalloonWiring` と同じ時に置かれる runtime の型（不在は可視性の相が error! を 1 回出す）。
+        if let Some(mut balloon_hover) = world.get_non_send_mut::<BalloonHover>() {
+            for &scope in &scopes {
+                balloon_hover.clear_balloon_hover(scope);
+            }
         }
     } else {
         tracing::error!(

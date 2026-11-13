@@ -40,8 +40,8 @@ use wintf::ecs::world::tick_wake;
 use wintf::ecs::{FrameTime, WindowDragging};
 
 use crate::ghost_session::GhostSlot;
-use crate::input_events::balloon::BalloonWiring;
-use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
+use crate::runtime::balloon_hover::BalloonHover;
+use crate::runtime::shell_box_hover::{ShellBoxHover, settle_box_hover};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{RuntimeWiring, resolve_talk_time};
@@ -353,12 +353,12 @@ fn borrow_runtime<'r>(
     }
 }
 
-/// ポインタ滞在の照会先（`BalloonWiring`）を引く（不在は抑止なし・記録は 1 回）。
+/// ポインタ滞在の照会先（`BalloonHover`）を引く（不在は抑止なし・記録は 1 回）。
 fn observe_hover_wiring<'w>(
     world: &'w World,
     state: &mut BalloonVisibilityState,
-) -> Option<&'w BalloonWiring> {
-    match world.get_non_send::<BalloonWiring>() {
+) -> Option<&'w BalloonHover> {
+    match world.get_non_send::<BalloonHover>() {
         Some(wiring) => {
             state.observation_failure_logged.hover_wiring = false;
             Some(wiring)
@@ -796,13 +796,13 @@ fn notify_timeout(world: &World, notice: Option<TalkId>) {
 /// 不可視へ落ちた scope のポインタ滞在の記録を落とす（Requirement 5.2／5.5）。
 ///
 /// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
-/// 固着して二度と消えないバルーンが生まれる。`BalloonWiring` の不在は掃除する相手が無いだけで
+/// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
 /// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
 fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
     if scopes.is_empty() {
         return;
     }
-    let Some(mut wiring) = world.get_non_send_mut::<BalloonWiring>() else {
+    let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
         return;
     };
     for &scope in scopes {

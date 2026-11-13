@@ -14,6 +14,7 @@
 // 反復回数のみによる有界化は 1 つも用いない（Requirements 9.2 / 9.3）。
 // =============================================================================
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::sync::mpsc;
 
 use areka_emo_text::state::TextLayerConfig;
@@ -63,6 +64,7 @@ fn gpu_frame_world() -> (
     world.insert_resource(core);
     world.insert_resource(wuc);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     (gpu, world, gw)
 }
 

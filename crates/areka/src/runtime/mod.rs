@@ -16,6 +16,8 @@ pub mod adapter;
 pub mod assets;
 /// バルーン面 0 の原点画素から背景色を導く（無効表示の混色の相手・要件 4.6）。
 mod balloon_background;
+/// バルーンの上の滞在の集合（可視性の相が読み、入力の側が書く・runtime-module-untangle 3.3）。
+pub(crate) mod balloon_hover;
 pub mod balloon_visibility;
 /// `\![change,ghost,…]` の受け口（areka-P0-ghost-shell-balloon-switch）。
 mod change_cue;
@@ -45,6 +47,8 @@ pub(crate) mod shell_balloon_resolve;
 pub(crate) mod shell_balloon_switch;
 /// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
 pub(crate) mod shell_box_assets;
+/// 箱の上の滞在と毎フレームの整え（可視性の相が読み、入力の側が書く・runtime-module-untangle 3.3）。
+pub(crate) mod shell_box_hover;
 /// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。
 pub(crate) mod shell_carry;
 pub(crate) mod shell_cursor_assets;

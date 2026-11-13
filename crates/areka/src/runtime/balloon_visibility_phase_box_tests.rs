@@ -12,6 +12,7 @@
 // 作った写しを渡して確かめ、相の観測の収集は写しが空の形で通す（通しの確かめは 12.3）。
 // =============================================================================
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -154,6 +155,7 @@ fn missing_box_hover_record_means_no_hover_and_is_logged_once() {
 fn collection_settles_the_box_hover_before_observing() {
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);
     let runtime = runtime();
@@ -247,6 +249,7 @@ fn shell_window_drag_counts_for_scopes_with_box_text() {
 fn shell_window_drag_without_box_text_is_not_dragging() {
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
     world.spawn((CharWindowMarker { scope: 0 }, WindowDragging));
     let mut presenter = EmoPresenter::new();
     attach_headless(&mut presenter, &mut world, 0);

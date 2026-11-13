@@ -805,3 +805,13 @@ public struct RECT { public int L, T, R, B; }
 | `leave_emo2_absent_degrades_with_debug_and_leaves_hover` | `leave_runtime_absent_degrades_with_debug_and_leaves_hover` | `input_events/balloon_leave_tests.rs` |
 | `moved_emo2_absent_degrades_with_debug_not_error` | `moved_runtime_absent_degrades_with_debug_not_error` | `input_events/balloon_pointer_handler_tests.rs` |
 | `pressed_emo2_absent_degrades_with_debug_not_error` | `pressed_runtime_absent_degrades_with_debug_not_error` | `input_events/balloon_pointer_handler_tests.rs` |
+
+## ホバーの集合を置く所の包含の確かめ（2026-11-13・タスク 3.3・要件 3.1）
+
+`BalloonWiring` を world へ置く所の集合 ⊆ `BalloonHover` を置く所の集合を、`crates/areka/src` で grep して確かめた（置き忘れ 0）。
+
+- `BalloonWiring` を置くファイル（式: `insert_non_send(BalloonWiring::new` または `BalloonWiring` の値を入れた変数の `insert_non_send(bw)`／`insert_non_send(wiring)`）: 12（本番 1＝`input_events/balloon.rs` の `wire_balloon_choice`・テスト 11）。
+- `BalloonHover::default()` を置くファイル: 同じ 12。差（前者にあって後者に無いもの）は 0。
+- 置く回数もファイルごとに一致する（本番 1・テスト 30。`balloon_pointer_handler_tests.rs` 10・`balloon_visibility_phase_tests.rs` 10・`balloon_visibility_phase_box_tests.rs` 2・残り 8 ファイル各 1）。
+- 設計の「13 ファイル 45 か所」との差: `balloon_pass_through_tests.rs` は `BalloonWiring::new` を作るが world へ置かない（`send_selection` を直に呼ぶ）ので数に入らない。設計の 45 か所はこの式の数（30）と一致しない（設計の段の数え方は記録が無い）が、包含は上の式で 0 を示した。`wire_balloon_choice` を呼ぶテストは本番の関数が両方を置く。
+- 外す所: 本番で外す所は無い（`BalloonWiring` と同じ）。

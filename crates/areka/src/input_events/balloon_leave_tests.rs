@@ -9,6 +9,7 @@
 // の除去は本システムの責務外（FrameFinalize の機構不変）ゆえ検証しない。
 // -------------------------------------------------------------------------
 
+use crate::runtime::balloon_hover::BalloonHover;
 use bevy_ecs::hierarchy::ChildOf;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -35,6 +36,7 @@ fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: Option<usi
         bw.set_hover(scope, Some(o));
     }
     world.insert_non_send(bw);
+    world.insert_non_send(BalloonHover::default());
 }
 
 /// バルーン所有 leave→hover 解除（Inject(None) アーム・R1.3）: choice 表示中・現行 hit=None

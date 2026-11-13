@@ -17,6 +17,8 @@
 // 実時間の待機は使わない（要件 3.4）。前の台詞は scope 0 に 5 文字を残す。
 // =============================================================================
 
+use crate::input_events::balloon::BalloonWiring;
+use crate::runtime::balloon_hover::BalloonHover;
 use std::sync::mpsc;
 
 use areka_emo_text::state::TextLayerConfig;
@@ -56,6 +58,7 @@ impl Rig {
         let mut presenter = EmoPresenter::new();
         let mut world = World::new();
         world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+        world.insert_non_send(BalloonHover::default());
         for &scope in scopes {
             attach_headless(&mut presenter, &mut world, scope);
         }
