@@ -1,7 +1,7 @@
 //! パレットの絵の検体を作る（spec: emo-atlas-palette-alpha 要件 3.5・5.4・5.7・5.8）。
 //!
 //! `cargo run -p areka-emo-atlas --example gen_palette_samples` で
-//! `src/testdata/palette/` に 6 本を書く。使うのは std だけ。
+//! `src/testdata/palette/` に 8 本を書く。使うのは std だけ。
 //! 圧縮しない（zlib の無圧縮の 1 ブロック）ので、何度走らせても同じバイト列になる。
 //! 中身の説明は同じフォルダの `README.md`。wintf の `tests/com/wic_test.rs` も同じ検体を読む。
 
@@ -51,7 +51,7 @@ const PNG_GRAY: u8 = 0;
 const PNG_PALETTE: u8 = 3;
 
 /// 2×2 の PNG。`values` は (0,0)・(1,0)・(0,1)・(1,1) の順の番号（グレーなら値）。
-/// `bit_depth` は 8 か 4。
+/// `bit_depth` は 8・4・2・1。
 fn png(
     bit_depth: u8,
     color_type: u8,
@@ -64,9 +64,9 @@ fn png(
         raw.push(0); // フィルタ 0（無し）
         match bit_depth {
             8 => raw.extend_from_slice(row),
-            // 2 画素で 1 バイト（上位の 4 ビットが左）。行は 1 バイトで割り切れる。
-            4 => raw.push((row[0] << 4) | row[1]),
-            _ => unreachable!("8 か 4 ビットだけ"),
+            // 2 画素で 1 バイトに収まる（左の画素が上位のビット・残りのビットは 0）。
+            d @ (1 | 2 | 4) => raw.push((row[0] << (8 - d)) | (row[1] << (8 - 2 * d))),
+            _ => unreachable!("8・4・2・1 ビットだけ"),
         }
     }
     // zlib: 見出し 78 01・無圧縮の最後のブロック・Adler-32。
@@ -173,6 +173,21 @@ fn main() {
     write(
         "gray8_trns.png",
         &png(8, PNG_GRAY, &[], Some(&[0x00, 0x00]), [255, 255, 0, 128]),
+    );
+    write(
+        "idx2_mixed.png",
+        &png(2, PNG_PALETTE, &rgb, Some(mixed), [0, 0, 1, 2]),
+    );
+    // 1 ビットは番号 2 つ: 0＝赤 透明度 255・1＝緑 透明度 0。
+    write(
+        "idx1_trns.png",
+        &png(
+            1,
+            PNG_PALETTE,
+            &[RED, GREEN],
+            Some(&[0xFF, 0x00]),
+            [0, 0, 1, 1],
+        ),
     );
     write("trans.gif", &trans_gif());
 }

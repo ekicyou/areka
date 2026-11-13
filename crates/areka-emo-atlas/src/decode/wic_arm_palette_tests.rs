@@ -54,6 +54,18 @@ fn has_alpha_idx4_mixed() {
     assert_has_alpha("idx4_mixed.png", true);
 }
 
+// 1・2 ビットの番号つきの形式（`INDEXED_FORMATS` の 1・2 ビットの項の檻）。
+
+#[test]
+fn has_alpha_idx2_mixed() {
+    assert_has_alpha("idx2_mixed.png", true);
+}
+
+#[test]
+fn has_alpha_idx1_trns() {
+    assert_has_alpha("idx1_trns.png", true);
+}
+
 #[test]
 fn has_alpha_gray8_trns() {
     assert_has_alpha("gray8_trns.png", true);
