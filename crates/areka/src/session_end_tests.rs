@@ -27,10 +27,10 @@ use crate::boot_resolve::{
     BalloonDecision, BalloonRoute, GhostDecision, GhostRoute, read_session_mark, write_session_mark,
 };
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::frame::KanadeNoticeRx;
 use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_quit::KanadeNoticeRx;
 use crate::{after_run, finish_after_run};
 
 fn fault() -> ShioriFault {

@@ -20,6 +20,7 @@ use std::sync::mpsc;
 use areka_kanade::{
     CancelReason, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
 };
+use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::With;
 use log_capture_kit::{LineFormat, capture_lines};
 

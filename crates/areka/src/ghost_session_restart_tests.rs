@@ -16,11 +16,11 @@ use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::readme::ReadmeWiring;
-use crate::runtime::frame::KanadeNoticeRx;
 use crate::runtime::sample_test_support::acquire_emo2;
 use crate::runtime::spine::{
     Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
 };
+use crate::session::ghost_quit::KanadeNoticeRx;
 use areka_placement::spawn::GhostWindowMarker;
 use log_capture_kit::capture;
 

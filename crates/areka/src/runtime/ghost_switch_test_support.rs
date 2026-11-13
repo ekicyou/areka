@@ -34,7 +34,6 @@ use wintf::AppExit;
 use wintf::ecs::Input;
 
 use super::RuntimeInputs;
-use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
 use super::spine::{
@@ -49,6 +48,7 @@ use crate::ghost_session::{
     GhostBootInputs, GhostBootInputsSource, GhostSlot, StartupDescriptValues, boot_ghost,
     register_systems,
 };
+use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
 use areka_placement::AuthorDpi;
 
 /// 既定のバルーン（emo2 の同梱）。

@@ -20,7 +20,7 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 
-use crate::app_exit::close_windows_for_restart;
+use crate::app_exit::{ExitOrigin, close_windows_for_restart, quit_app};
 use areka_placement::chain_finalize::AdjacencyMark;
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::move_window_to;

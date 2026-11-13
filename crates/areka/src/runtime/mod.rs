@@ -129,7 +129,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Sender;
 
 use areka_emo_present::shell_target::ShellLoadError;
 use areka_emo_present::{EmoPresenter, PresentCommand};
@@ -155,7 +155,7 @@ use self::adapter::PresentBridge;
 use self::assets::{
     BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets_with_shell,
 };
-use self::frame::{KanadeNoticeRx, RuntimeWiring, frame_system, ghost_quit_system};
+use self::frame::{RuntimeWiring, frame_system};
 use self::move_cue::PositionCue;
 use self::talk_clock::TalkClock;
 use self::talk_lifecycle::TalkLifecycleSignal;
@@ -448,7 +448,7 @@ const _: fn() = || {
 ///    `shiori`／`ticker`／`app_profile_dir` は [`RuntimeInputs`] の値＝本番は `Helper`／`Real`。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
-///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
+///    作らない・受け口の据え付けは [`wire_kanade_stop`](crate::session::ghost_quit::wire_kanade_stop)）。
 /// 6. [`RuntimeWiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入（毎フレームの相の
 ///    `Update` への登録は [`register_frame_system`] が `ghost_session::register_systems` から
@@ -652,7 +652,7 @@ pub fn wire_runtime(
     // 受信端が窓の側に無い線（readme・中断・ghost の切替・shell/balloon の切替・読み直し）の
     // 据え付けは向こうが持ち、Err のとき World は変わっていない。停止通知の送出端は引数
     // `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（受け口の据え付けは
-    // [`wire_kanade_stop`]）。これが在ることで、終了挨拶を再生し終えてから窓が閉じる。
+    // [`wire_kanade_stop`](crate::session::ghost_quit::wire_kanade_stop)）。これが在ることで、終了挨拶を再生し終えてから窓が閉じる。
     let Ok(ghost_runtime) = runtime_boot::boot_runtime(world, inputs, &sources, kanade_stop, shell)
     else {
         // spawn 済み seriko の後始末: tick 用 clone（tick_sink）・セッションへ返す複製（session_sink）・
@@ -750,19 +750,6 @@ pub fn register_frame_system(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Update, frame_system.after(update_typewriters));
-}
-
-/// 運行の通知（停止ほか）の受け口を World に据え、終了相を `Update` に登録する（受け口はプロセスに 1 つ・
-/// 要件 6.4）。
-///
-/// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_frame_system`] の
-/// 直後に呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
-/// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
-pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {
-    world.insert_non_send(KanadeNoticeRx(rx));
-    world
-        .resource_mut::<Schedules>()
-        .add_systems(Update, ghost_quit_system.before(frame_system));
 }
 
 /// 実 entropy の種（`RandomState` はプロセスごとのランダム鍵で初期化され、作るたびに鍵が変わる）。

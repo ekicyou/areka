@@ -86,13 +86,14 @@ use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    KanadeNoticeRx, RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with,
-    run_text_phase, run_text_scale_phase,
+    RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
+    run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, PositionCue};
 use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::target_map::{balloon_target, shell_target};
+use crate::session::ghost_quit::KanadeNoticeRx;
 // 進行状態の記録（第 2 系統・R3.8）の型と本体は兄弟ファイル側に置く（design D3）。
 use self::conformance_support::{
     RecordedStatus, StatusLedger, record_status, snapshot_status_calls,

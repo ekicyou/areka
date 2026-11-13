@@ -90,7 +90,7 @@
   - _Requirements: 2.1, 3.1, 3.7, 3.8_
 
 - [ ] 5. 終わる相と起動の継ぎ目
-- [ ] 5.1 終わる相を相ごと `session` へ移す
+- [x] 5.1 終わる相を相ごと `session` へ移す
   - 通知の受け口・終わる相の本体・system・登録の関数を中身と記録の文を変えずに `session` の新しいファイルへ移し、登録は毎フレームの相の直後に `.before(frame_system)` のまま行う
   - 試験 3 本を名前から `frame_` を外したファイルへ履歴の残る移動で移し、試験の関数の名前は変えない
   - `frame_schedule_tests` が読む字面を、毎フレームの相は `runtime` の根、終わる相は新しいファイルへ向ける
@@ -199,3 +199,4 @@
 - 3.1: `runtime/skin_switch.rs:86` の説明の文の [`discard_for_exit`] は移した先で rustdoc のリンクが切れる（cargo doc は回していない）。8.x で `crate::runtime::shell_balloon_switch::discard_for_exit` へ。入口の出し直しは設計の 5 型より多い（テストが入口のパスで引くため）＝6.1 で `session` へ移すときに絞れる。
 - 3.2: 8.x で直す文言: `runtime/mod.rs:176` の doc の [`boot_runtime`]（リンク切れ）と `change_cue.rs:14` の module doc「`ghost_switch::ChangeRequestRaw`」（型は change_cue へ移った）。
 - 4.1: 口は 9 本（kanade・seriko_sink・ghost_ref_name・set_shell_dir・set_current_balloon・record_last_skin・ghost_switch_in_flight・reload_skin_applied・skin_phase_ended）。4.2 で ghost_folder を足して 10 本。`session/hooks.rs` にはログのマクロを置かない（記録の出所を runtime に残すため）。`main.rs` は 991 行で 1,000 行の番人に近い。
+- 5.1: 見える範囲の広げ: `ghost_quit_system` を `pub(super)`→`pub(crate)`（`frame_schedule_tests` のため）＝6.1 か 9.x で research.md の広げの一覧に載せる。`runtime/mod.rs:451`・`:655` の doc のリンク `crate::session::ghost_quit::wire_kanade_stop` は要件 3.4 の説明の文の一覧に入る。`doc/COMPAT_ARCHITECTURE.md:283` の古いパスは 8.1 で。

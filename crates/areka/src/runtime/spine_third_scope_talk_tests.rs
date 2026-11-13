@@ -29,7 +29,7 @@ use super::{
     capture_logs, run_attach_phase, shell_target, wait_until,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
-use crate::runtime::frame::run_ghost_quit_phase;
+use crate::session::ghost_quit::run_ghost_quit_phase;
 use areka_placement::test_support::emily_shaped_scopes;
 
 /// 起動の台本。scope 0・1 の台詞の間に scope 2 の面と台詞を挟み、その後ろへ scope 0 の目印の面

@@ -32,8 +32,9 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, IntoSystemSet, ScheduleLabel, Schedules};
 use wintf::ecs::{FrameFinalize, Update, update_typewriters};
 
-use super::frame::{KanadeNoticeRx, frame_system, ghost_quit_system};
+use super::frame::frame_system;
 use crate::app_exit::{ExitOrigin, FirstExit};
+use crate::session::ghost_quit::{KanadeNoticeRx, ghost_quit_system};
 use areka_placement::spawn::wire_zorder_pair;
 
 // ---------------------------------------------------------------- 道具立て
@@ -216,7 +217,7 @@ const QUIT_REGISTRATION: &str = "add_systems(Update, ghost_quit_system.before(fr
 #[test]
 fn ghost_quit_system_without_the_frame_system_quits_on_one_notice() {
     assert!(
-        squeeze(&code_only(include_str!("mod.rs"))).contains(QUIT_REGISTRATION),
+        squeeze(&code_only(include_str!("../session/ghost_quit.rs"))).contains(QUIT_REGISTRATION),
         "終了相の登録が本番の据え付けに無い、または順序指定が変わっている: {QUIT_REGISTRATION}"
     );
 

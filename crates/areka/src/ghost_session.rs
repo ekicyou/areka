@@ -45,7 +45,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 ///
 /// 載せる系と順序（段ごとに今日の挿入順を保つ）:
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
-///   なので [`runtime::wire_kanade_stop`] を分割せずそのまま呼ぶ） → 記憶を書けない失敗の
+///   なので [`crate::session::ghost_quit::wire_kanade_stop`] を分割せずそのまま呼ぶ） → 記憶を書けない失敗の
 ///   汲み出し（[`crate::write_failure::install`]）
 /// - `Input`← 説明書 → 台本の切替要求 → 台本のシェル・バルーンの切替要求 → 中断 → メニュー →
 ///   バルーンの離脱 → シェルの窓の離脱（箱の上の滞在） → 選択肢の送り → インストールの窓口 →
@@ -67,7 +67,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
     crate::session::hooks::install(world);
     runtime::register_frame_system(world);
-    runtime::wire_kanade_stop(world, kanade_stop_rx);
+    crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);
     // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回・areka-P0-write-failure-notice）。
     crate::write_failure::install(world);
 
