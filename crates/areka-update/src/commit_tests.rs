@@ -251,6 +251,35 @@ fn refused_removal_reports_stuck_and_keeps_unwinding() {
     drop(pinned);
 }
 
+/// 作った親の下に戻せないファイルが残ると、親は空でないので消さず、戻せなかった一覧には
+/// ファイルだけが載る（親を二重に数えない・5.5）。
+#[test]
+fn stuck_file_keeps_its_created_parent_without_listing_it() {
+    let fx = fixture();
+    fs::write(fx.target.join("b.txt"), b"old-b").unwrap();
+    fx.area.put("sub/a.bin", &pe_image()).unwrap();
+    fx.area.put("b.txt", b"new-b").unwrap();
+    let pinned = pin(&fx.area.fresh("sub/a.bin"));
+    let held = hold(&fx.target.join("b.txt"));
+    let err = commit(
+        &fx.target,
+        &fx.target_real,
+        &fx.area,
+        &names(&["sub/a.bin", "b.txt"]),
+    )
+    .expect_err("2 件目で失敗し、1 件目を消せない");
+    drop(held);
+    match err {
+        CommitFailure::RollbackFailed { stuck, .. } => {
+            let stuck: Vec<&str> = stuck.iter().map(|s| s.file.as_str()).collect();
+            assert_eq!(stuck, ["sub/a.bin"], "sub は載らない");
+        }
+        other => panic!("RollbackFailed のはず: {other:?}"),
+    }
+    assert!(fx.target.join("sub/a.bin").exists(), "戻せなかった物は残る");
+    drop(pinned);
+}
+
 /// ⑷ ジャンクションに置き換えた親で外側に何も作られず 1 件目が戻る（5.6）。
 #[test]
 fn junctioned_parent_escapes_creates_nothing_outside_and_restores_first() {
