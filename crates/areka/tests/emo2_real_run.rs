@@ -2,7 +2,7 @@
 //!
 //! 「emo2 が起動して喋る」最終統合（M-boot）を、**実 pasta.dll・実表示・実 DPI**で
 //! 任意に追験するための env-gate opt-in ハーネス。観測の二段（決定論 spine ＋ 本 env-gate 実走）の
-//! うち後者に相当し、決定論 spine（`crates/areka/src/emo2_boot/spine.rs`）が headless GPU で
+//! うち後者に相当し、決定論 spine（`crates/areka/src/runtime/spine.rs`）が headless GPU で
 //! 押さえ切れない「実表示・実 helper・実 DPI」の最終確認を人間判断に委ねる。
 //!
 //! ## 既定 OFF（DoD 非前提・要件 1.8）

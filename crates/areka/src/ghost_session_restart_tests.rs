@@ -13,14 +13,14 @@ use wintf::ecs::{Input, Update};
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::emo2_boot::frame::KanadeNoticeRx;
-use crate::emo2_boot::sample_test_support::acquire_emo2;
-use crate::emo2_boot::spine::{
-    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
-};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::readme::ReadmeWiring;
+use crate::runtime::frame::KanadeNoticeRx;
+use crate::runtime::sample_test_support::acquire_emo2;
+use crate::runtime::spine::{
+    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
+};
 use areka_placement::spawn::GhostWindowMarker;
 use log_capture_kit::capture;
 
@@ -357,7 +357,7 @@ fn scripted_inputs(
 ) -> (GhostBootInputs, ScriptedShioriHandle) {
     let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
     let inputs = GhostBootInputs {
-        wiring: emo2_boot::Emo2BootInputs {
+        wiring: runtime::Emo2BootInputs {
             ghost_root: sample.folder().to_path_buf(),
             balloon_root: emo2_balloon(sample),
             shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {

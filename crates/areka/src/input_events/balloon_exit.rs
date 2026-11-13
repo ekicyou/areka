@@ -10,7 +10,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::PointerLeave;
 
-use crate::emo2_boot::frame::Emo2Wiring;
+use crate::runtime::frame::Emo2Wiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
 use super::{BalloonWiring, HoverAction, hover_action};

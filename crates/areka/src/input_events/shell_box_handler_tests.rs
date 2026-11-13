@@ -28,9 +28,6 @@ use wintf::ecs::pointer::{DoubleClick, Phase, PointerLeave, PointerState};
 use wintf::ecs::{Input, Point, Window};
 
 use super::*;
-use crate::emo2_boot::hit_region::HitRegion;
-use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
-use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
 use crate::input_events::balloon::test_support::{
     anchor_cues, anchor_row, headless_emo2_wiring, row,
 };
@@ -40,6 +37,9 @@ use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signa
 use crate::input_events::{
     MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed,
 };
+use crate::runtime::hit_region::HitRegion;
+use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
+use crate::runtime::user_break_cue::NoUserBreakSignal;
 use areka_placement::spawn::CharWindowMarker;
 use log_capture_kit::capture;
 

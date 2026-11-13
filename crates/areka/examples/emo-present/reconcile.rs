@@ -8,7 +8,7 @@ use super::{
 // 窓寸 reconcile（areka-P0-emo-dpi-scaling task 5.2・R7.1/R7.2）
 // ---------------------------------------------------------------------------
 
-/// 窓寸 reconcile 時の**位置の決め方**の別（本番 `emo2_boot::frame::GhostWindowKind` の同型）。
+/// 窓寸 reconcile 時の**位置の決め方**の別（本番 `runtime::frame::GhostWindowKind` の同型）。
 ///
 /// 本番は char 窓＝`resize_window_to`（`Anchored` 射影で接地点＝下端中央を保つ）／balloon 窓＝
 /// `resize_window_keep_position`（位置は `follow_balloon` が決める従属量ゆえ据え置き）に振り分ける。
@@ -38,7 +38,7 @@ enum ReconcileKind {
 /// （emo-dpi-scaling task 5.2・R7.1/R7.2）。
 ///
 /// 各 target について [`EmoPresenter::take_pending_resize`] を引き、`Some(新物理寸)` のときだけ
-/// [`reconcile_window_size`] で反映する。本番 `emo2_boot` の `reconcile_reported_sizes` と同じ流儀:
+/// [`reconcile_window_size`] で反映する。本番 `runtime` の `reconcile_reported_sizes` と同じ流儀:
 ///
 /// - **消費者は表示を引き起こした者**（消費規約）。本 example は presenter を直接所有し `apply` を
 ///   自ら呼ぶ唯一の主体であり、`refresh_scale`（もう一方の消費者）は呼ばない——ゆえに要求を取り

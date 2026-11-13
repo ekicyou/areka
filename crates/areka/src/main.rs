@@ -55,7 +55,7 @@ mod tick_gate_config;
 /// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
 /// `wire_emo2_boot`）。
-mod emo2_boot;
+mod runtime;
 
 /// UI→kanade のマウス入力配信配線（areka-P0-input-events）。キャラ窓のポインタイベントを
 /// 捉え、当たり判定名を resolver で解決し、送出間引き（`throttle`）を通して kanade へ配信する
@@ -905,7 +905,7 @@ pub(crate) fn record_last_used(
 /// # 2 源を同じ構築関数で作る（atom task 5.1・要件 5.1）
 ///
 /// 返すのは作業領域源と**モニタ別拡大率表**の組である。実行時の同期段
-/// （`emo2_boot::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
+/// （`runtime::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
 /// を通る——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 fn boot_monitor_snapshot(
     monitors: &[wintf::ecs::window::monitor::Monitor],

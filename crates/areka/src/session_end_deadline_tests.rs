@@ -43,13 +43,13 @@ use shiori_host32_host::{ExitKind, RequestError};
 
 use super::{SESSION_END_SHIORI_LIMIT, end_session_within};
 use crate::boot_resolve::{read_session_mark, write_session_mark};
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::hold_support::HoldAt;
-use crate::emo2_boot::spine::{
+use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::runtime::spine::hold_support::HoldAt;
+use crate::runtime::spine::{
     Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
     ScriptedShioriHandle, wait_until,
 };
-use crate::ghost_session::{GhostSession, GhostSlot};
 
 /// 負荷で期限の口が先に発火しない上限（手動の口と「上限の中で応答」の回）。
 const WIDE: Duration = Duration::from_secs(60);

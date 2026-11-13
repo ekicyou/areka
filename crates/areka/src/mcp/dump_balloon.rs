@@ -23,8 +23,8 @@ use super::dump_surface::{
     Job, PresenterFacts, Reader, Step, check_size, fail, image, judge, refuse, start,
 };
 use super::resolve::ActiveGhost;
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::target_map::balloon_target;
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::target_map::balloon_target;
 
 #[path = "dump_balloon_overlay.rs"]
 mod overlay;

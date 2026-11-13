@@ -166,7 +166,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let _gpu = crate::emo2_boot::spine::GpuPermit::take();
+    let _gpu = crate::runtime::spine::GpuPermit::take();
     let (rt, _sink, _join) = runtime_in_choice_wait();
     let actor = ActorKey::from(ACTOR);
 

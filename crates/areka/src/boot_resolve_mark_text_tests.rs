@@ -21,8 +21,8 @@ use wintf::ecs::{FrameTime, Update};
 use super::*;
 use crate::app_exit::FirstExit;
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::ghost_session::GhostSlot;
+use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// `event` の記録（`event` 欄で引く）。
 fn events_named<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {

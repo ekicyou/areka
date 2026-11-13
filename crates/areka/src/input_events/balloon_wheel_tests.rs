@@ -21,10 +21,10 @@ use super::super::balloon::test_support::headless_emo2_wiring;
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
-use crate::emo2_boot::frame::balloon_runtime_test_support::{
+use crate::runtime::frame::balloon_runtime_test_support::{
     balloon_is_manual, manual_balloon_runtime,
 };
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// バルーン窓（scope 0）の子を持ち主にし、回転を載せる。
@@ -60,7 +60,7 @@ fn rig(
     vertical: i16,
     horizontal: i16,
 ) -> (
-    crate::emo2_boot::spine::GpuPermit,
+    crate::runtime::spine::GpuPermit,
     World,
     Rc<RefCell<TextLayerRuntime>>,
 ) {

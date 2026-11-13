@@ -31,13 +31,13 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::RecordedCall;
 use crate::ghost_session::GhostSlot;
 use crate::install::{InstallOrder, InstallOrigin};
 use crate::readonly::ReadOnlyRun;
 use crate::roots::user_root::copy_unless_readonly;
+use crate::runtime::ghost_switch::SwitchInFlight;
+use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::runtime::spine::RecordedCall;
 use crate::update::{RawUpdateRequest, TargetKind, UpdateReason};
 use crate::write_failure::check_boot;
 use crate::{MarkVerdict, Teardown, after_run, insert_persist_wiring, settle_session_mark};

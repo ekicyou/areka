@@ -15,10 +15,10 @@ use bevy_ecs::world::World;
 use super::{GhostBootInputsSource, GhostSlot};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::runtime_boot;
 use crate::input_events;
 use crate::menu;
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::runtime_boot;
 
 /// 実行系に結びつく窓側の結線をやり直す（`boot_wired` の boot 後の塊の純移動＋`ChoiceForwarder`）。
 /// 移した塊の中の呼び順は移動前と同じ。`wire_balloon_choice`（窓の側）は含めない。

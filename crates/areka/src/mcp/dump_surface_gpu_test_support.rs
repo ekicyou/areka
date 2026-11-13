@@ -43,12 +43,10 @@ use wintf::com::wic::{
 };
 use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucGraphicsResource};
 
-use crate::emo2_boot::ghost_switch_test_support::{
-    BALLOON, FakeShiori, SwitchRig, standard_script,
-};
-use crate::emo2_boot::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use crate::ghost_session::GhostSlot;
 use crate::mcp::resolve;
+use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use crate::runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::spawn_ghost_windows;

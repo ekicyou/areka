@@ -10,8 +10,8 @@ use std::sync::{Arc, RwLock};
 use areka_emo_present::{AppliedScale, ScaleRatio};
 use areka_sylphya::{PropPath, PullShape, PullSource, SylphyaReader};
 
-use crate::emo2_boot::target_map::TargetWindow;
 use crate::ghost_session::ghost_session_scope_rect::{ScopeSelector, scope_selector};
+use crate::runtime::target_map::TargetWindow;
 
 /// 書き手（毎フレームの相）と読み手（どのスレッドからでも）が共有する表。
 pub(crate) type SharedScopeScaleTable = Arc<RwLock<ScopeScaleTable>>;

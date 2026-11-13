@@ -13,8 +13,8 @@ use areka_kanade::WaitBudget;
 use wintf::AppExit;
 
 use super::*;
-use crate::emo2_boot::frame::KanadeNoticeRx;
 use crate::exit_wait::EXIT_WAIT_LIMIT;
+use crate::runtime::frame::KanadeNoticeRx;
 use crate::session_end::end_session_from;
 
 /// 待っている依頼（2 本の依頼と 1 本の依頼）は始めずに捨て、`warn!(install_pending_discarded)` を

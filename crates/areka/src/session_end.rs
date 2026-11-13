@@ -15,10 +15,10 @@ use bevy_ecs::prelude::*;
 
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::frame::run_ghost_quit_phase;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::exit_wait;
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::runtime::frame::run_ghost_quit_phase;
+use crate::runtime::ghost_switch::SwitchInFlight;
 use crate::write_failure;
 use crate::{MarkInputs, Teardown, settle_session_mark};
 

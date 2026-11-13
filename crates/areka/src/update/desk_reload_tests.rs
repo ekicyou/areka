@@ -21,13 +21,13 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::UpdateDesk;
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
-use crate::emo2_boot::ghost_switch::{
+use crate::exit_wait::begin_close;
+use crate::runtime::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
 };
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::RecordedCall;
-use crate::exit_wait::begin_close;
+use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::runtime::spine::RecordedCall;
 use crate::update::worker::DeskAsk;
 
 /// 列を受ける回数の上限（偽の SHIORI の台本に積む数）。
@@ -358,7 +358,7 @@ fn a_reload_that_cannot_run_sends_or_drops_the_tail_by_reason() {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
+        copy: crate::runtime::switch_copy::SwitchCopy::None,
     });
     assert_not_reloaded(&mut rig, a_dir.clone(), skipped("switching"), Fate::Sent);
     rig.world.remove_non_send::<SwitchInFlight>();

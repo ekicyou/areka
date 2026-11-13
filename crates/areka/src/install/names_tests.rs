@@ -15,7 +15,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 値を本物の記憶の書き手へ載せ、台詞の開始の表で 2 語を展開する（`%lastghostname`, `%lastobjectname`）。
 fn resolved(names: &LastInstallNames) -> (ResolvedVar, ResolvedVar) {

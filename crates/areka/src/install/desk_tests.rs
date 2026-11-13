@@ -27,13 +27,13 @@ use tracing::Level;
 use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::emo2_boot::ghost_switch::{
-    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, on_notice,
-};
 use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::install::procedure::{InstalledRecord, Overwritten};
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
+use crate::runtime::ghost_switch::{
+    PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, on_notice,
+};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -124,7 +124,7 @@ fn reservation() -> SwitchInFlight {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
+        copy: crate::runtime::switch_copy::SwitchCopy::None,
     }
 }
 

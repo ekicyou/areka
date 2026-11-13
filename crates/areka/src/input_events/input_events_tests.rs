@@ -1,5 +1,5 @@
 use super::*;
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use std::sync::mpsc;

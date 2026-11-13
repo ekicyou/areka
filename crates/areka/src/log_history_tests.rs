@@ -103,7 +103,7 @@ fn status_rows_and_areka_is_exact_only() {
         "areka::boot_config",
         "areka::boot_resolve",
         "areka::ghost_session",
-        "areka::emo2_boot::ghost_switch",
+        "areka::runtime::ghost_switch",
         "ghost-boot",
         "ghost-shutdown",
         // 外のものを開いた記録（areka-P0-open-external-tags 要件 7.3）。
@@ -117,11 +117,11 @@ fn status_rows_and_areka_is_exact_only() {
         );
     }
     assert_eq!(
-        classify(Level::INFO, "areka::emo2_boot::ghost_switch::x"),
+        classify(Level::INFO, "areka::runtime::ghost_switch::x"),
         Some(Kind::Status)
     );
     // `areka` は完全一致だけ。下のモジュールの info は外れる。
-    assert_eq!(classify(Level::INFO, "areka::emo2_boot"), None);
+    assert_eq!(classify(Level::INFO, "areka::runtime"), None);
     assert_eq!(classify(Level::INFO, "areka::alert"), None);
     assert_eq!(classify(Level::INFO, "areka::menu"), None);
     assert_eq!(classify(Level::INFO, "ghost-boots"), None);
@@ -151,7 +151,7 @@ fn rules_table_is_the_designed_fourteen_rows_in_order() {
             ("areka::boot_config", Kind::Status, false),
             ("areka::boot_resolve", Kind::Status, false),
             ("areka::ghost_session", Kind::Status, false),
-            ("areka::emo2_boot::ghost_switch", Kind::Status, false),
+            ("areka::runtime::ghost_switch", Kind::Status, false),
             ("ghost-boot", Kind::Status, false),
             ("ghost-shutdown", Kind::Status, false),
             ("areka::readme", Kind::Status, false),

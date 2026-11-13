@@ -59,14 +59,14 @@
 //! 本 example は窓を **k 未適用の native 原寸**で生成する（起動時は実窓 DPI が未確定なため）。その後
 //! **表示が成立した時点で窓 client を k 適用後の物理 px へ合わせる**（`areka-P0-emo-dpi-scaling`
 //! task 5.2・[`reconcile_present_sizes`]）——`EmoPresenter::take_pending_resize` が積む「表示成立点の
-//! 窓寸 reconcile 要求」を各 `apply` の直後に消費する流儀で、本番 boot（`emo2_boot` の
+//! 窓寸 reconcile 要求」を各 `apply` の直後に消費する流儀で、本番 boot（`runtime` の
 //! `emo2_frame_system` が drain の後段で直接呼ぶ `reconcile_reported_sizes`）と同一である。これが
 //! 無いと k≠1.0 の環境で
 //! 「窓 client（native 原寸）＜ 表示内容（k 倍）」となり、拡大表示もクリック捕捉域も窓 client の外側が
 //! 切り詰められて**手動観測が劣化する**（golden assert は `read_back` が合成メモの原寸直読みゆえ無影響）。
 //!
 //! **DPI の動的追従（`Changed<DPI>`／モニタ跨ぎ移動）は本 example の領分ではない** — それは本番
-//! `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`＝`refresh_scale`）が担う。本 example は
+//! `runtime` の DPI 追従フェーズ（`run_dpi_phase`＝`refresh_scale`）が担う。本 example は
 //! `refresh_scale` を呼ばないため、**起動前にスケーリングを設定してから**実行すること（下記手順 1）。
 //!
 //! **dpi≠96 のモニタ／スケーリング設定での実行確認**は task 5.3 の領分（本 example の rustdoc に手順を

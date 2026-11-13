@@ -14,7 +14,7 @@ use areka_emo_text::actor::{ChoiceHitRow, ShownBox};
 use wintf::ecs::pointer::DoubleClick;
 
 use super::balloon::{ChoiceSelection, click_selection, hit_choice_row};
-use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
+use crate::runtime::user_break_cue::NoUserBreakSignal;
 
 /// 届いた座標の下にある、文字の出ている箱を 1 つ選ぶ（要件 9.5・3.9）。
 ///

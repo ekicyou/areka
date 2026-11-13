@@ -18,9 +18,9 @@ use tracing::debug;
 use super::check_script_judge::diagnose;
 use super::dump_surface::{Job, Step, start};
 use super::resolve::ActiveGhost;
-use crate::emo2_boot::consumer_ledger::ConsumerLedger;
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::skin_facts_copy;
+use crate::runtime::consumer_ledger::ConsumerLedger;
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::skin_facts_copy;
 use areka_placement::spawn::GhostWindows;
 
 const TOOL: &str = "check_script";

@@ -18,9 +18,9 @@ use wintf::ecs::Point;
 use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased};
 
 use super::*;
-use crate::emo2_boot::hit_region::HitRegion;
 use crate::input_events::RegionSource;
 use crate::menu::plan::PlanEntry;
+use crate::runtime::hit_region::HitRegion;
 use areka_placement::spawn::CharWindowMarker;
 
 /// 当たり判定の代役（このテストでは当たり判定を引かないので中身は使われない）。

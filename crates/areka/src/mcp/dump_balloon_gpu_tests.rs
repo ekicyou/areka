@@ -24,12 +24,12 @@ use bevy_ecs::world::World;
 use log_capture_kit::count_levels;
 use wintf::ecs::FrameTime;
 
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::spine::RecordedCall;
-use crate::emo2_boot::target_map::balloon_target;
 use crate::mcp::dump_surface::dump_surface_tests::is_picture;
 use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
 use crate::mcp::dump_surface::{Job, Step, finish};
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::spine::RecordedCall;
+use crate::runtime::target_map::balloon_target;
 
 /// スコープ 0 が話す字（[`LINE`]・[`LINE_THEN_HIDE`] の本文・[`LINE_THEN_ANOTHER`] の最初の本文）。
 const WORDS: &str = "表示の確かめ";

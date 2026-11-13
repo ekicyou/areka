@@ -220,7 +220,7 @@ mod opener;
 #[cfg(test)]
 mod opener_test_support;
 
-// 台本の入口から偽の OS までの通しのテスト（`emo2_boot`）にだけ見せる（本番の見え方は変えない）。
+// 台本の入口から偽の OS までの通しのテスト（`runtime`）にだけ見せる（本番の見え方は変えない）。
 #[cfg(test)]
 pub(crate) use opener::{Opener, serve};
 #[cfg(test)]

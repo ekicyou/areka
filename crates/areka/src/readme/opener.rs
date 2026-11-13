@@ -18,12 +18,10 @@ use bevy_ecs::world::World;
 use super::destination::{Destination, Store, Target};
 use super::os_port::{OsCall, OsPort, Verb};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
-use crate::emo2_boot::shell_balloon_resolve::{
-    SkinCandidate, balloon_candidates, shell_candidates,
-};
 use crate::ghost_session::GhostSlot;
 use crate::log_history::TARGET_ERROR;
+use crate::runtime::ghost_switch::{GhostSpec, resolve_switch_target};
+use crate::runtime::shell_balloon_resolve::{SkinCandidate, balloon_candidates, shell_candidates};
 
 /// 開く文脈（UI スレッドで World から写す）。
 #[derive(Debug, Clone, PartialEq, Eq)]

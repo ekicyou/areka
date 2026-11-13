@@ -32,20 +32,18 @@ use wintf::ecs::{
 
 use super::GhostSlot;
 use crate::boot_resolve::read_last_shell;
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{
-    BALLOON, FakeShiori, SwitchRig, standard_script,
-};
-use crate::emo2_boot::shell_balloon_switch::{
+use crate::input_events::user_break::UserBreakWiring;
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::ghost_switch::SwitchInFlight;
+use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use crate::runtime::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
     request_skin_switch,
 };
-use crate::emo2_boot::spine::{
+use crate::runtime::spine::{
     GpuPermit, Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until,
 };
-use crate::emo2_boot::target_map::shell_target;
-use crate::input_events::user_break::UserBreakWiring;
+use crate::runtime::target_map::shell_target;
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};

@@ -26,7 +26,7 @@ use super::shell_box::box_under_point;
 use super::shell_box_handler::box_place;
 use super::wheel::{WheelAccum, WheelPlan, WheelRotation, plan_wheel};
 use super::{MouseWiring, char_scope, resolve_hit_owned};
-use crate::emo2_boot::frame::Emo2Wiring;
+use crate::runtime::frame::Emo2Wiring;
 use areka_placement::spawn::CharWindowMarker;
 
 /// 窓の外へ出たときに捨てる押下の控え（左は捕捉で持ち主が残るので含めない・要件 3.3）。

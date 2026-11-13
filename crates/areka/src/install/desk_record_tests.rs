@@ -16,13 +16,11 @@ use tracing::Level;
 
 use super::*;
 use crate::boot_resolve::read_last_balloon;
-use crate::emo2_boot::ghost_switch::LastInstalledGhost;
-use crate::emo2_boot::ghost_switch_test_support::{
-    BALLOON, FakeShiori, SwitchRig, standard_script,
-};
-use crate::emo2_boot::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
+use crate::runtime::ghost_switch::LastInstalledGhost;
+use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use crate::runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 
 /// 今のゴースト A を起こした土台（受け皿・置換語の値はまだ無い）。
 fn rig() -> SwitchRig {

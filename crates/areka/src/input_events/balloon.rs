@@ -16,7 +16,7 @@
 //! の窓 spawn 直後クロージャ内）。
 //! 本 mod の公開項目はこの 3 入口のいずれかから到達する（唯一の例外は
 //! [`BalloonWiring::is_balloon_hovered`] で、こちらはバルーン可視性の相
-//! ——`emo2_boot/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`——が読む）。
+//! ——`runtime/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`——が読む）。
 //!
 //! 上流契約（collision-geometry の resolver・`Emo2Wiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
@@ -197,8 +197,8 @@ impl BalloonWiring {
     /// タイムアウト抑止の判断側（バルーン可視性コントローラ）が読む口。未観測の scope は偽。
     ///
     /// 本番到達済み（実測）——バルーン可視性の相が毎フレームの観測収集で呼ぶ
-    /// （`emo2_boot/balloon_visibility_phase.rs` の `collect_observations`）。到達の起点は
-    /// `emo2_boot/frame.rs:170` の `run_balloon_visibility_phase` 呼び出しである。
+    /// （`runtime/balloon_visibility_phase.rs` の `collect_observations`）。到達の起点は
+    /// `runtime/frame.rs:170` の `run_balloon_visibility_phase` 呼び出しである。
     pub(crate) fn is_balloon_hovered(&self, scope: usize) -> bool {
         self.balloon_hover.contains(&scope)
     }
@@ -247,7 +247,7 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 /// k≠1.0 が実供給されても本経路は正しいままである。
 ///
 /// シェル窓の当たり判定は逆向きで、「矩形は作者定義サーフェス px のまま・**点を ÷k**」する
-/// （正準記述＝`crate::emo2_boot::hit_region` の座標契約）。バルーンは「点はそのまま・**矩形を ×k**」
+/// （正準記述＝`crate::runtime::hit_region` の座標契約）。バルーンは「点はそのまま・**矩形を ×k**」
 /// ——**逆向きだが等価に正しい**整合方式である。
 ///
 /// **警告**: 本経路へ ÷k を追加すると **二重縮約**（矩形 ×k と点 ÷k の両掛け）になり、正常動作を

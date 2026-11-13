@@ -24,10 +24,10 @@ use wintf::ecs::{Point, Window};
 use super::super::test_support::{capture_logs, headless_emo2_wiring};
 use super::super::{BalloonWiring, ChoiceSelection};
 use super::on_balloon_pointer_pressed;
-use crate::emo2_boot::frame::balloon_runtime_test_support::manual_balloon_runtime;
-use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
-use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
+use crate::runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
+use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
+use crate::runtime::user_break_cue::NoUserBreakSignal;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// 既定の置き場（120×40 の絵: 上 (100, 15)・下 (100, 25)）の矢印の不透明な点。
@@ -62,7 +62,7 @@ struct Rig {
     lifecycle: Receiver<TalkLifecycleSignal>,
     kanade: Receiver<KanadeMsg>,
     /// GPU の装置の許可。World の装置より後に返すので欄の最後。
-    _permit: crate::emo2_boot::spine::GpuPermit,
+    _permit: crate::runtime::spine::GpuPermit,
 }
 
 /// 上下の矢印が出ている普通のバルーン（scope 0）の窓と、その受け口・結線。

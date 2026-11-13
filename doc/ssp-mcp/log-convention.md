@@ -52,7 +52,7 @@ target の照合は 2 通りある。
 | status | `areka::boot_config` | 下も含む |
 | status | `areka::boot_resolve` | 下も含む |
 | status | `areka::ghost_session` | 下も含む |
-| status | `areka::emo2_boot::ghost_switch` | 下も含む |
+| status | `areka::runtime::ghost_switch` | 下も含む |
 | status | `ghost-boot` | 下も含む |
 | status | `ghost-shutdown` | 下も含む |
 | status | `areka::readme` | 下も含む |
@@ -131,7 +131,7 @@ tracing::warn!(
 ## 7. 履歴に届かないもの
 
 - debug・trace の出来事（取り決めの target でも）。
-- 規則の表のどの target にも当たらない info の出来事（例: `areka::alert` の問いかけの行、`areka::emo2_boot` の info）。
+- 規則の表のどの target にも当たらない info の出来事（例: `areka::alert` の問いかけの行、`areka::runtime` の info）。
 - `tracing` も `log` クレートも通らない出力（`println!`・`eprintln!`・パニックの報告）。
 - `log` クレートで出した info 以下の行。`log` クレートの warn 以上は `error` に残る（target は `log` として届くが、warn 以上はどの target でも `error` なので変わらない）。
 - スパン（`tracing::span!`）。履歴に残るのは出来事だけ。

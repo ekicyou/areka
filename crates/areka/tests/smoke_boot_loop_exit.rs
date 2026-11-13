@@ -47,7 +47,7 @@ use temp_path_kit::TempPath;
 /// 子へ渡す保険の自動終了。起動窓を開き run ループを一巡させるだけの十分小さな値。
 const SMOKE_EXIT: Duration = Duration::from_millis(500);
 
-/// wire 成立マーカー（`emo2_boot` の `info!`・実 sink 結線が end-to-end で踏まれた証跡・task 7.1）。
+/// wire 成立マーカー（`runtime` の `info!`・実 sink 結線が end-to-end で踏まれた証跡・task 7.1）。
 const WIRED: &str = "emo2-boot: 実 sink 結線が成立しました（wire 成立）";
 
 /// 本物のゴースト窓を開いたマーカー（`ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。
@@ -113,7 +113,7 @@ fn assert_real_windows_and_exit_zero(status: ExitStatus, all: &str) {
          \n--- child output ---\n{all}"
     );
     // wire 成立マーカーの存在 assert（task 7.1・R7.3 観測境界）: `main` は起動窓の後で
-    // `emo2_boot::wire_emo2_boot` を呼び、実 fixture では `wired=true` で本マーカーを `info!` する。
+    // `runtime::wire_emo2_boot` を呼び、実 fixture では `wired=true` で本マーカーを `info!` する。
     // `emo2_frame_system` の schedule 登録が end-to-end で少なくとも 1 回踏まれたことを固定する。
     assert!(
         all.contains(WIRED),

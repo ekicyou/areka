@@ -72,7 +72,7 @@ fn answers_unavailable_and_warns_once_without_a_runtime() {
 
 #[test]
 fn reads_values_through_the_ghost_own_asker_on_a_real_runtime() {
-    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(
         "A",
@@ -153,11 +153,11 @@ mod scope_rect {
     use wintf::ecs::WindowHandle;
 
     use super::*;
-    use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
     use crate::ghost_session::ghost_session_scope_rect::{
         ScopeRectReadSeam, ScreenRect, WindowKey,
     };
     use crate::ghost_session::{RuntimeRebuild, rebuild_runtime_in_place};
+    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
     use crate::shiori_host::ShioriHostSink;
     use areka_placement::follow::OffsetBase;
     use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};

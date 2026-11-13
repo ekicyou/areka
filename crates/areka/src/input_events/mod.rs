@@ -32,8 +32,8 @@ use wintf::ecs::drag::{OnDragEnd, OnDragStart};
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
 use crate::app_exit::{ExitOrigin, quit_app};
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::hit_region::{HitRegion, resolve_hit_region};
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::hit_region::{HitRegion, resolve_hit_region};
 use areka_placement::spawn::CharWindowMarker;
 use throttle::{MouseMoveThrottle, plan_mouse_move};
 
@@ -156,12 +156,12 @@ impl MouseWiring {
     ///   （collision-geometry design の消費想定どおり・trace）。このとき `surface_point` は**無変換の
     ///   入力値**とする——presenter が居なければ実適用 k を知る術が無く、等倍相当（縮約は恒等）が
     ///   唯一整合する縮退規約である（presenter 側の k 不在縮退＝要件 1.6 と同じ扱い。座標空間の
-    ///   正準契約は `emo2_boot::hit_region` の冒頭 doc）。
+    ///   正準契約は `runtime::hit_region` の冒頭 doc）。
     ///
     /// # 座標空間（DD-IE-10 改訂・areka-P0-collision-dpi-hittest）
     ///
     /// 旧 DD-IE-10 の「座標は素通し＝DPI 変換なし・k=1.0 限定契約」は**解除済み**。現契約は次のとおりで、
-    /// 全体像の正本は [`crate::emo2_boot::hit_region`] の冒頭 doc（受領空間・吸収点・配信空間・
+    /// 全体像の正本は [`crate::runtime::hit_region`] の冒頭 doc（受領空間・吸収点・配信空間・
     /// shell 限定の旨）である。本 doc はそこへの参照＋本層の差分のみを述べる。
     ///
     /// - 受領する `x`/`y` は当該 shell 窓の client 物理 px であり、**そのまま** resolver へ渡す
@@ -212,7 +212,7 @@ impl MouseWiring {
     /// - `surface_pos`: resolver が返した縮約後サーフェス px。**配信する `MouseInput{x,y}` の値**
     ///   であり、`region` と同一空間に揃う（1.8）。k=1.0 では両者が一致し従前の配信値と同一（1.9）。
     ///
-    /// 座標契約の全体像は [`crate::emo2_boot::hit_region`] の冒頭 doc（正本）を参照。
+    /// 座標契約の全体像は [`crate::runtime::hit_region`] の冒頭 doc（正本）を参照。
     /// 返り値は実際に送出したか。
     /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（false 返し・log-first）。
     fn plan_and_send_move(
@@ -256,7 +256,7 @@ impl MouseWiring {
     ///
     /// これが kanade の**正規の終了の握手**（`OnClose` GET →終了挨拶の再生 → `\-` →解放）の
     /// 入口である。送るだけで窓には触れない——窓を閉じるのは握手が終わったことを知らせる
-    /// 停止通知を受けた側（`emo2_boot::frame` の終了相）であり、この順序が
+    /// 停止通知を受けた側（`runtime::frame` の終了相）であり、この順序が
     /// 「終了挨拶をしてから消える」という見え方を作る。
     ///
     /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（log-first）。既に kanade が
@@ -284,7 +284,7 @@ impl MouseWiring {
     ///
     /// クリックは間引き対象外ゆえ throttle を通さず即送出する。`surface_pos` は resolver が返した
     /// 縮約後サーフェス px＝配信空間の値（1.8・DD-IE-10 改訂）。throttle を経ないため本経路に
-    /// client px は現れない。座標契約の正本は [`crate::emo2_boot::hit_region`] の冒頭 doc。
+    /// client px は現れない。座標契約の正本は [`crate::runtime::hit_region`] の冒頭 doc。
     /// 送出失敗は warn＋no-op（log-first）。
     fn send_double_click(
         &mut self,

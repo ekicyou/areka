@@ -19,9 +19,9 @@ use tracing::Level;
 use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
-use crate::emo2_boot::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::refs::executing_refs;
 use crate::update::{SubmitVerdict, SummaryKind, UpdateOrder, UpdateReason, register, submit};
 
@@ -283,7 +283,7 @@ fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::emo2_boot::switch_copy::SwitchCopy::None,
+        copy: crate::runtime::switch_copy::SwitchCopy::None,
     });
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NotSteady);

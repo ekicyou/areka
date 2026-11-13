@@ -44,7 +44,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   pwsh -NoProfile -File tools/load-flake.ps1 -Label before -NoCapture
   pwsh -NoProfile -File tools/load-flake.ps1 -Label smoke -Rounds 1 -Burners 2 -Filter some::test
   pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet -Burners 0 -Rounds 3
-  pwsh -NoProfile -File tools/load-flake.ps1 -Label case1 -Filter emo2_boot::frame -SetEnv RUST_LOG=trace
+  pwsh -NoProfile -File tools/load-flake.ps1 -Label case1 -Filter runtime::frame -SetEnv RUST_LOG=trace
   pwsh -NoProfile -File tools/load-flake.ps1 -Label case3 -Binary wintf-lib -Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source -Burners 0
 
 spec areka-test-binary-stability（design「LoadFlake」）で足した口:

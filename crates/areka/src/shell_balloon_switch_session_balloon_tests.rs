@@ -19,9 +19,9 @@ use super::shell_balloon_switch_session_lap_tests::{
 };
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
-use crate::emo2_boot::target_map::balloon_target;
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
+use crate::runtime::target_map::balloon_target;
 
 /// 2 つ目のバルーン（検体 `StayseeBalloon` の複製・フォルダ名）。
 const STAYSEE: &str = "StayseeBalloon";
@@ -31,7 +31,7 @@ const BOOT_TO_STAYSEE: &str = r"\0\s[0]\1\s[10]\0A\![change,balloon,StayseeBallo
 /// 1 度目の `OnBalloonChange` の台詞: 新しいバルーンで話し、既定のバルーンへ戻る切替を命じる。
 ///
 /// 1 文字の台詞が切替の後の最初のフレームで現れることは
-/// `emo2_boot/balloon_visibility_phase_reappear_tests.rs` が決定論で確かめる。
+/// `runtime/balloon_visibility_phase_reappear_tests.rs` が決定論で確かめる。
 const CHANGE_1: &str = r"\0新しい\![change,balloon,emo2-kakukaku]\e";
 /// 2 度目の `OnBalloonChange` の台詞（戻った既定のバルーンで話す）。
 const CHANGE_2: &str = r"\0戻った\e";

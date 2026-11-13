@@ -25,12 +25,12 @@ use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::emo2_boot::ghost_switch::{LastInstalledGhost, SwitchInFlight};
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::RecordedCall;
 use crate::exit_wait::{begin_close, register_gate};
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
+use crate::runtime::ghost_switch::{LastInstalledGhost, SwitchInFlight};
+use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::runtime::spine::RecordedCall;
 
 // ---------------------------------------------------------------- 道具立て
 

@@ -25,11 +25,11 @@ use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPo
 
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
-use crate::emo2_boot;
-use crate::emo2_boot::runtime_boot::CueSinkSources;
 use crate::input_events;
 use crate::menu;
 use crate::readme;
+use crate::runtime;
+use crate::runtime::runtime_boot::CueSinkSources;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_scope_rect.rs"]
@@ -45,7 +45,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 ///
 /// 載せる系と順序（段ごとに今日の挿入順を保つ）:
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
-///   なので [`emo2_boot::wire_kanade_stop`] を分割せずそのまま呼ぶ） → 記憶を書けない失敗の
+///   なので [`runtime::wire_kanade_stop`] を分割せずそのまま呼ぶ） → 記憶を書けない失敗の
 ///   汲み出し（[`crate::write_failure::install`]）
 /// - `Input`← 説明書 → 台本の切替要求 → 台本のシェル・バルーンの切替要求 → 中断 → メニュー →
 ///   バルーンの離脱 → シェルの窓の離脱（箱の上の滞在） → 選択肢の送り → インストールの窓口 →
@@ -65,15 +65,15 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// 進まず、LogSink の起動のバルーン窓は `HitTest::none()` のまま（当たり判定の面は結線ありの
 /// 起動でだけ装着する）なので `PointerLeave` が立たず届かない。
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
-    emo2_boot::register_emo2_frame_system(world);
-    emo2_boot::wire_kanade_stop(world, kanade_stop_rx);
+    runtime::register_emo2_frame_system(world);
+    runtime::wire_kanade_stop(world, kanade_stop_rx);
     // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回・areka-P0-write-failure-notice）。
     crate::write_failure::install(world);
 
     readme::register_readme_drain(world);
-    emo2_boot::ghost_switch::register_change_drain(world);
-    emo2_boot::shell_balloon_switch::register_switch_drain(world);
-    emo2_boot::reload::register(world);
+    runtime::ghost_switch::register_change_drain(world);
+    runtime::shell_balloon_switch::register_switch_drain(world);
+    runtime::reload::register(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
@@ -226,7 +226,7 @@ pub(crate) fn prepare_ghost_windows(
     // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
     // （4.7・task 8.2）と拡大率の相が消費する。
     // **セッション内固定ではない**（DD15 撤回・atom 要件 5.1）——毎フレーム先頭の
-    // 同期段（`emo2_boot::frame::work_area_sync`）が実行時のモニタ表から作り直す。
+    // 同期段（`runtime::frame::work_area_sync`）が実行時のモニタ表から作り直す。
     // ここが作るのは起動時の初期値であり、構築関数は同期段と同一である。
     // 構築と同時に全モニタの観測を 1 回出す（areka-P0-dpi-window-vanish 要件 1.1 の
     // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
@@ -390,7 +390,7 @@ pub(crate) fn reopen_ghost_windows(
 /// ゴーストごとの結線の入力の束（design「boot_ghost」）。
 pub(crate) struct GhostBootInputs {
     /// 起動の結線の入力（ゴーストの根・バルーンの根・SHIORI の結線・時計の種類・記憶の置き場）。
-    pub wiring: emo2_boot::Emo2BootInputs,
+    pub wiring: runtime::Emo2BootInputs,
     /// fallback（`LogSink`）の起動が使う 32bit SHIORI helper のパス。
     pub helper_exe: PathBuf,
     /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・`shiori-fault-notice`）。
@@ -412,7 +412,7 @@ impl GhostBootInputs {
         modules: crate::cli::ModulePolicy,
     ) -> Self {
         Self {
-            wiring: emo2_boot::Emo2BootInputs {
+            wiring: runtime::Emo2BootInputs {
                 ghost_root: cfg.ghost_root.clone(),
                 balloon_root: cfg.balloon_root.clone(),
                 shiori: crate::boot_config::shiori_wiring_for(modules, helper_exe.clone()),
@@ -849,7 +849,7 @@ pub(crate) fn boot_ghost_strict(
 /// 取り出した起動のシェル（[`take_boot_shell`]）で、結線へそのまま渡す（要件 6.4）。
 fn boot_wired(
     world: &mut World,
-    wiring: emo2_boot::Emo2BootInputs,
+    wiring: runtime::Emo2BootInputs,
     kanade_stop: &Sender<KanadeNotice>,
     descript: &StartupDescriptValues,
     ghost: &GhostDecision,
@@ -862,7 +862,7 @@ fn boot_wired(
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。
-    let outcome = emo2_boot::wire_emo2_boot(
+    let outcome = runtime::wire_emo2_boot(
         world,
         wiring,
         descript.author_dpi,

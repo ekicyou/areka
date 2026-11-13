@@ -36,10 +36,10 @@ use super::startup::CarriedInstall;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::{SwitchInFlight, record_last_installed};
-use crate::emo2_boot::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
+use crate::runtime::ghost_switch::{SwitchInFlight, record_last_installed};
+use crate::runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 
 /// 手元に置いたイベントの頼み（送る条件がそろうまで待つ）。
 struct HeldRaise {

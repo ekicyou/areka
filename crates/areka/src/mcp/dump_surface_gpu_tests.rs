@@ -13,9 +13,9 @@ use log_capture_kit::count_levels;
 use super::dump_surface_tests::is_picture;
 use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
 use super::{Step, WaitAnswer, finish};
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::spine::{Progress, RecordedCall};
-use crate::emo2_boot::target_map::shell_target;
+use crate::runtime::frame::Emo2Wiring;
+use crate::runtime::spine::{Progress, RecordedCall};
+use crate::runtime::target_map::shell_target;
 
 /// 検体（emo2）の `surfaces.txt` に在る、アニメーションも着せ替えも持たない surface（`element0` 1 枚）。
 /// 起動のときの 0 と違う番号で、台本で出したことが ID に現れる。

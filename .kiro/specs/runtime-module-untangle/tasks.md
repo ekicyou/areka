@@ -23,7 +23,7 @@
   - _Requirements: 3.1, 3.3_
 
 - [ ] 2. 名前の改め（機械的な改名だけの段）
-- [ ] 2.1 モジュールを `runtime` へ改名し、パスで読む所を全部追従させる
+- [x] 2.1 モジュールを `runtime` へ改名し、パスで読む所を全部追従させる
   - モジュールのフォルダを履歴の残る移動で改名し、本体の中の `emo2_boot` のパス（`main.rs`・`ghost_session*`・`mcp/`・`menu/`・`input_events/`・`install/`・`update/`・`readme/`・`offline_dump/`・`session_end.rs`・`app_exit.rs`・`boot_config.rs`・`log_history.rs`・`placement_tests/` の 9 ファイルほか）を書き換える
   - ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR`・`crate_source_test_support` 経由・`tick_gate_config_producers_tests` のパス 8 本）と `examples/collision-probe.rs` の `#[path]` 2 つを新しいパスへ
   - 本体の外でパスが切れると働きが変わる所（1,000 行の番人の例外表 2 か所・`workspace_scan_test`・`wintf` の `test_crash_report.rs` 1 行目・`tools/load-flake.ps1` 47 行目）を直し、例外表の項目は増やさない
@@ -193,3 +193,4 @@
 - 1.1: `cargo check` は rustc の警告 0 件だが、cargo のマニフェストの警告（使われない依存）が 3 件前からある（workspace の `async-executor`・`shiori-abi` の `windows`・`shiori-host32-host` の `event-listener`。どれも `crates/areka` の外）。要件 8.2 は「rustc 0 件・マニフェストはこの 3 件のまま」で比べる。消すのは範囲外（要件 8.7 が依存の変更を禁じる）＝完了の棚卸で起票する。
 - 1.3: 9.1 で式 1〜3 を当て直すときは、インラインのテストのモジュールだけでなく、本番のファイルの中の `#[cfg(test)]` の fn・use・impl のメソッドに当たる行も見る。
 - 1.2: 9.6 で終わる道の行を比べるときは、`exitlines.ps1` の出力をファイルへ UTF-8（`Out-File -Encoding utf8NoBOM`）で出し、末尾の空白を落として diff を取る。メニューの道はカーソルを先に動かしてから `WindowFromPoint` で pid を確かめる（キャラの窓はカーソルが乗るまでクリックを素通しにする）。
+- 2.1: 改名で tracing の出所は `module_path!` に従って `areka::runtime::*` へ自動で変わる。振る舞いを保つため `log_history.rs` の決まり・照合するテスト・`log-convention.md` の 55・134 行は 2.1 で中間の値 `areka::runtime::*` にした（7.1・7.2 で最後の値へ）。`tests/stay_on_top_real_run.rs` 51〜54 行の `RUST_LOG` と `tests/emo2_real_run/common_tests.rs:28` は 7.2 で必ず直す（それまでその実機テストは赤になりうる）。`.claude/agents/perf-review.md:47` の古いパスは 8.1 で直す。

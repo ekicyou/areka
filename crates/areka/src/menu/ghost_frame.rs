@@ -13,7 +13,7 @@ use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::{GhostSpec, SwitchRequest, request_ghost_switch};
+use crate::runtime::ghost_switch::{GhostSpec, SwitchRequest, request_ghost_switch};
 
 /// 「ゴースト」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の直後）。
 pub(crate) fn register(world: &mut World) {

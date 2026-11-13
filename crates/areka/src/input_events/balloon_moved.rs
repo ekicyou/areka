@@ -8,7 +8,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use crate::emo2_boot::frame::Emo2Wiring;
+use crate::runtime::frame::Emo2Wiring;
 use areka_placement::spawn::BalloonWindowMarker;
 
 use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};

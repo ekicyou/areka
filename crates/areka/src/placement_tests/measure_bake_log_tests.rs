@@ -16,7 +16,7 @@ use areka_emo_atlas::{
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::emo2_boot::assets::{build_balloon_assets, build_shell_assets};
+use crate::runtime::assets::{build_balloon_assets, build_shell_assets};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::measure_with_reader;
