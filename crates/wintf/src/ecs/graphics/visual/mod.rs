@@ -32,6 +32,10 @@ mod world_visual_tests;
 
 pub use draw::command::*;
 pub(crate) use draw::emit;
+// graphics の下の入れ物・読み戻しのテストが WARP の足場を使う口。使い手のテストが入るまでは未使用。
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
 pub use systems::*;

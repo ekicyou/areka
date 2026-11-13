@@ -9,6 +9,7 @@ use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::error;
+use windows::Win32::Graphics::Direct2D::ID2D1DeviceContext6;
 use windows::Win32::System::WinRT::Composition::ICompositionDrawingSurfaceInterop;
 use windows::core::Interface;
 
@@ -138,7 +139,8 @@ pub fn render_surface(
         }
         // 木の節は根の後に同じ描画面へ（変換は上の拡大＋offset を根に）。失敗は EndDraw に出る。
         if let Some(tree) = tree {
-            emit(&dc, transform, &tree.commands);
+            let dc6 = dc.cast::<ID2D1DeviceContext6>().ok();
+            emit(&dc, dc6.as_ref(), transform, &tree.commands);
         }
 
         if let Err(e) = surface_interop.end_draw() {

@@ -14,9 +14,16 @@ use windows_numerics::Matrix3x2;
 ///   図形の切り抜きは DC を恒等にして局所→物理の全部を層の `maskTransform` で渡す。
 /// - 層は透明から始まる（`D2D1_LAYER_OPTIONS1_NONE`）。層の中の `SOURCE_OVER` でない重ね方は
 ///   層の中身に対して効く（D2D の既定・変えるのは `wintf-d2d-composite-rules`）。
+/// - `dc6` はブレンドの描き方（`BlendImage`）を持つ同じ DC。持たない DC なら `None`。
+///   呼び手が合成の回に 1 度 `dc.cast()` して渡す。
 /// - 戻ってきたとき DC の変換は `root` に戻してある。D2D の描画の呼び出しは HRESULT を返さず、
 ///   失敗は呼び手の `EndDraw` の結果に出る。
-pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCommand]) {
+pub(crate) fn emit(
+    dc: &ID2D1DeviceContext,
+    _dc6: Option<&ID2D1DeviceContext6>,
+    root: Matrix3x2,
+    commands: &[DrawCommand],
+) {
     let identity = Matrix3x2::identity();
     for command in commands {
         // SAFETY: Windows API 境界。呼び手が `BeginDraw` の中で呼ぶ。push と pop は `build` が対で出す。
