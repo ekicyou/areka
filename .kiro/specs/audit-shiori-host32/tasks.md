@@ -104,7 +104,7 @@
   - 完了の姿: `areka-ghost` のテストが緑で、本番の接続の道が子のプロセス番号で縛られている
   - _Depends: 7.2_
   - _Requirements: 3.2, 6.1, 6.2_
-- [ ] 7.4 窓 2 組が並んで生きるテストを置き、緑なら直列の錠と当座の錠を消す（指摘 40・要件 10.5）
+- [x] 7.4 窓 2 組が並んで生きるテストを置き、緑なら直列の錠と当座の錠を消す（指摘 40・要件 10.5）
   - テスト `two_parent_windows_live_side_by_side_on_two_threads` を置いて回す
   - 緑なら: `WINDOW_TEST_SERIAL` と「窓 1 組」「`--test-threads=1` で回す」の説明（`lifecycle.rs`・`parent_window.rs`・`lifecycle_cyclic_e2e.rs`）を消し、`areka-ghost` の当座の錠 `real_pasta_turn` とその取り回し・「`PASTA_DEBUG=0` で回す」の説明（4 ファイル）を消す
   - 赤なら: `kiro-debug` の手順で原因を 1 つに絞り、設計の「赤なら」の逃げ道どおり錠を 1 か所にまとめて残し、本番の 2 体同時の件を `/kiro-discovery` で起票し、錠を残すことを開発者への議題として出す（その場合 8 の試験の形が変わる）
@@ -203,3 +203,5 @@
 - 6: process_host.rs の中のテストは process_host_tests.rs へ移した（901 行になったため）。wait_handle は WAIT_FAILED を時間切れと区別しない（記録は出る）。14 の audit で見る。
 - 7.1: parent_window の既存テスト pump_none_then_some_and_bad_frame_recorded は (c) の節を新しいテストへ移したので名前が中身とずれた。7.2／7.4 で触るときに名前を直す。
 - 7.2: expect_helper_pid は HELLO が届いた後に呼ぶと pid の確かめが記録なしで飛ぶ。7.3 の real_connect は spawn → expect_helper_pid → ポンプの順を守る。parent_window.rs は 898 行なので 7.4 でテストを足すときは parent_window_tests.rs へ移す。lib.rs に #[cfg(test)] extern crate self as shiori_host32_host; を置いた（tests/common を lib の単体テストからも #[path] で引くため）。
+- 7.4（範囲外・/kiro-complete の棚卸へ）: 窓 2 組のテストが緑で「窓 1 組の制約」は無いと分かった。areka-kanade の tests/kanade/common/common_window_actor.rs の WINDOW_CREATE_SERIAL（同時に作ると 2 つ目が失敗する前提）が今も要るかは確かめていない（注にその旨を書いた）。
+- 7.4: 机で、emo2 自身の pasta.dll・PASTA_DEBUG=1・既定の並列で areka-ghost を回し、錠なしで実物の pasta のテスト 3 本が並んで緑（lib 234・ghost 39・real_pasta_online 8）。

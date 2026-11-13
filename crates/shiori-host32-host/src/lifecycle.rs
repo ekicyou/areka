@@ -515,13 +515,6 @@ pub(crate) mod tests {
     // --- request_clean_shutdown: 短絡経路（既終了への正常終了要求・R5.1/R5.3/R5.4/R5.5）---
     // ParentMessageWindow は super::* で導入済み（本モジュール先頭 use）。
 
-    /// 窓を生成するテストを直列化する共有ロック（wintf-winmsg-executor 0.0.5 の
-    /// 「同一プロセスで 2 組の message-only 窓を同時生成すると 2 組目が WindowCreationError」
-    /// 既知制約への対処）。窓生成テスト同士が並列に走ると衝突するため、
-    /// 本テストと `parent_window.rs::window_tests::pump_none_then_some_and_bad_frame_recorded`
-    /// が同一ロックを取って直列化する。poison は無視する（ロックは相互排他のみが目的）。
-    pub(crate) static WINDOW_TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     /// 性質（短絡成功・R5.1/R5.3/R5.4）: 既終了 stand-in への `request_clean_shutdown` は
     /// UNLOAD を送出せず、観測済み `ExitKind::Clean` を短絡で `Ok` 返しする（既終了への
     /// 終了要求を失敗させない・冪等）。
@@ -531,9 +524,6 @@ pub(crate) mod tests {
     /// 「送出前に短絡した」ことの証明である。再起動は一切試みない（R5.4）。
     #[test]
     fn request_clean_shutdown_short_circuits_when_already_exited() {
-        // 窓生成テストの直列化（並列窓生成の WindowCreationError 回避）。
-        let _guard = WINDOW_TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-
         // 既終了 stand-in（`cmd /c exit 0` → Clean）を組み、終了を bounded 観測する。
         let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);

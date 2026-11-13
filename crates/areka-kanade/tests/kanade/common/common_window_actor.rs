@@ -1,9 +1,10 @@
 //! 窓を作るテストの共有ヘルパ（窓を作るテストはこの 1 か所から組み立てる）。
 //!
 //! - [`WINDOW_CREATE_SERIAL`]: 親 message-only 窓の**生成の呼び出しだけ**を直列化するロック。
-//!   wintf-winmsg-executor 0.0.5 は同じ瞬間に 2 つの窓を生成すると 2 つ目が
-//!   `WindowCreationError` になる。生成後の共存は問題ないため、ロックは生成の一瞬だけを覆う
-//!   （`shiori-host32-host` の `lifecycle.rs` にある `WINDOW_TEST_SERIAL` と同じ考え方）。
+//!   「同じ瞬間に 2 つの窓を生成すると 2 つ目が `WindowCreationError` になる」という前提で
+//!   置かれたが、この前提は `shiori-host32-host` のテスト
+//!   `two_parent_windows_live_side_by_side_on_two_threads`（2 スレッドで同時に生成して共存）で
+//!   覆った。このロックが今も要るかは確かめていない。
 //! - [`spawn_window_actor`]: 本番の [`spawn_shiori_actor`] を、本番と同じ順序（窓は connect が
 //!   アクタースレッド上で作る）で起こす。backend は本番の [`ShioriConnection`] そのもので、
 //!   helper は即終了する x64 の stand-in（`cmd.exe /c exit 0`）を公開 API で起こしたもの。

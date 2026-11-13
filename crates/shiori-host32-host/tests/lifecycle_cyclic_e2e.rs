@@ -29,25 +29,15 @@
 //! env override 最優先 → `CARGO_MANIFEST_DIR` から `target/i686-pc-windows-msvc/{debug,release}/`
 //! を探索 → 不在は**明確な panic**（i686 未ビルドの指摘）。silent-skip（緑の偽装）を禁ずる。
 //!
-//! ## 二窓 discipline（R6.3・design Testing Strategy #10）
-//! 本ファイルには **windowed テストが 2 本**存在する:
-//! - `cyclic_run_and_clean_shutdown`（task 5.1・決定的・常に窓を作る）
-//! - `cyclic_real_pasta_optional`（task 5.2・env-gate・`HOST32_PASTA_DLL` **設定時のみ**窓を作る）
-//!
-//! 親 message-only 窓は同一プロセスで同時 2 組生成不可（既知の 1 窓＝2 組制約）。ゆえに
-//! **`HOST32_PASTA_DLL` を設定して実行する場合は必ず `--test-threads=1` で直列化**すること
-//! （下記 PowerShell 手順に明記）。CI（env 未設定）では `cyclic_real_pasta_optional` が
-//! **窓生成前に早期 return** するため、通常の並行 `cargo test` でも 2 窓が同時生存せず衝突しない。
-//!
 //! ## 実行前提（PowerShell・Git Bash 不可・2 段ビルド→x64 test）
 //! ```powershell
 //! cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc
 //! cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc
 //! cargo test  -p shiori-host32-host    --test lifecycle_cyclic_e2e
 //!
-//! # env-gate 実 pasta 追験（任意・R6）を含める場合は必ず --test-threads=1 で直列化（2 窓制約）:
+//! # env-gate 実 pasta 追験（任意・R6）を含める場合:
 //! $env:HOST32_PASTA_DLL="C:\path\to\pasta.dll"
-//! cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e -- --test-threads=1
+//! cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e
 //! ```
 
 use std::path::PathBuf;
@@ -105,7 +95,7 @@ fn cyclic_run_and_clean_shutdown() {
     let dll_path = load_dir.join("shiori.dll");
     std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・独立テストバイナリなので本プロセスで唯一）---
+    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -181,7 +171,7 @@ fn cyclic_run_and_clean_shutdown() {
         "正規の正常終了経路が exit code 0（Clean）を生む（実 helper の UNLOAD arm 経由・R5.1/R5.3）"
     );
 
-    // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）→ best-effort cleanup ---
+    // --- 親窓を明示 drop → best-effort cleanup ---
     drop(parent);
 }
 
@@ -201,23 +191,16 @@ fn cyclic_run_and_clean_shutdown() {
 /// load_dir=DLL の親 dir・shiori_name=ファイル名（実 pasta は自身の dir に住むため。request 系
 /// `request_e2e_real_pasta_optional` と同じ流儀）＝load_dir は削除しない（本テストが作った temp ではない）。
 ///
-/// **2 窓 discipline**: 本テストは cyclic（`cyclic_run_and_clean_shutdown`）と同一バイナリの windowed
-/// テスト 2 本目にあたる。env `HOST32_PASTA_DLL` 設定時の実行は必ず `--test-threads=1` で直列化すること
-/// （1 窓＝2 組制約対処・ファイル冒頭 doc の PowerShell 手順に明記）。env 未設定（CI）では下記の早期
-/// return が窓生成の**前**に発火するため、通常の並行 `cargo test` でも 2 窓が同時生存せず衝突しない。
-///
 /// bounded: pump=HANDSHAKE_TIMEOUT・LOAD ack=LOAD_ACK_TIMEOUT・notify 往復=client の env timeout
 /// ＋SMTO_ABORTIFHUNG・終了観測=`request_clean_shutdown` 内 timeout で必ず有限復帰する（ハングしない）。
 #[test]
 fn cyclic_real_pasta_optional() {
     // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ明示 skip（R6.3・CI 必須ゲートにしない）---
-    //     この早期 return は「窓生成の前」に起きる。ゆえに CI（env 未設定）では本テストは窓を作らず、
-    //     並行実行中の `cyclic_run_and_clean_shutdown` と 2 窓が同時生存することはない（衝突しない）。
     let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
         eprintln!(
             "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・R6.3）。\
              実 pasta への周期連打＋正規 clean shutdown を検証するには env に pasta DLL の\
-             フルパスを設定し、`--test-threads=1` で直列実行してください（2 窓制約）。"
+             フルパスを設定してください。"
         );
         return;
     };
@@ -243,7 +226,7 @@ fn cyclic_real_pasta_optional() {
         .to_string_lossy()
         .into_owned();
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
+    // --- ① 親 message-only 窓（使用後に明示 drop）---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -316,7 +299,7 @@ fn cyclic_real_pasta_optional() {
         "実 pasta 周期連打（{N_PASTA} 回 NOTIFY）＋正規 clean shutdown 完走（Clean・R6.1）: {pasta_dll:?}"
     );
 
-    // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）---
+    // --- 親窓を明示 drop ---
     //     load_dir は実 pasta 自身の dir ゆえ削除しない（本テストが作った temp ではない）。
     drop(parent);
 }

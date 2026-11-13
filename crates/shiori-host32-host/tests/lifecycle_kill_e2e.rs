@@ -18,9 +18,6 @@
 //! → 二重 terminate()→Ok（冪等）→ request_clean_shutdown→Ok(非 Clean kind)（短絡）
 //! ```
 //!
-//! **1 窓制約対処**: 親 message-only 窓は同一プロセスで 2 組独立生成すると 2 組目が失敗する既知制約ゆえ、
-//! 周期連打テスト（`lifecycle_cyclic_e2e.rs`）とは**別のテストバイナリ**（＝別プロセス＝単一窓）とする。
-//!
 //! **有限復帰の worst-case を短く決定化する env**: SMTO が dead HWND 上で即時 fast-fail せず timeout まで
 //! 待つ場合に備え、テスト先頭で `AREKA_SHIORI_REQUEST_TIMEOUT_MS=3000` を設定し worst-case を 3s に縛る
 //! （`Shiori3Client` の実効 timeout がこの env を読む）。本テストは単一テストバイナリ（別プロセス）ゆえ、
@@ -105,7 +102,7 @@ fn kill_injection_detection_and_reporting() {
     let dll_path = load_dir.join("shiori.dll");
     std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・独立テストバイナリなので本プロセスで唯一）---
+    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -238,6 +235,6 @@ fn kill_injection_detection_and_reporting() {
         "既終了（強制 kill）への request_clean_shutdown は観測済み非 Clean kind へ短絡する（UNLOAD 非送出・R5.3）: got {kind2:?}"
     );
 
-    // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）→ best-effort cleanup ---
+    // --- 親窓を明示 drop → best-effort cleanup ---
     drop(parent);
 }

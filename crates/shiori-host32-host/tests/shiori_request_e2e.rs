@@ -4,9 +4,7 @@
 //! `LoadLibraryExW` させたうえで、**helper 越しに GET／NOTIFY request を跨プロセスで往復**させ、
 //! [`Shiori3Client`] の出口 API が正しい Value を取り出す／204 を破棄することを観測する。
 //! GET と NOTIFY を **1 つの `#[test]` 関数**に集約し、単一の親窓＋helper を再利用する
-//! （R6.9「両 request line を 1 回の決定的 run で行使」）。親 message-only 窓は同一プロセスで
-//! 2 組独立生成すると 2 組目が失敗する既知制約ゆえ、**同時生存する親窓を高々 1 つ**に保つ
-//! （使用後に明示 `drop`・shiori_load_e2e.rs / parent_window 参照）。
+//! （R6.9「両 request line を 1 回の決定的 run で行使」）。
 //!
 //! 検証フロー（design.md GET 往復・Load-before-Request 構造不変条件）:
 //! - ① 親窓 `create()` → helper spawn → HELLO pump でハンドシェイク完了を観測。
@@ -17,7 +15,7 @@
 //!   (b) Value 抽出が働く、(c) HGLOBAL 所有権往復が二重解放なく完了した（さもなくばテストプロセス abort）。
 //! - ④ **NOTIFY** `client.notify("OnTestNotify", &[])` → `Ok(())` を assert（fixture は 204・client は破棄・R4.8/R6.9）。
 //! - ⑤ 往復後の helper 生存（`poll_exit_kind`→`None`）を assert（no-crash・R6.4）。
-//! - ⑥ handle／parent を明示 drop（同時生存親窓を高々 1 に保つ）。
+//! - ⑥ handle→parent の順で明示 drop（helper を先に終わらせる）。
 //!
 //! fixture 契約値は testdll 側 `TEST_GET_ID`／`TEST_NOTIFY_ID`／固定 Value と一致するが、host
 //! テストクレートは testdll へ依存しないため、**文字列 ID と期待 Value をハードコード**する
@@ -65,7 +63,7 @@ const TEST_NOTIFY_ID: &str = "OnTestNotify";
 /// （task 6.1・design.md「#### shiori_request_e2e」・System Flows GET 往復・R6.3/6.4/6.9/7.2/7.3）。
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を GET／NOTIFY 双方で再利用し、両 request line を 1 回の
-/// 決定的 run で行使する（R6.9）。親窓は create→使用→最後に明示 drop で同時生存を高々 1 に保つ。
+/// 決定的 run で行使する（R6.9）。
 ///
 /// bounded: pump は HANDSHAKE_TIMEOUT、LOAD ack は LOAD_ACK_TIMEOUT、request 往復は REQUEST_TIMEOUT
 /// ＋SMTO_ABORTIFHUNG で必ず有限復帰するため、テスト全体もハングしない。
@@ -80,7 +78,7 @@ fn request_e2e_get_value_and_notify_discard() {
     let dll_path = load_dir.join("shiori.dll");
     std::fs::copy(&testdll, &dll_path).expect("testdll を load_dir へコピーできない");
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
+    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -136,7 +134,7 @@ fn request_e2e_get_value_and_notify_discard() {
         "GET/NOTIFY 往復後も helper は稼働中である（クラッシュしていない・R6.4）"
     );
 
-    // --- ⑥ 同時生存親窓を高々 1 に保つため、ここで明示 drop（helper も terminate）---
+    // --- ⑥ 明示 drop（helper も terminate）---
     //     client は `&parent` を借用するだけ（Drop 非実装）で、最後の使用（NOTIFY）以降 borrow は
     //     終了している（NLL）。ゆえに parent を安全に drop できる。handle→parent の順で明示 drop する。
     drop(handle);
@@ -194,9 +192,7 @@ fn request_e2e_real_pasta_optional() {
         .to_string_lossy()
         .into_owned();
 
-    // --- ① 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
-    //     決定的テストは実行終了時に自窓を drop 済み・本テストは既定 skip ゆえ、通常 run では
-    //     同時に窓生成経路を走る #[test] は 1 つに留まる（shiori_load_e2e と同じ env-gate 前提）。
+    // --- ① 親 message-only 窓 ---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -245,7 +241,7 @@ fn request_e2e_real_pasta_optional() {
         "OnBoot 往復後も helper は稼働中である（クラッシュしていない）"
     );
 
-    // --- ⑤ 同時生存親窓を高々 1 に保つため明示 drop（handle→parent の順）---
+    // --- ⑤ 明示 drop（helper を先に終わらせる handle→parent の順）---
     drop(handle);
     drop(parent);
 }

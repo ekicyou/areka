@@ -2,9 +2,7 @@
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
 //! `LoadLibraryExW` させて **LOAD の成否 ack を跨プロセスで観測**する。3 ケースを 1 つの
-//! `#[test]` 関数に集約し、各ケースで親 message-only 窓を新規 `create()`→使用→明示 `drop`
-//! することで、**同時生存する親窓を高々 1 つ**に保つ（wintf の message-only 窓は同一プロセスで
-//! 2 組独立生成すると 2 組目が失敗する既知制約・shiori_request_e2e/parent_window 参照）。
+//! `#[test]` 関数に集約し、各ケースで親 message-only 窓を新規 `create()`→使用→明示 `drop` する。
 //!
 //! 検証系列（design.md「検証系列」①〜④）:
 //! - ① 成功 ack `[1]`（testdll を `load_dir\shiori.dll` へコピー・cwd=load_dir 慣習）→ R5.3/7.3
@@ -48,15 +46,15 @@ use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 ///   spawn 後に即 remove する（子は生成時 env スナップショットを継承・親 global env 汚染を最小化）。
 ///
 /// 手順: `ParentMessageWindow::create` → `spawn` → HELLO pump → `send_request(Load, LOAD_ACK_TIMEOUT)`
-/// → **失敗後の helper 生存を `poll_exit_kind`→`None` で観測** → handle/parent を明示 drop
-/// （同時生存親窓を高々 1 に保つ）。ack バイト列を返す。
+/// → **失敗後の helper 生存を `poll_exit_kind`→`None` で観測** → handle/parent を明示 drop。
+/// ack バイト列を返す。
 fn run_load_case(
     helper_exe: &Path,
     load_dir: &Path,
     shiori_name: &str,
     set_load_fail: bool,
 ) -> Vec<u8> {
-    // --- 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
+    // --- 親 message-only 窓（使用後に明示 drop）---
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
@@ -98,7 +96,7 @@ fn run_load_case(
         "LOAD 後も helper は稼働中である（クラッシュしていない・要件 6.4）"
     );
 
-    // 同時生存親窓を高々 1 に保つため、ここで明示 drop（helper も terminate）。
+    // ケースの終わりに明示 drop（helper も terminate）。
     drop(handle);
     drop(parent);
 
@@ -108,8 +106,7 @@ fn run_load_case(
 /// 実プロセス LOAD E2E: 成功 ack[1]／env 強制失敗 ack[0]／DLL 不在 ack[0]＋各失敗後の生存
 /// （design.md「#### LoadE2E」検証系列①〜④・System Flows WS-A LOAD・確定設計判断 (d)）。
 ///
-/// PRIMARY 構造: 3 ケースを 1 関数内で逐次実行し、各ケースで親窓を新規 create→使用→明示 drop
-/// することで同時生存親窓を高々 1 に保つ（wintf 制約回避）。
+/// PRIMARY 構造: 3 ケースを 1 関数内で逐次実行し、各ケースで親窓を新規 create→使用→明示 drop する。
 ///
 /// bounded: pump は HANDSHAKE_TIMEOUT、send_request は LOAD_ACK_TIMEOUT＋SMTO_ABORTIFHUNG で
 /// 必ず有限復帰するため、テスト全体もハングしない（要件 4.4）。

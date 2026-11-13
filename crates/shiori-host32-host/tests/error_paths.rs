@@ -39,10 +39,7 @@
 //! 本統合テストは**到達可能な不正フレーム＝未知タグ**の WndProc 隔離を実配送検証し、長さ不整合は
 //! 上記単体被覆に委ねる。
 //!
-//! ## wintf 1 窓制約への対処（tasks.md Implementation Notes・design §77）
-//! `wintf-winmsg-executor` の message-only 窓は**同一プロセス内で 2 組独立生成すると 2 組目が
-//! `WindowCreationError`** になる。よって**窓が要る経路（1・2・4）を単一のテスト関数で 1 つの
-//! 親窓に集約**し、順に検証する（4.2 / 4.3 / 5.1 が採った方式）。
+//! 窓が要る経路（1・2・4）は 1 つのテスト関数で 1 つの親窓を使い、順に検証する。
 //!
 //! ## 実行（PowerShell・Git Bash 不可）
 //! ```powershell
@@ -100,7 +97,7 @@ unsafe fn send_raw_frame_with_tag(target_hwnd: u32, dw_data: usize, data: &[u8])
 }
 
 // ---------------------------------------------------------------------------
-// 経路 1・2・4: 窓を要する 3 経路を 1 つの親窓へ集約（1 窓制約の厳守）
+// 経路 1・2・4: 窓を要する 3 経路を 1 つの親窓で順に確かめる
 // ---------------------------------------------------------------------------
 
 /// 窓を要する 3 経路（ハンドシェイク timeout / 不正フレーム隔離 / 応答 timeout・wedge）を
@@ -115,7 +112,7 @@ unsafe fn send_raw_frame_with_tag(target_hwnd: u32, dw_data: usize, data: &[u8])
 /// `slot.clear()` に盲目化されない（ハンドシェイク自体が成立しないため）。
 #[test]
 fn window_error_paths_handshake_timeout_wedge_and_corrupt_frame_isolation() {
-    // 唯一の親 message-only 窓（1 窓制約）。helper は spawn しない（HELLO は誰も送らない）。
+    // 親 message-only 窓。helper は spawn しない（HELLO は誰も送らない）。
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 

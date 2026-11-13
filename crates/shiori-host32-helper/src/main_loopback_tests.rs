@@ -5,8 +5,7 @@ use std::rc::Rc;
 /// 単一 loopback テスト（HELLO 送出・未確立 REQUEST→500・LOAD・proxy 駆動 REQUEST(GET/NOTIFY)・
 /// 不正フレーム記録・bounded 生存を同一窓で網羅）。
 ///
-/// wintf の message-only 窓を i686 テストプロセスで 2 組独立生成すると 2 組目が
-/// WindowCreationError になる既知制約ゆえ、窓は 1 組（stand-in parent ＋ helper）に集約する。
+/// 窓は stand-in parent ＋ helper の 2 つ。
 /// bounded: 有限メッセージを PostMessage で撒いた後に必ず抜ける（無限ループ禁止）。
 #[test]
 #[cfg_attr(
