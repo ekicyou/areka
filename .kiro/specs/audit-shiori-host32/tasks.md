@@ -54,7 +54,7 @@
   - `temp_path_guard_test.rs` の例外表から残る `process_host.rs` の分を外し、本範囲の 10 件が全部外れたことに合わせて件数と説明を直す（指摘 3 の締め）
   - 完了の姿: 新しい単体テストが環境に `("PASTA_DEBUG", Some("0"))` を見つけて緑、`temp_path_guard_test.rs` の 4 本が緑
   - _Requirements: 3.1, 3.2, 4.1, 4.3, 8.1, 8.2, 10.4_
-- [ ] 4.2 親に `PASTA_DEBUG=1` を立てても helper の下で 0 になることを確かめる結合テストを置く
+- [x] 4.2 親に `PASTA_DEBUG=1` を立てても helper の下で 0 になることを確かめる結合テストを置く
   - `tests/helper_env_e2e.rs` に、親のテストが自分を `--exact <観測の本体> --ignored` で起こし直して子に `PASTA_DEBUG=1` を渡す形の 2 本を置く（自分のプロセスの環境は書き換えない）
   - 観測の本体は前提（自分の環境が 1）を確かめてから、本番の起こし方で実の i686 helper を起こし、握手・LOAD・`GET OnTestEnv` で値を読む
   - 完了の姿: テストが緑で、4.1 の `PASTA_DEBUG` の行を消すと値が `1` になって赤になる
@@ -195,3 +195,4 @@
 - 2: testdll の OnTestReenter が実際に送る道（Reference0 の窓へ空の WM_COPYDATA・wParam 0）は testdll の中では縛っていない。10.3 の main_loopback_tests で初めて縛られる。
 - 3（範囲外・/kiro-complete の棚卸へ）: areka-ghost の実物の pasta のテスト（real_pasta_boot_observes_a_cue_then_shuts_down_cleanly・real_pasta_online）は HOST32_PASTA_DLL の DLL を emo2 の辞書へ差し込むので、hello-pasta の pasta.dll では LoadReturnedFalse で赤（古い LoadLibraryW でも同じ）。emo2 自身の DLL なら緑。
 - 3（範囲外）: crates/shiori-host32-host/README.md:15,92 と doc/COMPAT_ARCHITECTURE.md:84 に LoadLibraryW の記述が残る。README は 11 の説明の直しで扱う。
+- 4.2: helper_env_e2e の観測の本体（#[ignore] の pasta_debug_probe_child）は前提として自分の PASTA_DEBUG=1 を確かめるので、host のテストを --ignored／--include-ignored で回すとこの 1 本は赤になる（設計の「件 2 の試験」どおり）。
