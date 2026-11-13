@@ -28,6 +28,8 @@ mod systems_tests;
 #[cfg(test)]
 mod visual_tests;
 #[cfg(test)]
+mod world_visual_opacity_tests;
+#[cfg(test)]
 mod world_visual_tests;
 
 pub use draw::command::*;

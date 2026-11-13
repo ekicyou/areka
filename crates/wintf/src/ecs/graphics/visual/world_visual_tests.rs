@@ -15,9 +15,8 @@ use windows_numerics::{Matrix3x2, Vector2};
 
 const DEPTH_TEXT: &str = "木の深さが上限を越えた";
 const OWNER_TEXT: &str = "節の下の描画面の持ち主は支えない";
-const OPACITY_TEXT: &str = "節の不透明度の層は";
 
-fn rect4() -> D2D_RECT_F {
+pub(super) fn rect4() -> D2D_RECT_F {
     D2D_RECT_F {
         left: 0.0,
         top: 0.0,
@@ -49,18 +48,18 @@ fn scaled(x: f32, y: f32) -> VisualTransform {
 
 /// 回をまたいで変化の検出を持つ係の代わり（`SystemState` が前の回の時刻を、
 /// `ReportedIssues` が前の回の誤りを覚える）。
-struct Filler(
+pub(super) struct Filler(
     SystemState<Query<'static, 'static, FillData>>,
     ReportedIssues,
 );
 
 impl Filler {
-    fn new(world: &mut World) -> Self {
+    pub(super) fn new(world: &mut World) -> Self {
         Self(SystemState::new(world), ReportedIssues::default())
     }
 
     /// 根の子を `children_of_root` として 1 回埋める。
-    fn run_with(
+    pub(super) fn run_with(
         &mut self,
         world: &mut World,
         root: Entity,
@@ -84,7 +83,7 @@ impl Filler {
         (changed, visited)
     }
 
-    fn run(&mut self, world: &mut World, root: Entity) -> bool {
+    pub(super) fn run(&mut self, world: &mut World, root: Entity) -> bool {
         let top = kids(world, root);
         self.run_with(world, root, false, &top, false).0
     }
@@ -99,11 +98,11 @@ fn fill(
     Filler::new(world).run_with(world, root, false, children_of_root, false)
 }
 
-fn version(world: &World, e: Entity) -> u64 {
+pub(super) fn version(world: &World, e: Entity) -> u64 {
     world.get::<VisualVersion>(e).unwrap().0
 }
 
-fn kids(world: &World, e: Entity) -> Vec<Entity> {
+pub(super) fn kids(world: &World, e: Entity) -> Vec<Entity> {
     world
         .get::<Children>(e)
         .map(|c| c.to_vec())
@@ -484,35 +483,6 @@ fn new_child_counts_as_change() {
 }
 
 #[test]
-fn node_opacity_warns_once_per_change() {
-    let mut world = World::new();
-    let root = world.spawn(Visual::default()).id();
-    let n = world
-        .spawn((
-            Visual {
-                opacity: 0.5,
-                ..Default::default()
-            },
-            solid_rect_content(rect4()),
-            Name::new("half"),
-            ChildOf(root),
-        ))
-        .id();
-    let mut filler = Filler::new(&mut world);
-    let log = capture_under_filter("warn", || {
-        filler.run(&mut world, root);
-        filler.run(&mut world, root);
-    });
-    assert_eq!(log.matches(OPACITY_TEXT).count(), 1, "{log}");
-    assert!(log.contains("half"), "実体名が要る: {log}");
-    world.get_mut::<Visual>(n).unwrap().opacity = 1.0;
-    let log = capture_under_filter("warn", || {
-        filler.run(&mut world, root);
-    });
-    assert!(!log.contains(OPACITY_TEXT), "1.0 は記録しない: {log}");
-}
-
-#[test]
 fn content_change_while_hidden_bumps_version() {
     let mut world = World::new();
     let (mut filler, root, n) = settled_node(&mut world);
@@ -537,36 +507,4 @@ fn content_change_while_hidden_bumps_version() {
         "隠れている間の変化も版に残す"
     );
     assert_eq!(visited, vec![(n, 1), (child, 2)]);
-}
-
-#[test]
-fn hidden_node_opacity_warns_once() {
-    let mut world = World::new();
-    let root = world.spawn(Visual::default()).id();
-    let hidden = world
-        .spawn((
-            Visual {
-                is_visible: false,
-                ..Default::default()
-            },
-            WorldVisual::default(),
-            ChildOf(root),
-        ))
-        .id();
-    world.spawn((
-        Visual {
-            opacity: 0.5,
-            ..Default::default()
-        },
-        WorldVisual::default(),
-        Name::new("half-hidden"),
-        ChildOf(hidden),
-    ));
-    let mut filler = Filler::new(&mut world);
-    let log = capture_under_filter("warn", || {
-        filler.run(&mut world, root);
-        filler.run(&mut world, root);
-    });
-    assert_eq!(log.matches(OPACITY_TEXT).count(), 1, "{log}");
-    assert!(log.contains("half-hidden"), "実体名が要る: {log}");
 }

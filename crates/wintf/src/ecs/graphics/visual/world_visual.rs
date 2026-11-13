@@ -76,16 +76,18 @@ pub(crate) type FillData = (
     Option<&'static Name>,
 );
 
-/// 木の作りの誤り（`fill_world_visuals` が `error!` を残すもの）の種類。
+/// 木の作りの誤り（`fill_world_visuals` が `error!`／`warn!` を残すもの）の種類。
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum TreeIssue {
     /// 節の下の描画面の持ち主（鍵はその持ち主）。
     OwnerUnderNode,
     /// 深さの上限越え・親の輪（鍵は根）。
     TooDeep,
+    /// 欄へ直に書かれた不透明度の NaN（鍵はその節・`warn!`・1.0 として描く）。
+    NanOpacity,
 }
 
-/// 毎回の検査で同じ誤りの `error!` を毎フレーム出さないための覚え。続く間は 1 回だけ記録し、
+/// 毎回の検査で同じ誤りの記録を毎フレーム出さないための覚え。続く間は 1 回だけ記録し、
 /// 消えた回の後にまた現れたらもう 1 回記録する。回の終わりに [`Self::end_round`] を呼ぶ。
 /// 係の `Local` に置くので公開（中身は crate の外から触れない）。
 #[derive(Default)]
@@ -112,15 +114,16 @@ impl ReportedIssues {
 ///   `world = local * parent`（行ベクトル）。根は恒等。
 /// - 前順（`Children` の並び順）に訪れ、`visited` に訪れた節と深さ（根の子が 1）を入れる。
 ///   平らにする係はこの順をそのまま使う。
-/// - 見えない節は自分も子孫も訪れない（`WorldVisual` は前の値のまま）。ただし版を上げる・
-///   不透明度の `warn!`・持ち主と深さの検査だけは見えない部分木の中でも行う。
+/// - 見えない節と不透明度（`clamped_opacity`）が 0 の節は、自分も子孫も訪れない（`WorldVisual` は
+///   前の値のまま）。ただし版を上げる・不透明度の NaN の検査・持ち主と深さの検査だけは見えない
+///   部分木の中でも行う。
+/// - 欄へ直に書かれた不透明度の NaN は 1.0 として訪れ、`warn!` を `reported` で続く間 1 回だけ残す。
 /// - 子が描画面の持ち主なら訪れない。親が節なら `error!` を残して切る（根の直下は記録しない）。
 /// - 深さが `MAX_ANCESTOR_DEPTH` を越えた節は訪れず `error!` を 1 行残す（親の輪もここで止まる）。
-/// - この 2 つの `error!` は `reported` で、誤りが続く間は 1 回だけにする（切る・止めるは毎回行う）。
+/// - この 2 つの `error!` も `reported` で、誤りが続く間は 1 回だけにする（切る・止めるは毎回行う）。
 /// - `Visual` か描く中身が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
-///   `VisualTransform` は見ない＝変形だけでは上げない。`Visual` の変化には `opacity`・
-///   `transform_origin` も入る（版が余分に上がるだけ）。
-/// - `Visual` が変わった回に `opacity != 1.0` なら `warn!` を 1 行（節の不透明度は 1.0 で描く）。
+///   `VisualTransform` は見ない＝変形だけでは上げない。`Visual` の変化には `opacity`
+///   （描き直しになる）・`transform_origin`（版が余分に上がるだけ）も入る。
 /// - 値が変わった節だけ書く。戻り値「変化あり」は、版の上がり・行列などの変化・節の入り
 ///   （`WorldVisual` が付いた）・親子の変化（`Children`・`root_children_changed`）・根の配置の変化
 ///   （`root_arrangement_changed`）・切り抜きを持つ節の `Arrangement` の変化。後の 2 つは版を上げない。
@@ -174,14 +177,13 @@ pub(crate) fn fill_world_visuals(
         if visual.is_changed() || content.as_ref().is_some_and(|c| c.is_changed()) {
             bumped.push(e);
         }
-        if visual.is_changed() && visual.opacity != 1.0 {
+        if visual.opacity.is_nan() && reported.first_seen(e, TreeIssue::NanOpacity) {
             warn!(
                 entity = %format_entity_name(e, name),
-                opacity = visual.opacity,
-                "[fill_world_visuals] 節の不透明度の層は wintf-d2d-composite-rules の範囲なので、1.0 で描く"
+                "[fill_world_visuals] 節の不透明度が NaN なので、1.0 として描く"
             );
         }
-        if hidden || !visual.is_visible {
+        if hidden || !visual.is_visible || visual.clamped_opacity() == 0.0 {
             // 見えない部分木も版だけは追う（隠れている間の変化を、また見えた回に失わない）。
             if let Some(kids) = kids {
                 stack.extend(kids.iter().rev().map(|k| (k, depth + 1, None, true)));
