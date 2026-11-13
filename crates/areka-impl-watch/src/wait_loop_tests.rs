@@ -17,12 +17,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{T0, merge, request, resume, watch};
+use super::test_support::{merge, request, resume, watch};
 use super::{WaitEnd, WaitPort, WaitSpec, run};
 use crate::error::{Damage, WatchError};
 use crate::plan::{Applied, Command, Presence, apply};
 use crate::presence::{Held, hold};
 use crate::state::{DeskSet, ParticipantStatus, State, WaitKind, WaitRecord};
+use crate::test_support::T0;
 
 /// 待ちのプロセスの番号（偽の口が答える）。
 const OWN_PID: u32 = 4321;
@@ -547,14 +548,18 @@ fn a_version_mismatch_on_the_first_read_is_the_error() {
     assert_eq!(port.trace(), "Rfr");
 }
 
-/// 更新時刻と大きさが取れない失敗も、読みの失敗と同じく待ちを失敗で終える。
-#[test]
-fn a_failed_fingerprint_ends_the_wait_with_the_error() {
-    let denied = || WatchError::Io {
+/// 状態ファイルの更新時刻と大きさを読む許しが無い失敗。
+fn denied() -> WatchError {
+    WatchError::Io {
         op: "stat state.json",
         kind: "PermissionDenied".to_owned(),
         code: 5,
-    };
+    }
+}
+
+/// 更新時刻と大きさが取れない失敗も、読みの失敗と同じく待ちを失敗で終える。
+#[test]
+fn a_failed_fingerprint_ends_the_wait_with_the_error() {
     let port =
         b_queued_behind_a().failing(move |call, sleeps| (call == 'f' && sleeps == 4).then(denied));
 
@@ -571,11 +576,6 @@ fn a_failed_fingerprint_ends_the_wait_with_the_error() {
 /// 畳まない: 番がすでに来ていても読まずに返り、自分の記録は消しに行かない。
 #[test]
 fn a_failed_fingerprint_right_after_registration_ends_the_wait_with_the_error() {
-    let denied = || WatchError::Io {
-        op: "stat state.json",
-        kind: "PermissionDenied".to_owned(),
-        code: 5,
-    };
     let port =
         FakePort::new().failing(move |call, sleeps| (call == 'f' && sleeps == 0).then(denied));
     port.does("B", watching("B"));

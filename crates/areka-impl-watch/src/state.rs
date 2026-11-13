@@ -76,6 +76,7 @@ impl State {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Participant {
+    /// 表の鍵の写し。判断は読まない（状態ファイルの形を変えないために残す）。
     pub id: String,
     pub name: String,
     pub repo: String,

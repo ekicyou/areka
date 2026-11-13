@@ -3,12 +3,14 @@
 //! 状態を変える呼び出しは [`Store::with_state`] か [`Store::clear`] を通る。状態ファイルとは別の
 //! ロックファイル `state.lock` の排他の中で「読む → 判断 → 変わっていれば置き換え書き → 読み物」を
 //! 行い、排他はこの読み書きの間だけ続く（机の保持は排他で表さない。要件 8.2）。
-//! [`Store::read_only`] は排他を取らず、何も書かない。
+//! [`Store::read_only`] は排他を取らず、何も書かない。[`Store::summary`] は排他を 1 回だけ試し、
+//! 取れたときだけその中で読み直して読み物を書く。
 //!
 //! - 読み: 版の数字だけを先に見る。無い → 空から始める。知らない版 → 読まず動かさず失敗。
 //!   JSON として読めない・形が合わない → 時刻入りの別名へ退避して空から始める。
-//! - 書き: プロセス番号入りの一時ファイルに全部書いて確定してから、名前を替えて置き換える
-//!   （読む側はロック無しでも書きかけを見ない。要件 8.3）。
+//! - 書き: プロセス番号入りの一時ファイルに全部書いてから、名前を替えて置き換える
+//!   （読む側はロック無しでも書きかけを見ない。要件 8.3）。ディスクへ確定するのは状態ファイル
+//!   だけで、読み物は確定しない。
 //! - ログ: 置き場所の下の `impl-watch.log` へ追記する。状態の変化は出来事 1 件ずつログの口へ
 //!   渡し（本物は 1 行ずつ書く）、失敗は各入口の出口で `error!` を 1 行出してから返す。
 //!   渡すのは、状態ファイルの置き換え（か退避）が済んだ変化だけ。読み物を書くのはその後。
@@ -197,14 +199,36 @@ impl Store {
         })
     }
 
-    /// 状態の確認。排他を取らずに読み（[`Store::read_only`]）、読み物を置き換え、端末向けの
-    /// 要約（ASCII）を返す。状態ファイルには触らない。状態ファイルが無ければ `None`（読み物も
-    /// 書かない）。読み物が書けなくても要約は返す。
+    /// 状態の確認。まず排他を取らずに読み（[`Store::read_only`]）、状態ファイルが無い・読めない
+    /// ときはロックのファイルにも読み物にも触らずに返す（無ければ `None`）。在れば `state.lock` を
+    /// 待たずに 1 回だけ試し、取れたら排他の中で読み直した状態から読み物を置き換えて端末向けの
+    /// 要約（ASCII）を返す。他人が握っていれば書かずに最初の状態から要約を返す（握っている側が
+    /// 書く）。開けない・試しが OS の失敗を返すときは読み物が書けなかったときと同じ `warn!` を
+    /// 1 行残す。状態ファイルには触らない。読み物が書けなくても要約は返す。
     pub fn summary(&self) -> Result<Option<String>, WatchError> {
         let Some(state) = self.read_only()? else {
             return Ok(None);
         };
-        self.write_status(&state, self.time()?);
+        let now = self.time()?;
+        let locked = self.open_lock().and_then(|file| match file.try_lock() {
+            Ok(()) => Ok(Some(StateLock(file))),
+            Err(TryLockError::WouldBlock) => Ok(None),
+            Err(TryLockError::Error(err)) => Err(WatchError::io("lock state.lock", &err)),
+        });
+        let state = match locked {
+            Ok(Some(_lock)) => {
+                let Some(fresh) = self.read_only()? else {
+                    return Ok(None);
+                };
+                self.write_status(&fresh, now);
+                fresh
+            }
+            Ok(None) => state,
+            Err(err) => {
+                tracing::warn!(error = %err, "[store] status.md not written; the result stands");
+                state
+            }
+        };
         let summary = status::render_terminal(&state, self.presence.as_ref());
         Ok(Some(summary))
     }
@@ -243,13 +267,7 @@ impl Store {
 
     /// `state.lock` を排他で握る。短い間隔で試し、上限まで取れなければ `LockBusy`。
     fn lock(&self) -> Result<StateLock, WatchError> {
-        // 中身は使わない。在るファイルはそのまま開く。
-        let file = File::options()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(self.home.lock_path())
-            .map_err(|err| WatchError::io("open state.lock", &err))?;
+        let file = self.open_lock()?;
         let mut waited = Duration::ZERO;
         loop {
             match file.try_lock() {
@@ -264,6 +282,16 @@ impl Store {
                 }
             }
         }
+    }
+
+    /// `state.lock` を開くだけ（無ければ作る）。中身は使わない。在るファイルはそのまま開く。
+    fn open_lock(&self) -> Result<File, WatchError> {
+        File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(self.home.lock_path())
+            .map_err(|err| WatchError::io("open state.lock", &err))
     }
 
     /// 状態ファイルの中身。無ければ `None`。
@@ -326,26 +354,37 @@ impl Store {
     /// 状態ファイルを置き換える。
     fn write_state(&self, state: &State) -> Result<(), WatchError> {
         let json = serde_json::to_vec_pretty(state)?;
-        self.replace(&self.home.state_path(), &json, "write state.json")
+        self.replace(&self.home.state_path(), &json, "write state.json", true)
     }
 
     /// 読み物を置き換える。書けなくても失敗にしない: ログに 1 行残すだけで、呼び手の結果は
     /// 変わらない（正本は状態ファイルで、読み物は次の変化か状態の確認で書き直される）。
     fn write_status(&self, state: &State, now: u64) {
         let text = status::render_markdown(state, self.presence.as_ref(), now);
-        if let Err(err) = self.replace(&self.home.status_path(), text.as_bytes(), "write status.md")
-        {
+        // 読み物は確定しない: 消えても次の変化か状態の確認で書き直される。
+        if let Err(err) = self.replace(
+            &self.home.status_path(),
+            text.as_bytes(),
+            "write status.md",
+            false,
+        ) {
             tracing::warn!(error = %err, "[store] status.md not written; the result stands");
         }
     }
 
-    /// 置き換え書き。一時ファイル `<名前>.<プロセス番号>.tmp` に全部書いて確定してから、
+    /// 置き換え書き。一時ファイル `<名前>.<プロセス番号>.tmp` に全部書いて（`sync` なら確定して）から、
     /// 名前を替えて置き換える。失敗したら一時ファイルを消す（元のファイルは無傷）。
-    fn replace(&self, path: &Path, bytes: &[u8], op: &'static str) -> Result<(), WatchError> {
+    fn replace(
+        &self,
+        path: &Path,
+        bytes: &[u8],
+        op: &'static str,
+        sync: bool,
+    ) -> Result<(), WatchError> {
         let mut name = path.file_name().unwrap_or_default().to_owned();
         name.push(format!(".{}.tmp", std::process::id()));
         let temp = path.with_file_name(name);
-        write_synced(&temp, bytes)
+        write_temp(&temp, bytes, sync)
             .and_then(|()| self.rename_retrying(&temp, path))
             .map_err(|err| {
                 let _ = fs::remove_file(&temp);
@@ -402,11 +441,11 @@ fn lossy(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// 新しいファイルに全部書き、ディスクへ確定する。
-fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
+/// 新しいファイルに全部書く。`sync` なら、ディスクへ確定する。
+fn write_temp(path: &Path, bytes: &[u8], sync: bool) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(bytes)?;
-    file.sync_all()
+    if sync { file.sync_all() } else { Ok(()) }
 }
 
 #[cfg(test)]

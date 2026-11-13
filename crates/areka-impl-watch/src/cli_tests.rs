@@ -11,12 +11,10 @@ use std::path::PathBuf;
 
 use temp_path_kit::TempPath;
 
-use super::args::Opt;
-use super::test_support::{args, entries, line, run_captured};
+use super::test_support::{args, run_captured, state_bytes};
 use super::{Outcome, exit_code, usage};
 use crate::error::WatchError;
-
-use Opt::{Id, Repo};
+use crate::test_support::entries;
 
 // ---- 使い方の誤り ----
 
@@ -52,13 +50,26 @@ fn a_usage_error_is_one_ascii_line_on_stderr_even_for_japanese_arguments() {
 fn a_usage_error_reads_and_writes_nothing() {
     let root = TempPath::under_target("impl-watch-cli");
     let home = root.child("home");
-    for words in [
+    let errors = [
         args(&["join"]),
         args(&["leave"]),
         args(&["leave", "--id", "a b"]),
         args(&["status", "--wait"]),
-    ] {
-        let (result, _, _) = run_captured(&words, Some(home.clone().into_os_string()));
+        args(&["clear", "--repo", "a/b"]),
+        args(&[
+            "request",
+            "--id",
+            "a",
+            "--repo",
+            "areka",
+            "--desk",
+            "merge",
+            "--purpose",
+            "p",
+        ]),
+    ];
+    for words in &errors {
+        let (result, _, _) = run_captured(words, Some(home.clone().into_os_string()));
         assert!(
             matches!(result, Ok(Outcome::Usage)),
             "{words:?}: {result:?}"
@@ -67,6 +78,21 @@ fn a_usage_error_reads_and_writes_nothing() {
         assert!(!home.exists(), "{words:?}: 置き場所を作った");
     }
     assert_eq!(entries(root.path()), Vec::<PathBuf>::new());
+
+    // 状態の在る置き場所でも、状態を 1 バイトも変えず、何も足さない。
+    let merge = args(&["merge", "--id", "a", "--repo", "areka", "--spec", "x"]);
+    let (result, _, _) = run_captured(&merge, Some(home.clone().into_os_string()));
+    assert!(matches!(result, Ok(Outcome::Done)), "{result:?}");
+    let (before, listed) = (state_bytes(&home), entries(&home));
+    for words in &errors {
+        let (result, _, _) = run_captured(words, Some(home.clone().into_os_string()));
+        assert!(
+            matches!(result, Ok(Outcome::Usage)),
+            "{words:?}: {result:?}"
+        );
+        assert_eq!(state_bytes(&home), before, "{words:?}: 状態が変わった");
+        assert_eq!(entries(&home), listed, "{words:?}: 何かを足した");
+    }
 }
 
 // ---- 環境変数 ----
@@ -76,7 +102,10 @@ fn a_missing_or_empty_home_fails_in_at_most_two_ascii_lines_and_creates_nothing(
     let cwd = std::env::current_dir().expect("カレントが分かる");
     let before = entries(&cwd);
     for home in [None, Some(""), Some("  ")] {
-        for words in [args(&["status"]), line("watch", &[Id, Repo])] {
+        for words in [
+            args(&["status"]),
+            args(&["watch", "--id", "a1", "--repo", "areka"]),
+        ] {
             let (result, out, err) = run_captured(&words, home.map(OsString::from));
             assert!(
                 matches!(result, Err(WatchError::HomeUnset)),
@@ -139,7 +168,10 @@ fn a_home_that_is_not_absolute_fails_in_at_most_two_ascii_lines_and_creates_noth
     assert_eq!(std::path::absolute(&home).expect("綴れる"), dir);
     let home = home.into_os_string();
 
-    for words in [args(&["status"]), line("watch", &[Id, Repo])] {
+    for words in [
+        args(&["status"]),
+        args(&["watch", "--id", "a1", "--repo", "areka"]),
+    ] {
         let (result, out, err) = run_captured(&words, Some(home.clone()));
         assert!(
             matches!(result, Err(WatchError::HomeNotAbsolute { .. })),

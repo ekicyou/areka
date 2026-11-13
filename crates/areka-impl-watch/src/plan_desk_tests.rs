@@ -1,4 +1,5 @@
-//! 机と待ち行列の判断（規則 1・3・4・6）の決定論テスト。時刻と生死は引数で渡し、眠らない。
+//! 机と待ち行列の判断（参加・離脱・取り下げ・マージの机・机の申し込みと番）の決定論テスト。
+//! 時刻と生死は引数で渡し、眠らない。
 //!
 //! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
 //! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.4）。
@@ -9,89 +10,19 @@
 //! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, give_back, hold_load,
-    hold_merge, hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge,
-    queue_request, run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled,
+    desk_requested, give_back, granted, hold_load, hold_merge, hold_running_load, hold_test,
+    joined, leave, left, load_done, load_test, merge, merge_done, merge_granted, merge_requested,
+    merged, new_participant, queue_load, queue_merge, queue_request, resumed, returned, run,
+    state_with, stop_for, stopped, test_freed, test_freed_record, wait_record, watch,
     watch_registered,
 };
-use super::{Command, Event, Verdict};
+use super::{Command, Verdict};
 use crate::state::{
-    DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
-    SoleHolder, State, TestHolder, WaitKind, WaitRecord, WatchInfo,
+    DeskSet, LastMerge, MergeDesk, MergeRequest, Participant, ParticipantStatus, State, WaitKind,
+    WaitRecord, WatchInfo,
 };
-
-fn watch(id: &str, name: Option<&str>, repo: &str, pid: u32) -> Command {
-    Command::Watch {
-        id: id.to_owned(),
-        name: name.map(str::to_owned),
-        repo: repo.to_owned(),
-        pid,
-    }
-}
-
-fn leave(id: &str) -> Command {
-    Command::Leave { id: id.to_owned() }
-}
-
-fn cancel(id: &str) -> Command {
-    Command::Cancel { id: id.to_owned() }
-}
-
-/// 名前を省いた、spec が `spec-<識別>` の申し込み（支えの組み立てる申し込みと同じ綴り）。
-fn merge(id: &str, repo: &str, bug: bool) -> Command {
-    Command::Merge {
-        id: id.to_owned(),
-        name: None,
-        repo: repo.to_owned(),
-        spec: format!("spec-{id}"),
-        bug,
-    }
-}
-
-fn merged(id: &str) -> Command {
-    Command::Merged {
-        id: id.to_owned(),
-        pr: "281".to_owned(),
-        sha: "414d43eb".to_owned(),
-    }
-}
-
-fn joined(id: &str) -> Event {
-    Event::Joined { id: id.to_owned() }
-}
-
-fn merge_requested(id: &str, repo: &str, bug: bool) -> Event {
-    Event::MergeRequested {
-        repo: repo.to_owned(),
-        id: id.to_owned(),
-        spec: format!("spec-{id}"),
-        bug,
-    }
-}
-
-fn merge_granted(id: &str, repo: &str) -> Event {
-    Event::MergeGranted {
-        repo: repo.to_owned(),
-        id: id.to_owned(),
-    }
-}
-
-/// [`merged`] の出来事。
-fn merge_done(id: &str, repo: &str) -> Event {
-    Event::Merged {
-        repo: repo.to_owned(),
-        id: id.to_owned(),
-        pr: "281".to_owned(),
-        sha: "414d43eb".to_owned(),
-    }
-}
-
-fn left_merged(id: &str) -> Event {
-    Event::Left {
-        id: id.to_owned(),
-        why: "merged",
-    }
-}
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// マージの待ち行列の末尾へ、バグの申し込みを足す。
 fn queue_bug_merge(state: &mut State, repo: &str, id: &str, requested: u64) {
@@ -241,7 +172,6 @@ fn repeating_the_same_watch_start_changes_nothing() {
 
     // 待ちの記録はその場で置き換わり、並びも変わらない。
     assert_eq!(state, before);
-    assert_eq!(state.waits[0].id, "A");
     assert_eq!(got, applied(false, vec![]));
 }
 
@@ -295,11 +225,8 @@ fn leave_removes_requests_desks_wait_records_and_the_participant() {
             .merge
             .insert("areka".to_owned(), MergeDesk::default());
         assert_eq!(state, expected, "{caller:?}");
-        let left = Event::Left {
-            id: "A".to_owned(),
-            why: "leave",
-        };
-        assert_eq!(got, applied(true, vec![left]), "{caller:?}");
+        let events = vec![left("A", "leave")];
+        assert_eq!(got, applied(true, events), "{caller:?}");
     }
 }
 
@@ -318,8 +245,8 @@ fn cancel_removes_requests_and_desks_but_keeps_the_participant() {
             .insert("areka".to_owned(), MergeDesk::default());
         expected.waits.push(wait_record("A", WaitKind::Request));
         assert_eq!(state, expected, "{caller:?}");
-        let cancelled = Event::Cancelled { id: "A".to_owned() };
-        assert_eq!(got, applied(true, vec![cancelled]), "{caller:?}");
+        let events = vec![cancelled("A")];
+        assert_eq!(got, applied(true, events), "{caller:?}");
     }
 }
 
@@ -341,20 +268,15 @@ fn leave_and_cancel_release_both_desks_of_a_load_test() {
 /// 出来事に残り、待っていた申し込みに同じ呼び出しで番が来る（要件 6.3・6.4・11.4）。
 #[test]
 fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
-    let left = |why| Event::Left {
-        id: "A".to_owned(),
-        why,
-    };
-    let cancelled = Event::Cancelled { id: "A".to_owned() };
     let cases = [
         (
             leave("A"),
-            vec![test_freed("A", "left"), left("leave")],
+            vec![test_freed("A", "left"), left("A", "leave")],
             "left",
         ),
         (
             cancel("A"),
-            vec![test_freed("A", "cancelled"), cancelled],
+            vec![test_freed("A", "cancelled"), cancelled("A")],
             "cancelled",
         ),
         (
@@ -362,7 +284,7 @@ fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
             vec![
                 merge_done("A", REPO),
                 test_freed("A", "merged"),
-                left_merged("A"),
+                left("A", "merged"),
             ],
             "merged",
         ),
@@ -376,19 +298,10 @@ fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
 
         let got = run(&mut state, &cmd, Some("A"), T0 + 10);
 
-        events.push(Event::DeskGranted {
-            id: "B".to_owned(),
-            desks: DeskSet::Test,
-            stopped: Vec::new(),
-        });
+        events.push(granted("B", DeskSet::Test, &[]));
         assert_eq!(got, applied(true, events), "{cmd:?}");
-        let holder = TestHolder {
-            id: "B".to_owned(),
-            purpose: PURPOSE.to_owned(),
-            requested: T0 + 1,
-            granted: T0 + 10,
-        };
-        assert_eq!(state.test, Some(holder), "{cmd:?}");
+        let holder = test_holder("B", PURPOSE, T0 + 1, T0 + 10);
+        assert_eq!(state.test, holder, "{cmd:?}");
         assert!(state.requests.is_empty(), "{cmd:?}");
         assert_eq!(state.merge[REPO].holder, None, "{cmd:?}");
         assert_eq!(state.recent, [test_freed_record("A", why, T0 + 10)]);
@@ -429,13 +342,7 @@ fn a_merge_request_joins_and_waits_behind_the_holder() {
     // 持ち主にならず、申し込みの時刻とともに待ち行列に並ぶ。
     expected.participants.insert(
         "A".to_owned(),
-        Participant {
-            id: "A".to_owned(),
-            name: "えー".to_owned(),
-            repo: "areka".to_owned(),
-            since: T0 + 5,
-            ..Participant::default()
-        },
+        new_participant("A", "えー", "areka", T0 + 5),
     );
     let desk = expected.merge.get_mut("areka").expect("机が在る");
     desk.queue.push(MergeRequest {
@@ -489,13 +396,7 @@ fn the_next_holder_is_a_bug_request_first_then_the_earlier_request() {
     assert_eq!(order, ["D", "B", "E", "A"]);
     // 番の時刻は「いま」。申し込みの中身はそのまま持ち主へ写る。
     let desk = MergeDesk {
-        holder: Some(MergeHolder {
-            id: "A".to_owned(),
-            spec: "spec-A".to_owned(),
-            bug: false,
-            requested: T0 + 2,
-            granted: T0 + 13,
-        }),
+        holder: merge_holder("A", T0 + 2, T0 + 13),
         ..MergeDesk::default()
     };
     assert_eq!(state.merge["areka"], desk);
@@ -549,14 +450,8 @@ fn waiting_in_one_repo_does_not_block_a_request_for_another() {
 fn every_freed_repo_gets_its_next_holder_in_the_same_call() {
     // A が areka と pasta の机を両方持ち、それぞれに 1 人ずつ待っている。
     for (cmd, gone) in [
-        (
-            leave("A"),
-            Event::Left {
-                id: "A".to_owned(),
-                why: "leave",
-            },
-        ),
-        (cancel("A"), Event::Cancelled { id: "A".to_owned() }),
+        (leave("A"), left("A", "leave")),
+        (cancel("A"), cancelled("A")),
     ] {
         let mut state = state_with(&["A", "B", "C"]);
         hold_merge(&mut state, "areka", "A");
@@ -601,13 +496,7 @@ fn merged_frees_the_desk_records_the_last_merge_and_ends_the_participation() {
     expected.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: Some(MergeHolder {
-                id: "B".to_owned(),
-                spec: "spec-B".to_owned(),
-                bug: false,
-                requested: T0 + 1,
-                granted: T0 + 10,
-            }),
+            holder: merge_holder("B", T0 + 1, T0 + 10),
             queue: Vec::new(),
             last: Some(LastMerge {
                 pr: "281".to_owned(),
@@ -620,7 +509,7 @@ fn merged_frees_the_desk_records_the_last_merge_and_ends_the_participation() {
     assert_eq!(state, expected);
     let events = vec![
         merge_done("A", "areka"),
-        left_merged("A"),
+        left("A", "merged"),
         merge_granted("B", "areka"),
     ];
     assert_eq!(got, applied(true, events));
@@ -662,13 +551,13 @@ fn a_merge_round_trip_reports_one_event_per_change() {
     let got = run(&mut state, &merged("A"), Some("A"), T0 + 2);
     let events = vec![
         merge_done("A", "areka"),
-        left_merged("A"),
+        left("A", "merged"),
         merge_granted("B", "areka"),
     ];
     assert_eq!(got, applied(true, events));
 
     let got = run(&mut state, &merged("B"), Some("B"), T0 + 3);
-    let events = vec![merge_done("B", "areka"), left_merged("B")];
+    let events = vec![merge_done("B", "areka"), left("B", "merged")];
     assert_eq!(got, applied(true, events));
     assert!(state.participants.is_empty());
 }
@@ -691,40 +580,15 @@ fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
     let mut expected = State::empty();
     expected.participants.insert(
         "A".to_owned(),
-        Participant {
-            id: "A".to_owned(),
-            name: "えー".to_owned(),
-            repo: "areka".to_owned(),
-            since: T0 + 5,
-            ..Participant::default()
-        },
+        new_participant("A", "えー", "areka", T0 + 5),
     );
-    expected.test = Some(TestHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-    });
-    expected.sole = Some(SoleHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-        running: false,
-        stopped: Vec::new(),
-    });
+    expected.test = test_holder("A", PURPOSE, T0 + 5, T0 + 5);
+    expected.sole = sole_holder("A", PURPOSE, T0 + 5, T0 + 5, false, &[]);
     assert_eq!(state, expected);
     let events = vec![
         joined("A"),
-        Event::DeskRequested {
-            id: "A".to_owned(),
-            desks: DeskSet::TestSole,
-        },
-        Event::DeskGranted {
-            id: "A".to_owned(),
-            desks: DeskSet::TestSole,
-            stopped: Vec::new(),
-        },
+        desk_requested("A", DeskSet::TestSole),
+        granted("A", DeskSet::TestSole, &[]),
     ];
     assert_eq!(got, applied(true, events));
 }
@@ -778,21 +642,9 @@ fn the_next_load_holder_is_the_earliest_request() {
     // 時刻が早い順。同じ時刻なら行列の前（B）が先。
     assert_eq!(order, ["B", "C", "A"]);
     // 番の時刻は「いま」。申し込みの中身はそのまま 2 つの机の持ち主へ写る。
-    let sole = SoleHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 3,
-        granted: T0 + 12,
-        running: false,
-        stopped: vec!["B".to_owned(), "C".to_owned(), "D".to_owned()],
-    };
-    let test = TestHolder {
-        id: "A".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 3,
-        granted: T0 + 12,
-    };
-    assert_eq!((state.sole, state.test), (Some(sole), Some(test)));
+    let sole = sole_holder("A", PURPOSE, T0 + 3, T0 + 12, false, &["B", "C", "D"]);
+    let test = test_holder("A", PURPOSE, T0 + 3, T0 + 12);
+    assert_eq!((state.sole, state.test), (sole, test));
     assert!(state.requests.is_empty());
 }
 
@@ -820,14 +672,8 @@ fn no_repo_gets_a_merge_holder_while_a_load_test_is_wanted_or_held() {
     assert_eq!(merge_holders(&state), [("areka", "A"), ("pasta", "B")]);
     let events = vec![
         test_freed("C", "returned"),
-        Event::DeskReturned {
-            id: "C".to_owned(),
-            desks: DeskSet::TestSole,
-        },
-        Event::Resumed {
-            id: "D".to_owned(),
-            why: "no-sole",
-        },
+        returned("C", DeskSet::TestSole),
+        resumed("D", "no-sole"),
         merge_granted("A", "areka"),
         merge_granted("B", "pasta"),
     ];

@@ -2,30 +2,15 @@
 //! 返し方・固定点）。支えは親の `plan_test_support.rs` を読むだけ。
 
 use super::super::test_support::{
-    PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, give_back, hold_load, hold_merge,
-    hold_sole, hold_test, load_done, queue_load, queue_merge, queue_request, request, run,
-    state_with, stop_for, stopped, test_freed, test_freed_record,
+    PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, desk_requested, give_back,
+    granted, hold_load, hold_merge, hold_sole, hold_test, joined, load_done, load_running,
+    new_participant, queue_load, queue_merge, queue_request, recorded_running, request, resumed,
+    returned, run, state_with, stop_for, stop_reported, stopped, test_freed, test_freed_record,
 };
 use super::replan;
 use crate::plan::{Command, Event};
 use crate::state::{DeskSet, ParticipantStatus, State};
-
-/// 机の番が来た出来事。
-fn granted(id: &str, desks: DeskSet, stopped: &[&str]) -> Event {
-    Event::DeskGranted {
-        id: id.to_owned(),
-        desks,
-        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
-    }
-}
-
-/// 机を返した出来事。
-fn returned(id: &str, desks: DeskSet) -> Event {
-    Event::DeskReturned {
-        id: id.to_owned(),
-        desks,
-    }
-}
+use crate::test_support::{T0, sole_holder, test_holder};
 
 /// 出来事に机の番が 1 件も無い。
 fn no_grant(events: &[Event]) -> bool {
@@ -75,19 +60,12 @@ fn test_and_sole_are_granted_at_once_in_one_call() {
         T0 + 1,
     );
 
-    let granted: Vec<&Event> = got
+    let grants: Vec<&Event> = got
         .events
         .iter()
         .filter(|event| matches!(event, Event::DeskGranted { .. }))
         .collect();
-    assert_eq!(
-        granted,
-        [&Event::DeskGranted {
-            id: "a".to_owned(),
-            desks: DeskSet::TestSole,
-            stopped: vec!["b".to_owned()],
-        }]
-    );
+    assert_eq!(grants, [&granted("a", DeskSet::TestSole, &["b"])]);
     assert_eq!(state.test.as_ref().map(|h| h.id.as_str()), Some("a"));
     let sole = state.sole.as_ref().expect("ひとり占めの持ち主が居る");
     assert_eq!(
@@ -100,24 +78,34 @@ fn test_and_sole_are_granted_at_once_in_one_call() {
     );
 }
 
-/// 固定点: 番の決め直しを 2 度続けて呼んだ 2 度目は、状態も出来事も変えない。
+/// ひとり占めだけの番（要件 4.1）: `sole` だけを申し込んだ者は、止まる必要のある全員が止まった
+/// ときにひとり占めだけを受け、排他テストの机は誰も持たない。続けて参加した者の `test` は同じ
+/// 呼び出しで渡る（ひとり占めは待たれていない）。
 #[test]
-fn replan_twice_changes_nothing_the_second_time() {
-    let mut state = state_with(&["a", "b", "c"]);
-    run(
-        &mut state,
-        &request("a", DeskSet::TestSole),
-        Some("a"),
-        T0 + 1,
+fn a_sole_only_request_gets_only_the_sole_desk() {
+    let mut state = state_with(&["a", "b"]);
+    run(&mut state, &request("a", DeskSet::Sole), Some("a"), T0 + 1);
+
+    let got = run(&mut state, &stopped("b"), Some("b"), T0 + 2);
+
+    assert!(
+        got.events.contains(&granted("a", DeskSet::Sole, &["b"])),
+        "{:?}",
+        got.events
     );
-    run(&mut state, &request("b", DeskSet::Test), Some("b"), T0 + 2);
+    assert_eq!(holders(&state), (None, Some("a")));
+    assert_fixed_point(&state, "sole only");
 
-    let before = state.clone();
-    let mut events = Vec::new();
-    replan(&mut state, T0 + 3, &mut events);
+    let got = run(&mut state, &request("d", DeskSet::Test), Some("d"), T0 + 3);
 
-    assert_eq!(state, before);
-    assert!(events.is_empty(), "{events:?}");
+    assert!(
+        got.events.contains(&granted("d", DeskSet::Test, &[])),
+        "{:?}",
+        got.events
+    );
+    assert_eq!(status(&state, "d"), ParticipantStatus::StopRequested);
+    assert_eq!(holders(&state), (Some("d"), Some("a")));
+    assert_fixed_point(&state, "joined test");
 }
 
 /// 一部を渡さない（要件 2.2）: 排他テストの机が空いていても、ひとり占めが渡せない間（止まって
@@ -175,10 +163,7 @@ fn a_later_test_request_of_a_merge_holder_overtakes_a_waiting_load_test() {
         applied(
             true,
             vec![
-                Event::DeskRequested {
-                    id: "b".to_owned(),
-                    desks: DeskSet::Test,
-                },
+                desk_requested("b", DeskSet::Test),
                 granted("b", DeskSet::Test, &[]),
             ]
         )
@@ -244,15 +229,13 @@ fn a_stopped_participant_gets_the_test_desk_in_the_call_that_resumes_it() {
     assert_eq!(status(&state, "b"), ParticipantStatus::Stopped);
     assert_fixed_point(&state, "stopped");
 
-    let cancel = Command::Cancel { id: "a".to_owned() };
-    let got = run(&mut state, &cancel, None, T0 + 3);
+    let got = run(&mut state, &cancel("a"), None, T0 + 3);
 
-    let resumed = Event::Resumed {
-        id: "b".to_owned(),
-        why: "no-sole",
-    };
     let at = |wanted: &Event| got.events.iter().position(|event| event == wanted);
-    let (resumed, grant) = (at(&resumed), at(&granted("b", DeskSet::Test, &[])));
+    let (resumed, grant) = (
+        at(&resumed("b", "no-sole")),
+        at(&granted("b", DeskSet::Test, &[])),
+    );
     assert!(
         resumed.is_some() && grant.is_some() && resumed < grant,
         "{:?}",
@@ -278,7 +261,7 @@ fn reporting_stopped_frees_the_test_desk_and_records_it_once() {
         applied(
             true,
             vec![
-                Event::Stopped { id: "b".to_owned() },
+                stop_reported("b"),
                 test_freed("b", "stopped"),
                 granted("a", DeskSet::TestSole, &["b"]),
             ]
@@ -302,23 +285,23 @@ fn requests_while_holding_are_accepted_only_for_a_merge_holder_adding_test() {
     assert!(state.merge[REPO].holder.is_some(), "マージの机は持ったまま");
     assert_fixed_point(&state, "merge holder adds test");
 
-    let mut merge_holder = state_with(&["a"]);
-    hold_merge(&mut merge_holder, REPO, "a");
-    let mut test_holder = state_with(&["a"]);
-    hold_test(&mut test_holder, "a");
-    let mut sole_holder = state_with(&["a"]);
-    hold_sole(&mut sole_holder, "a", &[]);
+    let mut holds_merge_state = state_with(&["a"]);
+    hold_merge(&mut holds_merge_state, REPO, "a");
+    let mut holds_test_state = state_with(&["a"]);
+    hold_test(&mut holds_test_state, "a");
+    let mut holds_sole_state = state_with(&["a"]);
+    hold_sole(&mut holds_sole_state, "a", &[]);
     let cases = [
         (
-            &test_holder,
+            &holds_test_state,
             DeskSet::TestSole,
             "test holder asks test,sole",
         ),
-        (&test_holder, DeskSet::Sole, "test holder asks sole"),
-        (&sole_holder, DeskSet::Test, "sole holder asks test"),
-        (&merge_holder, DeskSet::Sole, "merge holder asks sole"),
+        (&holds_test_state, DeskSet::Sole, "test holder asks sole"),
+        (&holds_sole_state, DeskSet::Test, "sole holder asks test"),
+        (&holds_merge_state, DeskSet::Sole, "merge holder asks sole"),
         (
-            &merge_holder,
+            &holds_merge_state,
             DeskSet::TestSole,
             "merge holder asks test,sole",
         ),
@@ -430,10 +413,6 @@ fn returning_the_sole_desk_resumes_the_stopped_in_the_same_call() {
 
     let got = run(&mut state, &load_done("a"), Some("a"), T0 + 4);
 
-    let resumed = |id: &str| Event::Resumed {
-        id: id.to_owned(),
-        why: "no-sole",
-    };
     assert_eq!(
         got,
         applied(
@@ -441,8 +420,8 @@ fn returning_the_sole_desk_resumes_the_stopped_in_the_same_call() {
             vec![
                 test_freed("a", "returned"),
                 returned("a", DeskSet::TestSole),
-                resumed("b"),
-                resumed("c"),
+                resumed("b", "no-sole"),
+                resumed("c", "no-sole"),
             ]
         )
     );
@@ -452,35 +431,59 @@ fn returning_the_sole_desk_resumes_the_stopped_in_the_same_call() {
     assert_fixed_point(&state, "resumed");
 }
 
-/// 要件 5.5・5.6: 走っている負荷テストの記録は、両方の机が空なら停止要請なしで両方の持ち主にする。
-/// どちらか一方にだけ持ち主が居ても断り、状態は同じ。
+/// 要件 5.5・5.6: 走っている負荷テストの記録は、両方の机が空なら停止要請なしで、走っている印つきの
+/// 両方の持ち主にする（記録は参加の申し出を兼ねる）。test だけ・sole だけ・両方（持ち主に走って
+/// いる印が在っても無くても）のどれかに持ち主が居れば断り、状態は同じ。断るときは名前・リポジトリの
+/// 更新も、参加も、「作業中」への戻しもしない（元のスクリプトは断っても参加させて「作業中」へ戻す）。
 #[test]
 fn recording_a_running_load_test_needs_both_desks_free() {
-    let load_running = |id: &str| Command::LoadRunning {
-        id: id.to_owned(),
-        name: None,
-        repo: REPO.to_owned(),
-        purpose: PURPOSE.to_owned(),
+    // 両方空き: 参加していない Z の記録。A も B も「作業中」のまま。
+    let mut state = state_with(&["A", "B"]);
+    let mut expected = state.clone();
+    let got = run(&mut state, &load_running("Z"), Some("Z"), T0 + 5);
+    expected
+        .participants
+        .insert("Z".to_owned(), new_participant("Z", "Z", REPO, T0 + 5));
+    expected.test = test_holder("Z", PURPOSE, T0 + 5, T0 + 5);
+    expected.sole = sole_holder("Z", PURPOSE, T0 + 5, T0 + 5, true, &[]);
+    assert_eq!(state, expected);
+    let events = vec![joined("Z"), recorded_running("Z")];
+    assert_eq!(got, applied(true, events));
+    assert_fixed_point(&state, "both free");
+
+    // C が test だけ・sole だけ（A は C のために止まっている）・両方を持つ。
+    let held = |test: bool, sole: bool| {
+        let mut state = state_with(&["A", "C"]);
+        if test {
+            hold_test(&mut state, "C");
+        }
+        if sole {
+            hold_sole(&mut state, "C", &["A"]);
+            stop_for(&mut state, "A", "C");
+        }
+        state
     };
-
-    let mut state = state_with(&["a", "b"]);
-    let got = run(&mut state, &load_running("a"), Some("a"), T0 + 1);
-    let recorded = Event::LoadRunning { id: "a".to_owned() };
-    assert_eq!(got, applied(true, vec![recorded]));
-    assert_eq!(holders(&state), (Some("a"), Some("a")));
-    assert_eq!(status(&state, "b"), ParticipantStatus::Working);
-    assert_fixed_point(&state, "running");
-
-    // 一方だけに持ち主が居る（b のひとり占めのために a は止まっている）。
-    let mut test_only = state_with(&["a", "b"]);
-    hold_test(&mut test_only, "b");
-    let mut sole_only = state_with(&["a", "b"]);
-    hold_sole(&mut sole_only, "b", &["a"]);
-    stop_for(&mut sole_only, "a", "b");
-    for (before, label) in [(&test_only, "test held"), (&sole_only, "sole held")] {
-        let mut state = before.clone();
-        let got = run(&mut state, &load_running("a"), Some("a"), T0 + 1);
-        assert_eq!(&state, before, "{label}");
-        assert_not_applied(&got, label);
+    let mut marked = held(true, true);
+    marked.sole.as_mut().expect("C が持つ").running = true;
+    let cases = [
+        (held(true, false), "test held"),
+        (held(false, true), "sole held"),
+        (held(true, true), "both held"),
+        (marked, "both held, running"),
+    ];
+    for (before, label) in cases {
+        // A は参加者、C は持ち主、Z は参加していない識別。
+        for id in ["A", "C", "Z"] {
+            let mut state = before.clone();
+            let cmd = Command::LoadRunning {
+                id: id.to_owned(),
+                name: Some("別の名前".to_owned()),
+                repo: "pasta".to_owned(),
+                purpose: "別の内容".to_owned(),
+            };
+            let got = run(&mut state, &cmd, Some(id), T0 + 9);
+            assert_eq!(state, before, "{label} {id}");
+            assert_not_applied(&got, &format!("{label} {id}"));
+        }
     }
 }

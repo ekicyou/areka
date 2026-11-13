@@ -4,15 +4,14 @@
 //! `WaitKind::Watch` の答えだけで、ほかの種類の答えは待ちの記録の回収にだけ使う。
 
 use super::test_support::{
-    FakePresence, PID, PURPOSE, REPO, T0, applied, ask_to_stop, hold_load, hold_merge,
-    hold_running_load, hold_test, queue_load, queue_merge, queue_request, run, state_with,
-    stop_for, test_freed, test_freed_record, wait_record,
+    FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, granted, hold_load, hold_merge,
+    hold_running_load, hold_test, merge, merge_granted, merge_requested, queue_load, queue_merge,
+    queue_request, resumed, run, state_with, stop_for, test_freed, test_freed_record, wait_record,
+    wait_registered,
 };
 use super::{Applied, Command, Event, apply};
-use crate::state::{
-    DeskSet, MergeDesk, MergeHolder, Recent, RecentKind, SoleHolder, State, TestHolder, WaitKind,
-    WaitRecord,
-};
+use crate::state::{DeskSet, MergeDesk, Recent, RecentKind, State, WaitKind, WaitRecord};
+use crate::test_support::{T0, merge_holder, sole_holder, test_holder};
 
 /// 周期の一回りを 1 回呼ぶ。
 fn tick(state: &mut State, caller: Option<&str>, now: u64, presence: &FakePresence) -> Applied {
@@ -61,30 +60,12 @@ fn reclaim_record(id: &str, at: u64) -> Recent {
     }
 }
 
-fn wait_registered(id: &str, kind: WaitKind) -> Event {
-    Event::WaitRegistered {
-        id: id.to_owned(),
-        kind,
-    }
-}
-
 fn wait_removed(id: &str, kind: WaitKind, why: &'static str) -> Event {
     Event::WaitRemoved {
         id: id.to_owned(),
         kind,
         why,
     }
-}
-
-/// `requested` に申し込み、`granted` に番の来たマージの持ち主（支えの申し込みと同じ綴り）。
-fn merge_holder(id: &str, requested: u64, granted: u64) -> Option<MergeHolder> {
-    Some(MergeHolder {
-        id: id.to_owned(),
-        spec: format!("spec-{id}"),
-        bug: false,
-        requested,
-        granted,
-    })
 }
 
 /// その識別の待ちの記録の種類の一覧（記録の並びの順）。
@@ -125,11 +106,8 @@ fn a_merge_holder_without_a_watch_is_reclaimed_and_the_next_holder_comes_in_the_
     hold_test(&mut expected, "C");
     expected.recent = vec![reclaim_record("A", T0 + 10)];
     assert_eq!(state, expected);
-    let granted = Event::MergeGranted {
-        repo: "areka".to_owned(),
-        id: "B".to_owned(),
-    };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), granted]));
+    let events = vec![reclaimed("A"), merge_granted("B", "areka")];
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]
@@ -161,19 +139,11 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
         test_freed_record("A", "reclaimed", T0 + 10),
     ];
     assert_eq!(state, expected);
-    let resumed = Event::Resumed {
-        id: "B".to_owned(),
-        why: "no-sole",
-    };
-    let granted = Event::MergeGranted {
-        repo: REPO.to_owned(),
-        id: "C".to_owned(),
-    };
     let events = vec![
         test_freed("A", "reclaimed"),
         reclaimed("A"),
-        resumed,
-        granted,
+        resumed("B", "no-sole"),
+        merge_granted("C", REPO),
     ];
     assert_eq!(got, applied(true, events));
 }
@@ -189,28 +159,12 @@ fn reclaiming_the_merge_holder_lets_the_waiting_load_test_take_its_desk_in_the_s
     let got = tick(&mut state, Some("C"), T0 + 10, &no_watch(&["A"]));
 
     assert_eq!(ids(&state), ["B", "C"]);
-    let test = TestHolder {
-        id: "C".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 1,
-        granted: T0 + 10,
-    };
-    let sole = SoleHolder {
-        id: "C".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 1,
-        granted: T0 + 10,
-        running: false,
-        stopped: vec!["B".to_owned()],
-    };
-    assert_eq!((state.test, state.sole), (Some(test), Some(sole)));
+    let test = test_holder("C", PURPOSE, T0 + 1, T0 + 10);
+    let sole = sole_holder("C", PURPOSE, T0 + 1, T0 + 10, false, &["B"]);
+    assert_eq!((state.test, state.sole), (test, sole));
     assert!(state.requests.is_empty());
-    let granted = Event::DeskGranted {
-        id: "C".to_owned(),
-        desks: DeskSet::TestSole,
-        stopped: vec!["B".to_owned()],
-    };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), granted]));
+    let grant = granted("C", DeskSet::TestSole, &["B"]);
+    assert_eq!(got, applied(true, vec![reclaimed("A"), grant]));
 }
 
 #[test]
@@ -218,13 +172,7 @@ fn an_ordinary_command_reclaims_first_then_works_then_replans() {
     // 見張りの居ない A が areka の机を持っている。B が申し込む。
     let mut state = state_with(&["A", "B"]);
     hold_merge(&mut state, REPO, "A");
-    let cmd = Command::Merge {
-        id: "B".to_owned(),
-        name: None,
-        repo: REPO.to_owned(),
-        spec: "spec-B".to_owned(),
-        bug: false,
-    };
+    let cmd = merge("B", REPO, false);
 
     let got = apply(&mut state, &cmd, Some("B"), T0 + 10, &no_watch(&["A"]));
 
@@ -234,17 +182,12 @@ fn an_ordinary_command_reclaims_first_then_works_then_replans() {
         state.merge[REPO].holder,
         merge_holder("B", T0 + 10, T0 + 10)
     );
-    let requested = Event::MergeRequested {
-        repo: REPO.to_owned(),
-        id: "B".to_owned(),
-        spec: "spec-B".to_owned(),
-        bug: false,
-    };
-    let granted = Event::MergeGranted {
-        repo: REPO.to_owned(),
-        id: "B".to_owned(),
-    };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), requested, granted]));
+    let events = vec![
+        reclaimed("A"),
+        merge_requested("B", REPO, false),
+        merge_granted("B", REPO),
+    ];
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]

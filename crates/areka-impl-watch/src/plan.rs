@@ -1,4 +1,5 @@
-//! 純粋な判断（規則 1〜7・回収・番の決め直し・出来事）。ファイルも時計もプロセスも触らない。
+//! 純粋な判断（番の決まり（`plan_turns.rs`）・回収・番の決め直し・出来事）。
+//! ファイルも時計もプロセスも触らない。
 //!
 //! 入口は [`apply`] 1 つ。いまの時刻と生死の答え（[`Presence`]）は引数で受けるので、同じ引数なら
 //! いつ呼んでも同じ結果になる。状態が変わるたびに出来事（[`Event`]）を 1 件ずつ返し、ログへ
@@ -351,13 +352,11 @@ pub fn apply(
             // 走っている印の無いひとり占めがまだ持たれ・待たれていれば、この後の番の決め直しが
             // 停止要請を出し直す。
             let mut any = false;
-            for participant in state.participants.values_mut() {
-                let target = id.as_ref().is_none_or(|id| *id == participant.id);
+            for (key, participant) in state.participants.iter_mut() {
+                let target = id.as_ref().is_none_or(|id| id == key);
                 if target && back_to_work(participant, now) {
                     any = true;
-                    events.push(Event::Unstopped {
-                        id: participant.id.clone(),
-                    });
+                    events.push(Event::Unstopped { id: key.clone() });
                 }
             }
             if any {
@@ -567,11 +566,17 @@ fn back_to_work(participant: &mut Participant, now: u64) -> bool {
     true
 }
 
-/// [`back_to_work`] で戻し、戻したら出来事 `Resumed` を 1 件。
-fn resume(participant: &mut Participant, why: &'static str, now: u64, events: &mut Vec<Event>) {
+/// [`back_to_work`] で戻し、戻したら表の鍵 `id` を載せた出来事 `Resumed` を 1 件。
+fn resume(
+    id: &str,
+    participant: &mut Participant,
+    why: &'static str,
+    now: u64,
+    events: &mut Vec<Event>,
+) {
     if back_to_work(participant, now) {
         events.push(Event::Resumed {
-            id: participant.id.clone(),
+            id: id.to_owned(),
             why,
         });
     }
