@@ -285,23 +285,23 @@ fn requests_while_holding_are_accepted_only_for_a_merge_holder_adding_test() {
     assert!(state.merge[REPO].holder.is_some(), "マージの机は持ったまま");
     assert_fixed_point(&state, "merge holder adds test");
 
-    let mut merge_holder = state_with(&["a"]);
-    hold_merge(&mut merge_holder, REPO, "a");
-    let mut test_holder = state_with(&["a"]);
-    hold_test(&mut test_holder, "a");
-    let mut sole_holder = state_with(&["a"]);
-    hold_sole(&mut sole_holder, "a", &[]);
+    let mut holds_merge_state = state_with(&["a"]);
+    hold_merge(&mut holds_merge_state, REPO, "a");
+    let mut holds_test_state = state_with(&["a"]);
+    hold_test(&mut holds_test_state, "a");
+    let mut holds_sole_state = state_with(&["a"]);
+    hold_sole(&mut holds_sole_state, "a", &[]);
     let cases = [
         (
-            &test_holder,
+            &holds_test_state,
             DeskSet::TestSole,
             "test holder asks test,sole",
         ),
-        (&test_holder, DeskSet::Sole, "test holder asks sole"),
-        (&sole_holder, DeskSet::Test, "sole holder asks test"),
-        (&merge_holder, DeskSet::Sole, "merge holder asks sole"),
+        (&holds_test_state, DeskSet::Sole, "test holder asks sole"),
+        (&holds_sole_state, DeskSet::Test, "sole holder asks test"),
+        (&holds_merge_state, DeskSet::Sole, "merge holder asks sole"),
         (
-            &merge_holder,
+            &holds_merge_state,
             DeskSet::TestSole,
             "merge holder asks test,sole",
         ),
