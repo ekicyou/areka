@@ -107,7 +107,7 @@
   - _Boundary: areka-parsers shell, areka-emo-compose pattern_word/method, areka-emo-atlas manifest_
   - _Depends: 2.1, 2.4_
   - _Requirements: 2.1, 2.3, 5.1, 5.2, 5.4, 6.4_
-- [ ] 3.9 (P) 道具 `gen_default_balloon` の引数の読みのテストを走らせる（指摘 5）
+- [x] 3.9 (P) 道具 `gen_default_balloon` の引数の読みのテストを走らせる（指摘 5）
   - 道具の入口の中の引数の読み・動きの種類・最初の違い・置き換えの書き込み・入出力の文とそのテスト 4 本を、子のファイルへそのまま移す
   - ずれの見張りのテストが、その子のファイルを読む 1 行を足し、見張りの説明が全部の子に当てはまるようにする（どの `Cargo.toml` も変えない）
   - 完了の状態: 移した 4 本がずれの見張りのターゲットで走って緑、道具の `--check` が 0 で終わる
