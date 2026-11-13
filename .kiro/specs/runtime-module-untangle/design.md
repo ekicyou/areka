@@ -386,14 +386,16 @@ pub(crate) struct SessionHooks {
 }
 
 impl SessionHooks {
-    /// 据えられた口（無ければ `FALLBACK`）。
+    /// 据えられた口。本番で無ければ `error!(session_hooks_missing)` を出して `NO_BODY` を返す。
     pub(crate) fn of(world: &World) -> Self;
 }
 
-/// 本番の口の無い World の答え: `None`・偽・空の文字・何もしない（本体の状態が無いときの今の答えと同じ）。
+/// 本体の状態が無いときの答え: `None`・偽・空の文字・何もしない（今の「状態が無い」ときの答えと同じ・cfg を付けない）。
+pub(crate) const NO_BODY: SessionHooks;
+/// 口の無い World の倒れ先。本番は `NO_BODY`（記録つき）。
 #[cfg(not(test))]
-const FALLBACK: SessionHooks;
-/// テストの World は本体の口そのもの（今日と同じく本体の状態をそのまま読む）。
+const FALLBACK: SessionHooks = NO_BODY;
+/// テストの World は本体の口そのもの（今日と同じく本体の状態をそのまま読む・記録は出さない）。
 #[cfg(test)]
 const FALLBACK: SessionHooks = crate::session::hooks::HOOKS;
 ```
@@ -405,7 +407,8 @@ const FALLBACK: SessionHooks = crate::session::hooks::HOOKS;
 **Implementation Notes**
 - Integration: 呼ぶ側は相の入口で `let hooks = SessionHooks::of(world);` を 1 度取り、`(hooks.kanade)(world)` の形で呼ぶ。
 - Validation: 本番の据え付けは既存の試験 `boots_twice_in_one_process_without_double_registration` に `assert!(world.contains_resource::<SessionHooks>())` を足して固定する（試験の数は変えない）。
-- Risks: 本番の `FALLBACK` は試験で踏まれない。答えが今の「状態が無い」と同じ定数なので、来ても今の縮退の記録が出るだけ。`#[cfg(test)]` の `FALLBACK` は本体を引く（要件 3.5 の数・`runtime-crate-split` へ申し送り）。
+- Validation（`NO_BODY`）: `NO_BODY` の 10 本の答え（`None`・偽・空の文字・何もしない）を、既存の `frame/switch_tests.rs` の試験に assert を足して固定する（試験の関数は増やさない）。口の据え忘れは `of()` の `error!` で記録に残り、黙った縮退にならない（ログ無し失敗経路の禁止）。`of()` は `&World` しか持たないので、回数は絞らず呼ぶたびに `error!` を出す（絞るための `OnceLock` はプロセスで共有する状態を増やす＝3.9 に反する）。据え付けは `register_systems` の先頭で最初の巡より前に済むので、本番でこの記録が出るのは据え付けを忘れた結線の誤りのときだけで、その誤りは `boots_twice_in_one_process_without_double_registration` の assert が赤で捕まえる。
+- Risks: `#[cfg(test)]` の `FALLBACK` は本体を引く（要件 3.5 の数・`runtime-crate-split` へ申し送り）。
 
 #### SwitchPhaseHooks（`frame/switch.rs` の書き換え）
 
@@ -528,7 +531,7 @@ impl BalloonHover {
 #### ShellCarryGate（`runtime/shell_carry.rs`）
 
 - `capture_for_reload(world: &World, carries: bool) -> Option<ShellCarry>`: `carries` が偽なら `None`（今の門と同じ）。呼び手 `session/ghost_switch.rs` が `crate::session::reload::carries_shell_state(world)` を渡す。`hand_over` は本体を引かないので `runtime` に残る。`replay` は `(hooks.seriko_sink)(world)` で送り手を引く。記録（`reload_shell_captured`・`reload_shell_carry_unavailable` ほか）の文と出所は変えない。
-- 要件 2.1 の「今の測りに当てはめると」の列は `capture_for_reload`・`hand_over` を `session` へ移すと書くが、設計の段の測り直しで、本体を引くのは `capture_for_reload` の門の 1 行（`reload::carries_shell_state`）だけで、`hand_over` は `RuntimeWiring` の欄を書くだけと分かった。同じ要件の「測り直しで頼る・頼らないが変わったものは、この原則で振り分ける」に従い、門だけを呼び手へ出し、2 つの関数は `runtime` に残す（記録の出所も変わらない）。
+- 要件の段の列は `capture_for_reload`・`hand_over` を `session` へ移すと書いていたが（設計の討議で要件 2.1 の列をこの形に改めた）、設計の段の測り直しで、本体を引くのは `capture_for_reload` の門の 1 行（`reload::carries_shell_state`）だけで、`hand_over` は `RuntimeWiring` の欄を書くだけと分かった。同じ要件の「測り直しで頼る・頼らないが変わったものは、この原則で振り分ける」に従い、門だけを呼び手へ出し、2 つの関数は `runtime` に残す（記録の出所も変わらない）。
 
 ### session（本体の層）
 
@@ -671,11 +674,13 @@ pub(crate) fn install(world: &mut World);
 ### 外の参照の数え方（BoundaryCount・3.1〜3.5）
 - 本番のファイルの集合: `crates/areka/src/runtime/**/*.rs` から `*_tests.rs`・`*test_support*.rs`・`spine*.rs`・`*_cases.rs` を除いたもの。着手の測りで、親が `#[cfg(test)]` で宣言していないファイルの集合と一致することを 1 度確かめる。
 - 式 1: `rg -n --pcre2 <glob> '^(?!\s*//).*\bcrate::(?!runtime\b)' crates/areka/src/runtime`
-- 式 2: `rg -n --pcre2 --max-depth 1 <glob> '^(?!\s*//).*\bsuper::super::' crates/areka/src/runtime`
-- 式 3: `rg -n --pcre2 <glob> '^(?!\s*//).*\bsuper::super::super::' crates/areka/src/runtime/frame`
+- 本番のファイルの集合を、宣言の深さ（`runtime` から数えたモジュールの段の数・`#[path]` の分も入れる）で 2 つに分ける。深さ 1 の集合 D1（`mod.rs` が直に宣言するもの）と、深さ 2 の集合 D2（`frame.rs` が宣言する `frame/*.rs`・`balloon_visibility.rs` が `#[path]` で宣言する `balloon_visibility_{phase,decision,wait}.rs`・`move_cue.rs` が `#[path]` で宣言する `move_cue_{args,geometry,place}.rs` ほか）。D2 はファイルの置き場では決まらないので、着手の測り（S0）で `#[path]` の宣言をたどって一覧にし、`research.md` に置く。
+- 式 2: `rg -n --pcre2 '^(?!\s*//).*\bsuper::super::' <D1 のファイル>`（深さ 1 から `super::super::` で `runtime` の外へ抜ける）
+- 式 3: `rg -n --pcre2 '^(?!\s*//).*\bsuper::super::super::' <D2 のファイル>`（深さ 2 から `super::super::super::` で外へ抜ける。D2 の `super::super::frame` ほかは `runtime` の中を指すので数えない）
+- S0 で式 1〜3 を今の木に当て、外への参照だけが出る（`balloon_visibility_phase.rs` の `super::super::frame`・`super::super::target_map` が出ない）ことを確かめる。
 - 3 本の出力が 0 行（0 行でなければ、残った行が全部 `#[cfg(test)]` の項目の中にあることを行ごとに示し、3.5 の数へ回す）。`runtime` の本番では `use crate::{…}` の束ねた形を使わない。
 - 説明の文（3.4）は先頭の `^(?!\s*//)` を `^\s*//` に替えた 3 本で一覧にする。テスト（3.5）は同じ式をテストのファイルの集合と本番のファイルの中の `#[cfg(test)]` の項目に当て、`rg -c` でファイルごとに数える。
-- `super::` の深さはファイルの置き場ではなく宣言の深さで決まる。本番のファイルは `#[path]` で深さが変わるものが無い（`frame.rs` の子は `frame/` に在る・着手の測りで確かめる）ので式 2・3 で足りる。テストのファイルは `#[path]` で深く宣言されるもの（`frame.rs` が宣言する直下の `frame_*_tests.rs` は深さ 3）があるので、式 2 に当たったテストの行は宣言の深さで読み直し、`runtime` の外へ抜けるものだけを 3.5 の数に入れる。
+- `super::` の深さはファイルの置き場ではなく宣言の深さで決まる。本番のファイルは上の D1・D2 で分けて式 2・3 を当てる（深さ 3 以上の本番のファイルが S0 の測りで見つかったら、同じ形の式を 1 本足す）。テストのファイルは `#[path]` で深く宣言されるもの（`frame.rs` が宣言する直下の `frame_*_tests.rs` は深さ 3）があるので、式 2 に当たったテストの行は宣言の深さで読み直し、`runtime` の外へ抜けるものだけを 3.5 の数に入れる。
 
 ## Migration Strategy
 
