@@ -3,11 +3,12 @@
 //! 拒否の `warn!` と要求ごとの `debug!` は mcp スレッドで出るので、ここでは数えない
 //! （実機確認の `RUST_LOG` で確かめる＝要件 9.6）。
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use crate::testkit::{HELP, Response, post_rpc, request, rpc, serve};
+use crate::testkit::{HELP, MCP_V1, RPC_ACCEPT, Response, post_rpc, request, rpc, send_raw, serve};
 use crate::{ToolContent, ToolHandler, ToolOutcome, ToolRegistry, ToolSpec};
 
 const EVIL_ORIGIN: &str = "http://evil.example";
@@ -53,6 +54,67 @@ fn bad_host_is_403() {
     let host = [("Host", "evil.example")];
     assert_forbidden_before_mcp(&post_rpc(addr, &host, &rpc("ping", Some(1), None)));
     assert_forbidden_before_mcp(&request(addr, "GET", HELP, &host, b""));
+}
+
+/// `POST /api/mcp/v1` の生のバイト列を組む。`extra` は頭に足す行（`\r\n` で終わる）、
+/// `Content-Length` は `length`（本文の実際の長さと違ってよい）。`extra` が `Host:` で始まらなければ実番号の `Host` を付ける。
+fn raw_post(addr: SocketAddr, extra: &[u8], length: usize, body: &[u8]) -> Vec<u8> {
+    let mut raw = format!("POST {MCP_V1} HTTP/1.1\r\n").into_bytes();
+    if !extra.starts_with(b"Host:") {
+        raw.extend_from_slice(format!("Host: {addr}\r\n").as_bytes());
+    }
+    raw.extend_from_slice(extra);
+    raw.extend_from_slice(
+        format!(
+            "Content-Type: application/json\r\nAccept: {RPC_ACCEPT}\r\n\
+             Content-Length: {length}\r\nConnection: close\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    raw.extend_from_slice(body);
+    raw
+}
+
+/// (要件 4.3・4.4) UTF-8 でない `Origin`／`Host` は「無し」へ倒さず 403（置換文字入りの値として拒む）。
+/// hyper は値の中の 0x80〜0xFF を通すので、要求は受け口の検査まで届く。
+#[test]
+fn non_utf8_origin_and_host_are_refused() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    let ping = rpc("ping", Some(1), None);
+    let send = |extra: &[u8]| {
+        send_raw(
+            addr,
+            &raw_post(addr, extra, ping.len(), ping.as_bytes()),
+            false,
+        )
+    };
+    // 較正: 同じ組み方で `Origin` が読める値なら通る（403 は `\xff` のせい）。
+    let ok = send(b"Origin: http://127.0.0.1\r\n");
+    assert_eq!(ok.status, 200, "{ok:?}");
+    for extra in [&b"Origin: http://\xff\r\n"[..], &b"Host: \xff\r\n"[..]] {
+        let response = send(extra);
+        assert_forbidden_before_mcp(&response);
+        assert_eq!(
+            String::from_utf8_lossy(&response.body),
+            "Forbidden",
+            "{}",
+            String::from_utf8_lossy(extra)
+        );
+    }
+}
+
+/// 約束の `Content-Length` より短い本文で書きの側を閉じると、rmcp へ渡さずに 400。
+#[test]
+fn a_body_shorter_than_its_length_is_400() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    let response = send_raw(addr, &raw_post(addr, b"", 100, b"0123456789"), true);
+    assert_eq!(response.status, 400, "{response:?}");
+    assert_eq!(
+        response.header("content-type"),
+        Some("text/plain; charset=utf-8"),
+        "{response:?}"
+    );
+    assert_eq!(String::from_utf8_lossy(&response.body), "Bad Request");
 }
 
 /// (要件 6.1・6.2) help は 200・`text/html; charset=utf-8`・本文の URL は実番号。

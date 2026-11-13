@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use super::server_protocol_tests::{SUPPORTED_VERSIONS, speak};
 use crate::ToolRegistry;
-use crate::testkit::{Response, STATELESS, post_rpc, serve};
+use crate::testkit::{MCP_V1, RPC_ACCEPT, Response, STATELESS, post_rpc, serve};
 
 /// rmcp が読めない本文に返す 415 の平文（JSON として読めた 1 件の形でないとき）。
 const RMCP_415_SHAPE: &str = "fail to deserialize request body unrecognized JSON-RPC message";
@@ -82,6 +82,27 @@ fn non_object_params_answer_with_the_id_in_every_version() {
             }
         }
     }
+}
+
+/// (要件 6.1・6.4) `Content-Type` に `charset` が付いても同じ表の答え（rmcp の 415 の平文にしない）。
+#[test]
+fn a_charset_in_the_content_type_keeps_the_shape_answer() {
+    let (_server, addr) = serve(ToolRegistry::default());
+    let response = crate::testkit::request(
+        addr,
+        "POST",
+        MCP_V1,
+        &[
+            ("Content-Type", "application/json; charset=utf-8"),
+            ("Accept", RPC_ACCEPT),
+        ],
+        request(&json!(1), "tools/list", &json!([1])).as_bytes(),
+    );
+    assert_eq!(response.status, 200, "{response:?}");
+    assert_eq!(
+        response.json(),
+        json!({ "jsonrpc": "2.0", "id": 1, "error": { "code": -32602, "message": ARRAY_MESSAGE } }),
+    );
 }
 
 /// (要件 6.7) 当たらないものは今のまま: 通知・`id` が `null` の要求・JSON でない本文は rmcp の

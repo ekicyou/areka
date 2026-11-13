@@ -405,19 +405,38 @@ fn accept_header_missing_is_406() {
     }
 }
 
-/// (要件 5.1・設計 B-7) 上限（4 MiB）を 1 バイト超えた本文は 413（差の一覧へ）。
-#[test]
-fn body_over_limit_is_413() {
+/// 長さ `len` の空白だけの本文を rmcp の受け口へ送る。
+fn post_blank_body(len: usize) -> Response {
     let (_server, addr) = serve(ToolRegistry::default());
-    let body = vec![b' '; MAX_BODY_BYTES + 1];
-    let response = request(
+    request(
         addr,
         "POST",
         MCP_V1,
         &[("Content-Type", "application/json"), ("Accept", RPC_ACCEPT)],
-        &body,
-    );
+        &vec![b' '; len],
+    )
+}
+
+/// (要件 5.1・設計 B-7) 上限（4 MiB）を 1 バイト超えた本文は自前の 413（差の一覧へ）。
+/// rmcp 3.9.0 の 413 は本文 `Payload Too Large: request body exceeds 4194304 bytes`・`Content-Type` なし
+/// なので、本文と `Content-Type` で rmcp へ渡す前に断ったことを見分ける。
+#[test]
+fn body_over_limit_is_413() {
+    let response = post_blank_body(MAX_BODY_BYTES + 1);
     assert_eq!(response.status, 413, "{response:?}");
+    assert_eq!(
+        response.header("content-type"),
+        Some("text/plain; charset=utf-8"),
+        "{response:?}"
+    );
+    assert_eq!(String::from_utf8_lossy(&response.body), "Payload Too Large");
+}
+
+/// (要件 5.1・設計 B-7) 上限ちょうどの本文は 413 にならない（上限は「超えたら」）。
+#[test]
+fn a_body_of_exactly_the_limit_is_not_413() {
+    let response = post_blank_body(MAX_BODY_BYTES);
+    assert_ne!(response.status, 413, "{response:?}");
 }
 
 /// 版ごとの話し方で要求 1 件を送る。旧式の 4 版は `MCP-Protocol-Version` を付ける（`initialize` だけは
