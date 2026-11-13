@@ -109,3 +109,73 @@ mod graphics_core_tests {
     // Note: 旧 test_commit（IDCompositionDevice3::Commit）は WUC 移行で削除。
     // WUC は DispatcherQueue 経由の暗黙反映のため明示 commit が存在しない（要件 7.1）。
 }
+
+// 入れ物の寿命（要件 4.3, 4.5）: 描画面の入れ替え（大きさの変化）と放し（持ち主から外れる・
+// 装置の失い。どちらも `clear` を通る）の後に入れ物が残らない。
+#[cfg(test)]
+mod surface_composite_lifetime_tests {
+    use crate::ecs::graphics::GraphicsCore;
+    use crate::ecs::graphics::SurfaceGraphics;
+    use crate::ecs::graphics::composite::SurfaceComposite;
+    use crate::ecs::graphics::visual::emit_test_support::warp_dc;
+    use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
+    use windows::Foundation::Size;
+    use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
+    use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush};
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+    fn make_surface(
+        resource: &WucGraphicsResource,
+        w: u32,
+        h: u32,
+    ) -> (CompositionDrawingSurface, CompositionSurfaceBrush) {
+        let gd = resource.graphics_device().expect("graphics_device");
+        let surface = gd
+            .CreateDrawingSurface(
+                Size {
+                    Width: w as f32,
+                    Height: h as f32,
+                },
+                DirectXPixelFormat::B8G8R8A8UIntNormalized,
+                DirectXAlphaMode::Premultiplied,
+            )
+            .expect("CreateDrawingSurface");
+        let brush = resource
+            .compositor()
+            .expect("compositor")
+            .CreateSurfaceBrushWithSurface(&surface)
+            .expect("CreateSurfaceBrushWithSurface");
+        (surface, brush)
+    }
+
+    fn fill_composite(sg: &mut SurfaceGraphics) {
+        let dc = warp_dc();
+        *sg.composite_slot() = Some(SurfaceComposite::new(&dc, sg.size).expect("入れ物"));
+        assert!(sg.composite().is_some());
+    }
+
+    #[test]
+    fn set_surface_and_clear_release_the_composite() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore作成失敗");
+        let resource =
+            WucGraphicsResource::new(core.d2d_device().expect("d2d")).expect("WucGraphicsResource");
+        let (s1, b1) = make_surface(&resource, 16, 16);
+        let (s2, b2) = make_surface(&resource, 24, 20);
+
+        let mut sg = SurfaceGraphics::new(s1, b1, (16, 16));
+        assert!(sg.composite().is_none(), "作った直後は入れ物が無い");
+        fill_composite(&mut sg);
+        sg.set_surface(s2, b2, (24, 20));
+        assert!(
+            sg.composite().is_none(),
+            "描画面を入れ替えた後に入れ物が残る"
+        );
+
+        fill_composite(&mut sg);
+        sg.clear();
+        assert!(sg.composite().is_none(), "描画面を放した後に入れ物が残る");
+    }
+}

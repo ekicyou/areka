@@ -1,4 +1,4 @@
-//! Serialization round-trip tests (JSON / YAML)
+//! Serialization round-trip tests (JSON: dev-only `serde_json`; TOML: feature `toml`)
 //! Tasks 11.2, 11.4
 
 // =============================================================
@@ -38,18 +38,49 @@ mod json_integration_tests {
 }
 
 // =============================================================
-// Task 11.4: YAML round-trip (feature "yaml")
+// TOML round-trip and read/write failures (feature `toml`)
 // =============================================================
 
-#[cfg(feature = "yaml")]
-mod yaml_integration_tests {
+#[cfg(feature = "toml")]
+mod toml_integration_tests {
     use super::super::*;
 
     #[test]
-    fn complete_document_yaml_roundtrip() {
+    fn complete_document_toml_roundtrip() {
         let doc = build_complete_document();
-        let yaml_str = serde_yaml::to_string(&doc).unwrap();
-        let deserialized: DolaDocument = serde_yaml::from_str(&yaml_str).unwrap();
+        let toml = doc.to_toml_string().unwrap();
+        let deserialized = DolaDocument::from_toml_str(&toml).unwrap();
         assert_eq!(doc, deserialized);
+    }
+
+    #[test]
+    fn toml_output_is_identical_twice() {
+        let doc = build_complete_document();
+        assert_eq!(doc.to_toml_string().unwrap(), doc.to_toml_string().unwrap());
+    }
+
+    #[test]
+    fn toml_read_errors_carry_a_reason() {
+        let malformed = DolaDocument::from_toml_str("schema_version = ").unwrap_err();
+        assert!(!malformed.to_string().is_empty());
+
+        let missing = DolaDocument::from_toml_str("").unwrap_err();
+        assert!(missing.to_string().contains("schema_version"));
+    }
+
+    #[test]
+    fn toml_write_of_null_is_an_error() {
+        let doc = DolaDocument {
+            schema_version: "1.0".to_string(),
+            variable: BTreeMap::from([(
+                "obj".to_string(),
+                AnimationVariableDef::Object {
+                    initial: DynamicValue::Null,
+                },
+            )]),
+            transition: BTreeMap::new(),
+            storyboard: BTreeMap::new(),
+        };
+        assert!(doc.to_toml_string().is_err());
     }
 }
