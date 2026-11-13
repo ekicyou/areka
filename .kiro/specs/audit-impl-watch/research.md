@@ -274,3 +274,13 @@
 - 確かめて落としたもの（要約）: 走っている負荷テストの記録の持ち主の `return --desk sole` は完了 spec の要件 4.3（10-18 の裁定）の範囲。`status.md` の表でない行を逃がさないのは手で書き替えた状態ファイルのときだけ。`--id .` は普通のファイル名になる。`cli_commands_tests` の `..Default` の持ち主は識別だけが意味を持つ形で写しではない。
 
 - 5 回目の直し（2 件・名前替えだけ）＝`a48ac75f`。テストは 305 本緑。ここで打ち切り（§10.5）。かけ直し 5 回の新しい指摘は計 34 件（15・7・4・6・2）、すべて直し済み、本番のコードの振る舞いを変えた直しは 0。
+
+## 11. 仕上げの確かめ（タスク 6.2・2026-11-13・HEAD `bfff0401`）
+
+- 全体テスト `pwsh -NoProfile -File tools/test-all.ps1`（排他テストの机を取って回した）: **all steps green**（i686 の組み立て・fmt・x64 のワークスペースのテスト 1508 秒・dola・i686・crates.io の事前確かめ・文字コード・リリースノート・ロードマップ・i686 helper の同期・見本の取得・i686 helper の置き場所＝全部 exit 0）。
+- 実機テスト `cargo test -p areka-impl-watch --test real -- --ignored`（同じ机の中）: **12 passed; 0 failed**（同時の変更を見る `simultaneous_changes_are_all_kept`・`status.md` が書けないときの警告を見る `an_unwritable_status_md_changes_no_result_and_leaves_a_warning` を含む）。置き場所は今の作りのまま `target` の下へ上書き。
+- 既定のブランチ（`origin/main` `343ec035`・取り込み済み・先行 0）との差分:
+  - `crates/areka/`・`Cargo.lock`・`vendors/`・要件 6.3 のファイル（`crates/wintf/src/test_crash_report.rs`・`crates/log-capture-kit`・`tools/load-flake.ps1`・`doc/ssp-mcp/log-convention.md`・`doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`）・`tools/`・`.claude/skills/`・`.kiro/steering/`＝差分 0。
+  - `cli_args.rs`・`status.rs`・`Cargo.toml`＝差分 0。`wait.rs` はかけ直し 1 回目の R1-3 で doc の 2 行だけ変わった（コードの差分 0。タスクの「`wait.rs` は差分 0」はコメントの直しの分だけ外れた）。`cli.rs`・`state.rs`・`main.rs`・`plan.rs` の doc 以外の変化はタスクのとおり（`cli.rs`・`state.rs` はコメントだけ＝コメントでない行の差分 0 を確かめた）。
+  - 状態ファイルの版は 2 のまま（`state.rs` の `VERSION: u32 = 2`）。
+- 置き場所（`AREKA_IMPL_WATCH_HOME`）の実行ファイルと状態ファイル: この実装の間、机のコマンド（`watch`・`request`・`return`）を呼んだだけで、組み立て・写し・置き換えはしていない。実行ファイルの日時は着手の前のまま。
