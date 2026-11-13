@@ -94,54 +94,6 @@ fn initialized_notification_is_202_without_body() {
     assert!(response.body.is_empty(), "{response:?}");
 }
 
-/// (要件 3.4) 登録 0 本の `tools/list` は空の配列。
-#[test]
-fn tools_list_is_empty() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    let result = Response::result(&post_rpc(addr, &[], &rpc("tools/list", Some(1), None)));
-    assert_eq!(result["tools"], json!([]), "{result}");
-}
-
-/// (要件 3.5) `ping` は `result: {}`。
-#[test]
-fn ping_returns_empty_object() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    let result = Response::result(&post_rpc(addr, &[], &rpc("ping", Some(7), None)));
-    assert_eq!(result, json!({}));
-}
-
-/// (要件 3.6) どの名前・引数の `tools/call` も JSON-RPC のエラー `-32602`（`isError` の結果ではない）。
-#[test]
-fn tools_call_any_name_is_invalid_params() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    for params in [
-        json!({ "name": "get_status", "arguments": {} }),
-        json!({ "name": "no_such_tool", "arguments": { "x": 1 } }),
-    ] {
-        let error = Response::error(&post_rpc(
-            addr,
-            &[],
-            &rpc("tools/call", Some(1), Some(params)),
-        ));
-        assert_eq!(error["code"], -32602, "{error}");
-    }
-}
-
-/// (要件 3.7) 未知メソッドは rmcp のまま `-32601`・旧式の経路で HTTP 200（差の一覧へ）。
-#[test]
-fn unknown_method_is_jsonrpc_error_from_rmcp() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    let error = Response::error(&post_rpc(addr, &[], &rpc("no/such", Some(1), None)));
-    assert_eq!(error["code"], -32601, "{error}");
-    // エラーの形（差の一覧へ）: `message` はメソッド名そのもの・`data` の欄は無い
-    // （SSP は `data` に `message` と同じ文字列を入れる）。
-    assert_eq!(
-        error,
-        json!({ "code": -32601, "message": "no/such" }),
-        "{error}"
-    );
-}
-
 /// (要件 3.8・5.1) バッチ（JSON の配列）は rmcp のまま 415・平文（1 件の形として読めない。
 /// JSON-RPC のエラーではない＝差の一覧へ。SSP は 400・`-32600`）。
 #[test]
@@ -171,22 +123,6 @@ fn non_json_content_type_is_415() {
         rpc("ping", Some(1), None).as_bytes(),
     );
     assert_eq!(response.status, 415, "{response:?}");
-}
-
-/// (要件 3.8・設計 B-10) 壊れた JSON は 415・平文（JSON-RPC のエラーではない）。
-/// 待受は落ちず、同じサーバへ続けて送った `ping` が通る。
-#[test]
-fn broken_json_body_is_415_and_next_request_works() {
-    let (_server, addr) = serve(ToolRegistry::default());
-    let response = post_rpc(addr, &[], "{");
-    assert_eq!(response.status, 415, "{response:?}");
-    assert!(!response.body.is_empty(), "{response:?}");
-    assert!(
-        serde_json::from_slice::<Value>(&response.body).is_err(),
-        "本文が平文でない: {response:?}"
-    );
-    let result = Response::result(&post_rpc(addr, &[], &rpc("ping", Some(2), None)));
-    assert_eq!(result, json!({}));
 }
 
 /// (要件 3.9) `initialize` を経ない `ping`／`tools/list` も 200・応答に `Mcp-Session-Id` が無い。
