@@ -31,7 +31,7 @@
   - 完了の姿: i686 の段で helper と loadu のテストが移す前と同じ本数で緑、`shiori_proxy.rs` が 500 行を下回り、helper・loadu に `std::env::temp_dir` の呼び出しが 0 件で、`temp_path_guard_test.rs` の 4 本が緑
   - _Requirements: 3.1, 4.3, 4.4, 5.1, 5.5_
 
-- [ ] 2. 試験用の DLL の試しの ID と依存の形をそろえる（U3）
+- [x] 2. 試験用の DLL の試しの ID と依存の形をそろえる（U3）
   - testdll と loadu の `Cargo.toml` を `windows` のワークスペースの版と機能の行にし（指摘 29）、testdll に `Win32_System_DataExchange` を足す
   - testdll に試しの ID 5 つ（`OnTestNull`・`OnTestLenOverflow`・`OnTestReenter`・`OnTestUnloadFalse`・`OnTestEnv`）を設計の表どおりに足す。`OnTestReenter` のタグの値は ipc の写しとし、場所を注釈で指す
   - `GMEM_FIXED`・応答の確保・`alloc_input` の 3 か所に互いを指す注釈を置き（指摘 47）、testdll の古い説明（「`len` が null なら null」など）を直す（指摘 32 の testdll の分）
@@ -192,3 +192,4 @@
 ## Implementation Notes
 - 1.1: shiori_load_e2e・shiori_request_e2e の TestRoot は HelperGuard が終わりを待たないので消え残る（Drop が eprintln）。タスク 6 で `target\test-roots\` に残らないことを確かめる。
 - 1.3: temp_path_guard_test.rs の ⒝ の見出し「読み出しのみの 2 件」は表の 1 件と合わない（1.1 の残り）。4.1 の件数と説明の直しで合わせる。
+- 2: testdll の OnTestReenter が実際に送る道（Reference0 の窓へ空の WM_COPYDATA・wParam 0）は testdll の中では縛っていない。10.3 の main_loopback_tests で初めて縛られる。

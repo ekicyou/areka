@@ -501,3 +501,9 @@
 | i686 | `crates/shiori-host32-testdll/src/lib.rs:63` | `clippy::needless_bool` | `if` の守りが真偽の字をそのまま返す |
 
 - U18 では、この表の 5 件のうち消えた分と、audit の指摘と重なった所（`event-listener` は指摘 28）を書く。
+
+### 14.11 試験用の DLL の依存の形（タスク 2・指摘 29）
+
+- testdll と loadu の `Cargo.toml` を `[dependencies.windows] workspace = true` と機能の行にした（版の直書き `"0.62.2"` を消した）。testdll は `OnTestReenter` のために `Win32_System_DataExchange`（と、ワークスペースの機能に元からある `Win32_UI_WindowsAndMessaging`）を足した。
+- `git diff --exit-code Cargo.lock` は 0（差分なし）。x64 と i686（`--target i686-pc-windows-msvc`）の両方で `cargo build -p shiori-host32-testdll -p shiori-host32-testdll-loadu` が通った後に確かめた。解決される `windows` の版は今までと同じ 0.62.2。
+- 14.10 の基準のうち、i686 の `crates/shiori-host32-testdll/src/lib.rs:63` の `clippy::needless_bool` はこのタスクで消えた（`load` の戻りを比べの式にした）。

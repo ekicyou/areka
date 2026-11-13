@@ -62,6 +62,7 @@ use windows::core::{HSTRING, PCSTR, s};
 
 /// `GlobalAlloc` の `GMEM_FIXED`（=0）。pasta と同値で確保する（research §9.3）。
 /// `GMEM_FIXED` ではハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書き込める。
+/// 同じ決まりの写し: testdll・loadu の `lib.rs` の `GMEM_FIXED`（決まりを変えるなら 3 か所とも）。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
 /// `loadu`／`load` 共通の flat-C cdecl 署名（design §351-355・research §9.2 でバイト正確に固定）。
@@ -324,6 +325,7 @@ impl ShioriByteProxy {
         }
 
         // 手順 5: 応答 HGLOBAL から len バイトをコピー → GlobalFree（caller-free・R3.4）。
+        // 応答を確保する側の写し: testdll・loadu の `lib.rs` の `request`。
         // SAFETY: `hres` は DLL が `GlobalAlloc(GMEM_FIXED)` で確保した `len` バイトの有効領域
         // （GMEM_FIXED ゆえ `hres.0` が先頭ポインタ）。上で is_invalid() を確認済み。ローカル Vec への
         // コピーは非重複（別確保）。
@@ -361,6 +363,7 @@ impl Drop for ShioriByteProxy {
 ///
 /// `GMEM_FIXED` ゆえハンドル＝先頭ポインタで直接書き込める。確保失敗（Err／null）→[`ProxyError::EncodingFailed`]。
 /// 返した HGLOBAL の所有権は呼出側（→ `load` の callee へ move）にある。
+/// テストでの写し: testdll・loadu の `lib.rs` のテストの `alloc_input`。
 fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     // 空バッファでも 0 バイト確保は有効（len==0 の load_dir は運用上ないが防御的に許容）。
     // SAFETY: GlobalAlloc は失敗時 Err を返す（下で map）。GMEM_FIXED ゆえハンドル＝先頭ポインタ。

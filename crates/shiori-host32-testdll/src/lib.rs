@@ -11,11 +11,17 @@
 //!   ＝Drop で GlobalFree の忠実再現）。ホスト側が誤って二重解放したら検出できる。
 //! - シンボルは `#[unsafe(no_mangle)]` で無装飾。
 
-use windows::Win32::Foundation::{GlobalFree, HGLOBAL};
+use std::borrow::Cow;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use windows::Win32::Foundation::{GlobalFree, HGLOBAL, HWND, LPARAM, WPARAM};
+use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
+use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_COPYDATA};
 
 /// `GlobalAlloc` の `GMEM_FIXED`（=0）。pasta／helper と同値で確保する（research §9.3）。
 /// `GMEM_FIXED` ではハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書き込める。
+/// 同じ決まりの写し: helper `shiori_proxy.rs` の `GMEM_FIXED`・loadu `lib.rs` の `GMEM_FIXED`。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
 /// テスト用 GET request の `ID`。**host 側 E2E（task 6.1）の契約値**。
@@ -45,6 +51,32 @@ const RESP_NOTIFY_204: &[u8] = b"SHIORI/3.0 204 No Content\r\n\r\n";
 /// 誤って組み立てた request は silent success でなく検出可能な 400 を返す。
 const RESP_400: &[u8] = b"SHIORI/3.0 400 Bad Request\r\n\r\n";
 
+/// helper の失敗の道を試すための ID（request line は問わない）。
+///
+/// - `OnTestNull`: null の HGLOBAL を返す（`*len` は 0）。
+/// - `OnTestLenOverflow`: 確保した大きさより大きい `*len` を書く（応答は 204）。
+/// - `OnTestReenter`: `Reference0` の 10 進の窓へ、`Reference1` のタグ（3＝REQUEST・5＝UNLOAD）の
+///   空の `WM_COPYDATA` を `SendMessageW` で送ってから 204 を返す（窓やタグが読めなければ送らず 400）。
+/// - `OnTestUnloadFalse`: DLL の中の印を立て、以後の `unload` が偽を返す。204 を返す。
+/// - `OnTestEnv`: `Value` に自分のプロセスの `PASTA_DEBUG` の値（無ければ空）を入れて 200 を返す。
+pub const TEST_NULL_ID: &str = "OnTestNull";
+/// [`TEST_NULL_ID`] の説明を見よ。
+pub const TEST_LEN_OVERFLOW_ID: &str = "OnTestLenOverflow";
+/// [`TEST_NULL_ID`] の説明を見よ。
+pub const TEST_REENTER_ID: &str = "OnTestReenter";
+/// [`TEST_NULL_ID`] の説明を見よ。
+pub const TEST_UNLOAD_FALSE_ID: &str = "OnTestUnloadFalse";
+/// [`TEST_NULL_ID`] の説明を見よ。
+pub const TEST_ENV_ID: &str = "OnTestEnv";
+
+/// `OnTestReenter` が送ってよいタグ。写し: `crates/shiori-host32-ipc/src/lib.rs` の `MsgTag::Request`。
+const TAG_REQUEST: usize = 3;
+/// 写し: `crates/shiori-host32-ipc/src/lib.rs` の `MsgTag::Unload`。
+const TAG_UNLOAD: usize = 5;
+
+/// `OnTestUnloadFalse` で立つ印（DLL の写しごと）。
+static UNLOAD_RETURNS_FALSE: AtomicBool = AtomicBool::new(false);
+
 /// SHIORI load: 受領 HGLOBAL を callee 解放（二重解放検出器）。
 ///
 /// env `HOST32_TESTDLL_LOAD_FAIL=1` で `false` を強制（R7.2）。
@@ -60,13 +92,10 @@ pub unsafe extern "C" fn load(hdir: HGLOBAL, _len: usize) -> bool {
     unsafe {
         let _ = GlobalFree(Some(hdir));
     }
-    if std::env::var("HOST32_TESTDLL_LOAD_FAIL").as_deref() == Ok("1") {
-        return false;
-    }
-    true
+    std::env::var("HOST32_TESTDLL_LOAD_FAIL").as_deref() != Ok("1")
 }
 
-/// SHIORI unload: いつも `true` を返す。panic しない。
+/// SHIORI unload: `OnTestUnloadFalse` の後だけ `false`、ほかは `true` を返す。panic しない。
 ///
 /// 環境変数 `HOST32_TESTDLL_UNLOAD_MARKER` に値があり、かつ、そのパスの親フォルダが
 /// いま unload されているこの DLL 自身の置き場のフォルダと同じときだけ、そのパスへ
@@ -88,18 +117,24 @@ pub unsafe extern "C" fn load(hdir: HGLOBAL, _len: usize) -> bool {
 /// 引数を取らない flat-C エクスポート。呼出側の ABI 契約（cdecl）にのみ依存する。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn unload() -> bool {
+    write_unload_marker();
+    !UNLOAD_RETURNS_FALSE.load(Ordering::Relaxed)
+}
+
+/// `unload` の印を書く（決まりは `unload` の説明）。
+fn write_unload_marker() {
     let Ok(marker) = std::env::var("HOST32_TESTDLL_UNLOAD_MARKER") else {
-        return true;
+        return;
     };
     let Some(own_dir) = own_module_dir() else {
         eprintln!(
             "shiori-host32-testdll: own module dir unavailable; skip writing unload marker {marker}"
         );
-        return true;
+        return;
     };
     let marker = std::path::Path::new(&marker);
     let Some(marker_dir) = marker.parent() else {
-        return true;
+        return;
     };
     let same = marker_dir.as_os_str() == own_dir.as_os_str()
         || matches!(
@@ -109,7 +144,6 @@ pub unsafe extern "C" fn unload() -> bool {
     if same {
         let _ = std::fs::write(marker, b"unloaded");
     }
-    true
 }
 
 /// いま走っているこの DLL が置かれているフォルダ。引けなければ `None`。
@@ -147,36 +181,61 @@ fn own_module_dir() -> Option<std::path::PathBuf> {
     path.parent().map(std::path::Path::to_path_buf)
 }
 
-/// 受領 request バイト列から request line（先頭行）と `ID:` ヘッダ値を取り出す純粋関数。
+/// 受領 request バイト列から request line（先頭行）とヘッダの `(名, 値)` の並びを取り出す純粋関数。
 ///
 /// - 行区切りは CRLF／LF いずれも許容（codec の寛容度を写すが独立実装・R6.8：pilot 非依存）。
-/// - ヘッダ名照合は case-insensitive（`ID`／`id`／`Id` を同一視）。
 /// - 空行（ヘッダ部終端）以降は走査しない。
-///
-/// 戻り値: `(request_line, id_value)`。いずれも見つからなければ空文字列。
-fn parse_request(bytes: &[u8]) -> (String, String) {
+/// - 名と値の前後の空白は落とす。名の照合は [`header`] が case-insensitive に行う。
+fn parse_request(bytes: &[u8]) -> (String, Vec<(String, String)>) {
     let text = String::from_utf8_lossy(bytes);
     // CRLF/LF 両対応: \r を除去してから \n 分割する。
     let normalized = text.replace('\r', "");
     let mut lines = normalized.split('\n');
 
     let request_line = lines.next().unwrap_or("").trim().to_string();
-
-    let mut id_value = String::new();
-    for line in lines {
+    let headers = lines
         // 空行はヘッダ部終端。以降は走査しない。
-        if line.is_empty() {
-            break;
-        }
-        if let Some((name, value)) = line.split_once(':')
-            && name.trim().eq_ignore_ascii_case("ID")
-        {
-            id_value = value.trim().to_string();
-            // 最初に一致した ID を採用。
-            break;
-        }
+        .take_while(|line| !line.is_empty())
+        .filter_map(|line| line.split_once(':'))
+        .map(|(name, value)| (name.trim().to_string(), value.trim().to_string()))
+        .collect();
+    (request_line, headers)
+}
+
+/// ヘッダ `name` の最初の値（`ID`／`id`／`Id` を同一視）。無ければ空文字列。
+fn header<'a>(headers: &'a [(String, String)], name: &str) -> &'a str {
+    headers
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map_or("", |(_, v)| v.as_str())
+}
+
+/// `OnTestReenter`: `Reference0` の窓へ `Reference1` のタグの空の `WM_COPYDATA` を送る。
+/// 窓が 10 進で読めない・タグが REQUEST／UNLOAD でなければ送らず `false`。
+fn send_reenter(headers: &[(String, String)]) -> bool {
+    let Ok(hwnd) = header(headers, "Reference0").parse::<usize>() else {
+        return false;
+    };
+    let tag = match header(headers, "Reference1").parse::<usize>() {
+        Ok(t @ (TAG_REQUEST | TAG_UNLOAD)) => t,
+        _ => return false,
+    };
+    let cds = COPYDATASTRUCT {
+        dwData: tag,
+        cbData: 0,
+        lpData: std::ptr::null_mut(),
+    };
+    // SAFETY: &cds は同期送信のあいだ生きている。窓が無ければ OS が 0 を返すだけ。
+    // 戻り値は問わない（試すのは送った後の helper の振る舞い）。
+    unsafe {
+        SendMessageW(
+            HWND(hwnd as *mut core::ffi::c_void),
+            WM_COPYDATA,
+            Some(WPARAM(0)),
+            Some(LPARAM(&cds as *const COPYDATASTRUCT as isize)),
+        );
     }
-    (request_line, id_value)
+    true
 }
 
 /// 受領 request line／`ID` から返すべき固定応答バイト列を選ぶ純粋関数（R6.4／R6.9）。
@@ -199,6 +258,7 @@ fn select_response(request_line: &str, id_value: &str) -> &'static [u8] {
 /// 2. **入力 HGLOBAL を callee 解放**（`GlobalFree`・二重解放検出器・R6.2）。
 /// 3. request line／`ID` を検証（assert 面・R6.4）し固定応答を選択（R6.9）。
 ///    - GET `OnTestValue` → 200+Value／NOTIFY `OnTestNotify` → 204／その他 → 400。
+///    - 失敗の道を試す ID（[`TEST_NULL_ID`] ほか 5 つ）はその説明のとおり。
 /// 4. 応答を新規 `GlobalAlloc(GMEM_FIXED)` へコピーし `*len` に応答長を書き戻して返す。
 ///    応答 HGLOBAL は **caller(host)-free**（本関数は解放しない・R6.2）。
 ///
@@ -209,8 +269,8 @@ fn select_response(request_line: &str, id_value: &str) -> &'static [u8] {
 /// `len` は呼出側が有効な in/out ポインタを渡す契約だが null 防御を行う。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
-    // 手順 1: 入力長を読み取る（len null 防御）。null なら受領内容を検証できないため
-    // 入力解放のみ行い 400 相当の空応答は返せない → null 応答で返す（防御的）。
+    // 手順 1: 入力長を読み取る（len null 防御）。null なら入力長 0＝空の要求として扱い、
+    // 400 の応答を返す（`*len` には書けないので書かない）。
     let in_len = if len.is_null() {
         0
     } else {
@@ -233,11 +293,35 @@ pub unsafe extern "C" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
     }
 
     // 手順 3: 受領内容を検証し固定応答を選択（R6.4／R6.9）。
-    let (request_line, id_value) = parse_request(&received);
-    let resp = select_response(&request_line, &id_value);
+    let (request_line, headers) = parse_request(&received);
+    let id_value = header(&headers, "ID");
+    let resp: Cow<'static, [u8]> = match id_value {
+        TEST_NULL_ID => {
+            if !len.is_null() {
+                // SAFETY: len 非 null を確認済み。
+                unsafe { *len = 0 };
+            }
+            return HGLOBAL(std::ptr::null_mut());
+        }
+        TEST_LEN_OVERFLOW_ID => RESP_NOTIFY_204.into(),
+        TEST_REENTER_ID if send_reenter(&headers) => RESP_NOTIFY_204.into(),
+        TEST_REENTER_ID => RESP_400.into(),
+        TEST_UNLOAD_FALSE_ID => {
+            UNLOAD_RETURNS_FALSE.store(true, Ordering::Relaxed);
+            RESP_NOTIFY_204.into()
+        }
+        TEST_ENV_ID => format!(
+            "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: {}\r\n\r\n",
+            std::env::var("PASTA_DEBUG").unwrap_or_default()
+        )
+        .into_bytes()
+        .into(),
+        _ => select_response(&request_line, id_value).into(),
+    };
 
     // 手順 4: 応答を新規 GlobalAlloc(GMEM_FIXED) へコピーし返す（caller-free 被検証側・R6.2）。
     // spec_dll 推奨に従い len+1 でゼロ終端付き確保（host は len 厳守だが安全側）。
+    // 読む側: helper `shiori_proxy.rs` の `request`。同じ確保の写し: loadu `lib.rs` の `request`。
     // SAFETY: GlobalAlloc は失敗時 Err を返す（下で防御）。
     let alloc = unsafe { GlobalAlloc(GMEM_FIXED, resp.len() + 1) };
     let hresp = match alloc {
@@ -263,10 +347,16 @@ pub unsafe extern "C" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
     }
 
     // 応答長を書き戻す（NUL 終端は含めない・len=resp.len()）。
+    // OnTestLenOverflow は確保より大きく書く（GlobalSize は切り上がるので 4096 を足して確実に超える）。
+    let declared = if id_value == TEST_LEN_OVERFLOW_ID {
+        resp.len() + 1 + 4096
+    } else {
+        resp.len()
+    };
     if !len.is_null() {
         // SAFETY: len 非 null を確認済み。
         unsafe {
-            *len = resp.len();
+            *len = declared;
         }
     }
 
@@ -278,7 +368,7 @@ mod tests {
     use super::*;
 
     /// テスト用: `bytes` を `GlobalAlloc(GMEM_FIXED)` へコピーして HGLOBAL を返す
-    /// （helper の入力 alloc を模す）。
+    /// （helper の入力 alloc を模す。写しの元: helper `shiori_proxy.rs` の `global_alloc_copy`）。
     fn alloc_input(bytes: &[u8]) -> HGLOBAL {
         // SAFETY: GlobalAlloc の Err／null は unwrap／assert で顕在化させる（テスト）。
         let h = unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }.expect("GlobalAlloc failed");
@@ -401,5 +491,81 @@ mod tests {
             "*len must equal response body length"
         );
         let _ = read_and_free(hresp, len);
+    }
+
+    /// `req_bytes` で `request` を呼び、応答の HGLOBAL と書き戻された `len` をそのまま返す。
+    fn call_raw(req_bytes: &[u8]) -> (HGLOBAL, usize) {
+        let hreq = alloc_input(req_bytes);
+        let mut len: usize = req_bytes.len();
+        // SAFETY: hreq は len バイトの有効入力 HGLOBAL、&mut len は有効 in/out ポインタ。
+        let hresp = unsafe { request(hreq, &mut len as *mut usize) };
+        (hresp, len)
+    }
+
+    #[test]
+    fn null_len_pointer_still_answers_400() {
+        // len が null だと入力を読めないので、空の要求として 400 を返す（null は返さない）。
+        let hreq = alloc_input(b"GET SHIORI/3.0\r\nID: OnTestValue\r\n\r\n");
+        // SAFETY: hreq は有効な入力 HGLOBAL。len の null は request が防御する。
+        let hresp = unsafe { request(hreq, std::ptr::null_mut()) };
+        let text = String::from_utf8(read_and_free(hresp, RESP_400.len())).unwrap();
+        assert!(text.starts_with("SHIORI/3.0 400 Bad Request"), "{text:?}");
+    }
+
+    #[test]
+    fn on_test_null_returns_a_null_hglobal() {
+        let (hresp, len) = call_raw(b"GET SHIORI/3.0\r\nID: OnTestNull\r\n\r\n");
+        assert!(hresp.0.is_null(), "OnTestNull must return a null HGLOBAL");
+        assert_eq!(len, 0);
+    }
+
+    #[test]
+    fn on_test_len_overflow_declares_more_than_allocated() {
+        use windows::Win32::System::Memory::GlobalSize;
+        let (hresp, len) = call_raw(b"GET SHIORI/3.0\r\nID: OnTestLenOverflow\r\n\r\n");
+        assert!(!hresp.0.is_null());
+        // SAFETY: hresp は request が確保した有効な HGLOBAL。
+        let allocated = unsafe { GlobalSize(hresp) };
+        assert!(allocated > 0 && len > allocated, "len {len} vs {allocated}");
+        // SAFETY: 所有は呼び手（ここ）に移っている。
+        unsafe {
+            let _ = GlobalFree(Some(hresp));
+        }
+    }
+
+    #[test]
+    fn on_test_unload_false_makes_unload_return_false() {
+        // この試験の組みで unload を呼ぶのはこのテストだけ（印はプロセスに 1 つ）。
+        let text = String::from_utf8(roundtrip(
+            b"NOTIFY SHIORI/3.0\r\nID: OnTestUnloadFalse\r\n\r\n",
+        ))
+        .unwrap();
+        assert!(text.starts_with("SHIORI/3.0 204 No Content"), "{text:?}");
+        // SAFETY: 引数のない flat-C エクスポート。
+        assert!(!unsafe { unload() });
+    }
+
+    #[test]
+    fn on_test_env_returns_own_pasta_debug() {
+        let text =
+            String::from_utf8(roundtrip(b"GET SHIORI/3.0\r\nID: OnTestEnv\r\n\r\n")).unwrap();
+        let expected = std::env::var("PASTA_DEBUG").unwrap_or_default();
+        assert!(text.starts_with("SHIORI/3.0 200 OK"), "{text:?}");
+        assert!(
+            text.contains(&format!("\r\nValue: {expected}\r\n")),
+            "{text:?}"
+        );
+    }
+
+    #[test]
+    fn on_test_reenter_refuses_a_bad_window_or_tag() {
+        // 窓が 10 進でない・タグが REQUEST(3)／UNLOAD(5) でない → 何も送らず 400。
+        for req in [
+            &b"NOTIFY SHIORI/3.0\r\nID: OnTestReenter\r\nReference0: x\r\nReference1: 3\r\n\r\n"[..],
+            &b"NOTIFY SHIORI/3.0\r\nID: OnTestReenter\r\nReference0: 1\r\nReference1: 4\r\n\r\n"[..],
+        ] {
+            let text = String::from_utf8(roundtrip(req)).unwrap();
+            assert!(text.starts_with("SHIORI/3.0 400 Bad Request"), "{text:?}");
+        }
     }
 }

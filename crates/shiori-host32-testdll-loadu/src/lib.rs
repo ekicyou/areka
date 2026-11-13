@@ -21,6 +21,7 @@ use windows::Win32::Foundation::{ERROR_ACCESS_DENIED, GlobalFree, HGLOBAL, SetLa
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 
 /// `GlobalAlloc` の `GMEM_FIXED`（=0）。ハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書ける。
+/// 同じ決まりの写し: helper `shiori_proxy.rs` の `GMEM_FIXED`・testdll `lib.rs` の `GMEM_FIXED`。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
 /// 記録ファイルのパスを指す env（テスト専用）。
@@ -112,6 +113,7 @@ pub unsafe extern "C" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
             let _ = GlobalFree(Some(req));
         }
     }
+    // 読む側: helper `shiori_proxy.rs` の `request`。同じ確保の写し: testdll `lib.rs` の `request`。
     // SAFETY: GlobalAlloc は失敗時 Err を返す（下で防御）。
     let hresp = match unsafe { GlobalAlloc(GMEM_FIXED, RESP_400.len() + 1) } {
         Ok(h) if !h.0.is_null() => h,
@@ -146,7 +148,7 @@ mod tests {
     /// env `HOST32_TESTDLL_LOADU_*` を触るテストの直列化（プロセス内で env は共有）。
     static ENV_SERIAL: Mutex<()> = Mutex::new(());
 
-    /// `bytes` を `GlobalAlloc(GMEM_FIXED)` へコピーして返す（helper の入力 alloc を模す）。
+    /// `bytes` を `GlobalAlloc(GMEM_FIXED)` へコピーして返す（helper の入力 alloc を模す。写しの元: helper `shiori_proxy.rs` の `global_alloc_copy`）。
     fn alloc_input(bytes: &[u8]) -> HGLOBAL {
         // SAFETY: Err／null は expect／assert で顕在化させる（テスト）。
         let h = unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }.expect("GlobalAlloc failed");
