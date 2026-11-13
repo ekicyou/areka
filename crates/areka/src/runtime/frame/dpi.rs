@@ -58,7 +58,7 @@ impl AuthorDpis {
             warn!(
                 ?target,
                 scope = item.scope,
-                "emo2 attach: 当該 scope の shell/balloon いずれの target でもない → author_dpi 既定 96 へ縮退"
+                "runtime attach: 当該 scope の shell/balloon いずれの target でもない → author_dpi 既定 96 へ縮退"
             );
             96
         }

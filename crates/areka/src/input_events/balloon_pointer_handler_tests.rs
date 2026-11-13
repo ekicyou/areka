@@ -70,8 +70,8 @@ fn moved_runtime_absent_degrades_with_debug_not_error() {
 
     assert!(
         logs.iter()
-            .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_emo2")),
-        "RuntimeWiring 不在は DEBUG で正常縮退する（event=choice_moved_no_emo2）: {logs:?}"
+            .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_runtime")),
+        "RuntimeWiring 不在は DEBUG で正常縮退する（event=choice_moved_no_runtime）: {logs:?}"
     );
     assert!(
         !logs.iter().any(|l| l.contains("level=ERROR")),
@@ -353,8 +353,8 @@ fn pressed_runtime_absent_degrades_with_debug_not_error() {
 
     assert!(
         logs.iter()
-            .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")),
-        "RuntimeWiring 不在は DEBUG で正常縮退（event=choice_pressed_no_emo2）: {logs:?}"
+            .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_runtime")),
+        "RuntimeWiring 不在は DEBUG で正常縮退（event=choice_pressed_no_runtime）: {logs:?}"
     );
     assert!(
         !logs.iter().any(|l| l.contains("level=ERROR")),
@@ -599,8 +599,8 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
             Degrade::RuntimeAbsent => {
                 assert!(
                     logs.iter()
-                        .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_emo2")),
-                    "RuntimeWiring 不在は DEBUG で正常縮退（choice_moved_no_emo2）: {logs:?}"
+                        .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_runtime")),
+                    "RuntimeWiring 不在は DEBUG で正常縮退（choice_moved_no_runtime）: {logs:?}"
                 );
                 assert!(
                     !logs.iter().any(|l| l.contains("level=ERROR")),
@@ -710,8 +710,9 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             Degrade::RuntimeAbsent => {
                 assert!(
                     logs.iter()
-                        .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")),
-                    "RuntimeWiring 不在は DEBUG で正常縮退（choice_pressed_no_emo2）: {logs:?}"
+                        .any(|l| l.contains("level=DEBUG")
+                            && l.contains("choice_pressed_no_runtime")),
+                    "RuntimeWiring 不在は DEBUG で正常縮退（choice_pressed_no_runtime）: {logs:?}"
                 );
                 assert!(
                     !logs.iter().any(|l| l.contains("level=ERROR")),

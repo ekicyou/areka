@@ -38,7 +38,7 @@ use super::{BalloonWiring, HoverAction, hover_action};
 /// `RuntimeWiring` の可否より前・選択肢機構の縮退に依らず行う（記録側との非対称は本文中コメント参照・5.5）。
 ///
 /// **借用規律・縮退はハンドラ（task 4.1）と同一**:
-/// - `RuntimeWiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_emo2")`＋no-op
+/// - `RuntimeWiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_runtime")`＋no-op
 ///   （donor presenter=None 同型・R4.1）。runtime `Rc` は 1 度 clone し全 scope で共有する（同一資源）。
 /// - `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋skip。
 /// - runtime `try_borrow`（不変）で `hit_active` を控え、借用解放後に `try_borrow_mut` で
@@ -109,7 +109,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
-            event = "choice_leave_no_emo2",
+            event = "choice_leave_no_runtime",
             "RuntimeWiring 不在（boot 前／失敗）: バルーン離脱 hover 解除を no-op 縮退"
         );
         return;

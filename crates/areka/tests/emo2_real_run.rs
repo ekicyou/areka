@@ -16,8 +16,8 @@
 //! 実機の試験の窓口 `real-run-kit` で、`CARGO_BIN_EXE_areka`（Cargo が統合テスト用に先ビルドして渡す
 //! **実バイナリ**のパス）を emo2 の検体（`Launch::Sample { emo2, emo2-kakukaku }`）の新しい写しで立て、
 //! 印を順に待つ:
-//! - wire 成立マーカー `emo2-boot: 実 sink 結線が成立しました（wire 成立）`
-//! - attach 完了マーカー `emo2 attach: 装着計画を実行`
+//! - wire 成立マーカー `runtime: 実 sink 結線が成立しました（wire 成立）`
+//! - attach 完了マーカー `runtime attach: 装着計画を実行`
 //! - 折返し ON 解決の証跡 `wrap=BudouxWordWrap`
 //!
 //! 印 `wrap=BudouxWordWrap` を見てから**利用者と同じ閉じ方で閉じ**、別れの台詞の後に終了コード 0 で

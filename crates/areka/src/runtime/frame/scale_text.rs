@@ -307,7 +307,7 @@ pub fn run_text_phase(
         error!(
             error = %e,
             talk_time,
-            "emo2 text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
+            "runtime text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
     }
     // 発話が進行中（まだ現れていない文字が在る）なら次の画面更新を予約する（設計 C16 の

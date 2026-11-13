@@ -63,7 +63,7 @@ pub(super) fn balloon_wheel_with(world: &mut World, read_lines: impl FnOnce() ->
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
-            event = "balloon_wheel_no_emo2",
+            event = "balloon_wheel_no_runtime",
             "RuntimeWiring 不在（boot 前／失敗）: バルーンのホイールを no-op 縮退"
         );
         return;

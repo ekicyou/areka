@@ -175,7 +175,7 @@ fn leave_no_marker_is_full_noop() {
 }
 
 /// RuntimeWiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: バルーン所有 leave があっても
-/// **DEBUG** で no-op・hover 不変（`event=choice_leave_no_emo2`・ERROR は出さない）。
+/// **DEBUG** で no-op・hover 不変（`event=choice_leave_no_runtime`・ERROR は出さない）。
 #[test]
 fn leave_runtime_absent_degrades_with_debug_and_leaves_hover() {
     let mut world = World::new();
@@ -192,8 +192,8 @@ fn leave_runtime_absent_degrades_with_debug_and_leaves_hover() {
     );
     assert!(
         logs.iter()
-            .any(|l| l.contains("level=DEBUG") && l.contains("choice_leave_no_emo2")),
-        "RuntimeWiring 不在は DEBUG で正常縮退（event=choice_leave_no_emo2）: {logs:?}"
+            .any(|l| l.contains("level=DEBUG") && l.contains("choice_leave_no_runtime")),
+        "RuntimeWiring 不在は DEBUG で正常縮退（event=choice_leave_no_runtime）: {logs:?}"
     );
     assert!(
         !logs.iter().any(|l| l.contains("level=ERROR")),

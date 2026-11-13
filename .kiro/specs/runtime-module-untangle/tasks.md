@@ -40,7 +40,7 @@
   - 完了の形: 警告 0 件で通り、対応表と判定の表が `research.md` にある
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6_
 
-- [ ] 2.3 ログの文言とイベントの値を改め、照合する所を一緒に直す
+- [x] 2.3 ログの文言とイベントの値を改め、照合する所を一緒に直す
   - 文言 `emo2-boot:`・`emo2 attach:`・`emo2 text:`・`emo2-boot wire` の 2 行と、イベントの値 `*_no_emo2` の 4 つを `runtime` の語へ改める。文の本体・欄・段は変えない
   - 照合する所（`smoke_boot_loop_exit` の成立の印・`emo2_real_run/common.rs` と `common_tests.rs`・`balloon_pointer_handler_tests`・`balloon_leave_tests`・`assets_tests`・`balloon_background_tests`・`reload_skin_tests`・`reload_tests`）を同じ文言と値へ直す
   - 完了の形: 警告 0 件で通り、照合するテストが改めた文言と値で緑
@@ -195,3 +195,4 @@
 - 1.2: 9.6 で終わる道の行を比べるときは、`exitlines.ps1` の出力をファイルへ UTF-8（`Out-File -Encoding utf8NoBOM`）で出し、末尾の空白を落として diff を取る。メニューの道はカーソルを先に動かしてから `WindowFromPoint` で pid を確かめる（キャラの窓はカーソルが乗るまでクリックを素通しにする）。
 - 2.1: 改名で tracing の出所は `module_path!` に従って `areka::runtime::*` へ自動で変わる。振る舞いを保つため `log_history.rs` の決まり・照合するテスト・`log-convention.md` の 55・134 行は 2.1 で中間の値 `areka::runtime::*` にした（7.1・7.2 で最後の値へ）。`tests/stay_on_top_real_run.rs` 51〜54 行の `RUST_LOG` と `tests/emo2_real_run/common_tests.rs:28` は 7.2 で必ず直す（それまでその実機テストは赤になりうる）。`.claude/agents/perf-review.md:47` の古いパスは 8.1 で直す。
 - 2.2: 8.x の掃き出しで拾う: `input_events/balloon_pointer_handler_tests.rs:513`・`:540` のコメント「Emo2 不在」（→「Runtime 不在」）、本体の外の `Emo2Wiring` の言及（`areka-placement/src/persist.rs:633`・`persist_io_wiring_tests.rs:163`・`chain_finalize.rs`・`lib.rs`・`placement_prepare_tests.rs`・`doc/ukadoc-coverage/ledger/assets.toml:5980`）。
+- 2.3: `crates/ukadoc-survey/src/evidence/candidates_tests.rs:345` の `choice_pressed_no_emo2` は抽出器に食わせる見本の文字列（照合ではない・本体の外）として残した。9.2 の 4 区分で判定する。

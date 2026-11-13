@@ -176,7 +176,7 @@ fn without_runtime_wiring_does_nothing() {
     assert!(
         lines
             .iter()
-            .any(|l| l.contains("DEBUG") && l.contains("balloon_wheel_no_emo2")),
+            .any(|l| l.contains("DEBUG") && l.contains("balloon_wheel_no_runtime")),
         "{lines:?}"
     );
 }

@@ -192,7 +192,9 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // 資産は高々 1 回消費（ゲート成立後にのみ take）。既に None（二重 attach の異常）なら log-first で
     // 観測して打ち切る（panic しない・attached を立てて以降の空回りを止める）。
     let Some(assets) = wiring.assets.take() else {
-        warn!("emo2 attach: ゲート成立だが BootAssets が既に消費済み（想定外）→ 装着せず打ち切り");
+        warn!(
+            "runtime attach: ゲート成立だが BootAssets が既に消費済み（想定外）→ 装着せず打ち切り"
+        );
         wiring.attached = true;
         return;
     };
@@ -204,13 +206,13 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     if !plan.missing_assets.is_empty() {
         warn!(
             missing_scopes = ?plan.missing_assets,
-            "emo2 attach: 窓はあるが対応資産が無い scope（表示なし縮退・skip）"
+            "runtime attach: 窓はあるが対応資産が無い scope（表示なし縮退・skip）"
         );
     }
     if !plan.unused_assets.is_empty() {
         debug!(
             unused_scopes = ?plan.unused_assets,
-            "emo2 attach: 資産はあるが窓が無い scope（破棄）"
+            "runtime attach: 資産はあるが窓が無い scope（破棄）"
         );
     }
 
@@ -272,7 +274,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         let Some(shell_window) = ghost_windows.char_window(scope as usize) else {
             error!(
                 scope,
-                "emo2 attach: char_window が無い（GhostWindows 不整合）→ この scope を skip"
+                "runtime attach: char_window が無い（GhostWindows 不整合）→ この scope を skip"
             );
             continue;
         };
@@ -280,7 +282,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
             error!(
                 scope,
                 shell_index = item.shell_index,
-                "emo2 attach: shell 資産の添字が空（二重消費？）→ skip"
+                "runtime attach: shell 資産の添字が空（二重消費？）→ skip"
             );
             continue;
         };
@@ -338,14 +340,14 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         let Some(balloon_index) = item.balloon_index else {
             warn!(
                 scope,
-                "emo2 attach: 同 scope の balloon 資産が無い（DD-12 balloon_index None）→ 文字層接続なし"
+                "runtime attach: 同 scope の balloon 資産が無い（DD-12 balloon_index None）→ 文字層接続なし"
             );
             continue;
         };
         let Some(balloon_window) = ghost_windows.balloon_window(scope as usize) else {
             warn!(
                 scope,
-                "emo2 attach: balloon_window が無い（GhostWindows 不整合）→ バルーン装着を skip"
+                "runtime attach: balloon_window が無い（GhostWindows 不整合）→ バルーン装着を skip"
             );
             continue;
         };
@@ -363,7 +365,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
             error!(
                 scope,
                 balloon_index,
-                "emo2 attach: balloon 資産の添字が空（二重消費？）→ バルーン装着を skip"
+                "runtime attach: balloon 資産の添字が空（二重消費？）→ バルーン装着を skip"
             );
             continue;
         };
@@ -390,7 +392,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
             error!(
                 scope,
                 error = %e,
-                "emo2 attach: バルーン可視性の外部所有への設定に失敗（log-first・このバルーンを skip）"
+                "runtime attach: バルーン可視性の外部所有への設定に失敗（log-first・このバルーンを skip）"
             );
             continue;
         }
@@ -443,7 +445,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
         attached = attached_count,
         missing = plan.missing_assets.len(),
         unused = plan.unused_assets.len(),
-        "emo2 attach: 装着計画を実行（planned＝計画件数・attached＝実装着件数）"
+        "runtime attach: 装着計画を実行（planned＝計画件数・attached＝実装着件数）"
     );
 
     // ghost の読み直しの前の面と着せ替えを、台本の `\s[面]`・`\![bind,…]` と同じ道で seriko へ出し直す
@@ -496,7 +498,7 @@ pub(super) fn connect_balloon_text(
         None => {
             warn!(
                 actor = %actor.as_str(),
-                "emo2 attach: text_slot_view が None（初回 ShowSurface 未合流）→ 文字層接続を次フレームへ委ねる（R4.2）"
+                "runtime attach: text_slot_view が None（初回 ShowSurface 未合流）→ 文字層接続を次フレームへ委ねる（R4.2）"
             );
             false
         }

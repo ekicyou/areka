@@ -31,7 +31,7 @@ use super::{BalloonWiring, click_selection, selection_events, settle_after_selec
 ///
 /// **借用規律（移動ハンドラと固定同順・design §204）**:
 /// 1. `RuntimeWiring` 共有借用→`runtime()` で `Rc` clone→world 側借用解放。`RuntimeWiring` 不在（boot 前／失敗）は
-///    **正常縮退**＝`debug!(event = "choice_pressed_no_emo2")`＋no-op（donor presenter=None 同型・R4.1）。
+///    **正常縮退**＝`debug!(event = "choice_pressed_no_runtime")`＋no-op（donor presenter=None 同型・R4.1）。
 /// 2. `BalloonWiring` 存在確認（共有借用即解放）。不在は結線漏れ＝**構成異常**
 ///    `error!(event = "balloon_wiring_missing")`＋no-op。
 /// 3. runtime `try_borrow`（不変）でスナップショット——`hit_active`（押せる範囲＝選択肢かアンカーが
@@ -100,7 +100,7 @@ pub(crate) fn on_balloon_pointer_pressed(
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
-            event = "choice_pressed_no_emo2",
+            event = "choice_pressed_no_runtime",
             scope,
             "RuntimeWiring 不在（boot 前／失敗）: クリック確定を no-op 縮退"
         );

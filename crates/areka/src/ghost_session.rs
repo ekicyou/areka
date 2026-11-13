@@ -774,7 +774,7 @@ pub(crate) fn boot_ghost(
         crate::write_failure::sender(world),
     ) {
         Ok(runtime) => {
-            tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+            tracing::info!("LogSink フォールバックで起動しました（runtime wire 不成立）");
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
             // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
             // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
@@ -874,7 +874,7 @@ fn boot_wired(
     if !outcome.wired {
         return Err(BootWiringFailed);
     }
-    tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
+    tracing::info!("実 sink 結線で起動しました（runtime wire 成立・SERIKO ループ ticker 稼働）");
     // 実行系に結びつく窓側の結線（マウス・メニューと枠の登記・置換語・記憶・選択肢の送り）は
     // [`ghost_session_runtime::rewire_runtime_consumers`] が持つ（areka-P0-mcp-reload 13.4・純移動）。
     if let Some(runtime) = outcome.ghost.as_ref() {

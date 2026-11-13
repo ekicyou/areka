@@ -355,14 +355,14 @@ fn classify_wiring_error(err: &BootWiringError) {
         BootWiringError::Mount(MountError::StartPointMissing { .. }) => {
             warn!(
                 error = %err,
-                "emo2-boot: 構築入力の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
+                "runtime: 構築入力の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
             );
         }
         // 他は真に予期しない失敗として error（読取不能／bake／balloon／spawn_ui 等）。
         _ => {
             error!(
                 error = %err,
-                "emo2-boot: 構築入力の組立に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
+                "runtime: 構築入力の組立に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
             );
         }
     }
@@ -543,7 +543,7 @@ pub fn wire_runtime(
     info!(
         seed,
         pick_seed,
-        "emo2-boot: SERIKO ループ乱数 seed（抽選・選び／RandomState 由来・実 entropy・再現用）"
+        "runtime: SERIKO ループ乱数 seed（抽選・選び／RandomState 由来・実 entropy・再現用）"
     );
     let loop_config = SerikoLoopConfig {
         shell_table,
@@ -664,7 +664,7 @@ pub fn wire_runtime(
     );
 
     // wire 成立マーカー（実 fixture smoke＝task 7.1 がこの info! の存在を assert する・R7.3 観測境界）。
-    info!("emo2-boot: 実 sink 結線が成立しました（wire 成立）");
+    info!("runtime: 実 sink 結線が成立しました（wire 成立）");
 
     // 手順7: 実 sink 結線成立。ghost/seriko ハンドル＋loop ticker 停止端＋束を呼び手へ返す。
     RuntimeOutcome {

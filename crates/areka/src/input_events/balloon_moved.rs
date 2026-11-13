@@ -84,7 +84,7 @@ pub(crate) fn on_balloon_pointer_moved(
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
-            event = "choice_moved_no_emo2",
+            event = "choice_moved_no_runtime",
             scope,
             "RuntimeWiring 不在（boot 前／失敗）: hover 追従を no-op 縮退"
         );

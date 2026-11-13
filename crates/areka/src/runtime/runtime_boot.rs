@@ -165,12 +165,12 @@ pub(crate) fn boot_runtime(
             if crate::is_benign_boot_error(&err) {
                 warn!(
                     error = %err,
-                    "emo2-boot: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
+                    "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
                 );
             } else {
                 error!(
                     error = %err,
-                    "emo2-boot: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
+                    "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
                 );
             }
             return Err(RuntimeBootError::Boot(err));

@@ -14,8 +14,8 @@ pub const DEADLINE: Duration = Duration::from_secs(120);
 // 保険の自動終了が締切より先に来ないと、締切がハングの判定で先に働く（1.5）。
 const _: () = assert!(SAFETY_EXIT.as_secs() < DEADLINE.as_secs());
 
-pub const WIRE: &str = "emo2-boot: 実 sink 結線が成立しました（wire 成立）";
-pub const ATTACH: &str = "emo2 attach: 装着計画を実行";
+pub const WIRE: &str = "runtime: 実 sink 結線が成立しました（wire 成立）";
+pub const ATTACH: &str = "runtime attach: 装着計画を実行";
 pub const WRAP: &str = "wrap=BudouxWordWrap";
 /// 時間の切り分けにだけ使う（待たない）。
 pub const BOOT_TALK: &str = "event=\"boot_talk\"";
