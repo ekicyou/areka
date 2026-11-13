@@ -18,7 +18,7 @@ use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 
 use super::*;
-use crate::ghost_session::GhostSession;
+use crate::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, capture};
 
 fn obs(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObservation {

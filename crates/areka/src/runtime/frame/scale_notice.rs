@@ -15,8 +15,8 @@ use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 
 use super::RuntimeWiring;
-use crate::ghost_session::GhostSlot;
 use crate::runtime::scope_scale::{percent_text, scaling_text};
+use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::target_map::{TargetWindow, target_scope};
 
 /// テストだけが入れる送り先（本番は入れない＝置き場のゴーストの kanade へ送る）。
@@ -56,11 +56,7 @@ pub(super) fn run_scale_notice_phase(wiring: &mut RuntimeWiring, world: &World) 
     }
     let kanade = match world.get_resource::<ScaleEventSeam>() {
         Some(seam) => Some(seam.0.clone()),
-        None => world
-            .get_non_send::<GhostSlot>()
-            .and_then(|slot| slot.0.as_ref())
-            .and_then(|session| session.kanade())
-            .cloned(),
+        None => (SessionHooks::of(world).kanade)(world).cloned(),
     };
     for event in plan.events {
         let (id, scope) = (event.id, event.scope);

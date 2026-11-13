@@ -23,7 +23,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, info};
 use wintf::ecs::window::{BandOp, StayOnTop, WindowBandQueue};
 
-use crate::boot_config::BootContext;
+use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::window_state_cue::WindowStateDirective;
 use areka_placement::spawn::GhostWindows;
 
@@ -196,10 +196,7 @@ pub(crate) fn log_stay_on_top_discard(world: &World, reason: DiscardReason) {
 
 /// 記録のゴーストの名（今のゴーストのフォルダの名・無ければ `-`）。
 fn ghost_name(world: &World) -> String {
-    world
-        .get_resource::<BootContext>()
-        .and_then(|ctx| ctx.current.ghost.folder.clone())
-        .unwrap_or_else(|| "-".to_owned())
+    (SessionHooks::of(world).ghost_folder)(world).unwrap_or_else(|| "-".to_owned())
 }
 
 fn directive_text(on: bool) -> &'static str {

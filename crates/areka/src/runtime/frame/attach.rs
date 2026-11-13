@@ -12,7 +12,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::{shell_carry, skin_facts_copy};
 use areka_placement::descript_window_keys::fallback_candidates;
 use areka_placement::spawn::GhostWindows;
@@ -454,11 +454,7 @@ pub fn run_attach_phase(wiring: &mut RuntimeWiring, world: &mut World) {
 
     // strict の判定に使う今のシェルとバルーンの事実を、装着した表示の層から入れる
     // （spec: mcp-strict-errors 要件 4.1）。置き場のゴーストが無ければ判定もしない。
-    if let Some(sink) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(GhostSession::seriko_sink)
-    {
+    if let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) {
         let scopes = window_scopes.iter().filter_map(|&s| u32::try_from(s).ok());
         sink.set_facts(skin_facts_copy::copy(wiring.presenter(), scopes));
     }

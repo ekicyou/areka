@@ -24,6 +24,7 @@ pub(crate) const HOOKS: SessionHooks = SessionHooks {
     kanade: kanade_of,
     seriko_sink: seriko_sink_of,
     ghost_ref_name,
+    ghost_folder,
     set_shell_dir,
     set_current_balloon,
     record_last_skin,
@@ -60,6 +61,15 @@ fn ghost_ref_name(world: &World) -> String {
                 .unwrap_or_default()
         })
     })
+}
+
+fn ghost_folder(world: &World) -> Option<String> {
+    world
+        .get_resource::<BootContext>()?
+        .current
+        .ghost
+        .folder
+        .clone()
 }
 
 fn set_shell_dir(world: &mut World, dir: PathBuf) -> bool {

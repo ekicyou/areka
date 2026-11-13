@@ -30,8 +30,8 @@ use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use tracing::{info, warn};
 
 use super::frame::RuntimeWiring;
+use super::session_hooks::SessionHooks;
 use super::target_map::shell_target;
-use crate::ghost_session::GhostSlot;
 use areka_placement::descript_window_keys::{fallback_candidates, first_existing};
 use areka_placement::spawn::GhostWindows;
 
@@ -221,8 +221,9 @@ pub(crate) fn snapshot(
 
 /// 窓口自身の ghost の読み直しのときだけ、降ろす前に表示中の面と着せ替えを控える（それ以外は
 /// `None`＝今までどおり）。結線か窓の一覧が無ければ空の控え（`warn!` を 1 件）。
-pub(crate) fn capture_for_reload(world: &World) -> Option<ShellCarry> {
-    if !super::reload::carries_shell_state(world) {
+/// 門の答え `carries`（`reload::carries_shell_state`）は呼び手が渡す。
+pub(crate) fn capture_for_reload(world: &World, carries: bool) -> Option<ShellCarry> {
+    if !carries {
         return None;
     }
     let (Some(wiring), Some(windows)) = (
@@ -321,11 +322,7 @@ pub(crate) fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32,
             ),
         }
     }
-    let Some(sink) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.seriko_sink())
-    else {
+    let Some(sink) = (SessionHooks::of(world).seriko_sink)(world) else {
         warn!(
             event = "reload_shell_carry_unavailable",
             "置き場のゴーストの seriko が無いので、読み直しの前の面を出し直せない"

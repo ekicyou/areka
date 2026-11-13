@@ -17,7 +17,7 @@ use areka_seriko::{
 };
 
 use super::*;
-use crate::ghost_session::GhostSession;
+use crate::ghost_session::{GhostSession, GhostSlot};
 
 fn stage(scope: u32, open: bool, surface_id: Option<u32>, generation: u64) -> StageObservation {
     StageObservation {

@@ -487,6 +487,7 @@ fn nothing_arrived_keeps_waiting_silently() {
         (NO_BODY.kanade)(w).is_none(),
         (NO_BODY.seriko_sink)(w).is_none(),
         (NO_BODY.ghost_ref_name)(w),
+        (NO_BODY.ghost_folder)(w),
         (NO_BODY.set_shell_dir)(w, dir.to_path_buf()),
         target.is_some_and(|t| (NO_BODY.set_current_balloon)(w, &t)),
         (NO_BODY.record_last_skin)(w, SkinKind::Shell, "B"),
@@ -497,8 +498,18 @@ fn nothing_arrived_keeps_waiting_silently() {
     w.remove_non_send::<SwitchInFlight>();
     assert_eq!(
         no_body,
-        (true, true, String::new(), false, false, false, false, false),
-        "NO_BODY の答え (kanade 無し, seriko 無し, 名前, シェル, バルーン, 記憶, ゴースト切替, 読み直し)"
+        (
+            true,
+            true,
+            String::new(),
+            None,
+            false,
+            false,
+            false,
+            false,
+            false
+        ),
+        "NO_BODY の答え (kanade 無し, seriko 無し, 名前, フォルダ, シェル, バルーン, 記憶, ゴースト切替, 読み直し)"
     );
     assert_eq!(
         (after, replaces(rig)),

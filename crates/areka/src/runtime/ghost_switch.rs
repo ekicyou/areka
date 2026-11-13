@@ -641,8 +641,9 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         return;
     }
     // ghost の読み直し（窓口自身の予約）だけは、窓を閉じる前に表示中の面を控える（要件 3.8）。
-    let carry = super::shell_carry::capture_for_reload(world);
-    let reason = if super::reload::carries_shell_state(world) {
+    let carries = super::reload::carries_shell_state(world);
+    let carry = super::shell_carry::capture_for_reload(world, carries);
+    let reason = if carries {
         DiscardReason::Reload
     } else {
         DiscardReason::Switch

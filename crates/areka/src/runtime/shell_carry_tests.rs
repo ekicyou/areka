@@ -21,7 +21,8 @@ use areka_seriko::{
 };
 
 use super::*;
-use crate::ghost_session::GhostSession;
+use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::runtime::reload::carries_shell_state;
 
 /// 在る面の集合（読み直したシェルの代わり）。
 fn shell_with(ids: &'static [u32]) -> impl Fn(u32) -> bool {
@@ -150,7 +151,7 @@ fn snapshot_keeps_only_the_shown_scopes() {
 #[test]
 fn nothing_is_carried_without_a_ghost_reload() {
     let mut world = World::new();
-    let carry = capture_for_reload(&world);
+    let carry = capture_for_reload(&world, carries_shell_state(&world));
     assert_eq!(carry, None);
     hand_over(&mut world, carry);
     assert!(!world.contains_non_send::<RuntimeWiring>());

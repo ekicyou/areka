@@ -27,7 +27,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
 use super::RuntimeWiring;
-use crate::ghost_session::GhostSlot;
+use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::target_map::balloon_target;
 
 /// 最後に kanade へ送った組と、番号が取れない scope の警告済み集合と、最後に取れた番号
@@ -144,10 +144,7 @@ pub(in crate::runtime) fn report_stages(
             })
         })
         .collect();
-    let sink = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.seriko_sink());
+    let sink = (SessionHooks::of(world).seriko_sink)(world);
     report_stage_observed(
         ledger,
         &observed,
@@ -194,7 +191,7 @@ fn report_stage_observed(
 }
 
 /// 照会の配線。照会（表示層 2 本＋文字の層の `shown_boxes`）→ 純関数 → 差分 →
-/// `GhostSlot` の kanade へ送出 → 記録。
+/// 置き場のゴーストの kanade（本体の口）へ送出 → 記録。
 ///
 /// `scopes` は装着済みバルーンの scope 昇順（[`run_status_report_phase`] が作る）。
 pub(in crate::runtime) fn report_balloons(
@@ -249,11 +246,7 @@ fn report_observed(
     if bindings == ledger.last_sent {
         return;
     }
-    let Some(kanade) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.kanade())
-    else {
+    let Some(kanade) = (SessionHooks::of(world).kanade)(world) else {
         // 切替の最中など。台帳を保ち、ゴーストが据わった最初のフレームで送る。
         debug!(
             event = "balloon_status_no_ghost",

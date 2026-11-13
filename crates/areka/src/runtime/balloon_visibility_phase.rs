@@ -39,8 +39,8 @@ use tracing::{error, info, warn};
 use wintf::ecs::world::tick_wake;
 use wintf::ecs::{FrameTime, WindowDragging};
 
-use crate::ghost_session::GhostSlot;
 use crate::runtime::balloon_hover::BalloonHover;
+use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::shell_box_hover::{ShellBoxHover, settle_box_hover};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
@@ -752,7 +752,7 @@ fn emit_visibility_logs(logs: &[VisibilityLogEvent], not_shown: &[u32]) {
 
 /// 判断が立てた時間切れの知らせを、置き場のゴーストの kanade へ `BalloonTimeout` として送る。
 ///
-/// 送出端は `frame/status_report.rs` と同じく `GhostSlot` から取り出す（結線の束は変えない）。
+/// 送出端は `frame/status_report.rs` と同じく本体の口から取り出す（結線の束は変えない）。
 /// ここが持つ分岐は「送出端があるか」と「送れたか」だけで、送るかどうかは判断と kanade の表 D が
 /// 決める。ゴーストの切替は置き場と可視性の状態（ゴーストごとの結線）を一緒に入れ替えるので、
 /// 前のゴーストのトークの番号は新しいゴーストへ届かない。
@@ -760,11 +760,7 @@ fn notify_timeout(world: &World, notice: Option<TalkId>) {
     let Some(talk_id) = notice else {
         return;
     };
-    let Some(kanade) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .and_then(|session| session.kanade())
-    else {
+    let Some(kanade) = (SessionHooks::of(world).kanade)(world) else {
         warn!(
             event = "balloon_timeout_notice_failed",
             reason = "no_ghost",
