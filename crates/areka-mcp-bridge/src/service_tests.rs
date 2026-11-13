@@ -268,6 +268,40 @@ async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_
     assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
 }
 
+/// `2026-07-28` で話す Desktop でも、新しいつなぎ先の最初の長い要求の間に次の要求は待たない（設計 D-13）。
+/// 版の札の付いた要求は、つないだときの版（`2025-11-25`）と違う間は rmcp が他の要求を止めて送る。
+#[tokio::test]
+async fn a_slow_stateless_request_first_on_a_link_does_not_hold_back_the_next() {
+    let gate = Gate::shut();
+    let slow = Reply::Gated(
+        gate.clone(),
+        Box::new(Reply::Result(json!({"content": []}))),
+    );
+    let script = Script::areka()
+        .on("tools/call", slow)
+        .on("tools/list", Reply::Result(tools()));
+    let fake = FakeServer::start(script);
+    let mut desk = Desk::start(vec![fake.port()]);
+
+    let call = json!({"name": "t", "_meta": stateless_meta()});
+    desk.send(request(json!("slow"), "tools/call", call)).await;
+    arrived(&fake, "tools/call", 1).await;
+    desk.send(request(json!("quick"), "tools/list", stateless()))
+        .await;
+    assert_eq!(desk.next().await, result(json!("quick"), tools()));
+    gate.open();
+    let reply = desk.next().await;
+    assert_eq!(reply, result(json!("slow"), json!({"content": []})));
+
+    desk.close().await;
+    assert_eq!(handshakes(&fake), 1, "{:?}", fake.requests());
+    // 版を揃える `server/discover` は、つなぎ先ごとに 1 つだけ（版は要求の `_meta` のもの）。
+    let [aligned] = &fake.requests_of("server/discover")[..] else {
+        panic!("1 度だけ届くはず: {:?}", fake.requests());
+    };
+    assert_eq!(aligned.header("MCP-Protocol-Version"), Some("2026-07-28"));
+}
+
 /// 要求の `_meta` は areka へそのまま届く（要件 1.10）。`2026-07-28` で話す Desktop の要求は、
 /// areka にもその版の要求として届く（版の札と本文の `_meta`）。
 #[tokio::test]

@@ -10,9 +10,9 @@ use areka_mcp::tools::all_specs;
 use areka_mcp::{INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, ToolSpec};
 use rmcp::model::{
     CacheScope, ClientCapabilities, ClientConfig, ClientNotification, ClientRequest,
-    DiscoverResult, ErrorData, GetExtensions, Implementation, ListToolsResult, ProtocolVersion,
-    RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerPeerInfo, ServerResult,
-    Tool,
+    DiscoverRequest, DiscoverRequestParams, DiscoverResult, ErrorData, GetExtensions,
+    Implementation, ListToolsResult, ProtocolVersion, RequestMetaObject, ResultType,
+    ServerCapabilities, ServerConfig, ServerPeerInfo, ServerResult, Tool,
 };
 use rmcp::service::{
     NotificationContext, PeerRequestOptions, QuitReason, RequestContext, serve_directly,
@@ -54,6 +54,8 @@ impl ClientHandler for BridgeClient {
 pub struct Linked {
     pub link: Link,
     pub port: u16,
+    /// rmcp のクライアントが今話している版（最初はつないだときの `initialize` の版）。[`Bridge::align`] が揃える。
+    version: Mutex<Option<ProtocolVersion>>,
 }
 
 /// areka へ届ける途中の失敗の読み分け（設計 D-6）。
@@ -98,7 +100,13 @@ impl Bridge {
                 if let Some(info) = link.peer_info() {
                     self.cache.save_server_info(&info);
                 }
-                let linked = Arc::new(Linked { link, port });
+                let version = link.peer_info().map(|info| info.protocol_version.clone());
+                let version = Mutex::new(version);
+                let linked = Arc::new(Linked {
+                    link,
+                    port,
+                    version,
+                });
                 *slot = Some(linked.clone());
                 Ok(linked)
             }
@@ -220,6 +228,7 @@ impl Bridge {
         request: &ClientRequest,
         meta: &RequestMetaObject,
     ) -> Result<ServerResult, Failure> {
+        self.align(linked, meta).await;
         let wait = self.config.timeouts.reply;
         let options = PeerRequestOptions::with_timeout(wait).with_meta(meta.clone());
         let sending = linked
@@ -260,6 +269,41 @@ impl Bridge {
                     Failure::AfterWrite(_) => {}
                 }
                 Err(failure)
+            }
+        }
+    }
+
+    /// 要求の `_meta` の版が rmcp のクライアントの今の版と違えば、先に同じ `_meta` の `server/discover` を
+    /// 1 つ送り、答えを捨てる。rmcp は版の変わる要求の答えが返るまでほかの要求を送らないので、その要求を
+    /// 短いものにする（長いツールの間も、ほかの要求は待たない＝設計 D-13）。届いたかは問わない（失敗は、
+    /// 続けて送る本当の要求が読み分ける）。
+    async fn align(&self, linked: &Linked, meta: &RequestMetaObject) {
+        let Some(wanted) = meta.protocol_version() else {
+            return;
+        };
+        let mut version = linked.version.lock().await;
+        if version.as_ref() == Some(&wanted) {
+            return;
+        }
+        let discover =
+            ClientRequest::DiscoverRequest(DiscoverRequest::new(DiscoverRequestParams {}));
+        let wait = self.config.timeouts.reply;
+        let options = PeerRequestOptions::with_timeout(wait).with_meta(meta.clone());
+        // 送り出せたら、rmcp のクライアントはその版に替わっている（答えを待つのは、止める間を終えるため）。
+        // 失敗は捨てる（続く本当の要求が同じ道で失敗し、そちらが今の読み分けと記録を通る）。
+        match linked
+            .link
+            .send_request_with_option(discover, options)
+            .await
+        {
+            Ok(sent) => {
+                if let Err(err) = sent.await_response().await {
+                    debug!(port = linked.port, error = ?err, "[bridge] the version discover got no answer");
+                }
+                *version = Some(wanted);
+            }
+            Err(err) => {
+                debug!(port = linked.port, error = ?err, "[bridge] the version discover was not sent")
             }
         }
     }
