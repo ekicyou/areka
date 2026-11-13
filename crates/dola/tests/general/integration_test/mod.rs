@@ -1,4 +1,4 @@
-//! Integration tests — JSON/TOML/YAML round-trip and E2E tests
+//! Integration tests — round-trip (JSON: dev-only `serde_json`; TOML: feature `toml`) and E2E tests
 //! Tasks 11.2, 11.3, 11.4, 12.1, 12.2
 
 use dola::*;
