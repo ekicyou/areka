@@ -10,8 +10,9 @@ use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{call, done, entries, hold_watches, home_in, read_state, state_bytes};
+use super::test_support::{call, done, hold_watches, home_in, state_bytes};
 use crate::state::{WaitKind, WaitRecord};
+use crate::test_support::{entries, read_state};
 
 const PURPOSE: &str = "全体テスト";
 

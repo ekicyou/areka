@@ -9,9 +9,9 @@
 //! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, give_back, hold_load,
-    hold_merge, hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge,
-    queue_request, run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, give_back, hold_load, hold_merge,
+    hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge, queue_request,
+    run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
     watch_registered,
 };
 use super::{Command, Event, Verdict};
@@ -19,6 +19,7 @@ use crate::state::{
     DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
     SoleHolder, State, TestHolder, WaitKind, WaitRecord, WatchInfo,
 };
+use crate::test_support::T0;
 
 fn watch(id: &str, name: Option<&str>, repo: &str, pid: u32) -> Command {
     Command::Watch {

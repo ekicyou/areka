@@ -3,9 +3,6 @@
 
 use super::WaitSpec;
 
-/// テストの時刻の起点（2026-10-03T04:00:00Z）。
-pub(super) const T0: u64 = 1_791_000_000;
-
 pub(super) fn watch(id: &str) -> WaitSpec {
     WaitSpec::Watch {
         id: id.to_owned(),

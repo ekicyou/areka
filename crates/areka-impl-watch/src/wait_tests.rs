@@ -3,12 +3,13 @@
 //! 組み立てる参加者の名前と机の申し込みの内容は日本語（端末へ出てはならない値）。終わりの 1 行は
 //! [`judged`] が毎回「ASCII だけ・1 行」を確かめる。
 
-use super::test_support::{T0, merge, request, resume, watch};
+use super::test_support::{merge, request, resume, watch};
 use super::{WaitEnd, WaitSpec, judge};
 use crate::state::{
     DeskRequest, DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant,
     ParticipantStatus, SoleHolder, State, StopReason, TestHolder,
 };
+use crate::test_support::T0;
 
 const WORKING: ParticipantStatus = ParticipantStatus::Working;
 const STOP_REQUESTED: ParticipantStatus = ParticipantStatus::StopRequested;

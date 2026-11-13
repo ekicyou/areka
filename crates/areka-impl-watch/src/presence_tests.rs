@@ -10,26 +10,9 @@ use std::path::{Path, PathBuf};
 use temp_path_kit::TempPath;
 
 use super::{LockFilePresence, hold, hold_retrying};
-use crate::home::Home;
 use crate::plan::Presence;
 use crate::state::WaitKind;
-
-/// 一時フォルダを置き場所にした `Home`（フォルダは在る・`alive/` はまだ無い）。
-fn home_in(root: &TempPath) -> Home {
-    Home {
-        dir: root.path().to_path_buf(),
-    }
-}
-
-/// フォルダの直下に在るものの一覧（並べ替え済み）。
-fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| entry.expect("項目を読める").path())
-        .collect();
-    found.sort();
-    found
-}
+use crate::test_support::{entries, home_in};
 
 #[test]
 fn held_is_present_and_dropped_is_absent_and_the_file_stays() {

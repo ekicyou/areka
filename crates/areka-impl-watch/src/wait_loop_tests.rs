@@ -17,12 +17,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{T0, merge, request, resume, watch};
+use super::test_support::{merge, request, resume, watch};
 use super::{WaitEnd, WaitPort, WaitSpec, run};
 use crate::error::{Damage, WatchError};
 use crate::plan::{Applied, Command, Presence, apply};
 use crate::presence::{Held, hold};
 use crate::state::{DeskSet, ParticipantStatus, State, WaitKind, WaitRecord};
+use crate::test_support::T0;
 
 /// 待ちのプロセスの番号（偽の口が答える）。
 const OWN_PID: u32 = 4321;

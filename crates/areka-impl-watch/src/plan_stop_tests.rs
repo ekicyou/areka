@@ -4,7 +4,7 @@
 //! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.5）。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
     hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
     stopped, test_freed, test_freed_record, watch_registered,
 };
@@ -12,6 +12,7 @@ use super::{Command, Event};
 use crate::state::{
     DeskRequest, DeskSet, Participant, ParticipantStatus, SoleHolder, State, TestHolder,
 };
+use crate::test_support::T0;
 
 use ParticipantStatus::{StopRequested, Stopped, Working};
 

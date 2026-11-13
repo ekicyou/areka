@@ -11,14 +11,15 @@ use std::time::Duration;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    BROKEN_AT_T0, Nobody, T0, block_state_writes, home_in, names, participants, read_state,
-    refuse_poll, store_in, store_noting_events, store_noting_pauses, tick, watch,
+    BROKEN_AT_T0, Nobody, block_state_writes, participants, refuse_poll, store_in,
+    store_noting_events, store_noting_pauses, tick, watch,
 };
 use super::{Store, lossy};
 use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::State;
+use crate::test_support::{T0, home_in, names, read_state};
 use crate::wait::WaitPort;
 
 /// [`T0`] に `clear` が状態ファイルを退避したときの名前。
@@ -216,7 +217,7 @@ fn when_only_the_reading_matter_cannot_be_written_the_events_still_reach_the_log
     assert_eq!(fs::read(home.status_path()).expect("読める"), reading);
     // 状態ファイルはもう置き換わっている（変化は起きた）。
     assert_eq!(participants(&home), ["a"]);
-    let holder = read_state(&home).merge["areka"].holder.clone();
+    let holder = read_state(&home.dir).merge["areka"].holder.clone();
     assert_eq!(holder.map(|holder| holder.id), Some("a".to_owned()));
     // 起きた変化は、読み物が書けなくてもログの口へ渡っている。
     let (repo, id) = ("areka".to_owned(), "a".to_owned());
@@ -293,7 +294,7 @@ fn read_only_returns_the_state_without_taking_the_lock_or_writing() {
 
     let got = store.read_only().expect("読める");
 
-    assert_eq!(got, Some(read_state(&home)));
+    assert_eq!(got, Some(read_state(&home.dir)));
     let ids: Vec<String> = got.expect("在る").participants.into_keys().collect();
     assert_eq!(ids, ["a"]);
     assert_eq!(*pauses.borrow(), [], "ロックを待っていない");
@@ -475,7 +476,7 @@ fn clear_sets_the_state_file_aside_and_leaves_only_the_cleared_record() {
         "消す前の状態ファイルが中身のまま残る"
     );
     // 状態は版と「消した記録」だけ（参加者・机・直前のマージ・待ちの記録は無い）。
-    let state = read_state(&home);
+    let state = read_state(&home.dir);
     assert_eq!(state, State::cleared(T0, &expected));
     let mut only_the_record = State::empty();
     only_the_record.recent = state.recent.clone();
@@ -503,7 +504,7 @@ fn clear_without_a_state_file_still_writes_the_empty_state_and_returns_none() {
     let backup = store.clear().expect("消せる");
 
     assert_eq!(backup, None);
-    assert_eq!(read_state(&home), State::cleared(T0, Path::new("none")));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, Path::new("none")));
     assert_eq!(names(&home.dir), ["state.json", "state.lock", "status.md"]);
     assert_eq!(*noted.borrow(), [cleared_event(None)], "作り直しではない");
 }
@@ -524,7 +525,7 @@ fn clear_does_not_read_the_old_file_so_it_works_over_an_unknown_version_and_a_br
 
         assert_eq!(backup, home.dir.join(CLEARED_AT_T0));
         assert_eq!(fs::read_to_string(&backup).expect("在る"), text, "{text}");
-        assert_eq!(read_state(&home), State::cleared(T0, &backup));
+        assert_eq!(read_state(&home.dir), State::cleared(T0, &backup));
         // 「壊れていた」の退避ではない。
         assert_eq!(
             names(&home.dir),
@@ -550,7 +551,7 @@ fn a_second_clear_in_the_same_second_does_not_overwrite_the_first_backup() {
     assert_eq!(second, home.dir.join(format!("{CLEARED_AT_T0}-1")));
     assert_eq!(fs::read(&first).expect("在る"), original);
     assert_eq!(fs::read(&second).expect("在る"), cleared);
-    assert_eq!(read_state(&home), State::cleared(T0, &second));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, &second));
 }
 
 #[test]
@@ -590,7 +591,7 @@ fn when_only_the_reading_matter_cannot_be_written_clear_still_returns_the_backup
 
     let expected = home.dir.join(CLEARED_AT_T0);
     assert_eq!(backup.as_deref(), Some(expected.as_path()));
-    assert_eq!(read_state(&home), State::cleared(T0, &expected));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, &expected));
     assert_eq!(*noted.borrow(), [cleared_event(Some(&expected))]);
     // 較正: 読み物は本当に書けていない（塞ぐ前のまま）。
     assert_eq!(fs::read(home.status_path()).expect("読める"), reading);
@@ -761,5 +762,5 @@ fn the_last_unregister_releases_the_presence_mark_inside_the_exclusion() {
 
     // (印が居るか, state.lock が握られているか)。
     assert_eq!(*seen.borrow(), [(false, true)]);
-    assert!(read_state(&home).waits.is_empty(), "記録は消えた");
+    assert!(read_state(&home.dir).waits.is_empty(), "記録は消えた");
 }

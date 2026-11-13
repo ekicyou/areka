@@ -2,11 +2,12 @@
 //! 眠らない。
 
 use super::test_support::{
-    REPO, T0, hold_load, hold_merge, queue_merge, queue_request, run, state_with, stop_for,
-    test_freed, test_freed_record, wait_record,
+    REPO, hold_load, hold_merge, queue_merge, queue_request, run, state_with, stop_for, test_freed,
+    test_freed_record, wait_record,
 };
 use super::{Command, Event, Verdict};
 use crate::state::{DeskSet, LastMerge, Recent, RecentKind, State, WaitKind};
+use crate::test_support::T0;
 
 /// ほかのリポジトリの名前。
 const OTHER: &str = "other";

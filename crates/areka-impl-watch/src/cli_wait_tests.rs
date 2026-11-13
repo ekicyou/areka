@@ -15,11 +15,10 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{
-    call, done, hold_sign, hold_watches, home_in, names, put_state, read_state, state_bytes,
-};
+use super::test_support::{call, done, hold_sign, hold_watches, home_in, put_state, state_bytes};
 use crate::error::escape_path;
 use crate::state::{ParticipantStatus, WaitKind, WaitRecord};
+use crate::test_support::{names, read_state};
 
 const MERGE_A: [&str; 7] = ["merge", "--id", "a", "--repo", "areka", "--spec", "x"];
 const SOLE_A: [&str; 9] = [

@@ -12,7 +12,7 @@ use super::{Outcome, exit_code, run_with};
 use crate::error::WatchError;
 use crate::home::Home;
 use crate::presence::{Held, hold};
-use crate::state::{State, WaitKind};
+use crate::state::WaitKind;
 
 pub(super) fn args(words: &[&str]) -> Vec<String> {
     words.iter().map(|word| (*word).to_owned()).collect()
@@ -96,33 +96,8 @@ pub(super) fn hold_watches(home: &Path, ids: &[&str]) -> Vec<Held> {
     ids.iter().map(watch).collect()
 }
 
-/// フォルダの直下に在るものの一覧（並べ替え済み）。
-pub(super) fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| entry.expect("項目を読める").path())
-        .collect();
-    found.sort();
-    found
-}
-
-/// 置き場所の直下に在るものの名前（並べ替え済み）。
-pub(super) fn names(home: &Path) -> Vec<String> {
-    let name = |path: PathBuf| {
-        path.file_name()
-            .expect("名前が在る")
-            .to_string_lossy()
-            .into_owned()
-    };
-    entries(home).into_iter().map(name).collect()
-}
-
 pub(super) fn state_bytes(home: &Path) -> Vec<u8> {
     fs::read(home.join("state.json")).expect("状態ファイルが在る")
-}
-
-pub(super) fn read_state(home: &Path) -> State {
-    serde_json::from_slice(&state_bytes(home)).expect("状態ファイルが状態として読める")
 }
 
 /// 状態ファイルを直に置く（コマンドの列では作れない状態・壊れたファイル）。

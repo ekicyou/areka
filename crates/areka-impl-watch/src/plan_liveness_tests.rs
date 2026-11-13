@@ -4,11 +4,12 @@
 use std::collections::{BTreeSet, HashSet};
 
 use super::super::test_support::{
-    REPO, T0, assert_not_applied, give_back, load_test, request, run, state_with, stopped,
+    REPO, assert_not_applied, give_back, load_test, request, run, state_with, stopped,
 };
 use super::replan;
 use crate::plan::{Command, Event, Verdict};
 use crate::state::{DeskSet, MergeDesk, ParticipantStatus, State};
+use crate::test_support::T0;
 
 /// 全探索の深さ（手数）。debug の `cargo test -p areka-impl-watch` の中で 0.5〜0.7 秒（7 は 1.0〜1.3 秒）
 /// と確かめた値。機械の速さで変えない。

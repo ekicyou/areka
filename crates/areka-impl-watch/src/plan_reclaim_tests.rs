@@ -4,7 +4,7 @@
 //! `WaitKind::Watch` の答えだけで、ほかの種類の答えは待ちの記録の回収にだけ使う。
 
 use super::test_support::{
-    FakePresence, PID, PURPOSE, REPO, T0, applied, ask_to_stop, hold_load, hold_merge,
+    FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, hold_load, hold_merge,
     hold_running_load, hold_test, queue_load, queue_merge, queue_request, run, state_with,
     stop_for, test_freed, test_freed_record, wait_record,
 };
@@ -13,6 +13,7 @@ use crate::state::{
     DeskSet, MergeDesk, MergeHolder, Recent, RecentKind, SoleHolder, State, TestHolder, WaitKind,
     WaitRecord,
 };
+use crate::test_support::T0;
 
 /// 周期の一回りを 1 回呼ぶ。
 fn tick(state: &mut State, caller: Option<&str>, now: u64, presence: &FakePresence) -> Applied {

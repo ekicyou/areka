@@ -7,9 +7,9 @@ use crate::state::{
     ParticipantStatus, Recent, RecentKind, SoleHolder, State, StopReason, TestHolder, WaitKind,
     WaitRecord, WatchInfo,
 };
+use crate::test_support::T0;
 
-/// テストの時刻の起点（2026-10-03T04:00:00Z）。
-const T0: u64 = 1_791_000_000;
+/// [`T0`] の UTC の綴り。
 const T0_UTC: &str = "2026-10-03T04:00:00Z";
 
 /// 偽の生死: 名指しした識別の「見張り」だけが居ない。ほかの種類を尋ねられたら「居る」と答えるので、

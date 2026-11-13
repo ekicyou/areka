@@ -14,8 +14,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    BROKEN_AT_T0, Everyone, Nobody, T0, block_state_writes, home_in, names, participants,
-    read_state, store_in, store_noting_pauses, tick, watch,
+    BROKEN_AT_T0, Everyone, Nobody, block_state_writes, participants, store_in,
+    store_noting_pauses, tick, watch,
 };
 use super::{Store, open, unix_seconds};
 use crate::error::WatchError;
@@ -23,6 +23,7 @@ use crate::home::Home;
 use crate::plan::{Applied, Command, Verdict, apply};
 use crate::presence::hold;
 use crate::state::{Recent, RecentKind, State, WaitKind};
+use crate::test_support::{T0, home_in, names, read_state};
 
 /// 「何も変えなかった」という判断の答え。
 fn unchanged() -> Applied {
@@ -63,7 +64,7 @@ fn missing_file_is_created_and_recorded_once_even_when_nothing_else_changes() {
 
     let mut expected = State::empty();
     expected.push_recent(recovered("created"));
-    assert_eq!(read_state(&home), expected);
+    assert_eq!(read_state(&home.dir), expected);
     assert_eq!(names(&home.dir), ["state.json", "state.lock", "status.md"]);
     let status = fs::read_to_string(home.status_path()).expect("読み物が在る");
     assert!(status.contains("| recovered | - | created |"), "{status}");
@@ -97,7 +98,7 @@ fn unreadable_file_is_set_aside_under_a_time_stamped_name_and_recorded() {
             bytes,
             "壊れたファイルは中身のまま残る"
         );
-        let state = read_state(&home);
+        let state = read_state(&home.dir);
         assert_eq!(
             state.recent,
             [recovered(&format!("backed up: {}", backup.display()))]
@@ -139,7 +140,7 @@ fn json_of_the_wrong_shape_is_broken_too() {
         );
         let mut expected = State::empty();
         expected.push_recent(recovered(&format!("backed up: {}", backup.display())));
-        assert_eq!(read_state(&home), expected, "{text}");
+        assert_eq!(read_state(&home.dir), expected, "{text}");
     }
 }
 
@@ -159,7 +160,7 @@ fn a_second_break_in_the_same_second_does_not_overwrite_the_first_backup() {
     assert_eq!(fs::read_to_string(&first).expect("在る"), "first");
     assert_eq!(fs::read_to_string(&second).expect("在る"), "second");
     assert_eq!(
-        read_state(&home).recent,
+        read_state(&home.dir).recent,
         [recovered(&format!("backed up: {}", second.display()))]
     );
 }
@@ -221,7 +222,7 @@ fn a_version_1_file_is_refused_byte_for_byte_and_clear_still_goes_through() {
     // `clear` は版を見ずに退避して通る（7.5）。退避したファイルも 1 バイトも変わらない。
     let backup = store_in(&root).clear().expect("消せる").expect("退避した");
     assert_eq!(fs::read(&backup).expect("在る"), old.as_bytes());
-    assert_eq!(read_state(&home), State::cleared(T0, &backup));
+    assert_eq!(read_state(&home.dir), State::cleared(T0, &backup));
 }
 
 #[test]
@@ -345,7 +346,7 @@ fn writing_is_decided_by_changed_and_not_by_the_verdict() {
 
     assert!(changed);
     assert!(matches!(verdict, Verdict::NotApplied(_)), "{verdict:?}");
-    let state = read_state(&home);
+    let state = read_state(&home.dir);
     assert!(state.participants.is_empty(), "回収の分は書かれている");
     assert_eq!(state.recent[0].kind, RecentKind::Reclaimed);
     let status = fs::read_to_string(home.status_path()).expect("読める");
@@ -481,7 +482,7 @@ fn concurrent_changes_from_several_threads_are_all_kept() {
 
     assert_eq!(participants(&home), ids, "どのスレッドの参加も残る");
     assert_eq!(
-        read_state(&home).recent,
+        read_state(&home.dir).recent,
         [recovered("created")],
         "作ったのは 1 度だけ"
     );

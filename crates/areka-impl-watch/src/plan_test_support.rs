@@ -5,9 +5,7 @@ use crate::state::{
     DeskRequest, DeskSet, MergeHolder, MergeRequest, Participant, ParticipantStatus, Recent,
     RecentKind, SoleHolder, State, StopReason, TestHolder, WaitKind, WaitRecord, WatchInfo,
 };
-
-/// テストの「いま」の起点（UNIX 秒）。後の時刻は `T0 + n` と書く。
-pub(super) const T0: u64 = 1_791_000_000;
+use crate::test_support::T0;
 
 /// 支えの組み立てる参加者のリポジトリ。
 pub(super) const REPO: &str = "areka";

@@ -2,13 +2,14 @@
 //! 返し方・固定点）。支えは親の `plan_test_support.rs` を読むだけ。
 
 use super::super::test_support::{
-    PURPOSE, REPO, T0, applied, ask_to_stop, assert_not_applied, give_back, hold_load, hold_merge,
+    PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, give_back, hold_load, hold_merge,
     hold_sole, hold_test, load_done, queue_load, queue_merge, queue_request, request, run,
     state_with, stop_for, stopped, test_freed, test_freed_record,
 };
 use super::replan;
 use crate::plan::{Command, Event};
 use crate::state::{DeskSet, ParticipantStatus, State};
+use crate::test_support::T0;
 
 /// 机の番が来た出来事。
 fn granted(id: &str, desks: DeskSet, stopped: &[&str]) -> Event {

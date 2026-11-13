@@ -12,9 +12,10 @@ use std::path::PathBuf;
 use temp_path_kit::TempPath;
 
 use super::args::Opt;
-use super::test_support::{args, entries, line, run_captured};
+use super::test_support::{args, line, run_captured};
 use super::{Outcome, exit_code, usage};
 use crate::error::WatchError;
+use crate::test_support::entries;
 
 use Opt::{Id, Repo};
 

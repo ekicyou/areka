@@ -11,16 +11,7 @@ use temp_path_kit::TempPath;
 use super::{Home, resolve};
 use crate::error::WatchError;
 use crate::state::WaitKind;
-
-/// フォルダの直下に在るものの一覧（並べ替え済み）。
-fn entries(dir: &Path) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
-        .expect("フォルダを読める")
-        .map(|entry| entry.expect("項目を読める").path())
-        .collect();
-    found.sort();
-    found
-}
+use crate::test_support::entries;
 
 #[test]
 fn missing_or_empty_value_is_unset_and_creates_nothing() {

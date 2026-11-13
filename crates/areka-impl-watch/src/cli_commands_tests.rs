@@ -13,12 +13,11 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{
-    args, call, done, hold_watches, home_in, names, put_state, read_state, state_bytes,
-};
+use super::test_support::{args, call, done, hold_watches, home_in, put_state, state_bytes};
 use super::{exit_code, run_with};
 use crate::error::{WatchError, escape_path};
 use crate::state::RecentKind;
+use crate::test_support::{names, read_state};
 
 const NAME: &str = "見張り役";
 const PURPOSE: &str = "負荷の計測";
