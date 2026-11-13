@@ -471,3 +471,95 @@
     - `unused dependency event-listener`（`shiori-host32-host`）
   - 本仕様が触るのは `crates/areka` の中なので、この 3 件は数を変えずに完了まで持つ（完了の比べでは「rustc の警告 0 件・マニフェストの警告はこの 3 件のまま」で読む）。この 3 件を消すかどうかは進行役の判断へ回す。
 - 整形: `cargo fmt --all -- --check` は差なし。
+
+## 外の参照の数え方の較正（2026-11-13・タスク 1.3・要件 3.1・3.3）
+
+### 16. 本番のファイルの集合・D1・D2 と式 1〜3 の今の数（前）
+
+- 測った木: `c78dfa3c6`（`crates/` は 15 節の土台 `4863cb66` のまま）。モジュールはまだ `emo2_boot`（改名はタスク 2.1）なので、9.10 節と design.md「外の参照の数え方」の式は **`crates/areka/src/runtime` を `crates/areka/src/emo2_boot` に、式 1 の `crate::(?!runtime\b)` を `crate::(?!emo2_boot\b)` に置き換えて**当てた。9.1 で測り直すときは置き換えを戻す（下のコマンドの `B` と式 1 の先読みの 2 か所）。
+- モジュールの根は `main.rs:58` の `mod emo2_boot;`（`crates/areka` の bin）。
+
+#### 16.1 本番のファイルの集合の確かめ（9.10 節の 1 度だけの突き合わせ）
+
+- 宣言の木は、下の使い捨ての読み手（リポジトリには置かない・一時フォルダで回す）で `mod.rs` から `mod x;` の宣言をたどって作った。`#[path = "…"]` は宣言したファイルのディレクトリから、`#[path]` の無い宣言は Rust の規則どおり（`mod.rs` ならそのディレクトリ・`x.rs` なら `x/`）に解く。直前の属性に `#[cfg(…test…)]` があるか、親が既にテストなら「テスト」とする。
+- 結果: 宣言されたファイル 236 本＝ディレクトリの `*.rs` 236 本（宣言されていないファイル 0 本・行頭に字下げのある `mod x;`＝インラインの `mod … { }` の中の宣言 0 本）。
+  - 深さごとの本数（深さ 0 は `mod.rs`）: 本番＝深さ 0 が 1 本・深さ 1 が 38 本・深さ 2 が 22 本（計 61 本）。テスト＝深さ 1 が 8 本・2 が 125 本・3 が 36 本・4 が 5 本・5 が 1 本（計 175 本）。
+- 除外の glob（`-g '!*_tests.rs' -g '!*test_support*.rs' -g '!spine*.rs' -g '!*_cases.rs'`）で残る 61 本と、「親が `#[cfg(test)]` で宣言していない」61 本は **一致**（`diff` が空）。glob は足さない。
+- 深さ 3 以上の本番のファイルは **0 本**。式を足す必要は無い。
+- 深さ 0 の `mod.rs` から `super::` で外へ抜ける行（`'^(?!\s*//).*\bsuper::'` を `mod.rs` に当てたもの）は 2 行（`mod.rs:741`・`mod.rs:742`）で、どちらも `#[cfg(test)] mod wire_tests { … }` の中の `use super::…`（`emo2_boot` 自身を指す）＝本番の外への参照ではない。
+
+#### 16.2 D1（宣言の深さ 1 の本番のファイル・38 本）
+
+`adapter.rs` `assets.rs` `balloon_background.rs` `balloon_visibility.rs` `change_cue.rs` `consumer_ledger.rs` `frame.rs` `ghost_switch.rs` `hit_region.rs` `hover_inject.rs` `install_cue.rs` `move_cue.rs` `readme_cue.rs` `reload.rs` `reload_args.rs` `reload_cue.rs` `runtime_boot.rs` `same_folder_pin.rs` `script_restriction.rs` `shell_balloon_resolve.rs` `shell_balloon_switch.rs` `shell_box_assets.rs` `shell_carry.rs` `shell_cursor_assets.rs` `shell_cursor_table.rs` `skin_facts_copy.rs` `special_name.rs` `strict_judges.rs` `switch_assets.rs` `switch_copy.rs` `switch_cue.rs` `talk_clock.rs` `talk_lifecycle.rs` `target_map.rs` `update_cue.rs` `user_break_cue.rs` `window_state_cue.rs` `zorder_cue.rs`
+
+#### 16.3 D2（宣言の深さ 2 の本番のファイル・22 本）
+
+- `balloon_visibility.rs` が `#[path]` で宣言: `balloon_visibility_decision.rs` `balloon_visibility_phase.rs` `balloon_visibility_wait.rs`
+- `move_cue.rs` が `#[path]` で宣言: `move_cue_args.rs` `move_cue_geometry.rs` `move_cue_place.rs`
+- `frame.rs` が宣言: `frame/attach.rs` `frame/balloon_face.rs` `frame/balloon_offset_follow.rs` `frame/dpi.rs` `frame/drain_resnap.rs` `frame/move_hold.rs` `frame/move_shift.rs` `frame/scale_notice.rs` `frame/scale_text.rs` `frame/status_report.rs` `frame/switch.rs` `frame/window_state.rs` `frame/wiring.rs` `frame/work_area_sync.rs` `frame/zorder_descript.rs` `frame/zorder_drain.rs`
+
+#### 16.4 式 1〜3 の今の行数（外の参照だけ）
+
+| 式 | 当てた所 | 今の行数 |
+|---|---|---|
+| 式 1 `crate::(?!emo2_boot\b)` | 本番の 61 本 | **60 行** |
+| 式 2 `super::super::` | D1 の 38 本 | **0 行** |
+| 式 3 `super::super::super::` | D2 の 22 本 | **0 行** |
+
+- 式 1 の 60 行のファイルごとの内訳: `ghost_switch.rs` 16・`reload.rs` 9・`runtime_boot.rs` 8・`shell_balloon_switch.rs` 5・`install_cue.rs` 3・`frame/switch.rs` 3・`balloon_visibility_phase.rs` 3・`readme_cue.rs` 2・`frame/scale_notice.rs` 2・`update_cue.rs` 1・`switch_copy.rs` 1・`shell_carry.rs` 1・`same_folder_pin.rs` 1・`frame/wiring.rs` 1・`frame/window_state.rs` 1・`frame/status_report.rs` 1・`frame/attach.rs` 1・`frame.rs` 1。
+  - 60 行は全部 `emo2_boot` の外（`app_exit`・`boot_config`・`boot_resolve`・`exit_wait`・`ghost_session`・`input_events`・`install`・`log_history`・`readme`・`readonly`・`roots`・`session_end`・`update`・`write_failure`・`crate::record_last_used`・`crate::is_benign_boot_error`）を指す。インラインのテストのモジュール（`adapter.rs:259`・`hit_region.rs:121`・`hover_inject.rs:207`・`mod.rs:740`・`talk_clock.rs:138`・`target_map.rs:62`）を持つファイルには 1 行も当たらない＝60 行は全部本番の項目の中。
+  - 束ねた形 `use crate::{…}` は 0 行。複数行の `use crate::x::{` は 1 宣言 1 行で数える（`ghost_switch.rs:34`・`:38`）。
+- `emo2_boot` の中を指す `super::super::` が出ないことを確かめた: D2 で `super::super::` のあとに `super::` が続かない行は 11 行（`balloon_visibility_phase.rs:47` の `super::super::frame`・`:48` の `super::super::target_map`・`frame/move_shift.rs:22`・`frame/move_hold.rs:23`・`:24`・`frame/wiring.rs:25`〜`:30`）で、どれも深さ 2 から `emo2_boot` の中（`frame`・`target_map`・`move_cue`・`balloon_visibility`・`shell_carry`・`switch_assets`・`talk_lifecycle`・`window_state_cue`・`zorder_cue`）を指す。式 3 はこの 11 行を拾わず、式 2 は D1 だけに当てるのでこれも拾わない。
+- よって、要件 3.1 で 0 にする今の外の参照は **式 1 の 60 行だけ**（式 2・式 3 は今から 0 行）。
+
+#### 16.5 測り直しのコマンド（Git Bash・ワークツリーの根で）
+
+```sh
+B=crates/areka/src/emo2_boot              # 改名の後は crates/areka/src/runtime
+G=(-g '!*_tests.rs' -g '!*test_support*.rs' -g '!spine*.rs' -g '!*_cases.rs')
+python -I modtree.py "$B" > tree.txt      # 下の読み手。行は「深さ P|T 相対パス」
+awk '$2=="P"{print $3}' tree.txt | sort > prod.txt
+(cd "$B" && rg --files --path-separator // "${G[@]}" | sort) | diff - prod.txt && echo SAME
+D1=$(awk -v b="$B" '$1==1&&$2=="P"{print b"/"$3}' tree.txt)
+D2=$(awk -v b="$B" '$1==2&&$2=="P"{print b"/"$3}' tree.txt)
+awk '$1>=3&&$2=="P"' tree.txt             # 空なら式を足さない
+rg -n --pcre2 "${G[@]}" '^(?!\s*//).*\bcrate::(?!emo2_boot\b)' "$B"   # 式 1（改名の後は runtime）
+rg -n --pcre2 '^(?!\s*//).*\bsuper::super::' $D1                       # 式 2
+rg -n --pcre2 '^(?!\s*//).*\bsuper::super::super::' $D2                # 式 3
+rg -n --pcre2 '^(?!\s*//).*\bsuper::' "$B/mod.rs"                      # 深さ 0（16.1 の確かめ）
+```
+
+使い捨ての読み手 `modtree.py`（一時フォルダに置いて回す・リポジトリには置かない）:
+
+```python
+import os, re, sys
+root = sys.argv[1]
+decl = re.compile(r'^(\s*)(pub(\([^)]*\))?\s+)?mod\s+(\w+)\s*;')
+out = {}
+def walk(f, depth, test, own_dir):
+    out[os.path.relpath(f, root).replace(os.sep, "/")] = (depth, test)
+    lines = open(f, encoding='utf-8').read().splitlines()
+    for i, l in enumerate(lines):
+        m = decl.match(l)
+        if not m: continue
+        if m.group(1): print('INDENTED', f, i + 1, file=sys.stderr)
+        attrs, j = [], i - 1
+        while j >= 0 and re.match(r'^\s*(#\[|//)', lines[j]):
+            attrs.append(lines[j]); j -= 1
+        t = test or any(re.search(r'#\[cfg\(.*\btest\b', a) for a in attrs)
+        p = [re.search(r'#\[path\s*=\s*"([^"]+)"', a) for a in attrs]
+        p = [x.group(1) for x in p if x]
+        name = m.group(4)
+        if p: child = os.path.join(os.path.dirname(f), p[0])
+        else:
+            child = os.path.join(own_dir, name + '.rs')
+            if not os.path.exists(child): child = os.path.join(own_dir, name, 'mod.rs')
+        cd = os.path.join(os.path.dirname(child), name) if not child.endswith('mod.rs') else os.path.dirname(child)
+        walk(os.path.normpath(child), depth + 1, t, cd)
+walk(os.path.join(root, 'mod.rs'), 0, False, root)
+for k, (d, t) in sorted(out.items()): print(d, 'T' if t else 'P', k)
+allf = {os.path.relpath(os.path.join(a, b), root).replace(os.sep, "/") for a, _, fs in os.walk(root) for b in fs if b.endswith('.rs')}
+print('UNDECLARED', sorted(allf - set(out)), file=sys.stderr)
+```
+
+- 読み手の限り: インラインの `mod … { }` の中の `mod x;` は解かない（出たら `INDENTED` を出す・今は 0 件）。`#[cfg(any(test, …))]` も「テスト」に数える。
