@@ -384,7 +384,7 @@ fn mixed_script_matches_replay_all_at_every_point() {
 
 // ---- 台詞の途中で生まれた場所（要件 2.5）
 
-/// 台詞の途中で生まれた箱の場所が `` を受けてから行き先が替わっても、一から計算した値と等しい
+/// 台詞の途中で生まれた箱の場所が `\f` を受けてから行き先が替わっても、一から計算した値と等しい
 /// （印が場所の生まれで振られ、別の場所の系列の頭とみなされない）。
 ///
 /// 台本の先頭を流さないので、普通のバルーンは生まれたときの印のまま指定を 1 件持ち続ける。
@@ -417,4 +417,108 @@ fn place_born_mid_talk_matches_scratch_after_route_change() {
         (0, 0, 255),
         "c の青が届き、バルーンの古い赤は残らない"
     );
+}
+
+// ---- 同じ値の 2 層では当て直さない（要件 2.2・2.3・2.4）
+
+fn rebased() -> usize {
+    counts().1
+}
+
+/// 場所ごとの `applied` の数の合計（`boxes_only` なら箱の場所だけ）。
+fn applied_total(state: &TextLayerState, boxes_only: bool) -> usize {
+    state
+        .places()
+        .filter(|(p, _)| !boxes_only || matches!(p.place, TextPlace::Box(_)))
+        .map(|(_, s)| s.decor.applied.len())
+        .sum()
+}
+
+/// 同じ値の 2 層の差し込みと箱の既定の受け取りを繰り返しても当て直しは 0。違う値では
+/// 差し替わった場所の指定の数だけ増え、字の届き・`\f` の 1 件・行き先の替わりでは増えない。
+#[test]
+fn same_layers_do_not_rebase_and_other_events_never_rebase() {
+    let mut state = state();
+    let actor = key("0");
+    f(&mut state, "0", &["color", "255", "0", "0"]);
+    f(&mut state, "0", &["height", "+4"]);
+    show(&mut state, "0", 0);
+    f(&mut state, "0", &["bold", "1"]);
+    state.apply_cue(&select("0", "c"));
+    f(&mut state, "0", &["italic", "1"]);
+    zero_counts();
+
+    for _ in 0..5 {
+        state.set_look_layers(&actor, layers(16.0, 10));
+        state.set_box_traits(traits(0.0));
+    }
+    assert_eq!(rebased(), 0, "同じ値の差し込みでは当て直さない");
+
+    let balloon = applied_total(&state, false) - applied_total(&state, true);
+    assert!(balloon > 0, "バルーンに指定がある");
+    state.set_look_layers(&actor, layers(18.0, 12));
+    assert_eq!(
+        rebased(),
+        balloon,
+        "バルーンの 2 層の差し替えは指定の数だけ"
+    );
+
+    let boxes = applied_total(&state, true);
+    assert!(boxes > 0, "箱に指定がある");
+    zero_counts();
+    state.set_box_traits(traits(2.0));
+    assert_eq!(rebased(), boxes, "箱の既定の差し替えは箱の指定の数だけ");
+
+    zero_counts();
+    write(&mut state, "0", "あ");
+    f(&mut state, "0", &["color", "1", "2", "3"]);
+    show(&mut state, "0", 3);
+    show(&mut state, "0", 0);
+    state.apply_cue(&select("0", "c"));
+    write(&mut state, "0", "い");
+    assert_eq!(
+        rebased(),
+        0,
+        "字・\\f の 1 件・行き先の替わりでは当て直さない"
+    );
+    assert!(counts().0 > 0, "写しは起きている（行き先は替わった）");
+}
+
+// ---- 記録が今のまま（要件 2.6）
+
+/// 不正な `\f` の警告は、行き先を何度替えても、持ち主でなくなった場所がもう一度行き先になって
+/// 同じ指定を当てても 1 台詞 1 度。台本の先頭の後はもう 1 度出る（前の作りとも件数が等しい）。
+#[test]
+fn invalid_spec_warns_once_per_talk_across_route_changes() {
+    let mut t = Twin::new();
+    t.step("台本の先頭", |s| s.apply_cue(&clear_all("0")));
+    t.step("バルーンで不正", |s| f(s, "0", &["height", "abc"]));
+    assert_eq!(t.warns, 1, "1 度目は記録する");
+    // a → c → バルーン を 3 周（どの手順も行き先が替わる）。
+    for i in 0..9 {
+        t.step(&format!("{i}: 行き先を替えて同じ不正"), |s| {
+            match i % 3 {
+                0 => show(s, "0", 0),
+                1 => {
+                    s.apply_cue(&select("0", "c"));
+                }
+                _ => show(s, "0", 3),
+            }
+            f(s, "0", &["height", "abc"]);
+        });
+    }
+    t.step("バルーンへ戻って同じ不正", |s| {
+        show(s, "0", 3);
+        f(s, "0", &["height", "abc"]);
+    });
+    t.step("a へ戻って同じ不正", |s| {
+        show(s, "0", 0);
+        f(s, "0", &["height", "abc"]);
+    });
+    assert_eq!(t.warns, 1, "同じ台詞では 1 度のまま");
+    t.step("次の台本の先頭で同じ不正", |s| {
+        s.apply_cue(&clear_all("0"));
+        f(s, "0", &["height", "abc"]);
+    });
+    assert_eq!(t.warns, 2, "台本の先頭の後はもう 1 度");
 }
