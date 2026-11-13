@@ -138,3 +138,53 @@
 - **読み手の側の一瞬の失敗**: 待ちのループは、読み（`read_only`）と更新時刻の取得（`fingerprint`）の OS の失敗で待ちごと終了コード 1 で終わる（`wait.rs:269-271` が決めとして書く）。書き手の名前の付け替えは「読む側が開いている一瞬」のために 5 回試す（`store.rs:356-365`）が、逆向き（書き手が名前を付け替える一瞬に読み手の `fs::read`／`fs::metadata` が失敗するか）は確かめていない。今の Rust の `fs::rename`（Windows）が POSIX の意味の付け替えを使うかで答えが変わる。想定した負荷で起きると確かめられたら指摘になる（今は具体的な場合を作れていないので指摘にしない）。
 - **#7 の新しいモジュールと見張り**: `main_layering_tests.rs` の読み込みの向きの表（`main.rs:7-9` の doc）に `#[cfg(test)]` のモジュールをどう扱うか（表に載せない・載せる）。
 - **#8 の `try_lock`**: `state.lock` を取った `status` が中で読み直すと、`status` の「排他を取らない」（完了 spec の要件）に触れるかを、完了 `areka-P0-impl-watch` の requirements.md で確かめる。
+
+## 9. 設計の段の調べと決め（2026-11-13・`/kiro-spec-design -y`）
+
+- 見た物: スキル `kiro-spec-design`（規則 `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）・テンプレート `.kiro/settings/templates/specs/design.md`・steering `structure.md`（テストの配置と導出規則・Impl Watch の節）・ponytail（いちばん小さい完全な直し）。
+- 調べの種類: light（今のクレートの直し。新しい依存・外の API なし）。
+
+### 9.1 `state.lock` の道具と版
+
+- `store.rs:19・255` はもう `std::fs::File::try_lock`（Rust 1.89 で安定）と `TryLockError` を使う。手元の rustc は 1.100.0（2026-11-09）。#8 は同じ道具を 1 回だけ使うので、依存も `Cargo.lock` も変わらない（要件 5.6）。
+
+### 9.2 読み手の側の一瞬の失敗（§8 の 1 つ目）＝指摘にしない
+
+- 今の標準ライブラリの源（`<sysroot>\lib\rustlib\src\rust\library\std\src\sys\fs\windows.rs`）: `rename` は `MoveFileExW(…, MOVEFILE_REPLACE_EXISTING)` を先に呼び、`ERROR_ACCESS_DENIED` のときだけ `SetFileInformationByHandle(FileRenameInfoEx)` に `FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS` を付けて試し直す（1305-1370 行目付近）。ファイルを開くときの既定の共有は `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`（210 行目）で、`fs::metadata` は権限 0 で開き、`ERROR_SHARING_VIOLATION`・`ERROR_ACCESS_DENIED` なら `FindFirstFileExW` へ倒れる（1484 行目付近）。
+- 実測（この機械・Windows 11 10.0.26300・NTFS・ワークツリーの `target\test-roots\` の下で。道具はスクラッチの使い捨てのプログラム）: 書き手 1 本が一時ファイルに 3,000〜4,000 バイトを書き（半分は `sync_all`）名前を付け替えるのを 3,000 回、読み手 4 本が `fs::read` と `fs::metadata().modified()` を回し続けるのを 2 回。読み 34,741 回・38,628 回で、読み手の失敗 0・付け替えの失敗 0。
+- 結論: 想定の負荷（8 本前後のセッション・1 秒ごとの更新時刻の確かめ）で読み手の一瞬の失敗が起きる場合を作れない。指摘にしない（新しい指摘 0 件）。限界: 測ったのは 1 台の機械で、外の常駐ソフト（ウイルス対策の検査など）が開いたままにする場合は見ていない。
+
+### 9.3 #8 と完了 spec の文（§8 の 3 つ目）
+
+- 完了 `areka-P0-impl-watch` の requirements.md には「排他を取らない」「ロック無し」の語が無い（grep）。`status` に当たる要件 9.4 は「状態の確認を状態を変えない読み取りとして行い（回収も行わない）」で、`try_lock` で読み直して読み物を書くことはこれに触れない。
+- 排他を取らないと書いたのは同じ spec の design.md（398 行目の表「ロック無し」・567 行目「`summary`（`status`）は排他を取らずに `status.md` を置き換えるので、同時に走った変更の読み物を、少し古い内容で上書きすることがある」）で、設計の段の受け入れた限界。要件の討議の議題 1 で直すと確定した（要件 9.3）。完了 spec の文書は書き替えない。
+- 手順書は `doc/impl-watch.md` 576 行目（6 節「`status.md` の中身が古い」）の文と、384 行目のコマンドの表の `status` の行を直す。スキルの中の手順書の写しに同じ文は無い（grep）。
+
+### 9.4 #7 の新しいモジュールと見張り（§8 の 2 つ目）
+
+- steering `structure.md` の導出規則（`<stem>_<モジュール名>.rs`・`main.rs` は stem `main`）に従い、ファイルは `src/main_test_support.rs`、`main.rs` から `#[cfg(test)] #[path = "main_test_support.rs"] mod test_support;`（`crate::test_support`）。同じ親に `test_support` は無いので E0428 にならない。前向きの衝突も無い（`main_*.rs` の本番のファイルは無い）。
+- `main_layering_tests.rs` の扱い: 足さない。純粋さの走査は `plan.rs`・`plan_turns.rs` だけを見て、ASCII の走査（#3 の直しの後）は名前が `_test_support.rs` で終わるファイルを外す。`main.rs` の層の向きの doc に「テストだけのモジュールは向きの外」を 1 文足す。
+- 寄せる物の差: `cli_test_support.rs` の `home_in` は `PathBuf`（置き場所にする子のフォルダの道筋）を返し、`store_test_support.rs`・`presence_tests.rs` の `home_in` は `Home` を返す別物。寄せるのは後の 2 つだけ。`read_state` は `store` の側が `&Home`、`cli` の側が `&Path` を受けるので、共通の支えは `read_state(dir: &Path)` にして、`store` の側の呼び手（15 か所）は `&home.dir` を渡す。
+
+### 9.5 設計の段で見つけた事実（指摘の直しの中で片づける）
+
+- `main.rs` は `#[path = "main_layering_tests.rs"]` のリテラルを持つ。`main_layering_tests.rs` の doc の「リテラルの無い起動ファイル `main.rs` を除いた 11 本」は事実と違う。#3 の直しで `main.rs` も走査に入れ、doc を直す。
+- `plan_liveness_tests.rs:265・267`（協力的な進め方）が `participant.id` を読む。#1 で判断の側の読みを 0 にするのに合わせ、テストの側も鍵で見る形へ直す（#1 のタスクに入れる）。
+- #8 の後、状態ファイルが在って `state.lock` がまだ無い置き場所（状態ファイルを手で置いたとき）では、`status` が `state.lock` を作る。名前はもう置き場所の下のファイルの名前に在り、外への約束は変わらない。テストの側で、手で置いた状態ファイルの後に `status` を呼んで名前の一覧を見る所があれば直す（要件 4.6）。
+- #8 の後、`status` の試しが他人の排他に当たった回は読み物を書かない。排他を持つ側が変化の無い呼び出し（変わらない `tick` など）なら読み物は書かれないので、居る・居ないの印と時刻は次の変更か次の `status` まで前のまま（手順書の「次の変更か、もう一度の `status` で直る」の範囲）。
+
+### 9.6 設計の決め（議題 B を閉じる・design.md の D1〜D7）
+
+| 議題 | 決め | 取らなかった案と理由 |
+|---|---|---|
+| #2 の形 | 名指しのテスト 1 本（`plan_turns_tests.rs`） | 全探索の不変「渡した机の組＝申し込んだ組」: 状態だけでは書けず、`check_invariants` へ出来事を渡す配管が要る |
+| #3 の形 | 手の一覧を消し、走るたびに `src/` を読む | 一覧と `read_dir` の名前を比べる: 一覧が残り、足したファイルは一覧を直すまで見られない |
+| #7 の寄せ方 | 案 B（`src/main_test_support.rs`＝`crate::test_support`） | 案 A（`store_test_support.rs` へ寄せる）: `home`・`presence` のテストが `store` の支えを読む逆向き |
+| #9 の形 | `replace` に `sync: bool` | 読み物だけ別の書き方: 一時ファイルの名前・後始末・改名の試し直しが 2 組になる |
+| #8 の順 | 排他の外で 1 度読む（無い・壊れた・版違いは今どおり返る）→ 1 回だけ試す → 取れたら中で読み直して読み物と要約 | 先に試す: 状態ファイルの無い置き場所にも `state.lock` を作り、「何も作らない」の主張（cli・store のテスト）が崩れる |
+
+### 9.7 まとめの 3 つの見方（design-synthesis）
+
+- 一般化: #4〜#7・#10 は同じ「支えの写し → 1 か所」で、置き場所の規則（モジュールの支えは `<stem>_test_support.rs`・クレート全体は `main_test_support.rs`）を 1 つに揃えるだけで、新しい仕組みは足さない。
+- 作るか使うか: 排他は標準の `File::try_lock`、走査は標準の `fs::read_dir`。新しい依存なし。
+- 削る: #3 は比べる仕組みを足さずに一覧を消す。#9 は書き方を 2 組にせず引数 1 つ。#8 は待ちの上限や試しの回数の設定を足さない（1 回だけ）。
