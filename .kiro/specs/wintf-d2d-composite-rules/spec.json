@@ -1,9 +1,9 @@
 {
   "feature_name": "wintf-d2d-composite-rules",
   "created_at": "2026-11-12T23:05:33Z",
-  "updated_at": "2026-11-13T00:15:29Z",
+  "updated_at": "2026-11-13T02:00:00Z",
   "language": "ja",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -12,13 +12,14 @@
     },
     "design": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-11-13T00:15:29Z"
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-11-13T02:00:00Z"
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true
 }
