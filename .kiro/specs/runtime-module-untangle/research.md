@@ -846,3 +846,105 @@ public struct RECT { public int L, T, R, B; }
   - `install_cue.rs:25`・`:26`・`:48`・`readme_cue.rs:39`・`:40`・`update_cue.rs:22`（6 行）＝受け口の持ち主を名指す所。**6.2** で持ち主へ移すと消える。
   - `mod.rs:837`（`#[cfg(test)] mod wire_tests` の中の `crate::session::runtime_boot::boot_runtime`）・`session_hooks.rs:78`（`#[cfg(test)] const FALLBACK = crate::session::hooks::HOOKS`・設計どおり）（2 行）＝`#[cfg(test)]` の項目の中。**9.1** で行ごとに示す。
 - `runtime` の本番で `session` を名指すほかの行は説明の文だけ（`special_name.rs:3`・`mod.rs:176` の `session::runtime_boot::boot_runtime`・`mod.rs` の `wire_kanade_stop` のリンク）＝要件 3.4 の一覧（9.1）に載せる。
+
+## 境界の 0 件と数（後）（2026-11-13・タスク 9.1・要件 3.1〜3.5・3.9・7.2）
+
+### 18. 完了の木で当て直した式 1〜3
+
+- 測った木: `263fdc964`（8.2 の後）。コマンドは 16.5 節のとおりで、置き換えを戻した形（`B=crates/areka/src/runtime`・式 1 は `crate::(?!runtime\b)`）。`rg` は PCRE2 の入った 15.0.0。
+- 除いたもの（本番のファイルの集合を決める glob）: `*_tests.rs`・`*test_support*.rs`・`spine*.rs`・`*_cases.rs`（16 節と同じ・足していない）。
+
+#### 18.1 本番のファイルの集合と D1・D2
+
+- 宣言の木（`modtree.py`）と glob で残る集合は **一致**（`SAME`）。宣言されたファイル 207 本・ディレクトリの `*.rs` 209 本。
+  - 差の 2 本 `readme_script_e2e_tests.rs`・`script_security_e2e_tests.rs` は `UNDECLARED`。`runtime/mod.rs` からは宣言されず、`session/runtime_boot_tests.rs:264`・`:268` が `#[path = "../runtime/…"]` で宣言する（6.1 で `runtime_boot_tests.rs` を `session/` へ移し、この 2 本は設計の対応表どおり `runtime/` に残した）。モジュールとしては `session` の下のテストなので、`runtime` の本番の集合にも `runtime` のテストの数にも入らない（中身は 18.3 の末尾に別に書く）。glob でも `*_tests.rs` で外れる。
+- 深さごとの本数: 本番＝深さ 0 が 1 本（`mod.rs`）・深さ 1 が 34 本・深さ 2 が 22 本（計 57 本）。テスト＝深さ 1 が 7 本・2 が 103 本・3 が 34 本・4 が 5 本・5 が 1 本（計 150 本）。深さ 3 以上の本番は **0 本**（式は足さない）。
+- 16 節（前・61 本）からの差: 移した本番 9 本（`session/` へ `ghost_switch.rs`・`reload.rs`・`runtime_boot.rs`・`same_folder_pin.rs`・`shell_balloon_switch.rs`・`switch_copy.rs`、持ち主へ `install_cue.rs`・`update_cue.rs`・`readme_cue.rs`）を外し、新しく入れた 5 本（`balloon_hover.rs`・`scope_scale.rs`・`session_hooks.rs`・`shell_box_hover.rs`・`skin_switch.rs`）を入れた＝61 − 9 ＋ 5 ＝ 57。
+- D1（34 本）: `adapter.rs` `assets.rs` `balloon_background.rs` `balloon_hover.rs` `balloon_visibility.rs` `change_cue.rs` `consumer_ledger.rs` `frame.rs` `hit_region.rs` `hover_inject.rs` `move_cue.rs` `reload_args.rs` `reload_cue.rs` `scope_scale.rs` `script_restriction.rs` `session_hooks.rs` `shell_balloon_resolve.rs` `shell_box_assets.rs` `shell_box_hover.rs` `shell_carry.rs` `shell_cursor_assets.rs` `shell_cursor_table.rs` `skin_facts_copy.rs` `skin_switch.rs` `special_name.rs` `strict_judges.rs` `switch_assets.rs` `switch_cue.rs` `talk_clock.rs` `talk_lifecycle.rs` `target_map.rs` `user_break_cue.rs` `window_state_cue.rs` `zorder_cue.rs`
+- D2（22 本・16.3 と同じ顔ぶれ）: `balloon_visibility_{decision,phase,wait}.rs`・`move_cue_{args,geometry,place}.rs`・`frame/{attach,balloon_face,balloon_offset_follow,dpi,drain_resnap,move_hold,move_shift,scale_notice,scale_text,status_report,switch,window_state,wiring,work_area_sync,zorder_descript,zorder_drain}.rs`
+
+#### 18.2 式 1〜3 の結果（要件 3.1・3.2・3.3）
+
+| 式 | 当てた所 | 前（16.4） | 後 |
+|---|---|---|---|
+| 式 1 `crate::(?!runtime\b)` | 本番の 57 本 | 60 行 | **2 行**（どちらも `#[cfg(test)]` の項目の中＝本番は 0） |
+| 式 2 `super::super::` | D1 の 34 本 | 0 行 | **0 行** |
+| 式 3 `super::super::super::` | D2 の 22 本 | 0 行 | **0 行** |
+
+式 1 に残った 2 行（行ごとの確かめ）:
+
+- `runtime/mod.rs:834` `crate::session::runtime_boot::boot_runtime,` — `mod.rs:755` の `#[cfg(test)]` と `:756` の `mod wire_tests {`（ファイルの末尾 850 行まで）の中。`wire_runtime` に起動の関数を渡すテストの引数。
+- `runtime/session_hooks.rs:78` `const FALLBACK: SessionHooks = crate::session::hooks::HOOKS;` — 直前 `:77` の `#[cfg(test)]` が付いた項目。本番は `:73`〜`:74` の `#[cfg(not(test))] const FALLBACK = NO_BODY`（設計どおり・テストの World は本体の口をそのまま読む）。
+- 1.3 の注どおり、インラインのテストのモジュールだけでなく本番のファイルの中の `#[cfg(test)]` の fn・use・impl・const も見た。式 1 に当たるのは上の 2 行だけで、ほかの本番の行は 0。
+- 深さ 0 の `mod.rs` の `super::` は 2 行（`mod.rs:757`・`:758`）で、どちらも `wire_tests` の中の `use super::…`（`runtime` 自身）＝外への参照ではない。
+- 束ねた形 `use crate::{…}` は本番に 0 行（式 1 の 0 に入っている）。
+- よって `runtime` の本番のコードが本体の `runtime` の外（`session`・`install`・`update`・`readme` を含む）を参照する所は **0 件**。参照してよい相手（要件 3.2）はワークスペースの下の crate と外の crate だけになった。上の 2 行は 18.3 のテストの数へ回す。
+
+#### 18.3 テストのコードが本体の外を引く所（要件 3.5・7.2）
+
+数え方: テストのファイル（宣言の木で `T` の 150 本）の各ファイルに、式 1 と「宣言の深さ d のファイルから `super::` を d＋1 回続けて `runtime` の外へ抜ける行」を当て、ファイルごとに数えた（使い捨ての読み手 `testrefs.py` を一時フォルダで回した・リポジトリには置かない）。インラインの `mod … { }` の中は深さが 1 つ増えるが、`super::` で抜ける行は 0 本なので数は変わらない（インラインのモジュールを持つのは `strict_judges_tests.rs` だけ）。本番のファイルの中の `#[cfg(test)]` の項目は 18.2 の 2 行。
+
+- 合計: **79 行**（テストのファイル 40 本で 77 行・本番のファイルの中の `#[cfg(test)]` の項目 2 本で 2 行）。`super::` で外へ抜ける行は 0 行で、79 行は全部 `crate::` で始まる。0 にすることは求めない（要件 3.5）。
+- ファイルごとの数（`runtime/` からの相対パス・括弧は宣言の深さ）:
+  - 5 行: `frame/switch_finish_tests.rs`（3）・`frame/switch_tests.rs`（3）
+  - 4 行: `frame_chain_finalize_persist_tests.rs`（2）・`frame_scale_notice_integration_tests.rs`（3）・`frame_stay_on_top_lifecycle_tests.rs`（2）
+  - 3 行: `consumer_ledger_agreement_tests.rs`（2）・`frame/switch_cursor_tests.rs`（4）・`frame/window_state_tests.rs`（3）・`frame_chain_finalize_persist_nowrite_tests.rs`（2）・`frame_shell_box_arrow_tests.rs`（4）・`frame_visibility_integration_tests.rs`（2）
+  - 2 行: `balloon_visibility_phase_box_tests.rs`（3）・`frame_chain_finalize_persist_restart_tests.rs`（2）・`frame_move_order_tests.rs`（2）・`frame_schedule_tests.rs`（1）・`shell_carry_tests.rs`（2）・`spine.rs`（1）・`spine_third_scope_talk_tests.rs`（2）・`strict_judges_tests.rs`（2）
+  - 1 行: `assets_shell_tests.rs`・`assets_tests.rs`・`balloon_visibility_lifecycle_e2e_tests.rs`・`balloon_visibility_phase_notice_tests.rs`・`balloon_visibility_phase_reappear_tests.rs`・`balloon_visibility_phase_tests.rs`・`film_playback_e2e_tests.rs`・`frame/status_report_stage_tests.rs`・`frame/status_report_tests.rs`・`frame/switch_reload_tests.rs`・`frame_attach_carry_tests.rs`・`frame_chain_finalize_persist_test_support.rs`・`frame_chain_finalize_remembered_tests.rs`・`frame_chain_finalize_restart_tests.rs`・`frame_shell_box_integration_tests.rs`・`frame_transition_atomicity_tests.rs`・`frame_transition_branch_tests.rs`・`shell_balloon_resolve_tests.rs`・`spine_close_wiring_tests.rs`・`switch_cue_tests.rs`・`zorder_wiring_tests.rs`（21 本）
+  - `#[cfg(test)]` の項目: `mod.rs`（`wire_tests`）1 行・`session_hooks.rs`（`FALLBACK`）1 行
+- 引く相手（`crate::` の次の段・テストのファイルの 77 行）: `session` 18・`ghost_session` 14・`input_events` 13・`restore_merged_placements` 7・`app_exit` 6・`update` 2・`scope_bind_fixture_test_support` 2・`roots` 2・`placement_tests` 2（`frame_transition_atomicity_tests.rs`・`frame_transition_branch_tests.rs` の `crate::placement_tests::transition_judge`・要件 7.2 の名指し）・`boot_resolve` 2・`boot_config` 2・`readme` 1・`menu` 1・`mcp` 1・`log_history` 1・`install` 1・`insert_persist_wiring` 1・`crate_source_test_support` 1。`runtime-crate-split` で crate を分けるときに、テストの置き場か支えを決める材料になる。
+- 宣言の木の外の 2 本（18.1）: `readme_script_e2e_tests.rs` は 4 行（`crate::ghost_session`・`crate::readme` 2・`crate::session::ghost_switch_test_support`）、`script_security_e2e_tests.rs` は 1 行（`crate::session::ghost_switch_test_support`）。どちらも `session::runtime_boot_tests` の子なので上の 79 行には入れていない（`runtime-crate-split` への申し送りは 8.2 で済み）。
+
+#### 18.4 説明の文の名指し（要件 3.4）
+
+式 1〜3 の `^(?!\s*//)` を `^\s*//` に替えた 3 本を本番の集合に当てた。式 2・式 3 の説明の版は **0 行**、式 1 の説明の版は **16 行**。残すもの（どれも説明の文・rustdoc のリンクで、コードの参照ではない）:
+
+| 所 | 名指し | 残す理由 |
+|---|---|---|
+| `consumer_ledger.rs:90`・`:152` | `crate::readme::readme_cue::ReadmeCueSink` | 台帳の行を受ける受け口へのリンク（要件 2.4 で移した先へ書き換えたもの） |
+| `consumer_ledger.rs:108`・`:189` | `crate::install::install_cue::InstallCueSink` | 同上 |
+| `consumer_ledger.rs:111`・`:196` | `crate::update::update_cue::UpdateCueSink` | 同上 |
+| `hit_region.rs:45`・`:47`・`:51`・`:57` | `crate::`（語としての「`crate::` フリー」の決まり） | パスの名指しではなく、このファイルが `crate::` を使わない決まりの説明 |
+| `hit_region.rs:56` | `crate::is_benign_boot_error` | `#[path]` で取り込めない理由の説明 |
+| `mod.rs:380`・`:439` | `crate::is_benign_boot_error` | 起動の失敗を分ける所の説明（R7.4） |
+| `mod.rs:442`・`:647` | `crate::session::ghost_quit::wire_kanade_stop` | 終了の受け口を据える所へのリンク（5.1 の注） |
+| `special_name.rs:3` | `crate::session::ghost_switch` | 純移動の出所の説明 |
+
+補足（3 本の式では拾わない、`crate::` の付かない名指し・説明の文だけ）: `session::` 4 行（`mod.rs:173`・`session_hooks.rs:5`・`:18`・`skin_switch.rs:86`）、`ghost_session::` 15 行（`frame.rs:198`・`mod.rs:187`・`:188`・`:335`・`:427`・`:428`・`:445`・`:452`・`:453`・`:483`・`:485`・`frame/wiring.rs:300`・`:301`・`:332`・`:333`）、`input_events::` 6 行（`balloon_hover.rs:3`・`:6`・`hit_region.rs:18`・`:20`・`shell_box_hover.rs:3`・`:19`）、`app_exit::` 1 行（`frame.rs:177`）、`install::` 1 行（`mod.rs:375`）、`super::super::input_events::balloon` 1 行（`frame/wiring.rs:322`・深さ 2 の `super::super` は `runtime` 自身なので字面は古い・コードではないので式 3 にも当たらない）。計 28 行。どれも呼び手や持ち主を説明する文で、残す（式: `'^\s*//.*(?<!crate::)(?<!runtime::)\b(session|install|update|readme|ghost_session|app_exit|session_end|input_events|boot_config)::'` を本番の集合に当てた）。
+
+#### 18.5 プロセスで共有する状態 3 つの置き場（要件 3.9）
+
+| 状態 | 前（`4863cb66`） | 後（`263fdc964`） |
+|---|---|---|
+| `static RESOLVED: OnceLock<f64>` | `emo2_boot/balloon_visibility_wait.rs:72` | `runtime/balloon_visibility_wait.rs:72` |
+| `static CONFIG: OnceLock<HoverInjectConfig>` | `emo2_boot/hover_inject.rs:187` | `runtime/hover_inject.rs:187` |
+| `static NEXT_EPOCH: AtomicU64` | `emo2_boot/frame/switch.rs:60` | `runtime/frame/switch.rs:56` |
+
+- 3 つとも同じファイル（モジュールの改名 `emo2_boot` → `runtime` の分だけパスが変わった）に、同じ型と初期値のまま残った。`NEXT_EPOCH` の行が 60 → 56 になったのは、同じファイルの上の `use` から本体を引く行（`crate::boot_config`・`crate::boot_resolve`・`crate::ghost_session` ほか）を外した分。`frame/switch.rs` は `runtime` に残したので、2.9 節の「`NEXT_EPOCH` が session へ移る」案は取っていない。
+- 数も変わっていない: `crates/areka/src` 全体の `static`／`thread_local!` の行数をファイルごとに前後で比べた差は、`emo2_boot/` → `runtime/` の改名と、テストの `install_cue_tests.rs` の `install/` への移動（2 行・テストの中の状態）だけ。`session/` と新しく足した 5 本（`session_hooks.rs` ほか）には `static` は 0 行（`SessionHooks` の口は `Resource` で World に置く・設計どおり）。
+- 確かめのコマンド: `git grep -c -P '^\s*(pub(\([^)]*\))?\s+)?static\s|thread_local!' <木> -- crates/areka/src` を `4863cb66` と `HEAD` で取り、`<木>:` を落として `diff`。
+
+#### 18.6 測り直しのコマンドと読み手（再現の確かめ）
+
+- 16.5 節のコマンドを `B=crates/areka/src/runtime`・式 1 `crate::(?!runtime\b)` にして回す（`modtree.py` は 16.5 節のまま）。説明の版は 3 本の式の `^(?!\s*//)` を `^\s*//` に替える。
+- テストの数の読み手 `testrefs.py`（一時フォルダに置いて回す・リポジトリには置かない・引数は `B` と `modtree.py` の出力）:
+
+```python
+import re, sys, os
+root, tree = sys.argv[1], sys.argv[2]
+rows = [l.split() for l in open(tree, encoding='utf-8')]
+e1 = re.compile(r'^(?!\s*//).*\bcrate::(?!runtime\b)')
+tot = {}
+for d, k, f in rows:
+    if k != 'T': continue
+    d = int(d)
+    sup = re.compile(r'^(?!\s*//).*\b(super::){%d}' % (d + 1))
+    lines = open(os.path.join(root, f), encoding='utf-8').read().splitlines()
+    c = sum(1 for l in lines if e1.search(l)); s = sum(1 for l in lines if sup.search(l))
+    if c or s: tot[f] = (d, c, s)
+for f, (d, c, s) in sorted(tot.items(), key=lambda x: -(x[1][1] + x[1][2])):
+    print(f'{c+s:3} crate={c} super={s} depth={d} {f}')
+print('FILES', len(tot), 'CRATE', sum(v[1] for v in tot.values()), 'SUPER', sum(v[2] for v in tot.values()))
+```
+
+- 2 回目に回した結果も同じ（`SAME`・本番 57 本・D1 34・D2 22・式 1 は 2 行・式 2 と式 3 は 0 行・説明の版 16／0／0 行・テスト 40 本 77 行）。

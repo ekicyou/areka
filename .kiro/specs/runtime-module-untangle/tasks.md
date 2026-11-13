@@ -152,7 +152,7 @@
   - _Requirements: 5.7, 5.8, 7.2, 7.3_
 
 - [ ] 9. 検証
-- [ ] 9.1 境界の 0 件と数を記録する
+- [x] 9.1 境界の 0 件と数を記録する
   - 完了の木で D1・D2 を 1.3 と同じ方法で作り直し（新しいファイルを入れ、移したファイルを外す）、式 1〜3 を当て、3 本の出力が 0 行であること（0 でなければ残りが全部 `#[cfg(test)]` の項目の中であることを行ごとに）を示す
   - 説明の文の名指しを 3 本の説明の版で一覧にし、テストが本体の外を引く所をファイルごとの数で数える
   - プロセスで共有する状態 3 つの置き場が変わっていないことを書く
@@ -205,3 +205,4 @@
 - 6.2: 移した後、7.1 までは `log_history.rs:121` の `rule("areka::install", …)` が前方一致で `areka::install::install_cue` の `info!`（readonly_refused）を Update として残す（中間の状態）。7.1 で `UNKEPT_TARGETS` を必ず入れる。式 1 は本番で 2 行（どちらも `cfg(test)`: `session_hooks.rs:78`・`mod.rs:834`）。
 - 7.1: `update::update_cue`・`readme::readme_cue` は前方一致の決まり `areka::update`（Update）・`areka::readme`（Status）の下に入ったが、今は `info!` を持たないので分け方は前と同じ。後から `info!` を足すと残るようになる（9.3 の申し送りの候補）。
 - 8.1: 揺れ: `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が `cargo test -p areka -j 4` の 1 回で赤（単独 3 回・全体 1 回は緑）。9.5 で再び赤なら止めて調べる。前から古い行番号（`runtime/assets.rs:55`・`:82`・`:291`・`frame/zorder_descript.rs:61`・`spine_conformance_script.rs:589` ほか・merge-base でも同じ）は範囲外＝完了の棚卸で起票候補。briefing-*.md は手書き（生成物は report/*.md）。
+- 9.1: rg は PATH に無い。VS Code 同梱の `C:\Program Files\Microsoft VS Code\69047191fc\resources\app\node_modules.asar.unpacked\@vscode\ripgrep-universal\bin\win32-x64\rg.exe`（15.0.0 +pcre2）で測った。`frame/wiring.rs:322` の説明の文 `super::super::input_events::balloon` は字面が古い＝9.3 の申し送りの候補。
