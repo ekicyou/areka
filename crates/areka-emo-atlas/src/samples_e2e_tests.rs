@@ -59,9 +59,11 @@ fn bake_samples(limits: AnimationLimits) -> (BakeResult, String) {
     let mut result = None;
     let mut log = String::new();
     with_arm(|arm| {
-        log = crate::log_capture::capture_logs(|| {
-            result = Some(bake_with_limits(&sets, arm, PackConfig::default(), limits));
+        let (baked, captured) = crate::log_capture::capture_logs(|| {
+            bake_with_limits(&sets, arm, PackConfig::default(), limits)
         });
+        result = Some(baked);
+        log = captured;
     });
     let result = result.unwrap();
     assert!(result.errors.is_empty(), "no failures: {:?}", result.errors);

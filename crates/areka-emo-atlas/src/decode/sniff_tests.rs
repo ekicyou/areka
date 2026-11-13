@@ -60,6 +60,7 @@ fn samples_answer_by_content() {
 // ---- バイト列の組み立て ----
 
 use super::PNG_SIGNATURE as PNG_SIG;
+use super::WEBP_ANIMATION_FLAG as ANIM_FLAG;
 
 fn png_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -113,8 +114,6 @@ fn riff(body: &[u8]) -> Vec<u8> {
     out.extend_from_slice(body);
     out
 }
-
-const ANIM_FLAG: u8 = 0x02;
 
 /// 読んだバイト数を数える読み手。
 struct Counting<'a> {

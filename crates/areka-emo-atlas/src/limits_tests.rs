@@ -174,20 +174,15 @@ fn from_lookup_not_unicode_falls_back_alone() {
 /// 指摘 6⑸: 読めない値を返す引き手では `WARN` が 1 行（変数の名と値を含む）で、その項目は既定。
 #[test]
 fn from_env_with_warns_once_for_the_unreadable_item() {
-    let mut limits = None;
-    let log = crate::log_capture::capture_logs(|| {
-        limits = Some(AnimationLimits::from_env_with(lookup_of(
-            Some(Some("7")),
-            Some(Some("x")),
-            None,
-        )));
+    let (limits, log) = crate::log_capture::capture_logs(|| {
+        AnimationLimits::from_env_with(lookup_of(Some(Some("7")), Some(Some("x")), None))
     });
     assert_eq!(
         limits,
-        Some(AnimationLimits {
+        AnimationLimits {
             max_frames: 7,
             ..AnimationLimits::default()
-        })
+        }
     );
     let warns: Vec<&str> = log.lines().filter(|l| l.contains("level=WARN")).collect();
     assert_eq!(warns.len(), 1, "{log}");

@@ -157,10 +157,8 @@ fn warn_fires_on_all_transparent_element() {
     register(&mut dec, base, "clear.png", transparent_2x2());
     let sets = [set(&shell, base)];
 
-    let mut captured: Option<BakeResult> = None;
-    let out = crate::log_capture::capture_logs(|| {
-        captured = Some(bake(&sets, &dec, PackConfig::default()));
-    });
+    let (result, out) =
+        crate::log_capture::capture_logs(|| bake(&sets, &dec, PackConfig::default()));
 
     // warn が発火し、target・当該 element（rel_path）を名指ししている。
     assert!(
@@ -174,7 +172,6 @@ fn warn_fires_on_all_transparent_element() {
     assert!(out.contains("clear.png"), "問題の element を名指し: {out}");
 
     // bake 結果は既存挙動不変: 全透明はエラーでなく空エントリ（placement None・原寸記録）。
-    let result = captured.unwrap();
     assert!(result.errors.is_empty(), "全透明は error ではない（不変）");
     let clear_id = result
         .table
@@ -204,10 +201,8 @@ fn no_warn_and_output_unchanged_for_normal_bake() {
     register(&mut dec, base, "solid.png", opaque_2x2());
     let sets = [set(&shell, base)];
 
-    let mut captured: Option<BakeResult> = None;
-    let out = crate::log_capture::capture_logs(|| {
-        captured = Some(bake(&sets, &dec, PackConfig::default()));
-    });
+    let (result, out) =
+        crate::log_capture::capture_logs(|| bake(&sets, &dec, PackConfig::default()));
 
     // 正常 element では warn 経路に入らない。
     assert!(
@@ -216,7 +211,6 @@ fn no_warn_and_output_unchanged_for_normal_bake() {
     );
 
     // 既存の bake 出力は不変（placement 有り・非零 uv・原寸 2×2）。
-    let result = captured.unwrap();
     assert!(result.errors.is_empty());
     let id = result.table.resolve(SetId(0), "solid.png").unwrap();
     let entry = result.table.entry(id);
@@ -248,11 +242,9 @@ fn bake_owned(interval: Interval, rel: &str, spec: ImageSpec) -> (String, BakeRe
     register(&mut dec, base, "solid.png", opaque_2x2());
     register(&mut dec, base, rel, spec);
     let sets = [set(&shell, base)];
-    let mut captured: Option<BakeResult> = None;
-    let out = crate::log_capture::capture_logs(|| {
-        captured = Some(bake(&sets, &dec, PackConfig::default()));
-    });
-    (out, captured.unwrap())
+    let (result, out) =
+        crate::log_capture::capture_logs(|| bake(&sets, &dec, PackConfig::default()));
+    (out, result)
 }
 
 /// T9 ⑴: `bind` だけから参照される面の全透明の絵は `warn` 0 件・`debug` 1 件（欄は今の `warn` と同じ）。

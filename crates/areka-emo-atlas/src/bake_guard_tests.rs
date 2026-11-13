@@ -18,16 +18,14 @@ const OPAQUE: [u8; 4] = [10, 20, 30, 255];
 fn bake_logged(dec: &MemoryDecoder, rel: &str) -> (BakeResult, String) {
     let surfaces = vec![surface(0, vec![elem(0, rel)])];
     let sets = [set(&surfaces, Path::new(BASE))];
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| {
-        result = Some(bake_with_limits(
+    crate::log_capture::capture_logs(|| {
+        bake_with_limits(
             &sets,
             dec,
             PackConfig::default(),
             AnimationLimits::default(),
-        ));
-    });
-    (result.unwrap(), log)
+        )
+    })
 }
 
 /// 失敗の一覧がちょうど 1 件の `Decode` で、その文を返す。

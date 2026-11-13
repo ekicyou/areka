@@ -26,12 +26,12 @@
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// クロージャ `f` を実行し、その最中に**現在のスレッド**で発火した `tracing` イベントを
-/// 1 行 1 イベントの文字列へ整形して返す（改行連結）。
+/// 1 行 1 イベントの文字列へ整形し（改行連結）、`f` の戻り値と組にして返す。
 ///
-/// 捕捉と硬化は `log-capture-kit` の [`capture_lines`] が行う。返り値は捕捉テキストで、呼び手は
+/// 捕捉と硬化は `log-capture-kit` の [`capture_lines`] が行う。組の 2 つ目が捕捉テキストで、呼び手は
 /// `contains` で level（`level=WARN`）・target（`target=areka_emo_atlas`）・discriminating field
 /// （`rel_path=…`／`set=…`／`original_w=…` 等）を検証する。
-pub(crate) fn capture_logs<F: FnOnce()>(f: F) -> String {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines.join("\n")
+pub(crate) fn capture_logs<R>(f: impl FnOnce() -> R) -> (R, String) {
+    let (out, lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    (out, lines.join("\n"))
 }

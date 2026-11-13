@@ -58,11 +58,8 @@ fn bake_by(
     let surfaces = shell();
     let dec = decoder(base);
     let sets = [set(&surfaces, base)];
-    let mut captured: Option<BakeResult> = None;
-    let out = crate::log_capture::capture_logs(|| {
-        captured = Some(f(&sets, &dec, PackConfig::default()));
-    });
-    (out, captured.unwrap())
+    let (result, out) = crate::log_capture::capture_logs(|| f(&sets, &dec, PackConfig::default()));
+    (out, result)
 }
 
 fn count(out: &str, text: &str) -> usize {
@@ -113,9 +110,7 @@ fn bake_quiet_keeps_the_animation_warnings() {
         Err("frames are broken".into()),
     );
     let warns = |f: fn(&[SurfaceSet<'_>], &MemoryDecoder, PackConfig) -> BakeResult| {
-        let out = crate::log_capture::capture_logs(|| {
-            f(&sets, &dec, PackConfig::default());
-        });
+        let (_, out) = crate::log_capture::capture_logs(|| f(&sets, &dec, PackConfig::default()));
         out.lines()
             .filter(|l| l.contains("level=WARN") && l.contains("bake: 動く絵"))
             .map(str::to_owned)

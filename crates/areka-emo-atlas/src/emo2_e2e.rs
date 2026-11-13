@@ -64,11 +64,9 @@ fn emo2_shell_all_elements_baked() {
     with_arm(|dec| {
         let set = set(&surfaces, &base);
         // 本物の焼きはこのファイルの shell だけの焼きで 1 回。記録を捕まえ、null.png の記録も同じ焼きで見る。
-        let mut result = None;
-        let out = crate::log_capture::capture_logs(|| {
-            result = Some(bake(std::slice::from_ref(&set), dec, PackConfig::default()));
+        let (result, out) = crate::log_capture::capture_logs(|| {
+            bake(std::slice::from_ref(&set), dec, PackConfig::default())
         });
-        let result = result.expect("bake ran inside capture_logs");
 
         // 檻 T10（real-run-log-noise 要件 3.1・3.6・5.2）: `purple/a/null.png`（着せ替えの「無し」の絵）は
         // `warn` 0 件・見分けた `debug` 1 件。

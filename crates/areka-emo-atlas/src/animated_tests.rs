@@ -38,13 +38,7 @@ fn shell_of(names: &[&str]) -> Vec<Surface> {
 
 /// 2×2 の絵（画素は左上から行順）。
 fn image(px: [Px; 4], has_alpha: bool) -> DecodedImage {
-    DecodedImage {
-        width: 2,
-        height: 2,
-        stride: 8,
-        bgra: px.concat(),
-        has_alpha,
-    }
+    crate::test_support::image(2, 2, has_alpha, &px)
 }
 
 fn animated(frames: &[([Px; 4], u32)], has_alpha: bool) -> AnimatedImage {
@@ -127,11 +121,7 @@ fn bake_logged(
     limits: AnimationLimits,
     cfg: PackConfig,
 ) -> (BakeResult, String) {
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| {
-        result = Some(bake_in(dec, names, limits, cfg));
-    });
-    (result.unwrap(), log)
+    crate::log_capture::capture_logs(|| bake_in(dec, names, limits, cfg))
 }
 
 fn three_frames() -> AnimatedImage {
@@ -229,9 +219,8 @@ fn transparent_frame_keeps_its_number_and_delay_without_warning() {
         &[([K0; 4], 100), ([CLEAR; 4], 40), ([X; 4], 70)],
         true,
     ));
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| result = Some(bake(&dec)));
-    let table = result.unwrap().table;
+    let (result, log) = crate::log_capture::capture_logs(|| bake(&dec));
+    let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     let a = table.animation(parent).unwrap();
     assert_eq!(a.frames.len(), 3, "the transparent frame is not dropped");
@@ -253,9 +242,8 @@ fn transparent_frame_zero_keeps_the_key_entry_without_warning() {
         &[([CLEAR; 4], 100), ([K0; 4], 40), ([X; 4], 70)],
         true,
     ));
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| result = Some(bake(&dec)));
-    let table = result.unwrap().table;
+    let (result, log) = crate::log_capture::capture_logs(|| bake(&dec));
+    let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     let a = table.animation(parent).unwrap();
     assert_eq!(a.delays_ms, vec![100, 40, 70]);
@@ -269,9 +257,8 @@ fn transparent_frame_zero_keeps_the_key_entry_without_warning() {
 #[test]
 fn all_transparent_animation_warns_once() {
     let dec = with_animation(animated(&[([CLEAR; 4], 100), ([CLEAR; 4], 40)], true));
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| result = Some(bake(&dec)));
-    let table = result.unwrap().table;
+    let (result, log) = crate::log_capture::capture_logs(|| bake(&dec));
+    let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     assert_eq!(table.animation(parent).unwrap().frames.len(), 2);
     assert_eq!(log.matches("全透明").count(), 1, "one warning: {log}");
@@ -623,17 +610,15 @@ const H: Px = [0, 0, 64, 128];
 /// anim.png だけのシェルを宣言つきで焼き、全部のコマの画素とログを返す（失敗の一覧は空）。
 fn frames_as(anim: AnimatedImage, decl: UseSelfAlpha) -> (Vec<Vec<Px>>, String) {
     let dec = with_animation(anim);
-    let mut result = None;
-    let log = crate::log_capture::capture_logs(|| {
-        result = Some(bake_as(
+    let (result, log) = crate::log_capture::capture_logs(|| {
+        bake_as(
             &dec,
             &["anim.png"],
             decl,
             AnimationLimits::default(),
             PackConfig::default(),
-        ));
+        )
     });
-    let result = result.unwrap();
     assert!(result.errors.is_empty(), "{decl:?}: {:?}", result.errors);
     let table = result.table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
