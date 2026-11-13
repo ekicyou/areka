@@ -218,3 +218,17 @@
 - 確かめて落としたもの（読み手の報告の要約）: `tests/real.rs` の `status.md` を読む所は #8 の後も成り立つ（ほかの子プロセスが居ない場面か、直前に状態を変えた呼び出しが書いている）。#13 で消した 2 本の誤りの形は `cli_args_tests` の引数の読みのテストが文字どおり見ている。#16 のまとめで失われた主張は無い。`summary` の時刻が排他の前に取られるのは読み物の `generated:` が待ちの分だけ早いだけ。`status` が `state.lock` を作るのは §9.5 で受け入れ済み。
 
 - 1 回目の直し（15 件すべて・本番のコードの振る舞いは 0 変化・`store.rs` は差分 0）: 口と待ちの組 R1-1・3・4・5・13・14・15＝`841c709d`（R1-1・R1-14 の新しいテスト 2 本は、`summary` を最初の状態で書く形・試しの失敗で `Err` を返す形へ壊すとそれぞれ赤を実装係とレビュー係の 2 回で確かめた）。入口の組 R1-6〜9＝`b4fed95d`。判断の核の組 R1-2・10・11・12＝最新のコミット（レビューの差し戻し 1 回: `Left`・`Cancelled`・`Leave`・`Cancel` の写しも支えへ寄せた）。テストは 305 本緑（R1-1・R1-14 で +2、R1-6・R1-15 で −2）。
+
+### 10.2 2 回目（HEAD `1f35c498`・テスト 305 本緑）＝新しい指摘 7 件（Must 0・Should 0・Nice 7）・外への約束と実行ファイルの振る舞いに響くもの 0
+
+| # | 重さ | 場所 | 何が起きるか | 直し方 |
+|---|---|---|---|---|
+| R2-1 | Nice | `plan_test_support.rs` の `left_merged` と `left` | R1-2 で `Event::Left` を作る手が 2 つになった（`left_merged` は `left(id, "merged")` の特別版） | `left_merged` を消して `left(id, "merged")` に |
+| R2-2 | Nice | `DeskRequested`（`plan_desk_tests`・`plan_turns_tests`・`plan_stop_tests` の `load_requested`）・`Stopped`（`plan_stop_tests` の `stop_reported`・`plan_turns_tests`）・`LoadRunning`（`plan_stop_tests` の `recorded_running`・`plan_turns_tests`） | R1-2 と同じ形の写しの残り（R1-2 の表に挙がらなかった出来事） | 支えへ寄せる |
+| R2-3 | Nice | `plan_desk_tests.rs:1`・`plan_stop_tests.rs:1` | R1-10 の直しで 1 行目が約 140 桁（兄弟は約 100 桁で折る） | 2 行に折る |
+| R2-4 | Nice | `doc/impl-watch.md:162` | 置き方の道具は「ロック・`status.md`・ログには触らない」と書くが、道具が呼ぶ `status` は `status.md` を書き直し、#8 の後は `state.lock` も一瞬握る（同じ文書の 586・588 行目と食い違う） | 「`status` は `status.md` を書き直し、`state.lock` を一瞬握ることがある」の形に。同じ中身の注が `tools/impl-watch-install.ps1:20-24` にも在るが、範囲の外（`audit-tools-scripts` の持ち物）なので申し送り（tasks.md の Implementation Notes） |
+| R2-5 | Nice | `cli_commands_tests.rs:111-114` | R1-8 の取りこぼし。`merge` の引数を手で並べる 1 か所 | 支えの `merge(&home, "c", "fix", &["--bug"])` に |
+| R2-6 | Nice | `store_tests.rs` の `while_another_thread_holds_the_lock_the_change_fails_at_the_limit` | R1-13 の後、ロックはメインスレッドで握り、スレッドとチャンネルは何もしない。名前も実態と合わない（直しが生んだ形） | スレッドとチャンネルを消して `drop(file)` だけに・名前を「別のハンドル」に |
+| R2-7 | Nice | `store_test_support.rs:1` の doc | 「時刻の定数」が残る（R1-4・R1-11 の漏れ）。`hold_state_lock`・`block_state_writes` が並びに無い | 今の中身に合わせる |
+
+- 確かめて落としたもの（要約）: R1 の直しの値と主張は全部保たれている（読み手 4 本が差分を全部照らした）。本番のコードの新しい指摘は 0。`status` の排他の中の読み直しで状態ファイルが無い・壊れている枝は今どおり正しい。`TempPath::new` も `target\test-roots\` の下に作る。
