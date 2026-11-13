@@ -11,11 +11,11 @@ use crate::decode::AnimationInfo;
 use crate::pack::PackConfig;
 
 /// ㋐ 動く絵 1 つのコマの枚数の上限。
-pub const MAX_FRAMES_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_FRAMES";
+pub(crate) const MAX_FRAMES_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_FRAMES";
 /// ㋑ 動く絵 1 つの全コマの画素の量（枚数 × 幅 × 高さ）の上限。
-pub const MAX_PIXELS_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_PIXELS";
+pub(crate) const MAX_PIXELS_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_PIXELS";
 /// ㋒ `bake` 1 回の、動く絵の全コマの画素の量の合計の上限。
-pub const MAX_TOTAL_PIXELS_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_TOTAL_PIXELS";
+pub(crate) const MAX_TOTAL_PIXELS_ENV: &str = "AREKA_ANIMATED_IMAGE_MAX_TOTAL_PIXELS";
 
 /// 動く絵の 3 つの上限（要件 6.1・6.9）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

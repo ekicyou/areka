@@ -47,7 +47,7 @@ fn png(
             8 => raw.extend_from_slice(row),
             // 2 画素で 1 バイトに収まる（左の画素が上位のビット・残りのビットは 0）。
             d @ (1 | 2 | 4) => raw.push((row[0] << (8 - d)) | (row[1] << (8 - 2 * d))),
-            _ => unreachable!("8・4・2・1 ビットだけ"),
+            _ => unreachable!("bit depth is 8, 4, 2 or 1"),
         }
     }
     // zlib: 見出し 78 01・無圧縮の最後のブロック・Adler-32。
@@ -119,10 +119,10 @@ fn trans_gif() -> Vec<u8> {
 
 fn main() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/testdata/palette");
-    std::fs::create_dir_all(&dir).expect("検体のフォルダを作れない");
+    std::fs::create_dir_all(&dir).expect("cannot create the sample folder");
     let write = |name: &str, bytes: &[u8]| {
-        std::fs::write(dir.join(name), bytes).expect("検体を書けない");
-        println!("{name}: {} バイト", bytes.len());
+        std::fs::write(dir.join(name), bytes).expect("cannot write the sample");
+        println!("{name}: {} bytes", bytes.len());
     };
 
     let rgb = [RED, GREEN, BLUE];

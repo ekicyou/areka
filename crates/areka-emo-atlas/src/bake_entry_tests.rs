@@ -7,8 +7,8 @@ use crate::decode::MemoryDecoder;
 use crate::pack::PackConfig;
 use crate::table::SetId;
 use crate::test_support::{
-    BIND_DEBUG, CLEAR_WARN, ZERO_WARN, dressed_shell, elem, full, opaque_2x2, register, set,
-    surface, transparent_2x2, zero_sized,
+    BIND_DEBUG, CLEAR_WARN, ImageSpec, ZERO_WARN, dressed_shell, elem, full, opaque_2x2, register,
+    set, surface, transparent_2x2, zero_sized,
 };
 use areka_parsers::shell::{Interval, Surface};
 use std::path::Path;
@@ -148,7 +148,7 @@ fn dense_renumbering_and_roundtrip_after_failure() {
     assert_eq!(result.table.resolve(SetId(0), "b.png"), None);
 }
 
-/// テスト⑥（task 2.4・設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
+/// テスト⑥（設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
 /// 含む bake で `warn!` が発火する（tracing capture で決定論 assert・当該 element を名指し）。
 /// **bake 結果自体は既存挙動不変**（全透明はエラーでなく空エントリ・placement None）。
 #[test]
@@ -197,7 +197,7 @@ fn warn_fires_on_all_transparent_element() {
     assert!(result.table.entry(solid_id).placement.is_some());
 }
 
-/// テスト⑦（task 2.4）: 元画像 0 寸（0×0）element を含む bake でも `warn!` が発火する。
+/// テスト⑦: 元画像 0 寸（0×0）element を含む bake でも `warn!` が発火する。
 #[test]
 fn warn_fires_on_zero_sized_source_element() {
     let base = Path::new("shell/master");
@@ -220,7 +220,7 @@ fn warn_fires_on_zero_sized_source_element() {
     assert!(out.contains("zero.png"), "問題の element を名指し: {out}");
 }
 
-/// テスト⑧（task 2.4・不変性の陰性確認）: 正常（不透明・非零）element の bake では warn は
+/// テスト⑧（不変性の陰性確認）: 正常（不透明・非零）element の bake では warn は
 /// 発火せず、既知の bake 出力（placement 有り・非零 uv・原寸）が変わらない。
 #[test]
 fn no_warn_and_output_unchanged_for_normal_bake() {
@@ -267,11 +267,7 @@ fn shell_owned_by(interval: Interval, rel: &str) -> Vec<Surface> {
 }
 
 /// `shell_owned_by` のシェルを、`rel` に `spec` の絵を当てて焼き、捕捉した記録と結果を返す。
-fn bake_owned(
-    interval: Interval,
-    rel: &str,
-    spec: (u32, u32, u32, Vec<u8>, bool),
-) -> (String, BakeResult) {
+fn bake_owned(interval: Interval, rel: &str, spec: ImageSpec) -> (String, BakeResult) {
     let base = Path::new("shell/master");
     let shell = shell_owned_by(interval, rel);
     let mut dec = MemoryDecoder::new();

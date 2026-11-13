@@ -10,7 +10,7 @@ use crate::normalize::UseSelfAlpha;
 use crate::pack::PackConfig;
 use crate::table::{AtlasTable, ElementId, LoopCount, SetId};
 use crate::test_support::{
-    BROKEN, FELL_BACK, KEYED, OVER, dump, elem, full, params, set, surface, view,
+    BROKEN, FELL_BACK, KEYED, OVER, dump, elem, full, params, surface, view,
 };
 use crate::{BakeResult, bake_with_limits};
 use areka_parsers::shell::Surface;
@@ -25,11 +25,6 @@ const K0: Px = [10, 20, 30, 255];
 const K1: Px = [40, 50, 60, 255];
 const X: Px = [70, 80, 90, 255];
 const Y: Px = [100, 110, 120, 255];
-
-/// a.png・anim.png・c.png の 3 つを持つシェル（鍵の並びは a → anim → c）。
-fn shell() -> Vec<Surface> {
-    shell_of(&["a.png", "anim.png", "c.png"])
-}
 
 /// 名前を並べたシェル（面 0 に 1 層ずつ）。
 fn shell_of(names: &[&str]) -> Vec<Surface> {
@@ -630,24 +625,6 @@ fn first_frame_failure_falls_back_to_the_old_reader_then_to_the_failure_list() {
         let id = table.resolve(SetId(0), rel).expect("other pictures stay");
         assert_eq!(full(&table, id), vec![px; 4], "{rel}");
     }
-}
-
-/// 上限を渡さない入口 `bake` は環境の上限（`AnimationLimits::from_env`）で焼く。
-/// 環境の値に依らないよう、同じ上限を渡した `bake_with_limits` と結果を比べる。
-#[test]
-fn bake_without_limits_uses_the_env_limits() {
-    let dec = with_animation(three_frames());
-    let surfaces = shell();
-    let sets = [set(&surfaces, Path::new(BASE))];
-    let table = crate::bake(&sets, &dec, PackConfig::default()).table;
-    let with_env = bake_with_limits(
-        &sets,
-        &dec,
-        PackConfig::default(),
-        AnimationLimits::from_env(),
-    )
-    .table;
-    assert_eq!(dump(&table), dump(&with_env));
 }
 
 // ---- 宣言ごとの動く絵と `.pna`（spec: areka-P0-self-alpha-declaration 要件 3.3・4.3・4.4・5.5・5.7・9.4） ----

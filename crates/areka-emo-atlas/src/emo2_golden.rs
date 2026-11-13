@@ -1,4 +1,4 @@
-//! emo2 fixture の bake 出力に対する決定性（golden）テスト（task 4.1・要件 **5.5**）。
+//! emo2 fixture の bake 出力に対する決定性（golden）テスト（要件 **5.5**）。
 //!
 //! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
 //! packing → 焼付）を、実 fixture emo2 の shell surface 一式で駆動し、その配置結果

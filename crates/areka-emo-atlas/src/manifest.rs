@@ -157,7 +157,7 @@ mod tests {
     use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern, Surface};
     use std::path::Path;
 
-    // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
+    // ---- 合成モデルビルダ（emo2 相当構造・実 fixture は `emo2_e2e.rs`）----
 
     /// 単一 pattern（surface_id 参照）を持つ bind animation。
     fn bind_anim(anim_id: u32, ref_surface_id: i64) -> Animation {

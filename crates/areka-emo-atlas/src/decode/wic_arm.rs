@@ -282,21 +282,6 @@ mod tests {
             assert!(!arm.probe_pna(&png), "emo2 has no sibling .pna");
         });
     }
-
-    /// 2.1（抽象境界）: `&dyn ElementDecoder` 経由でポート契約を満たすことを確認する。
-    #[test]
-    fn satisfies_port_via_trait_object() {
-        with_arm(|arm| {
-            let dyn_dec: &dyn ElementDecoder = arm;
-            let png = balloon_path("online0.png");
-            assert!(png.exists());
-
-            let _ = dyn_dec.probe_pna(&png);
-            let img = dyn_dec.decode(&png).expect("decodes via dyn port");
-            assert_eq!(img.bgra.len(), (img.stride * img.height) as usize);
-            assert!(img.has_alpha);
-        });
-    }
 }
 
 #[cfg(test)]

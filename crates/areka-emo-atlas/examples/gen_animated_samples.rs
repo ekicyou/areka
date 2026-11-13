@@ -60,7 +60,7 @@ fn encode_png(pixels: &[u8], w: u32, h: u32, color: ExtendedColorType) -> (Vec<u
     let mut png = Vec::new();
     PngEncoder::new(&mut png)
         .write_image(pixels, w, h, color)
-        .expect("PNG を書けない");
+        .expect("cannot encode PNG");
     let (mut ihdr, mut idat) = (Vec::new(), Vec::new());
     let mut pos = 8;
     while pos + 8 <= png.len() {
@@ -229,7 +229,10 @@ fn animated_webp(alpha: bool, loop_count: u16, frames: &[WebpFrame]) -> Vec<u8> 
     anim.extend_from_slice(&loop_count.to_le_bytes());
     riff_chunk(&mut body, b"ANIM", &anim);
     for f in frames {
-        assert!(f.x % 2 == 0 && f.y % 2 == 0, "WebP のコマの位置は偶数");
+        assert!(
+            f.x % 2 == 0 && f.y % 2 == 0,
+            "WebP frame offset must be even"
+        );
         let pixels = if alpha {
             f.pixels.clone()
         } else {
@@ -274,10 +277,10 @@ const TWO_FRAMES_GIF: &[u8] = &[
 
 fn main() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/testdata/animated");
-    std::fs::create_dir_all(&dir).expect("検体のフォルダを作れない");
+    std::fs::create_dir_all(&dir).expect("cannot create the sample folder");
     let write = |name: &str, bytes: &[u8]| {
-        std::fs::write(dir.join(name), bytes).expect("検体を書けない");
-        println!("{name}: {} バイト", bytes.len());
+        std::fs::write(dir.join(name), bytes).expect("cannot write the sample");
+        println!("{name}: {} bytes", bytes.len());
     };
 
     let left_half =

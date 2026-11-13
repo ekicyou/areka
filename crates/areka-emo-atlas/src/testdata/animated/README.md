@@ -9,7 +9,7 @@ cargo run -p areka-emo-atlas --example gen_animated_samples
 ```
 
 - 作り手は `crates/areka-emo-atlas/examples/gen_animated_samples.rs`。使うのは `image` と std だけ。このフォルダが無ければ作り、12 個を上書きする。
-- APNG: `image` の PNG の書き手で 1 コマずつ静止画を作り、その `IHDR` と `IDAT` の中身を取り出して、`acTL`・`fcTL`・`IDAT`・`fdAT` に包み直す（CRC は作り手の中の数行）。
+- APNG: `image` の PNG の書き手で 1 コマずつ静止画を作り、その `IHDR` と `IDAT` の中身を取り出して、`acTL`・`fcTL`・`IDAT`・`fdAT` に包み直す（CRC は `examples/common/png.rs`）。
 - 動く WebP: `image` の可逆の書き手で 1 コマずつ作り、`VP8L` のチャンクを `VP8X`・`ANIM`・`ANMF` に包む。`ANIM` の背景色は不透明な白。
 - GIF: 作り手の中の手書きのバイト列をそのまま書く。
 - 2 回走らせると同じバイト列になる（2026-10-04 に `sha256sum` で 12 個とも一致を確かめた）。ただし `image`・`image-webp` の版を変えると、書き手の出力が変わってバイト列が変わることがある。そのときは作り直して、下の表どおりに読めることをテストで確かめる。

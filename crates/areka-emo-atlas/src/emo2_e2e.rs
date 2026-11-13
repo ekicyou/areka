@@ -1,6 +1,6 @@
 //! emo2 fixture を用いた bake パイプラインの統合テスト（shell・balloon 横断）。
 //!
-//! task 3.2（要件 **1.1, 1.4, 2.2, 5.6, 6.1, 6.2**）。
+//! 要件 **1.1, 1.4, 2.2, 5.6, 6.1, 6.2**。
 //!
 //! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
 //! packing → 焼付）を、実 fixture emo2 の shell surface 一式・balloon 画像・欠落パス混在
@@ -15,18 +15,10 @@
 //!   継続（2.2/5.6）。
 //!
 //! in-source `#[cfg(test)]`（regular dep `areka-parsers` / `windows` へ full access・
-//! WIC 腕テスト task 2.2 の前例に倣う）。
-
-use areka_parsers::shell::Surface;
+//! WIC 腕のテストの前例に倣う）。
 
 use crate::test_support::{BIND_DEBUG, elem, emo2_shell, emo2_shell_dir, set, surface, with_arm};
 use crate::{BakeError, ManifestDeriver, PackConfig, SetId, bake};
-
-/// balloon 画像 1 枚を 1 element として持つ手組み surface（layer0・x/y=0・collision/animation 空）。
-/// balloon→surface 適応は本層の責務外（design D1）ゆえ、テストが surface 表現を手構築する。
-fn hand_surface(id: u32, rel: &str) -> Surface {
-    surface(id, vec![elem(0, rel)])
-}
 
 /// emo2 shell の実測フィクスチャ事実（本統合テストが依拠する）。
 ///
@@ -159,16 +151,19 @@ fn emo2_shell_all_elements_baked() {
 ///
 /// balloon 画像を surface 表現に手組みし（design D1）、shell set と **1 度の bake** で
 /// 併せて処理。両 set の代表 key が別 SetId で resolve→placement を持つことで、balloon が
-/// shell と同一機構で処理されることを実証。
+/// shell と同一機構で処理されることを実証。shell の側は `surface0.png` の 1 枚だけにする
+/// （55 枚全部の焼きはテスト①が見る）。
 #[test]
 fn emo2_balloon_same_bake_path_as_shell() {
-    let (surfaces, shell_base) = emo2_shell();
+    let shell_base = emo2_shell_dir();
+    let surfaces = vec![surface(0, vec![elem(0, "surface0.png")])];
     let balloon_base = crate::sample_test_support::emo2_balloon_root();
 
     // balloon の surface 表現を手組み（本層外の適応をテストが肩代わり・D1）。
+    // 画像 1 枚を 1 element として持つ（layer0・x/y=0・collision/animation 空）。
     let balloon_surfaces = vec![
-        hand_surface(0, "balloons0.png"),
-        hand_surface(1, "balloonk0.png"),
+        surface(0, vec![elem(0, "balloons0.png")]),
+        surface(1, vec![elem(0, "balloonk0.png")]),
     ];
 
     with_arm(|dec| {
@@ -178,8 +173,8 @@ fn emo2_balloon_same_bake_path_as_shell() {
         // shell(set0) と balloon(set1) を 1 度の bake で同一機構により処理（1.4）。
         let result = bake(&[shell_set, balloon_set], dec, PackConfig::default());
 
-        // balloon 画像（RGBA）はデコード・正規化を通過。shell 側のパレットの絵の null.png も
-        // α の道を通って全画素が透明になるので、併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
+        // balloon 画像（RGBA）も shell の surface0.png もデコード・正規化を通過し、
+        // 併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
         assert!(
             result.errors.is_empty(),
             "combined shell+balloon bake has zero failures, got {:?}",

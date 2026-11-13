@@ -345,15 +345,15 @@ mod sample_test_support;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-// emo2 fixture を用いた統合テスト（shell・balloon 横断・task 3.2）。
+// emo2 fixture を用いた統合テスト（shell・balloon 横断）。
 #[cfg(test)]
 mod emo2_e2e;
 
-// emo2 fixture の bake 出力に対する決定性（golden）テスト（task 4.1・5.5）。
+// emo2 fixture の bake 出力に対する決定性（golden）テスト（要件 5.5）。
 #[cfg(test)]
 mod emo2_golden;
 
-// テスト専用の tracing ログ捕捉ハーネス（0 寸/全透明 warn の決定論 assert 用・task 2.4）。
+// テスト専用の tracing ログ捕捉ハーネス（0 寸/全透明 warn の決定論 assert 用）。
 // `#[cfg(test)]` 限定ゆえ本番 bake 経路に現れない。
 #[cfg(test)]
 mod log_capture;
@@ -364,7 +364,6 @@ mod webp_pin_tests;
 
 // 記録を出さない焼きの入口の檻（spec: emo-bake-log-overlap 要件 1.1〜1.3・1.6・3.2・3.4）。
 #[cfg(test)]
-#[path = "bake_quiet_tests.rs"]
 mod bake_quiet_tests;
 
 // 本物の読み手で動く絵の検体のフォルダを焼く結合テスト（spec: areka-P0-animated-image-decode 要件 8.3〜8.6）。
