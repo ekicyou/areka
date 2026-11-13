@@ -36,20 +36,3 @@ mod json_integration_tests {
         assert!(json.contains("conclude"));
     }
 }
-
-// =============================================================
-// Task 11.4: YAML round-trip (feature "yaml")
-// =============================================================
-
-#[cfg(feature = "yaml")]
-mod yaml_integration_tests {
-    use super::super::*;
-
-    #[test]
-    fn complete_document_yaml_roundtrip() {
-        let doc = build_complete_document();
-        let yaml_str = serde_yaml::to_string(&doc).unwrap();
-        let deserialized: DolaDocument = serde_yaml::from_str(&yaml_str).unwrap();
-        assert_eq!(doc, deserialized);
-    }
-}

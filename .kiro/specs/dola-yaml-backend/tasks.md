@@ -1,7 +1,7 @@
 # 実装計画
 
 - [ ] 1. 依存の土台を替え、監査の見逃しを消す
-- [ ] 1.1 `dola` の任意の依存と機能を YAML から TOML に替える
+- [x] 1.1 `dola` の任意の依存と機能を YAML から TOML に替える
   - 任意の依存の YAML のクレートを、ワークスペースの版の指定に従う任意の `toml` に替え、任意の機能を `toml` の 1 つだけにする（既定の機能は足さない）
   - docs.rs が機能 `toml` を有効にして説明書を作る指定を足す
   - 機能 `yaml` の唯一の使い手だった YAML の往復のテストの束とその見出しのコメントを同時に消す（無い機能を名指す `cfg` を残さない）
@@ -65,3 +65,7 @@
   - 要件 7.1・7.2 はここでは満たさず、完了の段で満たす: 完了の全体テスト（`tools/test-all.ps1 -Format -License`）は手順の決まりで `/kiro-complete` がアーカイブの後に 1 回だけ回すため、実装の段で重ねて回さない。触っていないクレートだけ赤なら、そのクレートだけ 1 回回し直し、変化が無ければ申し送りを残す
   - 済んだ形: `cargo test --workspace` と `cargo test -p dola --features toml` が緑、`cargo deny check` が終了コード 0、作り直した謝辞が作業ツリーのものと 1 バイトも違わない
   - _Requirements: 1.1, 1.3, 5.5_
+
+## Implementation Notes
+
+- 1.1: `src/value.rs:7` と `src/compile/mod.rs:72` のコメントに「JSON/TOML/YAML」が残る。src を触るタスク 2 で YAML を外す（タスク 6 の yaml 0 件の確かめにも掛かる）。
