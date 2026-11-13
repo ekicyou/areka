@@ -30,9 +30,11 @@
 //! 変えない。見るのは渡されたパスだけ（探さない）。[`spawn_command`] では確かめない
 //! （helper でない子を起こすテストが記録を出さない）。
 
+use std::io::BufRead;
 use std::os::windows::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::error::SpawnError;
@@ -181,6 +183,10 @@ pub struct HelperHandle {
     /// KILL_ON_JOB_CLOSE 付き Job Object の RAII ハンドル（孤児化防止）。`Drop` で
     /// `CloseHandle`→job クローズ→helper kill。割り当て失敗時は `None`（縮退）。
     _job: Option<std::os::windows::io::OwnedHandle>,
+    /// helper の標準エラーの読み手のスレッド（標準エラーが管のときだけ `Some`）。管が閉じれば
+    /// （helper とその書き口を受け継いだ子がみな終われば）自分で終わる。`HelperHandle` の Drop が
+    /// helper の終わりの後にこれを 1 秒まで待つ（U7）ので、ここに持っておく。
+    _stderr_reader: Option<JoinHandle<()>>,
 }
 
 impl HelperHandle {
@@ -241,6 +247,7 @@ impl HelperHandle {
 ///   [`LOAD_DIR_ENV`] = load_dir・[`SHIORI_NAME_ENV`] = shiori_name。
 /// - **cwd**: `load_dir`（伺か慣習・R3.3）。
 /// - **`PASTA_DEBUG=0`**: 親の値を受け継がせない（[`helper_command`]）。
+/// - **標準エラー**: 管にし、行ごとに `warn`（`event = "helper_stderr"`）で記録へ回す。
 ///
 /// Rust 関数の引数順（`helper_exe, load_dir, shiori_name, parent_hwnd`）と
 /// 子引数の並び（arg1=parent_hwnd 先頭）は別物である点に注意。`shiori_name` は
@@ -268,7 +275,7 @@ pub fn spawn(
     ))
 }
 
-/// helper を起こす [`Command`] を 1 か所で組む（引数・環境・作業フォルダ）。中身はテストが
+/// helper を起こす [`Command`] を 1 か所で組む（引数・環境・作業フォルダ・標準エラーの管）。中身はテストが
 /// `get_args`／`get_envs`／`get_current_dir` で読む。
 ///
 /// `PASTA_DEBUG` は常に `0`（開ける口は無い＝要件 8.1・8.2・10.4）。親（areka）に立っていても
@@ -293,6 +300,8 @@ fn helper_command(
         .env("PASTA_DEBUG", "0")
         // cwd=load_dir（伺か慣習・R3.3）。
         .current_dir(load_dir);
+    // helper の `[helper]` の行を areka の記録へ回す（[`spawn_command`] が読み手を起こす）。
+    command.stderr(Stdio::piped());
     command
 }
 
@@ -306,20 +315,112 @@ fn helper_command(
 /// （GUI の `areka.exe` から窓の指定なしで起こすと新しいコンソール窓が開き、利用者が閉じると
 /// 補助プロセスが殺される）。`HelperHandle` に包む子の起こし方の決まり（job への割り当てと同じ
 /// 置き場）なので、`arg`／`env`／`cwd` の契約を組む [`spawn`] ではなくこの seam に置く。
-/// 標準入出力の扱いは変えない（受け取った `Command` の指定のまま）。
+/// 標準入出力の扱いは変えない（受け取った `Command` の指定のまま）。標準エラーが管なら、
+/// 行を `warn` で記録へ回す読み手のスレッドを起こす（[`log_helper_line`]）。
 ///
 /// # Errors
 /// `Command::spawn` の I/O 失敗を [`SpawnError`] として返す。
-pub fn spawn_command(mut command: Command) -> Result<HelperHandle, SpawnError> {
-    let child = command.creation_flags(CREATE_NO_WINDOW).spawn()?;
+pub fn spawn_command(command: Command) -> Result<HelperHandle, SpawnError> {
+    spawn_command_with(command, log_helper_line)
+}
+
+/// [`spawn_command`] の中身。標準エラーの行を渡す先 `sink(pid, 行)` を差し替えられる（テスト用）。
+pub(crate) fn spawn_command_with(
+    mut command: Command,
+    mut sink: impl FnMut(u32, &str) + Send + 'static,
+) -> Result<HelperHandle, SpawnError> {
+    let mut child = command.creation_flags(CREATE_NO_WINDOW).spawn()?;
     // 孤児化防止: spawn 直後に KILL_ON_JOB_CLOSE 付き job へ割り当てる（失敗は縮退＝None）。
     // これにより、親プロセスが UNLOAD を送らずに終了しても helper が OS 機構で kill される。
     let job = crate::job::attach_kill_on_close_job(&child);
+    let pid = child.id();
+    let stderr_reader = child.stderr.take().and_then(|stderr| {
+        std::thread::Builder::new()
+            .name("shiori-host32-stderr".into())
+            .spawn(move || {
+                if let Err(e) =
+                    forward_helper_stderr(std::io::BufReader::new(stderr), |line| sink(pid, line))
+                {
+                    tracing::error!(
+                        target: LOG_TARGET,
+                        event = "helper_stderr_read_failed",
+                        pid,
+                        error = %e,
+                        "helper の標準エラーを読めなかった——ここから先の行は記録へ回らない"
+                    );
+                }
+            })
+            .map_err(|e| {
+                tracing::error!(
+                    target: LOG_TARGET,
+                    event = "helper_stderr_reader_spawn_failed",
+                    pid,
+                    error = %e,
+                    "helper の標準エラーの読み手を起こせなかった——helper の行は記録へ回らない"
+                );
+            })
+            .ok()
+    });
     Ok(HelperHandle {
         child,
         helper_hwnd: None,
         _job: job,
+        _stderr_reader: stderr_reader,
     })
+}
+
+/// helper の標準エラーを LF で切り（行末の CR を落とす）、行ごとに `sink` を呼ぶ。管の終わりで
+/// `Ok`、読みの失敗で `Err` を返す（呼び手が記録して終わる）。
+///
+/// 行は UTF-8 で読み、UTF-8 でない行は OS の ANSI コードページで読む（文字化けは読む側で直す）。
+fn forward_helper_stderr(
+    mut reader: impl BufRead,
+    mut sink: impl FnMut(&str),
+) -> std::io::Result<()> {
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        if reader.read_until(b'\n', &mut buf)? == 0 {
+            return Ok(());
+        }
+        let mut line = buf.as_slice();
+        line = line.strip_suffix(b"\n").unwrap_or(line);
+        line = line.strip_suffix(b"\r").unwrap_or(line);
+        match std::str::from_utf8(line) {
+            Ok(text) => sink(text),
+            Err(_) => sink(&decode_ansi(line)),
+        }
+    }
+}
+
+/// ANSI コードページ（`CP_ACP`）のバイト列を読む。読めなければ置き換えの字で読む（行は落とさない）。
+fn decode_ansi(bytes: &[u8]) -> String {
+    use windows::Win32::Globalization::{
+        CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar,
+    };
+    // SAFETY: `bytes` は有効なバイト列。出力 None＝長さの問い合わせ。既定のフラグ(0)。
+    let len = unsafe { MultiByteToWideChar(CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, None) };
+    if len > 0 {
+        let mut wide = vec![0u16; len as usize];
+        // SAFETY: `wide` は `len` 要素の可変領域。`bytes` は有効なバイト列。既定のフラグ(0)。
+        let got = unsafe {
+            MultiByteToWideChar(
+                CP_ACP,
+                MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0),
+                bytes,
+                Some(&mut wide),
+            )
+        };
+        if got > 0 {
+            return String::from_utf16_lossy(&wide[..got as usize]);
+        }
+    }
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// 本番の行の渡し先: helper の 1 行を文を変えずに `warn` で書く（Display＝逃がしの字を入れない）。
+fn log_helper_line(pid: u32, line: &str) {
+    tracing::warn!(target: LOG_TARGET, event = "helper_stderr", pid, "{line}");
 }
 
 /// helper の生死を非ブロッキングで問い合わせる（要件 1.2）。
@@ -456,6 +557,10 @@ mod console_tests;
 #[cfg(test)]
 #[path = "process_host_image_tests.rs"]
 mod image_tests;
+
+#[cfg(test)]
+#[path = "process_host_stderr_tests.rs"]
+mod stderr_tests;
 
 #[cfg(test)]
 pub(crate) mod tests {

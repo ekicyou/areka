@@ -28,6 +28,8 @@ features = [
     # SECURITY_ATTRIBUTES を持つため Win32_Security も要る。
     "Win32_System_JobObjects",
     "Win32_Security",
+    # helper の標準エラーの行を ANSI コードページで読む（MultiByteToWideChar(CP_ACP)・process_host.rs）。
+    "Win32_Globalization",
 ]
 
 [dev-dependencies]

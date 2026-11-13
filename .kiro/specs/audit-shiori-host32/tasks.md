@@ -59,7 +59,7 @@
   - 観測の本体は前提（自分の環境が 1）を確かめてから、本番の起こし方で実の i686 helper を起こし、握手・LOAD・`GET OnTestEnv` で値を読む
   - 完了の姿: テストが緑で、4.1 の `PASTA_DEBUG` の行を消すと値が `1` になって赤になる
   - _Requirements: 4.1, 4.4, 8.5_
-- [ ] 4.3 helper の標準エラーを読み手のスレッドで areka の記録へ `warn` で回す（指摘 4）
+- [x] 4.3 helper の標準エラーを読み手のスレッドで areka の記録へ `warn` で回す（指摘 4）
   - 起こし方で標準エラーを管にし、helper 1 つに 1 本の読み手のスレッドが行ごとに `warn!(target: "shiori-host32", event = "helper_stderr", pid, ..)` を書く。行の文は変えない
   - 行は UTF-8 で読み、読めない行は OS の ANSI コードページで読む。読みの失敗は `error!` を 1 行書いて終わる
   - 行を集める口を差し替えられる内側の起こし方を置き、公開の `spawn_command` の形は変えない。`windows` の機能に `Win32_Globalization` を足す（`Cargo.lock` は変わらない）
@@ -196,3 +196,5 @@
 - 3（範囲外・/kiro-complete の棚卸へ）: areka-ghost の実物の pasta のテスト（real_pasta_boot_observes_a_cue_then_shuts_down_cleanly・real_pasta_online）は HOST32_PASTA_DLL の DLL を emo2 の辞書へ差し込むので、hello-pasta の pasta.dll では LoadReturnedFalse で赤（古い LoadLibraryW でも同じ）。emo2 自身の DLL なら緑。
 - 3（範囲外）: crates/shiori-host32-host/README.md:15,92 と doc/COMPAT_ARCHITECTURE.md:84 に LoadLibraryW の記述が残る。README は 11 の説明の直しで扱う。
 - 4.2: helper_env_e2e の観測の本体（#[ignore] の pasta_debug_probe_child）は前提として自分の PASTA_DEBUG=1 を確かめるので、host のテストを --ignored／--include-ignored で回すとこの 1 本は赤になる（設計の「件 2 の試験」どおり）。
+- 4.3: 標準エラーの読み手の read_until に行の長さの上限が無い（SHIORI の DLL が改行なしで書き続けると host のメモリが伸びる）。設計・要件は上限を求めていない。14 の audit のかけ直しで見る。
+- 4.3: forward_helper_stderr は設計の () でなく io::Result<()> を返し（読みの失敗の error! に pid を載せるため呼び手で書く）、読み手のスレッドを起こせないときの error!（helper_stderr_reader_spawn_failed）を足した。審査で承認。
