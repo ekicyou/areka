@@ -375,3 +375,7 @@ mod samples_e2e_tests;
 // 焼きの入口 `bake` の檻（spec: audit-emo-atlas 指摘 19 で兄弟のファイルへ移した）。
 #[cfg(test)]
 mod bake_entry_tests;
+
+// 信用できない読み手の答えを焼きの段で断るテスト（spec: audit-emo-atlas 指摘 2・18）。
+#[cfg(test)]
+mod bake_guard_tests;

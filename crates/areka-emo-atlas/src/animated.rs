@@ -11,6 +11,7 @@ use std::path::Path;
 
 use crate::decode::{
     AnimatedImage, AnimationFrame, AnimationInfo, DecodeError, DecodedImage, ElementDecoder,
+    check_image, pixel_len,
 };
 use crate::limits::{AnimationLimits, Exceeded, judge};
 use crate::normalize::{AlphaRule, apply_to};
@@ -42,6 +43,13 @@ pub(crate) fn load(
     let Some(info) = decoder.probe_animation(path) else {
         return still(decoder, path);
     };
+    // 縮める道も同じ寸法で読むので、一辺の上限を越える見出しは縮めずに読めなかった絵にする（指摘 2）。
+    if let Err(source) = pixel_len(info.width, info.height) {
+        return Loaded::Failed(DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
+        });
+    }
     let pixels = match judge(info, limits, used, cfg) {
         Ok(pixels) => pixels,
         Err(exceeded) => {
@@ -64,21 +72,28 @@ pub(crate) fn load(
             && anim
                 .frames
                 .iter()
-                .all(|f| f.image.width == info.width && f.image.height == info.height);
+                .all(|f| {
+                    f.image.width == info.width
+                        && f.image.height == info.height
+                        && check_image(&f.image).is_ok()
+                });
         if fits {
             Ok(anim)
         } else {
             Err(DecodeError::Decode {
                 path: path.to_path_buf(),
                 source: format!(
-                    "frames do not match the header: header {} frames {}x{}, got {} frames ({})",
+                    "frames do not match the header or break the contract: header {} frames {}x{}, got {} frames ({})",
                     info.frame_count,
                     info.width,
                     info.height,
                     anim.frames.len(),
                     anim.frames
                         .iter()
-                        .map(|f| format!("{}x{}", f.image.width, f.image.height))
+                        .map(|f| match check_image(&f.image) {
+                            Ok(()) => format!("{}x{}", f.image.width, f.image.height),
+                            Err(e) => e,
+                        })
                         .collect::<Vec<_>>()
                         .join(", "),
                 ),
@@ -102,9 +117,20 @@ pub(crate) fn load(
 
 /// 今までの 1 枚読み。
 fn still(decoder: &impl ElementDecoder, path: &Path) -> Loaded {
-    match decoder.decode(path) {
+    match decoder.decode(path).and_then(|img| accept(img, path)) {
         Ok(img) => Loaded::Still(img),
         Err(e) => Loaded::Failed(e),
+    }
+}
+
+/// 読めた絵が読み手の約束（一辺・stride・長さ）を守るときだけ通す（指摘 18）。
+fn accept(img: DecodedImage, path: &Path) -> Result<DecodedImage, DecodeError> {
+    match check_image(&img) {
+        Ok(()) => Ok(img),
+        Err(source) => Err(DecodeError::Decode {
+            path: path.to_path_buf(),
+            source,
+        }),
     }
 }
 
@@ -117,7 +143,10 @@ fn shrink(
     key: &AtlasKey,
     info: AnimationInfo,
 ) -> Loaded {
-    match decoder.decode_first_frame(path, info) {
+    match decoder
+        .decode_first_frame(path, info)
+        .and_then(|img| accept(img, path))
+    {
         Ok(img) => Loaded::Still(img),
         Err(reason) => {
             tracing::warn!(

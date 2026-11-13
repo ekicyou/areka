@@ -55,7 +55,7 @@ impl Baker {
         page_size: u32,
     ) -> (Vec<AtlasPage>, Vec<(ElementId, Placement)>) {
         let stride = page_size * 4;
-        let page_len = (stride * page_size) as usize;
+        let page_len = stride as usize * page_size as usize;
 
         // 1. 頁数分の可変バッファを確保（初期値 0＝完全透明 premultiplied・6.3）。
         //    blit 後に Arc<[u8]> へ変換する。
@@ -100,10 +100,10 @@ impl Baker {
             // 元: src_offset = row * trimmed.stride（tightly packed・== uv.w*4）。
             // 先: dest_offset = (uv.y + row) * stride + uv.x * 4（頁 stride）。
             let src_stride = trimmed.stride as usize;
-            let dest_row_bytes = (uv.w * 4) as usize;
+            let dest_row_bytes = uv.w as usize * 4;
             for row in 0..uv.h {
                 let src_off = (row as usize) * src_stride;
-                let dest_off = ((uv.y + row) * stride + uv.x * 4) as usize;
+                let dest_off = (uv.y + row) as usize * stride as usize + uv.x as usize * 4;
                 // in-range スライスへ copy_from_slice（premultiplied バイトを素通し）。
                 page_buf[dest_off..dest_off + dest_row_bytes]
                     .copy_from_slice(&trimmed.pbgra[src_off..src_off + dest_row_bytes]);

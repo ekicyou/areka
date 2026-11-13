@@ -66,7 +66,7 @@ impl Trimmer {
         let mut any = false;
 
         for y in 0..img.height {
-            let row_start = (y * img.stride) as usize;
+            let row_start = y as usize * img.stride as usize;
             for x in 0..img.width {
                 // PBGRA32: 4 byte/画素・α は 4 byte 目（オフセット +3）。
                 let alpha_offset = row_start + (x as usize * 4) + 3;
@@ -105,12 +105,12 @@ impl Trimmer {
         let out_stride = size.w * 4;
 
         // bbox 領域を tightly-packed な新規バッファへ行単位でコピー（premultiplied 素通し・4.3/D8）。
-        let mut pbgra = vec![0u8; (out_stride * size.h) as usize];
+        let mut pbgra = vec![0u8; out_stride as usize * size.h as usize];
         for row in 0..size.h {
             let src_y = min_y + row;
-            let src_start = (src_y * img.stride + min_x * 4) as usize;
-            let dst_start = (row * out_stride) as usize;
-            let len = (size.w * 4) as usize;
+            let src_start = src_y as usize * img.stride as usize + min_x as usize * 4;
+            let dst_start = row as usize * out_stride as usize;
+            let len = size.w as usize * 4;
             pbgra[dst_start..dst_start + len]
                 .copy_from_slice(&img.pbgra[src_start..src_start + len]);
         }

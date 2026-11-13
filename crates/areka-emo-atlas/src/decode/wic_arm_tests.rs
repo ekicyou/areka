@@ -187,7 +187,7 @@ fn decode_opens_name_with_lone_surrogate() {
 /// 幅 `width`・高さ 1 の本物の PNG をワークツリーの `target` の下に作ってパスを返す。
 fn wide_png(width: u32) -> PathBuf {
     let dir =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/emo_atlas_max_side_test");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/emo_atlas_side_limit_test");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(format!("{width}x1.png"));
     image::RgbaImage::new(width, 1).save(&path).unwrap();

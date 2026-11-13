@@ -33,7 +33,7 @@
   - 16,385×1 と 16,384×1 の本物の PNG をワークツリーの `target` の下に作って読むテスト 2 本と、長さの関数のあふれのテストを置く
   - 完了の状態: 16,385×1 が読めなかった絵になり文に上限が出る、16,384×1 は幅 16,384 で読める、長さの関数のテストが緑
   - _Requirements: 2.1, 4.6, 4.7, 6.2, 7.2, 7.4_
-- [ ] 2.3 鍵 1 つの読みと切り詰め・焼きで上限と約束を守る（指摘 2・18 の後半）
+- [x] 2.3 鍵 1 つの読みと切り詰め・焼きで上限と約束を守る（指摘 2・18 の後半）
   - 動く絵の見出しの寸法を上限の判定の前に確かめ、越えたら縮めずに読めなかった絵にする（縮める道の `warn!` は出さない）
   - 1 枚読みと縮める道の段 1 で読めた絵を約束の確かめに通し、全コマの合う確かめにも約束を足す（破れば今の「読めなかった」と同じ道）
   - 切り詰めと焼きの添字と長さの掛け算を `usize` で行う
@@ -148,3 +148,4 @@
 ## Implementation Notes
 
 - 2.2: `check_image` は本番の使い手が無いと clippy の dead_code で落ちるので、仮に `decode/wic_arm.rs::copy_checked` の最後で呼んでいる。2.3 で `animated::accept`/`fits` が使い始めたら、その 1 行を消す（設計どおり WIC の腕は `pixel_len` だけ）。
+- 2.3: 範囲の外で替え玉の読み手（`MemoryDecoder`）に絵を登録する呼び出しを grep で全部読んだ。39 ファイル・45 件（`insert` 35・`insert_animated` 10。内訳 areka 4・areka-emo-compose 17・areka-emo-present 16・areka-emo-text 1・areka-placement 1）、約束（stride ≥ 幅×4・長さ＝stride×高さ）を破るものは 0 件。`decode/wic_arm.rs::copy_checked` の仮の `check_image` は消した。

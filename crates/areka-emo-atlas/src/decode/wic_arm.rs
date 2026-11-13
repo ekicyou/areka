@@ -26,8 +26,8 @@ use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::core::{GUID, HSTRING, Interface};
 
 use crate::decode::{
-    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, check_image,
-    image_arm, pixel_len, sniff,
+    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, image_arm, pixel_len,
+    sniff,
 };
 
 /// 既定デコード腕（WIC 経由）。COM/unsafe をこの腕へ隔離する（D4）。
@@ -112,15 +112,13 @@ fn copy_checked(source: &IWICBitmapSource, has_alpha: bool) -> Result<DecodedIma
     let mut bgra = vec![0u8; len];
     unsafe { source.CopyPixels(std::ptr::null(), stride, &mut bgra) }.map_err(|e| e.to_string())?;
 
-    let img = DecodedImage {
+    Ok(DecodedImage {
         width,
         height,
         stride,
         bgra,
         has_alpha,
-    };
-    check_image(&img)?;
-    Ok(img)
+    })
 }
 
 impl ElementDecoder for WicDecoderArm {

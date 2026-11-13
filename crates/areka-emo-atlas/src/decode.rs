@@ -416,7 +416,12 @@ mod tests {
         // 上限の端の長さは 2^30。u32 の掛け算ならあふれる寸法（u32::MAX 四方）は掛ける前に断る。
         assert_eq!(pixel_len(MAX_SIDE, MAX_SIDE), Ok(1usize << 30));
         assert_eq!(pixel_len(0, 0), Ok(0));
-        for (w, h) in [(MAX_SIDE + 1, 1), (1, MAX_SIDE + 1), (u32::MAX, u32::MAX)] {
+        for (w, h) in [
+            (MAX_SIDE + 1, 1),
+            (1, MAX_SIDE + 1),
+            (40_000, 30_000),
+            (u32::MAX, u32::MAX),
+        ] {
             let err = pixel_len(w, h).expect_err("over max side");
             assert!(
                 err.contains(&format!("{w}x{h}")) && err.contains("16384"),
