@@ -160,6 +160,22 @@ pub(crate) fn post_stateless(addr: SocketAddr, method: &str, id: u64, params: Va
     post_rpc(addr, &headers, &rpc(method, Some(id), Some(params)))
 }
 
+/// 両方の経路で同じ要求を送る（経路の名前, 応答）。旧式は id 1、無状態版は id 2。
+/// `params` が None なら旧式は欄ごと省き、無状態版は `{}`。
+pub(crate) fn post_both(
+    addr: SocketAddr,
+    method: &str,
+    params: Option<Value>,
+) -> [(&'static str, Response); 2] {
+    [
+        ("旧式", post_legacy(addr, method, 1, params.clone())),
+        (
+            "無状態版",
+            post_stateless(addr, method, 2, params.unwrap_or_else(|| json!({}))),
+        ),
+    ]
+}
+
 /// `tools/call` の `params`。
 pub(crate) fn call_params(name: &str, arguments: Value) -> Value {
     json!({ "name": name, "arguments": arguments })
@@ -188,13 +204,7 @@ pub(crate) fn assert_invalid_params(
     let (_server, addr) = serve(registry);
     let params = call_params(name, arguments);
     // 旧式の経路も無状態版の経路も 200（rmcp 3.9.0 で測った値。3.5.0 の無状態版は 400 だった＝差の一覧へ）。
-    for (path, response) in [
-        (
-            "旧式",
-            post_legacy(addr, "tools/call", 1, Some(params.clone())),
-        ),
-        ("無状態版", post_stateless(addr, "tools/call", 2, params)),
-    ] {
+    for (path, response) in post_both(addr, "tools/call", Some(params)) {
         assert_eq!(response.status, 200, "{path}: {response:?}");
         let value = response.json();
         assert!(value.get("result").is_none(), "{path}: {value}");

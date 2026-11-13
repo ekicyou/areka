@@ -165,16 +165,7 @@ fn get_v1_has_no_form() {
 #[test]
 fn server_discover_stateless() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let params = json!({ "_meta": stateless_meta() });
-    let response = post_rpc(
-        addr,
-        &[
-            ("MCP-Protocol-Version", "2026-07-28"),
-            ("Mcp-Method", "server/discover"),
-        ],
-        &rpc("server/discover", Some(1), Some(params.clone())),
-    );
-    let result = Response::result(&response);
+    let result = Response::result(&post_stateless(addr, "server/discover", 1, json!({})));
     assert_eq!(
         result["supportedVersions"],
         json!(SUPPORTED_VERSIONS),
@@ -195,6 +186,8 @@ fn server_discover_stateless() {
         "{result}"
     );
     // `Mcp-Method` が本文のメソッドと食い違うと 400・`-32020`（SSP と同じ番号・文言は違う）。
+    // 食い違いをわざと作るので、この要求だけは手で組む。
+    let params = json!({ "_meta": stateless_meta() });
     let response = post_rpc(
         addr,
         &[
@@ -219,18 +212,7 @@ fn server_discover_stateless() {
 #[test]
 fn tools_list_stateless_has_cache_hints() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let result = Response::result(&post_rpc(
-        addr,
-        &[
-            ("MCP-Protocol-Version", "2026-07-28"),
-            ("Mcp-Method", "tools/list"),
-        ],
-        &rpc(
-            "tools/list",
-            Some(1),
-            Some(json!({ "_meta": stateless_meta() })),
-        ),
-    ));
+    let result = Response::result(&post_stateless(addr, "tools/list", 1, json!({})));
     assert_eq!(result["ttlMs"], 0, "{result}");
     assert_eq!(result["cacheScope"], "private", "{result}");
     assert_eq!(result["resultType"], "complete", "{result}");

@@ -5,7 +5,6 @@
 //! `127.0.0.1` の空きポートだけを使い、ネットへは出ない。受け手はテストのスレッドの偽物。旧式（ヘッダも
 //! `_meta` も無い）と無状態版（`2026-07-28`）の両方の経路で確かめる。
 
-use std::net::SocketAddr;
 use std::thread;
 
 use serde_json::{Value, json};
@@ -16,23 +15,8 @@ use super::{
 };
 use crate::testkit::{
     LONG_WAIT, RECV_WAIT, Response, assert_invalid_params, assert_no_request, call_params,
-    initialize_params, post_legacy, post_stateless, saved_list, serve,
+    initialize_params, post_both, post_legacy, post_stateless, saved_list, serve,
 };
-
-/// 両方の経路で同じ要求を送る（経路の名前, 応答）。`params` が None なら旧式は欄ごと省き、無状態版は `{}`。
-fn post_both(
-    addr: SocketAddr,
-    method: &str,
-    params: Option<Value>,
-) -> [(&'static str, Response); 2] {
-    [
-        ("旧式", post_legacy(addr, method, 1, params.clone())),
-        (
-            "無状態版",
-            post_stateless(addr, method, 2, params.unwrap_or_else(|| json!({}))),
-        ),
-    ]
-}
 
 /// (要件 1.1・1.3・1.4・1.5・5.1・5.3) `tools/list` は 11 本。先頭 10 本は保存した SSP の定義と配列ごと一致
 /// （並び・欄の過不足を 1 度に見る）、11 本目は `check_script` の定義そのもので、欄は 4 つだけ。
