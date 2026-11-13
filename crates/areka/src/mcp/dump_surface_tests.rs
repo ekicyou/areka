@@ -13,8 +13,8 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 #[test]
 fn answers_no_window_at_once_with_an_empty_world() {
@@ -69,7 +69,7 @@ fn success_is_finished_on_the_encoding_thread_and_answered_from_there() {
     let started = || entered.load(std::sync::atomic::Ordering::SeqCst);
     assert_eq!(
         pending
-            .wait_answer(crate::emo2_boot::spine::Progress::Count(&started))
+            .wait_answer(crate::runtime::spine::Progress::Count(&started))
             .map(|a| a.outcome),
         Some(outcome::ok(ENCODE_THREAD))
     );
@@ -401,9 +401,9 @@ fn abandoned_while_encoding_drops_the_pair_without_ui_errors() {
         let held_after_leave = held(&rig);
         let _ = release_tx.send(());
         let started = || entered.load(std::sync::atomic::Ordering::SeqCst);
-        let ran = crate::emo2_boot::spine::wait_recv(
+        let ran = crate::runtime::spine::wait_recv(
             "放した符号化の仕事が走り終える",
-            crate::emo2_boot::spine::Progress::Count(&started),
+            crate::runtime::spine::Progress::Count(&started),
             &ran_rx,
         )
         .map_err(|failure| eprintln!("{failure}"))

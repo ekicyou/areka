@@ -17,8 +17,8 @@ use areka_emo_present::balloon::resolve_balloon_faces;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::emo2_boot::assets::{build_balloon_assets, build_shell_assets};
-use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::runtime::assets::{build_balloon_assets, build_shell_assets};
+use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::{measure_baked, measure_with_reader};

@@ -1,0 +1,604 @@
+// =============================================================================
+// フレーム統合の検証（task 6.6）
+//
+// ここが押さえるのは**相順そのもの**——本番の `frame_system` が design 決定 D5 の順で
+// 各相を回したときにだけ成り立つ性質である。判断中核の分岐表・配線層の縮退・表示層の
+// 可視性能力は、それぞれ `balloon_visibility_tests.rs` 群・`balloon_visibility_phase_tests.rs`・
+// `areka-emo-present` の in-crate テストが所有しており、ここでは重ねない。
+//
+// 実 emo2 fixture ＋ 実 GPU（MTA）で本番の `frame_system` をそのまま駆動する。
+// 表示層の可視化（`show_target`）は「表示が一度も確立していない」と必ず失敗するため、確立が
+// 成立する実 attach を通さない限り、以下の性質はどれも観測できない。
+//
+// 時刻はすべて注入（`FrameTime` 資源＋`TalkClock` の epoch）で、実時間の待機・スリープ・
+// 反復回数のみによる有界化は 1 つも用いない（Requirements 9.2 / 9.3）。
+// =============================================================================
+
+use crate::runtime::balloon_hover::BalloonHover;
+use std::sync::mpsc;
+
+use areka_emo_text::state::TextLayerConfig;
+use dola::cue::{CueCommand, TalkCue};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use wintf::ecs::Visual;
+use wintf::ecs::layout::Arrangement;
+
+use crate::input_events::balloon::BalloonWiring;
+use crate::runtime::assets::build_boot_assets;
+use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
+
+use super::test_support::{dpi_world, size_of, zero_clock};
+use super::*;
+
+// ---------------------------------------------------------------------------
+// 檻の組み立て
+// ---------------------------------------------------------------------------
+
+/// 相順の檻の World（2 スコープ窓＋偽 `WindowHandle`＋全窓 DPI 96＋実 GPU 資源）。
+///
+/// attach 相のゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の
+/// 連言ゆえ、本番の相順を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を
+/// 初期化する（記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
+///
+/// ポインタ配線（`BalloonWiring`）も本番同様に置く。不在でも「抑止なし」へ倒れるだけだが、
+/// その縮退の誤りログが相順の観測窓へ毎回混ざるため、観測を濁さないために揃えておく。
+///
+/// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
+fn gpu_frame_world() -> (
+    crate::runtime::spine::GpuPermit,
+    World,
+    areka_placement::spawn::GhostWindows,
+) {
+    // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
+    // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let (mut world, gw) = dpi_world();
+    let gpu = crate::runtime::spine::GpuPermit::take();
+    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
+    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
+    world.insert_resource(core);
+    world.insert_resource(wuc);
+    world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonHover::default());
+    (gpu, world, gw)
+}
+
+/// 実 emo2 資産で結線資源を組む（本番 `wire_runtime` 手順 6 と同じ構築点）。
+fn boot_wiring(
+    rx: Receiver<PresentCommand>,
+    lifecycle_rx: Receiver<TalkLifecycleSignal>,
+) -> RuntimeWiring {
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    RuntimeWiring::new(
+        EmoPresenter::new(),
+        rx,
+        mpsc::channel::<PositionCue>().1,
+        lifecycle_rx,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        assets,
+    )
+}
+
+/// 本番の相順を 1 フレーム分回す（`frame_system` の donor 手順をそのまま通す）。
+///
+/// 相を個別に呼ばないのが要点である——相順の性質を見たい檻が相を自分で並べたら、檻は自分の
+/// 並べ方を検査するだけになる。
+fn advance_frame(world: &mut World, wiring: RuntimeWiring) -> RuntimeWiring {
+    world.insert_non_send(wiring);
+    frame_system(world);
+    world
+        .remove_non_send::<RuntimeWiring>()
+        .expect("frame_system は取り出した結線資源を必ず戻す")
+}
+
+/// `[balloon-visibility]` を名乗る行だけを取り出す（他所のログは相順の関心事ではない）。
+fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.message().contains("[balloon-visibility]"))
+        .collect()
+}
+
+/// 本制御が発行していない可視性変化として記録された行だけを取り出す。
+fn explicit_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    visibility_lines(events)
+        .into_iter()
+        .filter(|e| e.field("trigger") == Some("\"explicit\""))
+        .collect()
+}
+
+/// 当該 scope へ可視グリフを流し込む（`at=0.0` 起点・注入時刻が進むほど文字がリビールされる）。
+fn reveal_text(wiring: &RuntimeWiring, scope: u32, text: &str) {
+    wiring.runtime.borrow_mut().apply_cue(&TalkCue {
+        at: 0.0,
+        actor: ActorKey::from(scope.to_string()),
+        command: CueCommand::Text(text.into()),
+        duration: text.chars().count() as f64 * 0.25,
+    });
+}
+
+/// 窓 entity の `DPI` を現在値と必ず異なる実機水準（96／192）へ差し替え、その新 DPI を返す。
+///
+/// 固定値を書き込むと「たまたま同値＝拡大率不変」で檻が空虚化するため、現在値を読んでから
+/// 別の値を選ぶ（`spine_test_support.rs:80-83` の `bump_window_dpi` と同流儀）。
+fn bump_window_dpi(world: &mut World, window: Entity) -> u16 {
+    let current = world.get::<DPI>(window).map(|d| d.dpi_x);
+    let next = if current == Some(192) { 96 } else { 192 };
+    world.entity_mut(window).insert(DPI::from_dpi(next, next));
+    next
+}
+
+/// 装着済みバルーンの「確立はしているが不可視」を 1 scope 分主張する。
+///
+/// 不可視だけを見る主張は「そもそも何も確立していない」場合にも真になる（`target_visible` は
+/// `attach_target` 直後から `Some(false)` を返す）。確立の証跡——面 0 の記録・文字の配置先・
+/// 文字スロット entity の実値——を先に要求してから不可視を主張することで、確立が起きていない
+/// 縮退では不可視の主張へ到達する前に落ちる。
+fn assert_established_but_invisible(world: &World, wiring: &RuntimeWiring, scope: u32, at: &str) {
+    let target = balloon_target(scope);
+    assert_eq!(
+        wiring.presenter.current_surface_id(target),
+        Some(0),
+        "{at} scope{scope}: 面 0 が確立している（撤去ではなく不可視のままの確立）"
+    );
+    let view = wiring
+        .presenter
+        .text_slot_view(target)
+        .unwrap_or_else(|| panic!("{at} scope{scope}: 文字の配置先が確立している"));
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(false),
+        "{at} scope{scope}: バルーンは不可視のまま（Requirement 1.1／1.2・全 scope 適用の 1.6）"
+    );
+    assert_eq!(
+        world.get::<Visual>(view.slot()).map(|v| v.is_visible),
+        Some(false),
+        "{at} scope{scope}: 文字スロット entity の可視状態も偽のまま（presenter の帳簿ではなく実値）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑴ 判断は「本フレームの表示指令を適用し終えた実状態」で行われる（Requirement 3.5）
+// ---------------------------------------------------------------------------
+
+/// 可視性の相は drain の**後**に置かれている——本フレームに届いた `\b[-1]` 相当の非表示を
+/// 適用し終えた実状態を見て判断する（design 決定 D5・Requirement 3.5）。
+///
+/// # 観測の仕組み
+///
+/// 配線層は「前フレームの記憶」と「本フレームの観測」の差分を `trigger=explicit` として
+/// 記録する。ゆえに「前フレームは可視・本フレームの drain が非表示を適用」という状況を作れば、
+/// 相順が正しいときだけ当該フレームに 1 行が現れる。相を drain の前へ移すと、判断が見るのは
+/// 1 フレーム古い可視状態（＝まだ可視）となり、差分が立たず 1 行も出ない。
+///
+/// 可視の実状態は表示層へ直接発行して作る。ここで見たいのはコンテンツ判定ではなく
+/// **相順が何を観測するか**であり、可視化の契機まで本檻に持ち込むと観測点が二重になる。
+#[test]
+fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
+    let (_gpu, mut world, _gw) = gpu_frame_world();
+    let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    // 送出端は檻が保持し続ける（drop すると受信端が切断され、相が誤りレベルで 1 行鳴らす）。
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    let target = balloon_target(0);
+
+    // フレーム 1: 装着（不可視のままの確立）。
+    wiring = advance_frame(&mut world, wiring);
+    assert_established_but_invisible(&world, &wiring, 0, "フレーム 1 終了時点:");
+
+    // 実状態を可視にする（本番でこれを発行するのは可視性の相だが、本檻の対象は相順ゆえ直接発行する）。
+    wiring
+        .presenter
+        .show_target(&mut world, target)
+        .expect("確立済みバルーンの可視化は成功する");
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(true),
+        "前提: 表示層の実状態が可視になっている"
+    );
+
+    // フレーム 2: 外から可視になったことを相が検出し、以後の比較相手が「可視」に揃う。
+    let (next, events) = capture(|| advance_frame(&mut world, wiring));
+    wiring = next;
+    let explicit = explicit_lines(&events);
+    assert_eq!(
+        explicit.len(),
+        1,
+        "外因の可視化が 1 行で記録される（次フレームの比較相手が可視に揃った証跡）: {events:?}"
+    );
+    assert_eq!(explicit[0].expect_field("scope"), "0");
+    assert_eq!(explicit[0].expect_field("visible"), "true");
+
+    // フレーム 3: 本フレームの drain が `\b[-1]` 相当の非表示を適用する。
+    present_tx
+        .send(PresentCommand::Hide {
+            target,
+            reply: None,
+        })
+        .expect("受信端は結線資源が保持している");
+    let (next, events) = capture(|| advance_frame(&mut world, wiring));
+    wiring = next;
+
+    let explicit = explicit_lines(&events);
+    assert_eq!(
+        explicit.len(),
+        1,
+        "指令適用後の実状態で判断していれば、同一フレームで非表示への変化を検出する（相を drain の前へ移すと 0 件になる）: {events:?}"
+    );
+    assert_eq!(explicit[0].expect_field("scope"), "0");
+    assert_eq!(explicit[0].expect_field("visible"), "false");
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(false),
+        "フレーム終了時点の実状態も不可視"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑵ 表示へ遷移したフレームで窓寸が同一フレームに届く（Requirement 6.6）
+// ---------------------------------------------------------------------------
+
+/// 可視性の相は窓寸の反映より**前**に置かれている——表示へ遷移したフレームで、その表示が
+/// 積んだ窓寸要求が同一フレームのうちに窓へ届く（design 決定 D5・Requirement 6.6）。
+///
+/// # 非空虚性の作り方（不可視の間に溜めた拡大率の差）
+///
+/// 不可視のバルーンは dpi 相で拡大率を拾わない（`refresh_scale` の可視ゲート・
+/// `areka-emo-present/src/presenter/refresh.rs:74-80`）。ゆえに不可視のまま表示倍率を変えると
+/// 差は保留され、可視化の際に `show_target` が単一漏斗を再通過して**現在の**倍率から拡大率を
+/// 導出し直したときに初めて物理寸が跳ぶ。この跳びが同一フレームで窓へ届くかどうかが、
+/// 相が窓寸の反映より前に居るかどうかそのものである。相を反映の後ろへ移すと、窓寸は当該
+/// フレームでは旧寸のまま据え置かれて落ちる。
+#[test]
+fn show_transition_lands_the_new_window_size_within_the_same_frame() {
+    let (_gpu, mut world, gw) = gpu_frame_world();
+    let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    let target = balloon_target(0);
+    let window = gw.balloon_window(0).expect("balloon 窓がある");
+
+    // フレーム 1: 装着（不可視のままの確立）。確立が積んだ初回の窓寸要求も同一フレームで届く。
+    wiring = advance_frame(&mut world, wiring);
+    let established = wiring
+        .presenter
+        .target_physical_size(target)
+        .expect("確立済みなら物理寸が引ける");
+    assert_eq!(
+        size_of(&world, window),
+        Some(SizeI::new(established.0 as i32, established.1 as i32)),
+        "前提: 確立が積んだ窓寸要求は装着フレームのうちに窓へ届いている"
+    );
+
+    // 不可視のまま表示倍率が変わる。
+    let bumped_dpi = bump_window_dpi(&mut world, window);
+
+    // フレーム 2: 不可視のバルーンは dpi 相で拡大率を拾わない＝窓寸も動かない。
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(false),
+        "可視コンテンツがまだ無いので不可視のまま"
+    );
+    assert_eq!(
+        size_of(&world, window),
+        Some(SizeI::new(established.0 as i32, established.1 as i32)),
+        "不可視の間は倍率の変化が保留される（この保留が次の主張を非空虚にする）"
+    );
+
+    // 可視コンテンツを置く（表示の唯一の契機）。時刻は注入のみ。
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(1.0));
+    reveal_text(&wiring, 0, "あい");
+
+    // フレーム 3: 表示へ遷移し、その表示が積んだ窓寸要求が同一フレームで窓へ届く。
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(true),
+        "可視コンテンツの配置で表示へ遷移する"
+    );
+    let shown = wiring
+        .presenter
+        .target_physical_size(target)
+        .expect("表示成立後も物理寸が引ける");
+    assert_ne!(
+        shown, established,
+        "前提: 表示倍率 {bumped_dpi} では物理寸が実際に変わる（同値なら本檻は何も弁別しない）"
+    );
+    assert_eq!(
+        size_of(&world, window),
+        Some(SizeI::new(shown.0 as i32, shown.1 as i32)),
+        "表示へ遷移したフレームで窓寸が同一フレームに届く（相を窓寸の反映の後ろへ移すと旧寸のまま落ちる）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑶ 起動から最初の可視コンテンツまで全フレームで不可視（Requirements 1.1 / 1.2 / 1.6）
+// ---------------------------------------------------------------------------
+
+/// 起動から最初の可視コンテンツまで、**全フレーム**でバルーンが可視にならない。
+///
+/// 既存の 2 本（`frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface`
+/// と `spine_display_tests.rs::spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface`）
+/// はいずれも**装着時点**の 1 点だけを見る。本番は毎フレーム 9 つの相が回るため、装着後の
+/// どこかの相が可視化してしまう欠陥は 1 点観測では捕まらない——ここが全フレームの掃引を担う。
+///
+/// 時刻は最初のフレームから注入しておく（`FrameTime`＋epoch）。時刻が定まらない間だけ不可視、
+/// という当たり判定の緩い緑を避けるためである。
+///
+/// # 非空虚性
+///
+/// 掃引の後に可視コンテンツを置き、当該 scope が実際に可視へ遷移することを主張する。
+/// 「そもそも何をしても可視にならない」実装では、この最後の主張が落ちる。
+#[test]
+fn every_frame_from_boot_to_the_first_visible_content_keeps_balloons_invisible() {
+    let (_gpu, mut world, _gw) = gpu_frame_world();
+    let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+
+    // 起点から時刻を注入しておく（可視グリフ数が観測できるフレームでも不可視であることを見る）。
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(0.5));
+
+    for frame in 1..=4u32 {
+        wiring = advance_frame(&mut world, wiring);
+        let scopes = wiring.balloon_model_scopes();
+        assert_eq!(
+            scopes,
+            vec![0u32, 1],
+            "前提: 両 scope の balloon 装着が成立している（片方でも欠けると掃引が空虚になる）"
+        );
+        for scope in scopes {
+            assert_established_but_invisible(
+                &world,
+                &wiring,
+                scope,
+                &format!("フレーム {frame} 終了時点:"),
+            );
+        }
+    }
+
+    // 非空虚性: 可視コンテンツを置けば当該 scope **だけ**が可視になる。
+    reveal_text(&wiring, 0, "あい");
+    world.insert_resource(FrameTime(1.0));
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(balloon_target(0)),
+        Some(true),
+        "可視コンテンツを置いた scope は表示へ遷移する（掃引が「何も可視にならない」ゆえの緑ではない）"
+    );
+    assert_eq!(
+        wiring.presenter.target_visible(balloon_target(1)),
+        Some(false),
+        "喋っていない scope は表示しない（Requirement 2.2）"
+    );
+}
+
+/// 文字の配置先を接続した後も、文字スロットの可視状態は偽のままである。
+///
+/// 文字層は最初の提示フレームで配置先 entity へ供給面を装着し、`VisualGraphics` と
+/// `Arrangement` を**挿入**する（`areka-emo-text/src/surface.rs:249-262`）。`Visual` の既定は
+/// 可視（`wintf/src/ecs/graphics/visual.rs:26` の構造体・既定値は `is_visible: true`）なので、
+/// この挿入がもし `Visual` まで含めば、装着で不可視に作った文字スロットが可視既定へ戻される。
+/// 枠だけが不可視で文字が画面に残る状態そのものであり、Requirement 1.7 が禁じている形である。
+///
+/// # 可視コンテンツを生まない cue で観測する
+///
+/// 可視グリフを生む cue を使うと同一フレームの可視性の相がバルーンを可視化してしまい、
+/// 「接続後も不可視」を観測できない。改行だけを流すと、文字層は配置先へ供給面を装着する一方で
+/// 可視グリフ数は 0 のままとなり、装着と不可視が同時に成り立つフレームが作れる。
+#[test]
+fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
+    let (_gpu, mut world, _gw) = gpu_frame_world();
+    let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    let target = balloon_target(1);
+
+    // フレーム 1: 装着（不可視のままの確立）。
+    wiring = advance_frame(&mut world, wiring);
+    let slot = wiring
+        .presenter
+        .text_slot_view(target)
+        .expect("前提: 文字の配置先が確立している")
+        .slot();
+    assert_eq!(
+        world.get::<Arrangement>(slot).map(|a| a.size.width),
+        Some(0.0),
+        "前提: 文字層が触る前の配置先は寸ゼロ（この後の寸が装着の証跡になる）"
+    );
+
+    // 可視グリフを生まない cue（改行）だけを置く。
+    wiring.runtime.borrow_mut().apply_cue(&TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("1"),
+        command: CueCommand::NewLine { ratio: 1.0 },
+        duration: 0.0,
+    });
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(1.0));
+
+    // フレーム 2: 文字層が配置先へ供給面を装着する。
+    wiring = advance_frame(&mut world, wiring);
+
+    assert!(
+        world
+            .get::<Arrangement>(slot)
+            .is_some_and(|a| a.size.width > 0.0 && a.size.height > 0.0),
+        "前提: 文字層が配置先へ供給面を装着した（装着が起きていなければ以下の主張は空虚）"
+    );
+    assert_eq!(
+        world.get::<Visual>(slot).map(|v| v.is_visible),
+        Some(false),
+        "文字の配置先を接続した後も文字スロットは不可視のまま（外部からの挿入で可視既定へ戻されない）"
+    );
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(false),
+        "改行だけでは可視コンテンツにならず、バルーンも不可視のまま（Requirement 2.3）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑸ 見えているバルーンの組をフレームの終わり（提示の後）に kanade へ届ける
+//    （areka-P0-status-execution-states task 5.2・要件 4.1／4.5／4.7／4.8／5.2）
+// ---------------------------------------------------------------------------
+//
+// headless の表示層は可視にできないので、照会が「見えている」を読む経路はここ（実 GPU・
+// 本番の相順）で踏む。置き場には kanade の送出端だけを持つゴーストを据え、受信端で数える。
+
+/// 置き場に kanade の送出端だけを持つゴーストを据え、その受信端を返す（切替は据え直しで表す）。
+fn seat_ghost(world: &mut World) -> mpsc::Receiver<areka_kanade::KanadeMsg> {
+    let (tx, rx) = mpsc::channel();
+    world.insert_non_send(crate::ghost_session::GhostSlot(Some(
+        crate::ghost_session::GhostSession::for_test(
+            Some(tx),
+            std::path::PathBuf::from("ghost/test"),
+        ),
+    )));
+    rx
+}
+
+/// 受信端に溜まったバルーンの組の知らせを `(character_id, balloon_id)` の列で取り出す
+/// （それ以外の知らせは失敗）。
+fn balloon_reports(rx: &mpsc::Receiver<areka_kanade::KanadeMsg>) -> Vec<Vec<(u32, u32)>> {
+    rx.try_iter()
+        .map(|msg| match msg {
+            areka_kanade::KanadeMsg::ExecutionState(
+                areka_kanade::ExecutionStateUpdate::Balloons(bindings),
+            ) => bindings
+                .iter()
+                .map(|b| (b.character_id, b.balloon_id))
+                .collect(),
+            _ => panic!("バルーンの組の知らせ以外が届いた"),
+        })
+        .collect()
+}
+
+/// 見えたフレームで組が 1 回だけ届き、見えている間は送り直さず、消えたフレームで空の組が届く。
+#[test]
+fn visible_balloon_is_reported_once_and_its_disappearance_as_an_empty_set() {
+    let (_gpu, mut world, _gw) = gpu_frame_world();
+    let reports = seat_ghost(&mut world);
+    let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(0.5));
+
+    // 装着のフレーム: 何も見えていない＝空の組は「最後に届けた組」と同じなので送らない。
+    wiring = advance_frame(&mut world, wiring);
+    assert!(
+        balloon_reports(&reports).is_empty(),
+        "見えていない間は送らない"
+    );
+
+    // scope 0 が見えたフレームで 1 回だけ届く（番号は表示層の現サーフェス＝面 0）。
+    reveal_text(&wiring, 0, "あい");
+    world.insert_resource(FrameTime(1.0));
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(balloon_target(0)),
+        Some(true),
+        "前提: scope 0 が実際に見えている"
+    );
+    assert_eq!(balloon_reports(&reports), vec![vec![(0, 0)]]);
+
+    // 見えたままのフレームでは送り直さない。
+    wiring = advance_frame(&mut world, wiring);
+    assert!(balloon_reports(&reports).is_empty(), "同じ組は送り直さない");
+
+    // 消えたフレームで空の組が届く。
+    present_tx
+        .send(PresentCommand::Hide {
+            target: balloon_target(0),
+            reply: None,
+        })
+        .expect("受信端は結線資源が保持している");
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(balloon_target(0)),
+        Some(false),
+        "前提: scope 0 が実際に消えている"
+    );
+    assert_eq!(balloon_reports(&reports), vec![Vec::new()]);
+}
+
+/// 切替で据わる新しい結線状態の台帳は新品で、前のゴーストの組を持ち越さない（要件 4.8）。
+///
+/// 持ち越すと、新しいゴーストの最初のフレームで「前の組と違う」として空の組が飛び、
+/// 同じ組が見えたフレームでは「前の組と同じ」として知らせが落ちる——その両方を見る。
+#[test]
+fn new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch() {
+    // 前のゴースト: scope 0 が見えて組が届いた状態で降りる。
+    let (_old_gpu, mut old_world, _old_gw) = gpu_frame_world();
+    let old_reports = seat_ghost(&mut old_world);
+    let (_old_present_tx, old_present_rx) = mpsc::channel::<PresentCommand>();
+    let (_old_lifecycle_tx, old_lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut old_wiring = boot_wiring(old_present_rx, old_lifecycle_rx);
+    old_wiring.clock.observe_cue(0.0);
+    old_world.insert_resource(FrameTime(1.0));
+    old_wiring = advance_frame(&mut old_world, old_wiring);
+    reveal_text(&old_wiring, 0, "あい");
+    old_wiring = advance_frame(&mut old_world, old_wiring);
+    assert_eq!(
+        balloon_reports(&old_reports),
+        vec![vec![(0, 0)]],
+        "前提: 前のゴーストは組を届けている"
+    );
+    drop(old_wiring);
+
+    // 新しいゴースト: 新しい置き場と新しい結線状態（本番の切替と同じく `RuntimeWiring::new`）。
+    let (_gpu, mut world, _gw) = gpu_frame_world();
+    let reports = seat_ghost(&mut world);
+    let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(1.0));
+
+    wiring = advance_frame(&mut world, wiring);
+    assert!(
+        balloon_reports(&reports).is_empty(),
+        "最初のフレームに空の組は飛ばない（前の組を持ち越していない）"
+    );
+
+    reveal_text(&wiring, 0, "あい");
+    let _wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        balloon_reports(&reports),
+        vec![vec![(0, 0)]],
+        "前と同じ組でも新しいゴーストへは届く"
+    );
+    assert!(
+        balloon_reports(&old_reports).is_empty(),
+        "前のゴーストへは何も届かない"
+    );
+}
+
+// 箱の結線の通し（areka-P0-shell-balloon task 12.3）。本ファイルの檻（GPU の World・runtime の結線・
+// 置き場のゴースト）をそのまま使うため子に置く。
+#[path = "frame_shell_box_integration_tests.rs"]
+mod shell_box_integration_tests;
+
+// 受け口から可視性の相までの通し（areka-P0-balloon-lifecycle-events task 5.2）。時間切れの知らせが
+// 置き場のゴーストの kanade へ届くまでを、本ファイルの檻をそのまま使って見るため子に置く。
+#[path = "frame_balloon_timeout_notice_e2e_tests.rs"]
+mod balloon_timeout_notice_e2e_tests;
+
+// 倍率の変わりの相の同じフレームの檻（shell-scale-linkage task 6.2）。本ファイルの檻（GPU の World・
+// runtime の結線・置き場のゴースト）をそのまま使うため子に置く。
+#[path = "frame_scale_notice_integration_tests.rs"]
+mod scale_notice_integration_tests;

@@ -7,6 +7,7 @@
 // （`spawn_emo_text` の UI ドレイン）へ選択待ちの始まりを積んで、このスレッドの待ち行列を汲んでから押す。
 // =============================================================================
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -134,7 +135,7 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::pointer::{Phase, PointerState};
 use wintf::ecs::{GraphicsCore, Point, Visual, WucGraphicsResource};
 
-use super::test_support::headless_emo2_wiring;
+use super::test_support::headless_runtime_wiring;
 use super::{BalloonWiring, ChoiceSelection, on_balloon_pointer_pressed};
 use areka_placement::spawn::BalloonWindowMarker;
 
@@ -166,7 +167,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let _gpu = crate::emo2_boot::spine::GpuPermit::take();
+    let _gpu = crate::runtime::spine::GpuPermit::take();
     let (rt, _sink, _join) = runtime_in_choice_wait();
     let actor = ActorKey::from(ACTOR);
 
@@ -197,9 +198,10 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     let x = ((row.rect.left + row.rect.right) / 2.0) as i32;
     let y = ((row.rect.top + row.rect.bottom) / 2.0) as i32;
 
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&rt)));
     let (tx, rx) = mpsc::channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
+    world.insert_non_send(BalloonHover::default());
 
     // 1 回目: 選択を送り、その場所の選択肢が済む（アンカーは押せるまま）。
     assert!(on_balloon_pointer_pressed(

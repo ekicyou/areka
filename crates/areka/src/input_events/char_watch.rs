@@ -26,7 +26,7 @@ use super::shell_box::box_under_point;
 use super::shell_box_handler::box_place;
 use super::wheel::{WheelAccum, WheelPlan, WheelRotation, plan_wheel};
 use super::{MouseWiring, char_scope, resolve_hit_owned};
-use crate::emo2_boot::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::CharWindowMarker;
 
 /// 窓の外へ出たときに捨てる押下の控え（左は捕捉で持ち主が残るので含めない・要件 3.3）。
@@ -153,7 +153,7 @@ pub(crate) fn char_watch_with(world: &mut World, mut read_lines: impl FnMut() ->
 
     // 5. 上に居る窓: 動いた・初めて見た・ホイールが回ったときだけ当たり判定を解く。
     let runtime = world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()));
     let mut rotations: HashMap<Entity, (u32, WheelRotation)> = HashMap::new();
     for o in overs {

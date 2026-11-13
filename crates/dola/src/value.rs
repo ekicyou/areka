@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
-/// フォーマット非依存の動的値型（JSON/TOML/YAML 共通）
+/// フォーマット非依存の動的値型（JSON/TOML 共通）
 /// バリアント順序: Integer を Float より前に定義し、TOML の整数/浮動小数点区別を保持
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]

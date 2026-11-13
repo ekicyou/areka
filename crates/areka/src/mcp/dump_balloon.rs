@@ -23,8 +23,8 @@ use super::dump_surface::{
     Job, PresenterFacts, Reader, Step, check_size, fail, image, judge, refuse, start,
 };
 use super::resolve::ActiveGhost;
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::target_map::balloon_target;
+use crate::runtime::frame::RuntimeWiring;
+use crate::runtime::target_map::balloon_target;
 
 #[path = "dump_balloon_overlay.rs"]
 mod overlay;
@@ -38,7 +38,7 @@ pub(super) fn handle(world: &mut World, ghost: &ActiveGhost, args: Args, reply: 
 
 /// 今答えられるなら `Some`。装着の相がまだなら `None`（`later` が次のフレームでもう 1 度呼ぶ）。
 fn answer(world: &World, args: &Args) -> Option<Step> {
-    let Some(wiring) = world.get_non_send::<Emo2Wiring>() else {
+    let Some(wiring) = world.get_non_send::<RuntimeWiring>() else {
         return Some(Step::Now(refuse(TOOL, args.scope, judge::NO_WINDOW)));
     };
     if !wiring.attached() {

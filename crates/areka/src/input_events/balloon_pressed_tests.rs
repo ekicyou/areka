@@ -4,6 +4,7 @@
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
 //! で配る（印の面の上の押下が窓の受け口へ届くこと）。
 
+use crate::runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -21,13 +22,13 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, PointerState, dispatch_pointer_events};
 use wintf::ecs::{Point, Window};
 
-use super::super::test_support::{capture_logs, headless_emo2_wiring};
+use super::super::test_support::{capture_logs, headless_runtime_wiring};
 use super::super::{BalloonWiring, ChoiceSelection};
 use super::on_balloon_pointer_pressed;
-use crate::emo2_boot::frame::balloon_runtime_test_support::manual_balloon_runtime;
-use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
-use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
+use crate::runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
+use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
+use crate::runtime::user_break_cue::NoUserBreakSignal;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// 既定の置き場（120×40 の絵: 上 (100, 15)・下 (100, 25)）の矢印の不透明な点。
@@ -62,7 +63,7 @@ struct Rig {
     lifecycle: Receiver<TalkLifecycleSignal>,
     kanade: Receiver<KanadeMsg>,
     /// GPU の装置の許可。World の装置より後に返すので欄の最後。
-    _permit: crate::emo2_boot::spine::GpuPermit,
+    _permit: crate::runtime::spine::GpuPermit,
 }
 
 /// 上下の矢印が出ている普通のバルーン（scope 0）の窓と、その受け口・結線。
@@ -91,9 +92,10 @@ fn rig() -> Rig {
         BalloonWindowMarker { scope: 0 },
         OnPointerPressed(on_balloon_pointer_pressed),
     ));
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     let (tx, selections) = mpsc::channel();
     world.insert_non_send(BalloonWiring::new(tx));
+    world.insert_non_send(BalloonHover::default());
     let (flag_tx, flag_rx) = mpsc::channel();
     let (lifecycle_tx, lifecycle) = mpsc::channel();
     let (kanade_tx, kanade) = mpsc::channel();

@@ -291,3 +291,117 @@ fn owner_transform_warns_once_per_change() {
     world.get_mut::<VisualTransform>(owner).unwrap().0.rotation = 0.5;
     assert_eq!(warns(world), 1, "変わった回にまた 1 度");
 }
+
+/// 装置を入れ、窓の下の持ち主と描く中身つきの節を作って 1 回組む（根の部品が入るまで）。
+fn built_owner_and_node(ecs: &mut EcsWorld) -> (Entity, Entity) {
+    use crate::ecs::graphics::GraphicsCore;
+    let world = ecs.world_mut();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let window = world.spawn(Window::default()).id();
+    // 根の大きさが 0 だと描く 1 件が見える範囲の外で間引かれるので、中身より広くする
+    let arrangement = crate::ecs::layout::Arrangement {
+        size: crate::ecs::Size {
+            width: 8.0,
+            height: 8.0,
+        },
+        ..Default::default()
+    };
+    let owner = world
+        .spawn((Visual::default(), arrangement, ChildOf(window)))
+        .id();
+    let node = world
+        .spawn((
+            Visual::default(),
+            solid_rect_content(rect()),
+            ChildOf(owner),
+        ))
+        .id();
+    world.run_schedule(PreRenderSurface);
+    assert!(world.get::<DrawTree>(owner).is_some(), "最初の回に組む");
+    (owner, node)
+}
+
+/// 根の列（`DrawTree`）と描き直しの印（`SurfaceGraphicsDirty`）が最後に変わった時点。
+fn change_ticks(world: &World, owner: Entity) -> (u32, u32) {
+    let e = world.entity(owner);
+    (
+        e.get_ref::<DrawTree>().unwrap().last_changed().get(),
+        e.get_ref::<SurfaceGraphicsDirty>()
+            .unwrap()
+            .last_changed()
+            .get(),
+    )
+}
+
+/// 回す前の時点から列が組み直され、印も立ったか（どちらも新しい時点で書かれたか）。
+fn assert_rebuilt_and_marked(world: &mut World, owner: Entity, what: &str) {
+    let (tree0, dirty0) = change_ticks(world, owner);
+    world.run_schedule(PreRenderSurface);
+    let (tree1, dirty1) = change_ticks(world, owner);
+    assert_ne!(tree1, tree0, "{what}: 列を組み直す");
+    assert_ne!(dirty1, dirty0, "{what}: 描き直しの印が立つ");
+}
+
+/// 何も変えない回は組み直さず印も立てない（後の 2 つのテストの比べの基準）。
+#[test]
+fn unchanged_round_neither_rebuilds_nor_marks() {
+    let mut ecs = EcsWorld::new();
+    let (owner, _) = built_owner_and_node(&mut ecs);
+    let world = ecs.world_mut();
+    world.run_schedule(PreRenderSurface);
+    let before = change_ticks(world, owner);
+    world.run_schedule(PreRenderSurface);
+    assert_eq!(change_ticks(world, owner), before, "変化が無ければ書かない");
+}
+
+/// 描く中身の混ぜ方を変えた回に列が組み直され、新しい混ぜ方と同一性で描き直しの印が立つ（1.8）。
+#[test]
+fn mix_mode_change_rebuilds_and_marks_dirty() {
+    use windows::Win32::Graphics::Direct2D::Common::D2D1_BLEND_MODE_MULTIPLY;
+    let mut ecs = EcsWorld::new();
+    let (owner, node) = built_owner_and_node(&mut ecs);
+    let world = ecs.world_mut();
+    world.run_schedule(PreRenderSurface);
+    let item = |w: &World| match &w.get::<DrawTree>(owner).unwrap().commands[..] {
+        [DrawCommand::Draw(d)] => (d.hash, d.mix_mode),
+        other => panic!("描く 1 件だけのはず: {other:?}"),
+    };
+    let (hash0, mix0) = item(world);
+    assert_eq!(mix0, MixMode::default());
+
+    world.get_mut::<VisualDrawContent>(node).unwrap().mix_mode =
+        MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY);
+    assert_rebuilt_and_marked(world, owner, "混ぜ方の変化");
+    let (hash1, mix1) = item(world);
+    assert_eq!(mix1, MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY));
+    assert_ne!(hash1, hash0, "同一性も変わる");
+}
+
+/// 節の不透明度を変えた回に列が組み直され、不透明度の層が入って描き直しの印が立つ（2.7）。
+#[test]
+fn node_opacity_change_rebuilds_and_marks_dirty() {
+    let mut ecs = EcsWorld::new();
+    let (owner, node) = built_owner_and_node(&mut ecs);
+    let world = ecs.world_mut();
+    world.run_schedule(PreRenderSurface);
+    let layers = |w: &World| -> Vec<f32> {
+        w.get::<DrawTree>(owner)
+            .unwrap()
+            .commands
+            .iter()
+            .filter_map(|c| match c {
+                DrawCommand::PushOpacity(l) => Some(l.opacity),
+                _ => None,
+            })
+            .collect()
+    };
+    assert!(layers(world).is_empty(), "不透明なら層は無い");
+
+    world.get_mut::<Visual>(node).unwrap().opacity = 0.5;
+    assert_rebuilt_and_marked(world, owner, "不透明度の変化");
+    assert_eq!(layers(world), vec![0.5]);
+
+    world.get_mut::<Visual>(node).unwrap().opacity = 0.25;
+    assert_rebuilt_and_marked(world, owner, "不透明度の再変化");
+    assert_eq!(layers(world), vec![0.25]);
+}

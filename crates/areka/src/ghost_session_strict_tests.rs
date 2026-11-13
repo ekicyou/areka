@@ -8,13 +8,13 @@ use crate::input_events::MouseWiring;
 use crate::menu::MenuWiring;
 use log_capture_kit::capture;
 
-/// 結線が成立しない入力（ゴーストの根もバルーンの根も実在しない）。`wire_emo2_boot` は資産の
+/// 結線が成立しない入力（ゴーストの根もバルーンの根も実在しない）。`wire_runtime` は資産の
 /// 組立で失敗し World に触れない。fallback の腕へ倒れれば LogSink の起動が試みられ、その起点
 /// 不在が `warn!` で残る。
 fn unwirable_inputs() -> GhostBootInputs {
     let (kanade_stop, _rx) = mpsc::channel::<KanadeNotice>();
     GhostBootInputs {
-        wiring: emo2_boot::Emo2BootInputs {
+        wiring: runtime::RuntimeInputs {
             ghost_root: PathBuf::from("ghost_session_strict_tests/無い/ghost"),
             balloon_root: PathBuf::from("ghost_session_strict_tests/無い/balloon"),
             shiori: areka_ghost::ShioriWiring::Helper {
@@ -128,7 +128,7 @@ fn strict_boot_returns_err_without_falling_back() {
     );
 }
 
-/// 作り口（[`GhostBootInputsSource`]）に渡した由来が、起動の結線の入力（`Emo2BootInputs`）へ
+/// 作り口（[`GhostBootInputsSource`]）に渡した由来が、起動の結線の入力（`RuntimeInputs`）へ
 /// そのまま載る（要件 8.6）。本番の組み立て（[`GhostBootInputs::production`]）を閉じた作り口で、
 /// 3 つの由来をそれぞれ通す。
 #[test]
@@ -186,7 +186,7 @@ fn origin_given_to_source_reaches_wiring_inputs() {
 #[test]
 fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
     use crate::boot_resolve::read_last_ghost;
-    use crate::emo2_boot::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
+    use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
 
     let (descript, ghost, balloon) = decisions();
 
@@ -216,7 +216,7 @@ fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
     };
     let (kanade_stop, _stop_rx) = mpsc::channel::<KanadeNotice>();
     let inputs = GhostBootInputs {
-        wiring: emo2_boot::Emo2BootInputs {
+        wiring: runtime::RuntimeInputs {
             ghost_root: ghost_a.dir.clone(),
             balloon_root: balloon_missing.dir.clone(),
             shiori: areka_ghost::ShioriWiring::Helper {

@@ -19,11 +19,11 @@ use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::Window;
 use wintf::ecs::pointer::PointerLeave;
 
-use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::move_cue::PositionCue;
-use crate::emo2_boot::talk_clock::TalkClock;
-use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
+use crate::runtime::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+use crate::runtime::frame::RuntimeWiring;
+use crate::runtime::move_cue::PositionCue;
+use crate::runtime::talk_clock::TalkClock;
+use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
@@ -81,7 +81,7 @@ fn synth_boot_assets() -> BootAssets {
             scope: 0,
             emo_world: empty_world(),
             atlas: empty_atlas(),
-            definitions: crate::emo2_boot::assets::empty_definitions(0),
+            definitions: crate::runtime::assets::empty_definitions(0),
             // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白（要件 4.6）。
             background_color: (255, 255, 255),
             name: String::new(),
@@ -91,8 +91,8 @@ fn synth_boot_assets() -> BootAssets {
         bind_resolver: BindResolver::empty(),
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
-        boxes: crate::emo2_boot::shell_box_assets::ShellBoxAssets::default(),
-        cursors: crate::emo2_boot::shell_cursor_assets::ShellCursorAssets::default(),
+        boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
+        cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),
             balloon: BTreeMap::new(),
@@ -100,17 +100,17 @@ fn synth_boot_assets() -> BootAssets {
     }
 }
 
-/// headless な `Emo2Wiring`（実 `EmoPresenter`／与えた runtime／合成 `BootAssets`・COM/GPU 不要）。
+/// headless な `RuntimeWiring`（実 `EmoPresenter`／与えた runtime／合成 `BootAssets`・COM/GPU 不要）。
 ///
-/// ハンドラが `Emo2Wiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
+/// ハンドラが `RuntimeWiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
 /// 差し込むための最小結線（frame.rs の headless_wiring_with と同型）。
-pub(crate) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Emo2Wiring {
-    Emo2Wiring::new(
+pub(crate) fn headless_runtime_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> RuntimeWiring {
+    RuntimeWiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
         runtime,
         TalkClock::new(Arc::new(|| 0.0)),
         synth_boot_assets(),

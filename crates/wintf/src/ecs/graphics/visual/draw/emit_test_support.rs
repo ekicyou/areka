@@ -56,14 +56,15 @@ fn warp() -> &'static Warp {
     })
 }
 
+/// WARP の D2D の装置（プロセスで 1 つ）。入れ物や読み戻しのテストが自分で DC を作るときに使う。
+pub(crate) fn warp_device() -> &'static ID2D1Device {
+    &warp().device
+}
+
 /// WARP の装置の新しい DC（96 DPI）。
 pub(crate) fn warp_dc() -> ID2D1DeviceContext {
-    let dc = unsafe {
-        warp()
-            .device
-            .CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
-    }
-    .expect("DC");
+    let dc =
+        unsafe { warp_device().CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE) }.expect("DC");
     unsafe { dc.SetDpi(96.0, 96.0) };
     dc
 }
@@ -226,15 +227,36 @@ pub(crate) fn tree_commands(
     commands
 }
 
-/// 列 `commands` を `emit` で `w×h` の透明な的へ再生し、読み戻す。
+/// 列 `commands` を `emit` で `w×h` の透明な的へ再生し、読み戻す。本番と同じく DC6 を cast して渡す。
 pub(crate) fn replay_to_pixels(
     commands: &[DrawCommand],
     w: u32,
     h: u32,
     root_transform: Matrix3x2,
 ) -> Pixels {
+    replay(commands, w, h, root_transform, true)
+}
+
+/// `replay_to_pixels` と同じだが DC6 を渡さない（ブレンドの描き方が無い Windows の道・1.7）。
+pub(crate) fn replay_to_pixels_without_blend(
+    commands: &[DrawCommand],
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+) -> Pixels {
+    replay(commands, w, h, root_transform, false)
+}
+
+fn replay(
+    commands: &[DrawCommand],
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+    with_blend: bool,
+) -> Pixels {
     draw_to_pixels(w, h, root_transform, |dc| {
-        emit(dc, root_transform, commands);
+        let dc6 = if with_blend { dc.cast().ok() } else { None };
+        emit(dc, dc6.as_ref(), root_transform, commands);
         let mut after = Matrix3x2::default();
         // SAFETY: Windows API 境界。
         unsafe { dc.GetTransform(&mut after) };
@@ -262,7 +284,7 @@ pub(crate) fn render_list_to_pixels(
 }
 
 /// `w×h` の透明な的に `root_transform` を置いて `draw` で描き、読み戻す。
-fn draw_to_pixels(
+pub(crate) fn draw_to_pixels(
     w: u32,
     h: u32,
     root_transform: Matrix3x2,

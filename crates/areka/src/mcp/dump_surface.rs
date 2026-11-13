@@ -18,8 +18,8 @@ use bevy_ecs::world::World;
 use tracing::{debug, error};
 
 use super::resolve::{self, ActiveGhost};
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::target_map::shell_target;
+use crate::runtime::frame::RuntimeWiring;
+use crate::runtime::target_map::shell_target;
 use judge::SurfacePlan;
 
 #[path = "dump_surface_judge.rs"]
@@ -254,7 +254,7 @@ pub(in crate::mcp) fn send_back(tx: mpsc::Sender<ToolOutcome>, outcome: ToolOutc
 
 /// 今答えられるなら `Some`。装着の相がまだなら `None`（`later` が次のフレームでもう 1 度呼ぶ）。
 fn answer(world: &World, args: &Args) -> Option<Step> {
-    let Some(wiring) = world.get_non_send::<Emo2Wiring>() else {
+    let Some(wiring) = world.get_non_send::<RuntimeWiring>() else {
         return Some(Step::Now(refuse(TOOL, args.scope, judge::NO_WINDOW)));
     };
     if !wiring.attached() {
@@ -410,7 +410,7 @@ pub(in crate::mcp) trait WaitAnswer {
     #[track_caller]
     fn wait_answer(
         &self,
-        progress: crate::emo2_boot::spine::Progress<'_>,
+        progress: crate::runtime::spine::Progress<'_>,
     ) -> Option<areka_mcp::tools::Answer>;
 }
 
@@ -419,11 +419,11 @@ impl WaitAnswer for areka_mcp::tools::Pending {
     #[track_caller]
     fn wait_answer(
         &self,
-        progress: crate::emo2_boot::spine::Progress<'_>,
+        progress: crate::runtime::spine::Progress<'_>,
     ) -> Option<areka_mcp::tools::Answer> {
         let at = std::panic::Location::caller();
         let mut got = None;
-        let _ = crate::emo2_boot::spine::wait_until(
+        let _ = crate::runtime::spine::wait_until(
             &format!("MCP の答え（{}:{}）", at.file(), at.line()),
             progress,
             || match self.try_answer() {

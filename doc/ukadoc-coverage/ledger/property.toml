@@ -427,8 +427,8 @@ note = """
 ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 画面の DPI への追従の倍率 × 表示の倍率（今は 100%）。DPI への追従の倍率は窓の居る画面の DPI ÷ 作者の基準の DPI（シェルは `seriko.dpi`・バルーンはバルーンの `dpi`・書かれていなければ 96）。シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形のどれを指すか決まらないので関連には書かない。百分率は割り切れれば整数、割り切れなければ小数第 2 位まで（第 3 位で四捨五入・末尾の 0 は落とすが小数点の後に 1 桁は残す）。
-実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（表 ScopeScaleTable・読み手 ScopeScaleSource・百分率の文字 percent_text と scaling_text）。表は表示が成り立った時点の倍率の変わりを毎フレームの最後の相（crates/areka/src/emo2_boot/frame/scale_notice.rs の run_scale_notice_phase）が書き、読み取りは他のスレッドを待たない。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
-テスト: crates/areka/src/ghost_session_scope_scale_tests.rs・crates/areka/src/ghost_session_scope_scale_boot_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs。
+実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（読み手 ScopeScaleSource）、表 ScopeScaleTable と百分率の文字 percent_text・scaling_text は crates/areka/src/runtime/scope_scale.rs。表は表示が成り立った時点の倍率の変わりを毎フレームの最後の相（crates/areka/src/runtime/frame/scale_notice.rs の run_scale_notice_phase）が書き、読み取りは他のスレッドを待たない。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
+テスト: crates/areka/src/ghost_session_scope_scale_tests.rs・crates/areka/src/ghost_session_scope_scale_boot_tests.rs・crates/areka/src/runtime/frame_scale_notice_integration_tests.rs。
 担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
@@ -673,8 +673,8 @@ note = """
 ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面の目盛の細かさ（その窓の絵に倍率がかかった時点の DPI）。相手の id が正典に無いので関連には書けない。バルーンの窓の DPI は areka 独自の `currentghost.balloon.scope(ID).currentmonitor.dpi` で読める（ukadoc に無い名前なので台帳に行は無い・doc/COMPAT_ARCHITECTURE.md 8 節）。
-実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（表 ScopeScaleTable・読み手 ScopeScaleSource）。表は毎フレームの最後の相（crates/areka/src/emo2_boot/frame/scale_notice.rs の run_scale_notice_phase）が倍率と一緒に書く。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
-テスト: crates/areka/src/ghost_session_scope_scale_tests.rs・crates/areka/src/ghost_session_scope_scale_boot_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs。
+実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（読み手 ScopeScaleSource）、表 ScopeScaleTable は crates/areka/src/runtime/scope_scale.rs。表は毎フレームの最後の相（crates/areka/src/runtime/frame/scale_notice.rs の run_scale_notice_phase）が倍率と一緒に書く。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
+テスト: crates/areka/src/ghost_session_scope_scale_tests.rs・crates/areka/src/ghost_session_scope_scale_boot_tests.rs・crates/areka/src/runtime/frame_scale_notice_integration_tests.rs。
 担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は currentghost-property-tree）。
 """
 
@@ -770,8 +770,8 @@ note = """
 ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 画面の DPI への追従の倍率 × 表示の倍率（今は 100%）。DPI への追従の倍率は窓の居る画面の DPI ÷ 作者の基準の DPI（シェルは `seriko.dpi`・バルーンはバルーンの `dpi`・書かれていなければ 96）。シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形のどれを指すか決まらないので関連には書かない。百分率は割り切れれば整数、割り切れなければ小数第 2 位まで（第 3 位で四捨五入・末尾の 0 は落とすが小数点の後に 1 桁は残す）。
-実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（表 ScopeScaleTable・読み手 ScopeScaleSource・百分率の文字 percent_text と scaling_text）。表は表示が成り立った時点の倍率の変わりを毎フレームの最後の相（crates/areka/src/emo2_boot/frame/scale_notice.rs の run_scale_notice_phase）が書き、読み取りは他のスレッドを待たない。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
-テスト: crates/areka/src/ghost_session_scope_scale_tests.rs・crates/areka/src/ghost_session_scope_scale_boot_tests.rs・crates/areka/src/emo2_boot/frame_scale_notice_integration_tests.rs。
+実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（読み手 ScopeScaleSource）、表 ScopeScaleTable と百分率の文字 percent_text・scaling_text は crates/areka/src/runtime/scope_scale.rs。表は表示が成り立った時点の倍率の変わりを毎フレームの最後の相（crates/areka/src/runtime/frame/scale_notice.rs の run_scale_notice_phase）が書き、読み取りは他のスレッドを待たない。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
+テスト: crates/areka/src/ghost_session_scope_scale_tests.rs・crates/areka/src/ghost_session_scope_scale_boot_tests.rs・crates/areka/src/runtime/frame_scale_notice_integration_tests.rs。
 担当 spec は shell-scale-linkage。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目を v0.1.0 の中で片づけるために起票した spec として書いた（前の宛先は currentghost-property-tree）。
 """
 

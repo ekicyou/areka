@@ -51,3 +51,42 @@ fn recreated_visual_gets_offset_and_opacity() {
         "作り直した見た目に位置が写っていない"
     );
 }
+
+/// 描画面の持ち主の欄へ直に書かれた NaN は 1.0 として写し、`warn!` を変わったときに 1 度残す（2.8・6.3）。
+/// 持ち主は fill_world_visuals が訪れないので、ここで記録しないと黙って消える。
+#[test]
+fn owner_nan_opacity_syncs_as_one_and_warns_once_per_change() {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let core = GraphicsCore::new().expect("GraphicsCore");
+    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d")).expect("WUC");
+    let compositor = wuc.compositor().expect("compositor");
+    let wuc_visual: WucVisual = compositor.CreateSpriteVisual().unwrap().cast().unwrap();
+
+    let mut world = World::new();
+    let entity = world
+        .spawn((
+            Visual {
+                opacity: f32::NAN,
+                ..Default::default()
+            },
+            VisualGraphics::new(wuc_visual.clone()),
+            Name::new("nan-owner"),
+        ))
+        .id();
+    let mut schedule = Schedule::default();
+    // 捕捉はスレッドローカルなので、係を同じスレッドで回す
+    schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
+    schedule.add_systems(visual_property_sync_system);
+
+    let log = crate::ecs::test_support::capture_under_filter("warn", || {
+        schedule.run(&mut world);
+        // 位置だけが動いても、NaN の記録は繰り返さない
+        world.get_mut::<Arrangement>(entity).unwrap().offset = Offset { x: 1.0, y: 2.0 };
+        schedule.run(&mut world);
+    });
+    assert_eq!(wuc_visual.Opacity().unwrap(), 1.0, "NaN は 1.0 として写す");
+    assert_eq!(log.matches("不透明度が NaN").count(), 1, "{log}");
+    assert!(log.contains("nan-owner"), "実体名が要る: {log}");
+}

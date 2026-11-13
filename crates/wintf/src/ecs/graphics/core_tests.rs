@@ -154,3 +154,12 @@ fn check_device_removed_leaves_healthy_device_untouched() {
     assert!(gc.is_valid());
     assert_eq!(gc.last_changed(), before);
 }
+
+/// 失いの判定だけの口は、記録も無効化もしない（読み戻しが使う・要件 5.6）。
+#[test]
+fn is_lost_failure_does_not_invalidate() {
+    let core = GraphicsCore::new().expect("GraphicsCore");
+    assert!(core.is_lost_failure(&Error::from(DXGI_ERROR_DEVICE_REMOVED)));
+    assert!(!core.is_lost_failure(&Error::from(E_INVALIDARG)));
+    assert!(core.is_valid());
+}

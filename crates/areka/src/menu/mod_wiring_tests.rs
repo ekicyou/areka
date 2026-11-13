@@ -26,8 +26,8 @@ use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased, Phase, PointerState
 use wintf::ecs::{Input, Point, WindowHandle};
 
 use super::*;
-use crate::emo2_boot::hit_region::HitRegion;
 use crate::input_events::{MouseWiring, RegionSource};
+use crate::runtime::hit_region::HitRegion;
 use areka_placement::spawn::CharWindowMarker;
 
 /// 当たり判定の代役（このテストでは当たり判定を引かないので中身は使われない）。

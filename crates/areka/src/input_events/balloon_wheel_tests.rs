@@ -17,14 +17,14 @@ use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::Window;
 use wintf::ecs::pointer::{PointerState, WheelDelta};
 
-use super::super::balloon::test_support::headless_emo2_wiring;
+use super::super::balloon::test_support::headless_runtime_wiring;
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
-use crate::emo2_boot::frame::balloon_runtime_test_support::{
+use crate::runtime::frame::balloon_runtime_test_support::{
     balloon_is_manual, manual_balloon_runtime,
 };
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_placement::spawn::BalloonWindowMarker;
 
 /// バルーン窓（scope 0）の子を持ち主にし、回転を載せる。
@@ -54,18 +54,18 @@ fn run(world: &mut World) -> u32 {
     reads.get()
 }
 
-/// 結線（Emo2Wiring）つきの World と、手動の位置（自動の 1 行上）にいる文字の層。
+/// 結線（RuntimeWiring）つきの World と、手動の位置（自動の 1 行上）にいる文字の層。
 /// GPU の許可は組の先頭で返す（World の装置より後に捨てる）。
 fn rig(
     vertical: i16,
     horizontal: i16,
 ) -> (
-    crate::emo2_boot::spine::GpuPermit,
+    crate::runtime::spine::GpuPermit,
     World,
     Rc<RefCell<TextLayerRuntime>>,
 ) {
     let (permit, mut world, runtime) = manual_balloon_runtime("0");
-    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_runtime_wiring(Rc::clone(&runtime)));
     spawn_rotation(&mut world, vertical, horizontal);
     (permit, world, runtime)
 }
@@ -166,9 +166,9 @@ fn balloon_wheel_does_not_queue_on_mouse_wheel() {
     );
 }
 
-/// 結線（Emo2Wiring）が無いときは debug を出して何もしない（OS の行数も読まない）。
+/// 結線（RuntimeWiring）が無いときは debug を出して何もしない（OS の行数も読まない）。
 #[test]
-fn without_emo2_wiring_does_nothing() {
+fn without_runtime_wiring_does_nothing() {
     let mut world = World::new();
     spawn_rotation(&mut world, 120, 0);
     let (reads, lines) = capture_lines(LineFormat::LevelFields, || run(&mut world));
@@ -176,7 +176,7 @@ fn without_emo2_wiring_does_nothing() {
     assert!(
         lines
             .iter()
-            .any(|l| l.contains("DEBUG") && l.contains("balloon_wheel_no_emo2")),
+            .any(|l| l.contains("DEBUG") && l.contains("balloon_wheel_no_runtime")),
         "{lines:?}"
     );
 }

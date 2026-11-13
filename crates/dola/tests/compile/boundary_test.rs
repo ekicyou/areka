@@ -1,6 +1,6 @@
 //! デシリアライズ境界・数値境界・panic 経路のテスト
 //!
-//! 外部入力（JSON/TOML/YAML）由来の DolaDocument が compile へ渡される境界で、
+//! 外部入力（JSON・機能 `toml` の TOML）由来の DolaDocument が compile へ渡される境界で、
 //! 数値の規則（#29）を外れた文書が panic でなくエラーで拒まれることと、
 //! 検証を通った文書が panic しないことを縛る。
 
@@ -258,8 +258,9 @@ fn segment_sort_with_many_nan_follows_total_order() {
 #[test]
 fn json_rejects_nan_literal_at_deserialization_boundary() {
     // 標準 JSON 経由では NaN/inf リテラルを注入できない（serde_json がパース時に
-    // 拒否する）。NaN/inf の流入経路は YAML（.nan/.inf）のみ
-    // （機能 `yaml` により既定ビルド外。そこから来た値は validate の数値の規則が拒む）。
+    // 拒否する）。NaN/inf の流入経路は機能 `toml` の TOML（nan/inf/-inf）で、読み込みは
+    // 断らず、数値の欄に来た値は validate の数値の規則が拒む。Object の値の中の数は
+    // 補間しない中身として運ぶだけで、数値の規則の外（下の TOML の境界のテスト）。
     assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": NaN }"#).is_err());
     assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": Infinity }"#).is_err());
 }
@@ -386,4 +387,95 @@ fn storyboard_builder_cannot_bypass_compile_validation() {
     assert!(errs.iter().any(
         |e| matches!(e, DolaError::UndefinedVariable { name, .. } if name == "undefined_var")
     ));
+}
+
+// ---------------------------------------------------------------
+// デシリアライズ境界（TOML は nan/inf/-inf を読める・機能 `toml`）
+// ---------------------------------------------------------------
+
+#[cfg(feature = "toml")]
+#[test]
+fn toml_non_finite_numbers_are_rejected_by_validate() {
+    // 型の決まった欄（initial・delay・time_scale）と untagged の欄
+    // （to・ベジェの点・loop_offset・at の offset）に同じ値を入れる
+    const TEMPLATE: &str = r#"
+schema_version = "1.0"
+
+[variable.x]
+type = "f64"
+initial = V
+
+[transition.t]
+to = V
+delay = V
+easing = { type = "cubic_bezier", x0 = 0.0, x1 = V, x2 = 0.0, x3 = 1.0 }
+
+[storyboard.s]
+time_scale = V
+loop_offset = V
+
+[[storyboard.s.entry]]
+variable = "x"
+transition = "t"
+at = { keyframes = "start", offset = V }
+
+[[storyboard.s.entry]]
+variable = "x"
+transition = { to = V }
+"#;
+    let mut expected = vec![
+        ("storyboard 's'", "loop_offset"),
+        ("storyboard 's'", "time_scale"),
+        ("storyboard 's' entry 0", "offset"),
+        ("storyboard 's' entry 1", "to"),
+        ("transition 't'", "delay"),
+        ("transition 't'", "easing.x1"),
+        ("transition 't'", "to"),
+        ("variable 'x'", "initial"),
+    ];
+    expected.sort();
+    for value in ["nan", "inf", "-inf"] {
+        let doc = DolaDocument::from_toml_str(&TEMPLATE.replace('V', value))
+            .unwrap_or_else(|e| panic!("{value}: read refused: {e}"));
+        // -inf は loop_offset の負の上限の規則にも掛かるので、数値の規則の誤りだけを見る
+        let mut fields: Vec<(String, String)> = doc
+            .validate()
+            .unwrap_err()
+            .into_iter()
+            .filter_map(|e| match e {
+                DolaError::InvalidNumber {
+                    location, field, ..
+                } => Some((location, field)),
+                _ => None,
+            })
+            .collect();
+        fields.sort();
+        let fields: Vec<(&str, &str)> = fields
+            .iter()
+            .map(|(l, f)| (l.as_str(), f.as_str()))
+            .collect();
+        assert_eq!(fields, expected, "{value}");
+    }
+}
+
+#[cfg(feature = "toml")]
+#[test]
+fn toml_non_finite_in_object_value_does_not_panic() {
+    // Object の値は補間しない中身として運ぶだけで、数値の規則の外（通る）
+    let doc = DolaDocument::from_toml_str(
+        r#"
+schema_version = "1.0"
+
+[variable.o]
+type = "object"
+initial = { a = nan, b = [inf, -inf] }
+
+[[storyboard.s.entry]]
+variable = "o"
+transition = { to = { a = inf, b = nan } }
+"#,
+    )
+    .unwrap();
+    assert!(doc.validate().is_ok());
+    assert!(compile_storyboard(&doc, "s", 0.0).is_ok());
 }

@@ -26,12 +26,12 @@ use super::refs::{ON_UPDATE_FAILURE, executing_refs};
 use super::worker::{DeskAsk, HOMEURL, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
 use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::{
-    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
-};
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
 use crate::menu::captions::{QueryReply, send_query};
+use crate::session::ghost_switch::{
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+};
 
 /// 後送りの列（ゴーストの成功の締め → 総括・決めたこと 21）。
 type Tail = Vec<(&'static str, Vec<String>)>;

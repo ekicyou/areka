@@ -60,7 +60,7 @@ pub(crate) struct ReadmeWiring {
 
 /// 説明書の持ち物を World へ入れる（取り出しの登録は [`register_readme_drain`]）。
 ///
-/// 呼び手は boot 成功後の `wire_emo2_boot`（ゴーストの根と `readme` キーを読める場所・task 4.3）。
+/// 呼び手は boot 成功後の `wire_runtime`（ゴーストの根と `readme` キーを読める場所・task 4.3）。
 pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
     world.insert_non_send(ReadmeWiring {
         path,
@@ -217,10 +217,13 @@ pub(crate) mod destination;
 // 開く処理の 1 か所（task 3.1〜3.4）。
 mod opener;
 
+/// `\![open,…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+pub(crate) mod readme_cue;
+
 #[cfg(test)]
 mod opener_test_support;
 
-// 台本の入口から偽の OS までの通しのテスト（`emo2_boot`）にだけ見せる（本番の見え方は変えない）。
+// 台本の入口から偽の OS までの通しのテスト（`runtime`）にだけ見せる（本番の見え方は変えない）。
 #[cfg(test)]
 pub(crate) use opener::{Opener, serve};
 #[cfg(test)]

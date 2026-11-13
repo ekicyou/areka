@@ -28,6 +28,14 @@
 - **境をまたぐテスト**: placement の `reset_balloon_pos_tests.rs` は `switch_assets` を使う。`placement-crate-split` で本体に残したもの。
 - **examples**: `collision-probe.rs` が `#[path]` で `target_map.rs`・`hit_region.rs` を取り込んでいる。
 - **ログの出所**: `runtime-module-untangle` の後は `areka::runtime::…`。移すと `areka_runtime::…` に変わる。
+- **`runtime-module-untangle` からの申し送り**（2026-11-13・パスはその着地の形。数は同 spec の `research.md` の検証の記録）:
+  - **落ちの報告の支え**: `crates/areka/src/runtime/crash_report_test_support.rs`（宣言は `runtime/mod.rs` の `mod crash_report_test_support;`・使い手は `runtime/spine_wait.rs`）は、テストの実行ファイルごとに `.CRT$XCU` の初期化子で据える。実行ファイルが本体と `areka-runtime` に分かれると、**両方に要る**（本体の側には今は無い＝runtime と一緒に移すだけだと、本体のテストの実行ファイルが落ちの報告を失う）。前例は `crates/areka-placement/src/test_crash_report.rs`（1 行目の「写しの相手」の行を、置いた先のパスへ合わせる。`crates/wintf/src/test_crash_report.rs` の 1 行目も）。
+  - **テストが本体の外を引く所**（crate を分けると引けなくなる）:
+    - 口のテストの倒れ先: `runtime/session_hooks.rs` の `#[cfg(test)] const FALLBACK: SessionHooks = crate::session::hooks::HOOKS;`（`runtime-module-untangle` 設計の議題 1＝テストの World は本体の口そのものを読む）。本番の倒れ先は `NO_BODY`。`areka-runtime` のテストからは `session` が見えないので、テストの倒れ先を決め直す。
+    - 文字列で読むファイル: `runtime/frame_schedule_tests.rs` の `include_str!("../session/ghost_quit.rs")`・`runtime/zorder_wiring_tests.rs` の `include_str!("../session/runtime_boot.rs")`・`"../ghost_session.rs"`・`"../main.rs"`・`runtime/strict_judges_tests.rs` の `include_str!("../../../../doc/ssp-mcp/areka-tools.md")`（相対の深さが変わる）・`runtime/film_playback_e2e_tests.rs` の `crate::crate_source_test_support::crate_path`（支えの宣言は本体の `main.rs`）。
+    - `transition_judge`: `runtime/frame_transition_atomicity_tests.rs`・`runtime/frame_transition_branch_tests.rs` が `crate::placement_tests::transition_judge` を引く（上の「本体に残る `transition_judge*`」）。
+    - 骨組みの起動の選択肢: `runtime/spine.rs` が `crate::session::runtime_boot::runtime_boot_options` を呼ぶ（テストの支えの骨組みが実行系を起こすとき）。
+    - 逆向きの e2e: `session/runtime_boot_tests.rs` が `#[path = "../runtime/script_security_e2e_tests.rs"]`・`#[path = "../runtime/readme_script_e2e_tests.rs"]` で 2 本を session のテストとして宣言している（ファイルは `runtime/` に残した）。crate を分けるときは置き場（本体の側へ寄せるか）を決める。
 
 ## Desired Outcome
 
