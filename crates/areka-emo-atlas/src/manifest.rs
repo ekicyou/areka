@@ -226,31 +226,12 @@ fn surface_ids(surface: &areka_parsers::shell::Surface) -> Vec<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::normalize::{AlphaParams, UseSelfAlpha};
     use crate::table::{AtlasKey, SetId};
-    use areka_parsers::shell::{Animation, DrawMethod, Element, Interval, Pattern, Surface};
+    use crate::test_support::{elem, set, surface};
+    use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern, Surface};
     use std::path::Path;
 
     // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
-
-    fn elem(layer: u32, path: &str) -> Element {
-        Element {
-            layer,
-            path: areka_parsers::shell::ElementPath::new(path.to_string()),
-            x: 0,
-            y: 0,
-        }
-    }
-
-    /// element のみを持つ最小 surface（collision/animation 空）。
-    fn surface(id: u32, elements: Vec<Element>) -> Surface {
-        Surface {
-            targets: vec![areka_parsers::shell::AppendTarget::Single(id)],
-            elements,
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        }
-    }
 
     /// 単一 pattern（surface_id 参照）を持つ bind animation。
     fn bind_anim(anim_id: u32, ref_surface_id: i64) -> Animation {
@@ -266,21 +247,6 @@ mod tests {
                 x: 0,
                 y: 0,
             }],
-        }
-    }
-
-    fn params() -> AlphaParams {
-        AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        }
-    }
-
-    /// SurfaceSet を借用で組む小ヘルパ（base_dir はダミー・derive は join しない）。
-    fn set<'a>(surfaces: &'a [Surface], base: &'a Path) -> SurfaceSet<'a> {
-        SurfaceSet {
-            surfaces,
-            base_dir: base,
-            alpha_params: params(),
         }
     }
 

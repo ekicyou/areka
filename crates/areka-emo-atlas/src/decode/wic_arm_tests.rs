@@ -7,8 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-use super::test_support::with_arm;
 use crate::decode::{AnimationInfo, DecodeError, ElementDecoder};
+use crate::test_support::with_arm;
 
 fn sample(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

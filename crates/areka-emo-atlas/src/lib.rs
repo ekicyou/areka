@@ -342,6 +342,10 @@ pub use error::BakeError;
 #[cfg(test)]
 mod sample_test_support;
 
+// クレートのテストが共有する部品の置き場（COM の手伝い・組み立て・読み出し・spec: audit-emo-atlas 指摘 4・10）。
+#[cfg(test)]
+pub(crate) mod test_support;
+
 // emo2 fixture を用いた統合テスト（shell・balloon 横断・task 3.2）。
 #[cfg(test)]
 mod emo2_e2e;
@@ -372,87 +376,15 @@ mod samples_e2e_tests;
 mod bake_entry_tests {
     use super::*;
     use crate::decode::MemoryDecoder;
-    use crate::manifest::SurfaceSet;
-    use crate::normalize::{AlphaParams, UseSelfAlpha};
     use crate::pack::PackConfig;
     use crate::table::SetId;
-    use areka_parsers::shell::{
-        Animation, AppendTarget, DrawMethod, Element, ElementPath, Interval, Pattern, Surface,
+    use crate::test_support::{
+        dressed_shell, elem, opaque_2x2, register, set, surface, transparent_2x2, zero_sized,
     };
+    use areka_parsers::shell::{Interval, Surface};
     use std::path::Path;
 
     // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
-
-    fn elem(layer: u32, path: &str) -> Element {
-        Element {
-            layer,
-            path: ElementPath::new(path.to_string()),
-            x: 0,
-            y: 0,
-        }
-    }
-
-    /// element のみを持つ最小 surface（collision/animation 空）。
-    fn surface(id: u32, elements: Vec<Element>) -> Surface {
-        Surface {
-            targets: vec![AppendTarget::Single(id)],
-            elements,
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        }
-    }
-
-    fn params() -> AlphaParams {
-        AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        }
-    }
-
-    fn set<'a>(surfaces: &'a [Surface], base: &'a Path) -> SurfaceSet<'a> {
-        SurfaceSet {
-            surfaces,
-            base_dir: base,
-            alpha_params: params(),
-        }
-    }
-
-    /// tightly-packed 2×2 の premultiplied BGRA・不透明（α=255）画像スペックを返す。
-    fn opaque_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-        let (w, h) = (2u32, 2u32);
-        let stride = w * 4;
-        // 全画素 α=255・色は適当（premultiplied 適合: B,G,R <= A）。
-        let bgra = vec![
-            10, 20, 30, 255, //
-            40, 50, 60, 255, //
-            70, 80, 90, 255, //
-            100, 110, 120, 255,
-        ];
-        (w, h, stride, bgra, true)
-    }
-
-    /// tightly-packed 2×2 の完全透明（全 α=0）画像スペック（has_alpha=true で normalize 通過）。
-    fn transparent_2x2() -> (u32, u32, u32, Vec<u8>, bool) {
-        let (w, h) = (2u32, 2u32);
-        let stride = w * 4;
-        let bgra = vec![0u8; (stride * h) as usize];
-        (w, h, stride, bgra, true)
-    }
-
-    /// 0×0（元画像 0 寸）の画像スペック（has_alpha=true で normalize 通過・trim は空エントリ）。
-    fn zero_sized() -> (u32, u32, u32, Vec<u8>, bool) {
-        (0, 0, 0, Vec::new(), true)
-    }
-
-    /// MemoryDecoder へ base_dir.join(rel_path) の実パスで画像を登録する。
-    fn register(
-        dec: &mut MemoryDecoder,
-        base: &Path,
-        rel: &str,
-        spec: (u32, u32, u32, Vec<u8>, bool),
-    ) {
-        let (w, h, stride, bgra, has_alpha) = spec;
-        dec.insert(base.join(rel), w, h, stride, bgra, has_alpha);
-    }
 
     /// テスト①: end-to-end 結線（複数セット）。shell + balloon の 2 セットを 1 度の bake で
     /// 処理し、索引表＋頁バッファが**値で直接**得られる（channel 非依存・R6.5 ＋ 1.x/4.x/5.x/6.x）。
@@ -742,21 +674,7 @@ mod bake_entry_tests {
 
     /// 面 0（不透明の絵）の `interval` のアニメーションが面 3000 を参照し、面 3000 が `rel` だけを持つシェル。
     fn shell_owned_by(interval: Interval, rel: &str) -> Vec<Surface> {
-        let mut base = surface(0, vec![elem(0, "solid.png")]);
-        base.animations = vec![Animation {
-            id: 0,
-            interval,
-            patterns: vec![Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 3000,
-                target: "3000".into(),
-                wait: 0,
-                x: 0,
-                y: 0,
-            }],
-        }];
-        vec![base, surface(3000, vec![elem(0, rel)])]
+        dressed_shell(surface(0, vec![elem(0, "solid.png")]), interval, rel)
     }
 
     /// `shell_owned_by` のシェルを、`rel` に `spec` の絵を当てて焼き、捕捉した記録と結果を返す。

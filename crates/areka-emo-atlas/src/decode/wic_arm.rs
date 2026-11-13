@@ -202,21 +202,8 @@ fn pixel_format_has_alpha(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::with_arm;
     use std::path::PathBuf;
-    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-
-    /// COM 初期化下でクロージャを実行するヘルパ（WIC は CPU-only だが COM init 必須）。
-    /// wintf の既存 WIC テスト（MTA）と同じパターン。
-    fn with_com_initialized<F: FnOnce()>(f: F) {
-        unsafe {
-            // 既に初期化済みでも RPC_E_CHANGED_MODE を許容し、続行する。
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        }
-        f();
-        unsafe {
-            CoUninitialize();
-        }
-    }
 
     /// emo2 が同梱するバルーンの実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
     /// 本モジュールの檻が指す実資産（`online0.png`・`descript.txt`）は全てこのフォルダ直下に在る。
@@ -227,8 +214,7 @@ mod tests {
     /// 2.1: 実 emo2 element PNG（α 付き）を復号し、契約（寸法・stride・長さ・has_alpha）を確認。
     #[test]
     fn decode_real_emo2_png_satisfies_contract() {
-        with_com_initialized(|| {
-            let arm = WicDecoderArm::new().expect("WIC factory creates under COM init");
+        with_arm(|arm| {
             let png = balloon_path("online0.png");
             assert!(png.exists(), "fixture must exist: {}", png.display());
 
@@ -245,8 +231,7 @@ mod tests {
     /// 2.2: 不在パスは NotFound（パス付き）で返す（panic しない）。
     #[test]
     fn missing_path_yields_not_found() {
-        with_com_initialized(|| {
-            let arm = WicDecoderArm::new().expect("WIC factory");
+        with_arm(|arm| {
             let missing = balloon_path("does_not_exist_xyz.png");
             assert!(!missing.exists());
             match arm.decode(&missing) {
@@ -259,8 +244,7 @@ mod tests {
     /// 2.2: 実在するが画像でないファイルは Decode（パス＋source 付き）で返す（panic しない）。
     #[test]
     fn non_image_file_yields_decode_error() {
-        with_com_initialized(|| {
-            let arm = WicDecoderArm::new().expect("WIC factory");
+        with_arm(|arm| {
             let not_image = balloon_path("descript.txt");
             assert!(
                 not_image.exists(),
@@ -279,7 +263,7 @@ mod tests {
 
     /// D5/emo2: emo2 の PNG には `.pna` 兄弟が無いため probe_pna は false。
     ///
-    /// 注意: 他の WIC テストと同じく `with_com_initialized` で包む。以前の実装は
+    /// 注意: 他の WIC テストと同じく `with_arm` で包む。以前の実装は
     /// 「未初期化のまま `new()` → 失敗したら空 `with_com_initialized(||{})` で
     /// init+uninit（差引ゼロ）してから再 `new()`」という壊れたフォールバックを持ち、
     /// 暗黙 MTA（他テストが同時に MTA を保持）に依存していた。単一スレッド実行や
@@ -288,8 +272,7 @@ mod tests {
     /// factory 生成・使用まで完結させることで実行順・スレッド数に非依存にする。
     #[test]
     fn probe_pna_false_for_emo2() {
-        with_com_initialized(|| {
-            let arm = WicDecoderArm::new().expect("WIC factory");
+        with_arm(|arm| {
             let png = balloon_path("online0.png");
             assert!(png.exists());
             // `online0.pna` は存在しない。
@@ -301,9 +284,8 @@ mod tests {
     /// 2.1（抽象境界）: `&dyn ElementDecoder` 経由でポート契約を満たすことを確認する。
     #[test]
     fn satisfies_port_via_trait_object() {
-        with_com_initialized(|| {
-            let arm = WicDecoderArm::new().expect("WIC factory");
-            let dyn_dec: &dyn ElementDecoder = &arm;
+        with_arm(|arm| {
+            let dyn_dec: &dyn ElementDecoder = arm;
             let png = balloon_path("online0.png");
             assert!(png.exists());
 
@@ -318,10 +300,6 @@ mod tests {
 #[cfg(test)]
 #[path = "wic_arm_tests.rs"]
 mod animation_tests;
-
-#[cfg(test)]
-#[path = "wic_arm_test_support.rs"]
-mod test_support;
 
 #[cfg(test)]
 #[path = "wic_arm_palette_tests.rs"]

@@ -9,8 +9,9 @@ use crate::manifest::SurfaceSet;
 use crate::normalize::{AlphaParams, UseSelfAlpha};
 use crate::pack::PackConfig;
 use crate::table::{AtlasTable, ElementId, LoopCount, SetId};
+use crate::test_support::{dump, elem, full, set, surface, view};
 use crate::{BakeResult, bake_with_limits};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
+use areka_parsers::shell::Surface;
 use std::num::NonZeroU32;
 use std::path::Path;
 
@@ -33,19 +34,9 @@ fn shell_of(names: &[&str]) -> Vec<Surface> {
     let elements = names
         .iter()
         .enumerate()
-        .map(|(layer, path)| Element {
-            layer: layer as u32,
-            path: ElementPath::new(path.to_string()),
-            x: 0,
-            y: 0,
-        })
+        .map(|(layer, path)| elem(layer as u32, path))
         .collect();
-    vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }]
+    vec![surface(0, elements)]
 }
 
 /// 2×2 の絵（画素は左上から行順）。
@@ -149,47 +140,6 @@ fn bake_logged(
         result = Some(bake_in(dec, names, limits, cfg));
     });
     (result.unwrap(), log)
-}
-
-/// エントリをページから原寸の絵へ戻す（切り詰めの外は透明）。
-fn full(table: &AtlasTable, id: ElementId) -> Vec<Px> {
-    let e = table.entry(id);
-    let w = e.original.w;
-    let mut out = vec![CLEAR; (w * e.original.h) as usize];
-    if let Some(p) = &e.placement {
-        let page = table.page(p.page).expect("page exists");
-        for y in 0..p.uv_rect.h {
-            for x in 0..p.uv_rect.w {
-                let src = ((p.uv_rect.y + y) * page.stride + (p.uv_rect.x + x) * 4) as usize;
-                let dst = ((p.trim_offset.y as u32 + y) * w + p.trim_offset.x as u32 + x) as usize;
-                out[dst] = page.bytes[src..src + 4].try_into().unwrap();
-            }
-        }
-    }
-    out
-}
-
-/// 表の中身を順序の決まった文字列にする（`HashMap` の並びに依らない）。
-fn dump(table: &AtlasTable) -> String {
-    let mut s = String::new();
-    for i in 0..table.len() {
-        let id = ElementId(i as u32);
-        s += &format!(
-            "{i}: {:?} {:?} {:?}\n",
-            table.key(id),
-            table.entry(id),
-            table.animation(id)
-        );
-    }
-    for page in table.pages() {
-        s += &format!(
-            "page {}x{} {:?}\n",
-            page.width,
-            page.height,
-            &page.bytes[..]
-        );
-    }
-    s
 }
 
 fn three_frames() -> AnimatedImage {
@@ -392,16 +342,6 @@ fn insert_still(dec: &mut MemoryDecoder, rel: &str, img: DecodedImage) {
 
 fn warns(log: &str) -> Vec<&str> {
     log.lines().filter(|l| l.contains("level=WARN")).collect()
-}
-
-/// エントリの見え方（寸法・切り詰めの位置と大きさ・原寸へ戻した画素）。ページ上の位置は含めない。
-fn view(table: &AtlasTable, id: ElementId) -> String {
-    let e = table.entry(id);
-    let trim = e
-        .placement
-        .as_ref()
-        .map(|p| (p.trim_offset, p.uv_rect.w, p.uv_rect.h));
-    format!("{:?} {:?} {:?}", e.original, trim, full(table, id))
 }
 
 /// 透明度を持たない 3 コマの動く絵。0 番の左上の色 K0 を抜くと 0 番は右下の 1 画素だけになる。
@@ -696,13 +636,7 @@ fn first_frame_failure_falls_back_to_the_old_reader_then_to_the_failure_list() {
 fn bake_without_limits_uses_the_default_limits() {
     let dec = with_animation(three_frames());
     let surfaces = shell();
-    let sets = [SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    }];
+    let sets = [set(&surfaces, Path::new(BASE))];
     let table = crate::bake(&sets, &dec, PackConfig::default()).table;
     let parent = table.resolve(SetId(0), "anim.png").unwrap();
     assert_eq!(table.animation(parent).unwrap().frames.len(), 3);
