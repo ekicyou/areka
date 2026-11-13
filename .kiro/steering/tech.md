@@ -29,7 +29,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - ~~**async-executor**~~: 撤去済み（spec `wintf-winmsg-executor` 完了時）。UI スレッド async は `wintf-winmsg-executor` の `spawn_local` へ移行。背景プール `WintfTaskPool` は `bevy_tasks` ベースで async-executor 非依存。根の `[workspace.dependencies]` に宣言だけが残っている（2026-10-23 時点でどのクレートも使っていない・`Cargo.lock` の版は `bevy_tasks` 経由の推移的依存）
 - **bevy_tasks** (0.19): 背景ワーカープール `WintfTaskPool` の実行基盤（`world.spawn` 経路・UI スレッドとは別レイヤ）
 - **tracing / tracing-subscriber**: 構造化ロギング
-- **toml** (1): sylphya の永続化の書式（`areka-sylphya` の `persist/format.rs`・2026-07-24 `areka-P0-sylphya` で追加・2026-08-19 の bevy 0.19 更新と同時に 0.8→1 へ）。`dola` の `toml` 機能は 2026-11-13 `audit-dola` が消した
+- **toml** (1): sylphya の永続化の書式（`areka-sylphya` の `persist/format.rs`・2026-07-24 `areka-P0-sylphya` で追加・2026-08-19 の bevy 0.19 更新と同時に 0.8→1 へ）。`dola` の任意の機能 `toml` も同じ 1 を使う
 - **windows-numerics** (0.3.1): Windows数値型サポート
 - **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
 - **miniz_oxide** (0.9): `.nar`（zip コンテナ）の deflate **伸長**（`areka-nar` の `container` module・意図的依存追加＝2026-09-18 承認済）と、MCP の `dump_surface`／`dump_balloon` が返す PNG の `IDAT` の zlib **圧縮**（`crates/areka` の `mcp/dump_surface_image.rs` だけ・`areka-P0-mcp-dump-images` の設計の議題 1 で 2026-10-04 承認済・`Cargo.lock` に新しいクレートは増えない）。どちらも既定機能を切り `with-alloc` だけを明示する（テスト専用の `sample-ghost-kit` も同じ形で持ち、検体の `.nar` を組む `nar_writer.rs` で deflate **圧縮**を使う）。`areka-nar` は伸長だけで、`areka-nar` の本番コードが `miniz_oxide::deflate` を綴らないことを常設検査 `crates/areka-nar/src/lib_tests.rs` が見張る。zip コンテナの読み手は `areka-nar` が std だけで持つ（`zip`・`flate2` は入れない）。推移的依存は `adler2` 1 本。この「`flate2` は入れない」は `areka-nar` の話で、`flate2` 1.1 は 2026-10-04 から `image` → `png` 経由で本番の木に入っている（下の `image` の項）
@@ -49,7 +49,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤
-- **serde_yaml** (0.9, feature: `yaml`): YAML対応（既定の機能は無い・機能 `json`・`toml` と任意の `toml` は 2026-11-13 `audit-dola` が消し、`serde_json` は開発専用の依存へ移した・`yaml` の行き先は `dola-yaml-backend`）
+- **toml** (1, feature: `toml`): `DolaDocument` の TOML の読み書きの入口（`DolaDocument::from_toml_str`・`to_toml_string`・2026-11-13 `dola-yaml-backend`）。既定の機能は無い。ほかの書式は serde の導出で利用者が選ぶ。`serde_json` は開発専用の依存
 - **interpolation** (0.3.0): イージング・補間計算の基盤（`easing.rs`, `runtime/interpolator/`）
 - **rand** (0.10): アニメーション系の乱数生成
 - **windows** (0.62・`cfg(windows)` のときだけ・`Win32_System_Performance`): `runtime/clock.rs` の `clock::now()`（OS 起動からの高精度時刻＝`QueryPerformanceCounter`）。ターゲット限定の依存にして、dola のほかの部分をプラットフォーム非依存に保つ
@@ -82,7 +82,8 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **判定は終了コードで行う**: `| Select-String` で絞ると終了コードが失われ赤でも通って見える。`--no-fail-fast` で最初の赤いバイナリの後ろも回し、段ごとの合否を最後に一覧する
 - **重いビルドを同時に走らせない**: `-j 4`（ページング不足 os error 1455 の回避）。`cargo deny`／`cargo about` はテストと並べると rustc がメモリ不足で落ちるので最後に直列
 - 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない（通信するのはテストの前の段 `sample fetch` だけで、テストは通信しない）
-- **URL の行の検体は先に取り寄せる**（2026-10-19 `areka-P0-sample-url-fetch`）: 最初の段 `sample fetch`（`tools/sample-fetch.ps1`）が URL の行の書庫を置き場へ取り寄せる。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段（`x64 workspace tests`・`i686 tests (host-32)`）を `skipped (sample fetch failed)` として回さず、ほかの段は回して終了コード 1 で終わる。段 `sample fetch check`（`tools/sample-fetch.ps1 -SelfTest`・ネットを使わない）はほかの道具の自分の検査と並ぶ
+- **URL の行の検体は先に取り寄せる**（2026-10-19 `areka-P0-sample-url-fetch`）: 最初の段 `sample fetch`（`tools/sample-fetch.ps1`）が URL の行の書庫を置き場へ取り寄せる。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段（`x64 workspace tests`・`i686 tests (host-32)`）を `skipped (sample fetch failed)` として回さず、ほかの段は回して終了コード 1 で終わる（段 `dola toml feature tests` は検体を使わないので取り寄せが赤でも回る）。段 `sample fetch check`（`tools/sample-fetch.ps1 -SelfTest`・ネットを使わない）はほかの道具の自分の検査と並ぶ
+- **段 `dola toml feature tests`**（`cargo test -p dola --features toml --no-fail-fast -j 4`・`x64 workspace tests` の直後・ネットを使わない）: 全体テストは任意の機能を有効にしないので、`dola` の機能 `toml` の下のテスト（TOML の往復と境界）を名指しで回す（2026-11-13 `dola-yaml-backend`）
 
 #### テストの待ちと、負荷の下で許す赤（申し開き・2026-10-09 `areka-P0-ghost-session-test-load-flake`）
 

@@ -17,8 +17,8 @@ thiserror = { workspace = true }
 interpolation = "0.3.0"
 rand = { workspace = true }
 
-[dependencies.serde_yaml]
-version = "0.9"
+[dependencies.toml]
+workspace = true
 optional = true
 
 [target.'cfg(windows)'.dependencies]
@@ -28,4 +28,7 @@ windows = { workspace = true, features = ["Win32_System_Performance"] }
 serde_json = "1"
 
 [features]
-yaml = ["dep:serde_yaml"]
+toml = ["dep:toml"]
+
+[package.metadata.docs.rs]
+features = ["toml"]
