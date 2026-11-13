@@ -87,7 +87,7 @@ type LedgerKey = (String, Option<String>);
 ///   [`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)。正準台帳が `(set, zorder)`・
 ///   `(reset, zorder)` の 2 組を登記する（要件 11.2）。
 /// - [`ReadmeSink`](CommandConsumer::ReadmeSink): 開く系の受け口（説明書を含む）
-///   [`ReadmeCueSink`](super::readme_cue::ReadmeCueSink)。正準台帳が `(open, readme|file|browser|
+///   [`ReadmeCueSink`](crate::readme::readme_cue::ReadmeCueSink)。正準台帳が `(open, readme|file|browser|
 ///   explorer|editor|mailer)` の 6 組と運搬名 `\j`（選別子なし）を登記する（要件 4.5・
 ///   areka-P0-open-external-tags 要件 9.2）。
 /// - [`UserBreakSink`](CommandConsumer::UserBreakSink): 中断の無効化の区間の出入りを消費する
@@ -105,10 +105,10 @@ type LedgerKey = (String, Option<String>);
 ///   消費する [`SwitchCueSink`](super::switch_cue::SwitchCueSink)。正準台帳が `(change, shell)`・
 ///   `(change, balloon)` の 2 組を登記する（areka-P0-shell-balloon-switch 要件 1.15）。
 /// - [`InstallSink`](CommandConsumer::InstallSink): `\![execute,install,…]` を消費する
-///   [`InstallCueSink`](super::install_cue::InstallCueSink)。正準台帳が `(execute, install)` の
+///   [`InstallCueSink`](crate::install::install_cue::InstallCueSink)。正準台帳が `(execute, install)` の
 ///   1 組だけを登記する（areka-P0-ghost-install 要件 1.5〜1.7）。
 /// - [`UpdateSink`](CommandConsumer::UpdateSink): `\![updatebymyself]`・`\![update,…]`・
-///   `\![updateother,…]` を消費する [`UpdateCueSink`](super::update_cue::UpdateCueSink)。正準台帳が
+///   `\![updateother,…]` を消費する [`UpdateCueSink`](crate::update::update_cue::UpdateCueSink)。正準台帳が
 ///   3 つの名前を選別子なしで登記する（areka-P0-network-update 要件 1.5〜1.8）。
 /// - [`ScriptCompile`](CommandConsumer::ScriptCompile): `\![set,choicetimeout,…]` を読む台本の
 ///   組み立て（`areka_sakura::compile`）。正準台帳が `(set, choicetimeout)` の 1 組を登記する
@@ -149,7 +149,7 @@ pub enum CommandConsumer {
     /// 第 1 引数が `zorder` の出現だけを担当する（要件 11.2）。
     ZOrderSink,
     /// 開く系の受け口（説明書を含む）の担当消費者
-    /// （[`ReadmeCueSink`](super::readme_cue::ReadmeCueSink)）。`open` は名前だけでは決まらず、
+    /// （[`ReadmeCueSink`](crate::readme::readme_cue::ReadmeCueSink)）。`open` は名前だけでは決まらず、
     /// 第 1 引数が `readme`・`file`・`browser`・`explorer`・`editor`・`mailer` の出現だけを担当する
     /// （作り付けの窓の `help` などは将来の担当の余地・要件 4.5）。運搬名 `\j` は選別子なしで
     /// 担当する（areka-P0-open-external-tags 要件 1.5・9.2）。
@@ -186,14 +186,14 @@ pub enum CommandConsumer {
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1
     SwitchSink,
     /// 書庫を入れるタグの担当消費者
-    /// （[`InstallCueSink`](super::install_cue::InstallCueSink)）。名前だけでは決まらず、
+    /// （[`InstallCueSink`](crate::install::install_cue::InstallCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `install` の出現だけを担当する（`execute` の別の第 1 引数は担当外・
     /// areka-P0-ghost-install 要件 1.5〜1.7）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1
     InstallSink,
     /// ネットワーク更新のタグの担当消費者
-    /// （[`UpdateCueSink`](super::update_cue::UpdateCueSink)）。`updatebymyself`・`update`・
+    /// （[`UpdateCueSink`](crate::update::update_cue::UpdateCueSink)）。`updatebymyself`・`update`・
     /// `updateother` の 3 つの名前を選別子なしで担当する（第 1 引数は更新対象・指定であって担当を
     /// 分けない・areka-P0-network-update 要件 1.5〜1.8）。
     ///

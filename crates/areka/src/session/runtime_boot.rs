@@ -19,21 +19,21 @@ use tracing::{error, warn};
 
 use super::ghost_switch::{self, ChangeRequestRaw};
 use super::shell_balloon_switch;
+use crate::install::install_cue::InstallCueSink;
+use crate::readme::readme_cue::ReadmeCueSink;
 use crate::runtime::RuntimeInputs;
 use crate::runtime::change_cue::ChangeCueSink;
-use crate::runtime::install_cue::InstallCueSink;
 use crate::runtime::move_cue::MoveCueSink;
-use crate::runtime::readme_cue::ReadmeCueSink;
 use crate::runtime::reload_args::ScriptReload;
 use crate::runtime::reload_cue::{ReloadCueSink, wire_reload_rx};
 use crate::runtime::skin_switch::SkinRequestRaw;
 use crate::runtime::switch_cue::SwitchCueSink;
 use crate::runtime::talk_clock::ClockedTextSink;
 use crate::runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use crate::runtime::update_cue::UpdateCueSink;
 use crate::runtime::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use crate::runtime::window_state_cue::WindowStateCueSink;
 use crate::runtime::zorder_cue::ZOrderCueSink;
+use crate::update::update_cue::UpdateCueSink;
 
 pub(crate) use crate::runtime::{CueSinkSources, RuntimeBootError};
 

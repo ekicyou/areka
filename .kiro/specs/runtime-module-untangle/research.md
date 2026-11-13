@@ -833,10 +833,10 @@ public struct RECT { public int L, T, R, B; }
 |---|---|---|---|
 | `session::ghost_quit::ghost_quit_system` | `pub(super)` → `pub(crate)` | `runtime/frame_schedule_tests.rs` | 5.1 |
 | `runtime/mod.rs` の `mod change_cue`・`reload_cue`・`special_name`・`switch_cue`・`window_state_cue` | 私有 → `pub(crate)` | `session/runtime_boot.rs`・`ghost_switch.rs`・`reload.rs` | 6.1 |
-| `runtime/mod.rs` の `mod install_cue`・`readme_cue`・`update_cue` | 私有 → `pub(crate)` | `session/runtime_boot.rs` の `runtime_sinks`（6.2 で持ち主へ移すと持ち主の宣言になる） | 6.1 |
+| ~~`runtime/mod.rs` の `mod install_cue`・`readme_cue`・`update_cue`~~ | 私有 → `pub(crate)`（6.2 で `runtime` から外し、広げは消えた） | 6.2 から持ち主の宣言 `install/mod.rs`・`update/mod.rs`・`readme.rs` の `pub(crate) mod`（`session/runtime_boot.rs` の `runtime_sinks` と `runtime/consumer_ledger_agreement_tests.rs` が引く） | 6.1→6.2 |
 | `RuntimeWiring` の欄 `shell_carry` | `pub(in crate::runtime)` → `pub(crate)` | `session/ghost_switch_reload_tests.rs` | 6.1 |
 
-- 8 つの `mod` は 1 つずつ私有へ戻して `cargo check -p areka --all-targets` が誤りになることを確かめた（8 つとも要る）。
+- （6.1 の時点）8 つの `mod` は 1 つずつ私有へ戻して `cargo check -p areka --all-targets` が誤りになることを確かめた（8 つとも要る）。
 
 ### 式 1〜3（6.1 の後・16.5 のコマンドで `B=crates/areka/src/runtime`・式 1 は `crate::(?!runtime\b)`）
 

@@ -25,9 +25,7 @@ pub mod consumer_ledger;
 pub mod frame;
 pub mod hit_region;
 pub mod hover_inject;
-pub(crate) mod install_cue;
 pub mod move_cue;
-pub(crate) mod readme_cue;
 pub(crate) mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
 pub(crate) mod reload_cue;
@@ -61,7 +59,6 @@ pub(crate) mod switch_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
-pub(crate) mod update_cue;
 pub(crate) mod user_break_cue;
 /// `\v`／`\![set,windowstate,…]` の受け口（stay-on-top-directives）。
 pub(crate) mod window_state_cue;

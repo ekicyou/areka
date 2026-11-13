@@ -217,6 +217,9 @@ pub(crate) mod destination;
 // 開く処理の 1 か所（task 3.1〜3.4）。
 mod opener;
 
+/// `\![open,…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+pub(crate) mod readme_cue;
+
 #[cfg(test)]
 mod opener_test_support;
 

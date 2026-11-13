@@ -22,6 +22,8 @@ pub(crate) mod desk;
 mod procedure;
 mod readonly_refusal;
 mod refs;
+/// `\![update…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+pub(crate) mod update_cue;
 mod worker;
 
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。

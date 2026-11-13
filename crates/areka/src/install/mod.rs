@@ -22,6 +22,8 @@ mod destination;
 pub(crate) mod fetch_url;
 #[cfg(test)]
 pub(crate) mod fetch_url_test_support;
+/// `\![execute,install,…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+pub(crate) mod install_cue;
 pub(crate) mod judge;
 pub(crate) mod names;
 pub(crate) mod pick;

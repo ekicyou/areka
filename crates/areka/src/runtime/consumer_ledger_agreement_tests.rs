@@ -29,18 +29,18 @@ use areka_sakura::contract::FONT_TAG_CARRIER;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 
 use super::super::change_cue::ChangeCueSink;
-use super::super::install_cue::{InstallCueSink, StartFetch};
 use super::super::move_cue::MoveCueSink;
-use super::super::readme_cue::ReadmeCueSink;
 use super::super::reload_cue::ReloadCueSink;
 use super::super::switch_cue::SwitchCueSink;
 use super::super::talk_clock::TalkClock;
 use super::super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use super::super::update_cue::UpdateCueSink;
 use super::super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use super::super::window_state_cue::WindowStateCueSink;
 use super::super::zorder_cue::ZOrderCueSink;
 use super::{CommandConsumer, ConsumerLedger, LedgerKey};
+use crate::install::install_cue::{InstallCueSink, StartFetch};
+use crate::readme::readme_cue::ReadmeCueSink;
+use crate::update::update_cue::UpdateCueSink;
 
 // ---------------------------------------------------------------- 見本
 

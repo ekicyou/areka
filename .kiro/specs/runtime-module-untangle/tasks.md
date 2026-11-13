@@ -113,7 +113,7 @@
   - 完了の形: 警告 0 件で通り、切替・読み直しの試験が今の段取りの順のまま緑で、`runtime` のフォルダに移したファイルが無い
   - _Requirements: 2.1, 2.3, 3.7, 6.4_
 
-- [ ] 6.2 install・update・readme の cue の受け口を持ち主へ移す
+- [x] 6.2 install・update・readme の cue の受け口を持ち主へ移す
   - 3 つの受け口と各テストを持ち主のモジュールへ履歴の残る移動で移し、持ち主が宣言する。組み立ての並びは変えない
   - 受け口の同型の形と台帳の表の行は変えず、台帳の説明の文のリンク 6 か所を移した先のパスへ書き換える
   - 完了の形: 3 つの受け口の試験と台帳の試験が緑で、`runtime` に cue の受け口の持ち主を名指す所が無い
@@ -202,3 +202,4 @@
 - 5.1: 見える範囲の広げ: `ghost_quit_system` を `pub(super)`→`pub(crate)`（`frame_schedule_tests` のため）＝6.1 か 9.x で research.md の広げの一覧に載せる。`runtime/mod.rs:451`・`:655` の doc のリンク `crate::session::ghost_quit::wire_kanade_stop` は要件 3.4 の説明の文の一覧に入る。`doc/COMPAT_ARCHITECTURE.md:283` の古いパスは 8.1 で。
 - 5.2: 3.2 の注の `runtime/mod.rs:176` の [`boot_runtime`] は [`BootRuntimeFn`] へ替わって解けた。6.1 で起動のファイルを移した後、`runtime/mod.rs` 184・192 行の doc の字面「`runtime_boot::boot_runtime`」を `session::runtime_boot::boot_runtime` へ合わせる。`spine.rs:770` の `runtime_boot_options` は 6.1 でパスを直す（テストの支え・7.2 の申し送りに載る）。
 - 6.1: 7.1・7.2 の一部を先に済ませた（決まり `areka::session::ghost_switch`・そのテスト・`log-convention.md:55`・`reload_tests:580`／`reload_skin_tests:328` の `areka::session::reload`）。7.1 に残るのは `UNKEPT_TARGETS` と assert。`runtime_boot_tests.rs` が `#[path = "../runtime/…"]` で引く e2e 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）は `runtime/` に残る＝8.2 の `runtime-crate-split` の申し送りに入れる。`ghost_session_switch_tests.rs:3` の説明の文の古いパスは 8.x で。
+- 6.2: 移した後、7.1 までは `log_history.rs:121` の `rule("areka::install", …)` が前方一致で `areka::install::install_cue` の `info!`（readonly_refused）を Update として残す（中間の状態）。7.1 で `UNKEPT_TARGETS` を必ず入れる。式 1 は本番で 2 行（どちらも `cfg(test)`: `session_hooks.rs:78`・`mod.rs:834`）。
