@@ -32,6 +32,10 @@
 // consume するまで未使用ゆえ、モジュール側で dead_code を抑止している。宣言のみ（Task 5.1 の領分）。
 mod shiori_proxy;
 
+// helper のテストの共通の道具（試験用の DLL の探し方・テストの根）。
+#[cfg(test)]
+mod proxy_test_support;
+
 use shiori_proxy::ShioriByteProxy;
 
 use std::cell::{Cell, RefCell};

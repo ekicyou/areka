@@ -23,7 +23,7 @@
   - host の単体テストのテストの根も 1.1 の決まりにそろえる（`process_host.rs` の `.bat` のテストは 4.1 で消えるので触らない）
   - 完了の姿: `client.rs` と `shiori3.rs` が 500 行を下回り、host の単体テストの本数が移す前と同じ（消した重複の 1 本を除く）で緑
   - _Requirements: 3.1, 4.5, 5.1_
-- [ ] 1.3 helper と loadu のテストの道具をまとめ、中のテストを移す
+- [x] 1.3 helper と loadu のテストの道具をまとめ、中のテストを移す
   - helper のテストの共通の道具（試験用の DLL の探し方・一意のフォルダへの写し・テストの根）を `proxy_test_support.rs` に置き、`main_loopback_tests`・`shiori_proxy_loadu_tests` がそれを使う。host の `TestRoot` と互いの場所を注釈で指す
   - shiori_proxy の中のテストを `shiori_proxy_tests.rs` へ移す
   - loadu の中のテストの根を `target\test-roots\` の下へ移す（指摘 3）
@@ -191,3 +191,4 @@
 
 ## Implementation Notes
 - 1.1: shiori_load_e2e・shiori_request_e2e の TestRoot は HelperGuard が終わりを待たないので消え残る（Drop が eprintln）。タスク 6 で `target\test-roots\` に残らないことを確かめる。
+- 1.3: temp_path_guard_test.rs の ⒝ の見出し「読み出しのみの 2 件」は表の 1 件と合わない（1.1 の残り）。4.1 の件数と説明の直しで合わせる。

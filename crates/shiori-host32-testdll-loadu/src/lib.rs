@@ -139,7 +139,9 @@ pub unsafe extern "C" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     /// env `HOST32_TESTDLL_LOADU_*` を触るテストの直列化（プロセス内で env は共有）。
     static ENV_SERIAL: Mutex<()> = Mutex::new(());
@@ -154,17 +156,31 @@ mod tests {
         h
     }
 
+    /// テストの根 `<ワークスペース>\target\test-roots\shiori-host32-<名>-<pid>-<連番>` を作る（指摘 3）。
+    /// helper の `crates/shiori-host32-helper/src/proxy_test_support.rs` の `TestRoot` と同じ形
+    /// （偽の DLL に依存を足さないため、ここに小さく置く）。消すのは呼んだ側。
+    fn new_test_root(name: &str) -> PathBuf {
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent() // crates/
+            .and_then(Path::parent) // ワークスペースルート
+            .expect("CARGO_MANIFEST_DIR の 2 つ上（ワークスペースの根）")
+            .join("target")
+            .join("test-roots")
+            .join(format!("shiori-host32-{name}-{}-{seq}", std::process::id()));
+        // 前の走行の残り（同じ pid の再利用）を消してから作る。
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path)
+            .unwrap_or_else(|e| panic!("テストの根 {} を作れない: {e}", path.display()));
+        path
+    }
+
     /// 記録 env と偽返却 env を設定した状態で `f` を走らせ、記録ファイルの中身を返す。
     fn with_record(fail: bool, f: impl FnOnce() -> i32) -> (i32, String) {
         let _g = ENV_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        let path = std::env::temp_dir().join(format!(
-            "shiori_loadu_record_{}_{}.txt",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = new_test_root("loadu-record");
+        let path = root.join("record.txt");
         // SAFETY: env を触るテストは ENV_SERIAL で直列化しており、同時に env を読み書きする
         // スレッドはこのクレートのテストに存在しない。
         unsafe {
@@ -182,7 +198,9 @@ mod tests {
             std::env::remove_var(ENV_FAIL);
         }
         let text = std::fs::read_to_string(&path).unwrap_or_default();
-        let _ = std::fs::remove_file(&path);
+        if let Err(e) = std::fs::remove_dir_all(&root) {
+            eprintln!("テストの根 {} を消せない: {e}", root.display());
+        }
         (ret, text)
     }
 

@@ -1,35 +1,6 @@
 use super::*;
-use std::path::PathBuf;
+use crate::proxy_test_support::copy_testdll_into_unique_target_dir;
 use std::rc::Rc;
-
-/// testdll の `shiori.dll` を解決する（proxy 単体テストと同型・Task 5.2）。
-/// 優先順: env `HOST32_TESTDLL_DLL` → `CARGO_MANIFEST_DIR` から target 探索。
-/// **silent skip 禁止**: 見つからなければ明確に panic。
-fn resolve_testdll() -> PathBuf {
-    if let Ok(p) = std::env::var("HOST32_TESTDLL_DLL") {
-        let path = PathBuf::from(p);
-        assert!(
-            path.is_file(),
-            "HOST32_TESTDLL_DLL={} が実ファイルでない",
-            path.display()
-        );
-        return path;
-    }
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let target_root = manifest.join("../../target/i686-pc-windows-msvc");
-    for profile in ["debug", "release"] {
-        let candidate = target_root.join(profile).join("shiori.dll");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-    panic!(
-        "testdll shiori.dll not found. まず PowerShell で \
-         `cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` を実行するか、\
-         env HOST32_TESTDLL_DLL に絶対パスを設定すること（silent skip 禁止）。探索した base: {}",
-        target_root.display()
-    );
-}
 
 /// 単一 loopback テスト（HELLO 送出・未確立 REQUEST→500・LOAD・proxy 駆動 REQUEST(GET/NOTIFY)・
 /// 不正フレーム記録・bounded 生存を同一窓で網羅）。
@@ -82,20 +53,11 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
 
     // --- helper 窓生成（HELLO は create 内で親へ送出）---
-    // LOAD 経路検証のため、testdll(shiori.dll) を入れた一時 load_dir で helper を構築する。
+    // LOAD 経路検証のため、testdll(shiori.dll) を入れたテストの根を load_dir として helper を構築する。
     // dll_path = load_dir\shiori.dll（絶対）。testdll 解決は silent skip 禁止（resolve_testdll が panic）。
-    let src_dll = resolve_testdll();
-    let unique = format!(
-        "host32_helper_loopback_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
-    );
-    let load_dir = std::env::temp_dir().join(&unique);
-    std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
-    std::fs::copy(&src_dll, load_dir.join("shiori.dll")).expect("copy shiori.dll into load_dir");
+    // 根は helper より先に作るので、helper の後に消える。
+    let (root, _) = copy_testdll_into_unique_target_dir("loop");
+    let load_dir = root.path().to_path_buf();
 
     let helper =
         HelperMessageWindow::create(parent_hwnd_u32, load_dir.clone(), "shiori.dll".to_string())
@@ -435,7 +397,6 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     // 窓は Drop で破棄（helper Drop で proxy の courtesy unload → FreeLibrary が走る）。
     drop(helper);
     drop(parent);
-
-    // 後始末（best-effort）: 一時 load_dir（testdll コピー先）を掃除。
-    let _ = std::fs::remove_dir_all(&load_dir);
+    // 根（testdll の写し先）は Drop で消える。
+    drop(root);
 }
