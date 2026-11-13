@@ -15,7 +15,7 @@ use windows::Win32::Graphics::Direct2D::*;
 use windows::core::Interface;
 use windows_numerics::Matrix3x2;
 
-const INFINITE: Aabb = Aabb::new(
+pub(super) const INFINITE: Aabb = Aabb::new(
     f32::NEG_INFINITY,
     f32::NEG_INFINITY,
     f32::INFINITY,
@@ -49,7 +49,7 @@ fn unit_rect() -> ID2D1Geometry {
         .unwrap()
 }
 
-fn at(x: f32, y: f32, w: f32, h: f32) -> Arrangement {
+pub(super) fn at(x: f32, y: f32, w: f32, h: f32) -> Arrangement {
     Arrangement {
         offset: crate::ecs::Offset { x, y },
         size: crate::ecs::Size {
@@ -60,7 +60,7 @@ fn at(x: f32, y: f32, w: f32, h: f32) -> Arrangement {
     }
 }
 
-fn clipped() -> Visual {
+pub(super) fn clipped() -> Visual {
     Visual {
         clip: Some(ClipShape::Rectangle),
         ..Default::default()
@@ -75,7 +75,7 @@ fn rotated(rad: f32) -> VisualTransform {
 }
 
 /// 中身つきの節（位置 (x, y)・大きさ 4×4）。
-fn leaf(world: &mut World, parent: Entity, x: f32, y: f32) -> Entity {
+pub(super) fn leaf(world: &mut World, parent: Entity, x: f32, y: f32) -> Entity {
     world
         .spawn((
             Visual::default(),
@@ -87,7 +87,7 @@ fn leaf(world: &mut World, parent: Entity, x: f32, y: f32) -> Entity {
 }
 
 /// 中身なしの節（変形だけ）。
-fn group(world: &mut World, parent: Entity, visual: Visual, arr: Arrangement) -> Entity {
+pub(super) fn group(world: &mut World, parent: Entity, visual: Visual, arr: Arrangement) -> Entity {
     world
         .spawn((
             visual,
@@ -142,13 +142,13 @@ fn build_only(
     out
 }
 
-fn flatten(world: &mut World, root: Entity, viewport: Aabb) -> Vec<DrawCommand> {
+pub(super) fn flatten(world: &mut World, root: Entity, viewport: Aabb) -> Vec<DrawCommand> {
     let visited = fill(world, root);
     build_only(world, &unit_rect(), viewport, &visited)
 }
 
 /// 比べやすい形（命令の種類・実体・世界の外接矩形）。
-fn shape(cmds: &[DrawCommand]) -> Vec<String> {
+pub(super) fn shape(cmds: &[DrawCommand]) -> Vec<String> {
     cmds.iter()
         .map(|c| match c {
             DrawCommand::Draw(d) => format!("draw {:?} {:?}", d.entity, d.world_aabb),
@@ -156,15 +156,17 @@ fn shape(cmds: &[DrawCommand]) -> Vec<String> {
             DrawCommand::PopClipRect => "pop_rect".into(),
             DrawCommand::PushClipGeometry(g) => format!("push_geom {:?}", g.world_aabb),
             DrawCommand::PopClipGeometry => "pop_geom".into(),
+            DrawCommand::PushOpacity(o) => format!("push_opacity {} {:?}", o.opacity, o.world_aabb),
+            DrawCommand::PopOpacity => "pop_opacity".into(),
         })
         .collect()
 }
 
-fn draw(e: Entity, l: f32, t: f32, r: f32, b: f32) -> String {
+pub(super) fn draw(e: Entity, l: f32, t: f32, r: f32, b: f32) -> String {
     format!("draw {:?} {:?}", e, Aabb::new(l, t, r, b))
 }
 
-fn push_rect(l: f32, t: f32, r: f32, b: f32) -> String {
+pub(super) fn push_rect(l: f32, t: f32, r: f32, b: f32) -> String {
     format!("push_rect {:?}", Aabb::new(l, t, r, b))
 }
 
@@ -298,15 +300,22 @@ fn cull_by_hand(full: &[DrawCommand], viewport: Aabb) -> Vec<String> {
     for (c, s) in full.iter().zip(shape(full)) {
         let outside = |a: Aabb| a.intersect(viewport).is_empty();
         match c {
-            DrawCommand::PushClipRect(_) | DrawCommand::PushClipGeometry(_) if skip_depth > 0 => {
+            DrawCommand::PushClipRect(_)
+            | DrawCommand::PushClipGeometry(_)
+            | DrawCommand::PushOpacity(_)
+                if skip_depth > 0 =>
+            {
                 skip_depth += 1;
             }
-            DrawCommand::PopClipRect | DrawCommand::PopClipGeometry if skip_depth > 0 => {
+            DrawCommand::PopClipRect | DrawCommand::PopClipGeometry | DrawCommand::PopOpacity
+                if skip_depth > 0 =>
+            {
                 skip_depth -= 1;
             }
             _ if skip_depth > 0 => {}
             DrawCommand::PushClipRect(r) if outside(r.world_aabb) => skip_depth = 1,
             DrawCommand::PushClipGeometry(g) if outside(g.world_aabb) => skip_depth = 1,
+            DrawCommand::PushOpacity(o) if outside(o.world_aabb) => skip_depth = 1,
             DrawCommand::Draw(d) if outside(d.world_aabb) => {}
             _ => kept.push(s),
         }

@@ -16,6 +16,9 @@ pub enum DrawCommand {
     /// 単位矩形・角丸の path・使い手の図形のどれも「図形＋局所→世界の変換」で同じ形。
     PushClipGeometry(ClipGeometry),
     PopClipGeometry,
+    /// 節と子孫をまとめた 1 枚に不透明度を掛けて重ねる層（透明から始める）。
+    PushOpacity(OpacityLayer),
+    PopOpacity,
 }
 
 /// 描く 1 件（節の描く中身を世界の行列で置いたもの）。
@@ -48,5 +51,14 @@ pub struct ClipGeometry {
     pub world_mat: Matrix3x2,
     pub geometry: ID2D1Geometry,
     /// 図形を `world_mat` で置いた外接矩形（DIP）。
+    pub world_aabb: Aabb,
+}
+
+/// 不透明度の層。
+#[derive(Clone, Debug)]
+pub struct OpacityLayer {
+    /// `Visual::clamped_opacity` の値（0 より大きく 1.0 未満）。
+    pub opacity: f32,
+    /// 層の中身の範囲（根からの DIP）。節の部分木の世界の外接矩形と、外側の有効な矩形の交わり。
     pub world_aabb: Aabb,
 }

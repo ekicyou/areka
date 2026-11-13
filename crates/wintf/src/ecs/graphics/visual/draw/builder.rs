@@ -44,6 +44,9 @@ enum ClipKind {
 /// - `root`・`root_name`: 記録に載せる根（描画面の持ち主）。根が自分の `VisualDrawContent` を持てば
 ///   （節から昇格した持ち主）、それを先頭の 1 件として恒等の行列（根の局所の DIP）で出す（子より前・間引かない）。
 ///
+/// 不透明度が 1.0 未満の節は、部分木の世界の外接矩形と外側の有効な矩形の交わりを範囲として
+/// `PushOpacity` を切り抜きより外側に積み、同じ深さで閉じる。範囲が空なら部分木を間引く（2.1, 2.3〜2.5）。
+///
 /// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす（5.1, 5.2）。
 ///
 /// 間引きは性能のため（D2D の切り抜きが既に正しく切る）。間引いた列は viewport に依る。
@@ -97,7 +100,7 @@ pub(crate) fn build(
         }
         let size = &arrangement.size;
         let plan = plan_clip(factory, visual.clip.as_ref(), size, unit_rect, world, eff);
-        let new_eff = match plan {
+        let (clip, new_eff) = match plan {
             Err(e) => {
                 error!(
                     root = %format_entity_name(root, root_name),
@@ -113,13 +116,27 @@ pub(crate) fn build(
                 culled_at = Some(depth);
                 continue;
             }
-            Ok(ClipKind::NoClip) => eff,
-            Ok(ClipKind::Clip { push, pop, new_eff }) => {
-                out.push(push);
-                open.push((depth, pop, new_eff));
-                new_eff
-            }
+            Ok(ClipKind::NoClip) => (None, eff),
+            Ok(ClipKind::Clip { push, pop, new_eff }) => (Some((push, pop)), new_eff),
         };
+        // 不透明度の層は切り抜きの外側（根は訪れないので出ない・6.3）。
+        let opacity = visual.clamped_opacity();
+        if opacity < 1.0 {
+            let world_aabb = world.subtree_world_aabb.intersect(eff);
+            if world_aabb.is_empty() {
+                culled_at = Some(depth);
+                continue;
+            }
+            out.push(DrawCommand::PushOpacity(OpacityLayer {
+                opacity,
+                world_aabb,
+            }));
+            open.push((depth, DrawCommand::PopOpacity, new_eff));
+        }
+        if let Some((push, pop)) = clip {
+            out.push(push);
+            open.push((depth, pop, new_eff));
+        }
         if let Some(c) = content
             && !world.content_world_aabb.intersect(new_eff).is_empty()
         {

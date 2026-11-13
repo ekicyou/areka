@@ -53,6 +53,8 @@ static MIX_OUT_OF_RANGE: AtomicBool = AtomicBool::new(false);
 /// - ブレンドは世界の変形を効かせたあと `BlendImage` で描き、絵の外を変えない（1.3・1.6）。
 ///   ブレンドの描き方が無いときと範囲の外の値は、種類ごとにプロセスで 1 度だけ `error!` を残して
 ///   `SOURCE_OVER` で描く（1.7）。
+/// - 不透明度の層は変換を恒等にし、範囲を物理の整数の矩形へ外向きに丸めて積む。透明から始まり、
+///   降ろすとき `SOURCE_OVER` で不透明度を掛けて重なる（3.4）。
 /// - 層は透明から始まる（`D2D1_LAYER_OPTIONS1_NONE`）。層の中の `SOURCE_OVER` でない重ね方は
 ///   層の中身に対して効く（D2D の既定・変えるのは `wintf-d2d-composite-rules`）。
 /// - `dc6` はブレンドの描き方（`BlendImage`）を持つ同じ DC。持たない DC なら `None`。
@@ -141,6 +143,27 @@ pub(crate) fn emit(
                     drop(ManuallyDrop::into_inner(params.geometricMask));
                 }
                 DrawCommand::PopClipGeometry => dc.PopLayer(),
+                DrawCommand::PushOpacity(layer) => {
+                    dc.SetTransform(&identity);
+                    // 物理の整数へ外向きに丸める（層の写しを画素の格子に揃える）。
+                    let b = layer.world_aabb.transform(root).0;
+                    let params = D2D1_LAYER_PARAMETERS1 {
+                        contentBounds: D2D_RECT_F {
+                            left: b.left.floor(),
+                            top: b.top.floor(),
+                            right: b.right.ceil(),
+                            bottom: b.bottom.ceil(),
+                        },
+                        geometricMask: ManuallyDrop::new(None),
+                        maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                        maskTransform: identity,
+                        opacity: layer.opacity,
+                        opacityBrush: ManuallyDrop::new(None),
+                        layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+                    };
+                    dc.PushLayer(&params, None::<&ID2D1Layer>);
+                }
+                DrawCommand::PopOpacity => dc.PopLayer(),
             }
         }
     }
