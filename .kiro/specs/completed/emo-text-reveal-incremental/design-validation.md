@@ -1,6 +1,6 @@
 # 設計の検証: emo-text-reveal-incremental
 
-- 対象: `.kiro/specs/emo-text-reveal-incremental/design.md`（要件 `requirements.md`・調査 `research.md`）
+- 対象: `.kiro/specs/completed/emo-text-reveal-incremental/design.md`（要件 `requirements.md`・調査 `research.md`）
 - 検証日: 2026-11-13（ブランチ `claude/kiro-start-emo-text-reveal-incremental-61e501`・`ffbf08ce9`）
 - 判定: **GO**（下の 3 件は設計の文とテストの作りの直しで、形を変える必要は無い）
 
