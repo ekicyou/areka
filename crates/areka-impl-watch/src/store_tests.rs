@@ -6,7 +6,7 @@
 //! どちらも `store_test_support.rs` のものを使う）。
 
 use std::cell::Cell;
-use std::fs::{self, File};
+use std::fs;
 use std::rc::Rc;
 use std::sync::{Barrier, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    BROKEN_AT_T0, Everyone, Nobody, block_state_writes, participants, store_in,
+    BROKEN_AT_T0, Everyone, Nobody, block_state_writes, hold_state_lock, participants, store_in,
     store_noting_pauses, tick, watch,
 };
 use super::{Store, open, unix_seconds};
@@ -410,23 +410,13 @@ fn a_failed_replace_is_retried_five_times_and_then_removes_the_temp_file() {
 fn while_another_thread_holds_the_lock_the_change_fails_at_the_limit() {
     let root = TempPath::under_target("impl-watch-store");
     let home = home_in(&root);
-    let lock_path = home.lock_path();
-    let (locked_tx, locked_rx) = mpsc::channel::<()>();
+    let file = hold_state_lock(&store_in(&root));
     let (release_tx, release_rx) = mpsc::channel::<()>();
     let holder = std::thread::spawn(move || {
-        let file = File::options()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(lock_path)
-            .expect("ロックファイルを開ける");
-        file.lock().expect("握れる");
-        locked_tx.send(()).expect("知らせられる");
         // 放せと言われる（または相手が落ちる）まで握っておく。
         let _ = release_rx.recv();
         file.unlock().expect("放せる");
     });
-    locked_rx.recv().expect("握ったと知らされる");
     let (store, pauses) = store_noting_pauses(&root);
     let called = Cell::new(false);
 

@@ -3,7 +3,7 @@
 //! 時計と、試しの間の待ちと、ログの口は [`Store`] の欄へ直に差し込む。
 
 use std::cell::RefCell;
-use std::fs;
+use std::fs::{self, File};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -103,6 +103,13 @@ pub(super) fn tick(state: &mut State, now: u64, alive: &dyn Presence) -> (Applie
 
 pub(super) fn participants(home: &Home) -> Vec<String> {
     read_state(&home.dir).participants.into_keys().collect()
+}
+
+/// `state.lock` を本番の開き方（[`Store::open_lock`]）の別のハンドルで握る（落とすと解ける）。
+pub(super) fn hold_state_lock(store: &Store) -> File {
+    let file = store.open_lock().expect("ロックファイルを開ける");
+    file.lock().expect("握れる");
+    file
 }
 
 /// 一時ファイルの名前（プロセス番号入り）をフォルダで塞ぐ: 状態ファイルが書けなくなる。

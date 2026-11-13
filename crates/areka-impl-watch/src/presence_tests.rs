@@ -23,6 +23,10 @@ fn held_is_present_and_dropped_is_absent_and_the_file_stays() {
 
     let held = hold(&path).expect("握れる").expect("誰も握っていない");
     assert!(probe.is_present("a", WaitKind::Watch), "握っている間は居る");
+    // 握られているファイルには、探りの共有のロックも掛からない。
+    let other = File::open(&path).expect("開ける");
+    assert!(other.try_lock_shared().is_err(), "排他で握れていない");
+    drop(other);
     // 探りは握っている側のロックを壊さない（何度探っても同じ答え）。
     assert!(probe.is_present("a", WaitKind::Watch));
 
@@ -102,19 +106,6 @@ fn two_probes_at_the_same_time_both_answer_absent() {
     assert!(!LockFilePresence::new(&home).is_present("a", WaitKind::Watch));
 
     drop(other);
-}
-
-#[test]
-fn a_held_file_is_present_for_probes_at_the_same_time() {
-    let root = TempPath::under_target("impl-watch-presence");
-    let home = home_in(&root);
-    let path = home.alive_path("a", WaitKind::Watch);
-    let _held = hold(&path).expect("握れる").expect("誰も握っていない");
-
-    // 握られているファイルには、探りの共有のロックも掛からない。
-    let other = File::open(&path).expect("開ける");
-    assert!(other.try_lock_shared().is_err(), "排他で握れていない");
-    assert!(LockFilePresence::new(&home).is_present("a", WaitKind::Watch));
 }
 
 #[test]
