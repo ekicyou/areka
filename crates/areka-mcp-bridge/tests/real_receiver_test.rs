@@ -23,7 +23,12 @@ use areka_mcp_bridge::service::run;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream};
-use tokio::net::TcpSocket;
+
+/// 部品のテスト（クレートの中）と同じ偽の受け口。ここで使うのは誰も待ち受けない番号（`nobody`）だけなので、
+/// 使わない部品の警告は止める。
+#[allow(dead_code)]
+#[path = "common/fake_server.rs"]
+mod fake_server;
 
 /// `initialize` を持たない版（`server/discover` で始め、要求ごとに `_meta` と札を付ける）。
 const STATELESS: &str = "2026-07-28";
@@ -284,10 +289,7 @@ async fn built_in_answers_equal_the_answers_of_the_real_receiver_in_all_five_ver
     let receiver = server.local_addr().expect("空きポートで待ち受けている");
     let receiver = receiver.port();
     // 中継の候補は、束ねたまま待ち受けないソケットの番号（誰も応えない）だけ。
-    let held = TcpSocket::new_v4().expect("ソケットを作れる");
-    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
-    held.bind(any_port).expect("空きポートを束ねられる");
-    let nobody = held.local_addr().expect("番号が分かる").port();
+    let (_held, nobody) = fake_server::nobody();
     let name = areka_mcp::SERVER_NAME;
 
     for version in [

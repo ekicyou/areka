@@ -486,7 +486,7 @@ mod tests;
 
 #[cfg(test)]
 #[path = "service_failure_tests.rs"]
-mod failure_tests;
+pub(crate) mod failure_tests;
 
 #[cfg(test)]
 #[path = "service_retry_tests.rs"]

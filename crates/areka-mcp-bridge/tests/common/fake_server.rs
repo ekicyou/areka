@@ -10,16 +10,17 @@
 //! 開いていた接続も閉じている。
 
 use std::collections::HashMap;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use areka_mcp::{MCP_PATH, SERVER_NAME};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{oneshot, watch};
+use tokio::net::{TcpListener, TcpSocket, TcpStream};
+use tokio::sync::{Semaphore, oneshot, watch};
 
-/// 待つ上限（番号の束ね直し・[`FakeServer::wait`]）。過ぎたら panic でテストを赤にする。
+/// 待つ上限（[`FakeServer::wait`]）。過ぎたら panic でテストを赤にする。
 const WAIT: Duration = Duration::from_secs(10);
 const JSON: &str = "application/json";
 /// 旧式の `initialize` を持つ版（新しい順）。本物の受け口が `initialize` にそのまま返す版。
@@ -54,6 +55,29 @@ pub enum Reply {
     EventStream,
     /// この時間だけ遅れてから、中の答え方で答える（長い要求）。
     Delayed(Duration, Box<Reply>),
+    /// 門が開くまで待ってから、中の答え方で答える。待つのはこの要求だけ（ほかの接続は止めない）。
+    Gated(Gate, Box<Reply>),
+}
+
+/// テストが開けるまで答えを止める門。開けたら閉じない（後から届いた要求もすぐ通る）。
+#[derive(Debug, Clone)]
+pub struct Gate(Arc<Semaphore>);
+
+impl Gate {
+    /// 閉じた門。
+    pub fn shut() -> Gate {
+        Gate(Arc::new(Semaphore::new(0)))
+    }
+
+    /// 開ける（同期の口・どのスレッドからでもよい）。
+    pub fn open(&self) {
+        self.0.close();
+    }
+
+    /// 開くまで待つ（許しの数は 0 なので、閉じられて `Err` が返るまで戻らない）。
+    async fn passed(&self) {
+        let _ = self.0.acquire().await;
+    }
 }
 
 /// 台本: 名乗りと、方法ごとの答え方。台本に無い方法には既定（[`default_reply`]）で答える。
@@ -120,6 +144,22 @@ pub struct Log {
     pub connections: Vec<Conn>,
 }
 
+/// 誰も待ち受けない番号: `SO_REUSEADDR` を付けて束ねたまま待ち受けないソケット。落とすまで、
+/// 並んで走るテストの束ね（`bind(0)` も番号を決めた束ねも）にこの番号は渡らない。
+/// [`FakeServer::start_on`] はこの番号の上で待ち受けられる（止めた後の接続は断られる）。
+pub fn nobody() -> (TcpSocket, u16) {
+    let socket = TcpSocket::new_v4().expect("fake server: make a socket");
+    // 待ち受ける側（`start_on`）と両方に付けないと、そちらの束ねが断られる。
+    socket
+        .set_reuseaddr(true)
+        .expect("fake server: set_reuseaddr");
+    socket
+        .bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+        .expect("fake server: bind a free port");
+    let port = socket.local_addr().expect("fake server: local_addr").port();
+    (socket, port)
+}
+
 struct Shared {
     script: Mutex<Script>,
     log: watch::Sender<Log>,
@@ -136,34 +176,36 @@ pub struct FakeServer {
 impl FakeServer {
     /// OS が割り当てる空きポートで起こす。別の番号で起こし直すのも、これをもう 1 度呼ぶだけ。
     pub fn start(script: Script) -> FakeServer {
-        FakeServer::start_on(0, script)
+        let socket = TcpSocket::new_v4().expect("fake server: make a socket");
+        socket
+            .bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+            .expect("fake server: bind a free port");
+        FakeServer::listen(socket, script)
     }
 
-    /// 番号を決めて起こす（止めた受け口と同じ番号に、別の台本で立て直す）。
-    /// OS がまだ番号を放していなければ、期限（[`WAIT`]）まで束ね直す。
+    /// [`nobody`] が握る番号の上で待ち受ける。止めた後も番号は [`nobody`] が握り続けるので、
+    /// その番号への接続は必ず断られる（覚えた先に areka が居なくなった形）。束ねられなければ panic。
     pub fn start_on(port: u16, script: Script) -> FakeServer {
-        let deadline = Instant::now() + WAIT;
-        let listener = loop {
-            match std::net::TcpListener::bind(("127.0.0.1", port)) {
-                Ok(listener) => break listener,
-                Err(_) if Instant::now() < deadline => {
-                    std::thread::sleep(Duration::from_millis(10))
-                }
-                Err(e) => panic!("fake server: cannot bind 127.0.0.1:{port} within {WAIT:?}: {e}"),
-            }
-        };
-        listener
-            .set_nonblocking(true)
-            .expect("fake server: set_nonblocking");
-        let port = listener
-            .local_addr()
-            .expect("fake server: local_addr")
-            .port();
+        let socket = TcpSocket::new_v4().expect("fake server: make a socket");
+        socket
+            .set_reuseaddr(true)
+            .expect("fake server: set_reuseaddr");
+        if let Err(e) = socket.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))) {
+            panic!("fake server: cannot bind 127.0.0.1:{port} (is it held by nobody()?): {e}");
+        }
+        FakeServer::listen(socket, script)
+    }
+
+    /// 束ねたソケットを受け口のスレッドへ渡し、そのスレッドの tokio の中で待ち受ける。
+    /// 待ち受け始めてから戻る（戻った直後の接続も断られない）。
+    fn listen(socket: TcpSocket, script: Script) -> FakeServer {
+        let port = socket.local_addr().expect("fake server: local_addr").port();
         let shared = Arc::new(Shared {
             script: Mutex::new(script),
             log: watch::Sender::new(Log::default()),
         });
         let (stop, stopped) = oneshot::channel::<()>();
+        let (ready, listening) = std::sync::mpsc::channel::<()>();
         let thread = std::thread::spawn({
             let shared = shared.clone();
             move || {
@@ -172,7 +214,8 @@ impl FakeServer {
                     .build()
                     .expect("fake server: runtime");
                 runtime.block_on(async move {
-                    let listener = TcpListener::from_std(listener).expect("fake server: listener");
+                    let listener = socket.listen(1024).expect("fake server: listen");
+                    let _ = ready.send(());
                     tokio::spawn(accept_loop(listener, shared));
                     // 止める合図（送り手が落ちても同じ）まで回す。
                     let _ = stopped.await;
@@ -180,12 +223,18 @@ impl FakeServer {
                 // ここで runtime が落ち、待受と開いている接続の全部が閉じる。
             }
         });
-        FakeServer {
+        // 送り手が落ちた（待ち受けられずに panic した）なら、その panic を `stop` で返す。
+        let started = listening.recv().is_ok();
+        let mut server = FakeServer {
             port,
             shared,
             stop: Some(stop),
             thread: Some(thread),
+        };
+        if !started {
+            server.stop();
         }
+        server
     }
 
     pub fn port(&self) -> u16 {
@@ -219,11 +268,6 @@ impl FakeServer {
         let mut requests = self.requests();
         requests.retain(|r| r.method == method);
         requests
-    }
-
-    /// 受け付けた接続の全部（受け付けた順）。止めた後も読める。
-    pub fn connections(&self) -> Vec<Conn> {
-        self.shared.log.borrow().connections.clone()
     }
 
     /// 記録が条件を満たすまで待って、そのときの記録を返す（応答の行が出ない通知が届いたこと・
@@ -404,9 +448,19 @@ async fn respond(
     connection: usize,
     shared: &Shared,
 ) -> std::io::Result<bool> {
-    while let Reply::Delayed(delay, inner) = reply {
-        tokio::time::sleep(delay).await;
-        reply = *inner;
+    // 遅れと門をほどいてから答える。
+    loop {
+        reply = match reply {
+            Reply::Delayed(delay, inner) => {
+                tokio::time::sleep(delay).await;
+                *inner
+            }
+            Reply::Gated(gate, inner) => {
+                gate.passed().await;
+                *inner
+            }
+            _ => break,
+        };
     }
     let result = |value: Value| {
         json!({"jsonrpc": "2.0", "id": id, "result": value})
@@ -466,7 +520,9 @@ async fn respond(
             hold(stream, connection, shared).await;
             return Ok(false);
         }
-        Reply::Delayed(..) => unreachable!("the delays are unwrapped above"),
+        Reply::Delayed(..) | Reply::Gated(..) => {
+            unreachable!("the delays and gates are unwrapped above")
+        }
     };
     let framing = format!("Content-Length: {}\r\n", body.len());
     write(stream, status, content_type, &framing, close, &body).await?;

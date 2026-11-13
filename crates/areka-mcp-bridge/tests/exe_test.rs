@@ -17,7 +17,7 @@ use areka_mcp_bridge::cache::Cache;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
 
-use fake_server::{FakeServer, Reply, Script};
+use fake_server::{FakeServer, Reply, Script, nobody};
 
 /// 部品のテスト（クレートの中）と同じ偽の受け口。ここで使わない部品の警告は止める。
 #[allow(dead_code)]
@@ -537,10 +537,7 @@ fn a_reply_coming_within_5s_after_stdin_closed_is_written_before_exit_code_0() {
 #[test]
 fn without_areka_or_a_cache_the_built_in_definitions_answer_and_leave_a_record() {
     // 束ねたまま待ち受けないソケットの番号（落とすまで、並んで走るテストに取られない）。
-    let held = tokio::net::TcpSocket::new_v4().expect("make a socket");
-    let any_port = "127.0.0.1:0".parse().expect("an address");
-    held.bind(any_port).expect("bind a free port");
-    let port = held.local_addr().expect("the bound port").port();
+    let (_held, port) = nobody();
     let profile = TempPath::under_target("bridge-exe");
     let input = [initialize(1), request(2, "tools/list", Value::Null)];
 

@@ -13,13 +13,12 @@ use rmcp::service::QuitReason;
 use serde_json::{Value, json};
 use temp_path_kit::TempPath;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, DuplexStream};
-use tokio::net::TcpSocket;
 use tokio::task::JoinHandle;
 
 use super::run;
 use crate::cache::Cache;
 use crate::config::{Config, Timeouts};
-use crate::fake_server::{FakeServer, Received, Reply, Script};
+use crate::fake_server::{FakeServer, Gate, Received, Reply, Script, nobody};
 
 const PIPE: usize = 64 * 1024;
 /// 待つ上限。過ぎたら panic でテストを赤にする。
@@ -353,11 +352,12 @@ async fn a_cancel_notification_is_not_forwarded_and_fails_no_request_in_flight()
 }
 
 /// 長い要求の間も次の要求は待たない（設計 D-13）。最初に同時に届いた 2 つの要求は、探索と
-/// つなぎ先を 1 つだけ作る。
+/// つなぎ先を 1 つだけ作る。長い要求は門で止めるので、`ping` が先に終わるのは負荷によらない。
 #[tokio::test]
 async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_link() {
-    let slow = Reply::Delayed(
-        Duration::from_secs(2),
+    let gate = Gate::shut();
+    let slow = Reply::Gated(
+        gate.clone(),
         Box::new(Reply::Result(json!({"content": []}))),
     );
     let fake = FakeServer::start(Script::areka().on("tools/call", slow));
@@ -367,6 +367,7 @@ async fn a_slow_request_does_not_hold_back_the_next_and_the_first_two_share_one_
         .await;
     desk.send(request(json!("quick"), "ping", json!({}))).await;
     assert_eq!(desk.next().await, result(json!("quick"), json!({})));
+    gate.open();
     let reply = desk.next().await;
     assert_eq!(reply, result(json!("slow"), json!({"content": []})));
 
@@ -399,15 +400,6 @@ async fn request_meta_reaches_areka_so_a_stateless_request_stays_stateless() {
 }
 
 // ---- areka が居ないとき・待ち受けない設定のとき（要件 2.6・3.4〜3.9） ----
-
-/// 誰も居ない番号: 束ねたまま待ち受けないソケット（落とすまで、並んで走るテストに取られない）。
-fn nobody() -> (TcpSocket, u16) {
-    let socket = TcpSocket::new_v4().expect("ソケットを作れる");
-    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
-    socket.bind(any_port).expect("空きポートを束ねられる");
-    let port = socket.local_addr().expect("番号が分かる").port();
-    (socket, port)
-}
 
 /// 中継が自分で作る「居ない」エラーの行（番号 `-1`・`Server not available` で始まる文）。
 pub(super) fn unavailable(id: Value, reason: &str) -> Value {

@@ -25,7 +25,8 @@ fn failed(id: Value, message: &str) -> Value {
 }
 
 /// 確かめの上限を長く取った時間（負荷の下で偽の受け口の答えが遅れても areka を飛ばさない）。
-pub(super) fn patient() -> Timeouts {
+/// 探索のテスト（`scan_tests.rs`）もこれを使う。
+pub(crate) fn patient() -> Timeouts {
     Timeouts {
         verify: WAIT,
         ..Timeouts::default()

@@ -15,17 +15,17 @@ use rmcp::transport::streamable_http_client::{
 };
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpSocket, TcpStream};
+use tokio::net::TcpStream;
 
 use super::{HttpError, OwnHttp, check_request, read_reply, verify};
 use crate::config::Timeouts;
-use crate::fake_server::{Conn, FakeServer, Log, Reply, Script};
+use crate::fake_server::{Conn, FakeServer, Log, Reply, Script, nobody};
 
 /// 受け口が黙ったときにテストを止めずに赤にする上限。
 const DEADLINE: Duration = Duration::from_secs(10);
 
-/// 本物の受け口を空きポートに起こす（自分のスレッドと自分の tokio で回る）。
-fn real_receiver() -> (McpServer, u16) {
+/// 本物の受け口を空きポートに起こす（自分のスレッドと自分の tokio で回る）。探索のテストも使う。
+pub(crate) fn real_receiver() -> (McpServer, u16) {
     let server = areka_mcp::start(&[0], ToolRegistry::default(), None);
     let port = server
         .local_addr()
@@ -471,8 +471,8 @@ fn is_not_areka(error: &HttpError, port: u16, name: &str) -> bool {
 }
 
 /// 「書く前」の裏づけ: 受け口に届いた要求は確かめの `initialize` の 1 つだけで、その接続が受けた
-/// バイトの数は確かめの要求の長さちょうど（本当の本文は 1 バイトも書かれていない）。
-async fn only_the_check_arrived(fake: &FakeServer) {
+/// バイトの数は確かめの要求の長さちょうど（本当の本文は 1 バイトも書かれていない）。探索のテストも使う。
+pub(crate) async fn only_the_check_arrived(fake: &FakeServer) {
     let log = finished(fake).await;
     let check_only = Conn {
         bytes: check_request(fake.port()).len(),
@@ -597,10 +597,7 @@ async fn a_silent_peer_is_given_up_after_the_verify_wait() {
 #[tokio::test]
 async fn nobody_listening_is_a_connect_failure() {
     // 番号を束ねたまま待ち受けない: 接続は通らず、並んで走るテストの受け口がこの番号を取ることもない。
-    let socket = TcpSocket::new_v4().expect("ソケットを作れる");
-    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
-    socket.bind(any_port).expect("空きポートを束ねられる");
-    let port = socket.local_addr().expect("番号が分かる").port();
+    let (_held, port) = nobody();
 
     let error = failure(port, &call(json!(1))).await;
     // 断られるか、上限（300 ms）で見切るかは机による。どちらも同じ失敗。
