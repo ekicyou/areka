@@ -1140,3 +1140,24 @@ RG=<rg.exe>; cd crates/areka/src
 | 6 | cargo のマニフェストの警告（使われない依存）: `shiori-abi` の `windows`・`shiori-host32-host` の `event-listener` | 要らない項目 | `audit-shiori-host32` |
 | 7 | cargo のマニフェストの警告（使われない依存）: workspace の `async-executor`（根の `Cargo.toml`・受け持つ audit が無い） | 要らない項目 | 完了の棚卸で `/kiro-discovery` 起票 |
 | 8 | 前からある古い行番号（`runtime/assets.rs:55`・`:82`・`:291`・`frame/zorder_descript.rs:61`・`spine_conformance_script.rs:589` ほか）が網羅台帳 `doc/ukadoc-coverage/ledger/` と手書きの briefing-*.md に残る（merge-base でも同じ・`doc/` を受け持つ audit が無い） | 要らない項目 | 完了の棚卸で `/kiro-discovery` 起票 |
+
+## テストの名前の比べと静的な門（後）（2026-11-13・タスク 9.4・要件 1.4・8.1・8.2・8.6・8.7）
+
+### 25. テストの名前の多重集合（後）と 15 節の「前」との比べ（要件 1.4・8.1）
+
+- 測った木: `5ad1afc922c2912909c89d89439978ef548e799f`（9.3 の後）。道具は 15 節と同じ `cargo 1.100.0 (3acc79c0c 2026-11-05)`。作り方も 15 節と同じ（`cargo test --workspace --no-fail-fast -- --list`＝並べるだけでテストは走らない）。
+- 置き場: `.kiro/specs/runtime-module-untangle/test-name-tails-after.txt`。
+  - 行の数: 13,926（前と同じ）。異なる名前の数: 13,813（前と同じ）。`: benchmark$` の行は 0 行。
+  - SHA-256: `f413befe34efe5970430b1572e74a235648fc292ab5eb882f388acca6efabcbe`
+- `diff test-name-tails-before.txt test-name-tails-after.txt` の差は「−12 行・＋12 行」だけで、その 12 組は「名前を改めたテストの新旧の対応表」の 12 行とそのまま一致する。機械でも確かめた: 対応表の 12 行を `sed` の置き換え（`s/^旧$/新/`）にして「前」へ当て、バイト順に並べ直したものが「後」とバイトで一致する（`cmp` が差なし）。
+  ```sh
+  awk '/^### 名前を改めたテストの新旧の対応表/{f=1;next} f&&/^## /{f=0} f&&/^\| `/' research.md | awk -F'`' '{print "s/^"$2"$/"$4"/"}' > map.sed   # 12 行
+  sed -f map.sed test-name-tails-before.txt | LC_ALL=C sort | cmp - test-name-tails-after.txt   # 差なし
+  ```
+- 土台の取り込みによる差: 無い。`git log --merges 4863cb66..HEAD` は 0 件（このブランチは土台 `4863cb66` から取り込みも rebase もしていない・`git merge-base HEAD origin/main` も `4863cb66` のまま）。`crates/areka`・`.kiro`・`doc`・`tools`・`.claude` の外でこのブランチが変えたのは 4 ファイル（`areka-placement/src/test_crash_report.rs`・`wintf/src/test_crash_report.rs` の説明の文、`log-capture-kit/tests/file_length_guard_test.rs`・`workspace_scan_test.rs` のパスの文字列 `emo2_boot/`→`runtime/`）で、どれもテストの名前を変えない。
+
+### 26. 警告・1,000 行の番人・Cargo の差（要件 8.2・8.6・8.7）
+
+- 警告（要件 8.2）: `cargo check --workspace --all-targets` は成功（終わりの値 0）。rustc の警告は **0 件**。マニフェストの警告は 15 節と同じ 3 件のまま（workspace の `async-executor`・`shiori-abi` の `windows`・`shiori-host32-host` の `event-listener`・24 節の 6・7 で申し送り済み）。
+- 1,000 行の番人（要件 8.6）: `cargo test -p log-capture-kit` は全部緑（`file_length_guard_test` 6 passed を含む・失敗 0）。例外表の項目は土台 `4863cb66` も後も 5 件（`frame_transition_branch_tests.rs`・`window_move.rs`・`transition_judge_tests.rs`・`transition_judge_verdict_tests.rs`・`pilot-clickthrough-alpha-toggle/main.rs`）で増えていない。`git diff 4863cb66 -- crates/log-capture-kit/tests/file_length_guard_test.rs` の差は、例外表の 1 項目と較正の定数 `CALIBRATION_DROPPED_ENTRY` のパスの `emo2_boot/`→`runtime/` だけ（項目の数は同じ）。
+- Cargo（要件 8.7）: `git diff 4863cb66 -- Cargo.lock` は空。`git diff 4863cb66 -- '*Cargo.toml'` の差は `crates/areka/Cargo.toml` のコメント 3 行（`emo2-boot 統合結線`→`runtime 統合結線`・`emo2-boot の実 sink 結線`→`runtime の実 sink 結線`・`emo2_boot::spine`→`runtime::spine`）だけで、依存・機能・版は変わっていない。
