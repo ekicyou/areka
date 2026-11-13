@@ -29,7 +29,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - ~~**async-executor**~~: 撤去済み（spec `wintf-winmsg-executor` 完了時）。UI スレッド async は `wintf-winmsg-executor` の `spawn_local` へ移行。背景プール `WintfTaskPool` は `bevy_tasks` ベースで async-executor 非依存。根の `[workspace.dependencies]` に宣言だけが残っている（2026-10-23 時点でどのクレートも使っていない・`Cargo.lock` の版は `bevy_tasks` 経由の推移的依存）
 - **bevy_tasks** (0.19): 背景ワーカープール `WintfTaskPool` の実行基盤（`world.spawn` 経路・UI スレッドとは別レイヤ）
 - **tracing / tracing-subscriber**: 構造化ロギング
-- **toml** (1): sylphya の永続化の書式（`areka-sylphya` の `persist/format.rs`・2026-07-24 `areka-P0-sylphya` で追加・2026-08-19 の bevy 0.19 更新と同時に 0.8→1 へ）。`dola` の `toml` 機能は 2026-11-13 `audit-dola` が消した
+- **toml** (1): sylphya の永続化の書式（`areka-sylphya` の `persist/format.rs`・2026-07-24 `areka-P0-sylphya` で追加・2026-08-19 の bevy 0.19 更新と同時に 0.8→1 へ）。`dola` の任意の機能 `toml` も同じ 1 を使う
 - **windows-numerics** (0.3.1): Windows数値型サポート
 - **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
 - **miniz_oxide** (0.9): `.nar`（zip コンテナ）の deflate **伸長**（`areka-nar` の `container` module・意図的依存追加＝2026-09-18 承認済）と、MCP の `dump_surface`／`dump_balloon` が返す PNG の `IDAT` の zlib **圧縮**（`crates/areka` の `mcp/dump_surface_image.rs` だけ・`areka-P0-mcp-dump-images` の設計の議題 1 で 2026-10-04 承認済・`Cargo.lock` に新しいクレートは増えない）。どちらも既定機能を切り `with-alloc` だけを明示する（テスト専用の `sample-ghost-kit` も同じ形で持ち、検体の `.nar` を組む `nar_writer.rs` で deflate **圧縮**を使う）。`areka-nar` は伸長だけで、`areka-nar` の本番コードが `miniz_oxide::deflate` を綴らないことを常設検査 `crates/areka-nar/src/lib_tests.rs` が見張る。zip コンテナの読み手は `areka-nar` が std だけで持つ（`zip`・`flate2` は入れない）。推移的依存は `adler2` 1 本。この「`flate2` は入れない」は `areka-nar` の話で、`flate2` 1.1 は 2026-10-04 から `image` → `png` 経由で本番の木に入っている（下の `image` の項）
@@ -49,7 +49,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤
-- **serde_yaml** (0.9, feature: `yaml`): YAML対応（既定の機能は無い・機能 `json`・`toml` と任意の `toml` は 2026-11-13 `audit-dola` が消し、`serde_json` は開発専用の依存へ移した・`yaml` の行き先は `dola-yaml-backend`）
+- **toml** (1, feature: `toml`): `DolaDocument` の TOML の読み書きの入口（`DolaDocument::from_toml_str`・`to_toml_string`・2026-11-13 `dola-yaml-backend`）。既定の機能は無い。ほかの書式は serde の導出で利用者が選ぶ。`serde_json` は開発専用の依存
 - **interpolation** (0.3.0): イージング・補間計算の基盤（`easing.rs`, `runtime/interpolator/`）
 - **rand** (0.10): アニメーション系の乱数生成
 - **windows** (0.62・`cfg(windows)` のときだけ・`Win32_System_Performance`): `runtime/clock.rs` の `clock::now()`（OS 起動からの高精度時刻＝`QueryPerformanceCounter`）。ターゲット限定の依存にして、dola のほかの部分をプラットフォーム非依存に保つ
@@ -69,7 +69,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 - `cargo test` を基準に、クレートごとの統合テストとin-sourceテストを併用する
 - wintfは`tests/`配下をドメイン別に分割し、トップレベルのエントリポイントから束ねる
-- GPU のテストは実のハードウェア GPU で行う。例外は描画の木の画素の答え（`crates/wintf/src/ecs/graphics/visual/draw/emit_tests.rs`）だけで、画面に出さず決定論で読み戻すため WARP（`D3D_DRIVER_TYPE_WARP`）を使ってよい（許容差 ±1）
+- GPU のテストは実のハードウェア GPU で行う。例外は合成の答えの画素（描画の木・ブレンド・不透明度の層・入れ物・読み戻し）だけで、画面に出さず決定論で読み戻すため WARP（`D3D_DRIVER_TYPE_WARP`）を使ってよい（許容差 ±1）。入れ物を通した描画面が画面に出るかは実 GPU で確かめる
 - examplesは手動検証とグラフィックス挙動確認の補助であり、テストの代替ではない
 - `areka-parsers` の dev-dependency にワークスペースの `log-capture-kit` を持つ（テスト専用・charset などの `warn!` を数える・2026-11-05 `audit-parsers-sakura` の設計で承認された例外。`Cargo.lock` に新しいクレートは増えない）
 
@@ -82,12 +82,13 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **判定は終了コードで行う**: `| Select-String` で絞ると終了コードが失われ赤でも通って見える。`--no-fail-fast` で最初の赤いバイナリの後ろも回し、段ごとの合否を最後に一覧する
 - **重いビルドを同時に走らせない**: `-j 4`（ページング不足 os error 1455 の回避）。`cargo deny`／`cargo about` はテストと並べると rustc がメモリ不足で落ちるので最後に直列
 - 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない（通信するのはテストの前の段 `sample fetch` だけで、テストは通信しない）
-- **URL の行の検体は先に取り寄せる**（2026-10-19 `areka-P0-sample-url-fetch`）: 最初の段 `sample fetch`（`tools/sample-fetch.ps1`）が URL の行の書庫を置き場へ取り寄せる。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段（`x64 workspace tests`・`i686 tests (host-32)`）を `skipped (sample fetch failed)` として回さず、ほかの段は回して終了コード 1 で終わる。段 `sample fetch check`（`tools/sample-fetch.ps1 -SelfTest`・ネットを使わない）はほかの道具の自分の検査と並ぶ
+- **URL の行の検体は先に取り寄せる**（2026-10-19 `areka-P0-sample-url-fetch`）: 最初の段 `sample fetch`（`tools/sample-fetch.ps1`）が URL の行の書庫を置き場へ取り寄せる。失敗したら `sample fetch` を FAIL として載せ、`cargo test` を回す段（`x64 workspace tests`・`i686 tests (host-32)`）を `skipped (sample fetch failed)` として回さず、ほかの段は回して終了コード 1 で終わる（段 `dola toml feature tests` は検体を使わないので取り寄せが赤でも回る）。段 `sample fetch check`（`tools/sample-fetch.ps1 -SelfTest`・ネットを使わない）はほかの道具の自分の検査と並ぶ
+- **段 `dola toml feature tests`**（`cargo test -p dola --features toml --no-fail-fast -j 4`・`x64 workspace tests` の直後・ネットを使わない）: 全体テストは任意の機能を有効にしないので、`dola` の機能 `toml` の下のテスト（TOML の往復と境界）を名指しで回す（2026-11-13 `dola-yaml-backend`）
 
 #### テストの待ちと、負荷の下で許す赤（申し開き・2026-10-09 `areka-P0-ghost-session-test-load-flake`）
 
 - **テストの中で相手を待つときは待ちの部品を通す**: `crates/areka/src/runtime/spine_wait.rs` の `wait_until`／`wait_until_with`／`wait_recv`／`run_bounded_watching` を使い、相手の進みが読めるなら目印（`Progress::Count`）を渡す。自前の `Instant::now() + 秒` の締切や、実時間だけで打ち切る待ちを新しく書かない。打ち切りは文言の先頭で読み分けられる: `［止まった］`（相手が 30 秒進まない）・`［進んではいた］`（300 秒でも届かない）・`［進みは不明］`（目印の無い待ちが 30 秒）・`［相手が居ない］`。読み方の表は同 spec の design の「直した後に赤が出たときの読み方」
-- **スレッドを多く作る足場は絞ったまま使う**: プールを汲み出さない足場は `WintfTaskPool::with_threads(1)`、GPU の装置を作る足場は `GraphicsCore::new()` の直前で `GpuPermit::take()`（同時に 4 つ）を取り、足場の最後の欄として持つ。許可の待ちは、許可が 1 つも返らないまま 500 秒たった `［止まった］` でだけ打ち切り、総時間の上限は置かない（2026-11-02 開発者の裁定「案 2」・`areka-test-binary-stability`）。テストのプロセスは初めからプロセスの寿命の MTA を持つ（areka と wintf の落ちの報告の初期化子で `CoIncrementMTAUsage`）。一時の MTA を `CoUninitialize` で畳むと、ほかのテストのスレッドがまだ呼んでいる DLL まで降ろされて落ちる（同 spec の件 1・件 3 の直し）。GPU のテストは実のハードウェア GPU で行う（WARP などへ替えない）（例外は描画の木の画素の答えだけ・Testing の節）
+- **スレッドを多く作る足場は絞ったまま使う**: プールを汲み出さない足場は `WintfTaskPool::with_threads(1)`、GPU の装置を作る足場は `GraphicsCore::new()` の直前で `GpuPermit::take()`（同時に 4 つ）を取り、足場の最後の欄として持つ。許可の待ちは、許可が 1 つも返らないまま 500 秒たった `［止まった］` でだけ打ち切り、総時間の上限は置かない（2026-11-02 開発者の裁定「案 2」・`areka-test-binary-stability`）。テストのプロセスは初めからプロセスの寿命の MTA を持つ（areka と wintf の落ちの報告の初期化子で `CoIncrementMTAUsage`）。一時の MTA を `CoUninitialize` で畳むと、ほかのテストのスレッドがまだ呼んでいる DLL まで降ろされて落ちる（同 spec の件 1・件 3 の直し）。GPU のテストは実のハードウェア GPU で行う（WARP などへ替えない）（例外は合成の答えの画素だけ・Testing の節）
 - **許す赤（申し開き）**: CPU を論理 CPU の 2 倍の空回しで埋めた負荷の再現（`tools/load-flake.ps1 -Burners 44`・22 論理 CPU の机）の下に限り、ゴーストの足場（`SwitchRig` とその仲間）と GPU の足場を使うテストが、5 回に十数件ほど `［止まった］`（多くは「進み 0 回・待ち始めから 30.0 秒」）で赤になることがある。これは既知の残りとして許す。理由: 最初の GPU のテストが装置を作った後、Intel のドライバの DLL（`igd10umt64xe`・`igc64` など）と D3D の検証層がプロセスに残り、GPU を使わないテストも含めて、すべてのスレッドの生まれと消えのたびに OS のローダーの錠の中で初期化を受ける。CPU を 2 倍に埋めると錠を持つスレッドが待たされ、スレッドの始まりと終わりが 30 秒を越えて列を作る。テストの側での絞り（プールのスレッド・GPU の装置の数・足場の同時の数）は試し尽くしており、残りは負荷の条件そのものから来る。本番の順序の取り違えではない（同 spec の `load-repro.md` の 4.2〜4.4）。同じ負荷の再現の下では、スレッドの終わりの待ち（`join_bounded`）の進み 0 回の `［止まった］` も同じ理由の残りとして許す（2026-11-02 `areka-test-binary-stability`）
 - **許さない赤**: 静かな机と `tools/test-all.ps1` の赤は、上の形でも許さない（ふだんは緑）。負荷の下でも、待ちの文言の無い赤・`［進みは不明］`・`［進んではいた］`、それに `［止まった］` で相手の処理に取り違えがある赤は許さない。待ちを足すか、取り違えを直す
 - **段 `encoding check`**（`tools/encoding-check.ps1`・crates.io の公開前の確認の後、`-License` の段の前）: 道具（`tools/*.ps1` と `tools/perf/*.ps1`・どちらもフォルダの直下だけ・同じ規則）と、スキルの中に置いたスクリプト（`.claude/skills/**/*.ps1`・2026-10-16 から）と `.github/workflows/*.yml` の `run:` の本文を構文解析して、端末へ出す文の ASCII の外の字・端末の文字コードの書き替え・`cargo metadata`／`nar-sample-path` の素の呼び出しを赤にする。書き替えは子の pwsh の `-Command`／`-c` に渡す文字列の中と、`Encoding`／`chcp` を含む文字列の中まで同じに見る（`[Console]::SetOut`／`SetError` は書き替えに数えない）。素の呼び出しは引数の変数を代入の右辺までたどって見る。端末を 932 にした自分だけの子で、`Invoke-Utf8Child`（`tools/utf8-child.ps1`）が UTF-8 を字のとおりに読むこと、`tools/perf/` の `Invoke-PwshChild` が子の 3 行（`Write-Output`・`Write-Host`・標準エラー）を字のとおりに届けること（前置きの無い素の `-File` では崩れることを較正として先に確かめる）、子の端末が 932 のままであることを確かめる（2026-10-06 `areka-P0-tools-utf8-child-output`・2026-10-16 `areka-P0-perf-tools-console-encoding`）
@@ -103,7 +104,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 ### Required Tools
 - Rust 2024 Edition
-- Windows 10/11（Windows.UI.Composition 対応）
+- Windows 10 1903 以降／Windows 11（Windows.UI.Composition 対応・ブレンドの口 `ID2D1DeviceContext6::BlendImage` が要る。1903 より前ではブレンドだけが `SOURCE_OVER` で描かれる）
 - Visual Studio Build Tools（Windows SDKが必要）
 - `cargo-deny`・`cargo-about`（全体テストの `-License` の段）
 

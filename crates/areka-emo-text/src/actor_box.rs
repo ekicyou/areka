@@ -31,6 +31,7 @@ use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
 use crate::state::{BoxTraits, SurfaceFallback};
+use crate::writing::note_direction_declarations;
 
 impl TextLayerRuntime {
     /// 箱の束を受け取る（UI スレッドから・装着の相とシェルの切替が呼ぶ）。
@@ -38,6 +39,7 @@ impl TextLayerRuntime {
     /// 1. 前の箱の面（シェルの窓の子）を片付け、箱の場所ごとの実行時の表も捨てる。
     /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製・audit-emo-text-state-actor 指摘 7）、
     ///    既定の 2 層（その `font.looks`・拡大率に依らない・design.md「装飾の持ち運び」）と種類を状態へ渡す。
+    ///    解いた直後に書字方向の宣言を前を渡さずに記録する（名前ごとに 1 度・`emo-text-reveal-incremental` 要件 3.4）。
     /// 3. 新しい表を状態へ入れる。状態は箱の場所の文字を捨て、各スコープの今のサーフェス番号を保ち、
     ///    行き先を新しい表での既定へ引き直す（要件 6.8）。種類は 3 の持ち運びの判定が引くので、
     ///    **2 を 3 より先に**行う（`set_box_index` は今ある箱の種類で持ち運びを判定するため）。
@@ -100,12 +102,14 @@ impl TextLayerRuntime {
                 def.map(|def| (name.clone(), def))
             })
             .map(|(name, def)| {
-                // 解決の中の作者向けの警告は、ここで名前ごとに 1 度だけ出る。
+                // 解決の中の作者向けの警告と、書字方向の宣言の記録（前を渡さない・`emo-text-reveal-incremental`
+                // 要件 3.4）は、ここで名前ごとに 1 度だけ出る。
                 let resolved = ResolvedBalloonText::resolve_with_background(
                     &def.model,
                     def.size,
                     DEFAULT_BALLOON_BACKGROUND,
                 );
+                note_direction_declarations(&def.model, None);
                 let traits = BoxTraits {
                     looks: resolved.font.looks.clone(),
                     follow: def.follow,
