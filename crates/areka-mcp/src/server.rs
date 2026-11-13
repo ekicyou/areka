@@ -17,7 +17,7 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::dispatch::{self, State};
+use crate::dispatch::{self, MCP_PATH, State};
 use crate::handler::ArekaHandler;
 use crate::registry::ToolRegistry;
 
@@ -73,7 +73,7 @@ pub fn start(candidates: &[u16], registry: ToolRegistry, bridge_exe: Option<Path
     let (inbox, thread) = spawn_actor::<(), _>("mcp", move |_inbox| {
         run(listener, thread_token, state, done_tx)
     });
-    let url = format!("http://{addr}/api/mcp/v1");
+    let url = format!("http://{addr}{MCP_PATH}");
     if skipped.is_empty() {
         info!(url = %url, "MCP: 待受を始めた");
     } else {
@@ -185,13 +185,16 @@ async fn accept_loop(listener: std::net::TcpListener, state: Arc<State>) {
                     }
                 });
             }
-            Err(err) => {
-                // ループは殺さない。間を置いて続ける。
-                warn!(error = %err, "MCP: 接続を受けられなかった（間を置いて続ける）");
-                tokio::time::sleep(ACCEPT_RETRY_WAIT).await;
-            }
+            // ループは殺さない。間を置いて続ける。
+            Err(err) => wait_after_accept_error(&err).await,
         }
     }
+}
+
+/// `accept` の失敗を記録し、次を試すまで [`ACCEPT_RETRY_WAIT`] だけ待つ。
+async fn wait_after_accept_error(err: &std::io::Error) {
+    warn!(error = %err, "MCP: 接続を受けられなかった（間を置いて続ける）");
+    tokio::time::sleep(ACCEPT_RETRY_WAIT).await;
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use crate::dispatch::MCP_PATH;
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value};
 use crate::tools::{OWN_TABLE, spec_from_definition};
 
@@ -33,7 +34,7 @@ pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {
             Some(format!("<li><code>{name}</code> — {summary}</li>\n"))
         })
         .collect();
-    let url = format!("http://127.0.0.1:{port}/api/mcp/v1");
+    let url = format!("http://127.0.0.1:{port}{MCP_PATH}");
     let [first, second] = DEFAULT_PORTS;
     let (first_next, second_next) = (first + 1, second + 1);
     let (first_last, second_last) = (first + FALLBACK_STEPS, second + FALLBACK_STEPS);
