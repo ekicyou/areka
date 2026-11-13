@@ -270,3 +270,18 @@
 ### 11.4 設計の記述から変わった所
 
 - 中継の `patient()`・`Desk`・`stateless_meta()` は、1 回目の B-1・B-2 で `tests/common/desk.rs` の 1 か所へ移った（部品のテストは `src/lib.rs` の `#[cfg(test)]` の `mod desk`、通しのテストは `#[path]` で読む）。そのため `design.md` の「直すファイル」の `service.rs` の `pub(crate) mod failure_tests`（#10）と「`patient` は今どおり `service_failure_tests.rs` が共有元」は、今は当たらない（`service.rs` は `mod failure_tests` に戻った）。
+
+## 12. 全体テストと既定の枝との差分の確かめ（タスク 4.2・2026-11-13）
+
+### 12.1 全体テスト
+
+- `pwsh -NoProfile -File tools/test-all.ps1` を排他テストの机で 1 回回し、全部の段が緑（commit `07a4a204b`・始めの未コミットの変更 0）。x64 のワークスペースのテスト 1,489 秒・fmt の検査・i686 のテスト・dola の toml の機能・エンコーディングの検査ほか 14 段が OK。`crates/areka/src/log_history_convention_tests.rs` は書き換えなしで緑、1,000 行の番人も緑。
+
+### 12.2 差分の確かめ（基準は `origin/main` との merge-base `343ec0350`）
+
+- `git diff --stat 343ec0350 HEAD -- crates/areka/ crates/real-run-kit/ crates/log-capture-kit/ vendors/ Cargo.lock` と 3 つのクレートの `Cargo.toml` は空（要件 6.2・6.8・5.5）。依存は足していない。
+- 差分のファイルは、範囲の 3 つのクレート・`.kiro/specs/audit-mcp-update-crates/` の下・`crates/areka-user-data/src/lib.rs`・`doc/ssp-mcp/transport-diff-areka.md` だけ（範囲の外は grep で 0 件）。C19 のほかの 7 本の触るファイルとは重ならない。
+- `areka-user-data` の差分は `usable_profile_env` の `pub(crate)` → `pub` と説明の内部リンクを字面にした 2 行だけ。`transport-diff-areka.md` の差分はテスト名の欄とファイルの並びだけ（表の値・判定は変えていない）。
+- 公開の形: 消した公開の物は `areka_mcp::tools::entrances` だけ（`tools::entrances|[^_]entrances\(` の grep で範囲の外に 0 件・`cargo build -p areka` が通る）。足した公開の物は `usable_profile_env` の `pub` だけ。`areka_mcp_bridge::service::Linked` には非公開の欄を 1 つ足した（組み立ては `service.rs` の 1 か所だけ・外で欄を名指す所は 0 件）。
+- 記録: 既存の記録の文と出どころは全部同じ（`server.rs` の受付の失敗の `warn!` は関数へ移っただけで文・欄は同じ）。足した記録は、かけ直しの B3-1 の直しで中継に置いた `debug!` 3 行（「[bridge] the version discover was answered with an error」「… got no answer」「… was not sent」）だけで、捨てる失敗に記録を残すため（ログ無しの失敗経路を作らない）。GPU と端末の文は足していない。
+- 消したテストの名を、ツリー全体（`.kiro/specs/completed/`・この spec の下・`doc/ssp-mcp/areka-tools.md:173` は外す）で grep して 0 件（`entrances`・`connections` は別の識別子の一部として出るだけで、`tools::entrances`・`.connections()` は 0 件）。
