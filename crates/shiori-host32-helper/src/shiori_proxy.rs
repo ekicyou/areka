@@ -323,7 +323,7 @@ impl ShioriByteProxy {
     ///    コピー。どちらでも `GlobalUnlock` → `GlobalFree(hres)`（caller-free・R3.4）。
     ///
     /// `len` は in/out で 32bit `usize` として自然に閉じる（R7.6・i686 で ABI 一致）。`unload` は呼ばない
-    /// （Drop courtesy のみ・R3.7）。unsafe FFI は本モジュールへ一点集約する。
+    /// （呼ぶのは後始末＝UNLOAD の道の `close`、UNLOAD を経ない道の Drop・R3.7）。unsafe FFI は本モジュールへ一点集約する。
     ///
     /// Preconditions: proxy 確立済み（`load`→true）。呼出は helper UI スレッド（WndProc）上。
     /// Postconditions: 応答 HGLOBAL は `GlobalFree` 済み（リーク・二重解放なし）。入力 HGLOBAL は callee 解放。

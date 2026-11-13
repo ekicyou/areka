@@ -12,7 +12,7 @@
 //!
 //! 検証フロー（design.md System Flows「強制 kill 注入と統一報告」）:
 //! ```text
-//! status()==Running → terminate()（kill 注入）→ bounded poll status()→Exited(Abnormal|Terminated)
+//! status()==Running → terminate()（kill 注入）→ bounded poll status()→Exited(Abnormal(1))
 //! → get(dummy)→Err(Ipc|Timeout)（SMTO 有限復帰）
 //! → 二重 terminate()→Ok（冪等）→ request_clean_shutdown→Ok(非 Clean kind)（短絡）
 //! ```
@@ -95,7 +95,7 @@ fn kill_injection_detection_and_reporting() {
     let helper_exe = resolve_helper_exe();
     let testdll = resolve_testdll();
 
-    // --- load_dir に testdll を shiori.dll としてコピー（helper の cwd＝DLL 探索起点）---
+    // --- load_dir に testdll を shiori.dll としてコピー（helper は load_dir\shiori.dll を絶対パスで読む・作業フォルダも load_dir）---
     let root = TestRoot::new("kill-e2e-kill");
     let load_dir = root.path();
     let dll_path = load_dir.join("shiori.dll");
@@ -166,8 +166,9 @@ fn kill_injection_detection_and_reporting() {
         );
         std::thread::sleep(POLL_INTERVAL);
     };
-    // Windows std の Child::kill は TerminateProcess(_, 1) → 通常 Abnormal(1)。
-    // Terminated（code 取得不能）も強制終了経路として受容する。いずれにせよ Clean ではない（R4.1）。
+    // Windows std の Child::kill は TerminateProcess(_, 1) → いつも Abnormal(1)（Windows の終了コードは
+    // いつも値を持ち Terminated は起きない・process_host.rs の ExitKind）。下の断言は形の上で Terminated も
+    // 通すが、どちらにせよ Clean ではない（R4.1）。
     assert!(
         matches!(kind, ExitKind::Abnormal(_) | ExitKind::Terminated),
         "強制終了の種別は Abnormal または Terminated（非正常・R4.1）: got {kind:?}"

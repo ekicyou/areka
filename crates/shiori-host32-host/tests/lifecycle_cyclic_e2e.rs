@@ -89,7 +89,7 @@ fn cyclic_run_and_clean_shutdown() {
     let helper_exe = resolve_helper_exe();
     let testdll = resolve_testdll();
 
-    // --- load_dir に testdll を shiori.dll としてコピー（helper の cwd＝DLL 探索起点）---
+    // --- load_dir に testdll を shiori.dll としてコピー（helper は load_dir\shiori.dll を絶対パスで読む・作業フォルダも load_dir）---
     let root = TestRoot::new("cyclic-e2e-cyclic");
     let load_dir = root.path();
     let dll_path = load_dir.join("shiori.dll");

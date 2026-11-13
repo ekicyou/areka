@@ -24,7 +24,7 @@ use shiori_host32_host::{
 };
 use shiori_host32_ipc::MsgTag;
 
-/// ハンドシェイク（HELLO 受領）の上限時間（既存 E2E の `HANDSHAKE_TIMEOUT` と同値）。
+/// ハンドシェイク（HELLO 受領）の上限時間。
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 起動時の決定・後退を記録する宛先（`sylphya_wiring` と同じ `ghost-boot`）。

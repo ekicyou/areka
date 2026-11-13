@@ -68,7 +68,7 @@ cargo test -p shiori-host32-host --test shiori_request_e2e  # request 往復（G
 cargo test -p shiori-host32-host --test error_paths         # エラー経路（要件 1.4/2.5/3.4/5.x）
 
 # ③ proto の 32bit 可搬性テスト（i686 でも単体テストが通ることの確認・要件 7.2/7.3）
-cargo test -p shiori-host32-ipc --target i686-pc-windows-msvc
+cargo test -p shiori-host32-helper -p shiori-host32-ipc --target i686-pc-windows-msvc
 ```
 
 統合テストは helper exe を

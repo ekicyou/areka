@@ -40,7 +40,7 @@ use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
 /// 1 ケース分の LOAD 往復を実行し、observed ack バイト列を返す。
 ///
-/// - `load_dir`: helper の cwd＝DLL 探索起点。呼び出し側が testdll コピー／空 dir を用意する。
+/// - `load_dir`: helper は `load_dir\shiori.dll` を絶対パスで読む（作業フォルダも load_dir）。呼び出し側が testdll コピー／空 dir を用意する。
 /// - `shiori_name`: 解決する DLL 名（成功/env 失敗は `"shiori.dll"`・不在ケースも同名で不在）。
 /// - `set_load_fail`: `true` なら spawn 前に env `HOST32_TESTDLL_LOAD_FAIL=1` を set し、
 ///   spawn 後に即 remove する（子は生成時 env スナップショットを継承・親 global env 汚染を最小化）。
@@ -74,7 +74,7 @@ fn run_load_case(
 
     if set_load_fail {
         // 子は既に env スナップショットを継承済み。親 global env を即クリーンアップ。
-        // SAFETY: 上記 set と対（単一スレッド）。
+        // SAFETY: 上記 set と同じ根拠。
         unsafe {
             std::env::remove_var("HOST32_TESTDLL_LOAD_FAIL");
         }

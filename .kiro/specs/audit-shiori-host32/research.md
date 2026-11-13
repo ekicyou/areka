@@ -575,3 +575,21 @@
   - (b) x64 の `clippy::drop_non_drop` の 3 件: 振る舞いに響かず、spec `clippy-199-lints` の持ち場。
 
 タスク 14 で、1.1 と同じ 2 つの命令（x64 の `cargo clippy -p shiori-host32-host -p shiori-host32-ipc --all-targets` と、i686 の `cargo clippy -p shiori-host32-helper -p shiori-host32-ipc -p shiori-host32-testdll -p shiori-host32-testdll-loadu --all-targets --target i686-pc-windows-msvc`）を回し直した。14.10 の基準 5 件のうち 2 件が消え、3 件が残った。消えたのは、i686 の `crates/shiori-host32-testdll/src/lib.rs:63` の `clippy::needless_bool`（タスク 2 で `load` の戻りを比べの式にした・指摘 29 の直しと同じ所）と、x64 の `crates/shiori-host32-host/Cargo.toml` の使っていない依存 `event-listener` の警告（タスク 13・指摘 28 で依存を消した）である。残ったのは x64 の `clippy::drop_non_drop` の 3 件で、場所は直しで行が動き、今は `crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs:162`・`:287` と `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs:212` にある。この 3 件は Drop を持たない `Shiori3Client` を `drop` しているだけで振る舞いに響かず、audit の指摘とも重ならないので、本 spec では直さず `clippy-199-lints` に残す。i686 の段の警告は 0 件になった。
+
+### 14.17 かけ直し 2 回目（タスク 14）
+
+- 結果: 新しい指摘が 10 件出た。10 件ともテスト・説明・片付けで、本番の振る舞いを変えるものは 0 件。10 件とも直した。
+  1. テストの弱さ: `crates/shiori-host32-helper/src/main_helper_log_tests.rs` の子のテストを手書きの名前＋`--exact` で起こし、`.status().success()` だけを見ていた。名前がずれると子は 0 件走って成功し、親は緑のまま残る。直し: 子の名前を `module_path!()` から組み（`crates/shiori-host32-host/src/terminator_tests.rs` の `hold_child_entry` と同じ形）、`.output()` に替えて子の標準出力に `1 passed` があることを確かめる。名前をわざとずらして親が赤になる（子は `0 passed` で成功）のを確かめてから戻した。
+  2. 説明の古さ: `crates/shiori-host32-host/tests/error_paths.rs` の 2 か所が `read_copydata` の置き場を `src/parent_window.rs` と書いていた。今は crate `shiori-host32-ipc` の `src/lib.rs`（14.16 の 3）。直した。
+  3. 説明の古さ: `tests/shiori_load_e2e.rs`・`tests/shiori_request_e2e.rs`・`tests/lifecycle_cyclic_e2e.rs`・`tests/lifecycle_kill_e2e.rs` の 4 か所が「helper の cwd＝DLL 探索起点」と書いていた。タスク 3 から DLL は `load_dir\shiori.dll` の絶対パスを `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` で読み、作業フォルダは探す場所に入らない。「`load_dir\shiori.dll` を絶対パスで読む（作業フォルダも load_dir）」に直した。
+  4. 説明の古さ: `tests/shiori_load_e2e.rs` の `remove_var` の SAFETY が「上記 set と対（単一スレッド）」のままだった（14.16 の 4 で set の側だけ直した）。「上記 set と同じ根拠」に直した。
+  5. 説明の古さ（「courtesy unload」）: helper の `main.rs` のメッセージループの前の注、`main_loopback_tests.rs` の断言の文（take→drop）と窓を消す前の注、`shiori_proxy.rs` の `request` の「Drop courtesy のみ」の 4 か所。今は UNLOAD の道が `close` を呼び、Drop が後始末するのは UNLOAD を経ない道だけ。その姿に直した。
+  6. 説明の古さ: `crates/areka-ghost/src/shiori_wiring.rs` の `HANDSHAKE_TIMEOUT` が「既存 E2E の `HANDSHAKE_TIMEOUT` と同値」と書いていた。E2E の方は今 30 秒、本番は 5 秒。「同値」の句を消した。値は変えていない。
+  7. 説明の古さ: `tests/lifecycle_kill_e2e.rs` の流れ図と kill 後の注が、kill の結果に `Terminated`（終了コードなし）が起こりうるように書いていた。Windows ではいつも `Abnormal(1)`（`process_host.rs` の `ExitKind`・指摘 25）。説明だけ直し、断言（`Abnormal(_) | Terminated` を通し `Clean` を拒む）は誤りではないので変えていない。
+  8. 説明の古さ: `crates/shiori-host32-host/README.md` の手順 ③ が `cargo test -p shiori-host32-ipc --target i686-pc-windows-msvc` だけだった。`tools/test-all.ps1` と同じ `cargo test -p shiori-host32-helper -p shiori-host32-ipc --target i686-pc-windows-msvc` に直した。
+  9. 説明の形: `crates/shiori-host32-ipc/src/lib.rs` の unsafe でない `send_copydata`・`send_copydata_response`・`send_copydata_with`・`send_request` が `# Safety` の節を持っていた。節の名を「# 前提」に替え、`# Safety` は本当に unsafe な `read_copydata` だけにした。
+  10. 片付け: `crates/shiori-host32-host/src/parent_window_tests.rs` の `ignored_frames_are_logged` が、同じファイルの `ignored_reasons` と同じ絞り込みを手で書いていた。`ignored_reasons(&events)` を呼ぶ形にした。
+- 見直して指摘にしなかったもの:
+  - (a) helper の `main.rs` の REQUEST の腕（いま約 378 行目）で、UNLOAD を先送りした後に DLL の呼び出しの最中へ入れ子の REQUEST が来ると、`finish_deferred_unload` → `close` が外側の呼び出しの中で走りうる道: 届く道が無い。host は UNLOAD の後に何も送らない（`crates/shiori-host32-host/src/lifecycle.rs` の `request_clean_shutdown`・`crates/areka-kanade/src/shiori/real.rs:205`）。偽って送るのは 14.8 の議題 1 のとおり脅威の見立ての外。14.16 の (a) と同じ型で、欠陥ではない。
+- 範囲の外の申し送り（`/kiro-complete` の棚卸へ）: 本番のハンドシェイクの上限は 5 秒（`shiori_wiring.rs`）、テストは 30 秒。ひどく混んだ初回起動では本番が上限を越えうる。変えるかは要件・設計の裁定なので、本 spec では変えない。
+- clippy の回し直し: x64 は 14.16 と同じ `clippy::drop_non_drop` の 3 件だけ（7 の注が 1 行増えたので `tests/lifecycle_kill_e2e.rs` の 1 件は今 `:213`）。i686 は 0 件。

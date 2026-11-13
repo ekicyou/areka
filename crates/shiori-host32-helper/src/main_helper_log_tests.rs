@@ -25,15 +25,27 @@ fn helper_log_does_not_panic_when_stderr_reader_is_gone() {
         assert!(result.is_ok(), "helper_log が panic した");
         return;
     }
-    let status = std::process::Command::new(std::env::current_exe().expect("テストの exe"))
-        .args([
-            "helper_log_tests::helper_log_does_not_panic_when_stderr_reader_is_gone",
-            "--exact",
-            "--nocapture",
-            "--test-threads=1",
-        ])
+    // 子の名前は module_path!() から組む（手書きの名前は改名で 0 件走行になり親が緑のまま残る）。
+    let entry = format!(
+        "{}::helper_log_does_not_panic_when_stderr_reader_is_gone",
+        module_path!()
+            .split_once("::")
+            .expect("crate 名の後の経路")
+            .1
+    );
+    let output = std::process::Command::new(std::env::current_exe().expect("テストの exe"))
+        .args([entry.as_str(), "--exact", "--nocapture", "--test-threads=1"])
         .env(CHILD_ENV, "1")
-        .status()
+        .output()
         .expect("子のテストを起こせない");
-    assert!(status.success(), "子のテストが赤: {status:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "子のテストが赤: {:?}\n{stdout}",
+        output.status
+    );
+    assert!(
+        stdout.contains("1 passed"),
+        "子が 1 件走っていない: {stdout}"
+    );
 }

@@ -297,12 +297,12 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     );
     assert!(
         helper.shared().proxy.borrow().is_none(),
-        "UNLOAD で proxy を take→drop し未確立へ戻す（courtesy unload 実行・R5.1）"
+        "UNLOAD で proxy を take→close し未確立へ戻す（unload 実行・R5.1）"
     );
     assert_eq!(
         responses.get(),
         6,
-        "親が UNLOAD ack を追加 1 通受領する（proxy drop 後・ループ終了前・計 6）"
+        "親が UNLOAD ack を追加 1 通受領する（proxy close 後・ループ終了前・計 6）"
     );
     assert_eq!(
         &*last_response.borrow(),
@@ -401,7 +401,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         "bounded ループが有限回で必ず抜ける（無限ループでない・要件 6.3）"
     );
 
-    // 窓は Drop で破棄（helper Drop で proxy の courtesy unload → FreeLibrary が走る）。
+    // 窓は Drop で破棄（proxy は UNLOAD の close で解放済み＝None なので helper の Drop は窓だけ）。
     drop(helper);
     drop(parent);
     // 根（testdll の写し先）は Drop で消える。

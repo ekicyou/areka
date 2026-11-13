@@ -322,7 +322,7 @@ pub const fn send_flags(flavor: SendFlavor) -> SEND_MESSAGE_TIMEOUT_FLAGS {
 /// - `lpData`: `payload` を指す。ポインタ自体はワイヤに載らず OS が `cbData` バイトを marshal する。
 /// - `wParam`: 送信側自身の HWND（`self_hwnd`）。
 ///
-/// # Safety
+/// # 前提
 /// `SendMessageTimeoutW` は FFI。`target` は有効な HWND（ハンドシェイク確定済）であること、
 /// `payload` は本呼び出し中生存すること（`SendMessage` は同期ゆえ復帰まで生存が保証される）。
 pub fn send_copydata(
@@ -350,8 +350,8 @@ pub fn send_copydata(
 /// 長引けば OS からは「応答なし」に見えうるが、この向きではその判定を送出の打ち切り理由にしない。
 /// 時間上限は呼び出し側が渡す（helper は `REPLY_TIMEOUT`＝5 秒）。
 ///
-/// # Safety
-/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+/// # 前提
+/// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
 pub fn send_copydata_response(
     target: HWND,
     self_hwnd: HWND,
@@ -374,8 +374,8 @@ pub fn send_copydata_response(
 /// 旗以外は両方向で同一である（COPYDATASTRUCT の組み立て・timeout の飽和変換・戻り 0 の
 /// 写像＝期限切れは [`IpcError::Timeout`]・他は [`IpcError::SendFailed`]）。
 ///
-/// # Safety
-/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+/// # 前提
+/// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
 fn send_copydata_with(
     flavor: SendFlavor,
     target: HWND,
@@ -438,8 +438,8 @@ fn send_copydata_with(
 /// **注意**: 実際の再入往復は実窓を要すため統合 task（4.3 / 5.1）で検証する。本関数は
 /// timeout 契約と slot 消費ロジックの確立まで。
 ///
-/// # Safety
-/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+/// # 前提
+/// [`send_copydata`] の前提（有効 `target`・`payload` 生存）を引き継ぐ。
 pub fn send_request(
     target: HWND,
     self_hwnd: HWND,

@@ -23,7 +23,7 @@
 //! 前ラウンドは「`cbData` と実長 不整合」フレームを `SendMessageW` で注入して WndProc 隔離を
 //! 検証しようとしたが、これは 2 つの理由で**撤回**した:
 //! 1. **UB**: `cbData`(宣言長) を実バッファ長より大きく詐称すると、受信側 `read_copydata`
-//!    （`src/parent_window.rs`）が `from_raw_parts(lpData, cbData)` で**境界外読み取り（未定義動作）**を
+//!    （crate `shiori-host32-ipc` の `src/lib.rs`）が `from_raw_parts(lpData, cbData)` で**境界外読み取り（未定義動作）**を
 //!    起こす。テストに UB を残さない。
 //! 2. **構造上到達不能**: `read_copydata` は `cbData` バイトちょうどを slice して `classify_inbound`
 //!    へ渡すため、実受信経路では常に `declared_len == data.len()` となり、`copydata_payload` の
@@ -65,7 +65,7 @@ use common::HANDSHAKE_TIMEOUT;
 /// フレームを注入するにはこの生ヘルパが要る。
 ///
 /// **UB 回避（重要）**: `cbData` は**必ず `data.len()`（実バッファ長）ちょうど**に設定する。
-/// これにより受信側 `read_copydata`（`src/parent_window.rs`）が `from_raw_parts(lpData, cbData)` を
+/// これにより受信側 `read_copydata`（crate `shiori-host32-ipc` の `src/lib.rs`）が `from_raw_parts(lpData, cbData)` を
 /// 呼んでも境界外読み取りが起きない。`cbData` を実長より大きく詐称する（＝長さ不整合注入）ことは
 /// **意図的に行わない**（UB を招き、かつ実受信経路では `LengthMismatch` が原理的に発火しないため。
 /// ファイル冒頭「撤回した検証」参照）。長さ不整合の検出は proto/host の単体テストに委譲する。

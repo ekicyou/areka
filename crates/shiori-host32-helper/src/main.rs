@@ -690,7 +690,8 @@ fn main() {
     // 終了は正規の正常終了経路（R5.6）: UNLOAD アームが quit_requested を立て自窓を起こす → 本フィルタが
     // それを検知して msg_loop.quit() → ループが正常終了 → main が return → プロセス exit 0
     // （stand-in exit(0) ではなく canonical な正常終了・memory「終了経路は正規実装」）。
-    // `win` は本フィルタが borrow して生存し続け、Drop（窓破棄・proxy の courtesy unload）は main 終了時。
+    // `win` は本フィルタが borrow して生存し続け、Drop（窓破棄）は main 終了時。proxy は UNLOAD の道で
+    // close 済み（ループを抜けるのはその後だけ）で、Drop が後始末するのは UNLOAD を経ない道だけ。
     MessageLoop::run(|msg_loop, _msg| {
         if win.quit_requested() {
             msg_loop.quit();

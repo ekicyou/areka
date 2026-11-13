@@ -308,18 +308,8 @@ mod window_tests {
                 );
             }
         });
-        let reasons: Vec<_> = events
-            .iter()
-            .filter(|e| {
-                e.target == "shiori-host32" && e.field_str("event") == Some("parent_frame_ignored")
-            })
-            .map(|e| {
-                assert_eq!(e.level, tracing::Level::WARN, "{e:?}");
-                e.field_str("reason").unwrap_or_default().to_owned()
-            })
-            .collect();
         assert_eq!(
-            reasons,
+            ignored_reasons(&events),
             [
                 "unknown_tag",
                 "malformed_hello",
