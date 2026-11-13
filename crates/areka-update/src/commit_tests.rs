@@ -288,3 +288,45 @@ fn junctioned_parent_escapes_creates_nothing_outside_and_restores_first() {
     fs::create_dir(&sub).unwrap();
     assert_eq!(visible(&fx.target), before, "1 件目は戻された");
 }
+
+/// ⑷ の後に戻せなかった物が残る → 全部戻せた `Escapes` でなく `RollbackFailed`（5.5・5.6）。
+#[test]
+fn an_escape_after_a_stuck_file_is_rollback_failed() {
+    let fx = fixture();
+    let outside = fx.root.join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(fx.target.join("a.bin"), b"old-a").unwrap();
+    fx.area.put("a.bin", &pe_image()).unwrap();
+    fx.area.put("sub/deeper/b.txt", b"b").unwrap();
+    let pinned = pin(&fx.area.fresh("a.bin"));
+    junction(&fx.target.join("sub"), &outside);
+
+    let err = commit(
+        &fx.target,
+        &fx.target_real,
+        &fx.area,
+        &names(&["a.bin", "sub/deeper/b.txt"]),
+    )
+    .expect_err("2 件目が外へ解決され、1 件目は消せず上書きもできない");
+    match err {
+        CommitFailure::RollbackFailed {
+            path,
+            restored,
+            stuck,
+            ..
+        } => {
+            assert_eq!(path, fx.target.join("sub/deeper/b.txt"));
+            assert!(restored.is_empty(), "{restored:?}");
+            let stuck: Vec<&str> = stuck.iter().map(|s| s.file.as_str()).collect();
+            assert_eq!(stuck, ["a.bin"]);
+        }
+        other => panic!("RollbackFailed のはず: {other:?}"),
+    }
+    assert!(tree(&outside).is_empty(), "外側には何も作らない");
+    assert_eq!(
+        fs::read(fx.area.retired("a.bin")).unwrap(),
+        b"old-a",
+        "元の内容は old/ に残る"
+    );
+    drop(pinned);
+}

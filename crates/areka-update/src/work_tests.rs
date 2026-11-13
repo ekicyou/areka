@@ -246,6 +246,24 @@ fn purge_does_not_follow_a_junction_on_the_shelf() {
 }
 
 #[test]
+fn purge_lists_the_shelf_when_it_cannot_be_read() {
+    let (_w, target) = fixture();
+    let shelf = target.join(WORK_DIR);
+    junction(&shelf, &shelf);
+    // 較正: 開くと NotFound でない失敗（1921）。崩れたらテストを曲げずに止める。
+    let open = fs::read_dir(&shelf).expect_err("較正: 自分を指すジャンクションは開けない");
+    assert!(
+        !matches!(open.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory),
+        "較正: {open}"
+    );
+
+    let purge = purge_committed(&target);
+
+    assert_eq!(purge.held, vec![shelf]);
+    assert!(purge.removed.is_empty(), "{:?}", purge.removed);
+}
+
+#[test]
 fn purge_without_shelf_does_nothing() {
     let (_w, target) = fixture();
     assert_eq!(purge_committed(&target), Purge::default());

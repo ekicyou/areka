@@ -169,7 +169,8 @@ pub(crate) fn junction(link: &Path, target: &Path) {
         .output()
         .expect("cmd を起こせる");
     assert!(
-        out.status.success() && link.exists(),
+        // 辿らずに見る（自分を指すジャンクションは辿ると開けない）。
+        out.status.success() && fs::symlink_metadata(link).is_ok(),
         "ジャンクションを作れない: {} -> {}: {}{}",
         link.display(),
         target.display(),

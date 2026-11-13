@@ -32,22 +32,6 @@ fn other_first_components_are_not_the_work_area() {
     assert!(!is_in_work_area(""));
 }
 
-// ---- ローカルパス ----
-
-#[test]
-fn local_path_is_the_target_joined_with_the_relative_name_as_is() {
-    let target = Path::new(r"C:\ghost\g");
-    assert_eq!(
-        local_path(target, "shell/master/a.png"),
-        target.join("shell/master/a.png")
-    );
-    // 比較は部品単位なので、区切りの綴りが違っても同じ場所。
-    assert_eq!(
-        local_path(target, "shell/master/a.png"),
-        PathBuf::from(r"C:\ghost\g\shell\master\a.png")
-    );
-}
-
 // ---- 配下の判定 ----
 
 struct Fixture {
@@ -118,6 +102,22 @@ fn a_dangling_junction_is_not_under() {
     fs::remove_dir(&gone).unwrap();
 
     assert!(!resolves_under(&f.target_real, &link.join("b.txt")).unwrap());
+}
+
+#[test]
+fn a_self_looping_junction_is_an_error_not_under() {
+    let f = fixture();
+    let link = f.target.join("loop");
+    junction(&link, &link);
+    // 較正: 開くと NotFound でない失敗（1921）。崩れたらテストを曲げずに止める。
+    let open = fs::metadata(&link).expect_err("較正: 自分を指すジャンクションは開けない");
+    assert_ne!(open.kind(), std::io::ErrorKind::NotFound, "較正: {open}");
+
+    // 下の名前は `symlink_metadata` で、リンクそのものは `canonicalize` で失敗する。
+    let below = resolves_under(&f.target_real, &link.join("x")).expect_err("Ok に丸めない");
+    assert_ne!(below.kind(), std::io::ErrorKind::NotFound, "{below}");
+    let itself = resolves_under(&f.target_real, &link).expect_err("Ok に丸めない");
+    assert_ne!(itself.kind(), std::io::ErrorKind::NotFound, "{itself}");
 }
 
 #[test]

@@ -140,6 +140,7 @@ fn unwind(target: &Path, area: &WorkArea, undo: Vec<Undo>) -> (Vec<String>, Vec<
                     r => r,
                 };
                 // フォルダは戻せた一覧に数えない（戻せなければ戻せなかった一覧には載せる）。
+                // 試さない: 確定がその場で作ったフォルダを途中で掴む差し込みが無い（DirectoryNotEmpty と NotFound は commit_tests が通る）
                 if let Err(source) = r {
                     stuck.push(Stuck { file: dir, source });
                 }

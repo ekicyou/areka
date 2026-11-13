@@ -261,9 +261,10 @@ fn delete_files_orders_numerically_and_ignores_other_names() {
     let f = fixture();
     for name in [
         "delete10.txt",
-        "delete2.txt",
+        "delete3.txt",
+        "delete02.txt",
         "delete.txt",
-        "delete1.txt",
+        "Delete1.TXT",
         "deletea.txt",
         "delete-1.txt",
         "delete.txt.bak",
@@ -279,7 +280,13 @@ fn delete_files_orders_numerically_and_ignores_other_names() {
         .collect();
     assert_eq!(
         got,
-        ["delete.txt", "delete1.txt", "delete2.txt", "delete10.txt"]
+        [
+            "delete.txt",
+            "Delete1.TXT",
+            "delete02.txt",
+            "delete3.txt",
+            "delete10.txt"
+        ]
     );
 }
 
@@ -355,6 +362,25 @@ fn undeletable_is_listed_and_the_rest_goes_on() {
     );
     assert_eq!(r.removed, vec![f.target.join("free.txt")]);
     assert!(f.target.join("held.txt").is_file());
+}
+
+#[test]
+fn a_line_through_a_self_looping_junction_is_undeletable() {
+    let f = fixture();
+    let link = f.target.join("loop");
+    junction(&link, &link);
+    // 較正: 開くと NotFound でない失敗（1921）。崩れたらテストを曲げずに止める。
+    let open = fs::metadata(&link).expect_err("較正: 自分を指すジャンクションは開けない");
+    assert_ne!(open.kind(), ErrorKind::NotFound, "較正: {open}");
+    f.put("delete.txt", &txt(&["loop/x.txt"]));
+
+    let r = f.apply(encoding_rs::SHIFT_JIS);
+
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(r.removed.is_empty(), "{:?}", r.removed);
+    assert_eq!(r.undeletable.len(), 1);
+    assert_eq!(r.undeletable[0].path, f.target.join("loop/x.txt"));
+    assert_ne!(r.undeletable[0].source.kind(), ErrorKind::NotFound);
 }
 
 #[test]
