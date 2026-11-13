@@ -1,17 +1,11 @@
 //! 窓を作るテストの共有ヘルパ（窓を作るテストはこの 1 か所から組み立てる）。
 //!
-//! - [`WINDOW_CREATE_SERIAL`]: 親 message-only 窓の**生成の呼び出しだけ**を直列化するロック。
-//!   「同じ瞬間に 2 つの窓を生成すると 2 つ目が `WindowCreationError` になる」という前提で
-//!   置かれたが、この前提は `shiori-host32-host` のテスト
-//!   `two_parent_windows_live_side_by_side_on_two_threads`（2 スレッドで同時に生成して共存）で
-//!   覆った。このロックが今も要るかは確かめていない。
 //! - [`spawn_window_actor`]: 本番の [`spawn_shiori_actor`] を、本番と同じ順序（窓は connect が
 //!   アクタースレッド上で作る）で起こす。backend は本番の [`ShioriConnection`] そのもので、
 //!   helper は即終了する x64 の stand-in（`cmd.exe /c exit 0`）を公開 API で起こしたもの。
 //!   fake backend は置かない（`ShioriConnection` の委譲まで本番経路を踏ませるため）。
 
 use std::process::Command;
-use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
@@ -19,10 +13,6 @@ use areka_actor::ActorHandle;
 use areka_kanade::{KanadeMsg, ShioriBackend, ShioriConnection, ShioriMsg, spawn_shiori_actor};
 use shiori_host32_host::process_host::spawn_command;
 use shiori_host32_host::{Charset, CharsetNegotiator, HelperLifecycle, ParentMessageWindow};
-
-/// 親 message-only 窓の生成を直列化する共有ロック（生成の呼び出しだけを囲む）。
-/// poison は無視する（目的は相互排他だけ）。
-pub static WINDOW_CREATE_SERIAL: Mutex<()> = Mutex::new(());
 
 /// connect が HWND を返すまでの待ちの上限。
 const HWND_TIMEOUT: Duration = Duration::from_secs(5);
@@ -41,7 +31,7 @@ pub struct WindowActor {
 
 /// 本番の shiori アクターを、実 [`ShioriConnection`]＋x64 stand-in helper で起こす。
 ///
-/// connect はアクタースレッド上で（[`WINDOW_CREATE_SERIAL`] の内側で）親窓を生成し、その HWND を
+/// connect はアクタースレッド上で親窓を生成し、その HWND を
 /// 呼び手へ返してから `ShioriConnection` を backend として返す。HWND が上限内に届かなければ
 /// 原因（届いていれば `ShioriDown` の理由）を添えて panic する。
 pub fn spawn_window_actor() -> WindowActor {
@@ -49,13 +39,8 @@ pub fn spawn_window_actor() -> WindowActor {
     let (down_tx, down_rx) = channel::<KanadeMsg>();
 
     let connect = move || -> Result<Box<dyn ShioriBackend>, String> {
-        let window = {
-            let _guard = WINDOW_CREATE_SERIAL
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            ParentMessageWindow::create()
-                .map_err(|e| format!("親 message-only 窓の生成に失敗: {e}"))?
-        };
+        let window = ParentMessageWindow::create()
+            .map_err(|e| format!("親 message-only 窓の生成に失敗: {e}"))?;
         let mut stand_in = Command::new("cmd.exe");
         stand_in.args(["/c", "exit", "0"]);
         let handle = spawn_command(stand_in)

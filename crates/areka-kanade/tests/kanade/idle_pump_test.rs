@@ -19,7 +19,7 @@ use shiori_host32_host::{
 };
 use shiori_host32_ipc::{MsgTag, hwnd_from_u32, send_copydata, send_copydata_response};
 
-use super::common::{DEFAULT_TIMEOUT, WINDOW_CREATE_SERIAL, join_bounded, spawn_window_actor};
+use super::common::{DEFAULT_TIMEOUT, join_bounded, spawn_window_actor};
 
 /// 速いテストの同期送出の上限。
 const SEND_BOUND: Duration = Duration::from_secs(2);
@@ -174,12 +174,7 @@ fn down_before(rx: &std::sync::mpsc::Receiver<KanadeMsg>, deadline: Instant) -> 
 /// `real_probe_tests.rs` が偽の backend で判定する。
 #[test]
 fn the_real_connection_offers_an_unblock_handle_that_ends_the_helper() {
-    let window = {
-        let _guard = WINDOW_CREATE_SERIAL
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        ParentMessageWindow::create().expect("親 message-only 窓を作る")
-    };
+    let window = ParentMessageWindow::create().expect("親 message-only 窓を作る");
     let mut long_lived = Command::new("ping.exe");
     long_lived
         .args(["-n", "60", "127.0.0.1"])
