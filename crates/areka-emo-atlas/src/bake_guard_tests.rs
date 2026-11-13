@@ -158,3 +158,37 @@ fn animated_frame_shorter_than_contract_shrinks() {
     assert!(result.table.animation(id).is_none(), "not animated");
     assert_eq!(log.matches(BROKEN).count(), 1, "{log}");
 }
+
+/// 指摘 6⑶: 見出しが 1 コマの動く絵は panic せず 1 枚へ縮み、「読めなかった」の記録を 1 行出す
+/// （`AtlasTable::with_frames` は 2 コマ以上しか受けない）。
+#[test]
+fn animated_with_one_frame_shrinks_without_panic() {
+    let path = Path::new(BASE).join("one.png");
+    let good = image(2, 2, true, &[OPAQUE; 4]);
+    let mut dec = MemoryDecoder::new();
+    dec.insert_animated(
+        &path,
+        AnimationInfo {
+            width: 2,
+            height: 2,
+            frame_count: 1,
+        },
+        Ok(good.clone()),
+        Ok(AnimatedImage {
+            frames: vec![AnimationFrame {
+                image: good,
+                delay_ms: 100,
+            }],
+            loop_count: LoopCount::Infinite,
+        }),
+    );
+
+    let (result, log) = bake_logged(&dec, "one.png");
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let id = result
+        .table
+        .resolve(SetId(0), "one.png")
+        .expect("shrinks to one picture");
+    assert!(result.table.animation(id).is_none(), "not animated");
+    assert_eq!(log.matches(BROKEN).count(), 1, "{log}");
+}

@@ -97,3 +97,31 @@ fn bake_quiet_emits_none_of_the_quieted_records_and_same_result() {
     assert_eq!(quiet.ignored_pna, 1, "`.pna` の数も同じ形で数える");
     assert_eq!(fingerprint(&quiet), fingerprint(&loud), "戻り値は等しい");
 }
+
+/// 指摘 6⑴: 動く絵の記録は黙らせない。全コマも 1 枚目も読めず 1 枚読みも無い動く絵を焼き、
+/// 「bake: 動く絵」の `WARN` の行が両入口で同じで 1 行以上（どの行かは比べないので、環境の上限に依らない）。
+#[test]
+fn bake_quiet_keeps_the_animation_warnings() {
+    let base = Path::new("shell/master");
+    let surfaces = vec![surface(0, vec![elem(0, "anim.png")])];
+    let sets = [set(&surfaces, base)];
+    let mut dec = MemoryDecoder::new();
+    dec.insert_animated(
+        base.join("anim.png"),
+        crate::test_support::info(2),
+        Err("first frame is broken".into()),
+        Err("frames are broken".into()),
+    );
+    let warns = |f: fn(&[SurfaceSet<'_>], &MemoryDecoder, PackConfig) -> BakeResult| {
+        let out = crate::log_capture::capture_logs(|| {
+            f(&sets, &dec, PackConfig::default());
+        });
+        out.lines()
+            .filter(|l| l.contains("level=WARN") && l.contains("bake: 動く絵"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let loud = warns(bake);
+    assert!(!loud.is_empty(), "対照: 出す入口は動く絵の記録を出す");
+    assert_eq!(warns(bake_quiet), loud, "出さない入口も同じ行を出す");
+}

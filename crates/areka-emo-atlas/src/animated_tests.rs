@@ -542,6 +542,13 @@ fn total_limit_shrinks_only_the_third_animation() {
     let (first, log) = bake_logged(&dec, &ANIMS, limits, PackConfig::default());
     assert!(first.errors.is_empty(), "{:?}", first.errors);
     assert_eq!(animated_of(&first.table), [true, true, false]);
+    // 2 つの動く絵のコマは、鍵のエントリ 3 つの後ろへ親の番号の昇順・コマの番号の昇順に並ぶ（要件 4.7）。
+    let frames_of = |rel| {
+        let id = first.table.resolve(SetId(0), rel).unwrap();
+        first.table.animation(id).unwrap().frames.clone()
+    };
+    assert_eq!(frames_of("anim1.png"), vec![ElementId(0), ElementId(3)]);
+    assert_eq!(frames_of("anim2.png"), vec![ElementId(1), ElementId(4)]);
     let anim3 = first.table.resolve(SetId(0), "anim3.png").unwrap();
     assert_eq!(full(&first.table, anim3), vec![X; 4], "frame 0 of anim3");
     let w = warns(&log);

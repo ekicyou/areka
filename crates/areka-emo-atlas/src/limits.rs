@@ -71,18 +71,22 @@ impl AnimationLimits {
     /// 本番の入口。プロセスで 1 回だけ本物の環境を読み、読めない値を `warn!` で出し、以後は同じ値。
     pub fn from_env() -> Self {
         static LIMITS: OnceLock<AnimationLimits> = OnceLock::new();
-        *LIMITS.get_or_init(|| {
-            let (limits, warnings) = Self::from_lookup(std::env::var);
-            for w in warnings {
-                tracing::warn!(
-                    target: "areka_emo_atlas",
-                    env = w.name,
-                    value = %w.given,
-                    "[emo-atlas] 動く絵の上限として読めない値なので、この項目は既定を使う（1 以上の整数）"
-                );
-            }
-            limits
-        })
+        *LIMITS.get_or_init(|| Self::from_env_with(std::env::var))
+    }
+
+    /// `from_lookup` の答えのうち読めない値を `warn!` で出し、上限を返す（`from_env` の中身・
+    /// 本物の環境を読まずに試すため `lookup` を受け取る）。
+    pub(crate) fn from_env_with(lookup: impl Fn(&'static str) -> Result<String, VarError>) -> Self {
+        let (limits, warnings) = Self::from_lookup(lookup);
+        for w in warnings {
+            tracing::warn!(
+                target: "areka_emo_atlas",
+                env = w.name,
+                value = %w.given,
+                "[emo-atlas] 動く絵の上限として読めない値なので、この項目は既定を使う（1 以上の整数）"
+            );
+        }
+        limits
     }
 }
 
