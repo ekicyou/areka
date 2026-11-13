@@ -80,11 +80,11 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 - pasta（native旗艦の脳）はこの経路で `IShiori` を実装。
 
 ### 過去互換経路（フォールバック）
-- **32bit Rustホスト**（`areka-shiori-host`, i686ターゲットの随伴バイナリ）。
-- 本物の `shiori.dll` を `LoadLibraryW`＋`GetProcAddress` で**実行時ロード**（`extern "C"` cdecl）。`load`/`unload`/`request`。
+- **32bit Rustホスト**（i686ターゲットの随伴バイナリ `shiori-host32-helper`。64bit areka側の受け手は `shiori-host32-host`、両者のワイヤ規約は `shiori-host32-ipc`）。
+- 本物の `shiori.dll` を `LoadLibraryExW`（`LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`）＋`GetProcAddress` で**実行時ロード**（`extern "C"` cdecl）。`load`/`unload`/`request`。
 - `load` へ渡すゴーストのフォルダは **絶対パス・`\` の区切り・末尾に `\` が 1 つ**（華和梨はこれにファイル名をそのままつなげて辞書を開く）。`shiori4-api` の決定 6 の helper の道を `shiori2-protocol` が前倒しした（要件 6.4・`crates/areka-ghost/src/shiori_wiring.rs` の `helper_load_dir`）。
 - 相手の SHIORI の版（3.0／2.x）は読み込みの直後の `GET Version` で決め、2.x の相手へは要求を 2.x の書き方へ組み替える（§8「SHIORI/2.x のゴーストとの話し方」）。
-- **64bit areka側で早期に HSTRING(UTF-16) → Charsetヘッダ解析 → charset符号化バイト列**へ変換し、**自前IPC**（名前付きパイプ/共有メモリ）でバイト列を運ぶ。※HGLOBALはプロセスローカルなので跨げない。
+- **64bit areka側で早期に HSTRING(UTF-16) → Charsetヘッダ解析 → charset符号化バイト列**へ変換し、**`WM_COPYDATA`**（隠しの message-only 窓どうし）でバイト列を運ぶ。※HGLOBALはプロセスローカルなので跨げない。
 - 32bitホストが受信バイト列を `GlobalAlloc` で HGLOBAL 化して旧SHIORIへ渡す。SHIORI規約の所有権（要求HGLOBALはDLLが解放／応答HGLOBALはホストが解放）はホスト内に閉じる。
 - **SAORIサブDLLは同32bitプロセスに同居**（実物を飼うことで互換をタダで得る。里々/YAYAをソースビルドしないこと——bitness連鎖で詰む）。
 - **自前メッセージループ**を持ち、窓を作るSHIORIも満たす。COMアパートメント問題を回避。
