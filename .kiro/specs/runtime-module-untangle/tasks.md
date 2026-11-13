@@ -208,3 +208,6 @@
 - 9.1: rg は PATH に無い。VS Code 同梱の `C:\Program Files\Microsoft VS Code\69047191fc\resources\app\node_modules.asar.unpacked\@vscode\ripgrep-universal\bin\win32-x64\rg.exe`（15.0.0 +pcre2）で測った。`frame/wiring.rs:322` の説明の文 `super::super::input_events::balloon` は字面が古い＝9.3 の申し送りの候補。
 - 9.5: 全体テストで `areka-ghost`・`shiori4-testdll`（本 spec が触っていない）が cargo 1.100 の build-dir の置き方で赤だったが、main で直っていた。main を取り込んで緑（research.md 27 節）。起票は不要。
 - 9.6: メニューの道は子の起動から「終了」のクリックまでを 1 つの pwsh プロセスで続ける（段のあいだに別の pwsh を起こすとメニューが閉じる）。メニューの窓もカーソルを先に乗せないと `WindowFromPoint` が下の窓を返す（research.md 30 節）。
+- 完了時にその場で解決: 根の `Cargo.toml` の使われない workspace の依存 `async-executor` を外した（`1e4bfe289`・Cargo.lock は不変・research.md 24 節の 7 番）。
+- 完了時にその場で解決: 網羅台帳 `ledger/assets.toml`・`briefing-assets.md`・`COMPAT_ARCHITECTURE.md`・`emo2-conformance-scope.md` の runtime の古い行番号と消えた名前（`default_bind_ids` ほか 58＋5＋2＋1 か所）を今の木へ直した（`c779062bd`・ukadoc-survey check 0 件・24 節の 8 番）。bindgroup の既定の欄の状態（kero・`char*`）が事実と違う件は `coverage-roadmap-refresh` の brief 280 行目で起票済みなので除いた。
+- 完了時の棚卸: その場で解決 2 件・新しい起票 0 件。
