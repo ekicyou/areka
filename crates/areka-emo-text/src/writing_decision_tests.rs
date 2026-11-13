@@ -4,12 +4,14 @@
 //! （[`WritingDirectionDecision`]）の、次の 4 つの振る舞いを逐語で固定する。
 //!
 //! 1. **正典キー `vertical` の分類 4 分岐**——未宣言／`0`／`1`／不正値。不正値
-//!    （`0`・`1` 以外および空文字列）は `warn!` ちょうど 1 件（本仕様 1.6／1.7）。
+//!    （`0`・`1` 以外および空文字列）は `Invalid` に分類される（本仕様 1.6／1.7）。
 //! 2. **2 キーの共存規則**——単独宣言 5 形・一致併記・不一致併記・未知値／不正値の
 //!    合流。採用結果（`mode`）だけでなく**採用出所**（`source`）と**矛盾併記の有無**
 //!    （`conflicting`）まで固定する（本仕様 2.2〜2.5・2.7・10.3）。
-//! 3. **記録水準の非対称**——値の破損は `warn!`・意図的な矛盾併記は `debug!`
-//!    （本仕様の裁定 1）。両者を**別々に**数え、混同したら赤にする。
+//! 3. **解決は記録しない**——値の破損の `warn!` も矛盾併記の `debug!` も、解決の中では
+//!    1 件も出さない（`emo-text-reveal-incremental` 要件 3.1）。記録は登録口が
+//!    `note_direction_declarations` で書き、その件数と文言は登録口を通す檻が固定する。
+//!    ここでは `warn` と `debug` を**別々に** 0 件と数える。
 //! 4. **`.vertical` の導出 3 値**——横書き `0`／`vertical_rl` `1`／`vertical_lr` `1`
 //!    （本仕様 7.1）。
 //!
@@ -82,12 +84,12 @@ fn assert_capture_alive(counts: &LevelCounts) {
 
 // ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7・`0`／`1` は ⑵ の `vertical_alone_adopts_canon_key_without_records`・未宣言は ⑵ の `no_declaration_…` が見る） ──
 
-/// `0`／`1` 以外（`2`）と空文字列はいずれも `Invalid`＋`warn!` ちょうど 1 件。
+/// `0`／`1` 以外（`2`）と空文字列はいずれも `Invalid`（解決は記録しない）。
 ///
 /// 空文字列を別扱いしない（本仕様 1.7 は 1.6 と同一に扱うことを命じている）。
 /// 併記が無い単独宣言なので、縮退先は正典既定の横書きになる（Flow 1 の `DefH`）。
 #[test]
-fn vertical_invalid_values_warn_exactly_once_and_fall_back_to_canon_default() {
+fn vertical_invalid_values_fall_back_to_canon_default_without_records() {
     for value in ["2", ""] {
         let (decision, counts) = decide(Some(value), None);
         assert_eq!(
@@ -106,10 +108,13 @@ fn vertical_invalid_values_warn_exactly_once_and_fall_back_to_canon_default() {
             "壊れた宣言は「指定なし」として合流するので採用出所は正典既定"
         );
         assert_capture_alive(&counts);
-        assert_eq!(counts.warn, 1, "vertical {value:?} は warn ちょうど 1 件");
+        assert_eq!(
+            counts.warn, 0,
+            "vertical {value:?} でも解決は warn を出さない"
+        );
         assert_eq!(
             counts.debug, 0,
-            "vertical {value:?} は矛盾併記ではないので debug を出さない"
+            "vertical {value:?} でも解決は debug を出さない"
         );
     }
 }
@@ -218,16 +223,13 @@ fn agreeing_declarations_resolve_without_any_record() {
     }
 }
 
-/// 不一致併記——拡張キー `writing_mode` を採用し、`debug!` ちょうど 1 件・warn 0 件。
-///
-/// 記録水準の非対称は意図的である（本仕様の裁定 1）——矛盾併記は areka を知る作者の
-/// 意図的な状態であって値の破損ではないため、警告にはしない。
+/// 不一致併記——拡張キー `writing_mode` を採用し、`conflicting()` が真になる（解決は記録しない）。
 ///
 /// 3 組目 `vertical,1` ＋ `writing_mode,vertical_lr` も**異なる方向**である。本仕様 2.2 が
 /// `vertical,1` を `VerticalRl` へ逐語固定しており、`vertical_lr` はそれとは別の方向
 /// （列送りが左向き）だからである。「どちらも縦書きだから一致」とは扱わない。
 #[test]
-fn conflicting_declarations_adopt_extension_key_with_exactly_one_debug() {
+fn conflicting_declarations_adopt_extension_key_without_records() {
     for (vertical, writing_mode, expected) in [
         ("0", "vertical_rl", WritingMode::VerticalRl),
         ("1", "horizontal_tb", WritingMode::HorizontalTb),
@@ -245,21 +247,14 @@ fn conflicting_declarations_adopt_extension_key_with_exactly_one_debug() {
             "vertical,{vertical} ＋ writing_mode,{writing_mode} は異なる方向の併記である"
         );
         assert_capture_alive(&counts);
-        assert_eq!(
-            counts.debug, 1,
-            "矛盾併記は debug ちょうど 1 件（採らなかった正典キーの生値と採った拡張キーの生値）"
-        );
-        assert_eq!(
-            counts.warn, 0,
-            "矛盾併記は値の破損ではないので warn へ格上げしない"
-        );
+        assert_eq!(counts.debug, 0, "矛盾併記でも解決は debug を出さない");
+        assert_eq!(counts.warn, 0, "矛盾併記でも解決は warn を出さない");
     }
 }
 
 /// `writing_mode` 未知値 ＋ `vertical` 宣言——`vertical` を採用（本仕様 2.7）。
 ///
-/// 未知値は「指定なし」として合流するため、これは矛盾併記ではない（`debug` 0 件）。
-/// warn は未知値の 1 件だけである。
+/// 未知値は「指定なし」として合流するため、これは矛盾併記ではない。
 #[test]
 fn unknown_writing_mode_falls_back_to_declared_vertical() {
     let (decision, counts) = decide(Some("1"), Some("diagonal_bt"));
@@ -279,16 +274,16 @@ fn unknown_writing_mode_falls_back_to_declared_vertical() {
     );
     assert_capture_alive(&counts);
     assert_eq!(
-        counts.warn, 1,
-        "未知の writing_mode 値は warn ちょうど 1 件"
+        counts.warn, 0,
+        "未知の writing_mode 値でも解決は warn を出さない"
     );
-    assert_eq!(counts.debug, 0, "矛盾併記ではないので debug は出ない");
+    assert_eq!(counts.debug, 0, "解決は debug を出さない");
 }
 
 /// `vertical` 不正値 ＋ `writing_mode` 有効宣言——拡張キーを採用（設計 DD6 の合流）。
 ///
 /// 前項と対称の形である。壊れた `vertical` は「指定なし」として合流するので、
-/// これも矛盾併記ではない（`debug` 0 件）。warn は不正値の 1 件だけ。
+/// これも矛盾併記ではない。
 #[test]
 fn invalid_vertical_falls_back_to_declared_writing_mode() {
     let (decision, counts) = decide(Some("2"), Some("vertical_rl"));
@@ -304,19 +299,22 @@ fn invalid_vertical_falls_back_to_declared_writing_mode() {
         "有効宣言が片方だけなので矛盾併記ではない"
     );
     assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 1, "vertical の不正値は warn ちょうど 1 件");
-    assert_eq!(counts.debug, 0, "矛盾併記ではないので debug は出ない");
+    assert_eq!(
+        counts.warn, 0,
+        "vertical の不正値でも解決は warn を出さない"
+    );
+    assert_eq!(counts.debug, 0, "解決は debug を出さない");
 }
 
-/// 両キーとも壊れている——正典既定の横書きへ縮退し、warn は 2 件（各キー 1 件ずつ）。
+/// 両キーとも壊れている——正典既定の横書きへ縮退し、解決は記録を出さない。
 #[test]
-fn both_declarations_broken_fall_back_to_canon_default_with_two_warns() {
+fn both_declarations_broken_fall_back_to_canon_default_without_records() {
     let (decision, counts) = decide(Some("2"), Some("diagonal_bt"));
     assert_eq!(decision.mode(), WritingMode::HorizontalTb);
     assert_eq!(decision.source(), DirectionSource::CanonDefault);
     assert!(!decision.conflicting());
     assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 2, "壊れた宣言 2 つでそれぞれ 1 件ずつ");
+    assert_eq!(counts.warn, 0, "壊れた宣言 2 つでも解決は warn を出さない");
     assert_eq!(counts.debug, 0);
 }
 

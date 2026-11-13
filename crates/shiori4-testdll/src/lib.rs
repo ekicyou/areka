@@ -11,10 +11,8 @@
 //!   要件 2.1）＋生成面 [`ReplayFactory`]（`#[implement(IShioriFactory)]`）＋台本脳 [`ReplayBrain`]
 //!   （`#[implement(IShiori)]`）。ID 分岐 replay で正典イベントへ凍結スナップショットを決定論応答する
 //!   （task 1.4・design.md "ReplayBrain・ReplayFactory・shiori_factory export"）。
-//! - `cargo test --workspace` 実行後、ビルド成果物 cdylib が現れる**単一の正準位置**を実測固定する
-//!   in-crate spike テスト（要件 1.2・5.4／design.md D-1「単一正準位置・フォールバックなし」）。
-//!   **実測結果（task 1.1 spike）**: 正準位置は `target/<profile>/deps/shiori4_testdll.dll`
-//!   （= `current_exe()` と同一ディレクトリ）。詳細な実測根拠は spike テスト本体の doc を参照。
+//! - `cargo test` がビルドした cdylib の場所を決める唯一の口 [`locate_built_dll`]（cargo 1.100 の
+//!   新しい置き方にも対応・決め方は `locate` の説明を参照）。
 //!
 //! ## スレッド座・COM（design.md D-6）
 //! 全 COM 参照は shiori アクタースレッド常駐で、`CoInitializeEx` は**呼ばない**（直接 vtable dispatch
@@ -59,11 +57,15 @@ mod request;
 mod snapshot;
 pub use snapshot::{PROVISIONAL_MARKER, snapshot_for, snapshots};
 
+/// `cargo test` がビルドしたこの crate の cdylib の場所を決める唯一の口（試験の支え）。
+mod locate;
+pub use locate::locate_built_dll;
+
 /// 出力 DLL ファイル名（design.md §SnapshotTable Service Interface の契約定数・単一権威）。
 ///
 /// この値は次の 2 箇所が共有する契約値である:
 /// - テストゴースト fixture の `ghost/master/descript.txt` の `shiori,` 行（D-8）。
-/// - e2e の `locate_built_test_dll()`／fixture への DLL コピー（要件 1.2・5.4）。
+/// - [`locate_built_dll`]／fixture への DLL コピー（要件 1.2・5.4）。
 ///
 /// D-8 で確定した命名（crate `shiori4-testdll`・`[lib] name = "shiori4_testdll"`）の帰結として、
 /// x64 ネイティブビルドの cdylib 出力ファイル名は `shiori4_testdll.dll` になる。
@@ -224,69 +226,12 @@ pub unsafe extern "system" fn shiori_factory(out: *mut *mut c_void) -> HRESULT {
 mod tests {
     //! crate 雛形の in-crate 檻。
     //!
-    //! 中核は **uplift spike**（`built_cdylib_appears_at_single_canonical_deps_dir`）で、
-    //! `cargo test` がビルドする cdylib が現れる単一の正準位置を実測固定する
-    //! （要件 1.2・5.4／design.md D-1）。併せて task 1.4 の `ReplayFactory`→`CreateInstance`→
+    //! cdylib の場所の決め方は `locate` の試験が持つ。ここは task 1.4 の `ReplayFactory`→`CreateInstance`→
     //! `Get`/`Notify` の vtable dispatch を実 COM 面で駆動し、即時 `S_OK`・凍結スナップショット
     //! move-out・未知 204・malformed 400・host 欠落 `E_POINTER`・PENDING 非返却を檻へ入れる
     //! （design.md Testing Strategy Unit Test #3・要件 2.1〜2.5/7.4/1.5・reference_brain の流儀）。
 
     use super::*;
-    use std::path::PathBuf;
-
-    /// **実測固定（uplift spike・task 1.1）**: `cargo test`（`--workspace` 含む）のビルド成果物 cdylib が
-    /// 現れる**単一の正準位置**は `target/<profile>/deps/shiori4_testdll.dll`
-    /// （= `current_exe()` と同一ディレクトリ）である（要件 1.2・5.4／design.md D-1）。
-    ///
-    /// **実測根拠（本 spike が確定させた事実）**:
-    /// cargo は cdylib を必ず `target/<profile>/deps/` にリンク出力する。`target/<profile>/`（deps の親）
-    /// への「uplift（トップレベル複製）」は `cargo build`（primary ビルド）でのみ起き、
-    /// `cargo test` / `cargo test --workspace` では**起きない**（`--no-run` 実測で確認）。したがって
-    /// 常設ゲート `cargo test --workspace` が確実に生成する単一の正準位置は deps ディレクトリ自身であり、
-    /// design.md D-1 の散文が推定した `target/<profile>/`（deps を pop）ではない——D-1 が命じた
-    /// 「実装先頭タスクでの uplift 実証 spike で確定した単一の正準位置のみを locate する」に従い、
-    /// spike の実測が prose の推定を上書きする（正準位置＝deps・単一・フォールバックなし）。
-    ///
-    /// 導出は `current_exe()` から決定論的に行う: テストバイナリは
-    /// `target/<profile>/deps/<name>-<hash>.exe` に置かれるため、その**親ディレクトリ（deps）**へ
-    /// [`DLL_FILE_NAME`] を join した位置が正準 cdylib である（cdylib 出力はハッシュ接尾なしの素名
-    /// `shiori4_testdll.dll` 固定）。areka-ghost tests の e2e もこの同一 deps を共有するため、
-    /// `locate_built_test_dll()`（task 3 系）はこの導出を逐語再利用できる。
-    ///
-    /// glob／mtime／`target/<profile>/` へのフォールバックは採らない（design.md D-1・設計討議#1
-    /// 「単一正準位置・フォールバックなし」——将来 cargo 挙動変化時に古い DLL を拾って壊れたビルドを
-    /// 隠蔽する silent green を防ぐため。挙動変化は下記 assert の明示 panic で即座に顕在化させる）。
-    #[test]
-    fn built_cdylib_appears_at_single_canonical_deps_dir() {
-        // current_exe = target/<profile>/deps/<name>-<hash>.exe
-        let test_exe = std::env::current_exe().expect("test executable path is available");
-
-        // 親ディレクトリ = target/<profile>/deps（cdylib もここへ出力される・実測固定の正準ディレクトリ）。
-        let deps_dir: PathBuf = test_exe
-            .parent()
-            .expect("test executable resides in a deps directory")
-            .to_path_buf();
-        assert_eq!(
-            deps_dir.file_name().and_then(|s| s.to_str()),
-            Some("deps"),
-            "cargo のテストバイナリ配置（target/<profile>/deps/...）を前提とする。\
-             layout が変化した場合は本 spike と locate 導出を再実証すること（design.md D-1）。\
-             observed test_exe = {}",
-            test_exe.display()
-        );
-
-        // 正準位置 = target/<profile>/deps/shiori4_testdll.dll（契約定数を rlib 面から参照）。
-        let canonical_dll = deps_dir.join(DLL_FILE_NAME);
-
-        assert!(
-            canonical_dll.exists(),
-            "ビルド成果物 cdylib が正準位置に不在: {}\n\
-             この cdylib は `cargo test --workspace` が自動ビルドし単一の正準位置へ出力する。\
-             単独実行時は先に `cargo build -p shiori4-testdll` を実行すること（フォールバックは設けない・\
-             design.md D-1）。",
-            canonical_dll.display()
-        );
-    }
 
     /// 契約定数 [`DLL_FILE_NAME`] が D-8 の命名（`shiori4_testdll.dll`）に固定されていること（回帰防止）。
     #[test]

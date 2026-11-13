@@ -1,0 +1,554 @@
+//! 毎フレーム結線（attach／dpi／drain／text）の排他 system と NonSend 配線状態。
+//!
+//! `RuntimeWiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
+//! 排他 system `frame_system(world: &mut World)`（donor パターン: remove→各フェーズ→insert）を
+//! 所有する。各フェーズ:
+//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーンの可視性を
+//!   外部所有へ→**不可視のままの確立**（`ShowSurface` 面0）→文字層スロット取得→`register_actor_view`
+//!   （`Option::take` で高々 1 回消費）。バルーンは装着だけでは画面へ出ず、可視化はバルーン可視性制御が
+//!   別途付与する（`areka-P0-balloon-visibility` Requirement 1.1/1.3）。**シェルは初回
+//!   `ShowSurface` を発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・実機#5）。
+//! - dpi: `Changed<DPI>` の窓を永続 `SystemState` で観測し（`anchor_changed_system` 先例）、当該窓の
+//!   target を `refresh_scale` で再スケールして窓寸を reconcile する（emo-dpi-scaling task 4.2・D8）。
+//! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ
+//!   適用する（**適用のみ**）。
+//! - balloon-visibility: 本フレームの表示指令を適用し終えた実状態からバルーンの可視性を決めて発行する
+//!   （`areka-P0-balloon-visibility` design 決定 D5・Requirement 3.5／6.6）。観測（可視状態・可視
+//!   グリフ数・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
+//!   返った遷移を発行して 1 行ずつ記録する。実装は `runtime::balloon_visibility`（判断）と
+//!   その配線層 `balloon_visibility_phase.rs`。
+//! - zorder-drain: 台本から届いた `\![set,zorder,…]`／`\![reset,zorder]` を台帳へ適用し、台帳と
+//!   窓の在庫から**望む鎖 1 本**を組んで wintf の受け口（`ZOrderChainPlan`）へ置く。公開は内容が
+//!   前回と異なるときだけで、窓の出現・破棄はこの門で自然に検出される。窓寸 reconcile の
+//!   直後・鎖の適用系より前（scope-zorder-pinning）。実装は `frame/zorder_drain.rs`。
+//! - 窓寸 reconcile: 表示成立点の状態照合報告（`take_pending_resize`）で窓寸を反映する（第 2 経路）。
+//!   可視性の相が発行した表示が積む窓寸要求も、同一フレームのここで landing する。
+//! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム
+//!   合わせ直す（`refresh_actor_scale`・emo-dpi-scaling task 7.2・D11-4・Req8）。適用 k の更新点は
+//!   1 フレームに 2 つ（dpi 相の `refresh_scale`／drain 相の `apply_show`）あるため、**両者の下流**・
+//!   text 相の**上流**に置く。
+//! - text: `TalkClock::talk_time` が `Some` のとき `present_frame` を呼ぶ（`Err` は `error!`＋継続）。
+//! - status-report: 提示の**後**（相の並びの最後）に、窓の可視と箱の写しから「見えているバルーンの組」を
+//!   作り、変わったときだけ kanade へ届ける（areka-P0-shell-balloon-frame-align 要件 2.3）。実装は
+//!   `frame/status_report.rs`。
+//!
+//! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数・DD-12）も本モジュールに属する。
+//!
+//! 本ファイルは task 3 の純関数 `plan_attachments`（＋`AttachPlan`／`PlannedAttach`）、task 4.1 の
+//! NonSend 結線資源 `RuntimeWiring` と attach フェーズ（`run_attach_phase`＋補助 `connect_balloon_text`）、
+//! そして task 4.2 の drain フェーズ（`run_drain_phase`）・text フェーズ（`run_text_phase`＋純判断
+//! `resolve_talk_time`）・排他 system `frame_system`（remove→各フェーズ→insert）を実装する。
+
+mod attach;
+// 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6）。
+mod balloon_offset_follow;
+// 今の定義の唯一の書き手（balloon-scroll-arrows design「BalloonFaceSelector」）。
+mod balloon_face;
+mod dpi;
+mod drain_resnap;
+// 位置の指令の預かり（window-work-area-clamp design「MoveHold」）。
+mod move_hold;
+// 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」）。
+mod move_shift;
+mod scale_text;
+// 倍率の変わりの相（shell-scale-linkage design「ScaleNoticePhase」）。
+mod scale_notice;
+pub(in crate::runtime) mod status_report;
+// シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
+mod switch;
+mod wiring;
+// 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
+mod window_state;
+use self::window_state::run_window_state_phase;
+pub(crate) use self::window_state::{DiscardReason, log_stay_on_top_discard};
+mod work_area_sync;
+mod zorder_descript;
+mod zorder_drain;
+
+// 移設前の本モジュール本体が使っていた import 一式をそのまま保持する。本番項目は各サブモジュール
+// へ移り、そちらが同じ経路を直接 import するため、ここに残る束縛の役目は 2 つである——
+// (1) `super::…`（runtime 兄弟）の 4 本はサブモジュールが `super::` で辿る先、
+// (2) それ以外は末尾のテストモジュール群の `use super::*;` が従来どおり拾うための束縛。
+// (2) の消費者は `#[cfg(test)]` だけなので、`areka`（lib target を持たない bin クレート）では
+// 非 test ビルド単位で未使用に見える。実際に未使用と判定された文にのみ抑止を付ける。
+#[allow(unused_imports)]
+use std::cell::RefCell;
+#[allow(unused_imports)]
+use std::collections::{BTreeSet, HashMap};
+#[allow(unused_imports)]
+use std::rc::Rc;
+#[allow(unused_imports)]
+use std::sync::mpsc::Receiver;
+
+#[allow(unused_imports)]
+use bevy_ecs::entity::Entity;
+#[allow(unused_imports)]
+use bevy_ecs::prelude::{Changed, Query};
+#[allow(unused_imports)]
+use bevy_ecs::system::SystemState;
+use bevy_ecs::world::World;
+#[allow(unused_imports)]
+use tracing::{debug, error, info, warn};
+
+#[allow(unused_imports)]
+use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
+#[allow(unused_imports)]
+use areka_emo_text::actor::{TextLayerRuntime, present_frame};
+#[allow(unused_imports)]
+use areka_parsers::balloon::BalloonModel;
+#[allow(unused_imports)]
+use areka_sakura::ActorKey;
+#[allow(unused_imports)]
+use wintf::ecs::{DPI, FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
+
+#[allow(unused_imports)]
+use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+#[allow(unused_imports)]
+use areka_placement::follow::{resize_window_keep_position, resize_window_to};
+#[allow(unused_imports)]
+use areka_placement::resolver::SizePx;
+#[allow(unused_imports)]
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
+
+use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
+// 可視性の相（design 決定 D5）。相順の所有者は本モジュールなので、呼び出しはここから行う。
+use super::balloon_visibility::run_balloon_visibility_phase;
+// `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先（移設前は本ファイルから
+// `super::hover_inject` が runtime を指していた）。呼び出し本文を書き換えないための束縛。
+use super::hover_inject;
+use super::move_cue::{PositionCue, apply_move_directive};
+use super::talk_clock::TalkClock;
+use super::target_map::{balloon_target, shell_target};
+
+// 公開面の維持（要件 2.5）だけを担う再輸出。このグループで非 test ビルドの未使用は
+// `AttachPlan`（`plan_attachments` の戻り値型ゆえ公開パスの維持が要件・参照は定義元の
+// サブモジュール内で完結する）と `plan_attachments`（`frame::` 経由で呼ぶのは
+// `#[cfg(test)]` の `attach_tests` だけ）の 2 名。`PlannedAttach` は `dpi` サブモジュールが、
+// `run_attach_phase` は下の `frame_system` が非 test ビルドでも使う。属性は use 文単位で
+// 効くためグループ全体に付く（`areka` は lib target を持たない bin クレート）。
+#[allow(unused_imports)]
+pub use self::attach::{AttachPlan, PlannedAttach, plan_attachments, run_attach_phase};
+pub use self::dpi::run_dpi_phase;
+pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
+// 表示の拡大率を読み口で受ける move drain（GPU 無しの檻が窓を「表示した」前提で流すためのシーム）。
+#[cfg(test)]
+pub(crate) use self::drain_resnap::run_move_drain_with;
+pub use self::scale_text::{run_text_phase, run_text_scale_phase};
+// 窓がどれも表示した前提の読み口（spine の檻も同じものを使う）。
+#[cfg(test)]
+pub(crate) use self::test_support::all_shown;
+pub use self::wiring::RuntimeWiring;
+pub use self::zorder_drain::run_zorder_drain_phase;
+
+// 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。サブモジュール間の
+// 相互参照とテストモジュールからの `use super::*;` は、いずれもここを経由する。
+// `connect_balloon_text` の参照は定義元 `attach` 内で完結するため、`frame::` 経由の消費者は
+// `#[cfg(test)]` の `attach_tests` だけである。
+#[allow(unused_imports)]
+use self::attach::connect_balloon_text;
+// 同上。ただしこのグループで実際に未使用と判定されるのは `GhostWindowClass`・
+// `classify_ghost_window`・`dpi_phase_with`・`reproject_char_window_at_current_size` の 4 名
+// （いずれも参照が定義元 `dpi` 内で完結する）。残る `AuthorDpis`・`DpiChangedQuery`・
+// `GhostWindowKind`・`ScaleReportSource`・`reconcile_window_size` は非 test ビルドでも
+// `attach`／`wiring`／`scale_text` が消費している。
+#[allow(unused_imports)]
+use self::dpi::{
+    AuthorDpis, DpiChangedQuery, GhostWindowClass, GhostWindowKind, ScaleReportSource,
+    classify_ghost_window, dpi_phase_with, reconcile_window_size,
+    reproject_char_window_at_current_size,
+};
+// 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with`・
+// `finalize_chain_once_with`・`realign_chain_once_with_source` の 5 名で、
+// `resnap_shell_targets`・`finalize_chain_once`・`realign_chain_once` は
+// 下の `frame_system` が呼ぶ。
+#[allow(unused_imports)]
+use self::drain_resnap::{
+    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, realign_chain_once,
+    realign_chain_once_with_source, resnap_from_sizes, resnap_shell_targets, resnap_with,
+};
+// 同上。`reconcile_reported_sizes` は下の `frame_system` が非 test ビルドでも呼ぶ
+// （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
+use self::scale_text::reconcile_reported_sizes;
+// バルーン可視性の相（兄弟モジュール `runtime::balloon_visibility`）が注入時刻の解決に用いる
+// ための再輸出。可視性の相と text 相が**同一の**時刻契約を共有することが要る——可視性の相は
+// `visible_glyphs(actor, t)` でリビール済みグリフ数を観測し、text 相は同じ `t` で描画するため、
+// 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
+pub(super) use self::scale_text::resolve_talk_time;
+// 窓を全部閉じるとき（`app_exit::close_windows_for_restart`）に外す、窓の一式に属する控え。
+pub(crate) use self::zorder_drain::ZOrderAbsentReports;
+
+/// `Update` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
+///
+/// `RuntimeWiring`（NonSend）を [`World::remove_non_send`] で取り出してから
+/// attach→dpi→drain→差し替え→balloon-visibility→窓寸 reconcile→zorder-drain→resnap→move-drain→連鎖確定→連鎖再解決→
+/// text-scale→text→status-report
+/// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
+/// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
+/// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
+/// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
+///
+/// アプリの終了が指示済み（World の `wintf::AppExit` が指示済みを返す）の巡では、`RuntimeWiring` を
+/// 取り出すより前に判定し、作業領域の同期も含めて相を 1 つも回さずに戻る。記録は
+/// `debug!(event = "frame_phases_skipped_after_exit")` の 1 行。`wintf::AppExit` が World に無い構成は
+/// 未指示とみなす。
+///
+/// `RuntimeWiring` 未挿入（`wire_runtime`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
+/// no-op（安全・panic しない）。schedule への登録
+/// （`add_systems(Update, frame_system.after(update_typewriters))`）は `register_frame_system`
+/// （`ghost_session::register_systems` からプロセスに 1 回）が行い、本関数はここでは定義のみ（登録しない）。載せ先が `Update`＝上流の
+/// `Update` 鎖の最後の系より後なのは、本 system が挿した描画命令と配置を同じ巡の伝播
+/// （`PostLayout`）・面の生成（`PreRenderSurface`）・描画（`RenderSurface`）に拾わせるため
+/// である（裁定 2026-09-12・要件 2.4。末尾の段に載せると絵の着地が次の巡へずれる）。
+pub fn frame_system(world: &mut World) {
+    // 終了が指示済みの巡は結線を取り出さず、作業領域の同期も含めて何もしない（受け口は読むだけ・
+    // 無ければ未指示）。窓は閉じる途中で、相を走らせても閉じる窓を描き直すだけである。
+    if world
+        .get_non_send::<wintf::AppExit>()
+        .is_some_and(|e| e.is_requested())
+    {
+        debug!(
+            event = "frame_phases_skipped_after_exit",
+            "終了が指示済み——毎フレームの処理を読み飛ばす"
+        );
+        return;
+    }
+    // RuntimeWiring 未挿入（wire_runtime=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
+    let Some(mut wiring) = world.remove_non_send::<RuntimeWiring>() else {
+        return;
+    };
+    // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
+    // 拡大率の相が読む作業領域源を同一フレームの先頭で新しくしておくと、相は新しい下端へ
+    // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
+    // 表の内容が変わらないフレームでは作り直さない＝定常フレームは無操作である。
+    // 戻り値（差し替えの有無）を受けるのは作業領域変化を契機とする再スナップ（task 5.2）で、
+    // その置き場は拡大率の相の**後**である（下の `resnap_for_work_area_change`）。
+    let work_area_change = work_area_sync::sync_monitor_snapshot(world);
+    // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、全フェーズ駆動後に必ず戻す。
+    run_attach_phase(&mut wiring, world);
+    // 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` の変化の印を見たら
+    // presenter が控えを捨てて見えている target を出し直す。装着の**後**（target が在る）・拡大率と
+    // drain の**前**に置く——この回の再スケールと表示の指令が、新しい装置の上で重ねて描く。
+    wiring.presenter.refresh_after_device_change(world);
+    // DPI 追従（attach → dpi → drain …の順・design「run_dpi_phase（frame.rs）」）: attach の**後**に
+    // 置く——装着前は再スケール対象の target が無く、attach と同一フレームで窓が生えた直後の
+    // `Changed<DPI>`（生成時 GetDpiForWindow 実値補正）を同フレームで拾えるようにするため。drain の
+    // **前**に置く理由は責任分界であり順序依存ではない: エッジ駆動の再表示を先に済ませ、残った
+    // 未消費要求（初回表示の k₀ 補正）を後段の状態照合経路が拾う（両経路は presenter の
+    // 消費規約により二重にも取りこぼしにもならない＝どちらの順でも整合する）。
+    run_dpi_phase(&mut wiring, world);
+    // 作業領域変化を契機とする再スナップ（atom 設計 C6・要件 5.1／5.2／5.3／5.4／4.7）:
+    // 拡大率の相の**直後**に置く。拡大率が変わらず作業領域だけが変わった窓は `Changed<DPI>`
+    // が立たず相を素通りするので、ここで現寸のまま新しい下端へ射影し直す。相の**前**に置くと
+    // 旧寸のまま先に動かしてから相が書き直す 2 段書込になり、後に置けば相が書き終えた窓は
+    // 導出値が現在値と一致してべき等 skip で抜ける（＝同一フレームで 1 回に合流する）。
+    // 作業領域が動かなかったフレームは同期段が `None` を返す＝**呼び出しごと起きない**。
+    if let Some(work_area_change) = &work_area_change {
+        work_area_sync::resnap_for_work_area_change(world, work_area_change);
+    }
+    // drain の時間は差し替えの相が `swap_ms` へ足す（置き換えの適用はこの中で走る・要件 4.4）。
+    let drain_started = std::time::Instant::now();
+    run_drain_phase(&mut wiring, world);
+    wiring.last_drain = drain_started.elapsed();
+    // シェル・バルーンの差し替えの相: drain の**直後**（置き換えを適用した同じフレームで後始末し、
+    // 続く可視性・窓寸・resnap・文字の層の相がその結果を拾う・design Flow 1 ⑷）。
+    switch::run_switch_phase(&mut wiring, world);
+    // バルーン可視性（areka-P0-balloon-visibility design 決定 D5・Requirement 3.5／6.6）: 本フレームの
+    // 表示指令をすべて適用し終えた**後**に置く——判断の根拠は「指令適用後の実状態」でなければならず、
+    // drain の前だと 1 フレーム古い可視状態を見る。同時に窓寸 reconcile の**前**でもある必要がある
+    // ——ここで発行した表示が積む窓寸要求を同一フレームのうちに消化するため。
+    run_balloon_visibility_phase(&mut wiring, world);
+    // 窓寸 reconcile の第 2 経路（emo-dpi-scaling task 4.2・design Flow 2 キー決定 (d)／Flow 3 手順 5）:
+    // 本フレームの全 apply が済んだ**後**に、表示成立点の状態照合が積んだ未消費の窓寸要求を取り出して
+    // 窓 client へ反映する（同一フレーム内完結・エッジ消費順序に依存しない）。attach 相の初回
+    // ShowSurface が積む k₀ 補正もここで landing する。task 4.3 で `run_drain_phase` 末尾から相順の
+    // 所有者である本関数へ純移動した（drain の責務を「適用のみ」に保ち、可視性の相を drain と本反映の
+    // 間へ挟めるようにするため。適用 → 反映という順序自体は移動前と変わらない）。
+    // 移動により装着ゲート（`run_drain_phase` 冒頭の `attached` 早期 return）の内側から外側へ出るが、
+    // 反映は自分でゲートされている——装着前は presenter に target が 1 つも無く、報告の取り出し
+    // （`take_pending_resize`）が全 target で `None` を返すため、窓書込もログも発生しない。
+    // 未装着 presenter で本 system を回して書込ゼロを主張する既存の検査
+    // （`frame_text_scale_tests.rs::frame_system_runs_dpi_phase_without_writes_when_unattached`）が
+    // この経路をそのまま覆っている。
+    reconcile_reported_sizes(&mut wiring.presenter, world);
+    // 重なりの指令の取り出し（scope-zorder-pinning design「zorder drain 相」・要件 1.4／4.1／
+    // 5.1／7.1／8.4／14.5／15.3）: 窓寸 reconcile の**直後**に置く。`\![move]` と同じ跨ぎ（台本の
+    // スレッドが送り出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳と窓の
+    // 在庫から**望む鎖 1 本**を組み、内容が前回と異なるときだけ wintf の受け口
+    // （`ZOrderChainPlan`）へ公開するところまでを行う。
+    // 鎖の適用系（確定段の末尾）より**前**である必要がある——後ろだと、ここで公開した
+    // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない
+    // （要件 14.5）。その順序は**段そのものの並び**が担う——本 system は `Update` に載り
+    // （`wire_runtime` 手順 6・裁定 2026-09-12）、適用系が載る確定段（`FrameFinalize`）は
+    // 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので `.before` は使わない）。
+    // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
+    run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
+    // 常に手前の指令の取り出し（stay-on-top-directives design「WindowStatePhase」）: 重なりの
+    // 取り出しの直後。印と帯の指令の列を同じ巡の確定段（帯の系）が読む。
+    run_window_state_phase(&mut wiring.window_state, world);
+    // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
+    // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
+    // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
+    resnap_shell_targets(&wiring.presenter, world);
+    // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた PositionCue を drain し、`Move` は
+    // apply_move_directive で実窓へ即時反映し、`ResetWindowPos` は並べ直しの手続きへ渡す
+    // （GhostWindows ゲート・R5・task 9.2・areka-P0-move-canon 3.2）。present drain とは独立で、GPU
+    // attach は待たず、`\![move]` ごとに対象と基準の窓が最初の面を表示するまで預かる
+    // （window-work-area-clamp design「MoveHold」・`frame/move_hold.rs`）。表示した巡では、上の
+    // 表示の指令・窓寸の照合・再スナップの後に当たる。
+    // resnap の**後**に置く（areka-P0-move-canon design D4・要件 2.5／2.12）: 同じフレームで表示の面の
+    // 大きさが変わったとき、移動は再スナップが書いた**新しい大きさ**で位置を決める。前に置くと古い
+    // 大きさで右下などをそろえ、続く再スナップが下端中央を保って大きさだけ変えるので位置がずれる。
+    // 連鎖の確定の**前**でもある（確定は一度きりで、定常のフレームでは何もしない）。面の指令と
+    // `\![move]` は別の線で届くので、別のフレームに割れて届いた場合の隙間はここでは扱わない。
+    run_move_drain_phase(&wiring, world);
+    // 面の `move` のずれ（seriko-pattern-calls design「MoveShiftPlacement」・要件 3.8・7.1・7.3・7.6）:
+    // 移動の相の**直後**。表示の指令（ずれは `Show` と同じ線で届く）・再スナップ・`\![move]` が
+    // 窓を置いた後に、その位置を元にずれを当てる。連鎖の確定・解き直しより前に置き、それらが
+    // ずらした後の位置を読む。
+    move_shift::run_move_shift_phase(&wiring.presenter, world);
+    // 初期配置の確定（scg 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
+    // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
+    // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
+    finalize_chain_once(&wiring.presenter, world);
+    // 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）: 起動時確定の**直後**に
+    // 置く。拡大率の遷移では全スコープの幅が変わり、下端中央保存の再射影だけでは隣接が
+    // 幅変化の半分の和だけ開く——起動時の確定は一度きりでこれを直さないので、遷移ごとに
+    // 一度だけ解き直す別機構が要る。resnap・確定の**後**である必要は確定と同じ理由
+    // （各窓の再射影結果と、全スコープの窓寸が遷移後の実表示寸へ揃ったことを入力に取る）。
+    // 武装していないフレームは早期 return＝定常フレームは無操作である（要件 4.7）。
+    realign_chain_once(&wiring.presenter, world);
+    // 文字層 k 追従（emo-dpi-scaling task 7.2・D11-4・Req8）: 適用 k の更新点（dpi 相の `refresh_scale`
+    // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
+    // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
+    // で走る（旧寸の文字が 1 フレーム残らない）。戻り値（再構築 scope）は観測用ゆえ本番は捨てる。
+    let _ = run_text_scale_phase(&mut wiring, world);
+    run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
+    // `Status` の `balloon(ID群)` の届け（areka-P0-shell-balloon-frame-align 要件 2.3）: 提示の**直後**
+    // ＝相の並びの最後に置く。窓の可視（可視性の相が発行済み）と箱の写し（直前の提示で作り直し
+    // 済み）がどちらもこのフレームの最終の姿になってから組を作るので、届けが画面から 1 フレーム
+    // 遅れない。可視性の相の中で届けると、箱の同期と提示より前なので写しが 1 フレーム古い。
+    status_report::run_status_report_phase(&mut wiring, world);
+    // 倍率の変わり（shell-scale-linkage 設計 Flow 2・要件 5.5）: 並びの最後。k を書く点（dpi・drain・
+    // 差し替え・可視性の相）はどれもこれより前なので、k が変わったのと同じフレームで表とイベントが出る。
+    scale_notice::run_scale_notice_phase(&mut wiring, world);
+    world.insert_non_send(wiring);
+}
+
+#[cfg(test)]
+#[path = "frame_test_support.rs"]
+pub(crate) mod test_support;
+
+#[cfg(test)]
+#[path = "frame_balloon_runtime_test_support.rs"]
+pub(crate) mod balloon_runtime_test_support;
+
+// 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
+// x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_harness_tests.rs"]
+mod harness_tests;
+
+// 作業領域源の同期（task 5.1）の統合テスト。ハーネスに乗るので**x64 のみ**で接続する
+// （常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_sync_tests.rs"]
+mod work_area_sync_tests;
+
+// 作業領域変化を契機とする再スナップ（task 5.2）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_resnap_tests.rs"]
+mod work_area_resnap_tests;
+
+// 組の相手を連れ動かさない道（当て直し・大きさの変化・作業領域の変化）の檻
+// （areka-P0-window-link-directives task 4・要件 4.7）。
+#[cfg(test)]
+#[path = "frame_sticky_no_follow_tests.rs"]
+mod sticky_no_follow_tests;
+
+// 拡大率と表の整合待ち（task 5.4）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_dpi_sync_hold_tests.rs"]
+mod dpi_sync_hold_tests;
+
+// 既定位置の追跡（task 5.5）の統合テスト。同じくハーネスに乗るので**x64 のみ**で接続する
+// （常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_default_pos_track_tests.rs"]
+mod default_pos_track_tests;
+
+// 遷移後の連鎖再解決（task 5.6）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_tests.rs"]
+mod chain_realign_tests;
+
+// 遷移後の連鎖再解決の**武装条件**（task 5.6・3 連言の特異性）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_arm_tests.rs"]
+mod chain_realign_arm_tests;
+
+// 拡大率の後の詰め直しで動かさない組（外す理由）と変わる直前の控えの檻
+// （dpi-realign-remembered-chain 要件 2・3・7.2）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_exclusion_tests.rs"]
+mod chain_realign_exclusion_tests;
+
+// 拡大率の後の詰め直しが変わる直前の隣り合いで組を詰める檻
+// （dpi-realign-remembered-chain 要件 1・8.1）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_adjacency_tests.rs"]
+mod chain_realign_adjacency_tests;
+
+// 遷移の原子性と随伴（task 6.1）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_transition_atomicity_tests.rs"]
+mod transition_atomicity_tests;
+
+// 整合待ちと作業領域追随の判断分岐（task 6.2）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_transition_branch_tests.rs"]
+mod transition_branch_tests;
+
+// 整合ゲートの 4 つ目の窓書込口（task 6.5）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_resnap_hold_tests.rs"]
+mod work_area_resnap_hold_tests;
+
+// move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_order_tests.rs"]
+mod move_order_tests;
+
+// 位置の指令の預かり（window-work-area-clamp task 3.3・design MoveHold）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_hold_tests.rs"]
+mod move_hold_tests;
+
+// 窓の組・吸着・バルーン位置初期化の指令が位置の線で当たる檻（areka-P0-window-link-directives task 6）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_window_link_drain_tests.rs"]
+mod window_link_drain_tests;
+
+// 常に手前の状態と台本の組の寿命（ゴーストの読み直し・切り替え・SHIORI だけの読み直し）
+// （stay-on-top-directives タスク 5.3）。
+#[cfg(test)]
+#[path = "frame_stay_on_top_lifecycle_tests.rs"]
+mod stay_on_top_lifecycle_tests;
+
+#[cfg(test)]
+#[path = "frame_attach_tests.rs"]
+mod attach_tests;
+
+#[cfg(test)]
+#[path = "frame_drain_text_tests.rs"]
+mod drain_text_tests;
+
+// 終了指示の有無による毎フレームの処理の分岐（areka-P0-frame-phases-after-exit タスク 2.1）。
+// GPU もハーネスも使わない。
+#[cfg(test)]
+#[path = "frame_exit_gate_tests.rs"]
+mod exit_gate_tests;
+
+#[cfg(test)]
+#[path = "frame_resnap_tests.rs"]
+mod resnap_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_tests.rs"]
+mod chain_finalize_tests;
+
+// 窓を全部閉じたあとの次の窓の一式の確定（areka-P0-ghost-shell-balloon-switch タスク 11.9）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_restart_tests.rs"]
+mod chain_finalize_restart_tests;
+
+// 並べ直しから記憶まで（areka-P0-char-position-save-on-exit タスク 3.2〜4.2）。共有の部品と、
+// それを使う 3 つのテストファイル（1,000 行の上限に合わせて分けた）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_test_support.rs"]
+mod chain_finalize_persist_test_support;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_tests.rs"]
+mod chain_finalize_persist_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_restart_tests.rs"]
+mod chain_finalize_persist_restart_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
+mod chain_finalize_persist_nowrite_tests;
+
+// 起動の並べ直しが作業領域へ寄せてから書く檻（window-work-area-clamp タスク 2.1）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_clamp_tests.rs"]
+mod chain_finalize_clamp_tests;
+
+// 起動・作り直しの並べ直しが記憶から戻した組を覚えた印で隣り合わせる檻
+// （dpi-realign-remembered-chain 要件 6・8.6）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_finalize_remembered_tests.rs"]
+mod chain_finalize_remembered_tests;
+
+// 拡大率の違う画面をまたぐドラッグで掴んだ点を窓の大きさの比で置き直す檻
+// （dpi-realign-remembered-chain 要件 4・8.5）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_dpi_drag_grab_tests.rs"]
+mod dpi_drag_grab_tests;
+
+#[cfg(test)]
+#[path = "frame_dpi_tests.rs"]
+mod dpi_tests;
+
+#[cfg(test)]
+#[path = "frame_dpi_reproject_tests.rs"]
+mod dpi_reproject_tests;
+
+#[cfg(test)]
+#[path = "frame_dpi_reproject_none_tests.rs"]
+mod dpi_reproject_none_tests;
+
+// 収束の保証（areka-P0-balloon-offset-dpi task 6.2・design D16・要件 3.1／3.4）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_converge_tests.rs"]
+mod balloon_offset_converge_tests;
+
+// キーワード再導出との排他の門（areka-P0-balloon-offset-dpi task 6.3・design D7・要件 4.3）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_keyword_gate_tests.rs"]
+mod balloon_offset_keyword_gate_tests;
+
+// 遷移相の結合テスト行列（areka-P0-balloon-offset-dpi task 6.5・design Integration 1／2／4／5／6・
+// 要件 3.2／3.5／4.2／7.1／7.3／9.8）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_follow_tests.rs"]
+mod balloon_offset_follow_tests;
+
+// 拡大率の往復で基準へ bit 同一で戻ることの櫯（areka-P0-balloon-offset-dpi task 6.1 の実装時是正・design D4／D16・
+// 要件 3.3／7.8）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_roundtrip_tests.rs"]
+mod balloon_offset_roundtrip_tests;
+
+#[cfg(test)]
+#[path = "frame_diag_route_tests.rs"]
+mod diag_route_tests;
+
+#[cfg(test)]
+#[path = "frame_text_scale_tests.rs"]
+mod text_scale_tests;
+
+// 相順そのものの検査（areka-P0-balloon-visibility task 6.6）。実 emo2 資産＋実 GPU で
+// `frame_system` をそのまま駆動し、相を並べ替えたときにだけ壊れる性質を主張する。
+#[cfg(test)]
+#[path = "frame_visibility_integration_tests.rs"]
+mod visibility_integration_tests;

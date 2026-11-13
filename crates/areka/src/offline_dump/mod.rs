@@ -21,8 +21,8 @@ use areka_seriko::{AnimationTable, BindResolver, DefaultBinds, ScopeStates};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use crate::cli::OfflineDumpRequest;
-use crate::emo2_boot::shell_balloon_resolve::{find_by_name_or_folder, shell_candidates};
 use crate::log_history;
+use crate::runtime::shell_balloon_resolve::{find_by_name_or_folder, shell_candidates};
 
 /// `--dump-bind` の読みと、スコープの着せ替えへの当て方。
 mod bind_spec;

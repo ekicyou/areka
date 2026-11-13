@@ -38,8 +38,8 @@
 //! `#[path]` で私有 include する。配置（`spawn_ghost_windows`／`resize_window_to`）は crate の公開面
 //! `areka_placement::…` で使う（spec: placement-crate-split 要件 4.2）:
 //!
-//! - `../src/emo2_boot/target_map.rs`（scope→`TargetId` 写像の正本・既に `crate::` フリー）
-//! - `../src/emo2_boot/hit_region.rs`（[`resolve_hit_region`]／`HitRegion` 契約・非テストコードは
+//! - `../src/runtime/target_map.rs`（scope→`TargetId` 写像の正本・既に `crate::` フリー）
+//! - `../src/runtime/hit_region.rs`（[`resolve_hit_region`]／`HitRegion` 契約・非テストコードは
 //!   `super::target_map` と外部 crate のみ参照＝`crate::` フリー）
 //!
 //! **`target_map` と `hit_region` は example クレートルートに宣言する**（入れ子にしない）。これにより
@@ -215,13 +215,13 @@ use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, ScaleRatio, TargetId, load_shell_target};
 
 /// scope→`TargetId` 写像の正本を私有 include する（`super::target_map` 解決の要ゆえクレートルート宣言）。
-#[path = "../src/emo2_boot/target_map.rs"]
+#[path = "../src/runtime/target_map.rs"]
 #[allow(dead_code)]
 mod target_map;
 
 /// [`resolve_hit_region`]／`HitRegion` 契約を私有 include する。内部の `super::target_map` は上の
 /// `target_map` へ解決される（クレートルート宣言・入れ子にしない）。
-#[path = "../src/emo2_boot/hit_region.rs"]
+#[path = "../src/runtime/hit_region.rs"]
 #[allow(dead_code)]
 mod hit_region;
 

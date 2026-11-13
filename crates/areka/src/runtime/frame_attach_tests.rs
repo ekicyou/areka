@@ -1,0 +1,975 @@
+use crate::runtime::assets::build_boot_assets;
+use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_emo_text::state::TextLayerConfig;
+use dola::cue::{CueCommand, TalkCue};
+use std::sync::{Arc, mpsc};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+use super::test_support::{
+    capture_logs, resnap_world, synth_assets, synth_assets_with_balloons, zero_clock,
+};
+use super::*;
+
+/// DD-12 完全一致: `window_scopes == 資産 scope` → 計画件数＝窓数・missing/unused 空。
+///
+/// 各項目の shell/balloon target（DD-3 採番）と初期面（DD-9: scope0→0／scope1→10）・添字も検証する。
+#[test]
+fn plan_attachments_exact_match_plans_all_windows() {
+    // 資産 scope [0,1]（DD-9: scope0→初期 surface 0／scope1→初期 surface 10）。
+    let assets = synth_assets(&[(0, 0), (1, 10)]);
+    let window_scopes = [0usize, 1];
+
+    let plan = plan_attachments(&window_scopes, &assets);
+
+    // 計画件数＝窓数（DD-12 の積極 assert・完全一致の核）。
+    assert_eq!(
+        plan.items.len(),
+        window_scopes.len(),
+        "完全一致では計画件数＝窓数"
+    );
+    assert!(plan.missing_assets.is_empty(), "窓あり資産なしは無い");
+    assert!(plan.unused_assets.is_empty(), "資産あり窓なしは無い");
+
+    // scope0 の項目: shell=TargetId(0)・balloon=TargetId(1)・初期面 0（DD-9）。
+    assert_eq!(plan.items[0].scope, 0);
+    assert_eq!(plan.items[0].shell_target, shell_target(0));
+    assert_eq!(plan.items[0].balloon_target, balloon_target(0));
+    assert_eq!(
+        plan.items[0].initial_surface_id, 0,
+        "scope0 初期面 0（DD-9）"
+    );
+    assert_eq!(plan.items[0].shell_index, 0);
+    assert_eq!(plan.items[0].balloon_index, Some(0));
+
+    // scope1 の項目: shell=TargetId(2)・balloon=TargetId(3)・初期面 10（DD-9）。
+    assert_eq!(plan.items[1].scope, 1);
+    assert_eq!(plan.items[1].shell_target, shell_target(1));
+    assert_eq!(plan.items[1].balloon_target, balloon_target(1));
+    assert_eq!(
+        plan.items[1].initial_surface_id, 10,
+        "scope1 初期面 10（DD-9）"
+    );
+    assert_eq!(plan.items[1].shell_index, 1);
+    assert_eq!(plan.items[1].balloon_index, Some(1));
+}
+
+/// DD-12 窓あり資産なし: 窓 scope に対応資産が無ければ `missing_assets` へ（`items` には載らない）。
+#[test]
+fn plan_attachments_window_without_asset_goes_to_missing() {
+    // 資産 [0,1]・窓 [0,1,2] → 窓 scope 2 は資産なし。
+    let assets = synth_assets(&[(0, 0), (1, 10)]);
+    let window_scopes = [0usize, 1, 2];
+
+    let plan = plan_attachments(&window_scopes, &assets);
+
+    assert_eq!(
+        plan.missing_assets,
+        vec![2usize],
+        "窓あり資産なしは missing 検出"
+    );
+    assert_eq!(plan.items.len(), 2, "資産のある 0,1 のみ装着計画に載る");
+    assert!(
+        plan.items.iter().all(|it| it.scope != 2),
+        "scope2 は items に載らない"
+    );
+    assert!(plan.unused_assets.is_empty(), "全資産に窓がある");
+}
+
+/// DD-12 資産あり窓なし: 窓を持たない資産 scope は `unused_assets`（`u32`）へ（`items` には載らない）。
+#[test]
+fn plan_attachments_asset_without_window_goes_to_unused() {
+    // 資産 [0,1]・窓 [0] のみ → 資産 scope 1 は窓なし。
+    let assets = synth_assets(&[(0, 0), (1, 10)]);
+    let window_scopes = [0usize];
+
+    let plan = plan_attachments(&window_scopes, &assets);
+
+    assert_eq!(
+        plan.unused_assets,
+        vec![1u32],
+        "資産あり窓なしは unused 検出（u32）"
+    );
+    assert_eq!(plan.items.len(), 1, "窓のある scope0 のみ装着計画に載る");
+    assert_eq!(plan.items[0].scope, 0);
+    assert!(plan.missing_assets.is_empty(), "全窓に資産がある");
+}
+
+/// DD-12 `usize`→`u32` 変換境界: 小 usize scope は u32 資産 scope と一致・`u32::MAX` 超過は missing。
+#[test]
+fn plan_attachments_usize_to_u32_conversion_boundary() {
+    let assets = synth_assets(&[(0, 0), (1, 10)]);
+
+    // 小さい usize scope (0,1) は u32 資産 scope と正しく一致する。
+    let plan = plan_attachments(&[0usize, 1], &assets);
+    assert_eq!(plan.items.len(), 2, "小 usize scope は u32 資産と一致");
+    assert_eq!(plan.items[0].scope, 0);
+    assert_eq!(plan.items[1].scope, 1);
+
+    // usize > u32::MAX は如何なる u32 資産 scope とも一致し得ず missing 分類（64bit 環境でのみ表現可能）。
+    #[cfg(target_pointer_width = "64")]
+    {
+        let overflow = (u32::MAX as usize) + 1; // u32 に収まらない境界超過値
+        let plan = plan_attachments(&[0usize, overflow], &assets);
+        assert_eq!(plan.items.len(), 1, "overflow scope は装着計画に載らない");
+        assert_eq!(plan.items[0].scope, 0, "収まる 0 のみ計画に載る");
+        assert_eq!(
+            plan.missing_assets,
+            vec![overflow],
+            "u32 超過 usize は missing 分類（変換不能）"
+        );
+    }
+}
+
+/// `balloon_index` の `None` 経路: shell 資産はあるが同 scope の balloon 資産が無い場合。
+#[test]
+fn plan_attachments_marks_missing_balloon_index_none() {
+    // shell scope [0,1]・balloon scope [0] のみ → scope1 は shell だけで balloon なし。
+    let assets = synth_assets_with_balloons(&[(0, 0), (1, 10)], &[0]);
+    let plan = plan_attachments(&[0usize, 1], &assets);
+
+    assert_eq!(plan.items.len(), 2, "shell 資産の揃う 0,1 が計画に載る");
+    assert_eq!(
+        plan.items[0].balloon_index,
+        Some(0),
+        "scope0 は balloon あり"
+    );
+    assert_eq!(
+        plan.items[1].balloon_index, None,
+        "scope1 は balloon なし → None"
+    );
+}
+
+/// R4.2 headless: `text_slot_view` が `None`（初回 ShowSurface 未合流）の経路では文字層を
+/// 接続せず `false` を返し、次フレーム再試行へ委ねる（panic しない・register も呼ばない）。
+///
+/// 実 `EmoPresenter::new()` は何も装着していないため `text_slot_view(any) == None`。この実源の
+/// `None` を `connect_balloon_text` に与え、接続が起きない（`false`）ことを GPU 不要で檻に入れる。
+#[test]
+fn connect_balloon_text_skips_when_view_none() {
+    // 初回 ShowSurface 前の presenter は text_slot_view が None（R4.2 の遅延化を実源で再現）。
+    let presenter = EmoPresenter::new();
+    let view = presenter.text_slot_view(TargetId(1));
+    assert!(
+        view.is_none(),
+        "初回 ShowSurface 前の text_slot_view は None（前提）"
+    );
+
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    let model = areka_parsers::balloon::parse_str("", None);
+
+    // None 経路: 文字層を接続せず false（次フレーム再試行へ委ねる）。panic しない。
+    let registered =
+        connect_balloon_text(&runtime, view, ActorKey::from("0"), &model, (255, 255, 255));
+    assert!(
+        !registered,
+        "text_slot_view None では文字層を接続せず false を返す（R4.2）"
+    );
+
+    // register_actor_view 未呼出の担保: runtime は無改変で再借用可能（lingering borrow / poison なし）。
+    assert!(
+        runtime.try_borrow_mut().is_ok(),
+        "None 経路は runtime に触れない（借用/poison を残さない）"
+    );
+}
+
+/// ゲート（GPU 資源）不成立の World では装着しない・panic しない・資産を消費しない（R1.3/4.1）。
+///
+/// `GraphicsCore`／`WucGraphicsResource`／`GhostWindows` を一切持たない `World` に対し
+/// `run_attach_phase` を複数回呼んでも、`attached` は false のまま・`assets` は `Some` のまま
+/// （高々 1 回消費の `take` はゲート成立後にのみ行うため未消費）で、panic しないことを headless に固定する。
+#[test]
+fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        TalkClock::new(Arc::new(|| 0.0)),
+        synth_assets(&[(0, 0), (1, 10)]),
+    );
+    // GraphicsCore/WucGraphicsResource/GhostWindows を一切持たない素の World（ゲート不成立）。
+    let mut world = World::new();
+
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(
+        !wiring.attached,
+        "GPU 資源なしでは装着しない（attached=false）"
+    );
+    assert!(
+        wiring.assets.is_some(),
+        "ゲート不成立では assets を take しない（次フレーム再試行のため保持）"
+    );
+    assert!(
+        wiring.balloon_model_scopes().is_empty(),
+        "ゲート不成立では per-scope BalloonModel も記憶しない（attach 相の副作用ゼロ・D11-3）"
+    );
+
+    // 冪等: 再試行してもゲート不成立なら未装着のまま・panic しない・資産も保持する。
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(!wiring.attached, "再試行でもゲート不成立なら未装着");
+    assert!(wiring.assets.is_some(), "再試行でも assets を保持");
+}
+
+/// 装着の門は装置の有無でなく有効性を見る（audit-wintf-graphics-world 6 番・要件 3.1）: 窓と
+/// WUC が揃っていても、失った（無効な）`GraphicsCore` では装着せず資産も消費しない。
+#[test]
+fn run_attach_phase_with_an_invalid_core_does_not_attach() {
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    world.resource_mut::<GraphicsCore>().invalidate();
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        synth_assets(&[(0, 0), (1, 10)]),
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    assert_eq!(
+        (wiring.attached, wiring.assets.is_some()),
+        (false, true),
+        "(装着した, 資産を残した)"
+    );
+}
+
+// ── task 3.3: attach が scope 別バルーン定義を文字層へ供給する（R2.6/4.1/4.2） ──────
+//
+// 実 emo2 fixture（`emo2-kakukaku`）では scope0 が `balloons0.png`／scope1 が `balloonk0.png`
+// を採用し、面別上書き（`balloons0s.txt`／`balloonk0s.txt`）の `validrect`／`windowposition`
+// が互いに異なる。ゆえに「先頭 scope の定義を全 scope へ配る」実装はこの檻で必ず落ちる。
+// attach は GPU 資源ゲート越しにしか走らないため、檻も 実 GPU（MTA）で
+// 本番 [`run_attach_phase`] をそのまま駆動する（シームを噛ませない）。
+
+/// [`resnap_world`]（2 スコープ窓＋偽 `WindowHandle`）へ実 GPU 資源を載せた attach 檻の World。
+///
+/// attach ゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の連言ゆえ、
+/// 本番 attach を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を初期化する
+/// （記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
+///
+/// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
+fn gpu_attach_world() -> (crate::runtime::spine::GpuPermit, World, GhostWindows) {
+    // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
+    // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let (mut world, gw) = resnap_world();
+    let gpu = crate::runtime::spine::GpuPermit::take();
+    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
+    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
+    world.insert_resource(core);
+    world.insert_resource(wuc);
+    (gpu, world, gw)
+}
+
+/// 装着の相は起動の資産のシェルのカーソルを NonSend へ入れる（shell-mouse-cursor 要件 6.8・
+/// tasks.md 4.3）。入れ替えの順そのものは `shell_cursor_assets` の檻が持つ。
+///
+/// # 非空虚性
+/// 装着の相が `hand_to` しないと、世界にカーソルの資源が無く赤。
+#[test]
+fn attach_hands_the_boot_shell_cursors_to_the_world() {
+    use crate::runtime::shell_cursor_assets::ShellCursorAssets;
+    use crate::runtime::shell_cursor_table::{CursorScene, Shape, SystemCursor};
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let mut assets = synth_assets(&[(0, 0), (1, 10)]);
+    let key = (0, "Head".to_owned(), CursorScene::Up);
+    assets
+        .cursors
+        .rows
+        .rows
+        .insert(key.clone(), Shape::System(SystemCursor::Cross));
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        assets,
+    );
+
+    run_attach_phase(&mut wiring, &mut world);
+
+    assert_eq!(
+        (
+            wiring.attached,
+            world
+                .get_non_send::<ShellCursorAssets>()
+                .map(|a| a.rows.rows.get(&key).cloned()),
+        ),
+        (true, Some(Some(Shape::System(SystemCursor::Cross)))),
+        "(装着した, 世界のカーソルの表の行)"
+    );
+}
+
+/// 観測可能な完了条件（tasks.md task 3.3・R4.1/4.2）: **相方側 scope の文字描画領域が相方側
+/// 定義から解決される**。実 emo2 fixture＋実 GPU で本番 attach を駆動し、per-scope の
+/// [`BalloonModel`] が
+/// (a) 再追従の記憶写像 `balloon_models`、(b) 文字層結線 [`connect_balloon_text`]
+/// の**双方へ同一値**で届くことを固定する。
+///
+/// (b) の観測は `refresh_actor_scale` の判定契約を利用する——装着直後の同一 view に対し、
+/// **相方側定義**で再追従を求めると「binding・文字描画領域とも同値」で `false`（no-op）に
+/// なり、**本体側定義**なら `validrect` 差により `true`（再構築）になる。すなわち
+/// `false`/`true` の対が「装着時にどちらの定義で領域を解決したか」を弁別する。
+///
+/// 先頭 scope の定義を全 scope へ配る実装では (a) が相方側で本体側の値を返し、(b) は
+/// 相方側定義に対して `true`（＝装着が別定義だった証跡）を返して落ちる。
+#[test]
+fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    assert_eq!(
+        assets.balloons.iter().map(|b| b.scope).collect::<Vec<_>>(),
+        vec![0u32, 1],
+        "前提: balloon 資産は scope 昇順 [0,1]（添字＝scope の対応）"
+    );
+    // 期待値は資産そのものから取る（fixture 実値との突き合わせは assets.rs の檻が所有するが、
+    // 非空虚性のため両 scope の実値が実際に異なることをここでも 1 点だけ固定する）。
+    let sakura = assets.balloons[0].definitions.face0().model.clone();
+    let kero = assets.balloons[1].definitions.face0().model.clone();
+    assert_eq!(
+        (sakura.validrect().top(), kero.validrect().top()),
+        (Some(46), Some(40)),
+        "前提: 本体側／相方側の validrect が実際に異なる（同値なら本檻は何も弁別しない）"
+    );
+
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::clone(&runtime),
+        zero_clock(),
+        assets,
+    );
+
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(
+        wiring.attached,
+        "前提: GhostWindows＋GPU 資源のゲート成立で attach が走る"
+    );
+    assert_eq!(
+        wiring.balloon_model_scopes(),
+        vec![0u32, 1],
+        "前提: 両 scope の balloon 装着が成立している"
+    );
+
+    // (a) 再追従の記憶写像（D11-3）: scope ごとに **その scope の** 定義が入る（R4.1）。
+    assert_eq!(
+        wiring.balloon_models[&0].validrect().top(),
+        sakura.validrect().top(),
+        "本体側 scope には本体側定義が入る"
+    );
+    assert_eq!(
+        wiring.balloon_models[&1].validrect().top(),
+        kero.validrect().top(),
+        "相方側 scope には相方側定義が入る（先頭 scope の配り回しではない・R4.1）"
+    );
+    assert_eq!(
+        wiring.balloon_models[&1].windowposition().x(),
+        Some(-190),
+        "相方側 scope の windowposition も相方側定義由来（balloonk0s.txt 実値）"
+    );
+
+    // (b) 文字層結線へ届いた値: 装着と同一の scope→アクタ写像（R4.2）で登録済みの binding は、
+    //     相方側定義で解決済み＝相方側定義での再追従は no-op（false）になる。
+    let view = wiring
+        .presenter
+        .text_slot_view(balloon_target(1))
+        .expect("前提: attach の不可視のままの確立（面 0 の ShowSurface）で相方側バルーンの文字層スロットが成立する");
+    assert!(
+        !runtime
+            .borrow_mut()
+            .refresh_actor_scale(&ActorKey::from("1"), &view, &kero),
+        "相方側 scope の文字描画領域は相方側定義から解決済み（同値ゆえ再構築しない・R4.1）"
+    );
+    // 非空虚性: 本体側定義なら validrect 差で必ず再構築が要る＝上の false は「何を渡しても
+    // false」ではない（弁別が生きている）。
+    assert!(
+        runtime
+            .borrow_mut()
+            .refresh_actor_scale(&ActorKey::from("1"), &view, &sakura),
+        "本体側定義は相方側 scope の解決済み領域と異なる（この差が上の no-op を意味あるものにする）"
+    );
+}
+
+/// `areka-P0-balloon-visibility` task 4.2 完了状態の檻: 起動直後、装着済みの**全 scope**の
+/// バルーンが不可視でありながら、文字の配置先と面が確立している（Requirements 1.1 / 1.3 / 1.6）。
+///
+/// attach 相は初回 `ShowSurface`（面 0）を従来どおり発行するが、その**前に**当該 target の
+/// 可視性を外部所有へ移すため、指令は表示状態の確立だけを行って可視化しない。ゆえに
+/// `target_visible` は `Some(false)` のまま、`current_surface_id`（確立した面）と
+/// `text_slot_view`（文字の配置先）は成立している。
+///
+/// 所有権の設定を初回 `ShowSurface` より**後**に置く実装では、指令が先に可視化してしまい
+/// `target_visible == Some(true)` で落ちる（順序そのものが檻に入っている）。装着 scope を
+/// 総当たりするため、先頭 scope だけを不可視化する部分適用も落ちる（Requirement 1.6）。
+#[test]
+fn attach_establishes_balloons_invisible_with_slot_and_surface() {
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        assets,
+    );
+
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(
+        wiring.attached,
+        "前提: GhostWindows＋GPU 資源のゲート成立で attach が走る"
+    );
+    let scopes = wiring.balloon_model_scopes();
+    assert_eq!(
+        scopes,
+        vec![0u32, 1],
+        "前提: 両 scope の balloon 装着が成立している（片方でも欠けると総当たりが空虚になる）"
+    );
+
+    for scope in scopes {
+        let target = balloon_target(scope);
+        assert_eq!(
+            wiring.presenter.target_visible(target),
+            Some(false),
+            "scope{scope}: 起動直後のバルーンは不可視（Requirement 1.1・全 scope 適用の 1.6）"
+        );
+        assert_eq!(
+            wiring.presenter.current_surface_id(target),
+            Some(0),
+            "scope{scope}: 面 0 が確立している（撤去ではなく不可視のままの確立・Requirement 1.3）"
+        );
+        assert!(
+            wiring.presenter.text_slot_view(target).is_some(),
+            "scope{scope}: 文字の配置先が確立している（可視化から分離・Requirement 1.3）"
+        );
+    }
+}
+
+/// task 2.5（Req 1.3）: UI 配線層（`RuntimeWiring`）の presenter 読み口から collision-geometry の
+/// `resolve_hit_region` を呼べることを固定する。`input-events` の第一消費者（task 2.6/2.7 の
+/// `RegionSource::Presenter`）が `RuntimeWiring::presenter()` を借りて resolver を叩く経路の縮図。
+///
+/// 未装着 `EmoPresenter`（現サーフェス無し）では collision-geometry の documented degrade により
+/// `region: None` へ正常縮退する（hit_region.rs 4.4/5.3）。GPU/表示なしで決定論的に成立する。
+#[test]
+fn presenter_accessor_feeds_resolve_hit_region() {
+    use crate::runtime::hit_region::{HitRegion, resolve_hit_region};
+
+    let wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        TalkClock::new(Arc::new(|| 0.0)),
+        synth_assets(&[(0, 0), (1, 10)]),
+    );
+
+    // UI 配線層の読み口から resolver を呼べる（Req 1.3・型が resolve_hit_region の
+    // 第 1 引数 &EmoPresenter に一致することをコンパイル時にも固定）。未装着ゆえ region None。
+    let got = resolve_hit_region(wiring.presenter(), 0, 100, 100);
+    assert_eq!(
+        got,
+        HitRegion {
+            scope: 0,
+            region: None,
+            surface_point: (100, 100),
+        },
+        "未装着 presenter は region None・座標は等倍縮退（collision-geometry の正常縮退・Req1.3）"
+    );
+}
+
+/// task 9.1 存在檻: `MoveCueSink`（送出端）→ `RuntimeWiring`（受信端 `move_rx`）の channel 配線が
+/// 到達可能であること（`wire_runtime` が `mpsc::channel::<PositionCue>()` を生成し送出端を
+/// sinks 第 3 要素の `MoveCueSink` へ、受信端を `RuntimeWiring` へ渡す配線の縮図）。
+///
+/// 送出端を持つ `MoveCueSink` に `\![move]` キャリア cue を `emit` すると、`RuntimeWiring` が保持する
+/// 受信端から同一 `MoveDirective` が drain できる（frame 相 drain＝task 9.2 の適用は本檻の範囲外）。
+#[test]
+fn move_cue_sink_reaches_runtime_wiring_receiver() {
+    use super::super::move_cue::MoveCueSink;
+    use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+
+    // wire_runtime 手順4 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
+    let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
+    let mut move_sink = MoveCueSink::new(move_tx);
+    let wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        move_rx,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        TalkClock::new(Arc::new(|| 0.0)),
+        synth_assets(&[(0, 0)]),
+    );
+
+    // sink（talk スレッド相当）へ `\![move]` キャリアを emit → 受信端（RuntimeWiring）へ届く。
+    move_sink.emit(TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("1"),
+        command: CueCommand::command_carrier(
+            "move",
+            ["-353", "", "", "0", "base", "base"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        ),
+        duration: 0.0,
+    });
+
+    let drained = wiring.drain_move_directives();
+    assert_eq!(
+        drained.len(),
+        1,
+        "sink→RuntimeWiring の受信端へちょうど 1 件届く"
+    );
+    let PositionCue::Move(directive) = &drained[0] else {
+        panic!("移動の指令が届く: {drained:?}");
+    };
+    assert_eq!(directive.scope, 1, "scope は cue.actor（\\1）由来");
+    assert_eq!(
+        directive.base,
+        crate::runtime::move_cue::MoveBase::Scope(0),
+        "base=scope0（fixture 形）"
+    );
+}
+
+/// task 4.1 完了状態の檻: **会話を再生すると**フレーム側（`RuntimeWiring`）が受信端
+/// `lifecycle_rx` から表示ライフサイクル信号を取り出せること（Requirements 4.1 / 4.5）。
+///
+/// `wire_runtime` の配線（`mpsc::channel::<TalkLifecycleSignal>()` を生成し、送出端を
+/// `GhostBootOptions.sinks` 4 本目の `BalloonLifecycleSink` へ、受信端を `RuntimeWiring` へ渡す）の
+/// 縮図を、実台本の再生経路（parse → compile → `CueSheet` → `CuePlayer` の broadcast）の上で
+/// 通す。受け取った信号の消費（計測の破棄・占有終端の更新）は task 4.4 の配線が担うため本檻の
+/// 範囲外で、ここで固定するのは「会話の再生が受信端へ届く」ことだけである。
+///
+/// 再生は**注入時刻のみ**で駆動する（実時間の待機なし・Requirement 4.9 / 9.2）。tick 時刻は
+/// 台本自身の発火時刻と占有終端から採るため、注入時刻が観測すべき時点を追い越さない
+/// （Requirement 9.3——反復回数による有界化もしない）。
+#[test]
+fn talk_playback_reaches_runtime_wiring_lifecycle_receiver() {
+    use super::super::talk_lifecycle::BalloonLifecycleSink;
+    use areka_sakura::sysvar::SystemVarSnapshot;
+    use dola::cue::CuePlayer;
+
+    // wire_runtime 手順4/5 と同型: 単一 channel の送出端を sink へ、受信端を RuntimeWiring へ。
+    let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        lifecycle_rx,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        TalkClock::new(Arc::new(|| 0.0)),
+        synth_assets(&[(0, 0)]),
+    );
+
+    // 待機（`\w9`）を含む実台本（Requirement 4.1 の「占有区間の終端」が最後の文字より後になる形）。
+    let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
+    let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
+    let horizon = compiled.sheet.absolute_end_time();
+    assert!(
+        horizon > 0.0,
+        "前提: 待機を含む台本の占有終端は正（台本が空なら本檻は空虚になる）"
+    );
+
+    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    player.register_sink(Box::new(BalloonLifecycleSink::new(
+        lifecycle_tx,
+        wiring.clock.clone(),
+    )));
+
+    // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
+    let mut tick_points: Vec<f64> = compiled
+        .sheet
+        .cues()
+        .iter()
+        .map(|cue| compiled.sheet.absolute_fire_time(cue))
+        .collect();
+    tick_points.push(horizon);
+    for at in tick_points {
+        player.tick(at);
+    }
+
+    // フレーム側の受信端から取り出す（本番は task 4.4 の可視性相が同じ口を drain する）。
+    let signals = wiring.drain_lifecycle_signals();
+    assert_eq!(
+        signals.first(),
+        Some(&TalkLifecycleSignal::TalkStarted { talk_id: None }),
+        "会話の開始通知が先行する（Ordering 契約・Requirement 4.5 の計測破棄契機）"
+    );
+
+    let ends: Vec<f64> = signals
+        .iter()
+        .filter_map(|signal| match signal {
+            TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        ends.windows(2).all(|pair| pair[0] < pair[1]),
+        "占有終端は狭義単調増加で届く（実際の受信列: {ends:?}）"
+    );
+    assert_eq!(
+        ends.last().copied(),
+        Some(horizon),
+        "最後に届く占有終端は台本の占有区間の終端と一致する（待機込み・Requirement 4.1）"
+    );
+}
+
+/// task 7.3／要件 4.6: `connect_balloon_text` は**背景を渡してから装着する**（字面側の檻）。
+///
+/// 装着（`register_actor_view`）の時点で覚えている背景が無効表示の 2 層に焼かれるため、
+/// 順序が逆だと既に装着済みのスコープには効かず、次の再追従まで効き目が遅れる
+/// （`areka-emo-text` の `set_balloon_background` の doc が逐語で定める契約）。
+///
+/// 位置づけ: 実挙動の述語は
+/// [`connect_balloon_text_resolves_text_with_the_background_at_attach_time`]（実 GPU）が持ち、
+/// 本檻はそれに対する**二重の備え**である——実 GPU の檻が環境都合で回らない場では、
+/// この字面検査だけが順序を見張る。
+///
+/// 較正: 2 行を入れ替えると `set < register` が偽になり赤（実測済み）。どちらかの呼び出しを
+/// 消すと `expect` が赤。
+///
+/// **コメント行は先に落とす**——落とさないと、順序を説明している行内コメントの
+/// `set_balloon_background` の綴りに当たってしまい、実際の 2 行を入れ替えても緑のまま通る
+/// （較正で実測した穴）。
+#[test]
+fn connect_balloon_text_hands_the_background_over_before_attaching() {
+    let source = include_str!("frame/attach.rs");
+    let body: String = source
+        .split("pub(super) fn connect_balloon_text")
+        .nth(1)
+        .expect("connect_balloon_text の定義が本文にある")
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let set = body
+        .find(".set_balloon_background(")
+        .expect("背景を渡す呼び出しがある（要件 4.6 の配線）");
+    let register = body
+        .find(".register_actor_view(")
+        .expect("装着の呼び出しがある");
+    assert!(
+        set < register,
+        "背景を渡してから装着する（順序が逆だと既装着スコープに効かない）: \
+         set_balloon_background@{set} / register_actor_view@{register}"
+    );
+}
+
+/// task 7.3／要件 4.6 の**実挙動の述語**: `connect_balloon_text` を通した actor の
+/// 文字レイアウト入力は、**装着の時点で背景が効いた**値になっている。
+///
+/// 観測は `refresh_actor_scale` の churn ガード契約を使う——判定キーには
+/// `ResolvedBalloonText::resolve_with_background(model, image_size, background_of(actor))` が
+/// 入るため、装着時と同じ背景・同じ view・同じモデルで再追従を求めれば **`false`**（作り直し
+/// なし）になる。背景が装着に間に合っていなければ、装着時は既定（白）で解かれ、再追従時は
+/// 渡した背景で解かれるので値が食い違い **`true`** になる。
+///
+/// ゆえに次の 2 値の差が「背景が装着に間に合ったか」を弁別する。
+///
+/// - 正順（本番経路 = `connect_balloon_text`）: `false`
+/// - 逆順（`register_actor_view` → `set_balloon_background` を手で再現）: `true`
+///
+/// 較正: `connect_balloon_text` の 2 行を入れ替えると正順側が `true` になって赤（実測済み）。
+/// 逆順側の `true` が非空虚性を保証する——「何をしても `false`」ではない。
+#[test]
+fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    let kero = assets.balloons[1].definitions.face0().model.clone();
+
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        assets,
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    // `TextSlotView` は Copy——同じ view 値を両経路と再追従に使う（差は順序だけ）。
+    let view = wiring
+        .presenter
+        .text_slot_view(balloon_target(1))
+        .expect("前提: attach で相方側バルーンの文字層スロットが成立する");
+
+    let actor = ActorKey::from("1");
+    // 既定背景（白）と必ず違う値を選ぶ——同値だと順序が効かず、述語が空虚になる。
+    let background = (0u8, 0u8, 0u8);
+
+    // 正順: 本番の結線そのもの（背景 → 装着）。
+    let correct = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    assert!(
+        connect_balloon_text(&correct, Some(view), actor.clone(), &kero, background),
+        "前提: Some(view) 経路は接続に成功する"
+    );
+    let correct_churn = correct
+        .borrow_mut()
+        .refresh_actor_scale(&actor, &view, &kero);
+
+    // 逆順: 装着 → 背景（要件 4.6 が禁じる並び）を手で再現する。
+    let mut reversed = TextLayerRuntime::new(TextLayerConfig::default());
+    reversed.register_actor_view(actor.clone(), &view, &kero);
+    reversed.set_balloon_background(actor.clone(), background);
+    let reversed_churn = reversed.refresh_actor_scale(&actor, &view, &kero);
+
+    assert!(
+        !correct_churn,
+        "正順では装着時点で背景が効いている＝同じ背景での再追従は作り直しを起こさない（要件 4.6）"
+    );
+    assert!(
+        reversed_churn,
+        "非空虚性: 逆順では装着が既定背景で解かれるため再追従が作り直しを起こす\
+         （この true が上の false を意味あるものにする）"
+    );
+}
+
+// ───────── `state.actors()` の走査点の見張り（タスク 9.4・7.2 の申し送り）─────────
+
+/// 本番で `state.actors()` を走査する箇所（`.rs` の**実ファイルを読んで**数える）。
+///
+/// ワークスペース root からの相対パス。`areka-emo-text` は上流 crate だが、走査点の不変式は
+/// この結線層が守るものなので見張りもここに置く。
+const ACTOR_SCAN_SITES: &[&str] = &[
+    "crates/areka-emo-text/src/actor_present.rs",
+    "crates/areka/src/runtime/frame/scale_text.rs",
+    "crates/areka/src/runtime/hover_inject.rs",
+];
+
+/// **幽霊スコープを数えない**という不変式に機械の番人を置く（7.2 の申し送り・タスク 9.4）。
+///
+/// `present_frame`（`areka-emo-text` の `actor.rs`）は `state.actors()` を
+/// 「**中身か供給面のどちらかがある**」で絞って走査する。装着（2 層の差し込み）が
+/// `entry().or_default()` で発話前のスコープの器を作るため、この絞りが無いと一度も発話して
+/// いないスコープにまで供給面が割り当てられる（＝幽霊が提示層へ載る）。
+///
+/// 絞りそのものは `present_frame` の兄弟テストが判定しているが、**新しい走査点が増えたこと**は
+/// 誰も見張っていなかった。ここでは走査点の集合と本数を実ファイルから数え直して固定する
+/// ——4 本目を足した人に「その走査は供給面を割り当てるか」を必ず考えさせるための躓き石である。
+///
+/// 走査点を足すのが正しい変更なら、本表に 1 行足したうえで、その走査が供給面を作らない
+/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 3 点のうち供給面を
+/// 割り当てるのは `present_frame` だけで、他の 2 点は読むだけである。
+#[test]
+fn every_production_scan_of_the_actor_map_is_registered() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates/areka の 2 つ上がワークスペース root")
+        .to_path_buf();
+
+    let mut found: Vec<String> = Vec::new();
+    let mut stack = vec![root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("crates を読めない") {
+            let path = entry.expect("項目を読めない").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            // 兄弟テスト・統合テスト・支援は本番ではない（走査しても提示層に触れない）。
+            let in_tests_dir = path
+                .components()
+                .any(|c| c.as_os_str() == std::ffi::OsStr::new("tests"));
+            if !name.ends_with(".rs")
+                || name.ends_with("_tests.rs")
+                || name.ends_with("_test.rs")
+                || name.contains("test_support")
+                || in_tests_dir
+            {
+                continue;
+            }
+            // 綴りの揺れ（改行・字下げ）で取り逃さないよう空白を潰してから見る。
+            // ほかの型の `.actors()` と紛れないよう、直前が状態表であることを要求する。
+            let src: String = std::fs::read_to_string(&path)
+                .unwrap_or_default()
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect();
+            if src.contains("state().actors()") || src.contains("state.actors()") {
+                let rel = path
+                    .strip_prefix(&root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                found.push(rel);
+            }
+        }
+    }
+    found.sort();
+
+    // 空振り防止: 1 件も拾えていないなら以下の等値は恒真になる。
+    assert!(
+        !found.is_empty(),
+        "走査点を 1 件も拾えていない——検査が空振りしている"
+    );
+    let expected: Vec<String> = ACTOR_SCAN_SITES.iter().map(|s| (*s).to_owned()).collect();
+    assert_eq!(
+        found, expected,
+        "`state.actors()` の本番走査点が変わった。新しい走査が供給面を割り当てるなら、\
+         `present_frame` と同じ絞り（中身か供給面のどちらかがある）を通すこと。\
+         読むだけなら ACTOR_SCAN_SITES に 1 行足すこと"
+    );
+}
+
+/// task 8.2（要件 3.10・3.12・4.1・6.8）: 起動の結線を箱のあるシェルで組むと、装着の相が
+/// 文字の層へ **箱の束**（置き場所の表・`\s` の解決の閉包・フォントを探す場所の順）と
+/// **普通のバルーンの名前**（バルーンのフォルダ名）を渡す。
+///
+/// 検体は `R_POST_and_KOMAINU`（面 0 は画像と当たり判定だけ）。写しの `surfaces.txt` に
+/// `balloon.talk`ブレスと、面 0 への `surface.append0` の element定義 `balloon` を足す。
+///
+/// - 探す場所の順はシェルのフォルダ → ゴーストのフォルダ（`ghost/master`）。
+/// - `\s[0]` で行き先が箱 `talk` になる（閉包と表が渡っていないと普通のバルーンのまま）。
+/// - 普通のバルーンの警告の名前の欄がバルーンのフォルダ名になる（未設定なら
+///   `スコープ0のバルーン`）。警告は範囲外の `origin.x` を持つ定義で再追従させて出す。
+#[test]
+fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
+    use std::io::Write as _;
+
+    let (_gpu, mut world, _gw) = gpu_attach_world();
+    let rpost =
+        sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
+    let shell_dir = rpost.folder().join("shell").join("master");
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(shell_dir.join("surfaces.txt"))
+        .and_then(|mut f| {
+            f.write_all(
+                b"\r\nballoon.talk\r\n{\r\nsize,100,40\r\n}\r\n\
+                  surface.append0\r\n{\r\nelement9,balloon,talk,10,10\r\n}\r\n",
+            )
+        })
+        .expect("写しの surfaces.txt へ箱を足せるはず");
+    let balloon_root = emo2_balloon_root();
+    let balloon_name = balloon_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .expect("バルーンのフォルダ名")
+        .to_owned();
+    let assets = build_boot_assets(rpost.folder(), &balloon_root, &[0, 1], 96, 96)
+        .expect("箱を足したシェルの BootAssets 組立は成功する");
+
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    let mut wiring = RuntimeWiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<PositionCue>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        Rc::clone(&runtime),
+        zero_clock(),
+        assets,
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(wiring.attached, "前提: ゲート成立で attach が走る");
+
+    // 探す場所の順（要件 3.10）。
+    assert_eq!(
+        runtime.borrow().box_font_dirs(),
+        [shell_dir, rpost.folder().join("ghost").join("master")],
+        "箱のフォントを探す場所はシェルのフォルダ → ゴーストのフォルダ"
+    );
+
+    // `\s[0]` で行き先が箱へ（要件 4.1）。
+    let actor = ActorKey::from("0");
+    runtime.borrow_mut().apply_cue(&TalkCue {
+        at: 0.0,
+        actor: actor.clone(),
+        command: CueCommand::Emote { key: "0".into() },
+        duration: 0.0,
+    });
+    let destination = runtime.borrow().state().destination(&actor);
+    assert!(
+        matches!(&destination, areka_emo_text::place::TextPlace::Box(name) if name.as_str() == "talk"),
+        "箱のある面 0 では行き先が箱 talk になる: {destination:?}"
+    );
+
+    // 普通のバルーンの警告の名前の欄（要件 3.12）。
+    let view = wiring
+        .presenter
+        .text_slot_view(balloon_target(0))
+        .expect("前提: 本体側バルーンの文字層スロットが成立する");
+    let coarse = areka_parsers::balloon::parse_str("origin.x,9999\r\n", None);
+    let logs = capture_logs(|| {
+        runtime
+            .borrow_mut()
+            .refresh_actor_scale(&actor, &view, &coarse);
+    });
+    let warned: Vec<&String> = logs
+        .iter()
+        .filter(|l| l.contains("level=WARN") && l.contains("origin.x"))
+        .collect();
+    assert!(
+        !warned.is_empty(),
+        "前提: 範囲外の origin.x で警告が出る（出ないと名前の欄を見られない）: {logs:?}"
+    );
+    assert!(
+        warned
+            .iter()
+            .all(|l| l.contains(&format!("balloon=\"{balloon_name}\""))),
+        "警告の名前の欄はバルーンのフォルダ名 {balloon_name}: {warned:?}"
+    );
+}
+
+// ghost の読み直しで控えた面を装着の相が出し直す檻（areka-P0-mcp-reload 要件 3.8）。
+#[path = "frame_attach_carry_tests.rs"]
+mod carry_tests;

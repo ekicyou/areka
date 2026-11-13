@@ -25,11 +25,11 @@ use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPo
 
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
-use crate::emo2_boot;
-use crate::emo2_boot::runtime_boot::CueSinkSources;
 use crate::input_events;
 use crate::menu;
 use crate::readme;
+use crate::runtime;
+use crate::session::runtime_boot::CueSinkSources;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_scope_rect.rs"]
@@ -45,7 +45,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 ///
 /// 載せる系と順序（段ごとに今日の挿入順を保つ）:
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
-///   なので [`emo2_boot::wire_kanade_stop`] を分割せずそのまま呼ぶ） → 記憶を書けない失敗の
+///   なので [`crate::session::ghost_quit::wire_kanade_stop`] を分割せずそのまま呼ぶ） → 記憶を書けない失敗の
 ///   汲み出し（[`crate::write_failure::install`]）
 /// - `Input`← 説明書 → 台本の切替要求 → 台本のシェル・バルーンの切替要求 → 中断 → メニュー →
 ///   バルーンの離脱 → シェルの窓の離脱（箱の上の滞在） → 選択肢の送り → インストールの窓口 →
@@ -57,7 +57,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の各系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の各系と `Update` の毎フレームの相（`frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
 /// ので、見え方は変わらない（インストールと更新の窓口だけは登録と同時に据わるが、依頼が無ければ
 /// 何もしない）。バルーンの離脱の系だけは `BalloonWiring` 不在で
@@ -65,15 +65,16 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// 進まず、LogSink の起動のバルーン窓は `HitTest::none()` のまま（当たり判定の面は結線ありの
 /// 起動でだけ装着する）なので `PointerLeave` が立たず届かない。
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
-    emo2_boot::register_emo2_frame_system(world);
-    emo2_boot::wire_kanade_stop(world, kanade_stop_rx);
+    crate::session::hooks::install(world);
+    runtime::register_frame_system(world);
+    crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);
     // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回・areka-P0-write-failure-notice）。
     crate::write_failure::install(world);
 
     readme::register_readme_drain(world);
-    emo2_boot::ghost_switch::register_change_drain(world);
-    emo2_boot::shell_balloon_switch::register_switch_drain(world);
-    emo2_boot::reload::register(world);
+    crate::session::ghost_switch::register_change_drain(world);
+    crate::session::shell_balloon_switch::register_switch_drain(world);
+    crate::session::reload::register(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
@@ -101,7 +102,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
 /// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ
 /// 配るもの（areka-P0-emo-dpi-scaling task 4.3・areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
 ///
-/// どちらも `wire_emo2_boot` へ渡る搬送値であり、[`open_ghost_windows`] 自身は解釈しない。
+/// どちらも `wire_runtime` へ渡る搬送値であり、[`open_ghost_windows`] 自身は解釈しない。
 /// 戻り口を 2 つに増やさず 1 つの型へまとめるのは、「同じ 1 度の読取から来た」という出所を
 /// 型で示すためである——別々に読み直す余地を残すと、配置と重なりが違う宣言を見る日が来る。
 #[derive(Clone)]
@@ -116,7 +117,7 @@ pub(crate) struct StartupDescriptValues {
 
 /// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
 /// 要件 6.4・8.4）。起こす処理の 2 つの入口（[`boot_ghost`]・[`boot_ghost_strict`]）が取り出して
-/// 起動の結線（結線ありの腕と LogSink の倒れ先の両方）へ渡す。`Emo2BootInputs`・
+/// 起動の結線（結線ありの腕と LogSink の倒れ先の両方）へ渡す。`RuntimeInputs`・
 /// [`StartupDescriptValues`]・`GhostBootOptions` に欄を足さずに運ぶための置き場である。
 #[derive(bevy_ecs::prelude::Resource)]
 pub(crate) struct BootShellChoice {
@@ -166,7 +167,7 @@ pub(crate) enum OpenWindowsError {
 ///
 /// 戻り値は準備が descript から**1 度だけ**読んだ値の組（[`StartupDescriptValues`]）。
 /// 作者基準 DPI は (a) 採寸の k₀ と (b) 呼び手（`main`）経由で
-/// `wire_emo2_boot`→`attach_target` の双方へ配られ、shell の `seriko.zorder` は同じ経路で
+/// `wire_runtime`→`attach_target` の双方へ配られ、shell の `seriko.zorder` は同じ経路で
 /// 重なりの台帳へ配られる（design Flow 3 手順1「1 度だけ読む」）。
 pub(crate) fn open_ghost_windows(
     world: &mut World,
@@ -226,7 +227,7 @@ pub(crate) fn prepare_ghost_windows(
     // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
     // （4.7・task 8.2）と拡大率の相が消費する。
     // **セッション内固定ではない**（DD15 撤回・atom 要件 5.1）——毎フレーム先頭の
-    // 同期段（`emo2_boot::frame::work_area_sync`）が実行時のモニタ表から作り直す。
+    // 同期段（`runtime::frame::work_area_sync`）が実行時のモニタ表から作り直す。
     // ここが作るのは起動時の初期値であり、構築関数は同期段と同一である。
     // 構築と同時に全モニタの観測を 1 回出す（areka-P0-dpi-window-vanish 要件 1.1 の
     // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
@@ -390,7 +391,7 @@ pub(crate) fn reopen_ghost_windows(
 /// ゴーストごとの結線の入力の束（design「boot_ghost」）。
 pub(crate) struct GhostBootInputs {
     /// 起動の結線の入力（ゴーストの根・バルーンの根・SHIORI の結線・時計の種類・記憶の置き場）。
-    pub wiring: emo2_boot::Emo2BootInputs,
+    pub wiring: runtime::RuntimeInputs,
     /// fallback（`LogSink`）の起動が使う 32bit SHIORI helper のパス。
     pub helper_exe: PathBuf,
     /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・`shiori-fault-notice`）。
@@ -412,7 +413,7 @@ impl GhostBootInputs {
         modules: crate::cli::ModulePolicy,
     ) -> Self {
         Self {
-            wiring: emo2_boot::Emo2BootInputs {
+            wiring: runtime::RuntimeInputs {
                 ghost_root: cfg.ghost_root.clone(),
                 balloon_root: cfg.balloon_root.clone(),
                 shiori: crate::boot_config::shiori_wiring_for(modules, helper_exe.clone()),
@@ -440,7 +441,7 @@ pub(crate) struct GhostBootInputsSource(
 /// 入れ替え、`main` が `run()` の後に取り出して降ろす。
 pub(crate) struct GhostSlot(pub(crate) Option<GhostSession>);
 
-/// 結線ありの起動が成立しなかった（理由は `wire_emo2_boot` が `warn!`／`error!` で記録済み）。
+/// 結線ありの起動が成立しなかった（理由は `wire_runtime` が `warn!`／`error!` で記録済み）。
 #[derive(Debug, thiserror::Error)]
 #[error("ゴーストの起動の結線が成立しなかった")]
 pub(crate) struct BootWiringFailed;
@@ -644,7 +645,7 @@ impl GhostSession {
         // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
         // tick_sink が drop される（inbox 切断の 1 本が外れる。セッションの複製はこの段の末尾、
         // ghost 側 SerikoSink は ② が外す）。
-        // 呼び手は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
+        // 呼び手は ticker の JoinHandle を持たない（`wire_runtime` が保持せず drop 済み）ため直接 join でき
         // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
         // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
         // 失敗（既に終端済み）は shutdown 期待事象ゆえ `debug!`（silent failure 禁止・非致命・R7.5）。
@@ -696,7 +697,7 @@ impl GhostSession {
         // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
         // `tick_sink`（①の Close→worker return で drop）と (c) セッションの複製（`seriko_sink`・① で drop）。
         // ①②で全端が drop されて inbox が切断され、seriko worker は自然終了する。複製は `GhostSession`
-        // だけが持ち ① で落とす（それ以外の sink は `wire_emo2_boot` が boot／ticker へ move 済み）ため、
+        // だけが持ち ① で落とす（それ以外の sink は `wire_runtime` が boot／ticker へ move 済み）ため、
         // この `join` は全端 drop 完了（＝ticker worker 終端）まで block したうえで速やかに戻る（①で ticker
         // を先に Close し複製を落としたことが hang 回避の要）。join 失敗（worker
         // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
@@ -774,7 +775,7 @@ pub(crate) fn boot_ghost(
         crate::write_failure::sender(world),
     ) {
         Ok(runtime) => {
-            tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+            tracing::info!("LogSink フォールバックで起動しました（runtime wire 不成立）");
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
             // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
             // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
@@ -842,14 +843,14 @@ pub(crate) fn boot_ghost_strict(
     )
 }
 
-/// 結線ありの腕（2 つの入口が共有・私有）: 起動の結線（`wire_emo2_boot`）を試み、成立すれば
+/// 結線ありの腕（2 つの入口が共有・私有）: 起動の結線（`wire_runtime`）を試み、成立すれば
 /// 窓ごとの状態（マウス・メニュー・記憶・バルーンの選択・選択肢の送り）を `insert_non_send` で
 /// 新品へ置き換えて [`GhostSession`] を返す（要件 4.8）。成立しなければ `Err(BootWiringFailed)`
-/// （理由は `wire_emo2_boot` が記録済み）で、World の状態には触れない。`shell` は入口が
+/// （理由は `wire_runtime` が記録済み）で、World の状態には触れない。`shell` は入口が
 /// 取り出した起動のシェル（[`take_boot_shell`]）で、結線へそのまま渡す（要件 6.4）。
 fn boot_wired(
     world: &mut World,
-    wiring: emo2_boot::Emo2BootInputs,
+    wiring: runtime::RuntimeInputs,
     kanade_stop: &Sender<KanadeNotice>,
     descript: &StartupDescriptValues,
     ghost: &GhostDecision,
@@ -858,11 +859,11 @@ fn boot_wired(
 ) -> Result<GhostSession, BootWiringFailed> {
     let ghost_dir = wiring.ghost_root.clone();
 
-    // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
+    // runtime 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_runtime」・DD-7）:
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。
-    let outcome = emo2_boot::wire_emo2_boot(
+    let outcome = runtime::wire_runtime(
         world,
         wiring,
         descript.author_dpi,
@@ -870,11 +871,12 @@ fn boot_wired(
         kanade_stop.clone(),
         shell,
         &descript.default_surfaces,
+        crate::session::runtime_boot::boot_runtime,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);
     }
-    tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
+    tracing::info!("実 sink 結線で起動しました（runtime wire 成立・SERIKO ループ ticker 稼働）");
     // 実行系に結びつく窓側の結線（マウス・メニューと枠の登記・置換語・記憶・選択肢の送り）は
     // [`ghost_session_runtime::rewire_runtime_consumers`] が持つ（areka-P0-mcp-reload 13.4・純移動）。
     if let Some(runtime) = outcome.ghost.as_ref() {
@@ -883,7 +885,7 @@ fn boot_wired(
     // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
     // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入。
     // 離脱の系の登録は [`register_systems`] が済ませてある。ハンドラ装着は [`open_ghost_windows`] の
-    // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を
+    // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `RuntimeWiring` を
     // self-gate するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
     input_events::balloon::wire_balloon_choice(world);
     Ok(GhostSession {

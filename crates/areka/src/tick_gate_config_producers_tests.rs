@@ -21,43 +21,43 @@
 /// 2 行を持っていたのは、退役したバルーン再表示の追随トリガのぶんである。）
 const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
-        "emo2_boot/adapter.rs",
-        include_str!("emo2_boot/adapter.rs"),
+        "runtime/adapter.rs",
+        include_str!("runtime/adapter.rs"),
         "PRESENT",
     ),
     (
-        "emo2_boot/balloon_visibility_phase.rs",
-        include_str!("emo2_boot/balloon_visibility_phase.rs"),
+        "runtime/balloon_visibility_phase.rs",
+        include_str!("runtime/balloon_visibility_phase.rs"),
         "REARM",
     ),
     (
-        "emo2_boot/frame/scale_text.rs",
-        include_str!("emo2_boot/frame/scale_text.rs"),
+        "runtime/frame/scale_text.rs",
+        include_str!("runtime/frame/scale_text.rs"),
         "REARM",
     ),
     (
-        "emo2_boot/hover_inject.rs",
-        include_str!("emo2_boot/hover_inject.rs"),
+        "runtime/hover_inject.rs",
+        include_str!("runtime/hover_inject.rs"),
         "REARM",
     ),
     (
-        "emo2_boot/move_cue.rs",
-        include_str!("emo2_boot/move_cue.rs"),
+        "runtime/move_cue.rs",
+        include_str!("runtime/move_cue.rs"),
         "PRESENT",
     ),
     (
-        "emo2_boot/talk_lifecycle.rs",
-        include_str!("emo2_boot/talk_lifecycle.rs"),
+        "runtime/talk_lifecycle.rs",
+        include_str!("runtime/talk_lifecycle.rs"),
         "PRESENT",
     ),
     (
-        "emo2_boot/window_state_cue.rs",
-        include_str!("emo2_boot/window_state_cue.rs"),
+        "runtime/window_state_cue.rs",
+        include_str!("runtime/window_state_cue.rs"),
         "ZORDER",
     ),
     (
-        "emo2_boot/zorder_cue.rs",
-        include_str!("emo2_boot/zorder_cue.rs"),
+        "runtime/zorder_cue.rs",
+        include_str!("runtime/zorder_cue.rs"),
         "ZORDER",
     ),
 ];
@@ -92,10 +92,10 @@ fn every_areka_producer_marks_the_tick_wake() {
 /// 相の側の決定論テストが `visibility_wake` の答えとして固定する）。
 #[test]
 fn balloon_visibility_phase_arms_the_deadline() {
-    let code = code_only(include_str!("emo2_boot/balloon_visibility_phase.rs"));
+    let code = code_only(include_str!("runtime/balloon_visibility_phase.rs"));
     assert!(
         code.contains("tick_wake::arm_deadline("),
-        "emo2_boot/balloon_visibility_phase.rs: 待ち時間を預ける呼出（tick_wake::arm_deadline(）が無い"
+        "runtime/balloon_visibility_phase.rs: 待ち時間を預ける呼出（tick_wake::arm_deadline(）が無い"
     );
 }
 

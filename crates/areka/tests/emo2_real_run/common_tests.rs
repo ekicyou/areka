@@ -25,7 +25,7 @@ fn primary_dpi_is_none_without_the_line() {
 
 const TALK_THEN_WRAP: &str = "\
 2026-10-22T13:18:16.000100Z  INFO kanade: talk event=\"boot_talk\"
-2026-10-22T13:18:16.310100Z  INFO areka::emo2_boot: text surface attached wrap=BudouxWordWrap
+2026-10-22T13:18:16.310100Z  INFO areka::runtime: text surface attached wrap=BudouxWordWrap
 ";
 
 #[test]

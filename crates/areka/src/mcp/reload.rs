@@ -9,9 +9,9 @@ use areka_mcp::tools::{ReplyTo, outcome};
 use bevy_ecs::world::World;
 
 use super::resolve::{self, ActiveGhost};
-use crate::emo2_boot::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
-use crate::emo2_boot::reload_args::{DescriptNotes, McpTarget, ReloadTarget};
 use crate::log_history::{self, TARGET_ERROR};
+use crate::runtime::reload_args::{DescriptNotes, McpTarget, ReloadTarget};
+use crate::session::reload::{ReloadOrigin, ReloadRequest, ReloadVerdict, request_reload};
 
 /// 知らない `target` の理由（SSP の実測の文・要件 1.3）。
 const UNKNOWN_TARGET: &str =

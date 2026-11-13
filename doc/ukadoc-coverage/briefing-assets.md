@@ -218,15 +218,15 @@
 
 | 開く場所 | どのファイル | 読めなかったときに残るもの |
 |---|---|---|
-| `crates/areka-parsers/src/package/resolve_shell.rs:59`（`read_ghost_descript`。入口は `resolve_with_shell` と `read_ghost_names`） | ⑴ ゴーストの descript | ここでは記録せず、失敗の理由を呼ぶ側へ返す。呼ぶ側は 7 つあり、どれも記録する——`crates/areka-ghost/src/runtime.rs:608`（エラー段）・`crates/areka-placement/src/source.rs:148`（エラー段）・`crates/areka-placement/src/persist.rs:309`（警告段）・`crates/areka/src/emo2_boot/assets.rs:331`（`crates/areka/src/emo2_boot/mod.rs:356` のファイルが無いとき・警告段と同 `:363` のそれ以外・エラー段）・`crates/areka/src/emo2_boot/reload.rs:637`（エラー段）・`crates/areka/src/offline_dump/mod.rs:130`（同 `:122` のエラー段）と同 `:169`（同 `:171` のエラー段） |
+| `crates/areka-parsers/src/package/resolve_shell.rs:59`（`read_ghost_descript`。入口は `resolve_with_shell` と `read_ghost_names`） | ⑴ ゴーストの descript | ここでは記録せず、失敗の理由を呼ぶ側へ返す。呼ぶ側は 7 つあり、どれも記録する——`crates/areka-ghost/src/runtime.rs:608`（エラー段）・`crates/areka-placement/src/source.rs:148`（エラー段）・`crates/areka-placement/src/persist.rs:309`（警告段）・`crates/areka/src/runtime/assets.rs:331`（`crates/areka/src/runtime/mod.rs:385` のファイルが無いとき・警告段と同 `:392` のそれ以外・エラー段）・`crates/areka/src/session/reload.rs:636`（エラー段）・`crates/areka/src/offline_dump/mod.rs:130`（同 `:122` のエラー段）と同 `:169`（同 `:171` のエラー段） |
 | `crates/areka-parsers/src/package/resolve.rs:157`（`read_bindgroup_defaults`） | ⑵ シェルの descript | **何も残らない。** 着せ替えの既定を拾うためだけの読みで、読めなければ「着せ替えの宣言が無い」と同じ空として続き、呼ぶ側にも伝わらない。**10 か所のうち無言なのはここだけである。** |
 | `crates/areka-ghost/src/config.rs:44`（`resolve_shell_name`） | ⑵ シェルの descript | `:47` の警告段。読めても `name` が無いときは `:61` の警告段。どちらもシェルのフォルダ名で代用して続く |
 | `crates/areka-placement/src/source.rs:154`（`read_kv_lenient` を通る） | ⑴ ゴーストの descript | `:190` の警告段。空の表として続く |
 | `crates/areka-placement/src/source.rs:158`（`load_descript_source`） | ⑵ シェルの descript | `:161` のエラー段。窓の配置はここで打ち切る |
 | `crates/areka-placement/src/source.rs:209`（`load_balloon_author_dpi`。同じ `read_kv_lenient` を通る） | ⑷ バルーンの descript | `:190` の警告段。空の表として続く |
 | `crates/areka-emo-present/src/shell_target.rs:376`（`load_shell_target_quiet`。採寸の `crates/areka-placement/src/measure.rs:399`（`build_shell_assets`）が呼ぶ） | ⑶ surfaces.txt | `:380` のエラー段（無いときは失敗にせず面の画像だけで組む）。面の定義も面の画像も無いときは `:402` のエラー段 |
-| `crates/areka/src/emo2_boot/assets.rs:343`（`build_boot_assets` の中の `load_shell_target`） | ⑶ surfaces.txt | その場では記録せず、`crates/areka/src/emo2_boot/mod.rs:363` のエラー段でまとめて記録する（面を 1 つも産まないときも同じ） |
-| `crates/areka/src/emo2_boot/assets.rs:331`（同じ関数の `resolve_with_shell`） | ⑵ シェルの descript | 同じく `emo2_boot/mod.rs:363` のエラー段 |
+| `crates/areka/src/runtime/assets.rs:343`（`build_shell_assets` の中の `load_shell_target`） | ⑶ surfaces.txt | その場では記録せず、`crates/areka/src/runtime/mod.rs:392` のエラー段でまとめて記録する（面を 1 つも産まないときも同じ） |
+| `crates/areka/src/runtime/assets.rs:331`（同じ関数の `resolve_with_shell`） | ⑵ シェルの descript | 同じく `runtime/mod.rs:392` のエラー段 |
 | `crates/areka-emo-present/src/balloon.rs:505`（`read_descript_layer`） | ⑷ バルーンの descript | `:429` の警告段。バルーンの既定設定を空にして続く |
 
 **⒝ 書いてある値が語彙や書式の外だったときの記録（代表例。ここに挙げたものが全部ではない）。** 転記のあと、値を受け取った側が「知らない語だ」と気づいて記録することがある。本ドメインの読み取りに近いものを挙げると次のとおりである。**下流は広く、これで尽くしたとは言えない。**
@@ -269,7 +269,7 @@
 
 - **分類**: 黙って捨てる。
 - **根拠**: `crates/areka-parsers/src/shell/decode.rs` が塊の見出しで振り分ける（`dispatch_block`・`:115`）。受けるのは 4 語だけで、`descript`（`:118`・中身ごと捨てる）・`kero.surface.alias`（`:122`）・`surface.append*`（`:127`）・`surfaceNNN`（`:132`）である。**どれにも当たらない見出しの塊は `:156` で何も積まずに終わる。** 塊の外の行は、並べ方の 2 語（`animation-sort`・`collision-sort`）だけが値になり、それ以外は `:91`〜`:93` と `:492`（`decode_sort_key`）で何もされない。塊の中でも、重ね合わせの行は第 2 欄が `overlay` のときだけ値になり（`:197`〜`:199`・`decode_elements`）、当たり判定の行は `collision` に続く部分が数字だけのときに限られる（`:234`〜`:236`・`decode_collisions`）——円・楕円・多角形を書く `collisionex` はここで**何も記録せずに読み飛ばされる**。
-- **記録**: なし。ただし 2 つ、押さえておくことがある。1 つめ。アニメーションを起こす間隔の語だけは、転記のあと下流で記録が出る（`crates/areka-seriko/src/table.rs:111`・`:120`・`:129`）。段は控えめで既定の水準では見えないので、壊れ方は「黙って壊れる」である（要件 3.5a）。2 つめ。**このファイルの文字コードの宣言は読まれる。** 本番でこのファイルを読む入口は `areka-emo-present` の `shell_target::load_shell_target`（`crates/areka-emo-present/src/shell_target.rs:230`。読み取りは `:254`、復号は `:255`）の 1 か所で、ゴースト・シェル・バルーンの descript と同じ前走査を通す（`areka-parsers` の `charset::decode` が `charset::prescan_charset` を呼び、宣言された文字コードで全体を復号する）。起動の `build_boot_assets`（`crates/areka/src/emo2_boot/assets.rs:291`）も採寸の `build_shell_assets`（`crates/areka-placement/src/measure.rs:399`）も、この 1 つの入口を呼ぶ。Shift_JIS で書かれた既存シェルもそのまま読める。綴りを解けないときだけ、呼ぶ側の決めた既定（本番は Shift_JIS）へ静かに落ちて控えめな段の記録が出る（`charset/decode.rs:35`）ので、そこは ⑴・⑵・⑷ と同じ例外である。台帳がこのページの `charset,文字コード` を実装済みとしているのはこのためである（**この段落は 2026-09-20 に測り直した。** 以前は「宣言は読まれず UTF-8 として読む」と書いてあったが、読み取りの入口が 1 か所へ寄る前から復号は前走査を通っており、当時の記述が誤っていた）。
+- **記録**: なし。ただし 2 つ、押さえておくことがある。1 つめ。アニメーションを起こす間隔の語だけは、転記のあと下流で記録が出る（`crates/areka-seriko/src/table.rs:111`・`:120`・`:129`）。段は控えめで既定の水準では見えないので、壊れ方は「黙って壊れる」である（要件 3.5a）。2 つめ。**このファイルの文字コードの宣言は読まれる。** 本番でこのファイルを読む入口は `areka-emo-present` の `shell_target::load_shell_target`（`crates/areka-emo-present/src/shell_target.rs:230`。読み取りは `:254`、復号は `:255`）の 1 か所で、ゴースト・シェル・バルーンの descript と同じ前走査を通す（`areka-parsers` の `charset::decode` が `charset::prescan_charset` を呼び、宣言された文字コードで全体を復号する）。起動の `build_shell_assets`（`crates/areka/src/runtime/assets.rs:322`）も採寸の `build_shell_assets`（`crates/areka-placement/src/measure.rs:399`）も、この 1 つの入口を呼ぶ。Shift_JIS で書かれた既存シェルもそのまま読める。綴りを解けないときだけ、呼ぶ側の決めた既定（本番は Shift_JIS）へ静かに落ちて控えめな段の記録が出る（`charset/decode.rs:35`）ので、そこは ⑴・⑵・⑷ と同じ例外である。台帳がこのページの `charset,文字コード` を実装済みとしているのはこのためである（**この段落は 2026-09-20 に測り直した。** 以前は「宣言は読まれず UTF-8 として読む」と書いてあったが、読み取りの入口が 1 か所へ寄る前から復号は前走査を通っており、当時の記述が誤っていた）。
 - **その記述を読むのは誰か**: 転記層では止まらない。`areka-parsers` の `shell::parse` が組んだものを、`areka-seriko` がアニメーションの表へ、`areka-emo-compose` と `areka-emo-atlas` が絵の重ね合わせへ、`areka` の窓の配置が採寸へ使う。読み飛ばされた行は転記層にも残らない。
 - **成立に要る基盤**: emo の合成器 69 件・SERIKO/MAYUNA の再生 26 件・マウスの矢印の差し替え 15 件が大きく、ほかに窓の配置と重なりの解決 12 件・当たり判定の形の拡張 5 件・シェルの定義ファイルの転記層 4 件が続く。
 - **台帳の内訳**: 137 件（実装済み 10・語彙のみ 50・縮退 6・別名 4・未対応 67・対象外 0）。
@@ -315,7 +315,7 @@
 #### ⑻ surfacetable.txt（サーフェスの名前表）
 
 - **分類**: 黙って捨てる（ファイル全体）。
-- **根拠**: **読む経路が無い。** シェルの置き場所から areka が開くファイルの名前は定数で 2 つだけ持っており（`crates/areka/src/emo2_boot/assets.rs:82` の `surfaces.txt` と `:84` の `descript.txt`）、この綴りは本番の経路のどこにも現れない。試験用ゴーストはこのファイルを実際に同梱しているが、開かれない。
+- **根拠**: **読む経路が無い。** シェルの置き場所から areka が開くファイルの名前は定数で 2 つだけ持っており（`crates/areka-emo-present/src/shell_target.rs:68` の `surfaces.txt` と `:71` の `descript.txt`）、この綴りは本番の経路のどこにも現れない。試験用ゴーストはこのファイルを実際に同梱しているが、開かれない。
 - **記録**: なし。壊れ方は「黙って壊れる」。
 - **その記述を読むのは誰か**: 誰も読まない。
 - **成立に要る基盤**: シェルの定義ファイルの転記層（6 件すべて）。まずこのファイルを開いて読む口が要る。
@@ -341,7 +341,7 @@
 設計の同じ主題の表と、測り直した結果とが食い違った箇所が 2 つある。**結論はどちらも動かないが、根拠の書き方が正しくなかった。**
 
 1. **surfacetable.txt が Rust に現れる行数は 0 ではなく 6 である。** 設計の表は「`crates/` に `surfacetable` を含む Rust の行が 0 件」を根拠にしているが、実際には 6 行ある——`crates/ukadoc-survey/src/assignment.rs:48`・同 `assignment_tests.rs:56`・`:246`・`:327`・同 `model_tests.rs:49`・`:50`。**6 行とも、この網羅調査のための道具が正典のページの名前として持っているもので、シェルのファイルを読む経路ではない。** よって「読む経路が無い」という結論は動かない。
-2. **「読む経路が無い」という言い方は、ページ 1 枚をまとめて指す項目にまで及ぶように読めるが、そこは「一部だけ読む」である。** `manual_shell`・`manual_ghost`・`manual_directory`・`manual_balloon`・`dev_shell`・`dev_bind` の 6 件は、そのページが並べるファイルの一部に読む経路があり、ページ全体としては満たしていない、という形である。たとえば `manual_shell` が並べるファイルのうち areka が開くのは `crates/areka/src/emo2_boot/assets.rs:82` が指す 1 本の surfaces.txt までで、分割された追加ファイル・別名のファイル・surfacetable.txt・翻訳の DLL・メニュー用の画像には経路が無い。`dev_bind` は起動時の着せ替えの初期集合を組むところまでは動く（`crates/areka/src/emo2_boot/assets.rs:55` の `default_bind_ids`）が、利用者が着せ替えを選ぶ入口である作り付けのメニューが無い。**「読む経路が無い」と言い切ってよいのは、上の ⑸〜⑼ の 5 種だけである。** 台帳の 6 件の備考も同じ書き方をしている。
+2. **「読む経路が無い」という言い方は、ページ 1 枚をまとめて指す項目にまで及ぶように読めるが、そこは「一部だけ読む」である。** `manual_shell`・`manual_ghost`・`manual_directory`・`manual_balloon`・`dev_shell`・`dev_bind` の 6 件は、そのページが並べるファイルの一部に読む経路があり、ページ全体としては満たしていない、という形である。たとえば `manual_shell` が並べるファイルのうち areka が開くのは `crates/areka-emo-present/src/shell_target.rs:68` が指す 1 本の surfaces.txt までで、分割された追加ファイル・別名のファイル・surfacetable.txt・翻訳の DLL・メニュー用の画像には経路が無い。`dev_bind` は起動時の着せ替えの初期集合を組むところまでは動く（`crates/areka/src/runtime/assets.rs:415` の `DefaultBinds::from_groups`）が、利用者が着せ替えを選ぶ入口である作り付けのメニューが無い。**「読む経路が無い」と言い切ってよいのは、上の ⑸〜⑼ の 5 種だけである。** 台帳の 6 件の備考も同じ書き方をしている。
 
 ## nar インストールとネットワーク更新の導線
 

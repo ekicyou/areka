@@ -42,10 +42,6 @@ features = [
     "serialize",
 ]
 
-[workspace.dependencies.async-executor]
-version = "1"
-features = ["static"]
-
 [workspace.dependencies.windows]
 version = "0.62"
 features = [

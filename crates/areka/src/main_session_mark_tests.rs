@@ -32,11 +32,9 @@ use crate::boot_resolve::{
     BalloonDecision, BalloonRoute, DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute,
     read_last_ghost, read_session_mark, write_session_mark,
 };
-use crate::emo2_boot::ghost_switch_test_support::{
-    BALLOON, FakeShiori, SwitchRig, standard_script,
-};
-use crate::emo2_boot::spine::RecordedCall;
 use crate::ghost_session::{GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues};
+use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_placement::AuthorDpi;
 
 fn fault(kind: ShioriFaultKind) -> ShioriFault {

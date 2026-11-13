@@ -317,7 +317,7 @@ fn over_limit_treats_the_limit_itself_as_within_bounds() {
 const KNOWN_SOURCES: &[&str] = &[
     "crates/areka-ghost/tests/ghost/spine_e2e_test.rs",
     "crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs",
-    "crates/areka/src/emo2_boot/spine_display_tests.rs",
+    "crates/areka/src/runtime/spine_display_tests.rs",
     "crates/log-capture-kit/tests/capture_calibration_test.rs",
 ];
 

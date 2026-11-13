@@ -13,9 +13,9 @@ use log_capture_kit::count_levels;
 use super::dump_surface_tests::is_picture;
 use super::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png};
 use super::{Step, WaitAnswer, finish};
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::spine::{Progress, RecordedCall};
-use crate::emo2_boot::target_map::shell_target;
+use crate::runtime::frame::RuntimeWiring;
+use crate::runtime::spine::{Progress, RecordedCall};
+use crate::runtime::target_map::shell_target;
 
 /// 検体（emo2）の `surfaces.txt` に在る、アニメーションも着せ替えも持たない surface（`element0` 1 枚）。
 /// 起動のときの 0 と違う番号で、台本で出したことが ID に現れる。
@@ -33,7 +33,7 @@ fn shown_surface_matches_the_composed_pixels_at_native_size() {
     let mut gpu = GpuRig::new(r"\0\s[1101]\e", 144);
     let shown = gpu.frames_until(100, |world| {
         world
-            .get_non_send::<Emo2Wiring>()
+            .get_non_send::<RuntimeWiring>()
             .and_then(|w| w.presenter().last_shown(shell_target(0)))
             .is_some_and(|(id, pic)| id == SHOWN && pic.is_some())
     });
@@ -102,14 +102,14 @@ const SETTLE_FRAMES: usize = 30;
 /// スコープ `scope` に `id` の表示が成立し、その絵が合成メモに在る。
 fn is_shown(world: &World, scope: u32, id: u32) -> bool {
     world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .and_then(|w| w.presenter().last_shown(shell_target(scope)))
         .is_some_and(|(shown, pic)| shown == id && pic.is_some())
 }
 
 /// 画面の状態＝スコープ 0・1 の（今の surface, 可視）。読み戻しの前後で比べる。
 fn screen(world: &World) -> [(Option<u32>, Option<bool>); 2] {
-    let presenter = world.non_send::<Emo2Wiring>().presenter();
+    let presenter = world.non_send::<RuntimeWiring>().presenter();
     [0, 1].map(|scope| {
         (
             presenter.current_surface_id(shell_target(scope)),
@@ -300,7 +300,7 @@ fn hidden_character_returns_the_picture_before_hiding() {
     let hidden = gpu.frames_until(100, |world| {
         is_shown(world, 0, SHOWN)
             && world
-                .non_send::<Emo2Wiring>()
+                .non_send::<RuntimeWiring>()
                 .presenter()
                 .target_visible(shell_target(0))
                 == Some(false)
@@ -339,7 +339,7 @@ fn never_shown_scope_refuses_the_omitted_but_renders_the_specified() {
     let never = gpu
         .rig
         .world
-        .non_send::<Emo2Wiring>()
+        .non_send::<RuntimeWiring>()
         .presenter()
         .last_shown(shell_target(1))
         .is_none();
@@ -418,7 +418,7 @@ fn before_attachment_answers_after_the_frames_run() {
     let attached = gpu
         .rig
         .world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| w.attached());
     let pending = gpu.dump_surface(None, Some(i64::from(OTHER)));
     let at_once = pending.try_answer().ok().flatten().map(|a| a.outcome);

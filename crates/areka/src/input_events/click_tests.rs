@@ -5,7 +5,7 @@ use super::{
     LeftDrag, NotClickReason, PressNote, ReleaseVerdict, judge_release, note_press,
     on_char_pointer_released,
 };
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{ClickButton, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
 use bevy_ecs::prelude::*;

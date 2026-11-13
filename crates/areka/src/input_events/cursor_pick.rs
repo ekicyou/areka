@@ -5,7 +5,7 @@
 
 use wintf::ecs::cursor::CursorTrigger;
 
-use crate::emo2_boot::shell_cursor_table::{
+use crate::runtime::shell_cursor_table::{
     CursorRows, CursorScene, GhostCursorKeys, Shape, SystemCursor,
 };
 

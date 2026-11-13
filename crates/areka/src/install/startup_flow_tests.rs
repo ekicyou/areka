@@ -291,9 +291,9 @@ fn carried(
 /// （要件 3.2・3.4・9.12・10.6）。
 #[test]
 fn carried_installs_reach_the_desk_receivers_and_the_desk_replaces_them() {
-    use crate::emo2_boot::ghost_switch::LastInstalledGhost;
-    use crate::emo2_boot::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
     use crate::install::names::LastInstallNames;
+    use crate::runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
+    use crate::session::ghost_switch::LastInstalledGhost;
     use areka_nar::InstallKind;
 
     let mut world = World::new();

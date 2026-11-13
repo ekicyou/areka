@@ -12,8 +12,8 @@ use areka_parsers::sakura::parse_noted;
 use areka_seriko::{SkinFacts, SkinLookup, SurfaceResolver, SurfaceTarget};
 
 use super::*;
-use crate::emo2_boot::consumer_ledger::ConsumerLedger;
 use crate::mcp::check_script_judge::diagnose;
+use crate::runtime::consumer_ledger::ConsumerLedger;
 
 /// 手で組んだ事実。スコープ 0 の絵は 0・3・10、スコープ 1 は 10・11、別名 `笑顔` は 3。
 /// バルーンはスコープ 0 が 0・2、スコープ 1 が 1。スコープ 2 には何も無い。
@@ -97,9 +97,9 @@ fn snapshot_without_a_scope_does_not_judge_it() {
 
 use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
 
-use crate::emo2_boot::spine::Progress;
 use crate::mcp::dump_surface::WaitAnswer;
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
+use crate::runtime::spine::Progress;
 
 /// 窓の無いゴーストの答え（surface とバルーンを診ないと添える）。
 fn no_window_answer(count: usize) -> areka_mcp::ToolOutcome {
@@ -189,9 +189,9 @@ fn omitted_or_matching_name_answers_with_the_running_ghost() {
 
 // ---- 何もさせない（5.4・要件 2.4・5.2・偽の SHIORI で起こした本物の単位） ----
 
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::ghost_session::GhostSlot;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// kanade に今の実行の状態を問い、台詞の再生中かを答える。問いは受信の順に処理されるので、先に送られた
 /// 依頼が済むまで待つ口にもなる（状態の問い合わせは SHIORI を呼ばない・呼出の記録からも除かれる）。
@@ -243,7 +243,7 @@ fn real_unit_answers_two_scripts_without_running_them() {
     rig.boot("A");
     // 窓を作らない土台では装着が起きず、預けた答えが届かない。表示の結線を外して窓の無いゴーストとして
     // 答えさせる（`shell_balloon_switch_tests.rs` と同じ外し方・判断の事実は 4.2 のテストが固定する）。
-    let unwired = rig.world.remove_non_send::<Emo2Wiring>().is_some();
+    let unwired = rig.world.remove_non_send::<RuntimeWiring>().is_some();
     let (tx, rx) = mpsc::channel();
     crate::mcp::install(&mut rig.world, rx);
     let steady = rig.wait_steady();
