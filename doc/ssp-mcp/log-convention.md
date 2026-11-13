@@ -25,8 +25,9 @@ areka は、ログ（`tracing` のマクロで出す行）のうち意味のあ�
 1. レベルが debug・trace の出来事は残さない（取り決めの target でも残さない）。
 2. target が `areka::log::script` なら `script`（warn や error で出しても `error` には入らない）。
 3. target が `areka::log::error`、またはレベルが warn 以上なら `error`。
-4. レベルが info なら、下の規則の表の target を上から照合し、最初に当たった行の種別。
-5. どれにも当たらなければ残さない（通し番号も進まない）。
+4. レベルが info で、target が `areka::install::install_cue`（完全一致・実装の `UNKEPT_TARGETS`）なら残さない。
+5. レベルが info なら、下の規則の表の target を上から照合し、最初に当たった行の種別。
+6. どれにも当たらなければ残さない（通し番号も進まない）。
 
 target の照合は 2 通りある。
 
@@ -132,6 +133,7 @@ tracing::warn!(
 
 - debug・trace の出来事（取り決めの target でも）。
 - 規則の表のどの target にも当たらない info の出来事（例: `areka::alert` の問いかけの行、`areka::runtime` の info）。
+- `areka::install::install_cue` の info の出来事（規則の表の `areka::install` には当てない）。
 - `tracing` も `log` クレートも通らない出力（`println!`・`eprintln!`・パニックの報告）。
 - `log` クレートで出した info 以下の行。`log` クレートの warn 以上は `error` に残る（target は `log` として届くが、warn 以上はどの target でも `error` なので変わらない）。
 - スパン（`tracing::span!`）。履歴に残るのは出来事だけ。

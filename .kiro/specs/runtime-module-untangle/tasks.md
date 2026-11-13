@@ -126,7 +126,7 @@
   - 完了の形: `log_history_tests` が緑で、移した出所の行が前と同じ種類と扱いで分かれる
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 7.2 出所を名前で読むほかの所を新しい名前へ直す
+- [x] 7.2 出所を名前で読むほかの所を新しい名前へ直す
   - `stay_on_top_real_run.rs` の `RUST_LOG` 6 つ・`tools/load-flake.ps1` の例・出所を照合するテスト（`areka::runtime::…`・`areka::session::reload`）・`doc/ssp-mcp/log-convention.md` を直す
   - `log-convention.md` は出所に加えて、2.3 で改めたログの文言とイベントの値もここで直す
   - 語彙として付けた直書きの出所（`areka::persist::*` ほか）は変えない
