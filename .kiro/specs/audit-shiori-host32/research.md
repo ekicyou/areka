@@ -531,3 +531,25 @@
 - 入口の行は DLL を読んで入口を解いた後にしか出ないので、どの走りでも読む段は通っている。
 - `areka-ghost` の 2 本の赤は、hello-pasta の `pasta.dll`（3,832,832 B）を emo2 の辞書の中へ差し込む組み合わせのせい。emo2 の検体の `pasta.dll`（3,681,280 B）は別物で、それなら新しいコードで緑になり、旧の `LoadLibraryW` でも hello-pasta なら同じ赤になる。この直しとは関係がない。
 - 結論: 読めないゴーストは見つからなかった。要件 7.5 の議題は要らない。
+
+### 14.13 応答のヘッダの値の空白と重なり（タスク 9.2・R5・指摘 22・23・要件 10.8）
+
+- 開発者の答え（2026-11-13・進行役が伝えた）: 「SSPで何か調べるならどうぞ。今起動しているSSPは終了しておきました。」＝SSP で測ってよい。
+- ukadoc: ukadoc の MCP が応答せず（検索の呼び出しが 2 回とも失敗）、値の前後の空白と同じ名前のヘッダの扱いが ukadoc で決まっているかは確かめられなかった。
+- 測り方: 測るだけのゴースト `arekaR5probe` を作り（`target\test-roots\shiori-host32-r5probe\arekaR5probe`・SHIORI は SSP の `emily4` の `yaya.dll` の写し・辞書 `probe.dic` の `request` が応答を丸ごと返す・シェルは 64×64 の単色 2 枚）、排他のテストの机を取って `C:\wintools\ssp\ghost\arekaR5probe` へ写した。`C:\wintools\ssp\ssp.exe` を起こし、起動したゴースト（窓際のぱすたさんDEBUG）から `\![call,ghost,arekaR5probe]` で呼び、SSP の MCP の `raise_event` で 5 つのイベントを送った。SSP の答えの台本と `get_log`（script・#27〜#31）は同じ。終わった後、両方のゴーストを `\-` で閉じて SSP を正常に終わらせ、写したゴーストを消した（SSP の `data\profile` に残った名前には触っていない）。
+- 測った値:
+
+| イベント | ゴーストが返した行 | SSP が採った台本 | 読み |
+|---|---|---|---|
+| `OnR5FullWidth` | `Value: 　fw　`（前後が全角の空白） | `　fw　` | 全角の空白は削らない |
+| `OnR5HalfWidth` | `Value:`・タブ・半角の空白・`hw`・半角の空白・タブ | `hw`・半角の空白・タブ | 頭の半角の空白とタブだけ削る |
+| `OnR5DupValue` | `Value: first`・`Value: second` | `second` | 後勝ち |
+| `OnR5DupCharsetUtf8First` | `Charset: UTF-8`・`Charset: Shift_JIS`・`Value: こんにちは`（本文は UTF-8） | `縺薙ｓ縺ｫ縺｡縺ｯ`（Shift_JIS で読んで化けた） | 後勝ち |
+| `OnR5DupCharsetSjisFirst` | 上の 2 行の順を入れ替えたもの | `こんにちは`（UTF-8 で読んだ） | 後勝ち |
+
+- 後ろの半角の空白とタブが残ることは、SSP の MCP の答えと `get_log` の表示で読んだ。バイトでは確かめていない（このゴーストには `ssp_shiori_log.txt` が作られなかった）。
+- 直し（`crates/shiori-host32-host/src/shiori3.rs`・削るのは半角の空白とタブだけ＝`HEADER_BLANKS`）: 設計の「SSP で測れて結果が違えば SSP に合わせる」に従い、既定（前後を削る・先勝ち）から次の形にした。
+  - 測った値に合わせる: 値の見出し（3.0 の `Value`・2.x の `Sentence`／`String`）の値と `Charset` の値は頭だけ削る。後ろの空白と全角の空白は残す。`Charset` の値の後ろの空白は `encoding_rs` のラベルの読みが落とすので、残しても文字コードは解決できる（テストで確かめた）。
+  - 測っていない点は今の要件の書きぶりを保つ: ヘッダ名と `ErrorLevel`・`ErrorDescription`・`SecurityLevel` の値は前後を削る。`SecurityLevel` は areka-P0-script-security-level 要件 3.5 が「前後の空白を落とした生の値」と書いており、これを縛る既存のテスト（`request_headers_tests.rs::response_security_level_is_the_trimmed_raw_value_case_insensitive`・`shiori3_charset_tests.rs::charset_header_name_matches_case_insensitively_and_tolerates_spacing`・`areka-ghost` の `shiori_inproc_headers_tests.rs::map_get_outcome_carries_the_raw_level`）を変えずに緑のまま保つため（開発者側の進行役の裁定・案 B）。
+  - 重なり: 同じ名前のヘッダはすべて後勝ち（`Value`・2.x の値の見出し・`Charset`・`ErrorLevel`・`ErrorDescription`・`SecurityLevel`）。測ったのは `Value` と `Charset` だけで、ほかは同じ決まりにそろえた。
+- テスト（新しい決まりで書き、直す前に 3 本とも赤を確かめた）: `shiori3_tests.rs::a_value_keeps_full_width_spaces`（頭のタブと空白・後ろの空白とタブ・全角の空白・後ろに空白の残る `Charset` の値が UTF-8 に解決される）・`the_last_of_duplicated_headers_wins`（5 つの見出しが 2 つずつで、どれも後ろ）、`shiori2_tests.rs::a_sentence_keeps_full_width_spaces_and_the_last_wins`。tasks.md の名前 `the_first_of_duplicated_headers_wins` は、測りで決まりが変わったので `the_last_…` にした。

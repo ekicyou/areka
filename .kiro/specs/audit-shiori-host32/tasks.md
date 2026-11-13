@@ -132,7 +132,7 @@
   - _Boundary: host client, shiori3, shiori2_
   - _Depends: 1.2_
   - _Requirements: 3.1, 4.1, 4.5, 5.2_
-- [ ] 9.2 応答のヘッダの値の空白と重なりの決まりを直す（指摘 22・23）
+- [x] 9.2 応答のヘッダの値の空白と重なりの決まりを直す（指摘 22・23）
   - 始めに R5: 進行役が、このタスクを実装係に渡す前に開発者へ SSP で測ってよいかを尋ね、答えを依頼の文に載せて渡す（実装係は開発者に尋ねられない）。承認があれば SSP の MCP と `ssp_shiori_log.txt` で測る。承認が無い・測れないときは「測れなかった」と `research.md` に書き、既定（半角の空白とタブだけ削る・先勝ち）で直す
   - 値・ヘッダ名・`Charset` の値の前後の削り方をそろえ、同じ名前のヘッダを全部先勝ちにする
   - テスト `a_value_keeps_full_width_spaces`・`the_first_of_duplicated_headers_wins` と、2.x の `Sentence` の 1 本を置く
@@ -206,3 +206,4 @@
 - 7.4（範囲外・/kiro-complete の棚卸へ）: 窓 2 組のテストが緑で「窓 1 組の制約」は無いと分かった。areka-kanade の tests/kanade/common/common_window_actor.rs の WINDOW_CREATE_SERIAL（同時に作ると 2 つ目が失敗する前提）が今も要るかは確かめていない（注にその旨を書いた）。
 - 7.4: 机で、emo2 自身の pasta.dll・PASTA_DEBUG=1・既定の並列で areka-ghost を回し、錠なしで実物の pasta のテスト 3 本が並んで緑（lib 234・ghost 39・real_pasta_online 8）。
 - 10.3（14 の再監査へ）: LOAD の腕の DLL 呼び出しの最中に別の LOAD が届くと、proxy が None のため ShioriByteProxy::load がもう一度呼ばれ（入れ子）、内側の InDllCall の Drop が外側の印を下ろす。設計の状態図は REQUEST と UNLOAD だけを扱い、testdll では LOAD の再入を起こせないので縛れていない。
+- 9.2: R5 を SSP で測り、値・Charset の重なりは後勝ち、値の見出しと Charset の値は頭の半角の空白とタブだけ削ると分かったので SSP に合わせた（案 B・測っていないヘッダ名と ErrorLevel・ErrorDescription・SecurityLevel は前後を削るまま）。テスト名は the_last_of_duplicated_headers_wins・a_sentence_keeps_full_width_spaces_and_the_last_wins に変えた（研究 §14.13）。範囲外: areka-parsers/src/charset/prescan.rs:6 の「scan_charset_header と同じ読み」は重なりの扱い（prescan は先勝ち）が違うので /kiro-complete の棚卸へ。

@@ -190,6 +190,40 @@ fn parse_charset_header_found_at_non_first_position() {
     assert_eq!(parsed.charset_header.as_deref(), Some("EUC-JP"));
 }
 
+/// SSP に合わせ（research.md §14.13）、値は頭の半角の空白とタブだけを削る。
+/// 後ろの半角の空白とタブ、全角の空白（U+3000）は残す（指摘 22・要件 10.8）。
+/// 後ろに空白の残る `Charset` の値も文字コードとして解決される（継承の Shift_JIS でなく UTF-8 で読む）。
+#[test]
+fn a_value_keeps_full_width_spaces() {
+    let resp = "SHIORI/3.0 200 OK\r\n\tCharset: \tUTF-8 \t\r\n Value: \t\u{3000}こんにちは\u{3000} \t\r\n\r\n";
+    let parsed = parse_response(
+        resp.as_bytes(),
+        CharsetPolicy::Negotiate(Charset::SHIFT_JIS),
+    )
+    .expect("well-formed");
+    assert_eq!(
+        parsed.value.as_deref(),
+        Some("\u{3000}こんにちは\u{3000} \t")
+    );
+    assert_eq!(parsed.charset_header.as_deref(), Some("UTF-8 \t"));
+    assert!(!parsed.decode_had_errors);
+}
+
+/// 同じ名前のヘッダが 2 つあれば、どれも後ろのものを採る（SSP に合わせた・指摘 23・要件 10.8）。
+#[test]
+fn the_last_of_duplicated_headers_wins() {
+    let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: first\r\nErrorLevel: warning\r\n\
+                ErrorDescription: d1\r\nSecurityLevel: local\r\nCharset: Shift_JIS\r\nValue: second\r\n\
+                ErrorLevel: error\r\nErrorDescription: d2\r\nSecurityLevel: external\r\n\r\n";
+    let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+        .expect("well-formed");
+    assert_eq!(parsed.value.as_deref(), Some("second"));
+    assert_eq!(parsed.charset_header.as_deref(), Some("Shift_JIS"));
+    assert_eq!(parsed.error_level.as_deref(), Some("error"));
+    assert_eq!(parsed.error_description.as_deref(), Some("d2"));
+    assert_eq!(parsed.security_level.as_deref(), Some("external"));
+}
+
 // 復号の 4 経路（解決できるヘッダ／省略時の継承／解決不能ラベル／強制時の無視）は、
 // 兄弟ファイル `shiori3_charset_tests.rs` が 3〜4 系統の定数バイト列で固定する
 // （タスク 2.3・要件 9.2/9.3）。ASCII と Shift_JIS だけの固定物より強い被覆なので、

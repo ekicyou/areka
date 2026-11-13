@@ -205,32 +205,44 @@ pub struct ParsedResponse {
     pub security_level: Option<String>,
 }
 
+/// ヘッダの名前と値で削るのは半角の空白とタブだけ（全角の空白は残す・指摘 22）。
+/// SSP で測った値（値の見出しと `Charset` の値）は頭だけ削り、測っていない名前と
+/// `ErrorLevel`・`ErrorDescription`・`SecurityLevel` の値は前後を削る（research.md §14.13）。
+const HEADER_BLANKS: [char; 2] = [' ', '\t'];
+
 /// 復号より先に、応答の `Charset` ヘッダの生の値をバイト列から走査する（要件 4.1）。
 ///
 /// 行を LF で切り、行末の CR を落とし、`:` の手前をヘッダ名として ASCII 一致で比べる。
-/// **位置は問わない**（正典は「望ましい」位置を示すのみ）。最初に一致した行の値を
-/// 前後空白を落として返し、`Charset` 行が無ければ `None`。
+/// **位置は問わない**（正典は「望ましい」位置を示すのみ）。最後に一致した行の値
+/// （SSP に合わせた後勝ち・指摘 23）を、頭の半角の空白とタブを落として返し、
+/// `Charset` 行が無ければ `None`。後ろの空白は `Charset::for_label`（WHATWG の
+/// ラベルの読み）が落とすので、残しても文字コードは解決できる。
 ///
 /// 復号前ゆえバイト列のまま走るが、ASCII 走査で足りる: 対応集合（`Charset`）には UTF-16 系が
 /// 入らないためヘッダ名の並ぶ領域は常に ASCII 互換である（ISO-2022-JP も ASCII 状態から
 /// 始まる・design.md §走査が ASCII で成り立つ根拠）。非 ASCII を含む値は
 /// `from_utf8_lossy` で文字列化され、`Charset::for_label` が解決できないラベルとして退ける。
 fn scan_charset_header(bytes: &[u8]) -> Option<String> {
+    let mut found = None;
     for line in bytes.split(|&b| b == b'\n') {
         let line = line.strip_suffix(b"\r").unwrap_or(line);
         let Some(colon) = line.iter().position(|&b| b == b':') else {
             continue;
         };
-        if line[..colon].trim_ascii().eq_ignore_ascii_case(b"charset") {
+        let name = String::from_utf8_lossy(&line[..colon]);
+        if name
+            .trim_matches(HEADER_BLANKS)
+            .eq_ignore_ascii_case("charset")
+        {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Charset:2
-            return Some(
+            found = Some(
                 String::from_utf8_lossy(&line[colon + 1..])
-                    .trim()
+                    .trim_start_matches(HEADER_BLANKS)
                     .to_owned(),
             );
         }
     }
-    None
+    found
 }
 
 /// response バイト列を解析する（CRLF/LF 受理・寛容・要件 2.x）。
@@ -262,8 +274,9 @@ fn scan_charset_header(bytes: &[u8]) -> Option<String> {
 /// - 行区切りは CR+LF を第一に、bare LF にも頑健（donor `parse_value` と同じ二段 split）。
 /// - status 行（先頭行）: `SHIORI/3.0 <code> <reason>`。`<code>` を `u16` として抽出。
 ///   数値コードが取れなければ malformed（要件 malformed・fail fast）。
-/// - ヘッダ行: `名前: 値`。名前・値は前後空白をトリム。ヘッダ名の一致は
-///   大文字小文字を無視（donor 準拠の堅牢性）。
+/// - ヘッダ行: `名前: 値`。名前は前後の半角の空白とタブを削る。値の見出しの値は頭の半角の
+///   空白とタブだけを削り（後ろと全角の空白は残す）、ほかの値は前後を削る。ヘッダ名の一致は
+///   大文字小文字を無視（donor 準拠の堅牢性）。同じ名前のヘッダは後勝ち（research.md §14.13）。
 /// - `Value` → `value`（要件 2.1）。`ErrorLevel`/`ErrorDescription` → 各 `Option`（要件 2.5）。
 ///   `SecurityLevel` → `security_level`（生の値・areka-P0-script-security-level 要件 3.5）。
 /// - 未知ヘッダ（`Reference0`/`Marker`/任意）は無視し parse を失敗させない（要件 2.8）。
@@ -315,21 +328,20 @@ pub(crate) fn parse_response_with(
         let Some((name, val)) = line.split_once(':') else {
             continue;
         };
-        let name = name.trim();
-        let val = val.trim();
+        let name = name.trim_matches(HEADER_BLANKS);
         // ヘッダ名一致は大文字小文字無視（堅牢性）。既知ヘッダ以外は無視（要件 2.8）。
         if name.eq_ignore_ascii_case(value_header) {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Value:1
-            value = Some(val.to_string());
+            value = Some(val.trim_start_matches(HEADER_BLANKS).to_string());
         } else if name.eq_ignore_ascii_case("ErrorLevel") {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ErrorLevel_20_5bSSP_62e1_5f35_5d:1
-            error_level = Some(val.to_string());
+            error_level = Some(val.trim_matches(HEADER_BLANKS).to_string());
         } else if name.eq_ignore_ascii_case("ErrorDescription") {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ErrorDescription_20_5bSSP_62e1_5f35_5d:1
-            error_description = Some(val.to_string());
+            error_description = Some(val.trim_matches(HEADER_BLANKS).to_string());
         } else if name.eq_ignore_ascii_case("SecurityLevel") {
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#SecurityLevel_20_5bSSP_62e1_5f35_5d:1
-            security_level = Some(val.to_string());
+            security_level = Some(val.trim_matches(HEADER_BLANKS).to_string());
         }
         // Reference0 / Marker / 未知ヘッダ等は読み飛ばす（要件 2.8）。`Charset` は復号前に
         // `scan_charset_header` が拾い終えているので、ここでは腕を持たない（要件 4.1）。
