@@ -161,10 +161,8 @@ impl ExitKind {
 
 /// spawn 済み helper プロセスへの参照（要件 1.1）。
 ///
-/// 起動した子プロセスの [`Child`] を保持し、[`poll_exit`] /
-/// [`poll_exit_kind`] による非ブロッキング生存監視の対象となる。
-/// `helper_hwnd` は HELLO ハンドシェイク受領後に確定する（本ユニット内で
-/// 結線・本タスクでは未使用）。
+/// 起動した子プロセスの [`Child`] を保持し、[`poll_exit_kind`] による非ブロッキング生存監視の
+/// 対象となる。
 ///
 /// **孤児化防止**: spawn 時に helper を `KILL_ON_JOB_CLOSE` 付き Job Object へ割り当て、
 /// その job ハンドルを `_job` として保持する（[`crate::job`]）。本ハンドルを保持する
@@ -174,8 +172,6 @@ impl ExitKind {
 #[derive(Debug)]
 pub struct HelperHandle {
     child: Child,
-    /// HELLO 受領後に確定する helper のウィンドウハンドル（u32 ワイヤ値）。
-    helper_hwnd: Option<u32>,
     /// KILL_ON_JOB_CLOSE 付き Job Object の RAII ハンドル（孤児化防止）。`Drop` で
     /// `CloseHandle`→job クローズ→helper kill。割り当て失敗時は `None`（縮退）。
     _job: Option<std::os::windows::io::OwnedHandle>,
@@ -190,21 +186,6 @@ impl HelperHandle {
     #[must_use]
     pub fn pid(&self) -> u32 {
         self.child.id()
-    }
-
-    /// HELLO 受領後に確定した helper HWND（u32 ワイヤ値）を返す。
-    ///
-    /// 未確定（ハンドシェイク未完了）なら `None`。
-    #[must_use]
-    pub fn helper_hwnd(&self) -> Option<u32> {
-        self.helper_hwnd
-    }
-
-    /// HELLO 受領時に helper HWND（u32 ワイヤ値）を記録する。
-    ///
-    /// ハンドシェイクを担う別タスク（4.2）が受領時に呼ぶ結線点。
-    pub fn set_helper_hwnd(&mut self, hwnd: u32) {
-        self.helper_hwnd = Some(hwnd);
     }
 
     /// helper を強制終了する（検証用 additive・統合 5.2 の観測点）。
@@ -424,7 +405,6 @@ pub(crate) fn spawn_command_with(
     });
     Ok(HelperHandle {
         child,
-        helper_hwnd: None,
         _job: job,
         stderr_reader,
     })
@@ -482,30 +462,6 @@ fn decode_ansi(bytes: &[u8]) -> String {
 /// 本番の行の渡し先: helper の 1 行を文を変えずに `warn` で書く（Display＝逃がしの字を入れない）。
 fn log_helper_line(pid: u32, line: &str) {
     tracing::warn!(target: LOG_TARGET, event = "helper_stderr", pid, "{line}");
-}
-
-/// helper の生死を非ブロッキングで問い合わせる（要件 1.2）。
-///
-/// 稼働中なら `None`、終了済みなら `Some(exit_code)`（終了コードを持たない
-/// 終了は `Some(-1)` 相当ではなく、種別の詳細が要るなら [`poll_exit_kind`] を
-/// 使う）。`try_wait` ベースゆえ呼び出し側スレッドをブロックしない。
-///
-/// 終了コードを持たない終了（[`ExitKind::Terminated`]）では `None` ではなく
-/// 「終了はしているがコード不明」を区別できないため、終了の有無だけを見るなら
-/// このシグネチャで、分類が要るなら [`poll_exit_kind`] を使うこと。
-///
-/// # Panics / Errors
-/// `try_wait` の I/O 失敗時は稼働中扱い（`None`）として握り、無限待機を
-/// 招かないようにする（生存監視は打ち切り可能・要件 1.2 の非ブロッキング
-/// 意図を優先）。
-#[must_use]
-pub fn poll_exit(handle: &mut HelperHandle) -> Option<i32> {
-    match handle.child.try_wait() {
-        Ok(Some(status)) => status.code(),
-        Ok(None) => None,
-        // try_wait の I/O エラーは稼働中扱い（非ブロッキング・無限待機回避）。
-        Err(_) => None,
-    }
 }
 
 /// helper の終了を非ブロッキングで問い合わせ、終了種別を分類する（要件 1.2〜1.4）。

@@ -60,7 +60,6 @@ fn dropping_a_handle_without_job_ends_the_child() {
         .expect("取っ手を複製できる");
     drop(HelperHandle {
         child,
-        helper_hwnd: None,
         _job: None,
         stderr_reader: None,
     });
@@ -104,30 +103,6 @@ fn spawn_command_then_poll_classifies_abnormal() {
     // stand-in を spawn → 終了後に Abnormal(5) 分類（要件 1.4）。
     let mut handle = spawn_command(cmd_exit(5)).expect("stand-in を spawn できる");
     assert_eq!(wait_kind(&mut handle), ExitKind::Abnormal(5));
-}
-
-#[test]
-fn poll_exit_is_nonblocking_and_reports_code() {
-    // poll がブロックしないこと（要件 1.2）を上限時間で担保しつつ、
-    // 終了後は exit code を返す。
-    let mut handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
-    // 少なくとも 1 回の poll は即座に返る（稼働中なら None・終了済みなら Some）。
-    let start = Instant::now();
-    let _first = poll_exit(&mut handle);
-    assert!(
-        start.elapsed() < Duration::from_secs(1),
-        "poll_exit は非ブロッキングで即座に返る"
-    );
-    // 終了まで bounded に待って code を確認。
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let code = loop {
-        if let Some(code) = poll_exit(&mut handle) {
-            break code;
-        }
-        assert!(Instant::now() < deadline, "終了待ちが上限を超えた");
-        std::thread::sleep(Duration::from_millis(5));
-    };
-    assert_eq!(code, 0);
 }
 
 // --- spawn の起動パラメーター契約（arg1..3・env 3 種・cwd＝design §SpawnContract）---

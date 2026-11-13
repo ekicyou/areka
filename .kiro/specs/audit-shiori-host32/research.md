@@ -553,3 +553,8 @@
   - 測っていない点は今の要件の書きぶりを保つ: ヘッダ名と `ErrorLevel`・`ErrorDescription`・`SecurityLevel` の値は前後を削る。`SecurityLevel` は areka-P0-script-security-level 要件 3.5 が「前後の空白を落とした生の値」と書いており、これを縛る既存のテスト（`request_headers_tests.rs::response_security_level_is_the_trimmed_raw_value_case_insensitive`・`shiori3_charset_tests.rs::charset_header_name_matches_case_insensitively_and_tolerates_spacing`・`areka-ghost` の `shiori_inproc_headers_tests.rs::map_get_outcome_carries_the_raw_level`）を変えずに緑のまま保つため（開発者側の進行役の裁定・案 B）。
   - 重なり: 同じ名前のヘッダはすべて後勝ち（`Value`・2.x の値の見出し・`Charset`・`ErrorLevel`・`ErrorDescription`・`SecurityLevel`）。測ったのは `Value` と `Charset` だけで、ほかは同じ決まりにそろえた。
 - テスト（新しい決まりで書き、直す前に 3 本とも赤を確かめた）: `shiori3_tests.rs::a_value_keeps_full_width_spaces`（頭のタブと空白・後ろの空白とタブ・全角の空白・後ろに空白の残る `Charset` の値が UTF-8 に解決される）・`the_last_of_duplicated_headers_wins`（5 つの見出しが 2 つずつで、どれも後ろ）、`shiori2_tests.rs::a_sentence_keeps_full_width_spaces_and_the_last_wins`。tasks.md の名前 `the_first_of_duplicated_headers_wins` は、測りで決まりが変わったので `the_last_…` にした。
+
+### 14.14 `EXIT_POLL_INTERVAL` を消すことの知らせ（タスク 12・指摘 26・要件 10.9）
+
+- 2026-11-13、進め役が確かめた: `runtime-module-untangle` は完了して `.kiro/specs/completed/runtime-module-untangle` に退避済みで、`main` に `343ec0350`（PR #447）として着地し、このブランチにも取り込み済み。そのセッションは動いていない（同日、走っている下請けの一覧で確かめた）。
+- 結論: 知らせる相手なし・異議なしとして消す。`EXIT_POLL_INTERVAL` は 14.3 の一覧の項目と一緒にタスク 12 で消した（消す前にツリー全体を grep し直し、`crates/shiori-host32-host` の外の使い手は 0。`crates/pilot/examples/shiori-host-32/` の同名の項目は pilot 自身の写しで、設計どおり響かない）。

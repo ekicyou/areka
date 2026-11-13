@@ -18,8 +18,7 @@
 //! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
 //!   parse → `RequestError` 統合を結線する。
 //! - [`error`] — 構造化エラー型（`thiserror`）。
-//! - [`lifecycle`] — helper のライフサイクル管理（`HelperLifecycle` による正常終了要求 /
-//!   `classify_failure` による統一終了分類 / `LifecycleReport` によるレポート /
+//! - [`lifecycle`] — helper のライフサイクル管理（`HelperLifecycle` による生存の観測と正常終了要求 /
 //!   `ShutdownError` shutdown 失敗語彙）。クレート直下に公開 re-export。
 
 // 単体テストが `#[path]` で引く結合テストの道具（`tests/common`）は自分を `shiori_host32_host` と呼ぶ。
@@ -46,12 +45,10 @@ mod terminator;
 pub use charset::{Charset, CharsetNegotiator, CharsetPolicy, LabelError};
 pub use client::{Shiori3Client, map_get_reply};
 pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
-pub use lifecycle::{
-    FailureClass, HelperLifecycle, HelperStatus, LifecycleReport, ShutdownError, classify_failure,
-};
+pub use lifecycle::{HelperLifecycle, HelperStatus, ShutdownError};
 pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
 pub use process_host::{
-    ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
+    ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit_kind, spawn,
 };
 pub use request_headers::{RequestHeaders, ValueReply, request_of};
 pub use shiori2::{ShioriVersion, VersionVerdict};

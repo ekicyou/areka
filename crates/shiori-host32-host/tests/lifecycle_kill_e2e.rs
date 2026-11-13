@@ -1,4 +1,4 @@
-//! 強制 kill 注入 → 異常検出 → 有限復帰 → 統一報告分類 → 冪等二重 kill の end-to-end テスト
+//! 強制 kill 注入 → 異常検出 → 有限復帰 → 冪等二重 kill の end-to-end テスト
 //! （task 5.3・design.md Testing Strategy #9「lifecycle_kill_e2e.rs::kill_injection_detection_and_reporting」）。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
@@ -6,15 +6,14 @@
 //! **強制終了（`TerminateProcess` 相当）を注入**し、以下を **1 つの `#[test]` 関数**で実証する:
 //! - ① kill 後、bounded ポーリングで **異常な終了種別**（helper プロセス由来の非正常終了・R4.1）が検出される。
 //! - ② その後の request が **無限待ちにならず**、有限時間内に **観測可能なエラー**として返る（R4.2）。
-//! - ③ そのエラーから **統一報告が死活起因（`HelperDown`）として分類**される（R2.1/2.5・死優先）。
-//! - ④ **二重の強制終了要求が冪等に成功**として扱われる（R5.2）。
-//! - ⑤（design #9 bonus）異常後の後始末の決定性: 既終了への `request_clean_shutdown` は
+//! - ③ **二重の強制終了要求が冪等に成功**として扱われる（R5.2）。
+//! - ④（design #9 bonus）異常後の後始末の決定性: 既終了への `request_clean_shutdown` は
 //!   UNLOAD を送出せず観測済み非 Clean kind へ短絡する（R5.3）。
 //!
 //! 検証フロー（design.md System Flows「強制 kill 注入と統一報告」）:
 //! ```text
 //! status()==Running → terminate()（kill 注入）→ bounded poll status()→Exited(Abnormal|Terminated)
-//! → get(dummy)→Err(Ipc|Timeout)（SMTO 有限復帰）→ report_failure(err)→HelperDown(kind)
+//! → get(dummy)→Err(Ipc|Timeout)（SMTO 有限復帰）
 //! → 二重 terminate()→Ok（冪等）→ request_clean_shutdown→Ok(非 Clean kind)（短絡）
 //! ```
 //!
@@ -42,8 +41,8 @@ use std::time::{Duration, Instant};
 
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{
-    Charset, CharsetNegotiator, ExitKind, FailureClass, HelperLifecycle, HelperStatus,
-    ParentMessageWindow, RequestError, Shiori3Client, spawn,
+    Charset, CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow,
+    RequestError, Shiori3Client, spawn,
 };
 use shiori_host32_ipc::MsgTag;
 
@@ -69,14 +68,14 @@ const BOUNDED_LIMIT: Duration = Duration::from_secs(10);
 const EXIT_OBSERVE_LIMIT: Duration = Duration::from_secs(10);
 
 /// bounded poll の刻み（実時間 sleep はこれのみ・R7.5）。
-const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(5);
+const POLL_INTERVAL: Duration = Duration::from_millis(5);
 
-/// 強制 kill 注入 → 異常検出 → 有限復帰 → 統一報告分類 → 冪等二重 kill の E2E
+/// 強制 kill 注入 → 異常検出 → 有限復帰 → 冪等二重 kill の E2E
 /// （task 5.3・design.md Testing Strategy #9・System Flows「強制 kill 注入と統一報告」・
-/// R4.1/4.2/4.3, R2.1/2.5, R5.2/5.3）。
+/// R4.1/4.2/4.3, R5.2/5.3）。
 ///
 /// PRIMARY 構造: 単一の親窓＋helper を用い、ベースライン往復成功を確認したうえで強制終了を注入し、
-/// 異常検出・有限復帰・統一報告分類・冪等二重終了要求のすべてを **1 つの `#[test]`** で実証する。
+/// 異常検出・有限復帰・冪等二重終了要求のすべてを **1 つの `#[test]`** で実証する。
 /// `HelperLifecycle` は handle を単独所有し、panic 経路では中の `HelperHandle` の Drop が
 /// helper を終わらせて待つ（親窓は使用後に明示 drop）。
 ///
@@ -165,7 +164,7 @@ fn kill_injection_detection_and_reporting() {
             Instant::now() < deadline,
             "kill 注入後、上限時間内に helper の終了を観測できなかった（R4.1）"
         );
-        std::thread::sleep(EXIT_POLL_INTERVAL);
+        std::thread::sleep(POLL_INTERVAL);
     };
     // Windows std の Child::kill は TerminateProcess(_, 1) → 通常 Abnormal(1)。
     // Terminated（code 取得不能）も強制終了経路として受容する。いずれにせよ Clean ではない（R4.1）。
@@ -198,22 +197,7 @@ fn kill_injection_detection_and_reporting() {
     );
     eprintln!("kill 後 GET の観測エラー（R4.2）: {err:?}（経過 {elapsed:?}）");
 
-    // --- ⑦ 統一報告分類（R2.1/2.5）: 死活起因（HelperDown・非 Clean）として分類される ---
-    //     表面の err が Ipc/Timeout でも、観測された終了が死優先で HelperDown へ写る（death precedence）。
-    let report = lifecycle.report_failure(err);
-    assert!(
-        matches!(report.class, FailureClass::HelperDown(k) if k != ExitKind::Clean),
-        "統一報告は死活起因（HelperDown・非 Clean）として分類される（R2.1/2.5・死優先）: got {:?}",
-        report.class
-    );
-    // 原本 error は単一不透明へ潰さず報告に保持される（R2.4）。
-    assert!(
-        matches!(report.error, RequestError::Ipc(_) | RequestError::Timeout),
-        "report は原本 RequestError（Ipc|Timeout）を保持する（R2.4）: got {:?}",
-        report.error
-    );
-
-    // --- ⑧ 冪等二重 kill（R5.2）: 既終了プロセスへの二重の強制終了要求は両方 Ok ---
+    // --- ⑦ 冪等二重 kill（R5.2）: 既終了プロセスへの二重の強制終了要求は両方 Ok ---
     assert!(
         lifecycle.terminate().is_ok(),
         "既終了 helper への 2 回目の terminate は Ok（冪等・R5.2）"
@@ -223,7 +207,7 @@ fn kill_injection_detection_and_reporting() {
         "既終了 helper への 3 回目の terminate も Ok（冪等・R5.2）"
     );
 
-    // --- ⑨（design #9 bonus・R5.3）異常後後始末の決定性: 既終了への request_clean_shutdown は
+    // --- ⑧（design #9 bonus・R5.3）異常後後始末の決定性: 既終了への request_clean_shutdown は
     //     UNLOAD を送出せず観測済み非 Clean kind へ短絡する（既終了への終了要求を失敗させない）---
     drop(client); // `&parent` 借用を解放してから shutdown 経路へ進む（借用終端の明示）。
     let kind2 = lifecycle
