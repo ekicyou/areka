@@ -7,27 +7,10 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use crate::testkit::{Response, post_rpc, request, rpc, serve};
+use crate::testkit::{HELP, Response, post_rpc, request, rpc, serve};
 use crate::{ToolContent, ToolHandler, ToolOutcome, ToolRegistry, ToolSpec};
 
-const HELP: &str = "/api/mcp/help";
 const EVIL_ORIGIN: &str = "http://evil.example";
-
-/// 200 で JSON 1 件の応答を読み、`result` を返す（`error` があれば失敗）。
-fn result_of(response: &Response) -> Value {
-    assert_eq!(response.status, 200, "{response:?}");
-    let value = response.json();
-    assert!(value.get("error").is_none(), "{value}");
-    value["result"].clone()
-}
-
-/// 200 で JSON 1 件の応答を読み、`error` を返す（`result` があれば失敗）。
-fn error_of(response: &Response) -> Value {
-    assert_eq!(response.status, 200, "{response:?}");
-    let value = response.json();
-    assert!(value.get("result").is_none(), "{value}");
-    value["error"].clone()
-}
 
 /// 403 で、本文が JSON-RPC でない（MCP の処理に入っていない）ことを確かめる。
 fn assert_forbidden_before_mcp(response: &Response) {
@@ -186,7 +169,7 @@ fn registered_tool_roundtrip() {
     let (_server, addr) = serve(echo_registry());
     let spec = echo_spec();
 
-    let list = result_of(&post_rpc(addr, &[], &rpc("tools/list", Some(1), None)));
+    let list = Response::result(&post_rpc(addr, &[], &rpc("tools/list", Some(1), None)));
     let tools = list["tools"].as_array().expect("tools が配列");
     assert_eq!(tools.len(), 1, "{list}");
     let tool = &tools[0];
@@ -208,7 +191,7 @@ fn registered_tool_roundtrip() {
         ),
         (3, json!({ "text": "こんにちは", "n": 3 }), false),
     ] {
-        let call = result_of(&post_rpc(
+        let call = Response::result(&post_rpc(
             addr,
             &[],
             &rpc(
@@ -233,7 +216,7 @@ fn registered_tool_roundtrip() {
 #[test]
 fn unregistered_name_is_invalid_params() {
     let (_server, addr) = serve(echo_registry());
-    let error = error_of(&post_rpc(
+    let error = Response::error(&post_rpc(
         addr,
         &[],
         &rpc(

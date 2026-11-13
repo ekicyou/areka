@@ -3,110 +3,18 @@
 //! 登録表は本番と同じ [`entrances`] で組み、受け手はテストのスレッドの偽物。ネットへは出ない
 //! （`127.0.0.1` の空きポートだけ＝要件 8.1）。測った版は rmcp 3.9.0。
 
-use std::net::SocketAddr;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 
 use super::{
-    ToolCall, ToolRequest, dump_balloon, dump_surface, entrances, get_expression_table, get_log,
-    get_property, get_status, outcome, raise_event, reload, sakurascript,
+    ToolCall, dump_balloon, dump_surface, entrances, get_expression_table, get_log, get_property,
+    get_status, outcome, raise_event, reload, sakurascript,
 };
-use crate::testkit::{Response, post_rpc, rpc, serve};
-
-/// 保存した JSON（テストだけが読む＝要件 7.6）。
-const SAVED_LIST: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../doc/ssp-mcp/tools-list-ssp-2.9.05.json"
-);
-/// 受け手の要求・応答を待つ上限。届かなければテストを止めずに失敗させる（正しさは待ち時間に頼らない）。
-const RECV_WAIT: Duration = Duration::from_secs(10);
-/// 返事の上限。待ちの間の `ping` のテストが上限で終わらないよう長く取る（返事は必ず放す）。
-const LONG_WAIT: Duration = Duration::from_secs(30);
-/// 無状態版の版。
-const STATELESS: &str = "2026-07-28";
-
-/// 無状態版（`2026-07-28`）の要求に付ける本文の `_meta`。
-fn stateless_meta() -> Value {
-    json!({
-        "io.modelcontextprotocol/protocolVersion": STATELESS,
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
-    })
-}
-
-/// 旧式の経路（ヘッダも `_meta` も無い）で 1 件送る。
-fn post_legacy(addr: SocketAddr, method: &str, id: u64, params: Option<Value>) -> Response {
-    post_rpc(addr, &[], &rpc(method, Some(id), params))
-}
-
-/// 無状態版の経路で 1 件送る（`MCP-Protocol-Version`・`Mcp-Method`・`tools/call` なら `Mcp-Name`・本文の `_meta`）。
-fn post_stateless(addr: SocketAddr, method: &str, id: u64, params: Value) -> Response {
-    let mut params = params;
-    params["_meta"] = stateless_meta();
-    let name = params["name"].as_str().map(str::to_owned);
-    let mut headers = vec![("MCP-Protocol-Version", STATELESS), ("Mcp-Method", method)];
-    if let Some(name) = name.as_deref() {
-        headers.push(("Mcp-Name", name));
-    }
-    post_rpc(addr, &headers, &rpc(method, Some(id), Some(params)))
-}
-
-/// `tools/call` の `params`。
-fn call_params(name: &str, arguments: Value) -> Value {
-    json!({ "name": name, "arguments": arguments })
-}
-
-/// 200 で JSON 1 件の応答を読み、`result` を返す（`error` があれば失敗）。
-fn result_of(response: &Response) -> Value {
-    assert_eq!(response.status, 200, "{response:?}");
-    let value = response.json();
-    assert!(value.get("error").is_none(), "{value}");
-    value["result"].clone()
-}
-
-/// 受け手に要求が 1 件も届いていない（検査で弾いた要求はアプリ本体へ届かない）。
-/// 検査は handler を呼ぶ前に同期で済み、応答はその後に返るので、ここで覗けば十分。
-fn assert_no_request(rx: &Receiver<ToolRequest>) {
-    match rx.try_recv() {
-        Err(TryRecvError::Empty) => {}
-        Ok(request) => panic!("受け手に要求が届いた: {:?}", request.call),
-        Err(TryRecvError::Disconnected) => panic!("受け口が閉じている"),
-    }
-}
-
-/// 旧式と無状態版の両方で同じ `tools/call` を送り、`-32602` の `error` と HTTP の状態を固定する。
-/// どちらも `result` は無く、受け手への要求は 0 件。
-fn assert_invalid_params(name: &str, arguments: Value, message: &str) {
-    let (registry, rx) = entrances(LONG_WAIT);
-    let (_server, addr) = serve(registry);
-    let params = call_params(name, arguments);
-    // 旧式の経路も無状態版の経路も 200（rmcp 3.9.0 で測った値。3.5.0 の無状態版は 400 だった＝差の一覧へ）。
-    for (path, status, response) in [
-        (
-            "旧式",
-            200,
-            post_legacy(addr, "tools/call", 1, Some(params.clone())),
-        ),
-        (
-            "無状態版",
-            200,
-            post_stateless(addr, "tools/call", 1, params.clone()),
-        ),
-    ] {
-        assert_eq!(response.status, status, "{path}: {response:?}");
-        let value = response.json();
-        assert!(value.get("result").is_none(), "{path}: {value}");
-        assert_eq!(
-            value["error"],
-            json!({ "code": -32602, "message": message }),
-            "{path}: {value}"
-        );
-    }
-    assert_no_request(&rx);
-}
+use crate::testkit::{
+    LONG_WAIT, RECV_WAIT, Response, SAVED_LIST, assert_invalid_params, assert_no_request,
+    call_params, post_legacy, post_stateless, serve,
+};
 
 /// (要件 1.1〜1.6) `tools/list` の `tools` が保存した JSON と配列ごと一致する（並び・欄の過不足を 1 度に見る）。
 /// 旧式と無状態版の両方。無状態版の `ttlMs`・`cacheScope` は一覧の結果の欄で、`tools` の各要素には無い。
@@ -117,10 +25,10 @@ fn tools_list_matches_saved_ssp_json() {
     let (registry, _rx) = entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
 
-    let legacy = result_of(&post_legacy(addr, "tools/list", 1, None));
+    let legacy = Response::result(&post_legacy(addr, "tools/list", 1, None));
     assert_eq!(legacy["tools"], saved["tools"], "旧式");
 
-    let stateless = result_of(&post_stateless(addr, "tools/list", 2, json!({})));
+    let stateless = Response::result(&post_stateless(addr, "tools/list", 2, json!({})));
     assert_eq!(stateless["tools"], saved["tools"], "無状態版");
     assert_eq!(stateless["ttlMs"], 0, "{stateless}");
     assert_eq!(stateless["cacheScope"], "private", "{stateless}");
@@ -129,13 +37,19 @@ fn tools_list_matches_saved_ssp_json() {
 /// (要件 2.1・2.7・2.8) 10 本のどれでもない名前は `-32602`・受け手へ届かない。
 #[test]
 fn unknown_name_is_invalid_params() {
-    assert_invalid_params("no_such_tool", json!({}), "tool not found");
+    assert_invalid_params(
+        entrances(LONG_WAIT),
+        "no_such_tool",
+        json!({}),
+        "tool not found",
+    );
 }
 
 /// (要件 2.2・2.7・2.8) 必須の欄（`sakurascript` の `script`）が無いと `-32602`・受け手へ届かない。
 #[test]
 fn missing_required_is_invalid_params() {
     assert_invalid_params(
+        entrances(LONG_WAIT),
         "sakurascript",
         json!({ "ghost_name": "emo" }),
         "missing required argument: script",
@@ -146,6 +60,7 @@ fn missing_required_is_invalid_params() {
 #[test]
 fn wrong_type_is_invalid_params() {
     assert_invalid_params(
+        entrances(LONG_WAIT),
         "sakurascript",
         json!({ "script": "\\e", "strict": "yes" }),
         "argument strict must be boolean",
@@ -245,7 +160,7 @@ fn each_of_nine_reaches_the_receiver_with_typed_args() {
     });
 
     for (id, (name, arguments, expected)) in (1..).zip(cases) {
-        let result = result_of(&post_legacy(
+        let result = Response::result(&post_legacy(
             addr,
             "tools/call",
             id,
@@ -288,13 +203,16 @@ fn ping_answers_while_a_call_waits() {
         ToolCall::GetStatus(get_status::Args { ghost_name: None })
     );
 
-    assert_eq!(result_of(&post_legacy(addr, "ping", 2, None)), json!({}));
-    let list = result_of(&post_legacy(addr, "tools/list", 3, None));
+    assert_eq!(
+        Response::result(&post_legacy(addr, "ping", 2, None)),
+        json!({})
+    );
+    let list = Response::result(&post_legacy(addr, "tools/list", 3, None));
     assert_eq!(list["tools"].as_array().map(Vec::len), Some(10), "{list}");
     assert!(!caller.is_finished(), "返事を放す前に呼び出しが終わった");
 
     request.reply.send(outcome::ng("not implemented yet"));
-    let result = result_of(
+    let result = Response::result(
         &caller
             .join()
             .expect("呼び出しのスレッドが panic しなかった"),

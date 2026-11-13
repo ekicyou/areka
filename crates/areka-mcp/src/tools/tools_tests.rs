@@ -1,14 +1,9 @@
 //! `tools` の決定論テスト（定義の読み込み・引数の詰め替え）。
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::*;
-
-/// 保存した JSON（テストだけが読む。本番はクレートの外のファイルを読まない＝要件 7.6）。
-const SAVED_LIST: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../doc/ssp-mcp/tools-list-ssp-2.9.05.json"
-);
+use crate::testkit::{SAVED_LIST, obj};
 
 fn saved_tools() -> Vec<Value> {
     let text = std::fs::read_to_string(SAVED_LIST).expect("保存した JSON が読めない");
@@ -17,13 +12,6 @@ fn saved_tools() -> Vec<Value> {
         .as_array()
         .expect("tools が配列でない")
         .clone()
-}
-
-fn obj(v: Value) -> Map<String, Value> {
-    match v {
-        Value::Object(m) => m,
-        other => panic!("オブジェクトでない: {other}"),
-    }
 }
 
 fn parse_by_name(name: &str, args: Value) -> ToolCall {

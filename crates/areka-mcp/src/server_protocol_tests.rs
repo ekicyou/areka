@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::ToolRegistry;
 use crate::dispatch::MAX_BODY_BYTES;
-use crate::testkit::{MCP_V1, RPC_ACCEPT, Response, post_rpc, request, rpc, serve};
+use crate::testkit::{MCP_V1, RPC_ACCEPT, Response, post_rpc, request, rpc, serve, stateless_meta};
 
 /// `initialize` を持つ旧式の 4 版（要件 3.1）。
 const LEGACY_VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -33,37 +33,12 @@ fn initialize(version: &str) -> String {
     )
 }
 
-/// 無状態版（`2026-07-28`）の要求に付ける本文の `_meta`。
-fn stateless_meta() -> Value {
-    json!({
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientCapabilities": {},
-        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
-    })
-}
-
-/// 200 で JSON 1 件の応答を読み、`result` を返す（`error` があれば失敗）。
-fn result_of(response: &Response) -> Value {
-    assert_eq!(response.status, 200, "{response:?}");
-    let value = response.json();
-    assert!(value.get("error").is_none(), "{value}");
-    value["result"].clone()
-}
-
-/// 200 で JSON 1 件の応答を読み、`error` を返す（`result` があれば失敗）。
-fn error_of(response: &Response) -> Value {
-    assert_eq!(response.status, 200, "{response:?}");
-    let value = response.json();
-    assert!(value.get("result").is_none(), "{value}");
-    value["error"].clone()
-}
-
 /// (要件 3.1) 旧式の 4 版は要求どおりの版・`tools` だけの能力・serverInfo・instructions。
 #[test]
 fn initialize_returns_requested_version_for_each_of_four() {
     let (_server, addr) = serve(ToolRegistry::default());
     for version in LEGACY_VERSIONS {
-        let result = result_of(&post_rpc(addr, &[], &initialize(version)));
+        let result = Response::result(&post_rpc(addr, &[], &initialize(version)));
         assert_eq!(result["protocolVersion"], version, "{result}");
         let capabilities = &result["capabilities"];
         assert!(capabilities.get("tools").is_some(), "{result}");
@@ -88,13 +63,13 @@ fn initialize_returns_requested_version_for_each_of_four() {
 #[test]
 fn initialize_with_no_initialize_version_falls_back_to_2025_11_25() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let result = result_of(&post_rpc(addr, &[], &initialize("2026-07-28")));
+    let result = Response::result(&post_rpc(addr, &[], &initialize("2026-07-28")));
     assert_eq!(result["protocolVersion"], "2025-11-25", "{result}");
     // 無状態版の形（本文の `_meta` と `MCP-Protocol-Version: 2026-07-28`）で送っても、
     // `initialize` は旧式の扱いで 200・`2025-11-25`（差の一覧へ。SSP は 400）。
     let mut body: Value = serde_json::from_str(&initialize("2026-07-28")).unwrap();
     body["params"]["_meta"] = stateless_meta();
-    let result = result_of(&post_rpc(
+    let result = Response::result(&post_rpc(
         addr,
         &[("MCP-Protocol-Version", "2026-07-28")],
         &body.to_string(),
@@ -106,7 +81,7 @@ fn initialize_with_no_initialize_version_falls_back_to_2025_11_25() {
 #[test]
 fn initialize_unknown_version_falls_back() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let result = result_of(&post_rpc(addr, &[], &initialize("1999-01-01")));
+    let result = Response::result(&post_rpc(addr, &[], &initialize("1999-01-01")));
     assert_eq!(result["protocolVersion"], "2025-11-25", "{result}");
 }
 
@@ -123,7 +98,7 @@ fn initialized_notification_is_202_without_body() {
 #[test]
 fn tools_list_is_empty() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let result = result_of(&post_rpc(addr, &[], &rpc("tools/list", Some(1), None)));
+    let result = Response::result(&post_rpc(addr, &[], &rpc("tools/list", Some(1), None)));
     assert_eq!(result["tools"], json!([]), "{result}");
 }
 
@@ -131,7 +106,7 @@ fn tools_list_is_empty() {
 #[test]
 fn ping_returns_empty_object() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let result = result_of(&post_rpc(addr, &[], &rpc("ping", Some(7), None)));
+    let result = Response::result(&post_rpc(addr, &[], &rpc("ping", Some(7), None)));
     assert_eq!(result, json!({}));
 }
 
@@ -143,7 +118,7 @@ fn tools_call_any_name_is_invalid_params() {
         json!({ "name": "get_status", "arguments": {} }),
         json!({ "name": "no_such_tool", "arguments": { "x": 1 } }),
     ] {
-        let error = error_of(&post_rpc(
+        let error = Response::error(&post_rpc(
             addr,
             &[],
             &rpc("tools/call", Some(1), Some(params)),
@@ -156,7 +131,7 @@ fn tools_call_any_name_is_invalid_params() {
 #[test]
 fn unknown_method_is_jsonrpc_error_from_rmcp() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let error = error_of(&post_rpc(addr, &[], &rpc("no/such", Some(1), None)));
+    let error = Response::error(&post_rpc(addr, &[], &rpc("no/such", Some(1), None)));
     assert_eq!(error["code"], -32601, "{error}");
     // エラーの形（差の一覧へ）: `message` はメソッド名そのもの・`data` の欄は無い
     // （SSP は `data` に `message` と同じ文字列を入れる）。
@@ -210,7 +185,7 @@ fn broken_json_body_is_415_and_next_request_works() {
         serde_json::from_slice::<Value>(&response.body).is_err(),
         "本文が平文でない: {response:?}"
     );
-    let result = result_of(&post_rpc(addr, &[], &rpc("ping", Some(2), None)));
+    let result = Response::result(&post_rpc(addr, &[], &rpc("ping", Some(2), None)));
     assert_eq!(result, json!({}));
 }
 
@@ -220,7 +195,7 @@ fn ping_without_initialize_and_without_session_id() {
     let (_server, addr) = serve(ToolRegistry::default());
     for method in ["ping", "tools/list"] {
         let response = post_rpc(addr, &[], &rpc(method, Some(1), None));
-        result_of(&response);
+        Response::result(&response);
         assert!(response.header("mcp-session-id").is_none(), "{response:?}");
     }
 }
@@ -268,7 +243,7 @@ fn server_discover_stateless() {
         ],
         &rpc("server/discover", Some(1), Some(params.clone())),
     );
-    let result = result_of(&response);
+    let result = Response::result(&response);
     assert_eq!(
         result["supportedVersions"],
         json!(SUPPORTED_VERSIONS),
@@ -313,7 +288,7 @@ fn server_discover_stateless() {
 #[test]
 fn tools_list_stateless_has_cache_hints() {
     let (_server, addr) = serve(ToolRegistry::default());
-    let result = result_of(&post_rpc(
+    let result = Response::result(&post_rpc(
         addr,
         &[
             ("MCP-Protocol-Version", "2026-07-28"),
@@ -330,7 +305,7 @@ fn tools_list_stateless_has_cache_hints() {
     assert_eq!(result["resultType"], "complete", "{result}");
     assert_eq!(result["tools"], json!([]), "{result}");
     // 旧式の形は従来どおり（欄を足さない）。
-    let legacy = result_of(&post_rpc(addr, &[], &rpc("tools/list", Some(2), None)));
+    let legacy = Response::result(&post_rpc(addr, &[], &rpc("tools/list", Some(2), None)));
     assert!(legacy.get("ttlMs").is_none(), "{legacy}");
     assert!(legacy.get("cacheScope").is_none(), "{legacy}");
     assert_eq!(legacy["tools"], json!([]), "{legacy}");
@@ -348,9 +323,9 @@ fn protocol_version_header_old_or_missing_is_passthrough() {
         )
         .collect();
     for extra in &headers {
-        let ping = result_of(&post_rpc(addr, extra, &rpc("ping", Some(1), None)));
+        let ping = Response::result(&post_rpc(addr, extra, &rpc("ping", Some(1), None)));
         assert_eq!(ping, json!({}), "{extra:?}");
-        let list = result_of(&post_rpc(addr, extra, &rpc("tools/list", Some(2), None)));
+        let list = Response::result(&post_rpc(addr, extra, &rpc("tools/list", Some(2), None)));
         assert_eq!(list["tools"], json!([]), "{extra:?}");
     }
 }
@@ -548,7 +523,7 @@ fn methods_not_accepted_keep_method_not_found_and_list_methods_keep_passing_in_e
                 "{response:?}"
             );
         }
-        let list = result_of(&speak(
+        let list = Response::result(&speak(
             addr,
             version,
             3,

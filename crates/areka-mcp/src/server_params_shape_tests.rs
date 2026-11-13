@@ -12,9 +12,8 @@ use serde_json::{Value, json};
 
 use super::server_protocol_tests::{SUPPORTED_VERSIONS, speak};
 use crate::ToolRegistry;
-use crate::testkit::{Response, post_rpc, serve};
+use crate::testkit::{Response, STATELESS, post_rpc, serve};
 
-const STATELESS: &str = "2026-07-28";
 /// rmcp が読めない本文に返す 415 の平文（JSON として読めた 1 件の形でないとき）。
 const RMCP_415_SHAPE: &str = "fail to deserialize request body unrecognized JSON-RPC message";
 const SCALAR_MESSAGE: &str = "Invalid Request: params must be an array or an object";
@@ -54,7 +53,7 @@ fn non_object_params_answer_with_the_id_in_every_version() {
         for method in ["tools/list", "no/such"] {
             for (params, code, message) in &cases {
                 n += 1;
-                let id = if n % 2 == 0 {
+                let id = if n.is_multiple_of(2) {
                     json!(n)
                 } else {
                     json!(format!("s{n}"))

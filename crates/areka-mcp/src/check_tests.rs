@@ -3,13 +3,7 @@
 use serde_json::{Map, Value, json};
 
 use super::{as_integer, check_arguments};
-
-fn obj(v: Value) -> Map<String, Value> {
-    match v {
-        Value::Object(m) => m,
-        other => panic!("オブジェクトでない: {other}"),
-    }
-}
+use crate::testkit::obj;
 
 /// 手書きの schema。必須は `name`（string）と `ghost_name`（string）。他の欄は任意。
 fn schema() -> Map<String, Value> {
