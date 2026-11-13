@@ -116,19 +116,43 @@ fn an_event_not_sent_to_2x_logs_exactly_one_debug_line() {
 }
 
 /// 確かめの往復を窓なしで回す: 今の文字コードで要求を組み、送受の結果を判定の半分へ渡す。
-/// 交渉の状態は判定の前後で同じでなければならない（答えを採用の根拠にしない・要件 6.1）。
+/// 答えを採用の根拠にしないこと（要件 6.1）は [`the_probe_body_contains_no_adoption_path`] が縛る。
 fn probe_with(result: Result<Vec<u8>, SendError>) -> VersionVerdict {
     let negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
-    let before = negotiator.current();
     let req = shiori2::version_probe_request(negotiator.current(), DEFAULT_SENDER);
     assert!(req.starts_with(b"GET Version SHIORI/2.6\r\nCharset: UTF-8\r\n"));
-    let verdict = verdict_of_probe(result);
-    assert_eq!(
-        negotiator.current(),
-        before,
-        "確かめの後も文字コードは変わらない"
+    verdict_of_probe(result)
+}
+
+/// 確かめの本体が採用の経路を一切踏まないことを、`client.rs` の本文で機械的に確かめる
+/// （要件 6.1・先例 `the_one_way_event_body_contains_no_adoption_path`）。
+///
+/// 呼ばれていないことは実行では観測できないため、本文そのものを判定材料にする。採用の
+/// 経路を後から確かめの側へ繋ぐと赤になる。コメントも検査に入るので、確かめの側の説明
+/// では採用の経路を名指ししない。
+#[test]
+fn the_probe_body_contains_no_adoption_path() {
+    const SELF_SOURCE: &str = include_str!("client.rs");
+    // 改行の綴り（CRLF／LF）に依存しないよう CR を落としてから切り出す。
+    let source = SELF_SOURCE.replace('\r', "");
+    let after = source
+        .split_once("    pub fn probe_version(")
+        .expect("probe_version の定義行が見つからない")
+        .1;
+    let body = after
+        .split_once("\n    }\n")
+        .expect("probe_version の閉じ括弧が見つからない")
+        .0;
+    assert!(
+        body.contains("verdict_of_probe("),
+        "確かめは判定の半分を通るべき"
     );
-    verdict
+    for forbidden in ["parse_for", "note_response", "parse_response"] {
+        assert!(
+            !body.contains(forbidden),
+            "確かめの本体に採用の経路 `{forbidden}` がある（要件 6.1 が破れている）"
+        );
+    }
 }
 
 /// 2.x の答え（`Charset` 付きでも）は 2.x に決まる（要件 2.1・6.1）。

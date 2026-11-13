@@ -222,7 +222,8 @@ fn hold_child_entry() {
             .expect("親のイベントを開ける"),
     );
     create_hold_window(&hold_title(std::process::id()));
-    // 送信が届くまで覗く（親が来なければ 60 秒で諦めて緑で終わる）。下位語＝今キューにある種類。
+    // 送信が届くまで覗く（親が来なければ 60 秒で諦めて緑で終わる）。下位語＝前回の GetQueueStatus／GetMessage／PeekMessage の後に加わり今もキューにある種類
+    // （上位語が今キューにある種類）。
     let deadline = Instant::now() + Duration::from_secs(60);
     // SAFETY: キューの状態を読むだけで、送られてきたメッセージは配らない。
     while unsafe { GetQueueStatus(QS_SENDMESSAGE) } & QS_SENDMESSAGE.0 == 0 {

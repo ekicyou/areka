@@ -1,5 +1,5 @@
 //! `areka-P0-shiori-loadu` のテスト（design「テスト → `shiori_proxy_loadu_tests.rs`」）。
-//! 既存 `mod tests`（`shiori_proxy.rs` 末尾）には触らず、本仕様のテストはここへ置く。
+//! 既存 `mod tests`（`shiori_proxy_tests.rs`）には触らず、本仕様のテストはここへ置く。
 //!
 //! 群 A（x64 常時）: 入口の選択の判断表 4 行（要件 1.1〜1.4・1.8・6.3）。DLL を読まない純関数の
 //! テストゆえ i686 に限らない（要件 9.5）。

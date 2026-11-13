@@ -9,7 +9,8 @@
 //!    [`ShioriByteProxy::request`] へ流し、その結果（SHIORI/3.0 応答）を `Response` として親へ
 //!    **1 通だけ** 返送して即 return する（それ以上の跨プロセス `SendMessage` を発行しない）。
 //!    proxy 未確立なら明示エラーバイト列（`SHIORI/3.0 500`）を返送し crash させない（R3.1）。
-//!    不正フレーム／未知タグは crash させず観測カウンタに記録するのみ（要件 2.5・上位へ渡さない）。
+//!    不正フレーム／未知タグは crash させず観測カウンタに数え、`[helper]` の行に残すのみ
+//!    （要件 2.5・上位へ渡さない）。
 //! 3. **`main`**（要件 7.1）: 親 HWND を arg/env の u32 ワイヤ値で取得 → 窓生成 → HELLO 送出 →
 //!    `MessageLoop::run`。WndProc は LOAD（SHIORI のロードと ack 返送）・REQUEST・UNLOAD を受け、
 //!    UNLOAD で proxy を閉じてループを抜け、正常終了（exit 0）する（R5.6）。
@@ -151,8 +152,10 @@ enum InboundAction {
     TriggerLoad,
     /// `Unload` を受領＝正規の正常終了経路のトリガ（R5.6）。従来の「既知だが無視」を置換する。
     /// **ペイロードを持たない**（wire で理由やパスを運ばない）ため、受領フレームのペイロード有無を
-    /// 問わずこの動作へ写像される。終了（proxy drop → `quit_requested` セット → ack `[1]` 返送 →
-    /// `PostMessageW` 起こし → main ループ正常終了 → exit 0）は `handle_message` の `TriggerUnload` の腕が行う。
+    /// 問わずこの動作へ写像される。終了（proxy の `close`＝unload → FreeLibrary → `quit_requested`
+    /// セット → ack `[1]` 返送 → `PostMessageW` 起こし → main ループ正常終了 → exit 0）は
+    /// `handle_message` の `TriggerUnload` の腕が行う。DLL の呼び出しの最中に来たときは ack `[1]` を
+    /// 先に返し、`close` 以降は呼び出しが戻ってから行う（指摘 8）。
     TriggerUnload,
     /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`）。crash させず無視する
     /// （記録のみ）。`Load` は `TriggerLoad`、`Unload` は `TriggerUnload` へ分離済みゆえ含まない。
@@ -198,7 +201,8 @@ fn load_result_to_ack<T>(result: &Result<T, shiori_proxy::ProxyError>) -> u8 {
 ///
 /// `wintf-winmsg-executor` の `Window<S>` は `state: S` を窓と同居させ、WndProc へ `Pin<&S>` で
 /// 渡す（`Rc` 不要・GWLP_USERDATA 手詰め不要）。single-in-flight・単一 UI スレッドゆえ内部可変は
-/// [`Cell`] で足りる。lifecycle 状態機械は request 往復実証に必要な最小（観測カウンタのみ）に留める。
+/// [`Cell`] で足りる。lifecycle の状態は観測カウンタと、終了・再入の印（`quit_requested`・`in_dll_call`・
+/// `unload_pending`）に留める。
 struct HelperShared {
     /// 親のメッセージ窓 HWND（u32 ワイヤ値）。HELLO 送出先＆RESPONSE 返送先。
     parent_hwnd: u32,

@@ -13,7 +13,7 @@
 //!   overflow を回避する（要件 7.2）。
 //!
 //! 送信プリミティブ（`send_copydata` / `send_copydata_response` / `send_request`）・
-//! `ResponseSlot`・`IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
+//! 受信の取り出し（`read_copydata`）・`ResponseSlot`・`IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
 //! 送信関数は `SendMessageTimeoutW` の上限時間で無限待機を構造的に排除する（要件 5.3）。
 //! 旗は**送出の向き**で分ける（[`SendFlavor`]・[`send_flags`]・要件 16.1/16.2）:
 //! 要求方向（ホスト → helper）は `SMTO_ABORTIFHUNG` ＋上限時間、応答方向

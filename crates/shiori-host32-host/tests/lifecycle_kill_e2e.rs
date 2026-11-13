@@ -85,9 +85,11 @@ const POLL_INTERVAL: Duration = Duration::from_millis(5);
 #[test]
 fn kill_injection_detection_and_reporting() {
     // --- 有限復帰の worst-case を短く決定化（R4.2）: dead HWND 上で SMTO が fast-fail せず timeout
-    //     まで待つ場合に備え、request timeout を 3s に縛る。client 構築の前に設定する必要がある
-    //     （client は構築ごとに env から実効 timeout を解決する）。単一テストバイナリ（別プロセス）
+    //     まで待つ場合に備え、request timeout を 3s に縛る。kill 後の GET より前に設定すればよい
+    //     （client は往復のたびに env から実効 timeout を解決する）。単一テストバイナリ（別プロセス）
     //     ゆえこの process-global set_var は他テストバイナリへ漏れない。---
+    // SAFETY: edition 2024 の set_var は unsafe。このバイナリのテストはこの 1 本だけで、設定は
+    // helper の spawn や他のスレッドを起こす前（env を同時に読み書きする相手がいない時点）に行う。
     unsafe {
         std::env::set_var("AREKA_SHIORI_REQUEST_TIMEOUT_MS", "3000");
     }
@@ -128,7 +130,7 @@ fn kill_injection_detection_and_reporting() {
         "LOAD 成功 ack [1]（proxy 確立）を先に得る（REQUEST の前提）"
     );
 
-    // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用・env timeout 3s を解決済み）---
+    // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用・env timeout 3s は往復ごとに解決）---
     // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
     // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);

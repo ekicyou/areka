@@ -25,15 +25,17 @@
 //! 1. **UB**: `cbData`(宣言長) を実バッファ長より大きく詐称すると、受信側 `read_copydata`
 //!    （crate `shiori-host32-ipc` の `src/lib.rs`）が `from_raw_parts(lpData, cbData)` で**境界外読み取り（未定義動作）**を
 //!    起こす。テストに UB を残さない。
-//! 2. **構造上到達不能**: `read_copydata` は `cbData` バイトちょうどを slice して `classify_inbound`
-//!    へ渡すため、実受信経路では常に `declared_len == data.len()` となり、`copydata_payload` の
-//!    `LengthMismatch` 分岐は**実 WM_COPYDATA 受信では原理的に発火しない**（発火させるには上記 UB が
-//!    必要）。よって「実配送で cbData 不整合を隔離検証する」ことは構造上できない。
+//! 2. **普通の配送ではまず発火しない**: `read_copydata` は `lpData` が空でなければ `cbData` バイト
+//!    ちょうどを slice して `classify_inbound` へ渡すため、`declared_len == data.len()` となる。
+//!    例外は `cbData > 0` で `lpData` が空の場合で、`read_copydata` は空の payload と `len = cbData`
+//!    を返すので、同じプロセスの送り手（OS が領域を写さない）からは `LengthMismatch` に届き得る。
+//!    ただし実配送で長さ不整合を作る手はこの空ポインタの形か上記 UB しかなく、隔離の検証は
+//!    単体に任せる。
 //!
 //! `cbData`/実長 不整合の検出は**単体レベルで既に被覆済み**であり、本統合テストはそこへ委譲する:
 //! - proto 単体 `shiori-host32-ipc::framing_tests::framing_rejects_length_mismatch`
 //!   （純関数 `copydata_payload` の `LengthMismatch` 分岐を直接検証）。
-//! - host 単体 `shiori-host32-host::parent_window::classify_tests::length_mismatch_is_ignored_as_bad`
+//! - host 単体 `shiori-host32-host::parent_window::tests::classify_tests::length_mismatch_is_ignored_as_bad`
 //!   （WndProc 判定ロジック `classify_inbound` が長さ不整合を `IgnoreBad` にすることを検証）。
 //!
 //! 本統合テストは**到達可能な不正フレーム＝未知タグ**の WndProc 隔離を実配送検証し、長さ不整合は
@@ -67,7 +69,7 @@ use common::HANDSHAKE_TIMEOUT;
 /// **UB 回避（重要）**: `cbData` は**必ず `data.len()`（実バッファ長）ちょうど**に設定する。
 /// これにより受信側 `read_copydata`（crate `shiori-host32-ipc` の `src/lib.rs`）が `from_raw_parts(lpData, cbData)` を
 /// 呼んでも境界外読み取りが起きない。`cbData` を実長より大きく詐称する（＝長さ不整合注入）ことは
-/// **意図的に行わない**（UB を招き、かつ実受信経路では `LengthMismatch` が原理的に発火しないため。
+/// **意図的に行わない**（UB を招き、かつ実受信経路で `LengthMismatch` に届くのは `lpData` が空の特殊な形だけのため。
 /// ファイル冒頭「撤回した検証」参照）。長さ不整合の検出は proto/host の単体テストに委譲する。
 ///
 /// `SendMessageW` は同期ゆえ、復帰時点で対象 WndProc の処理は完了している（観測が決定的）。

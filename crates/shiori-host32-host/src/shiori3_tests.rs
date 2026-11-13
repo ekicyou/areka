@@ -443,7 +443,7 @@ fn build_status_value_is_verbatim() {
 }
 
 /// 複合した値 `talking,balloon(0=2/1=0)` が `Status:` 行にそのまま書かれ、行の位置が
-/// 今までどおり `Sender` の直後・`ID` の直前であることを、リクエスト全文の逐語で固定する
+/// 今までどおり `SenderType` の直後・`ID` の直前であることを、リクエスト全文の逐語で固定する
 /// （areka-P0-status-execution-states 要件 1.5・8.2）。
 #[test]
 fn build_compound_status_full_request_is_verbatim_in_place() {

@@ -161,7 +161,7 @@ mod tests {
 
         let guard = attach_kill_on_close_job(&child).expect("job 割り当てが成功する");
 
-        // job ハンドルを閉じる → KILL_ON_JOB_CLOSE で所属プロセス（child とその子孫）を全 kill。
+        // job ハンドルを閉じる → KILL_ON_JOB_CLOSE で所属プロセス（helper 役の child 自身・子孫は SILENT_BREAKAWAY_OK で抜けている）を全 kill。
         drop(guard);
 
         // 締切内に子が終了する（＝kill された）ことを非ブロッキング poll で確認する。

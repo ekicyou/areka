@@ -593,3 +593,27 @@
   - (a) helper の `main.rs` の REQUEST の腕（いま約 378 行目）で、UNLOAD を先送りした後に DLL の呼び出しの最中へ入れ子の REQUEST が来ると、`finish_deferred_unload` → `close` が外側の呼び出しの中で走りうる道: 届く道が無い。host は UNLOAD の後に何も送らない（`crates/shiori-host32-host/src/lifecycle.rs` の `request_clean_shutdown`・`crates/areka-kanade/src/shiori/real.rs:205`）。偽って送るのは 14.8 の議題 1 のとおり脅威の見立ての外。14.16 の (a) と同じ型で、欠陥ではない。
 - 範囲の外の申し送り（`/kiro-complete` の棚卸へ）: 本番のハンドシェイクの上限は 5 秒（`shiori_wiring.rs`）、テストは 30 秒。ひどく混んだ初回起動では本番が上限を越えうる。変えるかは要件・設計の裁定なので、本 spec では変えない。
 - clippy の回し直し: x64 は 14.16 と同じ `clippy::drop_non_drop` の 3 件だけ（7 の注が 1 行増えたので `tests/lifecycle_kill_e2e.rs` の 1 件は今 `:213`）。i686 は 0 件。
+
+### 14.18 かけ直し 3 回目（タスク 14）
+
+- 結果: 新しい指摘が 14 件出た。12 件は古い・誤った説明、2 件は言い分を証していないテストで、本番の振る舞いを変えるものは 0 件。14 件とも直した。
+  1. テストの弱さ: `crates/shiori-host32-host/src/client_shiori2_tests.rs` の `probe_with` が `negotiator.current()` の前後の一致を断言していたが、交渉の状態は変わらない値で `probe_version` にも渡らず、いつも真だった。直し: その断言を消し、`client_tests.rs` の `the_one_way_event_body_contains_no_adoption_path` と同じ形の `the_probe_body_contains_no_adoption_path` を足した（`client.rs` の `probe_version` の本文に `parse_for`・`note_response`・`parse_response` が無いこと、`verdict_of_probe(` を通ることを見る）。本文に `// parse_response` の 1 行を一時に足して赤になる（`client_shiori2_tests.rs:151` の断言で落ちる）のを確かめてから戻した（`client.rs` は手を付けていない）。
+  2. テストの弱さ: `crates/shiori-host32-helper/src/main_loopback_tests.rs` の UNLOAD の後の MessageLoop の段が、main のフィルタの写しを自分で回して「quit の配線の回帰の守り」と名乗っていた。写しは main の配線を通らないので守りにならない。直し: その段を消し、本当の守りは main の本物のフィルタを通す `tests/lifecycle_cyclic_e2e.rs` の `ExitKind::Clean` の検査だと 1 行の注で示した。
+  3. 説明の古さ: `main_loopback_tests.rs` の `unload_during_a_dll_call_defers_the_unload` の説明の「（今は `proxy` の借りの衝突で panic して落ちる）」を消した（指摘 8 の直しの後は落ちない）。
+  4. 説明の古さ: `crates/shiori-host32-host/src/shiori3_charset_tests.rs` の出所の `git show 4db516fe:…` は今の履歴から引けない（squash で消えた）。そう書いた。`areka/src/emo2_boot/spine_conformance_script.rs` は今 `crates/areka/src/runtime/spine_conformance_script.rs`（在ること・`SHELL_NAME` があることを確かめた）に直した。
+  5. 説明の誤り: `shiori3_tests.rs` の `build_compound_status_full_request_is_verbatim_in_place` の説明が `Status` の位置を「`Sender` の直後」と書いていた。逐語の期待どおり「`SenderType` の直後」に直した。
+  6. 説明の誤り: `tests/lifecycle_kill_e2e.rs` の 2 か所が、実効の timeout を client を作るときに解決すると書いていた。`client.rs` の `get_with_headers`・`notify_with_headers` は往復のたびに `effective_timeout()` で env を読む。「往復ごとに解決」に直した。`set_var` に SAFETY の注を足した（このバイナリのテストは 1 本で、helper の spawn やスレッドの前に設定する）。
+  7. 説明の誤り: `tests/error_paths.rs` の単体テストの道を `parent_window::tests::classify_tests::length_mismatch_is_ignored_as_bad` に直した（在ることを確かめた）。「`LengthMismatch` は実受信では原理的に発火しない」を和らげた: `read_copydata` は `cbData > 0` で `lpData` が空のとき空の payload と `len = cbData` を返すので、同じプロセスの送り手からは届き得る。冒頭の注と `send_raw` の注の 2 か所。
+  8. 説明の誤り: `src/terminator_tests.rs` の `GetQueueStatus` の注が下位語を「今キューにある種類」と書いていた。上位語が今キューにある種類、下位語は前回の GetQueueStatus／GetMessage／PeekMessage の後に加わり今もキューにある種類。そう直した。コードは変えていない。
+  9. 説明の古さ: `src/job.rs` のテストの注が KILL_ON_JOB_CLOSE で「child とその子孫」を kill すると書いていた。SILENT_BREAKAWAY_OK で子孫は job に入らない。「helper 役の child 自身・子孫は抜けている」に直した。
+  10. 説明の古さ: `src/process_host.rs` の `HelperHandle::terminate` が「検証用 additive・統合 5.2 の観測点」のままだった。今は本番の kill の道（`HelperHandle` の `Drop` と `HelperLifecycle::terminate` が使う）。そう直した。
+  11. 説明の古さ: helper の `src/main.rs` の 3 か所。冒頭の「不正フレームはカウンタに記録するのみ」に「`[helper]` の行に残す」を足した。`TriggerUnload` の説明の流れを今の形（proxy の `close`＝unload → FreeLibrary → `quit_requested` → ack `[1]` → `PostMessageW`、DLL の呼び出しの最中は ack を先に返し `close` は戻ってから）に直した。`HelperShared` の「観測カウンタのみ」に終了・再入の印（`quit_requested`・`in_dll_call`・`unload_pending`）を足した。
+  12. 説明の古さ: `src/shiori_proxy_loadu_tests.rs` の「既存 `mod tests`（`shiori_proxy.rs` 末尾）」を `shiori_proxy_tests.rs` に直した。
+  13. 限界の注が無かった: `process_host.rs` の `forward_helper_stderr` の `read_until(b'\n')` に行の長さの上限が無い。`// shortcut: 1 行の長さに上限なし（改行の無い大きな書き込みは丸ごと貯まる）、実害が出たら上限で切る` の注を置いた（下の決め 1）。
+  14. 説明の古さ: `crates/shiori-host32-host/README.md` の手順 ③ の見出しが「proto の 32bit 可搬性テスト」のままだった。今は helper の proxy・loopback・再入・固まった窓のテストも回る（約 42 秒）。そう書き直した。
+- 数えなかった小さな直し: `crates/shiori-host32-ipc/src/lib.rs` の冒頭が同居する項目を並べているので `read_copydata`（受信の取り出し）を足した。
+- 決め 1（標準エラーの行の上限）: 上限は設けず、`shortcut:` の注で残す。design-validation.md（64 行目）の見立て「直すなら `shortcut:` の注釈で足りる」と、Implementation Note 4.3（14 で見る）に従った。今の負荷（helper の `[helper]` の行と SHIORI の DLL の診断の行）では当たらない。
+- 決め 2（`wait_handle` の WAIT_FAILED）: 今のまま、時間切れと同じに扱う（Implementation Note 6）。呼び手は記録を出す（`ExitTimeout` の error、または読み手を切り離した旨の debug の行）ので黙った失敗ではなく、正しいプロセスの取っ手では WAIT_FAILED は起きない。
+- 見直して指摘にしなかったもの:
+  - (a) `crates/shiori-host32-helper/src/shiori_proxy_tests.rs` と `crates/shiori-host32-testdll/src/lib.rs` の「courtesy unload」の語: 正しい。UNLOAD を経ない道（no-UNLOAD）では `Drop` → 後始末 → `unload` が本当に走り、`testdll_drop_invokes_courtesy_unload` が testdll の書く印のファイルでそれを証す。14.17 の 5 で直したのは UNLOAD の道（今は `close`）の説明だけ。
+- clippy の回し直し: x64 は 14.16 と同じ `clippy::drop_non_drop` の 3 件だけ。6 の SAFETY の注で 2 行増えたので `tests/lifecycle_kill_e2e.rs` の 1 件は今 `:215`（`lifecycle_cyclic_e2e.rs:162`・`:287` は動いていない）。i686 は 0 件。

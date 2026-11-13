@@ -188,7 +188,7 @@ impl HelperHandle {
         self.child.id()
     }
 
-    /// helper を強制終了する（検証用 additive・統合 5.2 の観測点）。
+    /// helper を強制終了する（本番の kill の経路: 本型の `Drop` と `HelperLifecycle::terminate` が使う）。
     ///
     /// 既に終了済みの場合も `Ok(())` として扱う（冪等）。強制終了後の
     /// 終了種別は [`poll_exit_kind`] で観測できる。
@@ -421,6 +421,7 @@ fn forward_helper_stderr(
     let mut buf = Vec::new();
     loop {
         buf.clear();
+        // shortcut: 1 行の長さに上限なし（改行の無い大きな書き込みは丸ごと貯まる）、実害が出たら上限で切る
         if reader.read_until(b'\n', &mut buf)? == 0 {
             return Ok(());
         }
