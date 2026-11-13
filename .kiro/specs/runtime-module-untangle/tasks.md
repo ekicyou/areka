@@ -2,7 +2,7 @@
 
 各段のあいだで `cargo check --workspace --all-targets` が警告 0 件で通る順に並べる（design.md「Migration Strategy」の S0〜S8）。段の差分は混ぜない。新しい試験の関数は足さず、固定は既存の試験への assert で足す。振る舞いを変えたくなった所は直さず、受け持つ audit の brief へ申し送る（9.3 で記録する）。
 
-- [ ] 1. 着手の測り（コードを触る前の「前」を取る）
+- [x] 1. 着手の測り（コードを触る前の「前」を取る）
 - [x] 1.1 テストの名前の一覧と警告の数を取る
   - `cargo test --workspace --no-fail-fast -- --list` の `: test$` の行から名前の末尾の多重集合を作り、`research.md` に置く（比べるための「前」）
   - `cargo check --workspace --all-targets` の警告が 0 件であることを記録する
@@ -22,7 +22,7 @@
   - 完了の形: `research.md` に D1・D2 の一覧と、式 1〜3 の今の行数（外の参照だけ）が書かれている
   - _Requirements: 3.1, 3.3_
 
-- [ ] 2. 名前の改め（機械的な改名だけの段）
+- [x] 2. 名前の改め（機械的な改名だけの段）
 - [x] 2.1 モジュールを `runtime` へ改名し、パスで読む所を全部追従させる
   - モジュールのフォルダを履歴の残る移動で改名し、本体の中の `emo2_boot` のパス（`main.rs`・`ghost_session*`・`mcp/`・`menu/`・`input_events/`・`install/`・`update/`・`readme/`・`offline_dump/`・`session_end.rs`・`app_exit.rs`・`boot_config.rs`・`log_history.rs`・`placement_tests/` の 9 ファイルほか）を書き換える
   - ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR`・`crate_source_test_support` 経由・`tick_gate_config_producers_tests` のパス 8 本）と `examples/collision-probe.rs` の `#[path]` 2 つを新しいパスへ
@@ -46,7 +46,7 @@
   - 完了の形: 警告 0 件で通り、照合するテストが改めた文言と値で緑
   - _Requirements: 1.1, 1.5, 1.6_
 
-- [ ] 3. `runtime` に型を下ろす
+- [x] 3. `runtime` に型を下ろす
 - [x] 3.1 切替の型を `runtime` の新しいファイルへ下ろす
   - `SkinKind` ほかの切替の型と `skin_ref_name`・`skin_ref_path` を中身を変えずに切り出し、`runtime` の中は直に引き、入口のファイルは呼び手のために出し直す
   - 行の多い側（要求の入口）を元のファイルのまま残し、少ない側（型）を新しいファイルにする
@@ -72,7 +72,7 @@
   - 完了の形: 警告 0 件で通り、倍率の表を引く `runtime` の本番が本体の結線の側を名指さない
   - _Requirements: 3.1_
 
-- [ ] 4. 本体の口（SessionHooks）
+- [x] 4. 本体の口（SessionHooks）
 - [x] 4.1 口の束を作り、差し替えの相を口に替える
   - 本体の新しいモジュール `session` を作り（宣言だけの入口）、`runtime` に口の束の型・`NO_BODY`・本番とテストで倒れ先を分ける `FALLBACK`・`of()` を置く。本番で据え忘れたときは呼ぶたびに `error!(session_hooks_missing)` を出して `NO_BODY` を返す
   - `session` に口の中身と据え付けを置き、`register_systems` の先頭で最初の巡より前に据える。プロセスで共有する状態は増やさない（回数を絞る `OnceLock` は使わない）
@@ -89,7 +89,7 @@
   - 完了の形: 7 ファイルの本番から本体の状態の型を名指す所が消え、可視性・倍率・読み直しの既存の試験が緑
   - _Requirements: 2.1, 3.1, 3.7, 3.8_
 
-- [ ] 5. 終わる相と起動の継ぎ目
+- [x] 5. 終わる相と起動の継ぎ目
 - [x] 5.1 終わる相を相ごと `session` へ移す
   - 通知の受け口・終わる相の本体・system・登録の関数を中身と記録の文を変えずに `session` の新しいファイルへ移し、登録は毎フレームの相の直後に `.before(frame_system)` のまま行う
   - 試験 3 本を名前から `frame_` を外したファイルへ履歴の残る移動で移し、試験の関数の名前は変えない
@@ -104,7 +104,7 @@
   - 完了の形: `runtime` の根と骨組みから起動の側への参照が消え、`zorder_wiring_tests`・起動の試験・再起動の試験が緑
   - _Requirements: 2.1, 2.5, 3.1, 3.8_
 
-- [ ] 6. ファイルの移動
+- [x] 6. ファイルの移動
 - [x] 6.1 本体に頼るファイルを `session` へ移す
   - 切替・読み直し・実行系の起動・写し・同じフォルダの留め・切替の要求の入口の本番と各テスト（切替の試験の支えを含む）を履歴の残る移動で `session` へ移す
   - 中身の書き換えは、`runtime` に残るものへのパス・型の置き場・名前の改めだけ。見える範囲の広げはコンパイルが求めた分だけで、足した分を `research.md` に書く
@@ -119,7 +119,7 @@
   - 完了の形: 3 つの受け口の試験と台帳の試験が緑で、`runtime` に cue の受け口の持ち主を名指す所が無い
   - _Requirements: 2.2, 2.3, 2.4_
 
-- [ ] 7. ログの出所の追従
+- [x] 7. ログの出所の追従
 - [x] 7.1 記録の分け方の決まりを移した出所へ追従させる
   - 決まり `areka::session::ghost_switch`（Status）へ改め、決まりを当てる前に引く「残さない出所」の表に `areka::install::install_cue` を置く
   - 既存の `unrelated_info_is_not_kept` に、その出所の info は残らず warn は誤りになる assert を足す。行の数と順（14 行）は変えない
@@ -133,7 +133,7 @@
   - 完了の形: 出所を照合するテストが新しい出所で緑で、`log-convention.md` が新しい出所を指す
   - _Requirements: 1.5, 4.2, 4.4, 4.5_
 
-- [ ] 8. 文書と申し送り
+- [x] 8. 文書と申し送り
 - [x] 8.1 (P) 文書と steering と網羅台帳の古いパスと名前を書き換える
   - `doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`・`doc/ssp-mcp/`（`log-convention.md` は 7.2 が持つので除く）・`doc/ideas/`・`.kiro/steering/structure.md`・`tech.md` を移した先のパスと改めた名前へ
   - 網羅台帳の根拠の場所を根拠のファイルが実際に移った先へ書き換え、台帳から作る生成物（`briefing-*.md` ほか）は生成器で作り直す（手で直さない）
@@ -151,7 +151,7 @@
   - _Depends: 6.2, 7.2_
   - _Requirements: 5.7, 5.8, 7.2, 7.3_
 
-- [ ] 9. 検証
+- [x] 9. 検証
 - [x] 9.1 境界の 0 件と数を記録する
   - 完了の木で D1・D2 を 1.3 と同じ方法で作り直し（新しいファイルを入れ、移したファイルを外す）、式 1〜3 を当て、3 本の出力が 0 行であること（0 でなければ残りが全部 `#[cfg(test)]` の項目の中であることを行ごとに）を示す
   - 説明の文の名指しを 3 本の説明の版で一覧にし、テストが本体の外を引く所をファイルごとの数で数える
