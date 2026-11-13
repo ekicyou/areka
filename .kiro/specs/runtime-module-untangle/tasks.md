@@ -182,7 +182,7 @@
   - 完了の形: 全体テストが緑
   - _Requirements: 8.3_
 
-- [ ] 9.6 実機テスト 2 つと終わる道の記録の順（後）
+- [x] 9.6 実機テスト 2 つと終わる道の記録の順（後）
   - `smoke_boot_loop_exit` と `emo2_real_run`（`AREKA_EMO2_REAL_RUN`）を 1 回ずつ回す
   - 1.2 と同じ 3 つの道・同じ `RUST_LOG` で走らせ、終わる段取りの行の順を、出所と文言の対応表で読み替えて 1.2 と比べる
   - 実機の走行はこの 2 つと 1.2 だけ
@@ -207,3 +207,4 @@
 - 8.1: 揺れ: `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が `cargo test -p areka -j 4` の 1 回で赤（単独 3 回・全体 1 回は緑）。9.5 で再び赤なら止めて調べる。前から古い行番号（`runtime/assets.rs:55`・`:82`・`:291`・`frame/zorder_descript.rs:61`・`spine_conformance_script.rs:589` ほか・merge-base でも同じ）は範囲外＝完了の棚卸で起票候補。briefing-*.md は手書き（生成物は report/*.md）。
 - 9.1: rg は PATH に無い。VS Code 同梱の `C:\Program Files\Microsoft VS Code\69047191fc\resources\app\node_modules.asar.unpacked\@vscode\ripgrep-universal\bin\win32-x64\rg.exe`（15.0.0 +pcre2）で測った。`frame/wiring.rs:322` の説明の文 `super::super::input_events::balloon` は字面が古い＝9.3 の申し送りの候補。
 - 9.5: 全体テストで `areka-ghost`・`shiori4-testdll`（本 spec が触っていない）が cargo 1.100 の build-dir の置き方で赤だったが、main で直っていた。main を取り込んで緑（research.md 27 節）。起票は不要。
+- 9.6: メニューの道は子の起動から「終了」のクリックまでを 1 つの pwsh プロセスで続ける（段のあいだに別の pwsh を起こすとメニューが閉じる）。メニューの窓もカーソルを先に乗せないと `WindowFromPoint` が下の窓を返す（research.md 30 節）。

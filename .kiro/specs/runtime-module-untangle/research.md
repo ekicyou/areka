@@ -1170,3 +1170,91 @@ RG=<rg.exe>; cd crates/areka/src
 - 決まり（触っていない crate だけが赤 → 赤の crate だけもう 1 回）どおり `cargo test -p areka-ghost -p shiori4-testdll` を回し直し、同じ 5 本が同じ文で赤（変化なし）。本 spec の受け持ちではないので申し送りとし、本 spec の全体テストは緑とみなす。完了の棚卸で `/kiro-discovery` に起票する（道具の版の上がりで落ちたテストの直し）。
 - 8.1 で 1 度だけ赤だった揺れのテスト `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は今回緑。
 - 追記（同日）: 開発者より「main では解決している」。`origin/main`（`d6777fc56`）を取り込み（merge `7c4abcb71`・衝突は `tech.md` の 1 か所＝main の文言に新しいパス `runtime/spine_wait.rs` を当てた）、`cargo test -p areka-ghost -p shiori4-testdll` は全部緑、`cargo test -p areka` は 3171 passed・0 failed、`cargo check --workspace --all-targets` は rustc の警告 0（マニフェストの 3 件は前のまま）、fmt は差なし。上の 2 crate の赤は申し送り不要になった（起票しない）。全体テストの通しは最終の検証（`/kiro-validate-impl`）で回す。
+
+## 終わる道 3 つの記録の順（後）と実機テスト 2 つ（2026-11-13・タスク 9.6・要件 3.6・8.4・8.5・8.8）
+
+### 28. 実機テスト 2 つ（要件 8.4・8.8）
+
+- 測った木: `e9c953d3a`（main の取り込みの後）。`cargo build -p areka`（`target\debug\areka.exe`・11-13 16:35）と `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の後、排他テストの机を取って 1 回ずつ回した。走らせる前に 127.0.0.1:9276 を握るものが無いことを `netstat -ano` で確かめた。
+
+| テスト | 回し方 | 結果 |
+|---|---|---|
+| `smoke_boot_loop_exit` | `cargo test -p areka --test smoke_boot_loop_exit` | 5 passed・0 failed（①〜⑤ の 5 方向） |
+| `emo2_real_run` | `$env:AREKA_EMO2_REAL_RUN="1"; cargo test -p areka --test emo2_real_run -- --nocapture` | 14 passed・0 failed（実走 `emo2_real_run_boots_talks_and_exits_zero` を含む） |
+
+- `emo2_real_run` の時間の 1 行: `wire_ms=850 attach_ms=1054 wrap_ms=1935 close_ms=19391 talk_to_wrap_ms=81 attach_to_talk_ms=820 primary_dpi=192`。
+
+### 29. 終わる道 3 つの行の順（後）と 17 節（前）との比べ（要件 3.6・8.5）
+
+- 道具・`RUST_LOG`・手順は 17 節と同じ。違うのは根だけで、`target\test-roots\rmu-after-<道>\` に置いた（17 節の道具の `rmu-$Path` を `rmu-after-$Path` に替えた写しで走らせた）。`RUST_LOG` は 17 節の文字列のまま:
+  ```
+  info,areka::app_exit=debug,areka::emo2_boot::frame=debug,areka::runtime::frame=debug,areka::session::ghost_quit=debug
+  ```
+- 終わる段取りの行の文言は前から変わっていない（`git grep` で確かめた: `session/ghost_quit.rs:93`・`runtime/frame.rs:211`・`app_exit.rs:136`・`:299`・`ghost_session.rs:655`・`smoke_exit.rs:37`）。ゆえに `exitlines.ps1` の `$plain` は 17.3 節のまま使った。
+
+| 道 | pid | 終わり（`app_exit` の `origin`） | 終了コード | 行の数（後／前） |
+|---|---|---|---|---|
+| 煙の自動終了 | 30200 | `Smoke`（closed=4） | 0 | 12／12 |
+| 窓を閉じる | 12872 | `KanadeStopped(Quit)`（closed=4） | 0 | 18／18 |
+| メニューの終了 | 27896 | `KanadeStopped(Quit)`（closed=4） | 0 | 16／14 |
+
+比べ方: 抜き出しを UTF-8（BOM なし）でファイルへ出し、行末の空白を落とし、出所を design.md「LogTargetFollow」の表で前の名へ読み替えて（`areka::session::ghost_quit`→`areka::emo2_boot::frame`・`areka::runtime::frame`→`areka::emo2_boot::frame`）、17.1 節の行と位置どうしで比べた。
+
+- **煙の自動終了**: 12 行すべて同じ順・同じ文言・同じ event。
+- **窓を閉じる**: 18 行すべて同じ順・同じ文言・同じ event（`steady_close_pending`→`steady_talk_done_close` の 2 行は前も後も在る）。
+- **メニューの終了**: 後は前より 2 行多い。多い 2 行は先頭の `steady_close_pending`→`steady_talk_done_close`（「終了」を押したとき台詞を再生中だった）。17.2 節のとおりこの 2 行の有る無しは段取りの順の違いではない。この 2 行を除くと 14 行すべて前と同じ順・同じ文言・同じ event。
+- 読み替えた出所の行は後で次のとおり出た: `INFO | areka::session::ghost_quit | kanade の終了系列が完了した: 全ゴースト窓を閉じる | ghost_quit`（窓を閉じる・メニュー）と `DEBUG | areka::runtime::frame | 終了が指示済み——毎フレームの処理を読み飛ばす | frame_phases_skipped_after_exit`（3 つとも）。`areka::emo2_boot::frame` の行は 1 行も無い。
+- **結論: 3 つの道とも、終わる段取りの行の順は前（17 節）と後で同じ**。違いは出所の名の読み替えだけで、それは LogTargetFollow の表のとおり。
+
+後のメニューの道の行（読み替える前）:
+
+```
+INFO | kanade | close 指示——active talk あり・保留記録（TalkDone を待つ） | steady_close_pending
+INFO | kanade | talk 完了——保留 close を消化し握手開始 | steady_talk_done_close
+INFO | kanade | OnClose GET を発行し握手を開始 | close_handshake_begin
+INFO | kanade | OnClose 応答スクリプト——close talk を再生起動し完了を待機 | close_talk_start
+INFO | kanade | reason=Quit——終了系列（Quit）へ | talk_done_quit
+INFO | shiori-actor | 正規 clean shutdown 完了（unload が正常終了を返した） | unload_clean
+INFO | shiori-actor | 停止指示（Close）を受領——即時停止（接続資材を RAII teardown） | close
+INFO | areka::session::ghost_quit | kanade の終了系列が完了した: 全ゴースト窓を閉じる | ghost_quit
+INFO | wintf::ecs::app | [App] Last window closed. |
+INFO | areka::app_exit | [quit_app] 全窓を閉じ、終了を指示した | app_exit
+INFO | wintf::runtime::message_loop | [AppExit] exit requested |
+DEBUG | areka::runtime::frame | 終了が指示済み——毎フレームの処理を読み飛ばす | frame_phases_skipped_after_exit
+INFO | areka::ghost_session | seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止） |
+INFO | ghost-shutdown | persist flush confirmed |
+INFO | ghost-shutdown | ghost shutdown sequence completed |
+INFO | areka_mcp::server | MCP: 待受を閉じた |
+```
+
+煙の自動終了と窓を閉じるの後の行は、読み替えると 17.1 節の行と 1 行ずつ同じなので写さない（出所が変わった行は上の 2 種類だけ）。
+
+### 30. メニューの道の手順の学び
+
+- 1 回目は失敗した（pid 36988・保険の 120 秒の自動終了 `origin=Smoke` で終わった・行の比べには使っていない）。右クリックでメニューは出た（`menu_shown items=11`）が、手順の段ごとに別の `pwsh` を起こし、撮った絵を見てから次へ進んだため、「終了」の点を確かめた時には `WindowFromPoint` が explorer（メニューの下の窓）を返し、約 30 秒後にカーソルを動かして確かめ直した時にはメニューが消えていて、左クリックはキャラの体への普通のクリック（`OnMouseClick`）になった。害は無い。机を持ったままのやり直しはせず、机を返してから道具を直した。
+- 直した形（2 回目・成功）: 子を起こすところから「終了」を押すところまでを 1 つのプロセスで続ける。`tools/mouse-input.ps1` は `&` で同じプロセスの中から呼び、段のあいだに別の `pwsh` を起こさない。どの点も**先にカーソルを動かしてから** `WindowFromPoint` で pid を確かめる（メニューの窓もキャラの窓と同じく、カーソルが乗る前は下の窓が返る）。「終了」の点は、子の pid でかつキャラの窓とは別の窓（＝メニューの窓）のときだけ押す。2 回目は体の点＝キャラの窓（hwnd 28052968）、「終了」の点＝別の areka の窓（hwnd 23464632）で、押して終わった。
+- 道具（`exitrun-menu.ps1`）は 17.4 節の道具の根を `rmu-after-$Path` に替え、menu の枝の窓の一覧を出した後に次を足したもの（17.4 節との差の全部）:
+
+```powershell
+        # 9.6 retry: the whole menu operation in this one process (no pwsh spawned between steps).
+        Add-Type -Namespace RmuW32 -Name P -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(System.Drawing.Point p); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);' -ReferencedAssemblies System.Drawing.Primitives
+        function PidAt([int]$x, [int]$y) { $h = [RmuW32.P]::WindowFromPoint([System.Drawing.Point]::new($x, $y)); $o = [uint32]0; [RmuW32.P]::GetWindowThreadProcessId($h, [ref]$o) | Out-Null; "$h/$o" }
+        $tool = "$wt\tools\mouse-input.ps1"
+        # The character window is the one whose bottom touches the work area bottom (1.2: 1392,904,2064,1704).
+        $char = $found | Where-Object { $_ -match 'rect=1392,904,2064,1704$' }
+        if (-not $char) { Write-Output 'abort character window rect differs from 1.2'; Wait-Exit; return }
+        $bx, $by, $qx, $qy = 1592, 1304, 1684, 1280   # body point and the Quit item, as in 1.2
+        & $tool -Action move -X $bx -Y $by; Start-Sleep -Milliseconds 300
+        $a = PidAt $bx $by; Write-Output "body $a"
+        if ($a -notmatch "/$target$") { Write-Output 'abort body pid mismatch'; Wait-Exit; return }
+        & $tool -Action rightclick -X $bx -Y $by; Start-Sleep -Milliseconds 1000
+        & $tool -Action shot -X 1392 -Y 904 -X2 2064 -Y2 1704 -Out "$run\menu.png"
+        & $tool -Action move -X $qx -Y $qy; Start-Sleep -Milliseconds 300
+        $b = PidAt $qx $qy; Write-Output "quit $b"
+        # The Quit item must be on an areka window other than the character window itself.
+        if ($b -match "/$target$" -and $b -notmatch "^$(($char -replace '^window hwnd=(\d+).*$','$1'))/") {
+            & $tool -Action click -X $qx -Y $qy
+        } else { Write-Output 'abort quit point is not the menu window (not clicking)' }
+```
+
+- 走らせ方: `pwsh -NoProfile -File exitrun-menu.ps1 -Path menu`（前で走らせると子が終わるまで戻らない）。座標は物理画素（主のモニタは 200%）で、窓の矩形もメニューの位置も 1.2 と同じだった。
