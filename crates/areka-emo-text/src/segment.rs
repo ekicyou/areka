@@ -564,3 +564,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "segment_grow_tests.rs"]
+mod grow_tests;

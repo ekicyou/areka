@@ -246,6 +246,10 @@ mod tests {
             include_str!("region_inline_limit_tests.rs"),
         ),
         ("segment.rs", include_str!("segment.rs")),
+        (
+            "segment_grow_tests.rs",
+            include_str!("segment_grow_tests.rs"),
+        ),
         ("layout.rs", include_str!("layout.rs")),
         (
             "layout_cluster_tests.rs",
@@ -312,6 +316,10 @@ mod tests {
         (
             "state_decoration_reset_tests.rs",
             include_str!("state_decoration_reset_tests.rs"),
+        ),
+        (
+            "state_decoration_incremental_tests.rs",
+            include_str!("state_decoration_incremental_tests.rs"),
         ),
         ("layout_line_ops.rs", include_str!("layout_line_ops.rs")),
         ("layout_scan.rs", include_str!("layout_scan.rs")),
@@ -475,6 +483,7 @@ mod tests {
         "actor_test_support.rs",
         "actor_tests.rs",
         "actor_underline_present_tests.rs",
+        "actor_writing_warn_tests.rs",
         "draw.rs",
         "draw_catalog.rs",
         "draw_catalog_tests.rs",
@@ -522,7 +531,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 88, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 90, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

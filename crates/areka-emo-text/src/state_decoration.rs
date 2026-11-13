@@ -647,3 +647,7 @@ mod tests;
 #[cfg(test)]
 #[path = "state_decoration_carry_tests.rs"]
 mod carry_tests;
+
+#[cfg(test)]
+#[path = "state_decoration_incremental_tests.rs"]
+mod incremental_tests;

@@ -841,6 +841,10 @@ mod scale_refresh_tests;
 mod region_warn_tests;
 
 #[cfg(test)]
+#[path = "actor_writing_warn_tests.rs"]
+mod writing_warn_tests;
+
+#[cfg(test)]
 #[path = "actor_region_collapse_tests.rs"]
 mod region_collapse_tests;
 
