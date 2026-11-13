@@ -4414,7 +4414,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4432,7 +4432,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4450,7 +4450,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4468,7 +4468,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その出しかたを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4486,7 +4486,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その並びの決まった位置に項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4504,7 +4504,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その並びに階層を作って項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4522,7 +4522,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka が 2 人目以降の窓の題に使う名前は起点の descript の側からしか採らず、シェルの descript に書かれた同じ綴りは引かれない。
 題を組み立てる areka の placement::source::build_titles が走査するのは起点の表だけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄の値は読まれず、`charN.` の綴りもキャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4587,7 +4587,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はシェルの作者の連絡先を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがゴースト・バルーン・プラグインの descript にもある。別ドメインのプロパティの側にも同名の項目がある（areka-sylphya の vocab::GENERIC_PROP_NAMES が語彙として持っている）。SHIORI の資源の側にこの名前は無い——そちらにあるのは `craftman` と `craftmanw` の 2 つだけである。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4876,7 +4876,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4894,7 +4894,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4912,7 +4912,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4930,7 +4930,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その出しかたを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4948,7 +4948,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その並びの決まった位置に項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4966,7 +4966,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その並びに階層を作って項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -4984,7 +4984,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka が相方の名前として採るのは起点の descript の側だけで、シェルの descript に書かれた同じ綴りは名前としては引かれない。
 名前を写すのは areka-parsers の package::resolve で、走査するのは起点の descript から作った表 1 つだけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 1 つ補いがある——この欄の値は読まれないが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5018,7 +5018,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その背景に敷く画像を置く位置を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5035,7 +5035,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その背景に敷く画像のファイル名を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5053,7 +5053,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その背景の上に出る文字の色の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5071,7 +5071,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その背景の上に出る文字の色の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5089,7 +5089,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その背景の上に出る文字の色の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5107,7 +5107,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その選べない項目の文字の色の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5125,7 +5125,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その選べない項目の文字の色の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5143,7 +5143,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その選べない項目の文字の色の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5161,7 +5161,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その文字の大きさを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5179,7 +5179,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その書体を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5197,7 +5197,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その手前に重ねる画像を置く位置を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5214,7 +5214,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その手前に重ねる画像のファイル名を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5232,7 +5232,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その手前の画像の上に出る文字の色の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5250,7 +5250,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その手前の画像の上に出る文字の色の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5268,7 +5268,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その手前の画像の上に出る文字の色の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5286,7 +5286,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その枠の色の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5304,7 +5304,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その枠の色の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5322,7 +5322,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その枠の色の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5340,7 +5340,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その仕切り線の色の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5358,7 +5358,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その仕切り線の色の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5376,7 +5376,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その仕切り線の色の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5394,7 +5394,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その脇に置く画像を置く位置を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
 束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5411,7 +5411,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その脇に置く画像のファイル名を決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の項目が別ドメインの SHIORI の資源の側にもある（areka-sylphya の vocab::shiori_resource が語彙として持っている。そちらは辞書へ問い合わせて答えを返す名前であって、シェルの descript の欄ではない）。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5460,7 +5460,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には説明文を開く画面が無く、その文字コードの宣言を読む経路も無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えの宣言と、areka-ghost の config::resolve_shell_name が読むシェル名、そして areka の placement::source::load_descript_source が丸ごと読んだうえで placement::config::build_placement_config と placement::config::resolve_scope が引く窓の置き方の欄、同じクレートの runtime::assets::default_bind_ids が引く起動時の着せ替えだけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えの宣言と、areka-ghost の config::resolve_shell_name が読むシェル名、そして areka の placement::source::load_descript_source が丸ごと読んだうえで placement::config::build_placement_config と placement::config::resolve_scope が引く窓の置き方の欄、areka-seriko の bind::DefaultBinds::from_groups が引く起動時の着せ替えだけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じページの `charset` は areka-parsers の charset::prescan_charset が読んでおり実装済みである。名前は似ているが別の欄で、状態も割れる。ページと欄を決めてから引くこと。
 同じ名前の見出しがバルーン・ゴースト・プラグイン・ヘッドラインの descript にもある。
 文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を対象外と宣言している（説明文を表示する機能が無いため）。担当は決まっていない。
@@ -5595,7 +5595,7 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka の runtime::assets::default_bind_ids が値 `1` の行の番号を集め、起動時の着せ替えの初期集合になる。areka-parsers の package::read_bindgroup_defaults も同じキーを別に転記する。見出しの `*` は 1 個以上の数字。
+areka-parsers の package::read_bindgroup_defaults が値 `1` の行の番号を集め、areka-seriko の bind::DefaultBinds::from_groups がそれを起動時の着せ替えの初期集合にする。見出しの `*` は 1 個以上の数字。
 担当 spec は areka-P0-mayuna-compose。
 束: 着せ替えの宣言・正典どおりに動く（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 67——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -5719,7 +5719,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の青の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5737,7 +5737,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の緑の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5755,7 +5755,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵の枠の赤の成分を決めるこの欄を読む経路も無い。
 この欄が成り立つには、発言の履歴を見せる窓が要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5773,7 +5773,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その出しかたを決めるこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は popup-menu-shell-look。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -5791,7 +5791,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その並びの決まった位置に項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5809,7 +5809,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には着せ替えのメニューが無く、その並びに階層を作って項目を置くこの欄を読む経路も無い。
 この欄が成り立つには、右クリックで開く着せ替えのメニューが要る。areka にはそれが無い（着せ替えそのものの宣言は別に読まれている）。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5827,7 +5827,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka がもう 1 つの呼び名として採るのは起点の descript の側だけで、シェルの descript に書かれた同じ綴りは一度も引かれない。
 呼び名を写すのは areka-parsers の package::resolve で、走査するのは起点の descript から作った表 1 つだけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5845,7 +5845,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka が本体側の名前として採るのは起点の descript の側だけで、シェルの descript に書かれた同じ綴りは一度も引かれない。
 名前を写すのは areka-parsers の package::resolve で、走査するのは起点の descript から作った表 1 つだけである。同じ綴りでも状態はページごとに別に決まる。同じ名前の見出しがゴーストの descript にもある。名前で引かず、ページを決めてから引くこと。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 `sakura.` で始まるキーには、`kero.` のようなキャラクタの人数への効き目も無い（areka の placement::config::detect_scopes が材料にするのは `kero.` の綴りだけである。`charN.` の綴りも、2026-10-17 から人数に効かない・areka-P0-emily-ghost-verification のタスク 3.1）。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -5907,7 +5907,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はサーフェスを切り替えるときの重ね消しを止める宣言を読む経路を持たない。
 そもそも areka はサーフェスの切り替えに重ね消しの効果を持たない——`crossfade` に当たる綴りは areka のソースに 1 つも無い。止める対象が無いので、この宣言には受け取る先も無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
 テーマを付けなかった根拠: この欄は機能を切るための宣言で、読まれなくても既定の振る舞いがそのまま残るだけなので、利用者が失うものを 1 つも言えない（テーマを付ける規則は「この項目が無いと利用者はゴーストの何を失うか」に答えられるかどうかの 1 つだけである）。本台帳で `seriko.use_self_alpha` などが「装い」を持つのは、あちらが絵の描き方そのものを決める宣言だからで、切るか切らないかだけを言うこの欄とは別に扱った。
@@ -5925,7 +5925,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は透過色の残る場所を黒で塗るかどうかの宣言を読む経路を持たない。
 透過の正規化を受け持つ areka-emo-atlas の normalize::AlphaParams にはこの切り替えの欄そのものが無く、透過の扱いは α を採るかどうかの 1 つだけで決まる。受け取る口が無いので、書いても何も変わらない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5992,7 +5992,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はファイルセットの種別を読む経路を持たない。
 areka がシェルだと決めるのは置き場所だけで、起点の descript の `seriko.defaultsurfacedirectoryname` が指すフォルダをシェルとして開く（areka-parsers の package::resolve）。正典も SSP はシェルのフォルダの中にあるものを自動で見分けると書いている。正典が省略できないと定める欄を読まないので、種別の違うファイルセットを渡されても気づかない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の runtime::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka-seriko の bind::DefaultBinds::from_groups が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがゴースト・バルーン・プラグイン・インストール指示の descript にもある。名前で引かず、ページを決めてから引くこと。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当は決まっていない。
@@ -7949,7 +7949,7 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の runtime::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka-emo-present の shell_target が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
@@ -7965,7 +7965,7 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の runtime::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka-emo-present の shell_target が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
@@ -7982,7 +7982,7 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の runtime::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka-emo-present の shell_target が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
@@ -7998,7 +7998,7 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の runtime::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka-emo-present の shell_target が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
@@ -8014,7 +8014,7 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の runtime::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka-emo-present の shell_target が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
@@ -8030,7 +8030,7 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の runtime::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka-emo-present の shell_target が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
@@ -8049,7 +8049,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:dev_shell" },
 ]
 note = """
-壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは着せ替えの設定一式（surfaces.txt 側の定義と、シェルの descript.txt 側のメニュー配置）を定める。areka が起動時の初期集合を runtime::assets::default_bind_ids で組むところまでで、利用者が着せ替えを選ぶ入口であるオーナードローメニューが無いため、ページ全体としては満たしていない。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは着せ替えの設定一式（surfaces.txt 側の定義と、シェルの descript.txt 側のメニュー配置）を定める。areka が起動時の初期集合を areka-seriko の bind::DefaultBinds::from_groups で組むところまでで、利用者が着せ替えを選ぶ入口であるオーナードローメニューが無いため、ページ全体としては満たしていない。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
 担当は空。配布者向けのページで、要件 7.2 が名指しする担当 spec にも設計が足した 2 本にも、ページ 1 枚をまとめて引き受ける spec は無い。担当の割り当ては areka-P0-ukadoc-coverage-roadmap に委ねる。
 関連の向き: 正典の本文が相手のページを名指しで指しているとき、指している側にだけ関連を置き、指されている側には戻りの関連を置かない。このページが名指しで指しているのは「シェルの作成」のページだけで、アニメーションの設定そのものの説明をそちらに預けている。これを関連に置いた。着せ替えをメニューへ出す話を書いている「オーナードローメニューの設定」のページは、あちらがこのページを名指しで指している側なので、関連はあちらにある。
 束: 配布者向け・プラグイン・ヘッドライン（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: プラグインとヘッドラインの仕組み）。束の順位: 55——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
