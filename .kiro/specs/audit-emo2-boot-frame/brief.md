@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/emo2_boot/frame/` と `emo2_boot/frame_*.rs`。
+- 受け持つファイル: `crates/areka/src/runtime/frame/` と `runtime/frame_*.rs`、終わる相の `crates/areka/src/session/ghost_quit.rs`・`ghost_quit_tests.rs`・`ghost_quit_logsink_tests.rs`・`ghost_quit_switch_tests.rs`（2026-11-13 `runtime-module-untangle` で書き換えた＝前は `emo2_boot/frame/`・`emo2_boot/frame_*.rs`。終わる相は前の `frame.rs` と `frame_ghost_quit_*_tests.rs` から移した。`runtime-crate-split` で runtime の分は `crates/areka-runtime/src/` へもう一度移る。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）。
 - 大きさ: 60 ファイル・コード 4,845 行・テスト 21,175 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 

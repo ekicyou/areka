@@ -142,7 +142,7 @@
   - _Depends: 6.2, 7.2_
   - _Requirements: 5.5, 5.6_
 
-- [ ] 8.2 (P) roadmap の対応表と brief の受け持つファイルと申し送りを書く
+- [x] 8.2 (P) roadmap の対応表と brief の受け持つファイルと申し送りを書く
   - `.kiro/steering/roadmap.md` に新旧のパスの対応表（design.md「Supporting References」の表）を置く
   - `audit-emo2-boot-frame`・`audit-emo2-boot-spine`・`audit-emo2-boot-switch` の brief の「受け持つファイル」を移した先のパスへ
   - `runtime-crate-split` の brief に、落ちの報告の支えが本体と `areka-runtime` の両方に要ることと、テストが本体の外を引く所（口のテストの倒れ先・文字列で読むファイル・`transition_judge`・骨組みの起動の選択肢）を書く

@@ -8,7 +8,9 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/emo2_boot/` の `ghost_switch*`・`switch_assets*`・`shell_balloon_switch*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`。
+- 受け持つファイル（2026-11-13 `runtime-module-untangle` で書き換えた＝前は `crates/areka/src/emo2_boot/` の `ghost_switch*`・`switch_assets*`・`shell_balloon_switch*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
+  - `crates/areka/src/session/` の `ghost_switch*`・`shell_balloon_switch*`。
+  - `crates/areka/src/runtime/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`、切替から runtime に残した `change_cue*`（`ChangeRequestRaw`）・`skin_switch.rs`（切替の型と `skin_ref_*`）、ホバーの `balloon_hover.rs`・`shell_box_hover.rs`（`input_events/` から移した）。runtime の分は `runtime-crate-split` で `crates/areka-runtime/src/` へもう一度移る。
 - 大きさ: 50 ファイル・コード 5,672 行・テスト 12,687 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
