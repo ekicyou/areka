@@ -247,3 +247,16 @@
 - 確かめて落としたもの: 入口の読み手が挙げた「`cli_wait_tests.rs` の `MERGE_A`・`SOLE_A`・`merge_b` と `cli_tests.rs:83` の引数の配列を支えの `merge`・`request` に」は、2 回目の読み手が同じ候補を落とした理由が今も成り立つので落とした（配列は `waiting`（`--wait` を足して待ちの口で走らせる）・`call_until_first_sleep`・`run_captured` に生の語の並びとして渡すもので、`call` まで走らせる支えの関数では役目を果たせない。寄せるには語の並びを返す別の手が要り、写しを減らすより手を増やす）。本番 12 ファイル・口と待ちのテストは新しい指摘 0。`doc/impl-watch.md:162` の直しはコードと合う。
 
 - 3 回目の直し（4 件すべて・本番のコードは doc の折り返しだけ）＝`e8c0c3e5`。テストは 305 本緑。
+
+### 10.4 4 回目（HEAD `2cc09da7`・テスト 305 本緑）＝新しい指摘 6 件（Must 0・Should 0・Nice 6）・外への約束と実行ファイルの振る舞いに響くもの 0・本番のコードの新しい指摘 0
+
+| # | 重さ | 場所 | 何が起きるか | 直し方 |
+|---|---|---|---|---|
+| R4-1 | Nice | `plan_desk_tests`・`plan_stop_tests`・`plan_turns_tests`・`plan_reclaim_tests` の `TestHolder`・`SoleHolder` の手書き 13 か所・`wait_tests.rs` の `merge_holder`・`hold_test`・`hold_sole`・`status_tests.rs` の `MergeHolder` の手書き 3 か所（値が読み物の確かめに出る 1 か所は除く） | 机の持ち主の組み立てが plan・wait・status の 3 モジュールに写る（R3-3 と同じ種類。plan の支えは `pub(super)` で外から使えない） | `merge_holder`・`test_holder`・`sole_holder`（と `PURPOSE`）を `crate::test_support` へ `pub(crate)` で移し、写しを置き換える |
+| R4-2 | Nice | `plan_turns_tests.rs`・`plan_desk_tests.rs` の参加した直後の `Participant { id, name, repo, since, ..default }` 3 か所 | 同じ組み立てが 2 ファイル | 支えに 1 つ置く |
+| R4-3 | Nice | `cli_test_support.rs:1-2` の doc | `put_state`（書いて置く）と `merge`・`request`・`running`（コマンドの呼び出し）が並びに無い（R2-7 と同じ種類） | 並びに足す |
+| R4-4 | Nice | `store_ports_tests.rs` の `the_wait_record_takes_its_start_time_from_the_clock_of_the_store` | 状態ファイルを手で読む（#7 の取りこぼし） | `read_state(&dir)` に |
+| R4-5 | Nice | `store_tests.rs` の失敗する時計の値 2 か所・`wait_loop_tests.rs` の `denied` の値 2 か所 | 同じファイルの中の写し | ファイルごとに小さな関数 1 つ |
+| R4-6 | Nice | `plan.rs:1`（約 113 桁） | R2-3・R3-4 と同じ種類の長い行 | 2 行に折る（コメントだけ） |
+
+- 確かめて落としたもの: `Command::Request`・`Merge`・`LoadRunning` の手書きは値を支えから外すのが主題。`WaitRecord { .., ..wait_record(..) }` はもう支えを使う。種類の違う `Recent` の組み立て・1 ファイルだけの組み立ては残してよい。ロックの探り 3 つは目的と crate が違う。`cli_wait_tests` の生の配列は §10.3 の理由のまま。
