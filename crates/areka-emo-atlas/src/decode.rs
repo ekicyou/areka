@@ -21,7 +21,7 @@ use crate::table::LoopCount;
 
 mod image_arm;
 mod sniff;
-pub mod wic_arm;
+pub(crate) mod wic_arm;
 
 /// デコード済み画像（BGRA8・非トリム・原寸）。
 ///

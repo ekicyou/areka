@@ -41,7 +41,7 @@
   - 範囲の外のテストが替え玉の読み手に登録する絵が約束を守ることを、ツリー全体の grep で確かめる。本体の中に破る所が見つかったら、直さずに止める。`runtime-module-untangle` のセッションが走っていれば申し合わせ、終わっていれば開発者の裁定を仰ぐ（要件 6.1）
   - 完了の状態: 新しいテストが全部緑（直す前は表に載るか panic して赤）、emo2 の golden と今のテストが変わらず緑、範囲の外で替え玉の読み手を使うクレート（`areka-emo-present`・`areka-emo-compose` ほか）のテストが緑、確かめた呼び出しの件数が記録に残る
   - _Requirements: 2.1, 2.3, 4.6, 4.7, 5.1, 6.1, 7.2_
-- [ ] 2.4 範囲の外に使い手の無い公開の型 9 つとモジュール 8 つを下げる（指摘 22）
+- [x] 2.4 範囲の外に使い手の無い公開の型 9 つとモジュール 8 つを下げる（指摘 22）
   - 頭で、ツリー全体で 9 つの型の名と 8 つのモジュールのパスを grep し、範囲の外のコードの使い手が 0 であることを確かめ直す
   - 下げる型とモジュールの名を、`runtime-module-untangle` のセッションへ知らせる（新しい失敗が今の読めなかった絵と同じ形で、本体に触る所が無いことも添える）。そのセッションが終わっていれば、知らせの代わりに grep の結果（使い手 0 件）を記録に残す
   - 9 つの型をクレートの中だけの形に、8 つの公開のモジュールを非公開に下げ、根の再公開から外す。根から再公開しない公開の項目は、中で使われていれば中だけの形に、使われていなければ消す（`#[allow(dead_code)]` は置かない）。根の説明のリンクを再公開の型へ向け直す
@@ -149,3 +149,4 @@
 
 - 2.2: `check_image` は本番の使い手が無いと clippy の dead_code で落ちるので、仮に `decode/wic_arm.rs::copy_checked` の最後で呼んでいる。2.3 で `animated::accept`/`fits` が使い始めたら、その 1 行を消す（設計どおり WIC の腕は `pixel_len` だけ）。
 - 2.3: 範囲の外で替え玉の読み手（`MemoryDecoder`）に絵を登録する呼び出しを grep で全部読んだ。39 ファイル・45 件（`insert` 35・`insert_animated` 10。内訳 areka 4・areka-emo-compose 17・areka-emo-present 16・areka-emo-text 1・areka-placement 1）、約束（stride ≥ 幅×4・長さ＝stride×高さ）を破るものは 0 件。`decode/wic_arm.rs::copy_checked` の仮の `check_image` は消した。
+- 2.4: `runtime-module-untangle` は PR#447 で着地済みのため、知らせの代わりに grep を記録する。9 つの型（Packer・PackOutput・PackedEntry・Baker・Trimmer・TrimResult・Trimmed・ManifestDeriver・Manifest）と 8 つのモジュール（bake・decode・error・manifest・normalize・pack・table・trim）の範囲の外のコードの使い手は 0 件（当たりは areka-emo-present の説明の文 2 か所と、別の同名の型だけ）。残り物（5.1 の audit で拾う候補）: `normalize.rs:92` の説明が非公開の `Normalizer::plan`/`apply` へリンクする `cargo doc` の警告 2 件（前からある）、`limits.rs` の外から届かない `pub const` 3 つ。

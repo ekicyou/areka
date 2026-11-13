@@ -29,20 +29,20 @@ pub struct SurfaceSet<'a> {
 }
 
 /// マニフェスト＝`ElementId` 順に整列した `AtlasKey` 一覧（採番の正本・D3/D7）。
-pub struct Manifest {
+pub(crate) struct Manifest {
     /// index == `ElementId.0`（密・決定的：(SetId 昇順, rel_path 昇順)）。
-    pub keys: Vec<AtlasKey>,
+    pub(crate) keys: Vec<AtlasKey>,
 }
 
 /// マニフェスト導出器（列挙・重複排除・決定的採番）。
-pub struct ManifestDeriver;
+pub(crate) struct ManifestDeriver;
 
 impl ManifestDeriver {
     /// 全セットの全部の面の element パスを直に数えて重複なく導出し（参照先も同じセットの面なので
     /// 数え漏れは無い）、(SetId 昇順, 相対パス昇順) で `ElementId` を決定的に採番する（D7・golden 安定）。
     ///
     /// 入力は読み取り専用（改変しない）。実パスは生成しない（実パス化はデコード段・一度きり）。
-    pub fn derive(&self, sets: &[SurfaceSet<'_>]) -> Manifest {
+    pub(crate) fn derive(&self, sets: &[SurfaceSet<'_>]) -> Manifest {
         // 重複排除キー＝(SetId, rel_path)。BTreeSet で挿入と同時に (set, path) 昇順整列。
         let mut keys: BTreeSet<(u32, String)> = BTreeSet::new();
 

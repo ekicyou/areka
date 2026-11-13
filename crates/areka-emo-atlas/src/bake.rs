@@ -22,7 +22,7 @@ use crate::table::{AtlasPage, ElementId, Placement};
 use crate::trim::Trimmed;
 
 /// 焼付器（頁確保・blit・座標不変）。
-pub struct Baker;
+pub(crate) struct Baker;
 
 impl Baker {
     /// 座標（`PackOutput`）＋トリム画素から頁バッファ群を確保・blit する。
@@ -48,7 +48,7 @@ impl Baker {
     /// # Invariants
     /// - Packer 出力の座標（`page`/`uv_rect`）を改変しない（Critical Issue 3）。
     /// - `uv_rect` 外の画素は初期値 0（透明）のまま（bleed 防止・5.2/5.3）。
-    pub fn bake_pages(
+    pub(crate) fn bake_pages(
         &self,
         items: &[(ElementId, Trimmed)],
         pack: &PackOutput,

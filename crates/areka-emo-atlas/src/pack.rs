@@ -43,26 +43,26 @@ impl Default for PackConfig {
 ///
 /// `uv_rect` は **padding 非包含**の実トリム矩形（5.3）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PackedEntry {
+pub(crate) struct PackedEntry {
     /// 対象 element。
-    pub id: ElementId,
+    pub(crate) id: ElementId,
     /// 配置頁番号（0-based・密・6.1）。
-    pub page: u32,
+    pub(crate) page: u32,
     /// 頁内 UV（padding 非包含の実矩形・5.3）。
-    pub uv_rect: Rect,
+    pub(crate) uv_rect: Rect,
 }
 
 /// packing 出力（頁数＋各矩形座標）。**画素バッファは持たない**（焼付は Baker）。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PackOutput {
+pub(crate) struct PackOutput {
     /// 使用頁数（密・0..page_count）。
-    pub page_count: u32,
+    pub(crate) page_count: u32,
     /// 各矩形の配置（ElementId 昇順・golden 安定）。
-    pub entries: Vec<PackedEntry>,
+    pub(crate) entries: Vec<PackedEntry>,
 }
 
 /// packer（静的・決定的・複数頁・padding ラップ）。
-pub struct Packer;
+pub(crate) struct Packer;
 
 impl Packer {
     /// トリム矩形群を頁へ決定的に配置し、座標（page/uv_rect）のみを返す。
@@ -76,7 +76,7 @@ impl Packer {
     ///
     /// **座標のみ**を返し、頁バッファ確保も画素 blit も行わない（Critical Issue 3）。
     /// `Trimmed.pbgra` は読まない（`size` のみ使用）。
-    pub fn pack(&self, items: &[(ElementId, Trimmed)], cfg: PackConfig) -> PackOutput {
+    pub(crate) fn pack(&self, items: &[(ElementId, Trimmed)], cfg: PackConfig) -> PackOutput {
         // 空入力 → 頁ゼロ・エントリ空。
         if items.is_empty() {
             return PackOutput {

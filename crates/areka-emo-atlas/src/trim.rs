@@ -18,11 +18,11 @@ use crate::table::{Point, Size};
 /// `original` は常に原画像の寸法（全透明でも記録・4.2/4.5）。`placement=None` は
 /// 全 α==0 の空エントリ（以降の焼付をスキップできる・4.4）。
 #[derive(Clone, Debug)]
-pub struct TrimResult {
+pub(crate) struct TrimResult {
     /// 原寸（4.2/4.5）。全透明でも記録する。
-    pub original: Size,
+    pub(crate) original: Size,
     /// トリム後の配置エントリ。`None`＝全透明（空エントリ・焼付スキップ・4.4）。
-    pub placement: Option<Trimmed>,
+    pub(crate) placement: Option<Trimmed>,
 }
 
 /// トリム後の配置エントリ（tightly packed premultiplied BGRA）。
@@ -30,19 +30,19 @@ pub struct TrimResult {
 /// `trim_offset`＋配置座標で原画像全体を焼き付けた場合と見た目が等価になる（4.5）。
 /// `pbgra` は隙間なく詰めた最小矩形（`stride == size.w*4`・premultiplied 素通し・4.3）。
 #[derive(Clone, Debug)]
-pub struct Trimmed {
+pub(crate) struct Trimmed {
     /// 原画像内の bbox 左上（4.2）。
-    pub trim_offset: Point,
+    pub(crate) trim_offset: Point,
     /// トリム後寸法（α>0 を過不足なく含む最小・4.2）。
-    pub size: Size,
+    pub(crate) size: Size,
     /// トリム後 premultiplied BGRA（隙間なし・`len == stride * size.h`・4.3）。
-    pub pbgra: Vec<u8>,
+    pub(crate) pbgra: Vec<u8>,
     /// 行あたりバイト数（tightly packed ゆえ `size.w * 4`）。
-    pub stride: u32,
+    pub(crate) stride: u32,
 }
 
 /// α トリマー（bbox 算出・空判定・素通し焼付）。
-pub struct Trimmer;
+pub(crate) struct Trimmer;
 
 impl Trimmer {
     /// 正規化済み premultiplied BGRA 画像から α>0 タイト矩形を算出する。
@@ -52,7 +52,7 @@ impl Trimmer {
     /// α>0 画素が 1 つも無ければ `placement=None`（全透明・4.4）。それ以外は
     /// bbox を新規 tightly-packed バッファへ抽出し（画素は無変換・premultiplied
     /// のまま素通し・4.3/D8）、原画像内オフセットと寸法を記録する（4.2）。
-    pub fn trim(&self, img: &NormalizedImage) -> TrimResult {
+    pub(crate) fn trim(&self, img: &NormalizedImage) -> TrimResult {
         let original = Size {
             w: img.width,
             h: img.height,

@@ -10,26 +10,26 @@
 //! 定義する。COM/WIC 依存はデコードポートの WIC 腕にのみ隔離し、正規化以降の
 //! 純粋コアは wintf 本体（ECS/D2D/GraphicsCore）へ依存しない。
 //!
-//! パイプライン各段はモジュールへ分割される（本タスクでは雛形のみ）:
-//! - [`manifest`] — マニフェスト導出（全部の面の絵を直に数える・重複排除）
-//! - [`decode`] — デコードポート（trait）＋既定 WIC 腕
-//! - [`normalize`] — 透過正規化（premultiplied 統一）
-//! - [`trim`] — α トリミング
-//! - [`pack`] — packing 座標算出
-//! - [`bake`] — 頁バッファへの焼付
-//! - [`table`] — 成果物契約型（正本）
-//! - [`error`] — 診断可能なエラー型
+//! パイプラインの各段と、外へ出す型（段のモジュールはクレートの中だけ）:
+//! - マニフェスト導出（全部の面の絵を直に数える・重複排除）— 入力は [`SurfaceSet`]
+//! - デコードポート（trait）＋既定 WIC 腕 — [`ElementDecoder`]・[`WicDecoderArm`]・[`MemoryDecoder`]
+//! - 透過正規化（premultiplied 統一）— [`Normalizer`]・[`AlphaParams`]
+//! - α トリミング（外へ出す型は無い）
+//! - packing 座標算出 — [`PackConfig`]
+//! - 頁バッファへの焼付 — 入口は [`bake`]
+//! - 成果物契約型（正本）— [`AtlasTable`] ほか
+//! - 診断可能なエラー型 — [`BakeError`]・[`DecodeError`]
 
 mod animated;
-pub mod bake;
-pub mod decode;
-pub mod error;
+mod bake;
+mod decode;
+mod error;
 mod limits;
-pub mod manifest;
-pub mod normalize;
-pub mod pack;
-pub mod table;
-pub mod trim;
+mod manifest;
+mod normalize;
+mod pack;
+mod table;
+mod trim;
 
 /// `bake` の成果物（索引表＋失敗集合・channel 非依存・R6.5）。
 ///
@@ -318,7 +318,7 @@ pub use limits::AnimationLimits;
 pub use decode::wic_arm::WicDecoderArm;
 
 // マニフェスト導出（列挙層・R1.1–1.6/5.6・D6）。
-pub use manifest::{Manifest, ManifestDeriver, SurfaceSet};
+pub use manifest::SurfaceSet;
 
 // 共有透過パラメータ型（normalize の設計本拠・SurfaceSet が運ぶ・3.6）。
 pub use normalize::{AlphaParams, UseSelfAlpha};
@@ -326,17 +326,17 @@ pub use normalize::{AlphaParams, UseSelfAlpha};
 // 正規化層（use_self_alpha 解釈・premultiplied BGRA 統一・R3・D5/D8）。
 pub use normalize::{NormalizedImage, Normalizer};
 
-// トリム層（α>0 タイト bbox・オフセット記録・全透明→空・R4・D8）。
-pub use trim::{TrimResult, Trimmed, Trimmer};
-
 // packing 層（決定的・複数頁・padding・座標のみ・R5・D7）。
-pub use pack::{PackConfig, PackOutput, PackedEntry, Packer};
-
-// 焼付層（頁確保・premultiplied 素通し blit・座標不変・R4.3/R6.3・D8・Critical Issue 3）。
-pub use bake::Baker;
+pub use pack::PackConfig;
 
 // 診断可能なエラー型（bake パイプラインの脱落集約・R2.2）。
 pub use error::BakeError;
+
+// 焼きの中の段（マニフェスト・トリム・packing・焼付）。クレートの外には出さない（spec: audit-emo-atlas 指摘 22）。
+pub(crate) use bake::Baker;
+pub(crate) use manifest::ManifestDeriver;
+pub(crate) use pack::Packer;
+pub(crate) use trim::{Trimmed, Trimmer};
 
 // 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
 #[cfg(test)]
