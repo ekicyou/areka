@@ -15,7 +15,9 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{call, done, hold_sign, hold_watches, home_in, put_state, state_bytes};
+use super::test_support::{
+    call, done, hold_sign, hold_watches, home_in, put_state, state_bytes, waits,
+};
 use crate::error::escape_path;
 use crate::state::{ParticipantStatus, WaitKind, WaitRecord};
 use crate::test_support::{names, read_state};
@@ -54,13 +56,6 @@ fn call_until_first_sleep(home: &Path, words: &[&str]) {
         stopped_by.downcast_ref::<&str>(),
         Some(&"a test reached the real 1-second sleep")
     );
-}
-
-/// 待ちの記録（識別, 種類）。
-fn waits(home: &Path) -> Vec<(String, WaitKind)> {
-    let state = read_state(home);
-    let key = |wait: &WaitRecord| (wait.id.clone(), wait.kind);
-    state.waits.iter().map(key).collect()
 }
 
 /// 消えた: 終了コード 3・標準出力は空・標準エラーにその 1 行。

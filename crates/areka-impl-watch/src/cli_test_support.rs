@@ -1,5 +1,5 @@
 //! `cli` のテストの支え: 引数の組み立て・差し替えた書き手での実行・一時の置き場所・居る印・
-//! 状態ファイルとフォルダの中身の読み取り。
+//! 結果の 3 つの組・待ちの記録と状態ファイルの読み取り。
 
 use std::ffi::OsString;
 use std::fs;
@@ -7,42 +7,15 @@ use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 
-use super::args::Opt::{self, Bug, Desk, Id, Name, Pr, Purpose, Repo, Sha, Spec, Wait};
 use super::{Outcome, exit_code, run_with};
 use crate::error::WatchError;
 use crate::home::Home;
 use crate::presence::{Held, hold};
-use crate::state::WaitKind;
+use crate::state::{WaitKind, WaitRecord};
+use crate::test_support::read_state;
 
 pub(super) fn args(words: &[&str]) -> Vec<String> {
     words.iter().map(|word| (*word).to_owned()).collect()
-}
-
-/// 引数の綴りと、形に合う値（値を取らないものは `None`）。
-pub(super) fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
-    match opt {
-        Id => ("--id", Some("a1")),
-        Repo => ("--repo", Some("areka")),
-        Spec => ("--spec", Some("areka-P0-impl-watch")),
-        Name => ("--name", Some("見張り役")),
-        Purpose => ("--purpose", Some("負荷の計測")),
-        Desk => ("--desk", Some("test")),
-        Pr => ("--pr", Some("281")),
-        Sha => ("--sha", Some("414d43eb")),
-        Bug => ("--bug", None),
-        Wait => ("--wait", None),
-    }
-}
-
-/// コマンドの名前の後ろに、引数を形に合う値つきで並べる。
-pub(super) fn line(name: &str, opts: &[Opt]) -> Vec<String> {
-    let mut words = vec![name];
-    for opt in opts {
-        let (flag, value) = sample(*opt);
-        words.push(flag);
-        words.extend(value);
-    }
-    args(&words)
 }
 
 /// 差し替えた書き手で走らせ、結果・標準出力・標準エラーを返す。
@@ -78,6 +51,17 @@ pub(super) fn call(home: &Path, words: &[&str]) -> (u8, String, String) {
 /// できた: 終了コード 0・標準出力にその 1 行・標準エラーは空。
 pub(super) fn done(line: &str) -> (u8, String, String) {
     (0, format!("{line}\n"), String::new())
+}
+
+/// 当てはまらなかった: 終了コード 3・標準出力は空・標準エラーにその 1 行。
+pub(super) fn not_applied(why: &str) -> (u8, String, String) {
+    (3, String::new(), format!("not applied: {why}\n"))
+}
+
+/// 待ちの記録（識別, 種類）。
+pub(super) fn waits(home: &Path) -> Vec<(String, WaitKind)> {
+    let key = |wait: &WaitRecord| (wait.id.clone(), wait.kind);
+    read_state(home).waits.iter().map(key).collect()
 }
 
 /// その識別の、その種類の居る印（ロックファイル）を握る。返した値を持っている間だけ「居る」。

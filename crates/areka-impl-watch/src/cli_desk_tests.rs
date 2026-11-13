@@ -1,18 +1,20 @@
 //! 机の申し込みと返し（`request`・`return`・`loadrunning`）の入口の往復のテスト: 出力の 1 行と
 //! 終了コード・断りの `not applied: …` と 3・`--wait` 付きの断りは待ちに入らず待ちの記録を
-//! 残さないこと・`--desk` の形の誤りは何も読み書きしないこと。
+//! 残さないこと（`--desk` の形の誤りが何も読み書きしないことは `cli_tests.rs` が見る）。
 //!
 //! 本物の口（状態ファイル・ロックファイル・本物の時計）を、ワークツリーの `target\` の下の
 //! 一時の置き場所に向けて通す。端末へ出る文が ASCII だけであることは、どの呼び出しでも
 //! [`call`] が判定する。2 つ以上の識別を使うテストは、呼ぶ前に全員の見張りの居る印を握る。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{call, done, hold_watches, home_in, state_bytes};
+use super::test_support::{
+    call, done, hold_watches, home_in, not_applied, put_state, state_bytes, waits,
+};
 use crate::state::{WaitKind, WaitRecord};
-use crate::test_support::{entries, read_state};
+use crate::test_support::read_state;
 
 const PURPOSE: &str = "全体テスト";
 
@@ -38,17 +40,6 @@ fn give_back(home: &Path, id: &str, desks: Option<&str>) -> (u8, String, String)
 fn running(home: &Path, id: &str) -> (u8, String, String) {
     let words = ["loadrunning", "--id", id, "--repo", "areka"];
     call(home, &[&words[..], &["--purpose", PURPOSE]].concat())
-}
-
-/// 当てはまらなかった: 終了コード 3・標準出力は空・標準エラーにその 1 行。
-fn not_applied(why: &str) -> (u8, String, String) {
-    (3, String::new(), format!("not applied: {why}\n"))
-}
-
-/// 待ちの記録（識別, 種類）。
-fn waits(home: &Path) -> Vec<(String, WaitKind)> {
-    let key = |wait: &WaitRecord| (wait.id.clone(), wait.kind);
-    read_state(home).waits.iter().map(key).collect()
 }
 
 /// 断りが `--wait` の有無によらず同じ 1 行と 3 で、状態ファイルを 1 バイトも変えず、待ちの記録を
@@ -172,8 +163,7 @@ fn a_refused_request_wait_removes_the_record_of_a_killed_wait() {
         pid: 4242,
         since: 1,
     });
-    let text = serde_json::to_string(&state).expect("状態を書ける");
-    std::fs::write(home.join("state.json"), text).expect("書ける");
+    put_state(&home, &serde_json::to_string(&state).expect("状態を書ける"));
 
     let held = "desks are held; only a merge holder may add the test desk";
     assert_eq!(
@@ -243,22 +233,4 @@ fn loadrunning_by_a_merge_waiter_is_3_and_by_the_merge_holder_is_recorded() {
     assert_eq!(state_bytes(&home), before);
     // マージの机の持ち主は記録できる（5.5）。
     assert_eq!(running(&home, "a"), done("recorded running load"));
-}
-
-// ---- `--desk` の形の誤り ----
-
-#[test]
-fn a_malformed_desk_is_2_and_reads_or_writes_nothing() {
-    let root = TempPath::under_target("impl-watch-cli-desk");
-    let home = home_in(&root);
-    for desks in ["test,test", "merge", ""] {
-        for extra in [&[][..], &["--wait"]] {
-            let (code, out, err) = request(&home, "a", desks, extra);
-            assert_eq!((code, out.as_str()), (2, ""), "{desks:?} {extra:?}");
-            assert!(err.starts_with("usage error: "), "{err:?}");
-            // 置き場所の解決（フォルダを作る）にも進まない。
-            assert!(!home.exists(), "{desks:?}: 置き場所を作った");
-        }
-    }
-    assert_eq!(entries(root.path()), Vec::<PathBuf>::new());
 }

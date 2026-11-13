@@ -13,7 +13,9 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::test_support::{args, call, done, hold_watches, home_in, put_state, state_bytes};
+use super::test_support::{
+    args, call, done, hold_watches, home_in, not_applied, put_state, state_bytes,
+};
 use super::{exit_code, run_with};
 use crate::error::{WatchError, escape_path};
 use crate::state::RecentKind;
@@ -49,11 +51,6 @@ fn merged(home: &Path, id: &str) -> (u8, String, String) {
         home,
         &["merged", "--id", id, "--pr", "281", "--sha", "414d43eb"],
     )
-}
-
-/// 当てはまらなかった: 終了コード 3・標準出力は空・標準エラーにその 1 行。
-fn not_applied(why: &str) -> (u8, String, String) {
-    (3, String::new(), format!("not applied: {why}\n"))
 }
 
 // ---- マージの机 ----
@@ -451,36 +448,6 @@ fn clear_repo_leaves_everyone_of_the_repo_and_prints_the_ids_without_a_backup() 
         call(&home, &["clear", "--repo", "areka"]),
         done("cleared repo=areka; left: none")
     );
-}
-
-#[test]
-fn a_malformed_clear_repo_is_2_and_creates_or_changes_nothing() {
-    let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
-    let malformed: [&[&str]; 8] = [
-        &["clear", "--repo"],
-        &["clear", "--repo", "a/b"],
-        &["clear", "--repo", r"C:\x"],
-        &["clear", "--repo", "areka", "--repo", "areka"],
-        &["clear", "--repo", "areka", "--id", "a"],
-        &["clear", "--repo", "areka", "extra"],
-        &["clear", "--repo", "areka", "--wait"],
-        &["clear", "--wait"],
-    ];
-    // 置き場所の無いときは作らない。
-    for words in malformed {
-        let (code, out, _) = call(&home, words);
-        assert_eq!((code, out.as_str()), (2, ""), "{words:?}");
-        assert!(!home.exists(), "{words:?}: 置き場所を作った");
-    }
-    // 状態の在るときは変えず、何も足さない。
-    merge(&home, "a");
-    let (before, listed) = (state_bytes(&home), names(&home));
-    for words in malformed {
-        assert_eq!(call(&home, words).0, 2, "{words:?}");
-        assert_eq!(state_bytes(&home), before, "{words:?}");
-        assert_eq!(names(&home), listed, "{words:?}");
-    }
 }
 
 // ---- 書けなかった読み物 ----

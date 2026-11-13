@@ -4,6 +4,7 @@
 //! （本番の表を書き換えると、このファイルのテストが赤になる）。
 
 use super::super::subject;
+use super::super::test_support::args;
 use super::{COMMANDS, Command, Invocation, Opt, parse, usage};
 use crate::plan;
 use crate::state::DeskSet;
@@ -30,12 +31,7 @@ const DESIGN: [(&str, &[Opt], &[Opt], bool); 14] = [
 
 const ALL_OPTIONS: [Opt; 10] = [Id, Repo, Spec, Name, Purpose, Desk, Pr, Sha, Bug, Wait];
 
-fn args(words: &[&str]) -> Vec<String> {
-    words.iter().map(|word| (*word).to_owned()).collect()
-}
-
-/// 引数の綴りと、形に合う値（値を取らないものは `None`）。入口のテストの支え
-/// （`cli_test_support.rs`）とは別に持つ（`--desk` を含む）。
+/// 引数の綴りと、形に合う値（値を取らないものは `None`）。使い手はここだけ。
 fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
     match opt {
         Id => ("--id", Some("a1")),
@@ -51,7 +47,7 @@ fn sample(opt: Opt) -> (&'static str, Option<&'static str>) {
     }
 }
 
-/// コマンドの名前の後ろに、引数を形に合う値つきで並べる。
+/// コマンドの名前の後ろに、引数を形に合う値つきで並べる。使い手はここだけ。
 fn line(name: &str, opts: &[Opt]) -> Vec<String> {
     let mut words = vec![name];
     for opt in opts {
@@ -538,12 +534,6 @@ fn usage_is_ascii_and_shows_every_command_argument_and_exit_code() {
             );
         }
     }
-    assert!(
-        lines.contains(
-            &"  merge --id <id> --repo <repo> --spec <spec> [--bug] [--name <name>] [--wait]"
-        ),
-        "{text}"
-    );
     assert!(lines.contains(&"  unstop [--id <id>]"), "{text}");
     assert!(lines.contains(&"  --help"), "{text}");
 
@@ -612,26 +602,6 @@ fn usage_notes_say_what_3_means_for_exactly_the_commands_that_can_end_with_3() {
             with_3.contains(&name),
             "{name}: {note}"
         );
-    }
-}
-
-/// 再開の待ちの 0 は 2 通り（再開した・停止要請が出し直された）。
-#[test]
-fn usage_notes_of_the_resume_waits_say_that_0_is_resumed_or_a_stop_requested_again() {
-    let lines: Vec<&str> = usage().lines().collect();
-    for (command, note) in [
-        (
-            "  stopped --id <id> [--wait]",
-            "report stopped; the test desk held is freed. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
-        ),
-        (
-            "  resume --id <id>",
-            "wait for the resume only. 0=resumed, or stop requested again 3=record gone",
-        ),
-    ] {
-        let at = lines.iter().position(|l| *l == command);
-        let at = at.unwrap_or_else(|| panic!("{command} の行が無い"));
-        assert_eq!(lines[at + 1].trim_start(), note);
     }
 }
 
@@ -755,8 +725,9 @@ fn desk_refuses_empty_twice_unknown_and_merge() {
     );
 }
 
+/// 名前の行（設計の綴りのまま）の次の行が、設計の説明の行。
 #[test]
-fn usage_shows_the_merge_request_return_and_loadrunning_lines_of_the_design() {
+fn usage_shows_the_design_note_under_each_named_command_line() {
     let text = usage();
     let lines: Vec<&str> = text.lines().collect();
     for (command, note) in [
@@ -779,6 +750,15 @@ fn usage_shows_the_merge_request_return_and_loadrunning_lines_of_the_design() {
         (
             "  cancel --id <id>",
             "drop the requests and desks of the id; the participant stays. 0=done",
+        ),
+        // 再開の待ちの 0 は 2 通り（再開した・停止要請が出し直された）。
+        (
+            "  stopped --id <id> [--wait]",
+            "report stopped; the test desk held is freed. 0=recorded 3=no stop request; with --wait 0=resumed, or stop requested again 3=record gone",
+        ),
+        (
+            "  resume --id <id>",
+            "wait for the resume only. 0=resumed, or stop requested again 3=record gone",
         ),
     ] {
         let at = lines.iter().position(|l| *l == command);
