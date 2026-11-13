@@ -4,6 +4,8 @@ use bevy_ecs::world::DeferredWorld;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush, Visual};
 
+use super::composite::SurfaceComposite;
+
 /// GPU 資源を使う窓の印（在ることだけに意味がある）
 ///
 /// 変化の印は見ない。作り直しの合図は `Res<GraphicsCore>` の変化の印。
@@ -176,10 +178,14 @@ pub struct SurfaceGraphics {
     /// brush を保持し損ねると surface が解放され黒画像化するため、寿命をここで固定する。
     brush: Option<CompositionSurfaceBrush>,
     pub size: (u32, u32),
+    /// 描画面ごとの入れ物（要件 4.3）。描画面の入れ替えと放しで一緒に放す（4.5）。
+    composite: Option<SurfaceComposite>,
 }
 
 // SAFETY 条件: WindowGraphics と同様。CompositionDrawingSurface / CompositionSurfaceBrush への
 // 呼び出しが同時に実行されないことを ECS スケジュール構成が担保する前提（UI スレッドアフィニティ）。
+// 入れ物は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列の D2D の資源で、同じ系列への呼び出しは
+// D2D が内部で直列化する。入れ物の 1 画素の写し先と控えは `Mutex` の中にある（`SurfaceComposite`）。
 unsafe impl Send for SurfaceGraphics {}
 unsafe impl Sync for SurfaceGraphics {}
 
@@ -193,7 +199,21 @@ impl SurfaceGraphics {
             inner: Some(surface),
             brush: Some(brush),
             size,
+            composite: None,
         }
+    }
+
+    /// 入れ物への参照を取得（まだ合成していない・放した後は `None`）
+    // 本番の係が使い始めるまで（6.2・6.3）は、テストの外で使い手が無い。
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn composite(&self) -> Option<&SurfaceComposite> {
+        self.composite.as_ref()
+    }
+
+    /// 入れ物の置き場（係だけが `bypass_change_detection` の下で使う）
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn composite_slot(&mut self) -> &mut Option<SurfaceComposite> {
+        &mut self.composite
     }
 
     pub fn is_valid(&self) -> bool {
@@ -210,7 +230,7 @@ impl SurfaceGraphics {
         self.brush.as_ref()
     }
 
-    /// Surface と brush を設定（既存のコンポーネントを直接更新）
+    /// Surface と brush を設定（既存のコンポーネントを直接更新・入れ物は放す）
     ///
     /// commands.insert()の代わりにこのメソッドを使用することで、
     /// 同一フレーム内で変更が即座に反映される。
@@ -224,9 +244,10 @@ impl SurfaceGraphics {
         self.inner = Some(surface);
         self.brush = Some(brush);
         self.size = size;
+        self.composite = None;
     }
 
-    /// Surface と brush をクリア（装置の失いでの無効化もこの口を使う）
+    /// Surface と brush と入れ物をクリア（装置の失いでの無効化もこの口を使う）
     ///
     /// commands.remove()の代わりにこのメソッドを使用することで、
     /// コンポーネント自体は残したまま内容だけをクリアする。
@@ -234,6 +255,7 @@ impl SurfaceGraphics {
         self.inner = None;
         self.brush = None;
         self.size = (0, 0);
+        self.composite = None;
     }
 }
 

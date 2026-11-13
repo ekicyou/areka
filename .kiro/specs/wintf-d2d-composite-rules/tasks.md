@@ -96,7 +96,7 @@
   - _Requirements: 5.1, 5.2, 5.4, 5.9, 7.8_
 
 - [ ] 6. 描画の係と読み戻しの口への組み込み
-- [ ] 6.1 描画面の部品に入れ物の欄を持たせ、描画面の入れ替えと放しで入れ物も放す
+- [x] 6.1 描画面の部品に入れ物の欄を持たせ、描画面の入れ替えと放しで入れ物も放す
   - 描画面の部品に入れ物の欄と、読む口・係だけが使う書く口を足し、描画面の入れ替えと放し（大きさの変化・持ち主から外れる・装置の失い）で入れ物を無しにする
   - 部品の `Send`／`Sync` の根拠の注記に、入れ物の資源と控えの錠を足す
   - 完了の姿: 描画面を入れ替えた後と放した後に入れ物が無いことを確かめるテストと、既存の描画面の係のテストが緑
@@ -150,3 +150,4 @@
 - 4.2: `emit_layer_tests.rs` の `render_with_unbounded_clip` は emit の図形の切り抜きの層の旗を写している。emit の層の旗を変えるときは一緒に変える。
 - 5.1: `composite.rs` の `#![cfg_attr(not(test), allow(dead_code))]` は 6.2 で外す。`pixel`／`gpu_reads` の欄と `PixelReadState` の `#[allow(dead_code)]` は 5.2 で外す。根の列の `DrawImage` は `render.rs` と重複（6.2 で `compose` へ一本化）。
 - 5.2: `read_pixel`／`read_all` は GPU の失敗を `Err` で返すだけで記録しない。座標の範囲・世代 0・失いの見分けと `error!` は 6.3 の `SurfaceReadback` が持つ。読み戻しのテストは `composite_tests.rs` に置いた（design の `readback_tests.rs` は 6.3 の口のテスト用）。
+- 6.1: `SurfaceGraphics::composite()`／`composite_slot()` の `#[cfg_attr(not(test), allow(dead_code))]` は 6.2／6.3 で使い始めたら外す。入れ物を放す道は `set_surface` と `clear` の 2 つ（持ち主から外れる・装置の失いはどちらも `clear`）。
