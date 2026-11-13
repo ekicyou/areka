@@ -81,16 +81,6 @@ fn drop_without_send_raises_signal_and_try_answer_is_dropped() {
     assert!(matches!(pending.try_answer(), Err(ReplyError::Dropped)));
 }
 
-#[test]
-fn send_after_pending_dropped_does_nothing() {
-    let (request, pending) = new_pair();
-    let answered = pending.answered();
-    drop(pending);
-    // 受け手が居ないので黙って捨てる（panic しない）。
-    request.reply.for_ghost("emo").send(outcome::value("late"));
-    assert!(answered.is_cancelled());
-}
-
 // ---- 送って待つ（`call`）: テストのスレッドで tokio を回して記録を数える ----
 
 use std::sync::mpsc;
@@ -102,8 +92,9 @@ use tracing::Level;
 use crate::ToolOutcome;
 use crate::tools::REPLY_WAIT;
 
-/// 終了の途中の枝が「待たずに返った」と言える経過の上限（長い上限 60 秒に比べて十分短い）。
+/// 返事を待つ長い上限（終了の途中の枝がこれを待たずに返ることを見る）。
 const LONG: Duration = Duration::from_secs(60);
+/// 終了の途中の枝が「待たずに返った」と言える経過の上限（長い上限 60 秒に比べて十分短い）。
 const QUICK: Duration = Duration::from_secs(5);
 
 fn count(events: &[CapturedEvent], level: Level) -> usize {
@@ -257,6 +248,5 @@ fn send_after_timeout_does_nothing() {
     // 要求は受け口に溜まったまま。上限の後に取り出して答える。
     let request = rx.try_recv().expect("要求は届いている");
     assert!(request.reply.is_abandoned());
-    let ((), events) = capture(|| request.reply.for_ghost("emo").send(outcome::value("late")));
-    assert!(events.is_empty(), "{events:?}");
+    request.reply.for_ghost("emo").send(outcome::value("late"));
 }

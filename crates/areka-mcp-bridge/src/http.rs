@@ -448,4 +448,4 @@ fn invalid(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> io::Er
 
 #[cfg(test)]
 #[path = "http_tests.rs"]
-mod tests;
+pub(crate) mod tests;

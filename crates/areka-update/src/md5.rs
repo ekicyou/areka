@@ -8,7 +8,7 @@ use windows::Win32::Security::Cryptography::{BCRYPT_MD5_ALG_HANDLE, BCryptHash};
 /// 前提: `bytes.len() <= u32::MAX`（呼び出し側が守る。ローカルの読みは `diff` が 4 GiB 超を
 /// `LocalUnreadable` にし、取得の本文は `winhttp` が `MAX_BODY_BYTES` で止める）。
 /// `NTSTATUS` が失敗なら致命として `panic!`（Windows 10 以降で擬似ハンドルの MD5 が失敗するのは
-/// OS の暗号基盤が壊れているとき＝回復不能・`logging.md` の「panic は致命限定」）。
+/// OS の暗号基盤が壊れているとき＝回復不能）。
 pub(crate) fn md5_hex(bytes: &[u8]) -> String {
     let mut digest = [0u8; 16];
     // SAFETY: 擬似ハンドル `BCRYPT_MD5_ALG_HANDLE` は Open／Close 不要で常に有効。入力と出力は

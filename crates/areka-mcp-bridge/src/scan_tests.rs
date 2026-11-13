@@ -5,32 +5,16 @@
 
 use std::time::{Duration, Instant};
 
-use areka_mcp::{SERVER_NAME, ToolRegistry};
+use areka_mcp::SERVER_NAME;
 use serde_json::{Value, json};
-use tokio::net::TcpSocket;
 
 use super::{Link, Scan, scan};
 use crate::config::Timeouts;
-use crate::fake_server::{Conn, FakeServer, Received, Reply, Script};
+use crate::desk::patient;
+use crate::fake_server::{Conn, FakeServer, Received, Reply, Script, nobody};
+use crate::http::tests::{only_the_check_arrived, real_receiver};
 
 const SSP: &str = "ssp-mcp-server";
-
-/// 確かめの上限を長く取った時間（負荷の下で偽の受け口の答えが遅れても、areka を飛ばさない）。
-fn patient() -> Timeouts {
-    Timeouts {
-        verify: Duration::from_secs(10),
-        ..Timeouts::default()
-    }
-}
-
-/// 誰も居ない番号: 束ねたまま待ち受けないソケット（落とすまで、並んで走るテストに取られない）。
-fn nobody() -> (TcpSocket, u16) {
-    let socket = TcpSocket::new_v4().expect("ソケットを作れる");
-    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
-    socket.bind(any_port).expect("空きポートを束ねられる");
-    let port = socket.local_addr().expect("番号が分かる").port();
-    (socket, port)
-}
 
 fn found(scan: Scan) -> (Link, u16) {
     match scan {
@@ -57,19 +41,6 @@ fn assert_linked_to_areka(link: &Link) {
     let info = peer_info(link);
     assert_eq!(info["serverInfo"]["name"], SERVER_NAME, "{info}");
     assert_eq!(info["protocolVersion"], "2025-11-25", "{info}");
-}
-
-/// この受け口に届いたのは、探索の確かめの `initialize` の 1 つだけ（本当の要求も rmcp の手順も 0）。
-async fn only_the_check_arrived(fake: &FakeServer) {
-    let log = fake
-        .wait(|log| log.connections.iter().any(|c| c.closed))
-        .await;
-    assert_eq!(log.connections.len(), 1, "{log:?}");
-    let [check] = &log.requests[..] else {
-        panic!("届くのは確かめの 1 つだけのはず: {log:?}");
-    };
-    assert_eq!(check.method, "initialize", "{log:?}");
-    assert_eq!(check.body["id"], "identity-check", "{log:?}");
 }
 
 /// 先に居る SSP を飛ばして、後ろの areka に決める（要件 2.2・2.3）。SSP に届くのは確かめの 1 つ
@@ -213,7 +184,7 @@ async fn peers_without_a_readable_name_are_skipped_but_not_collected() {
 /// より先に上限で切れる）。
 #[tokio::test]
 async fn connections_to_all_candidates_are_opened_side_by_side() {
-    let closed: Vec<(TcpSocket, u16)> = (0..10).map(|_| nobody()).collect();
+    let closed: Vec<_> = (0..10).map(|_| nobody()).collect();
     let areka = FakeServer::start(Script::areka());
     let mut candidates: Vec<u16> = closed.iter().map(|(_, port)| *port).collect();
     candidates.push(areka.port());
@@ -227,8 +198,8 @@ async fn connections_to_all_candidates_are_opened_side_by_side() {
     let (_link, port) = found(scan(&candidates, &timeouts).await);
     let elapsed = started.elapsed();
     assert_eq!(port, areka.port());
-    // 上の限りは負荷の分だけゆるく見る（並べて開けば 500 ms ほど）。
-    assert!(elapsed < connect * 6, "{elapsed:?}");
+    // 上の限りは順に開いたときの最小（10 回分）。並べて開けば 500 ms ほどで、負荷の分の余裕は大きい。
+    assert!(elapsed < connect * 10, "{elapsed:?}");
 }
 
 /// 確かめを通った番号で rmcp のクライアントを立てる手順が失敗したら（確かめの後で相手が替わった・
@@ -251,11 +222,7 @@ async fn a_failed_handshake_after_the_check_is_not_found() {
 /// クライアントで要求が通る（rmcp のクライアント → 自前の送り手 → 本物の受け口、の通し）。
 #[tokio::test]
 async fn scan_finds_the_real_receiver_and_the_link_carries_a_request() {
-    let server = areka_mcp::start(&[0], ToolRegistry::default(), None);
-    let port = server
-        .local_addr()
-        .expect("空きポートで待ち受けている")
-        .port();
+    let (_server, port) = real_receiver();
 
     let (link, found_port) = found(scan(&[port], &patient()).await);
     assert_eq!(found_port, port);

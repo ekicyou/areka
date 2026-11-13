@@ -1,21 +1,17 @@
 //! 判断（`service.rs`）のテストのうち、届ける前の失敗の扱い（要件 2.10・2.11・設計 D-6）:
 //! 覚えた番号に areka が居なくなったら、覚えを捨てて探し直し、見つかれば同じ要求を 1 回だけ送る。
 //!
-//! 道具（`Desk` など）は `service_tests.rs` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
-
-use std::net::{Ipv4Addr, SocketAddr};
-use std::time::{Duration, Instant};
+//! 道具は `service_tests.rs` と `crate::desk` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
 
 use areka_mcp::SERVER_NAME;
 use rmcp::model::{ClientRequest, RequestMetaObject};
 use serde_json::{Value, json};
-use tokio::net::TcpSocket;
 
 use super::Bridge;
-use super::failure_tests::patient;
-use super::tests::{Desk, WAIT, arrived, handshakes, request, result, stateless_meta, unavailable};
+use super::tests::{arrived, handshakes, result, unavailable};
 use crate::config::Config;
-use crate::fake_server::{FakeServer, Received, Reply, Script};
+use crate::desk::{Desk, patient, request, stateless_meta};
+use crate::fake_server::{FakeServer, Gate, Received, Reply, Script, nobody};
 
 /// 別の名乗り（SSP の MCP サーバー）。
 const OTHER: &str = "ssp-mcp-server";
@@ -28,20 +24,6 @@ fn said(text: &str) -> Value {
 /// 文で見分けられるツールの結果を返す areka の台本。
 fn areka_saying(text: &str) -> Script {
     Script::areka().on("tools/call", Reply::Result(said(text)))
-}
-
-/// 止めた受け口の番号を、束ねたまま待ち受けないソケットで取っておく（落とすまで、並んで走るテストに
-/// 取られない）。OS がまだ番号を放していなければ、期限まで束ね直す。
-fn keep_closed(port: u16) -> TcpSocket {
-    let deadline = Instant::now() + WAIT;
-    loop {
-        let socket = TcpSocket::new_v4().expect("ソケットを作れる");
-        match socket.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))) {
-            Ok(()) => return socket,
-            Err(_) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
-            Err(error) => panic!("止めた受け口の番号 {port} を束ねられない: {error}"),
-        }
-    }
 }
 
 /// 受け口が `from` 件目より後に受けた要求。
@@ -62,7 +44,9 @@ fn only_checks(requests: &[Received]) -> bool {
 /// 新しい areka のサーバーの情報が控えに入り、次の要求も届く（要件 4.6）。
 #[tokio::test]
 async fn a_request_reaches_areka_restarted_on_another_port_exactly_once() {
-    let mut gone = FakeServer::start(areka_saying("old"));
+    // 止めた後も番号は `nobody()` が握るので、覚えた番号への接続は必ず断られる。
+    let (_held, gone_port) = nobody();
+    let mut gone = FakeServer::start_on(gone_port, areka_saying("old"));
     let info = json!({
         "protocolVersion": "2025-11-25",
         "capabilities": {"tools": {}},
@@ -78,7 +62,6 @@ async fn a_request_reaches_areka_restarted_on_another_port_exactly_once() {
     assert!(back.requests().is_empty(), "{:?}", back.requests());
 
     gone.stop();
-    let _closed = keep_closed(gone.port());
     let meta = stateless_meta();
     let call = json!({"name": "get_status", "_meta": meta});
     let called = desk.ask(json!(2), "tools/call", call).await;
@@ -159,13 +142,11 @@ async fn without_areka_anywhere_a_takeover_gets_the_not_found_answers() {
 }
 
 /// 長い要求の途中で、別の要求が書く前の失敗を見て覚えを捨てても、長い要求の応答は返る（古いつなぎ先は、
-/// 使っている要求が終わるまで落ちない）。
+/// 使っている要求が終わるまで落ちない）。長い要求は門で止めるので、`ping` が先に終わるのは負荷によらない。
 #[tokio::test]
 async fn a_slow_request_survives_another_request_forgetting_the_link() {
-    let slow = Reply::Delayed(
-        Duration::from_secs(2),
-        Box::new(Reply::Result(said("slow"))),
-    );
+    let gate = Gate::shut();
+    let slow = Reply::Gated(gate.clone(), Box::new(Reply::Result(said("slow"))));
     let old = FakeServer::start(Script::areka().on("tools/call", slow));
     let new = FakeServer::start(Script::areka());
     let mut desk = Desk::start(vec![old.port(), new.port()]);
@@ -180,6 +161,7 @@ async fn a_slow_request_survives_another_request_forgetting_the_link() {
     assert_eq!(new.requests_of("ping").len(), 1, "{:?}", new.requests());
     assert!(old.requests_of("ping").is_empty(), "{:?}", old.requests());
 
+    gate.open();
     let reply = desk.next().await;
     assert_eq!(reply, result(json!("slow"), said("slow")));
     desk.close().await;

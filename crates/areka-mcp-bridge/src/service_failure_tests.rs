@@ -1,35 +1,29 @@
 //! 判断（`service.rs`）のテストのうち、areka へ届ける途中の失敗（要件 4）。
 //!
-//! 道具（`Desk` など）は `service_tests.rs` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
+//! 道具は `service_tests.rs` と `crate::desk` のもの。ここも `current_thread` の `#[tokio::test]` だけで書く。
 
 use std::any::TypeId;
 use std::io;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use log_capture_kit::{capture, expect_one};
 use rmcp::ServiceError;
 use rmcp::model::{ClientRequest, RequestMetaObject};
 use rmcp::transport::DynamicTransportError;
 use rmcp::transport::streamable_http_client::StreamableHttpError;
 use serde_json::{Value, json};
 
-use super::tests::{Desk, WAIT, handshakes, result};
+use super::tests::{arrived, handshakes, result};
 use super::{Bridge, Failure, classify};
 use crate::config::{Config, REPLY_WAIT, Timeouts};
+use crate::desk::{Desk, WAIT, patient};
 use crate::fake_server::{FakeServer, Reply, Script};
 use crate::http::HttpError;
 
 /// 中継が自分で作るエラーの行（番号 `-1`）。
 fn failed(id: Value, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": -1, "message": message}})
-}
-
-/// 確かめの上限を長く取った時間（負荷の下で偽の受け口の答えが遅れても areka を飛ばさない）。
-pub(super) fn patient() -> Timeouts {
-    Timeouts {
-        verify: WAIT,
-        ..Timeouts::default()
-    }
 }
 
 /// 書いた後の失敗は中継のエラーで答え、送り直さない（要件 4.5）: 壊れた本文・状態付きの平文・SSE は
@@ -181,6 +175,39 @@ async fn a_dead_link_is_forgotten_so_the_next_request_scans_again() {
 
     assert_eq!(fake.requests_of("ping").len(), 1, "{:?}", fake.requests());
     assert_eq!(handshakes(&fake), 2, "{:?}", fake.requests());
+}
+
+/// areka が断った通知は記録だけの枝（Desktop へは何も出ない）: WARN「the notification to areka failed」が
+/// ちょうど 1 件。記録を捕まえるため `#[tokio::test]` でなく、捕まえの中で `current_thread` の tokio を回す
+/// （中継のタスクも同じスレッドで回る）。500 を読み終えた後の道（送り手の失敗 → rmcp の返し → `warn!`）は
+/// I/O を待たないので、次の `ping` の応答の I/O より先に回り切る（遅れても `desk.close()` が同じスレッドで回す）。
+#[test]
+fn a_notification_areka_refuses_is_warned() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("tokio を立てる");
+    let ((), events) = capture(|| {
+        runtime.block_on(async {
+            let script = Script::areka().on("notifications/x-test", Reply::Text(500, "no"));
+            let fake = FakeServer::start(script);
+            let mut desk = Desk::start(vec![fake.port()]);
+            let pong = desk.ask(json!(1), "ping", json!({})).await;
+            assert_eq!(pong, result(json!(1), json!({})));
+
+            let note = json!({"jsonrpc": "2.0", "method": "notifications/x-test", "params": {}});
+            desk.send(note).await;
+            let notes = arrived(&fake, "notifications/x-test", 1).await;
+            let connection = notes[0].connection;
+            fake.wait(|log| log.connections[connection].closed).await;
+            // 次に出る行は次の要求の応答（断られた通知の分の行は無い）。
+            let pong = desk.ask(json!(2), "ping", json!({})).await;
+            assert_eq!(pong, result(json!(2), json!({})));
+            desk.close().await;
+        })
+    });
+    let warned = expect_one(&events, "[bridge] the notification to areka failed");
+    assert_eq!(warned.level, tracing::Level::WARN, "{events:?}");
 }
 
 /// 失敗の読み分け（設計 D-6）: 書く前と読むのは、送り手の「書く前」の失敗だけ。送り手の「書いた後」の

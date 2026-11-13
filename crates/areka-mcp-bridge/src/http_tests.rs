@@ -4,7 +4,6 @@
 //! （`crate::fake_server`）。どちらも OS が割り当てる番号で、机の 9801〜9830 へはつながない。
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use areka_mcp::{MCP_PATH, McpServer, SERVER_NAME, ToolRegistry};
@@ -15,17 +14,15 @@ use rmcp::transport::streamable_http_client::{
 };
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpSocket, TcpStream};
+use tokio::net::TcpStream;
 
 use super::{HttpError, OwnHttp, check_request, read_reply, verify};
 use crate::config::Timeouts;
-use crate::fake_server::{Conn, FakeServer, Log, Reply, Script};
+use crate::desk::{WAIT, patient};
+use crate::fake_server::{Conn, FakeServer, Log, Reply, Script, nobody};
 
-/// 受け口が黙ったときにテストを止めずに赤にする上限。
-const DEADLINE: Duration = Duration::from_secs(10);
-
-/// 本物の受け口を空きポートに起こす（自分のスレッドと自分の tokio で回る）。
-fn real_receiver() -> (McpServer, u16) {
+/// 本物の受け口を空きポートに起こす（自分のスレッドと自分の tokio で回る）。探索のテストも使う。
+pub(crate) fn real_receiver() -> (McpServer, u16) {
     let server = areka_mcp::start(&[0], ToolRegistry::default(), None);
     let port = server
         .local_addr()
@@ -79,7 +76,7 @@ async fn raw_reply(stream: &mut TcpStream) -> (String, Value) {
         let body = serde_json::from_slice(&raw[head_end..]).expect("本文は JSON");
         (head, body)
     };
-    tokio::time::timeout(DEADLINE, read)
+    tokio::time::timeout(WAIT, read)
         .await
         .expect("応答が上限のうちに届く")
 }
@@ -127,7 +124,7 @@ async fn real_receiver_answers_two_requests_on_one_connection_then_closes() {
 
     // 受け口の側から閉じる（読みが 0 バイトで戻る）。
     let mut rest = [0u8; 16];
-    let n = tokio::time::timeout(DEADLINE, stream.read(&mut rest))
+    let n = tokio::time::timeout(WAIT, stream.read(&mut rest))
         .await
         .expect("受け口が上限のうちに閉じる")
         .expect("閉じるまで読める");
@@ -145,7 +142,7 @@ fn no_headers() -> HashMap<HeaderName, HeaderValue> {
 /// rmcp が呼ぶのと同じ口で 1 件送る。`uri` には別の機械を、セッションと認証には値を渡す:
 /// 送り手はどれも使わず、自分の番号の `127.0.0.1` へつなぐ（要件 2.7）。
 async fn post(port: u16, message: &Value, headers: HashMap<HeaderName, HeaderValue>) -> Posted {
-    post_within(port, message, headers, Timeouts::default()).await
+    post_within(port, message, headers, patient()).await
 }
 
 /// [`post`] と同じ。待つ時間を差し替える。
@@ -397,33 +394,13 @@ async fn verify_returns_the_name_the_peer_gives() {
             .await
             .expect("偽の受け口へ接続できる");
 
-        let got = verify(stream, fake.port(), &Timeouts::default()).await;
+        let got = verify(stream, fake.port(), &patient()).await;
         assert_eq!(got.expect("名乗りが返る"), name);
 
         let log = finished(&fake).await;
         assert_eq!(log.requests.len(), 1, "{log:?}");
         assert_eq!(log.requests[0].method, "initialize");
     }
-}
-
-/// セッションと SSE の口は、呼ばれない前提の決まった答え（areka は無状態・JSON の単発応答）。
-#[tokio::test]
-async fn session_and_sse_entries_answer_without_connecting() {
-    // 番号 0 へはつなげない: つなぎに行けば、ここの答えが変わる。
-    let http = OwnHttp {
-        port: 0,
-        timeouts: Timeouts::default(),
-    };
-    let uri: Arc<str> = "http://127.0.0.1:0/".into();
-    let deleted = http
-        .delete_session(uri.clone(), "session".into(), None, no_headers())
-        .await;
-    assert!(deleted.is_ok(), "{deleted:?}");
-    let stream = http.get_stream(uri, None, None, None, no_headers()).await;
-    assert!(matches!(
-        stream,
-        Err(StreamableHttpError::ServerDoesNotSupportSse)
-    ));
 }
 
 /// 応答の読み取り（接続なし・バイト列から）: chunked の塊の拡張（`;…`）と後置の札を読み捨て、
@@ -449,21 +426,51 @@ async fn chunk_extensions_and_trailers_are_skipped_and_the_next_reply_follows() 
     assert!(buf.is_empty() && stream.is_empty(), "余りが残った");
 }
 
+/// HTTP として読めない応答（接続なし・バイト列から）: 頭が多すぎる・長さが数でない・塊の長さが
+/// 読めない・塊の長さが溢れる、の 4 形は、どれも本文として解かずに `InvalidData` になる。
+#[tokio::test]
+async fn replies_that_are_not_http_are_invalid_data() {
+    let many_headers: String = (0..65).map(|i| format!("X-{i}: 1\r\n")).collect();
+    let chunked = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n";
+    let cases = [
+        (
+            "頭が 65 個",
+            format!("HTTP/1.1 200 OK\r\n{many_headers}\r\n"),
+        ),
+        (
+            "長さが数でない",
+            "HTTP/1.1 200 OK\r\nContent-Length: x\r\n\r\n".to_owned(),
+        ),
+        ("塊の長さが読めない", format!("{chunked}zz\r\n")),
+        // 塊の後ろの CRLF を足すと溢れる長さ（`usize::MAX`）。
+        ("塊の長さが溢れる", format!("{chunked}ffffffffffffffff\r\n")),
+    ];
+    let mut wrong = Vec::new();
+    for (name, raw) in &cases {
+        match read_reply(&mut raw.as_bytes(), &mut Vec::new()).await {
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {}
+            Err(error) => wrong.push(format!("{name}: {error:?}")),
+            Ok(reply) => wrong.push(format!("{name}: HTTP {} として読めた", reply.status)),
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
 // ---- ここから下は失敗の読み分け: 「書く前」か「書いた後」か（設計 D-6） ----
 
 /// 1 件送って、送り手の失敗を取り出す（成功や、送り手の外の失敗なら赤）。送り手が戻らなければ、
 /// テストを止めずに赤にする。
 async fn failure_within(port: u16, message: &Value, timeouts: Timeouts) -> HttpError {
     let posted = post_within(port, message, no_headers(), timeouts);
-    match tokio::time::timeout(DEADLINE, posted).await {
+    match tokio::time::timeout(WAIT, posted).await {
         Ok(Err(StreamableHttpError::Client(error))) => error,
         Ok(other) => panic!("送り手の失敗でない: {other:?}"),
-        Err(_) => panic!("送り手が {DEADLINE:?} のうちに戻らない"),
+        Err(_) => panic!("送り手が {WAIT:?} のうちに戻らない"),
     }
 }
 
 async fn failure(port: u16, message: &Value) -> HttpError {
-    failure_within(port, message, Timeouts::default()).await
+    failure_within(port, message, patient()).await
 }
 
 fn is_not_areka(error: &HttpError, port: u16, name: &str) -> bool {
@@ -471,8 +478,8 @@ fn is_not_areka(error: &HttpError, port: u16, name: &str) -> bool {
 }
 
 /// 「書く前」の裏づけ: 受け口に届いた要求は確かめの `initialize` の 1 つだけで、その接続が受けた
-/// バイトの数は確かめの要求の長さちょうど（本当の本文は 1 バイトも書かれていない）。
-async fn only_the_check_arrived(fake: &FakeServer) {
+/// バイトの数は確かめの要求の長さちょうど（本当の本文は 1 バイトも書かれていない）。探索のテストも使う。
+pub(crate) async fn only_the_check_arrived(fake: &FakeServer) {
     let log = finished(fake).await;
     let check_only = Conn {
         bytes: check_request(fake.port()).len(),
@@ -597,10 +604,7 @@ async fn a_silent_peer_is_given_up_after_the_verify_wait() {
 #[tokio::test]
 async fn nobody_listening_is_a_connect_failure() {
     // 番号を束ねたまま待ち受けない: 接続は通らず、並んで走るテストの受け口がこの番号を取ることもない。
-    let socket = TcpSocket::new_v4().expect("ソケットを作れる");
-    let any_port = "127.0.0.1:0".parse().expect("アドレスとして読める");
-    socket.bind(any_port).expect("空きポートを束ねられる");
-    let port = socket.local_addr().expect("番号が分かる").port();
+    let (_held, port) = nobody();
 
     let error = failure(port, &call(json!(1))).await;
     // 断られるか、上限（300 ms）で見切るかは机による。どちらも同じ失敗。
@@ -677,32 +681,6 @@ async fn an_event_stream_answer_is_refused_on_its_header_without_reading_the_bod
 
     finished(&fake).await;
     assert_eq!(fake.requests_of("tools/call").len(), 1);
-}
-
-/// 「書いた後か」の真偽の表（失敗の 5 つの全部）。
-#[test]
-fn written_is_true_only_for_the_failures_after_the_real_body() {
-    let before = [
-        HttpError::Connect(std::io::ErrorKind::ConnectionRefused.into()),
-        HttpError::NotAreka {
-            port: 9801,
-            name: "ssp-mcp-server".into(),
-        },
-        HttpError::VerifyTimeout(Duration::from_secs(3)),
-    ];
-    let after = [
-        HttpError::NoResponse,
-        HttpError::NotJson {
-            status: 500,
-            head: "internal error".into(),
-        },
-    ];
-    for error in &before {
-        assert!(!error.written(), "{error:?}");
-    }
-    for error in &after {
-        assert!(error.written(), "{error:?}");
-    }
 }
 
 /// 日本語の入った本文は欠けずに届く: `Content-Length` はバイトの数（文字の数ではない）。

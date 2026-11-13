@@ -6,6 +6,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use log_capture_kit::{capture, expect_one};
 use serde_json::json;
 use temp_path_kit::TempPath;
 
@@ -117,7 +118,11 @@ fn unwritable_place_keeps_going() {
     std::fs::create_dir_all(dir.join(TOOLS_FILE)).unwrap();
     let cache = Cache::new(Some(dir.clone()));
     cache.save_tools(&tools(1));
-    assert_eq!(cache.load_tools(), None);
+    // 読めないのは記録だけの枝なので、WARN がちょうど 1 件出ることを見る。
+    let (loaded, events) = capture(|| cache.load_tools());
+    assert_eq!(loaded, None);
+    let warned = expect_one(&events, "[bridge] cannot read the cache");
+    assert_eq!(warned.level, tracing::Level::WARN, "{events:?}");
     assert_eq!(names_in(&dir), [TOOLS_FILE]);
     // もう片方の控えは巻き込まれない。
     cache.save_server_info(&info("areka-mcp-server"));

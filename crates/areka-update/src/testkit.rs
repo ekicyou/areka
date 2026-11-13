@@ -5,14 +5,30 @@
 
 use crate::error::FetchError;
 use crate::fetch::Fetch;
+use sample_ghost_kit::WorkDir;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::windows::fs::OpenOptionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
 use windows::Win32::System::LibraryLoader::{LOAD_LIBRARY_AS_IMAGE_RESOURCE, LoadLibraryExW};
 use windows::core::HSTRING;
+
+/// `ERROR_SHARING_VIOLATION`（`hold` で掴まれた物を退避・削除しようとした）。
+pub(crate) const SHARING_VIOLATION: i32 = 32;
+/// `abc` の MD5。
+pub(crate) const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
+
+/// 作業の根と、その下に作った `target` と、`canonicalize` した `target`。
+/// 各テストのファイルはこの上に自分の欄だけを足す。
+pub(crate) fn target_fixture() -> (WorkDir, PathBuf, PathBuf) {
+    let work = WorkDir::new().expect("作業フォルダ");
+    let target = work.path().join("target");
+    fs::create_dir_all(&target).unwrap();
+    let target_real = fs::canonicalize(&target).unwrap();
+    (work, target, target_real)
+}
 
 /// 固定表の 1 行の答え。
 type Answer = Result<Vec<u8>, FetchError>;
@@ -72,7 +88,7 @@ impl Fetch for FakeFetch {
 
 /// 相対パス → バイト列（フォルダは末尾 `/`・値は空）。9.4 のバイト単位の比較に使う。
 ///
-/// フォルダが無ければ空（`areka-nar` の `install_tests.rs` の `tree` の写し）。
+/// フォルダが無ければ空（`areka-nar` の `lib_tests.rs` の `tree` の写し）。
 pub(crate) fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     if root.is_dir() {
@@ -98,7 +114,7 @@ fn walk(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
 const SHARE_READ: u32 = 1;
 
 /// `share_mode(FILE_SHARE_READ)` で開いたまま持ち、`rename`／`remove` を失敗させる
-/// （`install_commit_tests.rs` の `hold` と同じ・読み込まれた DLL と同じく読みは通る）。
+/// （`areka-nar` の `lib_tests.rs` の `hold` と同じ・読み込まれた DLL と同じく読みは通る）。
 pub(crate) fn hold(path: &Path) -> fs::File {
     fs::OpenOptions::new()
         .read(true)
@@ -169,7 +185,8 @@ pub(crate) fn junction(link: &Path, target: &Path) {
         .output()
         .expect("cmd を起こせる");
     assert!(
-        out.status.success() && link.exists(),
+        // 辿らずに見る（自分を指すジャンクションは辿ると開けない）。
+        out.status.success() && fs::symlink_metadata(link).is_ok(),
         "ジャンクションを作れない: {} -> {}: {}{}",
         link.display(),
         target.display(),
