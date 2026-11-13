@@ -511,7 +511,8 @@ fn copy_and_rebase_count_applied_specs() {
     state.apply_cue(&font("0", &["italic", "1"]));
     let actor = ActorKey::from("0");
 
-    state.set_look_layers(&actor, crate::look::LookLayers::default());
+    // 同じ値の 2 層は当て直さない（spec `emo-text-reveal-incremental` task 3.3）ので違う値を差す。
+    state.set_look_layers(&actor, other_layers());
     assert_eq!(REBASED_SPECS.with(|c| c.get()), 2, "当て直しは指定 2 件");
     assert_eq!(COPIED_SPECS.with(|c| c.get()), 0);
 
@@ -527,6 +528,78 @@ fn copy_and_rebase_count_applied_specs() {
         2,
         "写しは当て直しに数えない"
     );
+}
+
+/// 作りたての 2 層（[`crate::look::LookLayers::default`]）と違う値の 2 層。
+fn other_layers() -> crate::look::LookLayers {
+    crate::look::LookLayers {
+        cursor_text: (1, 2, 3),
+        ..Default::default()
+    }
+}
+
+/// スコープ 0 の普通のバルーンに指定 2 件を当て、まだ無い箱 `a` へ写した状態と箱の名前。
+fn balloon_and_box_with_two_specs() -> (TextLayerState, ActorKey, areka_emo_compose::BoxName) {
+    use crate::actor::test_support::{box_in, box_index, box_layout};
+    let mut state = TextLayerState::default();
+    state.apply_cue(&font("0", &["bold", "1"]));
+    state.apply_cue(&font("0", &["italic", "1"]));
+    let actor = ActorKey::from("0");
+    let layout =
+        box_layout("balloon.a\n{\nsize,10,10\n}\nsurface0\n{\nelement1,balloon,a,0,0\n}\n");
+    let name = box_in(&box_index(&layout, 0..=0), "a");
+    let to = crate::place::TextPlace::Box(name.clone());
+    state.copy_script(&actor, &crate::place::TextPlace::Balloon, &to);
+    (state, actor, name)
+}
+
+fn box_traits_of(
+    name: &areka_emo_compose::BoxName,
+    looks: crate::look::LookLayers,
+) -> std::collections::BTreeMap<areka_emo_compose::BoxName, super::BoxTraits> {
+    let follow = areka_emo_compose::FontFollow::Scope;
+    [(name.clone(), super::BoxTraits { looks, follow })].into()
+}
+
+/// 2 層の差し込み 2 か所は、値が同じなら当て直さず、違えば指定の数だけ当て直す
+/// （spec `emo-text-reveal-incremental` 要件 2.2・2.3・2.4）。
+#[test]
+fn same_layers_skip_rebase_different_layers_rebase() {
+    use super::REBASED_SPECS;
+    let (mut state, actor, name) = balloon_and_box_with_two_specs();
+    let rebased = || REBASED_SPECS.with(|c| c.get());
+    REBASED_SPECS.with(|c| c.set(0));
+
+    state.set_look_layers(&actor, crate::look::LookLayers::default());
+    assert_eq!(rebased(), 0, "普通のバルーン: 同じ値では当て直さない");
+    state.set_look_layers(&actor, other_layers());
+    assert_eq!(rebased(), 2, "普通のバルーン: 違う値では指定 2 件");
+    assert!(st(&state, "0").current_look().bold, "当て直しで指定が残る");
+    state.set_look_layers(&actor, other_layers());
+    assert_eq!(rebased(), 2, "普通のバルーン: 2 度目の同じ値では増えない");
+
+    state.set_box_traits(box_traits_of(&name, crate::look::LookLayers::default()));
+    assert_eq!(rebased(), 2, "箱: 同じ値では当て直さない");
+    state.set_box_traits(box_traits_of(&name, other_layers()));
+    assert_eq!(rebased(), 4, "箱: 違う値では指定 2 件");
+    state.set_box_traits(box_traits_of(&name, other_layers()));
+    assert_eq!(rebased(), 4, "箱: 2 度目の同じ値では増えない");
+}
+
+/// 試験だけの切り替えが真なら、2 層の差し込みは値に依らず当て直す（前の作り・要件 2.8）。
+#[test]
+fn replay_all_rebases_same_layers() {
+    use super::{REBASED_SPECS, REPLAY_ALL};
+    let (mut state, actor, name) = balloon_and_box_with_two_specs();
+    let rebased = || REBASED_SPECS.with(|c| c.get());
+    REBASED_SPECS.with(|c| c.set(0));
+    REPLAY_ALL.with(|c| c.set(true));
+
+    state.set_look_layers(&actor, crate::look::LookLayers::default());
+    assert_eq!(rebased(), 2, "普通のバルーン: 同じ値でも当て直す");
+    state.set_box_traits(box_traits_of(&name, crate::look::LookLayers::default()));
+    assert_eq!(rebased(), 4, "箱: 同じ値でも当て直す");
+    REPLAY_ALL.with(|c| c.set(false));
 }
 
 #[path = "state_decoration_reset_tests.rs"]

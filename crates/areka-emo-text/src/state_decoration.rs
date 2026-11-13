@@ -298,6 +298,21 @@ impl Decoration {
         self.replay();
     }
 
+    /// 2 層の差し込みの共通の実体（呼び手は [`TextLayerState::set_look_layers`] と
+    /// [`TextLayerState::set_box_traits`] の 2 か所だけ）。今と同じ値なら何もせず、違えば差し替えて
+    /// 当て直す（spec `emo-text-reveal-incremental` 要件 2.2・2.3・2.4）。`REPLAY_ALL` が真なら値に
+    /// 依らず当て直す（前の作り・試験の作りだけ）。
+    fn set_layers(&mut self, layers: &LookLayers) {
+        #[cfg(test)]
+        let always = REPLAY_ALL.with(std::cell::Cell::get);
+        #[cfg(not(test))]
+        let always = false;
+        if always || self.layers != *layers {
+            self.layers = layers.clone();
+            self.rebase();
+        }
+    }
+
     /// 土台の見た目から `applied` を順に当てる（写しと当て直しの共通の実体・数えは呼び手が持つ）。
     fn replay(&mut self) {
         self.current = self.base_look();
@@ -593,7 +608,7 @@ impl TextLayerState {
     ///
     /// 箱の場所の状態は作られるときにこの 2 層を受け取る（[`TextLayerState::place_entry`]）ので、
     /// 文字が届く前に既定が決まっている。すでにある箱の場所は、装着と同じく新しい 2 層の上へ
-    /// 載せ直す（[`Decoration::rebase`]）。種類は行き先が替わるときの写しが引く
+    /// 載せ直す（[`Decoration::rebase`]・今と同じ 2 層なら何もしない）。種類は行き先が替わるときの写しが引く
     /// （[`TextLayerState::carry_script_decor`]）。表に無い名前の箱は ukadoc の既定の 2 層で、
     /// スコープに従う。
     pub fn set_box_traits(&mut self, traits: BTreeMap<BoxName, BoxTraits>) {
@@ -601,8 +616,7 @@ impl TextLayerState {
             if let TextPlace::Box(name) = &key.place
                 && let Some(t) = traits.get(name)
             {
-                state.decor.layers = t.looks.clone();
-                state.decor.rebase();
+                state.decor.set_layers(&t.looks);
             }
         }
         tracing::debug!(boxes = traits.len(), "箱の既定の見た目と種類を受け取った");
@@ -724,11 +738,10 @@ impl TextLayerState {
     /// 1 フレーム遅らせて順序を作る必要は無い（`areka-P0-text-decoration-canon` の開発者裁定）。
     ///
     /// 再装着（k 再追従）でも同じ経路を通る——土台だけが新しい値へ移り、明示された指定は
-    /// 保たれる。
+    /// 保たれる。今と同じ 2 層なら何もしない（spec `emo-text-reveal-incremental` 要件 2.2）。
     pub fn set_look_layers(&mut self, actor: &ActorKey, layers: LookLayers) {
         let state = self.actors.entry(PlaceKey::balloon(actor)).or_default();
-        state.decor.layers = layers;
-        state.decor.rebase();
+        state.decor.set_layers(&layers);
     }
 
     /// 「戻す操作」（要件 10.3 の権威定義）——装飾状態の全項目を既定の見た目へ戻す。
