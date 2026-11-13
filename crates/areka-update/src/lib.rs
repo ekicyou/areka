@@ -116,7 +116,7 @@ pub fn run(
 /// 段で止まった失敗。`Err` は [`run`] が [`log_failure`] を通して組む。
 type Failed = (Stage, FailReason);
 
-/// 段を直列に進める。記録は警告と成功の終了だけ（失敗の記録は [`run`] の 1 か所）。
+/// 段を直列に進める。記録は開始・警告・成功の終了と棚の掃除の `debug!` だけ（失敗の記録は [`run`] の 1 か所）。
 /// 作業場所を作ったら `slot` に預ける（失敗時に `run` が片付けるか残す）。
 fn walk(
     target: &Path,
