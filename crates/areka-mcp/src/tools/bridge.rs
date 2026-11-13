@@ -94,7 +94,7 @@ pub struct Pending {
 }
 
 impl Pending {
-    /// 待たずに覗く（アプリ本体側のテストが使う）。
+    /// 待たずに覗く（橋の `call` が待った後に覗く・アプリ本体側のテストも使う）。
     pub fn try_answer(&self) -> Result<Option<Answer>, ReplyError> {
         self.receiver.try_recv()
     }

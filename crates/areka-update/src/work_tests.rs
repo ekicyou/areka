@@ -1,13 +1,11 @@
 //! 作業場所の作成・書き込み・片付け・他の走行の残骸（要件 4.1・4.7・4.8・5.5・5.9・9.10）。
 
 use super::*;
-use crate::testkit::{hold, junction, tree};
+use crate::testkit::{hold, junction, target_fixture, tree};
 use sample_ghost_kit::WorkDir;
 
 fn fixture() -> (WorkDir, PathBuf) {
-    let work = WorkDir::new().expect("作業フォルダ");
-    let target = work.path().join("target");
-    fs::create_dir_all(&target).unwrap();
+    let (work, target, _) = target_fixture();
     (work, target)
 }
 
@@ -148,7 +146,7 @@ fn committed_run_with_held_file_in_old_is_not_residue_and_goes_once_released() {
     fs::write(&retired, b"old").unwrap();
     let dir = area.dir().to_path_buf();
     let held = hold(&retired);
-    // 成功した確定の後片付け: 消せなかった自分のフォルダは今日どおり挙げ、印を置く。
+    // 成功した確定の後片付け（戻せた失敗も同じ道）: 消せなかった自分のフォルダは今日どおり挙げ、印を置く。
     assert_eq!(area.cleanup(), vec![dir.clone()]);
     assert!(dir.join(COMMITTED_MARK).is_file(), "印が置かれる");
     // 開いたままの間は何周しても残骸に挙がらない（消しにかかって消せなくても黙る）。
@@ -243,6 +241,24 @@ fn purge_does_not_follow_a_junction_on_the_shelf() {
     assert_eq!(purge_committed(&target), Purge::default());
     assert_eq!(tree(&outside), before, "棚の外は触らない");
     assert!(link.exists(), "ジャンクションも触らない");
+}
+
+#[test]
+fn purge_lists_the_shelf_when_it_cannot_be_read() {
+    let (_w, target) = fixture();
+    let shelf = target.join(WORK_DIR);
+    junction(&shelf, &shelf);
+    // 較正: 開くと NotFound でない失敗（1921）。崩れたらテストを曲げずに止める。
+    let open = fs::read_dir(&shelf).expect_err("較正: 自分を指すジャンクションは開けない");
+    assert!(
+        !matches!(open.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory),
+        "較正: {open}"
+    );
+
+    let purge = purge_committed(&target);
+
+    assert_eq!(purge.held, vec![shelf]);
+    assert!(purge.removed.is_empty(), "{:?}", purge.removed);
 }
 
 #[test]

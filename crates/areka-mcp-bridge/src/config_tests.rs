@@ -4,7 +4,6 @@
 //! （パスは組むだけで開かない）。
 
 use std::path::PathBuf;
-use std::time::Duration;
 
 use areka_user_data::AppProfile;
 
@@ -66,17 +65,12 @@ fn cache_dir_follows_the_table() {
     let ready = under_target(r"Local\areka\profile\areka");
     let root = under_target(r"Local\areka");
 
-    // ⑴ `AREKA_PROFILE_DIR` があれば、隣の答えがどれでもその下（2.9）。
-    for beside in [
-        None,
-        Some(AppProfile::Ready(ready.clone())),
-        Some(AppProfile::Unlocatable),
-    ] {
-        assert_eq!(
-            cache_dir_of(Some(under_target("prof")), beside, Some(local.clone())),
-            Some(under_target(r"prof\mcp-bridge"))
-        );
-    }
+    // ⑴ `AREKA_PROFILE_DIR` があればその下（2.9）。隣に areka が居るときは `from_inputs` が渡さない
+    // （使える値は隣の答えが既に含む）ので、隣の答えは無い形だけ。
+    assert_eq!(
+        cache_dir_of(Some(under_target("prof")), None, Some(local.clone())),
+        Some(under_target(r"prof\mcp-bridge"))
+    );
     // ⑵ 使える形なら、その下の `mcp-bridge`（2.6・2.8）。
     assert_eq!(
         cache_dir_of(
@@ -112,10 +106,6 @@ fn cache_dir_follows_the_table() {
 /// 待つ時間の既定は 3 つの定数（設計 D-11）。
 #[test]
 fn default_timeouts_are_the_three_constants() {
-    assert_eq!(CONNECT_WAIT, Duration::from_millis(300));
-    assert_eq!(VERIFY_WAIT, Duration::from_secs(3));
-    assert_eq!(REPLY_WAIT, Duration::from_secs(30));
-
     let timeouts = Config::from_values(None, None, None, None).timeouts;
     assert_eq!(timeouts.connect, CONNECT_WAIT);
     assert_eq!(timeouts.verify, VERIFY_WAIT);
@@ -126,20 +116,4 @@ fn default_timeouts_are_the_three_constants() {
 #[test]
 fn reply_wait_is_longer_than_the_areka_tool_limit() {
     assert!(REPLY_WAIT > areka_mcp::tools::REPLY_WAIT);
-}
-
-/// テストは時間を差し替えられる（`from_parts`）。
-#[test]
-fn from_parts_keeps_the_given_values() {
-    let short = Timeouts {
-        connect: Duration::from_millis(1),
-        verify: Duration::from_millis(2),
-        reply: Duration::from_millis(3),
-    };
-    let config = Config::from_parts(vec![1234], Some(PathBuf::from("dir")), short.clone());
-    assert_eq!(config.candidates, vec![1234]);
-    assert_eq!(config.cache_dir, Some(PathBuf::from("dir")));
-    assert_eq!(config.timeouts.connect, short.connect);
-    assert_eq!(config.timeouts.verify, short.verify);
-    assert_eq!(config.timeouts.reply, short.reply);
 }

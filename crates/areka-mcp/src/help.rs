@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use crate::dispatch::MCP_PATH;
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value};
 use crate::tools::{OWN_TABLE, spec_from_definition};
 
@@ -9,7 +10,7 @@ use crate::tools::{OWN_TABLE, spec_from_definition};
 /// （spec: areka-P0-mcp-stdio-bridge）。
 pub const BRIDGE_EXE_FILE_NAME: &str = "areka-mcp-bridge.exe";
 
-/// 登録手順の日本語 HTML を実際の番号 `port` で組む（要件 6.1・6.2）。
+/// 登録手順の日本語 HTML を実際の番号 `port` で組む（spec: areka-P0-mcp-server-core 要件 6.1・6.2）。
 ///
 /// 5 項目: ⑴ 待ち受けている URL、⑵ Claude Code の登録コマンド、⑶ Cursor の
 /// `mcpServers` の断片、⑷ ポートの決まり方と変え方（既定の順・早い者勝ち・隣への退避・
@@ -33,7 +34,7 @@ pub fn help_html(port: u16, bridge_exe: Option<&Path>) -> String {
             Some(format!("<li><code>{name}</code> — {summary}</li>\n"))
         })
         .collect();
-    let url = format!("http://127.0.0.1:{port}/api/mcp/v1");
+    let url = format!("http://127.0.0.1:{port}{MCP_PATH}");
     let [first, second] = DEFAULT_PORTS;
     let (first_next, second_next) = (first + 1, second + 1);
     let (first_last, second_last) = (first + FALLBACK_STEPS, second + FALLBACK_STEPS);

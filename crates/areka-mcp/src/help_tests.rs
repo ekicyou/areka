@@ -1,4 +1,4 @@
-//! `help` の決定論テスト（要件 6.1・6.2 の 5 項目と番号・Claude Desktop の節の設定例）。
+//! `help` の決定論テスト（spec: areka-P0-mcp-server-core 要件 6.1・6.2 の 5 項目と番号・Claude Desktop の節の設定例）。
 
 use std::path::Path;
 
@@ -8,7 +8,7 @@ use super::{BRIDGE_EXE_FILE_NAME, help_html};
 use crate::port::{DEFAULT_PORTS, FALLBACK_STEPS, PORT_ENV, candidates_from_env_value};
 use crate::tools::{OWN_TABLE, spec_from_definition};
 
-/// (要件 6.1, 6.2, 2.7) 既定でない番号で組むと 5 項目が実番号で載り、
+/// (spec: areka-P0-mcp-server-core 要件 6.1, 6.2, 2.7) 既定でない番号で組むと 5 項目が実番号で載り、
 /// 既定の番号（9801・9821）の URL は無く、⑷ は既定の順（先頭 2 つ → 隣 … 末尾 2 つ）を説明する。
 #[test]
 fn help_html_lists_five_items_with_actual_port() {
@@ -118,10 +118,10 @@ pub(crate) fn desktop_example(html: &str) -> Value {
     serde_json::from_str(&shown).unwrap_or_else(|err| panic!("JSON でない（{err}）: {shown}"))
 }
 
-/// `\`・空白・`&` 入りの置き場（要件 6.2）。
+/// `\`・空白・`&` 入りの置き場（spec: areka-P0-mcp-stdio-bridge 要件 6.2）。
 const BRIDGE_PATH: &str = r"C:\Program Files\R&D tools\areka-mcp-bridge.exe";
 
-/// (要件 6.1, 6.2, 6.4) 既定の 20 候補の外の番号では、設定例が JSON として読めて、`command` が渡した
+/// (spec: areka-P0-mcp-stdio-bridge 要件 6.1, 6.2, 6.4) 既定の 20 候補の外の番号では、設定例が JSON として読めて、`command` が渡した
 /// パスと同じ・`env` に `AREKA_MCP_PORT` がその番号で載る。頁の上では `&` が置き換えてある。
 #[test]
 fn desktop_example_carries_the_path_and_the_port_outside_the_defaults() {
@@ -144,7 +144,7 @@ fn desktop_example_carries_the_path_and_the_port_outside_the_defaults() {
     assert!(!source.contains("R&D"), "{html}");
 }
 
-/// (要件 6.3) 既定の 20 候補のどれで待ち受けていても、設定例に `env` を載せない。
+/// (spec: areka-P0-mcp-stdio-bridge 要件 6.3) 既定の 20 候補のどれで待ち受けていても、設定例に `env` を載せない。
 #[test]
 fn desktop_example_has_no_env_on_every_default_candidate() {
     let defaults = candidates_from_env_value(None);
@@ -159,7 +159,7 @@ fn desktop_example_has_no_env_on_every_default_candidate() {
     }
 }
 
-/// (要件 6.5) 節に、設定ファイルの名前・Desktop の設定の画面から開くこと・書いた後に起動し直すこと
+/// (spec: areka-P0-mcp-stdio-bridge 要件 6.5) 節に、設定ファイルの名前・Desktop の設定の画面から開くこと・書いた後に起動し直すこと
 /// （窓を閉じるだけでは終了しない旨の断り付き）・Desktop を areka より先に起動していてもツールが並ぶこと
 /// （控えか、控えが無ければ中継が自分で持っている一覧で。「一度つないだ後は」の条件は付かない）・
 /// ツールを使うには areka の起動が要り、起動すれば Desktop を起動し直さなくてよいことが載り、
@@ -198,7 +198,7 @@ fn desktop_section_tells_where_to_write_and_to_restart() {
     assert!(!section.contains("置き換えてください"), "{html}");
 }
 
-/// (要件 6.1) 置き場が取れないときは、設定例の `command` をファイル名だけにして、
+/// (spec: areka-P0-mcp-stdio-bridge 要件 6.1) 置き場が取れないときは、設定例の `command` をファイル名だけにして、
 /// 絶対パスに置き換える旨の 1 文を添える。
 #[test]
 fn desktop_example_without_a_path_shows_the_file_name_and_asks_to_replace_it() {

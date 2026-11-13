@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 
-/// 成功した確定の後片付けで消せなかった走行フォルダに置く印（空ファイル・5.9）。
+/// 全部戻せた後（成功・戻せた失敗）の後片付けで消せなかった走行フォルダに置く印（空ファイル・5.9）。
 pub(crate) const COMMITTED_MARK: &str = "committed";
 
 /// 失敗は `(触ったパス, io::Error)`。
@@ -32,7 +32,7 @@ pub(crate) struct WorkArea {
 impl WorkArea {
     /// 棚の他の走行の残骸を先に消し（消せなければ `residue`）、自分のフォルダを作る。
     /// `old/` に中身が残るフォルダ（戻せなかった走行の元の内容＝5.5）は消さずに `residue` へ。
-    /// ただし印 [`COMMITTED_MARK`] の在るフォルダは成功した確定の残りなので消しにかかり、
+    /// ただし印 [`COMMITTED_MARK`] の在るフォルダは全部戻せた後（成功・戻せた失敗）の残りなので消しにかかり、
     /// 消せなくても `residue` に挙げない（5.9）。
     /// 自分の名前のフォルダが既に在れば（プロセス識別子の再利用）作らずに失敗する。
     pub(crate) fn create(target: &Path) -> Result<WorkArea, Failed> {
@@ -117,7 +117,7 @@ fn sweep(shelf: &Path) -> Result<Vec<PathBuf>, Failed> {
         let removed = match entry.file_type() {
             Ok(kind) if kind.is_dir() => {
                 if is_committed(&path) {
-                    // 成功した確定の残り（写像中の DLL の古い写しなど）。消せなければ黙って次の機会へ。
+                    // 全部戻せた後（成功・戻せた失敗）の残り（写像中の DLL の古い写しなど）。消せなければ黙って次の機会へ。
                     remove_committed(&path);
                     continue;
                 }
@@ -147,7 +147,7 @@ pub struct Purge {
     pub held: Vec<PathBuf>,
 }
 
-/// 成功した確定の残り（印 [`COMMITTED_MARK`] の在る走行フォルダ）だけを消す（5.9）。
+/// 全部戻せた後（成功・戻せた失敗）の残り（印 `COMMITTED_MARK`＝`"committed"` の在る走行フォルダ）だけを消す（5.9）。
 ///
 /// `<target>/.update-work/` の直下だけを見る。印の無いフォルダ（戻せなかった走行の元の内容）と
 /// フォルダでない物は触らない。棚が無ければ何もしない。何か消せて棚が空になれば棚も消す。

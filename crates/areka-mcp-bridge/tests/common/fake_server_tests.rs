@@ -12,6 +12,9 @@ use areka_mcp::{MCP_PATH, SERVER_NAME};
 
 use crate::fake_server::*;
 
+/// 止めた番号への接続が断られるのを待つ上限（Windows は断りを待つ間に SYN を送り直す）。
+const WAIT_REFUSED: Duration = Duration::from_secs(10);
+
 async fn connect(port: u16) -> TcpStream {
     TcpStream::connect(("127.0.0.1", port))
         .await
@@ -110,7 +113,8 @@ fn dechunk(mut raw: &[u8]) -> (Vec<u8>, usize) {
 }
 
 /// 完了の姿: 起こして 1 要求を投げ、台本どおりの応答と受けた要求の記録が取れる。
-/// 続けて、何も書かない接続の記録・止める・同じ番号に別の名乗りで立て直す、までを通す。
+/// 続けて、何も書かない接続の記録・止める、までを通す（止めた番号が接続を断ることは
+/// `start_on_a_held_port_refuses_after_stop` が見る）。
 #[tokio::test]
 async fn one_request_gets_the_scripted_reply_and_is_recorded() {
     let script = Script::areka().on("tools/call", Reply::Result(json!({"content": []})));
@@ -155,7 +159,7 @@ async fn one_request_gets_the_scripted_reply_and_is_recorded() {
     assert_eq!(server.requests_of("tools/call").len(), 1);
     assert!(server.requests_of("ping").is_empty());
 
-    // 止めると、開いていた接続が閉じ、番号は接続を受けなくなる。記録は止めた後も読める。
+    // 止めると、開いていた接続が閉じる。記録は止めた後も読める。
     let mut idle = connect(port).await;
     server.wait(|log| log.connections.len() == 3).await;
     server.stop();
@@ -163,34 +167,13 @@ async fn one_request_gets_the_scripted_reply_and_is_recorded() {
         matches!(idle.read(&mut [0u8; 1]).await, Ok(0) | Err(_)),
         "開いていた接続が閉じる"
     );
-    let again = timeout(
-        Duration::from_millis(300),
-        TcpStream::connect(("127.0.0.1", port)),
-    )
-    .await;
-    assert!(!matches!(again, Ok(Ok(_))), "止めた番号は接続を受けない");
     assert_eq!(server.requests().len(), 1);
-    assert_eq!(server.connections().len(), 3);
-
-    // 同じ番号に、別の名乗りで立て直す。
-    let other = FakeServer::start_on(port, Script::named("ssp-mcp-server"));
-    assert_eq!(other.port(), port);
-    let (_, _, body) = ask(port, "initialize").await;
-    assert_eq!(
-        parsed(&body)["result"]["serverInfo"]["name"],
-        "ssp-mcp-server"
-    );
-    assert_eq!(other.requests_of("initialize").len(), 1);
-
-    // 動かしたまま台本を入れ替えると、次の要求から効く。
-    other.rescript(Script::areka());
-    let (_, _, body) = ask(port, "initialize").await;
-    assert_eq!(parsed(&body)["result"]["serverInfo"]["name"], SERVER_NAME);
 }
 
 /// rmcp のクライアントの手順への既定の答えと、台本の答え方の全部が、名前どおりの応答になる。
 #[tokio::test]
 async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
+    let gate = Gate::shut();
     let script = Script::areka()
         .on(
             "m/error",
@@ -213,6 +196,13 @@ async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
             Reply::Delayed(
                 Duration::from_millis(50),
                 Box::new(Reply::Result(json!({"late": true}))),
+            ),
+        )
+        .on(
+            "m/gated",
+            Reply::Gated(
+                gate.clone(),
+                Box::new(Reply::Result(json!({"gated": true}))),
             ),
         )
         .on("m/until-close", Reply::UntilClose(json!({"n": 1})))
@@ -381,6 +371,33 @@ async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
     assert!(started.elapsed() >= Duration::from_millis(50));
     assert_eq!(parsed(&body)["result"], json!({"late": true}));
 
+    // 門: 開けるまで答えず、その間もほかの接続には答える。開けた後に届いた要求もすぐ通る。
+    let mut gated = connect(port).await;
+    send(
+        &mut gated,
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "m/gated"}),
+        true,
+    )
+    .await;
+    server
+        .wait(|log| log.requests.iter().any(|r| r.method == "m/gated"))
+        .await;
+    assert_eq!(
+        parsed(&ask(port, "ping").await.2),
+        json!({"jsonrpc": "2.0", "id": 1, "result": {}})
+    );
+    let shut = timeout(Duration::from_millis(100), gated.read(&mut [0u8; 1])).await;
+    assert!(shut.is_err(), "門の前で答えたはずが {shut:?}");
+    gate.open();
+    assert_eq!(
+        parsed(&receive(&mut gated).await.2)["result"],
+        json!({"gated": true})
+    );
+    assert_eq!(
+        parsed(&ask(port, "m/gated").await.2)["result"],
+        json!({"gated": true})
+    );
+
     // SSE: 頭は text/event-stream で長さの札が無く、1 件を書いた後も閉じない。
     let mut sse = connect(port).await;
     send(
@@ -423,7 +440,7 @@ async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
         .find(|r| r.method == "m/never")
         .expect("待った要求")
         .connection;
-    assert!(!server.connections()[held].closed);
+    assert!(!log.connections[held].closed);
     drop((stream, sse, silent));
     server
         .wait(|log| log.connections.iter().all(|c| c.closed))
@@ -455,5 +472,34 @@ async fn the_handshake_defaults_and_every_reply_mode_answer_as_named() {
     assert_eq!(
         parsed(&ask(port, "m/delayed").await.2)["error"]["code"],
         -32601
+    );
+}
+
+/// 道具の較正: `nobody()` が握る番号の上で `start_on` が待ち受け、接続はこの受け口に届く。
+/// 止めた後、その番号への接続は断られ（ほかの束ねにも渡らない）、`SO_REUSEADDR` の無い束ねも断られる。
+#[tokio::test]
+async fn start_on_a_held_port_refuses_after_stop() {
+    let (_held, port) = nobody();
+    let mut server = FakeServer::start_on(port, Script::named("held"));
+    assert_eq!(server.port(), port);
+    let (_, _, body) = ask(port, "initialize").await;
+    assert_eq!(parsed(&body)["result"]["serverInfo"]["name"], "held");
+    assert_eq!(server.requests_of("initialize").len(), 1);
+
+    server.stop();
+    let started = Instant::now();
+    let again = timeout(WAIT_REFUSED, TcpStream::connect(("127.0.0.1", port))).await;
+    let Ok(Err(error)) = again else {
+        panic!("止めた番号への接続が断られない: {again:?}");
+    };
+    assert_eq!(
+        error.kind(),
+        std::io::ErrorKind::ConnectionRefused,
+        "{error:?} ({:?})",
+        started.elapsed()
+    );
+    assert!(
+        std::net::TcpListener::bind(("127.0.0.1", port)).is_err(),
+        "握ったままの番号はほかの束ねに渡らない"
     );
 }

@@ -123,31 +123,3 @@ fn status_is_400_only_for_invalid_params_on_the_stateless_version() {
         }
     }
 }
-
-/// 受け口の配線: rmcp の 415 の後に答えを返す。JSON でない `Content-Type` の 415 は今のまま
-/// （5 つの版の表は 8.2 の受け口のテストが持つ）。
-#[test]
-fn forward_answers_after_rmcp_415_only_for_json_bodies() {
-    use crate::ToolRegistry;
-    use crate::testkit::{MCP_V1, RPC_ACCEPT, post_rpc, request as http, serve};
-
-    let (_server, addr) = serve(ToolRegistry::default());
-    let body = r#"{"jsonrpc":"2.0","id":5,"method":"tools/list","params":[1]}"#;
-    let response = post_rpc(addr, &[("MCP-Protocol-Version", "2026-07-28")], body);
-    assert_eq!(response.status, 400, "{response:?}");
-    assert_eq!(response.header("content-type"), Some("application/json"));
-    let v = response.json();
-    assert_eq!(
-        (v["id"].clone(), v["error"]["code"].clone()),
-        (json!(5), json!(-32602))
-    );
-
-    let response = http(
-        addr,
-        "POST",
-        MCP_V1,
-        &[("Content-Type", "text/plain"), ("Accept", RPC_ACCEPT)],
-        body.as_bytes(),
-    );
-    assert_eq!(response.status, 415, "{response:?}");
-}

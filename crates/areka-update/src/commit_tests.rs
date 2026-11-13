@@ -3,12 +3,9 @@
 
 use super::*;
 use crate::paths::WORK_DIR;
-use crate::testkit::{hold, junction, pe_image, pin, tree};
+use crate::testkit::{SHARING_VIOLATION, hold, junction, pe_image, pin, target_fixture, tree};
 use sample_ghost_kit::WorkDir;
 use std::collections::BTreeMap;
-
-/// `ERROR_SHARING_VIOLATION`（`hold` で掴まれた宛先を退避しようとした）。
-const SHARING_VIOLATION: i32 = 32;
 
 struct Fixture {
     _work: WorkDir,
@@ -19,11 +16,8 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let work = WorkDir::new().expect("作業フォルダ");
+    let (work, target, target_real) = target_fixture();
     let root = work.path().to_path_buf();
-    let target = root.join("target");
-    fs::create_dir_all(&target).unwrap();
-    let target_real = fs::canonicalize(&target).unwrap();
     let area = WorkArea::create(&target).unwrap();
     Fixture {
         _work: work,
@@ -257,6 +251,35 @@ fn refused_removal_reports_stuck_and_keeps_unwinding() {
     drop(pinned);
 }
 
+/// 作った親の下に戻せないファイルが残ると、親は空でないので消さず、戻せなかった一覧には
+/// ファイルだけが載る（親を二重に数えない・5.5）。
+#[test]
+fn stuck_file_keeps_its_created_parent_without_listing_it() {
+    let fx = fixture();
+    fs::write(fx.target.join("b.txt"), b"old-b").unwrap();
+    fx.area.put("sub/a.bin", &pe_image()).unwrap();
+    fx.area.put("b.txt", b"new-b").unwrap();
+    let pinned = pin(&fx.area.fresh("sub/a.bin"));
+    let held = hold(&fx.target.join("b.txt"));
+    let err = commit(
+        &fx.target,
+        &fx.target_real,
+        &fx.area,
+        &names(&["sub/a.bin", "b.txt"]),
+    )
+    .expect_err("2 件目で失敗し、1 件目を消せない");
+    drop(held);
+    match err {
+        CommitFailure::RollbackFailed { stuck, .. } => {
+            let stuck: Vec<&str> = stuck.iter().map(|s| s.file.as_str()).collect();
+            assert_eq!(stuck, ["sub/a.bin"], "sub は載らない");
+        }
+        other => panic!("RollbackFailed のはず: {other:?}"),
+    }
+    assert!(fx.target.join("sub/a.bin").exists(), "戻せなかった物は残る");
+    drop(pinned);
+}
+
 /// ⑷ ジャンクションに置き換えた親で外側に何も作られず 1 件目が戻る（5.6）。
 #[test]
 fn junctioned_parent_escapes_creates_nothing_outside_and_restores_first() {
@@ -287,4 +310,46 @@ fn junctioned_parent_escapes_creates_nothing_outside_and_restores_first() {
     fs::remove_dir(&sub).unwrap();
     fs::create_dir(&sub).unwrap();
     assert_eq!(visible(&fx.target), before, "1 件目は戻された");
+}
+
+/// ⑷ の後に戻せなかった物が残る → 全部戻せた `Escapes` でなく `RollbackFailed`（5.5・5.6）。
+#[test]
+fn an_escape_after_a_stuck_file_is_rollback_failed() {
+    let fx = fixture();
+    let outside = fx.root.join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(fx.target.join("a.bin"), b"old-a").unwrap();
+    fx.area.put("a.bin", &pe_image()).unwrap();
+    fx.area.put("sub/deeper/b.txt", b"b").unwrap();
+    let pinned = pin(&fx.area.fresh("a.bin"));
+    junction(&fx.target.join("sub"), &outside);
+
+    let err = commit(
+        &fx.target,
+        &fx.target_real,
+        &fx.area,
+        &names(&["a.bin", "sub/deeper/b.txt"]),
+    )
+    .expect_err("2 件目が外へ解決され、1 件目は消せず上書きもできない");
+    match err {
+        CommitFailure::RollbackFailed {
+            path,
+            restored,
+            stuck,
+            ..
+        } => {
+            assert_eq!(path, fx.target.join("sub/deeper/b.txt"));
+            assert!(restored.is_empty(), "{restored:?}");
+            let stuck: Vec<&str> = stuck.iter().map(|s| s.file.as_str()).collect();
+            assert_eq!(stuck, ["a.bin"]);
+        }
+        other => panic!("RollbackFailed のはず: {other:?}"),
+    }
+    assert!(tree(&outside).is_empty(), "外側には何も作らない");
+    assert_eq!(
+        fs::read(fx.area.retired("a.bin")).unwrap(),
+        b"old-a",
+        "元の内容は old/ に残る"
+    );
+    drop(pinned);
 }

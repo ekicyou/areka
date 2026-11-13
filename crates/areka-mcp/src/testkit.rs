@@ -5,15 +5,32 @@
 //! ネットへは出ない（`127.0.0.1` の空きポートだけ＝要件 9.1）。
 
 use std::io::{ErrorKind, Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Duration;
 
+use serde_json::{Map, Value, json};
+
+use crate::tools::ToolRequest;
 use crate::{McpServer, ToolRegistry, start};
 
 /// MCP の受け口のパス（テストの側で契約を綴る）。
 pub(crate) const MCP_V1: &str = "/api/mcp/v1";
+/// help のパス。
+pub(crate) const HELP: &str = "/api/mcp/help";
 /// rmcp が `POST` に求める `Accept`（両方が無いと 406＝設計 B-8）。
 pub(crate) const RPC_ACCEPT: &str = "application/json, text/event-stream";
+/// 無状態版の版。
+pub(crate) const STATELESS: &str = "2026-07-28";
+/// 保存した SSP の定義（テストだけが読む。本番はクレートの外のファイルを読まない＝spec: areka-P0-mcp-tool-entrances 要件 7.6）。
+const SAVED_LIST: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../doc/ssp-mcp/tools-list-ssp-2.9.05.json"
+);
+/// 受け手の要求を待つ上限。届かなければテストを止めずに失敗させる（正しさは待ち時間に頼らない）。
+pub(crate) const RECV_WAIT: Duration = Duration::from_secs(10);
+/// 返事の上限。待ちの間の `ping` のテストが上限で終わらないよう長く取る（受け手は必ず答える）。
+pub(crate) const LONG_WAIT: Duration = Duration::from_secs(30);
 /// 読み取りの上限。サーバが黙ったらテストを止めずに失敗させる。
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -42,6 +59,30 @@ impl Response {
                 String::from_utf8_lossy(&self.body)
             )
         })
+    }
+
+    /// 200 で JSON 1 件の応答を読み、`result` を返す（`error` があれば失敗）。
+    pub(crate) fn result(&self) -> Value {
+        assert_eq!(self.status, 200, "{self:?}");
+        let value = self.json();
+        assert!(value.get("error").is_none(), "{value}");
+        value["result"].clone()
+    }
+
+    /// 200 で JSON 1 件の応答を読み、`error` を返す（`result` があれば失敗）。
+    pub(crate) fn error(&self) -> Value {
+        assert_eq!(self.status, 200, "{self:?}");
+        let value = self.json();
+        assert!(value.get("result").is_none(), "{value}");
+        value["error"].clone()
+    }
+}
+
+/// JSON のオブジェクトの中身を取り出す（オブジェクトでなければ失敗）。
+pub(crate) fn obj(v: Value) -> Map<String, Value> {
+    match v {
+        Value::Object(m) => m,
+        other => panic!("オブジェクトでない: {other}"),
     }
 }
 
@@ -73,11 +114,113 @@ pub(crate) fn post_rpc(addr: SocketAddr, extra: &[(&str, &str)], body: &str) -> 
     request(addr, "POST", MCP_V1, &headers, body.as_bytes())
 }
 
+/// 保存した SSP の定義（[`SAVED_LIST`]）を JSON 1 件として読む。
+pub(crate) fn saved_list() -> Value {
+    let text = std::fs::read_to_string(SAVED_LIST).expect("保存した JSON が読めない");
+    serde_json::from_str(&text).expect("保存した JSON が JSON でない")
+}
+
+/// 旧式の `initialize` の `params`（`protocolVersion` だけを変える）。
+pub(crate) fn initialize_params(version: &str) -> Value {
+    json!({
+        "protocolVersion": version,
+        "capabilities": {},
+        "clientInfo": { "name": "areka-test", "version": "0" }
+    })
+}
+
+/// 無状態版の要求に付ける本文の `_meta`。
+pub(crate) fn stateless_meta() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": STATELESS,
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { "name": "areka-test", "version": "0" }
+    })
+}
+
+/// 旧式の経路（ヘッダも `_meta` も無い）で 1 件送る。
+pub(crate) fn post_legacy(
+    addr: SocketAddr,
+    method: &str,
+    id: u64,
+    params: Option<Value>,
+) -> Response {
+    post_rpc(addr, &[], &rpc(method, Some(id), params))
+}
+
+/// 無状態版の経路で 1 件送る（`MCP-Protocol-Version`・`Mcp-Method`・`tools/call` なら `Mcp-Name`・本文の `_meta`）。
+pub(crate) fn post_stateless(addr: SocketAddr, method: &str, id: u64, params: Value) -> Response {
+    let mut params = params;
+    params["_meta"] = stateless_meta();
+    let name = params["name"].as_str().map(str::to_owned);
+    let mut headers = vec![("MCP-Protocol-Version", STATELESS), ("Mcp-Method", method)];
+    if let Some(name) = name.as_deref() {
+        headers.push(("Mcp-Name", name));
+    }
+    post_rpc(addr, &headers, &rpc(method, Some(id), Some(params)))
+}
+
+/// 両方の経路で同じ要求を送る（経路の名前, 応答）。旧式は id 1、無状態版は id 2。
+/// `params` が None なら旧式は欄ごと省き、無状態版は `{}`。
+pub(crate) fn post_both(
+    addr: SocketAddr,
+    method: &str,
+    params: Option<Value>,
+) -> [(&'static str, Response); 2] {
+    [
+        ("旧式", post_legacy(addr, method, 1, params.clone())),
+        (
+            "無状態版",
+            post_stateless(addr, method, 2, params.unwrap_or_else(|| json!({}))),
+        ),
+    ]
+}
+
+/// `tools/call` の `params`。
+pub(crate) fn call_params(name: &str, arguments: Value) -> Value {
+    json!({ "name": name, "arguments": arguments })
+}
+
+/// 受け手に要求が 1 件も届いていない（検査で弾いた要求はアプリ本体へ届かない）。
+/// 検査は handler を呼ぶ前に同期で済み、応答はその後に返るので、応答を受けた後に覗けば十分。
+pub(crate) fn assert_no_request(rx: &Receiver<ToolRequest>) {
+    match rx.try_recv() {
+        Err(TryRecvError::Empty) => {}
+        Ok(request) => panic!("受け手に要求が届いた: {:?}", request.call),
+        Err(TryRecvError::Disconnected) => panic!("受け口が閉じている"),
+    }
+}
+
+/// 登録表と受け口の組 `entrances`（`all_entrances(..)` の戻り値）のサーバへ、旧式と無状態版の
+/// 両方の経路で同じ `tools/call` を送り、`-32602` の `error` と HTTP の状態を固定する。
+/// どちらも `result` は無く、受け手への要求は 0 件。
+pub(crate) fn assert_invalid_params(
+    entrances: (ToolRegistry, Receiver<ToolRequest>),
+    name: &str,
+    arguments: Value,
+    message: &str,
+) {
+    let (registry, rx) = entrances;
+    let (_server, addr) = serve(registry);
+    let params = call_params(name, arguments);
+    // 旧式の経路も無状態版の経路も 200（rmcp 3.9.0 で測った値。3.5.0 の無状態版は 400 だった＝差の一覧へ）。
+    for (path, response) in post_both(addr, "tools/call", Some(params)) {
+        assert_eq!(response.status, 200, "{path}: {response:?}");
+        let value = response.json();
+        assert!(value.get("result").is_none(), "{path}: {value}");
+        assert_eq!(
+            value["error"],
+            json!({ "code": -32602, "message": message }),
+            "{path}: {value}"
+        );
+    }
+    assert_no_request(&rx);
+}
+
 /// 要求 1 本を送って応答を受ける。
 ///
 /// 足すのは `Host`（`headers` に無ければ `127.0.0.1:<port>`）・`Content-Length`・
-/// `Connection: close` だけ。書き込みの失敗は無視して読みに進む（本文の上限を超えた
-/// 要求に、サーバが読み切る前に 413 を返して閉じることがある）。
+/// `Connection: close` だけ。送りと読みは [`send_raw`] に任せる。
 pub(crate) fn request(
     addr: SocketAddr,
     method: &str,
@@ -85,9 +228,6 @@ pub(crate) fn request(
     headers: &[(&str, &str)],
     body: &[u8],
 ) -> Response {
-    let mut stream = TcpStream::connect(addr).expect("ループバックへ接続できる");
-    stream.set_read_timeout(Some(READ_TIMEOUT)).unwrap();
-    stream.set_write_timeout(Some(READ_TIMEOUT)).unwrap();
     let mut head = format!("{method} {path} HTTP/1.1\r\n");
     if !headers.iter().any(|(n, _)| n.eq_ignore_ascii_case("host")) {
         head.push_str(&format!("Host: {addr}\r\n"));
@@ -99,9 +239,24 @@ pub(crate) fn request(
         "Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     ));
-    let _ = stream
-        .write_all(head.as_bytes())
-        .and_then(|()| stream.write_all(body));
+    let mut bytes = head.into_bytes();
+    bytes.extend_from_slice(body);
+    send_raw(addr, &bytes, false)
+}
+
+/// 組み上がった要求のバイト列をそのまま送り、close_write なら書きの側を閉じてから、
+/// サーバが閉じるまで読んで分ける（ヘッダの値に UTF-8 でないバイトを入れる・本文を約束より短く切る、のため）。
+///
+/// 書き込みの失敗は無視して読みに進む（本文の上限を超えた要求に、サーバが読み切る前に
+/// 413 を返して閉じることがある）。
+pub(crate) fn send_raw(addr: SocketAddr, raw: &[u8], close_write: bool) -> Response {
+    let mut stream = TcpStream::connect(addr).expect("ループバックへ接続できる");
+    stream.set_read_timeout(Some(READ_TIMEOUT)).unwrap();
+    stream.set_write_timeout(Some(READ_TIMEOUT)).unwrap();
+    let _ = stream.write_all(raw);
+    if close_write {
+        let _ = stream.shutdown(Shutdown::Write);
+    }
     parse(&read_until_closed(&mut stream))
 }
 
