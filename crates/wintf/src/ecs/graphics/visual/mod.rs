@@ -188,22 +188,36 @@ impl Default for Visual {
     }
 }
 
+/// 不透明度を 0.0〜1.0 に収める共通の 1 か所。NaN は 1.0（不透明）とする。
+fn clamp_opacity(value: f32) -> f32 {
+    if value.is_nan() {
+        1.0
+    } else {
+        value.clamp(0.0, 1.0)
+    }
+}
+
 impl Visual {
     /// opacity を 0.0〜1.0 にクランプして設定する。
+    /// NaN は呼ばれるたびに warn ログを残して 1.0（不透明）を入れる。
     /// 範囲外の値は warn ログを出力後にクランプされる。
     pub fn set_opacity(&mut self, value: f32) {
-        if value < 0.0 || value > 1.0 {
+        if value.is_nan() {
+            warn!("Opacity value is NaN; treated as 1.0");
+        } else if value < 0.0 || value > 1.0 {
             warn!(
                 value = value,
                 "Opacity value is outside valid range [0.0, 1.0]"
             );
         }
-        self.opacity = value.clamp(0.0, 1.0);
+        self.opacity = clamp_opacity(value);
     }
 
     /// クランプ済み opacity 値を返す (0.0〜1.0)。
+    /// 欄へ直に書かれた NaN は黙って 1.0 を返す（記録は実体を知る `fill_world_visuals` の持ち分）。
+    /// 持ち主の同期・描く列の組み立て・当たり判定はこの関数を通るので、NaN の答えは全部 1.0 に揃う。
     pub fn clamped_opacity(&self) -> f32 {
-        self.opacity.clamp(0.0, 1.0)
+        clamp_opacity(self.opacity)
     }
 
     /// is_visible を設定する。
