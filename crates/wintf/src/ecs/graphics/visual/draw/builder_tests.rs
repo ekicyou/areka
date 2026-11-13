@@ -402,8 +402,7 @@ fn hash_is_the_same_for_same_version_and_transform_regardless_of_com_address() {
     // 版か行列が変われば違う。
     let item = first_draw(&second);
     let v = world.get::<VisualVersion>(a).unwrap().0;
-    let hash =
-        |v: u64, m: Matrix3x2| hash_draw(a, v, item.interpolation_mode, item.composite_mode, &m);
+    let hash = |v: u64, m: Matrix3x2| hash_draw(a, v, item.interpolation_mode, item.mix_mode, &m);
     assert_eq!(hash(v, item.world_mat), h1);
     assert_ne!(hash(v + 1, item.world_mat), h1);
     assert_ne!(hash(v, Matrix3x2::translation(4.0, 0.0)), h1);
@@ -411,6 +410,63 @@ fn hash_is_the_same_for_same_version_and_transform_regardless_of_com_address() {
     let mut neg = item.world_mat;
     neg.M12 = -0.0;
     assert_eq!(hash(v, neg), h1);
+}
+
+#[test]
+fn hash_mixes_the_kind_and_value_of_mix_mode() {
+    let a = World::new().spawn_empty().id();
+    let m = Matrix3x2::identity();
+    let hash = |mix: MixMode| hash_draw(a, 1, D2D1_INTERPOLATION_MODE_LINEAR, mix, &m);
+    // 既定は SOURCE_OVER の重ね方。
+    assert_eq!(
+        MixMode::default(),
+        MixMode::Composite(D2D1_COMPOSITE_MODE_SOURCE_OVER)
+    );
+    let base = hash(MixMode::default());
+    // 値が変われば違う（重ね方どうし・ブレンドどうし）。
+    assert_ne!(
+        hash(MixMode::Composite(D2D1_COMPOSITE_MODE_DESTINATION_OVER)),
+        base
+    );
+    assert_ne!(
+        hash(MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY)),
+        hash(MixMode::Blend(D2D1_BLEND_MODE_SCREEN))
+    );
+    // 同じ数値でも種類が違えば違う（SOURCE_OVER と MULTIPLY はどちらも 0）。
+    assert_eq!(
+        D2D1_COMPOSITE_MODE_SOURCE_OVER.0,
+        D2D1_BLEND_MODE_MULTIPLY.0
+    );
+    assert_ne!(hash(MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY)), base);
+    // 描く中身の欄が描く 1 件の hash と欄へそのまま渡る。
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let leaf_e = leaf(&mut world, root, 0.0, 0.0);
+    let c = world.get::<VisualDrawContent>(leaf_e).unwrap().clone();
+    world
+        .entity_mut(leaf_e)
+        .insert(VisualDrawContent::new_blend(
+            c.local_aabb,
+            c.command_list,
+            c.interpolation_mode,
+            D2D1_BLEND_MODE_SCREEN,
+        ));
+    let unit = unit_rect();
+    let visited = fill(&mut world, root);
+    let out = build_only(&mut world, &unit, INFINITE, &visited);
+    let item = first_draw(&out);
+    assert_eq!(item.mix_mode, MixMode::Blend(D2D1_BLEND_MODE_SCREEN));
+    let v = world.get::<VisualVersion>(leaf_e).unwrap().0;
+    assert_eq!(
+        item.hash,
+        hash_draw(
+            leaf_e,
+            v,
+            item.interpolation_mode,
+            item.mix_mode,
+            &item.world_mat
+        )
+    );
 }
 
 fn with_clip(clip: ClipShape) -> Visual {

@@ -7,7 +7,6 @@ use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use std::hash::{Hash, Hasher};
 use tracing::error;
-use windows::Win32::Graphics::Direct2D::Common::D2D1_COMPOSITE_MODE;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
 
@@ -151,7 +150,7 @@ fn draw_item(
             entity,
             version.map_or(0, |v| v.0),
             c.interpolation_mode,
-            c.composite_mode,
+            c.mix_mode,
             &world_mat,
         ),
         entity,
@@ -159,7 +158,7 @@ fn draw_item(
         world_aabb,
         command_list: c.command_list.clone(),
         interpolation_mode: c.interpolation_mode,
-        composite_mode: c.composite_mode,
+        mix_mode: c.mix_mode,
     })
 }
 
@@ -234,20 +233,24 @@ fn geometry_bounds(g: &ID2D1Geometry, m: &Matrix3x2) -> windows::core::Result<Aa
     Ok(Aabb::new_rect(unsafe { g.GetBounds(Some(m as *const _)) }?))
 }
 
-/// 描く 1 件の同一性（4.5）。実体・見た目の版・補間・重ね方・世界の行列から取り、COM の番地は使わない。
+/// 描く 1 件の同一性（4.5）。実体・見た目の版・補間・混ぜ方（種類と値）・世界の行列から取り、COM の番地は使わない。
 /// 小数は `CalcHash` で正規化する。`DefaultHasher::new()` は鍵が固定なので回をまたいで同じ値になる。
 pub(crate) fn hash_draw(
     entity: Entity,
     version: u64,
     interpolation: D2D1_INTERPOLATION_MODE,
-    composite: D2D1_COMPOSITE_MODE,
+    mix: MixMode,
     world: &Matrix3x2,
 ) -> u64 {
     let mut state = std::collections::hash_map::DefaultHasher::new();
     entity.hash(&mut state);
     version.hash(&mut state);
     interpolation.0.hash(&mut state);
-    composite.0.hash(&mut state);
+    // 種類を先に混ぜる（重ね方とブレンドは同じ数値を持ち得る）。
+    match mix {
+        MixMode::Composite(c) => (0u8, c.0).hash(&mut state),
+        MixMode::Blend(b) => (1u8, b.0).hash(&mut state),
+    }
     world.calc_hash(&mut state);
     state.finish()
 }

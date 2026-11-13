@@ -1,9 +1,9 @@
 //! 平らにした描く列（画家の順）。矩形と行列はすべて根からの DIP。
 //! 欄は `wintf-visual-damage-redraw` が読むので公開にする。
 
+use super::super::MixMode;
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
-use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
 
@@ -31,7 +31,7 @@ pub struct DrawItem {
     /// `VisualDrawContent` の命令の列の複製（AddRef だけ）。中身を差し替えても次の組み直しまで生きる。
     pub command_list: ID2D1CommandList,
     pub interpolation_mode: D2D1_INTERPOLATION_MODE,
-    pub composite_mode: D2D1_COMPOSITE_MODE,
+    pub mix_mode: MixMode,
 }
 
 /// 軸に沿う矩形の切り抜き。
