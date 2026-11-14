@@ -1,6 +1,6 @@
 # Brief: pasta-idle-surface-cost-measure
 
-> 2026-11-14 `wintf-visual-damage-redraw` の完了の棚卸で `/kiro-discovery` で起票。同 spec の要件の討議（議題 3）で、件 1 を同 spec から外し、測ることが本体の spec として別に起こすと決めた（`.kiro/specs/wintf-visual-damage-redraw/requirements.md` の 14 行目と Out of scope）。同 spec の brief の「件 1」の節は、下の「出どころ」へそのまま移した。
+> 2026-11-14 `wintf-visual-damage-redraw` の完了の棚卸で `/kiro-discovery` で起票。同 spec の要件の討議（議題 3）で、件 1 を同 spec から外し、測ることが本体の spec として別に起こすと決めた（`.kiro/specs/completed/wintf-visual-damage-redraw/requirements.md` の 14 行目と Out of scope）。同 spec の brief の「件 1」の節は、下の「出どころ」へそのまま移した。
 
 ## Problem
 
