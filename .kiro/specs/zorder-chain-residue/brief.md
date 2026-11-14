@@ -22,7 +22,7 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 
 | # | 事項 | 実測アンカー | e2e DoD への影響 |
 |---|---|---|---|
-| A-1 | 既存ペア機構の実窓の檻が **3 プロセス同時 regime で稀に赤**——他プロセスの可視窓が owner 一組の間に割り込む／`SetWindowPos(HWND_NOTOPMOST)` が Ok を返しつつ帯から出さない。隔離測定では両ツリーとも 0 本＝**測定条件か欠陥か未決着** | `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:653`（09-02 の `:767`）・同 `:274`（同 `:411`）・同 `:722`（後から足された 3 本目）＝2026-11-14 の位置 | あり（間欠）→ 隔離済みで既定の走行には入らない |
+| A-1 | 既存ペア機構の実窓の檻が **3 プロセス同時 regime で稀に赤**——他プロセスの可視窓が owner 一組の間に割り込む／`SetWindowPos(HWND_NOTOPMOST)` が Ok を返しつつ帯から出さない。隔離測定では両ツリーとも 0 本＝**測定条件か欠陥か未決着** | `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:687`（09-02 の `:767`）・同 `:271`（同 `:411`）・同 `:756`（後から足された 3 本目）＝`audit-wintf-window` の最後のコミットの時点の `fn` の行（名前は末尾の節） | あり（間欠）→ 隔離済みで既定の走行には入らない |
 | A-2 | **壁時計期限の飢餓**——vblank 500ms 期限切れ／boot 応答 5 本が有界内に発火しない（後者は zsp 分岐点 `35387f00` でも同じ場所・同じ文言＝zsp 由来ではない） | `crates/wintf/src/runtime/tick_bridge.rs:355`（2026-11-14 の位置＝役割名待ちの 5 秒は `:428`・vblank の 1 本の `#[ignore]` は `:446`）・`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:46`・`spine_talk_close_tests.rs:306`（spine の族は `ghost-session-test-load-flake` へ移し済み・ファイルは今 `crates/areka/src/runtime/` に在る）・**2026-09-11 e2e からの追記＝同じ族（壁時計期限 `SPIN_WAIT` 30 秒）**: `crates/areka/src/emo2_boot/spine_text_scale_tests.rs`・`spine_seriko_loop_tests.rs`・`spine_display_tests.rs`（e2e `verification/isolation-decision.md` §4.5.1・負荷走行で赤を観測・既定では緑） | あり（間欠） |
 
 **§13.9（完成検証が掘った未担当・所有者ゼロ 6 件・いずれも挙動不変）**
@@ -34,7 +34,7 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 | B-3 | 生産者名簿の穴 2 件（照合が file 単位／doc 写し検査が wintf の木しか歩かない） | `crates/wintf/src/ecs/world/tick_gate_tests.rs`・`crates/areka/src/tick_gate_config_producers_tests.rs` |
 | B-4 | 要件 12.1〜12.4・13.3・13.4 が COMPAT §8 の行だけに乗り檻が無い（**13.3/13.4 は `zorder-property` の語彙記録行そのもの**＝同 spec が実質の受け皿・本台帳は 12.1〜12.4 のみ持つ） | `doc/COMPAT_ARCHITECTURE.md:192-207`（09-02 合流で 176-191 から 16 行ずれ・2026-11-14 は §8 の重なりの行が `:215-233` に並び、後から足された stay-on-top の行が混じる＝12.1〜12.4 の行は着手時に名前で引く） |
 | B-5 | 要件 11.5（タスクバーへの出方・クリック透過）と 8.2（入力受付を損なわない）に実行テストが無い（構造で論証のみ・実機目視でしか測れない性質・§8 に裁量登記済み） | — |
-| B-6 | ペア機構の doc が 2 系統の処理列を述べたまま（本番は 3 系統） | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs`（**✅ 2026-11-14 消化**＝`audit-wintf-window` の指摘 36・同ファイル `:387-388`） |
+| B-6 | ペア機構の doc が 2 系統の処理列を述べたまま（本番は 3 系統） | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs`（**✅ 2026-11-14 消化**＝`audit-wintf-window` の指摘 36・同ファイル `:388-389`） |
 
 所有者ゼロの根拠（zsp research §13.8 の引受先実在検証）: `zorder-property` は「Out: 窓の是正機構そのもの」、`tick-gate-adoption` は「In は門の裁定・`tick_bridge` の檻は範囲外」で明示的に拒否。完了 spec は申し送りを消化できない（記憶 deferral-requires-verified-owner）。
 
@@ -131,13 +131,14 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 
 ## 2026-11-14 `audit-wintf-window` からの書き直し（ブランチ `claude/kiro-start-audit-wintf-window-695c43`・分岐点 main `73c4f87a`）
 
-- **B-6 は閉じた。** 09-20 と 10-02 の「消化済み」は誤りで、B-6 は生きていた。指していたのは `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` の関数の中の結線の説明で、本番の字面（`(establish_owner_links, apply_zorder_pair_maintenance).chain()`）を引いたまま、本番の `wire_zorder_pair`（`crates/areka-placement/src/spawn.rs:709`）は帯の系と鎖の適用系を含む 4 本になっていた。`audit-wintf-window` の指摘 36（タスク 12.1）で、字面を引かずに「`areka-placement` の組の結線では確立系が本 system より前に走る」と書き直した（`zorder_pair_maintain.rs:387-388`）。本 spec に B-6 の仕事は残らない。
+- **場所の引き方**: この節と本文の「2026-11-14 の位置」の行番号は、`audit-wintf-window` の最後のコミットの時点のもの。後の直しでずれるので、変わらない手がかりはテストの関数の名前（と system・関数の名前）であり、着手時は名前で引き直す。
+- **B-6 は閉じた。** 09-20 と 10-02 の「消化済み」は誤りで、B-6 は生きていた。指していたのは `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` の関数の中の結線の説明で、本番の字面（`(establish_owner_links, apply_zorder_pair_maintenance).chain()`）を引いたまま、本番の `wire_zorder_pair`（`crates/areka-placement/src/spawn.rs:709`）は帯の系と鎖の適用系を含む 4 本になっていた。`audit-wintf-window` の指摘 36（タスク 12.1）で、字面を引かずに「`areka-placement` の組の結線では確立系が本 system より前に走る」と書き直した（`zorder_pair_maintain.rs:388-389`）。本 spec に B-6 の仕事は残らない。
 - **A-1 の隔離は 3 本。** `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` で `#[ignore]` と本体 1 行目の門 `require_explicit_real_window_run()` が付くのは次の 3 本（行は `#[ignore]` の行／`fn` の行）。
-  - `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`（`:273`／`:274`・帯の印だけを見る。`#[ignore]` の理由の文は「帯から外す指令が効かない回がある」）
-  - `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`（`:652`／`:653`）
-  - `a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band`（`:721`／`:722`・#399 で足された 3 本目）
-  - ファイル頭の説明（`:37-45`）も「3 本」と名前を並べる形に直した（指摘 38）。
-- **門の置き場が動いた。** 環境変数 `AREKA_WINTF_REAL_WINDOW_ZORDER` と門の関数は、組と帯の実窓テストの共有の道具 `crates/wintf/src/ecs/window/zorder_pair_test_support.rs` に在る（定数 `:76`・`require_explicit_real_window_run` `:94`）。同じ門は帯の実窓テスト（`window_band_real_tests.rs:137`・`:265`・`window_band_pipeline_real_tests.rs:68`）にも付く。
-- **10-10 の申し送りの 3 本目の対照**（`a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band`）は今 `:434` に在り、隔離はしていない（ふだんの走行に入る）。説明の挿入の向きは「すぐ背後」に直した（指摘 40・挙動不変）。
+  - `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`（`:270`／`:271`・帯の印だけを見る。`#[ignore]` の理由の文は「帯から外す指令が効かない回がある」）
+  - `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`（`:686`／`:687`）
+  - `a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band`（`:755`／`:756`・#399 で足された 3 本目）
+  - ファイル頭の説明（`:38-45`）も「3 本」と名前を並べる形に直した（指摘 38）。
+- **門の置き場が動いた。** 環境変数 `AREKA_WINTF_REAL_WINDOW_ZORDER` と門の関数は、組と帯の実窓テストの共有の道具 `crates/wintf/src/ecs/window/zorder_pair_test_support.rs` に在る（定数 `:76`・`require_explicit_real_window_run` `:94`）。同じ門は帯の実窓テスト（`window_band_real_tests.rs:124`・`:252`・`window_band_pipeline_real_tests.rs:50`＝門の呼び出しの行）にも付く。
+- **10-10 の申し送りの 3 本目の対照**（`a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band`）は今 `:431`（`fn` の行）に在り、隔離はしていない（ふだんの走行に入る）。説明の挿入の向きは「すぐ背後」に直した（指摘 40・挙動不変）。
 - **A-1 の隔離と根治は本 spec に残す。** `audit-wintf-window` は説明・属性の文・下ごしらえの置き場だけを直し、`#[ignore]` と門の呼び出しは変えていない。「測り方の問題か欠陥か」の決着は未了のまま。
 - **B 群の場所**: B-2 の `crates/wintf/src/ecs/window/zorder_chain_tests.rs` は、後押しの指令が Z を触らない形でないことの検査が旗の全一致の検査へまとまった（`the_nudge_moves_only_the_zorder`・挙動不変）だけで、B-2 の中身（`plan_chain_ops` を名簿が守らない）は変わらない。B-1 のファイルは `crates/areka/src/placement_tests/` へ移っている。B-3・B-4・B-5 は本 spec の触れた範囲の外。
