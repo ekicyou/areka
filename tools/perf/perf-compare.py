@@ -285,6 +285,9 @@ def load_goal(path: Path) -> Goal:
                        ("goal", "judge_version"), ("goal", "judge_script")):
         if not isinstance(tables[table].get(key, ""), str):
             raise bad_input(f"{path}: [{table}].{key} must be a string ({tables[table][key]!r})")
+    build = levels.get("iteration_build")
+    if build is not None and build not in ("dev", "release"):  # 判定スクリプトの --build と同じ 2 択
+        raise bad_input(f'{path}: [levels].iteration_build must be "dev" or "release" ({build!r})')
 
     name = primary.get("name")
     if not isinstance(name, str) or not name:
@@ -298,9 +301,9 @@ def load_goal(path: Path) -> Goal:
             f"{path}: [primary_metric].noise_floor_pct must be a number ({floor!r})",
             ["a missing or non-numeric noise floor adopts everything when the measured spread is 0."],
         )
-    if not floor > 0:  # 0・負・NaN は床の役目（ばらつき 0 で全部採用）を果たさない
+    if not (floor > 0 and math.isfinite(floor)):  # 0・負・NaN・inf は床の役目を果たさない
         raise bad_input(
-            f"{path}: [primary_metric].noise_floor_pct must be greater than 0 ({floor!r})",
+            f"{path}: [primary_metric].noise_floor_pct must be greater than 0 and finite ({floor!r})",
             ["a floor of 0 or less adopts everything when the measured spread is 0."],
         )
     must = secondary.get("must_not_regress", [])

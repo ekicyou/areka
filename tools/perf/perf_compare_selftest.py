@@ -14,7 +14,7 @@
 1 ケース＝1 ディレクトリ（`fixtures-loop/compare/<名前>/`）:
 
     case.txt              期待値台帳（下記）。この 1 ファイルを人も機械も読む
-    expected_compare.txt  `compare.txt` と逐語一致する期待出力（必須）
+    expected_compare.txt  `compare.txt` と逐語一致する期待出力（exit が 3 でなければ必須）
 
 `case.txt` に書ける項目:
 
@@ -157,26 +157,26 @@ def _matches(env: SelftestEnv, expected: str, actual) -> bool:
 def _check_json(env: SelftestEnv, case: SelftestCase, work: Path) -> list[str]:
     json_path = work / env.json_filename
     if not json_path.is_file():
-        return [f"{env.json_filename} が作られていません"]
+        return [f"{env.json_filename} was not written"]
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     reasons: list[str] = []
     for key in CASE_JSON_KEYS:
         if key in case.values and not _matches(env, case.values[key], payload.get(key)):
             reasons.append(
-                f"{env.json_filename} の {key}: "
-                f"期待 {case.values[key]!r} 実際 {payload.get(key)!r}"
+                f"{env.json_filename} {key}: "
+                f"want {ascii(case.values[key])} got {ascii(payload.get(key))}"
             )
     judge_stderr = " ".join(
         str(payload.get(name, {}).get("judge_stderr", "")) for name in ("a1", "a2", "b1", "b2")
     )
     for substring in case.judge_stderr_substrings:
         if substring not in judge_stderr:
-            reasons.append(f"{env.json_filename} の judge_stderr に {substring!r} がありません")
+            reasons.append(f"{env.json_filename} judge_stderr does not contain {ascii(substring)}")
     for key in CASE_NULLABLE_NUMBER_KEYS:
         if key not in case.values and payload.get(key) is not None:
             reasons.append(
-                f"{env.json_filename} の {key}: 期待 null（測れていない側）"
-                f" 実際 {payload.get(key)!r}"
+                f"{env.json_filename} {key}: want null (not measured)"
+                f" got {ascii(payload.get(key))}"
             )
     return reasons
 
@@ -203,7 +203,7 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
     if code == case.expected_exit:
         reproduced.add(code)
     else:
-        reasons.append(f"終了コード: 期待 {case.expected_exit} 実際 {code}")
+        reasons.append(f"exit code: want {case.expected_exit} got {code}")
 
     if case.expected_exit == env.bad_input_exit:
         return reasons + _stderr_reasons(case, err), reproduced
@@ -213,11 +213,11 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
     produced = work / env.text_filename
     if not expected_path.is_file():
         reasons.append(
-            f"{SELFTEST_EXPECTED_FILENAME} がありません"
-            "（期待出力の無いケースは較正になりません）"
+            f"{SELFTEST_EXPECTED_FILENAME} is missing"
+            " (a case without an expected output does not calibrate)"
         )
     elif not produced.is_file():
-        reasons.append(f"{env.text_filename} が作られていません")
+        reasons.append(f"{env.text_filename} was not written")
     else:
         want = common.read_normalized(expected_path)
         got = common.read_normalized(produced)
@@ -228,7 +228,7 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
 
 
 def _stderr_reasons(case: SelftestCase, err: str) -> list[str]:
-    return [f"標準エラーに {s!r} が出ていません"
+    return [f"stderr does not contain {ascii(s)}"
             for s in case.stderr_substrings if s not in err]
 
 
@@ -249,7 +249,7 @@ def run_selftest(env: SelftestEnv) -> int:
 
     results.append(("(to_number)", "有限でない値は None",
                     [] if all(env.to_number(v) is None for v in ("nan", "inf", "-inf"))
-                    and env.to_number("1.5") == 1.5 else ["to_number が nan・inf を弾いていません"]))
+                    and env.to_number("1.5") == 1.5 else ["to_number does not turn nan/inf into None"]))
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
     results.append(("(check_tree)", "木全体の見張り",
                     common.check_tree(ascii_stderr=True, readme_examples=True)))

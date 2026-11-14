@@ -1,0 +1,14 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = [levels].iteration_build が dev／release のどちらでもない目標定義は入力不正
+goal = goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_p95_150
+b2 = ../runs/idle_620_p95_150
+exit = 3
+
+stderr_substr = perf-compare: bad input
+stderr_substr = [levels].iteration_build must be "dev" or "release"
+
+note = adopted と同じ 4 本の走行を読む。入力不正（exit 3）で終わるので結果は書かれない。
+note = 検査を戻すと --build relase を判定スクリプトが引数不正で拒み、計測失敗（exit 4）になって赤になる。
