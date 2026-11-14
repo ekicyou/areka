@@ -212,3 +212,4 @@
 - 3.10: `transition_judge_offset_negative_tests.rs` は合格ログの行を数（`lines[14]` ほか）で引く。緑を期待するテストは並びが変わると元の行のまま緑になる余地があるので、5.1 で檻の前提の 1 行（`assert!(lines[14].contains("scope=1"))` の形）を足すか判断する
 - 3.11: 消した `visibility_guard_route_table_matches_the_d13_decision` の名を、完了済みの `areka-P0-dpi-window-vanish` の `diagnosis-procedure.md`・`diagnosis-report.md` が挙げる（当時の記録なので直さない）。4.6 で範囲の外の古い参照の一覧へ 1 行足す
 - 5.1（かけ直し 2 回目）: 面の `move` のずれはドラッグ中の窓と組の相手へ当てず `debug!` で見送るようにした。範囲の外の呼び手 `crates/areka/src/runtime/frame/move_shift.rs` の注「当てられなかったときは口の中で warn! 済み」は見送り（debug）を書いていない → `runtime-crate-split` の brief へ申し送る
+- 完了の棚卸（2026-11-14）: その場で解決 0 件・申し送り 0 件（新たな分。実装中の範囲の外の残りは `research.md`「核へ伝える一覧（実装の段）」で `audit-placement-core` へ、`runtime-crate-split/brief.md` の申し送りの節へ渡し済み）・起票 0 件。最終の確かめの「直さなくてよい」2 点は不具合ではないと判断した（`is_placed`／`known_position` の印の判定 1 行は `window_move.rs` にも同じ形が複数あり、揃えるなら全部を一度にまとめる直し／`on_balloon_drag_end` のバルーン自身の位置の印はドラッグ中で確定しており届かない）
