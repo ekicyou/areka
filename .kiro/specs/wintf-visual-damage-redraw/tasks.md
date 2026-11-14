@@ -86,7 +86,7 @@
   - 完了の姿: 初めての作成で初めて、捨てた後の作成で作り直しが返り、同じ大きさで描画面を差し替えた後の作成でも作り直しが返るテストが通る
   - _Requirements: 3.1, 3.4, 4.3_
 
-- [ ] 5.2 描画面の係を計画の 4 つの道に分ける（統合）
+- [x] 5.2 描画面の係を計画の 4 つの道に分ける（統合）
   - 入れ物を作る回の理由を計画の入力に渡し、計画から合成までの関数を呼ぶ。何もしない回は描画面へ写さない
   - 触るのは係（`render.rs`）・入れ物（`composite.rs`）・WUC の注記（`wuc.rs`）の 3 か所。入れ物に、渡された矩形を透明に塗ってから入れ物のその矩形を返された atlas の位置へ最近傍で 1 度描く部分の写しの口（`copy_rect_to`）を足す
   - 範囲だけで前の写しを終えている回は、描画面への写しを描画面へ写す矩形だけに狭め（部分の矩形で描き始め、部分の写しの口で写す）、全部・写すだけ・写し終えていない回は今どおり全面を写す。成功で写し終えた印を付ける
@@ -147,3 +147,4 @@
 - 4.2: `compose_partial` と `entries` の再公開に `cfg_attr(not(test), expect(...))` が付いている。4.3 で外す。範囲だけの WARP のテストでは小さい描画面（16×16）だとにじみの余白で計画が全面（CoversSurface）になる＝32×32 以上で組む。
 - 4.3: `compose_planned` と `mark_presented` に `cfg_attr(not(test), expect(dead_code))` が残る。5.2 で外す。「項にできない回は控えを空にし次の回が `Full(NoPrev)`」を `compose_planned` で直に固めるテストは無い（6.1 で足せるなら足す）。
 - 5.1: `SurfaceGraphics::note_composite_created` に `cfg_attr(not(test), expect(dead_code))` が付いている。5.2 で外す。呼ぶのは係が入れ物を作る枝（置き場が空か大きさ違い）だけ。
+- 5.2: `DAMAGE_TARGET`・`FullReason::as_str` に `cfg_attr(not(test), expect(dead_code))` が付いている。5.3 で外す。wintf の描画面を描く実 GPU のテストは `#[ignore]` でなく普通の `cargo test -p wintf` で回る（机は要らない）。Skip の回に BeginDraw しない・Partial の回に部分の矩形を渡すことを係の単位で固めるテストは無い（6.3 で見る）。

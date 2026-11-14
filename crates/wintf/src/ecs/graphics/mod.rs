@@ -3,10 +3,6 @@ mod command_list;
 mod components;
 mod composite;
 mod core;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "描画の係（タスク 3.x）が計画を使い始めたら外す")
-)]
 mod damage;
 mod readback;
 mod systems;

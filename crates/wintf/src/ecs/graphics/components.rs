@@ -209,10 +209,6 @@ impl SurfaceGraphics {
     }
 
     /// 入れ物を作る回に呼ぶ: 初めてなら `First`、前に持ったことがあれば `Recreated`（3.1）
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "5.2 で render_surface が使い始める")
-    )]
     pub(crate) fn note_composite_created(&mut self) -> FullReason {
         let before = std::mem::replace(&mut self.composed_before, true);
         if before {

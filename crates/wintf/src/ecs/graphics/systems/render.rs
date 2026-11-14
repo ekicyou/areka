@@ -1,6 +1,7 @@
 use super::init::format_entity_name;
 use crate::com::wuc::DrawingSurfaceInteropExt;
-use crate::ecs::graphics::composite::{SurfaceComposite, compose_or_drop};
+use crate::ecs::graphics::composite::{SurfaceComposite, compose_planned};
+use crate::ecs::graphics::damage::ComposePlan;
 use crate::ecs::graphics::{
     DrawTree, GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
 };
@@ -9,6 +10,7 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::collections::HashMap;
 use tracing::{debug, error};
+use windows::Win32::Foundation::RECT;
 use windows::Win32::System::WinRT::Composition::ICompositionDrawingSurfaceInterop;
 use windows::core::{HRESULT, Interface};
 
@@ -138,11 +140,17 @@ pub fn render_surface(
 
         // 入れ物へ合成する（WUC の BeginDraw より前）。変換は拡大だけ（atlas の offset は写しで足す）。
         let size = surface.size;
-        let slot = surface.bypass_change_detection().composite_slot();
-        if slot.as_ref().is_none_or(|c| c.size() != size) {
+        let surface = surface.bypass_change_detection();
+        // 入れ物を今作った回の理由（First か Recreated・3.1）。
+        let mut fresh = None;
+        if surface.composite().is_none_or(|c| c.size() != size) {
+            let slot = surface.composite_slot();
             *slot = None;
             match SurfaceComposite::new(&shared_dc, size) {
-                Ok(c) => *slot = Some(c),
+                Ok(c) => {
+                    *slot = Some(c);
+                    fresh = Some(surface.note_composite_created());
+                }
                 Err(err) => {
                     let lost = on_stage_failure(
                         &mut graphics_core,
@@ -169,29 +177,57 @@ pub fn render_surface(
         };
         let root_list = cmd_list_opt.and_then(|c| c.command_list());
         let tree_commands = tree.map_or(&[][..], |t| &t.commands[..]);
-        // 失敗した入れ物は捨てる（途中まで描いた絵を読ませない・5.5）。
-        if let Err(err) = compose_or_drop(slot, |c| {
-            c.compose(&shared_dc, scale, root_list, tree_commands)
-        }) {
-            let lost = on_stage_failure(
-                &mut graphics_core,
-                &mut commands,
-                &mut log,
-                who,
-                STAGE_COMPOSE,
-                &err,
-            );
-            if lost {
-                return;
+        let slot = surface.composite_slot();
+        // 合成の前に読む（合成した回は remember が偽に戻す）。
+        let presented_before = slot.as_ref().is_some_and(|c| c.presented());
+        // 計画を立てて合成する。失敗した入れ物は控えごと捨てる（途中まで描いた絵を読ませない・3.5）。
+        let planned = match compose_planned(
+            slot,
+            &shared_dc,
+            fresh,
+            scale,
+            root_list,
+            tree_commands,
+            size,
+        ) {
+            Ok((planned, _)) => planned,
+            Err(err) => {
+                let lost = on_stage_failure(
+                    &mut graphics_core,
+                    &mut commands,
+                    &mut log,
+                    who,
+                    STAGE_COMPOSE,
+                    &err,
+                );
+                if lost {
+                    return;
+                }
+                continue;
             }
-            continue;
-        }
+        };
+        // 描画面へ写す矩形（None＝全面）。範囲だけで前の写しを終えている回だけ狭める（2.6・2.8）。
+        let present_rect = match &planned {
+            ComposePlan::Skip => {
+                log.remove(&entity);
+                continue;
+            }
+            ComposePlan::Partial(p) if presented_before => Some(p.present_rect),
+            _ => None,
+        };
 
         let Some(composite) = slot.as_ref() else {
             continue;
         };
-        // BeginDraw は必ず None＝全面（Some(部分矩形) は WUC で E_INVALIDARG になる・task 1.2 実測）。
-        let (dc, offset) = match surface_interop.begin_draw(None) {
+        // 部分の矩形は作りたての描画面では断られる（E_INVALIDARG）が、作りたての描画面は入れ物も
+        // 作りたて＝必ず全部なのでここへは来ない（全面を 1 度描いた後は通る・2026-11-14 実測）。
+        let update_rect = present_rect.map(|r| RECT {
+            left: r.left,
+            top: r.top,
+            right: r.right,
+            bottom: r.bottom,
+        });
+        let (dc, offset) = match surface_interop.begin_draw(update_rect.as_ref()) {
             Ok(result) => result,
             Err(err) => {
                 // 失いの記録と無効化は note_draw_failure が残す。残りの描画面も同じ装置なので描かない。
@@ -215,8 +251,12 @@ pub fn render_surface(
             }
         };
 
-        // 写し: 入れ物を atlas の offset（物理ピクセル）へ。失敗は EndDraw に出る。
-        composite.copy_to(&dc, offset);
+        // 写し: 入れ物を atlas の offset（物理ピクセル）へ。失敗は EndDraw に出る。写しに失敗した回は
+        // 控えを残し写し終えた印を付けない（次の回に写すだけで写す・2.8）。
+        match present_rect {
+            Some(r) => composite.copy_rect_to(&dc, r, offset),
+            None => composite.copy_to(&dc, offset),
+        }
         if let Err(err) = surface_interop.end_draw() {
             let lost = on_stage_failure(
                 &mut graphics_core,
@@ -230,6 +270,9 @@ pub fn render_surface(
                 return;
             }
             continue;
+        }
+        if let Some(c) = slot.as_mut() {
+            c.mark_presented();
         }
         log.remove(&entity);
     }

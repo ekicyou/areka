@@ -415,7 +415,8 @@ pub(crate) struct Diff {
 }
 
 impl Diff {
-    /// 消えた・足された・動いた項が無い。
+    /// 消えた・足された・動いた項が無い（計画は件ごとに見るのでテストだけが使う）。
+    #[cfg(test)]
     pub fn is_unchanged(&self) -> bool {
         self.removed.is_empty() && self.added.is_empty() && self.moved.is_empty()
     }

@@ -2,7 +2,7 @@
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
 use super::damage::{ComposePlan, FullReason, PartialPlan, PlanInput, RegionShift, plan};
-use super::visual::{DamageEntry, DrawCommand, emit, emit_within, entries};
+use super::visual::{DamageEntry, DrawCommand, PxRect, emit, emit_within, entries};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -95,7 +95,6 @@ pub(crate) fn compose_or_drop(
 /// 作った回の理由。全部・範囲だけは失敗なら入れ物と控えを捨てて `Err`、写すだけ・何もしないは合成しない。
 /// 成功で控えを今の項の列（項にできなければ空）に置き換える。返すのは計画と今の項の列。置き場が空なら
 /// 何もしない（`Skip`）。本番の係と WARP のテストが同じこの関数を呼ぶ。
-#[cfg_attr(not(test), expect(dead_code, reason = "5.2 の描画面の係が使い始める"))]
 pub(crate) fn compose_planned(
     slot: &mut Option<SurfaceComposite>,
     dc: &ID2D1DeviceContext,
@@ -214,7 +213,6 @@ impl SurfaceComposite {
     }
 
     /// 入れ物を描画面へ写し終えた印を付ける（2.8）。
-    #[cfg_attr(not(test), expect(dead_code, reason = "5.2 の描画面の係が使い始める"))]
     pub(crate) fn mark_presented(&mut self) {
         self.presented = true;
     }
@@ -368,6 +366,45 @@ impl SurfaceComposite {
                 D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
                 D2D1_COMPOSITE_MODE_SOURCE_OVER,
             );
+        }
+    }
+
+    /// `dst`（部分の矩形 `rect` で `BeginDraw` した DC）の `offset` から `rect` の大きさを透明に塗り、
+    /// 入れ物の `rect` を `offset` へ `NEAREST_NEIGHBOR`・`SOURCE_OVER` で 1 度描く（2.6・2.9）。
+    /// `offset` は `rect` の左上が来る位置。入れ物は読むだけ。失敗は `dst` の `EndDraw` に出る。
+    pub(crate) fn copy_rect_to(&self, dst: &ID2D1DeviceContext, rect: PxRect, offset: POINT) {
+        let (x, y) = (offset.x as f32, offset.y as f32);
+        let (w, h) = (
+            (rect.right - rect.left) as f32,
+            (rect.bottom - rect.top) as f32,
+        );
+        // SAFETY: Windows API 境界。
+        unsafe {
+            dst.SetTransform(&Matrix3x2::identity());
+            // 塗りを写す矩形の中に閉じる（Clear は切り抜きの中だけを塗る）。
+            dst.PushAxisAlignedClip(
+                &D2D_RECT_F {
+                    left: x,
+                    top: y,
+                    right: x + w,
+                    bottom: y + h,
+                },
+                D2D1_ANTIALIAS_MODE_ALIASED,
+            );
+            dst.Clear(Some(&D2D1_COLOR_F::default()));
+            dst.DrawImage(
+                &self.bitmap,
+                Some(&Vector2 { X: x, Y: y }),
+                Some(&D2D_RECT_F {
+                    left: rect.left as f32,
+                    top: rect.top as f32,
+                    right: rect.right as f32,
+                    bottom: rect.bottom as f32,
+                }),
+                D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                D2D1_COMPOSITE_MODE_SOURCE_OVER,
+            );
+            dst.PopAxisAlignedClip();
         }
     }
 

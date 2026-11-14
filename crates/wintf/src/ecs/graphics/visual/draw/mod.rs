@@ -5,10 +5,6 @@ mod builder_opacity_tests;
 mod builder_tests;
 mod clip_geometry;
 pub mod command;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "計画（タスク 3.x）が項の列を使い始めたら外す")
-)]
 pub(crate) mod diff;
 #[cfg(test)]
 mod diff_tests;

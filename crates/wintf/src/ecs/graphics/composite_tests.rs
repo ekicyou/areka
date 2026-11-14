@@ -187,6 +187,55 @@ fn contents_stay_after_copy_and_second_copy_is_identical() {
     assert!(first.bytes == second.bytes, "2 度目の写しが違う");
 }
 
+/// 部分の写し（2.6・2.9）: 写す矩形の外は的の前の画素のまま、中は全面の写しと同じ画素になる。
+#[test]
+fn copy_rect_to_keeps_outside_and_matches_full_copy_inside() {
+    let mut world = World::new();
+    let root = tree(&mut world);
+    let commands = tree_commands(&mut world, root, None);
+    let list = root_list();
+    let (comp, full) = via_composite(1.25, Some(&list), &commands);
+    assert_not_degenerate(&full);
+    // 入れ物の (1,2)-(14,20)（左下に透明な画素を含む）を、その左上が全面の写しと同じ位置に来る
+    // offset へ写す。
+    let r = PxRect {
+        left: 1,
+        top: 2,
+        right: 14,
+        bottom: 20,
+    };
+    let offset = POINT {
+        x: OFFSET.x + r.left,
+        y: OFFSET.y + r.top,
+    };
+    let got = draw_to_pixels(DST, DST, scale(3.0), |dst| unsafe {
+        dst.Clear(Some(&D2D1_COLOR_F {
+            r: 0.0,
+            g: 0.0,
+            b: 1.0,
+            a: 1.0,
+        }));
+        comp.copy_rect_to(dst, r, offset);
+    });
+    let inside = |x: u32, y: u32| {
+        (offset.x as u32..offset.x as u32 + (r.right - r.left) as u32).contains(&x)
+            && (offset.y as u32..offset.y as u32 + (r.bottom - r.top) as u32).contains(&y)
+    };
+    for y in 0..DST {
+        for x in 0..DST {
+            let want = if inside(x, y) { full.at(x, y) } else { BLUE };
+            assert_eq!(got.at(x, y), want, "({x},{y})");
+        }
+    }
+    // 較正: 矩形の中に透明な画素と絵の画素の両方が在る（塗りと写しの両方を見ている）。
+    let px: Vec<_> = (0..DST)
+        .flat_map(|y| (0..DST).map(move |x| (x, y)))
+        .filter(|&(x, y)| inside(x, y))
+        .map(|(x, y)| got.at(x, y))
+        .collect();
+    assert!(px.contains(&CLEAR) && px.iter().any(|p| p[3] == 255));
+}
+
 #[test]
 fn compose_leaves_dc_without_target_and_identity_transform() {
     let mut world = World::new();

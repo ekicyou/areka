@@ -6,6 +6,7 @@ use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
 
 /// 合成の記録の target（履歴の層の info 以上には入らない）。
+#[cfg_attr(not(test), expect(dead_code, reason = "5.3 の記録の行が使い始める"))]
 pub(crate) const DAMAGE_TARGET: &str = "wintf::damage";
 
 /// 全部の合成の理由（記録の `reason` の綴り・3.4）。
@@ -21,6 +22,7 @@ pub(crate) enum FullReason {
 }
 
 impl FullReason {
+    #[cfg_attr(not(test), expect(dead_code, reason = "5.3 の記録の行が使い始める"))]
     pub fn as_str(self) -> &'static str {
         match self {
             FullReason::First => "first",
