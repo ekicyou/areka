@@ -20,7 +20,7 @@ use super::{
 use super::super::balloon_lock::{balloon_drag_held, end_balloon_drag};
 use super::super::persist::saved_form_anchor;
 use super::sticky_follow::{
-    drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
+    CharDragSession, drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
 };
 
 /// バルーン単独ドラッグで確定した相対位置を、キャラ窓の表示 DPI を読めないまま
@@ -182,12 +182,14 @@ pub fn on_char_drag_end(
                             ?entity,
                             "DraggingState も WindowPos.position も無いため位置を保存しなかった"
                         );
+                        world.remove_resource::<CharDragSession>(); // 控えを残さない
                         return false;
                     };
                     pos
                 }
             };
             if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None, None) {
+                world.remove_resource::<CharDragSession>();
                 return false;
             }
             // 面の move のずれは、利用者が置いた所を元の位置として 0 から（task 6.2）。
@@ -479,13 +481,11 @@ fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> 
     // 旧矩形＝**現在位置** × 現寸。位置が未確定なら旧矩形不明＝安全側 clamp。
     // 負座標は正当（左モニタは `-1920..0`）ゆえ、位置の未確定は符号ではなく
     // wintf 正典のセンチネル `CW_USEDEFAULT` そのもので判定する
-    // （wintf `window_pos.rs` の `apply_window_pos_changes`
-    //   と `monitor_systems.rs` の `window_center`
-    // と同じ式。素通しすると `WindowPos::default()` 由来の窓が
-    // 「もともと画面外に留置されていた」と誤判定され安全側の腕が死ぬ）。
+    // （wintf 正典 `window_pos.rs` の `apply_window_pos_changes`／`monitor_systems.rs` の
+    // `window_center` と同型——正典が見るのは `position.x` で、ここは位置の両軸を見る点だけが異なる。
+    // 素通しすると `WindowPos::default()` 由来の窓が「もともと画面外に留置」と誤判定され安全側の腕が死ぬ）。
     let old_rect = window_pos
-        .and_then(|wp| wp.position)
-        .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
+        .and_then(known_position)
         .map(|p| rect_at(PointPx { x: p.x, y: p.y }, size));
 
     evaluate_visibility_guard(
@@ -546,6 +546,12 @@ pub fn on_balloon_drag(
     }
 }
 
+/// 窓の位置。`CW_USEDEFAULT` の印（窓生成前・位置未確定）は無いのと同じに扱う。
+fn known_position(wp: &WindowPos) -> Option<Point> {
+    wp.position
+        .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
+}
+
 /// `BalloonFollow.balloon == balloon` のキャラ窓を逆引きし、追従の基準を `balloon_pos − char_pos`
 /// から確立し直す。ドラッグ中（[`on_balloon_drag`]）と、離したときの保存の直後（指摘 3）が呼ぶ。
 fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: Point) {
@@ -556,7 +562,15 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
         .iter(world)
         .filter(|(_, follow, _)| follow.balloon == balloon)
         .filter_map(|(char_window, _, char_wp)| {
-            let char_pos = char_wp.position?;
+            let Some(char_pos) = known_position(char_wp) else {
+                warn!(
+                    entity = ?char_window,
+                    ?balloon,
+                    position = ?char_wp.position,
+                    "追従元キャラ窓の位置が無い・未確定（CW_USEDEFAULT の印）ため追従の基準を確立し直さない"
+                );
+                return None;
+            };
             // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
             // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
             debug_assert!(
@@ -716,7 +730,7 @@ pub(crate) fn on_balloon_drag_end(
                 if follow.balloon != entity {
                     continue;
                 }
-                let Some(char_pos) = char_wp.position else {
+                let Some(char_pos) = known_position(char_wp) else {
                     continue;
                 };
                 let Some(size) = char_wp.size else {
@@ -736,7 +750,7 @@ pub(crate) fn on_balloon_drag_end(
             let Some((char_window, char_pos, anchor, char_size)) = found else {
                 warn!(
                     ?entity,
-                    "追従元キャラ窓（位置/寸法）が無いためバルーンの位置を保存しなかった"
+                    "追従元キャラ窓（位置/寸法）が無い・位置が未確定のためバルーンの位置を保存しなかった"
                 );
                 return false;
             };

@@ -299,7 +299,7 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
             format!("{fresh:?}"),
             "再導出ログに再導出**後**の offset が載っていない"
         );
-        // 採寸寸は「窓生成直後で読めない」ことがあり得るため `Option` のまま載る
+        // 採寸寸は現寸不明（`None`）のことがあり得るため `Option` のまま載る
         // （読めなかったことを `Some` へ潰して嘘をつかない）。
         assert_eq!(
             rec.expect_field("old_char_size"),
@@ -528,15 +528,20 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
 
 /// バルーンの現寸が解決できないときは `warn!` を残し、offset には**一切触れない**。
 ///
-/// 未確定表現は `Option::None` だけではない——`CW_USEDEFAULT`（`i32::MIN` センチネル）も
+/// 未確定表現は `Option::None` だけではない——`CW_USEDEFAULT` の印も
 /// 同じ腕へ落とす（`guard_balloon_position`／runtime 関門と同型のガード）。
 #[test]
 fn unresolvable_balloon_size_warns_and_leaves_the_offset_untouched() {
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+
     let adjust = PointPx { x: 0, y: 0 };
     let mode = BalloonXMode::CenterTop;
     for (label, size) in [
         ("寸なし", None),
-        ("センチネル", Some(SizeI::new(i32::MIN, i32::MIN))),
+        (
+            "CW_USEDEFAULT の印",
+            Some(SizeI::new(CW_USEDEFAULT, CW_USEDEFAULT)),
+        ),
     ] {
         let (mut world, char_window, balloon_window) =
             world_with(placement_measured_at(Some((mode, adjust)), false));

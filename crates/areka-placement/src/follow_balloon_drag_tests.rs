@@ -509,3 +509,69 @@ fn the_reestablished_follow_base_is_the_position_before_the_limit_correction() {
         "出し直した基準が補正の前の位置でない（補正の焼き付き・または最後の OnDrag の値のまま）"
     );
 }
+
+/// キャラ窓の位置が `CW_USEDEFAULT` の印（窓生成前・位置未確定）なら、バルーンのドラッグ中も離したときも
+/// その印を位置として引かない——追従の基準を変えず、相対位置も保存せず、どちらも `warn!` を 1 行出す
+/// （黙らない・かけ直し 5 回目 A4）。
+#[test]
+fn balloon_drag_ignores_a_char_position_sentinel() {
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+
+    use super::on_balloon_drag_end;
+    use crate::spawn::BalloonWindowMarker;
+
+    let mut world = World::new();
+    let balloon = world
+        .spawn((
+            fake_handle(0x2000),
+            window_pos_at(1729, 401),
+            BalloonWindowMarker { scope: 0 },
+        ))
+        .id();
+    let initial = PointPx { x: -412, y: -25 };
+    let char_w = world
+        .spawn((
+            fake_handle(0x1000),
+            window_pos_sized(CW_USEDEFAULT, CW_USEDEFAULT, 434, 600),
+            BalloonFollow::new(balloon, OffsetBase::unpinned(initial)),
+        ))
+        .id();
+
+    let (_, drag_events) = capture(|| {
+        on_balloon_drag(
+            &mut world,
+            balloon,
+            balloon,
+            &Phase::Bubble(drag_event(balloon)),
+        )
+    });
+    let (_, end_events) = capture(|| {
+        on_balloon_drag_end(
+            &mut world,
+            balloon,
+            balloon,
+            &Phase::Bubble(drag_end_event_at(balloon, (0, 0))),
+        )
+    });
+
+    assert_eq!(
+        world.get::<BalloonFollow>(char_w).unwrap().offset(),
+        initial,
+        "印を位置として引いて基準を変えた"
+    );
+    for (what, events) in [("drag", &drag_events), ("drag_end", &end_events)] {
+        let warns = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .count();
+        assert_eq!(warns, 1, "{what}: warn! が 1 行でない: {events:?}");
+    }
+    assert!(
+        !end_events
+            .iter()
+            .any(|e| e.target == "areka::persist::save"),
+        "印を位置として引いて相対位置を保存した: {end_events:?}"
+    );
+    drop(world);
+    let _residue = drain_window_pos_commands();
+}

@@ -475,7 +475,7 @@ fn no_window_move_record_when_nothing_is_written() {
 /// テストが緑になる空振りを塞ぐ（`follow_transition_diag_tests.rs` の `CONTROL_LINE` と同じ置き方）。
 const CONTROL_LINE: &str = "[window-move-probe] alive";
 
-/// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag.rs の
+/// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag_tests.rs の
 /// `emit_all_under_filter` と同型——こちらは**単一ライター経由**で点灯を確かめる）。
 ///
 /// 戻り値には必ず [`CONTROL_LINE`] が含まれる。含まれないなら捕捉の故障であり、呼び手は

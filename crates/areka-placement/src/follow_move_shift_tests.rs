@@ -515,7 +515,11 @@ fn balloon_drag_end_resets_the_shift_without_double_counting() {
 /// 無ければ当てる。
 fn run_frame_phase(world: &mut World, window: Entity, want: (i64, i64)) {
     if !shift_is_current(world, window, want, ScaleRatio::ONE)
-        && world.get::<DpiSyncHold>(window).is_none()
+        && !crate::dpi_sync::defers_window_write(
+            world,
+            window,
+            crate::dpi_sync::HoldSite::PatternMove,
+        )
     {
         apply_char_shift(world, window, want, ScaleRatio::ONE);
     }

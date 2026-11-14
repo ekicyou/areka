@@ -445,3 +445,43 @@ fn a_drag_partner_is_not_shifted_until_the_drag_ends() {
     );
     finish(world);
 }
+
+/// ドラッグを離したときに位置が読めない・書込が断られたの 2 つの早期 return でも、控えを残さない
+/// （残すと、次のドラッグまでその窓の面の `move` のずれが見送られ続ける・かけ直し 5 回目 A1）。
+#[test]
+fn drag_end_early_returns_do_not_leave_the_session() {
+    use wintf::ecs::WindowHandle;
+    use wintf::ecs::WindowPos;
+    use wintf::ecs::pointer::Phase;
+
+    use super::on_char_drag_end;
+    use super::test_support::drag_end_event_at;
+
+    for unreadable_position in [true, false] {
+        let mut world = world_with_snapshot();
+        let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+        begin_char_drag(&mut world, dragged.char);
+        assert!(
+            world.contains_resource::<CharDragSession>(),
+            "前提: 控えがある"
+        );
+        if unreadable_position {
+            world.get_mut::<WindowPos>(dragged.char).unwrap().position = None;
+        } else {
+            world.entity_mut(dragged.char).remove::<WindowHandle>();
+        }
+
+        let ev = Phase::Bubble(drag_end_event_at(dragged.char, (510, 205)));
+        assert!(!on_char_drag_end(
+            &mut world,
+            dragged.char,
+            dragged.char,
+            &ev
+        ));
+        assert!(
+            !world.contains_resource::<CharDragSession>(),
+            "位置が読めない={unreadable_position}: 控えが残った"
+        );
+        finish(world);
+    }
+}

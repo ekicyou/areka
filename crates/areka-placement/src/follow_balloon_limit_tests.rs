@@ -540,50 +540,66 @@ fn unresolvable_reference_warns_and_lets_the_write_through() {
     }
 }
 
-/// 対象バルーンの現寸が未確定（窓生成前）でも、警告のうえ書込が通ること。
+/// 対象バルーンの現寸が未確定でも、警告のうえ書込が通ること。未確定は 2 つの形で回す——
+/// 現寸不明（`None`）と、窓生成前の印（`Some(CW_USEDEFAULT, CW_USEDEFAULT)`・正の寸だけを
+/// 判定寸にする関門の篩が落とす）。
 ///
 /// `size=None`（移動専用の書込）は対象の現 `WindowPos.size` を判定寸に使うため、
 /// それが未確定だと矩形を組めない。ここだけは寸の**明示指定**があれば解決するので、
 /// 同じ World で `Some(寸)` を渡すと補正が復活することも併せて固定する。
 #[test]
 fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
-    let proposed = out_of_area();
-    let (mut world, _char_window, balloon) = char_overflowing_world(true);
-    world.entity_mut(balloon).insert(WindowPos {
-        position: Some(Point { x: 1601, y: 811 }),
-        size: None,
-        ..Default::default()
-    });
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 
-    let (ok, events) = capture(|| {
-        enqueue_window_set_pos(
-            &mut world,
-            balloon,
-            proposed.x,
-            proposed.y,
-            None,
-            Some(PlacementRoute::BalloonFollow),
-        )
-    });
-    expect_one(&events, LIMIT_UNRESOLVED_TAG);
-    assert_no_event(&events, LIMIT_CLAMP_TAG);
-    assert!(ok);
-    assert_eq!(point_of(&world, balloon), proposed);
+    for (label, size) in [
+        ("現寸不明", None),
+        (
+            "窓生成前の印",
+            Some(SizeI::new(CW_USEDEFAULT, CW_USEDEFAULT)),
+        ),
+    ] {
+        let proposed = out_of_area();
+        let (mut world, _char_window, balloon) = char_overflowing_world(true);
+        world.entity_mut(balloon).insert(WindowPos {
+            position: Some(Point { x: 1601, y: 811 }),
+            size,
+            ..Default::default()
+        });
 
-    // 明示寸があれば現寸を読む必要がない＝同じ World でも補正が成立する。
-    let (ok, events) = capture(|| {
-        enqueue_window_set_pos(
-            &mut world,
-            balloon,
-            proposed.x,
-            proposed.y,
-            Some(limit_balloon_size()),
-            Some(PlacementRoute::KeepPositionResize),
-        )
-    });
-    expect_one(&events, LIMIT_CLAMP_TAG);
-    assert!(ok);
-    assert_eq!(point_of(&world, balloon), out_of_area_corrected());
+        let (ok, events) = capture(|| {
+            enqueue_window_set_pos(
+                &mut world,
+                balloon,
+                proposed.x,
+                proposed.y,
+                None,
+                Some(PlacementRoute::BalloonFollow),
+            )
+        });
+        expect_one(&events, LIMIT_UNRESOLVED_TAG);
+        assert_no_event(&events, LIMIT_CLAMP_TAG);
+        assert!(ok, "{label}");
+        assert_eq!(point_of(&world, balloon), proposed, "{label}");
+
+        // 明示寸があれば現寸を読む必要がない＝同じ World でも補正が成立する。
+        let (ok, events) = capture(|| {
+            enqueue_window_set_pos(
+                &mut world,
+                balloon,
+                proposed.x,
+                proposed.y,
+                Some(limit_balloon_size()),
+                Some(PlacementRoute::KeepPositionResize),
+            )
+        });
+        expect_one(&events, LIMIT_CLAMP_TAG);
+        assert!(ok, "{label}");
+        assert_eq!(
+            point_of(&world, balloon),
+            out_of_area_corrected(),
+            "{label}"
+        );
+    }
 }
 
 // -------------------------------------------------------------------------

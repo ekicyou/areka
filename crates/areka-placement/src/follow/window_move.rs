@@ -102,11 +102,11 @@ pub fn move_window_with_route(
 /// - [`Anchored`] 欠落: char 窓は spawn で必ず付与される＝異常系ゆえ `warn!`＋`false`。
 /// - 非正寸（w≤0 or h≤0）: T を再適用せず現状保持＋`warn!`＋`false`（Req3.4・
 ///   下端吸着の非正寸縮退と整合）。
-/// - `WindowPos`／`WindowPos.position` 不在（窓生成前の異常系）: 生位置 `raw` を
-///   導出できないため `warn!`＋`false`（panic しない）。
+/// - `WindowPos`／`WindowPos.position` 不在、または `CW_USEDEFAULT` の印（窓生成前・位置未確定）:
+///   生位置 `raw` を導出できないため `warn!`＋`false`（panic しない）。
 /// - べき等（Req3.1）: 導出 `(position, size)` が現 `WindowPos` と同一なら書込を行わず
 ///   `false`（冗長な再配置を避ける・正常系ゆえ `debug!`）。
-/// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
+/// - `WindowHandle` 未付与: [`enqueue_window_set_pos`] が `warn!`＋`false`
 ///   （Req3.3）。このとき随伴バルーンも動かさない（[`move_window_to`] と同じ流儀）。
 ///
 /// # 不変条件（Req1.5/1.7）
@@ -331,7 +331,7 @@ pub fn resize_window_to(
     }
 
     // 5. 一度書き（Req1.5/1.7）: 位置＋サイズを単一ライター経路で 1 コマンド発行。
-    //    WindowHandle 未付与/不在は enqueue が warn!＋false（Req3.3）——false なら
+    //    WindowHandle 未付与は enqueue が warn!＋false（Req3.3）——false なら
     //    随伴バルーンも動かさず false を返す（move_window_to と同じ流儀）。
     if !enqueue_window_set_pos(
         world,
@@ -1146,7 +1146,7 @@ fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 ///   同上 `warn!`＋`false`（panic しない・印と不在は警告の文で言い分ける）。
 /// - べき等 skip（R4.2）: 現 `WindowPos.size` が新寸と同一なら**書込を一切行わず**
 ///   `false`（k 不変・同寸で窓が振動しないための檻・正常系ゆえ `debug!`）。
-/// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
+/// - `WindowHandle` 未付与: [`enqueue_window_set_pos`] が `warn!`＋`false`
 ///   （判定を二重化せず委譲する）。
 ///
 /// 消費者: `runtime::frame` の DPI 追従フェーズ（`dpi::run_dpi_phase`／`scale_text::reconcile_reported_sizes`・結線済み）。
