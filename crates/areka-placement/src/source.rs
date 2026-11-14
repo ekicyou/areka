@@ -128,17 +128,18 @@ impl DescriptSource {
 /// - shell descript 読取失敗 → `error!`＋`Err(PlacementError::DescriptRead)`
 /// - ghost descript 読取失敗 → `warn!`＋空 KV で継続（shell 側だけで emo2 は成立。
 ///   resolve 成功直後ゆえ通常は読めるが、TOCTOU への防御として寛容経路を維持する）
-#[allow(dead_code)] // 本番の呼び手は無い（起動はシェル名つきの `load_descript_source_for_shell` を通る）・テストだけが使う
+// 本番の呼び手は無い（起動はシェル名つきの `load_descript_source_for_shell` を通る）・テストだけが使う
+#[cfg(any(test, feature = "test-support"))]
 pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, PlacementError> {
     load_descript_source_for_shell(ghost_root, None)
 }
 
-/// [`load_descript_source`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+/// `load_descript_source`（テストのビルドだけ）のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
 ///
 /// `shell` が `Some(名)` なら `ghost_root/shell/<名>` の `descript.txt` を読む。`None` は
 /// 今日の規則（`areka_parsers::package::resolve_with_shell` の名前なし）。名前の先が無ければ
 /// 既定のシェルへ黙って戻らず、`error!`＋`Err(PlacementError::Mount)` を返す。
-/// 名前の検査はしない（渡す側が目録に在る名前だけを渡す）。失敗契約は [`load_descript_source`] と同じ。
+/// 名前の検査はしない（渡す側が目録に在る名前だけを渡す）。失敗契約は `load_descript_source` と同じ。
 pub fn load_descript_source_for_shell(
     ghost_root: &Path,
     shell: Option<&str>,

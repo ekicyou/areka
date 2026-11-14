@@ -42,11 +42,82 @@ use super::transition_diag::{
     HOLD_SITE_WORK_AREA_RESNAP,
 };
 
-/// 整合待ちの上限フレーム数（設計 C5・C7）。
-///
-/// 判定器の許容（`transition_judge_verdict::HOLD_FRAME_ALLOWANCE`）はこの定数を参照する
-/// ——待ちの上限は本番の挙動そのものであり、判定語と同じく定義元は 1 つでなければならない。
-pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中はゲートが使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncOutcome, evaluate};
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncOutcome, evaluate};
+
+mod test_open {
+    use super::*;
+
+    /// 整合待ちの上限フレーム数（設計 C5・C7）。
+    ///
+    /// 判定器の許容（`transition_judge_verdict::HOLD_FRAME_ALLOWANCE`）はこの定数を参照する
+    /// ——待ちの上限は本番の挙動そのものであり、判定語と同じく定義元は 1 つでなければならない。
+    pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
+
+    /// 整合ゲートの判定（設計 C5）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DpiSyncDecision {
+        /// 表と一致した（または表を引けない）ので、そのまま処理する。
+        Proceed,
+        /// 不一致ゆえ当該窓の窓書込を見送る。
+        Hold,
+        /// 上限フレームを超えたので、警告の上で現在の源のまま処理する。
+        ProceedAfterTimeout,
+    }
+
+    impl DpiSyncDecision {
+        /// 観測レコードの判定語（定義元は [`transition_diag`] の 1 箇所）。
+        pub(crate) fn as_str(self) -> &'static str {
+            match self {
+                DpiSyncDecision::Proceed => HOLD_DECISION_PROCEED,
+                DpiSyncDecision::Hold => HOLD_DECISION_HOLD,
+                DpiSyncDecision::ProceedAfterTimeout => HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
+            }
+        }
+
+        /// 窓書込を見送るか。
+        pub(crate) fn is_hold(self) -> bool {
+            matches!(self, DpiSyncDecision::Hold)
+        }
+    }
+
+    /// 1 つの窓についてゲートを評価した結果（記録の材料をそのまま持つ）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct DpiSyncOutcome {
+        /// 判定。
+        pub decision: DpiSyncDecision,
+        /// 窓が持つ拡大率。
+        pub window_dpi: u32,
+        /// 帰属モニタの表が持つ拡大率（帰属なし・表なしは `None`）。
+        pub table_dpi: Option<u32>,
+        /// 待ち始めたフレーム番号（これから待ち始めるなら `now`）。
+        pub since_frame: u32,
+    }
+
+    /// 窓の拡大率と帰属モニタの表を突き合わせる（World を**読むだけ**）。
+    ///
+    /// 帰属は窓矩形の中心で決める。中心は表示基盤側の
+    /// [`window_center`] が求める——`WindowPos` の未確定表現（`CW_USEDEFAULT`）の扱いを含めて
+    /// 規則を 1 箇所に置くためである（素直に `position + size / 2` と書くと窓生成前の窓で
+    /// 整数桁溢れを起こす）。中心が求まらない窓・`DPI` を持たない窓・表そのものが無い World は
+    /// いずれも「表を引けない」＝[`Proceed`](DpiSyncDecision::Proceed) へ倒す。
+    pub fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
+        let window_dpi = world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32);
+        let table_dpi = owning_table_dpi(world, window);
+        let held_since = world
+            .get::<DpiSyncHold>(window)
+            .map(|hold| hold.since_frame);
+        DpiSyncOutcome {
+            decision: dpi_sync_decision(window_dpi, table_dpi, held_since, now),
+            window_dpi,
+            table_dpi,
+            since_frame: held_since.unwrap_or(now),
+        }
+    }
+}
 
 /// 整合待ちの札（ゴースト窓 entity へ付く）。
 ///
@@ -56,33 +127,6 @@ pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
 pub struct DpiSyncHold {
     /// 待ち始めたフレーム番号（有界の起点）。
     pub since_frame: u32,
-}
-
-/// 整合ゲートの判定（設計 C5）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DpiSyncDecision {
-    /// 表と一致した（または表を引けない）ので、そのまま処理する。
-    Proceed,
-    /// 不一致ゆえ当該窓の窓書込を見送る。
-    Hold,
-    /// 上限フレームを超えたので、警告の上で現在の源のまま処理する。
-    ProceedAfterTimeout,
-}
-
-impl DpiSyncDecision {
-    /// 観測レコードの判定語（定義元は [`transition_diag`] の 1 箇所）。
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            DpiSyncDecision::Proceed => HOLD_DECISION_PROCEED,
-            DpiSyncDecision::Hold => HOLD_DECISION_HOLD,
-            DpiSyncDecision::ProceedAfterTimeout => HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
-        }
-    }
-
-    /// 窓書込を見送るか。
-    pub(crate) fn is_hold(self) -> bool {
-        matches!(self, DpiSyncDecision::Hold)
-    }
 }
 
 /// 判定を下した観測点（設計 C5 の「4 点すべて」＝待ち札の守備範囲そのもの）。
@@ -160,19 +204,6 @@ pub fn current_frame(world: &World) -> u32 {
         .map_or(0, |frame| frame.0)
 }
 
-/// 1 つの窓についてゲートを評価した結果（記録の材料をそのまま持つ）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DpiSyncOutcome {
-    /// 判定。
-    pub decision: DpiSyncDecision,
-    /// 窓が持つ拡大率。
-    pub window_dpi: u32,
-    /// 帰属モニタの表が持つ拡大率（帰属なし・表なしは `None`）。
-    pub table_dpi: Option<u32>,
-    /// 待ち始めたフレーム番号（これから待ち始めるなら `now`）。
-    pub since_frame: u32,
-}
-
 /// 帰属モニタの表の拡大率（中心が求まらない・`DPI` を持たない・表が無い窓は `None`＝進む）。
 fn owning_table_dpi(world: &World, window: Entity) -> Option<u32> {
     world.get::<DPI>(window)?;
@@ -180,27 +211,6 @@ fn owning_table_dpi(world: &World, window: Entity) -> Option<u32> {
     world
         .get_resource::<MonitorDpiTable>()?
         .dpi_for_point(cx, cy)
-}
-
-/// 窓の拡大率と帰属モニタの表を突き合わせる（World を**読むだけ**）。
-///
-/// 帰属は窓矩形の中心で決める。中心は表示基盤側の
-/// [`window_center`] が求める——`WindowPos` の未確定表現（`CW_USEDEFAULT`）の扱いを含めて
-/// 規則を 1 箇所に置くためである（素直に `position + size / 2` と書くと窓生成前の窓で
-/// 整数桁溢れを起こす）。中心が求まらない窓・`DPI` を持たない窓・表そのものが無い World は
-/// いずれも「表を引けない」＝[`Proceed`](DpiSyncDecision::Proceed) へ倒す。
-pub fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
-    let window_dpi = world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32);
-    let table_dpi = owning_table_dpi(world, window);
-    let held_since = world
-        .get::<DpiSyncHold>(window)
-        .map(|hold| hold.since_frame);
-    DpiSyncOutcome {
-        decision: dpi_sync_decision(window_dpi, table_dpi, held_since, now),
-        window_dpi,
-        table_dpi,
-        since_frame: held_since.unwrap_or(now),
-    }
 }
 
 /// 拡大率の相のゲート適用——判定し、札を付け外しし、記録を 1 行出す。

@@ -5460,7 +5460,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には説明文を開く画面が無く、その文字コードの宣言を読む経路も無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えの宣言と、areka-ghost の config::resolve_shell_name が読むシェル名、そして areka の placement::source::load_descript_source が丸ごと読んだうえで placement::config::build_placement_config と placement::config::resolve_scope が引く窓の置き方の欄、areka-seriko の bind::DefaultBinds::from_groups が引く起動時の着せ替えだけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えの宣言と、areka-ghost の config::resolve_shell_name が読むシェル名、そして areka の placement::source::load_descript_source_for_shell が丸ごと読んだうえで placement::config::build_placement_config と placement::config::resolve_scope が引く窓の置き方の欄、areka-seriko の bind::DefaultBinds::from_groups が引く起動時の着せ替えだけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じページの `charset` は areka-parsers の charset::prescan_charset が読んでおり実装済みである。名前は似ているが別の欄で、状態も割れる。ページと欄を決めてから引くこと。
 同じ名前の見出しがバルーン・ゴースト・プラグイン・ヘッドラインの descript にもある。
 文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を対象外と宣言している（説明文を表示する機能が無いため）。担当は決まっていない。

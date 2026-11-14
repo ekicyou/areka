@@ -34,7 +34,7 @@ fn scopes(raw: &[u32]) -> BTreeSet<u32> {
 }
 
 fn reason(world: &World, scope: u32) -> Option<HoldReason> {
-    world.resource::<BalloonLockLedger>().reason(scope)
+    hold_reason(world.resource::<BalloonLockLedger>(), scope)
 }
 
 fn count(events: &[CapturedEvent], event: &str) -> usize {

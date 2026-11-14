@@ -35,12 +35,19 @@ use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
 // 観測タグ（design「C10: 観測」・以降の全関門が本モジュールの定数を共有する）
 // =============================================================================
 
-/// limit 補正がバルーン位置を実際に動かしたことを表す判定語（要件 6.1・`info`）。
-///
-/// 実機サインオフの grep 判定語であり、`[balloon-limit] ` 接頭辞 1 語で本機能の記録を
-/// 全部拾えることが 2 段 grep の第 1 段になる（`[zorder-pair] ` の先例と同じ手口）。
-/// 出力点は各関門（task 2.4／3.3／3.4）が持ち、本モジュールは語彙だけを所有する。
-pub const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
+mod test_open {
+    /// limit 補正がバルーン位置を実際に動かしたことを表す判定語（要件 6.1・`info`）。
+    ///
+    /// 実機サインオフの grep 判定語であり、`[balloon-limit] ` 接頭辞 1 語で本機能の記録を
+    /// 全部拾えることが 2 段 grep の第 1 段になる（`[zorder-pair] ` の先例と同じ手口）。
+    /// 出力点は各関門（task 2.4／3.3／3.4）が持ち、本モジュールは語彙だけを所有する。
+    pub const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
+}
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は関門が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::BALLOON_LIMIT_CLAMP_TAG;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::BALLOON_LIMIT_CLAMP_TAG;
 
 /// 作業領域が解決できず limit 補正を評価できなかったことを表す判定語（`warn`）。
 ///

@@ -109,12 +109,12 @@ pub fn synth_declared_dpi_ghost(
 
 /// えみり（`emily4`）と同じ形のゴーストの `descript.txt`（spec: areka-P0-emily-ghost-verification
 /// 要件 6.7）。`kero.name` に加えて `char2.name` を持つ。名前は架空で、えみりの文面は写さない。
-pub const EMILY_SHAPED_GHOST_DESCRIPT: &str =
+pub(crate) const EMILY_SHAPED_GHOST_DESCRIPT: &str =
     "charset,UTF-8\nname,かたち\nsakura.name,ひとり\nkero.name,ふたり\nchar2.name,さんにん\n";
 
 /// えみりと同じ形のシェルの `descript.txt`（同上）。`char2.balloon.offsetx`・
 /// `char3.seriko.alignmenttodesktop`・`char4.seriko.alignmenttodesktop` を持つ。
-pub const EMILY_SHAPED_SHELL_DESCRIPT: &str = "charset,UTF-8\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nchar2.balloon.offsetx,0\nchar3.seriko.alignmenttodesktop,free\nchar4.seriko.alignmenttodesktop,free\n";
+pub(crate) const EMILY_SHAPED_SHELL_DESCRIPT: &str = "charset,UTF-8\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nchar2.balloon.offsetx,0\nchar3.seriko.alignmenttodesktop,free\nchar4.seriko.alignmenttodesktop,free\n";
 
 /// えみりの形の固定入力から配置の設定が返す scope の全部（窓を手で書かずに作るための元）。
 pub fn emily_shaped_scopes() -> Vec<usize> {

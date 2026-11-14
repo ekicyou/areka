@@ -736,7 +736,7 @@ fn shell_finish_replaces_only_the_descript_sticky_group() {
 #[test]
 fn shell_finish_replaces_only_the_descript_balloon_lock() {
     use areka_placement::balloon_lock::{
-        BalloonLockLedger, HoldReason, apply_script_balloon_lock, seed_balloon_lock,
+        BalloonLockLedger, HoldReason, apply_script_balloon_lock, hold_reason, seed_balloon_lock,
     };
 
     let (mut world, _windows) = reseed_tests::booted_world(96);
@@ -759,7 +759,7 @@ fn shell_finish_replaces_only_the_descript_balloon_lock() {
 
     let ledger = rig.world.resource::<BalloonLockLedger>();
     assert_eq!(
-        (ledger.reason(0), ledger.reason(1)),
+        (hold_reason(ledger, 0), hold_reason(ledger, 1)),
         (
             None,
             Some(HoldReason {

@@ -270,7 +270,7 @@ fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
 /// 動かせない（据える前に作った窓へ書き手が届く）。
 #[test]
 fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
-    use areka_placement::balloon_lock::{BalloonLockLedger, HoldReason};
+    use areka_placement::balloon_lock::{BalloonLockLedger, HoldReason, hold_reason};
     use areka_placement::spawn::BalloonWindowMarker;
     use wintf::ecs::drag::DragConfig;
 
@@ -278,7 +278,7 @@ fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
 
     let reasons = world
         .get_resource::<BalloonLockLedger>()
-        .map(|ledger| (ledger.reason(0), ledger.reason(1)));
+        .map(|ledger| (hold_reason(ledger, 0), hold_reason(ledger, 1)));
     assert_eq!(
         reasons,
         Some((

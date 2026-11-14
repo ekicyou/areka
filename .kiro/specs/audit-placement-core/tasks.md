@@ -107,7 +107,7 @@
   - _Dispatch: mechanical — 式を私有の関数へ寄せ、腕の答えと属性 1 行を設計どおりに直す_
   - _Requirements: 4.1, 6.6_
 
-- [ ] 4.4 テストだけに開いた公開を、本番のビルドの外へ見せなくする（U11・指摘 8・19・42・45）
+- [x] 4.4 テストだけに開いた公開を、本番のビルドの外へ見せなくする（U11・指摘 8・19・42・45）
   - 名前ごとにツリー全体を grep し直し、まだ走っている兄弟のセッションへ変える名前を知らせてから直す。
   - 使い手 0 の項目は crate の中へ閉じるか消し、crate の本番も使わない項目は test-support の cfg を付け、crate の本番が使う項目は私有の子モジュールから test-support のときだけ公開する（道と名前はテストのビルドで今のまま）。
   - 帳簿のメソッドを、開く段を切り替えられる関数に替え、crate の中と本体のテスト 2 本の呼び手を直す。
@@ -262,3 +262,4 @@
 - 1: `cargo test -p areka` の `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は込み具合で待ちの期限が切れて揺れることがある（範囲の外・単独の回し直しで緑）。続けば完了の棚卸で起票する。
 - 2.1 のレビューの提案（8.1 のかけ直しで拾う）: `resolver.rs` の「射影を通しても動かない（べき等）」の doc は作業領域に収まる寸法に限ると書き足す。`from_alignment` の知らない値の `warn!` にスコープ番号が載らなくなった（消した側の `warn!` は持っていた）。
 - 2.4: 追随の持ち物 `follow/drag_follow.rs` の `reestablish_balloon_follow` に印の 1 行（`mark_user_moved`）を足し、1,000 行に収めるため同じ関数のコメント 2 行を 1 行にまとめた。完了の申し送り（8.2）で `audit-placement-follow` へ渡す。1,000 行の番人は crate のテストでは回らないので `cargo test -p log-capture-kit --test file_length_guard_test` を確かめに入れる。
+- 4.4 のレビュー（8.1・8.2 で拾う）: `crates/areka/examples/collision-probe.rs:103・107・111` と `doc/COMPAT_ARCHITECTURE.md:212` の `lib.rs` の行番号はこの spec の前から古い（`load_scope_windowpositions` は今 L582・`prepare_stages` は L381）。

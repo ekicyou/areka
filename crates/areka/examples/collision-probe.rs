@@ -93,9 +93,9 @@
 //! 2. **本 probe は `pasta.dll` を一切ロードしない**: SHIORI（`pasta.dll`）も host-32 helper も起動しない
 //!    ため、`0x8007007E`（DLL LOAD 失敗）の経路自体が存在しない。**読むものは少なくない**が、いずれも
 //!    データファイルの読取であって DLL のロードではない——実際の読取先は次のとおり:
-//!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:152-154`・寛容読取）・**shell の
-//!      `descript.txt`**（`source.rs:156-167`・読取失敗は致命）・**バルーンの `descript.txt`**
-//!      （`source.rs:207-211`・作者基準 DPI の取得）——起点が `descript.txt` であることは
+//!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:153-155`・寛容読取）・**shell の
+//!      `descript.txt`**（`source.rs:157-168`・読取失敗は致命）・**バルーンの `descript.txt`**
+//!      （`source.rs:208-212`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
 //!      [`load_shell_assets`]）

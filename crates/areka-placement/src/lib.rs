@@ -129,17 +129,24 @@ const DEFAULT_AUTHOR_DPI: u16 = 96;
 /// 実際に見る値そのもの）。本タグはその出所を名乗る。
 pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
 
-/// [`prepare_ghost_windows`] のモニタ列挙点の**呼出点タグ**（要件 1.1・design D12）。
-///
-/// 同一運転内に列挙点は複数ある。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を
-/// 呼びつつタグだけを違えることで、ログ上で出所を弁別でき、かつ**同じ語彙**ゆえ
-/// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
-pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
+mod test_open {
+    /// [`prepare_ghost_windows`](crate::prepare_ghost_windows) のモニタ列挙点の**呼出点タグ**（要件 1.1・design D12）。
+    ///
+    /// 同一運転内に列挙点は複数ある。同じ共有ヘルパ [`diag::log_monitor_snapshot`](crate::diag::log_monitor_snapshot) を
+    /// 呼びつつタグだけを違えることで、ログ上で出所を弁別でき、かつ**同じ語彙**ゆえ
+    /// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
+    pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
+}
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は列挙点が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::PREPARE_GHOST_WINDOWS_CONTEXT;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::PREPARE_GHOST_WINDOWS_CONTEXT;
 
 /// 作業領域源の**実行時同期**（`runtime::frame::work_area_sync`）の呼出点タグ
 /// （areka-P0-dpi-transition-atomicity 要件 5.1・設計 C6）。
 ///
-/// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（[`PREPARE_GHOST_WINDOWS_CONTEXT`]）に
+/// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（`PREPARE_GHOST_WINDOWS_CONTEXT`）に
 /// 続く 3 つ目の出所である。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を呼び、タグだけを
 /// 違える（D12: 語彙は共有したまま出所を弁別する）——起動時の構成と同期後の構成が
 /// 同じ語彙で並ぶので、どのフレームで何が変わったかを grep 突合で追える。
@@ -176,7 +183,7 @@ pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
 
 /// 起動時 k₀ の分母となる作者基準 DPI の対（design D1・Flow 3 手順1）。
 ///
-/// descript 読取は [`prepare_stages`] で **1 度だけ**行い（shell＝
+/// descript 読取は `prepare_stages` で **1 度だけ**行い（shell＝
 /// `DescriptSource::shell_author_dpi()`・balloon＝[`source::load_balloon_author_dpi`]）、
 /// その値を本型に束ねて 2 つの消費者へ配る:
 ///
@@ -203,12 +210,6 @@ impl AuthorDpi {
         shell: DEFAULT_AUTHOR_DPI,
         balloon: DEFAULT_AUTHOR_DPI,
     };
-}
-
-impl Default for AuthorDpi {
-    fn default() -> Self {
-        AuthorDpi::DEFAULT
-    }
 }
 
 /// placement 側の同期準備一括の結果（design「main.rs seam」正本）。
@@ -376,6 +377,7 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
 /// `primary_dpi` は起動時 k₀ の分子（primary モニタ DPI・物理 DPI 値）。取得不能
 /// （モニタ 0 台等）は `None` を渡す——[`build_measure_scaling`] が `error!`＋96 相当へ
 /// 縮退させる（要件 1.4）。
+#[cfg(any(test, feature = "test-support"))]
 fn prepare_stages(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -841,6 +843,7 @@ pub fn prepare_ghost_windows_for_shell(
 /// （実 DPI に依存すると採寸期待値が機械ごとに変わり決定論が壊れる）。既存の work area
 /// 注入と同じ「実列挙由来の値を引数で差し替える」形に揃え、新しい機構は導入しない。
 /// `None` は「primary モニタ DPI 取得不能」の縮退分岐（要件 1.4）を檻に入れるための入力。
+#[cfg(any(test, feature = "test-support"))]
 pub fn prepare_ghost_windows_with_work_area(
     ghost_root: &Path,
     balloon_root: &Path,
