@@ -97,11 +97,15 @@ const SCOPE_BLOCK: [GroupWindowKind; 2] = [GroupWindowKind::Balloon, GroupWindow
 /// 記録行に載る不在要素の正準表記であり、指令消化の相が受理行の `members=` 欄で
 /// 使っている字面と同じものである（行の中で照らし合わせられる）。
 pub fn element_text(element: &GroupElement) -> String {
-    let prefix = match element.kind {
+    format!("{}{}", kind_char(element.kind), element.scope)
+}
+
+/// 正準表記の種別の字（`b`／`s`）。不在の組（[`ChainPlan::absent`]）も同じ表から取る。
+fn kind_char(kind: GroupWindowKind) -> char {
+    match kind {
         GroupWindowKind::Balloon => 'b',
         GroupWindowKind::Char => 's',
-    };
-    format!("{prefix}{}", element.scope)
+    }
 }
 
 /// 台帳のグループと窓の在庫から、望む鎖 1 本を組む。
@@ -128,7 +132,7 @@ pub fn compose_chain(
     // 区間はここでしか判らない——連結してしまえばグループの境界は列から消えるので、
     // 適用系が後から復元することはできない（要件 9.1 の記録材料）。
     let mut placed: Vec<(GroupElement, Entity, ChainSegment)> = Vec::new();
-    let mut absent: Vec<(u32, String)> = Vec::new();
+    let mut absent: Vec<(u32, char, u32)> = Vec::new();
     let mut named: HashSet<u32> = HashSet::new();
 
     // ⑴ グループを登記の順で連ねる（要件 3.6）。各グループの中は書かれた順のまま。
@@ -141,7 +145,7 @@ pub fn compose_chain(
             match resolve(element) {
                 Some(entity) => placed.push((*element, entity, segment)),
                 // 不在は**宣言したグループの ID とともに**記録材料へ載せる（要件 8.4）。
-                None => absent.push((group.id, element_text(element))),
+                None => absent.push((group.id, kind_char(element.kind), element.scope)),
             }
         }
     }

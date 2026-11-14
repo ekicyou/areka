@@ -652,7 +652,7 @@ fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
             &[fake_hwnd(0x10), fake_hwnd(0x20)],
             Some(true),
         );
-        log_chain_absent(3, "b0");
+        log_chain_absent(3, 'b', 0);
         log_chain_skipped(ChainSkipReason::NoChange);
         log_chain_link_failed(
             Some(ChainSegment::Group(0)),

@@ -99,13 +99,16 @@ pub struct ChainPlan {
     pub members: Vec<Entity>,
     /// 本 spec が張る横断 edge（`members` の連続対のうち、同一スコープのペア対でないもの）。
     pub cross_edges: Vec<CrossEdge>,
-    /// 窓が存在しなかった宣言要素——**宣言したグループの ID と正準表記の対**
-    /// （`(0, "b0")`／`(1, "s1")`。要件 1.4／8.4 の記録材料）。
+    /// 窓が存在しなかった宣言要素——**宣言したグループの ID・種別の字・スコープの組**
+    /// （`(0, 'b', 0)`／`(1, 's', 1)`。要件 1.4／8.4 の記録材料）。
+    ///
+    /// 文字列で持たないのは、合成が毎フレーム走るからである。正準表記（`b0`）は
+    /// 記録の行を組むときだけ作る（[`log_chain_absent`]）。
     ///
     /// ID を伴うのは、記録行（`[zorder-chain] absent group_id= element=`）が
     /// 「どのグループの宣言が空振りしたか」を単独で読めなければならないからである。
     /// 後方配置のスコープは誰も宣言していないので、ここには 1 度も現れない。
-    pub absent: Vec<(u32, String)>,
+    pub absent: Vec<(u32, char, u32)>,
 }
 
 /// areka が公開する「望む鎖」。wintf 側の唯一の受け口。
@@ -546,10 +549,10 @@ pub(crate) fn log_chain_settled(
 /// （[`log_group_applied`](super::zorder_chain_diag::log_group_applied) 等）と同じく
 /// crate の外へ開いてある。出力先は本モジュールのまま（記録の関数をこのファイルに揃える）。
 /// 呼び手は指令消化の相（areka の `runtime/frame/zorder_drain.rs`）であり、材料は
-/// [`ChainPlan::absent`] が `(group_id, element)` の対で運ぶ。同じ内容が続く間は
+/// [`ChainPlan::absent`] が `(group_id, kind, scope)` の組で運ぶ。同じ内容が続く間は
 /// 1 度だけ出す（連呼の抑止は呼び手側の控えが持つ）。
-pub fn log_chain_absent(group_id: u32, element: &str) {
-    debug!("{}", absent_line(group_id, element));
+pub fn log_chain_absent(group_id: u32, kind: char, scope: u32) {
+    debug!("{}", absent_line(group_id, kind, scope));
 }
 
 /// 見送りを理由つきで記録する（debug・要件 8.3）。

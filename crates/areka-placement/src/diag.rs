@@ -59,6 +59,9 @@ use std::fmt;
 use bevy_ecs::entity::Entity;
 use tracing::debug;
 use wintf::ecs::ZOrderPairStrategy;
+// 値が取得できなかったフィールドの番兵は wintf の記録と同じ綴りを使う。
+// フィールド自体は落とさない（落とすと経路ごとに grep の当たり方が変わる）。
+use wintf::ecs::window::transition_diag::MISSING;
 
 /// 恒久観測の専用ログ target（design D1: 既定 OFF・診断手順が `RUST_LOG` で点灯）。
 ///
@@ -136,12 +139,6 @@ pub const ZORDER_PAIR_STRATEGY_TAG: &str = "[zorder-pair] strategy-selected";
 /// 終了時ログの静穏性（要件 6.2）は診断手順の点灯有無に依らず成立すべきものだからである。
 /// 本モジュールが持つのは語彙であって出力点ではない。
 pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
-
-/// 値が取得できなかったフィールドの番兵。
-///
-/// フィールド自体は落とさない——落とすと経路ごとに grep の当たり方が変わり、
-/// 「出ていない」のか「そのフィールドが無い経路だった」のかを事後に区別できなくなる。
-const UNKNOWN: &str = "-";
 
 /// 窓位置・窓寸を書き込んだ**経路**（要件 1.2 の「変化を引き起こした経路」＝
 /// 要件 2.4 の「最終位置を書き込んだ主体」を名指しするための結論語彙）。
@@ -433,15 +430,15 @@ pub fn monitor_record_line(record: &MonitorRecord, index: usize) -> String {
 
 /// 窓移動レコード行を組む（純関数・要件 1.2 の全フィールド）。
 ///
-/// 寸・DPI が取れない経路でもフィールドは落とさず [`UNKNOWN`] を置く（語彙不変）。
+/// 寸・DPI が取れない経路でもフィールドは落とさず [`MISSING`] を置く（語彙不変）。
 pub fn window_move_record_line(record: &WindowMoveRecord) -> String {
     let (w, h) = match record.size {
         Some((w, h)) => (w.to_string(), h.to_string()),
-        None => (UNKNOWN.to_string(), UNKNOWN.to_string()),
+        None => (MISSING.to_string(), MISSING.to_string()),
     };
     let dpi = match record.dpi {
         Some(dpi) => dpi.to_string(),
-        None => UNKNOWN.to_string(),
+        None => MISSING.to_string(),
     };
     format!(
         "{WINDOW_MOVE_RECORD_TAG} route={route} entity={entity:?} kind={kind} scope={scope} \
@@ -512,14 +509,14 @@ pub fn log_zorder_pair_declared(scope: usize, char_entity: Entity, balloon_entit
 /// 頭の中で翻訳しなければならない。
 ///
 /// `raise_assist` は案 A にしか無い概念だが、案 B でも**フィールドを落とさず**番兵
-/// [`UNKNOWN`] を置く（本モジュールの既定方針＝経路によって grep の当たり方を変えない）。
+/// [`MISSING`] を置く（本モジュールの既定方針＝経路によって grep の当たり方を変えない）。
 pub fn zorder_pair_strategy_line(strategy: ZOrderPairStrategy) -> String {
     let (plan, mechanism, raise_assist) = match strategy {
         ZOrderPairStrategy::OwnerLink { raise_assist } => {
             ("A", "owner-link", raise_assist.to_string())
         }
         ZOrderPairStrategy::ExplicitMaintenance => {
-            ("B", "explicit-maintenance", UNKNOWN.to_string())
+            ("B", "explicit-maintenance", MISSING.to_string())
         }
     };
     format!(

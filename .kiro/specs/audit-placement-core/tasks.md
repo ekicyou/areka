@@ -222,7 +222,7 @@
 
 - [ ] 7. 相手の着地の後の直しと最後の実装
 
-- [ ] 7.1 async-io の版を workspace の表へ移し、Z 順の記録の値の型を直す（U25・指摘 47・67・73）
+- [x] 7.1 async-io の版を workspace の表へ移し、Z 順の記録の値の型を直す（U25・指摘 47・67・73）
   - 頭で `wintf-winmsg-executor-import` と `audit-wintf-window` の着地を確かめ直す。
   - async-io を根の workspace の表へ移し、3 つの crate が表から引くようにする（同じ版のまま）。
   - 記録の「無い」の綴りを wintf の公開の定数から引く（綴りは同じ）。

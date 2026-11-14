@@ -263,7 +263,7 @@ fn t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group() {
     );
     assert_eq!(
         plan.absent,
-        vec![(1, "b1".to_string()), (1, "s1".to_string())],
+        vec![(1, 'b', 1), (1, 's', 1)],
         "不在要素は宣言したグループの ID を伴う（要件 8.4）"
     );
 
@@ -284,7 +284,7 @@ fn t_zcc05_partially_present_scope_keeps_the_surviving_window_in_the_chain() {
 
     assert_eq!(plan.members, ents(&[b(0), s(0), b(1)]));
     assert_eq!(plan.cross_edges, vec![edge(s(0), b(1), g(1))]);
-    assert_eq!(plan.absent, vec![(1, "s1".to_string())]);
+    assert_eq!(plan.absent, vec![(1, 's', 1)]);
 }
 
 /// 1 枚も実在しないときも計画そのものは組まれる（指定は生きている）。
@@ -300,12 +300,7 @@ fn t_zcc06_group_with_no_existing_window_still_yields_a_plan_with_absent_element
     assert!(plan.cross_edges.is_empty());
     assert_eq!(
         plan.absent,
-        vec![
-            (1, "b0".to_string()),
-            (1, "s0".to_string()),
-            (1, "b1".to_string()),
-            (1, "s1".to_string())
-        ]
+        vec![(1, 'b', 0), (1, 's', 0), (1, 'b', 1), (1, 's', 1)]
     );
 }
 
@@ -678,12 +673,7 @@ fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary
     // どのグループの宣言が空振りしたかが、要素ごとに読める。
     assert_eq!(
         plan.absent,
-        vec![
-            (1, "b1".to_string()),
-            (1, "s1".to_string()),
-            (2, "b5".to_string()),
-            (2, "s5".to_string())
-        ],
+        vec![(1, 'b', 1), (1, 's', 1), (2, 'b', 5), (2, 's', 5)],
         "不在要素が宣言したグループを名乗っていない"
     );
 }

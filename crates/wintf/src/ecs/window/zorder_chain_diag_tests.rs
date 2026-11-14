@@ -487,16 +487,9 @@ fn an_unnudged_pass_renders_the_sentinel_in_every_settled_field() {
 #[test]
 fn the_absent_line_names_the_group_and_the_declared_element() {
     assert_eq!(
-        absent_line(3, "b0"),
+        absent_line(3, 'b', 0),
         "[zorder-chain] absent group_id=3 element=b0"
     );
-}
-
-/// 不在の行の要素名も自由文として畳む（空なら番兵で、欄そのものは落ちない）。
-#[test]
-fn an_empty_element_name_renders_the_sentinel() {
-    let line = absent_line(0, "");
-    assert_eq!(line, "[zorder-chain] absent group_id=0 element=-");
 }
 
 /// 見送りの行は必ず理由を伴う（要件 8.3——理由の無い見送りを作れない）。

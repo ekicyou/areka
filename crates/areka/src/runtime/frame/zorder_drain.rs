@@ -234,8 +234,8 @@ fn resolve_member(
 /// 重なりの判断には何の影響も無い。
 #[derive(Resource, Default)]
 pub(crate) struct ZOrderAbsentReports {
-    /// 前回報せた `(グループ id, 要素の正準表記)` の並び（合成が返した順のまま）。
-    reported: Vec<(u32, String)>,
+    /// 前回報せた `(グループ id, 種別の字, スコープ)` の並び（合成が返した順のまま）。
+    reported: Vec<(u32, char, u32)>,
 }
 
 /// 窓が無かった宣言要素を記録する（要件 8.3／8.4）。
@@ -255,7 +255,7 @@ pub(crate) struct ZOrderAbsentReports {
 /// しないのは、欠けが増減した事実まで黙らせないためである。
 ///
 /// 控えは報告の有無を決めるためだけに使い、判断には一切関与しない。
-fn report_absent_elements(world: &mut World, absent: &[(u32, String)]) {
+fn report_absent_elements(world: &mut World, absent: &[(u32, char, u32)]) {
     // 報せるものが無く、控えもまだ無い＝既定状態。Resource を作らずに戻る
     // （グループが 1 つも無い間は何も生やさない・要件 6.1 と同じ姿勢）。
     if absent.is_empty() && world.get_resource::<ZOrderAbsentReports>().is_none() {
@@ -271,8 +271,8 @@ fn report_absent_elements(world: &mut World, absent: &[(u32, String)]) {
     drop(reports);
 
     // 出す順は合成が返した順＝宣言の順（決定論・要件 10.3）。
-    for (group_id, element) in absent {
-        log_chain_absent(*group_id, element);
+    for &(group_id, kind, scope) in absent {
+        log_chain_absent(group_id, kind, scope);
     }
 }
 
