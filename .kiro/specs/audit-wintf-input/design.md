@@ -59,7 +59,7 @@
 - **ドラッグの知らせと設定の欄（指摘 9 ⑸ ⑹）**: `DragStartEvent`・`DragEvent`・`DragEndEvent` の `is_primary` と `DragConfig.right_button`・`middle_button` が消える。構造体の式でこれらを書く所（ツリー全体で 15 か所・File Structure Plan）は 1 行ずつ消す。
 - **改名（指摘 15）**: `DraggingState.initial_inset` → `initial_window_pos`（型は `(f32, f32)` のまま）。読み手は 3 クレート 15 ファイル（File Structure Plan）。
 - **`PointerState` の欄（指摘 10・19）**: `velocity`・`timestamp` が消え、`moved: bool` が足される。ツリーの中の構造体の式は全部 `..Default::default()` か `..pointer(…)` で組む（2026-11-14 に 55 か所を確かめた）ので、欄を足しても消してもビルドは通る。`dispatch_pointer_events` で `OnPointerMoved` を受けることを確かめるテストは `moved: true` を書く。
-- **`OnPointerMoved` の回数（指摘 19）**: 本番の受け手は 2 つ。キャラの窓の `on_char_pointer_moved` は `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）が位置の同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` は変わらない（議題 9）。バルーンの窓の `on_balloon_pointer_moved`（`balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` は、止まったカーソルの下で中身が替わったときの強調とバルーン滞在の記録が、次にカーソルが動くまで更新されなくなる（「未解決の危うさ」の 1）。手で回す道具 `crates/areka/examples/collision-probe/` の `OnPointerMoved` も動いた tick だけになる（その説明 `collision-probe.rs:187` は「届かない行は正しい」と書くので直しは要らない）。
+- **`OnPointerMoved` の回数（指摘 19）**: 本番の受け手は 3 つ（シェルの箱の受け手はキャラの窓の受け手の中から呼ばれる）。キャラの窓の `on_char_pointer_moved` は `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）が位置の同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` は変わらない（議題 9）。バルーンの窓の `on_balloon_pointer_moved`（`balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` は、止まったカーソルの下で中身が替わったときの強調とバルーン滞在の記録が、次にカーソルが動くまで更新されなくなる（「未解決の危うさ」の 1）。手で回す道具 `crates/areka/examples/collision-probe/` の `OnPointerMoved` も動いた tick だけになる（その説明 `collision-probe.rs:187` は「届かない行は正しい」と書くので直しは要らない）。
 - **クリック透過の対象（指摘 21）**: `Window` を持たない entity と、`WindowHandle` の HWND が登録の HWND と違う対象は、評価の前に刈られる。本番の登録（`areka-placement` の `register_ghost_windows_click_through`・`Added<WindowHandle>` で登録）は wintf の窓だけなので変わらない。
 - **記録の段（指摘 14）**: `[DragStartEvent] Dispatching` ほか 5 か所が `debug!` になる。この文言を読む範囲の外のテストは `crates/areka/tests/window_link_real_run.rs:508,531` だけで、その `RUST_LOG`（`:49-50`）に `wintf::ecs::drag::dispatch=debug` を足す。
 - **始めの位置が取れないドラッグ（指摘 3）**: 控え（`WindowDragContext`）の `move_window` が偽になり `warn!` が 1 行出る。偽の HWND で `client_to_window_coords` が失敗するテスト（`WindowDragContextResource` を読むのは `crates/areka/src/input_events/drag_test_support.rs`・`crates/areka-placement/src/balloon_lock.rs`・`balloon_lock_drag_tests.rs`・`follow_drag_end_gate_tests.rs`）は、`move_window` と `WARN` の行の数を確かめ直す（実装の頭で grep し、`areka-placement` の側で直しが要るなら申し合わせる）。
@@ -348,10 +348,10 @@ sequenceDiagram
 fn drag_origin(world: &World, window: Entity) -> Result<(Option<HWND>, Point), String>;
 ```
 
-- 始まりの腕は `find_owner_window(world, entity)` で窓を引き、`None`（窓が無い）か `drag_origin` の `Err` なら `warn!(?entity, ?window, reason, "[dispatch_drag_events] ドラッグを始めた窓の位置が取れない: 窓は動かさない")` を 1 行出し、控えの `move_window` を偽にする。受け手へのドラッグの知らせ・`DraggingState`（始めの位置は (0,0)）・`WindowDragging` は今どおり入れる（下流の約束「ドラッグの間は `DraggingState` が在る」を崩さない）。
-- `update_dragging` の「控えが無い」の 2 つの枝（`state/mod.rs:388-393`）は 1 つにまとめ、`warn!(?entity, "[update_dragging] 窓の控えが無い: 窓は動かさない")` を 1 行出す（`move_window = false` は今と同じ）。
+- 始まりの腕は `find_owner_window(world, entity)` で窓を引き、`None`（窓が無い）か `drag_origin` の `Err` なら `warn!(?entity, ?window, reason, "[dispatch_drag_events] ドラッグを始めた窓の位置が取れない: 窓は動かさない")` を 1 行出し、控えの `initial_window_pos` を `None` にする（今は `Some((0,0))`）。**控えの `move_window` は `DragConfig` の値のまま変えない**: `areka-placement` の本番のコード `balloon_drag_held`（`balloon_lock.rs:103-114`）が控えの `!move_window` を「このドラッグは止めている」の印として読むので、偽にすると `move_window: true` のバルーンが止めたドラッグに化ける（設計の検証の重い指摘 1）。受け手へのドラッグの知らせ・`DraggingState`（始めの位置は (0,0)）・`WindowDragging` は今どおり入れる（下流の約束「ドラッグの間は `DraggingState` が在る」を崩さない）。
+- `update_dragging` は `Dragging.move_window = ctx.move_window && ctx.initial_window_pos.is_some()` にする（位置の取れない窓は wintf が動かさない）。「控えが無い」の 2 つの枝（`state/mod.rs:388-393`）は 1 つにまとめ、`warn!(?entity, "[update_dragging] 窓の控えが無い: 窓は動かさない")` を 1 行出す（`move_window = false` は今と同じ）。
 - **残る限界**: 位置の取れない窓が `move_window = false`（areka が自分で動かす吸着の窓）なら、`areka-placement` の追従は (0,0) から求める。記録が残るので黙った失敗ではない。位置の無い窓は表示も当たり判定もできない（`hit_test_in_window_ex` が `None`）ので、本番で掴むことは無い。
-- **テスト**: `dispatch_order_tests.rs` に「`Window` はあるが `WindowPos.position` の無い窓の子で始まりを配ると、`WARN` が 1 行・控えの `move_window` が偽・`DragStartEvent` は 1 件」（`DragConfig { move_window: true }` を付けて）。直す前は `WARN` が 0 行で `move_window` が真で赤。
+- **テスト**: `dispatch_order_tests.rs` に「`Window` はあるが `WindowPos.position` の無い窓の子で始まりを配ると、`WARN` が 1 行・控えの `initial_window_pos` が `None`・控えの `move_window` は `DragConfig` のまま真・`DragStartEvent` は 1 件」（`DragConfig { move_window: true }` を付けて）。直す前は `WARN` が 0 行で `initial_window_pos` が `Some((0,0))` で赤。`update_dragging` の側は `state/` の新しい兄弟のテストで「`initial_window_pos: None` の控えでは `Dragging.move_window` が偽」。`balloon_lock_drag_tests.rs`（偽の HWND で変換が失敗する道）の期待は変わらない。
 
 #### 指摘 4: 同じ HWND で登録し直すと透過が外れなくなる
 
@@ -411,7 +411,7 @@ fn answer(hit: bool, held: bool) -> LRESULT {
 #### 指摘 10・22: ポインタの速さと時刻・中の溜めの型
 
 - `POINTER_BUFFERS: RefCell<HashMap<Entity, PhysicalPoint>>`（最新の位置だけ）。`push_pointer_sample(entity: Entity, point: PhysicalPoint)` は `insert` するだけ（`wake_pointer` と `trace!` は残す）。窓の手続きの 2 か所（`mouse_move.rs:383,436`）を `push_pointer_sample(target_entity, PhysicalPoint::new(x, y))` に。
-- `PositionSample`・`PointerBuffer`（`calculate_velocity` ごと）・`CursorVelocity`・`PointerState.velocity`・`timestamp` を消す。`PointerState` の手書きの `Default` を `#[derive(Default)]` に。`ecs/mod.rs:33` の `CursorVelocity` を外す。移すときの飽和の説明（`buffers.rs:156-161`）とテストも消える（i32 のまま運ぶ）。
+- `PositionSample`・`PointerBuffer`（`calculate_velocity` ごと）・`CursorVelocity`・`PointerState.velocity`・`timestamp` を消す。`PointerState` の手書きの `Default` を `#[derive(Default)]` に。`ecs/mod.rs:33` の `CursorVelocity` を外す。文字列での参照（要件 5.3）として、夢の段の `.kiro/specs/window-snap/brief.md:33` が「`CursorVelocity` はポインタの速さ」と名指しするので、その 1 文を「速さの型は 2026-11 の見直しで消した・要るときはドラッグの知らせの位置から求める」に直す（その spec は未着手で走っていない＝申し合わせは要らない）。移すときの飽和の説明（`buffers.rs:156-161`）とテストも消える（i32 のまま運ぶ）。
 - `ButtonBuffer`・`WheelBuffer` を `pub(crate)` に（範囲の外の使い手 0）。`pub use types::*` はそのまま（`pub(crate)` の名は外へ出なくなる）。
 
 #### 指摘 11: `local_point` を本当のローカル座標にする
@@ -591,7 +591,8 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | `audit-wintf-window`（`ecs/window*`・ギャップ分析の途中） | **2026-11-14 に分け方を申し合わせた（議題 11・あちらの開発者が承認）**: ⑴ `ecs/window_proc/mouse_*` の作りの直しはあちら（あちらの 45・46・61〜63）。こちらがあちらのファイルに入れるのは型の形の変化への機械的な追従だけ＝`mouse_move.rs` の 214・217・258 行（`DragState`）・383・436 行（`push_pointer_sample` の引数の型）・463・472-473 行（欄名）、テスト 4 ファイルの `DragStateSnapshot` の行と `mouse_dblclick_wheel_tests.rs:213`（`right_button`）、`mouse_move_drag_origin_tests.rs:14`（欄名）。`PointerState` を作る所（`local_point`）には触らない。⑵ `check_threshold` は残し、あちらの 62 が呼び出しに替える。⑶ `WindowPointerTracking` はあちらが消す。⑷ 着地は先に着いた方がそのまま入れ、後の方が rebase して追従する。実装の頭に、上の行の番号を着地の後の `main` で引き直してもう一度伝える（要件 5.2）。こちらからの気づき 2 つ（閾値の計算の写し・押すたびの `info!`）は 2026-11-14 に伝え済み（⑵ と あちらの持ち物） | 実装の頭（指摘 18 のタスクの前） |
 | `audit-placement-core`（`balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs`） | **2026-11-14 に順を申し合わせた**: この spec が先に実装して着地し、`balloon_lock_drag_tests.rs:244`・`balloon_limit_flip_tests.rs:315` の `is_primary: true` の行も消す。`audit-placement-core` はその後に、消した後の形の上でテストの部品（向こうの指摘 80・`DragStartEvent` ほかを組む部品）をまとめる。**予備の決め**: もし向こうが先に着地したら、前の決め「後から着地する側が読み手を直す」どおりこの spec が直す | 9⑹ のタスク |
 | `audit-placement-follow`（`follow/drag_follow.rs`・`follow_test_support.rs` ほか） | 「後から着地する側が読み手を直す」（2026-11-14 合意）。この spec が触るのは `is_primary` の 3 行と `initial_inset` の 7 行（説明を含む）だけ。`spawn_follow_pipeline_tests.rs`・`persist_finalize_save_tests.rs` はどちらの持ち物かを実装の頭に両方へ確かめる | 9⑹ と 15 のタスクの頭 |
-| `audit-tools-perf-judge`（`tools/perf/judge-followup.py`） | 記録の文言と `DesiredState` の綴りは変えないが、`judge-followup.py:106,111` が書く `controller.rs:212`・`registry.rs:18-23` の行の番号がずれることを知らせる（直すのは向こう） | 指摘 4・21・23 のタスクの後 |
+| `audit-tools-perf-judge`（`tools/perf/judge-followup.py`） | **2026-11-14 に知らせて答えを得た**: 行の番号のずれは向こうの指摘 #74 として、行の番号をやめてファイル名と項目の名で指す形に直す（着地の順は問わない）。こちらの約束は、クリック透過のファイル名と、`DesiredState`・`MSG_TOGGLE` が写す記録の文言の綴りを変えないこと（変えるときだけ知らせる）。今の設計はどちらも変えない（指摘 23 で消すのは `ClickThroughController` の型だけ） | 済み |
+| `areka棚卸`（C20 の段の割り当て・2026-11-14） | C20 を 2 段に分けた。この spec は**後の段**（`audit-tools-perf-run`・`audit-tools-perf-judge`・`audit-placement-core` と同じ段）。**実装（`/kiro-impl`）は先の段の 4 本（`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・`audit-placement-follow`）が着地してから始める**。後の段の中では、この spec が `audit-placement-core` より先に着地する。先の段が早まった・遅れたときの入れ替えは `areka棚卸` へ知らせる | 実装の頭 |
 | `wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-tools-perf-run` | 知らせることは無い（触るファイルが重ならない・依存も `Cargo.toml` も変えない） | — |
 | SSP の測り | 要らない（議題 9 は下流の間引きで閉じた） | — |
 
@@ -606,7 +607,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | 5 | `check_threshold` の古い説明・ドラッグの記録の段と説明 | 9⑴（説明だけ）・14 の drag・16 の drag |
 | 6 | ポインタの溜めと型（最新の位置・速さと時刻・仮の当たり判定・`pub(crate)`・`DOUBLE_CLICK_BUFFERS`） | 10・22・9⑵⑶ |
 | 7 | ポインタの溜めの `drain`・押下の枝・見張りの枝・押下の記録の段 | 2・13・17・14 の pointer |
-| 8 | 本当のローカル座標（窓の手続きの 4 か所） | 11 |
+| 8 | 本当のローカル座標（範囲の中の `transfer_buffers_to_world` で引く・窓の手続きの作る所は触らない＝議題 11） | 11 |
 | 9 | `OnPointerMoved` を動いた tick だけ | 19 |
 | 10 | NCHITTEST の答えと定数 | 8・20 |
 | 11 | クリック透過の再登録と刈り方・`DesiredState` の `Default` | 4・21・23 の一部 |
