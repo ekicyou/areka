@@ -25,21 +25,12 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::test_support::{
-    compliant_transition_lines, compliant_transition_lines_at, replace_once, summarize_lines,
+    compliant_transition_lines, compliant_transition_lines_at, deterministic_violations, log_of,
+    replace_once, summarize_lines,
 };
 use super::{Bounds, Quantity, Violation, WindowKey, judge, judge_transition_log};
 use areka_placement::diag::WindowKind;
 use areka_placement::transition_diag::FIELD_DIFF;
-
-/// 行の列を 1 本のログ文字列へ。
-fn log_of(lines: &[String]) -> String {
-    lines.join("\n")
-}
-
-/// 決定論の上限で判定して違反の列を得る。
-fn deterministic_violations(lines: &[String]) -> Vec<Violation> {
-    judge(&summarize_lines(lines), &Bounds::deterministic()).expect_err("違反があるはず")
-}
 
 // ---------------------------------------------------------------------------
 // 判定語を壊した入力
@@ -270,4 +261,20 @@ fn an_all_zero_frame_series_is_indeterminate_and_never_a_pass() {
         deterministic_violations(&all_zero),
         vec![Violation::FramesIndeterminate]
     );
+}
+
+// ---------------------------------------------------------------------------
+// 置換の部品そのもの（空振りの置換で負例が負例でなくなることを防ぐ）
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "置換対象")]
+fn replace_once_panics_when_the_target_is_missing() {
+    replace_once(&compliant_transition_lines(), "kind=no-such-kind", "x");
+}
+
+#[test]
+#[should_panic(expected = "置換対象")]
+fn replace_once_panics_when_one_line_holds_the_target_twice() {
+    replace_once(&["a=1 a=1".to_owned()], "a=1", "a=2");
 }

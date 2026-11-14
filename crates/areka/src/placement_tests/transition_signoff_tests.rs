@@ -109,7 +109,6 @@ fn a_log_without_any_observation_line_is_an_error_not_an_empty_pass() {
         let error = signoff_log(path.to_str()).expect_err("観測行 0 行は失敗");
         assert!(error.contains(TRANSITION_LOG_ENV), "{error}");
     }
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }
 
 #[test]
@@ -140,6 +139,4 @@ fn the_runner_reads_the_same_pure_functions_as_the_deterministic_tests() {
     assert!(report.failed(), "是正前のログは合格しない");
     assert!(report.transitions[0].deterministic.is_err());
     assert!(report.transitions[0].signoff.is_err());
-
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }

@@ -9,22 +9,16 @@
 //! `transition_judge_tests` が持つ。
 
 use areka_emo_present::presenter::{SURFACE_STAGE_UPLOAD, SURFACE_STAGE_VISUALIZE};
-use wintf::ecs::window::transition_diag::{
-    FIELD_FRAME, FIELD_KIND, FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_OLD_WA, FIELD_T_US,
-    KIND_MONITOR, MISSING, ORIGIN_WINDOW_POS, RECORD_PREFIX_TAG, STAGE_FLUSH,
-};
+use wintf::ecs::window::transition_diag::{FIELD_FRAME, MISSING, ORIGIN_WINDOW_POS, STAGE_FLUSH};
 
 use super::test_support::{char_kind, monitor, summarize_lines, surface, write};
-use super::{RecordDefect, WindowKey, parse_transition_line, parse_transition_log};
+use super::{RecordDefect, WindowKey, parse_transition_line};
 use areka_placement::diag::WindowKind;
 
 /// 接頭語を差し替えたモニタ行（`frame=` を任意の字面に置ける）。
 fn monitor_with_raw_frame(frame_field: &str) -> String {
-    format!(
-        "{RECORD_PREFIX_TAG} {frame_field} {FIELD_T_US}=0 {FIELD_KIND}={KIND_MONITOR} \
-         entity=2v0 {FIELD_OLD_DPI}=192 {FIELD_NEW_DPI}=96 {FIELD_OLD_WA}=0,0,1,1 \
-         {FIELD_NEW_WA}=0,0,1,2"
-    )
+    let from = format!("{FIELD_FRAME}=0 ");
+    monitor(0, 192, 96, 1, 2).replacen(&from, &format!("{frame_field} "), 1)
 }
 
 /// 組立ヘルパが出した行の `frame=<数>` を任意の字面へ差し替える。
@@ -105,10 +99,7 @@ fn summarize_refuses_a_series_whose_frames_could_not_be_read() {
             "zz",
         ),
     ];
-    let records = parse_transition_log(&broken.join("\n"));
-    let transitions = super::split_transitions(&records);
-    assert_eq!(transitions.len(), 1);
-    let summary = super::summarize(&transitions[0]);
+    let summary = summarize_lines(&broken);
     assert_eq!(summary.malformed_records, 2, "壊れた行は数える");
     assert!(
         summary.frames_indeterminate,

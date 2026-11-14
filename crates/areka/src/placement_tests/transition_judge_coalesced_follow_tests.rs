@@ -38,8 +38,8 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::test_support::{
-    balloon_kind, char_kind, enqueue_merged_into, flush, ground, monitor, summarize_lines, surface,
-    write,
+    balloon_kind, char_kind, enqueue_merged_into, flush, ground, monitor, replace_once,
+    summarize_lines, surface, write,
 };
 use super::{
     Bounds, Quantity, TransitionSummary, Violation, WindowKey, judge, parse_transition_log,
@@ -560,18 +560,13 @@ fn the_recaptured_transition_still_flags_a_companion_that_lands_a_frame_late() {
     // 実機ログの形のままでは「違反が立たないこと」しか測れない。合流先の書込（scope=1 の
     // バルーンの seq=0）を 1 フレーム遅らせると、同じ入力が従来どおり違反として立つ——
     // 是正が要件 4.3 の見張りを殺していないことの対である。
-    let needle = "frame=14884 t_us=157617 kind=write";
-    assert_eq!(
-        RECAPTURE_TRANSITION_3.matches(needle).count(),
-        1,
-        "置換対象はちょうど 1 行にあるはず"
+    let lines: Vec<String> = RECAPTURE_TRANSITION_3.lines().map(str::to_owned).collect();
+    let late = replace_once(
+        &lines,
+        "frame=14884 t_us=157617 kind=write",
+        "frame=14885 t_us=157617 kind=write",
     );
-    let late = RECAPTURE_TRANSITION_3.replace(needle, "frame=14885 t_us=157617 kind=write");
-
-    let records = parse_transition_log(&late);
-    let transitions = split_transitions(&records);
-    assert_eq!(transitions.len(), 1);
-    let summary = summarize(&transitions[0]);
+    let summary = summarize_lines(&late);
     assert_eq!(
         summary.balloon_pairs_checked, 2,
         "対は 2 組とも検査できたままである（測れなくなったのではない）"

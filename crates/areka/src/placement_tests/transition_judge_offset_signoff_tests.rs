@@ -376,9 +376,10 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::transition_judge_offset_tests::{log_of, pass_lines};
+use super::transition_judge_offset_tests::pass_lines;
 use super::{OffsetReport, judge_offset_log};
 use crate::placement_tests::transition_judge::TRANSITION_LOG_ENV;
+use crate::placement_tests::transition_judge::test_support::log_of;
 use areka_placement::transition_diag::KIND_OFFSET;
 use wintf::ecs::window::transition_diag::FIELD_KIND;
 
@@ -486,7 +487,6 @@ fn a_log_without_any_offset_record_is_an_error_not_an_empty_pass() {
         let error = signoff_offset_log(path.to_str()).expect_err("追随レコード 0 行は失敗");
         assert!(error.contains(TRANSITION_LOG_ENV), "{error}");
     }
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }
 
 #[test]
@@ -503,6 +503,4 @@ fn the_runner_reads_the_same_pure_function_as_the_deterministic_tests() {
     assert_eq!(report, judge_offset_log(&log), "入口が別の判定を通っている");
     assert!(!report.failed(), "既知の合格ログが赤になった:\n{report}");
     assert_eq!(report.transitions.len(), 4, "{report}");
-
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }

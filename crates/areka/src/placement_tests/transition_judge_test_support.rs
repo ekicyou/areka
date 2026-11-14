@@ -24,8 +24,8 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::{
-    TransitionRecord, TransitionSummary, parse_transition_line, parse_transition_log,
-    split_transitions, summarize,
+    Bounds, TransitionRecord, TransitionSummary, Violation, judge, parse_transition_line,
+    parse_transition_log, split_transitions, summarize,
 };
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::transition_diag::{
@@ -324,23 +324,38 @@ pub fn compliant_transition_lines_at(origin_frame: u32, body_frame: u32) -> Vec<
 /// [`compliant_transition_lines`] のフレーム番号。
 pub const COMPLIANT_FRAME: u32 = 10;
 
-/// 行の列の 1 箇所だけを置換する（見つからない／2 箇所以上あれば落とす）。
+/// 行の列の 1 箇所だけを置換する（列の全体で出現がちょうど 1 回でなければ落とす）。
 ///
 /// 変異の作法⑵と同じ理由——置換パターンが陳腐化して静かに空振りすると、**壊していない入力に
-/// 対して赤を測った**ことになり、負例が負例でなくなる。
+/// 対して赤を測った**ことになり、負例が負例でなくなる。1 行の中に 2 回あっても落とす。
 pub fn replace_once(lines: &[String], needle: &str, replacement: &str) -> Vec<String> {
-    let hits = lines.iter().filter(|line| line.contains(needle)).count();
-    assert_eq!(hits, 1, "置換対象 `{needle}` はちょうど 1 行にあるはず");
+    let hits: usize = lines.iter().map(|line| line.matches(needle).count()).sum();
+    assert_eq!(hits, 1, "置換対象 `{needle}` はちょうど 1 回現れるはず");
     lines
         .iter()
-        .map(|line| line.replace(needle, replacement))
+        .map(|line| line.replacen(needle, replacement, 1))
         .collect()
+}
+
+/// 行の列を 1 本のログ文字列へ。
+pub fn log_of(lines: &[String]) -> String {
+    lines.join("\n")
 }
 
 /// 行の列を解析して遷移 1 本へ切り出し、集計まで通す。
 pub fn summarize_lines(lines: &[String]) -> TransitionSummary {
-    let records = parse_transition_log(&lines.join("\n"));
+    let records = parse_transition_log(&log_of(lines));
     let transitions = split_transitions(&records);
     assert_eq!(transitions.len(), 1, "遷移が 1 本に切り出せるはず");
     summarize(&transitions[0])
+}
+
+/// 遷移 1 本を決定論の上限で判定する。
+pub fn deterministic_verdict(lines: &[String]) -> Result<(), Vec<Violation>> {
+    judge(&summarize_lines(lines), &Bounds::deterministic())
+}
+
+/// 決定論の上限で判定して違反の列を得る（合格なら落とす）。
+pub fn deterministic_violations(lines: &[String]) -> Vec<Violation> {
+    deterministic_verdict(lines).expect_err("違反があるはず")
 }

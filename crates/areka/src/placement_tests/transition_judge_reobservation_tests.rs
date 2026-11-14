@@ -52,10 +52,8 @@ use wintf::ecs::window::transition_diag::{
     FIELD_STAGE, KIND_WRITE, MISSING, STAGE_BEGIN, STAGE_END, STAGE_FLUSH,
 };
 
-use super::test_support::{flush, ground, monitor, surface, write};
-use super::{
-    Bounds, Violation, WindowKey, judge, parse_transition_log, split_transitions, summarize,
-};
+use super::test_support::{deterministic_verdict, flush, ground, monitor, surface, write};
+use super::{Violation, WindowKey, parse_transition_log, split_transitions, summarize};
 use areka_placement::diag::{PlacementRoute, WindowKind};
 
 /// 起点のフレーム番号（整形時に与えた 1 つの値）。
@@ -428,14 +426,6 @@ fn baseline_transitions() -> Vec<(usize, Vec<String>)> {
         )
     })
     .collect()
-}
-
-/// 1 遷移ぶんを決定論の上限で判定する。
-fn deterministic_verdict(lines: &[String]) -> Result<(), Vec<Violation>> {
-    let records = parse_transition_log(&lines.join("\n"));
-    let transitions = split_transitions(&records);
-    assert_eq!(transitions.len(), 1);
-    judge(&summarize(&transitions[0]), &Bounds::deterministic())
 }
 
 #[test]

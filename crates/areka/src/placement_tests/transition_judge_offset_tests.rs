@@ -31,7 +31,7 @@
 //! [`an_identity_ratio_that_does_not_re_derive_is_red`] が赤にする所である。
 
 use crate::placement_tests::transition_judge::parse_transition_line;
-use crate::placement_tests::transition_judge::test_support::monitor;
+use crate::placement_tests::transition_judge::test_support::{log_of, monitor};
 use areka_placement::resolver::PointPx;
 use areka_placement::transition_diag::{
     FIELD_BASE_DPI, FIELD_VERDICT, OFFSET_VERDICT_ALL, OFFSET_VERDICT_ANCHORED,
@@ -222,11 +222,6 @@ pub(super) fn pass_lines() -> Vec<String> {
             OFFSET_VERDICT_RESCALED,
         ),
     ]
-}
-
-/// 行の並びをログ本文へ。
-pub(super) fn log_of(lines: &[String]) -> String {
-    lines.join("\n")
 }
 
 /// 1 行だけ差し替えた不合格ログ。
