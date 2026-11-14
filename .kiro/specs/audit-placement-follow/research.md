@@ -448,3 +448,5 @@
 10. **旧い名前 `emo2_boot`（要件 2.8）**: 推す＝直して、`runtime-crate-split` の brief へ申し送る。
 
 > 2026-11-14 要件の討議の結果は `requirements.md` の「確定した直す対象」が正本。上の推奨から変えたのは 4 つ＝議題 1 は切らない（`audit-dola` の前例）・議題 4 は system を残す（範囲の外の 5 か所の説明が見本として名指す）・議題 7 は残す（`seriko-pattern-calls` の設計の決めどおり）・議題 8 は使い手 0 の公開を C20 のうちに狭め、テストだけが使う公開を `runtime-crate-split` へ申し送る。
+
+> 2026-11-14 並走の申し合わせ（設計の段へ）: `audit-placement-core` とは、指摘 2 で相手のテスト（`dpi_sync_tests.rs` ほか）が赤になったら後から着地する側が直す・`Cargo.toml` の `env-filter`（指摘 17）は触ってよい・相手は `dpi_sync` の `DPI_SYNC_HOLD_MAX_FRAMES` ほかテストだけが使う公開を `cfg(any(test, feature = "test-support"))` の内側へ移す案（判定器のテストは本体の `test-support` で届く）。`audit-tools-perf-judge` とは、`transition_judge.rs` の `judge-perf.py` の行番号の参照（22・403 行）をこちらが指摘 22 で「ファイル名と関数名」の形に直す。
