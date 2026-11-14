@@ -7,7 +7,7 @@
 //! # 走らせ方
 //!
 //! ```text
-//! AREKA_TRANSITION_LOG=<絶対パス> cargo test -p areka transition_signoff -- --ignored --nocapture
+//! $env:AREKA_TRANSITION_LOG = "<絶対パス>"; cargo test -p areka transition_signoff -- --ignored --nocapture
 //! ```
 //!
 //! 既定の `cargo test` では `#[ignore]` により 1 度も走らない——実機ログが無い環境で
@@ -34,8 +34,8 @@ use super::{Report, TRANSITION_LOG_ENV, judge_transition_log};
 fn signoff_log(raw_path: Option<&str>) -> Result<(Report, String), String> {
     let Some(raw_path) = raw_path.map(str::trim).filter(|path| !path.is_empty()) else {
         return Err(format!(
-            "{TRANSITION_LOG_ENV} が未設定である。実機ログの絶対パスを与えて \
-             `{TRANSITION_LOG_ENV}=<絶対パス> cargo test -p areka transition_signoff -- --ignored --nocapture` \
+            "{TRANSITION_LOG_ENV} が未設定である。実機ログの絶対パスを PowerShell で与えて \
+             `$env:{TRANSITION_LOG_ENV} = \"<絶対パス>\"; cargo test -p areka transition_signoff -- --ignored --nocapture` \
              で実行する"
         ));
     };

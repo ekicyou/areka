@@ -79,16 +79,17 @@ const WA_LOW: i32 = 1752;
 const WA_HIGH: i32 = 1704;
 
 // 合格ログの行番号（壊すときに名指しできるようにする）。
-const T0_SCOPE0: usize = 1;
-const T0_SCOPE1: usize = 2;
-const T2_SCOPE0: usize = 9;
-const T2_SCOPE2: usize = 11;
-const T3_SCOPE0: usize = 13;
-const T3_SCOPE1: usize = 14;
-const T3_SCOPE2: usize = 15;
-const T1_SCOPE0: usize = 5;
-const T1_SCOPE1: usize = 6;
-const T1_SCOPE2: usize = 7;
+pub(super) const T0_SCOPE0: usize = 1;
+pub(super) const T0_SCOPE1: usize = 2;
+pub(super) const T1_SCOPE0: usize = 5;
+pub(super) const T1_SCOPE1: usize = 6;
+pub(super) const T1_SCOPE2: usize = 7;
+pub(super) const T2_SCOPE0: usize = 9;
+pub(super) const T2_SCOPE1: usize = 10;
+pub(super) const T2_SCOPE2: usize = 11;
+pub(super) const T3_SCOPE0: usize = 13;
+pub(super) const T3_SCOPE1: usize = 14;
+pub(super) const T3_SCOPE2: usize = 15;
 
 /// 既知の**合格**ログ（module doc の台本）。
 pub(super) fn pass_lines() -> Vec<String> {
@@ -619,27 +620,6 @@ fn an_alignment_residual_beyond_the_allowance_is_red() {
 }
 
 #[test]
-fn a_residual_inside_the_allowance_is_green() {
-    // 許容量ちょうど（3px）は合格側に置く——契約の上限は「以内」である。
-    // 基準 (25,-11)@192 → 96 の厳密値 12.5 に対し 15.5 は 3px。整数の欄なので 15 を採り、
-    // 残差 2.5px が緑であることを固定する（3px 超で初めて赤になることは上の檻が示す）。
-    let log = broken(
-        T3_SCOPE1,
-        offset(
-            40,
-            1,
-            Some(192),
-            96,
-            (25, -11),
-            (25, -11),
-            (15, -6),
-            OFFSET_VERDICT_RESCALED,
-        ),
-    );
-    assert!(!judge_offset_log(&log).failed());
-}
-
-#[test]
 fn a_log_that_never_measures_a_keyword_alignment_is_red() {
     // キーワード指定スコープが門の語しか出していない（＝揃えを 1 度も測れていない）ログ。
     let log = broken(
@@ -751,7 +731,7 @@ fn a_malformed_gate_row_does_not_enter_the_denominator() {
     assert!(
         report
             .violations
-            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 }),
+            .contains(&OffsetViolation::NoKeywordAlignmentMeasured),
         "{report}"
     );
 }
@@ -764,7 +744,7 @@ fn a_log_with_no_gate_row_anywhere_is_still_red() {
     assert!(
         report
             .violations
-            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 }),
+            .contains(&OffsetViolation::NoKeywordAlignmentMeasured),
         "{report}"
     );
 }

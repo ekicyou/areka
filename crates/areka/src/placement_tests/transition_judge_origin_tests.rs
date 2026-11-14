@@ -155,7 +155,7 @@ fn frames_are_compared_by_difference_so_the_counter_may_wrap() {
 ///
 /// 1 つの変化につき `monitor` 1 行 ＋ 窓 4 枚ぶんの `windpi` 4 行＝**5 行**が出る。
 /// 起点行を素朴に数えると 30 本だが、拡大率の変化は 6 回である。
-const VERBATIM_ROUND_TRIP_LOG: &str = "\
+const ROUND_TRIP_ORIGIN_LOG: &str = "\
 DEBUG wintf::transition: [transition] frame=10 t_us=0 kind=monitor entity=2v0 old_dpi=192 new_dpi=144 old_wa=0,0,2880,1704 new_wa=0,0,2880,1704
 DEBUG wintf::transition: [transition] frame=10 t_us=1 kind=windpi entity=42v1 old_dpi=192 new_dpi=144
 DEBUG wintf::transition: [transition] frame=10 t_us=2 kind=windpi entity=43v1 old_dpi=192 new_dpi=144
@@ -189,20 +189,20 @@ DEBUG wintf::transition: [transition] frame=60 t_us=4 kind=windpi entity=45v1 ol
 ";
 
 #[test]
-fn the_verbatim_fixture_uses_the_current_vocabulary() {
-    // 逐語の字面は発行側の語彙から離れ得る。離れたら以下の檻は「起点が 1 つも無いログ」を
+fn the_synthetic_fixture_uses_the_current_vocabulary() {
+    // 合成の字面は発行側の語彙から離れ得る。離れたら以下の檻は「起点が 1 つも無いログ」を
     // 測ることになり、水増しの検査が空振りする。
     for word in [KIND_MONITOR, KIND_WINDPI] {
         assert!(
-            VERBATIM_ROUND_TRIP_LOG.contains(&format!("{FIELD_KIND}={word}")),
-            "{word} の行が逐語ログから消えている"
+            ROUND_TRIP_ORIGIN_LOG.contains(&format!("{FIELD_KIND}={word}")),
+            "{word} の行が合成ログから消えている"
         );
     }
     for name in [FIELD_OLD_DPI, FIELD_NEW_DPI] {
-        assert!(VERBATIM_ROUND_TRIP_LOG.contains(&format!("{name}=")));
+        assert!(ROUND_TRIP_ORIGIN_LOG.contains(&format!("{name}=")));
     }
-    assert!(VERBATIM_ROUND_TRIP_LOG.contains(RECORD_PREFIX_TAG));
-    let records = parse_transition_log(VERBATIM_ROUND_TRIP_LOG);
+    assert!(ROUND_TRIP_ORIGIN_LOG.contains(RECORD_PREFIX_TAG));
+    let records = parse_transition_log(ROUND_TRIP_ORIGIN_LOG);
     assert_eq!(records.len(), 30, "起点行 30 本（変化 6 回 × 5 行）");
     assert!(records.iter().all(|record| record.is_well_formed()));
 }
@@ -211,7 +211,7 @@ fn the_verbatim_fixture_uses_the_current_vocabulary() {
 fn the_round_trip_count_is_not_inflated_by_the_duplicated_origins() {
     // 起点行は 30 本あるが変化は 6 回である。畳まないと各方向 15 回と数えられ、報告される
     // 遷移本数と、手順書が運用者に目で確かめさせる往復の本数が実態の 5 倍で刷られる。
-    let observed = directions(VERBATIM_ROUND_TRIP_LOG);
+    let observed = directions(ROUND_TRIP_ORIGIN_LOG);
     assert_eq!(
         observed,
         [
@@ -227,10 +227,10 @@ fn the_round_trip_count_is_not_inflated_by_the_duplicated_origins() {
 }
 
 #[test]
-fn every_origin_line_of_the_verbatim_log_is_recognized_as_an_origin_candidate() {
+fn every_origin_line_of_the_synthetic_log_is_recognized_as_an_origin_candidate() {
     // 畳み込みを「`windpi` を起点に採らない」で実現していたら、遷移の本数は 6 本のまま
     // 緑になる。候補として認められていること自体を別に測り、その抜け道を塞ぐ。
-    let records = parse_transition_log(VERBATIM_ROUND_TRIP_LOG);
+    let records = parse_transition_log(ROUND_TRIP_ORIGIN_LOG);
     assert_eq!(
         records.iter().filter(|r| is_transition_origin(r)).count(),
         30

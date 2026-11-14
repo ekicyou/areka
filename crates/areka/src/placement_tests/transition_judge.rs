@@ -255,7 +255,7 @@ pub struct TransitionSummary {
     pub origin: Option<TransitionOrigin>,
     /// 遷移に含まれる観測行の本数。
     pub records: usize,
-    /// 語彙の規約を破っていた行の本数。
+    /// 語彙の規約を破っていた行と、`diff`・`total_us` が数として読めない行の本数。
     pub malformed_records: u32,
     /// フレーム差が判定不能であること（要件 8.5）。
     ///
@@ -793,17 +793,16 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                         }
                         _ => diff,
                     });
+                } else if record.is_well_formed() && record.field(FIELD_DIFF).is_some() {
+                    // 欄があり番兵でもないのに読めない（行の欠陥とは二重に数えない）。
+                    summary.malformed_records += 1;
                 }
             }
-            KIND_FLUSH => {
-                if record.raw_field(FIELD_STAGE) == Some(STAGE_END)
-                    && let Some(total) = record.int_field::<u64>(FIELD_TOTAL_US)
-                {
-                    summary.flush_total_us_max = Some(
-                        summary
-                            .flush_total_us_max
-                            .map_or(total, |max| max.max(total)),
-                    );
+            KIND_FLUSH if record.raw_field(FIELD_STAGE) == Some(STAGE_END) => {
+                if let Some(total) = record.int_field::<u64>(FIELD_TOTAL_US) {
+                    summary.flush_total_us_max = summary.flush_total_us_max.max(Some(total));
+                } else if record.is_well_formed() && record.field(FIELD_TOTAL_US).is_some() {
+                    summary.malformed_records += 1;
                 }
             }
             _ => {}

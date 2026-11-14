@@ -26,9 +26,9 @@
 //! - 上限を当てる対象そのものが欠けていること（[`Violation::Unmeasured`]）
 //!
 //! 3 番目が要るのは、[`super::RecordDefect::UnreadableField`] が**接頭語**（`frame`／`t_us`）に
-//! しか立たないためである。本体側の数値（`diff`・`total_us`・`target_id`）が壊れた行は
-//! `is_well_formed() == true`・`malformed_records == 0` のまま当該量だけが静かに消え、上限
-//! （`≤ 0` や `≤ 1`）は「量が無い」を素通しにしてしまう。
+//! しか立たないためである。本体側の数値のうち `diff`・`total_us` が読めない行は
+//! `malformed_records` に数えるが、`target_id` が壊れた行や量の行がそもそも無い遷移では
+//! 当該量だけが静かに消え、上限（`≤ 0` や `≤ 1`）は「量が無い」を素通しにしてしまう。
 
 use std::collections::BTreeSet;
 use std::fmt;

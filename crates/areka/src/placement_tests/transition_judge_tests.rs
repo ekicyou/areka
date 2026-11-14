@@ -221,7 +221,7 @@ fn parse_reports_an_unknown_kind_word() {
 
 #[test]
 fn required_fields_cover_every_kind_word_the_three_crates_define() {
-    // 語彙の定義元は 3 箇所（wintf・emo-present・areka）。どれか 1 語でも表から漏れると
+    // 語彙の定義元は 3 箇所（wintf・emo-present・areka-placement）。どれか 1 語でも表から漏れると
     // その種別の行が「未知の種別」として全件欠陥になり、判定が静かに空振りする。
     for kind in KIND_ALL
         .iter()

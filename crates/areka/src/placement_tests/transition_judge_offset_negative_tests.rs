@@ -8,7 +8,10 @@ use std::fs;
 use temp_path_kit::TempPath;
 
 use super::transition_judge_offset_signoff_tests::signoff_offset_log;
-use super::transition_judge_offset_tests::{offset, pass_lines};
+use super::transition_judge_offset_tests::{
+    T0_SCOPE0, T0_SCOPE1, T1_SCOPE0, T1_SCOPE2, T2_SCOPE0, T2_SCOPE1, T3_SCOPE0, T3_SCOPE1,
+    T3_SCOPE2, offset, pass_lines,
+};
 use super::{OffsetViolation, judge_offset_log};
 use crate::placement_tests::transition_judge::parse_transition_line;
 use crate::placement_tests::transition_judge::test_support::log_of;
@@ -35,11 +38,15 @@ fn without_base_offset(line: &str) -> String {
 /// 合格ログの `scope=0 base_dpi=96` の行（T0）の欄を 1 つ書き換えた行。
 fn t0_scope0_with(from: &str, to: &str) -> Vec<String> {
     let mut lines = pass_lines();
-    assert!(lines[1].contains(from), "檻の前提: {}", lines[1]);
-    lines[1] = lines[1].replace(from, to);
+    assert!(
+        lines[T0_SCOPE0].contains(from),
+        "檻の前提: {}",
+        lines[T0_SCOPE0]
+    );
+    lines[T0_SCOPE0] = lines[T0_SCOPE0].replace(from, to);
     // 欠陥は立たない（字面は読める）ので、赤は判定器が欄を読む所からしか来ない。
     assert!(
-        parse_transition_line(&lines[1])
+        parse_transition_line(&lines[T0_SCOPE0])
             .expect("行としては解析できる")
             .is_well_formed(),
         "檻の前提: 語彙の規約は破っていないこと"
@@ -61,7 +68,7 @@ fn malformed_in_t0(lines: &[String], field: &str) -> bool {
 fn a_malformed_row_before_the_first_origin_is_red() {
     // 12 ⑴ 最初の起点より前の門の行が壊れている。どの遷移にも属さないが、捨てずに違反にする。
     let mut lines = pass_lines();
-    let gate = without_base_offset(&lines[2]);
+    let gate = without_base_offset(&lines[T0_SCOPE1]);
     lines.insert(0, gate);
     let report = judge_offset_log(&log_of(&lines));
     assert!(
@@ -88,7 +95,7 @@ fn a_log_whose_every_row_is_malformed_carries_the_violations_in_the_error() {
             }
         })
         .collect();
-    let before_origin = lines[2].clone();
+    let before_origin = lines[T0_SCOPE1].clone();
     lines.insert(0, before_origin);
     let log = log_of(&lines);
     let report = judge_offset_log(&log);
@@ -152,9 +159,9 @@ fn a_keyword_scope_left_unmeasured_is_red_even_when_another_is_measured() {
 #[test]
 fn a_doubled_row_in_one_transition_is_not_a_round_trip() {
     // 13 ⑵ T0・T1 だけ（往復なし）のログで、T1 の scope 0 の行を同じ遷移の中で 2 度出す。
-    let mut lines = pass_lines()[..8].to_vec();
-    let doubled = lines[5].clone();
-    lines.insert(6, doubled);
+    let mut lines = pass_lines()[..=T1_SCOPE2].to_vec();
+    let doubled = lines[T1_SCOPE0].clone();
+    lines.insert(T1_SCOPE0 + 1, doubled);
     let report = judge_offset_log(&log_of(&lines));
     assert!(
         report
@@ -169,7 +176,7 @@ fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
     // 13 ⑶ scope 1 の `rescaled` は戻りの T2（192 → 192・恒等比）だけ。作りから残差 0 の行は
     // 測った数に入れないので、T3 を門の行にすると scope 1 は 1 度も測れていない。
     let mut lines = pass_lines();
-    lines[10] = offset(
+    lines[T2_SCOPE1] = offset(
         30,
         1,
         Some(192),
@@ -179,7 +186,7 @@ fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
         (25, -11),
         OFFSET_VERDICT_RESCALED,
     );
-    lines[14] = gate(40, 1);
+    lines[T3_SCOPE1] = gate(40, 1);
     let report = judge_offset_log(&log_of(&lines));
     assert_eq!(
         report.violations,
@@ -195,8 +202,8 @@ fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
 /// 合格ログの scope 0 の T2・T3（往復の戻り）を、基準を据え直した行へ替える。
 fn scope0_rebased(t2: String, t3: String) -> Vec<String> {
     let mut lines = pass_lines();
-    lines[9] = t2;
-    lines[13] = t3;
+    lines[T2_SCOPE0] = t2;
+    lines[T3_SCOPE0] = t3;
     lines
 }
 
@@ -265,7 +272,7 @@ fn a_residual_of_exactly_the_allowance_is_green() {
     // 14 ⑶ 基準 (24,-12)@192 を 96 へ引き直した厳密値は (12,-6)。x の 15 は残差ちょうど 3.0px
     // ＝許容量「以内」なので緑。
     let mut lines = pass_lines();
-    lines[14] = offset(
+    lines[T3_SCOPE1] = offset(
         40,
         1,
         Some(192),
@@ -289,7 +296,7 @@ fn every_stable_verdict_that_moved_the_value_is_red() {
         (Some(192), 96, OFFSET_VERDICT_UNRESOLVED),
     ] {
         let mut lines = pass_lines();
-        lines[15] = offset(40, 2, base_dpi, new_dpi, (7, 7), (7, 7), (4, 4), verdict);
+        lines[T3_SCOPE2] = offset(40, 2, base_dpi, new_dpi, (7, 7), (7, 7), (4, 4), verdict);
         let report = judge_offset_log(&log_of(&lines));
         assert!(
             report.violations.iter().any(|violation| matches!(
@@ -306,7 +313,7 @@ fn every_stable_verdict_that_moved_the_value_is_red() {
 fn a_non_identity_ratio_expects_rescaled_or_saturated() {
     // 14 ⑷ 比が恒等でない腕（T0 の scope 0・96 → 192）。飽和は許し、据え置きの語は赤。
     let mut lines = pass_lines();
-    lines[1] = offset(
+    lines[T0_SCOPE0] = offset(
         10,
         0,
         Some(96),
@@ -319,7 +326,7 @@ fn a_non_identity_ratio_expects_rescaled_or_saturated() {
     let report = judge_offset_log(&log_of(&lines));
     assert!(!report.failed(), "{report}");
 
-    lines[1] = offset(
+    lines[T0_SCOPE0] = offset(
         10,
         0,
         Some(96),
@@ -346,7 +353,7 @@ fn a_non_identity_ratio_expects_rescaled_or_saturated() {
 fn an_identity_ratio_with_the_current_value_on_the_base_expects_unchanged() {
     // 14 ⑷ 恒等比の腕で現在値が基準と同じ（T2 の scope 1・192 → 192）なら、期待は据え置きの語。
     let mut lines = pass_lines();
-    lines[10] = offset(
+    lines[T2_SCOPE1] = offset(
         30,
         1,
         Some(192),
@@ -384,7 +391,7 @@ fn a_zero_base_dpi_is_not_divided_by() {
     // 14 ⑷ `base_dpi=0` の `rescaled` は残差を測らない（0 割りしない）。scope 1 の測れる行は
     // これだけなので、測れていないとして立つ。
     let mut lines = pass_lines();
-    lines[14] = offset(
+    lines[T3_SCOPE1] = offset(
         40,
         1,
         Some(0),

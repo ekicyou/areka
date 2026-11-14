@@ -229,12 +229,10 @@ pub enum OffsetViolation {
         /// 許容量（px）。
         max_px: i64,
     },
-    /// キーワード指定スコープの揃えを 1 度も測れていない（要件 8.5）。母数が空のときだけ立つ
-    /// （母数があれば測れていないスコープごとに [`Self::KeywordScopeUnmeasured`] が立つ）。
-    NoKeywordAlignmentMeasured {
-        /// 門の判定語を 1 度でも出したスコープの数（今は母数が空のときだけ立つので 0）。
-        keyword_scopes: usize,
-    },
+    /// キーワード指定スコープの揃えを 1 度も測れていない（要件 8.5）。母数（門の判定語を出した
+    /// スコープ）が空のときだけ立つ（母数があれば測れていないスコープごとに
+    /// [`Self::KeywordScopeUnmeasured`] が立つ）。
+    NoKeywordAlignmentMeasured,
     /// 母数に入ったキーワード指定スコープのうち、揃えを 1 度も測れていないものがある（要件 8.5）。
     KeywordScopeUnmeasured {
         /// 測れていないスコープ。
@@ -334,9 +332,9 @@ impl fmt::Display for OffsetViolation {
                 residual_hundredths / 100,
                 residual_hundredths % 100
             ),
-            Self::NoKeywordAlignmentMeasured { keyword_scopes } => write!(
+            Self::NoKeywordAlignmentMeasured => write!(
                 f,
-                "キーワード指定スコープの揃えを 1 度も測れていない（{OFFSET_VERDICT_KEYWORD_PENDING} を出したスコープ {keyword_scopes} 個・素材消費後に {OFFSET_VERDICT_RESCALED} の行が要る）"
+                "キーワード指定スコープの揃えを 1 度も測れていない（{OFFSET_VERDICT_KEYWORD_PENDING} を出したスコープが無い・素材消費後に {OFFSET_VERDICT_RESCALED} の行が要る）"
             ),
             Self::KeywordScopeUnmeasured { scope } => write!(
                 f,
@@ -798,7 +796,7 @@ fn check_alignment_residual(
         }
     } else {
         // 母数が空なら、上の繰り返しは 1 行も通さない＝何も測れていない。
-        violations.push(OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 });
+        violations.push(OffsetViolation::NoKeywordAlignmentMeasured);
     }
 }
 

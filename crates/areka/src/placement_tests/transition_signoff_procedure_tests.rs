@@ -734,7 +734,7 @@ fn the_two_bounds_families_produce_different_violations() {
         );
         assert!(
             !signoff.contains(&signature),
-            "実機専用系統がフレーム単位の違反を出している             （`Bounds::signoff` が `frame_bound` を armed にした？）: {signature}"
+            "実機専用系統がフレーム単位の違反を出している（`Bounds::signoff` が `frame_bound` を armed にした？）: {signature}"
         );
     }
 
