@@ -509,7 +509,7 @@ pub(super) fn WM_DPICHANGED(
 
     // 「書かなかった」場合も `Some(LRESULT(0))`＝処理済みを返す。`None` を返すと
     // `DefWindowProcW` が既定の提案矩形適用を行い、**その内部から `SetWindowPos` が
-    // 同期的に呼ばれる**（`window/components.rs:29-31`）ため、源断ちが無意味になる。
+    // 同期的に呼ばれる**（`window/components.rs` の `DpiChangeContext` の doc）ため、源断ちが無意味になる。
     // ここが源断ちの最外殻であり、`guarded_set_window_pos` を飛ばすだけでは足りない
     // （檻＝`s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc`）。
     // 提案矩形の不採用は Per-Monitor v2 の契約違反ではない（OS 提示は勧告である）。

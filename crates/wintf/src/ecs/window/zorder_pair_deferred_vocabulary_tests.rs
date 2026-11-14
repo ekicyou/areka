@@ -36,8 +36,10 @@
 //! 走査の語は 2 つの表に分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
 //! 先送りのままである（持ち主 `tasktray-minimize` ほか）。常に手前の帯の語
 //! （`BAND_NEEDLES`＝`topmost`・`stayontop`・`windowstate`）は `stay-on-top-directives` が
-//! 実装したが、帯を書くのは帯の働きのファイル `window_band.rs` だけと決めてある。よって
-//! どちらの表の語も、重なり順の機構の本番ファイルには 1 つも無いことを主張し続ける。
+//! 実装した。ゴーストの窓の帯を書くのは帯の働きのファイル `window_band.rs` であり（帯の値を
+//! 書く本番の所はほかにツールチップと `WindowPos` があり、`window_band.rs` の頭の doc に
+//! 挙げてある）、重なり順の機構（`zorder_*`）は帯を書かない。よってどちらの表の語も、
+//! 重なり順の機構の本番ファイルには 1 つも無いことを主張し続ける。
 //! 対照として、`window_band.rs` のコードに `HWND_TOPMOST` が在ることも主張する
 //! （帯の働きが別の場所へ移れば、この守りの前提が崩れたと赤くなる）。
 //!
@@ -125,8 +127,9 @@ const DEFERRED_NEEDLES: [(&str, &str); 6] = [
     ),
 ];
 
-/// 帯の語（小文字）。常に手前の帯を書くのは帯の働きのファイル [`BAND_FILE`] だけであり
-/// （`stay-on-top-directives`）、重なり順の機構（組・鎖）の本番ファイルには 1 つも無い。
+/// 帯の語（小文字）。ゴーストの窓の帯を書くのは帯の働きのファイル [`BAND_FILE`] であり
+/// （`stay-on-top-directives`・ほかの書き手は `window_band.rs` の頭の doc）、重なり順の機構
+/// （組・鎖）の本番ファイルには 1 つも無い。
 const BAND_NEEDLES: [(&str, &str); 3] = [
     (
         "topmost",
@@ -136,7 +139,7 @@ const BAND_NEEDLES: [(&str, &str); 3] = [
     ("windowstate", "`\\![set,windowstate,...]`"),
 ];
 
-/// 帯を書く唯一の本番ファイル（`stay-on-top-directives` の帯の働き）。
+/// ゴーストの窓の帯を書く本番ファイル（`stay-on-top-directives` の帯の働き）。
 const BAND_FILE: &str = "src/ecs/window/window_band.rs";
 
 fn source_path(relative: &str) -> PathBuf {
@@ -194,7 +197,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_wintf_sources()
         let hits = deferred_hits(&code);
         assert!(
             hits.is_empty(),
-            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯を書くのは {BAND_FILE} だけ）: {hits:?}"
+            "{relative}: 先送りの語か帯の語が本番コードに現れている（ゴーストの窓の帯を書くのは {BAND_FILE}）: {hits:?}"
         );
 
         scanned_files += 1;

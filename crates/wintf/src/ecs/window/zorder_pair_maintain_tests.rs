@@ -445,6 +445,9 @@ fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
 }
 
 /// 要求を受けた巡で既に相手が居なければ、指令を出さずに理由つきで見送る。
+///
+/// 要求が外から差し替えられた形（検証待ちでない要求に前の持ち越しが残る）にして、
+/// 見送りで持ち越しも外れることも見る。
 #[test]
 fn request_for_a_missing_peer_issues_no_command() {
     let parent = create_test_parent(w!("wintf-zorder-maintain-peer-gone"));
@@ -456,6 +459,9 @@ fn request_for_a_missing_peer_issues_no_command() {
     let balloon = spawn_window(&mut world, balloon_hwnd);
     declare_pair(&mut world, balloon, character);
     request_reassert(&mut world, balloon);
+    world.entity_mut(balloon).insert(IssuedPairFix {
+        insert_after: InsertSpec::TopEdge,
+    });
     world.entity_mut(character).despawn();
 
     let mut schedule = maintain_schedule();
@@ -474,6 +480,7 @@ fn request_for_a_missing_peer_issues_no_command() {
         "是正の指令は出ず、対照の 1 本だけが出るはず",
     );
     assert!(!world.entity(balloon).contains::<ReassertZOrder>());
+    assert!(!world.entity(balloon).contains::<IssuedPairFix>());
 
     destroy_test_window(parent);
 }

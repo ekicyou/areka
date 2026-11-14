@@ -514,7 +514,10 @@ pub fn apply_zorder_pair_maintenance(
         // 判断結果は必ず `record_decision` を通す——見送りはそこで理由つきの記録になり、
         // 返ってくるのは適用すべき是正だけである（要件 6.3 の規約）。
         let Some(fix) = record_decision(entity, peer, decide_pair_fix(&observation)) else {
-            commands.entity(entity).remove::<ReassertZOrder>();
+            // 要求は外から差し替えられる公開の契約点なので、前の持ち越しが残りうる。一緒に外す。
+            commands
+                .entity(entity)
+                .remove::<(ReassertZOrder, IssuedPairFix)>();
             continue;
         };
         if fix_issued_this_pass {
@@ -525,9 +528,17 @@ pub fn apply_zorder_pair_maintenance(
             continue;
         }
         let Some(plan) = plan_pair_fix(&observation, fix) else {
-            // 是正の腕が返った以上ハンドルは揃っており、ここへは届かない。届いても
-            // panic は作らず、指令を出さずに要求を落とす（要件 6.4）。
-            commands.entity(entity).remove::<ReassertZOrder>();
+            // 是正の腕が返った以上ハンドルは揃っており（`plan_pair_fix` が None を返すのは
+            // ハンドルが欠けたときか見送りの腕のときだけ）、ここへは届かない。届いても
+            // panic は作らず、1 行残して指令を出さずに要求と持ち越しを落とす（要件 6.4）。
+            tracing::debug!(
+                entity = ?entity,
+                peer = ?peer,
+                "[apply_zorder_pair_maintenance] no plan for the pair fix, dropping the request"
+            );
+            commands
+                .entity(entity)
+                .remove::<(ReassertZOrder, IssuedPairFix)>();
             continue;
         };
 

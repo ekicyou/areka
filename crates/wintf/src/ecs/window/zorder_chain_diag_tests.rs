@@ -16,8 +16,8 @@
 //! 1 件も当てられなかった。ここでは**隣り合う欄の対**を実際の字面のまま名指しで固定し、
 //! 間に別の欄が割り込んだ瞬間に赤くなるようにしてある。
 
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use windows::core::HRESULT;
 
 use super::{
@@ -40,11 +40,6 @@ const DEFAULT_DIRECTIVES: &str = "info";
 
 /// 本モジュールの記録の出力先（module path 既定）。
 const LOG_TARGET: &str = "wintf::ecs::window::zorder_chain_diag";
-
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
 
 /// テスト用の Entity を 2 つ採る（空の World から順に確保するだけ）。
 fn two_entities() -> (Entity, Entity) {

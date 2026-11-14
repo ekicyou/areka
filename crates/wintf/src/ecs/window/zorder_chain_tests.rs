@@ -23,6 +23,7 @@
 //! だけが拾える。Bevy の既定実行器（多スレッド）を挟むと 1 行も拾えず検査が空虚に緑に
 //! なるため、**この檻は Schedule を一切使わない**。
 
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
@@ -51,11 +52,6 @@ const DIAG_TARGET: &str = "wintf::ecs::window::zorder_chain_diag";
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
 
 /// テスト用の Entity を n 個採る（空の World から順に確保するだけ）。
 fn entities(n: usize) -> Vec<Entity> {

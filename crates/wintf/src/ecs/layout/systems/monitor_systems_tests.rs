@@ -599,14 +599,50 @@ fn enumeration_failure_is_logged_once_per_streak() {
     let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
         // 続きの 1 巡目（zero_streak は偽）→ 2・3 巡目（真）
         for zero_streak in [false, true, true] {
-            assert!(monitors_or_log_failure(None, zero_streak).is_empty());
+            assert!(monitors_or_log_failure((None, Vec::new()), zero_streak).is_empty());
         }
     });
     assert_eq!(out.matches(FAILED).count(), 1, "{out}");
 
     let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
-        let got = monitors_or_log_failure(Some(vec![synthetic_monitor()]), false);
+        let got = monitors_or_log_failure((Some(vec![synthetic_monitor()]), Vec::new()), false);
         assert_eq!(got.len(), 1);
     });
     assert!(!out.contains(FAILED), "{out}");
+    assert!(!out.contains(INFO_FAILED), "{out}");
+}
+
+const INFO_FAILED: &str = "Failed to get monitor info";
+
+/// 全台の情報取得の失敗（列挙は成功・0 台）が続く間も、`error!` は続きの最初の 1 回・
+/// 1 本だけ出る（失敗した台数は `failed` の欄に数える）。
+#[test]
+fn monitor_info_failures_are_logged_once_per_streak() {
+    use crate::ecs::window::monitor::MonitorError;
+    let failures = || {
+        vec![
+            (HMONITOR(1 as _), MonitorError::GetMonitorInfoFailed),
+            (HMONITOR(2 as _), MonitorError::GetDpiFailed),
+        ]
+    };
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        for zero_streak in [false, true, true] {
+            assert!(
+                monitors_or_log_failure((Some(Vec::new()), failures()), zero_streak).is_empty()
+            );
+        }
+    });
+    assert_eq!(out.matches(INFO_FAILED).count(), 1, "{out}");
+    assert!(out.contains("failed=2"), "{out}");
+
+    // 列挙が途中で失敗しても、それまでの情報取得の失敗は捨てずに残す。
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        assert!(monitors_or_log_failure((None, failures()), false).is_empty());
+    });
+    assert_eq!(out.matches(INFO_FAILED).count(), 1, "{out}");
+    assert_eq!(
+        out.matches("EnumDisplayMonitors failed").count(),
+        1,
+        "{out}"
+    );
 }

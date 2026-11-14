@@ -10,6 +10,7 @@ use super::super::{
 use crate::ecs::window::transition_diag::{self, MonitorRecord, Stamp, TickStart, WindowDpiRecord};
 use crate::ecs::world::FrameCount;
 
+use windows::Win32::Graphics::Gdi::HMONITOR;
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
     SM_YVIRTUALSCREEN,
@@ -172,8 +173,8 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 ///
 /// 列挙が 0 台（列挙の失敗を含む）なら [`apply_monitor_snapshot`] は表を変えずに `None` を
 /// 返す。そのときは構成の変化の旗を下ろさずに戻り、次の刻みで読み直す。0 台が続く間は
-/// `zero_streak` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）と列挙の失敗の `error!`
-/// （[`monitors_or_log_failure`]）は続きの最初の 1 回だけ出す。
+/// `zero_streak` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）と列挙・情報取得の失敗の
+/// `error!`（[`monitors_or_log_failure`]）は続きの最初の 1 回だけ出す。
 ///
 /// # 遷移観測の刻印は World 資源から組む（design D1）
 ///
@@ -247,16 +248,30 @@ pub fn detect_display_change_system(
     app.reset_display_change();
 }
 
-/// 列挙の結果を受け取り、失敗（`None`）なら空を返す。失敗の `error!` は 0 台が続いていない
-/// （`zero_streak` が偽の）ときだけ出す——失敗が続く間は続きの最初の 1 回だけ残す。
+/// 列挙の結果を受け取り、取れたモニタの列を返す（`EnumDisplayMonitors` の失敗なら空）。
+/// 1 台ずつの情報取得の失敗と列挙の失敗の `error!` は、0 台が続いていない（`zero_streak` が
+/// 偽の）ときだけ出す——失敗が続く間は続きの最初の 1 回だけ残す。情報取得の失敗は台数を
+/// 数えて 1 本にまとめる（列挙が途中で失敗したときも出す）。
 fn monitors_or_log_failure(
-    enumerated: Option<Vec<crate::ecs::Monitor>>,
+    (monitors, failures): (
+        Option<Vec<crate::ecs::Monitor>>,
+        Vec<(HMONITOR, crate::ecs::window::monitor::MonitorError)>,
+    ),
     zero_streak: bool,
 ) -> Vec<crate::ecs::Monitor> {
-    enumerated.unwrap_or_else(|| {
-        if !zero_streak {
-            error!("[detect_display_change_system] EnumDisplayMonitors failed");
-        }
+    if zero_streak {
+        return monitors.unwrap_or_default();
+    }
+    if let Some((hmonitor, e)) = failures.first() {
+        error!(
+            failed = failures.len(),
+            hmonitor = ?hmonitor,
+            error = %e,
+            "[detect_display_change_system] Failed to get monitor info"
+        );
+    }
+    monitors.unwrap_or_else(|| {
+        error!("[detect_display_change_system] EnumDisplayMonitors failed");
         Vec::new()
     })
 }
