@@ -100,8 +100,8 @@ pub struct PlacementConfig {
     ///
     /// ⚠ 2026-08-31 訂正: 以前ここには「実挙動なし」と書いてあったが、
     /// `areka-P0-scope-zorder-pinning` の着地で**実挙動が付いた**——`main.rs` が読み出し、
-    /// `emo2_boot::frame::wiring::seed_zorder_descript_base` を通って起動時の基底グループになる
-    /// （解釈器はタグ入口と共通・`emo2_boot::frame::zorder_descript`）。
+    /// `runtime::frame::wiring::seed_zorder_descript_base` を通って起動時の基底グループになる
+    /// （解釈器はタグ入口と共通・`runtime::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
     /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
     /// areka-P0-window-link-directives 要件 3.8）。

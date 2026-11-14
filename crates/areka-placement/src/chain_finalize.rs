@@ -26,12 +26,12 @@
 //!   確定はその窓を動かさない。除外したスコープの**実位置**は以後の連鎖の基準
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
 //! - 解きの核は組ごとの決め（[`PairDecision`]）を受け取る [`resolve_chain`] で、起動時の確定
-//!   （`emo2_boot::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
+//!   （`runtime::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
 //!   一致から、記憶から戻したスコープを覚えた印（[`remembered_decision`]）から決めて渡す
 //!   （dpi-realign-remembered-chain 要件 6.3）。拡大率の後の詰め直しは変わる直前の隣り合い
 //!   （[`judge_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
-//!   （`emo2_boot::frame`）が持ち、本モジュールは純粋な判定だけを担う。
+//!   （`runtime::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
 //! # 確定が起きなかったとき
 //!
@@ -60,7 +60,7 @@ pub struct ChainFinalized;
 
 /// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む・7.3）。
 ///
-/// 読むのは起動時の確定（`emo2_boot::frame` の `finalize_chain_once_with`）と並べ終えた時点の保存
+/// 読むのは起動時の確定（`runtime::frame` の `finalize_chain_once_with`）と並べ終えた時点の保存
 /// （`persist::persist_unremembered_char_positions`）で、印の付いた窓は引き戻さず、記憶にも書かない。
 /// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
 /// 戻した窓からも外す。
@@ -445,7 +445,7 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 
 /// 診断を出すまでに待つフレーム数（有界の待ち・scg 6.5）。
 ///
-/// 呼び手（`emo2_boot::frame::emo2_frame_system`）は 60Hz の tick ループから毎フレーム確定を
+/// 呼び手（`runtime::frame::frame_system`）は 60Hz の tick ループから毎フレーム確定を
 /// 試みるため、**約 10 秒**ぶんに相当する。窓は起動窓（`ghost_session::open_ghost_windows`）の時点で既に生えており、
 /// この待ちで残るのは GPU 装着と初回 `ShowSurface` の landing だけゆえ、正常起動が閾値に届く
 /// ことはない（＝正常系で診断が出ない余裕を持たせた値）。

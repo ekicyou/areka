@@ -195,7 +195,7 @@ fn roundtrip(anchor: Anchor, saved: Option<PointPx>) -> ScopePlacement {
     out.into_iter().next().expect("1 スコープ分が返る")
 }
 
-/// 追随相（`emo2_boot::frame::balloon_offset_follow`）の**腕の割り当てを写した**観測 1 回。
+/// 追随相（`runtime::frame::balloon_offset_follow`）の**腕の割り当てを写した**観測 1 回。
 ///
 /// 値を決めるのは本番の純関数 [`rescale_follow_offset`]、書くのは本番の書込口
 /// （[`BalloonFollow::anchor_base_dpi`]／[`BalloonFollow::apply_rescaled`]）であり、

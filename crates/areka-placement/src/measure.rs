@@ -384,7 +384,7 @@ fn scale_size_px(
 ///
 /// 一覧・`surfaces.txt` の読取と解析・「番号 → 面の画像」の決定・bake はすべて
 /// [`areka_emo_present::shell_target::load_shell_target`] が行う。起動時の資産組立
-/// （`emo2_boot::assets::build_boot_assets`）も同じ入口を通るので、採寸した窓寸と実際に
+/// （`runtime::assets::build_boot_assets`）も同じ入口を通るので、採寸した窓寸と実際に
 /// 合成される枠が食い違わない（要件 3.6——列挙の規則が 2 実装に分かれると実機でしか現れない
 /// 欠陥になる。`measure_balloon_surface0` の説明と同じ理由）。
 ///

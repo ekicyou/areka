@@ -613,7 +613,7 @@ fn prepare_k0_rounding_matches_integer_authority_not_f32() {
 }
 
 /// design Flow 3 手順1（**1 度だけ読む**）: 準備が読んだ作者基準 DPI が
-/// `PreparedPlacement` に載って attach 側（`wire_emo2_boot`→`attach_target`）へ渡る。
+/// `PreparedPlacement` に載って attach 側（`wire_runtime`→`attach_target`）へ渡る。
 ///
 /// 単一読取の証拠は「読取器（task 2.1）を直接呼んだ値と、準備の戻り値が一致すること」。
 /// 本番 fixture（emo2）は 96/96 ゆえ既定との区別が付かない——宣言値との区別は
@@ -680,7 +680,7 @@ fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
 
 /// shell が `seriko.zorder` を宣言していれば、その**生の値がそのまま**準備の結果に載る。
 ///
-/// 起動の結線（`wire_emo2_boot`）はこの欄から重なりの基底を受け取る。ここで落ちると
+/// 起動の結線（`wire_runtime`）はこの欄から重なりの基底を受け取る。ここで落ちると
 /// 設定は本番で一切効かないが、配置も採寸も何一つ変わらないので他のどの檻にも映らない。
 #[test]
 fn prepare_carries_the_shell_zorder_value_verbatim() {

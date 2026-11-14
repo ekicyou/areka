@@ -109,7 +109,7 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// `primary モニタ DPI 取得不能（boot）` 行・要件 1.4）。
 ///
 /// この縮退は**恒久的な情報損失ではない**——窓生成後は窓の実 DPI が正であり、
-/// `Changed<DPI>` を観測する `emo2_boot::frame::run_dpi_phase`（task 4.2）と
+/// `Changed<DPI>` を観測する `runtime::frame::run_dpi_phase`（task 4.2）と
 /// 表示成立点の状態照合（design Flow 1／Flow 3 手順5）が k を自己補正する（D7）。
 const FALLBACK_PRIMARY_DPI: u32 = 96;
 
@@ -136,7 +136,7 @@ pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
 /// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
 pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
 
-/// 作業領域源の**実行時同期**（`emo2_boot::frame::work_area_sync`）の呼出点タグ
+/// 作業領域源の**実行時同期**（`runtime::frame::work_area_sync`）の呼出点タグ
 /// （areka-P0-dpi-transition-atomicity 要件 5.1・設計 C6）。
 ///
 /// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（[`PREPARE_GHOST_WINDOWS_CONTEXT`]）に
@@ -182,13 +182,13 @@ pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
 ///
 /// 1. 採寸の k₀（[`build_measure_scaling`] → `measure_scope_sizes`・要件 3.3）
 /// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → `main` →
-///    `emo2_boot::wire_emo2_boot` → `build_boot_assets` → `attach_target`・要件 1.1）
+///    `runtime::wire_runtime` → `build_boot_assets` → `attach_target`・要件 1.1）
 ///
 /// 同じ宣言が 2 経路で食い違わないこと（＝読取が 1 度であること）が本型の存在理由である。
 ///
 /// shell と balloon は別々のキー（`seriko.dpi`／`dpi`）で宣言され得るうえ、
 /// 素の `u16` 2 引数は**取り違えてもコンパイルが通る**。名前付きフィールドで束ね、
-/// 呼び手に「どちらの `u16` か」を選ばせない（`emo2_boot::frame` の `AuthorDpis` と同じ防御）。
+/// 呼び手に「どちらの `u16` か」を選ばせない（`runtime::frame` の `AuthorDpis` と同じ防御）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AuthorDpi {
     /// shell descript `seriko.dpi` 由来（縮退梯子適用済みの非ゼロ値）。
@@ -231,7 +231,7 @@ pub struct PreparedPlacement {
     ///
     /// `author_dpi` と**同じ搬送の形**である（areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
     /// descript を読むのは準備の中の 1 度だけなので、重なりの基底もそのときの読取結果を
-    /// ここへ載せて `main` → `wire_emo2_boot` → 台帳へ配る。ここで搬送せずに結線の側で
+    /// ここへ載せて `main` → `wire_runtime` → 台帳へ配る。ここで搬送せずに結線の側で
     /// 読み直すと、配置と重なりが**別々の宣言**を見る余地が生まれる（`author_dpi` を搬送に
     /// した理由そのもの）。
     ///

@@ -136,14 +136,14 @@ pub fn snapshot_char_rects(world: &World) -> Vec<(usize, ChainRect)> {
 
 /// 解き直しの入力——判定へ渡す状態列と、反映へ渡す `(scope, キャラ窓 entity, 現在位置)` の列。
 ///
-/// 起動時確定の走査（`emo2_boot::frame::drain_resnap::collect_chain_states`）の戻り値と
+/// 起動時確定の走査（`runtime::frame::drain_resnap::collect_chain_states`）の戻り値と
 /// **同じ形**である。走査を 2 つ持つと「窓寸が実表示寸へ揃ったか」の判定が 2 実装に割れる
 /// ので、解き直しは走査を関数として受け取り、起動時確定とまったく同じものを再利用する。
 pub type ChainRealignScan = (Vec<ScopeChainState>, Vec<(usize, Entity, PointPx)>);
 
 /// 遷移後の解き直しを**武装**する（設計 C4・要件 6.1）。
 ///
-/// 呼び手は拡大率の相（`emo2_boot::frame::dpi`）だけで、キャラ窓の再射影が**寸変化を
+/// 呼び手は拡大率の相（`runtime::frame::dpi`）だけで、キャラ窓の再射影が**寸変化を
 /// 伴って**書込を起こしたときに呼ぶ。判断（寸が変わったか・書込が起きたか）は呼び手が持つ
 /// ——本関数は「武装してよい状態か」だけを見る。
 ///
