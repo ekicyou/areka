@@ -1,3 +1,4 @@
+GOAL-CHECK ok judge_version=0.4.0 token=42424242
 PERF-LOOP FINAL: STOPPED run=42424242 reason=plateau best_idle_cpu=6.12 top_remaining=phase:tick_all:0.41 iters=1
-PERF-LOOP FINAL: GOAL_MET run=42424242 idle_cpu=2.84 judge=PASS iters=1 commits=4
+PERF-LOOP FINAL: GOAL_MET run=42424242 idle_cpu=2.84 judge=PASS iters=1 commits=1
 PERF-LOOP FINAL: GOAL_MET run=42424242 idle_cpu=6.12 judge=PASS iters=1 commits=1

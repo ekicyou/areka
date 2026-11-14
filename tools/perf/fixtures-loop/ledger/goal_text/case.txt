@@ -1,3 +1,5 @@
 title=goal-text は走行トークンを埋めた /goal 条件文を出す（トークンが無ければ拒む・4,000 字以内）
-stderr_substr=上限 4000
+stderr_substr=limit 4000
+stderr_substr=: 1012 文字 (
+note=「<n> 文字」は perf-loop.ps1 の selftest が拾って goal.md のヘッダの字数と比べる（英語に変えると黙って比べなくなる）
 stderr_substr=走行トークン

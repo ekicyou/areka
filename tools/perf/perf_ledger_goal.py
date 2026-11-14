@@ -145,12 +145,8 @@ def _goal_table(args) -> dict:
 def _stop_limits(args) -> tuple[int, int]:
     """停止条件（連続無改善の上限・周数の上限）。TOML → 既定 の順で解く。"""
     stop = _goal_table(args).get("stop") or {}
-    max_streak = getattr(args, "max_streak", None) or stop.get(
-        "max_no_gain_streak", CORE.DEFAULT_MAX_NO_GAIN_STREAK
-    )
-    max_iterations = getattr(args, "max_iterations", None) or stop.get(
-        "max_iterations", CORE.DEFAULT_MAX_ITERATIONS
-    )
+    max_streak = stop.get("max_no_gain_streak", CORE.DEFAULT_MAX_NO_GAIN_STREAK)
+    max_iterations = stop.get("max_iterations", CORE.DEFAULT_MAX_ITERATIONS)
     try:
         return int(max_streak), int(max_iterations)
     except (TypeError, ValueError) as exc:
@@ -266,7 +262,7 @@ def cmd_final(args) -> int:
     ledger = CORE.load_ledger(args)
     token = _run_token(ledger)
     outcome = _one_of(args.outcome, CORE.FINAL_OUTCOMES, "終端の種類")
-    iterations = args.iters if args.iters is not None else CORE.state_int(ledger, "iteration", default=0)
+    iterations = CORE.state_int(ledger, "iteration", default=0)
     latest = _latest_entry(ledger)
 
     if outcome == "GOAL_MET":
@@ -276,9 +272,8 @@ def cmd_final(args) -> int:
                 [f"reason= を付けるのは STOPPED のときだけです（{'・'.join(CORE.FINAL_REASONS)}）。"],
             )
         idle = _idle_cpu_text(args, ledger, latest)
-        commits = args.commits if args.commits is not None else _adopted_commits(ledger)
         line = CORE.FINAL_PREFIX + (
-            f"GOAL_MET run={token} idle_cpu={idle} judge=PASS iters={iterations} commits={commits}"
+            f"GOAL_MET run={token} idle_cpu={idle} judge=PASS iters={iterations} commits={_adopted_commits(ledger)}"
         )
     else:
         if not args.reason:
@@ -287,11 +282,7 @@ def cmd_final(args) -> int:
                 [f"使えるのは {'・'.join(CORE.FINAL_REASONS)} です（停止の理由を残さずに止めない）。"],
             )
         _one_of(args.reason, CORE.FINAL_REASONS, "停止の reason")
-        best = (
-            CORE.format_number_text(args.best_idle_cpu, False, "--best-idle-cpu")
-            if args.best_idle_cpu
-            else CORE.state_number_text(ledger, "best_idle_cpu_pct")
-        )
+        best = CORE.state_number_text(ledger, "best_idle_cpu_pct")
         top = TOP_REMAINING_BAD_RE.sub("_", args.top_remaining) if args.top_remaining else CORE.EMPTY_VALUE
         line = CORE.FINAL_PREFIX + (
             f"STOPPED run={token} reason={args.reason} best_idle_cpu={best} "
@@ -303,7 +294,7 @@ def cmd_final(args) -> int:
 
 
 def _adopted_commits(ledger) -> int:
-    """採用した周の数（`--commits` を省いたときの既定＝採用＝1 周 1 コミット・要件 1.8）。"""
+    """採用した周の数（FINAL 行の commits=。採用＝1 周 1 コミット・要件 1.8）。"""
     return sum(1 for entry in ledger.entries if entry.values.get("verdict") == "ADOPTED")
 
 
@@ -470,13 +461,13 @@ def cmd_goal_check(args) -> int:
                     "作り直すなら台帳ごと `init --force` してください。",
                 ],
             )
-        CORE.report(f"走行トークンは既にあります（変えません）: {token}")
+        CORE.report(f"run token already set (unchanged): {token}")
     else:
         token = _new_run_token(args.token)
         state = dict(ledger.state)
         state["run"] = token
         CORE.write_text(ledger.path, CORE.replace_state_block(ledger, state))
-        CORE.report(f"走行トークンを状態ブロックへ書きました: {token}")
+        CORE.report(f"run token written to the state block: {token}")
 
     print(f"GOAL-CHECK ok judge_version={judge_version} token={token}")
     return CORE.EXIT_OK
@@ -489,6 +480,11 @@ def _new_run_token(requested: str | None) -> str:
             raise CORE.bad_input(
                 f"--token は {CORE.RUN_TOKEN_DIGITS} 桁の数字です: {requested!r}",
                 ["自己較正・再現のためだけの指定です（普段は省いて乱数に任せます）。"],
+            )
+        if requested == CORE.RESERVED_RUN_TOKEN:
+            raise CORE.bad_input(
+                f"--token {requested} は文書の見本専用で、走行トークンには使えません",
+                ["見本と実出力の字面を分けるための予約です（設計 C1）。"],
             )
         return requested
     while True:
@@ -525,13 +521,9 @@ def cmd_goal_text(args) -> int:
     )
     check_goal_text(text)
     print(text, end="" if text.endswith("\n") else "\n")
-    CORE.report(f"/goal 条件文: {len(text)} 文字（上限 {GOAL_TEXT_MAX_CHARS}）・走行トークン {token}")
+    # perf-loop.ps1 の selftest が「<n> 文字」を拾って goal.md のヘッダの字数と比べる（ASCII 化の唯一の例外）
+    CORE.report(f"/goal text: {len(text)} 文字 (limit {GOAL_TEXT_MAX_CHARS}), run token {token}")
     return CORE.EXIT_OK
-
-
-# =============================================================================
-# summary（brief 旧数値との対比表・要件 7.6）
-# =============================================================================
 
 
 def check_goal_text(text: str) -> None:
@@ -551,6 +543,11 @@ def check_goal_text(text: str) -> None:
                 "条件文の中に、そのまま終端と読める行があります",
                 [line, "条件文を貼った時点で「達成」と判定されてしまいます（行頭に置かないこと）。"],
             )
+
+
+# =============================================================================
+# summary（brief 旧数値との対比表・要件 7.6）
+# =============================================================================
 
 
 def _results_dir(args, ledger):
@@ -575,11 +572,11 @@ def _final_release_idle_text(results_dir):
     try:
         text = finals[-1].read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
-        CORE.report(f"最終判定を開けません（最後の周の 7 分の値を出します）: {finals[-1]}: {exc}")
+        CORE.report(f"cannot open the final verdict (using the last iteration's 7-min value): {finals[-1]}: {exc}")
         return None
     m = re.search(r"定常状態の CPU:.*?平均=([0-9.]+)%", text)
     if not m:
-        CORE.report(f"最終判定から定常状態の CPU の平均を拾えません（最後の周の 7 分の値を出します）: {finals[-1]}")
+        CORE.report(f"no steady-state CPU mean in the final verdict (using the last iteration's 7-min value): {finals[-1]}")
         return None
     return m.group(1) + "（25 分最終判定・" + finals[-1].parent.parent.name + "）"
 
@@ -629,7 +626,7 @@ def build_summary(ledger, goal_name: str, results_dir) -> str:
     if not ledger.entries:
         lines.append("| - | - | （まだ 1 周も記録がありません） | - | - | - | - | - | - |")
     for entry in sorted(ledger.entries, key=lambda item: item.iteration):
-        values = entry.values
+        values = {key: value.replace("|", "\\|") for key, value in entry.values.items()}  # 表の区切りを逃がす
         lines.append(
             f"| {entry.iteration} | {entry.timestamp} | {values.get('hypothesis', CORE.EMPTY_VALUE)} "
             f"| {values.get('verdict', CORE.EMPTY_VALUE)} "
@@ -644,7 +641,7 @@ def build_summary(ledger, goal_name: str, results_dir) -> str:
 
 
 def cmd_summary(args) -> int:
-    """`results/summary.md` を書く（`--out -` なら標準出力へ）。"""
+    """`<results_dir>/summary.md` を書く（`--out -` なら標準出力へ）。"""
     ledger = CORE.load_ledger(args)
     text = build_summary(ledger, ledger.state["goal"], _results_dir(args, ledger))
     if args.out == "-":
@@ -652,7 +649,7 @@ def cmd_summary(args) -> int:
         return CORE.EXIT_OK
     out_path = CORE.resolve_summary_path(args)
     CORE.write_text(out_path, text)
-    CORE.report(f"まとめを書きました: {out_path}")
+    CORE.report(f"summary written: {out_path}")
     return CORE.EXIT_OK
 
 
@@ -709,17 +706,12 @@ def add_parsers(subparsers, location: argparse.ArgumentParser) -> None:
     status.add_argument("--phase", help="相（既定は状態ブロックの phase）")
     status.add_argument("--next", help="次の相（既定は遷移表の ok の行き先）")
     status.add_argument("--idle-cpu", help="今のアイドル CPU（%%・既定は最後の周の後の値）")
-    status.add_argument("--max-streak", help="連続無改善の上限（既定は [stop].max_no_gain_streak）")
-    status.add_argument("--max-iterations", help="周数の上限（既定は [stop].max_iterations）")
 
     final = subparsers.add_parser("final", parents=[location], help="FINAL 行を出す")
     final.add_argument("--outcome", required=True, help="・".join(CORE.FINAL_OUTCOMES))
     final.add_argument("--reason", help=f"停止の理由（STOPPED のみ・{'・'.join(CORE.FINAL_REASONS)}）")
     final.add_argument("--idle-cpu", help="到達したアイドル CPU（%%・GOAL_MET）")
-    final.add_argument("--best-idle-cpu", help="これまでの最良（%%・STOPPED・既定は状態ブロック）")
     final.add_argument("--top-remaining", help="残る最大項 stage:item:share（STOPPED）")
-    final.add_argument("--commits", type=int, help="採用した周の数（既定は台帳の ADOPTED の件数）")
-    final.add_argument("--iters", type=int, help="回した周数（既定は状態ブロックの iteration）")
 
     next_phase = subparsers.add_parser("next-phase", parents=[location], help="相の遷移表（純関数）")
     next_phase.add_argument("--phase", help=f"今の相（{CORE.WAIT_PHASE_PREFIX} 冠も可）")

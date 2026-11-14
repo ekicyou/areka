@@ -5,3 +5,5 @@
 0 :: status --ledger @LEDGER@
 0 :: status --ledger @LEDGER@ --judge PASS --next RECORD
 3 :: status --ledger @LEDGER@ --judge MAYBE
+3 :: status --ledger @LEDGER@ --max-streak 5
+3 :: status --ledger @LEDGER@ --max-iterations 5

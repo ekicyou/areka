@@ -43,7 +43,7 @@
     init      台帳を新しく作る（既にあれば拒む。作り直すなら --force）
     state     状態ブロックを JSON で出す（`-` は null・数の鍵は数として出す）
     set-phase 状態ブロックだけを書き換える（周の記録は 1 バイトも動かさない）
-    append    周の記録を 1 つ追記する（--from-json で値を渡す）
+    append    周の記録を 1 つ追記する（--from-json で値を渡す・--iteration は必須）
     read      指定した周の記録を JSON で出す（append へそのまま戻せる形）
     entries   全ての周の記録を JSON 配列で出す（周番号と日時つき）
 
@@ -53,7 +53,7 @@
     next-phase 相の遷移表（純関数）。`--table` で表そのものを出す
     goal-check 目標定義の必須キー・判定スクリプトの版・閾値を確かめ、周 0 にトークンを作る
     goal-text  トークンを埋めた `/goal` 条件文を出す（4,000 字以内）
-    summary    results/summary.md（brief 旧数値との対比表・要件 7.6）
+    summary    <results_dir>/summary.md（brief 旧数値との対比表・要件 7.6）
 
     --samples  文書へ貼る書式見本（山括弧）と実出力の見本を並べる（台帳は要らない）
     --selftest 自己較正（fixtures-loop/ledger/ の既知ケースを逐語再現する）
@@ -107,7 +107,7 @@ import perf_ledger_goal  # noqa: E402
 import perf_ledger_selftest  # noqa: E402
 
 # =============================================================================
-# 定数（値の所在はすべてここ 1 箇所。task 5.5 はこの節へ足す）
+# 定数（値の所在はすべてここ 1 箇所）
 # =============================================================================
 
 #: 本スクリプトの版（台帳の書式か語彙を変えたら上げる）。
@@ -193,7 +193,7 @@ PHASE_TRANSITIONS: dict[str, dict[str, str]] = {
     "TOOLFIX": {"toolfix_ok": PREVIOUS_PHASE_MARKER, "toolfix_fail": "FINAL"},
     "FINAL": {},
 }
-TERMINAL_PHASE_NOTE = "(終端・遷移なし)"
+TERMINAL_PHASE_NOTE = "(terminal, no transitions)"
 
 #: 停止条件の既定（要件 1.4。目標定義ファイルの `[stop]` があればそちらが優先）。
 DEFAULT_MAX_NO_GAIN_STREAK = 3
@@ -490,6 +490,9 @@ def _to_ledger_value(key: str, value, int_keys: tuple[str, ...], float_keys: tup
             raise bad_input(f"{key} は{what}でなければなりません（{value!r}）") from exc
         if not math.isfinite(number):
             raise bad_input(f"{key} は有限の数でなければなりません（{value!r}）")
+        # 負になれるのは差（delta_pct）だけ。負の回数や CPU を書くと STATUS 行の文法に乗らない。
+        if number < 0 and key != "delta_pct":
+            raise bad_input(f"{key} は 0 以上でなければなりません（{value!r}）")
         return str(number) if integral else FLOAT_FORMAT.format(number)
     if not isinstance(value, (str, int, float)):
         raise bad_input(f"{key} に書けない型です（{type(value).__name__}）", ["値は文字列か数です。"])
@@ -744,7 +747,7 @@ def cmd_init(args) -> int:
         "not_quiet_retries": "0",
     }
     write_text(path, "\n".join(state_lines(state)) + "\n")
-    report(f"台帳を作りました: {path}")
+    report(f"ledger created: {path}")
     return EXIT_OK
 
 
@@ -764,7 +767,6 @@ def cmd_set_phase(args) -> int:
         ("pending_run", args.pending_run),
         ("best_idle_cpu_pct", args.best),
         ("baseline_idle_cpu_pct", args.baseline),
-        ("run", args.run),
         ("capabilities", args.capabilities),
         ("previous_phase", args.previous_phase),
         ("toolfix_used", args.toolfix_used),
@@ -784,7 +786,7 @@ def cmd_set_phase(args) -> int:
             else _to_ledger_value(key, value, STATE_INT_KEYS, STATE_FLOAT_KEYS)
         )
     write_text(ledger.path, replace_state_block(ledger, state))
-    report(f"状態を更新しました: phase={state['phase']} iteration={state['iteration']}")
+    report(f"state updated: phase={state['phase']} iteration={state['iteration']}")
     return EXIT_OK
 
 
@@ -837,7 +839,7 @@ def cmd_append(args) -> int:
     state["iteration"] = str(iteration)
     body = replace_state_block(ledger, state)
     write_text(ledger.path, append_entry_text(body, iteration, timestamp, values))
-    report(f"周 {iteration} を追記しました: {ledger.path}")
+    report(f"iteration {iteration} appended: {ledger.path}")
     return EXIT_OK
 
 
@@ -925,7 +927,6 @@ def build_parser() -> Parser:
     set_phase.add_argument("--streak", help="採用に至らなかった連続周数")
     set_phase.add_argument("--best", help="これまでの最良のアイドル CPU（%%）")
     set_phase.add_argument("--baseline", help="ベースラインのアイドル CPU（%%）")
-    set_phase.add_argument("--run", help="走行固有のトークン（task 5.5 の goal-check が書く）")
     set_phase.add_argument("--capabilities", help="道具の可否（PREFLIGHT の結果）")
     set_phase.add_argument(
         "--previous-phase",
