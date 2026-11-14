@@ -180,7 +180,7 @@
   - 26: サインオフの手順の例のログをワークツリーの `target` の下の絶対パスにし、置き場の 1 文を書く
   - 完了の状態: `cargo test -p areka-placement` と `cargo test -p areka-placement --release` の札の見張りのテストが緑（出荷の作りでは 2 本が ignored）、取り消しのテストが緑
   - _Requirements: 3.1, 3.2, 4.4, 5.6, 5.7, 8.6_
-- [ ] 4.6 使い手 0 の公開を狭め、核へ知らせ、`runtime-crate-split` へ申し送る（指摘 28・要件 2.9）
+- [x] 4.6 使い手 0 の公開を狭め、核へ知らせ、`runtime-crate-split` へ申し送る（指摘 28・要件 2.9）
   - 狭める前にツリー全体（`vendors/` を除く・テストと examples と文字列を含む）を grep し直して使い手 0 を確かめ、`audit-placement-core` のセッションへ一言知らせる
   - `VisibilityVerdict`・`guard_visibility` を `pub(crate)` にし、再公開の行を消し、crate の中のテストは定義元の道で引く。説明のリンクを外して文の語にする。コンパイラが `private_interfaces` か `dead_code` を出したら、その項目は狭めずに申し送りの側へ回す（`#[allow]` を足さない）
   - `MonitorDpiEntry` と `anchor_changed_system` は狭めない

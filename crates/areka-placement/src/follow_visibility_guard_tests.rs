@@ -13,11 +13,12 @@
 //! 本檻は [`guard_visibility`] を矩形で直接呼ぶ純関数檻であり、関門が読む
 //! `BalloonLimit` Component も ECS World もここには登場しない＝関門は走らない。
 
+use super::MonitorSnapshot;
 use super::test_support::{
     DPIS, balloon_size, char_size, grounded_y, left_wa, mixed_layout, overlaps, point, px,
     right_wa, win,
 };
-use super::{MonitorSnapshot, VisibilityVerdict, guard_visibility};
+use super::visibility::{VisibilityVerdict, guard_visibility};
 use crate::resolver::SizePx;
 
 // --- guard_visibility: キャラ矩形 -----------------------------------------

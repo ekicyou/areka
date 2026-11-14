@@ -13,7 +13,7 @@ use super::{
 /// いずれの腕も**最終位置そのもの**を持つ（呼出側が「clamp されたか」を見て warn
 /// 水準を分岐しつつ、位置は腕を問わず [`VisibilityVerdict::position`] で取れる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VisibilityVerdict {
+pub(crate) enum VisibilityVerdict {
     /// 提案位置をそのまま採る（交差維持・またはユーザーの明示留置の尊重）。
     Keep(PointPx),
     /// 交差→非交差の遷移を検出し、X のみ `clamp_wa` の水平範囲へ引き戻した。
@@ -22,7 +22,7 @@ pub enum VisibilityVerdict {
 
 impl VisibilityVerdict {
     /// 判定によらず最終位置を取り出す。
-    pub fn position(self) -> PointPx {
+    pub(crate) fn position(self) -> PointPx {
         match self {
             VisibilityVerdict::Keep(p) | VisibilityVerdict::ClampX(p) => p,
         }
@@ -78,7 +78,7 @@ impl VisibilityVerdict {
 /// 空 snapshot では何も交差しないため、`old_rect` が `Some`（＝同じく非交差）なら
 /// `Keep`＝現状維持。架空の可視領域を発明しない（resolver／`work_area_for_window`
 /// と同方針）。
-pub fn guard_visibility(
+pub(crate) fn guard_visibility(
     old_rect: Option<RectPx>,
     proposed_pos: PointPx,
     size: SizePx,

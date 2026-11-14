@@ -108,8 +108,6 @@ pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
 #[allow(unused_imports)]
 pub(crate) use self::work_area_clamp::GroupShift;
 
-// 公開面の維持（要件 2.5）の再輸出。配置は lib の crate なので `pub` の項目は未使用の警告にならない。
-pub use self::visibility::{VisibilityVerdict, guard_visibility};
 // 窓の移動・寸の口。呼び手は `runtime::…`（`anchor_changed_system` は schedule に登録しない見本）。
 pub use self::window_move::{
     anchor_changed_system, move_window_to, move_window_with_route, resize_window_keep_position,

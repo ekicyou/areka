@@ -94,3 +94,20 @@
 ## 2026-11-14 棚卸㊲の申し送り
 
 - 完了した `runtime-module-untangle` の research の §24 は「本体の外のクレートの説明の中に残る古い名前（`emo2_boot`・`Emo2Wiring`）は `runtime-crate-split` が直す」と書いたが、この brief には書かれていなかった。2026-11-14 の main `df6f4e03` で、本体（`crates/areka/`）の外の 43 ファイル・76 行に残る（数え方: `rg -n 'emo2_boot|Emo2Wiring' crates -g '!crates/areka/**'`・例 `areka-emo-present/src/presenter/` の `read.rs`・`refresh.rs`・`target.rs`、`areka-emo-text/src/actor_attach.rs`・`state_decoration.rs`、`areka-ghost/src/prop_sink.rs`）。説明だけの直しで動きは変わらない。`areka-placement` の 4 行は棚卸㊲で直した。
+
+## 2026-11-14 `audit-placement-follow` の申し送り（要件 2.9・7.9）
+
+- **旧い名前は直した**: `areka-placement` の追従（`follow*`）と移り変わりの記録（`transition_diag*`）の受け持ちの 9 ファイル（`follow.rs`・`follow/window_move.rs`・`follow/work_area.rs`・`follow/move_shift.rs`・`follow/offset_space.rs`・`follow_transition_diag_tests.rs`・`follow_visibility_balloon_wiring_tests.rs`・`follow_balloon_limit_tests.rs`・`follow_default_pos_track_tests.rs`）の説明にあった `emo2_boot` 21 か所は、今の `runtime::…` の場所へ直した（受け持ちの 58 ファイルで `rg -n 'emo2_boot|Emo2Wiring'` が 0 件）。同じ crate の範囲の外の 13 ファイルに残る分は `audit-placement-core` の持ち物（`audit-placement-core` へ伝える一覧に載せた）。
+- **狭めた公開**: `VisibilityVerdict`・`guard_visibility` は使い手がツリー全体（`vendors/` を除く）で 0 だったので `pub(crate)` にし、`follow.rs` の再公開を消した。`ChainPlacement`・`ChainClampOutcome` は名で呼べるよう `pub use` にした。
+- **テストだけが使う公開（この spec では狭めない・判定器を `areka-runtime` へ移すときにまとめて扱う）**: 範囲の外の使い手が本体（`crates/areka/`）のテストだけの項目。狭めると本体のテストが壊れるので、テスト用の feature へ移すか、テストを crate の中へ移すかを、この spec の設計で決める。
+  - `on_balloon_drag`（`follow/drag_follow.rs`）・`sync_drag_writer`（`follow/sticky_follow.rs`）
+  - `WORK_AREA_CLAMP_TAG`（`follow/work_area_clamp.rs`）
+  - `AnchorSource`（`follow/anchor.rs`）・`WorkAreaResolution`・`work_area_for_window_with_origin`（`follow/work_area.rs`）
+  - `move_window_with_route`（`follow/window_move.rs`）
+  - `MonitorSources::is_empty`（`follow/work_area.rs`）
+  - `MonitorDpiEntry`（公開の欄 `MonitorDpiTable.entries` の要素の型。本体のテスト `main_monitor_snapshot_seam_tests.rs` が欄を読む。型だけを下げると公開の形が変わるので狭めなかった）
+  - `transition_diag.rs` の語・欄・行の組み立ての大半（本体のテスト専用の判定器 `placement_tests/transition_*` が読む）
+- **範囲の外の古い参照（本体の側・直していない）**:
+  - `crates/areka/src/runtime/frame_transition_atomicity_tests.rs:57,150` の `transition_judge.rs:609-613` は、今は `summarize` の `KIND_WRITE` の腕（`path_a_writes` を数える所）。行の番号でなく名で指すのがよい。
+  - 古い「唯一の位置ライター」: `crates/areka/src/runtime/frame/drain_resnap.rs`（`move_window_to` の呼び出しの上）・`crates/areka/src/runtime/frame_chain_finalize_tests.rs`（明示的な再配置の行）。今の `move_window_to` は位置の書き手の 1 つであって唯一ではない。
+  - `crates/areka/src/runtime/frame_work_area_resnap_hold_tests.rs` の `the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites` は `debug_assert!` に依る `should_panic` で、`cargo test --release` では赤になる。`#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]` を付けるのがよい。

@@ -517,6 +517,7 @@
 - `dpi(v)` の写し: `balloon_offset_persist_roundtrip_tests.rs`。
 - 行の頭が `//` の行を落とす `code_only` の写し: `spawn_zorder_chain_wiring_tests.rs`・`zorder_group_ledger_state_tests.rs`・`test_support.rs` の `zorder_pair_deferred::code_only`（`measure_template::code_only` は文字列とブロックコメントも扱う別物）。この spec の 2 つ（`follow_transition_diag_tests.rs`・`transition_diag_tests.rs`）は `follow_test_support::code_only` の 1 つにした。
 - `fake_handle`・`position_of`・`px` の写し: `reseed_test_support.rs`・`resolver_test_support.rs` ほか。
+- `point(x, y)`（`PointPx` を組む 1 行）の写し: `balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`balloon_limit_tests.rs`。範囲の中は `follow_test_support.rs` の `point` へまとめた（`follow` の子の `pub(crate)`・`#[cfg(test)]` の内側）。
 
 ### 指摘 22（task 4.1・判定器とテストの側）で残した範囲の外の古い参照
 
@@ -544,3 +545,14 @@
 
 - 核（`audit-placement-core`）: `crates/areka-placement/src/dpi_sync_tests.rs` の `a_write_reaching_a_waiting_window_trips_the_single_writer`
 - 本体（`runtime-crate-split` へも申し送る）: `crates/areka/src/runtime/frame_work_area_resnap_hold_tests.rs` の `the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`
+
+### 指摘 15・18（task 3.11・追従の側のテストの直し）で消したテストの名を挙げる完了済みの記録
+
+- 消した `visibility_guard_route_table_matches_the_d13_decision` の名を、完了済みの spec の記録が挙げる: `completed/areka-P0-dpi-window-vanish/diagnosis-report.md`（1119・1129・1317 行）・`diagnosis-procedure.md`（570 行）。ほかに `completed/` の下の検証の写し（`areka-P0-file-slimming`・`areka-P0-emo-text-file-split`・`areka-P0-test-cage-determinism`・`runtime-module-untangle` のテスト名の一覧とログ）にも残る。どれも当時の記録なので直さない（知らせるだけ）。
+
+### 指摘 28（task 4.6・使い手 0 の公開）で狭めたもの
+
+- `VisibilityVerdict`・`guard_visibility`（`follow/visibility.rs`）を `pub(crate)` にし、`follow.rs` の再公開 `pub use self::visibility::{VisibilityVerdict, guard_visibility};` を消した。狭める前のツリー全体の grep（`rg -n --hidden -g '!vendors/**' -g '!target/**' -g '!.git/**' -g '!crates/areka-placement/**' -g '!.kiro/**' 'VisibilityVerdict|guard_visibility' .`）の当たりは本体の説明の 1 行（`crates/areka/src/runtime/frame_balloon_offset_follow_tests.rs:199`・文の語）だけで、コードの使い手は 0。核の側に名で呼ぶ所は無い（`lib.rs` ほか核のファイルの当たり 0）。
+- `MonitorDpiEntry`・`anchor_changed_system` は狭めていない（13.2）。テストだけが使う公開は `runtime-crate-split/brief.md` へ申し送った。
+
+送った日と相手: 2026-11-14・`audit-placement-core` のセッション（狭めた 2 つの知らせと、この一覧の指摘 16・22・23・24・15/18・28 の節の中身を伝えた）
