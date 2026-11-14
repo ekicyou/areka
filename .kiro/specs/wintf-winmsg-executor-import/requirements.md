@@ -83,6 +83,7 @@
 6. The 公開の段（`.github/workflows/crates-io.yml`）shall その注記で出すクレートを 3 つと示し、認証を Trusted Publishing だけにする今の形を保つ（長く使える鍵を置かない）。
 7. The 取り込み shall この spec の間に crates.io へ版を出さない（組み立てまでの確かめに留める）。
 8. The 取り込み shall crates.io に在る `wintf-winmsg-executor` の 0.0.1〜0.0.5 を取り下げない（yank しない）。
+9. When 取り込みが本線に入った後のリリースのタグ `v{版}` が push され、crates.io の `wintf-winmsg-executor` の Trusted Publishing が設定済みのとき, the areka の CI（`release.yml` の緑を待つ公開の段 `crates-io.yml`）shall 開発者が手元から版を出さなくても、`wintf-winmsg-executor` を `dola`・`wintf` と一緒にリリースの版で crates.io へ出す（2026-11-14 開発者「こっちのCIでリリースが作れるようにしておきたい」）。この spec の間の確かめは、公開前の確認の道具の `-Verify`（組み立てまで・何も上げない）と `-Pending`（`wintf-winmsg-executor` を残りの名前として出す）に留める。
 
 ### Requirement 5: 手順書と steering と `/release` の手順
 **Objective:** As a 開発者, I want 手順書・steering・`/release` の手順が新しい形を説明すること, so that 次のリリースで迷わず、版上げで動かす行を取りこぼさない
