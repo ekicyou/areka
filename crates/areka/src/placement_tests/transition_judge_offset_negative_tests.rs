@@ -1,4 +1,4 @@
-//! 追随レコードの判定器の負のテスト（audit の指摘 12・27）。
+//! 追随レコードの判定器の負のテスト（audit の指摘 12・13・27）。
 //!
 //! 壊れた行・読めない欄が**合格に化けない**ことを固定する。どれも既知の合格ログ
 //! [`pass_lines`] を 1 箇所ずつ壊して作る。
@@ -8,11 +8,14 @@ use std::fs;
 use temp_path_kit::TempPath;
 
 use super::transition_judge_offset_signoff_tests::signoff_offset_log;
-use super::transition_judge_offset_tests::pass_lines;
+use super::transition_judge_offset_tests::{offset, pass_lines};
 use super::{OffsetViolation, judge_offset_log};
 use crate::placement_tests::transition_judge::parse_transition_line;
 use crate::placement_tests::transition_judge::test_support::log_of;
-use areka_placement::transition_diag::{FIELD_BASE_DPI, FIELD_BASE_OFFSET, KIND_OFFSET};
+use areka_placement::transition_diag::{
+    FIELD_BASE_DPI, FIELD_BASE_OFFSET, KIND_OFFSET, OFFSET_VERDICT_KEYWORD_PENDING,
+    OFFSET_VERDICT_RESCALED,
+};
 use wintf::ecs::window::transition_diag::{FIELD_KIND, FIELD_SCOPE};
 
 /// 必須欄 `base_offset` の名を崩した行（語彙の規約を破る＝`is_well_formed()` が偽）。
@@ -116,4 +119,70 @@ fn an_unreadable_scope_is_a_malformed_record() {
     // 27 `scope=x` は番兵の `-` でも数でもない＝形の壊れた行。
     let lines = t0_scope0_with(&format!(" {FIELD_SCOPE}=0 "), " scope=x ");
     assert!(malformed_in_t0(&lines, FIELD_SCOPE));
+}
+
+/// キーワード指定スコープ `scope` の門の行（素材未消費・`new_dpi=0`）。
+fn gate(frame: u32, scope: u32) -> String {
+    offset(
+        frame,
+        scope,
+        Some(192),
+        0,
+        (25, -11),
+        (25, -11),
+        (25, -11),
+        OFFSET_VERDICT_KEYWORD_PENDING,
+    )
+}
+
+#[test]
+fn a_keyword_scope_left_unmeasured_is_red_even_when_another_is_measured() {
+    // 13 ⑴ scope 1 は T3 で測れているが、起点の前に門の行だけを出した scope 3 は測れていない。
+    let mut lines = pass_lines();
+    lines.insert(0, gate(1, 3));
+    let report = judge_offset_log(&log_of(&lines));
+    assert_eq!(
+        report.violations,
+        vec![OffsetViolation::KeywordScopeUnmeasured { scope: Some(3) }],
+        "{report}"
+    );
+}
+
+#[test]
+fn a_doubled_row_in_one_transition_is_not_a_round_trip() {
+    // 13 ⑵ T0・T1 だけ（往復なし）のログで、T1 の scope 0 の行を同じ遷移の中で 2 度出す。
+    let mut lines = pass_lines()[..8].to_vec();
+    let doubled = lines[5].clone();
+    lines.insert(6, doubled);
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(
+        report
+            .violations
+            .contains(&OffsetViolation::NoRoundTripObserved),
+        "{report}"
+    );
+}
+
+#[test]
+fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
+    // 13 ⑶ scope 1 の `rescaled` は戻りの T2（192 → 192・恒等比）だけ。作りから残差 0 の行は
+    // 測った数に入れないので、T3 を門の行にすると scope 1 は 1 度も測れていない。
+    let mut lines = pass_lines();
+    lines[10] = offset(
+        30,
+        1,
+        Some(192),
+        192,
+        (25, -11),
+        (13, -6),
+        (25, -11),
+        OFFSET_VERDICT_RESCALED,
+    );
+    lines[14] = gate(40, 1);
+    let report = judge_offset_log(&log_of(&lines));
+    assert_eq!(
+        report.violations,
+        vec![OffsetViolation::KeywordScopeUnmeasured { scope: Some(1) }],
+        "{report}"
+    );
 }

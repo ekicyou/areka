@@ -229,10 +229,16 @@ pub enum OffsetViolation {
         /// 許容量（px）。
         max_px: i64,
     },
-    /// キーワード指定スコープの揃えを 1 度も測れていない（要件 8.5）。
+    /// キーワード指定スコープの揃えを 1 度も測れていない（要件 8.5）。母数が空のときだけ立つ
+    /// （母数があれば測れていないスコープごとに [`Self::KeywordScopeUnmeasured`] が立つ）。
     NoKeywordAlignmentMeasured {
-        /// 門の判定語を 1 度でも出したスコープの数（0 なら点灯そのものが無い）。
+        /// 門の判定語を 1 度でも出したスコープの数（今は母数が空のときだけ立つので 0）。
         keyword_scopes: usize,
+    },
+    /// 母数に入ったキーワード指定スコープのうち、揃えを 1 度も測れていないものがある（要件 8.5）。
+    KeywordScopeUnmeasured {
+        /// 測れていないスコープ。
+        scope: Option<u32>,
     },
 }
 
@@ -331,6 +337,11 @@ impl fmt::Display for OffsetViolation {
             Self::NoKeywordAlignmentMeasured { keyword_scopes } => write!(
                 f,
                 "キーワード指定スコープの揃えを 1 度も測れていない（{OFFSET_VERDICT_KEYWORD_PENDING} を出したスコープ {keyword_scopes} 個・素材消費後に {OFFSET_VERDICT_RESCALED} の行が要る）"
+            ),
+            Self::KeywordScopeUnmeasured { scope } => write!(
+                f,
+                "{FIELD_SCOPE}={}: キーワード指定スコープの揃えを 1 度も測れていない（素材消費後に比が恒等でない {OFFSET_VERDICT_RESCALED} の行が要る）",
+                scope_text(*scope)
             ),
         }
     }
@@ -621,7 +632,10 @@ fn check_round_trip(transitions: &[OffsetTransition], violations: &mut Vec<Offse
                 seen.insert(key, (row.transition, row.new_offset));
             }
             Some(&(first_transition, first)) => {
-                round_trips += 1;
+                // 同じ遷移の中の二重の行は往復ではない（値の一致だけは下で確かめる）。
+                if first_transition != row.transition {
+                    round_trips += 1;
+                }
                 if first != row.new_offset {
                     violations.push(OffsetViolation::RoundTripDrift {
                         scope: row.scope,
@@ -694,7 +708,9 @@ fn residual_measurable(row: &OffsetRow) -> Option<u32> {
     if row.verdict != OFFSET_VERDICT_RESCALED || row.new_dpi == 0 {
         return None;
     }
-    row.base_dpi.filter(|base_dpi| *base_dpi != 0)
+    // 恒等比の行は作りから残差 0 なので、測った数に入れない。
+    row.base_dpi
+        .filter(|base_dpi| *base_dpi != 0 && *base_dpi != row.new_dpi)
 }
 
 /// 1 軸ぶんの残差（px の 1/100 単位・切り捨て）と、許容量を超えたか。
@@ -755,7 +771,7 @@ fn check_alignment_residual(
     violations: &mut Vec<OffsetViolation>,
 ) {
     let keyword_scopes = keyword_pending_scopes(records);
-    let mut measured = 0usize;
+    let mut measured_scopes = BTreeSet::new();
     for row in transitions
         .iter()
         .flat_map(|t| t.rows.iter())
@@ -764,7 +780,7 @@ fn check_alignment_residual(
         let Some(base_dpi) = residual_measurable(row) else {
             continue;
         };
-        measured += 1;
+        measured_scopes.insert(row.scope);
         for (axis, base, new) in [
             ("x", row.base_offset.0, row.new_offset.0),
             ("y", row.base_offset.1, row.new_offset.1),
@@ -781,10 +797,13 @@ fn check_alignment_residual(
             }
         }
     }
-    if measured == 0 {
-        violations.push(OffsetViolation::NoKeywordAlignmentMeasured {
-            keyword_scopes: keyword_scopes.len(),
-        });
+    if !keyword_scopes.is_empty() {
+        for &scope in keyword_scopes.difference(&measured_scopes) {
+            violations.push(OffsetViolation::KeywordScopeUnmeasured { scope });
+        }
+    } else {
+        // 母数が空なら、上の繰り返しは 1 行も通さない＝何も測れていない。
+        violations.push(OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 });
     }
 }
 

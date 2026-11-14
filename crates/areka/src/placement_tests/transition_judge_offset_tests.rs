@@ -47,7 +47,7 @@ use super::{ALIGNMENT_RESIDUAL_MAX_PX, OffsetViolation, judge_offset_log};
     clippy::too_many_arguments,
     reason = "欄がそのまま引数＝束ねると檻が読めない"
 )]
-fn offset(
+pub(super) fn offset(
     frame: u32,
     scope: u32,
     base_dpi: Option<u32>,
@@ -679,7 +679,7 @@ fn a_log_that_never_measures_a_keyword_alignment_is_red() {
     assert!(
         report
             .violations
-            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 1 }),
+            .contains(&OffsetViolation::KeywordScopeUnmeasured { scope: Some(1) }),
         "{report}"
     );
 }
