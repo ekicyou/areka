@@ -6,7 +6,7 @@
 
 **使う人**: 開発者。速い掴み直しでもシェルが指に付いてくること、位置の決まっていない窓を掴んでも窓が画面の左上へ飛ばないこと、登録し直した窓のクリック透過が外れなくならないこと、`cargo test` が開発者のカーソルを動かさないこと、テストが守っているつもりの分岐を本当に守っていることを得る。
 
-**変わること**: 外から見た振る舞いの変化は次の 7 点。⑴ 1 回の画面更新の間にドラッグの終わりと次の始まりが重なっても、次のドラッグに `DraggingState` が残り、ドラッグの状態は正しい窓の控えで進み、前のドラッグの移動量が次のドラッグへ配られない（指摘 1）。⑵ 始めの窓の位置が取れないとき、wintf は窓を動かさず `warn!` を 1 行出す（指摘 3）。⑶ 同じ窓を同じ HWND で登録し直しても透過の記録が崩れない（指摘 4）。⑷ `Window` を外した窓・HWND の違う対象はクリック透過の対象から外れる（指摘 21）。⑸ `PointerState.local_point` が当たった entity の左上からの座標になる（指摘 11）。⑹ `OnPointerMoved` はその tick に位置が届いた entity にだけ配られる（指摘 19）。⑺ 押す・離す・ドラッグの始まりと終わりの記録が `info!` から `debug!` になる（指摘 14）。wintf の公開の形は減る（議題 6 で承認済み）: `DragConfig.right_button`・`middle_button`、ドラッグの知らせ 3 つの `is_primary`、`DragStateSnapshot`・`cleanup_drag_state`・`CaptureGuard` の再公開、`CursorVelocity`・`PositionSample`・`PointerBuffer`・`PointerState.velocity`・`timestamp`、仮の当たり判定 2 つ。`DraggingState.initial_inset` は `initial_window_pos` へ改める。足すのは `PointerState.moved` の 1 欄だけ。
+**変わること**: 外から見た振る舞いの変化は次の 6 点。⑴ 1 回の画面更新の間にドラッグの終わりと次の始まりが重なっても、次のドラッグに `DraggingState` が残り、ドラッグの状態は正しい窓の控えで進み、前のドラッグの移動量が次のドラッグへ配られない（指摘 1）。⑵ 始めの窓の位置が取れないとき、wintf は窓を動かさず `warn!` を 1 行出す（指摘 3）。⑶ 同じ窓を同じ HWND で登録し直しても透過の記録が崩れない（指摘 4）。⑷ `Window` を外した窓・HWND の違う対象はクリック透過の対象から外れる（指摘 21）。⑸ `PointerState.local_point` が当たった entity の左上からの座標になる（指摘 11）。⑹ 押す・離す・ドラッグの始まりと終わりの記録が `info!` から `debug!` になる（指摘 14）。wintf の公開の形は減る（議題 6 で承認済み）: `DragConfig.right_button`・`middle_button`、ドラッグの知らせ 3 つの `is_primary`、`DragStateSnapshot`・`cleanup_drag_state`・`CaptureGuard` の再公開、`CursorVelocity`・`PositionSample`・`PointerBuffer`・`PointerState.velocity`・`timestamp`、仮の当たり判定 2 つ。`DraggingState.initial_inset` は `initial_window_pos` へ改める。足す公開の欄は 0（`OnPointerMoved` の配り方は変えない＝指摘 19 は説明と檻）。
 
 ### Goals
 
@@ -31,7 +31,7 @@
 - 範囲の 24 ファイルの、確定した 23 件の直し。
 - ドラッグの状態の形（`DragState` を `Copy` にし、捕捉の守りを専用の `thread_local!` の 1 枠に置く）と、その読み手の直し（指摘 18）。
 - ドラッグの配りの順序の約束（`DraggingState` を外すのは終わりの腕だけ・始まりの腕は今のドラッグにだけ `update_dragging` を呼ぶ・終わりを積むと移動量を 0 に戻す）（指摘 1）。
-- ポインタの溜めの形（entity ごとの最新の位置 1 つ・毎 tick 取り出して空にする）と `PointerState` の欄（`moved` を足し、`velocity`・`timestamp` を消す）（指摘 2・10・19）。
+- ポインタの溜めの形（entity ごとの最新の位置 1 つ・毎 tick 取り出して空にする）と `PointerState` の欄（`velocity`・`timestamp` を消す）（指摘 2・10）。
 - `local_point` の求め方の 1 か所（`pointer/buffers.rs` の `local_point_of`）と、それを tick の頭で全部の `PointerState` へ書く所（`transfer_buffers_to_world`）（指摘 11）。窓の手続きが `PointerState` を作る所は変えない（議題 11）。
 - クリック透過の対象の刈り方（`Window` と、同じ HWND の `WindowHandle` を持つ窓だけを残す）と再登録の扱い（指摘 4・21）。
 - 範囲の外の、直しに要る最小の箇所（File Structure Plan の「範囲の外」の表のとおり）。
@@ -58,8 +58,8 @@
 - **ドラッグの状態の形（指摘 18）**: `DragStateSnapshot` と `DragState::snapshot` が消え、`snapshot_drag_state()` は `DragState`（`Copy`）を返す。`DragState` の腕から `capture_guard` の欄が消える。読み手は `DragStateSnapshot::X` を `DragState::X` に読み替える（File Structure Plan の表）。`update_drag_state(|s| *s = DragState::Idle)` で状態を戻すテストは、そのまま書ける（残った守りは次の `start_preparing` が先に落とす）。
 - **ドラッグの知らせと設定の欄（指摘 9 ⑸ ⑹）**: `DragStartEvent`・`DragEvent`・`DragEndEvent` の `is_primary` と `DragConfig.right_button`・`middle_button` が消える。構造体の式でこれらを書く所（ツリー全体で 15 か所・File Structure Plan）は 1 行ずつ消す。
 - **改名（指摘 15）**: `DraggingState.initial_inset` → `initial_window_pos`（型は `(f32, f32)` のまま）。読み手は 3 クレート 15 ファイル（File Structure Plan）。
-- **`PointerState` の欄（指摘 10・19）**: `velocity`・`timestamp` が消え、`moved: bool` が足される。ツリーの中の構造体の式は全部 `..Default::default()` か `..pointer(…)` で組む（2026-11-14 に 55 か所を確かめた）ので、欄を足しても消してもビルドは通る。`dispatch_pointer_events` で `OnPointerMoved` を受けることを確かめるテストは `moved: true` を書く。
-- **`OnPointerMoved` の回数（指摘 19）**: 本番の受け手は 3 つ（シェルの箱の受け手はキャラの窓の受け手の中から呼ばれる）。キャラの窓の `on_char_pointer_moved` は `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）が位置の同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` は変わらない（議題 9）。バルーンの窓の `on_balloon_pointer_moved`（`balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` は、止まったカーソルの下で中身が替わったときの強調とバルーン滞在の記録が、次にカーソルが動くまで更新されなくなる（「未解決の危うさ」の 1）。手で回す道具 `crates/areka/examples/collision-probe/` の `OnPointerMoved` も動いた tick だけになる（その説明 `collision-probe.rs:187` は「届かない行は正しい」と書くので直しは要らない）。
+- **`PointerState` の欄（指摘 10）**: `velocity`・`timestamp` が消える。ツリーの中の構造体の式は全部 `..Default::default()` か `..pointer(…)` で組む（2026-11-14 に 55 か所を確かめた）ので、欄を消してもビルドは通る。
+- **`OnPointerMoved` の回数（指摘 19）**: 本番の受け手は 3 つ（シェルの箱の受け手はキャラの窓の受け手の中から呼ばれる）。キャラの窓の `on_char_pointer_moved` は `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）が位置の同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` は変わらない（議題 9）。バルーンの窓の `on_balloon_pointer_moved`（`balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` は、毎 tick 配られることを当てにして、止まったカーソルの下のバルーン滞在と強調を立て直す。そのため配り方は変えず、理由を説明に書いて檻に入れる（設計の討議 議題 1）。配り方を変える直しが後で出たら、この 3 つの受け手を確かめ直す。
 - **クリック透過の対象（指摘 21）**: `Window` を持たない entity と、`WindowHandle` の HWND が登録の HWND と違う対象は、評価の前に刈られる。本番の登録（`areka-placement` の `register_ghost_windows_click_through`・`Added<WindowHandle>` で登録）は wintf の窓だけなので変わらない。
 - **記録の段（指摘 14）**: `[DragStartEvent] Dispatching` ほか 5 か所が `debug!` になる。この文言を読む範囲の外のテストは `crates/areka/tests/window_link_real_run.rs:508,531` だけで、その `RUST_LOG`（`:49-50`）に `wintf::ecs::drag::dispatch=debug` を足す。
 - **始めの位置が取れないドラッグ（指摘 3）**: 控え（`WindowDragContext`）の `move_window` が偽になり `warn!` が 1 行出る。偽の HWND で `client_to_window_coords` が失敗するテスト（`WindowDragContextResource` を読むのは `crates/areka/src/input_events/drag_test_support.rs`・`crates/areka-placement/src/balloon_lock.rs`・`balloon_lock_drag_tests.rs`・`follow_drag_end_gate_tests.rs`）は、`move_window` と `WARN` の行の数を確かめ直す（実装の頭で grep し、`areka-placement` の側で直しが要るなら申し合わせる）。
@@ -83,8 +83,8 @@ graph TB
         Click[mouse_click dblclick]
     end
     subgraph Pointer[pointer]
-        Buffers[buffers 最新の位置 drain local_point_of moved]
-        PDispatch[dispatch moved のときだけ OnPointerMoved]
+        Buffers[buffers 最新の位置 drain local_point_of]
+        PDispatch[dispatch 毎 tick OnPointerMoved]
         Nchit[nchittest_cache answer]
     end
     subgraph Drag[drag]
@@ -111,7 +111,7 @@ graph TB
 
 - **選んだ形**: ギャップ分析 5 節の案 B（ドラッグの状態を作り直してから直す）に当たる。議題 8 で指摘 18 をこの spec で直すと決まったので、先に `DragState` を `Copy` にしてから指摘 1 の比べと指摘 3 の警告を新しい形の上で書く（`mem::replace` の繰り返しが消え、比べが `matches!` 1 つで済む）。
 - **守る形**: `Input` の段の系の順（`dispatch_pointer_events` → `dispatch_drag_events`）・`thread_local!` の控え・捕捉の守りを借用の外で落とす約束・クリック透過の 3 層（純関数・同期の評価・非同期のループ）・差分の守り。
-- **新しく足すもの**: `PointerState.moved`（公開の欄 1 つ）・`pointer/buffers.rs` の `local_point_of`（私的）・`nchittest_cache::answer`（私的）・`monitor::poll_once`（私的）・`drag::dispatch::drag_origin`（私的）・`CAPTURE_GUARD`（私的な `thread_local!`）・`start_click_through`（`ClickThroughController::start` を自由な関数にしたもの）。どれも直しに要る最小のもの。
+- **新しく足すもの**: `pointer/buffers.rs` の `local_point_of`（私的）・`nchittest_cache::answer`（私的）・`monitor::poll_once`（私的）・`drag::dispatch::drag_origin`（私的）・`CAPTURE_GUARD`（私的な `thread_local!`）・`start_click_through`（`ClickThroughController::start` を自由な関数にしたもの）。どれも直しに要る最小のもの。
 
 ### Technology Stack
 
@@ -154,11 +154,11 @@ crates/wintf/src/ecs/drag/
 - `reentry.rs` — 変えない（読み手でない）。`reentry_tests.rs` — `DragStateSnapshot` を `DragState` に、`force_idle` を 1 行に（18）。
 
 `crates/wintf/src/ecs/pointer/`:
-- `buffers.rs` — `POINTER_BUFFERS` を `HashMap<Entity, PhysicalPoint>` に、`push_pointer_sample(entity, point: PhysicalPoint)` に（10）。`DOUBLE_CLICK_BUFFERS` を消す（9⑵）。`transfer_buffers_to_world` の 3 つの表を `drain` で取り出す（2）。押下の記録の「離した」の枝と古い説明を消す（13）。`info!` 2 つを `debug!` に（14）。`local_point_of` を足し、移すときに `moved` を書き、移し終えたら `PointerState` を持つ全部の entity の `local_point` を書き直す（164 行の `local_point = client_point` は消す）（11・19）。説明 38 行（16）。テスト: 速さと飽和の 3 本（519-569 行ほか）を消し、417-446 行を直す（10・13）。2・11・19 の確かめを足す。
-- `types/mod.rs` — `CursorVelocity`・`PositionSample`・`PointerBuffer`・`hit_test_placeholder`・`hit_test_with_local_coords` を消す（10・9⑶）。`PointerState` から `velocity`・`timestamp` を消し `moved` を足して `#[derive(Default)]` に（10・19）。`ButtonBuffer`・`WheelBuffer` を `pub(crate)` に（22）。`local_point` の説明（11）。
+- `buffers.rs` — `POINTER_BUFFERS` を `HashMap<Entity, PhysicalPoint>` に、`push_pointer_sample(entity, point: PhysicalPoint)` に（10）。`DOUBLE_CLICK_BUFFERS` を消す（9⑵）。`transfer_buffers_to_world` の 3 つの表を `drain` で取り出す（2）。押下の記録の「離した」の枝と古い説明を消す（13）。`info!` 2 つを `debug!` に（14）。`local_point_of` を足し、移し終えたら `PointerState` を持つ全部の entity の `local_point` を書き直す（164 行の `local_point = client_point` は消す）（11）。説明 38 行（16）。テスト: 速さと飽和の 3 本（519-569 行ほか）を消し、417-446 行を直す（10・13）。2・11 の確かめを足す。
+- `types/mod.rs` — `CursorVelocity`・`PositionSample`・`PointerBuffer`・`hit_test_placeholder`・`hit_test_with_local_coords` を消す（10・9⑶）。`PointerState` から `velocity`・`timestamp` を消して `#[derive(Default)]` に（10）。`ButtonBuffer`・`WheelBuffer` を `pub(crate)` に（22）。`local_point` の説明（11）。
 - `types/tests.rs` — 速さと溜めの 9 本・仮の当たり判定の 2 本（300-326 行）・偽の安心の 112-164 行を消す（10・9⑶・7）。
-- `dispatch/mod.rs` — `OnPointerMoved` を `state.moved` のときだけ配り、配りの後に `moved` を下ろす（19）。説明「常に発火」を直す。
-- `dispatch/tests.rs` — 3-38・164-171 行を消す（7）。`OnPointerMoved` を確かめる本に `moved: true`。19 の 1 本を足す。
+- `dispatch/mod.rs` — 配り方は変えず、説明「常に発火」に毎 tick 配る理由を書く（19）。
+- `dispatch/tests.rs` — 3-38・164-171 行を消す（7）。19 の檻の 1 本を足す。
 - `systems.rs` — 見張りのダブルクリックの枝と `clear_transient_pointer_state` の `double_click` の 1 行を消す（17）。説明 65-68 行（16）。113-139 行のテストを直す（13）。
 - `nchittest_cache.rs` — 自前の `HTCLIENT`・`HTTRANSPARENT` と説明 22-28 行を消して `windows` の定数を使う（20・16）。判定を `fn answer(hit: bool, held: bool) -> LRESULT` に切り、4 つの組み合わせの 1 本を足す（8）。説明 142-144 行（16）。
 
@@ -494,11 +494,11 @@ pub fn snapshot_drag_state() -> DragState;
 - `resolve_transition(hit, drag: &DragState, last_applied)`（`controller.rs`）と、読み手のテスト（File Structure Plan の表）を `DragState::X` に読み替える。
 - **テスト**: 足さない（バグでない）。捕捉を落とす順と `ReleaseCapture` の有無は `state/tests.rs:780-812` が記録で確かめ続ける。
 
-#### 指摘 19: `OnPointerMoved` を動いた tick だけ
+#### 指摘 19: `OnPointerMoved` を毎 tick 配る理由を書き、檻に入れる（設計の討議 議題 1・2026-11-14）
 
-- `PointerState` に `pub moved: bool`（「この tick に位置（`WM_MOUSEMOVE`）が届いた。配りの後に `dispatch_pointer_events` が下ろす」）を足す。`transfer_buffers_to_world` が位置を移すときに真にする。`dispatch_pointer_events` は `state.moved` のときだけ `OnPointerMoved` を配り、末尾のリセット（262-272 行）で `moved = false`。
-- 位置が届いたかで決める（前と同じ位置かは比べない）。窓が動いたときに OS が送る移動の知らせも「届いた」に数える。位置の同じ呼び出しを送らないのは下流の間引きの仕事（議題 9）。
-- **テスト**（`pointer/dispatch/tests.rs`）: `moved: false` の `PointerState` では `OnPointerMoved` の受け手が呼ばれず、`moved: true` では 1 回呼ばれて配りの後に `moved` が偽。
+- **配り方は変えない**（毎 tick、`PointerState` を持つ全部の entity へ配る）。設計の段の調べで、毎 tick 配ることが下流の約束になっていると分かった: バルーンの窓の `on_balloon_pointer_moved`（`balloon_moved.rs:114-116`）はこの知らせで `BalloonHover::set_balloon_hover` を立て、バルーン可視性の相（`balloon_visibility_phase`）がそれを毎フレーム読んで、カーソルがバルーンの上にある間の自動で閉じるのを抑える。滞在は非表示へ移るときに消される（`clear_balloon_hover`）ので、止めたカーソルの下でバルーンが出直したとき、立て直すのは毎 tick の配りだけ。選択肢の強調も同じ（止めたカーソルの下で選択肢が出たとき）。動いた tick だけにすると、カーソルを動かすまでバルーンが閉じうる＝外から見える振る舞いが変わる（設計の検証の重い指摘 2）。
+- 直すのは説明: `dispatch/mod.rs:221-228` の「常に発火」に、理由（止まったカーソルの下の滞在と強調の観測・下流 `balloon_moved.rs`／`balloon_visibility_phase`）と、手間の見立て（受け手は 3 つ・位置の同じ呼び出しは下流の間引きが送らない＝`throttle.rs:54-66`）を 1〜2 行で書く。`PointerState.moved` は足さない。
+- **テスト**（`pointer/dispatch/tests.rs`・決定論）: 位置の知らせが 1 件も届かない tick を 2 回回しても、`OnPointerMoved` の受け手が tick ごとに 1 回ずつ呼ばれる（「動いた tick だけ」に変えると赤になる檻）。
 
 #### 指摘 21: `Window` を外した窓が対象に残る
 
@@ -530,7 +530,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | `DragConfig` | `right_button`・`middle_button` あり | 消す | 9⑸ |
 | `DragStartEvent`・`DragEvent`・`DragEndEvent` | `is_primary` あり | 消す（`timestamp` は残す） | 9⑹ |
 | `DraggingState` | `initial_inset: (f32, f32)` | `initial_window_pos: (f32, f32)` | 15 |
-| `PointerState` | `velocity`・`timestamp`・手書きの `Default` | `moved: bool` を足す・`#[derive(Default)]` | 10・19 |
+| `PointerState` | `velocity`・`timestamp`・手書きの `Default` | `#[derive(Default)]` | 10 |
 | `POINTER_BUFFERS` | `HashMap<Entity, PointerBuffer>` | `HashMap<Entity, PhysicalPoint>` | 10 |
 | `ClickThroughHandle` | `monitor`・`registry`・`wake_event`・`_join` | `monitor`・`_join` | 5 |
 
@@ -561,7 +561,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | 6 | 偽のカーソルで同じ位置 2 回 → 知らせ 1 回・知らせの中で新しい位置が読める（`monitor.rs`） | —（テストそのものが直し） |
 | 8 | `answer` の 4 つの組み合わせ（`nchittest_cache.rs`） | —（同） |
 | 11 | 子に移すと `local_point` が子の左上からの座標・位置を積まずに直に入れた状態も書き直される・窓そのものは `client_point` と同じ（`buffers.rs`） | 窓の中の座標で赤 |
-| 19 | `moved: false` では `OnPointerMoved` が呼ばれず、`moved: true` で 1 回・配りの後に偽（`pointer/dispatch/tests.rs`） | 毎回呼ばれて赤 |
+| 19 | 位置の知らせが届かない tick を 2 回回しても、`OnPointerMoved` の受け手が tick ごとに 1 回ずつ呼ばれる（`pointer/dispatch/tests.rs`） | 「動いた tick だけ」に変えると赤 |
 | 21 | `Window` を外した窓・HWND の違う対象・`Window` の無い entity が刈られる（`controller_tests.rs`） | 残って赤 |
 
 - テストを足さない指摘とその理由: 5（使われないコードを消すだけ・ビルドが確かめる）・7・9（消すだけ）・10・22（消す・下げるだけ。速さと時刻の読み手は 0）・12（振る舞いが同じ・今のテストが覆う）・13（2 本を事実に直すのが直し）・14・15・16・23（記録の段・名前・説明・形）・17（決して出ない枝を消すだけ）・18（バグでない・今のテストが守りの順を覆う）・20（8 のテストが同じ定数を通る）。
@@ -608,7 +608,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | 6 | ポインタの溜めと型（最新の位置・速さと時刻・仮の当たり判定・`pub(crate)`・`DOUBLE_CLICK_BUFFERS`） | 10・22・9⑵⑶ |
 | 7 | ポインタの溜めの `drain`・押下の枝・見張りの枝・押下の記録の段 | 2・13・17・14 の pointer |
 | 8 | 本当のローカル座標（範囲の中の `transfer_buffers_to_world` で引く・窓の手続きの作る所は触らない＝議題 11） | 11 |
-| 9 | `OnPointerMoved` を動いた tick だけ | 19 |
+| 9 | `OnPointerMoved` を毎 tick 配る理由の説明と檻 | 19 |
 | 10 | NCHITTEST の答えと定数 | 8・20 |
 | 11 | クリック透過の再登録と刈り方・`DesiredState` の `Default` | 4・21・23 の一部 |
 | 12 | クリック透過の許しを外す・空の型を関数に・`doc/click-through.md` | 5・23 の一部 |
@@ -622,7 +622,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 
 ## 未解決の危うさ
 
-1. **指摘 19 の副作用（設計の討議で確かめる）**: 議題 9 は SHIORI へ送る `OnMouseMove` の数（キャラの窓）で閉じたが、もう 1 つの本番の受け手 `on_balloon_pointer_moved`（`crates/areka/src/input_events/balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` も今は毎 tick 呼ばれている。直した後は、カーソルを止めたままバルーンの中身が替わったとき（選択肢が出た・非表示から戻った）の選択肢の強調とバルーン滞在の記録（`BalloonHover::set_balloon_hover`）が、次にカーソルが動くまで更新されない。キャラの窓の見張りは既に「止まったまま当たり判定が替わっても、動くまで出ない」（`char_watch_tests.rs:173`・mouse-click-wheel-events 要件 7.9）の形なので向きは揃うが、バルーン滞在がバルーンの自動で閉じる抑止に使われる（`balloon_visibility_phase`）ので、止めたカーソルの下でバルーンが出直した場合に閉じる時刻が変わりうる。設計はこの直しを議題 9 どおりに書いた。設計の討議で、⑴ このまま進める、⑵ 指摘 19 の直しを「動いた tick」に加えて「その entity の配置が変わった tick」にも配る形へ広げる、のどちらにするかを決める（推す＝⑴・Windows は窓が出る・動くときにカーソルの下の窓へ移動の知らせを送るので、出直しの大半は「届いた」に数えられる）。
+1. **（閉じた・2026-11-14 設計の討議 議題 1）** 配り方を変えず、毎 tick 配る理由を説明に書いて檻に入れることにした（指摘 19 の節）。下は閉じる前の記録。**指摘 19 の副作用（設計の討議で確かめる）**: 議題 9 は SHIORI へ送る `OnMouseMove` の数（キャラの窓）で閉じたが、もう 1 つの本番の受け手 `on_balloon_pointer_moved`（`crates/areka/src/input_events/balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` も今は毎 tick 呼ばれている。直した後は、カーソルを止めたままバルーンの中身が替わったとき（選択肢が出た・非表示から戻った）の選択肢の強調とバルーン滞在の記録（`BalloonHover::set_balloon_hover`）が、次にカーソルが動くまで更新されない。キャラの窓の見張りは既に「止まったまま当たり判定が替わっても、動くまで出ない」（`char_watch_tests.rs:173`・mouse-click-wheel-events 要件 7.9）の形なので向きは揃うが、バルーン滞在がバルーンの自動で閉じる抑止に使われる（`balloon_visibility_phase`）ので、止めたカーソルの下でバルーンが出直した場合に閉じる時刻が変わりうる。設計はこの直しを議題 9 どおりに書いた。設計の討議で、⑴ このまま進める、⑵ 指摘 19 の直しを「動いた tick」に加えて「その entity の配置が変わった tick」にも配る形へ広げる、のどちらにするかを決める（推す＝⑴・Windows は窓が出る・動くときにカーソルの下の窓へ移動の知らせを送るので、出直しの大半は「届いた」に数えられる）。
 2. **指摘 3 の残る限界**: 位置の取れない吸着の窓では `areka-placement` の追従が (0,0) から求める（`warn!` が残る）。本番で掴めない窓なので、この spec では `DraggingState` を入れる約束の側を保つ。
 
 ## 設計の段で決めた事項
@@ -633,7 +633,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 4. **指摘 11 の引き方（ギャップ分析 10 節の 3）**: スクリーン座標の原点に `WindowPos.position` でなく窓の entity の `GlobalArrangement.bounds` の左上を使う（ドラッグ中は窓の配置を写さないため）。引くのは tick の頭で、当たり判定が選んだのと同じ前の tick の配置になる。
 5. **指摘 3 の扱い**: 窓を動かさないのは wintf の側（控えの `move_window`）だけにし、`DraggingState` は今どおり入れる。入れないと、偽の HWND で変換が失敗する範囲の外のテスト（`areka-placement` の `follow_drag_end_gate_tests.rs:248-251` ほか）が `DraggingState` を失い、下流の約束も崩れる。
 6. **指摘 15 の型**: 名前と説明だけを改め、`(f32, f32)` は変えない（議題 7 の範囲・`dpi.rs` の置き直しは端数を持たない値を返す決めを持つ）。かけ直しの audit が型を指したら、そのときの指摘として直す。
-7. **指摘 19 の「動いた」**: その tick に位置（`WM_MOUSEMOVE`）が届いたこと。前と同じ位置かは比べない（比べは下流の間引きの仕事・比べるための控えを足さない）。
+7. **指摘 19 の扱い（設計の討議 議題 1 で改めた）**: 配り方は変えず、毎 tick 配る理由（止まったカーソルの下のバルーン滞在と選択肢の強調の観測）を説明に書き、檻のテストを置く。`PointerState.moved` は足さない（足す公開の欄は 0 になった）。
 8. **指摘 21 の刈り方**: `Window` と、登録の HWND と同じ `WindowHandle` の両方を見る（`Window` を外しても `WindowHandle` は外れないため）。
 9. **指摘 9⑹ の数**: 範囲の外の `is_primary` の書き手は 13 か所（要件の討議の「5 か所」を設計の段の grep で数え直した）。どれも構造体の式の 1 行を消すだけ。
 10. **議題 11（2026-11-14・`audit-wintf-window` との分け方）の反映**: `check_threshold` は残して説明だけ直す（指摘 9⑴・7 から外す）。ローカル座標は窓の手続きの作る所を変えず、`transfer_buffers_to_world` の最後で全部の `PointerState` に書き直す（指摘 11）。窓の手続きのファイルへは機械的な追従の行だけを入れる。`WindowPointerTracking` は触らない。

@@ -41,7 +41,7 @@
 | できれば | 14・16・17・20・22・23 | 直す |
 | できれば | 15（`initial_inset` の説明と名前） | 直す＝説明を直し、名前も改める（議題 7） |
 | できれば | 18（`DragStateSnapshot` の写し） | 直す（議題 8） |
-| できれば | 19（`OnPointerMoved` を毎 tick 配る） | 直す（議題 9） |
+| できれば | 19（`OnPointerMoved` を毎 tick 配る） | 直す＝配り方は変えず、毎 tick 配る理由を説明に書いて檻に入れる（議題 9・設計の討議で改めた） |
 | できれば | 21（`Window` を外した窓が対象に残る） | 直す＝汎用の対象をやめる（議題 10） |
 
 議題ごとの決め:
@@ -54,7 +54,7 @@
 6. **wintf の公開の形を減らす直し（9 ⑶ ⑸ ⑹・10・22）**: 減らしてよい（wintf は 0.x の版で v0.2.0 の作り直しの途中・使い手はツリーの中だけで grep で確かめられる）。C20 の約束 ⑶ の名には触らない。
 7. **`initial_inset` の改名（指摘 15）**: この spec で `initial_window_pos` へ改め、範囲の外の使い手（`areka-placement`・`areka` の `runtime/frame/dpi.rs`・窓の手続き）まで直し切る。走っている `audit-placement-follow`・`audit-wintf-window` とは要件 5.2 で申し合わせる（ギャップ分析の推しは「説明だけ直して改名は後へ」だったが、後へ回す持ち主の spec が無く要件 2.2 に反するため、並走の都合で回避せず調整する形にした）。
 8. **`DragStateSnapshot` の写し（指摘 18）**: この spec で直す（捕捉の守りを列挙の外へ出し、写しの列挙と写す関数を消す）。写しの読み手のうち窓の手続き（`mouse_move.rs` ほか）は `audit-wintf-window` と申し合わせる（議題 7 と同じ理由で後へ回さない）。
-9. **毎 tick の `OnPointerMoved`（指摘 19）**: 直す＝その tick に動いた entity にだけ配る。要件 3.1 の 3 種類目には当たらない: 本体の間引き `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）は位置が同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` の数は変わらない（ukadoc の原文「マウスが移動した際に発生。」<https://ukatech.shillest.net/ukadoc-spec/list_shiori_event.html#OnMouseMove> にも近づく向き）。
+9. **毎 tick の `OnPointerMoved`（指摘 19）**: **2026-11-14 の設計の討議で改めた**＝配り方は変えず、毎 tick 配る理由を説明に書いて、毎 tick 配ることを檻のテストに入れる。設計の段の調べで、毎 tick 配ることが下流の約束だと分かったため: バルーンの窓の受け手がこの知らせでバルーン滞在（`BalloonHover`）を立て、バルーン可視性の相がそれを読んで、カーソルがバルーンの上にある間の自動で閉じるのを抑える。滞在は非表示へ移るときに消されるので、止めたカーソルの下でバルーンが出直したとき、立て直すのは毎 tick の配りだけ（選択肢の強調も同じ）。動いた tick だけに配ると、カーソルを動かすまでバルーンが閉じうる。audit の指摘の要点（理由の書かれていない無駄）は、理由を書くことで閉じる。以下は要件の討議のときの決め（取り消し）: 直す＝その tick に動いた entity にだけ配る。要件 3.1 の 3 種類目には当たらない: 本体の間引き `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）は位置が同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` の数は変わらない（ukadoc の原文「マウスが移動した際に発生。」<https://ukatech.shillest.net/ukadoc-spec/list_shiori_event.html#OnMouseMove> にも近づく向き）。
 10. **`Window` を持たない汎用の対象（指摘 21）**: やめる。登録するのは wintf の窓だけにし、`WindowHandle` の HWND と一致しない対象は刈る。逆を固定するテスト（`controller_tests.rs:513-525`）は向きを直す。
 11. **`audit-wintf-window` との分け方（2026-11-14 あちらの要件の討議で開発者が承認・正本はあちらの `requirements.md` の「確定した指摘の一覧」）**:
     - 指摘 9 ⑴: `check_threshold` は消さずに残す。あちらの指摘 62 が、窓の手続きの中の閾値の計算の写し（`mouse_move.rs:228-233`）をこの関数の呼び出しに替えて写しを無くす。こちらは関数とその 5 本のテストを残し（指摘 7 の「消すテスト」から外す）、行き先の無い参照「P62」などの古い説明だけを直す（指摘 16）。
