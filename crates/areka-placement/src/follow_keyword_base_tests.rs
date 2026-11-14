@@ -7,8 +7,8 @@ use super::test_support::{
     assert_no_event, drag_end_event_at, drag_event, fake_handle, point_of, rect,
 };
 use super::{
-    BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
-    resize_window_to,
+    BalloonFollow, CharWindowMarker, MonitorSnapshot, PlacementRoute, on_balloon_drag,
+    on_balloon_drag_end, resize_window_to,
 };
 use crate::config::BalloonXMode;
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
@@ -797,4 +797,55 @@ fn rederive_without_display_dpi_establishes_unpinned_base_and_warns() {
         world.get::<BalloonKeywordBase>(char_window).is_none(),
         "未係留の腕でも素材は消費される"
     );
+}
+
+/// 指摘 11 ⑺ キャラ窓の部品を 1 つずつ外すと、外した部品を名指す `Unresolved` の `warn!` が
+/// 1 件出て、offset にも素材にも触れない（次の機会を潰さない）。対照の行（何も外さない）は
+/// 再導出して素材を消費する。
+#[test]
+fn missing_char_parts_warn_and_keep_the_material() {
+    type Strip = fn(&mut World, Entity);
+    let rows: [(Option<&str>, Strip); 3] = [
+        (None, |_, _| {}),
+        (Some("BalloonFollow"), |w, e| {
+            w.entity_mut(e).remove::<BalloonFollow>();
+        }),
+        (Some("CharWindowMarker"), |w, e| {
+            w.entity_mut(e).remove::<CharWindowMarker>();
+        }),
+    ];
+    for (part, strip) in rows {
+        let (mut world, char_window, _balloon_window) = world_with(placement_measured_at(
+            Some((BalloonXMode::CenterTop, PointPx { x: 0, y: 0 })),
+            false,
+        ));
+        let before = world.get::<BalloonFollow>(char_window).map(|f| f.offset());
+        strip(&mut world, char_window);
+
+        let (_, events) = capture(|| {
+            resize_window_to(
+                &mut world,
+                char_window,
+                displayed_char(),
+                PlacementRoute::ReportedSizeReconcile,
+            )
+        });
+
+        let material = world.get::<BalloonKeywordBase>(char_window).is_some();
+        let Some(part) = part else {
+            expect_one(&events, REDERIVE_TAG);
+            assert!(!material, "対照: 部品が揃えば素材を消費する");
+            continue;
+        };
+        let warn = expect_one(&events, KEYWORD_UNRESOLVED_TAG);
+        assert_eq!(warn.level, tracing::Level::WARN, "[{part}]");
+        assert!(warn.message().contains(part), "[{part}] {}", warn.message());
+        assert_no_event(&events, REDERIVE_TAG);
+        assert!(material, "[{part}] 導出できなかったのに素材を消費した");
+        assert_eq!(
+            world.get::<BalloonFollow>(char_window).map(|f| f.offset()),
+            before.filter(|_| part != "BalloonFollow"),
+            "[{part}] offset を書き換えた"
+        );
+    }
 }

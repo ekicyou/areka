@@ -219,3 +219,43 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
     assert_eq!(warn.expect_field("reason"), "\"no-work-area\"");
     expect_one(&events, WORK_AREA_CLAMP_TAG);
 }
+
+/// 指摘 11 ⑸ 記憶の矩形が離れていても（隙間 60）印が `right` なら組として繋がり、同じ量だけ
+/// 寄せられる（要件 4.1・4.2）。印の腕が無いと窓ごとの結果のまま 2 枚が重なる。
+#[test]
+fn separated_rects_joined_by_right_mark_shift_together() {
+    let windows = [
+        win(0, point(5000, 864), point(2240, 864), None),
+        win(
+            1,
+            point(5700, 864),
+            point(2240, 864),
+            Some(AdjacencyMark::Right),
+        ),
+    ];
+    let shifts = keep_restored_groups(&windows, &desk());
+    // 和の矩形 5000..6340 を右端 2880 へ収める差（−3460）を 2 枚に足す。
+    assert_eq!(
+        placed(&windows, &shifts),
+        vec![point(1540, 864), point(2240, 864)]
+    );
+}
+
+/// 指摘 11 ⑸ 印が `left`（n が n−1 の左）で記憶の矩形が離れていても同じく組になる。
+#[test]
+fn separated_rects_joined_by_left_mark_shift_together() {
+    let windows = [
+        win(0, point(5700, 864), point(2240, 864), None),
+        win(
+            1,
+            point(5000, 864),
+            point(2240, 864),
+            Some(AdjacencyMark::Left),
+        ),
+    ];
+    let shifts = keep_restored_groups(&windows, &desk());
+    assert_eq!(
+        placed(&windows, &shifts),
+        vec![point(2240, 864), point(1540, 864)]
+    );
+}

@@ -412,3 +412,25 @@ fn unreadable_height_is_unresolved_and_others_continue() {
     assert_eq!(warn.expect_field("reason"), "\"no-window-height\"");
     assert_eq!(warn.expect_field("scope"), "1");
 }
+
+/// 指摘 11 ⑹ 写しは有るが空の World → 並べた位置のまま `Unresolved`（reason=no-work-area）。
+#[test]
+fn world_with_empty_snapshot_warns_no_work_area() {
+    let rects = [HEAD, cr(1000, 900, 1108, 800)];
+    let decisions = [PairDecision::JoinLeft, PairDecision::JoinLeft];
+    let (world, slots, targets) = world_chain(
+        &rects,
+        &decisions,
+        Some(MonitorSnapshot { work_areas: vec![] }),
+    );
+
+    let (out, events) =
+        capture(|| place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::DpiRealign));
+
+    assert_eq!(out[0].to, point(-1108, 900));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved);
+    let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(warn.expect_field("scope"), "1");
+    assert_eq!(warn.expect_field("reason"), "\"no-work-area\"");
+}

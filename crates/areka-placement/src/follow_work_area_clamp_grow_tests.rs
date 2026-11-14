@@ -277,3 +277,30 @@ fn resize_write_clamps_once_carries_default_and_moves_balloon() {
         "バルーンはキャラ窓と同じだけ動く"
     );
 }
+
+/// 指摘 11 ⑹ 作業領域は今の位置でなく提案の位置に置いた窓のモニタから引く（要件 7.1）。
+/// 今の位置（既定の位置）は主の画面、提案は右の画面（高さ 1200）に載る: 右の画面の上辺へ
+/// 合い x は変わらない。主の画面で収めると (1772, 336) になる。
+#[test]
+fn work_area_comes_from_the_proposed_rect_monitor() {
+    let right = rect(2880, 0, 4800, 1200);
+    let (world, window) = world_free(Some(MonitorSnapshot {
+        work_areas: vec![rect(0, 0, 2880, 1704), right],
+    }));
+    let proposed = point(3000, 500);
+    let (to, events) = capture(|| {
+        clamp_grown_free_default(
+            &world,
+            window,
+            Anchor::Free,
+            PlacementRoute::Resnap,
+            proposed,
+            GROWN,
+        )
+    });
+    assert_eq!(to, point(3000, 0));
+    assert_eq!(
+        expect_one(&events, WORK_AREA_CLAMP_TAG).expect_field("work_area"),
+        format!("{:?}", Some(right))
+    );
+}
