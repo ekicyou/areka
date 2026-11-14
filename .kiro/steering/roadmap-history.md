@@ -3180,3 +3180,105 @@ Opus
 ### spec 台帳から外した完了済みの行
 
 | ✅ `wintf-visual-tree`（**10-21 起票**・11-06 着地・`completed/wintf-visual-tree`・開発者「`ecs\visual` 層のコード群は実装準備されているが採用されていない。これらを新しいビジュアル層・描画層として取り込んでほしい。D2D合成の多様化に必要と考える」「実施フェーズはwintf/dola改修のタイミングとする」） | 優先・区分 A | 作りかけの描画の木（`crates/wintf/src/ecs/visual/`・外からの参照 0）を本番の描画層へ上げる。WUC の描画面の下に木を置き（開発者 10-21）、節ごとに重ね方（`D2D1_COMPOSITE_MODE`）・補間・変形（回転・拡大・反転）・切り抜き（矩形・任意の図形）を効かせて 1 枚に描く。木の無い描画面は今と同じ。描く係・スケジュールへの配線・`WorldVisual`／`VisualVersion` を埋める system・傷 8 つの直し（COM の番地の hash・数学の二重・`GetBounds` の失敗を黙って 0 に・深さの番兵ほか）・WARP の決定論のテストの足場 | M（15〜19・棚卸㉟） | wintf だけ（`ecs/visual/`・`numerics/`・`ecs/graphics/systems/render.rs`・`ecs/world/mod.rs`）。v0.2.0 の先頭＝`wintf-d2d-composite-rules` の前。見直しの `audit-wintf-graphics-world`・`audit-wintf-runtime`（v0.2.0 と重なる分＝本 spec より先に取る）の後（どちらの brief にも「消さない」と書き足した） | 見直しの 2 本 | ○ |
+
+## 2026-11-14 棚卸㊲退避（`roadmap.md` から逐語で移した・main `df6f4e03`）
+
+### 旧「ウェーブ編成」の表（C19 の行・次の候補）
+
+| Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
+|---|---|---|---|
+| **C19**（8 本・今の版 v0.2.0 の 2 本＋v0.2.0 の前に済ませる本体の crate 分け 1 本と見直し 5 本・Opus 8・見直しの規模は指摘の数で決まる） | ① ✅ `wintf-d2d-composite-rules`（v0.2.0・A・Opus〔2026-11-13 棚卸㊱で Fable から改めた＝写しの順と読み戻しは `areka-emo-text` の `surface.rs` に先例がある〕・11〜15〔議題 3 まで入れると 14〜18〕・ぶら下がる v0.2.0 は `wintf-visual-damage-redraw` から先の約 6 本・11-13 着地・`completed/wintf-d2d-composite-rules`）② ✅ `dola-yaml-backend`（v0.2.0・C・XS〜S 3〜6・`Cargo.lock` の席・11-13 着地・`completed/dola-yaml-backend`）／本体の crate 分け ③ ✅ `runtime-module-untangle`（A・15〜18・ぶら下がるのは crate 分けの鎖の残り 4 本と本体の見直し・11-13 着地・`completed/runtime-module-untangle`）／見直し（どれも A・v0.1.0 の後の隙間・規模は指摘の数で決まる）④ ✅ `audit-mcp-update-crates`（11-13 着地・`completed/audit-mcp-update-crates`）⑤ ✅ `audit-shiori-host32`（11-14 着地・`completed/audit-shiori-host32`） ⑥ ✅ `audit-emo-atlas`（11-14 着地・`completed/audit-emo-atlas`）⑦ ✅ `emo-text-reveal-incremental`（S〜M 6〜11・11-12 起票・emo-text の新しいファイルの席・11-13 着地・`completed/emo-text-reveal-incremental`）⑧ ✅ `audit-impl-watch`（v0.2.0 と重ならない・11-13 着地・`completed/audit-impl-watch`） | 下の塊 | 触るファイル＝① wintf の `ecs/graphics/systems/render.rs`・`systems/surface.rs`・`ecs/graphics/visual/`・`visual/draw/`・`com/wuc.rs`・`com/dxgi.rs`・`com/d2d/mod.rs`（議題 3 を入れるなら `ecs/widget/bitmap_source/alpha_mask.rs`・`ecs/layout/hit_region/`・`areka-emo-present` の `presenter/budget.rs`・`cache.rs`）② `crates/dola/Cargo.toml`・dola のテストと README・`deny.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`③ `crates/areka/src/emo2_boot/`・`placement_tests/` の 9 ファイル・`ghost_session.rs`・`main.rs`・`log_history.rs`・`mcp/`・`update/`・wintf の `test_crash_report.rs`・`log-capture-kit` の番人 2 つ（`file_length_guard_test.rs`・`workspace_scan_test.rs`）・`tools/load-flake.ps1`・文書 3 つ④ `crates/areka-mcp`・`areka-mcp-bridge`・`areka-update` ⑤ `shiori-host32-*` ほか（`shiori-abi`・`shiori4-testdll` は範囲から外すのを推す）⑥ `crates/areka-emo-atlas/` ⑦ `areka-emo-text` の `actor*`・`state_decoration.rs`・`look.rs` ⑧ impl-watch の道具。**約束**: ⑴ 見直しの 5 本（④〜⑧）は `crates/areka/` に触らず、自分のクレートの公開面は足すだけ（④ の `areka-mcp`・`areka-update`、⑤ の `shiori-host32-host` の公開の型、⑥ の atlas の公開 API を変える指摘が出たら、③ のセッションと申し合わせるか C20 へ回す） ⑵ ③ が本体の外で書き換えるのは上に挙げたファイルだけ＝ほかのクレートの説明の中の `emo2_boot` の名指し（`areka-placement` の 26 ファイルほか）は `runtime-crate-split` で直す ⑶ ① は `crates/areka/` に触らない ⑷ `Cargo.lock` の席は ② だけ・emo-text の新しいファイルは ⑦ だけ ⑸ `audit-placement-core`・`audit-placement-follow` はこのウェーブに入れない（③ と本体の `placement_tests/` の 9 ファイルを分け合う＝2026-11-13 棚卸㊱の測り） |
+| **次のウェーブの候補**（次の棚卸で組む） | **今の版は v0.2.0**（25 本）。C19 の後の見込みは下の「その先のウェーブ」（C20〜C22）。v0.2.0 の着地は C19 を入れて**約 11 ウェーブ（C19〜C29 の見込み）**＝前の見込み（C27）より 2 つ延びた: ⑴ `audit-placement-core`・`audit-placement-follow` が `runtime-module-untangle` と本体の `placement_tests/` を分け合うので C20 へ下がり、その 2 本を待つ `runtime-crate-split` も C21 へ下がる ⑵ `compose-f16-precision` は働きの前提の `draw-methods-canon` を待つ（前の見込みの C21 は誤り）。一番長い道は本体の crate 分けの 5 本の直列（C19〜C24 の見込み）→ 本体の見直し（`audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`）→ `dola-interrupt-ticks`（1 本だけで）→ `draw-methods-canon`・`sylphya-sqlite-kvs` ほか → `talk-anchor-interrupt-ticks`・`element-clipping-option`・`mcp-set-property` → `draw-methods-blend`・`compose-f16-precision`・`seriko-talk-clock-fidelity`。版の外の spec を待つ 4 本（`shiori4-api`・`seriko-talk-clock-fidelity`・`element-clipping-option`・`collisionex-regions`）は開発者の決めが要る（「棚卸㊱の裁定」の 9）。待ちの突き合わせは各 brief の「2026-11-13 棚卸㊱の再測定」と history「2026-11-13 棚卸㊱退避」 | — | — |
+
+### 旧「C19 の開始コマンド」
+
+**C19 の開始コマンド**（`/kiro-next` の報告と同じ形・俯瞰の HTML がこの塊をコピーのボタンつきで出す・`/kiro-wave` はこの塊と spec 台帳の Fable の列を読む）:
+
+```
+Wave C19 8本（v0.2.0 2本＋見直しと crate 分け 6本）
+（8 本とも着地した）
+```
+
+### その先のウェーブ（2026-11-13 の見込み）
+
+見込みは次の棚卸で測り直す（C19 が全部着地したと置いて組んだ・v0.2.0 の spec と、v0.2.0 が待つ見直しと crate 分けだけで組んだ＝割り込みはその棚卸で選ぶ。C21・C22 は待つ相手が多く 4 本と 3 本しか組めない＝空く席は、その棚卸で版に縛らない列の先頭から選ぶ）。
+
+| ウェーブ | spec | 入る条件 | 要件定義 |
+|---|---|---|---|
+| C20（見込み・8 本） | `wintf-visual-damage-redraw`（v0.2.0）・`audit-placement-core`・`audit-placement-follow`・`audit-wintf-window`・`audit-wintf-input`・`audit-tools-perf-run`・`audit-tools-scripts`・`audit-tools-perf-judge` | C19 の全部の着地（`wintf-visual-damage-redraw` は `wintf-d2d-composite-rules` を、配置の見直し 2 本は `runtime-module-untangle` を待つ＝本体の `placement_tests/` を分け合う・`audit-tools-scripts` は `runtime-module-untangle` が書き換える `tools/load-flake.ps1` の後）。**約束**: `wintf-visual-damage-redraw` はクレートを足さない・見直しの 7 本は `crates/areka/` のうち自分の持ち物だけ（配置の 2 本は `placement_tests/`）・配置の 2 本は互いの持ち物の関数の形を変えない（両向きに呼び合う）・`areka-placement` の公開面は足すだけ（`emo2_boot`・`input_events`・`menu` と wintf の `lifecycle.rs` が使う）。`Cargo.lock` の席は空き | どれも Opus |
+| C21（見込み・4 本） | `runtime-crate-split`・`balloon-flip-side-rules`（v0.2.0）・`wintf-surface-auto-promotion`（v0.2.0）・`audit-pilot` | C20 の全部の着地（`runtime-crate-split` は `runtime-module-untangle` と配置の見直し 2 本を、`balloon-flip-side-rules` は配置の見直し 2 本を、`wintf-surface-auto-promotion` は `wintf-visual-damage-redraw` を待つ）。**約束**: `runtime-crate-split` は `tools/` に触らず、`doc/COMPAT_ARCHITECTURE.md` はパスの書き換えだけ・`wintf-surface-auto-promotion` は `Cargo.toml` に触らない。`Cargo.lock` の席は `runtime-crate-split`（新しいクレート） | どれも Opus |
+| C22（見込み・3 本） | `input-crate-split`・`audit-test-kits`・`audit-ukadoc-survey` | C21 の全部の着地（`input-crate-split` は `runtime-crate-split` を待つ・`audit-test-kits` は crate 分けの各段が `log-capture-kit` の番人を書き換えるので `runtime-crate-split` の後）。**約束**: `input-crate-split` は `log-capture-kit/src/event*.rs`・`real-run-kit`・`ukadoc-survey/src/evidence/candidates.rs` の説明の中のパスを見直しの 2 本へ任せる。`Cargo.lock` の席は `input-crate-split` | どれも Opus |
+
+C22 の後も v0.2.0 は約 7 ウェーブ（C23〜C29 の見込み）残る＝C23 `session-module-gather`・`audit-emo2-boot-frame`・`audit-emo2-boot-spine`・`audit-areka-input-menu` → C24 `session-crate-split`・`window-resetwindowpos-hold`・`collisionex-regions` → C25 `audit-areka-app`・`audit-areka-install-update`・`audit-emo2-boot-switch`（範囲の `ghost_switch*` が `session-crate-split` まで本体に居る）・`hit-id-pass`（Fable）・`balloon-script-offset-align` → C26 `dola-interrupt-ticks`（Fable・1 本だけで）→ C27 `draw-methods-canon`（Fable）・`sylphya-sqlite-kvs`（Fable）・`ghost-switch-balloon-fallback`・`talk-thread-count-growth`・`talk-script-metadata`・`instant-to-interrupt-ticks` → C28 `talk-anchor-interrupt-ticks`・`element-clipping-option`・`mcp-set-property`・`ghost-alias-file` → C29 `draw-methods-blend`・`compose-f16-precision`・`seriko-talk-clock-fidelity`。`doc-compat-architecture-rename` は crate 分けと名指す見直しが着地した後の 1 ウェーブ。
+
+```
+Wave C20（見込み）8本（v0.2.0 1本＋見直し 7本）
+【本来の次の版 v0.2.0】
+Opus
+/kiro-start wintf-visual-damage-redraw
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start audit-placement-core
+/kiro-start audit-placement-follow
+/kiro-start audit-wintf-window
+/kiro-start audit-wintf-input
+/kiro-start audit-tools-perf-run
+/kiro-start audit-tools-scripts
+/kiro-start audit-tools-perf-judge
+```
+
+```
+Wave C21（見込み）4本（v0.2.0 2本＋見直しと crate 分け 2本）
+【本来の次の版 v0.2.0】
+Opus
+/kiro-start balloon-flip-side-rules
+/kiro-start wintf-surface-auto-promotion
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start runtime-crate-split
+/kiro-start audit-pilot
+```
+
+```
+Wave C22（見込み）3本（見直しと crate 分け 3本）
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start input-crate-split
+/kiro-start audit-test-kits
+/kiro-start audit-ukadoc-survey
+```
+
+### 旧「組済みのウェーブ」（版の段の下の行）
+
+- **組済みのウェーブ**: **C19（2026-11-13 棚卸㊱・8 本）＝今の版 v0.2.0 の `wintf-d2d-composite-rules`（11-13 着地）・`dola-yaml-backend`（11-13 着地）＋本体の crate 分けの `runtime-module-untangle`（11-13 着地）＋v0.2.0 の前に済ませる見直し 5 本（うち `emo-text-reveal-incremental`・`audit-mcp-update-crates`・`audit-impl-watch` は 11-13 着地・`audit-shiori-host32`・`audit-emo-atlas` は 11-14 着地＝C19 は 8 本とも着地した）**（「ウェーブ編成」の表）。C18（棚卸㉟・8 本）は全部着地した＝`placement-crate-split`（11-06・PR#433）・`wintf-visual-tree`（PR#434）・`audit-emo-text-state-actor`（PR#435）・`audit-kanade`（PR#436）・`audit-sylphya-actor`（PR#437）・`audit-emo-text-layout-draw`（PR#438）・`audit-wintf-layout-widget`（PR#439）・`audit-dola`（PR#440・11-13）。C18 の行の全文は history「2026-11-13 棚卸㊱退避」。
+
+### 旧「1 ウェーブに 1 本だけの席」
+
+> **1 ウェーブに 1 本だけの席**: ⑴ 依存を足す spec と版上げ（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`）＝C19 は `dola-yaml-backend`（`serde_yaml` を替えるか外す）が使う（見込みの C20 は空き・C21 は `runtime-crate-split`・C22 は `input-crate-split`） ⑵ emo-text に新しいソースファイルを足す spec（`lib.rs` の純粋な一覧の数の行）＝C19 は `emo-text-reveal-incremental` が使う。
+
+### 旧「棚卸㊱の裁定」（2026-11-13）
+
+#### 棚卸㊱の裁定（2026-11-13・main `069f1a48`・開発者指示＝`/kiro-next` の定めどおり）
+
+> 棚卸㉟（11-06・main `18e4cb30`）の後、C18 の 8 本が 11-06〜11-13 に全部着地した（PR#433〜PR#440）。今の版は v0.2.0（まだ公開していない・25 本）のまま。
+
+1. **測り直した範囲**: 速い道を使った（C18 が全部着地・前の棚卸が C19〜C21 を見込んでいた・その後の起票 2 本〔`wintf-surface-auto-promotion`・`emo-text-reveal-incremental`〕と brief への足しは、着地した spec の完了の棚卸のものだけ）。見込みの C19 の 8 本を 2 つのサブエージェント（Opus）で測り直し、8 本とも brief に「2026-11-13 棚卸㊱の再測定」の節を書いた。C20・C21 の入る条件の確かめと C22 の見込みはもう 1 つのサブエージェント（読むだけ）、残り物の拾い出しは道具（`leftovers.py`・515 行）とサブエージェント 1 つ。
+2. **規模・モデル**: `wintf-d2d-composite-rules` を Fable から Opus へ改めた（写しの順と読み戻しには `areka-emo-text` の `surface.rs` の「自前のテクスチャ → CopyResource → Present」と、待つ・待たない両方の読み戻しの先例がある・層の中の重ね方は `wintf-visual-tree` が決めた・残る新しい点は UI のスレッドで Map を待つことだけ＝新しいスレッドも順序の約束も生まない）。規模は 11〜15（議題 3 まで入れると 14〜18）。`dola-yaml-backend` は XS〜S（3〜6）。`runtime-module-untangle` は 15〜18 のまま。見直しの 4 本は指摘の数で決まる（`audit-placement-core` は範囲が一番広い＝114 ファイル・20 を越えたら同じ範囲の 2 本目）。分割は無し。
+3. **直したもの・渡したもの**: 「直接修正候補」の節のとおり。起票は無し（残り物の 3 件は既存の brief の件にした）。
+4. **ウェーブ C19 を 8 本で組んだ**（Opus 8・Fable 0）: ① `wintf-d2d-composite-rules` ② `dola-yaml-backend`（v0.2.0）／③ `runtime-module-untangle`／見直し ④ `audit-mcp-update-crates` ⑤ `audit-shiori-host32` ⑥ `audit-emo-atlas` ⑦ `emo-text-reveal-incremental` ⑧ `audit-impl-watch`。前の見込みから 2 本を入れ替えた＝**`audit-placement-core`・`audit-placement-follow` を C20 へ下げた**。`runtime-module-untangle` が本体の `placement_tests/` の 9 ファイル（`use crate::emo2_boot::` の書き換え）を触り、配置の 2 本はそのファイルの持ち主で、見込みの約束「見直しは `crates/areka/` に触らない」が 2 本の受け持ちと合わなかった。「見直しは `placement_tests/` の指摘を数えるだけにして後で直す」約束で並べる案もあったが、受け持ちを割る回避の形なので取らず、ウェーブを分けた。`runtime-module-untangle` の方を残したのは、配置の 2 本を先にすると C20 で `runtime-module-untangle` が `audit-tools-scripts`（`tools/load-flake.ps1`）と `audit-test-kits`（番人 2 つ）とも重なり、鎖の延びは同じだから。空いた 2 席には、待つ相手が無く C19 のどれとも触るファイルが重ならない見直しの列の先頭から `emo-text-reveal-incremental`（emo-text の新しいファイルの席）と `audit-impl-watch` を入れた。
+5. **同じウェーブの約束**: 表の C19 の行の ⑴〜⑸。見直しの 4 本（④〜⑥・⑧）は自分のクレートの公開面を足すだけにする（変えると `crates/areka/` の使い手＝`runtime-module-untangle` の範囲に及ぶ）。`audit-shiori-host32` は `shiori-abi`・`shiori4-testdll` を範囲から外すのを推す（`shiori4-api` が消す予定・残すと本体の `shiori_*` に及ぶ）。
+6. **その先の C20〜C22**（「その先のウェーブ」）: C20 は 8 本（配置の見直し 2 本が入り、`runtime-crate-split`・`balloon-flip-side-rules` は C21 へ）。C21 は 4 本、C22 は 3 本（空き席はその棚卸で版に縛らない列から選ぶ）。`compose-f16-precision` は見込みから外した（働きの前提の `draw-methods-canon` がまだ）。`audit-test-kits` は crate 分けの各段が `log-capture-kit` の番人を書き換えるので `runtime-crate-split` の後（C22）。`audit-emo2-boot-switch` は範囲の `ghost_switch*` が `session-crate-split` まで本体に居るのでその後（C25 の見込み）。
+7. **v0.2.0 の着地まで約 11 ウェーブ（C19〜C29 の見込み）**。前の見込み（C27）より 2 つ延びた＝配置の見直しのウェーブ分けで crate 分けの鎖が 1 つ、`compose-f16-precision` の前提の見落としで 1 つ。
+8. **見つけた穴**: ⑴ `audit-dola` が消した dola の機能 `json`・`toml` は crates.io の利用者に破壊的なのに「次のリリースへの申し送り」に項目が無かった＝足した。 ⑵ 版の外の spec を待つ v0.2.0 が 4 本ある＝`shiori4-api`（host32 の列＝`mcp-shiori-query` → `makoto-dll-host` → `makoto-reload-directives` → `property-ipc-transport` と `property-query-channels`・どれも「いつか」）・`seriko-talk-clock-fidelity`（`seriko-trigger-lottery-gaps`＝v0.1.0 から外した 5 本）・`element-clipping-option`・`collisionex-regions`（直列の列の順で `extent-element-offset`・`animated-image-import`＝同じ 5 本）。 ⑶ 台帳の前提の輪（`talk-anchor-interrupt-ticks` ⇄ `seriko-talk-clock-fidelity`）＝直した。 ⑷ 並びの決まり「据え置きは木に入れない」と、台帳の段の欄が「据え置き」のままの v0.2.0 の 4 本（`compose-f16-precision`・`dola-interrupt-ticks`・`talk-anchor-interrupt-ticks`・`instant-to-interrupt-ticks`）が食い違う＝版の段に入れた時点で据え置きは解けたと読んで木に入れた（段の欄は各 spec の要件の段で直す）。 ⑸ `audit-placement-follow` は版の段で「v0.2.0 と重ならない」の組だが、`balloon-flip-side-rules` の brief（78 行目）は重なると書く＝見込みの順（C20 → C21）で守られる。
+9. **開発者に決めてほしいこと**（どれも C19 の着手を止めない）: ⑴ 8 の ⑵ の 4 本が待つ版の外の spec をどうするか（推す＝`seriko-trigger-lottery-gaps`・`extent-element-offset`・`animated-image-import` を v0.2.0 へ入れる・`shiori4-api` は host32 の列を待たずに C ABI へ移せるかを要件の段で確かめる）。 ⑵ `wintf-d2d-composite-rules` の Fable から Opus への改め（推す＝Opus・Fable を残す根拠は議題 3〔マウスが動くたびの同期の読み戻し〕だけ）。 ⑶ 持ち越し（history の旧「棚卸㉟の裁定」の 9）＝`doc-compat-architecture-rename` を取る時期（推す＝crate 分けと名指す見直しの後）・「v0.1.0 の余力の枠」と「v0.1.0 から外した 5 本」の行き先（⑴ と重なる）・棚卸㉝からの答え待ち。
+
+### 旧「直接修正候補」（棚卸㊱の分）
+
+> **2026-11-13 棚卸㊱で直した**（どれも動きを変えない）: ⑴ spec 台帳に残っていた完了済みの `wintf-visual-tree` の行を外した（数は 148 のまま＝行が 1 本多かった） ⑵ 台帳の前提＝`talk-anchor-interrupt-ticks` から `seriko-talk-clock-fidelity` を外した（逆向き＝輪になっていた）・`audit-emo2-boot-switch` を `runtime-crate-split` から `session-crate-split` へ・`audit-test-kits` の「なし」を crate 分けの各段の後へ・`wintf-d2d-composite-rules` の Fable の欄を − へ ⑶ 版の段の「v0.1.0 の後の隙間」の数（重なる 15→14・見直し 21→20・合わせて 27→26＝`audit-dola` の着地の減らし忘れ） ⑷ 実装規律の 1,000 行の行（例外表 10→5 件・近いファイルを測り直し・配置の新しい置き場） ⑸ 取り下げた件の判定器のパス（`placement/` → `placement_tests/`） ⑹ `tech.md` の dola の依存（機能 `json`・`toml` は `audit-dola` が消した） ⑺ `crates/dola/tests/compile/boundary_test.rs` の説明（NaN/inf の入り口は YAML だけ） ⑻ `emo-text-reveal-incremental` の brief の `look.rs` の行数（1,000→998） ⑼ 「次のリリースへの申し送り」に `audit-dola` の機能の削除を足した ⑽ 覚え書き `image-webp` に 11-13 の確かめ（crates.io はまだ 0.2.4） ⑾ 版の段の v0.2.0 の行の `wintf-surface-auto-promotion` を括弧の外へ出した（俯瞰の頁が数えず 24 本と読んでいた）。
+>
+> **直さずに各 spec へ渡したもの**: ⑴ 測り直した 8 本の brief の古い記述（行の数・待つ相手・同じウェーブでの約束）＝各 brief の「2026-11-13 棚卸㊱の再測定」の節 ⑵ 完了した spec の申し送りで拾われていなかった 3 件＝`audit-test-kits`（`expect_one`・`ExpectField` の写し 2 つ・`placement-crate-split` から）・`dola-interrupt-ticks`（止めた状態から戻すときの `pause_start` の残り・`audit-dola` から）・`talk-anchor-interrupt-ticks`（kanade のテストの数字の定数・`audit-kanade` から）の brief の末尾 ⑶ `wintf-d2d-composite-rules`・`wintf-visual-damage-redraw` の brief の `crates/wintf/src/ecs/visual/…`（今は `ecs/graphics/visual/`）＝完了の裁定どおり各 spec が設計の前に追う ⑷ 台帳の `talk-thread-count-growth`・`ghost-switch-balloon-fallback`・`balloon-flip-side-rules`・`window-resetwindowpos-hold` の前提「なし」は、各 brief の棚卸㉞の節が見直しの着地を待つ形へ強めている＝要件の段で台帳を直す ⑸ `audit-areka-input-menu` の brief 11 行目の `menu*`（76〜78 行目で外した）＝要件の段で直す。
+>
+> **2026-11-06 棚卸㉟で直したもの・渡したもの**の全文は history「2026-11-13 棚卸㊱退避」の旧「直接修正候補」節。2026-11-04 棚卸㉞のぶんは history「2026-11-06 棚卸㉟退避」。それより前は、そこから辿る。
+

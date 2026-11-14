@@ -133,7 +133,7 @@ pub const ZORDER_PAIR_STRATEGY_TAG: &str = "[zorder-pair] strategy-selected";
 /// # target について（本定数だけの例外）
 ///
 /// 本モジュールの**出力**はすべて [`DIAG_TARGET`] を通るが、本定数を用いる `debug!` は
-/// 各消費点の既定 target（`areka_placement::follow`／`areka::emo2_boot::frame`）へ出る——
+/// 各消費点の既定 target（`areka_placement::follow`／`areka::runtime::frame`）へ出る——
 /// 終了時ログの静穏性（要件 6.2）は診断手順の点灯有無に依らず成立すべきものだからである。
 /// 本モジュールが持つのは語彙であって出力点ではない。
 pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
@@ -217,7 +217,7 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ
     /// （D13 の 1 語＝1 実在トリガ）。混同すると「作業領域が動いたから移した」のか
     /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
-    // 発行者は `emo2_boot::frame::work_area_sync::resnap_for_work_area_change`（task 5.2 で
+    // 発行者は `runtime::frame::work_area_sync::resnap_for_work_area_change`（task 5.2 で
     // 着地）。語彙を task 2.4 で先に建てたのは、判定器（task 3.1）と単一の窓書込口の札が
     // 同じ語を見るためである。
     WorkAreaResnap,

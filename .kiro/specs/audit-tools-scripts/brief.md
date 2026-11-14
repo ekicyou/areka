@@ -72,3 +72,16 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 2026-11-14 棚卸㊲の再測定（main `df6f4e03`）
+
+- **前提の変化**: roadmap の見込みでは、この spec は `runtime-module-untangle` が書き換える `tools/load-flake.ps1` を待っていた。同 spec は 11-13 に着地した（例の `-Filter emo2_boot::frame` を `runtime::frame` に直した 1 行だけ）ので、待つ相手は無くなった。ほかに、着地した spec が受け持ちの 2 つに触った: `dola-yaml-backend` が `test-all.ps1` に「機能 toml を有効にした dola のテスト」の段を足して段の番号を 1 つずつずらし、`audit-impl-watch` が `impl-watch-install.ps1` の説明の 2 行を直した。ここの指摘を先に直したものは無い。
+- **触るファイル**: 20 ファイル・4,332 行（台本 15 と `release-notes-fixture/` の 5）。起票のとき（17 ファイル・3,409 行）の後に `cursor-art.ps1` 339・`mouse-input.ps1` 243・`mcp-bridge-install.ps1` 156 が増えた。大きいもの: `package.ps1` 754・`encoding-check.ps1` 539・`sample-fetch.ps1` 366・`load-flake.ps1` 357。1,000 行の近くは無い。
+- **ほかの spec と重なるファイル**: C20 の見込みに入った `wintf-winmsg-executor-import`（v0.2.0）が `tools/crates-io.ps1` を書き換える（68 行目の公開の一覧 `$PUBLISH` と、184〜219 行目の `dola`・`wintf` の名前を決め打ちした較正）。同じウェーブには置けないので、この spec は C21 へ下がる。C21 の見込みの 4 本は `tools/` を書き換えない（`runtime-crate-split` は触らない約束・ほかの 3 本は `test-all.ps1` を回すだけ）。
+- **C21 で気をつけること**: `runtime-crate-split` が `runtime` を `areka-runtime` へ移すと、`load-flake.ps1` の選び肢（52・68・211〜212 行目の `areka-bin`・`wintf-lib`・`areka-placement-lib`）では `runtime` のテストを回せなくなり、47 行目の例の `-Filter runtime::frame` も古くなる。`runtime-crate-split` は `tools/` に触らない約束なので、同 spec が先に着地したらこの spec が選び肢を足す。この spec が先に着地したら、同 spec の完了のときに申し送りとして拾う。
+- **規模**: 指摘の数で決まる（コード 4,332 行・テスト 0 行）。20 を越える見込みは低い。
+- **先に要るもの**: なし。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（台本の中の直しで、新しい境目は作らない）。
+- **分割の案**: 無し。
+- **見つけた古い記述**: `package.ps1` の 144・148・668 行目は、`SMOKE_EXIT_ENV` と smoke の自動 close の行の在りかを `crates/areka/src/main.rs` と書くが、今は `crates/areka/src/smoke_exit.rs`（22・37・44 行目）にある。

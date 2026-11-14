@@ -121,13 +121,14 @@
 
 3. **測り（Approach の 1）を v0.2.0 の前に別に取るか**: 内訳が分かれば、描き直しが主因かどうか（＝本 spec で縮むか）が先に決まる。取らなければ、本 spec の着手のときに測る。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+## 2026-11-14 棚卸㊲の再測定（main `df6f4e03`）
 
-- 前提の変化: 描画の木（`crates/wintf/src/ecs/visual/draw/`）・`render.rs`・`numerics/matrix3x2.rs` は変更 0。「WUC の描画面は部分の `BeginDraw` を断る」（`render.rs:60-61`）も今の main のまま。10-31 に件 1（ぱすたの面 1002 の CPU）が足され、測りの印を emo の表示の適用や SERIKO の刻みに足す見込みになった。emo の CPU の合成は `animated-surface-log-flood`（10-31）で「変わった矩形だけ重ね直す」形になった（`crates/areka-emo-compose/src/blit_rect.rs`）＝この spec の差分の描き直しの CPU の側の先例で、`draw-methods-canon` が合成を描画の木へ移すと、この効きはこの spec が引き継ぐ。
-- 触るファイル: `crates/wintf/src/ecs/visual/draw/`（`builder.rs` 298 行・`command.rs`・`README.md`）・`ecs/graphics/systems/render.rs`（156 行）・`numerics/`。LIS の依存を足すなら `crates/wintf/Cargo.toml` と `Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md`（1 ウェーブに 1 本だけの席）。件 1 の印は emo の表示の `crates/areka-emo-present/src/presenter/`（`show.rs`・`timing.rs`）と、刻みに足すなら `crates/areka-seriko/`。
-- 規模: 10〜15 タスクのまま（本文 8〜12＋件 1 の測り 2〜3）。
-- 先に要るもの: `wintf-visual-tree`・`wintf-d2d-composite-rules`。見直しは台帳の `audit-wintf-graphics-world`・`audit-wintf-runtime` に、件 1 の印の分で `audit-emo-present`（seriko に印を足すなら `audit-seriko`）を足す（件 1 は 10-22 の突き合わせの後に入った）。`draw-methods-canon` と並べるなら、件 1 の印は emo-present に足さず wintf の側だけにする（あちらが emo-present の表示を触る）。
+- 前提の変化: 先に要る 2 本はどちらも着地した（`wintf-visual-tree`＝C18・`wintf-d2d-composite-rules`＝11-13）。描画の木は `crates/wintf/src/ecs/graphics/visual/` へ移り、hash は COM の番地に依らない値から取る形に直った（`draw/command.rs` の `DrawItem.hash`）。描く列には不透明度の層の命令（`PushOpacity`・`PopOpacity`）と混ぜ方の欄（`DrawItem.mix_mode`）が増えた＝比べと範囲の計算はこれも数える。最長増加部分列の作りは今も無い（`draw/README.md` は 13 行の構想だけ）。
+- 入れ物の今: 描画面ごとの入れ物は `crates/wintf/src/ecs/graphics/composite.rs` に在る。中身は次の合成まで残る（あちらの要件 4.4）が、合成のたびに全部消して木を全部描き（`composite.rs:134`）、WUC の描画面へは全面を写す（`render.rs:191-192`・`composite.rs:161-165`）。範囲だけ描くには、この消し方を範囲だけの形に変える。入れ物の大きさ・形式・寿命・中身を保つ決めを変えるのは、あちらの設計の「Revalidation Triggers」に当たる（読み戻し `readback.rs` の世代の数え方も確かめる）。
+- 触るファイル: `crates/wintf/src/ecs/graphics/visual/draw/`（`builder.rs` 285 行・`command.rs` 70 行・`emit.rs` 178 行・`README.md`）・`ecs/graphics/composite.rs`（243 行）・`ecs/graphics/systems/render.rs`（239 行）・`numerics/matrix3x2.rs`（45 行）。どれも 1,000 行から遠い。件 1 の印は `crates/areka-emo-present/src/presenter/`（適用の所要を書く `timing.rs` は在る）と、刻みに足すなら `crates/areka-seriko/`。
+- 規模: 10〜15 タスクのまま（描き先の入れ物は在るので作る分は要らず、消し方を範囲に絞る分が足りる）。
+- 先に要るもの: 無い（働きの前提は全部着地・見直しの `audit-wintf-graphics-world`・`audit-wintf-runtime`・`audit-emo-present`・`audit-seriko` も着地済み）。C20 の見込みのほかの 7 本とは触るファイルの重なり 0（`audit-wintf-window` は `ecs/window*`、`audit-wintf-input` は `ecs/` の `drag`・`pointer`・`clickthrough`＝この spec は `ecs/graphics/` と `numerics/` だけ）。同じウェーブの約束: クレートを足さない（最長増加部分列は自前で書く）・件 1 の測りで perf の行の形を変えない（変えると `tools/perf/` の判定の台本＝`audit-tools-perf-judge`・`audit-tools-perf-run` の持ち物に触る）。`draw-methods-canon` と並べるなら、件 1 の印は emo-present に足さず wintf の側だけにする（あちらが emo-present の表示を触る）。
 - 優先度の区分: A（開発者 10-21 の指示から分けた）。
-- 要件定義のモデル: Opus（比べと範囲の計算は純粋な計算・描き先は `wintf-d2d-composite-rules` の入れ物に乗る）。
-- 分割の案: 無し。件 1 の測りは「測ることが本体」に近い＝議題 3 で先に取るなら、ウェーブに並べない測りの仕事として別に置く。
-- 見つけた穴・古くなった記述: 件 1 の Approach 1 は印を足す先に emo-present の適用を挙げるが、適用の所要を書く所（`crates/areka-emo-present/src/presenter/timing.rs`）は既に在る＝足すのは wintf の描き直しと present・commit の側だけで済むかを着手のときに確かめる。
+- 要件定義のモデル: Opus（比べと範囲の計算は純粋な計算・描き先は着地済みの入れ物・変わった矩形だけ重ね直す形は `crates/areka-emo-compose/src/blit_rect.rs` に先例）。
+- 分割の案: 無し。件 1 の測りを議題 3 で先に取るなら、ウェーブに並べない測りの仕事として別に置く。
+- 見つけた穴・古くなった記述: 本文の「Current State」の `render.rs:60-61` は今は `crates/wintf/src/ecs/graphics/systems/render.rs:191-192`、`ecs/visual/` は `ecs/graphics/visual/`、`draw/README.md` は 48 行でなく 13 行。「hash の取り方の傷は `wintf-visual-tree` が直す」は直り済み。WUC の描画面への写しは全面のまま（部分の `BeginDraw` を断るため）＝範囲だけ描いても縮むのは入れ物への合成の分だけで、写しの分は残る＝件 1 の目標（SSP の水準）の見積もりに入れる。roadmap の spec 台帳の行（447 行目）の「先に要るもの」の 2 本に ✅ が付いていない。

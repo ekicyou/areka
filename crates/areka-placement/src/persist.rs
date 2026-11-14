@@ -630,7 +630,7 @@ fn merge_scope(
 // Req1.1 ドラッグ確定即時書込／1.9 発火規律／6.2 保存失敗縮退／7.1 Ghost スコープ固定）
 // ---------------------------------------------------------------------------
 
-/// UI スレッド常駐の保存投函口（**NonSend** リソース・`MouseWiring`／`Emo2Wiring` 先例）。
+/// UI スレッド常駐の保存投函口（**NonSend** リソース・`MouseWiring`／`RuntimeWiring` 先例）。
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
