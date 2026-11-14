@@ -12,6 +12,7 @@
   - 先の段の 4 本の着地を `main` の履歴で確かめ、`main` を取り込む。
   - この設計が名指す行を grep し直し、相手の着地で動いた所（`audit-wintf-window` の `WindowHandle.instance` の削除が配置の構築の式に及んだか、`audit-placement-follow` の `move_window_with_route` の変化が `chain_realign.rs`・`dpi_sync_tests.rs` に響いたか、`reestablish_balloon_follow` が置かれたか）を読み替え、赤があればこのタスクで合わせる。
   - まだ走っている兄弟のセッションへ、4.4・4.5・7.1 で変える名前を知らせる。
+  - research.md 15 節（追随の側から受けた一覧）の行を grep し直し、表の受け持ちのタスク（2.1・2.2・4.2・4.3・5.1・6.3・6.5・6.6・7.2）で一緒に直す。
   - 直しに新しい依存が要ると分かったら、直さずに開発者へ議題として出す。
   - 終わったと言える状態: 取り込んだ `main` の上で配置の crate と本体のテストが緑で、読み替えた行と知らせた相手の一覧が research.md の実装の頭の節に残っている。
   - _Requirements: 1.7, 7.1, 7.2, 8.5, 8.7, 8.9_

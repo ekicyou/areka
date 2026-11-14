@@ -747,3 +747,23 @@
 
 - 議題 1（指摘 2）: 丸めの差を 3px まで許す形は、作者の DPI と主モニタの DPI が違う構成と拡大率が 3 倍以上の移りで取りこぼしが残り、3px 以内の利用者の移動を取り違える（設計の検証の大きな問題 2）。開発者の承認で、値の比べをやめて印 `BalloonUserMoved` を状態で持つ形にした（付ける＝ドラッグの据え直しと記憶からの戻し・外す＝標準への据え直し）。追随の持ち物の `follow/drag_follow.rs` に 1 行を足すのは、相手の着地の後に申し合わせて行う。
 - 議題 2（指摘 4・61）: 手本の中の `assert_eq!` だけでは全体テストで走らない（設計の検証の大きな問題 3）。選ぶ所を純粋な関数にし、手本の中の `#[test]` と `[[example]] test = true` で全体テストに入れる形にした。
+
+## 15. 追随の側から受けた一覧（2026-11-14 `audit-placement-follow` の実装の段）
+
+`audit-placement-follow` が直さずに残した、この spec の持ち物の件（相手の要件 6.4・正本は相手の `research.md`「核へ伝える一覧（実装の段）」）。どれも確定した 80 件の直しと同じ所か、その隣にある。実装の頭（タスク 1）で、相手の着地の後の `main` で行を grep し直してから、下の表のタスクで直す。かけ直し（タスク 8.1）で新しい指摘として 2 度数えない。
+
+| 件 | 場所 | 受け持つタスク |
+|---|---|---|
+| `fake_handle`・`position_of`・`px` の写し | `reseed_test_support.rs`・`resolver_test_support.rs` ほか | 2.2（指摘 14 の隣） |
+| `BottomSnapPolicy`（消えた名前）を指す説明 | `resolver.rs:L438` | 2.1（resolver の doc） |
+| 同上 | `persist.rs:L227`・`L238`・`persist_restore_tests.rs:L295` | 5.1（persist の説明） |
+| `dpi(v)` の写し | `balloon_offset_persist_roundtrip_tests.rs` | 5.1 |
+| `debug_assert!` に依る `should_panic`（`cargo test --release` で赤） | `dpi_sync_tests.rs` の `a_write_reaching_a_waiting_window_trips_the_single_writer` | 4.3（相手と同じ `#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]` を付ける） |
+| `emo2_boot`・`wire_emo2_boot` の古い名前（13 ファイル） | `lib.rs` ほか | 4.2（指摘 41・数え直しに入る） |
+| `diag_tests.rs` の古い行の参照・`judge-perf.py::parse_fields` をファイル名で指す 1 行・`is_system_reanchor` の「D9 の 6 経路」（今は 7 経路） | `diag_tests.rs`・`diag.rs` | 6.5（指摘 27・68 の隣。判定器は名を書かずに「tools/perf/ の Python の道具の `parse_fields`」と指す＝相手と `audit-tools-perf-judge` の申し合わせに揃える） |
+| `code_only` の写し | `spawn_zorder_chain_wiring_tests.rs`・`zorder_group_ledger_state_tests.rs`・`test_support.rs` の `zorder_pair_deferred` | 6.3・6.6（指摘 64・76。`measure_template::code_only` は別物で残す） |
+| `SharedFakeIo` の写し | `persist_finalize_save_tests.rs`・`persist_io_wiring_tests.rs`・`reset_pos_tests.rs`・`balloon_lock_drag_tests.rs` | 7.2（指摘 80 と同じ置き場 `test_support.rs` へ。sylphya の `SharedFakeIo` には足さない＝議題 6。追随の `SylphyaRig` は follow の子なので使わない） |
+| `assert_no_event`・`contained`・`point(x, y)` の写し | `balloon_limit_gate_tests.rs`・`balloon_limit_tests.rs`・`balloon_limit_flip_tests.rs`・`placement_windowposition_vocab_tests.rs` | 7.2（指摘 80） |
+
+- 相手が `follow` の `VisibilityVerdict`・`guard_visibility` を `pub(crate)` にした。この spec の範囲で名で呼ぶ所は 0（grep で確かめた。範囲の外の `frame_balloon_offset_follow_tests.rs:L199` の doc が名を書くだけ）。相手への知らせは要らない。
+- `completed/` の古い記録に残る消えたテストの名は、当時の記録なので直さない（相手と同じ判断）。
