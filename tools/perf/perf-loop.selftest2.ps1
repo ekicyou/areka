@@ -129,6 +129,8 @@ $SelfTestChecks = @(
             @{ Name = 'no-meta'; Over = @{ 'run-meta.txt' = $null }; Want = $false; Tag = 'INCOMPLETE' }
             @{ Name = 'not-quiet'; Over = @{ 'quiet-after.txt' = "verdict=QUIET`nverdict=NOT_QUIET`n" }; Want = $false; Tag = 'NOTQUIET' }
             @{ Name = 'no-runlog'; Over = @{ 'run.log' = $null; 'cpu.csv' = $null; 'quiet-after.txt' = $null; 'DRY-RUN.txt' = 'dry' }; Want = $false; Tag = $null }
+            # 静かさの確かめの間に止まった走行（run.log も印も無い）は -Resume で退ける
+            @{ Name = 'stopped-in-quiet'; Over = @{ 'run.log' = $null; 'cpu.csv' = $null; 'run-meta.txt' = $null; 'quiet-after.txt' = $null; 'quiet-before.txt' = 'verdict=NOT_QUIET' }; Want = $false; Tag = 'INCOMPLETE' }
         )
         foreach ($case in $cases) {
             $dir = Join-Path $root $case.Name
@@ -290,11 +292,13 @@ $SelfTestChecks = @(
         # selftest でも、明示した -GoalFile が無いのは 3（既定の目標で緑にしない）
         $missing = Join-Path $script:SelfTestRoot 'no-such-goal.toml'
         foreach ($bad in @(@('rank-run', '-Iter', 'x'), @('rank-run', '-Iterr', '3'), @('rank-run', '3'), @('selftest', '-GoalFile', $missing),
-                           @('preflight', '-Ledger', (Join-Path $script:SelfTestRoot 'no-such-ledger.md')))) {
+                           @('preflight', '-Ledger', (Join-Path $script:SelfTestRoot 'no-such-ledger.md')),
+                           @('followup', '-Iter', '1', '-RunDir', (Join-Path $script:SelfTestRoot 'x')),
+                           @('compare', '-Iter', '99'))) {
             $r = Invoke-PwshChild -ScriptPath $entry -Arguments ($bad + @('-DryRun', '-OutRoot', $out)) -Quiet
             $label = $bad -join ' '
             Assert-SelfTest ($r.Code -eq 3) "${label}: code $($r.Code) (want 3): $(ConvertTo-SelfTestAscii $r.LastLine)"
-            Assert-SelfTest (($r.Out | Select-Object -Last 1) -eq "PERF-LOOP RESULT $($bad[0]) code=3 dir=-") "${label}: last line $(ConvertTo-SelfTestAscii (($r.Out | Select-Object -Last 1)))"
+            Assert-SelfTest ([bool](($r.Out | Select-Object -Last 1) -like "PERF-LOOP RESULT $($bad[0]) code=3 dir=*")) "${label}: last line $(ConvertTo-SelfTestAscii (($r.Out | Select-Object -Last 1)))"
         }
     } }
 
@@ -428,6 +432,7 @@ $SelfTestChecks = @(
             @{ Name = 'quiet-after-4'; Runner = @('0|0 ok'); Stop = $stopOk; Quiet = 4; Exit = 4; Stops = 1; Runs = 1 }
             @{ Name = 'retake'; Runner = @('1|0 ok', '0|0 ok'); Stop = $stopOk; Quiet = 0; Exit = 0; Stops = 1; Runs = 2 }
             @{ Name = 'stop-not-started'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code -1 -Err @('pwsh not found') -LastLine 'pwsh not found'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1; Want = 'xperf -stop' }
+            @{ Name = 'stop-bad-args'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code 3 -Err @('error: pdb') -LastLine 'error: pdb'); Quiet = 0; Exit = 3; Stops = 1; Runs = 1 }
             @{ Name = 'stop-failed'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code 1 -Err @('error: boom') -LastLine 'error: boom'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1; Want = 'xperf -stop' }
             @{ Name = 'runner-failed'; Runner = @('1|0 ok'); Stop = $stopOk; Quiet = 0; Exit = 4; Stops = 0; Runs = 2 }
             @{ Name = 'not-started'; Runner = @('0|5 not_elevated'); Stop = $stopOk; Quiet = 0; Exit = 0; Stops = 0; Runs = 1 }
@@ -579,6 +584,8 @@ $SelfTestChecks = @(
             @{ Name = 'bin-b-dryrun'; BinDir = ''; Build = "dry_run=true`n"; Want = $target; Helper = ''; Calls = 'build,helper,sample,sample,child' }
             @{ Name = 'nothing'; BinDir = ''; Build = $null; Want = $target; Helper = ''; Calls = 'build,helper,sample,sample,child' }
         )
+        $null = New-Item -ItemType Directory -Path $given -Force
+        [System.IO.File]::WriteAllText((Join-Path $given 'areka.exe'), 'x')
         foreach ($case in $cases) {
             $script:SelfTestCalls.Clear()
             $script:FakeFollowup = @('0|judged')
@@ -600,6 +607,12 @@ $SelfTestChecks = @(
             $h = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'helper' })[0].Arguments)[0]
             Assert-SelfTest ($h -eq $case.Helper) "$($case.Name): helper synced for '$(ConvertTo-SelfTestAscii $h)' (want '$(ConvertTo-SelfTestAscii $case.Helper)')"
         }
+        # 渡された -BinDir に実行体が無ければ子を起こさずに 3
+        $script:SelfTestCalls.Clear()
+        $script:BinDirArg = Join-Path $script:SelfTestRoot 'fec-empty'
+        $null = New-Item -ItemType Directory -Path $script:BinDirArg -Force
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        Assert-SelfTest ($code -eq 3 -and -not @($script:SelfTestCalls | Where-Object { $_.Name -eq 'child' }).Count) "-BinDir without areka.exe: exit $code (want 3 and no child)"
     } }
 
     [pscustomobject]@{ Name = 'bin-set-stale'; Body = {

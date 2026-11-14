@@ -73,6 +73,13 @@ function Get-SelfTestExitCode {
 # 検査を回して終える。作業のフォルダは <リポジトリ>\target\perf-loop-tmp\selftest-<GUID>\ の下だけで、終わったら消す。
 function Invoke-SelfTestChecks {
     param([Parameter(Mandatory = $true)][object[]]$Checks, [Parameter(Mandatory = $true)][string]$Label)
+    # 検査が子として起こした perf-loop が自分の検査をまた回し始めたら（入口の早い 3 が崩れた）、増え続けずに赤で止める
+    if ($env:PERF_LOOP_SELFTEST_NESTED) {
+        Write-Info "NG nested-selftest: a check started perf-loop selftest again (an early exit 3 of the entry was lost)"
+        Write-Info "$Label RESULT ok=0 ng=1 code=1"
+        exit 1
+    }
+    $env:PERF_LOOP_SELFTEST_NESTED = '1'
     $script:SelfTestRoot = Join-Path $repoRoot ('target\perf-loop-tmp\selftest-' + [Guid]::NewGuid().ToString('N'))
     $okCount = 0
     $ngCount = 0

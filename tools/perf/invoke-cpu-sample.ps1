@@ -286,6 +286,10 @@ public static class PerfToolDumpCounter {
             int extra = fields.Length - header.Columns;   // columns still left over go to Image!Function
             if (extra < 0) continue;
             string value = (extra == 0 ? fields[header.ImageIndex] : string.Join(",", fields, header.ImageIndex, extra + 1)).Trim();
+            // a module name has no , < > ( or space: then the extra commas were in an earlier column (ThreadStartImage); count from the end
+            int firstBang = value.IndexOf('!');
+            if (extra > 0 && firstBang > 0 && value.Substring(0, firstBang).IndexOfAny(new[] { ',', '<', '>', '(', ' ' }) >= 0)
+                value = fields[fields.Length - (header.Columns - header.ImageIndex)].Trim();
             int bang = value.IndexOf('!');
             if (bang < 0) continue;
             string module = value.Substring(0, bang).Trim();
@@ -726,10 +730,12 @@ function Invoke-SelfTestMode {
         '         SampledProfile,    1052388,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   areka.exe!std::thread::spawn<closure$0, ()>,   areka.exe!drop_in_place<(u32, u64)>,     1,     1',
         '                  Stack,    1052388,      18332,   1, 0x00007ff6c4a91b30,       areka.exe!core::iter::Map<A, fn(u8, u8) -> u8>::next',
         # 括りが閉じない記号（C++ の operator<）の行は素直に割り直し、余りを Image!Function へ寄せて数える
-        '         SampledProfile,    1052390,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   foo.dll!operator<,   areka.exe!f<A, B>,     1,     1'
+        '         SampledProfile,    1052390,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   foo.dll!operator<,   areka.exe!f<A, B>,     1,     1',
+        # 閉じない括りとカンマが ThreadStartImage!Function の側に在る行は、Image!Function を後ろから数えて読む
+        '         SampledProfile,    1052391,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   foo.dll!operator<<int, int>,   areka.exe!g,     1,     1'
     ))
-    if ($commaStats.ArekaFrames -ne 3 -or $commaStats.ResolvedFrames -ne 3 -or ($commaStats.ThreadIds -join ',') -ne '18332' -or $commaStats.Problem) {
-        $failures += "symbol commas: areka_frames=$($commaStats.ArekaFrames) resolved=$($commaStats.ResolvedFrames) tids=$($commaStats.ThreadIds -join ',') problem='$($commaStats.Problem)' (want 3 / 3 / 18332 / none)"
+    if ($commaStats.ArekaFrames -ne 4 -or $commaStats.ResolvedFrames -ne 4 -or ($commaStats.ThreadIds -join ',') -ne '18332' -or $commaStats.Problem) {
+        $failures += "symbol commas: areka_frames=$($commaStats.ArekaFrames) resolved=$($commaStats.ResolvedFrames) tids=$($commaStats.ThreadIds -join ',') problem='$($commaStats.Problem)' (want 4 / 4 / 18332 / none)"
     }
     # 記号の解けていない areka.exe!0x… は関門に数えない（PDB の食い違いで 0 件のまま通さない）
     $hexStats = Measure-ArekaFrames -Lines ([string[]]@($commaHead,

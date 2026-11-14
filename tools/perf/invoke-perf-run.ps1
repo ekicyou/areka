@@ -159,6 +159,8 @@ param(
     [switch]$SelfTest
 )
 
+# shortcut: 値の無い引数（-Profile だけ）と型の付いた引数の読めない値は PowerShell の束ねの段で 1 になる
+# （script の中から捕まえる口が無い）。呼び手（perf-loop）がそうした形で渡すようになったら字で受けて自分で確かめる
 # 想定外の失敗は理由の 1 行と 1（実走の失敗＝perf-loop は 1 度だけ採り直す）。出力先は Stop-Run が退ける
 trap {
     # 共通部品より前の失敗（読み込めない）でも元の原因の 1 行で 1（出力先はまだ無い）
@@ -292,9 +294,10 @@ function Move-FailedOutDir {
 function Stop-Run {
     param([int]$Code, [string]$Message, [System.Diagnostics.Process]$Process)
 
-    Write-Problem "[invoke-perf-run] failed: $Message"
     if ($Process) { Stop-ArekaProcess -Process $Process }
     Stop-RunSampling
+    # 理由の行は後始末の警告の後に出す（perf-loop が最後の行を失敗の理由として写す）
+    Write-Problem "[invoke-perf-run] failed: $Message"
     if ($script:ArekaNotStopped) {
         Write-Problem "[invoke-perf-run] areka did not end within $KILL_WAIT_MS ms after it was killed. The out dir was left as is: $script:OutDirPath"
         exit $EXIT_RUN_FAILED

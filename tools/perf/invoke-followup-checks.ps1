@@ -353,10 +353,15 @@ function Get-RunLogLinesSince {
 
 function Wait-RunLogPattern {
     # $Since 以降の行に正規表現が現れるまで待つ。現れたら $true
-    param([string]$Path, [datetime]$Since, [string]$Pattern, [int]$TimeoutMs)
+    # -Process が終わったら待たずに $false（起動直後に落ちた areka を上限まで待たない）
+    param([string]$Path, [datetime]$Since, [string]$Pattern, [int]$TimeoutMs, [System.Diagnostics.Process]$Process)
     $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
     $tail = New-RunLogTail -Path $Path
     while ([DateTime]::UtcNow -lt $deadline) {
+        if ($Process -and $Process.HasExited) {
+            foreach ($line in (Get-RunLogLinesSince -Tail $tail -Since $Since)) { if ($line -match $Pattern) { return $true } }
+            return $false
+        }
         foreach ($line in (Get-RunLogLinesSince -Tail $tail -Since $Since)) {
             if ($line -match $Pattern) { return $true }
         }
@@ -581,10 +586,11 @@ try {
     Write-Info "[invoke-followup-checks] started (process ID $($proc.Id)). Waiting for the show-ready point."
 
     # --- 表示成立点を待つ（ここから先が観測の前提）------------------------------
-    $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt `
+    $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt -Process $proc `
         -Pattern $LOG_MARKER_SHOW_READY -TimeoutMs $SHOW_READY_TIMEOUT_MS
     if (-not $showReady) {
         Write-Probe -Check 'session' -Step 'show_ready' -Fields @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
+        if ($proc.HasExited) { Stop-Run $EXIT_FAIL "areka exited before the show-ready point (exit code $($proc.ExitCode)). Check $errLogPath and $runLogPath." }
         Stop-Run $EXIT_FAIL "the show-ready point (apply(ShowSurface)) did not appear within $SHOW_READY_TIMEOUT_MS ms. Check $runLogPath."
     }
     Start-Sleep -Milliseconds 1500   # 2 キャラ分の初期配置が落ち着くまで

@@ -377,6 +377,15 @@ $SelfTestChecks = @(
         $script:GoalConfig = $null
         $script:GoalFilePath = $null
         $script:GoalName = 'selftest'
+        # 目標定義の負の回数・待ち秒数は確かめずに 3
+        foreach ($bad in @('retry_max = -1', 'retry_wait_sec = -1')) {
+            $script:SelfTestCalls.Clear()
+            $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[quiet]`n$bad`n") }
+            $code = Get-SelfTestExitCode { Invoke-MeasureQuietAfter -RunDir (Join-Path $script:SelfTestRoot 'run') }
+            $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' }).Count
+            Assert-SelfTest ($code -eq 3 -and $calls -eq 0) "${bad}: exit $code with $calls check-quiet calls (want 3 and none)"
+        }
+        $script:GoalConfig = $null
         foreach ($case in @(@(3, 3, 1), @(4, 4, 1), @(1, 4, 1), @(-1, 4, 1), @(2, 2, ($MEASURE_QUIET_RETRY_MAX_DEFAULT + 1)))) {
             $script:SelfTestCalls.Clear()
             $childCode = $case[0]

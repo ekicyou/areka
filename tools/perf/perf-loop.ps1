@@ -116,7 +116,8 @@ param(
 
     # 周番号（iter-<n> の <n>）。周の作業場を使うサブコマンドが読む。
     # 字で受けて入口で整数にする（型の変換の失敗を PowerShell の束ねに任せると RESULT 行の無い 1 になる）。
-    # shortcut: 値の無い '-Iter' と同じ名前の 2 度の指定は、なお束ねの段で RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
+    # shortcut: 値の無い '-Iter'・同じ名前の 2 度の指定・いくつもの引数に当たる縮めた名前（-B・-R）は、なお束ねの段で
+    # RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
     # 呼び手（スキル・エージェント）が手で打つ形でそうなるようになったら、引数を全部受け皿で受けて自分で解く形にする
     [string]$Iter = '0',
 
@@ -577,6 +578,11 @@ if (-not $Sub) {
 if ($SUBCOMMANDS -notcontains $Sub) {
     Write-Problem "[perf-loop] available subcommands: $($SUBCOMMANDS -join ', ')"
     Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-'
+}
+# -RunDir を読むのは 4 本だけ。ほかへ渡されたら黙って無視せず 3
+$SUBCOMMANDS_RUNDIR = @('measure-baseline', 'rank-run', 'rank', 'final')
+if ($RunDir -and $SUBCOMMANDS_RUNDIR -notcontains $Sub) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-RunDir is read only by $($SUBCOMMANDS_RUNDIR -join ', ') (got it with '$Sub')"
 }
 if ($UnknownArgs) {
     Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown arguments: $($UnknownArgs -join ' ')"

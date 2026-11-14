@@ -94,6 +94,8 @@ param(
     [switch]$SelfTest
 )
 
+# shortcut: 型の付いた引数の読めない値（-SampleSec abc）は PowerShell の束ねの段で RESULT 行の無い 1 になる
+# （script の中から捕まえる口が無い）。呼び手（ランナー・perf-loop）がそうした値を渡すようになったら字で受けて自分で確かめる
 # 想定外の失敗は理由の 1 行と RESULT 行で 4（計測失敗）。-SelfTest のときは 1（自分の検査が赤）
 trap {
     # 共通部品より前の失敗（読み込めない）でも元の原因と RESULT 行を出す（決まった終了コードは字で持つ）

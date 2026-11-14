@@ -271,6 +271,9 @@ function Invoke-MeasureQuietAfter {
     $checkPath = Join-Path $PSScriptRoot 'check-quiet.ps1'
     $retryMax  = Get-MeasureTomlInt -Section 'quiet' -Key 'retry_max' -Default $MEASURE_QUIET_RETRY_MAX_DEFAULT
     $waitSec   = Get-MeasureTomlInt -Section 'quiet' -Key 'retry_wait_sec' -Default $MEASURE_QUIET_RETRY_WAIT_DEFAULT
+    if ($retryMax -lt 0 -or $waitSec -lt 0) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [quiet] retry_max and retry_wait_sec must be 0 or more (got $retryMax / $waitSec)"
+    }
     for ($i = 0; $i -le $retryMax; $i++) {
         $arguments = @('-Stage', 'after', '-OutDir', $RunDir) + (Get-MeasureGoalArgsPwsh)
         $result = Invoke-PwshChild -ScriptPath $checkPath -Arguments $arguments -Quiet
@@ -700,6 +703,8 @@ function Invoke-SubCompare {
     $iterDir = Get-LoopDir -Kind 'iter' -Iter $script:IterArg
     $script:CurrentDir = $iterDir
     Write-Info "[perf-loop] compare iter $($script:IterArg) / $iterDir"
+    # 周の作業場そのものが無いのは -Iter の打ち間違い（計測の失敗の 4 にしない）
+    if (-not (Test-Path -LiteralPath $iterDir -PathType Container)) { Stop-Run -Code $EXIT_BAD_ARGS -Message "iteration folder not found: $iterDir (check -Iter)" }
     Invoke-MeasureCompareCore -IterDir $iterDir
     Exit-WithResult -Code $EXIT_OK -Dir $iterDir
 }
@@ -780,6 +785,8 @@ function Invoke-SubFollowup {
     $binDir = if ($script:BinDirArg) { [System.IO.Path]::GetFullPath($script:BinDirArg).TrimEnd('\') }
               elseif ($useTarget)    { Get-MeasureBinDir -Build 'release' }
               else                   { $candidate }
+    # 渡された -BinDir に実行体が無ければ検査の子を起こさずに 3（打つべきビルドを示す。-DryRun では止めない）
+    if ($script:BinDirArg) { $null = Test-MeasureExeReady -BinDir $binDir -Build 'release' }
     $arguments = @('-OutDir', $dir, '-BinDir', $binDir, '-ExitMs', "$exitMs", '-Checks', $checksArg)
     Write-Info "[perf-loop] followup iter $($script:IterArg) / exe $binDir / checks $checksArg / limit $exitMs ms / out $dir"
     if ($script:DryRunMode) {

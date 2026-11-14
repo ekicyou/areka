@@ -15,11 +15,19 @@ perf-loop.rundir.ps1 — perf-loop の走行の出力先の扱い（完了の見
 Set-StrictMode -Version 3.0
 
 # -Resume の完了の印（2）。完了なら $true。run.log の在る未完了の走行は -INCOMPLETE、静かでない走行は
-# -NOTQUIET へ脇へ退けて $false（採り直させる。測ったものは消さない）。run.log の無い出力先（-DryRun の
-# 置き土産）と在らない出力先は触らずに $false。ended_utc はランナーが成功の最後にだけ書く。
+# -NOTQUIET へ脇へ退けて $false（採り直させる。測ったものは消さない）。run.log の無い出力先のうち、
+# -DryRun の置き土産（DRY-RUN.txt が在る）と在らない出力先は触らずに $false。DRY-RUN.txt も run.log も無い出力先は
+# 静かさの確かめの間に止まった走行なので -INCOMPLETE へ退ける（-Resume で「既に在る」の 3 にしない）。
+# ended_utc はランナーが成功の最後にだけ書く。
 function Test-MeasureRunComplete {
     param([Parameter(Mandatory = $true)][string]$Dir)
-    if (-not (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_RUN_LOG) -PathType Leaf)) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_RUN_LOG) -PathType Leaf)) {
+        if ((Test-Path -LiteralPath $Dir -PathType Container) -and -not (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_DRYRUN) -PathType Leaf)) {
+            $aside = Move-MeasureRunAside -Dir $Dir -Tag 'INCOMPLETE'
+            Write-Problem "[perf-loop] run stopped before $MEASURE_FILE_RUN_LOG was written; moved aside: $aside (will rerun)"
+        }
+        return $false
+    }
     $meta  = Join-Path $Dir $MEASURE_FILE_RUN_META
     $after = Join-Path $Dir $MEASURE_FILE_QUIET_AFTER
     $verdict = @()
