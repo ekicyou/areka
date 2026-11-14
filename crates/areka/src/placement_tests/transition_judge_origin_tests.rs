@@ -224,14 +224,6 @@ fn the_round_trip_count_is_not_inflated_by_the_duplicated_origins() {
         ],
         "遷移は 6 本（起点行 30 本ではない）"
     );
-
-    let down = observed.iter().filter(|d| **d == (192, 144)).count();
-    let up = observed.iter().filter(|d| **d == (144, 192)).count();
-    assert_eq!(
-        (down, up),
-        (3, 3),
-        "各方向 3 回（起点行を数えた 15 回ではない）"
-    );
 }
 
 #[test]

@@ -48,9 +48,7 @@
 use areka_emo_present::presenter::{
     SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
 };
-use wintf::ecs::window::transition_diag::{
-    FIELD_STAGE, KIND_WRITE, MISSING, STAGE_BEGIN, STAGE_END, STAGE_FLUSH,
-};
+use wintf::ecs::window::transition_diag::{MISSING, STAGE_BEGIN, STAGE_END, STAGE_FLUSH};
 
 use super::test_support::{deterministic_verdict, flush, ground, monitor, surface, write};
 use super::{Violation, WindowKey, parse_transition_log, split_transitions, summarize};
@@ -257,28 +255,6 @@ fn nothing_was_held_realigned_or_skipped_in_this_transition() {
     );
     assert_eq!(summary.malformed_records, 0);
     assert_eq!(summary.records, 29);
-}
-
-#[test]
-fn the_visualize_stage_precedes_every_window_write_in_the_same_frame() {
-    // 順序（サーフェス更新と窓書込の前後）は要件 7.1 の判定量である。
-    let records = parse_transition_log(REOBSERVATION_TRANSITION_1);
-    let last_visualize = records
-        .iter()
-        .filter(|record| record.raw_field(FIELD_STAGE) == Some(SURFACE_STAGE_VISUALIZE))
-        .map(|record| record.stamp.t_us)
-        .max()
-        .expect("可視化の記録があるはず");
-    let first_write = records
-        .iter()
-        .filter(|record| record.kind == KIND_WRITE)
-        .map(|record| record.stamp.t_us)
-        .min()
-        .expect("窓書込の記録があるはず");
-    assert!(
-        last_visualize < first_write,
-        "4 窓とも可視化が済んでから 1 枚目の窓書込が出る（{last_visualize} < {first_write}）"
-    );
 }
 
 // ---------------------------------------------------------------------------

@@ -60,8 +60,8 @@ const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH, OFFSET_PROCEDURE_R
 /// 本仕様の手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
 ///
 /// 文書は独立した `.md` ではなく**ランナーのモジュール doc** に置いてある（design の指定）。
-/// 本檻は出所をテキストとして読むだけなので、拡張子が `.rs` でも読める——手順書とランナーが
-/// 同じファイルに在ることは、手順の字面と実装が離れないという点でむしろ望ましい。
+/// 手順書は `//!` の行だけなので、本檻は `.rs` の出所から `//!` の行だけを読む（関数名や
+/// `#[ignore]` の理由などコードの行に在る語で、説明から消えた語が通らないように）。
 const OFFSET_PROCEDURE_RELATIVE_PATH: &str =
     "src/placement_tests/transition_judge_offset_signoff_tests.rs";
 
@@ -90,15 +90,24 @@ fn procedure_text() -> String {
 }
 
 /// 出所 1 本の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
+/// `.rs` の出所は `//!` の行だけを残す（手順書はモジュール doc だけ）。
 fn read_procedure(relative: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
-    std::fs::read_to_string(&path).unwrap_or_else(|error| {
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
             "サインオフ手順書を読めない: {} ({error})。task 4.1 の成果物であり、\
              本檻はこの文書の判定語が判定器と一致することだけを見る",
             path.display()
         )
-    })
+    });
+    if !relative.ends_with(".rs") {
+        return text;
+    }
+    let doc: Vec<&str> = text
+        .lines()
+        .filter(|line| line.trim_start().starts_with("//!"))
+        .collect();
+    doc.join("\n")
 }
 
 /// 出所集合すべての本文を連結して返す（語の在処の検査は「どれかに載っていれば良い」）。

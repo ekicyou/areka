@@ -823,9 +823,8 @@ fn the_judge_writes_no_verdict_literal() {
             "判定器が判定語のリテラル {literal} を書いている"
         );
     }
-    let probe = format!("\"{OFFSET_VERDICT_RESCALED}\"");
     assert!(
-        format!("let x = {probe};").contains(&probe),
-        "檻の探し方そのものが壊れている"
+        source.contains("OFFSET_VERDICT_RESCALED"),
+        "檻が判定器のソースを読めていない（定数の名が見つからない）"
     );
 }

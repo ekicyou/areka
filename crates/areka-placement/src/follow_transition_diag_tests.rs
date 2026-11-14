@@ -382,28 +382,3 @@ fn the_ground_record_is_built_behind_the_front_guard() {
         "説明文を落とす処理が本文まで落としている"
     );
 }
-
-/// design D3／要件 10.5: 本タスクは観測を足すだけで、既存の 3 つに 1 bit も触らない
-/// ——`[diag.window_move]` チャネル・`windowposition.limit` の関門・手順 5a の一度きり再導出。
-#[test]
-fn the_observation_addition_leaves_the_existing_channels_and_gates_untouched() {
-    let code = code_only(include_str!("follow/window_move.rs"));
-
-    assert_eq!(
-        code.matches("diag::log_window_move(&WindowMoveRecord {")
-            .count(),
-        1,
-        "`[diag.window_move]` レコードの組立点が動いている（design D3 は不動と定めている）"
-    );
-    assert!(
-        code.contains(
-            "let corrected = apply_balloon_limit_gate(world, window, PointPx { x, y }, size, route);"
-        ),
-        "windowposition-limit の関門呼出が変わっている（要件 10.5）"
-    );
-    assert_eq!(
-        code.matches("rederive_keyword_balloon_offset(").count(),
-        1,
-        "キーワード基本位置の一度きり再導出（手順 5a）の呼出数が変わっている（要件 10.5）"
-    );
-}

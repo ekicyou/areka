@@ -14,8 +14,8 @@ use areka_emo_present::presenter::{
 };
 use wintf::ecs::window::transition_diag::{
     FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_SCOPE, FIELD_WIN_KIND, KIND_ALL,
-    KIND_MONITOR, KIND_MSG, KIND_WRITE, MISSING, MSG_DPICHANGED, ORIGIN_DPI_SUGGESTED,
-    ORIGIN_WINDOW_POS, STAGE_BEGIN, STAGE_END, STAGE_FLUSH, STAGE_SYNC,
+    KIND_MONITOR, KIND_WRITE, MISSING, MSG_DPICHANGED, ORIGIN_DPI_SUGGESTED, ORIGIN_WINDOW_POS,
+    STAGE_BEGIN, STAGE_END, STAGE_FLUSH, STAGE_SYNC,
 };
 
 use super::test_support::{
@@ -866,7 +866,7 @@ fn summarize_keeps_an_untagged_write_visible_under_the_sentinel_key() {
 
 #[test]
 fn summarize_ignores_records_that_are_not_part_of_the_judged_quantities() {
-    // msg／enqueue は台帳の裏取り用であり、判定量そのものは動かさない。
+    // msg／enqueue は台帳の裏取り用で判定量を動かさない（畳まれていない enqueue は追随でない）。
     let summary = summarize_lines(&[
         monitor(10, 192, 96, 1704, 1752),
         msg(10, 124_000, MSG_DPICHANGED, "0x1"),
@@ -889,7 +889,7 @@ fn summarize_ignores_records_that_are_not_part_of_the_judged_quantities() {
             .is_some_and(|origin| origin.old_dpi == 192 && origin.new_dpi == 96),
         "起点の新旧 DPI は要約が持つ"
     );
-    assert_ne!(KIND_MSG, KIND_MONITOR);
+    assert!(summary.balloon_follow_windows.is_empty());
 }
 
 // ---------------------------------------------------------------------------
