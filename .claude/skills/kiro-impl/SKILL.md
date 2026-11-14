@@ -41,20 +41,20 @@ Select skills for the current task even when steering/spec context is already av
 
 #### Preflight
 
-**Determine dispatch model policy** (added by areka-P0-draw-load-parity; revised 2026-09-12 by developer request — choose per task difficulty, not a fixed downgrade):
-- Read your own system prompt line "You are powered by the model named <NAME>" and record `OWN_MODEL` (Fable / Opus / Sonnet / Haiku; `unknown` if the line cannot be found).
-- If `OWN_MODEL` is Opus or lower → every dispatch inherits (omit the `model` argument). Do not spend effort tiering.
-- If `OWN_MODEL` is Fable or `unknown` → pick the model **per dispatch** from the task's difficulty. The developer's intent: judgment stays at Fable grade, mechanical work goes to cheaper models, and nothing is downgraded merely because the caller is Fable.
+**Determine dispatch model and effort** (added by areka-P0-draw-load-parity; revised 2026-09-12 by developer request — per task difficulty; revised 2026-11-14 by developer request — the tier comes from tasks.md and applies whatever model this session runs on):
+- Each executable task carries `_Dispatch: <tier>[, effort <level>] — <reason>_`, written by `/kiro-spec-tasks` with the criteria in `../kiro-spec-tasks/rules/tasks-generation.md` section "5.5 Dispatch Tier" (resolved relative to this skill's directory). Use that tier. A task without the line (tasks.md written before 2026-11-14) gets its tier from the same criteria, with the reason `(no annotation)`.
+- The tier sets the Agent tool's `model` and `effort` for the task's first implementer dispatch, independent of this session's own model: an Opus session still dispatches `"fable"` for a judgment task, and a Fable session still dispatches `"sonnet"` for a mechanical one.
 
-  | Tier | Choose when | `model` |
+  | Tier | `model` | `effort` |
   |---|---|---|
-  | judgment | the task is an explicit integration task or crosses `_Boundary:_` scopes; it changes a contract other tasks depend on (funnel, cache key, public API); the design leaves a decision to the implementer; or it is a **re-dispatch after a REJECTED review or a debug round** (always escalate one tier from the previous attempt) | `"fable"` |
-  | standard (default) | ordinary implementation inside one boundary whose design section fully specifies the change | `"opus"` |
-  | mechanical | signature/rename/import follow-ups, manifest or registration edits, doc rewrites whose wording the design already gives, test re-derivation whose expected values are stated in the design | `"sonnet"` |
+  | judgment | `"fable"` | `"high"` |
+  | standard | `"opus"` | omit (session default) |
+  | mechanical | `"sonnet"` | `"low"` |
 
-- Reviewer (Step 3c): never lower than the implementer of the same task; judgment-tier tasks get a `"fable"` reviewer. Debugger (Step 3g): same tier as the failing implementer, escalated once on the second debug round of the same task.
-- Record every decision in the run output, one line per dispatch: `dispatch model: <task id> <role> → <model> (<tier>: <one-phrase reason>)`.
-- Pass the policy on to `/kiro-validate-impl` (Step 4) as `DISPATCH_POLICY=tiered OWN_MODEL=<name>`.
+  An `effort <level>` in the annotation replaces the tier's effort for the first implementer dispatch.
+- Implementer re-dispatch after a `REJECTED` review or a debug round → one tier up from the previous attempt (mechanical → standard → judgment; judgment stays), effort per "Effort escalation" below.
+- Reviewer (Step 3c, and a fresh reviewer in manual mode): never a lower `model` than the implementer of the same task; judgment-tier tasks get a `"fable"` reviewer. Debugger (Step 3g): the model of the failing implementer's tier, one tier up on the second debug round of the same task.
+- Record every decision in the run output, one line per dispatch: `dispatch model: <task id> <role> → <model>/<effort> (<tier>: <reason>)`.
 
 **Validate approvals**:
 - Verify tasks are approved in spec.json (stop if not, see Safety & Fallback)
@@ -118,11 +118,13 @@ For each task (one at a time):
 - The implementer subagent will read the spec files and build its own Task Brief (acceptance criteria, completion definition, design constraints, verification method) before implementation
 - Preserve this task context, including selected skill guidance, on every implementer re-dispatch (context requests, review remediation, and debug retries); append the new context or feedback.
 - Append the two desk sentences of "Desk coordination (areka-impl-watch)" verbatim to the end of every implementer prompt (only the first while desk steps are off)
-- Dispatch via **Agent tool** as a fresh subagent; set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
+- Dispatch via **Agent tool** as a fresh subagent; set `model` and `effort` from the Preflight tier for this task (see Effort escalation)
 
-**Effort escalation** (local customization — keep when regenerating this skill): this skill explicitly sets the Agent tool's `effort` parameter as follows. Escalate only on these triggers; never lower effort below the session default.
-- First implementer dispatch, `NEEDS_CONTEXT` re-dispatch, status/verdict format re-dispatch, and reviewer dispatch → omit `effort` (session default)
-- Implementer re-dispatch after `REJECTED` (round 1-2) → `effort: "high"`
+**Effort escalation** (local customization — keep when regenerating this skill): this skill explicitly sets the Agent tool's `effort` parameter as follows. Only a mechanical task's first implementer dispatch (or an annotation's explicit `effort`) goes below the session default; every escalation is at least `"high"`.
+- First implementer dispatch → the tier's effort from Preflight (or the annotation's `effort <level>`)
+- `NEEDS_CONTEXT` re-dispatch and status/verdict format re-dispatch → the same effort as the dispatch it repeats
+- Reviewer dispatch → omit `effort` (session default)
+- Implementer re-dispatch after `REJECTED` (round 1-2) → `effort: "high"`, or `"xhigh"` when the previous attempt already ran at `"high"`
 - Debug subagent (section g) → `effort: "xhigh"`
 - New implementer after `NEXT_ACTION: RETRY_TASK` → `effort: "high"`
 
@@ -147,7 +149,7 @@ For each task (one at a time):
   - Preserve the existing task-specific context: task text, spec refs, `_Boundary:_` scope, validation commands, implementer report, and the actual `git diff` as the primary source of truth.
   - Validation commands for the reviewer leave out full-test, UI-test and load-test steps unless the main conversation holds the desk for them at this handoff, and the reviewer prompt then carries the no-desk sentence ("Test commands for the reviewer" in "Desk coordination (areka-impl-watch)")
   - The reviewer subagent will run `git diff` itself to read the actual code changes and verify against the spec
-  - Dispatch via **Agent tool** as a fresh subagent; set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
+  - Dispatch via **Agent tool** as a fresh subagent; set `model` by the Preflight reviewer rule for this task
 - If review mode is `inline`:
   - Apply `kiro-review` in the parent context using the same task evidence and the actual `git diff`
 - If review mode is `off`:
@@ -181,7 +183,7 @@ For each task (one at a time):
 - Supply the task brief/boundary, exact spec references, failure output, reviewer findings, current changed files/diff, and relevant Implementation Notes/runtime constraints
 - Include attempted fixes and their observed results concisely, without copying the failed workers' conversation history
 - Append the two desk sentences of "Desk coordination (areka-impl-watch)" verbatim to the end of the prompt (only the first while desk steps are off)
-- Dispatch via **Agent tool** as a fresh subagent with `effort: "xhigh"` (see Effort escalation); it reads the canonical `kiro-debug` procedure itself. Set `model` from the Preflight tier for this task and role (omit it when `OWN_MODEL` is Opus or lower)
+- Dispatch via **Agent tool** as a fresh subagent with `effort: "xhigh"` (see Effort escalation); it reads the canonical `kiro-debug` procedure itself. Set `model` by the Preflight debugger rule for this task
 
 **Handle debug report**:
 - Require a `## Debug Report` and parse its exact `- NEXT_ACTION:` field (`RETRY_TASK | BLOCK_TASK | STOP_FOR_HUMAN`). If the protocol or a valid report is missing, stop this feature (Desk timing 7) and report the missing input; do not guess a next action or dispatch another implementer.
@@ -214,7 +216,7 @@ Before writing any code, read the relevant sections of requirements.md and desig
 - **REFACTOR**: Improve code structure, remove duplication. All tests must still pass.
 - **VERIFY**: All tests pass (new and existing), no regressions. Confirm verification method passes.
 - **REVIEW**:
-  - `required`: Apply `kiro-review` before marking the task complete. If the host supports fresh subagents in manual mode, use a fresh reviewer; otherwise perform the review in the main context using the `kiro-review` protocol. Do NOT continue until the verdict is parseably `APPROVED`.
+  - `required`: Apply `kiro-review` before marking the task complete. If the host supports fresh subagents in manual mode, use a fresh reviewer (`model` by the Preflight reviewer rule, with this session's model as the implementer's); otherwise perform the review in the main context using the `kiro-review` protocol. Do NOT continue until the verdict is parseably `APPROVED`.
   - `inline`: Apply `kiro-review` in the main context before marking the task complete.
   - `off`: Skip task-local review, but note that `kiro-validate-impl` becomes the primary quality gate before any feature-level completion claim.
 - **MARK COMPLETE**:
@@ -227,7 +229,6 @@ Before writing any code, read the relevant sections of requirements.md and desig
 
 **Autonomous mode**:
 - After all tasks complete, run `/kiro-validate-impl {feature}` as a GO/NO-GO gate, called only after `granted test` for `request --desk test --purpose "kiro-validate-impl {feature}" --wait` and followed at once by `return` whatever the result (Desk timing 6; while desk steps are `off`, call it directly)
-- Pass the Preflight policy along: state `DISPATCH_POLICY=tiered OWN_MODEL=<name>` in the `/kiro-validate-impl` invocation so its own subagent dispatches follow the same tiering
 - If validation returns GO → before reporting feature success, apply `kiro-verify-completion` to the feature-level claim using the validation result and fresh supporting evidence
 - If validation returns NO-GO:
   - Fix only concrete findings from the validation report
