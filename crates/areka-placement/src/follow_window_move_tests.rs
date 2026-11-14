@@ -320,3 +320,72 @@ fn enqueue_window_set_pos_without_handle_returns_false_and_leaves_state() {
     assert_eq!(position_of(&world, window), Point { x: 10, y: 20 });
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
 }
+
+// -------------------------------------------------------------------------
+// 経路つきの移動の随伴バルーンは追随の書き手（`follow_balloon`）1 本を通る（指摘 2）
+// -------------------------------------------------------------------------
+
+use super::super::diag::PlacementRoute;
+use super::move_window_with_route;
+use super::test_support::{CLAMP_TAG, GUARD_TAG_PREFIX, guard_events};
+use log_capture_kit::{capture, expect_one};
+
+/// 前の位置では見えていたバルーンが、キャラ窓を x=0 へ置くと画面の外へ丸ごと出る形
+/// （offset −400・幅 350＝右端 −50）を組む。単一モニタ（0..1920）。
+fn char_with_offscreen_balloon_world() -> (World, Entity, Entity) {
+    let mut world = World::new();
+    world.insert_resource(single_monitor_snapshot());
+    let balloon = world
+        .spawn((fake_handle(0x2000), window_pos_sized(100, 300, 350, 200)))
+        .id();
+    let window = world
+        .spawn((
+            fake_handle(0x1000),
+            window_pos_sized(500, 300, 200, 300),
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: -400, y: 0 })),
+        ))
+        .id();
+    (world, window, balloon)
+}
+
+/// 配置の経路（`ChainRealign`・`PatternMove`）では、画面の外へ丸ごと出る随伴バルーンが
+/// 可視性の守りで引き戻され、`ClampX` の行が `route=BalloonFollow` で 1 行出る。
+/// 直す前は自前の式で書いていたので x=−400 のまま・行は 0。
+#[test]
+fn placement_route_move_pulls_offscreen_balloon_back() {
+    for route in [PlacementRoute::ChainRealign, PlacementRoute::PatternMove] {
+        let (mut world, window, balloon) = char_with_offscreen_balloon_world();
+
+        let (ok, events) = capture(|| move_window_with_route(&mut world, window, 0, 300, route));
+        assert!(ok, "route={route}: キャラ窓の書込は成立する前提");
+
+        assert_eq!(position_of(&world, window), Point { x: 0, y: 300 });
+        let pos = position_of(&world, balloon);
+        assert!(
+            (0..=1920 - 350).contains(&pos.x),
+            "route={route}: バルーン {pos:?} が引き戻されていない"
+        );
+        assert_eq!(pos.y, 300, "route={route}: Y は守りが触らない");
+        let clamped = expect_one(&events, CLAMP_TAG);
+        assert_eq!(
+            clamped.field("route"),
+            Some("BalloonFollow"),
+            "route={route}: ClampX の行の経路が BalloonFollow でない"
+        );
+    }
+}
+
+/// `MoveCue`（明示操作）は守りの対象でないので、同じ幾何でも引き戻さず守りも喋らない。
+#[test]
+fn move_cue_move_leaves_offscreen_balloon_in_place() {
+    let (mut world, window, balloon) = char_with_offscreen_balloon_world();
+
+    let (ok, events) = capture(|| move_window_to(&mut world, window, 0, 300));
+    assert!(ok);
+
+    assert_eq!(position_of(&world, balloon), Point { x: -400, y: 300 });
+    assert!(
+        guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+        "MoveCue で守りが喋っている: {events:?}"
+    );
+}

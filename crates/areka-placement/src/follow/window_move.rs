@@ -11,34 +11,33 @@ use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos
 
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit, BalloonPlace,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollowTrigger, BalloonLimit, BalloonPlace,
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
-    apply_visibility_guard, balloon_shift, diag, follow_balloon, place_balloon_in_work_area,
-    project_anchor, rect_at, rederive_keyword_balloon_offset, transition_diag,
-    work_area_for_window,
+    apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
+    rect_at, rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
 ///
 /// - 移動は `SetWindowPosCommand`（`SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE`）経由。
 ///   座標は物理 px 素通し（U4・再スケールなし）
-/// - 対象が [`BalloonFollow`] を持つ場合はバルーン窓も offset 維持で随伴移動する
+/// - 対象が [`BalloonFollow`](super::BalloonFollow) を持つ場合はバルーン窓も [`follow_balloon`] で随伴移動する
 /// - `WindowHandle` 未付与（窓生成前）は `warn!` して `false` を返す（silent no-op に
 ///   しない）。対象が既に破棄済み（entity 不在）なら**正常終了系**ゆえ `debug!` で
 ///   打ち切って `false`（task 7.3・Req 6.2）。いずれも随伴バルーンは動かさない
 /// - 随伴バルーン側の `WindowHandle` 未付与は `warn!` のみ（対象自身の移動は成立
 ///   しているため戻り値は `true`）
 ///
-/// 消費者: `emo2_boot::move_cue::apply_move_directive`（`\![move]` の UI スレッド適用・
-/// task 7.4）が唯一の位置ライターとして本 API を呼ぶ。
+/// 呼び手: `\![move]`（本体の `runtime::move_cue_place`）・連鎖の確定（本体の
+/// `runtime::frame::drain_resnap`）・連れ動き（`sticky_follow`）・位置の初期化（`reset_pos`）。
+/// 位置を書く道はほかにもある（[`resize_window_to`]・[`move_window_with_route`] ほか）。
 ///
 /// # 経路タグ（Req 1.2／2.4・D13・task 1.4）
 ///
 /// 対象窓の書込は [`PlacementRoute::MoveCue`]・随伴バルーンは
-/// [`PlacementRoute::BalloonFollow`] として記録する。呼び手（`\![move]`・連鎖の確定・並べ直し）はどれも `MoveCue` を名乗る
-/// ため route は引数で受けない（呼出側が渡せる値が 1 つしか無く、取り違えの余地だけを
-/// 増やす＝`resize_window_keep_position` と同じ判断）。**スクリプトの明示操作**ゆえ
+/// [`PlacementRoute::BalloonFollow`] として記録する。本関数の呼び手はどれも `MoveCue` を名乗る
+/// （別の経路を名乗る呼び手は [`move_window_with_route`] を呼ぶ）。**スクリプトの明示操作**ゆえ
 /// 遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）。
 /// 整合待ちの札（[`DpiSyncHold`]）のある窓へ届いても [`enqueue_window_set_pos`] の監視は
 /// 鳴らない——見送らないことが正しい書込だからである（分類は [`deferral_covers_route`] が
@@ -49,15 +48,17 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 
 /// [`move_window_to`] の経路引数版（対象窓の書込 route だけを呼び手が名乗る）。
 ///
-/// 幾何の扱いは [`move_window_to`] と**完全に同一**である——変わるのは対象窓の書込へ載る
-/// [`PlacementRoute`] だけで、随伴バルーンは従来どおり [`PlacementRoute::BalloonFollow`] を
-/// 名乗る（随伴はキャラ窓の従属量であって、キャラ窓を動かした由来を名乗る主体ではない）。
+/// 変わるのは対象窓の書込へ載る [`PlacementRoute`] と、それを引き金に [`follow_balloon`] が
+/// 随伴バルーンへ可視性の守りを当てるかどうか（配置の経路なら当てる・`MoveCue` は当てない）
+/// だけである。随伴バルーンの書込は従来どおり [`PlacementRoute::BalloonFollow`] を名乗る
+/// （随伴はキャラ窓の従属量であって、キャラ窓を動かした由来を名乗る主体ではない）。
 ///
 /// # なぜ経路を引数で受けるか（D13 の 1 語＝1 実在トリガ）
 ///
-/// 「寸を変えずに位置だけを書く」手続きの呼び手は 2 つある——`\![move]` cue（明示操作＝
-/// [`PlacementRoute::MoveCue`]）と、DPI 遷移後の連鎖再解決（システム由来＝
-/// [`PlacementRoute::ChainRealign`]・`areka-P0-dpi-transition-atomicity` C4）である。
+/// 「寸を変えずに位置だけを書く」手続きの呼び手は由来で分かれる——明示操作（[`move_window_to`]
+/// 経由の [`PlacementRoute::MoveCue`]）と、システム由来の DPI 遷移後の連鎖再解決
+/// （[`PlacementRoute::ChainRealign`]・`areka-P0-dpi-transition-atomicity` C4）・面の `move` の
+/// ずれ（[`PlacementRoute::PatternMove`]）である。
 /// 由来が違えば**挙動も違う**: 既定位置の追跡（[`track_default_char_pos`]・D9／D16）は
 /// システム由来の書込にだけ効くので、遷移後の解き直しを `MoveCue` で書くと既定位置が
 /// 置き去りになり、次の遷移で当該スコープが「明示的に動かされた」へ倒れる。
@@ -68,30 +69,17 @@ pub fn move_window_with_route(
     y: i32,
     route: PlacementRoute,
 ) -> bool {
-    let follow = world.get::<BalloonFollow>(window).copied();
-
     if !enqueue_window_set_pos(world, window, x, y, None, Some(route)) {
         return false;
     }
-
-    if let Some(follow) = follow {
-        let shift = balloon_shift(world, follow.balloon);
-        let offset = follow.offset();
-        debug_assert!(
-            x.checked_add(offset.x).is_some() && y.checked_add(offset.y).is_some(),
-            "move target out of virtual-screen range: ({x},{y}) + {offset:?}"
-        );
-        // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_set_pos が
-        // warn! 済み。対象自身の移動は成立しているため true のまま返す。
-        enqueue_window_set_pos(
-            world,
-            follow.balloon,
-            x.saturating_add(offset.x).saturating_add(shift.x),
-            y.saturating_add(offset.y).saturating_add(shift.y),
-            None,
-            Some(PlacementRoute::BalloonFollow),
-        );
-    }
+    // 随伴は追随の書き手 1 本に任せる（引き金は配置の経路・`MoveCue` は守りの対象外）。
+    // バルーン側の失敗は enqueue_window_set_pos が warn! 済み。対象自身の移動は成立している。
+    follow_balloon(
+        world,
+        window,
+        Point { x, y },
+        BalloonFollowTrigger::Placement(route),
+    );
 
     true
 }

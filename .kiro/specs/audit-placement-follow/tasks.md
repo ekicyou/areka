@@ -32,7 +32,7 @@
   - テスト 3 本: 札のある窓で当て直しても書込の列が空で panic せず「今の値」が偽・札を外すと当たる／作業領域の無い世界で当て直した後に偽／印が立った窓をドラッグで離すと真になり、毎フレームの相を回しても書込の列が空
   - 完了の状態: 3 本が緑で、直す前の形に戻すと 1 本目が panic・2 本目が真で赤になる。本体の呼び手の道（`cargo test -p areka runtime::move_cue` と `runtime::frame::move_shift`）も緑
   - _Requirements: 3.1, 3.3, 5.6, 5.7, 7.2, 8.4_
-- [ ] 2.2 移動の随伴のバルーンを追随の書き手 1 本に任せ、範囲の外のテストまで緑で揃える（指摘 2）
+- [x] 2.2 移動の随伴のバルーンを追随の書き手 1 本に任せ、範囲の外のテストまで緑で揃える（指摘 2）
   - 経路つきの移動の中にある随伴のバルーンの自前の式を、キャラ窓を書けた後の追随の書き手の 1 呼び出し（引き金は配置の経路）に替える。`MoveCue` の書込は今と同じ
   - 移動の関数の説明（「唯一の位置ライター」「呼び手はどれも `MoveCue` を名乗る」）を事実に直す
   - 例外表のファイル（`window_move.rs`）の終わりの行数が 1,231 を越えない
@@ -207,3 +207,4 @@
 
 ## Implementation Notes
 - 1.1: 範囲の外の `point()` の写し（`balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`balloon_limit_tests.rs`）は「核へ伝える一覧」に未記載。4.6 で核へ送るときに足す。`follow.rs` の `mod test_support` は `pub(crate)`（`#[cfg(test)]` の内側）にした
+- 2.2: 範囲の外の本体に古い「唯一の位置ライター」が 2 か所残る（`crates/areka/src/runtime/frame/drain_resnap.rs` の `move_window_to` の呼び出しの上・`crates/areka/src/runtime/frame_chain_finalize_tests.rs`）。直さず、4.6 で核へ伝える一覧に足す（または 3.5／4.1 が受け持ちなら直す）
