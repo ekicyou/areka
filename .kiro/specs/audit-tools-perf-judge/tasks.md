@@ -241,3 +241,4 @@
 - 12.2: README へ渡す分（13）: 830 行の段①の説明から「発話中の頂」を消す（#21）／1059 行は judge 側か rank 側かを確かめる／段②③④の理由の語と、段③の no_dump・declared_unavailable・0 バイトの dump が exit 4 になる点（#62・#66）を 901〜906 行あたりへ。perf-ledger の入口の reconfigure も backslashreplace にした（D9）
 - 13: perf-run は main に未着地のため、README の perf-run の文 ①〜③ は今の .ps1 の形のまま（後に着地した方が取り込みで合わせる）。④ の理由の語に `dry_run`・`no_record` を足した
 - 14: かけ直しは 7 回で収束（research.md §10）。議題 4 件は audit の決めごとで推奨案で裁定。範囲の外の申し送り（.ps1・SKILL.md・crates・doc）は §10.4 → /kiro-complete の棚卸で扱う
+- 完了の棚卸（2026-11-15）: その場で解決 1 件（`doc/COMPAT_ARCHITECTURE.md:629` の「judge-perf.py（版 0.4.0）」を版を名指さない形へ）・申し送り 5 件（`audit-tools-perf-run` の brief へ 4 件＝`.ps1` の古い注記と行番号・SKILL.md:45-46 の `--iteration`・道具の口の変化・README の合わせ方／`talk-thread-count-growth` の brief へ 1 件＝`perf_thread_report.rs:22-24` の注記）・起票 0 件。実機の dump での確かめ（議題 3）は任意の申し合わせのまま未で、起票しない
