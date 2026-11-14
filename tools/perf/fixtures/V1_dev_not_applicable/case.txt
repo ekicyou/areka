@@ -1,0 +1,8 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = dev ビルドでは CPU の数値目標は適用外
+mode = verdict
+build = dev
+exit = 0
+
+note = build = dev。CPU 4.0% は release なら ⑷a で不合格（1）になる値。
+note = ⑷a・⑷b は release だけの判定なので dev では適用外とし、ほかが健全なら合格（0）になる。

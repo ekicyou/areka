@@ -1,0 +1,7 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 明示指定の系列が上限を越えたら不合格
+mode = verdict
+build = release
+exit = 1
+
+note = S2 の待ちを 200 ms（上限 172.5 ms 越え）にした。不合格（1）になる。
