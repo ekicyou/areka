@@ -40,10 +40,21 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 - よその依存: `sysinfo` 0.38.4（`human-panic` 経由）が `windows` を 0.63 未満に固定している。古い系列が木に並ぶだけで、`deny.toml` の `multiple-versions` は `warn`。
 - 公開の制約: `wintf`・`dola`・（取り込みの後は）`wintf-winmsg-executor` は crates.io へ出す。crates.io へ出すクレートは git の依存を持てない。`deny.toml` は `unknown-git = "deny"` で、許しているのは `image-webp` の 1 件だけ。
 
+**先に確かめたこと**（2026-11-14・起票の後・別のセッションからの引継ぎの先行検証）
+
+- **新旧は同じ依存の木に並ぶ**: 自分の `[workspace]` を持つ小さなパッケージから、本物の `wintf`・`areka-emo-text`（`windows-core` 0.62.2 のまま）を path で借り、`windows-core` 0.100.0 を直に持つ形で、依存の解決が通った（`cargo tree`）。本線の `Cargo.toml`・`Cargo.lock` は変わらない。
+- **上流の縦書きのサンプルは動く**: `crates/samples/text/vertical`（`text-vertical`）は rev `520097a` で組めて動いた（rustc 1.100.0）。上流のワークスペースを要るフォルダだけ取り寄せると、取り寄せていないテストと道具のクレートが `members` に残って解決が止まるので、その行を外す必要があった（サンプルとライブラリのソースは無変更）。
+- **当たり判定は通る**: サンプル付属のテスト（折り返し直した後も UTF-8 の位置で選択肢を当てる）が緑。縦書きの選択肢へクリックのメッセージを送ると、その選択肢が選ばれた。
+- **開き括弧の位置がずれる**: 既定のままだと、開き括弧（「『（）の墨が字の枠の上側に寄り、次の字とのあいだに半字ぶんの空きができる（Yu Gothic で確かめた）。areka が `emo-text-dwrite-fidelity` で直したのと同じ現象。**areka の 10 個の字形の指定（`crates/areka-emo-text/src/draw.rs` の `VERTICAL_FEATURES`）を `set_font_features` に当てると直った**。上流へは開発者が報告する。
+- **縦書きの下線は列の左側に出る**。areka の選択肢の下線は列の右に置く決まりなので、位置は自前で決める。
+- **カラー絵文字**は縦書きでも色つきで立って出た（上流の `windows-canvas` 経由の描画）。自前の Direct2D の描画では未確認。
+- 引継ぎのメモは合成を DirectComposition と書いていたが、areka は Windows.UI.Composition である。
+
 ## Desired Outcome
 下の問いのそれぞれに、go／違う／直す の判定と学びが付いた一次記録（README）が在り、開発者がそれを見て移行の本体へ進むかを決められる。あわせて次が出ている。
 
 - **移行の本体を何本にどう刻むかの案**（束縛を作る道具・クレートの群ごとの移行・`windows` 0.62 を外す締め・`windows-text` の採用）と、それぞれの規模の実数に基づく見立て。
+- **書き換えの対応表**（今の書き方 → 新しい書き方。戻り値の `HRESULT`・「ポインタ＋長さ」・`HWND`・列挙の定数・`windows-numerics` のフィールド・`#[implement]` の `_Impl`）。移行の本体の実装係がこの表だけで機械的に書き換えられる形にする（開発者「方針さえ決まれば、やることは機械的だから実装サブエージェントはsonnetでもいけそう」）。
 - **上流へ返す文案**（`windows-text` の足りない所・実アプリで確かめた結果）。出すのは開発者の承認の後。
 
 **確かめる問い**
@@ -54,17 +65,22 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 4. **WinRT**: `windows-bindgen` の束縛で、今の `com/wuc.rs` の形（Compositor・DesktopWindowTarget・描画面と SpriteVisual のつなぎ・相互運用のインターフェース・DispatcherQueue）がそのまま通るか。
 5. **`HWND`**: 生ポインタの別名を bevy の Component に持つための包み方。
 6. **COM の実装**: `windows-core` 0.101 の `#[interface]`・`#[implement]` で、SHIORI の 1 組と `IDWriteTextRenderer1` が組めるか。
-7. **`windows-text` の縦書き**: 今の areka の 1 列（開き括弧`「`・小書きかな・句読点・絵文字を含む）と画素で比べて同じか。`set_font_features` で今の縦書きの字形の指定を再現できるか。`decorations()` で下線の位置が取れるか。範囲ごとの色を `as_interface` 経由の `SetDrawingEffect` で付けられるか。UTF-8 の位置と panic する `new` をどう扱うか。
+7. **`windows-text` の縦書き**: 今の areka の 1 列（開き括弧`「`・小書きかな・句読点・絵文字を含む）と画素で比べて同じか。`set_font_features` で今の縦書きの字形の指定を再現できるか（**上流のサンプルでは再現できた**＝上の「先に確かめたこと」。残りは areka の出力との画素の比べ）。`decorations()` で下線の位置が取れるか。範囲ごとの色を `as_interface` 経由の `SetDrawingEffect` で付けられるか。UTF-8 の位置と panic する `new` をどう扱うか。**透過の枠なしの窓で、Windows.UI.Composition の描画面へ自前の Direct2D で描いた縦書きのバルーンと、クリックできる選択肢が出るか**（カラー絵文字を含む・引継ぎのメモの第 2・第 3 ゴール）。
 8. **リンク**: `windows-link` の束縛で i686 と arm64 が通るか。
 9. **規模**: 使っている API の全数（関数・型・定数・メソッド）の数え方と実数。
-10. **git の依存**: 公開の前の 0.101 の系列を、本線の `Cargo.lock` に入れてよいか（`deny.toml` の許し・公開の道具の、ネットを使わない包みの段が通るか）。
+10. **機械的に回せるか**: 書き換えの対応表だけで、問い 1 の写しを安い実装係（Sonnet）が移せるか。取りこぼし（戻り値の `HRESULT` を見ない・「ポインタ＋長さ」の長さの誤り・失敗を記録しない経路）がコンパイルと lint で捕まるか。捕まらない種類は、移行の本体でレビューが見る点として挙げる。
+
+「公開の前の 0.101 の系列を本線の `Cargo.lock` に入れてよいか」は、置き場を独立のワークスペースにしたので、この先進坑の問いから外した（移行の本体の問いとして残る）。
 
 ## Approach
 二坑モデル（`.kiro/steering/two-tunnel.md`）の先進坑として掘る。成果物はコードでなく知見である。
 
 - 上流は master の決まったコミットを git で引く（引いたコミット番号を README に書く）。
 - 小さく縦に通す。全クレートを移そうとしない。問い 1 は `wintf-winmsg-executor` の写し、問い 2〜5 は DirectWrite・Direct2D・WUC を 1 本だけ通す最小の例、問い 6 は SHIORI の 1 組、問い 7 は縦書きの 1 列で確かめる。
-- 出荷するクレート（`crates/wintf` ほか）は書き換えない。試すのは写しの上か、知見のクレート `crates/pilot` の `examples/pilot-windows-rs-next/` の中だけ。
+- 出荷するクレート（`crates/wintf` ほか）は書き換えない。試すのは写しの上か、先進坑の置き場の中だけ。
+- **置き場は独立の小さなワークスペース**にする（`crates/pilot/examples/pilot-windows-rs-next/` の下に、自分の `[workspace]` と `Cargo.lock` を持つ）。`crates/pilot` の例の 1 つには置けない。1 つのパッケージが `windows_core` の名前で持てる版は 1 つだけで、`#[implement]`・`#[interface]` と `windows-bindgen` の出力は `windows_core::` を名指しし、`crates/pilot` は既に 0.62 を持つからである。独立にすれば、git の依存は本線の `Cargo.lock` に入らず、全体テストにも乗らない。ビルドの出力は作業木の `target` の下へ向ける。
+- **今のクレートは写さずに借りる**。本物の `wintf`・`areka-emo-text` は path の依存で 0.62 のまま借りられる（解決は確かめた）。新旧の COM の型は `as_interface` ではつなげない（`windows-core` 0.101 の型どうしだけ）ので、橋が要るなら生ポインタで渡すか、両側を別々に描いて画素だけ比べる。
+- **写す量の上限は 1,500 行前後**。問い 1＝`wintf-winmsg-executor` を丸ごと（約 920 行）／問い 3＝`wintf` の `com/dwrite.rs`（154 行）と Direct2D の一部／問い 4＝`com/wuc.rs`（253 行）／問い 6＝`shiori-abi` の `interface.rs`（476 行）のうち 1 組。ほかの問いは写さずに新しく小さく書く。「`wintf` 全体が移せるか」は確かめない（移行の本体の仕事。先進坑が出すのは、写した分の 1 行あたりの手間と API の全数からの見積もりまで）。
 - 一次記録は `crates/pilot/examples/pilot-windows-rs-next/README.md`（動機・概要・検証結果の 3 幕）。
 
 ## Scope
@@ -107,7 +123,7 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 
 ## Constraints
 - **二坑モデルの決まりに従う**: コードは `crates/pilot/examples/pilot-windows-rs-next/` に隔離し、出荷するクレートが先進坑のコードに頼らない。先進坑のコードを本坑へ写して使わない。go の判定は開発者。
-- **git の依存を本線に入れられないとき**（問い 10 が「違う」のとき）は、この spec に限り、本線へ入れるのを README と刻み方の案だけにし、コードは枝に残す。この例外は自分の要件・設計・タスクに書き、共通の文書（`two-tunnel.md`・`workflow.md`）は直さない。
+- **置き場の形だけは決まりの例外**: 二坑モデルは「探索のコードは `crates/pilot` の例に置く」と定めるが、この spec は同じフォルダの下に独立のワークスペースを置く（理由は Approach）。本線のワークスペースの一員にしないので、葉の隔離はより強く保たれる。この例外は自分の要件・設計・タスクに書き、共通の文書（`two-tunnel.md`・`workflow.md`）は直さない。
 - **裁定済みのことを議題に戻さない**: `windows` クレートを使わない・WinRT は `windows-bindgen`・`windows-composition` は使わない。
 - **外部クレートはそのまま使う**（フォークも `[patch]` もしない）。上流の master を決まったコミットで引くのは、未公開の版をそのまま使う形で、書き換えではない。足りない所は公開の型で自分の側に組む。
 - **上流は動く**: `windows-text` は 2026-11-06 にできたクレートで、0.101 は未公開。引いたコミット番号と確かめた日を必ず書き、公開の後に結果が変わりうることを README に書く。
