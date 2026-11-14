@@ -4,7 +4,7 @@
 
 開発者は、areka のコードに残っているバグ・危ない所・負荷に弱い所・テストの抜け・遅い所・要らないコードを、一度まとめて直したい。今までは、各 spec が自分の触る所だけを見てきた。全体を同じ物差しで見直したことはない。物差しは ponytail のプラグイン（5.3.2・利用者全体に入れてある）の `/ponytail:ponytail-audit`。この spec は **性能改善ループの走らせ方（PowerShell）** を受け持つ（受け持つファイル＝`tools/perf/` の `*.ps1`・`*.psm1`。まだ audit をかけていない）。
 
-着手のときの測り直し（2026-11-14・`main` `30a343eb`・brief と同じく `_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）: 8 ファイル＝コード 5,456 行・テスト 0 行・`*.psm1` は 0 ファイル。内訳は `check-quiet.ps1` 662 行・`invoke-cpu-sample.ps1` 606 行・`invoke-followup-checks.ps1` 865 行・`invoke-perf-run.ps1` 926 行・`perf-loop.common.ps1` 678 行・`perf-loop.measure.ps1` 993 行・`perf-loop.ps1` 685 行・`perf-pwsh-child.ps1` 41 行。起票のとき（`main` `e3c2cbe4`）の数と変わらない。
+着手のときの測り直し（2026-11-14・`main` `30a343eb`・brief と同じく `_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）: 8 ファイル＝コード 5,456 行・テスト 0 行・`*.psm1` は 0 ファイル。内訳は `check-quiet.ps1` 662 行・`invoke-cpu-sample.ps1` 606 行・`invoke-followup-checks.ps1` 865 行・`invoke-perf-run.ps1` 926 行・`perf-loop.common.ps1` 678 行・`perf-loop.measure.ps1` 993 行・`perf-loop.ps1` 685 行・`perf-pwsh-child.ps1` 41 行。起票のとき（`main` `e3c2cbe4`）の数と変わらない。物差しの版は、brief の 5.3.2 ではなく、いま入っている 5.3.3（audit の作法は同じ）。
 
 直した後の姿: 受け持つ範囲に audit をかけて出た指摘が、3 つの組（必ず直す・直したほうがよい・できれば）とも全部直っている（開発者「とにかく指摘事項は全部直す方針」）。直した後に同じ範囲へもう一度 audit をかけて、新しい指摘が 0 件（直しが生んだ指摘も直す）。全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`）が緑で、直したバグ・危ない所には、それが壊れたら落ちるテストが 1 本ずつある。
 
@@ -84,7 +84,7 @@
 1. The 本 spec の直し shall 直す対象として確定した指摘を、3 つの組（必ず直す・直したほうがよい・できれば）とも全部直す
 2. When 指摘を直すとき, the 本 spec の直し shall その直しで壊れる呼び出し元・読み手・テスト・検体・設定・文書を、範囲の外も含めてツリー全体で探し、全部直し切る
 3. When コードやファイルを消すとき, the 本 spec の直し shall 消す前に、ツリー全体（テスト・検体・設定・スキル・エージェント・手順書・文字列での参照を含む）でそれが使われていないことを確かめる
-4. The 本 spec の直し shall 直す対象として確定していない新しい機能を足さない
+4. The 本 spec の直し shall 直す対象として確定していない新しい機能を足さない（確定した指摘の直しとして、走る前に止める確かめや止まる道を足すこと〔例: ギャップ分析の 15・26・34〕は新しい機能に数えない）
 
 ### Requirement 4: 直したバグと危ない所をテストで縛る
 
