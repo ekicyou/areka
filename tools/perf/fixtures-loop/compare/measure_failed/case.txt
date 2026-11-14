@@ -11,7 +11,7 @@ verdict = MEASURE_FAILED
 before_idle_cpu_pct = 9.35
 noise_pct = 0.30
 
-stderr_substr = 計測失敗
+stderr_substr = measure failed
 stderr_substr = b2
 
 note = b2 は表示成立点の行 が 1 本も無い走行で、judge-perf.py が必要ログ種の欠落

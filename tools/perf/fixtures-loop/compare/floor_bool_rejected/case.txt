@@ -8,7 +8,8 @@ b2 = ../runs/idle_620_p95_150
 exit = 3
 verdict = ADOPTED
 
-stderr_substr = perf-compare:
+stderr_substr = perf-compare: bad input
+stderr_substr = noise_floor_pct must be a number (True)
 
 note = adopted と同じ 4 本の走行を読む。入力不正（exit 3）で終わるので結果は書かれない。
 note = 検査を戻すと ADOPTED（exit 0）になって赤になる。

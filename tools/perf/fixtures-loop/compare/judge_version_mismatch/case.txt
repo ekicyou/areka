@@ -1,0 +1,15 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 目標定義の判定スクリプトの版が走行の版と違う（4 本とも判定不能・計測失敗）
+goal = goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_p95_150
+b2 = ../runs/idle_620_p95_150
+exit = 4
+verdict = MEASURE_FAILED
+
+stderr_substr = measure failed
+stderr_substr = judge script version mismatch: goal 0.0.1 / run 0.5.0
+
+note = 版が違えば判定式か較正値が違い、前後で意味の違う数を引き算することになる（設計 C1）。
+note = goal.toml は本番の写しの judge_version だけを 0.0.1 にした。検査を戻すと ADOPTED になる。
