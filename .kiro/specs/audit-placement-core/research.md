@@ -689,3 +689,57 @@
 
 - 要件の討議（`/kiro-requirements-discussion audit-placement-core`）で、80 件を直す対象として requirements.md に落とす。そこで 8 節・9 節の決めと 5 節の約束の扱い、6.3 の切り方を確定する。
 - その後、`/kiro-design audit-placement-core` へ進む。
+
+---
+
+## 11. 設計の段の調べ（2026-11-14 `/kiro-spec-design -y`）
+
+発見の型は軽い（今ある crate の中の直し・新しい依存なし）。使った決まりは `kiro-spec-design` の `design-discovery-light`・`design-synthesis`・`design-review-gate`。外の調べ（web）は要らなかった（`image` はレジストリのソースで足りた）。
+
+### 11.1 7 節の調べの答え
+
+| 7 節 | 答え | 出所 |
+|---|---|---|
+| 1 `image` の `Limits` | `PngDecoder::new` は `Self::with_limits(r, Limits::no_limits())`＝見出しの寸法どおりに確保する。`Limits::default()` の `max_alloc` 512 MiB は `new` では使われない。WebP も確保の上限をかけない（`audit-emo-atlas` の設計の決め 2・`image-webp` 0.2.4 の `memory_limit` の既定は `usize::MAX`）。指摘 3 は重さのとおり「必ず直す」 | `C:\rust\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\image-0.25.10\src\codecs\png.rs:L42-L55`・`src\io\limits.rs:L50-L66` |
+| 2 属性を外したときの警告 | 9 つの属性の項目は、どれも `pub mod`（`lib.rs:L23-L63`）の中の `pub` の項目か、根の `pub use`（`L72`）で、lib の根から届く。`dead_code`・`unused_imports` は鳴らない読み。実装で `cargo check -p areka-placement --all-targets`（機能あり・なし）を 1 回ずつ回して確かめる | `lib.rs` のモジュールの宣言 |
+| 3 起動の経路の `resize_window_to` | 指摘 1 で最初の位置そのものを辺で解くので、問わなくてよい | — |
+| 4 96→144 の数値 | 設計で U4 のテストに固定する（手計算: 追随 −407・解き直し −406） | 2 節の 2 番 |
+| 5 heartbeat の間隔 | 指摘 71 は doc に条件を書く形（議題 7）なので値は要らない | — |
+| 6 台本の引数の長さ | 指摘 72 は `HashSet`／`HashMap` で長さに依らない形にするので要らない | — |
+| 7 `clippy-199-lints` との重なり | 実装の最後（U28）に clippy を回して確かめ、同 brief へ書く | — |
+
+### 11.2 指摘 2 の「同じ丸め」の形を確かめた結果
+
+- 追随の値: `BalloonFollow` の基準（`OffsetBase`＝起動のときの標準のずらしと採寸の DPI）を、`rescale_follow_offset`（`follow/offset_space.rs:L208-L246`）で今の DPI へ 1 回で換算した値。基準は追随で変わらない（`apply_rescaled`）。変わるのはドラッグとキーワードの再導出（`reestablish`・`follow/drag_follow.rs:L581`・`follow/keyword_base.rs:L152`）だけ。
+- 解き直しの値: `resolve_standard_scopes`（`reseed.rs:L144-L224`）が、今の窓の寸法と今の DPI で部品ごとに換算して足した値。
+- 解き直す側を「基準の DPI で解いて 1 回で換算」にそろえるには、基準の DPI のときの窓寸が要るが、世界に残っていない（窓寸は今の DPI の `WindowPos` だけ・面を変えると寸法も変わる）。「動かした印」を配置の側の部品で持つ形も、キーワードの再導出（追随の持ち物）が基準を焼き直すので、印を付け直すには追随の持ち物に触れる。
+- よって、follow に触れない形は「差を許す」だけになる。差の見積もり（`n` 個の部品・比 `r`・基準の拡大率 `k0`）:
+  - `k0 = 1`（作者の DPI＝主モニタの DPI）のとき、Side の腕は |差| ≤ 2、キーワードの腕は |差| ≤ 3（`r < 3`）。
+  - `k0 ≠ 1` で拡大率が上がる移り（例: 作者 96・主モニタ 144 で起動して 288 へ）は、基準の丸めの差が `r` 倍されるので 3 を越えうる。
+- 設計の決め: 軸ごとに 3px を許し、限界を `shortcut:` の注釈に書く（design の U4）。議題へは戻さない（follow の持ち物に触れないため・8 節 13 の条件）。
+
+### 11.3 公開を狭める形（議題 5）の確かめ
+
+- `pub(crate)` の項目を `pub use` で開き直すのは Rust では組めない（E0364）。テストだけに開く項目のうち crate の本番も使うもの（`evaluate`・`DpiSyncDecision`・`DpiSyncOutcome`・`DPI_SYNC_HOLD_MAX_FRAMES`・`HoldReason`・`BALLOON_LIMIT_CLAMP_TAG`・`PREPARE_GHOST_WINDOWS_CONTEXT`）は、同じファイルの私有の子モジュールに `pub` で置き、機能 `test-support` の有無で `pub use`／`pub(crate) use` を切り替える形にした。道と名前は変わらないので、追随の持ち物（`pt/transition_judge_verdict.rs:L57`・`follow.rs:L53`）は直さなくてよい。
+- `BalloonLockLedger::reason` は crate の中の本番（`balloon_lock.rs:L125`）も使うメソッドなので、子モジュールの関数 `hold_reason` にする。外の使い手は本体のテスト 2 本だけ。
+- ワークスペースに `unreachable_pub` などの lint の設定は無い（根と配置の `Cargo.toml` に `[lints]` が無い）。
+
+### 11.4 指摘 5・13・17・36・73 の口と呼び手
+
+- 5: 資産の道で焼くのは `areka-emo-present` の `shell_target.rs:L621-L622`（`bake`／`bake_quiet`）と `balloon.rs:L806-L807`。測りの 2 本が動く絵を登録するのはシェルの側だけ（`measure_bake_log_tests.rs:L169-L180`）なので、上限の口はシェルの側だけに足す。本体は `areka-emo-atlas` に直に依存している（`crates/areka/Cargo.toml:L58`）。`build_shell_assets` の呼び手は本番 2 か所（`assets.rs:L252`・`switch_assets.rs:L219`）とテスト。
+- 13: 3 か所とも、主モニタを引いた後の `RECT`→`RectPx` の写しが同じ。並べ直しは DPI も要るので、`Option<RectPx>` を返す形でなく、モニタ 1 つを写す `work_area_px` にした。
+- 17: sylphya の書き込みは、投函 `SylphyaMsg::PersistPut` → `SylphyaCore::apply` の効果 `SetDottedGlobal`・`PersistSave` → アクターの実行（`actor.rs:L715`・`L731`）→ `save_scope`（`persist/mod.rs:L301-L417`・錠・既存の読み・`apply_entry`・`to_toml_string_over(base, doc)`・commit）。`to_toml_string_over` は `doc` を `base` に重ねるだけなので、消すには `base` の表からも消す要がある。`LastRunning` の「空文字は無し」の約束は、バルーンのずらしでは壊れた値と見分けがつかないので取らない。
+- 36: `apply_descript`（`sticky_group_ledger.rs:L262`）は既に `action`（`descript_seed`／`descript_replace`）を受けるが、`L275` が `"seed"` を固定で渡す。呼び手は crate の中の 2 か所だけ。
+- 73: `ChainPlan.absent` の読み手は本体の `runtime/frame/zorder_drain.rs:L124`・`L258-L277` とテスト。`GroupElement` は配置の型なので wintf に置けない。値は `(u32, char, u32)` にする。
+
+## 12. 設計の総合（`design-synthesis`）
+
+- **まとめられる形**: 記録の無い縮退（16・26・35・40）は、どれも「今の縮退の手前に `warn!` を 1 行」で同じ形。写し（11・14・32・37・64・65・76・77・80）は、どれも今ある支え（`test_support.rs`・`placement_shared_test_support.rs`・`spawn_test_support.rs`）か新しい 2 つの支えへ寄せる。公開を狭める 6 件（8・19・42・45・51・62）は、表の 3 種類の置き方で 1 つに決めた。
+- **作るか使うか**: 新しい依存は使わない（`visibility` のような crate は足さない）。`image` の上限は確保の前の確かめを自前の `pixel_len` で持つ（`image` の `Limits` は `new` で効かない）。
+- **削ったもの**: 指摘 27 の `macro_rules!`（テストの網羅の `match` で足りる）・指摘 13 の `primary_work_area`（`work_area_px` で足りる）・指摘 2 の「動かした印」（追随の持ち物に触れる）・指摘 5 のバルーンの側の上限の口（測りのテストが使わない）。
+
+## 13. 設計の検証の材料（`design.md` の決めの要点）
+
+- 単位は 28（U1〜U28・`design.md` の一覧）。指摘 80（U26）はほかの直しの後の最後の実装。
+- 外から見た振る舞いが変わるのは 1・2・17 の 3 件。
+- 範囲の外に触るのは、裁定で認めた所（3・5・13・17・47・51・62・67・73 と、8・19・42 の本体のテスト）だけ。

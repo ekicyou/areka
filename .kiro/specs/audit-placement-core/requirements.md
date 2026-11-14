@@ -194,6 +194,8 @@
 
 開発者「重なりがあるなら、セッション間で調整し、どちらを先に実装するかを決めてください」「audit系以外は必ず先に実施します」。結果は「areka棚卸」のセッションへ伝えた。
 
+「areka棚卸」は C20 を 2 段に分けた（2026-11-14）。先の段は `wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・`audit-placement-follow`、後の段は `audit-wintf-input`・`audit-tools-perf-run`・`audit-tools-perf-judge`・この spec。この spec の実装（`/kiro-impl`）は先の段の 4 本が着地してから始める。後の段の中では `audit-wintf-input` が先に着地し、この spec は指摘 80 を最後のタスクにして、その着地を待つ（遅れたら「後から着地する側が読み手を直す」に戻す）。
+
 | 相手の spec | 重なる所 | 順 | 申し合わせ |
 |---|---|---|---|
 | `wintf-visual-damage-redraw` | 重なり無し（相手は 11-14 の要件の討議で件 1 を外し、`areka-emo-present` に触らなくなった＝触るのは wintf の `ecs/graphics/` と `numerics/` だけ） | 順は問わない | 合意（11-14） |
