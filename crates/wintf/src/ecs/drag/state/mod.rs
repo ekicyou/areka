@@ -80,7 +80,7 @@ pub enum DragState {
         // --- WndProc レベルドラッグ用の新規フィールド ---
         /// Window の Win32 ハンドル
         hwnd: HWND,
-        /// ドラッグ開始時のウィンドウ位置（クライアント領域スクリーン座標）
+        /// ドラッグ開始時のウィンドウ位置（ウィンドウ枠を含むスクリーン座標）
         initial_window_pos: Point,
         /// DragConfig.move_window のキャッシュ
         move_window: bool,
@@ -464,15 +464,12 @@ pub fn end_dragging_on_release(hwnd: HWND, position: Option<PhysicalPoint>) -> D
 
 /// ドラッグ準備中をDraggingに遷移させるか判定する
 ///
-/// # 整数境界の注意（挙動非破壊で記録）
+/// # 整数境界の注意
 /// `dx`/`dy` は i32 座標差、`distance_sq = dx*dx + dy*dy` と `threshold_sq = threshold*threshold`
 /// はいずれも i32 乗算であり、極値座標差では debug ビルドで桁あふれ panic（`|dx| > 46340` で
 /// `dx*dx` が i32::MAX 超過）・release ビルドでラップする理論的経路がある。ただし本番座標は
 /// WM lparam 由来の i16 クライアント座標＋ウィンドウ位置オフセット（実モニタ幾何で有界）であり、
-/// 実用座標では桁あふれしない。なお本関数は **本番呼び出しがゼロ**（ワークスペース全 grep で
-/// 呼び出し元はこの in-source テストのみ）で、本番の閾値判定は `window_proc/mouse_move.rs`
-/// 内に同一算術がインライン複製されている（W7a 境界）。飽和/checked 化や複製統合は計算結果や
-/// 構造を変える挙動変更のため本ループでは適用せず P62 に記録（R2.4/R5.2）。
+/// 実用座標では桁あふれしない。
 #[inline]
 pub fn check_threshold(current_pos: PhysicalPoint, threshold: i32) -> bool {
     read_drag_state(|state| {

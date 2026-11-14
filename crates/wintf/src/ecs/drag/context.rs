@@ -1,7 +1,7 @@
-//! ドラッグコンテキスト（ECS→wndprocスレッド間転送用）
+//! ドラッグコンテキスト（配りから窓の手続きへの受け渡し用）
 //!
-//! dispatch_drag_events（ECSスレッド）がドラッグ開始時にWindowDragContextを書き込み、
-//! update_dragging（wndprocスレッド）がJustStarted→Dragging遷移時に読み取る。
+//! dispatch_drag_events がドラッグ開始時にWindowDragContextを書き込み、
+//! update_dragging がJustStarted→Dragging遷移時に読み取る（どちらも同じ UI スレッド）。
 
 use bevy_ecs::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -10,7 +10,7 @@ use windows::Win32::Foundation::HWND;
 use super::DragConstraint;
 use crate::ecs::Point;
 
-/// wndprocスレッドでのドラッグに必要なWindow情報
+/// ドラッグに必要なWindow情報（配りが書き、update_dragging が読む）
 #[derive(Debug, Clone, Default)]
 pub struct WindowDragContext {
     /// Window の Win32 ハンドル
@@ -24,7 +24,7 @@ pub struct WindowDragContext {
 }
 
 // HWND は *mut c_void を含むため自動的に Send/Sync を実装しないが、
-// ウィンドウハンドルは実質的にただの整数値であり、スレッド間の受け渡しは安全。
+// Resource に置くには Send/Sync が要る。ウィンドウハンドルは実質的にただの整数値で、読み書きはどれも同じ UI スレッド。
 // Arc<Mutex> でラップされているため、データ競合も発生しない。
 unsafe impl Send for WindowDragContext {}
 unsafe impl Sync for WindowDragContext {}
@@ -39,11 +39,11 @@ impl WindowDragContext {
     }
 }
 
-/// ECSスレッド→wndprocスレッド間でドラッグ開始時のWindow情報を転送するリソース
+/// ドラッグ開始時のWindow情報を配りから窓の手続きへ渡すリソース（同じ UI スレッド）
 ///
 /// # ライフサイクル
-/// - dispatch_drag_events (ECS スレッド) が Started 処理時に更新
-/// - update_dragging (wndproc スレッド) が JustStarted → Dragging 遷移時に読み取り
+/// - dispatch_drag_events が Started 処理時に更新
+/// - update_dragging が JustStarted → Dragging 遷移時に読み取り
 #[derive(Resource, Clone)]
 pub struct WindowDragContextResource {
     inner: Arc<Mutex<WindowDragContext>>,
@@ -57,14 +57,14 @@ impl WindowDragContextResource {
         }
     }
 
-    /// コンテキストを設定（ECSスレッドから呼ばれる）
+    /// コンテキストを設定（配りの dispatch_drag_events から呼ばれる）
     pub fn set(&self, context: WindowDragContext) {
         if let Ok(mut inner) = self.inner.lock() {
             *inner = context;
         }
     }
 
-    /// コンテキストを読み取る（wndprocスレッドから呼ばれる）
+    /// コンテキストを読み取る（update_dragging から呼ばれる。窓の手続きの WM_MOUSEMOVE と配りの両方が呼ぶ）
     pub fn get(&self) -> Option<WindowDragContext> {
         self.inner.lock().ok().map(|inner| inner.clone())
     }

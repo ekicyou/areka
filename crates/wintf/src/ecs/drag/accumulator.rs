@@ -1,4 +1,4 @@
-//! ドラッグ累積器（スレッド間データ転送用）
+//! ドラッグ累積器（窓の手続きから配りへの受け渡し用・どちらも同じ UI スレッド）
 
 use crate::ecs::pointer::PhysicalPoint;
 use bevy_ecs::prelude::*;
@@ -126,7 +126,7 @@ pub struct FlushResult {
     /// 状態遷移（積んだ順・空なら知らせ無し）
     pub transitions: Vec<DragTransition>,
 
-    /// 現在ドラッグ中のエンティティ（Dragging状態の時のみSome）
+    /// 現在ドラッグ中のエンティティ（Started を積んでから Ended を積むまで Some）
     pub current_dragging_entity: Option<Entity>,
 
     /// 現在のマウス位置

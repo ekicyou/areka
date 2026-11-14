@@ -113,7 +113,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                     constraint = Some(*dc);
                 }
 
-                // WindowDragContextResource に書き込み（wndprocスレッドでの読み取り用）
+                // WindowDragContextResource に書き込み（update_dragging での読み取り用）
                 if let Some(ctx_res) =
                     world.get_resource::<crate::ecs::drag::WindowDragContextResource>()
                 {
@@ -162,7 +162,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                     timestamp,
                 };
 
-                tracing::info!(
+                tracing::debug!(
                     entity = ?entity,
                     x = start_pos.x,
                     y = start_pos.y,
@@ -206,7 +206,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                     timestamp: Instant::now(),
                 };
 
-                tracing::info!(
+                tracing::debug!(
                     entity = ?entity,
                     x = end_pos.x,
                     y = end_pos.y,
@@ -275,7 +275,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                                 window_mut.get_mut::<crate::ecs::layout::Arrangement>()
                             {
                                 if arr.offset != new_offset {
-                                    tracing::info!(
+                                    tracing::debug!(
                                         window_entity = ?window,
                                         old_offset = format_args!("({:.0},{:.0})", arr.offset.x, arr.offset.y),
                                         new_offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
