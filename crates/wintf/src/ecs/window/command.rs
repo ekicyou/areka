@@ -867,6 +867,10 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
 }
 
 #[cfg(test)]
+#[path = "command_test_support.rs"]
+mod test_support;
+
+#[cfg(test)]
 #[path = "command_transition_tests.rs"]
 mod command_transition_tests;
 

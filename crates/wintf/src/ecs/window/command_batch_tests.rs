@@ -36,63 +36,19 @@ use std::cell::RefCell;
 
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, GW_HWNDNEXT, GetTopWindow, GetWindow, IsWindow,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, GW_HWNDNEXT, GetTopWindow, GetWindow,
     RegisterClassExW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
     WINDOW_EX_STYLE, WM_WINDOWPOSCHANGED, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
-use super::super::transition_diag::{self, KIND_FLUSH, KIND_WRITE, RECORD_PREFIX_TAG};
+use super::super::transition_diag::{self, KIND_FLUSH, KIND_WRITE};
+use super::test_support::*;
 use super::{
-    BatchDegrade, SetWindowPosCommand, WindowPosArgs, drain_window_pos_commands,
-    flush_window_pos_commands, is_self_initiated, window_pos_args, with_forced_batch_begin_failure,
+    BatchDegrade, SetWindowPosCommand, WindowPosArgs, flush_window_pos_commands, is_self_initiated,
+    window_pos_args, with_forced_batch_begin_failure,
 };
 use crate::ecs::test_support::capture_under_filter;
-
-/// 観測チャネルを点灯させる directive（実機サインオフと同じ）。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::transition=debug";
-
-/// 捕捉が生きている証拠として同じ窓の中で必ず出す対照行。
-const CONTROL_LINE: &str = "[transition-probe] alive";
-
-fn emit_control() {
-    tracing::info!(target: transition_diag::TRANSITION_TARGET, "{CONTROL_LINE}");
-}
-
-/// テスト冒頭の初期化——キューの残りと刻印の写しを落とす（要件 7.7）。
-fn clean_slate() {
-    let _residue = drain_window_pos_commands();
-    transition_diag::reset_for_test();
-}
-
-/// 捕捉出力から観測チャネルの行だけを取り出す。
-fn transition_lines(captured: &str) -> Vec<&str> {
-    captured
-        .lines()
-        .filter(|line| line.contains(RECORD_PREFIX_TAG))
-        .collect()
-}
-
-/// 種別語 `kind=<kind>` を持つ行だけを取り出す。
-fn lines_of_kind<'a>(captured: &'a str, kind: &str) -> Vec<&'a str> {
-    let needle = format!("kind={kind} ");
-    transition_lines(captured)
-        .into_iter()
-        .filter(|line| line.contains(&needle))
-        .collect()
-}
-
-/// 実在し得ない窓ハンドル（`command_transition_tests` と同じ作法）。
-fn fake_hwnd(tag: u8) -> HWND {
-    let value = 0xFFFF_FE00_usize | (usize::from(tag) << 1) | 1;
-    let hwnd = HWND(value as *mut core::ffi::c_void);
-    // SAFETY: `IsWindow` は任意のハンドル値に対して安全に真偽を返す読み取り専用 API。
-    assert!(
-        !unsafe { IsWindow(Some(hwnd)) }.as_bool(),
-        "偽ハンドル 0x{value:X} が実窓を掴んでいる"
-    );
-    hwnd
-}
 
 // ---------------------------------------------------------------------------
 // テスト窓（0x0・不可視・既定手続き）
