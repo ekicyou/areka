@@ -541,3 +541,93 @@ fn modes_in_an_opacity_layer_apply_to_what_the_layer_drew_first() {
         }
     }
 }
+
+// ---- 描く矩形 1 つの中だけの再生（`emit_within`・要件 2.2） ------------------------------------
+
+fn px(left: i32, top: i32, right: i32, bottom: i32) -> super::diff::PxRect {
+    super::diff::PxRect {
+        left,
+        top,
+        right,
+        bottom,
+    }
+}
+
+/// 比べの項を手で組む（`emit_within` が読むのは `bounds` だけ）。
+fn entry(kind: super::diff::EntryKind, bounds: super::diff::PxRect) -> super::diff::DamageEntry {
+    super::diff::DamageEntry {
+        id: 0,
+        shape: 0,
+        kind,
+        parent: None,
+        end: 0,
+        bounds,
+        exact: [0.0; 4],
+        linear: [0.0; 4],
+        origin: [0.0; 2],
+    }
+}
+
+/// `group_of_red_blue(0.5, 1.0)` の列（層・赤・青・降ろす）と、その Pop 以外の命令ごとの項。
+fn faded_red_blue_with_entries() -> (Vec<DrawCommand>, Vec<super::diff::DamageEntry>) {
+    use super::diff::EntryKind;
+    let mut world = World::new();
+    let root = group_of_red_blue(&mut world, 0.5, 1.0);
+    let commands = tree_commands(&mut world, root, None);
+    assert!(
+        matches!(
+            commands.as_slice(),
+            [
+                DrawCommand::PushOpacity(_),
+                DrawCommand::Draw(_),
+                DrawCommand::Draw(_),
+                DrawCommand::PopOpacity
+            ]
+        ),
+        "層・赤・青・降ろすの列"
+    );
+    let entries = vec![
+        entry(EntryKind::Opacity, px(0, 0, 16, 16)),
+        entry(EntryKind::Draw { unbounded: false }, px(0, 0, 8, 8)),
+        entry(EntryKind::Draw { unbounded: false }, px(4, 4, 12, 12)),
+    ];
+    (commands, entries)
+}
+
+fn replay_within(
+    commands: &[DrawCommand],
+    entries: &[super::diff::DamageEntry],
+    rect: super::diff::PxRect,
+) -> Pixels {
+    let root = Matrix3x2::identity();
+    draw_to_pixels(16, 16, root, |dc| {
+        let dc6: Option<ID2D1DeviceContext6> = dc.cast().ok();
+        super::emit_within(dc, dc6.as_ref(), root, commands, entries, rect);
+        let mut after = Matrix3x2::default();
+        // SAFETY: Windows API 境界。
+        unsafe { dc.GetTransform(&mut after) };
+        assert_eq!(after, root, "emit_within は DC の変換を根に戻す");
+    })
+}
+
+#[test]
+fn emit_within_the_whole_surface_matches_emit_byte_for_byte() {
+    let (commands, entries) = faded_red_blue_with_entries();
+    let all = replay_to_pixels(&commands, 16, 16, Matrix3x2::identity());
+    let within = replay_within(&commands, &entries, px(0, 0, 16, 16));
+    assert_eq!(within.bytes, all.bytes);
+    pixel_near(&within, [0, 0, 128, 128], RED_ONLY.0, RED_ONLY.1);
+}
+
+#[test]
+fn emit_within_skips_items_outside_the_rect_and_keeps_layers_balanced() {
+    let (commands, entries) = faded_red_blue_with_entries();
+    // どの件とも交わらない矩形: 件を 1 つも描かない（層は積んで降ろす＝EndDraw が通る）。
+    let none = replay_within(&commands, &entries, px(12, 0, 16, 4));
+    assert!(none.bytes.iter().all(|&b| b == 0), "どの件も描かない");
+    // 赤とだけ交わる矩形: 赤は描き、青は飛ばす（範囲の外の画素は呼び手の切り抜きが守る）。
+    let red = replay_within(&commands, &entries, px(0, 0, 2, 2));
+    pixel_near(&red, [0, 0, 128, 128], RED_ONLY.0, RED_ONLY.1);
+    pixel_near(&red, [0, 0, 128, 128], OVERLAP.0, OVERLAP.1);
+    pixel_near(&red, CLEAR, BLUE_ONLY.0, BLUE_ONLY.1);
+}

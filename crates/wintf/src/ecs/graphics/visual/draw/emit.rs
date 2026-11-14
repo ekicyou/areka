@@ -2,6 +2,7 @@
 
 use super::super::MixMode;
 use super::command::*;
+use super::diff::{DamageEntry, PxRect};
 use crate::numerics::Aabb;
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -71,12 +72,58 @@ pub(crate) fn emit(
     root: Matrix3x2,
     commands: &[DrawCommand],
 ) {
+    play(dc, dc6, root, commands, None);
+}
+
+/// `emit` と同じ再生で、項の `bounds` が描く矩形 `rect` と交わらない件（`Draw`）を飛ばす（2.2）。
+///
+/// 層の命令は全部そのまま積み降ろし、層の旗は変えない。範囲の外の画素は呼び手の切り抜きが守るので、
+/// 飛ばすのは性能のためだけ。前提: `entries` は同じ `commands` から作った列（Pop 以外の命令と
+/// 1 対 1）。項の無い件は飛ばさずに描く。
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "範囲だけの合成（タスク 4.2）が使い始めたら外す")
+)]
+pub(crate) fn emit_within(
+    dc: &ID2D1DeviceContext,
+    dc6: Option<&ID2D1DeviceContext6>,
+    root: Matrix3x2,
+    commands: &[DrawCommand],
+    entries: &[DamageEntry],
+    rect: PxRect,
+) {
+    play(dc, dc6, root, commands, Some((entries, rect)));
+}
+
+fn play(
+    dc: &ID2D1DeviceContext,
+    dc6: Option<&ID2D1DeviceContext6>,
+    root: Matrix3x2,
+    commands: &[DrawCommand],
+    within: Option<(&[DamageEntry], PxRect)>,
+) {
     let identity = Matrix3x2::identity();
+    // 項の番号（Pop 以外の命令を数える）。
+    let mut index = 0usize;
     for command in commands {
+        let entry = index;
+        if !matches!(
+            command,
+            DrawCommand::PopClipRect | DrawCommand::PopClipGeometry | DrawCommand::PopOpacity
+        ) {
+            index += 1;
+        }
         // SAFETY: Windows API 境界。呼び手が `BeginDraw` の中で呼ぶ。push と pop は `build` が対で出す。
         unsafe {
             match command {
                 DrawCommand::Draw(item) => {
+                    if let Some((entries, rect)) = within
+                        && entries
+                            .get(entry)
+                            .is_some_and(|e| e.bounds.intersect(rect).is_empty())
+                    {
+                        continue;
+                    }
                     dc.SetTransform(&(item.world_mat * root));
                     let composite = match draw_method(item.mix_mode, dc6.is_some()) {
                         DrawMethod::Image(c) => c,
