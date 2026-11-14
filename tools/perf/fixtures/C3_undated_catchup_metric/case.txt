@@ -1,0 +1,11 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 時刻の読めない catch-up があれば catchup_count は - を出す
+mode = baseline
+build = release
+exit = 0
+emit_metrics = yes
+
+note = 行頭に時刻の無い catch-up 行が 1 本ある。定常の中か外か分からないので、
+note = catchup_count は「測っていない」の - を出す（0 は「数えて 0」で、A/B の比べを欺く）。
+
+contains = metric=catchup_count value=-

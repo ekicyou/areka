@@ -185,5 +185,42 @@ def case_K1() -> g.Fixture:
     )
 
 
+def _profile(name: str, profile: str) -> g.Fixture:
+    return _named(_healthy().cpu_series(count=12).run_meta(profile=profile), name)
+
+
+def case_M1() -> g.Fixture:
+    return _profile("M1_profile_empty", "").declare(
+        "verdict", 2, "run-meta.txt の profile が空なら判定不能", build="release",
+        notes=[
+            "profile = （空）。short か long か分からないので判定式⑷b の適用条件を決められない。",
+            "空を「書いてある」と読むと適用外へ落ちて合格（0）になるので、判定不能（2）にする。",
+        ],
+    )
+
+
+def case_M2() -> g.Fixture:
+    return _profile("M2_profile_unknown", "medium").declare(
+        "verdict", 2, "run-meta.txt の profile が short・long 以外なら判定不能", build="release",
+        notes=["profile = medium。M1 と同じ理由で、知らない値も判定不能（2）にする。"],
+    )
+
+
+def case_C3() -> g.Fixture:
+    f = _healthy().cpu_series(count=12)
+    at = g.T0 + g.timedelta(seconds=90.0)
+    f._add(at, g.catchup_line(at, "kanade").split("  ", 1)[1])  # 行頭の時刻を外す
+    return _named(f, "C3_undated_catchup_metric").declare(
+        "baseline", 0, "時刻の読めない catch-up があれば catchup_count は - を出す", build="release",
+        emit_metrics=True,
+        notes=[
+            "行頭に時刻の無い catch-up 行が 1 本ある。定常の中か外か分からないので、",
+            "catchup_count は「測っていない」の - を出す（0 は「数えて 0」で、A/B の比べを欺く）。",
+        ],
+        contains=("metric=catchup_count value=-",),
+    )
+
+
 CASES = (case_N1, case_U1, case_L1, case_L2, case_L3, case_V1,
-         case_S1, case_S2, case_S3, case_B2, case_X3, case_K1)
+         case_S1, case_S2, case_S3, case_B2, case_X3, case_K1,
+         case_M1, case_M2, case_C3)

@@ -86,7 +86,7 @@
   - _Requirements: 2.1, 4.7, 4.8, 5.3, 5.4_
 
 - [ ] 6. judge-perf の入力・終了コード・端末の文を直し、版を上げる（#5・#6・#8・#9・#24・#44〜#46・#75・#77・D10）
-- [ ] 6.1 入力の関門と数の出し方を直す（#5・#9・#44〜#46・#75・#77）
+- [x] 6.1 入力の関門と数の出し方を直す（#5・#9・#44〜#46・#75・#77）
   - profile が `short`／`long` 以外なら判定不能（#5・検体 M1_profile_empty・M2_profile_unknown＝T5）。時刻の読めない catch-up があれば `catchup_count` は `-`（#9・検体 C3_undated_catchup_metric＝T9）
   - 注意書きを定常の点数と `CONVERGENCE_MIN_SAMPLES_PER_WINDOW * CONVERGENCE_WINDOW_COUNT` で比べる（#44）。食い違いのとき子の stderr の最初の行も添える（#45）。`case.txt` の知らない鍵は exit 3（#46）。`NO_COLOR` の説明を README と同じ趣旨に（#75）。見本のコメントを 2 行に（#77）
   - 終わった姿: M1・M2・C3 が緑で、`is None` に戻すと M1 が 0 で、0 を出す形に戻すと C3 で赤になる
@@ -227,3 +227,4 @@
 - 4.1: README へ渡す分（13）: 344・411 行の H1b を H11 へ、397〜399 行に「4 つの終了コードは全部要る」（#42）。H1b の裁定の記録は H11 の note
 - 4.2: `tools/perf/fixtures/.gitattributes` は `* -text`。fixtures の .py は LF のまま書く（CRLF にすると CRLF で入る）。検体を作り直すのは generate.py（generate_more.py 単独では書かない）
 - 5: design T2 の「5 秒の CPU 9.00」は D4 のもとでは満たせない（起動の挨拶も発話の区間）ので、実装に合わせて「12 秒（boot_talk_done の後）」へ直した。K1 が縛るのは「終わりの語が無いと区間が閉じず、挨拶の後の重さを巻き込む」こと
+- 6.1: README へ渡す分（13）の候補: profile は short・long 以外で判定不能／時刻の無い catch-up があると `catchup_count` は `-`（978 行あたり）／case.txt の鍵の一覧と知らない鍵は exit 3（389 行あたり）／検体の一覧に M1・M2・C3／baseline の注意書きは定常の点数（12）で比べる

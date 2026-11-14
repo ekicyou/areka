@@ -108,7 +108,7 @@ tracing-subscriber 0.3.23 を同一の初期化で走らせて採取した逐語
 `tracing-subscriber-0.3.23/src/fmt/fmt_layer.rs` の `Default for Layer` は
 「ansi feature が有効で、かつ環境変数 `NO_COLOR` が未設定または空なら色を付ける」と
 決めており、出力先が端末かどうかを見ていない。`invoke-perf-run.ps1` は `NO_COLOR` を
-設定しないため、ファイルへリダイレクトした run.log にも色コードが入る。
+設定して起動するが、手で起動した走行や設定前に採った run.log には色コードが入っている。
 本スクリプトは読み込み時に ANSI エスケープを除去してから解析する（除去後の行が
 `NO_COLOR=1` で採取した行と逐語一致することを実測で確認済み）。
 """
@@ -510,8 +510,8 @@ J_CATCHUP_TARGETS = ("dispatcher", "kanade", "loop_ticker")
 #: `lane="dispatcher"` の形で出る。audit-ghost-catalog（#53）より前の ticker.rs は同じ欄を
 #: `target = "…"` と綴っていた（メタデータの `target:` ではない）ので、記録済みの走行ログは
 #: `target="…"` を持つ。lane を先に読み、無ければ target を読む。実測の逐語（45 秒の実走ログ・旧綴り）:
-#:   …Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker: loop ticker catch-up: #:   skipped multiple boundaries, firing once target="loop_ticker"
-#: 値は引用符付きなので `unquote_field` で落としてからこの語彙と突き合わせる。
+#:   …Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker: loop ticker catch-up:
+#:   skipped multiple boundaries, firing once target="loop_ticker"（値は引用符付き・`unquote_field` で落とす）
 J_CATCHUP_TARGET_FIELDS = ("lane", "target")
 
 #: 【任意種】以下の 3 種は「有れば読む」行である。**必要ログ種ではない**——
@@ -1483,7 +1483,7 @@ def render_metrics(agg: "Aggregation") -> list[str]:
                     percentile(intervals, 0.95) if intervals else None,
                     FRAME_INTERVAL_COMPARE_DECIMALS),
         _metric("frame_interval_samples", str(len(intervals))),
-        _metric("catchup_count", str(len(agg.steady_catchup))),
+        _metric("catchup_count", "-" if any(e[0] is None for e in agg.scan.catchup) else str(len(agg.steady_catchup))),
         _metric("catchup_count_total", str(len(agg.scan.catchup))),
     ]
     for target in J_CATCHUP_TARGETS:
@@ -3118,24 +3118,20 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
         )
 
     meta_profile = meta_lookup(sections, "profile")
-    if require_build and meta_profile is None:
-        # 【黙って適用外へ落とさない】判定式⑷b は「20 分に届かない走行は適用外。ただし
-        # profile=long なら途中で切れた長時間走行として判定不能」と決めている。profile が
-        # 無いと後者の枝へ入れず、切れた長時間走行が黙って「適用外・終了コード 0」になる。
-        # build は上で突合しているのに profile は突合していなかった、という非対称を塞ぐ。
-        # 終了コードは 2（判定不能）を選ぶ: run-meta.txt そのものが無い場合を 2 にしている
-        # のと同じ理由で、これは「走行条件を書けない＝データ不足」であって引数の誤り(3)では
-        # ない（3 は引数不正・ファイル読取不能に限る）。
+    if require_build and (meta_profile or "").strip().lower() not in ("short", "long"):
+        # 【黙って適用外へ落とさない】判定式⑷b は「20 分に届かない走行は適用外。ただし profile=long なら
+        # 途中で切れた長時間走行として判定不能」と決めている。profile が無い・空・知らない値だと後者の
+        # 枝へ入れず、切れた長時間走行が黙って「適用外・終了コード 0」になる（build だけ突合する非対称）。
+        # 終了コードは 2: run-meta.txt が無い場合と同じく「走行条件を書けない＝データ不足」で、引数の誤り(3)ではない。
         raise inconclusive(
-            f"run-meta.txt に profile がありません: {meta_path}",
+            f"run-meta.txt の profile が short・long のどちらでもありません（{meta_profile!r}）: {meta_path}",
             [
                 "判定モードは profile で判定式⑷b の適用条件を決めます"
                 f"（LONG_RUN_MIN_SPAN_SEC={LONG_RUN_MIN_SPAN_SEC:.0f} 秒に届かない走行のうち、"
                 "profile=long は途中で切れた長時間走行として判定不能にする）。",
-                "profile が無いまま判定すると、途中で切れた長時間走行が「適用外」として"
+                "profile が short・long 以外のまま判定すると、途中で切れた長時間走行が「適用外」として"
                 "黙って終了コード 0 になります（要件 5.1・D7）。",
-                "invoke-perf-run.ps1 は profile を必ず書き出します。"
-                "手で作った run-meta.txt を使っている場合は profile を足してください。",
+                "invoke-perf-run.ps1 は profile を必ず書き出します。手で作った run-meta.txt なら profile = short か long を書いてください。",
             ],
         )
 
@@ -3260,10 +3256,10 @@ def run_baseline(args: argparse.Namespace) -> int:
             "【重大】定常状態に perf 行が 1 本もない。WARMUP_EXCLUDE_SEC が走行長に対して"
             "大きすぎるので、この走行から定常状態の数値は読めない。",
         )
-    if len(agg.cpu) < CONVERGENCE_WINDOW_COUNT * 2:
+    if len(agg.steady_cpu) < CONVERGENCE_MIN_SAMPLES_PER_WINDOW * CONVERGENCE_WINDOW_COUNT:
         caveats.append(
-            f"CPU の採取点が {len(agg.cpu)} 点しかなく、収束判定（要件 5.1）に足りない"
-            "可能性がある。長時間水準で採り直すこと。"
+            f"定常状態の CPU の採取点が {len(agg.steady_cpu)} 点しかなく、収束判定（要件 5.1）に"
+            "足りない（判定モードでは判定不能になる）。長時間水準で採り直すこと。"
         )
     for i, text in enumerate(caveats, start=1):
         report.line(f"  ({i}) {text}")
@@ -3447,6 +3443,8 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
             continue
         key, _, value = stripped.partition("=")
         key = key.strip()
+        if key not in ("mode", "exit", "build", "twin", "title", "note", "contains", "emit_metrics"):
+            raise bad_input(f"{path} に知らない鍵があります（{key!r}）", ["書き損じの鍵は、その検査を黙って消します。"])
         if key == "note":  # 人が読む説明。機械は使わない
             continue
         if key == "contains":  # 何度でも書ける（上書きせず積む）
@@ -3458,7 +3456,7 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
     if missing:
         raise bad_input(
             f"{path} に {'・'.join(missing)} がありません",
-            [f"必須項目: mode・exit（任意: build・twin・title・note）"],
+            ["必須項目: mode・exit（任意: build・twin・title・note・contains・emit_metrics）"],
         )
     if fields["mode"] not in MODES:
         raise bad_input(
@@ -3505,8 +3503,8 @@ def _selftest_collect(root: Path) -> list[SelftestCase]:
     return cases
 
 
-def _selftest_invoke(case: SelftestCase) -> tuple[int, str]:
-    """実運用と同じ入口 `main(argv)` を呼び、終了コードと標準出力を持ち帰る。"""
+def _selftest_invoke(case: SelftestCase) -> tuple[int, str, str]:
+    """実運用と同じ入口 `main(argv)` を呼び、終了コード・標準出力・stderr の最初の行を持ち帰る。"""
     import contextlib
     import io
 
@@ -3516,7 +3514,7 @@ def _selftest_invoke(case: SelftestCase) -> tuple[int, str]:
             code = main(case.argv())
         except SystemExit as exc:  # 引数解析が直接終了する経路も終了コードとして拾う
             code = exc.code if isinstance(exc.code, int) else EXIT_BAD_INPUT
-    return code, out.getvalue()
+    return code, out.getvalue(), next(iter(err.getvalue().splitlines()), "")
 
 
 def _selftest_normalize(case: SelftestCase, text: str) -> str:
@@ -3540,10 +3538,11 @@ def run_selftest() -> int:
     report.line("  終了コード     : 0=全件一致 / 1=1 件でも食い違い / 3=fixture を読めない")
 
     outputs: dict[str, str] = {}
+    first_err: dict[str, str] = {}
     results: list[tuple[SelftestCase, int, bool]] = []
     report.sub("逐語再現（期待終了コードとの突き合わせ）")
     for case in cases:
-        code, stdout = _selftest_invoke(case)
+        code, stdout, first_err[case.name] = _selftest_invoke(case)
         outputs[case.name] = stdout
         ok = code == case.expected
         results.append((case, code, ok))
@@ -3670,6 +3669,7 @@ def run_selftest() -> int:
         report.line(
             f"  【食い違い】{case.name}: 期待 {case.expected} に対し実際 {got}"
             f"（{case.mode}{'/' + case.build if case.build else ''}・{case.title}）"
+            f"{' stderr: ' + first_err[case.name] if first_err[case.name] else ''}"
         )
     for name in twin_failed:
         report.line(f"  【食い違い】{name}: 色なしの双子とレポートが一致しません。")
