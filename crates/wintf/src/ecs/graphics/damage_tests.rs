@@ -244,3 +244,253 @@ fn surface_without_tree_skips_when_same_and_is_full_when_root_scale_or_container
     };
     assert_eq!(plan(&i), ComposePlan::Full(FullReason::Recreated));
 }
+
+// ---- 平行移動の写し（5.1〜5.4・条件 S1〜S9） ----
+
+/// `id`・`shape`・種類・親・部分木の終わりを決めた項（`exact`・`origin` は `b` から）。
+fn node(
+    id: u64,
+    shape: u64,
+    kind: EntryKind,
+    parent: Option<u32>,
+    end: u32,
+    b: PxRect,
+) -> DamageEntry {
+    DamageEntry {
+        shape,
+        parent,
+        end,
+        ..entry(id, kind, b)
+    }
+}
+
+/// 項を `(dx, dy)` だけ平行移動した今の項（`id` は位置で変わる＝新しい `id`）。
+fn shifted(e: &DamageEntry, id: u64, dx: f32, dy: f32) -> DamageEntry {
+    let mut n = e.clone();
+    n.id = id;
+    n.bounds = e.bounds.offset(dx.floor() as i32, dy.floor() as i32);
+    if dx.fract() != 0.0 || dy.fract() != 0.0 {
+        n.bounds.right += 1;
+        n.bounds.bottom += 1;
+    }
+    n.exact = [
+        e.exact[0] + dx,
+        e.exact[1] + dy,
+        e.exact[2] + dx,
+        e.exact[3] + dy,
+    ];
+    n.origin = [e.origin[0] + dx, e.origin[1] + dy];
+    n
+}
+
+/// 不透明度の層 [0] の中に、外の件 [1]・矩形の切り抜き E [2]（`e`）・E の中の件 2 つ [3][4]・外の件 [5]。
+/// 今の列では E の中の件だけが `(dx, dy)` ずれ、外の件 [5] は描き換わる（id 5 → 6）。
+fn clip_case(e: PxRect, dx: f32, dy: f32) -> (Vec<DamageEntry>, Vec<DamageEntry>) {
+    let all = rect(0, 0, 100, 80);
+    let layer = node(100, 100, EntryKind::Opacity, None, 6, all);
+    let out1 = node(1, 1, item_kind(), Some(0), 2, rect(80, 0, 100, 10));
+    let clip = node(2, 2, EntryKind::ClipRect, Some(0), 5, e);
+    let c1 = node(
+        20,
+        20,
+        item_kind(),
+        Some(2),
+        4,
+        rect(e.left + 5, e.top + 5, e.left + 25, e.top + 15),
+    );
+    let c2 = node(
+        21,
+        21,
+        item_kind(),
+        Some(2),
+        5,
+        rect(e.left + 5, e.top + 20, e.left + 25, e.top + 30),
+    );
+    let out5 = node(5, 5, item_kind(), Some(0), 6, rect(70, 70, 90, 80));
+    let out6 = node(6, 6, item_kind(), Some(0), 6, rect(70, 70, 90, 80));
+    let prev = vec![
+        layer.clone(),
+        out1.clone(),
+        clip.clone(),
+        c1.clone(),
+        c2.clone(),
+        out5,
+    ];
+    let now = vec![
+        layer,
+        out1,
+        clip,
+        shifted(&c1, 30, dx, dy),
+        shifted(&c2, 31, dx, dy),
+        out6,
+    ];
+    (prev, now)
+}
+
+fn item_kind() -> EntryKind {
+    EntryKind::Draw { unbounded: false }
+}
+
+/// 写しを使わず普通の範囲へ回った（E の中の前の件の範囲が描く矩形に入る）。
+fn assert_falls_back(i: &PlanInput<'_>) {
+    let p = partial(plan(i));
+    assert!(p.shifts.is_empty(), "写しを受け入れた: {p:?}");
+    assert_eq!((p.shift_area, p.exposed_area), (0, 0));
+    assert_eq!(p.rects.len(), 1, "{p:?}");
+    let sub = rect(15, 15, 35, 40);
+    assert_eq!(p.rects[0].intersect(sub), sub, "{p:?}");
+}
+
+#[test]
+fn clip_rect_candidate_accepts_shift_with_band_and_keeps_normal_range_outside() {
+    let (prev, now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    let p = partial(plan(&input(&prev, &now)));
+    // D = (10,10)-(55,60)・元はその 5 右・右の帯 (55,10)-(60,60)・外の描き換え (70,70)-(90,80)
+    assert_eq!(
+        p.shifts,
+        vec![RegionShift {
+            src: rect(15, 10, 60, 60),
+            dst: (10, 10),
+        }]
+    );
+    assert_eq!(p.rects, vec![rect(55, 10, 60, 60), rect(70, 70, 90, 80)]);
+    assert_eq!(p.shift_area, 45 * 50);
+    assert_eq!(p.exposed_area, 5 * 50);
+    assert_eq!(p.area, 5 * 50 + 20 * 10);
+    assert_eq!(p.present_rect, rect(10, 10, 90, 80));
+    // 帯にも外の矩形にも交わる件は描き換わった外の件だけ（E の中の件は数えない）
+    assert_eq!(p.items_redrawn, 1);
+}
+
+#[test]
+fn whole_surface_candidate_accepts_shift_without_root_list() {
+    let a = item(10, rect(10, 10, 30, 20));
+    let b = item(11, rect(10, 30, 30, 40));
+    let c = item(12, rect(10, 60, 30, 70));
+    let prev = [a.clone(), b.clone(), c.clone()];
+    // 全部が 20 上へ・下の帯へ新しい件が入る（前なら描画面の外 (10,85)-(30,95)）
+    let now = [
+        shifted(&a, 40, 0.0, -20.0),
+        shifted(&b, 41, 0.0, -20.0),
+        shifted(&c, 42, 0.0, -20.0),
+        item(43, rect(10, 65, 30, 75)),
+    ];
+    let p = partial(plan(&input(&prev, &now)));
+    assert_eq!(
+        p.shifts,
+        vec![RegionShift {
+            src: rect(0, 20, 100, 80),
+            dst: (0, 0),
+        }]
+    );
+    assert_eq!(p.rects, vec![rect(0, 60, 100, 80)]);
+    assert_eq!(p.shift_area, 100 * 60);
+    assert_eq!(p.exposed_area, 100 * 20);
+    assert_eq!(p.area, 100 * 20);
+    assert_eq!(p.present_rect, rect(0, 0, 100, 80));
+    assert_eq!(p.items_redrawn, 1);
+
+    // S1: 根の命令の列を持てば描画面の全面の候補も写さない
+    let i = PlanInput {
+        root_present: true,
+        ..input(&prev, &now)
+    };
+    let p = partial(plan(&i));
+    assert!(p.shifts.is_empty());
+    assert_eq!(p.rects, vec![rect(10, 10, 30, 75)]);
+}
+
+#[test]
+fn s1_root_list_present_falls_back() {
+    let (prev, now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    assert_falls_back(&PlanInput {
+        root_present: true,
+        ..input(&prev, &now)
+    });
+}
+
+#[test]
+fn s2_geometry_clip_in_parent_chain_falls_back() {
+    let (mut prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    prev[0].kind = EntryKind::ClipGeometry;
+    now[0].kind = EntryKind::ClipGeometry;
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s3_reordered_pairs_fall_back() {
+    let (prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    now.swap(3, 4);
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s4_non_integer_or_uneven_shift_falls_back() {
+    let (prev, now) = clip_case(rect(10, 10, 60, 60), -5.5, 0.0);
+    assert_falls_back(&input(&prev, &now));
+    let (prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    now[4] = shifted(&prev[4], 31, -4.0, 0.0);
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s5_linear_or_size_difference_falls_back() {
+    let (prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    now[4].linear[3] = 1.5;
+    assert_falls_back(&input(&prev, &now));
+    let (prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    now[4].exact[2] += 1.0;
+    now[4].bounds.right += 1;
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s6_non_source_over_item_falls_back() {
+    let (mut prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    prev[3].kind = EntryKind::Draw { unbounded: true };
+    now[3].kind = EntryKind::Draw { unbounded: true };
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s7_unpaired_item_staying_inside_the_clip_falls_back() {
+    // 前にだけ在る件がずらしても切り抜きの中に残る
+    let (mut prev, now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    prev[2].end = 6;
+    prev[4].end = 5;
+    prev.insert(
+        5,
+        node(22, 22, item_kind(), Some(2), 6, rect(30, 45, 50, 55)),
+    );
+    prev[0].end = 7;
+    prev[6].end = 7;
+    assert_falls_back(&input(&prev, &now));
+    // 今にだけ在る件が露出した帯の外（写しの先）に入る
+    let (prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    now[2].end = 6;
+    now.insert(
+        5,
+        node(32, 32, item_kind(), Some(2), 6, rect(30, 45, 50, 55)),
+    );
+    now[0].end = 7;
+    now[6].end = 7;
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s8_item_outside_subtree_overlapping_the_clip_falls_back() {
+    let (mut prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    prev[1].bounds = rect(50, 0, 70, 20);
+    now[1].bounds = rect(50, 0, 70, 20);
+    assert_falls_back(&input(&prev, &now));
+}
+
+#[test]
+fn s9_empty_destination_falls_back() {
+    // 切り抜きは描画面の左へはみ出し、描画面の中の幅 10 より大きく動く（幅 60 の中では整数）
+    let (prev, now) = clip_case(rect(-50, 10, 10, 60), -20.0, 0.0);
+    let p = partial(plan(&input(&prev, &now)));
+    assert!(p.shifts.is_empty(), "{p:?}");
+    // E の中の件は描画面の外にしか描かないので、普通の範囲は外の描き換えだけ
+    assert_eq!(p.rects, vec![rect(70, 70, 90, 80)]);
+}
