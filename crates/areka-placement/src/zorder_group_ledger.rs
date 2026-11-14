@@ -63,7 +63,7 @@
 //! トークン前後の空白は上流（さくらスクリプトの引数分割・kv 層）で既に落ちており、
 //! ここでの `trim` はその冗長化である（実際に届く値に対しては恒等）。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 // =============================================================================
 // 語彙
@@ -370,8 +370,11 @@ pub fn parse_zorder_tokens(
 /// 記録は明示モードで現れたスコープごとに、書かれた初出順で 1 件ずつ出す。
 /// 呼び出し前提は⑸の重複検査を通っていること（各窓が高々 1 回しか現れない）。
 fn fill_partner_windows(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<Normalization>) {
+    // 書かれた窓は集合で、補った後の位置は表で引く（要素の数の 2 乗で回さない）。
+    // 出す順は `elements`・`filled` を前から舐める順のままで、集合と表の並びには依らない。
+    let written_set: HashSet<GroupElement> = elements.iter().copied().collect();
     let written =
-        |scope: u32, kind: GroupWindowKind| elements.contains(&GroupElement { scope, kind });
+        |scope: u32, kind: GroupWindowKind| written_set.contains(&GroupElement { scope, kind });
 
     // 補いは各スコープを高々 1 枚ぶん増やす＝上限は入力の 2 倍。
     let mut filled = Vec::with_capacity(elements.len() * 2);
@@ -396,15 +399,18 @@ fn fill_partner_windows(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<
         }
     }
 
-    let position_of = |scope: u32, kind: GroupWindowKind| {
-        filled
-            .iter()
-            .position(|other| *other == GroupElement { scope, kind })
-    };
+    let positions: HashMap<GroupElement, usize> = filled
+        .iter()
+        .enumerate()
+        .map(|(index, element)| (*element, index))
+        .collect();
+    let position_of =
+        |scope: u32, kind: GroupWindowKind| positions.get(&GroupElement { scope, kind }).copied();
+    let mut recorded: HashSet<u32> = HashSet::new();
     let mut normalizations: Vec<Normalization> = Vec::new();
     for element in &elements {
         let scope = element.scope;
-        if normalizations.iter().any(|n| n.scope == scope) {
+        if !recorded.insert(scope) {
             continue;
         }
         let implied_partner = match (
@@ -679,9 +685,11 @@ impl ZOrderGroupLedger {
             .flat_map(|group| group.members.iter().map(|member| member.scope))
             .collect();
 
+        // 拾った印は集合で引き、出す順は `members` の初出順のまま。
+        let mut reported: HashSet<u32> = HashSet::new();
         let mut hit: Vec<u32> = Vec::new();
         for member in members {
-            if occupied.contains(&member.scope) && !hit.contains(&member.scope) {
+            if occupied.contains(&member.scope) && reported.insert(member.scope) {
                 hit.push(member.scope);
             }
         }
@@ -718,7 +726,8 @@ mod rebase_tests;
 mod written_order_tests;
 
 // 先送りしたプロパティ `currentghost.seriko.zorder` の不提供を固定する檻（要件 13.1／13.2／13.5）。
-// 台帳の兄弟に置くのは、要件 13.2 後段「窓の重なりの状態を変更しない」の主張に台帳が要るため。
+// 台帳の兄弟に置くのは、守るのが sylphya の中身ではなく「Z 順の機能が sylphya へ何も足していない
+// こと」だから（檻のファイルの説明）。台帳そのものは使わない。
 #[cfg(test)]
 #[path = "zorder_property_deferral_tests.rs"]
 mod property_deferral_tests;

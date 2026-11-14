@@ -9,7 +9,7 @@
 //!
 //! - 受理 3 形と拒否 4 分岐＋拒否どうしの優先順・入力の前処理（`t_zgp1`〜`t_zgp14`）
 //! - 相棒窓の補いと、補いがスコープどうしの並びに触れないこと（`t_zgp18`〜`t_zgp20`・
-//!   `t_zgp22`〜`t_zgp28`）——片方の窓だけを指名されたスコープへ相棒を補う
+//!   `t_zgp22`〜`t_zgp25`・`t_zgp27`・`t_zgp28`）——片方の窓だけを指名されたスコープへ相棒を補う
 //!   （`areka-P0-zorder-scope-inversion` 要件 3）。補う向き・記録の欄・要素数の判定との順序・
 //!   数値モードの不関与・既存の拒否分岐の不動を押さえる。
 //!
@@ -31,26 +31,11 @@
 //! 「まとめて端へ回す」実装と区別が付かない（初版 1.2 の教訓）。
 
 use super::*;
+use crate::zorder_test_support::{b, s};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
 // ---------------------------------------------------------------------------
-
-/// バルーン窓の要素（`balloonN`／`bN`）。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素（`surfaceN`／`sN`）。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
 
 /// 受理を期待し、要素列と正規化の記録を取り出す。
 fn expect_accept(tokens: &[&str]) -> (Vec<GroupElement>, Vec<Normalization>) {
@@ -373,28 +358,12 @@ fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
     );
 }
 
-/// 片方の窓だけが書かれたスコープは、相棒窓を補って隣り合いにする（要件 2.6・
-/// `areka-P0-zorder-scope-inversion` 要件 3.1・3.2）。
-/// 補ったことは記録に残る——どちらの窓を補ったかまで読み取れる形である。
+/// 2 窓そろったスコープと 1 枚だけのスコープが同居する場合。並びの形の記録と
+/// 補いの記録が同じ列に並び、どちらが起きたかを欄で弁別できる（要件 2.6・
+/// `areka-P0-zorder-scope-inversion` 要件 3.1・3.2）。片方だけの補いの 2 つの位置は
+/// 兄弟の `t_zwo06` が押さえる。
 #[test]
 fn t_zgp19_single_window_scope_is_completed_with_its_implied_partner() {
-    let (elements, normalizations) = expect_accept(&["b1", "s0"]);
-    assert_eq!(
-        elements,
-        vec![b(1), s(1), b(0), s(0)],
-        "b1 の直後に s1 が、s0 の直前に b0 が補われる"
-    );
-    assert_eq!(
-        normalizations,
-        vec![
-            implied(1, GroupWindowKind::Char),
-            implied(0, GroupWindowKind::Balloon)
-        ],
-        "補った窓の種別が記録から読み取れない"
-    );
-
-    // 2 窓そろったスコープと 1 枚だけのスコープが同居する場合。並びの形の記録と
-    // 補いの記録が同じ列に並び、どちらが起きたかを欄で弁別できる。
     let (mixed, mixed_records) = expect_accept(&["b1", "s0", "s1"]);
     assert_eq!(
         mixed,
@@ -548,57 +517,14 @@ fn t_zgp25_folding_never_rescues_a_one_element_tag() {
     }
 }
 
-/// 数値モードでは畳み込みが起きない（展開で既に隣接ブロックになっているため）。
-/// 記録が 1 件も出ないことを、補いの欄まで含めて押さえる。
-#[test]
-fn t_zgp26_numeric_mode_never_implies_a_partner() {
-    for tokens in [
-        ["1", "0"].as_slice(),
-        ["0", "1", "2"].as_slice(),
-        ["7", "7000000"].as_slice(),
-    ] {
-        let (elements, normalizations) = expect_accept(tokens);
-
-        assert!(
-            normalizations.is_empty(),
-            "数値モードで正規化の記録が出ている: tokens={tokens:?} \
-             normalizations={normalizations:?}"
-        );
-        assert_eq!(
-            elements.len(),
-            tokens.len() * 2,
-            "数値モードの展開が窓を増やしすぎている（畳み込みが二重に走っている）: \
-             tokens={tokens:?} elements={elements:?}"
-        );
-    }
-}
-
 /// 既存の拒否分岐は畳み込みの導入で 1 つも動かない（判定順の据え置き）。
 ///
 /// 解釈不能 → モード混在 → 要素数 → 数値展開 → タグ内重複 → 正規化 の順である。
-/// 畳み込みは最後の段なので、拒否される指定には一切触れない——拒否経路で要素列が
-/// 1 つも外へ出ないことは [`expect_reject`] の構造が示す（要件 8.1）。
+/// 畳み込みは最後の段なので、拒否される指定には一切触れない。片方だけの指名を混ぜても
+/// 先に立つ拒否理由が変わらないことは兄弟の `t_zwo11` が押さえ、ここでは畳み込みが
+/// 新しい重複を作らないことだけを見る。
 #[test]
 fn t_zgp27_existing_reject_branches_are_unchanged_by_folding() {
-    // 片方だけの指名を混ぜても、先に立つ拒否理由が変わらない。
-    assert_eq!(
-        expect_reject(&["b0", "xyz"]),
-        ZOrderReject::UnparsableToken {
-            token: "xyz".to_owned()
-        },
-        "解釈不能は最優先のまま"
-    );
-    assert_eq!(
-        expect_reject(&["b0", "1"]),
-        ZOrderReject::ModeMixed,
-        "モード混在は要素数・重複より先のまま"
-    );
-    assert_eq!(
-        expect_reject(&["b1", "s0", "b1"]),
-        ZOrderReject::DuplicateElement { element: b(1) },
-        "タグ内重複は正規化より先のまま"
-    );
-
     // 畳み込みが新しい重複を作らないこと（補うのは不在の相棒だけ）。
     for tokens in [
         ["b1", "s1"].as_slice(),

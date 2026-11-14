@@ -14,26 +14,11 @@
 //! 純関数の檻なので、単独で回しても一括で回しても結果は同じである（要件 8.3）。
 
 use super::*;
+use crate::zorder_test_support::{b, s};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
 // ---------------------------------------------------------------------------
-
-/// バルーン窓の要素（`balloonN`／`bN`）。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素（`surfaceN`／`sN`）。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
 
 /// 2 枚とも書かれたスコープの記録。
 fn written(scope: u32, order: WrittenOrder) -> Normalization {
@@ -188,22 +173,6 @@ fn t_zwo07_both_windows_written_means_no_fill() {
     }
 }
 
-/// 要素が 2 個未満のタグは補いで 2 枚に増やして受け付けない（要件 3.4）。
-#[test]
-fn t_zwo08_a_single_window_is_rejected_before_any_fill() {
-    for tokens in [
-        ["b0"].as_slice(),
-        ["s0"].as_slice(),
-        ["balloon3"].as_slice(),
-    ] {
-        assert_eq!(
-            reject(tokens),
-            ZOrderReject::TooFewElements { count: 1 },
-            "{tokens:?}"
-        );
-    }
-}
-
 /// 補いの記録は常に隣り合い（`Some(_)` なら `Adjacent`）。記録はスコープごとに初出順で 1 件。
 #[test]
 fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
@@ -236,7 +205,7 @@ fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
 }
 
 // ---------------------------------------------------------------------------
-// 数字だけの記法・拒否・完全形（要件 4.2・4.7・1.3）
+// 数字だけの記法・拒否（要件 4.2・4.7。完全形の要件 1.3 は兄弟の `t_zgp3` が受け持つ）
 // ---------------------------------------------------------------------------
 
 /// 数字だけの記法は今のまま `[バルーン, キャラ]` へ展開し、記録は空（要件 4.2）。
@@ -273,17 +242,4 @@ fn t_zwo11_the_five_rejections_are_unchanged() {
         Err(ZOrderReject::CrossGroupRedesignation { scopes: vec![1] })
     );
     assert_eq!(ledger.groups().len(), 1, "拒否で台帳が動いた");
-}
-
-/// 完全形（`balloonN`／`surfaceN`）でも省略形と同じ解釈になる（descript と共通の解釈・要件 1.3）。
-#[test]
-fn t_zwo12_long_form_reads_the_same_as_short_form() {
-    assert_eq!(
-        accept(&["surface0", "balloon0", "surface1"]),
-        accept(&["s0", "b0", "s1"])
-    );
-    assert_eq!(
-        accept(&["balloon1", "surface0", "surface1", "balloon0"]),
-        accept(&["b1", "s0", "s1", "b0"])
-    );
 }

@@ -17,60 +17,13 @@ use std::collections::HashMap;
 use bevy_ecs::entity::Entity;
 use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
 
-use super::compose_chain;
-use crate::zorder_group_ledger::{
-    GroupElement, GroupSource, GroupWindowKind, ZOrderGroup, parse_zorder_tokens,
-};
+use super::{compose_chain, element_text};
+use crate::zorder_group_ledger::{GroupElement, ZOrderGroup};
+use crate::zorder_test_support::{b, edge, ent, ents, s, tag_group};
 
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
-
-/// 要素 1 つに割り当てる決定論的な `Entity`（スコープ×種別で一意）。
-fn ent(element: GroupElement) -> Entity {
-    let kind = match element.kind {
-        GroupWindowKind::Balloon => 0,
-        GroupWindowKind::Char => 1,
-    };
-    Entity::from_raw_u32(element.scope * 2 + kind + 1).expect("テスト用 entity 索引は有効")
-}
-
-fn ents(elements: &[GroupElement]) -> Vec<Entity> {
-    elements.iter().copied().map(ent).collect()
-}
-
-/// 手前側 `front` が奥側 `back` に所有される繋ぎ 1 本（`front ← back`）。
-fn edge(front: GroupElement, back: GroupElement, segment: ChainSegment) -> CrossEdge {
-    CrossEdge {
-        owned: ent(front),
-        owner: ent(back),
-        segment,
-    }
-}
-
-/// タグ由来のグループ 1 本を、本番と同じ解釈器（補い込み）を通して組む。
-fn tag_group(id: u32, tokens: &[&str]) -> ZOrderGroup {
-    let (members, _) = parse_zorder_tokens(tokens).expect("テストの指定は受理されるもの");
-    ZOrderGroup {
-        id,
-        members,
-        source: GroupSource::Tag,
-    }
-}
 
 /// 各スコープの 2 窓がそろって在る在庫で合成する。
 fn compose_full(groups: &[ZOrderGroup], scopes: &[u32]) -> ChainPlan {
@@ -243,13 +196,6 @@ fn permutations(items: &mut Vec<GroupElement>, k: usize, out: &mut Vec<Vec<Group
     }
 }
 
-fn token(element: GroupElement) -> String {
-    match element.kind {
-        GroupWindowKind::Balloon => format!("b{}", element.scope),
-        GroupWindowKind::Char => format!("s{}", element.scope),
-    }
-}
-
 /// スコープ 0〜2 の各々を「書かない・`bN` だけ・`sN` だけ・2 枚とも」から選び、書いた窓の
 /// 全順列を指定にする。後ろ側の参加も混ぜるため在庫には常にスコープ 3 を足す。
 /// どの指定でも最後の持ち主の関係は連続する 2 枚の全部と一致し、一直線になる。
@@ -280,7 +226,11 @@ fn t_zcw04_every_written_order_yields_one_straight_line() {
         let mut orders = Vec::new();
         permutations(&mut written, 0, &mut orders);
         for order in orders {
-            let tokens: Vec<String> = order.iter().copied().map(token).collect();
+            let tokens: Vec<String> = order
+                .iter()
+                .copied()
+                .map(|element| element_text(&element))
+                .collect();
             let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
             let groups = [tag_group(1, &tokens)];
             let plan = compose_full(&groups, &scopes);

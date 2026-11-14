@@ -29,54 +29,13 @@ use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge, log_chain_absent};
 
 use super::compose_chain;
 use crate::zorder_group_ledger::{
-    GroupElement, GroupSource, GroupWindowKind, ZOrderGroup, ZOrderGroupLedger, parse_zorder_tokens,
+    GroupElement, GroupSource, ZOrderGroup, ZOrderGroupLedger, parse_zorder_tokens,
 };
+use crate::zorder_test_support::{b, edge, ent, ents, s, tag_group};
 
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-/// バルーン窓の要素。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
-
-/// 要素 1 つに割り当てる決定論的な `Entity`（スコープ×種別で一意）。
-fn ent(element: GroupElement) -> Entity {
-    let kind = match element.kind {
-        GroupWindowKind::Balloon => 0,
-        GroupWindowKind::Char => 1,
-    };
-    Entity::from_raw_u32(element.scope * 2 + kind + 1).expect("テスト用 entity 索引は有効")
-}
-
-/// 要素列を `Entity` 列へ。
-fn ents(elements: &[GroupElement]) -> Vec<Entity> {
-    elements.iter().copied().map(ent).collect()
-}
-
-/// 手前側 `front` が奥側 `back` に所有される繋ぎ 1 本（区間つき）。
-///
-/// 区間は**手前側の枠が属していたもの**である（合成の規則そのもの）。ここで書き下すのは
-/// 「どのグループの繋ぎか」が記録から復元できることの主張であり、値を取り違えると赤くなる。
-fn edge(front: GroupElement, back: GroupElement, segment: ChainSegment) -> CrossEdge {
-    CrossEdge {
-        owned: ent(front),
-        owner: ent(back),
-        segment,
-    }
-}
 
 /// グループ `id` に属する繋ぎ 1 本。
 fn g(id: u32) -> ChainSegment {
@@ -125,17 +84,6 @@ impl Inventory {
 fn compose(groups: &[ZOrderGroup], inventory: &Inventory) -> Option<ChainPlan> {
     let scopes = inventory.scopes();
     compose_chain(groups, &scopes, &|element| inventory.resolve(element))
-}
-
-/// タグ由来のグループ 1 本を、本番と同じ解釈器を通して組む。
-fn tag_group(id: u32, tokens: &[&str]) -> ZOrderGroup {
-    let (members, _normalizations) =
-        parse_zorder_tokens(tokens).expect("テストの指定は受理されるもの");
-    ZOrderGroup {
-        id,
-        members,
-        source: GroupSource::Tag,
-    }
 }
 
 /// 台帳を通さずに要素列を直接持たせたグループ（解釈器が作れない形＝要素 1 個以下の検査用）。

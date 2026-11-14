@@ -1,7 +1,8 @@
 //! 先送りしたプロパティ `currentghost.seriko.zorder` について、⑴プロパティの一覧
 //! （sylphya の語彙表）に名前が現れないこと、⑵参照と書込が未提供のプロパティに
 //! 対する現行どおりの応答になること、⑶その試みが窓の重なりの状態を動かさないこと、
-//! の 3 つを固定する檻（要件 13.1／13.2／13.5）。
+//! の 3 つを固定する檻（要件 13.1／13.2／13.5）。⑶は書込が効果を 1 つも生まないことで
+//! 成り立つので、[`t_zpd30_writing_the_deferred_property_is_dropped`] が受け持つ。
 //!
 //! # なぜ本機能の側に置くか
 //!
@@ -26,8 +27,6 @@
 //!   同じ分類器が別の名前を別の分岐へ落とすことを添える。
 //! - ソース走査（[`t_zpd40_the_property_system_sources_never_mention_the_name`]）には、
 //!   同じ走査が既知の語を必ず拾うことと、走査したファイル数の下限を添える。
-//! - 台帳の不動（[`t_zpd50_touching_the_deferred_property_leaves_the_ledger_untouched`]）
-//!   には、同じ比較が本物の重なり指定では必ず差を検出することを添える。
 //!
 //! # 期待値は檻の側の literal
 //!
@@ -48,8 +47,6 @@ use areka_sylphya::{
     AskerContext, AskerId, DottedResolution, Effect, MirrorImage, SetClass, SharedMirror,
     SylphyaCore, SylphyaMsg, SylphyaReader, classify_set,
 };
-
-use super::{ZOrderGroupLedger, parse_zorder_tokens};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
@@ -543,70 +540,5 @@ fn t_zpd40_the_property_system_sources_never_mention_the_name() {
     assert!(
         calibration >= 1,
         "走査そのものが効いていない（既知の語 defaultsurface を 1 度も拾えない）"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// ⑶ 試みても窓の重なりの状態が動かない（要件 13.2 後段）
-// ---------------------------------------------------------------------------
-
-/// 参照と書込を試みても、重なり順のグループ台帳が 1 ビットも動かない（要件 13.2）。
-///
-/// 対照として、同じ比較に本物の重なり指定を通すと必ず差が出ることを同じ 1 本で示す
-/// ——差を検出できない比較で「動かない」と言っても何も守れない。
-#[test]
-fn t_zpd50_touching_the_deferred_property_leaves_the_ledger_untouched() {
-    let mut ledger = ZOrderGroupLedger::default();
-    let members = match parse_zorder_tokens(&["0", "1"]) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {reject:?}"),
-    };
-    ledger
-        .try_add_tag_group(members)
-        .expect("受理されるべき指定が台帳に拒否された");
-
-    let before = ledger.clone();
-    let before_version = ledger.version();
-
-    // 参照と書込を試みる。
-    let reader = reader_with_one_provided_property();
-    assert_eq!(
-        reader.resolve_dotted_str(&asker_ctx(), DEFERRED_PROPERTY),
-        DottedResolution::NotFound
-    );
-    assert_eq!(
-        set_effects(DEFERRED_PROPERTY, "1,0"),
-        vec![Effect::NotSettable {
-            asker: AskerId::new(ASKER),
-            key: DEFERRED_PROPERTY.to_owned(),
-            value: "1,0".to_owned(),
-        }]
-    );
-
-    assert_eq!(
-        ledger, before,
-        "先送りしたプロパティへの参照・書込がグループ台帳を動かした（要件 13.2）"
-    );
-    assert_eq!(
-        ledger.version(),
-        before_version,
-        "先送りしたプロパティへの参照・書込が台帳の版を進めた（要件 13.2）"
-    );
-
-    // 対照: 本物の重なり指定は同じ比較で必ず差として現れる。
-    let more = match parse_zorder_tokens(&["2", "3"]) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {reject:?}"),
-    };
-    ledger
-        .try_add_tag_group(more)
-        .expect("受理されるべき指定が台帳に拒否された");
-    assert_ne!(
-        ledger, before,
-        "台帳の比較が変化を検出できていない（不動の主張が恒真になる）"
-    );
-    assert!(
-        ledger.version() > before_version,
-        "版の比較が変化を検出できていない（不動の主張が恒真になる）"
     );
 }

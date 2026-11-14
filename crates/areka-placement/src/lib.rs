@@ -87,6 +87,9 @@ mod test_crash_report;
 /// 本番のビルドには含まれない（spec: placement-crate-split 要件 3.3・3.5）。
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+/// Z 順のテストが共に使う道具（台帳・鎖の合成のテストの写しを 1 つにまとめた）。
+#[cfg(test)]
+pub(crate) mod zorder_test_support;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

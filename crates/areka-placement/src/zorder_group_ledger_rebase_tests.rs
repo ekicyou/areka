@@ -5,22 +5,7 @@
 //! 一切必要とせず、台帳は各テストが自前で作る値である。
 
 use super::*;
-
-/// バルーン窓の要素。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
+use crate::zorder_test_support::{b, s};
 
 /// 解釈を通った要素列（台帳の入口の呼び出し規約どおり）。
 fn accept(tokens: &[&str]) -> Vec<GroupElement> {

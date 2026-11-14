@@ -23,26 +23,12 @@
 //! 増える 3 経路と増えない 3 経路を同じ 1 本で挟む（task 1.2 の差し戻しの教訓）。
 
 use super::*;
+use crate::test_support::zorder_pair_deferred::code_only;
+use crate::zorder_test_support::{b, s};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
 // ---------------------------------------------------------------------------
-
-/// バルーン窓の要素（`balloonN`／`bN`）。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素（`surfaceN`／`sN`）。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
 
 /// トークン列を解釈して要素列を得る。
 ///
@@ -110,15 +96,6 @@ fn members_of(ledger: &ZOrderGroupLedger) -> Vec<Vec<GroupElement>> {
         .iter()
         .map(|group| group.members.clone())
         .collect()
-}
-
-/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -595,8 +572,8 @@ fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
 /// task 1.3 の完了状態の総取り。台帳がどんな状態にあっても、拒否された呼び出しの
 /// 前後で台帳**全体**が完全に一致する（要件 3.2／8.1 の部分適用禁止）。
 ///
-/// 前状態を 4 通り（空／タグ 1 本／基底のみ／基底＋タグ 2 本）用意し、それぞれで
-/// 再指定の拒否を起こす。`assert_ledger_unchanged` はグループ列だけでなく
+/// 前状態を 3 通り（タグ 1 本／基底のみ／基底＋タグ 2 本）用意し、それぞれで
+/// 再指定の拒否を起こす（空の台帳では再指定の拒否が起きないので前状態に入れない）。`assert_ledger_unchanged` はグループ列だけでなく
 /// 「次に配る ID」と版も比べるので、拒否の途中で ID を 1 つ消費する形も赤になる。
 #[test]
 fn t_zgl20_every_rejected_call_leaves_the_ledger_completely_identical() {
@@ -652,7 +629,8 @@ fn t_zgl20_every_rejected_call_leaves_the_ledger_completely_identical() {
 fn t_zgl21_groups_are_listed_base_first_then_in_addition_order() {
     let mut ledger = ZOrderGroupLedger::default();
 
-    // 先にタグ、後から基底——それでも読み出しは基底が先頭に来る。
+    // 先にタグを載せても、基底を据えるとタグ由来は落ちる（`set_descript_base` の終状態は
+    // 解除と同じ）。その後のタグは基底の後ろへ追加順に続く。
     expect_added(&mut ledger, &["3", "2"]);
     set_base(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["5", "4"]);
