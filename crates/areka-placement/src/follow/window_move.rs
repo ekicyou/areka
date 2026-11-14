@@ -517,10 +517,10 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
         // `reconcile_window_size` は上の 2 点（拡大率の相・報告寸の突合）の**内側**にしか
         // 無く、見送りが覆っている（`is_system_reanchor` と割れる 1 語＝上の節）。
         | PlacementRoute::KeepPositionResize
-        // 遷移後の連鎖の解き直し。4 点は通らないが**自前の見送り**を持つ——
+        // 遷移後の連鎖の解き直し。見送りの点（`HOLD_SITE_ALL`）は通らないが**自前の見送り**を持つ——
         // `chain_realign::realign_chain_once_with` は「札を持つゴースト窓が 1 つも無い」を
         // 解決の条件に置く（設計 C4 の条件 2）。窓ごとではなく全窓一括で止める点だけが
-        // 4 点と違い、覆われていることに変わりはない。ゆえに届けば漏れである。
+        // 見送りの点と違い、覆われていることに変わりはない。ゆえに届けば漏れである。
         | PlacementRoute::ChainRealign
         // アンカー変化トリガ。**本番では未結線**（`anchor_changed_system` は schedule へ
         // 登録されておらず、呼ぶのは決定論テストだけ）ゆえ現に到達しないが、由来は表示環境の
@@ -542,7 +542,7 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
         | PlacementRoute::BalloonLimitRelease
         // 随伴バルーンの追従（task 5.4 で確定・task 7.5 まで唯一の例外だった・設計 C5）。位置は
         // キャラ窓の従属量であり、キャラ窓が動いた同一書込の一部として動く。そもそも
-        // 4 点を通らないので止まりはせず、鳴らせば偽の警報になる。
+        // 見送りの点を通らないので止まりはせず、鳴らせば偽の警報になる。
         | PlacementRoute::BalloonFollow
         // spawn 初期配置。位置**そのものを作る**書込であり、見送れば窓が置かれないまま
         // 残る（保つべき「遷移前の値」が存在しない）。現状は単一ライターを通らない。
@@ -668,7 +668,7 @@ pub(super) fn enqueue_window_set_pos(
     // 正当に届く。バルーンの位置は独立した量ではなくキャラ窓の従属量であり、キャラ窓が動いた
     // 同一書込の一部として動くからである。しかも [`dpi_sync_decision`] は拡大率と表の値だけを
     // 見て作業領域を見ないので、表が古くても随伴の位置は壊れない。バルーン**自身**の書込
-    // （拡大率の相・報告寸の突合・2 つの再スナップ）は 4 点の見送りが引き続き覆う。
+    // （拡大率の相・報告寸の突合・2 つの再スナップ・面の move のずれの相）は見送りの点が引き続き覆う。
     //
     // 覆うべき経路が増えたときに黙って通さないための錨が網羅 match である（task 6.5 の学び）。
     if deferral_covers_route(route)
@@ -1013,7 +1013,7 @@ fn apply_balloon_limit_gate(
             context = BALLOON_LIMIT_RUNTIME_CONTEXT,
             route = ?route,
             ?proposed,
-            "{BALLOON_LIMIT_UNRESOLVED_TAG} 対象バルーンの寸が未確定（窓生成直後／CW_USEDEFAULT センチネル）のため内包判定できない → 補正せず書込は続行"
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} 対象バルーンの寸が未確定（窓生成前／CW_USEDEFAULT センチネル）のため内包判定できない → 補正せず書込は続行"
         );
         return proposed;
     };
@@ -1142,7 +1142,8 @@ fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 /// - 非正寸（w≤0 or h≤0）: 何も書かず `warn!`＋`false`（[`resize_window_to`] の
 ///   非正寸縮退と同一流儀）。
 /// - `WindowPos` 不在（窓生成前の異常系）: 現在位置を読めないため `warn!`＋`false`。
-/// - `WindowPos.position` 不在（窓生成前）: 同上 `warn!`＋`false`（panic しない）。
+/// - `WindowPos.position` 不在、または `CW_USEDEFAULT` の印（窓生成前・位置未確定）:
+///   同上 `warn!`＋`false`（panic しない・印と不在は警告の文で言い分ける）。
 /// - べき等 skip（R4.2）: 現 `WindowPos.size` が新寸と同一なら**書込を一切行わず**
 ///   `false`（k 不変・同寸で窓が振動しないための檻・正常系ゆえ `debug!`）。
 /// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
@@ -1189,11 +1190,11 @@ pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: 
         let pos = match wp.position {
             Some(p) if p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT => p,
             p => {
-                // 印（窓生成直後）と不在（窓生成前）を言い分ける。
+                // 印（`on_window_add` が CreateWindow の前に挿す既定値）と不在を言い分ける。
                 let what = if p.is_some() {
-                    "が CW_USEDEFAULT の印（窓生成直後）"
+                    "が CW_USEDEFAULT の印（窓生成前）"
                 } else {
-                    "不在（窓生成前）"
+                    "不在"
                 };
                 warn!(entity = ?window, "WindowPos.position {what}のため現在位置を読めずリサイズしない");
                 return false;

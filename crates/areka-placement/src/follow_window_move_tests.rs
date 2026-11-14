@@ -379,7 +379,7 @@ fn move_cue_move_leaves_offscreen_balloon_in_place() {
 // 位置が未確定の印（`CW_USEDEFAULT`）の窓へ寸だけを書かない（指摘 20）
 // -------------------------------------------------------------------------
 
-/// 位置が `CW_USEDEFAULT`（窓生成直後の印）のバルーンへ位置を保った寸を書くと、
+/// 位置が `CW_USEDEFAULT`（窓生成前の印）のバルーンへ位置を保った寸を書くと、
 /// 「位置が無い」と同じく偽で書込の列が空。直す前は印の位置のまま書いていた。
 #[test]
 fn resize_keep_position_on_sentinel_position_writes_nothing() {
@@ -401,5 +401,8 @@ fn resize_keep_position_on_sentinel_position_writes_nothing() {
     assert!(!ok, "印の位置へ寸を書いてはならない");
     assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
     assert_eq!(size_of(&world, balloon), SizeI::new(350, 200));
-    expect_one(&events, "WindowPos.position が CW_USEDEFAULT の印");
+    expect_one(
+        &events,
+        "WindowPos.position が CW_USEDEFAULT の印（窓生成前）",
+    );
 }

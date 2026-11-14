@@ -50,8 +50,8 @@ fn bottom_snap(raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -
 ///
 /// シェル座標系（アンカー辺基準）→ ウィンドウ座標系（サーフェス寸法基準）の変換 T の
 /// 恒常維持を担う純粋関数（World 不可視・物理 px 単一通貨・`saturating_*` 演算で
-/// panic しない）。ドラッグ（`policy_mapped_position`）とリサイズ（後続 task の
-/// `resize_window_to`）の**両者が同一 T を呼ぶ**ことで座標系変換の二重化を避ける
+/// panic しない）。ドラッグ（`policy_mapped_position`）とリサイズ
+/// （`resize_window_to`）の**両者が同一 T を呼ぶ**ことで座標系変換の二重化を避ける
 /// （R1.6）。
 ///
 /// # 射影規則（`wa` 取得成功かつ正寸のとき）

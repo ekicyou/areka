@@ -11,16 +11,17 @@ use wintf::ecs::{Point, SizeI};
 use wintf::ecs::WindowPos;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
+use wintf::ecs::window::transition_diag::FIELD_ORIGIN;
 
 use super::move_shift::MoveShiftApplied;
 use super::test_support::{
-    OFFSCREEN_PULL_TAG, drag_end_event_at, drag_event, fake_handle, guard_events, position_of,
-    single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
+    OFFSCREEN_PULL_TAG, drag_end_event_at, drag_event, dragging_state, fake_handle, guard_events,
+    position_of, single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
 };
 use super::{
-    Anchored, BalloonFollow, DpiSyncHold, MonitorSnapshot, OffsetBase, apply_balloon_shift,
-    apply_char_shift, move_window_to, on_balloon_drag, on_balloon_drag_end, on_char_drag_end,
-    rebase_shift_axes, shift_is_current,
+    Anchored, BalloonFollow, DpiSyncHold, MonitorSnapshot, OffsetBase, PlacementRoute,
+    apply_balloon_shift, apply_char_shift, move_window_to, on_balloon_drag, on_balloon_drag_end,
+    on_char_drag_end, rebase_shift_axes, shift_is_current,
 };
 use crate::resolver::{Anchor, PointPx};
 use log_capture_kit::{capture, expect_one};
@@ -169,7 +170,10 @@ fn a_huge_shift_pulled_back_by_our_own_clamp_does_not_warn_offscreen_pull() {
         assert!(applied, "{anchor:?}: 当てる");
         // 捕捉の陽性の対: この書込の遷移の行（経路 PatternMove）は 1 行在る（0 行が捕捉の
         // 取りこぼしでない証・印の無い窓なので窓移動レコードは出ない）。
-        expect_one(&events, "kind=enqueue hwnd=0x1000 origin=PatternMove");
+        expect_one(
+            &events,
+            &format!("{FIELD_ORIGIN}={}", PlacementRoute::PatternMove.as_str()),
+        );
         assert!(
             guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
             "{anchor:?}: 自分の寄せを画面外からの引き寄せとして報告している: {events:?}"
@@ -596,4 +600,92 @@ fn drag_end_clears_the_awaiting_reapply_mark() {
         "置いた所へずれを足し直した"
     );
     assert_eq!(position_of(&world, window), Point { x: 300, y: 200 });
+}
+
+// -------------------------------------------------------------------------
+// 位置が未確定の印（`CW_USEDEFAULT`）・ドラッグ中の窓へは当てない（audit のかけ直し 2 回目 A3・A4）
+// -------------------------------------------------------------------------
+
+/// 位置が `CW_USEDEFAULT` の印（窓生成前）のキャラ窓へは当てず、位置が無いのと同じ理由で
+/// `warn!` する。持ち主のキャラ窓の位置が印のバルーンも同じ（記録を書かない）。
+#[test]
+fn a_sentinel_position_is_not_shifted() {
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+
+    let (mut world, window) = char_world(Anchor::Free, CW_USEDEFAULT, CW_USEDEFAULT);
+    let _residue = drain_window_pos_commands();
+    let (ok, events) = capture(|| apply_char_shift(&mut world, window, (10, 20), ScaleRatio::ONE));
+    assert!(!ok, "印の位置へ当ててはならない");
+    assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
+    assert!(world.get::<MoveShiftApplied>(window).is_none());
+    assert_skipped(&events, "no_window_position");
+
+    let balloon = world
+        .spawn((fake_handle(0x2000), window_pos_sized(0, 0, 150, 100)))
+        .id();
+    world.entity_mut(window).insert(BalloonFollow::new(
+        balloon,
+        OffsetBase::unpinned(PointPx { x: -170, y: -40 }),
+    ));
+    let (ok, events) =
+        capture(|| apply_balloon_shift(&mut world, balloon, (4, 6), ScaleRatio::ONE));
+    assert!(!ok, "持ち主の位置が印のバルーンへ当ててはならない");
+    assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
+    assert!(world.get::<MoveShiftApplied>(balloon).is_none());
+    assert_skipped(&events, "no_char_window_position");
+}
+
+/// ドラッグ中の窓（`DraggingState` が付いている）へは当てず記録も変えない（次のドラッグの
+/// 出来事が古いずれで書き戻してちらつかない）。見送りは失敗でないので `warn!` を出さず
+/// `debug!` を 1 行残す。ドラッグが終われば当たる。
+#[test]
+fn a_dragged_window_is_not_shifted_until_the_drag_ends() {
+    let (mut world, window) = char_world(Anchor::Free, 100, 100);
+    let balloon = world
+        .spawn((fake_handle(0x2000), window_pos_sized(0, 0, 150, 100)))
+        .id();
+    world.entity_mut(window).insert(BalloonFollow::new(
+        balloon,
+        OffsetBase::unpinned(PointPx { x: -170, y: -40 }),
+    ));
+    let _residue = drain_window_pos_commands();
+
+    for (target, shift) in [
+        (
+            window,
+            apply_char_shift as fn(&mut World, Entity, (i64, i64), ScaleRatio) -> bool,
+        ),
+        (balloon, apply_balloon_shift),
+    ] {
+        world
+            .entity_mut(target)
+            .insert(dragging_state((100, 100), (0, 0)));
+        let (ok, events) = capture(|| shift(&mut world, target, (10, 20), ScaleRatio::ONE));
+        assert!(!ok, "ドラッグ中の窓へ当ててはならない");
+        assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
+        assert!(
+            world.get::<MoveShiftApplied>(target).is_none(),
+            "記録を変えた"
+        );
+        let deferred: Vec<_> = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("move_shift_deferred"))
+            .collect();
+        assert_eq!(deferred.len(), 1, "{events:?}");
+        assert_eq!(deferred[0].level, tracing::Level::DEBUG);
+        assert_eq!(deferred[0].field_str("reason"), Some("dragging"));
+        assert!(
+            events.iter().all(|e| e.level != tracing::Level::WARN),
+            "見送りで warn! を出した: {events:?}"
+        );
+
+        world
+            .entity_mut(target)
+            .remove::<wintf::ecs::drag::DraggingState>();
+        assert!(
+            shift(&mut world, target, (10, 20), ScaleRatio::ONE),
+            "ドラッグの後は当たる"
+        );
+        let _residue = drain_window_pos_commands();
+    }
 }

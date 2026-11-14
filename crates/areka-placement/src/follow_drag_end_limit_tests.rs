@@ -481,7 +481,6 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
 /// したかが最終位置 1 つで判別できる配置にしてある。
 #[test]
 fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
-    let left_wa = left_wa();
     let mut placement = base_placement(true);
     placement.char_pos = PointPx { x: -800, y: 300 };
     placement.balloon_pos = PointPx { x: -500, y: 700 };
@@ -489,7 +488,7 @@ fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
     let (mut world, _char_window, balloon) = world_with(
         placement,
         MonitorSnapshot {
-            work_areas: vec![left_wa, odd_edge_wa()],
+            work_areas: vec![left_wa(), odd_edge_wa()],
         },
     );
     let released_at = PointPx { x: 100, y: 950 };
@@ -518,7 +517,7 @@ fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
 
     assert_eq!(
         point_of(&world, balloon),
-        max_pos(left_wa, limit_balloon_size()),
+        max_pos(left_wa(), limit_balloon_size()),
         "キャラ窓が属する左モニタではなくバルーン側のモニタを基準にしている（要件 5.5 違反）"
     );
 }

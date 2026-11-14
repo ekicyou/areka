@@ -8,7 +8,9 @@
 
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::*;
-use tracing::warn;
+use tracing::{debug, warn};
+use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+use wintf::ecs::drag::DraggingState;
 use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
@@ -16,8 +18,8 @@ use super::super::dpi_sync::{self, HoldSite};
 use super::super::windowposition::scale_signed;
 use super::{
     Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, PlacementRoute,
-    PointPx, RectPx, SizePx, apply_visibility_guard, follow_balloon, move_window_with_route,
-    project_anchor, rect_at, work_area_for_window,
+    PointPx, RectPx, SizePx, apply_visibility_guard, follow_balloon, is_char_drag_partner,
+    move_window_with_route, project_anchor, rect_at, work_area_for_window,
 };
 
 const ZERO: PointPx = PointPx { x: 0, y: 0 };
@@ -123,10 +125,36 @@ pub(super) fn reset_applied(world: &mut World, window: Entity) {
     }
 }
 
+/// 位置が `CW_USEDEFAULT` の印（窓生成前・位置未確定）でないか（印は位置が無いのと同じに扱う）。
+fn is_placed(p: &wintf::ecs::Point) -> bool {
+    p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT
+}
+
+/// 利用者がドラッグ中の窓か、キャラ窓のドラッグに連れ動く組の相手か。どちらも当てない（次の
+/// ドラッグの出来事が古いずれで書き戻してちらつき、相手は保存の元の位置もずれる）。記録を
+/// 変えないので、ドラッグの後に当て直される。見送りは失敗でなく毎フレーム起こるので `debug!` で残す。
+fn defers_for_drag(world: &World, window: Entity) -> bool {
+    let reason = if world.get::<DraggingState>(window).is_some() {
+        "dragging"
+    } else if is_char_drag_partner(world, window) {
+        "drag_partner"
+    } else {
+        return false;
+    };
+    debug!(
+        event = "move_shift_deferred",
+        entity = ?window,
+        reason,
+        "ドラッグ中の窓なので面の move のずれを当てない（ドラッグの後に当て直す）"
+    );
+    true
+}
+
 /// キャラ窓へずれを当てる。書いたら `true`。
 ///
-/// 窓・位置・寸・作業領域のどれかが無ければ `warn!` のうえ `false`（記録は変えないので、
-/// 当て直し待ちの印も立ったまま残り、次のフレームで当て直す）。
+/// 窓・位置（`CW_USEDEFAULT` の印を含む）・寸・作業領域のどれかが無ければ `warn!` のうえ
+/// `false`（記録は変えないので、当て直し待ちの印も立ったまま残り、次のフレームで当て直す）。
+/// ドラッグ中の窓とキャラ窓のドラッグの組の相手は `debug!` のうえ `false`（記録は変えない）。
 pub fn apply_char_shift(
     world: &mut World,
     window: Entity,
@@ -142,10 +170,13 @@ pub fn apply_char_shift(
         );
         false
     };
+    if defers_for_drag(world, window) {
+        return false;
+    }
     let Some((pos, size)) = world
         .get::<WindowPos>(window)
         .and_then(|wp| Some((wp.position?, wp.size?)))
-        .filter(|(_, s)| s.width > 0 && s.height > 0)
+        .filter(|(p, s)| is_placed(p) && s.width > 0 && s.height > 0)
     else {
         return skipped("no_window_position");
     };
@@ -216,8 +247,9 @@ pub fn apply_char_shift(
 
 /// バルーン窓へずれを当てる（記録してから、そのキャラ窓の今の位置で追い直す）。書いたら `true`。
 ///
-/// バルーン窓（`WindowHandle` まで）・その持ち主のキャラ窓・キャラ窓の位置のどれかが無ければ
-/// `warn!` のうえ `false`（記録は書かない）。
+/// バルーン窓（`WindowHandle` まで）・その持ち主のキャラ窓・キャラ窓の位置（`CW_USEDEFAULT` の
+/// 印を含む）のどれかが無ければ `warn!` のうえ `false`（記録は書かない）。ドラッグ中のバルーン窓は
+/// `debug!` のうえ `false`（記録は変えない）。
 pub fn apply_balloon_shift(
     world: &mut World,
     balloon: Entity,
@@ -238,11 +270,14 @@ pub fn apply_balloon_shift(
     if world.get::<WindowHandle>(balloon).is_none() {
         return skipped("no_balloon_window");
     }
+    if defers_for_drag(world, balloon) {
+        return false;
+    }
     let owner = world
         .query::<(Entity, &BalloonFollow, &WindowPos)>()
         .iter(world)
         .find(|(_, f, _)| f.balloon == balloon)
-        .map(|(e, _, wp)| (e, wp.position));
+        .map(|(e, _, wp)| (e, wp.position.filter(is_placed)));
     let Some((char_window, Some(pos))) = owner else {
         return skipped("no_char_window_position");
     };

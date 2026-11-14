@@ -53,7 +53,7 @@ pub(super) fn drag_event(target: Entity) -> DragEvent {
     }
 }
 
-pub(super) fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
+pub(crate) fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
     RectPx {
         left,
         top,

@@ -397,7 +397,7 @@ fn balloon_undetermined_size_holds_proposed_position_and_warns() {
             "dpi={dpi}: 探針が不動点——センチネル素通し変異でも X が動かない配置になっている"
         );
 
-        // 窓生成直後の実表現（position・size ともに CW_USEDEFAULT センチネル）。
+        // 窓生成前の実表現（position・size ともに CW_USEDEFAULT センチネル）。
         let (mut world, char_window, balloon) =
             char_with_balloon_window_pos(dpi, WindowPos::default(), offset);
 

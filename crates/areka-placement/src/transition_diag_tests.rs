@@ -17,8 +17,8 @@ use wintf::ecs::window::transition_diag::{self as base, MISSING, Stamp};
 use super::*;
 use crate::chain_finalize::ChainDeferReason;
 use crate::diag::{PlacementRoute, WindowKind};
-use crate::follow::test_support::{code_only, monitor_with_work_area_bottom};
-use crate::resolver::{PointPx, RectPx, SizePx};
+use crate::follow::test_support::{code_only, monitor_with_work_area_bottom, rect};
+use crate::resolver::{PointPx, SizePx};
 use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 /// 任意の刻印（純関数は時刻を読まないので、テストは好きな値で行を組める）。
@@ -31,15 +31,6 @@ fn stamp() -> Stamp {
 
 fn ent(raw: u32) -> Entity {
     Entity::from_raw_u32(raw).expect("テスト用 entity index は有効")
-}
-
-fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
-    RectPx {
-        left,
-        top,
-        right,
-        bottom,
-    }
 }
 
 // ---------------------------------------------------------------------------

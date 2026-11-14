@@ -236,8 +236,9 @@ fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     );
 }
 
-/// (1) 経路名は**呼出側が渡した route と 1:1**（`resize_window_to` は多くの経路の共通
-/// 反映口ゆえ・ここではそのうち 3 経路を渡す、ここを取り違えると書き手の名指し＝Req 2.4 が丸ごと嘘になる）。
+/// (1) 経路名は**呼出側が渡した route と 1:1**。`resize_window_to` は多くの経路の共通の
+/// 反映口なので、ここで route を取り違えると書き手の名指し（Req 2.4）が丸ごと嘘になる。
+/// ここではそのうち 3 経路を渡す。
 #[test]
 fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
     for route in [

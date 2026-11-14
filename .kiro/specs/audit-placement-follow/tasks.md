@@ -211,3 +211,4 @@
 - 3.6: `sticky_follow.rs` の `warn!`「記憶の形が決まらない」（`saved_form_anchor` が None の腕）は届かない（アンカーの無い相手は `move_partners` が先に外す）。5.1 の audit のかけ直しで拾うか判断する
 - 3.10: `transition_judge_offset_negative_tests.rs` は合格ログの行を数（`lines[14]` ほか）で引く。緑を期待するテストは並びが変わると元の行のまま緑になる余地があるので、5.1 で檻の前提の 1 行（`assert!(lines[14].contains("scope=1"))` の形）を足すか判断する
 - 3.11: 消した `visibility_guard_route_table_matches_the_d13_decision` の名を、完了済みの `areka-P0-dpi-window-vanish` の `diagnosis-procedure.md`・`diagnosis-report.md` が挙げる（当時の記録なので直さない）。4.6 で範囲の外の古い参照の一覧へ 1 行足す
+- 5.1（かけ直し 2 回目）: 面の `move` のずれはドラッグ中の窓と組の相手へ当てず `debug!` で見送るようにした。範囲の外の呼び手 `crates/areka/src/runtime/frame/move_shift.rs` の注「当てられなかったときは口の中で warn! 済み」は見送り（debug）を書いていない → `runtime-crate-split` の brief へ申し送る

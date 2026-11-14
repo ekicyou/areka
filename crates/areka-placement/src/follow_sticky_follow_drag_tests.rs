@@ -412,3 +412,42 @@ fn unreadable_begin_clears_a_stale_session() {
     assert_eq!(position_of(&world, partner.char), Point { x: 900, y: 150 });
     finish(world);
 }
+
+/// キャラ窓のドラッグ中、組の相手へも面の `move` のずれを当てない（相手は `DraggingState` を
+/// 持たないが「始め＋量」で書かれる・audit のかけ直し 2 回目 A4 の差し戻し）。記録を変えず
+/// `debug!`（reason=drag_partner）を 1 行、`warn!` 0 行。ドラッグが終われば当たる。
+#[test]
+fn a_drag_partner_is_not_shifted_until_the_drag_ends() {
+    let mut world = world_with_snapshot();
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    group(&mut world, &["0", "1"]);
+    begin_char_drag(&mut world, dragged.char);
+    let _residue = drain_window_pos_commands();
+
+    let (ok, events) =
+        capture(|| apply_char_shift(&mut world, partner.char, (10, 20), ScaleRatio::ONE));
+    assert!(!ok, "ドラッグの相手へ当ててはならない");
+    assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
+    assert!(
+        world
+            .get::<super::move_shift::MoveShiftApplied>(partner.char)
+            .is_none(),
+        "記録を変えた"
+    );
+    let deferred = events_of(&events, "move_shift_deferred");
+    assert_eq!(deferred.len(), 1, "{events:?}");
+    assert_eq!(deferred[0].level, tracing::Level::DEBUG);
+    assert_eq!(deferred[0].field_str("reason"), Some("drag_partner"));
+    assert!(
+        events.iter().all(|e| e.level != tracing::Level::WARN),
+        "見送りで warn! を出した: {events:?}"
+    );
+
+    finish_char_drag(&mut world, dragged.char, point(500, 200));
+    assert!(
+        apply_char_shift(&mut world, partner.char, (10, 20), ScaleRatio::ONE),
+        "ドラッグの後は当たる"
+    );
+    finish(world);
+}

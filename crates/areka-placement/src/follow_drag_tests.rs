@@ -392,7 +392,7 @@ fn on_char_drag_end_tunnel_phase_is_ignored() {
 /// Task 2.2 保存フック（Req1.1/1.9・design C2）: 非 Free アンカーのキャラ窓の
 /// DragEnd で、確定位置 `mapped` が当該スコープの `WindowPos` entries として Ghost
 /// 永続スコープへ write-through される。`barrier` 後に別ハンドルの `load_scope` で
-/// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist.rs の
+/// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist_io_wiring_tests.rs の
 /// `persist_entries_with_wiring_write_through_to_ghost_scope` と同流儀の実 publisher 檻）。
 #[test]
 fn on_char_drag_end_persists_char_pos_for_scope() {

@@ -767,7 +767,7 @@ fn resize_window_keep_position_without_window_pos_returns_false() {
     assert_no_write(&world, window);
 }
 
-/// `WindowPos.position` 不在（窓生成前）: 現在位置を読めないため warn＋`false`＋
+/// `WindowPos.position` 不在: 現在位置を読めないため warn（印と別の文）＋`false`＋
 /// 書込ゼロ。`size` も書き換えない。
 #[test]
 fn resize_window_keep_position_without_position_returns_false() {
@@ -784,11 +784,14 @@ fn resize_window_keep_position_without_position_returns_false() {
         ))
         .id();
 
-    assert!(!resize_window_keep_position(
-        &mut world,
-        window,
-        SizePx { w: 517, h: 823 }
-    ));
+    let (ok, events) = log_capture_kit::capture(|| {
+        resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 })
+    });
+    assert!(!ok);
+    log_capture_kit::expect_one(
+        &events,
+        "WindowPos.position 不在のため現在位置を読めずリサイズしない",
+    );
     assert!(
         world
             .get::<WindowPos>(window)

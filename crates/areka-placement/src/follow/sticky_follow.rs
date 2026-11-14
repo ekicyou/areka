@@ -191,6 +191,13 @@ pub(crate) fn is_char_dragging(world: &World, window: Entity) -> bool {
         .is_some_and(|session| session.dragged == window)
 }
 
+/// `window` が今のドラッグの組の相手か（控えの相手に入っている・相手は `DraggingState` を持たない）。
+pub(crate) fn is_char_drag_partner(world: &World, window: Entity) -> bool {
+    world
+        .get_resource::<CharDragSession>()
+        .is_some_and(|session| session.partners.iter().any(|p| p.window == window))
+}
+
 /// ドラッグ中の窓の縛りの向き（控えがあれば始めの向き・無ければ `Anchored`・2.4）。
 pub(crate) fn drag_anchor(world: &World, window: Entity) -> Option<Anchor> {
     match world.get_resource::<CharDragSession>() {

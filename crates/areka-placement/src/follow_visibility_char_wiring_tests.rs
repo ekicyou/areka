@@ -543,7 +543,7 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
         let e = world
             .spawn((
                 fake_handle(0x1000),
-                // 寸は `CW_USEDEFAULT` センチネルのまま（窓生成直後の実表現）。
+                // 寸は `CW_USEDEFAULT` センチネルのまま（窓生成前の実表現）。
                 WindowPos {
                     position: Some(Point { x: raw.x, y: raw.y }),
                     ..Default::default()
@@ -672,7 +672,10 @@ fn undetermined_position_aborts_resize_without_writing() {
 
         for (label, size) in [
             // `on_window_add` が挿す実表現そのもの（位置・寸とも未確定）。
-            ("窓生成直後（位置・寸ともセンチネル）", None),
+            (
+                "窓生成前（位置・寸ともセンチネル）",
+                Some(SizeI::new(SENTINEL, SENTINEL)),
+            ),
             // 寸だけ確定した窓＝汚染されるのは位置の側だけ、という切り分け。
             ("寸のみ確定・位置センチネル", Some(old_size_i(dpi))),
         ] {

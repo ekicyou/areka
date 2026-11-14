@@ -167,9 +167,9 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     use crate::resolver::ScopePlacement;
     use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-    // --- fixture: 最小解決可能ゴースト（persist.rs plant_minimal_ghost 同型）---------
+    // --- fixture: 最小解決可能ゴースト（follow_test_support.rs の plant_minimal_ghost）---------
     // 永続ファイルは load_restored_state が読む場所と同一＝profile_areka_root(shiori.dir)。
-    // shiori.dir は resolve が root/ghost/master へ解決する（persist.rs load 檻が証明）。
+    // shiori.dir は resolve が root/ghost/master へ解決する（persist_io_wiring_tests.rs の load_restored_state_reads_planted_sylphya_toml が証明）。
     let (_temp, root, profile_root) = plant_minimal_ghost("follow-round-trip-e2e-8-2");
 
     // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------

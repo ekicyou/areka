@@ -130,8 +130,8 @@ pub use self::move_shift::{
 };
 use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::move_shift::{origin_position, rebase_shift};
-pub(crate) use self::sticky_follow::is_char_dragging;
 pub use self::sticky_follow::sync_drag_writer;
+pub(crate) use self::sticky_follow::{is_char_drag_partner, is_char_dragging};
 // ドラッグの始めの控え。呼び手は areka の `input_events::drag`。
 pub use self::sticky_follow::{CharDragSession, begin_char_drag};
 // `\![move]` の連れ動き。呼び手は `runtime::…` の `move_cue_place`。
