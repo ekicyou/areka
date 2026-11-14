@@ -283,7 +283,7 @@
   - 記録に、読んだ数＝範囲の数・回ごとの 3 つの組の件数（0 件も数字で）・0 件か打ち切りの判定・残す番号（無し）を書く
   - 完了の姿: research.md のかけ直しの記録に、最後の回が 0 件（または 5 回目で打ち切り）の判定と、読んだ数と範囲の数の一致がある
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 3.2, 4.1, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4_
-- [ ] 17.2 静的な約束と wintf と触った crate のビルドとテストを確かめる
+- [x] 17.2 静的な約束と wintf と触った crate のビルドとテストを確かめる
   - 1 ファイル 1,000 行の番人を回し、赤が 0 で、例外表に新しいファイルが足されていないことを確かめる
   - `main` との差分で、`Cargo.toml`・`Cargo.lock`・`vendors/` が 0 行、`MonitorRecord` と `Monitor` の定義が 0 行、`DESPAWNED_SKIP_TAG` の行とその説明・`areka_placement::diag` を名指す綴りが 0 行であることを確かめる
   - `cargo build` と `cargo test` を wintf・`areka`・`areka-placement` で回す（実窓の A-1 の 3 本は `--ignored` を付けない）

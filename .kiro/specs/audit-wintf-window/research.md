@@ -1156,3 +1156,23 @@ A-1 の 3 本（`#[ignore]`）は既定の走行に入らないまま（`-- --li
 
 - テストの関数名は、消した 1 本（`measure_window_above_maps_failure_to_absence_and_records_it`・消す前の grep は `crates/` で定義の 1 か所だけ）と足した 6 本のほかは変わっていない（変えたファイルの `#[test]` の名を `995ab6518` と突き合わせた）。A-1 の 3 本は無視のまま。
 - 直しの各回で build（wintf・areka・areka-placement の tests と examples）は警告 0、`cargo fmt --all -- --check` は通った。
+
+### 15.8 静的な約束とビルド・テスト（タスク 17.2）
+
+差分の基準は `git merge-base HEAD origin/main`＝`73c4f87a0`。
+
+| 確かめ | 調べ方 | 結果 |
+|---|---|---|
+| 1,000 行の番人 | `cargo test -p log-capture-kit --test file_length_guard_test` | 6 緑・赤 0。例外表 `OVER_LIMIT_ALLOWED`（同じファイルの `:61`）は `git diff 73c4f87a0 -- crates/log-capture-kit` が 0 行で、足したファイルは無い。変えた `.rs` の最長は `command.rs` の 986 行 |
+| `Cargo.toml`（全部）・`Cargo.lock`・`vendors/` | `git diff 73c4f87a0 --stat -- '*Cargo.toml' Cargo.lock vendors/` | 0 行 |
+| `MonitorRecord` の定義 | 基準と今の `pub struct MonitorRecord {`〜`}`（`transition_diag.rs:403`・14 行）を awk で切り出して突き合わせ | 同じ。このファイルの差分の塊は `:5`・`:82`・`:98`・`:143`・`:330`・`:334`・`:806` だけで、構造体にも impl にも掛からない |
+| `Monitor` の定義 | 同じく `pub struct Monitor {`（`monitor.rs:68`・7 行）を突き合わせ | 同じ。差分の塊は `:16`・`:30` と `:232` から後の自由関数（`enumerate_monitors` と足した自由関数 `try_enumerate_monitors`）だけで、`impl Monitor`（`:76`〜`:109` から）は 0 行 |
+| `DESPAWNED_SKIP_TAG` の行とその説明 | `git diff 73c4f87a0 -U0 -- crates/wintf/src/ecs/window_proc/lifecycle.rs` の塊の位置 | 塊は `:82`・`:95`・`:324`・`:383` だけで、説明（`:20` 台〜`:37`）と定義（`:38`）は 0 行。`crates/` の差分に出るこの名の `+` 行 6 本は `mouse_move.rs` とそのテストで定数を使う側だけ |
+| `areka_placement::diag` を名指す綴り | `git diff 73c4f87a0 -- crates \| grep -cE '^[+-].*areka_placement::diag'` | 0 行 |
+| ビルド | `cargo build -p wintf -p areka -p areka-placement --tests --examples` | 通った・警告 0 |
+| `cargo test -p wintf` | `--ignored` なし | 1,743 緑・赤 0・無視 48（A-1 の 3 本は無視のまま） |
+| `cargo test -p areka-placement` | 同じ | 1,008 緑・赤 0・無視 1 |
+| `cargo test -p areka` | 同じ | 本体 3,171 緑・無視 6、`embedded_icon_test` 2 緑、`emo2_first_load_repeat` 19 緑、`offline_dump_exe_test` 13 緑（別に回した）。`emo2_mcp_real_run` の 1 本が赤（下）。cargo がそこで止まったので、`emo2_real_run`・`smoke_boot_loop_exit`・`startup_install_real_run`・`stay_on_top_real_run`・`window_link_real_run` は回っていない |
+
+- `emo2_mcp_real_run::emo2_mcp_get_log_origin_and_strict_over_one_real_boot` の赤は、32bit の `shiori-host32-helper.exe` がこのワークツリーの `target\i686-pc-windows-msvc\` に建っていないため、起こす前に `real-run-kit/src/i686.rs:77` で止まったもの（0.08 秒・窓は出ていない）。この試験は env の門が無く既定で走り、emo2 を本当に起こす。この spec の変更とは関わらない。
+- ここで確かめていない areka の試験のバイナリは 6 本＝`emo2_mcp_real_run`・`emo2_real_run`・`smoke_boot_loop_exit`・`startup_install_real_run`・`stay_on_top_real_run`・`window_link_real_run`。どれも areka を本当に起こす（`smoke_boot_loop_exit` は env を自分で立てて窓を開き、`emo2_mcp_real_run` は 32bit の helper も要る）ので、排他テストの机と i686 の helper が要り、机を持たないこのタスクでは回さなかった。2 度は回さず、helper を建ててから回すタスク 17.3 の `tools/test-all.ps1` の全体テスト 1 回で確かめる。
