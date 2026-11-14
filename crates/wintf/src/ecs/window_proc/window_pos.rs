@@ -522,7 +522,7 @@ mod tests;
 
 #[cfg(test)]
 #[path = "window_pos_transition_tests.rs"]
-mod window_pos_transition_tests;
+pub(super) mod window_pos_transition_tests;
 
 #[cfg(test)]
 #[path = "window_pos_decision_tests.rs"]

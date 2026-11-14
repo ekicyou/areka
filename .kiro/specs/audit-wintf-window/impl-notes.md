@@ -268,3 +268,13 @@
 - 58: `zorder_pair_maintain_tests.rs` の `measure_window_below_maps_failure_to_absence_and_records_it`（主張は「ログが空でない」だけ）と、その 1 本だけの節の見出し「検証で使う実測（記録の付随フィールド）」を消し、使われなくなった `measure_window_below` の use を外した。同じことは `zorder_pair_measure_tests.rs` の `measurement_falls_back_to_absence_when_the_scan_hits_its_limit` が、同じ捕捉の中の `measure_window_below(HWND::default())` が `None` を返すことと `FAILURE_MARK` がちょうど 1 本であることで厳しく押さえている（research.md が書く `:325-336` は今の行では `:203-215`）。緑を確かめた。
 - 消す前の git grep: `git grep "measure_window_below_maps_failure_to_absence_and_records_it"` は消したテストの定義 1 か所と research.md の指摘、completed の spec の検証記録（テスト名の一覧・実行の記録）だけ。コード・fixture・設定からの参照は無い。
 - テストの数: `cargo test -p wintf --lib zorder_pair_maintain` は 33→32 緑・3 ignored（1 本消した分）。行数: `zorder_pair_maintain_tests.rs` 805→784・`zorder_pair_maintain_detach_tests.rs` 546→561。build・fmt 通る・clippy に足した警告は無い。
+
+## 13.2
+
+- 直したこと（6 番）: `window_proc/mouse_move.rs` に `track_mouse_leave(hwnd)` を置き、`WM_MOUSEMOVE` の頭（World の借用の外）で毎回呼ぶ。成功は `trace!`「TrackMouseEvent(TME_LEAVE) set」、失敗は `debug!`「TrackMouseEvent(TME_LEAVE) failed」を 1 行ずつ。理由の 1 行（返す相手が無い・次の移動でまた呼ぶ・`warn!` だと溢れる・`cursor/answer.rs` と同じ）を本番の説明に書いた。旗の読み書きと `WM_MOUSELEAVE` の旗の戻しを消し、`WM_MOUSEMOVE` の説明の「初回移動時に」を「移動のたびに」に直した。
+- 消したもの: 型 `WindowPointerTracking`（`ecs/pointer/types/mod.rs`）・そのテスト `test_window_pointer_tracking_default`（`ecs/pointer/types/tests.rs`）・再公開（`ecs/mod.rs`）。
+- 消す前の `git grep "WindowPointerTracking"`: crates の中は `ecs/mod.rs:35`・`pointer/types/mod.rs:198,206`・`pointer/types/tests.rs:122,125`・`window_proc/mouse_move.rs:131,159,171,172,180,493,523,525` だけ（areka・areka-placement・examples・`crates/*/tests`・fixture・設定は 0）。ほかは `.kiro/specs/` の文書（この spec と completed の記録）だけ。消した後は crates の中で 0 件。
+- 新しいテスト: `window_proc/mouse_move_dispatch_tests.rs`（`mouse_move.rs` から `#[cfg(test)] #[path] mod dispatch_tests;`）の `every_mouse_move_arms_the_leave_watch`。道具窓は `window_pos_transition_tests.rs` の `DISPATCH_TARGET`・`create_test_window` を借りる（写さない）。借りるために `window_pos.rs` の `mod window_pos_transition_tests` を `pub(super)` に、2 項目を `pub(in crate::ecs::window_proc)` に広げた（テストの時だけの可視性で、本番は変わらない）。
+- 赤（直す前）: 今のコードのままで `left: 1, right: 2`（旗が立った 2 度目は掛けない）。
+- 較正: `track_mouse_leave` の頭に thread_local の「1 度だけ」の門を入れる → `every_mouse_move_arms_the_leave_watch` が赤（`left: 1, right: 2`）。門を外して緑に戻した。
+- テストの数: `window_proc::mouse_move` 8→9（足した 1 本）・`pointer::types` 22→21（消した 1 本）。

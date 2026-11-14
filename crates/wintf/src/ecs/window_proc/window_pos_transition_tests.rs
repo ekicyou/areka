@@ -500,7 +500,7 @@ fn message_handlers_emit_nothing_under_the_default_directives() {
 thread_local! {
     /// テスト窓の wndproc が配送先とする `(World, Entity)`。未設定なら配送しない
     /// （`CreateWindowExW`／`DestroyWindow` が送るメッセージを拾わないため）。
-    pub(super) static DISPATCH_TARGET: RefCell<Option<(Rc<RefCell<EcsWorld>>, Entity)>> =
+    pub(in crate::ecs::window_proc) static DISPATCH_TARGET: RefCell<Option<(Rc<RefCell<EcsWorld>>, Entity)>> =
         const { RefCell::new(None) };
 }
 
@@ -559,7 +559,7 @@ pub(super) fn register_test_class() {
 
 /// 0x0 の不可視の道具窓を作る（`SetWindowPos` は不可視窓にも
 /// `WM_WINDOWPOSCHANGED` を**同期送達**するので表示は要らない）。
-pub(super) fn create_test_window() -> (HWND, HINSTANCE) {
+pub(in crate::ecs::window_proc) fn create_test_window() -> (HWND, HINSTANCE) {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     register_test_class();
     // SAFETY: Win32 境界。自プロセス所有の 0x0 窓を生成する。

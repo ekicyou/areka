@@ -207,7 +207,7 @@
   - 完了の姿: 3 点の確かめの結果（日付・相手・答え）が research.md 12.2 に追記されている
   - _Boundary: I1_
   - _Requirements: 6.2, 8.9_
-- [ ] 13.2 `WM_MOUSEMOVE` のたびに離脱の見張りを掛け、使われなくなる型を消す（6）
+- [x] 13.2 `WM_MOUSEMOVE` のたびに離脱の見張りを掛け、使われなくなる型を消す（6）
   - 6: 移動の受け手の頭（World の借用の外）で毎回、離脱の見張りを掛ける。成功は `trace!` 1 行、失敗は `debug!` 1 行（返す相手が無い・次の移動でまた呼ぶ・`warn!` だと溢れる・`cursor/answer.rs` と同じ、の理由を本番の説明に 1 行書く）
   - 旗の読み書きと、離脱の受け手の旗の戻しを消す。使い手を `git grep` で確かめ直してから、範囲の外の最小の追従として型 `WindowPointerTracking` とそのテスト（`ecs/pointer/types/`）と再公開（`ecs/mod.rs`）を消す
   - 新しい兄弟のテストのファイル `window_proc/mouse_move_dispatch_tests.rs` を作り、移動の受け手のファイルからテストの時だけ宣言する。同じ窓へ `WM_MOUSEMOVE` を 2 回配ると見張りの行が 2 本、のテストを置く

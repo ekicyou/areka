@@ -115,10 +115,29 @@ pub(super) fn collect_entities_to_leave(
     result
 }
 
+/// 離脱の見張り（`TME_LEAVE`）を掛ける。`WM_MOUSEMOVE` のたびに呼ぶ（状態を持たない）。
+fn track_mouse_leave(hwnd: HWND) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+    };
+    let mut tme = TRACKMOUSEEVENT {
+        cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+        dwFlags: TME_LEAVE,
+        hwndTrack: hwnd,
+        dwHoverTime: 0,
+    };
+    // 失敗は debug!: 返す相手が無く、次の移動でまた呼ぶので立ち直り、warn! だと移動のたびに溢れる（`cursor/answer.rs` と同じ）。
+    // SAFETY: 有効な TRACKMOUSEEVENT。
+    match unsafe { TrackMouseEvent(&mut tme) } {
+        Ok(()) => trace!(?hwnd, "TrackMouseEvent(TME_LEAVE) set"),
+        Err(e) => debug!(?hwnd, error = %e, "TrackMouseEvent(TME_LEAVE) failed"),
+    }
+}
+
 /// WM_MOUSEMOVE: マウス移動メッセージ
 ///
 /// 位置をPointerBufferに蓄積し、hit_testでヒットしたエンティティにPointerStateを付与。
-/// 初回移動時にTrackMouseEventを設定。
+/// 移動のたびに（World の借用の外で）離脱の見張りを掛ける。
 #[inline]
 pub(super) fn WM_MOUSEMOVE(
     world: &Rc<RefCell<EcsWorld>>,
@@ -128,13 +147,12 @@ pub(super) fn WM_MOUSEMOVE(
     lparam: LPARAM,
 ) -> HandlerResult {
     use crate::ecs::pointer::{
-        PointerLeave, PointerState, WindowPointerTracking, push_pointer_sample, set_modifier_state,
+        PointerLeave, PointerState, push_pointer_sample, set_modifier_state,
     };
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
     use std::time::Instant;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
-    };
+
+    track_mouse_leave(hwnd);
 
     // 位置取得（物理ピクセル、クライアント座標）
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
@@ -153,41 +171,6 @@ pub(super) fn WM_MOUSEMOVE(
 
     {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            // TrackMouseEvent 設定（ウィンドウに対して）
-            if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(window_entity) {
-                let needs_tracking = entity_ref
-                    .get::<WindowPointerTracking>()
-                    .is_none_or(|t| !t.0);
-
-                if needs_tracking {
-                    let mut tme = TRACKMOUSEEVENT {
-                        cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
-                        dwFlags: TME_LEAVE,
-                        hwndTrack: hwnd,
-                        dwHoverTime: 0,
-                    };
-                    let _ = unsafe { TrackMouseEvent(&mut tme) };
-
-                    if entity_ref.get::<WindowPointerTracking>().is_some() {
-                        if let Some(mut tracking) = entity_ref.get_mut::<WindowPointerTracking>() {
-                            tracking.0 = true;
-                        }
-                    } else {
-                        drop(entity_ref);
-                        world_borrow
-                            .world_mut()
-                            .entity_mut(window_entity)
-                            .insert(WindowPointerTracking(true));
-                    }
-
-                    trace!(
-                        entity = ?window_entity,
-                        hwnd = ?hwnd,
-                        "TrackMouseEvent(TME_LEAVE) set"
-                    );
-                }
-            }
-
             // hit_test でヒットしたエンティティを取得
             let hit_entity = hit_test_in_window(
                 world_borrow.world(),
@@ -490,7 +473,7 @@ pub(super) fn WM_MOUSELEAVE(
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    use crate::ecs::pointer::{PointerLeave, PointerState, WindowPointerTracking};
+    use crate::ecs::pointer::{PointerLeave, PointerState};
     use crate::ecs::window::find_owner_window;
 
     {
@@ -517,13 +500,6 @@ pub(super) fn WM_MOUSELEAVE(
                         hwnd = ?hwnd,
                         "PointerLeave marker inserted (scoped to window)"
                     );
-                }
-            }
-
-            // WindowPointerTrackingを無効化
-            if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(window_entity) {
-                if let Some(mut tracking) = entity_ref.get_mut::<WindowPointerTracking>() {
-                    tracking.0 = false;
                 }
             }
         }
@@ -630,3 +606,7 @@ mod tests {
 #[cfg(test)]
 #[path = "mouse_move_drag_origin_tests.rs"]
 mod mouse_move_drag_origin_tests;
+
+#[cfg(test)]
+#[path = "mouse_move_dispatch_tests.rs"]
+mod dispatch_tests;
