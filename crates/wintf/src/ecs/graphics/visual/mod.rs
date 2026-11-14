@@ -33,7 +33,7 @@ mod world_visual_opacity_tests;
 mod world_visual_tests;
 
 pub use draw::command::*;
-pub(crate) use draw::diff::PxRect;
+pub(crate) use draw::diff::{DamageEntry, EntryKind, PxRect, diff};
 pub(crate) use draw::emit;
 // graphics の下の入れ物・読み戻しのテストが WARP の足場を使う口。
 #[cfg(test)]
