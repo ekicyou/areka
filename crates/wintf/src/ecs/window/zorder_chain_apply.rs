@@ -216,9 +216,9 @@ pub fn apply_zorder_chain(
         log_chain_skipped(ChainSkipReason::NoChange);
         // **ここも待ちの出口である**——直前で `dirty` を落としており、持ち越しは終わっている。
         // 武装し直さないと、待ちの最中にこの巡が挟まった以降のすべての待ちが無記録になる
-        // （要件 8.3 への無言の失敗経路）。待ちを終わらせる出口は 3 つ——⑴ 1 本でも書けた
-        // ⑵ 持ち越さない巡（食い違いだけ等）⑶ この「出す操作が無い」巡——であり、
-        // **3 つとも武装し直す**。
+        // （要件 8.3 への無言の失敗経路）。待ちを終わらせる出口は 2 つ——⑴ 待ちの付与が
+        // 残らない巡（書けた・食い違いだけ等）⑵ この「出す操作が無い」巡——であり、
+        // **2 つとも武装し直す**。
         *carry_announced = false;
         return;
     }
@@ -257,46 +257,26 @@ pub fn apply_zorder_chain(
     );
     // 持ち越しの判断は**鎖の操作の結果だけ**で行う——組の操作の分で持ち越しが解けると、
     // ハンドルが揃っても鎖が永久に書かれない。組の印の付け外しは上で済んでいる。
-    let outcome = ExecOutcome {
-        acted: detached.acted || attached.acted,
-        handle_missing: detached.handle_missing || attached.handle_missing,
-        missed: pair.missed,
-    };
-    if !outcome.acted {
-        // 1 度も実行環境を呼べなかった（ハンドル未取得・食い違いだけの巡）。理由は
-        // 各操作の側で記録済みであり、後押しを出す根拠が無いので鎖には触れない。
-        if outcome.handle_missing {
-            // **まだ一度も書けていない**——印は「書くべきものがある」の合図であって
-            // 「観測して直せ」ではない。窓ハンドルは entity より遅れて付く
-            // （`crates/areka-placement/src/spawn.rs` の `Added<WindowHandle>`）ので、計画は HWND 生成より
-            // 前に公開されうる。ここで印を落とすと、あとからハンドルが現れても
-            // **計画の内容は変わらないので再公開されず、印は二度と立たない**＝鎖が
-            // 永久に書かれない。よって 1 本も書けなかった巡は印を戻す。
-            //
-            // これは要件 14.2 が禁じた「毎巡の観測と是正」ではない——重なりを 1 度も
-            // 読まず、まだ**適用していない**計画を持ち越すだけである。持ち越しが解ける
-            // のは「**付与の両端の窓ハンドルが揃った edge が 1 本でも現れたとき**」で
-            // ある（`handle_missing` は付与の**どちらか一方**の窓ハンドルが無いだけで
-            // 立つので、ハンドル済みの窓を含む鎖でも 1 本も書けずに待つ配置が在る）。
-            //
-            // 待っている間は実行環境を 1 度も呼ばず、記録も待ち始めの 1 回しか出さない
-            // ——だから「解けるまで毎巡試す」形にはならない。
-            plan.dirty = true;
-            *carry_announced = true;
-        } else {
-            // 持ち越さない巡（食い違いだけ等）。次に待ち始めたらまた 1 回記録する。
-            *carry_announced = false;
-        }
-        // 後押しの要否は鎖と組のどちらかが窓口を呼んだかで決める。
-        if pair.acted {
-            nudge_round(plan.chain.is_some(), &members, &restored, &handles);
-        }
-        return;
+    let acted = detached.acted || attached.acted;
+    let handle_missing = detached.handle_missing || attached.handle_missing;
+    // **窓ハンドル待ちの付与が 1 本でも残る巡は印を戻す**——書けた本数には依らない。
+    // 窓ハンドルは entity より遅れて付く（`crates/areka-placement/src/spawn.rs` の
+    // `Added<WindowHandle>`）ので、計画は HWND 生成より前に公開されうる。ここで印を落とすと、
+    // あとからハンドルが現れても**計画の内容は変わらないので再公開されず、印は二度と
+    // 立たない**＝残りの繋ぎが永久に張られない（1 本書けた巡でも同じ）。
+    //
+    // これは要件 14.2 が禁じた「毎巡の観測と是正」ではない——重なりを 1 度も読まず、まだ
+    // **適用していない**付与を持ち越すだけである。書けた分は次の巡には帳簿に載っているので
+    // 差分に現れず、待っている間は実行環境を 1 度も呼ばない。見送りの記録も待ち始めの 1 回
+    // しか出さない。持ち越しが解けるのは、待ちの付与が残らない巡（両端の窓ハンドルが揃った・
+    // 計画が変わった）である。待ちの無い巡は記録を武装し直す（次に待ち始めたらまた 1 回出す）。
+    plan.dirty = handle_missing;
+    *carry_announced = handle_missing;
+    // 後押しの要否は鎖と組のどちらかが窓口を呼んだかで決める。どちらも呼ばなかった巡
+    // （ハンドル未取得・食い違いだけ）は後押しを出す根拠が無い。
+    if acted || pair.acted {
+        nudge_round(plan.chain.is_some(), &members, &restored, &handles);
     }
-
-    // 1 本でも書けた＝待ちは解けた。
-    *carry_announced = false;
-    nudge_round(plan.chain.is_some(), &members, &restored, &handles);
 }
 
 /// 後押しの出し分け（要件 4.5）: 鎖が在れば鎖全体へ 1 回（結び直した組も鎖が並べ直す）。
@@ -566,7 +546,7 @@ struct ExecOutcome {
 /// 呼ばないので、それだけの巡では後押しも出ない——書いていないものを収める必要は無い。
 ///
 /// [`ExecOutcome::handle_missing`] は、印を持ち越すかどうかの判断材料である
-/// （呼び出し元の「まだ一度も書けていない」の節を参照）。
+/// （書けた本数に依らず、立てば呼び出し元が印を戻す）。
 ///
 /// `record_handle_missing` が false の巡は、**窓ハンドル待ちの見送りを記録しない**——
 /// 前の巡と同じ理由で待ち続けているだけだからである（判断そのものは変わらない）。

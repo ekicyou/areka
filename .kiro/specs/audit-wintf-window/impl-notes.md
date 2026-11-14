@@ -147,3 +147,15 @@
 - 18: `monitor.rs` の冒頭の使用例を `wintf::ecs::window::monitor::{Monitor, enumerate_monitors}` に直した（`rust,ignore` のまま）。
 - 消したもの: なし（git grep 不要）。古い綴り `ecs::monitor::` は `crates/` に 0（完了した spec の文書にだけ残る）。
 - テストの数: `cargo test -p wintf --lib monitor` 38 → 39（足した 1 本）・`monitor_systems` 21 → 22、すべて緑。`cargo test -p wintf --test window` 20 緑。`cargo build -p wintf -p areka -p areka-placement --tests` 警告 0（列挙の呼び手は直さずに通る）・fmt 通る・clippy で触った 2 ファイルの警告 0。
+
+## 7.1
+
+- 3: `window/zorder_chain_apply.rs` の `apply_zorder_chain` で、持ち越しの判断を「1 本も書けなかったとき」の枝の外へ出した。鎖の付与に窓ハンドル待ちが 1 本でも残る巡は、書けた本数に依らず `plan.dirty = true`・`carry_announced = true`、残らない巡は両方 false。書けた分は次の巡には帳簿に載るので差分に現れず、待つ間は窓口を呼ばない（見送りの記録は `carry_announced` で待ち始めの 1 回だけ・`execute_ops` は変えていない）。後押しは「鎖か組のどちらかが窓口を呼んだ巡」で今のまま（`acted || pair.acted`）。
+- 53: 呼び出し元で `ExecOutcome { acted, handle_missing, missed: pair.missed }` を組むのをやめ、ローカルの `acted`・`handle_missing` の 2 つにした。`ExecOutcome` の型そのもの（`execute_ops` の戻り値・`detached.missed` は読まれる）は残した。長い説明を新しい規則に書き直し、`NoChange` の枝の「出口は 3 つ」を 2 つに、`execute_ops` の説明の「まだ一度も書けていない」の参照を直した。
+- 説明の追従（コメントだけ）: `zorder_chain_apply_nudge_tests.rs` の冒頭の主題 2・節の見出し・`a_wait_ended_by_a_non_carrying_pass_also_re_arms_the_record` の説明の ⑴ を新しい規則に直した。`zorder_chain.rs:115` の `dirty` の説明は 7.2（23 番）の持ち場なので触っていない。
+- テスト: `zorder_chain_apply_tests.rs` の `an_edge_without_handles_is_skipped_with_a_reason_and_the_rest_are_linked` に「印が残る」の主張を 1 つ足し、`zorder_chain_apply_nudge_tests.rs` に `the_remaining_link_is_made_once_the_late_handle_attaches_and_the_mark_drops` を 1 本足した（偽の OS・1 つの schedule で 3 巡: a←b を書いて b←c は待つ → 待つだけの巡 → c にハンドルが付いた巡で b←c。`SetOwner` は (0x10,0x20)・(0x20,0x30) の 2 回だけ・見送りの記録 1 本・張った記録 2 本・最後に印が落ちる）。`zorder_chain_order_tests.rs`（977）と `zorder_pair_maintain_tests.rs`（978）は触っていない。
+- 赤（直す前）: 足した 2 つが赤（52 緑・2 赤）。
+- 較正: 持ち越しを「書けなかったとき」の中へ戻す（`plan.dirty = handle_missing && !acted;`・`*carry_announced = handle_missing && !acted;`）と、`an_edge_without_handles_is_skipped_with_a_reason_and_the_rest_are_linked` と `the_remaining_link_is_made_once_the_late_handle_attaches_and_the_mark_drops` の 2 本が赤。明示の編集で戻し、差分が意図どおりに戻ったのを確かめた。
+- 消したもの: 関数・型・口は消していない（呼び出し元の構造体の組み立てだけ）ので git grep 不要。
+- 印を立てる `areka` の側（`crates/areka/src/runtime/frame/zorder_drain.rs`）は直していない。
+- テストの数: `cargo test -p wintf --lib zorder_chain_apply` 53 → 54（足した 1 本）すべて緑・`cargo test -p areka zorder_drain` 34 緑。`cargo build -p wintf -p areka -p areka-placement --tests` 警告 0・fmt 通る・clippy の触ったファイルの警告は前からある `field_reassign_with_default`（`zorder_chain_apply_tests.rs:387-388`・`zorder_chain_apply_nudge_tests.rs` の末尾の 1 本）だけで、足したものは 0。

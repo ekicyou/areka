@@ -455,6 +455,11 @@ fn an_edge_without_handles_is_skipped_with_a_reason_and_the_rest_are_linked() {
         "ハンドルの無い窓へ書き込もうとしている: {:?}",
         used.calls
     );
+    // 1 本書けても待ちの付与が残る巡は印を戻す（落とすと残りは計画が変わるまで張られない）。
+    assert!(
+        world.resource::<ZOrderChainPlan>().dirty,
+        "窓ハンドル待ちの付与が残るのに印が落ちている"
+    );
 }
 
 // ===========================================================================

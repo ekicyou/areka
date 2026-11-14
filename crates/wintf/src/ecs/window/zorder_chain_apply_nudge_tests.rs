@@ -11,7 +11,8 @@
 //! 1. **後押しの形**——動かすのは鎖の**根**であり、挿入位置は錨（根の 1 つ手前の窓）か、
 //!    それが空振りになる巡だけ先頭へ切り替わる（`research.md` §13）。切り替えの両枝を
 //!    対にして固定するので、切り替えを経路から外す変異はどちらかで必ず赤になる
-//! 2. **印の持ち越し**——1 本も書けなかった巡（窓ハンドル未取得）では印を落とさない。
+//! 2. **印の持ち越し**——窓ハンドル待ちの付与が 1 本でも残る巡では、書けた本数に依らず
+//!    印を落とさない。
 //!    計画は HWND 生成より前に公開されうるので、落とすと鎖が永久に書かれない（§13.5）。
 //!    持ち越しが「毎巡の観測と是正」（要件 14.2 が退役させた形）へ化けていないことは、
 //!    ⑴ ハンドルが付いた次の巡で解けること ⑵ 食い違いだけの巡では持ち越さないこと
@@ -20,7 +21,7 @@
 use super::*;
 
 // ===========================================================================
-// 1 本も書けなかった巡は印を持ち越す（計画が HWND より先に公開されうる経路）
+// 窓ハンドル待ちの付与が残る巡は印を持ち越す（計画が HWND より先に公開されうる経路）
 // ===========================================================================
 
 /// 印の現況を読む。
@@ -195,8 +196,8 @@ fn a_wait_resolved_by_writing_re_arms_the_record_for_the_next_wait() {
 
 /// **書けずに終わった待ちのあとも、次の待ちで記録が出る**（2 つ目の再武装の枝）。
 ///
-/// 待ちが終わる経路は **3 つ**ある——⑴ 1 本でも書けた ⑵ そもそも持ち越さない巡（食い違い
-/// だけ等）が挟まった ⑶ **出す操作が無い巡**（`NoChange`）が挟まった。上の 1 本が ⑴ を、
+/// 待ちが終わる経路は **3 つ**ある——⑴ 待ちの付与が書けて残らない ⑵ そもそも持ち越さない巡
+/// （食い違いだけ等）が挟まった ⑶ **出す操作が無い巡**（`NoChange`）が挟まった。上の 1 本が ⑴ を、
 /// こちらが ⑵ を、次の 1 本が ⑶ を固定する。**どれ 1 つでも武装し直さなければ、それ以降の
 /// 待ちが無記録になる**（要件 8.3 への無言の失敗経路）。
 #[test]
@@ -415,6 +416,58 @@ fn the_carried_mark_is_consumed_as_soon_as_the_handles_appear() {
         !dirty_now(&world),
         "書けた巡でも印が残っている（毎巡の空振りへ逆戻りしている）"
     );
+}
+
+/// 1 本書けて 1 本が待った巡のあと、**ハンドルが付いた次の巡で残りの繋ぎを張って印が落ちる**。
+///
+/// 待つ間の巡は書けた分が帳簿に載っているので窓口を呼ばず、記録も待ち始めの 1 本だけである。
+#[test]
+fn the_remaining_link_is_made_once_the_late_handle_attaches_and_the_mark_drops() {
+    let mut world = World::new();
+    let a = spawn_window(&mut world, fake_hwnd(0x10));
+    let b = spawn_window(&mut world, fake_hwnd(0x20));
+    let c = world.spawn_empty().id();
+    publish(
+        &mut world,
+        vec![a, b, c],
+        vec![
+            edge(a, b, ChainSegment::Group(0)),
+            edge(b, c, ChainSegment::Group(0)),
+        ],
+    );
+
+    let mut schedule = chain_schedule();
+    let (out, used) = run_on(
+        &mut schedule,
+        &mut world,
+        Script::default(),
+        |schedule, world| {
+            // ⑴ a←b を書き、b←c は待つ。⑵ 待つだけの巡（窓口を呼ばない）。
+            schedule.run(world);
+            schedule.run(world);
+            world.entity_mut(c).insert(WindowHandle {
+                hwnd: fake_hwnd(0x30),
+                instance: HINSTANCE::default(),
+            });
+            // ⑶ ハンドルが付いた巡で b←c を張る。
+            schedule.run(world);
+        },
+    );
+
+    let owners: Vec<&Call> = used
+        .calls
+        .iter()
+        .filter(|call| matches!(call, Call::SetOwner(_, _)))
+        .collect();
+    assert_eq!(
+        owners,
+        [&Call::SetOwner(0x10, 0x20), &Call::SetOwner(0x20, 0x30)],
+        "書けた分を書き直しているか、残りを張っていない: {:?}",
+        used.calls
+    );
+    assert_line_count(&out, SKIPPED, 1, "待ち始めの 1 本だけ");
+    assert_line_count(&out, LINKED, 2, "a←b と b←c");
+    assert!(!dirty_now(&world), "残りを張った巡で印が残っている");
 }
 
 /// 帳簿との**食い違いだけ**の巡は、印を持ち越さない（待っても変わらないため）。
