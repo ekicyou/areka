@@ -114,7 +114,7 @@
   - _Requirements: 2.1, 4.7_
 
 - [ ] 5. クリック透過を直す
-- [ ] 5.1 クリック透過の対象を wintf の窓だけにし、同じ HWND の再登録で記録を崩さないようにする
+- [x] 5.1 クリック透過の対象を wintf の窓だけにし、同じ HWND の再登録で記録を崩さないようにする
   - 登録は HWND が変わったときだけ適用の記録を戻す（同じ HWND なら何もしない）。登録の口の説明も「HWND が変わったときだけ記録を戻す」に。
   - 対象を刈るとき、`Window` と、登録の HWND と同じ `WindowHandle` を持つ窓だけを残す。説明の「汎用の対象」を「wintf の窓だけ」に直す（議題 10）。
   - 望む状態の既定を derive と既定の腕の印にする（綴りは変えない）。
@@ -184,3 +184,4 @@
 - `cargo test -p areka --all-targets`／`--tests` は `crates/areka/tests/` の実機起動のテスト（`#[ignore]` 無し）まで回す＝排他テストの机が要る。机の無い確かめは `--bin areka` と `--example mock-shell`、ほかの残りは `cargo test --workspace --all-targets --no-run` で拾う（`build --all-targets` は example のテストを組まない・3.1）。
 - `audit-placement-core` と: この spec が先に着地。向こうの 2.4 が `follow/drag_follow.rs` の `reestablish_balloon_follow` に 1 行足す＝3.2 の読み手の直しと近くで重なれば後から着地する側（向こう）が合わせる（11-14 の伝言）。
 - `areka-placement/src/follow/drag_follow.rs` は 1000 行ちょうど＝空き 0 行（3.2 の後）。`audit-placement-core` が 1 行足すなら向こうで空きを作る（伝え済み）。
+- 範囲の外の例の説明 2 か所が、クリック透過の刈る条件を今も「Entity の生存確認」と書く（`crates/areka/examples/mock-shell.rs:135`・`crates/areka/examples/emo-present/systems.rs:17`）。5.1 で条件が「wintf の窓（`Window`＋同じ HWND の `WindowHandle`）だけ」に変わった＝完了の棚卸で拾う（5.1 のレビュー）。

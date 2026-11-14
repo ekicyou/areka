@@ -24,7 +24,7 @@ use crate::ecs::PointF;
 use crate::ecs::drag::{DragState, snapshot_drag_state};
 use crate::ecs::hit_test_in_window;
 use crate::ecs::world::EcsWorld;
-use crate::ecs::{PhysicalPoint, WindowPos};
+use crate::ecs::{PhysicalPoint, Window, WindowHandle, WindowPos};
 use crate::win_style::{apply_click_through, apply_layered_companion};
 use windows::Win32::Foundation::{HWND, POINT};
 
@@ -80,27 +80,25 @@ pub(crate) fn resolve_transition(
     }
 }
 
-/// World 上に生存しない対象窓をレジストリから刈り取る（窓破棄追随・R7.2 / Lifecycle）。
+/// 対象のうち、`Window` と、登録の HWND と同じ `WindowHandle` を持つ窓だけを残す
+/// （窓の破棄と付け替えに追随・R7.2 / Lifecycle）。対象は wintf の窓だけ。
 ///
-/// 除去条件: window Entity が既に despawn 済み（`world.get_entity(window).is_err()`）。
-/// これが「窓破棄」の正準シグナルである。areka の窓 close は `world.despawn(entity)` で
-/// 行われ（登録簿の掃除 `reconcile_window_registry` が `DestroyWindow` する起点）、Entity と共に
-/// 対象が消える。したがって Entity 生存確認だけで破棄追随が成立する。
+/// 刈る条件: window Entity が despawn 済み・`Window` を外した（`Window` に `on_remove` の
+/// フックが無いので `WindowHandle` は残る）・`WindowHandle` の HWND が登録の HWND と違う。
+/// areka の窓 close は `world.despawn(entity)` で行われ（登録簿の掃除
+/// `reconcile_window_registry` が `DestroyWindow` する起点）、Entity と共に対象が消える。
 ///
-/// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み窓の無効 HWND へ
-/// `apply_click_through` を撃つ経路（`Err` スパム）を構造的に断つ。除去件数を返す
-/// （テスト・観測用）。areka の窓登録／破棄（task 4.1）は非同期ゆえ、機構側は「今 World に
-/// 在る Entity の対象だけを見る」ことで窓ライフサイクルに追随する（既存窓ライフサイクル
-/// ファイルは不変）。
-///
-/// NOTE: `remove::<Window>` のみ（Entity は残す）で HWND が破棄される稀な過渡状態は、
-/// `evaluate_targets` の `apply_click_through` が `Err` をグレースフルに warn+skip する
-/// 既存経路（`last_applied` 据え置き・次サイクル再試行）が受け止める。prune は「Entity 消滅」
-/// という単一・明快な破棄シグナルに限定し、`Window` コンポーネント有無へ結合しない
-/// （eval コアの純粋性を保ち、`Window` を持たない汎用対象も破棄までは監視できる）。
+/// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み・付け替え前の HWND へ
+/// `ScreenToClient`／`apply_click_through` を撃つ経路を断つ。除去件数を返す（テスト・観測用）。
+/// areka の窓登録／破棄（task 4.1）は非同期ゆえ、機構側は「今 World に在る wintf の窓だけを
+/// 見る」ことで窓ライフサイクルに追随する。
 pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegistry) -> usize {
-    // Entity が World 上に生存している対象のみ残す（despawn 済みは刈り取る）。
-    registry.retain(|t| world.get_entity(t.window).is_ok())
+    registry.retain(|t| {
+        world.get::<Window>(t.window).is_some()
+            && world
+                .get::<WindowHandle>(t.window)
+                .is_some_and(|h| h.hwnd == t.hwnd)
+    })
 }
 
 /// settled な `&World` に対しレジストリの全対象窓を 1 回巡回評価する同期コア
@@ -144,7 +142,7 @@ pub(crate) fn evaluate_targets(
     mut screen_to_client: impl FnMut(HWND) -> Option<PointF>,
 ) {
     // 窓破棄追随（R7.2 / Error Handling: Lifecycle）: 巡回前に、World 上に生存しない対象
-    // （despawn 済み Entity・`Window` コンポーネント喪失）をレジストリから刈り取る。これにより
+    // （despawn 済み Entity・`Window` 喪失・`WindowHandle` の HWND の違い）をレジストリから刈り取る。これにより
     // 破棄済み窓の無効 HWND へ `apply_click_through` を撃たない（Err スパム回避）。
     prune_dead_targets(world, registry);
 
@@ -153,7 +151,7 @@ pub(crate) fn evaluate_targets(
 
     // 巡回中に `registry` を可変借用して書き戻すため、対象の列挙を先にスナップショット
     // する（`iter` の不変借用と `set_last_applied` の可変借用の重複を避ける）。
-    // 対象は areka で 2 窓のみ・汎用でも小数のため Vec 収集のコストは無視できる。
+    // 対象は areka で 2 窓のみ・wintf の窓は小数のため Vec 収集のコストは無視できる。
     let targets: Vec<(Entity, windows::Win32::Foundation::HWND, DesiredState, bool)> = registry
         .iter()
         .map(|t| (t.window, t.hwnd, t.last_applied, t.layered_applied))
@@ -390,7 +388,8 @@ impl ClickThroughRegistryHandle {
 
     /// 監視対象窓を登録する（areka の非同期窓生成に追随・task 4.1）。
     ///
-    /// 同一 window Entity の再登録は HWND 更新＋`last_applied` リセット（dedupe）。
+    /// 同一 window Entity の再登録は重複させず、HWND が変わったときだけ記録を戻す
+    /// （同じ HWND なら何もしない）。
     pub fn register(&self, window: Entity, hwnd: windows::Win32::Foundation::HWND) {
         self.registry.borrow_mut().register(window, hwnd);
     }

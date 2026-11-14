@@ -514,7 +514,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 ```
 
 - `Window` を外しても `WindowHandle` は外れない（`Window` に `on_remove` のフックが無い・`ecs/window/components.rs:99`）ので、`Window` も見る。「`Window` を持たない汎用の対象」はやめる（議題 10）。`registry.rs` と `controller.rs` の説明の「汎用」を「wintf の窓だけ」に。
-- **テスト**（`controller_tests.rs`）: `prune_keeps_live_entity_without_window_component`（513-525 行）を「`Window` の無い entity は刈る」に直す。「`Window` を外した窓は刈る」「`WindowHandle` の HWND が違う対象は刈る」「`Window` と同じ HWND の `WindowHandle` を持つ窓は残す」を足す（`WindowHandle { hwnd, instance: HINSTANCE::default() }` を直に入れる・`HWND` は整数から作る偽の値）。評価のテストの組み立て（`world_with_hittable_window`・`spawn_live_window`）に `Window` と `WindowHandle` を足す。直す前は `Window` を外した窓が残って赤。
+- **テスト**（`controller_tests.rs`）: `prune_keeps_live_entity_without_window_component`（513-525 行）を「`Window` の無い entity は刈る」に直す。「`Window` を外した窓は刈る」「`WindowHandle` の HWND が違う対象は刈る」「`Window` と同じ HWND の `WindowHandle` を持つ窓は残す」を足す（`WindowHandle { hwnd }`（今の型は `hwnd` の欄だけ・実装 5.1） を直に入れる・`HWND` は整数から作る偽の値）。評価のテストの組み立て（`world_with_hittable_window`・`spawn_live_window`）に `Window` と `WindowHandle` を足す。直す前は `Window` を外した窓が残って赤。
 
 #### 指摘 23: 小さな形
 
