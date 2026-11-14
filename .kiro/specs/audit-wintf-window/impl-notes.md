@@ -204,3 +204,16 @@
 - 較正: 足したテスト・直したテストは無い（design.md「直したテストの較正」の 582 行の扱い＝写しをまとめた指摘は専用のテストを足さない）。門の内側のテストは既定の走行では `#[ignore]` で走らないので、既定の走行での較正はできない。写しが残っていないことはコンパイルと下の `git grep` で確かめた。
 - 消す前の git grep: 消したのはどれも private な `fn`／`const`。消した後の `git grep "require_explicit_real_window_run\|REAL_WINDOW_ZORDER_ENV"`（このスペックの文書の外）で当たるのは、共有のファイルの定義 1 組と、3 本のファイルの `use` と門の呼び出しだけ。`create_ghost_shaped`・`in_band`・`relative_order`・`destroy(hwnd: HWND)` の定義は `window_band_real_tests.rs` の 1 つずつだけ（同じ名前の別物＝`command_batch_tests.rs` の `destroy(windows: &[HWND])`・各テストの型の `fn destroy(self)`・`window_band_tests.rs` の偽の OS の `in_band` は別の定義で、触っていない）。
 - テストの数: `cargo test -p wintf --lib window_band` は前後とも 16 緑・3 ignored、`cargo test -p wintf --lib always_on_top` は前後とも 6 緑・3 ignored。行数: 帯の実窓 335→325・帯の流れの実窓 242→178（前の行数は HEAD）・常に手前 811→774・共有の道具 304→340。build 警告 0・fmt 通る・clippy の新しい警告 0。
+
+## 10.1
+
+- 4: 確立系 `establish_owner_links` の宣言の問い合わせを `Ref<KeepDirectlyAbove>` にし（clippy の type_complexity を避けて `DeclarationQuery` の型の別名に置いた・`zorder_pair_maintain.rs` の `OwnerLinkQuery` と同じ形）、手順へ入る条件に `declaration.is_added() ||` を足した。条件の変数名を `handle_added` から `added` に改めた。
+- 説明の追従（コメントだけ）: `zorder_pair_establish.rs` の区切りの見出し（「Added<WindowHandle> 駆動」→「ハンドルか宣言の付与で駆動」）・「何を契機に動くか」の段落・条件の行のコメント、`zorder_pair_establish_tests.rs` の `skips_handle_missing_pair_while_the_complete_pair_establishes` の説明（「ハンドルが付いた巡だけ動き」→「ハンドルか宣言が付いた巡だけ動き」）。`zorder_chain_apply.rs:415`・`zorder_chain_apply_release_tests.rs:198` の「ハンドルが付いた巡に確立系が張る」は今も正しいので触っていない。
+- 足したテスト（`zorder_pair_establish_tests.rs`・実窓 2 枚・既定の走行で走る）:
+  - `establishes_when_the_declaration_is_added_after_the_handles`（4）: ハンドルの付いた窓 2 枚で 1 巡 → 宣言を付けて 1 巡 → もう 1 巡。`owner-established` がちょうど 1 本・OS 側の owner がキャラ窓・`ReassertZOrder` が入る。
+  - `retries_and_establishes_once_the_handles_are_replaced`（29・本番は変えない）: null のハンドルで失敗（`owner-establish-failed` 1 本・印あり）→ 両窓のハンドルを実窓の別のハンドルへ付け直し（除去 → 付与）1 巡 → `owner-established` がちょうど 1 本・失敗 0 本・OS 側の owner がキャラ窓。
+- Feature Flag の手順: 旗 OFF で 4 のテストが赤（`establishes_when_the_declaration_is_added_after_the_handles` が `zorder_pair_test_support.rs:334` の本数の検査で panic）→ 旗 ON で 11 本緑 → 旗を消して 11 本緑。
+- 較正: ⑴ `declaration.is_added() ||` を外す → `establishes_when_the_declaration_is_added_after_the_handles` だけが赤（10 緑 1 赤）。⑵ 比べを `failed.is_some()` にする → `retries_and_establishes_once_the_handles_are_replaced` だけが赤（10 緑 1 赤）。どちらも戻して 11 本緑、`git diff` は意図した変更だけ。
+- 消したもの: 無い（git grep 不要）。
+- テストの数: `cargo test -p wintf --lib zorder_pair_establish` 9 → 11 緑、`cargo test -p wintf --lib zorder` 233 緑・3 ignored（足した 2 本を含む）、`cargo test -p areka-placement` 1008 緑・1 ignored。行数: `zorder_pair_establish.rs` 224 → 237・`zorder_pair_establish_tests.rs` 427 → 512。`zorder_pair_tests.rs` は触っていない。fmt 通る・clippy の新しい警告 0。
+- 振る舞いの差（記録だけ）: 宣言を窓の生成前に付ける areka の経路（`spawn.rs:593`）では、宣言の付いた巡にまだハンドルが無ければ `reason=HandleMissing` の見送りが組ごとに 1 本増えうる（実機では確かめていない・窓の振る舞いは変わらない）。
