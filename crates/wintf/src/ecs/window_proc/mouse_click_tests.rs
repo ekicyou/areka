@@ -1,19 +1,19 @@
 //! 左解放（`WM_LBUTTONUP`）を wndproc の経路で配ったときに届くドラッグの知らせの決定論テスト。
 //!
-//! 知らせの件数は `dispatch_drag_events` を 1 回呼んだ後の `Messages<DragStartEvent>`／
-//! `Messages<DragEndEvent>` を `drain` して数える。累積器の返す形（`FlushResult`）には触らない。
+//! 知らせの件数は `dispatch_drag_events` を 1 回呼んだ後に、開始・終了の受け手が呼ばれた数で
+//! 数える（`drag::seen_test_support`）。累積器の返す形（`FlushResult`）には触らない。
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
-use bevy_ecs::message::Messages;
-use bevy_ecs::prelude::{Entity, World};
+use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::WM_LBUTTONUP;
 
+use crate::ecs::drag::seen_test_support::{take, watch};
 use crate::ecs::drag::{
-    DragAccumulatorResource, DragEndEvent, DragStartEvent, DragStateSnapshot, DragTransition,
+    DragAccumulatorResource, DragEndEvent, DragStartEvent, DragState, DragTransition,
     cancel_dragging, dispatch_drag_events, snapshot_drag_state, start_dragging, start_preparing,
 };
 use crate::ecs::pointer::PhysicalPoint;
@@ -38,7 +38,9 @@ fn setup() -> (Rc<RefCell<EcsWorld>>, Entity, DragAccumulatorResource) {
         let mut w = world.borrow_mut();
         let w = w.world_mut();
         let accumulator = w.resource::<DragAccumulatorResource>().clone();
-        (w.spawn(Window::default()).id(), accumulator)
+        let entity = w.spawn(Window::default()).id();
+        watch(w, entity);
+        (entity, accumulator)
     };
     (world, entity, accumulator)
 }
@@ -54,16 +56,12 @@ fn release_left(world: &Rc<RefCell<EcsWorld>>, entity: Entity, x: i32, y: i32) {
     crate::ecs::dispatch_window_message(world, entity, &message);
 }
 
-/// 1 回の画面更新として配り、届いた開始・終了の知らせを読み出す。
+/// 1 回の画面更新として配り、開始・終了の受け手に届いた知らせを読み出す。
 fn dispatch_once(world: &Rc<RefCell<EcsWorld>>) -> (Vec<DragStartEvent>, Vec<DragEndEvent>) {
     let mut w = world.borrow_mut();
     let w = w.world_mut();
     dispatch_drag_events(w);
-    (drain::<DragStartEvent>(w), drain::<DragEndEvent>(w))
-}
-
-fn drain<E: bevy_ecs::message::Message>(world: &mut World) -> Vec<E> {
-    world.resource_mut::<Messages<E>>().drain().collect()
+    (take::<DragStartEvent>(w), take::<DragEndEvent>(w))
 }
 
 /// 閾値に届かずに離した（クリックだけの）ときは、終了の知らせを配らない。
@@ -78,7 +76,7 @@ fn release_before_threshold_dispatches_no_drag_end() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: false,
                 ..
             }
@@ -120,7 +118,7 @@ fn release_after_threshold_dispatches_start_and_end_once_each() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: false,
                 ..
             }

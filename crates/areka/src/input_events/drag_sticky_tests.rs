@@ -52,14 +52,14 @@ fn group(rig: &mut Rig) {
     seed_sticky_descript(&mut rig.world, Some("0,1"));
 }
 
-/// ドラッグを始める（`DraggingState.initial_inset` を窓の位置にする）。押した位置を返す。
+/// ドラッグを始める（`DraggingState.initial_window_pos` を窓の位置にする）。押した位置を返す。
 fn begin(rig: &mut Rig) -> Point {
     let char_w = rig.char_w;
     let start = rig.position_of(char_w);
     let press = add(start, PRESS_LOCAL);
     rig.put(started(char_w, press));
     rig.tick();
-    rig.set_initial_inset(char_w, start);
+    rig.set_initial_window_pos(char_w, start);
     press
 }
 

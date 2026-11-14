@@ -311,7 +311,6 @@ fn release_correction_never_flips() {
         target: balloon,
         position: Point::new(0, 0),
         cancelled: false,
-        is_primary: true,
         timestamp: Instant::now(),
     };
     let (_, events) =

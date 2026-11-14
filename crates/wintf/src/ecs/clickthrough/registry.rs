@@ -12,20 +12,15 @@ use windows::Win32::Foundation::HWND;
 
 /// クリック透過の適用済み／適用予定状態。
 ///
-/// レジストリと（後続タスクの）コントローラで共有する。`Opaque` は
+/// レジストリとコントローラで共有する。`Opaque` は
 /// 初回トグル前の初期・既定状態（当該窓は自ウィンドウでクリックを受領する）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum DesiredState {
     /// クリック透過 ON（`WS_EX_TRANSPARENT` 付与相当）。
     Transparent,
     /// クリック透過 OFF（自ウィンドウで受領・既定）。
+    #[default]
     Opaque,
-}
-
-impl Default for DesiredState {
-    fn default() -> Self {
-        Self::Opaque
-    }
 }
 
 /// 監視対象 1 窓分のレコード。window Entity・対応 HWND・適用済み状態を束ねる。
@@ -47,7 +42,7 @@ pub(crate) struct ClickThroughTarget {
 
 /// 監視対象窓と適用済み状態を保持するレジストリ。
 ///
-/// UI スレッド所有。汎用機構として複数窓を巡回可能（areka は shell/balloon の 2 窓）。
+/// UI スレッド所有。複数の wintf の窓を巡回可能（areka は shell/balloon の 2 窓）。
 #[derive(Debug, Default)]
 pub(crate) struct ClickThroughRegistry {
     targets: Vec<ClickThroughTarget>,
@@ -62,14 +57,17 @@ impl ClickThroughRegistry {
     /// 監視対象窓を登録する。`last_applied` は既定（`Opaque`）、`layered_applied` は
     /// `false` で初期化する。
     ///
-    /// 同一 window Entity が既に登録済みの場合は HWND を更新し `last_applied`／
-    /// `layered_applied` をリセットして重複させない（dedupe by Entity。HWND が
-    /// 変わり得るため同伴フラグも再適用が必要）。
+    /// 同一 window Entity が既に登録済みの場合は重複させない（dedupe by Entity）。HWND が
+    /// 変わったときだけ HWND を更新し `last_applied`／`layered_applied` を戻す（新しい HWND には
+    /// 同伴フラグも透過も未適用）。同じ HWND なら何もしない（冪等。戻すと差分の守りが実際の
+    /// ex-style とずれて透過が外れなくなる）。登録するのは wintf の窓だけ。
     pub(crate) fn register(&mut self, window: Entity, hwnd: HWND) {
         if let Some(target) = self.targets.iter_mut().find(|t| t.window == window) {
-            target.hwnd = hwnd;
-            target.last_applied = DesiredState::default();
-            target.layered_applied = false;
+            if target.hwnd != hwnd {
+                target.hwnd = hwnd;
+                target.last_applied = DesiredState::default();
+                target.layered_applied = false;
+            }
         } else {
             self.targets.push(ClickThroughTarget {
                 window,
@@ -80,26 +78,20 @@ impl ClickThroughRegistry {
         }
     }
 
-    /// 監視対象窓を除去する（ウィンドウライフサイクル追随・R7.2 非破壊）。
-    ///
-    /// 対象が存在すれば `true`、無ければ `false` を返す。
-    pub(crate) fn remove(&mut self, window: Entity) -> bool {
-        let before = self.targets.len();
-        self.targets.retain(|t| t.window != window);
-        self.targets.len() != before
-    }
-
-    /// 登録済み対象窓数。
+    /// 登録済み対象窓数。使い手はテストだけ。
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.targets.len()
     }
 
-    /// 登録済み対象が無いか。
+    /// 登録済み対象が無いか。使い手はテストだけ。
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.targets.is_empty()
     }
 
-    /// 指定 window の `last_applied` を読む（未登録なら `None`）。
+    /// 指定 window の `last_applied` を読む（未登録なら `None`）。使い手はテストだけ。
+    #[cfg(test)]
     pub(crate) fn last_applied(&self, window: Entity) -> Option<DesiredState> {
         self.targets
             .iter()
@@ -137,7 +129,7 @@ impl ClickThroughRegistry {
 
     /// 述語が `false` を返す対象を一括除去する（窓破棄追随のバルク版・R7.2 非破壊）。
     ///
-    /// `remove` は Entity 指定の単発除去だが、本メソッドは「World 上に生存しない窓」を
+    /// wintf の窓（`Window` と、登録の HWND と同じ `WindowHandle` を持つもの）でない対象を
     /// まとめて刈り取る（`prune_dead_targets` が World 参照で述語を与える）。除去件数を返す。
     pub(crate) fn retain<F: FnMut(&ClickThroughTarget) -> bool>(&mut self, mut keep: F) -> usize {
         let before = self.targets.len();
@@ -173,33 +165,27 @@ mod tests {
     }
 
     #[test]
-    fn register_then_remove() {
-        let mut world = World::new();
-        let e = world.spawn_empty().id();
-        let mut reg = ClickThroughRegistry::new();
-
-        assert!(reg.is_empty());
-        reg.register(e, hwnd(1));
-        assert!(!reg.is_empty());
-        assert!(reg.last_applied(e).is_some());
-
-        assert!(reg.remove(e));
-        assert!(reg.is_empty());
-        assert_eq!(reg.last_applied(e), None);
-        // 二重除去は false。
-        assert!(!reg.remove(e));
-    }
-
-    #[test]
     fn re_registering_same_entity_does_not_duplicate() {
         let mut world = World::new();
         let e = world.spawn_empty().id();
         let mut reg = ClickThroughRegistry::new();
 
         reg.register(e, hwnd(1));
-        // 状態を進めてから再登録。
+        // 状態を進めてから同じ HWND で再登録: 記録は変わらない。
         assert!(reg.set_last_applied(e, DesiredState::Transparent));
         assert!(reg.mark_layered_applied(e));
+        reg.register(e, hwnd(1));
+
+        assert_eq!(reg.len(), 1);
+        assert_eq!(
+            reg.iter()
+                .next()
+                .map(|t| (t.last_applied, t.layered_applied)),
+            Some((DesiredState::Transparent, true)),
+            "同じ HWND の再登録で記録は変わらない"
+        );
+
+        // 違う HWND で再登録: 記録を戻す。
         reg.register(e, hwnd(2));
 
         assert_eq!(reg.len(), 1);

@@ -157,7 +157,7 @@ fn track_mouse_leave(hwnd: HWND) {
 
 /// WM_MOUSEMOVE: マウス移動メッセージ
 ///
-/// 位置をPointerBufferに蓄積し、hit_testでヒットしたエンティティにPointerStateを付与。
+/// 位置を溜め（最新の 1 つ）に置き、hit_testでヒットしたエンティティにPointerStateを付与。
 /// 移動のたびに（World の借用の外で）離脱の見張りを掛ける。
 /// 移す先の entity が破棄済みなら位置を積まず、[`DESPAWNED_SKIP_TAG`] の `debug!` を残す。
 #[inline]
@@ -170,7 +170,6 @@ pub(super) fn WM_MOUSEMOVE(
 ) -> HandlerResult {
     use crate::ecs::pointer::{PointerState, push_pointer_sample, set_modifier_state};
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
-    use std::time::Instant;
 
     track_mouse_leave(hwnd);
 
@@ -207,7 +206,7 @@ pub(super) fn WM_MOUSEMOVE(
             let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
             match state_snapshot {
-                crate::ecs::drag::DragStateSnapshot::Preparing {
+                crate::ecs::drag::DragState::Preparing {
                     entity,
                     start_pos,
                     start_time,
@@ -243,7 +242,7 @@ pub(super) fn WM_MOUSEMOVE(
                         }
                     }
                 }
-                crate::ecs::drag::DragStateSnapshot::Dragging {
+                crate::ecs::drag::DragState::Dragging {
                     entity: drag_entity,
                     prev_pos,
                     start_pos,
@@ -356,7 +355,7 @@ pub(super) fn WM_MOUSEMOVE(
 
             // PointerStateが存在することを保証した上で、バッファに蓄積
             if target_alive {
-                push_pointer_sample(target_entity, x as f32, y as f32, Instant::now());
+                push_pointer_sample(target_entity, crate::ecs::pointer::PhysicalPoint::new(x, y));
                 set_modifier_state(target_entity, shift, ctrl);
             }
         }
@@ -393,7 +392,7 @@ pub(super) fn WM_MOUSEMOVE(
 }
 
 /// ドラッグの式の始めの値を選ぶ。live（ドラッグ対象の DraggingState）があれば
-/// (initial_inset を整数にしたもの, drag_start_pos)、無ければ控えの (initial_window_pos, start_pos)。
+/// (initial_window_pos を整数にしたもの, drag_start_pos)、無ければ控えの (initial_window_pos, start_pos)。
 pub(crate) fn dragging_window_origin(
     snapshot_origin: crate::ecs::Point,
     snapshot_start: crate::ecs::pointer::PhysicalPoint,
@@ -402,8 +401,8 @@ pub(crate) fn dragging_window_origin(
     match live {
         Some(s) => (
             crate::ecs::Point {
-                x: s.initial_inset.0.round() as i32,
-                y: s.initial_inset.1.round() as i32,
+                x: s.initial_window_pos.0.round() as i32,
+                y: s.initial_window_pos.1.round() as i32,
             },
             s.drag_start_pos,
         ),

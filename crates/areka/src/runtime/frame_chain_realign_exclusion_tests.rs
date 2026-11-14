@@ -245,7 +245,7 @@ fn a_dragging_window_and_its_neighbour_are_not_moved() {
         let start = pos_of(&harness.world, window).expect("位置がある");
         harness.world.entity_mut(window).insert(DraggingState {
             drag_start_pos: Point::new(start.x + 50, start.y + 50),
-            initial_inset: (start.x as f32, start.y as f32),
+            initial_window_pos: (start.x as f32, start.y as f32),
         });
         let x0 = char_pos(&harness, 0).0;
         assert_scope1_kept(&mut harness, what);

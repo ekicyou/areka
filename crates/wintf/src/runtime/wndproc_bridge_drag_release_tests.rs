@@ -21,8 +21,7 @@ use super::wndproc_bridge_drag_test_support::{
 };
 use super::{WndState, make_wndproc};
 use crate::ecs::drag::{
-    DragConfig, DragEndEvent, DragStartEvent, DragStateSnapshot, snapshot_drag_state,
-    start_preparing,
+    DragConfig, DragEndEvent, DragStartEvent, DragState, snapshot_drag_state, start_preparing,
 };
 use crate::ecs::pointer::PhysicalPoint;
 
@@ -43,7 +42,7 @@ fn capture_owner() -> HWND {
 fn rests_released() -> bool {
     matches!(
         snapshot_drag_state(),
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             cancelled: false,
             ..
         }
@@ -524,7 +523,7 @@ fn t14_start_preparing_takes_capture_without_falling_over_on_capture_changed() {
         "捕捉を取る間に届いた WM_CAPTURECHANGED を入口が受けても落ちない"
     );
     assert!(
-        matches!(snapshot_drag_state(), DragStateSnapshot::Preparing { .. }),
+        matches!(snapshot_drag_state(), DragState::Preparing { .. }),
         "押しの後は準備中: {:?}",
         snapshot_drag_state()
     );

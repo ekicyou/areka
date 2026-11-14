@@ -827,7 +827,6 @@ fn drag_balloon_to(harness: &mut FrameHarness, scope: usize, offset: PointPx) {
         target: balloon,
         start_position: Point::new(0, 0),
         position: Point::new(0, 0),
-        is_primary: true,
         timestamp: std::time::Instant::now(),
     });
     assert!(

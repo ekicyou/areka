@@ -14,8 +14,8 @@ use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, SendMessageW, WM_MO
 
 use super::super::window_pos::window_pos_transition_tests::{DISPATCH_TARGET, create_test_window};
 use crate::ecs::drag::{
-    DragStateSnapshot, WindowDragContext, WindowDragContextResource, cancel_dragging,
-    snapshot_drag_state, start_dragging, start_preparing, update_dragging,
+    DragState, WindowDragContext, WindowDragContextResource, cancel_dragging, snapshot_drag_state,
+    start_dragging, start_preparing, update_dragging,
 };
 use crate::ecs::pointer::{PhysicalPoint, PointerLeave, PointerState};
 use crate::ecs::test_support::capture_under_filter;
@@ -125,18 +125,19 @@ fn failed_drag_window_move_is_logged_as_error() {
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = world.borrow_mut().world_mut().spawn_empty().id();
 
-    // Dragging まで進める。窓の文脈は取っ手が無く（空の取っ手になる）、窓を動かす形。
+    // Dragging まで進める。窓の文脈は取っ手が無く（空の取っ手になる）、始めの位置があって窓を動かす形。
     start_preparing(entity, PhysicalPoint::new(10, 20), HWND::default());
     start_dragging(PhysicalPoint::new(40, 50));
     let ctx = WindowDragContextResource::new();
     ctx.set(WindowDragContext {
+        initial_window_pos: Some(crate::ecs::Point { x: 0, y: 0 }),
         move_window: true,
         ..Default::default()
     });
     update_dragging(PhysicalPoint::new(40, 50), Some(&ctx));
     assert!(matches!(
         snapshot_drag_state(),
-        DragStateSnapshot::Dragging {
+        DragState::Dragging {
             move_window: true,
             ..
         }

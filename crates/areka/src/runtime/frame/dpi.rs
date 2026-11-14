@@ -176,30 +176,40 @@ pub(super) fn reconcile_window_size(
     }
 }
 
-/// 掴んだ点の窓の中の位置 g = drag_start − initial_inset を、g' = round(g × after ÷ before)
-/// （縦横別・四捨五入）にし、置き直した initial_inset = drag_start − g' を返す
+/// 掴んだ点の窓の中の位置 g = drag_start − initial_window_pos を、g' = round(g × after ÷ before)
+/// （縦横別・四捨五入）にし、置き直した initial_window_pos = drag_start − g' を返す
 /// （dpi-realign-remembered-chain 要件 4.1・4.2・設計 DragGrab）。
 ///
 /// 返す値は整数の値に揃える——読み手（`drag_follow` と wndproc の式）がどちらも `as i32` で
 /// 読むので、端数を持たせると読み手ごとに 1 px 割れる。before の縦か横が 0 以下なら比が
-/// 決まらないので initial_inset をそのまま返す。
+/// 決まらないので initial_window_pos をそのまま返す。
 pub(super) fn rescale_drag_grab(
     drag_start: PhysicalPoint,
-    initial_inset: (f32, f32),
+    initial_window_pos: (f32, f32),
     before: SizeI,
     after: SizeI,
 ) -> (f32, f32) {
     if before.width <= 0 || before.height <= 0 {
-        return initial_inset;
+        return initial_window_pos;
     }
-    let axis = |start: i32, inset: f32, b: i32, a: i32| -> f32 {
-        let grab = f64::from(start) - f64::from(inset);
+    let axis = |start: i32, origin: f32, b: i32, a: i32| -> f32 {
+        let grab = f64::from(start) - f64::from(origin);
         let scaled = (grab * f64::from(a) / f64::from(b)).round();
         (f64::from(start) - scaled) as f32
     };
     (
-        axis(drag_start.x, initial_inset.0, before.width, after.width),
-        axis(drag_start.y, initial_inset.1, before.height, after.height),
+        axis(
+            drag_start.x,
+            initial_window_pos.0,
+            before.width,
+            after.width,
+        ),
+        axis(
+            drag_start.y,
+            initial_window_pos.1,
+            before.height,
+            after.height,
+        ),
     )
 }
 
@@ -217,7 +227,7 @@ fn realign_drag_grab(world: &mut World, window: Entity, before: Option<SizeI>, a
         return;
     };
     let start = drag.drag_start_pos;
-    let old = drag.initial_inset;
+    let old = drag.initial_window_pos;
     let new = rescale_drag_grab(start, old, before, after);
     debug!(
         entity = ?window,
@@ -227,7 +237,7 @@ fn realign_drag_grab(world: &mut World, window: Entity, before: Option<SizeI>, a
         grab_after = ?(start.x as f32 - new.0, start.y as f32 - new.1),
         "dpi reconcile: ドラッグ中のキャラ窓の大きさが変わった → 掴んだ点を窓の大きさの比で置き直す"
     );
-    drag.initial_inset = new;
+    drag.initial_window_pos = new;
 }
 
 /// 報告された物理寸が**書込前の窓寸と違う**か（遷移後の連鎖再解決の武装条件・設計 C4）。

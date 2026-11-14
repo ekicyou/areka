@@ -15,8 +15,8 @@ fn ppoint() -> PhysicalPoint {
 }
 
 /// 閾値到達・移動中の `Dragging` スナップショット。
-fn dragging() -> DragStateSnapshot {
-    DragStateSnapshot::Dragging {
+fn dragging() -> DragState {
+    DragState::Dragging {
         entity: entity(1),
         start_pos: ppoint(),
         current_pos: ppoint(),
@@ -30,8 +30,8 @@ fn dragging() -> DragStateSnapshot {
 }
 
 /// ドラッグ終了直後の `JustEnded` スナップショット。
-fn just_ended() -> DragStateSnapshot {
-    DragStateSnapshot::JustEnded {
+fn just_ended() -> DragState {
+    DragState::JustEnded {
         entity: entity(1),
         position: ppoint(),
         cancelled: false,
@@ -42,17 +42,13 @@ fn just_ended() -> DragStateSnapshot {
 
 #[test]
 fn maps_hit_some_to_opaque_when_last_was_transparent() {
-    let out = resolve_transition(
-        Some(entity(7)),
-        &DragStateSnapshot::Idle,
-        DesiredState::Transparent,
-    );
+    let out = resolve_transition(Some(entity(7)), &DragState::Idle, DesiredState::Transparent);
     assert_eq!(out, Some(DesiredState::Opaque));
 }
 
 #[test]
 fn maps_hit_none_to_transparent_when_last_was_opaque() {
-    let out = resolve_transition(None, &DragStateSnapshot::Idle, DesiredState::Opaque);
+    let out = resolve_transition(None, &DragState::Idle, DesiredState::Opaque);
     assert_eq!(out, Some(DesiredState::Transparent));
 }
 
@@ -60,17 +56,13 @@ fn maps_hit_none_to_transparent_when_last_was_opaque() {
 
 #[test]
 fn diff_guard_hit_some_already_opaque_returns_none() {
-    let out = resolve_transition(
-        Some(entity(7)),
-        &DragStateSnapshot::Idle,
-        DesiredState::Opaque,
-    );
+    let out = resolve_transition(Some(entity(7)), &DragState::Idle, DesiredState::Opaque);
     assert_eq!(out, None);
 }
 
 #[test]
 fn diff_guard_hit_none_already_transparent_returns_none() {
-    let out = resolve_transition(None, &DragStateSnapshot::Idle, DesiredState::Transparent);
+    let out = resolve_transition(None, &DragState::Idle, DesiredState::Transparent);
     assert_eq!(out, None);
 }
 
@@ -93,7 +85,7 @@ fn dragging_forces_opaque_when_last_was_transparent() {
 #[test]
 fn just_started_also_suppresses_transparent() {
     // JustStarted（移動開始直後）も抑止対象。
-    let just_started = DragStateSnapshot::JustStarted {
+    let just_started = DragState::JustStarted {
         entity: entity(1),
         start_pos: ppoint(),
         current_pos: ppoint(),
@@ -124,7 +116,7 @@ fn just_ended_reconverges_to_opaque_when_hit_some() {
 
 #[test]
 fn preparing_behaves_as_non_drag_mapping() {
-    let preparing = DragStateSnapshot::Preparing {
+    let preparing = DragState::Preparing {
         entity: entity(1),
         start_pos: ppoint(),
         start_time: Instant::now(),
@@ -229,9 +221,12 @@ fn sim_s2c(cursor: PhysicalPoint) -> impl Fn(HWND) -> Option<PointF> {
 
 /// 原点 (100,200) の窓に、client (50,50)=screen (150,250) で当たる子を仕込んだ
 /// World を作る。窓 Entity を返す。cursor screen (150,250) が hit、(0,0) が no-hit。
-fn world_with_hittable_window(world: &mut World) -> Entity {
+/// 窓は `Window` と、登録する HWND の `WindowHandle` を持つ（刈る条件を満たす wintf の窓）。
+fn world_with_hittable_window(world: &mut World, hwnd: HWND) -> Entity {
     let window = world
         .spawn((
+            test_window(),
+            WindowHandle { hwnd },
             global_arrangement(100.0, 200.0, 500.0, 500.0),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
@@ -254,8 +249,8 @@ fn world_with_hittable_window(world: &mut World) -> Entity {
 #[test]
 fn eval_hit_some_from_transparent_becomes_opaque() {
     let mut world = World::new();
-    let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         // 前提: TRANSPARENT を立てて last_applied=Transparent の状態から開始。
@@ -286,8 +281,8 @@ fn eval_hit_some_from_transparent_becomes_opaque() {
 #[test]
 fn eval_hit_none_from_opaque_becomes_transparent() {
     let mut world = World::new();
-    let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         apply_click_through(hwnd, false).expect("seed opaque");
@@ -319,8 +314,8 @@ fn eval_hit_none_from_opaque_becomes_transparent() {
 #[test]
 fn eval_diff_guard_stable_on_repeat() {
     let mut world = World::new();
-    let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         apply_click_through(hwnd, true).expect("seed transparent");
@@ -349,7 +344,39 @@ fn eval_diff_guard_stable_on_repeat() {
     }
 }
 
-/// (d) ドラッグ経路: `JustEnded`（capture_guard 不要の実 thread_local 状態）を仕込むと
+/// 透過を適用した後に同じ HWND で登録し直しても、当たりの上の評価で透過が外れる
+/// （同じ HWND の再登録は記録を戻さない。戻すと差分の守りが何もせず透過が残る）。
+#[test]
+fn eval_reregister_same_hwnd_then_hit_clears_transparent() {
+    let mut world = World::new();
+    let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut reg = ClickThroughRegistry::new();
+        reg.register(window, hwnd);
+
+        // 外れで評価して透過を適用する（last_applied=Transparent）。
+        evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(0, 0)));
+        assert!(is_transparent(hwnd), "前提: 透過が適用されている");
+
+        // 同じ HWND で登録し直す。
+        reg.register(window, hwnd);
+
+        // 当たりの上で評価すると透過が外れる。
+        evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
+        assert!(
+            !is_transparent(hwnd),
+            "同じ HWND の再登録の後も、当たりの上では透過が外れるべき"
+        );
+    }));
+    destroy_test_hwnd(hwnd);
+    if let Err(e) = result {
+        std::panic::resume_unwind(e);
+    }
+}
+
+/// (d) ドラッグ経路: `JustEnded`（実 thread_local 状態）を仕込むと
 /// 抑止解除サイクルとして現在 hit に基づき再収束する（eval コアが drag スナップショットを
 /// 尊重することの確認）。Dragging 抑止自体は `resolve_transition` の in-source テストで網羅。
 #[test]
@@ -358,10 +385,10 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
     use crate::ecs::drag::{snapshot_drag_state, update_drag_state};
 
     let mut world = World::new();
-    let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
 
-    // thread_local を JustEnded に設定（capture_guard を持たない変種ゆえ直接構築可能）。
+    // thread_local を JustEnded に設定（状態は Copy で直接構築可能）。
     update_drag_state(|state| {
         *state = DragState::JustEnded {
             entity: entity(1),
@@ -370,10 +397,7 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
         };
     });
     // 前提確認: スナップショットが JustEnded であること。
-    assert!(matches!(
-        snapshot_drag_state(),
-        DragStateSnapshot::JustEnded { .. }
-    ));
+    assert!(matches!(snapshot_drag_state(), DragState::JustEnded { .. }));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         apply_click_through(hwnd, true).expect("seed transparent");
@@ -390,8 +414,8 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
         );
     }));
 
-    // thread_local を Idle に戻す（他テストへの汚染防止）。JustEnded は capture_guard を
-    // 持たないので、借用の中で代入しても ReleaseCapture は走らない。
+    // thread_local を Idle に戻す（他テストへの汚染防止）。捕捉の守りは状態の外の枠が持つので、
+    // 借用の中で代入しても ReleaseCapture は走らない。
     update_drag_state(|s| *s = DragState::Idle);
     destroy_test_hwnd(hwnd);
     if let Err(e) = result {
@@ -411,8 +435,8 @@ fn is_layered(hwnd: HWND) -> bool {
 #[test]
 fn eval_applies_layered_companion_on_first_pass() {
     let mut world = World::new();
-    let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         assert!(!is_layered(hwnd), "seed: LAYERED must start clear");
@@ -444,9 +468,20 @@ fn eval_applies_layered_companion_on_first_pass() {
 #[test]
 fn eval_skips_window_without_position() {
     let mut world = World::new();
-    // position を持たない窓（未マップ相当）。
-    let window = world.spawn(global_arrangement(0.0, 0.0, 100.0, 100.0)).id();
     let hwnd = create_test_hwnd();
+    // position を持たない窓（未マップ相当）。`WindowPos::default()` の position は
+    // `Some(CW_USEDEFAULT)` なので `None` を明示する。
+    let window = world
+        .spawn((
+            test_window(),
+            WindowHandle { hwnd },
+            WindowPos {
+                position: None,
+                ..Default::default()
+            },
+            global_arrangement(0.0, 0.0, 100.0, 100.0),
+        ))
+        .id();
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mut reg = ClickThroughRegistry::new();
@@ -467,17 +502,28 @@ fn eval_skips_window_without_position() {
 // prune_dead_targets（窓破棄追随・R7.2 / Lifecycle）
 // ========================================================================
 
-use crate::ecs::window::{Window as WinComp, WindowStyle};
+use crate::ecs::window::{Window as WinComp, WindowHandle, WindowStyle};
 use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_POPUP};
 
-/// `Window` コンポーネントを持つ生きた窓 Entity を spawn する（prune テスト用最小構成）。
-fn spawn_live_window(world: &mut World) -> Entity {
+/// テストの窓の `Window`。
+fn test_window() -> WinComp {
+    WinComp {
+        title: "ClickThroughTest".to_string(),
+        parent: None,
+    }
+}
+
+/// 整数から作る偽の HWND（prune は値を比べるだけで OS へ渡さない）。
+fn fake_hwnd(v: isize) -> HWND {
+    HWND(v as *mut core::ffi::c_void)
+}
+
+/// `Window` と `WindowHandle { hwnd }` を持つ生きた窓 Entity を spawn する（prune テスト用最小構成）。
+fn spawn_live_window(world: &mut World, hwnd: HWND) -> Entity {
     world
         .spawn((
-            WinComp {
-                title: "PruneTest".to_string(),
-                parent: None,
-            },
+            test_window(),
+            WindowHandle { hwnd },
             WindowStyle {
                 style: WS_POPUP,
                 ex_style: WS_EX_LAYERED,
@@ -490,12 +536,12 @@ fn spawn_live_window(world: &mut World) -> Entity {
 #[test]
 fn prune_removes_despawned_window_entity() {
     let mut world = World::new();
-    let live = spawn_live_window(&mut world);
-    let dead = spawn_live_window(&mut world);
+    let live = spawn_live_window(&mut world, fake_hwnd(1));
+    let dead = spawn_live_window(&mut world, fake_hwnd(2));
 
     let mut reg = ClickThroughRegistry::new();
-    reg.register(live, HWND::default());
-    reg.register(dead, HWND::default());
+    reg.register(live, fake_hwnd(1));
+    reg.register(dead, fake_hwnd(2));
     assert_eq!(reg.len(), 2);
 
     // 1 窓を despawn（破棄相当）。
@@ -508,19 +554,66 @@ fn prune_removes_despawned_window_entity() {
     assert!(reg.last_applied(dead).is_none(), "破棄窓は除去される");
 }
 
-/// `Window` コンポーネントを持たない対象でも、Entity が生存する限り prune は除去しない
-/// （prune は Entity 消滅のみを破棄シグナルとする＝eval コアの純粋性・汎用対象も監視可）。
+/// `Window` を持たない entity は、生きていても prune で刈る（対象は wintf の窓だけ）。
 #[test]
-fn prune_keeps_live_entity_without_window_component() {
+fn prune_removes_live_entity_without_window_component() {
     let mut world = World::new();
     let bare = world.spawn_empty().id(); // Window コンポーネントなし・生きた Entity。
 
     let mut reg = ClickThroughRegistry::new();
-    reg.register(bare, HWND::default());
+    reg.register(bare, fake_hwnd(1));
     assert_eq!(reg.len(), 1);
 
     let removed = prune_dead_targets(&world, &mut reg);
-    assert_eq!(removed, 0, "生存 Entity は Window 有無に関わらず残す");
+    assert_eq!(removed, 1, "Window の無い entity は刈る");
+    assert!(reg.is_empty());
+}
+
+/// `Window` を外した窓は、`WindowHandle` が残っていても prune で刈る
+/// （`Window` に `on_remove` のフックが無いので `WindowHandle` は外れない）。
+#[test]
+fn prune_removes_window_whose_window_component_was_removed() {
+    let mut world = World::new();
+    let window = spawn_live_window(&mut world, fake_hwnd(1));
+    world.entity_mut(window).remove::<WinComp>();
+    assert!(
+        world.get::<WindowHandle>(window).is_some(),
+        "前提: WindowHandle は残る"
+    );
+
+    let mut reg = ClickThroughRegistry::new();
+    reg.register(window, fake_hwnd(1));
+
+    let removed = prune_dead_targets(&world, &mut reg);
+    assert_eq!(removed, 1, "Window を外した窓は刈る");
+    assert!(reg.is_empty());
+}
+
+/// `WindowHandle` の HWND が登録の HWND と違う対象は prune で刈る（窓の付け替えに追随）。
+#[test]
+fn prune_removes_target_whose_window_handle_differs() {
+    let mut world = World::new();
+    let window = spawn_live_window(&mut world, fake_hwnd(2));
+
+    let mut reg = ClickThroughRegistry::new();
+    reg.register(window, fake_hwnd(1));
+
+    let removed = prune_dead_targets(&world, &mut reg);
+    assert_eq!(removed, 1, "HWND の違う対象は刈る");
+    assert!(reg.is_empty());
+}
+
+/// `Window` と、登録の HWND と同じ `WindowHandle` を持つ窓は prune で残す。
+#[test]
+fn prune_keeps_window_with_matching_window_handle() {
+    let mut world = World::new();
+    let window = spawn_live_window(&mut world, fake_hwnd(1));
+
+    let mut reg = ClickThroughRegistry::new();
+    reg.register(window, fake_hwnd(1));
+
+    let removed = prune_dead_targets(&world, &mut reg);
+    assert_eq!(removed, 0, "両方を持つ窓は残す");
     assert_eq!(reg.len(), 1);
 }
 
@@ -531,8 +624,8 @@ fn prune_keeps_live_entity_without_window_component() {
 #[test]
 fn eval_skips_apply_for_destroyed_window() {
     let mut world = World::new();
-    let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
+    let window = world_with_hittable_window(&mut world, hwnd);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         // seed: TRANSPARENT を立て last_applied=Transparent。
@@ -566,29 +659,22 @@ fn eval_skips_apply_for_destroyed_window() {
 // ClickThroughRegistryHandle（areka 登録面・NonSend リソース）
 // ========================================================================
 
-/// 公開ハンドル経由の register/remove が共有レジストリへ反映される（areka 4.1 の登録面）。
+/// 公開ハンドル経由の register が共有レジストリへ反映される（areka 4.1 の登録面）。
 #[test]
-fn registry_handle_register_remove_reflects_shared_registry() {
+fn registry_handle_register_reflects_shared_registry() {
     let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
     let handle = ClickThroughRegistryHandle::new(StdRc::clone(&registry));
 
     let mut w = World::new();
     let e = w.spawn_empty().id();
-    let hwnd = create_test_hwnd();
+    handle.register(e, fake_hwnd(1));
 
-    assert!(handle.is_empty());
-    handle.register(e, hwnd);
     assert_eq!(handle.len(), 1);
     assert_eq!(registry.borrow().len(), 1, "共有レジストリへ反映される");
-
-    assert!(handle.remove(e));
-    assert!(handle.is_empty());
-    assert!(registry.borrow().is_empty());
-    destroy_test_hwnd(hwnd);
 }
 
 // ========================================================================
-// ClickThroughController::start / ClickThroughHandle（RAII・shutdown）
+// start_click_through / ClickThroughHandle（RAII・shutdown）
 // ========================================================================
 
 /// RAII: `start`→`drop(handle)` でカーソルワーカが確実に stop/join され、ハングしない。
@@ -599,48 +685,16 @@ fn start_then_drop_joins_worker_without_hanging() {
     let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
     let wake = Arc::new(Event::new());
 
-    let handle = ClickThroughController::start(
+    let handle = start_click_through(
         StdRc::downgrade(&world),
         StdRc::clone(&registry),
         Arc::clone(&wake),
         StdRc::new(std::cell::Cell::new(true)),
     );
 
-    // handle 経由の register/remove が共有レジストリへ反映されること。
-    let mut w = World::new();
-    let e = w.spawn_empty().id();
-    let hwnd = create_test_hwnd();
-    handle.register(e, hwnd);
-    assert_eq!(
-        registry.borrow().len(),
-        1,
-        "start 後の register が反映される"
-    );
-    assert!(handle.remove(e), "start 後の remove が反映される");
-    assert!(registry.borrow().is_empty());
-    destroy_test_hwnd(hwnd);
-
     // drop で唯一の強 Rc<CursorMonitorBridge> が落ち、ワーカが stop/join。
     // ハングせず復帰すれば RAII は健全。
     drop(handle);
-}
-
-/// shutdown 終了条件: world strong 所有者を drop すると、次起床でループ本体の
-/// `world.upgrade()` が `None` を返し評価が走らない。ここでは executor を回さず、
-/// 終了条件そのもの（Weak upgrade が None）を sync レベルで確認する（フル async 駆動は
-/// メッセージループが要るため、`run_async_tick` テストと同様に条件を直接検証する）。
-#[test]
-fn shutdown_condition_world_weak_upgrade_none() {
-    let world = StdRc::new(StdRefCell::new(EcsWorld::new()));
-    let weak = StdRc::downgrade(&world);
-    assert!(weak.upgrade().is_some(), "生存中は upgrade できる");
-
-    // strong 所有者を drop（アプリ shutdown 相当）。
-    drop(world);
-    assert!(
-        weak.upgrade().is_none(),
-        "world drop 後は Weak upgrade が None（ループはこの契機で終了する）"
-    );
 }
 
 /// `run()` が戻った後に届いた起床では、判定ループは判定を回さずに終わる。待ちの間は
@@ -664,7 +718,7 @@ fn eval_loop_stops_without_a_check_once_the_loop_has_returned() {
         e
     };
 
-    let handle = ClickThroughController::start(
+    let handle = start_click_through(
         StdRc::downgrade(&world),
         StdRc::clone(&registry),
         Arc::clone(&wake),
@@ -673,7 +727,7 @@ fn eval_loop_stops_without_a_check_once_the_loop_has_returned() {
     crate::executor::block_on(async {}); // 待ちを立てさせる
     let held_while_waiting = (
         StdRc::strong_count(&world) - 1,
-        StdRc::strong_count(&handle.monitor) - 1,
+        StdRc::strong_count(&handle._monitor) - 1,
     );
 
     // 対照: ループが回っている間の起床は判定を回す（起床が届く仕掛けの確認）。

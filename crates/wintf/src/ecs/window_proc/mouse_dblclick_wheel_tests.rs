@@ -10,17 +10,17 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use bevy_ecs::message::Messages;
-use bevy_ecs::prelude::{Entity, World};
+use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_LBUTTONDBLCLK, WM_LBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDBLCLK,
 };
 use windows_numerics::Matrix3x2;
 
+use crate::ecs::drag::seen_test_support::{take, watch};
 use crate::ecs::drag::{
-    DragConfig, DragEndEvent, DragStartEvent, DragStateSnapshot, cancel_dragging,
-    dispatch_drag_events, snapshot_drag_state,
+    DragConfig, DragEndEvent, DragStartEvent, DragState, cancel_dragging, dispatch_drag_events,
+    snapshot_drag_state,
 };
 use crate::ecs::layout::GlobalArrangement;
 use crate::ecs::pointer::{PhysicalPoint, PointerState, transfer_buffers_to_world};
@@ -77,6 +77,7 @@ fn setup(config: Option<DragConfig>) -> (Rc<RefCell<EcsWorld>>, Entity) {
         }
         let widget = w.spawn(arrangement(150.0, 250.0, 250.0, 300.0)).id();
         w.entity_mut(window).add_children(&[widget]);
+        watch(w, window);
         window
     };
     (world, window)
@@ -93,20 +94,16 @@ fn send(world: &Rc<RefCell<EcsWorld>>, window: Entity, msg: u32, x: i32, y: i32)
     crate::ecs::dispatch_window_message(world, window, &message);
 }
 
-/// 1 回の画面更新として配り、届いた開始・終了の知らせを読み出す。
+/// 1 回の画面更新として配り、開始・終了の受け手に届いた知らせを読み出す。
 fn dispatch_once(world: &Rc<RefCell<EcsWorld>>) -> (Vec<DragStartEvent>, Vec<DragEndEvent>) {
     let mut w = world.borrow_mut();
     let w = w.world_mut();
     dispatch_drag_events(w);
-    (drain::<DragStartEvent>(w), drain::<DragEndEvent>(w))
-}
-
-fn drain<E: bevy_ecs::message::Message>(world: &mut World) -> Vec<E> {
-    world.resource_mut::<Messages<E>>().drain().collect()
+    (take::<DragStartEvent>(w), take::<DragEndEvent>(w))
 }
 
 fn is_preparing() -> bool {
-    matches!(snapshot_drag_state(), DragStateSnapshot::Preparing { .. })
+    matches!(snapshot_drag_state(), DragState::Preparing { .. })
 }
 
 /// W1 前半: 左のダブルクリックの押下で準備に入る。準備の対象は `DragConfig` を持つ祖先（窓）、
@@ -119,7 +116,7 @@ fn w1_left_dblclick_prepares_and_crossing_threshold_starts() {
     send(&world, window, WM_LBUTTONDBLCLK, 60, 60);
 
     match snapshot_drag_state() {
-        DragStateSnapshot::Preparing {
+        DragState::Preparing {
             entity, start_pos, ..
         } => {
             assert_eq!(entity, window, "準備の対象は DragConfig を持つ祖先の窓");
@@ -162,7 +159,7 @@ fn w1_left_dblclick_released_without_move_dispatches_nothing() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: false,
                 ..
             }
@@ -210,10 +207,7 @@ fn w2_left_dblclick_on_window_without_drag_does_not_prepare() {
 /// W2: ドラッグを許した窓でも、右ボタンのダブルクリックの押下では準備に入らない。
 #[test]
 fn w2_right_dblclick_does_not_prepare() {
-    let (world, window) = setup(Some(DragConfig {
-        right_button: true,
-        ..Default::default()
-    }));
+    let (world, window) = setup(Some(DragConfig::default()));
 
     send(&world, window, WM_RBUTTONDBLCLK, 60, 60);
 
