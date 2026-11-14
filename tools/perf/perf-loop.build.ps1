@@ -18,6 +18,11 @@ Set-StrictMode -Version 3.0
 # 実行体の在り処・作り直し・32bit ヘルパ
 # =============================================================================
 
+# 32bit SHIORI ヘルパの作られる所（target\<i686>\release・隣へ写す元）。
+function Get-MeasureHelperSource {
+    return (Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE))))
+}
+
 # 実行体の在り処（-BinDir が最優先・無ければ target\<release|debug>）。
 function Get-MeasureBinDir {
     param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
@@ -56,7 +61,7 @@ function Test-MeasureExeReady {
 function Sync-MeasureShioriHelper {
     param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
     $dest = Join-Path (Get-MeasureBinDir -BinDir $BinDir -Build $Build) $MEASURE_HELPER_EXE
-    $src = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE)))
+    $src = Get-MeasureHelperSource
     $destPresent = Test-Path -LiteralPath $dest -PathType Leaf
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) {
         if ($destPresent) { return }
@@ -64,6 +69,12 @@ function Sync-MeasureShioriHelper {
         return
     }
     if ($destPresent -and ($BinDir -or (Get-MeasureSha256 -Path $src) -eq (Get-MeasureSha256 -Path $dest))) { return }
+    # 小部屋の BUILD.txt が helper=missing と書く側には、共有の元（多くは相手の側のビルド）を入れない
+    $build = if ($BinDir) { Join-Path $BinDir $MEASURE_FILE_BUILD }
+    if ($build -and (Test-Path -LiteralPath $build -PathType Leaf) -and (Select-String -LiteralPath $build -Pattern '^helper=missing$' -Quiet)) {
+        Write-Problem "[perf-loop] warning: $build says helper=missing, so the shared helper is not copied into $BinDir (the run has no real SHIORI)."
+        return
+    }
     Copy-Item -LiteralPath $src -Destination $dest -Force
     Write-Info "[perf-loop] copied 32bit SHIORI helper next to the executable: $src -> $dest"
 }
@@ -81,6 +92,15 @@ function Sync-MeasureWorktreeBuild {
     $cargoArgs += @('-p', $MEASURE_AREKA_PACKAGE, '--manifest-path', $manifest)
     $r = Invoke-MeasureCargo -Label "pre-run $Build build from the worktree" -Arguments $cargoArgs
     if ($r.Code -ne 0) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message "pre-run $Build build failed (exit code $($r.Code)): $($r.LastLine)" }
+    # 32bit ヘルパも同じツリーから作り直す（隣へ写す元＝target\<i686>\release が古いままにならない）。作れなくても止めない
+    $helper = Invoke-MeasureCargo -Label 'pre-run 32bit SHIORI helper build from the worktree' `
+        -Arguments @('build', '--release', '-p', $MEASURE_HELPER_PACKAGE, '--target', $MEASURE_HELPER_TARGET, '--manifest-path', $manifest)
+    if ($helper.Code -ne 0) {
+        # 別のツリーの古いヘルパで測らない（A/B の側と同じ決まり）。元と隣の写しを消し、合否の走行は既にある関門（4）で止まる
+        Remove-Item -LiteralPath (Get-MeasureHelperSource) -Force -ErrorAction Ignore
+        Remove-Item -LiteralPath (Join-Path (Get-MeasureBinDir -BinDir '' -Build $Build) $MEASURE_HELPER_EXE) -Force -ErrorAction Ignore
+        Write-Problem "[perf-loop] warning: could not rebuild the 32bit SHIORI helper (exit code $($helper.Code)): $($helper.LastLine). The old helper was removed, so this run has no real SHIORI (a pass/fail run stops with 4)."
+    }
     $exe = Join-Path (Get-MeasureBinDir -BinDir '' -Build $Build) $MEASURE_AREKA_EXE
     $git = Get-MeasureGitFacts
     Write-Info "[perf-loop] executable to run: $exe sha256=$(Get-MeasureSha256 -Path $exe) git_head=$($git.Head) git_dirty=$($git.Dirty)"
@@ -90,11 +110,14 @@ function Sync-MeasureWorktreeBuild {
 # A/B のビルドと複製（prepare-ab／measure-ab）
 # =============================================================================
 
+# 揃った小部屋か。-DryRun で写しただけの一式（BUILD.txt の dry_run=true＝そのツリーから作っていない）は揃ったと見ない
 function Test-MeasureBinDirComplete {
     param([Parameter(Mandatory = $true)][string]$Dir)
     if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return $false }
     if (-not (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_AREKA_EXE) -PathType Leaf)) { return $false }
-    return (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_BUILD) -PathType Leaf)
+    $build = Join-Path $Dir $MEASURE_FILE_BUILD
+    if (-not (Test-Path -LiteralPath $build -PathType Leaf)) { return $false }
+    return -not (Select-String -LiteralPath $build -Pattern '^dry_run=true$' -Quiet)
 }
 
 # BUILD.txt に書く git の事実（どのツリーから作った実行体かを後から突き合わせるため）。
@@ -103,7 +126,9 @@ function Get-MeasureGitFacts {
     if (-not $git) { return [pscustomobject]@{ Head = $PERF_LOOP_EMPTY; Dirty = $PERF_LOOP_EMPTY } }
     $head = Invoke-Child -Exe $git.Source -Arguments @('-C', $repoRoot, 'rev-parse', 'HEAD') -Quiet
     $stat = Invoke-Child -Exe $git.Source -Arguments @('-C', $repoRoot, 'status', '--porcelain') -Quiet
-    $headText = if ($head.Code -eq 0) { $head.LastLine } else { $PERF_LOOP_EMPTY }
+    # 標準出力の最後の行だけ（git の警告は標準エラーに出るので混ぜない）
+    $headOut = @($head.Out | Where-Object { $_ })
+    $headText = if ($head.Code -eq 0 -and $headOut.Count -gt 0) { $headOut[-1].Trim() } else { $PERF_LOOP_EMPTY }
     $dirty = if ($stat.Code -ne 0) { $PERF_LOOP_EMPTY }
              elseif ((@($stat.Out) -join '').Trim()) { 'true' }
              else { 'false' }
@@ -120,27 +145,30 @@ function Get-MeasureSha256 {
 function Invoke-MeasureCargo {
     param([Parameter(Mandatory = $true)][string[]]$Arguments, [Parameter(Mandatory = $true)][string]$Label)
     $cargo = Get-Command 'cargo' -ErrorAction SilentlyContinue
-    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo not found (cannot build A/B)' }
+    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message "cargo not found (cannot run the ${Label}: cargo $($Arguments -join ' '))" }
     $releaseDebug = Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT
     Write-Info "[perf-loop] ${Label}: cargo $($Arguments -join ' ') (CARGO_PROFILE_RELEASE_DEBUG=$releaseDebug)"
-    return Invoke-Child -Exe $cargo.Source -Arguments $Arguments -Environment @{ CARGO_PROFILE_RELEASE_DEBUG = $releaseDebug }
+    # cargo の Compiling の行は呼ぶ側の会話へ流さない（トークンの負荷）。落ちたときだけ最後の数行を出す
+    $r = Invoke-Child -Exe $cargo.Source -Arguments $Arguments -Environment @{ CARGO_PROFILE_RELEASE_DEBUG = $releaseDebug } -Quiet
+    if ($r.Code -ne 0) { foreach ($line in @($r.Lines | Select-Object -Last 8)) { Write-Problem "    $line" } }
+    return $r
 }
 
 # 片側（A＝変更前／B＝変更後）の実行体一式を作って小部屋へ複製する。
-# 32bit ヘルパが作れないときは止めずに大きく警告して続ける——A と B を同じ手順で
-# 作る限り条件は揃っており、ヘルパの有無は run-meta.txt と BUILD.txt に残るためである。
+# 32bit ヘルパが作れないときは止めずに大きく警告して続ける——ヘルパの有無は BUILD.txt に残り、
+# A と B で食い違えば measure-ab が走る前に止める（Assert-MeasureAbDistinct）。
 function Invoke-MeasureBuildSide {
     param(
         [Parameter(Mandatory = $true)][ValidateSet('A', 'B')][string]$Side,
         [Parameter(Mandatory = $true)][string]$BinDir
     )
-    if ($script:ResumeMode -and (Test-MeasureBinDirComplete -Dir $BinDir)) {
-        Write-Info "[perf-loop] -Resume: not recreating the $Side side executable set: $BinDir"
+    # -Resume は揃った一式を使う。-DryRun は配管だけを確かめるので、揃った本物の一式を書き替えない（A の実行体を失う）
+    if (($script:ResumeMode -or $script:DryRunMode) -and (Test-MeasureBinDirComplete -Dir $BinDir)) {
+        Write-Info "[perf-loop] -Resume/-DryRun: not recreating the $Side side executable set: $BinDir"
         return $BinDir
     }
     $manifest    = Join-Path $repoRoot 'Cargo.toml'
     $releaseDir  = Join-Path $repoRoot 'target\release'
-    $helperDir   = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET 'release'))
     $helperState = 'skipped'
 
     if ($script:DryRunMode) {
@@ -165,6 +193,10 @@ function Invoke-MeasureBuildSide {
     }
 
     New-LoopDir -Path $BinDir | Out-Null
+    # 作り直しの途中で止まったとき、新しい実行体と古い BUILD.txt を揃った一式と見ない（BUILD.txt は最後に書く）
+    Remove-Item -LiteralPath (Join-Path $BinDir $MEASURE_FILE_BUILD) -Force -ErrorAction Ignore
+    # 前の -DryRun が置いた印を本物の一式に残さない
+    if (-not $script:DryRunMode) { Remove-Item -LiteralPath (Join-Path $BinDir $MEASURE_FILE_DRYRUN) -Force -ErrorAction Ignore }
     $exeSrc = Join-Path $releaseDir $MEASURE_AREKA_EXE
     if (Test-Path -LiteralPath $exeSrc -PathType Leaf) {
         Copy-Item -LiteralPath $exeSrc -Destination (Join-Path $BinDir $MEASURE_AREKA_EXE) -Force
@@ -182,16 +214,22 @@ function Invoke-MeasureBuildSide {
         Copy-Item -LiteralPath $pdbSrc -Destination (Join-Path $BinDir $MEASURE_AREKA_PDB) -Force
         $pdbState = $MEASURE_AREKA_PDB
     } else {
+        # 前の回の PDB を残さない（BUILD.txt の pdb=no_pdb と食い違う）
+        Remove-Item -LiteralPath (Join-Path $BinDir $MEASURE_AREKA_PDB) -Force -ErrorAction Ignore
         Write-Problem "[perf-loop] warning: no PDB ($pdbSrc). Stage 3 (per-function attribution) cannot resolve symbols."
     }
 
-    $helperSrc = Join-Path $helperDir $MEASURE_HELPER_EXE
+    $helperSrc = Get-MeasureHelperSource
+    $helperDest = Join-Path $BinDir $MEASURE_HELPER_EXE
     if ($helperState -eq 'missing') {
+        # 前の回の（別のツリーの）ヘルパを残さない（BUILD.txt の helper=missing と食い違う）
+        Remove-Item -LiteralPath $helperDest -Force -ErrorAction Ignore
         Write-Problem "[perf-loop] warning: the helper build failed, so it is not copied (BUILD.txt says helper=missing)."
     } elseif (Test-Path -LiteralPath $helperSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $helperSrc -Destination (Join-Path $BinDir $MEASURE_HELPER_EXE) -Force
+        Copy-Item -LiteralPath $helperSrc -Destination $helperDest -Force
         if ($helperState -eq 'skipped') { $helperState = 'copied' }
     } else {
+        Remove-Item -LiteralPath $helperDest -Force -ErrorAction Ignore
         Write-Problem "[perf-loop] warning: no 32bit SHIORI helper ($helperSrc). The run will have no real SHIORI."
         $helperState = 'missing'
     }
@@ -221,12 +259,16 @@ function Invoke-MeasureBuildSide {
 # または prepare-ab を変更の後に回した）。走る前に 3 で止める。どちらかが '-'（読めない・無い）なら比べない。
 function Assert-MeasureAbDistinct {
     param([Parameter(Mandatory = $true)][string]$BinA, [Parameter(Mandatory = $true)][string]$BinB)
-    $sha = foreach ($dir in @($BinA, $BinB)) {
+    $sha = @(); $helper = @()
+    foreach ($dir in @($BinA, $BinB)) {
         $path = Join-Path $dir $MEASURE_FILE_BUILD
-        $line = if (Test-Path -LiteralPath $path -PathType Leaf) {
-            @(Get-Content -LiteralPath $path -Encoding utf8 | Where-Object { $_ -like 'exe_sha256=*' })[0]
-        }
-        if ($line) { $line.Substring('exe_sha256='.Length).Trim() } else { $PERF_LOOP_EMPTY }
+        $map = if (Test-Path -LiteralPath $path -PathType Leaf) { ConvertFrom-KeyValueLines -Lines @(Get-Content -LiteralPath $path -Encoding utf8) } else { @{} }
+        $sha += $(if ($map['exe_sha256']) { $map['exe_sha256'].Trim() } else { $PERF_LOOP_EMPTY })
+        $helper += $(if ($map['helper']) { $map['helper'].Trim() } else { $PERF_LOOP_EMPTY })
+    }
+    # 片側だけ 32bit ヘルパが無い（helper=missing）と、発話の有る側と無い側を比べることになる。走る前に 4 で止める
+    if (($helper[0] -eq 'missing') -ne ($helper[1] -eq 'missing')) {
+        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "A and B differ in the 32bit SHIORI helper (helper=$($helper[0]) in $BinA, helper=$($helper[1]) in $BinB): one side would run without talk. Fix the helper build and prepare the side again. No run was started."
     }
     if ($sha[0] -eq $PERF_LOOP_EMPTY -or $sha[1] -eq $PERF_LOOP_EMPTY) { return }
     if ($sha[0] -eq $sha[1]) {

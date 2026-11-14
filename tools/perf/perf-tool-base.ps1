@@ -91,7 +91,7 @@ function Invoke-Child {
     $startInfo.RedirectStandardError  = $true
     $startInfo.StandardOutputEncoding = $encoding
     $startInfo.StandardErrorEncoding  = $encoding
-    $startInfo.WorkingDirectory       = (Get-Location).Path
+    $startInfo.WorkingDirectory       = (Get-Location -PSProvider FileSystem).ProviderPath   # PSDrive の名前でなく OS が知る道
     foreach ($argument in $Arguments) { $startInfo.ArgumentList.Add([string]$argument) }
     if ($Environment) {
         foreach ($key in $Environment.Keys) { $startInfo.Environment[[string]$key] = [string]$Environment[$key] }
@@ -119,7 +119,7 @@ function Invoke-Child {
     if ($outText) { $outLines = @(($outText -replace "`r`n", "`n").TrimEnd("`n") -split "`n") }
     $errLines = @()
     if ($errText) { $errLines = @(($errText -replace "`r`n", "`n").TrimEnd("`n") -split "`n") }
-    $lines = @($outLines) + @($errLines)
+    $lines = @($outLines) + @($errLines)   # 表示と最後の 1 行の選びに使う（戻り値の Lines は New-ChildResult が同じ順で組む）
     if ($null -eq $code) { $code = -1 }
     if (-not $Quiet) { foreach ($line in $lines) { Write-Info $line } }
     $last = $PERF_TOOL_EMPTY
@@ -131,7 +131,7 @@ function Invoke-Child {
         $last = $trimmed
         break
     }
-    return [pscustomobject]@{ Code = [int]$code; Out = $outLines; Err = $errLines; Lines = $lines; LastLine = $last }
+    return New-ChildResult -Code $code -Out $outLines -Err $errLines -LastLine $last
 }
 
 # 自分と同じ pwsh の在り処（無ければ $null）。子の .ps1 は必ず別プロセスで回す。
@@ -148,12 +148,18 @@ function Get-PwshPath {
 # python の在り処。単一要素の配列を返すと PowerShell が文字列へ展開するため、
 # 実行体と前置引数を別の項として持つオブジェクトで返す（無ければ $null）。
 function Get-PythonCommand {
+    # WindowsApps の下は Microsoft Store へ誘う別名のことがある（入れていなければ python は無い）ので最後に回す。
+    # Store から入れた python もそこにしか無いので捨てはしない（別名なら版が読めずに preflight が言う）
+    $apps = @()
     foreach ($candidate in @('python', 'python3')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found) { return [pscustomobject]@{ Exe = $found.Source; Prefix = @() } }
+        $found = @(Get-Command $candidate -CommandType Application -All -ErrorAction SilentlyContinue)
+        $real = @($found | Where-Object { $_.Source -notmatch '\\WindowsApps\\' })
+        if ($real.Count -gt 0) { return [pscustomobject]@{ Exe = $real[0].Source; Prefix = @() } }
+        $apps += @($found)
     }
     $py = Get-Command 'py' -ErrorAction SilentlyContinue
     if ($py) { return [pscustomobject]@{ Exe = $py.Source; Prefix = @('-3') } }
+    if ($apps.Count -gt 0) { return [pscustomobject]@{ Exe = $apps[0].Source; Prefix = @() } }
     return $null
 }
 
@@ -200,17 +206,14 @@ function Stop-ChildProcess {
     if (-not $Process) { return $true }
     $deadline = [DateTime]::UtcNow.AddMilliseconds($WaitMs)
     $tree = @($Process)
-    try {
-        if ($Process.HasExited) { return $true }
-    } catch { $null = $_ }
+    # 子が先に終わっていても子孫（ファイルを握る 32bit ヘルパなど）は残り得るので、一覧は必ず取る。
     # 一覧が取れなくても子は止める（待つ相手が子だけに減ることを 1 行で知らせる）
     try { $tree += @(Get-DescendantProcess -Process $Process) }
     catch { Write-Problem "[perf-tool-base] descendant snapshot failed: $($_.Exception.Message)" }
-    try {
-        $Process.Kill($true)
-    } catch {
-        # 止める間に自分で終わった（または止める権限が無い）。終わったかは下の待ちで決める。
-        $null = $_
+    # 子孫も 1 つずつ止める（子が既に終わっていると Kill($true) は子孫へ届かない）。
+    # 止める間に自分で終わった（または止める権限が無い）ものは、終わったかを下の待ちで決める。
+    foreach ($p in $tree) {
+        try { if (-not $p.HasExited) { $p.Kill($true) } } catch { $null = $_ }
     }
     $allExited = $true
     foreach ($p in $tree) {
@@ -227,18 +230,21 @@ function Get-DescendantProcess {
     $all = @(Get-CimInstance -ClassName Win32_Process -Property ProcessId, ParentProcessId, CreationDate -ErrorAction Stop)
     $found = @()
     $queue = [System.Collections.Generic.Queue[object]]::new()
-    $queue.Enqueue([pscustomobject]@{ Id = $Process.Id; Start = $Process.StartTime })
+    $rootEnd = if ($Process.HasExited) { $Process.ExitTime } else { $null }
+    $queue.Enqueue([pscustomobject]@{ Id = $Process.Id; Start = $Process.StartTime; End = $rootEnd })
     while ($queue.Count -gt 0) {
         $parent = $queue.Dequeue()
         foreach ($c in $all) {
             if ($c.ParentProcessId -ne $parent.Id -or $c.ProcessId -eq $parent.Id -or $c.CreationDate -lt $parent.Start) { continue }
+            # 根が既に終わっていれば、その後に生まれたものは使い回された PID の別物の子（根の子は根が生きている間に生まれる）
+            if ($null -ne $parent.End -and $c.CreationDate -gt $parent.End) { continue }
             try {
                 $p = [System.Diagnostics.Process]::GetProcessById([int]$c.ProcessId)
                 $null = $p.Handle
                 # 一覧を取った後で PID が使い回された別物は外す（CIM の時刻はマイクロ秒止まりなので 1ms の幅で比べる）
                 if ([Math]::Abs(($p.StartTime - $c.CreationDate).TotalMilliseconds) -gt 1) { $p.Dispose(); continue }
                 $found += $p
-                $queue.Enqueue([pscustomobject]@{ Id = $p.Id; Start = $c.CreationDate })
+                $queue.Enqueue([pscustomobject]@{ Id = $p.Id; Start = $c.CreationDate; End = $null })
             } catch { $null = $_ }
         }
     }
@@ -259,7 +265,8 @@ function Read-TomlSections {
     foreach ($raw in ($Text -split "`r?`n")) {
         $line = $raw.Trim()
         if ($line -eq '' -or $line.StartsWith('#')) { continue }
-        if ($line -match '^\[([^\]]+)\]\s*$') {
+        # 見出しの後ろの注釈（[quiet] # 注）も見出しとして読む（読み落とすと下の鍵が前の節へ入る）
+        if ($line -match '^\[([^\]]+)\]\s*(#.*)?$') {
             $section = $Matches[1].Trim()
             if (-not $result.ContainsKey($section)) { $result[$section] = @{} }
             continue

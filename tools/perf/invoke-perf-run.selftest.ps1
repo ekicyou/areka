@@ -35,7 +35,8 @@ function New-FakeCounterSample {
 }
 
 # ファイルを握って眠る pwsh を起こす（-Grandchild なら子がさらに起こした孫が握る）。
-# 握った者は自分の PID を ready に書く。戻り: [pscustomobject]@{ Process; Ready }
+# 握った者は自分の PID を ready に書く。その Process の Handle を開いて持ち帰る（終わった後に PID が使い回されても別物を止めない）。
+# 戻り: [pscustomobject]@{ Process; Ready; Held（握った者・読めなければ $null） }
 function Start-SelfTestHolder {
     param([Parameter(Mandatory)][string]$Dir, [Parameter(Mandatory)][string]$Tag, [switch]$Grandchild)
     $ready = Join-Path $script:SelfTestRoot "$Tag-ready.txt"
@@ -43,7 +44,8 @@ function Start-SelfTestHolder {
     $hold = Join-Path $script:SelfTestRoot "$Tag-hold.ps1"
     [System.IO.File]::WriteAllText($hold, (@(
         "`$f = [System.IO.File]::Open('$(& $q (Join-Path $Dir 'lock.txt'))', 'Create', 'ReadWrite', 'None')"
-        "[System.IO.File]::WriteAllText('$(& $q $ready)', [string]`$PID)"
+        # ready は書き終えてから名前を付ける（読み手が空のファイルを掴まない）
+        "[System.IO.File]::WriteAllText('$(& $q $ready).tmp', [string]`$PID); [System.IO.File]::Move('$(& $q $ready).tmp', '$(& $q $ready)')"
         'Start-Sleep -Seconds 60'
     ) -join "`n"), [System.Text.UTF8Encoding]::new($false))
     $entry = $hold
@@ -66,18 +68,21 @@ function Start-SelfTestHolder {
     while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $deadline -and -not $process.HasExited) {
         Start-Sleep -Milliseconds 100
     }
-    return [pscustomobject]@{ Process = $process; Ready = $ready }
+    $held = $null
+    $heldPid = 0
+    if ((Test-Path -LiteralPath $ready) -and [int]::TryParse((Get-Content -LiteralPath $ready -Raw), [ref]$heldPid)) {
+        try { $held = [System.Diagnostics.Process]::GetProcessById($heldPid); $null = $held.Handle } catch { $held = $null }
+    }
+    return [pscustomobject]@{ Process = $process; Ready = $ready; Held = $held }
 }
 
-# 赤のときに握った者が残ってフォルダを握り続けないよう、子と、握った者が自分で書いた PID で止める
+# 赤のときに握った者が残ってフォルダを握り続けないよう、子と、握った者（開いておいた Process）を止める
 function Stop-SelfTestHolder {
     param([Parameter(Mandatory)][pscustomobject]$Holder)
-    if (-not $Holder.Process.HasExited) { $Holder.Process.Kill($true); $null = $Holder.Process.WaitForExit(10000) }
-    $Holder.Process.Dispose()
-    $holderPid = 0
-    if ((Test-Path -LiteralPath $Holder.Ready) -and [int]::TryParse((Get-Content -LiteralPath $Holder.Ready -Raw), [ref]$holderPid)) {
-        $p = Get-Process -Id $holderPid -ErrorAction SilentlyContinue
-        if ($p) { $p.Kill(); $null = $p.WaitForExit(10000); $p.Dispose() }
+    foreach ($p in @($Holder.Process, $Holder.Held)) {
+        if (-not $p) { continue }
+        if (-not $p.HasExited) { $p.Kill($true); $null = $p.WaitForExit(10000) }
+        $p.Dispose()
     }
 }
 
@@ -115,6 +120,21 @@ $PerfRunSelfTestChecks = @(
         Assert-SelfTest ($r.Count -eq 1 -and $r['retry_max'] -eq 0) "only retry_max = 0: got $(@($r.Keys) -join ',') / $($r['retry_max'])"
         $r = Read-QuietRetrySettingsFromToml (@('[other]', 'retry_max = 4') -join "`n")
         Assert-SelfTest ($r.Count -eq 0) "no [quiet]: expected 0 keys, got $($r.Count)"
+        # 鍵は在るのに整数で読めない値は既定へ落とさず投げる
+        foreach ($bad in @('retry_wait_sec = 60s', 'retry_max = 3.0')) {
+            $threw = $false
+            try { $null = Read-QuietRetrySettingsFromToml "[quiet]`n$bad" } catch { $threw = $true }
+            Assert-SelfTest $threw "'$bad' fell back to the default"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'quiet-attempt-step'; Body = {
+        # 静かさの確かめの答え: 0 は進む・4 はカウンタ・2 でも 0 でも 4 でもないものは引数・2 は retry_max + 1 回目で尽きる
+        foreach ($case in @(@(0, 1, 3, 'go'), @(0, 4, 3, 'go'), @(4, 1, 3, 'counter'), @(1, 1, 3, 'bad'), @(3, 1, 3, 'bad'), @(-1, 1, 3, 'bad'),
+                            @(2, 1, 3, 'wait'), @(2, 3, 3, 'wait'), @(2, 4, 3, 'unconfirmed'), @(2, 1, 0, 'unconfirmed'))) {
+            $got = Get-QuietAttemptStep -Code $case[0] -Attempt $case[1] -RetryMax $case[2]
+            Assert-SelfTest ($got -eq $case[3]) "code $($case[0]) attempt $($case[1]) retry_max $($case[2]): got $got (want $($case[3]))"
+        }
     } }
 
     [pscustomobject]@{ Name = 'smoke-marker'; Body = {
@@ -175,7 +195,8 @@ $PerfRunSelfTestChecks = @(
             $calls.Add("$(Split-Path -Leaf $ScriptPath) $($Arguments -join ' ')")
             return [pscustomobject]@{ Code = $script:FakeSample.Code; Out = $script:FakeSample.Out; Err = @(); LastLine = 'x' } }
         function Write-Info { param([string]$Message) $info.Add($Message) }
-        function Write-Problem { param([string]$Message) }
+        $problems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $problems.Add($Message) }
         $etl = Join-Path $script:SelfTestRoot 'cpu.etl'
 
         # 印が立っていなければ（-SampleEtl なし・始められなかった）取り消さない
@@ -190,6 +211,9 @@ $PerfRunSelfTestChecks = @(
             Stop-RunSampling
             Assert-SelfTest ($calls.Count -eq 1 -and $calls[0] -eq "invoke-cpu-sample.ps1 -Start -Etl $etl") "start code $($case.Code): calls '$($calls -join ' | ')'"
             Assert-SelfTest ($info -contains "[invoke-perf-run] sampling start: code=$($case.Code) reason=$($case.Reason)") "start code $($case.Code): line '$($info -join ' | ')'"
+            # 語の無い失敗は子の訳の行を 1 行出す（語の有る 5 は出さない）
+            Assert-SelfTest (($problems.Count -gt 0) -eq ($case.Reason -eq 'start_failed')) "start code $($case.Code): $($problems.Count) reason lines"
+            $problems.Clear()
         }
 
         # 始められたら印が立ち、取り消しは -Cancel を 1 回だけ呼んで印を下ろす
@@ -223,7 +247,7 @@ $PerfRunSelfTestChecks = @(
         $out = Join-Path $script:SelfTestRoot 'dry-out'
         $r = & $realChild -ScriptPath (Join-Path $PSScriptRoot 'invoke-perf-run.ps1') -Quiet -Arguments @('-DryRun', '-SampleEtl', $etl,
             '-OutDir', $out, '-Profile', 'short', '-Build', 'dev', '-BinDir', $bin, '-GhostRoot', $ghost, '-BalloonRoot', $bin)
-        Assert-SelfTest ($r.Code -eq 3 -and -not (Test-Path -LiteralPath $out)) "-DryRun -SampleEtl: exit code $($r.Code) (want 3), out dir made: $(Test-Path -LiteralPath $out)"
+        Assert-SelfTest ($r.Code -eq 3 -and -not (Test-Path -LiteralPath $out) -and $r.LastLine -match '-SampleEtl') "-DryRun -SampleEtl: exit code $($r.Code) (want 3), out dir made: $(Test-Path -LiteralPath $out)"
     } }
 )
 

@@ -58,7 +58,7 @@ invoke-followup-checks.ps1 — 見た目の追随をエージェント自身が�
   1 は実走そのものに失敗した場合（起動できない・表示が成立しない・窓が先に閉じた）にも返す。
   -SelfTest は自分の検査と判定器の較正のどちらかが赤なら非ゼロ。
 
-標準出力の末尾には必ず次の 1 行を出す（背景実行でも会話へ届く形・要件 1.9）:
+標準出力の末尾には必ず次の 1 行を出す（実走のとき。-SelfTest は終了コードだけ・背景実行でも会話へ届く形・要件 1.9）:
   FOLLOWUP RESULT overall=<…> clickthrough=<…> drag=<…> dpi=<…> balloon_follow=<…> code=<n> dir=<path>
 
 使い方:
@@ -99,9 +99,19 @@ param(
     [Parameter(ParameterSetName = 'SelfTest', Mandatory = $true)]
     [switch]$SelfTest
 )
+# shortcut: 必須の引数の欠けは PowerShell の束ねの段で RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
+# 呼び手（perf-loop）が引数を欠く形で呼ぶようになったら、必須を外して自分で確かめて 3 にする
 
 # 想定外の失敗は理由の 1 行と中止の形の FOLLOWUP RESULT 行で 1（perf-loop は 1 度だけ採り直す）
-trap { Stop-Run $EXIT_FAIL (Format-UnexpectedError -ErrorRecord $_) }
+trap {
+    # 共通部品より前の失敗（読み込めない）でも元の原因と中止の形の RESULT 行で 1
+    if (-not (Get-Command -Name 'Stop-Run' -CommandType Function -ErrorAction Ignore)) {
+        [Console]::Error.WriteLine("[invoke-followup-checks] stopped: unexpected failure before the shared helpers loaded: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+        [Console]::Out.WriteLine('FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code=1 dir=-')
+        exit 1
+    }
+    Stop-Run $EXIT_FAIL (Format-UnexpectedError -ErrorRecord $_)
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
@@ -113,7 +123,7 @@ $script:OutDirPath = '-'
 # =============================================================================
 # 較正値
 # =============================================================================
-$SCRIPT_VERSION        = '0.1.1'
+$SCRIPT_VERSION        = '0.2.0'
 $RUST_LOG_VALUE        = 'info,wintf::ecs::clickthrough=debug,wintf::transition=debug,areka_emo_present=debug'
 $SMOKE_EXIT_ENV_NAME   = 'AREKA_APP_SMOKE_EXIT_MS'
 $SAMPLE_NAME            = 'emo2'
@@ -265,6 +275,15 @@ function Invoke-Judge {
     $script:JudgeExitCode = $result.Code
 }
 
+# balloon_follow が比べる前後の操作（drag・dpi のうち求められたもの）のうち、status=done に届かなかったもの（純関数）。
+# 戻り: Sources（求められた操作・必ず配列）・NotDone（届かなかった操作）・Ready（操作が 1 つ以上あり全部届いた）
+function Get-BalloonFollowSources {
+    param([string[]]$Requested, [string[]]$ProbeLines)
+    $sources = @(@('drag', 'dpi') | Where-Object { $Requested -contains $_ })
+    $notDone = @($sources | Where-Object { $s = $_; -not @($ProbeLines | Where-Object { $_ -match "check=$s step=status .*status=done" }).Count })
+    return [pscustomobject]@{ Sources = $sources; NotDone = $notDone; Ready = ($sources.Count -gt 0 -and $notDone.Count -eq 0) }
+}
+
 # 判定器（judge-followup.py）の終了コードを返す値へ写す（純関数）: 0・1・2 はそのまま、
 # 3（読取不能）とほか（起こせない -1 を含む）は 1＝実走の失敗（perf-loop が 1 度だけ採り直す）
 function Convert-FollowupJudgeExit {
@@ -375,6 +394,19 @@ function Test-ExTransparent {
 # 自分の検査（-SelfTest で判定器の較正の前に回す）。1 検査 1 行を ASCII で出し、赤の数を返す。
 function Invoke-FollowupSelfChecks {
     $checks = [ordered]@{
+        'balloon-follow-sources' = {
+            # 求められた操作が 1 つでも 0 でも配列のまま数える（StrictMode で 1 つの文字列の .Count を引かない）
+            $done = @('check=drag step=status status=done reason=-')
+            foreach ($case in @(@{ Req = @('clickthrough', 'drag', 'balloon_follow'); Ready = $true; NotDone = '' }
+                                @{ Req = @('drag', 'dpi', 'balloon_follow'); Ready = $false; NotDone = 'dpi' }
+                                @{ Req = @('dpi', 'balloon_follow'); Ready = $false; NotDone = 'dpi' }
+                                @{ Req = @('balloon_follow'); Ready = $false; NotDone = '' })) {
+                $r = Get-BalloonFollowSources -Requested $case.Req -ProbeLines $done
+                if ($r.Ready -ne $case.Ready -or ($r.NotDone -join ',') -ne $case.NotDone) {
+                    throw "$($case.Req -join ','): ready=$($r.Ready) not_done='$($r.NotDone -join ',')' (want $($case.Ready) / '$($case.NotDone)')"
+                }
+            }
+        }
         'judge-exit-map' = {
             foreach ($pair in @(@(0, 0), @(1, 1), @(2, 2), @(3, 1), @(4, 1), @(-1, 1), @(255, 1))) {
                 $got = Convert-FollowupJudgeExit -Code $pair[0]
@@ -434,6 +466,8 @@ if ($SelfTest) {
     }
     $selfNg = Invoke-FollowupSelfChecks
     Invoke-Judge -Python $python -Arguments @($judgePath, '--selftest')
+    # 最後の行が判定器の緑の行のまま赤で終わらないよう、自分の検査の赤をその後に 1 行で言う
+    if ($selfNg -gt 0) { Write-Info "selftest own checks: ng=$selfNg (see the NG lines above)" }
     if ($script:JudgeExitCode -ne 0) { exit $script:JudgeExitCode }
     exit $(if ($selfNg -gt 0) { $EXIT_FAIL } else { 0 })
 }
@@ -453,6 +487,8 @@ $script:NotePath     = Join-Path $script:OutDirPath 'followup.txt'
 $runLogPath          = Join-Path $script:OutDirPath 'run.log'
 $errLogPath          = Join-Path $script:OutDirPath 'run-stderr.log'
 Set-Content -LiteralPath $script:ProbeLogPath -Value '' -Encoding utf8 -NoNewline
+# 同じ出力先の前の回の判定を残さない（判定器が落ちた回に古い判定を RESULT 行へ写さない）
+Remove-Item -LiteralPath (Join-Path $script:OutDirPath 'followup-verdict.txt'), $script:NotePath -Force -ErrorAction Ignore
 
 # -Checks は配列でも 'a,b,c' の 1 文字列でも受ける（perf-loop.measure.ps1 は子 pwsh へ引用した
 # 1 文字列で渡す＝2026-08-23 周 1 の followup が exit 3「未知の検査名 'clickthrough,drag,…'」で止まった穴）。
@@ -557,11 +593,15 @@ try {
     # --- 操作を注入できるかを実際に試す（推測しない）---------------------------
     $cursorBefore = New-Object AkFollowupW32+POINT
     $null = [AkFollowupW32]::GetCursorPos([ref]$cursorBefore)
-    $setRet = [AkFollowupW32]::SetCursorPos($cursorBefore.X + 7, $cursorBefore.Y + 5)
-    Start-Sleep -Milliseconds 60
-    $cursorAfter = New-Object AkFollowupW32+POINT
-    $null = [AkFollowupW32]::GetCursorPos([ref]$cursorAfter)
-    $cursorMoved = ($cursorAfter.X -ne $cursorBefore.X) -or ($cursorAfter.Y -ne $cursorBefore.Y)
+    # 右下の角にカーソルが居ると +7,+5 は画面の端で止められて動かない。動かなければ逆向きでもう 1 度だけ試す
+    foreach ($delta in @(@(7, 5), @(-7, -5))) {
+        $setRet = [AkFollowupW32]::SetCursorPos($cursorBefore.X + $delta[0], $cursorBefore.Y + $delta[1])
+        Start-Sleep -Milliseconds 60
+        $cursorAfter = New-Object AkFollowupW32+POINT
+        $null = [AkFollowupW32]::GetCursorPos([ref]$cursorAfter)
+        $cursorMoved = ($cursorAfter.X -ne $cursorBefore.X) -or ($cursorAfter.Y -ne $cursorBefore.Y)
+        if ($cursorMoved) { break }
+    }
     if ($cursorMoved) { $null = [AkFollowupW32]::SetCursorPos($cursorBefore.X, $cursorBefore.Y) }
 
     $probeInput = New-Object AkFollowupW32+INPUT
@@ -665,17 +705,21 @@ try {
                     @{ Name = 'transparent'; X = $rect.X + $TRANSPARENT_INSET_PX; Y = $rect.Y + $TRANSPARENT_INSET_PX; Expect = 'true' },
                     @{ Name = 'opaque'; X = $rect.X + [int]($rect.W / 2); Y = $rect.Y + $rect.H - $OPAQUE_BOTTOM_PX; Expect = 'false' }
                 )
+                $allLanded = $true
                 foreach ($point in $points) {
                     $null = [AkFollowupW32]::SetCursorPos($point.X, $point.Y)
                     Start-Sleep -Milliseconds 80
                     $now = New-Object AkFollowupW32+POINT
                     $null = [AkFollowupW32]::GetCursorPos([ref]$now)
                     $landed = ($now.X -eq $point.X) -and ($now.Y -eq $point.Y)
+                    if (-not $landed) { $allLanded = $false }
                     Write-Probe -Check 'clickthrough' -Step 'probe_point' -Fields @(
                         "hwnd=$($charWin.Key)", "point=$($point.Name)", "x=$($point.X)", "y=$($point.Y)",
                         "moved=$($landed.ToString().ToLower())"
                     )
                     Start-Sleep -Milliseconds $SETTLE_MS
+                    # 窓が先に閉じていれば読んだ様式は 0（＝不透明）になり、本物の不一致に見える。閉じていれば 1 で止める
+                    $null = Get-TargetRect -Window $charWin
                     $ex = Test-ExTransparent -Hwnd $charWin.Hwnd
                     $observed = $ex.Transparent.ToString().ToLower()
                     $result = if ($observed -eq $point.Expect) { 'match' } else { 'mismatch' }
@@ -691,7 +735,9 @@ try {
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
                     "end_t=$(Get-ProbeStamp)"
                 )
-                Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=done', 'reason=-')
+                # 点が画面の外で止められたら、別の画素を読んだ結果を不一致と言わない（drag と同じ決まり）
+                if ($allLanded) { Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=done', 'reason=-') }
+                else { Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=unavailable', 'reason=cursor_did_not_reach_target') }
             }
         }
 
@@ -861,15 +907,13 @@ try {
         # 検査 4: balloon_follow（drag / dpi の前後の矩形を使う・自前の操作は無い）
         # =====================================================================
         if ($requested -contains 'balloon_follow') {
-            $sources = @('drag', 'dpi') | Where-Object { $requested -contains $_ }
-            $notDone = @()
-            foreach ($source in $sources) {
-                $done = @($script:ProbeLines | Where-Object { $_ -match "check=$source step=status .*status=done" }).Count -gt 0
-                if (-not $done) { $notDone += $source }
-            }
-            if ($notDone.Count -gt 0 -or $sources.Count -eq 0) {
+            $follow = Get-BalloonFollowSources -Requested $requested -ProbeLines $script:ProbeLines
+            if ($follow.Sources.Count -eq 0) {
+                Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=unavailable', 'reason=no_required_mover')
+                Write-Note 'balloon_follow: inconclusive, neither drag nor dpi is in the required checks (nothing moves the windows to compare).'
+            } elseif (-not $follow.Ready) {
                 Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=unavailable', 'reason=depends_on_drag_dpi')
-                Write-Note "balloon_follow: inconclusive, the operations to compare before and after ($($notDone -join ', ')) did not complete."
+                Write-Note "balloon_follow: inconclusive, the operations to compare before and after ($($follow.NotDone -join ', ')) did not complete."
             } else {
                 Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=done', 'reason=-')
             }

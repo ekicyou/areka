@@ -68,7 +68,7 @@ CPU の「1 コア換算」について:
       -AutoQuiet のときは、待って確かめ直しても静かにならなかった場合もこの 2 を返す（要件 2.8）
   3 … 引数・前提の不正（水準/ビルド種別の指定誤り・パス不正・出力先の作成不能。
       -AutoQuiet と -ConfirmQuiet の同時指定・-BinDir の不正もここ）
-  4 … CPU カウンタの取得失敗（-AutoQuiet の自動静寂確認がカウンタを読めなかった場合を含む）
+  4 … CPU カウンタの取得失敗（-AutoQuiet の自動静寂確認がカウンタを読めなかった、または確かめそのものが想定外に落ちた場合を含む）
   ※ judge-perf.py の終了コード（0=合格 / 1=不合格 / 2=判定不能 / 3=引数不正）とは
      別体系である。本スクリプトは合否を判定しない。
 
@@ -112,7 +112,7 @@ CPU の「1 コア換算」について:
   自動静寂確認つき・実行体の所在を指定・追加のログ指定つきで採る:
   pwsh -File tools/perf/invoke-perf-run.ps1 `
       -Profile short -Build release `
-      -GhostRoot C:\絶対パス\emo2 -OutDir C:\出力先\A1 `
+      -GhostRoot C:\絶対パス\emo2 -BalloonRoot C:\絶対パス\balloon -OutDir C:\出力先\A1 `
       -AutoQuiet -Goal draw-load-parity `
       -BinDir C:\出力先\bin-A -RustLogExtra 'wintf::tick=debug,areka::perf=debug'
 
@@ -160,7 +160,14 @@ param(
 )
 
 # 想定外の失敗は理由の 1 行と 1（実走の失敗＝perf-loop は 1 度だけ採り直す）。出力先は Stop-Run が退ける
-trap { Stop-Run $EXIT_RUN_FAILED (Format-UnexpectedError -ErrorRecord $_) }
+trap {
+    # 共通部品より前の失敗（読み込めない）でも元の原因の 1 行で 1（出力先はまだ無い）
+    if (-not (Get-Command -Name 'Stop-Run' -CommandType Function -ErrorAction Ignore)) {
+        [Console]::Error.WriteLine("[invoke-perf-run] failed: unexpected failure before the shared helpers loaded: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+        exit 1
+    }
+    Stop-Run $EXIT_RUN_FAILED (Format-UnexpectedError -ErrorRecord $_)
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
@@ -173,7 +180,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION                 = '1.1.0'
+$SCRIPT_VERSION                 = '1.2.0'
 $SMOKE_EXIT_MS_SHORT            = 420000
 $SMOKE_EXIT_MS_LONG             = 1500000
 $SMOKE_EXIT_ENV_NAME            = 'AREKA_APP_SMOKE_EXIT_MS'
@@ -236,6 +243,8 @@ function Start-RunSampling {
     else {
         $m = [regex]::Match((@($r.Out) -join "`n"), 'INVOKE-CPU-SAMPLE RESULT start code=\S+ .*?\breason=(\S+)')
         $reason = if ($m.Success) { $m.Groups[1].Value } else { 'start_failed' }
+        # 語の無い失敗（xperf が始められない・子を起こせない）は子の訳の行を黙って落とさない
+        if (-not $m.Success) { Write-Problem "[invoke-perf-run] sampling not started: $($r.LastLine)" }
     }
     Write-Info "[invoke-perf-run] sampling start: code=$($r.Code) reason=$reason"
 }
@@ -372,6 +381,7 @@ function Test-SmokeMarker {
 # 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む薄い引き口
 # （読みは perf-tool-base の読み口）。閾値・採取秒数・重いプロセス名は check-quiet.ps1 が
 # 自分で同じファイルから読む（二重に解釈して食い違わせないため、この 2 つ以外を読まない）。
+# 鍵は在るのに整数で読めない値は投げる（黙って既定値へ落とさない。呼び手が 3 で止める）。
 function Read-QuietRetrySettingsFromToml {
     param([string]$Text)
     $out = @{}
@@ -379,8 +389,21 @@ function Read-QuietRetrySettingsFromToml {
     foreach ($key in 'retry_max', 'retry_wait_sec') {
         $v = Get-TomlInt -Toml $toml -Section 'quiet' -Key $key
         if ($null -ne $v) { $out[$key] = $v }
+        elseif ($null -ne ($raw = Get-TomlRaw -Toml $toml -Section 'quiet' -Key $key)) { throw "[quiet] $key cannot be read as an integer: $raw" }
     }
     return $out
+}
+
+# 静かさの確かめ 1 回の答えから次の手を決める（-SelfTest の quiet-attempt-step が固定する）。
+# 戻り: 'go'（静か）・'counter'（4＝カウンタが読めない）・'bad'（2 でも 0 でも 4 でもない）・
+#       'unconfirmed'（2 で、確かめた回数が retry_max + 1 に届いた）・'wait'（2 で、まだ確かめ直せる）
+function Get-QuietAttemptStep {
+    param([int]$Code, [int]$Attempt, [int]$RetryMax)
+    if ($Code -eq 0) { return 'go' }
+    if ($Code -eq 4) { return 'counter' }
+    if ($Code -ne 2) { return 'bad' }
+    if ($Attempt -ge $RetryMax + 1) { return 'unconfirmed' }
+    return 'wait'
 }
 
 # check-quiet.ps1 を 1 回呼ぶ。報告は quiet-<Stage>.txt として OutDir に残り、
@@ -512,7 +535,8 @@ if ($Goal -or $GoalFile) {
         Stop-Run $EXIT_BAD_ARGS "goal file not found: $goalCandidate"
     }
     $goalFileFull = (Resolve-Path -LiteralPath $goalCandidate).Path
-    $retrySettings = Read-QuietRetrySettingsFromToml ([IO.File]::ReadAllText($goalFileFull))
+    try { $retrySettings = Read-QuietRetrySettingsFromToml ([IO.File]::ReadAllText($goalFileFull)) }
+    catch { Stop-Run $EXIT_BAD_ARGS "goal file ${goalFileFull}: $($_.Exception.Message)" }
     if ($retrySettings.ContainsKey('retry_max'))      { $quietRetryMax  = [int]$retrySettings['retry_max'] }
     if ($retrySettings.ContainsKey('retry_wait_sec')) { $quietRetryWait = [int]$retrySettings['retry_wait_sec'] }
     if (-not $AutoQuiet) {
@@ -601,6 +625,8 @@ if ($AutoQuiet) {
     $maxQuietAttempts = $quietRetryMax + 1
     while ($true) {
         $quietAttempts++
+        # 前の回の報告を残さない（今回が報告を書く前に落ちたとき、古い報告を証拠と言わない）
+        Remove-Item -LiteralPath $quietPath -Force -ErrorAction Ignore
         Write-Info "[invoke-perf-run] quiet check $quietAttempts/$maxQuietAttempts ($CHECK_QUIET_SCRIPT)..."
         try {
             $quietCode = Invoke-CheckQuietOnce -ScriptPath $checkQuietPath -TargetOutDir $script:OutDirPath `
@@ -608,14 +634,17 @@ if ($AutoQuiet) {
         } catch {
             Stop-Run $EXIT_BAD_ARGS "cannot start the quiet-check script ($checkQuietPath): $($_.Exception.Message)"
         }
-        if ($quietCode -eq 0) { break }
-        if ($quietCode -eq 4) {
-            Stop-Run $EXIT_COUNTER_FAILED "quiet check could not read the performance counters ($CHECK_QUIET_SCRIPT exited with 4). The evidence is in quiet-$QUIET_STAGE_BEFORE.txt."
+        $step = Get-QuietAttemptStep -Code $quietCode -Attempt $quietAttempts -RetryMax $quietRetryMax
+        if ($step -eq 'go') { break }
+        if ($step -eq 'counter') {
+            # 4 は確かめそのものが落ちた（カウンタ・道具の想定外の失敗）。報告が無ければ訳は上に写した子の最後の行にある
+            $evidence = if (Test-Path -LiteralPath $quietPath -PathType Leaf) { "The evidence is in quiet-$QUIET_STAGE_BEFORE.txt." } else { "It wrote no quiet-$QUIET_STAGE_BEFORE.txt; the reason is its last line above." }
+            Stop-Run $EXIT_COUNTER_FAILED "quiet check failed (counters could not be read, or the check itself failed: $CHECK_QUIET_SCRIPT exited with 4). $evidence"
         }
-        if ($quietCode -ne 2) {
+        if ($step -eq 'bad') {
             Stop-Run $EXIT_BAD_ARGS "quiet check could not run ($CHECK_QUIET_SCRIPT exited with $quietCode). Bad arguments or preconditions."
         }
-        if ($quietAttempts -ge $maxQuietAttempts) {
+        if ($step -eq 'unconfirmed') {
             Stop-Run $EXIT_QUIET_UNCONFIRMED "quiet check failed (checked $maxQuietAttempts times, never quiet). A CPU series taken while other load runs measures the machine, not areka, so areka is not started. The evidence is in quiet-$QUIET_STAGE_BEFORE.txt (in the folder of the moved to: line below)."
         }
         Write-Info "[invoke-perf-run] not quiet yet. Waiting $quietRetryWait s and checking again ($($maxQuietAttempts - $quietAttempts) left)."
@@ -770,7 +799,7 @@ try {
     $lastError   = ''
     while ($true) {
         if ($proc.HasExited) {
-            Stop-Run $EXIT_RUN_FAILED "areka exited before the first CPU sample (exit code $($proc.ExitCode)). Check the run logs $runLogPath and $errLogPath."
+            Stop-Run $EXIT_RUN_FAILED "areka exited before the first CPU sample (exit code $($proc.ExitCode)). Check the run logs $runLogPath and $errLogPath." -Process $proc
         }
         try {
             $firstValue = Get-ProcessCpuPercent1Core -TargetProcessId $proc.Id -InstanceFilter "$instanceName*" `
@@ -813,7 +842,7 @@ try {
                 if ($proc.HasExited) { break }   # 走行が終わっただけ＝異常ではない
                 $attempt++
                 if ($attempt -gt $COUNTER_RETRY_MAX) {
-                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $COUNTER_RETRY_MAX times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed." -Process $proc
+                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $($COUNTER_RETRY_MAX + 1) times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed." -Process $proc
                 }
                 Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
             }
@@ -855,20 +884,17 @@ try {
 # 7. 採取結果の健全性確認（黙って壊れた成果を残さない）
 # =============================================================================
 if ($exitCode -ne 0) {
-    Stop-Run $EXIT_RUN_FAILED "areka exited abnormally (exit code $exitCode). Check the run logs $runLogPath and $errLogPath."
+    Stop-Run $EXIT_RUN_FAILED "areka exited abnormally (exit code $exitCode). Check the run logs $runLogPath and $errLogPath." -Process $proc
 }
 $plannedSec = $smokeExitMs / 1000.0
 if ($elapsedSec -lt ($plannedSec - $EARLY_EXIT_TOLERANCE_SEC)) {
-    Stop-Run $EXIT_RUN_FAILED "areka exited earlier than planned (planned $([math]::Round($plannedSec)) s, actual $([math]::Round($elapsedSec)) s). It did not end by the smoke auto-exit, so this is not a valid measurement."
+    Stop-Run $EXIT_RUN_FAILED "areka exited earlier than planned (planned $([math]::Round($plannedSec)) s, actual $([math]::Round($elapsedSec)) s). It did not end by the smoke auto-exit, so this is not a valid measurement." -Process $proc
 }
 if (-not (Test-Path -LiteralPath $runLogPath -PathType Leaf) -or (Get-Item -LiteralPath $runLogPath).Length -eq 0) {
-    Stop-Run $EXIT_RUN_FAILED "run log $runLogPath is empty. A run without a log cannot be judged."
+    Stop-Run $EXIT_RUN_FAILED "run log $runLogPath is empty. A run without a log cannot be judged." -Process $proc
 }
 if (-not (Test-SmokeMarker -Path $runLogPath)) {
-    Stop-Run $EXIT_RUN_FAILED "run log has no smoke auto-exit marker (LOG_MARKER_SMOKE_GATE). A run where $SMOKE_EXIT_ENV_NAME did not take effect is not a repeat of the same procedure."
-}
-if ($sampleCount -lt 1) {
-    Stop-Run $EXIT_COUNTER_FAILED "no CPU sample was taken."
+    Stop-Run $EXIT_RUN_FAILED "run log has no smoke auto-exit marker (LOG_MARKER_SMOKE_GATE). A run where $SMOKE_EXIT_ENV_NAME did not take effect is not a repeat of the same procedure." -Process $proc
 }
 
 # =============================================================================

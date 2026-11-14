@@ -10,7 +10,7 @@ perf-loop.selftest.ps1 — perf-loop 側の自分の検査（T2）
         'PERF-LOOP-SELFTEST RESULT ok=<n> ng=<m> code=<0|1>'（全部 ASCII）。
 終了:   0＝全部緑・1＝1 件でも赤。
 
-決まり:
+決まり（骨組みは perf-loop.selftest-base.ps1・2 本目と共に読む）:
   - perf-loop.common.ps1 と perf-loop.measure.ps1 を読み込み、その関数をそのまま試す。
   - 偽物は読み込んだ後で同じ名前の関数を定義し直して作り、呼ばれた順と引数を
     Add-SelfTestCall で $script:SelfTestCalls に残す（検査ごとに空にする）。
@@ -23,59 +23,7 @@ perf-loop.selftest.ps1 — perf-loop 側の自分の検査（T2）
 ================================================================================
 #>
 
-. (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
-. (Join-Path $PSScriptRoot 'perf-loop.measure.ps1')
-
-# =============================================================================
-# 骨組み（偽物の記録・終了の口・作業のフォルダ・判定）
-# =============================================================================
-
-$script:SelfTestCalls = [System.Collections.Generic.List[object]]::new()
-
-# 偽物が呼ばれた順と引数を残す
-function Add-SelfTestCall {
-    param([Parameter(Mandatory = $true)][string]$Name, [object[]]$Arguments = @())
-    $script:SelfTestCalls.Add([pscustomobject]@{ Name = $Name; Arguments = @($Arguments) })
-}
-
-# 終了の口の偽物: 本物の exit で検査が終わらないよう、終了コードを持った例外を投げる
-function Exit-WithResult {
-    param([Parameter(Mandatory = $true)][int]$Code, [string]$Sub, [string]$Dir)
-    Add-SelfTestCall -Name 'Exit-WithResult' -Arguments @($Code, $Sub, $Dir)
-    $ex = [System.Exception]::new("Exit-WithResult code=$Code")
-    $ex.Data['ExitCode'] = $Code
-    throw $ex
-}
-
-function Assert-SelfTest {
-    param([bool]$Condition, [string]$Reason)
-    if (-not $Condition) { throw $Reason }
-}
-
-# 理由を 1 行の ASCII にする（例外の文は地域語のことがある）
-function ConvertTo-SelfTestAscii {
-    param([string]$Text)
-    return (($Text -replace '\s*\r?\n\s*', ' ') -replace '[^\x20-\x7E]', '?')
-}
-
-# 子の pwsh に回させる .ps1 を作業のフォルダに書く（BOM の無い UTF-8）
-function New-SelfTestScript {
-    param([Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][string]$Text)
-    $path = Join-Path $script:SelfTestRoot $Name
-    [System.IO.File]::WriteAllText($path, $Text, [System.Text.UTF8Encoding]::new($false))
-    return $path
-}
-
-# 偽の Exit-WithResult が投げた終了コードを返す（終わらなければ $null）
-function Get-SelfTestExitCode {
-    param([Parameter(Mandatory = $true)][scriptblock]$Script)
-    try { $null = & $Script }
-    catch {
-        if ($_.Exception.Data.Contains('ExitCode')) { return [int]$_.Exception.Data['ExitCode'] }
-        throw
-    }
-    return $null
-}
+. (Join-Path $PSScriptRoot 'perf-loop.selftest-base.ps1')
 
 #: 頭に trap を持つ入口 5 本
 $SelfTestEntryScripts = @('perf-loop.ps1', 'invoke-perf-run.ps1', 'invoke-cpu-sample.ps1', 'check-quiet.ps1', 'invoke-followup-checks.ps1')
@@ -148,6 +96,9 @@ $SelfTestChecks = @(
         Assert-SelfTest ((Get-TomlInt $t 'target' 'count') -eq 1000) 'int with _'
         Assert-SelfTest ($null -eq (Get-TomlInt $t 'target' 'ratio')) 'int of a double must be null'
         Assert-SelfTest ((Get-TomlInt $t 'quiet' 'neg') -eq -3) 'heading with spaces / negative int'
+        # 見出しの後ろの注釈: 下の鍵はその節に入り、前の節へ紛れない
+        $h = Read-TomlSections -Text "[stop]`nmax = 1`n[quiet] # note`nretry = 3`n"
+        Assert-SelfTest ((Get-TomlInt $h 'quiet' 'retry') -eq 3 -and $null -eq (Get-TomlInt $h 'stop' 'retry')) 'heading with a trailing comment'
         Assert-SelfTest ($null -eq (Get-TomlString $t 'target' 'missing')) 'missing key must be null'
     } }
 
@@ -209,7 +160,8 @@ $SelfTestChecks = @(
         $ready = Join-Path $script:SelfTestRoot 'held-ready.txt'
         $grandchild = New-SelfTestScript -Name 'hold.ps1' -Text (@(
             "`$f = [System.IO.File]::Open('$((Join-Path $held 'lock.txt') -replace "'", "''")', 'Create', 'ReadWrite', 'None')"
-            "[System.IO.File]::WriteAllText('$($ready -replace "'", "''")', [string]`$PID)"
+            # ready は書き終えてから名前を付ける（読み手が空のファイルを掴まない）
+            "[System.IO.File]::WriteAllText('$($ready -replace "'", "''").tmp', [string]`$PID); [System.IO.File]::Move('$($ready -replace "'", "''").tmp', '$($ready -replace "'", "''")')"
             'Start-Sleep -Seconds 60'
         ) -join "`n")
         $child = New-SelfTestScript -Name 'spawn-hold.ps1' -Text (@(
@@ -224,6 +176,7 @@ $SelfTestChecks = @(
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
         $process = [System.Diagnostics.Process]::Start($psi)
+        $gc = $null
         try {
             $deadline = [DateTime]::UtcNow.AddSeconds(20)
             while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $deadline -and -not $process.HasExited) {
@@ -232,22 +185,63 @@ $SelfTestChecks = @(
             Assert-SelfTest (Test-Path -LiteralPath $ready) 'child did not start holding the file'
             # 待つ相手に孫が入ることを固定する（孫を待たない抜けは Kill が速いので実の走行では再現しにくい）
             $gcPidSeen = [int](Get-Content -LiteralPath $ready -Raw)
+            # 後始末用に孫の Handle を開いておく（終わった後に PID が使い回されても別物を止めない）
+            $gc = [System.Diagnostics.Process]::GetProcessById($gcPidSeen); $null = $gc.Handle
             Assert-SelfTest (@(Get-DescendantProcess -Process $process).Id -contains $gcPidSeen) 'Get-DescendantProcess did not find the grandchild'
             $stopped = Stop-ChildProcess -Process $process -WaitMs 10000
             Assert-SelfTest $stopped 'Stop-ChildProcess returned false'
             Assert-SelfTest $process.HasExited 'Stop-ChildProcess returned before the child exited'
-            $gcLeft = Get-Process -Id $gcPidSeen -ErrorAction SilentlyContinue
-            Assert-SelfTest (-not $gcLeft -or $gcLeft.HasExited) 'Stop-ChildProcess returned before the grandchild exited'
+            Assert-SelfTest $gc.HasExited 'Stop-ChildProcess returned before the grandchild exited'
             try { Rename-Item -LiteralPath $held -NewName 'held-moved' -ErrorAction Stop }
             catch { throw "folder still held after Stop-ChildProcess: $($_.Exception.Message)" }
         } finally {
             if (-not $process.HasExited) { $process.Kill($true); $null = $process.WaitForExit(10000) }
             $process.Dispose()
-            # 赤のときに孫が残ってフォルダを握り続けないよう、孫が自分で書いた PID で止める
-            $gcPid = 0
-            if ((Test-Path -LiteralPath $ready) -and [int]::TryParse((Get-Content -LiteralPath $ready -Raw), [ref]$gcPid)) {
-                $gc = Get-Process -Id $gcPid -ErrorAction SilentlyContinue
-                if ($gc) { $gc.Kill(); $null = $gc.WaitForExit(10000); $gc.Dispose() }
+            # 赤のときに孫が残ってフォルダを握り続けないよう、開いておいた孫を止める
+            if ($gc) {
+                if (-not $gc.HasExited) { $gc.Kill(); $null = $gc.WaitForExit(10000) }
+                $gc.Dispose()
+            }
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'kill-after-parent-exit'; Body = {
+        # 子が先に終わり、子が起こした孫がファイルを握って残る（areka が落ちて 32bit ヘルパが残る形）。それでも孫まで止めて待つ
+        $held = Join-Path $script:SelfTestRoot 'held2'
+        $null = New-Item -ItemType Directory -Path $held
+        $ready = Join-Path $script:SelfTestRoot 'held2-ready.txt'
+        $grandchild = New-SelfTestScript -Name 'hold2.ps1' -Text (@(
+            "`$f = [System.IO.File]::Open('$((Join-Path $held 'lock.txt') -replace "'", "''")', 'Create', 'ReadWrite', 'None')"
+            # ready は書き終えてから名前を付ける（読み手が空のファイルを掴まない）
+            "[System.IO.File]::WriteAllText('$($ready -replace "'", "''").tmp', [string]`$PID); [System.IO.File]::Move('$($ready -replace "'", "''").tmp', '$($ready -replace "'", "''")')"
+            'Start-Sleep -Seconds 60'
+        ) -join "`n")
+        $child = New-SelfTestScript -Name 'spawn-hold2.ps1' -Text (@(
+            '$psi = [System.Diagnostics.ProcessStartInfo]::new([Environment]::ProcessPath)'
+            "foreach (`$a in @('-NoProfile', '-NonInteractive', '-File', '$($grandchild -replace "'", "''")')) { `$psi.ArgumentList.Add(`$a) }"
+            '$psi.UseShellExecute = $false'
+            '$null = [System.Diagnostics.Process]::Start($psi)'
+            "while (-not (Test-Path -LiteralPath '$($ready -replace "'", "''")')) { Start-Sleep -Milliseconds 100 }"
+        ) -join "`n")
+        $psi = [System.Diagnostics.ProcessStartInfo]::new((Get-PwshPath))
+        foreach ($a in @('-NoProfile', '-NonInteractive', '-File', $child)) { $psi.ArgumentList.Add($a) }
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $gc = $null
+        try {
+            Assert-SelfTest ($process.WaitForExit(20000)) 'child did not exit after starting the grandchild'
+            $gc = [System.Diagnostics.Process]::GetProcessById([int](Get-Content -LiteralPath $ready -Raw)); $null = $gc.Handle
+            Assert-SelfTest (Stop-ChildProcess -Process $process -WaitMs 10000) 'Stop-ChildProcess returned false'
+            Assert-SelfTest $gc.HasExited 'the grandchild of an exited child was not stopped'
+            try { Rename-Item -LiteralPath $held -NewName 'held2-moved' -ErrorAction Stop }
+            catch { throw "folder still held after Stop-ChildProcess: $($_.Exception.Message)" }
+        } finally {
+            if (-not $process.HasExited) { $process.Kill($true); $null = $process.WaitForExit(10000) }
+            $process.Dispose()
+            if ($gc) {
+                if (-not $gc.HasExited) { $gc.Kill(); $null = $gc.WaitForExit(10000) }
+                $gc.Dispose()
             }
         }
     } }
@@ -347,8 +341,30 @@ $SelfTestChecks = @(
         }
     } }
 
+    [pscustomobject]@{ Name = 'trap-before-base'; Body = {
+        # 共通部品が読めない写しの部屋: 子の道具 4 本の trap は元の原因の 1 行と決まった終了コード・最後の行で終わる
+        $dir = Join-Path $script:SelfTestRoot 'base-broken\tools\perf'
+        $null = New-Item -ItemType Directory -Path $dir -Force
+        Copy-Item -Path (Join-Path $PSScriptRoot '*.ps1') -Destination $dir
+        [System.IO.File]::WriteAllText((Join-Path $dir 'perf-tool-base.ps1'), "throw 'base broken'`n")
+        $cases = @(
+            @{ Name = 'invoke-perf-run.ps1'; Args = @('-SelfTest'); Code = 1; Last = $null }
+            @{ Name = 'invoke-cpu-sample.ps1'; Args = @('-Probe'); Code = 1; Last = 'INVOKE-CPU-SAMPLE RESULT probe code=1' }
+            @{ Name = 'check-quiet.ps1'; Args = @('-SelfTest'); Code = 1; Last = 'CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_NG code=1 file=-' }
+            @{ Name = 'check-quiet.ps1'; Args = @('-Stage', 'after'); Code = 4; Last = 'CHECK-QUIET RESULT stage=after verdict=MEASURE_FAILED code=4 file=-' }
+            @{ Name = 'invoke-followup-checks.ps1'; Args = @('-SelfTest'); Code = 1; Last = 'FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code=1 dir=-' }
+        )
+        foreach ($case in $cases) {
+            $r = Invoke-PwshChild -ScriptPath (Join-Path $dir $case.Name) -Arguments $case.Args -Quiet
+            $label = "$($case.Name) $($case.Args -join ' ')"
+            Assert-SelfTest ($r.Code -eq $case.Code) "${label}: exit code $($r.Code) (want $($case.Code)): $(ConvertTo-SelfTestAscii $r.LastLine)"
+            if ($case.Last) { Assert-SelfTest (($r.Out | Select-Object -Last 1) -eq $case.Last) "${label}: last line: $(ConvertTo-SelfTestAscii (($r.Out | Select-Object -Last 1)))" }
+            Assert-SelfTest ([bool]((@($r.Err) -join "`n") -match 'before the shared helpers loaded: base broken')) "${label}: the original cause is lost: $(ConvertTo-SelfTestAscii (@($r.Err) -join ' | '))"
+        }
+    } }
+
     [pscustomobject]@{ Name = 'quiet-after-codes'; Body = {
-        # 走行の後の静かさの確かめ: 3 は 3、4 は 4 でそのまま止まる（確かめ直さない）
+        # 走行の後の静かさの確かめ: 3 は 3、4 と回らなかった子（1・-1）は 4 でそのまま止まる（確かめ直さない）。2 は既定の回数だけ確かめて 2
         function Write-Problem { param([string]$Message) }
         function Write-Info { param([string]$Message) }
         function Start-Sleep { Add-SelfTestCall -Name 'Start-Sleep' }
@@ -361,12 +377,13 @@ $SelfTestChecks = @(
         $script:GoalConfig = $null
         $script:GoalFilePath = $null
         $script:GoalName = 'selftest'
-        foreach ($childCode in @(3, 4)) {
+        foreach ($case in @(@(3, 3, 1), @(4, 4, 1), @(1, 4, 1), @(-1, 4, 1), @(2, 2, ($MEASURE_QUIET_RETRY_MAX_DEFAULT + 1)))) {
             $script:SelfTestCalls.Clear()
+            $childCode = $case[0]
             $code = Get-SelfTestExitCode { Invoke-MeasureQuietAfter -RunDir (Join-Path $script:SelfTestRoot 'run') }
-            Assert-SelfTest ($code -eq $childCode) "check-quiet $childCode -> exit $code (want $childCode)"
+            Assert-SelfTest ($code -eq $case[1]) "check-quiet $childCode -> exit $code (want $($case[1]))"
             $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' }).Count
-            Assert-SelfTest ($calls -eq 1) "check-quiet $childCode was called $calls times (want 1)"
+            Assert-SelfTest ($calls -eq $case[2]) "check-quiet $childCode was called $calls times (want $($case[2]))"
         }
     } }
 
@@ -496,6 +513,16 @@ $SelfTestChecks = @(
         Invoke-MeasureRun -OutDir (Join-Path $script:SelfTestRoot 'eab-run') -RunProfile 'short' -Build 'release'
         $n = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'build' }).Count
         Assert-SelfTest ($n -eq 0) "Invoke-MeasureRun called the build $n times (want 0)"
+        # 出力先が既に在れば、ビルドする前に 3（既に在る走行のためにビルドしない）
+        foreach ($sub in @('Invoke-SubMeasureBaseline', 'Invoke-SubRankRun', 'Invoke-SubFinal')) {
+            $script:SelfTestCalls.Clear()
+            $script:RunDirArg = Join-Path $script:SelfTestRoot "eab2-$sub"
+            $runDir = if ($sub -eq 'Invoke-SubFinal') { Join-Path $script:RunDirArg 'release' } else { $script:RunDirArg }
+            $null = New-Item -ItemType Directory -Path $runDir -Force
+            $code = Get-SelfTestExitCode { & $sub }
+            $n = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'build' }).Count
+            Assert-SelfTest ($code -eq 3 -and $n -eq 0) "${sub} with an existing out dir: exit $code with $n builds (want 3 and 0)"
+        }
     } }
 
     [pscustomobject]@{ Name = 'final-bindir'; Body = {
@@ -529,6 +556,58 @@ $SelfTestChecks = @(
         foreach ($name in @('check', 'run')) {
             $got = @($script:SelfTestCalls | Where-Object { $_.Name -eq $name } | ForEach-Object { $_.Arguments[0] })
             Assert-SelfTest ($got.Count -eq 1 -and $got[0] -eq $bin) "final $name got -BinDir '$(ConvertTo-SelfTestAscii ($got -join ','))' (want '$(ConvertTo-SelfTestAscii $bin)')"
+        }
+        # builds_final の語は 1 本目を測る前に全部確かめる（2 本目の打ち間違いで 1 本目を捨てない）
+        $script:SelfTestCalls.Clear()
+        $script:BinDirArg = ''
+        $script:BuildExplicit = $false
+        $script:RunDirArg = Join-Path $script:SelfTestRoot 'fb-final-typo'
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[target]`nbuilds_final = [`"release`", `"dvv`"]`n") }
+        $code = Get-SelfTestExitCode { Invoke-SubFinal }
+        $n = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'check', 'run' }).Count
+        Assert-SelfTest ($code -eq 3 -and $n -eq 0) "builds_final with a bad word: exit $code with $n build/check/run calls (want 3 and 0)"
+        $script:SelfTestCalls.Clear()
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[target]`nbuilds_final = [`"release`", `"Release`"]`n") }
+        $code = Get-SelfTestExitCode { Invoke-SubFinal }
+        $n = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'check', 'run' }).Count
+        Assert-SelfTest ($code -eq 3 -and $n -eq 0) "builds_final naming release twice: exit $code with $n build/check/run calls (want 3 and 0)"
+        $script:GoalConfig = $null
+        # 2 本目（dev）の出力先が既に在れば、1 本目を測る前に 3
+        $script:SelfTestCalls.Clear()
+        $script:RunDirArg = Join-Path $script:SelfTestRoot 'fb-final-taken'
+        $null = New-Item -ItemType Directory -Path (Join-Path $script:RunDirArg 'dev') -Force
+        $code = Get-SelfTestExitCode { Invoke-SubFinal }
+        $n = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'check', 'run' }).Count
+        Assert-SelfTest ($code -eq 3 -and $n -eq 0) "final with dev already there: exit $code with $n build/check/run calls (want 3 and 0)"
+    } }
+
+    [pscustomobject]@{ Name = 'shiori-gate'; Body = {
+        # 合否を出す走行は実 SHIORI が関門（偽・無いは 4）。相対比較の走行は警告して続ける。判定器の 0/1 は PASS/FAIL・ほかは 4
+        $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
+        function Write-Info { param([string]$Message) }
+        $run = Join-Path $script:SelfTestRoot 'sg-run'
+        $null = New-Item -ItemType Directory -Path $run -Force
+        $meta = Join-Path $run 'run-meta.txt'
+        foreach ($case in @(@{ Line = 'shiori_helper_present = True'; Abs = 'True'; Rel = $true }, @{ Line = 'shiori_helper_present = false'; Abs = 'exit4'; Rel = $false },
+                            @{ Line = 'other = 1'; Abs = 'exit4'; Rel = $false })) {
+            [System.IO.File]::WriteAllText($meta, "[run]`n$($case.Line)`n")
+            $abs = try { "$(Assert-MeasureShioriHelper -RunDir $run -Absolute)" } catch { if ($_.Exception.Data['ExitCode'] -eq 4) { 'exit4' } else { throw } }
+            Assert-SelfTest ($abs -eq $case.Abs) "'$($case.Line)' -Absolute: $abs (want $($case.Abs))"
+            $script:SelfTestProblems.Clear()
+            $rel = Assert-MeasureShioriHelper -RunDir $run
+            Assert-SelfTest ($rel -eq $case.Rel -and ($script:SelfTestProblems.Count -gt 0) -ne $case.Rel) "'$($case.Line)' relative: $rel with $($script:SelfTestProblems.Count) warnings"
+        }
+        [System.IO.File]::WriteAllText($meta, "[run]`nshiori_helper_present = true`n")
+        [System.IO.File]::WriteAllText((Join-Path $run 'run.log'), "x`n")
+        $script:DryRunMode = $false
+        $script:GoalConfig = $null
+        function Get-MeasurePython { [pscustomobject]@{ Exe = 'python'; Prefix = @() } }
+        function Invoke-PythonChild { param($Python, $Arguments, [switch]$Quiet) New-ChildResult -Code $script:FakeJudge -Out @('judge line') -LastLine 'judge line' }
+        foreach ($pair in @(@(0, 'PASS'), @(1, 'FAIL'), @(2, 'exit4'), @(3, 'exit4'))) {
+            $script:FakeJudge = $pair[0]
+            $got = try { Invoke-MeasureJudge -RunDir $run -Build 'release' } catch { if ($_.Exception.Data['ExitCode'] -eq 4) { 'exit4' } else { throw } }
+            Assert-SelfTest ($got -eq $pair[1]) "judge-perf.py $($pair[0]) -> $got (want $($pair[1]))"
         }
     } }
 
@@ -592,10 +671,22 @@ $SelfTestChecks = @(
             $n = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'run' }).Count
             Assert-SelfTest ($n -eq 0) "ab_sequence $($seq -join ','): $n build/run calls (want 0)"
         }
-        # 正しい並び（A B B A も）は B のビルドまで進む
+        # 正しい並び（A B B A も）は B のビルドまで進む。iteration_build の語は大小を問わず release だけ
         $script:SelfTestSequence = @('a', 'B', 'B', 'A')
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[levels]`niteration_build = `"Release`"`n") }
         $msg = try { Invoke-SubMeasureAb; '<returned>' } catch { $_.Exception.Message }
-        Assert-SelfTest ($msg -eq 'stop-after-build') "ab_sequence a,B,B,A did not reach the B build: $(ConvertTo-SelfTestAscii $msg)"
+        Assert-SelfTest ($msg -eq 'stop-after-build') "ab_sequence a,B,B,A / iteration_build Release did not reach the B build: $(ConvertTo-SelfTestAscii $msg)"
+        Assert-SelfTest ((Get-MeasureAbBuild) -ceq 'release') 'iteration_build Release is not passed on as release'
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[levels]`niteration_build = `"dev`"`n") }
+        $code = Get-SelfTestExitCode { Invoke-SubMeasureAb }
+        Assert-SelfTest ($code -eq 3) "iteration_build dev: exit $code (want 3)"
+        $script:GoalConfig = $null
+        # 走る出力先が既に在れば、B を作る前に 3
+        $script:SelfTestCalls.Clear()
+        $null = New-Item -ItemType Directory -Path (Get-LoopDir -Kind 'iter' -Iter 1 -Leaf 'A1') -Force
+        $code = Get-SelfTestExitCode { Invoke-SubMeasureAb }
+        $n = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'build' }).Count
+        Assert-SelfTest ($code -eq 3 -and $n -eq 0) "existing A1: exit $code with $n B builds (want 3 and 0)"
     } }
 
     [pscustomobject]@{ Name = 'ab-same-exe'; Body = {
@@ -606,7 +697,7 @@ $SelfTestChecks = @(
         function Invoke-MeasureBuildSide {
             param($Side, $BinDir)
             $null = New-Item -ItemType Directory -Path $BinDir -Force
-            [System.IO.File]::WriteAllText((Join-Path $BinDir $MEASURE_FILE_BUILD), "side=B`nexe_sha256=$($script:SelfTestShaB)`n")
+            [System.IO.File]::WriteAllText((Join-Path $BinDir $MEASURE_FILE_BUILD), "side=B`nexe_sha256=$($script:SelfTestShaB)`nhelper=$($script:SelfTestHelperB)`n")
             return $BinDir
         }
         function Test-MeasureExeReady { param($BinDir, $Build) $true }
@@ -623,16 +714,23 @@ $SelfTestChecks = @(
             @{ A = 'aa11'; B = 'bb22'; Dry = $false; Want = 'run' }
             @{ A = '-'; B = '-'; Dry = $false; Want = 'run' }
             @{ A = 'aa11'; B = 'aa11'; Dry = $true; Want = 'run' }
+            @{ A = $null; B = 'bb22'; Dry = $false; Want = 'run' }
+            @{ A = 'aa11'; B = 'bb22'; Dry = $false; Want = 'exit4'; HelperB = 'missing' }
         )
         foreach ($case in $cases) {
             $script:SelfTestCalls.Clear()
             $script:DryRunMode = $case.Dry
             $script:SelfTestShaB = $case.B
-            [System.IO.File]::WriteAllText((Join-Path $binA $MEASURE_FILE_BUILD), "side=A`nexe_sha256=$($case.A)`n")
+            $script:SelfTestHelperB = if ($case.ContainsKey('HelperB')) { $case.HelperB } else { 'built' }
+            # A が $null なら exe_sha256 の行そのものが無い BUILD.txt（比べずに進む）
+            [System.IO.File]::WriteAllText((Join-Path $binA $MEASURE_FILE_BUILD), $(if ($null -eq $case.A) { "side=A`nhelper=built`n" } else { "side=A`nexe_sha256=$($case.A)`nhelper=built`n" }))
             $label = "A=$($case.A) B=$($case.B) dry=$($case.Dry)"
             $got = try { $c = Get-SelfTestExitCode { Invoke-SubMeasureAb }; "exit$c" } catch { $_.Exception.Message }
             $runs = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'run' }).Count
-            if ($case.Want -eq 'exit') {
+            if ($case.Want -eq 'exit4') {
+                # 片側だけヘルパが無ければ走る前に 4
+                Assert-SelfTest ($got -eq 'exit4' -and $runs -eq 0) "${label} helper mismatch: got '$(ConvertTo-SelfTestAscii $got)' with $runs runs (want exit4 and 0 runs)"
+            } elseif ($case.Want -eq 'exit') {
                 Assert-SelfTest ($got -eq 'exit3' -and $runs -eq 0) "${label}: got '$(ConvertTo-SelfTestAscii $got)' with $runs runs (want exit3 and 0 runs)"
             } else {
                 Assert-SelfTest ($got -eq 'stop-at-run') "${label}: got '$(ConvertTo-SelfTestAscii $got)' (want the first run)"
@@ -645,25 +743,4 @@ $SelfTestChecks = @(
 # 回す
 # =============================================================================
 
-$script:SelfTestRoot = Join-Path $repoRoot ('target\perf-loop-tmp\selftest-' + [Guid]::NewGuid().ToString('N'))
-$okCount = 0
-$ngCount = 0
-$null = New-Item -ItemType Directory -Path $script:SelfTestRoot -Force
-try {
-    foreach ($check in $SelfTestChecks) {
-        $script:SelfTestCalls.Clear()
-        try {
-            $null = & $check.Body
-            $okCount++
-        } catch {
-            $ngCount++
-            Write-Info "NG $($check.Name): $(ConvertTo-SelfTestAscii $_.Exception.Message)"
-        }
-    }
-} finally {
-    Remove-Item -LiteralPath $script:SelfTestRoot -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-$code = if ($ngCount -eq 0) { 0 } else { 1 }
-Write-Info "PERF-LOOP-SELFTEST RESULT ok=$okCount ng=$ngCount code=$code"
-exit $code
+Invoke-SelfTestChecks -Checks $SelfTestChecks -Label 'PERF-LOOP-SELFTEST'

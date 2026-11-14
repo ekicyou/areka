@@ -22,7 +22,7 @@ perf-tool-base.ps1（表示・時刻・子の起こし方・目標定義の読�
                        Get-Measure* は $script:GoalConfig.Toml を引く節・鍵の読み口で、
                        呼び手は計測の本体（perf-loop.measure.ps1）＝置き場だけがここ
   出力先の配置       … Get-LoopDir / Resolve-RunDir / Resolve-LoopPath / New-LoopDir / Test-ResumeArtifact
-  preflight の判定   … Get-PreflightCode / Test-GoalTextCharCount（純関数）
+  preflight の判定   … Get-PreflightCode / Test-GoalTextCharCount（純関数）/ Get-PythonVersionText
                        %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\… の唯一の所在
 
 なぜ別ファイルなのか:
@@ -58,8 +58,8 @@ $PERF_LOOP_OUTROOT_SUBDIR = 'areka-diag\perf-loop'
 #: 周（iteration）の出力先に置く小部屋の語彙（design C5 の配置そのもの）。
 $PERF_LOOP_ITER_LEAVES = @('rank', 'A1', 'B1', 'A2', 'B2', 'bin-A', 'bin-B', 'followup')
 
-#: 値が無いことを表す字面（台帳・RESULT 行と同じ）。
-$PERF_LOOP_EMPTY = '-'
+#: 値が無いことを表す字面（台帳・RESULT 行と同じ・所在は perf-tool-base）。
+$PERF_LOOP_EMPTY = $PERF_TOOL_EMPTY
 
 #: 終了コード（入口・測る側・実行体の用意・出力先の扱いが共に使う）
 $EXIT_OK             = 0
@@ -123,8 +123,7 @@ function Resolve-GoalFile {
 }
 
 # 目標定義を読み、道具が要る値だけを取り出す。
-# 返す: Path・Name・SpecDir・LedgerRel・LedgerPath・ResultsDir・JudgeScript・JudgeScriptPath・
-#       JudgeVersion・CheckinMinutes・IdleCpuMaxPct・Toml
+# 返す: Path・Name・SpecDir・LedgerPath・ResultsDir・JudgeScriptPath・JudgeVersion・CheckinMinutes・Toml
 function Get-GoalConfig {
     param(
         [Parameter(Mandatory = $true)][string]$GoalFilePath,
@@ -140,7 +139,10 @@ function Get-GoalConfig {
     $judgeScript = Get-TomlString -Toml $toml -Section 'goal' -Key 'judge_script'
     $judgeVer    = Get-TomlString -Toml $toml -Section 'goal' -Key 'judge_version'
     $checkin     = Get-TomlInt    -Toml $toml -Section 'goal_runtime' -Key 'checkin_minutes'
-    $idleMax     = Get-TomlString -Toml $toml -Section 'target' -Key 'idle_cpu_release_max_pct'
+    # 書いた値を黙って既定へ落とさない（読めなければ 3・Get-MeasureTomlInt と同じ決まり）
+    if ($null -eq $checkin -and $null -ne ($rawCheckin = Get-TomlRaw -Toml $toml -Section 'goal_runtime' -Key 'checkin_minutes')) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [goal_runtime] checkin_minutes cannot be read as an integer: $rawCheckin"
+    }
 
     $ledgerPath = $null
     if ($specDir -and $ledgerRel) {
@@ -155,14 +157,11 @@ function Get-GoalConfig {
         Path            = $GoalFilePath
         Name            = $name
         SpecDir         = $specDir
-        LedgerRel       = $ledgerRel
         LedgerPath      = $ledgerPath
         ResultsDir      = $resultsDir
-        JudgeScript     = $judgeScript
         JudgeScriptPath = $judgePath
         JudgeVersion    = $judgeVer
         CheckinMinutes  = $checkin
-        IdleCpuMaxPct   = $idleMax
         Toml            = $toml
     }
 }
@@ -180,21 +179,29 @@ function Get-MeasureToml {
     return $value
 }
 
+# 鍵が無ければ既定値。鍵は在るのに整数で読めなければ 3 で止める（書いた値を黙って既定へ落とさない）
 function Get-MeasureTomlInt {
     param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [int]$Default)
     if (-not $script:GoalConfig) { return $Default }
     $value = Get-TomlInt -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
-    if ($null -eq $value) { return $Default }
-    return $value
+    if ($null -ne $value) { return $value }
+    $raw = Get-TomlRaw -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -ne $raw) { Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [$Section] $Key cannot be read as an integer: $raw" }
+    return $Default
 }
 
-# 1 行の配列（["A", "B", "A", "B"]）を文字列の配列へ。読めなければ既定値を返す
+# 1 行の配列（["A", "B", "A", "B"]）を文字列の配列へ。鍵が無ければ既定値
 # （目標定義ファイルは配列を 1 行に保つ決まり＝tasks.md Implementation Notes (5.1)）。
+# 鍵は在るのに 1 行の配列として読めない・空の配列なら 3 で止める（どの呼び手も空の集合では回せない）。
 function Get-MeasureTomlArray {
     param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [string[]]$Default)
     if (-not $script:GoalConfig) { return $Default }
+    $raw = Get-TomlRaw -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -eq $raw) { return $Default }
     $items = Get-TomlStringArray -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
-    if ($null -eq $items -or $items.Count -eq 0) { return $Default }
+    if ($null -eq $items -or $items.Count -eq 0) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [$Section] $Key must be a non-empty one-line array of strings: $raw"
+    }
     return $items
 }
 
@@ -270,13 +277,15 @@ function Get-LoopDir {
     return $path
 }
 
-# 出力先の名前に使う日付（既定は実行日のローカル時刻・yyyyMMdd）。
-# -Date で上書きできるのは、同じ日付の出力先を後から作り直す／試験で決定論にするため。
+# 出力先の名前に使う日付（既定は最初に聞かれた時のローカル時刻・yyyyMMdd）。1 回の呼び出しの中では
+# 一度決めたら変えない（日付をまたぐ final の走行フォルダと結果の写し先が別の日付にならない）。
+# 入口の -Date（$script:DateStamp）で上書きできるのは、同じ日付の出力先を後から作り直す／試験で決定論にするため。
+# 決めた今日は $script:LoopDateToday に置く（$script:DateStamp は「-Date が渡された」の印でもあるので書き替えない）。
+$script:LoopDateToday = $null
 function Get-LoopDateStamp {
-    param([string]$Date)
-    if ($Date) { return $Date }
     if ($script:DateStamp) { return $script:DateStamp }
-    return (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture)
+    if (-not $script:LoopDateToday) { $script:LoopDateToday = (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture) }
+    return $script:LoopDateToday
 }
 
 # 走行の出力先を決める唯一の口。-RunDir が与えられていればそれを使い（既定の配置の外へ
@@ -337,16 +346,34 @@ function Get-SamplingProbe {
     $result = Invoke-PwshChild -ScriptPath $path -Arguments @('-Probe') -Quiet
     $probe = [pscustomobject]@{ Available = $false; Reason = 'probe_failed'; Elevated = $false; XperfPath = $null; Code = $result.Code; Lines = $result.Lines }
     # -Probe は必ず 0 で返る約束。非ゼロは道具自身の異常
-    if ($result.Code -ne 0) { return $probe }
-    foreach ($line in $result.Lines) {
-        if ($line -match '^available=(true|false) reason=(\S+) elevated=(true|false) xperf_path=(.+)$') {
-            $probe.Available = ($Matches[1] -eq 'true')
-            $probe.Reason    = $Matches[2]
-            $probe.Elevated  = ($Matches[3] -eq 'true')
-            $probe.XperfPath = if ($Matches[4] -eq '-') { $null } else { $Matches[4] }
+    $read = $false
+    if ($result.Code -eq 0) {
+        foreach ($line in $result.Lines) {
+            if ($line -match '^available=(true|false) reason=(\S+) elevated=(true|false) xperf_path=(.+)$') {
+                $probe.Available = ($Matches[1] -eq 'true')
+                $probe.Reason    = $Matches[2]
+                $probe.Elevated  = ($Matches[3] -eq 'true')
+                $probe.XperfPath = if ($Matches[4] -eq '-') { $null } else { $Matches[4] }
+                $read = $true
+            }
         }
     }
+    # 昇格と xperf の値もこの 1 行が唯一の出どころなので、読めなかった訳を黙って落とさない
+    if (-not $read) { Write-Problem "[perf-loop] warning: invoke-cpu-sample.ps1 -Probe failed (exit code $($result.Code)): $($result.LastLine) - elevated and xperf are reported as false." }
     return $probe
+}
+
+# python の版を「3.13.15」の形で得る（読めなければ $null）。
+function Get-PythonVersionText {
+    param([pscustomobject]$Python)
+    if (-not $Python) { return $null }
+    $result = Invoke-Child -Exe $Python.Exe -Arguments (@($Python.Prefix) + @('-c', 'import sys;print("%d.%d.%d" % sys.version_info[:3])')) -Quiet
+    # 標準出力の最後の行だけ（python の警告は標準エラーに出るので混ぜない）
+    $out = @($result.Out | Where-Object { $_ })
+    if ($result.Code -ne 0 -or $out.Count -eq 0) { return $null }
+    $last = $out[-1].Trim()
+    if ($last -match '^\d+\.\d+') { return $last }
+    return $null
 }
 
 # preflight の合否（純関数）。順に見て最初に落ちたものを理由にする:

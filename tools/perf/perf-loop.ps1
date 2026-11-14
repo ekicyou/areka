@@ -114,8 +114,11 @@ param(
     # 目標定義ファイルを直接指定する（-Goal の代わり。試験・別所在用）
     [string]$GoalFile,
 
-    # 周番号（iter-<n> の <n>）。周の作業場を使うサブコマンドが読む
-    [int]$Iter = 0,
+    # 周番号（iter-<n> の <n>）。周の作業場を使うサブコマンドが読む。
+    # 字で受けて入口で整数にする（型の変換の失敗を PowerShell の束ねに任せると RESULT 行の無い 1 になる）。
+    # shortcut: 値の無い '-Iter' と同じ名前の 2 度の指定は、なお束ねの段で RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
+    # 呼び手（スキル・エージェント）が手で打つ形でそうなるようになったら、引数を全部受け皿で受けて自分で解く形にする
+    [string]$Iter = '0',
 
     # 走行の出力先を直接指定する（既定の配置を使わないとき）
     [string]$RunDir,
@@ -147,7 +150,11 @@ param(
 
     # **試験専用**。areka を起動せず、配管（出力先・-Resume・RESULT 行）だけを確かめる。
     # 静寂確認・cargo build・サンプリング・追随チェックも行わない（測定にはならない）
-    [switch]$DryRun
+    [switch]$DryRun,
+
+    # 知らない引数・余った位置引数の受け皿（打ち間違いを 3 と RESULT 行で返すため。使い道はほかに無い）
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$UnknownArgs
 )
 
 # 想定外の失敗は理由の 1 行と RESULT 行で 4（道具の不具合）。共通部品を読み込む前なら自分で RESULT 行を出す。
@@ -167,7 +174,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION             = '1.0.0'
+$SCRIPT_VERSION             = '1.1.0'
 $CHECKIN_DEFAULT_MINUTES    = 30
 $CHECKIN_WARN_BELOW_MINUTES = 25
 $CHECKIN_ENV_NAME           = 'CLAUDE_CODE_GOAL_CHECKIN_MINUTES'
@@ -386,16 +393,6 @@ function Invoke-SubSelfTest {
 # 能力確認（preflight）
 # =============================================================================
 
-# python の版を「3.13.15」の形で得る（読めなければ $null）。
-function Get-PythonVersionText {
-    param([pscustomobject]$Python)
-    if (-not $Python) { return $null }
-    $result = Invoke-Child -Exe $Python.Exe -Arguments (@($Python.Prefix) + @('-c', 'import sys;print("%d.%d.%d" % sys.version_info[:3])')) -Quiet
-    if ($result.Code -ne 0) { return $null }
-    if ($result.LastLine -match '^\d+\.\d+') { return $result.LastLine }
-    return $null
-}
-
 function Invoke-SubPreflight {
     $dir = New-LoopDir -Path (Get-LoopDir -Kind goal)
     $script:CurrentDir = $dir
@@ -451,7 +448,7 @@ function Invoke-SubPreflight {
             $checkinMinutes = $parsedCheckin
             $checkinSource = 'env'
         } else {
-            $checkinNote = "env var $CHECKIN_ENV_NAME value '$checkinRaw' is not an integer (using the default $CHECKIN_DEFAULT_MINUTES min)"
+            $checkinNote = "env var $CHECKIN_ENV_NAME value '$checkinRaw' is not a positive integer (using the default $CHECKIN_DEFAULT_MINUTES min)"
             $checkinSource = 'default'
         }
     }
@@ -581,11 +578,15 @@ if ($SUBCOMMANDS -notcontains $Sub) {
     Write-Problem "[perf-loop] available subcommands: $($SUBCOMMANDS -join ', ')"
     Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-'
 }
+if ($UnknownArgs) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown arguments: $($UnknownArgs -join ' ')"
+}
 if ($BUILD_KINDS -notcontains $Build) {
     Stop-Run -Code $EXIT_BAD_ARGS -Message "-Build must be $($BUILD_KINDS -join ' or ') (got: '$Build')"
 }
-if ($Iter -lt 0) {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Iter must be 0 or more (got: $Iter)"
+$iterNumber = 0
+if (-not [int]::TryParse($Iter, [Globalization.NumberStyles]::AllowLeadingSign, [Globalization.CultureInfo]::InvariantCulture, [ref]$iterNumber) -or $iterNumber -lt 0) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Iter must be an integer 0 or more (got: '$Iter')"
 }
 if ($Date -and $Date -notmatch '^\d{8}$') {
     Stop-Run -Code $EXIT_BAD_ARGS -Message "-Date must be 8 digits yyyyMMdd (got: '$Date')"
@@ -602,11 +603,15 @@ $GhostRoot   = Resolve-LoopPath $GhostRoot
 $BalloonRoot = Resolve-LoopPath $BalloonRoot
 $GoalFile    = Resolve-LoopPath $GoalFile
 $Ledger      = Resolve-LoopPath $Ledger
+# 明示した -Ledger が無いのは打ち間違い（goal-check を黙って飛ばして緑にしない）
+if ($Ledger -and -not (Test-Path -LiteralPath $Ledger -PathType Leaf)) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "ledger not found: $Ledger (check -Ledger)"
+}
 
 # 計測サブコマンド（perf-loop.measure.ps1）が読む引数。**引数を読む所在はここだけ**に
 # しておく——8 本の本体が $PSBoundParameters や param 変数を直に触ると、どの引数が
 # 効くのかが 8 か所に散るためである。
-$script:IterArg        = $Iter
+$script:IterArg        = $iterNumber   # 整数（-Iter の param は字の型のまま）
 $script:RunDirArg      = $RunDir
 $script:BuildKind      = $Build
 $script:BuildExplicit  = $PSBoundParameters.ContainsKey('Build')
@@ -633,7 +638,8 @@ if (Test-Path -LiteralPath $goalCandidate -PathType Leaf) {
         # -GoalFile で別名のファイルを渡したときは、出力先は定義側の名前に従う
         $script:GoalName = $script:GoalConfig.Name
     }
-} elseif ($Sub -ne $SUB_SELFTEST) {
+} elseif ($Sub -ne $SUB_SELFTEST -or $GoalFile) {
+    # selftest でも、明示した -GoalFile が無いのは打ち間違い（既定の目標で緑にして見逃さない）
     Stop-Run -Code $EXIT_BAD_ARGS -Message "goal definition file not found: $goalCandidate (check -Goal or -GoalFile)"
 }
 

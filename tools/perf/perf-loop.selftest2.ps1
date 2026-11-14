@@ -7,52 +7,11 @@ perf-loop.selftest2.ps1 — perf-loop 側の自分の検査（T2 の 2 本目＝
 呼び方・出力・終了・決まりは perf-loop.selftest.ps1 と同じ（1,000 行の番人のため束ごとに分けた）:
   pwsh -NoProfile -File tools/perf/perf-loop.selftest2.ps1（引数なし）
   赤の検査だけ 'NG <検査の名前>: <理由>'、最後に 'PERF-LOOP-SELFTEST2 RESULT ok=<n> ng=<m> code=<0|1>'。
-  骨組みの助けの関数は 1 本目の写し（このファイルだけで独立して回る）。
+  骨組み（偽物の記録・終了の口・回し方）は perf-loop.selftest-base.ps1 を 1 本目と共に読む。
 ================================================================================
 #>
 
-. (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
-. (Join-Path $PSScriptRoot 'perf-loop.measure.ps1')
-
-# =============================================================================
-# 骨組み（perf-loop.selftest.ps1 の写し・使う分だけ）
-# =============================================================================
-
-$script:SelfTestCalls = [System.Collections.Generic.List[object]]::new()
-
-function Add-SelfTestCall {
-    param([Parameter(Mandatory = $true)][string]$Name, [object[]]$Arguments = @())
-    $script:SelfTestCalls.Add([pscustomobject]@{ Name = $Name; Arguments = @($Arguments) })
-}
-
-# 終了の口の偽物: 本物の exit で検査が終わらないよう、終了コードを持った例外を投げる
-function Exit-WithResult {
-    param([Parameter(Mandatory = $true)][int]$Code, [string]$Sub, [string]$Dir)
-    Add-SelfTestCall -Name 'Exit-WithResult' -Arguments @($Code, $Sub, $Dir)
-    $ex = [System.Exception]::new("Exit-WithResult code=$Code")
-    $ex.Data['ExitCode'] = $Code
-    throw $ex
-}
-
-function Assert-SelfTest {
-    param([bool]$Condition, [string]$Reason)
-    if (-not $Condition) { throw $Reason }
-}
-
-function ConvertTo-SelfTestAscii {
-    param([string]$Text)
-    return (($Text -replace '\s*\r?\n\s*', ' ') -replace '[^\x20-\x7E]', '?')
-}
-
-function Get-SelfTestExitCode {
-    param([Parameter(Mandatory = $true)][scriptblock]$Script)
-    try { $null = & $Script }
-    catch {
-        if ($_.Exception.Data.Contains('ExitCode')) { return [int]$_.Exception.Data['ExitCode'] }
-        throw
-    }
-    return $null
-}
+. (Join-Path $PSScriptRoot 'perf-loop.selftest-base.ps1')
 
 # 段③の束の偽物（検査の中で . $SelfTestRankRunFakes として読む）。部品の呼ばれた順を Add-SelfTestCall に残す。
 # ランナーの答えは $script:FakeRunner の頭から 1 つずつ（最後の 1 つは使い回す）、-Stop の答えは $script:FakeStop
@@ -115,6 +74,7 @@ $SelfTestFollowupFakes = {
     function Write-Info { param([string]$Message) }
     function Invoke-MeasureCargo { param($Arguments, $Label) Add-SelfTestCall -Name 'cargo'; New-ChildResult -Code 1 -LastLine 'fake cargo' }
     function Get-NarSamplePath { param($Sample, $Key) Add-SelfTestCall -Name 'sample'; [pscustomobject]@{ Ok = $true; Value = 'C:\x'; Message = '' } }
+    function Sync-MeasureShioriHelper { param($BinDir, $Build) Add-SelfTestCall -Name 'helper' -Arguments @($BinDir) }
     function Invoke-PwshChild {
         param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
         Add-SelfTestCall -Name 'child' -Arguments $Arguments
@@ -231,6 +191,7 @@ $SelfTestChecks = @(
         $note = Join-Path $root 'note'
         $null = New-Item -ItemType Directory -Path $note
         Write-MeasureSamplingNote -RunDir $note -Available $false -Reason 'dry_run'
+        $script:DryRunMode = $false   # 後の検査へ持ち越さない
         Assert-SelfTest (-not (Test-Path -LiteralPath (Join-Path $note 'sampling.txt'))) '-DryRun wrote sampling.txt'
     } }
 
@@ -262,6 +223,16 @@ $SelfTestChecks = @(
         try { $null = Get-LoopDir -Kind 'iter' -Iter 0 @o } catch { $threw = $true }
         Assert-SelfTest $threw '-Iter 0 was accepted'
         Assert-SelfTest ((Resolve-RunDir -RunDir 'C:\x\y\' -Kind 'iter') -eq 'C:\x\y') '-RunDir must be used as it is (no trailing \)'
+        # 日付は 1 回の呼び出しの中で一度だけ決まる（日付をまたいでも final の走行と結果の写しが同じ日付）
+        $script:DateStamp = $null
+        $script:LoopDateToday = $null
+        $script:FakeDay = 0
+        function Get-Date { $script:FakeDay++; [datetime]::new(2026, 11, 14 + $script:FakeDay) }
+        $first = Get-LoopDir -Kind 'final' @o
+        $second = Get-LoopDateStamp
+        Assert-SelfTest ($first -eq 'C:\out\g\final-20261115' -and $second -eq '20261115') "date moved within one call: '$first' then '$second'"
+        Assert-SelfTest ($null -eq $script:DateStamp) 'deciding today set the -Date mark'
+        $script:LoopDateToday = $null
     } }
 
     # -------------------------------------------------------------------------
@@ -310,6 +281,21 @@ $SelfTestChecks = @(
         $r = Invoke-PwshChild -ScriptPath $entry -Arguments ($base + @('-Goal', 'draw-load-parity')) -Quiet
         Assert-SelfTest ($r.Code -eq 3) "explicit -Goal with -GoalFile: code $($r.Code) (want 3): $(ConvertTo-SelfTestAscii $r.LastLine)"
         Assert-SelfTest ([bool](@($r.Err) -match '-Goal and -GoalFile')) "no reason line naming -Goal and -GoalFile: $(ConvertTo-SelfTestAscii (@($r.Err) -join ' | '))"
+    } }
+
+    [pscustomobject]@{ Name = 'bad-params'; Body = {
+        # 読めない -Iter・知らない引数・余った位置引数は、PowerShell の束ねの失敗（RESULT 行の無い 1）でなく 3 と RESULT 行
+        $entry = Join-Path $PSScriptRoot 'perf-loop.ps1'
+        $out = Join-Path $script:SelfTestRoot 'out-bad'
+        # selftest でも、明示した -GoalFile が無いのは 3（既定の目標で緑にしない）
+        $missing = Join-Path $script:SelfTestRoot 'no-such-goal.toml'
+        foreach ($bad in @(@('rank-run', '-Iter', 'x'), @('rank-run', '-Iterr', '3'), @('rank-run', '3'), @('selftest', '-GoalFile', $missing),
+                           @('preflight', '-Ledger', (Join-Path $script:SelfTestRoot 'no-such-ledger.md')))) {
+            $r = Invoke-PwshChild -ScriptPath $entry -Arguments ($bad + @('-DryRun', '-OutRoot', $out)) -Quiet
+            $label = $bad -join ' '
+            Assert-SelfTest ($r.Code -eq 3) "${label}: code $($r.Code) (want 3): $(ConvertTo-SelfTestAscii $r.LastLine)"
+            Assert-SelfTest (($r.Out | Select-Object -Last 1) -eq "PERF-LOOP RESULT $($bad[0]) code=3 dir=-") "${label}: last line $(ConvertTo-SelfTestAscii (($r.Out | Select-Object -Last 1)))"
+        }
     } }
 
     [pscustomobject]@{ Name = 'relative-paths'; Body = {
@@ -380,8 +366,13 @@ $SelfTestChecks = @(
                Want = @{ Available = $false; Reason = 'no_xperf'; Elevated = $true; XperfPath = $null } }
             @{ Lines = @('error: boom'); Code = 1
                Want = @{ Available = $false; Reason = 'probe_failed'; Elevated = $false; XperfPath = $null } }
+            @{ Lines = @('available=maybe'); Code = 0
+               Want = @{ Available = $false; Reason = 'probe_failed'; Elevated = $false; XperfPath = $null } }
         )
+        $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
         foreach ($case in $cases) {
+            $script:SelfTestProblems.Clear()
             $script:ProbeFake = $case
             function Invoke-PwshChild { param($ScriptPath, $Arguments, [switch]$Quiet)
                 Add-SelfTestCall -Name 'Invoke-PwshChild' -Arguments @($Arguments)
@@ -390,6 +381,9 @@ $SelfTestChecks = @(
             foreach ($k in $case.Want.Keys) {
                 Assert-SelfTest ($p.$k -eq $case.Want[$k]) "line '$(ConvertTo-SelfTestAscii $case.Lines[0])': $k = '$($p.$k)' (want '$($case.Want[$k])')"
             }
+            # 読めなかったときだけ訳を 1 行出す
+            $warned = [bool](@($script:SelfTestProblems) -match '-Probe failed')
+            Assert-SelfTest ($warned -eq ($case.Want.Reason -eq 'probe_failed')) "line '$(ConvertTo-SelfTestAscii $case.Lines[0])': warning printed = $warned"
         }
         $args = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' } | ForEach-Object { $_.Arguments -join ' ' })
         Assert-SelfTest (($args | Sort-Object -Unique) -join ',' -eq '-Probe') "Get-SamplingProbe passed '$($args -join ',')' (want -Probe)"
@@ -434,7 +428,7 @@ $SelfTestChecks = @(
             @{ Name = 'quiet-after-4'; Runner = @('0|0 ok'); Stop = $stopOk; Quiet = 4; Exit = 4; Stops = 1; Runs = 1 }
             @{ Name = 'retake'; Runner = @('1|0 ok', '0|0 ok'); Stop = $stopOk; Quiet = 0; Exit = 0; Stops = 1; Runs = 2 }
             @{ Name = 'stop-not-started'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code -1 -Err @('pwsh not found') -LastLine 'pwsh not found'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1; Want = 'xperf -stop' }
-            @{ Name = 'stop-failed'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code 1 -Err @('error: boom') -LastLine 'error: boom'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1 }
+            @{ Name = 'stop-failed'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code 1 -Err @('error: boom') -LastLine 'error: boom'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1; Want = 'xperf -stop' }
             @{ Name = 'runner-failed'; Runner = @('1|0 ok'); Stop = $stopOk; Quiet = 0; Exit = 4; Stops = 0; Runs = 2 }
             @{ Name = 'not-started'; Runner = @('0|5 not_elevated'); Stop = $stopOk; Quiet = 0; Exit = 0; Stops = 0; Runs = 1 }
         )
@@ -528,6 +522,22 @@ $SelfTestChecks = @(
         Assert-SelfTest ($code -eq 0) "exit $code (want 0)"
         $order = Get-SelfTestCallOrder
         Assert-SelfTest ($order -eq '') "external calls under -Resume: '$order' (want none)"
+        # -DryRun でも済んだ判定へ印を置かずに 3。済んでいない出力先の -DryRun は印だけで外を何も呼ばない
+        $script:SelfTestCalls.Clear()
+        $script:ResumeMode = $false
+        $script:DryRunMode = $true
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        Assert-SelfTest ($code -eq 3 -and -not (Test-Path -LiteralPath (Join-Path $dir 'DRY-RUN.txt'))) "finished folder with -DryRun: exit $code (want 3, no mark)"
+        $script:IterArg = 2
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        Assert-SelfTest ($code -eq 0 -and (Get-SelfTestCallOrder) -eq '') "-DryRun: exit $code, calls '$(Get-SelfTestCallOrder)' (want 0 and none)"
+        $script:IterArg = 1
+        $script:DryRunMode = $false
+        # -Resume が無ければ済んだ判定を消さずに 3
+        $script:SelfTestCalls.Clear()
+        $script:ResumeMode = $false
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        Assert-SelfTest ($code -eq 3 -and (Get-SelfTestCallOrder) -eq '' -and (Test-Path -LiteralPath (Join-Path $dir 'followup-verdict.txt'))) "finished folder without -Resume: exit $code, calls '$(Get-SelfTestCallOrder)' (want 3, none, verdict kept)"
     } }
 
     [pscustomobject]@{ Name = 'followup-retry-on-1'; Body = {
@@ -536,6 +546,7 @@ $SelfTestChecks = @(
         $binB = Join-Path (Get-LoopDir -Kind 'iter' -Iter 1) 'bin-B'
         $null = New-Item -ItemType Directory -Path $binB -Force
         [System.IO.File]::WriteAllText((Join-Path $binB 'areka.exe'), 'x')
+        [System.IO.File]::WriteAllText((Join-Path $binB 'BUILD.txt'), "side=B`ndry_run=false`n")
         $cases = @(
             @{ Name = '1-then-judged'; Answers = @('1|abort', '0|judged'); Exit = 0; Calls = 2 }
             @{ Name = '1-twice'; Answers = @('1|abort', '1|abort'); Exit = 4; Calls = 2 }
@@ -547,11 +558,250 @@ $SelfTestChecks = @(
             $code = Get-SelfTestExitCode { Invoke-SubFollowup }
             Assert-SelfTest ($code -eq $case.Exit) "$($case.Name): exit $code (want $($case.Exit))"
             $order = Get-SelfTestCallOrder
-            $want = (@('sample', 'sample') + @(1..$case.Calls | ForEach-Object { 'child' })) -join ','
+            $want = (@('helper', 'sample', 'sample') + @(1..$case.Calls | ForEach-Object { 'child' })) -join ','
             Assert-SelfTest ($order -eq $want) "$($case.Name): calls '$order' (want '$want')"
             $bin = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'child' })[0].Arguments)
             Assert-SelfTest ($bin[[array]::IndexOf($bin, '-BinDir') + 1] -eq $binB) "$($case.Name): -BinDir is not bin-B: $(ConvertTo-SelfTestAscii ($bin -join ' '))"
         }
+    } }
+
+    [pscustomobject]@{ Name = 'followup-exe-choice'; Body = {
+        # 実行体: -BinDir があればそれ（ビルドしない）・揃った bin-B があればそれ（ビルドしない）・
+        # bin-B が無いか -DryRun の写しなら作業ツリーからビルドして target\release（13）
+        . $SelfTestFollowupFakes
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) Add-SelfTestCall -Name 'build' }
+        $binB = Join-Path (Get-LoopDir -Kind 'iter' -Iter 1) 'bin-B'
+        $given = Join-Path $script:SelfTestRoot 'fec-given'
+        $target = Get-MeasureBinDir -Build 'release'
+        $cases = @(
+            @{ Name = 'bindir'; BinDir = $given; Build = $null; Want = $given; Helper = $given; Calls = 'helper,sample,sample,child' }
+            @{ Name = 'bin-b'; BinDir = ''; Build = "dry_run=false`n"; Want = $binB; Helper = $binB; Calls = 'helper,sample,sample,child' }
+            @{ Name = 'bin-b-dryrun'; BinDir = ''; Build = "dry_run=true`n"; Want = $target; Helper = ''; Calls = 'build,helper,sample,sample,child' }
+            @{ Name = 'nothing'; BinDir = ''; Build = $null; Want = $target; Helper = ''; Calls = 'build,helper,sample,sample,child' }
+        )
+        foreach ($case in $cases) {
+            $script:SelfTestCalls.Clear()
+            $script:FakeFollowup = @('0|judged')
+            $script:BinDirArg = $case.BinDir
+            Remove-Item -LiteralPath $binB -Recurse -Force -ErrorAction SilentlyContinue
+            if ($null -ne $case.Build) {
+                $null = New-Item -ItemType Directory -Path $binB -Force
+                [System.IO.File]::WriteAllText((Join-Path $binB 'areka.exe'), 'x')
+                [System.IO.File]::WriteAllText((Join-Path $binB 'BUILD.txt'), $case.Build)
+            }
+            $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+            Assert-SelfTest ($code -eq 0) "$($case.Name): exit $code (want 0)"
+            $order = Get-SelfTestCallOrder
+            Assert-SelfTest ($order -eq $case.Calls) "$($case.Name): calls '$order' (want '$($case.Calls)')"
+            $a = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'child' })[0].Arguments)
+            $got = $a[[array]::IndexOf($a, '-BinDir') + 1]
+            Assert-SelfTest ($got -eq $case.Want) "$($case.Name): -BinDir '$(ConvertTo-SelfTestAscii $got)' (want '$(ConvertTo-SelfTestAscii $case.Want)')"
+            # 検査の子へ渡す実行体の隣に 32bit ヘルパをそろえる（target\release は -BinDir 無しの形で）
+            $h = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'helper' })[0].Arguments)[0]
+            Assert-SelfTest ($h -eq $case.Helper) "$($case.Name): helper synced for '$(ConvertTo-SelfTestAscii $h)' (want '$(ConvertTo-SelfTestAscii $case.Helper)')"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'bin-set-stale'; Body = {
+        # 揃った小部屋に -DryRun の写しを数えない。作り直しで写さなかったヘルパと PDB は前の回のものを残さない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Get-MeasureGitFacts { [pscustomobject]@{ Head = 'h'; Dirty = 'false' } }
+        $side = Join-Path $script:SelfTestRoot 'bss-bin'
+        $null = New-Item -ItemType Directory -Path $side -Force
+        [System.IO.File]::WriteAllText((Join-Path $side 'areka.exe'), 'x')
+        Assert-SelfTest (-not (Test-MeasureBinDirComplete -Dir $side)) 'no BUILD.txt counted as complete'
+        [System.IO.File]::WriteAllText((Join-Path $side 'BUILD.txt'), "side=A`ndry_run=true`n")
+        Assert-SelfTest (-not (Test-MeasureBinDirComplete -Dir $side)) 'a -DryRun copy counted as complete'
+        [System.IO.File]::WriteAllText((Join-Path $side 'BUILD.txt'), "side=A`ndry_run=false`n")
+        Assert-SelfTest (Test-MeasureBinDirComplete -Dir $side) 'a real set not counted as complete'
+
+        $repoRoot = Join-Path $script:SelfTestRoot 'bss-repo'
+        $null = New-Item -ItemType Directory -Path (Join-Path $repoRoot 'target\release') -Force
+        [System.IO.File]::WriteAllText((Join-Path $repoRoot 'target\release\areka.exe'), 'new')
+        foreach ($f in @($MEASURE_HELPER_EXE, $MEASURE_AREKA_PDB)) { [System.IO.File]::WriteAllText((Join-Path $side $f), 'old') }
+        function Invoke-MeasureCargo { param($Arguments, $Label) New-ChildResult -Code $(if ($Arguments -contains $MEASURE_HELPER_PACKAGE) { 1 } else { 0 }) -LastLine 'fake' }
+        $script:DryRunMode = $false
+        $script:ResumeMode = $false
+        $script:GoalConfig = $null
+        $null = Invoke-MeasureBuildSide -Side 'A' -BinDir $side
+        $left = @(@($MEASURE_HELPER_EXE, $MEASURE_AREKA_PDB) | Where-Object { Test-Path -LiteralPath (Join-Path $side $_) })
+        Assert-SelfTest ($left.Count -eq 0) "stale files left in the set: $($left -join ', ')"
+        $build = [System.IO.File]::ReadAllText((Join-Path $side 'BUILD.txt'))
+        Assert-SelfTest ($build.Contains("helper=missing`n") -and $build.Contains("helper_sha256=-`n") -and $build.Contains("pdb=no_pdb`n")) "BUILD.txt: $(ConvertTo-SelfTestAscii $build)"
+        # helper=missing と書く小部屋には、共有の元のヘルパを写さない
+        $srcDir = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET 'release'))
+        $null = New-Item -ItemType Directory -Path $srcDir -Force
+        [System.IO.File]::WriteAllText((Join-Path $srcDir $MEASURE_HELPER_EXE), 'other side')
+        Sync-MeasureShioriHelper -BinDir $side -Build 'release'
+        Assert-SelfTest (-not (Test-Path -LiteralPath (Join-Path $side $MEASURE_HELPER_EXE))) 'the shared helper was copied into a helper=missing set'
+    } }
+
+    [pscustomobject]@{ Name = 'worktree-build-helper'; Body = {
+        # 走行の前のビルドは 32bit ヘルパも作り直す。作れなければ止めずに 1 行で知らせ、古いヘルパ（元と隣の写し）を消す
+        $repoRoot = Join-Path $script:SelfTestRoot 'wbh-repo'
+        $oldSrc = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE)))
+        $oldDest = Join-Path $repoRoot (Join-Path 'target\release' $MEASURE_HELPER_EXE)
+        foreach ($f in @($oldSrc, $oldDest)) { $null = New-Item -ItemType Directory -Path (Split-Path -Parent $f) -Force; [System.IO.File]::WriteAllText($f, 'old') }
+        $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
+        function Write-Info { param([string]$Message) }
+        function Get-MeasureGitFacts { [pscustomobject]@{ Head = 'h'; Dirty = 'false' } }
+        function Get-MeasureSha256 { param($Path) '-' }
+        function Invoke-MeasureCargo { param($Arguments, $Label)
+            Add-SelfTestCall -Name 'cargo' -Arguments $Arguments
+            New-ChildResult -Code $(if ($Arguments -contains $MEASURE_HELPER_PACKAGE) { 1 } else { 0 }) -LastLine 'fake' }
+        $script:DryRunMode = $false
+        Sync-MeasureWorktreeBuild -Build 'release'
+        $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'cargo' })
+        Assert-SelfTest ($calls.Count -eq 2 -and $calls[1].Arguments -contains $MEASURE_HELPER_PACKAGE -and $calls[1].Arguments -contains $MEASURE_HELPER_TARGET) "cargo calls: $($calls.Count) (want the exe, then the helper)"
+        Assert-SelfTest ((@($script:SelfTestProblems) -join ' ') -match 'could not rebuild the 32bit SHIORI helper') 'no warning for the failed helper build'
+        Assert-SelfTest (-not (Test-Path -LiteralPath $oldSrc) -and -not (Test-Path -LiteralPath $oldDest)) 'the old helper was kept after a failed rebuild'
+    } }
+
+    [pscustomobject]@{ Name = 'goal-values-strict'; Body = {
+        # 目標定義: 鍵が無ければ既定値。在るのに読めない値・空の配列は 3（黙って既定へ落とさない）
+        function Write-Problem { param([string]$Message) }
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text (@('[levels]', 'n = 5', 'bad = "120000"', 'arr = ["A", "B"]', 'empty = []', 'multi = [') -join "`n")) }
+        Assert-SelfTest ((Get-MeasureTomlInt -Section 'levels' -Key 'n' -Default 1) -eq 5) 'int'
+        Assert-SelfTest ((Get-MeasureTomlInt -Section 'levels' -Key 'none' -Default 7) -eq 7) 'missing int -> default'
+        Assert-SelfTest ((@(Get-MeasureTomlArray -Section 'levels' -Key 'arr' -Default @('x')) -join ',') -eq 'A,B') 'array'
+        Assert-SelfTest ((@(Get-MeasureTomlArray -Section 'levels' -Key 'none' -Default @('x')) -join ',') -eq 'x') 'missing array -> default'
+        $code = Get-SelfTestExitCode { Get-MeasureTomlInt -Section 'levels' -Key 'bad' -Default 1 }
+        Assert-SelfTest ($code -eq 3) "quoted int: exit $code (want 3)"
+        foreach ($k in 'empty', 'multi') {
+            $code = Get-SelfTestExitCode { Get-MeasureTomlArray -Section 'levels' -Key $k -Default @('x') }
+            Assert-SelfTest ($code -eq 3) "array '$k': exit $code (want 3)"
+        }
+        $script:GoalConfig = $null
+    } }
+
+    [pscustomobject]@{ Name = 'python-read'; Body = {
+        # python の版は標準出力の最後の行だけから読む（警告は標準エラー）。在り処は WindowsApps の別名を最後に回す
+        function Invoke-Child { param($Exe, $Arguments, [switch]$Quiet) New-ChildResult -Code 0 -Out @('3.13.1') -Err @('Warning: something') -LastLine 'Warning: something' }
+        $v = Get-PythonVersionText -Python ([pscustomobject]@{ Exe = 'python'; Prefix = @() })
+        Assert-SelfTest ($v -eq '3.13.1') "python version '$(ConvertTo-SelfTestAscii $v)' (want 3.13.1)"
+        $script:FakeCommands = @{ python = @('C:\Users\x\AppData\Local\Microsoft\WindowsApps\python.exe'); python3 = @(); py = 'C:\Windows\py.exe' }
+        function Get-Command { param([string]$Name, $CommandType, [switch]$All, $ErrorAction)
+            $v = $script:FakeCommands[$Name]
+            foreach ($s in @($v)) { if ($s) { [pscustomobject]@{ Source = $s } } } }
+        $p = Get-PythonCommand
+        Assert-SelfTest ($p.Exe -eq 'C:\Windows\py.exe' -and ($p.Prefix -join ' ') -eq '-3') "with py: $(ConvertTo-SelfTestAscii $p.Exe) (want py -3 before the WindowsApps alias)"
+        $script:FakeCommands['py'] = $null
+        $p = Get-PythonCommand
+        Assert-SelfTest ($p.Exe -like '*\WindowsApps\python.exe') "without py: $(ConvertTo-SelfTestAscii "$($p.Exe)") (want the WindowsApps python as the last choice)"
+    } }
+
+    [pscustomobject]@{ Name = 'ab-resume'; Body = {
+        # measure-ab -Resume: 済んだ走行は使い、済んでいない走行は脇へ退けて採り直す（済んだ走行のために 3 で止めない）
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Test-MeasureBinDirComplete { param($Dir) $true }
+        function Invoke-MeasureBuildSide { param($Side, $BinDir) Add-SelfTestCall -Name 'build'; $BinDir }
+        function Assert-MeasureAbDistinct { param($BinA, $BinB) }
+        function Test-MeasureExeReady { param($BinDir, $Build) $true }
+        function Invoke-MeasureRun { param($OutDir, $RunProfile, $Build, $BinDir, $Label) Add-SelfTestCall -Name 'run' -Arguments @((Split-Path -Leaf $OutDir)) }
+        function Invoke-MeasureQuietAfter { param($RunDir) }
+        function Invoke-MeasureCompareCore { param($IterDir) }
+        $script:DryRunMode = $false
+        $script:ResumeMode = $true
+        $script:GoalConfig = $null
+        $script:GoalName = 'selftest'
+        $script:OutRootPath = Join-Path $script:SelfTestRoot 'abr-out'
+        $script:IterArg = 1
+        $a1 = Get-LoopDir -Kind 'iter' -Iter 1 -Leaf 'A1'
+        $b1 = Get-LoopDir -Kind 'iter' -Iter 1 -Leaf 'B1'
+        $null = New-Item -ItemType Directory -Path $a1, $b1 -Force
+        $full = @{ 'run.log' = 'log'; 'cpu.csv' = 'csv'; 'run-meta.txt' = "[result]`nended_utc = x`n"; 'quiet-after.txt' = "verdict=QUIET`n" }
+        foreach ($f in $full.Keys) { [System.IO.File]::WriteAllText((Join-Path $a1 $f), $full[$f]) }
+        [System.IO.File]::WriteAllText((Join-Path $b1 'run.log'), 'log')
+        $code = Get-SelfTestExitCode { Invoke-SubMeasureAb }
+        $runs = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'run' } | ForEach-Object { $_.Arguments[0] }) -join ','
+        Assert-SelfTest ($code -eq 0 -and $runs -eq 'B1,A2,B2') "exit $code, runs '$runs' (want 0 and B1,A2,B2)"
+        $moved = @(Get-ChildItem -LiteralPath (Split-Path -Parent $b1) -Directory -Filter 'B1-INCOMPLETE-*')
+        Assert-SelfTest ($moved.Count -eq 1) "the incomplete B1 was not moved aside ($($moved.Count) folders)"
+        $script:ResumeMode = $false
+    } }
+
+    [pscustomobject]@{ Name = 'dryrun-keeps-real-set'; Body = {
+        # -DryRun の prepare-ab は、揃った本物の小部屋（A の実行体）を書き替えない
+        function Write-Info { param([string]$Message) }
+        function Write-Problem { param([string]$Message) }
+        $repoRoot = Join-Path $script:SelfTestRoot 'dkr-repo'
+        $null = New-Item -ItemType Directory -Path (Join-Path $repoRoot 'target\release') -Force
+        [System.IO.File]::WriteAllText((Join-Path $repoRoot 'target\release\areka.exe'), 'changed')
+        $side = Join-Path $script:SelfTestRoot 'dkr-bin-A'
+        $null = New-Item -ItemType Directory -Path $side -Force
+        [System.IO.File]::WriteAllText((Join-Path $side 'areka.exe'), 'before')
+        [System.IO.File]::WriteAllText((Join-Path $side 'BUILD.txt'), "side=A`ndry_run=false`n")
+        $script:DryRunMode = $true
+        $script:ResumeMode = $false
+        $null = Invoke-MeasureBuildSide -Side 'A' -BinDir $side
+        $script:DryRunMode = $false
+        Assert-SelfTest ([System.IO.File]::ReadAllText((Join-Path $side 'areka.exe')) -eq 'before') 'the real A executable was overwritten by a -DryRun'
+        Assert-SelfTest ([System.IO.File]::ReadAllText((Join-Path $side 'BUILD.txt')).Contains('dry_run=false')) 'the real BUILD.txt was rewritten by a -DryRun'
+    } }
+
+    [pscustomobject]@{ Name = 'followup-checks-arg'; Body = {
+        # [followup] required は固定語彙の順にそろえて -Checks へ渡る。知らない名前は子を起こさずに 3
+        . $SelfTestFollowupFakes
+        $binB = Join-Path (Get-LoopDir -Kind 'iter' -Iter 1) 'bin-B'
+        $null = New-Item -ItemType Directory -Path $binB -Force
+        [System.IO.File]::WriteAllText((Join-Path $binB 'areka.exe'), 'x')
+        [System.IO.File]::WriteAllText((Join-Path $binB 'BUILD.txt'), "dry_run=false`n")
+        $script:FakeFollowup = @('0|judged')
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[followup]`nrequired = [`"dpi`", `"drag`"]`n") }
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        $a = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'child' })[0].Arguments)
+        $got = $a[[array]::IndexOf($a, '-Checks') + 1]
+        Assert-SelfTest ($code -eq 0 -and $got -eq 'drag,dpi') "required dpi,drag: exit $code, -Checks '$got' (want 0 and drag,dpi)"
+        $script:SelfTestCalls.Clear()
+        Remove-Item -LiteralPath (Join-Path (Get-LoopDir -Kind 'iter' -Iter 1) 'followup') -Recurse -Force -ErrorAction Ignore
+        $script:GoalConfig = [pscustomobject]@{ Toml = (Read-TomlSections -Text "[followup]`nrequired = [`"dpi`", `"bogus`"]`n") }
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        Assert-SelfTest ($code -eq 3 -and -not @($script:SelfTestCalls | Where-Object { $_.Name -eq 'child' }).Count) "unknown check name: exit $code (want 3 and no child)"
+        $script:GoalConfig = $null
+    } }
+
+    [pscustomobject]@{ Name = 'compare-core'; Body = {
+        # 受け入れの判定（perf-compare.py）: 4 本のどれかが無ければ -DryRun では戻り、本番では 4。判定器の 3 は 3・ほかは 4
+        function Write-Info { param([string]$Message) }
+        function Write-Problem { param([string]$Message) }
+        function Get-MeasurePython { [pscustomobject]@{ Exe = 'python'; Prefix = @() } }
+        function Invoke-PythonChild { param($Python, $Arguments, [switch]$Quiet) Add-SelfTestCall -Name 'compare'; New-ChildResult -Code $script:FakeCompare -LastLine 'fake compare' }
+        $script:GoalConfig = $null
+        $iter = Join-Path $script:SelfTestRoot 'cc-iter'
+        $null = New-Item -ItemType Directory -Path $iter -Force
+        $script:DryRunMode = $true
+        $code = Get-SelfTestExitCode { Invoke-MeasureCompareCore -IterDir $iter }
+        Assert-SelfTest ($null -eq $code -and -not @($script:SelfTestCalls).Count) "-DryRun with no runs: exit $code (want none and no compare)"
+        $script:DryRunMode = $false
+        $code = Get-SelfTestExitCode { Invoke-MeasureCompareCore -IterDir $iter }
+        Assert-SelfTest ($code -eq 4) "no runs: exit $code (want 4)"
+        foreach ($n in 'A1', 'A2', 'B1', 'B2') { $d = Join-Path $iter $n; $null = New-Item -ItemType Directory -Path $d -Force; [System.IO.File]::WriteAllText((Join-Path $d 'run.log'), 'x') }
+        foreach ($pair in @(@(3, 3), @(2, 4), @(-1, 4))) {
+            $script:FakeCompare = $pair[0]
+            $code = Get-SelfTestExitCode { Invoke-MeasureCompareCore -IterDir $iter }
+            Assert-SelfTest ($code -eq $pair[1]) "perf-compare.py $($pair[0]) -> exit $code (want $($pair[1]))"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'final-results-date'; Body = {
+        # 判定の写し先の日付は走行の出力先（final-<date>）の日付。合わない名前のときだけ今日（-Date）の日付
+        function Write-Info { param([string]$Message) }
+        $repoRoot = Join-Path $script:SelfTestRoot 'frd-repo'
+        $script:GoalConfig = [pscustomobject]@{ SpecDir = 'spec'; ResultsDir = 'results' }
+        $script:DateStamp = '20261115'
+        foreach ($case in @(@{ Run = 'final-20260101\release'; Want = 'final-20260101' }, @{ Run = 'elsewhere\release'; Want = 'final-20261115' })) {
+            $run = Join-Path $script:SelfTestRoot (Join-Path 'frd' $case.Run)
+            $null = New-Item -ItemType Directory -Path $run -Force
+            [System.IO.File]::WriteAllText((Join-Path $run 'verdict.txt'), 'v')
+            Copy-MeasureVerdictToResults -RunDir $run -Build 'release'
+            $want = Join-Path $repoRoot (Join-Path 'spec\results' (Join-Path $case.Want 'release\verdict.txt'))
+            Assert-SelfTest (Test-Path -LiteralPath $want) "$($case.Run): verdict not copied to $(ConvertTo-SelfTestAscii $want)"
+        }
+        $script:GoalConfig = $null
+        $script:DateStamp = $null
     } }
 
     [pscustomobject]@{ Name = 'followup-verdict-shape'; Body = {
@@ -581,25 +831,4 @@ $SelfTestChecks = @(
 # 回す
 # =============================================================================
 
-$script:SelfTestRoot = Join-Path $repoRoot ('target\perf-loop-tmp\selftest-' + [Guid]::NewGuid().ToString('N'))
-$okCount = 0
-$ngCount = 0
-$null = New-Item -ItemType Directory -Path $script:SelfTestRoot -Force
-try {
-    foreach ($check in $SelfTestChecks) {
-        $script:SelfTestCalls.Clear()
-        try {
-            $null = & $check.Body
-            $okCount++
-        } catch {
-            $ngCount++
-            Write-Info "NG $($check.Name): $(ConvertTo-SelfTestAscii $_.Exception.Message)"
-        }
-    }
-} finally {
-    Remove-Item -LiteralPath $script:SelfTestRoot -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-$code = if ($ngCount -eq 0) { 0 } else { 1 }
-Write-Info "PERF-LOOP-SELFTEST2 RESULT ok=$okCount ng=$ngCount code=$code"
-exit $code
+Invoke-SelfTestChecks -Checks $SelfTestChecks -Label 'PERF-LOOP-SELFTEST2'

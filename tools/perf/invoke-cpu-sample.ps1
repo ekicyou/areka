@@ -116,9 +116,20 @@ param(
     [Parameter(ParameterSetName = 'Start')]
     [int]$ProfIntervalUnits = 0
 )
+# shortcut: 引数なしは None の組で 3 と RESULT 行にするが、モードの必須の引数の欠け（-Stop で -Out 無し）と
+# 2 つのモードの同時指定は PowerShell の束ねの段で RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
+# 呼び手（perf-loop・ランナー）が引数を欠く形で呼ぶようになったら、必須を外して自分で確かめる形にする
 
 # 想定外の失敗は理由の 1 行と RESULT 行で 1
-trap { Stop-Run -Mode $PSCmdlet.ParameterSetName.ToLowerInvariant() -Code $EXIT_RUN_FAILED -Message (Format-UnexpectedError -ErrorRecord $_) }
+trap {
+    # 共通部品より前の失敗（読み込めない）でも元の原因と RESULT 行で 1
+    if (-not (Get-Command -Name 'Stop-Run' -CommandType Function -ErrorAction Ignore)) {
+        [Console]::Error.WriteLine("error: unexpected failure before the shared helpers loaded: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+        [Console]::Out.WriteLine("INVOKE-CPU-SAMPLE RESULT $($PSCmdlet.ParameterSetName.ToLowerInvariant()) code=1")
+        exit 1
+    }
+    Stop-Run -Mode $PSCmdlet.ParameterSetName.ToLowerInvariant() -Code $EXIT_RUN_FAILED -Message (Format-UnexpectedError -ErrorRecord $_)
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
@@ -126,7 +137,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
 
 # ---------------------------------------------------------------- 較正値 ----
-$SCRIPT_VERSION           = '1.0.0'
+$SCRIPT_VERSION           = '1.1.0'
 $XPERF_DEFAULT_PATH       = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
 $PROF_INTERVAL_UNITS      = 1221
 $PROBE_CAPTURE_SEC        = 5
@@ -217,91 +228,107 @@ function Get-StartArguments {
 # 数えるのは Image!Function 列だけである。ThreadStartImage!Function 列はスレッドの
 # 起点であって帰属先ではないので数えない（素朴な文字列検索だと二重に数えてしまう）。
 # 行は 1 行ずつ受ける（-Stop は [IO.File]::ReadLines を渡す＝大きな dump を丸ごと持たない）。
+# 7 分の採取の dump は数百万行になる。PowerShell の行ごとの処理は 1 行あたり 100 マイクロ秒を越えて
+# 関門だけで何時間もかかるので、数える本体は .NET の標準だけの C#（Add-Type・1 回だけ組む）に置く。
+# 比べ方は PowerShell の -eq と同じく大小を区別しない（列名の位置だけは字のまま探す）。
+# C# の中の注釈は ASCII（encoding check の規則 A は here-string の中身も字句として見る）。
 function Measure-ArekaFrames {
     param([System.Collections.Generic.IEnumerable[string]]$Lines)
+    if (-not ('PerfToolDumpCounter' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
-    $result = [pscustomobject]@{
-        SampleCount      = 0    # SampledProfile 行の数
-        StackCount       = 0    # Stack 行の数
-        ArekaFrames      = 0    # Image!Function 列が areka.exe のフレームの数
-        ResolvedFrames   = 0    # 記号が解いてある（関数名が 0x… でない）フレームの数
-        UnresolvedFrames = 0    # 記号が解けていないフレームの数
-        HeaderFound      = $false
-        ThreadIds        = @()  # 行に出てきた ThreadID（重複なし・昇順）
-        Problem          = ''
-    }
-    $headers = @{}   # イベント名 → @{ Names = 列名の配列; ImageIndex = Image!Function の位置 }
-    $seenLine = $false
-    foreach ($raw in $Lines) {
-        $line = $raw.Trim()
-        if (-not $line) { continue }
-        $seenLine = $true
-        if ($line -eq 'BeginHeader' -or $line -eq 'EndHeader') { continue }
-        if ($line.StartsWith('//') -or $line.StartsWith('#')) { continue }
-        if ($line -notmatch ',') { continue }
+public static class PerfToolDumpCounter {
+    sealed class Header { public int Columns; public int ImageIndex; public int TidIndex; }
+    static readonly Regex Hex = new Regex("^0x[0-9a-fA-F]+$", RegexOptions.CultureInvariant);
+    static bool Same(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
 
-        $fields = $line -split ','
-        $name = $fields[0].Trim()
-        if ($name -ne 'SampledProfile' -and $name -ne 'Stack') { continue }
-
-        $trimmed = @($fields | ForEach-Object { $_.Trim() })
-        # 列名行の判別: 2 列目が TimeStamp という語そのもの（データ行はここが数値）。
-        if ($trimmed.Count -ge 2 -and $trimmed[1] -eq 'TimeStamp') {
-            $imageIndex = -1
-            for ($i = $trimmed.Count - 1; $i -ge 0; $i--) {
-                if ($trimmed[$i] -eq 'Image!Function') { $imageIndex = $i; break }
+    // Returns SampleCount, StackCount, ArekaFrames, ResolvedFrames, UnresolvedFrames, ThreadIds (sorted), Problem, SeenLine
+    public static Dictionary<string, object> Count(IEnumerable<string> lines, string target) {
+        long samples = 0, stacks = 0, areka = 0, resolved = 0, unresolved = 0;
+        bool seen = false;
+        string problem = "";
+        var tids = new SortedSet<string>(StringComparer.Ordinal);
+        var headers = new Dictionary<string, Header>(StringComparer.OrdinalIgnoreCase);
+        foreach (string raw in lines) {
+            if (raw == null) continue;
+            string line = raw.Trim();
+            if (line.Length == 0) continue;
+            seen = true;
+            if (Same(line, "BeginHeader") || Same(line, "EndHeader")) continue;
+            if (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("#", StringComparison.Ordinal)) continue;
+            if (line.IndexOf(',') < 0) continue;
+            string[] fields = line.Split(',');
+            string name = fields[0].Trim();
+            bool isSample = Same(name, "SampledProfile");
+            if (!isSample && !Same(name, "Stack")) continue;
+            // Header row: the 2nd column is the word TimeStamp (data rows have a number there)
+            if (fields.Length >= 2 && Same(fields[1].Trim(), "TimeStamp")) {
+                string[] names = new string[fields.Length];
+                for (int i = 0; i < fields.Length; i++) names[i] = fields[i].Trim();
+                var h = new Header { Columns = names.Length, ImageIndex = Array.LastIndexOf(names, "Image!Function"), TidIndex = Array.IndexOf(names, "ThreadID") };
+                headers[name] = h;
+                if (h.ImageIndex < 0) problem = "Image!Function column missing in the " + name + " header row";
+                continue;
             }
-            $headers[$name] = @{ Names = $trimmed; ImageIndex = $imageIndex }
-            $result.HeaderFound = $true
-            continue
+            Header header;
+            if (!headers.TryGetValue(name, out header)) continue;   // events without a header row are not read
+            if (isSample) samples++; else stacks++;
+            // Rust symbols may hold commas inside generics or fn types: re-split only rows with too many columns
+            if (fields.Length > header.Columns) fields = SplitOutside(line, header.Columns);
+            if (header.TidIndex >= 0 && header.TidIndex < fields.Length) {
+                string tid = fields[header.TidIndex].Trim();
+                if (tid.Length > 0) tids.Add(tid);
+            }
+            if (header.ImageIndex < 0) continue;
+            int extra = fields.Length - header.Columns;   // columns still left over go to Image!Function
+            if (extra < 0) continue;
+            string value = (extra == 0 ? fields[header.ImageIndex] : string.Join(",", fields, header.ImageIndex, extra + 1)).Trim();
+            int bang = value.IndexOf('!');
+            if (bang < 0) continue;
+            string module = value.Substring(0, bang).Trim();
+            string func = value.Substring(bang + 1).Trim();
+            // only resolved frames count for the gate (areka.exe!0x... means the PDB did not match)
+            if (Same(module, "Unknown") || module == "??" || Hex.IsMatch(func)) unresolved++;
+            else { resolved++; if (Same(module, target)) areka++; }
         }
+        // Name the missing known header rows (design C9 Risks: exit 4). A dump with SampledProfile but no Stack
+        // would pass silently although no call stack was read
+        var missing = new List<string>();
+        foreach (string known in new[] { "SampledProfile", "Stack" }) { if (!headers.ContainsKey(known)) missing.Add(known); }
+        if (missing.Count > 0) problem = "known header rows missing from dump: " + string.Join("/", missing);
+        var r = new Dictionary<string, object>();
+        r["SampleCount"] = samples; r["StackCount"] = stacks; r["ArekaFrames"] = areka;
+        r["ResolvedFrames"] = resolved; r["UnresolvedFrames"] = unresolved;
+        r["ThreadIds"] = new List<string>(tids).ToArray(); r["Problem"] = problem; r["SeenLine"] = seen;
+        return r;
+    }
 
-        if (-not $headers.ContainsKey($name)) { continue }   # 列名行の無いイベントは読まない
-        if ($name -eq 'SampledProfile') { $result.SampleCount++ } else { $result.StackCount++ }
-
-        $tidIndex = [array]::IndexOf($headers[$name].Names, 'ThreadID')
-        if ($tidIndex -ge 0 -and $tidIndex -lt $fields.Count) {
-            $tid = $fields[$tidIndex].Trim()
-            if ($tid -and $result.ThreadIds -notcontains $tid) { $result.ThreadIds += $tid }
+    // Split only at commas outside brackets (<> () [], the '>' of '->' does not count); plain split if the count is not want
+    static string[] SplitOutside(string line, int want) {
+        var parts = new List<string>();
+        int depth = 0, from = 0;
+        for (int i = 0; i < line.Length; i++) {
+            char ch = line[i];
+            if (ch == '<' || ch == '(' || ch == '[') depth++;
+            else if ((ch == '>' && (i == 0 || line[i - 1] != '-')) || ch == ')' || ch == ']') { if (depth > 0) depth--; }
+            else if (ch == ',' && depth == 0) { parts.Add(line.Substring(from, i - from)); from = i + 1; }
         }
-
-        $idx = $headers[$name].ImageIndex
-        if ($idx -lt 0) { continue }
-        $expected = $headers[$name].Names.Count
-        # Rust の記号は総称型の中にカンマを含み得るので、余った分は Image!Function 側へ寄せる。
-        $extra = $fields.Count - $expected
-        if ($extra -lt 0) { continue }
-        $value = (($fields[$idx..($idx + $extra)]) -join ',').Trim()
-        if (-not $value) { continue }
-
-        $bang = $value.IndexOf('!')
-        if ($bang -lt 0) { continue }
-        $module = $value.Substring(0, $bang).Trim()
-        $func   = $value.Substring($bang + 1).Trim()
-        if ($func -match '^0x[0-9a-fA-F]+$' -or $module -eq 'Unknown' -or $module -eq '??') {
-            $result.UnresolvedFrames++
-        } else {
-            $result.ResolvedFrames++
-        }
-        if ($module -eq $TARGET_MODULE) { $result.ArekaFrames++ }
+        parts.Add(line.Substring(from));
+        return parts.Count == want ? parts.ToArray() : line.Split(',');
     }
-
-    if (-not $seenLine) {
-        $result.Problem = 'dump is empty'
-        return $result
+}
+'@
     }
-
-    # 既知の列名行が欠けていたら、どのイベントの分が無いのかまで言う（design C9 の Risks:
-    # 既知列が無ければ exit 4）。SampledProfile だけ在って Stack が無い dump は、
-    # 呼出スタックが 1 本も読めていないのに黙って通ってしまうので、ここで捕まえる。
-    $missingHeaders = @()
-    foreach ($known in @('SampledProfile', 'Stack')) {
-        if (-not $headers.ContainsKey($known)) { $missingHeaders += $known }
+    $c = [PerfToolDumpCounter]::Count($Lines, $TARGET_MODULE)
+    $result = [pscustomobject]@{
+        SampleCount = $c['SampleCount']; StackCount = $c['StackCount']; ArekaFrames = $c['ArekaFrames']
+        ResolvedFrames = $c['ResolvedFrames']; UnresolvedFrames = $c['UnresolvedFrames']
+        ThreadIds = @($c['ThreadIds']); Problem = $c['Problem']
     }
-    if ($missingHeaders.Count -gt 0) {
-        $result.Problem = "known header rows missing from dump: $($missingHeaders -join '/')"
-    }
-    $result.ThreadIds = @($result.ThreadIds | Sort-Object)
+    if (-not $c['SeenLine']) { $result.Problem = 'dump is empty' }
     return $result
 }
 
@@ -365,11 +392,10 @@ function Invoke-StartMode {
         try { $null = New-Item -ItemType Directory -Path $parent -Force }
         catch { Stop-Run -Mode 'start' -Code $EXIT_BAD_ARGS -Message "could not create the -Etl output folder ${parent}: $($_.Exception.Message)" }
     }
-    $xperf = Get-XperfPath
-    $r = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments (Get-StartArguments -EtlPath $etlFull)
+    $r = Invoke-Child -Exe $probe.XperfPath -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments (Get-StartArguments -EtlPath $etlFull)
     if ($r.Code -ne 0) {
         Stop-Run -Mode 'start' -Code $EXIT_RUN_FAILED `
-            -Message "xperf failed to start capture (exit code $($r.Code)): $($r.Lines -join ' ')"
+            -Message "xperf failed to start capture (exit code $($r.Code)): $($r.Lines -join ' ') - if a kernel logger is still running from an earlier capture (xperf -loggers lists NT Kernel Logger) and no other tool is sampling, run 'xperf -stop' in an elevated PowerShell."
     }
     Write-Info "capture started: $etlFull"
     Write-ResultLine -Mode 'start' -Code $EXIT_OK -Extra "etl=$etlFull"
@@ -407,12 +433,18 @@ function Invoke-StopMode {
     $d = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-d', $merged)
     # 0 でもまとめた先が無ければ通らなかった扱い（元を消すと測った物が残らない）
     if ($d.Code -ne 0 -or -not (Test-Path -LiteralPath $merged -PathType Leaf)) {
-        if (-not (Test-Path -LiteralPath $etlFull -PathType Leaf)) {
+        # -d が落ちたなら採取が止まっていないことがある。-Probe と同じく -stop で必ず止めてから読む
+        if ($d.Code -ne 0) { $null = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-stop') }
+        if (Test-Path -LiteralPath $etlFull -PathType Leaf) {
+            Write-Info "stopping capture (-d) did not produce $merged (exit code $($d.Code)). Reading the existing $etlFull as is."
+            $merged = $etlFull
+        } elseif (Test-Path -LiteralPath $merged -PathType Leaf) {
+            # 前の -Stop がまとめて元を消した後に前提の不備で 3 で止まり、直して打ち直した形。まとめた物を読む
+            Write-Info "no capture to stop and $etlFull is gone. Reading the earlier merged trace $merged."
+        } else {
             Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED `
                 -Message "xperf failed to stop capture and $etlFull does not exist (exit code $($d.Code)): $($d.Lines -join ' ')"
         }
-        Write-Info "stopping capture (-d) did not produce $merged (exit code $($d.Code)). Reading the existing $etlFull as is."
-        $merged = $etlFull
     } elseif (Test-Path -LiteralPath $etlFull -PathType Leaf) {
         Remove-Item -LiteralPath $etlFull -Force   # まとめが通ったら元は要らない（大きい）
     }
@@ -426,7 +458,8 @@ function Invoke-StopMode {
         if (-not $localApp) { Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message 'could not resolve the default symbol cache location (LOCALAPPDATA). Pass -SymCache explicitly.' }
         $SymCache = Join-Path $localApp $DEFAULT_SYMCACHE_SUBDIR
     }
-    $null = New-Item -ItemType Directory -Path $SymCache -Force -ErrorAction SilentlyContinue
+    try { $null = New-Item -ItemType Directory -Path $SymCache -Force -ErrorAction Stop }
+    catch { Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "could not create the -SymCache folder ${SymCache}: $($_.Exception.Message)" }
 
     # ⒝ 記号解決の道筋を子プロセスへ渡し、テキスト dump を書き出す
     $savedSymbolPath = $env:_NT_SYMBOL_PATH
@@ -452,11 +485,12 @@ function Invoke-StopMode {
             -Extra "dump=$outFull sample_count=$($stats.SampleCount) stack_rows=$($stats.StackCount)"
     }
     if ($stats.ArekaFrames -lt 1) {
-        $why = if ($stats.Problem) { " ($($stats.Problem))" } else { '' }
         Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED `
-            -Message "no symbols resolved (0 areka.exe! frames)$why - dump=$outFull sample_count=$($stats.SampleCount). Build release with the environment variable CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and check that -PdbDir has the PDB." `
+            -Message "no symbols resolved (0 areka.exe! frames) - dump=$outFull sample_count=$($stats.SampleCount). Build release with the environment variable CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and check that -PdbDir has the PDB." `
             -Extra "dump=$outFull sample_count=$($stats.SampleCount) areka_frames=0"
     }
+    # 関門を通ったらまとめたトレース（大きい）は要らない。読んだのが元の ETL なら残す（まとめに失敗した証拠）
+    if ($merged -ne $etlFull) { Remove-Item -LiteralPath $merged -Force -ErrorAction Ignore }
     $summary = "sample_count=$($stats.SampleCount) areka_frames=$($stats.ArekaFrames) dump=$outFull"
     Write-Info $summary
     Write-ResultLine -Mode 'stop' -Code $EXIT_OK `
@@ -586,6 +620,25 @@ function Test-FakeXperfModes {
         if ($r.Code -ne $EXIT_RUN_FAILED -or $calls.Count -ne 1 -or -not (Test-Path -LiteralPath $badEtl) -or $last -notlike 'INVOKE-CPU-SAMPLE RESULT cancel code=1 *' -or -not ($r.Err -match 'xperf')) {
             $failures += "cancel-mode: failing xperf -stop gave exit code $($r.Code) (want $EXIT_RUN_FAILED), $($calls.Count) call(s), etl kept=$(Test-Path -LiteralPath $badEtl), last line '$last'"
         }
+
+        # stop-merge-fails: -d が落ちたら -stop で採取を止めてから元の ETL を読みにいく（ここでは -i も落ちて 1）
+        $badPdb = Join-Path $badRoom.Data 'pdb dir'
+        $null = New-Item -ItemType Directory -Path $badPdb -Force
+        $r = Invoke-SelfWithFakeXperf -Room $badRoom -Arguments @('-Stop', '-Etl', $badEtl, '-Out', (Join-Path $badRoom.Data 'dump.txt'), '-PdbDir', $badPdb, '-SymCache', (Join-Path $badRoom.Data 'sym'))
+        $calls = Read-FakeXperfCalls -Room $badRoom
+        $order = ($calls | ForEach-Object { $_.Args[0] }) -join ','
+        $readFrom = if ($calls.Count -gt 2) { $calls[2].Args[1] } else { '' }
+        if ($r.Code -ne $EXIT_RUN_FAILED -or $order -ne '-d,-stop,-i' -or $readFrom -ne $badEtl) {
+            $failures += "stop-merge-fails: exit code $($r.Code) (want $EXIT_RUN_FAILED), xperf calls '$order' (want -d,-stop,-i), -i read '$readFrom' (want $badEtl)"
+        }
+        # 元の ETL が無く前のまとめが残っていれば（直して打ち直した -Stop）、まとめた物を読む
+        Remove-Item -LiteralPath $badEtl -Force
+        $badMerged = [System.IO.Path]::ChangeExtension($badEtl, '.merged.etl')
+        [IO.File]::WriteAllText($badMerged, 'merged')
+        $r = Invoke-SelfWithFakeXperf -Room $badRoom -Arguments @('-Stop', '-Etl', $badEtl, '-Out', (Join-Path $badRoom.Data 'dump.txt'), '-PdbDir', $badPdb, '-SymCache', (Join-Path $badRoom.Data 'sym'))
+        $calls = Read-FakeXperfCalls -Room $badRoom
+        $readFrom = if ($calls.Count -gt 2) { $calls[2].Args[1] } else { '' }
+        if ($readFrom -ne $badMerged) { $failures += "stop-merge-fails: retry without the ETL read '$readFrom' (want $badMerged), exit code $($r.Code)" }
     } finally {
         Remove-Item -LiteralPath $room.Root, $badRoom.Root -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -663,6 +716,28 @@ function Invoke-SelfTestMode {
         $failures += "missing header row: input without the Stack header row was accepted (Problem='$($noStackStats.Problem)')"
     }
     Write-Info "selftest missing header row: problem=$($noStackStats.Problem)"
+
+    # ⒜-4b 記号のカンマ: 総称型のカンマを含む ThreadStartImage!Function と Image!Function でも、数えるのは Image!Function 列。
+    #      列名行に Image!Function が無ければ、記号が無いせいにせず列名行の不備と言う
+    $commaHead = '         SampledProfile,  TimeStamp,     Process Name ( PID),   ThreadID,           PrgrmCtr, CPU, ThreadStartImage!Function,            Image!Function, Count, SampledProfile type'
+    $commaStats = Measure-ArekaFrames -Lines ([string[]]@(
+        $commaHead,
+        '                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function',
+        '         SampledProfile,    1052388,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   areka.exe!std::thread::spawn<closure$0, ()>,   areka.exe!drop_in_place<(u32, u64)>,     1,     1',
+        '                  Stack,    1052388,      18332,   1, 0x00007ff6c4a91b30,       areka.exe!core::iter::Map<A, fn(u8, u8) -> u8>::next',
+        # 括りが閉じない記号（C++ の operator<）の行は素直に割り直し、余りを Image!Function へ寄せて数える
+        '         SampledProfile,    1052390,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   foo.dll!operator<,   areka.exe!f<A, B>,     1,     1'
+    ))
+    if ($commaStats.ArekaFrames -ne 3 -or $commaStats.ResolvedFrames -ne 3 -or ($commaStats.ThreadIds -join ',') -ne '18332' -or $commaStats.Problem) {
+        $failures += "symbol commas: areka_frames=$($commaStats.ArekaFrames) resolved=$($commaStats.ResolvedFrames) tids=$($commaStats.ThreadIds -join ',') problem='$($commaStats.Problem)' (want 3 / 3 / 18332 / none)"
+    }
+    # 記号の解けていない areka.exe!0x… は関門に数えない（PDB の食い違いで 0 件のまま通さない）
+    $hexStats = Measure-ArekaFrames -Lines ([string[]]@($commaHead,
+        '                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function',
+        '         SampledProfile,    1052388,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,   areka.exe!0x00007ff6c4a90000,   areka.exe!0x00007ff6c4a91b30,     1,     1'))
+    if ($hexStats.ArekaFrames -ne 0 -or $hexStats.UnresolvedFrames -ne 1) { $failures += "unresolved areka.exe!0x frame: areka_frames=$($hexStats.ArekaFrames) unresolved=$($hexStats.UnresolvedFrames) (want 0 / 1)" }
+    $noImageStats = Measure-ArekaFrames -Lines ([string[]]@(($commaHead -replace ' Image!Function,', ' Image Function,'), '                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function'))
+    if ($noImageStats.Problem -notmatch 'Image!Function column missing') { $failures += "header without Image!Function: problem='$($noImageStats.Problem)'" }
 
     # ⒜-5 no-args: 引数なしは必須の引数を問わずに 3 と RESULT 行 none で終わる（-NonInteractive の子でも）
     $noArgs = Invoke-PwshChild -ScriptPath $PSCommandPath -Quiet
