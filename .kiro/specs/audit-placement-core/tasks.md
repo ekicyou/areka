@@ -9,7 +9,7 @@
 - 各タスクの `_Dispatch:_` は、`/kiro-impl` が下請けのモデルと手間をそこから選ぶ段（`judgment` は 0 本・`standard` 15 本・`mechanical` 13 本）。
 - 各タスクの終わりに `cargo test -p areka-placement --features test-support` が緑。本体に響くタスクは `cargo test -p areka` も緑。依存を足さず、`Cargo.lock`・`vendors/`・追随の持ち物（`src/follow*`・`src/transition_*`・`placement_tests/transition_*`）に触らない（例外は 2.4 の 1 行だけ）。
 
-- [ ] 1. 着手の確かめ（U1）
+- [x] 1. 着手の確かめ（U1）
   - 先の段の 4 本の着地を `main` の履歴で確かめ、`main` を取り込む。
   - この設計が名指す行を grep し直し、相手の着地で動いた所（`audit-wintf-window` の `WindowHandle.instance` の削除が配置の構築の式に及んだか、`audit-placement-follow` の `move_window_with_route` の変化が `chain_realign.rs`・`dpi_sync_tests.rs` に響いたか、`reestablish_balloon_follow` が置かれたか）を読み替え、赤があればこのタスクで合わせる。
   - まだ走っている兄弟のセッションへ、4.4・4.5・7.1 で変える名前を知らせる。

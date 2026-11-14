@@ -782,3 +782,62 @@
   - 指摘 7（`[[example]]`）: `crates/areka-placement/Cargo.toml` に `[[example]]` の節は無く、追随の側も触っていない。
   - 15 節の件: `BottomSnapPolicy` を指す 4 行（`persist.rs:L227`・`L238`・`persist_restore_tests.rs:L295`・`resolver.rs:L438`）は残っている。
 - 重なる相手のうち、まだ着地していないのは `audit-wintf-input`（指摘 80・タスク 7.2）だけ。指摘 80 を最後にする順は変えない。
+
+## 17. 実装の頭（タスク 1・2026-11-14）
+
+取り込んだ `main`（71594918）の上で、設計が名指す行と 15 節の表の行を grep し直した。ずれは `#461` が窓の構築の式から `instance` の行を消した所の後ろだけ。設計の文は直さず、ここの読み替えで直す。
+
+### 17.1 読み替えた行
+
+| 指摘・件 | 設計の行 | 今の行 |
+|---|---|---|
+| 64 | `spawn_zorder_pair_wiring_tests.rs:L50-L98`（窓を作る道具） | `L50-L93`（`create_test_window` の doc〜`spawn_window`） |
+| 25 | 同 `L133-L153`・`wire_inserts_plan_a_strategy_resource` | `L128-L148` |
+| 64 | `spawn_zorder_chain_wiring_tests.rs:L55-L97`（窓を作る道具） | `L55-L92` |
+| 64 | 同 `L275-L282`（`code_only`） | `L270-L277` |
+| 31 | `zorder_chain_tail_order_tests.rs:L5-L7`・`L48-L74` | 同じ（ずれは `L83` より後ろだけ） |
+| 80 | `balloon_limit_flip_tests.rs:L212-L217`（`fake_handle`） | `L212-L216` |
+| 80 | `balloon_lock_drag_tests.rs:L51-L66`（`SharedFakeIo`・`fake_handle`） | `L51-L65` |
+| 80 | 同 `L264-L266`（`scopes`） | `L263-L265` |
+| 80 | `balloon_limit_flip_tests.rs:L69-L82`・本体の `pt/reset_balloon_pos_tests.rs:L42-L50` | 同じ |
+| U11 | 追随の `pt/transition_judge_verdict.rs:L57`（`DPI_SYNC_HOLD_MAX_FRAMES` を読む所） | `L60`（道は `areka_placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES` のまま） |
+| U11 | `follow.rs:L53`（`BALLOON_LIMIT_CLAMP_TAG`） | `L52` |
+| U28 | 追随の `follow/work_area_clamp.rs:L18` の古い文（「examples は `#[path]` で…」） | 追随の側が直した（今の `L15-L20` に `examples`・`#[path]` の語は無い）。完了の申し送りに書く件は 1 つ減る |
+
+15 節の表の行は、どれも今もある（タスク 2.1・2.2・4.2・4.3・5.1・6.3・6.5・6.6・7.2 で直す）。
+
+- `fake_handle`・`position_of`・`px`: `reseed_test_support.rs:L97`・`L131`、`resolver_test_support.rs:L11`（`px`）、`balloon_limit_tests.rs:L26`・`balloon_limit_gate_tests.rs:L428`（`px`）。
+- `BottomSnapPolicy`: `resolver.rs:L438`・`persist.rs:L227`・`L238`・`persist_restore_tests.rs:L295`。
+- `dpi(v)`: `balloon_offset_persist_roundtrip_tests.rs:L147`。
+- `should_panic`: `dpi_sync_tests.rs:L328-L329`（`cfg_attr` はまだ無い）。
+- `emo2_boot`・`wire_emo2_boot`: 配置の 13 ファイル（本体の `runtime/mod.rs`・`runtime/spine.rs` にもある）。
+- `diag_tests.rs:L107`（`judge-perf.py::parse_fields`）・`diag.rs:L295`・`L308`（「D9 の 6 経路」）。
+- `code_only`: `spawn_zorder_chain_wiring_tests.rs:L271`・`zorder_group_ledger_state_tests.rs:L116`・`test_support.rs:L284`（`zorder_pair_deferred` の中・6.3・6.6 で直す）。`L149` は `measure_template::code_only` で残す。
+- `SharedFakeIo`: `persist_finalize_save_tests.rs:L56`・`persist_io_wiring_tests.rs:L136`・`reset_pos_tests.rs:L63`・`balloon_lock_drag_tests.rs:L51`。
+- `assert_no_event`・`contained`・`point(x, y)`: `balloon_limit_gate_tests.rs:L52`・`L96`・`L438`、`balloon_limit_tests.rs:L53`・`L69`、`balloon_limit_flip_tests.rs:L42`、`placement_windowposition_vocab_tests.rs:L62`。
+
+### 17.2 テスト
+
+取り込んだ `main` の上で `cargo test -p areka-placement --features test-support`・`cargo test -p areka`・`cargo fmt --all -- --check` を回した。直した所は 0。
+
+- 配置の crate: 緑（lib 1011 件が通り、1 件は ignore）。
+- 本体: 3183 件のうち 1 件が赤（`runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`・`spine_third_scope_talk_tests.rs:L154` の「会話が止まった」の待ちの期限切れ）。この 1 件だけを回し直すと緑（3.24 秒）。待ちの期限に依るテストで、全部を並べて回したときの込み具合で揺れたと見る。この spec の範囲（配置）の外で、先の段の 4 本が触ったのも `spine.rs` の import の 1 行（`HINSTANCE` を外す）だけなので、直さない。
+- `cargo fmt --all -- --check`: 緑。
+
+### 17.3 知らせる相手と名前（要件 8.7）
+
+重なる相手のうち、まだ着地していないのは `audit-wintf-input` だけ（今は `brief.md` だけで、下の名前はどれも書いていない）。この相手はまだセッションが動いていないので、知らせは送っていない。この記録を知らせの代わりとし、タスク 4.4・4.5・7.1 で下の名前を変える前に、もう一度名前を確かめる（その時までに相手のセッションが動き出していれば、そこへ伝える）。着地した 4 本（`#458`〜`#461`）へは送らない。
+
+- 4.4（U11・公開を狭める）
+  - `test_support::EMILY_SHAPED_GHOST_DESCRIPT`・`EMILY_SHAPED_SHELL_DESCRIPT` を `pub(crate)` にする。`impl Default for AuthorDpi` を消す。
+  - `source::load_descript_source`・`prepare_ghost_windows_with_work_area` を test-support のときだけにする。
+  - `dpi_sync::{evaluate, DpiSyncDecision, DpiSyncOutcome, DPI_SYNC_HOLD_MAX_FRAMES}`・`balloon_lock::HoldReason`・`balloon_limit::BALLOON_LIMIT_CLAMP_TAG`・根の `PREPARE_GHOST_WINDOWS_CONTEXT` を test-support のときだけ外へ開く（道と名前は同じ）。
+  - `BalloonLockLedger::reason` を関数 `balloon_lock::hold_reason(ledger, scope)` に替える。
+- 4.5（U12）
+  - `areka_placement::work_area_px(monitor)` を足す（crate の中に `square_dpi` も足す）。
+  - `persist::load_restored_state` の引数 `default_encoding` を消す。
+  - `chain_finalize::moved_default_pos` を消す。
+- 7.1（U25）
+  - wintf の `ChainPlan.absent` を `Vec<(u32, char, u32)>` に、`log_chain_absent(group_id, kind, scope)` にする（行の綴りは同じ）。本体の `ZOrderAbsentReports.reported`・`report_absent_elements` も同じ値の型にする。
+  - 根の `Cargo.toml` の `[workspace.dependencies]` に `async-io` を足し、`areka-placement`・`areka`・`wintf` の `Cargo.toml` を `async-io = { workspace = true }` にする（版は同じ・`Cargo.lock` は変わらない）。
+  - 配置の `diag.rs` の私有の `UNKNOWN` を wintf の `transition_diag::MISSING` に替える（私有なので外の名前は変わらない）。
