@@ -16,7 +16,7 @@ use super::super::dpi_sync::{self, HoldSite};
 use super::super::windowposition::scale_signed;
 use super::{
     Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, PlacementRoute,
-    PointPx, SizePx, apply_visibility_guard, follow_balloon, move_window_with_route,
+    PointPx, RectPx, SizePx, apply_visibility_guard, follow_balloon, move_window_with_route,
     project_anchor, rect_at, work_area_for_window,
 };
 
@@ -173,7 +173,16 @@ pub fn apply_char_shift(
     // 置き方の決まりを後から当てる（7.8）: 吸い付き → 作業領域の中への寄せ → 見える範囲の守り。
     let anchor = world.get::<Anchored>(window).map_or(Anchor::Free, |a| a.0);
     let anchored = project_anchor(anchor, raw, size, snapshot);
-    let clamped = clamp_rect_to_work_area(anchored, size, area);
+    // 寄せる先は作業領域と元の矩形を両方含む範囲（端に置いた窓をずれのたびに中へ引き寄せない・
+    // 監査の指摘 5）。元の矩形が作業領域の中なら作業領域そのもの。
+    let origin = rect_at(base, size);
+    let bounds = RectPx {
+        left: area.left.min(origin.left),
+        top: area.top.min(origin.top),
+        right: area.right.max(origin.right),
+        bottom: area.bottom.max(origin.bottom),
+    };
+    let clamped = clamp_rect_to_work_area(anchored, size, bounds);
     let old_rect = Some(rect_at(PointPx { x: pos.x, y: pos.y }, size));
     // 守りの入力は寄せた後の位置（`raw` だと自分の寄せを勝手に飛んだ窓＝OffscreenPull と見誤る）。
     let to = apply_visibility_guard(

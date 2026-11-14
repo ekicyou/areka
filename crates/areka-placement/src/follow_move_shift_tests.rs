@@ -124,6 +124,37 @@ fn a_huge_shift_is_pulled_into_the_work_area_and_zero_returns_to_base() {
     );
 }
 
+/// 作業領域の右端からはみ出して置いた窓（x=1820・幅 200）は、寄せる先が作業領域と元の矩形を
+/// 合わせた範囲なので、ずれ (5,0) でも (0,0) でも中へ引き寄せられない（監査の指摘 5）。
+#[test]
+fn an_edge_window_is_not_pulled_inward_by_a_shift() {
+    let (mut world, window) = char_world(Anchor::Free, 1820, 100);
+
+    assert!(apply_char_shift(
+        &mut world,
+        window,
+        (5, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(
+        position_of(&world, window),
+        Point { x: 1820, y: 100 },
+        "元の矩形の範囲までは寄せない（右へのずれは元の右端で止まる）"
+    );
+
+    assert!(apply_char_shift(
+        &mut world,
+        window,
+        (0, 0),
+        ScaleRatio::ONE
+    ));
+    assert_eq!(
+        position_of(&world, window),
+        Point { x: 1820, y: 100 },
+        "0 で元の位置のまま"
+    );
+}
+
 /// 作者の大きなずれを自分の寄せで作業領域へ戻すのは意図どおりで、勝手に飛んだ窓ではない。
 /// 揃えの有無を問わず `[visibility-guard] OffscreenPull` を出さない（task 8.3 の実機で見つけた件・要件 9.4）。
 #[test]
