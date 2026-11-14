@@ -99,7 +99,7 @@
   - _Dispatch: standard — 走る前の確かめ 2 つの新しい分岐とスキルの 1 段_
   - _Requirements: 3.1, 3.2, 3.4, 4.1, 6.2, 6.6_
 
-- [ ] 6. 段③の採取の始めと終わり
+- [x] 6. 段③の採取の始めと終わり
 - [x] 6.1 (P) 段③の採取の停止の順・取り消し・xperf の呼び方・dump の読み方を直す
   - `-Stop` は最初に `xperf -d` でまとめ、まとめが通ったら元の ETL を消し、前提の確かめと記号の解決はその後（1・29）
   - `-Cancel` を足す: xperf が無ければ 5、`xperf -stop` が 0 なら ETL を消して 0、非ゼロなら理由を標準エラーへ書いて 1（1）
@@ -130,7 +130,7 @@
   - _Depends: 6.1_
   - _Dispatch: standard — 採取の開始と取り消しの配線（順は設計が決めている）_
   - _Requirements: 3.1, 3.4, 4.1, 5.3_
-- [ ] 6.4 `rank-run` の段③の流れを組み替え、理由の語を子の出力から読む
+- [x] 6.4 `rank-run` の段③の流れを組み替え、理由の語を子の出力から読む
   - 流れを「ビルド → 実行体の確かめ → 可否 → ランナー（可否が真なら `-SampleEtl` 付き）→ 採取の開始が報告されたら直ちに `-Stop` → `sampling.txt` → 走行の後の静かさ → 順位表」にし、perf-loop は `-Start` を呼ばない（1・9）
   - `-Stop` の子を起こせなかったときは手で打つ `xperf -stop` を書いた警告の 1 行を出して 4（1）
   - 段③の理由の語は、開始はランナーの 1 行の `reason=`、停止は `-Stop` の RESULT 行の `reason=` から読む（30）
@@ -192,3 +192,4 @@
 - 6.1: `-Stop` は `xperf -d` が 0 でも、まとめた先が無ければ通らなかった扱いにして元の ETL を消さない（レビューの指摘を進行役が直した・偽の xperf は `-d` の先に空のファイルを作る）。この枝そのものの検査は無い。`-SelfTest` の可否の確かめはまだ本物の採取を試す（6.2 で `-SkipCapture`）
 - 6.2: T2 を `perf-loop.selftest.ps1`（20 本）と `perf-loop.selftest2.ps1`（出力先と -Resume の束・入口の束・probe-parse の 9 本）に分け、`perf-loop.ps1 selftest` の期待は ok=12。消す前の grep の件数（wpaexporter ほか）: HEAD で invoke-cpu-sample 22・perf-loop.common 4・perf-loop 5・goals 1 → 後で範囲の中 0（invoke-cpu-sample の `XPERF_DEFAULT_PATH`・`Test-Elevated` の 5 件は段③の採取の唯一の持ち場として残す）。範囲の外に残る `[sampling] backend`（goals の toml・perf_ledger_goal.py の必須の鍵・fixtures-loop の 5 本）は audit-tools-perf-judge の受け持ち
 - 6.3: ランナーの 1,000 行の余地のため `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.facts.ps1` へ字のまま移した（design の File Structure Plan に足した）。T3 は ok=6。採取の開始の行の理由の語は ok／子の `reason=`／start_failed。0 で終わる道は採取を動かしたまま返す（止めるのは perf-loop の `-Stop`）
+- 6.4: 採取が残る道は 3 つで、どれも design が受け入れている。ランナーが 0 で返ってから `-Stop` までの間の例外・ランナーの外からの強制終了・ランナーの `-Cancel` の失敗。`-Stop` が 1（`-d` も失敗し元の ETL も無い）のときも `xperf -stop` の警告を出すかは 8.1 の audit で決める。README の 884 行あたりに手で `-Start` する例が残る（R の受け持ち）

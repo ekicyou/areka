@@ -188,6 +188,17 @@ function Get-MeasureMovedDir {
     return $null
 }
 
+# 子の出力の決まった行から語を 1 つ読む（最後に合った行の 1 つ目の括り・無ければ $null）
+function Get-MeasureLineWord {
+    param([string[]]$Lines, [Parameter(Mandatory = $true)][string]$Pattern)
+    $word = $null
+    foreach ($line in @($Lines)) { if ($line -match $Pattern) { $word = $Matches[1] } }
+    return $word
+}
+
+# 戻り: SamplingStarted（ランナーが '[invoke-perf-run] sampling start: code=0' を出した＝採取が動いたまま返った）と
+# SamplingReason（その行の reason=・行が無ければ start_failed・-SampleEtl が無ければ '-'）。
+# 採取を始めた後の失敗の道はランナーが -Cancel で止めて返るので、ここは 0 の道だけを返す（30）
 function Invoke-MeasureRun {
     param(
         [Parameter(Mandatory = $true)][string]$OutDir,
@@ -195,6 +206,7 @@ function Invoke-MeasureRun {
         [Parameter(Mandatory = $true)][string]$Build,
         [string]$BinDir,
         [string]$RustLogExtra,
+        [string]$SampleEtl,
         [string]$Label = 'run'
     )
     $runnerPath = Join-Path $PSScriptRoot 'invoke-perf-run.ps1'
@@ -223,10 +235,16 @@ function Invoke-MeasureRun {
         }
         if ($BinDir)       { $arguments += @('-BinDir', $BinDir) }
         if ($RustLogExtra) { $arguments += @('-RustLogExtra', $RustLogExtra) }
+        if ($SampleEtl)    { $arguments += @('-SampleEtl', $SampleEtl) }
 
         Write-Info "[perf-loop] capturing $Label ($attempt/$attempts, level $RunProfile, build $Build, out $OutDir)"
         $result = Invoke-PwshChild -ScriptPath $runnerPath -Arguments $arguments
-        if ($result.Code -eq 0) { return }
+        if ($result.Code -eq 0) {
+            if (-not $SampleEtl) { return [pscustomobject]@{ SamplingStarted = $false; SamplingReason = $PERF_LOOP_EMPTY } }
+            $startCode = Get-MeasureLineWord -Lines $result.Lines -Pattern '^\[invoke-perf-run\] sampling start: code=(-?\d+) '
+            $startWhy  = Get-MeasureLineWord -Lines $result.Lines -Pattern '^\[invoke-perf-run\] sampling start: code=\S+ reason=(\S+)'
+            return [pscustomobject]@{ SamplingStarted = ($startCode -eq '0'); SamplingReason = $(if ($startWhy) { $startWhy } else { 'start_failed' }) }
+        }
         $moved = Get-MeasureMovedDir -Lines $result.Lines
         if ($result.Code -eq 2) {
             $evidence = if ($moved) { Join-Path $moved $MEASURE_FILE_QUIET_BEFORE } else { "$MEASURE_FILE_QUIET_BEFORE in $OutDir-FAILED*" }
@@ -387,7 +405,7 @@ function Invoke-MeasureRank {
         $arguments += @('--sampling-available', 'auto')
     } else {
         $note = Get-MeasureSamplingNote -RunDir $RunDir
-        $reason = if ($note) { $note.Reason } else { (Get-SamplingProbe).Reason }
+        $reason = if ($note) { $note.Reason } else { 'no_record' }   # 24: 可否の試しは回さない（今の機械の可否は過去の走行の理由ではない）
         $arguments += @('--sampling-available', 'false', '--unavailable-reason', $reason)
         Write-Info "[perf-loop] building the rank table with stage 3 (per-function attribution) as UNAVAILABLE reason=$reason (continuing with stages 1, 2, 4)."
     }
@@ -423,7 +441,7 @@ function Invoke-SubMeasureBaseline {
             Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
             Exit-WithResult -Code $EXIT_OK -Dir $dir
         }
-        Invoke-MeasureRun -OutDir $dir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "baseline ($build)"
+        $null = Invoke-MeasureRun -OutDir $dir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "baseline ($build)"
         Invoke-MeasureQuietAfter -RunDir $dir
     }
 
@@ -465,53 +483,54 @@ function Invoke-SubRankRun {
     }
 
     # --- 段③（サンプリング）の可否を先に確かめる -----------------------------
+    # 採取を始めるのはランナー（静かさの確かめの後・areka を起こす直前）。ここは -Start を呼ばない（1・9）
     $samplePath = Join-Path $PSScriptRoot 'invoke-cpu-sample.ps1'
     $etlPath = Join-Path (Split-Path -Parent $dir) ((Split-Path -Leaf $dir) + $MEASURE_TRACE_SUFFIX)
-    $sampling = $false
-    $reason = 'ok'
+    $sampleEtl = ''
+    $reason = 'dry_run'
     if ($script:DryRunMode) {
-        $reason = 'dry_run'
         Write-Info '[perf-loop] -DryRun: no stage 3 (sampling).'
     } else {
         $probe = Get-SamplingProbe
-        if (-not $probe.Available) {
-            $reason = $probe.Reason
-            Write-Info "[perf-loop] stage 3 unavailable: reason=$reason. Skipping the capture and continuing with stages 1, 2, 4 (not a reason to stop)."
-        } else {
+        $reason = $probe.Reason
+        if ($probe.Available) {
             New-LoopDir -Path (Split-Path -Parent $etlPath) | Out-Null
-            $start = Invoke-PwshChild -ScriptPath $samplePath -Arguments @('-Start', '-Etl', $etlPath)
-            if ($start.Code -eq 0) {
-                $sampling = $true
-                Write-Info "[perf-loop] stage 3 capture started: $etlPath"
-            } else {
-                $reason = if ($start.Code -eq $EXIT_UNAVAILABLE) { 'not_elevated' } else { 'start_failed' }
-                Write-Problem "[perf-loop] could not start the stage 3 capture (exit code $($start.Code), reason=$reason): $($start.LastLine)"
-            }
+            $sampleEtl = $etlPath
+        } else {
+            Write-Info "[perf-loop] stage 3 unavailable: reason=$reason. Skipping the capture and continuing with stages 1, 2, 4 (not a reason to stop)."
         }
     }
+    $pdbDir = Get-MeasureBinDir -BinDir $script:BinDirArg -Build $build
 
-    # --- 順位付けの走行（点灯） ----------------------------------------------
-    Invoke-MeasureRun -OutDir $dir -RunProfile $shortProfile -Build $build -BinDir $script:BinDirArg `
-        -RustLogExtra $MEASURE_RANK_RUSTLOG_EXTRA -Label 'rank run'
-    Assert-MeasureShioriHelper -RunDir $dir -Label 'rank run' | Out-Null
+    # --- 順位付けの走行（点灯・可否が真ならランナーが採取を始める） -----------
+    $run = Invoke-MeasureRun -OutDir $dir -RunProfile $shortProfile -Build $build -BinDir $script:BinDirArg `
+        -RustLogExtra $MEASURE_RANK_RUSTLOG_EXTRA -SampleEtl $sampleEtl -Label 'rank run'
 
-    # --- 段③の停止と記号解決 -------------------------------------------------
-    if ($sampling) {
-        $pdbDir = Get-MeasureBinDir -BinDir $script:BinDirArg -Build $build
+    # --- 段③の停止と記号解決（採取が動いたまま返ったら次の 1 手で必ず止める） ---
+    $sampling = $false
+    if ($run.SamplingStarted) {
         $stopArgs = @('-Stop', '-Etl', $etlPath, '-Out', (Join-Path $dir $MEASURE_FILE_DUMP), '-PdbDir', $pdbDir)
         $stop = Invoke-PwshChild -ScriptPath $samplePath -Arguments $stopArgs
         if ($stop.Code -eq 0) {
+            $sampling = $true
             $reason = 'ok'
         } elseif ($stop.Code -eq $EXIT_UNAVAILABLE) {
-            $sampling = $false
-            $reason = 'no_xperf'
+            $reason = Get-MeasureLineWord -Lines $stop.Lines -Pattern '^INVOKE-CPU-SAMPLE RESULT stop code=\S+ .*\breason=(\S+)'
+            if (-not $reason) { $reason = 'no_xperf' }
             Write-Problem "[perf-loop] stage 3 symbol resolution not possible, capability missing (reason=$reason). Continuing with stages 1, 2, 4."
+        } elseif ($stop.Code -eq -1) {
+            Write-Problem "[perf-loop] warning: the kernel CPU sampling may still be running. Run 'xperf -stop' in an elevated PowerShell by hand."
+            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "could not start invoke-cpu-sample.ps1 -Stop: $($stop.LastLine)"
         } else {
             Stop-Run -Code $EXIT_MEASURE_FAILED `
                 -Message "stage 3 symbol resolution failed (invoke-cpu-sample.ps1 exit code $($stop.Code)): $($stop.LastLine)"
         }
+    } elseif ($sampleEtl) {
+        $reason = $run.SamplingReason
+        Write-Problem "[perf-loop] the runner could not start the stage 3 capture (reason=$reason). Continuing with stages 1, 2, 4."
     }
     Write-MeasureSamplingNote -RunDir $dir -Available $sampling -Reason $reason
+    Assert-MeasureShioriHelper -RunDir $dir -Label 'rank run' | Out-Null
 
     Invoke-MeasureQuietAfter -RunDir $dir
     Invoke-MeasureRank -RunDir $dir | Out-Null
@@ -620,7 +639,7 @@ function Invoke-SubMeasureAb {
             Write-MeasureDryRunMark -Dir $run.Dir -Reason "no $($run.Side) side executable, so the run was skipped (-DryRun)"
             continue
         }
-        Invoke-MeasureRun -OutDir $run.Dir -RunProfile $shortProfile -Build $abBuild -BinDir $binDir -Label "run $($run.Name)"
+        $null = Invoke-MeasureRun -OutDir $run.Dir -RunProfile $shortProfile -Build $abBuild -BinDir $binDir -Label "run $($run.Name)"
         Assert-MeasureShioriHelper -RunDir $run.Dir -Label "run $($run.Name)" | Out-Null
         Invoke-MeasureQuietAfter -RunDir $run.Dir
     }
@@ -816,7 +835,7 @@ function Invoke-SubFinal {
                 $summary += "final build=$build verdict=$PERF_LOOP_EMPTY dir=$buildDir"
                 continue
             }
-            Invoke-MeasureRun -OutDir $buildDir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "final verdict ($build)"
+            $null = Invoke-MeasureRun -OutDir $buildDir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "final verdict ($build)"
             Invoke-MeasureQuietAfter -RunDir $buildDir
         }
         $verdict = Invoke-MeasureJudge -RunDir $buildDir -Build $build

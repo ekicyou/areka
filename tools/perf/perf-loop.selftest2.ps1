@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 <#
 ================================================================================
-perf-loop.selftest2.ps1 — perf-loop 側の自分の検査（T2 の 2 本目＝出力先と -Resume の束・入口の束）
+perf-loop.selftest2.ps1 — perf-loop 側の自分の検査（T2 の 2 本目＝出力先と -Resume の束・入口の束・段③の束）
   spec: audit-tools-perf-run（要件 4.1〜4.5・5.5・design「Testing Strategy」の T2）
 
 呼び方・出力・終了・決まりは perf-loop.selftest.ps1 と同じ（1,000 行の番人のため束ごとに分けた）:
@@ -53,6 +53,63 @@ function Get-SelfTestExitCode {
     }
     return $null
 }
+
+# 段③の束の偽物（検査の中で . $SelfTestRankRunFakes として読む）。部品の呼ばれた順を Add-SelfTestCall に残す。
+# ランナーの答えは $script:FakeRunner の頭から 1 つずつ（最後の 1 つは使い回す）、-Stop の答えは $script:FakeStop
+$SelfTestRankRunFakes = {
+    $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+    function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
+    function Write-Info { param([string]$Message) }
+    function Sync-MeasureWorktreeBuild { param($Build, $BinDir) Add-SelfTestCall -Name 'build' }
+    function Test-MeasureExeReady { param($BinDir, $Build) Add-SelfTestCall -Name 'check'; $true }
+    function Get-SamplingProbe {
+        Add-SelfTestCall -Name 'probe'
+        [pscustomobject]@{ Available = $script:FakeProbeOk; Reason = $(if ($script:FakeProbeOk) { 'ok' } else { 'probe_word' }) }
+    }
+    function Get-MeasureGhostRoot { 'G' }
+    function Get-MeasureBalloonRoot { 'B' }
+    function Sync-MeasureShioriHelper { param($BinDir, $Build) }
+    function Clear-MeasureDryRunDir { param($Dir) }
+    function New-LoopDir { param($Path) }
+    function Write-MeasureSamplingNote { param($RunDir, [bool]$Available, $Reason) Add-SelfTestCall -Name 'note' -Arguments @($Available, $Reason) }
+    function Invoke-MeasureRank { param($RunDir) Add-SelfTestCall -Name 'rank' }
+    function Invoke-PwshChild {
+        param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+        $leaf = Split-Path -Leaf $ScriptPath
+        if ($leaf -eq 'invoke-perf-run.ps1') {
+            Add-SelfTestCall -Name 'runner' -Arguments $Arguments
+            $r = $script:FakeRunner[0]
+            if ($script:FakeRunner.Count -gt 1) { $script:FakeRunner = @($script:FakeRunner | Select-Object -Skip 1) }
+            return $r
+        }
+        if ($leaf -eq 'invoke-cpu-sample.ps1') { Add-SelfTestCall -Name "sample$($Arguments[0])" -Arguments $Arguments; return $script:FakeStop }
+        if ($leaf -eq 'check-quiet.ps1') { Add-SelfTestCall -Name 'quiet-after'; return (New-ChildResult -Code $script:FakeQuiet -LastLine 'fake quiet') }
+        throw "unexpected child $leaf"
+    }
+    $script:FakeProbeOk = $true
+    $script:FakeQuiet = 0
+    $script:DryRunMode = $false
+    $script:ResumeMode = $false
+    $script:BuildKind = 'release'
+    $script:BinDirArg = ''
+    $script:DateStamp = $null
+    $script:GoalConfig = $null
+    $script:GoalFilePath = $null
+    $script:GoalName = 'selftest'
+    $script:RunDirArg = Join-Path $script:SelfTestRoot 'rr-run'
+}
+
+# ランナーの偽の答え: 採取の開始の行（'<code> <reason>'・空なら行なし）と、非ゼロなら退け先の行
+function New-SelfTestRunnerResult {
+    param([int]$Code, [string]$Start)
+    $out = @('[invoke-perf-run] fake')
+    if ($Start) { $c, $w = $Start -split ' ', 2; $out += "[invoke-perf-run] sampling start: code=$c reason=$w" }
+    if ($Code -ne 0) { $out += "[invoke-perf-run] moved to: $($script:RunDirArg)-FAILED" }
+    return (New-ChildResult -Code $Code -Out $out -LastLine $out[-1])
+}
+
+# 呼ばれた部品の名前を順に並べる（終了の口は除く）
+function Get-SelfTestCallOrder { return (@($script:SelfTestCalls | Where-Object { $_.Name -ne 'Exit-WithResult' } | ForEach-Object { $_.Name }) -join ',') }
 
 $SelfTestChecks = @(
     # -------------------------------------------------------------------------
@@ -303,6 +360,124 @@ $SelfTestChecks = @(
         }
         $args = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' } | ForEach-Object { $_.Arguments -join ' ' })
         Assert-SelfTest (($args | Sort-Object -Unique) -join ',' -eq '-Probe') "Get-SamplingProbe passed '$($args -join ',')' (want -Probe)"
+    } }
+
+    # -------------------------------------------------------------------------
+    # 段③の束（1・9・24・30）
+    # -------------------------------------------------------------------------
+
+    [pscustomobject]@{ Name = 'sampling-order'; Body = {
+        # ビルド -> 確かめ -> 可否 -> ランナー（-SampleEtl 付き）-> -Stop -> sampling.txt -> 走行の後の静かさ -> 順位表。-Start は呼ばない
+        . $SelfTestRankRunFakes
+        $script:FakeRunner = @(New-SelfTestRunnerResult -Code 0 -Start '0 ok')
+        $script:FakeStop = New-ChildResult -Code 0 -Out @('INVOKE-CPU-SAMPLE RESULT stop code=0 version=1') -LastLine 'stop ok'
+        $code = Get-SelfTestExitCode { Invoke-SubRankRun }
+        Assert-SelfTest ($code -eq 0) "rank-run exit $code (want 0)"
+        $order = Get-SelfTestCallOrder
+        Assert-SelfTest ($order -ceq 'build,check,probe,runner,sample-Stop,note,quiet-after,rank') "call order '$order'"
+        $runArgs = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'runner' })[0].Arguments)
+        $i = [array]::IndexOf($runArgs, '-SampleEtl')
+        Assert-SelfTest ($i -ge 0 -and $runArgs[$i + 1] -like '*-trace.etl') "runner args lack -SampleEtl <etl>: $(ConvertTo-SelfTestAscii ($runArgs -join ' '))"
+        $stopArgs = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'sample-Stop' })[0].Arguments)
+        Assert-SelfTest ($stopArgs[2] -eq $runArgs[$i + 1] -and $stopArgs -notcontains '-GoalFile') "-Stop args: $(ConvertTo-SelfTestAscii ($stopArgs -join ' '))"
+        # 可否が偽なら -SampleEtl を渡さず、-Stop も呼ばない
+        $script:SelfTestCalls.Clear()
+        $script:FakeProbeOk = $false
+        $script:RunDirArg += '-b'
+        $null = Get-SelfTestExitCode { Invoke-SubRankRun }
+        $order = Get-SelfTestCallOrder
+        Assert-SelfTest ($order -ceq 'build,check,probe,runner,note,quiet-after,rank') "unavailable: call order '$order'"
+        $runArgs = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'runner' })[0].Arguments)
+        Assert-SelfTest ($runArgs -notcontains '-SampleEtl') 'unavailable: the runner got -SampleEtl'
+    } }
+
+    [pscustomobject]@{ Name = 'sampling-stop-after-run'; Body = {
+        # ランナーが 0 で採取の開始を報告した道では、後で何が落ちても -Stop がランナーの直後に必ず 1 回。
+        # ランナーが失敗で返った道はランナー自身が -Cancel するので perf-loop は -Stop も -Start も呼ばない
+        . $SelfTestRankRunFakes
+        $stopOk = New-ChildResult -Code 0 -Out @('INVOKE-CPU-SAMPLE RESULT stop code=0 version=1') -LastLine 'stop ok'
+        $cases = @(
+            @{ Name = 'quiet-after-3'; Runner = @('0|0 ok'); Stop = $stopOk; Quiet = 3; Exit = 3; Stops = 1; Runs = 1 }
+            @{ Name = 'quiet-after-4'; Runner = @('0|0 ok'); Stop = $stopOk; Quiet = 4; Exit = 4; Stops = 1; Runs = 1 }
+            @{ Name = 'retake'; Runner = @('1|0 ok', '0|0 ok'); Stop = $stopOk; Quiet = 0; Exit = 0; Stops = 1; Runs = 2 }
+            @{ Name = 'stop-not-started'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code -1 -Err @('pwsh not found') -LastLine 'pwsh not found'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1; Want = 'xperf -stop' }
+            @{ Name = 'stop-failed'; Runner = @('0|0 ok'); Stop = (New-ChildResult -Code 1 -Err @('error: boom') -LastLine 'error: boom'); Quiet = 0; Exit = 4; Stops = 1; Runs = 1 }
+            @{ Name = 'runner-failed'; Runner = @('1|0 ok'); Stop = $stopOk; Quiet = 0; Exit = 4; Stops = 0; Runs = 2 }
+            @{ Name = 'not-started'; Runner = @('0|5 not_elevated'); Stop = $stopOk; Quiet = 0; Exit = 0; Stops = 0; Runs = 1 }
+        )
+        foreach ($case in $cases) {
+            $script:SelfTestCalls.Clear()
+            $script:SelfTestProblems.Clear()
+            $script:RunDirArg = Join-Path $script:SelfTestRoot "ssr-$($case.Name)"
+            $script:FakeRunner = @($case.Runner | ForEach-Object { $c, $st = $_ -split '\|', 2; New-SelfTestRunnerResult -Code ([int]$c) -Start $st })
+            $script:FakeStop = $case.Stop
+            $script:FakeQuiet = $case.Quiet
+            $code = Get-SelfTestExitCode { Invoke-SubRankRun }
+            Assert-SelfTest ($code -eq $case.Exit) "$($case.Name): exit $code (want $($case.Exit))"
+            $names = @($script:SelfTestCalls | ForEach-Object { $_.Name })
+            $stops = @($names | Where-Object { $_ -eq 'sample-Stop' }).Count
+            Assert-SelfTest ($stops -eq $case.Stops) "$($case.Name): -Stop called $stops times (want $($case.Stops))"
+            $runs = @($names | Where-Object { $_ -eq 'runner' }).Count
+            Assert-SelfTest ($runs -eq $case.Runs) "$($case.Name): runner called $runs times (want $($case.Runs))"
+            $others = @($names | Where-Object { $_ -like 'sample-*' -and $_ -ne 'sample-Stop' })
+            Assert-SelfTest ($others.Count -eq 0) "$($case.Name): perf-loop called $($others -join ',')"
+            if ($case.Stops) {
+                $at = [array]::LastIndexOf($names, 'runner')
+                Assert-SelfTest ($names[$at + 1] -eq 'sample-Stop') "$($case.Name): -Stop is not right after the runner: $($names -join ',')"
+            }
+            if ($case.ContainsKey('Want')) {
+                $msg = @($script:SelfTestProblems) -join ' | '
+                Assert-SelfTest ($msg.Contains($case.Want)) "$($case.Name): '$($case.Want)' not in: $(ConvertTo-SelfTestAscii $msg)"
+            }
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'sampling-reason'; Body = {
+        # 段③の理由の語は子の出力から: 開始はランナーの 1 行の reason=、停止は -Stop の RESULT 行の reason=（無ければ no_xperf）
+        . $SelfTestRankRunFakes
+        $stop5 = 'INVOKE-CPU-SAMPLE RESULT stop code=5 version=1 available=false reason=stop_word'
+        $cases = @(
+            @{ Name = 'start-5'; Start = '5 start_word'; Stop = $null; Want = 'False start_word' }
+            @{ Name = 'start-1'; Start = '1 other_word'; Stop = $null; Want = 'False other_word' }
+            @{ Name = 'no-start-line'; Start = ''; Stop = $null; Want = 'False start_failed' }
+            @{ Name = 'stop-0'; Start = '0 ok'; Stop = (New-ChildResult -Code 0 -Out @('x') -LastLine 'x'); Want = 'True ok' }
+            @{ Name = 'stop-5'; Start = '0 ok'; Stop = (New-ChildResult -Code 5 -Out @($stop5) -Err @('error: x') -LastLine 'error: x'); Want = 'False stop_word' }
+            @{ Name = 'stop-5-bare'; Start = '0 ok'; Stop = (New-ChildResult -Code 5 -Err @('error: x') -LastLine 'error: x'); Want = 'False no_xperf' }
+        )
+        foreach ($case in $cases) {
+            $script:SelfTestCalls.Clear()
+            $script:RunDirArg = Join-Path $script:SelfTestRoot "sr-$($case.Name)"
+            $script:FakeRunner = @(New-SelfTestRunnerResult -Code 0 -Start $case.Start)
+            $script:FakeStop = $case.Stop
+            $code = Get-SelfTestExitCode { Invoke-SubRankRun }
+            Assert-SelfTest ($code -eq 0) "$($case.Name): exit $code (want 0)"
+            $note = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'note' })
+            Assert-SelfTest ($note.Count -eq 1) "$($case.Name): sampling note written $($note.Count) times (want 1)"
+            $got = "$($note[0].Arguments[0]) $($note[0].Arguments[1])"
+            Assert-SelfTest ($got -eq $case.Want) "$($case.Name): note '$got' (want '$($case.Want)')"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'rank-no-record'; Body = {
+        # sampling.txt も dump も無い走行は可否の試しを回さず no_record。sampling.txt が在ればその理由
+        function Write-Info { param([string]$Message) }
+        function Get-SamplingProbe { Add-SelfTestCall -Name 'probe'; [pscustomobject]@{ Available = $false; Reason = 'probe_word' } }
+        function Get-MeasurePython { 'python' }
+        function Invoke-PythonChild { param($Python, $Arguments, [switch]$Quiet) Add-SelfTestCall -Name 'rank' -Arguments $Arguments; New-ChildResult -Code 0 -LastLine 'ok' }
+        $script:DryRunMode = $false
+        $dir = Join-Path $script:SelfTestRoot 'rnr-run'
+        $null = New-Item -ItemType Directory -Path $dir -Force
+        [System.IO.File]::WriteAllText((Join-Path $dir 'run.log'), "x`n")
+        foreach ($case in @(@{ Note = $null; Want = 'no_record' }, @{ Note = "available=false`nreason=note_word`n"; Want = 'note_word' })) {
+            $script:SelfTestCalls.Clear()
+            if ($case.Note) { [System.IO.File]::WriteAllText((Join-Path $dir 'sampling.txt'), $case.Note) }
+            $null = Invoke-MeasureRank -RunDir $dir
+            $probes = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'probe' }).Count
+            Assert-SelfTest ($probes -eq 0) "$($case.Want): the probe ran $probes times (want 0)"
+            $a = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'rank' })[0].Arguments)
+            $i = [array]::IndexOf($a, '--unavailable-reason')
+            Assert-SelfTest ($i -ge 0 -and $a[$i + 1] -eq $case.Want) "rank args: $(ConvertTo-SelfTestAscii ($a -join ' ')) (want --unavailable-reason $($case.Want))"
+        }
     } }
 )
 
