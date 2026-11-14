@@ -449,14 +449,14 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         // 「随伴は同一フレームだった」の根拠にならない（空虚な真）。判定側は**スコープごとに**
         // 数え直す——遷移全体で 1 組も無いことを条件にすると、scope が 1 つでその随伴が
         // 見送り窓のときに毎回発火し、非欠陥を不合格にする。
+        // 数だけの突き合わせなので、足りないときはどの窓が欠けたか分からず全窓を名指す。
+        let pairs_short = summary.balloon_pairs_checked < checkable_pairs(summary);
         for expectation in companion_expectations(summary) {
             let unmeasured = match expectation.state {
                 // 随伴が 1 度も書かれていない（見送り窓でもない）＝測りようがない。
                 CompanionState::BalloonNotWritten => true,
                 // 検査できるはずの対が集計側で数えられていない＝空虚な真。
-                CompanionState::Checkable => {
-                    summary.balloon_pairs_checked < checkable_pairs(summary)
-                }
+                CompanionState::Checkable => pairs_short,
             };
             if unmeasured {
                 violations.push(Violation::Unmeasured(Quantity::BalloonSameFrame(

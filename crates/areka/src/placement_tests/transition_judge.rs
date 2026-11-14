@@ -694,7 +694,6 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     let mut writes_in_order: Vec<(usize, WindowKey, Option<u32>, u32)> = Vec::new();
     // 窓ごと・フレームごとの「最後の書込 t_us」（実機専用量 visualize_to_write_us 用）。
     let mut last_write_us_per_window_frame: BTreeMap<(WindowKey, u32), u64> = BTreeMap::new();
-    let mut last_visualize_per_window: BTreeMap<WindowKey, (u32, u64)> = BTreeMap::new();
     // 窓ごとの**全ての**可視化（実機専用量は最大を採るので上書きしない）。
     let mut visualizes_per_window: BTreeMap<WindowKey, Vec<(u32, u64)>> = BTreeMap::new();
     let mut nonzero_frames_seen = 0_u32;
@@ -770,8 +769,6 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 if record.raw_field(FIELD_STAGE) == Some(SURFACE_STAGE_VISUALIZE)
                     && let Some(window) = record.surface_window()
                 {
-                    last_visualize_per_window
-                        .insert(window.clone(), (record.stamp.frame, record.stamp.t_us));
                     visualizes_per_window
                         .entry(window)
                         .or_default()
@@ -856,11 +853,13 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     // 可視化と書込の食い違い（見送り窓は要件 4.6 で除外する）。フレーム差は**最後の**
     // 可視化と**最後の**書込＝着地どうしの比較で採る（4.3 の「遷移後の寸法・位置で
     // 可視化されるとき」が問うのは着地のフレームだから）。
-    for (window, (visualize_frame, _)) in &last_visualize_per_window {
+    for (window, visualizes) in &visualizes_per_window {
         if summary.skipped_windows.contains(window) {
             continue;
         }
-        if let Some(write_frame) = last_write_frame_per_window.get(window) {
+        if let (Some((visualize_frame, _)), Some(write_frame)) =
+            (visualizes.last(), last_write_frame_per_window.get(window))
+        {
             summary
                 .mismatch_frames_per_window
                 .insert(window.clone(), write_frame.wrapping_sub(*visualize_frame));

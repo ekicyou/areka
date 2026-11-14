@@ -30,9 +30,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_emo_present::presenter::{KIND_SURFACE, SURFACE_FIELDS, SURFACE_STAGE_ALL};
 use wintf::ecs::window::transition_diag::{
-    ENQUEUE_FIELDS, FIELD_FRAME, FIELD_KIND, FIELD_STAGE, FIELD_T_US, FLUSH_FIELDS, KIND_ALL,
-    KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MONITOR_FIELDS,
-    MSG_FIELDS, RECORD_PREFIX_TAG, STAGE_ALL, TRANSITION_TARGET, WINDPI_FIELDS, WRITE_FIELDS,
+    ENQUEUE_FIELDS, FIELD_ENTITY, FIELD_FRAME, FIELD_KIND, FIELD_NEW_DPI, FIELD_NEW_WA,
+    FIELD_OLD_DPI, FIELD_OLD_WA, FIELD_STAGE, FIELD_T_US, FLUSH_FIELDS, KIND_ALL, KIND_ENQUEUE,
+    KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MONITOR_FIELDS, MSG_FIELDS,
+    RECORD_PREFIX_TAG, STAGE_ALL, TRANSITION_TARGET, WINDPI_FIELDS, WRITE_FIELDS,
 };
 
 use super::TRANSITION_LOG_ENV;
@@ -95,8 +96,8 @@ fn read_procedure(relative: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
-            "サインオフ手順書を読めない: {} ({error})。task 4.1 の成果物であり、\
-             本檻はこの文書の判定語が判定器と一致することだけを見る",
+            "サインオフ手順書を読めない: {} ({error})。出所（PROCEDURE_SOURCES）の 1 本で\
+             あり、本檻はこの文書の判定語が判定器と一致することだけを見る",
             path.display()
         )
     });
@@ -508,14 +509,27 @@ fn the_line_validator_rejects_broken_records() {
     // 檻そのものの較正。上の 3 本が緑でも、述語が何も落とせなければ意味が無い。
     let sound = format!(
         "{RECORD_PREFIX_TAG} {FIELD_FRAME}=7 {FIELD_T_US}=1200 {FIELD_KIND}={KIND_MONITOR} \
-         entity=12v1 old_dpi=192 new_dpi=96 old_wa=0,0,2880,1704 new_wa=0,0,2880,1752"
+         {FIELD_ENTITY}=12v1 {FIELD_OLD_DPI}=192 {FIELD_NEW_DPI}=96 \
+         {FIELD_OLD_WA}=0,0,2880,1704 {FIELD_NEW_WA}=0,0,2880,1752"
     );
     validate_record_line(&sound).expect("発行側の語彙どおりの行は通る");
 
     for (broken, expected) in [
-        (sound.replace("kind=monitor", "kind=moniter"), "語彙に無い"),
-        (sound.replace("new_dpi=", "new_dpix="), "語彙外のフィールド"),
-        (sound.replace("frame=7 ", ""), "接頭語のフィールド"),
+        (
+            sound.replace(
+                &format!("{FIELD_KIND}={KIND_MONITOR}"),
+                &format!("{FIELD_KIND}=moniter"),
+            ),
+            "語彙に無い",
+        ),
+        (
+            sound.replace(&format!("{FIELD_NEW_DPI}="), &format!("{FIELD_NEW_DPI}x=")),
+            "語彙外のフィールド",
+        ),
+        (
+            sound.replace(&format!("{FIELD_FRAME}=7 "), ""),
+            "接頭語のフィールド",
+        ),
         (
             format!("{sound} {FIELD_KIND}={KIND_WRITE}"),
             "1 行に 2 度出ている",
@@ -530,7 +544,7 @@ fn the_line_validator_rejects_broken_records() {
     }
 
     // 必須フィールドの欠落も落ちること（`-` 番兵は「書いてある」ので落ちない）。
-    let missing_field = sound.replace(" new_wa=0,0,2880,1752", "");
+    let missing_field = sound.replace(&format!(" {FIELD_NEW_WA}=0,0,2880,1752"), "");
     let error = validate_record_line(&missing_field).expect_err("必須フィールドの欠落は落ちる");
     assert!(error.contains("欠けている"), "{error}");
 }
@@ -556,10 +570,7 @@ const FAMILY_SIGNOFF: &str = "signoff:";
 
 /// 判定対象の窓（例示ブロックと同じ形の鍵）。
 fn sample_window() -> WindowKey {
-    WindowKey {
-        scope: Some(0),
-        kind: areka_placement::diag::WindowKind::Char.as_str().to_owned(),
-    }
+    WindowKey::of(0, areka_placement::diag::WindowKind::Char)
 }
 
 /// 量が**在って上限を超えている**判定量（各系統の「上限超」の腕を全部通す）。
