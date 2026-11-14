@@ -54,7 +54,7 @@
 
 ## 判定（judge-perf）
 
-- [ ] 3. (P) judge-perf の要らないコードを消す（#36〜#39・#47〜#50・#81 の catchup の頭書き）
+- [x] 3. (P) judge-perf の要らないコードを消す（#36〜#39・#47〜#50・#81 の catchup の頭書き）
   - 自動選別の枝を消し、指定が空なら起動の時点で止める assert を置き、バナーの文を縮める（#36・README の文は 13 へ）。`_STATUS_ORDER`・`worst_status`（#37）・`PLANNED_MODES`（#38）・`_timedelta_seconds`（#47）を消す
   - `aggregate()` で `steady_cpu`・`steady_catchup` を 1 回作って持たせ、10 か所と `judge_perf_catchup.py` が読む（#39）。`catchup_analysis` のキャッシュを外す（#50）。判定式⑴の結果を `functools.partial` 1 つに（#48）。観測集合の行を「外した系列 N 本（根拠に列挙）」に（#49）。catchup の頭書きを事実に（#81）
   - 消す名前ごとにツリー全体の grep で使い手が無いことを確かめ、同じ後退で落ちる別のテストが残ることを研究 §3 の根拠のとおり確かめる
@@ -223,3 +223,4 @@
 - 1.3: U1 は run.log と cpu.csv の両方に BOM。run.log は探して読むので BOM に左右されず、赤を作るのは cpu.csv の見出しの一致。judge-perf の selftest の `contains` は stdout だけを見る（stderr の理由は縛れない）
 - 2.1: `perf_selftest_common` の根の確かめは道具の読み込みのたびに走る（.ps1 は `$PSScriptRoot` から呼ぶので本番は壊れない）。`list_case_dirs` は `fail` を、`finish` は `materials`・`case_file` を取る。design の `guard_console` は持ち主のタスクが無く未実装
 - 2.2: `check_tree(*, ascii_stderr, readme_examples)`（design の `stderr_texts` の代わりに `invoke` が本体の stderr を集める）。⑶ は 7.2・8・12.2 が自分の selftest の `ascii_stderr=True` で、⑸ は 13 が 4 か所の `readme_examples=True` で有効にする。⑸ は README の code block の中のドライブ文字の絶対パスを全部拾うので、13 は #27 の行に加えて 765 行（`pending_run: C:\...`）と 886 行（`-PdbDir C:\repo\...`）も置き換え札にするか、検査を絞る
+- 3: README へ渡す分（13）: 286 行の表の `FRAME_INTERVAL_JUDGED_SERIES` の行に「空にできない（起動で assert）」。`FRAME_INTERVAL_MAX_MEAN_FACTOR` は窓 A の p95 の注記に使うので残す（合否には使わない）

@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """`judge-perf.py` 0.4.0 の §9 追補——catch-up の系統別・時刻突合と仮説の数値化（要件 2.9）。
 
-【なぜ別ファイルか】`judge-perf.py` は既に 3,500 行を超えている（本 spec 以前からの状態）。
-0.4.0 で足す「表を組んで印字する」部分をそこへ積み増すと読めなくなるので、ここへ分けた。
+【なぜ別ファイルか】`judge-perf.py` は長大（数千行）なので、0.4.0 で足した
+「表を組んで印字する」部分をそこへ積み増さず、ここへ分けた。
 
 【ここに無いもの】判定式は 1 つも無い。合否に関わる計算は `judge-perf.py` 側にしかなく、
 このモジュールがするのは **集計と表示だけ** である。較正値も持たない——閾値（比の下限・
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 @dataclass(frozen=True)
@@ -110,27 +110,29 @@ def analyze(
     events: list[tuple[datetime | None, str]],
     show_times: list[datetime],
     tick_windows: list[TickWindow],
-    steady_from: datetime,
+    steady_events: list[tuple[datetime | None, str]],
     show_window_sec: float,
     ratio_min: float,
     tick_match_max_sec: float,
 ) -> CatchupAnalysis:
     """catch-up の各発生を周辺状況と突き合わせ、仮説の比まで出す。
 
-    `events` は `(時刻, 系統)` の並び（時刻は読めなければ None）。`show_times` は
+    `events` は `(時刻, 系統)` の並び（時刻は読めなければ None）。`steady_events` は
+    そのうち定常状態のもの（呼び手が 1 度だけ絞って渡す）。`show_times` は
     表示成立点の時刻（昇順であること）。`tick_windows` は閉じた時刻の昇順であること。
     """
     analysis = CatchupAnalysis()
     windows = sorted(tick_windows, key=lambda w: w.at)
     closes = [w.at for w in windows]
     shows = sorted(show_times)
+    steady = set(steady_events)
 
     for at, target in events:
         analysis.total_by_target[target] = analysis.total_by_target.get(target, 0) + 1
         if at is None:
             analysis.undated += 1
             continue
-        in_steady = at >= steady_from
+        in_steady = (at, target) in steady
         if in_steady:
             analysis.steady_by_target[target] = analysis.steady_by_target.get(target, 0) + 1
 
@@ -138,7 +140,7 @@ def analyze(
         prev_index = bisect.bisect_right(shows, at) - 1
         since = (at - shows[prev_index]).total_seconds() if prev_index >= 0 else None
         # 直前 show_window_sec 秒に成立した表示の数（発話再生中かどうかの代理）。
-        window_from = at - _timedelta_seconds(show_window_sec)
+        window_from = at - timedelta(seconds=show_window_sec)
         in_window = prev_index + 1 - bisect.bisect_left(shows, window_from)
 
         analysis.rows.append(
@@ -204,12 +206,6 @@ def analyze(
         analysis.verdict_word = "不成立"
         analysis.verdict_reason = f"比 {analysis.ratio:.3f} < 下限 {ratio_min:.3f}"
     return analysis
-
-
-def _timedelta_seconds(seconds: float):
-    from datetime import timedelta
-
-    return timedelta(seconds=seconds)
 
 
 def _fmt_int(value: int | None) -> str:
