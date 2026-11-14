@@ -181,7 +181,7 @@ Write this whole report as ordinary text **before** the approval gate's question
 
 ## Step 11 — Approval gate (STOP here)
 - After the report, STOP. Do not push, open a PR or merge.
-- Only when the developer explicitly instructs it (e.g. 「PRしてスクワッシュマージ」) push the branch, open the PR (body ends with the required attribution line), then show the PR number, title and changed-file summary and ask for confirmation once more before `gh pr merge --squash`. After merging, report the main commit.
+- Only when the developer explicitly instructs it push the branch and open the PR (body ends with the required attribution line). When the instruction includes the merge (e.g. 「PRしてマージ」「PRしてスクワッシュマージ」), run `gh pr merge --squash` right after without asking again, then report the PR number, title, changed-file summary and the main commit (developer 2026-11-14: 「毎回二度手間で困ってる」 — the second confirmation before the merge is removed). When it asks only for the PR (e.g. 「PRだけ」), stop after opening it and report the same summary.
 - If the run was a dry run or the developer says not to merge the inventory, move the commit to a local backup branch (`git branch <name> <sha>`) instead of leaving it on the branch that will be merged.
 
 </instructions>
