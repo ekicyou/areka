@@ -219,7 +219,7 @@ pub(super) const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaU
 ///   [`Placement`](BalloonFollowTrigger::Placement) 腕が**引き金の route** に対して
 ///   本述語を引く形にした（本述語へ `BalloonFollow` を渡す形にはしていない）。
 pub(super) fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
-    // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）＝システム由来の再アンカー 6 経路。
+    // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）＝システム由来の再アンカー 7 経路。
     // 明示操作・別 spec 所有・バルーン窓側（上記 doc の内訳）はあちらで `false` に落ちる。
     route.is_system_reanchor()
 }

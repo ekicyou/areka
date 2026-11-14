@@ -3,7 +3,7 @@
 //!
 //! design.md の Data Models「Logical Data Model（レコード語彙）」の areka 行が正本である。
 //! 窓書込・サーフェス更新・モニタ表更新（wintf・areka-emo-present が出す）と**同一の
-//! フレーム番号系列**へ、配置側の判断を 4 種のレコードとして並べる。
+//! フレーム番号系列**へ、配置側の判断を 5 種のレコードとして並べる。
 //!
 //! ```text
 //! [transition] frame=<u32> t_us=<u64> kind=snapshot monitors=<n> m0=<dpi>:<l,t,r,b> …
@@ -27,13 +27,12 @@
 //!
 //! # 発行点
 //!
-//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、実際に到達できる発行点は 4 つ——
+//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、発行点は 5 つ——
 //! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
 //! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 4 点＝task 5.4 の 3 点＋task 6.5 の 4 点目）・[`log_chain`]
-//! （遷移後の連鎖再解決＝task 5.6 から）である。5 種目の [`log_offset_rescale`]
-//! （拡大率遷移でのバルーン追従オフセットの追随＝`areka-P0-balloon-offset-dpi` の
-//! 要件 3.7・design D10）は**語彙が先着**しており、発行する適用相は同 spec の後続タスクが
-//! 建てる。
+//! （遷移後の連鎖再解決＝task 5.6 から）・[`log_offset_rescale`]（拡大率遷移でのバルーン追従
+//! オフセットの追随＝`areka-P0-balloon-offset-dpi` の要件 3.7・design D10。呼び手は
+//! `runtime::frame::balloon_offset_follow`）である。
 //!
 //! # 語彙は先に建てる
 //!
@@ -695,7 +694,7 @@ pub fn live_work_area_bottom(world: &mut World, window: RectPx) -> Option<i32> {
 ///
 /// `pos`／`size` は再射影が決めた位置と寸。**バルーンの表示位置補正（`windowposition-limit`
 /// の関門）より前**の値だが、当該関門は `BalloonLimit(true)` の窓にしか作用せず、キャラ窓は
-/// それを持たない（`follow_balloon_limit_tests.rs:246` が固定）ので、キャラ窓については
+/// それを持たない（檻 `enqueue_passes_through_for_windows_without_the_balloon_limit_component` が固定）ので、キャラ窓については
 /// 書き込んだ値と一致する。接地点は `pos.y + size.h`
 /// ＝窓矩形の下端であり、キャラ窓の原点（下端中央）の Y 成分そのものである（要件 10.1 の
 /// 原点規約は読むだけで変えない）。

@@ -134,16 +134,14 @@ pub fn move_window_with_route(
 /// 窓移動レコードへ透過させる（D11: ラッパ関数を乱立させない）。
 ///
 /// **task 6.1 以後、route は観測語彙であると同時に挙動の入力でもある**——可視性の遷移
-/// ガード（手順 3c・[`apply_visibility_guard`]）は非ドラッグの配置系 4 経路
-/// （[`AnchorChange`](PlacementRoute::AnchorChange)／[`Resnap`](PlacementRoute::Resnap)／
-/// [`DpiReproject`](PlacementRoute::DpiReproject)／
-/// [`ReportedSizeReconcile`](PlacementRoute::ReportedSizeReconcile)）でのみ発火する
+/// ガード（手順 3c・[`apply_visibility_guard`]）は非ドラッグのシステム由来の 7 経路
+/// （内訳は `PlacementRoute::is_system_reanchor` が正本）でのみ発火する
 /// （D13 帰結⑴。同じ幾何でも由来が明示操作なら引き戻さない＝Req 3.1 の「ユーザーの
 /// 明示的なドラッグ以外の要因」）。
 ///
 /// **task 6.2 以後、route は随伴バルーンの発火条件でもある**——手順 7 の
 /// [`follow_balloon`] へ [`BalloonFollowTrigger::Placement`]`(route)` として渡され、
-/// バルーン矩形への遷移ガード（S3′・Req 3.4）が同じ 4 経路でのみ発火する。
+/// バルーン矩形への遷移ガード（S3′・Req 3.4）が同じ 7 経路でのみ発火する。
 ///
 /// # バルーン追従はリサイズで補正しない（**全アンカー共通**・2026-07-31 実機裁定）
 ///
@@ -762,7 +760,7 @@ pub(super) fn enqueue_window_set_pos(
 
     // 窓移動レコード（Req 1.2）: **書込成功時のみ** 1 レコードを専用 target へ出す。
     // 経路語彙を持たない書込（ドラッグ）は route=None ＝無記録（doc 参照）。
-    // `\![move]` は D13 で `MoveCue` を得たので記録される（:753 で `Some` を渡す）。
+    // `\![move]` は D13 で `MoveCue` を得たので記録される（[`move_window_to`] が `Some(MoveCue)` を渡す）。
     if let Some(route) = route {
         log_window_move(world, window, route, x, y, size);
     }
@@ -953,7 +951,7 @@ fn log_window_move(
 /// 本関門が読むのは上記の 6 つ（`BalloonLimit`／`BalloonWindowMarker`／
 /// `GhostWindows`／キャラ窓 `WindowPos`／`MonitorSnapshot`／対象 `WindowPos.size`）
 /// だけで、可視性を表す状態は**ひとつも含まない**（そもそもバルーンの可視性は
-/// `emo2_boot::balloon_visibility` が表示層で所有し、placement の World には無い）。
+/// `runtime::balloon_visibility` が表示層で所有し、placement の World には無い）。
 /// ゆえに非表示中の書込も可視中とまったく同一に補正され、「次に可視となった時点で
 /// 2.1 が成立している」が全書込の被覆から導かれる。檻
 /// `runtime_gate_result_is_identical_for_hidden_and_visible_balloons` が、World 上で
@@ -1146,7 +1144,7 @@ fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 /// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
 ///   （判定を二重化せず委譲する）。
 ///
-/// 消費者: `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`／`reconcile_reported_sizes`・結線済み）。
+/// 消費者: `runtime::frame` の DPI 追従フェーズ（`dpi::run_dpi_phase`／`scale_text::reconcile_reported_sizes`・結線済み）。
 ///
 /// # 経路タグ（Req 1.2・task 1.4）
 ///

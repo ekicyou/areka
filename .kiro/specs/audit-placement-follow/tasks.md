@@ -83,7 +83,7 @@
   - `anchor_changed_system` は system と 4 本のテストを残し、属性を消して、説明を「本番は `reseed` から `resize_window_to` で書く・schedule に登録しない書き方の見本」に直す（アンカーの型の説明も）
   - 完了の状態: `cargo check -p areka-placement --lib --tests --examples` と `cargo check -p areka --tests` で新しい警告 0、`#[allow(dead_code)]` が範囲の中で `GroupShift` の 1 個のほか 0
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.1, 3.3, 7.1_
-- [ ] 3.5 本番のコードの古い説明と旧い名前を直す（指摘 10・22 の本番の側）
+- [x] 3.5 本番のコードの古い説明と旧い名前を直す（指摘 10・22 の本番の側）
   - `OffsetRescale::Unchanged` の説明 2 か所を「比が恒等・呼び手は書き戻す」に直す
   - `research.md` 3 節の 22 の一覧のうち本番のファイルの行を今の事実に合わせるか消し、行の番号での参照を名に替える（`drag_follow.rs` の済んだ話を含む）
   - 旧い名前 `emo2_boot` を本番のファイルから無くす

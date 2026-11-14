@@ -511,8 +511,8 @@ fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> 
 /// `BalloonFollow.offset = balloon_pos − char_pos`（物理 px・再スケールなし・U4）
 /// へ更新するだけ。既存 consumer（[`on_char_drag`]／[`move_window_to`]）は
 /// 無改変で調整後 offset を読む（DD16・4.4 の恒等式
-/// `balloon_pos − char_pos ≡ offset` は更新後も不変）。記憶はセッション内のみ
-/// （永続化 ghost.dat は M-life の領分）。
+/// `balloon_pos − char_pos ≡ offset` は更新後も不変）。ghost.dat への保存は離したときの
+/// `on_balloon_drag_end` が行う。
 ///
 /// イベントは消費しない（常に `false`＝伝播続行。[`on_char_drag`] と同じ規約）。
 pub fn on_balloon_drag(
