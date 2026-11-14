@@ -65,3 +65,8 @@
   - 本 spec との関わり: `cache_hit` は本 spec が測る `presenter/show.rs` の適用の perf の行の欄（覚えに当たらないと `Stage::MaskGen` まで進む）。動く絵の適用が重いと刻みが詰まり、同じ UI のスレッドで受ける MCP の返事も遅れる見込み（確かめていない）。
   - やること: まず測る。ぱすたを起こしたまま、適用の回数・`cache_hit` の割合・1 回の時間・刻みの詰まりと MCP の返事の遅れを並べ、遅れが適用の重さから来るかを切り分ける。動く絵のコマが毎回覚えに当たらないのが正しい（コマごとに絵が違う）のか、覚えの鍵が要らない違いを含んでいるのかも見る。
   - 起票の理由: 測る場所（適用の計時と perf の行）が本 spec と同じ。原因が合成の覚えの鍵や合成そのもの（本文の Out「合成そのものの速さ」）と分かったら、本 spec は計測と記録で閉じ、直しを別に起票する（本文の「分割の案」と同じ）。
+
+## 申し送り（wintf-visual-damage-redraw より・2026-11-14）
+
+- **wintf の描画面ごとの所要の記録の行が在る**: target `wintf::damage`・水準 debug・文言 `[render_surface] damage`（`crates/wintf/src/ecs/graphics/systems/render.rs` の `log_damage`）。欄に `mode`（`full`・`partial`・`present`・`skip`）・`area`・`present_area` と、合成の所要 `compose_us`・描画面へ写す所要 `present_us` が在る。所要はこの target の debug が開いているときだけ測る（閉じていれば 0・計画と答えは変わらない）。適用の後の wintf の側の時間を切り分ける計測に使える。正本: `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の DamageRecord。
+- **描かない回が増えた**: 計画が `skip` の回は入れ物を合成せず、WUC の描画面へも写さない（`BeginDraw` しない）。範囲だけの回の部分の `BeginDraw` は、前の合成を描画面へ写し終えた後だけ（写せていなければ全面で写す）。既存の `[tick]` の行の `rendersurface_us` は係の全体の所要のまま（文言と欄は変えていない）。この spec が wintf の描画の時間を見るなら、前後を比べるときこの変化の後の main で測る。
