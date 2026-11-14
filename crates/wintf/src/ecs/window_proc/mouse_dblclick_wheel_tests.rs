@@ -19,8 +19,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows_numerics::Matrix3x2;
 
 use crate::ecs::drag::{
-    DragAccumulatorResource, DragConfig, DragEndEvent, DragStartEvent, DragStateSnapshot,
-    cancel_dragging, dispatch_drag_events, snapshot_drag_state,
+    DragConfig, DragEndEvent, DragStartEvent, DragStateSnapshot, cancel_dragging,
+    dispatch_drag_events, snapshot_drag_state,
 };
 use crate::ecs::layout::GlobalArrangement;
 use crate::ecs::pointer::{PhysicalPoint, PointerState, transfer_buffers_to_world};
@@ -55,7 +55,6 @@ fn setup(config: Option<DragConfig>) -> (Rc<RefCell<EcsWorld>>, Entity) {
     let window = {
         let mut w = world.borrow_mut();
         let w = w.world_mut();
-        w.insert_resource(DragAccumulatorResource::new());
         let window = w
             .spawn((
                 Window::default(),

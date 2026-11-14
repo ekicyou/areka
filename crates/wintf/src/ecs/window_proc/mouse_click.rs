@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 use windows::Win32::Foundation::*;
 
 use crate::ecs::world::EcsWorld;
@@ -68,32 +68,31 @@ pub(super) fn handle_button_message(
                 window_entity,
                 HitTestPoint::new(x as f32, y as f32),
             ) {
-                // ヒットしたエンティティの名前とGlobalArrangement.boundsをログ出力
-                let entity_name = world_borrow
-                    .world()
-                    .get::<bevy_ecs::name::Name>(target_entity)
-                    .map(|n| n.as_str().to_string())
-                    .unwrap_or_else(|| format!("{:?}", target_entity));
-                let bounds_info = world_borrow
-                    .world()
-                    .get::<crate::ecs::layout::GlobalArrangement>(target_entity)
-                    .map(|g| {
-                        format!(
-                            "({:.0},{:.0})-({:.0},{:.0})",
-                            g.bounds.left, g.bounds.top, g.bounds.right, g.bounds.bottom
-                        )
-                    })
-                    .unwrap_or_else(|| "no bounds".to_string());
-                info!(
+                // 当たった entity の名前と GlobalArrangement.bounds を記録（文字列は debug が開いているときだけ組む）
+                debug!(
                     target_entity = ?target_entity,
-                    entity_name = %entity_name,
+                    entity_name = %world_borrow
+                        .world()
+                        .get::<bevy_ecs::name::Name>(target_entity)
+                        .map(|n| n.as_str().to_string())
+                        .unwrap_or_else(|| format!("{:?}", target_entity)),
                     client_x = x,
                     client_y = y,
                     screen_x,
                     screen_y,
-                    bounds = %bounds_info,
+                    bounds = %world_borrow
+                        .world()
+                        .get::<crate::ecs::layout::GlobalArrangement>(target_entity)
+                        .map(|g| {
+                            format!(
+                                "({:.0},{:.0})-({:.0},{:.0})",
+                                g.bounds.left, g.bounds.top, g.bounds.right, g.bounds.bottom
+                            )
+                        })
+                        .unwrap_or_else(|| "no bounds".to_string()),
                     button = ?button,
                     is_down,
+                    double_click,
                     "[handle_button_message] hit_test result"
                 );
 
@@ -148,7 +147,7 @@ pub(super) fn handle_button_message(
                         };
                         if let Some((entity_with_config, drag_config)) = drag_entity {
                             if drag_config.enabled && drag_config.left_button {
-                                tracing::info!(
+                                debug!(
                                     hit_entity = ?target_entity,
                                     drag_entity = ?entity_with_config,
                                     x = screen_x,

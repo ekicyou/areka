@@ -323,3 +323,14 @@
 - 較正: `screen_point` の `x + pos.x` を `x` にする → `test_screen_point_adds_window_position_or_keeps_client_point` と `w1_left_dblclick_prepares_and_crossing_threshold_starts` が赤。`xbutton_of` の `== 1` を `== 2` にする → `test_xbutton_of_reads_hiword_of_wparam` が赤。どちらも明示の編集で戻し、ファイルが較正の前の写しとバイトで同じことを確かめた。
 - 消したのはローカルの式の写しだけで、外から引く名は無い（`git grep` の対象なし）。
 - テストの数: `cargo test -p wintf --lib window_proc` 117 → 119 本緑。`mouse_click.rs` 535→575 行・`mouse_move.rs` 535→525 行。fmt 通る・clippy に足した警告は無い。
+
+## 14.3
+
+- 63: クリックのたびの `info!` を `debug!` に下げた。14.1 でダブルクリックの `info!`（`[handle_double_click_message] Double-click detected`）は消えていたので、残る 3 か所＝`mouse_click.rs` の「hit_test result」（押す・離すたび）と「Calling start_preparing (ancestor search)」（左でドラッグの準備を始めるたび）・`keyboard.rs` の「[WM_ACTIVATE] Window deactivated during drag, cancelling」。`entity_name`・`bounds_info` の `let` の `format!` を消し、`debug!` のフィールドの式の中で組む形にした（`tracing` はフィールドの式を、その行が開いているときだけ評価する）。ダブルクリックの印が `debug` の行にしか出なくなるので、「hit_test result」の行に `double_click` の欄を足した。`mouse_click.rs` の取り込みから使われなくなった `info` を外した。`drop_files.rs:140` と `lifecycle.rs` の 2 か所の `info!` は変えていない。
+- 文言を読むテストの確かめ: `git grep "hit_test result\|Calling start_preparing\|deactivated during drag, cancelling"` は本番の 3 行と、この spec の research.md・impl-notes.md だけ（テスト・tools・doc から読む所は 0）。
+- 51: `mouse_dblclick_wheel_tests.rs` の `setup` の `w.insert_resource(DragAccumulatorResource::new())` を消し、使われなくなった import の `DragAccumulatorResource` を外した。これで `EcsWorld::new` が資源と窓の手続きの控えに置いた同じ累積器を使う。
+  - 確かめ（一時のテスト・残していない）: 「ダブルクリック → 閾値を越える → 離す → 終了が 1 件」の一時のテストを足し、消す前は赤（`left: 0, right: 1`）、消した後は緑。確かめた後に一時のテストは消した。
+- 50: ファイル頭の一覧を中身に合わせた。`keyboard.rs` に `WM_CAPTURECHANGED`、`mouse_move.rs` に `WM_SETCURSOR` を足した。`mouse_dblclick_wheel.rs` の 19-21 行の分かれた説明は 14.1 の作り直しで既に無くなっていたので、頭に「ダブルクリックは押下の共通処理へ印つきで渡すだけ・ホイールは回転量を溜めに記録する」を足した。
+- 消したもの: ローカルの束縛 `entity_name`・`bounds_info` と、テストの 1 行と import の 1 語だけ（外から引く名は無い）。
+- 較正: design の「直したテストの較正」で 50・63 はテストを持たない／既にあるテストが緑のままで確かめる区分、51 は表に無い。51 は上の一時のテストで赤と緑を見た。
+- テストの数: `cargo test -p wintf --lib window_proc` 119 → 119 本緑。fmt 通る・clippy の警告で触ったファイルのものは 0。

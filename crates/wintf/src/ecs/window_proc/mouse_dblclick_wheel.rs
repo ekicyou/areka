@@ -1,6 +1,8 @@
 //! ダブルクリック・ホイールメッセージハンドラ
 //!
 //! WM_*BUTTONDBLCLK, WM_MOUSEWHEEL, WM_MOUSEHWHEEL の処理を担当する。
+//! ダブルクリックは押下の共通処理（`mouse_click::handle_button_message`）へ印つきで渡すだけで、
+//! ホイールは回転量を溜めに記録する。
 
 #![allow(non_snake_case)]
 

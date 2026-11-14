@@ -1,6 +1,6 @@
 //! マウス移動・ヒットテスト・離脱ハンドラ
 //!
-//! WM_NCHITTEST, WM_MOUSEMOVE, WM_MOUSELEAVE
+//! WM_SETCURSOR, WM_NCHITTEST, WM_MOUSEMOVE, WM_MOUSELEAVE
 
 #![allow(non_snake_case)]
 
