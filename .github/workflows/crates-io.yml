@@ -1,4 +1,4 @@
-# 公開の段: その版の wintf・dola を、確かめてから crates.io へ出す（認証は Trusted Publishing だけ）。
+# 公開の段: その版の wintf・dola・wintf-winmsg-executor を、確かめてから crates.io へ出す（認証は Trusted Publishing だけ）。
 # きっかけは 2 つだけ:
 #   - タグ v{版} の push: 同じタグの release.yml の回が緑で終わるのを待ってから出す（release.yml はこの段を呼ばない）
 #   - 手での起動（workflow_dispatch・入力 version）: やり直しの口。GitHub の Actions の画面の「Run workflow」から

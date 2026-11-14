@@ -1,0 +1,32 @@
+[package]
+name = "wintf-winmsg-executor"
+workspace = "../.."
+description = "Per-thread async executor for Windows (fork of winmsg-executor)"
+repository.workspace = true
+version.workspace = true
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = true
+readme = "README.md"
+keywords = ["windows", "async", "executor", "winapi", "message-loop"]
+categories = ["asynchronous", "os::windows-apis"]
+include = [
+    "src/**/*.rs",
+    "examples/**/*.rs",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
+
+[dependencies]
+async-task = { version = "4.7.1", default-features = false }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = ["x86_64-pc-windows-msvc"]
