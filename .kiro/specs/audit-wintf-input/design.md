@@ -39,7 +39,7 @@
 ### Out of Boundary
 
 - 窓の手続き（`ecs/window_proc/`）の指摘の直しと `mouse_*` の作りの直し（`audit-wintf-window`・議題 11）。この spec が触るのは、型の形を変えたことへの機械的な追従の行だけ（「並走の兄弟との申し合わせ」の表）。
-- `WindowPointerTracking` 型を消すこと（範囲の中のファイルだが `audit-wintf-window` が消す・議題 11）。
+- `WindowPointerTracking` 型を消すこと（範囲の中のファイルだが `audit-wintf-window` が消す・議題 11）。2026-11-14 に #461 で型・テスト・再公開ごと消えた。
 - `crates/areka-placement/` の指摘の直し（`audit-placement-core`・`audit-placement-follow`）。この spec が触るのは `is_primary` と `initial_inset` の読み手の行だけ。
 - `tools/perf/` の道具（`audit-tools-perf-run`・`audit-tools-perf-judge`）。クリック透過の記録の文言 `clickthrough: ex-style トグル適用` と欄 `desired`、`DesiredState` の綴り `Transparent`・`Opaque` は道具が読むので変えない。
 - `crates/wintf/src/ecs/tooltip/`・`ecs/graphics/visual/draw/`・`ecs/graphics/composite.rs`・`ecs/graphics/systems/render.rs`・`numerics/matrix3x2.rs`（0 ファイル）。
@@ -178,30 +178,31 @@ crates/wintf/src/ecs/drag/
 | `crates/wintf/src/runtime/mod.rs` | 完了（`audit-wintf-runtime`） | 21 行の `use`・291 行の説明・324 行の呼び出しを `start_click_through` に | 23 |
 | `crates/wintf/src/runtime/wndproc_bridge_drag_cancel_tests.rs`・`wndproc_bridge_drag_release_tests.rs`・`wndproc_bridge_drag_test_support.rs` | 完了 | `DragStateSnapshot` を `DragState` に（release 24・45-46・527 行、support 35・160・170・183・284-285 行ほか） | 18 |
 | `crates/wintf/tests/drag/dispatch_test.rs` | 完了 | 17 行の `use` から `cleanup_drag_state`・492-545 行の 2 本を消す（1）。86-87・414・455・502・534 行の欄名（15）。106・513 行の `is_primary`（9⑹）。冒頭の説明 3 行 | 1・9⑹・15 |
-| `crates/wintf/src/ecs/window_proc/mouse_move.rs` | **`audit-wintf-window`（走っている）** | 機械的な追従だけ（議題 11）: 214・217・258 行（`DragStateSnapshot` → `DragState`）・383・436 行（`push_pointer_sample` の引数の型）・463・472-473 行（欄名） | 18・10・15 |
-| `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs` | **同上** | 20-21・108・120-121・163-164 行（`DragStateSnapshot`）・213 行（`right_button`） | 18・9⑸ |
-| `crates/wintf/src/ecs/window_proc/keyboard_tests.rs` | **同上** | 20-21・47-48・68-69・102-103・134-135・381-382 行 | 18 |
-| `crates/wintf/src/ecs/window_proc/mouse_click_tests.rs` | **同上** | 16-17・80-81・122-123 行 | 18 |
+| `crates/wintf/src/ecs/window_proc/mouse_move.rs` | **`audit-wintf-window`（完了・#461）** | 機械的な追従だけ（議題 11）: 210・246 行（`DragStateSnapshot` → `DragState`）・359 行（`push_pointer_sample` の引数の型・#461 で 1 か所に）・396・405-406 行（欄名） | 18・10・15 |
+| `crates/wintf/src/ecs/window_proc/mouse_move_dispatch_tests.rs`（#461 で新設） | **同上** | 17・139 行（`DragStateSnapshot`） | 18 |
+| `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs` | **同上** | 22・109・122・165 行（`DragStateSnapshot`）・214 行（`right_button`） | 18・9⑸ |
+| `crates/wintf/src/ecs/window_proc/keyboard_tests.rs` | **同上** | 20・48・69・103・135・382 行 | 18 |
+| `crates/wintf/src/ecs/window_proc/mouse_click_tests.rs` | **同上** | 16・81・123 行 | 18 |
 | `crates/wintf/src/ecs/window_proc/mouse_move_drag_origin_tests.rs` | **同上** | 14 行（欄名） | 15 |
-| `crates/areka-placement/src/follow/drag_follow.rs` | **`audit-placement-follow`（走っている）** | 271-273 行の説明（「歴史的経緯」の注記を消す）・294-295 行 | 15 |
-| `crates/areka-placement/src/follow_test_support.rs` | **同上** | 51・105・116 行（`is_primary`）・90・95 行（欄名） | 9⑹・15 |
-| `crates/areka-placement/src/follow_drag_end_gate_tests.rs`・`follow_drag_tests.rs` | **同上** | 248・251 行・552 行（説明の欄名） | 15 |
-| `crates/areka-placement/src/spawn_follow_pipeline_tests.rs`・`persist_finalize_save_tests.rs` | **`audit-placement-follow` か `audit-placement-core`**（実装の頭に両方へ確かめる） | 40 行・391 行（`is_primary`） | 9⑹ |
-| `crates/areka-placement/src/balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs` | **`audit-placement-core`（走っている）** | 244 行・315 行（`is_primary`） | 9⑹ |
+| `crates/areka-placement/src/follow/drag_follow.rs` | **`audit-placement-follow`（完了・#460）** | 270-272 行の説明（「歴史的経緯」の注記を消す）・293-294 行 | 15 |
+| `crates/areka-placement/src/follow_test_support.rs` | **同上** | 50・104・115 行（`is_primary`）・89・94 行（欄名） | 9⑹・15 |
+| `crates/areka-placement/src/follow_drag_end_gate_tests.rs`・`follow_drag_tests.rs` | **同上** | 208・211 行・489 行（説明の欄名） | 15 |
+| `crates/areka-placement/src/spawn_follow_pipeline_tests.rs`・`persist_finalize_save_tests.rs` | **`audit-placement-core`**（`audit-placement-follow` は着地済み・実装の頭に `audit-placement-core` へ確かめる） | 40 行・389 行（`is_primary`） | 9⑹ |
+| `crates/areka-placement/src/balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs` | **`audit-placement-core`（走っている）** | 243 行・314 行（`is_primary`） | 9⑹ |
 | `crates/areka/src/runtime/frame/dpi.rs` | 走っていない | 179-230 行（引数名・欄名・説明） | 15 |
 | `crates/areka/src/runtime/frame_chain_finalize_persist_restart_tests.rs` | 走っていない | 73 行（欄名）・79 行（`is_primary`） | 15・9⑹ |
 | `crates/areka/src/runtime/frame_chain_realign_exclusion_tests.rs` | 走っていない | 248 行 | 15 |
 | `crates/areka/src/runtime/frame_dpi_drag_grab_tests.rs` | 走っていない | 34-35・62・78・137-138・187 行 | 15 |
 | `crates/areka/src/runtime/frame_balloon_offset_follow_tests.rs` | 走っていない | 830 行 | 9⑹ |
-| `crates/areka/src/input_events/drag_test_support.rs`・`drag_tests.rs`・`drag_sticky_tests.rs` | 走っていない | 247-254 行（`set_initial_inset` を `set_initial_window_pos` に）・9・212・221・430 行・55・62 行 | 15・9⑹ |
+| `crates/areka/src/input_events/drag_test_support.rs`・`drag_tests.rs`・`drag_sticky_tests.rs` | 走っていない | 246-253 行（`set_initial_inset` を `set_initial_window_pos` に）・9・212・221・430 行・55・62 行 | 15・9⑹ |
 | `crates/areka/examples/mock-shell.rs` | 走っていない | 794 行 | 9⑹ |
 | `crates/areka/tests/window_link_real_run.rs` | 走っていない | 49-50 行の `RUST_LOG` に `wintf::ecs::drag::dispatch=debug` | 14 |
 | `doc/click-through.md` | 走っていない | 20・32・98・107 行（`ClickThroughController`・`snapshot_drag_state` の写し）・147 行（刈る条件） | 18・21・23 |
 
 - `crates/areka/src/menu/trigger.rs:209`（`snapshot_drag_state().is_button_held()`）と `menu/trigger_flow_tests.rs:335` は形が変わっても書き換えずにビルドできる（`DragState` も `is_button_held` を持つ）。
 - `crates/areka/examples/emo-present/input.rs`・`crates/wintf/examples/taffy_flex_demo/` は `local_point` を記録に出すだけ＝値が説明どおりになり、書き換えは要らない。
-- 窓の手続きの `PointerState` を作る 4 か所（`mouse_move.rs:364,422`・`mouse_click.rs:119`・`mouse_dblclick_wheel.rs:90`）の `local_point: PhysicalPoint::new(x, y)` は触らない（議題 11）。作った値は次の tick の頭で `transfer_buffers_to_world` が書き直すので、`Input` の段の系と受け手は本当のローカル座標だけを見る。`audit-wintf-window` の指摘 45 が 3 つの写しをまとめた後も同じ（作る所が減るだけ）。
-- `WindowPointerTracking`（`pointer/types/mod.rs:206`・`types/tests.rs:122-125`）は触らない。`audit-wintf-window` の指摘 6 の直しで使い手が無くなり、あちらが型ごと消す（範囲の中のファイルだが議題 11 の分け方・実装の前にもう一度申し合わせる）。
+- 窓の手続きの `PointerState` を作る 2 か所（`mouse_move.rs:335`・`mouse_click.rs:119`・#461 の指摘 45 で 4 か所から減った）の `local_point: PhysicalPoint::new(x, y)` は触らない（議題 11）。作った値は次の tick の頭で `transfer_buffers_to_world` が書き直すので、`Input` の段の系と受け手は本当のローカル座標だけを見る。作る所が減っても同じ。
+- `WindowPointerTracking` は `audit-wintf-window` の指摘 6 の直しで型・テスト・再公開ごと消えた（#461・議題 11 の分け方どおり）。この spec は触らない。
 - `crates/areka/tests/emo2_real_run/common.rs:106` の `is_primary=true` はモニタの記録で、変わらない。
 - `ecs/window_proc/keyboard.rs`・`mouse_click.rs:175` の「旧状態の CaptureGuard が Drop され」の説明は、守りが別の枠に移っても事実のまま（落ちるのは同じ）＝触らない（要件 5.4）。
 
@@ -385,7 +386,7 @@ fn poll_once(
 
 #### 指摘 7: 落ちえない・名前と違うことを確かめるテスト
 
-- ギャップ分析 3 節の 7 の 6 か所を消す（`controller_tests.rs:632-644`・`accumulator_tests.rs:121-135`・`context.rs:163-177`・`capture_guard.rs:83-108`・`pointer/dispatch/tests.rs:3-38,164-171`・`pointer/types/tests.rs:112-164`）。残る本物のテストがそれぞれの仕組みを覆う（同節の各行の後半）。同節の 7 に挙げた `drag/state/tests.rs:380-442`（`check_threshold` の 5 本）は、関数を残すので消さない（議題 11）。
+- ギャップ分析 3 節の 7 の 6 か所を消す（`controller_tests.rs:632-644`・`accumulator_tests.rs:121-135`・`context.rs:163-177`・`capture_guard.rs:83-108`・`pointer/dispatch/tests.rs:3-38,164-171`・`pointer/types/tests.rs:112-155`・#461 後の行）。残る本物のテストがそれぞれの仕組みを覆う（同節の各行の後半）。同節の 7 に挙げた `drag/state/tests.rs:380-442`（`check_threshold` の 5 本）は、関数を残すので消さない（議題 11）。
 
 #### 指摘 8・20: `WM_NCHITTEST` の答えの判定
 
@@ -401,11 +402,11 @@ fn answer(hit: bool, held: bool) -> LRESULT {
 
 #### 指摘 9: 使われないコード
 
-- ⑴ `check_threshold`（`state/mod.rs:611-647`）は消さずに残す（議題 11）。`audit-wintf-window` の指摘 62 が、窓の手続きの閾値の計算の写し（`mouse_move.rs:228-233`）をこの関数の呼び出しに替える。こちらは関数・5 本のテスト・再公開を残し、行き先の無い説明（「P62 に記録」「W7a 境界」「本ループ」「本番呼び出しがゼロ」）だけを直す（指摘 16）。こちらが先に着地した場合、かけ直しの audit がこの関数を「使われない」と指しても、議題 11 の決めとして新しい指摘に数えない（要件 3.4）。
+- ⑴ `check_threshold`（`state/mod.rs:611-647`）は消さずに残す（議題 11）。`audit-wintf-window` の指摘 62 が、窓の手続きの閾値の計算の写しをこの関数の呼び出し（`mouse_move.rs:223`）に替えた（#461）。こちらは関数・5 本のテスト・再公開を残し、行き先の無い説明（「P62 に記録」「W7a 境界」「本ループ」「本番呼び出しがゼロ」）だけを直す（指摘 16）。本番の呼び出しができたので「本番呼び出しがゼロ」は偽になった。
 - ⑵ `DOUBLE_CLICK_BUFFERS`（`buffers.rs:30-31`）とテストの片付けの 1 行（`:311`）を消す。
 - ⑶ `hit_test_placeholder`・`hit_test_with_local_coords`（`types/mod.rs:363-397`）とテスト 2 本を消す。
 - ⑷ `CaptureGuard::is_released` と、それを使うテストを消す（指摘 7 と同じ）。
-- ⑸ `DragConfig.right_button`・`middle_button` を消す（議題 2）。`Default` の 2 行・`mod.rs` のテストの 2 行・`window_proc/mouse_dblclick_wheel_tests.rs:213`。`left_button` は読み手（`mouse_click.rs:153`・`mouse_dblclick_wheel.rs:131`）があるので残す。
+- ⑸ `DragConfig.right_button`・`middle_button` を消す（議題 2）。`Default` の 2 行・`mod.rs` のテストの 2 行・`window_proc/mouse_dblclick_wheel_tests.rs:213`。`left_button` は読み手（`mouse_click.rs:149`・#461 でダブルクリックの側の読み手は無くなった）があるので残す。
 - ⑹ 3 つのドラッグの知らせの `is_primary`（`dispatch.rs:17-18,32-33,47-48`）と、書く所 3 つ（186・225・353 行）を消す（議題 2）。範囲の外の書き手はツリー全体で 13 か所（File Structure Plan の表・要件の討議で数えた「5 か所」は `areka-placement` の中の 2 ファイルだけを見た数で、2026-11-14 の設計の段の grep で `areka-placement` 7・`areka` 4・wintf のテスト 2 を確かめた）。
 
 #### 指摘 10・22: ポインタの速さと時刻・中の溜めの型
@@ -592,7 +593,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | `audit-placement-core`（`balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs`） | **2026-11-14 に順を申し合わせた**: この spec が先に実装して着地し、`balloon_lock_drag_tests.rs:244`・`balloon_limit_flip_tests.rs:315` の `is_primary: true` の行も消す。`audit-placement-core` はその後に、消した後の形の上でテストの部品（向こうの指摘 80・`DragStartEvent` ほかを組む部品）をまとめる。**予備の決め**: もし向こうが先に着地したら、前の決め「後から着地する側が読み手を直す」どおりこの spec が直す | 9⑹ のタスク |
 | `audit-placement-follow`（`follow/drag_follow.rs`・`follow_test_support.rs` ほか） | 「後から着地する側が読み手を直す」（2026-11-14 合意）。この spec が触るのは `is_primary` の 3 行と `initial_inset` の 7 行（説明を含む）だけ。`spawn_follow_pipeline_tests.rs`・`persist_finalize_save_tests.rs` はどちらの持ち物かを実装の頭に両方へ確かめる | 9⑹ と 15 のタスクの頭 |
 | `audit-tools-perf-judge`（`tools/perf/judge-followup.py`） | **2026-11-14 に知らせて答えを得た**: 行の番号のずれは向こうの指摘 #74 として、行の番号をやめてファイル名と項目の名で指す形に直す（着地の順は問わない）。こちらの約束は、クリック透過のファイル名と、`DesiredState`・`MSG_TOGGLE` が写す記録の文言の綴りを変えないこと（変えるときだけ知らせる）。今の設計はどちらも変えない（指摘 23 で消すのは `ClickThroughController` の型だけ） | 済み |
-| `areka棚卸`（C20 の段の割り当て・2026-11-14） | C20 を 2 段に分けた。この spec は**後の段**（`audit-tools-perf-run`・`audit-tools-perf-judge`・`audit-placement-core` と同じ段）。**実装（`/kiro-impl`）は先の段の 4 本（`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・`audit-placement-follow`）が着地してから始める**。後の段の中では、この spec が `audit-placement-core` より先に着地する。先の段が早まった・遅れたときの入れ替えは `areka棚卸` へ知らせる | 実装の頭 |
+| `areka棚卸`（C20 の段の割り当て・2026-11-14） | C20 を 2 段に分けた。この spec は**後の段**（`audit-tools-perf-run`・`audit-tools-perf-judge`・`audit-placement-core` と同じ段）。**実装（`/kiro-impl`）は先の段の 4 本（`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・`audit-placement-follow`）が着地してから始める**（2026-11-14 に 4 本とも着地＝#458〜#461・main `71594918`）。後の段の中では、この spec が `audit-placement-core` より先に着地する。先の段が早まった・遅れたときの入れ替えは `areka棚卸` へ知らせる | 実装の頭 |
 | `wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-tools-perf-run` | 知らせることは無い（触るファイルが重ならない・依存も `Cargo.toml` も変えない） | — |
 | SSP の測り | 要らない（議題 9 は下流の間引きで閉じた） | — |
 
