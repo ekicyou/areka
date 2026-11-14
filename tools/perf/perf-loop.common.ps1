@@ -13,7 +13,7 @@ perf-loop.common.ps1 — perf-loop.ps1 が dot-source する共通部品
 perf-tool-base.ps1（表示・時刻・子の起こし方・目標定義の読み・検体の在り処）だけで、
 単独で読み込んでも動く（tools/encoding-check.ps1 が Invoke-Child／Invoke-PwshChild を使う形）。
 
-  終了と定数        … Exit-WithResult / Stop-Run・終了コード（$EXIT_*）・$BUILD_KINDS・$repoRoot
+  終了と定数        … Exit-WithResult / Stop-Run / Exit-OnUnexpectedError（trap から）・終了コード（$EXIT_*）・$BUILD_KINDS・$repoRoot
                        終了は必ず Exit-WithResult を通る。ここが標準出力の末尾へ
                        `PERF-LOOP RESULT <sub> code=<n> dir=<path>` の 1 行を出す
                        唯一の場所である（背景実行の終了で会話へ届く形＝要件 1.11）
@@ -102,6 +102,12 @@ function Stop-Run {
     )
     Write-Problem "[perf-loop] FAILED: $Message"
     Exit-WithResult -Code $Code -Sub $Sub -Dir $Dir
+}
+
+# 想定外の失敗（入口の頭の trap から呼ぶ）。理由を 1 行出し、4（計測失敗の枠＝道具の不具合）で終える。
+function Exit-OnUnexpectedError {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord)
+    Stop-Run -Code $EXIT_MEASURE_FAILED -Message (Format-UnexpectedError -ErrorRecord $ErrorRecord -Label 'unexpected failure (tool bug)')
 }
 
 # =============================================================================

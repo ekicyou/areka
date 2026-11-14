@@ -148,6 +148,9 @@ param(
     [switch]$SelfTest
 )
 
+# 想定外の失敗は理由の 1 行と 1（実走の失敗＝perf-loop は 1 度だけ採り直す）。出力先は Stop-Run が退ける
+trap { Stop-Run $EXIT_RUN_FAILED (Format-UnexpectedError -ErrorRecord $_) }
+
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 # 外部コマンド（git）の標準エラー出力で例外を投げさせない。終了コードは自前で見る。

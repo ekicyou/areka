@@ -98,8 +98,15 @@ param(
     [switch]$SelfTest
 )
 
+# 想定外の失敗は理由の 1 行と中止の形の FOLLOWUP RESULT 行で 1（perf-loop は 1 度だけ採り直す）
+trap { Stop-Run $EXIT_FAIL (Format-UnexpectedError -ErrorRecord $_) }
+
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+
+# trap の Stop-Run が出力先の決まる前でも読める値
+$script:NoteLines  = @()
+$script:OutDirPath = '-'
 
 # =============================================================================
 # 較正値
@@ -334,7 +341,6 @@ if ($SelfTest) {
 # 引数の検証
 # =============================================================================
 $script:ProbeLines = @()
-$script:NoteLines = @()
 
 if (-not [System.IO.Path]::IsPathFullyQualified($OutDir)) {
     $OutDir = Join-Path (Get-Location).Path $OutDir

@@ -247,6 +247,9 @@ function Invoke-MeasureQuietAfter {
             Write-Info "[perf-loop] quiet check after the run: quiet ($RunDir\$MEASURE_FILE_QUIET_AFTER)"
             return
         }
+        if ($result.Code -eq 3) {
+            Stop-Run -Code $EXIT_BAD_ARGS -Message "quiet check after the run stopped on bad arguments or settings: $($result.LastLine)"
+        }
         if ($result.Code -eq 4) {
             Stop-Run -Code $EXIT_MEASURE_FAILED -Message "quiet check after the run could not read the performance counters (measure failed): $($result.LastLine)"
         }

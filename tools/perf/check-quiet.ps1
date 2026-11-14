@@ -93,6 +93,17 @@ param(
     [switch]$SelfTest
 )
 
+# 想定外の失敗は理由の 1 行と RESULT 行で 4（計測失敗）。-SelfTest のときは 1（自分の検査が赤）
+trap {
+    Write-Problem "[check-quiet] failed: $(Format-UnexpectedError -ErrorRecord $_)"
+    if ($SelfTest) {
+        Write-Info "CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_NG code=$EXIT_SELFTEST_NG file=-"
+        exit $EXIT_SELFTEST_NG
+    }
+    Write-Info "CHECK-QUIET RESULT stage=$(if ($Stage) { $Stage } else { '-' }) verdict=$VERDICT_FAILED code=$EXIT_MEASURE file=-"
+    exit $EXIT_MEASURE
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 

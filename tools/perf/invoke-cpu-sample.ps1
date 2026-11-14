@@ -68,7 +68,7 @@ invoke-cpu-sample.ps1 — CPU サンプリング（呼出スタック付き）�
 ================================================================================
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Probe')]
+[CmdletBinding(DefaultParameterSetName = 'None')]
 param(
     # 採れるかどうかだけを確かめる（必ず exit 0・1 行で報告）
     [Parameter(ParameterSetName = 'Probe', Mandatory = $true)]
@@ -116,6 +116,9 @@ param(
     [Parameter(ParameterSetName = 'Start')]
     [int]$ProfIntervalUnits = 0
 )
+
+# 想定外の失敗は理由の 1 行と RESULT 行で 1
+trap { Stop-Run -Mode $PSCmdlet.ParameterSetName.ToLowerInvariant() -Code $EXIT_RUN_FAILED -Message (Format-UnexpectedError -ErrorRecord $_) }
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
@@ -577,6 +580,13 @@ function Invoke-SelfTestMode {
     }
     Write-Info "selftest missing header row: problem=$($noStackStats.Problem)"
 
+    # ⒜-5 no-args: 引数なしは必須の引数を問わずに 3 と RESULT 行 none で終わる（-NonInteractive の子でも）
+    $noArgs = Invoke-PwshChild -ScriptPath $PSCommandPath -Quiet
+    $noArgsLast = [string]($noArgs.Out | Select-Object -Last 1) -replace '[^\x20-\x7E]', '?'
+    if ($noArgs.Code -ne $EXIT_BAD_ARGS -or $noArgsLast -notlike "INVOKE-CPU-SAMPLE RESULT none code=$EXIT_BAD_ARGS *") {
+        $failures += "no-args: exit code $($noArgs.Code) (want $EXIT_BAD_ARGS), last line '$noArgsLast'"
+    }
+
     # ⒝ -Probe（採れないことは赤ではなく UNAVAILABLE の報告）
     $probe = Get-ProbeResult
     $available = if ($probe.Available) { 'true' } else { 'false' }
@@ -599,5 +609,5 @@ switch ($PSCmdlet.ParameterSetName) {
     'Start'    { Invoke-StartMode }
     'Stop'     { Invoke-StopMode }
     'SelfTest' { Invoke-SelfTestMode }
-    default    { Stop-Run -Mode 'none' -Code $EXIT_BAD_ARGS -Message 'specify exactly one of -Probe / -Start / -Stop / -SelfTest.' }
+    'None'     { Stop-Run -Mode 'none' -Code $EXIT_BAD_ARGS -Message 'specify exactly one of -Probe / -Start / -Stop / -SelfTest.' }
 }

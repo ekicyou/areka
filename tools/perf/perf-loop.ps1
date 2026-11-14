@@ -84,7 +84,7 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
   2 … 静寂でない（再試行の上限を超えた）
   3 … 引数・前提の不正（未知のサブコマンド・目標定義ファイルが無い・未実装の受け口）
   4 … 計測失敗＝MEASURE_FAILED（自己較正が赤・判定スクリプトの版不一致・空採取・
-      記号解決ゼロ）。台帳へは MEASURE_FAILED として記録される
+      記号解決ゼロ）。想定外の失敗（道具の不具合）もここに入る。台帳へは MEASURE_FAILED として記録される
   5 … 能力不足＝UNAVAILABLE（昇格なし・xperf なし・PDB なし）。**停止の理由にしない**。
       preflight は段③を UNAVAILABLE と記して 0 で返す（順位表は段①②④で続く）
 
@@ -153,6 +153,14 @@ param(
     # 静寂確認・cargo build・サンプリング・追随チェックも行わない（測定にはならない）
     [switch]$DryRun
 )
+
+# 想定外の失敗は理由の 1 行と RESULT 行で 4（道具の不具合）。共通部品を読み込む前なら自分で RESULT 行を出す。
+trap {
+    if (Get-Command -Name 'Exit-OnUnexpectedError' -CommandType Function -ErrorAction Ignore) { Exit-OnUnexpectedError $_ }
+    [Console]::Error.WriteLine("[perf-loop] FAILED: unexpected failure (tool bug): $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+    [Console]::Out.WriteLine('PERF-LOOP RESULT - code=4 dir=-')
+    exit 4
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
@@ -671,7 +679,6 @@ switch ($Sub) {
     'compare'          { Invoke-SubCompare }
     'followup'         { Invoke-SubFollowup }
     'final'            { Invoke-SubFinal }
-    default            { Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-' }
 }
 
 # ここへは来ない（各サブコマンドは必ず Exit-WithResult で終わる）。来たら道具の不具合。

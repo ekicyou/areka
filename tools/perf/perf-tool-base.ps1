@@ -11,7 +11,7 @@ perf-tool-base.ps1 — tools/perf の道具どうしの共通部品
 呼び手の変数に頼らない（所在は自分の $PSScriptRoot＝tools/perf から決める）。
 端末へ出す文の字句は ASCII だけで、端末の文字コードには触れない。
 
-  表示と時刻     … Write-Info / Write-Problem / Get-UtcStamp（末尾に Z）
+  表示と時刻     … Write-Info / Write-Problem / Get-UtcStamp（末尾に Z）/ Format-UnexpectedError（trap の理由の文）
   子の起こし方   … Invoke-Child / Get-PwshPath / Get-PythonCommand / Invoke-PythonChild / Invoke-PwshChild
                    子の出力は既定で BOM の無い UTF-8 として読む（-ReadEncoding で選べる）
   強制終了       … Stop-ChildProcess（子孫まで止めて、終わるまで待つ）
@@ -48,6 +48,14 @@ function Write-Problem { param([string]$Message) [Console]::Error.WriteLine($Mes
 
 function Get-UtcStamp {
     [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+# 各入口の trap が出す理由の文: '<Label>: <例外の文を 1 行に> (<スクリプト名>:<行番号>)'
+function Format-UnexpectedError {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord, [string]$Label = 'unexpected failure')
+    $info = $ErrorRecord.InvocationInfo
+    $where = if ($info -and $info.ScriptName) { "$([System.IO.Path]::GetFileName($info.ScriptName)):$($info.ScriptLineNumber)" } else { $PERF_TOOL_EMPTY }
+    return "${Label}: $($ErrorRecord.Exception.Message -replace '\s*\r?\n\s*', ' ') ($where)"
 }
 
 # =============================================================================

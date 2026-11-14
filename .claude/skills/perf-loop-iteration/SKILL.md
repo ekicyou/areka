@@ -34,7 +34,7 @@ pwsh -NoProfile -File tools/perf/perf-loop.ps1 <sub> -Goal <goal> …
 | 1 | 実走の失敗 | 同じ引数で 1 回だけやり直す。なお失敗なら計測失敗と同じ扱い |
 | 2 | 静かでない | `set-phase <今の相> --goal <goal> --not-quiet-retries <n+1>`（`n` は台帳の `not_quiet_retries`。`-`／空なら 0）を書いてから、**次のターンで同じコマンドを 1 回やり直す**。`not_quiet_retries` が 1 を超えたら計測失敗（TOOLFIX へ）。周の記録の `reason` には `not_quiet` を残し、TOOLFIX に入ったら `--not-quiet-retries 0` で戻す |
 | 3 | 引数・前提の不正 | 自分の呼び方の誤り。引数を直して 1 回だけやり直す。直らなければ TOOLFIX |
-| 4 | 計測失敗（MEASURE_FAILED） | TOOLFIX へ |
+| 4 | 計測失敗（MEASURE_FAILED）。想定外の失敗（道具の不具合）もここに入る | TOOLFIX へ |
 | 5 | 能力不足（UNAVAILABLE） | **止まらない。** 段③を欠いたまま続け、理由語を台帳へ書く |
 
 ## 毎ターンの冒頭手順（例外なく、この順）

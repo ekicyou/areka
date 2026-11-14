@@ -45,7 +45,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1_
 
 - [ ] 3. 想定外の失敗の終わり方と入口の引数の確かめ
-- [ ] 3.1 5 本の入口の頭に `trap` を置き、決まった終了コードと最後の行で終える
+- [x] 3.1 5 本の入口の頭に `trap` を置き、決まった終了コードと最後の行で終える
   - perf-loop は理由の 1 行と `PERF-LOOP RESULT <sub> code=4 dir=<path>` で 4、共通部品を読み込む前の失敗でも RESULT 行を自分で出して 4。静かさの確かめは 4（`-SelfTest` では 1）、ランナー・段③の採取・追随の検査は 1（3）
   - 届かない `default` の枝を消し、段③の採取は引数なしを 3 と RESULT 行 `none` で受ける。走行の後の静かさの確かめが 3 を返したら 3 で止める
   - スキル `perf-loop-iteration` の終了コードの表の 4 の行に「想定外の失敗（道具の不具合）もここに入る」を足す（S1。ほかの行は触らない）
@@ -181,3 +181,4 @@
 - 1.3: 消す前の grep の件数（4 本の外）: Get-PwshPath・Get-NarSampleMap・NAR_SAMPLE_ARGS・NarSampleMaps は 0、Write-Info・Write-Problem・Get-UtcStamp・Get-PythonCommand・Get-NarSamplePath は共通部品を読む perf-loop*.ps1 だけ。4 本の Invoke-Utf8Child の参照 9 → 0。invoke-cpu-sample の失敗の文は標準エラーへ移ったので、測る側の `LastLine` は `error: ...` の行になる
 - 1.4: T2 は 1 つの検査＝名前と scriptblock の `$SelfTestChecks`。偽物の呼ばれた順は `Add-SelfTestCall`、終了の口は `Exit-WithResult` を例外へ定義し直してある。`kill-wait` は孫にファイルを握らせて子孫まで止めることを確かめる（待ちを抜いた変異は捕まらない・本物の Process では見分けられないので受け入れた）。perf-pwsh-child の捕まえた失敗の文は改行を空白へつなぐ
 - 2.1: T3 の検査は `tools/perf/invoke-perf-run.selftest.ps1` の `$PerfRunSelfTestChecks`（T2 と同じ形・助けの関数は写しで独立）。ランナーは 909 行で、1,000 行の番人まで余裕が少ない
+- 3.1: 子の道具 4 本の `trap` は共通部品を読んだ後の関数と定数を使うので、共通部品が読めないと RESULT 行の無い exit 1 になり、元の原因も消える（ループからは perf-loop が先に 4 で落ちるので届かない・直に呼んだときだけ）。8.1 の audit で直すか決める。`exit-trap` の壊した写しは「頂上の最後の関数の定義の直後」に throw を差すので、本体の後ろに関数を置くと本物を読みにいく

@@ -66,6 +66,39 @@ function New-SelfTestScript {
     return $path
 }
 
+# 偽の Exit-WithResult が投げた終了コードを返す（終わらなければ $null）
+function Get-SelfTestExitCode {
+    param([Parameter(Mandatory = $true)][scriptblock]$Script)
+    try { $null = & $Script }
+    catch {
+        if ($_.Exception.Data.Contains('ExitCode')) { return [int]$_.Exception.Data['ExitCode'] }
+        throw
+    }
+    return $null
+}
+
+#: 頭に trap を持つ入口 5 本
+$SelfTestEntryScripts = @('perf-loop.ps1', 'invoke-perf-run.ps1', 'invoke-cpu-sample.ps1', 'check-quiet.ps1', 'invoke-followup-checks.ps1')
+
+# 入口の写しを作業のフォルダの tools\perf\ に置き、最後の関数の定義の直後に throw を差し込む
+# （trap が受け止める想定外の失敗。areka もカウンタも触る前に落ちる）
+function New-SelfTestBrokenCopy {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    $dir = Join-Path $script:SelfTestRoot 'tools\perf'
+    if (-not (Test-Path -LiteralPath $dir)) {
+        $null = New-Item -ItemType Directory -Path $dir
+        Copy-Item -Path (Join-Path $PSScriptRoot '*.ps1') -Destination $dir
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot $Name))
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$null)
+    $lastFn = @($ast.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] })[-1]
+    $at = $lastFn.Extent.EndOffset
+    $path = Join-Path $dir $Name
+    $broken = $text.Substring(0, $at) + "`nthrow 'injected failure'`n" + $text.Substring($at)
+    [System.IO.File]::WriteAllText($path, $broken, [System.Text.UTF8Encoding]::new($false))
+    return $path
+}
+
 # =============================================================================
 # 土台の束
 # =============================================================================
@@ -220,6 +253,125 @@ $SelfTestChecks = @(
         $parsed = [DateTime]::ParseExact($stamp, 'yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture,
             [Globalization.DateTimeStyles]::AdjustToUniversal -bor [Globalization.DateTimeStyles]::AssumeUniversal)
         Assert-SelfTest ([Math]::Abs(([DateTime]::UtcNow - $parsed).TotalSeconds) -lt 60) "not UTC now: $stamp"
+    } }
+
+    # -------------------------------------------------------------------------
+    # 終わり方の束（3・21）
+    # -------------------------------------------------------------------------
+
+    [pscustomobject]@{ Name = 'exit-trap'; Body = {
+        # common と trap だけの子: 想定外の失敗は理由の 1 行と RESULT 行で 4。finally は throw でも本物の exit でも回る
+        $common = (Join-Path $PSScriptRoot 'perf-loop.common.ps1') -replace "'", "''"
+        $mark = Join-Path $script:SelfTestRoot 'finally.txt'
+        $markQ = $mark -replace "'", "''"
+        $child = New-SelfTestScript -Name 'exit-trap.ps1' -Text (@(
+            '$script:CurrentSub = ''exit-trap''; $script:CurrentDir = ''-'''
+            ". '$common'"
+            'trap { Exit-OnUnexpectedError $_ }'
+            '$ErrorActionPreference = ''Stop'''
+            "if (`$args -contains 'exit') { try { Exit-WithResult -Code 2 } finally { [System.IO.File]::WriteAllText('$markQ', 'exit') } }"
+            "try { throw 'boom' } finally { [System.IO.File]::WriteAllText('$markQ', 'throw') }"
+        ) -join "`n")
+        $r = Invoke-PwshChild -ScriptPath $child -Quiet
+        Assert-SelfTest ($r.Code -eq 4) "unexpected failure: exit code $($r.Code) (want 4): $(ConvertTo-SelfTestAscii $r.LastLine)"
+        Assert-SelfTest (($r.Out | Select-Object -Last 1) -eq 'PERF-LOOP RESULT exit-trap code=4 dir=-') "last stdout line: $(ConvertTo-SelfTestAscii (($r.Out | Select-Object -Last 1)))"
+        Assert-SelfTest ([bool](@($r.Err) -match '^\[perf-loop\] FAILED: unexpected failure \(tool bug\): boom \(exit-trap\.ps1:\d+\)$')) "no reason line: $(ConvertTo-SelfTestAscii (@($r.Err) -join ' | '))"
+        Assert-SelfTest ((Test-Path -LiteralPath $mark) -and (Get-Content -LiteralPath $mark -Raw) -eq 'throw') 'finally did not run on throw'
+        Remove-Item -LiteralPath $mark
+        $r = Invoke-PwshChild -ScriptPath $child -Arguments @('exit') -Quiet
+        Assert-SelfTest ($r.Code -eq 2) "real exit: exit code $($r.Code) (want 2)"
+        Assert-SelfTest ((Test-Path -LiteralPath $mark) -and (Get-Content -LiteralPath $mark -Raw) -eq 'exit') 'finally did not run on a real exit'
+
+        # 共通部品を読み込む前の失敗（perf-loop.ps1 だけを置いたフォルダ）も RESULT 行を自分で出して 4
+        $alone = Join-Path $script:SelfTestRoot 'alone'
+        $null = New-Item -ItemType Directory -Path $alone
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'perf-loop.ps1') -Destination $alone
+        $r = Invoke-PwshChild -ScriptPath (Join-Path $alone 'perf-loop.ps1') -Arguments @('rank') -Quiet
+        Assert-SelfTest ($r.Code -eq 4 -and ($r.Out | Select-Object -Last 1) -eq 'PERF-LOOP RESULT - code=4 dir=-') "before common: code $($r.Code), last stdout line: $(ConvertTo-SelfTestAscii (($r.Out | Select-Object -Last 1)))"
+
+        # 5 本の入口の写しに想定外の失敗を差し込む: 決まった終了コードと最後の行で終わる
+        $cases = @(
+            @{ Name = 'perf-loop.ps1'; Args = @('rank'); Code = 4; Last = 'PERF-LOOP RESULT rank code=4 dir=-' }
+            @{ Name = 'invoke-perf-run.ps1'; Args = @('-SelfTest'); Code = 1; Last = '`[invoke-perf-run`] failed: unexpected failure: injected failure *' }
+            @{ Name = 'invoke-cpu-sample.ps1'; Args = @('-Probe'); Code = 1; Last = 'INVOKE-CPU-SAMPLE RESULT probe code=1 *' }
+            @{ Name = 'check-quiet.ps1'; Args = @('-SelfTest'); Code = 1; Last = 'CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_NG code=1 file=-' }
+            @{ Name = 'check-quiet.ps1'; Args = @('-Stage', 'after'); Code = 4; Last = 'CHECK-QUIET RESULT stage=after verdict=MEASURE_FAILED code=4 file=-' }
+            @{ Name = 'invoke-followup-checks.ps1'; Args = @('-SelfTest'); Code = 1; Last = 'FOLLOWUP RESULT overall=INCONCLUSIVE * code=1 dir=-' }
+        )
+        foreach ($case in $cases) {
+            $r = Invoke-PwshChild -ScriptPath (New-SelfTestBrokenCopy -Name $case.Name) -Arguments $case.Args -Quiet
+            $label = "$($case.Name) $($case.Args -join ' ')"
+            Assert-SelfTest ($r.Code -eq $case.Code) "${label}: exit code $($r.Code) (want $($case.Code)): $(ConvertTo-SelfTestAscii $r.LastLine)"
+            # RESULT 行を持たない道具（ランナー）は理由の行が最後（標準エラー）
+            $last = if ($case.Name -eq 'invoke-perf-run.ps1') { ($r.Err | Select-Object -Last 1) } else { ($r.Out | Select-Object -Last 1) }
+            Assert-SelfTest ([bool]($last -like $case.Last)) "${label}: last line: $(ConvertTo-SelfTestAscii $last)"
+            Assert-SelfTest ([bool]((@($r.Lines) -join "`n") -match 'unexpected failure( \(tool bug\))?: injected failure \(')) "${label}: no reason line"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'trap-present'; Body = {
+        # 5 本の入口とも、param の直後（ほかのどの文より前）に trap が 1 つだけ在る
+        foreach ($name in $SelfTestEntryScripts) {
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $name), [ref]$null, [ref]$null)
+            $traps = @($ast.EndBlock.Traps | Where-Object { $_ })
+            Assert-SelfTest ($traps.Count -eq 1) "${name}: $($traps.Count) top-level traps (want 1)"
+            $first = @($ast.EndBlock.Statements)[0]
+            Assert-SelfTest ($traps[0].Extent.StartOffset -lt $first.Extent.StartOffset) "${name}: the trap is not the first statement after param"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'quiet-after-codes'; Body = {
+        # 走行の後の静かさの確かめ: 3 は 3、4 は 4 でそのまま止まる（確かめ直さない）
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Start-Sleep { Add-SelfTestCall -Name 'Start-Sleep' }
+        function Invoke-PwshChild {
+            param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+            Add-SelfTestCall -Name 'Invoke-PwshChild' -Arguments @($ScriptPath)
+            return (New-ChildResult -Code $childCode -LastLine 'fake check-quiet')
+        }
+        $script:DryRunMode = $false
+        $script:GoalConfig = $null
+        $script:GoalFilePath = $null
+        $script:GoalName = 'selftest'
+        foreach ($childCode in @(3, 4)) {
+            $script:SelfTestCalls.Clear()
+            $code = Get-SelfTestExitCode { Invoke-MeasureQuietAfter -RunDir (Join-Path $script:SelfTestRoot 'run') }
+            Assert-SelfTest ($code -eq $childCode) "check-quiet $childCode -> exit $code (want $childCode)"
+            $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' }).Count
+            Assert-SelfTest ($calls -eq 1) "check-quiet $childCode was called $calls times (want 1)"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'child-exit-map'; Body = {
+        # 子の道具の終了コードの写し方: 3 と 5 はそのまま、ほかは 4
+        foreach ($pair in @(@(3, 3), @(5, 5), @(1, 4), @(2, 4), @(4, 4), @(-1, 4))) {
+            $got = Convert-MeasureChildExit -Code $pair[0]
+            Assert-SelfTest ($got -eq $pair[1]) "Convert-MeasureChildExit $($pair[0]) -> $got (want $($pair[1]))"
+        }
+        # ランナーの終了コード: 0 は続ける・2 と 3 はそのまま 1 回で止める・ほかは 1 度だけ採り直して 4
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Get-MeasureGhostRoot { 'G' }
+        function Get-MeasureBalloonRoot { 'B' }
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) }
+        function Clear-MeasureDryRunDir { param($Dir) }
+        function Invoke-PwshChild {
+            param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+            Add-SelfTestCall -Name 'Invoke-PwshChild' -Arguments @($ScriptPath)
+            return (New-ChildResult -Code $runnerCode -LastLine 'fake runner')
+        }
+        $script:DryRunMode = $true
+        $outDir = Join-Path $script:SelfTestRoot 'no-such-run'
+        foreach ($case in @(@{ Runner = 0; Exit = $null; Calls = 1 }, @{ Runner = 2; Exit = 2; Calls = 1 }, @{ Runner = 3; Exit = 3; Calls = 1 },
+                            @{ Runner = 1; Exit = 4; Calls = 2 }, @{ Runner = 4; Exit = 4; Calls = 2 })) {
+            $script:SelfTestCalls.Clear()
+            $runnerCode = $case.Runner
+            $code = Get-SelfTestExitCode { Invoke-MeasureRun -OutDir $outDir -RunProfile 'short' -Build 'release' }
+            Assert-SelfTest ($code -eq $case.Exit) "runner $runnerCode -> exit $code (want $($case.Exit))"
+            $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' }).Count
+            Assert-SelfTest ($calls -eq $case.Calls) "runner $runnerCode was called $calls times (want $($case.Calls))"
+        }
     } }
 )
 
