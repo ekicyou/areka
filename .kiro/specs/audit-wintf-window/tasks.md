@@ -294,3 +294,13 @@
   - 赤が範囲の外の触っていない crate だけなら、決めごとどおり赤の crate だけ 1 回回し直す
   - 完了の姿: 全体テストが緑（または触っていない crate の 1 回の回し直しで変化なしの申し送り）で、結果が記録にある
   - _Requirements: 5.7, 8.5_
+
+## Implementation Notes
+
+- 完了時の棚卸（2026-11-14・research.md 15.5 の 13 行と実装中の控えから）: その場で解決 4 件・申し送り 6 件（2 本の brief）・起票 0 件・直さない 1 件。
+- 完了時にその場で解決: `ecs/layout/hit_test/mod.rs` の `hit_test_in_window_ex` が `CW_USEDEFAULT` の位置を足していた（テスト付き・`2b1da2129`）。
+- 完了時にその場で解決: `runtime/wndproc_bridge.rs` で World の借用中に届いた `WM_CLOSE` が黙って捨てられていたので `warn!`（`wm_close_world_busy`）を足した（テスト付き・`e511733bd`）。15.5 の「既定の手続きへ渡して窓が壊れる」は誤りで、`wintf-winmsg-executor` が `WM_CLOSE` を常に `LRESULT(0)` で返すため窓は壊れない。
+- 完了時にその場で解決: `api.rs` の `create_test_window` の説明を直し、テストの中の `insert_after` の写しを `zorder_pair_test_support` の 1 つに寄せた（`0ef7c3849`）。
+- 完了時にその場で解決: `areka-emo-present`・`areka-emo-text` の説明 7 か所の古い `emo2_boot` のパスを今の `runtime` の場所に直した（`4e0092494`）。
+- 申し送り: `audit-wintf-input` の brief へ 4 件（`nchittest_cache.rs` の古い参照・`POINTER_BUFFERS` の残り・`check_threshold` の説明・`controller.rs:91` の説明の書き直しの知らせ）。`audit-emo2-boot-frame` の brief へ 2 件（`frame_transition_atomicity_tests.rs` の古い行番号・`zorder_drain.rs` ほかの出力先の理由）。`audit-placement-follow` の 3 か所の古い行番号は、あちらの着地（#460）で既に消えていた。
+- 直さない: `crates/areka/tests/emo2_mcp_real_run.rs` に env の門が無いこと。areka を本当に起こすほかの統合テスト（`emo2_real_run` ほか）と同じ扱いで、全体テストが排他テストの机を通して回す。
