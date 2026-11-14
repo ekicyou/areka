@@ -3,10 +3,11 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::pointer::Phase;
+use wintf::ecs::window::drain_window_pos_commands;
 
 use super::test_support::{
-    drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle, odd_edge_snapshot,
-    position_of, rect, single_monitor_snapshot, window_pos_at, window_pos_sized,
+    SylphyaRig, drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle,
+    odd_edge_snapshot, position_of, rect, single_monitor_snapshot, window_pos_at, window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, MonitorSnapshot, PlacementRoute, move_window_to, on_balloon_drag,
@@ -91,17 +92,18 @@ fn on_char_drag_without_window_pos_is_noop() {
     assert_eq!(position_of(&world, balloon), Point { x: 70, y: 80 });
 }
 
-/// BalloonFollow の無い entity への Bubble は no-op（false・panic なし）。
+/// BalloonFollow の無い entity への Bubble は no-op（窓へ 1 つも書かない・panic なし）。
 #[test]
 fn on_char_drag_without_balloon_follow_is_noop() {
     let mut world = World::new();
     let window = world
         .spawn((fake_handle(0x1000), window_pos_at(50, 60)))
         .id();
+    let _residue = drain_window_pos_commands();
 
     let ev = Phase::Bubble(drag_event(window));
     assert!(!on_char_drag(&mut world, window, window, &ev));
-    assert_eq!(position_of(&world, window), Point { x: 50, y: 60 });
+    assert!(drain_window_pos_commands().is_empty(), "窓へ書いた");
 }
 
 /// (a)(b) 単一ライター・振動なし: 連続 DragEvent の**各適用直後**に WindowPos が
@@ -390,48 +392,19 @@ fn on_char_drag_end_tunnel_phase_is_ignored() {
 /// Task 2.2 保存フック（Req1.1/1.9・design C2）: 非 Free アンカーのキャラ窓の
 /// DragEnd で、確定位置 `mapped` が当該スコープの `WindowPos` entries として Ghost
 /// 永続スコープへ write-through される。`barrier` 後に別ハンドルの `load_scope` で
-/// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist.rs の
+/// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist_io_wiring_tests.rs の
 /// `persist_entries_with_wiring_write_through_to_ghost_scope` と同流儀の実 publisher 檻）。
 #[test]
 fn on_char_drag_end_persists_char_pos_for_scope() {
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
+    use areka_sylphya::{Axis, PersistKey};
 
-    use areka_sylphya::persist::{FakePersistIo, PersistIo};
-    use areka_sylphya::{
-        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-    };
-
-    use super::super::persist::PersistWiring;
     use crate::spawn::CharWindowMarker;
 
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・persist.rs と同流儀）。
-    struct SharedFakeIo(Arc<FakePersistIo>);
-    impl PersistIo for SharedFakeIo {
-        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-            self.0.read(path)
-        }
-        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-            self.0.commit(path, content)
-        }
-    }
-
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
 
     let mut world = World::new();
     // UI スレッド常駐の保存投函口を挿入（persist_entries が引く NonSend リソース）。
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356
 
     let start = (1400, 600);
@@ -453,15 +426,9 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
     // 確定点: mapped が WindowPos へ反映されている
     assert_eq!(position_of(&world, window), Point { x: 1408, y: 356 });
 
-    // barrier 復帰＝上記 put の write-through 保存まで完了（同一送信端 FIFO）。
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-
     // 別ハンドルの load_scope で scope1 の WindowPos を観測（実 IO 通過＝投函の証明）。
     // 保存 x は**原点＝下端中央**基準（左上 1408 ＋ w/2=217 → 1625）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let loaded = rig.saved();
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {
@@ -484,8 +451,7 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
     );
 
     // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
 }
 
 /// Task 8.1 偽 Free アンカー DragEnd→保存値等価の檻（Req1.1・design C2/C3・
@@ -507,43 +473,14 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
 /// dpi/96 再スケールの檻も兼ね、既定値（0・96 系）と重ならない。
 #[test]
 fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
+    use areka_sylphya::{Axis, PersistKey};
 
-    use areka_sylphya::persist::{FakePersistIo, PersistIo};
-    use areka_sylphya::{
-        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-    };
-
-    use super::super::persist::PersistWiring;
     use crate::spawn::CharWindowMarker;
 
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・上の Bottom 檻と同流儀）。
-    struct SharedFakeIo(Arc<FakePersistIo>);
-    impl PersistIo for SharedFakeIo {
-        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-            self.0.read(path)
-        }
-        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-            self.0.commit(path, content)
-        }
-    }
-
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
 
     let mut world = World::new();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     // snapshot 挿入（bottom=1043）。Free identity なら未使用だが、誤射影時に
     // Bottom 吸着 Y=1043−687=356 が現れる差分検出のため意図的に居させる。
     world.insert_resource(single_monitor_snapshot());
@@ -573,15 +510,9 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
         "Free は identity 射影＝確定 raw をそのまま反映（Bottom 誤射影なら Y=356 で落ちる）"
     );
 
-    // barrier 復帰＝上記 put の write-through 保存まで完了（同一送信端 FIFO）。
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-
     // 別ハンドルの load_scope で scope2 の WindowPos を読み戻す（実 IO 通過＝投函の証明）。
     // Free アンカーでも保存値は確定 raw と value-equal（アンカー種別を問わない・Req1.1）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let loaded = rig.saved();
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {
@@ -605,8 +536,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     );
 
     // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
 }
 
 /// Task 8.3 発火規律の統合檻（Req1.9・8.4・design C2/C3・Testing Strategy Integration §2）:
@@ -629,42 +559,14 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
 /// 保存経路を踏まないのと同様、自動再射影が永続へ漏れないことは決定論檻でのみ観測できる。
 #[test]
 fn non_dragend_operations_leave_persist_store_byte_invariant() {
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
-
-    use areka_sylphya::persist::{FakePersistIo, PersistIo};
-    use areka_sylphya::{PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
-
-    use super::super::persist::{PersistWiring, apply_restored_placements};
+    use super::super::persist::apply_restored_placements;
     use crate::resolver::ScopePlacement;
     use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・上の DragEnd 檻と同流儀）。
-    struct SharedFakeIo(Arc<FakePersistIo>);
-    impl PersistIo for SharedFakeIo {
-        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-            self.0.read(path)
-        }
-        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-            self.0.commit(path, content)
-        }
-    }
-
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
 
     let mut world = World::new();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356
 
     // char 窓 scope=1（Bottom）＋ balloon 窓 scope=1（BalloonFollow で連結）。
@@ -691,13 +593,9 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     //     意味あるものにするため）。最終カーソル (1601,113) → mapped=(1408, 356)。
     let ev = Phase::Bubble(drag_end_event_at(char_window, (1601, 113)));
     assert!(!on_char_drag_end(&mut world, char_window, char_window, &ev));
-    parts
-        .publisher
-        .barrier()
-        .expect("seed barrier should resolve while actor is alive");
 
     // seed 書込後のストア内容を正準スナップショットとして捕捉（load_scope は決定論順）。
-    let before = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let before = rig.saved();
     assert!(
         !before.is_empty(),
         "seed の DragEnd 書込がストアを満たしていない＝不変チェックが無意味になる: {before:?}"
@@ -739,14 +637,9 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     let drag = Phase::Bubble(drag_event_at(char_window, start, (1450, 350)));
     assert!(!on_char_drag(&mut world, char_window, char_window, &drag));
 
-    // 保留 put（存在しないはず）があれば flush する越境フェンス。
-    parts
-        .publisher
-        .barrier()
-        .expect("post-drive barrier should resolve while actor is alive");
-
     // --- ASSERT: ストア内容が seed 時点と完全一致（非 DragEnd 操作は何も書いていない）---
-    let after = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    // 保留 put（存在しないはず）は rig.saved() が挟む barrier で flush される。
+    let after = rig.saved();
     assert_eq!(
         before, after,
         "非 DragEnd 操作（move_window_to / resize_window_to / apply_restored_placements / \
@@ -755,19 +648,27 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     );
 
     // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
 }
 
 /// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
-/// on_char_drag／on_char_drag_end／on_balloon_drag はすべて no-op。
+/// on_char_drag／on_char_drag_end／on_balloon_drag／on_balloon_drag_end はすべて no-op。
+/// on_balloon_drag_end は `Tunnel` も無視する（指摘 11 ⑶）。
 #[test]
 fn drag_handlers_ignore_events_targeting_other_entities() {
+    use super::on_balloon_drag_end;
+    use crate::spawn::BalloonWindowMarker;
+
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     let other = world.spawn_empty().id();
+    // 守りを外せば保存まで進み、追従の基準を最終位置から出し直す（offset が変わる）形。
     let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(701, 383)))
+        .spawn((
+            fake_handle(0x2000),
+            window_pos_at(701, 383),
+            BalloonWindowMarker { scope: 0 },
+        ))
         .id();
     let initial = PointPx { x: 11, y: 22 };
     let start = (1400, 600);
@@ -799,6 +700,18 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
         world.get::<BalloonFollow>(window).unwrap().offset(),
         initial
     );
+
+    // on_balloon_drag_end: `Tunnel`（自分宛でも）と、target=other の Bubble → offset 不変
+    for ev in [
+        Phase::Tunnel(drag_end_event_at(balloon, (10, 10))),
+        Phase::Bubble(drag_end_event_at(other, (10, 10))),
+    ] {
+        assert!(!on_balloon_drag_end(&mut world, other, balloon, &ev));
+        assert_eq!(
+            world.get::<BalloonFollow>(window).unwrap().offset(),
+            initial
+        );
+    }
 }
 
 /// (+) MonitorSnapshot 不在（未挿入）: ポリシーは identity

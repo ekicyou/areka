@@ -26,7 +26,8 @@
 //!
 //! 本フィーチャーが共有ファイルへ足した継ぎ目は、`window_proc` の非活性化の枝、`api.rs` の
 //! 走査ラッパ（`get_window_above`／`get_window_below`／`is_window_visible`）と帯の所属を
-//! 読む `is_window_always_on_top`、areka の `main.rs` の結線 1 行である。それらのファイルは
+//! 読む `is_window_always_on_top`、結線（`areka_placement::spawn::wire_zorder_pair`・areka の
+//! `ghost_session.rs` から呼ぶ）である。それらのファイルは
 //! 他フィーチャーの持ち物でもあるため全文走査の対象には入れない——他所の追記で赤くなると、
 //! 本フィーチャーへの誤った告発になる。
 //!
@@ -35,8 +36,10 @@
 //! 走査の語は 2 つの表に分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
 //! 先送りのままである（持ち主 `tasktray-minimize` ほか）。常に手前の帯の語
 //! （`BAND_NEEDLES`＝`topmost`・`stayontop`・`windowstate`）は `stay-on-top-directives` が
-//! 実装したが、帯を書くのは帯の働きのファイル `window_band.rs` だけと決めてある。よって
-//! どちらの表の語も、重なり順の機構の本番ファイルには 1 つも無いことを主張し続ける。
+//! 実装した。ゴーストの窓の帯を書くのは帯の働きのファイル `window_band.rs` であり（帯の値を
+//! 書く本番の所はほかにツールチップと `WindowPos` があり、`window_band.rs` の頭の doc に
+//! 挙げてある）、重なり順の機構（`zorder_*`）は帯を書かない。よってどちらの表の語も、
+//! 重なり順の機構の本番ファイルには 1 つも無いことを主張し続ける。
 //! 対照として、`window_band.rs` のコードに `HWND_TOPMOST` が在ることも主張する
 //! （帯の働きが別の場所へ移れば、この守りの前提が崩れたと赤くなる）。
 //!
@@ -124,8 +127,9 @@ const DEFERRED_NEEDLES: [(&str, &str); 6] = [
     ),
 ];
 
-/// 帯の語（小文字）。常に手前の帯を書くのは帯の働きのファイル [`BAND_FILE`] だけであり
-/// （`stay-on-top-directives`）、重なり順の機構（組・鎖）の本番ファイルには 1 つも無い。
+/// 帯の語（小文字）。ゴーストの窓の帯を書くのは帯の働きのファイル [`BAND_FILE`] であり
+/// （`stay-on-top-directives`・ほかの書き手は `window_band.rs` の頭の doc）、重なり順の機構
+/// （組・鎖）の本番ファイルには 1 つも無い。
 const BAND_NEEDLES: [(&str, &str); 3] = [
     (
         "topmost",
@@ -135,7 +139,7 @@ const BAND_NEEDLES: [(&str, &str); 3] = [
     ("windowstate", "`\\![set,windowstate,...]`"),
 ];
 
-/// 帯を書く唯一の本番ファイル（`stay-on-top-directives` の帯の働き）。
+/// ゴーストの窓の帯を書く本番ファイル（`stay-on-top-directives` の帯の働き）。
 const BAND_FILE: &str = "src/ecs/window/window_band.rs";
 
 fn source_path(relative: &str) -> PathBuf {
@@ -193,7 +197,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_wintf_sources()
         let hits = deferred_hits(&code);
         assert!(
             hits.is_empty(),
-            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯を書くのは {BAND_FILE} だけ）: {hits:?}"
+            "{relative}: 先送りの語か帯の語が本番コードに現れている（ゴーストの窓の帯を書くのは {BAND_FILE}）: {hits:?}"
         );
 
         scanned_files += 1;
@@ -318,7 +322,7 @@ fn all_source_files() -> Vec<String> {
     found
 }
 
-/// 重なり順の 2 機構（ペア・グループ）が全部を書いた wintf 側の本番ファイル
+/// 重なり順の 2 機構（ペア・鎖＝グループの後継）が全部を書いた wintf 側の本番ファイル
 /// ＝ファイル名が `zorder_` で始まり、テストでもテスト専用の道具立てでもないもの。
 fn zorder_production_sources() -> Vec<String> {
     all_source_files()

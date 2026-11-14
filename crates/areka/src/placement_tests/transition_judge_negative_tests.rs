@@ -10,9 +10,10 @@
 //!    起点行が壊れると**遷移そのものが切り出せない**ので、判定は遷移の中ではなくログ水準
 //!    （[`super::Report::log_violations`]）で赤くなる。
 //! 3. **本体側の数値**（`diff`・`total_us`・`target_id`）だけが壊れた行——`is_well_formed()` は
-//!    真のままで `malformed_records` は 0 であり、当該の量**だけ**が `None`／空へ落ちる。
-//!    上限（`≤ 0`・`≤ 1`）はこれを素通しにするので、[`super::judge`] が
-//!    [`super::Violation::Unmeasured`] を返すことが唯一の防波堤である。
+//!    真のままである。`diff`・`total_us` は欄があり番兵でもないのに読めなければ
+//!    `malformed_records` に載る（同じ遷移の別の行が量を出しても赤）。`target_id` は載らず、
+//!    当該の量**だけ**が `None`／空へ落ちる。上限（`≤ 0`・`≤ 1`）は量が無いことを素通しに
+//!    するので、[`super::judge`] は [`super::Violation::Unmeasured`] も返す。
 //!
 //! 対照（壊していない入力）は [`compliant_transition_lines`] であり、
 //! `transition_judge_verdict_tests::the_compliant_transition_passes_both_families` が緑で
@@ -25,21 +26,12 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::test_support::{
-    compliant_transition_lines, compliant_transition_lines_at, replace_once, summarize_lines,
+    compliant_transition_lines, compliant_transition_lines_at, deterministic_violations, log_of,
+    replace_once, summarize_lines,
 };
 use super::{Bounds, Quantity, Violation, WindowKey, judge, judge_transition_log};
-use areka_placement::diag::WindowKind;
-use areka_placement::transition_diag::FIELD_DIFF;
-
-/// 行の列を 1 本のログ文字列へ。
-fn log_of(lines: &[String]) -> String {
-    lines.join("\n")
-}
-
-/// 決定論の上限で判定して違反の列を得る。
-fn deterministic_violations(lines: &[String]) -> Vec<Violation> {
-    judge(&summarize_lines(lines), &Bounds::deterministic()).expect_err("違反があるはず")
-}
+use areka_placement::diag::{PlacementRoute, WindowKind};
+use areka_placement::transition_diag::{FIELD_DIFF, GroundRecord, ground_line};
 
 // ---------------------------------------------------------------------------
 // 判定語を壊した入力
@@ -129,7 +121,7 @@ fn dropping_a_required_field_is_reported_and_takes_the_window_out_of_its_measure
 }
 
 // ---------------------------------------------------------------------------
-// 本体側の数値だけが壊れた行（`malformed_records` は 0 のまま）
+// 本体側の数値だけが壊れた行
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -141,35 +133,90 @@ fn an_unreadable_ground_difference_is_a_violation_not_a_silent_pass() {
     );
     let summary = summarize_lines(&broken);
     assert_eq!(
-        summary.malformed_records, 0,
-        "`diff` は接頭語ではないので行は健全と判定される（だから判定器が要る）"
+        summary.malformed_records, 1,
+        "読めない `diff` は壊れた行に数える"
     );
     assert_eq!(summary.ground_diff_max, None);
     assert_eq!(
         deterministic_violations(&broken),
-        vec![Violation::Unmeasured(Quantity::GroundDiff)],
+        vec![
+            Violation::MalformedRecords { count: 1 },
+            Violation::Unmeasured(Quantity::GroundDiff)
+        ],
         "接地点差 `≤ 0` は「量が無い」を素通しにする"
     );
 }
 
 #[test]
-fn an_unreadable_flush_total_is_a_violation_of_the_signoff_family_only() {
+fn an_unreadable_ground_difference_is_red_even_when_another_ground_row_reads() {
+    // 接地点の行が 2 つあり 1 つだけが読めないとき、読めた方が量を出すので `Unmeasured` は
+    // 立たない。読めない行を黙って飛ばすと、その行の差が上限を破っていても緑になる。
+    let mut broken = compliant_transition_lines();
+    let second = broken[3].replace(&format!("{FIELD_DIFF}=0"), &format!("{FIELD_DIFF}=??"));
+    assert_ne!(
+        second, broken[3],
+        "檻の前提: 2 行目の接地点の `diff` が壊れていること"
+    );
+    broken.insert(4, second);
+    let summary = summarize_lines(&broken);
+    assert_eq!(summary.ground_diff_max, Some(0), "読めた行は量を出す");
+    assert_eq!(summary.malformed_records, 1);
+    assert_eq!(
+        deterministic_violations(&broken),
+        vec![Violation::MalformedRecords { count: 1 }]
+    );
+}
+
+#[test]
+fn a_ground_row_without_a_work_area_bottom_is_unmeasured_even_when_another_scope_reads() {
+    // 発行側は作業領域の下端が解決できない行で `diff` を番兵 `-` にする。別の scope の行が
+    // 差 0 を出しても、測れなかった scope の接地点は上限を当てていない＝黙って緑にしない。
+    let mut lines = compliant_transition_lines();
+    let stamp = super::parse_transition_line(&lines[3])
+        .expect("接地点の行")
+        .stamp;
+    let unmeasured = ground_line(&GroundRecord {
+        stamp,
+        scope: Some(1),
+        ground_y: 1704,
+        wa_bottom: None,
+        route: PlacementRoute::DpiReproject,
+    });
+    assert!(
+        unmeasured.contains(&format!(" {FIELD_DIFF}={MISSING} ")),
+        "檻の前提: 差が番兵であること: {unmeasured}"
+    );
+    lines.insert(4, unmeasured);
+    let summary = summarize_lines(&lines);
+    assert_eq!(summary.ground_diff_max, Some(0), "測れた scope は量を出す");
+    assert_eq!(summary.malformed_records, 0, "番兵は壊れた行ではない");
+    assert_eq!(
+        deterministic_violations(&lines),
+        vec![Violation::Unmeasured(Quantity::GroundDiff)]
+    );
+}
+
+#[test]
+fn an_unreadable_flush_total_is_malformed_in_both_families() {
     let broken = replace_once(
         &compliant_transition_lines(),
         &format!("{FIELD_TOTAL_US}=300"),
         &format!("{FIELD_TOTAL_US}=??"),
     );
     let summary = summarize_lines(&broken);
-    assert_eq!(summary.malformed_records, 0);
+    assert_eq!(summary.malformed_records, 1);
     assert_eq!(summary.flush_total_us_max, None);
     assert_eq!(
         judge(&summary, &Bounds::signoff()),
-        Err(vec![Violation::Unmeasured(Quantity::FlushTotalUs)])
+        Err(vec![
+            Violation::MalformedRecords { count: 1 },
+            Violation::Unmeasured(Quantity::FlushTotalUs)
+        ])
     );
     assert_eq!(
         judge(&summary, &Bounds::deterministic()),
-        Ok(()),
-        "決定論側はこの量を当てないので合否が動かない"
+        Err(vec![Violation::MalformedRecords { count: 1 }]),
+        "決定論側はこの量の上限を当てないが、壊れた行はどちらの上限も支えない"
     );
 }
 
@@ -270,4 +317,20 @@ fn an_all_zero_frame_series_is_indeterminate_and_never_a_pass() {
         deterministic_violations(&all_zero),
         vec![Violation::FramesIndeterminate]
     );
+}
+
+// ---------------------------------------------------------------------------
+// 置換の部品そのもの（空振りの置換で負例が負例でなくなることを防ぐ）
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "置換対象")]
+fn replace_once_panics_when_the_target_is_missing() {
+    replace_once(&compliant_transition_lines(), "kind=no-such-kind", "x");
+}
+
+#[test]
+#[should_panic(expected = "置換対象")]
+fn replace_once_panics_when_one_line_holds_the_target_twice() {
+    replace_once(&["a=1 a=1".to_owned()], "a=1", "a=2");
 }

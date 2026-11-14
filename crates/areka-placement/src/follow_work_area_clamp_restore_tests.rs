@@ -5,14 +5,14 @@
 //! 右に外したモニタ（x=5000 から）で、今のどのモニタとも交わらない。`shown` は窓ごとの判定が
 //! 寄せた結果（見えている窓は `shown == projected`）を手で置く。
 
-use super::test_support::{point, rect};
+use super::test_support::{guard_events, point, rect};
+use super::work_area_clamp::{WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG};
 use super::{
-    GroupShift, MonitorSnapshot, RestoredWindow, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
-    WORK_AREA_UNRESOLVED_TAG, keep_restored_groups,
+    GroupShift, MonitorSnapshot, RestoredWindow, WORK_AREA_CLAMP_TAG, keep_restored_groups,
 };
 use crate::chain_finalize::{AdjacencyMark, ChainRect};
 use crate::resolver::PointPx;
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 fn desk() -> MonitorSnapshot {
     MonitorSnapshot {
@@ -46,13 +46,6 @@ fn placed(windows: &[RestoredWindow], shifts: &[GroupShift]) -> Vec<PointPx> {
                 .find(|s| s.scope == w.scope)
                 .map_or(w.shown, |s| s.to)
         })
-        .collect()
-}
-
-fn tagged<'a>(events: &'a [CapturedEvent], tag: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.message().contains(tag))
         .collect()
 }
 
@@ -97,7 +90,7 @@ fn groups_all_outside_shift_together() {
             right <= 2880 && after[0].x >= 0,
             "和が作業領域に入る: {after:?}"
         );
-        let clamps = tagged(&events, WORK_AREA_CLAMP_TAG);
+        let clamps = guard_events(&events, WORK_AREA_CLAMP_TAG);
         assert_eq!(clamps.len(), shifts.len());
         assert!(!shifts.is_empty());
         assert_eq!(clamps[0].level, tracing::Level::INFO);
@@ -156,7 +149,7 @@ fn apart_or_non_consecutive_pairs_are_not_grouped() {
     });
     assert_eq!((a, b), (vec![], vec![]));
     assert!(
-        tagged(&events, "[work-area-clamp]").is_empty(),
+        guard_events(&events, "[work-area-clamp]").is_empty(),
         "{events:?}"
     );
 }
@@ -225,4 +218,44 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
     assert_eq!(warn.expect_field("scene"), "\"restore-group\"");
     assert_eq!(warn.expect_field("reason"), "\"no-work-area\"");
     expect_one(&events, WORK_AREA_CLAMP_TAG);
+}
+
+/// 指摘 11 ⑸ 記憶の矩形が離れていても（隙間 60）印が `right` なら組として繋がり、同じ量だけ
+/// 寄せられる（要件 4.1・4.2）。印の腕が無いと窓ごとの結果のまま 2 枚が重なる。
+#[test]
+fn separated_rects_joined_by_right_mark_shift_together() {
+    let windows = [
+        win(0, point(5000, 864), point(2240, 864), None),
+        win(
+            1,
+            point(5700, 864),
+            point(2240, 864),
+            Some(AdjacencyMark::Right),
+        ),
+    ];
+    let shifts = keep_restored_groups(&windows, &desk());
+    // 和の矩形 5000..6340 を右端 2880 へ収める差（−3460）を 2 枚に足す。
+    assert_eq!(
+        placed(&windows, &shifts),
+        vec![point(1540, 864), point(2240, 864)]
+    );
+}
+
+/// 指摘 11 ⑸ 印が `left`（n が n−1 の左）で記憶の矩形が離れていても同じく組になる。
+#[test]
+fn separated_rects_joined_by_left_mark_shift_together() {
+    let windows = [
+        win(0, point(5700, 864), point(2240, 864), None),
+        win(
+            1,
+            point(5000, 864),
+            point(2240, 864),
+            Some(AdjacencyMark::Left),
+        ),
+    ];
+    let shifts = keep_restored_groups(&windows, &desk());
+    assert_eq!(
+        placed(&windows, &shifts),
+        vec![point(2240, 864), point(1540, 864)]
+    );
 }

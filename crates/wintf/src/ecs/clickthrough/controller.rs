@@ -88,7 +88,7 @@ pub(crate) fn resolve_transition(
 ///
 /// 除去条件: window Entity が既に despawn 済み（`world.get_entity(window).is_err()`）。
 /// これが「窓破棄」の正準シグナルである。areka の窓 close は `world.despawn(entity)` で
-/// 行われ（`on_window_handle_remove`→`WM_CLOSE`→`DestroyWindow` の起点）、Entity と共に
+/// 行われ（登録簿の掃除 `reconcile_window_registry` が `DestroyWindow` する起点）、Entity と共に
 /// 対象が消える。したがって Entity 生存確認だけで破棄追随が成立する。
 ///
 /// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み窓の無効 HWND へ

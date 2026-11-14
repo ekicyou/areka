@@ -8,6 +8,7 @@
 //! 記録の捕捉はスレッドローカルの差し替えなので、この檻は Schedule を一切使わない
 //! （兄弟の `zorder_chain_tests.rs` と同じ規律）。
 
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 use windows::core::HRESULT;
@@ -35,10 +36,6 @@ const DIAG_TARGET: &str = "wintf::ecs::window::zorder_chain_diag";
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
 
 /// テスト用の Entity を n 個採り、`Entity` の順序で昇順に並べて返す（`e[0] < e[1] < …`）。
 ///

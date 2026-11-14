@@ -76,3 +76,13 @@
 ## 2026-11-01 棚卸㉝の後の開発者の決め
 
 2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」）＝範囲からツールチップの部分を外す（wintf のツールチップはリアクターの描画に替える候補）。ドラッグ・ポインタ・クリック透過は今のまま。範囲のファイルの一覧は要件の段で直す。
+
+## 申し送り（audit-wintf-window より・2026-11-14）
+
+`audit-wintf-window` の完了の棚卸で、この spec の範囲で見つけたもの。直し方は決めない（論点として渡す）。場所は `audit-wintf-window` の着地の時点の行。
+
+- **件 1**: `crates/wintf/src/ecs/pointer/nchittest_cache.rs:25`・`:142` が `WM_MOUSELEAVE` の受け手を「handlers.rs L820-876」と指す。今の受け手は `crates/wintf/src/ecs/window_proc/mouse_move.rs` の `WM_MOUSELEAVE`（名前で引く）。
+- **件 2**: `crates/wintf/src/ecs/pointer/buffers.rs:144-179` の `POINTER_BUFFERS` は、窓ごとの項目を空にはするが消さないので、指した entity の数だけ残る（今の負荷では小さい）。
+- **件 3**: 門 GI ⒝ の申し合わせどおり、`ecs/drag/state/mod.rs:618-621` の `check_threshold` の説明（「本番呼び出しがゼロ」「`mouse_move.rs` 内にインライン複製」）は、`audit-wintf-window` が `mouse_move.rs` を `check_threshold` の呼び出しに替えたので事実に合わなくなった。
+- **件 4**: `audit-wintf-window` のタスク 5.1 が `crates/wintf/src/ecs/clickthrough/controller.rs:91` の説明の 1 行だけを書き直した（窓のハンドルが外れたときの `WM_CLOSE` を消したので、破棄の起点を登録簿の掃除 `reconcile_window_registry` に直した・コードは変えていない）。rebase のときの参考。
+- 型 `WindowPointerTracking` は門 GI ⒜ のとおり `audit-wintf-window` が型・既定のテスト・`ecs/mod.rs` の再公開まで消した。

@@ -23,11 +23,10 @@
 //! だけが拾える。Bevy の既定実行器（多スレッド）を挟むと 1 行も拾えず検査が空虚に緑に
 //! なるため、**この檻は Schedule を一切使わない**。
 
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-};
+use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
 use windows::core::HRESULT;
 
 use super::{
@@ -53,11 +52,6 @@ const DIAG_TARGET: &str = "wintf::ecs::window::zorder_chain_diag";
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
 
 /// テスト用の Entity を n 個採る（空の World から順に確保するだけ）。
 fn entities(n: usize) -> Vec<Entity> {
@@ -583,6 +577,7 @@ fn the_nudge_moves_only_the_zorder() {
     for (label, anchor_next) in [("素直な枝", None), ("切り替えた枝", Some(members[2]))] {
         let cmd = nudge_command(&members, anchor_next).expect("窓が 2 枚以上あれば後押しが出る");
 
+        // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7（全一致がそれも含む）。
         assert_eq!(
             cmd.flags,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
@@ -593,12 +588,6 @@ fn the_nudge_moves_only_the_zorder() {
             (cmd.x, cmd.y, cmd.width, cmd.height),
             (0, 0, 0, 0),
             "{label}: 位置・寸法の欄に値が入っている"
-        );
-        // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7。
-        assert_eq!(
-            cmd.flags & SET_WINDOW_POS_FLAGS(0x0004),
-            SET_WINDOW_POS_FLAGS(0),
-            "{label}: Z を触らない指令になっている（後押しとして効かない形）"
         );
     }
 }
@@ -635,7 +624,7 @@ fn the_nudge_is_built_without_the_deferred_queue_or_a_wake_request() {
 // 記録の出口——鎖系 7 語はこのモジュールから出る
 // ===========================================================================
 
-/// 鎖系 7 語はすべて本モジュールの出力先から出る（grep の対象が割れない）。
+/// 鎖系 7 語はすべて本モジュールの出力先から出る（記録の関数を 1 ファイルに揃えた決まり）。
 #[test]
 fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
     let e = entities(2);
@@ -682,7 +671,7 @@ fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
         );
         assert!(
             !line.contains(DIAG_TARGET),
-            "`{tag}` が行組立の層から出ている（記録の出口が割れている）: {line}"
+            "`{tag}` が行組立の層から出ている（記録の出口が 1 ファイルに揃っていない）: {line}"
         );
     }
 }

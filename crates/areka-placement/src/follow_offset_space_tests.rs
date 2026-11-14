@@ -1,10 +1,8 @@
 //! 単位空間契約の純関数のテスト
 //! （要件 2.2/2.4/2.5/3.1/3.3/3.6・7.5〜7.9・design「Unit Tests」1〜5）。
 //!
-//! 前半は task 1.2 が設計を駆動するために置いた最小限の主張、後半（「判断分岐の全網羅」節
-//! 以降）は task 1.3 が足した網羅——表示 DPI 行列（96 の倍数でない値を分子・分母の両側へ）・
-//! 負値・`i32::MIN` 近傍・飽和・作者基準 DPI の食い違い・[`OffsetRescale`] の 4 腕と
-//! 値を変えない縮退 3 経路の全到達・および design D8 の残差上限の実測である。
+//! 表示 DPI 行列（96 の倍数でない値を分子・分母の両側へ）・負値・`i32::MIN` 近傍・飽和・
+//! 作者基準 DPI の食い違い・[`OffsetRescale`] の 4 腕と値を変えない縮退 3 経路の全到達を見る。
 //!
 //! 期待値はすべて逐語（`assert_eq!`）で置く。近似比較はしない。
 //!
@@ -19,12 +17,8 @@ use super::OffsetBase;
 use super::offset_space::{
     OffsetRescale, ScaledAxis, UnresolvedScale, rescale_follow_offset, scale_author_offset,
 };
+use super::test_support::{dpi, k_axis};
 use crate::resolver::PointPx;
-
-/// 表示 DPI（両軸同値）。
-fn dpi(v: u16) -> DPI {
-    DPI::from_dpi(v, v)
-}
 
 /// 基準対（係留済み）。
 fn base_at(x: i32, y: i32, d: u16) -> OffsetBase {
@@ -35,98 +29,8 @@ fn base_at(x: i32, y: i32, d: u16) -> OffsetBase {
 }
 
 // -------------------------------------------------------------------------
-// 遷移の変換規則（`rescale_follow_offset`）
-// -------------------------------------------------------------------------
-
-/// 未係留（永続値の腕・5.2）は**値を変えずに**現在の表示 DPI へ係留する。
-#[test]
-fn unpinned_base_anchors_without_changing_value() {
-    let base = OffsetBase {
-        offset: PointPx { x: 10, y: -20 },
-        dpi: None,
-    };
-    assert_eq!(
-        rescale_follow_offset(base, dpi(192)),
-        OffsetRescale::Anchored { base_dpi: dpi(192) }
-    );
-}
-
-/// 基準 DPI と現在 DPI が同一なら値も基準も 1 bit も動かない（恒等・2.2）。
-#[test]
-fn identical_dpi_is_unchanged() {
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 96), dpi(96)),
-        OffsetRescale::Unchanged
-    );
-}
-
-/// 表示 DPI 比だけで追随する（96→192＝2 倍・3.1）。
-#[test]
-fn rescales_by_display_dpi_ratio() {
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 96), dpi(192)),
-        OffsetRescale::Rescaled {
-            offset: PointPx { x: 20, y: -40 },
-            saturated: false,
-        }
-    );
-}
-
-/// 往復しても基準から引き直すため bit 同一で戻る（3.3）。
-#[test]
-fn roundtrip_returns_bit_identical_value() {
-    let base = base_at(10, -20, 96);
-    let first = rescale_follow_offset(base, dpi(144));
-    assert_eq!(
-        rescale_follow_offset(base, dpi(96)),
-        OffsetRescale::Unchanged
-    );
-    assert_eq!(rescale_follow_offset(base, dpi(144)), first);
-    assert_eq!(
-        first,
-        OffsetRescale::Rescaled {
-            offset: PointPx { x: 15, y: -30 },
-            saturated: false,
-        }
-    );
-}
-
-/// 拡大率を解決できない腕は値も基準も変えず、理由を値として返す（3.6・9.4）。
-#[test]
-fn zero_dpi_is_unresolved_with_reason() {
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 0), dpi(192)),
-        OffsetRescale::Unresolved {
-            reason: UnresolvedScale::ZeroBaseDpi
-        }
-    );
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 96), dpi(0)),
-        OffsetRescale::Unresolved {
-            reason: UnresolvedScale::ZeroCurrentDpi
-        }
-    );
-}
-
-// -------------------------------------------------------------------------
 // 供給時の換算（`scale_author_offset`）
 // -------------------------------------------------------------------------
-
-/// 恒等比は生値を素通しする（2.2）。
-#[test]
-fn identity_ratio_passes_raw_through() {
-    let (x, y) = scale_author_offset((7, -13), ScaleRatio::ONE);
-    assert_eq!((x.value, y.value), (7, -13));
-    assert!(!x.saturated && !y.saturated);
-}
-
-/// 大きさは既存の丸め権威へ委譲する（5/4 倍・2.4）。
-#[test]
-fn scales_author_offset_by_ratio() {
-    let k = ScaleRatio::new(120, 96).expect("120/96");
-    let (x, y) = scale_author_offset((10, -10), k);
-    assert_eq!((x.value, y.value), (13, -13));
-}
 
 /// 域を超える換算は回り込まず飽和し、その事実を値として返す（2.5）。
 #[test]
@@ -143,26 +47,6 @@ fn saturating_axis_is_reported() {
 // 判断分岐の全網羅（task 1.3・要件 7.5〜7.9／design「Unit Tests」1〜5）
 // =========================================================================
 
-/// 判定が値を持ち去らなかったこと——`Rescaled` 以外の 3 腕は offset を運ばない。
-///
-/// 縮退・恒等・係留の各腕で「値が 1 bit も動かない」ことは、**新しい値がどこにも
-/// 現れない**ことで成立する——実効的な檻はこの match の側だけである。
-///
-/// 続く基準対の照合は檻ではない。`OffsetBase` は `Copy` で
-/// `rescale_follow_offset` は値渡しゆえ、実装が何をしても呼び手の複製は動かない。
-/// 不変を守っているのは型システムであり、この行は読み手向けの再確認に留まる。
-fn assert_value_untouched(verdict: OffsetRescale, base: OffsetBase, before: OffsetBase) {
-    assert_eq!(base, before, "基準対の不変（型で保証済み・再確認）");
-    match verdict {
-        OffsetRescale::Rescaled { offset, .. } => {
-            panic!("値を変えない腕のはずが Rescaled({offset:?}) を返した")
-        }
-        OffsetRescale::Anchored { .. }
-        | OffsetRescale::Unchanged
-        | OffsetRescale::Unresolved { .. } => {}
-    }
-}
-
 /// 換算結果の 2 軸を値だけの組へ落とす（飽和は別途主張する）。
 fn axis_values(pair: (ScaledAxis, ScaledAxis)) -> (i32, i32) {
     (pair.0.value, pair.1.value)
@@ -175,11 +59,9 @@ fn axis_values(pair: (ScaledAxis, ScaledAxis)) -> (i32, i32) {
 /// `96 → 120 → 192 → 120 → 96` を巡っても、同じ表示 DPI へ戻るたびに初回と bit 同一。
 ///
 /// 基準対から毎回引き直すため出力が入力へ戻らず、誤差が連鎖しない（D4）。
-/// 基準そのものが呼出をまたいで不変であることも同時に主張する。
 #[test]
 fn roundtrip_over_dpi_chain_is_bit_identical() {
     let base = base_at(10, -20, 96);
-    let before = base;
     let mut seen: Vec<(u16, OffsetRescale)> = Vec::new();
     for step in [96u16, 120, 192, 120, 96] {
         let verdict = rescale_follow_offset(base, dpi(step));
@@ -189,8 +71,6 @@ fn roundtrip_over_dpi_chain_is_bit_identical() {
             seen.push((step, verdict));
         }
     }
-    // 基準対の不変は `Copy` 渡しで型が保証する（再確認であって檻ではない）。
-    assert_eq!(base, before, "基準対の不変（型で保証済み・再確認）");
     // 逐語（近似ではない）。96 は恒等ゆえ Unchanged、他は基準からの引き直し。
     assert_eq!(
         seen,
@@ -276,10 +156,8 @@ fn identity_dpi_never_moves_any_value() {
                 },
                 dpi: Some(dpi(d)),
             };
-            let before = base;
             let verdict = rescale_follow_offset(base, dpi(d));
             assert_eq!(verdict, OffsetRescale::Unchanged, "v={v} dpi={d}");
-            assert_value_untouched(verdict, base, before);
         }
     }
 }
@@ -291,10 +169,8 @@ fn identity_holds_for_anisotropic_dpi() {
         offset: PointPx { x: 11, y: -22 },
         dpi: Some(DPI::from_dpi(120, 144)),
     };
-    let before = base;
     let verdict = rescale_follow_offset(base, DPI::from_dpi(120, 144));
     assert_eq!(verdict, OffsetRescale::Unchanged);
-    assert_value_untouched(verdict, base, before);
 }
 
 /// 供給側の恒等比は正準形で判定される——`ScaleRatio::new(120, 120)` も `ONE` と同じ素通し。
@@ -653,11 +529,6 @@ const SHELL_AUTHOR_DPI: u32 = 96;
 /// バルーンの作者基準 DPI（同上・シェルとわざと違える）。
 const BALLOON_AUTHOR_DPI: u32 = 120;
 
-/// 表示 DPI `d` における軸ごとの拡大率（`k_axis(d) = d ÷ author_dpi_axis`・app_scale=1）。
-fn k_axis(display_dpi: u32, author_dpi: u32) -> ScaleRatio {
-    ScaleRatio::new(display_dpi, author_dpi).expect("非ゼロ DPI")
-}
-
 /// 供給時は軸ごとに換算され、遷移の追随では作者基準 DPI が約分で消える（D5）。
 ///
 /// 主張は 2 段。⑴ 同じ生値でもシェル軸とバルーン軸では換算結果が違う（軸の選択は
@@ -702,24 +573,22 @@ fn author_dpi_axes_split_on_supply_but_cancel_on_transition() {
     }
 }
 
-/// 遷移の判定は作者基準 DPI をそもそも入力に取らない——同じ基準対なら軸に依らず同一。
-///
-/// 上のテストが「一致する」ことを値で示すのに対し、こちらは 2 軸の拡大率が実際に
-/// 異なっていること（模型が空回りしていないこと）を先に確かめたうえで、判定が
-/// 1 つしか無いことを示す。
+/// 遷移の換算は x と y を互いに独立に引き直す——入力の 2 軸を入れ替えると、出力も
+/// 入れ替わるだけで値は同じ（片方の軸の値が他方の軸へ漏れない）。
 #[test]
 fn transition_verdict_is_axis_independent() {
-    let base = base_at(32, -32, 96);
-    let shell_ratio = k_axis(192, SHELL_AUTHOR_DPI);
-    let balloon_ratio = k_axis(192, BALLOON_AUTHOR_DPI);
-    assert_ne!(
-        shell_ratio, balloon_ratio,
-        "2 軸が同じ比では主張が空回りする"
+    let rescaled = |x, y| rescale_follow_offset(base_at(x, y, 96), dpi(144));
+    assert_eq!(
+        rescaled(33, -7),
+        OffsetRescale::Rescaled {
+            offset: PointPx { x: 50, y: -11 },
+            saturated: false,
+        }
     );
     assert_eq!(
-        rescale_follow_offset(base, dpi(192)),
+        rescaled(-7, 33),
         OffsetRescale::Rescaled {
-            offset: PointPx { x: 64, y: -64 },
+            offset: PointPx { x: -11, y: 50 },
             saturated: false,
         }
     );
@@ -738,7 +607,6 @@ fn all_three_degenerate_paths_leave_the_value_untouched() {
     let unpinned = OffsetBase { offset, dpi: None };
     let verdict = rescale_follow_offset(unpinned, dpi(192));
     assert_eq!(verdict, OffsetRescale::Anchored { base_dpi: dpi(192) });
-    assert_value_untouched(verdict, unpinned, OffsetBase { offset, dpi: None });
 
     // ⑵ 基準 DPI が 0（軸ごとに独立して縮退する）。
     for zero_base in [
@@ -750,7 +618,6 @@ fn all_three_degenerate_paths_leave_the_value_untouched() {
             offset,
             dpi: Some(zero_base),
         };
-        let before = base;
         let verdict = rescale_follow_offset(base, dpi(192));
         assert_eq!(
             verdict,
@@ -759,7 +626,6 @@ fn all_three_degenerate_paths_leave_the_value_untouched() {
             },
             "base_dpi={zero_base:?}"
         );
-        assert_value_untouched(verdict, base, before);
     }
 
     // ⑶ 現在 DPI が 0。
@@ -769,7 +635,6 @@ fn all_three_degenerate_paths_leave_the_value_untouched() {
         DPI::from_dpi(96, 0),
     ] {
         let base = base_at(offset.x, offset.y, 192);
-        let before = base;
         let verdict = rescale_follow_offset(base, zero_current);
         assert_eq!(
             verdict,
@@ -778,7 +643,6 @@ fn all_three_degenerate_paths_leave_the_value_untouched() {
             },
             "current={zero_current:?}"
         );
-        assert_value_untouched(verdict, base, before);
     }
 }
 
@@ -806,7 +670,6 @@ fn unpinned_base_anchors_before_any_zero_check() {
         offset: PointPx { x: 10, y: -20 },
         dpi: None,
     };
-    let before = base;
     let verdict = rescale_follow_offset(base, DPI::from_dpi(0, 0));
     assert_eq!(
         verdict,
@@ -814,7 +677,6 @@ fn unpinned_base_anchors_before_any_zero_check() {
             base_dpi: DPI::from_dpi(0, 0)
         }
     );
-    assert_value_untouched(verdict, base, before);
 }
 
 /// **腕の順序の確定**: 基準 DPI と現在 DPI がともに 0 なら `Unchanged`（`Unresolved` ではない）。
@@ -837,10 +699,8 @@ fn zero_on_both_sides_is_unchanged_not_unresolved() {
         offset: PointPx { x: 10, y: -20 },
         dpi: Some(DPI::from_dpi(0, 0)),
     };
-    let before = base;
     let verdict = rescale_follow_offset(base, DPI::from_dpi(0, 0));
     assert_eq!(verdict, OffsetRescale::Unchanged);
-    assert_value_untouched(verdict, base, before);
 }
 
 /// 基準側と現在側の 0 が**同時に**あるとき、理由は基準側が先に立つ。
@@ -856,27 +716,4 @@ fn zero_base_dpi_wins_over_zero_current_dpi() {
             reason: UnresolvedScale::ZeroBaseDpi
         }
     );
-}
-
-/// [`OffsetRescale`] の 4 腕すべてに到達していること（腕の取りこぼしを構造で防ぐ）。
-#[test]
-fn every_verdict_arm_is_reachable() {
-    let offset = PointPx { x: 10, y: -20 };
-    let arms = [
-        rescale_follow_offset(OffsetBase { offset, dpi: None }, dpi(96)),
-        rescale_follow_offset(base_at(offset.x, offset.y, 96), dpi(96)),
-        rescale_follow_offset(base_at(offset.x, offset.y, 96), dpi(192)),
-        rescale_follow_offset(base_at(offset.x, offset.y, 96), dpi(0)),
-    ];
-    let mut seen = [false; 4];
-    for arm in arms {
-        let idx = match arm {
-            OffsetRescale::Anchored { .. } => 0,
-            OffsetRescale::Unchanged => 1,
-            OffsetRescale::Rescaled { .. } => 2,
-            OffsetRescale::Unresolved { .. } => 3,
-        };
-        seen[idx] = true;
-    }
-    assert_eq!(seen, [true; 4], "到達していない判定の腕がある");
 }

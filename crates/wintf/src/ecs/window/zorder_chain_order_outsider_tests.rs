@@ -51,17 +51,14 @@
 //! 適用系を載せていなくても、同じ緑になるからである。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::core::{PCWSTR, w};
 
-use super::apply_zorder_chain;
 use super::zorder_chain_order_tests::{
-    arrange_z, create_chain_window, is_visible, ledger_shape, owner_shape, raise_to_front_until,
-    teardown, z_shape,
+    arrange_z, chain_schedule, create_chain_window, is_visible, ledger_shape, owner_shape,
+    publish_full_chain, raise_to_front_until, spawn_window, teardown, z_shape,
 };
 use crate::ecs::test_support::capture_under_filter;
-use crate::ecs::window::{ChainPlan, ChainSegment, CrossEdge, WindowHandle, ZOrderChainPlan};
 
 /// 実機サインオフと同じ絞り（鎖系の記録がすべて点く）。
 const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_chain=debug";
@@ -70,57 +67,12 @@ const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_chain=debug";
 const ZORDER_TAG: &str = "[zorder-";
 
 // ---------------------------------------------------------------------------
-// 道具立て（足場は兄弟から借り、ここに置くのは公開と schedule だけ）
+// 道具立て（足場は兄弟から借り、ここに置くのは受け口を作らない用意と記録の絞り込みだけ）
 // ---------------------------------------------------------------------------
-
-/// 適用系だけを載せた 1 巡分の schedule（**単一スレッドの実行器を明示**）。
-///
-/// 実窓の操作は UI スレッド固定（[`NonSendMarker`](bevy_ecs::system::NonSendMarker)）の
-/// 前提であり、既定の多スレッド実行器では記録の捕捉（スレッドローカルの差し替え）が
-/// 1 行も拾えない。兄弟の檻と同じ規律でここでも明示する。
-fn chain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_chain);
-    schedule
-}
-
-/// 実窓のハンドルを持つ entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-/// 手前から奥へ並べた entity 列を、連続対すべてを横断 edge にした鎖として公開する。
-///
-/// 本ファイルの窓は「キャラ窓 1 枚だけのスコープ」とみなす（同一スコープのペア対は
-/// 1 組も無い）ので、隣り合わせはすべて本 spec が張る繋ぎである。
-fn publish_full_chain(world: &mut World, members: &[Entity]) {
-    let cross_edges: Vec<CrossEdge> = members
-        .windows(2)
-        .map(|pair| CrossEdge {
-            owned: pair[0],
-            owner: pair[1],
-            segment: ChainSegment::Group(0),
-        })
-        .collect();
-    world.insert_resource(ZOrderChainPlan {
-        chain: Some(ChainPlan {
-            members: members.to_vec(),
-            cross_edges,
-            absent: Vec::new(),
-        }),
-        dirty: true,
-    });
-}
 
 /// 実窓を `count` 枚作り、それぞれに entity を与える（**受け口は作らない**）。
 ///
-/// 受け口（[`ZOrderChainPlan`]）を作らないのが既定状態の姿である——本番の指令消化の相は
+/// 受け口（[`ZOrderChainPlan`](crate::ecs::window::ZOrderChainPlan)）を作らないのが既定状態の姿である——本番の指令消化の相は
 /// グループが 1 つも無い間、受け口そのものを挿入しない（`zorder_drain.rs`
 /// 「既定状態では受け口そのものを作らない」）。
 fn bare_fixture(count: usize, title: PCWSTR) -> (Vec<HWND>, World, Vec<Entity>) {
@@ -260,7 +212,7 @@ const DEFAULT_SIZE: usize = 4;
 
 /// グループ指定が一つも無い間、本 spec は 1 命令も出さず、重なりは利用者の操作だけで決まる。
 ///
-/// 本番の指令消化の相はグループが 1 つも無い間、受け口（[`ZOrderChainPlan`]）そのものを
+/// 本番の指令消化の相はグループが 1 つも無い間、受け口（[`ZOrderChainPlan`](crate::ecs::window::ZOrderChainPlan)）そのものを
 /// 挿入しない。よって既定状態の再現は「受け口を作らない World で適用系を回す」ことである。
 ///
 /// # 何を測るか

@@ -111,3 +111,27 @@ fn test_hit_test_in_window_ex_with_region() {
     assert_eq!(result.entity, widget);
     assert_eq!(result.region.as_deref(), Some("button"));
 }
+
+/// hit_test_in_window_ex: 生成時の既定の位置（`CW_USEDEFAULT`）は足さない
+/// （足すと画面座標が i32::MIN 近くへ飛び、当たるはずの所で外れる）。`screen_point` と同じ規則。
+#[test]
+fn test_hit_test_in_window_ex_default_position_adds_nothing() {
+    let mut world = World::new();
+
+    let window = world
+        .spawn((
+            make_global_arrangement(0.0, 0.0, 400.0, 300.0),
+            WindowPos::default(),
+        ))
+        .id();
+    let widget = world
+        .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 50.0),
+            HitTest::default(),
+        ))
+        .id();
+    world.entity_mut(window).add_children(&[widget]);
+
+    let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 25.0));
+    assert_eq!(result.map(|r| r.entity), Some(widget));
+}

@@ -15,7 +15,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, IsWindow,
     SW_SHOWNOACTIVATE, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
@@ -201,10 +201,7 @@ impl Rig {
         self.made.push(hwnd);
         self.hwnds[index] = Some(hwnd);
         let entity = self.entities[index].expect("実体が在る");
-        self.world.entity_mut(entity).insert(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        });
+        self.world.entity_mut(entity).insert(WindowHandle { hwnd });
     }
 
     /// 実体を落とす（窓はまだ壊さない——去る窓の切離しの巡を挟んでから壊す）。

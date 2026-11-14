@@ -86,7 +86,7 @@ fn enumerated_monitor_work_area_reconstructs_all_four_edges() {
 use crate::ecs::types::{Point, SizeI};
 use crate::ecs::{DPI, WindowPos};
 
-/// 檻へ注入する「新しいモニタ列挙結果」。実 OS 列挙（`enumerate_monitors`）の代役。
+/// 檻へ注入する「新しいモニタ列挙結果」。実 OS 列挙（`try_enumerate_monitors`）の代役。
 #[derive(Resource, Clone)]
 pub(super) struct InjectedMonitors(pub(super) Vec<Monitor>);
 
@@ -97,9 +97,9 @@ pub(super) const PROBE_STAMP: Stamp = Stamp {
     t_us: 1234,
 };
 
-/// [`apply_monitor_snapshot`] の戻り値（再導出を駆動した窓の数）を檻へ持ち出す受け皿。
+/// [`apply_monitor_snapshot`] の戻り値（再導出を駆動した窓の数・0 台なら `None`）を檻へ持ち出す受け皿。
 #[derive(Resource, Default)]
-struct RedriveCount(usize);
+struct RedriveCount(Option<usize>);
 
 /// 注入されたモニタ表を [`apply_monitor_snapshot`] へ流す檻専用システム。
 ///
@@ -126,8 +126,8 @@ fn apply_injected_monitors(
     );
 }
 
-/// 直前の [`run_apply`] が再導出を駆動した窓の数。
-fn redrive_count(world: &World) -> usize {
+/// 直前の [`run_apply`] が再導出を駆動した窓の数（0 台の一覧なら `None`）。
+fn redrive_count(world: &World) -> Option<usize> {
     world.resource::<RedriveCount>().0
 }
 
@@ -273,6 +273,25 @@ fn s4_red_monitor_table_updates_when_only_values_change() {
     );
 }
 
+/// 0 台の列挙（列挙の失敗を含む）では表を変えない（audit-wintf-window 15 番）。
+///
+/// 空の一覧で全部の `Monitor` を消すと、次の構成の変わり目まで表が空のままになる。
+/// 0 台の判定を外せば `Some(0)` が返り `Monitor` が消えて赤になる。
+#[test]
+fn empty_snapshot_keeps_monitor_table_and_returns_none() {
+    let (mut world, monitor_entity) = probe_world(Vec::new());
+    run_apply(&mut world);
+
+    assert_eq!(redrive_count(&world), None, "0 台の一覧で None が返らない");
+    let stored = world
+        .get::<Monitor>(monitor_entity)
+        .expect("0 台の一覧で Monitor の entity が消えた");
+    assert!(
+        !stored.differs_in_value(&probe_monitor_before()),
+        "0 台の一覧で Monitor の値が変わった: {stored:?}"
+    );
+}
+
 /// **S4 赤証跡（Req 7.3/7.5）**: モニタ表が更新されたとき、当該モニタ上の窓の
 /// `DPI` が `WM_DPICHANGED` 抜きで再導出されること。
 ///
@@ -360,7 +379,7 @@ fn updated_monitor_redrives_window_dpi_and_reports_it() {
         "再導出の新旧 DPI がログから読めない: {out}"
     );
     // 戻り値（駆動した窓の数）も判定語にする——ログだけに頼らない。
-    assert_eq!(redrive_count(&world), 1, "駆動した窓の数が 1 でない");
+    assert_eq!(redrive_count(&world), Some(1), "駆動した窓の数が 1 でない");
 }
 
 /// 非空虚性の対: **値が同一なら更新しない**（無条件更新へ変異させれば赤）。
@@ -388,7 +407,7 @@ fn identical_snapshot_updates_nothing() {
     );
     assert_eq!(
         redrive_count(&world),
-        0,
+        Some(0),
         "値が同一なのに再導出が駆動されている"
     );
 }
@@ -445,7 +464,7 @@ fn window_with_cw_usedefault_is_skipped_before_overflow() {
     );
     assert_eq!(
         redrive_count(&world),
-        0,
+        Some(0),
         "座標未確定の窓を駆動対象に数えている"
     );
     assert!(
@@ -568,5 +587,62 @@ fn monitor_containing_uses_half_open_bounds() {
     assert!(
         monitor_containing(&monitors, (-1, 1000)).is_none(),
         "左外は含まない"
+    );
+}
+
+/// 列挙の失敗が続く間、`error!` は続きの最初の 1 回だけ出る（`EnumDisplayMonitors` を
+/// 失敗させる継ぎ目は無いので、`detect_display_change_system` が列挙の結果を渡す
+/// [`monitors_or_log_failure`] を、その巡の `zero_streak` で直に呼ぶ）。
+#[test]
+fn enumeration_failure_is_logged_once_per_streak() {
+    const FAILED: &str = "EnumDisplayMonitors failed";
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        // 続きの 1 巡目（zero_streak は偽）→ 2・3 巡目（真）
+        for zero_streak in [false, true, true] {
+            assert!(monitors_or_log_failure((None, Vec::new()), zero_streak).is_empty());
+        }
+    });
+    assert_eq!(out.matches(FAILED).count(), 1, "{out}");
+
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        let got = monitors_or_log_failure((Some(vec![synthetic_monitor()]), Vec::new()), false);
+        assert_eq!(got.len(), 1);
+    });
+    assert!(!out.contains(FAILED), "{out}");
+    assert!(!out.contains(INFO_FAILED), "{out}");
+}
+
+const INFO_FAILED: &str = "Failed to get monitor info";
+
+/// 全台の情報取得の失敗（列挙は成功・0 台）が続く間も、`error!` は続きの最初の 1 回・
+/// 1 本だけ出る（失敗した台数は `failed` の欄に数える）。
+#[test]
+fn monitor_info_failures_are_logged_once_per_streak() {
+    use crate::ecs::window::monitor::MonitorError;
+    let failures = || {
+        vec![
+            (HMONITOR(1 as _), MonitorError::GetMonitorInfoFailed),
+            (HMONITOR(2 as _), MonitorError::GetDpiFailed),
+        ]
+    };
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        for zero_streak in [false, true, true] {
+            assert!(
+                monitors_or_log_failure((Some(Vec::new()), failures()), zero_streak).is_empty()
+            );
+        }
+    });
+    assert_eq!(out.matches(INFO_FAILED).count(), 1, "{out}");
+    assert!(out.contains("failed=2"), "{out}");
+
+    // 列挙が途中で失敗しても、それまでの情報取得の失敗は捨てずに残す。
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        assert!(monitors_or_log_failure((None, failures()), false).is_empty());
+    });
+    assert_eq!(out.matches(INFO_FAILED).count(), 1, "{out}");
+    assert_eq!(
+        out.matches("EnumDisplayMonitors failed").count(),
+        1,
+        "{out}"
     );
 }

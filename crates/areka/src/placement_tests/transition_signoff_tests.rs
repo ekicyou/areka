@@ -7,7 +7,7 @@
 //! # 走らせ方
 //!
 //! ```text
-//! AREKA_TRANSITION_LOG=<絶対パス> cargo test -p areka transition_signoff -- --ignored --nocapture
+//! $env:AREKA_TRANSITION_LOG = "<絶対パス>"; cargo test -p areka transition_signoff -- --ignored --nocapture
 //! ```
 //!
 //! 既定の `cargo test` では `#[ignore]` により 1 度も走らない——実機ログが無い環境で
@@ -34,8 +34,8 @@ use super::{Report, TRANSITION_LOG_ENV, judge_transition_log};
 fn signoff_log(raw_path: Option<&str>) -> Result<(Report, String), String> {
     let Some(raw_path) = raw_path.map(str::trim).filter(|path| !path.is_empty()) else {
         return Err(format!(
-            "{TRANSITION_LOG_ENV} が未設定である。実機ログの絶対パスを与えて \
-             `{TRANSITION_LOG_ENV}=<絶対パス> cargo test -p areka transition_signoff -- --ignored --nocapture` \
+            "{TRANSITION_LOG_ENV} が未設定である。実機ログの絶対パスを PowerShell で与えて \
+             `$env:{TRANSITION_LOG_ENV} = \"<絶対パス>\"; cargo test -p areka transition_signoff -- --ignored --nocapture` \
              で実行する"
         ));
     };
@@ -109,7 +109,6 @@ fn a_log_without_any_observation_line_is_an_error_not_an_empty_pass() {
         let error = signoff_log(path.to_str()).expect_err("観測行 0 行は失敗");
         assert!(error.contains(TRANSITION_LOG_ENV), "{error}");
     }
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }
 
 #[test]
@@ -140,6 +139,4 @@ fn the_runner_reads_the_same_pure_functions_as_the_deterministic_tests() {
     assert!(report.failed(), "是正前のログは合格しない");
     assert!(report.transitions[0].deterministic.is_err());
     assert!(report.transitions[0].signoff.is_err());
-
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }

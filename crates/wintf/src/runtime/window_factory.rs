@@ -22,8 +22,7 @@
 //! # CS_DBLCLKS・GWLP_USERDATA（要件 2.5/2.3）
 //! クラスの `CS_DBLCLKS` はライブラリの共有クラスが内蔵するため wintf 側補填は設けない。
 //! `GWLP_USERDATA` はライブラリが占有するため wintf からは手詰めしない（Entity は
-//! クロージャ capture の `WndState` から読む）。HINSTANCE はライブラリ内部 `__ImageBase`
-//! （DLL 安全）で処理されるため、`instance` はライブラリの `get_instance_handle()` を使う。
+//! クロージャ capture の `WndState` から読む）。
 //!
 //! # 結線
 //! `create_windows`（`ecs::window::window_system`）は本ファクトリ経由でウィンドウを生成する
@@ -34,7 +33,7 @@
 use std::cell::RefCell;
 use std::rc::Weak;
 
-use crate::executor::util::{Window as LibWindow, WindowType, get_instance_handle};
+use crate::executor::util::{Window as LibWindow, WindowType};
 use bevy_ecs::prelude::Component;
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::world::World;
@@ -131,7 +130,7 @@ impl EcsWindowFactory {
     ///    `to_window_coords_for_creation`・旗は [`initial_pos_flags`]）／`SetWindowTextW`。
     ///    親の付け替え・位置合わせ・題の設定の失敗は `error!` を残して先へ進む。
     /// 5. `Window<WndState>` を [`WindowRegistry`]（NonSend）へ entity キーで格納。
-    /// 6. `WindowHandle{ hwnd, instance }`／`HasGraphicsResources` を entity へ insert
+    /// 6. `WindowHandle { hwnd }`／`HasGraphicsResources` を entity へ insert
     ///    （グラフィクス経路）。
     ///
     /// `ecs_world` は wndproc が capture する共有 World への弱参照（strong 所有者は
@@ -232,11 +231,9 @@ impl EcsWindowFactory {
         }
 
         // --- 6. WindowHandle / HasGraphicsResources を反映（グラフィクス経路） ---
-        let instance = get_instance_handle();
-        world.entity_mut(entity).insert((
-            WindowHandle { hwnd, instance },
-            HasGraphicsResources::default(),
-        ));
+        world
+            .entity_mut(entity)
+            .insert((WindowHandle { hwnd }, HasGraphicsResources::default()));
 
         debug!(entity = ?entity, hwnd = ?hwnd, "EcsWindowFactory: ウィンドウ生成・登録完了");
     }
@@ -456,6 +453,7 @@ mod tests {
     fn create_windows_new_path_spawns_registers_and_handles_without_class_error() {
         use crate::ecs::window::window_system::create_windows;
         use crate::ecs::world::EcsWorldSelfRef;
+        use bevy_ecs::system::RunSystemOnce;
 
         // 共有 World（strong 所有者をテストが保持）。`create_windows` は self-ref の Weak を
         // 読んで WndState 用の外側 World 参照を得る。
@@ -492,7 +490,7 @@ mod tests {
         );
 
         // --- 新経路 ECS システムを実駆動（self-ref 在 → factory 経路へ分岐） ---
-        create_windows(&mut bevy_world);
+        bevy_world.run_system_once(create_windows).unwrap();
 
         // (c) WindowHandle が付与され、(a) HWND が有効（クラス未登録/生成失敗なし）。
         let handle = bevy_world
@@ -522,7 +520,7 @@ mod tests {
         // 冪等性: 同じ Entity は WindowHandle 付与済みゆえ再 create_windows で二重生成しない
         // （クエリ `Without<WindowHandle>` で除外される）。registry は Entity を鍵に上書き
         // するので件数では見えない——HWND が替わらないことで見る。
-        create_windows(&mut bevy_world);
+        bevy_world.run_system_once(create_windows).unwrap();
         assert_eq!(
             bevy_world.get::<WindowHandle>(entity).map(|h| h.hwnd),
             Some(handle.hwnd),

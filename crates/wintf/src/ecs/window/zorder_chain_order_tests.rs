@@ -71,7 +71,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow,
@@ -370,7 +370,7 @@ pub(super) fn z_shape(set: &[HWND]) -> Vec<usize> {
 /// 挿入位置に渡すのは常に**このテストが作った窓**である（唯一の例外は、攪乱の測定対象
 /// そのものである `HWND_TOP`）。他プロセスの窓を渡すと、読み取りと書き込みの間に消えた
 /// ときに黙って失敗する。
-fn place_after(hwnd: HWND, after: HWND) {
+pub(super) fn place_after(hwnd: HWND, after: HWND) {
     // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす（活性化・移動・寸法変更なし）。
     unsafe {
         let _ = SetWindowPos(
@@ -544,7 +544,7 @@ pub(super) fn raise_to_front_until(
 /// 既定の多スレッド実行器では system が別スレッドで走りうる。実窓の操作は
 /// UI スレッド固定（[`NonSendMarker`](bevy_ecs::system::NonSendMarker)）の前提であり、
 /// 兄弟の替え玉の檻と同じ規律でここでも明示する。
-fn chain_schedule() -> Schedule {
+pub(super) fn chain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_chain);
@@ -552,20 +552,15 @@ fn chain_schedule() -> Schedule {
 }
 
 /// 実窓のハンドルを持つ entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
+pub(super) fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
+    world.spawn(WindowHandle { hwnd }).id()
 }
 
 /// 手前から奥へ並べた entity 列から、連続対をすべて横断 edge にした鎖を公開する。
 ///
 /// 本ファイルの窓は 1 枚だけのスコープ 4 つなので、隣り合わせはすべて本 spec が張る繋ぎ
 /// である（同一スコープのペア対は 1 組も無い）。`dirty` を立てる＝内容が変わった巡。
-fn publish_full_chain(world: &mut World, members: &[Entity]) {
+pub(super) fn publish_full_chain(world: &mut World, members: &[Entity]) {
     let cross_edges: Vec<CrossEdge> = members
         .windows(2)
         .map(|pair| CrossEdge {

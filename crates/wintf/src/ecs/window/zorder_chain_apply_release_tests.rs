@@ -10,7 +10,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 
 use super::apply_zorder_chain;
 use super::double::{Call, Script, with_script};
@@ -34,10 +34,7 @@ fn h(v: usize) -> HWND {
 }
 
 fn handle(v: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: h(v),
-        instance: HINSTANCE::default(),
-    }
+    WindowHandle { hwnd: h(v) }
 }
 
 /// 1 巡回し、捕捉した記録と窓口の呼び出しの記録を返す。

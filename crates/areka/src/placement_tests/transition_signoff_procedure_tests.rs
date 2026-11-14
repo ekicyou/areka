@@ -30,9 +30,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_emo_present::presenter::{KIND_SURFACE, SURFACE_FIELDS, SURFACE_STAGE_ALL};
 use wintf::ecs::window::transition_diag::{
-    ENQUEUE_FIELDS, FIELD_FRAME, FIELD_KIND, FIELD_STAGE, FIELD_T_US, FLUSH_FIELDS, KIND_ALL,
-    KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MONITOR_FIELDS,
-    MSG_FIELDS, RECORD_PREFIX_TAG, STAGE_ALL, TRANSITION_TARGET, WINDPI_FIELDS, WRITE_FIELDS,
+    ENQUEUE_FIELDS, FIELD_ENTITY, FIELD_FRAME, FIELD_KIND, FIELD_NEW_DPI, FIELD_NEW_WA,
+    FIELD_OLD_DPI, FIELD_OLD_WA, FIELD_STAGE, FIELD_T_US, FLUSH_FIELDS, KIND_ALL, KIND_ENQUEUE,
+    KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MONITOR_FIELDS, MSG_FIELDS,
+    RECORD_PREFIX_TAG, STAGE_ALL, TRANSITION_TARGET, WINDPI_FIELDS, WRITE_FIELDS,
 };
 
 use super::TRANSITION_LOG_ENV;
@@ -60,8 +61,8 @@ const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH, OFFSET_PROCEDURE_R
 /// 本仕様の手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
 ///
 /// 文書は独立した `.md` ではなく**ランナーのモジュール doc** に置いてある（design の指定）。
-/// 本檻は出所をテキストとして読むだけなので、拡張子が `.rs` でも読める——手順書とランナーが
-/// 同じファイルに在ることは、手順の字面と実装が離れないという点でむしろ望ましい。
+/// 手順書は `//!` の行だけなので、本檻は `.rs` の出所から `//!` の行だけを読む（関数名や
+/// `#[ignore]` の理由などコードの行に在る語で、説明から消えた語が通らないように）。
 const OFFSET_PROCEDURE_RELATIVE_PATH: &str =
     "src/placement_tests/transition_judge_offset_signoff_tests.rs";
 
@@ -90,15 +91,24 @@ fn procedure_text() -> String {
 }
 
 /// 出所 1 本の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
+/// `.rs` の出所は `//!` の行だけを残す（手順書はモジュール doc だけ）。
 fn read_procedure(relative: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
-    std::fs::read_to_string(&path).unwrap_or_else(|error| {
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
-            "サインオフ手順書を読めない: {} ({error})。task 4.1 の成果物であり、\
-             本檻はこの文書の判定語が判定器と一致することだけを見る",
+            "サインオフ手順書を読めない: {} ({error})。出所（PROCEDURE_SOURCES）の 1 本で\
+             あり、本檻はこの文書の判定語が判定器と一致することだけを見る",
             path.display()
         )
-    })
+    });
+    if !relative.ends_with(".rs") {
+        return text;
+    }
+    let doc: Vec<&str> = text
+        .lines()
+        .filter(|line| line.trim_start().starts_with("//!"))
+        .collect();
+    doc.join("\n")
 }
 
 /// 出所集合すべての本文を連結して返す（語の在処の検査は「どれかに載っていれば良い」）。
@@ -499,14 +509,27 @@ fn the_line_validator_rejects_broken_records() {
     // 檻そのものの較正。上の 3 本が緑でも、述語が何も落とせなければ意味が無い。
     let sound = format!(
         "{RECORD_PREFIX_TAG} {FIELD_FRAME}=7 {FIELD_T_US}=1200 {FIELD_KIND}={KIND_MONITOR} \
-         entity=12v1 old_dpi=192 new_dpi=96 old_wa=0,0,2880,1704 new_wa=0,0,2880,1752"
+         {FIELD_ENTITY}=12v1 {FIELD_OLD_DPI}=192 {FIELD_NEW_DPI}=96 \
+         {FIELD_OLD_WA}=0,0,2880,1704 {FIELD_NEW_WA}=0,0,2880,1752"
     );
     validate_record_line(&sound).expect("発行側の語彙どおりの行は通る");
 
     for (broken, expected) in [
-        (sound.replace("kind=monitor", "kind=moniter"), "語彙に無い"),
-        (sound.replace("new_dpi=", "new_dpix="), "語彙外のフィールド"),
-        (sound.replace("frame=7 ", ""), "接頭語のフィールド"),
+        (
+            sound.replace(
+                &format!("{FIELD_KIND}={KIND_MONITOR}"),
+                &format!("{FIELD_KIND}=moniter"),
+            ),
+            "語彙に無い",
+        ),
+        (
+            sound.replace(&format!("{FIELD_NEW_DPI}="), &format!("{FIELD_NEW_DPI}x=")),
+            "語彙外のフィールド",
+        ),
+        (
+            sound.replace(&format!("{FIELD_FRAME}=7 "), ""),
+            "接頭語のフィールド",
+        ),
         (
             format!("{sound} {FIELD_KIND}={KIND_WRITE}"),
             "1 行に 2 度出ている",
@@ -521,7 +544,7 @@ fn the_line_validator_rejects_broken_records() {
     }
 
     // 必須フィールドの欠落も落ちること（`-` 番兵は「書いてある」ので落ちない）。
-    let missing_field = sound.replace(" new_wa=0,0,2880,1752", "");
+    let missing_field = sound.replace(&format!(" {FIELD_NEW_WA}=0,0,2880,1752"), "");
     let error = validate_record_line(&missing_field).expect_err("必須フィールドの欠落は落ちる");
     assert!(error.contains("欠けている"), "{error}");
 }
@@ -547,10 +570,7 @@ const FAMILY_SIGNOFF: &str = "signoff:";
 
 /// 判定対象の窓（例示ブロックと同じ形の鍵）。
 fn sample_window() -> WindowKey {
-    WindowKey {
-        scope: Some(0),
-        kind: "char".to_owned(),
-    }
+    WindowKey::of(0, areka_placement::diag::WindowKind::Char)
 }
 
 /// 量が**在って上限を超えている**判定量（各系統の「上限超」の腕を全部通す）。
@@ -725,7 +745,7 @@ fn the_two_bounds_families_produce_different_violations() {
         );
         assert!(
             !signoff.contains(&signature),
-            "実機専用系統がフレーム単位の違反を出している             （`Bounds::signoff` が `frame_bound` を armed にした？）: {signature}"
+            "実機専用系統がフレーム単位の違反を出している（`Bounds::signoff` が `frame_bound` を armed にした？）: {signature}"
         );
     }
 
@@ -744,10 +764,10 @@ fn the_producible_signatures_cover_the_per_window_unmeasured_arms() {
     // `misattributed_violations` はそこに載らない行を「出得ない」と断じる。ゆえに集合の
     // 取りこぼしはそのまま**偽陽性**へ跳ね返る——手順書が正しく書いた行を誤りと報告する。
     //
-    // 判定器の窓ごとの被覆検査（`transition_judge_verdict.rs:551-565` の走査）が積む 2 つの
+    // 判定器の窓ごとの被覆検査（`transition_judge_verdict.rs` の `judge` の ⑼ の走査）が積む 2 つの
     // 「量が欠けている」は、変種を 2 つしか回さない間は**構造的に起こせなかった**——
     // 量が揃った変種では欠落が無く、量が 1 つも無い変種では `writes_per_window` が空で
-    // `judged_windows`（同 `:857-863`）が 1 度も回らないためである。「書込は在るのに窓ごとの
+    // `judged_windows`（同じファイルの関数）が 1 度も回らないためである。「書込は在るのに窓ごとの
     // 量が欠けている」第 3 の形だけがこの 2 腕へ届く。
     let deterministic = signatures_producible_by(&Bounds::deterministic());
     let signoff = signatures_producible_by(&Bounds::signoff());

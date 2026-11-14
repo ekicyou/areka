@@ -3,24 +3,16 @@
 //! wndproc の代わりに `DragAccumulatorResource::set_transition` で種を積み、
 //! `dispatch_drag_events` を 1 回の画面更新として呼ぶ。受け手（`on_char_drag_end`・
 //! `on_balloon_drag_end`）は `OnDragEnd` で結線し、保存は偽の記憶の書き手
-//! （`FakePersistIo` の共有ストア）を `load_scope` で読んで数える。`FlushResult` の形には
-//! 触れないので、修正の前の HEAD でもそのままコンパイルできる。
+//! （`SylphyaRig` の偽の記憶）を `load_scope` で読んで数える。
 //!
 //! - T7-1〜T7-3: 開始の無い終了（動かさないクリック・準備中の取り消し）で保存 0 件・
-//!   窓の位置が変わらない・キーワードで決めたバルーンの位置の素材が残る（修正前は赤）。
-//! - T7-4・T7-6: 本物のドラッグと閾値を越えた後の取り消しは今どおり 1 件（前後とも緑）。
-//! - T7-5: 速いドラッグ（開始と終了が同じ配り）でキャラ窓が行き先へ置かれ 1 件保存
-//!   （修正前は赤）。
+//!   窓の位置が変わらない・キーワードで決めたバルーンの位置の素材が残る。
+//! - T7-4・T7-6: 本物のドラッグと閾値を越えた後の取り消しは 1 件。
+//! - T7-5: 速いドラッグ（開始と終了が同じ配り）でキャラ窓が行き先へ置かれ 1 件保存。
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Instant;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{
-    Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
-    spawn_sylphya,
-};
+use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::{
@@ -29,8 +21,9 @@ use wintf::ecs::drag::{
 };
 use wintf::ecs::{PhysicalPoint, Point, Window, WindowPos};
 
-use super::super::persist::PersistWiring;
-use super::test_support::{fake_handle, position_of, rect, window_pos_at, window_pos_sized};
+use super::test_support::{
+    SylphyaRig, fake_handle, position_of, rect, window_pos_at, window_pos_sized,
+};
 use super::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag_end, on_char_drag_end,
     project_anchor,
@@ -57,39 +50,17 @@ const KEYWORD_BASE: BalloonKeywordBase = BalloonKeywordBase {
     adjust: PointPx { x: 13, y: -7 },
 };
 
-/// アクターへ渡す口と観測する口が同じストアを指す偽の IO。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// キャラ窓とバルーン窓を入れた World と、偽の記憶の書き手。
 struct Rig {
     world: World,
-    parts: SylphyaParts,
-    roots: ScopeRoots,
-    store: Arc<FakePersistIo>,
+    sylphya: SylphyaRig,
     char_w: Entity,
     balloon: Entity,
 }
 
 impl Rig {
     fn new() -> Self {
-        let store = Arc::new(FakePersistIo::new());
-        let roots = ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
-            runtime_sink: None,
-        });
+        let sylphya = SylphyaRig::fake();
 
         // `dispatch_drag_events` が引くリソース（wintf の `EcsWorld::new` と同じ登録）。
         // 開始の腕は `Messages<DragStartEvent>` を `resource_mut` で引くので無いと落ちる。
@@ -102,9 +73,7 @@ impl Rig {
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![rect(0, 0, 1920, 1200)],
         });
-        world.insert_non_send(PersistWiring {
-            publisher: parts.publisher.clone(),
-        });
+        sylphya.wire(&mut world);
 
         // 製品と同じく窓 entity 自身が `Window` を持つ（開始の腕が窓を見つけて
         // 偽の HWND で枠の座標変換を試みる経路を通す）。`WindowPos` は明示する
@@ -141,9 +110,7 @@ impl Rig {
 
         Self {
             world,
-            parts,
-            roots,
-            store,
+            sylphya,
             char_w,
             balloon,
         }
@@ -163,20 +130,11 @@ impl Rig {
 
     /// 投函済みの保存がすべて書き終わってから Ghost スコープを読む。
     fn saved(&self) -> Vec<(PersistKey, String)> {
-        self.parts
-            .publisher
-            .barrier()
-            .expect("barrier should resolve while actor is alive");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.store.clone()),
-        )
+        self.sylphya.saved()
     }
 
     fn close(self) {
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.sylphya.close();
     }
 }
 
@@ -188,10 +146,12 @@ fn started(entity: Entity) -> DragTransition {
     }
 }
 
+/// 取り消しの終わりは開始の位置を載せる（本番の形・`input_events/drag_tests.rs` が固定する）。
 fn ended(entity: Entity, cancelled: bool) -> DragTransition {
+    let end = if cancelled { DRAG_START } else { CURSOR };
     DragTransition::Ended {
         entity,
-        end_pos: PhysicalPoint::new(CURSOR.0, CURSOR.1),
+        end_pos: PhysicalPoint::new(end.0, end.1),
         cancelled,
     }
 }
@@ -250,9 +210,14 @@ fn char_pair(top_left: Point) -> Vec<(PersistKey, String)> {
 /// これはテストの組み立ての都合（偽の窓の座標変換の失敗）に寄りかかった期待値で、
 /// 製品では `initial_inset` に `WindowPos.position` の枠込みの値が入る。
 fn destination() -> Point {
+    destination_at(CURSOR)
+}
+
+/// `end` で離したときの行き先（取り消しは開始の位置で離すので `DRAG_START` を渡す）。
+fn destination_at(end: (i32, i32)) -> Point {
     let raw = PointPx {
-        x: CURSOR.0 - DRAG_START.0,
-        y: CURSOR.1 - DRAG_START.1,
+        x: end.0 - DRAG_START.0,
+        y: end.1 - DRAG_START.1,
     };
     let snapshot = MonitorSnapshot {
         work_areas: vec![rect(0, 0, 1920, 1200)],
@@ -431,7 +396,7 @@ fn fast_drag_places_window_at_destination_and_persists_once() {
 }
 
 /// T7-6（要件 2.5・5.3）: 閾値を越えた後の取り消し（開始 → 配る → 取り消しの印つきの
-/// 終了 → 配る）→ 今どおりその時点の位置を 1 組保存する。修正の前後とも緑。
+/// 終了 → 配る）→ 今どおりその時点の位置（取り消しは開始の位置で離す）を 1 組保存する。修正の前後とも緑。
 #[test]
 fn cancel_after_threshold_persists_as_today() {
     let mut rig = Rig::new();
@@ -443,9 +408,117 @@ fn cancel_after_threshold_persists_as_today() {
 
     let saved = rig.saved();
     assert!(
-        same_pairs(&window_pos_keys(&saved), &char_pair(destination())),
-        "閾値を越えた後の取り消しで位置が 1 組保存されていない: {saved:?}"
+        same_pairs(
+            &window_pos_keys(&saved),
+            &char_pair(destination_at(DRAG_START))
+        ),
+        "閾値を越えた後の取り消しで開始の位置が 1 組保存されていない: {saved:?}"
     );
 
     rig.close();
+}
+
+/// 表のテストで外す部品（指摘 7）。
+#[derive(Debug, Clone, Copy)]
+enum Missing {
+    /// バルーン窓の `BalloonWindowMarker`。
+    BalloonMarker,
+    /// キャラ窓の `CharWindowMarker`。
+    CharMarker,
+    /// キャラ窓の `Anchored`（記録だけが使うので、バルーンの保存は書かれる）。
+    CharAnchored,
+}
+
+/// 指摘 7（要件 3.1・3.3・5.6・5.7・8.4）: 部品を 1 つずつ外してドラッグを終える。
+/// 印の無いバルーン・印の無いキャラ窓は「位置を保存しなかった」の `warn!` が 1 行、
+/// `Anchored` の無いキャラ窓ではバルーンの相対位置が保存される（直す前は保存されず赤）。
+#[test]
+fn drag_end_without_a_part_warns_or_still_saves() {
+    const SKIPPED: &str = "位置を保存しなかった";
+    for missing in [
+        Missing::BalloonMarker,
+        Missing::CharMarker,
+        Missing::CharAnchored,
+    ] {
+        let mut rig = Rig::new();
+        let dragged = match missing {
+            Missing::BalloonMarker => {
+                rig.world
+                    .entity_mut(rig.balloon)
+                    .remove::<BalloonWindowMarker>();
+                rig.balloon
+            }
+            Missing::CharMarker => {
+                rig.world
+                    .entity_mut(rig.char_w)
+                    .remove::<CharWindowMarker>();
+                rig.char_w
+            }
+            Missing::CharAnchored => {
+                rig.world.entity_mut(rig.char_w).remove::<Anchored>();
+                rig.balloon
+            }
+        };
+        rig.put(started(dragged));
+        rig.tick();
+        let balloon_final = Point { x: 773, y: 409 };
+        if dragged == rig.balloon {
+            rig.world
+                .get_mut::<WindowPos>(rig.balloon)
+                .unwrap()
+                .position = Some(balloon_final);
+        }
+        rig.put(ended(dragged, false));
+        let ((), events) = log_capture_kit::capture(|| rig.tick());
+        let skipped = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN && e.message().contains(SKIPPED))
+            .count();
+
+        let saved = rig.saved();
+        match missing {
+            Missing::BalloonMarker | Missing::CharMarker => {
+                assert_eq!(skipped, 1, "{missing:?}: warn! が 1 行でない: {events:?}");
+                // scope を問わず数える（印の無い窓が別の scope の鍵へ書いても見逃さない）。
+                let leaked = saved
+                    .iter()
+                    .filter(|(k, _)| match missing {
+                        Missing::BalloonMarker => matches!(k, PersistKey::BalloonOffset { .. }),
+                        _ => matches!(k, PersistKey::WindowPos { .. }),
+                    })
+                    .count();
+                assert_eq!(leaked, 0, "{missing:?}: 印が無いのに保存した: {saved:?}");
+            }
+            Missing::CharAnchored => {
+                assert_eq!(
+                    skipped, 0,
+                    "{missing:?}: 保存したのに warn! が出た: {events:?}"
+                );
+                let scope = SCOPE as u32;
+                assert!(
+                    same_pairs(
+                        &balloon_offset_keys(&saved),
+                        &[
+                            (
+                                PersistKey::BalloonOffset {
+                                    scope,
+                                    axis: Axis::X
+                                },
+                                (balloon_final.x - CHAR_START.x).to_string()
+                            ),
+                            (
+                                PersistKey::BalloonOffset {
+                                    scope,
+                                    axis: Axis::Y
+                                },
+                                (balloon_final.y - CHAR_START.y).to_string()
+                            ),
+                        ]
+                    ),
+                    "Anchored の無いキャラ窓でバルーンの相対位置が保存されていない: {saved:?}"
+                );
+            }
+        }
+        rig.close();
+    }
 }

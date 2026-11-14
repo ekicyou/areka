@@ -5,7 +5,6 @@
 //! （`device_lost_recovery_test.rs` と同じ形）。
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows::core::Interface;
 use windows_numerics::Matrix3x2;
@@ -329,10 +328,7 @@ fn device_loss_recovery_redraws_tree_surface() {
                     }),
                     ..Default::default()
                 },
-                WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE::default(),
-                },
+                WindowHandle { hwnd },
                 HasGraphicsResources,
                 BoxStyle {
                     size: Some(BoxSize {

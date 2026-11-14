@@ -5,35 +5,26 @@
 //! Win32 が呼ばれる。窓は持ち主の関係を張った自分のトップレベルの窓 4 枚（キャラクター 2・
 //! バルーン 2・鎖あり）で、手前から B0・C0・B1・C1 の 1 本の持ち主の列になる。
 //!
-//! トップレベルの窓の重なりは他のプロセスの窓に割り込まれうるので、兄弟の
-//! `zorder_pair_maintain_always_on_top_tests.rs` と同じ実窓の門
-//! （`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の内側に置く。並びの主張は自分の 4 枚の
-//! 相対の順だけを見るので、他の窓が間に入っても崩れない。
+//! トップレベルの窓の重なりは他のプロセスの窓に割り込まれうるので、
+//! `zorder_pair_test_support.rs` の実窓の門（`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の
+//! 内側に置く。並びの主張は自分の 4 枚の相対の順だけを見るので、他の窓が間に入っても崩れない。
+//! 窓の手伝いのうち `pub(super)` の 4 つは兄弟の `window_band_pipeline_real_tests.rs` も借りる。
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
+use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GWL_EXSTYLE, GetTopWindow, GetWindow,
-    GetWindowRect, HWND_TOP, HWND_TOPMOST, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_POPUP,
+    GetWindowRect, HWND_TOP, HWND_TOPMOST, SW_SHOWNA, ShowWindow, WINDOW_EX_STYLE, WS_EX_LAYERED,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
 use super::{BandOp, WindowBandQueue, apply_window_band};
 use crate::api::{clear_window_owner, get_window_long_ptr, is_window_visible, set_window_owner};
 use crate::ecs::window::WindowHandle;
-
-const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
-
-/// 門が開いていなければ判定を 1 行も走らせずに落とす（素通りの緑を「実窓で測った」に化けさせない）。
-fn require_explicit_real_window_run() {
-    assert!(
-        std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
-        "{REAL_WINDOW_ZORDER_ENV} が未設定である（判定は 1 行も走っていない）。走らせるには \
-         環境変数を与えて `cargo test -p wintf --lib <テスト名> -- --ignored --exact` とすること"
-    );
-}
+use crate::ecs::window::zorder_pair_test_support::{
+    insert_after, require_explicit_real_window_run,
+};
 
 fn create_toplevel(title: PCWSTR, ex_style: u32, x: i32) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -61,11 +52,11 @@ fn create_toplevel(title: PCWSTR, ex_style: u32, x: i32) -> HWND {
 }
 
 /// 本番のゴーストの窓と同じ拡張スタイル（`WS_EX_LAYERED` なので画面には何も描かれない）。
-fn create_ghost_shaped(title: PCWSTR, x: i32) -> HWND {
+pub(super) fn create_ghost_shaped(title: PCWSTR, x: i32) -> HWND {
     create_toplevel(title, WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0, x)
 }
 
-fn destroy(hwnd: HWND) {
+pub(super) fn destroy(hwnd: HWND) {
     // SAFETY: Win32 境界。自分で作った窓を壊す。
     unsafe {
         let _ = DestroyWindow(hwnd);
@@ -76,7 +67,7 @@ fn ex_style(hwnd: HWND) -> u32 {
     get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("拡張スタイルを読めるはず") as u32
 }
 
-fn in_band(hwnd: HWND) -> bool {
+pub(super) fn in_band(hwnd: HWND) -> bool {
     ex_style(hwnd) & WS_EX_TOPMOST.0 != 0
 }
 
@@ -86,22 +77,6 @@ fn shape(hwnd: HWND) -> (RECT, u32) {
     // SAFETY: Win32 境界。自分で作った窓の矩形を読むだけ。
     unsafe { GetWindowRect(hwnd, &mut rect) }.expect("GetWindowRect");
     (rect, ex_style(hwnd) & !WS_EX_TOPMOST.0)
-}
-
-fn raise_to_top(hwnd: HWND, insert_after: HWND) {
-    // SAFETY: Win32 境界。自分で作った窓の重なりだけを変える。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(insert_after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .expect("SetWindowPos should reorder a self-owned test window");
 }
 
 /// 最上から辿った重なりの列（手前 → 奥）。
@@ -118,7 +93,7 @@ fn desktop_z() -> Vec<HWND> {
 }
 
 /// `windows` の窓だけを、今の重なりの手前 → 奥の順に並べる。
-fn relative_order(windows: &[HWND]) -> Vec<HWND> {
+pub(super) fn relative_order(windows: &[HWND]) -> Vec<HWND> {
     desktop_z()
         .into_iter()
         .filter(|hwnd| windows.contains(hwnd))
@@ -156,7 +131,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
     set_window_owner(b1, c1).expect("owner");
     set_window_owner(c0, b1).expect("owner");
     set_window_owner(b0, c0).expect("owner");
-    raise_to_top(c1, HWND_TOP);
+    insert_after(c1, HWND_TOP);
     let ours = [b0, c0, b1, c1];
     let original = relative_order(&ours);
     assert_eq!(original, ours, "前提: 手前から B0・C0・B1・C1 の持ち主の列");
@@ -175,14 +150,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
 
     let mut world = World::new();
     world.init_resource::<WindowBandQueue>();
-    let spawn = |world: &mut World, hwnd: HWND| {
-        world
-            .spawn(WindowHandle {
-                hwnd,
-                instance: HINSTANCE::default(),
-            })
-            .id()
-    };
+    let spawn = |world: &mut World, hwnd: HWND| world.spawn(WindowHandle { hwnd }).id();
     let (eb0, ec0, eb1, ec1) = (
         spawn(&mut world, b0),
         spawn(&mut world, c0),
@@ -212,7 +180,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
 
     // 手前へ出す（帯の外）: 先に普通の窓の対照を最上へ置き、出した後は普通の窓の最上（要件 2.9）。
     let normal_probe = create_ghost_shaped(w!("wintf-band-real-normal-probe"), 120);
-    raise_to_top(normal_probe, HWND_TOP);
+    insert_after(normal_probe, HWND_TOP);
     assert!(
         visible_in_front_of(&ours).contains(&normal_probe),
         "前提: 普通の窓の対照が自分の窓より手前に居る"
@@ -244,7 +212,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
         WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0 | WS_EX_TOPMOST.0,
         140,
     );
-    raise_to_top(band_probe, HWND_TOPMOST);
+    insert_after(band_probe, HWND_TOPMOST);
     assert!(
         visible_in_front_of(&ours).contains(&band_probe),
         "前提: 帯の窓の対照が自分の窓より手前に居る"
@@ -289,11 +257,11 @@ fn owners_of_balloons_enter_the_band_from_behind_a_normal_window_on_real_windows
     let b0 = create_ghost_shaped(w!("wintf-band-behind-b0"), 100);
     set_window_owner(b1, c1).expect("owner");
     set_window_owner(b0, c0).expect("owner");
-    raise_to_top(c1, HWND_TOP);
-    raise_to_top(c0, HWND_TOP);
+    insert_after(c1, HWND_TOP);
+    insert_after(c0, HWND_TOP);
     // 他のアプリの窓の代わり（描かれる普通の窓）を組より手前へ。
     let other = create_toplevel(w!("wintf-band-behind-other"), 0, 120);
-    raise_to_top(other, HWND_TOP);
+    insert_after(other, HWND_TOP);
     let ours = [b0, c0, b1, c1];
     assert_eq!(
         relative_order(&[other, b0, c0, b1, c1]),
@@ -306,14 +274,7 @@ fn owners_of_balloons_enter_the_band_from_behind_a_normal_window_on_real_windows
     world.init_resource::<WindowBandQueue>();
     let entities: Vec<Entity> = ours
         .iter()
-        .map(|&hwnd| {
-            world
-                .spawn(WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE::default(),
-                })
-                .id()
-        })
+        .map(|&hwnd| world.spawn(WindowHandle { hwnd }).id())
         .collect();
     run_op(&mut world, BandOp::Enter, &entities);
 

@@ -15,21 +15,11 @@
 //! 判断分岐の網羅そのものは兄弟ファイル `follow_offset_space_tests.rs` が持つ。
 //! ここを分けているのは 1,000 行制限（要件 9.6）に収めるためである。
 
-use areka_emo_compose::ScaleRatio;
 use wintf::ecs::DPI;
 
+use super::test_support::{dpi, k_axis};
 use super::{OffsetBase, OffsetRescale, rescale_follow_offset};
 use crate::resolver::PointPx;
-
-/// 表示 DPI（両軸同値）。
-fn dpi(v: u16) -> DPI {
-    DPI::from_dpi(v, v)
-}
-
-/// 表示 DPI `d` における軸ごとの拡大率（`k_axis(d) = d ÷ author_dpi_axis`・app_scale=1）。
-fn k_axis(display_dpi: u32, author_dpi: u32) -> ScaleRatio {
-    ScaleRatio::new(display_dpi, author_dpi).expect("非ゼロ DPI")
-}
 
 /// 中央揃えの基本位置（キャラ窓左上相対）——`resolver::keyword_balloon_pos` と同じ式。
 ///

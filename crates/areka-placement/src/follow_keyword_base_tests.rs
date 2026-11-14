@@ -3,16 +3,18 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
-use super::test_support::{drag_end_event_at, drag_event, fake_handle, point_of, rect};
+use super::test_support::{
+    assert_no_event, drag_end_event_at, drag_event, fake_handle, point_of, rect,
+};
 use super::{
-    BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
-    resize_window_to,
+    BalloonFollow, CharWindowMarker, MonitorSnapshot, PlacementRoute, on_balloon_drag,
+    on_balloon_drag_end, resize_window_to,
 };
 use crate::config::BalloonXMode;
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{BalloonKeywordBase, spawn_ghost_windows};
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // 実表示寸確定時のキーワード基本位置の再導出（要件 4.2/4.3/4.5/4.7/5.2・
@@ -175,18 +177,6 @@ fn user_drags_balloon_to(world: &mut World, balloon: Entity, to: Point) {
     );
 }
 
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&str> = events
-        .iter()
-        .map(CapturedEvent::message)
-        .filter(|m| m.contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
-    );
-}
-
 // -------------------------------------------------------------------------
 // 探針の自己検査（檻が空虚にならないための前提）
 // -------------------------------------------------------------------------
@@ -309,7 +299,7 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
             format!("{fresh:?}"),
             "再導出ログに再導出**後**の offset が載っていない"
         );
-        // 採寸寸は「窓生成直後で読めない」ことがあり得るため `Option` のまま載る
+        // 採寸寸は現寸不明（`None`）のことがあり得るため `Option` のまま載る
         // （読めなかったことを `Some` へ潰して嘘をつかない）。
         assert_eq!(
             rec.expect_field("old_char_size"),
@@ -391,7 +381,7 @@ fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
 
     // 2 度目: さらに別の寸へ変えても offset は動かない（Side と同じ静的 offset）。
     let third = SizePx { w: 300, h: 500 };
-    let (_, events) = capture(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -399,6 +389,7 @@ fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
             PlacementRoute::ReportedSizeReconcile,
         )
     });
+    assert!(moved, "前提: 書込が起きている");
 
     assert_eq!(
         offset_of(&world, char_window),
@@ -512,7 +503,7 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
     );
     let before = offset_of(&world, char_window);
 
-    let (_, events) = capture(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -520,6 +511,7 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
             PlacementRoute::ReportedSizeReconcile,
         )
     });
+    assert!(moved, "前提: 書込が起きている");
 
     assert_eq!(
         offset_of(&world, char_window),
@@ -536,15 +528,20 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
 
 /// バルーンの現寸が解決できないときは `warn!` を残し、offset には**一切触れない**。
 ///
-/// 未確定表現は `Option::None` だけではない——`CW_USEDEFAULT`（`i32::MIN` センチネル）も
+/// 未確定表現は `Option::None` だけではない——`CW_USEDEFAULT` の印も
 /// 同じ腕へ落とす（`guard_balloon_position`／runtime 関門と同型のガード）。
 #[test]
 fn unresolvable_balloon_size_warns_and_leaves_the_offset_untouched() {
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+
     let adjust = PointPx { x: 0, y: 0 };
     let mode = BalloonXMode::CenterTop;
     for (label, size) in [
         ("寸なし", None),
-        ("センチネル", Some(SizeI::new(i32::MIN, i32::MIN))),
+        (
+            "CW_USEDEFAULT の印",
+            Some(SizeI::new(CW_USEDEFAULT, CW_USEDEFAULT)),
+        ),
     ] {
         let (mut world, char_window, balloon_window) =
             world_with(placement_measured_at(Some((mode, adjust)), false));
@@ -643,7 +640,7 @@ fn a_dragged_relative_position_survives_a_later_char_size_change() {
     );
 
     // その後にキャラ寸が変わる書込（面替え・再吸着・DPI 移動のいずれでも起こる）。
-    let (_, events) = capture(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -651,6 +648,7 @@ fn a_dragged_relative_position_survives_a_later_char_size_change() {
             PlacementRoute::ReportedSizeReconcile,
         )
     });
+    assert!(moved, "前提: 書込が起きている");
 
     let keyword_default = expected_offset(mode, displayed_char(), balloon(), adjust);
     assert_ne!(
@@ -807,4 +805,55 @@ fn rederive_without_display_dpi_establishes_unpinned_base_and_warns() {
         world.get::<BalloonKeywordBase>(char_window).is_none(),
         "未係留の腕でも素材は消費される"
     );
+}
+
+/// 指摘 11 ⑺ キャラ窓の部品を 1 つずつ外すと、外した部品を名指す `Unresolved` の `warn!` が
+/// 1 件出て、offset にも素材にも触れない（次の機会を潰さない）。対照の行（何も外さない）は
+/// 再導出して素材を消費する。
+#[test]
+fn missing_char_parts_warn_and_keep_the_material() {
+    type Strip = fn(&mut World, Entity);
+    let rows: [(Option<&str>, Strip); 3] = [
+        (None, |_, _| {}),
+        (Some("BalloonFollow"), |w, e| {
+            w.entity_mut(e).remove::<BalloonFollow>();
+        }),
+        (Some("CharWindowMarker"), |w, e| {
+            w.entity_mut(e).remove::<CharWindowMarker>();
+        }),
+    ];
+    for (part, strip) in rows {
+        let (mut world, char_window, _balloon_window) = world_with(placement_measured_at(
+            Some((BalloonXMode::CenterTop, PointPx { x: 0, y: 0 })),
+            false,
+        ));
+        let before = world.get::<BalloonFollow>(char_window).map(|f| f.offset());
+        strip(&mut world, char_window);
+
+        let (_, events) = capture(|| {
+            resize_window_to(
+                &mut world,
+                char_window,
+                displayed_char(),
+                PlacementRoute::ReportedSizeReconcile,
+            )
+        });
+
+        let material = world.get::<BalloonKeywordBase>(char_window).is_some();
+        let Some(part) = part else {
+            expect_one(&events, REDERIVE_TAG);
+            assert!(!material, "対照: 部品が揃えば素材を消費する");
+            continue;
+        };
+        let warn = expect_one(&events, KEYWORD_UNRESOLVED_TAG);
+        assert_eq!(warn.level, tracing::Level::WARN, "[{part}]");
+        assert!(warn.message().contains(part), "[{part}] {}", warn.message());
+        assert_no_event(&events, REDERIVE_TAG);
+        assert!(material, "[{part}] 導出できなかったのに素材を消費した");
+        assert_eq!(
+            world.get::<BalloonFollow>(char_window).map(|f| f.offset()),
+            before.filter(|_| part != "BalloonFollow"),
+            "[{part}] offset を書き換えた"
+        );
+    }
 }
