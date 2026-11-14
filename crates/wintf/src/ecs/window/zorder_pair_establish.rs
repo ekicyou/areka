@@ -154,7 +154,9 @@ pub fn establish_owner_links(
         // ストラテジの判定を生存・ハンドルより先に置くのは、案 B では**そもそも owner を
         // 張らない**ためである（[`decide_pair_fix`](super::zorder_pair::decide_pair_fix) は
         // 生存を先に見るが、あちらは是正の判断であり順序の意味が違う）。案 B で相手の不在を
-        // 理由に挙げると、owner を張らない本当の理由が記録から消える。
+        // 理由に挙げると、owner を張らない本当の理由が記録から消える。案 B では初めの
+        // [`ReassertZOrder`] も入れず、z の変化を知らせる仕組みも無いので、組は外から要求が
+        // 挿されたときだけ直る。
         if matches!(strategy, ZOrderPairStrategy::ExplicitMaintenance) {
             record_decision(
                 entity,
@@ -210,8 +212,8 @@ pub fn establish_owner_links(
                 commands.entity(entity).insert((
                     OwnerLink { owner_hwnd },
                     // 初期隣接の確定（維持系が消費する一回限りの要求）。確立は窓の
-                    // 生成直後・ペアにつき 1 度きりであり、他の挿入元（要件 2.6 の再表示・
-                    // z 変化検知）はこれより後にしか動かない——ゆえにここでの挿入が
+                    // 生成直後・ペアにつき 1 度きりであり、外から挿す口（要件 2.6 の再表示・
+                    // 今は挿す側が無い）もこれより後にしか動かない——ゆえにここでの挿入が
                     // 検証待ちの要求を踏み潰すことはない。
                     ReassertZOrder::default(),
                 ));

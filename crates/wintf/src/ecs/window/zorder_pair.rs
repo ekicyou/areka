@@ -86,26 +86,22 @@ pub struct ExpectedOrder {
 unsafe impl Send for ExpectedOrder {}
 unsafe impl Sync for ExpectedOrder {}
 
-/// 重なりの再断行の一時要求（one-shot）。挿入元:
-///   ① `establish_owner_links`（初期隣接の確定）
-///   ② balloon-visibility（要件 2.6: show 後に挿入）★相互登記の契約点
-///   ③ `WM_WINDOWPOSCHANGED` z 変化検知（案 B の B2）
-/// 維持系が消費し、適用→検証の完了で remove する。
+/// 重なりの再断行の一時要求（one-shot）。本番で挿すのは `establish_owner_links`
+/// （owner を張った巡の初期隣接の確定）だけで、要件 2.6 の再表示の口と z の変化の検知は
+/// 挿す側が無い（下記）。維持系が消費し、適用→検証の完了で remove する。
 ///
 /// 段階は `pending_verify` が表す——`None` は「挿入済み・未適用」、`Some(_)` は
 /// 「適用済みで実測検証待ち」。検証を次巡へ遅らせるのは、適用（`SetWindowPosCommand`）の
 /// flush が tick 後であり、同巡の実測では指令が反映されていないためである。
 /// この 2 段階が「指令は出したが効かなかった」を切り分ける（要件 6.2）。
 ///
-/// 他クレート（表示制御を所有する仕様）から挿入されるため公開到達性を持つ。
+/// 他クレートからも挿せるよう公開到達性を持つ（要件 2.6 の口。今は挿す呼び手が無い）。
 ///
-/// # 挿入元 ② の受け入れ形——再表示は決定論的テストのみで受け入れる（要件 7.6）
+/// # 要件 2.6 の再表示の口——決定論的テストのみで受け入れる（要件 7.6）
 ///
 /// 非表示から表示へ戻った窓を隣へ戻す経路（要件 2.6）は、**決定論的テストによる判断
-/// ロジックの検証をもって受け入れる**。実機での重なりの確認は本フィーチャーでは行わない
-/// ——areka に hide／show の実装がまだ無く、この要求を挿す発火経路が存在しないためである。
-/// 実機確認は、発火経路を所有する仕様（`areka-P0-balloon-visibility`）の着地後に、
-/// そちらの実機サインオフで行う。
+/// ロジックの検証をもって受け入れる**。実機での重なりの確認は行わない——areka の
+/// 表示の切り替えはこの要求を挿さず、発火経路が存在しないためである。
 ///
 /// 受け入れの根拠となる決定論的テストは 2 本立てである。
 ///
@@ -115,12 +111,12 @@ unsafe impl Sync for ExpectedOrder {}
 ///   `zorder_pair_maintain_tests.rs` の
 ///   `reassert_request_is_applied_verified_and_then_disappears`
 ///
-/// # 挿入元 ③ は現在の構成では結線されていない
+/// # z の変化を知らせる仕組みは無い
 ///
-/// z 変化検知は案 B ／補助浮上でのみ結線する設計であり、実機ゲート（判定表
-/// `verification/plan-a-gate.md`・G1〜G8 全 PASS）が案 A・補助浮上なしを確定させた結果、
-/// **この供給者は存在しない**。よって「重なりが動いた通知を受けて要求を挿すかどうか」の
-/// 配送は、実装されていない分岐であり固定すべき配送も無い。
+/// z 変化検知は案 B ／補助浮上のための設計だったが、実機ゲート（判定表
+/// `verification/plan-a-gate.md`・G1〜G8 全 PASS）が案 A・補助浮上なしを確定させ、
+/// 作らないと決まった——**どの案を選んでもこの供給者は存在しない**。よって「重なりが
+/// 動いた通知を受けて要求を挿すかどうか」の配送は、実装されていない分岐であり固定すべき配送も無い。
 /// [`decide_pair_fix`] 側の `RaisedAbove`／`RaisedBelow` は純関数の分岐として全ストラテジ分
 /// テストで固定してあり（供給者の有無とは独立に検査できる）、案 A・補助浮上なしでは
 /// どちらも [`SkipReason::StrategyDisabled`] になる。
@@ -164,12 +160,13 @@ unsafe impl Sync for OwnerLink {}
 ///
 /// 案 A（Win32 owner の OS 保証）を本線とし、実機ゲートで要件 5.1〜5.5 の毀損が
 /// 判明した場合のみ案 B へ切り替える（要件 5.6）。宣言の付与コードは両案で同一であり、
-/// 切り替わるのは wintf 側の反映手段だけである。
+/// 切り替わるのは wintf 側の反映手段だけである。ただし z の変化を知らせる仕組みは無い
+/// （[`ReassertZOrder`]）ので、案 B と `raise_assist` が効くのは判断の表の上だけである。
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZOrderPairStrategy {
-    /// 案 A: owner 保証。`raise_assist` はゲート G7 FAIL 時のみ true（要件 1.3 の明示実装）
+    /// 案 A: owner 保証。`raise_assist` は判断の表にだけ効く（z の変化が届かず、true も false と同じ動き）
     OwnerLink { raise_assist: bool },
-    /// 案 B: B2 検知＋B3 同乗の明示維持
+    /// 案 B: owner を張らず、[`ReassertZOrder`] が挿されたときだけ組を直す（初めの要求も入らない）
     ExplicitMaintenance,
 }
 
@@ -197,12 +194,10 @@ impl Default for ZOrderPairStrategy {
 /// ——同じ「z が動いた」でも要件 1.3 と要件 1.2 のどちらの腕かが変わるため、
 /// ここを 1 種へ潰してはならない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// 本番で組み立てているのは維持系の `Reassert` だけで、残る 3 種を作る呼び手は無い
-// （判断の分岐とテストだけが使う）。
+// 本番で組み立てているのは維持系の `Reassert` だけ。z の変化の 2 種は案 B の語彙で、完了 spec
+// `areka-P0-ghost-window-zorder` の要件 5.6 の案の切り替えを残す 2026-11-14 の討議の決め 2 で残す。挿す側は無い。
 #[allow(dead_code)]
 pub(crate) enum PairTrigger {
-    /// owner 確立直後の初期隣接の確定
-    Establish,
     /// 一回限りの再断行要求（[`ReassertZOrder`]・要件 2.6 のシームを含む）
     Reassert,
     /// 手前側（バルーン窓）の重なりが動いた
@@ -335,17 +330,16 @@ pub(crate) enum PairFixDecision {
 ///
 /// | トリガ | 案 A（raise assist 無効） | 案 A（有効） | 案 B |
 /// |---|---|---|---|
-/// | `Establish` / `Reassert` | 手前へ | 手前へ | 手前へ |
+/// | `Reassert` | 手前へ | 手前へ | 手前へ |
 /// | `RaisedAbove` | `StrategyDisabled` | 背後へ（要件 1.3） | 背後へ |
 /// | `RaisedBelow` | `StrategyDisabled` | `EchoOrIrrelevant` | 手前へ（要件 1.2） |
 ///
 /// 案 A で `RaisedBelow` を見送るのは、キャラ（owner）の浮上には OS が被 owner の
 /// バルーンを連れて上がるためである（ゲート G6 の保証）——是正は要らない。
-/// 案 A・raise assist 無効ではそもそも z 変化検知を結線しないが、万一トリガが届いても
+/// z 変化検知はどの案でも結線されていない（[`ReassertZOrder`]）が、万一トリガが届いても
 /// 判断側で止まる形にしておく（供給者の有無に判断の正しさを依存させない）。
 //
-// 呼び出しは維持系（[`apply_zorder_pair_maintenance`](super::apply_zorder_pair_maintenance)）。
-// 案 B の `compute_pair_z_intent` も同じ関数を呼ぶ（判断の一元点は 1 つに保つ）。
+// 呼び出しは維持系（[`apply_zorder_pair_maintenance`](super::apply_zorder_pair_maintenance)）だけ。
 pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     if !obs.above_alive || !obs.below_alive {
         return PairFixDecision::Skip(SkipReason::PeerMissing);
@@ -389,7 +383,7 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     // 上表そのままの組で尽くす（トリガ・ストラテジのどちらかにバリアントが増えれば
     // ここがコンパイルエラーになり、決め忘れが黙って既定へ落ちない）。
     match (obs.trigger, obs.strategy) {
-        (PairTrigger::Establish | PairTrigger::Reassert, _) => place_above,
+        (PairTrigger::Reassert, _) => place_above,
         (
             PairTrigger::RaisedAbove,
             ZOrderPairStrategy::OwnerLink { raise_assist: true }
@@ -415,8 +409,7 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
 // ============================================================================
 //
 // design.md「診断ログ語彙（要件 6）」のレコード表が正本である。本節はその表を
-// そのまま写した 6 種の記録を出す手段を提供する（呼び出す結線は確立系・維持系＝
-// 後続タスクの担当）。
+// そのまま写した 6 種の記録を出す手段を提供する（呼ぶのは確立系・維持系）。
 //
 // # レコード表のうち `declared` が本節に無い理由
 //
@@ -820,7 +813,7 @@ pub(crate) fn log_sink_observed(
 /// `fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision` と明記しており、
 /// この形はタスク 1.3 でレビュー承認済みである。診断語彙の都合で承認済みの判断関数の
 /// 署名を変えるのは、変更の理由と場所が食い違う。規約側で守り、逸脱はテスト
-/// （見送り 5 種が理由つきで記録されること）とレビューで検出する。
+/// （見送り 6 種が理由つきで記録されること）とレビューで検出する。
 ///
 /// 確立系（[`establish_owner_links`](super::establish_owner_links)）も見送りをここへ通す
 /// ——確立は [`decide_pair_fix`] を経由しない判断だが、**見送りの記録語彙は 1 つ**であり、

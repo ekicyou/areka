@@ -318,7 +318,7 @@ fn all_source_files() -> Vec<String> {
     found
 }
 
-/// 重なり順の 2 機構（ペア・グループ）が全部を書いた wintf 側の本番ファイル
+/// 重なり順の 2 機構（ペア・鎖＝グループの後継）が全部を書いた wintf 側の本番ファイル
 /// ＝ファイル名が `zorder_` で始まり、テストでもテスト専用の道具立てでもないもの。
 fn zorder_production_sources() -> Vec<String> {
     all_source_files()
