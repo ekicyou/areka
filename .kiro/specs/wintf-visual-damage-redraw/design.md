@@ -22,7 +22,6 @@
 
 - 描画の木の中身と、emo のシェルの合成を描画の木へ移すこと（`draw-methods-canon`）。
 - 入れ物の大きさ・形式・枚数・寿命・中身を保つ決め（`wintf-d2d-composite-rules` 4.1・4.3〜4.5）の変更、形式の f16 化（`compose-f16-precision`）。
-- WUC の描画面への写しの範囲を狭めること（部分の `BeginDraw` は断られる＝全面を写す）。※ 2026-11-14 設計の討議・議題 1: 全面を 1 度描いた後の部分の `BeginDraw` が通るかを、タスクに分ける前に実 GPU で測り直す。通れば写しを描き直した矩形だけに狭める作りを本 spec に入れ、この行と要件 2.6・Out of scope を改める。
 - 描画面へいつ出すか（`tick-gate-adoption`・`dola`）、描画面の自動の昇格・降格（`wintf-surface-auto-promotion`）、部分木を絵に焼くこと（`CACHE_AS_BITMAP`）、文字の層のスクロール（`areka-emo-text`・バルーンの文字の層を本 spec の写しへ寄せる spec は完了のときに起票＝要件の Out of scope）。
 - 件 1（面 1002 で何もしていないあいだの CPU と WorkingSet の内訳の測りと直し）。本 spec は記録に所要を載せるだけ（6.1）。
 - 離れた複数の変化を別々の矩形のまま描くこと（普通の変化は 1 つの外接矩形にまとめる・決め D5）。
@@ -132,6 +131,7 @@ crates/wintf/src/ecs/graphics/
 - `crates/wintf/src/ecs/graphics/mod.rs` — `damage`・`damage_tests`・`composite_damage_tests`・`composite_scroll_tests` の宣言。
 - `crates/wintf/src/ecs/graphics/composite.rs` — 前の合成の控え（`prev_entries`・`prev_root`・`prev_scale`・`presented`）と、範囲版の合成 `compose_partial`、控えの更新 `remember`・`mark_presented`。`compose_or_drop` を「入れ物への描き 1 回（閉包）を走らせ、失敗なら捨てる」形に広げる。
 - `crates/wintf/src/ecs/graphics/systems/render.rs` — 計画を立てて 4 つの道に分ける・記録の 1 行と所要の計測。
+- `crates/wintf/src/com/wuc.rs` — `begin_draw_roundtrip` の注記「部分の矩形は `E_INVALIDARG`」を「作りたての描画面では断られ、全面を 1 度描いた後は通る（2026-11-14 実測）」へ（コードは変えない）。
 - `crates/wintf/src/ecs/graphics/components.rs` — `SurfaceGraphics` に `composed_before: bool`（初めてと作り直しの見分け・3.4）と、それを読み書きする口。
 - `crates/wintf/src/ecs/graphics/composite_tests.rs` — `compose_or_drop` の呼び方の追随（1 件）。
 - `crates/wintf/src/ecs/graphics/visual/draw/emit_blend_tests.rs`・`emit_layer_tests.rs` — 命令の構造体の足した欄の追随。
@@ -167,7 +167,7 @@ flowchart TD
     Empty -->|no| Partial[Partial]
 ```
 
-- 全部（Full）と範囲だけ（Partial）は入れ物へ合成して世代を 1 上げ、全面を描画面へ写す（2.6）。写すだけ（PresentOnly）は前の答えを描画面へ写すだけ（2.8）。何もしない（Skip）は合成も写しもしない（2.5）。
+- 全部（Full）と範囲だけ（Partial）は入れ物へ合成して世代を 1 上げる。描画面へは、Full は全面を、Partial は `PartialPlan.present_rect`（描く矩形と写しの先の外接矩形）だけを写す（2.6・2.9）。写すだけ（PresentOnly）は前の答えを描画面へ写すだけ（2.8）。何もしない（Skip）は合成も写しもしない（2.5）。
 - どの道でも、合成（または Skip・PresentOnly）を終えたら控えの項の列を今の列に置き換える。今の列を項にできなかった回は控えを空にする（次の回は「前の列が無い」）。
 
 ### 範囲だけの合成（入れ物の中）
@@ -208,7 +208,8 @@ sequenceDiagram
 | 2.3 | 範囲の外を残す | SurfaceComposite | `compose_partial` | 範囲だけの合成 |
 | 2.4 | 全部の答えとバイトで一致 | 全体（不変条件 I1） | — | — |
 | 2.5 | 変わらない回は描かない | ComposePlanner・RenderSurface | `ComposePlan::Skip` | 計画 |
-| 2.6 | 全面を写し読み戻しを揃える | RenderSurface・SurfaceComposite | 世代 +1 | 計画 |
+| 2.6 | 変わった範囲だけ写し読み戻しを揃える | RenderSurface・SurfaceComposite | `present_rect`・`copy_rect_to`・世代 +1 | 計画 |
+| 2.9 | 範囲だけの写しの答えは全面の写しと同じ | RenderSurface | `begin_draw(Some(present_rect))` | 計画 |
 | 2.7 | 遅らせない | RenderSurface | 同じ回で描く | — |
 | 2.8 | 写し終えていなければ写す | SurfaceComposite・ComposePlanner | `presented`・`ComposePlan::PresentOnly` | 計画 |
 | 3.1 | 初めて・作り直しは全部 | ComposePlanner・SurfaceGraphics | `PlanInput.fresh`・`composed_before` | 計画 |
@@ -406,6 +407,7 @@ pub(crate) struct PartialPlan {
     pub area: u64,                // rects の面積の和（重なりは重ねて数える）
     pub shift_area: u64,          // 写した面積
     pub exposed_area: u64,        // 写しの切り抜きの中で描き直した面積
+    pub present_rect: PxRect,     // 描画面へ写す矩形＝rects と shifts の先の外接矩形（2.6）
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -495,7 +497,8 @@ impl SurfaceComposite {
 **Contracts**: Batch [x]
 
 - Trigger: 今どおり `Changed<SurfaceGraphicsDirty>` の描画面（印の立て方は変えない）。
-- 手順: (1) 入れ物を作る回は `SurfaceGraphics::note_composite_created()` が `First`（その `SurfaceGraphics` が入れ物を持ったことが無い）か `Recreated` を返し、`fresh` にする。(2)〜(5) は `composite.rs` の 1 つの関数 `compose_planned`（下）に任せる。(6) Skip 以外は今どおり `begin_draw(None)` → `copy_to` → `end_draw`、成功で `mark_presented`。(7) 記録の 1 行。
+- 手順: (1) 入れ物を作る回は `SurfaceGraphics::note_composite_created()` が `First`（その `SurfaceGraphics` が入れ物を持ったことが無い）か `Recreated` を返し、`fresh` にする。(2)〜(5) は `composite.rs` の 1 つの関数 `compose_planned`（下）に任せる。(6) Skip 以外は描画面へ写す: Partial で `presented` が真の回だけ `begin_draw(Some(present_rect))` → `copy_rect_to(present_rect, offset)`（入れ物の `present_rect` を返された atlas の位置へ `NEAREST_NEIGHBOR` で 1 度描く・その矩形を透明に塗ってから）→ `end_draw`。Full・PresentOnly・`presented` が偽の回は今どおり `begin_draw(None)` → `copy_to` → `end_draw`。成功で `mark_presented`。作りたての描画面は部分の矩形を断る（実測 `E_INVALIDARG`）が、作りたての描画面は入れ物も作りたて＝必ず Full なので部分の写しに来ない。(7) 記録の 1 行。
+- 部分の写しの前提（2026-11-14 設計の討議・議題 1 の実測・本開発機の実 GPU）: 作りたての描画面の部分の `BeginDraw` は `E_INVALIDARG`。全面を 1 度描いた後は部分の `BeginDraw`・`EndDraw` が 3 回続けて通り、返る atlas の位置は呼ぶたびに変わった（写しは毎回返る位置へ描く）。写した範囲の外の画素が前のまま残ることは、公式文書（DComp の面の `BeginDraw`）の記述に頼り、WUC では実 GPU のテスト（7.5・2.9）で固める。残らない組み合わせが見つかれば、テストを緩めず全面の写しへ戻す（`present_rect` を全面にする）。
 - `compose_planned(slot, dc, fresh, scale, root_list, tree, size) -> windows::core::Result<(ComposePlan, Option<Vec<DamageEntry>>)>`: (2) `entries(tree, scale, size)` で今の項の列を作る（木が無ければ空の列）。(3) `plan`。(4) Full＝`compose_or_drop(slot, |c| c.compose(…))`・Partial＝`compose_or_drop(slot, |c| c.compose_partial(…))`・PresentOnly と Skip は合成しない。(5) 成功（Skip・PresentOnly を含む）で `remember`。本番の係と WARP のテストが同じ関数を呼ぶ（`composite.rs` の冒頭の約束と同じ形）ので、`remember` の呼び忘れや Skip・失敗の回の順の誤りを WARP のテストで見つけられる。`render.rs` に残るのは WUC への写し・`mark_presented`・記録だけ。
 - 失敗: 範囲版の合成・作業用の絵の作成と写しの失敗は `compose_or_drop` が入れ物を捨て、`on_stage_failure(STAGE_COMPOSE)` に乗る（失いなら係を抜ける・失いでなければ `error!`＋実体名＋HRESULT と描き直しの印・3.5・3.6）。次の回は入れ物が新しいので `Recreated` で全部。
 - 写しの失敗（`BeginDraw`・`EndDraw` の失いでない失敗）では入れ物と控えが残り `presented = false` のまま。次の回に比べが「変わらない」と答えても PresentOnly で写す（2.8）。
@@ -511,7 +514,7 @@ impl SurfaceComposite {
 **Contracts**: Event [x]
 
 - 出す口: `debug!(target: "wintf::damage", …, "[render_surface] damage")`。履歴の層（info 以上）には入らない。
-- 欄: `entity`（実体名）・`mode`（`full`・`partial`・`present`・`skip`）・`reason`（full のときだけ・`FullReason::as_str`）・`items_redrawn`・`items`（描く列の件の数）・`area`・`surface_area`・`shift_area`・`exposed_area`・`compose_us`・`present_us`。
+- 欄: `entity`（実体名）・`mode`（`full`・`partial`・`present`・`skip`）・`reason`（full のときだけ・`FullReason::as_str`）・`items_redrawn`・`items`（描く列の件の数）・`area`・`surface_area`・`shift_area`・`exposed_area`・`present_area`（描画面へ写した面積）・`compose_us`・`present_us`。
 - 所要は係の頭で 1 度 `tracing::enabled!(target: DAMAGE_TARGET, Level::DEBUG)` を見て、出すときだけ `Instant` で測る。出すかどうかで計画・描く矩形・答えは変わらない（6.3）。
 - `[tick]`・`perf(…)` の行の文言と欄は変えない（6.4）。`[tick]` の `rendersurface_us` は係の全体の所要のまま。
 
@@ -575,6 +578,7 @@ stateDiagram-v2
 ### E2E Tests（実 GPU・7.5）
 
 - `tests/graphics/composite_systems_test.rs`: 描画の木を持つ描画面で 1 フレーム描き、節を 1 つ動かしたフレームの WUC の描画面の画素が今の答えになる。続けて描き直しの印だけを立てた（何も変えない）フレームで、描画面の画素が前のまま残る。
+- 範囲だけの写し（2.9）: 描画の木を持つ描画面を全部で 1 度写し、節を 1 つ動かして範囲だけを写した描画面と、同じ回に全面を写した描画面を `CopySurface` で読んでバイトで比べる（写した範囲の外の画素が前のまま残ること）。
 - 実 GPU のバイトの一致（3 件）: 同じ装置の描画面 2 枚（前を全部描いてから範囲だけの道で今へ／初めから今を全部）を `SurfaceReadback::read_all` で読んでバイトで比べる。件は、小数の位置の `LINEAR` の件を動かす・描く矩形の縁をまたぐ不透明度の層・拡大 1.25 の整数の平行移動の写し。範囲だけの道は層の中間の面の原点が全部の道と違い、同じ GPU の中でも 1 段ずれうる＝WARP の緑では保証できない。ずれたら、テストを緩めずその組み合わせを全部へ倒す（R1・R5 と同じ方針）。
 
 ### 既存のテストの追随
@@ -586,7 +590,7 @@ stateDiagram-v2
 - 比べは項の数 n に O(n log n)（最長増加部分列）・項の作りと平行移動の判定は O(n)。COM を呼ばない。
 - 範囲だけの回の D2D の仕事は、描く矩形の数（普通は 1・写しの回は最大 1 + 4×写しの数）× 根の命令の列と、矩形と交わる件の再生。層は全部積み直す（飛ばすのは件だけ・決め D7）。
 - 写しの回は作業用の絵（写す範囲の大きさ）を 1 回の合成の中だけ持つ。入れ物 1 枚に加わるのは合成のあいだの一時の分だけで、フレームをまたいで持つ絵は増えない（決め D6）。
-- WUC の描画面への写しは全面のまま（変わった回の写しの量は減らない・件 1 の見積もりに入れる）。
+- WUC の描画面への写しは、範囲だけの回は `present_rect` だけ（2.6）。全部合成の回は全面のまま。
 
 ## Supporting References
 
