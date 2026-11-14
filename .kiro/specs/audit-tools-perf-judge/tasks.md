@@ -133,7 +133,7 @@
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.4, 5.5, 7.1, 7.6_
 
 - [ ] 9. (P) 台帳の本体を直す（#14・#15・#19・#20・#33・#54〜#57・#59・#81 の perf-ledger）
-- [ ] 9.1 台帳の書き込みの入力の確かめ（#14・#15・#19・#20）
+- [x] 9.1 台帳の書き込みの入力の確かめ（#14・#15・#19・#20）
   - `load_entry_json` で verdict が空なら exit 3（#14・ケース `append_without_verdict`＝T14）。`append` の `--iteration` を必須にして既定の枝を消し、`steps.txt` 5 本を合わせる（#15・ケース `append_without_iteration`＝T15）。`cmd_final` で許さない字を `_` に（#19・ケース `final_top_remaining_symbols`＝T19）。山括弧の値をひな型のままとして exit 3（#20・ケース `append_template_placeholder`＝T20）
   - 終わった姿: perf-ledger の `--selftest` が 4 ケースを含めて緑で、直しを戻すとそれぞれ 0 か 3 で赤
   - _Boundary: perf-ledger_
@@ -233,3 +233,4 @@
 - 7.1: 7.2 への申し送り: exit 3 の 3 ケース（floor_*・unknown_metric_name）の `stderr_substr = perf-compare:` は理由を縛らないので、英語化のときに鍵の名（`noise_floor_pct` など）で縛る。bool の床を拒む文「…がありません」は原因（真偽値）とずれるので英語化で合わせる
 - 7.2: perf-compare の `main` の `reconfigure(errors="replace")` が残る（D9 は全部 `backslashreplace` にそろえる）。8・12.2 のときに残りの `replace` も合わせる。perf-compare の未決の理由は日本語（報告・compare.json）と英語（stderr）の 2 つを持つ
 - 8: `DRAG_DX_PX` は judge-followup の側では 0 件。`invoke-followup-checks.ps1` は作り手の定数として持ち続け、48 行の注記「judge-followup.py と対」は古くなった（`audit-tools-perf-run` へ知らせる）。show.rs の出所の注記の「info!」は実際は `show_line!` の `tracing::event!`（14 の audit で拾う候補）
+- 9.1: `--iteration` 必須で `empty_values_are_rejected_cleanly` の append の手順は意味を失い、status だけに減らした。`TOP_REMAINING_BAD_RE` は perf-ledger の `_TOP_REMAINING_PATTERN` の補集合を写して持つ（2 か所）。perf-ledger.py は 991 行

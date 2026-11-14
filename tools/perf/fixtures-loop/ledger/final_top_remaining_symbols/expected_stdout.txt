@@ -1,0 +1,1 @@
+PERF-LOOP FINAL: STOPPED run=42424242 reason=plateau best_idle_cpu=6.12 top_remaining=function:alloc::vec::Vec_T_::push:12.3% iters=0

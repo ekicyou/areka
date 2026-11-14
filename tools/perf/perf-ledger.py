@@ -64,7 +64,7 @@
 `--repo-root` で上書き可）。どれも無ければ exit 3。
 
     python tools/perf/perf-ledger.py state --goal draw-load-parity
-    python tools/perf/perf-ledger.py append --goal draw-load-parity --from-json iter.json
+    python tools/perf/perf-ledger.py append --goal draw-load-parity --iteration 1 --from-json iter.json
     python tools/perf/perf-ledger.py --selftest
 
 終了コード（judge-perf.py と同じ体系）: 0=正常（--selftest は全ケース一致）／
@@ -508,25 +508,16 @@ def entry_to_json(entry: Entry, path: Path) -> dict:
     }
 
 
-def state_int(ledger: Ledger, key: str, default: int | None = None) -> int:
+def state_int(ledger: Ledger, key: str, default: int) -> int:
     """状態ブロックの整数の鍵を読む。
 
-    `-`（`init` が書く正規の空値）は「値が無い」であって 0 ではない。`default` を渡した
-    呼び手（STATUS 行のように空でも 1 行出す側）にはそれを返し、渡さない呼び手（次の周番号を
-    決める `append` のように値が無ければ先へ進めない側）には理由つき exit 3 を返す。
+    `-`（`init` が書く正規の空値）は「値が無い」であって 0 ではないので、呼び手が渡す
+    `default` を返す（STATUS 行のように空でも 1 行出す側）。整数でない値は理由つき exit 3。
     **生の `ValueError` で落ちる経路は作らない**（task 5.4 のレビュー所見）。
     """
     raw = ledger.state.get(key, EMPTY_VALUE)
     if raw == EMPTY_VALUE:
-        if default is not None:
-            return default
-        raise bad_input(
-            f"状態ブロックの {key} の値が空（{EMPTY_VALUE}）です: {ledger.path}",
-            [
-                f"`set-phase <相> --{key.replace('_', '-')} <値>` で値を入れてから、もう一度実行してください。",
-                "空の値を 0 と読み替えて先へ進むと、周番号が黙って巻き戻ります。",
-            ],
-        )
+        return default
     try:
         return int(raw)
     except ValueError as exc:
@@ -814,7 +805,11 @@ def load_entry_json(path: Path) -> dict[str, str]:
         key: _to_ledger_value(key, payload.get(key), ENTRY_INT_KEYS, ENTRY_FLOAT_KEYS)
         for key in ENTRY_KEYS
     }
+    if values["verdict"] == EMPTY_VALUE:
+        raise bad_input(f"verdict が空です: {path}", [f"使える採否は {'・'.join(VERDICTS)} です。"])
     validate_verdict(values["verdict"])
+    if template := next((k for k, v in values.items() if v.startswith("<") and v.endswith(">")), None):
+        raise bad_input(f"{template} がひな型の山括弧のままです: {path}", ["<…> を実際の値に書き換えます。"])
     return values
 
 
@@ -822,7 +817,7 @@ def cmd_append(args) -> int:
     ledger = load_ledger(args)
     values = load_entry_json(Path(args.from_json))
     timestamp = validate_timestamp(args.now) if args.now else now_iso()
-    iteration = args.iteration if args.iteration is not None else state_int(ledger, "iteration") + 1
+    iteration = args.iteration
     if iteration < 1:
         raise bad_input(f"周番号は 1 以上です（{iteration}）")
     if any(entry.iteration == iteration for entry in ledger.entries):
@@ -953,7 +948,7 @@ def build_parser() -> Parser:
     append = subparsers.add_parser("append", parents=[location], help="周の記録を 1 つ追記する")
     append.add_argument("--from-json", required=True, help="追記する値の JSON ファイル")
     append.add_argument("--now", help="周の日時（省略時は現在の UTC）")
-    append.add_argument("--iteration", type=int, help="周番号（省略時は状態の iteration + 1）")
+    append.add_argument("--iteration", type=int, required=True, help="周番号（必須）")
 
     read = subparsers.add_parser("read", parents=[location], help="指定した周の記録を JSON で出す")
     read.add_argument("--iteration", type=int, required=True, help="周番号")

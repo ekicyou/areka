@@ -1,0 +1,3 @@
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+0 :: set-phase FINAL --ledger @LEDGER@ --run 42424242 --best 6.12
+0 :: final --ledger @LEDGER@ --outcome STOPPED --reason plateau --top-remaining function:alloc::vec::Vec<T>::push:12.3%

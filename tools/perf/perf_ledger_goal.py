@@ -71,6 +71,8 @@ GOAL_SCHEMA: dict[str, tuple[str, ...]] = {
 JUDGE_VERSION_RE = re.compile(r"SCRIPT_VERSION\s*=\s*\(?\s*[\"'](\d+\.\d+\.\d+)")
 JUDGE_THRESHOLD_RE = re.compile(r"^IDLE_CPU_MAX_RELEASE_PCT\s*=\s*([0-9]+(?:\.[0-9]+)?)", re.MULTILINE)
 JUDGE_THRESHOLD_NAME = "IDLE_CPU_MAX_RELEASE_PCT"
+#: FINAL 行の top_remaining に使えない字（`CORE.FINAL_RE` の字種の補集合）。`_` に置き換える。
+TOP_REMAINING_BAD_RE = re.compile(r"[^A-Za-z0-9_.:%+-]")
 
 #: `/goal` へ貼る条件文の雛形（要旨は設計 C1）。**波括弧は書式指定にしか使わない**。
 #: 終端行の字面はどの行も行頭に来ないように書く（この文自体が判定役に終端と誤読されないため）。
@@ -291,7 +293,7 @@ def cmd_final(args) -> int:
             if args.best_idle_cpu
             else CORE.state_number_text(ledger, "best_idle_cpu_pct")
         )
-        top = args.top_remaining or CORE.EMPTY_VALUE
+        top = TOP_REMAINING_BAD_RE.sub("_", args.top_remaining) if args.top_remaining else CORE.EMPTY_VALUE
         line = CORE.FINAL_PREFIX + (
             f"STOPPED run={token} reason={args.reason} best_idle_cpu={best} "
             f"top_remaining={top} iters={iterations}"
