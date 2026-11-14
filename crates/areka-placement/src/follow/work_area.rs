@@ -274,8 +274,7 @@ impl MonitorSources {
     /// 1 台も無い（列挙異常・[`MonitorSnapshot::from_monitors`] の 0 台契約と同義）。
     // 同期段は 0 台を `Monitor` 列の側で弾く（表を作る前に警告して現状維持する）ので、
     // 本判定を名前で呼ぶのは今のところ檻だけである。`len` を持つ型に `is_empty` が無いのは
-    // API として不自然なので残す（areka は bin crate ゆえ `pub` でも dead_code 免除されない）。
-    #[allow(dead_code)]
+    // API として不自然なので残す（配置は lib の crate なので `pub` の項目は未使用の警告にならない）。
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

@@ -76,7 +76,7 @@
   - 完了の状態: 表のテストが緑で、直す前の形ではアンカーの無い形で保存が書かれず赤。本体のドラッグの道（`cargo test -p areka input_events::drag`）も緑。`drag_follow.rs` が 1,000 行以下のまま（越えるなら 2.3 と同じ逃げ道）
   - _Depends: 2.3_
   - _Requirements: 3.1, 3.3, 5.6, 5.7, 8.4_
-- [ ] 3.4 古い `#[allow]` と理由の文を消し、`anchor_changed_system` の説明を事実に直す（指摘 8・9）
+- [x] 3.4 古い `#[allow]` と理由の文を消し、`anchor_changed_system` の説明を事実に直す（指摘 8・9）
   - 設計の 9 の 33 個の属性を消す。`follow.rs` の `pub(crate) use` の 5 項目は、`ChainPlacement`・`ChainClampOutcome` を `pub use` の行へ移し、語の 2 つの再束縛を消してテストを定義元の道で引き、連鎖の作業領域の解決の関数を `#[cfg(test)]` にする
   - `GroupShift` の属性（`follow.rs:123`）は残す
   - 説明を今の事実（配置は lib の crate・examples は公開の API だけ・呼び手は `runtime::…`）に合わせる。判定器の「areka は bin crate」は残し、「`#[cfg(test)]` と同じ形」だけ直す

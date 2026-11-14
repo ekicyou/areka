@@ -6,9 +6,9 @@
 //! 寄せた結果（見えている窓は `shown == projected`）を手で置く。
 
 use super::test_support::{guard_events, point, rect};
+use super::work_area_clamp::{WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG};
 use super::{
-    GroupShift, MonitorSnapshot, RestoredWindow, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
-    WORK_AREA_UNRESOLVED_TAG, keep_restored_groups,
+    GroupShift, MonitorSnapshot, RestoredWindow, WORK_AREA_CLAMP_TAG, keep_restored_groups,
 };
 use crate::chain_finalize::{AdjacencyMark, ChainRect};
 use crate::resolver::PointPx;

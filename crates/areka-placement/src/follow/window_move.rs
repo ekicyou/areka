@@ -411,9 +411,10 @@ pub fn resize_window_to(
 /// アンカー値の解決（`seriko.alignmenttodesktop` 優先度チェーン）と
 /// `\![set,alignmenttodesktop]` の cue routing は上流（parsers／seriko）の領分＝
 /// 本 spec は非所有。本 system は `Anchored` の変化に反応する **consumer** に徹する
-/// （design「System Flows > アンカー変化トリガ」・Req4.2）。schedule への登録（結線）は
-/// main.rs／runtime 側の領分ゆえ、本 task は system の**定義のみ**を持つ
-/// （`create_windows` が window_system.rs で定義のみ・登録は runtime、という repo 慣行）。
+/// （design「System Flows > アンカー変化トリガ」・Req4.2）。
+///
+/// 本番のアンカーの変化は `reseed` から [`resize_window_to`] で書く。この system は schedule に
+/// 登録しない。永続の [`SystemState`] で変化を拾う system の書き方の見本として、テストと共に残す。
 ///
 /// # 変更検知の永続性（毎フレーム全マッチしない・Req1.4 の要）
 ///
@@ -434,7 +435,6 @@ pub fn resize_window_to(
 /// # Concurrency
 ///
 /// UI スレッド・World 排他（`&mut World`）。他 actor は触れない（design State Management）。
-#[allow(dead_code)] // schedule へ登録する呼び手は本番に無い・テストだけが使う
 pub fn anchor_changed_system(
     world: &mut World,
     mut state: Local<Option<SystemState<Query<'static, 'static, Entity, Changed<Anchored>>>>>,

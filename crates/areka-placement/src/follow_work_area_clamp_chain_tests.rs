@@ -7,10 +7,12 @@
 use bevy_ecs::prelude::*;
 
 use super::test_support::{guard_events, point, rect, window_pos_sized};
+use super::work_area_clamp::{
+    WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG, resolve_chain_in_work_area,
+};
 use super::{
     ChainClampOutcome, ChainPlacement, ClampScene, MonitorSnapshot, WORK_AREA_CLAMP_TAG,
-    WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG, place_chain_in_work_area,
-    resolve_chain_in_work_area,
+    place_chain_in_work_area,
 };
 use crate::chain_finalize::{ChainRect, ChainSlot, KeepReason, PairDecision};
 use crate::resolver::PointPx;

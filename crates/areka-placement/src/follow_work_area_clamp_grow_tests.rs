@@ -7,9 +7,10 @@
 use bevy_ecs::prelude::*;
 
 use super::test_support::{dragging_state, fake_handle, guard_events, point, point_of, rect};
+use super::work_area_clamp::{WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG};
 use super::{
-    MonitorSnapshot, PlacementRoute, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
-    WORK_AREA_UNRESOLVED_TAG, clamp_grown_free_default, resize_window_to,
+    MonitorSnapshot, PlacementRoute, WORK_AREA_CLAMP_TAG, clamp_grown_free_default,
+    resize_window_to,
 };
 use crate::chain_finalize::ScriptPlaced;
 use crate::follow::OffsetBase;

@@ -46,17 +46,9 @@
 //! また `World`・`Entity`・ログ機構のいずれにも触れない。縮退・飽和は**判定結果の値**として
 //! 返し、警告の発行は呼び手の責務である（要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
 
-// 結線の履歴（scaffold 解消の記録）: 本モジュールは task 1.2 で契約と型と純関数だけを先に
-// 建て、消費者の結線を段階的に入れてきた。areka は lib target を持たない bin crate ゆえ
-// `pub` でも dead_code 免除されないため、その間は `#![allow(dead_code)]` を 1 枚貼っていた
-// （未使用の実測は task 3.1 で 9 項目・task 4.1 で 6 項目）。
-//
-// 実測（task 6.1・追随相の結線後）: 本 allow を外した `cargo build --workspace --all-targets`
-// で未使用は **1 つも残らない**——`base`・`anchor_base_dpi`・`apply_rescaled`・
-// `OffsetRescale`・`rescale_follow_offset` はいずれも追随相
-// （`emo2_boot::frame::balloon_offset_follow`）が呼び、`UnresolvedScale` はその縮退腕の
-// 理由として構築される。ゆえに `#![allow(dead_code)]` は撤去した（以後の**真の** dead code
-// を隠さないため、結線が減ったときは貼り直すのではなく減った理由を先に疑うこと）。
+// 許可の属性は置かない。配置は lib の crate で、公開の項目の呼び手は追随相
+// （`runtime::…` の `balloon_offset_follow`）。結線が減って私有の項目が未使用になったら、
+// 属性を貼るのではなく減った理由を先に疑うこと。
 
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::{Component, Entity};

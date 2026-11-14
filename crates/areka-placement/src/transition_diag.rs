@@ -35,14 +35,12 @@
 //! 要件 3.7・design D10）は**語彙が先着**しており、発行する適用相は同 spec の後続タスクが
 //! 建てる。
 //!
-//! # 語彙は先に建てる（未消費の `#[allow(dead_code)]` の根拠）
+//! # 語彙は先に建てる
 //!
 //! 判定語の一覧（`*_ALL`）と per-kind の必須フィールド列（`*_FIELDS`）は、**判定器
-//! （task 3.1／3.2）と発行側が同じ字面を見る**ための単一の定義元である。判定器は
-//! `#[cfg(test)]` 限定の配置ゆえ、非 test ビルドでは未消費に見える
-//! （areka は lib ターゲットを持たない bin crate ゆえ `pub` でも dead_code 免除されない）。
-//! 個別に `#[allow(dead_code)]` を置くのはモジュール大の allow が**以後の真の dead code を隠す**
-//! ためで、`placement::diag` が同じ理由でモジュール大の allow を撤去したのに倣う。
+//! （task 3.1／3.2）と発行側が同じ字面を見る**ための単一の定義元である。判定器は本体の
+//! crate の `#[cfg(test)]` の配置にあるが、配置は lib の crate なので `pub` の語彙は未使用の
+//! 警告にならない（許可の属性は要らない）。
 //!
 //! # 既定 OFF・前置ガードは呼出側が持つ
 //!
@@ -91,7 +89,6 @@ pub const KIND_OFFSET: &str = "offset";
 ///
 /// wintf の [`base::KIND_ALL`] とも emo-present の `KIND_SURFACE` とも交わらない
 /// （交わると判定側のレコード振り分けと遷移の起点判定が壊れる）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const PLACEMENT_KIND_ALL: &[&str] = &[
     KIND_SNAPSHOT,
     KIND_HOLD,
@@ -112,7 +109,6 @@ pub const HOLD_DECISION_HOLD: &str = "hold";
 pub const HOLD_DECISION_PROCEED_AFTER_TIMEOUT: &str = "proceed-after-timeout";
 
 /// 整合待ちの判定語の全体。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_DECISION_ALL: &[&str] = &[
     HOLD_DECISION_PROCEED,
     HOLD_DECISION_HOLD,
@@ -136,7 +132,6 @@ pub const HOLD_SITE_WORK_AREA_RESNAP: &str = "work-area-resnap";
 pub const HOLD_SITE_PATTERN_MOVE: &str = "pattern-move";
 
 /// 観測点語の全体（design C5 の「4 点すべて」と面の `move` のずれの相＝待ち札の守備範囲そのもの）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_SITE_ALL: &[&str] = &[
     HOLD_SITE_DPI,
     HOLD_SITE_RECONCILE,
@@ -157,7 +152,6 @@ pub const CHAIN_STAGE_REALIGNED: &str = "realigned";
 pub const CHAIN_STAGE_DEFERRED: &str = "deferred";
 
 /// 連鎖レコードの段階語の全体。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const CHAIN_STAGE_ALL: &[&str] = &[
     CHAIN_STAGE_ARMED,
     CHAIN_STAGE_REALIGNED,
@@ -189,7 +183,6 @@ pub const OFFSET_VERDICT_SATURATED: &str = "saturated";
 ///
 /// 実機サインオフの機械判定（要件 8.3）は**この定数群を参照するだけ**で、字面のリテラルを
 /// 自前で書かない——語を変えたときに片方だけが動く食い違いを構造で潰す。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const OFFSET_VERDICT_ALL: &[&str] = &[
     OFFSET_VERDICT_RESCALED,
     OFFSET_VERDICT_ANCHORED,
@@ -241,11 +234,9 @@ pub const FIELD_NEW_OFFSET: &str = "new_offset";
 pub const FIELD_VERDICT: &str = "verdict";
 
 /// `kind=snapshot` 行の必須フィールド（接頭語と可変長の `m<i>` を除く）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const SNAPSHOT_FIELDS: &[&str] = &[FIELD_MONITORS];
 
 /// `kind=hold` 行の必須フィールド（接頭語を除く）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_FIELDS: &[&str] = &[
     FIELD_ENTITY,
     FIELD_SCOPE,
@@ -258,7 +249,6 @@ pub const HOLD_FIELDS: &[&str] = &[
 ];
 
 /// `kind=ground` 行の必須フィールド（接頭語を除く）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const GROUND_FIELDS: &[&str] = &[
     FIELD_SCOPE,
     FIELD_GROUND_Y,
@@ -268,11 +258,9 @@ pub const GROUND_FIELDS: &[&str] = &[
 ];
 
 /// `kind=chain` 行の必須フィールド（接頭語を除く）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const CHAIN_FIELDS: &[&str] = &[FIELD_STAGE, FIELD_SCOPES, FIELD_MOVED, FIELD_REASON];
 
 /// `kind=offset` 行の必須フィールド（接頭語を除く）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const OFFSET_FIELDS: &[&str] = &[
     FIELD_SCOPE,
     FIELD_BASE_DPI,
@@ -375,7 +363,6 @@ pub struct ChainRecord {
 /// `base_offset` と 2 つの DPI であって `old_offset` ではない。一方 `old_offset` を落とすと
 /// 「実際に値が動いたか」が事後に判らない。3 つとも載せるのは、判定側が**引き直しの再現**と
 /// **動いたかの判定**をどちらも行うためである。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 #[derive(Clone, Copy, Debug)]
 pub struct OffsetRecord {
     /// 刻印。
@@ -413,7 +400,6 @@ fn opt_field<T: std::fmt::Display>(value: Option<T>) -> String {
 ///
 /// 値に空白を入れないのは、判定側の `名前=値` の切り出し（空白区切り）をそのまま通すため
 /// である（[`snapshot_line`] の `m<i>=<dpi>:<l,t,r,b>` と同じ流儀）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 fn point_field(point: PointPx) -> String {
     format!("{x},{y}", x = point.x, y = point.y)
 }
@@ -496,7 +482,6 @@ pub fn chain_line(record: &ChainRecord) -> String {
 }
 
 /// 追随の記録行。未係留の基準 DPI と marker の無い窓は番兵で埋める（欄を落とさない）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub fn offset_line(record: &OffsetRecord) -> String {
     format!(
         "{prefix} {FIELD_SCOPE}={scope} {FIELD_BASE_DPI}={base_dpi} {FIELD_NEW_DPI}={new_dpi} \
@@ -767,7 +752,6 @@ pub fn log_char_ground(
 ///
 /// 判定語は本モジュールの `pub const` が単一の定義元であり、呼出側は字面をリテラルで
 /// 持たない（語彙表に無い字面はその場で `debug_assert!` が落とす）。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub fn log_offset_rescale(
     world: &World,
     scope: Option<u32>,

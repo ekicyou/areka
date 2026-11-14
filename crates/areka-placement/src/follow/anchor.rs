@@ -171,8 +171,8 @@ pub fn project_anchor(
 /// Req1.6）。値は spawn 時に `config.alignment` 由来（`ScopePlacement.anchor`＝
 /// `Anchor::from_alignment` の解決結果）で焼き込まれ（付与は spawn の領分・task 3.1）、
 /// runtime は seriko（本 spec 非所有＝`\![set,alignmenttodesktop]` の routing）が
-/// 書き換える。`Changed<Anchored>` がアンカー変化での変換 T 再適用トリガとなる
-/// （反応 system は後続 task の領分・本 spec は consumer 契約のみ・Req1.4/4.2）。
+/// 書き換える。本番のアンカーの変化は `reseed` が書き換えた後に `resize_window_to` で書く
+/// （`Changed<Anchored>` に反応する `anchor_changed_system` は schedule に登録しない書き方の見本）。
 ///
 /// ドラッグ（`on_char_drag`）とリサイズ（`resize_window_to`）の**両者がこの値を読んで**
 /// 同一射影 T（`project_anchor`）を呼ぶ——`Free` か否かで wndproc 委譲／単一ライターを
