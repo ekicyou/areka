@@ -244,7 +244,7 @@ sequenceDiagram
 | 5.7 | `/release` の行数 | `/release` の手順 | 段 1.3・2.1・3.2・5.1・再開の表・見直すきっかけ | コミット 4 |
 | 5.8 | 版上げの後に 3 行を確かめて止まる | `/release` の手順 | 段 2.1 の判定・3.2 の表 | コミット 4 |
 | 5.9 | 日本語・project の語 | すべての文書 | — | コミット 4 |
-| 5.10 | 古い記述 4 か所 | 古い記述の書き換え | `/update`・structure.md・tech.md 154 行目・pilot の注記 | コミット 2・4 |
+| 5.10 | 古い記述 7 か所 | 古い記述の書き換え | `/update`・structure.md・tech.md 154 行目・pilot の注記・README.md・doc/README.md | コミット 2・4 |
 | 6.1 | 書く前に許しを得る | 元のリポジトリの後始末 | チャットで文と操作を示す | 後始末 |
 | 6.2 | 許しが無ければ書かない | 元のリポジトリの後始末・完了の報告 | 残りとして報告 | 後始末 |
 | 6.3 | README の先頭に移転先 | 元のリポジトリの後始末 | README の PR | 後始末 |
@@ -328,7 +328,7 @@ windows = { version = "0.62", features = [ ...元のまま 4 つ... ] }
 
 **Responsibilities & Constraints**
 - 根の `Cargo.toml` の 27 行目を `{ version = "{ワークスペースの版}", path = "crates/wintf-winmsg-executor" }` に替える。`=` の固定はやめる（path の依存なので版は 1 つしか無い）。行の位置は動かさない。
-- `crates/pilot/Cargo.toml` は `wintf-winmsg-executor = { workspace = true }`。注記 2 行（「0.0.5: クラス登録に CS_DBLCLKS…」「本坑 wintf 置換ではこの版を pin し…」）を、木の中の写しをワークスペースの依存で使う旨の 1〜2 行に書き換える（要件 5.10 の 4 か所の 1 つ）。
+- `crates/pilot/Cargo.toml` は `wintf-winmsg-executor = { workspace = true }`。注記 2 行（「0.0.5: クラス登録に CS_DBLCLKS…」「本坑 wintf 置換ではこの版を pin し…」）を、木の中の写しをワークスペースの依存で使う旨の 1〜2 行に書き換える（要件 5.10 の 7 か所の 1 つ）。
 - `Cargo.lock` は `cargo update -w`（ワークスペースのクレートだけを解き直す）で揃える。外部のクレートの項は動かさない。
 
 **Contracts**: State [x]
@@ -382,7 +382,7 @@ windows = { version = "0.62", features = [ ...元のまま 4 つ... ] }
 - Idempotency & recovery: 同じ版で何度起動し直してもよい（既に出たクレートは `-Pending` が飛ばす）。写しの Trusted Publishing が無いまま回ったときの止まり方は System Flows のとおりで、設定の後に Re-run か Run workflow で残りが出る。
 
 **Implementation Notes**
-- Integration: 直すのは 1 行目の注記だけ。前提は、開発者が `wintf-winmsg-executor` の crates.io の Settings に Trusted Publishing（`ekicyou`／`areka`／`crates-io.yml`／environment は空）を足すこと（取り込みが本線に入った後の最初のリリースのタグより前）。
+- Integration: 直すのは 1 行目の注記だけ。前提は、開発者が `wintf-winmsg-executor` の crates.io の Settings に Trusted Publishing（`ekicyou`／`areka`／`crates-io.yml`／environment は空）を足すこと（取り込みが本線に入った後の最初のリリースのタグより前）。**設定は 2026-11-14 の設計の討議（議題 1）で開発者に頼んだ**（写しは crates.io に既に版を持つので今すぐできる）。設定は crates.io にログインしないと読めないので、道具では確かめない。完了の報告の前に開発者へ済んだかを尋ね、報告で「済み」か「残り」かを示す（要件 7.1）。
 - Validation: `Test-Workflow` が緑のまま（注記は判定に響かない）。`tools/encoding-check.ps1` が緑のまま（文字コードを変えない）。
 - Risks: 設定の済む前にタグが打たれると、`dola` だけ上がった状態になりうる。手順書 2・5 節と完了の報告（要件 7.1）で手当てする。
 
@@ -439,8 +439,8 @@ windows = { version = "0.62", features = [ ...元のまま 4 つ... ] }
 | Requirements | 5.10 |
 
 **Responsibilities & Constraints**
-- 要件 5.10 の 4 か所: `/update` の `SKILL.md`（18 行目の自分のクレートの例に `wintf-winmsg-executor` を足す・32 行目の版の表記に `wintf-winmsg-executor` の `version` を足す・49 行目の `=` の行の一覧から `wintf-winmsg-executor` を外す）・`structure.md` の `crates-io.yml` の説明・`tech.md` 154 行目・`crates/pilot/Cargo.toml` の注記。
-- 同じ事実を述べる行として、設計で見つけた次の 3 か所も同じ PR で書き換える: `/update` の `SKILL.md` 102 行目（「`wintf` と `dola` は crates.io に出しており」を 3 つに）・`README.md` 60 行目・`doc/README.md` 34 行目。どれも 1 行の書き換えで、残すと次の `/update`・リリースの読み手が古い一覧を読む。
+- 要件の討議で決めた 4 か所: `/update` の `SKILL.md`（18 行目の自分のクレートの例に `wintf-winmsg-executor` を足す・32 行目の版の表記に `wintf-winmsg-executor` の `version` を足す・49 行目の `=` の行の一覧から `wintf-winmsg-executor` を外す）・`structure.md` の `crates-io.yml` の説明・`tech.md` 154 行目・`crates/pilot/Cargo.toml` の注記。
+- 同じ事実を述べる行として、設計で見つけた次の 3 か所も同じ PR で書き換える（2026-11-14 の設計の討議の議題 3 で確定）: `/update` の `SKILL.md` 102 行目（「`wintf` と `dola` は crates.io に出しており」を 3 つに）・`README.md` 60 行目・`doc/README.md` 34 行目。どれも 1 行の書き換えで、残すと次の `/update`・リリースの読み手が古い一覧を読む。
 - 検証: `git grep -n -E '=0\.0\.5|"0\.0\.5"'` と、`wintf・dola`／`dola・wintf` の並びの grep が、完了 spec・`roadmap*.md`・`crates/pilot/examples/` の記録・`THIRD-PARTY-NOTICES.md` のほかで 0 件。
 
 ### 外の操作と報告
@@ -455,7 +455,13 @@ windows = { version = "0.62", features = [ ...元のまま 4 つ... ] }
 **Contracts**: Batch [x]
 
 ##### Batch / Job Contract
-- Trigger: areka の側の変更が全体テストで緑になった後の最後のタスク。先に、README の先頭に足す文（日本語の文と英語の 1 文を並べる。移転先＝`https://github.com/ekicyou/areka` の `crates/wintf-winmsg-executor/`・以後の版は areka から出る）と、操作（README の PR → squash マージ → `gh repo archive ekicyou/wintf-winmsg-executor`）をチャットで示して許しを得る。
+- Trigger: areka の側の変更が全体テストで緑になった後の最後のタスク。**許しは 2026-11-14 の設計の討議（議題 2）で、下の文と操作に対して得た**（要件 6.1）。このタスクでは聞き直さずに行う。文か操作を下から変えるときだけ、改めてチャットで示して許しを得る。areka の PR が本線に入る前に済むことになるが、`/kiro-complete` のマージがすぐ後に続くこと、archive は持ち主が戻せること、リンクがリポジトリの根を指すことから、この順を取る（共通の `/kiro-complete` は直さない）。
+- README の先頭（題の行の次・バッジの前）に足す文（固定）:
+  ```markdown
+  > **移転しました / Moved**: このクレートは [areka](https://github.com/ekicyou/areka) の `crates/wintf-winmsg-executor/` へ移りました。以後の版は areka から crates.io へ出します。このリポジトリは読み取り専用（archive）です。
+  > This crate now lives in `crates/wintf-winmsg-executor/` of https://github.com/ekicyou/areka; new versions are published from there. This repository is archived.
+  ```
+- 操作（固定）: README の PR → squash マージ → 既定の枝に入ったことを確かめる → `gh repo archive ekicyou/wintf-winmsg-executor`。
 - Input / validation: 許しが無ければ何も書かず、完了の報告に残りとして載せる（要件 6.2）。リンクはリポジトリの根と置き場のパスの文字で示し、取り込みが本線に入る前でも切れない形にする。
 - Output / destination: 一時の作業の写しを `target\` の下へ `git clone` し、枝を切って README の先頭だけを直し、push → `gh pr create` → `gh pr merge --squash` → 既定の枝に入ったことを確かめてから `gh repo archive`。手元の写し `C:\home\maz\git\wintf-winmsg-executor` は使わない。
 - Idempotency & recovery: 履歴・タグ（`v0.2.0`〜`v0.3.2`）・枝を消す操作は含めない（要件 6.5）。archive は持ち主が戻せるが、戻す操作はこの spec では行わない。README の PR が入る前には archive しない。
@@ -468,7 +474,7 @@ windows = { version = "0.62", features = [ ...元のまま 4 つ... ] }
 | Requirements | 4.8, 6.2, 7.1, 7.2 |
 
 **Responsibilities & Constraints**
-- 7.1: crates.io の `wintf-winmsg-executor` の Trusted Publishing の設定が残っていること・値（`ekicyou`／`areka`／`crates-io.yml`／environment は空）・取り込みが本線に入った後の最初のリリースのタグより前に済ませる必要。
+- 7.1: crates.io の `wintf-winmsg-executor` の Trusted Publishing の設定が済んだか残っているか（報告の前に開発者へ尋ねる）・残っていれば値（`ekicyou`／`areka`／`crates-io.yml`／environment は空）・取り込みが本線に入った後の最初のリリースのタグより前に済ませる必要。
 - 7.2: 後始末（README の移転の案内・archive）が済んだか残っているか。
 - 4.8: crates.io の 0.0.1〜0.0.5 を yank していないこと（操作をしていない）を一言添える。
 
