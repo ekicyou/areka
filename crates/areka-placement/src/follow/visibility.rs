@@ -64,7 +64,10 @@ impl VisibilityVerdict {
 ///   （`saturating` 演算・逆転区間でも panic しない `min`/`max` 流儀）。窓幅が
 ///   work area より広い場合は `left` が勝つ＝左端合わせで**必ず水平に重なる**。
 /// - 正寸かつ `proposed_pos` の Y 範囲が `clamp_wa` と重なるとき（＝射影 T が Y を
-///   決めた正常系）、`ClampX` 後の矩形は `clamp_wa` と交差する＝完全不可視が消える。
+///   決めた正常系）でだけ、`ClampX` 後の矩形は `clamp_wa` と交差する＝完全不可視が消える。
+///   バルーンでは Y が作業領域の外のまま来ることがあり、そのときは寄せた後も見えない。
+///   呼出側はその場合 `ClampX` でなく `HiddenAfterClampX` の語で記録する
+///   （[`evaluate_visibility_guard`]）。
 /// - World 非依存・副作用なし・panic しない。ログは出さない——`ClampX`／
 ///   `NearestFallback`／`OffscreenPull` の `warn!` は route（経路タグ）で
 ///   水準が変わる呼出側（[`evaluate_visibility_guard`]）の責務
@@ -142,6 +145,10 @@ fn clamp_x_into(x: i32, w: i32, wa: RectPx) -> i32 {
 
 /// 遷移ガードが X を引き戻したことを表す判定語（`diagnosis-procedure.md` §3.3）。
 const VISIBILITY_CLAMP_TAG: &str = "[visibility-guard] ClampX";
+
+/// 遷移ガードが X を引き戻したが、寄せた矩形もどの work area とも交差しない（Y が画面の
+/// 外のまま＝バルーンで起こる）ことを表す判定語。`ClampX` の代わりに出す（位置は同じ）。
+const VISIBILITY_HIDDEN_AFTER_CLAMP_TAG: &str = "[visibility-guard] HiddenAfterClampX";
 
 /// work area 解決が最近傍フォールバックへ落ちたことを表す判定語（同上・Req 3.2）。
 const VISIBILITY_NEAREST_FALLBACK_TAG: &str = "[visibility-guard] NearestFallback";
@@ -270,7 +277,7 @@ pub(super) fn apply_visibility_guard(
 /// キャラ窓（[`apply_visibility_guard`]＝書込自身の route で発火判定）とバルーン窓
 /// （[`guard_balloon_position`]＝随伴の**引き金**で発火判定・task 6.2）が共有する。
 /// 発火判定だけを外へ出したのは、両者で判定の**入力が違う**（書込の route ⇔ 引き金の
-/// route）一方、評価規則・clamp 先の引き方・3 語の観測は**完全に同一**だからである
+/// route）一方、評価規則・clamp 先の引き方・判定語の観測は**完全に同一**だからである
 /// （design「バルーン適用（S3′ 是正）」＝新規機構ゼロ）。
 ///
 /// `route` は**ログに載る経路名**であり、発火判定には用いない——バルーン随伴の書込は
@@ -352,16 +359,29 @@ pub(super) fn evaluate_visibility_guard(
     // [`VisibilityVerdict::position`] で取る（同 enum の doc が定める消費の形）。
     let verdict = guard_visibility(old_rect, proposed, size, clamp_wa, snapshot);
     if let VisibilityVerdict::ClampX(clamped) = verdict {
-        warn!(
-            entity = ?entity,
-            ?route,
-            ?old_rect,
-            ?proposed,
-            clamped = ?clamped,
-            ?size,
-            ?clamp_wa,
-            "{VISIBILITY_CLAMP_TAG} 全 work area 非交差への遷移を検出し X を引き戻した（Y は射影の所有ゆえ不変）"
-        );
+        if !intersects_any_work_area(snapshot, rect_at(clamped, size)) {
+            warn!(
+                entity = ?entity,
+                ?route,
+                ?old_rect,
+                ?proposed,
+                clamped = ?clamped,
+                ?size,
+                ?clamp_wa,
+                "{VISIBILITY_HIDDEN_AFTER_CLAMP_TAG} X を引き戻したが Y が画面の外のままで、寄せた後も全 work area と非交差（位置はそのまま）"
+            );
+        } else {
+            warn!(
+                entity = ?entity,
+                ?route,
+                ?old_rect,
+                ?proposed,
+                clamped = ?clamped,
+                ?size,
+                ?clamp_wa,
+                "{VISIBILITY_CLAMP_TAG} 全 work area 非交差への遷移を検出し X を引き戻した（Y は射影の所有ゆえ不変）"
+            );
+        }
     }
     verdict.position()
 }

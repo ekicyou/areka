@@ -595,3 +595,6 @@ pub(super) fn plant_minimal_ghost(label: &str) -> (TempPath, PathBuf, PathBuf) {
     std::fs::create_dir_all(&profile_root).expect("create profile/areka");
     (temp, root, profile_root)
 }
+
+/// 手順書 §3.3 の grep 判定語（`ClampX` で寄せた後も全 work area と非交差・本体とは独立の literal）。
+pub(super) const HIDDEN_AFTER_CLAMP_TAG: &str = "[visibility-guard] HiddenAfterClampX";

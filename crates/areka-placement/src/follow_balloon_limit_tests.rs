@@ -3,7 +3,7 @@ use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
 use wintf::ecs::{Point, SizeI, WindowPos, WindowStyle};
 
 use super::test_support::{
-    CLAMP_TAG as GUARD_CLAMP_TAG, LIMIT_CLAMP_TAG, LIMIT_TAG_PREFIX, LIMIT_UNRESOLVED_TAG,
+    HIDDEN_AFTER_CLAMP_TAG, LIMIT_CLAMP_TAG, LIMIT_TAG_PREFIX, LIMIT_UNRESOLVED_TAG,
     WINDOW_MOVE_TAG, assert_no_event, base_placement, base_world, contained, left_wa,
     limit_balloon_size, max_pos, odd_edge_snapshot, odd_edge_wa, point_of, world_with,
 };
@@ -321,8 +321,9 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
         )
     });
 
-    // ガードが実際に走り、素の提案位置を見て X を引き戻したこと。
-    let guard = expect_one(&events, GUARD_CLAMP_TAG);
+    // ガードが実際に走り、素の提案位置を見て X を引き戻したこと。Y が作業領域の外のまま
+    // なので、寄せた後も見えない語（`HiddenAfterClampX`・`ClampX` と同じ欄）で記録される。
+    let guard = expect_one(&events, HIDDEN_AFTER_CLAMP_TAG);
     assert_eq!(
         guard.expect_field("proposed"),
         format!("{proposed:?}"),
