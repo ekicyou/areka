@@ -537,3 +537,10 @@
 - `crates/areka-placement/src/persist.rs:227`・`:238`（アンカー辺の再導出の注）
 - `crates/areka-placement/src/persist_restore_tests.rs:295`（保存側の補軸 x の説明）
 - `crates/areka-placement/src/resolver.rs:438`（`Anchor::Bottom` の説明「`BottomSnapPolicy` の一般化元」）
+
+### 指摘 24（task 4.5・出荷の作りでだけ赤になるテスト）で残した範囲の外の同じ形
+
+範囲の中の `follow_window_move_hold_watch_tests.rs` の `#[should_panic(expected = "DpiSyncHold")]` の 2 本には `#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]` を付けた。次の 2 本も `debug_assert!` に依る同じ形で、`cargo test --release` では赤になる。同じ 1 行を付けるのがよい。
+
+- 核（`audit-placement-core`）: `crates/areka-placement/src/dpi_sync_tests.rs` の `a_write_reaching_a_waiting_window_trips_the_single_writer`
+- 本体（`runtime-crate-split` へも申し送る）: `crates/areka/src/runtime/frame_work_area_resnap_hold_tests.rs` の `the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites`

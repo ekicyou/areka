@@ -146,10 +146,12 @@ fn started(entity: Entity) -> DragTransition {
     }
 }
 
+/// 取り消しの終わりは開始の位置を載せる（本番の形・`input_events/drag_tests.rs` が固定する）。
 fn ended(entity: Entity, cancelled: bool) -> DragTransition {
+    let end = if cancelled { DRAG_START } else { CURSOR };
     DragTransition::Ended {
         entity,
-        end_pos: PhysicalPoint::new(CURSOR.0, CURSOR.1),
+        end_pos: PhysicalPoint::new(end.0, end.1),
         cancelled,
     }
 }
@@ -208,9 +210,14 @@ fn char_pair(top_left: Point) -> Vec<(PersistKey, String)> {
 /// これはテストの組み立ての都合（偽の窓の座標変換の失敗）に寄りかかった期待値で、
 /// 製品では `initial_inset` に `WindowPos.position` の枠込みの値が入る。
 fn destination() -> Point {
+    destination_at(CURSOR)
+}
+
+/// `end` で離したときの行き先（取り消しは開始の位置で離すので `DRAG_START` を渡す）。
+fn destination_at(end: (i32, i32)) -> Point {
     let raw = PointPx {
-        x: CURSOR.0 - DRAG_START.0,
-        y: CURSOR.1 - DRAG_START.1,
+        x: end.0 - DRAG_START.0,
+        y: end.1 - DRAG_START.1,
     };
     let snapshot = MonitorSnapshot {
         work_areas: vec![rect(0, 0, 1920, 1200)],
@@ -389,7 +396,7 @@ fn fast_drag_places_window_at_destination_and_persists_once() {
 }
 
 /// T7-6（要件 2.5・5.3）: 閾値を越えた後の取り消し（開始 → 配る → 取り消しの印つきの
-/// 終了 → 配る）→ 今どおりその時点の位置を 1 組保存する。修正の前後とも緑。
+/// 終了 → 配る）→ 今どおりその時点の位置（取り消しは開始の位置で離す）を 1 組保存する。修正の前後とも緑。
 #[test]
 fn cancel_after_threshold_persists_as_today() {
     let mut rig = Rig::new();
@@ -401,8 +408,11 @@ fn cancel_after_threshold_persists_as_today() {
 
     let saved = rig.saved();
     assert!(
-        same_pairs(&window_pos_keys(&saved), &char_pair(destination())),
-        "閾値を越えた後の取り消しで位置が 1 組保存されていない: {saved:?}"
+        same_pairs(
+            &window_pos_keys(&saved),
+            &char_pair(destination_at(DRAG_START))
+        ),
+        "閾値を越えた後の取り消しで開始の位置が 1 組保存されていない: {saved:?}"
     );
 
     rig.close();

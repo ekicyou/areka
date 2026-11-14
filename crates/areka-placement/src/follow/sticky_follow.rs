@@ -297,6 +297,7 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
             continue;
         };
         // 面の move のずれを引いた元の位置を書く（seriko-pattern-calls task 6.2）。
+        // 利用者が手で置いたのは動かした窓だけ・相手のずれはまだ相手の面のアニメーションのもの。
         let pos = origin_position(world, partner.window, pos);
         let saved = char_pos_to_origin_x(form, pos, size_px(world, partner.window));
         persist_entries(world, char_pos_entries(partner.scope as u32, saved));

@@ -150,10 +150,12 @@
 //!             Select-String '^folder=').Line.Substring(7)
 //! $BALLOON = (cargo run -q -p sample-ghost-kit --bin nar-sample-path -- `
 //!             emo2-kakukaku-offsetdpi | Select-String '^folder=').Line.Substring(7)
-//! $LOG     = "<絶対パス>\signoff.log"
+//! $LOG     = "<ワークツリーの絶対パス>\target\transition-signoff\signoff.log"
 //! $env:RUST_LOG = "wintf::transition=debug"
 //! & $AREKA $GHOST $BALLOON 2>&1 | Tee-Object -FilePath $LOG
 //! ```
+//!
+//! ログの置き場はワークツリーの `target` の下である（実機の根・ログは `target` の下だけに置く）。
 //!
 //! **コマンドは PowerShell（本リポジトリの主たるシェル）の形で書いてある。** `VAR=値 コマンド`
 //! という先頭への環境変数付与は POSIX シェルの記法であり、PowerShell には無い——貼ると

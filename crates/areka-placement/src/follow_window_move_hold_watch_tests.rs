@@ -155,6 +155,7 @@ fn the_explicit_script_move_reaches_a_waiting_window_without_tripping_the_watch(
 /// 迂回した形＝将来その条件が壊れたときに鳴ってほしい形である。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn a_system_write_that_bypasses_its_deferral_still_trips_the_watch() {
     let (mut world, window) = held_world(true);
     move_window_with_route(&mut world, window, 1301, 356, PlacementRoute::ChainRealign);
@@ -180,6 +181,7 @@ fn the_same_system_write_passes_when_the_window_is_not_waiting() {
 /// であることを、実行で示すのがこの 1 本の役目である。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn the_keep_position_resize_of_a_waiting_balloon_trips_the_watch() {
     let (mut world, window) = held_world(true);
     resize_window_keep_position(&mut world, window, SizePx { w: 400, h: 300 });
