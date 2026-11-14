@@ -16,7 +16,7 @@ use image::codecs::webp::WebPDecoder;
 use image::{AnimationDecoder, Frame, Frames, ImageDecoder, RgbaImage};
 
 use super::sniff::{Format, format_of};
-use super::{AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage};
+use super::{AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage, pixel_len};
 use crate::table::LoopCount;
 
 /// 開いた動く絵（重ね済みのコマの並び・透明度の有無・繰り返し回数）。
@@ -83,12 +83,14 @@ fn open(path: &Path) -> Result<Opened, String> {
     match format_of(&head) {
         Some(Format::Png) => {
             let png = PngDecoder::new(reader).map_err(|e| e.to_string())?;
+            pixel_len(png.dimensions().0, png.dimensions().1)?; // 1 枚目を読む前に見出しの寸法で断る
             let has_alpha = png.color_type().has_alpha();
             let apng = png.apng().map_err(|e| e.to_string())?;
             Ok(opened(apng, has_alpha))
         }
         Some(Format::Webp) => {
             let webp = WebPDecoder::new(reader).map_err(|e| e.to_string())?;
+            pixel_len(webp.dimensions().0, webp.dimensions().1)?;
             let has_alpha = webp.color_type().has_alpha();
             Ok(opened(webp, has_alpha))
         }

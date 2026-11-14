@@ -205,6 +205,70 @@ fn header_mismatch_fails() {
 }
 
 #[test]
+fn header_one_over_max_side_is_refused_before_the_first_frame() {
+    // 見出しだけが正しい APNG（幅が上限 + 1・画素のデータは無い）。1 枚目を読む前に断るので、
+    // 中身が読めなくても文は上限の値を書く。両方の入口が通る `open` の 1 か所で断る。
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut c = !0u32;
+        for &b in bytes {
+            c ^= u32::from(b);
+            for _ in 0..8 {
+                c = if c & 1 != 0 {
+                    0xEDB8_8320 ^ (c >> 1)
+                } else {
+                    c >> 1
+                };
+            }
+        }
+        !c
+    }
+    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+        out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        let body = [&kind[..], data].concat();
+        out.extend_from_slice(&body);
+        out.extend_from_slice(&crc32(&body).to_be_bytes());
+    }
+    let over = crate::decode::MAX_SIDE + 1;
+    let w = over.to_be_bytes();
+    let mut bytes = [137u8, 80, 78, 71, 13, 10, 26, 10].to_vec();
+    chunk(
+        &mut bytes,
+        b"IHDR",
+        &[&w[..], &1u32.to_be_bytes(), &[8, 6, 0, 0, 0]].concat(),
+    );
+    chunk(&mut bytes, b"acTL", &[0, 0, 0, 2, 0, 0, 0, 0]);
+    let fctl = [
+        &[0u8; 4][..],
+        &w,
+        &1u32.to_be_bytes(),
+        &[0; 8],
+        &[0, 1, 0, 1, 0, 0],
+    ]
+    .concat();
+    chunk(&mut bytes, b"fcTL", &fctl);
+    chunk(&mut bytes, b"IDAT", &[0]);
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../target/oversize_header_{}.apng",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, bytes).unwrap();
+    let wide = AnimationInfo {
+        width: over,
+        height: 1,
+        frame_count: 2,
+    };
+    let errs = [
+        read_frames(&path, wide).unwrap_err(),
+        read_first_frame(&path, wide).unwrap_err(),
+    ];
+    let _ = std::fs::remove_file(&path);
+    for err in errs {
+        assert!(err.contains("16384"), "{err}");
+    }
+}
+
+#[test]
 fn non_apng_webp_and_missing_files_fail() {
     for err in [
         read_frames(&sample("two_frames.gif"), info(2)).unwrap_err(),
