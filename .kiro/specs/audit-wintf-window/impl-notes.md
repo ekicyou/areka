@@ -39,3 +39,16 @@
 - 直したもの（説明だけ・3 か所）: `window/transition_diag.rs` の `KIND_WINDPI` の説明（「wintf の 5 語（…＝[`KIND_ALL`]）」→「[`KIND_ALL`] から `windpi` を除いた 5 語」。既存の 11 語＝5＋1＋5 は `windpi` を選んだ時点の勘定なので数は残した）・`KIND_ALL` の説明の上位の語の列に `offset` を足した（`PLACEMENT_KIND_ALL` は snapshot／hold／ground／chain／offset の 5 語）・`window/transition_diag_tests.rs` の頭「5 種のレコード」→「6 種」（`KIND_ALL` は 6 語）。
 - 直す前の食い違い: `KIND_ALL` は monitor／windpi／write／flush／msg／enqueue の 6 語なのに説明は 5 語でこれを `KIND_ALL` と呼んでいた。上位の列は `offset` が抜けていた。
 - `MonitorRecord` の差分 0 行（`git diff | grep -c MonitorRecord` = 0）。説明だけの直しなので較正と消す前の `git grep` は当たらない。
+
+## 3.1
+
+- 変えたこと: `window_proc/window_pos_decision_tests.rs` に 42 番の 3 本を足した（本番は 0 行）。entity は `WindowHandle`・`WindowPos`・`BoxStyle`（最初の大きさ 7x7）・`DPI` 192 を持ち、置いた後に `clear_trackers` で印を消してから道具窓を `SetWindowPos`／`guarded_set_window_pos` で動かす。
+  - ⑴ `external_move_marks_window_pos_changed_and_writes_logical_box_size`: 素の `SetWindowPos` で印が立ち、位置 (30,40)、`BoxStyle.size` が 200x100 ÷ 2 = 100x50
+  - ⑵ `self_echo_writes_window_pos_without_marking_it_changed`: `guarded_set_window_pos` の照り返しで値は書くが印は立たず、`BoxStyle` は 7x7 のまま
+  - ⑶ `after_a_dpi_change_window_pos_is_marked_and_box_style_is_left_alone`: `DpiChangeContext::set` の後、照り返し・外からの両方で印が立ち `BoxStyle` は 7x7 のまま（照り返しの枝で較正 1 を、外からの枝で較正 2 を捕まえる）
+- 較正:
+  - `window_pos.rs` の `use_bypass` を `is_echo` だけにする → ⑶ が赤（echo=true の枝で印が立たない）
+  - `skip_box_style` から `dpi_context.is_some()` を落とす → ⑶ が赤（「DPI の直後に BoxStyle を書いた（echo=false）」）
+  - どちらも戻して本番の差分 0 を `cmp` で確かめた
+- 消したもの: なし（git grep 不要）
+- テストの数: `cargo test -p wintf --lib window_proc::window_pos` 31 → 34（全部緑）
