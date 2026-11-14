@@ -63,3 +63,20 @@
 - 消したもの: なし（git grep 不要）
 - `Cargo.toml`・`Cargo.lock` の差分 0
 - テストの数: `cargo test -p wintf --lib window_proc::drop_files` 6 → 7（全部緑）・`window_proc::dpi_helpers` 22（緑のまま）
+
+## 4.1
+
+- 頭の行数: `window/command.rs` 940 行。直した後の見込み（約 975 行）が 1,000 行を越えないので、3 項目は `command.rs` に置いた（`command_ui_thread.rs` は作らない）。直した後 976 行
+- 変えたもの
+  - 1: `command.rs` に `UI_THREAD`（`OnceLock<ThreadId>`・プロセスで 1 つ）・`record_ui_thread()`（`get_or_init`・`pub(crate)`）・`admits_enqueue(hwnd, ui_thread)`（控え無し・同じスレッド → true、違う → `error!` 1 行（`hwnd`・`ui_thread`・`current_thread`）で false）を足した。`error!` に窓を載せるため、設計の形に `hwnd` の引数を 1 つ足した
+  - `SetWindowPosCommand::enqueue` の頭で判断を呼び、false なら `tick_wake::mark`・合流・記録の行より前に戻る。説明に「`WinApp::run` を回すスレッドから呼ぶ。ほかのスレッドから積んだ指令は `error!` を残して捨てる」を書いた
+  - 範囲の外の最小の追従: `runtime/mod.rs` の `WinApp::run` の手順 1 の前に `crate::ecs::window::record_ui_thread();`（手順 0 の説明 1 行つき）
+  - テスト: `command_threadlocal_tests.rs` に 3 本（`enqueue_is_admitted_when_no_ui_thread_is_recorded`・`enqueue_is_admitted_on_the_recorded_ui_thread`・`enqueue_off_the_recorded_ui_thread_is_dropped_with_one_error`）。控えは引数で渡し、プロセス全体の控えは立てない
+- 旗の手順の赤: 判断を常に true にする旗で `enqueue_off_the_recorded_ui_thread_is_dropped_with_one_error` が赤
+- 較正:
+  - 比べを外す（`Some(ui) if ui != current` → `Some(ui)`）→ `enqueue_is_admitted_on_the_recorded_ui_thread` が赤
+  - `error!` を消す → `enqueue_off_the_recorded_ui_thread_is_dropped_with_one_error` が赤
+  - どちらも戻して `command.rs` の差分が意図した直しだけであることを確かめた
+- 積み込みの呼び手 4 か所（`zorder_pair_maintain.rs`・`graphics/systems/window_pos.rs`・`areka-placement` の `follow/window_move.rs`・`areka/examples/mock-shell.rs`）は直さずビルドが通る
+- 消したもの: なし（git grep 不要）
+- テストの数: `cargo test -p wintf --lib command_threadlocal_tests` 3 → 6（全部緑）

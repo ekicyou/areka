@@ -33,7 +33,7 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::time::Instant;
-use tracing::{debug, trace, warn};
+use tracing::{debug, error, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -223,6 +223,36 @@ pub struct SetWindowPosCommand {
 thread_local! {
     /// SetWindowPosコマンドキュー
     static WINDOW_POS_COMMANDS: RefCell<Vec<SetWindowPosCommand>> = const { RefCell::new(Vec::new()) };
+}
+
+/// `WinApp::run` を回すスレッド（UI スレッド）の id。立つのは [`record_ui_thread`] の 1 回だけ。
+/// キューはスレッドごとで流すのは UI スレッドだけなので、ほかのスレッドの積み込みは断る。
+static UI_THREAD: std::sync::OnceLock<std::thread::ThreadId> = std::sync::OnceLock::new();
+
+/// 今のスレッドを UI スレッドとして控える。`WinApp::run` の頭で呼ぶ。2 度目からは何もしない。
+pub(crate) fn record_ui_thread() {
+    UI_THREAD.get_or_init(|| std::thread::current().id());
+}
+
+/// 今のスレッドで `hwnd` への書き込みを積んでよいか。
+///
+/// 控えが無い（`WinApp::run` を回していない・テストの実行ファイル）か、控えと同じスレッドなら
+/// true。違うスレッドなら `error!` を 1 行（窓・控えのスレッド・今のスレッド）残して false。
+/// 控えを引数で受けるのは、テストがプロセス全体の控えを立てずに 3 通りを試すため。
+fn admits_enqueue(hwnd: HWND, ui_thread: Option<std::thread::ThreadId>) -> bool {
+    let current = std::thread::current().id();
+    match ui_thread {
+        Some(ui) if ui != current => {
+            error!(
+                hwnd = ?hwnd,
+                ui_thread = ?ui,
+                current_thread = ?current,
+                "SetWindowPosCommand::enqueue called off the UI thread; command dropped"
+            );
+            false
+        }
+        _ => true,
+    }
 }
 
 /// 書込後の物理矩形を読み戻す（**観測が有効なときだけ**呼ぶ）。
@@ -653,7 +683,13 @@ impl SetWindowPosCommand {
     ///
     /// Z のみの指令と表示状態を変える指令は畳まれない（要件 10.3）。判定と理由は
     /// [`coalesce_geometry`] の doc を見ること。
+    ///
+    /// `WinApp::run` を回すスレッドから呼ぶ。ほかのスレッドから積んだ指令は `error!` を
+    /// 残して捨てる（合流にも画面更新の起こしにも記録の行にも渡さない）。
     pub fn enqueue(cmd: SetWindowPosCommand) {
+        if !admits_enqueue(cmd.hwnd, UI_THREAD.get().copied()) {
+            return;
+        }
         // 窓書込が積まれた＝次の画面更新に仕事がある（設計 C16 の `WINDOW_CMD`）。
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::WINDOW_CMD);
         trace!(
