@@ -39,3 +39,11 @@
 
 - 核（`audit-placement-core`）: `research.md` の「核へ伝える一覧（実装の段）」を 2026-11-14 に相手のセッションへ送った。
 - 本体（`runtime-crate-split`）: 同 spec の `brief.md` の「2026-11-14 `audit-placement-follow` の申し送り」の節。5.1 で、毎フレームの相の注（`crates/areka/src/runtime/frame/move_shift.rs`）が見送り（`debug!`）を書いていない 1 行を足した。
+
+## 5.2 全体テストと約束の静的な確かめ
+
+- 全体テスト: `pwsh -NoProfile -File tools/test-all.ps1`（排他テストの机を取って 1 回）を `fd3cd9d14` で回し、**all steps green**。sample fetch・i686 の組み立て・`fmt --check`・x64 workspace tests（866 s）・dola toml・i686 tests・crates.io の事前確認・文字コード・release notes・roadmap・i686 helper の同期・areka.exe の隣の helper の 14 段がすべて exit 0。
+- `git diff 30a343eb -- Cargo.lock` は空。`crates/wintf/`・`vendors/`・`crates/areka-placement/Cargo.toml` の差分も 0。
+- 公開の形の変化は、`pub use self::work_area_clamp::{..}` に足した `ChainPlacement`・`ChainClampOutcome` の 2 つ、`pub(crate)` へ狭めた `VisibilityVerdict`（と `position`）・`guard_visibility` の 2 つ、消した `DragPositionPolicy`・`BottomSnapPolicy` の 2 つだけ（`git diff 30a343eb -- crates/areka-placement/src` の `pub` の行で確かめた。ほかは `pub(crate)`／`#[cfg(test)]` の中のテストの部品）。
+- 終了の道（`app_exit` ほか）に触る直しは無い（本番で変えたのは `crates/areka-placement/src` の `follow*`・`transition_diag.rs` と、テスト専用の判定器 `crates/areka/src/placement_tests/transition_judge*.rs` だけ）。
+- 記録の無い失敗の道は足していない: 直しで足した早期の戻りは、どれも `warn!`（保存しなかった・位置が未確定・窓が無い）か、失敗でない見送りの `debug!`（ドラッグ中・組の相手・札）を出す。タスクごとのレビューと 5 回の audit で確かめた。
