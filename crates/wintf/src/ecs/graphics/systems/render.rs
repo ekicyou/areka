@@ -170,7 +170,9 @@ pub fn render_surface(
         let root_list = cmd_list_opt.and_then(|c| c.command_list());
         let tree_commands = tree.map_or(&[][..], |t| &t.commands[..]);
         // 失敗した入れ物は捨てる（途中まで描いた絵を読ませない・5.5）。
-        if let Err(err) = compose_or_drop(slot, &shared_dc, scale, root_list, tree_commands) {
+        if let Err(err) = compose_or_drop(slot, |c| {
+            c.compose(&shared_dc, scale, root_list, tree_commands)
+        }) {
             let lost = on_stage_failure(
                 &mut graphics_core,
                 &mut commands,

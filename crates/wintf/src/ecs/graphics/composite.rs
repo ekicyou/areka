@@ -1,7 +1,7 @@
 //! 描画面ごとの入れ物（要件 4.1, 4.2, 4.4, 4.8）。描画面 1 枚の合成の結果を持ち、合成と写しの
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
-use super::visual::{DrawCommand, emit};
+use super::visual::{DamageEntry, DrawCommand, emit};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,6 +30,30 @@ pub(crate) struct SurfaceComposite {
     pixel: Mutex<PixelReadState>,
     /// GPU から読んだ回数（5.4 のテストの的）。
     gpu_reads: AtomicU64,
+    /// 前の合成の項の列（無い＝比べられない）。入れ物と同じ寿命（捨てれば控えも消える）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    prev_entries: Option<Vec<DamageEntry>>,
+    /// 前の合成の根の命令の列（参照を持つので番地の使い回しで取り違えない）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    prev_root: Option<ID2D1CommandList>,
+    /// 前の合成の拡大 (x, y)。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    prev_scale: (f32, f32),
+    /// 前の合成の入れ物を描画面へ写し終えた。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    presented: bool,
 }
 
 // SAFETY: 入れ物と写し先は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列（GraphicsCore の装置）の
@@ -66,19 +90,16 @@ fn create_bitmap(
     unsafe { dc.CreateBitmap(D2D_SIZE_U { width, height }, None, 0, &props) }
 }
 
-/// 置き場の入れ物へ合成する（置き場が空なら何もしない）。失敗したら入れ物を捨てる
-/// （途中まで描いた絵を読ませない＝読みは `Unreadable`・5.5。次の回に作り直す）。
+/// 置き場の入れ物への描き 1 回（`draw`）を走らせる（置き場が空なら何もしない）。失敗したら入れ物を
+/// 控えごと捨てる（途中まで描いた絵を読ませない＝読みは `Unreadable`・5.5。次の回に作り直す・3.5）。
 pub(crate) fn compose_or_drop(
     slot: &mut Option<SurfaceComposite>,
-    dc: &ID2D1DeviceContext,
-    scale: Matrix3x2,
-    root_list: Option<&ID2D1CommandList>,
-    tree: &[DrawCommand],
+    draw: impl FnOnce(&mut SurfaceComposite) -> windows::core::Result<()>,
 ) -> windows::core::Result<()> {
     let Some(composite) = slot.as_mut() else {
         return Ok(());
     };
-    let result = composite.compose(dc, scale, root_list, tree);
+    let result = draw(composite);
     if result.is_err() {
         *slot = None;
     }
@@ -103,6 +124,10 @@ impl SurfaceComposite {
                 last: None,
             }),
             gpu_reads: AtomicU64::new(0),
+            prev_entries: None,
+            prev_root: None,
+            prev_scale: (0.0, 0.0),
+            presented: false,
         })
     }
 
@@ -112,6 +137,73 @@ impl SurfaceComposite {
 
     pub(crate) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// 前の合成の項の列（新しい入れ物は無い）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn prev_entries(&self) -> Option<&[DamageEntry]> {
+        self.prev_entries.as_deref()
+    }
+
+    /// 根の命令の列が前の合成と同じ参照か（COM の参照の同一性・両方無いも同じ）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn same_root(&self, root_list: Option<&ID2D1CommandList>) -> bool {
+        self.prev_root.as_ref() == root_list
+    }
+
+    /// 拡大が前の合成とビットで同じか。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn same_scale(&self, (x, y): (f32, f32)) -> bool {
+        let (px, py) = self.prev_scale;
+        (px.to_bits(), py.to_bits()) == (x.to_bits(), y.to_bits())
+    }
+
+    /// 前の合成の入れ物を描画面へ写し終えたか（新しい入れ物は偽）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn presented(&self) -> bool {
+        self.presented
+    }
+
+    /// 合成か Skip・PresentOnly を終えた回に控えを置き換える。`composed` なら `presented` を偽にする
+    /// （1.1・2.8）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn remember(
+        &mut self,
+        entries: Option<Vec<DamageEntry>>,
+        root_list: Option<&ID2D1CommandList>,
+        scale: (f32, f32),
+        composed: bool,
+    ) {
+        self.prev_entries = entries;
+        self.prev_root = root_list.cloned();
+        self.prev_scale = scale;
+        if composed {
+            self.presented = false;
+        }
+    }
+
+    /// 入れ物を描画面へ写し終えた印を付ける（2.8）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn mark_presented(&mut self) {
+        self.presented = true;
     }
 
     /// 入れ物を透明に塗り、根の命令の列を `SOURCE_OVER` で、木の列を `emit` で描く（4.1・4.8）。
