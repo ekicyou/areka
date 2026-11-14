@@ -436,6 +436,114 @@ $SelfTestChecks = @(
     } }
 
     # -------------------------------------------------------------------------
+    # 実行体の用意の束（10・11・12）
+    # -------------------------------------------------------------------------
+
+    [pscustomobject]@{ Name = 'exe-after-build'; Body = {
+        # -BinDir の無い 3 つの走行は ビルド -> 確かめ の順。走行の本体はビルドを呼ばない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) Add-SelfTestCall -Name 'build' -Arguments @($BinDir) }
+        function Test-MeasureExeReady { param($BinDir, $Build) Add-SelfTestCall -Name 'check' -Arguments @($BinDir); $false }
+        function Write-MeasureDryRunMark { param($Dir, $Reason) }
+        function Get-MeasureGhostRoot { 'G' }
+        function Get-MeasureBalloonRoot { 'B' }
+        function Clear-MeasureDryRunDir { param($Dir) }
+        function Invoke-PwshChild { param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet) New-ChildResult -Code 0 -LastLine 'ok' }
+        $script:DryRunMode = $true
+        $script:ResumeMode = $false
+        $script:BuildKind = 'release'
+        $script:BuildExplicit = $true
+        $script:BinDirArg = ''
+        $script:DateStamp = $null
+        $script:GoalConfig = $null
+        $script:GoalName = 'selftest'
+        foreach ($sub in @('Invoke-SubMeasureBaseline', 'Invoke-SubRankRun', 'Invoke-SubFinal')) {
+            $script:SelfTestCalls.Clear()
+            $script:RunDirArg = Join-Path $script:SelfTestRoot "eab-$sub"
+            $null = Get-SelfTestExitCode { & $sub }
+            $order = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'check' } | ForEach-Object { $_.Name }) -join ','
+            Assert-SelfTest ($order -ceq 'build,check') "${sub}: call order '$order' (want 'build,check')"
+        }
+        $script:SelfTestCalls.Clear()
+        Invoke-MeasureRun -OutDir (Join-Path $script:SelfTestRoot 'eab-run') -RunProfile 'short' -Build 'release'
+        $n = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'build' }).Count
+        Assert-SelfTest ($n -eq 0) "Invoke-MeasureRun called the build $n times (want 0)"
+    } }
+
+    [pscustomobject]@{ Name = 'final-bindir'; Body = {
+        # final: -BinDir には -Build が要る（無ければ 3・何も呼ばない）。在れば確かめと走行へ渡す
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) Add-SelfTestCall -Name 'build' -Arguments @($BinDir) }
+        function Test-MeasureExeReady { param($BinDir, $Build) Add-SelfTestCall -Name 'check' -Arguments @($BinDir); $true }
+        function Invoke-MeasureRun { param($OutDir, $RunProfile, $Build, $BinDir, $Label) Add-SelfTestCall -Name 'run' -Arguments @($BinDir) }
+        function Invoke-MeasureQuietAfter { param($RunDir) }
+        function Invoke-MeasureJudge { param($RunDir, $Build) 'PASS' }
+        function Copy-MeasureVerdictToResults { param($RunDir, $Build) }
+        $script:DryRunMode = $true
+        $script:ResumeMode = $false
+        $script:GoalConfig = $null
+        $script:GoalName = 'selftest'
+        $script:DateStamp = $null
+        $bin = Join-Path $script:SelfTestRoot 'fb-bin'
+        $script:BinDirArg = $bin
+        $script:RunDirArg = Join-Path $script:SelfTestRoot 'fb-final'
+        $script:BuildKind = 'release'
+        $script:BuildExplicit = $false
+        $code = Get-SelfTestExitCode { Invoke-SubFinal }
+        Assert-SelfTest ($code -eq 3) "final -BinDir without -Build: exit $code (want 3)"
+        $n = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'check', 'run' }).Count
+        Assert-SelfTest ($n -eq 0) "final -BinDir without -Build made $n build/check/run calls (want 0)"
+        $script:SelfTestCalls.Clear()
+        $script:BuildExplicit = $true
+        $code = Get-SelfTestExitCode { Invoke-SubFinal }
+        Assert-SelfTest ($code -eq 0) "final -BinDir -Build: exit $code (want 0)"
+        foreach ($name in @('check', 'run')) {
+            $got = @($script:SelfTestCalls | Where-Object { $_.Name -eq $name } | ForEach-Object { $_.Arguments[0] })
+            Assert-SelfTest ($got.Count -eq 1 -and $got[0] -eq $bin) "final $name got -BinDir '$(ConvertTo-SelfTestAscii ($got -join ','))' (want '$(ConvertTo-SelfTestAscii $bin)')"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'helper-refresh'; Body = {
+        # 32bit ヘルパ: 隣に無い・SHA-256 が違うなら写す。同じなら触らない。元が無ければ隣のものを残す。
+        # -BinDir の走行（A/B の bin-A など）は隣に無いときだけ写し、SHA-256 が違っても書き換えない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) Add-SelfTestCall -Name 'Write-Info' -Arguments @($Message) }
+        $repoRoot = Join-Path $script:SelfTestRoot 'hr-repo'
+        $srcDir = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET 'release'))
+        $bin = Join-Path $repoRoot (Join-Path 'target' 'release')
+        $null = New-Item -ItemType Directory -Path $srcDir, $bin -Force
+        $src = Join-Path $srcDir $MEASURE_HELPER_EXE
+        $dest = Join-Path $bin $MEASURE_HELPER_EXE
+        [System.IO.File]::WriteAllText($src, 'new')
+        foreach ($case in @(@{ Name = 'missing'; Dest = $null; Copied = $true }, @{ Name = 'differs'; Dest = 'old'; Copied = $true },
+                            @{ Name = 'same'; Dest = 'new'; Copied = $false })) {
+            $script:SelfTestCalls.Clear()
+            Remove-Item -LiteralPath $dest -Force -ErrorAction SilentlyContinue
+            if ($null -ne $case.Dest) { [System.IO.File]::WriteAllText($dest, $case.Dest) }
+            Sync-MeasureShioriHelper -BinDir '' -Build 'release'
+            $text = if (Test-Path -LiteralPath $dest) { [System.IO.File]::ReadAllText($dest) } else { '<none>' }
+            Assert-SelfTest ($text -ceq 'new') "$($case.Name): helper next to the exe is '$text' (want 'new')"
+            $copied = [bool](@($script:SelfTestCalls | Where-Object { $_.Name -eq 'Write-Info' -and $_.Arguments[0] -like '*copied 32bit*' }).Count)
+            Assert-SelfTest ($copied -eq $case.Copied) "$($case.Name): copied=$copied (want $($case.Copied))"
+        }
+        Remove-Item -LiteralPath $src -Force
+        [System.IO.File]::WriteAllText($dest, 'old')
+        Sync-MeasureShioriHelper -BinDir '' -Build 'release'
+        Assert-SelfTest ([System.IO.File]::ReadAllText($dest) -ceq 'old') 'source missing: the helper next to the exe was changed'
+        [System.IO.File]::WriteAllText($src, 'new')
+        $side = Join-Path $script:SelfTestRoot 'hr-bin-A'
+        $null = New-Item -ItemType Directory -Path $side -Force
+        $sideDest = Join-Path $side $MEASURE_HELPER_EXE
+        Sync-MeasureShioriHelper -BinDir $side -Build 'release'
+        Assert-SelfTest ((Test-Path -LiteralPath $sideDest) -and [System.IO.File]::ReadAllText($sideDest) -ceq 'new') 'A/B side folder (-BinDir): a missing helper was not copied'
+        [System.IO.File]::WriteAllText($sideDest, 'old')
+        Sync-MeasureShioriHelper -BinDir $side -Build 'release'
+        Assert-SelfTest ([System.IO.File]::ReadAllText($sideDest) -ceq 'old') 'A/B side folder (-BinDir): a helper whose SHA-256 differs was overwritten'
+    } }
+
+    # -------------------------------------------------------------------------
     # 出力先と -Resume の束（2・6・21）
     # -------------------------------------------------------------------------
 
@@ -574,8 +682,10 @@ $SelfTestChecks = @(
         function Write-Problem { param([string]$Message) }
         function Get-MeasureTomlArray { param($Section, $Key, $Default) @('Release', 'DEV') }
         function Test-MeasureExeReady { param($BinDir, $Build) Add-SelfTestCall -Name 'Test-MeasureExeReady' -Arguments @($Build); $false }
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) }
         function Write-MeasureDryRunMark { param($Dir, $Reason) }
         $script:BuildExplicit = $false
+        $script:BinDirArg = ''
         $script:DateStamp = $null
         $script:GoalConfig = $null
         $script:GoalName = 'selftest'

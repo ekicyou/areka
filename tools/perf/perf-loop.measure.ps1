@@ -201,8 +201,7 @@ function Invoke-MeasureRun {
     $ghostRoot   = Get-MeasureGhostRoot
     $balloonRoot = Get-MeasureBalloonRoot
     $attempts = $MEASURE_RUN_RETRY + 1
-    Sync-MeasureWorktreeBuild -Build $Build -BinDir $BinDir
-    if (-not $script:DryRunMode) { Sync-MeasureShioriHelper -BinDir (Get-MeasureBinDir -BinDir $BinDir -Build $Build) }
+    if (-not $script:DryRunMode) { Sync-MeasureShioriHelper -BinDir $BinDir -Build $Build }
 
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
         Clear-MeasureDryRunDir -Dir $OutDir
@@ -417,12 +416,15 @@ function Invoke-SubMeasureBaseline {
 
     if ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $dir)) {
         Write-Info "[perf-loop] -Resume: using the existing run: $dir"
-    } elseif (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build) {
+    } else {
+        # 11: ビルドを先に回してから実行体を確かめる（走行の本体はビルドを呼ばない）
+        Sync-MeasureWorktreeBuild -Build $build -BinDir $script:BinDirArg
+        if (-not (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build)) {
+            Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
+            Exit-WithResult -Code $EXIT_OK -Dir $dir
+        }
         Invoke-MeasureRun -OutDir $dir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "baseline ($build)"
         Invoke-MeasureQuietAfter -RunDir $dir
-    } else {
-        Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
-        Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
 
     $verdict = Invoke-MeasureJudge -RunDir $dir -Build $build
@@ -456,6 +458,7 @@ function Invoke-SubRankRun {
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
 
+    Sync-MeasureWorktreeBuild -Build $build -BinDir $script:BinDirArg
     if (-not (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build)) {
         Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
         Exit-WithResult -Code $EXIT_OK -Dir $dir
@@ -779,6 +782,10 @@ function Invoke-SubFollowup {
 # （25 分 × 2 は check-in を跨ぐ＝要件 1.11）、2 本目は -Resume を付けて回すと
 # 済んだ方を採り直さない。判定の出力は spec の results へも写す（要件 5.6）。
 function Invoke-SubFinal {
+    # 10: 1 つの実行体を release と dev の 2 つのビルドとして測らない
+    if ($script:BinDirArg -and -not $script:BuildExplicit) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message 'final with -BinDir needs -Build (one executable cannot be measured as both builds)'
+    }
     $dir = Resolve-RunDir -RunDir $script:RunDirArg -Kind 'final' -Date $script:DateStamp
     $script:CurrentDir = $dir
     $longProfile = Get-MeasureToml -Section 'levels' -Key 'long_profile' -Default $MEASURE_LONG_PROFILE_DEFAULT
@@ -798,13 +805,15 @@ function Invoke-SubFinal {
         $buildDir = Join-Path $dir $build
         if ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $buildDir)) {
             Write-Info "[perf-loop] -Resume: using the existing run: $buildDir"
-        } elseif (Test-MeasureExeReady -Build $build) {
-            Invoke-MeasureRun -OutDir $buildDir -RunProfile $longProfile -Build $build -Label "final verdict ($build)"
-            Invoke-MeasureQuietAfter -RunDir $buildDir
         } else {
-            Write-MeasureDryRunMark -Dir $buildDir -Reason "no executable, so the run was skipped (-DryRun)"
-            $summary += "final build=$build verdict=$PERF_LOOP_EMPTY dir=$buildDir"
-            continue
+            Sync-MeasureWorktreeBuild -Build $build -BinDir $script:BinDirArg
+            if (-not (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build)) {
+                Write-MeasureDryRunMark -Dir $buildDir -Reason "no executable, so the run was skipped (-DryRun)"
+                $summary += "final build=$build verdict=$PERF_LOOP_EMPTY dir=$buildDir"
+                continue
+            }
+            Invoke-MeasureRun -OutDir $buildDir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "final verdict ($build)"
+            Invoke-MeasureQuietAfter -RunDir $buildDir
         }
         $verdict = Invoke-MeasureJudge -RunDir $buildDir -Build $build
         Copy-MeasureVerdictToResults -RunDir $buildDir -Build $build

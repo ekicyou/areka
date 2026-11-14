@@ -50,15 +50,20 @@ function Test-MeasureExeReady {
 # measure-baseline／rank-run／final は target\<release|debug> の areka.exe を直に使うが、ヘルパは
 # --target i686 で別ディレクトリに出るので、在るのに隣に無い＝実 SHIORI 無しの走行になって exit 4 で
 # 25 分を失う（2026-08-23 baseline-20260823\release で実際に起きた）。無ければ何もしない（既存の関門が止める）。
+# -BinDir の無い走行（target\<release|debug> を直に使う）だけは、隣に在っても元と SHA-256 が違えば写し直す
+# （古いヘルパで測らない・12）。-BinDir の走行（A/B の bin-A・bin-B、final -BinDir）は隣に無いときだけ写す
+# （共有の元は B のビルドで変わるので、bin-A の BUILD.txt と食い違うヘルパを入れない）。元が無ければ隣のものを残す。
 function Sync-MeasureShioriHelper {
-    param([Parameter(Mandatory = $true)][string]$BinDir)
-    $dest = Join-Path $BinDir $MEASURE_HELPER_EXE
-    if (Test-Path -LiteralPath $dest -PathType Leaf) { return }
+    param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
+    $dest = Join-Path (Get-MeasureBinDir -BinDir $BinDir -Build $Build) $MEASURE_HELPER_EXE
     $src = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE)))
+    $destPresent = Test-Path -LiteralPath $dest -PathType Leaf
     if (-not (Test-Path -LiteralPath $src -PathType Leaf)) {
+        if ($destPresent) { return }
         Write-Problem "[perf-loop] WARNING: 32bit SHIORI helper is in neither $dest nor $src. Run cargo build --release -p $MEASURE_HELPER_PACKAGE --target $MEASURE_HELPER_TARGET first (a pass/fail run stops with exit 4)."
         return
     }
+    if ($destPresent -and ($BinDir -or (Get-MeasureSha256 -Path $src) -eq (Get-MeasureSha256 -Path $dest))) { return }
     Copy-Item -LiteralPath $src -Destination $dest -Force
     Write-Info "[perf-loop] copied 32bit SHIORI helper next to the executable: $src -> $dest"
 }

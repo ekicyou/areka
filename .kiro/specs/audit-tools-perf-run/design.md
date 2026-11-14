@@ -433,7 +433,7 @@ function Get-MeasureBinDir     { param([string]$BinDir, [Parameter(Mandatory)][s
 function Test-MeasureExeReady  { param([string]$BinDir, [Parameter(Mandatory)][string]$Build) }   # 今のまま（無ければ 3・-DryRun では $false）
 function Invoke-MeasureCargo   { param([Parameter(Mandatory)][string[]]$Arguments, [Parameter(Mandatory)][string]$Label) }
 function Sync-MeasureWorktreeBuild { param([Parameter(Mandatory)][string]$Build, [string]$BinDir) }   # -BinDir・-DryRun では何もしない
-function Sync-MeasureShioriHelper  { param([Parameter(Mandatory)][string]$BinDir) }   # 隣に無い・または SHA-256 が違うときに写す（12）
+function Sync-MeasureShioriHelper  { param([string]$BinDir, [Parameter(Mandatory)][string]$Build) }   # 隣に無いときに写す。-BinDir の無い走行だけは SHA-256 が違うときも写す（A/B の bin-A を B のヘルパで上書きしない・12）
 function Get-MeasureGitFacts   { }
 function Get-MeasureSha256     { param([Parameter(Mandatory)][string]$Path) }
 function Test-MeasureBinDirComplete { param([Parameter(Mandatory)][string]$Dir) }

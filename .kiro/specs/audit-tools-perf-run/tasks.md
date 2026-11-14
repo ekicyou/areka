@@ -82,7 +82,7 @@
   - _Requirements: 3.1, 4.1, 5.2, 5.3_
 
 - [ ] 5. 実行体の用意と A/B の確かめ
-- [ ] 5.1 ビルドを実行体の確かめより前へ移し、`final` の `-BinDir` と 32bit ヘルパの写しを直す
+- [x] 5.1 ビルドを実行体の確かめより前へ移し、`final` の `-BinDir` と 32bit ヘルパの写しを直す
   - `-BinDir` の無い走行では作業ツリーからのビルドを呼び手が先に回し、実行体の確かめをその後にする。走行の本体はビルドを呼ばない（11）
   - `final` も `-BinDir` を実行体の確かめと走行へ渡し、`-BinDir` を渡すなら `-Build` も要る（無ければ 3）（10）
   - 32bit ヘルパは隣に無いときに加え、元と SHA-256 が違うときも写す（12）
@@ -186,3 +186,4 @@
 - 4.1: `-DryRun` の出力先を「印 2 つだけ」に保つため、`Write-MeasureSamplingNote` は `-DryRun` で何も書かない（読み手は run.log の無い dry run では読む前に戻る）。`Test-MeasureQuietAfterOk` は `Test-MeasureRunComplete` へ畳んで消した（README の 555 行だけが名を残す・R1）。`dryrun-clear` は `$script:DryRunMode` を立てたまま終わる
 - 隣の spec audit-tools-perf-judge（11-15 の知らせ）: judge-perf を 0.5.0 に上げ、標準出力の最後の行が `JUDGE-PERF RESULT code=N` に、自己較正は `SELFTEST RESULT ok=N ng=M` になる（まだ main に未着地）。着地の後は perf-loop.measure の止まりの文に埋まる `LastLine` がこの行になる。8.1 で合わせるか決める
 - 4.2: ランナーは 940 行で、1,000 行の番人まで約 60 行しか残っていない。6.3 で `-SampleEtl` を足す前に、まとまった塊（`Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` の約 100 行、または `Get-FailedDirName`・`Move-FailedOutDir`・`Select-ProcessCpuValue`・`Test-SmokeMarker` の純関数）を兄弟のファイルへ出す。退けの失敗は元の終了コードが 2〜4 でも 1（perf-loop は 4 で止まる）。`Stop-Run` の時間切れの枝そのものは本物の `exit` のため検査が無い
+- 5.1: 32bit ヘルパの SHA-256 での写し直しは `-BinDir` の無い走行だけ（A/B の部屋は B のビルドが共有の元を作り直すので、上書きすると A を B のヘルパで測る）。design の `Sync-MeasureShioriHelper` の形を `-Build` 付きへ直した
