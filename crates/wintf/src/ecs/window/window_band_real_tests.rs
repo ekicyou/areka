@@ -5,10 +5,10 @@
 //! Win32 が呼ばれる。窓は持ち主の関係を張った自分のトップレベルの窓 4 枚（キャラクター 2・
 //! バルーン 2・鎖あり）で、手前から B0・C0・B1・C1 の 1 本の持ち主の列になる。
 //!
-//! トップレベルの窓の重なりは他のプロセスの窓に割り込まれうるので、兄弟の
-//! `zorder_pair_maintain_always_on_top_tests.rs` と同じ実窓の門
-//! （`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の内側に置く。並びの主張は自分の 4 枚の
-//! 相対の順だけを見るので、他の窓が間に入っても崩れない。
+//! トップレベルの窓の重なりは他のプロセスの窓に割り込まれうるので、
+//! `zorder_pair_test_support.rs` の実窓の門（`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の
+//! 内側に置く。並びの主張は自分の 4 枚の相対の順だけを見るので、他の窓が間に入っても崩れない。
+//! 窓の手伝いのうち `pub(super)` の 4 つは兄弟の `window_band_pipeline_real_tests.rs` も借りる。
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
@@ -23,17 +23,7 @@ use windows::core::{PCWSTR, w};
 use super::{BandOp, WindowBandQueue, apply_window_band};
 use crate::api::{clear_window_owner, get_window_long_ptr, is_window_visible, set_window_owner};
 use crate::ecs::window::WindowHandle;
-
-const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
-
-/// 門が開いていなければ判定を 1 行も走らせずに落とす（素通りの緑を「実窓で測った」に化けさせない）。
-fn require_explicit_real_window_run() {
-    assert!(
-        std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
-        "{REAL_WINDOW_ZORDER_ENV} が未設定である（判定は 1 行も走っていない）。走らせるには \
-         環境変数を与えて `cargo test -p wintf --lib <テスト名> -- --ignored --exact` とすること"
-    );
-}
+use crate::ecs::window::zorder_pair_test_support::require_explicit_real_window_run;
 
 fn create_toplevel(title: PCWSTR, ex_style: u32, x: i32) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -61,11 +51,11 @@ fn create_toplevel(title: PCWSTR, ex_style: u32, x: i32) -> HWND {
 }
 
 /// 本番のゴーストの窓と同じ拡張スタイル（`WS_EX_LAYERED` なので画面には何も描かれない）。
-fn create_ghost_shaped(title: PCWSTR, x: i32) -> HWND {
+pub(super) fn create_ghost_shaped(title: PCWSTR, x: i32) -> HWND {
     create_toplevel(title, WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0, x)
 }
 
-fn destroy(hwnd: HWND) {
+pub(super) fn destroy(hwnd: HWND) {
     // SAFETY: Win32 境界。自分で作った窓を壊す。
     unsafe {
         let _ = DestroyWindow(hwnd);
@@ -76,7 +66,7 @@ fn ex_style(hwnd: HWND) -> u32 {
     get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("拡張スタイルを読めるはず") as u32
 }
 
-fn in_band(hwnd: HWND) -> bool {
+pub(super) fn in_band(hwnd: HWND) -> bool {
     ex_style(hwnd) & WS_EX_TOPMOST.0 != 0
 }
 
@@ -118,7 +108,7 @@ fn desktop_z() -> Vec<HWND> {
 }
 
 /// `windows` の窓だけを、今の重なりの手前 → 奥の順に並べる。
-fn relative_order(windows: &[HWND]) -> Vec<HWND> {
+pub(super) fn relative_order(windows: &[HWND]) -> Vec<HWND> {
     desktop_z()
         .into_iter()
         .filter(|hwnd| windows.contains(hwnd))

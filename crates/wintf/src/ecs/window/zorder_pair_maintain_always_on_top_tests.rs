@@ -58,46 +58,9 @@ use super::pair_fix_command;
 use crate::ecs::window::zorder_pair_test_support::{
     CAPTURE_DIRECTIVES, FIX_TAG, SKIP_TAG, VERIFY_FAILED_TAG,
     create_banded_test_parent as create_test_parent, create_test_child, create_window,
-    destroy_test_window, insert_after, maintain_schedule, pair_schedule, spawn_window,
+    destroy_test_window, insert_after, maintain_schedule, pair_schedule,
+    require_explicit_real_window_run, spawn_window,
 };
-
-// -------------------------------------------------------------------------
-// 明示実行の門（実窓の重なり順を直に測る 2 本のみ）
-// -------------------------------------------------------------------------
-
-/// 実窓の重なり順を直に測る 2 本を明示実行へ限る門の環境変数。
-///
-/// 本ワークスペースの実行時環境変数は `AREKA_` 名前空間である（同じ流儀の先例:
-/// `crates/log-capture-kit/tests/capture_calibration_test.rs` の `MODE_ENV`）。
-const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
-
-/// 門が開いていなければ、判定を 1 行も実行せずに落とす。
-///
-/// # なぜ門を付けたか
-///
-/// この 2 本は実窓の位置関係を直に測るため、他プロセスの可視窓が owner 一組の間へ
-/// 割り込むと崩れる。既定の `cargo test` に置いたままだと間欠的な赤が出て、「全通過」
-/// という記録が全通過を意味しなくなる。よって既定の走行からは外し、狙って走らせる
-/// ときだけ走る形にした。
-///
-/// **判定そのものは 1 行も変えていない**——閾値も期待値も隔離前のままである。根治
-/// （判定の作り直し）の引受先は `.kiro/specs/zorder-chain-residue/brief.md`
-/// の A-1 で、そちらが「実窓の重なり順を割り込みに強い形で測る」を持つ。
-///
-/// # 門が閉じたまま呼ばれたら緑にしない
-///
-/// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実窓で測った」という
-/// 記録に化ける。既存の手本（`crates/areka/src/placement_tests/transition_signoff_tests.rs`
-/// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
-fn require_explicit_real_window_run() {
-    assert!(
-        std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
-        "{REAL_WINDOW_ZORDER_ENV} が未設定である。実窓の重なり順は他プロセスの可視窓に\
-         割り込まれて間欠的に赤くなるため明示実行へ隔離してある（判定は 1 行も走っていない）。\
-         走らせるには環境変数を与えて `cargo test -p wintf --lib <テスト名> -- --ignored --exact` \
-         とすること"
-    );
-}
 
 // -------------------------------------------------------------------------
 // 帯の印を測る実窓のヘルパ（共通の下ごしらえは `zorder_pair_test_support`）
