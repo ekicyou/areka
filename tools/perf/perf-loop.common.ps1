@@ -124,7 +124,7 @@ function Resolve-GoalFile {
 
 # 目標定義を読み、道具が要る値だけを取り出す。
 # 返す: Path・Name・SpecDir・LedgerRel・LedgerPath・ResultsDir・JudgeScript・JudgeScriptPath・
-#       JudgeVersion・CheckinMinutes・IdleCpuMaxPct・SamplingBackend・Toml
+#       JudgeVersion・CheckinMinutes・IdleCpuMaxPct・Toml
 function Get-GoalConfig {
     param(
         [Parameter(Mandatory = $true)][string]$GoalFilePath,
@@ -141,7 +141,6 @@ function Get-GoalConfig {
     $judgeVer    = Get-TomlString -Toml $toml -Section 'goal' -Key 'judge_version'
     $checkin     = Get-TomlInt    -Toml $toml -Section 'goal_runtime' -Key 'checkin_minutes'
     $idleMax     = Get-TomlString -Toml $toml -Section 'target' -Key 'idle_cpu_release_max_pct'
-    $backend     = Get-TomlString -Toml $toml -Section 'sampling' -Key 'backend'
 
     $ledgerPath = $null
     if ($specDir -and $ledgerRel) {
@@ -164,7 +163,6 @@ function Get-GoalConfig {
         JudgeVersion    = $judgeVer
         CheckinMinutes  = $checkin
         IdleCpuMaxPct   = $idleMax
-        SamplingBackend = $backend
         Toml            = $toml
     }
 }
@@ -331,24 +329,24 @@ function Test-ResumeArtifact {
 # 環境の見立て（preflight が読む）
 # =============================================================================
 
-# 管理者権限で走っているか（段③＝関数別の帰属に要る）。
-function Test-Elevated {
-    try {
-        $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch {
-        return $false
+# invoke-cpu-sample.ps1 -Probe の 1 行を読む（昇格・xperf の在り処・段③の可否の出どころはここだけ）:
+#   available=<真偽> reason=<語> elevated=<真偽> xperf_path=<パス|->（在り処は行の最後で空白や括弧を含み得る）
+# 戻り: Available・Reason・Elevated・XperfPath（無ければ $null）・Code・Lines。読めなければ reason=probe_failed。
+function Get-SamplingProbe {
+    $path = Join-Path $PSScriptRoot 'invoke-cpu-sample.ps1'
+    $result = Invoke-PwshChild -ScriptPath $path -Arguments @('-Probe') -Quiet
+    $probe = [pscustomobject]@{ Available = $false; Reason = 'probe_failed'; Elevated = $false; XperfPath = $null; Code = $result.Code; Lines = $result.Lines }
+    # -Probe は必ず 0 で返る約束。非ゼロは道具自身の異常
+    if ($result.Code -ne 0) { return $probe }
+    foreach ($line in $result.Lines) {
+        if ($line -match '^available=(true|false) reason=(\S+) elevated=(true|false) xperf_path=(.+)$') {
+            $probe.Available = ($Matches[1] -eq 'true')
+            $probe.Reason    = $Matches[2]
+            $probe.Elevated  = ($Matches[3] -eq 'true')
+            $probe.XperfPath = if ($Matches[4] -eq '-') { $null } else { $Matches[4] }
+        }
     }
-}
-
-# xperf.exe の所在（PATH → Windows Kits の既定位置）。無ければ $null。
-function Find-XperfPath {
-    param([string]$DefaultPath)
-    $found = Get-Command 'xperf.exe' -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
-    if ($DefaultPath -and (Test-Path -LiteralPath $DefaultPath -PathType Leaf)) { return $DefaultPath }
-    return $null
+    return $probe
 }
 
 # preflight の合否（純関数）。順に見て最初に落ちたものを理由にする:

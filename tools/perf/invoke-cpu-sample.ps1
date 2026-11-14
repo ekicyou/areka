@@ -7,14 +7,16 @@ invoke-cpu-sample.ps1 — CPU サンプリング（呼出スタック付き）�
 
 何をするか（4 つのモードのどれか 1 つを指定する）:
   -Probe     … 採れるかどうかだけを確かめる。昇格しているか・xperf.exe が在るか・
-               実際に 5 秒だけ採って止められるかを見て、1 行で報告する（必ず exit 0）
+               実際に 5 秒だけ採って止められるかを見て、1 行で報告する（必ず exit 0）:
+                 available=<真偽> reason=<語> elevated=<真偽> xperf_path=<パス|->
+               xperf_path は空白や括弧を含み得るので行の最後に置く（perf-loop が読む）
   -Start     … サンプリングと呼出スタックの採取を始める（管理者権限が要る）
   -Stop      … 採取を止めてトレースをまとめ（まとめが通ったら元の ETL を消す）、記号を解決して
                テキストの dump を書き出す
   -Cancel    … 採取を止めて ETL を消す（記号は解かない。採取を始めた道具が失敗の道で使う）
   -SelfTest  … 道具そのものの較正。同梱の dump 断片で「areka.exe! のフレームを数える」
                関門が正しく数えられるか（合格側）と、フレームが無い入力で 0 を返すか
-               （不合格側）を確かめ、続けて -Probe と同じ確認を行う
+               （不合格側）を確かめ、続けて -Probe と同じ確認を行う（採取は試さない）
 
 「関門」について（要件 2.11 ＝ 黙って続けない）:
   記号が解決できていない dump は、見た目は正常でも中身が空である。そこで -Stop は
@@ -41,7 +43,6 @@ invoke-cpu-sample.ps1 — CPU サンプリング（呼出スタック付き）�
   FIXTURE_DUMP_RELPATH      -SelfTest が読む同梱 dump 断片
   FIXTURE_EXPECT_*          同梱 dump 断片の既知の内訳（-SelfTest がこの値と厳密に突き合わせる。
                             fixture を実採取で差し替えたら、この値も同時に書き換える）
-  WPA_PROFILE_RELPATH       代替 backend（wpaexporter）が使う版管理された .wpaProfile
   TARGET_MODULE             関門が数える対象モジュール名
 
 記号（要件 8.6 ＝ Cargo.toml 非接触）:
@@ -111,15 +112,6 @@ param(
     [Parameter(ParameterSetName = 'Stop')]
     [string]$SymCache,
 
-    # 記号解決の方式。目標定義ファイルの [sampling] backend より優先する
-    [Parameter(ParameterSetName = 'Stop')]
-    [ValidateSet('xperf-dumper', 'wpaexporter')]
-    [string]$Backend,
-
-    # 目標定義ファイル（[sampling] backend = "…" を読む）
-    [Parameter(ParameterSetName = 'Stop')]
-    [string]$GoalFile,
-
     # サンプリング周期（-SetProfInt の単位）。0 なら較正値を使う
     [Parameter(ParameterSetName = 'Start')]
     [int]$ProfIntervalUnits = 0
@@ -136,7 +128,6 @@ $ErrorActionPreference = 'Stop'
 # ---------------------------------------------------------------- 較正値 ----
 $SCRIPT_VERSION           = '1.0.0'
 $XPERF_DEFAULT_PATH       = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
-$WPAEXPORTER_DEFAULT_PATH = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\wpaexporter.exe'
 $PROF_INTERVAL_UNITS      = 1221
 $PROBE_CAPTURE_SEC        = 5
 $XPERF_KERNEL_FLAGS       = 'PROC_THREAD+LOADER+PROFILE'
@@ -155,7 +146,6 @@ $FIXTURE_EXPECT_AREKA_FRAMES      = 16
 $FIXTURE_EXPECT_RESOLVED_FRAMES   = 22
 $FIXTURE_EXPECT_UNRESOLVED_FRAMES = 2
 $FIXTURE_EXPECT_TIDS              = @('18332', '18420', '18512')
-$WPA_PROFILE_RELPATH      = 'wpa\cpu-sampled.wpaProfile'
 $TARGET_MODULE            = 'areka.exe'
 
 # 終了コード（design C5）
@@ -193,14 +183,6 @@ function Get-XperfPath {
         Select-Object -First 1
     if ($cmd) { return $cmd.Source }
     if (Test-Path -LiteralPath $XPERF_DEFAULT_PATH -PathType Leaf) { return $XPERF_DEFAULT_PATH }
-    return $null
-}
-
-function Get-WpaExporterPath {
-    $cmd = Get-Command 'wpaexporter' -CommandType Application -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($cmd) { return $cmd.Source }
-    if (Test-Path -LiteralPath $WPAEXPORTER_DEFAULT_PATH -PathType Leaf) { return $WPAEXPORTER_DEFAULT_PATH }
     return $null
 }
 
@@ -323,20 +305,20 @@ function Measure-ArekaFrames {
     return $result
 }
 
-# 昇格・xperf の実在・5 秒の実採取までを確かめる。返すのは available と reason。
+# 昇格・xperf の実在・5 秒の実採取までを確かめる。返すのは Available・Reason・Elevated・XperfPath と、
+# それを -Probe の 1 行にした Line（perf-loop の Get-SamplingProbe が読む形）。
 function Get-ProbeResult {
     param([switch]$SkipCapture)
-
-    if (-not (Test-Elevated)) {
-        return [pscustomobject]@{ Available = $false; Reason = 'not_elevated' }
-    }
+    $elevated = [bool](Test-Elevated)
     $xperf = Get-XperfPath
-    if (-not $xperf) {
-        return [pscustomobject]@{ Available = $false; Reason = 'no_xperf' }
-    }
-    if ($SkipCapture) {
-        return [pscustomobject]@{ Available = $true; Reason = 'ok' }
-    }
+    $tail = "elevated=$(if ($elevated) { 'true' } else { 'false' }) xperf_path=$(if ($xperf) { $xperf } else { '-' })"
+    $answer = { param([bool]$Ok, [string]$Why)
+        [pscustomobject]@{ Available = $Ok; Reason = $Why; Elevated = $elevated; XperfPath = $xperf
+                           Line = "available=$(if ($Ok) { 'true' } else { 'false' }) reason=$Why $tail" } }
+
+    if (-not $elevated) { return & $answer $false 'not_elevated' }
+    if (-not $xperf) { return & $answer $false 'no_xperf' }
+    if ($SkipCapture) { return & $answer $true 'ok' }
 
     $tempDir = Join-Path $PERF_TMP_DIR ('areka-cpu-probe-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $tempDir -Force
@@ -344,42 +326,27 @@ function Get-ProbeResult {
     $mergedEtl = Join-Path $tempDir 'probe-merged.etl'
     try {
         $r = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments (Get-StartArguments -EtlPath $probeEtl)
-        if ($r.Code -ne 0) {
-            return [pscustomobject]@{ Available = $false; Reason = 'start_failed' }
-        }
+        if ($r.Code -ne 0) { return & $answer $false 'start_failed' }
         Start-Sleep -Seconds $PROBE_CAPTURE_SEC
         $d = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-d', $mergedEtl)
         if ($d.Code -ne 0) {
             $null = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-stop')
-            return [pscustomobject]@{ Available = $false; Reason = 'start_failed' }
+            return & $answer $false 'start_failed'
         }
-        return [pscustomobject]@{ Available = $true; Reason = 'ok' }
+        return & $answer $true 'ok'
     } catch {
         $null = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-stop')
-        return [pscustomobject]@{ Available = $false; Reason = 'start_failed' }
+        return & $answer $false 'start_failed'
     } finally {
         Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
-# 目標定義ファイルの [sampling] backend を読む（読みは perf-tool-base の読み口）。
-function Get-BackendFromGoalFile {
-    param([string]$Path)
-    if (-not $Path) { return $null }
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-GoalFile not found: $Path"
-    }
-    $backend = Get-TomlString -Toml (Read-TomlSections -Text ([IO.File]::ReadAllText($Path))) -Section 'sampling' -Key 'backend'
-    if ([string]::IsNullOrEmpty($backend)) { return $null }
-    return $backend
-}
-
 # ------------------------------------------------------------- 各モード ----
 function Invoke-ProbeMode {
     $probe = Get-ProbeResult
-    $available = if ($probe.Available) { 'true' } else { 'false' }
-    Write-Info "available=$available reason=$($probe.Reason)"
-    Write-ResultLine -Mode 'probe' -Code $EXIT_OK -Extra "available=$available reason=$($probe.Reason)"
+    Write-Info $probe.Line
+    Write-ResultLine -Mode 'probe' -Code $EXIT_OK -Extra $probe.Line
     exit $EXIT_OK
 }
 
@@ -461,35 +428,14 @@ function Invoke-StopMode {
     }
     $null = New-Item -ItemType Directory -Path $SymCache -Force -ErrorAction SilentlyContinue
 
-    $backendName = $Backend
-    if (-not $backendName) { $backendName = Get-BackendFromGoalFile -Path $GoalFile }
-    if (-not $backendName) { $backendName = 'xperf-dumper' }
-    $wpaProfile = Join-Path $SCRIPT_DIR $WPA_PROFILE_RELPATH
-    if ($backendName -eq 'wpaexporter' -and -not (Test-Path -LiteralPath $wpaProfile -PathType Leaf)) {
-        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS `
-            -Message "profile file missing: $wpaProfile - the alternative backend (wpaexporter) needs the version-controlled .wpaProfile. Use the default backend (xperf-dumper) or add the .wpaProfile."
-    }
-
     # ⒝ 記号解決の道筋を子プロセスへ渡し、テキスト dump を書き出す
     $savedSymbolPath = $env:_NT_SYMBOL_PATH
     $env:_NT_SYMBOL_PATH = "srv*$SymCache*$SYMBOL_SERVER_URL;$pdbFull"
     try {
-        if ($backendName -eq 'wpaexporter') {
-            $wpa = Get-WpaExporterPath
-            if (-not $wpa) {
-                Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'wpaexporter.exe not found.' -Extra 'available=false reason=no_xperf'
-            }
-            $outDir = Split-Path -Parent $outFull
-            $w = Invoke-Child -Exe $wpa -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-i', $merged, '-profile', $wpaProfile, '-outputfolder', $outDir)
-            if ($w.Code -ne 0) {
-                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "wpaexporter failed (exit code $($w.Code)): $($w.Lines -join ' ')"
-            }
-        } else {
-            $s = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) `
-                -Arguments @('-i', $merged, '-symbols', '-a', 'dumper', '-o', $outFull)
-            if ($s.Code -ne 0) {
-                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "xperf symbol resolution (-a dumper) failed (exit code $($s.Code)): $($s.Lines -join ' ')"
-            }
+        $s = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) `
+            -Arguments @('-i', $merged, '-symbols', '-a', 'dumper', '-o', $outFull)
+        if ($s.Code -ne 0) {
+            Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "xperf symbol resolution (-a dumper) failed (exit code $($s.Code)): $($s.Lines -join ' ')"
         }
     } finally {
         $env:_NT_SYMBOL_PATH = $savedSymbolPath
@@ -514,7 +460,7 @@ function Invoke-StopMode {
     $summary = "sample_count=$($stats.SampleCount) areka_frames=$($stats.ArekaFrames) dump=$outFull"
     Write-Info $summary
     Write-ResultLine -Mode 'stop' -Code $EXIT_OK `
-        -Extra "$summary stack_rows=$($stats.StackCount) resolved=$($stats.ResolvedFrames) unresolved=$($stats.UnresolvedFrames) backend=$backendName"
+        -Extra "$summary stack_rows=$($stats.StackCount) resolved=$($stats.ResolvedFrames) unresolved=$($stats.UnresolvedFrames)"
     exit $EXIT_OK
 }
 
@@ -728,8 +674,17 @@ function Invoke-SelfTestMode {
     # ⒜-6 stop-merges-first・args-with-spaces・cancel-mode（偽の xperf を子の PATH の先頭へ）
     $failures += @(Test-FakeXperfModes)
 
-    # ⒝ -Probe（採れないことは赤ではなく UNAVAILABLE の報告）
-    $probe = Get-ProbeResult
+    # ⒜-7 probe-skip-capture: この関数の可否の確かめは、どれも採取を飛ばす形（-SkipCapture）で呼ぶ（構文木で見る）
+    $selfAst = [System.Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$null, [ref]$null)
+    $selfFn = $selfAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-SelfTestMode' }, $true)
+    $probeCalls = @($selfFn.Body.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Get-ProbeResult' }, $true))
+    $noSkip = @($probeCalls | Where-Object { -not ($_.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -eq 'SkipCapture' }) })
+    if ($probeCalls.Count -eq 0 -or $noSkip.Count -gt 0) {
+        $failures += "probe-skip-capture: Invoke-SelfTestMode calls Get-ProbeResult $($probeCalls.Count) time(s), $($noSkip.Count) without -SkipCapture (want at least 1, all with -SkipCapture)"
+    }
+
+    # ⒝ -Probe と同じ前提の確かめ（採取は試さない＝preflight の本物の 5 秒の採取は -Probe の 1 回だけ。採れないことは赤ではない）
+    $probe = Get-ProbeResult -SkipCapture
     $available = if ($probe.Available) { 'true' } else { 'false' }
     Write-Info "available=$available reason=$($probe.Reason)"
 

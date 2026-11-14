@@ -72,8 +72,6 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
                               Claude Code の既定。公式文書 code.claude.com/docs/en/goal.md）
   CHECKIN_WARN_BELOW_MINUTES  これ未満なら警告（25 分水準の計測に check-in が割り込む）
   PYTHON_MIN_VERSION          tomllib が要る最低の Python（3.11）
-  XPERF_DEFAULT_PATH          PATH に xperf が無いときに見に行く既定の位置
-                              （invoke-cpu-sample.ps1 の同名定数の写し）
   RELEASE_PDB_RELPATH         段③の記号解決に要る PDB の在り処
 
 終了コード（design C5 の体系。全てのサブコマンドで同じ意味）:
@@ -174,7 +172,6 @@ $CHECKIN_DEFAULT_MINUTES    = 30
 $CHECKIN_WARN_BELOW_MINUTES = 25
 $CHECKIN_ENV_NAME           = 'CLAUDE_CODE_GOAL_CHECKIN_MINUTES'
 $PYTHON_MIN_VERSION         = [Version]'3.11'
-$XPERF_DEFAULT_PATH         = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
 $RELEASE_PDB_RELPATH        = 'target\release\areka.pdb'
 $PDB_BUILD_HINT             = 'set CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and run cargo build --release to get it'
 $PREFLIGHT_FILE             = 'preflight.txt'
@@ -206,6 +203,7 @@ $SELFTEST_TOOLS = @(
     [pscustomobject]@{ Task = '5.1'; Kind = 'ps'; File = 'check-quiet.ps1';           Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = '6.4'; Kind = 'ps'; File = 'invoke-followup-checks.ps1'; Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = 'audit-tools-perf-run 1.4'; Kind = 'ps'; File = 'perf-loop.selftest.ps1'; Arguments = @() }
+    [pscustomobject]@{ Task = 'audit-tools-perf-run 6.2'; Kind = 'ps'; File = 'perf-loop.selftest2.ps1'; Arguments = @() }
     [pscustomobject]@{ Task = 'audit-tools-perf-run 2.1'; Kind = 'ps'; File = 'invoke-perf-run.ps1'; Arguments = @('-SelfTest') }
 )
 
@@ -398,26 +396,6 @@ function Get-PythonVersionText {
     return $null
 }
 
-# invoke-cpu-sample.ps1 -Probe の 1 行（available=… reason=…）を読む。
-function Get-SamplingProbe {
-    $path = Join-Path $PSScriptRoot 'invoke-cpu-sample.ps1'
-    $result = Invoke-PwshChild -ScriptPath $path -Arguments @('-Probe') -Quiet
-    $available = $false
-    $reason = 'probe_failed'
-    foreach ($line in $result.Lines) {
-        if ($line -match '^available=(true|false)(\s+reason=(\S+))?') {
-            $available = ($Matches[1] -eq 'true')
-            if ($Matches.Count -ge 4 -and $Matches[3]) { $reason = $Matches[3] }
-            elseif ($available) { $reason = 'ok' }
-        }
-    }
-    if ($result.Code -ne 0 -and -not $available) {
-        # -Probe は必ず 0 で返る約束（design C8）。非ゼロは道具自身の異常。
-        $reason = 'probe_failed'
-    }
-    return [pscustomobject]@{ Available = $available; Reason = $reason; Code = $result.Code; Lines = $result.Lines }
-}
-
 function Invoke-SubPreflight {
     $dir = New-LoopDir -Path (Get-LoopDir -Kind goal)
     $script:CurrentDir = $dir
@@ -425,11 +403,12 @@ function Invoke-SubPreflight {
     Write-Info "[perf-loop] version $SCRIPT_VERSION / preflight goal $($script:GoalName) / out dir $dir"
 
     # --- 環境の見立て ---------------------------------------------------------
-    $elevated  = Test-Elevated
-    $xperfPath = Find-XperfPath -DefaultPath $XPERF_DEFAULT_PATH
+    # 昇格と xperf の在り処は -Probe の 1 回の結果から読む（ここで探し直さない）
+    $probe     = Get-SamplingProbe
+    $elevated  = $probe.Elevated
+    $xperfPath = $probe.XperfPath
     $pdbPath   = Join-Path $repoRoot $RELEASE_PDB_RELPATH
     $pdbFound  = Test-Path -LiteralPath $pdbPath -PathType Leaf
-    $probe     = Get-SamplingProbe
 
     # 段③（関数別の帰属）の可否。順に見て、最初に足りないものを理由にする。
     $stage = $STAGE_AVAILABLE
@@ -565,7 +544,6 @@ function Invoke-SubPreflight {
         "ledger_exists=$(Format-LoopBool $ledgerExists)",
         "goal_check=$goalCheck",
         "selftest=$selftestWord ok=$($selftest.OkCount) ng=$($selftest.NgCount)",
-        "sampling_backend=$(Format-LoopValue $goalConfig.SamplingBackend)",
         "capabilities=$capabilities",
         "verdict=$verdict",
         "code=$code"

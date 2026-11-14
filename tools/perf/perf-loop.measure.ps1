@@ -499,7 +499,6 @@ function Invoke-SubRankRun {
     if ($sampling) {
         $pdbDir = Get-MeasureBinDir -BinDir $script:BinDirArg -Build $build
         $stopArgs = @('-Stop', '-Etl', $etlPath, '-Out', (Join-Path $dir $MEASURE_FILE_DUMP), '-PdbDir', $pdbDir)
-        if ($script:GoalFilePath) { $stopArgs += @('-GoalFile', $script:GoalFilePath) }
         $stop = Invoke-PwshChild -ScriptPath $samplePath -Arguments $stopArgs
         if ($stop.Code -eq 0) {
             $reason = 'ok'

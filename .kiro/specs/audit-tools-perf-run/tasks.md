@@ -111,7 +111,7 @@
   - _Boundary: invoke-cpu-sample_
   - _Dispatch: standard — 停止の順と取り消しの新しい道_
   - _Requirements: 3.1, 4.1, 4.5, 4.7, 5.3, 5.4_
-- [ ] 6.2 可否の 1 行に昇格と xperf の在り処を載せ、preflight をそこから出し、`wpaexporter` の道を消す
+- [x] 6.2 可否の 1 行に昇格と xperf の在り処を載せ、preflight をそこから出し、`wpaexporter` の道を消す
   - `-Probe` の 1 行の後ろに `elevated=` と `xperf_path=`（行の最後）を足す。`capabilities=` の鍵と並びは変えない（36）
   - perf-loop の可否の読みはその 1 行から昇格・xperf・在り処・段③の可否を出し、preflight はその 1 回の結果だけを使う。perf-loop 側の昇格と xperf の探し方を消す（36）
   - `-SelfTest` の可否の確かめは採取を試さない（24）。T1 に、可否の確かめの呼び出しが採取を飛ばす形（`-SkipCapture`）で呼ばれていることを構文木で確かめる検査 `probe-skip-capture` を足す
@@ -190,3 +190,4 @@
 - 1.1 の直し（5.1 の後）: `Stop-ChildProcess` は直下の子しか待たず、孫がファイルを握ったまま戻ることがあった（T2 `kill-wait` が 1 回揺れた）。強制終了の前に CIM で子孫を集め、同じ締め切りの中で子と子孫を待つ形へ直した。子孫を集め損ねても Kill は必ず走り、標準エラーへ 1 行出す（`kill-snapshot-fails`）
 - 5.2: S2 の段は台帳の語にそろえて「`verdict: MEASURE_FAILED`・`reason: same_executable`（出来事は `measure_failed`）」と書いた（design の 2 か所も同じ字面へ）。T2 は 892 行で、次に T2 へ検査を足すタスク（6.2）が足す前に束ごとに `perf-loop.selftest2.ps1` へ分け、`SELFTEST_TOOLS` に足す（以後の期待は ok=12）
 - 6.1: `-Stop` は `xperf -d` が 0 でも、まとめた先が無ければ通らなかった扱いにして元の ETL を消さない（レビューの指摘を進行役が直した・偽の xperf は `-d` の先に空のファイルを作る）。この枝そのものの検査は無い。`-SelfTest` の可否の確かめはまだ本物の採取を試す（6.2 で `-SkipCapture`）
+- 6.2: T2 を `perf-loop.selftest.ps1`（20 本）と `perf-loop.selftest2.ps1`（出力先と -Resume の束・入口の束・probe-parse の 9 本）に分け、`perf-loop.ps1 selftest` の期待は ok=12。消す前の grep の件数（wpaexporter ほか）: HEAD で invoke-cpu-sample 22・perf-loop.common 4・perf-loop 5・goals 1 → 後で範囲の中 0（invoke-cpu-sample の `XPERF_DEFAULT_PATH`・`Test-Elevated` の 5 件は段③の採取の唯一の持ち場として残す）。範囲の外に残る `[sampling] backend`（goals の toml・perf_ledger_goal.py の必須の鍵・fixtures-loop の 5 本）は audit-tools-perf-judge の受け持ち
