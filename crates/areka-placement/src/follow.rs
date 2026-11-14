@@ -114,11 +114,11 @@ pub use self::window_move::{
     resize_window_to,
 };
 
-// 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。
+// 私有・crate 内の再束縛と、`runtime::…` などが呼ぶ公開の口（呼び手は下の各行の注）。
 // サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれも
 // ここを経由する。
 // 追随相（`runtime::…`）が収束の保証（design D16）で `follow_balloon` を呼ぶため、
-// この 2 項目だけは私有再束縛から公開へ格上げする。
+// 次の 2 項目は公開する。
 pub use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // キーワード由来のバルーン基本位置の一度きりの再導出（`resize_window_to` が使う）。
 use self::keyword_base::rederive_keyword_balloon_offset;

@@ -725,7 +725,7 @@ fn resize_window_keep_position_new_size_keeps_position_and_writes_once() {
     );
 }
 
-/// 現寸不明（`WindowPos.size` が `None`＝窓生成直後）はべき等判定が成立しない
+/// 現寸不明（`WindowPos.size` が `None`）はべき等判定が成立しない
 /// ため書込へ進む（位置維持・新寸反映）。
 #[test]
 fn resize_window_keep_position_with_unknown_current_size_writes() {

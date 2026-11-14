@@ -479,8 +479,8 @@ fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> 
     // 旧矩形＝**現在位置** × 現寸。位置が未確定なら旧矩形不明＝安全側 clamp。
     // 負座標は正当（左モニタは `-1920..0`）ゆえ、位置の未確定は符号ではなく
     // wintf 正典のセンチネル `CW_USEDEFAULT` そのもので判定する
-    // （`crates/wintf/src/ecs/graphics/systems/window_pos.rs:41`
-    //   ／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:408`
+    // （wintf `window_pos.rs` の `apply_window_pos_changes`
+    //   と `monitor_systems.rs` の `window_center`
     // と同じ式。素通しすると `WindowPos::default()` 由来の窓が
     // 「もともと画面外に留置されていた」と誤判定され安全側の腕が死ぬ）。
     let old_rect = window_pos

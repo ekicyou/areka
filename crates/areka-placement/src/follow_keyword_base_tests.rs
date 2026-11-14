@@ -381,7 +381,7 @@ fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
 
     // 2 度目: さらに別の寸へ変えても offset は動かない（Side と同じ静的 offset）。
     let third = SizePx { w: 300, h: 500 };
-    let (_, events) = capture(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -389,6 +389,7 @@ fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
             PlacementRoute::ReportedSizeReconcile,
         )
     });
+    assert!(moved, "前提: 書込が起きている");
 
     assert_eq!(
         offset_of(&world, char_window),
@@ -502,7 +503,7 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
     );
     let before = offset_of(&world, char_window);
 
-    let (_, events) = capture(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -510,6 +511,7 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
             PlacementRoute::ReportedSizeReconcile,
         )
     });
+    assert!(moved, "前提: 書込が起きている");
 
     assert_eq!(
         offset_of(&world, char_window),
@@ -633,7 +635,7 @@ fn a_dragged_relative_position_survives_a_later_char_size_change() {
     );
 
     // その後にキャラ寸が変わる書込（面替え・再吸着・DPI 移動のいずれでも起こる）。
-    let (_, events) = capture(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -641,6 +643,7 @@ fn a_dragged_relative_position_survives_a_later_char_size_change() {
             PlacementRoute::ReportedSizeReconcile,
         )
     });
+    assert!(moved, "前提: 書込が起きている");
 
     let keyword_default = expected_offset(mode, displayed_char(), balloon(), adjust);
     assert_ne!(

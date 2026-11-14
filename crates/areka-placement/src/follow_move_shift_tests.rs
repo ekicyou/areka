@@ -15,8 +15,9 @@ use wintf::ecs::window::transition_diag::FIELD_ORIGIN;
 
 use super::move_shift::MoveShiftApplied;
 use super::test_support::{
-    OFFSCREEN_PULL_TAG, drag_end_event_at, drag_event, dragging_state, fake_handle, guard_events,
-    position_of, single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
+    OFFSCREEN_PULL_TAG, assert_deferred, drag_end_event_at, drag_event, dragging_state,
+    fake_handle, guard_events, position_of, single_monitor_snapshot, size_of, window_pos_at,
+    window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, DpiSyncHold, MonitorSnapshot, OffsetBase, PlacementRoute,
@@ -678,21 +679,6 @@ fn a_dragged_window_is_not_shifted_until_the_drag_ends() {
         );
         let _residue = drain_window_pos_commands();
     }
-}
-
-/// 見送りの `debug!` がちょうど 1 行で理由が `reason`、`warn!` は出ない（見送りは失敗でない）。
-fn assert_deferred(events: &[log_capture_kit::CapturedEvent], reason: &str) {
-    let deferred: Vec<_> = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("move_shift_deferred"))
-        .collect();
-    assert_eq!(deferred.len(), 1, "{events:?}");
-    assert_eq!(deferred[0].level, tracing::Level::DEBUG);
-    assert_eq!(deferred[0].field_str("reason"), Some(reason), "{events:?}");
-    assert!(
-        events.iter().all(|e| e.level != tracing::Level::WARN),
-        "見送りで warn! を出した: {events:?}"
-    );
 }
 
 /// 多窓のとき dispatch が DragEnd の前に `DraggingState` を落としても、ドラッグの控え

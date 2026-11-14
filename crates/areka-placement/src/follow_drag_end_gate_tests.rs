@@ -479,15 +479,15 @@ fn drag_end_without_a_part_warns_or_still_saves() {
         match missing {
             Missing::BalloonMarker | Missing::CharMarker => {
                 assert_eq!(skipped, 1, "{missing:?}: warn! が 1 行でない: {events:?}");
-                let keys = if matches!(missing, Missing::BalloonMarker) {
-                    balloon_offset_keys(&saved)
-                } else {
-                    window_pos_keys(&saved)
-                };
-                assert!(
-                    keys.is_empty(),
-                    "{missing:?}: 印が無いのに保存した: {saved:?}"
-                );
+                // scope を問わず数える（印の無い窓が別の scope の鍵へ書いても見逃さない）。
+                let leaked = saved
+                    .iter()
+                    .filter(|(k, _)| match missing {
+                        Missing::BalloonMarker => matches!(k, PersistKey::BalloonOffset { .. }),
+                        _ => matches!(k, PersistKey::WindowPos { .. }),
+                    })
+                    .count();
+                assert_eq!(leaked, 0, "{missing:?}: 印が無いのに保存した: {saved:?}");
             }
             Missing::CharAnchored => {
                 assert_eq!(

@@ -88,6 +88,32 @@ fn hold_and_chain_words_are_fixed_and_distinct() {
     assert_eq!(CHAIN_STAGE_ARMED, "armed");
     assert_eq!(CHAIN_STAGE_REALIGNED, "realigned");
     assert_eq!(CHAIN_STAGE_DEFERRED, "deferred");
+    assert_eq!(
+        HOLD_DECISION_ALL,
+        &[
+            HOLD_DECISION_PROCEED,
+            HOLD_DECISION_HOLD,
+            HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
+        ]
+    );
+    assert_eq!(
+        HOLD_SITE_ALL,
+        &[
+            HOLD_SITE_DPI,
+            HOLD_SITE_RECONCILE,
+            HOLD_SITE_RESNAP,
+            HOLD_SITE_WORK_AREA_RESNAP,
+            HOLD_SITE_PATTERN_MOVE,
+        ]
+    );
+    assert_eq!(
+        CHAIN_STAGE_ALL,
+        &[
+            CHAIN_STAGE_ARMED,
+            CHAIN_STAGE_REALIGNED,
+            CHAIN_STAGE_DEFERRED
+        ]
+    );
 
     for words in [
         HOLD_DECISION_ALL,

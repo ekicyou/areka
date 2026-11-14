@@ -509,7 +509,7 @@ fn missing_work_area_stays_silent_on_guard_exempt_routes() {
     for dpi in DPIS {
         let (mut world, e, _) = gap_bound_char_world(dpi);
         world.remove_resource::<MonitorSnapshot>();
-        let (_, events) = capture(|| {
+        let (moved, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 e,
@@ -517,6 +517,7 @@ fn missing_work_area_stays_silent_on_guard_exempt_routes() {
                 PlacementRoute::MoveCue,
             )
         });
+        assert!(moved, "dpi={dpi}: 前提: 書込が起きている");
         assert!(
             guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
             "dpi={dpi}: 適用外 route でガードが喋っている: {events:?}"

@@ -163,9 +163,10 @@ fn ground_record_uses_sentinels_when_the_running_monitor_table_is_empty() {
         ))
         .id();
 
-    let (_, events) =
+    let (written, events) =
         capture(|| resize_window_to(&mut world, char_window, NARROW, PlacementRoute::Resnap));
 
+    assert!(written, "前提: 書込が起きている");
     let line = ground_line_of(&events);
     assert!(
         line.contains(&format!("ground_y={BOOT_WA_BOTTOM} wa_bottom=- diff=-")),

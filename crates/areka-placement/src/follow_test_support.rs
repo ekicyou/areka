@@ -601,3 +601,18 @@ pub(super) fn plant_minimal_ghost(label: &str) -> (TempPath, PathBuf, PathBuf) {
 
 /// 手順書 §3.3 の grep 判定語（`ClampX` で寄せた後も全 work area と非交差・本体とは独立の literal）。
 pub(super) const HIDDEN_AFTER_CLAMP_TAG: &str = "[visibility-guard] HiddenAfterClampX";
+
+/// 見送りの `debug!` がちょうど 1 行で理由が `reason`、`warn!` は出ない（見送りは失敗でない）。
+pub(super) fn assert_deferred(events: &[CapturedEvent], reason: &str) {
+    let deferred: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("move_shift_deferred"))
+        .collect();
+    assert_eq!(deferred.len(), 1, "{events:?}");
+    assert_eq!(deferred[0].level, tracing::Level::DEBUG);
+    assert_eq!(deferred[0].field_str("reason"), Some(reason), "{events:?}");
+    assert!(
+        events.iter().all(|e| e.level != tracing::Level::WARN),
+        "見送りで warn! を出した: {events:?}"
+    );
+}

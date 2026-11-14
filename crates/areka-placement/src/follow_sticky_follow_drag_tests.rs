@@ -20,7 +20,8 @@ use super::sticky_follow::{
     follow_partners_on_drag,
 };
 use super::test_support::{
-    SylphyaRig, fake_handle, point, position_of, single_monitor_snapshot, window_pos_sized,
+    SylphyaRig, assert_deferred, fake_handle, point, position_of, single_monitor_snapshot,
+    window_pos_sized,
 };
 use super::{
     AnchorSource, Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift,
@@ -435,14 +436,7 @@ fn a_drag_partner_is_not_shifted_until_the_drag_ends() {
             .is_none(),
         "記録を変えた"
     );
-    let deferred = events_of(&events, "move_shift_deferred");
-    assert_eq!(deferred.len(), 1, "{events:?}");
-    assert_eq!(deferred[0].level, tracing::Level::DEBUG);
-    assert_eq!(deferred[0].field_str("reason"), Some("drag_partner"));
-    assert!(
-        events.iter().all(|e| e.level != tracing::Level::WARN),
-        "見送りで warn! を出した: {events:?}"
-    );
+    assert_deferred(&events, "drag_partner");
 
     finish_char_drag(&mut world, dragged.char, point(500, 200));
     assert!(

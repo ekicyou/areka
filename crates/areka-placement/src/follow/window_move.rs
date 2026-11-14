@@ -237,8 +237,8 @@ pub fn resize_window_to(
         // 警告」）。**寸センチネルとの非対称は意図的**（D15 帰結⑴）——寸未確定は接地点が
         // 実在するので resize に意味があり、手順 3a の `old_rect` 不明＝安全側 clamp で扱う。
         //
-        // 判定は**センチネル一致**で行う（wintf 正典 `window_pos.rs:41`／
-        // `monitor_systems.rs:408` と同型——正典が見るのは `position.x` と `size.width`
+        // 判定は**センチネル一致**で行う（wintf 正典 `window_pos.rs` の `apply_window_pos_changes`／
+        // `monitor_systems.rs` の `window_center` と同型——正典が見るのは `position.x` と `size.width`
         // で、ここは位置の両軸を見る点だけが異なる）。負座標そのものは正当（実機の左隣
         // モニタは負の X を持つ）ゆえ、符号や大きさの閾値で判定してはならない。
         if pos.x == CW_USEDEFAULT || pos.y == CW_USEDEFAULT {
@@ -1205,7 +1205,7 @@ pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: 
 
     // 3. べき等 skip（R4.2・D8）: 同寸なら書込ゼロ。位置は据え置きゆえ寸だけを見れば
     //    十分（resize_window_to の (position, size) 一致判定の位置維持版）。
-    //    現寸不明（None＝窓生成直後）は判定が成立しないので書込へ進む。
+    //    現寸不明（None）は判定が成立しないので書込へ進む。
     if current_size == Some(SizeI::new(new_size.w, new_size.h)) {
         debug!(
             entity = ?window,

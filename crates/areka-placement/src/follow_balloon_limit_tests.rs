@@ -389,7 +389,7 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
             }
             _ => {}
         }
-        let (_, events) = capture(|| {
+        let (ok, events) = capture(|| {
             enqueue_window_set_pos(
                 &mut world,
                 balloon,
@@ -399,6 +399,7 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
                 Some(PlacementRoute::BalloonFollow),
             )
         });
+        assert!(ok, "変種 {variant} で書込が失敗した");
         let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
         results.push((
             variant,
@@ -597,7 +598,7 @@ fn the_window_move_record_carries_the_corrected_position_and_the_original_route(
     let proposed = out_of_area();
     let corrected = out_of_area_corrected();
 
-    let (_, events) = capture(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,
@@ -608,6 +609,7 @@ fn the_window_move_record_carries_the_corrected_position_and_the_original_route(
         )
     });
 
+    assert!(ok, "補正しても書込自体は成功する");
     let record = expect_one(&events, WINDOW_MOVE_TAG);
     let line = record.message();
     assert!(
