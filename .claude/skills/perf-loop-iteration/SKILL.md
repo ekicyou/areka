@@ -194,6 +194,11 @@ python tools/perf/perf-ledger.py set-phase WAIT_REMEASURE --goal <goal> --pendin
 
 背景起動してターンを終える。回収したら `next-phase --phase REMEASURE --event ok`（＝DECIDE）。
 `code=4` → `measure_failed`（＝TOOLFIX）。
+`code=3` → `<iter>\bin-A\BUILD.txt` と `<iter>\bin-B\BUILD.txt` の `exe_sha256` が同じなら、A と B が
+同じ実行体（変更が実行体に届いていない、または `prepare-ab` を変更の後に回した）。走行は 1 本も回って
+いない。`next-phase --phase REMEASURE --event ok`（＝DECIDE）へ進め、DECIDE では `compare.json` を読まずに
+`verdict: MEASURE_FAILED`・`reason: same_executable` として RECORD へ（出来事は `measure_failed`）。
+同じでなければ表の 3 の行のとおり。
 
 ### DECIDE
 

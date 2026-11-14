@@ -583,14 +583,7 @@ function Invoke-SubMeasureAb {
     }
     Write-Info "[perf-loop] measure-ab iter $($script:IterArg) / level $shortProfile / build $abBuild / order $($sequence -join ' ')"
 
-    if (-not (Test-MeasureBinDirComplete -Dir $binA) -and -not $script:DryRunMode) {
-        Stop-Run -Code $EXIT_BAD_ARGS -Message "A side executable set not found: $binA (run prepare-ab -Iter $($script:IterArg) before making the change)"
-    }
-
-    # B 側（＝いまのツリー）を作る
-    Invoke-MeasureBuildSide -Side 'B' -BinDir $binB | Out-Null
-
-    # 走行の名前（A→A1, B→B1, A→A2, B→B2）。名前は出力先の語彙に無ければ止める。
+    # 走行の名前（A→A1, B→B1, A→A2, B→B2）。名前は出力先の語彙に無ければ止める。B を作る前に確かめる。
     $counts = @{ 'A' = 0; 'B' = 0 }
     $runs = @()
     foreach ($side in $sequence) {
@@ -605,6 +598,18 @@ function Invoke-SubMeasureAb {
         }
         $runs += [pscustomobject]@{ Name = $name; Side = $key; Dir = (Join-Path $iterDir $name) }
     }
+    if ($counts['A'] -ne 2 -or $counts['B'] -ne 2) {
+        # 34: 4 本の突き合わせは A と B が 2 本ずつのときだけ成り立つ
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [levels] ab_sequence must have A and B exactly twice each (got: $($sequence -join ' '))"
+    }
+
+    if (-not (Test-MeasureBinDirComplete -Dir $binA) -and -not $script:DryRunMode) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "A side executable set not found: $binA (run prepare-ab -Iter $($script:IterArg) before making the change)"
+    }
+
+    # B 側（＝いまのツリー）を作り、A と同じ実行体なら走る前に止める（-DryRun では比べない・15）
+    Invoke-MeasureBuildSide -Side 'B' -BinDir $binB | Out-Null
+    if (-not $script:DryRunMode) { Assert-MeasureAbDistinct -BinA $binA -BinB $binB }
 
     foreach ($run in $runs) {
         if ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $run.Dir)) {

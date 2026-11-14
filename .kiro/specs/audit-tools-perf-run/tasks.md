@@ -81,7 +81,7 @@
   - _Dispatch: standard — 書き手と読み手をまたぐ 1 行の約束の配線（形は設計が決めている）_
   - _Requirements: 3.1, 4.1, 5.2, 5.3_
 
-- [ ] 5. 実行体の用意と A/B の確かめ
+- [x] 5. 実行体の用意と A/B の確かめ
 - [x] 5.1 ビルドを実行体の確かめより前へ移し、`final` の `-BinDir` と 32bit ヘルパの写しを直す
   - `-BinDir` の無い走行では作業ツリーからのビルドを呼び手が先に回し、実行体の確かめをその後にする。走行の本体はビルドを呼ばない（11）
   - `final` も `-BinDir` を実行体の確かめと走行へ渡し、`-BinDir` を渡すなら `-Build` も要る（無ければ 3）（10）
@@ -90,7 +90,7 @@
   - 終わった姿: 偽のビルドと確かめの呼ばれる順が「ビルド → 確かめ」で、`final -BinDir` が `-Build` 無しで 3 になることを検査が示す
   - _Dispatch: standard — ビルドと確かめの順を入れ替え、引数の検査を足す_
   - _Requirements: 3.1, 4.1, 5.2_
-- [ ] 5.2 `measure-ab` に走る前の 2 つの確かめを足し、スキルの REMEASURE の節に 3 の扱いを足す
+- [x] 5.2 `measure-ab` に走る前の 2 つの確かめを足し、スキルの REMEASURE の節に 3 の扱いを足す
   - `ab_sequence` が A と B ちょうど 2 回ずつかを B を作る前に確かめ、違えば 3（34）
   - B を作った直後に `bin-A` と `bin-B` の `exe_sha256` を比べ、同じなら走る前に 3（どちらかが `-` なら比べない・`-DryRun` では比べない）（15）
   - スキル `perf-loop-iteration` の REMEASURE の節に、`code=3` で 2 つの `exe_sha256` が同じときは DECIDE で `measure_failed`（`reason: same_executable`）にする 1 段を足す（S2）。読み手を同じ変更で直す
@@ -188,3 +188,4 @@
 - 4.2: ランナーは 940 行で、1,000 行の番人まで約 60 行しか残っていない。6.3 で `-SampleEtl` を足す前に、まとまった塊（`Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` の約 100 行、または `Get-FailedDirName`・`Move-FailedOutDir`・`Select-ProcessCpuValue`・`Test-SmokeMarker` の純関数）を兄弟のファイルへ出す。退けの失敗は元の終了コードが 2〜4 でも 1（perf-loop は 4 で止まる）。`Stop-Run` の時間切れの枝そのものは本物の `exit` のため検査が無い
 - 5.1: 32bit ヘルパの SHA-256 での写し直しは `-BinDir` の無い走行だけ（A/B の部屋は B のビルドが共有の元を作り直すので、上書きすると A を B のヘルパで測る）。design の `Sync-MeasureShioriHelper` の形を `-Build` 付きへ直した
 - 1.1 の直し（5.1 の後）: `Stop-ChildProcess` は直下の子しか待たず、孫がファイルを握ったまま戻ることがあった（T2 `kill-wait` が 1 回揺れた）。強制終了の前に CIM で子孫を集め、同じ締め切りの中で子と子孫を待つ形へ直した。子孫を集め損ねても Kill は必ず走り、標準エラーへ 1 行出す（`kill-snapshot-fails`）
+- 5.2: S2 の段は台帳の語にそろえて「`verdict: MEASURE_FAILED`・`reason: same_executable`（出来事は `measure_failed`）」と書いた（design の 2 か所も同じ字面へ）。T2 は 892 行で、次に T2 へ検査を足すタスク（6.2）が足す前に束ごとに `perf-loop.selftest2.ps1` へ分け、`SELFTEST_TOOLS` に足す（以後の期待は ok=12）

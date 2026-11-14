@@ -216,3 +216,20 @@ function Invoke-MeasureBuildSide {
     Write-Info "[perf-loop] $Side side executable set: $BinDir"
     return $BinDir
 }
+
+# 15: bin-A と bin-B の BUILD.txt の exe_sha256 が同じなら、A と B は同じ実行体（変更が実行体に届いていない、
+# または prepare-ab を変更の後に回した）。走る前に 3 で止める。どちらかが '-'（読めない・無い）なら比べない。
+function Assert-MeasureAbDistinct {
+    param([Parameter(Mandatory = $true)][string]$BinA, [Parameter(Mandatory = $true)][string]$BinB)
+    $sha = foreach ($dir in @($BinA, $BinB)) {
+        $path = Join-Path $dir $MEASURE_FILE_BUILD
+        $line = if (Test-Path -LiteralPath $path -PathType Leaf) {
+            @(Get-Content -LiteralPath $path -Encoding utf8 | Where-Object { $_ -like 'exe_sha256=*' })[0]
+        }
+        if ($line) { $line.Substring('exe_sha256='.Length).Trim() } else { $PERF_LOOP_EMPTY }
+    }
+    if ($sha[0] -eq $PERF_LOOP_EMPTY -or $sha[1] -eq $PERF_LOOP_EMPTY) { return }
+    if ($sha[0] -eq $sha[1]) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "A and B are the same executable (exe_sha256=$($sha[0]) in both $BinA and $BinB): the change did not reach the executable, or prepare-ab ran after the change. No run was started."
+    }
+}

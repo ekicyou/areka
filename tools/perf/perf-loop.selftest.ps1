@@ -570,6 +570,76 @@ $SelfTestChecks = @(
         Assert-SelfTest ([System.IO.File]::ReadAllText($sideDest) -ceq 'old') 'A/B side folder (-BinDir): a helper whose SHA-256 differs was overwritten'
     } }
 
+    [pscustomobject]@{ Name = 'ab-sequence'; Body = {
+        # 34: ab_sequence が A と B ちょうど 2 回ずつでなければ 3。B のビルドもランナーも呼ばれない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Test-MeasureBinDirComplete { param($Dir) $true }
+        function Invoke-MeasureBuildSide { param($Side, $BinDir) Add-SelfTestCall -Name 'build'; throw 'stop-after-build' }
+        function Invoke-MeasureRun { param($OutDir, $RunProfile, $Build, $BinDir, $Label) Add-SelfTestCall -Name 'run' }
+        $script:DryRunMode = $false
+        $script:ResumeMode = $false
+        $script:GoalConfig = $null
+        $script:GoalName = 'selftest'
+        $script:OutRootPath = Join-Path $script:SelfTestRoot 'abs-out'
+        $script:IterArg = 1
+        foreach ($seq in @(@('A', 'B'), @('A', 'B', 'A', 'B', 'A'), @('A', 'A', 'A', 'B'), @('A', 'C', 'B', 'B'))) {
+            $script:SelfTestCalls.Clear()
+            $script:SelfTestSequence = $seq
+            function Get-MeasureTomlArray { param($Section, $Key, $Default) $script:SelfTestSequence }
+            $code = Get-SelfTestExitCode { Invoke-SubMeasureAb }
+            Assert-SelfTest ($code -eq 3) "ab_sequence $($seq -join ','): exit $code (want 3)"
+            $n = @($script:SelfTestCalls | Where-Object { $_.Name -in 'build', 'run' }).Count
+            Assert-SelfTest ($n -eq 0) "ab_sequence $($seq -join ','): $n build/run calls (want 0)"
+        }
+        # 正しい並び（A B B A も）は B のビルドまで進む
+        $script:SelfTestSequence = @('a', 'B', 'B', 'A')
+        $msg = try { Invoke-SubMeasureAb; '<returned>' } catch { $_.Exception.Message }
+        Assert-SelfTest ($msg -eq 'stop-after-build') "ab_sequence a,B,B,A did not reach the B build: $(ConvertTo-SelfTestAscii $msg)"
+    } }
+
+    [pscustomobject]@{ Name = 'ab-same-exe'; Body = {
+        # 15: B を作った直後に bin-A と bin-B の exe_sha256 が同じなら走る前に 3。'-' のときと -DryRun では比べない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        function Test-MeasureBinDirComplete { param($Dir) $true }
+        function Invoke-MeasureBuildSide {
+            param($Side, $BinDir)
+            $null = New-Item -ItemType Directory -Path $BinDir -Force
+            [System.IO.File]::WriteAllText((Join-Path $BinDir $MEASURE_FILE_BUILD), "side=B`nexe_sha256=$($script:SelfTestShaB)`n")
+            return $BinDir
+        }
+        function Test-MeasureExeReady { param($BinDir, $Build) $true }
+        function Invoke-MeasureRun { param($OutDir, $RunProfile, $Build, $BinDir, $Label) Add-SelfTestCall -Name 'run'; throw 'stop-at-run' }
+        $script:ResumeMode = $false
+        $script:GoalConfig = $null
+        $script:GoalName = 'selftest'
+        $script:OutRootPath = Join-Path $script:SelfTestRoot 'ase-out'
+        $script:IterArg = 1
+        $binA = Get-LoopDir -Kind 'iter' -Iter 1 -Leaf 'bin-A'
+        $null = New-Item -ItemType Directory -Path $binA -Force
+        $cases = @(
+            @{ A = 'aa11'; B = 'aa11'; Dry = $false; Want = 'exit' }
+            @{ A = 'aa11'; B = 'bb22'; Dry = $false; Want = 'run' }
+            @{ A = '-'; B = '-'; Dry = $false; Want = 'run' }
+            @{ A = 'aa11'; B = 'aa11'; Dry = $true; Want = 'run' }
+        )
+        foreach ($case in $cases) {
+            $script:SelfTestCalls.Clear()
+            $script:DryRunMode = $case.Dry
+            $script:SelfTestShaB = $case.B
+            [System.IO.File]::WriteAllText((Join-Path $binA $MEASURE_FILE_BUILD), "side=A`nexe_sha256=$($case.A)`n")
+            $label = "A=$($case.A) B=$($case.B) dry=$($case.Dry)"
+            $got = try { $c = Get-SelfTestExitCode { Invoke-SubMeasureAb }; "exit$c" } catch { $_.Exception.Message }
+            $runs = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'run' }).Count
+            if ($case.Want -eq 'exit') {
+                Assert-SelfTest ($got -eq 'exit3' -and $runs -eq 0) "${label}: got '$(ConvertTo-SelfTestAscii $got)' with $runs runs (want exit3 and 0 runs)"
+            } else {
+                Assert-SelfTest ($got -eq 'stop-at-run') "${label}: got '$(ConvertTo-SelfTestAscii $got)' (want the first run)"
+            }
+        }
+    } }
+
     # -------------------------------------------------------------------------
     # 出力先と -Resume の束（2・6・21）
     # -------------------------------------------------------------------------
