@@ -55,22 +55,10 @@ pub(super) fn handle_button_message(
     let ctrl = (wparam_val & 0x08) != 0;
 
     // スクリーン座標を事前計算（フォールバック処理でも使用）
-    let (screen_x, screen_y) = if let Ok(world_borrow) = world.try_borrow() {
-        let window_pos = world_borrow
-            .world()
-            .get::<crate::ecs::window::WindowPos>(window_entity);
-        if let Some(wp) = window_pos {
-            if let Some(pos) = wp.position {
-                (x + pos.x, y + pos.y)
-            } else {
-                (x, y)
-            }
-        } else {
-            (x, y)
-        }
-    } else {
-        (x, y)
-    };
+    let (screen_x, screen_y) = world
+        .try_borrow()
+        .map(|w| screen_point(w.world(), window_entity, x, y))
+        .unwrap_or((x, y));
 
     // hit_test でターゲットエンティティを特定し、PointerState を確保
     {
@@ -236,6 +224,32 @@ fn double_click_of(button: crate::ecs::pointer::PointerButton) -> crate::ecs::po
     }
 }
 
+/// クライアント座標を画面座標に直す（窓の `WindowPos.position` を足す。位置が無ければそのまま）。
+/// ドラッグの押した位置（押下）と今の位置（移動）が同じ規則で揃うよう、ここだけで計算する。
+pub(super) fn screen_point(
+    world: &bevy_ecs::world::World,
+    window_entity: Entity,
+    x: i32,
+    y: i32,
+) -> (i32, i32) {
+    match world
+        .get::<crate::ecs::window::WindowPos>(window_entity)
+        .and_then(|wp| wp.position)
+    {
+        Some(pos) => (x + pos.x, y + pos.y),
+        None => (x, y),
+    }
+}
+
+/// X ボタンの番号（`GET_XBUTTON_WPARAM`＝wParam の上の語）をボタンの種類に直す。1 なら XButton1、ほかは XButton2。
+pub(super) fn xbutton_of(wparam: WPARAM) -> crate::ecs::pointer::PointerButton {
+    if ((wparam.0 >> 16) & 0xFFFF) as u16 == 1 {
+        crate::ecs::pointer::PointerButton::XButton1
+    } else {
+        crate::ecs::pointer::PointerButton::XButton2
+    }
+}
+
 /// WM_LBUTTONDOWN: 左ボタン押下
 #[inline]
 pub(super) fn WM_LBUTTONDOWN(
@@ -387,13 +401,7 @@ pub(super) fn WM_XBUTTONDOWN(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    // GET_XBUTTON_WPARAM: HIWORD of wParam
-    let xbutton = ((wparam.0 >> 16) & 0xFFFF) as u16;
-    let button = if xbutton == 1 {
-        crate::ecs::pointer::PointerButton::XButton1
-    } else {
-        crate::ecs::pointer::PointerButton::XButton2
-    };
+    let button = xbutton_of(wparam);
     handle_button_message(world, entity, hwnd, wparam, lparam, button, true, false)
 }
 
@@ -406,12 +414,7 @@ pub(super) fn WM_XBUTTONUP(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    let xbutton = ((wparam.0 >> 16) & 0xFFFF) as u16;
-    let button = if xbutton == 1 {
-        crate::ecs::pointer::PointerButton::XButton1
-    } else {
-        crate::ecs::pointer::PointerButton::XButton2
-    };
+    let button = xbutton_of(wparam);
     let result = handle_button_message(world, entity, hwnd, wparam, lparam, button, false, false);
     push_release_cursor(world, entity);
     result
@@ -527,6 +530,43 @@ mod tests {
         let (entity, config) = result.expect("最近傍の DragConfig を返す");
         assert_eq!(entity, start);
         assert_eq!(config.threshold, 3); // 祖先の 99 ではなく start の 3
+    }
+
+    #[test]
+    fn test_screen_point_adds_window_position_or_keeps_client_point() {
+        use super::screen_point;
+        use crate::ecs::Point;
+        use crate::ecs::window::WindowPos;
+        let mut world = World::new();
+        let placed = world
+            .spawn(WindowPos {
+                position: Some(Point { x: 100, y: -20 }),
+                ..Default::default()
+            })
+            .id();
+        let unplaced = world
+            .spawn(WindowPos {
+                position: None,
+                ..Default::default()
+            })
+            .id();
+        let bare = world.spawn_empty().id();
+        assert_eq!(screen_point(&world, placed, 5, 7), (105, -13));
+        assert_eq!(screen_point(&world, unplaced, 5, 7), (5, 7));
+        assert_eq!(screen_point(&world, bare, 5, 7), (5, 7));
+    }
+
+    #[test]
+    fn test_xbutton_of_reads_hiword_of_wparam() {
+        use super::xbutton_of;
+        use crate::ecs::pointer::PointerButton;
+        use windows::Win32::Foundation::WPARAM;
+        // 下の語（修飾キー）は読み分けに効かない
+        assert_eq!(
+            xbutton_of(WPARAM((1 << 16) | 0x04)),
+            PointerButton::XButton1
+        );
+        assert_eq!(xbutton_of(WPARAM(2 << 16)), PointerButton::XButton2);
     }
 }
 

@@ -313,3 +313,13 @@
   - 較正: 予備の枝の `record_button_down(window_entity, button)` を外す → `w3_left_dblclick_without_hit_records_press_on_window` が赤（116 passed; 1 failed）。明示の編集で戻し、`git diff` が意図した差分だけに戻ったことを確かめた。
 - 消す前の `git grep`（`handle_double_click_message`）: crates の中は `mouse_dblclick_wheel.rs` の定義と 4 つの呼び出しだけ。tools・テスト・fixture・設定は 0 件。`doc/COMPAT_ARCHITECTURE.md:368` に 1 件（上で直した）。ほかは `.kiro/specs/completed/` の過去の記録（直さない）と、この spec の research.md・design.md。`DOUBLE_CLICK_BUFFERS` は触っていない。
 - テストの数: `cargo test -p wintf --lib window_proc` 116 → 117 passed（足した 1 本）。
+
+## 14.2
+
+- 47: `window_proc/mouse_click.rs` に `pub(super) fn screen_point(world: &World, window_entity, x, y) -> (i32, i32)`（`WindowPos.position` を足す・位置も `WindowPos` も無ければそのまま）を置き、押下（`handle_button_message`・借用に失敗したときは元どおり `(x, y)`）と移動（`mouse_move.rs` の `WM_MOUSEMOVE`）の 2 か所から呼ぶ。ダブルクリックは 14.1 で押下の道を通るので写しは元から 2 か所だった。
+- 60: 同じファイルに `pub(super) fn xbutton_of(wparam: WPARAM) -> PointerButton` を置き、`WM_XBUTTONDOWN`・`WM_XBUTTONUP`（`mouse_click.rs`）・`WM_XBUTTONDBLCLK`（`mouse_dblclick_wheel.rs`）の 3 か所から呼ぶ（14.1 の後も読み分けの写しは 3 か所残っていた）。
+- 1 か所だけの確かめ: `git grep -n "x + pos.x\|>> 16) & 0xFFFF) as u16" -- crates/wintf/src` は `screen_point`・`xbutton_of` の中の各 1 行と、別の話の `window/dpi.rs:57`（DPI の上の語）だけ。
+- 足したテスト（`mouse_click.rs` の `tests`）: `test_screen_point_adds_window_position_or_keeps_client_point`（位置あり・`position: None`・`WindowPos` 無しの 3 通り）・`test_xbutton_of_reads_hiword_of_wparam`（1→XButton1・2→XButton2・下の語の修飾キーは効かない）。RED: 手伝いを置く前は 2 本とも `unresolved import` で組めない。
+- 較正: `screen_point` の `x + pos.x` を `x` にする → `test_screen_point_adds_window_position_or_keeps_client_point` と `w1_left_dblclick_prepares_and_crossing_threshold_starts` が赤。`xbutton_of` の `== 1` を `== 2` にする → `test_xbutton_of_reads_hiword_of_wparam` が赤。どちらも明示の編集で戻し、ファイルが較正の前の写しとバイトで同じことを確かめた。
+- 消したのはローカルの式の写しだけで、外から引く名は無い（`git grep` の対象なし）。
+- テストの数: `cargo test -p wintf --lib window_proc` 117 → 119 本緑。`mouse_click.rs` 535→575 行・`mouse_move.rs` 535→525 行。fmt 通る・clippy に足した警告は無い。

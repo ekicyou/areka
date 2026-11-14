@@ -92,12 +92,7 @@ pub(super) fn WM_XBUTTONDBLCLK(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    let xbutton = ((wparam.0 >> 16) & 0xFFFF) as u16;
-    let button = if xbutton == 1 {
-        crate::ecs::pointer::PointerButton::XButton1
-    } else {
-        crate::ecs::pointer::PointerButton::XButton2
-    };
+    let button = super::mouse_click::xbutton_of(wparam);
     handle_button_message(world, entity, hwnd, wparam, lparam, button, true, true)
 }
 

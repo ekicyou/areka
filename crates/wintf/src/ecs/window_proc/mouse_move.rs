@@ -196,19 +196,9 @@ pub(super) fn WM_MOUSEMOVE(
                 HitTestPoint::new(x as f32, y as f32),
             );
 
-            // WindowPosを取得してスクリーン座標を計算
-            let window_pos = world_borrow
-                .world()
-                .get::<crate::ecs::window::WindowPos>(window_entity);
-            let (screen_x, screen_y) = if let Some(wp) = window_pos {
-                if let Some(pos) = wp.position {
-                    (x + pos.x, y + pos.y)
-                } else {
-                    (x, y)
-                }
-            } else {
-                (x, y)
-            };
+            // スクリーン座標（押下と同じ規則）
+            let (screen_x, screen_y) =
+                super::mouse_click::screen_point(world_borrow.world(), window_entity, x, y);
 
             // ドラッグ処理（thread_local DragState + DragAccumulatorResource）
             // ヒットテスト結果に関わらず、Preparing/Dragging状態なら処理を続ける
