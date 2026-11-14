@@ -769,3 +769,58 @@ clippy の指摘を機械的に直す指摘は 0。
 - 申し送り 4 件: ⑴＝2 番（必ず直す）・⑵＝指摘にしない・⑶＝指摘にしない（説明は 16 番）・⑷＝41 番（消す）。
 - C20 の型と綴りに触れる指摘 0、依存の追加 0。範囲の外で申し合わせが要る候補は 6・11・28 ⒝・62 ⒜。`audit-wintf-input` の直しとは `window_proc/mouse_*` の同じ式と塊で重なる（議題 11）。
 - `zorder-chain-residue` の B-6 は生きていて 36 番に当たる。A-1 は 38・40・32・19 が説明と下ごしらえで重なる。
+
+---
+
+## 12. 設計の段の調べ（2026-11-14・`/kiro-spec-design -y`）
+
+- 種類: 既にある仕組みの直し（Extension）＝軽い調べ（`rules/design-discovery-light.md`）。新しい依存・新しい外の API は 0 なので、外の文書の調べ（WebSearch）は行わなかった。測った時点は作業枝 `b915fd3b`（範囲のファイルは main `30a343eb` と同じ・`origin/main` も同じ）。
+- 使ったスキルと手引き: `kiro-spec-design` の 5 つの規則（設計の原則・軽い調べ・まとめの 3 つの見方・設計の門）・ponytail（いちばん小さな完全な変更・消せるものは消す・新しい判断の分岐には小さなテスト）・steering の `structure.md`（1,000 行・共有のテストの道具は `<stem>_test_support.rs`）・`logging.md`（`info!` はライフサイクルだけ・`warn!` は立ち直れる失敗）・`tech.md`（全体テスト・`log-capture-kit` は開発用）。完了した `audit-wintf-runtime` の design.md の形に合わせた。
+
+### 12.1 9 節の「設計へ持ち越す調べ」の答え
+
+| 番号 | 問い | 答え（根拠） | 設計への響き |
+|---|---|---|---|
+| 7 | `DeferWindowPos` は同じ窓の 2 本目を 1 項目へ畳むか | 静的には決まらない（Wine・ReactOS の読みだけ）。実窓の確かめを直しの最初の手順に置き、その結果で 2 つの枝のどちらかを取る | Q4 の手順 1 が門。どちらの枝でも残るテストは「重なった列のバッチの結果＝1 本ずつの結果」の 1 本 |
+| 1 | UI スレッドの id の控えの置き場 | `WinApp::run` の頭。木の中で `WinApp::run` を同じプロセスのテストから呼ぶ所は 0（`crates/wintf/tests/win_app.rs`・`crates/areka` の `input_events_tests.rs` ほか 4 本は `WinApp` を組むが `run` は呼ばない。`crates/areka/tests/smoke_boot_loop_exit.rs` は別のプロセス）。よってどのテストの実行ファイルでも控えは立たず、ヘッドレスのテストと `areka-placement` の別クレートのテストの振る舞いは変わらない | 判断は純関数 `admits_enqueue` に出して試す（控えのプロセス全体の値をテストで立てない＝同じ実行ファイルの他のテストを壊さない） |
+| 2 | 枠の厚みの px | 測らなくてよい。期待値を「両方を与えたときの API の値」から出せば、DPI と OS の版に依らず決まる。空の矩形を `AdjustWindowRectExForDpi` に渡すと枠の 4 辺が出る（`bMenu=false` なら位置と大きさに依らない）ので、片方だけのときも同じ 1 本の式で済む | P1 の 2 番は「空の矩形で枠を得て、与えられた側にだけ足す」1 本の道に置き換える（今の矩形の道は消える） |
+| 5 | 不可視の前面窓を決定論で固定する形 | `is_behind_foreground` に引数 `foreground_visible: bool` を 1 つ足す。呼び手は `get_foreground_window()` の値に `is_window_visible` をかけて渡す。走査の側（`measure_windows_in_front`）は変えない | Z5。表へ 1 行（不可視なら `None`） |
+| 11 | 65 ファイルの直しの手順 | 直しの最後のタスク（検証の前）。その前に `audit-placement-core`・`audit-placement-follow` と申し合わせる。`areka-placement` の 14 ファイルのうち `follow_test_support.rs:25` の 1 行が `audit-placement-follow` の持ち物、残りが `audit-placement-core`。この spec が足すテストのファイルも `WindowHandle {` を組む（`window_pos_decision_tests.rs` ほか）ので、タスクの頭で `git grep -l "WindowHandle {"` を数え直す | H1。`crates/wintf/tests/graphics/` の 4 本は `wintf-visual-damage-redraw` も 1 行ずつ触りうる＝後に着いた方が rebase |
+| 41 | 入口の確認は全部の経路を覆うか | 覆う。本番で `dispatch_window_message` を呼ぶのは `runtime/wndproc_bridge.rs` の `make_wndproc` だけで、そこは World の借用を試してから呼ぶ。ほかの呼び手はテストだけ（`ecs/tooltip/system_tests.rs:680`・`window/zorder_pair_sink_tests.rs:275`・`window_proc/` のテスト・`window_proc/window_pos_transition_tests.rs` の `test_wndproc`） | Q2 で ③ を消してよい。崩れを防ぐテストを 1 本足す |
+| 42・49 | 決定論の形 | 42: `window_pos_transition_tests.rs:499-583` の 0x0 の不可視の道具窓と配送の wndproc を `pub(super)` にして新しい兄弟ファイルから使い、entity に `WindowHandle` を付けて判断の本体へ届かせる。49: `#[link(name = "kernel32")] extern "system"` で `GlobalAlloc` を宣言し、`DROPFILES` の頭（20 バイト・`pFiles=20`・`fWide=1`）と NUL で区切った UTF-16 のパス 2 本と終わりの NUL を書く。`DragFinish` が片付ける | Q3 |
+
+### 12.2 申し合わせの更新（2026-11-14・取りまとめの側から）
+
+- **C20 は 2 段**: この spec は 1 段目（`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-placement-follow` と同じ段）。`audit-wintf-input`・`audit-placement-core` は 2 段目（1 段目の着地の後に実装を始める）なので、実際にはこの spec が両方より先に着地する。
+- **`audit-wintf-input`**: ⒜ 62 番＝あちらは `check_threshold` とそのテスト 5 本（`ecs/drag/state/tests.rs`）を残し、説明の古さだけ直す。こちらは `mouse_move.rs` の写しを `check_threshold` の呼び出しに替える。⒝ 6 番＝こちらが型 `WindowPointerTracking`（`ecs/pointer/types/mod.rs:206`・`tests.rs:122-125`・`ecs/mod.rs:35` の再公開）を丸ごと消す。あちらは触らない。実装の直前にもう一度確かめる。⒞ あちらがこちらのファイルに入れるのは機械的な追従だけ＝欄の名 `initial_inset`→`initial_window_pos`・`DragStateSnapshot` を消したことに伴う読み手の型の名・`DragConfig.right_button` を消したことに伴うテストの 1 行・`push_pointer_sample` の引数が `i32` になれば 2 行。`PointerState` の `local_point` の構築の場所は変えない（あちらは配送の前に自分の範囲で計算する）ので、45・46 番は影響を受けない。⒟ 着地は先に着いた方がそのまま入れ、後の方が rebase する。
+- **`audit-placement-follow`**: `Monitor` はこの spec で変えない（15 番は `monitor.rs` の自由関数の中だけ）とあちらへ伝えた。11 番で触るあちらの持ち物は `follow_test_support.rs:25` の 1 行だけ。
+- **`wintf-visual-damage-redraw`**: `crates/wintf/tests/graphics/` の 4 本（11 番が 1 行ずつ直す）に触りうる。後に着いた方が rebase する。
+- **`wintf-winmsg-executor-import`**: ソースの重なり 0（取りまとめの側の測り）。
+- 全体テストは排他テストの机を通す。
+
+### 12.3 まとめの 3 つの見方（`rules/design-synthesis.md`）
+
+- **一般化**: 写しの指摘（13・19・25・32・45・46・47・60）は「同じ下ごしらえ・同じ式が複数の所にある」という 1 つの形。どれも新しい層を作らず、既にあるファイルの 1 つを正本にして `pub(super)` で借りるか、共有の `<stem>_test_support.rs`（`structure.md` の決まり）を 2 本（`command_test_support.rs`・`zorder_pair_test_support.rs`）だけ足す。
+- **作るか借りるか**: UI スレッドの控えは `std::sync::OnceLock<ThreadId>`。枠の厚みは `AdjustWindowRectExForDpi`（既に使っている）。`WA_ACTIVE`／`WA_INACTIVE` は `windows` の定数（`drag/reentry.rs` と同じ）。閾値の判定は既にある `check_threshold`。HDROP を作るための `GlobalAlloc` だけは、`windows` の機能 `Win32_System_Memory` を足すと `Cargo.toml` が変わる（C20 の約束 ⑸）ので、テストの中の `extern "system"` の宣言で借りる。ログの確かめは既にある `log-capture-kit`。
+- **削り**: 新しい本番の部品は UI スレッドの控えの 2 つの関数だけ。ほかは消す（`WindowStyle::from_hwnd`・`WindowHandle.instance`・`SetWindowPosCommand::flush`・`WindowPos::set_window_pos`・`build_flags`・③・`WM_CLOSE` の投函・`PairTrigger::Establish`・`WindowPointerTracking`・`handle_double_click_message`・`ExecOutcome` の組み立て・弱いテスト 1 本・重なった主張 6 行）か、説明を直すだけ。
+
+### 12.4 設計で決めたこと（3 節の案から変えた所・決めた所）
+
+- 6 番の `TrackMouseEvent` の失敗は `debug!`（`cursor/answer.rs:225` と同じ・次の `WM_MOUSEMOVE` でまた呼ぶので害が無い）。成功は今の `trace!` の行を 1 呼び出しに 1 行出す（テストが呼んだ回数を数える手がかり）。
+- 15 番は呼び手の `detect_display_change_system` で「列挙が 0 台なら表を変えず、旗も下ろさずに戻る」。Windows はセッションがある間は 1 台以上を返すので、続くのは一時的な失敗の間だけ。
+- 44 番の記録は `error!`（要件 8.2）。窓の手続きの中なので返す相手は無い。
+- 46 番は `handle_button_message` に `double_click: bool` を足し、`DoubleClick` はボタンから決める。これで 60 番の X ボタンの式は 1 つの関数を 3 か所（押す・離す・ダブルクリック）から呼ぶ形になる。
+- 34 番は理由の文を事実（`EnvFilter` は前方一致・実機の grep はタグで行う）に直し、出力先を 1 つ（`zorder_pair`）に揃える決まりは残して、テストの検査を区切り（`:`）まで含めた一致にする（記録の関数は全部 `zorder_pair.rs` にあるので緑のまま意味を持つ）。
+- 8 番の後も `lifecycle.rs` の `[despawn-skip]` の枝は要る（despawn から登録簿の掃除までの間に、利用者や OS が投げた `WM_CLOSE` が届きうる）。説明の段落（`:80-87`）だけをその事実に直す。
+- 7 番は門の手順（実窓の確かめ）の結果で枝を取る。どちらの枝でも、確かめのテストは「重なった列を流した結果＝1 本ずつ当てた結果」を主張する形で残す。
+- 11 番は「直しの最後のタスク」と読み、その後に記録と検証（かけ直しの audit・全体テスト）を置く（かけ直しが 11 番の直しも読むため）。
+
+### 12.5 危うさと手当て
+
+| 危うさ | 手当て |
+|---|---|
+| 7 番の実窓の確かめが他のアプリの窓に割り込まれて揺れる | 自分の 0x0 の不可視の道具窓 4 枚だけで、相対の順（`GetWindow(GW_HWNDNEXT)`）だけを見る。2 回回して同じ答えが出てから枝を決める |
+| 32 番の写しのまとめで A-1 の隔離が崩れる | `#[ignore]` の属性と本文 1 行目の `require_explicit_real_window_run()` は動かさない（関数の置き場だけが共有のファイルへ移る）。`--ignored` を付けずに回して 3 本が走らないことを確かめる |
+| 1,000 行の番人（978 行・977 行の 2 本） | 978 行の `zorder_pair_maintain_tests.rs` は Z3・Z6 で減る側（下ごしらえ約 220 行・58 番の 15 行）。977 行の `zorder_chain_order_tests.rs` は Z2 で関数に `pub(super)` を付けるだけ。足すテストは全部 1,000 行から遠いファイルか新しい兄弟のファイルへ |
+| `audit-wintf-input` と同じ塊（`mouse_move.rs` の `Preparing` の腕・`dragging_window_origin`） | あちらは 2 段目＝こちらが先に着地する見込み。I1 の頭で申し合わせを確かめ直す |
+| 11 番の 65 ファイルと並走の spec | 最後に回し、頭で数え直しと申し合わせ。`areka-placement` の 14 ファイルと `crates/wintf/tests/graphics/` の 4 本は 1 欄の行を消すだけ |
