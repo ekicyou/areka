@@ -33,7 +33,10 @@ crates.io に持ち主のアカウントでログインし、設定の済んで�
    | Workflow filename | `crates-io.yml` |
    | Environment name (optional) | 空のまま |
 
-3. 保存し、一覧に 1 行増えたことを確かめる。
+3. **Require trusted publishing for all new versions** にチェックを入れる。
+4. 保存し、一覧に 1 行増えたことを確かめる。
+
+チェックを入れると、そのクレートの新しい版は Trusted Publishing からしか出せなくなる（API の鍵での `cargo publish` は断られる）。GitHub の外から出す予定は無いので、3 つとも入れている（2026-11-14 に `wintf`・`dola`・`wintf-winmsg-executor` で設定済み）。
 
 environment を空にするのは、公開の段が GitHub の environment（人の承認を挟む仕組み）を使わないためである。workflow のファイル名を変えたら、この設定も直す。
 
@@ -112,6 +115,8 @@ $left = pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version 0.0.2
 ### 必達
 
 次のすべてを満たしてから鍵を作る。
+
+0. 出すクレートの頁の **Settings** の **Trusted Publishing** の欄で、**Require trusted publishing for all new versions** のチェックを外してある（2 節で 3 つとも入れているので、外さないと鍵での公開は断られる）。出し終えたら、手順 6 の後に入れ直す。
 
 1. 作業木がきれいで、タグ `v{版}` のコミットに居る（`git switch --detach v0.0.2` で移り、`git status --porcelain` が何も出さない）。cargo は汚れた作業木からの公開を断る。
 2. 全体テストが緑。

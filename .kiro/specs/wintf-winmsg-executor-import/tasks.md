@@ -97,7 +97,7 @@
   - _Depends: 5.2_
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 7. 完了の報告の申し送りを整える
+- [x] 7. 完了の報告の申し送りを整える
   - 報告の前に、crates.io の写しの Trusted Publishing の設定が済んだかを開発者へ尋ねる
   - 申し送りの文に、設定の済み／残り・値（`ekicyou`／`areka`／`crates-io.yml`／environment は空）・取り込みが本線に入った後の最初のリリースのタグより前に済ませる必要、後始末の済み／残り、0.0.1〜0.0.5 を取り下げていないことが入っている
   - _Requirements: 4.8, 6.2, 7.1, 7.2_
@@ -107,3 +107,4 @@
 - 5.1 の記録（2026-11-14・ワークスペースの版 0.1.0）: `tools/crates-io.ps1 -Pending -Version 0.1.0` は終了コード 0、標準出力 `wintf-winmsg-executor`、標準エラー `OK check 'version'` / `present dola 0.1.0` / `present wintf 0.1.0` / `absent wintf-winmsg-executor 0.1.0`。`-Verify -Version 0.1.0` は終了コード 0、3 つとも `Uploading ...` の後に `aborting upload due to dry run` で止まり `green (publish list: dola, wintf, wintf-winmsg-executor)`。crates.io へは何も上げていない。
 - 5.2 の記録: `tools/test-all.ps1 -Format -License` の 1 回目は `x64 workspace tests` だけ赤（`areka` の `session_end::sync_send_tests` の 2 本）。本番ソースの同期の送信を数える許可表 `ALLOWED_SYNC_SENDS` が `crates/*` を走査し、写しの `SendMessageW(` 3 か所（`util/window.rs` の `WM_NCCREATE` の送り直し 1・`lib.rs` の `#[cfg(test)] mod` の `WM_CLOSE` 2）を表に無い当たりとした。設計の想定外だったので、表に理由つきの 2 行を足して直し、赤の 4 本だけ `cargo test -p areka sync_send` で緑を確かめた。ほかの段は全部緑（写しの単体テスト 15 本・doctest 1 本・公開前の確認・`cargo deny check`・`cargo about generate`）。謝辞は写しの塊が版 0.1.0 で並びの位置が移っただけで、Timo Kröger と ekicyou の著作権の 2 行は残る。
 - 6 の途中（2026-11-14）: 元のリポジトリに枝 `moved-to-areka`（README の先頭に固定の文だけ・`dcb6ada`）を push し、PR https://github.com/ekicyou/wintf-winmsg-executor/pull/9 を作った。`gh pr merge 9 --squash` は自動モードの見張りに止められたので、マージと `gh repo archive` はまだ。archive はしていない。
+- 7 の申し送り（2026-11-14）: crates.io の `wintf-winmsg-executor` の Trusted Publishing は開発者が設定済み（`ekicyou`／`areka`／`crates-io.yml`／environment は空）。あわせて `wintf`・`dola`・`wintf-winmsg-executor` の 3 つとも「Require trusted publishing for all new versions」を入れた（開発者の判断・GitHub の外から出す予定は無い）ので、手順書 2 節と 6 節（予備の手順は先にチェックを外す）を直した。取り込みが本線に入った後の最初のリリースのタグより前に要る設定は、これで済んでいる。元のリポジトリの後始末は PR #9 のマージと `gh repo archive` が残り（自動モードの見張りが止めた）。crates.io の 0.0.1〜0.0.5 は取り下げていない。
