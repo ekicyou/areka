@@ -247,6 +247,9 @@ mod transition_diag_tests;
 #[path = "follow_visibility_balloon_wiring_tests.rs"]
 mod visibility_balloon_wiring_tests;
 #[cfg(test)]
+#[path = "follow_visibility_balloon_words_tests.rs"]
+mod visibility_balloon_words_tests;
+#[cfg(test)]
 #[path = "follow_visibility_char_wiring_tests.rs"]
 mod visibility_char_wiring_tests;
 #[cfg(test)]

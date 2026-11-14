@@ -316,9 +316,11 @@ pub(super) fn evaluate_visibility_guard(
     // 現状維持を選ぶと、ゴーストは画面外に取り残されて見えず触れなくなる。要件 5.5 の
     // 「位置を変更せずに現状を維持」が効くのはモニタ表が空のとき（上の腕）に限る。
     // 交差の有無まで条件に入れる理由は判定語の doc を参照（帰属だけだと下端吸着の正常系を
-    // 偽陽性で叩く）。
+    // 偽陽性で叩く）。入力と提案が同じ（バルーン・`move` のずれ）なら動かしていない＝
+    // 引き寄せていないので記録しない。
     let input_rect = rect_at(raw, size);
-    if input_resolution == WorkAreaResolution::NearestFallback
+    if raw != proposed
+        && input_resolution == WorkAreaResolution::NearestFallback
         && !intersects_any_work_area(snapshot, input_rect)
     {
         warn!(
