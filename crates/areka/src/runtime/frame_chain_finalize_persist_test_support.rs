@@ -24,7 +24,7 @@ use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::{FakePersistIo, FsPersistIo, PersistIo};
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaPublisher};
 use areka_sylphya::{load_scope, spawn_sylphya};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::WindowHandle;
 
 use super::test_support::PerTargetSizes;
@@ -233,7 +233,6 @@ pub(super) fn spawn_shown(
         ] {
             world.entity_mut(e).insert(WindowHandle {
                 hwnd: HWND(raw as *mut _),
-                instance: HINSTANCE::default(),
             });
             raw += 0x10;
         }

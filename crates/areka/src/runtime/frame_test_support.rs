@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, mpsc};
 use std::time::Instant;
-use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
+use windows::Win32::Foundation::{HWND, RECT};
 use wintf::ecs::DPI;
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::window::monitor::Monitor;
@@ -159,7 +159,6 @@ pub(super) fn headless_wiring_with(
 fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

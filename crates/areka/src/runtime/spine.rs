@@ -73,7 +73,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use super::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{DPI, GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};

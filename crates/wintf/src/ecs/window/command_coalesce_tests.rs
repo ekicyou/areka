@@ -25,43 +25,14 @@
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    HWND_TOP, IsWindow, SET_WINDOW_POS_FLAGS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+    HWND_TOP, SET_WINDOW_POS_FLAGS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SWP_SHOWWINDOW,
 };
 
-use super::super::transition_diag::{KIND_ENQUEUE, RECORD_PREFIX_TAG, TRANSITION_TARGET, WriteTag};
+use super::super::transition_diag::{KIND_ENQUEUE, RECORD_PREFIX_TAG, WriteTag};
+use super::test_support::*;
 use super::{SetWindowPosCommand, coalesce_geometry, drain_window_pos_commands};
 use crate::ecs::test_support::capture_under_filter;
-
-/// 観測チャネルを点灯させる directive。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::transition=debug";
-
-/// 捕捉が生きている証拠として同じ窓の中で必ず出す対照行。
-const CONTROL_LINE: &str = "[coalesce-probe] alive";
-
-fn emit_control() {
-    tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
-}
-
-/// 実在し得ない窓ハンドルを作る。
-///
-/// 64bit Windows の `HWND` は 32bit 値の**符号拡張**であり、上位 32bit が 0 のまま下位が
-/// 負域にある値はハンドル表に存在し得ない。それでも他プロセスの実窓を掴んでいないことを
-/// `IsWindow` で毎回確かめる。
-///
-/// 識別子は**左へ 1 桁ずらしてから**奇数化する——`usize::from(tag) | 1` だと 0x60 と 0x61 が
-/// 同じ値へ潰れ、「別の窓」を意図した呼び分けが同一窓を指す。
-fn fake_hwnd(tag: u8) -> HWND {
-    let value = 0xFFFF_FE00_usize | (usize::from(tag) << 1) | 1;
-    let hwnd = HWND(value as *mut core::ffi::c_void);
-    // SAFETY: `IsWindow` は任意のハンドル値に対して安全に真偽を返す読み取り専用 API で
-    // あり、無効値でも未定義動作を起こさない。
-    assert!(
-        !unsafe { IsWindow(Some(hwnd)) }.as_bool(),
-        "偽ハンドル 0x{value:X} が実窓を掴んでいる——このまま書込を撃つと無関係の窓を動かす"
-    );
-    hwnd
-}
 
 /// 位置と寸の両方を書く指令（実機の `origin=DpiReproject`／`KeepPositionResize`＝`flags=0x14`）。
 fn move_and_size(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> SetWindowPosCommand {

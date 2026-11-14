@@ -4,117 +4,32 @@
 //!
 //! 組の維持の実測（`zorder_pair.rs` の `measure_*`）には偽の OS の継ぎ目が無いので、この 1 件は
 //! 偽の OS ではなく実窓で測る（開発者の裁定）。トップレベルの窓の重なりは他のプロセスの窓に
-//! 割り込まれうるので、兄弟の `window_band_real_tests.rs` と同じ実窓の門
+//! 割り込まれうるので、`zorder_pair_test_support.rs` の実窓の門
 //! （`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の内側に置き、主張は自分の窓の相対の順と
-//! 帯の印だけを見る。
+//! 帯の印だけを見る。窓の手伝い（`create_ghost_shaped`・`destroy`・`in_band`・`relative_order`）は
+//! 兄弟の `window_band_real_tests.rs` のものを借りる。
 //!
 //! 並びは本番の `crates/areka-placement/src/spawn.rs` の `wire_zorder_pair` と同じである
-//! （並びそのものの固定は areka 側の兄弟のテスト `spawn_window_band_wiring_tests.rs` が持つ）。
+//! （並びそのものの固定は areka-placement 側のテスト `spawn_window_band_wiring_tests.rs` が持つ）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GWL_EXSTYLE, GetTopWindow, GetWindow, HWND_TOP,
-    SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
-    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
-};
-use windows::core::{PCWSTR, w};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::HWND_TOP;
+use windows::core::w;
 
+use super::real_tests::{create_ghost_shaped, destroy, in_band, relative_order};
 use super::{BandOp, WindowBandQueue, apply_window_band};
-use crate::api::get_window_long_ptr;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::measure_window_below;
 use crate::ecs::window::zorder_pair_diag::hwnd_field;
-use crate::ecs::window::{
-    KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
-    apply_zorder_chain, apply_zorder_pair_maintenance, establish_owner_links,
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, FIX_TAG, VERIFY_FAILED_TAG, insert_after, require_explicit_real_window_run,
 };
-
-const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
-
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-const FIX_TAG: &str = "[zorder-pair] fix";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-
-/// 門が開いていなければ判定を 1 行も走らせずに落とす（素通りの緑を「実窓で測った」に化けさせない）。
-fn require_explicit_real_window_run() {
-    assert!(
-        std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
-        "{REAL_WINDOW_ZORDER_ENV} が未設定である（判定は 1 行も走っていない）。走らせるには \
-         環境変数を与えて `cargo test -p wintf --lib <テスト名> -- --ignored --exact` とすること"
-    );
-}
-
-/// 本番のゴーストの窓と同じ拡張スタイルの可視の窓（`WS_EX_LAYERED` なので画面には何も描かれない）。
-fn create_ghost_shaped(title: PCWSTR, x: i32) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで小さなテスト窓を作り、活性化せずに見せる。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        let hwnd = CreateWindowExW(
-            WINDOW_EX_STYLE(WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0),
-            w!("Static"),
-            title,
-            WS_POPUP,
-            x,
-            40,
-            16,
-            12,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window");
-        let _ = ShowWindow(hwnd, SW_SHOWNA);
-        hwnd
-    }
-}
-
-fn destroy(hwnd: HWND) {
-    // SAFETY: Win32 境界。自分で作った窓を壊す。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-fn in_band(hwnd: HWND) -> bool {
-    let ex = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("拡張スタイルを読めるはず") as u32;
-    ex & WS_EX_TOPMOST.0 != 0
-}
-
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自分で作った窓の重なりだけを変える。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .expect("SetWindowPos should reorder a self-owned test window");
-}
-
-/// `windows` の窓だけを、今の重なりの手前 → 奥の順に並べる。
-fn relative_order(windows: &[HWND]) -> Vec<HWND> {
-    let mut out = Vec::new();
-    // SAFETY: Win32 境界。読み取りだけ。
-    let mut current = unsafe { GetTopWindow(None) }.ok();
-    while let Some(hwnd) = current {
-        if windows.contains(&hwnd) {
-            out.push(hwnd);
-        }
-        // SAFETY: 同上。
-        current = unsafe { GetWindow(hwnd, GW_HWNDNEXT) }.ok();
-    }
-    out
-}
+use crate::ecs::window::{
+    KeepDirectlyAbove, ReassertZOrder, WindowHandle, ZOrderPairStrategy, apply_zorder_chain,
+    apply_zorder_pair_maintenance, establish_owner_links, flush_window_pos_commands,
+};
 
 /// オンの指令と同じ巡に組の是正が要る場面: 帯を当てる前は組が帯の外で隣り合っておらず、
 /// 是正は帯を当てた後の観測から決まり、流れた後もバルーンは帯の中でキャラクターのすぐ
@@ -154,14 +69,7 @@ fn an_on_directive_and_a_pair_fix_in_the_same_pass_leave_the_balloon_in_the_band
     let mut world = World::new();
     world.insert_resource(ZOrderPairStrategy::ExplicitMaintenance);
     world.init_resource::<WindowBandQueue>();
-    let spawn = |world: &mut World, hwnd: HWND| {
-        world
-            .spawn(WindowHandle {
-                hwnd,
-                instance: HINSTANCE::default(),
-            })
-            .id()
-    };
+    let spawn = |world: &mut World, hwnd: HWND| world.spawn(WindowHandle { hwnd }).id();
     let character = spawn(&mut world, character_hwnd);
     let balloon = spawn(&mut world, balloon_hwnd);
     world.entity_mut(balloon).insert((
@@ -173,7 +81,7 @@ fn an_on_directive_and_a_pair_fix_in_the_same_pass_leave_the_balloon_in_the_band
         .resource_mut::<WindowBandQueue>()
         .push(BandOp::Enter, vec![character, balloon]);
 
-    // 本番の `wire_zorder_pair`（areka の spawn.rs）と同じ並び・同じ同期点。
+    // 本番の `wire_zorder_pair`（areka-placement の spawn.rs）と同じ並び・同じ同期点。
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(
@@ -188,9 +96,9 @@ fn an_on_directive_and_a_pair_fix_in_the_same_pass_leave_the_balloon_in_the_band
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目: 結び・帯・是正の判断（指令は予約の列へ）。流して 2 巡目で検証する。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert!(

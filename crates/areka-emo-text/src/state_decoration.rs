@@ -731,7 +731,7 @@ impl TextLayerState {
     /// # 装着より先に `\f` が届いても取りこぼさない
     ///
     /// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
-    /// （`areka` の `emo2_boot::frame::attach::connect_balloon_text` の `None` の腕）。この窓で
+    /// （`areka` の `runtime::frame::attach::connect_balloon_text` の `None` の腕）。この窓で
     /// `\f[...]` が先に届いても、載せ直しが作者の命令を新しい既定の上で再生するので
     /// **バルーン定義の既定（大きさ・色・フォント名）はその台詞に届く**。台詞の流し始めを
     /// 1 フレーム遅らせて順序を作る必要は無い（`areka-P0-text-decoration-canon` の開発者裁定）。

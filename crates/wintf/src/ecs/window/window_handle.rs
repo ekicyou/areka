@@ -21,13 +21,12 @@ use super::dpi::DPI;
 #[component(storage = "SparseSet", on_add = on_window_handle_add, on_remove = on_window_handle_remove)]
 pub struct WindowHandle {
     pub hwnd: HWND,
-    pub instance: HINSTANCE,
 }
 
-// SAFETY: `WindowHandle` は `hwnd: HWND` と `instance: HINSTANCE` を保持し、いずれも
+// SAFETY: `WindowHandle` は `hwnd: HWND` を保持し、これは
 // windows-rs では `*mut c_void` の newtype で、自動では Send/Sync を実装しない
 // （windows-rs 0.62.2）ため、自動導出されない。よってこの手動 impl は冗長ではなく
-// 必須である。健全性: HWND/HINSTANCE は不透明な OS ハンドル（値渡しで所有権・解放
+// 必須である。健全性: HWND は不透明な OS ハンドル（値渡しで所有権・解放
 // 責務を伴わない。ウィンドウ破棄は WM_NCDESTROY / DestroyWindow が担い、本構造体の
 // Drop ではない）であり、`WindowHandle` は ECS コンポーネントとしてメインスレッドの
 // システム・ライフサイクルフックからのみ参照される。`drag/context.rs` の
@@ -267,17 +266,13 @@ fn on_window_handle_remove(
         debug!(
             entity = ?entity,
             hwnd = ?hwnd,
-            "Entity being removed, sending WM_CLOSE"
+            "Entity being removed, window handle released"
         );
 
-        // アプリに通知（ウィンドウカウント更新 & 必要ならメッセージ送信）
+        // アプリに通知（ウィンドウカウント更新）。OS の窓の破棄はここでは行わず、
+        // 登録簿の掃除（`reconcile_window_registry`）が `RemovedComponents<Window>` を見て行う。
         if let Some(mut app) = world.get_resource_mut::<crate::ecs::app::App>() {
             app.on_window_destroyed(entity);
-        }
-
-        // ウィンドウクローズを非同期で要求
-        unsafe {
-            let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
         }
     }
 }
@@ -286,7 +281,7 @@ fn on_window_handle_remove(
 mod tests {
     use super::*;
 
-    /// `WindowHandle` は `hwnd: HWND` / `instance: HINSTANCE`（いずれも `*mut c_void`
+    /// `WindowHandle` は `hwnd: HWND`（`*mut c_void`
     /// newtype・非 Send/Sync）を内包するため手動 `unsafe impl Send/Sync` で Send+Sync を
     /// 表明している。本テストはその不変条件をコンパイル時に固定する回帰検知器
     /// （device 非依存・実 HWND 不要）。将来フィールドが追加され手動 impl が撤去されて
@@ -295,5 +290,41 @@ mod tests {
     fn test_window_handle_is_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<WindowHandle>();
+    }
+
+    /// 枠のある様式（`WS_OVERLAPPEDWINDOW`）の見えない実窓で、クライアント → 外枠 →
+    /// クライアントの変換が元の値に戻ることを確かめる。既定の `WS_POPUP` は枠の差が 0 で、
+    /// `window_to_client_rect` の引き算の符号を誤っても赤にならないため、差が 0 でない窓で見る。
+    #[test]
+    fn framed_window_client_to_window_round_trips() {
+        crate::api::with_test_window(
+            WINDOW_EX_STYLE::default(),
+            WS_OVERLAPPEDWINDOW,
+            None,
+            |hwnd| {
+                let handle = WindowHandle { hwnd };
+                let position = crate::ecs::Point { x: 100, y: 200 };
+                let size = crate::ecs::SizeI {
+                    width: 300,
+                    height: 150,
+                };
+                let (x, y, w, h) = handle
+                    .client_to_window_coords(position, size)
+                    .expect("client_to_window_coords");
+                // 枠の差が 0 だと符号の誤りを見分けられないので、外枠が広がっていることを先に確かめる
+                assert!(
+                    x < position.x && y < position.y && w > size.width && h > size.height,
+                    "外枠がクライアントより広くない: ({x}, {y}, {w}, {h})"
+                );
+                let (back_pos, back_size) = handle
+                    .window_to_client_coords(x, y, w, h)
+                    .expect("window_to_client_coords");
+                assert_eq!((back_pos.x, back_pos.y), (position.x, position.y));
+                assert_eq!(
+                    (back_size.width, back_size.height),
+                    (size.width, size.height)
+                );
+            },
+        );
     }
 }

@@ -1,6 +1,6 @@
 use super::{
-    Duration, Entity, GhostWindows, HINSTANCE, HWND, Instant, Point, SPIN_WAIT, SpineHarness,
-    WindowHandle, WindowPos, World, all_shown, run_move_drain_with,
+    Duration, Entity, GhostWindows, HWND, Instant, Point, SPIN_WAIT, SpineHarness, WindowHandle,
+    WindowPos, World, all_shown, run_move_drain_with,
 };
 
 // ===========================================================================
@@ -20,7 +20,6 @@ use super::{
 fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

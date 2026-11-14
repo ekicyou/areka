@@ -3,7 +3,7 @@
 //!
 //! # 接地点レコードは「源が古びていないか」を見張る口である
 //!
-//! [`ground_record_shows_the_current_48px_float_when_the_scale_is_lowered`] は、**作業領域源が
+//! [`ground_record_shows_the_48px_float_when_the_source_is_stale`] は、**作業領域源が
 //! 実行時の作業領域より古いとき、その差が実測値として行に出る**ことを固定する。拡大率を
 //! 下げるとタスクバーが低くなって実際の作業領域下端は**下がる**のに、源が古ければ接地点は
 //! 古い下端に留まる——実機で 6/6 再現した −48px の浮きである
@@ -13,14 +13,14 @@
 //!
 //! task 2.4 の時点では「是正が入れば本テストは赤へ倒れるので期待値を 0 へ書き換える」と
 //! 書いてあった。**実際にはそうならなかった**——task 5.1 の是正は毎フレーム先頭の同期段
-//! （`emo2_boot::frame::work_area_sync`）が源を作り直すことであって、`resize_window_to` の
+//! （本体の `runtime::frame::work_area_sync`）が源を作り直すことであって、`resize_window_to` の
 //! 振る舞いは 1 bit も変わらない。本ファイルの檻は源が古い World を**手で組んで**単一の
 //! 書込口を直接呼ぶので、同期段を通らず古い源のままである。
 //!
 //! ゆえに本テストは是正後も緑のまま、**観測そのものの契約**（源が古ければ差が出る・
 //! 一致すれば 0・表が引けなければ番兵）を固定し続ける。要件 7.3 が求める「是正前に失敗し
 //! 是正後に通過する」対テストは、フレームを進めて同期段を通す
-//! `emo2_boot/frame_work_area_sync_tests.rs` の
+//! 本体の `runtime/frame_work_area_sync_tests.rs` の
 //! `lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write`
 //! が持つ（是正前 −48px で赤・是正後 0 で緑を実行で記録済み）。
 
@@ -28,12 +28,12 @@ use std::sync::{Arc, Mutex};
 
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
-use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{MISSING, TRANSITION_TARGET};
 
-use super::test_support::{fake_handle, rect, window_pos_sized};
+use super::test_support::{
+    code_only, fake_handle, monitor_with_work_area_bottom, rect, window_pos_sized,
+};
 use super::{Anchored, MonitorSnapshot, PlacementRoute, resize_window_to};
 use crate::diag::WindowKind;
 use crate::resolver::{Anchor, SizePx};
@@ -49,27 +49,6 @@ const NARROW: SizePx = SizePx { w: 382, h: 547 };
 const BOOT_WA_BOTTOM: i32 = 1704;
 /// 100% へ落とした後の**実際の**作業領域下端（タスクバーが低くなる）。
 const LIVE_WA_BOTTOM_AT_100: i32 = 1752;
-
-/// 実行時のモニタ表 1 台（作業領域の下端だけが関心）。
-fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
-    Monitor {
-        handle: 1,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1800,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom,
-        },
-        dpi: 96,
-        is_primary: true,
-    }
-}
 
 /// 起動時 snapshot（`BOOT_WA_BOTTOM` で固定）＋実行時モニタ表＋下端吸着のキャラ窓 1 枚。
 ///
@@ -106,10 +85,11 @@ fn ground_line_of(events: &[log_capture_kit::CapturedEvent]) -> String {
 // 接地点レコード（要件 5.3）
 // ---------------------------------------------------------------------------
 
-/// **現行の欠陥を固定する**（task 5.1 の是正前の赤）: 拡大率を下げると接地点が起動時の
-/// 作業領域下端に留まり、実際の下端との差が −48px になる。
+/// **源が古いときの差が行に出る**（モジュールの説明のとおり是正後も緑）: 源が古いまま
+/// 拡大率を下げると接地点が起動時の作業領域下端に留まり、
+/// 実際の下端との差が −48px になる。
 #[test]
-fn ground_record_shows_the_current_48px_float_when_the_scale_is_lowered() {
+fn ground_record_shows_the_48px_float_when_the_source_is_stale() {
     let _residue = drain_window_pos_commands();
     let (mut world, char_window) = world_with_stale_snapshot(LIVE_WA_BOTTOM_AT_100);
 
@@ -128,7 +108,7 @@ fn ground_record_shows_the_current_48px_float_when_the_scale_is_lowered() {
         line.contains(&format!(
             "scope=0 ground_y={BOOT_WA_BOTTOM} wa_bottom={LIVE_WA_BOTTOM_AT_100} diff=-48"
         )),
-        "現行の −48px の浮きが接地点レコードに現れていない: {line}"
+        "源が古いときの −48px の浮きが接地点レコードに現れていない: {line}"
     );
     assert!(
         line.contains("route=DpiReproject"),
@@ -183,9 +163,10 @@ fn ground_record_uses_sentinels_when_the_running_monitor_table_is_empty() {
         ))
         .id();
 
-    let (_, events) =
+    let (written, events) =
         capture(|| resize_window_to(&mut world, char_window, NARROW, PlacementRoute::Resnap));
 
+    assert!(written, "前提: 書込が起きている");
     let line = ground_line_of(&events);
     assert!(
         line.contains(&format!("ground_y={BOOT_WA_BOTTOM} wa_bottom=- diff=-")),
@@ -327,12 +308,12 @@ fn resize_under_filter(directives: &str) -> String {
     tracing::subscriber::with_default(subscriber, || {
         // 対照行は観測対象の**内側**で出す（同じ捕捉窓・同じ target・同じ directive を通る）。
         tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
-        resize_window_to(
+        assert!(resize_window_to(
             &mut world,
             char_window,
             NARROW,
             PlacementRoute::DpiReproject,
-        );
+        ));
     });
     let _drained = drain_window_pos_commands();
 
@@ -375,15 +356,6 @@ fn the_ground_record_lights_up_under_the_signoff_directive() {
 // 本文走査（ログ濾過テストでは原理的に見えない退行）
 // ---------------------------------------------------------------------------
 
-/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// 要件 10.6／10.4: 接地点レコードは「下端吸着のとき」かつ「観測が有効なとき」に**限って**
 /// 組む。前置ガードを外すと、既定運転でも毎回モニタ表を舐めて `String` を確保する形になる
 /// ——`debug!` は濾過されるので**出力は変わらず**、濾過テストは緑のまま通ってしまう。
@@ -410,30 +382,5 @@ fn the_ground_record_is_built_behind_the_front_guard() {
     assert!(
         code.contains("pub fn resize_window_to("),
         "説明文を落とす処理が本文まで落としている"
-    );
-}
-
-/// design D3／要件 10.5: 本タスクは観測を足すだけで、既存の 3 つに 1 bit も触らない
-/// ——`[diag.window_move]` チャネル・`windowposition.limit` の関門・手順 5a の一度きり再導出。
-#[test]
-fn the_observation_addition_leaves_the_existing_channels_and_gates_untouched() {
-    let code = code_only(include_str!("follow/window_move.rs"));
-
-    assert_eq!(
-        code.matches("diag::log_window_move(&WindowMoveRecord {")
-            .count(),
-        1,
-        "`[diag.window_move]` レコードの組立点が動いている（design D3 は不動と定めている）"
-    );
-    assert!(
-        code.contains(
-            "let corrected = apply_balloon_limit_gate(world, window, PointPx { x, y }, size, route);"
-        ),
-        "windowposition-limit の関門呼出が変わっている（要件 10.5）"
-    );
-    assert_eq!(
-        code.matches("rederive_keyword_balloon_offset(").count(),
-        1,
-        "キーワード基本位置の一度きり再導出（手順 5a）の呼出数が変わっている（要件 10.5）"
     );
 }

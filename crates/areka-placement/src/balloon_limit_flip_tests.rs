@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use std::time::Instant;
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragEndEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowHandle, WindowPos};
@@ -212,7 +212,6 @@ fn boot_gate_does_not_flip_when_limit_is_disabled() {
 fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

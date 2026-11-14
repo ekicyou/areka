@@ -9,8 +9,8 @@
 //!
 //! 置いてよいのは `tracing` のマクロを 1 つも含まない**純粋な文字列組立**だけである。
 //! `log_*`／`record_*`（マクロ呼出を含む）は兄弟の [`zorder_pair`](super::zorder_pair) に
-//! 残す——`tracing` の出力先は呼び出し元の module path が既定であり、こちらへ移すと
-//! サインオフの grep 対象（`wintf::ecs::window::zorder_pair`）が分裂する。
+//! 残す——出力先は組のモジュール（`wintf::ecs::window::zorder_pair`）1 つに揃える（読み手の
+//! 絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
 //!
 //! 本モジュールが独立しているのは兄弟が 1,000 行の上限に迫ったためであり、責務の境界は
 //! 「マクロを含むか否か」の一線に置いている。
@@ -24,7 +24,7 @@ use super::zorder_pair::{ExpectedOrder, InsertSpec, PeerLoss, SkipReason};
 ///
 /// フィールドごと落とさないのは、落とすと「記録が出ていない」のと「その経路には
 /// その値が無い」の区別が事後に付かなくなるためである。
-const UNKNOWN: &str = "-";
+pub(crate) const UNKNOWN: &str = "-";
 
 /// owner 確立の記録タグ（grep 判定語）。
 const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
@@ -54,7 +54,7 @@ pub(crate) fn hwnd_field(hwnd: Option<HWND>) -> String {
 ///
 /// 「取れなかった」を `false` へ潰さない——潰すと「沈まなかった」という**異常**と
 /// 「測れなかった」という**観測の欠落**が同じ字面になる。
-fn tristate_field(value: Option<bool>) -> String {
+pub(crate) fn tristate_field(value: Option<bool>) -> String {
     match value {
         Some(v) => v.to_string(),
         None => UNKNOWN.to_string(),

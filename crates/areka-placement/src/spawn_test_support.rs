@@ -58,9 +58,8 @@ pub fn ghost_window_entities(world: &mut World) -> Vec<Entity> {
 /// 偽 HWND を持つ `WindowHandle`（4.2 と同じ fake WindowHandle パターン）。配置のテストだけが使う。
 #[cfg(test)]
 pub(super) fn fake_window_handle(raw: isize) -> wintf::ecs::WindowHandle {
-    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::Foundation::HWND;
     wintf::ecs::WindowHandle {
         hwnd: HWND(raw as *mut core::ffi::c_void),
-        instance: HINSTANCE::default(),
     }
 }

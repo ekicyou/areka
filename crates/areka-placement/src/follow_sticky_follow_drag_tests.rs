@@ -6,27 +6,26 @@
 //! 直接呼ぶ（受け手へのつなぎは task 3.2）。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{
-    Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-};
+use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::window::drain_window_pos_commands;
 
-use super::super::persist::PersistWiring;
 use super::super::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 use super::sticky_follow::{
     CharDragSession, begin_char_drag, drag_anchor, drag_wintf_moves, finish_char_drag,
     follow_partners_on_drag,
 };
-use super::test_support::{fake_handle, position_of, single_monitor_snapshot, window_pos_sized};
-use super::{Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift};
+use super::test_support::{
+    SylphyaRig, assert_deferred, fake_handle, point, position_of, single_monitor_snapshot,
+    window_pos_sized,
+};
+use super::{
+    AnchorSource, Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift,
+};
 use crate::resolver::{Anchor, PointPx};
 use log_capture_kit::{CapturedEvent, capture};
 
@@ -75,10 +74,6 @@ fn world_with_snapshot() -> World {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     world
-}
-
-fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
 }
 
 fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
@@ -146,34 +141,13 @@ fn bottom_partner_takes_only_horizontal_delta() {
     finish(world);
 }
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 終わりは最終の量で相手を書き、相手の位置を記憶の形（下吸着なら下端中央）で書き、
 /// `sticky_follow`（drag）を 1 行記録して控えを外す（4.5・9.3）。
 #[test]
 fn finish_writes_partner_persists_logs_and_clears_session() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Bottom, (900, WA_BOTTOM - H));
     group(&mut world, &["0", "1"]);
@@ -203,11 +177,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
     assert_eq!(e.field("dx"), Some("37"));
     assert_eq!(e.field("dy"), Some("-20"));
 
-    parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> =
-        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
-            .into_iter()
-            .collect();
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(
         loaded.get(&key(Axis::X)),
@@ -223,8 +193,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
         axis: Axis::X
     }));
 
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
     finish(world);
 }
 
@@ -232,20 +201,9 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
 /// （seriko-pattern-calls task 6.2・要件 7.8）。窓はずれたまま動く。
 #[test]
 fn finish_persists_partner_position_without_its_pattern_shift() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
     group(&mut world, &["0", "1"]);
@@ -266,18 +224,76 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
             y: 150 + 25 - 20
         }
     );
-    parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> =
-        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
-            .into_iter()
-            .collect();
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
     // 揃えない置き方の記憶は左上のまま。
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(loaded.get(&key(Axis::X)), Some(&(900 + 37).to_string()));
     assert_eq!(loaded.get(&key(Axis::Y)), Some(&(150 - 20).to_string()));
 
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
+    finish(world);
+}
+
+/// 組の相手の記憶の形も descript の向きで選ぶ（指摘 11 ⑵・4.8）: descript は下吸着で台本が
+/// 揃えない置き方へ変えた相手は、左上でなく下端中央の x で書く。
+#[test]
+fn finish_persists_partner_in_descript_form_not_current_anchor() {
+    let rig = SylphyaRig::fake();
+    let mut world = world_with_snapshot();
+    rig.wire(&mut world);
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    world.entity_mut(partner.char).insert(AnchorSource {
+        descript: Anchor::Bottom,
+        by_script: true,
+    });
+    group(&mut world, &["0", "1"]);
+
+    begin_char_drag(&mut world, dragged.char);
+    finish_char_drag(&mut world, dragged.char, point(537, 180));
+
+    assert_eq!(position_of(&world, partner.char), Point { x: 937, y: 130 });
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    let key = |axis| PersistKey::WindowPos { scope: 1, axis };
+    assert_eq!(loaded.get(&key(Axis::X)), Some(&(937 + W / 2).to_string()));
+    assert_eq!(loaded.get(&key(Axis::Y)), Some(&130.to_string()));
+
+    rig.close();
+    finish(world);
+}
+
+/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（指摘 11 ⑵）。
+#[test]
+fn partner_without_anchored_is_warned_and_left_unmoved() {
+    let rig = SylphyaRig::fake();
+    let mut world = world_with_snapshot();
+    rig.wire(&mut world);
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    world.entity_mut(partner.char).remove::<Anchored>();
+    group(&mut world, &["0", "1"]);
+
+    begin_char_drag(&mut world, dragged.char);
+    let ((), events) = capture(|| finish_char_drag(&mut world, dragged.char, point(537, 180)));
+
+    assert_eq!(position_of(&world, partner.char), Point { x: 900, y: 150 });
+    let warned: Vec<_> = events
+        .iter()
+        .filter(|e| e.message().contains("組の相手の向きが読めない"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{events:?}");
+    assert_eq!(warned[0].level, tracing::Level::WARN);
+    assert_eq!(warned[0].field("scope"), Some("1"));
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    assert!(
+        !loaded.contains_key(&PersistKey::WindowPos {
+            scope: 1,
+            axis: Axis::X
+        }),
+        "{loaded:?}"
+    );
+
+    rig.close();
     finish(world);
 }
 
@@ -396,4 +412,76 @@ fn unreadable_begin_clears_a_stale_session() {
     follow_partners_on_drag(&mut world, dragged.char, point(600, WA_BOTTOM - H));
     assert_eq!(position_of(&world, partner.char), Point { x: 900, y: 150 });
     finish(world);
+}
+
+/// キャラ窓のドラッグ中、組の相手へも面の `move` のずれを当てない（相手は `DraggingState` を
+/// 持たないが「始め＋量」で書かれる・audit のかけ直し 2 回目 A4 の差し戻し）。記録を変えず
+/// `debug!`（reason=drag_partner）を 1 行、`warn!` 0 行。ドラッグが終われば当たる。
+#[test]
+fn a_drag_partner_is_not_shifted_until_the_drag_ends() {
+    let mut world = world_with_snapshot();
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    group(&mut world, &["0", "1"]);
+    begin_char_drag(&mut world, dragged.char);
+    let _residue = drain_window_pos_commands();
+
+    let (ok, events) =
+        capture(|| apply_char_shift(&mut world, partner.char, (10, 20), ScaleRatio::ONE));
+    assert!(!ok, "ドラッグの相手へ当ててはならない");
+    assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
+    assert!(
+        world
+            .get::<super::move_shift::MoveShiftApplied>(partner.char)
+            .is_none(),
+        "記録を変えた"
+    );
+    assert_deferred(&events, "drag_partner");
+
+    finish_char_drag(&mut world, dragged.char, point(500, 200));
+    assert!(
+        apply_char_shift(&mut world, partner.char, (10, 20), ScaleRatio::ONE),
+        "ドラッグの後は当たる"
+    );
+    finish(world);
+}
+
+/// ドラッグを離したときに位置が読めない・書込が断られたの 2 つの早期 return でも、控えを残さない
+/// （残すと、次のドラッグまでその窓の面の `move` のずれが見送られ続ける・かけ直し 5 回目 A1）。
+#[test]
+fn drag_end_early_returns_do_not_leave_the_session() {
+    use wintf::ecs::WindowHandle;
+    use wintf::ecs::WindowPos;
+    use wintf::ecs::pointer::Phase;
+
+    use super::on_char_drag_end;
+    use super::test_support::drag_end_event_at;
+
+    for unreadable_position in [true, false] {
+        let mut world = world_with_snapshot();
+        let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+        begin_char_drag(&mut world, dragged.char);
+        assert!(
+            world.contains_resource::<CharDragSession>(),
+            "前提: 控えがある"
+        );
+        if unreadable_position {
+            world.get_mut::<WindowPos>(dragged.char).unwrap().position = None;
+        } else {
+            world.entity_mut(dragged.char).remove::<WindowHandle>();
+        }
+
+        let ev = Phase::Bubble(drag_end_event_at(dragged.char, (510, 205)));
+        assert!(!on_char_drag_end(
+            &mut world,
+            dragged.char,
+            dragged.char,
+            &ev
+        ));
+        assert!(
+            !world.contains_resource::<CharDragSession>(),
+            "位置が読めない={unreadable_position}: 控えが残った"
+        );
+        finish(world);
+    }
 }

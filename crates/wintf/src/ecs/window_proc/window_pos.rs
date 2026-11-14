@@ -1,7 +1,7 @@
 //! ウィンドウ位置・サイズ・DPI変更メッセージハンドラ
 //!
 //! WM_WINDOWPOSCHANGED, WM_DPICHANGED の処理を担当する。
-//! DPI変更時のセンター座標補正ロジックもこのモジュールに含まれる。
+//! DPI変更時のセンター座標補正ロジックは `dpi_helpers.rs` にあり、ここはそれを呼ぶだけ。
 
 #![allow(non_snake_case)]
 
@@ -38,10 +38,9 @@ type HandlerResult = Option<LRESULT>;
 
 /// WM_WINDOWPOSCHANGED: ウィンドウ位置/サイズ変更通知
 ///
-/// World借用区切り方式による処理（3ステッププロトコル）:
+/// World借用区切り方式による処理（2ステッププロトコル）:
 /// ① World借用 → echo判定に基づきWindowPos更新, BoxStyle更新 → 借用解放
 /// ② flush_window_pos_commands_guarded() (再入ガードを取って流す)
-/// ③ flush_window_pos_commands() (SetWindowPos実行、ラッパー経由)
 ///
 /// echo判定: `is_self_initiated()` TLS フラグが `true` の場合、
 /// 自アプリの `guarded_set_window_pos()` 経由の呼び出し。
@@ -80,225 +79,215 @@ pub(super) fn WM_WINDOWPOSCHANGED(
     // ------------------------------------------------------------------
     // ① 第1借用セクション: DPI更新, echo判定に基づきWindowPos更新, BoxStyle更新
     // ------------------------------------------------------------------
-    {
-        {
-            // DpiChangeContextを先に取得（② の流しの前に消費する必要がある）
-            // is_echo にかかわらず常に実行
-            let dpi_context = crate::ecs::window::DpiChangeContext::take();
+    // DpiChangeContextを先に取得（② の流しの前に消費する必要がある）
+    // is_echo にかかわらず常に実行
+    let dpi_context = crate::ecs::window::DpiChangeContext::take();
 
-            // RefCellが既に借用されている場合はスキップ（再入時）
-            if let Ok(mut world_borrow) = world.try_borrow_mut() {
-                let windowpos = lparam.0 as *const WINDOWPOS;
-                if !windowpos.is_null() {
-                    let wp = unsafe { &*windowpos };
+    // RefCellが既に借用されている場合はスキップ（再入時）
+    if let Ok(mut world_borrow) = world.try_borrow_mut() {
+        let windowpos = lparam.0 as *const WINDOWPOS;
+        if !windowpos.is_null() {
+            let wp = unsafe { &*windowpos };
 
-                    if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
-                        // DPI コンポーネントの読み取り（更新は WM_DPICHANGED で直接実行済み）
-                        // DpiChangeContext の読み取りは echo bypass / BoxStyle skip の判定にのみ使用
-                        let dpi = entity_ref
-                            .get::<crate::ecs::window::DPI>()
-                            .copied()
-                            .unwrap_or_default();
+            if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
+                // DPI コンポーネントの読み取り（更新は WM_DPICHANGED で直接実行済み）
+                // DpiChangeContext の読み取りは echo bypass / BoxStyle skip の判定にのみ使用
+                let dpi = entity_ref
+                    .get::<crate::ecs::window::DPI>()
+                    .copied()
+                    .unwrap_or_default();
 
-                        // WindowHandleを取得してウィンドウ座標→クライアント座標に変換
-                        let client_coords = entity_ref
-                            .get::<crate::ecs::window::WindowHandle>()
-                            .and_then(|handle| {
-                                handle
-                                    .window_to_client_coords(wp.x, wp.y, wp.cx, wp.cy)
-                                    .ok()
-                            });
+                // WindowHandleを取得してウィンドウ座標→クライアント座標に変換
+                let client_coords = entity_ref
+                    .get::<crate::ecs::window::WindowHandle>()
+                    .and_then(|handle| {
+                        handle
+                            .window_to_client_coords(wp.x, wp.y, wp.cx, wp.cy)
+                            .ok()
+                    });
 
-                        // クライアント座標が取得できた場合のみ処理
-                        if let Some((client_pos, client_size)) = client_coords {
-                            debug!(
-                                is_echo = is_echo,
-                                has_dpi_ctx = dpi_context.is_some(),
+                // クライアント座標が取得できた場合のみ処理
+                if let Some((client_pos, client_size)) = client_coords {
+                    debug!(
+                        is_echo = is_echo,
+                        has_dpi_ctx = dpi_context.is_some(),
+                        entity = ?entity,
+                        window_xy = format_args!("({},{})", wp.x, wp.y),
+                        window_size = format_args!("{}x{}", wp.cx, wp.cy),
+                        client_xy = format_args!("({},{})", client_pos.x, client_pos.y),
+                        client_size = format_args!("{}x{}", client_size.width, client_size.height),
+                        dpi = format_args!("{:.2}", dpi.scale_x()),
+                        "[WM_WINDOWPOSCHANGED]"
+                    );
+
+                    // BoxStyle のスナップショットを WindowPos の mutable borrow 前に取得
+                    // （借用チェッカー制約: entity_ref の immutable と mutable は共存不可）
+                    let box_style_snapshot =
+                        entity_ref.get::<crate::ecs::layout::BoxStyle>().cloned();
+
+                    if let Some(mut window_pos) =
+                        entity_ref.get_mut::<crate::ecs::window::WindowPos>()
+                    {
+                        // DPI変更時の特別処理:
+                        // DpiChangeContext がある場合は echo でも bypass しない。
+                        // bypass すると Changed<WindowPos> が発火せず、
+                        // sync_window_arrangement_from_window_pos が新位置を
+                        // Arrangement.offset に反映できない。結果として
+                        // update_arrangements_system が旧 offset を保持したまま
+                        // 新 DPI スケールを適用 → 誤ったグローバル座標 →
+                        // window_pos_sync_system が旧位置へ SetWindowPos →
+                        // 旧モニタに戻る → 再び WM_DPICHANGED → 無限ループ (フリーズ)
+                        let use_bypass = is_echo && dpi_context.is_none();
+
+                        if use_bypass {
+                            // echo（自アプリ由来、DPI変更なし）→ bypass_change_detection で更新
+                            // Changed<WindowPos> を発火させない → apply_window_pos_changes 非トリガー
+                            let bypass = window_pos.bypass_change_detection();
+                            bypass.position = Some(client_pos);
+                            bypass.size = Some(client_size);
+
+                            trace!(
                                 entity = ?entity,
-                                window_xy = format_args!("({},{})", wp.x, wp.y),
-                                window_size = format_args!("{}x{}", wp.cx, wp.cy),
-                                client_xy = format_args!("({},{})", client_pos.x, client_pos.y),
-                                client_size = format_args!("{}x{}", client_size.width, client_size.height),
-                                dpi = format_args!("{:.2}", dpi.scale_x()),
-                                "[WM_WINDOWPOSCHANGED]"
+                                client_x = client_pos.x,
+                                client_y = client_pos.y,
+                                "WindowPos updated via bypass (echo, no DPI change)"
                             );
-
-                            // BoxStyle のスナップショットを WindowPos の mutable borrow 前に取得
-                            // （借用チェッカー制約: entity_ref の immutable と mutable は共存不可）
-                            let box_style_snapshot =
-                                entity_ref.get::<crate::ecs::layout::BoxStyle>().cloned();
-
-                            if let Some(mut window_pos) =
-                                entity_ref.get_mut::<crate::ecs::window::WindowPos>()
-                            {
-                                // DPI変更時の特別処理:
-                                // DpiChangeContext がある場合は echo でも bypass しない。
-                                // bypass すると Changed<WindowPos> が発火せず、
-                                // sync_window_arrangement_from_window_pos が新位置を
-                                // Arrangement.offset に反映できない。結果として
-                                // update_arrangements_system が旧 offset を保持したまま
-                                // 新 DPI スケールを適用 → 誤ったグローバル座標 →
-                                // window_pos_sync_system が旧位置へ SetWindowPos →
-                                // 旧モニタに戻る → 再び WM_DPICHANGED → 無限ループ (フリーズ)
-                                let use_bypass = is_echo && dpi_context.is_none();
-
-                                if use_bypass {
-                                    // echo（自アプリ由来、DPI変更なし）→ bypass_change_detection で更新
-                                    // Changed<WindowPos> を発火させない → apply_window_pos_changes 非トリガー
-                                    let bypass = window_pos.bypass_change_detection();
-                                    bypass.position = Some(client_pos);
-                                    bypass.size = Some(client_size);
-
-                                    trace!(
-                                        entity = ?entity,
-                                        client_x = client_pos.x,
-                                        client_y = client_pos.y,
-                                        "WindowPos updated via bypass (echo, no DPI change)"
-                                    );
-                                } else {
-                                    // 外部由来: 値が実際に変化した場合のみ DerefMut で更新
-                                    // Changed<WindowPos> → apply_window_pos_changes トリガー
-                                    //
-                                    // DPI 変更時の中心保持補正:
-                                    // サイズ変化に伴うウィンドウ中心座標のズレを防止する。
-                                    // dpi_context が None の場合は補正なし（client_pos をそのまま返す）。
-                                    let corrected_pos = super::dpi_helpers::correct_position_for_dpi_center_preserve(
-                                        client_pos,
-                                        client_size,
-                                        &dpi_context,
-                                        box_style_snapshot.as_ref(),
-                                        &dpi,
-                                    );
-
-                                    // 値ガード: ウィンドウアクティベーション等で WM_WINDOWPOSCHANGED が
-                                    // 発火しても、座標/サイズが同一なら Changed を発火させない。
-                                    // これにより不要な SetWindowPos エコーバックループを防止し、
-                                    // 高DPI環境でのフレームオフセット不一致による位置ズレを回避する。
-                                    let pos_changed = window_pos.position != Some(corrected_pos);
-                                    let size_changed = window_pos.size != Some(client_size);
-
-                                    if pos_changed || size_changed {
-                                        window_pos.position = Some(corrected_pos);
-                                        window_pos.size = Some(client_size);
-
-                                        if dpi_context.is_some() {
-                                            debug!(
-                                                entity = ?entity,
-                                                is_echo,
-                                                original_x = client_pos.x,
-                                                original_y = client_pos.y,
-                                                corrected_x = corrected_pos.x,
-                                                corrected_y = corrected_pos.y,
-                                                client_cx = client_size.width,
-                                                client_cy = client_size.height,
-                                                "[WM_WINDOWPOSCHANGED] WindowPos updated (DPI change, center-preserve)"
-                                            );
-                                        } else {
-                                            debug!(
-                                                entity = ?entity,
-                                                window_x = wp.x,
-                                                window_y = wp.y,
-                                                window_cx = wp.cx,
-                                                window_cy = wp.cy,
-                                                client_x = client_pos.x,
-                                                client_y = client_pos.y,
-                                                client_cx = client_size.width,
-                                                client_cy = client_size.height,
-                                                "WindowPos updated (external change, values differ)"
-                                            );
-                                        }
-                                    } else {
-                                        trace!(
-                                            entity = ?entity,
-                                            client_x = client_pos.x,
-                                            client_y = client_pos.y,
-                                            "WindowPos unchanged (external, same values — skipping DerefMut)"
-                                        );
-                                    }
-                                }
-                            }
-
-                            // BoxStyle.size のサイズ変更判定と条件付き更新
-                            // BoxStyle.inset への書き込みは行わない（Window位置はWindowPosが唯一のsource of truth）
+                        } else {
+                            // 外部由来: 値が実際に変化した場合のみ DerefMut で更新
+                            // Changed<WindowPos> → apply_window_pos_changes トリガー
                             //
-                            // skip_box_style = is_echo || dpi_context.is_some()
-                            // - echo（自アプリ由来、DPI変更なし）: ループ防止のためスキップ
-                            // - DPI変更時: BoxStyle.size は不変（レイアウトシステム主導でサイズ決定）
-                            // - 外部リサイズ時のみ: 物理px / DPI.scale → 論理px に変換して更新
-                            let skip_box_style = is_echo || dpi_context.is_some();
-                            if !skip_box_style {
-                                use crate::ecs::layout::{BoxSize, Dimension};
+                            // DPI 変更時の中心保持補正:
+                            // サイズ変化に伴うウィンドウ中心座標のズレを防止する。
+                            // dpi_context が None の場合は補正なし（client_pos をそのまま返す）。
+                            let corrected_pos =
+                                super::dpi_helpers::correct_position_for_dpi_center_preserve(
+                                    client_pos,
+                                    client_size,
+                                    &dpi_context,
+                                    box_style_snapshot.as_ref(),
+                                    &dpi,
+                                );
 
-                                let physical_width = client_size.width as f32;
-                                let physical_height = client_size.height as f32;
+                            // 値ガード: ウィンドウアクティベーション等で WM_WINDOWPOSCHANGED が
+                            // 発火しても、座標/サイズが同一なら Changed を発火させない。
+                            // これにより不要な SetWindowPos エコーバックループを防止し、
+                            // 高DPI環境でのフレームオフセット不一致による位置ズレを回避する。
+                            let pos_changed = window_pos.position != Some(corrected_pos);
+                            let size_changed = window_pos.size != Some(client_size);
 
-                                // 物理ピクセルを DPI スケールで除算して論理ピクセルに変換
-                                // BoxStyle は論理 px（96 DPI / 100% 相当）を唯一の座標系とする
-                                let logical_width = physical_width / dpi.scale_x();
-                                let logical_height = physical_height / dpi.scale_y();
+                            if pos_changed || size_changed {
+                                window_pos.position = Some(corrected_pos);
+                                window_pos.size = Some(client_size);
 
-                                let new_size = Some(BoxSize {
-                                    width: Some(Dimension::Px(logical_width)),
-                                    height: Some(Dimension::Px(logical_height)),
-                                });
-
-                                // Step 1: 現在のサイズを読み取り（immutable borrow）
-                                let current_size = entity_ref
-                                    .get::<crate::ecs::layout::BoxStyle>()
-                                    .map(|bs| bs.size);
-
-                                // Step 2: サイズ変更がある場合のみ get_mut で更新（Changed<BoxStyle> 発火）
-                                let size_changed =
-                                    current_size.map(|cs| cs != new_size).unwrap_or(false);
-
-                                if size_changed {
-                                    if let Some(mut box_style) =
-                                        entity_ref.get_mut::<crate::ecs::layout::BoxStyle>()
-                                    {
-                                        box_style.size = new_size;
-                                    }
-
+                                if dpi_context.is_some() {
                                     debug!(
                                         entity = ?entity,
-                                        logical_width = logical_width,
-                                        logical_height = logical_height,
-                                        physical_width = physical_width,
-                                        physical_height = physical_height,
-                                        dpi_scale = dpi.scale_x(),
-                                        "[WM_WINDOWPOSCHANGED] BoxStyle.size updated (logical px, external resize)"
+                                        is_echo,
+                                        original_x = client_pos.x,
+                                        original_y = client_pos.y,
+                                        corrected_x = corrected_pos.x,
+                                        corrected_y = corrected_pos.y,
+                                        client_cx = client_size.width,
+                                        client_cy = client_size.height,
+                                        "[WM_WINDOWPOSCHANGED] WindowPos updated (DPI change, center-preserve)"
                                     );
                                 } else {
-                                    trace!(
+                                    debug!(
                                         entity = ?entity,
-                                        "[WM_WINDOWPOSCHANGED] BoxStyle.size unchanged, skipping update"
+                                        window_x = wp.x,
+                                        window_y = wp.y,
+                                        window_cx = wp.cx,
+                                        window_cy = wp.cy,
+                                        client_x = client_pos.x,
+                                        client_y = client_pos.y,
+                                        client_cx = client_size.width,
+                                        client_cy = client_size.height,
+                                        "WindowPos updated (external change, values differ)"
                                     );
                                 }
                             } else {
                                 trace!(
                                     entity = ?entity,
-                                    is_echo = is_echo,
-                                    has_dpi_ctx = dpi_context.is_some(),
-                                    "[WM_WINDOWPOSCHANGED] BoxStyle.size skipped (echo or DPI change)"
+                                    client_x = client_pos.x,
+                                    client_y = client_pos.y,
+                                    "WindowPos unchanged (external, same values — skipping DerefMut)"
                                 );
                             }
                         }
                     }
+
+                    // BoxStyle.size のサイズ変更判定と条件付き更新
+                    // BoxStyle.inset への書き込みは行わない（Window位置はWindowPosが唯一のsource of truth）
+                    //
+                    // skip_box_style = is_echo || dpi_context.is_some()
+                    // - echo（自アプリ由来、DPI変更なし）: ループ防止のためスキップ
+                    // - DPI変更時: BoxStyle.size は不変（レイアウトシステム主導でサイズ決定）
+                    // - 外部リサイズ時のみ: 物理px / DPI.scale → 論理px に変換して更新
+                    let skip_box_style = is_echo || dpi_context.is_some();
+                    if !skip_box_style {
+                        use crate::ecs::layout::{BoxSize, Dimension};
+
+                        let physical_width = client_size.width as f32;
+                        let physical_height = client_size.height as f32;
+
+                        // 物理ピクセルを DPI スケールで除算して論理ピクセルに変換
+                        // BoxStyle は論理 px（96 DPI / 100% 相当）を唯一の座標系とする
+                        let logical_width = physical_width / dpi.scale_x();
+                        let logical_height = physical_height / dpi.scale_y();
+
+                        let new_size = Some(BoxSize {
+                            width: Some(Dimension::Px(logical_width)),
+                            height: Some(Dimension::Px(logical_height)),
+                        });
+
+                        // Step 1: 現在のサイズを読み取り（immutable borrow）
+                        let current_size = entity_ref
+                            .get::<crate::ecs::layout::BoxStyle>()
+                            .map(|bs| bs.size);
+
+                        // Step 2: サイズ変更がある場合のみ get_mut で更新（Changed<BoxStyle> 発火）
+                        let size_changed = current_size.map(|cs| cs != new_size).unwrap_or(false);
+
+                        if size_changed {
+                            if let Some(mut box_style) =
+                                entity_ref.get_mut::<crate::ecs::layout::BoxStyle>()
+                            {
+                                box_style.size = new_size;
+                            }
+
+                            debug!(
+                                entity = ?entity,
+                                logical_width = logical_width,
+                                logical_height = logical_height,
+                                physical_width = physical_width,
+                                physical_height = physical_height,
+                                dpi_scale = dpi.scale_x(),
+                                "[WM_WINDOWPOSCHANGED] BoxStyle.size updated (logical px, external resize)"
+                            );
+                        } else {
+                            trace!(
+                                entity = ?entity,
+                                "[WM_WINDOWPOSCHANGED] BoxStyle.size unchanged, skipping update"
+                            );
+                        }
+                    } else {
+                        trace!(
+                            entity = ?entity,
+                            is_echo = is_echo,
+                            has_dpi_ctx = dpi_context.is_some(),
+                            "[WM_WINDOWPOSCHANGED] BoxStyle.size skipped (echo or DPI change)"
+                        );
+                    }
                 }
             }
-            // world_borrowスコープ終了: 借用解放
-
-            // ------------------------------------------------------------------
-            // ② flush_window_pos_commands_guarded() (再入ガードを取って流す)
-            // ------------------------------------------------------------------
-            crate::ecs::world::flush_window_pos_commands_guarded();
-
-            // ------------------------------------------------------------------
-            // ③ flush_window_pos_commands() (SetWindowPos実行、ラッパー経由)
-            // World借用解放後なので安全
-            // ------------------------------------------------------------------
-            crate::ecs::window::flush_window_pos_commands();
         }
     }
+    // world_borrowスコープ終了: 借用解放
+
+    // ------------------------------------------------------------------
+    // ② flush_window_pos_commands_guarded() (再入ガードを取って流す)
+    // ------------------------------------------------------------------
+    crate::ecs::world::flush_window_pos_commands_guarded();
     None // DefWindowProcWに委譲
 }
 
@@ -384,51 +373,45 @@ pub(super) fn WM_DPICHANGED(
     // entity へ到達できたか（到達不能時に「政策未付与」と区別できないと、ログが
     // 「宣言が無かった」のか「読めなかった」のかを黙って混ぜてしまう）。
     let mut entity_reached = false;
-    {
-        {
-            if let Ok(mut world_borrow) = world.try_borrow_mut() {
-                if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
-                    entity_reached = true;
-                    // 先に immutable で政策を写し取る（次行の get_mut と共存できないため）。
-                    policy = entity_ref
-                        .get::<crate::ecs::window::DpiSuggestedRectPolicy>()
-                        .copied();
-                    if let Some(mut dpi_comp) = entity_ref.get_mut::<crate::ecs::window::DPI>() {
-                        let old_dpi = *dpi_comp;
-                        *dpi_comp = new_dpi;
-                        debug!(
-                            entity = ?entity,
-                            old_dpi_x = old_dpi.dpi_x,
-                            old_dpi_y = old_dpi.dpi_y,
-                            new_dpi_x = new_dpi.dpi_x,
-                            new_dpi_y = new_dpi.dpi_y,
-                            "[WM_DPICHANGED] DPI component directly updated (Changed<DPI>)"
-                        );
-                        // 窓の拡大率が変わったことを表す**起点**（task 8.3）。上の `debug` 行と
-                        // 同じ事実を、1 回の遷移の時系列へ並べられる形（刻印つき・単一 target）で
-                        // 出す。発行するのは component を**実際に書き換えたこの腕だけ**であり、
-                        // `DPI` を持たない窓・entity へ到達できなかった経路からは 1 行も出ない。
-                        //
-                        // 刻印はスレッド局所ミラーから組む（D1）——wndproc は UI スレッドで走り、
-                        // ここは World の借用を持っているが `FrameCount`／`TickStart` を
-                        // 引数で受け取っていないため、同ファイルの受理記録（`msg_line`）と
-                        // 同じ流儀に倣う。
-                        if transition_diag::is_enabled() {
-                            transition_diag::emit_line(&transition_diag::windpi_line(
-                                &WindowDpiRecord {
-                                    stamp: transition_diag::stamp(),
-                                    entity,
-                                    old_dpi: u32::from(old_dpi.dpi_x),
-                                    new_dpi: u32::from(new_dpi.dpi_x),
-                                },
-                            ));
-                        }
-                    }
+    if let Ok(mut world_borrow) = world.try_borrow_mut() {
+        if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
+            entity_reached = true;
+            // 先に immutable で政策を写し取る（次行の get_mut と共存できないため）。
+            policy = entity_ref
+                .get::<crate::ecs::window::DpiSuggestedRectPolicy>()
+                .copied();
+            if let Some(mut dpi_comp) = entity_ref.get_mut::<crate::ecs::window::DPI>() {
+                let old_dpi = *dpi_comp;
+                *dpi_comp = new_dpi;
+                debug!(
+                    entity = ?entity,
+                    old_dpi_x = old_dpi.dpi_x,
+                    old_dpi_y = old_dpi.dpi_y,
+                    new_dpi_x = new_dpi.dpi_x,
+                    new_dpi_y = new_dpi.dpi_y,
+                    "[WM_DPICHANGED] DPI component directly updated (Changed<DPI>)"
+                );
+                // 窓の拡大率が変わったことを表す**起点**（task 8.3）。上の `debug` 行と
+                // 同じ事実を、1 回の遷移の時系列へ並べられる形（刻印つき・単一 target）で
+                // 出す。発行するのは component を**実際に書き換えたこの腕だけ**であり、
+                // `DPI` を持たない窓・entity へ到達できなかった経路からは 1 行も出ない。
+                //
+                // 刻印はスレッド局所ミラーから組む（D1）——wndproc は UI スレッドで走り、
+                // ここは World の借用を持っているが `FrameCount`／`TickStart` を
+                // 引数で受け取っていないため、同ファイルの受理記録（`msg_line`）と
+                // 同じ流儀に倣う。
+                if transition_diag::is_enabled() {
+                    transition_diag::emit_line(&transition_diag::windpi_line(&WindowDpiRecord {
+                        stamp: transition_diag::stamp(),
+                        entity,
+                        old_dpi: u32::from(old_dpi.dpi_x),
+                        new_dpi: u32::from(new_dpi.dpi_x),
+                    }));
                 }
             }
-            // world_borrow スコープ終了: 借用解放
         }
     }
+    // world_borrow スコープ終了: 借用解放
 
     // 提案位置の採否を純関数へ委ねる（D3・Req 4.3）。戻り値の `Option` が②③の
     // **共通の**分岐条件であり、「書かない」を番兵座標ではなく型で表す。
@@ -526,7 +509,7 @@ pub(super) fn WM_DPICHANGED(
 
     // 「書かなかった」場合も `Some(LRESULT(0))`＝処理済みを返す。`None` を返すと
     // `DefWindowProcW` が既定の提案矩形適用を行い、**その内部から `SetWindowPos` が
-    // 同期的に呼ばれる**（`window/components.rs:29-31`）ため、源断ちが無意味になる。
+    // 同期的に呼ばれる**（`window/components.rs` の `DpiChangeContext` の doc）ため、源断ちが無意味になる。
     // ここが源断ちの最外殻であり、`guarded_set_window_pos` を飛ばすだけでは足りない
     // （檻＝`s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc`）。
     // 提案矩形の不採用は Per-Monitor v2 の契約違反ではない（OS 提示は勧告である）。
@@ -539,4 +522,8 @@ mod tests;
 
 #[cfg(test)]
 #[path = "window_pos_transition_tests.rs"]
-mod window_pos_transition_tests;
+pub(super) mod window_pos_transition_tests;
+
+#[cfg(test)]
+#[path = "window_pos_decision_tests.rs"]
+mod decision_tests;

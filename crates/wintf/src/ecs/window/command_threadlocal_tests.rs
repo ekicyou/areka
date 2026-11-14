@@ -32,7 +32,10 @@
 use std::sync::mpsc;
 use std::thread;
 
-use super::{SetWindowPosGuard, is_self_initiated};
+use windows::Win32::Foundation::HWND;
+
+use super::{SetWindowPosGuard, admits_enqueue, is_self_initiated};
+use crate::ecs::test_support::capture_under_filter;
 
 /// 別スレッドがガードを持ち上げている最中、こちらの判定は偽のままである。
 ///
@@ -181,4 +184,53 @@ fn two_threads_hold_their_own_depth_without_mixing() {
     let b_after = b.join().expect("B がパニックしていないこと");
     assert!(!b_after, "B は落とした後 偽へ戻ること");
     assert!(!is_self_initiated(), "主スレッドは終始 偽であること");
+}
+
+// ---------------------------------------------------------------------------
+// 積み込みのスレッドの判断（`admits_enqueue`・research.md 3 節の 1）
+//
+// プロセス全体の控え（`UI_THREAD`）は立てない——立てると同じ実行ファイルのほかのテストの
+// 積み込みが捨てられる。控えは引数で渡して 3 通りを試す。
+// ---------------------------------------------------------------------------
+
+/// 捨てるときの `error!` の文言（`command.rs` の `admits_enqueue` と同じ綴り）。
+const OFF_UI_THREAD_TEXT: &str = "called off the UI thread; command dropped";
+
+fn fake_hwnd() -> HWND {
+    HWND(0x1234 as *mut core::ffi::c_void)
+}
+
+/// 控えが無い（`WinApp::run` を回していない）なら積んでよく、記録も出ない。
+#[test]
+fn enqueue_is_admitted_when_no_ui_thread_is_recorded() {
+    let mut admitted = false;
+    let log = capture_under_filter("trace", || admitted = admits_enqueue(fake_hwnd(), None));
+    assert!(admitted);
+    assert_eq!(log.matches(OFF_UI_THREAD_TEXT).count(), 0, "{log}");
+}
+
+/// 控えが今のスレッドなら積んでよく、記録も出ない。
+#[test]
+fn enqueue_is_admitted_on_the_recorded_ui_thread() {
+    let here = thread::current().id();
+    let mut admitted = false;
+    let log = capture_under_filter("trace", || {
+        admitted = admits_enqueue(fake_hwnd(), Some(here));
+    });
+    assert!(admitted);
+    assert_eq!(log.matches(OFF_UI_THREAD_TEXT).count(), 0, "{log}");
+}
+
+/// 控えが別のスレッドなら捨て、`error` を 1 行残す。
+#[test]
+fn enqueue_off_the_recorded_ui_thread_is_dropped_with_one_error() {
+    let other = thread::spawn(|| thread::current().id())
+        .join()
+        .expect("id を返すだけのスレッドが落ちてはならない");
+    let mut admitted = true;
+    let log = capture_under_filter("error", || {
+        admitted = admits_enqueue(fake_hwnd(), Some(other));
+    });
+    assert!(!admitted);
+    assert_eq!(log.matches(OFF_UI_THREAD_TEXT).count(), 1, "{log}");
 }

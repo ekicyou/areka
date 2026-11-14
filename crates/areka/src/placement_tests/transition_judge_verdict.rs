@@ -22,16 +22,19 @@
 //! [`judge`] は沈黙を合格にしない。次はそれぞれ**別の [`Violation`]** として返す:
 //!
 //! - [`TransitionSummary::frames_indeterminate`]（フレーム系列が読めない・要件 8.5）
-//! - [`TransitionSummary::malformed_records`] が 1 件以上（語彙の規約を破った行がある）
+//! - [`TransitionSummary::malformed_records`] が 1 件以上（語彙の規約を破った行・
+//!   `diff`・`total_us` が数として読めない行がある）
 //! - 上限を当てる対象そのものが欠けていること（[`Violation::Unmeasured`]）
 //!
 //! 3 番目が要るのは、[`super::RecordDefect::UnreadableField`] が**接頭語**（`frame`／`t_us`）に
-//! しか立たないためである。本体側の数値（`diff`・`total_us`・`target_id`）が壊れた行は
-//! `is_well_formed() == true`・`malformed_records == 0` のまま当該量だけが静かに消え、上限
-//! （`≤ 0` や `≤ 1`）は「量が無い」を素通しにしてしまう。
+//! しか立たないためである。本体側の数値のうち `diff`・`total_us` が読めない行は
+//! `malformed_records` に数えるが、`target_id` が壊れた行や量の行がそもそも無い遷移では
+//! 当該量だけが静かに消え、上限（`≤ 0` や `≤ 1`）は「量が無い」を素通しにしてしまう。
 
 use std::collections::BTreeSet;
 use std::fmt;
+
+use wintf::ecs::window::transition_diag::MISSING;
 
 use super::{TransitionSummary, WindowKey, parse_transition_log, split_transitions, summarize};
 use areka_placement::diag::WindowKind;
@@ -195,9 +198,9 @@ impl Bounds {
 pub enum Quantity {
     /// 起点から最終書込までのフレーム差（＝窓書込が 1 件も無い）。
     FramesToLastWrite,
-    /// 接地点差（`ground` レコードが無い・`diff` が読めない）。
+    /// 接地点差（`ground` レコードが無い・どの行の `diff` も読めない・`diff=-`（作業領域の下端が不明）の行がある）。
     GroundDiff,
-    /// 一括書込の総所要（`flush stage=end` が無い・`total_us` が読めない）。
+    /// 一括書込の総所要（`flush stage=end` が無い・どの end 行の `total_us` も読めない）。
     FlushTotalUs,
     /// 当該キャラ窓の随伴の同一フレーム性（対を検査できていない＝`balloon_same_frame` は空虚な真）。
     BalloonSameFrame(WindowKey),
@@ -230,7 +233,7 @@ pub enum Violation {
     NoBoundsArmed,
     /// ログに遷移が 1 本も無い（[`Report`] 水準）。
     NoTransitionsFound,
-    /// 語彙の規約を破った行がある。
+    /// 語彙の規約を破った行、または `diff`・`total_us` が数として読めない行がある。
     MalformedRecords {
         /// 件数。
         count: u32,
@@ -446,14 +449,14 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
         // 「随伴は同一フレームだった」の根拠にならない（空虚な真）。判定側は**スコープごとに**
         // 数え直す——遷移全体で 1 組も無いことを条件にすると、scope が 1 つでその随伴が
         // 見送り窓のときに毎回発火し、非欠陥を不合格にする。
+        // 数だけの突き合わせなので、足りないときはどの窓が欠けたか分からず全窓を名指す。
+        let pairs_short = summary.balloon_pairs_checked < checkable_pairs(summary);
         for expectation in companion_expectations(summary) {
             let unmeasured = match expectation.state {
                 // 随伴が 1 度も書かれていない（見送り窓でもない）＝測りようがない。
                 CompanionState::BalloonNotWritten => true,
                 // 検査できるはずの対が集計側で数えられていない＝空虚な真。
-                CompanionState::Checkable => {
-                    summary.balloon_pairs_checked < checkable_pairs(summary)
-                }
+                CompanionState::Checkable => pairs_short,
             };
             if unmeasured {
                 violations.push(Violation::Unmeasured(Quantity::BalloonSameFrame(
@@ -501,13 +504,15 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
     }
 
     // ⑹ 接地点差（要件 5.3）。符号は保ったまま絶対値で比べる（浮きも沈みも違反）。
+    // 差が番兵（`diff=-`）の行が 1 つでもあれば、別の scope が量を出していても測れていない。
     if let Some(max) = bounds.ground_diff_abs_max {
-        match summary.ground_diff_max {
-            None => violations.push(Violation::Unmeasured(Quantity::GroundDiff)),
-            Some(diff) if diff.saturating_abs() > max => {
-                violations.push(Violation::GroundDiff { diff, max });
-            }
-            Some(_) => {}
+        if summary.ground_diff_unmeasured || summary.ground_diff_max.is_none() {
+            violations.push(Violation::Unmeasured(Quantity::GroundDiff));
+        }
+        if let Some(diff) = summary.ground_diff_max
+            && diff.saturating_abs() > max
+        {
+            violations.push(Violation::GroundDiff { diff, max });
         }
     }
 
@@ -679,8 +684,8 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         f,
         "    量: frames_to_last_write={} writes={} path_a_writes={} sync_stage_writes={} \
          balloon_same_frame={}(pairs={}) holds={} chain_realigned={} ground_diff_max={} \
-         flush_total_us_max={} malformed={} frames_indeterminate={}",
-        opt_u32(summary.frames_to_last_write),
+         ground_unmeasured={} flush_total_us_max={} malformed={} frames_indeterminate={}",
+        or_missing(summary.frames_to_last_write),
         summary.writes,
         summary.path_a_writes,
         summary.sync_stage_writes,
@@ -688,18 +693,17 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         summary.balloon_pairs_checked,
         summary.holds,
         summary.chain_realigned,
-        summary
-            .ground_diff_max
-            .map_or_else(|| "-".to_owned(), |diff| diff.to_string()),
-        opt_u64(summary.flush_total_us_max),
+        or_missing(summary.ground_diff_max),
+        summary.ground_diff_unmeasured,
+        or_missing(summary.flush_total_us_max),
         summary.malformed_records,
         summary.frames_indeterminate,
     )?;
     writeln!(
         f,
         "    量(参考): first_write_t_us={} last_write_t_us={} sum_call_us={}",
-        opt_u64(summary.wall.first_write_t_us),
-        opt_u64(summary.wall.last_write_t_us),
+        or_missing(summary.wall.first_write_t_us),
+        or_missing(summary.wall.last_write_t_us),
         summary.wall.sum_call_us,
     )?;
 
@@ -713,9 +717,9 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         writeln!(
             f,
             "    量(窓): {window} writes={} mismatch_frames={} visualize_to_write_us={}",
-            opt_u32(summary.writes_per_window.get(window).copied()),
-            opt_u32(summary.mismatch_frames_per_window.get(window).copied()),
-            opt_u64(summary.visualize_to_write_us.get(window).copied()),
+            or_missing(summary.writes_per_window.get(window).copied()),
+            or_missing(summary.mismatch_frames_per_window.get(window).copied()),
+            or_missing(summary.visualize_to_write_us.get(window).copied()),
         )?;
     }
 
@@ -732,14 +736,9 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
     }
 }
 
-/// 欠けている量は番兵で刷る（空欄にすると「0 だった」と読めてしまう）。
-fn opt_u32(value: Option<u32>) -> String {
-    value.map_or_else(|| "-".to_owned(), |value| value.to_string())
-}
-
-/// [`opt_u32`] の 64bit 版。
-fn opt_u64(value: Option<u64>) -> String {
-    value.map_or_else(|| "-".to_owned(), |value| value.to_string())
+/// 欠けている値は番兵 `MISSING` で刷る（空欄にすると「0 だった」と読めてしまう）。
+pub fn or_missing<T: fmt::Display>(value: Option<T>) -> String {
+    value.map_or_else(|| MISSING.to_owned(), |value| value.to_string())
 }
 
 /// 1 系統ぶんの合否を書き出す。

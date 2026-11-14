@@ -5,9 +5,9 @@ use wintf::ecs::{Point, WindowPos};
 
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, OFFSCREEN_PULL_TAG, UNRESOLVED_TAG,
-    drag_event_at, dragging_state, fake_handle, gap_center_x, guard_events, left_wa, mixed_layout,
-    narrow_char_size, point_of, px, right_wa, unguarded_projection, visible_in, wide_char_size,
-    win, window_pos_sized,
+    drag_event_at, dragging_state, fake_handle, gap_bound_char_world, gap_center_x, guard_events,
+    left_wa, mixed_layout, narrow_char_size, point_of, px, right_wa, unguarded_projection,
+    visible_in, wide_char_size, win, window_pos_sized,
 };
 use super::{
     Anchored, MonitorSnapshot, PlacementRoute, WorkAreaResolution, on_char_drag, project_anchor,
@@ -38,71 +38,7 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 // 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（Req 5.6）。
 // -------------------------------------------------------------------------
 
-use super::route_applies_visibility_guard;
-
-/// 「旧矩形は可視・新提案は全 work area 非交差」へ落ちるキャラ窓 World を組む。
-///
-/// 旧寸 [`wide_char_size`] の窓を、下端中央付替え（`resize_window_to` 手順 3b）後の
-/// 中心が帯へ落ちる位置に置く。新寸 [`narrow_char_size`] は帯より狭いので、射影 T が
-/// 出す提案矩形は帯へ収まり **どの work area とも交差しない**——S3 が言う
-/// 「非ドラッグ要因で不可視へ遷移する」状態そのものを合成する。
-fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
-    let old = wide_char_size(dpi);
-    let old_pos = PointPx {
-        x: gap_center_x(dpi) - old.w / 2,
-        y: left_wa().bottom - old.h,
-    };
-    let mut world = World::new();
-    world.insert_resource(mixed_layout(dpi));
-    let e = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
-            Anchored(Anchor::Bottom),
-        ))
-        .id();
-    (world, e, old_pos)
-}
-
-/// 発火条件の**表そのもの**を固定する（D13 帰結⑴⑵）。挙動側の檻（下 2 件）と
-/// 二段構えにしてあるのは、語彙が 13 種あるのに `resize_window_to` を実際に通るのは
-/// 現状 4 種だけで、残り 8 種の判定が挙動檻だけでは**合成でしか**検査できないため。
-/// [`PlacementRoute::ALL`] を回すので、語彙が増えたら本檻も落ちる。
-///
-/// 発火側は 7 種ある（7 種目は面の `move` のずれ `PatternMove`）。うち
-/// [`WorkAreaResnap`](PlacementRoute::WorkAreaResnap)／[`ChainRealign`](PlacementRoute::ChainRealign)
-/// は areka-P0-dpi-transition-atomicity が足した**システム由来の再アンカー**で、ユーザーの
-/// 明示操作ではない（同 design D9 が既定位置の追跡対象として挙げる 6 経路と同じ区分）。
-/// 書込を出す側は task 5.2／5.6 が新設するため、現時点で判定を検査できるのは本表だけである。
-#[test]
-fn visibility_guard_route_table_matches_the_d13_decision() {
-    for route in PlacementRoute::ALL {
-        let expected = matches!(
-            route,
-            PlacementRoute::AnchorChange
-                | PlacementRoute::Resnap
-                | PlacementRoute::DpiReproject
-                | PlacementRoute::ReportedSizeReconcile
-                | PlacementRoute::WorkAreaResnap
-                | PlacementRoute::ChainRealign
-                // 面の `move` のずれ（表示の側の置き直し・seriko-pattern-calls MoveShiftPlacement）。
-                | PlacementRoute::PatternMove
-        );
-        assert_eq!(
-            route_applies_visibility_guard(route),
-            expected,
-            "route={route} の発火判定が D13 帰結⑴⑵ と食い違う"
-        );
-    }
-    // 表が「全部真」「全部偽」へ潰れていないこと（自明な述語への退化の検出）。
-    let fired = PlacementRoute::ALL
-        .into_iter()
-        .filter(|r| route_applies_visibility_guard(*r))
-        .count();
-    assert_eq!(fired, 7, "発火 route が 7 種でない（表が潰れている）");
-}
-
-/// **Req 3.1 の本体**: 非ドラッグの配置系 4 経路（D13 帰結⑴）では、全 work area
+/// **Req 3.1 の本体**: 非ドラッグの配置系（D13 帰結⑴。守りが効くのは `is_system_reanchor` の 7 経路で、ここで回すのはそのうち 4 つ）では、全 work area
 /// 非交差への遷移が X の clamp で阻止され、`warn!` が 1 行残る。
 ///
 /// Y は射影 T の所有ゆえ 1 bit も動かない（[`guard_visibility`] の事後条件）。
@@ -413,22 +349,29 @@ fn an_offscreen_projection_input_warns_on_a_non_drag_route() {
 fn an_onscreen_projection_input_stays_silent() {
     for dpi in DPIS {
         let new = narrow_char_size(dpi);
-        let (mut world, e, old_pos) = gap_bound_char_world(dpi);
-        // 入力（帯の中の窓）ではなく、右モニタの内側へ置き直した状態から始める。
+        // 帯の中ではなく、右モニタの内側に置いた窓から始める。
         let inside = PointPx {
             x: right_wa(dpi).left + px(100, dpi),
             y: right_wa(dpi).bottom - wide_char_size(dpi).h,
         };
-        world.entity_mut(e).insert(window_pos_sized(
-            inside.x,
-            inside.y,
-            wide_char_size(dpi).w,
-            wide_char_size(dpi).h,
-        ));
-        let _ = old_pos;
+        let mut world = World::new();
+        world.insert_resource(mixed_layout(dpi));
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(
+                    inside.x,
+                    inside.y,
+                    wide_char_size(dpi).w,
+                    wide_char_size(dpi).h,
+                ),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
 
-        let (_, events) =
+        let (ok, events) =
             capture(|| resize_window_to(&mut world, e, new, PlacementRoute::WorkAreaResnap));
+        assert!(ok, "dpi={dpi}: 書く前に戻った（守りの道を通っていない）");
         assert!(
             guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
             "dpi={dpi}: 画面内の入力で引き寄せの警告が出ている: {events:?}"
@@ -566,7 +509,7 @@ fn missing_work_area_stays_silent_on_guard_exempt_routes() {
     for dpi in DPIS {
         let (mut world, e, _) = gap_bound_char_world(dpi);
         world.remove_resource::<MonitorSnapshot>();
-        let (_, events) = capture(|| {
+        let (moved, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 e,
@@ -574,6 +517,7 @@ fn missing_work_area_stays_silent_on_guard_exempt_routes() {
                 PlacementRoute::MoveCue,
             )
         });
+        assert!(moved, "dpi={dpi}: 前提: 書込が起きている");
         assert!(
             guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
             "dpi={dpi}: 適用外 route でガードが喋っている: {events:?}"
@@ -600,7 +544,7 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
         let e = world
             .spawn((
                 fake_handle(0x1000),
-                // 寸は `CW_USEDEFAULT` センチネルのまま（窓生成直後の実表現）。
+                // 寸は `CW_USEDEFAULT` センチネルのまま（窓生成前の実表現）。
                 WindowPos {
                     position: Some(Point { x: raw.x, y: raw.y }),
                     ..Default::default()
@@ -657,7 +601,7 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
 
 /// wintf 正典の未確定センチネル（`== i32::MIN`）。**本体の import とは独立に**
 /// 定義元から直接引き、判定式が正典と同式であることを檻側でも固定する
-/// （`window_pos.rs:41`／`monitor_systems.rs:408` と同じ値）。
+/// （`WindowPos::default`（wintf `window_pos/mod.rs`）と `monitor_systems.rs` の窓中心の判定 `window_center` と同じ値）。
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT as SENTINEL;
 
 /// 手順 3 の位置センチネル打ち切りが名乗る語（**本体の文言とは独立に literal で置く**）。
@@ -729,7 +673,10 @@ fn undetermined_position_aborts_resize_without_writing() {
 
         for (label, size) in [
             // `on_window_add` が挿す実表現そのもの（位置・寸とも未確定）。
-            ("窓生成直後（位置・寸ともセンチネル）", None),
+            (
+                "窓生成前（位置・寸ともセンチネル）",
+                Some(SizeI::new(SENTINEL, SENTINEL)),
+            ),
             // 寸だけ確定した窓＝汚染されるのは位置の側だけ、という切り分け。
             ("寸のみ確定・位置センチネル", Some(old_size_i(dpi))),
         ] {

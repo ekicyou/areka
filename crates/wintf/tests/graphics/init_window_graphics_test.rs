@@ -9,7 +9,7 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
 use log_capture_kit::count_levels;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
@@ -37,7 +37,6 @@ fn spawn_window(world: &mut World) -> Entity {
             Window::default(),
             WindowHandle {
                 hwnd: HWND(std::ptr::null_mut()),
-                instance: HINSTANCE(std::ptr::null_mut()),
             },
             HasGraphicsResources,
         ))
@@ -146,10 +145,7 @@ fn failed_recreation_is_retried_without_a_new_mark() {
         let entity = world
             .spawn((
                 Window::default(),
-                WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE(std::ptr::null_mut()),
-                },
+                WindowHandle { hwnd },
                 HasGraphicsResources,
             ))
             .id();

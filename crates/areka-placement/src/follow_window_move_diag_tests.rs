@@ -51,7 +51,7 @@ fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
 
     assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
-    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（spawn.rs T-V1 と同型）。
+    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（spawn_cleanup_tests.rs の T-V1 と同型）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
         "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
@@ -155,7 +155,7 @@ fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns()
 //   (3) 書込が起きない経路（べき等 skip・`WindowHandle` 未付与）ではレコードが出ない
 //   (4) 既定 `RUST_LOG=info` では 1 行も出ない（Req 1.7）
 //
-// 観測境界は tracing イベント本体（`test_support::capture`）——本レコードは
+// 観測境界は tracing イベント本体（`log_capture_kit::capture`）——本レコードは
 // `WindowPos` ミラーと違い「書込が起きた事実」そのものの証跡だからである。
 // 座標・寸・DPI は 96 の非倍数／非既定値を使い、取り違えを差で炙り出す。
 // -------------------------------------------------------------------------
@@ -165,7 +165,7 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber::EnvFilter;
 use wintf::ecs::DPI;
 
-use super::super::diag::{DESPAWNED_SKIP_TAG, WINDOW_MOVE_RECORD_TAG};
+use super::super::diag::{DESPAWNED_SKIP_TAG, DIAG_TARGET, WINDOW_MOVE_RECORD_TAG};
 use super::super::spawn::{BalloonWindowMarker, CharWindowMarker};
 use log_capture_kit::{CapturedEvent, capture, ensure_interest_probes, expect_one};
 
@@ -210,7 +210,8 @@ fn char_window_world(scope: usize, dpi: u16) -> (World, Entity) {
 }
 
 /// (2) 全フィールドの檻: 書込成功で**ちょうど 1 行**、route・entity・kind・scope・
-/// 物理位置・物理寸・DPI が揃う（1 つでも落ちたら赤）。
+/// 物理位置・物理寸・DPI が揃う（1 つでも落ちたら赤）。entity は wintf 側ログ（`entity = ?e`）と
+/// 同じ `Debug` 表現で出る——Req 1.9 の scope 別計数（2 段 grep）の結合キー。
 #[test]
 fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     let (mut world, e) = char_window_world(1, 192);
@@ -235,30 +236,9 @@ fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     );
 }
 
-/// (2) 結合キーの檻: entity は wintf 側ログ（`entity = ?e`＝`Debug` 表現・scope を
-/// 持たない）と同一表現で出る——Req 1.9 の scope 別計数（2 段 grep）の成立条件。
-#[test]
-fn window_move_record_entity_matches_wintf_debug_rendering() {
-    let (mut world, e) = char_window_world(0, 120);
-
-    let (_, events) = capture(|| {
-        resize_window_to(
-            &mut world,
-            e,
-            SizePx { w: 517, h: 823 },
-            PlacementRoute::Resnap,
-        )
-    });
-    let line = only_window_move_line(&events);
-    assert!(
-        line.contains(&format!("entity={e:?}")),
-        "wintf 側ログと結合できる Debug 表現になっていない: {line}"
-    );
-    assert!(line.contains("scope=0") && line.contains("kind=char"));
-}
-
-/// (1) 経路名は**呼出側が渡した route と 1:1**（`resize_window_to` は 3 経路の共通
-/// 反映口ゆえ、ここを取り違えると書き手の名指し＝Req 2.4 が丸ごと嘘になる）。
+/// (1) 経路名は**呼出側が渡した route と 1:1**。`resize_window_to` は多くの経路の共通の
+/// 反映口なので、ここで route を取り違えると書き手の名指し（Req 2.4）が丸ごと嘘になる。
+/// ここではそのうち 3 経路を渡す。
 #[test]
 fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
     for route in [
@@ -275,7 +255,7 @@ fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
             line.contains(&format!("route={}", route.as_str())),
             "route={route} を渡したのにレコードが一致しない: {line}"
         );
-        // 他 9 経路の語が混ざらない（取り違えの檻）。
+        // 渡していない残りの経路の語が混ざらない（取り違えの檻）。
         for other in PlacementRoute::ALL {
             if other == route {
                 continue;
@@ -488,8 +468,18 @@ fn no_window_move_record_when_nothing_is_written() {
     );
 }
 
-/// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag.rs の
+/// 捕捉が生きている証拠として同じ窓の中で必ず出す対照の行。
+///
+/// `info` 水準・記録の target で出すので、既定 directive（`info`）でも手順書の directive
+/// （`info,areka_placement::diag=debug`）でも必ず通る——捕捉が死んでいるだけで「出ない」の
+/// テストが緑になる空振りを塞ぐ（`follow_transition_diag_tests.rs` の `CONTROL_LINE` と同じ置き方）。
+const CONTROL_LINE: &str = "[window-move-probe] alive";
+
+/// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag_tests.rs の
 /// `emit_all_under_filter` と同型——こちらは**単一ライター経由**で点灯を確かめる）。
+///
+/// 戻り値には必ず [`CONTROL_LINE`] が含まれる。含まれないなら捕捉の故障であり、呼び手は
+/// それを先に主張すること。
 fn window_move_output_under_filter(directives: &str) -> String {
     ensure_interest_probes();
 
@@ -518,6 +508,8 @@ fn window_move_output_under_filter(directives: &str) -> String {
 
     let (mut world, e) = char_window_world(1, 192);
     tracing::subscriber::with_default(subscriber, || {
+        // 対照の行は観測の窓の内側で出す（同じ捕捉・同じ target・同じ directive を通る）。
+        tracing::info!(target: DIAG_TARGET, "{CONTROL_LINE}");
         assert!(resize_window_to(
             &mut world,
             e,
@@ -535,6 +527,10 @@ fn window_move_output_under_filter(directives: &str) -> String {
 fn window_move_records_are_silent_under_default_info_filter() {
     let out = window_move_output_under_filter("info");
     assert!(
+        out.contains(CONTROL_LINE),
+        "対照が拾えていない＝捕捉が死んでいる（このテストの否定は空振りになる）: {out}"
+    );
+    assert!(
         !out.contains(WINDOW_MOVE_RECORD_TAG),
         "既定 RUST_LOG=info で窓移動レコードが漏れている（Req 1.7 違反）: {out}"
     );
@@ -545,6 +541,10 @@ fn window_move_records_are_silent_under_default_info_filter() {
 #[test]
 fn window_move_records_light_up_under_the_procedure_directive() {
     let out = window_move_output_under_filter("info,areka_placement::diag=debug");
+    assert!(
+        out.contains(CONTROL_LINE),
+        "対照が拾えていない＝捕捉が死んでいる: {out}"
+    );
     assert!(
         out.contains(WINDOW_MOVE_RECORD_TAG) && out.contains("route=DpiReproject"),
         "手順書の RUST_LOG で単一ライターのレコードが点灯しない: {out}"

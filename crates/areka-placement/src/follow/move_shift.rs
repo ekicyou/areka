@@ -4,19 +4,22 @@
 //! 提示が覚えたずれ（作者基準）に倍率をかけ、元の位置（今の位置 − 当てた分）へ足してから、
 //! 今の置き方の決まり（吸い付き・作業領域の中への寄せ・見える範囲の守り）を後から当てる。
 //! 書くのは位置だけで、窓の寸は変えない（7.5）。補わずに一度で当てる（7.3）。
-//! 呼び手は毎フレームのずれの相（`emo2_boot/frame/move_shift.rs`）。
+//! 呼び手は毎フレームのずれの相（`runtime::frame::move_shift`）。
 
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::*;
-use tracing::warn;
-use wintf::ecs::WindowPos;
+use tracing::{debug, warn};
+use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+use wintf::ecs::drag::DraggingState;
+use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
+use super::super::dpi_sync::{self, HoldSite};
 use super::super::windowposition::scale_signed;
 use super::{
     Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, PlacementRoute,
-    PointPx, SizePx, apply_visibility_guard, follow_balloon, move_window_with_route,
-    project_anchor, rect_at, work_area_for_window,
+    PointPx, RectPx, SizePx, apply_visibility_guard, follow_balloon, is_char_drag_partner,
+    is_char_dragging, move_window_with_route, project_anchor, rect_at, work_area_for_window,
 };
 
 const ZERO: PointPx = PointPx { x: 0, y: 0 };
@@ -30,6 +33,9 @@ pub(crate) struct MoveShiftApplied {
     want: (i64, i64),
     ratio: ScaleRatio,
     applied: PointPx,
+    /// 絶対の軸の当て直しを待っている（札で書けなかった・材料が無かった）。立っていれば
+    /// 毎フレームの相が当て直す（「ずれは今の値」を偽にする）。
+    awaiting_reapply: bool,
 }
 
 /// 作者基準のずれに倍率をかける（`\![move]` と同じ `scale_signed`・`i32` へ飽和）。
@@ -67,7 +73,9 @@ pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> Po
 pub fn shift_is_current(world: &World, window: Entity, want: (i64, i64), k: ScaleRatio) -> bool {
     world
         .get::<MoveShiftApplied>(window)
-        .map_or(want == (0, 0), |r| r.want == want && r.ratio == k)
+        .map_or(want == (0, 0), |r| {
+            r.want == want && r.ratio == k && !r.awaiting_reapply
+        })
 }
 
 /// 窓を絶対の位置へ書いた書き手（位置の初期化）が、書いた位置を新しい元の位置にする。
@@ -84,6 +92,8 @@ pub(crate) fn rebase_shift(world: &mut World, window: Entity) {
 /// 新しい元の位置にし、今のずれをその上へすぐ当て直す。
 ///
 /// 残りの軸は今の位置からの相対なので当てた分を残す（外すとずれを二度数える）。記録が無ければ何もしない。
+/// 整合待ちの札がある窓へは書かず、当て直し待ちの印だけを立てて戻る（札が外れたフレームで
+/// 毎フレームの相が当て直す・監査の指摘 1）。
 pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
     let Some(mut r) = world.get::<MoveShiftApplied>(window).copied() else {
         return;
@@ -97,7 +107,11 @@ pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
     if y {
         r.applied.y = 0;
     }
+    r.awaiting_reapply = true;
     world.entity_mut(window).insert(r);
+    if dpi_sync::defers_window_write(world, window, HoldSite::PatternMove) {
+        return;
+    }
     apply_char_shift(world, window, r.want, r.ratio);
 }
 
@@ -107,13 +121,49 @@ pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
 pub(super) fn reset_applied(world: &mut World, window: Entity) {
     if let Some(mut r) = world.get_mut::<MoveShiftApplied>(window) {
         r.applied = ZERO;
+        r.awaiting_reapply = false;
     }
+}
+
+/// 位置が `CW_USEDEFAULT` の印（窓生成前・位置未確定）でないか（印は位置が無いのと同じに扱う）。
+fn is_placed(p: &wintf::ecs::Point) -> bool {
+    p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT
+}
+
+/// 利用者がドラッグ中の窓か、キャラ窓のドラッグに連れ動く組の相手か、持ち主のバルーンがドラッグ中の
+/// キャラ窓か。どれも当てない（次のドラッグの出来事が古いずれで書き戻してちらつき、相手は保存の元の
+/// 位置もずれ、バルーンは追いで跳ぶ）。ドラッグ中は `DraggingState` に加えて控え（`CharDragSession`）
+/// でも見る（多窓のとき dispatch が DragEnd の前に `DraggingState` を落とすことがある）。記録を
+/// 変えないので、ドラッグの後に当て直される。見送りは失敗でなく毎フレーム起こるので `debug!` で残す。
+fn defers_for_drag(world: &World, window: Entity) -> bool {
+    let reason = if world.get::<DraggingState>(window).is_some() || is_char_dragging(world, window)
+    {
+        "dragging"
+    } else if is_char_drag_partner(world, window) {
+        "drag_partner"
+    } else if world
+        .get::<BalloonFollow>(window)
+        .is_some_and(|f| world.get::<DraggingState>(f.balloon).is_some())
+    {
+        "balloon_dragging"
+    } else {
+        return false;
+    };
+    debug!(
+        event = "move_shift_deferred",
+        entity = ?window,
+        reason,
+        "ドラッグ中の窓なので面の move のずれを当てない（ドラッグの後に当て直す）"
+    );
+    true
 }
 
 /// キャラ窓へずれを当てる。書いたら `true`。
 ///
-/// 窓・位置・寸・作業領域のどれかが無ければ `warn!` のうえ `false`（記録は変えないので、
-/// 次のフレームで当て直す）。
+/// 窓・位置（`CW_USEDEFAULT` の印を含む）・寸・作業領域のどれかが無ければ `warn!` のうえ
+/// `false`（記録は変えないので、当て直し待ちの印も立ったまま残り、次のフレームで当て直す）。
+/// ドラッグ中の窓・キャラ窓のドラッグの組の相手・持ち主のバルーンがドラッグ中の窓は `debug!` のうえ
+/// `false`（記録は変えない）。
 pub fn apply_char_shift(
     world: &mut World,
     window: Entity,
@@ -129,10 +179,13 @@ pub fn apply_char_shift(
         );
         false
     };
+    if defers_for_drag(world, window) {
+        return false;
+    }
     let Some((pos, size)) = world
         .get::<WindowPos>(window)
         .and_then(|wp| Some((wp.position?, wp.size?)))
-        .filter(|(_, s)| s.width > 0 && s.height > 0)
+        .filter(|(p, s)| is_placed(p) && s.width > 0 && s.height > 0)
     else {
         return skipped("no_window_position");
     };
@@ -160,7 +213,16 @@ pub fn apply_char_shift(
     // 置き方の決まりを後から当てる（7.8）: 吸い付き → 作業領域の中への寄せ → 見える範囲の守り。
     let anchor = world.get::<Anchored>(window).map_or(Anchor::Free, |a| a.0);
     let anchored = project_anchor(anchor, raw, size, snapshot);
-    let clamped = clamp_rect_to_work_area(anchored, size, area);
+    // 寄せる先は作業領域と元の矩形を両方含む範囲（端に置いた窓をずれのたびに中へ引き寄せない・
+    // 監査の指摘 5）。元の矩形が作業領域の中なら作業領域そのもの。
+    let origin = rect_at(base, size);
+    let bounds = RectPx {
+        left: area.left.min(origin.left),
+        top: area.top.min(origin.top),
+        right: area.right.max(origin.right),
+        bottom: area.bottom.max(origin.bottom),
+    };
+    let clamped = clamp_rect_to_work_area(anchored, size, bounds);
     let old_rect = Some(rect_at(PointPx { x: pos.x, y: pos.y }, size));
     // 守りの入力は寄せた後の位置（`raw` だと自分の寄せを勝手に飛んだ窓＝OffscreenPull と見誤る）。
     let to = apply_visibility_guard(
@@ -187,13 +249,16 @@ pub fn apply_char_shift(
             x: written.x.saturating_sub(base.x),
             y: written.y.saturating_sub(base.y),
         },
+        awaiting_reapply: false,
     });
     true
 }
 
 /// バルーン窓へずれを当てる（記録してから、そのキャラ窓の今の位置で追い直す）。書いたら `true`。
 ///
-/// バルーン窓・その持ち主のキャラ窓・キャラ窓の位置のどれかが無ければ `warn!` のうえ `false`。
+/// バルーン窓（`WindowHandle` まで）・その持ち主のキャラ窓・キャラ窓の位置（`CW_USEDEFAULT` の
+/// 印を含む）のどれかが無ければ `warn!` のうえ `false`（記録は書かない）。ドラッグ中のバルーン窓は
+/// `debug!` のうえ `false`（記録は変えない）。
 pub fn apply_balloon_shift(
     world: &mut World,
     balloon: Entity,
@@ -209,14 +274,19 @@ pub fn apply_balloon_shift(
         );
         false
     };
-    if world.get_entity(balloon).is_err() {
+    // 窓の無い（破棄済み・`WindowHandle` の付く前の）バルーンへは書けない。当てたと記録すると
+    // 毎フレームの相が当て直さないので、記録の前に断る（窓ができたフレームで当て直す）。
+    if world.get::<WindowHandle>(balloon).is_none() {
         return skipped("no_balloon_window");
+    }
+    if defers_for_drag(world, balloon) {
+        return false;
     }
     let owner = world
         .query::<(Entity, &BalloonFollow, &WindowPos)>()
         .iter(world)
         .find(|(_, f, _)| f.balloon == balloon)
-        .map(|(e, _, wp)| (e, wp.position));
+        .map(|(e, _, wp)| (e, wp.position.filter(is_placed)));
     let Some((char_window, Some(pos))) = owner else {
         return skipped("no_char_window_position");
     };
@@ -224,6 +294,7 @@ pub fn apply_balloon_shift(
         want,
         ratio: k,
         applied: scaled(want, k),
+        awaiting_reapply: false,
     });
     follow_balloon(
         world,

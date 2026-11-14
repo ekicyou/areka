@@ -148,7 +148,7 @@ mod scope_rect {
     use areka_ghost::sylphya_wiring::ghost_asker_id;
     use shiori_abi::error::ShioriError;
     use shiori_abi::interface::IShioriHost;
-    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::Foundation::HWND;
     use windows::core::HSTRING;
     use wintf::ecs::WindowHandle;
 
@@ -178,7 +178,6 @@ mod scope_rect {
     fn fake_handle(raw: usize) -> WindowHandle {
         WindowHandle {
             hwnd: HWND(raw as *mut _),
-            instance: HINSTANCE::default(),
         }
     }
 
