@@ -375,6 +375,125 @@ $SelfTestChecks = @(
     } }
 
     # -------------------------------------------------------------------------
+    # 出力先と -Resume の束（2・6・21）
+    # -------------------------------------------------------------------------
+
+    [pscustomobject]@{ Name = 'resume-incomplete'; Body = {
+        # 5 つの状態の出力先: 完了は使われ、未完了・静かでないは脇へ退き（中身はそのまま）、run.log の無いものと無いものは触られない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        $root = Join-Path $script:SelfTestRoot 'resume'
+        $null = New-Item -ItemType Directory -Path $root
+        $full = @{
+            'run.log' = 'log'; 'cpu.csv' = 'csv'
+            'run-meta.txt' = "[run]`ndry_run = False`n`n[result]`nended_utc = 2026-01-01T00:00:00.000Z`n"
+            'quiet-after.txt' = "verdict=NOT_QUIET`nverdict=QUIET`n"
+        }
+        $cases = @(
+            @{ Name = 'complete'; Over = @{}; Want = $true; Tag = $null }
+            @{ Name = 'no-ended'; Over = @{ 'run-meta.txt' = "[run]`nstarted_utc = x`n" }; Want = $false; Tag = 'INCOMPLETE' }
+            @{ Name = 'no-after'; Over = @{ 'quiet-after.txt' = $null }; Want = $false; Tag = 'INCOMPLETE' }
+            @{ Name = 'no-verdict'; Over = @{ 'quiet-after.txt' = "mean=1.0`n" }; Want = $false; Tag = 'INCOMPLETE' }
+            @{ Name = 'no-csv'; Over = @{ 'cpu.csv' = $null }; Want = $false; Tag = 'INCOMPLETE' }
+            @{ Name = 'no-meta'; Over = @{ 'run-meta.txt' = $null }; Want = $false; Tag = 'INCOMPLETE' }
+            @{ Name = 'not-quiet'; Over = @{ 'quiet-after.txt' = "verdict=QUIET`nverdict=NOT_QUIET`n" }; Want = $false; Tag = 'NOTQUIET' }
+            @{ Name = 'no-runlog'; Over = @{ 'run.log' = $null; 'cpu.csv' = $null; 'quiet-after.txt' = $null; 'DRY-RUN.txt' = 'dry' }; Want = $false; Tag = $null }
+        )
+        foreach ($case in $cases) {
+            $dir = Join-Path $root $case.Name
+            $null = New-Item -ItemType Directory -Path $dir
+            $files = $full.Clone()
+            foreach ($k in $case.Over.Keys) { $files[$k] = $case.Over[$k] }
+            $names = @($files.Keys | Where-Object { $null -ne $files[$_] } | Sort-Object)
+            foreach ($n in $names) { [System.IO.File]::WriteAllText((Join-Path $dir $n), $files[$n]) }
+            $got = Test-MeasureRunComplete -Dir $dir
+            Assert-SelfTest ($got -eq $case.Want) "$($case.Name): Test-MeasureRunComplete $got (want $($case.Want))"
+            $aside = @(Get-ChildItem -LiteralPath $root -Directory -Filter "$($case.Name)-*")
+            $asideNames = @($aside | ForEach-Object Name) -join ','
+            if ($case.Tag) {
+                Assert-SelfTest (-not (Test-Path -LiteralPath $dir)) "$($case.Name): folder was not moved aside"
+                Assert-SelfTest ($aside.Count -eq 1 -and $aside[0].Name -cmatch "^$([regex]::Escape($case.Name))-$($case.Tag)-\d{17}$") "$($case.Name): moved aside as '$asideNames' (want $($case.Name)-$($case.Tag)-<17 digits>)"
+                $dir = $aside[0].FullName
+            } else {
+                Assert-SelfTest ($aside.Count -eq 0) "$($case.Name): moved aside as '$asideNames' (want untouched)"
+            }
+            $left = @(Get-ChildItem -LiteralPath $dir -File | ForEach-Object Name | Sort-Object)
+            Assert-SelfTest (($left -join ',') -eq ($names -join ',')) "$($case.Name): files '$($left -join ',')' (want '$($names -join ',')')"
+        }
+        $missing = Join-Path $root 'missing'
+        Assert-SelfTest (-not (Test-MeasureRunComplete -Dir $missing)) 'missing folder must not be complete'
+        Assert-SelfTest (-not (Test-Path -LiteralPath $missing)) 'missing folder was created'
+    } }
+
+    [pscustomobject]@{ Name = 'dryrun-clear'; Body = {
+        # -DryRun の印だけの出力先は作り直し、ほかが在れば 3 で止めて何も消さない
+        function Write-Problem { param([string]$Message) }
+        function Write-Info { param([string]$Message) }
+        $root = Join-Path $script:SelfTestRoot 'dryrun'
+        $null = New-Item -ItemType Directory -Path $root
+        $cases = @(
+            @{ Name = 'marks'; Files = @('DRY-RUN.txt', 'run-meta.txt'); Sub = $false; Exit = $null; Kept = $false }
+            @{ Name = 'mark-only'; Files = @('DRY-RUN.txt'); Sub = $false; Exit = $null; Kept = $false }
+            @{ Name = 'other-file'; Files = @('DRY-RUN.txt', 'run-meta.txt', 'perf-x.csv'); Sub = $false; Exit = 3; Kept = $true }
+            @{ Name = 'subfolder'; Files = @('DRY-RUN.txt'); Sub = $true; Exit = 3; Kept = $true }
+            @{ Name = 'mark-and-run'; Files = @('DRY-RUN.txt', 'run.log'); Sub = $false; Exit = 3; Kept = $true }
+            @{ Name = 'real-run'; Files = @('run.log', 'run-meta.txt'); Sub = $false; Exit = $null; Kept = $true }
+        )
+        foreach ($case in $cases) {
+            $dir = Join-Path $root $case.Name
+            $null = New-Item -ItemType Directory -Path $dir
+            foreach ($n in $case.Files) { [System.IO.File]::WriteAllText((Join-Path $dir $n), 'x') }
+            if ($case.Sub) { $null = New-Item -ItemType Directory -Path (Join-Path $dir 'A1') }
+            $code = Get-SelfTestExitCode { Clear-MeasureDryRunDir -Dir $dir }
+            Assert-SelfTest ($code -eq $case.Exit) "$($case.Name): exit $code (want $($case.Exit))"
+            if ($case.Kept) {
+                $left = @(Get-ChildItem -LiteralPath $dir -File | ForEach-Object Name | Sort-Object)
+                Assert-SelfTest (($left -join ',') -eq (@($case.Files | Sort-Object) -join ',')) "$($case.Name): files '$($left -join ',')' left (want all kept)"
+            } else {
+                Assert-SelfTest (-not (Test-Path -LiteralPath $dir)) "$($case.Name): marks-only folder was not recreated"
+            }
+        }
+        $code = Get-SelfTestExitCode { Clear-MeasureDryRunDir -Dir (Join-Path $root 'missing') }
+        Assert-SelfTest ($null -eq $code) "missing folder: exit $code (want none)"
+        # -DryRun の rank-run は段③の札を書かない（書くと次の本番が印のほかのファイルで 3 になる）
+        $script:DryRunMode = $true
+        $note = Join-Path $root 'note'
+        $null = New-Item -ItemType Directory -Path $note
+        Write-MeasureSamplingNote -RunDir $note -Available $false -Reason 'dry_run'
+        Assert-SelfTest (-not (Test-Path -LiteralPath (Join-Path $note 'sampling.txt'))) '-DryRun wrote sampling.txt'
+    } }
+
+    [pscustomobject]@{ Name = 'loopdir-vocab'; Body = {
+        # 出力先の配置は Kind ごとに決まり、周の小部屋は語彙の外を受けない
+        $o = @{ OutRoot = 'C:\out'; Goal = 'g' }
+        $want = @(
+            @{ Args = @{ Kind = 'goal' }; Path = 'C:\out\g' }
+            @{ Args = @{ Kind = 'baseline'; Date = '20260101' }; Path = 'C:\out\g\baseline-20260101' }
+            @{ Args = @{ Kind = 'baseline'; Date = '20260101'; Leaf = 'release' }; Path = 'C:\out\g\baseline-20260101\release' }
+            @{ Args = @{ Kind = 'iter'; Iter = 2; Leaf = 'A1' }; Path = 'C:\out\g\iter-2\A1' }
+            @{ Args = @{ Kind = 'final'; Date = '20260102' }; Path = 'C:\out\g\final-20260102' }
+        )
+        foreach ($w in $want) {
+            $a = $w.Args.Clone()
+            $got = Get-LoopDir @a @o
+            Assert-SelfTest ($got -eq $w.Path) "Get-LoopDir $($w.Args.Kind): '$got' (want '$($w.Path)')"
+        }
+        Assert-SelfTest (($PERF_LOOP_ITER_LEAVES -join ',') -ceq 'rank,A1,B1,A2,B2,bin-A,bin-B,followup') "iter leaves changed: $($PERF_LOOP_ITER_LEAVES -join ',')"
+        foreach ($leaf in @($PERF_LOOP_ITER_LEAVES) + @($MEASURE_SIDE_LEAF.Values)) {
+            $null = Get-LoopDir -Kind 'iter' -Iter 1 -Leaf $leaf @o
+        }
+        foreach ($bad in @('A3', 'rank-run', 'bin-C', 'final')) {
+            $threw = $false
+            try { $null = Get-LoopDir -Kind 'iter' -Iter 1 -Leaf $bad @o } catch { $threw = $true }
+            Assert-SelfTest $threw "iteration subfolder '$bad' outside the vocabulary was accepted"
+        }
+        $threw = $false
+        try { $null = Get-LoopDir -Kind 'iter' -Iter 0 @o } catch { $threw = $true }
+        Assert-SelfTest $threw '-Iter 0 was accepted'
+        Assert-SelfTest ((Resolve-RunDir -RunDir 'C:\x\y\' -Kind 'iter') -eq 'C:\x\y') '-RunDir must be used as it is (no trailing \)'
+    } }
+
+    # -------------------------------------------------------------------------
     # 入口の束（4・25・26・27・33）。入口を子として起こすときは必ず空の -BinDir と一時の -OutRoot（-DryRun）
     # -------------------------------------------------------------------------
 

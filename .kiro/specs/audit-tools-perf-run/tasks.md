@@ -64,7 +64,7 @@
   - _Requirements: 3.1, 3.3, 4.1, 5.2, 7.1_
 
 - [ ] 4. 走行の出力先と `-Resume`
-- [ ] 4.1 完了の見方を厳しくし、足りない走行と静かでない走行を脇へ退ける
+- [x] 4.1 完了の見方を厳しくし、足りない走行と静かでない走行を脇へ退ける
   - 完了は「`run.log`・`cpu.csv`・`run-meta.txt` が在り、`run-meta.txt` に `ended_utc = ` の行が在り、`quiet-after.txt` の最後の `verdict=` が `QUIET`」。欠ければ `-INCOMPLETE-<時刻>`、静かでなければ `-NOTQUIET-<時刻>` へ退けて採り直す。`run.log` の無い出力先は触らない（2）
   - `-DryRun` の出力先を作り直すのは、中身が印のファイル 2 つだけ（下位のフォルダ無し）のときに限り、ほかが在れば 3 で止めて何も消さない（6）
   - 検査: `resume-incomplete`・`dryrun-clear`・`loopdir-vocab`
@@ -183,3 +183,5 @@
 - 2.1: T3 の検査は `tools/perf/invoke-perf-run.selftest.ps1` の `$PerfRunSelfTestChecks`（T2 と同じ形・助けの関数は写しで独立）。ランナーは 909 行で、1,000 行の番人まで余裕が少ない
 - 3.1: 子の道具 4 本の `trap` は共通部品を読んだ後の関数と定数を使うので、共通部品が読めないと RESULT 行の無い exit 1 になり、元の原因も消える（ループからは perf-loop が先に 4 で落ちるので届かない・直に呼んだときだけ）。8.1 の audit で直すか決める。`exit-trap` の壊した写しは「頂上の最後の関数の定義の直後」に throw を差すので、本体の後ろに関数を置くと本物を読みにいく
 - 3.2: 件 #74 の 6 か所のうち `perf-ledger.py:930-932` は 1.2 で `Invoke-Child` と一緒に消えていたので、直したのは 5 か所。T2 は子の pwsh を起こす検査が増えて 1 回 60〜80 秒かかる
+- 4.1: `-DryRun` の出力先を「印 2 つだけ」に保つため、`Write-MeasureSamplingNote` は `-DryRun` で何も書かない（読み手は run.log の無い dry run では読む前に戻る）。`Test-MeasureQuietAfterOk` は `Test-MeasureRunComplete` へ畳んで消した（README の 555 行だけが名を残す・R1）。`dryrun-clear` は `$script:DryRunMode` を立てたまま終わる
+- 隣の spec audit-tools-perf-judge（11-15 の知らせ）: judge-perf を 0.5.0 に上げ、標準出力の最後の行が `JUDGE-PERF RESULT code=N` に、自己較正は `SELFTEST RESULT ok=N ng=M` になる（まだ main に未着地）。着地の後は perf-loop.measure の止まりの文に埋まる `LastLine` がこの行になる。8.1 で合わせるか決める

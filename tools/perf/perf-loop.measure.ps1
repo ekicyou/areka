@@ -341,6 +341,7 @@ function Assert-MeasureShioriHelper {
 function Write-MeasureSamplingNote {
     param([Parameter(Mandatory = $true)][string]$RunDir, [bool]$Available, [Parameter(Mandatory = $true)][string]$Reason)
     if (-not (Test-Path -LiteralPath $RunDir -PathType Container)) { return }
+    if ($script:DryRunMode) { return }   # 6: -DryRun の出力先に印のほかのファイルを置かない（次の本番が 3 で止まる）
     $lines = @("available=$(Format-LoopBool $Available)", "reason=$Reason", "time_utc=$(Get-UtcStamp)")
     Set-Content -LiteralPath (Join-Path $RunDir $MEASURE_FILE_SAMPLING) -Value (($lines -join "`n") + "`n") -Encoding utf8 -NoNewline
 }
