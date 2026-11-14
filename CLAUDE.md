@@ -30,10 +30,10 @@ Kiro-style Spec-Driven Development on an agentic SDLC
 - Phase 0 (optional): `/kiro-steering`, `/kiro-steering-custom`
 - Discovery: `/kiro-discovery "idea"` — determines action path, writes brief.md + roadmap.md for multi-spec projects
 - Phase 1 (Specification):
-  - Post-discovery single-spec entry: `/kiro-start {feature}` — on the harness worktree branch, drives init → requirements (kiro-spec-requirements) → gap analysis (kiro-validate-gap, subagent) → requirements discussion (kiro-requirements-discussion, interactive in the chat window), committing each phase (no push). STOPs on the default branch.
+  - Post-discovery single-spec entry: `/kiro-start {feature}` — on the harness worktree branch, drives init → requirements (kiro-spec-requirements) → gap analysis (kiro-validate-gap, subagent) → requirements discussion (kiro-requirements-discussion, interactive in the chat window), committing each phase (no push). Asks no questions before the discussion; the discussion's first approval is asked through the app's next-step box. STOPs on the default branch.
     - `/kiro-validate-gap {feature}` (standalone re-run; already performed by `/kiro-start`)
     - `/kiro-requirements-discussion {feature}` (standalone re-run; already performed by `/kiro-start`)
-  - Design phase entry: `/kiro-design {feature}` — on the same branch, drives design generation (kiro-spec-design -y) → design validation (kiro-validate-design, subagent) → design discussion (kiro-design-discussion, interactive in the chat window), committing each phase (no push). STOPs on the default branch.
+  - Design phase entry: `/kiro-design {feature}` — on the same branch, drives design generation (kiro-spec-design -y) → design validation (kiro-validate-design, subagent) → design discussion (kiro-design-discussion, interactive in the chat window), committing each phase (no push). Asks no questions before the discussion; the discussion's first approval is asked through the app's next-step box. STOPs on the default branch.
     - Then step by step on the same branch:
       - `/kiro-spec-design {feature} [-y]` (standalone re-run; already performed by `/kiro-design`)
       - `/kiro-validate-design {feature}` (standalone re-run; already performed by `/kiro-design`)
@@ -70,6 +70,9 @@ Skills are located in `.claude/skills/*/SKILL.md` (mostly `kiro-*`)
 - `kiro-next` — roadmap inventory ("棚卸") and next-wave planning (rewrites `roadmap.md` / `roadmap-history.md` / `focus.md` on the worktree branch; PR + squash merge only behind an explicit approval)
 - `kiro-wave` — launches the wave `/kiro-next` recommended as separate sessions (Opus specs only; Fable specs excluded with a warning); lands this worktree's changes by PR → squash merge first
 - `perf-loop-iteration` — one turn of the self-driving performance-improvement loop (`<goal-name>`; advances the ledger's phase, prints a `PERF-LOOP STATUS` line); one-off measurement calls `tools/perf/perf-loop.ps1` directly
+- `pasta-check` — reference for the `pasta_check` CLI (ghost release build `release`, later check commands)
+- `pasta-ghost-authoring` — Pasta DSL grammar and dictionary-writing patterns for a ghost's `.pasta` files
+- `pasta-lua-coding` — pasta.dll Lua runtime API reference and coding conventions (ghost `scripts/`, Lua blocks in Pasta DSL)
 - Use skills explicitly requested by the user and skills relevant to the task's domain, including design, accessibility, and UX.
 - Select skills from their descriptions or metadata first, then read only the selected skills and the references needed for the task.
 - Follow explicit host and project rules and retain required workflow checks. Do not skip relevant skills just because the task is small.
