@@ -824,3 +824,9 @@ clippy の指摘を機械的に直す指摘は 0。
 | 1,000 行の番人（978 行・977 行の 2 本） | 978 行の `zorder_pair_maintain_tests.rs` は Z3・Z6 で減る側（下ごしらえ約 220 行・58 番の 15 行）。977 行の `zorder_chain_order_tests.rs` は Z2 で関数に `pub(super)` を付けるだけ。足すテストは全部 1,000 行から遠いファイルか新しい兄弟のファイルへ |
 | `audit-wintf-input` と同じ塊（`mouse_move.rs` の `Preparing` の腕・`dragging_window_origin`） | あちらは 2 段目＝こちらが先に着地する見込み。I1 の頭で申し合わせを確かめ直す |
 | 11 番の 65 ファイルと並走の spec | 最後に回し、頭で数え直しと申し合わせ。`areka-placement` の 14 ファイルと `crates/wintf/tests/graphics/` の 4 本は 1 欄の行を消すだけ |
+
+## 13. 設計の討議の決め（2026-11-14・開発者「承認」＝2 議題とも推奨案）
+
+1. **6 番の `TrackMouseEvent` の失敗の記録は `debug!`**。要件 8.2（`error!`＋`Err`）と `logging.md`（立ち直れる失敗は `warn!`）の字面からは外れるが、窓の手続きの中で `Err` を返す相手が無い・次の `WM_MOUSEMOVE` でまた呼ぶので立ち直る・失敗が続く場面で `warn!` だと移動のたびに溢れる・`cursor/answer.rs:225` が同じ失敗を `debug!` で残す、の 4 つを理由とし、本番の説明にも 1 行書く（設計の検証の重大な点 1）。
+2. **15 番の 0 台の判定は `apply_monitor_snapshot` の頭へ**。戻り値を `Option<usize>` にし、0 台なら `None`（表を変えない）。`detect_display_change_system` は `None` なら旗を下ろさず次の刻みで読み直し、0 台が続く間は `Local<bool>` で覚えて `warn!` と頭の `info!` を続きの最初の 1 回だけ出す。空の一覧を渡すテストを 1 本足す（設計の検証の重大な点 3）。選ばなかった案＝0 台でも旗を下ろして次の `WM_DISPLAYCHANGE` を待つ（一時的な失敗の後に知らせが来なければ古い表が残る）。
+

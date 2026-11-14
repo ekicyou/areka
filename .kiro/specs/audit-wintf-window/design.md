@@ -34,7 +34,7 @@
 - 直しのために足すテストと直すテスト（新しいファイルは「ファイルの構成の計画」の 4 本）。
 - 範囲の外への最小の追従（要件 6.1）。次の行だけを直す。
   - `crates/wintf/src/runtime/mod.rs`: `WinApp::run` の頭に UI スレッドの控えの 1 行（1 番）。持ち主の `audit-wintf-runtime` は完了済み・走っているセッションは無い。
-  - `crates/wintf/src/ecs/layout/systems/monitor_systems.rs`: `detect_display_change_system` の、列挙が 0 台のときの戻り（15 番）。持ち主の `audit-wintf-layout-widget` は完了済み。
+  - `crates/wintf/src/ecs/layout/systems/monitor_systems.rs`: `apply_monitor_snapshot` の頭の 0 台の判定と `detect_display_change_system` の戻り・記録（15 番）と、そのテスト 1 本（既存のテストのファイル）。持ち主の `audit-wintf-layout-widget` は完了済み。
   - `crates/wintf/src/runtime/window_factory_creation_tests.rs`: `create_windows` を直に呼ぶ 2 か所を `run_system_once` へ（52 番）。持ち主は完了済み。
   - `crates/wintf/src/ecs/pointer/types/mod.rs`・`ecs/pointer/types/tests.rs`・`ecs/mod.rs`: 型 `WindowPointerTracking` とそのテストと再公開を消す（6 番）。持ち主の `audit-wintf-input` と申し合わせ済み（2026-11-14）・実装の直前に確かめ直す。
   - `WindowHandle {` を組む 65 ファイル（wintf 31・`crates/areka` 20・`crates/areka-placement` 14）の `instance` の 1 欄と、`runtime/window_factory.rs` の `get_instance_handle()` の呼び出しと説明（11 番）。`areka-placement` の 14 本はタスクの前に申し合わせる。
@@ -386,7 +386,7 @@ fn has_repeated_window(cmds: &[SetWindowPosCommand]) -> bool;
 |---|---|---|
 | 2 | `to_window_coords_for_creation` を下の形に置き換える（今の矩形の道と `:396-397` の古い説明は消える）。形は変えない | 呼び手は `runtime/window_factory.rs:290` の 1 つ・`initial_pos_flags` は変えない。テストは `window_pos/tests.rs:233-247` を 2 本（位置だけ・大きさだけ・`WS_OVERLAPPEDWINDOW`）に改め、期待値は両方を与えたときの値から出す |
 | 14 | research の案（`set_window_pos` を消し、`build_flags` の本体を `build_flags_for_system` へ移して私有の方を消す） | `build_flags_for_system` の呼び手 3 つ（`graphics/systems/window_pos.rs:76`・`zorder_chain.rs:479`・`zorder_pair_maintain.rs:207`）とテストは変わらない |
-| 15 | `monitor.rs` の 2 か所の `warn!` を `error!`（1 台ぶんは `hmonitor`・`error = %e`）に。`detect_display_change_system` は列挙が 0 台なら `warn!` を 1 行残し、表を変えず、旗も下ろさずに戻る（次の刻みで読み直す） | `enumerate_monitors` の形と、ほかの呼び手（`areka-placement`・examples・tests・`areka` の `ghost_session.rs`・collision-probe）は変わらない |
+| 15 | `monitor.rs` の 2 か所の `warn!` を `error!`（1 台ぶんは `hmonitor`・`error = %e`）に。0 台の判定は `apply_monitor_snapshot` の頭に置き、0 台なら表を変えずに `None` を返す（戻り値を `usize` から `Option<usize>` に）。`detect_display_change_system` は `None` なら旗を下ろさずに戻る（次の刻みで読み直す）。0 台が続く間は `Local<bool>` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）は続きの最初の 1 回だけ出す（設計の討議の決め 2） | `enumerate_monitors` の形と、ほかの呼び手（`areka-placement`・examples・tests・`areka` の `ghost_session.rs`・collision-probe）は変わらない |
 | 16 | research の案（説明に 2 行） | 振る舞いは変えない |
 | 17 | research の案（説明を直し、`LayoutRoot` が無くて親を付けない枝に `debug!` を 1 行） | |
 | 18 | `wintf::ecs::monitor` を `wintf::ecs::window::monitor` に直す（`rust,ignore` は外さない＝例は OS の列挙を呼ぶので doctest にしない） | |
@@ -473,7 +473,8 @@ pub(crate) fn is_behind_foreground(
 ```rust
 // crates/wintf/src/ecs/window_proc/mouse_move.rs（非公開）
 /// 離脱の見張り（TME_LEAVE）を掛ける。WM_MOUSEMOVE のたびに呼ぶ（状態を持たない）。
-/// 成功は trace! を 1 行、失敗は debug! を 1 行（`cursor/answer.rs` と同じ・次の移動でまた呼ぶ）。
+/// 成功は trace! を 1 行、失敗は debug! を 1 行（返す相手が無い・次の移動でまた呼ぶ・warn! だと溢れる。
+/// `cursor/answer.rs` と同じ。この理由の 1 行を本番の説明にも書く）。
 fn track_mouse_leave(hwnd: HWND);
 
 /// 窓 `window` に属する PointerState の持ち主のうち `keep` 以外から PointerState を外し、
@@ -544,8 +545,8 @@ fn double_click_of(button: PointerButton) -> DoubleClick;
 | 番号 | 道 | 記録 | 呼び手へ |
 |---|---|---|---|
 | 1 | UI スレッドの外の積み込み | `error!`（積むたび） | 返さない（`enqueue` は戻り値を持たない・説明に書く） |
-| 6 | `TrackMouseEvent` の失敗 | `debug!`（`cursor/answer.rs` と同じ・次の移動でまた呼ぶ） | — |
-| 15 | モニター 1 台ぶんの読み取りの失敗・`EnumDisplayMonitors` の失敗 | `error!`（`error = %e`） | 返さない（形を変えない）。呼び手は 0 台を失敗とみなして `warn!` を 1 行・表を変えない |
+| 6 | `TrackMouseEvent` の失敗 | `debug!`（設計の討議の決め 1。理由: 窓の手続きの中で `Err` を返す相手が無い・次の `WM_MOUSEMOVE` でまた呼ぶので立ち直る・失敗が続く場面で `warn!` にすると移動のたびに溢れる・`cursor/answer.rs:225` も同じ失敗を `debug!` で残す。今は `let _ =` で何も残していない） | — |
+| 15 | モニター 1 台ぶんの読み取りの失敗・`EnumDisplayMonitors` の失敗 | `error!`（`error = %e`） | 返さない（形を変えない）。`apply_monitor_snapshot` は 0 台を失敗とみなして `None` を返し表を変えない。呼び手は 0 台の続きの最初の 1 回だけ `warn!` を残す |
 | 17 | `LayoutRoot` が無くて親を付けない | `debug!` | — |
 | 44 | ドラッグで窓を動かす `SetWindowPos` の失敗 | `error!` | 返す相手は無い（窓の手続き） |
 | 55 | 走査の失敗 | `warn!`（今のまま・欄を足す） | — |
@@ -576,10 +577,11 @@ fn double_click_of(button: PointerButton) -> DoubleClick;
 | 46 | 当たらない形（素の `EcsWorld`）で `WM_LBUTTONDBLCLK` を配ると、窓の entity に左の押下が記録される（`mouse_dblclick_wheel_tests.rs`） | 予備の枝を外す |
 | 48 | research の案（窓 A・B・A へ `WM_MOUSELEAVE`）（`mouse_move_dispatch_tests.rs`） | 窓の絞り込みを外す |
 | 49 | 日本語を含むパス 2 本の HDROP で `WM_DROPFILES` を呼び、同じ 2 本が届く（`drop_files_tests.rs`） | 長さの `+ 1` を落とす |
+| 15 | 既にある `apply_monitor_snapshot` の檻（偽のモニターの一覧を流し込む形）に空の一覧を渡すと `None` が返り、`Monitor` の entity が残る（`monitor_systems` の既存のテストのファイル） | 0 台の判定を外す |
 
 - **消して解いた指摘**（8・10・11・12・14・30・53・54・58。6 番の旗と型の削除の分も。6・41 番の振る舞いは上の表のテストが守る）と、写しをまとめた指摘（13・19・25・32・45・47・60・62）は、壊れる元のコードが 1 か所になるか無くなるので、専用のテストを足さない。消えたことはコンパイル（呼び手が残れば通らない）と V2 のかけ直しと `git grep` で確かめる。62 番の判定はあちらの `check_threshold` のテスト 5 本が守る。
 - **説明だけの直し**（16〜18・20〜24・27・28・31・33〜38・40・43・50）は振る舞いを変えないので、テストを持たない。24 番の例の値と 34・39 番の検査の形は、既にあるテストを直す。
-- **振る舞いを変えるがテストの穴ではない直し**（15・17・52・55・57・59・61・63）は、既にあるテストが緑のままであることで確かめる。
+- **振る舞いを変えるがテストの穴ではない直し**（17・52・55・57・59・61・63）は、既にあるテストが緑のままであることで確かめる。
 
 ### 直したテストの較正
 
