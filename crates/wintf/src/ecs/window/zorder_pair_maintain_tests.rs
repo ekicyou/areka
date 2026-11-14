@@ -31,7 +31,6 @@
 //!
 //! シングルスレッド実行器を明示する理由は確立系のテストと同じである（既定の多スレッド
 //! 実行器では [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
-
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
@@ -51,6 +50,7 @@ use crate::ecs::window::zorder_pair::{
 };
 use crate::ecs::window::{
     KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
+    flush_window_pos_commands,
 };
 
 /// 実機サインオフの `RUST_LOG`（design.md「Real-Machine Signoff」の wintf 側）に、
@@ -217,7 +217,7 @@ fn issue_control_command(hwnd: HWND) {
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
         None,
     ));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 }
 
 fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
@@ -316,7 +316,7 @@ fn reassert_request_is_applied_verified_and_then_disappears() {
         );
 
         // tick 後の flush（本番と同じ経路）。ここで初めて OS の重なりが動く。
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
 
         // 2 巡目: 実測照合と記録、そして要求の消滅。
         schedule.run(&mut world);
@@ -392,7 +392,7 @@ fn already_adjacent_pair_issues_no_command_at_all() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 対照: 捕捉が生きていれば必ず 1 本現れる指令（重なりも位置も動かさない）。
         issue_control_command(balloon_hwnd);
     });
@@ -460,7 +460,7 @@ fn without_a_request_the_maintenance_does_nothing() {
         schedule.run(&mut world);
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(trio.balloon);
     });
 
@@ -523,7 +523,7 @@ fn verification_mismatch_is_recorded_once_without_retry() {
         schedule.run(&mut world);
         schedule.run(&mut world);
         // 溜まっている指令をすべて出し切って本数を数える。
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert_line_count(
@@ -580,7 +580,7 @@ fn peer_lost_before_verification_skips_instead_of_failing() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 検証の前にキャラ窓の実体が消える（窓そのものは残っている）。
         world.entity_mut(character).despawn();
         schedule.run(&mut world);
@@ -635,13 +635,13 @@ fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目: 是正を適用し、検証待ちへ進む。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 実体は残したまま OS のハンドルだけが外れる（切離し側の `HandleRemoved` と同じ状態）。
         world.entity_mut(character).remove::<WindowHandle>();
         // 2 巡目: 検証段階だが、実測に使う HWND がもう無い。
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert_line_count(&out, SKIP_TAG, 1, "見送りは理由つきで 1 本だけ");
@@ -686,7 +686,7 @@ fn request_for_a_missing_peer_issues_no_command() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -719,7 +719,7 @@ fn request_without_handles_issues_no_command() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -766,7 +766,7 @@ fn request_on_a_window_without_declaration_is_dropped_with_a_record() {
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -831,7 +831,7 @@ fn pending_verification_without_an_issued_command_is_dropped_with_a_record() {
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 

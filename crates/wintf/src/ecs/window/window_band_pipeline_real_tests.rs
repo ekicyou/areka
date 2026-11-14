@@ -27,8 +27,8 @@ use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::measure_window_below;
 use crate::ecs::window::zorder_pair_diag::hwnd_field;
 use crate::ecs::window::{
-    KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
-    apply_zorder_chain, apply_zorder_pair_maintenance, establish_owner_links,
+    KeepDirectlyAbove, ReassertZOrder, WindowHandle, ZOrderPairStrategy, apply_zorder_chain,
+    apply_zorder_pair_maintenance, establish_owner_links, flush_window_pos_commands,
 };
 
 const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
@@ -188,9 +188,9 @@ fn an_on_directive_and_a_pair_fix_in_the_same_pass_leave_the_balloon_in_the_band
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目: 結び・帯・是正の判断（指令は予約の列へ）。流して 2 巡目で検証する。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert!(

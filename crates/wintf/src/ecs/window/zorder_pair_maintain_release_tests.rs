@@ -26,7 +26,7 @@ use crate::ecs::window::zorder_pair::{ExpectedOrder, InsertSpec};
 use crate::ecs::window::zorder_pair_sink::{SinkObservationPending, mark_pair_sink_observation};
 use crate::ecs::window::{
     ChainPlan, KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle,
-    ZOrderChainPlan, ZOrderPairStrategy, apply_zorder_pair_maintenance,
+    ZOrderChainPlan, ZOrderPairStrategy, apply_zorder_pair_maintenance, flush_window_pos_commands,
 };
 
 const DIRECTIVES: &str =
@@ -170,7 +170,7 @@ fn issue_control_command(hwnd: HWND) {
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
         None,
     ));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 }
 
 fn count(out: &str, tag: &str) -> usize {
@@ -199,7 +199,7 @@ fn a_reshow_request_on_a_released_pair_moves_nothing_and_is_dropped() {
     let out = capture_under_filter(DIRECTIVES, || {
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(trio.balloon);
     });
 
@@ -238,7 +238,7 @@ fn a_pending_verification_on_a_released_pair_is_dropped_without_checking() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(trio.balloon);
     });
 
@@ -262,7 +262,7 @@ fn a_pair_the_chain_keeps_contiguous_is_still_fixed() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
@@ -293,7 +293,7 @@ fn a_sink_mark_on_a_released_pair_is_dropped_unmeasured() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(released_trio.balloon);
     });
 

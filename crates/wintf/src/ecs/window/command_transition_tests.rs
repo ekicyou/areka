@@ -254,7 +254,7 @@ fn flush_emits_begin_write_and_end_for_a_fake_window_handle() {
             scope: Some(2),
             kind: "shell",
         }));
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert!(
@@ -352,7 +352,8 @@ fn flush_of_an_empty_queue_emits_no_records() {
 
     let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         emit_control();
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
+        // 続けて流しても空のキューは記録を出さないまま
         flush_window_pos_commands();
     });
 
@@ -370,7 +371,7 @@ fn flush_emits_nothing_under_the_default_directives() {
     let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {
         emit_control();
         SetWindowPosCommand::enqueue(geometry_command(fake_hwnd(0x33), 1, 2, 3, 4));
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert!(
@@ -457,7 +458,7 @@ fn flush_keeps_the_front_guard_so_the_default_run_pays_no_observation_cost() {
 
     // 走査が中身を見ている対照——落とし過ぎていないこと。
     assert!(
-        code.contains("pub fn flush()"),
+        code.contains("pub fn flush_window_pos_commands()"),
         "説明文を落とす処理が本文まで落としている"
     );
 }

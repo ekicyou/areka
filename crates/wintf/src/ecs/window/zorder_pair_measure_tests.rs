@@ -40,8 +40,8 @@ use super::{SIBLING_SCAN_LIMIT, measure_window_above, measure_window_below};
 use crate::api::{get_window_above, get_window_below, is_window_visible};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::{
-    KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
-    apply_zorder_pair_maintenance,
+    KeepDirectlyAbove, ReassertZOrder, WindowHandle, ZOrderPairStrategy,
+    apply_zorder_pair_maintenance, flush_window_pos_commands,
 };
 
 /// 実機サインオフの `RUST_LOG`（design.md「Real-Machine Signoff」の wintf 側）。
@@ -423,14 +423,14 @@ fn an_invisible_window_between_the_pair_still_verifies_as_adjacent() {
     let out = capture_under_filter(MAINTAIN_CAPTURE_DIRECTIVES, || {
         // 1 巡目: 対象のペアが指令を積む。flush して実際に重なりを動かす。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 2 巡目: 対象のペアの検証（不可視窓を読み飛ばして隣接と判定される）。
         // 同じ巡で対照のペアの要求を挿し、次巡で必ず落ちる形を作る。
         request_reassert(&mut world, control_balloon);
         schedule.run(&mut world);
         // 3 巡目: 対照のペアの検証。指令を flush していないので実測は期待と食い違う。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert_line_count(&out, FIX_TAG, 1, "是正の記録は対象のペアの 1 本だけ");

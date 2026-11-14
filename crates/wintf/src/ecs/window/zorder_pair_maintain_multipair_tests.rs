@@ -46,7 +46,7 @@ use super::{IssuedPairFix, apply_zorder_pair_maintenance};
 use crate::api::{get_window_above, get_window_below};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::{
-    KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
+    KeepDirectlyAbove, ReassertZOrder, WindowHandle, ZOrderPairStrategy, flush_window_pos_commands,
 };
 
 /// 実機サインオフの `RUST_LOG` に、指令の実施記録を出す `command` モジュールを足したもの
@@ -340,7 +340,7 @@ fn two_pairs_requesting_in_the_same_pass_both_become_adjacent() {
         // 本番と同じ形（1 巡ごとに tick 後の flush）を有界回数だけ回す。
         for _ in 0..4 {
             schedule.run(&mut world);
-            SetWindowPosCommand::flush();
+            flush_window_pos_commands();
         }
     });
 
@@ -415,7 +415,7 @@ fn only_one_pair_is_corrected_per_pass_and_the_other_request_survives() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert_line_count(

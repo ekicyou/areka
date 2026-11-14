@@ -52,7 +52,7 @@ use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::types::{Point, SizeI};
 use crate::ecs::window::{
     KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, WindowHandle, WindowPos,
-    ZOrderPairStrategy, establish_owner_links,
+    ZOrderPairStrategy, establish_owner_links, flush_window_pos_commands,
 };
 
 /// 実機サインオフの `RUST_LOG` に、指令の実施記録を出す `command` モジュールを足したもの
@@ -211,7 +211,7 @@ fn issue_control_command(hwnd: HWND) {
         SET_WINDOW_POS_FLAGS(SWP_NOMOVE.0 | SWP_NOSIZE.0 | SWP_NOACTIVATE.0 | SWP_NOZORDER.0),
         None,
     ));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 }
 
 fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
@@ -342,7 +342,7 @@ fn peer_loss_leaves_the_surviving_windows_display_state_untouched() {
         schedule.run(&mut world);
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 対照: 捕捉が生きていれば必ず現れる 1 本（窓は動かさない）。
         issue_control_command(balloon_hwnd);
     });
@@ -414,7 +414,7 @@ fn detaching_a_lost_peer_leaves_the_surviving_windows_display_state_untouched() 
     // ——キューはスレッドローカルに残るため、流し忘れると次の flush で対照に紛れ込む
     // （実際に紛れ込ませて 2 本になる赤を確認済み）。
     world.entity_mut(balloon).remove::<ReassertZOrder>();
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 
     let before = DisplayState::measure_without_zorder(balloon_hwnd);
 
@@ -424,7 +424,7 @@ fn detaching_a_lost_peer_leaves_the_surviving_windows_display_state_untouched() 
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 対照: 捕捉が生きていれば必ず現れる 1 本（窓は動かさない）。
         issue_control_command(balloon_hwnd);
     });

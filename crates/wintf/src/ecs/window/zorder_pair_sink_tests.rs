@@ -48,7 +48,7 @@ use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{FrontScan, measure_windows_in_front};
 use crate::ecs::window::{
     KeepDirectlyAbove, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
-    apply_zorder_pair_maintenance,
+    apply_zorder_pair_maintenance, flush_window_pos_commands,
 };
 use crate::ecs::world::EcsWorld;
 use crate::executor::util::WindowMessage;
@@ -211,7 +211,7 @@ fn issue_control_command(hwnd: HWND) {
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
         None,
     ));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 }
 
 fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
@@ -467,7 +467,7 @@ fn the_sink_observation_issues_no_command_and_moves_nothing() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 対照: 捕捉が生きていれば必ず現れる 1 本。
         issue_control_command(balloon_hwnd);
     });

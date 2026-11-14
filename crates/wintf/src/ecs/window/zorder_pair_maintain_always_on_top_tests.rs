@@ -53,7 +53,7 @@ use crate::ecs::window::zorder_pair::{
 };
 use crate::ecs::window::{
     KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, WindowHandle,
-    ZOrderPairStrategy, establish_owner_links,
+    ZOrderPairStrategy, establish_owner_links, flush_window_pos_commands,
 };
 
 use super::pair_fix_command;
@@ -325,7 +325,7 @@ fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目で判断し指令を積み、flush で OS の重なりが動き、2 巡目で実測照合する。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
@@ -420,18 +420,18 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
 
     // 腕①「バルーンをキャラのすぐ手前へ」（要件 1.2）
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::After(character)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(is_always_on_top(balloon), "腕①でバルーンが帯から出た");
     assert!(is_always_on_top(character), "腕①でキャラが帯から出た");
 
     // 腕②「最上位へ」（キャラより手前に可視の窓が無い縁）
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::TopEdge));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(is_always_on_top(balloon), "腕②でバルーンが帯から出た");
 
     // 腕③「キャラをバルーンのすぐ背後へ」（要件 1.3）
     SetWindowPosCommand::enqueue(pair_fix_command(character, InsertSpec::After(balloon)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(is_always_on_top(character), "腕③でキャラが帯から出た");
     assert!(is_always_on_top(balloon), "腕③でバルーンが帯から出た");
 
@@ -460,7 +460,7 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
     let outsider = create_ghost_shaped_toplevel(w!("wintf-zorder-band-cmd-outsider"));
     assert!(!is_always_on_top(outsider), "前提: 帯の外で始まる");
     SetWindowPosCommand::enqueue(pair_fix_command(outsider, InsertSpec::After(balloon)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(
         is_always_on_top(outsider),
         "対照②: 帯の中の窓のすぐ手前へ入れると常時最前面になる（OS の性質）"
@@ -508,9 +508,9 @@ fn the_pair_machinery_never_puts_ghost_shaped_windows_into_the_always_on_top_ban
     // 捕捉の中で回す。
     let _out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
@@ -601,7 +601,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
     };
 
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, insert_after));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(
         !is_always_on_top(balloon),
         "挿入位置が常時最前面の窓でも、バルーンに常時最前面の印を付けてはならない（要件 8.1）"
@@ -616,7 +616,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
     let outsider = create_ghost_shaped_toplevel(w!("wintf-zorder-aot-insert-outsider"));
     assert!(!is_always_on_top(outsider), "前提: 対照窓は帯の外で始まる");
     SetWindowPosCommand::enqueue(pair_fix_command(outsider, InsertSpec::After(foreign_top)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(
         is_always_on_top(outsider),
         "対照: 帯の中の窓を挿入位置にすると常時最前面になる（この危険が実在する）"
@@ -686,7 +686,7 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
     );
 
     SetWindowPosCommand::enqueue(pair_fix_command(balloon_hwnd, InsertSpec::TopOfNormalBand));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert_eq!(
         measure_window_below(balloon_hwnd),
         Some(character_hwnd),
@@ -705,7 +705,7 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
         balloon_hwnd,
         InsertSpec::After(intruder_hwnd),
     ));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert_ne!(
         measure_window_below(balloon_hwnd),
         Some(character_hwnd),
@@ -804,7 +804,7 @@ fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_ba
     );
 
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::TopOfNormalBand));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 
     assert!(
         !is_always_on_top(balloon),
@@ -830,7 +830,7 @@ fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_ba
     sink_to_bottom(lone_character);
     sink_to_bottom(lone_balloon);
     SetWindowPosCommand::enqueue(pair_fix_command(lone_balloon, InsertSpec::TopOfNormalBand));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert_ne!(
         measure_window_below(lone_balloon),
         Some(lone_character),
@@ -890,7 +890,7 @@ fn a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band(
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
