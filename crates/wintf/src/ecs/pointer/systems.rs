@@ -61,10 +61,7 @@ pub fn debug_pointer_state_changes(
 
     // 変更（移動・ボタン・ホイール等）
     for (entity, pointer) in changed_query.iter() {
-        // Added も Changed に含まれるのでスキップ
-        // Note: bevy_ecs では Added は Changed のサブセット
-        // ここでは移動・ボタン変化のみログ出力したい場合、
-        // 別途フラグ管理が必要だが、デバッグ用なので許容
+        // Added の tick も Changed に含まれる（スキップはしない）。ここで出すのはホイールの回転だけ。
 
         // ホイール回転時のみログ
         if pointer.wheel.vertical != 0 || pointer.wheel.horizontal != 0 {

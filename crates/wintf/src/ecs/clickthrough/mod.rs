@@ -11,8 +11,8 @@ mod controller;
 mod monitor;
 mod registry;
 
-/// areka（task 4.1）が監視対象窓を登録するための **公開** ハンドル型。`runtime/mod.rs`
-/// （task 3.2）が World へ NonSend リソースとして挿入する。
+/// areka が監視対象窓を登録するための **公開** ハンドル型。`runtime/mod.rs` の
+/// `wire_click_through` が World へ NonSend リソースとして挿入する。
 pub use controller::ClickThroughRegistryHandle;
 
 pub(crate) use controller::{ClickThroughHandle, start_click_through};

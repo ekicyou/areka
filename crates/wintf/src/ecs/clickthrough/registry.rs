@@ -12,7 +12,7 @@ use windows::Win32::Foundation::HWND;
 
 /// クリック透過の適用済み／適用予定状態。
 ///
-/// レジストリと（後続タスクの）コントローラで共有する。`Opaque` は
+/// レジストリとコントローラで共有する。`Opaque` は
 /// 初回トグル前の初期・既定状態（当該窓は自ウィンドウでクリックを受領する）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum DesiredState {

@@ -53,7 +53,7 @@ use super::{ClickThroughRegistry, CursorMonitorBridge, DesiredState};
 ///
 /// # 純粋性
 /// `&World`・I/O・グローバル状態・副作用を持たない決定的関数。`last_applied` の
-/// 真実源（[`super::ClickThroughRegistry`]）への書き戻しは呼び出し側（タスク 3.1）の
+/// 真実源（[`super::ClickThroughRegistry`]）への書き戻しは呼び出し側（`evaluate_targets`）の
 /// 責務であり、本関数は計算のみを担う。
 pub(crate) fn resolve_transition(
     hit: Option<Entity>,
@@ -90,7 +90,7 @@ pub(crate) fn resolve_transition(
 ///
 /// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み・付け替え前の HWND へ
 /// `ScreenToClient`／`apply_click_through` を撃つ経路を断つ。除去件数を返す（テスト・観測用）。
-/// areka の窓登録／破棄（task 4.1）は非同期ゆえ、機構側は「今 World に在る wintf の窓だけを
+/// areka の窓登録／破棄は非同期ゆえ、機構側は「今 World に在る wintf の窓だけを
 /// 見る」ことで窓ライフサイクルに追随する。
 pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegistry) -> usize {
     registry.retain(|t| {
@@ -251,12 +251,13 @@ fn screen_to_client_point(hwnd: HWND, screen: PhysicalPoint) -> Option<PointF> {
 ///
 /// - **単一 wake event を引数で受ける**: async ループはただ 1 つの共有
 ///   `Arc<event_listener::Event>` を listen する。この wake event を (a) カーソルワーカ
-///   （`CursorMonitorBridge::spawn(wake_event.clone())`）と (b) VSync tick 源（後続
-///   タスク 3.2 が post-tick で notify）の **両方** が notify することで、futures/select
+///   （`CursorMonitorBridge::spawn(wake_event.clone())`）と (b) VSync tick 源（`WinApp::run` が
+///   起こす中継 `tick_bridge::relay_vblank` が vblank ごとに notify）の **両方** が notify することで、futures/select
 ///   コンビネータ（tokio/futures 非依存・R4.2）無しに二重起床を実現する。tick 源への
-///   結線は task 3.2 の責務のため、`start` は wake event を **引数** で受ける。
+///   結線は `WinApp` の責務（`wire_click_through` が event を作り、`run` が `relay_vblank` へ
+///   渡す）のため、`start` は wake event を **引数** で受ける。
 /// - **レジストリを共有可能化**（`Rc<RefCell<ClickThroughRegistry>>`）: areka は窓を
-///   非同期生成するため、task 3.2/4.1 が `start` **後** に対象窓を登録／破棄時に除去
+///   非同期生成するため、アプリ側が `start` **後** に対象窓を登録／破棄時に除去
 ///   できるよう、呼び手が同じ表を [`ClickThroughRegistryHandle`] に包んで World へ据える。
 ///
 /// ワーカ生成・event 共有・async ループの
@@ -266,7 +267,7 @@ fn screen_to_client_point(hwnd: HWND, screen: PhysicalPoint) -> Option<PointF> {
 ///   shutdown で `upgrade()` が `None` を返しループが安全終了）。
 /// - `registry`: 共有レジストリ（start 後の登録／除去を許すため `Rc<RefCell<..>>`）。
 /// - `wake_event`: 二重起床の単一 wake event。ワーカが notify し、VSync tick 源
-///   （task 3.2）も同一 event を post-tick で notify する。
+///   （`WinApp::run` が起こす `tick_bridge::relay_vblank`）も同一 event を vblank ごとに notify する。
 /// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では判定を
 ///   回さずに終える（[`run_click_through`] 参照）。
 ///
@@ -316,7 +317,7 @@ pub(crate) struct ClickThroughHandle {
     _join: crate::executor::JoinHandle<()>,
 }
 
-/// アプリ側（`crates/areka`・task 4.1）が監視対象窓を登録／除去するための **公開** ハンドル。
+/// アプリ側（`crates/areka`）が監視対象窓を登録／除去するための **公開** ハンドル。
 ///
 /// クリック透過機構は `WinApp::run`（`runtime/mod.rs` 結線点）で起動され、その共有レジストリ
 /// （`Rc<RefCell<ClickThroughRegistry>>`）がこの newtype に包まれて World へ **NonSend リソース**
@@ -332,7 +333,8 @@ pub(crate) struct ClickThroughHandle {
 ///
 /// # 破棄追随
 /// 登録済み窓が破棄されても、[`remove`](Self::remove) の明示除去に加え、機構内部の
-/// [`prune_dead_targets`] が毎評価で World 生存を確認して自動的に刈り取る（二重の安全弁）。
+/// [`prune_dead_targets`] が毎評価で、`Window` と登録の HWND と同じ `WindowHandle` を持つ
+/// wintf の窓だけを残して自動的に刈り取る（二重の安全弁）。
 pub struct ClickThroughRegistryHandle {
     registry: Rc<RefCell<ClickThroughRegistry>>,
 }
@@ -343,7 +345,7 @@ impl ClickThroughRegistryHandle {
         Self { registry }
     }
 
-    /// 監視対象窓を登録する（areka の非同期窓生成に追随・task 4.1）。
+    /// 監視対象窓を登録する（areka の非同期窓生成に追随）。
     ///
     /// 同一 window Entity の再登録は重複させず、HWND が変わったときだけ記録を戻す
     /// （同じ HWND なら何もしない）。
@@ -377,8 +379,8 @@ impl ClickThroughRegistryHandle {
 /// 所有者 drop 済み）でも終える。
 ///
 /// 起床後は当該フレームの **ECS tick 完了後（post-tick）** の settled World を 1 回だけ
-/// 評価する。wake event を tick 源が post-tick で notify する結線は task 3.2 の責務で
-/// あり、本ループは「起床したら settled World を評価する」ことのみ担う。
+/// 評価する。wake event を tick 源が notify する結線は `WinApp` の責務（`wire_click_through` が
+/// event を作り、`run` が `tick_bridge::relay_vblank` へ渡す）であり、本ループは「起床したら settled World を評価する」ことのみ担う。
 async fn run_click_through(
     wake_event: Arc<Event>,
     world: Weak<RefCell<EcsWorld>>,

@@ -32,10 +32,7 @@ unsafe impl Sync for WindowDragContext {}
 impl WindowDragContext {
     /// コンテキストをクリアする
     pub fn clear(&mut self) {
-        self.hwnd = None;
-        self.initial_window_pos = None;
-        self.move_window = false;
-        self.constraint = None;
+        *self = Self::default();
     }
 }
 

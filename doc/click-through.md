@@ -126,7 +126,7 @@ pub(crate) fn start_click_through(
 ) -> ClickThroughHandle;
 ```
 
-二重起床は **単一の共有 `Arc<Event>`** を cursor worker（`CursorMonitorBridge::spawn(wake_event.clone())`）と VSync tick 源の両方が notify する方式（select 併用なし）。tick 源が post-tick で notify する結線は `wire_click_through` の VSync relay タスクが担う。
+二重起床は **単一の共有 `Arc<Event>`** を cursor worker（`CursorMonitorBridge::spawn(wake_event.clone())`）と VSync tick 源の両方が notify する方式（select 併用なし）。tick 源の notify は `WinApp::run` が起こす中継タスク `tick_bridge::relay_vblank`（`runtime/tick_bridge.rs`）が vblank ごとに行う。`wire_click_through` は wake event を作って返すだけで、`run` がそれを `relay_vblank` へ渡す。
 
 ### 4.3 対象窓の登録（`ClickThroughRegistryHandle::register`）
 
@@ -141,7 +141,7 @@ fn register_click_through_windows(
 ) {
     let Some(handle) = handle else { return; };
     for (entity, wh) in new_windows.iter() {
-        handle.register(entity, wh.hwnd()); // 同一 Entity 再登録は dedupe（冪等）
+        handle.register(entity, wh.hwnd()); // 同一 Entity・同一 HWND の再登録は何もしない（HWND が変わったときだけ記録を戻す）
     }
 }
 ```
