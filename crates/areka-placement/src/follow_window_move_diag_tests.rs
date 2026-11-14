@@ -165,7 +165,7 @@ use std::sync::{Arc, Mutex};
 use tracing_subscriber::EnvFilter;
 use wintf::ecs::DPI;
 
-use super::super::diag::{DESPAWNED_SKIP_TAG, WINDOW_MOVE_RECORD_TAG};
+use super::super::diag::{DESPAWNED_SKIP_TAG, DIAG_TARGET, WINDOW_MOVE_RECORD_TAG};
 use super::super::spawn::{BalloonWindowMarker, CharWindowMarker};
 use log_capture_kit::{CapturedEvent, capture, ensure_interest_probes, expect_one};
 
@@ -488,8 +488,18 @@ fn no_window_move_record_when_nothing_is_written() {
     );
 }
 
+/// 捕捉が生きている証拠として同じ窓の中で必ず出す対照の行。
+///
+/// `info` 水準・記録の target で出すので、既定 directive（`info`）でも手順書の directive
+/// （`info,areka_placement::diag=debug`）でも必ず通る——捕捉が死んでいるだけで「出ない」の
+/// テストが緑になる空振りを塞ぐ（`follow_transition_diag_tests.rs` の `CONTROL_LINE` と同じ置き方）。
+const CONTROL_LINE: &str = "[window-move-probe] alive";
+
 /// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag.rs の
 /// `emit_all_under_filter` と同型——こちらは**単一ライター経由**で点灯を確かめる）。
+///
+/// 戻り値には必ず [`CONTROL_LINE`] が含まれる。含まれないなら捕捉の故障であり、呼び手は
+/// それを先に主張すること。
 fn window_move_output_under_filter(directives: &str) -> String {
     ensure_interest_probes();
 
@@ -518,6 +528,8 @@ fn window_move_output_under_filter(directives: &str) -> String {
 
     let (mut world, e) = char_window_world(1, 192);
     tracing::subscriber::with_default(subscriber, || {
+        // 対照の行は観測の窓の内側で出す（同じ捕捉・同じ target・同じ directive を通る）。
+        tracing::info!(target: DIAG_TARGET, "{CONTROL_LINE}");
         assert!(resize_window_to(
             &mut world,
             e,
@@ -535,6 +547,10 @@ fn window_move_output_under_filter(directives: &str) -> String {
 fn window_move_records_are_silent_under_default_info_filter() {
     let out = window_move_output_under_filter("info");
     assert!(
+        out.contains(CONTROL_LINE),
+        "対照が拾えていない＝捕捉が死んでいる（このテストの否定は空振りになる）: {out}"
+    );
+    assert!(
         !out.contains(WINDOW_MOVE_RECORD_TAG),
         "既定 RUST_LOG=info で窓移動レコードが漏れている（Req 1.7 違反）: {out}"
     );
@@ -545,6 +561,10 @@ fn window_move_records_are_silent_under_default_info_filter() {
 #[test]
 fn window_move_records_light_up_under_the_procedure_directive() {
     let out = window_move_output_under_filter("info,areka_placement::diag=debug");
+    assert!(
+        out.contains(CONTROL_LINE),
+        "対照が拾えていない＝捕捉が死んでいる: {out}"
+    );
     assert!(
         out.contains(WINDOW_MOVE_RECORD_TAG) && out.contains("route=DpiReproject"),
         "手順書の RUST_LOG で単一ライターのレコードが点灯しない: {out}"
