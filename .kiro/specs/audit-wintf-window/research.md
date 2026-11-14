@@ -798,6 +798,7 @@ clippy の指摘を機械的に直す指摘は 0。
 - **`wintf-winmsg-executor-import`**: ソースの重なり 0（取りまとめの側の測り）。
 - 全体テストは排他テストの机を通す。
 - **門 GI の確かめ（2026-11-14・相手 `audit-wintf-input` のセッション・タスク 13.1）**: ⒜ はい（`WindowPointerTracking` は型・既定のテスト・`ecs/mod.rs` の再公開までこの spec が丸ごと消す。あちらの tasks 6.1 はそのテストを消す対象から外してある）。⒝ はい（あちらは `check_threshold`・`state/tests.rs` の 5 本・再公開を残し、説明だけ直す。`mouse_move.rs` の閾値の写しを呼び出しに替えるのはこの spec）。⒞ はい（`PointerState` を作る 4 か所の `local_point` は変えない）。足し: あちらの機械的な追従はテストのファイル（`keyboard_tests.rs`・`mouse_click_tests.rs`・`mouse_dblclick_wheel_tests.rs`・`mouse_move_drag_origin_tests.rs`）にもあり、どれも `DragStateSnapshot`→`DragState` か欄名の置き換えだけ。あちらの設計・タスク（`45b8cd22`）は main に未着地で、窓の手続きのコードにはまだ手が入っていない。
+- **門 GP の確かめ（2026-11-14・タスク 15.1）**: 相手 `audit-placement-core` のセッション＝⑴ はい（あちらの設計は `WindowHandle.instance` の欄が消えることを前提にし、main を取り込んだ後に名指す行を grep し直す・持ち物の構築の式は 13 本）⑵ はい（こちらが先に着地し、あちらは先の段の 4 本の着地の後に main を取り込んで始める）。こちらが触るのは `instance` の 1 欄とそれだけが使う import だけ、と返した。相手 `audit-placement-follow` のセッション＝⑴ はい（持ち物で欄を持つのは `follow_test_support.rs:25` の 1 行だけで、あちらのブランチでも手を付けていない）⑵ はい（こちらが先に着地し、あちらが後で取り込む）。取り込み: この時点で `wintf-winmsg-executor-import` は main に着地済みで、こちらのブランチを `origin/main` へ rebase した。窓の工場のインスタンスの取り方（`crate::executor::util::get_instance_handle`）は変わっていない。`wintf-visual-damage-redraw` は未着地で、`WindowHandle {` を持つファイルとの重なりは 0。
 
 ### 12.3 まとめの 3 つの見方（`rules/design-synthesis.md`）
 

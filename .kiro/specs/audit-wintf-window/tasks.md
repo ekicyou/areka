@@ -247,7 +247,7 @@
   - _Requirements: 3.1, 3.3_
 
 - [ ] 15. `WindowHandle.instance` を消す（H1）
-- [ ] 15.1 門 GP: `audit-placement-core`・`audit-placement-follow` と申し合わせを確かめ直す
+- [x] 15.1 門 GP: `audit-placement-core`・`audit-placement-follow` と申し合わせを確かめ直す
   - 両方のセッションと、`areka-placement` の 14 ファイル（follow の 1 本・core の 13 本）から `instance` の 1 欄を消すこと、こちらが先に着地してあちらが後で載せること、を確かめ直す
   - あちらの着地があれば 14 ファイルを読み直す。`wintf-visual-damage-redraw` が着いていれば `crates/wintf/tests/graphics/` の 4 本を、`wintf-winmsg-executor-import` が着いていれば窓の工場のインスタンスの取り方の道を読み直す
   - 確かめが取れなければ止めて取りまとめへ知らせる
