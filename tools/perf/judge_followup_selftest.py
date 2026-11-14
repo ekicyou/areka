@@ -18,7 +18,7 @@
 
 1 ケース＝1 ディレクトリ（`fixtures-loop/followup/<名前>/`）:
 
-    case.txt              `exit`（期待終了コード・必須）と `title`（説明・任意）
+    case.txt              `exit`（期待終了コード・必須）と `title`（説明・任意）・`stderr_substr`（stderr に含まれるはずの英語の語・任意）
     expected_stdout.txt   標準出力と逐語一致する期待本文（必須）
     probe.log / run.log   判定の材料（本体が読む 2 つ）
 
@@ -36,7 +36,7 @@ from pathlib import Path
 import perf_selftest_common as common
 
 #: `case.txt` に書ける項目（これ以外は書き間違いとして拒む）。
-CASE_KEYS = frozenset({"exit", "title"})
+CASE_KEYS = frozenset({"exit", "title", "stderr_substr"})
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,7 @@ class SelftestEnv:
     expected_stdout_filename: str
     ok_exit: int
     fail_exit: int
+    inconclusive_exit: int
     #: `main` が SystemExit を非整数で投げたときに読み替える終了コード（本体の引数不正）。
     bad_input_exit: int
 
@@ -64,6 +65,7 @@ class SelftestCase:
     directory: Path
     title: str
     expected: int
+    stderr_substr: str = ""
 
 
 def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
@@ -75,12 +77,13 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
         )
     fields, _ = common.read_case_fields(path, CASE_KEYS, frozenset(), env.bad_input)
     if "exit" not in fields:
-        raise env.bad_input(f"{path} に exit がありません", ["必須項目: exit（任意: title）"])
+        raise env.bad_input(f"{path} に exit がありません", ["必須項目: exit（任意: title・stderr_substr）"])
     try:
         expected = int(fields["exit"])
     except ValueError as exc:
         raise env.bad_input(f"{path} の exit が整数ではありません（{fields['exit']!r}）") from exc
-    return SelftestCase(directory.name, directory, fields.get("title", "(説明なし)"), expected)
+    return SelftestCase(directory.name, directory, fields.get("title", "(説明なし)"), expected,
+                        fields.get("stderr_substr", ""))
 
 
 def run_selftest(env: SelftestEnv) -> int:
@@ -95,12 +98,20 @@ def run_selftest(env: SelftestEnv) -> int:
         for case in cases:
             work = temporary / case.name
             shutil.copytree(case.directory, work)
-            code, stdout, _err = common.invoke(env.invoke, [str(work)], env.bad_input_exit)
+            code, stdout, err = common.invoke(env.invoke, [str(work)], env.bad_input_exit)
             reasons: list[str] = []
             if code == case.expected:
                 reproduced.add(code)
             else:
                 reasons.append(f"終了コード: 期待 {case.expected} 実際 {code}")
+            if case.stderr_substr and case.stderr_substr not in err:
+                reasons.append(f"stderr does not contain {case.stderr_substr!r}: {ascii(err)}")
+            # .ps1 が実際に読むのは標準出力でなく followup-verdict.txt（#31）。
+            verdict_file = work / "followup-verdict.txt"
+            if code in (env.ok_exit, env.fail_exit, env.inconclusive_exit) and (
+                not verdict_file.is_file() or verdict_file.read_text(encoding="utf-8") != stdout
+            ):
+                reasons.append("followup-verdict.txt is missing or differs from stdout")
             expected_stdout = case.directory / env.expected_stdout_filename
             if expected_stdout.is_file():
                 want = common.read_normalized(expected_stdout)
@@ -113,9 +124,9 @@ def run_selftest(env: SelftestEnv) -> int:
                 )
             results.append((case.name, case.title, reasons))
 
-    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例は、その直しのタスクで真にする）。
+    # 木全体の見張り（⑸ README の例は、その直しのタスクで真にする）。
     results.append(("(check_tree)", "木全体の見張り",
-                    common.check_tree(ascii_stderr=False, readme_examples=False)))
+                    common.check_tree(ascii_stderr=True, readme_examples=False)))
     ng_count = common.finish(
         results, [], env.case_filename, reproduced, env.required_red_exits
     )

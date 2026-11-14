@@ -123,7 +123,7 @@
   - _Dispatch: mechanical — 端末の文の英語化・ケースの追加・読み込みの文字コードを既存の形で直す_
   - _Requirements: 2.1, 4.8, 5.4, 7.1, 7.6_
 
-- [ ] 8. (P) judge-followup を直す（#26・#31・#52・#53・#74）
+- [x] 8. (P) judge-followup を直す（#26・#31・#52・#53・#74）
   - stderr の失敗の文を英語の ASCII に（#26・D9）。標準出力の報告の本文は日本語のまま。`fixtures-loop/followup/` の `stderr_substr` のうち当たるものを合わせ、followup の自己較正で `check_tree` ⑶ を入れる（T26 の followup の分）
   - ケース `drag_fail`（F1）を足し、`followup-verdict.txt` を突き合わせる（#31）。`DRAG_DX_PX` を消して `probe.log` の `dx`・`dy` を期待値に（#52）。使われない `or` の右を消す（#53）。範囲の中の行番号（Rust の行を指す 106〜112 行ほか）を名前へ（#74）
   - 終わった姿: judge-followup の `--selftest` が F1 と ⑶ を含めて緑で（stderr の文を 1 つ日本語に戻すと ⑶ で赤）、`DRAG_DX_PX` が grep で 0 件、`judge-followup.py` が 1,000 行以下
@@ -232,3 +232,4 @@
 - 6.3: 範囲の外: `doc/COMPAT_ARCHITECTURE.md:629` が「judge-perf.py（版 0.4.0）の較正値に従う」と版を名指していて古くなった（D10 の一覧に無い）。/kiro-complete の棚卸で扱う
 - 7.1: 7.2 への申し送り: exit 3 の 3 ケース（floor_*・unknown_metric_name）の `stderr_substr = perf-compare:` は理由を縛らないので、英語化のときに鍵の名（`noise_floor_pct` など）で縛る。bool の床を拒む文「…がありません」は原因（真偽値）とずれるので英語化で合わせる
 - 7.2: perf-compare の `main` の `reconfigure(errors="replace")` が残る（D9 は全部 `backslashreplace` にそろえる）。8・12.2 のときに残りの `replace` も合わせる。perf-compare の未決の理由は日本語（報告・compare.json）と英語（stderr）の 2 つを持つ
+- 8: `DRAG_DX_PX` は judge-followup の側では 0 件。`invoke-followup-checks.ps1` は作り手の定数として持ち続け、48 行の注記「judge-followup.py と対」は古くなった（`audit-tools-perf-run` へ知らせる）。show.rs の出所の注記の「info!」は実際は `show_line!` の `tracing::event!`（14 の audit で拾う候補）
