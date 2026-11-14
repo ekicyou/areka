@@ -1,0 +1,3 @@
+# 見た目の追随チェックの自己較正ケース（不合格側・all_pass から 1 か所だけ変えた）
+title=DPI 検査のモニタ移動 phase=out が result=fail（移動そのものが成功していない）
+exit=1

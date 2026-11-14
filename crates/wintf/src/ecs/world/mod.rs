@@ -14,7 +14,6 @@ pub mod tick_wake;
 pub use schedule_labels::*;
 pub use vsync::*;
 
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::*;
 use bevy_ecs::system::*;
@@ -132,13 +131,8 @@ impl EcsWorld {
         // ドラッグ累積器の登録
         crate::ecs::drag::install_drag_accumulator(&mut world);
 
-        // ドラッグコンテキスト（ECS→wndprocスレッド間転送用）の登録
+        // ドラッグコンテキスト（ECS のシステムから同じ UI スレッドの wndproc へ値を渡す）の登録
         world.insert_resource(crate::ecs::drag::WindowDragContextResource::new());
-
-        // イベントの登録
-        world.init_resource::<Messages<crate::ecs::drag::DragStartEvent>>();
-        world.init_resource::<Messages<crate::ecs::drag::DragEvent>>();
-        world.init_resource::<Messages<crate::ecs::drag::DragEndEvent>>();
 
         // スケジュールの登録
         {
@@ -197,12 +191,6 @@ impl EcsWorld {
                 Input,
                 crate::ecs::drag::dispatch_drag_events
                     .after(crate::ecs::pointer::dispatch_pointer_events),
-            );
-
-            // Inputスケジュール: ドラッグ状態クリーンアップ（dispatch_drag_eventsの後）
-            schedules.add_systems(
-                Input,
-                crate::ecs::drag::cleanup_drag_state.after(crate::ecs::drag::dispatch_drag_events),
             );
 
             // Inputスケジュール: ポインターデバッグ監視（デバッグビルドのみ）
@@ -380,28 +368,6 @@ impl EcsWorld {
 
             // FrameFinalizeスケジュール: ドラッグ中は次の画面更新を予約（tick の末尾）
             schedules.add_systems(FrameFinalize, crate::ecs::drag::rearm_tick_while_dragging);
-
-            // FrameFinalizeスケジュール: Messagesの更新
-            schedules.add_systems(
-                FrameFinalize,
-                (
-                    |world: &mut World| {
-                        world
-                            .resource_mut::<Messages<crate::ecs::drag::DragStartEvent>>()
-                            .update()
-                    },
-                    |world: &mut World| {
-                        world
-                            .resource_mut::<Messages<crate::ecs::drag::DragEvent>>()
-                            .update()
-                    },
-                    |world: &mut World| {
-                        world
-                            .resource_mut::<Messages<crate::ecs::drag::DragEndEvent>>()
-                            .update()
-                    },
-                ),
-            );
         }
 
         // ツールチップ（資源と FrameFinalize の判定）の登録

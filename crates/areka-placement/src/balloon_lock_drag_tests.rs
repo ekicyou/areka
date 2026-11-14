@@ -15,11 +15,10 @@ use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
-use bevy_ecs::message::Messages;
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::{
-    DragAccumulatorResource, DragConfig, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
-    OnDrag, OnDragEnd, WindowDragContext, WindowDragContextResource, dispatch_drag_events,
+    DragAccumulatorResource, DragConfig, DragEndEvent, DragTransition, OnDrag, OnDragEnd,
+    WindowDragContext, WindowDragContextResource, dispatch_drag_events,
 };
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{PhysicalPoint, Point, SizeI, Window, WindowHandle, WindowPos};
@@ -96,9 +95,6 @@ impl Rig {
         let mut world = World::new();
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
-        world.init_resource::<Messages<DragStartEvent>>();
-        world.init_resource::<Messages<DragEvent>>();
-        world.init_resource::<Messages<DragEndEvent>>();
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![RectPx {
                 left: 0,
@@ -240,7 +236,6 @@ impl Rig {
             target: self.balloon,
             position: PhysicalPoint::new(1711, 953),
             cancelled: false,
-            is_primary: true,
             timestamp: Instant::now(),
         };
         let balloon = self.balloon;
@@ -438,10 +433,11 @@ fn held_drag_release_is_delivered_as_drag_end_not_click() {
     let mut rig = Rig::new();
     seed_balloon_lock(&mut rig.world, &scopes(&[SCOPE as u32]));
 
-    rig.full_drag(rig.balloon);
+    let ((), events) = capture(|| rig.full_drag(rig.balloon));
 
     let drag = rig.world.get::<DragConfig>(rig.balloon).unwrap();
     assert!(drag.enabled && drag.left_button && !drag.move_window);
-    assert_eq!(rig.world.resource::<Messages<DragEndEvent>>().len(), 1);
+    // 終わりの受け手が 1 回呼ばれた（止めたドラッグの終わりの記録は終わりの受け手だけが出す）
+    assert_eq!(held_logs(&events).len(), 1, "{events:?}");
     rig.close();
 }

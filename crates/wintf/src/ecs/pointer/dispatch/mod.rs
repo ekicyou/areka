@@ -218,7 +218,10 @@ pub fn dispatch_pointer_events(world: &mut World) {
         // 親チェーン構築
         let path = build_bubble_path(world, *sender);
 
-        // OnPointerMoved: 常に発火（移動イベント）
+        // OnPointerMoved: 常に発火（位置が変わらない tick でも毎 tick 配る）。
+        // 理由: 止まったカーソルの下で出直したバルーンの滞在・選択肢の強調は、この毎 tick の配りで
+        // 立て直される（下流の balloon_moved.rs・balloon_visibility_phase が当てにする）。
+        // 手間: 受け手は 3 つで、位置の同じ呼び出しは下流の間引き（throttle.rs）が SHIORI へ送らない。
         dispatch_event_for_handler::<PointerState, OnPointerMoved>(
             world,
             *sender,

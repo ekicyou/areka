@@ -1,0 +1,10 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = BOM 付きの run.log・cpu.csv も同じに読める
+mode = verdict
+build = release
+exit = 0
+
+note = run.log と cpu.csv の頭に UTF-8 の BOM（EF BB BF）を付けた、H11 の芯と同じ健全な走行。
+note = run.log は探して読むので BOM に左右されないが、BOM を字のまま残すと cpu.csv の
+note = 見出しが一致しなくなり判定不能（2）になる。読むときに BOM を外して合格（0）に
+note = なることを縛る。

@@ -1,0 +1,7 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 明示指定の系列の間隔がちょうど 20 本なら判定できる
+mode = verdict
+build = release
+exit = 0
+
+note = S1 と同じ形で間隔が 20 本。下限ちょうどなので判定でき、合格（0）になる。

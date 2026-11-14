@@ -11,7 +11,7 @@ use crate::ecs::pointer::PhysicalPoint;
 fn live(start: (i32, i32), inset: (f32, f32)) -> DraggingState {
     DraggingState {
         drag_start_pos: PhysicalPoint::new(start.0, start.1),
-        initial_inset: inset,
+        initial_window_pos: inset,
     }
 }
 

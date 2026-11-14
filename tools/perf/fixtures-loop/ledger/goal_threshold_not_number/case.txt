@@ -1,0 +1,2 @@
+title=目標定義の [target].idle_cpu_release_max_pct が数でないと goal-check は exit 3（生の traceback で落ちない）
+stderr_substr=idle_cpu_release_max_pct が数ではありません

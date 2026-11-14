@@ -1,0 +1,3 @@
+title=山括弧の値（ひな型のまま）は append で拒む
+stderr_substr=山括弧
+stderr_substr=candidate

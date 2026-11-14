@@ -30,7 +30,7 @@
 - **作業領域はモニタごと・毎フレーム**。`wintf/src/ecs/window/monitor.rs` の `Monitor.work_area`（`rcWork`）を、`follow/work_area.rs` の `MonitorSnapshot` が毎フレーム作り直し、窓の居るモニタの作業領域を引く。DPI の切替は `placement/dpi_sync.rs`・`placement/chain_realign.rs`。
 - **ドラッグは在る**。wintf の `ecs/drag/`（5px のしきい値・追跡・終わりの検出）と areka の `follow/drag_follow.rs`。`OnMouseDragStart`／`OnMouseDragEnd` は送っている（`areka-kanade/src/schedule/events.rs`）。
 - **ほかのアプリの窓を見張るコードは無い**。`EnumWindows`・`SetWinEventHook` はどこにも無い。wintf の `api.rs` に上下の窓を引く `get_window_above/below`・`get_foreground_window`（読むだけ）が在るだけ。
-- **物理は無い**。重力・速さ・慣性の部品は無い（`CursorVelocity` はポインタの速さ）。
+- **物理は無い**。重力・速さ・慣性の部品は無い（ポインタの速さの型 `CursorVelocity` は見直しで消した。要るときはドラッグの知らせの位置から求める）。
 - **時間をかける移動も動いていない**。`\![move]` は時間を読むが最終位置へ即時に置く（持ち主は `sakura-time-directives` だが範囲から外した D 群）。`\![moveasync]`・`\![set,alignmenttodesktop]`・`\![set,sticky-window]`・`\4`・`\5` は網羅台帳で absent。
 - **3 人目からの窓は無い**（`emo2_boot/mod.rs` の `derive_scopes()` が 0 と 1 だけ・持ち主は `extra-character-windows`）。ほかのゴーストを同時に出す仕組み（多重ゴースト）は roadmap の「予約」。
 - **シェルの定義は ukadoc のテキスト形式だけ**（`areka-parsers/src/shell/` が surfaces.txt、`kv/` が descript）。YAML のシェルの定義は無い（`dola-yaml-backend` は dola の任意機能の YAML の依存を外す話で、シェルの定義とは無関係）。

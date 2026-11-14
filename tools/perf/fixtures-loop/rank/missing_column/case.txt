@@ -4,7 +4,7 @@ argv = --stage thread
 
 stderr_substr = SampledProfile
 stderr_substr = ThreadID
-stderr_substr = 列名行
+stderr_substr = header line
 
 note = 列名行が丸ごと欠けている場合（missing_header）とは別の壊れ方である。列名行は
 note = 在るのに既知の列だけが別名になっていると、列を引き当てられないまま黙って

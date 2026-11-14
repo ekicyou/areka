@@ -1,0 +1,5 @@
+title=append は改行・真偽値・配列の値と周 0 を拒み、台帳を 1 バイトも変えない
+stderr_substr=改行は入れられません
+stderr_substr=真偽値
+stderr_substr=書けない型
+stderr_substr=周番号は 1 以上

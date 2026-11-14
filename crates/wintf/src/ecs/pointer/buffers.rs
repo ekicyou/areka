@@ -6,20 +6,16 @@
 use bevy_ecs::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::time::Instant;
 
-use super::types::{
-    ButtonBuffer, CursorVelocity, DoubleClick, PhysicalPoint, PointerBuffer, PointerButton,
-    PointerState, PositionSample, WheelBuffer,
-};
+use super::types::{ButtonBuffer, PhysicalPoint, PointerButton, PointerState, WheelBuffer};
 
 // ============================================================================
 // thread_local! バッファ
 // ============================================================================
 
 thread_local! {
-    /// Entity ごとの PointerBuffer
-    pub(crate) static POINTER_BUFFERS: RefCell<HashMap<Entity, PointerBuffer>> = RefCell::new(HashMap::new());
+    /// Entity ごとの最新のポインタ位置（クライアント座標）
+    pub(crate) static POINTER_BUFFERS: RefCell<HashMap<Entity, PhysicalPoint>> = RefCell::new(HashMap::new());
 
     /// Entity × Button ごとの ButtonBuffer
     pub(crate) static BUTTON_BUFFERS: RefCell<HashMap<(Entity, PointerButton), ButtonBuffer>> = RefCell::new(HashMap::new());
@@ -27,15 +23,12 @@ thread_local! {
     /// Entity ごとの WheelBuffer
     pub(crate) static WHEEL_BUFFERS: RefCell<HashMap<Entity, WheelBuffer>> = RefCell::new(HashMap::new());
 
-    /// Entity ごとの DoubleClick（tick 内で最初に検出されたもの）
-    pub(crate) static DOUBLE_CLICK_BUFFERS: RefCell<HashMap<Entity, DoubleClick>> = RefCell::new(HashMap::new());
-
     /// Entity ごとの修飾キー状態（最新値）
     pub(crate) static MODIFIER_STATE: RefCell<HashMap<Entity, (bool, bool)>> = RefCell::new(HashMap::new());
 }
 
 // ============================================================================
-// バッファ操作ヘルパー（handlers.rs から使用）
+// バッファ操作ヘルパー（窓の手続きが使う）
 // ============================================================================
 
 /// 入力を投入したことを起床の旗へ伝える（設計 C16 の `POINTER`）。
@@ -47,20 +40,19 @@ fn wake_pointer() {
     crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::POINTER);
 }
 
-/// PointerBufferにサンプルを追加
+/// 最新のポインタ位置を置く（同じ entity の前の位置は上書き）
 #[inline]
-pub(crate) fn push_pointer_sample(entity: Entity, x: f32, y: f32, timestamp: Instant) {
+pub(crate) fn push_pointer_sample(entity: Entity, point: PhysicalPoint) {
     wake_pointer();
     tracing::trace!(
         entity = ?entity,
-        x, y,
+        x = point.x,
+        y = point.y,
         thread_id = ?std::thread::current().id(),
         "[push_pointer_sample] Sample added"
     );
     POINTER_BUFFERS.with(|buffers| {
-        let mut buffers = buffers.borrow_mut();
-        let buffer = buffers.entry(entity).or_insert_with(PointerBuffer::new);
-        buffer.push(PositionSample { x, y, timestamp });
+        buffers.borrow_mut().insert(entity, point);
     });
 }
 
@@ -72,8 +64,7 @@ pub(crate) fn record_button_down(entity: Entity, button: PointerButton) {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry((entity, button)).or_default();
         buffer.record_down();
-        // デバッグ用に info レベルで出力
-        tracing::info!(
+        tracing::debug!(
             entity = ?entity,
             button = ?button,
             "[ButtonBuffer] record_button_down"
@@ -89,8 +80,7 @@ pub(crate) fn record_button_up(entity: Entity, button: PointerButton) {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry((entity, button)).or_default();
         buffer.record_up();
-        // デバッグ用に info レベルで出力
-        tracing::info!(
+        tracing::debug!(
             entity = ?entity,
             button = ?button,
             "[ButtonBuffer] record_button_up"
@@ -141,110 +131,60 @@ pub(crate) fn set_modifier_state(entity: Entity, shift: bool, ctrl: bool) {
 /// マルチスレッドで実行されるシステムがアクセスできるように転送する。
 pub(crate) fn transfer_buffers_to_world(world: &mut World) {
     // POINTER_BUFFERSからPointerStateへ位置情報を転送
-    POINTER_BUFFERS.with(|buffers| {
-        let mut buffers = buffers.borrow_mut();
+    // 1 tick 分だけ渡す（取り出して空にする）
+    let points: Vec<(Entity, PhysicalPoint)> =
+        POINTER_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
+    for (entity, point) in points {
+        // Worldから該当エンティティのPointerStateを取得（無ければ捨てる）
+        if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
+            pointer_state.client_point = point;
 
-        for (entity, buffer) in buffers.iter_mut() {
-            // 最新位置を取得
-            if let Some(sample) = buffer.latest() {
-                // 速度計算
-                let (vx, vy) = buffer.calculate_velocity();
-
-                // Worldから該当エンティティのPointerStateを取得または作成
-                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                    // 既存のPointerStateを更新
-                    // 整数変換: `f32 as i32` は Rust では飽和的（NaN→0、範囲外→i32::MIN/MAX、
-                    // UB/パニックなし）。本番でこの sample.x/y は WM_MOUSEMOVE lparam の
-                    // `(lparam & 0xFFFF) as i16 as i32 as f32`（window_proc/mouse_move.rs）由来で
-                    // i16 範囲 [-32768, 32767] に収まるため、i32 への切り戻しは無損失（切り捨て/
-                    // オーバーフローなし）。外部から非有限値や範囲外値が混入しても飽和で吸収され
-                    // パニック経路にはならない。
-                    pointer_state.client_point =
-                        PhysicalPoint::new(sample.x as i32, sample.y as i32);
-                    pointer_state.local_point = pointer_state.client_point;
-                    pointer_state.velocity = CursorVelocity::new(vx, vy);
-
-                    tracing::trace!(
-                        entity = ?entity,
-                        x = sample.x,
-                        y = sample.y,
-                        "[transfer_buffers_to_world] PointerState updated"
-                    );
-                }
-            }
-
-            // バッファをクリア
-            buffer.clear();
+            tracing::trace!(
+                entity = ?entity,
+                x = point.x,
+                y = point.y,
+                "[transfer_buffers_to_world] PointerState updated"
+            );
         }
-    });
+    }
 
-    // BUTTON_BUFFERSからPointerStateへボタン状態を転送
-    // down_receivedがtrueの場合のみ、ボタンが押されたとしてtrue設定
-    // up_receivedがtrueの場合のみ、ボタンが離されたとしてfalse設定
-    // どちらでもない場合は既存の状態を維持（エッジ検出）
-    BUTTON_BUFFERS.with(|buffers| {
-        let buffers = buffers.borrow();
+    // BUTTON_BUFFERS から PointerState へ、この tick に押された・離された旗を移す。
+    // `*_down` は「この tick に押された」の旗で、配り（dispatch_pointer_events）の後に下りる。
+    let button_bufs: Vec<((Entity, PointerButton), ButtonBuffer)> =
+        BUTTON_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
+    for ((entity, button), buf) in button_bufs.iter() {
+        // 解放の旗は押下と独立に立てる。同じ tick に押下と解放が入っても解放を落とさない。
+        if buf.up_received
+            && let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity)
+        {
+            match button {
+                PointerButton::Left => pointer_state.released.left = true,
+                PointerButton::Right => pointer_state.released.right = true,
+                PointerButton::Middle => pointer_state.released.middle = true,
+                PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
+                PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
+            }
+        }
 
-        for ((entity, button), buf) in buffers.iter() {
-            // 解放の旗は押下優先の分岐とは独立に立てる。同じ tick に押下と解放が
-            // 入っても（下の `if/else if` が押下を選んでも）解放を落とさない。
-            if buf.up_received
-                && let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity)
-            {
+        if buf.down_received {
+            // ボタンが押された瞬間
+            if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
                 match button {
-                    PointerButton::Left => pointer_state.released.left = true,
-                    PointerButton::Right => pointer_state.released.right = true,
-                    PointerButton::Middle => pointer_state.released.middle = true,
-                    PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
-                    PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
+                    PointerButton::Left => pointer_state.left_down = true,
+                    PointerButton::Right => pointer_state.right_down = true,
+                    PointerButton::Middle => pointer_state.middle_down = true,
+                    PointerButton::XButton1 => pointer_state.xbutton1_down = true,
+                    PointerButton::XButton2 => pointer_state.xbutton2_down = true,
                 }
-            }
 
-            if buf.down_received {
-                // ボタンが押された瞬間
-                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                    match button {
-                        PointerButton::Left => pointer_state.left_down = true,
-                        PointerButton::Right => pointer_state.right_down = true,
-                        PointerButton::Middle => pointer_state.middle_down = true,
-                        PointerButton::XButton1 => pointer_state.xbutton1_down = true,
-                        PointerButton::XButton2 => pointer_state.xbutton2_down = true,
-                    }
-
-                    tracing::trace!(
-                        entity = ?entity,
-                        button = ?button,
-                        "[transfer_buffers_to_world] Button pressed"
-                    );
-                }
-            } else if buf.up_received {
-                // ボタンが離された瞬間
-                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                    match button {
-                        PointerButton::Left => pointer_state.left_down = false,
-                        PointerButton::Right => pointer_state.right_down = false,
-                        PointerButton::Middle => pointer_state.middle_down = false,
-                        PointerButton::XButton1 => pointer_state.xbutton1_down = false,
-                        PointerButton::XButton2 => pointer_state.xbutton2_down = false,
-                    }
-
-                    tracing::trace!(
-                        entity = ?entity,
-                        button = ?button,
-                        "[transfer_buffers_to_world] Button released"
-                    );
-                }
+                tracing::trace!(
+                    entity = ?entity,
+                    button = ?button,
+                    "[transfer_buffers_to_world] Button pressed"
+                );
             }
         }
-    });
-
-    // BUTTON_BUFFERSをリセット（転送完了後）
-    BUTTON_BUFFERS.with(|buffers| {
-        let mut buffers = buffers.borrow_mut();
-        for buf in buffers.values_mut() {
-            buf.reset();
-        }
-    });
+    }
 
     // WHEEL_BUFFERS（窓ごと）から、その窓の中でポインタの状態を持つ entity（高々 1 つ）へ移す。
     // 持ち主が居なければ捨てる（要件 6.10）。どちらでも溜めは毎回空にする（1 tick 分だけ渡す）。
@@ -279,16 +219,55 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
     }
 
     // MODIFIER_STATEからPointerStateへ修飾キー状態を転送
-    MODIFIER_STATE.with(|state| {
-        let state = state.borrow();
-
-        for (entity, (shift_down, ctrl_down)) in state.iter() {
-            if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                pointer_state.shift_down = *shift_down;
-                pointer_state.ctrl_down = *ctrl_down;
-            }
+    // 届かない tick は前の値のまま（PointerState の欄が持つ）
+    let modifiers: Vec<(Entity, (bool, bool))> =
+        MODIFIER_STATE.with(|state| state.borrow_mut().drain().collect());
+    for (entity, (shift_down, ctrl_down)) in modifiers {
+        if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
+            pointer_state.shift_down = shift_down;
+            pointer_state.ctrl_down = ctrl_down;
         }
-    });
+    }
+
+    // ローカル座標は最後に全部書き直す。位置が届かず窓の手続きが直に入れた状態も含む。
+    let holders: Vec<(Entity, PhysicalPoint)> = world
+        .query::<(Entity, &PointerState)>()
+        .iter(world)
+        .map(|(e, s)| (e, s.client_point))
+        .collect();
+    for (entity, client) in holders {
+        let local = local_point_of(world, entity, client);
+        if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
+            pointer_state.local_point = local;
+        }
+    }
+}
+
+/// クライアント座標を、entity の左上からの座標にする（物理ピクセル）。
+/// local = client + (持ち主の窓の GlobalArrangement.bounds の左上 − entity の GlobalArrangement.bounds の左上)
+/// （差を四捨五入して i32）。entity が窓そのものなら client のまま。
+/// どちらかの GlobalArrangement が無い（配置の前）なら client を返し debug! を 1 行出す。
+fn local_point_of(world: &World, entity: Entity, client: PhysicalPoint) -> PhysicalPoint {
+    use crate::ecs::GlobalArrangement;
+    let window = crate::ecs::find_owner_window(world, entity);
+    if window == Some(entity) {
+        return client;
+    }
+    let window_bounds = window.and_then(|w| world.get::<GlobalArrangement>(w));
+    match (window_bounds, world.get::<GlobalArrangement>(entity)) {
+        (Some(w), Some(e)) => PhysicalPoint::new(
+            client.x + (w.bounds.left - e.bounds.left).round() as i32,
+            client.y + (w.bounds.top - e.bounds.top).round() as i32,
+        ),
+        _ => {
+            tracing::debug!(
+                entity = ?entity,
+                window = ?window,
+                "[local_point_of] no arrangement; local_point = client_point"
+            );
+            client
+        }
+    }
 }
 
 // ============================================================================
@@ -308,26 +287,25 @@ mod tests {
         POINTER_BUFFERS.with(|b| b.borrow_mut().clear());
         BUTTON_BUFFERS.with(|b| b.borrow_mut().clear());
         WHEEL_BUFFERS.with(|b| b.borrow_mut().clear());
-        DOUBLE_CLICK_BUFFERS.with(|b| b.borrow_mut().clear());
         MODIFIER_STATE.with(|b| b.borrow_mut().clear());
     }
 
     #[test]
-    fn test_push_pointer_sample_accumulates_in_thread_local() {
+    fn test_push_pointer_sample_keeps_only_latest() {
         reset_all_buffers();
         let mut world = World::new();
         let e = world.spawn_empty().id();
 
-        push_pointer_sample(e, 10.0, 20.0, Instant::now());
-        push_pointer_sample(e, 11.0, 21.0, Instant::now());
+        push_pointer_sample(e, PhysicalPoint::new(10, 20));
+        push_pointer_sample(e, PhysicalPoint::new(11, 21));
 
         POINTER_BUFFERS.with(|buffers| {
             let buffers = buffers.borrow();
-            let buf = buffers.get(&e).expect("buffer created on first push");
-            assert_eq!(buf.len(), 2, "2 samples accumulated");
-            let latest = buf.latest().unwrap();
-            assert_eq!(latest.x, 11.0);
-            assert_eq!(latest.y, 21.0);
+            assert_eq!(
+                buffers.get(&e),
+                Some(&PhysicalPoint::new(11, 21)),
+                "最新の 1 つだけ"
+            );
         });
     }
 
@@ -387,68 +365,76 @@ mod tests {
     }
 
     #[test]
-    fn test_transfer_buffers_to_world_updates_position_and_velocity() {
+    fn test_transfer_buffers_to_world_updates_position() {
         reset_all_buffers();
         let mut world = World::new();
         let e = world.spawn(PointerState::default()).id();
 
-        // 2 サンプル（速度計算に必要）。dt を十分に取って非ゼロ速度にする。
-        let t0 = Instant::now();
-        push_pointer_sample(e, 100.0, 200.0, t0);
-        push_pointer_sample(e, 150.0, 200.0, t0 + std::time::Duration::from_millis(100));
+        push_pointer_sample(e, PhysicalPoint::new(100, 200));
+        push_pointer_sample(e, PhysicalPoint::new(150, 200));
 
         transfer_buffers_to_world(&mut world);
 
         let state = world.get::<PointerState>(e).unwrap();
-        // 最新サンプルが client/local へ反映（f32→i32 切り捨て）
+        // 最新の位置が client/local へ反映
         assert_eq!(state.client_point, PhysicalPoint::new(150, 200));
         assert_eq!(state.local_point, PhysicalPoint::new(150, 200));
-        // x 方向に 50px / 0.1s = 500px/s、y は不変で 0
-        assert!(state.velocity.x > 0.0, "x 速度は正");
-        assert_eq!(state.velocity.y, 0.0, "y 速度は 0");
 
-        // 転送後にポインターバッファはクリアされる
+        // 転送後にポインターバッファは空になる
         POINTER_BUFFERS.with(|buffers| {
-            let buffers = buffers.borrow();
-            assert!(buffers.get(&e).unwrap().is_empty(), "転送後はクリア");
+            assert!(buffers.borrow().get(&e).is_none(), "転送後は空");
         });
     }
 
     #[test]
-    fn test_transfer_buffers_to_world_button_edge_detection_and_reset() {
+    fn test_transfer_buffers_to_world_empties_all_three_buffers() {
         reset_all_buffers();
         let mut world = World::new();
         let e = world.spawn(PointerState::default()).id();
 
-        // down のみ受信 → left_down = true
+        push_pointer_sample(e, PhysicalPoint::new(1, 2));
+        record_button_down(e, PointerButton::Left);
+        set_modifier_state(e, true, false);
+        transfer_buffers_to_world(&mut world);
+
+        assert!(POINTER_BUFFERS.with(|b| b.borrow().is_empty()), "位置は空");
+        assert!(BUTTON_BUFFERS.with(|b| b.borrow().is_empty()), "ボタンは空");
+        assert!(
+            MODIFIER_STATE.with(|b| b.borrow().is_empty()),
+            "修飾キーは空"
+        );
+    }
+
+    #[test]
+    fn test_transfer_buffers_to_world_press_is_true_only_in_its_tick() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let e = world.spawn(PointerState::default()).id();
+
+        // 押下を移すと、その tick だけ真
         record_button_down(e, PointerButton::Left);
         transfer_buffers_to_world(&mut world);
         assert!(
             world.get::<PointerState>(e).unwrap().left_down,
-            "down 受信で押下状態 true"
+            "押した tick は真"
         );
 
-        // transfer 後 ButtonBuffer は reset される（down_received/up_received=false）。
-        // フラグなしの transfer では既存の押下状態が維持される（エッジ検出）。
-        transfer_buffers_to_world(&mut world);
+        // 配りの後は偽で、知らせの無い次の tick も偽のまま
+        crate::ecs::pointer::dispatch_pointer_events(&mut world);
         assert!(
-            world.get::<PointerState>(e).unwrap().left_down,
-            "イベントなしでは押下状態を維持"
+            !world.get::<PointerState>(e).unwrap().left_down,
+            "配りの後は偽"
         );
-
-        // up 受信 → left_down = false
-        record_button_up(e, PointerButton::Left);
         transfer_buffers_to_world(&mut world);
         assert!(
             !world.get::<PointerState>(e).unwrap().left_down,
-            "up 受信で押下状態 false"
+            "次の tick も偽"
         );
     }
 
     #[test]
     fn test_transfer_buffers_to_world_sets_released_flag_even_with_down() {
-        // 同じ tick に押下と解放が入ると、押下優先の `if/else if` では解放が捨てられる。
-        // 解放の旗は独立した文で立てるため、押下状態と同時に立つ。
+        // 同じ tick に押下と解放が入っても、解放の旗は押下の旗と同時に立つ。
         reset_all_buffers();
         let mut world = World::new();
         let e = world.spawn(PointerState::default()).id();
@@ -458,7 +444,7 @@ mod tests {
         transfer_buffers_to_world(&mut world);
 
         let s = world.get::<PointerState>(e).unwrap();
-        assert!(s.right_down, "押下優先の既存分岐は不変");
+        assert!(s.right_down, "押下の旗も立つ");
         assert!(s.released.right, "同 tick でも解放の旗は落ちない");
         assert!(s.released.any(), "any() が真");
         assert!(!s.released.left, "他のボタンの旗は立たない");
@@ -517,65 +503,13 @@ mod tests {
     }
 
     #[test]
-    fn test_transfer_buffers_to_world_i16_extreme_coords_are_exact() {
-        // 本番の座標は WM_MOUSEMOVE lparam 由来で i16 範囲（[-32768, 32767]）。
-        // その極値を transfer_buffers_to_world に通すと、f32→i32 切り戻しが無損失で
-        // 正確な値になり（切り捨て/オーバーフローなし）、パニックもしないことを固定する。
-        reset_all_buffers();
-        let mut world = World::new();
-        let e = world.spawn(PointerState::default()).id();
-
-        let xmin = i16::MIN as f32; // -32768.0
-        let ymax = i16::MAX as f32; // 32767.0
-        push_pointer_sample(e, xmin, ymax, Instant::now());
-
-        transfer_buffers_to_world(&mut world);
-
-        let s = world.get::<PointerState>(e).unwrap();
-        assert_eq!(
-            s.client_point,
-            PhysicalPoint::new(i16::MIN as i32, i16::MAX as i32),
-            "i16 極値座標は無損失で i32 へ反映される"
-        );
-        assert_eq!(s.local_point, s.client_point, "local = client");
-    }
-
-    #[test]
-    fn test_transfer_buffers_to_world_nonfinite_coords_saturate_without_panic() {
-        // 防御的特性化: 本番経路では非有限/範囲外 f32 は供給されないが、万一混入しても
-        // Rust の `f32 as i32` は飽和（NaN→0・+inf→i32::MAX・-inf→i32::MIN・範囲超過→飽和）
-        // であり、パニック経路にはならないことを固定する（DoS パニックなしの安全鎖）。
-        reset_all_buffers();
-        let mut world = World::new();
-        let e = world.spawn(PointerState::default()).id();
-
-        // 2 サンプル（速度計算分岐も通す）。最新サンプルが NaN / +inf。
-        let t0 = Instant::now();
-        push_pointer_sample(e, 0.0, 0.0, t0);
-        push_pointer_sample(
-            e,
-            f32::NAN,
-            f32::INFINITY,
-            t0 + std::time::Duration::from_millis(10),
-        );
-
-        // パニックしないことが主眼
-        transfer_buffers_to_world(&mut world);
-
-        let s = world.get::<PointerState>(e).unwrap();
-        // NaN as i32 == 0、+inf as i32 == i32::MAX（Rust の飽和キャスト仕様）
-        assert_eq!(s.client_point.x, 0, "NaN は 0 に飽和");
-        assert_eq!(s.client_point.y, i32::MAX, "+inf は i32::MAX に飽和");
-    }
-
-    #[test]
     fn test_transfer_buffers_to_world_skips_entity_without_pointer_state() {
         reset_all_buffers();
         let mut world = World::new();
         // PointerState を持たないエンティティ
         let e = world.spawn_empty().id();
 
-        push_pointer_sample(e, 5.0, 5.0, Instant::now());
+        push_pointer_sample(e, PhysicalPoint::new(5, 5));
         record_button_down(e, PointerButton::Left);
         set_modifier_state(e, true, false);
 
@@ -657,6 +591,66 @@ mod tests {
                 "持ち主の居ない窓の溜めは捨てられる"
             );
         });
+    }
+
+    /// 左上 (left, top)・大きさ 50×50 の `GlobalArrangement` を作る。
+    fn arrangement_at(left: f32, top: f32) -> crate::ecs::GlobalArrangement {
+        crate::ecs::GlobalArrangement {
+            transform: windows_numerics::Matrix3x2::translation(left, top),
+            bounds: crate::ecs::Rect {
+                left,
+                top,
+                right: left + 50.0,
+                bottom: top + 50.0,
+            },
+        }
+    }
+
+    #[test]
+    fn test_transfer_local_point_is_from_entity_top_left() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                crate::ecs::window::Window::default(),
+                arrangement_at(100.0, 200.0),
+            ))
+            .id();
+        let child = world
+            .spawn((
+                PointerState::default(),
+                ChildOf(window),
+                arrangement_at(150.0, 250.0),
+            ))
+            .id();
+
+        // 窓の子に移すと、子の左上からの座標になる
+        push_pointer_sample(child, PhysicalPoint::new(60, 70));
+        transfer_buffers_to_world(&mut world);
+        let s = world.get::<PointerState>(child).unwrap();
+        assert_eq!(s.client_point, PhysicalPoint::new(60, 70));
+        assert_eq!(s.local_point, PhysicalPoint::new(10, 20), "子の左上から");
+
+        // 位置を積まずに直に入れた状態（ダブルクリックの道）も書き直される
+        *world.get_mut::<PointerState>(child).unwrap() = PointerState {
+            client_point: PhysicalPoint::new(60, 70),
+            local_point: PhysicalPoint::new(60, 70),
+            ..Default::default()
+        };
+        transfer_buffers_to_world(&mut world);
+        assert_eq!(
+            world.get::<PointerState>(child).unwrap().local_point,
+            PhysicalPoint::new(10, 20),
+            "直に入れた状態も書き直される"
+        );
+
+        // 窓そのものはクライアント座標のまま
+        world.entity_mut(child).remove::<PointerState>();
+        world.entity_mut(window).insert(PointerState::default());
+        push_pointer_sample(window, PhysicalPoint::new(60, 70));
+        transfer_buffers_to_world(&mut world);
+        let s = world.get::<PointerState>(window).unwrap();
+        assert_eq!(s.local_point, s.client_point, "窓そのものは client と同じ");
     }
 
     #[test]

@@ -1,0 +1,5 @@
+[goal]
+name = "draw-load-parity"
+spec_dir = "spec"
+ledger = "loop-ledger.md"
+results_dir = "out"

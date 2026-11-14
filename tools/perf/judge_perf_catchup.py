@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """`judge-perf.py` 0.4.0 の §9 追補——catch-up の系統別・時刻突合と仮説の数値化（要件 2.9）。
 
-【なぜ別ファイルか】`judge-perf.py` は既に 3,500 行を超えている（本 spec 以前からの状態）。
-0.4.0 で足す「表を組んで印字する」部分をそこへ積み増すと読めなくなるので、ここへ分けた。
+【なぜ別ファイルか】`judge-perf.py` は長大（数千行）なので、0.4.0 で足した
+「表を組んで印字する」部分をそこへ積み増さず、ここへ分けた。
 
 【ここに無いもの】判定式は 1 つも無い。合否に関わる計算は `judge-perf.py` 側にしかなく、
 このモジュールがするのは **集計と表示だけ** である。較正値も持たない——閾値（比の下限・
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 @dataclass(frozen=True)
@@ -67,13 +67,13 @@ class CatchupAnalysis:
     rows: list[CatchupRow] = field(default_factory=list)
     #: 時刻を読めなかった catch-up 行の数（表には出せないが、黙って消さない）。
     undated: int = 0
-    #: 系統別の件数（全区間・定常状態）。鍵は target の値。
+    #: 系統別の件数（全区間・定常状態）。鍵は系統の値（lane フィールド・古い記録は target フィールド）。
     total_by_target: dict[str, int] = field(default_factory=dict)
     steady_by_target: dict[str, int] = field(default_factory=dict)
     #: `[tick]` 窓の総数と、壁時計合計を読めた窓の数。
     tick_windows: int = 0
     tick_windows_with_wall: int = 0
-    #: catch-up を覆った窓の数（同じ窓に複数の catch-up が入れば 1 と数える）。
+    #: catch-up を覆った窓の数（同じ窓に複数の catch-up が入れば 1 と数える・wall_us の有無を問わない）。
     matched_windows: int = 0
     mean_wall_all_us: float | None = None
     mean_wall_catchup_us: float | None = None
@@ -110,27 +110,29 @@ def analyze(
     events: list[tuple[datetime | None, str]],
     show_times: list[datetime],
     tick_windows: list[TickWindow],
-    steady_from: datetime,
+    steady_events: list[tuple[datetime | None, str]],
     show_window_sec: float,
     ratio_min: float,
     tick_match_max_sec: float,
 ) -> CatchupAnalysis:
     """catch-up の各発生を周辺状況と突き合わせ、仮説の比まで出す。
 
-    `events` は `(時刻, 系統)` の並び（時刻は読めなければ None）。`show_times` は
+    `events` は `(時刻, 系統)` の並び（時刻は読めなければ None）。`steady_events` は
+    そのうち定常状態のもの（呼び手が 1 度だけ絞って渡す）。`show_times` は
     表示成立点の時刻（昇順であること）。`tick_windows` は閉じた時刻の昇順であること。
     """
     analysis = CatchupAnalysis()
     windows = sorted(tick_windows, key=lambda w: w.at)
     closes = [w.at for w in windows]
     shows = sorted(show_times)
+    steady = set(steady_events)
 
     for at, target in events:
         analysis.total_by_target[target] = analysis.total_by_target.get(target, 0) + 1
         if at is None:
             analysis.undated += 1
             continue
-        in_steady = at >= steady_from
+        in_steady = (at, target) in steady
         if in_steady:
             analysis.steady_by_target[target] = analysis.steady_by_target.get(target, 0) + 1
 
@@ -138,7 +140,7 @@ def analyze(
         prev_index = bisect.bisect_right(shows, at) - 1
         since = (at - shows[prev_index]).total_seconds() if prev_index >= 0 else None
         # 直前 show_window_sec 秒に成立した表示の数（発話再生中かどうかの代理）。
-        window_from = at - _timedelta_seconds(show_window_sec)
+        window_from = at - timedelta(seconds=show_window_sec)
         in_window = prev_index + 1 - bisect.bisect_left(shows, window_from)
 
         analysis.rows.append(
@@ -164,11 +166,9 @@ def analyze(
     if windows and (ticks_total + skipped_total) > 0:
         analysis.skip_ratio = skipped_total / (ticks_total + skipped_total)
 
-    matched: dict[datetime, int] = {}
-    for row in analysis.rows:
-        if row.tick is not None and row.tick.wall_us is not None:
-            matched[row.tick.at] = row.tick.wall_us
-    analysis.matched_windows = len(matched)
+    covering = {row.tick.at: row.tick.wall_us for row in analysis.rows if row.tick is not None}
+    matched = {at: wall for at, wall in covering.items() if wall is not None}
+    analysis.matched_windows = len(covering)
 
     if not windows:
         analysis.verdict_word = "判定不能"
@@ -186,7 +186,9 @@ def analyze(
     if not matched:
         analysis.verdict_word = "判定不能"
         analysis.verdict_reason = (
-            "catch-up の時刻を覆う [tick] 窓が 1 つも無い"
+            "catch-up の時刻を覆う [tick] 窓はあるが wall_us を読めない"
+            if covering
+            else "catch-up の時刻を覆う [tick] 窓が 1 つも無い"
             "（catch-up と [tick] の点灯区間が重なっていない）"
         )
         return analysis
@@ -206,12 +208,6 @@ def analyze(
     return analysis
 
 
-def _timedelta_seconds(seconds: float):
-    from datetime import timedelta
-
-    return timedelta(seconds=seconds)
-
-
 def _fmt_int(value: int | None) -> str:
     return "-" if value is None else str(value)
 
@@ -227,20 +223,20 @@ def render(
 ) -> None:
     """§9 の追補を印字する。`emit` は 1 行を受け取る関数（`Report.line`）。"""
     emit("")
-    emit(f"-- 系統別・各発生の突合（要件 2.9・0.4.0 で追加） " + "-" * 30)
+    emit("-- 系統別・各発生の突合（要件 2.9・0.4.0 で追加） " + "-" * 30)
     emit("  系統は行末の lane フィールド（古い記録は target・tracing のフィールドであって")
     emit("  メタデータの target 指示子ではない）で分ける。dispatcher と kanade は文言が")
     emit("  同一なので、文言では分けられない（ticker.rs）。")
     for target in targets:
         total = analysis.total_by_target.get(target, 0)
         steady = analysis.steady_by_target.get(target, 0)
-        emit(f"    系統 target={target}: 全区間 {total} 件（うち定常状態 {steady} 件）")
+        emit(f"    系統 lane={target}: 全区間 {total} 件（うち定常状態 {steady} 件）")
     others = sorted(set(analysis.total_by_target) - set(targets))
     for target in others:
         total = analysis.total_by_target.get(target, 0)
         steady = analysis.steady_by_target.get(target, 0)
         emit(
-            f"    系統 target={target}: 全区間 {total} 件（うち定常状態 {steady} 件）"
+            f"    系統 lane={target}: 全区間 {total} 件（うち定常状態 {steady} 件）"
             "   ← 既知の 3 系統に無い値（ticker.rs と本スクリプトの語彙がずれた疑い）"
         )
     if analysis.undated:
@@ -259,13 +255,13 @@ def render(
     if not analysis.rows:
         emit("    （時刻を読めた catch-up がありません）")
     for row in analysis.rows[:max_rows]:
-        since = "     -" if row.since_last_show_s is None else f"{row.since_last_show_s:6.3f}"
+        since = f"{'-':>7s}" if row.since_last_show_s is None else f"{row.since_last_show_s:6.3f}s"
         wall = _fmt_int(row.tick.wall_us) if row.tick else "-"
         skipped = _fmt_int(row.tick.skipped) if row.tick else "-"
         emit(
             f"    {row.at.strftime('%H:%M:%S.%f')}  "
             f"{'定常' if row.in_steady else '過渡'}  {row.target:<14s} "
-            f"{since}s  {row.shows_in_window:>7d}  {wall:>12s}  {skipped:>12s}"
+            f"{since}  {row.shows_in_window:>7d}  {wall:>12s}  {skipped:>12s}"
         )
     if len(analysis.rows) > max_rows:
         emit(f"    …ほか {len(analysis.rows) - max_rows} 件（表示上限 {max_rows} 行）")
@@ -273,7 +269,7 @@ def render(
     emit("")
     emit("  仮説「フレーム駆動の負荷が CPU 競合でティッカーの起床を遅らせる」（要件 2.9）:")
     emit(
-        f"    規則: catch-up を覆った [tick] 窓の wall_us 平均 ÷ 全 [tick] 窓の wall_us 平均。"
+        "    規則: catch-up を覆った [tick] 窓の wall_us 平均 ÷ 全 [tick] 窓の wall_us 平均。"
     )
     emit(
         f"          比 >= {ratio_min:.3f} なら 成立・下回れば 不成立・"

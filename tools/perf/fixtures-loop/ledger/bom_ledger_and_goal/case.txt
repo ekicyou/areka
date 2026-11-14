@@ -1,0 +1,1 @@
+title=BOM 付きの台帳と目標定義も読める（PowerShell の UTF-8 と同じ読み方）

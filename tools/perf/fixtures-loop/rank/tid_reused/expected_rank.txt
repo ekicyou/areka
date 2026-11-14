@@ -1,0 +1,18 @@
+perf-rank 0.2.0 run=tid_reused stages=thread top=5
+
+[2] スレッド  unit=cpu  出所=perf(thread)／perf(process)  基準=delta
+  window_s                            60.0
+  process_cpu_s                      3.000
+  registry_cpu_s                     1.000
+  unregistered_rest_cpu_s            2.000
+  snapshots                              2
+  役割別（上位 5）
+    rank  role                             cpu_s    share_pct
+       1  unregistered_rest                2.000        66.67
+       2  ui                               1.000        33.33
+       3  actor:sakura-talk-*              0.000         0.00
+  スレッド別（上位 5）
+    rank       tid  name                      role                           cpu_s    share_pct
+       1         0  -                         unregistered_rest              2.000        66.67
+       2         1  main                      ui                             1.000        33.33
+       3       100  sakura-talk-2             actor:sakura-talk-2            0.000         0.00

@@ -1,0 +1,4 @@
+[goal]
+name = "draw-load-parity"
+spec_dir = 5
+ledger = "ledger.md"

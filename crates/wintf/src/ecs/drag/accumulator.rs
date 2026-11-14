@@ -1,4 +1,4 @@
-//! ドラッグ累積器（スレッド間データ転送用）
+//! ドラッグ累積器（窓の手続きから配りへの受け渡し用・どちらも同じ UI スレッド）
 
 use crate::ecs::pointer::PhysicalPoint;
 use bevy_ecs::prelude::*;
@@ -25,7 +25,7 @@ pub enum DragTransition {
 }
 
 /// ドラッグ累積器（wndproc→ECS転送用）
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DragAccumulator {
     /// 前回flush以降の累積デルタ
     accumulated_delta: PhysicalPoint,
@@ -43,12 +43,7 @@ pub struct DragAccumulator {
 impl DragAccumulator {
     /// 新しいDragAccumulatorを作成
     pub fn new() -> Self {
-        Self {
-            accumulated_delta: PhysicalPoint::new(0, 0),
-            current_dragging_entity: None,
-            current_pos: PhysicalPoint::new(0, 0),
-            pending_transitions: Vec::new(),
-        }
+        Self::default()
     }
 
     /// デルタを累積
@@ -65,6 +60,7 @@ impl DragAccumulator {
     /// 状態遷移を積む
     ///
     /// Started を積んでいないドラッグの Ended（閾値前の離し・取り消し）は置かずに捨てる。
+    /// Ended を積むときは移動量を 0 に戻す（捨てる Ended では戻さない）。
     pub fn set_transition(&mut self, transition: DragTransition) {
         match &transition {
             DragTransition::Started { entity, .. } => {
@@ -82,6 +78,8 @@ impl DragAccumulator {
                     return;
                 }
                 self.current_dragging_entity = None;
+                // 終わったドラッグの移動量を次のドラッグへ配らない（指摘 1 ⑶）
+                self.accumulated_delta = PhysicalPoint::new(0, 0);
             }
         }
         self.pending_transitions.push(transition);
@@ -108,12 +106,6 @@ impl DragAccumulator {
     }
 }
 
-impl Default for DragAccumulator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// flush()の返却値
 #[derive(Debug)]
 pub struct FlushResult {
@@ -123,7 +115,7 @@ pub struct FlushResult {
     /// 状態遷移（積んだ順・空なら知らせ無し）
     pub transitions: Vec<DragTransition>,
 
-    /// 現在ドラッグ中のエンティティ（Dragging状態の時のみSome）
+    /// 現在ドラッグ中のエンティティ（Started を積んでから Ended を積むまで Some）
     pub current_dragging_entity: Option<Entity>,
 
     /// 現在のマウス位置
@@ -131,7 +123,7 @@ pub struct FlushResult {
 }
 
 /// DragAccumulatorのECSリソースラッパー
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Default)]
 pub struct DragAccumulatorResource {
     inner: Arc<Mutex<DragAccumulator>>,
 }
@@ -139,9 +131,7 @@ pub struct DragAccumulatorResource {
 impl DragAccumulatorResource {
     /// 新しいDragAccumulatorResourceを作成
     pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(DragAccumulator::new())),
-        }
+        Self::default()
     }
 
     /// デルタを累積（wndprocから呼ばれる）
@@ -188,12 +178,6 @@ impl DragAccumulatorResource {
                 None
             }
         }
-    }
-}
-
-impl Default for DragAccumulatorResource {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

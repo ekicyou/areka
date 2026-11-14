@@ -6,7 +6,7 @@
 //! 渡した位置が正しいことを読み戻す）。
 //!
 //! 終了の座標を見るテスト（A4・A6）と保存を比べるテスト（A7）は、開始を配った直後に
-//! `DraggingState.initial_inset` を開始時の窓位置で上書きし（偽の窓では `(0,0)` のまま入るため）、
+//! `DraggingState.initial_window_pos` を開始時の窓位置で上書きし（偽の窓では `(0,0)` のまま入るため）、
 //! ドラッグの間の窓の移動は窓の位置を直に書いて作る（[`begin_drag`]）。
 
 use std::time::Instant;
@@ -209,7 +209,7 @@ const WINDOW_SHIFT: Point = Point { x: 300, y: 0 };
 /// A6 で押した位置から離した位置までの動き（横と縦）。
 const RELEASE_BY: Point = Point { x: 150, y: 40 };
 
-/// 開始を配り、`initial_inset` を開始時の窓位置にしてから、窓を [`WINDOW_SHIFT`] だけ動かす
+/// 開始を配り、`initial_window_pos` を開始時の窓位置にしてから、窓を [`WINDOW_SHIFT`] だけ動かす
 /// （最後の移動の知らせが配られず 1 つ古い位置に残った窓も兼ねる）。
 /// 開始時の窓位置・押した位置・開始の配りで届いた知らせを返す。
 fn begin_drag(rig: &mut Rig) -> (Point, Point, Vec<MouseInput>) {
@@ -218,7 +218,7 @@ fn begin_drag(rig: &mut Rig) -> (Point, Point, Vec<MouseInput>) {
     let press = offset(start_win, PRESS_LOCAL);
     rig.put(started(char_w, press));
     rig.tick();
-    rig.set_initial_inset(char_w, start_win);
+    rig.set_initial_window_pos(char_w, start_win);
     rig.move_window(char_w, offset(start_win, WINDOW_SHIFT));
     (start_win, press, rig.drain())
 }
@@ -427,7 +427,6 @@ fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<Ca
     let ev = Phase::Bubble(DragStartEvent {
         target,
         position: PhysicalPoint::new(0, 0),
-        is_primary: true,
         timestamp: Instant::now(),
     });
     capture(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1

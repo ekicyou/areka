@@ -12,7 +12,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 /// `acquire()` で `SetCapture` を呼び出し、`Drop` で `ReleaseCapture` を呼び出す。
 /// `WM_CAPTURECHANGED` 受信時は `mark_released()` を呼ぶことで、
 /// Drop 時の `ReleaseCapture` をスキップする（OS が既に解放済みのため）。
-pub struct CaptureGuard {
+pub(crate) struct CaptureGuard {
     hwnd: HWND,
     released: bool,
 }
@@ -47,12 +47,6 @@ impl CaptureGuard {
     pub fn hwnd(&self) -> HWND {
         self.hwnd
     }
-
-    /// キャプチャが既に解放済みかどうかを返す。
-    #[allow(dead_code)]
-    pub fn is_released(&self) -> bool {
-        self.released
-    }
 }
 
 impl Drop for CaptureGuard {
@@ -64,46 +58,5 @@ impl Drop for CaptureGuard {
                 "[CaptureGuard] Capture released via Drop"
             );
         }
-    }
-}
-
-impl std::fmt::Debug for CaptureGuard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CaptureGuard")
-            .field("hwnd", &format_args!("0x{:X}", self.hwnd.0 as usize))
-            .field("released", &self.released)
-            .finish()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// CaptureGuard の基本構造テスト（null HWND で生成可能）
-    #[test]
-    fn capture_guard_with_null_hwnd() {
-        let guard = CaptureGuard::acquire(HWND::default());
-        assert!(!guard.is_released());
-        // Drop 時に ReleaseCapture が呼ばれるが null HWND なので安全
-    }
-
-    /// mark_released 後は is_released が true を返す
-    #[test]
-    fn mark_released_sets_flag() {
-        let mut guard = CaptureGuard::acquire(HWND::default());
-        assert!(!guard.is_released());
-        guard.mark_released();
-        assert!(guard.is_released());
-        // Drop 時に ReleaseCapture は呼ばれない
-    }
-
-    /// Debug 出力が正しい形式であること
-    #[test]
-    fn debug_format() {
-        let guard = CaptureGuard::acquire(HWND::default());
-        let debug_str = format!("{:?}", guard);
-        assert!(debug_str.contains("CaptureGuard"));
-        assert!(debug_str.contains("released: false"));
     }
 }

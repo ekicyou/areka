@@ -1,0 +1,8 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 長い走行を名乗るのに 20 分に届かない走行は判定不能
+mode = verdict
+build = release
+exit = 2
+
+note = profile = long なのに CPU は 25 点（360 秒）しかない。⑷b を適用する条件の
+note = 20 分に届かないので、黙って通さず判定不能（2）にする。

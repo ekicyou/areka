@@ -8,7 +8,6 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
-use bevy_ecs::message::Messages;
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_ACTIVATE, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
 };
@@ -240,14 +239,11 @@ fn deactivate_through_the_entrance_mid_tick() {
     }
 }
 
-/// 本番と同じく World を可変で借りたまま 1 回の画面更新を回し、届いた終了の知らせを読む。
+/// 本番と同じく World を可変で借りたまま 1 回の画面更新を回し、終了の受け手に届いた知らせを読む。
 fn tick(rig: &Rig) -> Vec<DragEndEvent> {
     let mut w = rig.world.borrow_mut();
     assert!(w.try_tick_world(), "画面更新が回る");
-    w.world_mut()
-        .resource_mut::<Messages<DragEndEvent>>()
-        .drain()
-        .collect()
+    crate::ecs::drag::seen_test_support::take::<DragEndEvent>(w.world_mut())
 }
 
 /// テスト用システムを UISetup へ置いた組み立てを作り、ドラッグ中にして預ける。

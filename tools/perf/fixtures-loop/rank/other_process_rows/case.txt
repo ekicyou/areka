@@ -1,0 +1,12 @@
+title = areka 以外のプロセスの行が混ざった dump（段③は areka.exe の行だけを数える）
+exit = 0
+argv = --stage function --top 3
+
+note = xperf の採取はシステム全体なので、dump には Idle や他のプロセスの SampledProfile と
+note = Stack の行も入る。この dump は sample_ok の断片に Idle (   0) と notepad.exe ( 900) の
+note = 行を混ぜたもので、期待出力は sample_ok_counts と同じ数（areka.exe の分だけ）である。
+note = notepad の Stack の行は areka のサンプルと同じ時刻・別の TID に置き、Image!Function が
+note = areka.exe の行も入れてある。処理名で絞らない実装はサンプル数と自己時間が膨らみ、
+note = (時刻, TID) の組で絞らない実装は包含時間が膨らんで赤になる。
+note = TID 18420 の 2 段の Stack の行は自分の SampledProfile の前に置いてある（D6 の
+note = 前でも後でも同じに数える）。それまでに見た組とだけ照らす 1 回読みは 2 段を落として赤。

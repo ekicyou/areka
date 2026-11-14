@@ -1,0 +1,7 @@
+title = --top 0（上位 0 件の順位表は出さない・引数不正として止める）
+exit = 3
+argv = --top 0
+
+stderr_substr = --top must be 1 or more
+
+note = 引数不正の 3 を再現する唯一のケース。走行ディレクトリの中身は読む前に止まるので要らない。

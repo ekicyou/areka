@@ -1,0 +1,7 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = build = debug は引数の誤り
+mode = verdict
+build = debug
+exit = 3
+
+note = 判定の build に debug は無い（argparse の choices が拒む）。終了コード 3。

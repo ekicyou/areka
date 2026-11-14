@@ -1,0 +1,8 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 長い走行（20 分超）で平坦な CPU は合格
+mode = verdict
+build = release
+exit = 0
+
+note = profile = long・CPU 89 点（15 秒おき・1,320 秒・1.50%）。20 分の下限を越え、
+note = 平均も傾きも基準の内側なので、判定式⑷b まで適用されて合格（0）になる。

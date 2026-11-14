@@ -1,0 +1,8 @@
+BeginHeader
+         SampledProfile,  TimeStamp,     Process Name ( PID),   ThreadID,           PrgrmCtr, CPU, ThreadStartImage!Function,            Image!Function, Count, SampledProfile type
+                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function
+EndHeader
+         SampledProfile,    5052388,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,        areka.exe!0x00007ff6c4c00110,        areka.exe!0x00007ff6c4a91b30,     1,     1
+         SampledProfile,    5053509,        areka.exe (23140),      18332, 0x00007ff6c4a3f210,   6,        areka.exe!0x00007ff6c4c00110,        areka.exe!0x00007ff6c4a3f210,     1,     1
+                  Stack,    5052388,      18332,   1, 0x00007ff6c4a91b30,        areka.exe!0x00007ff6c4a91b30
+                  Stack,    5052388,      18332,   2, 0x00007ff6c4c00110,        areka.exe!0x00007ff6c4c00110

@@ -1,0 +1,4 @@
+0 :: init --goal-file @DIR@/goal.toml --repo-root @DIR@ --now 2026-08-23T00:00:00Z
+0 :: append --goal-file @DIR@/goal.toml --repo-root @DIR@ --from-json @DIR@/entry.json --iteration 1 --now 2026-08-23T01:23:45Z
+0 :: summary --goal-file @DIR@/goal.toml --repo-root @DIR@ --out -
+0 :: summary --goal-file @DIR@/goal-unreadable.toml --repo-root @DIR@ --out -

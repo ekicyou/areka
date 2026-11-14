@@ -1,0 +1,7 @@
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+3 :: set-phase RANK --ledger @LEDGER@ --best nan
+3 :: set-phase RANK --ledger @LEDGER@ --best inf
+3 :: set-phase RANK --ledger @LEDGER@ --streak -1
+0 :: set-phase RANK --ledger @LEDGER@ --best -0
+0 :: status --ledger @LEDGER@
+0 :: state --ledger @LEDGER@

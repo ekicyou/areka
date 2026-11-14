@@ -1,0 +1,2 @@
+title=append は --iteration が必須（省くと入力不正で拒む・状態から推し量らない）
+stderr_substr=--iteration

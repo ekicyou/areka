@@ -17,7 +17,7 @@
 
 ```
 [ワーカスレッド]                       [UI スレッド]
-CursorMonitorBridge                    ClickThroughController (async loop)
+CursorMonitorBridge                    start_click_through (async loop)
   GetCursorPos (screen physical)
   移動を検知したら:
     latest_pos.store(pack(x,y))  ─┐
@@ -95,7 +95,7 @@ pub fn apply_layered_companion(hwnd: HWND) -> windows::core::Result<()>;
 
 通常は機構（`evaluate_targets`）が同伴フラグ適用・差分ガードを通したトグルを自動で行うため、アプリ側が直接叩く必要はない。
 
-### 4.2 機構の起動（`ClickThroughController::start`）
+### 4.2 機構の起動（`start_click_through`）
 
 `WinApp::run` の結線点（`wire_click_through`）が呼ぶ。ワーカ生成・event 共有・async ループの `spawn_local` を束ね、RAII ハンドル `ClickThroughHandle` を返す。
 
@@ -104,10 +104,11 @@ pub fn apply_layered_companion(hwnd: HWND) -> windows::core::Result<()>;
 let registry = Rc::new(RefCell::new(ClickThroughRegistry::new()));
 let wake_event = Arc::new(event_listener::Event::new());
 
-let handle = ClickThroughController::start(
+let handle = start_click_through(
     Rc::downgrade(&self.world), // Weak<RefCell<EcsWorld>>: shutdown で upgrade None → ループ終了
-    Rc::clone(&registry),      // Rc<RefCell<ClickThroughRegistry>>: start 後も register/remove 可能
+    Rc::clone(&registry),      // Rc<RefCell<ClickThroughRegistry>>: start 後も register 可能
     Arc::clone(&wake_event),   // Arc<event_listener::Event>: 二重起床の単一 wake event
+    running,                   // Rc<Cell<bool>>: run() のループが戻った後の起床では判定を回さない
 );
 
 // 登録面を World へ NonSend リソースとして挿入（areka が取得する）。
@@ -117,14 +118,15 @@ world.insert_non_send_resource(ClickThroughRegistryHandle::new(Rc::clone(&regist
 シグネチャ:
 
 ```rust
-pub(crate) fn start(
+pub(crate) fn start_click_through(
     world: Weak<RefCell<EcsWorld>>,
     registry: Rc<RefCell<ClickThroughRegistry>>,
     wake_event: Arc<event_listener::Event>,
+    running: Rc<Cell<bool>>,
 ) -> ClickThroughHandle;
 ```
 
-二重起床は **単一の共有 `Arc<Event>`** を cursor worker（`CursorMonitorBridge::spawn(wake_event.clone())`）と VSync tick 源の両方が notify する方式（select 併用なし）。tick 源が post-tick で notify する結線は `wire_click_through` の VSync relay タスクが担う。
+二重起床は **単一の共有 `Arc<Event>`** を cursor worker（`CursorMonitorBridge::spawn(wake_event.clone())`）と VSync tick 源の両方が notify する方式（select 併用なし）。tick 源の notify は `WinApp::run` が起こす中継タスク `tick_bridge::relay_vblank`（`runtime/tick_bridge.rs`）が vblank ごとに行う。`wire_click_through` は wake event を作って返すだけで、`run` がそれを `relay_vblank` へ渡す。
 
 ### 4.3 対象窓の登録（`ClickThroughRegistryHandle::register`）
 
@@ -139,12 +141,12 @@ fn register_click_through_windows(
 ) {
     let Some(handle) = handle else { return; };
     for (entity, wh) in new_windows.iter() {
-        handle.register(entity, wh.hwnd()); // 同一 Entity 再登録は dedupe（冪等）
+        handle.register(entity, wh.hwnd()); // 同一 Entity・同一 HWND の再登録は何もしない（HWND が変わったときだけ記録を戻す）
     }
 }
 ```
 
-窓破棄時の除去は機構内 `prune_dead_targets`（Entity 生存確認・`evaluate_targets` 冒頭で自動除去）が担うため、アプリ側の明示 `remove` は必須ではない（despawn で十分）。
+窓破棄時の除去は機構内 `prune_dead_targets`（`Window` と、登録の HWND と同じ `WindowHandle` を持つ wintf の窓だけを残す・`evaluate_targets` 冒頭で自動除去）が担う。アプリ側の除去の口は無い（despawn で十分）。
 
 ### 4.4 areka の DComp（WUC）オプトイン
 

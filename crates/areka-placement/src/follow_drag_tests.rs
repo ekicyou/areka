@@ -486,7 +486,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     world.insert_resource(single_monitor_snapshot());
 
     // scope=2 の Free キャラ窓。DraggingState は実 flow（dispatch_drag_events 挿入）を模す。
-    // initial_inset=(1250,356)＝ドラッグ開始時窓位置・drag_start=(1400,600)＝開始カーソル。
+    // initial_window_pos=(1250,356)＝ドラッグ開始時窓位置・drag_start=(1400,600)＝開始カーソル。
     let start = (1400, 600);
     let window = world
         .spawn((

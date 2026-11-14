@@ -267,9 +267,7 @@ pub fn on_char_drag_end(
 ///
 /// 生ドラッグ座標（＝move_window=true なら wndproc が書いたであろう位置）を
 /// wndproc と同じ式で復元する: `initial_window_pos + (cursor − drag_start)`。
-/// [`DraggingState`] の `initial_inset` は wintf dispatch が「ドラッグ開始時の
-/// 窓位置」を転記したもの（フィールド名は歴史的経緯・dispatch.rs 参照）。復元した
-/// 生座標へ [`project_anchor`] を適用する——リサイズ（[`resize_window_to`]）と同一の
+/// 復元した生座標へ [`project_anchor`] を適用する——リサイズ（[`resize_window_to`]）と同一の
 /// 射影 T を通し、座標系変換を二重化しない（Req1.6）。
 ///
 /// `None` は「[`DraggingState`] 不在で生座標を復元できない」場合のみ（実 flow では
@@ -290,8 +288,10 @@ fn policy_mapped_position(
     };
     let raw = PointPx {
         // 実カーソル・窓座標の範囲で溢れないが、極端入力でも panic しない契約
-        x: (ds.initial_inset.0 as i32).saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),
-        y: (ds.initial_inset.1 as i32).saturating_add(cursor.y.saturating_sub(ds.drag_start_pos.y)),
+        x: (ds.initial_window_pos.0 as i32)
+            .saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),
+        y: (ds.initial_window_pos.1 as i32)
+            .saturating_add(cursor.y.saturating_sub(ds.drag_start_pos.y)),
     };
     let size = world
         .get::<WindowPos>(entity)
