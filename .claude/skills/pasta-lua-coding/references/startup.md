@@ -34,11 +34,20 @@ Lua の `require` が解決するモジュールは、次の 5 つのディレ�
 
 ### 設置パスの長さ・文字種に依存しない
 
-モジュールの解決は、ゴーストの設置場所がどれほど深くても、パスにどのような文字が含まれていても同じ結果になる。
+モジュールの解決は、ゴーストの設置場所がどれほど深くても、パスにどのような文字が含まれていても（`;` と `?` を除く）同じ結果になる。
 
 - 絶対パスが 260 文字を超える場所に設置しても `require` は成功する。ランタイムは独自のパス長上限を持たない。
 - システムの ANSI コードページで表現できない文字（利用者名やフォルダ名に含まれる各国語の文字など）がパスに含まれても `require` は成功する。
 - モジュールが見つからなかった場合のエラーメッセージには、探索した候補パスが `no file '…'` の行として**探索順に**並ぶ。非 ASCII の文字も欠落・置換されずにそのまま表記される。どこを探したかがそのまま読み取れる。
+
+例外は `;` と `?` である。Lua の検索パス（`package.path`）は `;` を区切り、`?` をモジュール名を入れる場所として使うため、これらの文字を含むパスは検索パスに入れられない。ゴーストのフォルダ（`ghost/master`）の絶対パスか、`pasta.toml` の `[loader] lua_search_paths` の項目に `;` か `?` が含まれると、辞書の読み込みより前に読み込みエラーになる。エラーの理由には、問題の文字と、そのパスまたは項目が入る。
+
+```text
+Ghost folder path contains ';', which Lua package.path cannot hold: 'C:\SSP\ghost\a;b\ghost\master'
+[loader] lua_search_paths entry contains '?', which Lua package.path cannot hold: 'lib?'
+```
+
+ゴーストのフォルダ名か `lua_search_paths` の項目から、その文字を外す。
 
 ただし、これはランタイムが解決するモジュール（`require`）についての保証である。ゴースト作者のコードが直接呼ぶ Lua 標準のファイル入出力は対象外である（第 3 節を参照）。
 
@@ -110,11 +119,23 @@ SHIORI の DLL には、設置パスを UTF-8 で受け取る初期化入口 `lo
 
 データの永続化にこれらを使ってはならない。永続化は `@pasta_persistence` モジュールを用いること（[@pasta_persistence](pasta-persistence.md) を参照）。同モジュールはランタイム側でファイルを扱うため、設置パスの長さ・文字種の影響を受けない。
 
+### `ffi.load` で読む DLL の制限
+
+`ffi.load`（第 5 節）が保証するのは、DLL を見つけて読み込み、`ffi.load` の値として返すところまでである。次のことは保証しない。
+
+- **DLL のファイル名は ANSI コードページで表せる文字に限る。** フォルダの部分は深くても ANSI に無い文字を含んでもよいが、ファイル名（最後の部分）は LuaJIT の `ffi.load` へそのまま渡るため、ANSI で表せなければならない。似た文字への置き換えでしか表せない名前も表せないものとして扱う。この場合は `cannot load module '…': the file name '…' cannot be represented in the ANSI code page` で失敗する。
+- **同じファイル名の別の DLL がプロセスに読み込み済みなら失敗する。** 同じ SSP で動く別のゴーストが同名の DLL を読んでいる場合などである。黙ってそちらの DLL に結びつくことはなく、`cannot load module '…': a different DLL named '…' is already loaded in this process` で失敗する。同じファイルを読み直すのは失敗ではない。先に読んだ側が解放されれば読めるようになる。ほかと重ならないファイル名にすれば起きない。
+- **依存 DLL の同名の取り違えは防がない。** 確かめるのは `ffi.load` に渡した DLL 自身だけである。依存 DLL と同じ名前の DLL がプロセスに読み込み済みなら、Windows はそちらを使う。
+- **名前だけの指定で OS の探索に任せた DLL は、Windows の規則のまま読まれる。** 検索パスのどこにも無かった名前（第 5 節）は、探す場所も依存 DLL を探す場所も Windows の既定の探索に従う。この節のほかの保証（深いパス・ANSI に無い文字・依存 DLL の探し方）は及ばない。
+- **DLL の中で ANSI 版の API を使うと失敗しうる。** DLL が自分の置き場所などのパスを ANSI 版の API（`…A` の関数）で扱うと、設置パスが深い場合や ANSI に無い文字を含む場合に、DLL の中で失敗する。読み込みまでは成功しているので、`ffi.load` は失敗を報告しない。
+- **`PATH` にある依存 DLL は見つからない。** カレントディレクトリも探さない。依存 DLL を探す場所は第 5 節のとおりである。
+- **別のスレッドとの競合は防がない。** 同名の DLL の確かめと実際の読み込みの間に、同じプロセスの別のスレッド（同じ SSP で動く別のゴーストなど）が同名の別の DLL を読み込むと、そちらに結びつくことがある。同じ瞬間に同名の DLL を読んだ場合に限られる。
+
 ## 4. ゴーストが起動しない・喋らないとき
 
 ゴーストがまったく反応しない場合、起動シーケンスのどこかで失敗している可能性が高い。次の順で切り分ける。
 
-なお、ゴーストは起動しているがデバッガが接続できない場合は、[接続できないとき（トラブルシューティング）](https://ekicyou.github.io/pasta/debug/troubleshooting.html) を参照する。
+この節の手順は、起動・読み込みの失敗を扱う。読み込みに失敗したときの 500 応答は、設定にかかわらずバルーンに何も出ない。一方、起動した後にイベントの処理中に Lua のエラーで止まったとき（止まるエラー）は、既定ではバルーンに `【スクリプトのエラー：…】`・`【時間切れ：…】` の表記が出る。読み方は [止まるエラーの表記](https://ekicyou.github.io/pasta/reference/runtime-failures.html#止まるエラーの表記) を参照する。表記を出さない設定（`balloon_warning = false`）では表記は出ず、これまでどおり 500 応答の `X-Error-Reason` とログの警告で理由を見る。
 
 ### 手順 1: ログファイルの `fatal=true` の行を読む
 
@@ -163,6 +184,8 @@ X-ERROR-REASON: Load error: ... failed to load startup module 'pasta.shiori.entr
 | `module 'X' not found:` ＋ `no file '…'` の並び | モジュール未検出 | `no file` の行が**実際に探したパスの全リスト**である。意図した置き場所が並んでいるか、ファイル名・モジュール名の綴りが一致しているかを照合する |
 | `error loading module 'X' from file '…'` | ファイルは見つかったが、構文エラーまたは読み込みに失敗した | 示されたファイルを確認する |
 | `Partial transpilation failure: …` ＋ ログに `Parse error: ファイル:行:列: 内容` | `.pasta` ファイルの文法エラー（パースエラー） | 示されたファイルの行・列を修正する（下記「パースエラー」） |
+| `Module name collision: …` | 2 つ以上の `.pasta`、または辞書のフォルダの 2 つ以上の `.lua` が、同じモジュール名になる。大文字と小文字だけの違いも同じ名前として扱う | 示されたファイルのどれかの名前を変える（下記「モジュール名の衝突」） |
+| `which Lua package.path cannot hold` | ゴーストのフォルダのパスか `lua_search_paths` の項目に `;` か `?` が含まれる（第 1 節） | フォルダ名か項目から、その文字を外す |
 
 `no file '…'` の並びは、第 1 節の優先順位とファイル名パターンの組み合わせがそのまま出力されたものである。置いたつもりのファイルがリストのどのパスとも一致しないなら、置き場所かモジュール名のどちらかが間違っている。
 
@@ -175,3 +198,80 @@ Parse error: ファイル:行:列: 内容
 ```
 
 行と列は 1 から数える。`内容` には、該当する行の抜粋と、その位置で期待される要素の一覧が複数行で続く。`X-ERROR-REASON` とロード失敗の行（`PastaShiori load failed`）には、`Partial transpilation failure: 成功数 succeeded, 失敗数 failed [ファイルのパス]` の形で失敗したファイルの一覧だけが載り、行・列は載らない。行・列はログファイルの `Process failure` 行で確かめる。
+
+#### モジュール名の衝突
+
+辞書のファイル名からはモジュール名が作られる。違うファイルが同じモジュール名になると、片方の内容が失われるため、辞書の変換と Lua の実行より前に読み込みエラーになる。`Module name collision:` の後には、ぶつかったモジュール名とファイル（ゴーストのフォルダから見たパス）が並ぶ。大文字と小文字だけが違う組は、ファイルごとにモジュール名が付く。組が複数あれば ` / ` でつながる。
+
+```text
+Module name collision: pasta.scene.会話_朝: dic\会話-朝.pasta, dic\会話_朝.pasta
+Module name collision: dic\A-b.pasta (pasta.scene.A_b), dic\a_b.pasta (pasta.scene.a_b)
+```
+
+モジュール名の作り方は [辞書の検査](https://ekicyou.github.io/pasta/debug/validate.html#モジュール名) にある。`pasta_check validate` は同じ組を `module-pasta-collision`・`module-lua-collision` の誤りとして報告するので、ゴーストを起動する前に見つけられる。
+
+## 5. DLL を FFI で使う
+
+C で書いた DLL の関数は、LuaJIT の FFI を通して呼ぶ。FFI は既定では開いていない。`pasta.toml` の `[loader] ffi` を `true` にしたゴーストでだけ使える（[ffi](https://ekicyou.github.io/pasta/reference/pasta-toml.html#ffi) を参照。有効にしたときの注意もそこにある）。
+
+C モジュールを `require` で読む道（`package.cpath`・`package.loadlib`）は使えない。pasta.dll は Lua の C API を外に公開しておらず、`lua51.dll` も無いため、C モジュールの DLL はどこに置いても読めない。C の DLL は FFI で使う。
+
+### 例
+
+関数を 1 つ持つ DLL を C で書く。
+
+```c
+/* foo.c */
+__declspec(dllexport) int add(int a, int b) { return a + b; }
+```
+
+これを DLL に作り（Visual Studio なら `cl /LD foo.c`）、できた `foo.dll` をゴーストの `scripts/` に置く。DLL は pasta.dll と同じ 32 ビット・64 ビットの別で作る。
+
+`pasta.toml` で FFI を開く。
+
+```toml
+[loader]
+ffi = true
+```
+
+Lua から関数を宣言し、`ffi.load` で DLL を読んで呼ぶ。
+
+```lua
+local ffi = require "ffi"
+ffi.cdef [[ int add(int a, int b); ]]
+local foo = ffi.load("foo")
+local sum = foo.add(1, 2)  -- 3
+```
+
+`ffi.load` の 2 番目の引数は、LuaJIT の `ffi.load` へそのまま渡る。
+
+### 探すフォルダと順
+
+`ffi.load` に渡す名前は、書き方によって次のように探す。名前の最後の部分に `.` が無ければ `.dll` を足す（`foo` は `foo.dll`、`foo.bin` はそのまま）。
+
+| 書き方 | 例 | 探す場所 |
+| ------ | -- | -------- |
+| 名前だけ（`/`・`\`・`:` を含まない） | `"foo"`・`"foo.dll"` | 第 1 節のモジュール検索パスのディレクトリを同じ順で探し、最初に見つかったものを読む。どこにも無ければ OS の既定の探索に任せる |
+| 相対パス | `"lib/foo"`・`"lib\\foo.dll"` | 基準ディレクトリからの相対として解く |
+| 絶対パス | `"C:/dll/foo.dll"` | そのまま読む |
+
+名前だけの指定で探すディレクトリは、`require` と同じ `[loader] lua_search_paths` から作る。`lua_search_paths` を変えれば `require` と `ffi.load` の両方の探索が変わる。実行中に `package.path` を書き換えても、`ffi.load` の探索は変わらない。基準ディレクトリそのものは、`lua_search_paths` に含めない限り探さない。どのディレクトリにも無い名前（たとえば `"kernel32"`）は、OS の既定の探索で読む。このときの探し方は Windows の規則のままである（第 3 節の [`ffi.load` で読む DLL の制限](#ffiload-で読む-dll-の制限)）。
+
+相対パスの基点は、カレントディレクトリではなく基準ディレクトリである。区切りは `/` と `\` のどちらでもよい。`\foo`・`/foo`・`C:foo` も、ドライブのルートやドライブのカレントではなく、基準ディレクトリの下として解く。絶対パスとして扱うのは、ドライブ文字と区切りで始まるもの（`C:\…`・`C:/…`）と `\\` で始まるものである。
+
+相対パス・絶対パスで指したファイルが無ければ、そこで失敗する。モジュール検索パスのディレクトリや OS の既定の探索には回さない。
+
+ゴーストの設置場所が深くても、フォルダの名前に ANSI コードページに無い文字が含まれていても、ゴーストのフォルダの DLL は読める。ただしファイル名は ANSI で表せる文字に限る（第 3 節）。
+
+### 依存 DLL を探す場所
+
+ゴーストのフォルダから読んだ DLL が頼る依存 DLL は、次の順で探す。
+
+1. 読んだ DLL と同じフォルダ
+2. ホストの実行ファイル（`ssp.exe` など）のフォルダ、System32 などの Windows の既定のフォルダ
+
+カレントディレクトリと環境変数 `PATH` のフォルダは探さない。依存 DLL は、読む DLL と同じフォルダに置く。
+
+### 失敗したとき
+
+`ffi.load` が失敗すると、`cannot load module '名前': 理由` の形のエラーを、`ffi.load` を呼んだ位置で投げる。`名前` は `ffi.load` に渡したままの名前である。`理由` は Windows のエラーメッセージ（OS の表示言語、UTF-8）か、第 3 節に挙げた pasta の英語の文言である。DLL や依存 DLL が見つからないときは、「指定されたモジュールが見つかりません。」に当たる Windows のメッセージになる。失敗してもプロセスは落ちず、`pcall` で受け取れる。

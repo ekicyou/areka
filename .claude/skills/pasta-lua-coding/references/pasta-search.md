@@ -15,11 +15,11 @@ DSL の単語参照（`act:word(name)`）、Call（`＞`）のシーン解決、
 
 検索対象は、シーン辞書の読み込みの最後に `require("pasta").finalize_scene()` が実行された時点で確定する。`finalize_scene()` はランタイムが自動で呼ぶため、シーン関数・イベントハンドラの実行時には検索できる。
 
-`finalize_scene()` より前（`main.lua` や、シーン辞書の読み込み中に実行される Lua ブロックのトップレベル）でも `require` と呼び出しはエラーにならないが、検索対象が確定していないため、結果は使えない。
+`finalize_scene()` より前（`main.lua` や、シーン辞書の読み込み中に実行される Lua ブロックのトップレベル）でも `require` と呼び出しはできる。ただし検索対象はまだ空で、正しい引数で行ったどのシーン・単語の検索も、各メソッドの「見つからないとき」の値（`nil` など）を返す。キャッシュの状態や直前に編集した辞書によって、この結果は変わらない。空のシーン名などの引数の誤りは、`finalize_scene()` の後と同じくエラーになる。
 
 ## 検索の範囲
 
-どのメソッドも、第 2 引数 `global_scene_name` の有無で検索の範囲が決まる。
+第 2 引数 `global_scene_name` を取るメソッドは、その有無で検索の範囲が決まる。
 
 | 第 2 引数 | 検索する範囲 |
 | ---- | ---- |
@@ -35,6 +35,9 @@ DSL の単語参照（`act:word(name)`）、Call（`＞`）のシーン解決、
 - 候補を一巡するまで、同じ候補は選ばれない。一巡すると並べ直して最初から使う。
 - 並び順の記録は、検索の範囲（第 2 引数）と検索に使った名前の組ごとに持つ。照合用の名前に揃える引数（`search_scene` の第 1 引数、`search_word` の第 2 引数）は、揃えた後の名前で組を作る。グローバル単語に解決される DSL の `＠挨拶`（Lua の `act:word("挨拶")`）と `SEARCH:search_word("挨拶")` は、同じ記録を進める。
 - 記録はゴーストの実行中、イベントをまたいで保たれ、辞書の再読込で消える。
+- シーンの検索に `var`・`save` を渡したときは、条件を満たさない候補を見ただけで使ったものにし、優先の段より低い候補を出さない。並びの記録は表を渡したかどうかで分けない（[候補の選択](https://ekicyou.github.io/pasta/grammar/call-jump.html#候補の選択)）。
+- シーンの検索では、`＆重み：N` のシーンを並びに N 回乗せる。一巡の中で、そのシーンは N 回選ばれる（[重み](https://ekicyou.github.io/pasta/grammar/block-structure.html#重み)）。
+- シーンの検索で、抽出した候補（条件と `＆優先` で絞った後の候補。条件の表を渡さないときは名前に合う候補の全部）の全部に `＆順番` があるときは、シャッフルの代わりに番号の順に選び、いちばん大きい番号の次はいちばん小さい番号へ戻る。最後に選んだ番号は並びの記録と同じ組ごとにメモリの中に覚え、辞書の再読込とゴーストの終了で消える。`＆順番` の有る候補と無い候補が混ざっているときと、同じ番号が 2 つ以上あるときは、注意のログを出してシャッフル＆順次消費で選ぶ（[順番](https://ekicyou.github.io/pasta/grammar/block-structure.html#順番)）。
 
 前方一致で集まった候補を次の順に並べたものを、**候補の並び**と呼ぶ。`set_scene_selector`・`set_word_selector` に渡す整数は、候補の並びの位置を指す（[set_scene_selector(...) / set_word_selector(...)](#set_scene_selector--set_word_selector)）。
 
@@ -49,17 +52,19 @@ DSL の単語参照（`act:word(name)`）、Call（`＞`）のシーン解決、
 シーンを前方一致で検索する。
 
 ```lua
-SEARCH:search_scene(name, global_scene_name?) -> global_name, local_name | nil
+SEARCH:search_scene(name, global_scene_name?, var?, save?) -> global_name, local_name | nil | nil, "unmet"
 ```
 
 | パラメータ | 型 | 必須 | 説明 |
 | ---- | ---- | ---- | ---- |
 | `name` | string | ✅ | 検索するシーン名（照合用の名前に揃えてから前方一致） |
 | `global_scene_name` | string | ❌ | 指定すると、そのグローバルシーンのローカルシーンだけを検索する |
+| `var` | table | ❌ | 条件の `＄名前` を読む表（ふつうは `act.var`） |
+| `save` | table | ❌ | 条件の `＄＊名前` を読む表（ふつうは `act.save`） |
 
 `name` は、DSL の Call と同じく、照合用の名前（名前の中の文字と数字と `_` 以外の文字を `_` に置き換えた名前。[シーン名の照合](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の照合)）に揃えてから、シーン名の照合用の名前と前方一致させる。`"挨拶・朝"` も `"挨拶_朝"` も、照合用の名前 `挨拶_朝` で探す。照合用の名前が同じになるグローバルシーンは区別されず、同じ名前の候補になる。第 2 引数 `global_scene_name` には `global_name`（登録名）を渡す。第 2 引数は照合用の名前に揃えずに使う。
 
-第 2 引数を省略したとき（グローバルシーンの検索）は、照合用の名前に揃える前に、`name` を pasta.toml の別名表で置き換える（[シーン名の別名](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の別名)・[pasta.toml の `[scene]`](https://ekicyou.github.io/pasta/reference/pasta-toml.html#sceneシーン名)）。`name` が別名と完全に一致するときだけ置き換え先の名前にし、その名前を照合用の名前に揃えて前方一致させる。既定の別名表（`OnTalk = ["会話"]`）のもとでは、`search_scene("会話")` は `search_scene("OnTalk")` と同じ候補から選び、同じ順次消費の記録を進める。`"会話・朝"` は別名と完全一致しないため置き換えない。第 2 引数を指定したとき（ローカルシーンの検索）は、`name` を置き換えない。`search_word` は別名表を使わない。
+第 2 引数を省略したとき（グローバルシーンの検索）は、照合用の名前に揃える前に、`name` を pasta.toml の別名表で置き換える（[シーン名の別名](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の別名)・[pasta.toml の `[scene]`](https://ekicyou.github.io/pasta/reference/pasta-toml.html#sceneシーン名)）。`name` が別名と完全に一致するときだけ置き換え先の名前にし、その名前を照合用の名前に揃えて前方一致させる。既定の別名表（`OnTalk = ["会話"]` を含む）のもとでは、`search_scene("会話")` は `search_scene("OnTalk")` と同じ候補から選び、同じ順次消費の記録を進める。`"会話・朝"` は別名と完全一致しないため置き換えない。第 2 引数を指定したとき（ローカルシーンの検索）は、`name` を置き換えない。`search_word` は別名表を使わない。
 
 照合の相手は、シーン名の照合用の名前である。登録名（後述の `global_name`・`local_name`）の末尾の `_` と通し番号は照合に使わない。`name` は作者が書くシーン名として扱うため、登録名を渡しても、その登録名のシーンは指さない。たとえば `"メイン_1"` は、1 つ目の `＊メイン` ではなく、照合用の名前が `メイン_1` で始まるシーン（`＊メイン・1` など）を探す。第 2 引数を指定したときの第 1 引数（ローカルシーン名）も同じである。
 
@@ -71,6 +76,11 @@ Lua ブロックで定義したシーン関数（`function SCENE.名前(act)`）
   - `global_name`: グローバルシーンの登録名。シーン名の照合用の名前の後ろに `_` と、照合用の名前が同じグローバルシーンの通し番号（1 から）を付けた名前である（例: 1 つ目の `＊メイン` は `"メイン_1"`、2 つ目は `"メイン_2"`。1 つ目の `＊挨拶・朝` は `"挨拶_朝_1"`）。別名で宣言したシーンの登録名は、置き換え後の名前から作られる。既定の別名表のもとで `＊OnTalk` の無いゴーストの 1 つ目の `＊会話` は `"OnTalk_1"` になり、`＊OnTalk` と `＊会話` を両方宣言すると、通し番号は両方を通して振られる。第 2 引数を指定したときは、第 2 引数と同じ名前が返る。
   - `local_name`: グローバルシーンの本体なら `"__start__"`。ローカルシーンなら、ローカルシーン名の照合用の名前の後ろに `_` と、同じグローバルシーン内の同名ローカルシーンの通し番号（1 から）を付けた名前（例: `"選択肢_1"`。`・選択・A` なら `"選択_A_1"`）。
 - 見つからないとき: 何も返さない（受け取った変数は `nil` になる）。
+- 名前に合うシーンはあるが、条件を満たす候補が 1 本も無いとき（条件漏れ）: `nil, "unmet"` の 2 値。`var` か `save` を渡したときだけ返る。
+
+**条件で絞る**: `var`・`save` のどちらかに表を渡すと、候補の条件とフラグをその表の値で評価し、満たす候補だけから優先の段で 1 つ選ぶ（[条件で候補を絞る](https://ekicyou.github.io/pasta/grammar/block-structure.html#条件で候補を絞る)・[優先](https://ekicyou.github.io/pasta/grammar/block-structure.html#優先)・[候補の選択](https://ekicyou.github.io/pasta/grammar/call-jump.html#候補の選択)）。渡さない方は空の表として扱う。
+
+**`var` と `save` の両方を渡さない（`nil`）と、条件も優先の段も見ない**。条件のある候補も、優先の低い候補も、条件の無い候補と同じに選ばれる。DSL の Call と同じ選び方にするときは、`act.var` と `act.save` を渡す（[SCENE.search](script-api.md#scenesearchname-global_scene_name-act) に act を渡すのと同じ）。
 
 `name` に空文字列を渡すと、Lua のエラー（`Scene search error: Invalid scene name: ''`）になる。
 
@@ -94,6 +104,102 @@ local result = SEARCH:search_scene("存在しないシーン")
 if not result then
     print("Scene not found")
 end
+
+-- 条件で絞る（＊秘密　＆＄＊鍵＝１ だけがあり、＄＊鍵 が 1 でないとき）
+local g2, miss = SEARCH:search_scene("秘密", nil, act.var, act.save)
+print(g2, miss)  -- nil, "unmet"
+```
+
+### search_scene_exact(name, global_scene_name?)
+
+シーンを完全一致で検索する。
+
+```lua
+SEARCH:search_scene_exact(name, global_scene_name?, var?, save?) -> global_name, local_name | nil | nil, "unmet"
+```
+
+引数（`var`・`save` による条件の絞り込みを含む）、照合用の名前への揃え方、別名表での置き換え、戻り値は [search_scene](#search_scenename-global_scene_name) と同じである。違うのは候補だけで、照合用の名前が `name`（揃えた後）と完全に等しいシーンだけが候補になる。`search_scene_exact("つっつき反応女")` は `＊つっつき反応女の子Head` を選ばない。候補が複数あれば `search_scene` と同じくシャッフル＆順次消費で 1 つを選ぶ。並び順の記録は `search_scene` とは別に持つ。
+
+つつき・撫での既定ハンドラは、この関数でショートカットのシーンを探す（[つつき・撫でのショートカット](shiori-events.md#つつき撫でのショートカット)）。
+
+```lua
+local SEARCH = require "@pasta_search"
+
+local g, l = SEARCH:search_scene_exact("つっつき反応Head")
+if g then
+    print(g, l)  -- "つっつき反応Head_1", "__start__"
+end
+```
+
+### search_local_scene_exact(global_name, local_name)
+
+グローバルシーンの名前とローカルシーンの名前の組で、ローカルシーンを完全一致で検索する。
+
+```lua
+SEARCH:search_local_scene_exact(global_name, local_name) -> global_name, local_name | nil, miss
+```
+
+| パラメータ | 型 | 必須 | 説明 |
+| ---- | ---- | ---- | ---- |
+| `global_name` | string | ✅ | グローバルシーンの名前（作者が書く名前。別名表で置き換え、照合用の名前に揃えてから完全一致） |
+| `local_name` | string | ✅ | ローカルシーンの名前（作者が書く名前。照合用の名前に揃えてから完全一致） |
+
+2 つの引数は、どちらも作者が書くシーン名として扱う。`search_scene_exact` の第 2 引数と違い、`global_name` に登録名（`"会話_1"`）を渡しても、その登録名のグローバルシーンは指さない。照合用の名前への揃え方は [search_scene](#search_scenename-global_scene_name) と同じである。別名表での置き換えは `global_name` にだけ行い、`local_name` には行わない。
+
+候補は次の 2 段で選ぶ。
+
+1. 照合用の名前が `global_name` と完全に等しいグローバルシーンのうち、照合用の名前が `local_name` と完全に等しいローカルシーンを持つものだけを候補にし、シャッフル＆順次消費で 1 つを選ぶ。同じ名前のグローバルシーンのうち片方だけがローカルシーンを持つときは、持つ方が毎回選ばれる。並び順の記録は、`search_scene_exact(global_name)` とも `search_scene` とも別に持つ。
+2. 選んだグローバルシーンの中で、`local_name` のローカルシーンを `search_scene_exact` と同じ方法で選ぶ（同じ名前のローカルシーンが複数あれば、シャッフル＆順次消費）。
+
+**戻り値**:
+
+- 見つかったとき: `global_name, local_name` の 2 値。どちらも登録名である（[search_scene](#search_scenename-global_scene_name) の戻り値と同じ形。例: `"会話_1", "挨拶_1"`）。
+- 見つからないとき: `nil` と、見つからなかった側を表す文字列の 2 値。
+  - `"global"`: `global_name` のグローバルシーンが無い。別名で置き換えた後の名前で見つからなかったときは、`search_scene` と同じく、書いた名前と置き換えた後の名前の両方を記した警告ログ（`Scene not found (alias applied)`）を出す。
+  - `"local"`: `global_name` のグローバルシーンはあるが、どれも `local_name` のローカルシーンを持たない。
+
+`global_name` か `local_name` に空文字列を渡すと、Lua のエラー（`Scene search error: Invalid scene name: ''`）になる。
+
+開発用のイベント `OnPastaScene` の既定ハンドラは、Reference1 を渡されたとき、この関数でローカルシーンを探す（[OnPastaScene](shiori-events.md#onpastascene名前でシーンを再生)）。
+
+```lua
+local SEARCH = require "@pasta_search"
+
+local g, l = SEARCH:search_local_scene_exact("会話", "挨拶")
+if g then
+    print(g, l)  -- "会話_1", "挨拶_1"
+else
+    print("not found:", l)  -- "global" か "local"
+end
+```
+
+### count_scene(name) / count_scene_exact(name)
+
+グローバルシーンの数を返す。`count_scene` は `search_scene(name)` が選べる候補の数、`count_scene_exact` は `search_scene_exact(name)` が選べる候補の数である。DSL の `＠シーン数（名前）`・`＠シーン数完全一致（名前）` は、この 2 つで数える（[シーン数・シーン数完全一致](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン数シーン数完全一致)）。
+
+```lua
+SEARCH:count_scene(name) -> integer
+SEARCH:count_scene_exact(name) -> integer
+```
+
+| パラメータ | 型 | 必須 | 説明 |
+| ---- | ---- | ---- | ---- |
+| `name` | string | ✅ | 数えるシーン名（別名表で置き換え、照合用の名前に揃えてから照合する） |
+
+- `name` の扱いは、第 2 引数を省いた [search_scene](#search_scenename-global_scene_name) と同じである。別名と完全に一致すれば置き換え先の名前にし、照合用の名前に揃える。そのうえで `count_scene` は前方一致、`count_scene_exact` は完全一致で照合する。
+- 数えるのはグローバルシーンだけである。ローカルシーンは数えない。第 2 引数は無い。
+- 一致するシーンが無ければ `0` を返す。警告ログ（`Scene not found`）も出さない。
+- 読むだけで、並び順の記録（[候補の選び方](#候補の選び方)）を変えない。数えた後の `search_scene` は、数えなかったときと同じ候補を選ぶ。
+- シーンに書いた属性で絞らない。条件・フラグ・`＆優先` も見ず、定義されているシーンの全部を数える。`＆重み` でも数は増えず、重み 5 のシーンも 1 つと数える。
+- `name` に空文字列を渡すと、Lua のエラー（`Scene search error: Invalid scene name: ''`）になる。
+
+```lua
+local SEARCH = require "@pasta_search"
+
+-- ＊雑談 が 3 本、＊雑談_朝 が 2 本のとき
+print(SEARCH:count_scene("雑談"))        -- 5
+print(SEARCH:count_scene_exact("雑談"))  -- 3
+print(SEARCH:count_scene("無い名前"))    -- 0
 ```
 
 ### search_word(name, global_scene_name?)
@@ -130,6 +236,26 @@ local g = SEARCH:search_scene("メイン")
 local reply = SEARCH:search_word("返事", g)
 ```
 
+### scene_aliases()
+
+実際に使っている別名表（既定の表と pasta.toml の `[scene.alias]` に書いた行を合わせた結果）を返す（[pasta.toml の `[scene]`](https://ekicyou.github.io/pasta/reference/pasta-toml.html#sceneシーン名)）。
+
+```lua
+SEARCH:scene_aliases() -> { [置き換え先] = { 別名, ... } }
+```
+
+**戻り値**: キーが置き換え先の名前、値が別名の文字列の配列である表。別名の配列は辞書順（文字コード順）に並ぶ。別名表が空なら空の表を返す。
+
+```lua
+local aliases = SEARCH:scene_aliases()
+-- 既定の表のもとでは
+-- aliases["OnTalk"]                     → { "会話" }
+-- aliases["sakura.recommendsites"]      → { "おすすめメニュー" }
+-- aliases["sakura.portalbuttoncaption"] → { "ポータルボタン名" }
+```
+
+- 呼ぶたびに新しい表を返す。返った表を書き換えても、別名表と検索は変わらない。別名表は pasta.toml でだけ変えられる。
+
 ### set_scene_selector(...) / set_word_selector(...)
 
 テストのために、候補の選び方を決定論的にする。`set_scene_selector` はシーンの検索、`set_word_selector` は単語の検索に効く。
@@ -153,6 +279,8 @@ SEARCH:set_word_selector()              -- 既定（シャッフル）に戻す
 - 候補の数以上の整数と、その巡ですでに返した位置の整数は、その検索では無視する（エラーにならない）。
 - 引数なしで呼ぶと、既定のシャッフルに戻す。
 - どちらの呼び出しも、それまでの並び順の記録を消す。呼んだ後の最初の検索は、新しい巡の最初の検索になる。
+- `＆重み：N` のシーンは、候補の並びの中で続けて N 個の位置を占める（同じシーンを N 個並べたのと同じ）。たとえば重み 2 の `メイン_1` と重みの無い `メイン_2` の候補の並びは `メイン_1`・`メイン_1`・`メイン_2` で、位置 `2` は `メイン_2` を指す。
+- `＆順番` で選ぶとき（[候補の選び方](#候補の選び方)）は乱数を使わないので、`set_scene_selector` で設定しても選び方は変わらず、番号の順に選ぶ。ただし `set_scene_selector` の呼び出しは、並び順の記録と一緒に、最後に選んだ番号の記録も消す。呼んだ後の最初の検索は、いちばん小さい番号の候補を選ぶ。
 - 負の整数を渡すと Lua のエラー（`expected non-negative integer argument`）、整数でない引数（文字列・小数など）を渡すと Lua のエラー（`expected integer argument`）になる。エラーになった呼び出しは、設定も並び順の記録も変えない。
 - 設定はランタイム全体の検索に効く。DSL の単語参照・Call・ランダムトークのシーン選択も同じ選び方になるため、テストの後は引数なしで呼んで既定に戻す。
 

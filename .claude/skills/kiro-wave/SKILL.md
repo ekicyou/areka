@@ -42,7 +42,7 @@ Think in English. Every developer-facing message (progress, warnings, the report
    - `PR→スクワッシュマージして続ける (Recommended)` — land, then start the sessions
    - `やめる` — start nothing
    Anything other than the first option → STOP and start nothing (say the wave can be started after the changes are merged).
-6. On approval, without asking again (the dialog is the approval for both PR and merge):
+6. On approval, without asking again (the dialog is the approval for both PR and merge; developer 2026-10-10: no second confirmation between PR and merge):
    1. If there are uncommitted changes: `git add -A` and commit with a subject that says what changed (from the diff, conventional-commit style like the repository's history) and the session's attribution trailer.
    2. `git push -u origin <branch>` (masked output).
    3. Reuse the open PR if there is one; otherwise `gh pr create --base <default> --head <branch>` with the commit subject as the title (the latest subject if several, or a one-line summary) and a short bullet body ending with the attribution line. Avoid double backslashes in `gh` arguments.
