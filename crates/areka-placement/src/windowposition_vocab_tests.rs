@@ -8,7 +8,7 @@
 //!   型と構造で保証する回帰境界）。
 //! - 未指定（`Numeric(None)`／`Value(true)`）と不正値（`Invalid`）の**区別**（要件 7.2）。
 //!
-//! 本層は分類だけを持ち、警告の発行は呼び出し側（`apply_scope_windowpositions`・
+//! 本層は分類だけを持ち、警告の発行は呼び出し側（`merge_scope_windowpositions`・
 //! scope 文脈付き・task 2.2）が所有する（design C1 Invariants）。ゆえに本檻は
 //! `warn` の有無を主張せず、`Invalid` という**警告可能な戻り値**が出ることだけを固定する。
 

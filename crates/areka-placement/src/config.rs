@@ -265,7 +265,7 @@ fn resolve_scope(
 
     // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。本関数は KV の
     // 純粋転記に徹し、正典既定をそのまま置く（実供給は `lib.rs` の
-    // `apply_scope_windowpositions` が持つ取得経路）。
+    // `load_scope_windowpositions` → `scale_then_merge` が持つ取得経路）。
     //
     // 既定値の**単一権威は [`ScopeConfig::default`]** ゆえ literal を再掲せず既定から読む。
     // 同時に `..` 省略記法を使わず全フィールドを列挙することで、今後 `ScopeConfig` へ欄が

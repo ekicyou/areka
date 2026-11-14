@@ -421,18 +421,20 @@ fn prepare_stages_for_shell(
         scopes = ?sizes.scopes,
         "placement: k₀ 倍後の物理窓寸で窓を生成する（起動採寸・要件 3.3）"
     );
-    // 作者空間 → 物理 px の換算（areka-P0-balloon-offset-dpi 要件 1.2/2.1/2.3・design D2/D3）。
-    // **`apply_scope_windowpositions` の直前**に置く——合流欄（`ScopeConfig.balloon_offset`）で
-    // 加算が起きる時点で、descript 由来も windowposition 由来もどちらも物理 px であることを
-    // 保証するためである（要件 2.3）。順序を入れ替えると windowposition の調整量まで
-    // シェル軸で二重に掛かる。
-    apply_author_balloon_offset_scale(&mut cfg, &scope_ids, scaling.shell);
     // 表示位置指定（`windowposition` 数値指定）→ 初期既定位置の調整量（areka-P0-kero-balloon
     // 要件 3.2/3.3/3.4/3.6・design D1'）。**採寸の後**に scope ごとの定義を権威から取得し、
-    // `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
+    // 作者空間 → 物理 px の換算（areka-P0-balloon-offset-dpi 要件 1.2/2.1/2.3・design D2/D3）の
+    // 後で `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
     // ——配置解決の式 P1〜P5 は無改変であり、永続値優先の復元規約（`persist.rs`）にも触れない。
-    let windowpositions =
-        apply_scope_windowpositions(&mut cfg, balloon_root, &scope_ids, scaling.balloon);
+    // 読んだ値は標準の位置の材料として返す（読み直さずに運ぶ）。
+    let windowpositions = load_scope_windowpositions(balloon_root, &scope_ids);
+    scale_then_merge(
+        &mut cfg,
+        &windowpositions,
+        &scope_ids,
+        scaling.shell,
+        scaling.balloon,
+    );
     let titles = src.titles.clone();
     Ok(PreparedStages {
         cfg,
@@ -467,7 +469,8 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 ///
 /// # 呼び出し位置（D3・要件 2.3）
 ///
-/// [`prepare_stages`] が [`apply_scope_windowpositions`] を呼ぶ**直前**に走る。合流欄
+/// [`scale_then_merge`] が `windowposition` の合流（[`merge_scope_windowpositions`]）の**直前**に
+/// 呼ぶ。合流欄
 /// `ScopeConfig.balloon_offset` は加算欄であり、`windowposition` 由来の調整量は既に
 /// バルーン軸の k を掛けた物理 px として合流する——本ステップが先に走ることで、加算の
 /// 時点で両辺が同じ空間に揃う。逆順にすると windowposition の調整量にもシェル軸の k が
@@ -544,6 +547,41 @@ fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow:
     );
 }
 
+/// 作者の空間のバルーンのずらしをシェル軸で物理 px へ換算し（[`apply_author_balloon_offset_scale`]）、
+/// 続けてバルーンの `windowposition` を合流する（[`merge_scope_windowpositions`]）。起動の準備と
+/// シェルの切り替えの入れ直しの 2 か所が呼ぶ（順の決まりを書く所はここだけ）。
+///
+/// 順を入れ替えると `windowposition` の調整量にもシェル軸の k が掛かって二重に換算される
+/// （合流欄 `ScopeConfig.balloon_offset` は加算欄で、加算の時点で両辺が物理 px でなければならない）。
+pub(crate) fn scale_then_merge(
+    cfg: &mut PlacementConfig,
+    windowpositions: &ScopeWindowPositions,
+    scope_ids: &[usize],
+    k_shell: ScaleRatio,
+    k_balloon: ScaleRatio,
+) {
+    apply_author_balloon_offset_scale(cfg, scope_ids, k_shell);
+    merge_scope_windowpositions(cfg, windowpositions, scope_ids, k_balloon);
+}
+
+/// scope ごとに読んだバルーンの `windowposition`（数値解釈と生値の対）。読めなかった scope は
+/// 載らない（見送りの `warn!` は読んだ側が出している）。
+pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPositionRaw)>;
+
+/// バルーンの `windowposition` を scope ごとに読む（ファイルを読む）。合流は [`scale_then_merge`]。
+///
+/// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
+/// [`scale_then_merge`] だけを通す（areka-P0-shell-balloon-switch 要件 2.7）。
+pub fn load_scope_windowpositions(
+    balloon_root: &Path,
+    scope_ids: &[usize],
+) -> ScopeWindowPositions {
+    scope_ids
+        .iter()
+        .filter_map(|&scope| scope_windowposition(balloon_root, scope).map(|wp| (scope, wp)))
+        .collect()
+}
+
 /// scope ごとの表示位置指定（`windowposition` 数値指定）を初期既定位置の調整量へ変換し
 /// `cfg.scopes[scope].balloon_offset` へ合流させる（要件 3.2/3.3/3.4/3.6・design D1'）。
 ///
@@ -579,43 +617,7 @@ fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow:
 /// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
 /// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
 ///
-/// 読んだ値は標準の位置の材料として返す（読み直さずに運ぶ）。
-fn apply_scope_windowpositions(
-    cfg: &mut PlacementConfig,
-    balloon_root: &Path,
-    scope_ids: &[usize],
-    k: ScaleRatio,
-) -> ScopeWindowPositions {
-    // 読むのは配置表に在る scope だけ（無い scope は下の合流が警告して見送る＝読む意味が無い）。
-    let present: Vec<usize> = scope_ids
-        .iter()
-        .copied()
-        .filter(|scope| cfg.scopes.contains_key(scope))
-        .collect();
-    let windowpositions = load_scope_windowpositions(balloon_root, &present);
-    merge_scope_windowpositions(cfg, &windowpositions, scope_ids, k);
-    windowpositions
-}
-
-/// scope ごとに読んだバルーンの `windowposition`（数値解釈と生値の対）。読めなかった scope は
-/// 載らない（見送りの `warn!` は読んだ側が出している）。
-pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPositionRaw)>;
-
-/// [`apply_scope_windowpositions`] の読む半分（ファイルを読む）。
-///
-/// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
-/// [`merge_scope_windowpositions`] だけを通す（areka-P0-shell-balloon-switch 要件 2.7）。
-pub fn load_scope_windowpositions(
-    balloon_root: &Path,
-    scope_ids: &[usize],
-) -> ScopeWindowPositions {
-    scope_ids
-        .iter()
-        .filter_map(|&scope| scope_windowposition(balloon_root, scope).map(|wp| (scope, wp)))
-        .collect()
-}
-
-/// [`apply_scope_windowpositions`] の合流の半分（純関数・ファイルを読まない）。
+/// 純関数（ファイルは読まない。読むのは [`load_scope_windowpositions`]）。
 fn merge_scope_windowpositions(
     cfg: &mut PlacementConfig,
     windowpositions: &ScopeWindowPositions,
@@ -669,7 +671,7 @@ fn merge_scope_windowpositions(
             x_mode = ?x_mode,
             "placement: windowposition を初期既定位置の調整量へ変換した（scope 別・要件 3.2/7.6）"
         );
-        windowposition::apply_windowposition(cfg, scope, adjust);
+        windowposition::apply_windowposition(sc, adjust);
     }
 }
 

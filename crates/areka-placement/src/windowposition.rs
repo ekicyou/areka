@@ -4,7 +4,7 @@
 //!
 //! バルーン定義（`descript.txt` ＋ 面別上書き `{接頭辞}{ID}s.txt` の 2 層マージ結果）の
 //! `windowposition` を、画面座標系（物理 px）の調整量へ変換し
-//! [`PlacementConfig`] の `balloon_offset` 供給欄へ合流させる（R3.2/3.3/3.4/3.6）。
+//! [`ScopeConfig`] の `balloon_offset` 供給欄へ合流させる（R3.2/3.3/3.4/3.6）。
 //!
 //! 本モジュールは `resolver.rs` の配置式 P1〜P5 を**無改変**に保つための供給層である
 //! ——P5 は `balloon_offset.unwrap_or((0, 0))` を既に加算しているため、供給元を足すだけで
@@ -16,7 +16,7 @@
 //! が所有し、補正は `balloon_pos`（表示位置）だけに作用して調整量へは焼き付かない
 //! （windowposition-limit DD6）。
 //!
-//! 依存規約（lib.rs）: `config`（`PlacementConfig`）と
+//! 依存規約（lib.rs）: `config`（`ScopeConfig`）と
 //! `areka-emo-compose`（`ScaleRatio` 丸め権威）のみを消費し、wintf/bevy_ecs を import しない。
 //!
 //! `windowposition.x` の符号規約は実機（SSP 参照実装）で確定済みであり、バルーンの
@@ -24,14 +24,13 @@
 //! （[`to_screen_adjust`] の「符号規約」節・R7.6／task 6.1）。
 
 use areka_emo_compose::ScaleRatio;
-use tracing::warn;
 
-use super::config::{BalloonXMode, PlacementConfig};
+use super::config::{BalloonXMode, ScopeConfig};
 
 /// `windowposition.x` の分類結果（閉じた語彙・網羅 `match` 強制・design C1）。
 ///
 /// 分類だけを行い**警告は発しない**——warn の発行は scope 文脈を持つ呼び出し側
-/// （`apply_scope_windowpositions`）が所有する（design C1 Invariants・要件 6.3）。
+/// （`merge_scope_windowpositions`）が所有する（design C1 Invariants・要件 6.3）。
 /// 本 enum が [`XVocab::Invalid`] という腕を持つこと自体が「警告可能にする」設計である。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum XVocab {
@@ -182,8 +181,9 @@ pub fn to_screen_adjust(wp_x: Option<i32>, wp_y: Option<i32>, k: ScaleRatio) -> 
     Some((dx, dy))
 }
 
-/// [`to_screen_adjust`] の結果を `cfg.scopes[scope].balloon_offset` へ合流させる
-/// （既存値があれば加算・無ければ設定・`None` なら無操作）。
+/// [`to_screen_adjust`] の結果を scope の構成（`sc.balloon_offset`）へ合流させる
+/// （既存値があれば加算・無ければ設定・`None` なら無操作）。合流先の scope の構成は
+/// 呼び手（`merge_scope_windowpositions`）が既に引いて持っているものを受ける。
 ///
 /// 供給点をこの欄に置くことで `resolver.rs` の配置式 P1〜P5 は無改変で済む（design D1'）
 /// ——P5 は `balloon_offset.unwrap_or((0, 0))` を既に加算しているためである。
@@ -196,23 +196,12 @@ pub fn to_screen_adjust(wp_x: Option<i32>, wp_y: Option<i32>, k: ScaleRatio) -> 
 ///
 /// 作者空間の生値を持つ供給元は**合流の前に**換算される——descript の
 /// `balloon.offsetx`／`offsety` は `placement::apply_author_balloon_offset_scale` が
-/// シェル軸で（`apply_scope_windowpositions` を呼ぶ直前）、`windowposition` 由来の調整量は
+/// シェル軸で（`placement::scale_then_merge` の中で合流の直前）、`windowposition` 由来の調整量は
 /// [`to_screen_adjust`] がバルーン軸で換算する。ゆえに本欄へ加算される値はすべて
 /// 同じ空間の値であり、換算前の生値が混ざることは無い。
-pub fn apply_windowposition(cfg: &mut PlacementConfig, scope: usize, adjust: Option<(i32, i32)>) {
+pub fn apply_windowposition(sc: &mut ScopeConfig, adjust: Option<(i32, i32)>) {
     let Some((dx, dy)) = adjust else {
         // 調整量なし＝`balloon_offset` を触らない（現行と bit 同一・R3.4）。
-        return;
-    };
-    let Some(sc) = cfg.scopes.get_mut(&scope) else {
-        // 未収載 scope には合流先が無い（resolver は未収載を `ScopeConfig::default()` で
-        // 配置する契約ゆえ、ここで表を生やすと別の意味論を作ってしまう）。
-        warn!(
-            scope,
-            dx,
-            dy,
-            "windowposition: 未収載 scope への合流要求を無視した（配置表に当該 scope が無い）"
-        );
         return;
     };
     // 別供給元（descript 由来のオフセット・供給時にシェル軸で物理 px へ換算済み）が
@@ -232,26 +221,12 @@ mod vocab_tests;
 mod tests {
     use areka_emo_compose::ScaleRatio;
 
-    use super::super::config::{PlacementConfig, ScopeConfig};
+    use super::super::config::ScopeConfig;
     use super::{apply_windowposition, to_screen_adjust};
 
     /// テスト用 k（非ゼロ前提）。
     fn k(num: u32, den: u32) -> ScaleRatio {
         ScaleRatio::new(num, den).expect("テストの k は非ゼロ")
-    }
-
-    /// scope 集合を持つ最小の `PlacementConfig`（`balloon_offset` は既定 None）。
-    fn cfg_with_scopes(scopes: &[usize]) -> PlacementConfig {
-        let mut cfg = PlacementConfig {
-            scopes: Default::default(),
-            zorder_raw: None,
-            sticky_window_raw: None,
-            shell_dpi_raw: None,
-        };
-        for &s in scopes {
-            cfg.scopes.insert(s, ScopeConfig::default());
-        }
-        cfg
     }
 
     /// 檻 9（全分岐の直積）: x（正／負／未指定）× y（負／正／未指定）×
@@ -383,58 +358,49 @@ mod tests {
     /// ＝resolver 出力が本仕様適用前と bit 同一（R3.4）。
     #[test]
     fn apply_windowposition_none_leaves_balloon_offset_untouched() {
-        let mut cfg = cfg_with_scopes(&[0, 1]);
-        apply_windowposition(&mut cfg, 0, None);
-        apply_windowposition(&mut cfg, 1, None);
-        assert_eq!(cfg.scopes[&0].balloon_offset, None);
-        assert_eq!(cfg.scopes[&1].balloon_offset, None);
+        let mut sc = ScopeConfig::default();
+        apply_windowposition(&mut sc, None);
+        assert_eq!(sc.balloon_offset, None);
     }
 
     /// 調整量なし＋既存 descript offset あり → 既存値をそのまま温存する。
     #[test]
     fn apply_windowposition_none_preserves_existing_descript_offset() {
-        let mut cfg = cfg_with_scopes(&[0]);
-        cfg.scopes.get_mut(&0).expect("scope 0").balloon_offset = Some((30, -5));
-        apply_windowposition(&mut cfg, 0, None);
-        assert_eq!(cfg.scopes[&0].balloon_offset, Some((30, -5)));
+        let mut sc = ScopeConfig {
+            balloon_offset: Some((30, -5)),
+            ..ScopeConfig::default()
+        };
+        apply_windowposition(&mut sc, None);
+        assert_eq!(sc.balloon_offset, Some((30, -5)));
     }
 
     /// 既存値が無ければ設定する。
     #[test]
     fn apply_windowposition_sets_offset_when_absent() {
-        let mut cfg = cfg_with_scopes(&[0, 1]);
-        apply_windowposition(&mut cfg, 1, Some((190, -75)));
-        assert_eq!(cfg.scopes[&1].balloon_offset, Some((190, -75)));
-        // 他 scope へ漏れない。
-        assert_eq!(cfg.scopes[&0].balloon_offset, None);
+        let mut sc = ScopeConfig::default();
+        apply_windowposition(&mut sc, Some((190, -75)));
+        assert_eq!(sc.balloon_offset, Some((190, -75)));
     }
 
     /// 既存値（別供給元＝descript `balloon.offsetx/offsety`）があれば加算合流する。
     #[test]
     fn apply_windowposition_adds_to_existing_descript_offset() {
-        let mut cfg = cfg_with_scopes(&[0]);
-        cfg.scopes.get_mut(&0).expect("scope 0").balloon_offset = Some((30, -5));
-        apply_windowposition(&mut cfg, 0, Some((266, -129)));
-        assert_eq!(cfg.scopes[&0].balloon_offset, Some((296, -134)));
+        let mut sc = ScopeConfig {
+            balloon_offset: Some((30, -5)),
+            ..ScopeConfig::default()
+        };
+        apply_windowposition(&mut sc, Some((266, -129)));
+        assert_eq!(sc.balloon_offset, Some((296, -134)));
     }
 
     /// 加算は飽和（ラップアラウンドしない）。
     #[test]
     fn apply_windowposition_addition_saturates() {
-        let mut cfg = cfg_with_scopes(&[0]);
-        cfg.scopes.get_mut(&0).expect("scope 0").balloon_offset = Some((i32::MAX, i32::MIN));
-        apply_windowposition(&mut cfg, 0, Some((1, -1)));
-        assert_eq!(cfg.scopes[&0].balloon_offset, Some((i32::MAX, i32::MIN)));
-    }
-
-    /// 未収載 scope は合流先が無い（`ScopeConfig` を勝手に生やさない）。
-    /// resolver は未収載 scope を `ScopeConfig::default()` で配置する契約ゆえ、
-    /// ここで表を膨らませると別の意味論を作ってしまう。
-    #[test]
-    fn apply_windowposition_ignores_unknown_scope() {
-        let mut cfg = cfg_with_scopes(&[0]);
-        apply_windowposition(&mut cfg, 7, Some((1, 2)));
-        assert!(!cfg.scopes.contains_key(&7));
-        assert_eq!(cfg.scopes[&0].balloon_offset, None);
+        let mut sc = ScopeConfig {
+            balloon_offset: Some((i32::MAX, i32::MIN)),
+            ..ScopeConfig::default()
+        };
+        apply_windowposition(&mut sc, Some((1, -1)));
+        assert_eq!(sc.balloon_offset, Some((i32::MAX, i32::MIN)));
     }
 }

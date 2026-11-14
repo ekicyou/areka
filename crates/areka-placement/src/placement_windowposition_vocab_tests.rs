@@ -43,14 +43,15 @@ fn cfg_scope0() -> PlacementConfig {
     cfg
 }
 
-/// 合成バルーン定義 1 つに対し `apply_scope_windowpositions` を通し、
+/// 合成バルーン定義 1 つを読んで（`load_scope_windowpositions`）`merge_scope_windowpositions` を通し、
 /// 解決後の構成と捕捉ログを返す（k は恒等＝語彙の観測に丸めを混ぜない）。
 fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<CapturedEvent>) {
     let root = TempDir::new();
     let balloon_dir = synth_balloon_dir(&root, dir_name, extra_lines);
     let mut cfg = cfg_scope0();
     let (_, events) = capture(|| {
-        apply_scope_windowpositions(&mut cfg, &balloon_dir, &[0], ScaleRatio::ONE);
+        let windowpositions = load_scope_windowpositions(&balloon_dir, &[0]);
+        merge_scope_windowpositions(&mut cfg, &windowpositions, &[0], ScaleRatio::ONE);
     });
     (cfg, events)
 }
@@ -76,7 +77,7 @@ fn assert_no_event(events: &[CapturedEvent], needle: &str) {
 
 /// `limit` の受理値（0／1）が scope 別構成の実値へそのまま入る（要件 1.1/1.4）。
 #[test]
-fn apply_scope_windowpositions_reflects_accepted_limit_values() {
+fn merge_scope_windowpositions_reflects_accepted_limit_values() {
     for (raw, expected) in [("0", false), ("1", true)] {
         let (cfg, events) = resolve(
             &format!("balloon-limit-{raw}"),
@@ -101,7 +102,7 @@ fn apply_scope_windowpositions_reflects_accepted_limit_values() {
 /// あわせて**キーワード時は数値 x が供給されない**ことを固定する（design C3 (d)）:
 /// `windowposition.y` だけが調整量として残り、x 成分は 0 になる。
 #[test]
-fn apply_scope_windowpositions_reflects_keyword_x_modes() {
+fn merge_scope_windowpositions_reflects_keyword_x_modes() {
     for (raw, expected) in [
         ("center", BalloonXMode::CenterTop),
         ("top", BalloonXMode::CenterTop),
@@ -141,7 +142,7 @@ fn apply_scope_windowpositions_reflects_keyword_x_modes() {
 /// `Center`（大文字混在）が不正値になることは意図的な設計である——キーワードは小文字の
 /// 完全一致のみ受理し、綴り違いは無言で数値扱いへ落とさず警告で作者に気づかせる（DD8・要件 4.6）。
 #[test]
-fn apply_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
+fn merge_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
     let (cfg, events) = resolve(
         "balloon-invalid-both",
         "windowposition.limit,2\nwindowposition.x,Center\n",
@@ -183,7 +184,7 @@ fn apply_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
 /// 値が空（`windowposition.x,`）は**未指定ではなく不正値**である（要件 7.2）。
 /// キーはあるので生値 `Some("")` が届き、警告つきで未指定扱いへ縮退する。
 #[test]
-fn apply_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
+fn merge_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
     let (cfg, events) = resolve(
         "balloon-empty-x",
         "windowposition.x,\nwindowposition.limit,\n",
@@ -211,7 +212,7 @@ fn apply_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
 /// 「警告が無い」ことの主張が空虚にならないよう、先に観測点 4 が 1 件捕捉できていることを
 /// 確かめる（捕捉ハーネスが生きていることの較正）。
 #[test]
-fn apply_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
+fn merge_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
     let (cfg, events) = resolve("balloon-unspecified", "");
 
     let hit = expect_one(&events, OBSERVATION);
@@ -234,7 +235,7 @@ fn apply_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
 /// 数値指定の経路は本仕様の前後で 1 ビットも変わらない（要件 5.1 の回帰境界）。
 /// 数値が読めている限り生値は参照されず、モードは `Side` のまま・調整量は生値どおり。
 #[test]
-fn apply_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {
+fn merge_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {
     let (cfg, events) = resolve(
         "balloon-numeric",
         "windowposition.x,266\nwindowposition.y,-129\nwindowposition.limit,1\n",

@@ -2,8 +2,8 @@
 //! 入れ直す（areka-P0-shell-balloon-switch 要件 2.7・design「Reseed」）。
 //!
 //! 起動と同じ純関数を同じ順で通す: 配置の設定（[`build_placement_config`]）→ 作者の空間の
-//! バルーンのずらしを物理 px へ（[`apply_author_balloon_offset_scale`]）→ バルーンの
-//! `windowposition` を合流（[`merge_scope_windowpositions`]）→ 配置の解決
+//! バルーンのずらしを物理 px へ換算してバルーンの `windowposition` を合流
+//! （[`scale_then_merge`]・起動と同じ 1 つの関数）→ 配置の解決
 //! （[`resolve_placement`]・起動と同じく全スコープを昇順で 1 度に通す＝連鎖 P2 を保つ）→
 //! 利用者のドラッグの記憶を重ねる（[`apply_restored_placements`]）。
 //! 結果からはスコープごとの揃え方（`Anchored`）・バルーンのずらしの基準（`BalloonFollow`）・
@@ -22,6 +22,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 use wintf::ecs::{DPI, Point, WindowPos};
 
+use super::config::BalloonXMode;
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
 use super::follow::{
@@ -29,10 +30,12 @@ use super::follow::{
     resize_window_to, sync_drag_writer, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
-use super::resolver::{Anchor, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
+use super::resolver::{
+    Anchor, OffsetBase, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
+};
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, GhostWindows};
-use super::{ScopeWindowPositions, apply_author_balloon_offset_scale, merge_scope_windowpositions};
+use super::{ScopeWindowPositions, scale_then_merge};
 
 /// 走っているバルーンの配置の値（背景の資産づくりがバルーンのフォルダから読んでおいたもの）。
 ///
@@ -74,32 +77,50 @@ pub fn apply_shell_descript(
             continue;
         };
 
-        let c = running.char_window;
-        replace_anchor(world, c, scope, p.anchor);
-        world.entity_mut(c).insert(BalloonFollow::new(
-            running.balloon_window,
-            p.balloon_offset_base,
-        ));
-        match p.balloon_keyword_base {
-            Some((mode, adjust)) => {
-                world
-                    .entity_mut(c)
-                    .insert(BalloonKeywordBase { mode, adjust });
-            }
-            None => {
-                world.entity_mut(c).remove::<BalloonKeywordBase>();
-            }
-        }
-        // 置き直しは記憶の復元と同じ明示の配置として扱う（可視性の遷移ガードは掛けない）。
-        follow_balloon(
+        replace_anchor(world, running.char_window, scope, p.anchor);
+        reinstall_balloon(
             world,
-            c,
-            running.char_pos,
-            BalloonFollowTrigger::Placement(PlacementRoute::Restore),
+            &running,
+            p.balloon_offset_base,
+            p.balloon_keyword_base,
         );
     }
     // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す（設計の決め 12）。
     sync_drag_writer(world);
+}
+
+/// バルーンを標準の部品で据え直す 3 手（`BalloonFollow` を入れる → `BalloonKeywordBase` を
+/// 入れるか外す → [`follow_balloon`] で置き直す）。シェルの切り替えの入れ直し・面の
+/// `windowposition` の置き直し・バルーン位置初期化の 3 か所が呼ぶ（crate の中でこの手順を書く
+/// 所はここだけ）。
+///
+/// 置き直しは記憶の復元と同じ明示の配置として扱う（可視性の遷移ガードは掛けない）。
+pub(crate) fn reinstall_balloon(
+    world: &mut World,
+    running: &RunningScope,
+    base: OffsetBase,
+    keyword_base: Option<(BalloonXMode, PointPx)>,
+) {
+    let c = running.char_window;
+    world
+        .entity_mut(c)
+        .insert(BalloonFollow::new(running.balloon_window, base));
+    match keyword_base {
+        Some((mode, adjust)) => {
+            world
+                .entity_mut(c)
+                .insert(BalloonKeywordBase { mode, adjust });
+        }
+        None => {
+            world.entity_mut(c).remove::<BalloonKeywordBase>();
+        }
+    }
+    follow_balloon(
+        world,
+        c,
+        running.char_pos,
+        BalloonFollowTrigger::Placement(PlacementRoute::Restore),
+    );
 }
 
 /// 吸着の向きの出どころを新しいシェルの向きにし、台本の印の無い窓だけ `Anchored` を取り替える
@@ -180,16 +201,16 @@ pub(crate) fn resolve_standard_scopes(
         // （起動では設定の全スコープに窓があるので、合流先が無いことは起きない）。
         cfg.scopes.entry(scope).or_default();
         // 窓の DPI は 0 を弾いてあり、作者の DPI は縮退梯子が常に非 0 を返すので `ONE` へは
-        // 落ちない。順序は起動の準備と同じ（シェル軸の換算 → 合流）。
+        // 落ちない。順序（シェル軸の換算 → 合流）は起動の準備と同じ関数が持つ。
         let k = |author: u16| {
             ScaleRatio::new(u32::from(running.dpi.dpi_x), u32::from(author))
                 .unwrap_or(ScaleRatio::ONE)
         };
-        apply_author_balloon_offset_scale(&mut cfg, &[scope], k(shell_author_dpi));
-        merge_scope_windowpositions(
+        scale_then_merge(
             &mut cfg,
             &balloon.windowpositions,
             &[scope],
+            k(shell_author_dpi),
             k(balloon.author_dpi),
         );
         running_scopes.push(running);

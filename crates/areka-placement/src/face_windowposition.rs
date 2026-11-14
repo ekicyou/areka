@@ -2,19 +2,17 @@
 //! 標準の位置へ置き直す（balloon-scroll-arrows 要件 1.7・design「FaceWindowPosition」）。
 //!
 //! 標準の位置は、シェルの切り替えの入れ直し（[`super::reseed::apply_shell_descript`]）・
-//! バルーン位置初期化と同じ [`resolve_standard_scopes`] で解き、同じ部品（`BalloonFollow`・
-//! `BalloonKeywordBase`）を入れて [`follow_balloon`] で置き直す。窓の位置の記憶は書かない
-//! （面は台本の一時の状態）。
+//! バルーン位置初期化と同じ [`resolve_standard_scopes`] で解き、同じ [`reinstall_balloon`] で
+//! 据え直す。窓の位置の記憶は書かない（面は台本の一時の状態）。
 
 use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use bevy_ecs::world::World;
 use tracing::{info, warn};
 
-use super::diag::PlacementRoute;
-use super::follow::{BalloonFollow, BalloonFollowTrigger, follow_balloon};
-use super::reseed::{StandardScope, resolve_standard_scopes};
+use super::follow::BalloonFollow;
+use super::reseed::{StandardScope, reinstall_balloon, resolve_standard_scopes};
 use super::reset_pos::DefaultPlacementBasis;
-use super::spawn::{BalloonKeywordBase, GhostWindows};
+use super::spawn::GhostWindows;
 
 /// `scope` の面の `windowposition` を材料（[`DefaultPlacementBasis`]）へ入れ、まだ動かしていない
 /// バルーンを新しい面の標準の位置へ置き直す。置き直したら `true`。
@@ -63,26 +61,11 @@ pub fn apply_face_windowposition(
                 .get::<BalloonFollow>(c)
                 .is_some_and(|f| f.offset() == before.placement.balloon_offset_base.offset);
             if untouched {
-                world.entity_mut(c).insert(BalloonFollow::new(
-                    running.balloon_window,
-                    placement.balloon_offset_base,
-                ));
-                match placement.balloon_keyword_base {
-                    Some((mode, adjust)) => {
-                        world
-                            .entity_mut(c)
-                            .insert(BalloonKeywordBase { mode, adjust });
-                    }
-                    None => {
-                        world.entity_mut(c).remove::<BalloonKeywordBase>();
-                    }
-                }
-                // シェルの切り替えの置き直しと同じ明示の配置（見張りなし）。
-                follow_balloon(
+                reinstall_balloon(
                     world,
-                    c,
-                    running.char_pos,
-                    BalloonFollowTrigger::Placement(PlacementRoute::Restore),
+                    &running,
+                    placement.balloon_offset_base,
+                    placement.balloon_keyword_base,
                 );
             }
             untouched

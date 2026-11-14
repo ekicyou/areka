@@ -203,7 +203,7 @@ fn shell_axis_and_balloon_axis_sum_in_the_same_space() {
         Some((20, 40)),
         "windowposition はバルーン軸で換算される"
     );
-    apply_windowposition(&mut cfg, 0, adjust);
+    apply_windowposition(cfg.scopes.get_mut(&0).expect("scope 0"), adjust);
 
     assert_eq!(cfg.scopes[&0].balloon_offset, Some((145, -10)));
 }
@@ -214,8 +214,7 @@ fn merged_value_at_identity_matches_the_pre_spec_sum() {
     let mut cfg = cfg_with_offset(Some((266, -129)));
     apply_author_balloon_offset_scale(&mut cfg, &[0], ScaleRatio::ONE);
     apply_windowposition(
-        &mut cfg,
-        0,
+        cfg.scopes.get_mut(&0).expect("scope 0"),
         to_screen_adjust(Some(-190), Some(75), ScaleRatio::ONE),
     );
     assert_eq!(cfg.scopes[&0].balloon_offset, Some((266 - 190, -129 + 75)));
@@ -229,8 +228,9 @@ fn merged_value_at_identity_matches_the_pre_spec_sum() {
 // あること、⑶ 飽和が契約の語で**記録に出る**こと（要件 2.3／2.5／7.1／7.4）。
 //
 // 上の 4.1 群は純関数と 2 ステップの直列合成を固定したが、本番の呼出順そのものと
-// 記録の発生は踏んでいない。本群は `prepare_stages`（＝`apply_author_balloon_offset_scale`
-// と `apply_scope_windowpositions` を実際に並べている当の関数）を回して踏む。
+// 記録の発生は踏んでいない。本群は `prepare_stages`（＝`scale_then_merge` で
+// `apply_author_balloon_offset_scale` と `merge_scope_windowpositions` を並べている当の関数）
+// を回して踏む。
 //
 // # シェル軸とバルーン軸を**異なる値**にする方法（フィクスチャ到達性の但し書き）
 //

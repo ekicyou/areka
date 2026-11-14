@@ -1,8 +1,8 @@
 //! バルーン位置初期化（`\![execute,resetballoonpos]`・メニュー・近道の 3 つの入口が呼ぶ 1 つの
 //! 関数・areka-P0-window-link-directives 要件 7.1〜7.4・9.5・design「reset_balloon_pos」）。
 //!
-//! 標準の位置は、シェルの切り替えが部品を入れ直すのと同じ [`resolve_standard_scopes`] で解く
-//! （記憶は重ねない）。材料（[`DefaultPlacementBasis`]）は起動とシェルの切り替えが同じ形で置き、
+//! 標準の位置は、シェルの切り替えが部品を入れ直すのと同じ [`resolve_standard_scopes`] で解き
+//! （記憶は重ねない）、同じ [`reinstall_balloon`] で据え直す。材料（[`DefaultPlacementBasis`]）は起動とシェルの切り替えが同じ形で置き、
 //! 窓の今の DPI で解くので、同じシェル・同じ拡大率なら同じ位置になる（7.4）。
 //! キャラクターの窓・`Anchored`・`AnchorSource`・窓の組の帳簿には触らない（7.2）。
 
@@ -10,12 +10,10 @@ use bevy_ecs::world::World;
 use tracing::{info, warn};
 use wintf::ecs::WindowPos;
 
-use super::diag::PlacementRoute;
-use super::follow::{BalloonFollow, BalloonFollowTrigger, follow_balloon};
 use super::persist::{balloon_offset_entries, persist_entries};
-use super::reseed::{StandardScope, resolve_standard_scopes};
+use super::reseed::{StandardScope, reinstall_balloon, resolve_standard_scopes};
 use super::reset_pos::DefaultPlacementBasis;
-use super::spawn::{BalloonKeywordBase, GhostWindows};
+use super::spawn::GhostWindows;
 
 /// 初期化のきっかけ（要件 9.5 の記録の欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,28 +71,8 @@ pub fn reset_balloon_positions(world: &mut World, trigger: BalloonResetTrigger) 
     let mut reset = false;
     for StandardScope { running, placement } in resolved {
         let scope = running.input.scope;
-        let c = running.char_window;
         let base = placement.balloon_offset_base;
-        world
-            .entity_mut(c)
-            .insert(BalloonFollow::new(running.balloon_window, base));
-        match placement.balloon_keyword_base {
-            Some((mode, adjust)) => {
-                world
-                    .entity_mut(c)
-                    .insert(BalloonKeywordBase { mode, adjust });
-            }
-            None => {
-                world.entity_mut(c).remove::<BalloonKeywordBase>();
-            }
-        }
-        // シェルの切り替えでバルーンを置き直すときと同じ明示の配置（見張りなし）。
-        follow_balloon(
-            world,
-            c,
-            running.char_pos,
-            BalloonFollowTrigger::Placement(PlacementRoute::Restore),
-        );
+        reinstall_balloon(world, &running, base, placement.balloon_keyword_base);
         // 記憶へ標準のずらしを書く（次の起動も標準の位置に出る・7.3・裁定 8）。
         persist_entries(world, balloon_offset_entries(scope as u32, base.offset));
         let to = world

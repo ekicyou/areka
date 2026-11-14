@@ -100,7 +100,7 @@
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
 //!      [`load_shell_assets`]）
 //!    - **バルーンパッケージの面定義・面画像**（`measure.rs:433` の `measure_balloon_surface0`）と
-//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:583` の `apply_scope_windowpositions`）
+//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:575` の `load_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
