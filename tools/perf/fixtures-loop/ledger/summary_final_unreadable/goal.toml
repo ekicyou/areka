@@ -3,13 +3,12 @@
 name = "draw-load-parity"
 spec_dir = "spec"
 ledger = "loop-ledger.md"
-results_dir = "results"
+results_dir = "out"
 judge_script = "judge-stub.py"
 judge_version = "0.4.0"
 
 [target]
 idle_cpu_release_max_pct = 3.0
-formulas = ["1_frame_interval_p95", "2_catchup_zero", "3_alloc_zero", "4a_idle_cpu_release", "4b_no_monotonic_rise"]
 builds_final = ["release", "dev"]
 
 [levels]
@@ -44,7 +43,6 @@ exit_ms = 120000
 
 [goal_runtime]
 checkin_minutes = 60
-main_model_recommended = "fable"
 
 [sampling]
 backend = "xperf-dumper"

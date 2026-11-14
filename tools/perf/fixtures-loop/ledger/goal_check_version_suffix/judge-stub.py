@@ -7,7 +7,7 @@ Windows 専用の前提を持つため）。ここは版と較正値の 2 行だ
 """
 
 SCRIPT_VERSION = (
-    "0.4.0 (自己較正用の見本 / 実物は tools/perf/judge-perf.py)"
+    "0.5.0rc1 (自己較正用の見本 / 実物は tools/perf/judge-perf.py)"
 )
 
 IDLE_CPU_MAX_RELEASE_PCT = 3.0

@@ -1,0 +1,3 @@
+title=summary の最終列は [goal].results_dir の最終判定を読み、拾えなければ理由を stderr へ出してから 7 分の値を出す（T18）
+stderr_substr=最終判定から定常状態の CPU の平均を拾えません
+stderr_substr=out-unreadable

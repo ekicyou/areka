@@ -19,7 +19,8 @@
     expected_ledger.md    走り終えた台帳と逐語一致（任意）
     ledger.md             最初から置いておく台帳（任意。無ければ `init` で作る）
 
-`@LEDGER@` は複製先の `ledger.md`、`@DIR@` は複製先ディレクトリに置き換える。
+`@LEDGER@` は複製先の `ledger.md`、`@DIR@` は複製先ディレクトリ、`@SHARED@` はケースが分け合う
+素材の置き場 `fixtures-loop/ledger/_shared/`（`_` で始まるのでケースとしては読まない）に置き換える。
 「緑だけの自己較正は較正になっていない」ため、本体の `SELFTEST_REQUIRED_RED_EXITS` に挙げた
 終了コードを 1 件も再現していなければ自己較正そのものを不合格にする。
 """
@@ -30,6 +31,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+import perf_ledger_goal
 import perf_selftest_common as common
 
 #: 本体モジュール（`bind()` が入れる）。
@@ -54,6 +56,8 @@ SELFTEST_EXPECTED_STDOUT = "expected_stdout.txt"
 SELFTEST_STEP_SEPARATOR = " :: "
 SELFTEST_LEDGER_PLACEHOLDER = "@LEDGER@"
 SELFTEST_DIR_PLACEHOLDER = "@DIR@"
+SELFTEST_SHARED_PLACEHOLDER = "@SHARED@"
+SELFTEST_SHARED_DIRNAME = "_shared"
 CRLF, LF = "\r\n", "\n"
 
 
@@ -126,9 +130,9 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
     stdout_all = stderr_all = ""
     for expected, raw_argv in case.steps:
         argv = [
-            token.replace(SELFTEST_LEDGER_PLACEHOLDER, str(ledger)).replace(
-                SELFTEST_DIR_PLACEHOLDER, str(work)
-            )
+            token.replace(SELFTEST_LEDGER_PLACEHOLDER, str(ledger))
+            .replace(SELFTEST_DIR_PLACEHOLDER, str(work))
+            .replace(SELFTEST_SHARED_PLACEHOLDER, str(case.directory.parent / SELFTEST_SHARED_DIRNAME))
             for token in raw_argv
         ]
         before = _entry_region(ledger, prefix)
@@ -162,6 +166,27 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
     return reasons, reproduced
 
 
+def _goal_text_check_reasons() -> list[str]:
+    """goal-text の検査（`check_goal_text`）を直に呼ぶ: 終端の前置きで始まる行と 4,000 字の境目。"""
+    limit = perf_ledger_goal.GOAL_TEXT_MAX_CHARS
+    probes = (
+        ("行頭の FINAL の前置き", f"目標\n{CORE.FINAL_PREFIX}GOAL_MET run=12345678 が出たら達成\n", False),
+        ("行頭の STATUS の前置き", f"{CORE.STATUS_PREFIX}iter=<n> を返す\n", False),
+        (f"ちょうど {limit} 字", "a" * limit, True),
+        (f"{limit + 1} 字", "a" * (limit + 1), False),
+    )
+    reasons: list[str] = []
+    for label, text, should_pass in probes:
+        try:
+            perf_ledger_goal.check_goal_text(text)
+            passed = True
+        except CORE.LedgerError:
+            passed = False
+        if passed != should_pass:
+            reasons.append(f"{label}: 期待 {'通す' if should_pass else '拒む'} 実際 {'通した' if passed else '拒んだ'}")
+    return reasons
+
+
 def run_selftest() -> int:
     """`fixtures-loop/ledger/` の既知ケースを逐語再現する（要件 6.7）。"""
     directories, _ = common.list_case_dirs(
@@ -177,6 +202,8 @@ def run_selftest() -> int:
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
 
+    results.append(("(goal_text_check)", "goal-text の検査は終端の前置きで始まる行を拒み、4,000 字ちょうどは通す",
+                    _goal_text_check_reasons()))
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例は、その直しのタスクで真にする）。
     results.append(("(check_tree)", "木全体の見張り",
                     common.check_tree(ascii_stderr=False, readme_examples=False)))

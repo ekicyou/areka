@@ -1,0 +1,16 @@
+{
+  "hypothesis": "変化が無い tick で 13 本を回さない（tick gate）",
+  "candidate": "stage=phase rank=1 item=tick_all share=0.41",
+  "files_changed": "crates/wintf/src/ecs/world/tick_gate.rs",
+  "runs": "A1=iter-1/a1 B1=iter-1/b1 A2=iter-1/a2 B2=iter-1/b2",
+  "before_idle_cpu_pct": 9.31,
+  "after_idle_cpu_pct": 6.12,
+  "delta_pct": -3.19,
+  "noise_pct": 0.41,
+  "secondary": "p95_ms=18.20/18.00 catchup=0/0 allocs=0/0",
+  "tests": "green (5,640 passed)",
+  "followup": "PASS clickthrough=PASS drag=PASS dpi=PASS balloon_follow=PASS",
+  "verdict": "ADOPTED",
+  "commit": "abc1234",
+  "duration_min": 41
+}

@@ -147,7 +147,7 @@
   - _Dispatch: standard — 書き込みの順（fsync）と自己較正の支え（`bind(core)`）を組み直す_
   - _Requirements: 2.1, 2.3, 4.8, 5.5, 6.1, 7.1_
 
-- [ ] 10. 台帳の判定面と目標定義を直す（#16〜#18・#55・#58・#60・#81・wpaexporter の注釈）
+- [x] 10. 台帳の判定面と目標定義を直す（#16〜#18・#55・#58・#60・#81・wpaexporter の注釈）
   - 版の正規表現を PS と同じに（#16・ケース `goal_check_version_suffix`＝T16）。goal-text の検査を前置きの一致に（#17・直の確かめ＝T17）。拾えない・開けないとき理由を stderr へ・`--goal` の `results_dir`・docstring（#18・ケース `summary_final_unreadable`＝T18）
   - 目標定義の値の型の確かめの goal の分（#55）。`_shared/` へ 1 本ずつ・`@SHARED@`（#58）。`formulas`・`main_model_recommended` を `GOAL_SCHEMA`・toml・検体の `goal.toml` 5 本から消す（#60）。`goals/draw-load-parity.toml` の 80 行の語と `perf_ledger_goal.py` の注記を事実に（#81）。#81 のうち 4,000 字の境目は振る舞いの直し（`perf_ledger_goal.py` の `>= 4000` を、要件と `goal.md` の「以内」に合わせて `> 4000` で拒む形に・ちょうど 4,000 字が通ることを ledger の自己較正で確かめる）。STOPPED 行が崩れたら GOAL_MET の見本を出さない（223）・`NOT_AVAILABLE` の重複（117）・余分な空行（555-556）も直す。`[sampling]` の注釈の wpaexporter の行を直す（`[sampling]` と `backend` の鍵は残す）
   - 終わった姿: perf-ledger の `--selftest` と `perf-loop.ps1 selftest` の goal-check が緑で、直しを戻すと T16〜T18 が赤、`formulas`・`main_model_recommended` が grep で 0 件
@@ -235,3 +235,4 @@
 - 8: `DRAG_DX_PX` は judge-followup の側では 0 件。`invoke-followup-checks.ps1` は作り手の定数として持ち続け、48 行の注記「judge-followup.py と対」は古くなった（`audit-tools-perf-run` へ知らせる）。show.rs の出所の注記の「info!」は実際は `show_line!` の `tracing::event!`（14 の audit で拾う候補）
 - 9.1: `--iteration` 必須で `empty_values_are_rejected_cleanly` の append の手順は意味を失い、status だけに減らした。`TOP_REMAINING_BAD_RE` は perf-ledger の `_TOP_REMAINING_PATTERN` の補集合を写して持つ（2 か所）。perf-ledger.py は 991 行
 - 9.2: 「`SelftestEnv` が grep で 0 件」は perf-ledger の範囲（research #59）の意味で満たした。perf-compare と judge-followup は自分の `SelftestEnv` を持ち続ける（範囲の外・design.md:53 はそちらでは今も事実）。`_to_ledger_value` の isfinite は `--best` と append の entry の浮動小数の両方に効く
+- 10: 14 の audit で拾う候補: `check_goal_text` が `# summary` の節の見出しの下にある／`cmd_summary` の docstring の「results/summary.md」／ledger の selftest は想定外の例外で NG にならず落ちる
