@@ -129,15 +129,11 @@ $EXIT_BAD_ARGS = 3
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $judgePath = Join-Path $PSScriptRoot 'judge-followup.py'
 
-#: 検体の窓口の呼び出し（1 検体 1 回だけ呼ぶ＝呼ぶたびに展開し直すため）。
-$NAR_SAMPLE_ARGS   = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--manifest-path')
-$script:NarSampleMaps = @{}
-
 #: 表示成立点の実行ログの目印（本番のログの文言と字で突き合わせる）。
 $LOG_MARKER_SHOW_READY = 'apply\(ShowSurface\): 表示・マスクを更新'
 
-# 子の出力を端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'utf8-child.ps1')
+# 表示・時刻・子の起こし方・検体の在り処・python 探しは共通部品から
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
 
 # =============================================================================
 # Win32（DPI 対応で読む・列挙・入力注入・窓の移動）
@@ -206,18 +202,16 @@ $SM_CYVIRTUALSCREEN = 79
 # =============================================================================
 # 小さな道具
 # =============================================================================
-function Get-UtcStamp {
+function Get-ProbeStamp {
     # run.log（tracing の RFC3339・UTC・小数 6 桁）と同じ形。判定側が両者を同じ物差しで
     # 並べるため、ここを崩してはならない。
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture) + 'Z'
 }
 
-function Write-Info { param([string]$Text) Write-Host $Text }
-
 function Write-Probe {
     # probe.log へ 1 行足す（1 手 1 行・key=value・値に空白を入れない）
     param([string]$Check, [string]$Step, [string[]]$Fields)
-    $line = "probe: check=$Check step=$Step t=$(Get-UtcStamp)"
+    $line = "probe: check=$Check step=$Step t=$(Get-ProbeStamp)"
     if ($Fields) { $line += ' ' + ($Fields -join ' ') }
     Add-Content -LiteralPath $script:ProbeLogPath -Value $line -Encoding utf8
     $script:ProbeLines += $line
@@ -240,56 +234,13 @@ function Stop-Run {
     exit $Code
 }
 
-# 検体の窓口（`nar-sample-path`）を 1 回呼んで `key=value` の表にする。
-# perf-loop.common.ps1 の Get-NarSampleMap／Get-NarSamplePath と同形（Stop-Run の形だけが違う）。
-# 窓口は呼ぶたびに検体を展開し直すので、1 検体につき 1 回だけ呼んで表を取っておく。
-function Get-NarSampleMap {
-    param([Parameter(Mandatory = $true)][string]$Sample)
-    if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
-    $cargoArgs = @($NAR_SAMPLE_ARGS) + @((Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
-    $result = $null
-    # cargo（と窓口）は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む
-    try { $result = Invoke-Utf8Child cargo $cargoArgs }
-    catch { Stop-Run $EXIT_FAIL "cannot call the sample lookup (cargo $($cargoArgs -join ' ')): $($_.Exception.Message)" }
-    if ($result.Code -ne 0) {
-        # 標準エラーは端末へ直に出なくなったので、止める前に行のまま写す
-        foreach ($errLine in $result.ErrLines) { Write-Info $errLine }
-        Stop-Run $EXIT_FAIL "the sample lookup failed (exit code $($result.Code), cargo $($cargoArgs -join ' ')). The reason is in the stderr lines above."
-    }
-    $lines = @($result.Out -split '\r?\n')
-    $map = @{}
-    foreach ($line in $lines) {
-        $text = "$line".Trim()
-        # 最初の '=' だけで割る（値は Windows の絶対パスで、後ろに '=' が来ても壊さない）
-        $sep = $text.IndexOf('=')
-        if ($sep -lt 1) { continue }
-        $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
-    }
-    $script:NarSampleMaps[$Sample] = $map
-    return $map
-}
-
-# 表から 1 つの鍵を取り出す。鍵が無ければ止める——同梱バルーンを持たない検体では
-# `balloon.<名前>=` の行そのものが出ないので、空を掴んだまま進むとパス無しで起動してしまう。
-function Get-NarSamplePath {
+# 検体の窓口の値（読みは共通部品の Get-NarSamplePath）。取れなければ止める——同梱バルーンを
+# 持たない検体では `balloon.<名前>=` の行そのものが出ず、空を掴んだまま進むとパス無しで起動してしまう。
+function Get-NarSampleValue {
     param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
-    $map = Get-NarSampleMap -Sample $Sample
-    if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
-        Stop-Run $EXIT_FAIL "the sample lookup output has no '$Key=' line (sample '$Sample', keys seen: $(($map.Keys | Sort-Object) -join ', '))."
-    }
-    return $map[$Key]
-}
-
-function Get-PythonCommand {
-    # 単一要素の配列を返すと PowerShell が文字列へ展開してしまうため、
-    # 実行体と前置引数を別の項として持つオブジェクトで返す。
-    foreach ($candidate in @('python', 'python3')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found) { return [pscustomobject]@{ Exe = $found.Source; Prefix = @() } }
-    }
-    $py = Get-Command 'py' -ErrorAction SilentlyContinue
-    if ($py) { return [pscustomobject]@{ Exe = $py.Source; Prefix = @('-3') } }
-    return $null
+    $r = Get-NarSamplePath -Sample $Sample -Key $Key
+    if (-not $r.Ok) { Stop-Run $EXIT_FAIL $r.Message }
+    return $r.Value
 }
 
 function Invoke-Judge {
@@ -298,12 +249,9 @@ function Invoke-Judge {
     param([pscustomobject]$Python, [string[]]$Arguments)
     # judge-followup.py は標準出力と標準エラーを UTF-8 に寄せて書くので、UTF-8 で読み、
     # 標準出力の行・標準エラーの行の順に行のまま写す（末尾の改行 1 つだけを落とす）
-    $argv = @($Python.Prefix) + $Arguments
-    $result = Invoke-Utf8Child $Python.Exe $argv
-    if ($result.Out) {
-        foreach ($outLine in (($result.Out -replace '\r?\n\z', '') -split '\r?\n')) { Write-Host $outLine }
-    }
-    foreach ($errLine in $result.ErrLines) { Write-Host $errLine }
+    $result = Invoke-PythonChild -Python $Python -Arguments $Arguments -Quiet
+    foreach ($outLine in $result.Out) { Write-Info $outLine }
+    foreach ($errLine in $result.Err) { if ($errLine -ne '') { Write-Info $errLine } }
     $script:JudgeExitCode = $result.Code
 }
 
@@ -424,7 +372,7 @@ if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
     Stop-Run $EXIT_FAIL "executable not found: $exePath (check -BinDir, or run cargo build -p areka first)"
 }
 
-if (-not $GhostRoot) { $GhostRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key 'folder' }
+if (-not $GhostRoot) { $GhostRoot = Get-NarSampleValue -Sample $SAMPLE_NAME -Key 'folder' }
 if (-not [System.IO.Path]::IsPathFullyQualified($GhostRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-GhostRoot must be an absolute path (a relative path makes SHIORI loading fail): '$GhostRoot'"
 }
@@ -432,7 +380,7 @@ $ghostRootFull = [System.IO.Path]::GetFullPath($GhostRoot).TrimEnd('\')
 if (-not (Test-Path -LiteralPath $ghostRootFull -PathType Container)) {
     Stop-Run $EXIT_BAD_ARGS "-GhostRoot folder not found: $ghostRootFull"
 }
-if (-not $BalloonRoot) { $BalloonRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key "balloon.$SAMPLE_BALLOON_NAME" }
+if (-not $BalloonRoot) { $BalloonRoot = Get-NarSampleValue -Sample $SAMPLE_NAME -Key "balloon.$SAMPLE_BALLOON_NAME" }
 if (-not [System.IO.Path]::IsPathFullyQualified($BalloonRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-BalloonRoot must be an absolute path: '$BalloonRoot'"
 }
@@ -634,7 +582,7 @@ try {
                 Start-Sleep -Milliseconds $SETTLE_MS
                 Write-Probe -Check 'clickthrough' -Step 'window' -Fields @(
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
-                    "end_t=$(Get-UtcStamp)"
+                    "end_t=$(Get-ProbeStamp)"
                 )
                 Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=done', 'reason=-')
             }
@@ -706,7 +654,7 @@ try {
                 }
                 Write-Probe -Check 'drag' -Step 'window' -Fields @(
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
-                    "end_t=$(Get-UtcStamp)"
+                    "end_t=$(Get-ProbeStamp)"
                 )
                 if ($landed) {
                     Write-Probe -Check 'drag' -Step 'status' -Fields @('status=done', 'reason=-')
@@ -795,7 +743,7 @@ try {
                 }
                 Write-Probe -Check 'dpi' -Step 'window' -Fields @(
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
-                    "end_t=$(Get-UtcStamp)"
+                    "end_t=$(Get-ProbeStamp)"
                 )
                 Write-Probe -Check 'dpi' -Step 'status' -Fields @('status=done', 'reason=-')
                 Write-Note "dpi: moved $homeDpi -> $($away.Dpi) and back (out=$moveOk back=$backOk)"

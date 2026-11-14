@@ -147,9 +147,8 @@ Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 # 外部コマンド（git）の標準エラー出力で例外を投げさせない。終了コードは自前で見る。
 $PSNativeCommandUseErrorActionPreference = $false
-# 子の出力を端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）・子の pwsh の引数を UTF-8 の書き手の前置き付きで組む（Get-PwshChildArguments）
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'utf8-child.ps1')
-. (Join-Path $PSScriptRoot 'perf-pwsh-child.ps1')
+# 表示・時刻・子の起こし方・目標定義の読みは共通部品から（子の pwsh の前置きもここ経由で読まれる）
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
 
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
@@ -201,20 +200,6 @@ $FILE_RUN_META   = 'run-meta.txt'
 # 出力先の後始末に使う状態（Stop-Run が参照する）
 $script:OutDirPath    = ''
 $script:OutDirCreated = $false
-
-function Write-Info {
-    param([string]$Message)
-    [Console]::Out.WriteLine($Message)
-}
-
-function Write-Problem {
-    param([string]$Message)
-    [Console]::Error.WriteLine($Message)
-}
-
-function Get-UtcStamp {
-    [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fff', [Globalization.CultureInfo]::InvariantCulture) + 'Z'
-}
 
 # 失敗して終了する。理由を必ず表示し（黙って失敗しない）、作りかけの出力先は
 # 測定結果と取り違えられない名前へ退避する（部分成果を成果として残さない）。
@@ -362,16 +347,17 @@ function Get-SourceFacts {
     param([string]$RepoRoot)
     $facts = [ordered]@{}
     try {
-        # git は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）
-        $head = Invoke-Utf8Child git @('-C', $RepoRoot, 'rev-parse', 'HEAD')
+        # git は UTF-8 で書くので、共通部品の Invoke-Child（既定で UTF-8）で読む
+        $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $git) { throw 'command not found: git' }
+        $head = Invoke-Child -Exe $git.Source -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -Quiet
         if ($head.Code -eq 0) {
-            $facts['git_head'] = $head.Out.Trim()
-            $branch = Invoke-Utf8Child git @('-C', $RepoRoot, 'rev-parse', '--abbrev-ref', 'HEAD')
-            if ($branch.Code -eq 0) { $facts['git_branch'] = $branch.Out.Trim() }
-            $status = Invoke-Utf8Child git @('-C', $RepoRoot, 'status', '--porcelain')
+            $facts['git_head'] = ($head.Out -join "`n").Trim()
+            $branch = Invoke-Child -Exe $git.Source -Arguments @('-C', $RepoRoot, 'rev-parse', '--abbrev-ref', 'HEAD') -Quiet
+            if ($branch.Code -eq 0) { $facts['git_branch'] = ($branch.Out -join "`n").Trim() }
+            $status = Invoke-Child -Exe $git.Source -Arguments @('-C', $RepoRoot, 'status', '--porcelain') -Quiet
             if ($status.Code -eq 0) {
-                $dirty = @($status.Out -split '\r?\n' | Where-Object { $_.Trim().Length -gt 0 }).Count
-                $facts['git_dirty_files'] = $dirty
+                $facts['git_dirty_files'] = @($status.Out | Where-Object { $_.Trim().Length -gt 0 }).Count
             }
         } else {
             $facts['git_head'] = '(unavailable: git rev-parse HEAD failed)'
@@ -384,49 +370,18 @@ function Get-SourceFacts {
 
 # --- 版 1.1.0 で足した補助（自動静寂確認・実行体の所在・追加ログ指定） -------------
 
-# 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む最小の解釈器。
-# 閾値・採取秒数・重いプロセス名は check-quiet.ps1 が自分で同じファイルから読む（二重に
-# 解釈して食い違わせないため、本スクリプトはこの 2 つ以外を読まない）。
-# 他の節・他のキーは黙って読み飛ばす。引用符の外の # 以降は注釈として落とす。
+# 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む薄い引き口
+# （読みは perf-tool-base の読み口）。閾値・採取秒数・重いプロセス名は check-quiet.ps1 が
+# 自分で同じファイルから読む（二重に解釈して食い違わせないため、この 2 つ以外を読まない）。
 function Read-QuietRetrySettingsFromToml {
     param([string]$Text)
     $out = @{}
-    $inQuiet = $false
-    foreach ($raw in ($Text -split "`r?`n")) {
-        $line = $raw.Trim()
-        if ($line -eq '' -or $line.StartsWith('#')) { continue }
-        if ($line -match '^\[([^\]]+)\]\s*$') { $inQuiet = ($Matches[1].Trim() -eq 'quiet'); continue }
-        if (-not $inQuiet) { continue }
-        if ($line -notmatch '^([A-Za-z0-9_]+)\s*=\s*(.+)$') { continue }
-        $key = $Matches[1]
-        $val = ($Matches[2]).Trim()
-
-        $inStr = $false
-        $cut = -1
-        for ($i = 0; $i -lt $val.Length; $i++) {
-            $ch = $val[$i]
-            if ($ch -eq '"') { $inStr = -not $inStr }
-            elseif ($ch -eq '#' -and -not $inStr) { $cut = $i; break }
-        }
-        if ($cut -ge 0) { $val = $val.Substring(0, $cut).Trim() }
-
-        if ($key -eq 'retry_max' -or $key -eq 'retry_wait_sec') {
-            $parsed = 0
-            if ([int]::TryParse($val, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)) {
-                $out[$key] = $parsed
-            }
-        }
+    $toml = Read-TomlSections -Text $Text
+    foreach ($key in 'retry_max', 'retry_wait_sec') {
+        $v = Get-TomlInt -Toml $toml -Section 'quiet' -Key $key
+        if ($null -ne $v) { $out[$key] = $v }
     }
     return $out
-}
-
-# 本スクリプトを走らせている pwsh 自身を探す（子スクリプトも同じ版で走らせる）。
-function Get-PwshPath {
-    if ($PSHOME) {
-        $candidate = Join-Path $PSHOME 'pwsh.exe'
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
-    }
-    return 'pwsh'
 }
 
 # check-quiet.ps1 を 1 回呼ぶ。報告は quiet-<Stage>.txt として OutDir に残り、
@@ -443,9 +398,9 @@ function Invoke-CheckQuietOnce {
     if ($GoalFilePath) { $quietArgs += @('-GoalFile', $GoalFilePath) }
     # 子の pwsh は前置きで標準出力・標準エラーを UTF-8 で書くので、UTF-8 で読む。
     # 写す順は標準出力の行、続いて標準エラーの行（交互の順は保たない）。
-    $result = Invoke-Utf8Child (Get-PwshPath) (Get-PwshChildArguments -ScriptPath $ScriptPath -Arguments $quietArgs)
-    foreach ($line in @($result.Out -split '\r?\n' | Where-Object { $_ -ne '' })) { Write-Info $line }
-    foreach ($line in $result.ErrLines) { Write-Info $line }
+    $result = Invoke-PwshChild -ScriptPath $ScriptPath -Arguments $quietArgs -Quiet
+    foreach ($line in @($result.Out | Where-Object { $_ -ne '' })) { Write-Info $line }
+    foreach ($line in @($result.Err | Where-Object { $_ -ne '' })) { Write-Info $line }
     return $result.Code
 }
 

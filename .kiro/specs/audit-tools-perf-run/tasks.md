@@ -17,7 +17,7 @@
   - 終わった姿: 図の読み込みの向きどおりに読み込まれ、どのファイルも 1,000 行の下、`perf-loop.ps1 selftest` と全体テストの `encoding check` の段が緑
   - _Dispatch: standard — 分けた後の読み込みの向きと入口の変数に頼る所の直しが要る_
   - _Requirements: 3.1, 3.2, 5.1, 6.4, 6.6_
-- [ ] 1.3 子の道具 4 本の写しを共通部品へ寄せる
+- [x] 1.3 子の道具 4 本の写しを共通部品へ寄せる
   - 静かさの確かめ・ランナー・段③の採取・追随の検査の 4 本は新しい共通部品だけを読み込み（perf-loop の共通部品は読み込まない）、表示・時刻・目標定義の読み・子の起こし方・検体の在り処・python 探しの写しを消す（17・18・19・35）
   - ランナーと追随の検査は `tools/utf8-child.ps1` の子の起こし方から共通部品の起こし方へ移る。areka 本体を起こす 2 か所はそのまま残す
   - 静かさの確かめの目標定義の読みは共通部品の読み口の上の薄い引き口にし、鍵と型の検査は今のまま。追随の検査の 6 桁の時刻は名を替えて残す。段③の採取の失敗の文は標準エラーへ出す
@@ -178,3 +178,4 @@
 ## Implementation Notes
 - 1.1: perf-pwsh-child の捕まえた失敗の文は、例外の文が複数行だと標準エラーへ 2 行以上出て、スクリプトの外の失敗では ` (:0)` の形になる。1.4 の `pwsh-child-error` で改行を空白へ置き換えるかを決めて試す
 - 1.2: `Get-MeasureTomlArray` は共通部品の `Get-TomlStringArray` に寄せたので、引用符の無い配列は既定値に落ちる（今の目標定義はすべて引用符付き）。検体の問い合わせは止めない共通部品の上の `Get-MeasureSamplePath` が 4 で止める
+- 1.3: 消す前の grep の件数（4 本の外）: Get-PwshPath・Get-NarSampleMap・NAR_SAMPLE_ARGS・NarSampleMaps は 0、Write-Info・Write-Problem・Get-UtcStamp・Get-PythonCommand・Get-NarSamplePath は共通部品を読む perf-loop*.ps1 だけ。4 本の Invoke-Utf8Child の参照 9 → 0。invoke-cpu-sample の失敗の文は標準エラーへ移ったので、測る側の `LastLine` は `error: ...` の行になる

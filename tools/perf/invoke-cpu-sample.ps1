@@ -120,6 +120,8 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
+
 # ---------------------------------------------------------------- 較正値 ----
 $SCRIPT_VERSION           = '1.0.0'
 $XPERF_DEFAULT_PATH       = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
@@ -157,8 +159,7 @@ $SCRIPT_DIR = Split-Path -Parent $PSCommandPath
 $PERF_TMP_DIR = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\perf-loop-tmp'
 
 # --------------------------------------------------------------- 補助関数 ----
-function Write-Info    { param([string]$Message) Write-Host $Message }
-function Write-Problem { param([string]$Message) Write-Host "error: $Message" }
+# 表示（Write-Info／Write-Problem＝失敗の文は標準エラーへ）は perf-tool-base から
 
 # 標準出力の末尾に置く終端行。走行固有のトークンを添えて、背景終了でも読み取れるようにする。
 function Write-ResultLine {
@@ -170,7 +171,7 @@ function Write-ResultLine {
 
 function Stop-Run {
     param([string]$Mode, [int]$Code, [string]$Message, [string]$Extra = '')
-    if ($Message) { Write-Problem $Message }
+    if ($Message) { Write-Problem "error: $Message" }
     Write-ResultLine -Mode $Mode -Code $Code -Extra $Extra
     exit $Code
 }
@@ -370,20 +371,16 @@ function Get-ProbeResult {
     }
 }
 
-# 目標定義ファイルの [sampling] backend を読む（この 1 キーだけの最小読み）。
+# 目標定義ファイルの [sampling] backend を読む（読みは perf-tool-base の読み口）。
 function Get-BackendFromGoalFile {
     param([string]$Path)
     if (-not $Path) { return $null }
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-GoalFile not found: $Path"
     }
-    $inSampling = $false
-    foreach ($raw in (Get-Content -LiteralPath $Path)) {
-        $line = $raw.Trim()
-        if ($line -match '^\[(.+)\]$') { $inSampling = ($Matches[1].Trim() -eq 'sampling'); continue }
-        if ($inSampling -and $line -match '^backend\s*=\s*"([^"]+)"') { return $Matches[1] }
-    }
-    return $null
+    $backend = Get-TomlString -Toml (Read-TomlSections -Text ([IO.File]::ReadAllText($Path))) -Section 'sampling' -Key 'backend'
+    if ([string]::IsNullOrEmpty($backend)) { return $null }
+    return $backend
 }
 
 # ------------------------------------------------------------- 各モード ----
@@ -586,7 +583,7 @@ function Invoke-SelfTestMode {
     Write-Info "available=$available reason=$($probe.Reason)"
 
     if ($failures.Count -gt 0) {
-        foreach ($f in $failures) { Write-Problem $f }
+        foreach ($f in $failures) { Write-Problem "error: $f" }
         Stop-Run -Mode 'selftest' -Code $EXIT_RUN_FAILED -Message 'self-test is red (the tool itself is broken).' `
             -Extra "failures=$($failures.Count) available=$available reason=$($probe.Reason)"
     }

@@ -96,6 +96,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 表示・時刻・目標定義の読みは共通部品から（写しを持たない）
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
+
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
@@ -130,13 +133,6 @@ $INV = [Globalization.CultureInfo]::InvariantCulture
 # =============================================================================
 # 補助関数
 # =============================================================================
-function Write-Info    { param([string]$Message) [Console]::Out.WriteLine($Message) }
-function Write-Problem { param([string]$Message) [Console]::Error.WriteLine($Message) }
-
-function Get-UtcStamp {
-    [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fff', $INV) + 'Z'
-}
-
 # 失敗して終了する。理由を必ず表示する（黙って失敗しない）。
 function Stop-Bad {
     param([int]$Code, [string]$Message)
@@ -241,66 +237,26 @@ function Format-QuietReport {
     return (($lines -join "`n") + "`n")
 }
 
-# TOML の [quiet] 節だけを読む最小の解釈器（外部モジュールを使わない）。
+# TOML の [quiet] 節だけを読む薄い引き口（読みは perf-tool-base の Read-TomlSections／Get-Toml*）。
 # 読むのは machine_cpu_max_pct（小数）・sample_sec（整数）・heavy_process_names（文字列配列）・
 # heavy_process_cpu_min_pct（小数）・heavy_process_presence（文字列配列）。
-# 他の節・他のキーは黙って読み飛ばす。引用符の外の # 以降は注釈として落とす。
+# 他の節・他のキーは黙って読み飛ばす。読めない値・空の heavy_process_names は設定なし扱い。
 function Read-QuietSettingsFromToml {
     param([string]$Text)
     $out = @{}
-    $inQuiet = $false
-    foreach ($raw in ($Text -split "`r?`n")) {
-        $line = $raw.Trim()
-        if ($line -eq '' -or $line.StartsWith('#')) { continue }
-        if ($line -match '^\[([^\]]+)\]\s*$') { $inQuiet = ($Matches[1].Trim() -eq 'quiet'); continue }
-        if (-not $inQuiet) { continue }
-        if ($line -notmatch '^([A-Za-z0-9_]+)\s*=\s*(.+)$') { continue }
-        $key = $Matches[1]
-        $val = ($Matches[2]).Trim()
-
-        # 引用符の外にある # 以降を落とす
-        $inStr = $false
-        $cut = -1
-        for ($i = 0; $i -lt $val.Length; $i++) {
-            $ch = $val[$i]
-            if ($ch -eq '"') { $inStr = -not $inStr }
-            elseif ($ch -eq '#' -and -not $inStr) { $cut = $i; break }
-        }
-        if ($cut -ge 0) { $val = $val.Substring(0, $cut).Trim() }
-
-        switch ($key) {
-            'machine_cpu_max_pct' {
-                $parsed = 0.0
-                if ([double]::TryParse($val, [Globalization.NumberStyles]::Float, $INV, [ref]$parsed)) {
-                    $out['machine_cpu_max_pct'] = $parsed
-                }
-            }
-            'sample_sec' {
-                $parsedI = 0
-                if ([int]::TryParse($val, [Globalization.NumberStyles]::Integer, $INV, [ref]$parsedI)) {
-                    $out['sample_sec'] = $parsedI
-                }
-            }
-            'heavy_process_names' {
-                $names = @([regex]::Matches($val, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value })
-                if ($names.Count -gt 0) { $out['heavy_process_names'] = $names }
-            }
-            'heavy_process_cpu_min_pct' {
-                $parsedMin = 0.0
-                if ([double]::TryParse($val, [Globalization.NumberStyles]::Float, $INV, [ref]$parsedMin)) {
-                    $out['heavy_process_cpu_min_pct'] = $parsedMin
-                }
-            }
-            'heavy_process_presence' {
-                $presenceNames = @([regex]::Matches($val, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value })
-                # 空の配列（`[]`）は「在るだけで落とす名前を置かない」という指定であって、
-                # 既定へ落ちる合図ではない（黙って areka を戻すと指定が効かない）。
-                if ($presenceNames.Count -gt 0)  { $out['heavy_process_presence'] = $presenceNames }
-                elseif ($val -match '^\[\s*\]$') { $out['heavy_process_presence'] = @() }
-            }
-            default { }
-        }
+    $toml = Read-TomlSections -Text $Text
+    foreach ($k in 'machine_cpu_max_pct', 'heavy_process_cpu_min_pct') {
+        $v = Get-TomlDouble -Toml $toml -Section 'quiet' -Key $k
+        if ($null -ne $v) { $out[$k] = $v }
     }
+    $sampleSec = Get-TomlInt -Toml $toml -Section 'quiet' -Key 'sample_sec'
+    if ($null -ne $sampleSec) { $out['sample_sec'] = $sampleSec }
+    $names = Get-TomlStringArray -Toml $toml -Section 'quiet' -Key 'heavy_process_names'
+    if ($names -and @($names).Count -gt 0) { $out['heavy_process_names'] = @($names) }
+    # 空の配列（`[]`）は「在るだけで落とす名前を置かない」という指定であって、
+    # 既定へ落ちる合図ではない（黙って areka を戻すと指定が効かない）。
+    $presence = Get-TomlStringArray -Toml $toml -Section 'quiet' -Key 'heavy_process_presence'
+    if ($null -ne $presence) { $out['heavy_process_presence'] = @($presence) }
     return $out
 }
 
@@ -529,6 +485,10 @@ heavy_process_cpu_min_pct = 99.0
     if (-not $emptyPresence.ContainsKey('heavy_process_presence') -or @($emptyPresence['heavy_process_presence']).Count -ne 0) {
         $ng += 'TOML: an empty heavy_process_presence falls back to the default.'
     }
+
+    # 単引用符の配列も読む（読み口を共通部品へ寄せても落とさない）
+    $single = Read-QuietSettingsFromToml "[quiet]`nheavy_process_names = ['cargo', 'link']`n"
+    if ((@($single['heavy_process_names']) -join ',') -cne 'cargo,link') { $ng += 'TOML: single-quoted heavy_process_names is parsed wrongly.' }
 
     if ($ng.Count -gt 0) {
         Write-Problem "[check-quiet] self-test NG ($($ng.Count) problems)"
