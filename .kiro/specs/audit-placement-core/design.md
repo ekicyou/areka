@@ -42,7 +42,8 @@
   - 指摘 51・62・8・19・42 の、本体の呼び手（`crates/areka/src/main.rs`・`runtime/switch_assets.rs`・`runtime/frame/drain_resnap.rs` と本体のテスト）。
   - 指摘 47 の根の `Cargo.toml` の `[workspace.dependencies]` と `crates/areka/Cargo.toml`・`crates/wintf/Cargo.toml` の `async-io` の行。
   - 指摘 67・73 の wintf（`ecs/window/zorder_chain.rs` の `ChainPlan.absent`・`log_chain_absent`）と、本体の `runtime/frame/zorder_drain.rs`。
-- 申し送りの書き足し: `.kiro/specs/window-snap/brief.md`（議題 1）・`.kiro/specs/runtime-crate-split/brief.md`（要件 2.9）・`.kiro/specs/clippy-199-lints/brief.md`（要件 4.4）。
+- 申し送りの書き足し: `.kiro/specs/window-snap/brief.md`（議題 1）・`.kiro/specs/runtime-crate-split/brief.md`（要件 2.9）・`.kiro/specs/clippy-199-lints/brief.md`（要件 4.4）・`.kiro/specs/audit-areka-app/brief.md`（指摘 42 で古くなる `collision-probe.rs` の doc）。
+- 振る舞いが変わる指摘 1・17 の文書: `doc/ukadoc-coverage/ledger/assets.toml`（`seriko.alignmenttodesktop` の 8 項目）・`ledger/sakura-script.toml`（`\![execute,resetballoonpos]`）・`doc/COMPAT_ARCHITECTURE.md` の 8 章。
 
 ### Out of Boundary
 
@@ -187,7 +188,7 @@ crates/areka/src/placement_tests/
 - `crates/wintf/src/ecs/window/zorder_chain.rs` — 73。根の `Cargo.toml`・`crates/areka/Cargo.toml`・`crates/wintf/Cargo.toml` — 47。
 - `.kiro/specs/window-snap/brief.md`・`.kiro/specs/runtime-crate-split/brief.md`・`.kiro/specs/clippy-199-lints/brief.md` — 申し送り。
 
-1,000 行の番人（要件 9.1）: 行が増えるのは `persist.rs`（＋約 25 行＝約 953）・`lib.rs`（足す約 20・消す約 25＝増えない）・`persist_restore_tests.rs`（先に 20・49 で約 75 行消してから 16 のテストを約 20 行足す）。`measure_tests.rs` は減るだけ（11・21・54・59 で約 130 行減る）。どのタスクも終わりに 4 本の行数を測り、1,000 を越えるなら兄弟のファイルへ分ける（番人の例外表へは足さない）。
+1,000 行の番人（要件 9.1）: 行が増えるのは `persist.rs`（＋約 25 行＝約 953）・`lib.rs`（足す約 20・消す約 25＝増えない）・`persist_restore_tests.rs`（先に 20・49 で約 75 行消してから 16 のテストを約 20 行足す）。`measure_tests.rs` は減るだけ（11・21・54・59 で約 130 行減る）。範囲の外で 1,000 行に近いのは `crates/areka-emo-present/src/shell_target.rs`（956 行・指摘 5 で入口を足す）と `crates/areka-sylphya/src/actor.rs`（854 行・指摘 17 で腕を足す）。足して越えるなら、兄弟のファイルへ分ける。どのタスクも終わりに、触った 1,000 行の近くのファイルの行数を測り、1,000 を越えるなら兄弟のファイルへ分ける（番人の例外表へは足さない）。
 
 ## System Flows
 
@@ -317,7 +318,8 @@ sequenceDiagram
 | 要件 | 4.1・6.6・5.2（ukadoc は討議で確かめ済み） |
 
 - `resolve_placement` の P4 の前で `Anchor::from_alignment(&sc.alignment)` を 1 度だけ引き、上の「System Flows」の表のとおりに x・y を決める。出力の `anchor` 欄も同じ値を使う（2 度引かない）。
-- `Seam` の `warn!` は、`from_alignment` が `Bottom` を返す知らない値のときだけ出す。
+- `Seam` の `warn!` は、`from_alignment` が `Bottom` を返す知らない値のときだけ出す。`from_alignment`（`resolver.rs:L458-L470`）は知らない値で既に `warn!` を出すので、`resolve_placement` の側の `warn!`（`L279-L285`）は消す（知らない値の警告は呼び出し 1 回につき 1 行）。
+- 網羅台帳を同じ PR で直す（`structure.md` の「互換の振る舞いを着地させた spec が台帳を更新する」）: `doc/ukadoc-coverage/ledger/assets.toml` の `seriko.alignmenttodesktop` の 8 項目の説明を「最初の位置は 4 つの辺で解く・作業領域が変わったときの沿わせ直しは下端だけ（`window-snap` の件 1）」に改める。状態は `degraded` のまま（沿わせ直しが残るため）。台帳から作る説明の文書（`doc/ukadoc-coverage/briefing*.md`）は、生成の道具があればそれで作り直し、手では直さない。
 - doc を直す: `resolver.rs:L218` の P1 の説明（`Seam(_)` は下端、の文）・`L254-L258`（「挙動出力は Bottom と同一」）・`config.rs` の `Alignment::Seam` の doc（「bottom として配置」）。
 - 直し切る所: `resolver_resolve_tests.rs` の T-R5（下の Testing Strategy）。本体の reseed・reset・spawn のテストのうち `top`／`left`／`right` を使うものの期待（実装で `cargo test -p areka` を回して洗い出す）。
 - `window-snap` の brief の「追記（2026-10-23）件 1」の下に「最初の位置（`resolve_placement`）は `audit-placement-core` で 4 つの辺で解く形に直した。作業領域が変わったときに辺へ沿わせ直す所はこの件に残る」と 1 行書き足す。
@@ -408,6 +410,7 @@ pub fn remove_scope_keys(scope: PersistScope, roots: &ScopeRoots, io: &dyn Persi
 - `SylphyaCore::apply` は `PersistRemove` に、鍵ごとの `RemoveDottedGlobal { key: key.to_canonical_key() }` と `PersistRemove` を返す。アクターの実行は前者で鏡像の大域点付き区画から消し（実際に消えるときだけ後継の像を出す＝`RemoveFlatPerAsker` と同じ形）、後者で `remove_scope_keys` を呼んで失敗を受け口へ中継する（`PersistSave` と同じ形）。
 - `remove_scope_keys` は `save_scope` と同じ錠・既存の読み・控え・commit の道を通る。`save_scope` の本体を、doc に手を入れる関数を受け取る私有の 1 本（`update_scope`）へまとめ、`save_scope` は値を書く、`remove_scope_keys` は doc と土台の表（`to_toml_string_over` の `base`）の両方から鍵を消す。空になった `[balloon-offset."N"]` の表は消す。
 - 配置の側: `persist.rs` に `pub fn forget_entries(world: &World, keys: Vec<PersistKey>)`（`persist_entries` の兄弟・`PersistWiring` が無ければ同じく `debug!`＋何もしない）。`reset_balloon_pos.rs:L98-L99` は、スコープの繰り返しの中で書かず、戻せた全スコープの `BalloonOffset` の x・y の鍵を集めて、繰り返しの後に 1 回だけ `forget_entries` を呼ぶ（指摘 50）。doc の「記憶へ標準のずらしを書く」は「記憶の鍵を消す（次の起動はキーワードから標準を導き直す）」に直す。
+- 範囲の外の文書を同じ PR で直す: `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\![execute,resetballoonpos]` の項目と `doc/COMPAT_ARCHITECTURE.md` の 8 章（`L152`）の「戻したずらしを記憶に書く」を「記憶の鍵を消す」に改める。台帳から作る文書は、生成の道具があればそれで作り直す。
 - 規模の見込み: U14（sylphya）と U15（配置）の 2 タスク。
 
 #### U16 指摘 10・11・21・54・59・60
@@ -487,7 +490,7 @@ pub fn remove_scope_keys(scope: PersistScope, roots: &ScopeRoots, io: &dyn Persi
 #### U27 audit のかけ直し・U28 全体テストと申し送り
 
 - U27: 確定した直しを全部入れた後、同じ範囲（受け持つ 114 ファイル・足した 2 ファイル・範囲の外で直した所は除く）に、件数の上限なし・全部読む作法で `/ponytail:ponytail-audit` をかけ直す。新しい指摘は直してかけ直す。5 回目で 0 件に収まらず、5 回目の指摘に「必ず直す」と本番の振る舞いに関わるものが 1 件も無ければ、開発者に一言知らせ、5 回目の指摘を直したところで打ち切る（要件 6.3）。回ごとの組ごとの件数と判定を `research.md` の「かけ直しの記録」節に書く（要件 6.4）。かけ直しで要件 5 の 3 種類に当たる指摘が出たら、直さずに開発者の裁定を仰ぐ。
-- U28: `pwsh -NoProfile -File tools/test-all.ps1` を 1 回。触っていないクレートだけが赤なら、そのクレートだけを 1 回回し直す（開発の決まり）。`cargo clippy -p areka-placement --all-targets --features test-support` を 1 回回し、この spec が直した所と重なる clippy の指摘（の消えた分）を `clippy-199-lints` の brief に書く（要件 4.4・`research.md` 7 節 7）。完了の申し送りに「指摘 13 で本体の `crates/areka/src/runtime/move_cue_place.rs` の主モニタの作業領域の写しを `areka_placement::work_area_px` に替えた」を 1 行書く（要件 2.10・`research.md` の「完了の申し送り」節）。追随の持ち物の古い文（`follow/work_area_clamp.rs:L18`）も同じ節に書き、`audit-placement-follow` へ渡す。
+- U28: `pwsh -NoProfile -File tools/test-all.ps1` を 1 回。触っていないクレートだけが赤なら、そのクレートだけを 1 回回し直す（開発の決まり）。`cargo clippy -p areka-placement --all-targets --features test-support` を 1 回回し、この spec が直した所と重なる clippy の指摘（の消えた分）を `clippy-199-lints` の brief に書く（要件 4.4・`research.md` 7 節 7）。完了の申し送りに「指摘 13 で本体の `crates/areka/src/runtime/move_cue_place.rs` の主モニタの作業領域の写しを `areka_placement::work_area_px` に替えた」を 1 行書く（要件 2.10・`research.md` の「完了の申し送り」節）。追随の持ち物の古い文（`follow/work_area_clamp.rs:L18`）も同じ節に書き、`audit-placement-follow` へ渡す。指摘 42 で `prepare_stages` を消すと、範囲の外の `crates/areka/examples/collision-probe.rs` の doc が古くなるので、持ち主の `audit-areka-app` の brief へ申し送る（要件 7.4・持ち主の実在は申し送る前に確かめる）。
 
 ### 80 件と単位の対応
 
@@ -551,7 +554,7 @@ wintf の `ChainPlan.absent` の値の型だけが変わる（指摘 73・上の
 
 ### 壊れたら落ちるテスト（要件 6.6）
 
-直したバグと危ない所（`research.md` 4 節の 25 件に、バグの 4・36 を足した 27 件）の 1 件ずつに置く。
+直したバグと危ない所（`research.md` 4 節の 23 件）の 1 件ずつに置く。あわせて、直しの形を固定するテストを 50・61 にも置く。
 
 | 指摘 | テスト（置き場） | 直す前の結果 |
 |---|---|---|
