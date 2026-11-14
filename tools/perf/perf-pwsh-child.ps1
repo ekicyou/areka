@@ -39,7 +39,8 @@ function Get-PwshChildArguments {
     }
     # 捕まえていない失敗は、PowerShell の色付きの表示（地域語の文は化ける）の代わりに理由の 1 行を
     # UTF-8 の書き手の標準エラーへ素の文で書いて 1 で終える。正常の道（exit を含む）は今のまま。
-    $catch = 'catch { [Console]::Error.WriteLine(''[pwsh-child] uncaught error: '' + $_.Exception.Message + '' ('' + ' +
+    # 複数行の文は空白でつなぐ（呼び手は最後の 1 行を理由として読む）。
+    $catch = 'catch { [Console]::Error.WriteLine(''[pwsh-child] uncaught error: '' + ($_.Exception.Message -replace ''\s*\r?\n\s*'', '' '') + '' ('' + ' +
              '[System.IO.Path]::GetFileName([string]$_.InvocationInfo.ScriptName) + '':'' + $_.InvocationInfo.ScriptLineNumber + '')''); exit 1 }'
     $command = $prefix + '; try { ' + ($parts -join ' ') + ' } ' + $catch + '; exit $LASTEXITCODE'
     return @('-NoProfile', '-NonInteractive', '-Command', $command)

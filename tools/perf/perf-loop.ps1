@@ -189,7 +189,8 @@ $SUBCOMMANDS = $SUBCOMMANDS_ENTRY + $SUBCOMMANDS_MEASURE
 # -Build の語彙 $BUILD_KINDS と終了コード $EXIT_* は perf-loop.common.ps1 に置く
 
 # 自己較正を回す道具の一覧（順序も較正値＝この順で回す）。
-#   Task  … その道具を作ったタスク（tasks.md 5.1〜6.4）
+#   Task  … その道具を作ったタスク（数字だけは areka-P0-draw-load-parity の tasks.md 5.1〜6.4・
+#           'spec 名 番号' の形はその spec の tasks.md の番号）
 #   Kind  … py＝python スクリプト／ps＝PowerShell スクリプト
 $SELFTEST_TOOLS = @(
     [pscustomobject]@{ Task = '6.1'; Kind = 'py'; File = 'judge-perf.py';             Arguments = @('--selftest') }
@@ -200,6 +201,7 @@ $SELFTEST_TOOLS = @(
     [pscustomobject]@{ Task = '5.3'; Kind = 'ps'; File = 'invoke-cpu-sample.ps1';     Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = '5.1'; Kind = 'ps'; File = 'check-quiet.ps1';           Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = '6.4'; Kind = 'ps'; File = 'invoke-followup-checks.ps1'; Arguments = @('-SelfTest') }
+    [pscustomobject]@{ Task = 'audit-tools-perf-run 1.4'; Kind = 'ps'; File = 'perf-loop.selftest.ps1'; Arguments = @() }
 )
 
 #: 自己較正の最後に回す自前の検査（道具ではなく文書との一致を見る＝tasks.md (7.1)）。

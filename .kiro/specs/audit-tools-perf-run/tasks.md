@@ -2,7 +2,7 @@
 
 指摘の番号（1〜36・申し合わせ件 #74）は `research.md` の 5 節と `design.md` の「直し方の一覧」の番号。検査の名前（T1＝既にある `-SelfTest`・T2＝`perf-loop.selftest.ps1`・T3＝`invoke-perf-run.ps1 -SelfTest`）は `design.md` の Testing Strategy の名前。どのタスクも、足したテストを同じタスクの中で `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` から回して緑にしてから終える。実際の計測の走行（`measure-baseline`・`rank-run`・`measure-ab`・`followup`・`final` の本走）は回さない（要件 7.1）。作業のフォルダはワークツリーの `target\perf-loop-tmp\` の下だけ。どのファイルも 1,000 行の番人の下に収める。`perf-loop.selftest.ps1` が約 950 行を越えるタスクは、同じタスクの中で検査の束ごとに `perf-loop.selftest2.ps1` へ分けて `SELFTEST_TOOLS` に足し、以後の期待の数を 1 つ上げる（design の File Structure Plan）。
 
-- [ ] 1. 土台: 共通部品への寄せと分け直し、perf-loop 側の自分の検査の置き場
+- [x] 1. 土台: 共通部品への寄せと分け直し、perf-loop 側の自分の検査の置き場
 - [x] 1.1 道具どうしの共通部品を新しく作り、子の pwsh の前置きで想定外の失敗を受け止める
   - 表示・時刻（末尾に `Z`）・子の起こし方（引数を 1 つずつ渡し、任意で読む文字コードを選べる・最後の 1 行は色の符号を落としてから選ぶ）・pwsh と python の在り処・子孫まで止めて終わるまで待つ強制終了・目標定義の読み口（節の見出しの見方 1 通り・引用符の外だけで注釈を落とす・単引用符・整数・小数・1 行の配列・空の配列）・`key=value` の行の読み・検体の在り処の問い合わせを、関数と定数だけのファイル 1 本に置く（17・18・19・35・8・5）
   - 読み込んでも何も走らず、StrictMode を自分で切り替えず、呼び手の変数に頼らない。端末へ出す文の字句は ASCII だけで、端末の文字コードには触れない
@@ -25,7 +25,7 @@
   - 終わった姿: 4 本の中に写しの定義が 0 件、静かさの確かめの既にある TOML の検査（単引用符を 1 件足す）が寄せた読み口を通り、既にある 3 本の `-SelfTest` が緑
   - _Dispatch: mechanical — 写しを消して共通部品の同じ名前へ寄せる_
   - _Requirements: 3.1, 3.2, 3.3, 4.7, 5.4_
-- [ ] 1.4 perf-loop 側の自分の検査（T2）を作り、土台の束の検査を入れて `selftest` から回す
+- [x] 1.4 perf-loop 側の自分の検査（T2）を作り、土台の束の検査を入れて `selftest` から回す
   - 検査の骨組み: 共通部品と測る側を読み込み、偽物は関数の定義し直しで作り、呼ばれた順と引数を残す。終了の口を定義し直して本物の `exit` で検査が終わらないようにする。赤の検査だけ 1 行ずつと最後の結果の 1 行を ASCII で出し、0 か 1 で終える
   - 作業のフォルダは `target\perf-loop-tmp\selftest-<GUID>\` の下だけで、終わったら消す。本物の `cargo`・`python`・`xperf` を呼ばない
   - 土台の束: `load-standalone`・`toml-reader`・`keyvalue-parse`・`child-args-and-encoding`・`pwsh-child-args`・`pwsh-child-error`・`kill-wait`・`utc-stamp`
@@ -179,3 +179,4 @@
 - 1.1: perf-pwsh-child の捕まえた失敗の文は、例外の文が複数行だと標準エラーへ 2 行以上出て、スクリプトの外の失敗では ` (:0)` の形になる。1.4 の `pwsh-child-error` で改行を空白へ置き換えるかを決めて試す
 - 1.2: `Get-MeasureTomlArray` は共通部品の `Get-TomlStringArray` に寄せたので、引用符の無い配列は既定値に落ちる（今の目標定義はすべて引用符付き）。検体の問い合わせは止めない共通部品の上の `Get-MeasureSamplePath` が 4 で止める
 - 1.3: 消す前の grep の件数（4 本の外）: Get-PwshPath・Get-NarSampleMap・NAR_SAMPLE_ARGS・NarSampleMaps は 0、Write-Info・Write-Problem・Get-UtcStamp・Get-PythonCommand・Get-NarSamplePath は共通部品を読む perf-loop*.ps1 だけ。4 本の Invoke-Utf8Child の参照 9 → 0。invoke-cpu-sample の失敗の文は標準エラーへ移ったので、測る側の `LastLine` は `error: ...` の行になる
+- 1.4: T2 は 1 つの検査＝名前と scriptblock の `$SelfTestChecks`。偽物の呼ばれた順は `Add-SelfTestCall`、終了の口は `Exit-WithResult` を例外へ定義し直してある。`kill-wait` は孫にファイルを握らせて子孫まで止めることを確かめる（待ちを抜いた変異は捕まらない・本物の Process では見分けられないので受け入れた）。perf-pwsh-child の捕まえた失敗の文は改行を空白へつなぐ
