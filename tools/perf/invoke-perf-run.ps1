@@ -78,6 +78,9 @@ CPU の「1 コア換算」について:
   起動せず前提の検証と実行条件の記録だけを行う（配管の確認用）:
   pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -GhostRoot ... -BalloonRoot ... -DryRun
 
+  道具そのものの点検（areka を起こさず、run-meta.txt も出力先も作らない。0 緑／1 赤）:
+  pwsh -File tools/perf/invoke-perf-run.ps1 -SelfTest
+
 --------------------------------------------------------------------------------
 版 1.1.0 で足した引数（既存の呼び方は何も変わらない）
 --------------------------------------------------------------------------------
@@ -140,7 +143,9 @@ param(
     # 実走時の RUST_LOG の既定値の末尾へ「,」で連結する追加指定
     [string]$RustLogExtra,
     # 起動せず、前提検証と実行条件の記録だけを行う（測定にはならない）
-    [switch]$DryRun
+    [switch]$DryRun,
+    # 道具そのものの点検（中身は invoke-perf-run.selftest.ps1）。静かさの関門より前で終わる
+    [switch]$SelfTest
 )
 
 Set-StrictMode -Version 3.0
@@ -252,10 +257,18 @@ function Get-ProcessCpuPercent1Core {
 
     $paths = @(($IdCounterTemplate -f $InstanceFilter), ($CpuCounterTemplate -f $InstanceFilter))
     $set = Get-Counter -Counter $paths -MaxSamples 1 -ErrorAction Stop
+    return Select-ProcessCpuValue -Samples $set.CounterSamples -TargetProcessId $TargetProcessId
+}
+
+# カウンタの結果（Path と CookedValue を持つ CounterSample の並び）から、ID Process が
+# TargetProcessId の枝番の CPU の値を選ぶ（純関数・-SelfTest の counter-select が固定する）。
+# 見つからなければ $null。
+function Select-ProcessCpuValue {
+    param([object[]]$Samples, [int]$TargetProcessId)
 
     $idByKey  = @{}
     $cpuByKey = @{}
-    foreach ($s in $set.CounterSamples) {
+    foreach ($s in @($Samples)) {
         $path = [string]$s.Path
         $cut  = $path.LastIndexOf('\')
         if ($cut -lt 0) { continue }
@@ -272,6 +285,13 @@ function Get-ProcessCpuPercent1Core {
         }
     }
     return $null
+}
+
+# run.log に目印が在るか（最初の 1 件で読むのを止める＝大きなログを丸ごと読まない。
+# -SelfTest の smoke-marker が固定する）
+function Test-SmokeMarker {
+    param([string]$Path, [string]$Marker = $LOG_MARKER_SMOKE_GATE)
+    return [bool](Select-String -LiteralPath $Path -Pattern $Marker -SimpleMatch -List -Quiet -Encoding utf8)
 }
 
 # マシン識別（要件 4.5 の「測定マシンの条件」素材）。取得できない項目は理由を値として残す。
@@ -413,6 +433,15 @@ function Format-Section {
     }
     $lines.Add('')
     return ($lines -join [Environment]::NewLine)
+}
+
+# 道具そのものの点検: 静かさの関門より前で回して終わる（出力先も run-meta.txt も作らない）
+if ($SelfTest) {
+    . (Join-Path $PSScriptRoot 'invoke-perf-run.selftest.ps1')
+    $ng = Invoke-PerfRunSelfTest
+    $code = if ($ng -eq 0) { 0 } else { 1 }
+    Write-Info "INVOKE-PERF-RUN RESULT selftest code=$code ok=$script:SelfTestOk ng=$ng"
+    exit $code
 }
 
 # =============================================================================
@@ -853,8 +882,7 @@ if ($elapsedSec -lt ($plannedSec - $EARLY_EXIT_TOLERANCE_SEC)) {
 if (-not (Test-Path -LiteralPath $runLogPath -PathType Leaf) -or (Get-Item -LiteralPath $runLogPath).Length -eq 0) {
     Stop-Run $EXIT_RUN_FAILED "run log $runLogPath is empty. A run without a log cannot be judged."
 }
-$logText = Get-Content -LiteralPath $runLogPath -Raw -Encoding utf8
-if ($logText -notmatch [regex]::Escape($LOG_MARKER_SMOKE_GATE)) {
+if (-not (Test-SmokeMarker -Path $runLogPath)) {
     Stop-Run $EXIT_RUN_FAILED "run log has no smoke auto-exit marker (LOG_MARKER_SMOKE_GATE). A run where $SMOKE_EXIT_ENV_NAME did not take effect is not a repeat of the same procedure."
 }
 if ($sampleCount -lt 1) {

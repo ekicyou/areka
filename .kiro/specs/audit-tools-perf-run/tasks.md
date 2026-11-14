@@ -34,8 +34,8 @@
   - _Dispatch: standard — 偽物と終了の口を差し替える検査の骨組みを新しく書く_
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.5_
 
-- [ ] 2. ランナーの自分の検査（T3）の置き場
-- [ ] 2.1 ランナーに `-SelfTest` を足し、カウンタの値の選び方と目印の読み方を純関数にして試す
+- [x] 2. ランナーの自分の検査（T3）の置き場
+- [x] 2.1 ランナーに `-SelfTest` を足し、カウンタの値の選び方と目印の読み方を純関数にして試す
   - `-SelfTest` は静かさの関門より前で検査のファイルを読み込んで回し、結果の 1 行で終える。`run-meta.txt` も出力先も作らない
   - カウンタの結果から PID で値を選ぶ所と、目印を最初の 1 件まで読む所を、それぞれ純関数に出す（22・31）
   - 検査: `counter-select`・`quiet-retry-settings`・`smoke-marker`
@@ -180,3 +180,4 @@
 - 1.2: `Get-MeasureTomlArray` は共通部品の `Get-TomlStringArray` に寄せたので、引用符の無い配列は既定値に落ちる（今の目標定義はすべて引用符付き）。検体の問い合わせは止めない共通部品の上の `Get-MeasureSamplePath` が 4 で止める
 - 1.3: 消す前の grep の件数（4 本の外）: Get-PwshPath・Get-NarSampleMap・NAR_SAMPLE_ARGS・NarSampleMaps は 0、Write-Info・Write-Problem・Get-UtcStamp・Get-PythonCommand・Get-NarSamplePath は共通部品を読む perf-loop*.ps1 だけ。4 本の Invoke-Utf8Child の参照 9 → 0。invoke-cpu-sample の失敗の文は標準エラーへ移ったので、測る側の `LastLine` は `error: ...` の行になる
 - 1.4: T2 は 1 つの検査＝名前と scriptblock の `$SelfTestChecks`。偽物の呼ばれた順は `Add-SelfTestCall`、終了の口は `Exit-WithResult` を例外へ定義し直してある。`kill-wait` は孫にファイルを握らせて子孫まで止めることを確かめる（待ちを抜いた変異は捕まらない・本物の Process では見分けられないので受け入れた）。perf-pwsh-child の捕まえた失敗の文は改行を空白へつなぐ
+- 2.1: T3 の検査は `tools/perf/invoke-perf-run.selftest.ps1` の `$PerfRunSelfTestChecks`（T2 と同じ形・助けの関数は写しで独立）。ランナーは 909 行で、1,000 行の番人まで余裕が少ない

@@ -202,6 +202,7 @@ $SELFTEST_TOOLS = @(
     [pscustomobject]@{ Task = '5.1'; Kind = 'ps'; File = 'check-quiet.ps1';           Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = '6.4'; Kind = 'ps'; File = 'invoke-followup-checks.ps1'; Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = 'audit-tools-perf-run 1.4'; Kind = 'ps'; File = 'perf-loop.selftest.ps1'; Arguments = @() }
+    [pscustomobject]@{ Task = 'audit-tools-perf-run 2.1'; Kind = 'ps'; File = 'invoke-perf-run.ps1'; Arguments = @('-SelfTest') }
 )
 
 #: 自己較正の最後に回す自前の検査（道具ではなく文書との一致を見る＝tasks.md (7.1)）。
