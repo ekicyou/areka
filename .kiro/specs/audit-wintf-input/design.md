@@ -62,7 +62,7 @@
 - **`OnPointerMoved` の回数（指摘 19）**: 本番の受け手は 3 つ（シェルの箱の受け手はキャラの窓の受け手の中から呼ばれる）。キャラの窓の `on_char_pointer_moved` は `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）が位置の同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` は変わらない（議題 9）。バルーンの窓の `on_balloon_pointer_moved`（`balloon_moved.rs`）とシェルの箱の `on_box_pointer_moved` は、毎 tick 配られることを当てにして、止まったカーソルの下のバルーン滞在と強調を立て直す。そのため配り方は変えず、理由を説明に書いて檻に入れる（設計の討議 議題 1）。配り方を変える直しが後で出たら、この 3 つの受け手を確かめ直す。
 - **クリック透過の対象（指摘 21）**: `Window` を持たない entity と、`WindowHandle` の HWND が登録の HWND と違う対象は、評価の前に刈られる。本番の登録（`areka-placement` の `register_ghost_windows_click_through`・`Added<WindowHandle>` で登録）は wintf の窓だけなので変わらない。
 - **記録の段（指摘 14）**: `[DragStartEvent] Dispatching` ほか 5 か所が `debug!` になる。この文言を読む範囲の外のテストは `crates/areka/tests/window_link_real_run.rs:508,531` だけで、その `RUST_LOG`（`:49-50`）に `wintf::ecs::drag::dispatch=debug` を足す。
-- **始めの位置が取れないドラッグ（指摘 3）**: 控え（`WindowDragContext`）の `move_window` が偽になり `warn!` が 1 行出る。偽の HWND で `client_to_window_coords` が失敗するテスト（`WindowDragContextResource` を読むのは `crates/areka/src/input_events/drag_test_support.rs`・`crates/areka-placement/src/balloon_lock.rs`・`balloon_lock_drag_tests.rs`・`follow_drag_end_gate_tests.rs`）は、`move_window` と `WARN` の行の数を確かめ直す（実装の頭で grep し、`areka-placement` の側で直しが要るなら申し合わせる）。
+- **始めの位置が取れないドラッグ（指摘 3）**: 控え（`WindowDragContext`）の `initial_window_pos` が `None` になり（`move_window` は `DragConfig` のまま）、`warn!` が 1 行出る。偽の HWND で `client_to_window_coords` が失敗するテスト（`WindowDragContextResource` を読むのは `crates/areka/src/input_events/drag_test_support.rs`・`crates/areka-placement/src/balloon_lock.rs`・`balloon_lock_drag_tests.rs`・`follow_drag_end_gate_tests.rs`）は、`initial_window_pos` と `WARN` の行の数を確かめ直す（実装の頭で grep し、`areka-placement` の側で直しが要るなら申し合わせる）。
 - **行の番号の参照**: `tools/perf/judge-followup.py:106,111` が `controller.rs:212`・`registry.rs:18-23` の行の番号を書いている。文言と綴りは変えないが行はずれる＝`audit-tools-perf-judge` へ知らせる（直すのは向こう）。
 
 ## Architecture
@@ -146,7 +146,7 @@ crates/wintf/src/ecs/drag/
 - `state/mod.rs` — `DragState` を `#[derive(Debug, Clone, Copy)]` にし、各腕の `capture_guard` を消す。`CAPTURE_GUARD: RefCell<Option<CaptureGuard>>` を `thread_local!` に足す。`DragStateSnapshot`・`snapshot`・写しの `is_button_held` を消し、`snapshot_drag_state()` は `read_drag_state(|s| *s)` を返す（18）。`start_dragging`・`update_dragging` を `*state = …` の形に（`mem::replace` を消す）。`update_dragging` の控えが無い枝に `warn!`（3）。`check_threshold` は残し、説明の「本番呼び出しがゼロ」「W7a 境界」「本ループ」「P62 に記録」の行を消して、関数の仕事と整数の境界の注意だけにする（議題 11・16）。説明 87 行・358-360 行（16）。
 - `state/tests.rs` — `DragStateSnapshot` を `DragState` に読み替え、`force_idle` を 1 行に。写しの対応の 1 本（446-470 行）を消す。`check_threshold` の 5 本（380-442 行）は残し、`force_idle` の形だけ合わせる（議題 11）。
 - `capture_guard.rs` — `is_released` とテスト 3 本を消す（9⑷・7）。`pub` を `pub(crate)` に。
-- `dispatch.rs` — 始まりの腕・終わりの腕の窓探しを `find_owner_window` に（12）。始めの位置を `drag_origin` に切り、取れなければ `warn!`＋控えの `move_window = false`（3）。始まりの腕は今の状態が同じ entity の `JustStarted` のときだけ `update_dragging` を呼ぶ（1⑵）。3 つの知らせから `is_primary` を消す（9⑹）。`info!` 3 つを `debug!` に（14）。`DraggingState` の欄名（15）。`mod order_tests` の宣言。
+- `dispatch.rs` — 始まりの腕・終わりの腕の窓探しを `find_owner_window` に（12）。始めの位置を `drag_origin` に切り、取れなければ `warn!`＋控えの `initial_window_pos = None`（`move_window` は変えない・3）。始まりの腕は今の状態が同じ entity の `JustStarted` のときだけ `update_dragging` を呼ぶ（1⑵）。3 つの知らせから `is_primary` を消す（9⑹）。`info!` 3 つを `debug!` に（14）。`DraggingState` の欄名（15）。`mod order_tests` の宣言。
 - `accumulator.rs` — `set_transition` の `Ended` を積むとき `accumulated_delta` を 0 に戻す（1⑶）。説明 126 行（16）。
 - `accumulator_tests.rs` — 121-135 行を消す（7）。「終わりを積むと移動量が 0」の 1 本を足す（1⑶）。
 - `context.rs` — `clear` を `*self = Self::default()` に（23）。説明 1-4・18・44-46 行（16）。163-177 行のテストを消す（7）。
@@ -298,8 +298,8 @@ sequenceDiagram
 | ドラッグの状態（`drag/state/mod.rs`・`capture_guard.rs`） | drag | 状態を `Copy` に・守りは別の枠 | 18・9⑷・16 | State |
 | ドラッグの配り（`drag/dispatch.rs`・`accumulator.rs`・`systems.rs`） | drag | 重なる並びを正しく・始めの位置の警告・窓探しを 1 つに | 1・3・12・14 | Event |
 | ドラッグの公開の形（`drag/mod.rs`・`dispatch.rs`） | drag | 使われない欄を消す・改名 | 9⑸⑹・15 | 公開 API（減らす・改める） |
-| ポインタの溜めと型（`pointer/buffers.rs`・`types/mod.rs`） | pointer | 最新の位置だけ・毎 tick 空に・本当のローカル座標・動いた印 | 2・9⑵⑶・10・11・13・22 | State |
-| ポインタの配り（`pointer/dispatch/mod.rs`・`systems.rs`） | pointer | 動いた entity にだけ移動の知らせ | 17・19 | Event |
+| ポインタの溜めと型（`pointer/buffers.rs`・`types/mod.rs`） | pointer | 最新の位置だけ・毎 tick 空に・本当のローカル座標 | 2・9⑵⑶・10・11・13・22 | State |
+| ポインタの配り（`pointer/dispatch/mod.rs`・`systems.rs`） | pointer | 毎 tick 配る理由を書いて檻に・決して出ない枝を消す | 17・19 | Event |
 | NCHITTEST（`pointer/nchittest_cache.rs`） | pointer | 判定を関数に切る・`windows` の定数 | 8・20 | — |
 | クリック透過（`clickthrough/`） | clickthrough | 再登録・刈り方・使われない口・空の型 | 4・5・21・23 | Service |
 | カーソルの見張り（`clickthrough/monitor.rs`） | clickthrough | 1 回分を関数に切ってテスト | 6 | — |
@@ -351,7 +351,7 @@ fn drag_origin(world: &World, window: Entity) -> Result<(Option<HWND>, Point), S
 - 始まりの腕は `find_owner_window(world, entity)` で窓を引き、`None`（窓が無い）か `drag_origin` の `Err` なら `warn!(?entity, ?window, reason, "[dispatch_drag_events] ドラッグを始めた窓の位置が取れない: 窓は動かさない")` を 1 行出し、控えの `initial_window_pos` を `None` にする（今は `Some((0,0))`）。**控えの `move_window` は `DragConfig` の値のまま変えない**: `areka-placement` の本番のコード `balloon_drag_held`（`balloon_lock.rs:103-114`）が控えの `!move_window` を「このドラッグは止めている」の印として読むので、偽にすると `move_window: true` のバルーンが止めたドラッグに化ける（設計の検証の重い指摘 1）。受け手へのドラッグの知らせ・`DraggingState`（始めの位置は (0,0)）・`WindowDragging` は今どおり入れる（下流の約束「ドラッグの間は `DraggingState` が在る」を崩さない）。
 - `update_dragging` は `Dragging.move_window = ctx.move_window && ctx.initial_window_pos.is_some()` にする（位置の取れない窓は wintf が動かさない）。「控えが無い」の 2 つの枝（`state/mod.rs:388-393`）は 1 つにまとめ、`warn!(?entity, "[update_dragging] 窓の控えが無い: 窓は動かさない")` を 1 行出す（`move_window = false` は今と同じ）。
 - **残る限界**: 位置の取れない窓が `move_window = false`（areka が自分で動かす吸着の窓）なら、`areka-placement` の追従は (0,0) から求める。記録が残るので黙った失敗ではない。位置の無い窓は表示も当たり判定もできない（`hit_test_in_window_ex` が `None`）ので、本番で掴むことは無い。
-- **テスト**: `dispatch_order_tests.rs` に「`Window` はあるが `WindowPos.position` の無い窓の子で始まりを配ると、`WARN` が 1 行・控えの `initial_window_pos` が `None`・控えの `move_window` は `DragConfig` のまま真・`DragStartEvent` は 1 件」（`DragConfig { move_window: true }` を付けて）。直す前は `WARN` が 0 行で `initial_window_pos` が `Some((0,0))` で赤。`update_dragging` の側は `state/` の新しい兄弟のテストで「`initial_window_pos: None` の控えでは `Dragging.move_window` が偽」。`balloon_lock_drag_tests.rs`（偽の HWND で変換が失敗する道）の期待は変わらない。
+- **テスト**: `dispatch_order_tests.rs` に「`Window` はあるが `WindowPos.position` の無い窓の子で始まりを配ると、`WARN` が 1 行・控えの `initial_window_pos` が `None`・控えの `move_window` は `DragConfig` のまま真・`DragStartEvent` は 1 件」（`DragConfig { move_window: true }` を付けて）。直す前は `WARN` が 0 行で `initial_window_pos` が `Some((0,0))` で赤。`update_dragging` の側も同じ `dispatch_order_tests.rs` で「`initial_window_pos: None` の控えでは `Dragging.move_window` が偽」。`balloon_lock_drag_tests.rs`（偽の HWND で変換が失敗する道）の期待は変わらない。
 
 #### 指摘 4: 同じ HWND で登録し直すと透過が外れなくなる
 
@@ -538,7 +538,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 
 | 起きること | 記録 | 振る舞い |
 |---|---|---|
-| ドラッグを始めた窓が無い・位置が無い・枠への変換が `Err` | `warn!`（entity・窓・理由）1 行 | 控えの `move_window = false`（wintf は窓を動かさない）・知らせと `DraggingState` は配る |
+| ドラッグを始めた窓が無い・位置が無い・枠への変換が `Err` | `warn!`（entity・窓・理由）1 行 | 控えの `initial_window_pos = None`（`move_window` は `DragConfig` のまま・`update_dragging` が `Dragging.move_window` を偽にして wintf は窓を動かさない）・知らせと `DraggingState` は配る |
 | `update_dragging` で窓の控えが無い | `warn!` 1 行 | 今どおり `move_window = false` で `Dragging` へ |
 | `local_point_of` で配置が無い | `debug!` 1 行 | `client_point` を返す（当たり判定は配置の無い entity に当たらないので、届くのは窓が配置の前のときだけ） |
 | クリック透過の対象の窓が閉じられた・付け替えられた | 今の `trace!` は出なくなる（評価の前に刈る） | 刈る（壊れた HWND へ `ScreenToClient` を撃たない） |
@@ -556,7 +556,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 | 1 ⑵ | 位置の違う 2 つの窓の子 A・B。状態を `JustStarted { entity: B }` にして `Started A`・`Ended A`・`Started B` を 1 回で配ると、状態は `Dragging { entity: B, initial_window_pos: B の窓の位置 }`（同） | A の腕が A の位置で進めて赤 |
 | 1 ⑶ | 累積器に `Started A`・移動量・`Ended A`・`Started B` を積んで配ると `DragEvent` が 0 件（同）。累積器の単体でも「終わりを積むと `flush` の移動量が 0」（`accumulator_tests.rs`） | A の移動量で 1 件来て赤 |
 | 2 | 3 つの表へ積んで移した後、3 つとも空（`buffers.rs`） | 鍵が残って赤 |
-| 3 | 位置の無い窓の子で始まりを配ると `WARN` が 1 行・控えの `move_window` が偽（`dispatch_order_tests.rs`） | 0 行・真で赤 |
+| 3 | 位置の無い窓の子で始まりを配ると `WARN` が 1 行・控えの `initial_window_pos` が `None`・`move_window` は真のまま。`initial_window_pos: None` の控えで `update_dragging` すると `Dragging.move_window` が偽（`dispatch_order_tests.rs`） | 0 行・`Some((0,0))` で赤 |
 | 4 | 透過を適用した後に同じ HWND で登録し直し、当たりの上で評価すると `WS_EX_TRANSPARENT` が外れる（`controller_tests.rs`・本物の HWND）。同じ HWND の再登録で記録が変わらない（`registry.rs`） | 記録が戻って差分の守りが何もせず赤 |
 | 6 | 偽のカーソルで同じ位置 2 回 → 知らせ 1 回・知らせの中で新しい位置が読める（`monitor.rs`） | —（テストそのものが直し） |
 | 8 | `answer` の 4 つの組み合わせ（`nchittest_cache.rs`） | —（同） |
@@ -631,7 +631,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 2. **指摘 1 ⑵ の比べの置き場**: `update_dragging` の形を変えず、配りの始まりの腕で `matches!` で比べる（窓の手続きの呼び出しに触らない）。
 3. **指摘 1 のテストの組み方（ギャップ分析 10 節の 4）**: `crates/wintf/tests/drag/dispatch_test.rs` の `make_world` は本番の系の登録を持たないので使わない。wintf の中のテストで `EcsWorld::new()`（`keyboard_tests.rs` ほか 20 本のテストが既に使う）を作り、`world_mut().run_schedule(Input)` で本番の登録どおりに回す。直す前は登録に `cleanup_drag_state` が在るので ⑴ が赤になる。置き場は範囲の中の新しいファイル `drag/dispatch_order_tests.rs`（`state/tests.rs` は 848 行）。
 4. **指摘 11 の引き方（ギャップ分析 10 節の 3）**: スクリーン座標の原点に `WindowPos.position` でなく窓の entity の `GlobalArrangement.bounds` の左上を使う（ドラッグ中は窓の配置を写さないため）。引くのは tick の頭で、当たり判定が選んだのと同じ前の tick の配置になる。
-5. **指摘 3 の扱い**: 窓を動かさないのは wintf の側（控えの `move_window`）だけにし、`DraggingState` は今どおり入れる。入れないと、偽の HWND で変換が失敗する範囲の外のテスト（`areka-placement` の `follow_drag_end_gate_tests.rs:248-251` ほか）が `DraggingState` を失い、下流の約束も崩れる。
+5. **指摘 3 の扱い**: 窓を動かさないのは wintf の側（控えの `initial_window_pos = None` を見て `update_dragging` が `Dragging.move_window` を偽にする）だけにし、`DraggingState` は今どおり入れる。入れないと、偽の HWND で変換が失敗する範囲の外のテスト（`areka-placement` の `follow_drag_end_gate_tests.rs:248-251` ほか）が `DraggingState` を失い、下流の約束も崩れる。
 6. **指摘 15 の型**: 名前と説明だけを改め、`(f32, f32)` は変えない（議題 7 の範囲・`dpi.rs` の置き直しは端数を持たない値を返す決めを持つ）。かけ直しの audit が型を指したら、そのときの指摘として直す。
 7. **指摘 19 の扱い（設計の討議 議題 1 で改めた）**: 配り方は変えず、毎 tick 配る理由（止まったカーソルの下のバルーン滞在と選択肢の強調の観測）を説明に書き、檻のテストを置く。`PointerState.moved` は足さない（足す公開の欄は 0 になった）。
 8. **指摘 21 の刈り方**: `Window` と、登録の HWND と同じ `WindowHandle` の両方を見る（`Window` を外しても `WindowHandle` は外れないため）。
