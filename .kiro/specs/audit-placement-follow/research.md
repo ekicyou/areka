@@ -446,3 +446,5 @@
 8. **要らない公開（指摘 28・申し送り ⑶・C20）**: 推す＝狭める直しは C20 の後へ申し送る（`runtime-crate-split` の後に、テストだけの公開を `test-support` の feature へ移す）。`ChainPlacement`・`ChainClampOutcome` の `pub use` は足すだけなので本 spec で入れる。
 9. **申し送り ⑴（`MonitorSnapshot`）**: 推す＝理由が今も事実なので残す（指摘に上がらず・寄せるなら wintf の型と 50 ファイル）。
 10. **旧い名前 `emo2_boot`（要件 2.8）**: 推す＝直して、`runtime-crate-split` の brief へ申し送る。
+
+> 2026-11-14 要件の討議の結果は `requirements.md` の「確定した直す対象」が正本。上の推奨から変えたのは 4 つ＝議題 1 は切らない（`audit-dola` の前例）・議題 4 は system を残す（範囲の外の 5 か所の説明が見本として名指す）・議題 7 は残す（`seriko-pattern-calls` の設計の決めどおり）・議題 8 は使い手 0 の公開を C20 のうちに狭め、テストだけが使う公開を `runtime-crate-split` へ申し送る。
