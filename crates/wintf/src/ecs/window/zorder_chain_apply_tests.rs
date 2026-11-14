@@ -30,6 +30,9 @@ use windows::Win32::Foundation::{HINSTANCE, HWND};
 use super::apply_zorder_chain;
 use super::double::{self, Call, Script, with_script};
 use crate::ecs::test_support::capture_under_filter;
+use crate::ecs::window::zorder_pair_test_support::{
+    assert_line_count, fake_hwnd, lines_with, spawn_window,
+};
 use crate::ecs::window::{
     ChainPlan, ChainSegment, CrossEdge, CrossOwnerLink, WindowHandle, ZOrderChainPlan,
 };
@@ -47,27 +50,12 @@ const LINK_FAILED: &str = "[zorder-chain] link-failed";
 // 道具立て
 // ===========================================================================
 
-/// Win32 へは渡さない偽ハンドル（値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
-
 /// 適用系だけを載せた 1 巡分の schedule（**単一スレッドの実行器を明示**）。
 fn chain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_chain);
     schedule
-}
-
-/// 窓ハンドル付きの entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
 }
 
 /// 望む繋ぎ 1 本（区間つき）。
@@ -135,22 +123,6 @@ fn run_once(world: &mut World, script: Script) -> (String, Script) {
         })
     });
     (out, used)
-}
-
-/// 指定タグの行をすべて取り出す。
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
-}
-
-/// 指定タグの行がちょうど `expected` 本であることを固定する。
-fn assert_line_count(out: &str, tag: &str, expected: usize, what: &str) {
-    let found = lines_with(out, tag);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{tag}` は {expected} 本のはずが {} 本\n---捕捉全文---\n{out}",
-        found.len()
-    );
 }
 
 /// 1 行から `key=value` を切り出す。

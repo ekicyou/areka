@@ -32,40 +32,30 @@
 //! シングルスレッド実行器を明示する理由は確立系のテストと同じである（既定の多スレッド
 //! 実行器では [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SW_SHOWNA,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, ShowWindow,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
+    HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER,
 };
 use windows::core::{PCWSTR, w};
 
-use super::{IssuedPairFix, apply_zorder_pair_maintenance, pair_fix_command, plan_pair_fix};
+use super::{IssuedPairFix, pair_fix_command, plan_pair_fix};
 use crate::api::{get_window_above, get_window_below};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{
     ExpectedOrder, InsertSpec, PairFixDecision, PairObservation, PairTrigger, SkipReason,
     measure_window_below,
 };
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, FIX_TAG, SET_WINDOW_POS_TAG, SKIP_TAG, VERIFY_FAILED_TAG,
+    assert_line_count, create_test_child, create_test_parent, declare_pair, destroy_test_window,
+    fake_hwnd, hwnd_hex, insert_after, issue_control_command, lines_with, maintain_schedule,
+    request_reassert, spawn_window,
+};
 use crate::ecs::window::{
-    KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
-    flush_window_pos_commands,
+    ReassertZOrder, WindowHandle, ZOrderPairStrategy, flush_window_pos_commands,
 };
 
-/// 実機サインオフの `RUST_LOG`（design.md「Real-Machine Signoff」の wintf 側）に、
-/// 指令の実施記録を出す `command` モジュールを足したもの。
-///
-/// 足しているのは本テストが「指令が何本出たか」を数えるためであり、サインオフの
-/// 判定語を増やしているわけではない。
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-
-const FIX_TAG: &str = "[zorder-pair] fix";
-const SKIP_TAG: &str = "[zorder-pair] skip";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-/// `guarded_set_window_pos` の実施記録（＝実際に発行された指令 1 本）。
-const SET_WINDOW_POS_TAG: &str = "[guarded_set_window_pos] Calling SetWindowPos";
 /// ペア宣言の無い窓に付いた要求を落とした記録。
 const ORPHAN_REQUEST_MARK: &str = "ペア宣言の無い窓に再断行の要求";
 /// 出した指令の持ち越しが無い検証段階の要求を落とした記録。
@@ -74,169 +64,6 @@ const UNBACKED_VERIFY_MARK: &str = "検証待ちの要求に、出した指令�
 // -------------------------------------------------------------------------
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
-
-fn create_window(
-    title: PCWSTR,
-    ex_style: WINDOW_EX_STYLE,
-    style: WINDOW_STYLE,
-    parent: Option<HWND>,
-) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            ex_style,
-            w!("Static"),
-            title,
-            style,
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
-}
-
-/// テスト専用の親窓（兄弟列を閉じるための入れ物）。
-///
-/// **可視で作る**——実測層は可視の窓だけを隣と数えるため（`zorder_pair` の実測層 doc）、
-/// 隠れた親の下の子窓では隣接そのものが測れない（`IsWindowVisible` は当該窓と祖先すべての
-/// `WS_VISIBLE` を見るので、親が隠れていれば子はどう作っても不可視になる）。0x0 の道具窓
-/// （`WS_EX_TOOLWINDOW`）を活性化を伴わない `SW_SHOWNA` で見せるため、画面にもタスクバーにも
-/// 現れず、他のテストが握っている前面窓も奪わない。
-fn create_test_parent(title: PCWSTR) -> HWND {
-    let parent = create_window(
-        title,
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-        WINDOW_STYLE(WS_POPUP.0),
-        None,
-    );
-    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
-    unsafe {
-        let _ = ShowWindow(parent, SW_SHOWNA);
-    }
-    parent
-}
-
-/// 親窓の子として**可視の**実窓を生成する（本番のゴースト窓と同じ可視の窓を模す）。
-///
-/// 生成直後の兄弟間の重なりは前提にしない——初期配置は必ず [`insert_after`] で明示的に作る。
-/// 実測すると子窓は**先に作ったものほど手前**（新しい子窓は兄弟列の背面側へ入る）であり、
-/// 生成順から前後関係を読むと逆になる。`api.rs` の z オーダーのラッパテストも同じ理由で
-/// 生成順に依存しない形にしてある。
-fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(
-        title,
-        WINDOW_EX_STYLE(0),
-        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
-        Some(parent),
-    )
-}
-
-/// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す（`api.rs` のテストと同じ手）。
-///
-/// `SetWindowPos` の `hWndInsertAfter` は「位置決め対象の 1 つ手前に来る窓」であり、
-/// 対象はその**背面側**へ入る。
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する重なりのみの変更。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-        .expect("SetWindowPos should reorder self-owned test windows");
-    }
-}
-
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する（子窓は親の破棄で連鎖する）。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-fn hwnd_hex(hwnd: HWND) -> String {
-    format!("0x{:X}", hwnd.0 as usize)
-}
-
-/// Win32 へは渡さない偽ハンドル（値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-fn declare_pair(world: &mut World, balloon: Entity, character: Entity) {
-    world
-        .entity_mut(balloon)
-        .insert(KeepDirectlyAbove { peer: character });
-}
-
-/// 一回限りの再断行要求を外から挿入する（要件 2.6 のシームと同じ形＝未適用の既定値）。
-fn request_reassert(world: &mut World, balloon: Entity) {
-    world.entity_mut(balloon).insert(ReassertZOrder::default());
-}
-
-/// 維持系だけを載せた 1 巡分の schedule。
-fn maintain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_pair_maintenance);
-    schedule
-}
-
-/// 重なりも位置も動かさない対照の指令を 1 本だけ発行する。
-///
-/// 「是正の指令が出ていない」ことを主張する捕捉窓に必ず併置する——捕捉が死んでいれば
-/// この 1 本も現れず、テストは赤になる。
-fn issue_control_command(hwnd: HWND) {
-    SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
-        None,
-    ));
-    flush_window_pos_commands();
-}
-
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
-}
-
-/// 指定タグの行がちょうど `expected` 本であることを確かめる。
-///
-/// 「0 本でないこと」だけを見ると余計に出る側の欠陥（同じ是正が 2 度走る・再試行の輪が
-/// できる等）を見逃すため、常に本数で固定する。
-fn assert_line_count(out: &str, tag: &str, expected: usize, what: &str) {
-    let found = lines_with(out, tag);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{tag}` の行は {expected} 本のはずが {} 本だった\n---捕捉全文---\n{out}",
-        found.len()
-    );
-}
 
 /// キャラ窓・割り込み窓・バルーン窓の 3 枚を「バルーン／割り込み／キャラ」の順
 /// （手前 → 背後）で用意する。バルーンはキャラのすぐ手前に**居ない**。

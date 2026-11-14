@@ -33,35 +33,24 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WS_CHILD,
-    WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
-};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::UI::WindowsAndMessaging::WM_ACTIVATE;
 use windows::core::{PCWSTR, w};
 
 use super::{SinkObservationPending, is_behind_foreground, mark_pair_sink_observation};
 use crate::api::get_window_below;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{FrontScan, measure_windows_in_front};
-use crate::ecs::window::{
-    KeepDirectlyAbove, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
-    apply_zorder_pair_maintenance, flush_window_pos_commands,
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, SET_WINDOW_POS_TAG, SINK_OBSERVED_TAG as SINK_TAG, SKIP_TAG,
+    assert_line_count, create_hidden_test_child, create_test_child, create_test_parent,
+    declare_pair, destroy_test_window, fake_hwnd, insert_after, issue_control_command, lines_with,
+    maintain_schedule, spawn_window,
 };
+use crate::ecs::window::{ZOrderPairStrategy, flush_window_pos_commands};
 use crate::ecs::world::EcsWorld;
 use crate::executor::util::WindowMessage;
 
-/// 実機サインオフの `RUST_LOG`（design.md「Real-Machine Signoff」の wintf 側）に、
-/// 指令の実施記録を出す `command` モジュールを足したもの（維持系のテストと同じ）。
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-
-const SINK_TAG: &str = "[zorder-pair] sink-observed";
-const SKIP_TAG: &str = "[zorder-pair] skip";
-/// `guarded_set_window_pos` の実施記録（＝実際に発行された指令 1 本）。
-const SET_WINDOW_POS_TAG: &str = "[guarded_set_window_pos] Calling SetWindowPos";
 /// ペア宣言の無い窓に付いていた目印を落とした記録。
 const ORPHAN_MARK: &str = "沈降観測の目印がペア宣言の無い窓";
 
@@ -73,164 +62,6 @@ const WA_ACTIVE: usize = 1;
 // -------------------------------------------------------------------------
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
-
-fn create_window(
-    title: PCWSTR,
-    ex_style: WINDOW_EX_STYLE,
-    style: WINDOW_STYLE,
-    parent: Option<HWND>,
-) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            ex_style,
-            w!("Static"),
-            title,
-            style,
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
-}
-
-/// テスト専用の親窓（兄弟列を閉じるための入れ物）。
-///
-/// **可視で作る**——実測層は可視の窓だけを隣と数えるため（`zorder_pair` の実測層 doc）、
-/// 隠れた親の下の子窓では隣接も手前側の列も測れない（`IsWindowVisible` は当該窓と祖先
-/// すべての `WS_VISIBLE` を見る）。0x0 の道具窓（`WS_EX_TOOLWINDOW`）を活性化を伴わない
-/// `SW_SHOWNA` で見せるため、画面にもタスクバーにも現れず、前面窓も奪わない。
-fn create_test_parent(title: PCWSTR) -> HWND {
-    let parent = create_window(
-        title,
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-        WINDOW_STYLE(WS_POPUP.0),
-        None,
-    );
-    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
-    unsafe {
-        let _ = ShowWindow(parent, SW_SHOWNA);
-    }
-    parent
-}
-
-/// 親窓の子として**可視の**実窓を生成する（本番のゴースト窓と同じ可視の窓を模す）。
-///
-/// 生成直後の兄弟間の重なりは前提にしない——初期配置は必ず [`insert_after`] で明示的に作る
-/// （子窓は先に作ったものほど手前であり、生成順から前後関係を読むと逆になる）。
-fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(
-        title,
-        WINDOW_EX_STYLE(0),
-        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
-        Some(parent),
-    )
-}
-
-/// 親窓の子として**不可視の**実窓を生成する（OS が owner の直上に置く補助窓に当たる役）。
-fn create_hidden_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(
-        title,
-        WINDOW_EX_STYLE(0),
-        WINDOW_STYLE(WS_CHILD.0),
-        Some(parent),
-    )
-}
-
-/// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す。
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する重なりのみの変更。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-        .expect("SetWindowPos should reorder self-owned test windows");
-    }
-}
-
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する（子窓は親の破棄で連鎖する）。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-/// Win32 へは渡さない偽ハンドル（値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-fn declare_pair(world: &mut World, balloon: Entity, character: Entity) {
-    world
-        .entity_mut(balloon)
-        .insert(KeepDirectlyAbove { peer: character });
-}
-
-/// 維持系だけを載せた 1 巡分の schedule（沈降観測は維持系の中で回る）。
-fn maintain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_pair_maintenance);
-    schedule
-}
-
-/// 重なりも位置も動かさない対照の指令を 1 本だけ発行する。
-///
-/// 「観測は指令を出さない」ことを主張する捕捉窓に必ず併置する——捕捉が死んでいれば
-/// この 1 本も現れず、テストは赤になる。
-fn issue_control_command(hwnd: HWND) {
-    SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
-        None,
-    ));
-    flush_window_pos_commands();
-}
-
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
-}
-
-/// 指定タグの行がちょうど `expected` 本であることを確かめる。
-///
-/// 「0 本でないこと」だけを見ると余計に出る側の欠陥（同じ観測が 2 度走る・目印が消えない等）を
-/// 見逃すため、常に本数で固定する。
-fn assert_line_count(out: &str, tag: &str, expected: usize, what: &str) {
-    let found = lines_with(out, tag);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{tag}` の行は {expected} 本のはずが {} 本だった\n---捕捉全文---\n{out}",
-        found.len()
-    );
-}
 
 /// バルーンがキャラのすぐ手前に居るペアを実窓で 1 組つくる。
 struct Pair {

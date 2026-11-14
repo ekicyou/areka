@@ -35,16 +35,14 @@
 //! トップレベル窓で作る（印の読み戻しは割り込みの影響を受けず決定論的である）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, HWND_BOTTOM, HWND_NOTOPMOST,
-    SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WS_CHILD, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+    GWL_EXSTYLE, GetWindowLongPtrW, HWND_BOTTOM, HWND_NOTOPMOST, SW_SHOWNA, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_LAYERED,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
-use super::apply_zorder_pair_maintenance;
 use crate::api::{clear_window_owner, get_window_above, get_window_below, set_window_owner};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{
@@ -52,19 +50,16 @@ use crate::ecs::window::zorder_pair::{
     measure_window_above, measure_window_below, measure_window_is_always_on_top,
 };
 use crate::ecs::window::{
-    KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, WindowHandle,
-    ZOrderPairStrategy, establish_owner_links, flush_window_pos_commands,
+    KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, ZOrderPairStrategy,
+    flush_window_pos_commands,
 };
 
 use super::pair_fix_command;
-
-/// 兄弟の維持系テストと同じ捕捉条件（記録と、発行された指令の実施記録の両方）。
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-
-const FIX_TAG: &str = "[zorder-pair] fix";
-const SKIP_TAG: &str = "[zorder-pair] skip";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, FIX_TAG, SKIP_TAG, VERIFY_FAILED_TAG,
+    create_banded_test_parent as create_test_parent, create_test_child, create_window,
+    destroy_test_window, insert_after, maintain_schedule, pair_schedule, spawn_window,
+};
 
 // -------------------------------------------------------------------------
 // 明示実行の門（実窓の重なり順を直に測る 2 本のみ）
@@ -105,64 +100,8 @@ fn require_explicit_real_window_run() {
 }
 
 // -------------------------------------------------------------------------
-// 実窓・World・巡回のヘルパ（兄弟の維持系テストと同じレシピ）
+// 帯の印を測る実窓のヘルパ（共通の下ごしらえは `zorder_pair_test_support`）
 // -------------------------------------------------------------------------
-
-fn create_window(
-    title: PCWSTR,
-    ex_style: WINDOW_EX_STYLE,
-    style: WINDOW_STYLE,
-    parent: Option<HWND>,
-) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            ex_style,
-            w!("Static"),
-            title,
-            style,
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
-}
-
-/// 兄弟列を閉じるための私有の親窓。`always_on_top` が真なら一式を常時最前面の帯へ入れる。
-///
-/// 可視で作る理由は維持系テストと同じ（実測層は可視の窓だけを隣と数えるため、
-/// 隠れた親の下の子窓では隣接そのものが測れない）。0x0 の道具窓を活性化を伴わない
-/// `SW_SHOWNA` で見せるので、画面にもタスクバーにも現れない。
-fn create_test_parent(title: PCWSTR, always_on_top: bool) -> HWND {
-    let ex_style = if always_on_top {
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0 | WS_EX_TOPMOST.0)
-    } else {
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0)
-    };
-    let parent = create_window(title, ex_style, WINDOW_STYLE(WS_POPUP.0), None);
-    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
-    unsafe {
-        let _ = ShowWindow(parent, SW_SHOWNA);
-    }
-    parent
-}
-
-fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(
-        title,
-        WINDOW_EX_STYLE(0),
-        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
-        Some(parent),
-    )
-}
 
 /// 本番のゴースト窓と同じ拡張スタイルのトップレベル窓（`WS_VISIBLE` は付けない
 /// ——画面に何も出さずに印だけを測るため）。
@@ -195,22 +134,6 @@ fn is_always_on_top(hwnd: HWND) -> bool {
     (ex_style_of(hwnd) as u32) & WS_EX_TOPMOST.0 != 0
 }
 
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する重なりのみの変更。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-        .expect("SetWindowPos should reorder self-owned test windows");
-    }
-}
-
 /// 活性化を伴わずに窓を見せる（実測層は可視の窓だけを隣と数えるため、隣接を測る窓は
 /// 可視でなければならない）。0x0 の道具窓なので画面にもタスクバーにも現れない。
 fn show_without_activating(hwnd: HWND) {
@@ -235,38 +158,6 @@ fn sink_to_bottom(hwnd: HWND) {
         )
         .expect("SetWindowPos should sink a self-owned test window");
     }
-}
-
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する（子窓は親の破棄で連鎖する）。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-/// 維持系だけを載せた 1 巡分の schedule（単一スレッド実行器は記録の捕捉に必須）。
-fn maintain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_pair_maintenance);
-    schedule
-}
-
-/// 本番と同じ順（確立 → 維持）で並べた schedule。
-fn pair_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems((establish_owner_links, apply_zorder_pair_maintenance).chain());
-    schedule
 }
 
 fn count_lines(out: &str, tag: &str) -> usize {

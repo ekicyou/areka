@@ -7,59 +7,22 @@
 //! 張られたかは OS 側の事実（`GetWindow(GW_OWNER)`）で確かめる。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
-};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::DestroyWindow;
 use windows::core::w;
 
-use super::{OwnerEstablishFailed, establish_owner_links};
+use super::OwnerEstablishFailed;
 use crate::ecs::test_support::capture_under_filter;
+use crate::ecs::window::zorder_pair_test_support::{
+    OWNER_ESTABLISHED_TAG, RELEASED_REASON, SIGNOFF_DIRECTIVES as DIRECTIVES,
+    SKIP_TAG as RELEASED_SKIP, create_test_window, establish_schedule, owner_of, spawn_window,
+};
 use crate::ecs::window::{
-    ChainPlan, KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderChainPlan,
+    ChainPlan, KeepDirectlyAbove, OwnerLink, ReassertZOrder, ZOrderChainPlan,
 };
 
-const DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
-const RELEASED_SKIP: &str = "[zorder-pair] skip";
-const RELEASED_REASON: &str = "reason=ReleasedByChain";
-const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
-
 fn create_hidden_popup() -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示のトップレベル窓を作る。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("Static"),
-            w!("wintf-zorder-establish-release"),
-            WINDOW_STYLE(WS_POPUP.0),
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a hidden test window")
-    }
-}
-
-fn owner_of(hwnd: HWND) -> Option<HWND> {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { GetWindow(hwnd, GW_OWNER) }.ok()
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
+    create_test_window(w!("wintf-zorder-establish-release"))
 }
 
 fn released_skips(out: &str, entity: Entity) -> usize {
@@ -68,13 +31,6 @@ fn released_skips(out: &str, entity: Entity) -> usize {
         .filter(|l| l.contains(RELEASED_SKIP) && l.contains(RELEASED_REASON))
         .filter(|l| l.contains(&needle))
         .count()
-}
-
-fn establish_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(establish_owner_links);
-    schedule
 }
 
 /// 起動時から逆転の計画がある。ハンドルが付いた巡に、外す組は張らず見送りを記録し、

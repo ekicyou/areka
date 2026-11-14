@@ -10,13 +10,7 @@
 //! ことを対照の指令 1 本で示す（兄弟の `zorder_pair_maintain_tests.rs` と同じ作法）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD,
-    WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
-};
+use windows::Win32::Foundation::HWND;
 use windows::core::w;
 
 use super::IssuedPairFix;
@@ -24,58 +18,15 @@ use crate::api::get_window_below;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{ExpectedOrder, InsertSpec};
 use crate::ecs::window::zorder_pair_sink::{SinkObservationPending, mark_pair_sink_observation};
-use crate::ecs::window::{
-    ChainPlan, KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle,
-    ZOrderChainPlan, ZOrderPairStrategy, apply_zorder_pair_maintenance, flush_window_pos_commands,
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES as DIRECTIVES, FIX_TAG, RELEASED_REASON, SET_WINDOW_POS_TAG,
+    SINK_OBSERVED_TAG, SKIP_TAG, VERIFY_FAILED_TAG, create_test_child, create_test_parent,
+    destroy_test_window, insert_after, issue_control_command, maintain_schedule, spawn_window,
 };
-
-const DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-const SKIP_TAG: &str = "[zorder-pair] skip";
-const RELEASED_REASON: &str = "reason=ReleasedByChain";
-const FIX_TAG: &str = "[zorder-pair] fix";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-const SINK_OBSERVED_TAG: &str = "[zorder-pair] sink-observed";
-const SET_WINDOW_POS_TAG: &str = "[guarded_set_window_pos] Calling SetWindowPos";
-
-fn create_window(ex_style: u32, style: u32, parent: Option<HWND>) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を作る。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(ex_style),
-            w!("Static"),
-            w!("wintf-zorder-maintain-release"),
-            WINDOW_STYLE(style),
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
-}
-
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自プロセス所有の窓の重なりだけを動かす。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-        .expect("SetWindowPos should reorder self-owned test windows");
-    }
-}
+use crate::ecs::window::{
+    ChainPlan, KeepDirectlyAbove, ReassertZOrder, ZOrderChainPlan, ZOrderPairStrategy,
+    flush_window_pos_commands,
+};
 
 /// 可視の親の下に「バルーン／割り込み／キャラ」（手前 → 奥）の子窓 3 枚。
 /// バルーンはキャラのすぐ手前に居ない（是正を要する並び）。
@@ -88,12 +39,8 @@ struct Trio {
 
 impl Trio {
     fn create() -> Self {
-        let parent = create_window(WS_EX_TOOLWINDOW.0, WS_POPUP.0, None);
-        // SAFETY: Win32 境界。活性化せずに表示する（子窓を可視と数えるため）。
-        unsafe {
-            let _ = ShowWindow(parent, SW_SHOWNA);
-        }
-        let child = || create_window(0, WS_CHILD.0 | WS_VISIBLE.0, Some(parent));
+        let parent = create_test_parent(w!("wintf-zorder-maintain-release"));
+        let child = || create_test_child(parent, w!("wintf-zorder-maintain-release"));
         let (character, intruder, balloon) = (child(), child(), child());
         insert_after(intruder, balloon);
         insert_after(character, intruder);
@@ -109,20 +56,8 @@ impl Trio {
 
 impl Drop for Trio {
     fn drop(&mut self) {
-        // SAFETY: Win32 境界。作った親を破棄する（子窓は連鎖する）。
-        unsafe {
-            let _ = DestroyWindow(self.parent);
-        }
+        destroy_test_window(self.parent);
     }
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
 }
 
 /// 組を宣言し、(バルーン, キャラ) を返す。
@@ -150,27 +85,6 @@ fn new_world() -> World {
     let mut world = World::new();
     world.insert_resource(ZOrderPairStrategy::default());
     world
-}
-
-fn maintain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_pair_maintenance);
-    schedule
-}
-
-/// 重なりも位置も動かさない対照の指令を 1 本出す（捕捉が生きていることの証）。
-fn issue_control_command(hwnd: HWND) {
-    SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
-        None,
-    ));
-    flush_window_pos_commands();
 }
 
 fn count(out: &str, tag: &str) -> usize {

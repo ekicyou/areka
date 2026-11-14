@@ -175,7 +175,7 @@ pub unsafe fn guarded_set_window_pos(
 /// 出すと、破棄されたバッチの指令が縮退で書き直されたときに同じ指令が 2 度数えられる
 /// （本仕様の task 7.2 のレビューが実測で見つけた形）。対テストは
 /// `command_batch_tests::the_write_log_line_is_emitted_once_per_command_on_both_paths`。
-const WINDOW_WRITE_LOG_MESSAGE: &str = "[guarded_set_window_pos] Calling SetWindowPos";
+pub(super) const WINDOW_WRITE_LOG_MESSAGE: &str = "[guarded_set_window_pos] Calling SetWindowPos";
 
 /// `via=` の値: 1 本ずつの `SetWindowPos` で書いた。
 const VIA_SET_WINDOW_POS: &str = "SetWindowPos";
