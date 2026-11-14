@@ -142,7 +142,7 @@
   - _Requirements: 3.1, 4.1, 5.2, 5.3_
 
 - [ ] 7. 追随の検査
-- [ ] 7.1 (P) 追随の検査の判定の写し・増えた分だけの読み・強制終了の待ちを直す
+- [x] 7.1 (P) 追随の検査の判定の写し・増えた分だけの読み・強制終了の待ちを直す
   - 判定器の終了コードの写し方を純関数にし、0・1・2 はそのまま、3 とほかは 1（14）
   - ログは読んだ位置と書きかけの最後の 1 行を覚え、増えた分だけ読む（32）
   - 強制終了の 2 か所を子孫まで止めて待つ共通の口に替える（8）。窓が先に閉じたときは理由の 1 行で 1（3）
@@ -193,3 +193,4 @@
 - 6.2: T2 を `perf-loop.selftest.ps1`（20 本）と `perf-loop.selftest2.ps1`（出力先と -Resume の束・入口の束・probe-parse の 9 本）に分け、`perf-loop.ps1 selftest` の期待は ok=12。消す前の grep の件数（wpaexporter ほか）: HEAD で invoke-cpu-sample 22・perf-loop.common 4・perf-loop 5・goals 1 → 後で範囲の中 0（invoke-cpu-sample の `XPERF_DEFAULT_PATH`・`Test-Elevated` の 5 件は段③の採取の唯一の持ち場として残す）。範囲の外に残る `[sampling] backend`（goals の toml・perf_ledger_goal.py の必須の鍵・fixtures-loop の 5 本）は audit-tools-perf-judge の受け持ち
 - 6.3: ランナーの 1,000 行の余地のため `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.facts.ps1` へ字のまま移した（design の File Structure Plan に足した）。T3 は ok=6。採取の開始の行の理由の語は ok／子の `reason=`／start_failed。0 で終わる道は採取を動かしたまま返す（止めるのは perf-loop の `-Stop`）
 - 6.4: 採取が残る道は 3 つで、どれも design が受け入れている。ランナーが 0 で返ってから `-Stop` までの間の例外・ランナーの外からの強制終了・ランナーの `-Cancel` の失敗。`-Stop` が 1（`-d` も失敗し元の ETL も無い）のときも `xperf -stop` の警告を出すかは 8.1 の audit で決める。README の 884 行あたりに手で `-Start` する例が残る（R の受け持ち）
+- 7.1: レビューで、design の 35 のうち追随の検査の `Stop-Run`（色なしで標準エラーへ）を持つタスクが無いと分かったので、進行役が `Write-Host -ForegroundColor Red` の 2 か所を `Write-Problem` へ替えた（measure は RESULT 行を全部の行から探すので影響なし・`LastLine` は理由の行になる）。BOM を落とす条件も「バッファの頭がファイルの頭」へ直した。窓が閉じる道と強制終了の 2 か所は実走でしか通らない
