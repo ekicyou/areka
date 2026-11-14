@@ -362,7 +362,7 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
 
 /// 非表示のバルーン窓でも可視のときと **bit 同一**に補正されること。
 ///
-/// バルーンの可視性は表示層（`emo2_boot::balloon_visibility`）の所有で placement の
+/// バルーンの可視性は表示層（`runtime::balloon_visibility`）の所有で placement の
 /// World には無いが、World 上で可視性にもっとも近い表現である `WindowStyle` の
 /// `WS_VISIBLE` を落とす／`WindowStyle` ごと外す、の 2 変種でも結果が変わらないことを
 /// 固定する。関門が可視性らしき状態で分岐し始めたらここが割れる。

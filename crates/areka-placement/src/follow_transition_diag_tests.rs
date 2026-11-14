@@ -13,14 +13,14 @@
 //!
 //! task 2.4 の時点では「是正が入れば本テストは赤へ倒れるので期待値を 0 へ書き換える」と
 //! 書いてあった。**実際にはそうならなかった**——task 5.1 の是正は毎フレーム先頭の同期段
-//! （`emo2_boot::frame::work_area_sync`）が源を作り直すことであって、`resize_window_to` の
+//! （本体の `runtime::frame::work_area_sync`）が源を作り直すことであって、`resize_window_to` の
 //! 振る舞いは 1 bit も変わらない。本ファイルの檻は源が古い World を**手で組んで**単一の
 //! 書込口を直接呼ぶので、同期段を通らず古い源のままである。
 //!
 //! ゆえに本テストは是正後も緑のまま、**観測そのものの契約**（源が古ければ差が出る・
 //! 一致すれば 0・表が引けなければ番兵）を固定し続ける。要件 7.3 が求める「是正前に失敗し
 //! 是正後に通過する」対テストは、フレームを進めて同期段を通す
-//! `emo2_boot/frame_work_area_sync_tests.rs` の
+//! 本体の `runtime/frame_work_area_sync_tests.rs` の
 //! `lowering_the_scale_lands_the_ground_point_on_the_new_work_area_bottom_in_one_write`
 //! が持つ（是正前 −48px で赤・是正後 0 で緑を実行で記録済み）。
 
@@ -85,8 +85,9 @@ fn ground_line_of(events: &[log_capture_kit::CapturedEvent]) -> String {
 // 接地点レコード（要件 5.3）
 // ---------------------------------------------------------------------------
 
-/// **現行の欠陥を固定する**（task 5.1 の是正前の赤）: 拡大率を下げると接地点が起動時の
-/// 作業領域下端に留まり、実際の下端との差が −48px になる。
+/// **源が古いときの差が行に出る**（名の `current` は是正前の呼び名・モジュールの説明のとおり
+/// 是正後も緑）: 源が古いまま拡大率を下げると接地点が起動時の作業領域下端に留まり、
+/// 実際の下端との差が −48px になる。
 #[test]
 fn ground_record_shows_the_current_48px_float_when_the_scale_is_lowered() {
     let _residue = drain_window_pos_commands();
@@ -107,7 +108,7 @@ fn ground_record_shows_the_current_48px_float_when_the_scale_is_lowered() {
         line.contains(&format!(
             "scope=0 ground_y={BOOT_WA_BOTTOM} wa_bottom={LIVE_WA_BOTTOM_AT_100} diff=-48"
         )),
-        "現行の −48px の浮きが接地点レコードに現れていない: {line}"
+        "源が古いときの −48px の浮きが接地点レコードに現れていない: {line}"
     );
     assert!(
         line.contains("route=DpiReproject"),

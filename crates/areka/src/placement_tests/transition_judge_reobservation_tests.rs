@@ -5,10 +5,10 @@
 //! 明記した遷移を不合格にしてしまうからである（task 3.2 のレビューで 2 度起きた）。判定器を
 //! 触ったら、まず 6 遷移すべての判定をレポートの記述と突き合わせること。
 //!
-//! **この治具を実機専用側（`Bounds::signoff`）の判定へ流用しないこと。** `t_us` の並びは忠実で
-//! ないためである——最初の窓書込が `t_us=13,800`、`flush stage=begin` が `100,500` で、書込が
-//! 一括書込の開始より前に現れる。決定論側の判定は `t_us` を判定語に使わないので無害だが、
-//! `visualize_to_write_us`／`flush_total_us` を測る用途に使うなら先に時刻の並びを直すこと。
+//! **`t_us` は整形で補った値である**（下の補いの一覧）。この治具は実機専用側（`Bounds::signoff`）
+//! の判定にも流す（`transition_judge_verdict_tests`・`transition_signoff_tests`）が、
+//! `visualize_to_write_us`／`flush_total_us` はその補った値で決まるので、実測の値の根拠に
+//! 読まないこと（決定論側の判定は `t_us` を判定語に使わない）。
 //!
 //! 正本は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/reobservation-2026-08-15.md` の §3.1
 //! （全行を引用した代表例）である。当時のログにはフレーム番号が無く順序と遅れは時刻近似
@@ -33,10 +33,10 @@
 //! - `flush stage=begin`／`stage=end` の刻印と `total_us`——レポートに一括書込の区間の記録は
 //!   無い（当時その観測点が無かった）。最初の書込の直前から最後の書込の直後までを覆う値。
 //!
-//! # task 4.2 で実測と突き合わせること
+//! # 補いは実測ではない
 //!
-//! 上の補い（フレーム番号 1 つ・`t_us` の引き伸ばし・発明した 3 種）は、**フレーム番号つきの
-//! 再採取（task 4.2）が出る時点で必ず再検証する**。実測が「6 本の書込が複数フレームに
+//! 上の補い（フレーム番号 1 つ・`t_us` の引き伸ばし・発明した 3 種）は再観測の本文から導いた
+//! 値であって、実測ではない。フレーム番号つきの実測が「6 本の書込が複数フレームに
 //! またがる」を示したなら、本モジュールの前提（同一 tick）と
 //! `the_frame_unit_quantities_are_already_zero_before_any_correction` の主張は書き換えが要る。
 //!
@@ -62,8 +62,8 @@ const ORIGIN_FRAME: u32 = 41231;
 /// `[transition]` を持たない 3 行（`info` の本文・`[diag.window_move]`・段階別計時）は
 /// 実機ログの混ざり方をそのまま再現するために残してある。判定器はこれを 1 件も数えない。
 ///
-/// 姉妹モジュール `transition_judge_verdict_tests`／`transition_judge_negative_tests` が
-/// **同じ字面**を上限判定と負例の入力に使う（task 3.2）。複製すると片方だけが語彙の変更に
+/// 姉妹モジュール `transition_judge_verdict_tests`／`transition_signoff_tests` が
+/// **同じ字面**を上限判定とサインオフの入口の入力に使う。複製すると片方だけが語彙の変更に
 /// 追随しなくなるので、可視性を広げて 1 本を共有する。
 pub(super) const REOBSERVATION_TRANSITION_1: &str = "\
 2026-08-15T11:54:14.327101Z DEBUG wintf::transition: [transition] frame=41231 t_us=214 kind=monitor entity=2v0 old_dpi=192 new_dpi=96 old_wa=0,0,2880,1704 new_wa=0,0,2880,1752
@@ -244,7 +244,10 @@ fn the_first_and_last_write_times_come_from_the_report_the_call_total_does_not()
 #[test]
 fn nothing_was_held_realigned_or_skipped_in_this_transition() {
     let summary = summary();
-    assert_eq!(summary.holds, 0, "整合待ちは未実装（task 5.4）ゆえ 0");
+    assert_eq!(
+        summary.holds, 0,
+        "この遷移のログに整合待ち（`kind=hold`）の行は無いので 0"
+    );
     assert_eq!(
         summary.chain_realigned, 0,
         "再観測 §7「`finalize_chain` の解き直しは 6 遷移で 0 件」"

@@ -16,7 +16,7 @@
 //!
 //! # 判定語のリテラルを書かない
 //!
-//! 6 つの判定語も欄名も、発行側（[`super::transition_diag`]）の `pub const` を参照するだけ
+//! 6 つの判定語も欄名も、発行側（[`areka_placement::transition_diag`]）の `pub const` を参照するだけ
 //! である。字面を 1 つでもここで書き直すと、発行側が語を変えたときに判定が静かに空振りする
 //! （[`super::transition_judge`] の module doc と同じ規律）。
 //!

@@ -1,10 +1,10 @@
-//! 配置判断の遷移観測レコード（`snapshot`／`hold`／`ground`／`chain`）に対する決定論テスト。
+//! 配置判断の遷移観測レコード（`snapshot`／`hold`／`ground`／`chain`／`offset`）に対する決定論テスト。
 //!
 //! 固定するのは 3 つである。
 //!
-//! - **語彙**——4 つのレコード種別語・段階語・理由語・フィールド名が字面で固定され、上流 2 crate
+//! - **語彙**——5 つのレコード種別語・段階語・理由語・フィールド名が字面で固定され、上流 2 crate
 //!   （wintf・areka-emo-present）の語彙と交わらないこと。
-//! - **行の形**——4 種のレコード純関数が逐語で同じ行を組み、欠損は番兵で埋めてフィールドを
+//! - **行の形**——5 種のレコード純関数が逐語で同じ行を組み、欠損は番兵で埋めてフィールドを
 //!   落とさないこと。宣言した欄の表と組んだ行の欄が過不足なく一致すること。
 //! - **World からの転写**——刻印は World 資源（`FrameCount`＋`TickStart`）から組み（D1）、
 //!   書込タグは窓の marker から scope と種別を読むこと。
@@ -119,7 +119,7 @@ fn hold_and_chain_words_are_fixed_and_distinct() {
     }
 }
 
-/// 1 行に同じフィールド名を 2 度出さない（`judge-perf.py::parse_fields` は後勝ち＝先の値が消える）。
+/// 1 行に同じフィールド名を 2 度出さない（tools/perf/ の Python の道具の `parse_fields` は後勝ち＝先の値が消える）。
 #[test]
 fn no_placement_line_repeats_a_field_name() {
     let lines = [

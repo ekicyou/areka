@@ -60,7 +60,8 @@ fn held_world(hold: bool) -> (World, Entity) {
     (world, window)
 }
 
-/// 積まれた書込指令を捨てる（プロセス共有のキューをテスト間で持ち越さない）。
+/// このスレッドに積まれた書込指令を捨てる（キューはスレッドごとなのでテスト間の分離には
+/// 効かない・後始末として捨てるだけである）。
 fn drop_queued_writes() {
     let _residue = wintf::ecs::window::drain_window_pos_commands();
 }

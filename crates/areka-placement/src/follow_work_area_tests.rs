@@ -157,7 +157,7 @@ fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
         assert_eq!(wa, left_wa(), "dpi={dpi}: 最近傍は左モニタ");
 
         // ③ 2 面のあいだの帯（右モニタのタスクバー上・非対称 work area 由来）
-        //    幅 px(60) の窓を帯へ完全に収め、中心を帯の中へ落とす
+        //    幅 px(40) の窓を帯へ完全に収め、中心を帯の中へ落とす
         let strip_size = SizePx {
             w: px(40, dpi),
             h: px(40, dpi),

@@ -517,3 +517,15 @@
 - `dpi(v)` の写し: `balloon_offset_persist_roundtrip_tests.rs`。
 - 行の頭が `//` の行を落とす `code_only` の写し: `spawn_zorder_chain_wiring_tests.rs`・`zorder_group_ledger_state_tests.rs`・`test_support.rs` の `zorder_pair_deferred::code_only`（`measure_template::code_only` は文字列とブロックコメントも扱う別物）。この spec の 2 つ（`follow_transition_diag_tests.rs`・`transition_diag_tests.rs`）は `follow_test_support::code_only` の 1 つにした。
 - `fake_handle`・`position_of`・`px` の写し: `reseed_test_support.rs`・`resolver_test_support.rs` ほか。
+
+### 指摘 22（task 4.1・判定器とテストの側）で残した範囲の外の古い参照
+
+受け持ちの 58 ファイル（56＋この spec で作った 2 本）の古い説明と旧い名前は直した（`rg -n 'emo2_boot|Emo2Wiring'` が 0 件）。次は範囲の外なので直さずに残す。
+
+- 本体（`runtime-crate-split` へも申し送る）
+  - `crates/areka/src/runtime/frame_transition_atomicity_tests.rs:57,150` の `transition_judge.rs:609-613` は今は `summarize` の `KIND_WRITE` の腕（`path_a_writes` を数える所）。行の番号でなく名で指すのがよい。
+  - 古い「唯一の位置ライター」: `crates/areka/src/runtime/frame/drain_resnap.rs`（`move_window_to` の呼び出しの上）・`crates/areka/src/runtime/frame_chain_finalize_tests.rs`（明示的な再配置の行）。今の `move_window_to` は位置の書き手の 1 つであって唯一ではない。
+- 核（`audit-placement-core`）
+  - `crates/areka-placement/src/diag_tests.rs` の古い参照（ギャップ分析の当時の 158・278・492 行）と、`judge-perf.py::parse_fields` をファイル名で指す 1 行（今は 107 行）。判定器の側は「tools/perf/ の Python の道具の `parse_fields`」と名を書かずに指す形にした（`audit-tools-perf-judge` との申し合わせ）。
+  - `crates/areka-placement/src/diag.rs` の `is_system_reanchor` の説明「D9 の 6 経路」は、`PatternMove` を足した今は 7 経路（D9 の 6 つ＋面の `move` のずれ）。
+  - 旧い名前 `emo2_boot`（今は `runtime`）が範囲の外の 13 ファイルに残る: `lib.rs`・`chain_finalize.rs`・`chain_realign.rs`・`config.rs`・`dpi_sync.rs`・`measure.rs`・`spawn.rs`・`zorder_chain_compose.rs`・`balloon_offset_persist_roundtrip_tests.rs`・`measure_template_tests.rs`・`placement_prepare_tests.rs`・`sample_test_support.rs`・`spawn_zorder_pair_deferred_tests.rs`（`wire_emo2_boot` の名も含む）。

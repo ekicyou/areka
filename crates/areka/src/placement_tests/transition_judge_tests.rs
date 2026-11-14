@@ -1,9 +1,6 @@
 //! `transition_judge` の**解析・切り出し・集計**の決定論テスト（task 3.1）。
 //!
-//! テーマ別の姉妹モジュール:
-//!
-//! - `transition_judge_frame_tests` — フレーム刻印の扱い（周回・縮退・読めない値・同一フレーム性）
-//! - `transition_judge_reobservation_tests` — 再観測ログの逐語再現
+//! テーマ別の姉妹モジュールは `transition_judge.rs` の接続宣言が正本である（ここに一覧を写さない）。
 //!
 //! ここは 1 つの判定量につき 1 つの分岐を突く粒度で並べる。
 
@@ -153,7 +150,7 @@ fn parse_reads_the_sentinel_as_an_absent_value() {
 
 #[test]
 fn parse_treats_a_repeated_field_name_as_malformed_instead_of_last_wins() {
-    // judge-perf.py の辞書化は後勝ちだが、判定器は「1 行に同名を 2 度出さない」を
+    // tools/perf/ の Python の道具の辞書化は後勝ちだが、判定器は「1 行に同名を 2 度出さない」を
     // 語彙の不変条件として扱う。後勝ちで飲み込むと接頭語の kind= が潰される退行が消える。
     let line = format!(
         "{} {FIELD_SCOPE}=9",
@@ -601,7 +598,7 @@ fn summarize_excludes_windows_whose_redisplay_was_skipped() {
     // 本例はまさにその欠陥形（キャラは frame 10・随伴は frame 20）であり、検査される。
     assert_eq!(
         summary.balloon_pairs_checked, 1,
-        "両窓とも書込があるので対は検査できる（キャラ側は `last_write_frame_per_window`・バルーン側は `last_follow_frame_per_window` 由来）"
+        "両窓とも書込があるので対は検査できる（キャラ側は `last_write_frame_per_window`・バルーン側は `follow_landing_per_window` 由来）"
     );
     assert!(
         !summary.balloon_same_frame,

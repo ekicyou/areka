@@ -7,7 +7,8 @@
 //!
 //! 各ヘルパは当該種別の必須フィールド（`*_FIELDS`）を漏れなく載せる。載せ漏れは
 //! [`super::parse_transition_line`] が [`super::RecordDefect::MissingField`] を立てるので、
-//! `transition_judge_tests::builders_produce_well_formed_records` が赤にする。
+//! `transition_judge_tests::builders_produce_well_formed_records` が赤にする（ただし `windpi`・
+//! `enqueue_merged_into` はそこに無く、使い手のテストの解析を通るだけである）。
 
 use areka_emo_present::presenter::{
     KIND_SURFACE, SURFACE_FIELD_H, SURFACE_FIELD_REASON, SURFACE_FIELD_RESIZED,
@@ -65,7 +66,8 @@ pub fn windpi(frame: u32, entity: &str, old_dpi: u32, new_dpi: u32) -> String {
 }
 
 /// 窓書込 1 回。`scope`／`win_kind` は番兵を渡せるよう字面で受け取る。
-// 上と同じ理由（引数＝必須フィールドなので束ねない）。
+// 引数はそのまま `write` レコードの必須フィールドであり、束ねると呼出側でどの
+// フィールドを番兵にしたのかが読めなくなる。
 #[allow(clippy::too_many_arguments)]
 pub fn write(
     frame: u32,

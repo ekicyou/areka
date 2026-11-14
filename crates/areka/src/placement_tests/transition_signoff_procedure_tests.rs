@@ -753,10 +753,10 @@ fn the_producible_signatures_cover_the_per_window_unmeasured_arms() {
     // `misattributed_violations` はそこに載らない行を「出得ない」と断じる。ゆえに集合の
     // 取りこぼしはそのまま**偽陽性**へ跳ね返る——手順書が正しく書いた行を誤りと報告する。
     //
-    // 判定器の窓ごとの被覆検査（`transition_judge_verdict.rs:551-565` の走査）が積む 2 つの
+    // 判定器の窓ごとの被覆検査（`transition_judge_verdict.rs` の `judge` の ⑼ の走査）が積む 2 つの
     // 「量が欠けている」は、変種を 2 つしか回さない間は**構造的に起こせなかった**——
     // 量が揃った変種では欠落が無く、量が 1 つも無い変種では `writes_per_window` が空で
-    // `judged_windows`（同 `:857-863`）が 1 度も回らないためである。「書込は在るのに窓ごとの
+    // `judged_windows`（同じファイルの関数）が 1 度も回らないためである。「書込は在るのに窓ごとの
     // 量が欠けている」第 3 の形だけがこの 2 腕へ届く。
     let deterministic = signatures_producible_by(&Bounds::deterministic());
     let signoff = signatures_producible_by(&Bounds::signoff());

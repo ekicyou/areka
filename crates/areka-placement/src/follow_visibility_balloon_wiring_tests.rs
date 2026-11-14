@@ -100,7 +100,7 @@ fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
     }
 }
 
-/// **Req 3.4 の本体**: 非ドラッグの配置系 4 経路が引き金のとき、offset 恒等式が出した
+/// **Req 3.4 の本体**: 非ドラッグの配置系の引き金（発火する 7 種のうちここで回す 4 経路）のとき、offset 恒等式が出した
 /// バルーン提案位置が全 work area 非交差へ落ちるなら、X の clamp で救われる。
 ///
 /// キャラ窓は終始可視（clamp されない）＝救われたのは**バルーンだけ**である。
@@ -817,11 +817,11 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
 /// 「寸法変化に対する不変」群である。拡大率遷移を一度も起こさないので、追随の証拠にはならない。**
 /// 本檻は `for dpi in DPIS` で**水準ごとに世界を組み直して** [`resize_window_to`] を直接呼ぶ
 /// だけであり、`DPI` を書き換えて `Changed<DPI>` のエッジを立てることは無い。追随の発火条件
-/// はそのエッジに限られる（`emo2_boot::frame::dpi` の相）ため、追随が入っても本檻には届かない
+/// はそのエッジに限られる（本体の `runtime::frame::dpi` の相）ため、追随が入っても本檻には届かない
 /// ——上の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
 /// 実機 SSP 裁定）は**是正後も真のまま**であり、主張は 1 文字も書き換えていない。
 ///
-/// 実測（task 6.4）: 追随の適用（`emo2_boot::frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// 実測（task 6.4）: 追随の適用（本体の `runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`
 /// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
 /// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
 #[test]

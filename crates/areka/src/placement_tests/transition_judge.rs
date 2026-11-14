@@ -1,7 +1,7 @@
 //! 遷移観測ログの**判定器**——観測行の解析・遷移の切り出し・判定量の集計（純関数・I/O 無し）。
 //!
-//! design.md の C7（`transition_judge`）が正本である。3 crate（wintf・areka-emo-present・areka）が
-//! 同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor`／
+//! design.md の C7（`transition_judge`）が正本である。4 crate（wintf・areka-emo-present・areka-placement・
+//! areka）が同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor`／
 //! `kind=windpi` の拡大率変化を起点に**遷移**へ切り分け（起点規約は
 //! [`split_transitions`]）、遷移ごとの判定量（[`TransitionSummary`]）を出す。
 //!
@@ -10,16 +10,16 @@
 //! `kind` 語・`stage` 語・フィールド名は**発行側のレコード純関数が単一の定義元**であり、本
 //! モジュールは `pub const` を参照するだけである（リテラルを書かない）。定義元は 3 箇所:
 //!
-//! - `wintf::ecs::window::transition_diag`（`monitor`／`write`／`flush`／`msg`／`enqueue`）
+//! - `wintf::ecs::window::transition_diag`（`monitor`／`windpi`／`write`／`flush`／`msg`／`enqueue`）
 //! - `areka_emo_present::presenter`（`surface` の平坦な再輸出）
-//! - [`super::transition_diag`]（`snapshot`／`hold`／`ground`／`chain`）
+//! - [`areka_placement::transition_diag`]（`snapshot`／`hold`／`ground`／`chain`／`offset`）
 //!
 //! 語を 1 つでもここで宣言し直すと、発行側が字面を変えたときに判定が静かに空振りする。
 //!
-//! # 辞書化の規則は `judge-perf.py` と同一
+//! # 辞書化の規則は perf の道具と同一
 //!
 //! 行の本体は `名前=値` の並びであり、値は**次の名前の直前まで**とする
-//! （`tools/perf/judge-perf.py:562,588-596` の `parse_fields` と同じ規則）。空白で切らないのは、
+//! （tools/perf/ の Python の道具の `parse_fields` と同じ規則）。空白で切らないのは、
 //! `Debug` 表現が値に空白を含み得るためである。ただし**同名フィールドは後勝ちにしない**——
 //! Python 側は後勝ちで上書きするが、本判定器は「1 行に同じ名前を 2 度出さない」を語彙の
 //! 不変条件として扱い、破れた行を [`RecordDefect::DuplicateField`] として記録する
@@ -42,8 +42,8 @@
 //!
 //! # 本番バイナリには含まれない（`#[cfg(test)]`）
 //!
-//! 判定器の消費者は決定論テスト（task 3.1／3.2）と実機ログのサインオフランナー
-//! （task 3.2 の `#[ignore]` テスト）だけであり、本番の実行経路からは 1 度も呼ばれない。
+//! 判定器の消費者は決定論テスト（この下の姉妹と `runtime/frame_transition_*`）と実機ログの
+//! サインオフランナー（`#[ignore]` テスト）だけであり、本番の実行経路からは 1 度も呼ばれない。
 //! areka は lib ターゲットを持たない bin crate ゆえ `pub` でも dead_code 免除されず、
 //! 本番ビルドへ置くと項目ごとに `#[allow(dead_code)]` を貼る羽目になって**以後の真の
 //! dead code を隠す**。`main.rs` が `#[cfg(test)]` の下で宣言する `placement_tests` に置いて、
@@ -96,7 +96,7 @@ pub enum RecordDefect {
         /// 読めなかった値の字面。
         value: String,
     },
-    /// 3 crate のいずれも定義していない `kind` 語。
+    /// 定義元の 3 箇所のどれも定義していない `kind` 語。
     UnknownKind(String),
 }
 
@@ -400,7 +400,7 @@ fn required_fields(kind: &str) -> Option<&'static [&'static str]> {
 // 行の解析
 // ---------------------------------------------------------------------------
 
-/// `名前=` の出現 1 件（`judge-perf.py::parse_fields` の正規表現に相当）。
+/// `名前=` の出現 1 件（tools/perf/ の Python の道具の `parse_fields` の正規表現に相当）。
 struct FieldKey {
     /// 名前の開始位置（バイト）。
     name_start: usize,

@@ -368,9 +368,9 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 ///
 /// # 再現する根本経路（root cause）
 ///
-/// `on_char_drag_end` は保存位置を `policy_mapped_position`（＝`DraggingState` からの生座標
-/// 再導出）に依存させており、`DraggingState` 不在なら `None` で**早期 return＝保存 skip** する。
-/// しかし非 Free char は連続 `on_char_drag` が既に最終位置へ動かし済みで `WindowPos.position` が
+/// 直す前の `on_char_drag_end` は保存位置を `policy_mapped_position`（＝`DraggingState` からの
+/// 生座標再導出）だけに依存させ、`DraggingState` 不在なら**保存を skip** していた（今は
+/// `WindowPos.position` で補う）。非 Free char は連続 `on_char_drag` が既に最終位置へ動かし済みで `WindowPos.position` が
 /// 最終確定位置を保持している。dispatch が DragEnd 前に `DraggingState` を落とすと（多窓時に
 /// observed・実 flow の穴）、char は動いたのに位置が保存されない——一方 `on_balloon_drag_end` は
 /// char の `WindowPos.position` を読んで offset を保存するため balloon-offset だけが残り、実機の

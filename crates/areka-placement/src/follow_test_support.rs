@@ -142,7 +142,7 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 pub(super) const DPIS: [i32; 3] = [96, 120, 192];
 
 /// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制。
-/// `resolver.rs` の `px()` が donor・Req 5.6）。
+/// `resolver_test_support.rs` の `px()` が donor・Req 5.6）。
 pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     assert_eq!(
         (logical * dpi) % 96,
@@ -243,7 +243,6 @@ pub(super) const CLAMP_TAG: &str = "[visibility-guard] ClampX";
 pub(super) const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
 /// 同上（work area を解決できず判定不能・Req 3.3）。
 pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
-/// 3 語に共通の接頭辞（「ガードが何かを言った」ことの一括検出）。
 /// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
 /// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
 ///
@@ -254,6 +253,7 @@ pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 /// 狂わないようにするためである。
 pub(super) const OFFSCREEN_PULL_TAG: &str = "[visibility-guard] OffscreenPull";
 
+/// `[visibility-guard]` の判定語すべてに共通の接頭辞（「ガードが何かを言った」ことの一括検出）。
 pub(super) const GUARD_TAG_PREFIX: &str = "[visibility-guard]";
 
 /// 幅広のキャラ窓寸（論理 320×400）。論理 320／32 はいずれも 8 の倍数ゆえ、
