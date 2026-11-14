@@ -111,7 +111,7 @@ SELFTEST_REQUIRED_RED_EXITS = (EXIT_FAIL, EXIT_INCONCLUSIVE)
 #
 # 下は本番コードの字面である。変更するときは必ず出所を確かめること。
 #   MSG_TOGGLE       crates/wintf/src/ecs/clickthrough/controller.rs の debug! の文
-#   MSG_SHOW         crates/areka-emo-present/src/presenter/show.rs の `apply(ShowSurface)` の info! の文
+#   MSG_SHOW         crates/areka-emo-present/src/presenter/show.rs の `apply(ShowSurface)` の `show_line!` マクロ（`tracing::event!`）の文
 #   TRANSITION_TAG   crates/wintf/src/ecs/window/transition_diag.rs の `RECORD_PREFIX_TAG`
 #   MSG_WINDOWPOSCHANGED / MSG_DPICHANGED
 #                    crates/wintf/src/ecs/window/transition_diag.rs の同名の定数

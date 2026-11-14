@@ -105,6 +105,7 @@ graph TB
   - `sstp_send_started` は翻訳の返事を待つ前に出るので、区間が翻訳の分だけ早く始まりうる。頂は区間の中の最大なので、早く始まる分は CPU の小さい時間を足すだけ（受け入れる）。
 - **D5（判定の検体の置き場・議題 6・要件 7.1）**: 新しい判定の検体の組み立ては `tools/perf/fixtures/generate_more.py` に置く。`generate_more` は `import generate` で `Fixture`・行の組み立て・定数を読み、`CASES`（関数の組）を持つ。`generate.py` の `main()` は実行時に `import generate_more` して `CASES + generate_more.CASES` を作る（読み込み時に読むと `__main__` との循環になる）。作り直してバイトが一致することを確かめる約束は、新しい検体にもそのまま当たる。手書きの検体は足さない。
 - **D6（#3・#23・#61 の dump の読み方）**: dump を 1 行ずつ 2 回読む（`open()` を 2 回・丸ごとは読まない）。1 回目は `SampledProfile` の行だけを見て、列 `Process Name ( PID)` が `areka.exe (` で始まるもの（PID の前の空白の数に依らない）の (時刻, TID) を集め、自己時間を数える。2 回目は `Stack` の行のうち (時刻, TID) が集めた組に当たるものだけを、包含時間と未解決・解決のフレームの数に入れる。2 回に分けるので、`Stack` の行が自分の `SampledProfile` の前に来ても後に来ても同じに数える（`sample_ok` の検体は後に来る形）。列は今どおり列名の行から引き、列の確かめは事象ごとにする（`SampledProfile` は `TimeStamp`・`Process Name ( PID)`・`ThreadID`・`Image!Function`、`Stack` は `TimeStamp`・`ThreadID`・`Image!Function`。`Stack` の列名の行には処理名の列が無い）。areka の解決フレームは、解決済みの枝の中でだけ数える（#23）。空の dump の確かめ（`:242`）は「空でない行を 1 本も見なかった」に置き換える。
+  - かけ直しで足した点: フレームは `Stack` の行のほか `SampledProfile` の行の `Image!Function` からも数える（期待出力を変えないため・ps1 の `Measure-ArekaFrames` と同じ）。また条件 4 の端点 b の確かめは、条件 3 が (a, b] を覆うので死んだ枝として消した（P16 は a で数えることを固定する）。
   - 確かめたこと: 列名の行の綴りは、`invoke-cpu-sample.ps1` の注記が Windows Performance Toolkit の書式そのものとして写したもの（`SampledProfile, TimeStamp, Process Name ( PID), ThreadID, …`・`Stack, TimeStamp, ThreadID, No., Address, Image!Function`）と、検体 `sample_ok` の列名の行で一致する。採取（`xperf -on PROC_THREAD+LOADER+PROFILE -stackwalk Profile`）は処理を絞らない＝システム全体。
   - 確かめていないこと: 実物の dump の未解決フレームの綴り（`areka.exe!0x…` と読む）と、Idle の行の量。手元に実物の dump は無い（研究 §8・ツリーと `target\` を探して 0 件）。2 回読みは順序にも量にも依らないので、直しの正しさは綴りの 1 点だけに懸かる。実物での確かめは §Testing Strategy の「実機の確かめ（任意）」に置く。
 - **D7（#4 の直し方・議題 9）**: perf-rank の中だけで、差の基準（basis=delta）で `perf(process)` の差が取れたときは、名簿外の残りの行の `cpu_us` を `max(プロセスの差 − 名簿の行の差の合計, 0)` に置き換える（行の差でなく）。役割別とスレッド別の表はその行の値を読むので、両方が直る。`perf(process)` の差が取れないとき（行が無い）は今どおり行の差（占有率はもともと出さない）。TID の照らし方（TID で照らす・新しい TID は全量・消えた TID は落とす・0 で止める）は Rust の `delta`（規則の正本）と同じまま変えない。だから使い回された TID の新しいスレッドは、その窓では 0 に見え、その CPU は名簿外の残りに入る（合計はプロセスの CPU を越えない）。README の「名簿は登録を消しません」（`thread_registry.rs` は同じ TID の登録を置き換える）を事実に合わせる。既存の期待出力（`full_ok`・`no_dump_unavailable`）は同じ値のまま（研究の照らし合わせ）。
@@ -370,7 +371,7 @@ def read_text_lines(path: Path, what: str, fail: Fail) -> list[str]: ...   # utf
 @dataclass(frozen=True)
 class CpuSample: at: datetime; percent: float
 
-def read_cpu_csv(path: Path, header: str, fail: Fail, *, broken_note: str = "") -> list[CpuSample]: ...
+def read_cpu_csv(path: Path, header: tuple[str, ...], fail: Fail, *, broken_note: str = "", read_fail: Fail | None = None) -> list[CpuSample]: ...
 def percentile(values: Sequence[float], q: float) -> float: ...   # ceil(q·n)＝judge-perf の較正値 PERCENTILE_METHOD の実装（変えたら judge-perf の版を上げる）・空の列は呼び手が先に弾く
 ```
 - Preconditions: `fail` は例外を返す（投げない）。`read_cpu_csv` の文は今の judge-perf の文と同じ字面で、末尾だけ `broken_note`（judge-perf は「部分集計は出しません（要件 2.5）。」）。D9 で judge-perf・perf-rank の文を英語にするのは、呼び手が渡す文と `perf_lines` の中の文の両方（タスク 6・12 で合わせる）。
@@ -390,16 +391,18 @@ def percentile(values: Sequence[float], q: float) -> float: ...   # ceil(q·n)�
 REPO_ROOT: Path            # Path(__file__).resolve().parents[2]・REPO_ROOT/"Cargo.toml" が無ければ exit 3
 WORK_ROOT: Path            # REPO_ROOT / "target" / "perf-loop-tmp"
 
-def guard_console() -> None: ...       # stdout・stderr を errors="backslashreplace"
+# stdout・stderr の errors="backslashreplace" は各道具の入口で設定し直す（共通の関数は置かない）
 @contextmanager
 def work_dir(prefix: str) -> Iterator[Path]: ...   # WORK_ROOT/<prefix><uuid4().hex>・抜けるとき子だけを消す
-def list_case_dirs(root: Path, case_file: str, *, materials_allowed: bool) -> tuple[list[Path], list[str]]: ...
+def list_case_dirs(root: Path, case_file: str, fail: Fail, *, materials_allowed: bool) -> tuple[list[Path], list[str]]: ...
 def read_case_fields(path: Path, allowed: frozenset[str], multi: frozenset[str], fail: Fail) -> tuple[dict[str, str], dict[str, list[str]]]: ...
 def invoke(main: Callable[[list[str]], int], argv: list[str], exit_fallback: int) -> tuple[int, str, str]: ...
 def first_difference(label: str, want: str, got: str) -> str: ...   # 違う行は ascii() で
 def read_normalized(path: Path) -> str: ...                         # utf-8・CRLF を LF に
-def check_tree(*, ascii_stderr: bool, stderr_texts: Iterable[str]) -> list[str]: ...
-def finish(results: list[tuple[str, bool, list[str]]], reproduced: set[int], required_red: tuple[int, ...]) -> int: ...  # 最後の行 SELFTEST RESULT ok=N ng=M
+def ascii_outside_root(text: str, root: Path = REPO_ROOT) -> bool: ...   # 根の道筋を伏せたうえで ASCII か
+def localized_oserror_reasons(main, argv, exit_fallback: int, target: object, name: str, reached: str) -> list[str]: ...   # 日本語の文の OSError でも stderr が ASCII か
+def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]: ...
+def finish(results: list[tuple[str, str, list[str]]], materials: list[str], case_file: str, reproduced: set[int], required_red: tuple[int, ...]) -> int: ...  # 最後の行 SELFTEST RESULT ok=N ng=M
 ```
 - `check_tree` が見ること（食い違いの理由を返す・空なら合格）: ⑴ `tools/perf/` の `*.py` のどれも `tempfile` を読み込まない（#1）・`work_dir` が作った子が `WORK_ROOT` の下にある。⑵ `tools/perf/` の `*.py` のどれにも U+FEFF の字が無い（#13）。⑶ `ascii_stderr` が真の道具は、渡されたケースの stderr の全行が ASCII（#25・#26）。⑷ `first_difference("x", "µ", "—")` が ASCII（#25）。⑸ README の例の道筋（`-OutDir`・`-OutRoot`・`-EtlPath` などの値）が `<ワークツリー>\target\` か変数で始まる（#27。タスク 13 で足す）。⑶ は道具ごとに、その道具の文を英語にするタスク（perf-compare＝7・judge-followup＝8・perf-rank＝12）で真にする（それまで偽・perf-ledger はずっと偽＝D9）。
 - 4 本の自己較正は、どれも最後に `check_tree` を呼び、理由があれば NG の 1 件として数える（同じ見張りが 4 回回る＝どれか 1 本を戻しても残りが赤になる）。
@@ -495,7 +498,7 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 - 境目の数は研究の実験（`target\` の下で回した）で確かめた値。`count=81`（ちょうど 1,200 秒）は 0、80 点は 2。
 
 ### 既存のテストの扱い
-- 寄せ（#40・#41）の後も、5 本の自己較正の既存のケースが全部同じ結果で通る（`fixtures/` の 20 件から H1b を引いて新しい 15 件を足した 34 件・rank・compare・ledger・followup）。
+- 寄せ（#40・#41）の後も、5 本の自己較正の既存のケースが全部同じ結果で通る（`fixtures/` の 20 件から H1b を引いて新しい 15 件を足した 34 件に、かけ直しで足した分を加えた 46 件・rank・compare・ledger・followup）。
 - 消し（#36〜#38・#47・#50・#63・#64・#67・#68）は、消す前に同じ後退で落ちる別のテストが残ることを研究 §3 の根拠のとおり確かめる。
 - 英語にした文（D9）に合わせて、`fixtures-loop/` の `stderr_substr`（20 ファイルのうち当たるもの）と、判定の検体の `contains` のうち stderr の文を見るものを直す（判定の検体は `generate.py`／`generate_more.py` の `declare` を直して作り直す）。
 
