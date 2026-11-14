@@ -207,7 +207,7 @@
   - _Dispatch: standard — かけ直しの audit で出る指摘を読んで直す（中身は前もって決まらない）_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 6.5, 8.1_
 
-- [ ] 15. 自己較正と全体テストを緑にし、差分の約束を確かめる
+- [x] 15. 自己較正と全体テストを緑にし、差分の約束を確かめる
   - `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` と `pwsh -NoProfile -File tools/test-all.ps1` を回す（全体テストは長いので裏で回す）
   - 既定のブランチとの差分で、`tools/perf/*.ps1`・`crates/`・`Cargo.toml`・`Cargo.lock`・`vendors/`・`.claude/skills/` の差分が 0（ただしタスク 14 で議題 1 の当てを使ったときだけ `perf-loop-iteration/SKILL.md` の見分けの語の行を許し、そのことを記録に書く）、Python の道具に標準ライブラリの外の読み込みが 0、範囲の外で触ったのが `.claude/agents/` の 2 本と `talk-thread-count-growth/brief.md` だけであることを確かめる
   - `judge-perf.py` と `fixtures/generate.py` が着手のときの行数以下、ほかのどのファイルも 1,000 行の決まりを守る。GPU を使うテストを足していない（0 件）ことを記録に書く

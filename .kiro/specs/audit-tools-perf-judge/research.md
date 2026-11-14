@@ -347,3 +347,15 @@ audit の spec の決めごと（議題は推奨案で承認してよい・2026-
 - `.claude/skills/perf-loop-iteration/SKILL.md:45-46` の「`--iteration` を省くと `<n>+1` を書く」（#15 以後は exit 3）。
 - `crates/areka/src/perf_thread_report.rs:22-24` の「隣り合う snapshot の差」の注記（perf-rank は 60 秒前の snapshot と比べ、D7 以後は残りを行の差で数えない）。
 - `doc/COMPAT_ARCHITECTURE.md:629` の「judge-perf.py（版 0.4.0）」。
+
+## 11. 完了前の確かめ（タスク 15・2026-11-15）
+
+- 自己較正: `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` は `PERF-LOOP RESULT selftest code=0`（invoke-followup-checks は ok=16 ng=0、goal-text 照合は 1012 字で一致）。
+- 既定のブランチとの差分（`git diff --name-only origin/main...HEAD`）:
+  - `tools/perf/*.ps1` 0 件、`crates/`・`Cargo.toml`・`Cargo.lock`・`vendors/`・`.claude/skills/` 0 件（議題 1 の当ては使っていないので `perf-loop-iteration/SKILL.md` も 0 件）。
+  - 範囲の外で触ったのは `.claude/agents/perf-analyze.md`・`.claude/agents/perf-measure.md` の 2 本と `.kiro/specs/talk-thread-count-growth/brief.md` だけ。残りは `tools/perf/` の中（py・fixtures・fixtures-loop・goals・README）とこの spec の文書。
+- Python の道具の読み込みは標準ライブラリ（`tomllib` を含む）と tools/perf 内の自前のモジュールだけで、外の読み込みは 0。
+- 行数: `judge-perf.py` 3807（上限 4159）・`fixtures/generate.py` 1223（上限 1244）・`perf-ledger.py` 983・`perf-compare.py` 995。ほかの py・ps1 は 1000 以下。1000 を超えるのは README（1255・要件で除外）だけ。
+- GPU を使うテストの追加は 0 件（`crates/` の差分が 0 のため）。
+- `audit-tools-perf-run` へ、py の行（perf-ledger・perf_ledger_goal の行番号の指し先）が動いたこと・perf-compare の終了コードの幅（D-4）・perf-rank 0.2.0 ほかを 2026-11-15 に知らせた（§10.4 の申し送りも同じ知らせに入れた）。
+- 全体テスト（`tools/test-all.ps1`・1 回・終了コード 0）: 最後の行は `all steps green`。赤のクレート・手順は 0。
