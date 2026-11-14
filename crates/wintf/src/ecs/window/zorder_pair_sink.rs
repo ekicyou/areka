@@ -42,7 +42,7 @@ use super::zorder_pair::{
 };
 use super::zorder_pair_maintain::HandleQuery;
 use super::{KeepDirectlyAbove, WindowHandle};
-use crate::api::{get_foreground_window, is_window_always_on_top};
+use crate::api::{get_foreground_window, is_window_always_on_top, is_window_visible};
 
 // ============================================================================
 // SinkObservationPending - 非活性化の巡に付く観測の目印
@@ -113,6 +113,7 @@ pub(crate) fn mark_pair_sink_observation(world: &mut World, deactivated: Entity)
 /// | 状況 | 返り値 |
 /// |---|---|
 /// | 前面窓が取れない | `None`（測れなかった） |
+/// | 前面窓が不可視 | `None`（列は可視の窓だけなので判定できない） |
 /// | 前面窓が対象自身 | `Some(false)`（自分が前面なら背面ではない） |
 /// | 手前の列に前面窓が居る | `Some(true)` |
 /// | 最前面まで辿って居ない | `Some(false)` |
@@ -124,9 +125,14 @@ pub(crate) fn mark_pair_sink_observation(world: &mut World, deactivated: Entity)
 pub(crate) fn is_behind_foreground(
     target: HWND,
     foreground: Option<HWND>,
+    foreground_visible: bool,
     scan: &FrontScan,
 ) -> Option<bool> {
     let foreground = foreground?;
+    if !foreground_visible {
+        // 列は可視の窓だけなので、不可視の前面窓は列に現れず「居ない」と区別できない。
+        return None;
+    }
     if foreground == target {
         return Some(false);
     }
@@ -200,7 +206,9 @@ pub(crate) fn observe_marked_pair_sinks(
         // その背後に居る窓も当然に背面である）。
         let foreground = get_foreground_window();
         let scan = measure_windows_in_front(above_hwnd);
-        let behind_foreground = is_behind_foreground(above_hwnd, foreground, &scan);
+        let foreground_visible = foreground.is_some_and(is_window_visible);
+        let behind_foreground =
+            is_behind_foreground(above_hwnd, foreground, foreground_visible, &scan);
 
         // 帯に居るあいだは沈まないのが正しい動き。記録の読み手が読み分ける欄（要件 6.6）。
         let in_band = is_window_always_on_top(above_hwnd).ok();

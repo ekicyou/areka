@@ -227,3 +227,12 @@
 - 消す前の git grep: `git grep -n "PairTrigger::Establish\|Establish\b"`（ツリー全体・areka／areka-placement 含む）で当たったのは `zorder_pair.rs` の定義・表の行・腕と `zorder_pair_tests.rs` の 3 か所だけ（ほかは `.claude/skills/kiro-impl/SKILL.md` の英語の "Establish repo baseline" で別物）。消した後 `git grep "PairTrigger::Establish" -- crates` は 0 件（spec の文書だけが名を挙げる）。
 - 較正: `(PairTrigger::RaisedBelow, ExplicitMaintenance) => place_above` を `Skip(EchoOrIrrelevant)` に変える → `decide_pair_fix_follows_the_band_table_for_the_place_above_arm`（4 組の数の検査）と `decide_pair_fix_handles_raised_below_per_strategy` が赤（10 緑 2 赤）。明示の書き戻しで戻し、退避の写しとバイトで一致を確かめた。
 - テストの数: `cargo test -p wintf --lib zorder_pair` 96 緑・3 ignored（足し引き 0・改名 1）。行数: `zorder_pair.rs` 929→922・`zorder_pair_tests.rs` 934→933・`zorder_pair_establish.rs` 237→239。fmt 通る・build 警告 0・clippy の新しい警告 0。
+
+## 11.1
+
+- 直したこと（5）: `zorder_pair_sink.rs` の純関数 `is_behind_foreground` に `foreground_visible: bool` を足し、前面窓が取れない行（`None`）を先に判定したあと、前面窓が不可視なら `None`（判定できない）を返す。説明の表に「前面窓が不可視」の行を足した。呼び手 `observe_marked_pair_sinks` は `foreground.is_some_and(is_window_visible)` を渡す（呼び手はこの 1 か所だけ）。
+- 説明の直し 2 か所: `zorder_pair.rs` の `FrontScan::windows`（「判定に使う前面窓は必ず可視」）と `zorder_pair_sink_tests.rs` の走査のテストの説明（「前面窓は必ず可視ゆえ判定は変わらない」）を、不可視の前面窓は判定側が「判定できない」に倒す、に直した。
+- テスト: `is_behind_foreground_reports_absence_rather_than_a_false_negative` に「前面窓が不可視 → `None`」の 1 行を足した（既存の呼び出しは `true`・前面窓が無い行は `false` を渡す）。
+- 較正: 本番で引数を無視する（`let _ = foreground_visible;` で判定に使わない）形にして走らせ、`is_behind_foreground_reports_absence_rather_than_a_false_negative` が赤（`left: Some(false)` / `right: None`）。判定を入れて緑に戻した。
+- 消したもの: なし（git grep 不要）。
+- テストの数: `cargo test -p wintf --lib zorder_pair_sink` 13 本緑（本数は変わらない・1 本に行を 1 つ足した）。`zorder_pair` で 96 本緑・3 本 ignored。

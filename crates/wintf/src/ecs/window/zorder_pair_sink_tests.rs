@@ -551,17 +551,17 @@ fn is_behind_foreground_reads_the_front_chain() {
     let other = fake_hwnd(0x0103);
 
     assert_eq!(
-        is_behind_foreground(target, Some(front), &scan(&[other, front], true)),
+        is_behind_foreground(target, Some(front), true, &scan(&[other, front], true)),
         Some(true),
         "前面窓が自分より手前の列に居れば背面に居る"
     );
     assert_eq!(
-        is_behind_foreground(target, Some(front), &scan(&[other], true)),
+        is_behind_foreground(target, Some(front), true, &scan(&[other], true)),
         Some(false),
         "最前面まで辿って前面窓が居なければ、自分は前面窓より背面ではない"
     );
     assert_eq!(
-        is_behind_foreground(target, Some(target), &scan(&[], true)),
+        is_behind_foreground(target, Some(target), true, &scan(&[], true)),
         Some(false),
         "自分自身が前面窓なら背面ではない"
     );
@@ -574,18 +574,25 @@ fn is_behind_foreground_reports_absence_rather_than_a_false_negative() {
     let front = fake_hwnd(0x0202);
 
     assert_eq!(
-        is_behind_foreground(target, None, &scan(&[], true)),
+        is_behind_foreground(target, None, false, &scan(&[], true)),
         None,
         "前面窓が取れなければ判定できない"
     );
     assert_eq!(
-        is_behind_foreground(target, Some(front), &scan(&[], false)),
+        is_behind_foreground(target, Some(front), true, &scan(&[], false)),
         None,
         "列を最前面まで辿れていなければ「背面ではない」と断じない"
     );
+    // 走査の列は可視の窓だけなので、不可視の前面窓は列に現れない。最前面まで辿れても
+    // 「背面ではない」と断じない（不可視の自窓を前面にしてからメニューを出すアプリなど）。
+    assert_eq!(
+        is_behind_foreground(target, Some(front), false, &scan(&[], true)),
+        None,
+        "前面窓が不可視なら判定できない"
+    );
     // 対照: 走査が不完全でも、前面窓が既に見つかっていれば判定できる。
     assert_eq!(
-        is_behind_foreground(target, Some(front), &scan(&[front], false)),
+        is_behind_foreground(target, Some(front), true, &scan(&[front], false)),
         Some(true),
         "見つかった時点で判定は確定する"
     );
@@ -596,7 +603,7 @@ fn is_behind_foreground_reports_absence_rather_than_a_false_negative() {
 // -------------------------------------------------------------------------
 
 /// 手前側の走査は、対象より手前の**可視の**窓を手前へ向かう順に集め、最前面まで辿った
-/// ことを示す。不可視の窓は列に入らない（前面窓は必ず可視ゆえ判定は変わらない）。
+/// ことを示す。不可視の窓は列に入らない（不可視の前面窓は判定側が「判定できない」に倒す）。
 #[test]
 fn measure_windows_in_front_collects_the_visible_chain_up_to_the_top() {
     let parent = create_test_parent(w!("wintf-zorder-sink-scan"));
