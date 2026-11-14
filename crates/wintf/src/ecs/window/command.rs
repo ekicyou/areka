@@ -390,6 +390,13 @@ fn begin_batch(count: usize) -> Option<HDWP> {
 /// 成功したら `Ok(())`、投入できなかったら `Err(理由)` を返す。並びはキューの順のまま、
 /// 引数は [`window_pos_args`] が組んだものそのままである（要件 10.3）。
 ///
+/// 同じ窓が 2 度入った列（合流は Z 指令を仕切りにするので同じ窓の指令が 2 本残りうる）も
+/// そのまま積む。列 `[A を B の後へ][C を A の後へ][A を D の後へ]` では、1 本ずつ当てた
+/// ときと同じ Z の順に着くことを自分の不可視の窓で確かめてある（`command_batch_tests.rs` の
+/// `a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command`）。
+/// Wine・ReactOS の実装の読み（2 本目を既存の 1 項目へ畳む）は、この列の実際の Windows の
+/// 結果に合わない。ほかの列は確かめていない。
+///
 /// # 自発書込の判定（要件 10.2）
 ///
 /// `EndDeferWindowPos` は全窓ぶんの `WM_WINDOWPOSCHANGING`／`WM_WINDOWPOSCHANGED` を
@@ -725,7 +732,8 @@ impl SetWindowPosCommand {
 /// 取り出した指令列は [`apply_as_batch`] が `Begin`／`Defer`／`EndDeferWindowPos` の
 /// **1 バッチ**で投入する。Z 専用指令は合流の対象外だが、`DeferWindowPos` は
 /// per-window に `hwndInsertAfter` と flags を取れるので**同じバッチに同居**でき、
-/// 適用の並びも引数もキューのままである（要件 10.3）。
+/// 積む並びも引数もキューのままである（要件 10.3）。同じ窓が 2 度入った列について
+/// 確かめた範囲は [`apply_as_batch`] の doc にある。
 ///
 /// バッチが使えなかったときは 1 本ずつの `guarded_set_window_pos` へ**縮退**する
 /// （[`apply_sequentially`]）。縮退は `warn!` を伴い、当該区間の書込レコードは

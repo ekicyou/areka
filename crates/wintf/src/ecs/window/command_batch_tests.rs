@@ -672,3 +672,78 @@ fn a_batched_zorder_list_lands_in_the_same_order_as_one_write_per_command() {
         "バッチ投入と 1 本ずつの書込で Z の最終順序が食い違う（要件 10.3）"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 同じ窓が 2 度入った列（research.md 指摘 7・Q4 の手順 1 の門）
+// ---------------------------------------------------------------------------
+
+/// 4 枚の組を 1 本ずつの `guarded_set_window_pos` で並べ、同じ窓 A が 2 度入った Z だけの
+/// 列 `[A を B の後へ][C を A の後へ][A を D の後へ]` を当てた結果と、同じ列をキューに積んで
+/// `flush_window_pos_commands` で流した結果を比べる。毎回同じ初めの順 `0,1,2,3` へ並べ
+/// 直してから当て、比べるのは 4 枚の相対の順だけ。
+#[test]
+fn a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command() {
+    clean_slate();
+
+    let set: Vec<HWND> = (0..4).map(|_| create_test_window()).collect();
+    let (a, b, c, d) = (set[0], set[1], set[2], set[3]);
+    let program = [(a, b), (c, a), (a, d)];
+
+    normalize_z(&set);
+    let sequential_start = z_shape(&set);
+    for (hwnd, after) in program {
+        // SAFETY: Win32 境界。自プロセスの不可視の窓へ Z だけを書く。
+        unsafe {
+            super::guarded_set_window_pos(
+                hwnd,
+                Some(after),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+        }
+        .expect("SetWindowPos should succeed on a test window");
+    }
+    let sequential = z_shape(&set);
+
+    normalize_z(&set);
+    let queued_start = z_shape(&set);
+    let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
+        emit_control();
+        for (hwnd, after) in program {
+            SetWindowPosCommand::enqueue(zorder_command(hwnd, after));
+        }
+        flush_window_pos_commands();
+    });
+    let queued = z_shape(&set);
+
+    destroy(&set);
+    clean_slate();
+
+    assert!(captured.contains(CONTROL_LINE), "捕捉が死んでいる");
+    // 流しがバッチの道を通ったこと（縮退していれば 1 本ずつ同士の比べになり門にならない）。
+    let writes = lines_of_kind(&captured, KIND_WRITE);
+    assert_eq!(writes.len(), 3, "書込レコードが 3 本でない: {writes:?}");
+    assert!(
+        writes.iter().all(|line| line.contains(" in_batch=true")),
+        "キュー側がバッチで投入されていない: {writes:?}"
+    );
+    assert_eq!(
+        sequential_start,
+        vec![0, 1, 2, 3],
+        "1 本ずつ側の始点が揃っていない"
+    );
+    assert_eq!(
+        queued_start,
+        vec![0, 1, 2, 3],
+        "キュー側の始点が揃っていない"
+    );
+    // 1 本ずつ: B,A,C,D → （C は既に A の直後）→ B,C,D,A。
+    assert_eq!(sequential, vec![1, 2, 3, 0], "1 本ずつの対照が壊れている");
+    assert_eq!(
+        queued, sequential,
+        "同じ窓が 2 度入った列で、キューに積んで流した Z の順が 1 本ずつの結果と違う"
+    );
+}

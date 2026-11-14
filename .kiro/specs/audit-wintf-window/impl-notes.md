@@ -80,3 +80,14 @@
 - 積み込みの呼び手 4 か所（`zorder_pair_maintain.rs`・`graphics/systems/window_pos.rs`・`areka-placement` の `follow/window_move.rs`・`areka/examples/mock-shell.rs`）は直さずビルドが通る
 - 消したもの: なし（git grep 不要）
 - テストの数: `cargo test -p wintf --lib command_threadlocal_tests` 3 → 6（全部緑）
+
+## 4.2
+
+- 頭の行数: `window/command.rs` 976 行。直した後 983 行（1,000 行以下・`command_ui_thread.rs` は作らない）
+- 門（7 の手順 1）: `command_batch_tests.rs` に `a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command` を足した。自分の不可視の窓 4 枚（A〜D）を毎回 `normalize_z` で `0,1,2,3` に並べ直し、`[A を B の後へ][C を A の後へ][A を D の後へ]`（Z だけ・`SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE`）を、⑴ `guarded_set_window_pos` を順に呼ぶ、⑵ キューに積んで `flush_window_pos_commands` で流す、の 2 通りで当てて 4 枚の相対の順を比べる。⑵ がバッチの道を通ったこと（書込レコード 3 本とも `in_batch=true`）も確かめる
+- 門の結果: **同じ**の枝。2 回とも 1 本ずつ＝`[1, 2, 3, 0]`（B,C,D,A）、キューで流す＝`[1, 2, 3, 0]`。Wine・ReactOS の読み（2 本目を畳む）なら `[1, 3, 0, 2]` になるはずで、実際の Windows には当たらない
+- 7 の手順 2（説明だけ）: `command.rs` の `apply_as_batch` の doc に「同じ窓が 2 度入った列もそのまま積み、実際の Windows では 1 本ずつと同じ Z の順に着く（門のテストの名）・Wine・ReactOS の読みは当たらない」を足し、`flush_window_pos_commands` の doc の「適用の並びも引数もキューのまま」を「積む並びも引数もキューのまま・同じ窓が 2 度入った列でも Z の結果は 1 本ずつと同じ」に直した。本番のコードは変えない（`apply_sequentially` への回しも `has_repeated_window` も足さない）
+- 較正: `apply_as_batch` の積み上げの繰り返しを `.rev()` にする → 門のテストが赤（キュー側 `[1, 0, 3, 2]`）。戻して `command.rs` の差分が説明の行だけであることを確かめた
+- 消したもの: なし（git grep 不要）
+- テストの数: `cargo test -p wintf --lib command_batch_tests` 8 → 9（全部緑）
+- レビュー 1 回目の差し戻し: 説明が 1 本の列の測りを一般の決まりにしていたので、`apply_as_batch` の doc を「列 `[A を B の後へ][C を A の後へ][A を D の後へ]` では同じ順に着く・Wine・ReactOS の読みはこの列の実際の Windows の結果に合わない・ほかの列は確かめていない」に絞り、`flush_window_pos_commands` の doc は確かめた範囲を `apply_as_batch` の doc へ指すだけにした（説明だけ・較正のやり直しは不要）
