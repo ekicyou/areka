@@ -1176,3 +1176,10 @@ A-1 の 3 本（`#[ignore]`）は既定の走行に入らないまま（`-- --li
 
 - `emo2_mcp_real_run::emo2_mcp_get_log_origin_and_strict_over_one_real_boot` の赤は、32bit の `shiori-host32-helper.exe` がこのワークツリーの `target\i686-pc-windows-msvc\` に建っていないため、起こす前に `real-run-kit/src/i686.rs:77` で止まったもの（0.08 秒・窓は出ていない）。この試験は env の門が無く既定で走り、emo2 を本当に起こす。この spec の変更とは関わらない。
 - ここで確かめていない areka の試験のバイナリは 6 本＝`emo2_mcp_real_run`・`emo2_real_run`・`smoke_boot_loop_exit`・`startup_install_real_run`・`stay_on_top_real_run`・`window_link_real_run`。どれも areka を本当に起こす（`smoke_boot_loop_exit` は env を自分で立てて窓を開き、`emo2_mcp_real_run` は 32bit の helper も要る）ので、排他テストの机と i686 の helper が要り、机を持たないこのタスクでは回さなかった。2 度は回さず、helper を建ててから回すタスク 17.3 の `tools/test-all.ps1` の全体テスト 1 回で確かめる。
+
+### 15.9 全体テスト（タスク 17.3・2026-11-14）
+
+- 排他テストの机を通して `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回した（コミット `235a40999`・始めの未コミットの変更 0・GPU のテストは実 GPU のまま）。
+- 結果: **all steps green**。14 段すべて OK（x64 のワークスペースのテスト 1164 秒・i686 のテスト 45 秒・fmt の検査・文字コードの検査ほか）。`test result: ok` の行 165・`FAILED` の行 0。
+- 15.8 で机が要るので回さなかった areka の 6 本は、この 1 回で緑になった: `emo2_mcp_real_run` 1・`emo2_real_run` 14・`smoke_boot_loop_exit` 5・`startup_install_real_run` 2・`stay_on_top_real_run` 1・`window_link_real_run` 1（数は通った本数）。
+- 回し直しは無し（赤が 0 のため）。走りの記録は `target/t173/test-all.log`（追跡しない）。
