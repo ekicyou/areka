@@ -168,6 +168,12 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 /// [`apply_monitor_snapshot`] が担う（合成モニタ表を注入して檻に入れられるようにするための
 /// 挙動不変の抽出・S4 是正の前提）。
 ///
+/// # 0 台の列挙
+///
+/// 列挙が 0 台（列挙の失敗を含む）なら [`apply_monitor_snapshot`] は表を変えずに `None` を
+/// 返す。そのときは構成の変化の旗を下ろさずに戻り、次の刻みで読み直す。0 台が続く間は
+/// `zero_streak` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）は続きの最初の 1 回だけ出す。
+///
 /// # 遷移観測の刻印は World 資源から組む（design D1）
 ///
 /// 本システムは `Update` に登録されており、`Update` は**既定の多スレッド実行器**で回る。
@@ -175,6 +181,7 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 /// 行が出る）ため、刻印は必ず `Res<FrameCount>`＋`Res<TickStart>` から
 /// [`transition_diag::stamp_from_world`] で組む——`transition_diag::stamp()` を呼ぶのは
 /// 退行である。
+#[allow(clippy::too_many_arguments)]
 pub fn detect_display_change_system(
     mut commands: Commands,
     mut app: ResMut<crate::ecs::App>,
@@ -183,18 +190,22 @@ pub fn detect_display_change_system(
     mut windows: Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     frame: Res<FrameCount>,
     tick_start: Res<TickStart>,
+    mut zero_streak: Local<bool>,
 ) {
     // ディスプレイ構成変更フラグをチェック
     if !app.display_configuration_changed() {
         return;
     }
 
-    info!("[detect_display_change_system] Display configuration changed, updating monitors");
+    if !*zero_streak {
+        info!("[detect_display_change_system] Display configuration changed, updating monitors");
+    }
 
     // LayoutRootを取得
     let Ok(root_entity) = layout_root.single() else {
         warn!("[detect_display_change_system] LayoutRoot not found, skipping");
         app.reset_display_change();
+        *zero_streak = false;
         return;
     };
 
@@ -205,14 +216,24 @@ pub fn detect_display_change_system(
         "[detect_display_change_system] Found monitors"
     );
 
-    let windows_redriven = apply_monitor_snapshot(
+    let Some(windows_redriven) = apply_monitor_snapshot(
         &mut commands,
         root_entity,
         &mut existing_monitors,
         &mut windows,
         new_monitors,
         transition_diag::stamp_from_world(&frame, &tick_start),
-    );
+    ) else {
+        // 旗は下ろさない（次の刻みで読み直す）。
+        if !*zero_streak {
+            warn!(
+                "[detect_display_change_system] No monitors enumerated, keeping monitor table and retrying next tick"
+            );
+            *zero_streak = true;
+        }
+        return;
+    };
+    *zero_streak = false;
     debug!(
         windows_redriven = windows_redriven,
         "[detect_display_change_system] Display configuration change applied"
@@ -235,6 +256,9 @@ pub fn detect_display_change_system(
 /// `DPI` を実際に書き換えた窓の数（＝再導出を駆動した窓の数）。呼出点の観測値であり、
 /// 檻はこれを判定語に用いる（0 なら駆動していない・1 なら 1 窓だけ駆動した）。
 ///
+/// `new_monitors` が空（0 台の列挙・列挙の失敗を含む）なら表を変えずに `None` を返す
+/// （全部の `Monitor` を消して次の構成の変わり目まで表を空にしないため）。
+///
 /// # `stamp`
 /// 値変化更新の `monitor` レコードと、窓の拡大率再導出の `windpi` レコードに載せる刻印。
 /// **呼出側が World 資源から組んで渡す**（design D1）——本関数は多スレッド実行器で
@@ -246,7 +270,11 @@ pub(crate) fn apply_monitor_snapshot(
     windows: &mut Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     new_monitors: Vec<crate::ecs::Monitor>,
     stamp: Stamp,
-) -> usize {
+) -> Option<usize> {
+    if new_monitors.is_empty() {
+        return None;
+    }
+
     // 既存のMonitorエンティティをマップに変換（handle → entity）
     let mut existing_map: std::collections::HashMap<isize, (Entity, crate::ecs::Monitor)> =
         existing_monitors
@@ -348,7 +376,11 @@ pub(crate) fn apply_monitor_snapshot(
     }
 
     // モニタ表が実際に更新されたときだけ、当該モニタ上の窓の DPI を再導出する。
-    redrive_window_dpi_for_updated_monitors(windows, &updated_monitors, stamp)
+    Some(redrive_window_dpi_for_updated_monitors(
+        windows,
+        &updated_monitors,
+        stamp,
+    ))
 }
 
 /// 窓矩形（`WindowPos` の位置・寸）の中心点を返す。位置または寸が未確定なら `None`。

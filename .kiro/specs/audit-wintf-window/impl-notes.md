@@ -137,3 +137,13 @@
 - 21: `window/dpi.rs` のテスト `test_to_physical_rounds_half_away_from_zero` の説明を「1.5 は 0 から遠い側へ（`f32::round`。偶数丸めの `round_ties_even` ではない）」に直した。
 - 較正: テストは足しも直しもしていない（説明と削除だけ）ので較正なし。
 - テストの数（変化なし）: `cargo test -p wintf --lib ecs::window::window_pos` 17・`ecs::window::dpi` 10・`ecs::window_proc::dpi_helpers` 22、すべて緑。`cargo build -p wintf -p areka -p areka-placement --tests` 警告 0・fmt 通る・clippy で 2 ファイルの警告 0。
+
+## 6.3
+
+- 15: `window/monitor.rs` の `enumerate_monitors` の 2 か所の `warn!` を `error!` にした（1 台ぶんは `hmonitor = ?hmonitor, error = %e`＝`MonitorError` の値を残す・`EnumDisplayMonitors` の失敗は、API が拡張の誤りを返さないので文だけ）。口の形と返す値（失敗で空の `Vec`）は変えない。`Monitor` の定義（欄・メソッド）の差分 0。
+- 範囲の外の追従（`layout/systems/monitor_systems.rs`）: `apply_monitor_snapshot` の戻り値を `usize` から `Option<usize>` にし、頭で `new_monitors.is_empty()` なら表を変えずに `None` を返す。`detect_display_change_system` は `None` なら旗を下ろさずに戻り（次の刻みで読み直す）、`Local<bool>`（`zero_streak`）で 0 台の続きを覚えて `warn!`（No monitors enumerated…）と頭の `info!`（Display configuration changed…）を続きの最初の 1 回だけ出す。`LayoutRoot` が無い枝（旗を下ろす）では続きを解く。引数が 8 個になったので、同じ crate の型（`clip_sync.rs`・`zorder_chain_apply.rs`）に倣い `#[allow(clippy::too_many_arguments)]` を付けた。
+- テスト: `monitor_systems_tests.rs` に `empty_snapshot_keeps_monitor_table_and_returns_none` を 1 本足した（空の一覧で `None`・`Monitor` の entity が残り値も変わらない）。受け皿 `RedriveCount` を `Option<usize>` にし、既存の 3 か所の判定を `Some(1)`／`Some(0)` に直した。
+- 較正: 0 台の判定を `if false && new_monitors.is_empty()` に壊すと `empty_snapshot_keeps_monitor_table_and_returns_none` が赤（`left: Some(0)`・`right: None`）。明示の編集で戻し、差分が意図どおりに戻ったのを確かめた。
+- 18: `monitor.rs` の冒頭の使用例を `wintf::ecs::window::monitor::{Monitor, enumerate_monitors}` に直した（`rust,ignore` のまま）。
+- 消したもの: なし（git grep 不要）。古い綴り `ecs::monitor::` は `crates/` に 0（完了した spec の文書にだけ残る）。
+- テストの数: `cargo test -p wintf --lib monitor` 38 → 39（足した 1 本）・`monitor_systems` 21 → 22、すべて緑。`cargo test -p wintf --test window` 20 緑。`cargo build -p wintf -p areka -p areka-placement --tests` 警告 0（列挙の呼び手は直さずに通る）・fmt 通る・clippy で触った 2 ファイルの警告 0。

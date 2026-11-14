@@ -13,7 +13,7 @@
 //! ## 使用例
 //!
 //! ```rust,ignore
-//! use wintf::ecs::monitor::{Monitor, enumerate_monitors};
+//! use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
 //!
 //! // 全モニターを列挙
 //! let monitors = enumerate_monitors();
@@ -27,7 +27,7 @@ use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use std::fmt;
-use tracing::warn;
+use tracing::error;
 use windows::Win32::Foundation::{LPARAM, RECT};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetMonitorInfoW, HMONITOR, MONITORINFOEXW,
@@ -239,10 +239,9 @@ pub fn enumerate_monitors() -> Vec<Monitor> {
         lparam: LPARAM,
     ) -> BOOL {
         let monitors = unsafe { &mut *(lparam.0 as *mut Vec<Monitor>) };
-        if let Ok(monitor) = Monitor::from_hmonitor(hmonitor) {
-            monitors.push(monitor);
-        } else {
-            warn!(hmonitor = ?hmonitor, "Failed to get monitor info");
+        match Monitor::from_hmonitor(hmonitor) {
+            Ok(monitor) => monitors.push(monitor),
+            Err(e) => error!(hmonitor = ?hmonitor, error = %e, "Failed to get monitor info"),
         }
         BOOL(1)
     }
@@ -251,7 +250,7 @@ pub fn enumerate_monitors() -> Vec<Monitor> {
     let result = unsafe { EnumDisplayMonitors(None, None, Some(enum_proc), LPARAM(monitors_ptr)) };
 
     if !result.as_bool() {
-        warn!("EnumDisplayMonitors failed");
+        error!("EnumDisplayMonitors failed");
         return Vec::new();
     }
 

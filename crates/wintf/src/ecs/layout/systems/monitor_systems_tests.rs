@@ -97,9 +97,9 @@ pub(super) const PROBE_STAMP: Stamp = Stamp {
     t_us: 1234,
 };
 
-/// [`apply_monitor_snapshot`] の戻り値（再導出を駆動した窓の数）を檻へ持ち出す受け皿。
+/// [`apply_monitor_snapshot`] の戻り値（再導出を駆動した窓の数・0 台なら `None`）を檻へ持ち出す受け皿。
 #[derive(Resource, Default)]
-struct RedriveCount(usize);
+struct RedriveCount(Option<usize>);
 
 /// 注入されたモニタ表を [`apply_monitor_snapshot`] へ流す檻専用システム。
 ///
@@ -126,8 +126,8 @@ fn apply_injected_monitors(
     );
 }
 
-/// 直前の [`run_apply`] が再導出を駆動した窓の数。
-fn redrive_count(world: &World) -> usize {
+/// 直前の [`run_apply`] が再導出を駆動した窓の数（0 台の一覧なら `None`）。
+fn redrive_count(world: &World) -> Option<usize> {
     world.resource::<RedriveCount>().0
 }
 
@@ -273,6 +273,25 @@ fn s4_red_monitor_table_updates_when_only_values_change() {
     );
 }
 
+/// 0 台の列挙（列挙の失敗を含む）では表を変えない（audit-wintf-window 15 番）。
+///
+/// 空の一覧で全部の `Monitor` を消すと、次の構成の変わり目まで表が空のままになる。
+/// 0 台の判定を外せば `Some(0)` が返り `Monitor` が消えて赤になる。
+#[test]
+fn empty_snapshot_keeps_monitor_table_and_returns_none() {
+    let (mut world, monitor_entity) = probe_world(Vec::new());
+    run_apply(&mut world);
+
+    assert_eq!(redrive_count(&world), None, "0 台の一覧で None が返らない");
+    let stored = world
+        .get::<Monitor>(monitor_entity)
+        .expect("0 台の一覧で Monitor の entity が消えた");
+    assert!(
+        !stored.differs_in_value(&probe_monitor_before()),
+        "0 台の一覧で Monitor の値が変わった: {stored:?}"
+    );
+}
+
 /// **S4 赤証跡（Req 7.3/7.5）**: モニタ表が更新されたとき、当該モニタ上の窓の
 /// `DPI` が `WM_DPICHANGED` 抜きで再導出されること。
 ///
@@ -360,7 +379,7 @@ fn updated_monitor_redrives_window_dpi_and_reports_it() {
         "再導出の新旧 DPI がログから読めない: {out}"
     );
     // 戻り値（駆動した窓の数）も判定語にする——ログだけに頼らない。
-    assert_eq!(redrive_count(&world), 1, "駆動した窓の数が 1 でない");
+    assert_eq!(redrive_count(&world), Some(1), "駆動した窓の数が 1 でない");
 }
 
 /// 非空虚性の対: **値が同一なら更新しない**（無条件更新へ変異させれば赤）。
@@ -388,7 +407,7 @@ fn identical_snapshot_updates_nothing() {
     );
     assert_eq!(
         redrive_count(&world),
-        0,
+        Some(0),
         "値が同一なのに再導出が駆動されている"
     );
 }
@@ -445,7 +464,7 @@ fn window_with_cw_usedefault_is_skipped_before_overflow() {
     );
     assert_eq!(
         redrive_count(&world),
-        0,
+        Some(0),
         "座標未確定の窓を駆動対象に数えている"
     );
     assert!(
