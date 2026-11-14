@@ -45,7 +45,7 @@ invoke-followup-checks.ps1 — 見た目の追随をエージェント自身が�
   SAMPLE_BALLOON_NAME   その検体が同梱するバルーンの名前（窓口の `balloon.<名前>=` の鍵）
   SHOW_READY_TIMEOUT_MS 表示成立点を待つ上限
   SETTLE_MS             1 手ごとの反映待ち（クリック透過の再評価・窓書込の flush）
-  DRAG_DX_PX            ドラッグで動かす距離（px・judge-followup.py と対）
+  DRAG_DX_PX            ドラッグで動かす距離（px。probe.log の step=gesture 行の dx に書き、judge-followup.py はその値を期待の距離として読む）
   DRAG_STEPS            ドラッグ中に送る中間移動の回数
   DPI_WAIT_MS           DPI 変更の受理と表示成立を待つ上限
   EXIT_MARGIN_SEC       有界自動終了を過ぎてから強制終了するまでの猶予
