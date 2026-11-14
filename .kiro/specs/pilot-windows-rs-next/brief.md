@@ -144,3 +144,8 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 - **優先度の区分**: A（開発者が 2026-11-14 に windows-rs の移行を決め、方向を先進坑で確かめると決めた）。
 - **要件定義のモデル**: Opus（問いは brief に並んでいて、要件はそれを写す。束縛の置き場を決める分かれ道は移行の本体の側の話で、先進坑はその材料を出すだけ）。
 - **分割の案**: 無し（要件の段で問いを削るか 2 本に分けるかを決めてよい、のまま）。
+## 申し送り（wintf-winmsg-executor-import より・2026-11-14）
+
+- 写しは `crates/wintf-winmsg-executor/` に入った（版はワークスペースの版・根の依存は `dola` と同じ「版＋path」・`windows` 0.62 の 4 つの機能を写しの manifest に直書き・edition 2021）。問い 1 の的はこの置き場。
+- areka の試験 `crates/areka/src/session_end_sync_send_tests.rs` の許可表 `ALLOWED_SYNC_SENDS` は `crates/*/src/**/*.rs` を全部読み、写しの `SendMessageW(` を 2 行で数えている（`lib.rs` の `#[cfg(test)] mod` の中の 2 か所・`util/window.rs` の本番の 1 か所）。問い 1 で写しの送信の呼び出しを書き換える（`.sys()` の束縛の名前・数・置き場が変わる）と、この試験が赤になる。表の行も一緒に直す。
+- crates.io の 3 つのクレートは「Require trusted publishing for all new versions」を入れてある（手元からの `cargo publish` は断られる）。
