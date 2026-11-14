@@ -54,7 +54,7 @@ impl VisualDrawContent {
     /// - `local_aabb`: コンテンツがローカル座標で占める AABB。
     ///   **論理単位（96DPI）** で与えること。DPI に依存した値を
     ///   入れると、モニタ跨ぎや DPI 変更時に内在プロパティとしての不変性が
-    ///   崩れるため注意。
+    ///   崩れるため注意。`local_aabb` の外へはみ出す中身は、間引きと差分の描き直しで欠ける。
     /// - `command_list`: このコンテンツの描画コマンド列。呼び出し側で
     ///   [`ID2D1CommandList::Close`] 済みであることを想定する。
     /// - `interpolation_mode`: 描画時の補間モード。
