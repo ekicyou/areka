@@ -8,36 +8,25 @@
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::DestroyWindow;
 use windows::core::w;
 
 use super::OwnerEstablishFailed;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair_test_support::{
-    OWNER_ESTABLISHED_TAG, RELEASED_REASON, SIGNOFF_DIRECTIVES as DIRECTIVES,
-    SKIP_TAG as RELEASED_SKIP, create_test_window, establish_schedule, owner_of, spawn_window,
+    OWNER_ESTABLISHED_TAG, SIGNOFF_DIRECTIVES as DIRECTIVES, create_test_window,
+    destroy_test_window, establish_schedule, owner_of, released_skips, spawn_window,
 };
 use crate::ecs::window::{
     ChainPlan, KeepDirectlyAbove, OwnerLink, ReassertZOrder, ZOrderChainPlan,
 };
 
-fn create_hidden_popup() -> HWND {
-    create_test_window(w!("wintf-zorder-establish-release"))
-}
-
-fn released_skips(out: &str, entity: Entity) -> usize {
-    let needle = format!("entity={entity:?} ");
-    out.lines()
-        .filter(|l| l.contains(RELEASED_SKIP) && l.contains(RELEASED_REASON))
-        .filter(|l| l.contains(&needle))
-        .count()
-}
-
 /// 起動時から逆転の計画がある。ハンドルが付いた巡に、外す組は張らず見送りを記録し、
 /// 失敗の印も再断行の要求も付けない。連続する組は今と同じに張る。
 #[test]
 fn a_pair_the_chain_releases_is_not_linked_when_its_handles_arrive() {
-    let hwnds: Vec<HWND> = (0..4).map(|_| create_hidden_popup()).collect();
+    let hwnds: Vec<HWND> = (0..4)
+        .map(|_| create_test_window(w!("wintf-zorder-establish-release")))
+        .collect();
     let mut world = World::new();
     let s0 = spawn_window(&mut world, hwnds[0]);
     let b0 = spawn_window(&mut world, hwnds[1]);
@@ -78,18 +67,15 @@ fn a_pair_the_chain_releases_is_not_linked_when_its_handles_arrive() {
     assert!(world.get::<ReassertZOrder>(b1).is_some());
 
     for hwnd in hwnds {
-        // SAFETY: Win32 境界。作った窓を破棄する。
-        unsafe {
-            let _ = DestroyWindow(hwnd);
-        }
+        destroy_test_window(hwnd);
     }
 }
 
 /// 鎖が解けた（`None`）後に現れたバルーンは、組の結び目を通常どおり張る（要件 6.6）。
 #[test]
 fn after_the_chain_is_cleared_a_new_balloon_is_linked_as_a_pair() {
-    let character_hwnd = create_hidden_popup();
-    let balloon_hwnd = create_hidden_popup();
+    let character_hwnd = create_test_window(w!("wintf-zorder-establish-release"));
+    let balloon_hwnd = create_test_window(w!("wintf-zorder-establish-release"));
     let mut world = World::new();
     world.insert_resource(ZOrderChainPlan {
         chain: None,
@@ -108,9 +94,6 @@ fn after_the_chain_is_cleared_a_new_balloon_is_linked_as_a_pair() {
     assert_eq!(owner_of(balloon_hwnd), Some(character_hwnd));
     assert!(world.get::<OwnerLink>(balloon).is_some());
 
-    // SAFETY: Win32 境界。作った窓を破棄する。
-    unsafe {
-        let _ = DestroyWindow(balloon_hwnd);
-        let _ = DestroyWindow(character_hwnd);
-    }
+    destroy_test_window(balloon_hwnd);
+    destroy_test_window(character_hwnd);
 }

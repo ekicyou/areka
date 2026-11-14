@@ -405,7 +405,9 @@ pub fn apply_zorder_pair_maintenance(
 
     for entity in orphans.iter() {
         log_orphan_request_dropped(entity);
-        commands.entity(entity).remove::<ReassertZOrder>();
+        commands
+            .entity(entity)
+            .remove::<(ReassertZOrder, IssuedPairFix)>();
     }
 
     // この巡で既に是正の指令を出したか。実際に窓を動かす指令は 1 巡につき 1 本までとし、

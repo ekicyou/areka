@@ -22,13 +22,13 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, IsWindow, SW_SHOWNA, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+    DestroyWindow, GW_OWNER, GetWindow, IsWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 use windows::core::{PCWSTR, w};
 
-use crate::api::is_window_visible;
+use crate::api::{get_window_below, is_window_visible};
 use crate::ecs::window::{
     KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle,
     apply_zorder_pair_maintenance, establish_owner_links, flush_window_pos_commands,
@@ -73,7 +73,7 @@ pub(super) const SET_WINDOW_POS_TAG: &str = super::command::WINDOW_WRITE_LOG_MES
 ///
 /// 本ワークスペースの実行時環境変数は `AREKA_` 名前空間である（同じ流儀の先例:
 /// `crates/log-capture-kit/tests/capture_calibration_test.rs` の `MODE_ENV`）。
-pub(super) const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
+const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
 
 /// 門が開いていなければ、判定を 1 行も実行せずに落とす。各テストは本体の 1 行目で呼ぶ。
 ///
@@ -105,33 +105,14 @@ pub(super) fn require_explicit_real_window_run() {
 // 実窓
 // -------------------------------------------------------------------------
 
-/// 定義済 "Static" クラスで 0x0 のテスト窓を作る。
+/// 定義済 "Static" クラスで 0x0 のテスト窓を作る（生成の正本は [`crate::api::create_test_window`]）。
 pub(super) fn create_window(
     title: PCWSTR,
     ex_style: WINDOW_EX_STYLE,
     style: WINDOW_STYLE,
     parent: Option<HWND>,
 ) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            ex_style,
-            w!("Static"),
-            title,
-            style,
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
+    crate::api::create_test_window(ex_style, style, parent, title)
 }
 
 /// 自プロセス所有の非表示トップレベル窓を作る（`api.rs` のテスト生成レシピと同一）。
@@ -214,6 +195,46 @@ pub(super) fn insert_after(hwnd: HWND, after: HWND) {
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
         )
         .expect("SetWindowPos should reorder self-owned test windows");
+    }
+}
+
+/// キャラ窓・割り込み窓・バルーン窓の 3 枚を「バルーン／割り込み／キャラ」の順
+/// （手前 → 背後）で可視の親の下に用意する。バルーンはキャラのすぐ手前に**居ない**
+/// （是正を要する並び）。親ごと壊すのは `Drop`（テストが panic しても窓を残さない）。
+pub(super) struct Trio {
+    pub(super) parent: HWND,
+    pub(super) character: HWND,
+    pub(super) intruder: HWND,
+    pub(super) balloon: HWND,
+}
+
+impl Trio {
+    pub(super) fn create(tag: PCWSTR) -> Self {
+        let parent = create_test_parent(tag);
+        let character = create_test_child(parent, w!("character"));
+        let intruder = create_test_child(parent, w!("intruder"));
+        let balloon = create_test_child(parent, w!("balloon"));
+        // 「バルーン／割り込み／キャラ」の順（手前 → 背後）を明示的に作る。
+        insert_after(intruder, balloon);
+        insert_after(character, intruder);
+        let trio = Self {
+            parent,
+            character,
+            intruder,
+            balloon,
+        };
+        assert_eq!(
+            get_window_below(trio.balloon).expect("GetWindow は成功するはず"),
+            Some(trio.intruder),
+            "前提: バルーンの 1 つ背後は割り込み窓（＝キャラの隣に居ない）"
+        );
+        trio
+    }
+}
+
+impl Drop for Trio {
+    fn drop(&mut self) {
+        destroy_test_window(self.parent);
     }
 }
 
@@ -318,6 +339,14 @@ pub(super) fn issue_control_command(hwnd: HWND) {
 /// 捕捉した出力から、指定タグを含む行をすべて取り出す。
 pub(super) fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
     out.lines().filter(|l| l.contains(tag)).collect()
+}
+
+/// `entity` の組を、望む鎖が外させるので見送った記録（`ReleasedByChain`）の本数。
+pub(super) fn released_skips(out: &str, entity: Entity) -> usize {
+    let needle = format!("entity={entity:?} ");
+    out.lines()
+        .filter(|l| l.contains(SKIP_TAG) && l.contains(RELEASED_REASON) && l.contains(&needle))
+        .count()
 }
 
 /// 指定タグの行がちょうど `expected` 本であることを確かめる。

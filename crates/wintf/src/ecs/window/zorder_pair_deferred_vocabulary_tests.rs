@@ -26,7 +26,8 @@
 //!
 //! 本フィーチャーが共有ファイルへ足した継ぎ目は、`window_proc` の非活性化の枝、`api.rs` の
 //! 走査ラッパ（`get_window_above`／`get_window_below`／`is_window_visible`）と帯の所属を
-//! 読む `is_window_always_on_top`、areka の `main.rs` の結線 1 行である。それらのファイルは
+//! 読む `is_window_always_on_top`、結線（`areka_placement::spawn::wire_zorder_pair`・areka の
+//! `ghost_session.rs` から呼ぶ）である。それらのファイルは
 //! 他フィーチャーの持ち物でもあるため全文走査の対象には入れない——他所の追記で赤くなると、
 //! 本フィーチャーへの誤った告発になる。
 //!

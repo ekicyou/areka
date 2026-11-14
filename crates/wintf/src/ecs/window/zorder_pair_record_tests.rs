@@ -32,10 +32,7 @@ use super::{
     record_verification, skip_line, verify_failed_line,
 };
 use crate::ecs::test_support::capture_under_filter;
-
-/// 実機サインオフが用いる `RUST_LOG` 相当（design.md「Real-Machine Signoff」）。
-/// areka 側の宣言レコードは別クレートゆえ、本ファイルでは wintf 側の指定だけを使う。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
+use crate::ecs::window::zorder_pair_test_support::{SIGNOFF_DIRECTIVES, fake_hwnd, lines_with};
 
 /// 既定水準（診断手順を有効化していない通常運転）。
 const DEFAULT_DIRECTIVES: &str = "info";
@@ -54,11 +51,6 @@ const ALL_REASONS: [(SkipReason, &str); 6] = [
     (SkipReason::StrategyDisabled, "StrategyDisabled"),
     (SkipReason::ReleasedByChain, "ReleasedByChain"),
 ];
-
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
 
 fn balloon() -> HWND {
     fake_hwnd(0x00B0)
@@ -132,11 +124,6 @@ fn emit_every_record() {
         Some(true),
         Some(false),
     );
-}
-
-/// 捕捉した出力から、指定タグを含む行をすべて取り出す。
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
 }
 
 /// 捕捉した出力から、指定タグを含む行をちょうど 1 本取り出す。

@@ -56,7 +56,8 @@ use crate::api::{clear_window_owner, get_window_above, get_window_below, set_win
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, decide_pair_fix,
-    measure_window_above, measure_window_below, measure_window_is_always_on_top,
+    measure_below_is_always_on_top, measure_window_above, measure_window_below,
+    measure_window_is_always_on_top,
 };
 use crate::ecs::window::{
     KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, ZOrderPairStrategy,
@@ -65,10 +66,9 @@ use crate::ecs::window::{
 
 use super::pair_fix_command;
 use crate::ecs::window::zorder_pair_test_support::{
-    CAPTURE_DIRECTIVES, FIX_TAG, SKIP_TAG, VERIFY_FAILED_TAG,
-    create_banded_test_parent as create_test_parent, create_test_child, create_window,
-    destroy_test_window, insert_after, maintain_schedule, pair_schedule,
-    require_explicit_real_window_run, spawn_window,
+    CAPTURE_DIRECTIVES, FIX_TAG, SKIP_TAG, VERIFY_FAILED_TAG, assert_line_count,
+    create_banded_test_parent, create_test_child, create_window, destroy_test_window, insert_after,
+    lines_with, maintain_schedule, pair_schedule, require_explicit_real_window_run, spawn_window,
 };
 
 // -------------------------------------------------------------------------
@@ -132,10 +132,6 @@ fn sink_to_bottom(hwnd: HWND) {
     }
 }
 
-fn count_lines(out: &str, tag: &str) -> usize {
-    out.lines().filter(|l| l.contains(tag)).count()
-}
-
 // -------------------------------------------------------------------------
 // 要件 8.2: 常時最前面の政策を足しても、ペアの隣接は同じように成立する
 // -------------------------------------------------------------------------
@@ -157,7 +153,7 @@ struct ConvergenceOutcome {
 /// 「バルーン／割り込み／キャラ」の順（手前 → 背後）から是正を 1 巡走らせ、
 /// 隣接が成立するかと記録の本数を返す。返り値の 2 つ目は処理後の帯の所属。
 fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome, bool) {
-    let parent = create_test_parent(tag, always_on_top);
+    let parent = create_banded_test_parent(tag, always_on_top);
     assert_eq!(
         is_always_on_top(parent),
         always_on_top,
@@ -199,9 +195,9 @@ fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome
         character_directly_below_balloon: get_window_above(character_hwnd)
             .expect("GetWindow は成功するはず")
             == Some(balloon_hwnd),
-        fix_records: count_lines(&out, FIX_TAG),
-        verify_failed_records: count_lines(&out, VERIFY_FAILED_TAG),
-        skip_records: count_lines(&out, SKIP_TAG),
+        fix_records: lines_with(&out, FIX_TAG).len(),
+        verify_failed_records: lines_with(&out, VERIFY_FAILED_TAG).len(),
+        skip_records: lines_with(&out, SKIP_TAG).len(),
     };
     let band_after = is_always_on_top(parent);
     destroy_test_window(parent);
@@ -508,7 +504,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
 /// 結果としてキャラのすぐ手前に入る。
 #[test]
 fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_character() {
-    let parent = create_test_parent(w!("wintf-zorder-aot-adjacency"), false);
+    let parent = create_banded_test_parent(w!("wintf-zorder-aot-adjacency"), false);
     let character_hwnd = create_test_child(parent, w!("character"));
     let intruder_hwnd = create_test_child(parent, w!("intruder"));
     let balloon_hwnd = create_test_child(parent, w!("balloon"));
@@ -611,6 +607,43 @@ fn measuring_band_membership_answers_both_ways_and_falls_back_into_the_band_on_f
     assert!(
         out.contains("常時最前面かを読めませんでした"),
         "読めなかった事実が記録に残っていない: {out}"
+    );
+
+    for hwnd in [inside, outside] {
+        destroy_test_window(hwnd);
+    }
+}
+
+/// キャラ窓**自身**の帯の実測も 2 通りの答えを実際に返し、読めなかったときは帯の外へ倒す。
+///
+/// 挿入位置の窓の実測（直上のテスト）と倒す向きが逆である——こちらの真は「帯の窓を
+/// 挿入位置に指してよい」を開くので、読めないときに真へ倒すと帯の外のキャラのバルーンを
+/// 帯へ引き込む（要件 3.3）。倒したことは 1 度だけ記録に残す。
+#[test]
+fn measuring_the_character_band_answers_both_ways_and_falls_back_out_of_the_band_on_failure() {
+    let inside = create_always_on_top_toplevel(w!("wintf-zorder-below-band-inside"));
+    let outside = create_ghost_shaped_toplevel(w!("wintf-zorder-below-band-outside"));
+    assert!(
+        measure_below_is_always_on_top(inside),
+        "帯の中のキャラ窓は帯の中と読めるはず"
+    );
+    assert!(
+        !measure_below_is_always_on_top(outside),
+        "帯の外のキャラ窓は帯の外と読めるはず（読み取りが恒真になっていない）"
+    );
+
+    // 読めない窓（無効なハンドル）は帯の外として扱い、倒したことを 1 度だけ記録に残す。
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
+        assert!(
+            !measure_below_is_always_on_top(HWND::default()),
+            "読めなかったときは帯の外へ倒す（帯の外のキャラのバルーンを帯へ引き込まない）"
+        );
+    });
+    assert_line_count(
+        &out,
+        "キャラ窓が常時最前面かを読めませんでした",
+        1,
+        "読めなかった事実の記録",
     );
 
     for hwnd in [inside, outside] {
@@ -771,9 +804,13 @@ fn a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band(
     for hwnd in [character_hwnd, intruder_hwnd, balloon_hwnd] {
         assert!(is_always_on_top(hwnd), "是正で帯から落ちた窓がある");
     }
-    assert_eq!(count_lines(&out, FIX_TAG), 1, "是正の記録は 1 本: {out}");
     assert_eq!(
-        count_lines(&out, VERIFY_FAILED_TAG),
+        lines_with(&out, FIX_TAG).len(),
+        1,
+        "是正の記録は 1 本: {out}"
+    );
+    assert_eq!(
+        lines_with(&out, VERIFY_FAILED_TAG).len(),
         0,
         "検証は通るはず: {out}"
     );

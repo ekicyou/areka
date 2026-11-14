@@ -18,10 +18,7 @@ use super::{
     PairTrigger, ReassertZOrder, SkipReason, ZOrderPairStrategy, decide_pair_fix,
 };
 
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 
 /// `T: Send + Sync` を型検査で要求するだけのヘルパ。
 ///
@@ -424,24 +421,23 @@ fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
 /// ここを取り違えると割り込み窓とキャラの間ではなく、キャラの直後へ落ちてしまう。
 #[test]
 fn decide_pair_fix_places_balloon_directly_above_character_on_reassert() {
-    for trigger in [PairTrigger::Reassert] {
-        for strategy in ALL_STRATEGIES {
-            assert_eq!(
-                decide_pair_fix(&intruded(trigger, strategy)),
-                PairFixDecision::PlaceAboveOverBelow {
-                    insert_after: InsertSpec::After(intruder_front()),
-                },
-                "{trigger:?}／{strategy:?}: バルーンはキャラの最も近い可視の手前の窓の背後へ入る"
-            );
-            // 対照: キャラ自身を挿入位置にすると「すぐ背後」になってしまう（上下反転）
-            assert_ne!(
-                decide_pair_fix(&intruded(trigger, strategy)),
-                PairFixDecision::PlaceAboveOverBelow {
-                    insert_after: InsertSpec::After(character()),
-                },
-                "{trigger:?}／{strategy:?}: キャラ自身を挿入位置にはしない"
-            );
-        }
+    let trigger = PairTrigger::Reassert;
+    for strategy in ALL_STRATEGIES {
+        assert_eq!(
+            decide_pair_fix(&intruded(trigger, strategy)),
+            PairFixDecision::PlaceAboveOverBelow {
+                insert_after: InsertSpec::After(intruder_front()),
+            },
+            "{trigger:?}／{strategy:?}: バルーンはキャラの最も近い可視の手前の窓の背後へ入る"
+        );
+        // 対照: キャラ自身を挿入位置にすると「すぐ背後」になってしまう（上下反転）
+        assert_ne!(
+            decide_pair_fix(&intruded(trigger, strategy)),
+            PairFixDecision::PlaceAboveOverBelow {
+                insert_after: InsertSpec::After(character()),
+            },
+            "{trigger:?}／{strategy:?}: キャラ自身を挿入位置にはしない"
+        );
     }
 }
 
@@ -652,7 +648,7 @@ fn decide_pair_fix_handles_raised_below_per_strategy() {
 
 /// 案 A・raise assist 無効では、重なりの変化を契機とする両トリガが見送られる。
 ///
-/// この構成では z 変化検知そのものを結線しない（design.md「WM_WINDOWPOSCHANGED z 変化検知」）
+/// z 変化検知そのものを結線しない（design.md「WM_WINDOWPOSCHANGED z 変化検知」）
 /// ——万一トリガが届いても判断側で止まることを固定する。
 #[test]
 fn decide_pair_fix_skips_z_change_triggers_when_raise_assist_is_disabled() {
@@ -676,7 +672,7 @@ fn decide_pair_fix_skips_z_change_triggers_when_raise_assist_is_disabled() {
             "{trigger:?}: raise assist 有効時は見送り理由が変わる"
         );
     }
-    // 対照: 確立・再断行は raise assist の有無に関わらず処理される
+    // 対照: 再断行は raise assist の有無に関わらず処理される
     assert_eq!(
         decide_pair_fix(&intruded(PairTrigger::Reassert, disabled)),
         PairFixDecision::PlaceAboveOverBelow {

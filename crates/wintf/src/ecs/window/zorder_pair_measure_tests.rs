@@ -33,14 +33,11 @@ use windows::core::{PCWSTR, w};
 use super::{SIBLING_SCAN_LIMIT, measure_window_above, measure_window_below};
 use crate::api::{get_window_above, get_window_below, is_window_visible};
 use crate::ecs::test_support::capture_under_filter;
-// 本ファイルでは `zorder_pair` だけの絞り込みを `CAPTURE_DIRECTIVES`、`command` を足したものを
-// `MAINTAIN_CAPTURE_DIRECTIVES` と呼ぶ（共有の側の名前と入れ替わる）。
 use crate::ecs::window::zorder_pair_test_support::{
-    CAPTURE_DIRECTIVES as MAINTAIN_CAPTURE_DIRECTIVES, FIX_TAG,
-    SIGNOFF_DIRECTIVES as CAPTURE_DIRECTIVES, VERIFY_FAILED_TAG, assert_line_count,
-    create_hidden_test_child as create_hidden_child, create_test_child as create_visible_child,
-    create_test_parent as create_visible_test_parent, declare_pair, destroy_test_window, hwnd_hex,
-    insert_after, lines_with, maintain_schedule, request_reassert, spawn_window,
+    CAPTURE_DIRECTIVES, FIX_TAG, SIGNOFF_DIRECTIVES, VERIFY_FAILED_TAG, assert_line_count,
+    create_hidden_test_child, create_test_child, create_test_parent, declare_pair,
+    destroy_test_window, hwnd_hex, insert_after, lines_with, maintain_schedule, request_reassert,
+    spawn_window,
 };
 use crate::ecs::window::{ZOrderPairStrategy, flush_window_pos_commands};
 
@@ -64,14 +61,14 @@ struct Trio {
 impl Trio {
     /// `visible_intruder` が真なら割り込み窓を可視で作る（対照側）。
     fn create(tag: PCWSTR, visible_intruder: bool) -> Self {
-        let parent = create_visible_test_parent(tag);
-        let balloon = create_visible_child(parent, w!("balloon"));
+        let parent = create_test_parent(tag);
+        let balloon = create_test_child(parent, w!("balloon"));
         let intruder = if visible_intruder {
-            create_visible_child(parent, w!("intruder"))
+            create_test_child(parent, w!("intruder"))
         } else {
-            create_hidden_child(parent, w!("intruder"))
+            create_hidden_test_child(parent, w!("intruder"))
         };
-        let character = create_visible_child(parent, w!("character"));
+        let character = create_test_child(parent, w!("character"));
         // 「バルーン／割り込み／キャラ」の順（手前 → 背後）を明示的に作る。
         insert_after(intruder, balloon);
         insert_after(character, intruder);
@@ -167,15 +164,15 @@ fn measurement_stops_at_a_visible_intruder() {
 /// 捕捉が死んでいればこちらも 0 本になり、テストは赤になる。
 #[test]
 fn measurement_falls_back_to_absence_when_the_scan_hits_its_limit() {
-    let parent = create_visible_test_parent(w!("wintf-zorder-measure-limit"));
-    let balloon = create_visible_child(parent, w!("balloon"));
-    let character = create_visible_child(parent, w!("character"));
+    let parent = create_test_parent(w!("wintf-zorder-measure-limit"));
+    let balloon = create_test_child(parent, w!("balloon"));
+    let character = create_test_child(parent, w!("character"));
     insert_after(character, balloon);
     // 上限ちょうどの枚数の不可視窓を、バルーンの背後へ順に積む（可視のキャラ窓は最後尾へ）。
     let mut tail = balloon;
     let mut first_hidden = None;
     for _ in 0..SIBLING_SCAN_LIMIT {
-        let hidden = create_hidden_child(parent, w!("hidden"));
+        let hidden = create_hidden_test_child(parent, w!("hidden"));
         insert_after(hidden, tail);
         first_hidden.get_or_insert(hidden);
         tail = hidden;
@@ -201,7 +198,7 @@ fn measurement_falls_back_to_absence_when_the_scan_hits_its_limit() {
         "対照: 上限に達しない距離の可視窓は返る（常に不在へ倒す実装なら赤になる）"
     );
 
-    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
+    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         assert_eq!(
             measure_window_below(balloon),
             None,
@@ -238,10 +235,10 @@ fn measurement_falls_back_to_absence_when_the_scan_hits_its_limit() {
 fn an_invisible_window_between_the_pair_still_verifies_as_adjacent() {
     // 対象のペア: 「不可視／キャラ／バルーン」の順（手前 → 背後）。是正でバルーンが最上位へ
     // 上がり、不可視窓はバルーンとキャラの間に残る。
-    let parent = create_visible_test_parent(w!("wintf-zorder-measure-maintain"));
-    let hidden = create_hidden_child(parent, w!("hidden"));
-    let character_hwnd = create_visible_child(parent, w!("character"));
-    let balloon_hwnd = create_visible_child(parent, w!("balloon"));
+    let parent = create_test_parent(w!("wintf-zorder-measure-maintain"));
+    let hidden = create_hidden_test_child(parent, w!("hidden"));
+    let character_hwnd = create_test_child(parent, w!("character"));
+    let balloon_hwnd = create_test_child(parent, w!("balloon"));
     insert_after(character_hwnd, hidden);
     insert_after(balloon_hwnd, character_hwnd);
     assert_eq!(
@@ -264,7 +261,7 @@ fn an_invisible_window_between_the_pair_still_verifies_as_adjacent() {
     declare_pair(&mut world, control_balloon, control_character);
 
     let mut schedule = maintain_schedule();
-    let out = capture_under_filter(MAINTAIN_CAPTURE_DIRECTIVES, || {
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目: 対象のペアが指令を積む。flush して実際に重なりを動かす。
         schedule.run(&mut world);
         flush_window_pos_commands();

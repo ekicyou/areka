@@ -202,8 +202,7 @@ fn text_field(value: &str) -> String {
 /// # `Option` は防御であって、本番は常に実値である
 ///
 /// 区間は望む鎖が運んでくる——[`CrossEdge::segment`](super::zorder_chain::CrossEdge) に
-/// 載って届き、撤去のときは帳簿の控え
-/// （[`CrossOwnerLink::segment`](super::zorder_chain::CrossOwnerLink)）から出る。
+/// 載って届く。付与は望む鎖に在る繋ぎからしか作られないので、この検索は必ず当たる。
 /// よって**本番の呼び出しは常に `Some(..)`** であり、`gN` か `tail` のどちらかが必ず入る。
 ///
 /// 引数が `Option` なのは、値が取れなかったときに**欄そのものを落とさない**ための防御で
@@ -234,8 +233,10 @@ pub(crate) fn linked_line(
 /// **張った時点の owner の窓ハンドル**を載せる。これは撤去前の照合に使った値そのもの
 /// であり、`Diverged`（帳簿と OS の現況が食い違う）の行を読むときに要る。
 ///
-/// `segment` が `None` になるのはグループごと消えた後の撤去である。欄は落とさず番兵に
-/// する——落とすと「記録が出ていない」と「その経路にはその値が無い」の区別が付かなくなる。
+/// 区間は帳簿の控え（[`CrossOwnerLink::segment`](super::zorder_chain::CrossOwnerLink)）から
+/// 出るので、本番の呼び出し（`detach_one`）は常に `Some(..)` である。`Option` は欄を落とさない
+/// ための防御で、取れないときは番兵 `-` を入れる——落とすと「記録が出ていない」と
+/// 「その経路にはその値が無い」の区別が付かなくなる。
 pub(crate) fn unlinked_line(
     segment: Option<ChainSegment>,
     owned: Entity,
@@ -320,8 +321,9 @@ pub(crate) fn skipped_line(reason: ChainSkipReason) -> String {
 /// 失敗した繋ぎ **1 本だけ**を飛ばして残りは張る、というのが design.md の裁定である。
 /// よってこの行は「どの区間のどの対が張れなかったか」を単独で読めなければならない。
 ///
-/// 区間の扱いは [`linked_line`] と同じ——本番は常に実値であり、`Option` は欄を落とさない
-/// ための防御である（取れないときは番兵 `-`）。
+/// 区間は呼び手で違う。鎖の付与の失敗は望む鎖の区間（`Some(..)`）を載せ、組の結び目の
+/// 張り直し（`restore_pair`）の失敗は区間を持たないので `None` を渡し、番兵 `-` が入る
+/// （`segment=-`）。欄を落とさないのは [`linked_line`] と同じ理由である。
 pub(crate) fn link_failed_line(
     segment: Option<ChainSegment>,
     owned_hwnd: Option<HWND>,
@@ -340,9 +342,10 @@ pub(crate) fn link_failed_line(
 
 /// 外し失敗の行（純関数・error 水準で出す・要件 8.2）。
 ///
-/// 区間を載せないのは、撤去が起こる局面（グループの解除・窓の退去）では区間そのものが
-/// 既に消えていることがあるためである。所有側の窓ハンドルも同様に載せない——
-/// `clear_window_owner` は被所有側だけを引数に取るので、失敗の主語はそちらである。
+/// 区間を載せないのは、この行を鎖の撤去（`detach_one`・区間は帳簿にある）と組の結び目の
+/// 外し（`release_pair`・区間を持たない）の両方が出すためで、両方で同じ形にしてある。
+/// 所有側の窓ハンドルも載せない——`clear_window_owner` は被所有側だけを引数に取るので、
+/// 失敗の主語はそちらである。
 pub(crate) fn unlink_failed_line(owned_hwnd: Option<HWND>, error: &windows::core::Error) -> String {
     format!(
         "{UNLINK_FAILED_TAG} owned_hwnd={owned_h} error={code:?}",

@@ -139,7 +139,7 @@ fn the_two_preserved_group_tags_kept_their_exact_spelling_through_the_move() {
     );
 }
 
-/// 名簿に載っていない 8 つ目・3 つ目のタグはモジュール本体に存在しない。
+/// 名簿の外のタグはモジュール本体に存在しない。
 ///
 /// 直上の 2 つは「登録されているものが正しい」ことしか言わない——**それ以外に無い**は
 /// 名簿を読むだけでは決して言えず、余分な定数とそれを使う行組立を足しても名簿は沈黙する。
@@ -315,10 +315,10 @@ fn a_tail_segment_renders_as_the_tail_word_not_a_group_number() {
 
 /// 区間が取れない呼び出しでも欄は落ちず、番兵が入る（繋いだ行・張り失敗の行の両方）。
 ///
-/// **本番の呼び出しはここへ来ない**——区間は望む鎖（`CrossEdge::segment`）が運び、撤去では
-/// 帳簿の控えから出るので、実際に流れるのは常に `Some(..)` である。ここで固定するのは
-/// `Option` を残してある理由そのもの、すなわち「値が取れなくても**欄が消えない**」ことで
-/// ある——消えると「記録が出ていない」と「その経路にはその値が無い」の区別が事後に付かない。
+/// 繋いだ行の本番の呼び出しはここへ来ない（区間は望む鎖の `CrossEdge::segment` が運ぶ）。
+/// 張り失敗の行は、組の結び目の張り直し（`restore_pair`）の失敗で本番も `None` を渡す。
+/// ここで固定するのは「値が取れなくても**欄が消えない**」ことである——消えると
+/// 「記録が出ていない」と「その経路にはその値が無い」の区別が事後に付かない。
 #[test]
 fn a_segmentless_call_still_carries_the_field_filled_with_the_sentinel() {
     let (owned, owner) = two_entities();
@@ -398,7 +398,7 @@ fn the_unlinked_line_carries_the_reason_beside_the_handles() {
     );
 }
 
-/// 区間が分からない撤去でも欄は落ちず番兵になる（グループごと消えた後の撤去）。
+/// 区間が分からない撤去でも欄は落ちず番兵になる（本番の撤去は帳簿の区間を常に渡す・防御の固定）。
 #[test]
 fn an_unknown_segment_renders_the_sentinel_instead_of_dropping_the_field() {
     let (owned, _) = two_entities();

@@ -628,7 +628,7 @@ fn the_nudge_is_built_without_the_deferred_queue_or_a_wake_request() {
 // 記録の出口——鎖系 7 語はこのモジュールから出る
 // ===========================================================================
 
-/// 鎖系 7 語はすべて本モジュールの出力先から出る（grep の対象が割れない）。
+/// 鎖系 7 語はすべて本モジュールの出力先から出る（記録の関数を 1 ファイルに揃えた決まり）。
 #[test]
 fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
     let e = entities(2);
@@ -675,7 +675,7 @@ fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
         );
         assert!(
             !line.contains(DIAG_TARGET),
-            "`{tag}` が行組立の層から出ている（記録の出口が割れている）: {line}"
+            "`{tag}` が行組立の層から出ている（記録の出口が 1 ファイルに揃っていない）: {line}"
         );
     }
 }

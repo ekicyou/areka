@@ -32,12 +32,11 @@
 //! シングルスレッド実行器を明示する理由は確立系のテストと同じである（既定の多スレッド
 //! 実行器では [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER,
 };
-use windows::core::{PCWSTR, w};
+use windows::core::w;
 
 use super::{IssuedPairFix, pair_fix_command, plan_pair_fix};
 use crate::api::{get_window_above, get_window_below};
@@ -46,7 +45,7 @@ use crate::ecs::window::zorder_pair::{
     ExpectedOrder, InsertSpec, PairFixDecision, PairObservation, PairTrigger, SkipReason,
 };
 use crate::ecs::window::zorder_pair_test_support::{
-    CAPTURE_DIRECTIVES, FIX_TAG, SET_WINDOW_POS_TAG, SKIP_TAG, VERIFY_FAILED_TAG,
+    CAPTURE_DIRECTIVES, FIX_TAG, SET_WINDOW_POS_TAG, SKIP_TAG, Trio, VERIFY_FAILED_TAG,
     assert_line_count, create_test_child, create_test_parent, declare_pair, destroy_test_window,
     fake_hwnd, hwnd_hex, insert_after, issue_control_command, lines_with, maintain_schedule,
     request_reassert, spawn_window,
@@ -59,47 +58,6 @@ use crate::ecs::window::{
 const ORPHAN_REQUEST_MARK: &str = "ペア宣言の無い窓に再断行の要求";
 /// 出した指令の持ち越しが無い検証段階の要求を落とした記録。
 const UNBACKED_VERIFY_MARK: &str = "検証待ちの要求に、出した指令の持ち越しがありません";
-
-// -------------------------------------------------------------------------
-// 実窓・World・巡回のヘルパ
-// -------------------------------------------------------------------------
-
-/// キャラ窓・割り込み窓・バルーン窓の 3 枚を「バルーン／割り込み／キャラ」の順
-/// （手前 → 背後）で用意する。バルーンはキャラのすぐ手前に**居ない**。
-struct Trio {
-    parent: HWND,
-    character: HWND,
-    intruder: HWND,
-    balloon: HWND,
-}
-
-impl Trio {
-    fn create(tag: PCWSTR) -> Self {
-        let parent = create_test_parent(tag);
-        let character = create_test_child(parent, w!("character"));
-        let intruder = create_test_child(parent, w!("intruder"));
-        let balloon = create_test_child(parent, w!("balloon"));
-        // 「バルーン／割り込み／キャラ」の順（手前 → 背後）を明示的に作る。
-        insert_after(intruder, balloon);
-        insert_after(character, intruder);
-        let trio = Self {
-            parent,
-            character,
-            intruder,
-            balloon,
-        };
-        assert_eq!(
-            get_window_below(trio.balloon).expect("GetWindow は成功するはず"),
-            Some(trio.intruder),
-            "前提: バルーンの 1 つ背後は割り込み窓（＝キャラの隣に居ない）"
-        );
-        trio
-    }
-
-    fn destroy(self) {
-        destroy_test_window(self.parent);
-    }
-}
 
 // -------------------------------------------------------------------------
 // 要求の一生（挿入 → 適用 → 検証待ち → 実測照合 → 消滅）
@@ -186,8 +144,6 @@ fn reassert_request_is_applied_verified_and_then_disappears() {
         !world.entity(balloon).contains::<IssuedPairFix>(),
         "指令の持ち越しも要求とともに消えるはず"
     );
-
-    trio.destroy();
 }
 
 // -------------------------------------------------------------------------
@@ -315,7 +271,6 @@ fn without_a_request_the_maintenance_does_nothing() {
     );
 
     destroy_test_window(control_parent);
-    trio.destroy();
 }
 
 // -------------------------------------------------------------------------
@@ -383,8 +338,6 @@ fn verification_mismatch_is_recorded_once_without_retry() {
         !world.entity(balloon).contains::<ReassertZOrder>(),
         "不一致でも要求はそこで消える（再試行の輪を作らない）"
     );
-
-    trio.destroy();
 }
 
 // -------------------------------------------------------------------------
@@ -434,8 +387,6 @@ fn peer_lost_before_verification_skips_instead_of_failing() {
     );
     assert!(!world.entity(balloon).contains::<ReassertZOrder>());
     assert!(!world.entity(balloon).contains::<IssuedPairFix>());
-
-    trio.destroy();
 }
 
 /// 検証待ちの巡に相手の**ハンドルだけ**が外れた場合も、理由つきの見送りになる。
@@ -491,8 +442,6 @@ fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
     );
     assert!(!world.entity(balloon).contains::<ReassertZOrder>());
     assert!(!world.entity(balloon).contains::<IssuedPairFix>());
-
-    trio.destroy();
 }
 
 /// 要求を受けた巡で既に相手が居なければ、指令を出さずに理由つきで見送る。
@@ -619,6 +568,41 @@ fn request_on_a_window_without_declaration_is_dropped_with_a_record() {
     );
 
     destroy_test_window(parent);
+}
+
+/// 宣言の無い窓の検証待ちの要求を落とすときは、出した指令の持ち越しも一緒に外す
+/// （[`IssuedPairFix`] の「要求が消えるときは必ず一緒に外れる」）。
+#[test]
+fn dropping_an_orphan_request_also_drops_its_issued_fix() {
+    let mut world = World::new();
+    world.insert_resource(ZOrderPairStrategy::default());
+    let stray = spawn_window(&mut world, fake_hwnd(0x00C2));
+    world.entity_mut(stray).insert((
+        ReassertZOrder {
+            pending_verify: Some(ExpectedOrder {
+                above: fake_hwnd(0x00C2),
+                below: fake_hwnd(0x00C3),
+            }),
+        },
+        IssuedPairFix {
+            insert_after: InsertSpec::TopEdge,
+        },
+    ));
+
+    let mut schedule = maintain_schedule();
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || schedule.run(&mut world));
+
+    assert_line_count(
+        &out,
+        ORPHAN_REQUEST_MARK,
+        1,
+        "宣言の無い要求は 1 度だけ記録される",
+    );
+    assert!(!world.entity(stray).contains::<ReassertZOrder>());
+    assert!(
+        !world.entity(stray).contains::<IssuedPairFix>(),
+        "要求を落としたのに持ち越しが残っている"
+    );
 }
 
 /// 出した指令の持ち越しが無い検証待ちの要求は、検証せずに記録を残して落とす。

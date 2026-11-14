@@ -642,8 +642,10 @@ fn measure_windows_in_front_reports_failure_as_an_incomplete_chain() {
             "失敗を「最前面まで辿った」と偽らない（偽の判定を作らない）"
         );
     });
-    assert!(
-        !out.trim().is_empty(),
-        "走査の失敗は記録に残るはず（黙って潰さない）"
+    assert_line_count(
+        &out,
+        "手前側の走査に失敗しました",
+        1,
+        "走査の失敗は記録に残るはず（黙って潰さない）",
     );
 }

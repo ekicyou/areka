@@ -19,46 +19,14 @@ use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{ExpectedOrder, InsertSpec};
 use crate::ecs::window::zorder_pair_sink::{SinkObservationPending, mark_pair_sink_observation};
 use crate::ecs::window::zorder_pair_test_support::{
-    CAPTURE_DIRECTIVES as DIRECTIVES, FIX_TAG, RELEASED_REASON, SET_WINDOW_POS_TAG,
-    SINK_OBSERVED_TAG, SKIP_TAG, VERIFY_FAILED_TAG, create_test_child, create_test_parent,
-    destroy_test_window, insert_after, issue_control_command, maintain_schedule, spawn_window,
+    CAPTURE_DIRECTIVES as DIRECTIVES, FIX_TAG, SET_WINDOW_POS_TAG, SINK_OBSERVED_TAG, Trio,
+    VERIFY_FAILED_TAG, issue_control_command, lines_with, maintain_schedule, released_skips,
+    spawn_window,
 };
 use crate::ecs::window::{
     ChainPlan, KeepDirectlyAbove, ReassertZOrder, ZOrderChainPlan, ZOrderPairStrategy,
     flush_window_pos_commands,
 };
-
-/// 可視の親の下に「バルーン／割り込み／キャラ」（手前 → 奥）の子窓 3 枚。
-/// バルーンはキャラのすぐ手前に居ない（是正を要する並び）。
-struct Trio {
-    parent: HWND,
-    character: HWND,
-    intruder: HWND,
-    balloon: HWND,
-}
-
-impl Trio {
-    fn create() -> Self {
-        let parent = create_test_parent(w!("wintf-zorder-maintain-release"));
-        let child = || create_test_child(parent, w!("wintf-zorder-maintain-release"));
-        let (character, intruder, balloon) = (child(), child(), child());
-        insert_after(intruder, balloon);
-        insert_after(character, intruder);
-        assert_eq!(get_window_below(balloon).unwrap(), Some(intruder), "前提");
-        Self {
-            parent,
-            character,
-            intruder,
-            balloon,
-        }
-    }
-}
-
-impl Drop for Trio {
-    fn drop(&mut self) {
-        destroy_test_window(self.parent);
-    }
-}
 
 /// 組を宣言し、(バルーン, キャラ) を返す。
 fn pair(world: &mut World, balloon: HWND, character: HWND) -> (Entity, Entity) {
@@ -87,22 +55,11 @@ fn new_world() -> World {
     world
 }
 
-fn count(out: &str, tag: &str) -> usize {
-    out.lines().filter(|l| l.contains(tag)).count()
-}
-
-fn released_skips(out: &str, entity: Entity) -> usize {
-    let needle = format!("entity={entity:?} ");
-    out.lines()
-        .filter(|l| l.contains(SKIP_TAG) && l.contains(RELEASED_REASON) && l.contains(&needle))
-        .count()
-}
-
 /// 逆転の計画（キャラがバルーンより手前）の下で、バルーンの再表示が挿す未適用の要求は
 /// 指令を積まずに見送りで落ち、実窓の重なりは動かない（要件 5.2・5.5・6.3）。
 #[test]
 fn a_reshow_request_on_a_released_pair_moves_nothing_and_is_dropped() {
-    let trio = Trio::create();
+    let trio = Trio::create(w!("wintf-zorder-maintain-release"));
     let mut world = new_world();
     let (balloon, character) = pair(&mut world, trio.balloon, trio.character);
     publish(&mut world, vec![character, balloon]);
@@ -118,8 +75,12 @@ fn a_reshow_request_on_a_released_pair_moves_nothing_and_is_dropped() {
     });
 
     assert_eq!(released_skips(&out, balloon), 1, "見送りは 1 本\n{out}");
-    assert_eq!(count(&out, FIX_TAG), 0, "是正しない\n{out}");
-    assert_eq!(count(&out, SET_WINDOW_POS_TAG), 1, "対照の 1 本だけ\n{out}");
+    assert_eq!(lines_with(&out, FIX_TAG).len(), 0, "是正しない\n{out}");
+    assert_eq!(
+        lines_with(&out, SET_WINDOW_POS_TAG).len(),
+        1,
+        "対照の 1 本だけ\n{out}"
+    );
     assert!(world.get::<ReassertZOrder>(balloon).is_none());
     assert_eq!(
         get_window_below(trio.balloon).unwrap(),
@@ -131,7 +92,7 @@ fn a_reshow_request_on_a_released_pair_moves_nothing_and_is_dropped() {
 /// 外す組に付いた検証待ちの要求は、照合せずに見送りで落とし、持ち越しも外す（要件 5.5）。
 #[test]
 fn a_pending_verification_on_a_released_pair_is_dropped_without_checking() {
-    let trio = Trio::create();
+    let trio = Trio::create(w!("wintf-zorder-maintain-release"));
     let mut world = new_world();
     let (balloon, character) = pair(&mut world, trio.balloon, trio.character);
     // 非隣接の鎖（間に別の窓が挟まる）。
@@ -157,9 +118,21 @@ fn a_pending_verification_on_a_released_pair_is_dropped_without_checking() {
     });
 
     assert_eq!(released_skips(&out, balloon), 1, "見送りは 1 本\n{out}");
-    assert_eq!(count(&out, VERIFY_FAILED_TAG), 0, "照合しない\n{out}");
-    assert_eq!(count(&out, FIX_TAG), 0, "照合の記録も出さない\n{out}");
-    assert_eq!(count(&out, SET_WINDOW_POS_TAG), 1, "対照の 1 本だけ\n{out}");
+    assert_eq!(
+        lines_with(&out, VERIFY_FAILED_TAG).len(),
+        0,
+        "照合しない\n{out}"
+    );
+    assert_eq!(
+        lines_with(&out, FIX_TAG).len(),
+        0,
+        "照合の記録も出さない\n{out}"
+    );
+    assert_eq!(
+        lines_with(&out, SET_WINDOW_POS_TAG).len(),
+        1,
+        "対照の 1 本だけ\n{out}"
+    );
     assert!(world.get::<ReassertZOrder>(balloon).is_none());
     assert!(world.get::<IssuedPairFix>(balloon).is_none());
 }
@@ -167,7 +140,7 @@ fn a_pending_verification_on_a_released_pair_is_dropped_without_checking() {
 /// 同じ鎖の下でも、連続する組は今と同じに是正される（要件 4.4）。
 #[test]
 fn a_pair_the_chain_keeps_contiguous_is_still_fixed() {
-    let trio = Trio::create();
+    let trio = Trio::create(w!("wintf-zorder-maintain-release"));
     let mut world = new_world();
     let (balloon, character) = pair(&mut world, trio.balloon, trio.character);
     publish(&mut world, vec![balloon, character]);
@@ -181,8 +154,12 @@ fn a_pair_the_chain_keeps_contiguous_is_still_fixed() {
     });
 
     assert_eq!(released_skips(&out, balloon), 0, "{out}");
-    assert_eq!(count(&out, VERIFY_FAILED_TAG), 0, "{out}");
-    assert_eq!(count(&out, SET_WINDOW_POS_TAG), 1, "是正の 1 本\n{out}");
+    assert_eq!(lines_with(&out, VERIFY_FAILED_TAG).len(), 0, "{out}");
+    assert_eq!(
+        lines_with(&out, SET_WINDOW_POS_TAG).len(),
+        1,
+        "是正の 1 本\n{out}"
+    );
     assert_eq!(
         get_window_below(trio.balloon).unwrap(),
         Some(trio.character)
@@ -194,8 +171,8 @@ fn a_pair_the_chain_keeps_contiguous_is_still_fixed() {
 /// 指令も要求も生まない。連続する組の目印は今と同じに測られる（要件 5.1・5.4・4.4）。
 #[test]
 fn a_sink_mark_on_a_released_pair_is_dropped_unmeasured() {
-    let released_trio = Trio::create();
-    let kept_trio = Trio::create();
+    let released_trio = Trio::create(w!("wintf-zorder-maintain-release"));
+    let kept_trio = Trio::create(w!("wintf-zorder-maintain-release"));
     let mut world = new_world();
     let (b0, s0) = pair(&mut world, released_trio.balloon, released_trio.character);
     let (b1, s1) = pair(&mut world, kept_trio.balloon, kept_trio.character);
@@ -214,11 +191,15 @@ fn a_sink_mark_on_a_released_pair_is_dropped_unmeasured() {
     assert_eq!(released_skips(&out, b0), 1, "外す組は見送り 1 本\n{out}");
     assert_eq!(released_skips(&out, b1), 0, "{out}");
     assert_eq!(
-        count(&out, SINK_OBSERVED_TAG),
+        lines_with(&out, SINK_OBSERVED_TAG).len(),
         1,
         "測るのは連続する組だけ\n{out}"
     );
-    assert_eq!(count(&out, SET_WINDOW_POS_TAG), 1, "対照の 1 本だけ\n{out}");
+    assert_eq!(
+        lines_with(&out, SET_WINDOW_POS_TAG).len(),
+        1,
+        "対照の 1 本だけ\n{out}"
+    );
     for balloon in [b0, b1] {
         assert!(world.get::<SinkObservationPending>(balloon).is_none());
         assert!(world.get::<ReassertZOrder>(balloon).is_none());

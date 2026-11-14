@@ -38,7 +38,7 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 use windows::core::w;
 
-use super::{OwnerEstablishFailed, measure_window_above};
+use super::OwnerEstablishFailed;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::ZOrderPairStrategy;
 use crate::ecs::window::zorder_pair_test_support::{
@@ -486,23 +486,4 @@ fn retries_and_establishes_once_the_handles_are_replaced() {
 
     destroy_test_window(owned_hwnd);
     destroy_test_window(owner_hwnd);
-}
-
-// -------------------------------------------------------------------------
-// 確立直後の実測（記録の付随フィールド）
-// -------------------------------------------------------------------------
-
-/// 実測の失敗は「手前に誰も居ない」と同じ `None` へ潰れるが、黙って消えはしない。
-///
-/// 無効ハンドルでの走査は必ず失敗する。値としては不在（記録では番兵）になり、
-/// 失敗そのものは記録に残る（[areka-log-first-no-silent-failure]）。
-#[test]
-fn measure_window_above_maps_failure_to_absence_and_records_it() {
-    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
-        assert_eq!(measure_window_above(HWND::default()), None);
-    });
-    assert!(
-        !out.trim().is_empty(),
-        "走査の失敗は記録に残るはず（黙って None へ潰さない）"
-    );
 }

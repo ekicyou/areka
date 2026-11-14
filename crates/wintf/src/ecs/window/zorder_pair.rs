@@ -156,7 +156,8 @@ unsafe impl Sync for OwnerLink {}
 // ZOrderPairStrategy - 実行時ストラテジ
 // ============================================================================
 
-/// 実行時ストラテジ（areka main が挿入。既定は `OwnerLink { raise_assist: false }`）。
+/// 実行時ストラテジ（`areka_placement::spawn::wire_zorder_pair` が挿入。既定は
+/// `OwnerLink { raise_assist: false }`）。
 ///
 /// 案 A（Win32 owner の OS 保証）を本線とし、実機ゲートで要件 5.1〜5.5 の毀損が
 /// 判明した場合のみ案 B へ切り替える（要件 5.6）。宣言の付与コードは両案で同一であり、
