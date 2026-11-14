@@ -97,7 +97,8 @@ pub enum PointerButton {
 pub struct PointerState {
     /// クライアント座標（物理ピクセル）
     pub client_point: PhysicalPoint,
-    /// エンティティローカル座標（物理ピクセル）
+    /// この entity の左上（`GlobalArrangement.bounds` の左上）からの座標（物理ピクセル）。
+    /// 窓そのもの、または配置の前はクライアント座標と同じ。
     pub local_point: PhysicalPoint,
 
     // === ボタン押下（この tick に押下が届いたボタン。配りの後に `dispatch_pointer_events` が下ろす）===

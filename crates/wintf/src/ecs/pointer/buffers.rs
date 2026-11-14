@@ -138,7 +138,6 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         // Worldから該当エンティティのPointerStateを取得（無ければ捨てる）
         if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
             pointer_state.client_point = point;
-            pointer_state.local_point = point;
 
             tracing::trace!(
                 entity = ?entity,
@@ -227,6 +226,46 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
             pointer_state.shift_down = shift_down;
             pointer_state.ctrl_down = ctrl_down;
+        }
+    }
+
+    // ローカル座標は最後に全部書き直す。位置が届かず窓の手続きが直に入れた状態も含む。
+    let holders: Vec<(Entity, PhysicalPoint)> = world
+        .query::<(Entity, &PointerState)>()
+        .iter(world)
+        .map(|(e, s)| (e, s.client_point))
+        .collect();
+    for (entity, client) in holders {
+        let local = local_point_of(world, entity, client);
+        if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
+            pointer_state.local_point = local;
+        }
+    }
+}
+
+/// クライアント座標を、entity の左上からの座標にする（物理ピクセル）。
+/// local = client + (持ち主の窓の GlobalArrangement.bounds の左上 − entity の GlobalArrangement.bounds の左上)
+/// （差を四捨五入して i32）。entity が窓そのものなら client のまま。
+/// どちらかの GlobalArrangement が無い（配置の前）なら client を返し debug! を 1 行出す。
+fn local_point_of(world: &World, entity: Entity, client: PhysicalPoint) -> PhysicalPoint {
+    use crate::ecs::GlobalArrangement;
+    let window = crate::ecs::find_owner_window(world, entity);
+    if window == Some(entity) {
+        return client;
+    }
+    let window_bounds = window.and_then(|w| world.get::<GlobalArrangement>(w));
+    match (window_bounds, world.get::<GlobalArrangement>(entity)) {
+        (Some(w), Some(e)) => PhysicalPoint::new(
+            client.x + (w.bounds.left - e.bounds.left).round() as i32,
+            client.y + (w.bounds.top - e.bounds.top).round() as i32,
+        ),
+        _ => {
+            tracing::debug!(
+                entity = ?entity,
+                window = ?window,
+                "[local_point_of] no arrangement; local_point = client_point"
+            );
+            client
         }
     }
 }
@@ -552,6 +591,66 @@ mod tests {
                 "持ち主の居ない窓の溜めは捨てられる"
             );
         });
+    }
+
+    /// 左上 (left, top)・大きさ 50×50 の `GlobalArrangement` を作る。
+    fn arrangement_at(left: f32, top: f32) -> crate::ecs::GlobalArrangement {
+        crate::ecs::GlobalArrangement {
+            transform: windows_numerics::Matrix3x2::translation(left, top),
+            bounds: crate::ecs::Rect {
+                left,
+                top,
+                right: left + 50.0,
+                bottom: top + 50.0,
+            },
+        }
+    }
+
+    #[test]
+    fn test_transfer_local_point_is_from_entity_top_left() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                crate::ecs::window::Window::default(),
+                arrangement_at(100.0, 200.0),
+            ))
+            .id();
+        let child = world
+            .spawn((
+                PointerState::default(),
+                ChildOf(window),
+                arrangement_at(150.0, 250.0),
+            ))
+            .id();
+
+        // 窓の子に移すと、子の左上からの座標になる
+        push_pointer_sample(child, PhysicalPoint::new(60, 70));
+        transfer_buffers_to_world(&mut world);
+        let s = world.get::<PointerState>(child).unwrap();
+        assert_eq!(s.client_point, PhysicalPoint::new(60, 70));
+        assert_eq!(s.local_point, PhysicalPoint::new(10, 20), "子の左上から");
+
+        // 位置を積まずに直に入れた状態（ダブルクリックの道）も書き直される
+        *world.get_mut::<PointerState>(child).unwrap() = PointerState {
+            client_point: PhysicalPoint::new(60, 70),
+            local_point: PhysicalPoint::new(60, 70),
+            ..Default::default()
+        };
+        transfer_buffers_to_world(&mut world);
+        assert_eq!(
+            world.get::<PointerState>(child).unwrap().local_point,
+            PhysicalPoint::new(10, 20),
+            "直に入れた状態も書き直される"
+        );
+
+        // 窓そのものはクライアント座標のまま
+        world.entity_mut(child).remove::<PointerState>();
+        world.entity_mut(window).insert(PointerState::default());
+        push_pointer_sample(window, PhysicalPoint::new(60, 70));
+        transfer_buffers_to_world(&mut world);
+        let s = world.get::<PointerState>(window).unwrap();
+        assert_eq!(s.local_point, s.client_point, "窓そのものは client と同じ");
     }
 
     #[test]
