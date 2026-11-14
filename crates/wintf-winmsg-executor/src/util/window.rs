@@ -352,9 +352,8 @@ mod test {
                     // here we would get the second mutable alias
                     if w.state().try_borrow_mut().is_err() {
                         *state = true;
-                        let _ = unsafe {
-                            PostMessageW(Some(w.hwnd()), WM_USER, WPARAM(0), LPARAM(0))
-                        };
+                        let _ =
+                            unsafe { PostMessageW(Some(w.hwnd()), WM_USER, WPARAM(0), LPARAM(0)) };
                     }
                 }
                 None

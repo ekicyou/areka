@@ -412,18 +412,18 @@ mod test {
 
             // Close the modal window.
             unsafe {
-                SendMessageW(window_by_name(window_name), WM_CLOSE, Some(WPARAM(0)), Some(LPARAM(0)));
+                SendMessageW(
+                    window_by_name(window_name),
+                    WM_CLOSE,
+                    Some(WPARAM(0)),
+                    Some(LPARAM(0)),
+                );
             }
         });
 
         block_on(async {
             unsafe {
-                MessageBoxW(
-                    None,
-                    PCWSTR::null(),
-                    window_name,
-                    MESSAGEBOX_STYLE(0),
-                );
+                MessageBoxW(None, PCWSTR::null(), window_name, MESSAGEBOX_STYLE(0));
             }
             task.await;
         });
@@ -450,12 +450,7 @@ mod test {
 
             if msg.hwnd.0.is_null() && msg.message == WM_USER {
                 unsafe {
-                    MessageBoxW(
-                        None,
-                        PCWSTR::null(),
-                        window_name,
-                        MESSAGEBOX_STYLE(0),
-                    );
+                    MessageBoxW(None, PCWSTR::null(), window_name, MESSAGEBOX_STYLE(0));
                 }
             }
 
@@ -480,12 +475,7 @@ mod test {
 
             if msg.hwnd.0.is_null() && msg.message == WM_USER {
                 unsafe {
-                    MessageBoxW(
-                        None,
-                        PCWSTR::null(),
-                        window_name,
-                        MESSAGEBOX_STYLE(0),
-                    );
+                    MessageBoxW(None, PCWSTR::null(), window_name, MESSAGEBOX_STYLE(0));
                 }
             }
 
@@ -502,12 +492,7 @@ mod test {
 
         spawn_local(async move {
             unsafe {
-                MessageBoxW(
-                    None,
-                    PCWSTR::null(),
-                    window_name,
-                    MESSAGEBOX_STYLE(0),
-                );
+                MessageBoxW(None, PCWSTR::null(), window_name, MESSAGEBOX_STYLE(0));
             }
         });
 
@@ -521,7 +506,14 @@ mod test {
             }
 
             // Close modal window again.
-            unsafe { SendMessageW(window_by_name(window_name), WM_CLOSE, Some(WPARAM(0)), Some(LPARAM(0))) };
+            unsafe {
+                SendMessageW(
+                    window_by_name(window_name),
+                    WM_CLOSE,
+                    Some(WPARAM(0)),
+                    Some(LPARAM(0)),
+                )
+            };
         });
 
         let expected_msg = Cell::new(0);
@@ -554,12 +546,7 @@ mod test {
 
             if msg.hwnd.0.is_null() && msg.message == WM_USER {
                 unsafe {
-                    MessageBoxW(
-                        None,
-                        PCWSTR::null(),
-                        window_name,
-                        MESSAGEBOX_STYLE(0),
-                    );
+                    MessageBoxW(None, PCWSTR::null(), window_name, MESSAGEBOX_STYLE(0));
                 }
             }
 
