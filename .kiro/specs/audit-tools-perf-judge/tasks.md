@@ -20,17 +20,20 @@
   - 行番号を振ってから空行を飛ばす（#51）・`decode("utf-8-sig")` で BOM を読み、U+FEFF の字の比べを消す（#13）・CPU の CSV の有限でない値を壊れた行にする（#7）
   - `perf_lines` の振る舞いの変化（#7・#51）は judge-perf の版を上げる扱い（Revalidation Triggers）だが、版上げは 6.3 の 1 回でこの分も含めて行う（1 つの squash PR に入る・D10 の「1 回だけ」と合わせる）
   - 終わった姿: judge-perf の `--selftest` が今ある検体の全部で同じ結果のまま緑で、judge-perf の中に行の読み方の写しが残っていない
+  - _Dispatch: standard — 新しい共通モジュールへ写しを寄せ、読み方の振る舞いの直し（#7・#13・#51）を伴う_
   - _Requirements: 2.1, 2.3, 5.1, 5.3, 7.1_
 - [ ] 1.2 残りの道具を行の読み方のモジュールへ付け替える（#40・#7 の rank の分・#13）
   - perf-rank・`perf_rank_dump`・perf-compare・judge-followup・`fixtures/generate.py` の写しを消して `perf_lines` を読む（`generate.py` は親のフォルダを `sys.path` へ入れる）。perf-compare と perf-rank は判定スクリプトを今までどおり読まない
   - rank のケース `cpu_nan`（有限でない CPU で exit 4）を足す（T7 の rank の分）
   - 終わった姿: 4 本の道具の `--selftest` が今ある全ケースで緑、`cpu_nan` が緑で、`isfinite` を外すと 0 で赤になる。5 か所の写しが grep で 0 件
+  - _Dispatch: mechanical — 1.1 で作った形のまま残りの写しを読み込みに替え、ケースを 1 本足す_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.1, 5.3_
 - [ ] 1.3 新しい判定の検体の置き場を作り、N1・U1 を置く（D5・T7・T13）
   - `fixtures/generate_more.py` を作り、`generate.py` の `main()` が実行時に読み込んで `CASES + generate_more.CASES` を作る形にする（読み込み時の循環を作らない）
   - 判定の検体 `N1_cpu_nan`（exit 2）・`U1_bom_run_log`（exit 0）を `generate_more` に置き、作り直してバイトが一致することを確かめる
   - `audit-placement-follow` のセッションへ「置き場は `tools/perf/perf_lines.py` の `parse_fields`・judge-perf はその名前で読み込む」と知らせる（共有の覚え書きの置き場に残す）
   - 終わった姿: judge-perf の `--selftest` が N1・U1 を含めて緑、`generate.py` を回しても `git status` が汚れず、`generate.py` が着手のときの行数以下
+  - _Dispatch: mechanical — 置き場の形（実行時の読み込み）と 2 本の検体の期待値を design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.2, 7.1_
 
 - [ ] 2. 自己較正の支えを 1 つにまとめ、一時フォルダを `target` の下へ（#1・#41）
@@ -39,12 +42,14 @@
   - リポジトリの根は `Path(__file__).resolve().parents[2]` で、読み込みのときに `Cargo.toml` を確かめ、無ければ理由を stderr に出して exit 3。一時フォルダは `<根>\target\perf-loop-tmp\<接頭辞><uuid4>\`、消せなかったら理由を 1 行出して結果は変えない
   - `judge_followup_selftest.py`・`perf_compare_selftest.py`・`perf_ledger_selftest.py`・perf-rank の自己較正の 4 か所の `TemporaryDirectory` を `work_dir` に替える。judge-perf の自己較正は寄せない
   - 終わった姿: 4 本の `--selftest` が今ある全ケースで同じ結果のまま緑で、走らせた後に `target\perf-loop-tmp\` の下に子が残らない
+  - _Dispatch: standard — 新しい支えのモジュールへ 4 組の自己較正を付け替え、一時フォルダの扱いを変える_
   - _Requirements: 2.1, 2.3, 5.1, 7.1, 7.2, 7.4_
 - [ ] 2.2 木全体の見張り `check_tree` の ⑴⑵⑷ を足す（T1・T13・T25 の ⑷）
   - ⑴ `tools/perf/` の下のどの `.py` も `tempfile` を読み込まず（perf-rank.py の 55 行の読み込みも消す）、作った子が、自分のファイルの位置から別に求めた根（`Cargo.toml` と `tools/perf/` があるフォルダ）の `target\perf-loop-tmp\` の下にある。⑵ 範囲のファイルに U+FEFF の字の比べが 0。⑷ `first_difference` の出力が ASCII
   - ⑶（本体の stderr の全行が ASCII）と ⑸（README の例）の確かめの本体も置き、道具の側から有効にする形にする（このタスクではどの道具も有効にしない＝後のタスクが `perf_selftest_common.py` に触らずに済む）
   - 4 本の自己較正の終わりで `check_tree` を回す
   - 終わった姿: 4 本の `--selftest` が緑で、1 本を `TemporaryDirectory` に戻すと ⑴ で、根を `parents[1]` に戻すと ⑴ で、U+FEFF の比べを戻すと ⑵ で赤になる
+  - _Dispatch: standard — 木全体を歩く見張りの新しい検査（読み込みの検出・根の別求め）を組む_
   - _Requirements: 4.7, 4.8, 7.4_
 
 ## 判定（judge-perf）
@@ -56,6 +61,7 @@
   - 終わった姿: judge-perf の `--selftest` が全検体で同じ数のまま緑で、消した名前が grep で 0 件、`judge-perf.py` が着手のときより減っている
   - _Boundary: judge-perf_
   - _Depends: 1.1_
+  - _Dispatch: mechanical — 消す名前と `aggregate()` に持たせる形を design と研究 §3 が与える_
   - _Requirements: 2.1, 2.3, 5.5, 7.1_
 
 - [ ] 4. 判定の検体を手入れし、足りない場面の検体を足す（#28〜#30・#42・#43・#68〜#73・#74 の `generate.py:195`）
@@ -63,10 +69,12 @@
   - H1b を消し、「指定の外の遅い系列は合格を止めない」の裁定の記録を H11 の note へ移す（#68・README は 13 へ）。C1・C2・T2 の note を事実に（#69）。端末の文を英語に（#70）。作ったもの以外のフォルダがあれば名を出して止める（#71）。H12c を `case_H12()` から作る（#72）。確かめを `rmtree` の前へ（#73）。`generate.py:195` の行番号を名前へ（#74）
   - 4 つの終了コードを全部求め、定数と assert を消す（#42・judge-perf の数行は同じタスクの削りと差し引く）
   - 終わった姿: `generate.py` を回して検体が H1b を除いてバイトで同じ（H12c は双子の突き合わせが緑）、judge-perf の `--selftest` が緑、H1b の名が grep で 0 件
+  - _Dispatch: mechanical — 生成器の注記・文・小さな検査を既存の形に沿って直す_
   - _Requirements: 2.1, 2.3, 5.4, 5.5, 7.1, 7.6_
 - [ ] 4.2 long・dev・明示指定・薄い定常・build の検体を足す（#28〜#30・#43）
   - `generate_more` に L1_long_flat_pass（0）・L2_long_rising_fail（1）・L3_long_too_short（2）・V1_dev_not_applicable（0）・S1_explicit_19_intervals（2）・S2_explicit_20_intervals（0）・S3_explicit_over_limit（1）・B2_thin_steady_verdict（2・`contains` で薄い定常の文）・X3_build_debug_arg（3）を design の表の形で置く。新しい名は今ある頭の字と重ならない
   - 終わった姿: 9 本が期待の終了コードで judge-perf の `--selftest` に緑で並び、作り直してバイトが一致し、`generate.py` が着手のときの行数以下
+  - _Dispatch: mechanical — 9 本の検体の形と期待の終了コードを design の表が与える_
   - _Requirements: 2.1, 4.7, 4.8, 7.1_
 
 - [ ] 5. 発話の区切りの語を今の kanade に合わせる（#2・#74 の judge-perf の範囲の中）
@@ -74,6 +82,7 @@
   - 語の注記と judge-perf の範囲の中の行番号を、ファイル名と語・関数名で指す形に（#74）
   - 判定の検体 `K1_boot_talk_excluded`（baseline・`emit_metrics = yes`・`talk_peak_cpu_pct value=4.20`）を `generate_more` に置く（T2）
   - 終わった姿: K1 が緑で、終わりの組から `boot_talk_done` を外すと 9.00 で赤。ほかの検体は同じ結果で緑
+  - _Dispatch: mechanical — 語の一覧（D4 の表）と検体の期待値を design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.3, 5.4_
 
 - [ ] 6. judge-perf の入力・終了コード・端末の文を直し、版を上げる（#5・#6・#8・#9・#24・#44〜#46・#75・#77・D10）
@@ -81,6 +90,7 @@
   - profile が `short`／`long` 以外なら判定不能（#5・検体 M1_profile_empty・M2_profile_unknown＝T5）。時刻の読めない catch-up があれば `catchup_count` は `-`（#9・検体 C3_undated_catchup_metric＝T9）
   - 注意書きを定常の点数と `CONVERGENCE_MIN_SAMPLES_PER_WINDOW * CONVERGENCE_WINDOW_COUNT` で比べる（#44）。食い違いのとき子の stderr の最初の行も添える（#45）。`case.txt` の知らない鍵は exit 3（#46）。`NO_COLOR` の説明を README と同じ趣旨に（#75）。見本のコメントを 2 行に（#77）
   - 終わった姿: M1・M2・C3 が緑で、`is None` に戻すと M1 が 0 で、0 を出す形に戻すと C3 で赤になる
+  - _Dispatch: standard — 入力の関門と数の出し方に新しい分岐を足す_
   - _Requirements: 2.1, 4.7, 4.8, 7.1, 7.2_
 - [ ] 6.2 差し替えの較正を作り、想定外の例外・関門の順・最後の行を直す（#6・#8・#24・D9・D12）
   - `main` に `except Exception` を置き、traceback を stderr に出して終了コード 3（#6・申し合わせ済み）。関門は未観測を集めるだけにし、不合格の確かめの後で判定不能にする（#8）
@@ -88,11 +98,13 @@
   - judge-perf の読みの失敗の文は、呼び手の文と `perf_lines` の共通の部分の両方を英語の ASCII にする（`perf_lines` の文の持ち主はこのタスク・perf-rank の末尾は 12.2）。判定の検体のうち stderr の文を見る `contains` を `generate.py`／`generate_more.py` の `declare` で直して作り直す（`generate.py` は D11 を守る）
   - `judge_perf_selftest_inproc.py` を作り、judge-perf の `--selftest` から渡された本体の関数と定数を `unittest.mock.patch.object` で差し替えて `main(argv)` を呼ぶ。judge-perf の `--selftest` の終わりに呼び出しを 1 つ足す
   - 終わった姿: T6（`except Exception` を外すと 1 で赤）・T8（S3 の材料で A 上限越え・B 未観測が 1、関門を元の順に戻すと 2 で赤）・T24（最後の行を日本語に戻すと赤）が緑。`main` は今どおり終了コードを返し、終了を早める小細工が無い
+  - _Dispatch: standard — 差し替えの較正の新しいモジュールを作り、例外の扱いと関門の順を組み直す_
   - _Requirements: 2.1, 4.7, 4.8, 6.1, 6.3, 7.1, 7.2, 7.3, 7.6_
 - [ ] 6.3 judge-perf の版を 0.5.0 に上げる（D10・議題 2）
   - `SCRIPT_VERSION` を `0.5.0` にし、版の文の中身を 0.5.0 の変更点の一文に（行は増やさない）。同じコミットで `goals/draw-load-parity.toml` の `judge_version`・`goals/draw-load-parity.goal.md` の条件文の版・`fixtures-loop/compare/goal.toml` と `fixtures-loop/compare/na_secondary/goal.toml` の `judge_version`・`fixtures-loop/compare/*/expected_compare.txt` 8 本の版を上げる。`fixtures-loop/ledger/` と来歴の注記は変えない
   - `audit-tools-perf-run` のセッションへ「judge-perf の版の値が 0.5.0 に変わるだけ・字面の形は同じ」と知らせる
   - 終わった姿: judge-perf と perf-compare の `--selftest` と `perf-loop.ps1 selftest` が緑で、ツリー全体の grep で D10 の一覧に `0.4.0` が残っていない
+  - _Dispatch: mechanical — 版の値と直すファイルの一覧を design（D10）が与える_
   - _Requirements: 2.1, 5.1, 5.2, 6.1_
 
 ## 比べ・追いの判定・台帳
@@ -102,11 +114,13 @@
   - `to_number` が有限でない値を `None` にし、自己較正で `to_number("nan") is None` を確かめる（T7 の compare の分）
   - 床は `bool` と `not floor > 0` を exit 3 で拒む（#10・ケース `floor_zero_rejected`・`floor_bool_rejected`＝T10）。数の取れた走行のどれにも副指標の鍵が無ければ exit 3（#11・ケース `unknown_metric_name`＝T11）。`compare.json` の各走行に `judge_stderr` を残し、計測失敗の stderr に添える（#12・既存の `measure_failed` で確かめる＝T12）
   - 終わった姿: perf-compare の `--selftest` が新しいケースを含めて緑で、検査を戻すと ADOPTED で赤、`judge_stderr` を消すと赤
+  - _Dispatch: mechanical — 既存の exit 3 の検査の形に沿って入力の確かめと欄を 1 つ足す_
   - _Requirements: 2.1, 4.7, 4.8, 7.2_
 - [ ] 7.2 perf-compare の端末の文・ケース・読み方を直す（#26・#32・#56・#74）
   - stderr の失敗の文を英語の ASCII に（#26・D9）。報告の本文は日本語のまま。`fixtures-loop/compare/` の `stderr_substr` のうち当たるものを合わせる。compare の自己較正で `check_tree` ⑶（本体の stderr の全行が ASCII）を入れる（T26 の compare の分）
   - ケース `no_diff_by_spread`・`judge_version_mismatch`（exit 4）を足す（#32）。`encoding="utf-8-sig"`（#56）。範囲の中の行番号を名前へ（#74）
   - 終わった姿: perf-compare の `--selftest` が 2 ケースと ⑶ を含めて緑で、stderr の文を 1 つ日本語に戻すと ⑶ で赤、`perf-compare.py` が 1,000 行以下
+  - _Dispatch: mechanical — 端末の文の英語化・ケースの追加・読み込みの文字コードを既存の形で直す_
   - _Requirements: 2.1, 4.8, 5.4, 7.1, 7.6_
 
 - [ ] 8. (P) judge-followup を直す（#26・#31・#52・#53・#74）
@@ -115,6 +129,7 @@
   - 終わった姿: judge-followup の `--selftest` が F1 と ⑶ を含めて緑で（stderr の文を 1 つ日本語に戻すと ⑶ で赤）、`DRAG_DX_PX` が grep で 0 件、`judge-followup.py` が 1,000 行以下
   - _Boundary: judge-followup_
   - _Depends: 2.2_
+  - _Dispatch: mechanical — 端末の文の英語化・ケース 1 本・定数の削除を既存の形で直す_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.4, 5.5, 7.1, 7.6_
 
 - [ ] 9. (P) 台帳の本体を直す（#14・#15・#19・#20・#33・#54〜#57・#59・#81 の perf-ledger）
@@ -123,11 +138,13 @@
   - 終わった姿: perf-ledger の `--selftest` が 4 ケースを含めて緑で、直しを戻すとそれぞれ 0 か 3 で赤
   - _Boundary: perf-ledger_
   - _Depends: 2.2_
+  - _Dispatch: mechanical — 既存の exit 3 の検査の形に沿って 4 つの入力の確かめとケースを足す_
   - _Requirements: 2.1, 4.7, 4.8, 7.2_
 - [ ] 9.2 台帳の書き込みの安全と支えの片付け（#33・#54〜#57・#59・#81）
   - ケース `write_fails`（普通のファイルの下へ init・exit 4＝W1）を足す（#33）。`--best` を `math.isfinite` に（#54）。目標定義の値の型を確かめて exit 3（#55 の perf-ledger の分・申し合わせ済み）。`encoding="utf-8-sig"`（#56）。flush → `os.fsync` → replace（#57）。selftest も `bind(core)` にして `SelftestEnv` を消す（#59）。perf-ledger の注記 3 か所を事実に（#81）
   - 失敗の文は日本語のまま（議題 1）
   - 終わった姿: perf-ledger の `--selftest` が W1 を含めて緑、`SelftestEnv` が grep で 0 件、`perf-ledger.py` が 1,000 行以下（越えるなら #14・#20 の検査を `perf_ledger_goal.py` へ置く）
+  - _Dispatch: standard — 書き込みの順（fsync）と自己較正の支え（`bind(core)`）を組み直す_
   - _Requirements: 2.1, 2.3, 4.8, 5.5, 6.1, 7.1_
 
 - [ ] 10. 台帳の判定面と目標定義を直す（#16〜#18・#55・#58・#60・#81・wpaexporter の注釈）
@@ -136,6 +153,7 @@
   - 終わった姿: perf-ledger の `--selftest` と `perf-loop.ps1 selftest` の goal-check が緑で、直しを戻すと T16〜T18 が赤、`formulas`・`main_model_recommended` が grep で 0 件
   - 6.3（`goals/draw-load-parity.toml` の版上げ）と 9（`perf_ledger_selftest.py`・`fixtures-loop/ledger/`）の後に取る
   - _Depends: 6.3_
+  - _Dispatch: standard — 判定面の検査・目標定義の鍵・境目の直しが複数のファイルにまたがる_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.5, 6.1, 7.2_
 
 ## 順位表（perf-rank）
@@ -148,6 +166,7 @@
   - 実機の確かめ（任意・議題 3）: 開発者が昇格の窓を開けるときだけ `target\perf-judge-dump-check\` へ採取 1 回と `perf-rank.py --stage function` を回し、列名の行・`areka.exe!0x` の綴り・exit を記録に残してフォルダを消す。開けないときは検証の記録に「実機の dump での確かめは未」と書く
   - _Boundary: perf_rank_dump, perf-rank（dump を読む所）, fixtures-loop/rank_
   - _Depends: 2.2_
+  - _Dispatch: standard, effort high — dump の 2 回読みと事象ごとの列の確かめは取り違えやすい数え方_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.5, 7.4, 7.6_
 
 - [ ] 12. 順位表のスレッド・引数・端末の文を直す（#4・#21・#22・#25・#34・#35・#63・#65・#66・#67）
@@ -156,6 +175,7 @@
   - 役割別の表を作るときだけ `actor:…-<数字>` を `-*` に畳む（D8・#22・ケース `talk_threads_folded`＝T22）。`perf(process)` の欄を `snap`・`cpu_us` だけに（#63）。`run_dir.resolve().name`（#65）
   - Rust（`perf_thread_report.rs` とテスト）には触らない。`talk-thread-count-growth` の brief に、#4・#22・#63 をこの spec で直したことを一言残す（議題 9）
   - 終わった姿: perf-rank の `--selftest` が T4・T22 を含めて緑で、既存の `full_ok`・`no_dump_unavailable` の期待出力が同じ値のまま、行の差に戻すと T4 が `200.00` で赤
+  - _Dispatch: standard — スレッドの残りの差（D7）と役割の畳み（D8）の新しい数え方を足す_
   - _Requirements: 2.1, 4.7, 4.8, 5.1, 5.3, 7.1_
 - [ ] 12.2 順位表の出力・引数・端末の文を直す（#21・#25・#34・#35・#66・#67）
   - `talk_peak_pct` と窓の定数・注記を消し、期待出力 3 本を直す（#21・T21）。`.claude/agents/perf-measure.md` の当たる行を直す
@@ -164,6 +184,7 @@
   - rank の理由の語を `.claude/agents/perf-measure.md`・`perf-analyze.md` に並べる（#66・perf-loop の語を並べるなら `no_record` を入れる・README は 13 へ）
   - 消す名前（`talk_peak_pct`・`true` の分岐）がツリー全体の grep で `.ps1` を含めて使い手が無いことを確かめる
   - 終わった姿: perf-rank の `--selftest` が R1 と ⑶ を含めて緑で（stderr の文を 1 つ日本語に戻すと ⑶ で赤）、期待出力に `talk_peak_pct` の行が無く、`perf-rank.py` が 1,000 行以下
+  - _Dispatch: mechanical — 出力の欄の削除・選択肢の削除・端末の文の英語化を design の形で直す_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.1, 5.2, 5.5, 6.1, 6.3, 7.1, 7.6_
 
 ## 文書と仕上げ
@@ -174,6 +195,7 @@
   - 申し合わせの分: wpaexporter の説明・perf-run の文 ①〜④（555 行・563〜573 行・880〜887 行・902〜903 行の当たる所）
   - 例を直した後に、2.2 で置いた `check_tree` ⑸（README の例の道筋が置き換え札の形）を、4 本の自己較正（perf-rank・judge-followup・perf-compare・perf-ledger の自己較正の所）で有効にする
   - 終わった姿: design の README の表の行が全部入り、⑸ を含む 4 本の `--selftest` が緑で、README の例を `C:\出力先` に戻すと ⑸ で赤、README の中に古い行番号の指し先が無い
+  - _Dispatch: mechanical — 直す文の中身を design の README の表と perf-run の design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.1, 5.2, 5.4_
 
 - [ ] 14. かけ直しの audit で新しい指摘を 0 件にする
@@ -182,6 +204,7 @@
   - 議題 1 の当て: perf-ledger の失敗の文が `tech.md` の ASCII の決まりに反すると指摘されたら、`audit-tools-perf-run` へ知らせてから perf-ledger の文と `SKILL.md` の見分けの語を重ならない行だけで合わせる
   - 0 件になるまでかけ直す。5 回目でも 0 件にならず、5 回目に「必ず直す」と本番の振る舞いに関わるものが無ければ、開発者に一言知らせて 5 回目の直しで打ち切る。直しでタスクが 20 本を越えそうなら議題にする
   - 終わった姿: `research.md` の検証の記録に、回ごとの組ごとの件数と、0 件または「5 回目で打ち切った・残りは直し済み」の判定が書かれている
+  - _Dispatch: standard — かけ直しの audit で出る指摘を読んで直す（中身は前もって決まらない）_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 6.5, 8.1_
 
 - [ ] 15. 自己較正と全体テストを緑にし、差分の約束を確かめる
@@ -190,4 +213,5 @@
   - `judge-perf.py` と `fixtures/generate.py` が着手のときの行数以下、ほかのどのファイルも 1,000 行の決まりを守る。GPU を使うテストを足していない（0 件）ことを記録に書く
   - `audit-tools-perf-run` へ py の行が動いたことを知らせる（あちらの 2 か所の行番号の合わせ）
   - 終わった姿: 2 つのコマンドが緑で、上の確かめの結果が検証の記録に書かれている
+  - _Dispatch: mechanical — 決まったコマンドを回し、差分の約束を数えて記録する_
   - _Requirements: 4.5, 4.6, 5.2, 5.6, 6.2, 6.4, 6.6, 7.1, 7.5_
