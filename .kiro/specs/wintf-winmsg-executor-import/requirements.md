@@ -41,7 +41,7 @@
 2. The 取り込み shall 元のリポジトリの `.claude`・`.kiro`・`CLAUDE.md`・`.gitignore`・`Cargo.lock` を areka の木へ写さない。
 3. The 写したクレート shall `src`・`examples`・`README.md`・`LICENSE-MIT`・`LICENSE-APACHE` の中身を、全体テストの整形の段（`cargo fmt --all`）が動かす分のほかは `4f20275` と 1 字違わず同じに保つ。
 4. The 取り込みのコミット shall その本文に、写した元のリポジトリとコミット番号 `4f20275` を書く。
-5. If 取り込みの時点で手元の写しの作業木が汚れているか、`main` の先頭が `4f20275` でないか、`main` が `origin/main` と食い違う, then the 取り込み shall ファイルを写さずに止まり、食い違いの中身を開発者へ報告する。
+5. If 取り込みの時点で手元の写しの作業木が汚れているか、`main` の先頭が `4f20275` でないか、`main` が `origin/main`（判定の直前に GitHub から取りに行った〔`git fetch` した〕もの。作業木と `main` は動かさない）と食い違う, then the 取り込み shall ファイルを写さずに止まり、食い違いの中身を開発者へ報告する。
 6. The 写したクレート shall 公開面（公開の型・関数・欄・モジュールの並び）と動きを、crates.io の 0.0.5 と同じに保つ。
 7. The 写したクレート shall edition 2021 と、`windows` の 0.62 の系列への依存（機能 `Win32_Foundation`・`Win32_Graphics_Gdi`・`Win32_System_Threading`・`Win32_UI_WindowsAndMessaging`）と、`async-task` 4.7.1 への依存（既定の機能なし）を保つ。
 
