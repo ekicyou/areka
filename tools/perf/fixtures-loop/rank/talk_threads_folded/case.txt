@@ -1,0 +1,7 @@
+title = トークのスレッドの役割は役割別の表で actor:sakura-talk-* の 1 行に畳む（T22）
+exit = 0
+argv = --stage thread --top 3
+
+note = 窓の中で 4 トークが 0.2 秒ずつ使う。役割別の表では actor:sakura-talk-<数字> を
+note = actor:sakura-talk-* に畳み、0.800 秒の 1 行として cursor_monitor（0.500）より上に出る。
+note = スレッド別の表は元の役割のまま。畳まないと 0.200 秒の 4 行に割れて上位 3 から落ちる。

@@ -170,7 +170,7 @@
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.5, 7.4, 7.6_
 
 - [ ] 12. 順位表のスレッド・引数・端末の文を直す（#4・#21・#22・#25・#34・#35・#63・#65・#66・#67）
-- [ ] 12.1 スレッドの数え方を直す（#4・#22・#63・#65）
+- [x] 12.1 スレッドの数え方を直す（#4・#22・#63・#65）
   - 差の基準で `perf(process)` の差が取れたとき、名簿外の残りの行の `cpu_us` を `max(プロセスの差 − 名簿の行の差の合計, 0)` に（D7・#4・ケース `tid_reused`＝T4）。TID の照らし方は Rust の `delta` と同じまま
   - 役割別の表を作るときだけ `actor:…-<数字>` を `-*` に畳む（D8・#22・ケース `talk_threads_folded`＝T22）。`perf(process)` の欄を `snap`・`cpu_us` だけに（#63）。`run_dir.resolve().name`（#65）
   - Rust（`perf_thread_report.rs` とテスト）には触らない。`talk-thread-count-growth` の brief に、#4・#22・#63 をこの spec で直したことを一言残す（議題 9）
@@ -237,3 +237,4 @@
 - 9.2: 「`SelftestEnv` が grep で 0 件」は perf-ledger の範囲（research #59）の意味で満たした。perf-compare と judge-followup は自分の `SelftestEnv` を持ち続ける（範囲の外・design.md:53 はそちらでは今も事実）。`_to_ledger_value` の isfinite は `--best` と append の entry の浮動小数の両方に効く
 - 10: 14 の audit で拾う候補: `check_goal_text` が `# summary` の節の見出しの下にある／`cmd_summary` の docstring の「results/summary.md」／ledger の selftest は想定外の例外で NG にならず落ちる
 - 11: フレームの数は今までどおり SampledProfile の行の Image!Function も数える（D6 の図は Stack の行だけだが、期待出力と ps1 の `Measure-ArekaFrames` を変えないため。スタックのあるサンプルの最上位フレームは 2 回数わる）。R2 の赤は `exists()` では出ない（0 バイトでも真）ので直しの前の `is_file() and st_size > 0` で見た。実機の dump での確かめは未（議題 3・開発者の昇格の窓が要る）
+- 12.1: README へ渡す分（13）: 「名簿は登録を消しません」を事実に／段②に「使い回された TID は 0 と読まれ、その CPU は残りに入る」の 1 文

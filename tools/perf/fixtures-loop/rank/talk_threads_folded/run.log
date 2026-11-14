@@ -1,0 +1,12 @@
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(process): プロセス CPU snap=1 t_s=5 wall_ms=5000 cpu_us=1000000 kernel_us=0 user_us=1000000 threads=3
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=1 name=main role=ui cpu_us=1000000 kernel_us=0 user_us=1000000
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=2 name=wintf-cursor-monitor role=cursor_monitor cpu_us=0 kernel_us=0 user_us=0
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=0 name=- role=unregistered_rest cpu_us=0 kernel_us=0 user_us=0
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(process): プロセス CPU snap=2 t_s=65 wall_ms=65000 cpu_us=3500000 kernel_us=0 user_us=3500000 threads=7
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=1 name=main role=ui cpu_us=2000000 kernel_us=0 user_us=2000000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=2 name=wintf-cursor-monitor role=cursor_monitor cpu_us=500000 kernel_us=0 user_us=500000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=101 name=sakura-talk-1 role=actor:sakura-talk-1 cpu_us=200000 kernel_us=0 user_us=200000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=102 name=sakura-talk-2 role=actor:sakura-talk-2 cpu_us=200000 kernel_us=0 user_us=200000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=103 name=sakura-talk-3 role=actor:sakura-talk-3 cpu_us=200000 kernel_us=0 user_us=200000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=104 name=sakura-talk-4 role=actor:sakura-talk-4 cpu_us=200000 kernel_us=0 user_us=200000
+2026-08-23T11:01:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=2 t_s=65 tid=0 name=- role=unregistered_rest cpu_us=200000 kernel_us=0 user_us=200000

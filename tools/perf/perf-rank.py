@@ -45,9 +45,10 @@ cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊�
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -177,15 +178,10 @@ class ThreadRow:
 
 @dataclass
 class ProcessRow:
-    """`perf(process)` 行 1 本（`wall_ms` だけが壁時計・残る 3 つは CPU 時間）。"""
+    """`perf(process)` 行 1 本（使う欄だけ読む・`cpu_us` は累積の CPU 時間）。"""
 
     snap: int
-    t_s: int
-    wall_ms: int
     cpu_us: int
-    kernel_us: int
-    user_us: int
-    threads: int
 
 
 @dataclass
@@ -266,11 +262,7 @@ def scan_run_log(path: Path) -> LogScan:
         if index >= 0:
             f = parse_fields(line[index + len(PROCESS_LINE_MESSAGE):])
             need = lambda key: _need_int(f, key, line_no, broken)  # noqa: E731
-            scan.processes.append(ProcessRow(
-                snap=need("snap"), t_s=need("t_s"), wall_ms=need("wall_ms"),
-                cpu_us=need("cpu_us"), kernel_us=need("kernel_us"),
-                user_us=need("user_us"), threads=need("threads"),
-            ))
+            scan.processes.append(ProcessRow(snap=need("snap"), cpu_us=need("cpu_us")))
             continue
 
         index = line.find(TICK_WINDOW_MARKER)
@@ -440,6 +432,13 @@ def stage_thread(scan: LogScan, dump: DumpScan | None, top: int) -> list[str]:
             process_cpu_us = max(processes[last_snap].cpu_us - processes[prev_snap].cpu_us, 0)
     whole = float(process_cpu_us) if process_cpu_us is not None else 0.0
 
+    # 名簿外の残りは行どうしの差でなくプロセスの差から引く（D7・#4）。使い回された TID の
+    # 新しいスレッドは delta で 0 に止まり、行の差のままだと残りが幻の CPU で膨らむ。
+    if basis == "delta" and process_cpu_us is not None:
+        named_us = sum(r.cpu_us for r in rows if r.role != ROLE_UNREGISTERED_REST)
+        rows = [replace(r, cpu_us=max(process_cpu_us - named_us, 0))
+                if r.role == ROLE_UNREGISTERED_REST else r for r in rows]
+
     # 名簿由来と名簿外の残りは分けて出す。`perf(thread)` 行には `unregistered_rest` も
     # 1 本混じっており、全部足すと必ずプロセス CPU に一致してしまう（C14: 残り＝
     # プロセス − 名簿）。1 つの数にすると「名簿がプロセス全部を説明できている」と
@@ -466,7 +465,9 @@ def stage_thread(scan: LogScan, dump: DumpScan | None, top: int) -> list[str]:
 
     by_role: dict[str, int] = {}
     for row in rows:
-        by_role[row.role] = by_role.get(row.role, 0) + row.cpu_us
+        # トークのスレッドは 1 本ずつ役割が違う（sakura-talk-{id}）ので役割別でだけ畳む（D8・#22）。
+        role = re.sub(r"^(actor:.+)-\d+$", r"\1-*", row.role)
+        by_role[role] = by_role.get(role, 0) + row.cpu_us
     role_items = sorted(by_role.items(), key=lambda kv: (-kv[1], kv[0]))
     lines.append(f"  役割別（上位 {top}）")
     lines.extend(render_table(
@@ -615,7 +616,7 @@ def build_report(
         reason = "no_dump" if sampling != "false" else "declared_unavailable"
 
     lines = [
-        f"perf-rank {SCRIPT_VERSION} run={run_dir.name} stages={','.join(stages)} top={top}"
+        f"perf-rank {SCRIPT_VERSION} run={run_dir.resolve().name} stages={','.join(stages)} top={top}"
     ]
     for stage in stages:
         lines.append("")
