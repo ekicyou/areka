@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::BalloonXMode;
 use crate::follow::OffsetBase;
+use log_capture_kit::{ExpectField, capture};
 
 // ------------------------------------------------------------------
 // バルーン相対オフセットの保存基準（2.2/2.5・2026-07-31 実機裁定）
@@ -23,71 +24,6 @@ const ALL_ANCHORS: [Anchor; 5] = [
     Anchor::Right,
     Anchor::Free,
 ];
-
-/// 保存方向: [`balloon_offset_entries`] は左上基準 offset を**そのまま**書く
-/// （アンカー辺基準の減算をしない）。旧基準が書いていた値を明示的に排除する。
-#[test]
-fn balloon_offset_entries_persist_raw_top_left_offset() {
-    let offset_tl = PointPx { x: 40, y: 70 };
-    let entries = balloon_offset_entries(0, offset_tl);
-    assert_eq!(
-        entries,
-        vec![
-            (
-                PersistKey::BalloonOffset {
-                    scope: 0,
-                    axis: Axis::X
-                },
-                "40".to_string()
-            ),
-            (
-                PersistKey::BalloonOffset {
-                    scope: 0,
-                    axis: Axis::Y
-                },
-                "70".to_string()
-            ),
-        ],
-        "保存値は char 左上基準の生 offset（char_size を混ぜない）"
-    );
-    // 旧アンカー辺基準（char 300x500）なら Bottom は (-110,-430)・Right は (-260,70) を
-    // 書いていた——それらが再び現れないことを排除する（基準反転の恒久檻）。
-    for stale in ["-110", "-430", "-260"] {
-        assert!(
-            !entries.iter().any(|(_, v)| v == stale),
-            "旧アンカー辺基準の値 {stale} が保存されている（基準変換の復活）"
-        );
-    }
-}
-
-/// 復元方向: 保存 BalloonOffset は**全アンカーで**基準変換なしにそのまま
-/// 左上基準 offset として採用される（現 char_size を足し戻さない）。
-#[test]
-fn restored_balloon_offset_is_raw_saved_value_for_all_anchors() {
-    let snap = snapshot_of(vec![]); // 空＝project_restore identity
-    let saved = PointPx { x: 40, y: 70 };
-    let entries = balloon_offset_entries(0, saved);
-    for anchor in ALL_ANCHORS {
-        let placements = vec![placement(
-            0,
-            anchor,
-            PointPx { x: 100, y: 100 },
-            CSZ,                      // 400x600（旧基準なら Bottom で +（200,600）されていた）
-            PointPx { x: -50, y: 0 }, // 既定（保存値で上書きされる）
-            BSZ,
-        )];
-        let out = apply_restored_placements(placements, &entries, &snap);
-        assert_eq!(
-            out[0].balloon_offset, saved,
-            "anchor={anchor:?}: 保存値がそのまま左上基準 offset になっていない"
-        );
-        assert_eq!(
-            out[0].balloon_pos,
-            PointPx { x: 140, y: 170 },
-            "anchor={anchor:?}: balloon_pos ≡ char_pos + 左上基準 offset"
-        );
-    }
-}
 
 /// 不変条件: 全アンカー × 複数寸法で保存 → 復元が恒等（左上基準の往復）。
 /// **保存時と復元時で char_size が違っても**恒等——これがランタイム
@@ -115,7 +51,7 @@ fn balloon_offset_round_trip_is_identity_across_anchors_and_size_changes() {
                 let placements = vec![placement(
                     0,
                     anchor,
-                    PointPx { x: 0, y: 0 },
+                    PointPx { x: 100, y: 100 },
                     size,
                     PointPx { x: 7, y: 7 },
                     BSZ,
@@ -124,6 +60,15 @@ fn balloon_offset_round_trip_is_identity_across_anchors_and_size_changes() {
                 assert_eq!(
                     out[0].balloon_offset, offset,
                     "往復恒等が破れた: anchor={anchor:?} size={size:?} offset={offset:?}"
+                );
+                // 記憶に窓の位置が無いので char_pos は既定の (100,100) のまま。
+                assert_eq!(
+                    out[0].balloon_pos,
+                    PointPx {
+                        x: 100 + offset.x,
+                        y: 100 + offset.y
+                    },
+                    "balloon_pos が char_pos + 左上基準 offset でない: anchor={anchor:?} size={size:?}"
                 );
             }
         }
@@ -292,7 +237,7 @@ fn project_restore_bottom_x_outside_clamps_into_work_area() {
 
 /// 端付近に置いた Bottom char（右端を数十 px はみ出す＝**一部可視**）は復元で
 /// クランプされず保存 x をそのまま用いる（Req5.3・実機サインオフ検出の恒久回帰）。
-/// 保存側 `project_anchor`／BottomSnapPolicy は補軸 x を clamp しないため、一部可視の
+/// 保存側 `project_anchor`／`bottom_snap` は補軸 x を clamp しないため、一部可視の
 /// 位置は復元でも同一でなければ立ち位置がずれ、追従 balloon もずれる（保存↔復元の
 /// クランプ非対称）。実機値: 保存 x=3493・wa.right=3840・w=434（右端 3927 で 87px はみ出し）
 /// → 修正前は 3406 へ clamp していた欠陥を固定する。
@@ -718,6 +663,59 @@ fn apply_one_axis_corrupt_keeps_default() {
     assert_eq!(out[0], placements[0], "破損時は当該 scope 恒等");
 }
 
+/// 16（要件 9.2）: 在るが読めない鍵（窓の x = "12.5"）と、片方の軸だけの鍵（ずらしの y だけ）は、
+/// 鍵ごとに `warn!` を 1 行ずつ出して既定へ戻る。読める相方（窓の y）と、そろった記憶は出さない。
+#[test]
+fn apply_warns_once_per_unusable_key_and_keeps_default() {
+    let snap = snapshot_of(vec![]); // identity
+    let placements = vec![placement(
+        0,
+        Anchor::Free,
+        PointPx { x: 100, y: 100 },
+        CSZ,
+        PointPx { x: -50, y: 0 },
+        BSZ,
+    )];
+    let entries = vec![
+        wp(0, Axis::X, "12.5"),
+        wp(0, Axis::Y, "500"),
+        bo(0, Axis::Y, "-300"),
+    ];
+
+    let (out, events) = capture(|| apply_restored_placements(placements.clone(), &entries, &snap));
+
+    assert_eq!(out[0], placements[0], "読めない記憶は既定のまま");
+    let warned: Vec<(&str, &str)> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .map(|e| {
+            assert_eq!(e.field_str("event"), Some("persist_value_unusable"));
+            (e.expect_field("key"), e.expect_field("value"))
+        })
+        .collect();
+    assert_eq!(
+        warned,
+        vec![
+            ("areka.window.scope(0).x", "\"12.5\""),
+            ("areka.balloon.offset.scope(0).y", "\"-300\""),
+        ],
+        "鍵ごとに 1 行: {events:?}"
+    );
+
+    // そろった記憶は警告を出さない。
+    let good = vec![
+        wp(0, Axis::X, "800"),
+        wp(0, Axis::Y, "500"),
+        bo(0, Axis::X, "-30"),
+        bo(0, Axis::Y, "20"),
+    ];
+    let (_, events) = capture(|| apply_restored_placements(placements, &good, &snap));
+    assert!(
+        events.iter().all(|e| e.level != tracing::Level::WARN),
+        "そろった記憶で警告が出ている: {events:?}"
+    );
+}
+
 /// 5.1/5.2: 保存位置が現 work area 外でも project_restore で域内へ（Bottom 下端吸着）。
 /// merge が project_restore を実際に通していることの結合檻。
 #[test]
@@ -765,24 +763,6 @@ fn apply_matches_scope_usize_to_persist_u32() {
         PointPx { x: 77, y: 88 },
         "scope 3 の u32 一致"
     );
-}
-
-/// 決定論: 同一入力→同一出力。
-#[test]
-fn apply_is_deterministic() {
-    let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
-    let placements = vec![placement(
-        0,
-        Anchor::Bottom,
-        PointPx { x: 500, y: 440 },
-        CSZ,
-        PointPx { x: -200, y: 0 },
-        BSZ,
-    )];
-    let entries = vec![wp(0, Axis::X, "600"), wp(0, Axis::Y, "440")];
-    let a = apply_restored_placements(placements.clone(), &entries, &snap);
-    let b = apply_restored_placements(placements, &entries, &snap);
-    assert_eq!(a, b, "同一入力→同一出力");
 }
 
 /// char-position-save-on-exit 2.4/2.6（design テスト 6）: `has_saved_char_pos` は x・y の

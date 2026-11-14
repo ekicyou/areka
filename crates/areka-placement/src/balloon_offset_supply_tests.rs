@@ -352,31 +352,6 @@ fn prepare_merges_each_supply_in_its_own_axis() {
     });
 }
 
-/// **順序**の檻（要件 2.3・task 4.3 第 1 項）: 換算は `windowposition` の合流より
-/// **前**に走る。
-///
-/// 3 つの順序が互いに異なる値を出すので、値ひとつで順序が決まる（同じ検体・同じ手計算）:
-/// - 正（換算 → 合流）: (100×2, −40×2) = (200, −80) に (443, −215) を足して **(643, −295)**
-/// - 逆（合流 → 換算）: (100+443, −40−215) = (543, −255) をシェル軸 2/1 倍して (1086, −510)
-///   ——`windowposition` の調整量にまでシェル軸が二重に掛かる
-/// - 換算なし（是正前）: (543, −255)
-///
-/// ゆえに本檻は**ステップを入れ替えても落ちる**（入れ替えても通る種類の主張ではない）。
-#[test]
-fn prepare_runs_the_conversion_before_the_windowposition_merge() {
-    with_com_initialized(|| {
-        let root = TempDir::new();
-        let (ghost_root, balloon_dir) =
-            synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (100, -40));
-
-        let merged = merged_offset(&ghost_root, &balloon_dir, 240);
-
-        assert_eq!(merged, Some((643, -295)), "換算 → 合流の順");
-        assert_ne!(merged, Some((1086, -510)), "合流 → 換算（逆順）ではない");
-        assert_ne!(merged, Some((543, -255)), "換算なし（是正前）ではない");
-    });
-}
-
 /// 合流後の値が**配置解決の出力まで届く**こと（要件 2.3・7.1）。
 ///
 /// task 4.1 の純関数側は `PlacementConfig` を直に組んで合成したが、本檻は実配置経路

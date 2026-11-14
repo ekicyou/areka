@@ -6,11 +6,16 @@
 //! （形式・原子性・寛容読取・スコープ分離）は sylphya の領分であり、本モジュールは
 //! その契約（[`areka_sylphya::PersistKey`]／[`areka_sylphya::Axis`]）を消費するのみ。
 //!
-//! 記憶への送り口は [`persist_entries`] 1 つで、キャラ窓の位置を書く時機はドラッグの確定
-//! （`follow::drag_follow` の `on_char_drag_end`）と、起動の最後に並べ終えた時点
-//! （[`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ）の 2 つ。戻す側
-//! （[`apply_restored_placements`]）は純関数のままで、送り口に届かない。
-//! 2 つ目の時機は、完了 spec `areka-P0-position-persist` の要件 1.9（ドラッグの確定でだけ
+//! 記憶への送り口は [`persist_entries`] 1 つで、今の呼び手は次の 5 か所:
+//! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置）
+//! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
+//! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
+//! - 起動の最後に並べ終えた時点（[`persist_unremembered_char_positions`]・記憶に位置が無い
+//!   キャラだけ）
+//! - バルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・標準のずらし）
+//!
+//! 戻す側（[`apply_restored_placements`]）は純関数のままで、送り口に届かない。
+//! 並べ終えた時点の時機は、完了 spec `areka-P0-position-persist` の要件 1.9（ドラッグの確定でだけ
 //! 書く）を `areka-P0-char-position-save-on-exit` で改めたもの。一度もドラッグしていない
 //! キャラが起動のたびに並べ直されないようにするため（記録は `doc/COMPAT_ARCHITECTURE.md` 8 章）。
 //! 決定論的な変換——寛容 parse（[`parse_px`]）と保存 entries 構築
@@ -47,8 +52,9 @@ use super::sticky_group_ledger::StickyGroupLedger;
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
-/// 数値文字列 → `Some(i32)`。非数値・空文字列 → `None`（＝「値なし」・呼び手が warn＋
-/// 既定へ縮退する）。前後空白は許容する（寛容）。決定論（同一入力→同一出力）。
+/// 数値文字列 → `Some(i32)`。非数値・空文字列 → `None`（＝「値なし」・復元の
+/// `merge_scope` が鍵ごとに warn を出して既定へ戻る）。前後空白は許容する（寛容）。
+/// 決定論（同一入力→同一出力）。
 pub fn parse_px(value: &str) -> Option<i32> {
     // 寛容縮退（6.1）: 非数値・空・小数は「値なし」＝None（panic なし）。
     value.trim().parse::<i32>().ok()
@@ -216,7 +222,7 @@ fn project_restore_parts(
         return (pos, pos);
     };
 
-    // アンカー辺の再導出（5.2）＝ project_anchor へ委譲（Bottom は BottomSnapPolicy・
+    // アンカー辺の再導出（5.2）＝ project_anchor へ委譲（Bottom は下端吸着の `bottom_snap`・
     // Top/Left/Right は wa 対応辺固定・Free は identity）。二重定義しない（Req1.6/1.8）。
     // project_anchor 内部の wa も同一 window 矩形から引くため補軸 clamp の wa と整合する。
     let projected = project_anchor(anchor, pos, size, Some(snapshot));
@@ -227,7 +233,7 @@ fn project_restore_parts(
     // そのまま用いる（Req5.3: 収まる＝一部でも可視のとき不要な再射影をしない）。
     //
     // これで通常構成では復元＝保存（idempotent）を保証し、保存側（`project_anchor`／
-    // BottomSnapPolicy は補軸 x を clamp しない）との非対称による座標ずれを解消する
+    // `bottom_snap` は補軸 x を clamp しない）との非対称による座標ずれを解消する
     // ——実機サインオフ検出: 端付近（右端を数十 px はみ出す）へ置いた Bottom char が、
     // 復元でだけ `wa.right − w` へ内側に寄せられて立ち位置がずれ、追従 balloon もずれた
     // （保存 x=3493・wa.right=3840・w=434 → 復元だけが 3406 へ clamp していた）。
@@ -513,6 +519,11 @@ fn merge_scope(
     snapshot: &MonitorSnapshot,
 ) -> (ScopePlacement, Option<(PointPx, PointPx)>) {
     let scope = placement.scope as u32;
+    warn_unusable_pair(entries, scope, |axis| PersistKey::WindowPos { scope, axis });
+    warn_unusable_pair(entries, scope, |axis| PersistKey::BalloonOffset {
+        scope,
+        axis,
+    });
 
     // --- char_pos: 保存 WindowPos が両軸とも parse できたときのみ差替え＋再射影（1.4/1.5/6.1）---
     let saved_window = saved_char_pos(entries, scope);
@@ -617,6 +628,38 @@ fn merge_scope(
     (merged, restored_parts)
 }
 
+/// x・y の組の鍵のうち、在るが読めない鍵と、相方の鍵が無い鍵に `warn!` を 1 行ずつ出す
+/// （指摘 16・要件 9.2）。どちらも [`merge_scope`] は採らずに既定へ戻る。相方が在って
+/// 読めないときは、相方の行だけを出す。
+fn warn_unusable_pair(
+    entries: &[(PersistKey, String)],
+    scope: u32,
+    key_of: impl Fn(Axis) -> PersistKey,
+) {
+    for (axis, other) in [(Axis::X, Axis::Y), (Axis::Y, Axis::X)] {
+        let key = key_of(axis);
+        let Some(value) = entry_value(entries, key) else {
+            continue;
+        };
+        let reason = if parse_px(value).is_none() {
+            "数として読めない"
+        } else if entry_value(entries, key_of(other)).is_none() {
+            "片方の軸だけ"
+        } else {
+            continue;
+        };
+        warn!(
+            target: "areka::persist::restore",
+            event = "persist_value_unusable",
+            scope,
+            key = %key.to_canonical_key(),
+            value,
+            reason,
+            "記憶の値が使えないので既定の位置へ戻す"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // State Management（PersistWiring）＋保存投函ヘルパ（design C1・task 2.1・
 // Req1.1 ドラッグ確定即時書込／1.9 発火規律／6.2 保存失敗縮退／7.1 Ghost スコープ固定）
@@ -626,9 +669,8 @@ fn merge_scope(
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。ドラッグの確定（[`super::follow`] の task 2.2/2.3 フック）と、起動の
-/// 最後に並べ終えた時点（[`persist_unremembered_char_positions`]・キャラ窓の位置だけ）の 2 つが
-/// [`persist_entries`] 経由でこの publisher の clone 送信端から保存 entries を投函する。
+/// State Management・軸B）。[`persist_entries`] の呼び手（今の 5 か所はモジュールの doc に並べる）が、
+/// この publisher の clone 送信端から保存 entries を投函する。
 pub struct PersistWiring {
     /// sylphya アクターへの変異投函の送信端（`persist_put` の fire-and-forget 投函に用いる）。
     pub publisher: SylphyaPublisher,

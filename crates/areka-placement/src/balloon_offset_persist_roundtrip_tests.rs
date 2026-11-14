@@ -1,5 +1,5 @@
 //! **保存・復元の往復**の檻（areka-P0-balloon-offset-dpi・task 7・design D15・
-//! 「Testing Strategy > 保存・復元テスト」1〜3・要件 5.2／5.4／5.5／5.6／7.1／7.2）。
+//! 「Testing Strategy > 保存・復元テスト」1〜3・要件 5.2／5.4／5.6／7.1／7.2）。
 //!
 //! # ⚠ ここへ来た保守者へ——これは開発者裁定の非回帰テストである（要件 7.2）
 //!
@@ -27,7 +27,7 @@
 //!
 //! | 主張 | 置き場所 |
 //! |---|---|
-//! | 復元経路が運ぶ**基準対**の腕分け（保存値あり／欠損／片軸） | `persist_restore_offset_base_tests.rs`（task 2.2） |
+//! | 復元経路が運ぶ**基準対**の腕分け（保存値あり／欠損／片軸）＝採否の優先順位（要件 5.5） | `persist_restore_offset_base_tests.rs`（task 2.2） |
 //! | 変換規則そのもの（丸め・往復・縮退・全腕の到達） | `follow_offset_space_tests.rs`（task 1.2〜） |
 //! | 遷移 × アンカーの相の結合（`FrameHarness` で本番の相順を回す） | `frame_balloon_offset_follow_tests.rs`（task 6.5） |
 //! | **保存 → 復元 → 係留 → 追随**を 1 本に貫いた往復 | **本ファイル** |
@@ -145,7 +145,7 @@ const COUNTERFACTUAL_IF_CONVERTED: [(u16, PointPx); 3] = [
 // ---------------------------------------------------------------------------
 
 fn dpi(v: u16) -> DPI {
-    DPI { dpi_x: v, dpi_y: v }
+    crate::square_dpi(v.into())
 }
 
 fn snapshot() -> MonitorSnapshot {
@@ -255,22 +255,6 @@ fn a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit() {
             "探針が退化している——保存値と配置式既定が同値では採否も換算も見分けられない"
         );
     }
-}
-
-/// 5.2／7.2: 保存 entries が載せる文字列は**生値そのもの**である（補正後の表示位置でも
-/// 換算後の値でもない・要件 5.6 の保存側）。
-#[test]
-fn the_persisted_entries_carry_the_raw_offset_verbatim() {
-    let entries = balloon_offset_entries(0, SAVED);
-    let value_of = |axis: Axis| {
-        entries
-            .iter()
-            .find(|(k, _)| *k == PersistKey::BalloonOffset { scope: 0, axis })
-            .map(|(_, v)| v.as_str())
-            .expect("両軸が載る")
-    };
-    assert_eq!(value_of(Axis::X), "-512", "保存されるのは生値の逐語表現");
-    assert_eq!(value_of(Axis::Y), "-48", "保存されるのは生値の逐語表現");
 }
 
 /// 5.2／7.2: **復元先の表示 DPI が何であれ**、最初の観測は値を 1 bit も動かさずに
@@ -448,57 +432,8 @@ fn the_follow_never_precedes_the_anchoring() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. 採否の優先順位と生値保存は不変（要件 5.5／5.6・保存・復元 3）
+// 3. 復元は補正を焼き付けない（要件 5.6・保存・復元 3）
 // ---------------------------------------------------------------------------
-
-/// 5.5: 採否の優先順位は**本仕様の前後で変わらない**——保存値があれば保存値、無ければ
-/// 配置式の既定。片軸だけの保存値は採用されない（既存の受理境界も不変）。
-///
-/// `persist_restore_offset_base_tests.rs` は同じ順位を**基準対の腕**の側から押さえて
-/// いる。本テストは往復（保存 entries を本番の構築子で作る）の側から押さえる。
-#[test]
-fn the_adoption_priority_is_unchanged() {
-    for anchor in ANCHORS {
-        // 保存値あり → 保存値が勝つ。
-        let adopted = roundtrip(anchor, Some(SAVED));
-        assert_eq!(
-            adopted.balloon_offset, SAVED,
-            "{anchor:?}: 保存値があれば保存値が勝つ"
-        );
-
-        // 保存値なし → 配置式の既定が残り、基準対も配置式のもの（係留済み）のまま。
-        let defaulted = roundtrip(anchor, None);
-        assert_eq!(
-            defaulted.balloon_offset, FORMULA_DEFAULT,
-            "{anchor:?}: 保存値が無ければ配置式の既定"
-        );
-        assert_eq!(
-            defaulted.balloon_offset_base,
-            OffsetBase {
-                offset: FORMULA_DEFAULT,
-                dpi: Some(MEASURE_DPI),
-            },
-            "{anchor:?}: 欠損腕は配置式の基準対を素通しする（未係留へ落とさない）"
-        );
-
-        // 片軸だけ → 採用しない（既定のまま）。
-        let half = apply_restored_placements(
-            vec![placement_from_formula(anchor)],
-            &[(
-                PersistKey::BalloonOffset {
-                    scope: 0,
-                    axis: Axis::X,
-                },
-                SAVED.x.to_string(),
-            )],
-            &snapshot(),
-        );
-        assert_eq!(
-            half[0].balloon_offset, FORMULA_DEFAULT,
-            "{anchor:?}: 片軸のみの保存値は採用腕へ入らない"
-        );
-    }
-}
 
 /// 5.6: 復元は**補正後の表示位置をオフセットへ焼き付けない**。
 ///

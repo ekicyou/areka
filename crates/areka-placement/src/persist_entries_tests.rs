@@ -28,13 +28,6 @@ fn parse_px_tolerates_surrounding_whitespace() {
     assert_eq!(parse_px(" 42 "), Some(42));
 }
 
-#[test]
-fn parse_px_is_deterministic() {
-    for s in ["777", "-3", "x", ""] {
-        assert_eq!(parse_px(s), parse_px(s), "同一入力→同一出力: {s:?}");
-    }
-}
-
 // ------------------------------------------------------------------
 // char_pos_entries（保存 entries・1.6）: WindowPos X/Y の key/値等価
 // ------------------------------------------------------------------

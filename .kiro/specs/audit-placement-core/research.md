@@ -804,6 +804,7 @@
 | U11 | `follow.rs:L53`（`BALLOON_LIMIT_CLAMP_TAG`） | `L52` |
 | 9（タスク 4.1） | `lib.rs` の規約の文に挙げる名（`follow` との両向きは `balloon_limit`・`dpi_sync`・`sticky_group_ledger`・`spawn`、根を引く子は `reset_pos`・`follow/offset_space`） | 今の参照を grep し直して足した: 両向きに `persist`（`persist.rs:L40`↔`follow.rs:L56`）・`transition_diag`（`transition_diag.rs:L61`↔`follow.rs:L148`）、根を引く子に `reseed`→`scale_then_merge`・`ScopeWindowPositions`（`reseed.rs:L39`・タスク 2.3 で入った） |
 | U28 | 追随の `follow/work_area_clamp.rs:L18` の古い文（「examples は `#[path]` で…」） | 追随の側が直した（今の `L15-L20` に `examples`・`#[path]` の語は無い）。完了の申し送りに書く件は 1 つ減る |
+| U13（タスク 5.1） | `persist_entries` の呼び手は 6 か所 | 5 か所（`drag_follow.rs` に 2・`sticky_follow.rs`・`persist.rs` の `persist_unremembered_char_positions`・`reset_balloon_pos.rs`）。文書には今の 5 か所を挙げる |
 
 15 節の表の行は、どれも今もある（タスク 2.1・2.2・4.2・4.3・5.1・6.3・6.5・6.6・7.2 で直す）。
 
