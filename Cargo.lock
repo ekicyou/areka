@@ -2744,9 +2744,7 @@ dependencies = [
 
 [[package]]
 name = "wintf-winmsg-executor"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a50fdcfe3237a7ab85919b5d44f4ea8a119826955549135c965d0c0a26b8788"
+version = "0.1.0"
 dependencies = [
  "async-task",
  "windows",

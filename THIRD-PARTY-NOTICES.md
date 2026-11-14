@@ -3359,7 +3359,7 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- wintf-winmsg-executor 0.0.5
+- wintf-winmsg-executor 0.1.0
 
 ```
 MIT License

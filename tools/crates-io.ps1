@@ -65,7 +65,7 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 # =============================================================================
 # 較正値（説明の一覧と対応。変更はここだけ）
 # =============================================================================
-$PUBLISH   = @('dola', 'wintf')
+$PUBLISH   = @('dola', 'wintf', 'wintf-winmsg-executor')
 $MAX_CRATE = 10485760
 $INDEX_URL = 'https://index.crates.io/'
 $WORK_DIR  = 'target/crates-io'
@@ -183,6 +183,7 @@ function Pkgs([string]$Json) { @(($Json | ConvertFrom-Json).packages) }
 $good = '{"packages":[
   {"name":"dola","version":"0.0.1","publish":null,"description":"d","license":"MIT","repository":"r"},
   {"name":"wintf","version":"0.0.1","publish":null,"description":"d","license":"MIT","repository":"r"},
+  {"name":"wintf-winmsg-executor","version":"0.0.1","publish":null,"description":"d","license":"MIT OR Apache-2.0","repository":"r"},
   {"name":"areka","version":"0.0.1","publish":[],"description":null,"license":null,"repository":null}]}'
 
 function Calibrate([string]$Judgment, [string]$Sample, [string[]]$Got, [bool]$ShouldPass, [string[]]$Mention = @()) {

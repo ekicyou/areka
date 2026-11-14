@@ -79,3 +79,8 @@
 - 要件定義のモデル: Opus（鍵を広げるのも節の切り抜きも今ある口に足す形＝新しい境界ではない）。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述（前の再測定の節から持ち越し）: 同じ画像を「切り抜きあり」と「なし」で使うと片方は動き片方は止まる＝鍵を分ける形が要る（議題 2）。Constraints の「読み手と `manifest.rs` は `surface-element-nesting` と共有」は古い（今の相手は上の spec たち）。外形の計算は `plan.rs` でなく `plan_extent.rs`。
+
+## 申し送り（wintf-visual-damage-redraw より・2026-11-14）
+
+- **層の命令に欄が増えた**（`crates/wintf/src/ecs/graphics/visual/draw/command.rs`）: `ClipRect`・`ClipGeometry`・`OpacityLayer` が `entity`（層を積んだ節）と `version`（その節の `VisualVersion`・無ければ 0）を持つ。差分の描き直しの比べの同一性の鍵は、親の層の鎖を含む。`--clipping` を節の切り抜きで描くとき、描く列を自分で組むならこの欄を埋める。欄の変更は `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Revalidation Triggers に載る。
+- **切り抜きの変化は差分の描き直しが扱う**: 矩形と図形の切り抜きを足す・形を変える・外す回は、範囲だけの描き直しでも毎回全部描いた答えとバイトで一致することを WARP のテストで固めてある（`crates/wintf/src/ecs/graphics/composite_damage_tests.rs` の `rect_clip_added_reshaped_removed_matches_full_bytes`・`geometry_clip_added_reshaped_removed_matches_full_bytes`）。この spec の側で描き直しの範囲を手当てする必要は無い見込み。ただし範囲だけの描き直しは交わる件を丸ごと描く（同 design の Risks の R1）ので、大きな 1 枚の絵から切り抜く部品が多いシェルでは、絵の件の範囲（切り抜きの前か後か）しだいで描き直しの量が変わる。どちらの範囲になるかは確かめていない。
