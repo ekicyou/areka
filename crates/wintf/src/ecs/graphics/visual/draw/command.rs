@@ -33,6 +33,8 @@ pub struct DrawItem {
     /// 同一性。COM の番地に依らない値から取る（4.5）。
     pub hash: u64,
     pub entity: Entity,
+    /// 節の `VisualVersion`（無ければ 0）。平行移動を除いた鍵に使う。
+    pub version: u64,
     /// 根からの DIP。
     pub world_mat: Matrix3x2,
     /// DIP。
@@ -46,6 +48,10 @@ pub struct DrawItem {
 /// 軸に沿う矩形の切り抜き。
 #[derive(Clone, Debug)]
 pub struct ClipRect {
+    /// 層を積んだ節。
+    pub entity: Entity,
+    /// その節の `VisualVersion`（無ければ 0）。
+    pub version: u64,
     /// DIP。
     pub world_aabb: Aabb,
 }
@@ -53,6 +59,10 @@ pub struct ClipRect {
 /// 図形の切り抜き。
 #[derive(Clone, Debug)]
 pub struct ClipGeometry {
+    /// 層を積んだ節。
+    pub entity: Entity,
+    /// その節の `VisualVersion`（無ければ 0）。
+    pub version: u64,
     /// 図形の局所→世界（根からの DIP）の変換。
     pub world_mat: Matrix3x2,
     pub geometry: ID2D1Geometry,
@@ -63,6 +73,10 @@ pub struct ClipGeometry {
 /// 不透明度の層。
 #[derive(Clone, Debug)]
 pub struct OpacityLayer {
+    /// 層を積んだ節。
+    pub entity: Entity,
+    /// その節の `VisualVersion`（無ければ 0）。
+    pub version: u64,
     /// `Visual::clamped_opacity` の値（0 より大きく 1.0 未満）。
     pub opacity: f32,
     /// 層の中身の範囲（根からの DIP）。節の部分木の世界の外接矩形と、外側の有効な矩形の交わり。

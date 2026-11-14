@@ -187,6 +187,55 @@ fn contents_stay_after_copy_and_second_copy_is_identical() {
     assert!(first.bytes == second.bytes, "2 度目の写しが違う");
 }
 
+/// 部分の写し（2.6・2.9）: 写す矩形の外は的の前の画素のまま、中は全面の写しと同じ画素になる。
+#[test]
+fn copy_rect_to_keeps_outside_and_matches_full_copy_inside() {
+    let mut world = World::new();
+    let root = tree(&mut world);
+    let commands = tree_commands(&mut world, root, None);
+    let list = root_list();
+    let (comp, full) = via_composite(1.25, Some(&list), &commands);
+    assert_not_degenerate(&full);
+    // 入れ物の (1,2)-(14,20)（左下に透明な画素を含む）を、その左上が全面の写しと同じ位置に来る
+    // offset へ写す。
+    let r = PxRect {
+        left: 1,
+        top: 2,
+        right: 14,
+        bottom: 20,
+    };
+    let offset = POINT {
+        x: OFFSET.x + r.left,
+        y: OFFSET.y + r.top,
+    };
+    let got = draw_to_pixels(DST, DST, scale(3.0), |dst| unsafe {
+        dst.Clear(Some(&D2D1_COLOR_F {
+            r: 0.0,
+            g: 0.0,
+            b: 1.0,
+            a: 1.0,
+        }));
+        comp.copy_rect_to(dst, r, offset);
+    });
+    let inside = |x: u32, y: u32| {
+        (offset.x as u32..offset.x as u32 + (r.right - r.left) as u32).contains(&x)
+            && (offset.y as u32..offset.y as u32 + (r.bottom - r.top) as u32).contains(&y)
+    };
+    for y in 0..DST {
+        for x in 0..DST {
+            let want = if inside(x, y) { full.at(x, y) } else { BLUE };
+            assert_eq!(got.at(x, y), want, "({x},{y})");
+        }
+    }
+    // 較正: 矩形の中に透明な画素と絵の画素の両方が在る（塗りと写しの両方を見ている）。
+    let px: Vec<_> = (0..DST)
+        .flat_map(|y| (0..DST).map(move |x| (x, y)))
+        .filter(|&(x, y)| inside(x, y))
+        .map(|(x, y)| got.at(x, y))
+        .collect();
+    assert!(px.contains(&CLEAR) && px.iter().any(|p| p[3] == 255));
+}
+
 #[test]
 fn compose_leaves_dc_without_target_and_identity_transform() {
     let mut world = World::new();
@@ -335,14 +384,80 @@ fn two_threads_reading_different_points_get_their_own_values() {
 }
 
 #[test]
-fn failed_compose_drops_the_composite() {
+fn failed_compose_drops_the_composite_and_its_record() {
     let dc = warp_dc();
     let mut slot = Some(SurfaceComposite::new(&dc, (16, 16)).unwrap());
     let list = root_list();
-    compose_or_drop(&mut slot, &dc, scale(1.0), Some(&list), &[]).unwrap();
+    compose_or_drop(&mut slot, |c| c.compose(&dc, scale(1.0), Some(&list), &[])).unwrap();
     assert_eq!(slot.as_ref().map(|c| c.generation()), Some(1));
+    slot.as_mut()
+        .unwrap()
+        .remember(Some(vec![entry(1)]), Some(&list), (1.0, 1.0), true);
     // 閉じていない命令の列は EndDraw で D2DERR_WRONG_STATE（合成の失敗を決まって起こす）。
     let open = unsafe { dc.CreateCommandList().unwrap() };
-    assert!(compose_or_drop(&mut slot, &dc, scale(1.0), Some(&open), &[]).is_err());
-    assert!(slot.is_none(), "途中まで描いた入れ物を読ませない: {slot:?}");
+    assert!(compose_or_drop(&mut slot, |c| c.compose(&dc, scale(1.0), Some(&open), &[])).is_err());
+    assert!(
+        slot.is_none(),
+        "途中まで描いた入れ物と控えを読ませない: {slot:?}"
+    );
+}
+
+fn entry(id: u64) -> DamageEntry {
+    DamageEntry {
+        id,
+        shape: id,
+        kind: EntryKind::Draw { unbounded: false },
+        parent: None,
+        end: 1,
+        bounds: PxRect {
+            left: 1,
+            top: 1,
+            right: 4,
+            bottom: 4,
+        },
+        exact: [1.0, 1.0, 4.0, 4.0],
+        linear: [1.0, 0.0, 0.0, 1.0],
+        origin: [1.0, 1.0],
+    }
+}
+
+#[test]
+fn new_composite_has_no_record_and_is_not_presented() {
+    let comp = SurfaceComposite::new(&warp_dc(), (16, 16)).unwrap();
+    assert_eq!(comp.prev_entries(), None);
+    assert!(!comp.presented());
+}
+
+#[test]
+fn remember_replaces_the_record_and_compose_clears_presented() {
+    let mut comp = SurfaceComposite::new(&warp_dc(), (16, 16)).unwrap();
+    let (list, other) = (root_list(), root_list());
+    comp.remember(
+        Some(vec![entry(1), entry(2)]),
+        Some(&list),
+        (1.25, 1.25),
+        true,
+    );
+    assert_eq!(comp.prev_entries(), Some(&[entry(1), entry(2)][..]));
+    // 根の命令の列は参照の同一性で比べる（同じ中身の別の列は違う）。
+    assert!(comp.same_root(Some(&list.clone())));
+    assert!(!comp.same_root(Some(&other)));
+    assert!(!comp.same_root(None));
+    // 拡大はビットで比べる（0.0 と -0.0 は違う）。
+    assert!(comp.same_scale((1.25, 1.25)));
+    assert!(!comp.same_scale((1.25, 1.0)));
+    assert!(!comp.presented(), "合成した回は写し終えていない");
+
+    comp.mark_presented();
+    assert!(comp.presented());
+    // 合成しなかった回（何もしない・写すだけ）は写し終えた印を残す。
+    comp.remember(Some(vec![entry(3)]), None, (0.0, 1.0), false);
+    assert!(comp.presented());
+    assert_eq!(comp.prev_entries(), Some(&[entry(3)][..]));
+    assert!(comp.same_root(None));
+    assert!(!comp.same_scale((-0.0, 1.0)));
+
+    comp.remember(None, None, (1.0, 1.0), true);
+    assert_eq!(comp.prev_entries(), None);
+    assert!(!comp.presented());
 }

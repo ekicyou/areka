@@ -31,7 +31,7 @@
 | `anchor-compat.md` | アンカーの互換対応表（Reference の割付・送出の順・正典が黙る所の裁定） | 今も効く |
 | `choice-cascade-compat.md` | 選択関連イベントの互換対応表（カスケード則・Reference の割付・タイムアウト） | 今も効く |
 | `click-through.md` | wintf のクリック透過の仕組みの説明（`crates/areka/src/main.rs` の結線も述べる開発者向けの説明） | 今も効く |
-| `crates-io-publish.md` | `wintf`・`dola` を crates.io へ出す手順書 | 今も効く |
+| `crates-io-publish.md` | `wintf`・`dola`・`wintf-winmsg-executor` を crates.io へ出す手順書 | 今も効く |
 | `impl-watch.md` | 机の貸し出し `areka-impl-watch` の手順書（道具のエラー文がこの場所を名指す） | 今も効く |
 | `pasta-real-run.md` | ゴースト「窓際のぱすたさん」を areka で 7 段回して SSP と比べる、何度でも回せる実機の手順（v0.1.0 の版の門の最後の確かめで回した。今も何度でも回せる） | 今も効く |
 | `v0.1.0-gate-real-run.md` | v0.1.0 の版の門の最後の確かめ（2026-11-01 にぱすたの 7 段とどっとさくらを実機で回した結果と、残った崩れ） | 今も効く |

@@ -24,7 +24,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API
 - **taffy** (0.13): レイアウトエンジン（bevy 0.19 更新と同時に 0.9→0.13 へ）
-- **wintf-winmsg-executor** (=0.0.5): Windows メッセージループ・ウィンドウ生成・UI スレッド async の基盤クレ（`winmsg-executor` フォーク）。極初期版ゆえ完全 pin（`=`）。共有ウィンドウクラスに `CS_DBLCLKS` ＋既定カーソルを内蔵
+- **wintf-winmsg-executor** (ワークスペースの版・木の中の `crates/wintf-winmsg-executor/`): Windows メッセージループ・ウィンドウ生成・UI スレッド async の基盤クレ（`winmsg-executor` フォーク・2026-11-14 の spec `wintf-winmsg-executor-import` で元のリポジトリから写した）。根の `[workspace.dependencies]` は `dola` と同じ「版＋path」の依存。ライセンスは `MIT OR Apache-2.0`（ワークスペースの `MIT` を受け継がない）で、crates.io へ出す。`windows` 0.62 は 4 つの機能（`Win32_Foundation`・`Win32_Graphics_Gdi`・`Win32_System_Threading`・`Win32_UI_WindowsAndMessaging`）を自分の manifest に直書きする（ワークスペースの依存へ寄せると、ワークスペースの 27 の機能が公開する manifest に乗る）。共有ウィンドウクラスに `CS_DBLCLKS` ＋既定カーソルを内蔵
 - **event-listener** (5): スレッド跨ぎの起床通知（VSync スレッド→UI スレッド async tick）。tokio 非依存
 - ~~**async-executor**~~: 撤去済み（spec `wintf-winmsg-executor` 完了時）。UI スレッド async は `wintf-winmsg-executor` の `spawn_local` へ移行。背景プール `WintfTaskPool` は `bevy_tasks` ベースで async-executor 非依存。根の `[workspace.dependencies]` に宣言だけが残っている（2026-10-23 時点でどのクレートも使っていない・`Cargo.lock` の版は `bevy_tasks` 経由の推移的依存）
 - **bevy_tasks** (0.19): 背景ワーカープール `WintfTaskPool` の実行基盤（`world.spawn` 経路・UI スレッドとは別レイヤ）
@@ -44,7 +44,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **human-panic** (2.0.6): panic のときの利用者向けの知らせ（`areka`・`wintf` は開発専用の依存として持つ）
 - **rectangle-pack** (=0.4.2): アトラスへの画像の詰め込み（`areka-emo-atlas`）
 - **image** (0.25.10・`default-features = false`＋`png`・`webp`): 動く絵（APNG・動く WebP）の重ね済みのコマ・待ち時間・繰り返し回数を読む（`areka-emo-atlas` だけが使い、本番のソースで綴るのは `decode/image_arm.rs` の 1 ファイル・意図的依存追加＝2026-10-04 `areka-P0-animated-image-decode` の要件討議で承認済）。静止画は今までどおり WIC で読む。機能 `gif` は足さない（動く GIF は扱わない＝開発者裁定）。既定の機能は `exr`／`avif` 経由で `paste`（RUSTSEC-2024-0436）を引くので切る。推移的依存の `png` 0.18 が `flate2` 1.1（`miniz_oxide` 0.9）と `miniz_oxide` 0.8 を本番の木へ入れる（`cargo tree -e normal -p areka-emo-atlas -i flate2` で確かめられる）。`wintf` は前から開発専用の依存として持っている
-- **image-webp** (0.2.5・git の固定コミット `75f810915d02ae4ff55d3f825bf6a4b07efdf994`＝枝 `release-0.2.5` の先頭・機能は指定しない＝`image` が既定の機能のまま引く〔`cargo tree -e features -i image-webp`〕): `image` の WebP の読み手（`areka-emo-atlas` の `image` だけが使う・意図的依存追加＝2026-10-04 承認済）。公開版 0.2.0〜0.2.4 は透過のある動く WebP のコマに前のコマを残すので、直し（#171・#178・#179）を含むコミットを根の `Cargo.toml` の `[patch.crates-io]` で上流の GitHub（`image-rs/image-webp`）から取り込む。`[patch]` を足しただけでは `Cargo.lock` に `[[patch.unused]]` が付いて黙って公開版が使われるので、足した後は `cargo update -p image-webp` が要る。`deny.toml` の `[sources]` の `allow-git` はこの 1 件だけを名指しで許す（ほかの git の依存は `unknown-git = "deny"` のまま落ちる）。取り込みが効いていること（`Cargo.lock` の `image-webp` の出どころが固定コミット・`[[patch.unused]]` が無い・根の `Cargo.toml` の `rev` が同じ）は `crates/areka-emo-atlas/src/webp_pin_tests.rs` が全体テストの中で判定する。`[patch]` は根の `Cargo.toml` にだけ在り、`wintf`・`dola` の crates.io への公開には効かない。**取り外し条件**: `image-webp` 0.2.5 以上が crates.io に公開されたら、根の `Cargo.toml` の `[patch.crates-io]` の行・`deny.toml` の `allow-git` の行・`webp_pin_tests.rs` とそれを読み込む `crates/areka-emo-atlas/src/lib.rs` の `mod webp_pin_tests;` の宣言を外し、`cargo update -p image-webp` で公開版へ戻して、検体のテスト（`areka-emo-atlas` の `decode/image_arm_tests.rs`・`samples_e2e_tests.rs`）を通す。外す作業の持ち主は `roadmap.md` の覚え書き「`image-webp` の取り込みを外す作業」
+- **image-webp** (0.2.5・git の固定コミット `75f810915d02ae4ff55d3f825bf6a4b07efdf994`＝枝 `release-0.2.5` の先頭・機能は指定しない＝`image` が既定の機能のまま引く〔`cargo tree -e features -i image-webp`〕): `image` の WebP の読み手（`areka-emo-atlas` の `image` だけが使う・意図的依存追加＝2026-10-04 承認済）。公開版 0.2.0〜0.2.4 は透過のある動く WebP のコマに前のコマを残すので、直し（#171・#178・#179）を含むコミットを根の `Cargo.toml` の `[patch.crates-io]` で上流の GitHub（`image-rs/image-webp`）から取り込む。`[patch]` を足しただけでは `Cargo.lock` に `[[patch.unused]]` が付いて黙って公開版が使われるので、足した後は `cargo update -p image-webp` が要る。`deny.toml` の `[sources]` の `allow-git` はこの 1 件だけを名指しで許す（ほかの git の依存は `unknown-git = "deny"` のまま落ちる）。取り込みが効いていること（`Cargo.lock` の `image-webp` の出どころが固定コミット・`[[patch.unused]]` が無い・根の `Cargo.toml` の `rev` が同じ）は `crates/areka-emo-atlas/src/webp_pin_tests.rs` が全体テストの中で判定する。`[patch]` は根の `Cargo.toml` にだけ在り、`wintf`・`dola`・`wintf-winmsg-executor` の crates.io への公開には効かない。**取り外し条件**: `image-webp` 0.2.5 以上が crates.io に公開されたら、根の `Cargo.toml` の `[patch.crates-io]` の行・`deny.toml` の `allow-git` の行・`webp_pin_tests.rs` とそれを読み込む `crates/areka-emo-atlas/src/lib.rs` の `mod webp_pin_tests;` の宣言を外し、`cargo update -p image-webp` で公開版へ戻して、検体のテスト（`areka-emo-atlas` の `decode/image_arm_tests.rs`・`samples_e2e_tests.rs`）を通す。外す作業の持ち主は `roadmap.md` の覚え書き「`image-webp` の取り込みを外す作業」
 - 上の一覧は本番（`[dependencies]`）の外部クレートを 2026-10-04 の棚卸㉑で突き合わせて足したもの。開発専用の依存は載せない
 
 ### dola クレート依存
@@ -69,7 +69,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 - `cargo test` を基準に、クレートごとの統合テストとin-sourceテストを併用する
 - wintfは`tests/`配下をドメイン別に分割し、トップレベルのエントリポイントから束ねる
-- GPU のテストは実のハードウェア GPU で行う。例外は合成の答えの画素（描画の木・ブレンド・不透明度の層・入れ物・読み戻し）だけで、画面に出さず決定論で読み戻すため WARP（`D3D_DRIVER_TYPE_WARP`）を使ってよい（許容差 ±1）。入れ物を通した描画面が画面に出るかは実 GPU で確かめる
+- GPU のテストは実のハードウェア GPU で行う。例外は合成の答えの画素（描画の木・ブレンド・不透明度の層・入れ物・読み戻し）だけで、画面に出さず決定論で読み戻すため WARP（`D3D_DRIVER_TYPE_WARP`）を使ってよい（許容差 ±1）。ただし差分の描き直し（範囲だけの描き直し・平行移動の写し）の答えは、同じ装置で全部描いた答えとバイトで一致させる（±1 でない）。入れ物を通した描画面が画面に出るかは実 GPU で確かめる
 - examplesは手動検証とグラフィックス挙動確認の補助であり、テストの代替ではない
 - `areka-parsers` の dev-dependency にワークスペースの `log-capture-kit` を持つ（テスト専用・charset などの `warn!` を数える・2026-11-05 `audit-parsers-sakura` の設計で承認された例外。`Cargo.lock` に新しいクレートは増えない）
 
@@ -132,12 +132,12 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 ## crates.io への公開
 
-- **出すのは areka の外でも使える汎用のライブラリだけ**（今は `wintf`・`dola`）。`areka` は crates.io の 0.0.1 が名前の確保だけで、本体と部品は出さない（利用者は配布の zip で入れる）
+- **出すのは areka の外でも使える汎用のライブラリだけ**（今は `wintf`・`dola`・`wintf-winmsg-executor`。`wintf-winmsg-executor` は `wintf` の土台）。`areka` は crates.io の 0.0.1 が名前の確保だけで、本体と部品は出さない（利用者は配布の zip で入れる）
 - **出さないクレートは `publish = false # 理由`** と、印と理由を同じ行に書く。この行を `[package]` の最後の行に置かない（cargo-about 0.9.2 は `license` を受け継ぐクレートでその辺りへ 1 行を差し込み、日本語の途中に当たると落ちる。LF の作業木で起きる）。**新しいクレートを足すときは `publish` の行と理由を必ず書く**（書き忘れは全体テストの段が止める）
 - **確認は `tools/crates-io.ps1`**: 引数なし＝包むだけ（ネットを使わない）・`-Verify`＝組み立てまで（crates.io の索引を読む）・`-Pending`＝ワークスペースの版がまだ crates.io に無いクレートの名前だけを出す
 - **全体テストの段はネットを使わない形で包む**（Testing 節の「ネットへ出るテストは常時テストに入れない」のまま）。組み立てまでの形は手順書と公開の段が使う
 - **公開の段は `.github/workflows/crates-io.yml`**: タグ `v*` の push を自分で受け、同じタグの `release.yml` の回が緑で終わるのを待ってから出す（`release.yml` は呼ばない・`workflow_run` は crates.io の Trusted Publishing が断るので使わない）。やり直しは `workflow_dispatch`（Actions の画面の「Run workflow」に版を渡す）。crates.io への認証は Trusted Publishing だけ（長く使える鍵をリポジトリにも GitHub の秘密の置き場にも置かない）
-- **版を上げるときに動かすのは根の `Cargo.toml` の 2 行**（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）と `Cargo.lock`。各クレートの `Cargo.toml` は動かさない
+- **版を上げるときに動かすのは根の `Cargo.toml` の 3 行**（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` と `wintf-winmsg-executor` の `version`）と `Cargo.lock`。各クレートの `Cargo.toml` は動かさない
 - 手順書（Trusted Publishing の設定・やり直し・手元から出す予備の手順）は `doc/crates-io-publish.md`
 
 ## Key Technical Decisions
@@ -151,7 +151,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
-- **UI スレッド基盤の外部クレ化（tokio 非依存・置換完了）**: メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床を、自作実装から `wintf-winmsg-executor`（=0.0.5）ベースへ**置換完了**（spec `wintf-winmsg-executor`・新 facade `WinApp`）。`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>`（`new_ex`・wndproc 再入可）へ写像し、スレッド跨ぎ起床は `event_listener` で実現。tokio 非採用（`!Send` future を UI スレッド単一で実行）。背景重処理用 `WintfTaskPool`（`bevy_tasks` ＋ `world.spawn`）は別レイヤとして温存。ドラッグの同期 WM_WINDOWPOSCHANGED 再入に依存するため `new_checked_ex`（RefCell 再入阻止）ではなく `new_ex` を採用し、tick 二重実行は ECS ガード（`IS_TICK_FLUSH_IN_PROGRESS`＋`try_borrow_mut`）で防ぐ
+- **UI スレッド基盤のクレ化（tokio 非依存・置換完了）**: メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床を、自作実装から `wintf-winmsg-executor` ベースへ**置換完了**（spec `wintf-winmsg-executor`・新 facade `WinApp`）。置換の時点では別のリポジトリのクレートを crates.io の版で使っていたが、2026-11-14 の spec `wintf-winmsg-executor-import` で置き場を木の中の `crates/wintf-winmsg-executor/` へ移した。`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>`（`new_ex`・wndproc 再入可）へ写像し、スレッド跨ぎ起床は `event_listener` で実現。tokio 非採用（`!Send` future を UI スレッド単一で実行）。背景重処理用 `WintfTaskPool`（`bevy_tasks` ＋ `world.spawn`）は別レイヤとして温存。ドラッグの同期 WM_WINDOWPOSCHANGED 再入に依存するため `new_checked_ex`（RefCell 再入阻止）ではなく `new_ex` を採用し、tick 二重実行は ECS ガード（`IS_TICK_FLUSH_IN_PROGRESS`＋`try_borrow_mut`）で防ぐ
 - **レガシー UI 基盤の撤去（完了）**: 旧自作 `win_message_handler` / `win_thread_mgr` / `winproc` / `process_singleton` は spec `wintf-winmsg-executor` 完了に伴い**撤去済み**。メッセージ配送は `ecs/window_proc/` の `dispatch_window_message`、UI スレッド基盤は `runtime/` の `WinApp` facade を使用する
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 - **pasta は調査資料として同梱（2026-09-20 からビルド依存なし）**: `vendors/pasta/` は git サブモジュールのまま最新に保つが、`pasta_core` への依存と `[patch.crates-io]` は撤去済み（#166）。ビルドにもテストにもサブモジュールの取得は要らない

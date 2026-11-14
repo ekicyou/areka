@@ -62,3 +62,13 @@
 - 依存を増やさない（`Cargo.toml` を触らない）見込み。
 - 時刻は正確に扱う（頻度の判断で時刻を丸めない）。
 - **優先度の区分**: A（開発者の到達点・2026-11-06）。版は v0.2.0（`wintf-visual-damage-redraw` の後）。
+
+## 申し送り（wintf-visual-damage-redraw より・2026-11-14）
+
+- **昇格・降格の判断の材料に使える記録の行**: target `wintf::damage`・水準 debug・文言 `[render_surface] damage`（`crates/wintf/src/ecs/graphics/systems/render.rs` の `log_damage`）。描画面 1 枚の 1 回の合成ごとに 1 行。欄は 12 個:
+  - `entity`（描画面の実体名）・`mode`（`full`・`partial`・`present`＝入れ物を描かず描画面へ写すだけ・`skip`）・`reason`（`full` のときだけ。`first`・`recreated`・`root_list`・`scale`・`no_prev`・`undecidable`・`covers_surface`＝`crates/wintf/src/ecs/graphics/damage.rs` の `FullReason::as_str`）
+  - `items_redrawn`（描き直した件の数）・`items`（描く列の件数）・`area`（描き直した面積）・`surface_area`（描画面の面積）・`shift_area`（入れ物の中で写した面積）・`exposed_area`（写しの露出した帯の面積）・`present_area`（描画面へ写した面積）
+  - `compose_us`・`present_us`（合成と描画面へ写す所要。この target の debug が開いているときだけ測り、閉じていれば 0）
+  - 欄の名と意味の変更は `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Revalidation Triggers と DamageRecord に載る。履歴の層（info 以上）には入らないので、判断の係が使うならこの行の外で同じ量を持つ形も考える（未決）。
+- **持ち主へ上げた後の動きの量**（`crates/wintf/src/ecs/graphics/visual/draw/README.md` の「写し」の後半）: `OwnSurface` の子を `Arrangement` の位置で動かすだけなら親の描画面に触らず、写し終えた後の自分の描画面の計画は `skip`（描き直しも写しも 0）。命令の列だけを持つ持ち主は拡大の変わらない位置の変化で印も立たない。描画の木を持つ持ち主は木を組み直して項の列を比べる手間は掛かる。節の下に持ち主を置けないこと・持ち主の `VisualTransform` が WUC で効かないことは、この brief の Problem のとおり（変わっていない）。
+- **範囲だけの描き直しの粒は件を丸ごと**: 描く矩形を交わる件の範囲で閉じる（`.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Risks の R1）ので、大きな件に触れる変化は `covers_surface` で全部になる。昇格の判断で「描き直した面積」を見るなら、この粒を前提にする。

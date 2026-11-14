@@ -1,7 +1,7 @@
 ---
 name: kiro-discovery
 description: Entry point for new work. Determines the best action path or work decomposition (update existing spec, create new spec, mixed decomposition, or no spec needed) and refines ideas through structured dialogue.
-allowed-tools: Read, Write, Glob, Grep, Bash, Agent, WebSearch, WebFetch, AskUserQuestion
+allowed-tools: Bash, Read, Write, Glob, Grep, Agent, WebSearch, WebFetch, AskUserQuestion
 argument-hint: <idea-or-request>
 ---
 
@@ -15,18 +15,16 @@ argument-hint: <idea-or-request>
 
 ## Execution Steps
 
-### Step 0: Bring in the remote default branch (prevents stale-base accidents)
+### Step 0: Sync with the Remote Default Branch
 
-Before scanning, merge the latest remote default branch so discovery reads the current specs and roadmap.
-- **Remote**: `origin` if present; else the only remote; else none → warn once and skip this step.
-- **Default branch**: `git symbolic-ref --quiet --short refs/remotes/{remote}/HEAD` with the `{remote}/` prefix stripped; if empty, `main`.
-- Run (on any branch, including the default branch):
-  ```powershell
-  git fetch {remote} {default-branch}
-  git merge --no-edit {remote}/{default-branch}
-  ```
-- If the fetch fails, the merge refuses (uncommitted changes), or the merge conflicts: run `git merge --abort` when a merge is in progress, then STOP and report. Do not resolve conflicts, stash, or reset on the developer's behalf.
-- Report the result in one line (`Already up to date` or the merged range).
+Before scanning, merge the latest remote default branch into the current branch so the specs inventory and roadmap reflect what other sessions have already merged (prevents "forgot to pull" accidents).
+
+1. **Remote**: `origin` if present, else the only remote. If there is no remote (or several without `origin`), warn once and skip this step.
+2. **Default branch**: `git symbolic-ref --quiet --short refs/remotes/{remote}/HEAD` minus the `{remote}/` prefix; if empty, `main`.
+3. `git fetch {remote} {default-branch}`. If it fails, STOP and report the error (do not run discovery on a possibly stale base).
+4. If the current branch is the default branch: `git merge --ff-only {remote}/{default-branch}` (never a merge commit on the default branch). Otherwise: `git merge --no-edit {remote}/{default-branch}`.
+5. On a branch other than the default branch, resolve merge conflicts if any, then commit the merge. If the merge cannot go ahead (the default branch is not fast-forwardable, or uncommitted changes are in the way): run `git merge --abort` when a merge is in progress, then STOP and report the cause. Never force, reset, stash or discard local changes.
+6. Report the result in one line (already up to date / N commits came in), then proceed.
 
 ### Step 1: Lightweight Scan
 
