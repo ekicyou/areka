@@ -15,8 +15,8 @@ fn ppoint() -> PhysicalPoint {
 }
 
 /// 閾値到達・移動中の `Dragging` スナップショット。
-fn dragging() -> DragStateSnapshot {
-    DragStateSnapshot::Dragging {
+fn dragging() -> DragState {
+    DragState::Dragging {
         entity: entity(1),
         start_pos: ppoint(),
         current_pos: ppoint(),
@@ -30,8 +30,8 @@ fn dragging() -> DragStateSnapshot {
 }
 
 /// ドラッグ終了直後の `JustEnded` スナップショット。
-fn just_ended() -> DragStateSnapshot {
-    DragStateSnapshot::JustEnded {
+fn just_ended() -> DragState {
+    DragState::JustEnded {
         entity: entity(1),
         position: ppoint(),
         cancelled: false,
@@ -42,17 +42,13 @@ fn just_ended() -> DragStateSnapshot {
 
 #[test]
 fn maps_hit_some_to_opaque_when_last_was_transparent() {
-    let out = resolve_transition(
-        Some(entity(7)),
-        &DragStateSnapshot::Idle,
-        DesiredState::Transparent,
-    );
+    let out = resolve_transition(Some(entity(7)), &DragState::Idle, DesiredState::Transparent);
     assert_eq!(out, Some(DesiredState::Opaque));
 }
 
 #[test]
 fn maps_hit_none_to_transparent_when_last_was_opaque() {
-    let out = resolve_transition(None, &DragStateSnapshot::Idle, DesiredState::Opaque);
+    let out = resolve_transition(None, &DragState::Idle, DesiredState::Opaque);
     assert_eq!(out, Some(DesiredState::Transparent));
 }
 
@@ -60,17 +56,13 @@ fn maps_hit_none_to_transparent_when_last_was_opaque() {
 
 #[test]
 fn diff_guard_hit_some_already_opaque_returns_none() {
-    let out = resolve_transition(
-        Some(entity(7)),
-        &DragStateSnapshot::Idle,
-        DesiredState::Opaque,
-    );
+    let out = resolve_transition(Some(entity(7)), &DragState::Idle, DesiredState::Opaque);
     assert_eq!(out, None);
 }
 
 #[test]
 fn diff_guard_hit_none_already_transparent_returns_none() {
-    let out = resolve_transition(None, &DragStateSnapshot::Idle, DesiredState::Transparent);
+    let out = resolve_transition(None, &DragState::Idle, DesiredState::Transparent);
     assert_eq!(out, None);
 }
 
@@ -93,7 +85,7 @@ fn dragging_forces_opaque_when_last_was_transparent() {
 #[test]
 fn just_started_also_suppresses_transparent() {
     // JustStarted（移動開始直後）も抑止対象。
-    let just_started = DragStateSnapshot::JustStarted {
+    let just_started = DragState::JustStarted {
         entity: entity(1),
         start_pos: ppoint(),
         current_pos: ppoint(),
@@ -124,7 +116,7 @@ fn just_ended_reconverges_to_opaque_when_hit_some() {
 
 #[test]
 fn preparing_behaves_as_non_drag_mapping() {
-    let preparing = DragStateSnapshot::Preparing {
+    let preparing = DragState::Preparing {
         entity: entity(1),
         start_pos: ppoint(),
         start_time: Instant::now(),
@@ -349,7 +341,7 @@ fn eval_diff_guard_stable_on_repeat() {
     }
 }
 
-/// (d) ドラッグ経路: `JustEnded`（capture_guard 不要の実 thread_local 状態）を仕込むと
+/// (d) ドラッグ経路: `JustEnded`（実 thread_local 状態）を仕込むと
 /// 抑止解除サイクルとして現在 hit に基づき再収束する（eval コアが drag スナップショットを
 /// 尊重することの確認）。Dragging 抑止自体は `resolve_transition` の in-source テストで網羅。
 #[test]
@@ -361,7 +353,7 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
     let window = world_with_hittable_window(&mut world);
     let hwnd = create_test_hwnd();
 
-    // thread_local を JustEnded に設定（capture_guard を持たない変種ゆえ直接構築可能）。
+    // thread_local を JustEnded に設定（状態は Copy で直接構築可能）。
     update_drag_state(|state| {
         *state = DragState::JustEnded {
             entity: entity(1),
@@ -370,10 +362,7 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
         };
     });
     // 前提確認: スナップショットが JustEnded であること。
-    assert!(matches!(
-        snapshot_drag_state(),
-        DragStateSnapshot::JustEnded { .. }
-    ));
+    assert!(matches!(snapshot_drag_state(), DragState::JustEnded { .. }));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         apply_click_through(hwnd, true).expect("seed transparent");
@@ -390,8 +379,8 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
         );
     }));
 
-    // thread_local を Idle に戻す（他テストへの汚染防止）。JustEnded は capture_guard を
-    // 持たないので、借用の中で代入しても ReleaseCapture は走らない。
+    // thread_local を Idle に戻す（他テストへの汚染防止）。捕捉の守りは状態の外の枠が持つので、
+    // 借用の中で代入しても ReleaseCapture は走らない。
     update_drag_state(|s| *s = DragState::Idle);
     destroy_test_hwnd(hwnd);
     if let Err(e) = result {

@@ -14,8 +14,8 @@ use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, SendMessageW, WM_MO
 
 use super::super::window_pos::window_pos_transition_tests::{DISPATCH_TARGET, create_test_window};
 use crate::ecs::drag::{
-    DragStateSnapshot, WindowDragContext, WindowDragContextResource, cancel_dragging,
-    snapshot_drag_state, start_dragging, start_preparing, update_dragging,
+    DragState, WindowDragContext, WindowDragContextResource, cancel_dragging, snapshot_drag_state,
+    start_dragging, start_preparing, update_dragging,
 };
 use crate::ecs::pointer::{PhysicalPoint, PointerLeave, PointerState};
 use crate::ecs::test_support::capture_under_filter;
@@ -136,7 +136,7 @@ fn failed_drag_window_move_is_logged_as_error() {
     update_dragging(PhysicalPoint::new(40, 50), Some(&ctx));
     assert!(matches!(
         snapshot_drag_state(),
-        DragStateSnapshot::Dragging {
+        DragState::Dragging {
             move_window: true,
             ..
         }

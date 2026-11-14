@@ -17,7 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::ecs::drag::{
-    DragAccumulatorResource, DragEndEvent, DragStateSnapshot, DragTransition, cancel_dragging,
+    DragAccumulatorResource, DragEndEvent, DragState, DragTransition, cancel_dragging,
     dispatch_drag_events, snapshot_drag_state, start_dragging, start_preparing,
 };
 use crate::ecs::pointer::PhysicalPoint;
@@ -45,7 +45,7 @@ fn deactivation_right_after_the_threshold_cancels_the_drag() {
     start_dragging(PhysicalPoint::new(40, 50));
     assert!(matches!(
         snapshot_drag_state(),
-        DragStateSnapshot::JustStarted { .. }
+        DragState::JustStarted { .. }
     ));
     // mouse_move.rs が閾値越えで積む開始の種の代わりに手で積み、配った後の遷移だけを見る。
     accumulator.set_transition(DragTransition::Started {
@@ -66,7 +66,7 @@ fn deactivation_right_after_the_threshold_cancels_the_drag() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: true,
                 ..
             }
@@ -98,10 +98,7 @@ fn setup_preparing() -> (Rc<RefCell<EcsWorld>>, Entity) {
     // 累積器は EcsWorld::new が資源と wndproc 側の控えへ置いたものをそのまま使う（入れ直すと控えとずれる）。
     let entity = world.borrow_mut().world_mut().spawn_empty().id();
     start_preparing(entity, PhysicalPoint::new(10, 20), HWND::default());
-    assert!(matches!(
-        snapshot_drag_state(),
-        DragStateSnapshot::Preparing { .. }
-    ));
+    assert!(matches!(snapshot_drag_state(), DragState::Preparing { .. }));
     (world, entity)
 }
 
@@ -132,7 +129,7 @@ fn assert_cancel_before_threshold_dispatches_no_drag_end(msg: u32, wparam: usize
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: true,
                 ..
             }
@@ -379,7 +376,7 @@ fn esc_still_cancels_the_drag_before_delivery() {
 
     assert!(matches!(
         snapshot_drag_state(),
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             cancelled: true,
             ..
         }

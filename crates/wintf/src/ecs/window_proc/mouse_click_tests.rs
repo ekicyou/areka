@@ -13,7 +13,7 @@ use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::WM_LBUTTONUP;
 
 use crate::ecs::drag::{
-    DragAccumulatorResource, DragEndEvent, DragStartEvent, DragStateSnapshot, DragTransition,
+    DragAccumulatorResource, DragEndEvent, DragStartEvent, DragState, DragTransition,
     cancel_dragging, dispatch_drag_events, snapshot_drag_state, start_dragging, start_preparing,
 };
 use crate::ecs::pointer::PhysicalPoint;
@@ -78,7 +78,7 @@ fn release_before_threshold_dispatches_no_drag_end() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: false,
                 ..
             }
@@ -120,7 +120,7 @@ fn release_after_threshold_dispatches_start_and_end_once_each() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: false,
                 ..
             }

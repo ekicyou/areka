@@ -19,8 +19,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows_numerics::Matrix3x2;
 
 use crate::ecs::drag::{
-    DragConfig, DragEndEvent, DragStartEvent, DragStateSnapshot, cancel_dragging,
-    dispatch_drag_events, snapshot_drag_state,
+    DragConfig, DragEndEvent, DragStartEvent, DragState, cancel_dragging, dispatch_drag_events,
+    snapshot_drag_state,
 };
 use crate::ecs::layout::GlobalArrangement;
 use crate::ecs::pointer::{PhysicalPoint, PointerState, transfer_buffers_to_world};
@@ -106,7 +106,7 @@ fn drain<E: bevy_ecs::message::Message>(world: &mut World) -> Vec<E> {
 }
 
 fn is_preparing() -> bool {
-    matches!(snapshot_drag_state(), DragStateSnapshot::Preparing { .. })
+    matches!(snapshot_drag_state(), DragState::Preparing { .. })
 }
 
 /// W1 前半: 左のダブルクリックの押下で準備に入る。準備の対象は `DragConfig` を持つ祖先（窓）、
@@ -119,7 +119,7 @@ fn w1_left_dblclick_prepares_and_crossing_threshold_starts() {
     send(&world, window, WM_LBUTTONDBLCLK, 60, 60);
 
     match snapshot_drag_state() {
-        DragStateSnapshot::Preparing {
+        DragState::Preparing {
             entity, start_pos, ..
         } => {
             assert_eq!(entity, window, "準備の対象は DragConfig を持つ祖先の窓");
@@ -162,7 +162,7 @@ fn w1_left_dblclick_released_without_move_dispatches_nothing() {
     assert!(
         matches!(
             snapshot_drag_state(),
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 cancelled: false,
                 ..
             }

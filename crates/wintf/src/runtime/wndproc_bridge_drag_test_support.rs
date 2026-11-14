@@ -32,8 +32,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use super::{WndState, make_wndproc};
 use crate::ecs::Point;
 use crate::ecs::drag::{
-    DragAccumulatorResource, DragConfig, DragEndEvent, DragStartEvent, DragStateSnapshot,
-    cancel_dragging, dispatch_drag_events, snapshot_drag_state, start_preparing,
+    DragAccumulatorResource, DragConfig, DragEndEvent, DragStartEvent, DragState, cancel_dragging,
+    dispatch_drag_events, snapshot_drag_state, start_preparing,
 };
 use crate::ecs::pointer::PhysicalPoint;
 use crate::ecs::window::{Window, WindowHandle, WindowPos};
@@ -154,7 +154,7 @@ impl Rig {
     pub fn press(&self) {
         start_preparing(self.target, self.screen(PRESS), self.hwnd);
         assert!(
-            matches!(snapshot_drag_state(), DragStateSnapshot::Preparing { .. }),
+            matches!(snapshot_drag_state(), DragState::Preparing { .. }),
             "押しの後は準備中: {:?}",
             snapshot_drag_state()
         );
@@ -164,7 +164,7 @@ impl Rig {
     pub fn cross_threshold(&self) {
         self.send(WM_MOUSEMOVE, 0, client_lparam(MOVED));
         assert!(
-            matches!(snapshot_drag_state(), DragStateSnapshot::JustStarted { .. }),
+            matches!(snapshot_drag_state(), DragState::JustStarted { .. }),
             "閾値を越えた後は開始直後: {:?}",
             snapshot_drag_state()
         );
@@ -177,7 +177,7 @@ impl Rig {
         let starts = self.dispatch::<DragStartEvent>();
         assert_eq!(starts.len(), 1, "開始の知らせは 1 件: {starts:?}");
         assert!(
-            matches!(snapshot_drag_state(), DragStateSnapshot::Dragging { .. }),
+            matches!(snapshot_drag_state(), DragState::Dragging { .. }),
             "開始を配った後はドラッグ中: {:?}",
             snapshot_drag_state()
         );
@@ -279,7 +279,7 @@ pub(super) const CANCELS: [Cancel; 4] = [ESC, CANCELMODE, DEACTIVATE, CAPTURE_LO
 pub(super) fn rests_cancelled() -> bool {
     matches!(
         snapshot_drag_state(),
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             cancelled: true,
             ..
         }

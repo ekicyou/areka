@@ -21,7 +21,7 @@ use event_listener::Event;
 use tracing::{debug, trace, warn};
 
 use crate::ecs::PointF;
-use crate::ecs::drag::{DragStateSnapshot, snapshot_drag_state};
+use crate::ecs::drag::{DragState, snapshot_drag_state};
 use crate::ecs::hit_test_in_window;
 use crate::ecs::world::EcsWorld;
 use crate::ecs::{PhysicalPoint, WindowPos};
@@ -57,20 +57,16 @@ use super::{ClickThroughRegistry, CursorMonitorBridge, DesiredState};
 /// 責務であり、本関数は計算のみを担う。
 pub(crate) fn resolve_transition(
     hit: Option<Entity>,
-    drag: &DragStateSnapshot,
+    drag: &DragState,
     last_applied: DesiredState,
 ) -> Option<DesiredState> {
     // 望ましい状態を判定する。
     let desired = match drag {
         // ドラッグ移動中: 透過 ON へは絶対に遷移させない。強制 Opaque。
-        DragStateSnapshot::Dragging { .. } | DragStateSnapshot::JustStarted { .. } => {
-            DesiredState::Opaque
-        }
+        DragState::Dragging { .. } | DragState::JustStarted { .. } => DesiredState::Opaque,
         // それ以外（Idle / Preparing / JustEnded）は非ドラッグ写像に委ねる。
         // JustEnded は抑止解除サイクルとして現在の hit に従い再収束する（R5.2）。
-        DragStateSnapshot::Idle
-        | DragStateSnapshot::Preparing { .. }
-        | DragStateSnapshot::JustEnded { .. } => match hit {
+        DragState::Idle | DragState::Preparing { .. } | DragState::JustEnded { .. } => match hit {
             Some(_) => DesiredState::Opaque,
             None => DesiredState::Transparent,
         },

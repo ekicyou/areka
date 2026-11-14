@@ -10,18 +10,9 @@ use bevy_ecs::world::World;
 // SetCapture/ReleaseCapture は HWND::default()（null）に対し UI スレッド外では実質 no-op の
 // ため、状態機械そのものはデバイス非依存に検証できる。
 
-/// thread_local を Idle へ強制的に戻す（CaptureGuard が残っていれば borrow 解放後にドロップ）。
+/// thread_local を Idle へ強制的に戻す（残った捕捉の守りは次の `start_preparing` が先に落とす）。
 fn force_idle() {
-    let _guard = update_drag_state(|state| {
-        let old = std::mem::replace(state, DragState::Idle);
-        // 旧状態に CaptureGuard があれば取り出して borrow 解放後にドロップさせる
-        match old {
-            DragState::Preparing { capture_guard, .. }
-            | DragState::JustStarted { capture_guard, .. }
-            | DragState::Dragging { capture_guard, .. } => Some(capture_guard),
-            _ => None,
-        }
-    });
+    update_drag_state(|state| *state = DragState::Idle);
 }
 
 fn null_hwnd() -> HWND {
@@ -34,13 +25,13 @@ fn entity(idx: u32) -> Entity {
 }
 
 /// snapshot のバリアント判別子のみを比較するためのヘルパ。
-fn variant_name(s: &DragStateSnapshot) -> &'static str {
+fn variant_name(s: &DragState) -> &'static str {
     match s {
-        DragStateSnapshot::Idle => "Idle",
-        DragStateSnapshot::Preparing { .. } => "Preparing",
-        DragStateSnapshot::JustStarted { .. } => "JustStarted",
-        DragStateSnapshot::Dragging { .. } => "Dragging",
-        DragStateSnapshot::JustEnded { .. } => "JustEnded",
+        DragState::Idle => "Idle",
+        DragState::Preparing { .. } => "Preparing",
+        DragState::JustStarted { .. } => "JustStarted",
+        DragState::Dragging { .. } => "Dragging",
+        DragState::JustEnded { .. } => "JustEnded",
     }
 }
 
@@ -56,7 +47,7 @@ fn test_start_preparing_from_idle_enters_preparing() {
 
     let snap = snapshot_drag_state();
     match snap {
-        DragStateSnapshot::Preparing {
+        DragState::Preparing {
             entity, start_pos, ..
         } => {
             assert_eq!(entity, e);
@@ -81,7 +72,7 @@ fn test_start_preparing_ignored_when_already_active() {
 
     let snap = snapshot_drag_state();
     match snap {
-        DragStateSnapshot::Preparing {
+        DragState::Preparing {
             entity, start_pos, ..
         } => {
             assert_eq!(entity, first, "最初の press が維持されるべき");
@@ -99,15 +90,12 @@ fn test_start_preparing_allowed_from_just_ended() {
     let e1 = entity(1);
     start_preparing(e1, PhysicalPoint::new(5, 5), null_hwnd());
     end_dragging(PhysicalPoint::new(5, 5), false); // → JustEnded
-    assert!(matches!(
-        snapshot_drag_state(),
-        DragStateSnapshot::JustEnded { .. }
-    ));
+    assert!(matches!(snapshot_drag_state(), DragState::JustEnded { .. }));
 
     let e2 = entity(2);
     start_preparing(e2, PhysicalPoint::new(7, 8), null_hwnd());
     match snapshot_drag_state() {
-        DragStateSnapshot::Preparing { entity, .. } => assert_eq!(entity, e2),
+        DragState::Preparing { entity, .. } => assert_eq!(entity, e2),
         other => panic!("expected Preparing, got {}", variant_name(&other)),
     }
     force_idle();
@@ -124,7 +112,7 @@ fn test_start_dragging_preparing_to_just_started() {
     start_dragging(PhysicalPoint::new(18, 14));
 
     match snapshot_drag_state() {
-        DragStateSnapshot::JustStarted {
+        DragState::JustStarted {
             entity,
             start_pos,
             current_pos,
@@ -145,7 +133,7 @@ fn test_start_dragging_noop_when_not_preparing() {
     force_idle();
     start_dragging(PhysicalPoint::new(1, 1));
     assert!(
-        matches!(snapshot_drag_state(), DragStateSnapshot::Idle),
+        matches!(snapshot_drag_state(), DragState::Idle),
         "Idle からの start_dragging は何もしないべき"
     );
     force_idle();
@@ -164,7 +152,7 @@ fn test_update_dragging_just_started_to_dragging_without_context() {
     update_dragging(PhysicalPoint::new(6, 6), None);
 
     match snapshot_drag_state() {
-        DragStateSnapshot::Dragging {
+        DragState::Dragging {
             entity,
             current_pos,
             prev_pos,
@@ -212,7 +200,7 @@ fn test_update_dragging_reads_window_drag_context() {
     update_dragging(PhysicalPoint::new(3, 3), Some(&ctx_res));
 
     match snapshot_drag_state() {
-        DragStateSnapshot::Dragging {
+        DragState::Dragging {
             move_window,
             initial_window_pos,
             constraint,
@@ -240,7 +228,7 @@ fn test_update_dragging_dragging_updates_prev_pos() {
     update_dragging(PhysicalPoint::new(25, 30), None); // → current=25,30 / prev=10,10
 
     match snapshot_drag_state() {
-        DragStateSnapshot::Dragging {
+        DragState::Dragging {
             current_pos,
             prev_pos,
             ..
@@ -262,7 +250,7 @@ fn test_update_dragging_dragging_updates_prev_pos() {
 fn test_update_dragging_noop_when_idle() {
     force_idle();
     update_dragging(PhysicalPoint::new(5, 5), None);
-    assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
+    assert!(matches!(snapshot_drag_state(), DragState::Idle));
     force_idle();
 }
 
@@ -284,7 +272,7 @@ fn test_end_dragging_from_preparing() {
     );
 
     match snapshot_drag_state() {
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             entity,
             position,
             cancelled,
@@ -309,7 +297,7 @@ fn test_end_dragging_from_dragging_preserves_cancelled_flag() {
     end_dragging(PhysicalPoint::new(60, 70), true);
 
     match snapshot_drag_state() {
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             entity,
             position,
             cancelled,
@@ -334,7 +322,7 @@ fn test_end_dragging_noop_when_idle() {
         end_dragging(PhysicalPoint::new(1, 1), false),
         DragClose::NotActive
     );
-    assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
+    assert!(matches!(snapshot_drag_state(), DragState::Idle));
     force_idle();
 }
 
@@ -350,7 +338,7 @@ fn test_cancel_dragging_uses_start_pos_and_sets_cancelled() {
     cancel_dragging();
 
     match snapshot_drag_state() {
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             entity,
             position,
             cancelled,
@@ -373,7 +361,7 @@ fn test_cancel_dragging_uses_start_pos_and_sets_cancelled() {
 fn test_cancel_dragging_noop_when_idle() {
     force_idle();
     assert_eq!(cancel_dragging(), DragClose::NotActive);
-    assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
+    assert!(matches!(snapshot_drag_state(), DragState::Idle));
     force_idle();
 }
 
@@ -441,35 +429,6 @@ fn test_check_threshold_i16_extent_delta_no_overflow() {
     force_idle();
 }
 
-// --- snapshot ------------------------------------------------------------
-
-/// DragState::snapshot が各バリアントを対応する DragStateSnapshot バリアントに写像する。
-#[test]
-fn test_snapshot_maps_each_variant() {
-    force_idle();
-    // Idle
-    assert_eq!(variant_name(&snapshot_drag_state()), "Idle");
-
-    let e = entity(14);
-    // Preparing
-    start_preparing(e, PhysicalPoint::new(1, 2), null_hwnd());
-    assert_eq!(variant_name(&snapshot_drag_state()), "Preparing");
-
-    // JustStarted
-    start_dragging(PhysicalPoint::new(2, 3));
-    assert_eq!(variant_name(&snapshot_drag_state()), "JustStarted");
-
-    // Dragging
-    update_dragging(PhysicalPoint::new(2, 3), None);
-    assert_eq!(variant_name(&snapshot_drag_state()), "Dragging");
-
-    // JustEnded
-    end_dragging(PhysicalPoint::new(5, 5), false);
-    assert_eq!(variant_name(&snapshot_drag_state()), "JustEnded");
-
-    force_idle();
-}
-
 /// read_drag_state クロージャに現在の DragState 参照が渡される。
 #[test]
 fn test_read_drag_state_observes_current_state() {
@@ -486,18 +445,13 @@ fn test_read_drag_state_observes_current_state() {
 
 // --- 休止の契約（解放・中断のあとは次の左押下まで休む） -------------------
 
-/// 状態そのものと写しの両方の `is_button_held` が期待どおりで、写しの variant も一致する。
+/// `is_button_held` が期待どおりで、写しの variant も一致する。
 fn assert_held(expected_variant: &str, expected_held: bool) {
     assert_eq!(variant_name(&snapshot_drag_state()), expected_variant);
     assert_eq!(
         read_drag_state(|s| s.is_button_held()),
         expected_held,
         "DragState::is_button_held（{expected_variant}）"
-    );
-    assert_eq!(
-        snapshot_drag_state().is_button_held(),
-        expected_held,
-        "DragStateSnapshot::is_button_held（{expected_variant}）"
     );
 }
 
@@ -529,7 +483,7 @@ fn test_release_rests_until_next_press() {
 
     start_preparing(entity(22), PhysicalPoint::new(2, 2), null_hwnd());
     match snapshot_drag_state() {
-        DragStateSnapshot::Preparing { entity: e, .. } => assert_eq!(e, entity(22)),
+        DragState::Preparing { entity: e, .. } => assert_eq!(e, entity(22)),
         other => panic!("expected Preparing, got {}", variant_name(&other)),
     }
     force_idle();
@@ -546,7 +500,7 @@ fn test_cancel_rests_until_next_press() {
 
     start_preparing(entity(24), PhysicalPoint::new(2, 2), null_hwnd());
     match snapshot_drag_state() {
-        DragStateSnapshot::Preparing { entity: e, .. } => assert_eq!(e, entity(24)),
+        DragState::Preparing { entity: e, .. } => assert_eq!(e, entity(24)),
         other => panic!("expected Preparing, got {}", variant_name(&other)),
     }
     force_idle();
@@ -750,7 +704,7 @@ fn test_release_without_position_uses_last_screen_position() {
         end_dragging_on_release(null_hwnd(), None);
 
         match snapshot_drag_state() {
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 position,
                 cancelled,
                 ..
@@ -767,7 +721,7 @@ fn test_release_without_position_uses_last_screen_position() {
     start_preparing(entity(37), PhysicalPoint::new(7, 8), null_hwnd());
     end_dragging_on_release(null_hwnd(), None);
     match snapshot_drag_state() {
-        DragStateSnapshot::JustEnded { position, .. } => {
+        DragState::JustEnded { position, .. } => {
             assert_eq!((position.x, position.y), (7, 8))
         }
         other => panic!("expected JustEnded, got {}", variant_name(&other)),
@@ -792,7 +746,7 @@ fn test_capture_lost_marks_guard_released_before_cancelling() {
     assert!(matches!(result, DragClose::Closed { .. }), "{result:?}");
     assert_eq!(released_via_drop(&events), 0, "{events:?}");
     match snapshot_drag_state() {
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             position,
             cancelled,
             ..

@@ -19,7 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use super::handle_message_while_world_busy;
-use crate::ecs::drag::{DragState, DragStateSnapshot, snapshot_drag_state, update_drag_state};
+use crate::ecs::drag::{DragState, snapshot_drag_state, update_drag_state};
 use crate::ecs::drag::{start_dragging, start_preparing};
 use crate::ecs::pointer::PhysicalPoint;
 use crate::ecs::world::tick_wake;
@@ -36,14 +36,9 @@ fn window() -> Entity {
     Entity::from_raw_u32(3).expect("valid entity index")
 }
 
-/// 休む状態へ戻す（捕捉の守りは借用を返してから落とす）。
+/// 休む状態へ戻す（残った捕捉の守りは次の `start_preparing` が先に落とす）。
 fn force_idle() {
-    let _guard = update_drag_state(|state| match std::mem::replace(state, DragState::Idle) {
-        DragState::Preparing { capture_guard, .. }
-        | DragState::JustStarted { capture_guard, .. }
-        | DragState::Dragging { capture_guard, .. } => Some(capture_guard),
-        _ => None,
-    });
+    update_drag_state(|state| *state = DragState::Idle);
 }
 
 /// 押した（閾値前）。
@@ -150,7 +145,7 @@ fn cancel_kinds_after_threshold_rest_cancelled_at_the_press_point() {
             log_capture_kit::capture(|| handle_message_while_world_busy(window(), &msg));
         assert!(handled, "{case}: 扱った");
         match snapshot_drag_state() {
-            DragStateSnapshot::JustEnded {
+            DragState::JustEnded {
                 entity,
                 position,
                 cancelled,
@@ -175,7 +170,7 @@ fn cancel_kinds_before_threshold_also_rest() {
         assert!(
             matches!(
                 snapshot_drag_state(),
-                DragStateSnapshot::JustEnded {
+                DragState::JustEnded {
                     cancelled: true,
                     ..
                 }
@@ -194,7 +189,7 @@ fn release_on_an_empty_window_ends_at_the_last_point_and_logs_pos_unreadable() {
         log_capture_kit::capture(|| handle_message_while_world_busy(window(), &msg));
     assert!(handled);
     match snapshot_drag_state() {
-        DragStateSnapshot::JustEnded {
+        DragState::JustEnded {
             position,
             cancelled,
             ..
@@ -225,7 +220,7 @@ fn the_five_kinds_while_resting_log_none_at_debug_with_an_empty_entity() {
             log_capture_kit::capture(|| handle_message_while_world_busy(window(), &msg));
         assert!(handled, "{case}: 5 種は休んでいても扱った");
         assert!(
-            matches!(snapshot_drag_state(), DragStateSnapshot::Idle),
+            matches!(snapshot_drag_state(), DragState::Idle),
             "{case}: 休んだまま"
         );
         assert_one_handled_line(case, &events, "none", tracing::Level::DEBUG, "");

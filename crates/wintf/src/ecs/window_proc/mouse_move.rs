@@ -207,7 +207,7 @@ pub(super) fn WM_MOUSEMOVE(
             let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
             match state_snapshot {
-                crate::ecs::drag::DragStateSnapshot::Preparing {
+                crate::ecs::drag::DragState::Preparing {
                     entity,
                     start_pos,
                     start_time,
@@ -243,7 +243,7 @@ pub(super) fn WM_MOUSEMOVE(
                         }
                     }
                 }
-                crate::ecs::drag::DragStateSnapshot::Dragging {
+                crate::ecs::drag::DragState::Dragging {
                     entity: drag_entity,
                     prev_pos,
                     start_pos,
