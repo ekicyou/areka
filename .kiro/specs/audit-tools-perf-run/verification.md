@@ -101,3 +101,62 @@
 - スキル `perf-loop-iteration` の `SKILL.md` 45〜46 行の「`--iteration` を省くと n+1」は、`audit-tools-perf-judge` の枝では 3 で止まる形に変わる（相手の持ち物・まだ `main` に無い）。この spec の `.claude` の差分は S1・S2 だけなので触らない。
 - `judge-perf.py` 0.5.0 の最後の行 `JUDGE-PERF RESULT code=N`（相手の枝・未着地）は合わせていない。着地すれば `perf-loop.measure.ps1` の止まりの文に埋まる `LastLine` がその行になるだけで、終了コードの写しは変わらない。
 
+
+## 8.2 既定のブランチとの差分で約束を確かめる
+
+基準は `git merge-base HEAD main` ＝ `715949187`（この枝の分かれ目）。`git diff 715949187..HEAD` で数えた（この枝の変更だけ）。
+
+- 差分は 25 本。コードは `.claude/skills/perf-loop-iteration/SKILL.md` と `tools/perf/*.ps1` 16 本（新 8 本・直した 8 本）の 17 本だけ。ほかの 8 本は文書で、この spec の `.kiro/specs/audit-tools-perf-run/` の 7 本と、`.kiro/specs/audit-tools-scripts/brief.md` の 7 行の追記（要件の討議で決めた申し送りの件 1＝`test-all.ps1` に `perf-loop.ps1 selftest` の段を足す話。範囲の外のコードの直しではないので要件 6.2 に当たらない）。次は 0 件: `tools/perf/*.py`・`tools/perf/fixtures*/`・`tools/perf/goals/`・`tools/perf/README.md`・`vendors/`・`tools/utf8-child.ps1`・`Cargo.lock`・根の `Cargo.toml`・`tools/crates-io.ps1`・`.claude/agents/`（要件 6.2・6.3・6.8）。
+- `.claude/` の差分は `SKILL.md` の 2 か所だけ: S1（終了コードの表の 4 の行に「想定外の失敗（道具の不具合）もここに入る」）と S2（REMEASURE の節に `code=3` の 1 段）。申し合わせの表の文案どおり。
+- 外への約束の変更は design の「外への約束の変更と申し合わせ」の表の分（16・24・35・14・10・3・4・15・34・26・2・21・22・25・36・9・1・A・B）だけ。表に無い変更は見つからなかった（`SCRIPT_VERSION` の上げは B の 5 本）。
+- 備考: この枝を切った後に `main` が進んだ（`origin/main` は `2f22bd597`・隣の spec `audit-tools-perf-judge` が PR #462 `bf685d026` で着地済み）。上の差分は分かれ目からなので、`main` の進みは入らない。`/kiro-complete` の `main` の取り込みで次の 2 点を合わせる（下の R1〜R4）。
+
+## 8.2 効き目を次の実走で確かめる 8 行
+
+design の「指摘の表」の最後の列のうち、実走でしか確かめられない分。この spec は実走を回さない（要件 7）ので、次の実走（`/perf-loop-iteration` の段③を昇格した机で回す回）で見る。
+
+| 指摘 | 次の実走で見ること | 机で見る分 |
+|---|---|---|
+| 1 | 採取の開始がランナーの静かさの確かめの後・areka を起こす直前になり、ランナーが 0 で返った次の 1 手で `-Stop` が走る。本物の xperf のセッションが残らない | 一部（本物の xperf のセッション） |
+| 8 | areka の強制終了が子孫まで届き、終わるまで待ってから次へ進む。出力先の取り合い（退けの失敗）が起きない | 一部（取り合いの起きやすさ） |
+| 9 | ビルドが採取より前に終わり、xperf の重さが静かさの確かめを倒さない（`quiet-before` が QUIET のまま） | はい |
+| 23 | 大きな dump（実機の段③）の `-Stop` が、ファイルを 1 行ずつ読む道で重くならない | はい |
+| 24 | `preflight` の本物の 5 秒の採取が 1 回だけになる。`rank` は `sampling.txt` も dump も無いとき試しを回さず `no_record` | 一部（昇格した机での時間） |
+| 29 | `-Stop` はまとめが通ったら元の ETL を消す（走行の出力先が大きくならない） | はい（大きさ） |
+| 31 | 大きな `run.log` でもランナーの目印の読みが最初の 1 件で止まる（時間） | はい |
+| 32 | 追随の検査の `Wait-RunLogPattern` が増えた分だけ読む。効くかはログの大きさ次第 | 一部 |
+
+決定論で縛った分（T1〜T3 の検査）は 8.1 の自分の検査で緑。上の 8 行は「机でしか見えない効き目」だけで、直しの正しさの証拠は T1〜T3。
+
+## 8.2 README の R1〜R4 の状態（`main` に入ったか）
+
+`tools/perf/README.md` は `audit-tools-perf-judge` の持ち物（この spec は 0 行）。2026-11-15 に `origin/main` の README を読んで確かめた。
+
+隣の spec は先に着地した（PR #462）。着地したのは R4 だけで、R1〜R3 は今の `.ps1` の形に合わせる文なので、設計どおり「後に着地した側（この spec）が取り込みで合わせる」になった。
+
+| 印 | `main` の README | 状態 |
+|---|---|---|
+| R1（555 行あたり・`Test-MeasureQuietAfterOk` の項） | 875 行に `Test-MeasureQuietAfterOk` が残る（`Test-MeasureRunComplete` と `-INCOMPLETE-` の文は無い） | 着地待ち（相手が引き受けた記録: 隣の spec の design の README の表・555 行の行）。`/kiro-complete` の取り込みで合わせる |
+| R2（§11「読む所は 2 つ」） | 599〜608 行に「読む所は 2 つ」「`invoke-perf-run.ps1` と `invoke-followup-checks.ps1` は `Invoke-Utf8Child` を使います」が残る（`perf-tool-base.ps1`・`Invoke-Child` 1 つの文は無い） | 着地待ち（同上・563〜573 行の行）。取り込みで合わせる |
+| R3（§14 段③の `-Cancel`・`-SampleEtl`・`-Probe`／`-SelfTest` の注） | `-Cancel`・`-SampleEtl` の語が README に無い | 着地待ち（同上・880〜887 行の行）。取り込みで合わせる |
+| R4（理由の語に `no_record`） | 967 行に `no_record`（採取の記録が無い）が入っている | 着地済み（隣の spec が #24 の申し合わせで書いた） |
+
+取り込みの時に合わせるほかの 2 点（隣の spec の知らせ）: `judge-perf.py` 0.5.0 の最後の行 `JUDGE-PERF RESULT code=N`（`perf-loop.measure.ps1` の止まりの文に埋まる `LastLine` がこの行になるだけ・終了コードの写しは変わらない）。`invoke-followup-checks.ps1` 48 行の注記「`judge-followup.py` と対」（`DRAG_DX_PX` は判定器側で 0 件になったので古くなった）。
+
+## 8.2 全体テスト
+
+- 日付: 2026-11-15。排他の机を取って 1 回だけ回した（直しも回し直しも無し）。
+- 命令: `pwsh -NoProfile -File tools/test-all.ps1`
+- 結果: 終了コード 0・`all steps green`。全部の段が OK で、赤の段・赤のテストは 0。`test result: ok` の行は 165 行。
+- 主な段: `encoding check` 31 秒・OK（新しく足した `*.ps1` 8 本を含めて通った）・`dola toml feature tests` 61 秒・`i686 tests (host-32)` 44 秒・`crates.io pre-publish check (package only)` 12 秒・`release notes check`・`roadmap overview check`・`i686 helper sync check`・`sample fetch check`・`i686 helper beside areka.exe` がすべて OK。
+- 出力の全文: `target\testall-8.2.log`（ワークツリーの `target` の下・git の外）。
+
+## 8.2 要件ごとの証拠（記録で言えるもの）
+
+- 1.2（audit の前に `main` を取り込み、ファイルの数と行数を測り直す）: 8.1 の記録の 1,000 行の番人の行（16 本で 8,267 行）で測り直しを残した。
+- 1.6（外への約束の変更を指摘に書く）・6.4: 上の「外への約束の変更」の確かめのとおり、申し合わせの表に載せた分だけで、表に無い変更は 0。
+- 1.7・7.3（実走でしか確かめられない指摘）: 上の「効き目を次の実走で確かめる 8 行」に旨を書いた。どれも決定論の検査（T1〜T3）で形を先に縛ってあり、実走は効き目の確認だけ。
+- 3.2（壊れる読み手まで直す）: 全体テスト（`encoding check` を含む）が緑で、8.1 の「消す前の grep の件数」でツリー全体の参照 0 を確かめた。範囲の外の読み手は `SKILL.md` の S1・S2 だけを直し、README は R1〜R3 を `/kiro-complete` の取り込みで合わせる（上の状態の表）。
+- 4.6（GPU のテストは実 GPU）: この spec のテストは PowerShell の道具の検査（T1〜T3）で、GPU を使うものは 0。全体テストの GPU の段は実 GPU のまま緑。
+- 5.6・5.7（依存を足さない）: 差分に `Cargo.lock`・根の `Cargo.toml`・`tools/crates-io.ps1` は 0 件、足した `*.ps1` に `Import-Module`・`Install-Module`・`#requires -Module` の追加行は 0 件、Python は差分 0。依存なしで成り立たない直しは出なかったので、承認の議題は 0。
+- 7.2（既にある走行の成果物を書き替えない）: この spec は計測の走行を 1 本も回していない。`%LOCALAPPDATA%\areka-diag\perf-loop\` と `goals/` の台帳・結果には手を入れていない（差分に `goals/` は 0）。
