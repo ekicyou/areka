@@ -694,9 +694,9 @@ def run_selftest() -> int:
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
 
-    # 木全体の見張り（⑶ stderr の ASCII は有効・⑸ README の例は文書のタスクで真にする）。
+    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
     results.append(("(check_tree)", "木全体の見張り",
-                    selftest_common.check_tree(ascii_stderr=True, readme_examples=False)))
+                    selftest_common.check_tree(ascii_stderr=True, readme_examples=True)))
     ng_count = selftest_common.finish(
         results, materials, SELFTEST_CASE_FILENAME, reproduced_all, SELFTEST_REQUIRED_RED_EXITS
     )

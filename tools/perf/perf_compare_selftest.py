@@ -248,9 +248,9 @@ def run_selftest(env: SelftestEnv) -> int:
     results.append(("(to_number)", "有限でない値は None",
                     [] if all(env.to_number(v) is None for v in ("nan", "inf", "-inf"))
                     and env.to_number("1.5") == 1.5 else ["to_number が nan・inf を弾いていません"]))
-    # 木全体の見張り（⑶ stderr の ASCII は有効・⑸ README の例は 13 で真にする）。
+    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
     results.append(("(check_tree)", "木全体の見張り",
-                    common.check_tree(ascii_stderr=True, readme_examples=False)))
+                    common.check_tree(ascii_stderr=True, readme_examples=True)))
     ng_count = common.finish(
         results, materials, SELFTEST_CASE_FILENAME, reproduced_all, env.required_red_exits
     )

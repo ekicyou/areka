@@ -204,9 +204,9 @@ def run_selftest() -> int:
 
     results.append(("(goal_text_check)", "goal-text の検査は終端の前置きで始まる行を拒み、4,000 字ちょうどは通す",
                     _goal_text_check_reasons()))
-    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例は、その直しのタスクで真にする）。
+    # 木全体の見張り（⑸ README の例は有効・⑶ stderr の ASCII は D9 で台帳の失敗の文が日本語のままなので無効）。
     results.append(("(check_tree)", "木全体の見張り",
-                    common.check_tree(ascii_stderr=False, readme_examples=False)))
+                    common.check_tree(ascii_stderr=False, readme_examples=True)))
     ng_count = common.finish(
         results, [], SELFTEST_CASE_FILENAME, reproduced_all, CORE.SELFTEST_REQUIRED_RED_EXITS
     )

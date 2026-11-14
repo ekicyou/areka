@@ -124,9 +124,9 @@ def run_selftest(env: SelftestEnv) -> int:
                 )
             results.append((case.name, case.title, reasons))
 
-    # 木全体の見張り（⑸ README の例は、その直しのタスクで真にする）。
+    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
     results.append(("(check_tree)", "木全体の見張り",
-                    common.check_tree(ascii_stderr=True, readme_examples=False)))
+                    common.check_tree(ascii_stderr=True, readme_examples=True)))
     ng_count = common.finish(
         results, [], env.case_filename, reproduced, env.required_red_exits
     )
