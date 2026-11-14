@@ -37,15 +37,13 @@ results_dir = "results"
 # 合否を決める唯一の判定スクリプト（要件 1.1・5.3）。
 judge_script = "tools/perf/judge-perf.py"
 # 版が違えば判定式か較正値が違う＝合否の意味が変わるので MEASURE_FAILED として止める。
-judge_version = "0.4.0"
+judge_version = "0.5.0"
 
-# 合否の定義。判定式そのものは judge-perf.py が持ち、ここは「どの式を使うか」の宣言。
+# 合否の定義。判定式そのものは judge-perf.py が持つ。
 [target]
 # release アイドル CPU（1 コア換算・定常平均）の上限。狭義の未満比較（要件 5.1）。
 # judge-perf.py の IDLE_CPU_MAX_RELEASE_PCT と一致していること。
 idle_cpu_release_max_pct = 3.0
-# 最終判定で全て PASS を要求する判定式（要件 5.3）。
-formulas = ["1_frame_interval_p95", "2_catchup_zero", "3_alloc_zero", "4a_idle_cpu_release", "4b_no_monotonic_rise"]
 # ⑴〜⑶ は release／dev の両方、⑷a・⑷b は release に適用する（要件 5.3・5.6）。
 builds_final = ["release", "dev"]
 
@@ -77,7 +75,7 @@ must_not_regress = ["frame_interval_p95_ms", "catchup_count", "alloc_count"]
 [stop]
 # 連続でこの周数だけ採用に至る改善が無ければ頭打ちとして止める（⒝）。
 max_no_gain_streak = 3
-# 周数の上限（⒞）。到達したら STOPPED reason=max_iterations で止める。
+# 周数の上限（⒞）。到達したら STOPPED reason=iteration_cap で止める。
 max_iterations = 30
 # 計測失敗（exit 4・自己較正の赤・版不一致）のときに道具を直して良い回数。
 toolfix_retry = 1
@@ -113,12 +111,8 @@ exit_ms = 120000
 [goal_runtime]
 # CLAUDE_CODE_GOAL_CHECKIN_MINUTES の推奨値（分）。計測 1 本がこれを超えないよう分けて起動する。
 checkin_minutes = 60
-# メイン（各ターンを回す側）の推奨モデル。spec の中からは変えられないので README と
-# 条件文で示すだけ（Opus 5 でも同じ手順で回る）。重い作業は model: opus のサブエージェントへ。
-main_model_recommended = "fable"
 
 # CPU サンプリングの記号解決の方式（設計 C8）。invoke-cpu-sample.ps1 が読む。
 # xperf-dumper = xperf.exe の dumper で解決する既定の方式。
-# wpaexporter = 版管理された .wpaProfile を要する代替（プロファイルが無ければ拒否される）。
 [sampling]
 backend = "xperf-dumper"

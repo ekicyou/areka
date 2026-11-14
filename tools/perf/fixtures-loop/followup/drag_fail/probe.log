@@ -1,0 +1,31 @@
+probe: check=session step=begin t=2026-08-23T00:00:10.000000Z script_version=0.1.0 required=clickthrough,drag,dpi,balloon_follow pid=35000 exit_ms=60000
+probe: check=session step=show_ready t=2026-08-23T00:00:13.600000Z waited_ms=3600 result=ok
+probe: check=env step=injection t=2026-08-23T00:00:14.000000Z setcursorpos_ret=true cursor_moved=true sendinput_sent=1 sendinput_lasterr=0 injection=available
+probe: check=windows step=enumerate t=2026-08-23T00:00:14.500000Z hwnd=0x11B04C0 win_kind=char scope=0 x=2064 y=610 w=764 h=1094 ex=0x2800A0
+probe: check=windows step=enumerate t=2026-08-23T00:00:14.500000Z hwnd=0x1709EE win_kind=balloon scope=0 x=1796 y=352 w=800 h=448 ex=0x2800A0
+probe: check=windows step=target t=2026-08-23T00:00:14.600000Z scope=0 char_hwnd=0x11B04C0 balloon_hwnd=0x1709EE
+probe: check=clickthrough step=window t=2026-08-23T00:00:21.500000Z begin_t=2026-08-23T00:00:20.000000Z end_t=2026-08-23T00:00:21.400000Z
+probe: check=clickthrough step=probe_point t=2026-08-23T00:00:20.100000Z hwnd=0x11B04C0 point=transparent x=2066 y=612 moved=true
+probe: check=clickthrough step=read t=2026-08-23T00:00:20.400000Z hwnd=0x11B04C0 point=transparent ex=0x2800A0 transparent=true expected=true result=match
+probe: check=clickthrough step=probe_point t=2026-08-23T00:00:20.600000Z hwnd=0x11B04C0 point=opaque x=2446 y=1694 moved=true
+probe: check=clickthrough step=read t=2026-08-23T00:00:20.900000Z hwnd=0x11B04C0 point=opaque ex=0x280020 transparent=false expected=false result=match
+probe: check=clickthrough step=status t=2026-08-23T00:00:21.500000Z status=done reason=-
+probe: check=drag step=window t=2026-08-23T00:00:23.500000Z begin_t=2026-08-23T00:00:22.000000Z end_t=2026-08-23T00:00:23.400000Z
+probe: check=drag step=rect t=2026-08-23T00:00:22.050000Z phase=before hwnd=0x11B04C0 win_kind=char x=2064 y=610 w=764 h=1094
+probe: check=drag step=rect t=2026-08-23T00:00:22.050000Z phase=before hwnd=0x1709EE win_kind=balloon x=1796 y=352 w=800 h=448
+probe: check=drag step=gesture t=2026-08-23T00:00:22.200000Z hwnd=0x11B04C0 from_x=2446 from_y=1694 to_x=2526 to_y=1694 dx=80 dy=0 moved=true
+probe: check=drag step=rect t=2026-08-23T00:00:23.000000Z phase=after hwnd=0x11B04C0 win_kind=char x=2144 y=610 w=764 h=1094
+probe: check=drag step=rect t=2026-08-23T00:00:23.000000Z phase=after hwnd=0x1709EE win_kind=balloon x=1876 y=352 w=800 h=448
+probe: check=drag step=status t=2026-08-23T00:00:23.500000Z status=done reason=-
+probe: check=dpi step=monitors t=2026-08-23T00:00:24.000000Z mon=0 hmon=0x40399 dpi=192 wa=0,0,2880,1740
+probe: check=dpi step=monitors t=2026-08-23T00:00:24.000000Z mon=1 hmon=0x50165 dpi=144 wa=-2560,195,0,1795
+probe: check=dpi step=window t=2026-08-23T00:00:27.500000Z begin_t=2026-08-23T00:00:24.200000Z end_t=2026-08-23T00:00:27.400000Z
+probe: check=dpi step=rect t=2026-08-23T00:00:24.250000Z phase=before hwnd=0x11B04C0 win_kind=char x=2144 y=610 w=764 h=1094
+probe: check=dpi step=rect t=2026-08-23T00:00:24.250000Z phase=before hwnd=0x1709EE win_kind=balloon x=1876 y=352 w=800 h=448
+probe: check=dpi step=move t=2026-08-23T00:00:24.400000Z phase=out hwnd=0x11B04C0 x=-2400 y=400 from_dpi=192 to_dpi=144 result=ok
+probe: check=dpi step=move t=2026-08-23T00:00:26.200000Z phase=back hwnd=0x11B04C0 x=2144 y=610 from_dpi=144 to_dpi=192 result=ok
+probe: check=dpi step=rect t=2026-08-23T00:00:27.000000Z phase=after hwnd=0x11B04C0 win_kind=char x=2144 y=610 w=764 h=1094
+probe: check=dpi step=rect t=2026-08-23T00:00:27.000000Z phase=after hwnd=0x1709EE win_kind=balloon x=1876 y=352 w=800 h=448
+probe: check=dpi step=status t=2026-08-23T00:00:27.500000Z status=done reason=-
+probe: check=balloon_follow step=status t=2026-08-23T00:00:27.600000Z status=done reason=-
+probe: check=session step=end t=2026-08-23T00:01:00.000000Z exit_code=0 elapsed_sec=50.0

@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterator
 
 # =============================================================================
 # 失敗の運び方（4 段すべてが使う）
@@ -59,10 +60,15 @@ DUMP_EVENTS = ("SampledProfile", "Stack")
 DUMP_COLUMN_IMAGE = "Image!Function"
 DUMP_COLUMN_TID = "ThreadID"
 DUMP_COLUMN_TIMESTAMP = "TimeStamp"
+DUMP_COLUMN_PROCESS = "Process Name ( PID)"
 
-#: 列名行に必ず在るべき既知の列（`SampledProfile`／`Stack` のどちらにも在る）。
+#: 事象ごとに列名行に必ず在るべき既知の列（`Stack` の列名行には処理名の列が無い）。
 #: 1 つでも別名になっていたら列を引き当てられないので、その場で止める（exit 4）。
-DUMP_KNOWN_COLUMNS = (DUMP_COLUMN_TIMESTAMP, DUMP_COLUMN_TID, DUMP_COLUMN_IMAGE)
+DUMP_KNOWN_COLUMNS = {
+    "SampledProfile": (DUMP_COLUMN_TIMESTAMP, DUMP_COLUMN_PROCESS, DUMP_COLUMN_TID,
+                       DUMP_COLUMN_IMAGE),
+    "Stack": (DUMP_COLUMN_TIMESTAMP, DUMP_COLUMN_TID, DUMP_COLUMN_IMAGE),
+}
 
 #: 段③の関門が数える対象モジュール（`invoke-cpu-sample.ps1` の `TARGET_MODULE` と同じ）。
 TARGET_MODULE = "areka.exe"
@@ -219,7 +225,7 @@ def demangle(func: str) -> str:
 
 @dataclass
 class DumpScan:
-    """dump 1 本から読み取った中身（フレームは 2 種の行にまたがって数える）。"""
+    """dump 1 本から読み取った中身（areka.exe の行だけ・フレームは 2 種の行にまたがって数える）。"""
 
     #: `SampledProfile` 行＝1 つの CPU サンプル。(TimeStamp, ThreadID, module!function)
     samples: list[tuple[str, str, str]] = field(default_factory=list)
@@ -228,118 +234,131 @@ class DumpScan:
     areka_frames: int = 0
     resolved_frames: int = 0
     unresolved_frames: int = 0
-    tids: list[str] = field(default_factory=list)
 
 
-def parse_dump(text: str, path: Path) -> DumpScan:
-    """dump を読む。列は**列名行**で引き、既知列が無ければ exit 4（設計 C9 の Risks）。
+def _dump_rows(path: Path) -> Iterator[tuple[str, list[str], list[str]]]:
+    """dump を 1 行ずつ読み、(事象, セル, trim したセル) を返す（丸ごとは読まない・#61）。"""
+    with path.open(encoding="utf-8", errors="replace") as stream:
+        for raw in stream:
+            line = raw.strip()
+            if not line or line in ("BeginHeader", "EndHeader"):
+                continue
+            if line.startswith("//") or line.startswith("#") or "," not in line:
+                continue
+            cells = line.split(",")
+            event = cells[0].strip()
+            if event in DUMP_EVENTS:
+                yield event, cells, [cell.strip() for cell in cells]
 
-    数え方は `invoke-cpu-sample.ps1` の `Measure-ArekaFrames` と同じにしてある——
-    同じ断片を 2 つの道具が違う数に数えたら、どちらかが壊れている（fixture
-    `sample_ok_counts` がそれを毎回確かめる）。とりわけ `ThreadStartImage!Function`
-    列にも `areka.exe!` が入るので、素朴に字面を数えると倍に見える。
-    """
-    if not text.strip():
-        raise measure_failed(f"dump が空です: {path}")
 
+def _has_content(path: Path) -> bool:
+    with path.open(encoding="utf-8", errors="replace") as stream:
+        return any(raw.strip() for raw in stream)
+
+
+def _read_headers(path: Path) -> dict[str, dict[str, object]]:
+    """列名行を引く。列の確かめは事象ごと（`Stack` の列名行には処理名の列が無い）。"""
     headers: dict[str, dict[str, object]] = {}
-    scan = DumpScan()
-    seen_tids: list[str] = []
-
-    for raw in text.replace("\r\n", "\n").split("\n"):
-        line = raw.strip()
-        if not line or line in ("BeginHeader", "EndHeader"):
-            continue
-        if line.startswith("//") or line.startswith("#") or "," not in line:
-            continue
-
-        cells = line.split(",")
-        event = cells[0].strip()
-        if event not in DUMP_EVENTS:
-            continue
-        trimmed = [cell.strip() for cell in cells]
-
+    for event, _cells, trimmed in _dump_rows(path):
         # 列名行の判別: 2 列目が TimeStamp という語そのもの（データ行はここが数値）。
-        if len(trimmed) >= 2 and trimmed[1] == DUMP_COLUMN_TIMESTAMP:
-            # 列名行が在っても、既知の列が別名になっていたら**データ行を 1 本も読む前に**
-            # 止める（設計 C9 の Risks「既知列が無ければ exit 4 と文言」）。素通りさせると
-            # 列を引き当てられないまま読み進め、「空の TID 1 本に全サンプル」のような
-            # もっともらしい嘘の順位表が出る——しかも段によって出方が違う。
-            missing_columns = [c for c in DUMP_KNOWN_COLUMNS if c not in trimmed]
-            if missing_columns:
-                raise measure_failed(
-                    f"dump の列名行に既知の列がありません: {event} の "
-                    f"{'／'.join(missing_columns)}",
-                    [
-                        f"dump={path}",
-                        f"読めた列名: {', '.join(trimmed)}",
-                        "xperf の版で列の並びが変わった可能性がある。列は必ず列名行で引くこと。",
-                    ],
-                )
-            # `ThreadStartImage!Function` は別の綴りなので厳密一致では拾わないが、
-            # 念のため後ろから探して最後の一致を採る（列が増えても取り違えない）。
-            image_index = max(i for i, name in enumerate(trimmed) if name == DUMP_COLUMN_IMAGE)
-            headers[event] = {
-                "names": trimmed,
-                "image": image_index,
-                "tid": trimmed.index(DUMP_COLUMN_TID),
-                "ts": trimmed.index(DUMP_COLUMN_TIMESTAMP),
-            }
+        if len(trimmed) < 2 or trimmed[1] != DUMP_COLUMN_TIMESTAMP or event in headers:
             continue
+        # 既知の列が別名になっていたら**データ行を 1 本も数える前に**止める。素通りさせると
+        # 列を引き当てられないまま読み進め、「空の TID 1 本に全サンプル」のような
+        # もっともらしい嘘の順位表が出る——しかも段によって出方が違う。
+        missing_columns = [c for c in DUMP_KNOWN_COLUMNS[event] if c not in trimmed]
+        if missing_columns:
+            raise measure_failed(
+                f"dump header line lacks known columns: {event} {'/'.join(missing_columns)}",
+                [
+                    f"dump={path}",
+                    f"header columns: {', '.join(trimmed)}",
+                    "the xperf version may have changed the columns; "
+                    "columns must be looked up by the header line.",
+                ],
+            )
+        # `ThreadStartImage!Function` は別の綴りなので厳密一致では拾わないが、
+        # 念のため後ろから探して最後の一致を採る（列が増えても取り違えない）。
+        headers[event] = {
+            "names": trimmed,
+            "image": max(i for i, name in enumerate(trimmed) if name == DUMP_COLUMN_IMAGE),
+            "tid": trimmed.index(DUMP_COLUMN_TID),
+            "ts": trimmed.index(DUMP_COLUMN_TIMESTAMP),
+            "process": trimmed.index(DUMP_COLUMN_PROCESS) if event == "SampledProfile" else -1,
+        }
+        if len(headers) == len(DUMP_EVENTS):
+            break  # 列名行が揃ったら残りは読まない（dump 全体を読むのは D6 の 2 回だけ）
+    return headers
 
-        head = headers.get(event)
-        if head is None:
-            continue  # 列名行の無いイベントは読まない（欠落は下でまとめて咎める）
 
-        names, image_index = head["names"], head["image"]
-        tid_index, ts_index = head["tid"], head["ts"]
-        assert isinstance(names, list) and isinstance(image_index, int)
-        assert isinstance(tid_index, int) and isinstance(ts_index, int)
+def parse_dump(path: Path) -> DumpScan:
+    """dump を 1 行ずつ 2 回読む（設計 D6）。列は**列名行**で引き、既知列が無ければ exit 4。
 
-        # Rust の記号は総称型の中にカンマを含み得るので、余った分は Image!Function へ寄せる。
-        # 列が足りない行（途中で切れた dump）は先に弾く——そうしておけば、以降の列の
-        # 引き当ては必ず範囲内に収まる（既知の列が在ることは上の関門で確かめてある）。
-        extra = len(cells) - len(names)
-        if extra < 0:
-            continue
+    1 回目は `SampledProfile` の行のうち処理名が `areka.exe (` で始まるものだけを残して
+    （採取はシステム全体なので Idle や他のプロセスの行も入る・#3）その (時刻, TID) を集め、
+    2 回目は (時刻, TID) が集めた組に当たる `Stack` の行だけを数える。2 回に分けるので、
+    `Stack` の行が自分の `SampledProfile` の前に来ても後に来ても同じに数える。
+    areka の解決フレームは解決済みの枝の中でだけ数える（`areka.exe!0x…` は未解決・#23）。
+    `ThreadStartImage!Function` 列にも `areka.exe!` が入るので、素朴に字面を数えると倍に
+    見える。fixture `sample_ok_counts` が `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*` と
+    同じ内訳を毎回確かめる。
+    """
+    if not _has_content(path):
+        raise measure_failed(f"dump is empty (no non-empty line): {path}")
 
-        timestamp = cells[ts_index].strip()
-        tid = cells[tid_index].strip()
-        if tid and tid not in seen_tids:
-            seen_tids.append(tid)
-
-        value = ",".join(cells[image_index: image_index + extra + 1]).strip()
-        if not value:
-            continue
-
-        bang = value.find("!")
-        if bang < 0:
-            continue
-        module = value[:bang].strip()
-        func = value[bang + 1:].strip()
-        if re.fullmatch(r"0x[0-9a-fA-F]+", func) or module in ("Unknown", "??"):
-            scan.unresolved_frames += 1
-        else:
-            scan.resolved_frames += 1
-        if module == TARGET_MODULE:
-            scan.areka_frames += 1
-
-        entry = (timestamp, tid, f"{module}!{demangle(func)}")
-        if event == "SampledProfile":
-            scan.samples.append(entry)
-        else:
-            scan.stack_rows.append(entry)
-
+    headers = _read_headers(path)
     missing = [event for event in DUMP_EVENTS if event not in headers]
     if missing:
         raise measure_failed(
-            f"dump に既知の列名行がありません: {'／'.join(missing)}",
+            f"dump has no known header line: {'/'.join(missing)}",
             [
                 f"dump={path}",
-                "xperf の版で列の並びが変わった可能性がある。列は必ず列名行で引くこと。",
+                "the xperf version may have changed the columns; "
+                "columns must be looked up by the header line.",
             ],
         )
-    scan.tids = sorted(seen_tids, key=tid_sort_key)
+
+    scan = DumpScan()
+    keys: set[tuple[str, str]] = set()
+    for wanted in DUMP_EVENTS:  # 1 回目＝SampledProfile・2 回目＝Stack
+        head = headers[wanted]
+        names, image_index = head["names"], head["image"]
+        tid_index, ts_index, process_index = head["tid"], head["ts"], head["process"]
+        assert isinstance(names, list) and isinstance(image_index, int)
+        assert isinstance(tid_index, int) and isinstance(ts_index, int)
+        assert isinstance(process_index, int)
+        for event, cells, trimmed in _dump_rows(path):
+            if event != wanted or trimmed[1] == DUMP_COLUMN_TIMESTAMP:
+                continue
+            # Rust の記号は総称型の中にカンマを含み得るので、余った分は Image!Function へ寄せる。
+            # 列が足りない行（途中で切れた dump）は先に弾く——以降の列の引き当ては範囲内に収まる。
+            extra = len(cells) - len(names)
+            if extra < 0:
+                continue
+            key = (trimmed[ts_index], trimmed[tid_index])
+            if event == "SampledProfile":
+                # 処理名は `%16ws (%4d)`。PID の前の空白の数に依らないよう前置で見る。
+                if not trimmed[process_index].startswith(f"{TARGET_MODULE} ("):
+                    continue
+                keys.add(key)
+            elif key not in keys:
+                continue
+
+            value = ",".join(cells[image_index: image_index + extra + 1]).strip()
+            bang = value.find("!")
+            if bang < 0:
+                continue
+            module = value[:bang].strip()
+            func = value[bang + 1:].strip()
+            if re.fullmatch(r"0x[0-9a-fA-F]+", func) or module in ("Unknown", "??"):
+                scan.unresolved_frames += 1
+            else:
+                scan.resolved_frames += 1
+                if module == TARGET_MODULE:
+                    scan.areka_frames += 1
+
+            entry = (key[0], key[1], f"{module}!{demangle(func)}")
+            (scan.samples if event == "SampledProfile" else scan.stack_rows).append(entry)
     return scan
 
 
@@ -371,12 +390,10 @@ def rank_rows(counts: dict[str, int], whole: float, top: int, head: str) -> list
 def stage_function(dump: DumpScan | None, reason: str | None, top: int) -> list[str]:
     """dump から自己時間・包含時間・記号解決率（unit=samples）。"""
     if dump is None:
+        hint = "昇格した PowerShell から回すと採れる。" if reason == "not_elevated" else ""
         return [
             f"[3] 関数 UNAVAILABLE reason={reason}",
-            note(
-                "段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。"
-                "昇格した PowerShell から回すと採れる。"
-            ),
+            note(f"段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。{hint}"),
         ]
 
     samples_total = len(dump.samples)
@@ -386,12 +403,13 @@ def stage_function(dump: DumpScan | None, reason: str | None, top: int) -> list[
     # いないか列を取り違えているかであって、「areka が軽い」ではない（要件 2.11）。
     if dump.areka_frames == 0:
         raise measure_failed(
-            f"段③は利用可なのに {TARGET_MODULE}! の解決フレームが 0 です（記号解決の失敗）。",
+            f"stage 3 is available but {TARGET_MODULE}! has 0 resolved frames "
+            "(symbol resolution failed)",
             [
-                f"サンプル {samples_total} 本・スタック行 {len(dump.stack_rows)} 本・"
-                f"解決済み {dump.resolved_frames}・未解決 {dump.unresolved_frames}",
-                "CARGO_PROFILE_RELEASE_DEBUG=line-tables-only を付けてビルドしたか、"
-                "Image!Function 列を列名行から引いているかを確かめること。",
+                f"samples {samples_total}, stack rows {len(dump.stack_rows)}, "
+                f"resolved {dump.resolved_frames}, unresolved {dump.unresolved_frames}",
+                "check that the build had CARGO_PROFILE_RELEASE_DEBUG=line-tables-only "
+                "and that the Image!Function column is looked up by the header line.",
             ],
         )
 

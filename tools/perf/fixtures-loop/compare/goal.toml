@@ -12,7 +12,7 @@
 name = "selftest-compare"
 judge_script = "tools/perf/judge-perf.py"
 # 版が違えば判定式か較正値が違う＝合否の意味が変わるので、その走行を判定不能にする。
-judge_version = "0.4.0"
+judge_version = "0.5.0"
 
 [levels]
 # 採否の走行ビルド。judge-perf.py へ --build として渡り、run-meta.txt と突き合う。

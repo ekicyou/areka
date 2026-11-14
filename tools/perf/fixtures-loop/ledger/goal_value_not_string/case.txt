@@ -1,0 +1,3 @@
+title=目標定義の [goal].spec_dir が文字列でないと exit 3（生の traceback で落ちない）
+stderr_substr=文字列ではありません
+stderr_substr=spec_dir

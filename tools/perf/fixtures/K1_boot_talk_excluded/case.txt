@@ -1,0 +1,12 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 起動の挨拶（boot_talk）は boot_talk_done で閉じ、その後の CPU の山を発話中の頂に巻き込まない
+mode = baseline
+build = release
+exit = 0
+emit_metrics = yes
+
+note = boot_talk（2 秒）〜boot_talk_done（8 秒）で区間が閉じ、12 秒の CPU 9.00 は区間の外（起動の挨拶の後）。
+note = boot_talk_done が終わりの組に無いと区間が次の終わり（95 秒の steady_talk_done）まで開き、
+note = 後の発話の頂 4.20 が 9.00 に化ける。
+
+contains = metric=talk_peak_cpu_pct value=4.20

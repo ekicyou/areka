@@ -72,3 +72,10 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 申し送り（audit-tools-perf-judge より・2026-11-15）
+
+- **`.ps1` の古くなった所**（こちらは `.ps1` に触れない約束なので直していない）: `invoke-followup-checks.ps1:48` の「judge-followup.py と対」（judge-followup はもう `DRAG_DX_PX` を持たず、probe.log の `dx`・`dy` を期待値に読む）・`invoke-perf-run.ps1:111` の `-BinDir C:\出力先\bin-A`（#27 と同じ `C:\` 直下の例）・`perf-loop.common.ps1:188` と `perf-loop.ps1:510` の py の行番号の指し先（perf-ledger.py と perf_ledger_goal.py の行が動いた）・`perf-loop.common.ps1:465` の「judge-perf.py:150」。
+- **`.claude/skills/perf-loop-iteration/SKILL.md:45-46`** の「`--iteration` を省くと `<n>+1` を書く」: #15 で `append` の `--iteration` は必須になり、省くと exit 3。
+- **道具の口の変化**（値と終了コードの幅）: judge-perf の版 0.5.0・最後の行 `JUDGE-PERF RESULT code=N`（想定外の例外は 3）／perf-compare は目標定義の型の違い・UTF-8 で読めない・`iteration_build` が dev／release でない・床が無限大で exit 3（前は traceback の 1）・judge-perf へ `--meta` を渡さない／perf-rank の版 0.2.0・成功の最後の行 `perf-rank: wrote the ranking: <path>`／perf-ledger の失敗でない進みの行は英語（goal-text の `<n> 文字` は perf-loop.ps1:315 が読むので残した）。どれも 2026-11-15 にセッションへ伝えた。
+- **README**: `tools/perf/README.md` の perf-run の文（§11 の `Test-MeasureQuietAfterOk` の所・`Invoke-Child` の項・§14 の段③の注記）は今の `.ps1` の形で書いた。後に着地した側が取り込みで合わせる（design の申し合わせ）。

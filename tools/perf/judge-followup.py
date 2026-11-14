@@ -30,8 +30,8 @@ spec: areka-P0-draw-load-parity（要件 1.5 / 4.7・design.md「計測の道具
   ここを判定不能に倒すと、追随が壊れた変更が「確かめられなかった」の札で通ってしまう。
 
 較正値・調整値（変更する場合はここだけを書き換える）: `SCRIPT_VERSION`（版）・
-`CHECK_ALL`（検査の固定語彙・判定表の並び順）・`DRAG_DX_PX`／`DRAG_TOL_PX`（ドラッグの
-距離と許容差）・`WRITE_POS_TOL_PX`（窓書込ログと OS の実位置の許容差）・
+`CHECK_ALL`（検査の固定語彙・判定表の並び順）・`DRAG_TOL_PX`（ドラッグの
+許容差。期待の距離は `probe.log` の `step=gesture` 行の `dx`・`dy`）・`WRITE_POS_TOL_PX`（窓書込ログと OS の実位置の許容差）・
 `BALLOON_REL_TOL_PX`（バルーンのキャラ窓相対位置の許容差）・`SELFTEST_*`（自己較正）。
 
 `--selftest` のハーネスは兄弟モジュール `judge_followup_selftest.py` に在る（本ファイルを
@@ -46,13 +46,21 @@ import contextlib
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 # 兄弟モジュール（`judge_followup_selftest.py`）は本ファイルと同じディレクトリに在る。
 # 依存は常に「本体 → 兄弟」の一方向で、兄弟へは起動時に `SelftestEnv` で本体を渡す
 # （本ファイルの名前にはハイフンがあり、兄弟からは import できない＝循環しない）。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from perf_lines import (  # noqa: E402
+    parse_fields,
+    parse_timestamp,
+    read_text_lines as _read_text_lines,
+    split_after_message,
+    to_utc_datetime,
+)
 
 import judge_followup_selftest  # noqa: E402
 
@@ -69,10 +77,9 @@ CHECK_DPI = "dpi"
 CHECK_BALLOON_FOLLOW = "balloon_follow"
 CHECK_ALL = (CHECK_CLICKTHROUGH, CHECK_DRAG, CHECK_DPI, CHECK_BALLOON_FOLLOW)
 
-#: 許容差（px）。DRAG_DX_PX は `invoke-followup-checks.ps1` の同名の較正値と対。
+#: 許容差（px）。ドラッグの期待の距離は持たず、`probe.log` の `step=gesture` 行の `dx`・`dy` を読む。
 #: DRAG_TOL_PX / BALLOON_REL_TOL_PX は design C13 の「± 2px」、WRITE_POS_TOL_PX は
 #: 窓書込ログの新位置と OS の実位置を突き合わせるときの許容差。
-DRAG_DX_PX = 80
 DRAG_TOL_PX = 2
 WRITE_POS_TOL_PX = 2
 BALLOON_REL_TOL_PX = 2
@@ -103,13 +110,13 @@ SELFTEST_REQUIRED_RED_EXITS = (EXIT_FAIL, EXIT_INCONCLUSIVE)
 # =============================================================================
 #
 # 下は本番コードの字面である。変更するときは必ず出所を確かめること。
-#   MSG_TOGGLE       crates/wintf/src/ecs/clickthrough/controller.rs:212
-#   MSG_SHOW         crates/areka-emo-present/src/presenter/show.rs:480
-#   TRANSITION_TAG   crates/wintf/src/ecs/window/transition_diag.rs:57
+#   MSG_TOGGLE       crates/wintf/src/ecs/clickthrough/controller.rs の debug! の文
+#   MSG_SHOW         crates/areka-emo-present/src/presenter/show.rs の `apply(ShowSurface)` の `show_line!` マクロ（`tracing::event!`）の文
+#   TRANSITION_TAG   crates/wintf/src/ecs/window/transition_diag.rs の `RECORD_PREFIX_TAG`
 #   MSG_WINDOWPOSCHANGED / MSG_DPICHANGED
-#                    crates/wintf/src/ecs/window/transition_diag.rs:104,102
-#   DESIRED_*        crates/wintf/src/ecs/clickthrough/registry.rs:18-23（DesiredState）
-#   WIN_KIND_*       crates/areka-placement/src/diag.rs:351-356（WindowKind::as_str）
+#                    crates/wintf/src/ecs/window/transition_diag.rs の同名の定数
+#   DESIRED_*        crates/wintf/src/ecs/clickthrough/registry.rs の `DesiredState`
+#   WIN_KIND_*       crates/areka-placement/src/diag.rs の `WindowKind` の `as_str`
 
 MSG_TOGGLE = "clickthrough: ex-style トグル適用"
 MSG_SHOW = "apply(ShowSurface): 表示・マスクを更新"
@@ -122,17 +129,12 @@ WIN_KIND_CHAR = "char"
 WIN_KIND_BALLOON = "balloon"
 
 # =============================================================================
-# 行の解析（`judge-perf.py::parse_fields` と同じ規則）
+# 行の解析（共有の `perf_lines.py` を使う。ここに置くのは probe.log 固有の分だけ）
 # =============================================================================
 
-#: 順に、ANSI エスケープ（CSI シーケンス・読み込み時に落とす）／行頭の時刻
-#: （`tracing-subscriber` 既定の SystemTime タイマは RFC3339・UTC・小数 6 桁）／
-#: `probe.log` のフィールド値としての時刻／`名前=` の出現位置（値は次の `名前=` の
-#: 直前までとする＝空白を含んでよい）。
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-_TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z\s")
+#: `probe.log` のフィールド値としての時刻（行頭の時刻とは違い、末尾の `Z` で終わる）。
+#: `perf_lines.TIMESTAMP_RE` は行頭の時刻用で後ろに空白を要するので、値 1 つ全体には合わない。
 _BARE_TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z$")
-_FIELD_KEY_RE = re.compile(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=")
 
 
 class JudgeError(Exception):
@@ -149,63 +151,17 @@ def bad_input(message: str, details: list[str] | None = None) -> JudgeError:
     return JudgeError(EXIT_BAD_INPUT, message, details)
 
 
-def strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
-
-
-def _to_datetime(raw: str) -> datetime | None:
-    if "." in raw:
-        head, frac = raw.split(".", 1)
-        raw = f"{head}.{(frac + '000000')[:6]}"
-    else:
-        raw = raw + ".000000"
-    try:
-        return datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def parse_timestamp(line: str) -> datetime | None:
-    """行頭の時刻を返す。時刻で始まらない行（複数行メッセージの続き）は None。"""
-    m = _TIMESTAMP_RE.match(line)
-    return _to_datetime(m.group(1)) if m else None
-
-
 def parse_stamp_value(value: str | None) -> datetime | None:
     """`probe.log` のフィールド値としての時刻を返す。読めなければ None。"""
     if not value:
         return None
     m = _BARE_TIMESTAMP_RE.match(value.strip())
-    return _to_datetime(m.group(1)) if m else None
-
-
-def parse_fields(tail: str) -> dict[str, str]:
-    """`名前=値` の並びを辞書にする。値は次の名前の直前まで（空白を含んでよい）。"""
-    keys = list(_FIELD_KEY_RE.finditer(tail))
-    fields: dict[str, str] = {}
-    for i, m in enumerate(keys):
-        start = m.end()
-        end = keys[i + 1].start() if i + 1 < len(keys) else len(tail)
-        fields[m.group(1)] = tail[start:end].strip()
-    return fields
-
-
-def split_after_message(line: str, message: str) -> str | None:
-    """固定文言より後ろ（＝フィールドの並び）を返す。文言が無ければ None。"""
-    idx = line.find(message)
-    return None if idx < 0 else line[idx + len(message):]
+    return to_utc_datetime(m.group(1)) if m else None
 
 
 def read_text_lines(path: Path, what: str) -> list[str]:
-    """テキストを行に割って返す。ANSI を落とし、行末の CR も落とす。"""
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise bad_input(f"{what} を読めません: {path}", [str(exc)]) from exc
-    text = raw.decode("utf-8", errors="replace")
-    if text.startswith("﻿"):
-        text = text[1:]
-    return [strip_ansi(line.rstrip("\r")) for line in text.split("\n")]
+    """テキストを行に割って返す。読めなければ exit 3。"""
+    return _read_text_lines(path, what, bad_input)
 
 
 def to_int(value: str | None) -> int | None:
@@ -313,7 +269,7 @@ class Observations:
 
 def load_probe(path: Path) -> list[ProbeRecord]:
     records: list[ProbeRecord] = []
-    for line in read_text_lines(path, "操作の記録（probe.log）"):
+    for line in read_text_lines(path, "probe.log"):
         idx = line.find("probe: ")
         if idx < 0:
             continue
@@ -329,7 +285,7 @@ def load_probe(path: Path) -> list[ProbeRecord]:
 def load_run(path: Path) -> list[RunRecord]:
     records: list[RunRecord] = []
     last: datetime | None = None
-    for line in read_text_lines(path, "実走のログ（run.log）"):
+    for line in read_text_lines(path, "run.log"):
         if not line.strip():
             continue
         stamp = parse_timestamp(line)
@@ -343,45 +299,45 @@ def load_run(path: Path) -> list[RunRecord]:
 def load_observations(directory: Path) -> Observations:
     if not directory.is_dir():
         raise bad_input(
-            f"出力ディレクトリがありません: {directory}",
-            ["invoke-followup-checks.ps1 の -OutDir に渡したディレクトリを指定してください。"],
+            f"output directory not found: {directory}",
+            ["pass the directory given as -OutDir to invoke-followup-checks.ps1."],
         )
     probe_path = directory / PROBE_LOG_NAME
     run_path = directory / RUN_LOG_NAME
     for path, what in ((probe_path, PROBE_LOG_NAME), (run_path, RUN_LOG_NAME)):
         if not path.is_file():
             raise bad_input(
-                f"{what} がありません: {path}",
+                f"{what} not found: {path}",
                 [
-                    "判定は run.log（本番のログ）と probe.log（操作の記録）の両方を要ります。"
-                    "片方だけでは「操作したのに反応が無い」と「操作できなかった」を区別できません。",
+                    "both run.log (production log) and probe.log (operation record) are required: "
+                    "with only one, 'operated but no reaction' and 'could not operate' cannot be told apart.",
                 ],
             )
 
     obs = Observations(probe=load_probe(probe_path), run=load_run(run_path))
     if not obs.probe:
         raise bad_input(
-            f"{probe_path} に probe: 行が 1 行もありません",
-            ["操作を 1 つも記録していない probe.log からは、何も確かめられません。"],
+            f"no 'probe: ' line in {probe_path}",
+            ["a probe.log that recorded no operation proves nothing."],
         )
 
     session = obs.probe_row("session", "begin")
     if session is None or not session.get("required"):
         raise bad_input(
-            f"{probe_path} に check=session step=begin の required= がありません",
-            ["どの検査を必須とするかは probe.log の session 行が唯一の定義元です。"],
+            f"no required= on check=session step=begin in {probe_path}",
+            ["the session line of probe.log is the only place that defines which checks are required."],
         )
     obs.required = [name.strip() for name in session.get("required", "").split(",") if name.strip()]
     unknown = [name for name in obs.required if name not in CHECK_ALL]
     if unknown:
         raise bad_input(
-            f"required= に未知の検査名があります: {'・'.join(unknown)}",
-            [f"使えるのは {'・'.join(CHECK_ALL)} です。"],
+            f"unknown check name in required=: {', '.join(unknown)}",
+            [f"allowed: {', '.join(CHECK_ALL)}"],
         )
     if not obs.required:
         raise bad_input(
-            "required= が空です",
-            ["必須検査が 0 件の判定は、何も確かめずに PASS を返します。"],
+            "required= is empty",
+            ["a verdict with zero required checks returns PASS without checking anything."],
         )
 
     target = obs.probe_row("windows", "target")
@@ -589,6 +545,13 @@ def judge_drag(obs: Observations) -> Verdict:
         return Verdict(check, INCONCLUSIVE, "missing_probe_evidence",
                        ["    ! probe.log の check=drag に観測窓または前後の矩形がありません。"])
 
+    gesture = obs.probe_row(check, "gesture")
+    want_dx = to_int(gesture.get("dx")) if gesture else None
+    want_dy = to_int(gesture.get("dy")) if gesture else None
+    if want_dx is None or want_dy is None:
+        return Verdict(check, INCONCLUSIVE, "missing_probe_evidence",
+                       ["    ! probe.log の check=drag step=gesture に dx・dy がありません（期待の距離を決められません）。"])
+
     details: list[str] = []
     failures: list[str] = []
     records = obs.run_between(*window)
@@ -601,19 +564,19 @@ def judge_drag(obs: Observations) -> Verdict:
             return Verdict(check, INCONCLUSIVE, "missing_probe_evidence",
                            details + [f"    ! {win_kind} の前後どちらかの矩形がありません"])
         dx, dy = new.x - old.x, new.y - old.y
-        ok = abs(dx - DRAG_DX_PX) <= DRAG_TOL_PX and abs(dy) <= DRAG_TOL_PX
+        ok = abs(dx - want_dx) <= DRAG_TOL_PX and abs(dy - want_dy) <= DRAG_TOL_PX
         details.append(
             f"    {win_kind:<8s} OS の実位置 ({old.x},{old.y}) → ({new.x},{new.y}) "
-            f"Δ=({dx:+d},{dy:+d}) 期待 ({DRAG_DX_PX:+d},+0) ± {DRAG_TOL_PX} → {'一致' if ok else '食い違い'}"
+            f"Δ=({dx:+d},{dy:+d}) 期待 ({want_dx:+d},{want_dy:+d}) ± {DRAG_TOL_PX} → {'一致' if ok else '食い違い'}"
         )
         if not ok:
-            failures.append(f"{win_kind} の移動量が {DRAG_DX_PX}±{DRAG_TOL_PX}px から外れています")
+            failures.append(f"{win_kind} の移動量が ({want_dx:+d},{want_dy:+d})±{DRAG_TOL_PX}px から外れています")
 
         logged = [
             row for row in writes
             if norm_hwnd(row.get("hwnd")) == new.hwnd
-            and to_int(row.get("ax")) is not None
-            and abs((to_int(row.get("ax")) or 0) - new.x) <= WRITE_POS_TOL_PX
+            and (ax := to_int(row.get("ax"))) is not None
+            and abs(ax - new.x) <= WRITE_POS_TOL_PX
         ]
         details.append(
             f"    {win_kind:<8s} 窓書込ログ kind=write hwnd={new.hwnd} "
@@ -622,7 +585,7 @@ def judge_drag(obs: Observations) -> Verdict:
         if not logged:
             failures.append(f"{win_kind} の新位置を書いた kind=write 行が観測窓にありません")
 
-    char_hwnd = (after.get(WIN_KIND_CHAR) or before[WIN_KIND_CHAR]).hwnd
+    char_hwnd = after[WIN_KIND_CHAR].hwnd
     poschanged = [
         row for row in msgs
         if row.get("msg") == MSG_WINDOWPOSCHANGED and norm_hwnd(row.get("hwnd")) == char_hwnd
@@ -852,6 +815,7 @@ def run_selftest() -> int:
             expected_stdout_filename=SELFTEST_EXPECTED_STDOUT,
             ok_exit=EXIT_OK,
             fail_exit=EXIT_FAIL,
+            inconclusive_exit=EXIT_INCONCLUSIVE,
             bad_input_exit=EXIT_BAD_INPUT,
         )
     )
@@ -867,7 +831,7 @@ class Parser(argparse.ArgumentParser):
 
     def error(self, message: str):  # noqa: D102
         self.print_usage(sys.stderr)
-        print(f"judge-followup.py: 引数が不正です: {message}", file=sys.stderr)
+        print(f"judge-followup.py: invalid argument: {message}", file=sys.stderr)
         raise SystemExit(EXIT_BAD_INPUT)
 
 
@@ -896,7 +860,7 @@ def main(argv: list[str] | None = None) -> int:
     # reconfigure を持たないので AttributeError を握り潰す）。
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(AttributeError, OSError):
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -905,8 +869,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_selftest()
         if not args.directory:
             raise bad_input(
-                "出力ディレクトリを指定してください",
-                ["使い方: python judge-followup.py <出力ディレクトリ>"],
+                "specify the output directory",
+                ["usage: python judge-followup.py <output-directory>"],
             )
         directory = Path(args.directory)
         obs = load_observations(directory)
@@ -918,7 +882,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             (directory / VERDICT_NAME).write_text(text, encoding="utf-8")
         except OSError as exc:
-            print(f"judge-followup.py: {VERDICT_NAME} を書けません: {exc}", file=sys.stderr)
+            print(f"judge-followup.py: cannot write {VERDICT_NAME}: {ascii(str(exc))}", file=sys.stderr)
         return code
     except JudgeError as exc:
         print(f"judge-followup.py: {exc.message}", file=sys.stderr)

@@ -1,2 +1,3 @@
 title=goal-check が必須キー・版・較正値を確かめ、周 0 に走行トークンを書く（2 度目は同じ）
 stderr_substr=走行トークン
+stderr_substr=00000000

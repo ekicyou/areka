@@ -52,15 +52,16 @@ A＝変更前・B＝変更後で、`A1 → B1 → A2 → B2` の順に採る（`
 ないから悪化と断ずることはできず、かといって「観測が無いこと」を悪化として扱うと、
 既定 OFF の観測（設計 C14・C15）を点けずに採った走行が必ず WORSE になり、採否が
 計測の点灯忘れで決まってしまう。ゆえに `NA` は判定に効かせず、代わりに表と
-`worse_secondaries` の外側に必ず名前を出して、見落としを防ぐ。
+`worse_secondaries` の外側に必ず名前を出して、見落としを防ぐ。ただし数の取れた走行の
+どれにもその名前の行が無いときは綴り違いとみなし、NA にせず入力不正（3）で止める（#11）。
 
 判定スクリプトとの関係（別プロセスで呼ぶ・import しない）
 ----------------------------------------------------------
 各走行の集計は `judge-perf.py --mode baseline --emit-metrics` を **subprocess** で呼び、
 標準出力の `metric=<名前> value=<値>` 行だけを読む（設計 C10）。import しないのは、
 同じ周に別の担当が判定スクリプトを触っている可能性があり、輸入すると 2 つの道具が
-同時に倒れるためである（`perf-rank.py` と同じ理由）。行の読み方は `judge-perf.py` の
-`parse_fields` の規則を写してあり、写した箇所には出典を注記してある。
+同時に倒れるためである（`perf-rank.py` と同じ理由）。行の読み方（`parse_fields`）は
+judge-perf と共有の `perf_lines.py` を使う。
 
 `--build` は `[levels].iteration_build` から渡す。`judge-perf.py` は `--build` と
 `run-meta.txt` の `build` が食い違えば止まるので、A/B の 4 本が採否の走行ビルドで
@@ -76,7 +77,7 @@ A＝変更前・B＝変更後で、`A1 → B1 → A2 → B2` の順に採る（`
 
 **終了コード 1 の腕には fixture を置いていない（意図的）**。`judge-perf.py` の `EXIT_FAIL`
 は「合否判定モード専用。集計モードは返さない」と定数の注記そのものが宣言しており
-（`judge-perf.py:715`）、`perf-compare.py` は常に `--mode baseline` で呼ぶので、この腕は
+（`judge-perf.py` の `EXIT_FAIL`）、`perf-compare.py` は常に `--mode baseline` で呼ぶので、この腕は
 **現在の判定スクリプトからは到達しない**。到達しない腕を fixture で固定することはできない
 ので、代わりに「1 を判定不能に数えない」という決めをここに書き、判定スクリプトが集計
 モードでも 1 を返すようになったときに、この段落が食い違いとして目に入るようにしてある。
@@ -96,11 +97,11 @@ A＝変更前・B＝変更後で、`A1 → B1 → A2 → B2` の順に採る（`
                   `secondary` `verdict`
 
 `compare.json` を `perf-ledger.py append --from-json` へ**そのまま**渡すことはできない
-（`load_entry_json` が `ENTRY_KEYS` に無い鍵を拒む・`perf-ledger.py:772-781`）。周の記録は
+（`load_entry_json` が `ENTRY_KEYS` に無い鍵を拒む・`perf-ledger.py` の `load_entry_json`）。周の記録は
 `hypothesis`・`files_changed`・`tests`・`followup`・`commit` など別の相の値も要るので、
 スキル（設計 C2 の `RECORD`）がこの 6 つを抜き出して他の値と合わせ、1 つの JSON にする。
 綴りを揃えてあるのはその写し替えを機械的にするためである。null は台帳側で `-` になる
-（`_to_ledger_value`・`perf-ledger.py:456-458`）。
+（`perf-ledger.py` の `_to_ledger_value`）。
 
 `MEASURE_FAILED` でも 2 ファイルとも書く。計測失敗は台帳に記録する「採否の 1 つ」で
 あって、途中で投げ出した状態ではないためである（`perf-rank.py` が失敗時に順位表を
@@ -118,7 +119,9 @@ A＝変更前・B＝変更後で、`A1 → B1 → A2 → B2` の順に採る（`
 --------------------------------------------------------------------------
     0  判定できた（ADOPTED / NO_DIFF / WORSE のいずれか。改善したという意味ではない）
     1  `--selftest` の食い違い＝この道具自身が壊れている
-    3  引数不正・走行ディレクトリが無い・目標定義ファイルが読めない
+    3  引数不正・走行ディレクトリが無い・目標定義ファイルが読めない（UTF-8 でない・TOML でない・
+       節や値の型が違う）・ばらつきの床が正の有限の数でない（#10）・
+       `iteration_build` が dev／release でない・副指標の名前がどの走行にも無い（#11）
     4  計測失敗（MEASURE_FAILED）
 
 `2`（判定不能）は返さない——判定不能な走行があれば、それは `4`（計測失敗）である。
@@ -135,7 +138,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
+import math
 import subprocess
 import sys
 import tomllib
@@ -149,6 +152,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import perf_compare_selftest  # noqa: E402
+from perf_lines import parse_fields  # noqa: E402
 
 # --- 定数（較正値・語彙）-----------------------------------------------------
 
@@ -207,7 +211,6 @@ DEFAULT_JUDGE_SCRIPT = "tools/perf/judge-perf.py"
 #: 走行ディレクトリの中の成果物。
 RUN_LOG_FILENAME = "run.log"
 CPU_CSV_FILENAME = "cpu.csv"
-RUN_META_FILENAME = "run-meta.txt"
 
 OUTPUT_TEXT_FILENAME = "compare.txt"
 OUTPUT_JSON_FILENAME = "compare.json"
@@ -267,32 +270,47 @@ def default_repo_root() -> Path:
 
 def load_goal(path: Path) -> Goal:
     try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise bad_input(f"目標定義ファイルを読めません: {path}", [str(exc)]) from exc
+        raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise bad_input(f"cannot read goal file: {path}", [ascii(str(exc))]) from exc
     except tomllib.TOMLDecodeError as exc:
-        raise bad_input(f"目標定義ファイルの書式が壊れています: {path}", [str(exc)]) from exc
+        raise bad_input(f"goal file is not valid TOML: {path}", [str(exc)]) from exc
 
-    primary = raw.get("primary_metric") or {}
-    secondary = raw.get("secondary_metrics") or {}
-    levels = raw.get("levels") or {}
-    goal = raw.get("goal") or {}
+    # 型の違う値を通すと後で traceback（終了コード 1）になるので、ここで入力不正（3）にする。
+    tables = {key: raw.get(key, {}) for key in ("primary_metric", "secondary_metrics", "levels", "goal")}
+    for key, table in tables.items():
+        if not isinstance(table, dict):
+            raise bad_input(f"{path}: [{key}] must be a table ({table!a})")
+    primary, secondary, levels, goal = tables.values()
+    for table, key in (("levels", "iteration_build"), ("goal", "name"),
+                       ("goal", "judge_version"), ("goal", "judge_script")):
+        if not isinstance(tables[table].get(key, ""), str):
+            raise bad_input(f"{path}: [{table}].{key} must be a string ({tables[table][key]!a})")
+    build = levels.get("iteration_build")
+    if build is not None and build not in ("dev", "release"):  # 判定スクリプトの --build と同じ 2 択
+        raise bad_input(f'{path}: [levels].iteration_build must be "dev" or "release" ({build!a})')
 
     name = primary.get("name")
     if not isinstance(name, str) or not name:
         raise bad_input(
-            f"{path}: [primary_metric].name がありません",
-            ["主指標の名前が無ければ、何を比べているのか決まりません。"],
+            f"{path}: [primary_metric].name is missing",
+            ["without a primary metric name it is undefined what is compared."],
         )
     floor = primary.get("noise_floor_pct")
-    if not isinstance(floor, (int, float)):
+    if isinstance(floor, bool) or not isinstance(floor, (int, float)):
         raise bad_input(
-            f"{path}: [primary_metric].noise_floor_pct がありません",
-            ["ばらつきの床が無いと、実測のばらつきが 0 のとき何もかも採用になります。"],
+            f"{path}: [primary_metric].noise_floor_pct must be a number ({floor!a})",
+            ["a missing or non-numeric noise floor adopts everything when the measured spread is 0."],
+        )
+    if not (floor > 0 and math.isfinite(floor)):  # 0・負・NaN・inf は床の役目を果たさない
+        raise bad_input(
+            f"{path}: [primary_metric].noise_floor_pct must be greater than 0 and finite ({floor!a})",
+            ["a floor of 0 or less adopts everything when the measured spread is 0;"
+             " an infinite floor never adopts anything."],
         )
     must = secondary.get("must_not_regress", [])
     if not isinstance(must, list) or any(not isinstance(m, str) for m in must):
-        raise bad_input(f"{path}: [secondary_metrics].must_not_regress は文字列の配列です")
+        raise bad_input(f"{path}: [secondary_metrics].must_not_regress must be an array of strings")
 
     return Goal(
         name=str(goal.get("name") or path.stem),
@@ -307,25 +325,6 @@ def load_goal(path: Path) -> Goal:
 
 
 # --- 判定スクリプトの呼び出しと読み取り --------------------------------------
-
-#: `名前=` を見つける正規表現（judge-perf.py `_FIELD_KEY_RE` の写し・出典を残す）。
-_FIELD_KEY_RE = re.compile(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=")
-
-
-def parse_fields(tail: str) -> dict[str, str]:
-    """`名前=値` の並びを辞書にする（judge-perf.py `parse_fields` の写し）。
-
-    値は次の名前の直前まで（空白を含んでよい）。同じ名前が 2 度出たら後勝ちである。
-    写しであるから、judge-perf.py 側の読み口を変えたときはここも一緒に変えること。
-    """
-    keys = list(_FIELD_KEY_RE.finditer(tail))
-    fields: dict[str, str] = {}
-    for i, m in enumerate(keys):
-        start = m.end()
-        end = keys[i + 1].start() if i + 1 < len(keys) else len(tail)
-        fields[m.group(1)] = tail[start:end].strip()
-    return fields
-
 
 def parse_metric_lines(stdout: str) -> dict[str, str]:
     """`metric=<名前> value=<値>` の行だけを拾う（`--emit-metrics` の読み口）。
@@ -354,6 +353,14 @@ class RunResult:
     judge_exit: int | None = None
     metrics: dict[str, str] = field(default_factory=dict)
     undecidable_reason: str | None = None
+    #: `undecidable_reason` の英語（ASCII）版。標準エラー用で、報告の本文には出ない（#26）。
+    undecidable_reason_en: str = ""
+    judge_stderr: str = ""
+
+    def fail(self, ja: str, en: str) -> "RunResult":
+        self.undecidable_reason = ja
+        self.undecidable_reason_en = en
+        return self
 
     @property
     def decidable(self) -> bool:
@@ -371,9 +378,10 @@ def to_number(value: str | None) -> float | None:
     if value is None or value == METRIC_UNAVAILABLE:
         return None
     try:
-        return float(value)
+        number = float(value)
     except ValueError:
         return None
+    return number if math.isfinite(number) else None
 
 
 def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
@@ -385,16 +393,14 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
     cpu_csv = directory / CPU_CSV_FILENAME
     missing = [p.name for p in (run_log, cpu_csv) if not p.is_file()]
     if missing:
-        result.undecidable_reason = f"走行の成果物がありません: {'・'.join(missing)}"
+        result.fail(f"走行の成果物がありません: {'・'.join(missing)}",
+                    f"run artifacts are missing: {', '.join(missing)}")
         return result
 
     argv = [sys.executable, str(judge), str(run_log), str(cpu_csv),
             "--mode", "baseline", "--emit-metrics"]
     if build:
         argv += ["--build", build]
-    meta = directory / RUN_META_FILENAME
-    if meta.is_file():
-        argv += ["--meta", str(meta)]
 
     try:
         completed = subprocess.run(
@@ -402,42 +408,48 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
             timeout=timeout_sec, check=False,
         )
     except OSError as exc:
-        result.undecidable_reason = f"判定スクリプトを起動できません: {exc}"
+        result.fail(f"判定スクリプトを起動できません: {exc}", f"cannot start the judge script: {ascii(str(exc))}")
         return result
     except subprocess.TimeoutExpired:
-        result.undecidable_reason = f"判定スクリプトが {timeout_sec:.0f} 秒で終わりません"
+        result.fail(f"判定スクリプトが {timeout_sec:.0f} 秒で終わりません",
+                    f"the judge script did not finish in {timeout_sec:.0f} s")
         return result
 
     result.judge_exit = completed.returncode
+    result.judge_stderr = completed.stderr.strip()
     result.metrics = parse_metric_lines(completed.stdout)
 
     # 終了コード 1（不合格）は判定不能ではない——合否が付いたなら数値は採れている。
     if completed.returncode in (2, 3):
         word = "判定不能" if completed.returncode == 2 else "引数不正・読取不能"
-        result.undecidable_reason = (
-            f"判定スクリプトが終了コード {completed.returncode}（{word}）で終わりました"
+        result.fail(
+            f"判定スクリプトが終了コード {completed.returncode}（{word}）で終わりました",
+            f"the judge script exited with code {completed.returncode}",
         )
         return result
 
     if not result.metrics:
-        result.undecidable_reason = (
+        result.fail(
             "主要指標の行が 1 本も出ていません"
-            "（判定スクリプトが --emit-metrics に対応していない可能性）"
+            "（判定スクリプトが --emit-metrics に対応していない可能性）",
+            "no metric lines were printed (the judge script may not support --emit-metrics)",
         )
         return result
 
     if goal.judge_version:
         found = result.raw(JUDGE_VERSION_METRIC)
         if found != goal.judge_version:
-            result.undecidable_reason = (
-                f"判定スクリプトの版が違います: 目標定義 {goal.judge_version} ／ 走行 {found}"
+            result.fail(
+                f"判定スクリプトの版が違います: 目標定義 {goal.judge_version} ／ 走行 {found}",
+                f"judge script version mismatch: goal {goal.judge_version!a} / run {found!a}",
             )
             return result
 
     if result.number(goal.primary_metric) is None:
-        result.undecidable_reason = (
+        result.fail(
             f"主指標 {goal.primary_metric} の値が {result.raw(goal.primary_metric)!r} です"
-            "（測れていません）"
+            "（測れていません）",
+            f"primary metric {goal.primary_metric!a} is {result.raw(goal.primary_metric)!a} (not measured)",
         )
     return result
 
@@ -514,8 +526,8 @@ def primary_of(run: RunResult, goal: Goal) -> float:
     if value is None:
         raise CompareError(
             EXIT_MEASURE_FAILED,
-            f"判定できるはずの走行 {run.name} に主指標 {goal.primary_metric} がありません",
-            ["道具の側の食い違いです（0 で埋めずに止めます）。", str(run.directory)],
+            f"decidable run {run.name} has no primary metric {goal.primary_metric!a}",
+            ["tool-side inconsistency (stopping instead of filling in 0).", str(run.directory)],
         )
     return value
 
@@ -573,7 +585,7 @@ def decide(runs: dict[str, RunResult], goal: Goal) -> Decision:
         names = "・".join(name for name, _ in undecidable)
         return Decision(
             VERDICT_MEASURE_FAILED, mean_a, mean_b, delta, noise, spread, secondaries,
-            worse, undecidable, f"判定不能の走行があります（{names}）。3 本で決めない",
+            worse, undecidable, f"判定不能の走行があります（{names}）。残りの走行で決めない",
         )
 
     assert delta is not None and noise is not None  # 判定不能が無ければ 4 本とも数がある
@@ -796,6 +808,7 @@ def build_json(runs: dict[str, RunResult], goal: Goal, decision: Decision,
         payload[name] = {
             "dir": str(run.directory),
             "judge_exit": run.judge_exit,
+            "judge_stderr": run.judge_stderr,
             "primary": run.number(goal.primary_metric),
             "secondaries": {m: run.raw(m) for m in goal.must_not_regress},
             "talk_peak": run.raw(TALK_PEAK_METRIC),
@@ -813,9 +826,9 @@ def resolve_goal_path(args: argparse.Namespace, repo_root: Path) -> Path:
     elif args.goal:
         path = repo_root / "tools" / "perf" / "goals" / f"{args.goal}.toml"
     else:
-        raise bad_input("--goal（名前）か --goal-file（パス）のどちらかが要ります")
+        raise bad_input("either --goal (name) or --goal-file (path) is required")
     if not path.is_file():
-        raise bad_input(f"目標定義ファイルがありません: {path}")
+        raise bad_input(f"goal file not found: {path}")
     return path.resolve()
 
 
@@ -823,8 +836,8 @@ def resolve_judge(args: argparse.Namespace, goal: Goal, repo_root: Path) -> Path
     path = (Path(args.judge) if args.judge else repo_root / goal.judge_script).resolve()
     if not path.is_file():
         raise bad_input(
-            f"判定スクリプトがありません: {path}",
-            ["--judge <パス> で場所を渡せます。"],
+            f"judge script not found: {path}",
+            ["pass its location with --judge <path>."],
         )
     return path
 
@@ -840,12 +853,19 @@ def compare(args: argparse.Namespace) -> int:
     )
     for name, directory in directories.items():
         if not directory.is_dir():
-            raise bad_input(f"走行ディレクトリがありません（{name}）: {directory}")
+            raise bad_input(f"run directory not found ({name}): {directory}")
 
     runs = {
         name: measure_run(name, directory, goal, judge, build, args.timeout)
         for name, directory in directories.items()
     }
+    measured = [r for r in runs.values() if r.number(goal.primary_metric) is not None]
+    for metric in goal.must_not_regress:
+        if measured and not any(metric in r.metrics for r in measured):
+            raise bad_input(
+                f"secondary metric {metric!a} appears in none of the measured runs",
+                ["check the spelling of the metric name (must_not_regress in the goal file)."],
+            )
     decision = decide(runs, goal)
 
     versions = {r.raw(JUDGE_VERSION_METRIC) for r in runs.values()} - {METRIC_UNAVAILABLE}
@@ -868,12 +888,16 @@ def compare(args: argparse.Namespace) -> int:
             encoding="utf-8", newline="\n",
         )
     except OSError as exc:
-        raise bad_input(f"結果を書けません: {out_dir}", [str(exc)]) from exc
+        raise bad_input(f"cannot write results: {out_dir}", [ascii(str(exc))]) from exc
 
     if decision.verdict == VERDICT_MEASURE_FAILED:
-        sys.stderr.write(f"{STDERR_PREFIX} 計測失敗: {decision.reason}\n")
-        for name, reason in decision.undecidable:
-            sys.stderr.write(f"  - {name}: {reason}\n")
+        names = ", ".join(name for name, _ in decision.undecidable)
+        sys.stderr.write(
+            f"{STDERR_PREFIX} measure failed: undecidable runs ({names}); not deciding on the remaining runs\n")
+        for name, _reason in decision.undecidable:
+            sys.stderr.write(f"  - {name}: {runs[name].undecidable_reason_en}\n")
+            for line in runs[name].judge_stderr.splitlines():
+                sys.stderr.write(f"      {line}\n")
 
     delta = METRIC_UNAVAILABLE if decision.delta is None else f"{decision.delta:+.2f}"
     print(
@@ -896,6 +920,8 @@ def run_selftest() -> int:
             text_filename=OUTPUT_TEXT_FILENAME,
             json_filename=OUTPUT_JSON_FILENAME,
             unavailable=METRIC_UNAVAILABLE,
+            to_number=to_number,
+            bad_input_exit=EXIT_BAD_INPUT,
             pct_decimals=PCT_DECIMALS,
             ok_exit=EXIT_OK,
             fail_exit=EXIT_FAIL,
@@ -910,7 +936,7 @@ class Parser(argparse.ArgumentParser):
     """引数不正の終了コードを 3 に揃える（argparse の既定 2 は使わない）。"""
 
     def error(self, message: str):  # type: ignore[override]
-        sys.stderr.write(f"{STDERR_PREFIX} 引数が不正です: {message}\n")
+        sys.stderr.write(f"{STDERR_PREFIX} invalid arguments: {message}\n")
         sys.stderr.write(self.format_usage())
         raise SystemExit(EXIT_BAD_INPUT)
 
@@ -942,8 +968,8 @@ def build_parser() -> Parser:
 
 def main(argv: list[str]) -> int:
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
+        sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
     except (AttributeError, OSError):
         pass
 
@@ -953,12 +979,12 @@ def main(argv: list[str]) -> int:
             return run_selftest()
         if not args.a or not args.b:
             raise bad_input(
-                "--a <A1> <A2> と --b <B1> <B2> の両方が要ります",
-                ["同じ形を 2 回はさむ並び（A1 → B1 → A2 → B2）が判定の前提です。"],
+                "both --a <A1> <A2> and --b <B1> <B2> are required",
+                ["the A1 -> B1 -> A2 -> B2 order (the same shape twice) is the premise of the decision."],
             )
         return compare(args)
     except CompareError as exc:
-        label = {EXIT_BAD_INPUT: "入力不正", EXIT_MEASURE_FAILED: "計測失敗"}.get(exc.code, "失敗")
+        label = {EXIT_BAD_INPUT: "bad input", EXIT_MEASURE_FAILED: "measure failed"}.get(exc.code, "failed")
         sys.stderr.write(f"{STDERR_PREFIX} {label}: {exc.message}\n")
         for detail in exc.details:
             sys.stderr.write(f"  - {detail}\n")

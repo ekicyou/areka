@@ -1,0 +1,14 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 発話区間は終わりで閉じ、入れ子の開始は畳み、終わりの無い発話は走行の最後で閉じる
+mode = baseline
+build = release
+exit = 0
+emit_metrics = yes
+
+note = steady_talk（80 秒）〜steady_talk_done（85 秒）の中に CPU 3.00、その後（87 秒）に 9.00。
+note = 90 秒の steady_talk の中で 92 秒に steady_talk_replace（再生中の差し替え）があり、
+note = 終わりの記録が無いまま走行が終わる。91 秒の 6.00 が発話中の頂になる。
+note = steady_talk_done で閉じないと 9.00、差し替えで区間を開き直すと 3.00、
+note = 最後に閉じずに捨てると 3.00 に化ける。
+
+contains = metric=talk_peak_cpu_pct value=6.00

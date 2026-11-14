@@ -1,0 +1,9 @@
+title = 0 バイトの dump.txt（在るが空＝計測失敗として止める）
+exit = 4
+argv = --stage function
+
+stderr_substr = dump is empty
+
+note = 採取が dump.txt を作ったのに中身を書けなかった形。dump が在るのに空なのは
+note = 「段③が無い」ではなく採取の失敗なので、UNAVAILABLE（exit 0）にせず exit 4 で止める。
+note = 大きさで「在る」を決める実装は reason=no_dump の exit 0 になって赤になる。

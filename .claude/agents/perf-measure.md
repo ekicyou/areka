@@ -36,6 +36,7 @@ model: opus
 2. 標準出力の末尾にある `PERF-LOOP RESULT <sub> code=<n> dir=<path>` の 1 行を控える。
 3. 生成物を読む。`rank` は `<dir>\rank.txt`、`compare` は `compare.txt` と `compare.json`。
 4. 下の書式へ写す。段③が `UNAVAILABLE` のときは理由語をそのまま写す（空欄にしない・推測で埋めない）。
+   理由語は rank が出す形で、段②＝`no_perf_thread_lines`・段④＝`no_tick_lines`・段③＝`no_dump`／`declared_unavailable`（採取側が渡した語があればそれ: `not_elevated`・`no_xperf`・`start_failed`・`no_pdb`・`probe_failed`・`dry_run`・`no_record`）。
 5. 終了コードが 0 以外なら数値を作らず、`NOTES` に終了コードと標準出力の該当行を 1〜2 行だけ引いて返す。
 
 ## 守ること
@@ -54,7 +55,7 @@ model: opus
 ## Measure
 - MODE: rank
 - RESULT: PERF-LOOP RESULT rank code=<n> dir=<path>
-- STAGE1_PROCESS: mean=<x.xx> p50=<x.xx> p95=<x.xx> max=<x.xx> talk_peak=<x.xx>
+- STAGE1_PROCESS: mean=<x.xx> p50=<x.xx> p95=<x.xx> max=<x.xx>
 - STAGE2_THREAD: 1) <役割/TID> <x.x>% ; 2) ... （上位 10 まで）
 - STAGE3_FUNCTION: <UNAVAILABLE reason=<...> | 1) <module!func> self=<x.x>% incl=<x.x>% ; ... （上位 10 まで）>
 - STAGE4_PHASE: ticks_per_sec=<...> skipped_pct=<...> heartbeat_pct=<...> wall_us_avg=<...> top=<相> <us>(<pct>) ; ... （上位 10 まで）

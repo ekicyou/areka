@@ -1,0 +1,2 @@
+title=採否の空の記録は append で拒む（verdict が無いままの周を台帳に書かない）
+stderr_substr=verdict が空

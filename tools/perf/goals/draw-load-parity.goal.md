@@ -53,7 +53,7 @@ python tools/perf/perf-ledger.py goal-text  --goal draw-load-parity          # �
 
 ---
 
-目標: draw-load-parity — areka の release アイドル CPU（1 コア換算・定常平均）を 3.0% 未満にし、判定式⑴〜⑷b が 25 分の最終判定で全て合格すること。合否は judge-perf.py 0.4.0 の出力だけで決め、人の目視や主観を使わない。
+目標: draw-load-parity — areka の release アイドル CPU（1 コア換算・定常平均）を 3.0% 未満にし、判定式⑴〜⑷b が 25 分の最終判定で全て合格すること。合否は judge-perf.py 0.5.0 の出力だけで決め、人の目視や主観を使わない。
 
 毎ターンの手順: プロジェクトスキル `perf-loop-iteration` を引数 `draw-load-parity` で 1 回だけ呼び、その最後に出る `PERF-LOOP STATUS …` の行を一字も変えずに返答の最後の行として書く。スキルは背景コマンド（計測・最終判定）を起動するところまで相を進めてターンを終える（相の境界ごとに台帳を更新し状態行を印字する）。背景コマンドが走っている間は待つ——check-in が届いたターンは出力の末尾を読み、進行中なら「待つ」と答える。
 
