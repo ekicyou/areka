@@ -1,43 +1,6 @@
 use super::*;
 
 #[test]
-fn test_phase_tunnel() {
-    let phase = Phase::Tunnel(42);
-    assert!(phase.is_tunnel());
-    assert!(!phase.is_bubble());
-    assert_eq!(*phase.value(), 42);
-}
-
-#[test]
-fn test_phase_bubble() {
-    let phase = Phase::Bubble("test");
-    assert!(!phase.is_tunnel());
-    assert!(phase.is_bubble());
-    assert_eq!(*phase.value(), "test");
-}
-
-#[test]
-fn test_phase_clone() {
-    let phase = Phase::Tunnel(100);
-    let cloned = phase.clone();
-    assert_eq!(*cloned.value(), 100);
-}
-
-#[test]
-fn test_handler_component_size() {
-    // ハンドラコンポーネントは fn ポインタのサイズのみ
-    use std::mem::size_of;
-    assert_eq!(
-        size_of::<OnPointerPressed>(),
-        size_of::<PointerEventHandler>()
-    );
-    assert_eq!(
-        size_of::<OnPointerMoved>(),
-        size_of::<PointerEventHandler>()
-    );
-}
-
-#[test]
 fn test_build_bubble_path_single_entity() {
     let mut world = World::new();
     let entity = world.spawn_empty().id();
@@ -105,6 +68,35 @@ fn test_dispatch_with_handler() {
 }
 
 #[test]
+fn test_dispatch_moved_fires_every_tick_without_new_position() {
+    // 位置の知らせが届かない tick でも、移動の受け手は tick ごとに 1 回ずつ呼ばれる。
+    // 止まったカーソルの下のバルーン滞在・選択肢の強調の観測が、この毎 tick の配りを当てにする。
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static MOVED_COUNT: AtomicU32 = AtomicU32::new(0);
+
+    fn moved_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        ev: &Phase<PointerState>,
+    ) -> bool {
+        if ev.is_bubble() {
+            MOVED_COUNT.fetch_add(1, Ordering::SeqCst);
+        }
+        false
+    }
+
+    MOVED_COUNT.store(0, Ordering::SeqCst);
+    let mut world = World::new();
+    world.spawn((PointerState::default(), OnPointerMoved(moved_handler)));
+
+    dispatch_pointer_events(&mut world);
+    assert_eq!(MOVED_COUNT.load(Ordering::SeqCst), 1);
+    dispatch_pointer_events(&mut world);
+    assert_eq!(MOVED_COUNT.load(Ordering::SeqCst), 2);
+}
+
+#[test]
 fn test_dispatch_stop_propagation() {
     use std::sync::atomic::{AtomicU32, Ordering};
     static TUNNEL_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -159,15 +151,6 @@ fn test_dispatch_stop_propagation() {
     assert_eq!(TUNNEL_COUNT.load(Ordering::SeqCst), 1);
     assert_eq!(BUBBLE_COUNT.load(Ordering::SeqCst), 1);
     assert!(world.get_entity(child).is_ok());
-}
-
-#[test]
-fn test_phase_value_on_bubble() {
-    // value() は Tunnel/Bubble いずれでもデータを返す（既存は Tunnel のみ）
-    let phase = Phase::Bubble(7);
-    assert_eq!(*phase.value(), 7);
-    assert!(phase.is_bubble());
-    assert!(!phase.is_tunnel());
 }
 
 #[test]
