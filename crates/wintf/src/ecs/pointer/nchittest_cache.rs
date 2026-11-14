@@ -15,17 +15,21 @@ use std::rc::Rc;
 use tracing::trace;
 use windows::Win32::Foundation::{HWND, LRESULT, POINT};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
+use windows::Win32::UI::WindowsAndMessaging::{HTCLIENT, HTTRANSPARENT};
 
 use crate::ecs::world::EcsWorld;
 use crate::ecs::{PointF, hit_test_in_window};
 
-// HTCLIENT = 1, HTTRANSPARENT = -1
-const HTCLIENT: i32 = 1;
-/// WM_NCHITTEST でクライアント領域外（透明領域）を示す定数。
-/// WM_MOUSELEAVE ハンドラ実装済み（handlers.rs L820-876）により、
-/// HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
-/// 左ボタンを押している間は DragState ガードで HTCLIENT を強制返却する。
-const HTTRANSPARENT: i32 = -1;
+/// 当たりがある・または左を押している間は HTCLIENT、どちらでもなければ HTTRANSPARENT。
+///
+/// 左ボタンを押している間は、透明領域でも HTCLIENT を返す（ドラッグ操作の継続性のため）。
+fn answer(hit: bool, held: bool) -> LRESULT {
+    if hit || held {
+        LRESULT(HTCLIENT as isize)
+    } else {
+        LRESULT(HTTRANSPARENT as isize)
+    }
+}
 
 // ============================================================================
 // キャッシュエントリ
@@ -138,15 +142,7 @@ pub fn cached_nchittest(
     // DragState ガード: 左ボタンを押している間は透明領域でも HTCLIENT を強制返却
     // （ドラッグ操作の継続性を保証するため）
     let button_held = crate::ecs::drag::read_drag_state(|state| state.is_button_held());
-
-    // WM_MOUSELEAVE ハンドラ実装済み（handlers.rs L820-876）により、
-    // HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
-    // 左ボタンを押している間は DragState ガードで HTCLIENT を強制返却する。
-    let lresult = if button_held || hit_result.is_some() {
-        LRESULT(HTCLIENT as isize)
-    } else {
-        LRESULT(HTTRANSPARENT as isize)
-    };
+    let lresult = answer(hit_result.is_some(), button_held);
 
     // キャッシュに挿入
     insert(hwnd, screen_point, lresult);
@@ -298,5 +294,16 @@ mod tests {
 
         // クリーンアップ
         clear_nchittest_cache();
+    }
+
+    /// 透過になるのは「当たりなし」かつ「左を押していない」ときだけ
+    #[test]
+    fn test_answer_four_combinations() {
+        let client = LRESULT(HTCLIENT as isize);
+        let transparent = LRESULT(HTTRANSPARENT as isize);
+        assert_eq!(answer(false, false), transparent);
+        assert_eq!(answer(true, false), client);
+        assert_eq!(answer(false, true), client);
+        assert_eq!(answer(true, true), client);
     }
 }
