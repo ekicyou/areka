@@ -21,7 +21,8 @@ prepare-ab／measure-ab／compare／followup／final）が呼び出し側の sco
 --------------------------------------------------------------------------------
  ⒜ 実走は必ず invoke-perf-run.ps1（C7）を通す。**出力先は毎回まっさらな新規フォルダ**
     でなければならない（ランナー側の決まり）。失敗した走行の出力先はランナーが
-    `<leaf>-FAILED` へ退避するので、1 度だけの採り直しは同じ出力先で行える。
+    `<leaf>-FAILED` へ退避して `[invoke-perf-run] moved to: <path>` の 1 行で知らせるので、
+    1 度だけの採り直しは同じ出力先で行える。その行が無く出力先が残っていれば採り直さずに 4。
  ⒝ 静寂の確認は前後 2 回。前（quiet-before.txt）はランナーの `-AutoQuiet` が書く。
     後（quiet-after.txt）は**ここの仕事**で、check-quiet.ps1 -Stage after を呼ぶ。
     「静かでない」なら目標定義 [quiet] の retry_max 回だけ待って確かめ直し、
@@ -178,6 +179,15 @@ function Convert-MeasureChildExit {
 # 実走を 1 本採る。失敗は 1 度だけ採り直し、なお失敗なら 4 で止まる（tasks.md 7.3）。
 # 静寂でない（ランナーの 2）は採り直さずそのまま 2 で止まる——待って確かめ直すのは
 # ランナー側が目標定義の回数だけ既に行っているためである（design C6・C7）。
+# ランナーの決まった 1 行 '[invoke-perf-run] moved to: <path>' から失敗した走行の退け先を読む（無ければ $null）
+function Get-MeasureMovedDir {
+    param([string[]]$Lines)
+    foreach ($line in @($Lines)) {
+        if ($line -match '^\[invoke-perf-run\] moved to: (.+)$') { return $Matches[1].Trim() }
+    }
+    return $null
+}
+
 function Invoke-MeasureRun {
     param(
         [Parameter(Mandatory = $true)][string]$OutDir,
@@ -218,11 +228,16 @@ function Invoke-MeasureRun {
         Write-Info "[perf-loop] capturing $Label ($attempt/$attempts, level $RunProfile, build $Build, out $OutDir)"
         $result = Invoke-PwshChild -ScriptPath $runnerPath -Arguments $arguments
         if ($result.Code -eq 0) { return }
+        $moved = Get-MeasureMovedDir -Lines $result.Lines
         if ($result.Code -eq 2) {
-            Stop-Run -Code $EXIT_NOT_QUIET -Message "${Label}: the automatic quiet check did not pass (after waiting and rechecking as many times as goal [quiet] says). The evidence is $MEASURE_FILE_QUIET_BEFORE in the moved folder $OutDir-FAILED."
+            $evidence = if ($moved) { Join-Path $moved $MEASURE_FILE_QUIET_BEFORE } else { "$MEASURE_FILE_QUIET_BEFORE in $OutDir-FAILED*" }
+            Stop-Run -Code $EXIT_NOT_QUIET -Message "${Label}: the automatic quiet check did not pass (after waiting and rechecking as many times as goal [quiet] says). The evidence is $evidence"
         }
         if ($result.Code -eq 3) {
             Stop-Run -Code $EXIT_BAD_ARGS -Message "${Label}: the capture runner stopped on bad arguments or preconditions: $($result.LastLine)"
+        }
+        if (-not $moved -and (Test-Path -LiteralPath $OutDir)) {
+            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "${Label}: the failed run could not be moved aside, so it is not captured again: $OutDir (exit code $($result.Code)): $($result.LastLine)"
         }
         Write-Problem "[perf-loop] $Label failed (exit code $($result.Code)): $($result.LastLine)"
         if ($attempt -lt $attempts) { Write-Info "[perf-loop] capturing once more." }

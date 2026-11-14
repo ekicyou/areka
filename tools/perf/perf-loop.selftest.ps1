@@ -374,6 +374,67 @@ $SelfTestChecks = @(
         }
     } }
 
+    [pscustomobject]@{ Name = 'not-quiet-evidence'; Body = {
+        # ランナーの 2: 証拠の場所は moved to: の行から読んだ退け先。読めなければ <OutDir>-FAILED*
+        $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
+        function Write-Info { param([string]$Message) }
+        function Get-MeasureGhostRoot { 'G' }
+        function Get-MeasureBalloonRoot { 'B' }
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) }
+        function Clear-MeasureDryRunDir { param($Dir) }
+        function Invoke-PwshChild {
+            param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+            return (New-ChildResult -Code 2 -Out $runnerOut -Err @('[invoke-perf-run] failed: not quiet') -LastLine 'not quiet')
+        }
+        $script:DryRunMode = $true
+        $outDir = Join-Path $script:SelfTestRoot 'nq-run'
+        $moved = "$outDir-FAILED-123456789"
+        foreach ($case in @(@{ Out = @('x', "[invoke-perf-run] moved to: $moved"); Want = "$moved\quiet-before.txt" },
+                            @{ Out = @('x'); Want = "$outDir-FAILED*" })) {
+            $script:SelfTestProblems.Clear()
+            $runnerOut = $case.Out
+            $code = Get-SelfTestExitCode { Invoke-MeasureRun -OutDir $outDir -RunProfile 'short' -Build 'release' }
+            Assert-SelfTest ($code -eq 2) "runner 2 -> exit $code (want 2)"
+            $msg = @($script:SelfTestProblems) -join ' | '
+            Assert-SelfTest ($msg.Contains($case.Want)) "evidence '$($case.Want)' not in: $(ConvertTo-SelfTestAscii $msg)"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'run-not-moved'; Body = {
+        # ランナーの 1 で moved to: が無く出力先が残っている: 採り直さずに 4。退けが読めれば今のまま 1 度採り直す
+        $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
+        function Write-Info { param([string]$Message) }
+        function Get-MeasureGhostRoot { 'G' }
+        function Get-MeasureBalloonRoot { 'B' }
+        function Sync-MeasureWorktreeBuild { param($Build, $BinDir) }
+        function Clear-MeasureDryRunDir { param($Dir) }
+        function Invoke-PwshChild {
+            param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+            Add-SelfTestCall -Name 'Invoke-PwshChild' -Arguments @($ScriptPath)
+            if ($leaveDir) { $null = New-Item -ItemType Directory -Path $outDir -Force }
+            return (New-ChildResult -Code 1 -Out $runnerOut -Err @('[invoke-perf-run] failed: killed') -LastLine 'killed')
+        }
+        $script:DryRunMode = $true
+        $outDir = Join-Path $script:SelfTestRoot 'nm-run'
+        foreach ($case in @(@{ Out = @('x'); Leave = $true; Calls = 1; Want = 'could not be moved aside' },
+                            @{ Out = @("[invoke-perf-run] moved to: $outDir-FAILED"); Leave = $false; Calls = 2; Want = 'failed all 2 times' })) {
+            $script:SelfTestCalls.Clear()
+            $script:SelfTestProblems.Clear()
+            $runnerOut = $case.Out
+            $leaveDir = $case.Leave
+            $code = Get-SelfTestExitCode { Invoke-MeasureRun -OutDir $outDir -RunProfile 'short' -Build 'release' }
+            Remove-Item -LiteralPath $outDir -Recurse -Force -ErrorAction SilentlyContinue
+            Assert-SelfTest ($code -eq 4) "leave=$($case.Leave): exit $code (want 4)"
+            $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' }).Count
+            Assert-SelfTest ($calls -eq $case.Calls) "leave=$($case.Leave): runner was called $calls times (want $($case.Calls))"
+            $msg = @($script:SelfTestProblems) -join ' | '
+            Assert-SelfTest ($msg.Contains($case.Want)) "leave=$($case.Leave): '$($case.Want)' not in: $(ConvertTo-SelfTestAscii $msg)"
+            if ($case.Leave) { Assert-SelfTest ($msg.Contains($outDir)) "the out dir path not in: $(ConvertTo-SelfTestAscii $msg)" }
+        }
+    } }
+
     # -------------------------------------------------------------------------
     # 出力先と -Resume の束（2・6・21）
     # -------------------------------------------------------------------------

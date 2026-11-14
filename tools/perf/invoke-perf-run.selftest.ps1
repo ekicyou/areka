@@ -34,6 +34,53 @@ function New-FakeCounterSample {
     return [pscustomobject]@{ Path = "\\host\process($Instance)\$Counter"; InstanceName = 'areka'; CookedValue = $Value }
 }
 
+# ファイルを握って眠る pwsh を起こす（-Grandchild なら子がさらに起こした孫が握る）。
+# 握った者は自分の PID を ready に書く。戻り: [pscustomobject]@{ Process; Ready }
+function Start-SelfTestHolder {
+    param([Parameter(Mandatory)][string]$Dir, [Parameter(Mandatory)][string]$Tag, [switch]$Grandchild)
+    $ready = Join-Path $script:SelfTestRoot "$Tag-ready.txt"
+    $q = { param($t) $t -replace "'", "''" }
+    $hold = Join-Path $script:SelfTestRoot "$Tag-hold.ps1"
+    [System.IO.File]::WriteAllText($hold, (@(
+        "`$f = [System.IO.File]::Open('$(& $q (Join-Path $Dir 'lock.txt'))', 'Create', 'ReadWrite', 'None')"
+        "[System.IO.File]::WriteAllText('$(& $q $ready)', [string]`$PID)"
+        'Start-Sleep -Seconds 60'
+    ) -join "`n"), [System.Text.UTF8Encoding]::new($false))
+    $entry = $hold
+    if ($Grandchild) {
+        $entry = Join-Path $script:SelfTestRoot "$Tag-spawn.ps1"
+        [System.IO.File]::WriteAllText($entry, (@(
+            '$psi = [System.Diagnostics.ProcessStartInfo]::new([Environment]::ProcessPath)'
+            "foreach (`$a in @('-NoProfile', '-NonInteractive', '-File', '$(& $q $hold)')) { `$psi.ArgumentList.Add(`$a) }"
+            '$psi.UseShellExecute = $false'
+            '$null = [System.Diagnostics.Process]::Start($psi)'
+            'Start-Sleep -Seconds 60'
+        ) -join "`n"), [System.Text.UTF8Encoding]::new($false))
+    }
+    $psi = [System.Diagnostics.ProcessStartInfo]::new((Get-PwshPath))
+    foreach ($a in @('-NoProfile', '-NonInteractive', '-File', $entry)) { $psi.ArgumentList.Add($a) }
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $deadline -and -not $process.HasExited) {
+        Start-Sleep -Milliseconds 100
+    }
+    return [pscustomobject]@{ Process = $process; Ready = $ready }
+}
+
+# 赤のときに握った者が残ってフォルダを握り続けないよう、子と、握った者が自分で書いた PID で止める
+function Stop-SelfTestHolder {
+    param([Parameter(Mandatory)][pscustomobject]$Holder)
+    if (-not $Holder.Process.HasExited) { $Holder.Process.Kill($true); $null = $Holder.Process.WaitForExit(10000) }
+    $Holder.Process.Dispose()
+    $holderPid = 0
+    if ((Test-Path -LiteralPath $Holder.Ready) -and [int]::TryParse((Get-Content -LiteralPath $Holder.Ready -Raw), [ref]$holderPid)) {
+        $p = Get-Process -Id $holderPid -ErrorAction SilentlyContinue
+        if ($p) { $p.Kill(); $null = $p.WaitForExit(10000); $p.Dispose() }
+    }
+}
+
 $PerfRunSelfTestChecks = @(
     [pscustomobject]@{ Name = 'counter-select'; Body = {
         # 同じ素の名前で枝番の違う 2 つ。対象（PID 200）は後ろに並ぶ areka#1
@@ -84,6 +131,38 @@ $PerfRunSelfTestChecks = @(
         Assert-SelfTest (-not (Test-SmokeMarker -Path $none)) 'marker found in a log without it'
         # 目印は字面のまま比べる（正規表現として読まない）
         Assert-SelfTest (-not (Test-SmokeMarker -Path $none -Marker 'line.5000$')) 'marker read as a regex'
+    } }
+    [pscustomobject]@{ Name = 'failed-dir-name'; Body = {
+        $parent = Join-Path $script:SelfTestRoot 'names'
+        $null = New-Item -ItemType Directory -Path $parent
+        $n = Get-FailedDirName -Parent $parent -Leaf 'run'
+        Assert-SelfTest ($n -eq 'run-FAILED') "nothing there: expected run-FAILED, got $n"
+        $null = New-Item -ItemType Directory -Path (Join-Path $parent 'run-FAILED')
+        $n = Get-FailedDirName -Parent $parent -Leaf 'run'
+        Assert-SelfTest ($n -match '^run-FAILED-\d{9}$') "run-FAILED there: expected run-FAILED-<time>, got $n"
+        Assert-SelfTest (-not (Test-Path -LiteralPath (Join-Path $parent $n))) "the second name $n already exists"
+    } }
+
+    [pscustomobject]@{ Name = 'move-after-kill'; Body = {
+        # 子が握る場合と、子が起こした孫が握る場合。強制終了して待った後、Move-FailedOutDir が名前を替えられる
+        foreach ($grand in @($false, $true)) {
+            $tag = if ($grand) { 'grandchild' } else { 'child' }
+            $dir = Join-Path $script:SelfTestRoot "out-$tag"
+            $null = New-Item -ItemType Directory -Path $dir
+            $holder = Start-SelfTestHolder -Dir $dir -Tag $tag -Grandchild:$grand
+            try {
+                Assert-SelfTest (Test-Path -LiteralPath $holder.Ready) "${tag}: the holder did not start holding the file"
+                $script:ArekaNotStopped = $false
+                Stop-ArekaProcess -Process $holder.Process
+                Assert-SelfTest (-not $script:ArekaNotStopped) "${tag}: Stop-ArekaProcess reported a timeout"
+                Assert-SelfTest $holder.Process.HasExited "${tag}: Stop-ArekaProcess returned before the process exited"
+                try { $moved = Move-FailedOutDir -Path $dir }
+                catch { throw "${tag}: folder still held after Stop-ArekaProcess: $($_.Exception.Message)" }
+                Assert-SelfTest ($moved -eq "$dir-FAILED" -and (Test-Path -LiteralPath $moved) -and -not (Test-Path -LiteralPath $dir)) "${tag}: moved to '$moved'"
+            } finally {
+                Stop-SelfTestHolder -Holder $holder
+            }
+        }
     } }
 )
 

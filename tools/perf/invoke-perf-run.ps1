@@ -38,6 +38,7 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   EXIT_WATCHDOG_MARGIN_SEC = 180  有界終了予定時刻からの猶予（超えたら停止させて失敗扱い）
   EARLY_EXIT_TOLERANCE_SEC = 30   予定より早く終わった場合に失敗とみなす差（秒）
   POLL_INTERVAL_MS = 250          終了監視のポーリング間隔（ミリ秒）
+  KILL_WAIT_MS = 10000            強制終了の後に終わるまで待つ上限（ミリ秒）。超えたら出力先を残して 1
   LOG_MARKER_SMOKE_GATE           有界自動終了が有効化された証跡のログ文言。
                                   これが実行ログに無い実走は「有界でない」＝採取失敗とみなす
   CSV_HEADER                      CPU 時系列 CSV のヘッダ行（design「CPU 時系列 CSV スキーマ」）
@@ -60,7 +61,8 @@ CPU の「1 コア換算」について:
 
 終了コード:
   0 … 正常終了（採取完了、または -DryRun の検証完了）
-  1 … 実走の失敗（起動できない・異常終了・予定より早い終了・応答なし）
+  1 … 実走の失敗（起動できない・異常終了・予定より早い終了・応答なし）。
+      失敗した走行の出力先を退けられなかったときも 1（退けた先は '[invoke-perf-run] moved to: <path>' の行）
   2 … 静寂状態の確認がない（-ConfirmQuiet 欠落）＝起動拒否（要件 2.7）。
       -AutoQuiet のときは、待って確かめ直しても静かにならなかった場合もこの 2 を返す（要件 2.8）
   3 … 引数・前提の不正（水準/ビルド種別の指定誤り・パス不正・出力先の作成不能。
@@ -181,6 +183,7 @@ $COUNTER_RETRY_WAIT_SEC         = 2
 $EXIT_WATCHDOG_MARGIN_SEC       = 180
 $EARLY_EXIT_TOLERANCE_SEC       = 30
 $POLL_INTERVAL_MS               = 250
+$KILL_WAIT_MS                   = 10000
 $LOG_MARKER_SMOKE_GATE          = 'smoke 自動 close ゲート有効'
 $CSV_HEADER                     = 'timestamp,cpu_percent_1core'
 $CHECK_QUIET_SCRIPT             = 'check-quiet.ps1'
@@ -206,15 +209,47 @@ $FILE_RUN_META   = 'run-meta.txt'
 # =============================================================================
 
 # 出力先の後始末に使う状態（Stop-Run が参照する）
-$script:OutDirPath    = ''
-$script:OutDirCreated = $false
+$script:OutDirPath      = ''
+$script:OutDirCreated   = $false
+# 強制終了の後の待ちが時間切れになった（出力先のファイルを握ったままかもしれない）
+$script:ArekaNotStopped = $false
+
+# areka を子孫まで強制終了して終わるまで待つ（32bit の SHIORI ヘルパが run.log を受け継いでいても止める）
+function Stop-ArekaProcess {
+    param([System.Diagnostics.Process]$Process)
+    if (-not (Stop-ChildProcess -Process $Process -WaitMs $KILL_WAIT_MS)) { $script:ArekaNotStopped = $true }
+}
+
+# 退けた先の名前: '<Leaf>-FAILED'、既に在れば時刻を足す（-SelfTest の failed-dir-name が固定する）
+function Get-FailedDirName {
+    param([Parameter(Mandatory)][string]$Parent, [Parameter(Mandatory)][string]$Leaf)
+    $name = "$Leaf-FAILED"
+    if (Test-Path -LiteralPath (Join-Path $Parent $name)) { $name += '-' + [DateTime]::UtcNow.ToString('HHmmssfff') }
+    return $name
+}
+
+# 出力先を退けて退けた先のパスを返す。退けられなければ投げる（-SelfTest の move-after-kill が固定する）
+function Move-FailedOutDir {
+    param([Parameter(Mandatory)][string]$Path)
+    $parent = Split-Path -Parent $Path
+    $leaf = Get-FailedDirName -Parent $parent -Leaf (Split-Path -Leaf $Path)
+    Rename-Item -LiteralPath $Path -NewName $leaf -ErrorAction Stop
+    return (Join-Path $parent $leaf)
+}
 
 # 失敗して終了する。理由を必ず表示し（黙って失敗しない）、作りかけの出力先は
-# 測定結果と取り違えられない名前へ退避する（部分成果を成果として残さない）。
+# 測定結果と取り違えられない名前へ退け、退けた先を決まった 1 行 '[invoke-perf-run] moved to: <path>' で出す
+# （perf-loop が読む）。-Process は止めてから退ける areka。止まらない・退けられないときは
+# 出力先をそのまま残して 1 で終える（moved to: の行は出さない＝perf-loop は採り直さずに 4）。
 function Stop-Run {
-    param([int]$Code, [string]$Message)
+    param([int]$Code, [string]$Message, [System.Diagnostics.Process]$Process)
 
     Write-Problem "[invoke-perf-run] failed: $Message"
+    if ($Process) { Stop-ArekaProcess -Process $Process }
+    if ($script:ArekaNotStopped) {
+        Write-Problem "[invoke-perf-run] areka did not end within $KILL_WAIT_MS ms after it was killed. The out dir was left as is: $script:OutDirPath"
+        exit $EXIT_RUN_FAILED
+    }
 
     if ($script:OutDirCreated -and $script:OutDirPath -and (Test-Path -LiteralPath $script:OutDirPath)) {
         try {
@@ -225,17 +260,12 @@ function Stop-Run {
                 "reason: $Message"
             ) -join [Environment]::NewLine
             Set-Content -LiteralPath (Join-Path $script:OutDirPath 'FAILED.txt') -Value $errText -Encoding utf8
-
-            $parent = Split-Path -Parent $script:OutDirPath
-            $leaf   = (Split-Path -Leaf $script:OutDirPath) + '-FAILED'
-            if (Test-Path -LiteralPath (Join-Path $parent $leaf)) {
-                $leaf = $leaf + '-' + [DateTime]::UtcNow.ToString('HHmmssfff')
-            }
-            Rename-Item -LiteralPath $script:OutDirPath -NewName $leaf
-            Write-Problem "[invoke-perf-run] moved the partial output to $(Join-Path $parent $leaf) (not usable for judging)."
+            $moved = Move-FailedOutDir -Path $script:OutDirPath
         } catch {
-            Write-Problem "[invoke-perf-run] could not move the partial output: $($_.Exception.Message)"
+            Write-Problem "[invoke-perf-run] could not move the partial output $($script:OutDirPath): $($_.Exception.Message)"
+            exit $EXIT_RUN_FAILED
         }
+        Write-Info "[invoke-perf-run] moved to: $moved"
     }
     exit $Code
 }
@@ -637,7 +667,7 @@ if ($AutoQuiet) {
             Stop-Run $EXIT_BAD_ARGS "quiet check could not run ($CHECK_QUIET_SCRIPT exited with $quietCode). Bad arguments or preconditions."
         }
         if ($quietAttempts -ge $maxQuietAttempts) {
-            Stop-Run $EXIT_QUIET_UNCONFIRMED "quiet check failed (checked $maxQuietAttempts times, never quiet). A CPU series taken while other load runs measures the machine, not areka, so areka is not started. The evidence is in quiet-$QUIET_STAGE_BEFORE.txt (see the moved folder below)."
+            Stop-Run $EXIT_QUIET_UNCONFIRMED "quiet check failed (checked $maxQuietAttempts times, never quiet). A CPU series taken while other load runs measures the machine, not areka, so areka is not started. The evidence is in quiet-$QUIET_STAGE_BEFORE.txt (in the folder of the moved to: line below)."
         }
         Write-Info "[invoke-perf-run] not quiet yet. Waiting $quietRetryWait s and checking again ($($maxQuietAttempts - $quietAttempts) left)."
         Start-Sleep -Seconds $quietRetryWait
@@ -800,8 +830,7 @@ try {
             $lastError = $_.Exception.Message
         }
         if ([DateTime]::UtcNow -ge $graceUntil) {
-            if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
-            Stop-Run $EXIT_COUNTER_FAILED "cannot read the CPU performance counter (waited $COUNTER_FIRST_SAMPLE_GRACE_SEC s): $lastError - is the counter name '$($COUNTER_PATH_PROC_CPU -f $instanceName)' valid on this machine? (where counter names are localized, edit the calibration values at the top)"
+            Stop-Run $EXIT_COUNTER_FAILED "cannot read the CPU performance counter (waited $COUNTER_FIRST_SAMPLE_GRACE_SEC s): $lastError - is the counter name '$($COUNTER_PATH_PROC_CPU -f $instanceName)' valid on this machine? (where counter names are localized, edit the calibration values at the top)" -Process $proc
         }
         Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
     }
@@ -815,8 +844,7 @@ try {
     while (-not $proc.HasExited) {
         $now = [DateTime]::UtcNow
         if ($now -ge $deadline) {
-            try { $proc.Kill() } catch { }
-            Stop-Run $EXIT_RUN_FAILED "areka did not exit by the planned time (smoke auto-exit ${smokeExitMs}ms + margin ${EXIT_WATCHDOG_MARGIN_SEC}s). Killed it. Check the run log $runLogPath."
+            Stop-Run $EXIT_RUN_FAILED "areka did not exit by the planned time (smoke auto-exit ${smokeExitMs}ms + margin ${EXIT_WATCHDOG_MARGIN_SEC}s). Killed it. Check the run log $runLogPath." -Process $proc
         }
         if ($now -ge $nextSampleAt) {
             $value    = $null
@@ -834,8 +862,7 @@ try {
                 if ($proc.HasExited) { break }   # 走行が終わっただけ＝異常ではない
                 $attempt++
                 if ($attempt -gt $COUNTER_RETRY_MAX) {
-                    try { $proc.Kill() } catch { }
-                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $COUNTER_RETRY_MAX times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed."
+                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $COUNTER_RETRY_MAX times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed." -Process $proc
                 }
                 Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
             }
@@ -869,7 +896,8 @@ try {
     } else {
         $env:NO_COLOR = $prevNoColor
     }
-    if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
+    # 想定外の失敗ではこの後に trap の Stop-Run が退ける（時間切れなら Stop-Run が出力先を残して 1）
+    if ($proc -and -not $proc.HasExited) { Stop-ArekaProcess -Process $proc }
 }
 
 # =============================================================================

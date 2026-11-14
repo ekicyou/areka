@@ -63,7 +63,7 @@
   - _Dispatch: standard — 引数の正規化と preflight の合否の新しい分岐_
   - _Requirements: 3.1, 3.3, 4.1, 5.2, 7.1_
 
-- [ ] 4. 走行の出力先と `-Resume`
+- [x] 4. 走行の出力先と `-Resume`
 - [x] 4.1 完了の見方を厳しくし、足りない走行と静かでない走行を脇へ退ける
   - 完了は「`run.log`・`cpu.csv`・`run-meta.txt` が在り、`run-meta.txt` に `ended_utc = ` の行が在り、`quiet-after.txt` の最後の `verdict=` が `QUIET`」。欠ければ `-INCOMPLETE-<時刻>`、静かでなければ `-NOTQUIET-<時刻>` へ退けて採り直す。`run.log` の無い出力先は触らない（2）
   - `-DryRun` の出力先を作り直すのは、中身が印のファイル 2 つだけ（下位のフォルダ無し）のときに限り、ほかが在れば 3 で止めて何も消さない（6）
@@ -71,7 +71,7 @@
   - 終わった姿: 測ったファイルはどの道でも消えず、5 つの状態の出力先それぞれで決まった扱いになることを検査が示す
   - _Dispatch: standard — 完了の見方と退けの新しい分岐_
   - _Requirements: 3.1, 4.1, 5.2, 7.2_
-- [ ] 4.2 ランナーの強制終了の後に待ち、退けた先を決まった 1 行で渡し、perf-loop がそれを読む
+- [x] 4.2 ランナーの強制終了の後に待ち、退けた先を決まった 1 行で渡し、perf-loop がそれを読む
   - ランナーの強制終了の 4 か所を、子孫まで止めて終わるまで待つ共通の口に替える。退けは名前を決める純関数（既に在れば時刻を足す）を通し、退けた先を `[invoke-perf-run] moved to: <path>` で出す（8・28）
   - 待ちが時間切れか退けに失敗したら、ランナーは理由の 1 行を出して 1 で終え、`moved to:` の行は出さない
   - perf-loop はランナーの出力から退けた先を読んで静かでない証拠の場所を書き（読めなければ `<OutDir>-FAILED*`）、非ゼロで `moved to:` が無く出力先が元の名前のまま残っているときは採り直さずに 4（「失敗した走行を退けられなかった」）で止める
@@ -185,3 +185,4 @@
 - 3.2: 件 #74 の 6 か所のうち `perf-ledger.py:930-932` は 1.2 で `Invoke-Child` と一緒に消えていたので、直したのは 5 か所。T2 は子の pwsh を起こす検査が増えて 1 回 60〜80 秒かかる
 - 4.1: `-DryRun` の出力先を「印 2 つだけ」に保つため、`Write-MeasureSamplingNote` は `-DryRun` で何も書かない（読み手は run.log の無い dry run では読む前に戻る）。`Test-MeasureQuietAfterOk` は `Test-MeasureRunComplete` へ畳んで消した（README の 555 行だけが名を残す・R1）。`dryrun-clear` は `$script:DryRunMode` を立てたまま終わる
 - 隣の spec audit-tools-perf-judge（11-15 の知らせ）: judge-perf を 0.5.0 に上げ、標準出力の最後の行が `JUDGE-PERF RESULT code=N` に、自己較正は `SELFTEST RESULT ok=N ng=M` になる（まだ main に未着地）。着地の後は perf-loop.measure の止まりの文に埋まる `LastLine` がこの行になる。8.1 で合わせるか決める
+- 4.2: ランナーは 940 行で、1,000 行の番人まで約 60 行しか残っていない。6.3 で `-SampleEtl` を足す前に、まとまった塊（`Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` の約 100 行、または `Get-FailedDirName`・`Move-FailedOutDir`・`Select-ProcessCpuValue`・`Test-SmokeMarker` の純関数）を兄弟のファイルへ出す。退けの失敗は元の終了コードが 2〜4 でも 1（perf-loop は 4 で止まる）。`Stop-Run` の時間切れの枝そのものは本物の `exit` のため検査が無い
