@@ -12,3 +12,4 @@ stderr_substr = [levels].iteration_build must be a string
 
 note = adopted と同じ 4 本の走行を読む。入力不正（exit 3）で終わるので結果は書かれない。
 note = 検査を戻すと TypeError の traceback で自己較正ごと落ちる（終了コード 3 にならない）。
+note = 値を日本語の配列にしてあるのは、失敗の文が値を ascii で出すこと（!a）の較正を兼ねるため（!r に戻すと stderr の ASCII の見張りで赤）。

@@ -9,7 +9,7 @@ judge-followup.py 見た目の追随チェックの判定（要件 1.5 / 4.7・d
   対象キャラ窓   : hwnd=0x11B04C0 scope=0
   対象バルーン窓 : hwnd=0x1709EE
   操作の注入     : available（SetCursorPos=true cursor_moved=true SendInput=1 lasterr=0）
-  probe.log 行数 : 31  /  run.log 行数 : 21
+  probe.log 行数 : 31  /  run.log 行数 : 22
 
 -- 検査ごとの判定 --
 check=clickthrough verdict=PASS reason=-

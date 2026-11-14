@@ -16,7 +16,7 @@ judge_version = "0.5.0"
 
 [levels]
 # 採否の走行ビルド。judge-perf.py へ --build として渡り、run-meta.txt と突き合う。
-iteration_build = "relase"
+iteration_build = "リリース"
 
 [primary_metric]
 name = "steady_idle_cpu_mean_pct"

@@ -130,7 +130,7 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     try:
         expected_exit = int(values["exit"])
     except ValueError as exc:
-        raise env.bad_input(f"{case_path}: exit is not an integer ({values['exit']!r})") from exc
+        raise env.bad_input(f"{case_path}: exit is not an integer ({values['exit']!a})") from exc
     # 入力不正のケースは compare.json を書かないので verdict を突き合わせられない（書けば素通りの期待になる）。
     if (expected_exit == env.bad_input_exit) == ("verdict" in values):
         raise env.bad_input(f"{case_path}: verdict is required unless exit = {env.bad_input_exit},"

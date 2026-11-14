@@ -105,7 +105,7 @@ def run_selftest(env: SelftestEnv) -> int:
             else:
                 reasons.append(f"exit code: want {case.expected} got {code}")
             if case.stderr_substr and case.stderr_substr not in err:
-                reasons.append(f"stderr does not contain {case.stderr_substr!r}: {ascii(err)}")
+                reasons.append(f"stderr does not contain {ascii(case.stderr_substr)}: {ascii(err)}")
             # .ps1 が実際に読むのは標準出力でなく followup-verdict.txt（#31）。
             verdict_file = work / "followup-verdict.txt"
             if code in (env.ok_exit, env.fail_exit, env.inconclusive_exit) and (

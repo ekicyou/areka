@@ -1,4 +1,4 @@
-primary_metric = "steady_idle_cpu_mean_pct"
+primary_metric = "主指標"
 
 [goal]
 name = "selftest-primary-metric-not-table"

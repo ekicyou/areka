@@ -120,7 +120,8 @@ judge-perf と共有の `perf_lines.py` を使う。
     0  判定できた（ADOPTED / NO_DIFF / WORSE のいずれか。改善したという意味ではない）
     1  `--selftest` の食い違い＝この道具自身が壊れている
     3  引数不正・走行ディレクトリが無い・目標定義ファイルが読めない（UTF-8 でない・TOML でない・
-       節や値の型が違う）・ばらつきの床が正の数でない（#10）・副指標の名前がどの走行にも無い（#11）
+       節や値の型が違う）・ばらつきの床が正の有限の数でない（#10）・
+       `iteration_build` が dev／release でない・副指標の名前がどの走行にも無い（#11）
     4  計測失敗（MEASURE_FAILED）
 
 `2`（判定不能）は返さない——判定不能な走行があれば、それは `4`（計測失敗）である。
@@ -279,15 +280,15 @@ def load_goal(path: Path) -> Goal:
     tables = {key: raw.get(key, {}) for key in ("primary_metric", "secondary_metrics", "levels", "goal")}
     for key, table in tables.items():
         if not isinstance(table, dict):
-            raise bad_input(f"{path}: [{key}] must be a table ({table!r})")
+            raise bad_input(f"{path}: [{key}] must be a table ({table!a})")
     primary, secondary, levels, goal = tables.values()
     for table, key in (("levels", "iteration_build"), ("goal", "name"),
                        ("goal", "judge_version"), ("goal", "judge_script")):
         if not isinstance(tables[table].get(key, ""), str):
-            raise bad_input(f"{path}: [{table}].{key} must be a string ({tables[table][key]!r})")
+            raise bad_input(f"{path}: [{table}].{key} must be a string ({tables[table][key]!a})")
     build = levels.get("iteration_build")
     if build is not None and build not in ("dev", "release"):  # 判定スクリプトの --build と同じ 2 択
-        raise bad_input(f'{path}: [levels].iteration_build must be "dev" or "release" ({build!r})')
+        raise bad_input(f'{path}: [levels].iteration_build must be "dev" or "release" ({build!a})')
 
     name = primary.get("name")
     if not isinstance(name, str) or not name:
@@ -298,13 +299,14 @@ def load_goal(path: Path) -> Goal:
     floor = primary.get("noise_floor_pct")
     if isinstance(floor, bool) or not isinstance(floor, (int, float)):
         raise bad_input(
-            f"{path}: [primary_metric].noise_floor_pct must be a number ({floor!r})",
+            f"{path}: [primary_metric].noise_floor_pct must be a number ({floor!a})",
             ["a missing or non-numeric noise floor adopts everything when the measured spread is 0."],
         )
     if not (floor > 0 and math.isfinite(floor)):  # 0・負・NaN・inf は床の役目を果たさない
         raise bad_input(
-            f"{path}: [primary_metric].noise_floor_pct must be greater than 0 and finite ({floor!r})",
-            ["a floor of 0 or less adopts everything when the measured spread is 0."],
+            f"{path}: [primary_metric].noise_floor_pct must be greater than 0 and finite ({floor!a})",
+            ["a floor of 0 or less adopts everything when the measured spread is 0;"
+             " an infinite floor never adopts anything."],
         )
     must = secondary.get("must_not_regress", [])
     if not isinstance(must, list) or any(not isinstance(m, str) for m in must):
@@ -447,7 +449,7 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
         result.fail(
             f"主指標 {goal.primary_metric} の値が {result.raw(goal.primary_metric)!r} です"
             "（測れていません）",
-            f"primary metric {goal.primary_metric} is {result.raw(goal.primary_metric)!r} (not measured)",
+            f"primary metric {goal.primary_metric} is {result.raw(goal.primary_metric)!a} (not measured)",
         )
     return result
 

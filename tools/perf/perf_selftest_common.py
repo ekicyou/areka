@@ -206,13 +206,19 @@ def _readme_example_paths(readme: Path) -> list[str]:
     return reasons
 
 
-def _helper_failure_texts() -> list[str]:
-    """支えが自分で組む失敗の文（道具の stderr へそのまま出る）を、わざと 4 通り失敗させて集める。"""
+def _helper_failure_texts() -> tuple[Path, list[str]]:
+    """支えが自分で組む失敗の文（道具の stderr へそのまま出る）を、わざと 4 通り失敗させて集める。
+
+    日本語の名のフォルダの下で失敗させ、そのフォルダを返す（⑹ がそこを根として伏せる。呼び手を
+    `.isascii()` に戻すと ASCII の取り出しでも赤になる・R3Q-1）。
+    """
     def fail(message: str, details: list[str] | tuple[str, ...] = ()) -> Exception:
         return ValueError(" | ".join([message, *details]))
 
     texts: list[str] = []
-    with work_dir("perf-selftest-check-") as folder:
+    with work_dir("perf-selftest-check-") as parent:
+        folder = parent / "\u3042"
+        folder.mkdir()
         bad = folder / "case.txt"
         attempts = [
             lambda: list_case_dirs(folder / "missing", "case.txt", fail, materials_allowed=False),
@@ -229,7 +235,7 @@ def _helper_failure_texts() -> list[str]:
                 texts.append(str(exc))
             else:
                 texts.append("(no failure raised)")
-    return texts
+    return folder, texts
 
 
 def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
@@ -253,8 +259,11 @@ def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
             reasons.append(f"(1) {name} imports tempfile (use perf_selftest_common.work_dir)")
         if any(bom in text for bom in _BOM_TEXTS):
             reasons.append(f"(2) {name} has a U+FEFF character (decode with utf-8-sig)")
-    for text in _helper_failure_texts():
-        if not ascii_outside_root(text) or text == "(no failure raised)":
+    # shortcut: ⑶ と perf-rank の標準出力の見張りが ascii_outside_root を使うことは ASCII の取り出しでは
+    # 固定されない（道具を日本語の根で走らせないと赤が出ない）。日本語の根で回す較正を足すときに固定する。
+    fake_root, texts = _helper_failure_texts()
+    for text in texts:
+        if not ascii_outside_root(text, fake_root) or text == "(no failure raised)":
             reasons.append(f"(6) helper failure message is not ASCII (or not raised): {ascii(text)}")
     for child in _children_made:
         if child.resolve().parent != work_root:

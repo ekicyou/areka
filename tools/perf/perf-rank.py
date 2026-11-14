@@ -29,8 +29,9 @@
 終了コード（judge-perf.py・perf-ledger.py と同じ体系）: 0＝順位表を書けた（段が
 UNAVAILABLE でも、理由を書けているなら 0）／1＝`--selftest` の食い違い＝この道具自身が
 壊れている／3＝引数不正・走行ディレクトリが無い・読めない／4＝計測失敗（run.log か
-cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊れている・dump が在るのに空（段②③を出すとき）・dump の既知の
-列名行が無い・段③が利用可なのに `areka.exe!` の解決フレームが 0）。**2（判定不能）は
+cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊れている・dump が在るのに空か
+既知の列名行が無い（`--sampling-available auto` で段②③を出すとき）・段③が利用可なのに
+`areka.exe!` の解決フレームが 0）。**2（判定不能）は
 返さない**——順位表は合否を出さないので、判定できるかどうかという状態が無い。
 
 判定スクリプトとの関係: `judge-perf.py` は import しない（同じ周に別の担当が触っている
@@ -648,39 +649,38 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
     if case.dump_path:
         source = (case.directory / case.dump_path).resolve()
         if not source.is_file():
-            return ([f"dump_path が指す断片がありません: {source}"], set())
+            return ([f"dump_path does not point to a file: {ascii(str(source))}"], set())
         shutil.copyfile(source, work / "dump.txt")
 
     reasons: list[str] = []
     reproduced: set[int] = set()
     code, out, err = selftest_common.invoke(main, [str(work)] + case.argv, EXIT_BAD_INPUT)
     if not selftest_common.ascii_outside_root(out):
-        reasons.append(f"標準出力に ASCII でない行があります: {out.strip()!a}")
+        reasons.append(f"stdout is not ASCII: {out.strip()!a}")
     if code == case.expected_exit:
         reproduced.add(code)
     else:
-        reasons.append(f"終了コード: 期待 {case.expected_exit} 実際 {code}")
+        reasons.append(f"exit code: want {case.expected_exit} got {code}")
 
     expected_path = case.directory / SELFTEST_EXPECTED_FILENAME
     produced = work / OUTPUT_FILENAME
     if case.expected_exit == EXIT_OK:
         if not expected_path.is_file():
-            reasons.append(
-                f"{SELFTEST_EXPECTED_FILENAME} がありません（期待出力の無い合格側は較正になりません）"
-            )
+            reasons.append(f"{SELFTEST_EXPECTED_FILENAME} is missing"
+                           " (a passing case without expected output is not a calibration)")
         elif not produced.is_file():
-            reasons.append(f"{OUTPUT_FILENAME} が作られていません")
+            reasons.append(f"{OUTPUT_FILENAME} was not written")
         else:
             want = selftest_common.read_normalized(expected_path)
             got = selftest_common.read_normalized(produced)
             if want != got:
                 reasons.append(selftest_common.first_difference(OUTPUT_FILENAME, want, got))
     elif produced.is_file():
-        reasons.append(f"失敗したのに {OUTPUT_FILENAME} を書いています（途中結果を残さないこと）")
+        reasons.append(f"{OUTPUT_FILENAME} was written on failure (no partial result may be left)")
 
     for substring in case.stderr_substrings:
         if substring not in err:
-            reasons.append(f"標準エラーに {substring!r} が出ていません")
+            reasons.append(f"stderr does not contain {ascii(substring)}: {ascii(err)}")
     return reasons, reproduced
 
 
