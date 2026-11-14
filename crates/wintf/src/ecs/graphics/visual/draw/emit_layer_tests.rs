@@ -256,6 +256,7 @@ fn draw_item(content: &VisualDrawContent, mix: MixMode) -> DrawCommand {
     DrawCommand::Draw(DrawItem {
         hash: 0,
         entity: Entity::PLACEHOLDER,
+        version: 0,
         world_mat: Matrix3x2::identity(),
         world_aabb: content.local_aabb,
         command_list: content.command_list.clone(),
@@ -279,6 +280,8 @@ fn picture(bgra: [u8; 4], mix: MixMode) -> DrawCommand {
 /// 局所の図形 `geometry`（局所の外接矩形 `local`）を `world_mat` で置いた図形の切り抜き。
 fn geometry_clip(geometry: ID2D1Geometry, world_mat: Matrix3x2, local: Aabb) -> ClipGeometry {
     ClipGeometry {
+        entity: Entity::PLACEHOLDER,
+        version: 0,
         world_mat,
         geometry,
         world_aabb: local.transform(world_mat),
@@ -337,6 +340,8 @@ fn all_clips() -> Vec<(&'static str, DrawCommand, DrawCommand)> {
     let mut clips = vec![(
         "rect",
         DrawCommand::PushClipRect(ClipRect {
+            entity: Entity::PLACEHOLDER,
+            version: 0,
             world_aabb: Aabb::new(13.0, 13.0, 27.0, 27.0),
         }),
         DrawCommand::PopClipRect,
@@ -474,6 +479,8 @@ fn narrowing_the_layer_bounds_does_not_change_the_edge_pixels() {
 fn faded_blue_then(mix: MixMode, clip: Option<(DrawCommand, DrawCommand)>) -> Vec<DrawCommand> {
     let mut commands = colored_under();
     commands.push(DrawCommand::PushOpacity(OpacityLayer {
+        entity: Entity::PLACEHOLDER,
+        version: 0,
         opacity: 0.5,
         world_aabb: Aabb::new(0.0, 0.0, 40.0, 40.0),
     }));
