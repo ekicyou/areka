@@ -149,7 +149,7 @@ tools/perf/
 |---|---|---|
 | `perf_lines.py`（新規） | §Components の「行の読み方」の API。U+FEFF の字は書かず `decode("utf-8-sig")`。`read_cpu_csv` は `math.isfinite` でない値を壊れた行に・行番号を振ってから空行を飛ばす | #40・#7・#13・#51 |
 | `perf_selftest_common.py`（新規） | §Components の「自己較正の支え」の API | #41・#1・#25 ほか |
-| `judge_perf_selftest_inproc.py`（新規） | `run(judge) -> list[str]`（食い違いの理由の一覧）。T6・T8・T24 の 3 つの確かめ | #6・#8・#24 |
+| `judge_perf_selftest_inproc.py`（新規） | `run(judge) -> list[str]`（食い違いの理由の一覧）。T6・T8・T24 の 3 つの確かめと、日本語の文の OSError での読みの失敗の 2 つ（`case.txt` の失敗の文・走行の入力の stderr が ASCII・根の道筋は伏せて見る） | #6・#8・#24 |
 | `fixtures/generate_more.py`（新規） | §Testing Strategy の判定の検体の組み立て・`CASES` | #2・#5・#7・#9・#13・#28〜#30・#43 |
 | `judge-perf.py` | 754-822・1116-1164・1209-1213 を `perf_lines` の読み込みへ（`_FIELD_KEY_RE`・`CpuSample` は同じ名前で読み込む・`read_cpu_csv` は `J_CPU_CSV_HEADER` と `inconclusive` と「要件 2.5」の文を渡す）。#2 の 2 組（D4）。`main` に `except Exception`（traceback を stderr・3）。関門 2473-2524 は未観測を集めるだけにして `if failures:` の後で判定不能。`render_metrics` は時刻の読めない catch-up があれば `catchup_count` を `-`。profile の関門を `(meta_profile or "").strip().lower() not in ("short", "long")`。#36〜#39 の消し・#48 の `partial`・#49・#50・#42〜#46・#74〜#77 の文。終わりの行（D9）。版（D10）。`--selftest` の終わりで `judge_perf_selftest_inproc.run(sys.modules[__name__])` | #2・#5〜#9・#13・#24・#36〜#46・#48〜#51・#74〜#77 |
 | `judge_perf_catchup.py` | 定常の catch-up を呼び手から受ける（#39）・`_timedelta_seconds` を消す・頭書きの「3,500 行」 | #39・#47・#81 |
@@ -471,9 +471,9 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 | T21 | rank の期待出力 3 本 | `talk_peak_pct` の行が無い | 戻すと逐語の比べで赤 |
 | T22 | rank のケース `talk_threads_folded` | 4 トーク×0.2 s が `actor:sakura-talk-*` 0.800 の 1 行 | 戻すと赤 |
 | T23 | rank のケース `unresolved_areka_frames`（exit 4） | 全フレームが `areka.exe!0x…` | 数える所を戻すと 0 で赤 |
-| T24 | `judge_perf_selftest_inproc`（D12）・judge-perf の自己較正の最後の行 | 最後の行が ASCII の決まった形 | 日本語に戻すと赤 |
-| T25 | `check_tree` ⑶⑷（rank） | rank の stderr の全行が ASCII・`first_difference` が ASCII | 戻すと赤 |
-| T26 | `check_tree` ⑶（followup・compare） | stderr の全行が ASCII | 戻すと赤 |
+| T24 | `judge_perf_selftest_inproc`（D12）・judge-perf の自己較正の最後の行 | 最後の行が ASCII の決まった形。日本語の文の OSError を投げさせても `case.txt` の失敗の文と走行の入力の読み（`cannot read `）の stderr が ASCII（根の道筋は伏せる） | 日本語に戻すと赤 |
+| T25 | `check_tree` ⑶⑷（rank） | rank の stderr の全行が ASCII・`first_difference` が ASCII。ケース `(localized-oserror)` で読み（`read_bytes`）と書き（`write_text`）の 2 経路に日本語の文の OSError を投げさせても stderr が ASCII で `[Errno 13]` が残る | 戻すと赤 |
+| T26 | `check_tree` ⑶（followup・compare） | stderr の全行が ASCII。compare はケース `(localized-oserror)` で目標の読み・判定スクリプトの起動・結果の書きの 3 経路に日本語の文の OSError を投げさせても stderr が ASCII で `[Errno 13]` が残る | 戻すと赤 |
 | T27 | `check_tree` ⑸ | README の例の道筋 | `C:\出力先` に戻すと赤 |
 
 ### 判定の検体（`generate_more` が作る・#28〜#30・#43 と上の T）

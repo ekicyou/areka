@@ -46,7 +46,6 @@
 from __future__ import annotations
 
 import json
-import pathlib
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -201,9 +200,9 @@ def _localized_oserror_reasons(env: SelftestEnv, case: SelftestCase, work: Path)
     work.mkdir(parents=True)
     argv = _argv(case, work)
     reasons: list[str] = []
-    for target, name, reached in ((pathlib.Path, "read_text", "cannot read goal file"),
+    for target, name, reached in ((Path, "read_text", "cannot read goal file"),
                                   (subprocess, "run", "cannot start the judge script"),
-                                  (pathlib.Path, "write_text", "cannot write results")):
+                                  (Path, "write_text", "cannot write results")):
         reasons += common.localized_oserror_reasons(env.invoke, argv, env.fail_exit, target, name, reached)
     return reasons
 

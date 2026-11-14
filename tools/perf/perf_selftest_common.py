@@ -56,7 +56,7 @@ def work_dir(prefix: str) -> Iterator[Path]:
         try:
             shutil.rmtree(child)
         except OSError as exc:
-            sys.stderr.write(f"[perf-selftest] could not remove work dir {child}: {exc!a}\n")
+            sys.stderr.write(f"[perf-selftest] could not remove work dir {child}: {ascii(str(exc))}\n")
 
 
 def list_case_dirs(root: Path, case_file: str, fail: Fail, *,
@@ -133,14 +133,16 @@ def localized_oserror_reasons(main: Callable[[list[str]], int], argv: list[str],
     """`target.name` が日本語の文の OSError を投げるとき、stderr が全行 ASCII か（D9・R5Z-1）。
 
     `reached` が stderr に無ければ、差し替えた失敗の経路に届いていない（較正になっていない）。
+    `[Errno 13]` が無ければ OS の失敗の文の頭（番号・ファイル名）を落としている（`{exc!a}` は repr で落とす）。
     """
     def raiser(*_args, **_kwargs):
         raise OSError(13, LOCALIZED_OS_ERROR)
 
     with mock.patch.object(target, name, raiser):
         _code, _out, err = invoke(main, argv, exit_fallback)
-    if reached not in err:
-        return [f"{name} raising OSError: stderr has no {ascii(reached)}: {ascii(err)}"]
+    for needed in (reached, "[Errno 13]"):
+        if needed not in err:
+            return [f"{name} raising OSError: stderr has no {ascii(needed)}: {ascii(err)}"]
     return [f"{name} raising OSError: stderr line is not ASCII: {ascii(line)}"
             for line in err.splitlines() if not ascii_outside_root(line)]
 

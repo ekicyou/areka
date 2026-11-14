@@ -60,7 +60,9 @@ def _last_line(text: str) -> str:
 
 
 def _non_ascii(text: str) -> list[str]:
-    return [line for line in text.splitlines() if not line.isascii()]
+    """根の道筋を伏せたうえで ASCII でない行。根は利用者が選ぶ場所で、日本語のフォルダでも道具の誤りではない。"""
+    root = str(FIXTURES.parents[2])
+    return [line for line in text.splitlines() if not line.replace(root, "<root>").isascii()]
 
 
 def _read_case_code(judge: types.ModuleType, read_text) -> int | None:
@@ -128,7 +130,7 @@ def run(judge: types.ModuleType) -> tuple[int, list[str]]:
             reasons.append(f"case.txt {label}: got {got}, expected {expected}")
 
     # OS の失敗の文は機械の言語で日本語になる（R5Z-1・D9）。日本語の文の OSError を投げさせ、
-    # case.txt の読み（自己較正の失敗の文）と run.log の読み（stderr）が ASCII のままか。
+    # case.txt の読み（自己較正の失敗の文）と走行の入力の読み（最初に読む run-meta.txt・stderr）が ASCII のままか。
     def localized_oserror(_self, *_a, **_k):
         raise OSError(13, LOCALIZED_OS_ERROR)
 
@@ -143,8 +145,8 @@ def run(judge: types.ModuleType) -> tuple[int, list[str]]:
         reasons.append(f"case.txt unreadable (localized OSError): details {ascii(details)}")
     with mock.patch.object(judge.Path, "read_bytes", localized_oserror):
         code, _out, err = _call(judge, "H11_healthy_judged_series")
-    if code != 3 or _non_ascii(err):
-        reasons.append(f"run.log unreadable (localized OSError): exit {code}, stderr {ascii(err)}")
+    if code != 3 or "cannot read " not in err or _non_ascii(err):
+        reasons.append(f"run input unreadable (localized OSError): exit {code}, stderr {ascii(err)}")
 
     # T8: 明示指定 2 系列で A が上限越え・B が未観測なら不合格(1)。不合格が判定不能より先（#8）。
     # 未観測の系列は名指しされる。catch-up が 0 件の走行でも §9 の仮説の行は出る。

@@ -408,7 +408,7 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
             timeout=timeout_sec, check=False,
         )
     except OSError as exc:
-        result.fail(f"判定スクリプトを起動できません: {exc}", f"cannot start the judge script: {exc!a}")
+        result.fail(f"判定スクリプトを起動できません: {exc}", f"cannot start the judge script: {ascii(str(exc))}")
         return result
     except subprocess.TimeoutExpired:
         result.fail(f"判定スクリプトが {timeout_sec:.0f} 秒で終わりません",
