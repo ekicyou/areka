@@ -108,6 +108,39 @@ function New-SelfTestRunnerResult {
     return (New-ChildResult -Code $Code -Out $out -LastLine $out[-1])
 }
 
+# 追随の束の偽物（. $SelfTestFollowupFakes）: 外の呼び出しは cargo・sample（検体の問い合わせ）・child（検査の子）。
+# 子の答えは $script:FakeFollowup の頭から 1 つずつ（'<code>|judged' は判定の印を書いて判定の行、'|abort' は中止の形）
+$SelfTestFollowupFakes = {
+    function Write-Problem { param([string]$Message) }
+    function Write-Info { param([string]$Message) }
+    function Invoke-MeasureCargo { param($Arguments, $Label) Add-SelfTestCall -Name 'cargo'; New-ChildResult -Code 1 -LastLine 'fake cargo' }
+    function Get-NarSamplePath { param($Sample, $Key) Add-SelfTestCall -Name 'sample'; [pscustomobject]@{ Ok = $true; Value = 'C:\x'; Message = '' } }
+    function Invoke-PwshChild {
+        param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+        Add-SelfTestCall -Name 'child' -Arguments $Arguments
+        $c, $kind = $script:FakeFollowup[0] -split '\|', 2
+        $script:FakeFollowup = @($script:FakeFollowup | Select-Object -Skip 1)
+        $out = $Arguments[[array]::IndexOf($Arguments, '-OutDir') + 1]
+        if ($kind -eq 'judged') {
+            $null = New-Item -ItemType Directory -Path $out -Force
+            [System.IO.File]::WriteAllText((Join-Path $out 'followup-verdict.txt'), "x`n")
+            $line = "FOLLOWUP RESULT overall=PASS clickthrough=PASS drag=PASS dpi=PASS balloon_follow=PASS code=$c dir=$out"
+        } else {
+            $line = "FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code=$c dir=$out"
+        }
+        return (New-ChildResult -Code ([int]$c) -Out @($line) -Err @('stop reason') -LastLine 'stop reason')
+    }
+    $script:DryRunMode = $false
+    $script:ResumeMode = $false
+    $script:BinDirArg = ''
+    $script:GhostRootArg = ''
+    $script:BalloonRootArg = ''
+    $script:GoalConfig = $null
+    $script:GoalName = 'selftest'
+    $script:OutRootPath = Join-Path $script:SelfTestRoot ('fu-' + [Guid]::NewGuid().ToString('N'))
+    $script:IterArg = 1
+}
+
 # 呼ばれた部品の名前を順に並べる（終了の口は除く）
 function Get-SelfTestCallOrder { return (@($script:SelfTestCalls | Where-Object { $_.Name -ne 'Exit-WithResult' } | ForEach-Object { $_.Name }) -join ',') }
 
@@ -477,6 +510,69 @@ $SelfTestChecks = @(
             $a = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'rank' })[0].Arguments)
             $i = [array]::IndexOf($a, '--unavailable-reason')
             Assert-SelfTest ($i -ge 0 -and $a[$i + 1] -eq $case.Want) "rank args: $(ConvertTo-SelfTestAscii ($a -join ' ')) (want --unavailable-reason $($case.Want))"
+        }
+    } }
+
+    # -------------------------------------------------------------------------
+    # 追随の束（13・14・21）
+    # -------------------------------------------------------------------------
+
+    [pscustomobject]@{ Name = 'followup-resume-first'; Body = {
+        # 済んだ出力先と -Resume: 偽の cargo も検体の問い合わせも子も呼ばれずに 0
+        . $SelfTestFollowupFakes
+        $script:ResumeMode = $true
+        $dir = Join-Path (Get-LoopDir -Kind 'iter' -Iter 1) 'followup'
+        $null = New-Item -ItemType Directory -Path $dir -Force
+        foreach ($f in @('probe.log', 'followup-verdict.txt')) { [System.IO.File]::WriteAllText((Join-Path $dir $f), "x`n") }
+        $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+        Assert-SelfTest ($code -eq 0) "exit $code (want 0)"
+        $order = Get-SelfTestCallOrder
+        Assert-SelfTest ($order -eq '') "external calls under -Resume: '$order' (want none)"
+    } }
+
+    [pscustomobject]@{ Name = 'followup-retry-on-1'; Body = {
+        # 子の 1（判定なし）は 1 度だけ採り直す。bin-B が在ればビルドしない。子の 3 は採り直さない
+        . $SelfTestFollowupFakes
+        $binB = Join-Path (Get-LoopDir -Kind 'iter' -Iter 1) 'bin-B'
+        $null = New-Item -ItemType Directory -Path $binB -Force
+        [System.IO.File]::WriteAllText((Join-Path $binB 'areka.exe'), 'x')
+        $cases = @(
+            @{ Name = '1-then-judged'; Answers = @('1|abort', '0|judged'); Exit = 0; Calls = 2 }
+            @{ Name = '1-twice'; Answers = @('1|abort', '1|abort'); Exit = 4; Calls = 2 }
+            @{ Name = '3'; Answers = @('3|abort'); Exit = 3; Calls = 1 }
+        )
+        foreach ($case in $cases) {
+            $script:SelfTestCalls.Clear()
+            $script:FakeFollowup = @($case.Answers)
+            $code = Get-SelfTestExitCode { Invoke-SubFollowup }
+            Assert-SelfTest ($code -eq $case.Exit) "$($case.Name): exit $code (want $($case.Exit))"
+            $order = Get-SelfTestCallOrder
+            $want = (@('sample', 'sample') + @(1..$case.Calls | ForEach-Object { 'child' })) -join ','
+            Assert-SelfTest ($order -eq $want) "$($case.Name): calls '$order' (want '$want')"
+            $bin = @(@($script:SelfTestCalls | Where-Object { $_.Name -eq 'child' })[0].Arguments)
+            Assert-SelfTest ($bin[[array]::IndexOf($bin, '-BinDir') + 1] -eq $binB) "$($case.Name): -BinDir is not bin-B: $(ConvertTo-SelfTestAscii ($bin -join ' '))"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'followup-verdict-shape'; Body = {
+        # 判定まで届いた＝RESULT 行（標準エラーの側でも）＋ followup-verdict.txt ＋ 中止の形でない
+        $dir = Join-Path $script:SelfTestRoot 'fvs'
+        $none = Join-Path $script:SelfTestRoot 'fvs-none'
+        $null = New-Item -ItemType Directory -Path $dir -Force
+        [System.IO.File]::WriteAllText((Join-Path $dir 'followup-verdict.txt'), "x`n")
+        $pass = 'FOLLOWUP RESULT overall=FAIL clickthrough=PASS drag=FAIL dpi=- balloon_follow=- code=1 dir=x'
+        $abort = 'FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code=1 dir=x'
+        $cases = @(
+            @{ Name = 'judged'; Lines = @('a', $pass, 'stop reason'); Dir = $dir; Want = $true }
+            @{ Name = 'no-line'; Lines = @('a', 'b'); Dir = $dir; Want = $false }
+            @{ Name = 'abort-shape'; Lines = @($abort); Dir = $dir; Want = $false }
+            @{ Name = 'no-verdict-file'; Lines = @($pass); Dir = $none; Want = $false }
+            @{ Name = 'last-line-wins'; Lines = @($pass, $abort); Dir = $dir; Want = $false }
+        )
+        foreach ($case in $cases) {
+            $r = Test-FollowupReachedVerdict -Lines $case.Lines -Dir $case.Dir
+            Assert-SelfTest ($r.Reached -eq $case.Want) "$($case.Name): reached $($r.Reached) (want $($case.Want))"
+            Assert-SelfTest ($case.Want -or $r.Why) "$($case.Name): no reason given"
         }
     } }
 )

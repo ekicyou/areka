@@ -717,18 +717,31 @@ function Test-MeasureFollowupComplete {
     return (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_FOLLOWUP_VERDICT) -PathType Leaf)
 }
 
+# 判定まで届いたか（上の ⒜⒝）。RESULT 行は子の全部の行の最後のもの（理由の行は標準エラーへ出る）。
+# 戻り: Reached・ResultLine・Why（届かなかった理由の語・届いたら空）
+function Test-FollowupReachedVerdict {
+    param([string[]]$Lines = @(), [Parameter(Mandatory = $true)][string]$Dir)
+    $resultLine = $null
+    foreach ($line in $Lines) { if ($line -match '^FOLLOWUP RESULT ') { $resultLine = $line.Trim() } }
+    $judged = Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_FOLLOWUP_VERDICT) -PathType Leaf
+    $abortShape = ($resultLine -and ($resultLine -match 'clickthrough=-\s+drag=-\s+dpi=-\s+balloon_follow=-'))
+    $why = if (-not $resultLine) { 'no result line' }
+           elseif ($abortShape)  { 'the result line has the abort shape (all 4 checks are -)' }
+           elseif (-not $judged) { "no verdict output ($MEASURE_FILE_FOLLOWUP_VERDICT)" }
+           else                  { '' }
+    return [pscustomobject]@{ Reached = ($why -eq ''); ResultLine = $resultLine; Why = $why }
+}
+
+# 順（13）: -Resume の済み → 目標定義の検査の集合 → -DryRun → 実行体（-BinDir／bin-B／無ければビルドして
+# target\release）→ 検体の在り処 → 検査。済んだ -Resume と -DryRun は外を何も呼ばない。
 function Invoke-SubFollowup {
     Assert-MeasureIter
     $iterDir = Get-LoopDir -Kind 'iter' -Iter $script:IterArg
     $dir = Join-Path $iterDir 'followup'
     $script:CurrentDir = $dir
-    Sync-MeasureWorktreeBuild -Build 'release' -BinDir $script:BinDirArg
-    $binDir = if ($script:BinDirArg) {
-        [System.IO.Path]::GetFullPath($script:BinDirArg).TrimEnd('\')
-    } else {
-        $candidate = Join-Path $iterDir $MEASURE_SIDE_LEAF['B']
-        if (Test-Path -LiteralPath (Join-Path $candidate $MEASURE_AREKA_EXE) -PathType Leaf) { $candidate }
-        else { Get-MeasureBinDir -Build 'release' }
+    if ($script:ResumeMode -and (Test-MeasureFollowupComplete -Dir $dir)) {
+        Write-Info "[perf-loop] -Resume: using the existing followup verdict: $dir"
+        Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
     $exitMs = Get-MeasureTomlInt -Section 'followup' -Key 'exit_ms' -Default $MEASURE_FOLLOWUP_EXIT_MS_DEFAULT
     # 必須の検査は目標定義 [followup] required が唯一の所在（要件 1.1）。ここで読んで
@@ -745,29 +758,23 @@ function Invoke-SubFollowup {
     }
     # 並びは固定語彙の順に揃える（目標定義の書き順で報告の並びが揺れないように）。
     $checksArg = (@($MEASURE_FOLLOWUP_CHECKS_ALL | Where-Object { $checks -contains $_ }) -join ',')
-
-    $checkerPath = Join-Path $PSScriptRoot 'invoke-followup-checks.ps1'
-    $arguments = @(
-        '-OutDir', $dir,
-        '-BinDir', $binDir,
-        '-ExitMs', "$exitMs",
-        '-Checks', $checksArg,
-        '-GhostRoot', (Get-MeasureGhostRoot),
-        '-BalloonRoot', (Get-MeasureBalloonRoot)
-    )
+    $candidate = Join-Path $iterDir $MEASURE_SIDE_LEAF['B']
+    $useTarget = (-not $script:BinDirArg) -and -not (Test-Path -LiteralPath (Join-Path $candidate $MEASURE_AREKA_EXE) -PathType Leaf)
+    $binDir = if ($script:BinDirArg) { [System.IO.Path]::GetFullPath($script:BinDirArg).TrimEnd('\') }
+              elseif ($useTarget)    { Get-MeasureBinDir -Build 'release' }
+              else                   { $candidate }
+    $arguments = @('-OutDir', $dir, '-BinDir', $binDir, '-ExitMs', "$exitMs", '-Checks', $checksArg)
     Write-Info "[perf-loop] followup iter $($script:IterArg) / exe $binDir / checks $checksArg / limit $exitMs ms / out $dir"
-    Write-Info "[perf-loop] followup checker call: invoke-followup-checks.ps1 $($arguments -join ' ')"
-
-    if ($script:ResumeMode -and (Test-MeasureFollowupComplete -Dir $dir)) {
-        Write-Info "[perf-loop] -Resume: using the existing followup verdict: $dir"
-        Exit-WithResult -Code $EXIT_OK -Dir $dir
-    }
     if ($script:DryRunMode) {
         Write-MeasureDryRunMark -Dir $dir -Reason ('followup checks are not run under -DryRun (they need a real run and input injection). ' +
-            "arguments to pass: invoke-followup-checks.ps1 $($arguments -join ' ')")
+            "arguments to pass: invoke-followup-checks.ps1 $($arguments -join ' ') -GhostRoot <sample> -BalloonRoot <sample>")
         Write-Info '[perf-loop] -DryRun: followup checks were not run.'
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
+    if ($useTarget) { Sync-MeasureWorktreeBuild -Build 'release' }
+    $arguments += @('-GhostRoot', (Get-MeasureGhostRoot), '-BalloonRoot', (Get-MeasureBalloonRoot))
+    $checkerPath = Join-Path $PSScriptRoot 'invoke-followup-checks.ps1'
+    Write-Info "[perf-loop] followup checker call: invoke-followup-checks.ps1 $($arguments -join ' ')"
     $attempts = $MEASURE_RUN_RETRY + 1
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
         # 前の回の置き土産（中止したときの followup.txt・古い判定）を残さない。
@@ -781,18 +788,12 @@ function Invoke-SubFollowup {
         if ($result.Code -eq 3) {
             Stop-Run -Code $EXIT_BAD_ARGS -Message "followup checks stopped on bad arguments or preconditions: $($result.LastLine)" -Dir $dir
         }
-        $resultLine = $null
-        foreach ($line in $result.Lines) { if ($line -match '^FOLLOWUP RESULT ') { $resultLine = $line.Trim() } }
-        $judged = Test-Path -LiteralPath (Join-Path $dir $MEASURE_FILE_FOLLOWUP_VERDICT) -PathType Leaf
-        $abortShape = ($resultLine -and ($resultLine -match 'clickthrough=-\s+drag=-\s+dpi=-\s+balloon_follow=-'))
-        if ($resultLine -and $judged -and -not $abortShape) {
-            Write-Info "[perf-loop] $resultLine"
+        $verdict = Test-FollowupReachedVerdict -Lines $result.Lines -Dir $dir
+        if ($verdict.Reached) {
+            Write-Info "[perf-loop] $($verdict.ResultLine)"
             Exit-WithResult -Code $EXIT_OK -Dir $dir
         }
-        $why = if (-not $resultLine) { 'no result line' }
-               elseif ($abortShape)  { 'the result line has the abort shape (all 4 checks are -)' }
-               else                  { "no verdict output ($MEASURE_FILE_FOLLOWUP_VERDICT)" }
-        Write-Problem "[perf-loop] followup checks did not reach a verdict (exit code $($result.Code), $why): $($result.LastLine)"
+        Write-Problem "[perf-loop] followup checks did not reach a verdict (exit code $($result.Code), $($verdict.Why)): $($result.LastLine)"
         if ($attempt -lt $attempts) { Write-Info '[perf-loop] running once more.' }
     }
     Stop-Run -Code $EXIT_MEASURE_FAILED -Message "followup checks did not reach a verdict in all $attempts tries (MEASURE_FAILED)" -Dir $dir

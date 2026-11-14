@@ -141,7 +141,7 @@
   - _Dispatch: standard, effort high — 6 つの部品の呼ぶ順をまたぐ組み替えで、取りこぼすと採取が止まらない_
   - _Requirements: 3.1, 4.1, 5.2, 5.3_
 
-- [ ] 7. 追随の検査
+- [x] 7. 追随の検査
 - [x] 7.1 (P) 追随の検査の判定の写し・増えた分だけの読み・強制終了の待ちを直す
   - 判定器の終了コードの写し方を純関数にし、0・1・2 はそのまま、3 とほかは 1（14）
   - ログは読んだ位置と書きかけの最後の 1 行を覚え、増えた分だけ読む（32）
@@ -151,7 +151,7 @@
   - _Boundary: invoke-followup-checks_
   - _Dispatch: standard — 増えた分だけ読む読み手と写しの純関数_
   - _Requirements: 3.1, 4.1, 4.7, 5.3_
-- [ ] 7.2 `followup` の順を直し、判定まで届いたかの見方を純関数にする
+- [x] 7.2 `followup` の順を直し、判定まで届いたかの見方を純関数にする
   - `-Resume` の済みを最初に見て、ビルドは `-BinDir` も `bin-B` も無いときだけ回す（13）
   - 判定まで届いたかの見方を純関数に出し、子の 1 は 1 度だけ採り直す今の決まりを試す（14・21）
   - 検査: `followup-resume-first`（偽の `cargo` も検体の問い合わせも呼ばれない）・`followup-retry-on-1`（呼び出し 2 回）・`followup-verdict-shape`
@@ -194,3 +194,4 @@
 - 6.3: ランナーの 1,000 行の余地のため `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.facts.ps1` へ字のまま移した（design の File Structure Plan に足した）。T3 は ok=6。採取の開始の行の理由の語は ok／子の `reason=`／start_failed。0 で終わる道は採取を動かしたまま返す（止めるのは perf-loop の `-Stop`）
 - 6.4: 採取が残る道は 3 つで、どれも design が受け入れている。ランナーが 0 で返ってから `-Stop` までの間の例外・ランナーの外からの強制終了・ランナーの `-Cancel` の失敗。`-Stop` が 1（`-d` も失敗し元の ETL も無い）のときも `xperf -stop` の警告を出すかは 8.1 の audit で決める。README の 884 行あたりに手で `-Start` する例が残る（R の受け持ち）
 - 7.1: レビューで、design の 35 のうち追随の検査の `Stop-Run`（色なしで標準エラーへ）を持つタスクが無いと分かったので、進行役が `Write-Host -ForegroundColor Red` の 2 か所を `Write-Problem` へ替えた（measure は RESULT 行を全部の行から探すので影響なし・`LastLine` は理由の行になる）。BOM を落とす条件も「バッファの頭がファイルの頭」へ直した。窓が閉じる道と強制終了の 2 か所は実走でしか通らない
+- 7.2: `followup -DryRun` は検体の問い合わせより前で止まるので、DRY-RUN.txt の `-GhostRoot`・`-BalloonRoot` は `<sample>` の仮置き。`[followup] required` の名前の検査は `-Resume` の済みの後。偽の子は答えが尽きると添字の例外で落ちる（赤にはなる）。13 のビルドする側と `-BinDir` 側の検査は無い（8.1 の audit で見る）
