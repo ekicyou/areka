@@ -303,6 +303,8 @@ pub struct TransitionSummary {
     pub chain_realigned: u32,
     /// 接地点差の最大（絶対値が最大のものを**符号つき**で持つ。負＝浮き）。
     pub ground_diff_max: Option<i32>,
+    /// 接地点を測れなかった行（`diff=-`・作業領域の下端が不明）があった＝その scope を黙って通さない。
+    pub ground_diff_unmeasured: bool,
     /// **不可視ゆえ**再表示を見送られた窓（要件 4.6 で合否から除外する）。
     ///
     /// 見送りの理由は 2 語あるが、除外へ数えるのは
@@ -342,6 +344,7 @@ impl TransitionSummary {
             holds: 0,
             chain_realigned: 0,
             ground_diff_max: None,
+            ground_diff_unmeasured: false,
             skipped_windows: BTreeSet::new(),
             wall: WallClock::default(),
             visualize_to_write_us: BTreeMap::new(),
@@ -786,13 +789,12 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 }
             }
             KIND_GROUND => {
+                summary.ground_diff_unmeasured |= record.raw_field(FIELD_DIFF) == Some(MISSING);
                 if let Some(diff) = record.int_field::<i32>(FIELD_DIFF) {
-                    summary.ground_diff_max = Some(match summary.ground_diff_max {
-                        Some(current) if current.saturating_abs() >= diff.saturating_abs() => {
-                            current
-                        }
-                        _ => diff,
-                    });
+                    let current = summary.ground_diff_max.get_or_insert(diff);
+                    if diff.saturating_abs() > current.saturating_abs() {
+                        *current = diff;
+                    }
                 } else if record.is_well_formed() && record.field(FIELD_DIFF).is_some() {
                     // 欄があり番兵でもないのに読めない（行の欠陥とは二重に数えない）。
                     summary.malformed_records += 1;

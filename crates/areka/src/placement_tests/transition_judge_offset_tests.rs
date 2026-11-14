@@ -38,7 +38,7 @@ use areka_placement::transition_diag::{
     OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED,
     OFFSET_VERDICT_UNRESOLVED, OffsetRecord, offset_line,
 };
-use wintf::ecs::window::transition_diag::{FIELD_SCOPE, Stamp};
+use wintf::ecs::window::transition_diag::{FIELD_FRAME, FIELD_SCOPE, Stamp};
 
 use super::{ALIGNMENT_RESIDUAL_MAX_PX, OffsetViolation, judge_offset_log};
 
@@ -283,6 +283,40 @@ fn the_passing_fixture_is_actually_parsed() {
 }
 
 #[test]
+fn the_row_name_constants_point_at_their_transition_and_scope() {
+    // 行の名（`T1_SCOPE2` など）が本当にその遷移・scope の行を指すことを確かめる。名が
+    // ずれると、壊した檻は別の行を壊して別の理由で赤になり、名指しの判定を外したまま緑に見える。
+    let lines = pass_lines();
+    for (index, frame, scope) in [
+        (T0_SCOPE0, 10, 0),
+        (T0_SCOPE1, 10, 1),
+        (T1_SCOPE0, 20, 0),
+        (T1_SCOPE1, 20, 1),
+        (T1_SCOPE2, 20, 2),
+        (T2_SCOPE0, 30, 0),
+        (T2_SCOPE1, 30, 1),
+        (T2_SCOPE2, 30, 2),
+        (T3_SCOPE0, 40, 0),
+        (T3_SCOPE1, 40, 1),
+        (T3_SCOPE2, 40, 2),
+    ] {
+        let record = parse_transition_line(&lines[index]).expect("行として解析できる");
+        assert_eq!(
+            record.int_field::<u32>(FIELD_FRAME),
+            Some(frame),
+            "{index}: {}",
+            lines[index]
+        );
+        assert_eq!(
+            record.int_field::<u32>(FIELD_SCOPE),
+            Some(scope),
+            "{index}: {}",
+            lines[index]
+        );
+    }
+}
+
+#[test]
 fn an_empty_log_is_red_not_an_empty_pass() {
     let report = judge_offset_log("");
     assert_eq!(report.violations, vec![OffsetViolation::NoOffsetRecords]);
@@ -292,7 +326,7 @@ fn an_empty_log_is_red_not_an_empty_pass() {
 fn a_log_without_a_round_trip_is_red() {
     // 往復を 1 度も観測していないログは「違反 0 件」ではなく**判定できていない**。
     let lines = pass_lines();
-    let log = log_of(&lines[..8]);
+    let log = log_of(&lines[..=T1_SCOPE2]);
     let report = judge_offset_log(&log);
     assert!(
         report
@@ -686,8 +720,7 @@ fn a_gate_row_before_the_first_origin_still_forms_the_denominator() {
             .iter()
             .flat_map(|transition| transition.rows.iter())
             .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
-        "遷移の内側に門の行が残っている＝この檻が ⑴ の形を踏んでいない:
-{report}"
+        "遷移の内側に門の行が残っている＝この檻が母数の 1 つ目の形（門の行が最初の起点より前にだけある）を踏んでいない:\n{report}"
     );
     assert!(!report.failed(), "{report}");
 }
@@ -738,7 +771,7 @@ fn a_malformed_gate_row_does_not_enter_the_denominator() {
 
 #[test]
 fn a_log_with_no_gate_row_anywhere_is_still_red() {
-    // ⑶ 門の行が**どこにも無い**ログ。母数を広げた結果「検査が何も要求しなくなる」形を
+    // 母数の 3 つ目の檻: 門の行が**どこにも無い**ログ。母数を広げた結果「検査が何も要求しなくなる」形を
     // 防ぐ檻——ここが緑になったら、⑷ はキーワード指定スコープを 1 つも要求していない。
     let report = judge_offset_log(&log_of(&lines_without_gate_rows()));
     assert!(

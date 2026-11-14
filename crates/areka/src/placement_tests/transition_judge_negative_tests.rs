@@ -30,8 +30,8 @@ use super::test_support::{
     replace_once, summarize_lines,
 };
 use super::{Bounds, Quantity, Violation, WindowKey, judge, judge_transition_log};
-use areka_placement::diag::WindowKind;
-use areka_placement::transition_diag::FIELD_DIFF;
+use areka_placement::diag::{PlacementRoute, WindowKind};
+use areka_placement::transition_diag::{FIELD_DIFF, GroundRecord, ground_line};
 
 // ---------------------------------------------------------------------------
 // 判定語を壊した入力
@@ -164,6 +164,35 @@ fn an_unreadable_ground_difference_is_red_even_when_another_ground_row_reads() {
     assert_eq!(
         deterministic_violations(&broken),
         vec![Violation::MalformedRecords { count: 1 }]
+    );
+}
+
+#[test]
+fn a_ground_row_without_a_work_area_bottom_is_unmeasured_even_when_another_scope_reads() {
+    // 発行側は作業領域の下端が解決できない行で `diff` を番兵 `-` にする。別の scope の行が
+    // 差 0 を出しても、測れなかった scope の接地点は上限を当てていない＝黙って緑にしない。
+    let mut lines = compliant_transition_lines();
+    let stamp = super::parse_transition_line(&lines[3])
+        .expect("接地点の行")
+        .stamp;
+    let unmeasured = ground_line(&GroundRecord {
+        stamp,
+        scope: Some(1),
+        ground_y: 1704,
+        wa_bottom: None,
+        route: PlacementRoute::DpiReproject,
+    });
+    assert!(
+        unmeasured.contains(&format!(" {FIELD_DIFF}={MISSING} ")),
+        "檻の前提: 差が番兵であること: {unmeasured}"
+    );
+    lines.insert(4, unmeasured);
+    let summary = summarize_lines(&lines);
+    assert_eq!(summary.ground_diff_max, Some(0), "測れた scope は量を出す");
+    assert_eq!(summary.malformed_records, 0, "番兵は壊れた行ではない");
+    assert_eq!(
+        deterministic_violations(&lines),
+        vec![Violation::Unmeasured(Quantity::GroundDiff)]
     );
 }
 

@@ -832,7 +832,7 @@ fn the_report_prints_the_quantities_even_when_both_families_pass() {
     //
     // 対照の遷移は 2 系統とも合格するので、違反の列挙は 1 行も出ない——ここで量が読めるなら
     // 「刷られているのは違反ではなく量である」ことが確かめられる。
-    let report = judge_transition_log(&compliant_transition_lines().join("\n"));
+    let report = judge_transition_log(&log_of(&compliant_transition_lines()));
     assert_eq!(report.transitions[0].deterministic, Ok(()));
     assert_eq!(report.transitions[0].signoff, Ok(()));
     assert!(!report.failed(), "対照は合格する");
@@ -907,7 +907,7 @@ fn a_log_that_fails_only_the_deterministic_family_still_fails_the_report() {
         WindowKind::Balloon.as_str(),
         200,
     ));
-    let report = judge_transition_log(&lines.join("\n"));
+    let report = judge_transition_log(&log_of(&lines));
     assert!(report.transitions[0].deterministic.is_err());
     assert_eq!(report.transitions[0].signoff, Ok(()));
     assert!(report.failed(), "決定論側だけの違反でも不合格");
@@ -923,7 +923,7 @@ fn a_log_that_fails_only_the_signoff_family_still_fails_the_report() {
         &format!("{FIELD_T_US}=1300"),
         &format!("{FIELD_T_US}={stretched_us}"),
     );
-    let report = judge_transition_log(&lines.join("\n"));
+    let report = judge_transition_log(&log_of(&lines));
     assert_eq!(report.transitions[0].deterministic, Ok(()));
     assert!(report.transitions[0].signoff.is_err());
     assert!(report.failed(), "実機専用側だけの違反でも不合格");

@@ -118,14 +118,17 @@ fn a_log_whose_every_row_is_malformed_carries_the_violations_in_the_error() {
 #[test]
 fn an_unreadable_base_dpi_is_a_malformed_record() {
     // 27 `base_dpi=19x` は無い（`-`）とも数とも読めない＝形の壊れた行。
-    let lines = t0_scope0_with(&format!(" {FIELD_BASE_DPI}=96 "), " base_dpi=19x ");
+    let lines = t0_scope0_with(
+        &format!(" {FIELD_BASE_DPI}=96 "),
+        &format!(" {FIELD_BASE_DPI}=19x "),
+    );
     assert!(malformed_in_t0(&lines, FIELD_BASE_DPI));
 }
 
 #[test]
 fn an_unreadable_scope_is_a_malformed_record() {
     // 27 `scope=x` は番兵の `-` でも数でもない＝形の壊れた行。
-    let lines = t0_scope0_with(&format!(" {FIELD_SCOPE}=0 "), " scope=x ");
+    let lines = t0_scope0_with(&format!(" {FIELD_SCOPE}=0 "), &format!(" {FIELD_SCOPE}=x "));
     assert!(malformed_in_t0(&lines, FIELD_SCOPE));
 }
 

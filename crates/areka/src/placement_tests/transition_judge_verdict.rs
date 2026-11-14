@@ -22,7 +22,8 @@
 //! [`judge`] は沈黙を合格にしない。次はそれぞれ**別の [`Violation`]** として返す:
 //!
 //! - [`TransitionSummary::frames_indeterminate`]（フレーム系列が読めない・要件 8.5）
-//! - [`TransitionSummary::malformed_records`] が 1 件以上（語彙の規約を破った行がある）
+//! - [`TransitionSummary::malformed_records`] が 1 件以上（語彙の規約を破った行・
+//!   `diff`・`total_us` が数として読めない行がある）
 //! - 上限を当てる対象そのものが欠けていること（[`Violation::Unmeasured`]）
 //!
 //! 3 番目が要るのは、[`super::RecordDefect::UnreadableField`] が**接頭語**（`frame`／`t_us`）に
@@ -232,7 +233,7 @@ pub enum Violation {
     NoBoundsArmed,
     /// ログに遷移が 1 本も無い（[`Report`] 水準）。
     NoTransitionsFound,
-    /// 語彙の規約を破った行がある。
+    /// 語彙の規約を破った行、または `diff`・`total_us` が数として読めない行がある。
     MalformedRecords {
         /// 件数。
         count: u32,
@@ -503,13 +504,15 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
     }
 
     // ⑹ 接地点差（要件 5.3）。符号は保ったまま絶対値で比べる（浮きも沈みも違反）。
+    // 差が番兵（`diff=-`）の行が 1 つでもあれば、別の scope が量を出していても測れていない。
     if let Some(max) = bounds.ground_diff_abs_max {
-        match summary.ground_diff_max {
-            None => violations.push(Violation::Unmeasured(Quantity::GroundDiff)),
-            Some(diff) if diff.saturating_abs() > max => {
-                violations.push(Violation::GroundDiff { diff, max });
-            }
-            Some(_) => {}
+        if summary.ground_diff_unmeasured || summary.ground_diff_max.is_none() {
+            violations.push(Violation::Unmeasured(Quantity::GroundDiff));
+        }
+        if let Some(diff) = summary.ground_diff_max
+            && diff.saturating_abs() > max
+        {
+            violations.push(Violation::GroundDiff { diff, max });
         }
     }
 

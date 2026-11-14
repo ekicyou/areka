@@ -16,7 +16,7 @@ use wintf::ecs::window::transition_diag::{
     RECORD_PREFIX_TAG,
 };
 
-use super::test_support::{monitor, msg, windpi};
+use super::test_support::{log_of, monitor, msg, windpi};
 use super::{
     is_transition_origin, parse_transition_line, parse_transition_log, split_transitions, summarize,
 };
@@ -80,7 +80,7 @@ fn the_monitor_and_window_origins_of_one_display_setting_change_form_one_transit
         windpi(10, "42v1", 96, 192),
         windpi(10, "43v1", 96, 192),
     ];
-    let log = lines.join("\n");
+    let log = log_of(&lines);
     let records = parse_transition_log(&log);
     let transitions = split_transitions(&records);
 
@@ -93,13 +93,12 @@ fn the_monitor_and_window_origins_of_one_display_setting_change_form_one_transit
 fn several_windows_crossing_together_form_one_transition() {
     // ⑵ の水増し側。モニタ間の移動ではキャラ窓とバルーン窓がそれぞれ `windpi` を出す。
     // 畳まないと**窓の数だけ**遷移が増える。
-    let log = [
+    let log = log_of(&[
         windpi(10, "42v1", 192, 144),
         windpi(10, "43v1", 192, 144),
         windpi(10, "44v1", 192, 144),
         windpi(10, "45v1", 192, 144),
-    ]
-    .join("\n");
+    ]);
     assert_eq!(directions(&log), [(192, 144)]);
 }
 
@@ -107,12 +106,11 @@ fn several_windows_crossing_together_form_one_transition() {
 fn other_records_between_two_origins_of_the_same_change_do_not_break_the_coalescing() {
     // 同一フレームの内側では、起点のあいだに別種別の行（メッセージ受理など）が挟まる。
     // 挟まっても同じ変化であることは変わらない。
-    let log = [
+    let log = log_of(&[
         monitor(10, 96, 192, 1752, 1704),
         msg(10, 5, MSG_DPICHANGED, "0x1"),
         windpi(10, "42v1", 96, 192),
-    ]
-    .join("\n");
+    ]);
     assert_eq!(directions(&log), [(96, 192)]);
 }
 
@@ -124,14 +122,14 @@ fn other_records_between_two_origins_of_the_same_change_do_not_break_the_coalesc
 fn the_same_scale_change_in_a_later_frame_is_a_new_transition() {
     // 対が同じでもフレームが違えば別の変化である。ここを畳むと、往復を繰り返したログが
     // 1 本の遷移に潰れて「往復が 1 度も観測されていない」の偽の赤になる。
-    let log = [windpi(10, "42v1", 192, 144), windpi(11, "42v1", 192, 144)].join("\n");
+    let log = log_of(&[windpi(10, "42v1", 192, 144), windpi(11, "42v1", 192, 144)]);
     assert_eq!(directions(&log), [(192, 144), (192, 144)]);
 }
 
 #[test]
 fn the_opposite_direction_in_the_same_frame_is_a_new_transition() {
     // 同一フレームでも対が違えば別の変化である（畳むと往復の片道が消える）。
-    let log = [windpi(10, "42v1", 192, 144), windpi(10, "42v1", 144, 192)].join("\n");
+    let log = log_of(&[windpi(10, "42v1", 192, 144), windpi(10, "42v1", 144, 192)]);
     assert_eq!(directions(&log), [(192, 144), (144, 192)]);
 }
 
@@ -139,11 +137,10 @@ fn the_opposite_direction_in_the_same_frame_is_a_new_transition() {
 fn frames_are_compared_by_difference_so_the_counter_may_wrap() {
     // D14: `frame` は u32 で周回する。差分で見るかぎり `u32::MAX` の次の `0` は
     // 「同一フレーム」ではない（絶対値の大小比較を判定語に使っていないことの裏取り）。
-    let log = [
+    let log = log_of(&[
         windpi(u32::MAX, "42v1", 192, 144),
         windpi(0, "42v1", 192, 144),
-    ]
-    .join("\n");
+    ]);
     assert_eq!(directions(&log), [(192, 144), (192, 144)]);
 }
 

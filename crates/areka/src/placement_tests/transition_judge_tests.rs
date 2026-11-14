@@ -16,8 +16,8 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::test_support::{
-    balloon_kind, chain, char_kind, enqueue, flush, ground, hold, monitor, msg, parse_ok, record,
-    summarize_lines, surface, write,
+    balloon_kind, chain, char_kind, enqueue, flush, ground, hold, log_of, monitor, msg, parse_ok,
+    record, summarize_lines, surface, write,
 };
 use super::{
     RecordDefect, WindowKey, is_transition_origin, parse_transition_line, parse_transition_log,
@@ -267,7 +267,7 @@ fn split_starts_a_transition_at_each_dpi_changing_monitor_record() {
             1,
         ),
     ];
-    let records = parse_transition_log(&lines.join("\n"));
+    let records = parse_transition_log(&log_of(&lines));
     let transitions = split_transitions(&records);
     assert_eq!(transitions.len(), 2);
     assert_eq!(transitions[0].len(), 2);
@@ -312,7 +312,7 @@ fn split_drops_records_before_the_first_origin() {
             1,
         ),
     ];
-    let records = parse_transition_log(&lines.join("\n"));
+    let records = parse_transition_log(&log_of(&lines));
     let transitions = split_transitions(&records);
     assert_eq!(transitions.len(), 1);
     assert_eq!(
