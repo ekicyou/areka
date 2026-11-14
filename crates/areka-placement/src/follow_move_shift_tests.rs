@@ -17,8 +17,9 @@ use super::test_support::{
     single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
 };
 use super::{
-    Anchored, BalloonFollow, OffsetBase, apply_balloon_shift, apply_char_shift, move_window_to,
-    on_balloon_drag, on_balloon_drag_end, on_char_drag_end,
+    Anchored, BalloonFollow, DpiSyncHold, MonitorSnapshot, OffsetBase, apply_balloon_shift,
+    apply_char_shift, move_window_to, on_balloon_drag, on_balloon_drag_end, on_char_drag_end,
+    rebase_shift_axes, shift_is_current,
 };
 use crate::resolver::{Anchor, PointPx};
 use log_capture_kit::capture;
@@ -393,4 +394,96 @@ fn balloon_drag_end_resets_the_shift_without_double_counting() {
         }
     );
     let _residue = drain_window_pos_commands();
+}
+
+/// 毎フレームのずれの相（本体の `runtime/frame/move_shift.rs`）の判定をなぞる: 今の値でなく札も
+/// 無ければ当てる。
+fn run_frame_phase(world: &mut World, window: Entity, want: (i64, i64)) {
+    if !shift_is_current(world, window, want, ScaleRatio::ONE)
+        && world.get::<DpiSyncHold>(window).is_none()
+    {
+        apply_char_shift(world, window, want, ScaleRatio::ONE);
+    }
+}
+
+/// ずれ (10,20) を当てた後に `\![move]` が x を絶対の位置 500 へ書き、整合待ちの札が付いた窓。
+fn held_after_absolute_x_move() -> (World, Entity) {
+    let (mut world, window) = char_world(Anchor::Free, 100, 100);
+    assert!(apply_char_shift(
+        &mut world,
+        window,
+        (10, 20),
+        ScaleRatio::ONE
+    ));
+    world
+        .entity_mut(window)
+        .insert(DpiSyncHold { since_frame: 3 });
+    // `\![move]` は見送らない書き手（`MoveCue`・札の監視の対象外）。
+    assert!(move_window_to(&mut world, window, 500, 120));
+    let _residue = drain_window_pos_commands();
+    (world, window)
+}
+
+/// 札のある窓で絶対の軸を当て直しても書かず（監視が鳴らない）、「今の値」は偽で残る。札を外すと
+/// 当て直しが当たる（監査の指摘 1・要件 3.1）。
+#[test]
+fn rebase_on_a_held_window_waits_and_reapplies_after_the_hold_lifts() {
+    let (mut world, window) = held_after_absolute_x_move();
+
+    rebase_shift_axes(&mut world, window, true, false);
+
+    assert!(drain_window_pos_commands().is_empty(), "札のある窓へ書いた");
+    assert!(
+        !shift_is_current(&world, window, (10, 20), ScaleRatio::ONE),
+        "当て直しを待っているのに今の値と見なした"
+    );
+    world.entity_mut(window).remove::<DpiSyncHold>();
+    run_frame_phase(&mut world, window, (10, 20));
+    assert_eq!(position_of(&world, window), Point { x: 510, y: 120 });
+    assert!(shift_is_current(&world, window, (10, 20), ScaleRatio::ONE));
+    let _residue = drain_window_pos_commands();
+}
+
+/// 作業領域の無い World で当て直しが書けなかったら、「今の値」は偽で残る（次で当て直す）。
+#[test]
+fn rebase_that_cannot_write_is_not_current() {
+    let (mut world, window) = char_world(Anchor::Free, 100, 100);
+    assert!(apply_char_shift(
+        &mut world,
+        window,
+        (10, 20),
+        ScaleRatio::ONE
+    ));
+    world.remove_resource::<MonitorSnapshot>();
+
+    rebase_shift_axes(&mut world, window, true, false);
+
+    assert!(!shift_is_current(&world, window, (10, 20), ScaleRatio::ONE));
+    let _residue = drain_window_pos_commands();
+}
+
+/// 当て直し待ちの窓を利用者がドラッグで離すと置いた所が元の位置になり、毎フレームの相は書かない
+/// （完了した `seriko-pattern-calls` の task 6.2 を壊さない）。
+#[test]
+fn drag_end_clears_the_awaiting_reapply_mark() {
+    let (mut world, window) = held_after_absolute_x_move();
+    rebase_shift_axes(&mut world, window, true, false);
+    world.entity_mut(window).remove::<DpiSyncHold>();
+    world.get_mut::<WindowPos>(window).unwrap().position = Some(Point { x: 300, y: 200 });
+
+    on_char_drag_end(
+        &mut world,
+        window,
+        window,
+        &Phase::Bubble(drag_end_event_at(window, (0, 0))),
+    );
+    let _residue = drain_window_pos_commands();
+
+    assert!(shift_is_current(&world, window, (10, 20), ScaleRatio::ONE));
+    run_frame_phase(&mut world, window, (10, 20));
+    assert!(
+        drain_window_pos_commands().is_empty(),
+        "置いた所へずれを足し直した"
+    );
+    assert_eq!(position_of(&world, window), Point { x: 300, y: 200 });
 }

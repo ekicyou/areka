@@ -12,6 +12,7 @@ use tracing::warn;
 use wintf::ecs::WindowPos;
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
+use super::super::dpi_sync::{self, HoldSite};
 use super::super::windowposition::scale_signed;
 use super::{
     Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, PlacementRoute,
@@ -30,6 +31,9 @@ pub(crate) struct MoveShiftApplied {
     want: (i64, i64),
     ratio: ScaleRatio,
     applied: PointPx,
+    /// 絶対の軸の当て直しを待っている（札で書けなかった・材料が無かった）。立っていれば
+    /// 毎フレームの相が当て直す（「ずれは今の値」を偽にする）。
+    awaiting_reapply: bool,
 }
 
 /// 作者基準のずれに倍率をかける（`\![move]` と同じ `scale_signed`・`i32` へ飽和）。
@@ -67,7 +71,9 @@ pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> Po
 pub fn shift_is_current(world: &World, window: Entity, want: (i64, i64), k: ScaleRatio) -> bool {
     world
         .get::<MoveShiftApplied>(window)
-        .map_or(want == (0, 0), |r| r.want == want && r.ratio == k)
+        .map_or(want == (0, 0), |r| {
+            r.want == want && r.ratio == k && !r.awaiting_reapply
+        })
 }
 
 /// 窓を絶対の位置へ書いた書き手（位置の初期化）が、書いた位置を新しい元の位置にする。
@@ -84,6 +90,8 @@ pub(crate) fn rebase_shift(world: &mut World, window: Entity) {
 /// 新しい元の位置にし、今のずれをその上へすぐ当て直す。
 ///
 /// 残りの軸は今の位置からの相対なので当てた分を残す（外すとずれを二度数える）。記録が無ければ何もしない。
+/// 整合待ちの札がある窓へは書かず、当て直し待ちの印だけを立てて戻る（札が外れたフレームで
+/// 毎フレームの相が当て直す・監査の指摘 1）。
 pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
     let Some(mut r) = world.get::<MoveShiftApplied>(window).copied() else {
         return;
@@ -97,7 +105,11 @@ pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
     if y {
         r.applied.y = 0;
     }
+    r.awaiting_reapply = true;
     world.entity_mut(window).insert(r);
+    if dpi_sync::defers_window_write(world, window, HoldSite::PatternMove) {
+        return;
+    }
     apply_char_shift(world, window, r.want, r.ratio);
 }
 
@@ -107,13 +119,14 @@ pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
 pub(super) fn reset_applied(world: &mut World, window: Entity) {
     if let Some(mut r) = world.get_mut::<MoveShiftApplied>(window) {
         r.applied = ZERO;
+        r.awaiting_reapply = false;
     }
 }
 
 /// キャラ窓へずれを当てる。書いたら `true`。
 ///
 /// 窓・位置・寸・作業領域のどれかが無ければ `warn!` のうえ `false`（記録は変えないので、
-/// 次のフレームで当て直す）。
+/// 当て直し待ちの印も立ったまま残り、次のフレームで当て直す）。
 pub fn apply_char_shift(
     world: &mut World,
     window: Entity,
@@ -187,6 +200,7 @@ pub fn apply_char_shift(
             x: written.x.saturating_sub(base.x),
             y: written.y.saturating_sub(base.y),
         },
+        awaiting_reapply: false,
     });
     true
 }
@@ -224,6 +238,7 @@ pub fn apply_balloon_shift(
         want,
         ratio: k,
         applied: scaled(want, k),
+        awaiting_reapply: false,
     });
     follow_balloon(
         world,
