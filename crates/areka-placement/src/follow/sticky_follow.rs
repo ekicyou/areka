@@ -191,6 +191,13 @@ pub(crate) fn is_char_dragging(world: &World, window: Entity) -> bool {
         .is_some_and(|session| session.dragged == window)
 }
 
+/// `window` が今のドラッグの組の相手か（控えの相手に入っている・相手は `DraggingState` を持たない）。
+pub(crate) fn is_char_drag_partner(world: &World, window: Entity) -> bool {
+    world
+        .get_resource::<CharDragSession>()
+        .is_some_and(|session| session.partners.iter().any(|p| p.window == window))
+}
+
 /// ドラッグ中の窓の縛りの向き（控えがあれば始めの向き・無ければ `Anchored`・2.4）。
 pub(crate) fn drag_anchor(world: &World, window: Entity) -> Option<Anchor> {
     match world.get_resource::<CharDragSession>() {
@@ -289,6 +296,7 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
     let delta = delta_from(session.dragged_start, final_pos);
     for (partner, pos) in move_partners(world, &session, delta) {
         // 次の起動は descript の向きで読み戻すので、記憶の形もそれにそろえる（4.8）。
+        // `Anchored` の無い相手は move_partners が先に外すので None は来ない（到達不能でも黙らない）。
         let Some(form) = saved_form_anchor(world, partner.window) else {
             warn!(
                 scope = partner.scope,
@@ -297,6 +305,7 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
             continue;
         };
         // 面の move のずれを引いた元の位置を書く（seriko-pattern-calls task 6.2）。
+        // 利用者が手で置いたのは動かした窓だけ・相手のずれはまだ相手の面のアニメーションのもの。
         let pos = origin_position(world, partner.window, pos);
         let saved = char_pos_to_origin_x(form, pos, size_px(world, partner.window));
         persist_entries(world, char_pos_entries(partner.scope as u32, saved));

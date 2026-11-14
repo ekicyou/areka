@@ -3,7 +3,6 @@
 
 use super::*;
 use bevy_ecs::schedule::Schedule;
-use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::UI::WindowsAndMessaging::SET_WINDOW_POS_FLAGS;
 
 fn e(index: u32) -> Entity {
@@ -202,12 +201,7 @@ const TOPMOST: isize = -1;
 const NOTOPMOST: isize = -2;
 
 fn spawn_window(world: &mut World, raw: isize) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd: h(raw),
-            instance: HINSTANCE::default(),
-        })
-        .id()
+    world.spawn(WindowHandle { hwnd: h(raw) }).id()
 }
 
 fn band_schedule() -> Schedule {

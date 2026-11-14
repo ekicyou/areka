@@ -23,7 +23,7 @@
 //! メッセージポンプは要らない——`EndDeferWindowPos` は同一スレッドの窓へ同期 send する。
 //!
 //! 一括書込が持ち上げる `SELF_INITIATED_DEPTH` は**スレッドごとに独立**である
-//! （`command.rs` の `thread_local!`）。持ち上げ・同期送達・判定・解放はすべて `flush` を
+//! （`command.rs` の `thread_local!`）。持ち上げ・同期送達・判定・解放はすべて `flush_window_pos_commands` を
 //! 呼んだこのテストスレッドの内側で閉じるので、並列に走る他テストの `is_self_initiated()`
 //! ／`in_swp` 検査には見えない。よって本ファイルのテストは直列化の錠を取らない。
 //!
@@ -36,63 +36,19 @@ use std::cell::RefCell;
 
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, GW_HWNDNEXT, GetTopWindow, GetWindow, IsWindow,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, GW_HWNDNEXT, GetTopWindow, GetWindow,
     RegisterClassExW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
     WINDOW_EX_STYLE, WM_WINDOWPOSCHANGED, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
-use super::super::transition_diag::{self, KIND_FLUSH, KIND_WRITE, RECORD_PREFIX_TAG};
+use super::super::transition_diag::{self, KIND_FLUSH, KIND_WRITE};
+use super::test_support::*;
 use super::{
-    BatchDegrade, SetWindowPosCommand, WindowPosArgs, drain_window_pos_commands,
-    flush_window_pos_commands, is_self_initiated, window_pos_args, with_forced_batch_begin_failure,
+    BatchDegrade, SetWindowPosCommand, WindowPosArgs, flush_window_pos_commands, is_self_initiated,
+    window_pos_args, with_forced_batch_begin_failure,
 };
 use crate::ecs::test_support::capture_under_filter;
-
-/// 観測チャネルを点灯させる directive（実機サインオフと同じ）。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::transition=debug";
-
-/// 捕捉が生きている証拠として同じ窓の中で必ず出す対照行。
-const CONTROL_LINE: &str = "[transition-probe] alive";
-
-fn emit_control() {
-    tracing::info!(target: transition_diag::TRANSITION_TARGET, "{CONTROL_LINE}");
-}
-
-/// テスト冒頭の初期化——キューの残りと刻印の写しを落とす（要件 7.7）。
-fn clean_slate() {
-    let _residue = drain_window_pos_commands();
-    transition_diag::reset_for_test();
-}
-
-/// 捕捉出力から観測チャネルの行だけを取り出す。
-fn transition_lines(captured: &str) -> Vec<&str> {
-    captured
-        .lines()
-        .filter(|line| line.contains(RECORD_PREFIX_TAG))
-        .collect()
-}
-
-/// 種別語 `kind=<kind>` を持つ行だけを取り出す。
-fn lines_of_kind<'a>(captured: &'a str, kind: &str) -> Vec<&'a str> {
-    let needle = format!("kind={kind} ");
-    transition_lines(captured)
-        .into_iter()
-        .filter(|line| line.contains(&needle))
-        .collect()
-}
-
-/// 実在し得ない窓ハンドル（`command_transition_tests` と同じ作法）。
-fn fake_hwnd(tag: u8) -> HWND {
-    let value = 0xFFFF_FE00_usize | (usize::from(tag) << 1) | 1;
-    let hwnd = HWND(value as *mut core::ffi::c_void);
-    // SAFETY: `IsWindow` は任意のハンドル値に対して安全に真偽を返す読み取り専用 API。
-    assert!(
-        !unsafe { IsWindow(Some(hwnd)) }.as_bool(),
-        "偽ハンドル 0x{value:X} が実窓を掴んでいる"
-    );
-    hwnd
-}
 
 // ---------------------------------------------------------------------------
 // テスト窓（0x0・不可視・既定手続き）
@@ -714,5 +670,80 @@ fn a_batched_zorder_list_lands_in_the_same_order_as_one_write_per_command() {
     assert_eq!(
         batched, sequential,
         "バッチ投入と 1 本ずつの書込で Z の最終順序が食い違う（要件 10.3）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 同じ窓が 2 度入った列（research.md 指摘 7・Q4 の手順 1 の門）
+// ---------------------------------------------------------------------------
+
+/// 4 枚の組を 1 本ずつの `guarded_set_window_pos` で並べ、同じ窓 A が 2 度入った Z だけの
+/// 列 `[A を B の後へ][C を A の後へ][A を D の後へ]` を当てた結果と、同じ列をキューに積んで
+/// `flush_window_pos_commands` で流した結果を比べる。毎回同じ初めの順 `0,1,2,3` へ並べ
+/// 直してから当て、比べるのは 4 枚の相対の順だけ。
+#[test]
+fn a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command() {
+    clean_slate();
+
+    let set: Vec<HWND> = (0..4).map(|_| create_test_window()).collect();
+    let (a, b, c, d) = (set[0], set[1], set[2], set[3]);
+    let program = [(a, b), (c, a), (a, d)];
+
+    normalize_z(&set);
+    let sequential_start = z_shape(&set);
+    for (hwnd, after) in program {
+        // SAFETY: Win32 境界。自プロセスの不可視の窓へ Z だけを書く。
+        unsafe {
+            super::guarded_set_window_pos(
+                hwnd,
+                Some(after),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+        }
+        .expect("SetWindowPos should succeed on a test window");
+    }
+    let sequential = z_shape(&set);
+
+    normalize_z(&set);
+    let queued_start = z_shape(&set);
+    let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
+        emit_control();
+        for (hwnd, after) in program {
+            SetWindowPosCommand::enqueue(zorder_command(hwnd, after));
+        }
+        flush_window_pos_commands();
+    });
+    let queued = z_shape(&set);
+
+    destroy(&set);
+    clean_slate();
+
+    assert!(captured.contains(CONTROL_LINE), "捕捉が死んでいる");
+    // 流しがバッチの道を通ったこと（縮退していれば 1 本ずつ同士の比べになり門にならない）。
+    let writes = lines_of_kind(&captured, KIND_WRITE);
+    assert_eq!(writes.len(), 3, "書込レコードが 3 本でない: {writes:?}");
+    assert!(
+        writes.iter().all(|line| line.contains(" in_batch=true")),
+        "キュー側がバッチで投入されていない: {writes:?}"
+    );
+    assert_eq!(
+        sequential_start,
+        vec![0, 1, 2, 3],
+        "1 本ずつ側の始点が揃っていない"
+    );
+    assert_eq!(
+        queued_start,
+        vec![0, 1, 2, 3],
+        "キュー側の始点が揃っていない"
+    );
+    // 1 本ずつ: B,A,C,D → （C は既に A の直後）→ B,C,D,A。
+    assert_eq!(sequential, vec![1, 2, 3, 0], "1 本ずつの対照が壊れている");
+    assert_eq!(
+        queued, sequential,
+        "同じ窓が 2 度入った列で、キューに積んで流した Z の順が 1 本ずつの結果と違う"
     );
 }

@@ -7,9 +7,9 @@ use wintf::ecs::{WindowHandle, WindowPos};
 use super::super::diag::DESPAWNED_SKIP_TAG;
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, UNRESOLVED_TAG, balloon_size, char_size,
-    drag_end_event_at, drag_event_at, dragging_state, fake_handle, gap_center_x, grounded_y,
-    guard_events, left_wa, mixed_layout, narrow_char_size, point, point_of, px, right_wa,
-    unguarded_projection, visible_in, wide_char_size, window_pos_sized,
+    drag_end_event_at, drag_event_at, dragging_state, fake_handle, gap_bound_char_world,
+    grounded_y, guard_events, left_wa, mixed_layout, narrow_char_size, point, point_of, px,
+    right_wa, unguarded_projection, visible_in, wide_char_size, window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, MonitorSnapshot, PlacementRoute, on_char_drag, on_char_drag_end,
@@ -74,26 +74,9 @@ fn char_with_far_balloon_world(
     balloon_pos: PointPx,
     offset: PointPx,
 ) -> (World, Entity, Entity) {
-    let c = char_size(dpi);
     let b = balloon_size(dpi);
-    let start = char_start_pos(dpi);
-    let mut world = World::new();
-    world.insert_resource(mixed_layout(dpi));
-    let balloon = world
-        .spawn((
-            fake_handle(0x2000),
-            window_pos_sized(balloon_pos.x, balloon_pos.y, b.w, b.h),
-        ))
-        .id();
-    let char_window = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(start.x, start.y, c.w, c.h),
-            Anchored(Anchor::Bottom),
-            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
-        ))
-        .id();
-    (world, char_window, balloon)
+    let balloon_pos = window_pos_sized(balloon_pos.x, balloon_pos.y, b.w, b.h);
+    char_with_balloon_window_pos(dpi, balloon_pos, offset)
 }
 
 /// 引き金の表（D13 帰結⑴⑵ の**キャラ窓と同一の表**）を固定する。
@@ -115,15 +98,9 @@ fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
             "route={route} の引き金判定がキャラ窓の表と食い違う"
         );
     }
-    // 表が「全部真」「全部偽」へ潰れていないこと（自明な述語への退化の検出）。
-    let fired = PlacementRoute::ALL
-        .into_iter()
-        .filter(|r| BalloonFollowTrigger::Placement(*r).applies_visibility_guard())
-        .count();
-    assert_eq!(fired, 7, "発火する引き金が 7 種でない（表が潰れている）");
 }
 
-/// **Req 3.4 の本体**: 非ドラッグの配置系 4 経路が引き金のとき、offset 恒等式が出した
+/// **Req 3.4 の本体**: 非ドラッグの配置系の引き金（発火する 7 種のうちここで回す 4 経路）のとき、offset 恒等式が出した
 /// バルーン提案位置が全 work area 非交差へ落ちるなら、X の clamp で救われる。
 ///
 /// キャラ窓は終始可視（clamp されない）＝救われたのは**バルーンだけ**である。
@@ -420,7 +397,7 @@ fn balloon_undetermined_size_holds_proposed_position_and_warns() {
             "dpi={dpi}: 探針が不動点——センチネル素通し変異でも X が動かない配置になっている"
         );
 
-        // 窓生成直後の実表現（position・size ともに CW_USEDEFAULT センチネル）。
+        // 窓生成前の実表現（position・size ともに CW_USEDEFAULT センチネル）。
         let (mut world, char_window, balloon) =
             char_with_balloon_window_pos(dpi, WindowPos::default(), offset);
 
@@ -699,27 +676,16 @@ fn gap_bound_char_world_with_balloon(
     balloon_pos: PointPx,
     offset: PointPx,
 ) -> (World, Entity, Entity, PointPx) {
-    let old = wide_char_size(dpi);
-    let old_pos = PointPx {
-        x: gap_center_x(dpi) - old.w / 2,
-        y: left_wa().bottom - old.h,
-    };
-    let mut world = World::new();
-    world.insert_resource(mixed_layout(dpi));
+    let (mut world, char_window, old_pos) = gap_bound_char_world(dpi);
     let balloon = world
         .spawn((
             fake_handle(0x2000),
             window_pos_sized(balloon_pos.x, balloon_pos.y, balloon_size.w, balloon_size.h),
         ))
         .id();
-    let char_window = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
-            Anchored(Anchor::Bottom),
-            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
-        ))
-        .id();
+    world
+        .entity_mut(char_window)
+        .insert(BalloonFollow::new(balloon, OffsetBase::unpinned(offset)));
     (world, char_window, balloon, old_pos)
 }
 
@@ -851,11 +817,11 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
 /// 「寸法変化に対する不変」群である。拡大率遷移を一度も起こさないので、追随の証拠にはならない。**
 /// 本檻は `for dpi in DPIS` で**水準ごとに世界を組み直して** [`resize_window_to`] を直接呼ぶ
 /// だけであり、`DPI` を書き換えて `Changed<DPI>` のエッジを立てることは無い。追随の発火条件
-/// はそのエッジに限られる（`emo2_boot::frame::dpi` の相）ため、追随が入っても本檻には届かない
-/// ——上の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
+/// はそのエッジに限られる（本体の `runtime::frame::dpi` の相）ため、追随が入っても本檻には届かない
+/// ——下の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
 /// 実機 SSP 裁定）は**是正後も真のまま**であり、主張は 1 文字も書き換えていない。
 ///
-/// 実測（task 6.4）: 追随の適用（`emo2_boot::frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// 実測（task 6.4）: 追随の適用（本体の `runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`
 /// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
 /// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
 #[test]

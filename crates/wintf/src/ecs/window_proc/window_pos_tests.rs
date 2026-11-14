@@ -243,7 +243,7 @@ struct DpiChangedOutcome {
     written_origin: Option<(i32, i32)>,
     /// ハンドラの戻り値（`LRESULT` の生値）。**源断ちの最外殻**——
     /// `None`（＝未処理）を返すと `DefWindowProcW` が既定の提案矩形適用を行い、
-    /// その中から `SetWindowPos` が同期的に呼ばれる（`window/components.rs:29-31`
+    /// その中から `SetWindowPos` が同期的に呼ばれる（`window/components.rs` の `DpiChangeContext` の doc
     /// が明記）。ゆえに `guarded_set_window_pos` を飛ばしただけでは源断ちは
     /// 完成せず、`Some(0)`（＝処理済み）を返し切って初めて成立する。
     handler_result: Option<isize>,
@@ -669,7 +669,7 @@ fn s1_decision_line_reports_unreachable_when_policy_cannot_be_read() {
 //
 // `guarded_set_window_pos` を飛ばしただけでは源断ちは完成しない。
 // `None`（未処理）を返すと `DefWindowProcW` が既定の提案矩形適用を行い、
-// その内部から `SetWindowPos` が同期的に呼ばれる（`window/components.rs:29-31`
+// その内部から `SetWindowPos` が同期的に呼ばれる（`window/components.rs` の `DpiChangeContext` の doc
 // が当該同期発火を明記している）。ヘッドレス檻の `guarded_set_window_pos`
 // 実施ログは自前の書込しか捉えないため、**戻り値を直接見ないと
 // この退化は無検出で通る**。

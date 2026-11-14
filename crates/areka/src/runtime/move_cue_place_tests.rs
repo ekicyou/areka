@@ -13,7 +13,7 @@ use areka_emo_compose::ScaleRatio;
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
+use windows::Win32::Foundation::{HWND, RECT};
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{WindowHandle, WindowPos};
 
@@ -88,7 +88,6 @@ fn world_with(anchor1: Anchor) -> (World, GhostWindows) {
             raw += 0x10;
             world.entity_mut(e.unwrap()).insert(WindowHandle {
                 hwnd: HWND(raw as *mut _),
-                instance: HINSTANCE::default(),
             });
         }
     }

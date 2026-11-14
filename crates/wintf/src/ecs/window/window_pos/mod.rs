@@ -229,8 +229,10 @@ impl WindowPos {
         self
     }
 
-    /// bool値からフラグを生成
-    fn build_flags(&self) -> SET_WINDOW_POS_FLAGS {
+    /// bool の欄から `SetWindowPos` のフラグを組む
+    /// 呼び手: `apply_window_pos_changes`（graphics/systems/window_pos.rs）、
+    /// `nudge_command`（zorder_chain.rs）、`pair_fix_command`（zorder_pair_maintain.rs）
+    pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
         let mut flags = SET_WINDOW_POS_FLAGS(0);
 
         // 自動判定: position が None なら SWP_NOMOVE
@@ -282,14 +284,9 @@ impl WindowPos {
         flags
     }
 
-    /// システム用フラグビルダー（公開用）
-    /// apply_window_pos_changesシステムから利用
-    pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
-        self.build_flags()
-    }
-
-    /// ZOrderに基づくhwnd_insert_afterを取得（公開用）
-    /// apply_window_pos_changesシステムから利用
+    /// ZOrder から `SetWindowPos` の hwnd_insert_after を得る
+    /// 呼び手: `apply_window_pos_changes`（graphics/systems/window_pos.rs）、
+    /// `nudge_command`（zorder_chain.rs）、`pair_fix_command`（zorder_pair_maintain.rs）
     pub fn get_hwnd_insert_after(&self) -> Option<HWND> {
         match self.zorder {
             ZOrder::NoChange => None,
@@ -299,26 +296,6 @@ impl WindowPos {
             ZOrder::Bottom => Some(HWND_BOTTOM),
             ZOrder::InsertAfter(hwnd) => Some(hwnd),
         }
-    }
-
-    /// SetWindowPos を呼び出す
-    pub fn set_window_pos(&self, hwnd: HWND) -> windows::core::Result<()> {
-        let (x, y) = if let Some(pos) = self.position {
-            (pos.x, pos.y)
-        } else {
-            (0, 0)
-        };
-
-        let (width, height) = if let Some(size) = self.size {
-            (size.width, size.height)
-        } else {
-            (0, 0)
-        };
-
-        let flags = self.build_flags();
-        let hwnd_insert_after = self.get_hwnd_insert_after();
-
-        unsafe { SetWindowPos(hwnd, hwnd_insert_after, x, y, width, height, flags) }
     }
 
     /// クライアント領域の座標・サイズをウィンドウ全体の座標・サイズに変換する。
@@ -347,18 +324,16 @@ impl WindowPos {
         window_handle.client_to_window_coords(position, size)
     }
 
-    /// ウィンドウ作成時に使用する座標変換（HWNDなしでスタイル情報から変換）
+    /// 生成のときの窓の外枠の座標と大きさ（クライアント領域の値から）。
     ///
-    /// # Arguments
-    /// * `style` - ウィンドウスタイル
-    /// * `ex_style` - 拡張ウィンドウスタイル
-    /// * `dpi` - DPI値（0の場合はデフォルト96を使用）
+    /// 位置も大きさも既定（`CW_USEDEFAULT`）なら、そのまま返す（API を呼ばない）。
+    /// それ以外は、空の矩形を `AdjustWindowRectExForDpi` に渡して枠の 4 辺を得て、
+    /// 与えられた側にだけ足す（位置＝左上へ left・top、大きさ＝幅へ right-left・高さへ bottom-top）。
+    /// 既定の側は `CW_USEDEFAULT` のまま返す。API が失敗したら `warn!` を残して元の値を返す。
+    /// `dpi` が 0 なら 96 を使う。
     ///
     /// # Returns
-    /// * `(x, y, width, height)` - 変換後のウィンドウ全体座標
-    ///
-    /// # Notes
-    /// - CW_USEDEFAULTが含まれる場合は変換せずそのまま返す
+    /// * `(x, y, width, height)` - 窓の外枠の座標と大きさ
     pub fn to_window_coords_for_creation(
         &self,
         style: WINDOW_STYLE,
@@ -373,45 +348,42 @@ impl WindowPos {
             width: CW_USEDEFAULT,
             height: CW_USEDEFAULT,
         });
-
-        // CW_USEDEFAULTが含まれる場合は変換をスキップ
-        if position.x == CW_USEDEFAULT || size.width == CW_USEDEFAULT {
-            return (position.x, position.y, size.width, size.height);
+        // 既定かの判定は initial_pos_flags と同じく x・width で決める
+        let position_given = position.x != CW_USEDEFAULT;
+        let size_given = size.width != CW_USEDEFAULT;
+        let original = (position.x, position.y, size.width, size.height);
+        if !position_given && !size_given {
+            return original;
         }
 
-        // 実際のシステムDPIを使用してウィンドウ枠サイズを計算する。
-        // DPI=96 固定だと高DPI環境でフレームサイズが不一致となり、
-        // CreateWindowExW 後の実クライアント領域サイズが意図値とずれる。
-        // 0が渡された場合はフォールバックとして96を使用する。
+        // 高 DPI で枠の厚みが合うよう、実際の DPI で求める
         let dpi = if dpi == 0 { 96 } else { dpi };
 
-        // クライアント領域からRECT構造体を構築
-        let mut rect = RECT {
-            left: position.x,
-            top: position.y,
-            right: position.x + size.width,
-            bottom: position.y + size.height,
-        };
-
-        // AdjustWindowRectExForDpiでウィンドウ全体の矩形を計算
-        // dpi=96により、物理ピクセル単位でウィンドウ枠のサイズが追加される
-        let result = unsafe { AdjustWindowRectExForDpi(&mut rect, style, false, ex_style, dpi) };
-
+        // bMenu=false なら枠の 4 辺は位置にも大きさにもよらない
+        let mut frame = RECT::default();
+        let result = unsafe { AdjustWindowRectExForDpi(&mut frame, style, false, ex_style, dpi) };
         if result.is_err() {
-            // 変換失敗時は元の座標を返す
             warn!(
                 error = ?result,
                 "AdjustWindowRectExForDpi failed during window creation, using original values"
             );
-            return (position.x, position.y, size.width, size.height);
+            return original;
         }
 
-        (
-            rect.left,
-            rect.top,
-            rect.right - rect.left,
-            rect.bottom - rect.top,
-        )
+        let (x, y) = if position_given {
+            (position.x + frame.left, position.y + frame.top)
+        } else {
+            (position.x, position.y)
+        };
+        let (width, height) = if size_given {
+            (
+                size.width + frame.right - frame.left,
+                size.height + frame.bottom - frame.top,
+            )
+        } else {
+            (size.width, size.height)
+        };
+        (x, y, width, height)
     }
 }
 
@@ -444,9 +416,13 @@ impl Command for SetWindowParentToLayoutRoot {
                     entity_mut.insert(ChildOf(root));
                 }
             }
+        } else {
+            // LayoutRoot が無ければ親を付けない（本番は EcsWorld::new が Window より先に作る前提）
+            debug!(
+                entity = ?self.entity,
+                "No LayoutRoot; Window entity left without ChildOf"
+            );
         }
-        // LayoutRootが見つからない場合は何もしない
-        // 後のフレームで ensure_window_parent_system が処理する
     }
 }
 

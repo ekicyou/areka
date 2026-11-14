@@ -11,7 +11,7 @@
 //! 本ファイルはその規則そのもの——3 つの条件（route がシステム由来・対象がキャラ窓・
 //! 書込前の位置が既定位置と一致）の**各条件が実際に効いていること**を、条件ごとに 1 つずつ
 //! 外して固定する。遷移を通した観察可能な帰結（連鎖が対象から外さない）は
-//! `emo2_boot/frame_default_pos_track_tests.rs` が持つ。
+//! 本体の `runtime/frame_default_pos_track_tests.rs` が持つ。
 //!
 //! # 零件の主張には陽性の対を置く
 //!
@@ -140,7 +140,7 @@ fn a_system_reanchor_carries_the_default_position_to_the_written_spot() {
     );
 }
 
-/// D9 が挙げる**システム由来の 6 経路すべて**で追随する（1 経路だけ配線した実装を弾く）。
+/// **システム由来の 7 経路（D9 の 6 経路＋面の `move` のずれ＝`PatternMove`）すべて**で追随する（1 経路だけ配線した実装を弾く）。
 #[test]
 fn every_system_route_carries_the_default_position() {
     for route in PlacementRoute::ALL
@@ -152,7 +152,7 @@ fn every_system_route_carries_the_default_position() {
         assert_eq!(
             default_pos(&world),
             Some(REANCHORED),
-            "route={route} で既定位置が追随していない（D9 のシステム由来 6 経路）"
+            "route={route} で既定位置が追随していない（システム由来 7 経路＝D9 の 6＋PatternMove）"
         );
     }
 }

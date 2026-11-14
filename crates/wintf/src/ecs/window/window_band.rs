@@ -4,8 +4,9 @@
 //! design.md「WindowBand（`window_band.rs`）」が正本である。状態（オン・オフ）は areka が
 //! 持ち、ここは窓の印 [`StayOnTop`] と帯の指令の列 [`WindowBandQueue`] だけを受け取る。
 //!
-//! 本番で `HWND_TOPMOST`・`HWND_NOTOPMOST` を書くのはこのファイルだけ（ツールチップの既存の
-//! 1 か所を除く）。`zorder_*` の本番ファイルに帯の語が無いことは
+//! wintf の本番で `HWND_TOPMOST`・`HWND_NOTOPMOST` を書く所は、このファイルのほかに 2 つある:
+//! ツールチップ（`tooltip/os.rs`）と、`ZOrder::TopMost`・`ZOrder::NoTopMost` を写す
+//! `WindowPos::get_hwnd_insert_after`（`window_pos/mod.rs`。この 2 値を積む本番の呼び手は今は無い）。`zorder_*` の本番ファイルに帯の語が無いことは
 //! `zorder_pair_deferred_vocabulary_tests.rs`（守り G1）が見張る。
 //!
 //! # 帯を当てる手順

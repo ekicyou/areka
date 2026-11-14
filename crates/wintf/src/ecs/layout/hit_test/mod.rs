@@ -506,11 +506,14 @@ pub fn hit_test_in_window_ex(
     let window_pos = world.get::<WindowPos>(window)?;
     let position = window_pos.position?;
 
-    // クライアント座標 + ウィンドウ位置 = スクリーン座標
-    let screen_point = PointF::new(
-        client_point.x + position.x as f32,
-        client_point.y + position.y as f32,
-    );
+    // クライアント座標 + ウィンドウ位置 = スクリーン座標。生成時の既定（CW_USEDEFAULT）は
+    // 位置が未確定なので足さない（window_proc の `screen_point` と同じ規則）
+    let (dx, dy) = if position.x == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT {
+        (0.0, 0.0)
+    } else {
+        (position.x as f32, position.y as f32)
+    };
+    let screen_point = PointF::new(client_point.x + dx, client_point.y + dy);
 
     hit_test_ex(world, window, screen_point)
 }

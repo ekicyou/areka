@@ -5,17 +5,17 @@
 //! - **要求語彙タグ**——`SetWindowPosCommand` が `WriteTag` を運び、`new()` の 7 引数は
 //!   変わらないこと。タグを付けない生成は番兵（`UNTAGGED`）になり、「付け忘れた経路」が
 //!   行の上で見分けられること。
-//! - **一括書込の 3 種**——`flush` が `flush stage=begin`／各指令の `write stage=flush`／
+//! - **一括書込の 3 種**——`flush_window_pos_commands` が `flush stage=begin`／各指令の `write stage=flush`／
 //!   `flush stage=end` を発行すること。**偽の窓ハンドル**（`SetWindowPos` が必ず失敗する）
 //!   でも 3 種とも出て、`ok=false` になること。
 //! - **検査用の口**——`drain_window_pos_commands` が積まれた指令を**実行せずに**そのまま
 //!   返し、キューを空にすること。
-//! - **既定 OFF**——観測 target を点けていない運転では `flush` が観測行を 1 行も出さず、
+//! - **既定 OFF**——観測 target を点けていない運転では `flush_window_pos_commands` が観測行を 1 行も出さず、
 //!   読み戻し（`GetWindowRect`）も計時も行わないこと。
 //!
 //! # 実行形態の明示（要件 7.6）
 //!
-//! 本ファイルの検証はすべて**テストスレッド上の直接呼出**である。`flush` は bevy の
+//! 本ファイルの検証はすべて**テストスレッド上の直接呼出**である。`flush_window_pos_commands` は bevy の
 //! スケジュール実行器を介さないため、`tracing` のスレッド局所 subscriber
 //! （[`capture_under_filter`]）で確実に捕捉できる。多スレッド実行器の相での「出ないこと」は
 //! 一切主張しない。
@@ -25,9 +25,9 @@
 //!
 //! # 自発書込カウンタはスレッド局所である（要件 7.7）
 //!
-//! `flush` は `guarded_set_window_pos` を通り `SELF_INITIATED_DEPTH` を一時的に持ち上げる。
+//! `flush_window_pos_commands` は `guarded_set_window_pos` を通り `SELF_INITIATED_DEPTH` を一時的に持ち上げる。
 //! このカウンタは**スレッドごとに独立**であり（`command.rs` の `thread_local!`）、持ち上げ・
-//! 同期送達・判定・解放がすべて `flush` を呼んだこのスレッドの内側で閉じる。並列に走る
+//! 同期送達・判定・解放がすべて `flush_window_pos_commands` を呼んだこのスレッドの内側で閉じる。並列に走る
 //! 他テストの `is_self_initiated()`／`in_swp` 検査はこの値を読めないので、一括書込を呼ぶ
 //! テストを直列化する錠は要らない（スレッド局所であることの本体は
 //! `command_threadlocal_tests.rs`）。
@@ -41,85 +41,29 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    IsWindow, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
 };
 
 use super::super::transition_diag::{
     self, KIND_ENQUEUE, KIND_FLUSH, KIND_WRITE, MISSING, ORIGIN_WINDOW_POS, ORIGIN_ZORDER_PAIR,
-    RECORD_PREFIX_TAG, TRANSITION_TARGET, WriteTag,
+    WriteTag,
 };
 use super::super::zorder_pair::InsertSpec;
 use super::super::zorder_pair_maintain::pair_fix_command;
 use super::super::{Window, WindowHandle, WindowPos};
+use super::test_support::*;
 use super::{SetWindowPosCommand, drain_window_pos_commands, flush_window_pos_commands};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::{Point, SizeI, apply_window_pos_changes};
 
-/// 実機サインオフが用いる directive のうち、本チャネルを点灯させるもの。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::transition=debug";
-
 /// 既定水準（観測チャネルを有効化していない通常運転）。
 const DEFAULT_DIRECTIVES: &str = "info";
-
-/// 捕捉が生きている証拠として同じ窓の中で必ず出す対照行。
-const CONTROL_LINE: &str = "[transition-probe] alive";
-
-/// 対照行を出す（`info` 水準ゆえ両 directive で通る）。
-fn emit_control() {
-    tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
-}
-
-/// テスト冒頭の初期化——キューの残りと刻印の写しを落とす（要件 7.7）。
-fn clean_slate() {
-    let _residue = drain_window_pos_commands();
-    transition_diag::reset_for_test();
-}
-
-/// 実在し得ない窓ハンドルを作る。
-///
-/// 64bit Windows の `HWND` は 32bit 値の**符号拡張**であり、`0xFFFF_FF01` のように上位
-/// 32bit が 0 のまま下位が負域にある値はハンドル表に存在し得ない。それでも他プロセスの
-/// 実窓を掴んでいないことを `IsWindow` で毎回確かめる。
-fn fake_hwnd(tag: u8) -> HWND {
-    // 下位に識別子を載せ、必ず奇数にする（ハンドル値の粒度に載らない）。
-    //
-    // 識別子は**左へ 1 桁ずらしてから**奇数化する。`usize::from(tag) | 1` だと 0x20 と
-    // 0x21 が同じ値へ潰れ、「別の窓」を意図した呼び分けが同一窓を指してしまう
-    // （合流の導入で `drain_returns_the_enqueued_commands_verbatim_without_executing_them`
-    //  が偽の失敗を出して露見した・task 5.3）。
-    let value = 0xFFFF_FE00_usize | (usize::from(tag) << 1) | 1;
-    let hwnd = HWND(value as *mut core::ffi::c_void);
-    // SAFETY: `IsWindow` は任意のハンドル値に対して安全に真偽を返す読み取り専用 API で
-    // あり、無効値でも未定義動作を起こさない。
-    assert!(
-        !unsafe { IsWindow(Some(hwnd)) }.as_bool(),
-        "偽ハンドル 0x{value:X} が実窓を掴んでいる——このまま書込を撃つと無関係の窓を動かす"
-    );
-    hwnd
-}
 
 /// 合流の対象になり得る素直なジオメトリ指令（Z も表示状態も動かさない）。
 fn geometry_command(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> SetWindowPosCommand {
     SetWindowPosCommand::new(hwnd, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE, None)
-}
-
-/// 捕捉出力から観測チャネルの行だけを取り出す。
-fn transition_lines(captured: &str) -> Vec<&str> {
-    captured
-        .lines()
-        .filter(|line| line.contains(RECORD_PREFIX_TAG))
-        .collect()
-}
-
-/// 種別語 `kind=<kind>` を持つ行だけを取り出す。
-fn lines_of_kind<'a>(captured: &'a str, kind: &str) -> Vec<&'a str> {
-    let needle = format!("kind={kind} ");
-    transition_lines(captured)
-        .into_iter()
-        .filter(|line| line.contains(&needle))
-        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -195,10 +139,7 @@ fn the_generic_window_pos_site_tags_the_command_it_enqueues() {
     let mut world = World::new();
     world.spawn((
         Window::default(),
-        WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        },
+        WindowHandle { hwnd },
         WindowPos {
             position: Some(Point { x: 10, y: 20 }),
             size: Some(SizeI {
@@ -310,7 +251,7 @@ fn flush_emits_begin_write_and_end_for_a_fake_window_handle() {
             scope: Some(2),
             kind: "shell",
         }));
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert!(
@@ -408,7 +349,8 @@ fn flush_of_an_empty_queue_emits_no_records() {
 
     let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         emit_control();
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
+        // 続けて流しても空のキューは記録を出さないまま
         flush_window_pos_commands();
     });
 
@@ -426,7 +368,7 @@ fn flush_emits_nothing_under_the_default_directives() {
     let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {
         emit_control();
         SetWindowPosCommand::enqueue(geometry_command(fake_hwnd(0x33), 1, 2, 3, 4));
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert!(
@@ -441,9 +383,10 @@ fn flush_emits_nothing_under_the_default_directives() {
 
 #[test]
 fn a_nested_flush_epoch_restores_the_outer_one_instead_of_clearing_it() {
-    // 一括 flush は**入れ子になる**。`guarded_set_window_pos` の中で `WM_WINDOWPOSCHANGED` が
-    // 同期送達され、その処理の手順③（`window_proc/window_pos.rs:268`）が
-    // `flush_window_pos_commands()` を無条件に呼ぶためである。内側の解除が起点を消すと、
+    // 一括 flush は**入れ子になる**。入れ子は錠を取らない直の流しの内側の ② で起きる:
+    // `guarded_set_window_pos` の中で `WM_WINDOWPOSCHANGED` が同期送達され、その処理の
+    // 手順②（`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）が錠を取れて
+    // `flush_window_pos_commands()` をもう一度呼ぶためである。内側の解除が起点を消すと、
     // 2 本目以降の書込のあいだ `since_flush_us()` が `None` になり、
     // 「`WM_DPICHANGED` が `SetWindowPos` の内側で受理された」証跡（task 2.4 の `msg`
     // レコード）が失われる——本仕様が追っている当の機序が測れなくなる。
@@ -513,7 +456,7 @@ fn flush_keeps_the_front_guard_so_the_default_run_pays_no_observation_cost() {
 
     // 走査が中身を見ている対照——落とし過ぎていないこと。
     assert!(
-        code.contains("pub fn flush()"),
+        code.contains("pub fn flush_window_pos_commands()"),
         "説明文を落とす処理が本文まで落としている"
     );
 }

@@ -160,7 +160,7 @@ fn attaching_layers_moves_an_untouched_look_to_the_new_default() {
 /// **装着より先に `\f` が届いても、バルーン定義の既定はその台詞に届く**（`areka-P0-text-decoration-canon` の開発者裁定）。
 ///
 /// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
-/// （`crates/areka/src/emo2_boot/frame/attach.rs::connect_balloon_text` の `None` の腕）。
+/// （`crates/areka/src/runtime/frame/attach.rs::connect_balloon_text` の `None` の腕）。
 /// この窓で `\f[...]` が先に届く順序を再現し、**作者が明示した項目は残り、明示しなかった
 /// 項目は新しい既定になる**ことを固定する。台詞の流し始めを 1 フレーム遅らせて順序を
 /// 作る案は採らない。

@@ -18,7 +18,7 @@ use areka_sylphya::{
     spawn_sylphya,
 };
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
@@ -86,7 +86,6 @@ impl Rig {
                 raw += 1;
                 world.entity_mut(e.unwrap()).insert(WindowHandle {
                     hwnd: HWND(raw as *mut _),
-                    instance: HINSTANCE::default(),
                 });
             }
         }

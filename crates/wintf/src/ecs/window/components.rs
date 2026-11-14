@@ -2,8 +2,11 @@
 //!
 //! - `DpiChangeContext`: WM_DPICHANGED → WM_WINDOWPOSCHANGED 間の DPI 同期伝達
 //! - `Window`: ウィンドウ作成パラメータ
-//! - `WindowHandle`: 作成済みウィンドウのハンドル情報
+//! - `OnCloseRequest`・`OnSessionEnd`・`OnFilesDropped`・`OnKeyDown`: 窓のできごとを受ける関数
+//! - `KeyDown`: `OnKeyDown` へ渡すキー入力
 //! - `WindowStyle`: スタイル・拡張スタイル
+//!
+//! `WindowHandle` は `window_handle.rs` にある。
 
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
@@ -15,7 +18,6 @@ use windows::Win32::Foundation::*;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use crate::api::*;
 use crate::ecs::Visual;
 
 use super::dpi::DPI;
@@ -210,15 +212,6 @@ impl Default for WindowStyle {
             // ウィンドウ生成後には残らない。
             ex_style: WS_EX_LAYERED,
         }
-    }
-}
-
-impl WindowStyle {
-    /// 新しい WindowStyle を作成
-    pub fn from_hwnd(hwnd: HWND) -> windows::core::Result<Self> {
-        let style = WINDOW_STYLE(get_window_long_ptr(hwnd, GWL_STYLE)? as u32);
-        let ex_style = WINDOW_EX_STYLE(get_window_long_ptr(hwnd, GWL_EXSTYLE)? as u32);
-        Ok(Self { style, ex_style })
     }
 }
 

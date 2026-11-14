@@ -25,7 +25,7 @@ use super::RectPx;
 /// DD15）」と書いてあった。**その受容は撤回された**——拡大率を下げるとタスクバーの物理高が
 /// 縮んで実際の作業領域下端は下がるのに、起動時の下端が焼き付いたままキャラ窓が接地し
 /// 続け、実機で 6/6 の遷移が接地点 −48px の浮きを出した（確定台帳 L3）。
-/// 現在は毎フレーム先頭の同期段（`emo2_boot::frame::work_area_sync`）が実行時のモニタ表
+/// 現在は毎フレーム先頭の同期段（`runtime::frame::work_area_sync`）が実行時のモニタ表
 /// から本 Resource を作り直す。**変化したフレームだけ**差し替わり、同じ表なら無操作である
 /// （順序の揺れは [`same_monitors`] が吸収する）。
 ///
@@ -73,8 +73,7 @@ impl MonitorSnapshot {
 /// # 判別付き版への委譲（task 2.2・D6）
 ///
 /// 本関数は [`work_area_for_window_with_origin`] の**戻り値から判別を落とすだけ**の
-/// 薄いラッパである（契約不変＝既存呼出元の挙動は 1 bit も変わらない。等価性は
-/// `work_area_for_window_delegates_to_with_origin` が檻で固定する）。
+/// 薄いラッパである（契約不変＝既存呼出元の挙動は 1 bit も変わらない）。
 pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Option<RectPx> {
     work_area_for_window_with_origin(snapshot, window).map(|(wa, _)| wa)
 }
@@ -246,7 +245,7 @@ impl MonitorDpiTable {
 
 /// モニタ表から作られる 2 つの源（作業領域源＋モニタ別拡大率表）の組。
 ///
-/// **起動時（`main.rs` のシーム）も実行時の同期（`emo2_boot::frame::work_area_sync`）も
+/// **起動時（`main.rs` のシーム）も実行時の同期（`runtime::frame::work_area_sync`）も
 /// この 1 つの構築関数を通る**（要件 5.1・設計 C6「構築関数は同一＝二重権威にならない」）。
 /// 起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -274,8 +273,7 @@ impl MonitorSources {
     /// 1 台も無い（列挙異常・[`MonitorSnapshot::from_monitors`] の 0 台契約と同義）。
     // 同期段は 0 台を `Monitor` 列の側で弾く（表を作る前に警告して現状維持する）ので、
     // 本判定を名前で呼ぶのは今のところ檻だけである。`len` を持つ型に `is_empty` が無いのは
-    // API として不自然なので残す（areka は bin crate ゆえ `pub` でも dead_code 免除されない）。
-    #[allow(dead_code)]
+    // API として不自然なので残す（配置は lib の crate なので `pub` の項目は未使用の警告にならない）。
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

@@ -6,7 +6,7 @@
 //!   名前と必須フィールドを持ち、値が復元できる形で 1 行に載ること。
 //! - **水準と出力先**——失敗と検証不一致が error 水準であること（要件 6.2）、
 //!   調整・見送り・沈降観測が診断手順の水準（debug）で点灯すること（要件 6.1／6.3）、
-//!   そしてすべてが module path 既定の出力先（サインオフの grep 対象）へ出ること。
+//!   そしてすべてが組のモジュールの出力先（`wintf::ecs::window::zorder_pair`）へ出ること。
 //! - **記録の入口の振る舞い**——判断結果を記録の入口（`record_decision`）へ渡すと、
 //!   見送りは必ず理由つきの記録になったうえで適用対象としては返らず、是正の腕は
 //!   記録を足さずにそのまま返ること（要件 6.3）。
@@ -32,22 +32,25 @@ use super::{
     record_verification, skip_line, verify_failed_line,
 };
 use crate::ecs::test_support::capture_under_filter;
-
-/// 実機サインオフが用いる `RUST_LOG` 相当（design.md「Real-Machine Signoff」）。
-/// areka 側の宣言レコードは別クレートゆえ、本ファイルでは wintf 側の指定だけを使う。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
+use crate::ecs::window::zorder_pair_test_support::{SIGNOFF_DIRECTIVES, fake_hwnd, lines_with};
 
 /// 既定水準（診断手順を有効化していない通常運転）。
 const DEFAULT_DIRECTIVES: &str = "info";
 
-/// 記録の出力先。design.md は「ログ target は module path 既定」と定めており、
-/// サインオフの grep はこの名前で行う。
-const LOG_TARGET: &str = "wintf::ecs::window::zorder_pair";
+/// 記録の出力先。出力先は組のモジュール 1 つに揃える（読み手の絞り込みは前方一致なので
+/// 漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。区切りの `:` まで含めて
+/// 照らすので、`zorder_pair_sink` などの兄弟の出力先へ出た行は一致しない。
+const LOG_TARGET: &str = "wintf::ecs::window::zorder_pair:";
 
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
+/// 見送りの理由の 6 種と、その記録に載る理由語（7 種目を足すときはここだけを直す）。
+const ALL_REASONS: [(SkipReason, &str); 6] = [
+    (SkipReason::AlreadyAdjacent, "AlreadyAdjacent"),
+    (SkipReason::PeerMissing, "PeerMissing"),
+    (SkipReason::HandleMissing, "HandleMissing"),
+    (SkipReason::EchoOrIrrelevant, "EchoOrIrrelevant"),
+    (SkipReason::StrategyDisabled, "StrategyDisabled"),
+    (SkipReason::ReleasedByChain, "ReleasedByChain"),
+];
 
 fn balloon() -> HWND {
     fake_hwnd(0x00B0)
@@ -121,11 +124,6 @@ fn emit_every_record() {
         Some(true),
         Some(false),
     );
-}
-
-/// 捕捉した出力から、指定タグを含む行をすべて取り出す。
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
 }
 
 /// 捕捉した出力から、指定タグを含む行をちょうど 1 本取り出す。
@@ -236,17 +234,9 @@ fn fix_line_carries_the_command_and_the_measurement_on_one_line() {
 #[test]
 fn skip_line_names_a_distinct_reason_for_every_skip() {
     let (balloon_entity, char_entity) = pair_entities();
-    let all = [
-        (SkipReason::AlreadyAdjacent, "AlreadyAdjacent"),
-        (SkipReason::PeerMissing, "PeerMissing"),
-        (SkipReason::HandleMissing, "HandleMissing"),
-        (SkipReason::EchoOrIrrelevant, "EchoOrIrrelevant"),
-        (SkipReason::StrategyDisabled, "StrategyDisabled"),
-        (SkipReason::ReleasedByChain, "ReleasedByChain"),
-    ];
 
     let mut rendered: Vec<String> = Vec::new();
-    for (reason, word) in all {
+    for (reason, word) in ALL_REASONS {
         let line = skip_line(balloon_entity, char_entity, reason);
         assert!(line.contains("[zorder-pair] skip"), "{line}");
         assert!(
@@ -260,7 +250,7 @@ fn skip_line_names_a_distinct_reason_for_every_skip() {
         rendered.push(line);
     }
 
-    // 対照: 5 行がすべて相異なる（理由が 1 語へ潰れていれば重複が出る）
+    // 対照: 理由の数だけの行がすべて相異なる（理由が 1 語へ潰れていれば重複が出る）
     let mut sorted = rendered.clone();
     sorted.sort();
     sorted.dedup();
@@ -360,7 +350,7 @@ fn sink_observed_line_carries_adjacency_and_foreground_relation() {
 // 水準と出力先（実際の濾過を通した捕捉）
 // -------------------------------------------------------------------------
 
-/// サインオフの `RUST_LOG` では 6 種すべてが点灯し、grep 対象の出力先へ出る。
+/// サインオフの `RUST_LOG` では 6 種すべてが点灯し、組のモジュールの出力先へ出る。
 #[test]
 fn every_record_is_visible_under_the_signoff_directive() {
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, emit_every_record);
@@ -377,11 +367,13 @@ fn every_record_is_visible_under_the_signoff_directive() {
             out.contains(tag),
             "サインオフの水準で `{tag}` が観測できない: {out}"
         );
+        for line in out.lines().filter(|line| line.contains(tag)) {
+            assert!(
+                line.contains(LOG_TARGET),
+                "`{tag}` の行が組のモジュールの出力先へ出ていない: {line}"
+            );
+        }
     }
-    assert!(
-        out.contains(LOG_TARGET),
-        "grep 対象の出力先が module path 既定でない: {out}"
-    );
 }
 
 /// 既定水準では調整・見送り・沈降観測は無音で、失敗と検証不一致だけが残る。
@@ -465,14 +457,7 @@ fn failures_and_verification_mismatch_are_recorded_at_error_level() {
 fn record_decision_reports_every_skip_reason_and_yields_no_fix() {
     let (balloon_entity, char_entity) = pair_entities();
 
-    for reason in [
-        SkipReason::AlreadyAdjacent,
-        SkipReason::PeerMissing,
-        SkipReason::HandleMissing,
-        SkipReason::EchoOrIrrelevant,
-        SkipReason::StrategyDisabled,
-        SkipReason::ReleasedByChain,
-    ] {
+    for (reason, _) in ALL_REASONS {
         let mut taken = Some(PairFixDecision::Skip(reason));
         let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
             taken = record_decision(balloon_entity, char_entity, PairFixDecision::Skip(reason));

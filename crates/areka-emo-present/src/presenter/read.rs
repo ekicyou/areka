@@ -117,7 +117,7 @@ impl EmoPresenter {
     /// target の**窓 client 物理寸**（＝実適用 k を丸め単一権威に通した値・要件 3.1/4.2）。
     ///
     /// `scaled_extent(applied, native_size)` を [`ScaleRatio::scaled_extent`] 経由で計算する。
-    /// 窓 client を合わせる消費点（`emo2_boot` の resnap／DPI 追従フェーズ）はこの照会だけを見れば
+    /// 窓 client を合わせる消費点（`areka` の `runtime::frame` の resnap／DPI 追従フェーズ）はこの照会だけを見れば
     /// よく、native 原寸と物理寸を**取り違えようがない**——[`TextSlotView`] 経由だと
     /// [`TextSlotView::surface_size`]（native）と [`TextSlotView::physical_size`]（物理）が
     /// 隣り合って生えており、消費点での 1 トークンの取り違えが「窓が原寸へ引き戻される」

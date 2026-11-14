@@ -183,6 +183,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O15 | `[DragStartEvent] Dispatching` / `[DragEnd] Direct Arrangement.offset sync` | 同上 | `info` | `drag/dispatch.rs:190,301` |
 | O16 | `dpi reproject: WindowPos.size 未確定（窓生成前）`（`entity=`） | `areka::emo2_boot::frame` | **`warn`** | `frame.rs:923-926`（**タスク 5.2 着地後**。DPI 相の位置再射影が現寸を読めず打ち切った縮退＝1 行でも出たら当該窓の接地点は保証されない） |
 | O17 | **`[visibility-guard] ClampX`**（`entity=`・`route=`・`old_rect=`・`proposed=`・`clamped=`・`size=`・`clamp_wa=`） | `areka::placement::follow` | **`warn`** | `follow.rs:1853`（`evaluate_visibility_guard`・`:1798`。キャラ窓は `apply_visibility_guard`・`:1771` 経由／バルーン窓は `guard_balloon_position`・`:619` 経由）＝**タスク 6.1／6.2 着地後**。可視 → 全 work area 非交差への遷移を検出し X を引き戻した（Req 3.1） |
+| O17a | **`[visibility-guard] HiddenAfterClampX`**（`entity=`・`route=`・`old_rect=`・`proposed=`・`clamped=`・`size=`・`clamp_wa=`＝O17 と同じ欄） | 同上 | **`warn`** | `follow/visibility.rs`（`evaluate_visibility_guard`・audit-placement-follow 指摘 6 で新設）。判定は O17 と同じく X を引き戻したが、寄せた矩形も全 work area と非交差（Y が画面の外のまま＝主にバルーン窓）。1 回の判定で O17 とこの語のどちらか 1 行だけが出る。位置は O17 と同じ |
 | O18 | **`[visibility-guard] NearestFallback`**（`entity=`・`route=`・`proposed=`・`size=`・`clamp_wa=`） | 同上 | **`warn`** | `follow.rs:1837`（同上）＝**タスク 6.1／6.2 着地後**。**決めた位置**の窓中心がどの work area にも属さない＝モニタ構成情報と実画面の食い違いの兆候（Req 3.2） |
 | O19 | **`[visibility-guard] WorkAreaUnresolved`**（`entity=`・`route=`。**バルーン窓の寸未確定の行だけが `proposed=` を持つ**＝タスク 6.2・下記「判別子」） | 同上 | **`warn`** | `follow.rs:1811,1820`（`evaluate_visibility_guard`・キャラ窓／バルーン窓の共通経路）／`follow.rs:650`（`guard_balloon_position`・**タスク 6.2 着地後**）。`MonitorSnapshot` 不在／モニタ 0 台／**バルーン窓の寸が未確定**で可視性を判定できず位置を現状維持した（Req 3.3） |
 
@@ -190,13 +191,13 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O21 | `[detect_display_change_system] Updating Monitor entity`（`entity=`・`handle=`・`old_bounds=`／`new_bounds=`・`old_work_area=`／`new_work_area=`・`old_dpi=`／`new_dpi=`・`old_primary=`／`new_primary=`） | 同上 | `debug` | `monitor_systems.rs:315`（**タスク 4.6 新設**）。モニタ表が実際に何を反映したかを実機ログだけで復元できる（§5.1） |
 | O22 | `[detect_display_change_system] Display configuration change applied`（**`windows_redriven=N`**） | 同上 | `debug` | `monitor_systems.rs:234`（**タスク 4.6 新設**）。「モニタ表は更新されたが窓が 1 つも駆動されなかった」を 1 行で切り分ける（§5.1） |
 
-> **O17〜O19 は D-BASE の大域 `info` に載る**（`warn` ゆえ target 追加は不要）。3 語は接頭辞 `[visibility-guard]` を共有するので、「ガードが何か言ったか」は 1 回の `Select-String -SimpleMatch '[visibility-guard]'` で引ける。
+> **O17〜O19 は D-BASE の大域 `info` に載る**（`warn` ゆえ target 追加は不要）。4 語（O17〜O19 と O17a）は接頭辞 `[visibility-guard]` を共有するので、「ガードが何か言ったか」は 1 回の `Select-String -SimpleMatch '[visibility-guard]'` で引ける。
 >
 > **O20〜O22 は `debug` ゆえ D-BASE の `wintf::ecs::layout::systems::monitor_systems=debug` セグメントが要る**（§2.1）。このセグメントを省くと 3 語とも暗転し、「表示構成変更が処理されていない」と「観測点が消えている」が区別できなくなる（§0.3 の禁止規則の直接適用）。
 >
 > **識別子 `O16` の二重割当を是正した（2026-08-01）**: 旧版は本表 `O16`（`dpi reproject: WindowPos.size 未確定`・target `areka::emo2_boot::frame`・`warn`）と §5.1 の再導出行（target `monitor_systems`・`debug`）の**双方**に `O16` を与えていた。**先に採番されていた本表側を `O16` のまま残し**、再導出行を **`O20`** へ振り直した。`diagnosis-report.md` の §2.2／§2.2.1／§2.3／§4.1 が「O16」と書いているのは**すべて再導出行＝現 `O20`** である（本書の O16 ではない）。
 >
-> **件数の読み方（タスク 6.2 着地で改訂・2026-08-01）**: 3 語はキャラ窓とバルーン窓の**双方**から出る。窓種別は `route=` で判別する——**`route=BalloonFollow` の行はすべてバルーン窓由来**（`follow_balloon` の書込は定義上つねに `BalloonFollow`）であり、それ以外の 4 語（下記）はキャラ窓由来である。`entity=` は `[diag.window_move]` レコードとの結合キーなので、`kind=Balloon`／`kind=Char` で裏取りできる。
+> **件数の読み方（タスク 6.2 着地で改訂・2026-08-01）**: 4 語（O17〜O19 と O17a）はキャラ窓とバルーン窓の**双方**から出る。窓種別は `route=` で判別する——**`route=BalloonFollow` の行はすべてバルーン窓由来**（`follow_balloon` の書込は定義上つねに `BalloonFollow`）であり、それ以外の 4 語（下記）はキャラ窓由来である。`entity=` は `[diag.window_move]` レコードとの結合キーなので、`kind=Balloon`／`kind=Char` で裏取りできる。
 >
 > - **キャラ窓由来の発火 route は 4 種に限られる**（`AnchorChange`／`Resnap`／`DpiReproject`／`ReportedSizeReconcile`＝D13 帰結⑴）。**`MoveCue`・`Restore`・`SpawnInitial`・`KeepPositionResize` では 0 行が正常**。
 > - **バルーン窓由来の行は必ず `route=BalloonFollow`** だが、**出るのは配置系（上記 4 種）を引き金とする随伴のときだけ**である（タスク 6.2 は「随伴の引き金」を `follow_balloon` へ配管した）。**ドラッグ随伴（`on_char_drag`／`on_char_drag_end`）では 0 行が正常**——`route=BalloonFollow` の 0 行を「配線漏れ」と読まないこと。引き金はログ行に載らないので、判別が要るときは**直前のキャラ窓 `[diag.window_move]` レコードの `route=`** を見る（ドラッグ随伴ならキャラ側にレコードが無い＝`route=None` で無記録・§4）。

@@ -31,249 +31,33 @@
 //!
 //! シングルスレッド実行器を明示する理由は確立系のテストと同じである（既定の多スレッド
 //! 実行器では [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
-
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SW_SHOWNA,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, ShowWindow,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
+    HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER,
 };
-use windows::core::{PCWSTR, w};
+use windows::core::w;
 
-use super::{IssuedPairFix, apply_zorder_pair_maintenance, pair_fix_command, plan_pair_fix};
+use super::{IssuedPairFix, pair_fix_command, plan_pair_fix};
 use crate::api::{get_window_above, get_window_below};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{
     ExpectedOrder, InsertSpec, PairFixDecision, PairObservation, PairTrigger, SkipReason,
-    measure_window_below,
+};
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, FIX_TAG, SET_WINDOW_POS_TAG, SKIP_TAG, Trio, VERIFY_FAILED_TAG,
+    assert_line_count, create_test_child, create_test_parent, declare_pair, destroy_test_window,
+    fake_hwnd, hwnd_hex, insert_after, issue_control_command, lines_with, maintain_schedule,
+    request_reassert, spawn_window,
 };
 use crate::ecs::window::{
-    KeepDirectlyAbove, ReassertZOrder, SetWindowPosCommand, WindowHandle, ZOrderPairStrategy,
+    ReassertZOrder, WindowHandle, ZOrderPairStrategy, flush_window_pos_commands,
 };
 
-/// 実機サインオフの `RUST_LOG`（design.md「Real-Machine Signoff」の wintf 側）に、
-/// 指令の実施記録を出す `command` モジュールを足したもの。
-///
-/// 足しているのは本テストが「指令が何本出たか」を数えるためであり、サインオフの
-/// 判定語を増やしているわけではない。
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-
-const FIX_TAG: &str = "[zorder-pair] fix";
-const SKIP_TAG: &str = "[zorder-pair] skip";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-/// `guarded_set_window_pos` の実施記録（＝実際に発行された指令 1 本）。
-const SET_WINDOW_POS_TAG: &str = "[guarded_set_window_pos] Calling SetWindowPos";
 /// ペア宣言の無い窓に付いた要求を落とした記録。
 const ORPHAN_REQUEST_MARK: &str = "ペア宣言の無い窓に再断行の要求";
 /// 出した指令の持ち越しが無い検証段階の要求を落とした記録。
 const UNBACKED_VERIFY_MARK: &str = "検証待ちの要求に、出した指令の持ち越しがありません";
-
-// -------------------------------------------------------------------------
-// 実窓・World・巡回のヘルパ
-// -------------------------------------------------------------------------
-
-fn create_window(
-    title: PCWSTR,
-    ex_style: WINDOW_EX_STYLE,
-    style: WINDOW_STYLE,
-    parent: Option<HWND>,
-) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            ex_style,
-            w!("Static"),
-            title,
-            style,
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
-}
-
-/// テスト専用の親窓（兄弟列を閉じるための入れ物）。
-///
-/// **可視で作る**——実測層は可視の窓だけを隣と数えるため（`zorder_pair` の実測層 doc）、
-/// 隠れた親の下の子窓では隣接そのものが測れない（`IsWindowVisible` は当該窓と祖先すべての
-/// `WS_VISIBLE` を見るので、親が隠れていれば子はどう作っても不可視になる）。0x0 の道具窓
-/// （`WS_EX_TOOLWINDOW`）を活性化を伴わない `SW_SHOWNA` で見せるため、画面にもタスクバーにも
-/// 現れず、他のテストが握っている前面窓も奪わない。
-fn create_test_parent(title: PCWSTR) -> HWND {
-    let parent = create_window(
-        title,
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-        WINDOW_STYLE(WS_POPUP.0),
-        None,
-    );
-    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
-    unsafe {
-        let _ = ShowWindow(parent, SW_SHOWNA);
-    }
-    parent
-}
-
-/// 親窓の子として**可視の**実窓を生成する（本番のゴースト窓と同じ可視の窓を模す）。
-///
-/// 生成直後の兄弟間の重なりは前提にしない——初期配置は必ず [`insert_after`] で明示的に作る。
-/// 実測すると子窓は**先に作ったものほど手前**（新しい子窓は兄弟列の背面側へ入る）であり、
-/// 生成順から前後関係を読むと逆になる。`api.rs` の z オーダーのラッパテストも同じ理由で
-/// 生成順に依存しない形にしてある。
-fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(
-        title,
-        WINDOW_EX_STYLE(0),
-        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
-        Some(parent),
-    )
-}
-
-/// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す（`api.rs` のテストと同じ手）。
-///
-/// `SetWindowPos` の `hWndInsertAfter` は「位置決め対象の 1 つ手前に来る窓」であり、
-/// 対象はその**背面側**へ入る。
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する重なりのみの変更。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-        .expect("SetWindowPos should reorder self-owned test windows");
-    }
-}
-
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する（子窓は親の破棄で連鎖する）。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-fn hwnd_hex(hwnd: HWND) -> String {
-    format!("0x{:X}", hwnd.0 as usize)
-}
-
-/// Win32 へは渡さない偽ハンドル（値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-fn declare_pair(world: &mut World, balloon: Entity, character: Entity) {
-    world
-        .entity_mut(balloon)
-        .insert(KeepDirectlyAbove { peer: character });
-}
-
-/// 一回限りの再断行要求を外から挿入する（要件 2.6 のシームと同じ形＝未適用の既定値）。
-fn request_reassert(world: &mut World, balloon: Entity) {
-    world.entity_mut(balloon).insert(ReassertZOrder::default());
-}
-
-/// 維持系だけを載せた 1 巡分の schedule。
-fn maintain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_pair_maintenance);
-    schedule
-}
-
-/// 重なりも位置も動かさない対照の指令を 1 本だけ発行する。
-///
-/// 「是正の指令が出ていない」ことを主張する捕捉窓に必ず併置する——捕捉が死んでいれば
-/// この 1 本も現れず、テストは赤になる。
-fn issue_control_command(hwnd: HWND) {
-    SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER,
-        None,
-    ));
-    SetWindowPosCommand::flush();
-}
-
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
-}
-
-/// 指定タグの行がちょうど `expected` 本であることを確かめる。
-///
-/// 「0 本でないこと」だけを見ると余計に出る側の欠陥（同じ是正が 2 度走る・再試行の輪が
-/// できる等）を見逃すため、常に本数で固定する。
-fn assert_line_count(out: &str, tag: &str, expected: usize, what: &str) {
-    let found = lines_with(out, tag);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{tag}` の行は {expected} 本のはずが {} 本だった\n---捕捉全文---\n{out}",
-        found.len()
-    );
-}
-
-/// キャラ窓・割り込み窓・バルーン窓の 3 枚を「バルーン／割り込み／キャラ」の順
-/// （手前 → 背後）で用意する。バルーンはキャラのすぐ手前に**居ない**。
-struct Trio {
-    parent: HWND,
-    character: HWND,
-    intruder: HWND,
-    balloon: HWND,
-}
-
-impl Trio {
-    fn create(tag: PCWSTR) -> Self {
-        let parent = create_test_parent(tag);
-        let character = create_test_child(parent, w!("character"));
-        let intruder = create_test_child(parent, w!("intruder"));
-        let balloon = create_test_child(parent, w!("balloon"));
-        // 「バルーン／割り込み／キャラ」の順（手前 → 背後）を明示的に作る。
-        insert_after(intruder, balloon);
-        insert_after(character, intruder);
-        let trio = Self {
-            parent,
-            character,
-            intruder,
-            balloon,
-        };
-        assert_eq!(
-            get_window_below(trio.balloon).expect("GetWindow は成功するはず"),
-            Some(trio.intruder),
-            "前提: バルーンの 1 つ背後は割り込み窓（＝キャラの隣に居ない）"
-        );
-        trio
-    }
-
-    fn destroy(self) {
-        destroy_test_window(self.parent);
-    }
-}
 
 // -------------------------------------------------------------------------
 // 要求の一生（挿入 → 適用 → 検証待ち → 実測照合 → 消滅）
@@ -316,7 +100,7 @@ fn reassert_request_is_applied_verified_and_then_disappears() {
         );
 
         // tick 後の flush（本番と同じ経路）。ここで初めて OS の重なりが動く。
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
 
         // 2 巡目: 実測照合と記録、そして要求の消滅。
         schedule.run(&mut world);
@@ -360,8 +144,6 @@ fn reassert_request_is_applied_verified_and_then_disappears() {
         !world.entity(balloon).contains::<IssuedPairFix>(),
         "指令の持ち越しも要求とともに消えるはず"
     );
-
-    trio.destroy();
 }
 
 // -------------------------------------------------------------------------
@@ -392,7 +174,7 @@ fn already_adjacent_pair_issues_no_command_at_all() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 対照: 捕捉が生きていれば必ず 1 本現れる指令（重なりも位置も動かさない）。
         issue_control_command(balloon_hwnd);
     });
@@ -460,7 +242,7 @@ fn without_a_request_the_maintenance_does_nothing() {
         schedule.run(&mut world);
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(trio.balloon);
     });
 
@@ -489,7 +271,6 @@ fn without_a_request_the_maintenance_does_nothing() {
     );
 
     destroy_test_window(control_parent);
-    trio.destroy();
 }
 
 // -------------------------------------------------------------------------
@@ -523,7 +304,7 @@ fn verification_mismatch_is_recorded_once_without_retry() {
         schedule.run(&mut world);
         schedule.run(&mut world);
         // 溜まっている指令をすべて出し切って本数を数える。
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert_line_count(
@@ -557,8 +338,6 @@ fn verification_mismatch_is_recorded_once_without_retry() {
         !world.entity(balloon).contains::<ReassertZOrder>(),
         "不一致でも要求はそこで消える（再試行の輪を作らない）"
     );
-
-    trio.destroy();
 }
 
 // -------------------------------------------------------------------------
@@ -580,7 +359,7 @@ fn peer_lost_before_verification_skips_instead_of_failing() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 検証の前にキャラ窓の実体が消える（窓そのものは残っている）。
         world.entity_mut(character).despawn();
         schedule.run(&mut world);
@@ -608,8 +387,6 @@ fn peer_lost_before_verification_skips_instead_of_failing() {
     );
     assert!(!world.entity(balloon).contains::<ReassertZOrder>());
     assert!(!world.entity(balloon).contains::<IssuedPairFix>());
-
-    trio.destroy();
 }
 
 /// 検証待ちの巡に相手の**ハンドルだけ**が外れた場合も、理由つきの見送りになる。
@@ -635,13 +412,13 @@ fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目: 是正を適用し、検証待ちへ進む。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         // 実体は残したまま OS のハンドルだけが外れる（切離し側の `HandleRemoved` と同じ状態）。
         world.entity_mut(character).remove::<WindowHandle>();
         // 2 巡目: 検証段階だが、実測に使う HWND がもう無い。
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
     });
 
     assert_line_count(&out, SKIP_TAG, 1, "見送りは理由つきで 1 本だけ");
@@ -665,11 +442,12 @@ fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
     );
     assert!(!world.entity(balloon).contains::<ReassertZOrder>());
     assert!(!world.entity(balloon).contains::<IssuedPairFix>());
-
-    trio.destroy();
 }
 
 /// 要求を受けた巡で既に相手が居なければ、指令を出さずに理由つきで見送る。
+///
+/// 要求が外から差し替えられた形（検証待ちでない要求に前の持ち越しが残る）にして、
+/// 見送りで持ち越しも外れることも見る。
 #[test]
 fn request_for_a_missing_peer_issues_no_command() {
     let parent = create_test_parent(w!("wintf-zorder-maintain-peer-gone"));
@@ -681,12 +459,15 @@ fn request_for_a_missing_peer_issues_no_command() {
     let balloon = spawn_window(&mut world, balloon_hwnd);
     declare_pair(&mut world, balloon, character);
     request_reassert(&mut world, balloon);
+    world.entity_mut(balloon).insert(IssuedPairFix {
+        insert_after: InsertSpec::TopEdge,
+    });
     world.entity_mut(character).despawn();
 
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -699,6 +480,7 @@ fn request_for_a_missing_peer_issues_no_command() {
         "是正の指令は出ず、対照の 1 本だけが出るはず",
     );
     assert!(!world.entity(balloon).contains::<ReassertZOrder>());
+    assert!(!world.entity(balloon).contains::<IssuedPairFix>());
 
     destroy_test_window(parent);
 }
@@ -719,7 +501,7 @@ fn request_without_handles_issues_no_command() {
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -766,7 +548,7 @@ fn request_on_a_window_without_declaration_is_dropped_with_a_record() {
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -793,6 +575,41 @@ fn request_on_a_window_without_declaration_is_dropped_with_a_record() {
     );
 
     destroy_test_window(parent);
+}
+
+/// 宣言の無い窓の検証待ちの要求を落とすときは、出した指令の持ち越しも一緒に外す
+/// （[`IssuedPairFix`] の「要求が消えるときは必ず一緒に外れる」）。
+#[test]
+fn dropping_an_orphan_request_also_drops_its_issued_fix() {
+    let mut world = World::new();
+    world.insert_resource(ZOrderPairStrategy::default());
+    let stray = spawn_window(&mut world, fake_hwnd(0x00C2));
+    world.entity_mut(stray).insert((
+        ReassertZOrder {
+            pending_verify: Some(ExpectedOrder {
+                above: fake_hwnd(0x00C2),
+                below: fake_hwnd(0x00C3),
+            }),
+        },
+        IssuedPairFix {
+            insert_after: InsertSpec::TopEdge,
+        },
+    ));
+
+    let mut schedule = maintain_schedule();
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || schedule.run(&mut world));
+
+    assert_line_count(
+        &out,
+        ORPHAN_REQUEST_MARK,
+        1,
+        "宣言の無い要求は 1 度だけ記録される",
+    );
+    assert!(!world.entity(stray).contains::<ReassertZOrder>());
+    assert!(
+        !world.entity(stray).contains::<IssuedPairFix>(),
+        "要求を落としたのに持ち越しが残っている"
+    );
 }
 
 /// 出した指令の持ち越しが無い検証待ちの要求は、検証せずに記録を残して落とす。
@@ -831,7 +648,7 @@ fn pending_verification_without_an_issued_command_is_dropped_with_a_record() {
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         issue_control_command(balloon_hwnd);
     });
 
@@ -856,26 +673,6 @@ fn pending_verification_without_an_issued_command_is_dropped_with_a_record() {
     );
 
     destroy_test_window(parent);
-}
-
-// -------------------------------------------------------------------------
-// 検証で使う実測（記録の付随フィールド）
-// -------------------------------------------------------------------------
-
-/// 背後側の走査でも、失敗は「背後に誰も居ない」と同じ `None` へ潰れるが黙って消えはしない。
-///
-/// 無効ハンドルでの走査は必ず失敗する。値としては不在（記録では番兵）になり、失敗そのものは
-/// 記録に残る（[areka-log-first-no-silent-failure]）。対照は実窓での成功例
-/// （本ファイルの各シナリオが `Some` を得ていること）。
-#[test]
-fn measure_window_below_maps_failure_to_absence_and_records_it() {
-    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
-        assert_eq!(measure_window_below(HWND::default()), None);
-    });
-    assert!(
-        !out.trim().is_empty(),
-        "走査の失敗は記録に残るはず（黙って None へ潰さない）"
-    );
 }
 
 // -------------------------------------------------------------------------

@@ -557,13 +557,12 @@ fn close_windows_for_restart_removes_the_balloon_lock_ledger() {
 #[test]
 fn attach_os_close_request_puts_both_receivers_on_ghost_windows() {
     use bevy_ecs::system::RunSystemOnce;
-    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::Foundation::HWND;
     use wintf::ecs::window::OnSessionEnd;
 
     let mut world = World::new();
     let handle = || WindowHandle {
         hwnd: HWND(0x5e55 as *mut _),
-        instance: HINSTANCE::default(),
     };
     let ghost = world.spawn((GhostWindowMarker, handle())).id();
     let plain = world.spawn(handle()).id();
