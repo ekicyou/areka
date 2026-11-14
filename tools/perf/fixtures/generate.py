@@ -63,10 +63,9 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-# 行の読み方は親フォルダの perf_lines と共有する（ANSI 除去を二重に持たない）。
+# 行の読み方は親フォルダの perf_lines と共有する。
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from perf_lines import strip_ansi  # noqa: E402
-
 HERE = Path(__file__).resolve().parent
 
 #: 全 fixture の時刻の起点。実時刻に依存させない（同じ入力からは必ず同じ出力）。
@@ -1232,11 +1231,12 @@ CASES = (
 
 
 def main() -> int:
-    for factory in CASES:
+    import generate_more  # 実行時に読む（読み込み時だと循環になる）
+    for factory in (cases := CASES + generate_more.CASES):
         path = factory().write()
         size = sum(p.stat().st_size for p in path.iterdir())
         print(f"  {path.name:44s} {size:>9,d} バイト")
-    print(f"{len(CASES)} 件の fixture を生成しました: {HERE}")
+    print(f"{len(cases)} 件の fixture を生成しました: {HERE}")
     return 0
 
 

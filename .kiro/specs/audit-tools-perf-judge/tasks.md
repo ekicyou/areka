@@ -12,7 +12,7 @@
 
 ## 共通の土台
 
-- [ ] 1. 行の読み方を共通の兄弟モジュールへ寄せる（#7・#13・#40・#51）
+- [x] 1. 行の読み方を共通の兄弟モジュールへ寄せる（#7・#13・#40・#51）
 - [x] 1.1 行の読み方のモジュールを作り、judge-perf をそれへ付け替える（#40・#51・#13・#7 の CSV の分）
   - 着手の門（上）を確かめてから始める
   - 道具に依らない読み方（`parse_fields`・`split_after_message`・CPU の CSV の読み・`percentile` ほか、研究 §3 #40 の 5 か所の写し）を `perf_lines` に置く。判定式・較正値・終了コード・道具に固有の文は置かず、失敗は呼び手が渡す作り手で起こす（D2）
@@ -28,7 +28,7 @@
   - 終わった姿: 4 本の道具の `--selftest` が今ある全ケースで緑、`cpu_nan` が緑で、`isfinite` を外すと 0 で赤になる。5 か所の写しが grep で 0 件
   - _Dispatch: mechanical — 1.1 で作った形のまま残りの写しを読み込みに替え、ケースを 1 本足す_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.1, 5.3_
-- [ ] 1.3 新しい判定の検体の置き場を作り、N1・U1 を置く（D5・T7・T13）
+- [x] 1.3 新しい判定の検体の置き場を作り、N1・U1 を置く（D5・T7・T13）
   - `fixtures/generate_more.py` を作り、`generate.py` の `main()` が実行時に読み込んで `CASES + generate_more.CASES` を作る形にする（読み込み時の循環を作らない）
   - 判定の検体 `N1_cpu_nan`（exit 2）・`U1_bom_run_log`（exit 0）を `generate_more` に置き、作り直してバイトが一致することを確かめる
   - `audit-placement-follow` への置き場の知らせは要らない（2026-11-14 に着地し、`transition_judge.rs`・`transition_diag_tests.rs` の注記は「tools/perf/ の Python の道具の `parse_fields`」とファイルを名指さない形になった）。`presenter/timing.rs` の `judge-perf.py::parse_fields` の注記は、judge-perf が同じ名前で読み込むので指し先が残る（`crates/` には触らない）
@@ -220,3 +220,4 @@
 
 - 1.1: `perf_lines.read_cpu_csv` は design の形に加えて `read_fail`（読めないときの作り手）を取り、`header` は tuple。読めない cpu.csv は今どおり exit 3。perf-rank も `read_fail=bad_input` で渡す（1.2）
 - 1.2: perf-rank の cpu.csv の行番号は空行を含む実の行番号になった（#51）。perf-rank の注記「較正値（…）も同じ理由で写し」の「も」は先行の写しが無くなったので 14 の audit で拾う候補
+- 1.3: U1 は run.log と cpu.csv の両方に BOM。run.log は探して読むので BOM に左右されず、赤を作るのは cpu.csv の見出しの一致。judge-perf の selftest の `contains` は stdout だけを見る（stderr の理由は縛れない）
