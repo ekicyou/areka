@@ -116,9 +116,6 @@ tracing-subscriber 0.3.23 を同一の初期化で走らせて採取した逐語
 from __future__ import annotations
 
 import argparse
-import csv
-import math
-import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -134,6 +131,17 @@ _TOOLS_DIR = str(Path(__file__).resolve().parent)
 if _TOOLS_DIR not in sys.path:
     sys.path.append(_TOOLS_DIR)
 import judge_perf_catchup  # noqa: E402  （置き場を通してから読む）
+from perf_lines import (  # noqa: E402
+    FIELD_KEY_RE as _FIELD_KEY_RE,
+    CpuSample,
+    parse_fields,
+    parse_timestamp,
+    percentile,
+    read_cpu_csv,
+    read_text_lines,
+    split_after_message,
+    strip_ansi,
+)
 
 # =============================================================================
 # 較正値バナー（要件 2.6 / 4.5 / 5.3）
@@ -748,78 +756,9 @@ def bad_input(message: str, details: list[str] | None = None) -> JudgeError:
 
 
 # =============================================================================
-# ログ行の解析
+# ログ行の解析は道具に依らない読み方の兄弟モジュール perf_lines にある。
+# `parse_fields` ほかは同じ名前で読み込むので、名前で指す注記はずれない。
 # =============================================================================
-
-#: ANSI エスケープ（CSI シーケンス）。読み込み時に落とす。
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-
-#: 行頭の時刻。`tracing-subscriber` 既定の SystemTime タイマは RFC3339（UTC・小数 6 桁）。
-_TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z\s")
-
-#: `名前=` の出現位置。値は次の `名前=` の直前までとする。
-#: `window_dpi=Some((120, 120))` のように値に空白が入る Debug 出力があるため、
-#: 空白で切ってはいけない。
-_FIELD_KEY_RE = re.compile(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=")
-
-
-def strip_ansi(text: str) -> str:
-    """ANSI エスケープを落とす。"""
-    return _ANSI_RE.sub("", text)
-
-
-def parse_timestamp(line: str) -> datetime | None:
-    """行頭の時刻を返す。時刻で始まらない行（複数行メッセージの続き）は None。"""
-    m = _TIMESTAMP_RE.match(line)
-    if not m:
-        return None
-    raw = m.group(1)
-    if "." in raw:
-        head, frac = raw.split(".", 1)
-        frac = (frac + "000000")[:6]
-        raw = f"{head}.{frac}"
-    else:
-        raw = raw + ".000000"
-    try:
-        return datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def parse_fields(tail: str) -> dict[str, str]:
-    """`名前=値` の並びを辞書にする。値は次の名前の直前まで（空白を含んでよい）。"""
-    keys = list(_FIELD_KEY_RE.finditer(tail))
-    fields: dict[str, str] = {}
-    for i, m in enumerate(keys):
-        start = m.end()
-        end = keys[i + 1].start() if i + 1 < len(keys) else len(tail)
-        fields[m.group(1)] = tail[start:end].strip()
-    return fields
-
-
-def split_after_message(line: str, message: str) -> str | None:
-    """固定文言より後ろ（＝フィールドの並び）を返す。文言が無ければ None。"""
-    idx = line.find(message)
-    if idx < 0:
-        return None
-    return line[idx + len(message):]
-
-
-def read_text_lines(path: Path, what: str) -> list[str]:
-    """テキストを行に割って返す。ANSI を落とし、行末の CR も落とす。
-
-    読めないファイルは exit 3（引数不正・読取不能）。文字化けは行を捨てずに置換で通す——
-    数値もフィールド名も ASCII であり、化けるのは日本語のメッセージ部分だけである
-    （途中で切れた最終行が壊れていても、それ以前の観測を捨てない）。
-    """
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise bad_input(f"{what} を読めません: {path}", [str(exc)]) from exc
-    text = raw.decode("utf-8", errors="replace")
-    if text.startswith("﻿"):
-        text = text[1:]
-    return [strip_ansi(line.rstrip("\r")) for line in text.split("\n")]
 
 
 # =============================================================================
@@ -978,7 +917,7 @@ def unquote_field(value: str) -> str:
 
 def scan_log(path: Path) -> LogScan:
     """run.log を 1 度だけなめて必要なものを全部集める。"""
-    lines = read_text_lines(path, "実走ログ（run.log）")
+    lines = read_text_lines(path, "実走ログ（run.log）", bad_input)
     scan = LogScan()
     bad_lines: list[str] = []
 
@@ -1108,55 +1047,7 @@ def _parse_perf_line(
     )
 
 
-# =============================================================================
-# CPU 時系列 CSV
-# =============================================================================
-
-
-@dataclass
-class CpuSample:
-    at: datetime
-    percent: float
-
-
-def read_cpu_csv(path: Path) -> list[CpuSample]:
-    lines = read_text_lines(path, "CPU 時系列（cpu.csv）")
-    rows = [row for row in csv.reader(lines) if row]
-    if not rows:
-        raise inconclusive(f"CPU 時系列 CSV が空です: {path}")
-
-    header = tuple(cell.strip() for cell in rows[0])
-    if header != J_CPU_CSV_HEADER:
-        raise inconclusive(
-            "CPU 時系列 CSV のヘッダが契約と違います（採取スクリプトの版ずれの疑い）。",
-            [f"期待: {','.join(J_CPU_CSV_HEADER)}", f"実際: {','.join(header)}"],
-        )
-
-    samples: list[CpuSample] = []
-    broken: list[str] = []
-    for line_no, row in enumerate(rows[1:], start=2):
-        if len(row) < 2:
-            broken.append(f"{line_no} 行目: 列が足りません（{row!r}）")
-            continue
-        at = parse_timestamp(row[0].strip() + " ")
-        if at is None:
-            broken.append(f"{line_no} 行目: 時刻を読めません（{row[0]!r}）")
-            continue
-        try:
-            percent = float(row[1].strip())
-        except ValueError:
-            broken.append(f"{line_no} 行目: CPU 値が数値ではありません（{row[1]!r}）")
-            continue
-        samples.append(CpuSample(at=at, percent=percent))
-
-    if broken:
-        raise inconclusive(
-            f"CPU 時系列 CSV に読めない行が {len(broken)} 本あります。部分集計は出しません（要件 2.5）。",
-            broken[:20],
-        )
-    if not samples:
-        raise inconclusive(f"CPU 時系列 CSV に観測が 1 点もありません: {path}")
-    return samples
+# CPU 時系列 CSV は perf_lines の `read_cpu_csv`・`CpuSample` で読む（呼び出しは run_judge）。
 
 
 # =============================================================================
@@ -1166,7 +1057,7 @@ def read_cpu_csv(path: Path) -> list[CpuSample]:
 
 def read_run_meta(path: Path) -> list[tuple[str, list[tuple[str, str]]]]:
     """`[見出し]` と `名前 = 値` の並びを、順序を保ったまま読む。"""
-    lines = read_text_lines(path, "実行条件（run-meta.txt）")
+    lines = read_text_lines(path, "実行条件（run-meta.txt）", bad_input)
     sections: list[tuple[str, list[tuple[str, str]]]] = []
     current: list[tuple[str, str]] = []
     title = "(見出しなし)"
@@ -1206,11 +1097,7 @@ def meta_lookup(sections, name: str) -> str | None:
 # =============================================================================
 
 
-def percentile(values: list[float], q: float) -> float:
-    """nearest-rank の分位点（PERCENTILE_METHOD）。空列では呼ばない。"""
-    ordered = sorted(values)
-    rank = max(1, math.ceil(q * len(ordered)))
-    return ordered[min(rank, len(ordered)) - 1]
+# `percentile` は perf_lines から読む（nearest-rank＝PERCENTILE_METHOD の実装）。
 
 
 def describe(values: list[float]) -> dict[str, float]:
@@ -3424,7 +3311,10 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
 
     sections = read_run_meta(meta_path)
     scan = scan_log(run_log)
-    cpu = read_cpu_csv(cpu_csv)
+    cpu = read_cpu_csv(
+        cpu_csv, J_CPU_CSV_HEADER, inconclusive,
+        broken_note="部分集計は出しません（要件 2.5）。", read_fail=bad_input,
+    )
     check_required(scan, cpu, run_log)
 
     meta_build = meta_lookup(sections, "build")

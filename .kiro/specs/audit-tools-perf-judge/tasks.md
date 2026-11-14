@@ -13,7 +13,7 @@
 ## 共通の土台
 
 - [ ] 1. 行の読み方を共通の兄弟モジュールへ寄せる（#7・#13・#40・#51）
-- [ ] 1.1 行の読み方のモジュールを作り、judge-perf をそれへ付け替える（#40・#51・#13・#7 の CSV の分）
+- [x] 1.1 行の読み方のモジュールを作り、judge-perf をそれへ付け替える（#40・#51・#13・#7 の CSV の分）
   - 着手の門（上）を確かめてから始める
   - 道具に依らない読み方（`parse_fields`・`split_after_message`・CPU の CSV の読み・`percentile` ほか、研究 §3 #40 の 5 か所の写し）を `perf_lines` に置く。判定式・較正値・終了コード・道具に固有の文は置かず、失敗は呼び手が渡す作り手で起こす（D2）
   - judge-perf は同じ名前のまま読み込み、`parse_fields` を名前で指す範囲の外の文がずれないことを grep で確かめる
@@ -215,3 +215,7 @@
   - 終わった姿: 2 つのコマンドが緑で、上の確かめの結果が検証の記録に書かれている
   - _Dispatch: mechanical — 決まったコマンドを回し、差分の約束を数えて記録する_
   - _Requirements: 4.5, 4.6, 5.2, 5.6, 6.2, 6.4, 6.6, 7.1, 7.5_
+
+## Implementation Notes
+
+- 1.1: `perf_lines.read_cpu_csv` は design の形に加えて `read_fail`（読めないときの作り手）を取り、`header` は tuple。読めない cpu.csv は今どおり exit 3。perf-rank も `read_fail=bad_input` で渡す（1.2）
