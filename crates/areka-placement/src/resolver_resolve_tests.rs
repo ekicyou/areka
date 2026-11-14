@@ -6,8 +6,10 @@
 use super::resolve_test_support::{cfg_of, input, offset_work_area, scope_cfg};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
-use crate::config::Alignment;
+use crate::config::{Alignment, PlacementConfig};
+use crate::follow::{MonitorSnapshot, project_anchor};
 use crate::shared_test_support::MEASURE_DPI;
+use log_capture_kit::capture;
 
 // ------------------------------------------------------------------
 // T-R1: bottom 右下基準（P1＋P2 の scope0 項）
@@ -291,77 +293,158 @@ fn t_r3_default_y_ignored_under_bottom() {
 }
 
 // ------------------------------------------------------------------
-// T-R5: シーム値＝bottom 同一幾何出力（2.8・DD9）
+// T-R5: 上・左・右の辺で最初の位置を解く（指摘 1・4.2）・知らない値は bottom
 // ------------------------------------------------------------------
 
-/// T-R5: `Alignment::Seam(値)` は値によらず Bottom と同一**幾何**出力
-/// （位置・寸法・バルーン・DD9＝挙動出力不変）。ただし `anchor` は 5 値解釈で
-/// 相違する（`top`/`left`/`right`→対応辺・未知値→`Bottom` フォールバック・4.2）。
-/// 旧版は構造体全体一致だったが、`bottom_snap:bool`→`anchor:Anchor` のフィールド化
-/// （task 1.2）で幾何一致＋anchor 別検証へ意味を保って更新した。
+/// T-R5 の 2 スコープ（スコープ 0 だけ `defaultx` を持つ）を 1 つの値で組む。
+fn seam_cfg(value: &str, dx: i32) -> PlacementConfig {
+    cfg_of(vec![
+        (
+            0,
+            scope_cfg(Alignment::Seam(value.to_owned()), Some(dx), None),
+        ),
+        (
+            1,
+            scope_cfg(Alignment::Seam(value.to_owned()), Some(0), None),
+        ),
+    ])
+}
+
+/// T-R5: `top` は y が作業領域の上端・x は Bottom と同じ連なり、`left` は x が左端・
+/// `right` は x が右端 − w で、左右の辺は下から上へ連ねる（スコープ 1 の y＝スコープ 0
+/// の y − h1・`defaultx` は使わない）。どの辺も `anchor` は同じ辺で、解いた位置は
+/// `project_anchor` を通しても動かない（並べ直し・起動・記憶の戻し・ドラッグで同じ位置）。
+/// 左上が原点でない作業領域で `left`／`top` への依存を暴く。
 #[test]
-fn t_r5_seam_output_identical_to_bottom() {
+fn t_r5_top_left_right_resolve_on_their_own_edge() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![wa],
+        };
         let (w0, h0) = (px(400, dpi), px(600, dpi));
-        let (w1, h1) = (px(320, dpi), px(480, dpi));
+        let (w1, h1) = (px(320, dpi), px(400, dpi));
         let dx = px(40, dpi);
         let inputs = [input(0, w0, h0), input(1, w1, h1)];
+        let bottom = resolve_placement(
+            &cfg_of(vec![
+                (0, scope_cfg(Alignment::Bottom, Some(dx), None)),
+                (1, scope_cfg(Alignment::Bottom, Some(0), None)),
+            ]),
+            wa,
+            &inputs,
+            MEASURE_DPI,
+        );
+        let y0 = wa.bottom - h0;
+        let y1 = y0 - h1;
 
+        for (value, anchor, expected) in [
+            (
+                "top",
+                Anchor::Top,
+                [
+                    PointPx {
+                        x: bottom[0].char_pos.x,
+                        y: wa.top,
+                    },
+                    PointPx {
+                        x: bottom[1].char_pos.x,
+                        y: wa.top,
+                    },
+                ],
+            ),
+            (
+                "left",
+                Anchor::Left,
+                [PointPx { x: wa.left, y: y0 }, PointPx { x: wa.left, y: y1 }],
+            ),
+            (
+                "right",
+                Anchor::Right,
+                [
+                    PointPx {
+                        x: wa.right - w0,
+                        y: y0,
+                    },
+                    PointPx {
+                        x: wa.right - w1,
+                        y: y1,
+                    },
+                ],
+            ),
+        ] {
+            let out = resolve_placement(&seam_cfg(value, dx), wa, &inputs, MEASURE_DPI);
+            assert_eq!(out.len(), 2, "dpi={dpi} {value}");
+            for (s, want) in out.iter().zip(expected) {
+                assert_eq!(s.anchor, anchor, "dpi={dpi} {value}: anchor は同じ辺");
+                assert_eq!(
+                    s.char_pos, want,
+                    "dpi={dpi} {value} scope={}: 最初の位置はその辺で解く",
+                    s.scope
+                );
+                assert_eq!(
+                    project_anchor(anchor, s.char_pos, s.char_size, Some(&snapshot)),
+                    s.char_pos,
+                    "dpi={dpi} {value} scope={}: 射影を通しても動かない",
+                    s.scope
+                );
+            }
+        }
+    }
+}
+
+/// T-R5: 知らない値は Bottom と同じ幾何・`anchor` も Bottom（DD9）。
+#[test]
+fn t_r5_unknown_seam_value_resolves_like_bottom() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        let dx = px(40, dpi);
+        let inputs = [
+            input(0, px(400, dpi), px(600, dpi)),
+            input(1, px(320, dpi), px(480, dpi)),
+        ];
         let bottom = cfg_of(vec![
             (0, scope_cfg(Alignment::Bottom, Some(dx), None)),
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
         let expected = resolve_placement(&bottom, wa, &inputs, MEASURE_DPI);
-        // 空 Vec 同士の空虚一致（RED スタブで観測）を封じる
+        // 空 Vec 同士の空虚一致を封じる
         assert_eq!(expected.len(), 2, "dpi={dpi}: 比較基準が空では無意味");
 
-        for (seam_value, expected_anchor) in [
-            ("top", Anchor::Top),
-            ("left", Anchor::Left),
-            ("right", Anchor::Right),
-            ("unknown-value", Anchor::Bottom),
-        ] {
-            let seam = cfg_of(vec![
-                (
-                    0,
-                    scope_cfg(Alignment::Seam(seam_value.to_owned()), Some(dx), None),
-                ),
-                (
-                    1,
-                    scope_cfg(Alignment::Seam(seam_value.to_owned()), Some(0), None),
-                ),
-            ]);
-            let out = resolve_placement(&seam, wa, &inputs, MEASURE_DPI);
-            assert_eq!(out.len(), 2, "dpi={dpi} seam={seam_value}");
-            for (s, b) in out.iter().zip(&expected) {
-                // 幾何（位置・寸法・バルーン）は Bottom と同一（DD9・挙動出力不変）
-                assert_eq!(s.scope, b.scope, "dpi={dpi} seam={seam_value}");
-                assert_eq!(
-                    s.char_pos, b.char_pos,
-                    "dpi={dpi} seam={seam_value}: Seam の char_pos は Bottom と同一"
-                );
-                assert_eq!(s.char_size, b.char_size, "dpi={dpi} seam={seam_value}");
-                assert_eq!(
-                    s.balloon_pos, b.balloon_pos,
-                    "dpi={dpi} seam={seam_value}: Seam の balloon_pos は Bottom と同一"
-                );
-                assert_eq!(
-                    s.balloon_size, b.balloon_size,
-                    "dpi={dpi} seam={seam_value}"
-                );
-                assert_eq!(
-                    s.balloon_offset, b.balloon_offset,
-                    "dpi={dpi} seam={seam_value}"
-                );
-                // anchor は 5 値解釈で相違（top/left/right→対応辺・未知→Bottom・4.2）
-                assert_eq!(
-                    s.anchor, expected_anchor,
-                    "dpi={dpi} seam={seam_value}: anchor は 5 値解釈で解決"
-                );
-            }
-        }
+        let out = resolve_placement(&seam_cfg("unknown-value", dx), wa, &inputs, MEASURE_DPI);
+        assert_eq!(out, expected, "dpi={dpi}: 知らない値は Bottom と同じ出力");
     }
+}
+
+/// T-R5: 知らない値の警告は呼び出し 1 回につき 1 行、正典の値（`top`・`left`・`right`）
+/// では 0 行（並べ直しのたびに出ていた警告の 2 乗を止める）。
+#[test]
+fn t_r5_warns_once_per_call_only_for_unknown_value() {
+    let wa = work_area(96);
+    let inputs = [input(0, 400, 600), input(1, 320, 480)];
+    let warns = |cfg: &PlacementConfig| {
+        let (_, events) = capture(|| resolve_placement(cfg, wa, &inputs, MEASURE_DPI));
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .count()
+    };
+
+    for value in ["top", "left", "right"] {
+        assert_eq!(
+            warns(&seam_cfg(value, 0)),
+            0,
+            "{value}: 正典の値は警告しない"
+        );
+    }
+    let one_unknown = cfg_of(vec![
+        (
+            0,
+            scope_cfg(Alignment::Seam("unknown-value".to_owned()), None, None),
+        ),
+        (1, scope_cfg(Alignment::Bottom, None, None)),
+    ]);
+    assert_eq!(warns(&one_unknown), 1, "知らない値の警告は 1 行");
 }
 
 // ------------------------------------------------------------------

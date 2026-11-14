@@ -202,3 +202,37 @@ fn t_r8_balloon_none_picks_the_side_facing_the_area_center() {
         }
     }
 }
+
+/// T-R8（指摘 48）: `balloon.alignment=none` でキャラ窓の中心がちょうど作業領域の中央の
+/// ときは左側に付く（「中央より左なら右側」の境は左側＝`<` を `<=` に変えると赤）。
+#[test]
+fn t_r8_balloon_none_at_exact_center_goes_left() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        let w = px(400, dpi);
+        let inp = input(0, w, px(600, dpi));
+        let bw = inp.balloon_size.w;
+        // right − w − 760 + w/2 ＝ 1920 − 400 − 760 + 200 ＝ 960（作業領域の中央）
+        let cfg = cfg_of(vec![(
+            0,
+            scope_cfg_balloon(Some(px(760, dpi)), BalloonSide::Auto, None),
+        )]);
+
+        let out = resolve_placement(&cfg, wa, &[inp], MEASURE_DPI);
+
+        let cp = out[0].char_pos;
+        assert_eq!(
+            cp.x + w / 2,
+            (wa.left + wa.right) / 2,
+            "dpi={dpi}: 前提（中心がちょうど中央）が崩れている"
+        );
+        assert_eq!(
+            out[0].balloon_pos,
+            PointPx {
+                x: cp.x - bw,
+                y: cp.y
+            },
+            "dpi={dpi}: ちょうど中央は左側"
+        );
+    }
+}

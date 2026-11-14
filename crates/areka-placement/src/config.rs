@@ -17,8 +17,8 @@ pub enum Alignment {
     Bottom,
     /// `defaultleft`/`defaulttop` が有効な X/Y 初期座標になる（2.6）。
     Free,
-    /// `top`/`left`/`right`/未知値: 転記保持・実挙動は `Bottom` と同じ＋警告（2.8・DD9）。
-    /// warn ログはシーム値を実際に消費する resolver 側（呼び出し側）へ委ねる。
+    /// `top`/`left`/`right`/未知値: 転記保持。resolver が `Anchor::from_alignment` で解釈し、
+    /// `top`/`left`/`right` はその辺で最初の位置を解き、未知値は `Bottom` と同じ＋警告（DD9）。
     Seam(String),
 }
 
