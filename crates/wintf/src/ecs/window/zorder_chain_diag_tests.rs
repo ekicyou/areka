@@ -239,7 +239,7 @@ fn the_preserved_tags_have_exactly_one_home_in_this_crate() {
         assert_eq!(
             homes,
             vec!["ecs/window/zorder_chain_diag.rs".to_string()],
-            "`{tag}` の住処が 1 つではない（grep 対象が分裂する）"
+            "`{tag}` の住処が 1 つではない（出力先が割れて RUST_LOG の指定から外れうる・写しが食い違う）"
         );
     }
 

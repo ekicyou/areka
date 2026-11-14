@@ -87,8 +87,9 @@ use super::zorder_chain::pair_released_by_chain;
 use super::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, PeerLoss, SkipReason,
     decide_pair_fix, log_orphan_request_dropped, log_owner_detach_failed, log_owner_detached,
-    log_unbacked_verification_dropped, measure_below_is_always_on_top, measure_window_above,
-    measure_window_below, measure_window_is_always_on_top, record_decision, record_verification,
+    log_pair_fix_unplanned, log_unbacked_verification_dropped, measure_below_is_always_on_top,
+    measure_window_above, measure_window_below, measure_window_is_always_on_top, record_decision,
+    record_verification,
 };
 use super::zorder_pair_sink::{SinkMarkQuery, observe_marked_pair_sinks};
 use super::{
@@ -531,11 +532,7 @@ pub fn apply_zorder_pair_maintenance(
             // 是正の腕が返った以上ハンドルは揃っており（`plan_pair_fix` が None を返すのは
             // ハンドルが欠けたときか見送りの腕のときだけ）、ここへは届かない。届いても
             // panic は作らず、1 行残して指令を出さずに要求と持ち越しを落とす（要件 6.4）。
-            tracing::debug!(
-                entity = ?entity,
-                peer = ?peer,
-                "[apply_zorder_pair_maintenance] no plan for the pair fix, dropping the request"
-            );
+            log_pair_fix_unplanned(entity, peer);
             commands
                 .entity(entity)
                 .remove::<(ReassertZOrder, IssuedPairFix)>();

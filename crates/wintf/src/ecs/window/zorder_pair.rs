@@ -853,6 +853,19 @@ pub(crate) fn log_orphan_request_dropped(entity: Entity) {
     );
 }
 
+/// 是正の腕なのに適用計画が組めなかった要求を落としたことを記録する（debug）。
+///
+/// 維持系は是正の腕でハンドルが揃っていることを確かめてから計画を組むため、ここへは
+/// 届かない。届いても panic は作らず、記録して指令を出さずに落とす（要件 6.4）。
+/// タグを付けない理由は [`log_orphan_request_dropped`] と同じ。
+pub(crate) fn log_pair_fix_unplanned(entity: Entity, peer: Entity) {
+    debug!(
+        entity = ?entity,
+        peer = ?peer,
+        "[apply_zorder_pair_maintenance] no plan for the pair fix, dropping the request"
+    );
+}
+
 /// ペア宣言を持たない窓に残っていた沈降観測の目印を落としたことを記録する（warn）。
 ///
 /// 目印は宣言を持つ窓にしか付かないが、付いてから次の巡までに宣言が外れる余地はある。
