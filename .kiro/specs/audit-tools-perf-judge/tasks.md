@@ -36,7 +36,7 @@
   - _Dispatch: mechanical — 置き場の形（実行時の読み込み）と 2 本の検体の期待値を design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.2, 7.1_
 
-- [ ] 2. 自己較正の支えを 1 つにまとめ、一時フォルダを `target` の下へ（#1・#41）
+- [x] 2. 自己較正の支えを 1 つにまとめ、一時フォルダを `target` の下へ（#1・#41）
 - [x] 2.1 自己較正の支えのモジュールを作り、4 組の自己較正を付け替える（D1・D3）
   - ケースのフォルダの並べ方・ケースの鍵の読み（知らない鍵は exit 3）・`invoke`・`first_difference`（違う行は `ascii()`）・赤の下限と `SELFTEST RESULT ok=N ng=M` の行・一時フォルダ `work_dir(prefix)` を `perf_selftest_common` に置く。道具ごとの違い（鍵の一覧・ケースの回し方・期待出力の突き合わせ・赤の値）は道具に残す
   - リポジトリの根は `Path(__file__).resolve().parents[2]` で、読み込みのときに `Cargo.toml` を確かめ、無ければ理由を stderr に出して exit 3。一時フォルダは `<根>\target\perf-loop-tmp\<接頭辞><uuid4>\`、消せなかったら理由を 1 行出して結果は変えない
@@ -44,7 +44,7 @@
   - 終わった姿: 4 本の `--selftest` が今ある全ケースで同じ結果のまま緑で、走らせた後に `target\perf-loop-tmp\` の下に子が残らない
   - _Dispatch: standard — 新しい支えのモジュールへ 4 組の自己較正を付け替え、一時フォルダの扱いを変える_
   - _Requirements: 2.1, 2.3, 5.1, 7.1, 7.2, 7.4_
-- [ ] 2.2 木全体の見張り `check_tree` の ⑴⑵⑷ を足す（T1・T13・T25 の ⑷）
+- [x] 2.2 木全体の見張り `check_tree` の ⑴⑵⑷ を足す（T1・T13・T25 の ⑷）
   - ⑴ `tools/perf/` の下のどの `.py` も `tempfile` を読み込まず（perf-rank.py の 55 行の読み込みも消す）、作った子が、自分のファイルの位置から別に求めた根（`Cargo.toml` と `tools/perf/` があるフォルダ）の `target\perf-loop-tmp\` の下にある。⑵ 範囲のファイルに U+FEFF の字の比べが 0。⑷ `first_difference` の出力が ASCII
   - ⑶（本体の stderr の全行が ASCII）と ⑸（README の例）の確かめの本体も置き、道具の側から有効にする形にする（このタスクではどの道具も有効にしない＝後のタスクが `perf_selftest_common.py` に触らずに済む）
   - 4 本の自己較正の終わりで `check_tree` を回す
@@ -222,3 +222,4 @@
 - 1.2: perf-rank の cpu.csv の行番号は空行を含む実の行番号になった（#51）。perf-rank の注記「較正値（…）も同じ理由で写し」の「も」は先行の写しが無くなったので 14 の audit で拾う候補
 - 1.3: U1 は run.log と cpu.csv の両方に BOM。run.log は探して読むので BOM に左右されず、赤を作るのは cpu.csv の見出しの一致。judge-perf の selftest の `contains` は stdout だけを見る（stderr の理由は縛れない）
 - 2.1: `perf_selftest_common` の根の確かめは道具の読み込みのたびに走る（.ps1 は `$PSScriptRoot` から呼ぶので本番は壊れない）。`list_case_dirs` は `fail` を、`finish` は `materials`・`case_file` を取る。design の `guard_console` は持ち主のタスクが無く未実装
+- 2.2: `check_tree(*, ascii_stderr, readme_examples)`（design の `stderr_texts` の代わりに `invoke` が本体の stderr を集める）。⑶ は 7.2・8・12.2 が自分の selftest の `ascii_stderr=True` で、⑸ は 13 が 4 か所の `readme_examples=True` で有効にする。⑸ は README の code block の中のドライブ文字の絶対パスを全部拾うので、13 は #27 の行に加えて 765 行（`pending_run: C:\...`）と 886 行（`-PdbDir C:\repo\...`）も置き換え札にするか、検査を絞る

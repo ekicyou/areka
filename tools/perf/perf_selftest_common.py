@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import shutil
 import sys
 import uuid
@@ -33,6 +34,10 @@ MISSING_LINE = "(no line)"
 
 Fail = Callable[..., Exception]
 
+#: `work_dir` が作った子と `invoke` が受けた stderr（`check_tree` の ⑴ と ⑶ が見る）。
+_children_made: list[Path] = []
+_stderr_seen: list[str] = []
+
 
 @contextlib.contextmanager
 def work_dir(prefix: str) -> Iterator[Path]:
@@ -43,6 +48,7 @@ def work_dir(prefix: str) -> Iterator[Path]:
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     child = WORK_ROOT / f"{prefix}{uuid.uuid4().hex}"
     child.mkdir()
+    _children_made.append(child)
     try:
         yield child
     finally:
@@ -113,6 +119,7 @@ def invoke(main: Callable[[list[str]], int], argv: list[str],
             code = main(argv)
         except SystemExit as exc:
             code = exc.code if isinstance(exc.code, int) else exit_fallback
+    _stderr_seen.append(err.getvalue())
     return code, out.getvalue(), err.getvalue()
 
 
@@ -160,3 +167,70 @@ def finish(results: list[tuple[str, str, list[str]]], materials: list[str], case
 
     print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
     return ng_count
+
+
+# --- 木全体の見張り（T1・T13・T25・T26・T27） --------------------------------
+
+#: `import tempfile`・`import os, tempfile`・`from tempfile import …` の行。
+_TEMPFILE_IMPORT = re.compile(r"^[ \t]*(?:import[ \t][^#\n]*\btempfile\b|from[ \t]+tempfile\b)", re.M)
+#: U+FEFF の字そのものか、その逃がし書き（この行は字を書かずに組む）。
+_BOM_TEXTS = (chr(0xFEFF), "\\" + "ufeff", "\\" + "uFEFF", "\\" + "N{BYTE ORDER MARK}",
+              "\\" + "N{ZERO WIDTH NO-BREAK SPACE}")
+#: 字の書き手の付いた絶対の道筋（`C:\…`）。README の例は置き換え札か変数で書く（#27）。
+_DRIVE_PATH = re.compile(r"(?<![\w<])[A-Za-z]:[\\/]")
+
+
+def _find_root() -> Path | None:
+    """自分の位置から上へ、`Cargo.toml` と `tools/perf/` のあるフォルダを探す（`REPO_ROOT` は使わない）。"""
+    for folder in Path(__file__).resolve().parents:
+        if (folder / "Cargo.toml").is_file() and (folder / "tools" / "perf").is_dir():
+            return folder
+    return None
+
+
+def _readme_example_paths(readme: Path) -> list[str]:
+    """README のコードの囲みの中で、字の書き手の付いた道筋を書いた行を返す。"""
+    reasons: list[str] = []
+    inside = False
+    for lineno, line in enumerate(readme.read_text(encoding="utf-8").splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            inside = not inside
+        elif inside and _DRIVE_PATH.search(line):
+            reasons.append(f"(5) {readme.name}:{lineno}: example path is not a placeholder"
+                           f" (<worktree>\\target\\... or a variable): {ascii(line.strip())}")
+    return reasons
+
+
+def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
+    """木全体の見張り。食い違いの理由（ASCII）を返す。空なら合格。
+
+    ⑴ tools/perf の .py が tempfile を読まない・`work_dir` の子が別に求めた根の target\\perf-loop-tmp の下
+    ⑵ tools/perf の .py に U+FEFF の字が無い ⑷ `first_difference` が ASCII を出す。
+    ⑶（`invoke` が受けた stderr の全行が ASCII）と ⑸（README の例の道筋）は道具の側から真にする。
+    """
+    reasons: list[str] = []
+    root = _find_root()
+    if root is None:
+        return [f"(1) repository root not found above {Path(__file__).resolve()}"]
+    work_root = root / "target" / "perf-loop-tmp"
+    for path in sorted((root / "tools" / "perf").rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        name = path.relative_to(root).as_posix()
+        if _TEMPFILE_IMPORT.search(text):
+            reasons.append(f"(1) {name} imports tempfile (use perf_selftest_common.work_dir)")
+        if any(bom in text for bom in _BOM_TEXTS):
+            reasons.append(f"(2) {name} has a U+FEFF character (decode with utf-8-sig)")
+    for child in _children_made:
+        if child.resolve().parent != work_root:
+            reasons.append(f"(1) work dir {ascii(str(child))} is not under {ascii(str(work_root))}")
+    if ascii_stderr:
+        for text in _stderr_seen:
+            for line in text.splitlines():
+                if not line.isascii():
+                    reasons.append(f"(3) stderr line is not ASCII: {ascii(line)}")
+    sample = first_difference("x", "\u00b5", "\u2014")
+    if not sample.isascii():
+        reasons.append(f"(4) first_difference is not ASCII: {ascii(sample)}")
+    if readme_examples:
+        reasons += _readme_example_paths(root / "tools" / "perf" / "README.md")
+    return reasons
