@@ -81,22 +81,26 @@ use crate::ecs::window::{
 /// 平坦な窓の列では **添字 `2i` がバルーン窓・`2i+1` がキャラ窓**である。この対応は
 /// [`balloon_offsets`] と各テストの期待値が共有する唯一の約束である。
 #[derive(Clone, Copy)]
-struct Scope {
+pub(super) struct Scope {
     /// バルーン窓（手前側・キャラ窓に所有される）。
-    balloon: Entity,
+    pub(super) balloon: Entity,
     /// キャラ窓（奥側・スコープの根）。
-    character: Entity,
+    pub(super) character: Entity,
 }
 
 /// スコープを `count` 個ぶん作る。
 ///
 /// 返すのは（窓の列, スコープの列）。窓の列は `[b0, s0, b1, s1, ...]` の平坦な並びであり、
-/// **生成順は重なりの前提にしない**——各テストは [`arrange_z`] で始点を明示的に組み、
-/// その成立を自己検査する。
+/// **生成順は重なりの前提にしない**——各テストは [`arrange_z`] か組の確立で始点を組み、
+/// その成立を自己検査する（兄弟の inversion は組の確立から始める）。
 ///
 /// バルーン窓の entity には本番と同じペア宣言（[`KeepDirectlyAbove`]）を付ける。これが
 /// [`establish_owner_links`] の入口であり、ペア edge は**本番の手順で**張られる。
-fn spawn_scopes(world: &mut World, count: usize, title: PCWSTR) -> (Vec<HWND>, Vec<Scope>) {
+pub(super) fn spawn_scopes(
+    world: &mut World,
+    count: usize,
+    title: PCWSTR,
+) -> (Vec<HWND>, Vec<Scope>) {
     let mut windows = Vec::with_capacity(count * 2);
     let mut scopes = Vec::with_capacity(count);
     for _ in 0..count {
@@ -179,7 +183,7 @@ fn publish_released(world: &mut World) {
 ///
 /// **1 つの schedule を使い回すこと**——確立系は [`WindowHandle`] の付与を契機に動くので、
 /// 巡ごとに新しい schedule を作ると「前の巡で既に見た付与」を毎回新しく見てしまう。
-fn scope_chain_schedule() -> Schedule {
+pub(super) fn scope_chain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems((establish_owner_links, apply_zorder_chain).chain());
@@ -195,7 +199,7 @@ fn scope_chain_schedule() -> Schedule {
 /// `Some(1)` が**バルーンがキャラ窓の直上**である（要件 6.3）。どちらかが列に居なければ
 /// `None`。列（[`z_shape`]）には不可視の窓が 1 枚も混じらないので、この差はそのまま
 /// 「間に可視の窓が何枚あるか＋1」を意味する（module doc「測り方の但し書き」）。
-fn balloon_offsets(shape: &[usize], scope_count: usize) -> Vec<Option<isize>> {
+pub(super) fn balloon_offsets(shape: &[usize], scope_count: usize) -> Vec<Option<isize>> {
     (0..scope_count)
         .map(|scope| {
             let balloon = shape.iter().position(|v| *v == scope * 2);

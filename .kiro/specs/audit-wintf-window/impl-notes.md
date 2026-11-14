@@ -172,3 +172,13 @@
 - 較正（24）: `settled_line` の `nudged` と `after` の材料を入れ替えると、`the_settled_line_carries_the_declaration_and_the_measurement_together` と `the_four_signoff_fields_of_the_settled_line_stay_adjacent_in_this_order` の 2 本が赤。明示の編集で戻し、差分が意図どおりに戻ったのを確かめた。
 - 消す前の git grep: 鎖の側の `UNKNOWN` の使い手は `zorder_chain_diag.rs` の中と子のテスト `zorder_chain_diag_tests.rs`（`use super::UNKNOWN`・借りた名前で解決する）だけ、`zorder_chain_diag::UNKNOWN` を名指す場所は 0。鎖の側の `tristate_field` の使い手は `settled_line` だけ。`SET_WINDOW_POS_FLAGS` は `zorder_chain_tests.rs` では消した 2 行だけ。消した後、鎖の側に番兵と三値の欄の定義は 0（`git grep "fn tristate_field\|const UNKNOWN"` は `zorder_pair_diag.rs` の 2 行だけ）。
 - テストの数: `cargo test -p wintf --lib zorder_chain` 123 緑・`--lib zorder_pair` 94 緑（3 ignored・本数は変わらない）。`cargo build -p wintf --tests` 警告 0・fmt 通る・clippy の触ったファイルの警告 0。`zorder_chain_order_tests.rs`（977）と `zorder_pair_maintain_tests.rs`（978）は触っていない。
+
+## 8.1
+
+- 25: `zorder_chain_order_tests.rs` の `chain_schedule`・`spawn_window`・`publish_full_chain`・`place_after` を `pub(super)` にした（修飾子だけ・977 行のまま）。`zorder_chain_order_lifecycle_tests.rs` の `Scope`（欄 2 つも）・`spawn_scopes`・`scope_chain_schedule`・`balloon_offsets` を `pub(super)` にした。
+- outsider: 自前の `chain_schedule`・`spawn_window`・`publish_full_chain` を消し、兄弟から借りた。使わなくなった import（`Schedule`・`SingleThreadedExecutor`・`HINSTANCE`・`apply_zorder_chain`・`ChainPlan` ほか）を消し、doc だけが指す `ZOrderChainPlan` はパスつきのリンクにした。道具立ての見出しを「受け口を作らない用意と記録の絞り込みだけ」に直した。
+- inversion: 少し変えた写し 3 つは引数で表せたので写しを残さなかった。`schedule` は `scope_chain_schedule` と中身が同じ。`spawn_scopes` は lifecycle 版を `count = 2` で呼び、`Scope` の列を `[b0, s0, b1, s1]` の entity 列へ 1 行で平らにする。`balloon_offsets` は lifecycle 版に `scope_count = 2` を渡す（添字 `2i`／`2i+1` が `B0,S0,B1,S1` と一致）。`place_after` は基のファイルから借りた。module doc に借りる先を足した。
+- 説明の追従（コメントだけ）: lifecycle の `spawn_scopes` の doc「各テストは `arrange_z` で始点を組む」を、inversion が組の確立から始める形も含む書き方に直した。
+- 較正: 足したテスト・直したテストは無い（足場を借りる形に変えただけ）ので当たらない。
+- 消す前の git grep: 消した 7 つはどれも `pub` の無い private な関数で、そのファイルの外からは名指せない。同じ名前の関数は他の多くのテストファイルにもそれぞれ自前で在る（`window_band_tests.rs`・`zorder_pair_*_tests.rs`・`crates/areka*` ほか）が、別のモジュールの別物で指摘 25 の範囲の外。消した後、outsider と inversion に借りた項目の自前の定義は 0（`fn (chain_schedule|spawn_window|publish_full_chain|place_after|schedule|spawn_scopes|balloon_offsets|scope_chain_schedule)` の grep が 0 件）。
+- テストの数: 前（`--list`）＝基 4・lifecycle 3・outsider 2・inversion 2 の 11 本。後＝`cargo test -p wintf --lib zorder_chain_order` 11 緑（同じ 11 本）。行数: inversion 276→209・outsider 427→379・lifecycle 661→665（`spawn_scopes` の署名が fmt で 4 行に折れた分）・基 977→977。build 警告 0・fmt 通る・clippy の触ったファイルの警告 0。
