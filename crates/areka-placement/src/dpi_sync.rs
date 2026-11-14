@@ -173,6 +173,15 @@ pub struct DpiSyncOutcome {
     pub since_frame: u32,
 }
 
+/// 帰属モニタの表の拡大率（中心が求まらない・`DPI` を持たない・表が無い窓は `None`＝進む）。
+fn owning_table_dpi(world: &World, window: Entity) -> Option<u32> {
+    world.get::<DPI>(window)?;
+    let (cx, cy) = world.get::<WindowPos>(window).and_then(window_center)?;
+    world
+        .get_resource::<MonitorDpiTable>()?
+        .dpi_for_point(cx, cy)
+}
+
 /// 窓の拡大率と帰属モニタの表を突き合わせる（World を**読むだけ**）。
 ///
 /// 帰属は窓矩形の中心で決める。中心は表示基盤側の
@@ -182,11 +191,7 @@ pub struct DpiSyncOutcome {
 /// いずれも「表を引けない」＝[`Proceed`](DpiSyncDecision::Proceed) へ倒す。
 pub fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
     let window_dpi = world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32);
-    let table_dpi = world
-        .get::<WindowPos>(window)
-        .and_then(window_center)
-        .zip(world.get_resource::<MonitorDpiTable>())
-        .and_then(|((cx, cy), table)| table.dpi_for_point(cx, cy));
+    let table_dpi = owning_table_dpi(world, window);
     let held_since = world
         .get::<DpiSyncHold>(window)
         .map(|hold| hold.since_frame);
@@ -260,18 +265,15 @@ pub fn defers_window_write(world: &World, window: Entity, site: HoldSite) -> boo
     let Some(hold) = world.get::<DpiSyncHold>(window) else {
         return false;
     };
-    let since_frame = hold.since_frame;
-    let outcome = DpiSyncOutcome {
-        decision: DpiSyncDecision::Hold,
-        window_dpi: world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32),
-        table_dpi: world
-            .get::<WindowPos>(window)
-            .and_then(window_center)
-            .zip(world.get_resource::<MonitorDpiTable>())
-            .and_then(|((cx, cy), table)| table.dpi_for_point(cx, cy)),
-        since_frame,
-    };
-    log_hold(world, window, &outcome, site);
+    if transition_diag::is_enabled() {
+        let outcome = DpiSyncOutcome {
+            decision: DpiSyncDecision::Hold,
+            window_dpi: world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32),
+            table_dpi: owning_table_dpi(world, window),
+            since_frame: hold.since_frame,
+        };
+        log_hold(world, window, &outcome, site);
+    }
     true
 }
 

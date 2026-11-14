@@ -203,6 +203,34 @@ fn a_window_before_creation_proceeds_instead_of_overflowing() {
     assert_eq!(outcome.decision, DpiSyncDecision::Proceed);
 }
 
+/// `DPI` を持たない窓は表を引けない＝進む（30 フレーム後も警告 0 行）。
+#[test]
+fn a_window_without_dpi_proceeds_and_never_warns() {
+    let mut world = World::new();
+    world.insert_resource(two_monitor_table());
+    let window = world
+        .spawn(WindowPos {
+            position: Some(Point { x: 1000, y: 0 }),
+            size: Some(SizeI::new(200, 200)),
+            ..Default::default()
+        })
+        .id();
+    let (proceeded, events) = log_capture_kit::capture(|| {
+        (0..=DPI_SYNC_HOLD_MAX_FRAMES).all(|now| apply_dpi_phase_gate(&mut world, window, now))
+    });
+    assert!(proceeded, "DPI を持たない窓が止まった");
+    assert_eq!(
+        evaluate(&world, window, 0).decision,
+        DpiSyncDecision::Proceed
+    );
+    assert!(world.get::<DpiSyncHold>(window).is_none());
+    let warns = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .count();
+    assert_eq!(warns, 0, "警告が出ている: {events:?}");
+}
+
 /// 表そのものが無い World（起動シームを通らない経路）も進む。
 #[test]
 fn a_world_without_the_table_proceeds() {
@@ -325,6 +353,7 @@ fn writable_world(hold: bool) -> (World, Entity) {
 /// 偽の警報だった。監視が生きていることを示す役目は経路語を差し替えて保つ——分類そのものは
 /// `follow_window_move_hold_watch_tests.rs` が 12 語＋route 無しで固定する。
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 #[should_panic(expected = "DpiSyncHold")]
 fn a_write_reaching_a_waiting_window_trips_the_single_writer() {
     let (mut world, window) = writable_world(true);
