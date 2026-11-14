@@ -101,7 +101,7 @@ pub fn move_window_with_route(
 ///   埋まり、本物の結線バグ（実在窓の `Anchored` 欠落）が読めなくなる。
 /// - [`Anchored`] 欠落: char 窓は spawn で必ず付与される＝異常系ゆえ `warn!`＋`false`。
 /// - 非正寸（w≤0 or h≤0）: T を再適用せず現状保持＋`warn!`＋`false`（Req3.4・
-///   [`BottomSnapPolicy`] の非正寸縮退と整合）。
+///   下端吸着の非正寸縮退と整合）。
 /// - `WindowPos`／`WindowPos.position` 不在（窓生成前の異常系）: 生位置 `raw` を
 ///   導出できないため `warn!`＋`false`（panic しない）。
 /// - べき等（Req3.1）: 導出 `(position, size)` が現 `WindowPos` と同一なら書込を行わず
@@ -197,7 +197,7 @@ pub fn resize_window_to(
     };
 
     // 2. 非正寸ガード（Req3.4）: T を再適用せず現状保持。wa.right−w／wa.bottom−h の
-    //    暴走を先に弾く（BottomSnapPolicy の CW_USEDEFAULT センチネル縮退と整合）。
+    //    暴走を先に弾く（下端吸着の CW_USEDEFAULT センチネル縮退と整合）。
     if new_size.w <= 0 || new_size.h <= 0 {
         warn!(
             entity = ?char_window,

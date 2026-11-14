@@ -33,6 +33,8 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
+use wintf::ecs::window::transition_diag::MISSING;
+
 use super::{TransitionSummary, WindowKey, parse_transition_log, split_transitions, summarize};
 use areka_placement::diag::WindowKind;
 
@@ -680,7 +682,7 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         "    量: frames_to_last_write={} writes={} path_a_writes={} sync_stage_writes={} \
          balloon_same_frame={}(pairs={}) holds={} chain_realigned={} ground_diff_max={} \
          flush_total_us_max={} malformed={} frames_indeterminate={}",
-        opt_u32(summary.frames_to_last_write),
+        or_missing(summary.frames_to_last_write),
         summary.writes,
         summary.path_a_writes,
         summary.sync_stage_writes,
@@ -688,18 +690,16 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         summary.balloon_pairs_checked,
         summary.holds,
         summary.chain_realigned,
-        summary
-            .ground_diff_max
-            .map_or_else(|| "-".to_owned(), |diff| diff.to_string()),
-        opt_u64(summary.flush_total_us_max),
+        or_missing(summary.ground_diff_max),
+        or_missing(summary.flush_total_us_max),
         summary.malformed_records,
         summary.frames_indeterminate,
     )?;
     writeln!(
         f,
         "    量(参考): first_write_t_us={} last_write_t_us={} sum_call_us={}",
-        opt_u64(summary.wall.first_write_t_us),
-        opt_u64(summary.wall.last_write_t_us),
+        or_missing(summary.wall.first_write_t_us),
+        or_missing(summary.wall.last_write_t_us),
         summary.wall.sum_call_us,
     )?;
 
@@ -713,9 +713,9 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         writeln!(
             f,
             "    量(窓): {window} writes={} mismatch_frames={} visualize_to_write_us={}",
-            opt_u32(summary.writes_per_window.get(window).copied()),
-            opt_u32(summary.mismatch_frames_per_window.get(window).copied()),
-            opt_u64(summary.visualize_to_write_us.get(window).copied()),
+            or_missing(summary.writes_per_window.get(window).copied()),
+            or_missing(summary.mismatch_frames_per_window.get(window).copied()),
+            or_missing(summary.visualize_to_write_us.get(window).copied()),
         )?;
     }
 
@@ -732,14 +732,9 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
     }
 }
 
-/// 欠けている量は番兵で刷る（空欄にすると「0 だった」と読めてしまう）。
-fn opt_u32(value: Option<u32>) -> String {
-    value.map_or_else(|| "-".to_owned(), |value| value.to_string())
-}
-
-/// [`opt_u32`] の 64bit 版。
-fn opt_u64(value: Option<u64>) -> String {
-    value.map_or_else(|| "-".to_owned(), |value| value.to_string())
+/// 欠けている値は番兵 `MISSING` で刷る（空欄にすると「0 だった」と読めてしまう）。
+pub fn or_missing<T: fmt::Display>(value: Option<T>) -> String {
+    value.map_or_else(|| MISSING.to_owned(), |value| value.to_string())
 }
 
 /// 1 系統ぶんの合否を書き出す。

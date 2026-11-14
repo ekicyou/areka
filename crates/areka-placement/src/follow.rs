@@ -8,9 +8,8 @@
 //!   バルーン単独ドラッグの相対位置記憶。`BalloonFollow.offset` を
 //!   `balloon_pos − char_pos` へ更新する（キャラ窓は不動）
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
-//! - [`DragPositionPolicy`]／[`BottomSnapPolicy`]: bottom 吸着ドラッグ（4.7・
-//!   DD15 v2・task 8.2R）の核——「生ドラッグ座標→実窓位置」の純粋写像トレイトと
-//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。吸着した窓と組に
+//! - [`project_anchor`]: bottom 吸着ドラッグ（4.7・DD15 v2・task 8.2R）の核——
+//!   「生ドラッグ座標→実窓位置」の純粋写像（`Bottom` の腕は下端吸着）。吸着した窓と組に
 //!   入った窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
 //!   [`on_char_drag`]／[`on_char_drag_end`] がドラッグの始めに控えた向きで
 //!   [`project_anchor`] 適用済み座標を**単一ライター**として書く（組に入った Free は恒等・
@@ -110,7 +109,6 @@ pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
 pub(crate) use self::work_area_clamp::GroupShift;
 
 // 公開面の維持（要件 2.5）の再輸出。配置は lib の crate なので `pub` の項目は未使用の警告にならない。
-pub use self::anchor::{BottomSnapPolicy, DragPositionPolicy};
 pub use self::visibility::{VisibilityVerdict, guard_visibility};
 // 窓の移動・寸の口。呼び手は `runtime::…`（`anchor_changed_system` は schedule に登録しない見本）。
 pub use self::window_move::{

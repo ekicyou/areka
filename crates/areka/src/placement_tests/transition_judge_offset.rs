@@ -56,10 +56,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use wintf::ecs::window::transition_diag::{FIELD_NEW_DPI, FIELD_OLD_DPI, FIELD_SCOPE, MISSING};
+use wintf::ecs::window::transition_diag::{FIELD_NEW_DPI, FIELD_SCOPE};
 
 use super::transition_judge::{
-    TransitionRecord, is_transition_origin, parse_transition_log, split_transitions,
+    TransitionOrigin, TransitionRecord, or_missing, parse_transition_log, split_transitions,
 };
 use areka_placement::transition_diag::{
     FIELD_BASE_DPI, FIELD_BASE_OFFSET, FIELD_NEW_OFFSET, FIELD_OLD_OFFSET, FIELD_VERDICT,
@@ -263,7 +263,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: 語彙表に無い判定語 {FIELD_VERDICT}={verdict}（表は {OFFSET_VERDICT_ALL:?}）",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
             Self::UnexpectedVerdict {
                 transition,
@@ -273,7 +273,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: 判定語が期待の腕でない（実際 {verdict}・期待 {expected:?}）",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
             Self::ValueMoved {
                 transition,
@@ -284,7 +284,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: {verdict} は値を動かさない腕なのに動いた（{}→{}）",
-                scope_text(*scope),
+                or_missing(*scope),
                 point_text(*old_offset),
                 point_text(*new_offset)
             ),
@@ -295,7 +295,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: {OFFSET_VERDICT_KEYWORD_PENDING} は表示 DPI 読取より前の門なのに {FIELD_NEW_DPI}={new_dpi} を運んでいる",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
             Self::RoundTripDrift {
                 scope,
@@ -307,7 +307,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "{FIELD_SCOPE}={}: {FIELD_NEW_DPI}={dpi} へ戻ったのに値が bit 同一でない（遷移 {first_transition} で {}・遷移 {again_transition} で {}）",
-                scope_text(*scope),
+                or_missing(*scope),
                 point_text(*first),
                 point_text(*again)
             ),
@@ -330,7 +330,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: {axis} 軸の揃えの残差 {}.{:02}px が許容量 {max_px}px を超えた",
-                scope_text(*scope),
+                or_missing(*scope),
                 residual_hundredths / 100,
                 residual_hundredths % 100
             ),
@@ -341,17 +341,9 @@ impl fmt::Display for OffsetViolation {
             Self::KeywordScopeUnmeasured { scope } => write!(
                 f,
                 "{FIELD_SCOPE}={}: キーワード指定スコープの揃えを 1 度も測れていない（素材消費後に比が恒等でない {OFFSET_VERDICT_RESCALED} の行が要る）",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
         }
-    }
-}
-
-/// スコープ番号の表示（番兵は発行側と同じ字面）。
-fn scope_text(scope: Option<u32>) -> String {
-    match scope {
-        Some(scope) => scope.to_string(),
-        None => MISSING.to_owned(),
     }
 }
 
@@ -450,16 +442,19 @@ fn collect_offset_transitions(
         }
     }
     let mut transitions = Vec::new();
-    for (index, span) in spans.into_iter().enumerate() {
-        let Some(origin) = span.first().filter(|record| is_transition_origin(record)) else {
-            continue;
-        };
-        let (Some(old_dpi), Some(new_dpi)) = (
-            origin.int_field::<u32>(FIELD_OLD_DPI),
-            origin.int_field::<u32>(FIELD_NEW_DPI),
-        ) else {
-            continue;
-        };
+    // 区間の先頭は必ず起点（`split_transitions` の契約）なので、起点の型の結果をそのまま使う。
+    let spans = spans.into_iter().enumerate().filter_map(|(index, span)| {
+        let origin = TransitionOrigin::of(span.first()?)?;
+        Some((index, origin, span))
+    });
+    for (
+        index,
+        TransitionOrigin {
+            old_dpi, new_dpi, ..
+        },
+        span,
+    ) in spans
+    {
         let mut rows = Vec::new();
         for record in span.iter().filter(|record| record.kind == KIND_OFFSET) {
             match offset_row(index, record) {

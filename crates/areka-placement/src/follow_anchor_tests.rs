@@ -1,82 +1,9 @@
-use super::MonitorSnapshot;
-use super::test_support::{odd_edge_snapshot, rect, single_monitor_snapshot};
-use crate::resolver::PointPx;
-
-// -------------------------------------------------------------------------
-// DragPositionPolicy / BottomSnapPolicy（task 8.2R・4.7・DD15 v2）
-// 純粋写像の単体檻: X 素通し・Y 釘付け・モニタ別 live 算出・identity 縮退。
-// -------------------------------------------------------------------------
-
-use super::{BottomSnapPolicy, DragPositionPolicy};
-use crate::resolver::SizePx;
+use super::test_support::{odd_edge_snapshot, rect};
+use super::{MonitorSnapshot, project_anchor};
+use crate::resolver::{Anchor, PointPx, SizePx};
 
 /// emo2 scope0 実寸のキャラ窓寸法（物理 px）。
 const CHAR_SIZE: SizePx = SizePx { w: 434, h: 687 };
-
-/// ポリシー単体: X 素通し・Y=work_area.bottom−h（4.7・純粋写像）。
-#[test]
-fn bottom_snap_policy_pins_y_and_passes_x_through() {
-    let snapshot = single_monitor_snapshot();
-    let mapped = BottomSnapPolicy.resolve(PointPx { x: 1207, y: 217 }, CHAR_SIZE, Some(&snapshot));
-    assert_eq!(
-        mapped,
-        PointPx {
-            x: 1207,
-            y: 1043 - 687
-        }
-    );
-    // 既に下端一致なら不動点（釘付け済み座標は変わらない）
-    assert_eq!(
-        BottomSnapPolicy.resolve(mapped, CHAR_SIZE, Some(&snapshot)),
-        mapped
-    );
-}
-
-/// ポリシー単体: raw 位置の窓中心が属するモニタの下端で live 算出
-/// （モニタごとに異なる下端へ写る＝跨ぎ再吸着の核・4.7）。
-#[test]
-fn bottom_snap_policy_resolves_per_monitor() {
-    let snapshot = MonitorSnapshot {
-        work_areas: vec![
-            rect(0, 0, 1920, 1040),       // primary
-            rect(1920, -213, 4480, 1227), // 右の高解像度モニタ（下端が異なる）
-        ],
-    };
-    // 中心 x=2700+217=2917 → 右モニタ → Y=1227−687=540
-    assert_eq!(
-        BottomSnapPolicy.resolve(PointPx { x: 2700, y: 353 }, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 2700, y: 540 }
-    );
-    // 中心 x=1000+217=1217 → primary → Y=1040−687=353
-    assert_eq!(
-        BottomSnapPolicy.resolve(PointPx { x: 1000, y: 900 }, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 1000, y: 353 }
-    );
-}
-
-/// ポリシー単体: snapshot 不在／空・非正寸法（CW_USEDEFAULT センチネル含む）は
-/// identity 縮退（graceful・panic しない・架空矩形を発明しない）。
-#[test]
-fn bottom_snap_policy_degrades_to_identity() {
-    let raw = PointPx { x: 1207, y: 217 };
-    // snapshot 不在（未挿入）
-    assert_eq!(BottomSnapPolicy.resolve(raw, CHAR_SIZE, None), raw);
-    // 空 snapshot
-    let empty = MonitorSnapshot { work_areas: vec![] };
-    assert_eq!(BottomSnapPolicy.resolve(raw, CHAR_SIZE, Some(&empty)), raw);
-    // 非正寸法（saturating_sub が i32::MAX へ飛ぶ暴走の檻）
-    let snapshot = single_monitor_snapshot();
-    for size in [
-        SizePx { w: 0, h: 687 },
-        SizePx { w: 434, h: 0 },
-        SizePx {
-            w: i32::MIN,
-            h: i32::MIN,
-        },
-    ] {
-        assert_eq!(BottomSnapPolicy.resolve(raw, size, Some(&snapshot)), raw);
-    }
-}
 
 // -------------------------------------------------------------------------
 // project_anchor（変換 T・task 2.1・4.2/DD15・Req1.1/1.2/2.1-2.5/3.1/3.4/5.4）
@@ -85,13 +12,10 @@ fn bottom_snap_policy_degrades_to_identity() {
 // 座標・work area 辺は 96 の非倍数を含め、隠れた dpi/96 再スケールの檻とする。
 // -------------------------------------------------------------------------
 
-use super::project_anchor;
-use crate::resolver::Anchor;
-
-/// #1 Bottom: X 保持・Y=wa.bottom−h。既存 `BottomSnapPolicy` へ委譲し再定義しない
-/// ——同一入力で `BottomSnapPolicy.resolve` と**同値**（再利用の証明・Req1.2/2.1）。
+/// #1 Bottom: X 保持・Y=wa.bottom−h（96 非倍数の bottom で再計算を固定・Req1.2/2.1）。
+/// 既に下端一致なら不動点。
 #[test]
-fn project_anchor_bottom_delegates_to_bottom_snap_policy() {
+fn project_anchor_bottom_pins_bottom_edge_and_keeps_x() {
     let snapshot = odd_edge_snapshot();
     // 中心 (700+217, 300+343)=(917, 643) は単一モニタ内
     let raw = PointPx { x: 700, y: 300 };
@@ -105,9 +29,9 @@ fn project_anchor_bottom_delegates_to_bottom_snap_policy() {
         "X 保持・Y=下端−h"
     );
     assert_eq!(
+        project_anchor(Anchor::Bottom, mapped, CHAR_SIZE, Some(&snapshot)),
         mapped,
-        BottomSnapPolicy.resolve(raw, CHAR_SIZE, Some(&snapshot)),
-        "Bottom は BottomSnapPolicy と同値（再定義しない）"
+        "下端一致の位置は不動点"
     );
 }
 
@@ -183,7 +107,7 @@ fn project_anchor_free_is_always_identity() {
 }
 
 /// #2 縮退（Req3.4）: Bottom/Top/Left/Right とも snapshot 不在(None)/空・非正寸
-/// （0・負・i32::MIN）で identity 縮退（`BottomSnapPolicy` の非正寸縮退と整合・
+/// （0・負・i32::MIN）で identity 縮退（下端吸着の非正寸縮退と整合・
 /// `wa.right−w`／`wa.bottom−h` の暴走を先に弾く檻・panic しない）。
 #[test]
 fn project_anchor_degrades_to_identity_on_missing_snapshot_or_nonpositive_size() {

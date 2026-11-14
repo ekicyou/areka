@@ -45,7 +45,7 @@ pub(super) const BALLOON_DRAG_BASE_UNPINNED_TAG: &str = "[balloon-drag] BaseUnpi
 /// 組に入った窓（吸着なしでも・設計の決め 12）は `move_window: false` で、wndproc は窓を
 /// 動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
 /// DragEvent のカーソル座標から生ドラッグ座標を復元し（[`policy_mapped_position`]）、
-/// [`project_anchor`] 適用済み（`Bottom` は [`BottomSnapPolicy`] へ委譲）の座標を
+/// [`project_anchor`] 適用済み（`Bottom` は下端吸着）の座標を
 /// **一度だけ**書く——反映段階で既に正しい座標が確定しているため、v1 の
 /// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。ドラッグと
 /// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（Req1.6）。
@@ -301,7 +301,7 @@ fn policy_mapped_position(
         // 不在は非正寸法（＝寸法不明）として project_anchor の identity 縮退へ委ねる
         .unwrap_or(SizePx { w: 0, h: 0 });
     // drag と resize（resize_window_to）が同一 project_anchor を通ることで座標系変換を
-    // 二重化しない（Req1.6）。bottom は project_anchor 内で BottomSnapPolicy へ委譲。
+    // 二重化しない（Req1.6）。bottom は project_anchor 内で下端吸着へ委譲。
     let mapped = project_anchor(anchor, raw, size, world.get_resource::<MonitorSnapshot>());
     Some(Point {
         x: mapped.x,

@@ -529,3 +529,11 @@
   - `crates/areka-placement/src/diag_tests.rs` の古い参照（ギャップ分析の当時の 158・278・492 行）と、`judge-perf.py::parse_fields` をファイル名で指す 1 行（今は 107 行）。判定器の側は「tools/perf/ の Python の道具の `parse_fields`」と名を書かずに指す形にした（`audit-tools-perf-judge` との申し合わせ）。
   - `crates/areka-placement/src/diag.rs` の `is_system_reanchor` の説明「D9 の 6 経路」は、`PatternMove` を足した今は 7 経路（D9 の 6 つ＋面の `move` のずれ）。
   - 旧い名前 `emo2_boot`（今は `runtime`）が範囲の外の 13 ファイルに残る: `lib.rs`・`chain_finalize.rs`・`chain_realign.rs`・`config.rs`・`dpi_sync.rs`・`measure.rs`・`spawn.rs`・`zorder_chain_compose.rs`・`balloon_offset_persist_roundtrip_tests.rs`・`measure_template_tests.rs`・`placement_prepare_tests.rs`・`sample_test_support.rs`・`spawn_zorder_pair_deferred_tests.rs`（`wire_emo2_boot` の名も含む）。
+
+### 指摘 23（task 4.2・アンカーの型を消した後）で残した範囲の外の古い説明
+
+`DragPositionPolicy`・`BottomSnapPolicy` は消し、`project_anchor` の `Bottom` の腕が呼ぶ私有の関数（下端吸着）1 つにした（使い手はツリー全体で 0・`vendors/` を除く）。次の核の説明 4 行は消えた名前を指したまま残る（どれもコメントで、ビルドには効かない）。「下端吸着（`project_anchor` の `Bottom` の腕）」のような文の語へ直すのがよい。
+
+- `crates/areka-placement/src/persist.rs:227`・`:238`（アンカー辺の再導出の注）
+- `crates/areka-placement/src/persist_restore_tests.rs:295`（保存側の補軸 x の説明）
+- `crates/areka-placement/src/resolver.rs:438`（`Anchor::Bottom` の説明「`BottomSnapPolicy` の一般化元」）

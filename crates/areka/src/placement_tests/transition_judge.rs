@@ -548,7 +548,7 @@ pub fn is_transition_origin(record: &TransitionRecord) -> bool {
 
 impl TransitionOrigin {
     /// 起点候補なら起点情報を返す（起点判定の**単一の決定点**）。
-    fn of(record: &TransitionRecord) -> Option<Self> {
+    pub(super) fn of(record: &TransitionRecord) -> Option<Self> {
         if record.kind != KIND_MONITOR && record.kind != KIND_WINDPI {
             return None;
         }
@@ -955,7 +955,7 @@ pub use verdict::{
     Bounds, CHAIN_REALIGN_PER_TRANSITION, FLUSH_TOTAL_US_MAX, GROUND_DIFF_MAX,
     HOLD_FRAME_ALLOWANCE, PATH_A_WRITES_MAX, Quantity, Report, TRANSITION_FRAME_BOUND,
     TRANSITION_LOG_ENV, TransitionVerdict, VISUALIZE_TO_WRITE_US_MAX, Violation,
-    WRITES_PER_WINDOW_MAX, judge, judge_transition_log,
+    WRITES_PER_WINDOW_MAX, judge, judge_transition_log, or_missing,
 };
 
 #[cfg(test)]

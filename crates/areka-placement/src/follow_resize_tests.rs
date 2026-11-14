@@ -87,7 +87,7 @@ fn resize_window_to_is_idempotent_on_same_size_and_position() {
 }
 
 /// #4 非正寸縮退（Req3.4）: w≤0 or h≤0 は T 再適用せず `false`・位置/寸不変
-/// （warn・`BottomSnapPolicy` の非正寸縮退と整合）。
+/// （warn・下端吸着の非正寸縮退と整合）。
 #[test]
 fn resize_window_to_nonpositive_size_holds_state() {
     let mut world = World::new();

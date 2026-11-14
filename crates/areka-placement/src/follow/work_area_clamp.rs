@@ -232,17 +232,12 @@ pub fn place_chain_in_work_area(
         let scene = scene_of(p.scope).as_str();
         let (scope, from, to) = (p.scope, p.from, p.to);
         let how = match p.outcome {
-            ChainClampOutcome::Fits => "fits",
-            ChainClampOutcome::Flipped => "flipped",
-            ChainClampOutcome::Edge => "edge",
+            ChainClampOutcome::Fits => Some("fits"),
+            ChainClampOutcome::Flipped => Some("flipped"),
+            ChainClampOutcome::Edge => Some("edge"),
             ChainClampOutcome::Kept(reason) => {
                 debug!(scene, scope, reason = reason.as_str(), at = ?from, "{WORK_AREA_KEEP_TAG} 組の決めで動かさない窓");
-                base = ChainRect {
-                    x: to.x,
-                    y: to.y,
-                    ..*r
-                };
-                continue;
+                None
             }
             ChainClampOutcome::Unresolved => {
                 let reason = if snapshot.is_none() {
@@ -253,19 +248,16 @@ pub fn place_chain_in_work_area(
                     "no-work-area"
                 };
                 warn!(scene, scope, reason, at = ?to, "{WORK_AREA_UNRESOLVED_TAG} 作業領域が取れず寄せずに並べた位置へ置く");
-                base = ChainRect {
-                    x: to.x,
-                    y: to.y,
-                    ..*r
-                };
-                continue;
+                None
             }
         };
-        if to != p.joined {
-            let work_area = work_area_for_window(snapshot.unwrap_or(&empty), rect_of(base));
-            info!(scene, scope, how, joined = ?p.joined, from = ?from, to = ?to, work_area = ?work_area, "{WORK_AREA_CLAMP_TAG} キャラ窓を作業領域の中へ寄せた");
-        } else {
-            debug!(scene, scope, reason = "fits", at = ?to, "{WORK_AREA_KEEP_TAG} 並べた位置が作業領域に収まっている");
+        if let Some(how) = how {
+            if to != p.joined {
+                let work_area = work_area_for_window(snapshot.unwrap_or(&empty), rect_of(base));
+                info!(scene, scope, how, joined = ?p.joined, from = ?from, to = ?to, work_area = ?work_area, "{WORK_AREA_CLAMP_TAG} キャラ窓を作業領域の中へ寄せた");
+            } else {
+                debug!(scene, scope, reason = "fits", at = ?to, "{WORK_AREA_KEEP_TAG} 並べた位置が作業領域に収まっている");
+            }
         }
         base = ChainRect {
             x: to.x,

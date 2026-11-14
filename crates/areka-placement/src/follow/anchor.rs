@@ -1,31 +1,12 @@
-//! アンカー射影ポリシー（[`DragPositionPolicy`]・[`BottomSnapPolicy`]・[`project_anchor`]・[`Anchored`]）。
+//! アンカー射影（[`project_anchor`]・[`Anchored`]）。
 
 use bevy_ecs::prelude::*;
 use tracing::debug;
 
 use super::{Anchor, MonitorSnapshot, PointPx, RectPx, SizePx, work_area_for_window};
 
-// =============================================================================
-// DragPositionPolicy（task 8.2R・DD15 v2・4.7）
-// =============================================================================
-
-/// 生ドラッグ座標→実窓位置の純粋写像トレイト（DD15 v2・開発者指示 2026-07-11）。
-///
-/// 「ドラッグ座標管理」（wintf の DraggingState/DragEvent＝カーソル差分の復元）と
-/// 「実ウィンドウ位置の算出」を分離する。実装は純粋関数であること——
-/// `raw`（生ドラッグ座標＝ドラッグ開始時窓位置＋カーソル差分・物理 px）と
-/// 窓寸法・モニタ snapshot だけから実窓位置を返し、World に触れない。
-/// 反映段階（`enqueue_window_set_pos`）には**適用済み座標のみ**が渡る＝
-/// 事後補正が存在しないため、v1 の wndproc 競合振動は原理的に起きない。
-pub trait DragPositionPolicy {
-    /// 生ドラッグ座標 `raw` に対する実窓位置を返す（物理 px・純粋）。
-    ///
-    /// - `size`: 窓寸法（物理 px）。非正値は「寸法不明」を意味する
-    /// - `snapshot`: モニタ work area 集合。`None`＝未挿入（起動窓の生成前・素の `World` の檻）
-    fn resolve(&self, raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -> PointPx;
-}
-
-/// bottom 吸着ポリシー（4.7・DD15 v2）: X 素通し・Y＝現在モニタ `bottom − h`。
+/// bottom 吸着（4.7・DD15 v2）: X 素通し・Y＝現在モニタ `bottom − h`。`project_anchor` の
+/// `Bottom` の腕だけが呼ぶ純粋関数（World に触れない）。
 ///
 /// Y は **`raw` 位置に置いた窓矩形**の中心が属するモニタ（[`work_area_for_window`]）
 /// の work area 下端から live 算出する——イベントごとに引き直すため、モニタを
@@ -37,34 +18,30 @@ pub trait DragPositionPolicy {
 /// - 空 snapshot: [`work_area_for_window`] が `None`
 /// - 非正寸法: `WindowPos::default()` の size は `CW_USEDEFAULT`（負のセンチネル）で、
 ///   `bottom − h` が `i32::MAX` 方向へ暴走するため w/h > 0 のみ吸着する
-pub struct BottomSnapPolicy;
-
-impl DragPositionPolicy for BottomSnapPolicy {
-    fn resolve(&self, raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -> PointPx {
-        let Some(snapshot) = snapshot else {
-            debug!("MonitorSnapshot 未挿入（起動窓の前・素の World）のため identity 縮退");
-            return raw;
-        };
-        if size.w <= 0 || size.h <= 0 {
-            debug!(?size, "窓寸法が不明（非正）のため identity 縮退");
-            return raw;
-        }
-        let window = RectPx {
-            left: raw.x,
-            top: raw.y,
-            right: raw.x.saturating_add(size.w),
-            bottom: raw.y.saturating_add(size.h),
-        };
-        let Some(wa) = work_area_for_window(snapshot, window) else {
-            debug!("空 snapshot のため identity 縮退");
-            return raw;
-        };
-        PointPx {
-            x: raw.x,
-            // 実 work area／窓寸で溢れない範囲だが、極端入力でも panic しない契約
-            // （resolver の saturating 演算と同じ防波堤）
-            y: wa.bottom.saturating_sub(size.h),
-        }
+fn bottom_snap(raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -> PointPx {
+    let Some(snapshot) = snapshot else {
+        debug!("MonitorSnapshot 未挿入（起動窓の前・素の World）のため identity 縮退");
+        return raw;
+    };
+    if size.w <= 0 || size.h <= 0 {
+        debug!(?size, "窓寸法が不明（非正）のため identity 縮退");
+        return raw;
+    }
+    let window = RectPx {
+        left: raw.x,
+        top: raw.y,
+        right: raw.x.saturating_add(size.w),
+        bottom: raw.y.saturating_add(size.h),
+    };
+    let Some(wa) = work_area_for_window(snapshot, window) else {
+        debug!("空 snapshot のため identity 縮退");
+        return raw;
+    };
+    PointPx {
+        x: raw.x,
+        // 実 work area／窓寸で溢れない範囲だが、極端入力でも panic しない契約
+        // （resolver の saturating 演算と同じ防波堤）
+        y: wa.bottom.saturating_sub(size.h),
     }
 }
 
@@ -81,18 +58,18 @@ impl DragPositionPolicy for BottomSnapPolicy {
 ///
 /// `wa` は「生位置 `raw` に置いた窓矩形の中心が属するモニタの work area」
 /// （[`work_area_for_window`]）。モニタ跨ぎは live 算出＝跨いだ先の対応辺へ再吸着する。
-/// - `Bottom`: 既存 [`BottomSnapPolicy::resolve`] へ**委譲**（X 保持・`y = wa.bottom − h`）。
+/// - `Bottom`: 下端吸着の私有の関数へ**委譲**（X 保持・`y = wa.bottom − h`）。
 ///   再定義しない（Req1.2・bottom は T の一事例）。
 /// - `Top`: `x = raw.x`（保持）・`y = wa.top`。
 /// - `Left`: `x = wa.left`・`y = raw.y`（保持）。
 /// - `Right`: `x = wa.right − w`・`y = raw.y`（保持）。
 /// - `Free`: `raw` 素通し（identity・position 再計算なし・Req2.5）。
 ///
-/// # graceful degradation（identity＝`raw` 素通し・panic しない・既存 `BottomSnapPolicy` 流儀）
+/// # graceful degradation（identity＝`raw` 素通し・panic しない・下端吸着と同じ流儀）
 ///
 /// - `Free` は常に identity（`wa` 不要・寸法・snapshot を問わない）。
 /// - 非正寸（w≤0 or h≤0）は identity＋`debug!`。`wa.right − w`／`wa.bottom − h` が
-///   `i32::MAX` 方向へ暴走する前に弾く（Req3.4・`BottomSnapPolicy` の CW_USEDEFAULT
+///   `i32::MAX` 方向へ暴走する前に弾く（Req3.4・下端吸着の CW_USEDEFAULT
 ///   センチネル縮退と整合）。
 /// - `snapshot` 不在（`None`）／空 snapshot（[`work_area_for_window`] が `None`）は
 ///   identity＋`debug!`。ドラッグ経路 spam 回避で `warn!` でなく `debug!`（既存流儀）。
@@ -112,10 +89,10 @@ pub fn project_anchor(
         return raw;
     }
 
-    // Bottom: 既存 BottomSnapPolicy へ全面委譲（再定義しない・Req1.2）。縮退規約
-    // （snapshot 不在/空・非正寸）も同ポリシーが所有し、T の bottom 事例＝同値になる
+    // Bottom: 下端吸着の関数へ全面委譲（再定義しない・Req1.2）。縮退規約
+    // （snapshot 不在/空・非正寸）も同じ関数が所有し、T の bottom 事例＝同値になる
     if let Anchor::Bottom = anchor {
-        return BottomSnapPolicy.resolve(raw, size, snapshot);
+        return bottom_snap(raw, size, snapshot);
     }
 
     // 以下 Top/Left/Right（bottom の一般化）。非正寸は wa.right−w／暴走の前に弾く
@@ -154,7 +131,7 @@ pub fn project_anchor(
             y: raw.y,
         },
         // 右端固定（left_X = wa.right − w）・Y 保持（Req2.4）。極端入力でも panic
-        // しない契約で saturating_sub（BottomSnapPolicy の bottom−h と同型の防波堤）
+        // しない契約で saturating_sub（下端吸着の bottom−h と同型の防波堤）
         Anchor::Right => PointPx {
             x: wa.right.saturating_sub(size.w),
             y: raw.y,
