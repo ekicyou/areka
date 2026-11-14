@@ -82,8 +82,8 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
         .get::<DraggingState>(target)
         .expect("DraggingState が挿入されるべき");
     assert_eq!((ds.drag_start_pos.x, ds.drag_start_pos.y), (110, 210));
-    // WindowHandle なしフォールバックでは initial_inset = WindowPos.position
-    assert_eq!(ds.initial_inset, (100.0, 200.0));
+    // WindowHandle なしフォールバックでは initial_window_pos = WindowPos.position
+    assert_eq!(ds.initial_window_pos, (100.0, 200.0));
     // wndproc スレッドへ渡すコンテキストにも同じ位置が書かれる
     let ctx = world
         .resource::<WindowDragContextResource>()
@@ -409,7 +409,7 @@ fn dispatch_emits_drag_event_when_delta_nonzero() {
     let target = world
         .spawn(DraggingState {
             drag_start_pos: PhysicalPoint::new(100, 100),
-            initial_inset: (0.0, 0.0),
+            initial_window_pos: (0.0, 0.0),
         })
         .id();
 
@@ -450,7 +450,7 @@ fn dispatch_no_drag_event_when_delta_zero() {
     let target = world
         .spawn(DraggingState {
             drag_start_pos: PhysicalPoint::new(0, 0),
-            initial_inset: (0.0, 0.0),
+            initial_window_pos: (0.0, 0.0),
         })
         .id();
 

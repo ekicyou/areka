@@ -49,7 +49,7 @@
   - _Dispatch: mechanical — 設計が消す欄と書き手の場所を数えて与える・欄を消す追従だけ_
   - _Requirements: 2.1, 2.3, 5.1, 5.2, 5.3, 6.1_
 
-- [ ] 3.2 ドラッグ中の印の始めの位置の欄を、中身どおりの名へ改める
+- [x] 3.2 ドラッグ中の印の始めの位置の欄を、中身どおりの名へ改める
   - 欄を「始めの窓の位置」の名へ改め（型は変えない）、説明を「ドラッグを始めたときの窓の位置（枠を含むスクリーン座標・物理ピクセル・整数の値）」にする。配りの始まりの腕の「置き換え」の古い注記（`dispatch.rs:155`）も消す。
   - 範囲の中の書き手と読み手を全部改める: 配りの始まりの腕（`dispatch.rs:155,159`）・ドラッグの系のテスト・2.1 と 2.2 で足した新しいテストのファイル。
   - 範囲の外の読み手を全部直す: `areka-placement` の追従とテスト部品と追従のテスト・`areka` の DPI の置き直し（引数名と説明）とそのテスト・入力のテスト部品の設定の関数の名・wintf の窓の手続きの移動の処理とテスト・wintf の結合テスト（`dispatch_test.rs` は 2.1 で 2 本が消えた後に残る 86-87・414・455 行だけ）。追従の「名は歴史的経緯」の注記も消す。
@@ -183,3 +183,4 @@
 - `cargo test -p areka --bin areka` を clippy と並べて回したとき 1 本だけ赤・回し直しで緑（名は取れず）。7.2 の全体テストで再び出たら名を控える（2.2 のレビュー）。
 - `cargo test -p areka --all-targets`／`--tests` は `crates/areka/tests/` の実機起動のテスト（`#[ignore]` 無し）まで回す＝排他テストの机が要る。机の無い確かめは `--bin areka` と `--example mock-shell`、ほかの残りは `cargo test --workspace --all-targets --no-run` で拾う（`build --all-targets` は example のテストを組まない・3.1）。
 - `audit-placement-core` と: この spec が先に着地。向こうの 2.4 が `follow/drag_follow.rs` の `reestablish_balloon_follow` に 1 行足す＝3.2 の読み手の直しと近くで重なれば後から着地する側（向こう）が合わせる（11-14 の伝言）。
+- `areka-placement/src/follow/drag_follow.rs` は 1000 行ちょうど＝空き 0 行（3.2 の後）。`audit-placement-core` が 1 行足すなら向こうで空きを作る（伝え済み）。

@@ -125,11 +125,14 @@ pub fn dispatch_drag_events(world: &mut World) {
                     });
                 }
 
-                // DraggingStateコンポーネント挿入（initial_insetはinitial_window_posに置き換え）
+                // DraggingStateコンポーネント挿入
                 if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
                     entity_mut.insert(crate::ecs::drag::DraggingState {
                         drag_start_pos: start_pos,
-                        initial_inset: (initial_window_pos.x as f32, initial_window_pos.y as f32),
+                        initial_window_pos: (
+                            initial_window_pos.x as f32,
+                            initial_window_pos.y as f32,
+                        ),
                     });
 
                     tracing::debug!(

@@ -393,7 +393,7 @@ pub(super) fn WM_MOUSEMOVE(
 }
 
 /// ドラッグの式の始めの値を選ぶ。live（ドラッグ対象の DraggingState）があれば
-/// (initial_inset を整数にしたもの, drag_start_pos)、無ければ控えの (initial_window_pos, start_pos)。
+/// (initial_window_pos を整数にしたもの, drag_start_pos)、無ければ控えの (initial_window_pos, start_pos)。
 pub(crate) fn dragging_window_origin(
     snapshot_origin: crate::ecs::Point,
     snapshot_start: crate::ecs::pointer::PhysicalPoint,
@@ -402,8 +402,8 @@ pub(crate) fn dragging_window_origin(
     match live {
         Some(s) => (
             crate::ecs::Point {
-                x: s.initial_inset.0.round() as i32,
-                y: s.initial_inset.1.round() as i32,
+                x: s.initial_window_pos.0.round() as i32,
+                y: s.initial_window_pos.1.round() as i32,
             },
             s.drag_start_pos,
         ),

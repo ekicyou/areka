@@ -85,12 +85,12 @@ pub(super) fn odd_edge_snapshot() -> MonitorSnapshot {
 // -------------------------------------------------------------------------
 
 /// DraggingState（dispatch_drag_events 挿入の模擬）。wintf の実セマンティクス:
-/// `initial_inset`＝ドラッグ開始時の**窓位置**（dispatch.rs が initial_window_pos
+/// `initial_window_pos`＝ドラッグ開始時の**窓位置**（dispatch.rs が窓の位置
 /// を転記）・`drag_start_pos`＝開始カーソル（スクリーン物理 px）。
 pub(super) fn dragging_state(initial_window: (i32, i32), drag_start: (i32, i32)) -> DraggingState {
     DraggingState {
         drag_start_pos: Point::new(drag_start.0, drag_start.1),
-        initial_inset: (initial_window.0 as f32, initial_window.1 as f32),
+        initial_window_pos: (initial_window.0 as f32, initial_window.1 as f32),
     }
 }
 

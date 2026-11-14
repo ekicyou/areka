@@ -205,10 +205,10 @@ fn char_pair(top_left: Point) -> Vec<(PersistKey, String)> {
 /// 開始の腕が入れた `DraggingState` から受け手が復元するキャラ窓の行き先。
 ///
 /// 偽の HWND では開始の腕の枠の座標変換（`client_to_window_coords`）が失敗し、
-/// `DraggingState.initial_inset` が `(0,0)` のまま入る。そのため行き先は
+/// `DraggingState.initial_window_pos` が `(0,0)` のまま入る。そのため行き先は
 /// `(0,0) + (離したカーソル − 押したカーソル)` をアンカー辺へ射影した値になる。
 /// これはテストの組み立ての都合（偽の窓の座標変換の失敗）に寄りかかった期待値で、
-/// 製品では `initial_inset` に `WindowPos.position` の枠込みの値が入る。
+/// 製品では `initial_window_pos` に `WindowPos.position` の枠込みの値が入る。
 fn destination() -> Point {
     destination_at(CURSOR)
 }

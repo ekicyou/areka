@@ -243,14 +243,14 @@ impl Rig {
             .position = Some(to);
     }
 
-    /// 開始の配りで入った `DraggingState.initial_inset` を窓の位置にする（製品と同じ意味の値）。
+    /// 開始の配りで入った `DraggingState.initial_window_pos` を窓の位置にする（製品と同じ意味の値）。
     ///
     /// 偽の HWND では wintf の開始の腕の枠の座標変換が失敗し、`(0,0)` のまま入る。
-    pub(super) fn set_initial_inset(&mut self, entity: Entity, at: Point) {
+    pub(super) fn set_initial_window_pos(&mut self, entity: Entity, at: Point) {
         self.world
             .get_mut::<DraggingState>(entity)
             .expect("開始が配られて DraggingState があるはず")
-            .initial_inset = (at.x as f32, at.y as f32);
+            .initial_window_pos = (at.x as f32, at.y as f32);
     }
 
     /// 受け口を落とす（以後の送出は失敗する）。
