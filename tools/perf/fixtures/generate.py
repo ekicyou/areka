@@ -1205,20 +1205,19 @@ CASES = (
 
 def main() -> int:
     import generate_more  # 実行時に読む（読み込み時だと循環になる）
-    cases = CASES + generate_more.CASES
-    made = [f() for f in cases]
+    made = [f() for f in CASES + generate_more.CASES]
     names = {fx.name for fx in made}
+    if "" in names or len(names) != len(made):  # 空の名は write() が fixtures/ ごと消す・重なりは黙って上書き
+        raise SystemExit("every fixture needs its own non-empty name")
     stray = sorted(p.name for p in HERE.iterdir()
                    if p.is_dir() and not p.name.startswith(("_", ".")) and p.name not in names)
     if stray:
-        print(f"stray fixture folder(s) with no generator: {', '.join(stray)} (delete them)",
-              file=sys.stderr)
-        return 1
+        raise SystemExit(f"stray fixture folder(s) with no generator: {', '.join(stray)} (delete them)")
     for fx in made:
         path = fx.write()
         size = sum(p.stat().st_size for p in path.iterdir())
         print(f"  {path.name:44s} {size:>9,d} bytes")
-    print(f"generated {len(cases)} fixtures: {HERE}")
+    print(f"generated {len(made)} fixtures: {HERE}")
     return 0
 
 

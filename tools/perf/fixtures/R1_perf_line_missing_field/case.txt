@@ -1,0 +1,8 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = perf 行の必須の欄 t_mask_us が欠けたは判定不能
+mode = verdict
+build = release
+exit = 2
+
+note = H11 の芯の定常状態の perf 行 1 本を、必須の欄 t_mask_us が欠けた形にした（要件 2.5）。
+note = その行を黙って捨てると残りの行で合格（0）に化けるので、判定不能（2）にする。

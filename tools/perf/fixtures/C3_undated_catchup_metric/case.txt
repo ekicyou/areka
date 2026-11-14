@@ -7,5 +7,9 @@ emit_metrics = yes
 
 note = 行頭に時刻の無い catch-up 行が 1 本ある。定常の中か外か分からないので、
 note = catchup_count は「測っていない」の - を出す（0 は「数えて 0」で、A/B の比べを欺く）。
+note = 起動過渡の 2 本は、古い綴り target="dispatcher" を dispatcher と読むことと、
+note = 欄の無い行を既知の系統へ寄せず (lane 欄なし) と名指しすることを縛る。
 
 contains = metric=catchup_count value=-
+contains = metric=catchup_dispatcher value=1
+contains = target=(lane 欄なし): 1 件

@@ -11,7 +11,7 @@
 |---|---|
 | `invoke-perf-run.ps1` | areka を決まった時間だけ動かし、実行ログと CPU の推移を集める（採取） |
 | `judge-perf.py` | 集めたものを集計し、あらかじめ決めた式で合否を出す（判定） |
-| `fixtures/` | 判定の道具そのものが壊れていないか確かめるための、答えの分かっている入力 |
+| `fixtures/` | 判定の道具そのものが壊れていないか確かめるための、答えの分かっている入力（`fixtures/generate.py`・`fixtures/generate_more.py` が組み立てる） |
 | `README.md` | この文書 |
 
 対応する要件: 2.1・2.4・2.6・2.7・4.5・5.2、および設計の Key decision D7。
@@ -20,6 +20,13 @@
 （`perf-loop.ps1`・`check-quiet.ps1`・`invoke-cpu-sample.ps1`・`invoke-followup-checks.ps1`・
 `perf-rank.py`・`perf-compare.py`・`perf-ledger.py`・`judge-followup.py`・`goals/`）は
 第 13 節以降で扱います（spec `areka-P0-draw-load-parity`・対応する要件 4.7・5.2・7.1〜7.4・8.4）。
+
+どの道具からも読まれ、単独では動かさない兄弟の部品もここにあります。`perf_lines.py` はログの行と
+`cpu.csv` の読み方（`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`judge-followup.py` と
+`fixtures/generate.py` が共有）、`perf_selftest_common.py` は `perf-rank.py`・`perf-compare.py`・
+`judge-followup.py`・`perf-ledger.py` の自己較正の支えです。`judge_perf_catchup.py`・
+`judge_perf_selftest_inproc.py`・`perf_rank_dump.py`・`perf_ledger_goal.py`・`*_selftest.py` は、
+名前の頭の道具から切り分けた部分です。
 
 ---
 
@@ -89,8 +96,6 @@ python tools/perf/judge-perf.py --selftest
 パスや実行体の有無だけを検査して終わります（**測定にはなりません**）。
 
 ---
-
-- 性能カウンタ（`\Processor(_Total)\% Processor Time`）の読みは一過性に失敗することがある（PDH の「値のないカウンター」。2026-08-23 に 7 秒間隔で 2 度踏み、採り直し 2 回とも MEASURE_FAILED になった）。`check-quiet.ps1` 1.0.1 は 3 回まで 3 秒おきに採り直し、3 回とも失敗したときだけ `reason=counter_read_failed`（exit 4）を出す。
 
 ## 3. 2 つの水準と、その使い分け（要件 2.1・議題 4 裁定）
 
@@ -262,8 +267,9 @@ areka は前回の窓の位置を `run-meta.txt` の `areka_profile_dir` が指�
 「そのとき何と比べたのか」が分かります。終了コードの表と総合判定の決め方も印字されます。
 
 **ただし** ログの行を読み取るための正規表現（時刻の形・`名前=値` の切り出し方・色コードの
-落とし方）はレポートには印字されません。ソースの中ほど、`# ログ行の解析` の節にあります。
-ログの書式そのものが変わったときはそちらを直すことになります。
+落とし方）はレポートには印字されません。兄弟の部品 `perf_lines.py` にあり、`judge-perf.py`・
+`perf-rank.py`・`perf-compare.py`・`judge-followup.py`・`fixtures/generate.py` の 5 つが共有しています。
+ログの書式そのものが変わったときはそちらを直すことになります（5 つ全部に効きます）。
 
 **採取側**: `invoke-perf-run.ps1` の冒頭。ヘッダのコメントに一覧があり、その下の
 `# 較正値・調整値` ブロックが実体です。実走時間・CPU の採取間隔・`RUST_LOG` の値・
@@ -405,6 +411,9 @@ python tools/perf/judge-perf.py --selftest
 終了コードは 0（全件一致）／1（1 件でも食い違い）／3（`fixtures/` を読めない）です。
 最後の行は決まった ASCII の形 `SELFTEST RESULT ok=<n> ng=<m>` です（ok は期待どおりだった
 fixture の数・ng は食い違いの数）。
+検体では作れない場面（想定外の例外・明示指定の 2 系列など）は `judge_perf_selftest_inproc.py` が
+判定の関数を差し替えて確かめ、`差し替えの較正: <N> 件・食い違い <M> 件` の 1 行に出ます
+（1 件も走らなかったら、それ自体を食い違いとして終了コード 1 にします）。
 
 ### 入っている fixture
 
@@ -429,12 +438,19 @@ fixture の数・ng は食い違いの数）。
 | `B2_thin_steady_verdict` | 2 | 定常状態が薄い走行は合否判定では判定不能（B1 と同じ入力） |
 | `C1_catchup_by_target_pass` | 0 | catch-up が 3 系統とも起動過渡だけにある（合格側。`contains` と `emit_metrics` で本文と数値を固定） |
 | `C2_catchup_by_target_fail` | 1 | catch-up が 3 系統とも定常状態にある（不合格側） |
-| `C3_undated_catchup_metric` | 0 | 時刻の読めない catch-up があれば `catchup_count` は `-` を出す |
+| `C3_undated_catchup_metric` | 0 | 時刻の読めない catch-up があれば `catchup_count` は `-` を出す。古い綴り `target="…"` も系統として読み、欄の無い行は `(lane 欄なし)` と名指しする |
+| `C4_undated_catchup_verdict` | 2 | 同じ入力を合否判定で読むと、判定式⑵ は「0 件」と言い切れず判定不能 |
 | `K1_boot_talk_excluded` | 0 | 起動の挨拶は `boot_talk_done` で閉じ、その後の CPU の山を発話中の頂に巻き込まない |
+| `K2_talk_spans_closed_and_open` | 0 | 発話は `steady_talk_done` で閉じ、`steady_talk_replace` の入れ子は畳み、終わりの無い発話は走行の最後で閉じる（`talk_peak_cpu_pct` で固定） |
 | `L1_long_flat_pass`・`L2_long_rising_fail`・`L3_long_too_short` | 0・1・2 | 長い走行（20 分超）の平坦は合格・上り続けると⑷b だけ不合格・20 分に届かなければ判定不能 |
+| `L4_long_window_diff_fail`・`L5_long_slope_fail` | 1・1 | ⑷b の 2 つの条件を 1 つずつ: 末尾窓 − 中間窓だけが越える・後半窓の傾きだけが越える |
 | `M1_profile_empty`・`M2_profile_unknown` | 2 | `profile` は `short`・`long` 以外では（空でも未知の語でも）判定不能 |
 | `N1_cpu_nan` | 2 | 有限でない CPU の値は壊れた行 |
-| `S1_explicit_19_intervals`・`S2_explicit_20_intervals`・`S3_explicit_over_limit` | 2・0・1 | 明示指定の系列の間隔が 19 本で判定不能・20 本で判定できる・上限超過で不合格（§12 の 4 番） |
+| `E4_run_meta_without_values` | 2 | `run-meta.txt` に `名前 = 値` の行が 1 つも無い（集計モードでも判定不能） |
+| `A1_steady_alloc_fail` | 1 | 定常状態で表示用バッファの確保が 1 回でもあれば不合格（判定式⑶） |
+| `R1_perf_line_missing_field`・`R2_perf_line_undated`・`R3_perf_line_cache_hit_not_bool` | 2 | perf 行の必須の欄の欠け・行頭の時刻の欠け・`cache_hit` の値の誤りは、行を捨てずに判定不能（要件 2.5） |
+| `P15_other_stop_messages` | 0 | 「末尾残留」と「bind から外れた ID の再生を停止」もアニメの終わりとして数える（数えないと条件 4 が間隔を全部落とす） |
+| `S1_explicit_19_intervals`・`S2_explicit_20_intervals`・`S3_explicit_over_limit` | 2・0・1 | 明示指定の系列の間隔が 19 本で判定不能・20 本で判定できる・19 本でも上限超過なら不合格（§12 の 4 番） |
 | `T2_tick_lines_absent` | 0 | catch-up はあるが `[tick]` 行が 1 本も無い（仮説は判定不能・合否には効かない） |
 | `U1_bom_run_log` | 0 | BOM 付きの `run.log`・`cpu.csv` も同じに読める |
 | `V1_dev_not_applicable` | 0 | dev ビルドでは CPU の数値目標は適用外 |
@@ -471,6 +487,8 @@ fixture は `fixtures/generate.py` で作り直せます。作り直したあと
 登録されている入力は生成条件どおりです。汚れたら、生成条件を変えたのか、fixture を手で
 触ったのか、どちらかです（このリポジトリは取り出すときに改行を書き換える設定なので、
 `fixtures/.gitattributes` でその書き換えを止めてバイトを固定しています）。
+新しい検体は `fixtures/generate_more.py` に組み立てを足します（`generate.py` は行数の上限があるため）。
+`generate.py` は、組み立てる元の無いフォルダが `fixtures/` にあると名を出して終了コード 1 で止まり、名前が空・重なった検体があっても何も書かずに止まります。
 
 ---
 
@@ -564,14 +582,6 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 
 出典はいずれも `areka-P0-dpi-transition-atomicity` の再計測です。
 
----
-
-- **32bit SHIORI ヘルパは実行体の隣に要る。** 合否判定の走行（measure-baseline／rank-run／final）は `run-meta.txt` の `shiori_helper_present=true` が関門で、偽なら発話の無い別条件として exit 4（25 分を失う）。ヘルパは `--target i686-pc-windows-msvc` で別ディレクトリに出るので、`perf-loop.measure.ps1` は走行の直前に `target\i686-pc-windows-msvc\release\shiori-host32-helper.exe` を `target\<release|debug>\` へ複製する（`Sync-MeasureShioriHelper`・2026-08-23 の baseline で実際に踏んだ穴）。どちらにも無ければ警告だけ出して既存の関門に任せる。
-
-- **`-BinDir` を渡さない走行（followup／rank-run／measure-baseline／final）は、走行の直前に作業ツリーから実行体を作り直す**（`Sync-MeasureWorktreeBuild`・2026-08-23 TOOLFIX 4）。`measure-ab` は B 側を `target\release` に作って残し、`prepare-ab` は A 側（HEAD）を残すので、これが無いと次の周の `rank-run` が前の周の B を測り、`followup` は B でなく A を測る（周 1〜3 で実際に起きた＝周 1 の「門 ON がドラッグを壊す」は A 実行体での失敗だった）。走行ログに `[perf-loop] executable to run: … sha256=… git_head=… git_dirty=…` が 1 行出るので、run-meta の exe と突き合わせられる。
-
-- **走行後の静寂確認が NOT_QUIET だった走行は `-Resume` で再利用しない**（`Test-MeasureQuietAfterOk`・2026-08-23 TOOLFIX 5）。退避先は `<走行>-NOTQUIET-<時刻>`（測ったものは消さない）。周 3 で A1／B1（走行後 21.4%／20.5%）がそのまま compare に使われた穴。
-
 ### 端末の文字コードと子の出力
 
 道具は端末の文字コードを書き替えません（`[Console]::OutputEncoding` などへの代入も `chcp`
@@ -601,8 +611,8 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 exit 3）、`--selftest` は `SELFTEST RESULT ok=<n> ng=<m>`、`perf-compare.py` は `PERF-COMPARE RESULT ...`、
 `judge-followup.py` は報告の最後の `FOLLOWUP VERDICT ...` です。
 Python の各道具（`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`judge-followup.py`・
-`perf-ledger.py`）は標準出力・標準エラーを `backslashreplace` で書くので、端末が書けない字は
-`\u` の綴りになり、例外では落ちません。
+`perf-ledger.py`）は標準出力・標準エラーを端末の文字コードによらず UTF-8 で書くので、どの字も
+書けて例外では落ちません（`backslashreplace` は UTF-8 にも書けない孤立サロゲートだけの備えです）。
 注記や、ファイルにだけ書く記録（`run-meta.txt` の節の見出しと鍵など）と、レポート・報告の
 本文には日本語が残ります。
 
@@ -640,7 +650,7 @@ Python の各道具（`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`ju
    確定的な違反を本数不足に埋もれさせないためです。
    遅くなるほど窓に残る間隔が減るので、この経路は鈍化と同じ向きに効きます
    （`fixtures/S1_explicit_19_intervals`＝19 本で判定不能・`S2_explicit_20_intervals`＝20 本で
-   判定可・`S3_explicit_over_limit`＝上限超過は不合格）。
+   判定可・`S3_explicit_over_limit`＝19 本でも上限超過は不合格）。
    実測では dev の短時間走行で 22 本まで減りました。
 5. **偽の不合格が出る帯がある。** 判定対象に指定した列に、コマ送りでない散発的な適用が
    混ざると、まばたきの間隔で裁かれて不合格になります。判定対象の指定から外すのが
@@ -846,6 +856,14 @@ brief に載っている古い数値ではありません（§16 の警告を参
 1 行を出します（上は山括弧つきの見本です）。背景で走らせたときに、この 1 行だけで結果と
 出力先が会話へ届くようにするためです。
 
+### 走行の前後で道具が自分で行うこと
+
+- **32bit SHIORI ヘルパは実行体の隣に要る。** 合否判定の走行（measure-baseline／rank-run／final）は `run-meta.txt` の `shiori_helper_present=true` が関門で、偽なら発話の無い別条件として exit 4（25 分を失う）。ヘルパは `--target i686-pc-windows-msvc` で別ディレクトリに出るので、`perf-loop.measure.ps1` は走行の直前に `target\i686-pc-windows-msvc\release\shiori-host32-helper.exe` を `target\<release|debug>\` へ複製する（`Sync-MeasureShioriHelper`・2026-08-23 の baseline で実際に踏んだ穴）。どちらにも無ければ警告だけ出して既存の関門に任せる。
+
+- **`-BinDir` を渡さない走行（followup／rank-run／measure-baseline／final）は、走行の直前に作業ツリーから実行体を作り直す**（`Sync-MeasureWorktreeBuild`・2026-08-23 TOOLFIX 4）。`measure-ab` は B 側を `target\release` に作って残し、`prepare-ab` は A 側（HEAD）を残すので、これが無いと次の周の `rank-run` が前の周の B を測り、`followup` は B でなく A を測る（周 1〜3 で実際に起きた＝周 1 の「門 ON がドラッグを壊す」は A 実行体での失敗だった）。走行ログに `[perf-loop] executable to run: … sha256=… git_head=… git_dirty=…` が 1 行出るので、run-meta の exe と突き合わせられる。
+
+- **走行後の静寂確認が NOT_QUIET だった走行は `-Resume` で再利用しない**（`Test-MeasureQuietAfterOk`・2026-08-23 TOOLFIX 5）。退避先は `<走行>-NOTQUIET-<時刻>`（測ったものは消さない）。周 3 で A1／B1（走行後 21.4%／20.5%）がそのまま compare に使われた穴。
+
 ---
 
 ## 14. 4 段の採り方（要件 7.2）
@@ -1046,7 +1064,7 @@ pwsh -File tools/perf/check-quiet.ps1 -Stage before -OutDir <ワークツリー>
   `heavy_process_present`／`both`／`counter_read_failed` の 5 つです。
 - 終了コードは 0（静か）／2（静かでない）／3（引数の誤り）／4（性能カウンタが読めない）。
   **このスクリプト自身は待ちません。** 性能カウンタの一過性の読み失敗だけは 3 回まで 3 秒おきに
-  読み直します（§2 の注意）。静かでないときの待ちと確かめ直しは `-AutoQuiet` の側の仕事です。
+  読み直します（下の性能カウンタの注意）。静かでないときの待ちと確かめ直しは `-AutoQuiet` の側の仕事です。
 - 採取ランナーに任せる形が `-AutoQuiet` です（`-ConfirmQuiet` とは同時に指定できません）。
   起動前に上の確認を呼び、`quiet-before.txt` を出力先へ残し、静かでなければ 60 秒
   （`[quiet].retry_wait_sec`）待って確かめ直します。回数は `[quiet].retry_max = 3`＝
@@ -1068,6 +1086,7 @@ pwsh -File tools/perf/check-quiet.ps1 -Stage before -OutDir <ワークツリー>
   `heavy_process_busy=<pid:name:％;…>` にその根拠が残ります。
 - **ループ自身の道具（判定スクリプトや順位表）を計測と重ねない。** `python` は上の規則で
   「働いていれば」該当になります。確認は計測の直前・直後に置いてください。
+- 性能カウンタ（`\Processor(_Total)\% Processor Time`）の読みは一過性に失敗することがある（PDH の「値のないカウンター」。2026-08-23 に 7 秒間隔で 2 度踏み、採り直し 2 回とも MEASURE_FAILED になった）。`check-quiet.ps1` 1.0.1 は 3 回まで 3 秒おきに採り直し、3 回とも失敗したときだけ `reason=counter_read_failed`（exit 4）を出す。
 
 ---
 
