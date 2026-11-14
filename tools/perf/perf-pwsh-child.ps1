@@ -15,9 +15,10 @@
   引数の引用の規則: -SelfTest のような引数名の形（^-[A-Za-z][A-Za-z0-9]*$）は素で渡し、
   それ以外は単引用符で括って ' を '' にする（引用すると値として渡ってしまう形があるため）。
 
-  返り値: @('-NoProfile', '-NonInteractive', '-Command', '<前置き>; & ''<ScriptPath>'' <引数>; exit $LASTEXITCODE')
+  返り値: @('-NoProfile', '-NonInteractive', '-Command', '<前置き>; try { & ''<ScriptPath>'' <引数> } catch { <理由の 1 行>; exit 1 }; exit $LASTEXITCODE')
   これを ProcessStartInfo.ArgumentList（Invoke-Child・Invoke-Utf8Child）に渡して子の pwsh を起こす。
-  子の終了コードはスクリプトの exit の値になる。
+  子の終了コードはスクリプトの exit の値になる。スクリプトが捕まえていない失敗で落ちたときは、
+  '[pwsh-child] uncaught error: <例外の文> (<スクリプト名>:<行番号>)' を標準エラーへ 1 行書いて 1 で終える。
 #>
 
 function Get-PwshChildArguments {
@@ -36,6 +37,10 @@ function Get-PwshChildArguments {
         if ($text -match '^-[A-Za-z][A-Za-z0-9]*$') { $parts += $text }
         else { $parts += ("'" + ($text -replace "'", "''") + "'") }
     }
-    $command = $prefix + '; ' + ($parts -join ' ') + '; exit $LASTEXITCODE'
+    # 捕まえていない失敗は、PowerShell の色付きの表示（地域語の文は化ける）の代わりに理由の 1 行を
+    # UTF-8 の書き手の標準エラーへ素の文で書いて 1 で終える。正常の道（exit を含む）は今のまま。
+    $catch = 'catch { [Console]::Error.WriteLine(''[pwsh-child] uncaught error: '' + $_.Exception.Message + '' ('' + ' +
+             '[System.IO.Path]::GetFileName([string]$_.InvocationInfo.ScriptName) + '':'' + $_.InvocationInfo.ScriptLineNumber + '')''); exit 1 }'
+    $command = $prefix + '; try { ' + ($parts -join ' ') + ' } ' + $catch + '; exit $LASTEXITCODE'
     return @('-NoProfile', '-NonInteractive', '-Command', $command)
 }
