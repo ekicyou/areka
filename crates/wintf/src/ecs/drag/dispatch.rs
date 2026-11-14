@@ -86,51 +86,30 @@ pub fn dispatch_drag_events(world: &mut World) {
                 start_pos,
                 timestamp,
             } => {
-                // 親階層からWindowエンティティを探索し、HWND・位置・DragConfig情報を取得
-                let mut current = entity;
-                let mut window_entity: Option<bevy_ecs::entity::Entity> = None;
-                let mut initial_window_pos = crate::ecs::Point { x: 0, y: 0 };
+                // 持ち主の窓を引き、HWND・始めの位置を求める（位置が取れなければ窓は動かさない）。
+                // HWND は位置と別に控える: 下流（バルーンの止め）が控えの hwnd と move_window を組で読む。
+                let window_entity = crate::ecs::find_owner_window(world, entity);
+                let hwnd = window_entity
+                    .and_then(|w| world.get::<crate::ecs::window::WindowHandle>(w))
+                    .map(|wh| wh.hwnd);
+                let origin = match window_entity
+                    .ok_or_else(|| "持ち主の窓が無い".to_string())
+                    .and_then(|window| drag_origin(world, window))
+                {
+                    Ok(pos) => Some(pos),
+                    Err(reason) => {
+                        tracing::warn!(
+                            ?entity,
+                            window = ?window_entity,
+                            reason,
+                            "[dispatch_drag_events] ドラッグを始めた窓の位置が取れない: 窓は動かさない"
+                        );
+                        None
+                    }
+                };
+                let initial_window_pos = origin.unwrap_or(crate::ecs::Point { x: 0, y: 0 });
                 let mut move_window = false;
                 let mut constraint: Option<crate::ecs::drag::DragConstraint> = None;
-                let mut hwnd: Option<windows::Win32::Foundation::HWND> = None;
-
-                loop {
-                    if world.get::<crate::ecs::window::Window>(current).is_some() {
-                        window_entity = Some(current);
-
-                        // WindowHandle.hwnd を取得
-                        if let Some(wh) = world.get::<crate::ecs::window::WindowHandle>(current) {
-                            hwnd = Some(wh.hwnd);
-
-                            // WindowPos.position（クライアント領域座標）をウィンドウ座標に変換
-                            // SetWindowPos はウィンドウ枠を含むウィンドウ座標を期待するため
-                            if let Some(wp) = world.get::<crate::ecs::window::WindowPos>(current) {
-                                if let Some(pos) = wp.position {
-                                    let size = wp.size.unwrap_or_default();
-                                    if let Ok((wx, wy, _, _)) =
-                                        wh.client_to_window_coords(pos, size)
-                                    {
-                                        initial_window_pos = crate::ecs::Point { x: wx, y: wy };
-                                    }
-                                }
-                            }
-                        } else {
-                            // WindowHandle がない場合はフォールバック
-                            if let Some(wp) = world.get::<crate::ecs::window::WindowPos>(current) {
-                                if let Some(pos) = wp.position {
-                                    initial_window_pos = pos;
-                                }
-                            }
-                        }
-
-                        break;
-                    }
-                    if let Some(child_of) = world.get::<bevy_ecs::hierarchy::ChildOf>(current) {
-                        current = child_of.parent();
-                    } else {
-                        break;
-                    }
-                }
 
                 // DragConfig.move_window と DragConstraint を取得（ドラッグ対象エンティティから）
                 if let Some(dc) = world.get::<crate::ecs::drag::DragConfig>(entity) {
@@ -146,7 +125,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                 {
                     ctx_res.set(crate::ecs::drag::WindowDragContext {
                         hwnd,
-                        initial_window_pos: Some(initial_window_pos),
+                        initial_window_pos: origin,
                         move_window,
                         constraint,
                     });
@@ -263,71 +242,59 @@ pub fn dispatch_drag_events(world: &mut World) {
                     );
                 }
 
-                // Window entity を探索して WindowDragging を remove + Arrangement.offset を同期
-                {
-                    let mut current = entity;
-                    loop {
-                        if world.get::<crate::ecs::window::Window>(current).is_some() {
-                            // WindowDragging マーカーを remove
-                            if let Ok(mut window_mut) = world.get_entity_mut(current) {
-                                window_mut.remove::<crate::ecs::drag::WindowDragging>();
-                                tracing::debug!(
-                                    window_entity = ?current,
-                                    "[dispatch_drag_events] WindowDragging marker removed"
-                                );
-                            }
+                // 持ち主の窓から WindowDragging を remove + Arrangement.offset を同期
+                if let Some(window) = crate::ecs::find_owner_window(world, entity) {
+                    // WindowDragging マーカーを remove
+                    if let Ok(mut window_mut) = world.get_entity_mut(window) {
+                        window_mut.remove::<crate::ecs::drag::WindowDragging>();
+                        tracing::debug!(
+                            window_entity = ?window,
+                            "[dispatch_drag_events] WindowDragging marker removed"
+                        );
+                    }
 
-                            // Arrangement.offset を WindowPos.position から直接同期
-                            //
-                            // 旧方式: wp.set_changed() で Changed<WindowPos> を発火 →
-                            //   sync_window_arrangement_from_window_pos で offset 更新
-                            //   + apply_window_pos_changes で冗長な SetWindowPos 発火
-                            //
-                            // 問題: apply_window_pos_changes が client→window 座標変換を行い
-                            //   SetWindowPos を呼ぶが、変換の丸め誤差やタイミングにより
-                            //   ウィンドウがフレームオフセット分だけジャンプする場合がある。
-                            //
-                            // 新方式: Arrangement.offset を直接更新し、Changed<WindowPos> は
-                            //   発火させない。これにより冗長な SetWindowPos を回避しつつ、
-                            //   hit_test に必要な GA.bounds の整合性を維持する。
-                            if let Ok(mut window_mut) = world.get_entity_mut(current) {
-                                let pos_opt = window_mut
-                                    .get::<crate::ecs::window::WindowPos>()
-                                    .and_then(|wp| wp.position);
+                    // Arrangement.offset を WindowPos.position から直接同期
+                    //
+                    // 旧方式: wp.set_changed() で Changed<WindowPos> を発火 →
+                    //   sync_window_arrangement_from_window_pos で offset 更新
+                    //   + apply_window_pos_changes で冗長な SetWindowPos 発火
+                    //
+                    // 問題: apply_window_pos_changes が client→window 座標変換を行い
+                    //   SetWindowPos を呼ぶが、変換の丸め誤差やタイミングにより
+                    //   ウィンドウがフレームオフセット分だけジャンプする場合がある。
+                    //
+                    // 新方式: Arrangement.offset を直接更新し、Changed<WindowPos> は
+                    //   発火させない。これにより冗長な SetWindowPos を回避しつつ、
+                    //   hit_test に必要な GA.bounds の整合性を維持する。
+                    if let Ok(mut window_mut) = world.get_entity_mut(window) {
+                        let pos_opt = window_mut
+                            .get::<crate::ecs::window::WindowPos>()
+                            .and_then(|wp| wp.position);
 
-                                if let Some(pos) = pos_opt {
-                                    let new_offset = crate::ecs::layout::Offset {
-                                        x: pos.x as f32,
-                                        y: pos.y as f32,
-                                    };
-                                    if let Some(mut arr) =
-                                        window_mut.get_mut::<crate::ecs::layout::Arrangement>()
-                                    {
-                                        if arr.offset != new_offset {
-                                            tracing::info!(
-                                                window_entity = ?current,
-                                                old_offset = format_args!("({:.0},{:.0})", arr.offset.x, arr.offset.y),
-                                                new_offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
-                                                "[DragEnd] Direct Arrangement.offset sync"
-                                            );
-                                            arr.offset = new_offset;
-                                        } else {
-                                            tracing::debug!(
-                                                window_entity = ?current,
-                                                offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
-                                                "[DragEnd] Arrangement.offset unchanged"
-                                            );
-                                        }
-                                    }
+                        if let Some(pos) = pos_opt {
+                            let new_offset = crate::ecs::layout::Offset {
+                                x: pos.x as f32,
+                                y: pos.y as f32,
+                            };
+                            if let Some(mut arr) =
+                                window_mut.get_mut::<crate::ecs::layout::Arrangement>()
+                            {
+                                if arr.offset != new_offset {
+                                    tracing::info!(
+                                        window_entity = ?window,
+                                        old_offset = format_args!("({:.0},{:.0})", arr.offset.x, arr.offset.y),
+                                        new_offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
+                                        "[DragEnd] Direct Arrangement.offset sync"
+                                    );
+                                    arr.offset = new_offset;
+                                } else {
+                                    tracing::debug!(
+                                        window_entity = ?window,
+                                        offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
+                                        "[DragEnd] Arrangement.offset unchanged"
+                                    );
                                 }
                             }
-
-                            break;
-                        }
-                        if let Some(child_of) = world.get::<bevy_ecs::hierarchy::ChildOf>(current) {
-                            current = child_of.parent();
-                        } else {
-                            break;
                         }
                     }
                 }
@@ -384,6 +351,27 @@ pub fn dispatch_drag_events(world: &mut World) {
                 |h| h.0,
             );
         }
+    }
+}
+
+/// ドラッグを始めたときの窓の位置（枠を含むスクリーン座標）。
+///
+/// `WindowHandle` があれば `WindowPos.position` を `client_to_window_coords` で枠込みへ直す。
+/// `WindowHandle` が無ければ `WindowPos.position` をそのまま使う（テストの道）。
+/// 位置が無い・変換が失敗なら `Err`（理由の文）。
+fn drag_origin(world: &World, window: Entity) -> Result<crate::ecs::Point, String> {
+    let wp = world
+        .get::<crate::ecs::window::WindowPos>(window)
+        .ok_or_else(|| "WindowPos が無い".to_string())?;
+    let pos = wp
+        .position
+        .ok_or_else(|| "WindowPos.position が無い".to_string())?;
+    match world.get::<crate::ecs::window::WindowHandle>(window) {
+        // SetWindowPos はウィンドウ枠を含むウィンドウ座標を期待するため
+        Some(wh) => wh
+            .client_to_window_coords(pos, wp.size.unwrap_or_default())
+            .map(|(x, y, _, _)| crate::ecs::Point { x, y }),
+        None => Ok(pos),
     }
 }
 

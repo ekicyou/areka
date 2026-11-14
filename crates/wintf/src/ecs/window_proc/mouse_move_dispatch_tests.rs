@@ -125,11 +125,12 @@ fn failed_drag_window_move_is_logged_as_error() {
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = world.borrow_mut().world_mut().spawn_empty().id();
 
-    // Dragging まで進める。窓の文脈は取っ手が無く（空の取っ手になる）、窓を動かす形。
+    // Dragging まで進める。窓の文脈は取っ手が無く（空の取っ手になる）、始めの位置があって窓を動かす形。
     start_preparing(entity, PhysicalPoint::new(10, 20), HWND::default());
     start_dragging(PhysicalPoint::new(40, 50));
     let ctx = WindowDragContextResource::new();
     ctx.set(WindowDragContext {
+        initial_window_pos: Some(crate::ecs::Point { x: 0, y: 0 }),
         move_window: true,
         ..Default::default()
     });

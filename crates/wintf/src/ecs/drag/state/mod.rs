@@ -249,21 +249,21 @@ pub fn update_dragging(
                 ..
             } => {
                 // WindowDragContextResource から Window 情報を読み取り
-                let (hwnd, initial_window_pos, move_window, constraint) =
-                    if let Some(ctx_res) = drag_context {
-                        if let Some(ctx) = ctx_res.get() {
-                            (
-                                ctx.hwnd.unwrap_or(HWND::default()),
-                                ctx.initial_window_pos.unwrap_or(Point { x: 0, y: 0 }),
-                                ctx.move_window,
-                                ctx.constraint,
-                            )
-                        } else {
-                            (HWND::default(), Point { x: 0, y: 0 }, false, None)
-                        }
-                    } else {
+                // 窓を動かすのは、控えが動かすと言い、かつ始めの位置があるときだけ
+                let (hwnd, initial_window_pos, move_window, constraint) = match drag_context
+                    .and_then(|ctx_res| ctx_res.get())
+                {
+                    Some(ctx) => (
+                        ctx.hwnd.unwrap_or_default(),
+                        ctx.initial_window_pos.unwrap_or(Point { x: 0, y: 0 }),
+                        ctx.move_window && ctx.initial_window_pos.is_some(),
+                        ctx.constraint,
+                    ),
+                    None => {
+                        tracing::warn!(?entity, "[update_dragging] 窓の控えが無い: 窓は動かさない");
                         (HWND::default(), Point { x: 0, y: 0 }, false, None)
-                    };
+                    }
+                };
 
                 tracing::debug!(
                     entity = ?entity,

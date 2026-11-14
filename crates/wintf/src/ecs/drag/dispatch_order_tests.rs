@@ -1,10 +1,13 @@
-//! 1 回の配りにドラッグの終わりと次の始まりが重なる並びのテスト（指摘 1）。
+//! 1 回の配りにドラッグの終わりと次の始まりが重なる並びのテスト（指摘 1）と、
+//! ドラッグを始めた窓の位置が取れないときのテスト（指摘 3）。
 //!
 //! 世界は `EcsWorld::new()` の本番の登録どおりに組み、`Input` の段を回す。
 //! ドラッグの状態はスレッド局所なので、各テストの頭で「何もない」へ戻す。
 
 use crate::ecs::drag::{
-    DragAccumulatorResource, DragEvent, DragState, DragTransition, DraggingState, update_drag_state,
+    DragAccumulatorResource, DragConfig, DragEvent, DragStartEvent, DragState, DragTransition,
+    DraggingState, WindowDragContext, WindowDragContextResource, update_drag_state,
+    update_dragging,
 };
 use crate::ecs::pointer::PhysicalPoint;
 use crate::ecs::window::{Window, WindowPos};
@@ -143,6 +146,94 @@ fn delta_of_previous_drag_is_not_dispatched_to_next() {
     assert!(
         events.is_empty(),
         "前の移動量で DragEvent を配らない: {events:?}"
+    );
+    force_idle();
+}
+
+/// 位置の無い窓の子で始まりを配ると、記録を 1 行残し、控えの始めの位置は「無い」・動かすかは設定のまま。
+#[test]
+fn start_on_window_without_position_warns_and_leaves_origin_none() {
+    force_idle();
+    let mut ecs = EcsWorld::new();
+    let world = ecs.world_mut();
+    let window = world
+        .spawn((
+            Window::default(),
+            WindowPos {
+                position: None,
+                ..Default::default()
+            },
+        ))
+        .id();
+    let child = world
+        .spawn((
+            ChildOf(window),
+            DragConfig {
+                move_window: true,
+                ..Default::default()
+            },
+        ))
+        .id();
+
+    push(world, started(child, 10, 20));
+    let ((), events) = log_capture_kit::capture(|| world.run_schedule(Input));
+
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(warns.len(), 1, "WARN がちょうど 1 行でない: {events:?}");
+    let ctx = world
+        .resource::<WindowDragContextResource>()
+        .get()
+        .expect("控えが書かれる");
+    assert_eq!(ctx.initial_window_pos, None, "始めの位置は無い");
+    assert!(ctx.move_window, "動かすかは DragConfig のまま真");
+    let starts: Vec<DragStartEvent> = world
+        .resource_mut::<Messages<DragStartEvent>>()
+        .drain()
+        .collect();
+    assert_eq!(starts.len(), 1, "始まりの知らせは 1 件: {starts:?}");
+    assert!(
+        world.get::<DraggingState>(child).is_some(),
+        "印は今どおり入る"
+    );
+    force_idle();
+}
+
+/// 始めの位置の無い控えで状態を進めると、控えが動かすと言っても窓を動かさない。
+#[test]
+fn advance_with_context_without_origin_does_not_move_window() {
+    force_idle();
+    let entity = World::new().spawn_empty().id();
+    update_drag_state(|state| {
+        *state = DragState::JustStarted {
+            entity,
+            start_pos: PhysicalPoint::new(10, 20),
+            current_pos: PhysicalPoint::new(20, 30),
+            start_time: Instant::now(),
+        }
+    });
+    let ctx = WindowDragContextResource::new();
+    ctx.set(WindowDragContext {
+        hwnd: None,
+        initial_window_pos: None,
+        move_window: true,
+        constraint: None,
+    });
+
+    update_dragging(PhysicalPoint::new(20, 30), Some(&ctx));
+
+    let state = crate::ecs::drag::snapshot_drag_state();
+    assert!(
+        matches!(
+            state,
+            DragState::Dragging {
+                move_window: false,
+                ..
+            }
+        ),
+        "始めの位置が無いので動かさない: {state:?}"
     );
     force_idle();
 }

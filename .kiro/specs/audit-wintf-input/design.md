@@ -346,7 +346,7 @@ sequenceDiagram
 /// WindowHandle があれば WindowPos.position を client_to_window_coords で枠込みへ直す。
 /// WindowHandle が無ければ WindowPos.position をそのまま使う（今のテストの道）。
 /// 位置が無い・変換が Err なら Err（理由の文）。
-fn drag_origin(world: &World, window: Entity) -> Result<(Option<HWND>, Point), String>;
+fn drag_origin(world: &World, window: Entity) -> Result<Point, String>; // HWND は位置と別に WindowHandle から控える（位置が無くても控えの hwnd を残す＝balloon_drag_held の読みを変えない・実装 2.2）
 ```
 
 - 始まりの腕は `find_owner_window(world, entity)` で窓を引き、`None`（窓が無い）か `drag_origin` の `Err` なら `warn!(?entity, ?window, reason, "[dispatch_drag_events] ドラッグを始めた窓の位置が取れない: 窓は動かさない")` を 1 行出し、控えの `initial_window_pos` を `None` にする（今は `Some((0,0))`）。**控えの `move_window` は `DragConfig` の値のまま変えない**: `areka-placement` の本番のコード `balloon_drag_held`（`balloon_lock.rs:103-114`）が控えの `!move_window` を「このドラッグは止めている」の印として読むので、偽にすると `move_window: true` のバルーンが止めたドラッグに化ける（設計の検証の重い指摘 1）。受け手へのドラッグの知らせ・`DraggingState`（始めの位置は (0,0)）・`WindowDragging` は今どおり入れる（下流の約束「ドラッグの間は `DraggingState` が在る」を崩さない）。
