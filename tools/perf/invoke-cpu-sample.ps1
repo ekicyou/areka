@@ -9,7 +9,9 @@ invoke-cpu-sample.ps1 — CPU サンプリング（呼出スタック付き）�
   -Probe     … 採れるかどうかだけを確かめる。昇格しているか・xperf.exe が在るか・
                実際に 5 秒だけ採って止められるかを見て、1 行で報告する（必ず exit 0）
   -Start     … サンプリングと呼出スタックの採取を始める（管理者権限が要る）
-  -Stop      … 採取を止めてトレースをまとめ、記号を解決してテキストの dump を書き出す
+  -Stop      … 採取を止めてトレースをまとめ（まとめが通ったら元の ETL を消す）、記号を解決して
+               テキストの dump を書き出す
+  -Cancel    … 採取を止めて ETL を消す（記号は解かない。採取を始めた道具が失敗の道で使う）
   -SelfTest  … 道具そのものの較正。同梱の dump 断片で「areka.exe! のフレームを数える」
                関門が正しく数えられるか（合格側）と、フレームが無い入力で 0 を返すか
                （不合格側）を確かめ、続けて -Probe と同じ確認を行う
@@ -63,6 +65,7 @@ invoke-cpu-sample.ps1 — CPU サンプリング（呼出スタック付き）�
   pwsh -File tools/perf/invoke-cpu-sample.ps1 -Probe
   pwsh -File tools/perf/invoke-cpu-sample.ps1 -SelfTest
   pwsh -File tools/perf/invoke-cpu-sample.ps1 -Start -Etl C:\出力\cpu.etl
+  pwsh -File tools/perf/invoke-cpu-sample.ps1 -Cancel -Etl C:\出力\cpu.etl
   pwsh -File tools/perf/invoke-cpu-sample.ps1 -Stop  -Etl C:\出力\cpu.etl `
       -Out C:\出力\dump.txt -PdbDir C:\repo\target\release
 ================================================================================
@@ -82,6 +85,10 @@ param(
     [Parameter(ParameterSetName = 'Stop', Mandatory = $true)]
     [switch]$Stop,
 
+    # 採取を止めて ETL を消す
+    [Parameter(ParameterSetName = 'Cancel', Mandatory = $true)]
+    [switch]$Cancel,
+
     # 道具そのものの較正
     [Parameter(ParameterSetName = 'SelfTest', Mandatory = $true)]
     [switch]$SelfTest,
@@ -89,6 +96,7 @@ param(
     # 採取先／読み取り元のトレースファイル
     [Parameter(ParameterSetName = 'Start', Mandatory = $true)]
     [Parameter(ParameterSetName = 'Stop', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Cancel', Mandatory = $true)]
     [string]$Etl,
 
     # 書き出すテキスト dump
@@ -202,29 +210,6 @@ function Test-Elevated {
     return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# 外部コマンドを走らせ、終了コードと標準出力・標準エラーを揃えて返す。
-# 受け皿の 2 つのファイルは端末の出力の文字コード（[Console]::OutputEncoding）で読む。
-# xperf と wpaexporter は渡された出力先へ端末の出力の文字コードで書くため。今の xperf は
-# ASCII だけを書くので結果に差は出ないが、地域語の文が来たときに化けないようにしておく。
-function Invoke-NativeCommand {
-    param([string]$FilePath, [string[]]$ArgumentList)
-    $null = New-Item -ItemType Directory -Path $PERF_TMP_DIR -Force
-    $id = [guid]::NewGuid().ToString('N')
-    $outFile = Join-Path $PERF_TMP_DIR "cpu-sample-$id.out"
-    $errFile = Join-Path $PERF_TMP_DIR "cpu-sample-$id.err"
-    try {
-        $p = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -Wait -PassThru `
-            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-        return [pscustomobject]@{
-            ExitCode = $p.ExitCode
-            StdOut   = (Get-Content -LiteralPath $outFile -Raw -Encoding ([Console]::OutputEncoding) -ErrorAction SilentlyContinue)
-            StdErr   = (Get-Content -LiteralPath $errFile -Raw -Encoding ([Console]::OutputEncoding) -ErrorAction SilentlyContinue)
-        }
-    } finally {
-        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
-    }
-}
-
 function Get-StartArguments {
     param([string]$EtlPath)
     $interval = if ($ProfIntervalUnits -gt 0) { $ProfIntervalUnits } else { $PROF_INTERVAL_UNITS }
@@ -249,8 +234,9 @@ function Get-StartArguments {
 #   Stack,  TimeStamp,  ThreadID, No.,  Address,  Image!Function
 # 数えるのは Image!Function 列だけである。ThreadStartImage!Function 列はスレッドの
 # 起点であって帰属先ではないので数えない（素朴な文字列検索だと二重に数えてしまう）。
+# 行は 1 行ずつ受ける（-Stop は [IO.File]::ReadLines を渡す＝大きな dump を丸ごと持たない）。
 function Measure-ArekaFrames {
-    param([string]$Text)
+    param([System.Collections.Generic.IEnumerable[string]]$Lines)
 
     $result = [pscustomobject]@{
         SampleCount      = 0    # SampledProfile 行の数
@@ -262,15 +248,12 @@ function Measure-ArekaFrames {
         ThreadIds        = @()  # 行に出てきた ThreadID（重複なし・昇順）
         Problem          = ''
     }
-    if ([string]::IsNullOrWhiteSpace($Text)) {
-        $result.Problem = 'dump is empty'
-        return $result
-    }
-
     $headers = @{}   # イベント名 → @{ Names = 列名の配列; ImageIndex = Image!Function の位置 }
-    foreach ($raw in ($Text -split "`r?`n")) {
+    $seenLine = $false
+    foreach ($raw in $Lines) {
         $line = $raw.Trim()
         if (-not $line) { continue }
+        $seenLine = $true
         if ($line -eq 'BeginHeader' -or $line -eq 'EndHeader') { continue }
         if ($line.StartsWith('//') -or $line.StartsWith('#')) { continue }
         if ($line -notmatch ',') { continue }
@@ -321,6 +304,11 @@ function Measure-ArekaFrames {
         if ($module -eq $TARGET_MODULE) { $result.ArekaFrames++ }
     }
 
+    if (-not $seenLine) {
+        $result.Problem = 'dump is empty'
+        return $result
+    }
+
     # 既知の列名行が欠けていたら、どのイベントの分が無いのかまで言う（design C9 の Risks:
     # 既知列が無ければ exit 4）。SampledProfile だけ在って Stack が無い dump は、
     # 呼出スタックが 1 本も読めていないのに黙って通ってしまうので、ここで捕まえる。
@@ -355,19 +343,19 @@ function Get-ProbeResult {
     $probeEtl  = Join-Path $tempDir 'probe.etl'
     $mergedEtl = Join-Path $tempDir 'probe-merged.etl'
     try {
-        $r = Invoke-NativeCommand -FilePath $xperf -ArgumentList (Get-StartArguments -EtlPath $probeEtl)
-        if ($r.ExitCode -ne 0) {
+        $r = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments (Get-StartArguments -EtlPath $probeEtl)
+        if ($r.Code -ne 0) {
             return [pscustomobject]@{ Available = $false; Reason = 'start_failed' }
         }
         Start-Sleep -Seconds $PROBE_CAPTURE_SEC
-        $d = Invoke-NativeCommand -FilePath $xperf -ArgumentList @('-d', $mergedEtl)
-        if ($d.ExitCode -ne 0) {
-            $null = Invoke-NativeCommand -FilePath $xperf -ArgumentList @('-stop')
+        $d = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-d', $mergedEtl)
+        if ($d.Code -ne 0) {
+            $null = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-stop')
             return [pscustomobject]@{ Available = $false; Reason = 'start_failed' }
         }
         return [pscustomobject]@{ Available = $true; Reason = 'ok' }
     } catch {
-        $null = Invoke-NativeCommand -FilePath $xperf -ArgumentList @('-stop')
+        $null = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-stop')
         return [pscustomobject]@{ Available = $false; Reason = 'start_failed' }
     } finally {
         Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -411,13 +399,30 @@ function Invoke-StartMode {
         catch { Stop-Run -Mode 'start' -Code $EXIT_BAD_ARGS -Message "could not create the -Etl output folder ${parent}: $($_.Exception.Message)" }
     }
     $xperf = Get-XperfPath
-    $r = Invoke-NativeCommand -FilePath $xperf -ArgumentList (Get-StartArguments -EtlPath $etlFull)
-    if ($r.ExitCode -ne 0) {
+    $r = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments (Get-StartArguments -EtlPath $etlFull)
+    if ($r.Code -ne 0) {
         Stop-Run -Mode 'start' -Code $EXIT_RUN_FAILED `
-            -Message "xperf failed to start capture (exit code $($r.ExitCode)): $($r.StdErr)$($r.StdOut)"
+            -Message "xperf failed to start capture (exit code $($r.Code)): $($r.Lines -join ' ')"
     }
     Write-Info "capture started: $etlFull"
     Write-ResultLine -Mode 'start' -Code $EXIT_OK -Extra "etl=$etlFull"
+    exit $EXIT_OK
+}
+
+# 採取を止めて ETL を消す（記号は解かない）。呼ぶのは自分で採取を始めた道具だけ（カーネルの採取は 1 つ）。
+function Invoke-CancelMode {
+    $etlFull = [System.IO.Path]::GetFullPath($Etl)
+    $xperf = Get-XperfPath
+    if (-not $xperf) {
+        Stop-Run -Mode 'cancel' -Code $EXIT_UNAVAILABLE -Message 'xperf.exe not found.' -Extra 'available=false reason=no_xperf'
+    }
+    $r = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-stop')
+    if ($r.Code -ne 0) {
+        Stop-Run -Mode 'cancel' -Code $EXIT_RUN_FAILED -Message "xperf -stop failed (exit code $($r.Code)): $($r.Lines -join ' ')" -Extra "etl=$etlFull"
+    }
+    if (Test-Path -LiteralPath $etlFull -PathType Leaf) { Remove-Item -LiteralPath $etlFull -Force }
+    Write-Info "capture cancelled: $etlFull"
+    Write-ResultLine -Mode 'cancel' -Code $EXIT_OK -Extra "etl=$etlFull"
     exit $EXIT_OK
 }
 
@@ -425,12 +430,29 @@ function Invoke-StopMode {
     $etlFull = [System.IO.Path]::GetFullPath($Etl)
     $outFull = [System.IO.Path]::GetFullPath($Out)
     $pdbFull = [System.IO.Path]::GetFullPath($PdbDir)
-    if (-not (Test-Path -LiteralPath $pdbFull -PathType Container)) {
-        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-PdbDir folder not found: $pdbFull (build release with the environment variable CARGO_PROFILE_RELEASE_DEBUG=line-tables-only)"
-    }
     $xperf = Get-XperfPath
     if (-not $xperf) {
         Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'xperf.exe not found.' -Extra 'available=false reason=no_xperf'
+    }
+
+    # ⒜ 何より先に採取を止めてトレースをまとめる（前提の不備で止まっても、カーネルの採取を残さない）
+    $merged = [System.IO.Path]::ChangeExtension($etlFull, '.merged.etl')
+    $d = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-d', $merged)
+    # 0 でもまとめた先が無ければ通らなかった扱い（元を消すと測った物が残らない）
+    if ($d.Code -ne 0 -or -not (Test-Path -LiteralPath $merged -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath $etlFull -PathType Leaf)) {
+            Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED `
+                -Message "xperf failed to stop capture and $etlFull does not exist (exit code $($d.Code)): $($d.Lines -join ' ')"
+        }
+        Write-Info "stopping capture (-d) did not produce $merged (exit code $($d.Code)). Reading the existing $etlFull as is."
+        $merged = $etlFull
+    } elseif (Test-Path -LiteralPath $etlFull -PathType Leaf) {
+        Remove-Item -LiteralPath $etlFull -Force   # まとめが通ったら元は要らない（大きい）
+    }
+
+    # 前提の確かめは止めた後
+    if (-not (Test-Path -LiteralPath $pdbFull -PathType Container)) {
+        Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS -Message "-PdbDir folder not found: $pdbFull (build release with the environment variable CARGO_PROFILE_RELEASE_DEBUG=line-tables-only)"
     }
     if (-not $SymCache) {
         $localApp = [Environment]::GetFolderPath('LocalApplicationData')
@@ -439,7 +461,6 @@ function Invoke-StopMode {
     }
     $null = New-Item -ItemType Directory -Path $SymCache -Force -ErrorAction SilentlyContinue
 
-    # 記号解決の方式は採取を止める前に決める（引数の不備は仕事を始める前に言う）
     $backendName = $Backend
     if (-not $backendName) { $backendName = Get-BackendFromGoalFile -Path $GoalFile }
     if (-not $backendName) { $backendName = 'xperf-dumper' }
@@ -447,18 +468,6 @@ function Invoke-StopMode {
     if ($backendName -eq 'wpaexporter' -and -not (Test-Path -LiteralPath $wpaProfile -PathType Leaf)) {
         Stop-Run -Mode 'stop' -Code $EXIT_BAD_ARGS `
             -Message "profile file missing: $wpaProfile - the alternative backend (wpaexporter) needs the version-controlled .wpaProfile. Use the default backend (xperf-dumper) or add the .wpaProfile."
-    }
-
-    # ⒜ 採取を止めてトレースをまとめる（マージ済みの ETL を作る）
-    $merged = [System.IO.Path]::ChangeExtension($etlFull, '.merged.etl')
-    $d = Invoke-NativeCommand -FilePath $xperf -ArgumentList @('-d', $merged)
-    if ($d.ExitCode -ne 0) {
-        if (-not (Test-Path -LiteralPath $etlFull -PathType Leaf)) {
-            Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED `
-                -Message "xperf failed to stop capture and $etlFull does not exist (exit code $($d.ExitCode)): $($d.StdErr)$($d.StdOut)"
-        }
-        Write-Info "stopping capture (-d) returned non-zero. Reading the existing $etlFull as is."
-        $merged = $etlFull
     }
 
     # ⒝ 記号解決の道筋を子プロセスへ渡し、テキスト dump を書き出す
@@ -471,15 +480,15 @@ function Invoke-StopMode {
                 Stop-Run -Mode 'stop' -Code $EXIT_UNAVAILABLE -Message 'wpaexporter.exe not found.' -Extra 'available=false reason=no_xperf'
             }
             $outDir = Split-Path -Parent $outFull
-            $w = Invoke-NativeCommand -FilePath $wpa -ArgumentList @('-i', $merged, '-profile', $wpaProfile, '-outputfolder', $outDir)
-            if ($w.ExitCode -ne 0) {
-                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "wpaexporter failed (exit code $($w.ExitCode)): $($w.StdErr)$($w.StdOut)"
+            $w = Invoke-Child -Exe $wpa -Quiet -ReadEncoding ([Console]::OutputEncoding) -Arguments @('-i', $merged, '-profile', $wpaProfile, '-outputfolder', $outDir)
+            if ($w.Code -ne 0) {
+                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "wpaexporter failed (exit code $($w.Code)): $($w.Lines -join ' ')"
             }
         } else {
-            $s = Invoke-NativeCommand -FilePath $xperf `
-                -ArgumentList @('-i', $merged, '-symbols', '-a', 'dumper', '-o', $outFull)
-            if ($s.ExitCode -ne 0) {
-                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "xperf symbol resolution (-a dumper) failed (exit code $($s.ExitCode)): $($s.StdErr)$($s.StdOut)"
+            $s = Invoke-Child -Exe $xperf -Quiet -ReadEncoding ([Console]::OutputEncoding) `
+                -Arguments @('-i', $merged, '-symbols', '-a', 'dumper', '-o', $outFull)
+            if ($s.Code -ne 0) {
+                Stop-Run -Mode 'stop' -Code $EXIT_RUN_FAILED -Message "xperf symbol resolution (-a dumper) failed (exit code $($s.Code)): $($s.Lines -join ' ')"
             }
         }
     } finally {
@@ -490,7 +499,7 @@ function Invoke-StopMode {
     if (-not (Test-Path -LiteralPath $outFull -PathType Leaf)) {
         Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED -Message "dump was not written: $outFull"
     }
-    $stats = Measure-ArekaFrames -Text (Get-Content -LiteralPath $outFull -Raw)
+    $stats = Measure-ArekaFrames -Lines ([IO.File]::ReadLines($outFull))
     if ($stats.Problem) {
         Stop-Run -Mode 'stop' -Code $EXIT_MEASURE_FAILED `
             -Message "cannot read dump ($($stats.Problem)) - dump=$outFull. The xperf version may have changed the column order." `
@@ -507,6 +516,134 @@ function Invoke-StopMode {
     Write-ResultLine -Mode 'stop' -Code $EXIT_OK `
         -Extra "$summary stack_rows=$($stats.StackCount) resolved=$($stats.ResolvedFrames) unresolved=$($stats.UnresolvedFrames) backend=$backendName"
     exit $EXIT_OK
+}
+
+# ------------------------------------------------------ 自己較正の助け ----
+# 偽の xperf.cmd を置いた部屋（target\perf-loop-tmp\ の下）。本物の xperf は回さない。
+# 偽物は呼ばれるたびに 'call'・'sym=<_NT_SYMBOL_PATH>'・引数を 1 行ずつ書き、-o の先へ同梱の dump を写す。
+# 偽物の置き場は空白の無いフォルダ（cmd の引用の規則）、データは空白を含むフォルダに置く。
+function New-FakeXperfRoom {
+    param([int]$ExitCode = 0)
+    $root = Join-Path $PERF_TMP_DIR ('cpu-sample-selftest-' + [guid]::NewGuid().ToString('N'))
+    $room = [pscustomobject]@{
+        Root = $root; Bin = (Join-Path $root 'bin'); Data = (Join-Path $root 'dir with space')
+        Log  = (Join-Path $root 'xperf-calls.txt')
+    }
+    $null = New-Item -ItemType Directory -Path $room.Bin, $room.Data -Force
+    $fixture = Join-Path $SCRIPT_DIR $FIXTURE_DUMP_RELPATH
+    $cmd = @(
+        '@echo off',
+        ">>""$($room.Log)"" echo call",
+        ">>""$($room.Log)"" echo sym=%_NT_SYMBOL_PATH%",
+        'set "out="',
+        'set "mergedTo="',
+        ':loop',
+        'if "%~1"=="" goto done',
+        ">>""$($room.Log)"" echo(%~1",
+        'if /i "%~1"=="-o" set "out=%~2"',
+        'if /i "%~1"=="-d" set "mergedTo=%~2"',
+        'shift',
+        'goto loop',
+        ':done',
+        "if defined out copy /y ""$fixture"" ""%out%"" >nul",
+        'if defined mergedTo type nul > "%mergedTo%"',
+        "exit /b $ExitCode"
+    )
+    [IO.File]::WriteAllLines((Join-Path $room.Bin 'xperf.cmd'), $cmd, [Text.Encoding]::ASCII)
+    return $room
+}
+
+# 偽物の記録を呼び出しごとに読み、記録を消す。戻り: @( @{ Sym; Args } … )
+function Read-FakeXperfCalls {
+    param([pscustomobject]$Room)
+    $calls = [System.Collections.Generic.List[object]]::new()
+    if (-not (Test-Path -LiteralPath $Room.Log -PathType Leaf)) { return ,@() }
+    foreach ($line in [IO.File]::ReadAllLines($Room.Log)) {
+        if ($line -eq 'call') { $calls.Add([pscustomobject]@{ Sym = ''; Args = [System.Collections.Generic.List[string]]::new() }); continue }
+        if ($calls.Count -eq 0) { continue }
+        $last = $calls[$calls.Count - 1]
+        if ($line.StartsWith('sym=') -and $last.Args.Count -eq 0 -and -not $last.Sym) { $last.Sym = $line.Substring(4); continue }
+        $last.Args.Add($line)
+    }
+    Remove-Item -LiteralPath $Room.Log -Force
+    return ,@($calls)
+}
+
+# 自分を子として起こす（偽の xperf を子の PATH の先頭へ）
+function Invoke-SelfWithFakeXperf {
+    param([pscustomobject]$Room, [string[]]$Arguments)
+    $argv = Get-PwshChildArguments -ScriptPath $PSCommandPath -Arguments $Arguments
+    return Invoke-Child -Exe (Get-PwshPath) -Arguments $argv -Quiet -Environment @{ Path = "$($Room.Bin);$env:Path" }
+}
+
+function Get-AsciiLastLine {
+    param($Result)
+    return [string]($Result.Out | Select-Object -Last 1) -replace '[^\x20-\x7E]', '?'
+}
+
+# 段③の止める順・引数の渡し方・取り消しを偽の xperf で確かめる（stop-merges-first・args-with-spaces・cancel-mode）
+function Test-FakeXperfModes {
+    $failures = @()
+    $room = New-FakeXperfRoom
+    $badRoom = New-FakeXperfRoom -ExitCode 7
+    try {
+        $etl = Join-Path $room.Data 'cpu.etl'
+        $merged = Join-Path $room.Data 'cpu.merged.etl'
+        $out = Join-Path $room.Data 'dump out.txt'
+        $pdb = Join-Path $room.Data 'pdb dir'
+        $symCache = Join-Path $room.Data 'sym cache'
+
+        # stop-merges-first ⒜: -PdbDir が無くても、まず -d でまとめてから 3
+        [IO.File]::WriteAllText($etl, 'etl')
+        $r = Invoke-SelfWithFakeXperf -Room $room -Arguments @('-Stop', '-Etl', $etl, '-Out', $out, '-PdbDir', $pdb, '-SymCache', $symCache)
+        $calls = Read-FakeXperfCalls -Room $room
+        $first = if ($calls.Count -gt 0) { $calls[0].Args -join ' ' } else { '(fake xperf not called)' }
+        if ($r.Code -ne $EXIT_BAD_ARGS -or $calls.Count -ne 1 -or $calls[0].Args[0] -ne '-d') {
+            $failures += "stop-merges-first: missing -PdbDir gave exit code $($r.Code) (want $EXIT_BAD_ARGS) after $($calls.Count) xperf call(s), first '$first' (want -d first)"
+        }
+
+        # stop-merges-first ⒝: -PdbDir が在れば -d → -i … -o、dump が関門を通り、元の ETL が消えている
+        $null = New-Item -ItemType Directory -Path $pdb -Force
+        [IO.File]::WriteAllText($etl, 'etl')
+        $r = Invoke-SelfWithFakeXperf -Room $room -Arguments @('-Stop', '-Etl', $etl, '-Out', $out, '-PdbDir', $pdb, '-SymCache', $symCache)
+        $calls = Read-FakeXperfCalls -Room $room
+        $last = Get-AsciiLastLine $r
+        $order = ($calls | ForEach-Object { $_.Args[0] }) -join ','
+        if ($r.Code -ne $EXIT_OK -or $order -ne '-d,-i' -or (Test-Path -LiteralPath $etl) -or $last -notlike "INVOKE-CPU-SAMPLE RESULT stop code=0 *areka_frames=$FIXTURE_EXPECT_AREKA_FRAMES*") {
+            $failures += "stop-merges-first: exit code $($r.Code), xperf calls '$order' (want -d,-i), etl left=$(Test-Path -LiteralPath $etl), last line '$last'"
+        }
+
+        # args-with-spaces: 空白を含む ETL・-Out は 1 つの引数のまま、-PdbDir は記号の道筋の最後に 1 つのまま
+        $wantD = @('-d', $merged) -join '|'
+        $wantI = @('-i', $merged, '-symbols', '-a', 'dumper', '-o', $out) -join '|'
+        $gotD = if ($calls.Count -gt 0) { $calls[0].Args -join '|' } else { '' }
+        $gotI = if ($calls.Count -gt 1) { $calls[1].Args -join '|' } else { '' }
+        $gotSym = if ($calls.Count -gt 1) { $calls[1].Sym } else { '' }
+        if ($gotD -ne $wantD -or $gotI -ne $wantI -or -not $gotSym.EndsWith(";$pdb")) {
+            $failures += "args-with-spaces: got -d '$gotD' / -i '$gotI' / sym '$gotSym' (want '$wantD' / '$wantI' / ending ';$pdb')"
+        }
+
+        # cancel-mode: -stop が記録され ETL が消える。xperf が非ゼロなら 1 で ETL は残る
+        [IO.File]::WriteAllText($etl, 'etl')
+        $r = Invoke-SelfWithFakeXperf -Room $room -Arguments @('-Cancel', '-Etl', $etl)
+        $calls = Read-FakeXperfCalls -Room $room
+        $got = ($calls | ForEach-Object { $_.Args -join ' ' }) -join ','
+        $last = Get-AsciiLastLine $r
+        if ($r.Code -ne $EXIT_OK -or $got -ne '-stop' -or (Test-Path -LiteralPath $etl) -or $last -notlike 'INVOKE-CPU-SAMPLE RESULT cancel code=0 *') {
+            $failures += "cancel-mode: exit code $($r.Code), xperf calls '$got' (want -stop), etl left=$(Test-Path -LiteralPath $etl), last line '$last'"
+        }
+        $badEtl = Join-Path $badRoom.Data 'cpu.etl'
+        [IO.File]::WriteAllText($badEtl, 'etl')
+        $r = Invoke-SelfWithFakeXperf -Room $badRoom -Arguments @('-Cancel', '-Etl', $badEtl)
+        $calls = Read-FakeXperfCalls -Room $badRoom
+        $last = Get-AsciiLastLine $r
+        if ($r.Code -ne $EXIT_RUN_FAILED -or $calls.Count -ne 1 -or -not (Test-Path -LiteralPath $badEtl) -or $last -notlike 'INVOKE-CPU-SAMPLE RESULT cancel code=1 *' -or -not ($r.Err -match 'xperf')) {
+            $failures += "cancel-mode: failing xperf -stop gave exit code $($r.Code) (want $EXIT_RUN_FAILED), $($calls.Count) call(s), etl kept=$(Test-Path -LiteralPath $badEtl), last line '$last'"
+        }
+    } finally {
+        Remove-Item -LiteralPath $room.Root, $badRoom.Root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    return $failures
 }
 
 function Invoke-SelfTestMode {
@@ -529,7 +666,8 @@ function Invoke-SelfTestMode {
     if (-not (Test-Path -LiteralPath $fixture -PathType Leaf)) {
         $failures += "bundled dump fixture not found: $fixture"
     } else {
-        $okStats = Measure-ArekaFrames -Text (Get-Content -LiteralPath $fixture -Raw)
+        # stream-counts: -Stop と同じ 1 行ずつ読む道（[IO.File]::ReadLines）で数える
+        $okStats = Measure-ArekaFrames -Lines ([IO.File]::ReadLines($fixture))
         $okFrames = $okStats.ArekaFrames
         $okSamples = $okStats.SampleCount
         if ($okStats.Problem) { $failures += "pass side: $($okStats.Problem) ($fixture)" }
@@ -555,7 +693,7 @@ function Invoke-SelfTestMode {
         '         SampledProfile,    1053509,      notepad.exe ( 900),       1234, 0x00007ffb1c2d3e4f,   1,     ntdll.dll!RtlUserThreadStart,          Unknown!0x00007ffb1c2d3e4f,     1,     1',
         '                  Stack,    1053509,       1234,   1, 0x00007ffb0d21c4a0,       win32u.dll!NtUserPeekMessage'
     ) -join "`n"
-    $redStats = Measure-ArekaFrames -Text $redText
+    $redStats = Measure-ArekaFrames -Lines ($redText -split "`n")
     $failures += @(
         (Test-Expected 'fail side' 'areka.exe frame count'  0 $redStats.ArekaFrames),
         (Test-Expected 'fail side' 'SampledProfile row count' 2 $redStats.SampleCount),
@@ -566,7 +704,7 @@ function Invoke-SelfTestMode {
     Write-Info "selftest fail side: sample_count=$($redStats.SampleCount) stack_rows=$($redStats.StackCount) areka_frames=$($redStats.ArekaFrames) (expected areka_frames=0)"
 
     # ⒜-3 空の入力は「dump が空」と言い、黙って 0 を返さない
-    $emptyStats = Measure-ArekaFrames -Text ''
+    $emptyStats = Measure-ArekaFrames -Lines ([string[]]@())
     if (-not $emptyStats.Problem) { $failures += 'empty input returned no reason' }
 
     # ⒜-4 列名行が欠けた入力は、どのイベントの分が無いのかまで言う（-Stop はこれで exit 4）
@@ -574,7 +712,7 @@ function Invoke-SelfTestMode {
         '         SampledProfile,  TimeStamp,     Process Name ( PID),   ThreadID,           PrgrmCtr, CPU, ThreadStartImage!Function,            Image!Function, Count, SampledProfile type',
         '         SampledProfile,    1052388,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::world::EcsWorld::try_tick_world,     1,     1'
     ) -join "`n"
-    $noStackStats = Measure-ArekaFrames -Text $noStackText
+    $noStackStats = Measure-ArekaFrames -Lines ($noStackText -split "`n")
     if ($noStackStats.Problem -notmatch 'Stack') {
         $failures += "missing header row: input without the Stack header row was accepted (Problem='$($noStackStats.Problem)')"
     }
@@ -586,6 +724,9 @@ function Invoke-SelfTestMode {
     if ($noArgs.Code -ne $EXIT_BAD_ARGS -or $noArgsLast -notlike "INVOKE-CPU-SAMPLE RESULT none code=$EXIT_BAD_ARGS *") {
         $failures += "no-args: exit code $($noArgs.Code) (want $EXIT_BAD_ARGS), last line '$noArgsLast'"
     }
+
+    # ⒜-6 stop-merges-first・args-with-spaces・cancel-mode（偽の xperf を子の PATH の先頭へ）
+    $failures += @(Test-FakeXperfModes)
 
     # ⒝ -Probe（採れないことは赤ではなく UNAVAILABLE の報告）
     $probe = Get-ProbeResult
@@ -608,6 +749,7 @@ switch ($PSCmdlet.ParameterSetName) {
     'Probe'    { Invoke-ProbeMode }
     'Start'    { Invoke-StartMode }
     'Stop'     { Invoke-StopMode }
+    'Cancel'   { Invoke-CancelMode }
     'SelfTest' { Invoke-SelfTestMode }
-    'None'     { Stop-Run -Mode 'none' -Code $EXIT_BAD_ARGS -Message 'specify exactly one of -Probe / -Start / -Stop / -SelfTest.' }
+    'None'     { Stop-Run -Mode 'none' -Code $EXIT_BAD_ARGS -Message 'specify exactly one of -Probe / -Start / -Stop / -Cancel / -SelfTest.' }
 }
