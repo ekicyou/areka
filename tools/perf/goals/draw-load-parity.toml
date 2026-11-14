@@ -37,7 +37,7 @@ results_dir = "results"
 # 合否を決める唯一の判定スクリプト（要件 1.1・5.3）。
 judge_script = "tools/perf/judge-perf.py"
 # 版が違えば判定式か較正値が違う＝合否の意味が変わるので MEASURE_FAILED として止める。
-judge_version = "0.4.0"
+judge_version = "0.5.0"
 
 # 合否の定義。判定式そのものは judge-perf.py が持ち、ここは「どの式を使うか」の宣言。
 [target]

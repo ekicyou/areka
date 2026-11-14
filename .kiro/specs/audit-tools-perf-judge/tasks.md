@@ -85,7 +85,7 @@
   - _Dispatch: mechanical — 語の一覧（D4 の表）と検体の期待値を design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.3, 5.4_
 
-- [ ] 6. judge-perf の入力・終了コード・端末の文を直し、版を上げる（#5・#6・#8・#9・#24・#44〜#46・#75・#77・D10）
+- [x] 6. judge-perf の入力・終了コード・端末の文を直し、版を上げる（#5・#6・#8・#9・#24・#44〜#46・#75・#77・D10）
 - [x] 6.1 入力の関門と数の出し方を直す（#5・#9・#44〜#46・#75・#77）
   - profile が `short`／`long` 以外なら判定不能（#5・検体 M1_profile_empty・M2_profile_unknown＝T5）。時刻の読めない catch-up があれば `catchup_count` は `-`（#9・検体 C3_undated_catchup_metric＝T9）
   - 注意書きを定常の点数と `CONVERGENCE_MIN_SAMPLES_PER_WINDOW * CONVERGENCE_WINDOW_COUNT` で比べる（#44）。食い違いのとき子の stderr の最初の行も添える（#45）。`case.txt` の知らない鍵は exit 3（#46）。`NO_COLOR` の説明を README と同じ趣旨に（#75）。見本のコメントを 2 行に（#77）
@@ -100,7 +100,7 @@
   - 終わった姿: T6（`except Exception` を外すと 1 で赤）・T8（S3 の材料で A 上限越え・B 未観測が 1、関門を元の順に戻すと 2 で赤）・T24（最後の行を日本語に戻すと赤）が緑。`main` は今どおり終了コードを返し、終了を早める小細工が無い
   - _Dispatch: standard — 差し替えの較正の新しいモジュールを作り、例外の扱いと関門の順を組み直す_
   - _Requirements: 2.1, 4.7, 4.8, 6.1, 6.3, 7.1, 7.2, 7.3, 7.6_
-- [ ] 6.3 judge-perf の版を 0.5.0 に上げる（D10・議題 2）
+- [x] 6.3 judge-perf の版を 0.5.0 に上げる（D10・議題 2）
   - `SCRIPT_VERSION` を `0.5.0` にし、版の文の中身を 0.5.0 の変更点の一文に（行は増やさない）。同じコミットで `goals/draw-load-parity.toml` の `judge_version`・`goals/draw-load-parity.goal.md` の条件文の版・`fixtures-loop/compare/goal.toml` と `fixtures-loop/compare/na_secondary/goal.toml` の `judge_version`・`fixtures-loop/compare/*/expected_compare.txt` 8 本の版を上げる。`fixtures-loop/ledger/` と来歴の注記は変えない
   - `audit-tools-perf-run` のセッションへ「judge-perf の版の値が 0.5.0 に変わるだけ・字面の形は同じ」と知らせる
   - 終わった姿: judge-perf と perf-compare の `--selftest` と `perf-loop.ps1 selftest` が緑で、ツリー全体の grep で D10 の一覧に `0.4.0` が残っていない
@@ -229,3 +229,4 @@
 - 5: design T2 の「5 秒の CPU 9.00」は D4 のもとでは満たせない（起動の挨拶も発話の区間）ので、実装に合わせて「12 秒（boot_talk_done の後）」へ直した。K1 が縛るのは「終わりの語が無いと区間が閉じず、挨拶の後の重さを巻き込む」こと
 - 6.1: README へ渡す分（13）の候補: profile は short・long 以外で判定不能／時刻の無い catch-up があると `catchup_count` は `-`（978 行あたり）／case.txt の鍵の一覧と知らない鍵は exit 3（389 行あたり）／検体の一覧に M1・M2・C3／baseline の注意書きは定常の点数（12）で比べる
 - 6.2: judge-perf の verdict・baseline の標準出力の締めも `JUDGE-PERF RESULT code=N`（「判定は以上」を置き換え）。perf-loop の止まりの文の LastLine はこの行になり、理由は stderr と verdict.txt に残る（`audit-tools-perf-run` へ知らせる・6.3 の知らせと一緒に）。`--emit-metrics` では metric の行が RESULT の後に続く／`SELFTEST RESULT` の ok は検体の数・ng は理由の数／`--selftest` の想定外の例外は今も exit 1（14 の audit で拾う候補）。perf_lines の失敗の文は英語の ASCII
+- 6.3: 範囲の外: `doc/COMPAT_ARCHITECTURE.md:629` が「judge-perf.py（版 0.4.0）の較正値に従う」と版を名指していて古くなった（D10 の一覧に無い）。/kiro-complete の棚卸で扱う
