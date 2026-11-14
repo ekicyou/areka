@@ -298,3 +298,18 @@
 - 消す前の `git grep`: 消したのはローカルの束縛だけ（`dx`・`dy`・`distance_sq`・`threshold_sq`）で、外から引く名は無い。
 - 古くなった説明: `ecs/drag/state/mod.rs:618-621` の `check_threshold` の説明（「本番呼び出しがゼロ」「本番の閾値判定は `mouse_move.rs` 内にインライン複製」）はこの直しで事実と合わなくなったが、`ecs/drag/` はあちら（`audit-wintf-input`）の持ち物で、申し合わせ（12.2 門 GI ⒝）で説明の直しはあちらが持つので触っていない。
 - テストの数: `cargo test -p wintf --lib window_proc::mouse_move` 10→11 本緑。`window_proc` 全体 116 本緑。`drag::state` 32 本緑（`check_threshold` の 5 本を含む）。
+
+## 14.1
+
+- 何を変えたか（46・61）:
+  - `window_proc/mouse_click.rs`: `handle_button_message` に `double_click: bool` を足し `pub(super)` にした（引数が 8 個になるので `#[allow(clippy::too_many_arguments)]`・クレートに前例あり）。true のとき、付ける `PointerState` と既にある `PointerState` の `double_click` に `double_click_of(button)` を入れる。`double_click_of` を同じファイルに置いた。ふつうの押下・離しの 8 か所の呼び出しは `false`。
+  - 61: 付ける `PointerState` の `left_down`・`right_down`・`middle_down` の初めの値を消して `..Default::default()` に任せた。`client_point`・`local_point` の欄は変えていない（申し合わせ ⒞）。
+  - `window_proc/mouse_dblclick_wheel.rs`: `handle_double_click_message`（約 120 行）を消し、4 つの `WM_*BUTTONDBLCLK` は `handle_button_message(.., is_down = true, double_click = true)` を呼ぶだけにした。使われなくなった `use tracing::debug` を外した。これで当たらないときの予備の枝（窓の entity へ `record_button_down`）がダブルクリックにも効く。
+  - 振る舞いの差（テストの外）: 消した受け手は既にある `PointerState` の `shift_down`/`ctrl_down` も直に書いていた。新しい道は直に書かず、ふつうの押下と同じく `set_modifier_state` の溜め（次の tick の転送）に任せる。ログの `[handle_double_click_message] Double-click detected` の行は無くなり、ふつうの押下の `[handle_button_message] hit_test result` の行が出る（`git grep` で crates・tools・doc にこの文字列を読む所は 0 件。完了 spec の記録の中にだけ残る）。
+  - 文書: `doc/COMPAT_ARCHITECTURE.md:368` の定義点を `mouse_click.rs` の `handle_button_message`（`WM_LBUTTONDBLCLK` が印つきで呼ぶ）に直した。`mouse_click.rs` のファイル頭と共通処理の説明に、ダブルクリックもここを通ることを足した。
+- テストの試し方: 既にあるダブルクリックのテスト 4 本（W1×2・W2×2）は `dispatch_window_message` で配っているので、試し方・主張とも変える所が無く、新しい道で緑のまま。
+- 足したテスト: `mouse_dblclick_wheel_tests.rs` の `w3_left_dblclick_without_hit_records_press_on_window`（素の `EcsWorld`・窓に `PointerState` を付け、`WM_LBUTTONDBLCLK` を配って `transfer_buffers_to_world` の後に `left_down` が true）。
+  - RED: 直す前に回して赤（`cargo test -p wintf --lib mouse_dblclick_wheel`: 4 passed; 1 failed・`w3_left_dblclick_without_hit_records_press_on_window`）。
+  - 較正: 予備の枝の `record_button_down(window_entity, button)` を外す → `w3_left_dblclick_without_hit_records_press_on_window` が赤（116 passed; 1 failed）。明示の編集で戻し、`git diff` が意図した差分だけに戻ったことを確かめた。
+- 消す前の `git grep`（`handle_double_click_message`）: crates の中は `mouse_dblclick_wheel.rs` の定義と 4 つの呼び出しだけ。tools・テスト・fixture・設定は 0 件。`doc/COMPAT_ARCHITECTURE.md:368` に 1 件（上で直した）。ほかは `.kiro/specs/completed/` の過去の記録（直さない）と、この spec の research.md・design.md。`DOUBLE_CLICK_BUFFERS` は触っていない。
+- テストの数: `cargo test -p wintf --lib window_proc` 116 → 117 passed（足した 1 本）。

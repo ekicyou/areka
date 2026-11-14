@@ -4,6 +4,8 @@
 //!     閾値を越えて動かせば開始が積まれ、越えずに離せば開始も終了も積まれない。
 //! W2: ドラッグを許していない窓（`DragConfig` 無し・無効・左ボタン不可）と、右ボタンのダブルクリックでは
 //!     準備に入らない。
+//! W3: 当たり判定が取れない窓でも、ダブルクリックの押下は窓の entity に左の押下として記録される
+//!     （ふつうの押下と同じ予備の枝を通る）。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -21,7 +23,7 @@ use crate::ecs::drag::{
     cancel_dragging, dispatch_drag_events, snapshot_drag_state,
 };
 use crate::ecs::layout::GlobalArrangement;
-use crate::ecs::pointer::PhysicalPoint;
+use crate::ecs::pointer::{PhysicalPoint, PointerState, transfer_buffers_to_world};
 use crate::ecs::window::{Window, WindowPos};
 use crate::ecs::world::EcsWorld;
 use crate::ecs::{Point, Rect, SizeI};
@@ -220,5 +222,33 @@ fn w2_right_dblclick_does_not_prepare() {
         !is_preparing(),
         "右ボタンのダブルクリックでは準備に入らない: {:?}",
         snapshot_drag_state()
+    );
+}
+
+/// W3: 素の `EcsWorld`（当たり判定が取れない）で `WM_LBUTTONDBLCLK` を配ると、押下の受け手の予備の枝を通り、
+/// 窓の entity に左の押下が記録される（記録が無いと、続く `WM_LBUTTONUP` だけが届き「押していないのに離した」並びになる）。
+#[test]
+fn w3_left_dblclick_without_hit_records_press_on_window() {
+    cancel_dragging();
+    let world = Rc::new(RefCell::new(EcsWorld::new()));
+    let window = {
+        let mut w = world.borrow_mut();
+        let w = w.world_mut();
+        let window = w.spawn(Window::default()).id();
+        // 溜めは thread_local。前のテストの残りを、PointerState を付ける前に流して空にしておく。
+        transfer_buffers_to_world(w);
+        w.entity_mut(window).insert(PointerState::default());
+        window
+    };
+
+    send(&world, window, WM_LBUTTONDBLCLK, 60, 60);
+
+    let mut w = world.borrow_mut();
+    let w = w.world_mut();
+    transfer_buffers_to_world(w);
+    let state = w.get::<PointerState>(window).expect("窓の PointerState");
+    assert!(
+        state.left_down,
+        "当たらないダブルクリックでも窓の entity に左の押下が記録される: {state:?}"
     );
 }

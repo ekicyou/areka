@@ -1,6 +1,6 @@
 //! マウスボタン押下・解放メッセージハンドラ
 //!
-//! WM_*BUTTONDOWN, WM_*BUTTONUP の処理を担当する。
+//! WM_*BUTTONDOWN, WM_*BUTTONUP の処理を担当する。WM_*BUTTONDBLCLK も押下としてここの共通処理を通る。
 
 #![allow(non_snake_case)]
 
@@ -19,9 +19,12 @@ type HandlerResult = Option<LRESULT>;
 /// ボタンメッセージハンドラ共通処理
 ///
 /// hit_test でヒット対象エンティティを特定し、ButtonBuffer に記録する。
-/// PointerState がない場合は付与する。
+/// PointerState がない場合は付与する。当たらないときは窓の entity に記録する。
+/// `double_click` が true（`WM_*BUTTONDBLCLK` の 2 回目の押下）なら、当たった entity の
+/// PointerState にボタンから決めたダブルクリックの種類を入れる。押下・ドラッグ準備の決まりはふつうの押下と同じ。
 #[inline]
-fn handle_button_message(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn handle_button_message(
     world: &Rc<RefCell<EcsWorld>>,
     window_entity: Entity,
     hwnd: HWND,
@@ -29,6 +32,7 @@ fn handle_button_message(
     lparam: LPARAM,
     button: crate::ecs::pointer::PointerButton,
     is_down: bool,
+    double_click: bool,
 ) -> HandlerResult {
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
@@ -105,32 +109,37 @@ fn handle_button_message(
                     "[handle_button_message] hit_test result"
                 );
 
-                // PointerState がない場合は付与
-                if world_borrow
-                    .world()
-                    .get::<PointerState>(target_entity)
-                    .is_none()
+                let double_click_kind = if double_click {
+                    double_click_of(button)
+                } else {
+                    crate::ecs::pointer::DoubleClick::None
+                };
+
+                // PointerState がない場合は付与（ボタンの状態は次の tick の溜めの転送が入れる）
+                if let Some(mut ps) = world_borrow
+                    .world_mut()
+                    .get_mut::<PointerState>(target_entity)
                 {
+                    if double_click {
+                        ps.double_click = double_click_kind;
+                    }
+                } else {
                     world_borrow
                         .world_mut()
                         .entity_mut(target_entity)
                         .insert(PointerState {
                             client_point: PhysicalPoint::new(x, y),
                             local_point: PhysicalPoint::new(x, y),
-                            left_down: button == crate::ecs::pointer::PointerButton::Left
-                                && is_down,
-                            right_down: button == crate::ecs::pointer::PointerButton::Right
-                                && is_down,
-                            middle_down: button == crate::ecs::pointer::PointerButton::Middle
-                                && is_down,
                             shift_down: shift,
                             ctrl_down: ctrl,
+                            double_click: double_click_kind,
                             ..Default::default()
                         });
                     debug!(
                         entity = ?target_entity,
                         button = ?button,
                         is_down,
+                        double_click,
                         "PointerState inserted on button event"
                     );
                 }
@@ -215,6 +224,18 @@ fn handle_button_message(
     Some(LRESULT(0))
 }
 
+/// ダブルクリックの種類をボタンから決める（Left → DoubleClick::Left ほか）。
+fn double_click_of(button: crate::ecs::pointer::PointerButton) -> crate::ecs::pointer::DoubleClick {
+    use crate::ecs::pointer::{DoubleClick, PointerButton};
+    match button {
+        PointerButton::Left => DoubleClick::Left,
+        PointerButton::Right => DoubleClick::Right,
+        PointerButton::Middle => DoubleClick::Middle,
+        PointerButton::XButton1 => DoubleClick::XButton1,
+        PointerButton::XButton2 => DoubleClick::XButton2,
+    }
+}
+
 /// WM_LBUTTONDOWN: 左ボタン押下
 #[inline]
 pub(super) fn WM_LBUTTONDOWN(
@@ -232,6 +253,7 @@ pub(super) fn WM_LBUTTONDOWN(
         lparam,
         crate::ecs::pointer::PointerButton::Left,
         true,
+        false,
     )
 }
 
@@ -262,6 +284,7 @@ pub(super) fn WM_LBUTTONUP(
         lparam,
         crate::ecs::pointer::PointerButton::Left,
         false,
+        false,
     );
     push_release_cursor(world, entity);
     result
@@ -284,6 +307,7 @@ pub(super) fn WM_RBUTTONDOWN(
         lparam,
         crate::ecs::pointer::PointerButton::Right,
         true,
+        false,
     )
 }
 
@@ -303,6 +327,7 @@ pub(super) fn WM_RBUTTONUP(
         wparam,
         lparam,
         crate::ecs::pointer::PointerButton::Right,
+        false,
         false,
     );
     push_release_cursor(world, entity);
@@ -326,6 +351,7 @@ pub(super) fn WM_MBUTTONDOWN(
         lparam,
         crate::ecs::pointer::PointerButton::Middle,
         true,
+        false,
     )
 }
 
@@ -345,6 +371,7 @@ pub(super) fn WM_MBUTTONUP(
         wparam,
         lparam,
         crate::ecs::pointer::PointerButton::Middle,
+        false,
         false,
     );
     push_release_cursor(world, entity);
@@ -367,7 +394,7 @@ pub(super) fn WM_XBUTTONDOWN(
     } else {
         crate::ecs::pointer::PointerButton::XButton2
     };
-    handle_button_message(world, entity, hwnd, wparam, lparam, button, true)
+    handle_button_message(world, entity, hwnd, wparam, lparam, button, true, false)
 }
 
 /// WM_XBUTTONUP: 拡張ボタン解放
@@ -385,7 +412,7 @@ pub(super) fn WM_XBUTTONUP(
     } else {
         crate::ecs::pointer::PointerButton::XButton2
     };
-    let result = handle_button_message(world, entity, hwnd, wparam, lparam, button, false);
+    let result = handle_button_message(world, entity, hwnd, wparam, lparam, button, false, false);
     push_release_cursor(world, entity);
     result
 }
