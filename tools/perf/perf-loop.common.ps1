@@ -37,6 +37,11 @@ perf-tool-base.ps1（表示・時刻・子の起こし方・目標定義の読�
   $script:CurrentDir   … そのサブコマンドの出力先（無ければ '-'）
   $script:OutRootPath  … 出力先の根（既定は %LOCALAPPDATA%\areka-diag\perf-loop）
   $script:GoalName     … 目標の名前（出力先の第 2 階層）
+  次の 4 つは perf-loop.measure.ps1 と perf-loop.build.ps1 が読む（このファイルは読まない）:
+  $script:DryRunMode   … -DryRun の真偽（走らせずに配管だけを確かめる）
+  $script:ResumeMode   … -Resume の真偽（終わりきった走行と実行体を使い回す）
+  $script:BinDirArg    … -BinDir の値（無ければ空。実行体の所在の上書き）
+  $script:IterArg      … -Iter の値（整数。周の出力先 iter-<n> の番号）
 ================================================================================
 #>
 
