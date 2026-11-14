@@ -45,7 +45,7 @@
 
 ## 確定した直す対象（要件 1.5・要件の討議 2026-11-14）
 
-指摘の中身はギャップ分析（`research.md` 3 節）が正本。番号は audit の番号。議題 1〜10 は推奨案で確定した（2026-11-04 開発者「audit系は推奨案でよい」の常の承認による）。残すと裁定した指摘は 1 件（21）と 1 件の一部（8 の system そのもの）。後の spec へ回した指摘は 1 件の一部（28 のうちテストだけが使う公開）。
+指摘の中身はギャップ分析（`research.md` 3 節）が正本。番号は audit の番号。議題 1〜10 は推奨案で確定した（2026-11-04 開発者「audit系は推奨案でよい」の常の承認による）。残すと裁定した指摘は 1 件（21）と 2 件の一部（8 の system そのもの・23 の接続宣言の `#[cfg(test)]`）。後の spec へ回した指摘は 1 件の一部（28 のうちテストだけが使う公開）。
 
 | 番号 | 組 | 一言 | 扱い |
 |---|---|---|---|
@@ -71,7 +71,7 @@
 | 20 | できれば | 未確定の印（`CW_USEDEFAULT`・`i32::MIN`）の扱いが場所で違う | 直す |
 | 21 | できれば | 組のドラッグの終わりで、動かした窓と相手でずれの扱いが違う | 残す（議題 7） |
 | 22 | できれば | 古くなった説明（旧い名前 `emo2_boot` を含む） | 直す（議題 10） |
-| 23 | できれば | 本番と判定器の要らない小さなコード | 直す（`DragPositionPolicy` は議題 8） |
+| 23 | できれば | 本番と判定器の要らない小さなコード | 直す（`DragPositionPolicy` は議題 8・判定器のテストの接続宣言の `#[cfg(test)]` 12 個は議題 11 で残す） |
 | 24 | できれば | 出荷の作りでだけ赤になるテスト | 直す |
 | 25 | できれば | 取り消しのテストが本番の送らない位置を使う | 直す |
 | 26 | できれば | 実機のサインオフのログの置き場が `target` の下に決まっていない | 直す |
@@ -85,11 +85,14 @@
 3. **`ClampX` の後も見えない窓（指摘 6）**: 位置は今のまま（完了した `areka-P0-dpi-transition-atomicity` の設計 D6「Y は射影の所有」を崩さない）、寄せた後も作業領域と交わらないときは別の語で記録し、「引き戻した」と書かない。語の表を持つ文書も合わせて直す（置き場は設計で決める）。
 4. **`anchor_changed_system`（指摘 8）**: system とその 4 本のテストは残す。ほかの 4 つの crate の説明（本体 `runtime/frame.rs`・`runtime/frame/dpi.rs`・`runtime/frame/wiring.rs`、`areka-emo-present` の `presenter/refresh.rs`）と核の `diag.rs` が、永続 `SystemState` の書き方の見本として名指しているので、消すと範囲の外の 5 か所の説明を書き換えることになる。要らない `#[allow(dead_code)]` は消し、説明（`follow/window_move.rs`・`follow/anchor.rs:173-175`）を「本番のアンカーの変化は `reseed` から `resize_window_to` で書く。この system は schedule に登録しない書き方の見本」に直す。
 5. **brief が「古くない」とした `#[allow]`（`follow.rs:108`・`follow/window_move.rs:449`）**: 消す。理由の文は事実だが、lib の `pub` の項目には lint が鳴らないので属性は働いていない（ギャップ分析で `cargo check` を回して確かめた）。要件 2.3 を 2.5 より優先し、要件 2.5 を直した。
-6. **ログを捕まえる手段の写し（指摘 17）**: `crates/areka-placement/Cargo.toml` の `log-capture-kit` の dev-dependency に `env-filter` の feature を開け、2 つの写しを `log_capture_kit::capture_under_filter` に替える。`Cargo.lock` が 1 バイトも変わらないことを確かめてから入れ、変わるなら写しに見張りを足す形（案 乙）にする。`Cargo.toml` は `audit-placement-core` の持ち物なので、触る前に申し合わせる。依存は増えない（要件 7.5）。
+6. **ログを捕まえる手段の写し（指摘 17）**: 写しのまま、捕まえ損ねの見張りを足す（案 乙・範囲の中で閉じる）。`follow_transition_diag_tests.rs` の写しは既に対照の行を確かめているので、`follow_window_move_diag_tests.rs` の写しにだけ、窓の中で対照の行を出してそれが捕まったことの確かめを足す。`env-filter` を開ける案（案 甲）は取らない。完了した `areka-P0-test-cage-determinism` の決め（`env-filter` を宣言してよい crate は `wintf` 1 つ＝見張り `crates/log-capture-kit/tests/with_default_guard_test.rs` の `only_one_crate_declares_the_env_filter_feature`・`structure.md` の「有効にしてよいのは `wintf` のみ」）に当たるため（2026-11-14 設計の段で決め直した・`Cargo.lock` は変わらないことも確かめたが、決めに当たるのは別の理由）。`crates/areka-placement/Cargo.toml` には触らない。
 7. **組のドラッグの終わりのずれの扱い（指摘 21）**: 直さずに残す。完了した `seriko-pattern-calls` の設計（「利用者のドラッグの終わりだけは、その窓の当てた分を 0 にする。利用者が置いた所を新しい元の位置にする」・task 6.2「組の相手の保存は当てた分を引いた元の位置」）の決めどおりで、利用者が手で置いたのは動かした窓だけ、相手のずれはまだ相手の面のアニメーションのもの、という読みで揃っている。`sticky_follow.rs` の相手の保存の所に、この理由を 1 行の説明で書き足す。
 8. **要らない公開（指摘 28・申し送り ⑶・指摘 23 の `DragPositionPolicy`）**: 範囲の外にコードの使い手が 0 件の項目（`BottomSnapPolicy`・`DragPositionPolicy`・`VisibilityVerdict`・`guard_visibility`・`MonitorDpiEntry`ほか、ギャップ分析 3 節の 28 の一覧）は、C20 のうちに `pub(crate)` か私有へ下げる（核のテストが使う `MonitorDpiEntry` は `pub(crate)` で届く）。下げる前にツリー全体を grep し直し、`audit-placement-core` へ一言知らせる。範囲の外の使い手が本体のテストだけの項目（`on_balloon_drag`・`sync_drag_writer`・`WORK_AREA_CLAMP_TAG` ほか・`transition_diag.rs` の語の大半）は、C21 の `runtime-crate-split` が判定器とそのテストを `areka-runtime` へ移すと公開の要り方が変わるので、この spec では狭めず、その spec の brief へ申し送る。`ChainPlacement`・`ChainClampOutcome` は名で呼べるよう `pub use` を足す（足すだけ）。
 9. **申し送り ⑴（`MonitorSnapshot`）**: 理由が今も事実なので残す。wintf の `Monitor` を包まず、配置の `RectPx` へ写して持つ形で、直に組むファイルが 50 ある。寄せるのは wintf の型に触る（要件 7.4）大きな直しで、audit の指摘にも上がらなかった。
 10. **旧い名前 `emo2_boot`（要件 2.8）**: 直す（9 ファイル 21 か所・説明の中のパスだけ・`Emo2Wiring` は 0 か所）。直したら `runtime-crate-split` の brief へ申し送る（要件 2.9）。
+11. **判定器のテストの接続宣言の `#[cfg(test)]`（指摘 23 の 1 項目・2026-11-14 設計の段から返った議題）**: 消さずに残す。`transition_judge.rs` の 10 個と `transition_judge_offset.rs` の 2 個は、テストのファイルの接続宣言に付いた属性で、`structure.md` の「接続宣言の `#[cfg(test)]` は冗長でも付ける」の決まりどおりの形。要件 4.1 の 1 に当たるので、指摘 23 のこの 1 項目は直す対象に数えない。
+
+議題 6 と 11 は設計の段で決め直した・決めた（推奨案・2026-11-04 開発者「audit系は推奨案でよい」の常の承認による）。
 
 ## Requirements
 

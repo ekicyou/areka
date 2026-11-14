@@ -450,3 +450,57 @@
 > 2026-11-14 要件の討議の結果は `requirements.md` の「確定した直す対象」が正本。上の推奨から変えたのは 4 つ＝議題 1 は切らない（`audit-dola` の前例）・議題 4 は system を残す（範囲の外の 5 か所の説明が見本として名指す）・議題 7 は残す（`seriko-pattern-calls` の設計の決めどおり）・議題 8 は使い手 0 の公開を C20 のうちに狭め、テストだけが使う公開を `runtime-crate-split` へ申し送る。
 
 > 2026-11-14 並走の申し合わせ（設計の段へ）: `audit-placement-core` とは、指摘 2 で相手のテスト（`dpi_sync_tests.rs` ほか）が赤になったら後から着地する側が直す・`Cargo.toml` の `env-filter`（指摘 17）は触ってよい・相手は `dpi_sync` の `DPI_SYNC_HOLD_MAX_FRAMES` ほかテストだけが使う公開を `cfg(any(test, feature = "test-support"))` の内側へ移す案（判定器のテストは本体の `test-support` で届く）。`audit-tools-perf-judge` とは、`transition_judge.rs` の `judge-perf.py` の行番号の参照（22・403 行）をこちらが指摘 22 で関数名だけで指す形（例「tools/perf/ の Python の道具の parse_fields と同じ規則」）に直す。相手の指摘 40 で parse_fields の置き場が judge-perf.py から tools/perf/ の新しい共通モジュールへ移る見込みなので、ファイル名は書かない（どちらの順で着地してもずれない）。
+
+## 13. 設計の段の調べ（2026-11-14・`/kiro-spec-design`）
+
+- 調べの種類: 軽い調べ（今ある crate の中の直し・新しい依存も新しい境目も無い）。外の資料は引いていない（ukadoc の `move` の項は要件の討議の議題 2 で引き済み）。
+- 使ったスキルと決まり: `kiro-spec-design`（`rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。ponytail の「いちばん小さい完全な変更」（消せるものは消す・呼び出し元とテストまで直し切る）。steering は `structure.md`（テスト分離の接続規約・1,000 行・`log-capture-kit` の節）・`tech.md`（Testing）・`logging.md`（水準の表）を読んだ。
+- cargo は `cargo metadata --locked --offline` を 1 回だけ回した（下の 13.1 の 5）。`Cargo.toml` は確かめた直後に `git checkout` で戻し、作業ツリーは clean（`Cargo.lock` の sha256 は前後で同じ `e6c49342…`）。
+
+### 13.1 調べが要る所（11 節）の結論
+
+1. **指摘 3（離したフレームの最後の動き）**: 静的に確かめた。wintf の `DragAccumulator::set_transition` は `Ended` を積む時点で `current_dragging_entity` を `None` にする（`crates/wintf/src/ecs/drag/accumulator.rs:75-85`）。`dispatch_drag_events` は遷移を先に配り、そのあと `flush_result.current_dragging_entity` が `Some` のときだけ累積の量を `DragEvent` にする（`crates/wintf/src/ecs/drag/dispatch.rs:82`・`:340-349`）。よって `Ended` と同じ flush に入った最後の量は `DragEvent` にならない。指摘の前提は正しい。実機の再現は要らない（決定論のテストで、最終の `WindowPos` と最後の `DragEvent` をずらして固定できる）。
+2. **指摘 2（`move_window_with_route` を `follow_balloon` へ）**: `move_window_with_route` を通る呼び手は `MoveCue`（`move_window_to`）・`ChainRealign`（`chain_realign.rs:351`）・`PatternMove`（`move_shift.rs:176`）の 3 つ。`follow_balloon(.., Placement(route))` の守りは `route_applies_visibility_guard(route)` が真の経路だけで走り、`MoveCue` は偽なので、`\![move]`・`drain_resnap.rs:560`・組の連れ動き・本体の `frame_chain_finalize_*` の各テストは今と同じ書込になる。変わるのは `ChainRealign`・`PatternMove` のバルーンだけで、変わり方は 2 つ: ⑴ 画面の外へ出る形が引き戻される（指摘の狙い）、⑵ バルーンの寸が未確定・`MonitorSnapshot` が無い World では `[visibility-guard] WorkAreaUnresolved` の `warn!` が新しく 1 行出る。`dpi_sync_tests.rs:332-340`・`frame_work_area_resnap_hold_tests.rs:446` は、札のある窓ではキャラ窓の書込で panic する（バルーンまで届かない）か、`BalloonFollow` を持たない窓なので変わらない。範囲の中の `follow_move_shift_tests.rs` のバルーンの 2 本は、守りの入力が見えている位置なので位置は変わらない。範囲の外の連鎖のテスト（`chain_realign_*_tests.rs`・本体の `frame_chain_realign_*_tests.rs`）は `MonitorSnapshot` と寸を持つ足場を使い、⑵で赤になる見込みは静的には読めなかった。最後は実装の段で `cargo test -p areka-placement` と本体の `runtime::frame_chain` の名のテストを回して確かめる（赤が出たら設計の「並走の申し合わせ」のとおり直す）。
+3. **指摘 5（ukadoc）**: 要件の討議の議題 2 で引き済み（`move` の項は端の扱いを書かない・種類 3 に当たらない）。
+4. **指摘 13 ⑴（完了した `areka-P0-balloon-offset-dpi` の要件 8.5）**: 要件 8.5 は「キーワード指定のバルーンについて、遷移後の揃えを判定項目に含める」。バルーンごと（＝scope ごと）に揃えを判定する読みが素直で、`transition_judge_verdict.rs` が窓ごとに `judged_windows` で「黙っていれば合格」を塞いでいる形とも揃う。一方、往復の門（`NoRoundTripObserved`）は同じ spec の設計（`design.md:632`）が「回数に触れる門は `round_trips == 0` ただ 1 つ・scope ごとの往復の本数は手順書が目で確かめさせる」と決めており、要件 8.2 も回数を書かない。よって ⑴ は**キーワード指定の scope ごとの揃え**だけを scope ごとにし、往復の門は全体で 1 回以上のまま残す（「確定した直す対象」の 13 の一言「測っていない scope や往復を合格に数える」は、⑴＝scope・⑵＝同じ遷移の二重の行を往復と数える、を指すと読む）。完了した spec の実機ログ（`signoff-2026-08-28.log`）を読み直した: 門の行（`keyword-pending`）を出したのは scope 0 だけで、scope 0 は `base_dpi != new_dpi` の `rescaled` を 4 行持つ（frame 496・1082・2048・2288）。⑴（scope ごと）と ⑶（`base_dpi == new_dpi` を測った数に入れない）を入れても、このログは緑のまま読める見込み。実装の段で同じログを判定器のランナーへ通して確かめる。
+5. **指摘 17 の案 甲（`env-filter`）**: `Cargo.lock` の `log-capture-kit` の項は既に `tracing-subscriber` を持つ（`Cargo.lock:1449-1455`）。`crates/areka-placement/Cargo.toml` の `log-capture-kit` の行へ一時的に `features = ["env-filter"]` を足して `cargo metadata --locked --offline` を回したところ通り、`Cargo.lock` は 1 バイトも変わらなかった（直後に戻した）。**ただし、案 甲は別の 2 つの決まりに当たる**（要件の討議では見えていなかった）。
+   - `crates/log-capture-kit/tests/with_default_guard_test.rs` の見張り ⑷ `only_one_crate_declares_the_env_filter_feature` が、`env-filter` を宣言してよい crate を `wintf` 1 つに固定している（`ENV_FILTER_OWNER`・`:245`）。理由は「フィーチャはワークスペースで統合されるので、1 crate が宣言すると全 crate から `capture_under_filter` が届く」で、完了した `areka-P0-test-cage-determinism` の設計の宣言（同ファイルの説明「有効にするのは wintf のみという設計の宣言」・タスク 2.1 の申し送り）。`structure.md` の `log-capture-kit` の節も「有効にしてよいのは `wintf` のみ」と書く。案 甲を入れると、この見張りは赤になる。
+   - 同じファイルの例外表 `ALLOWED_DIRECT_CALLS`（`:101-132`・件数 6）が、`follow_transition_diag_tests.rs` と `follow_window_move_diag_tests.rs` の素の `with_default` を「`areka-placement` は `env-filter` を有効にしない（有効にしてよいのは wintf のみ）ため移行不能」の理由で載せている。写しを `capture_under_filter` へ替えると、2 つの項目は当たりの無い項目になり、`stale_entries` の見張り（`:306`）が赤になる。核の `diag_tests.rs` の項目の理由の文も事実でなくなる。
+   - つまり案 甲は、完了した spec の決め（要件 4.1 の 1）を覆し、範囲の外の見張りのファイル（持ち物は `audit-test-kits`）と steering を書き換える直しになる。要件の討議の議題 6 は「`Cargo.lock` が変わるなら案 乙」という条件だけを置いていて、この 2 つを前提にしていない。設計では決められないので、議題として返す（14 節）。
+   - 写しの今の形も確かめた: `follow_transition_diag_tests.rs:297-339` の写しは窓の中で対照の行（`CONTROL_LINE`）を出し、2 本のテストがそれを先に確かめている（捕まえ損ねは既に見張っている）。見張っていないのは `follow_window_move_diag_tests.rs:491-552` の写しだけ（`window_move_records_are_silent_under_default_info_filter` が「出ない」しか見ない）。
+6. **指摘 21**: 要件の討議の議題 7 で「残す」と確定済み。
+
+### 13.2 設計の段で新しく分かったこと
+
+- **`MonitorDpiEntry` は使い手 0 ではない**（議題 8・要件 7.8 の「下げる前にツリー全体を grep し直す」で分かった）。`MonitorDpiTable.entries: Vec<MonitorDpiEntry>` は公開の型の公開の欄で、範囲の外の本体のテスト `main_monitor_snapshot_seam_tests.rs:158-161` が `.entries.iter().map(|e| e.dpi)` で要素の欄を読む。名で呼ぶのは核のテストだけだが、型を `pub(crate)` に下げると公開の欄の型が crate の外から見えなくなる（`MonitorDpiTable` の公開の形が変わる＝要件 7.1）。再公開だけを下げると、指摘 28 が `ChainPlacement` で咎めた「公開の型なのに名で呼べない」形を新しく作る。よって議題 8 の決めの中の「範囲の外の使い手が本体のテストだけの項目」の側へ入れ、狭めずに `runtime-crate-split` へ申し送る（要件 7.9）。議題 8 の決めそのものに従った振り分けなので、議題にはしない。
+- **`anchor_changed_system` は `pub` のまま**。議題 8 の「使い手 0 の一覧（ギャップ分析 3 節の 28）」には説明の文だけの使い手として載るが、議題 4 が「system は残し、要らない `#[allow(dead_code)]` は消す」、議題 5 が「`window_move.rs:449` の属性は、lib の `pub` の項目には lint が鳴らないので消す」と決めている。`pub(crate)` へ下げるとテストからしか呼ばれない項目に `dead_code` が鳴り、議題 5 で消した属性をまた足すことになる。個別の決め（議題 4・5）を一般の一覧（議題 8）より先に読む。
+- **指摘 23 のうち `transition_judge.rs:961-999` の 10 個と `transition_judge_offset.rs:759,763` の 2 個の `#[cfg(test)]`**: どれもテストのファイルの接続宣言（`#[cfg(test)] #[path = "…"] mod …;`）に付いた属性で、`structure.md`「Test Naming Conventions」が「接続宣言の `#[cfg(test)]` は冗長でも付ける（`src/` と同一形にして規約を 1 本に保つため）」と決めている形そのもの。消すと steering の決まり（開発者が承認した決まり）に反する＝要件 4.1 の 1 に当たりうる。議題として返す（14 節）。
+
+### 13.3 まとめの 3 つの見方（design-synthesis）
+
+- **一般化**: ⑴ 指摘 2・3・20 は「随伴のバルーンの書き方」が場所ごとに違う形。書く口を `follow_balloon` 1 本にし（2）、バルーンの追従の基準を出し直す塊を 1 つの関数にし（3）、未確定の印の確かめを各口の同じ 1 行の `.filter` に揃える（20）。新しい層は作らない。⑵ 指摘 12・13・27 は「判定器が読めない・測っていないものを合格にする」形。足すのは違反の腕 2 つ（区切りの外の壊れた行・測っていない scope）と、読めない欄を `MalformedRecord` にする 1 か所だけ。⑶ 指摘 9・28 は「`#[allow]` で公開の見え方をごまかしていた所」。使い手 0 の公開は、再公開の行を消して定義を `pub(crate)` に下げ、crate の中のテストは定義元のモジュールの道（`super::visibility::…`）で引く。`#[allow]` も `#[cfg(test)]` の再束縛も足さない。
+- **作るか使うか**: ログを捕まえる手段は `log_capture_kit::capture_under_filter` が既にある（案 甲）が、使うには見張り ⑷ の決めを変える要がある（14 節の議題）。テストの部品は `follow_test_support.rs`・`transition_judge_test_support.rs` を使い、新しい部品のファイルは作らない（`structure.md`「`<stem>_test_support.rs` へ集約」）。書込の列は wintf の公開の `drain_window_pos_commands()` を読む（11 ⑴）。
+- **減らす**: `DragPositionPolicy`（実装 1 つ・呼び手 1 つ）と `BottomSnapPolicy` を消し、`anchor.rs` の私有の関数 1 つにする。`resolve_chain_in_work_area` は `#[cfg(test)]` にする。`place_chain_in_work_area` の基準の付け直し 3 か所を 1 か所にする。`log_of`・`deterministic_*`・`assert_no_event`・`dpi`・`k_axis`・`tagged`・`SharedFakeIo` の写しを消す。
+
+### 13.4 決めたこと（設計の段・議題にしないもの）
+
+| 件 | 決め | 理由 |
+|---|---|---|
+| 1 | 記録 `MoveShiftApplied`（`pub(crate)`）に「当て直し待ち」の印（`bool`）を 1 つ足す。`rebase_shift_axes` は当てた分を 0 にして印を立て、札が無いときだけ `apply_char_shift` を呼ぶ。`shift_is_current` は印が立っていれば偽。書けたら `apply_char_shift` が印の無い記録で置き換える | 記録を外すと、もう片方の軸の当てた分が消えて二度数える。印は crate の中の型の欄で、公開の形は変わらない |
+| 3 | `on_balloon_drag` の持ち主のキャラ窓の `BalloonFollow` を出し直す塊を私有の関数 1 つにし、`on_balloon_drag_end` の保存（手順 2）の直後・素材の退役（手順 3）の前に呼ぶ | DD6 の順（補正を保存値にも今の追従にも焼き付けない）を崩さない。補正（手順 4）の前の位置で出し直すので、補正後の位置は入らない |
+| 6 | 寄せた後も作業領域と交わらないときは `[visibility-guard] ClampX` の代わりに新しい語 `[visibility-guard] HiddenAfterClampX` を同じ `warn!` 水準で出す。位置は今と同じ。語の表は完了した `areka-P0-dpi-window-vanish` の `diagnosis-procedure.md` の O17 の次の行に足す | `ClampX` の接頭で始まる語（例 `ClampXStillHidden`）にすると、手順書の `Select-String -SimpleMatch '[visibility-guard] ClampX'` が両方を数えてしまう |
+| 7 | 保存を飛ばす 5 か所（バルーンの位置が無い・`BalloonWindowMarker` が無い・追従元のキャラ窓が無い・キャラ窓の `DraggingState` も位置も無い・`CharWindowMarker` が無い）を `debug!` から `warn!` にする。追従元を探す問い合わせから `&Anchored` を外し、記録の `anchor` は `Option` で出す | ハンドラは wintf の `EventHandler` の形（`bool`＝伝播を止めるか）で `Err` を返せない。`logging.md` の水準の表で「回復できる失敗」は `warn!`（次のドラッグで保存される） |
+| 13 ⑴ | キーワード指定の scope ごとに測った数を数え、0 の scope ごとに違反 `KeywordScopeUnmeasured { scope }` を出す。母数が空のときは今の `NoKeywordAlignmentMeasured { keyword_scopes: 0 }` のまま。往復の門は全体で 1 回以上のまま | 13.1 の 4 |
+| 17 | 案 乙（14 節の 1 で確定）。`follow_window_move_diag_tests.rs` の写しにだけ対照の行と先の確かめを足す。`Cargo.toml`・見張り・`structure.md` は触らない | 13.1 の 5 |
+| 22 | 行の番号での参照は名（関数・型・節）に替える。`judge-perf.py` の参照は「tools/perf/ の Python の道具の `parse_fields` と同じ規則」とファイル名を書かずに指す（`audit-tools-perf-judge` との申し合わせ） | 相手の着地の順に依らない |
+| 28 | 狭めるのは `VisibilityVerdict`・`guard_visibility`（`pub(crate)`）と、消す `DragPositionPolicy`・`BottomSnapPolicy`。`MonitorDpiEntry` と `anchor_changed_system` は 13.2 のとおり狭めない。`ChainPlacement`・`ChainClampOutcome` は `pub use` を足す | 13.2 |
+| 1,000 行 | 例外表の 3 本は、終わりの行数が着手のときの行数（1,231・1,039・1,037）を越えない。新しいテストの関数はどれも兄弟のファイルへ置く。`transition_judge_tests.rs` が 1,000 行以下になったら番人の例外表の項目と件数の定数（5→4）を消す（`every_over_limit_exception_is_still_over_the_limit` が、表にあって上限を越えないファイルを赤にするので、消すのは選べない手順） | 要件 8.2・8.3 |
+
+## 14. 設計の段から返す議題（2026-11-14）
+
+1. **指摘 17 の案 甲が、完了した spec の決め（`env-filter` を宣言してよいのは `wintf` だけ）と見張りに当たる**（13.1 の 5）。推す＝案 乙（写しのまま、`follow_window_move_diag_tests.rs` の写しに対照の行を足し、2 本のテストが対照を先に確かめる・`follow_transition_diag_tests.rs` の写しは既に見張っているので直さない）。範囲の中で閉じ、見張りのファイルも steering も触らない。案 甲を採るなら、`with_default_guard_test.rs` の ⑷ の `ENV_FILTER_OWNER` を 2 crate の表にし、`ALLOWED_DIRECT_CALLS` から 2 項目を消して件数を 6→4 にし、核の項目の理由の文を直し、`structure.md` の `log-capture-kit` の節を直す（範囲の外・`audit-test-kits` の持ち物・完了した `areka-P0-test-cage-determinism` の決めを覆す）。
+2. **指摘 23 のうち、テストのファイルの接続宣言に付いた冗長な `#[cfg(test)]` 12 個を消すか**（13.2 の 3 つ目）。推す＝消さない（`structure.md` の接続規約が冗長でも付けると決めている形・指摘 23 のこの 1 項目は数えない）。消すなら `structure.md` の規約の例外を書き足す要がある。
+
+> 2026-11-14 の結果: 14 節の 2 つはどちらも推奨案で確定した（2026-11-04 開発者「audit系は推奨案でよい」の常の承認・進行役が `requirements.md` の議題 6 を案 乙へ書き換え、議題 11 を足した）。1＝案 乙、2＝消さない（直す対象に数えない）。
+>
+> 同じ日の並走の事実（進行役から）: C20 は 2 つの段に分かれた（前の段＝`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・本 spec、後の段＝`audit-wintf-input`・`audit-tools-perf-run`・`audit-tools-perf-judge`・`audit-placement-core`）。`audit-wintf-window` は wintf の `Monitor` を変えず、`WindowHandle.instance` だけを消す（本 spec に届くのは `follow_test_support.rs` の `instance: HINSTANCE::default(),` の 1 行・後から着地する側が合わせる）。`audit-wintf-input` は本 spec の後に着地し、`initial_inset` の改名と `is_primary` の削除の読み手を相手が直す。本 spec は `crates/areka-placement/Cargo.toml` を触らない。
