@@ -133,7 +133,7 @@
   - _Dispatch: standard — 鍵ごとの警告の分岐を足し、重なるテストを移してから消す_
   - _Requirements: 4.1, 6.6, 9.1, 9.2_
 
-- [ ] 5.2 (P) sylphya に記憶の鍵を消す口を足す（U14・指摘 17）
+- [x] 5.2 (P) sylphya に記憶の鍵を消す口を足す（U14・指摘 17）
   - 鍵を消す投函・鏡像から消す効果・記憶から消す効果と、公開者の口を足す（今の関数の形は変えない）。腕が増える 2 つの列挙を crate の外で網羅して match する所が無いことを先に grep する。
   - 記憶から鍵を消す関数は、値を書く関数と同じ錠・読み・控え・commit の道を 1 本にまとめて通し、空になった表は消す。失敗は `error!` を出して縮退の答えを返し、失敗の受け口へ届く。
   - 終わったと言える状態: 鍵だけを消して知らない表と値を残すテスト、錠と commit の失敗で縮退を返すテスト、鏡像から鍵が消えるテストが緑。`actor.rs` が 1,000 行を越えていない。
@@ -264,3 +264,4 @@
 - 2.4: 追随の持ち物 `follow/drag_follow.rs` の `reestablish_balloon_follow` に印の 1 行（`mark_user_moved`）を足し、1,000 行に収めるため同じ関数のコメント 2 行を 1 行にまとめた。完了の申し送り（8.2）で `audit-placement-follow` へ渡す。1,000 行の番人は crate のテストでは回らないので `cargo test -p log-capture-kit --test file_length_guard_test` を確かめに入れる。
 - 4.4 のレビュー（8.1・8.2 で拾う）: `crates/areka/examples/collision-probe.rs:103・107・111` と `doc/COMPAT_ARCHITECTURE.md:212` の `lib.rs` の行番号はこの spec の前から古い（`load_scope_windowpositions` は今 L582・`prepare_stages` は L381）。
 - 4.5: 追随の持ち物 `follow_drag_end_persist_tests.rs` を 4 行直した（`load_restored_state` の引数を消したため・避けられない）。8.2 の申し送りで `audit-placement-follow` へ渡す。同じく申し送りの候補: 作業領域の写しが追随の側に 2 か所残る（`follow/work_area.rs:L49-L54`・`transition_diag.rs:L681`）・`follow/work_area.rs:L42` に古い名前 `primary_work_area`。
+- 5.2 のレビューの提案（8.1 で拾う）: `Effect::PersistRemove` の doc にタスク番号（「5.2 が…」）が入っている。無いファイルから鍵を消すと `format-version = 1` だけのファイルができる（読み手は鍵が無いのと同じに扱うので害は無い）。

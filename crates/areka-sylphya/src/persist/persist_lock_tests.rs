@@ -100,8 +100,8 @@ fn two_writers_in_one_process_do_not_lose_an_update() {
 
 /// 錠がすぐ取れず、書き込みの回数を数える偽の IO。
 #[derive(Default)]
-struct LockRefused {
-    commits: AtomicUsize,
+pub(super) struct LockRefused {
+    pub(super) commits: AtomicUsize,
 }
 
 impl PersistIo for LockRefused {

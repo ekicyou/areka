@@ -310,3 +310,36 @@ fn apply_publish_shiori_absent_emits_actor_debug_log() {
         "shiori resource absent",
     );
 }
+
+#[test]
+fn apply_persist_remove_removes_each_key_from_the_mirror_then_from_memory() {
+    let keys = vec![
+        PersistKey::BalloonOffset {
+            scope: 0,
+            axis: Axis::X,
+        },
+        PersistKey::BalloonOffset {
+            scope: 0,
+            axis: Axis::Y,
+        },
+    ];
+    let msg = SylphyaMsg::PersistRemove {
+        scope: PersistScope::Ghost,
+        keys: keys.clone(),
+    };
+    assert_eq!(
+        core().apply(&msg),
+        vec![
+            Effect::RemoveDottedGlobal {
+                key: "areka.balloon.offset.scope(0).x".into(),
+            },
+            Effect::RemoveDottedGlobal {
+                key: "areka.balloon.offset.scope(0).y".into(),
+            },
+            Effect::PersistRemove {
+                scope: PersistScope::Ghost,
+                keys,
+            },
+        ]
+    );
+}

@@ -119,3 +119,27 @@ fn dropped_receiver_does_not_stop_the_actor() {
     parts.publisher.close();
     parts.handle.join().expect("panic せず終わる");
 }
+
+#[test]
+fn failing_removal_sends_exactly_one_failure_matching_keys_and_scope() {
+    let (tx, rx) = mpsc::channel();
+    let parts = spawn_sylphya_with_failures(init_ghost_root_only(), Some(tx));
+
+    parts.publisher.persist_remove(
+        PersistScope::App,
+        vec![PersistKey::BootCount, PersistKey::BasewareRoots],
+    );
+    parts.publisher.barrier().expect("barrier");
+
+    let got: Vec<PersistFailure> = rx.try_iter().collect();
+    assert_eq!(got.len(), 1, "失敗の消し 1 回につき 1 件: {got:?}");
+    assert_eq!(got[0].scope, PersistScope::App);
+    assert_eq!(
+        got[0].keys,
+        vec![PersistKey::BootCount, PersistKey::BasewareRoots]
+    );
+    assert_eq!(got[0].cause, PersistFailureCause::NoRoot);
+
+    parts.publisher.close();
+    parts.handle.join().expect("join");
+}

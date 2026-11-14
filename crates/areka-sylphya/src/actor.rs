@@ -28,7 +28,7 @@ use crate::key::parse_dotted;
 use crate::mirror::{MirrorImage, SharedMirror};
 use crate::persist::{
     PersistFailure, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope,
-    save_scope,
+    remove_scope_keys, save_scope,
 };
 use crate::reader::SylphyaReader;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
@@ -92,6 +92,13 @@ pub enum SylphyaMsg {
         scope: PersistScope,
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
+    },
+    /// 永続の鍵を消す（鏡像と記憶の両方から・fire-and-forget。失敗は受け口へ届く）。
+    PersistRemove {
+        /// 永続スコープ（層別）。
+        scope: PersistScope,
+        /// 消す key。
+        keys: Vec<PersistKey>,
     },
     /// 反映フェンス（投函済みメッセージの処理完了を同期観測。テスト決定論と boot prefetch の
     /// 順序保証に使用・epoch フェンス読みの予約シームの M1 形）。
@@ -209,6 +216,11 @@ pub enum Effect {
         /// 値。
         value: String,
     },
+    /// 大域点付き区画から消す（`PersistRemove` の鏡像の側・無い key は何もしない）。
+    RemoveDottedGlobal {
+        /// 正準 key 文字列。
+        key: String,
+    },
     /// asker 別 host 点付き区画へ書く（SET StoreWrite＝自由 key の受け皿）。
     SetDottedPerAsker {
         /// 着地先 asker。
@@ -231,6 +243,13 @@ pub enum Effect {
         scope: PersistScope,
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
+    },
+    /// 永続の鍵を消す（記憶の側）。5.2 が [`crate::persist::remove_scope_keys`] を実行する。
+    PersistRemove {
+        /// スコープ。
+        scope: PersistScope,
+        /// 消す key。
+        keys: Vec<PersistKey>,
     },
     /// SET 運行コマンド（[`SetClass::RuntimeCommand`]・M1 sink 未登録→配送なし・warn 済み・書込なし）。
     RuntimeCommandReserved {
@@ -399,6 +418,20 @@ impl SylphyaCore {
                 });
                 effects
             }
+            SylphyaMsg::PersistRemove { scope, keys } => {
+                // 鏡像から鍵ごとに消し、記憶から 1 回で消す（PersistPut と同じ形）。
+                let mut effects: Vec<Effect> = keys
+                    .iter()
+                    .map(|key| Effect::RemoveDottedGlobal {
+                        key: key.to_canonical_key(),
+                    })
+                    .collect();
+                effects.push(Effect::PersistRemove {
+                    scope: *scope,
+                    keys: keys.clone(),
+                });
+                effects
+            }
             SylphyaMsg::Barrier { .. } => vec![Effect::Barrier],
             SylphyaMsg::Close => vec![Effect::Stop],
         }
@@ -522,6 +555,11 @@ impl SylphyaPublisher {
     /// 永続 put を投函する（write-through・fire-and-forget）。
     pub fn persist_put(&self, scope: PersistScope, entries: Vec<(PersistKey, String)>) {
         self.send(SylphyaMsg::PersistPut { scope, entries });
+    }
+
+    /// 永続の鍵を消す投函（鏡像と記憶の両方から・fire-and-forget）。
+    pub fn persist_remove(&self, scope: PersistScope, keys: Vec<PersistKey>) {
+        self.send(SylphyaMsg::PersistRemove { scope, keys });
     }
 
     /// 反映フェンス: 投函→処理完了を待つ（期限なし。期限が要るなら [`barrier_within`](Self::barrier_within)）。
@@ -681,7 +719,7 @@ fn run_actor(
         // 判断分岐は純関数中核が算出（借用）。配線はその効果列を実行するのみ。
         let effects = core.apply(&msg);
 
-        // copy-on-write 後継像は書き換える 4 つの枝が初めて要るときだけ作る（反映待ち・停止・
+        // copy-on-write 後継像は書き換える 5 つの枝が初めて要るときだけ作る（反映待ち・停止・
         // 書けない名前・204 の記録・保存だけの知らせでは複製しない・#20）。
         // 書き手はこのアクター 1 つなので、遅らせて作っても元の像は同じ（epoch も同じ）。
         let mut next: Option<MirrorImage> = None;
@@ -732,17 +770,21 @@ fn run_actor(
                     // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
                     // error!＋Degraded で縮退（panic しない・R6.7）——ここは失敗を受け口へ中継。
                     let outcome = save_scope(scope, &roots, io.as_ref(), entries);
-                    if let (PersistOutcome::Degraded(failure), Some(failures)) =
-                        (&outcome, failures.as_ref())
-                        && failures.send(failure.clone()).is_err()
-                    {
-                        // 失敗そのものは save_scope が記録済み。受け手が落ちていても続ける。
-                        tracing::warn!(
-                            target: PERSIST_LOG_TARGET,
-                            scope = ?scope,
-                            "persist failure receiver closed; failure not forwarded (continuing)"
-                        );
+                    forward_failure(scope, outcome, failures.as_ref());
+                }
+                Effect::RemoveDottedGlobal { key } => {
+                    // 実際に消えるときだけ後継像を出す（RemoveFlatPerAsker と同じ形）。
+                    let has = |img: &MirrorImage| img.dotted_global.contains_key(&key);
+                    if next.as_ref().map_or_else(|| has(&shared.load()), has) {
+                        next.get_or_insert_with(|| shared.load().successor())
+                            .dotted_global
+                            .remove(&key);
                     }
+                }
+                Effect::PersistRemove { scope, keys } => {
+                    // 失敗は remove_scope_keys が error!＋Degraded で記録済み。受け口へ中継する。
+                    let outcome = remove_scope_keys(scope, &roots, io.as_ref(), keys);
+                    forward_failure(scope, outcome, failures.as_ref());
                 }
                 Effect::RuntimeCommandReserved { asker, key, value } => {
                     // SET 運行コマンド。M1 は sink 未登録（apply 側 warn 済み）→ 配送なし。
@@ -778,6 +820,24 @@ fn run_actor(
             // Close 即時停止: 積み残しは rx の drop で破棄（areka-actor 停止規約）。
             return;
         }
+    }
+}
+
+/// 保存・消しの `Degraded` を失敗の受け口へ中継する（成功・受け口なしは何もしない）。
+fn forward_failure(
+    scope: PersistScope,
+    outcome: PersistOutcome,
+    failures: Option<&Sender<PersistFailure>>,
+) {
+    if let (PersistOutcome::Degraded(failure), Some(failures)) = (outcome, failures)
+        && failures.send(failure).is_err()
+    {
+        // 失敗そのものは保存の側が記録済み。受け手が落ちていても続ける。
+        tracing::warn!(
+            target: PERSIST_LOG_TARGET,
+            scope = ?scope,
+            "persist failure receiver closed; failure not forwarded (continuing)"
+        );
     }
 }
 
