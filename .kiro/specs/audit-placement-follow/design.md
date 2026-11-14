@@ -544,6 +544,7 @@ pub enum OffsetViolation {
 - **C20 の 2 つの段**（2026-11-14 areka棚卸）: 前の段＝`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・この spec。後の段＝`audit-wintf-input`・`audit-tools-perf-run`・`audit-tools-perf-judge`・`audit-placement-core`（前の段が全部着地してから実装する）。この spec の進みが段に対して遅れたら、areka棚卸へ知らせる。
 - **着地の順**: この spec が先に実装して着地し、`audit-placement-core` が後から着地して合わせる（2026-11-14 の申し合わせ・進行役の伝言）。
   - 指摘 2 で核のテスト（`chain_realign.rs` の周り・`dpi_sync_tests.rs` ほか）が赤になったら、合わせるのは後から着地する核の側。ただしこの spec の枝の先で赤のまま着地はできない（全体テスト緑・要件 5.5）ので、この spec の枝の先で赤になった範囲の外のテストは、この spec が最小の直しで緑に戻して着地し、直した所を核のセッションへ知らせる。核は自分の書き換えの上でそれに合わせる。
+  - 核の先触れ（2026-11-14）: 核は着地の後に、`follow/drag_follow.rs` の基準を据え直す所へ印 `BalloonUserMoved` の insert を 1 行足す。この spec の 3 でその塊は私有の関数 `reestablish_balloon_follow` になり、ドラッグ中と離したとき（保存の直後）の 2 か所から呼ばれる。その旨を核へ返した。
   - この spec は `crates/areka-placement/Cargo.toml` を触らない（議題 6 は案 乙）。`Cargo.toml` の直し（`async-io` をワークスペースの表へ移すほか）は核だけが行う。
   - 核は後で `DPI_SYNC_HOLD_MAX_FRAMES` ほかテストだけが使う公開を `cfg(any(test, feature = "test-support"))` の内側へ移す。判定器のテストは本体の `test-support` の機能で届くので、この spec の側の直しは要らない。
   - 28 で狭める前に、核のセッションへ一言知らせる（要件 7.8）。16・22・24 の範囲の外の写しと古い参照は相手の持ち物として残し、一覧を伝える。23 で `BottomSnapPolicy` を消すと古くなる核の説明 4 行（`persist.rs:227,238`・`persist_restore_tests.rs:295`・`resolver.rs:438`）もこの一覧に入れる。
