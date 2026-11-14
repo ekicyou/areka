@@ -110,7 +110,7 @@
 ## 比べ・追いの判定・台帳
 
 - [ ] 7. perf-compare を直す（#7 の `to_number`・#10〜#12・#26・#32・#56・#74）
-- [ ] 7.1 床・副指標・判定の理由を直す（#7・#10〜#12）
+- [x] 7.1 床・副指標・判定の理由を直す（#7・#10〜#12）
   - `to_number` が有限でない値を `None` にし、自己較正で `to_number("nan") is None` を確かめる（T7 の compare の分）
   - 床は `bool` と `not floor > 0` を exit 3 で拒む（#10・ケース `floor_zero_rejected`・`floor_bool_rejected`＝T10）。数の取れた走行のどれにも副指標の鍵が無ければ exit 3（#11・ケース `unknown_metric_name`＝T11）。`compare.json` の各走行に `judge_stderr` を残し、計測失敗の stderr に添える（#12・既存の `measure_failed` で確かめる＝T12）
   - 終わった姿: perf-compare の `--selftest` が新しいケースを含めて緑で、検査を戻すと ADOPTED で赤、`judge_stderr` を消すと赤
@@ -230,3 +230,4 @@
 - 6.1: README へ渡す分（13）の候補: profile は short・long 以外で判定不能／時刻の無い catch-up があると `catchup_count` は `-`（978 行あたり）／case.txt の鍵の一覧と知らない鍵は exit 3（389 行あたり）／検体の一覧に M1・M2・C3／baseline の注意書きは定常の点数（12）で比べる
 - 6.2: judge-perf の verdict・baseline の標準出力の締めも `JUDGE-PERF RESULT code=N`（「判定は以上」を置き換え）。perf-loop の止まりの文の LastLine はこの行になり、理由は stderr と verdict.txt に残る（`audit-tools-perf-run` へ知らせる・6.3 の知らせと一緒に）。`--emit-metrics` では metric の行が RESULT の後に続く／`SELFTEST RESULT` の ok は検体の数・ng は理由の数／`--selftest` の想定外の例外は今も exit 1（14 の audit で拾う候補）。perf_lines の失敗の文は英語の ASCII
 - 6.3: 範囲の外: `doc/COMPAT_ARCHITECTURE.md:629` が「judge-perf.py（版 0.4.0）の較正値に従う」と版を名指していて古くなった（D10 の一覧に無い）。/kiro-complete の棚卸で扱う
+- 7.1: 7.2 への申し送り: exit 3 の 3 ケース（floor_*・unknown_metric_name）の `stderr_substr = perf-compare:` は理由を縛らないので、英語化のときに鍵の名（`noise_floor_pct` など）で縛る。bool の床を拒む文「…がありません」は原因（真偽値）とずれるので英語化で合わせる

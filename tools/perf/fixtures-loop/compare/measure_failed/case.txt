@@ -21,3 +21,6 @@ note = 判定不能を含む側（B）の平均と差は空にし、A 側の平�
 note = 測れた事実は残し、測れていない事実を数字で埋めない。
 note = judge-perf.py の終了コード 1（不合格）はここへ来ない。合否が付いたということは
 note = 数値は採れているという意味なので、比較の入力としては使える（集計モードは 1 を返さない）。
+
+stderr_substr = required log kinds are missing
+judge_stderr_substr = required log kinds are missing

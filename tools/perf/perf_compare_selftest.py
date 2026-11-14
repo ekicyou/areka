@@ -30,6 +30,7 @@
     secondary             同上（台帳の `secondary:` に載る 1 行）
     argv                  追加の引数（空白区切り・任意）
     stderr_substr         標準エラーに必ず現れる文字列（何行でも書ける）
+    judge_stderr_substr   compare.json の各走行の judge_stderr に必ず現れる文字列（何行でも）
     note                  覚え書き（判定には使わない）
 
 数の 4 項目は **書かなければ「null（測れていない）であること」を期待する**——書き忘れと
@@ -96,6 +97,11 @@ class SelftestEnv:
     pct_decimals: int
     ok_exit: int
     fail_exit: int
+    #: 指標の値を数にする本体の `to_number`（有限でない値は None であることを較正する）。
+    to_number: Callable[[str | None], float | None]
+    #: 入力不正の終了コード。この終了コードで終わるケースは結果の書き出しに届かない
+    #: ので、期待出力（expected_compare.txt）も compare.json も要らない。
+    bad_input_exit: int
 
 
 @dataclass
@@ -107,13 +113,14 @@ class SelftestCase:
     values: dict[str, str]
     argv: list[str]
     stderr_substrings: list[str]
+    judge_stderr_substrings: list[str]
 
 
 def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     """ケース 1 件の台帳（case.txt）を読む。知らない項目は拒む（黙って無視しない）。"""
     case_path = directory / SELFTEST_CASE_FILENAME
     values, multi = common.read_case_fields(
-        case_path, frozenset(CASE_SINGLE_KEYS) | {"note"}, frozenset({"stderr_substr"}),
+        case_path, frozenset(CASE_SINGLE_KEYS) | {"note"}, frozenset({"stderr_substr", "judge_stderr_substr"}),
         env.bad_input,
     )
     values.pop("note", None)
@@ -129,6 +136,7 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     return SelftestCase(
         directory.name, directory, values.get("title") or "(説明なし)", expected_exit,
         values, values.get("argv", "").split(), multi["stderr_substr"],
+        multi["judge_stderr_substr"],
     )
 
 
@@ -156,6 +164,12 @@ def _check_json(env: SelftestEnv, case: SelftestCase, work: Path) -> list[str]:
                 f"{env.json_filename} の {key}: "
                 f"期待 {case.values[key]!r} 実際 {payload.get(key)!r}"
             )
+    judge_stderr = " ".join(
+        str(payload.get(name, {}).get("judge_stderr", "")) for name in ("a1", "a2", "b1", "b2")
+    )
+    for substring in case.judge_stderr_substrings:
+        if substring not in judge_stderr:
+            reasons.append(f"{env.json_filename} の judge_stderr に {substring!r} がありません")
     for key in CASE_NULLABLE_NUMBER_KEYS:
         if key not in case.values and payload.get(key) is not None:
             reasons.append(
@@ -189,6 +203,8 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
     else:
         reasons.append(f"終了コード: 期待 {case.expected_exit} 実際 {code}")
 
+    if case.expected_exit == env.bad_input_exit:
+        return reasons + _stderr_reasons(case, err), reproduced
     reasons += _check_json(env, case, work)
 
     expected_path = case.directory / SELFTEST_EXPECTED_FILENAME
@@ -206,10 +222,12 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
         if want != got:
             reasons.append(common.first_difference(env.text_filename, want, got))
 
-    for substring in case.stderr_substrings:
-        if substring not in err:
-            reasons.append(f"標準エラーに {substring!r} が出ていません")
-    return reasons, reproduced
+    return reasons + _stderr_reasons(case, err), reproduced
+
+
+def _stderr_reasons(case: SelftestCase, err: str) -> list[str]:
+    return [f"標準エラーに {s!r} が出ていません"
+            for s in case.stderr_substrings if s not in err]
 
 
 def run_selftest(env: SelftestEnv) -> int:
@@ -227,6 +245,9 @@ def run_selftest(env: SelftestEnv) -> int:
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
 
+    results.append(("(to_number)", "有限でない値は None",
+                    [] if all(env.to_number(v) is None for v in ("nan", "inf", "-inf"))
+                    and env.to_number("1.5") == 1.5 else ["to_number が nan・inf を弾いていません"]))
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例は、その直しのタスクで真にする）。
     results.append(("(check_tree)", "木全体の見張り",
                     common.check_tree(ascii_stderr=False, readme_examples=False)))

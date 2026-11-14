@@ -135,6 +135,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import tomllib
@@ -285,10 +286,15 @@ def load_goal(path: Path) -> Goal:
             ["主指標の名前が無ければ、何を比べているのか決まりません。"],
         )
     floor = primary.get("noise_floor_pct")
-    if not isinstance(floor, (int, float)):
+    if not isinstance(floor, (int, float)) or isinstance(floor, bool):
         raise bad_input(
             f"{path}: [primary_metric].noise_floor_pct がありません",
             ["ばらつきの床が無いと、実測のばらつきが 0 のとき何もかも採用になります。"],
+        )
+    if not floor > 0:  # 0・負・NaN は床の役目（ばらつき 0 で全部採用）を果たさない
+        raise bad_input(
+            f"{path}: [primary_metric].noise_floor_pct は 0 より大きい数です（{floor!r}）",
+            ["床が 0 以下だと、実測のばらつきが 0 のとき何もかも採用になります。"],
         )
     must = secondary.get("must_not_regress", [])
     if not isinstance(must, list) or any(not isinstance(m, str) for m in must):
@@ -335,6 +341,7 @@ class RunResult:
     judge_exit: int | None = None
     metrics: dict[str, str] = field(default_factory=dict)
     undecidable_reason: str | None = None
+    judge_stderr: str = ""
 
     @property
     def decidable(self) -> bool:
@@ -352,9 +359,10 @@ def to_number(value: str | None) -> float | None:
     if value is None or value == METRIC_UNAVAILABLE:
         return None
     try:
-        return float(value)
+        number = float(value)
     except ValueError:
         return None
+    return number if math.isfinite(number) else None
 
 
 def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
@@ -390,6 +398,7 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
         return result
 
     result.judge_exit = completed.returncode
+    result.judge_stderr = completed.stderr.strip()
     result.metrics = parse_metric_lines(completed.stdout)
 
     # 終了コード 1（不合格）は判定不能ではない——合否が付いたなら数値は採れている。
@@ -777,6 +786,7 @@ def build_json(runs: dict[str, RunResult], goal: Goal, decision: Decision,
         payload[name] = {
             "dir": str(run.directory),
             "judge_exit": run.judge_exit,
+            "judge_stderr": run.judge_stderr,
             "primary": run.number(goal.primary_metric),
             "secondaries": {m: run.raw(m) for m in goal.must_not_regress},
             "talk_peak": run.raw(TALK_PEAK_METRIC),
@@ -827,6 +837,13 @@ def compare(args: argparse.Namespace) -> int:
         name: measure_run(name, directory, goal, judge, build, args.timeout)
         for name, directory in directories.items()
     }
+    measured = [r for r in runs.values() if r.number(goal.primary_metric) is not None]
+    for metric in goal.must_not_regress:
+        if measured and not any(metric in r.metrics for r in measured):
+            raise bad_input(
+                f"副指標 {metric} は、数の取れた走行のどれにも出ていません",
+                ["指標の名前の綴りを確かめてください（目標定義の must_not_regress）。"],
+            )
     decision = decide(runs, goal)
 
     versions = {r.raw(JUDGE_VERSION_METRIC) for r in runs.values()} - {METRIC_UNAVAILABLE}
@@ -855,6 +872,8 @@ def compare(args: argparse.Namespace) -> int:
         sys.stderr.write(f"{STDERR_PREFIX} 計測失敗: {decision.reason}\n")
         for name, reason in decision.undecidable:
             sys.stderr.write(f"  - {name}: {reason}\n")
+            for line in runs[name].judge_stderr.splitlines():
+                sys.stderr.write(f"      {line}\n")
 
     delta = METRIC_UNAVAILABLE if decision.delta is None else f"{decision.delta:+.2f}"
     print(
@@ -877,6 +896,8 @@ def run_selftest() -> int:
             text_filename=OUTPUT_TEXT_FILENAME,
             json_filename=OUTPUT_JSON_FILENAME,
             unavailable=METRIC_UNAVAILABLE,
+            to_number=to_number,
+            bad_input_exit=EXIT_BAD_INPUT,
             pct_decimals=PCT_DECIMALS,
             ok_exit=EXIT_OK,
             fail_exit=EXIT_FAIL,
