@@ -27,6 +27,36 @@
 
 1,000 行に近いのは `drag/state/tests.rs`（848 行）・`clickthrough/controller_tests.rs`（702 行）・`pointer/buffers.rs`（682 行）・`drag/state/mod.rs`（650 行）。範囲の中に、1 ファイル 1,000 行の番人の例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs`・範囲の外）に載るファイルは 0 本。
 
+## 確定した指摘の一覧（要件 1.5・2026-11-14 要件の討議）
+
+指摘の中身はギャップ分析（`research.md` 3 節）が正本。番号は audit の番号。議題 1〜10 は推奨案で確定した（2026-11-04 開発者「audit系は推奨案でよい」の常の承認による）。**残すと裁定した指摘は 0 件、ほかの spec へ回した指摘も 0 件**＝23 件とも、この spec で直す。
+
+| 組 | 指摘 | 扱い |
+|---|---|---|
+| 必ず直す | 1（1 回の配りにドラッグの終わりと次の始まりが重なると取り違える） | 直す（議題 5） |
+| 直したほうがよい | 2〜8・12・13 | 直す |
+| 直したほうがよい | 9（使われないコード） | 直す。⑸ ⑹ は消す（議題 2） |
+| 直したほうがよい | 10（速さと時刻を誰も読まない・座標の f32 往復） | 直す＝消す（議題 3） |
+| 直したほうがよい | 11（`local_point` が窓の中の座標） | 直す＝本当のローカル座標を入れる（議題 4） |
+| できれば | 14・16・17・20・22・23 | 直す |
+| できれば | 15（`initial_inset` の説明と名前） | 直す＝説明を直し、名前も改める（議題 7） |
+| できれば | 18（`DragStateSnapshot` の写し） | 直す（議題 8） |
+| できれば | 19（`OnPointerMoved` を毎 tick 配る） | 直す（議題 9） |
+| できれば | 21（`Window` を外した窓が対象に残る） | 直す＝汎用の対象をやめる（議題 10） |
+
+議題ごとの決め:
+
+1. **切り方（要件 8）**: 切らない（見込み 14〜20 タスク・どの指摘も同じ 3 つのフォルダの同じファイルに触る）。タスクを作って 20 を越えたら、そのとき 2 本目へ切ることを議題にし直す。
+2. **右・中ボタンのドラッグの設定と `is_primary`（指摘 9 ⑸ ⑹）**: 消す。完了した `event-drag-system` の要件 1.2・1.5・1.6（左・右・中のどのボタンでもドラッグ・ボタンの識別・ボタンごとの設定）を閉じる裁定（要件 3.1 の 1 種類目）。理由＝今も左しか作られておらず、`true` にしても何も起きない設定は使う人を迷わせる。右・中のドラッグが要るときは新しい spec で作る。`window_proc/` のテスト 1 行と `areka-placement` のテスト 5 か所に触る＝要件 5.2 の申し合わせ。
+3. **ポインタの速さと時刻（指摘 10）**: 消す。完了した `event-mouse-basic` の要件 3（速さと 5 件の履歴）を閉じる裁定（1 種類目）。理由＝その要件の目的（撫でる操作の見分け）は、後の決め（`roadmap-history.md:255`「撫で＝OnMouseMove 連打の解釈は SHIORI 側の領分」）で本体の仕事でなくなった。速さが要るようになったら、ドラッグの知らせの位置から求める。
+4. **ローカル座標（指摘 11）**: `local_point` に、当たった entity の左上を引いた本当のローカル座標を入れる（完了した `event-mouse-basic` の要件 4 どおり・公開の形は変わらない）。窓の手続きの作る所を揃えるので `audit-wintf-window` と申し合わせる。
+5. **指摘 1 の後始末**: `cleanup_drag_state` を消し、配りの終わりの腕で外す今の形を正本にする（`OnDragEnd` の受け手が `DraggingState` を読めることが下流の約束＝`drag_follow.rs:114-116`）。
+6. **wintf の公開の形を減らす直し（9 ⑶ ⑸ ⑹・10・22）**: 減らしてよい（wintf は 0.x の版で v0.2.0 の作り直しの途中・使い手はツリーの中だけで grep で確かめられる）。C20 の約束 ⑶ の名には触らない。
+7. **`initial_inset` の改名（指摘 15）**: この spec で `initial_window_pos` へ改め、範囲の外の使い手（`areka-placement`・`areka` の `runtime/frame/dpi.rs`・窓の手続き）まで直し切る。走っている `audit-placement-follow`・`audit-wintf-window` とは要件 5.2 で申し合わせる（ギャップ分析の推しは「説明だけ直して改名は後へ」だったが、後へ回す持ち主の spec が無く要件 2.2 に反するため、並走の都合で回避せず調整する形にした）。
+8. **`DragStateSnapshot` の写し（指摘 18）**: この spec で直す（捕捉の守りを列挙の外へ出し、写しの列挙と写す関数を消す）。写しの読み手のうち窓の手続き（`mouse_move.rs` ほか）は `audit-wintf-window` と申し合わせる（議題 7 と同じ理由で後へ回さない）。
+9. **毎 tick の `OnPointerMoved`（指摘 19）**: 直す＝その tick に動いた entity にだけ配る。要件 3.1 の 3 種類目には当たらない: 本体の間引き `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）は位置が同じ呼び出しで送らないので、SHIORI へ送る `OnMouseMove` の数は変わらない（ukadoc の原文「マウスが移動した際に発生。」<https://ukatech.shillest.net/ukadoc-spec/list_shiori_event.html#OnMouseMove> にも近づく向き）。
+10. **`Window` を持たない汎用の対象（指摘 21）**: やめる。登録するのは wintf の窓だけにし、`WindowHandle` の HWND と一致しない対象は刈る。逆を固定するテスト（`controller_tests.rs:513-525`）は向きを直す。
+
 ## Boundary Context
 
 - **In scope**:
@@ -45,6 +75,7 @@
 - **Adjacent expectations**:
   - 範囲の型や関数を使う範囲の外のコードは、着手のときの grep で `crates/areka/`（約 66 ファイル・入力の受け口 `input_events/` ほか）・`crates/areka-placement/`（約 35 ファイル）・`crates/areka-emo-text/`（約 3 ファイル）・`crates/pilot/`（約 2 ファイル）・wintf の範囲の外（約 28 ファイル・`ecs/window*`・`runtime/` ほか）。
   - 同じウェーブ C20 で走っている spec のうち、直しが及びうるのは `audit-wintf-window`（wintf の `ecs/window*`）・`audit-placement-core` と `audit-placement-follow`（`crates/areka-placement/`）・`wintf-visual-damage-redraw`（wintf の `ecs/graphics/visual/draw/`・`ecs/graphics/composite.rs`・`ecs/graphics/systems/render.rs`・`numerics/matrix3x2.rs`）。これらのファイルに直しが及ぶときは要件 5.2 に従う。
+  - ギャップ分析で範囲の外に見つけた 2 つ（窓の手続き `mouse_move.rs:228-233` の閾値の計算の写し・`mouse_click.rs:150-156` が押すたびに出す `info!`）は `audit-wintf-window` の持ち物として、そのセッションへ伝えた（2026-11-14）。この spec では直さない（要件 5.4）。
   - v0.2.0 の `instant-to-interrupt-ticks` は、この見直しと触るファイルが重なり、この見直しの着地を待つ（roadmap の spec 台帳）。この spec の側に約束は無い。
 
 ## Requirements
