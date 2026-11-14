@@ -250,7 +250,7 @@ stateDiagram-v2
 | 5 | 必ず | xperf を `Invoke-Child`（`ArgumentList` に 1 つずつ）で呼ぶ。読む文字コードだけは端末の文字コード（`-ReadEncoding`） | cpu-sample・base | T1 `args-with-spaces`、T2 `child-args-and-encoding` | いいえ |
 | 6 | 必ず | `-DryRun` の出力先を作り直すのは、中身が `DRY-RUN.txt` と `run-meta.txt` だけ（下位のフォルダ無し）のときに限る。ほかが在れば 3 で止め、何も消さない | rundir | T2 `dryrun-clear` | いいえ |
 | 7 | 直したほうが | 前置きでスクリプトの呼び出しを `try`/`catch` で包み、捕まえた失敗を `[Console]::Error`（UTF-8 の書き手）へ素の文で書いて 1 で終える。`Invoke-Child` は「最後の 1 行」を選ぶ前に色の符号を落とす | pwsh-child・base | T2 `pwsh-child-error` | いいえ |
-| 8 | 直したほうが | areka を強制終了したら、終わるまで待ってから次へ進む（共通部品 `Stop-ChildProcess`。ランナーの 4 か所と追随の検査の 2 か所） | base・runner・followup | T2 `kill-wait`、T3 `move-after-kill` | 一部（取り合いの起きやすさ） |
+| 8 | 直したほうが | areka を子孫まで強制終了し（`Kill($true)`）、終わるまで待ってから次へ進む（共通部品 `Stop-ChildProcess`。ランナーの 4 か所と追随の検査の 2 か所）。待ちが時間切れか退けに失敗したら、ランナーは理由の 1 行を出して 1 で終え（`moved to:` の行は出ない）、`perf-loop` は出力先が元の名前のまま残っているのを見て採り直さずに 4（「失敗した走行を退けられなかった」）で止める | base・runner・followup・measure | T2 `kill-wait`・`run-not-moved`、T3 `move-after-kill` | 一部（取り合いの起きやすさ） |
 | 9 | 直したほうが | ビルドを採取より前へ。採取の開始はランナーが静かさの確かめの後に行う（上の流れ） | measure・runner | T2 `sampling-order` | はい（xperf の重さが静かさの確かめを倒さないこと） |
 | 10 | 直したほうが | `final` でも `-BinDir` を実行体の確かめと走行へ渡す。`-BinDir` を渡すなら `-Build` も要る（無ければ 3。1 つの実行体を 2 つのビルドとして測らない） | measure・build | T2 `final-bindir` | いいえ |
 | 11 | 直したほうが | `-BinDir` の無い走行では、作業ツリーからのビルドを先に回し、実行体の確かめをその後にする（ビルドは `Invoke-MeasureRun` から呼び手へ移す） | measure・build | T2 `exe-after-build` | いいえ |
@@ -346,7 +346,7 @@ function Get-PythonCommand { }   # [pscustomobject]@{ Exe; Prefix=[string[]] } �
 function Invoke-PythonChild { param([Parameter(Mandatory)][pscustomobject]$Python, [Parameter(Mandatory)][string[]]$Arguments, [switch]$Quiet) }
 function Invoke-PwshChild   { param([Parameter(Mandatory)][string]$ScriptPath, [string[]]$Arguments = @(), [switch]$Quiet) }
 
-# 強制終了して、終わるまで待つ（既定 10 秒）。戻り: 終わったら $true
+# 子孫まで強制終了して（Kill($true)＝32bit の SHIORI ヘルパが run.log を受け継いでいても止める）、終わるまで待つ（既定 10 秒）。戻り: 終わったら $true・時間切れなら $false
 function Stop-ChildProcess { param([System.Diagnostics.Process]$Process, [int]$WaitMs = 10000) }
 
 # 目標定義（1 行に収まった値と 1 行の配列だけ）。戻り: 節 → 鍵 → 値（引用符を外す前の字面）
@@ -467,7 +467,7 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 
 - `Invoke-MeasureRun -OutDir -RunProfile -Build [-BinDir] [-RustLogExtra] [-SampleEtl] [-Label]` → 戻り `[pscustomobject]@{ SamplingStarted=[bool]; SamplingReason=[string] }`（`-SampleEtl` が無ければ `SamplingStarted=$false`・`SamplingReason='-'`）。
   - ランナーの出力から 2 つの決まった行を読む: `[invoke-perf-run] sampling start: code=<n> reason=<語>`（30）と `[invoke-perf-run] moved to: <path>`（28）。
-  - ランナーの 2 → 2 で止める（証拠は読めた退け先の `quiet-before.txt`。読めなければ `<OutDir>-FAILED*`）。3 → 3。ほかの非ゼロ → 1 度だけ採り直し、なお失敗なら 4（今のまま）。
+  - ランナーの 2 → 2 で止める（証拠は読めた退け先の `quiet-before.txt`。読めなければ `<OutDir>-FAILED*`）。3 → 3。ほかの非ゼロ → 1 度だけ採り直し、なお失敗なら 4（今のまま）。ただし非ゼロで `moved to:` の行が無く、`-OutDir` が元の名前のまま残っているときは、採り直さずに 4（理由「失敗した走行を退けられなかった」と出力先のパス）で止める（8）。
 - `Invoke-MeasureQuietAfter`: 子の 0 → 済み、4 → 4、3 → 3（3 の追加）、2 → 待って確かめ直し、ほか → 4。
 - `Invoke-SubRankRun`（1・9・11・29・30）: ビルド → 実行体の確かめ → `Get-SamplingProbe` → `Invoke-MeasureRun -SampleEtl <ETL>`（可否が真のときだけ）→ 戻りが `SamplingStarted` なら直ちに `-Stop -Etl -Out -PdbDir`（`-GoalFile` は渡さない）→ `sampling.txt` → 走行の後の静かさ → 順位表。`-Stop` の 0 → `ok`、5 → 子の `reason=`（読めなければ `no_xperf`）、`Code -1`（子を起こせない）→ 警告の 1 行（手で打つ `xperf -stop`）を出して 4、ほか → 4。
 - `Invoke-MeasureRank`（24）: dump が在れば `auto`。無ければ `sampling.txt` の理由、`sampling.txt` も無ければ `no_record`。可否の試しは回さない。
@@ -542,7 +542,7 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
   - 偽物は、読み込んだ後で同じ名前の関数を定義し直して作る（`Invoke-PwshChild`・`Invoke-PythonChild`・`Invoke-MeasureCargo`・`Get-SamplingProbe` ほか）。呼ばれた順と引数を検査の中の表に残す。
   - `Exit-WithResult` を定義し直し、終了コードを持った例外を投げる形にする（本物の `exit` で検査が終わらないように）。本物の `exit` で `finally` と `trap` が働くことは、子の pwsh を 1 本起こす検査（`exit-trap`）で別に確かめる。
   - 作業のフォルダは `<リポジトリ>\target\perf-loop-tmp\selftest-<GUID>\` の下だけ。終わったら消す。`-OutRoot`・`-SymCache`・`$script:GoalConfig` の `SpecDir` は必ずその下へ向け、`%LOCALAPPDATA%` と spec の `results` に書かない。
-  - `cargo`・`python`・`xperf` の本物を呼ばない。子として起こすのは pwsh（とその中の偽の `.cmd`）だけ。`perf-loop.ps1` を子として起こすのは `-DryRun` と引数の確かめで終わる呼び方だけで、`preflight`・`selftest` は決して呼ばない（自分の検査の中から自分の検査を呼ばない）。
+  - `cargo`・`python`・`xperf` の本物を呼ばない。子として起こすのは pwsh（とその中の偽の `.cmd`）だけ。`perf-loop.ps1` を子として起こすのは `-DryRun` と引数の確かめで終わる呼び方だけで、`preflight`・`selftest` は決して呼ばない（自分の検査の中から自分の検査を呼ばない）。子として起こすときは必ず `-BinDir <中身の無い一時のフォルダ>` と `-OutRoot <一時>` を渡す（`-DryRun` でも実行体が在れば判定器や順位表の本物の python へ進むため、実行体の無い道で終わらせる＝ワークツリーにビルドが在るかで結果が変わらない）。
 
 #### invoke-perf-run.selftest（`tools/perf/invoke-perf-run.selftest.ps1`・T3）
 
@@ -572,8 +572,8 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 | 25 | `preflight.txt` の `pwsh=` の行が `pwsh=<版>` だけになり、python の版が低いと 4 | 読む Python もスキルも無い（スキルは `capabilities=` だけを写す） | 知らせるだけ |
 | 36 | `-Probe` の 1 行の後ろに `elevated=`・`xperf_path=`。`preflight` の 3 つの値の出どころ | `perf-loop` だけ（`capabilities=` の鍵と並びは同じ） | 知らせるだけ |
 | 9・1 | ランナーに `-SampleEtl`、`invoke-cpu-sample.ps1` に `-Cancel`、ランナーの決まった形の 2 行 | `perf-loop` だけ（Python はランナーも `invoke-cpu-sample.ps1` も呼ばない） | 知らせるだけ（README §4・§14 の引数の一覧への追記は `audit-tools-perf-judge` の判断） |
-| 申し合わせ待ち A | README §11「端末の文字コードと子の出力」の「読む所は 2 つ」の段（`Invoke-Child` の在りかと、`invoke-perf-run.ps1`・`invoke-followup-checks.ps1` が `Invoke-Utf8Child` を使うという文）が 19 の直しで古くなる | README（`audit-tools-perf-judge` の持ち物） | **申し合わせ待ち**: この spec が文案（下の R2）を渡し、相手が直す。**決まらないときの形**: 19 の直しを `invoke-cpu-sample.ps1` の分（5 と同じ所）だけにし、`invoke-perf-run.ps1`・`invoke-followup-checks.ps1` は `Invoke-Utf8Child` のまま残す（README の文は偽にならない。`Invoke-Child` は `perf-loop.common.ps1` を読み込めば使える形のまま） |
-| 申し合わせ待ち B | 振る舞いの変わる 5 本（`perf-loop.ps1`・`invoke-perf-run.ps1`・`invoke-cpu-sample.ps1`・`check-quiet.ps1`・`invoke-followup-checks.ps1`）の `SCRIPT_VERSION` を上げる（小さい版の数を 1 つ） | `run-meta.txt` の `script_version`・`preflight.txt`・各 RESULT 行。範囲の外で値を読む Python は無い（Python が読む `SCRIPT_VERSION` は `judge-perf.py` 自身のもの） | **申し合わせ待ち**（知らせて異論が無ければ上げる）。**決まらないときの形**: 版を据え置く（振る舞いは同じに直る。走行の記録から「直した後の道具か」を見分ける手掛かりが 1 つ減るだけ） |
+| A（19 の README） | README §11「端末の文字コードと子の出力」の「読む所は 2 つ」の段（`Invoke-Child` の在りかと、`invoke-perf-run.ps1`・`invoke-followup-checks.ps1` が `Invoke-Utf8Child` を使うという文）が 19 の直しで古くなる | README（`audit-tools-perf-judge` の持ち物） | **申し合わせ済み**（2026-11-14）: この spec が渡した文案（下の R2）を相手が書く。`tools/perf` の中で `Invoke-Utf8Child` を使わなくなる点も相手に差し支えなし＝19 は 3 本とも寄せる |
+| B（`SCRIPT_VERSION`） | 振る舞いの変わる 5 本（`perf-loop.ps1`・`invoke-perf-run.ps1`・`invoke-cpu-sample.ps1`・`check-quiet.ps1`・`invoke-followup-checks.ps1`）の `SCRIPT_VERSION` を上げる（小さい版の数を 1 つ） | `run-meta.txt` の `script_version`・`preflight.txt`・各 RESULT 行。範囲の外で値を読む Python は無い（相手が確かめた: `run-meta.txt` から読む鍵は `judge-perf.py` が `build`・`profile`、`perf-rank.py` が `build`・`logical_processors` だけ。字面で読む `SCRIPT_VERSION` は `judge-perf.py` 自身のもの） | **申し合わせ済み**（2026-11-14）: 上げる |
 
 ## 範囲の外で直す文（申し合わせ用）
 
@@ -584,7 +584,7 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 | S1 | `.claude/skills/perf-loop-iteration/SKILL.md` | 37 行（「使う道具」の終了コードの表の `4` の行） | 3 | 意味の欄を「計測失敗（MEASURE_FAILED）。想定外の失敗（道具の不具合）もここに入る」にする（扱い「TOOLFIX へ」は同じ） | この spec | なし（相手は 45〜46 行・238〜241 行） |
 | S2 | `.claude/skills/perf-loop-iteration/SKILL.md` | 196 行（「REMEASURE」の節の `code=4` の行）の直後に 1 段 | 15・34 | 「`code=3` → `bin-A\BUILD.txt` と `bin-B\BUILD.txt` の `exe_sha256` が同じなら A と B が同じ実行体（走行は 0 本）。`next-phase --phase REMEASURE --event ok` で DECIDE へ進め、DECIDE では `compare.json` を読まずに `measure_failed`（`reason: same_executable`）として RECORD へ。同じでなければ表の 3 の行のとおり」を足す | この spec | なし |
 | R1 | `tools/perf/README.md` | 555 行（§11 の「走行後の静寂確認が NOT_QUIET だった走行は…」の項） | 2 | 関数名 `Test-MeasureQuietAfterOk` を `Test-MeasureRunComplete`（`perf-loop.rundir.ps1`）に替え、「`-Resume` で使うのは `run.log`・`cpu.csv`・`run-meta.txt` が在り、`run-meta.txt` に `ended_utc` の行が在り、`quiet-after.txt` が `QUIET` の走行だけ。欠けた走行は `<走行>-INCOMPLETE-<時刻>`、静かでない走行は `<走行>-NOTQUIET-<時刻>` へ退ける（測ったものは消さない）」とする | 相手 | なし（相手の予定に無い行） |
-| R2 | `tools/perf/README.md` | 563〜573 行（§11「端末の文字コードと子の出力」の「読む所は 2 つ」と「pwsh の子」の項） | 19（申し合わせ待ち A） | 「読む所は `perf-tool-base.ps1` の `Invoke-Child` 1 つ（`perf-loop.common.ps1` が読み込む）。`perf-loop.ps1` とその部品・`invoke-perf-run.ps1`・`invoke-followup-checks.ps1`・`invoke-cpu-sample.ps1` はどれも `Invoke-Child`（pwsh の子は同じファイルの `Invoke-PwshChild`）を使い、`tools/utf8-child.ps1` の `Invoke-Utf8Child` は `tools/perf` からは使わない。`invoke-cpu-sample.ps1` が回す xperf の出力だけは端末の文字コードで読む」とする。申し合わせ待ち A が「決まらないときの形」になったら、この行は直さない | 相手 | なし |
+| R2 | `tools/perf/README.md` | 563〜573 行（§11「端末の文字コードと子の出力」の「読む所は 2 つ」と「pwsh の子」の項） | 19（申し合わせ待ち A） | 「読む所は `perf-tool-base.ps1` の `Invoke-Child` 1 つ（`perf-loop.common.ps1` が読み込む）。`perf-loop.ps1` とその部品・`invoke-perf-run.ps1`・`invoke-followup-checks.ps1`・`invoke-cpu-sample.ps1` はどれも `Invoke-Child`（pwsh の子は同じファイルの `Invoke-PwshChild`）を使い、`tools/utf8-child.ps1` の `Invoke-Utf8Child` は `tools/perf` からは使わない。`invoke-cpu-sample.ps1` が回す xperf の出力だけは端末の文字コードで読む」とする（申し合わせ済み） | 相手 | なし |
 | R3 | `tools/perf/README.md` | 880〜887 行（§14「段③ 関数別（昇格が要る）」のコマンドの塊）と、その下の項の頭 | 1・9・24・36 | コマンドの塊に `pwsh -File tools/perf/invoke-cpu-sample.ps1 -Cancel -Etl C:\出力\cpu.etl  # 途中で止まった採取の取り消し（ランナーが使う）` を足し、`-Probe` の注を「採れるか（必ず exit 0・1 行に available・reason・elevated・xperf_path）」、`-SelfTest` の注を「道具の点検（採取は試さない）」にする。項に「`rank-run` では、段③の採取はランナー（`invoke-perf-run.ps1 -SampleEtl`）が静かさの確認の後、areka を起こす直前に始め、失敗したらランナーが取り消す。止めて記号を解くのは perf-loop（`-Stop`）。`-Stop` はまとめが通ったら元の ETL を消す」を 1 つ足す | 相手 | なし |
 | R4 | `tools/perf/README.md` | 902〜903 行（§14 の段③の理由の語の一覧） | 24 | 理由の語に `no_record`（`rank` が `sampling.txt` も dump も無い走行から表を作るとき・可否は試さない）を足す | 相手 | **重なる**: 相手が #24 の申し合わせで同じ行に `no_record` を足す予定。相手の 1 回の直しで済ませ、この行はこの spec から別に頼まない |
 | 注 | `.claude/agents/perf-measure.md`・`.claude/agents/perf-analyze.md` | 56〜58 行・68 行あたり（相手が理由の語の行を足す所） | 24 | この spec は触らない。相手が足す行に perf-loop が渡す語（`not_elevated`・`no_xperf`・`start_failed`・`no_pdb`・`probe_failed`・`dry_run`）も並べるなら `no_record` も入れてほしい（任意） | 相手 | 相手の行そのもの |
@@ -635,7 +635,7 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 | 6.2 | 範囲の外は要る分だけ | `SKILL.md` の 2 か所だけ | — | — |
 | 6.3 | C20 のほかの 6 本のファイルに触らない | Out of Boundary | — | — |
 | 6.4 | 相手が読む口を申し合わせなしに変えない | 申し合わせの表 | — | — |
-| 6.5 | 約束を変えずに直せないときの扱い | 申し合わせ待ち A・B の「決まらないときの形」 | — | — |
+| 6.5 | 約束を変えずに直せないときの扱い | 外への約束を変える直しは全部、申し合わせ済みか要件の討議の裁定（「外への約束の変更と申し合わせ」の表） | — | — |
 | 6.6 | 読み手を同じ変更で直す | スキルの文・申し合わせの分担 | — | — |
 | 6.7 | 後の spec へ回すときの記録 | 回す指摘 0 件（全体テストの段は `audit-tools-scripts` の件 1 として裁定済み） | — | — |
 | 6.8 | `vendors/` に触らない | Out of Boundary | — | — |
@@ -684,14 +684,14 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 
 - **土台**: `load-standalone`（20：新しい pwsh で `common` だけを読み込み `Invoke-Child`・`Invoke-PwshChild` が呼べる・何も出力しない）・`toml-reader`（17：単引用符・注釈・見出しの 2 つの書き方・配列・`[]`・小数・整数）・`keyvalue-parse`（18：値の中の `=`）・`child-args-and-encoding`（5・19：空白を含む引数が 1 つのまま届く・`-ReadEncoding` が効く）・`pwsh-child-args`（21：引数名の形は素で・ほかは単引用符で括る）・`pwsh-child-error`（7：わざと落ちる子の最後の 1 行が理由の文で、ESC を含まない）・`kill-wait`（8：ファイルを握って眠る子を `Stop-ChildProcess` した後、そのファイルの入ったフォルダの名前を替えられる）・`utc-stamp`（35）。
 - **終わり方**: `exit-trap`（3：`common` と `trap { Exit-OnUnexpectedError $_ }` だけの小さなスクリプトを子として回し、RESULT 行と 4 を見る。同じ子で `finally` が本物の `exit` でも回ることを見る）・`trap-present`（3：構文木で 5 本の入口の頭に `trap` が在ること）・`quiet-after-codes`（3：偽の静かさの確かめが 3 → 3、4 → 4）・`child-exit-map`（21）。
-- **入口**（`perf-loop.ps1` を子として、`-DryRun` か引数の確かめで終わる形で起こす）: `case-normalize`（4：`Rank-Run -Build Release -DryRun -BinDir <空の一時> -OutRoot <一時>` の RESULT 行の `<sub>` が `rank-run`、`measure-baseline -Build Release -DryRun ...` の出力の build が `release`）・`goal-and-goalfile`（26）・`relative-paths`（27：`Resolve-LoopPath` を `Set-Location` の後に呼ぶ）・`preflight-code`（25）・`goal-text-count`（33）・`probe-parse`（36：`xperf_path` に空白と括弧を含む行）。
+- **入口**（`perf-loop.ps1` を子として、`-DryRun` か引数の確かめで終わる形で起こす）: `case-normalize`（4：`Rank-Run -Build Release -DryRun -BinDir <空の一時> -OutRoot <一時>` の RESULT 行の `<sub>` が `rank-run`、`measure-baseline -Build Release -DryRun -BinDir <空の一時> -OutRoot <一時>` の出力の build が `release`）・`goal-and-goalfile`（26）・`relative-paths`（27：`Resolve-LoopPath` を `Set-Location` の後に呼ぶ）・`preflight-code`（25）・`goal-text-count`（33）・`probe-parse`（36：`xperf_path` に空白と括弧を含む行）。
 - **出力先と -Resume**: `resume-incomplete`（2：`ended_utc` の無い出力先と `quiet-after.txt` の無い出力先が `-INCOMPLETE-` へ・静かでない出力先が `-NOTQUIET-` へ・揃った出力先は使われる・`run.log` の無い出力先は触られない）・`dryrun-clear`（6：`DRY-RUN.txt` とほかのファイルを置いた出力先で 3・ファイルが残る／印だけなら作り直される）・`loopdir-vocab`（21）。
-- **段③**: `sampling-order`（1・9：偽のビルド・可否・ランナー・停止で、呼ばれる順が「ビルド → 可否 → ランナー（`-SampleEtl` 付き）→ `-Stop`」で、`perf-loop` が `-Start` を呼ばない）・`sampling-stop-after-run`（1：ランナーが 0 で採取の開始を報告したら必ず `-Stop`・`-Stop` の子が `Code -1` なら `xperf -stop` を書いた警告と 4）・`sampling-reason`（30）・`rank-no-record`（24：`sampling.txt` も dump も無い走行で、偽の `Get-SamplingProbe` が呼ばれず、`--unavailable-reason no_record` が渡る）・`not-quiet-evidence`（28）。
+- **段③**: `sampling-order`（1・9：偽のビルド・可否・ランナー・停止で、呼ばれる順が「ビルド → 可否 → ランナー（`-SampleEtl` 付き）→ `-Stop`」で、`perf-loop` が `-Start` を呼ばない）・`sampling-stop-after-run`（1：ランナーが 0 で採取の開始を報告したら必ず `-Stop`・`-Stop` の子が `Code -1` なら `xperf -stop` を書いた警告と 4）・`sampling-reason`（30）・`rank-no-record`（24：`sampling.txt` も dump も無い走行で、偽の `Get-SamplingProbe` が呼ばれず、`--unavailable-reason no_record` が渡る）・`not-quiet-evidence`（28）・`run-not-moved`（8：偽のランナーが 1 で返り `moved to:` の行が無く出力先が残っているとき、採り直さずに 4・ランナーの呼び出し 1 回）。
 - **実行体**: `exe-after-build`（11）・`helper-refresh`（12）・`final-bindir`（10）・`ab-same-exe`（15）・`ab-sequence`（34：`["A","B"]` で 3・偽のビルドもランナーも呼ばれない）・`followup-resume-first`（13：済んだ出力先と `-Resume` で、偽の `cargo` も検体の問い合わせも呼ばれない）・`followup-retry-on-1`（14：1 回目が 1 で判定なし、2 回目が判定ありで 0・呼び出し 2 回）・`followup-verdict-shape`（21）。
 
 ### T3 の検査
 
-`counter-select`（22：同じ素の名前で枝番の違う 2 つのカウンタから PID で正しい方を選ぶ・見つからなければ `$null`）・`quiet-retry-settings`（22・17：寄せた読み口で `[quiet] retry_max`・`retry_wait_sec` を読む）・`smoke-marker`（31：目印が後ろの方に在る・無い）・`failed-dir-name`（28：`-FAILED` が既に在れば時刻を足す）・`sampling-cancel-on-stop`（1：採取を始めた印が立っていれば `Stop-RunSampling` が偽の `-Cancel` を呼び、立っていなければ呼ばない）・`move-after-kill`（8：ファイルを握って眠る子を強制終了して待った後、`Move-FailedOutDir` が名前を替えられる）。
+`counter-select`（22：同じ素の名前で枝番の違う 2 つのカウンタから PID で正しい方を選ぶ・見つからなければ `$null`）・`quiet-retry-settings`（22・17：寄せた読み口で `[quiet] retry_max`・`retry_wait_sec` を読む）・`smoke-marker`（31：目印が後ろの方に在る・無い）・`failed-dir-name`（28：`-FAILED` が既に在れば時刻を足す）・`sampling-cancel-on-stop`（1：採取を始めた印が立っていれば `Stop-RunSampling` が偽の `-Cancel` を呼び、立っていなければ呼ばない）・`move-after-kill`（8：ファイルを握って眠る子を強制終了して待った後、`Move-FailedOutDir` が名前を替えられる。子がさらに起こした孫がファイルを握る場合も同じく替えられる）。
 
 ### T1 に足す検査
 
@@ -720,7 +720,7 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 
 研究の 10 節の「まとまり」で切り、20 以下に収める。順は「土台 → テストの置き場 → 直しの束 → 検証」。各束はテストを同じタスクの中で足す。
 
-1. 土台の分け直し（20・17・18・19・35・8 の共通部品・7）: `perf-tool-base.ps1`・`perf-pwsh-child.ps1`・`common` の分け・`build`／`rundir` の移し（中身はまだ変えない）。T2 の骨組み（`load-standalone` ほか土台の束）。申し合わせ待ち A が決まらなければ、19 の 2 本分はここで行わない。
+1. 土台の分け直し（20・17・18・19・35・8 の共通部品・7）: `perf-tool-base.ps1`・`perf-pwsh-child.ps1`・`common` の分け・`build`／`rundir` の移し（中身はまだ変えない）。T2 の骨組み（`load-standalone` ほか土台の束）。
 2. T3 の置き場（22）と `SELFTEST_TOOLS` の 2 行（21・22）。
 3. 終わり方と終了コード（3・4・26・25・33・申し合わせ件 #74）。
 4. 走行の出力先と `-Resume`（2・6・28）。
@@ -738,7 +738,8 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 - `pwsh -NoProfile -File tools/test-all.ps1` が緑（`encoding check` が新しいファイルも含めて通る）。
 - 既定のブランチとの差分で: 要件 6.3 のファイル（`tools/test-all.ps1`・`tools/encoding-check.ps1`・`Cargo.lock`・根の `Cargo.toml`・`tools/crates-io.ps1`・`tools/utf8-child.ps1`・C20 のほかの 6 本のファイル）に差分が無い。`tools/perf/*.py`・`fixtures*/`・`goals/`・`README.md` に差分が無い（この spec の側）。`.claude/` の差分は `SKILL.md` の 2 か所だけ。
 - 範囲の `*.ps1` の注釈に、ほかのファイルを行番号で指す所が残っていない（申し合わせ件 #74・版を名指しした外のクレートの 1 か所を除く）。
-- 記録: 残す指摘 0 件・回す指摘 0 件・消す前の grep の件数・効き目を次の実走で確かめるもの 8 行。
+- 相手が書く README の R1〜R4: `main` に入っているかを確かめる。まだなら、相手が引き受けた記録（共有の覚え書き `audit-tools-perf-judge-to-perf-run.md`・相手の設計）を確かめ、完了の報告に「README の R1〜R4 は `audit-tools-perf-judge` の着地待ち」と書く（相手の spec が取りやめになったと分かったときは、この spec の完了の前に開発者へ知らせ、相手の持ち物の README を書いてよいか仰ぐ）。
+- 記録: 残す指摘 0 件・回す指摘 0 件・消す前の grep の件数・効き目を次の実走で確かめるもの 8 行・README の R1〜R4 の状態。
 
 ## Risks
 
@@ -746,4 +747,4 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 - **`xperf -stop`（1）**: カーネルの採取のセッションは 1 つしか無いので、`-Cancel` はランナーが自分で始めた後にだけ呼ぶ。本物で確かめるのは昇格した机の次の実走（上の記録）。
 - **`encoding check` の形（20・7・19）**: `common` を単独で読み込む形と 2 つの関数の名前・引数を崩さないことを T2 `load-standalone` で毎回試す。前置きの文は `encoding check` の規則 C で構文解析されるので、足す `try`/`catch` も pwsh として正しい文にする。
 - **ファイルの行数**: `invoke-perf-run.ps1`（約 940）と `invoke-followup-checks.ps1`（約 900）は番人に近い。検査の中身は別ファイル（T3）か既存の `-SelfTest` の小さな関数にとどめ、越えそうなら検査の部分を兄弟のファイルへ出す。
-- **申し合わせ待ち A・B**: どちらも「決まらないときの形」で道具の直しは止まらない。
+- **申し合わせ**: A・B を含めて全部済んだ（2026-11-14）。README は相手が書くので、この spec が先に着地すると相手の着地までの間 README が古い。検証の段の R1〜R4 の確かめで記録に残す。
