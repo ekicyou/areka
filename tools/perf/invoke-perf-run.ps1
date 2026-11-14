@@ -398,13 +398,14 @@ function Read-QuietRetrySettingsFromToml {
 }
 
 # 静かさの確かめ 1 回の答えから次の手を決める（-SelfTest の quiet-attempt-step が固定する）。
-# 戻り: 'go'（静か）・'counter'（4＝カウンタが読めない）・'bad'（2 でも 0 でも 4 でもない）・
+# 戻り: 'go'（静か）・'bad'（3＝引数・前提の不正）・'counter'（4＝カウンタが読めない、ほかの想定外の終わり方も
+#       走行の後の確かめと同じく 4 に寄せる）・
 #       'unconfirmed'（2 で、確かめた回数が retry_max + 1 に届いた）・'wait'（2 で、まだ確かめ直せる）
 function Get-QuietAttemptStep {
     param([int]$Code, [int]$Attempt, [int]$RetryMax)
     if ($Code -eq 0) { return 'go' }
-    if ($Code -eq 4) { return 'counter' }
-    if ($Code -ne 2) { return 'bad' }
+    if ($Code -eq 3) { return 'bad' }
+    if ($Code -ne 2) { return 'counter' }
     if ($Attempt -ge $RetryMax + 1) { return 'unconfirmed' }
     return 'wait'
 }
@@ -640,9 +641,9 @@ if ($AutoQuiet) {
         $step = Get-QuietAttemptStep -Code $quietCode -Attempt $quietAttempts -RetryMax $quietRetryMax
         if ($step -eq 'go') { break }
         if ($step -eq 'counter') {
-            # 4 は確かめそのものが落ちた（カウンタ・道具の想定外の失敗）。報告が無ければ訳は上に写した子の最後の行にある
+            # 4（とほかの想定外の終わり方）は確かめそのものが落ちた（カウンタ・道具の想定外の失敗）。報告が無ければ訳は上に写した子の最後の行にある
             $evidence = if (Test-Path -LiteralPath $quietPath -PathType Leaf) { "The evidence is in quiet-$QUIET_STAGE_BEFORE.txt." } else { "It wrote no quiet-$QUIET_STAGE_BEFORE.txt; the reason is its last line above." }
-            Stop-Run $EXIT_COUNTER_FAILED "quiet check failed (counters could not be read, or the check itself failed: $CHECK_QUIET_SCRIPT exited with 4). $evidence"
+            Stop-Run $EXIT_COUNTER_FAILED "quiet check failed (counters could not be read, or the check itself failed: $CHECK_QUIET_SCRIPT exited with $quietCode). $evidence"
         }
         if ($step -eq 'bad') {
             Stop-Run $EXIT_BAD_ARGS "quiet check could not run ($CHECK_QUIET_SCRIPT exited with $quietCode). Bad arguments or preconditions."

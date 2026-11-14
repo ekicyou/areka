@@ -129,8 +129,8 @@ $PerfRunSelfTestChecks = @(
     } }
 
     [pscustomobject]@{ Name = 'quiet-attempt-step'; Body = {
-        # 静かさの確かめの答え: 0 は進む・4 はカウンタ・2 でも 0 でも 4 でもないものは引数・2 は retry_max + 1 回目で尽きる
-        foreach ($case in @(@(0, 1, 3, 'go'), @(0, 4, 3, 'go'), @(4, 1, 3, 'counter'), @(1, 1, 3, 'bad'), @(3, 1, 3, 'bad'), @(-1, 1, 3, 'bad'),
+        # 静かさの確かめの答え: 0 は進む・3 は引数・ほかの想定外（1・-1 など）は 4 と同じカウンタ（走行の後の確かめと同じ 4）・2 は retry_max + 1 回目で尽きる
+        foreach ($case in @(@(0, 1, 3, 'go'), @(0, 4, 3, 'go'), @(4, 1, 3, 'counter'), @(1, 1, 3, 'counter'), @(3, 1, 3, 'bad'), @(-1, 1, 3, 'counter'),
                             @(2, 1, 3, 'wait'), @(2, 3, 3, 'wait'), @(2, 4, 3, 'unconfirmed'), @(2, 1, 0, 'unconfirmed'))) {
             $got = Get-QuietAttemptStep -Code $case[0] -Attempt $case[1] -RetryMax $case[2]
             Assert-SelfTest ($got -eq $case[3]) "code $($case[0]) attempt $($case[1]) retry_max $($case[2]): got $got (want $($case[3]))"
