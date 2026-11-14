@@ -44,3 +44,8 @@ temp-path-kit = { path = "../temp-path-kit" }
 tracing-subscriber = { workspace = true }
 # examples/window-placement.rs の smoke 自動 close の計時（本体・wintf と同じ版・Cargo.lock に新しいクレートは増えない）。
 async-io = { version = "2.6", default-features = false }
+
+[[example]]
+# 手本の中の `#[test]`（絵の選び・代わりの面）を `cargo test -p areka-placement` で走らせる（`main` は走らない）。
+name = "window-placement"
+test = true

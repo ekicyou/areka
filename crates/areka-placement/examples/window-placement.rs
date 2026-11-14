@@ -7,8 +7,9 @@
 //!
 //! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・434×687 物理 px）
 //! - **scope1 キャラ窓**: emo2 `surface10`（エモ・336×400 物理 px・ukadoc 正典の相方既定サーフェス）
-//! - **両バルーン窓**: balloon target（`balloons0.png`・400×224 物理 px・
-//!   `areka_emo_present::build_balloon_target` 経由）
+//! - **各スコープのバルーン窓**: そのスコープのバルーンの面 0（scope0 は `balloons0.png`・400×224 物理 px、
+//!   scope1 は `balloonk0.png`・288×203 物理 px・`areka_emo_present::build_balloon_target` 経由。
+//!   測りがスコープごとの絵で窓の大きさを決めるので、貼る絵もスコープごとに選ぶ）
 //!
 //! # 層境界（6.3）
 //!
@@ -66,8 +67,8 @@
 //!   `balloon_x(1) = char_x(0) − w0 + w1` となり、scope1 のバルーンが scope0 キャラ窓に
 //!   重畳する。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の**正常挙動**であり
 //!   配置破綻ではない。正式なバルーン配置規則は balloon 表示系の後続 spec が所有する。
-//! - **重畳域でバルーンが先に掴まれるのも正常**: 重畳域ではバルーン不透明部
-//!   （balloons0.png 内側 A=255）が αマスクで先にヒットするため、scope0 キャラでなく
+//! - **重畳域でバルーンが先に掴まれるのも正常**: 重畳域ではバルーン
+//!   （scope1 のバルーンの絵 balloonk0.png）の不透明部が αマスクで先にヒットするため、scope0 キャラでなく
 //!   バルーンが掴まれる。
 //! - **scope0（surface0.png）に吹き出しとセリフ文字が見えるのは正常**: emo2 fixture の
 //!   surface0 はバルーン＋サンプルセリフを**焼き込んだ**挨拶用デフォルト立ち絵であり、
@@ -96,6 +97,9 @@ use areka_emo_present::{
     EmoPresenter, PresentCommand, ShellTarget, TargetId, build_balloon_target, load_shell_target,
 };
 
+use areka_placement::descript_window_keys::{
+    DefaultSurfaces, builtin_default_surface, first_existing,
+};
 use areka_placement::spawn::{
     GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
 };
@@ -277,11 +281,9 @@ fn build_and_spawn(world: &mut World) {
     for scope in windows.scopes().collect::<Vec<_>>() {
         // 初期 surface id: 測りと同じく、候補の並びのうちシェルに在る最初の面（窓寸法と表示 surface の原寸が一致する）。
         let probe = shell_target.build_world();
-        let surface_id = areka_placement::descript_window_keys::first_existing(
-            &prepared.default_surfaces.candidates(scope),
-            |id| probe.surface(id).is_some(),
-        )
-        .unwrap_or_else(|| prepared.default_surfaces.surface(scope));
+        let surface_id = initial_char_surface(&prepared.default_surfaces, scope, |id| {
+            probe.surface(id).is_some()
+        });
 
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
@@ -295,9 +297,9 @@ fn build_and_spawn(world: &mut World) {
             });
         }
 
-        // バルーン窓 target（TargetId = 2*scope+1・balloon surface0＝balloons0.png）。
+        // バルーン窓 target（TargetId = 2*scope+1・そのスコープのバルーンの面 0）。
         if let Some(balloon_e) = windows.balloon_window(scope) {
-            match build_balloon_target(&balloon_dir, &decoder, 0) {
+            match build_balloon_target(&balloon_dir, &decoder, balloon_scope(scope)) {
                 Ok((b_world, b_table)) => pending.push(PendingTarget {
                     target: TargetId((scope as u32) * 2 + 1),
                     window: balloon_e,
@@ -349,6 +351,21 @@ fn build_shell_material(
             None
         }
     }
+}
+
+/// キャラ窓に最初に出す面: 測り（`measure.rs` の `initial_surface`）と同じく、候補の並びのうち
+/// シェルに在る最初の面、どれも無ければ組み込みの既定の面（窓寸法と表示の原寸が一致する）。
+fn initial_char_surface(
+    defaults: &DefaultSurfaces,
+    scope: usize,
+    exists: impl Fn(u32) -> bool,
+) -> u32 {
+    first_existing(&defaults.candidates(scope), exists).unwrap_or(builtin_default_surface(scope))
+}
+
+/// バルーン窓に貼る絵のスコープ（`build_balloon_target` の第 3 引数）: 窓のスコープそのもの。
+fn balloon_scope(scope: usize) -> u32 {
+    scope as u32
 }
 
 // ---------------------------------------------------------------------------
@@ -457,4 +474,39 @@ fn install_smoke_exit(app: &WinApp) {
             "window-placement smoke 自動 close: ゴースト窓を despawn しました"
         );
     });
+}
+
+// 窓も GPU も使わない選びだけを確かめる（`[[example]] test = true` で `cargo test -p areka-placement` が走らせる）。
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn each_scope_balloon_uses_its_own_scope_picture() {
+        // `build_balloon_target` に渡すのと同じ値で、手本と同じバルーンの絵の選びを読む（ファイルを読むだけ）。
+        let dir = balloon_root();
+        let first_prefix = |scope: usize| {
+            areka_emo_present::balloon::resolve_balloon_faces_quiet(&dir, balloon_scope(scope))
+                .expect("emo2 の同梱バルーンの面")[0]
+                .prefix
+                .clone()
+        };
+        assert_eq!(first_prefix(0), "balloons");
+        assert_eq!(first_prefix(1), "balloonk");
+    }
+
+    #[test]
+    fn missing_face_falls_back_to_the_measure_answer() {
+        // descript が kero の既定の面に 12 を書き、シェルに候補（12・10）のどれも無い。
+        let kv = BTreeMap::from([("kero.seriko.defaultsurface".to_string(), "12".to_string())]);
+        let defaults = areka_placement::descript_window_keys::read_default_surfaces(&kv);
+        assert_eq!(
+            initial_char_surface(&defaults, 1, |_| false),
+            builtin_default_surface(1)
+        );
+        // 在る面があればそれ（候補の先頭から）。
+        assert_eq!(initial_char_surface(&defaults, 1, |id| id == 10), 10);
+        assert_eq!(initial_char_surface(&defaults, 1, |_| true), 12);
+    }
 }
