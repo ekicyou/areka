@@ -157,7 +157,7 @@ pub fn load_descript_source_for_shell(
     // shell descript: 読取失敗は致命（→呼び手の `main` が「起動窓を開けない」を告知して終える）。
     let shell_descript = model.shell.dir.join(DESCRIPT_FILE);
     let shell_kv = match std::fs::read(&shell_descript) {
-        Ok(bytes) => parse_kv(&decode(&bytes, DefaultEncoding::Ansi)),
+        Ok(bytes) => read_kv(&bytes),
         Err(source) => {
             error!(path = %shell_descript.display(), error = %source, "shell descript の読み取りに失敗");
             return Err(PlacementError::DescriptRead {
@@ -177,6 +177,11 @@ pub fn load_descript_source_for_shell(
     })
 }
 
+/// descript の生バイトを charset 判定（既定 Ansi）して KV にする（`read_kv_lenient` と shell descript の読みの 1 行）。
+fn read_kv(bytes: &[u8]) -> BTreeMap<String, String> {
+    parse_kv(&decode(bytes, DefaultEncoding::Ansi))
+}
+
 /// descript.txt の寛容読取: 読めなければ `warn!`＋空 KV（ghost 側の継続契約）。
 /// 読めれば `charset::decode`（既定 Ansi・宣言優先）→ `kv::parse_kv`。
 ///
@@ -186,7 +191,7 @@ pub fn load_descript_source_for_shell(
 /// R6.3 の `RUST_LOG` grep 判定を誤らせる。
 pub fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
     match std::fs::read(path) {
-        Ok(bytes) => parse_kv(&decode(&bytes, DefaultEncoding::Ansi)),
+        Ok(bytes) => read_kv(&bytes),
         Err(err) => {
             warn!(path = %path.display(), error = %err, "descript の読み取りに失敗（空 KV で継続）");
             BTreeMap::new()

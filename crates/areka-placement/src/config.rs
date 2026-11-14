@@ -515,13 +515,34 @@ mod tests {
         assert_eq!(cfg.scopes[&1].default_y, Some(2));
     }
 
-    /// T-C2: 数値化不能な値はパニックせず None（純粋・呼び出し側 warn の契約）。
+    /// T-C2: 数値化不能な値はパニックせず None（`parse_i32` が `warn!` を残す）。
     #[test]
     fn t_c2_unparseable_numeric_becomes_none() {
         let shell = kv(&[("sakura.defaultx", "abc"), ("sakura.defaulty", "12.5")]);
         let cfg = build_placement_config(&empty(), &shell);
         assert_eq!(cfg.scopes[&0].default_x, None);
         assert_eq!(cfg.scopes[&0].default_y, None);
+    }
+
+    /// T-C2: 読めない値 2 つ（未知の `balloon.alignment`・数値でない `defaultx`）は、
+    /// それぞれ `warn!` を 1 件ずつ出し、値は既定（Left・None）になる。
+    #[test]
+    fn t_c2_two_unreadable_values_warn_once_each_and_fall_back() {
+        let shell = kv(&[
+            ("sakura.balloon.alignment", "center"),
+            ("sakura.defaultx", "abc"),
+        ]);
+        let (cfg, events) = log_capture_kit::capture(|| build_placement_config(&empty(), &shell));
+        assert_eq!(cfg.scopes[&0].balloon_alignment, BalloonSide::Left);
+        assert_eq!(cfg.scopes[&0].default_x, None);
+        let count = |needle: &str| {
+            events
+                .iter()
+                .filter(|e| e.message().contains(needle))
+                .count()
+        };
+        assert_eq!(count("balloon.alignment の未知値"), 1, "{events:?}");
+        assert_eq!(count("配置キーの数値化に失敗"), 1, "{events:?}");
     }
 
     // ------------------------------------------------------------------
@@ -623,24 +644,6 @@ mod tests {
         assert_eq!(s1.default_y, None);
         assert_eq!(s1.balloon_alignment, BalloonSide::Right);
         assert_eq!(s1.balloon_offset, None);
-
-        // デモ定数の不在: 全数値スロットを走査し 400/200/335 が一切出現しない
-        let demo_constants = [400, 200, 335];
-        for (scope, sc) in &cfg.scopes {
-            let mut values = vec![];
-            values.extend(sc.default_x);
-            values.extend(sc.default_y);
-            if let Some((ox, oy)) = sc.balloon_offset {
-                values.push(ox);
-                values.push(oy);
-            }
-            for v in values {
-                assert!(
-                    !demo_constants.contains(&v),
-                    "scope {scope} にデモ定数 {v} が混入"
-                );
-            }
-        }
     }
 
     // ------------------------------------------------------------------

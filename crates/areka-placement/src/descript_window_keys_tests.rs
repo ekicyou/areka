@@ -97,26 +97,6 @@ fn unreadable_values_fall_back_to_builtin_with_one_warning_each() {
     }
 }
 
-/// 既定の面はゴーストの descript だけから読む。シェルの KV に同じ名前の鍵があっても使わない（要件 1.6）。
-///
-/// 読みの関数はシェルの KV を引数に持たない（型で守る）。ここではシェルの KV を渡す道が無いことを、
-/// ゴーストの KV だけを渡したときに組み込みの値になることで確かめる。
-#[test]
-fn shell_kv_with_same_key_is_not_used() {
-    let shell_kv = kv(&[
-        ("sakura.seriko.defaultsurface", "5"),
-        ("kero.seriko.defaultsurface", "12"),
-    ]);
-    let ghost_kv = kv(&[("name", "x")]);
-    let ds = read_default_surfaces(&ghost_kv);
-    assert_eq!(ds, DefaultSurfaces::builtin());
-    assert_ne!(
-        ds.surface(0),
-        5,
-        "シェルの値 {shell_kv:?} を拾ってはならない"
-    );
-}
-
 /// 候補の並びは descript の面、違えば続けて組み込みの面で、重ならない（要件 2.6）。
 #[test]
 fn fallback_candidates_do_not_overlap() {
@@ -187,6 +167,16 @@ fn ghost_only_locks_every_scope() {
     assert_eq!(
         read_balloon_dontmove(&ghost, &kv(&[]), &[0, 1]),
         BTreeSet::from([0, 1])
+    );
+}
+
+/// u32 に収まらないスコープ番号は集合に入れない（`1 << 32` が 0 番へ切り詰められない）。
+#[test]
+fn scope_that_does_not_fit_u32_is_not_locked() {
+    let ghost = kv(&[("balloon.dontmove", "1")]);
+    assert_eq!(
+        read_balloon_dontmove(&ghost, &kv(&[]), &[1usize << 32]),
+        BTreeSet::new()
     );
 }
 

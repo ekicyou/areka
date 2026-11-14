@@ -124,9 +124,11 @@ pub fn read_balloon_dontmove(
                 .get(BALLOON_DONTMOVE)
                 .and_then(|raw| read_flag(scope, BALLOON_DONTMOVE, raw))
         };
-        if shell.or_else(ghost).unwrap_or(false) {
-            // スコープ番号は u32 に収まる（窓のスコープは数個）。
-            locked.insert(scope as u32);
+        // 収まらない番号の窓は在り得ないので、集合には入れない（`read_balloon_syncscale` と同じ）。
+        if shell.or_else(ghost).unwrap_or(false)
+            && let Ok(scope) = u32::try_from(scope)
+        {
+            locked.insert(scope);
         }
     }
     locked

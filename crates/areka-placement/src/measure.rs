@@ -304,11 +304,10 @@ fn apply_scaling(
     natives: Vec<ScopeInput>,
     scaling: &MeasureScaling,
 ) -> Result<Vec<ScopeInput>, PlacementError> {
-    let mut scaled = Vec::with_capacity(natives.len());
-    for input in natives {
-        scaled.push(scale_scope_input(input, scaling)?);
-    }
-    Ok(scaled)
+    natives
+        .into_iter()
+        .map(|input| scale_scope_input(input, scaling))
+        .collect()
 }
 
 /// 1 スコープぶんの k 適用（char=`scaling.shell`・balloon=`scaling.balloon`）。
@@ -446,7 +445,7 @@ fn measure_balloon_surface0(
         );
         PlacementError::Measure {
             scope,
-            reason: format!("balloon: {reason}"),
+            reason: format!("{}{reason}", SizeKind::Balloon.reason_prefix()),
         }
     };
 
