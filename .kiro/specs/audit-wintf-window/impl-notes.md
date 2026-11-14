@@ -109,3 +109,12 @@
 - 9 の較正: `window_to_client_rect` の `left: window_rect.left - left_diff` を `+ left_diff` に変えると `framed_window_client_to_window_round_trips` が赤（位置 `(84, 200)` ≠ `(100, 200)`）。明示の編集で戻し、`git diff` で戻ったことを確かめた。
 - 10: 消す前の `git grep -n "from_hwnd"`: コード（crates・examples・tools・テスト・fixture・設定）では `crates/wintf/src/ecs/window/components.rs:218` の定義の 1 か所だけ。ほかの当たりは `.kiro/specs/completed/` の過去の文書（`WindowStyle::from_hwnd` の記述と、別物の `get_entity_from_hwnd`・`WindowCoordinateConverter::from_hwnd`）と、この spec の文書だけ。`impl WindowStyle { from_hwnd }` を消し、それだけが使っていた `use crate::api::*;`（components.rs）も消した。消した後の `git grep "from_hwnd"` はコードで 0 件。
 - テストの数: `cargo test -p wintf --lib window_handle` 10 → 11（1 本足した）。`cargo test -p wintf --lib ecs::window` 474 passed・6 ignored。
+
+## 5.3
+
+- 52: `crates/wintf/src/ecs/window/window_system.rs` の関数の中の `type Pending` を関数の外の `type PendingWindow`（`With<Window>`・`Without<WindowHandle>`・`Without<WindowCreationFailed>` の 3 条件）へ出し、`create_windows(world: &mut World, pending: &mut QueryState<Entity, PendingWindow>)` にした。本体の `SystemState::new` と `.get(world).expect(..)` を `pending.iter(world).collect()` に替え、`use bevy_ecs::system::SystemState;` を消した。self-ref の確かめは今どおり先。`UISetup` への登録（`ecs/world/mod.rs:220`）は変えていない。
+- 直前の姿: `window_system.rs:41` に `let mut system_state: SystemState<Query<Entity, Pending>> = SystemState::new(world);`。直した後の `git grep -n "SystemState" -- crates/wintf/src/ecs/window/window_system.rs` は 0 件。
+- 直に呼ぶテストを `run_system_once(create_windows).unwrap()` へ替えた: `window_system.rs` の 1 か所、`runtime/window_factory_creation_tests.rs` の 2 か所（範囲の外・完了した `audit-wintf-runtime` の持ち物）。tasks.md に載っていない `runtime/window_factory.rs` の `create_windows_new_path_spawns_registers_and_handles_without_class_error` にも直に呼ぶ所が 2 か所あり、引数が増えてビルドが通らなくなるので同じ形へ替えた（範囲の外）。
+- 較正: 振る舞いを変えない直し（design.md「直したテストの較正」で 52 は既にあるテストが緑のままであることで確かめる組）なので、壊し方は入れていない。
+- 消したもの: 関数の中の型の別名と `SystemState` の import だけ（公開の口ではない）。`git grep -n "create_windows(&mut"` は直した後 crates で 0 件。
+- テストの数: `cargo test -p wintf --lib window_system` 1 → 1、`--lib window_factory` 12 → 12（どちらも緑）。`cargo build -p wintf -p areka -p areka-placement --tests` 通る。

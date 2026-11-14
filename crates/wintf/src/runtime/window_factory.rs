@@ -456,6 +456,7 @@ mod tests {
     fn create_windows_new_path_spawns_registers_and_handles_without_class_error() {
         use crate::ecs::window::window_system::create_windows;
         use crate::ecs::world::EcsWorldSelfRef;
+        use bevy_ecs::system::RunSystemOnce;
 
         // 共有 World（strong 所有者をテストが保持）。`create_windows` は self-ref の Weak を
         // 読んで WndState 用の外側 World 参照を得る。
@@ -492,7 +493,7 @@ mod tests {
         );
 
         // --- 新経路 ECS システムを実駆動（self-ref 在 → factory 経路へ分岐） ---
-        create_windows(&mut bevy_world);
+        bevy_world.run_system_once(create_windows).unwrap();
 
         // (c) WindowHandle が付与され、(a) HWND が有効（クラス未登録/生成失敗なし）。
         let handle = bevy_world
@@ -522,7 +523,7 @@ mod tests {
         // 冪等性: 同じ Entity は WindowHandle 付与済みゆえ再 create_windows で二重生成しない
         // （クエリ `Without<WindowHandle>` で除外される）。registry は Entity を鍵に上書き
         // するので件数では見えない——HWND が替わらないことで見る。
-        create_windows(&mut bevy_world);
+        bevy_world.run_system_once(create_windows).unwrap();
         assert_eq!(
             bevy_world.get::<WindowHandle>(entity).map(|h| h.hwnd),
             Some(handle.hwnd),

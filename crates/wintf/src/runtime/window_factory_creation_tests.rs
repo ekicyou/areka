@@ -6,6 +6,7 @@ use super::*;
 use crate::ecs::types::Point;
 use crate::ecs::window::window_system::create_windows;
 use crate::ecs::world::EcsWorldSelfRef;
+use bevy_ecs::system::RunSystemOnce;
 use log_capture_kit::count_levels;
 use std::rc::Rc;
 use windows::Win32::Foundation::RECT;
@@ -101,14 +102,14 @@ fn create_windows_skips_marked_entity_until_the_mark_is_removed() {
         ))
         .id();
 
-    create_windows(&mut world);
+    world.run_system_once(create_windows).unwrap();
     assert!(
         world.get::<WindowHandle>(entity).is_none(),
         "印の付いた実体は作らない"
     );
 
     world.entity_mut(entity).remove::<WindowCreationFailed>();
-    create_windows(&mut world);
+    world.run_system_once(create_windows).unwrap();
     hide(&world, entity);
 }
 
