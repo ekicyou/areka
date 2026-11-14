@@ -141,11 +141,11 @@ $ARM64_VS_COMPONENT   = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
 $VSWHERE_PATH         = "$([Environment]::GetFolderPath('ProgramFilesX86'))\Microsoft Visual Studio\Installer\vswhere.exe"
 $DLL_DENY_PREFIXES    = @('vcruntime', 'msvcp', 'msvcr', 'api-ms-win-crt-', 'ucrtbase', 'concrt')
 $ALLOWED_EXECUTABLES  = @('areka.exe', 'areka-mcp-bridge.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/pasta.dll')
-$LOG_MARKER_SMOKE_GATE     = 'smoke 自動 close ゲート有効'          # crates/areka/src/main.rs の SMOKE_EXIT_ENV の info!
+$LOG_MARKER_SMOKE_GATE     = 'smoke 自動 close ゲート有効'          # crates/areka/src/smoke_exit.rs の SMOKE_EXIT_ENV の info!
 $LOG_MARKER_WINDOWS        = '本物のゴースト窓を開きました'          # crates/areka/src/ghost_session.rs
 $LOG_MARKER_FAULTS         = @('SHIORI が動かなくなりました', 'event="connect_failed"', 'event="helper_exited"')
 $LOG_MARKER_GREETING       = '起動グリーティングを再生起動'          # areka-kanade/src/schedule/boot.rs（204 側の文言は数えない）
-$LOG_MARKER_SMOKE_EXIT     = 'smoke 自動 close: ゴースト窓を despawn しました'  # crates/areka/src/main.rs の有界の自動終了が発火した行（quit_app の直後）
+$LOG_MARKER_SMOKE_EXIT     = 'smoke 自動 close: ゴースト窓を despawn しました'  # crates/areka/src/smoke_exit.rs の有界の自動終了が発火した行（quit_app の直後）
 $LOG_MARKER_BALLOON        = 'バルーンを決めました'                  # crates/areka/src/boot_config.rs の balloon_resolved
 $LOG_MARKER_BALLOON_ROUTE  = 'route=Companion'
 $LOG_MARKER_BALLOON_DIR    = '\balloon\emo2-kakukaku'
@@ -665,7 +665,7 @@ if ($Check) {
         # AREKA_*／WINTF_* を全部外し、決めた 4 つだけ入れる。子へは継承で渡し、起こした直後に戻す。
         Get-ChildItem Env: | Where-Object { $_.Name -like 'AREKA_*' -or $_.Name -like 'WINTF_*' } |
             ForEach-Object { Set-EnvTemp $_.Name $null }
-        Set-EnvTemp 'AREKA_APP_SMOKE_EXIT_MS' "$script:SmokeMs"   # crates/areka/src/main.rs の SMOKE_EXIT_ENV
+        Set-EnvTemp 'AREKA_APP_SMOKE_EXIT_MS' "$script:SmokeMs"   # crates/areka/src/smoke_exit.rs の SMOKE_EXIT_ENV
         Set-EnvTemp 'AREKA_NO_ALERT' '1'                          # crates/areka/src/alert.rs の NO_ALERT_ENV
         Set-EnvTemp 'RUST_LOG' 'info'
         Set-EnvTemp 'NO_COLOR' '1'

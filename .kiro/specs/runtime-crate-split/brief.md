@@ -90,3 +90,7 @@
   `log_history` の分け方（MCP の `get_log` の 5 種別）が前後で同じことも示す。
 - **共通の約束**: roadmap の同じ節のとおり。
 - **Fable**: Opus で足りる。
+
+## 2026-11-14 棚卸㊲の申し送り
+
+- 完了した `runtime-module-untangle` の research の §24 は「本体の外のクレートの説明の中に残る古い名前（`emo2_boot`・`Emo2Wiring`）は `runtime-crate-split` が直す」と書いたが、この brief には書かれていなかった。2026-11-14 の main `df6f4e03` で、本体（`crates/areka/`）の外の 43 ファイル・76 行に残る（数え方: `rg -n 'emo2_boot|Emo2Wiring' crates -g '!crates/areka/**'`・例 `areka-emo-present/src/presenter/` の `read.rs`・`refresh.rs`・`target.rs`、`areka-emo-text/src/actor_attach.rs`・`state_decoration.rs`、`areka-ghost/src/prop_sink.rs`）。説明だけの直しで動きは変わらない。`areka-placement` の 4 行は棚卸㊲で直した。
