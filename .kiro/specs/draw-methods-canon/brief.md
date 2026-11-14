@@ -148,3 +148,11 @@
 - 要件定義のモデル: Fable（骨組みを決める分かれ目を先例が決めていない＝CPU の合成を残して 5 つの読み手の出どころにするか、全部を GPU の読み戻しへ替えるか）。
 - 分割の案: 一度切り出した spec なので、20 を少し越える程度では分けない。要件で 22 を越えたら、5 つの読み手の付け替え（`presenter/{budget,read}.rs`・`cache.rs`・`balloon_background.rs`・`offline_dump/render.rs`）を後の 1 本（名前の例 `emo-pixel-readback`）へ出す。後ろの 1 本が本体（`crates/areka`）の分をほぼ全部持つので、この spec の待ちが軽くなる。
 - 見つけた穴・古くなった記述: `element-clipping-option` も `Element` に欄を足す＝同じ 44 ファイルをもう一度触る。この spec が描画メソッドの欄と一緒にオプションの並びの欄（転記だけ）を足せば、あちらは触り直さずに済む。
+
+## 申し送り（wintf-visual-damage-redraw より・2026-11-14）
+
+- **範囲だけの描き直しは件を丸ごと描く**: 描く矩形と写しの帯を、交わる今の `Draw` の項の範囲で動かなくなるまで閉じる（広げた矩形が全面になれば全部へ倒す＝理由 `covers_surface`）。根の命令の列と描画の木を両方持つ描画面は、変化の在る回は全部（理由 `undecidable`）。外の変形で縮める `HIGH_QUALITY_CUBIC` の件は、`SOURCE_OVER` でない件と同じく囲む矩形の切り抜きか全面を範囲にする。訳は、D2D が絵を恒等でない変換で描くとき答えを描画域（絵の範囲 ∩ 切り抜き）に依らせること（WARP で実測）。正本: `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Risks の R1、`crates/wintf/src/ecs/graphics/visual/draw/README.md` の「差分の描き直し」の「計画」。
+- **この spec で見直すこと（未決）**: シェルを描画の木へ移すと、まばたきなどの変化が大きな下地の絵の件に触れるので、毎回 `covers_surface` で全部の描き直しになる見込み。変形した絵の件を範囲だけで描くには、中身の側が「画素どおり」（ベクタだけ・等倍の整数の位置に置く絵だけ）を申告する仕組みが要る。申告の形と、申告を誰が持つか（この spec か wintf の別の spec か）は決まっていない。
+- **写しも同じ根で捨てられる**: 余白（にじみの余白）込みで隣り合う件の範囲が重なる形（行の並ぶ一覧）では、露出した帯が件から件へ広がって写しの先まで描き直し、写しは捨てられる（答えは一致）。上の「画素どおり」の申告が入れば変わりうる。正本: `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の ScrollCheck の「受け入れたら」、README の「写し」。
+- **描く列の欄が増えた**（`crates/wintf/src/ecs/graphics/visual/draw/command.rs`）: `DrawItem.version`（節の `VisualVersion`・無ければ 0）と、層の命令 `ClipRect`・`ClipGeometry`・`OpacityLayer` の `entity`（層を積んだ節）・`version`。`DrawCommand` を自分で組む側はこれを埋める（比べの同一性の鍵と平行移動を除いた鍵に使う）。欄の変更は `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Revalidation Triggers に載る。
+- **`VisualDrawContent` の `interpolation_mode`**（`crates/wintf/src/ecs/graphics/visual/draw_content.rs` の `new_ex` の文書）: D2D は命令の列を描くときこの値を使わず、中の命令の補間が効く。wintf はこの値を、にじみの余白と「縮める `HIGH_QUALITY_CUBIC` の件」の規則にだけ使う。語ごとの補間をこの欄で指すつもりなら、効かないことを前提に組み直す。

@@ -1,7 +1,8 @@
 //! 描画面ごとの入れ物（要件 4.1, 4.2, 4.4, 4.8）。描画面 1 枚の合成の結果を持ち、合成と写しの
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
-use super::visual::{DrawCommand, emit};
+use super::damage::{ComposePlan, FullReason, PartialPlan, PlanInput, RegionShift, plan};
+use super::visual::{DamageEntry, DrawCommand, PxRect, emit, emit_within, entries};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,6 +31,14 @@ pub(crate) struct SurfaceComposite {
     pixel: Mutex<PixelReadState>,
     /// GPU から読んだ回数（5.4 のテストの的）。
     gpu_reads: AtomicU64,
+    /// 前の合成の項の列（無い＝比べられない）。入れ物と同じ寿命（捨てれば控えも消える）。
+    prev_entries: Option<Vec<DamageEntry>>,
+    /// 前の合成の根の命令の列（参照を持つので番地の使い回しで取り違えない）。
+    prev_root: Option<ID2D1CommandList>,
+    /// 前の合成の拡大 (x, y)。
+    prev_scale: (f32, f32),
+    /// 前の合成の入れ物を描画面へ写し終えた。
+    presented: bool,
 }
 
 // SAFETY: 入れ物と写し先は D2D1_FACTORY_TYPE_MULTI_THREADED の工場の系列（GraphicsCore の装置）の
@@ -66,23 +75,70 @@ fn create_bitmap(
     unsafe { dc.CreateBitmap(D2D_SIZE_U { width, height }, None, 0, &props) }
 }
 
-/// 置き場の入れ物へ合成する（置き場が空なら何もしない）。失敗したら入れ物を捨てる
-/// （途中まで描いた絵を読ませない＝読みは `Unreadable`・5.5。次の回に作り直す）。
+/// 置き場の入れ物への描き 1 回（`draw`）を走らせる（置き場が空なら何もしない）。失敗したら入れ物を
+/// 控えごと捨てる（途中まで描いた絵を読ませない＝読みは `Unreadable`・5.5。次の回に作り直す・3.5）。
 pub(crate) fn compose_or_drop(
     slot: &mut Option<SurfaceComposite>,
-    dc: &ID2D1DeviceContext,
-    scale: Matrix3x2,
-    root_list: Option<&ID2D1CommandList>,
-    tree: &[DrawCommand],
+    draw: impl FnOnce(&mut SurfaceComposite) -> windows::core::Result<()>,
 ) -> windows::core::Result<()> {
     let Some(composite) = slot.as_mut() else {
         return Ok(());
     };
-    let result = composite.compose(dc, scale, root_list, tree);
+    let result = draw(composite);
     if result.is_err() {
         *slot = None;
     }
     result
+}
+
+/// 描画面 1 枚の、この回の計画を立てて入れ物へ合成する（1.1・2.5・2.7・3.1・3.3）。`fresh` は入れ物を今
+/// 作った回の理由。全部・範囲だけは失敗なら入れ物と控えを捨てて `Err`、写すだけ・何もしないは合成しない。
+/// 成功で控えを今の項の列（項にできなければ空）に置き換える。返すのは計画と今の項の列。置き場が空なら
+/// 何もしない（`Skip`）。本番の係と WARP のテストが同じこの関数を呼ぶ。
+pub(crate) fn compose_planned(
+    slot: &mut Option<SurfaceComposite>,
+    dc: &ID2D1DeviceContext,
+    fresh: Option<FullReason>,
+    scale: Matrix3x2,
+    root_list: Option<&ID2D1CommandList>,
+    tree: &[DrawCommand],
+    size: (u32, u32),
+) -> windows::core::Result<(ComposePlan, Option<Vec<DamageEntry>>)> {
+    let scale_xy = (scale.M11, scale.M22);
+    let now = entries(tree, scale_xy, size);
+    let Some(composite) = slot.as_ref() else {
+        return Ok((ComposePlan::Skip, now));
+    };
+    let planned = plan(&PlanInput {
+        fresh,
+        same_root: composite.same_root(root_list),
+        same_scale: composite.same_scale(scale_xy),
+        root_present: root_list.is_some(),
+        prev: composite.prev_entries(),
+        now: now.as_deref(),
+        presented: composite.presented(),
+        surface: size,
+    });
+    let composed = match &planned {
+        ComposePlan::Full(_) => {
+            compose_or_drop(slot, |c| c.compose(dc, scale, root_list, tree))?;
+            true
+        }
+        ComposePlan::Partial(p) => {
+            // `plan` は `now` が在るときだけ範囲だけを返す。
+            let list = now.as_deref().unwrap_or_default();
+            compose_or_drop(slot, |c| {
+                c.compose_partial(dc, scale, root_list, tree, list, p)
+            })?;
+            true
+        }
+        ComposePlan::PresentOnly | ComposePlan::Skip => false,
+    };
+    if let Some(c) = slot.as_mut() {
+        // 控えと呼び手（記録）の両方が列を使う。
+        c.remember(now.clone(), root_list, scale_xy, composed);
+    }
+    Ok((planned, now))
 }
 
 impl SurfaceComposite {
@@ -103,6 +159,10 @@ impl SurfaceComposite {
                 last: None,
             }),
             gpu_reads: AtomicU64::new(0),
+            prev_entries: None,
+            prev_root: None,
+            prev_scale: (0.0, 0.0),
+            presented: false,
         })
     }
 
@@ -112,6 +172,49 @@ impl SurfaceComposite {
 
     pub(crate) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// 前の合成の項の列（新しい入れ物は無い）。
+    pub(crate) fn prev_entries(&self) -> Option<&[DamageEntry]> {
+        self.prev_entries.as_deref()
+    }
+
+    /// 根の命令の列が前の合成と同じ参照か（COM の参照の同一性・両方無いも同じ）。
+    pub(crate) fn same_root(&self, root_list: Option<&ID2D1CommandList>) -> bool {
+        self.prev_root.as_ref() == root_list
+    }
+
+    /// 拡大が前の合成とビットで同じか。
+    pub(crate) fn same_scale(&self, (x, y): (f32, f32)) -> bool {
+        let (px, py) = self.prev_scale;
+        (px.to_bits(), py.to_bits()) == (x.to_bits(), y.to_bits())
+    }
+
+    /// 前の合成の入れ物を描画面へ写し終えたか（新しい入れ物は偽）。
+    pub(crate) fn presented(&self) -> bool {
+        self.presented
+    }
+
+    /// 合成か Skip・PresentOnly を終えた回に控えを置き換える。`composed` なら `presented` を偽にする
+    /// （1.1・2.8）。
+    pub(crate) fn remember(
+        &mut self,
+        entries: Option<Vec<DamageEntry>>,
+        root_list: Option<&ID2D1CommandList>,
+        scale: (f32, f32),
+        composed: bool,
+    ) {
+        self.prev_entries = entries;
+        self.prev_root = root_list.cloned();
+        self.prev_scale = scale;
+        if composed {
+            self.presented = false;
+        }
+    }
+
+    /// 入れ物を描画面へ写し終えた印を付ける（2.8）。
+    pub(crate) fn mark_presented(&mut self) {
+        self.presented = true;
     }
 
     /// 入れ物を透明に塗り、根の命令の列を `SOURCE_OVER` で、木の列を `emit` で描く（4.1・4.8）。
@@ -156,6 +259,96 @@ impl SurfaceComposite {
         result
     }
 
+    /// 計画 `plan` の範囲だけを描き直す（2.2・2.3・5.1）。先に各写しを作業用の絵を通して行い（重なる写しを
+    /// 直接しない・決め D6）、描く矩形ごとに軸に沿う切り抜きの中を透明に塗って根の命令の列と `emit_within`
+    /// で描く。`entries` は `tree` から作った列。成功したら世代を 1 上げる。戻るとき `dc` は的なし・変換は
+    /// 恒等（写しの失敗では `dc` に触っていない）。
+    pub(crate) fn compose_partial(
+        &mut self,
+        dc: &ID2D1DeviceContext,
+        scale: Matrix3x2,
+        root_list: Option<&ID2D1CommandList>,
+        tree: &[DrawCommand],
+        entries: &[DamageEntry],
+        plan: &PartialPlan,
+    ) -> windows::core::Result<()> {
+        // 写しは BeginDraw の前（入れ物が的に付いていない時点）に行う。
+        for shift in &plan.shifts {
+            self.shift(dc, shift)?;
+        }
+        let identity = Matrix3x2::identity();
+        // SAFETY: Windows API 境界。`dc` は UI スレッドの係だけが使う共有の DC（呼び手の約束）。
+        let result = unsafe {
+            dc.SetTarget(&self.bitmap);
+            dc.SetDpi(96.0, 96.0);
+            dc.BeginDraw();
+            dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
+            let dc6 = if tree.is_empty() {
+                None
+            } else {
+                dc.cast::<ID2D1DeviceContext6>().ok()
+            };
+            for r in &plan.rects {
+                dc.SetTransform(&identity);
+                let clip = D2D_RECT_F {
+                    left: r.left as f32,
+                    top: r.top as f32,
+                    right: r.right as f32,
+                    bottom: r.bottom as f32,
+                };
+                // 整数の縁なので覆いは 0 か 1。
+                dc.PushAxisAlignedClip(&clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+                dc.SetTransform(&scale);
+                dc.Clear(Some(&D2D1_COLOR_F::default()));
+                if let Some(list) = root_list {
+                    dc.DrawImage(
+                        list,
+                        None,
+                        None,
+                        D2D1_INTERPOLATION_MODE_LINEAR,
+                        D2D1_COMPOSITE_MODE_SOURCE_OVER,
+                    );
+                }
+                if !tree.is_empty() {
+                    emit_within(dc, dc6.as_ref(), scale, tree, entries, *r);
+                }
+                dc.PopAxisAlignedClip();
+            }
+            let result = dc.EndDraw(None, None);
+            dc.SetTransform(&identity);
+            dc.SetTarget(None);
+            result
+        };
+        if result.is_ok() {
+            self.generation += 1;
+        }
+        result
+    }
+
+    /// 入れ物の `shift.src` を `shift.dst` へ写す。作業用の絵（`src` の大きさ・入れ物と同じ形式）は
+    /// この呼び出しの中だけ持つ。
+    fn shift(&self, dc: &ID2D1DeviceContext, shift: &RegionShift) -> windows::core::Result<()> {
+        let src = shift.src;
+        // 計画の写しは描画面の中（負でない・空でない）。
+        let size = ((src.right - src.left) as u32, (src.bottom - src.top) as u32);
+        let work = create_bitmap(dc, size, D2D1_BITMAP_OPTIONS_NONE)?;
+        let src_rect = D2D_RECT_U {
+            left: src.left as u32,
+            top: src.top as u32,
+            right: src.right as u32,
+            bottom: src.bottom as u32,
+        };
+        let dst = D2D_POINT_2U {
+            x: shift.dst.0,
+            y: shift.dst.1,
+        };
+        // SAFETY: Windows API 境界。元と先はどちらの写しでも別の絵（重ならない）。
+        unsafe {
+            work.CopyFromBitmap(None, &self.bitmap, Some(&src_rect))?;
+            self.bitmap.CopyFromBitmap(Some(&dst), &work, None)
+        }
+    }
+
     /// `dst`（`BeginDraw` の中の DC）を透明に塗り、入れ物を整数の `offset` に `NEAREST_NEIGHBOR`・
     /// `SOURCE_OVER` で 1 度描く（4.2）。入れ物は読むだけ（4.4）。失敗は `dst` の `EndDraw` に出る。
     pub(crate) fn copy_to(&self, dst: &ID2D1DeviceContext, offset: POINT) {
@@ -173,6 +366,45 @@ impl SurfaceComposite {
                 D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
                 D2D1_COMPOSITE_MODE_SOURCE_OVER,
             );
+        }
+    }
+
+    /// `dst`（部分の矩形 `rect` で `BeginDraw` した DC）の `offset` から `rect` の大きさを透明に塗り、
+    /// 入れ物の `rect` を `offset` へ `NEAREST_NEIGHBOR`・`SOURCE_OVER` で 1 度描く（2.6・2.9）。
+    /// `offset` は `rect` の左上が来る位置。入れ物は読むだけ。失敗は `dst` の `EndDraw` に出る。
+    pub(crate) fn copy_rect_to(&self, dst: &ID2D1DeviceContext, rect: PxRect, offset: POINT) {
+        let (x, y) = (offset.x as f32, offset.y as f32);
+        let (w, h) = (
+            (rect.right - rect.left) as f32,
+            (rect.bottom - rect.top) as f32,
+        );
+        // SAFETY: Windows API 境界。
+        unsafe {
+            dst.SetTransform(&Matrix3x2::identity());
+            // 塗りを写す矩形の中に閉じる（Clear は切り抜きの中だけを塗る）。
+            dst.PushAxisAlignedClip(
+                &D2D_RECT_F {
+                    left: x,
+                    top: y,
+                    right: x + w,
+                    bottom: y + h,
+                },
+                D2D1_ANTIALIAS_MODE_ALIASED,
+            );
+            dst.Clear(Some(&D2D1_COLOR_F::default()));
+            dst.DrawImage(
+                &self.bitmap,
+                Some(&Vector2 { X: x, Y: y }),
+                Some(&D2D_RECT_F {
+                    left: rect.left as f32,
+                    top: rect.top as f32,
+                    right: rect.right as f32,
+                    bottom: rect.bottom as f32,
+                }),
+                D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                D2D1_COMPOSITE_MODE_SOURCE_OVER,
+            );
+            dst.PopAxisAlignedClip();
         }
     }
 

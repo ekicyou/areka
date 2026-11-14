@@ -640,3 +640,50 @@ fn node_gone_between_fill_and_build_is_logged_and_skipped() {
     assert_eq!(shape(&out), vec![draw(c, 10.0, 0.0, 14.0, 4.0)]);
     assert_eq!(log.matches("[build]").count(), 1, "{log}");
 }
+
+#[test]
+fn layer_commands_and_draw_items_carry_their_node_entity_and_version() {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let mut v = clipped();
+    v.set_opacity(0.5);
+    let a = group(&mut world, root, v, at(0.0, 0.0, 20.0, 20.0));
+    let b = group(
+        &mut world,
+        a,
+        with_clip(ClipShape::rounded_rectangle(2.0)),
+        at(1.0, 1.0, 10.0, 10.0),
+    );
+    let c = leaf(&mut world, b, 0.0, 0.0);
+    let visited = fill(&mut world, root);
+    // 節ごとに違う版を置く（`build` は版をそのまま読む）。
+    for (e, n) in [(a, 7), (b, 11), (c, 13)] {
+        world.entity_mut(e).insert(VisualVersion(n));
+    }
+    let out = build_only(&mut world, &unit_rect(), INFINITE, &visited);
+    let DrawCommand::PushOpacity(o) = &out[0] else {
+        panic!("{:?}", shape(&out));
+    };
+    assert_eq!((o.entity, o.version), (a, 7));
+    let DrawCommand::PushClipRect(r) = &out[1] else {
+        panic!("{:?}", shape(&out));
+    };
+    assert_eq!((r.entity, r.version), (a, 7));
+    let DrawCommand::PushClipGeometry(g) = &out[2] else {
+        panic!("{:?}", shape(&out));
+    };
+    assert_eq!((g.entity, g.version), (b, 11));
+    let item = first_draw(&out);
+    assert_eq!((item.entity, item.version), (c, 13));
+    // 件の hash の作りは変えない（4.5）。
+    assert_eq!(
+        item.hash,
+        hash_draw(
+            c,
+            13,
+            item.interpolation_mode,
+            item.mix_mode,
+            &item.world_mat
+        )
+    );
+}
