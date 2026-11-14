@@ -158,7 +158,7 @@
 
 ## 順位表（perf-rank）
 
-- [ ] 11. (P) 順位表の dump の読み方を直す（#3・#23・#25 の dump の文・#61・#62・#64）
+- [x] 11. (P) 順位表の dump の読み方を直す（#3・#23・#25 の dump の文・#61・#62・#64）
   - dump を 1 行ずつ 2 回読み、1 回目は `SampledProfile` の `areka.exe (` の行の (時刻, TID) を集めて自己時間を数え、2 回目は当たる `Stack` の行だけを数える。列の確かめは事象ごと。areka の解決フレームは解決済みの枝の中でだけ数える。空の dump の確かめを「空でない行を 1 本も見なかった」に（D6・#3・#23・#61）
   - `dump_present = dump_path.is_file()`（#62）。0 バイトの dump は「在るが空」として計測失敗になるので、rank のケース `empty_dump`（0 バイトの `dump.txt`・exit 4・理由が stderr に出る＝R2）を足す。`DumpScan.tids` を消し、`sample_ok_counts/case.txt` の注記を直す（#64）。`perf_rank_dump` の `RankError` の文を英語の ASCII に（#25 の dump の分）
   - rank のケース `other_process_rows`（T3）・`unresolved_areka_frames`（exit 4＝T23）を足す
@@ -236,3 +236,4 @@
 - 9.1: `--iteration` 必須で `empty_values_are_rejected_cleanly` の append の手順は意味を失い、status だけに減らした。`TOP_REMAINING_BAD_RE` は perf-ledger の `_TOP_REMAINING_PATTERN` の補集合を写して持つ（2 か所）。perf-ledger.py は 991 行
 - 9.2: 「`SelftestEnv` が grep で 0 件」は perf-ledger の範囲（research #59）の意味で満たした。perf-compare と judge-followup は自分の `SelftestEnv` を持ち続ける（範囲の外・design.md:53 はそちらでは今も事実）。`_to_ledger_value` の isfinite は `--best` と append の entry の浮動小数の両方に効く
 - 10: 14 の audit で拾う候補: `check_goal_text` が `# summary` の節の見出しの下にある／`cmd_summary` の docstring の「results/summary.md」／ledger の selftest は想定外の例外で NG にならず落ちる
+- 11: フレームの数は今までどおり SampledProfile の行の Image!Function も数える（D6 の図は Stack の行だけだが、期待出力と ps1 の `Measure-ArekaFrames` を変えないため。スタックのあるサンプルの最上位フレームは 2 回数わる）。R2 の赤は `exists()` では出ない（0 バイトでも真）ので直しの前の `is_file() and st_size > 0` で見た。実機の dump での確かめは未（議題 3・開発者の昇格の窓が要る）

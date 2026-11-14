@@ -29,7 +29,7 @@
 終了コード（judge-perf.py・perf-ledger.py と同じ体系）: 0＝順位表を書けた（段が
 UNAVAILABLE でも、理由を書けているなら 0）／1＝`--selftest` の食い違い＝この道具自身が
 壊れている／3＝引数不正・走行ディレクトリが無い・読めない／4＝計測失敗（run.log か
-cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊れている・dump の既知の
+cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊れている・dump が在るのに空・dump の既知の
 列名行が無い・段③が利用可なのに `areka.exe!` の解決フレームが 0）。**2（判定不能）は
 返さない**——順位表は合否を出さないので、判定できるかどうかという状態が無い。
 
@@ -592,7 +592,8 @@ def build_report(
     cpu = read_cpu_csv(cpu_csv)
     meta = read_run_meta(meta_path) if meta_path.is_file() else None
 
-    dump_present = dump_path.is_file() and dump_path.stat().st_size > 0
+    # 0 バイトの dump は「在るが空」＝採取の失敗として parse_dump が止める（#62）。
+    dump_present = dump_path.is_file()
     if sampling == "true":
         if not dump_present:
             raise measure_failed(
@@ -609,7 +610,7 @@ def build_report(
     dump: DumpScan | None = None
     reason = unavailable_reason
     if available:
-        dump = parse_dump(dump_path.read_text(encoding="utf-8", errors="replace"), dump_path)
+        dump = parse_dump(dump_path)
     elif reason is None:
         reason = "no_dump" if sampling != "false" else "declared_unavailable"
 
