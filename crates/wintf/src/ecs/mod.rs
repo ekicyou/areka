@@ -25,7 +25,7 @@ pub use common::tree_system::*;
 pub use drag::{
     DragConfig, DragConstraint, DragEndEvent, DragEvent, DragStartEvent, DraggingState, OnDrag,
     OnDragEnd, OnDragStart, WindowDragContext, WindowDragContextResource, WindowDragging,
-    cleanup_drag_state, dispatch_drag_events,
+    dispatch_drag_events,
 };
 pub use graphics::*;
 pub use layout::*;

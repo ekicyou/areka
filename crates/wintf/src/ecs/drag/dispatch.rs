@@ -207,9 +207,15 @@ pub fn dispatch_drag_events(world: &mut World) {
                     |h| h.0,
                 );
 
-                // JustStarted→Dragging遷移（次のWM_MOUSEMOVEでDragEventが発火できるように）
-                let ctx_res = world.get_resource::<crate::ecs::drag::WindowDragContextResource>();
-                super::state::update_dragging(start_pos, ctx_res);
+                // JustStarted→Dragging遷移（次のWM_MOUSEMOVEでDragEventが発火できるように）。
+                // 前のドラッグの始まりの腕が、次のドラッグの状態を前の控えで進めない（指摘 1 ⑵）。
+                if super::state::read_drag_state(
+                    |s| matches!(s, super::DragState::JustStarted { entity: e, .. } if *e == entity),
+                ) {
+                    let ctx_res =
+                        world.get_resource::<crate::ecs::drag::WindowDragContextResource>();
+                    super::state::update_dragging(start_pos, ctx_res);
+                }
             }
 
             crate::ecs::drag::DragTransition::Ended {
@@ -380,3 +386,7 @@ pub fn dispatch_drag_events(world: &mut World) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "dispatch_order_tests.rs"]
+mod order_tests;

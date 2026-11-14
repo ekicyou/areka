@@ -1,6 +1,6 @@
 //! ドラッグイベントディスパッチ統合テスト（W6b-T）
 //!
-//! `dispatch_drag_events`（ECS スレッド側のディスパッチ）と `cleanup_drag_state` の
+//! `dispatch_drag_events`（ECS スレッド側のディスパッチ）の
 //! World 観測可能な挙動を特性化する。これらはデバイス非依存（bevy World 操作）であり、
 //! 実マウス/HWND を必要としない経路のみを対象とする。
 //!
@@ -14,8 +14,7 @@ use bevy_ecs::prelude::*;
 use std::time::Instant;
 use wintf::ecs::drag::{
     DragAccumulatorResource, DragConstraint, DragEndEvent, DragEvent, DragStartEvent,
-    DragTransition, DraggingState, WindowDragContextResource, WindowDragging, cleanup_drag_state,
-    dispatch_drag_events,
+    DragTransition, DraggingState, WindowDragContextResource, WindowDragging, dispatch_drag_events,
 };
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::window::{Window, WindowPos};
@@ -486,61 +485,4 @@ fn dispatch_noop_when_no_transition_and_no_entity() {
     assert!(drain_messages::<DragStartEvent>(&mut world).is_empty());
     assert!(drain_messages::<DragEvent>(&mut world).is_empty());
     assert!(drain_messages::<DragEndEvent>(&mut world).is_empty());
-}
-
-// =============================================================================
-// cleanup_drag_state システム
-// =============================================================================
-
-/// cleanup_drag_state は DragEndEvent を受けて対象の DraggingState を削除する。
-#[test]
-fn cleanup_removes_dragging_state_on_end_event() {
-    let mut world = make_world();
-    let target = world
-        .spawn(DraggingState {
-            drag_start_pos: PhysicalPoint::new(0, 0),
-            initial_inset: (0.0, 0.0),
-        })
-        .id();
-
-    // DragEndEvent を書き込む
-    world
-        .resource_mut::<Messages<DragEndEvent>>()
-        .write(DragEndEvent {
-            target,
-            position: PhysicalPoint::new(1, 1),
-            cancelled: false,
-            is_primary: true,
-            timestamp: Instant::now(),
-        });
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(cleanup_drag_state);
-    schedule.run(&mut world);
-
-    assert!(
-        world.get::<DraggingState>(target).is_none(),
-        "DragEndEvent 受信で DraggingState が削除されるべき"
-    );
-}
-
-/// DragEndEvent がなければ cleanup_drag_state は DraggingState を削除しない（noop）。
-#[test]
-fn cleanup_noop_without_end_event() {
-    let mut world = make_world();
-    let target = world
-        .spawn(DraggingState {
-            drag_start_pos: PhysicalPoint::new(0, 0),
-            initial_inset: (0.0, 0.0),
-        })
-        .id();
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(cleanup_drag_state);
-    schedule.run(&mut world);
-
-    assert!(
-        world.get::<DraggingState>(target).is_some(),
-        "イベントなしでは DraggingState は残るべき"
-    );
 }

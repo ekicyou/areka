@@ -65,6 +65,7 @@ impl DragAccumulator {
     /// 状態遷移を積む
     ///
     /// Started を積んでいないドラッグの Ended（閾値前の離し・取り消し）は置かずに捨てる。
+    /// Ended を積むときは移動量を 0 に戻す（捨てる Ended では戻さない）。
     pub fn set_transition(&mut self, transition: DragTransition) {
         match &transition {
             DragTransition::Started { entity, .. } => {
@@ -82,6 +83,8 @@ impl DragAccumulator {
                     return;
                 }
                 self.current_dragging_entity = None;
+                // 終わったドラッグの移動量を次のドラッグへ配らない（指摘 1 ⑶）
+                self.accumulated_delta = PhysicalPoint::new(0, 0);
             }
         }
         self.pending_transitions.push(transition);

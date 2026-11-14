@@ -105,6 +105,37 @@ fn test_set_transition_ended_clears_entity() {
     );
 }
 
+/// 終わりを積むと移動量は 0 に戻る（次のドラッグへ配らない）。始まりの無い終わりは捨て、戻さない。
+#[test]
+fn test_ended_resets_delta_but_dropped_ended_does_not() {
+    let mut acc = DragAccumulator::new();
+    let e = entity(4);
+    acc.set_transition(DragTransition::Started {
+        entity: e,
+        start_pos: PhysicalPoint::new(0, 0),
+        timestamp: Instant::now(),
+    });
+    acc.accumulate_delta(PhysicalPoint::new(3, 4));
+    acc.set_transition(DragTransition::Ended {
+        entity: e,
+        end_pos: PhysicalPoint::new(3, 4),
+        cancelled: false,
+    });
+    let result = acc.flush();
+    assert_eq!((result.delta.x, result.delta.y), (0, 0));
+
+    // 始まりの無い終わり（閾値前の離し）は何も起きていないので、積んだ移動量はそのまま。
+    acc.accumulate_delta(PhysicalPoint::new(5, 6));
+    acc.set_transition(DragTransition::Ended {
+        entity: e,
+        end_pos: PhysicalPoint::new(5, 6),
+        cancelled: false,
+    });
+    let result = acc.flush();
+    assert!(result.transitions.is_empty());
+    assert_eq!((result.delta.x, result.delta.y), (5, 6));
+}
+
 /// update_position は最新位置で上書きされる（累積ではない）。
 #[test]
 fn test_update_position_overwrites() {

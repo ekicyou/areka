@@ -199,12 +199,6 @@ impl EcsWorld {
                     .after(crate::ecs::pointer::dispatch_pointer_events),
             );
 
-            // Inputスケジュール: ドラッグ状態クリーンアップ（dispatch_drag_eventsの後）
-            schedules.add_systems(
-                Input,
-                crate::ecs::drag::cleanup_drag_state.after(crate::ecs::drag::dispatch_drag_events),
-            );
-
             // Inputスケジュール: ポインターデバッグ監視（デバッグビルドのみ）
             #[cfg(debug_assertions)]
             schedules.add_systems(
