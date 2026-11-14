@@ -67,7 +67,7 @@ class CatchupAnalysis:
     rows: list[CatchupRow] = field(default_factory=list)
     #: 時刻を読めなかった catch-up 行の数（表には出せないが、黙って消さない）。
     undated: int = 0
-    #: 系統別の件数（全区間・定常状態）。鍵は target の値。
+    #: 系統別の件数（全区間・定常状態）。鍵は系統の値（lane フィールド・古い記録は target フィールド）。
     total_by_target: dict[str, int] = field(default_factory=dict)
     steady_by_target: dict[str, int] = field(default_factory=dict)
     #: `[tick]` 窓の総数と、壁時計合計を読めた窓の数。

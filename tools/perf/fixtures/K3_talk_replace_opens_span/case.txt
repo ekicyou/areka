@@ -6,7 +6,8 @@ exit = 0
 emit_metrics = yes
 
 note = 90 秒に steady_talk_replace（差し替え）だけがあり、その前に開いた発話は無い。95 秒の
-note = steady_talk_done で閉じ、92 秒の CPU 5.00 が発話中の頂になる。差し替えを始まりの組から
+note = steady_talk_done で閉じ、93 秒の CPU 5.00 が発話中の頂になる。差し替えを始まりの組から
 note = 外すと区間が 1 本も無くなり、頂が「-」（測っていない）に化ける（K2 の入れ子では見えない）。
+note = 87 秒の 9.00 は発話の外の囮で、区間を 90 秒より前から開くと頂が 9.00 に化ける。
 
 contains = metric=talk_peak_cpu_pct value=5.00

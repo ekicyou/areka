@@ -67,8 +67,8 @@ run.log・cpu.csv の指定は要らない。詳しくは「自己較正（--sel
     3  引数不正・ファイル読取不能・想定外の例外（traceback を stderr へ）
 
 `--selftest` も同じ体系に載せる: `0`=全 fixture が期待どおり／`1`=1 つでも食い違い（＝道具が
-壊れている＝不合格）／`3`=fixture 置き場そのものが読めない（引数・ファイルの問題）。`2` は
-返さない（自己較正に「判定不能」は無い——読めたか読めなかったかのどちらかである）。
+壊れている＝不合格）／`3`=fixture 置き場が読めない・想定外の例外（`SELFTEST RESULT` は出さず、stderr の
+最後の行が `JUDGE-PERF RESULT code=3`）。`2` は返さない（自己較正に「判定不能」は無い）。
 
 **不合格(1) は判定不能(2) より優先する**。1 つの判定式が確定的に不合格で、別の判定式が
 判定不能なら、総合は不合格である（design.md「Error Handling」）。
@@ -2867,7 +2867,7 @@ def judge_idle_cpu(
                     "（第 4 段）の 2 回のみで、中間の是正ループは短時間水準で回す。"
                     "したがって短時間走行では本判定は適用外とし、終了コードに寄与させない。",
                     "【未検証であることの明示】この走行は 20 分超で単調上昇しないことを"
-                    "確かめていない。長時間水準の判定は task 7.2 が行う。",
+                    "確かめていない。長時間水準の判定は recompose-budget の task 7.2 が行う。",
                     "上の参考値は収束判定（要件 5.1）の結果であって、⑷後半の合格ではない。",
                 ],
             )
@@ -3504,7 +3504,7 @@ def run_selftest() -> int:
     report.line(f"  fixture 置き場 : {root}")
     report.line(f"  期待値の所在   : 各 fixture の {SELFTEST_CASE_FILENAME}")
     report.line("  経路           : 実運用と同じ入口 main(argv) を fixture ごとに呼ぶ")
-    report.line("  終了コード     : 0=全件一致 / 1=1 件でも食い違い / 3=fixture を読めない")
+    report.line("  終了コード     : 0=全件一致 / 1=1 件でも食い違い / 3=fixture を読めない・想定外の例外（stderr に JUDGE-PERF RESULT code=3）")
 
     outputs: dict[str, str] = {}
     first_err: dict[str, str] = {}
@@ -3571,11 +3571,9 @@ def run_selftest() -> int:
     )
     tick_ok = tick_names == J_TICK_WINDOW_FIELDS
     report.line(
-        f"  {'一致  ' if tick_ok else '不一致'} J_TICK_WINDOW_FIELDS "
-        f"（{len(J_TICK_WINDOW_FIELDS)} 個）が [tick] の逐語サンプルと同じ名前・同じ順序"
+        f"  {'一致  ' if tick_ok else '不一致'} J_TICK_WINDOW_FIELDS （{len(J_TICK_WINDOW_FIELDS)} 個）が [tick] の逐語サンプルと同じ名前・同じ順序"
     )
-    if not tick_ok:
-        vocabulary_failures.append("J_TICK_WINDOW_FIELDS と [tick] 逐語サンプルの食い違い")
+    tick_failures = [] if tick_ok else ["J_TICK_WINDOW_FIELDS と [tick] 逐語サンプルの食い違い"]
 
     # --- 双子の突き合わせ（色付きログが色なしと同じ結論になること）-----------
     twin_checks: list[tuple[str, str, bool, str]] = []
@@ -3655,6 +3653,8 @@ def run_selftest() -> int:
             f"  【食い違い】{label}: 1 行にフィールド名の重複があります（要件 2.12）。"
             "parse_fields は後勝ちで上書きするので、先に書いた値が黙って消えます。"
         )
+    for label in tick_failures:  # 重複ではなく、名前の一覧そのもののずれ
+        report.line(f"  【食い違い】{label}: [tick] 行のフィールド名の一覧（名前・順序）がずれています。")
 
     # 検体では作れない場面（想定外の例外・明示指定 2 系列・最後の行）は差し替えで確かめる（D12）
     import judge_perf_selftest_inproc  # noqa: E402
@@ -3666,7 +3666,7 @@ def run_selftest() -> int:
     if not inproc_checks:  # 1 つも走らない差し替えの較正は、壊れていても緑を返す（D7）
         inproc_failures = ["no in-process check ran"]
         report.line("  【較正になっていない】差し替えの較正が 1 件も走っていません。")
-    failed = [*mismatches, *twin_failed, *red_missing, *missing_text, *vocabulary_failures, *inproc_failures]
+    failed = [*mismatches, *twin_failed, *red_missing, *missing_text, *vocabulary_failures, *tick_failures, *inproc_failures]
     code = EXIT_FAIL if failed else EXIT_OK
     if code == EXIT_OK:
         report.line("  合格・不合格・判定不能・引数不正のいずれも期待どおり再現しました。")

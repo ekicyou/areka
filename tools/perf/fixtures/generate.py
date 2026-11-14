@@ -198,17 +198,16 @@ def thread_report_lines(at: datetime, snap: int, t_s: int) -> list[str]:
 
 
 def talk_line(at: datetime, event: str) -> str:
-    """発話（talk）の開始・終了 info!（`areka-kanade/src/schedule/steady.rs` の steady_talk・steady_talk_done の info!）。
+    """発話（talk）の開始・置換・終了 info!（`areka-kanade/src/schedule/steady.rs` の steady_talk・steady_talk_replace・steady_talk_done）。
 
     `target: "kanade"` は指示子なので target 位置に出る。`event` はフィールドなので
     メッセージの後ろに引用符付きで出る。発話中の CPU の頂（要件 5.4）はこの 2 本で挟まれた
     区間の採取点から採る。
     """
     if event == "steady_talk":
-        return (
-            f"{ts(at)}  INFO kanade: 応答にスクリプト——再生起動 "
-            f'event="{event}" talk_id=7 origin="mouse"'
-        )
+        return f'{ts(at)}  INFO kanade: 応答にスクリプト——再生起動 event="{event}" talk_id=7 origin="mouse"'
+    if event == "steady_talk_replace":  # 置換は新しい talk_id を採番する（steady.rs の逐語）
+        return f'{ts(at)}  INFO kanade: active talk 中に置き換える出所の Value——単一 slot 置換（新 talk_id 採番） event="{event}" talk_id=8 origin="mouse"'
     return f'{ts(at)}  INFO kanade: talk 完了——定常運転へ復帰 event="{event}"'
 
 
@@ -361,11 +360,11 @@ class Fixture:
 
     def other_scope_span(self, at_sec: float, duration_ms: float,
                          scope: str = "1", animation_id: str = "0") -> "Fixture":
-        """別 scope のアニメが `at_sec` から `duration_ms` のあいだ走っていた記録を置く。
+        """`scope` のアニメが `at_sec` から `duration_ms` のあいだ走っていた記録を置く（既定は別 scope の "1"）。
 
-        発火と停止の 2 行だけを置く（コマ適用の記録は置かない——別 scope のアニメは
-        別の対象へコマを出すので、判定対象の系列の列には混ざらないからである）。
-        窓 C の条件 4 が「判定対象系列の scope だけを数える」ことを確かめる素材である。
+        発火と停止の 2 行だけを置く（コマ適用の記録は置かない——判定対象の系列の列には混ぜない）。
+        別 scope なら窓 C の条件 4 が「判定対象系列の scope だけを数える」ことを（P14）、
+        同じ scope="0" なら区間の始め a で数えることを（P16）確かめる素材である。
         """
         start = T0 + timedelta(seconds=at_sec)
         stop = start + timedelta(microseconds=round(duration_ms * 1000))

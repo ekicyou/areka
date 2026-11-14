@@ -332,7 +332,7 @@ areka は前回の窓の位置を `run-meta.txt` の `areka_profile_dir` が指�
 決めるので、超過が数本あっても合格になることがあります）。
 条件 4 が落とした間隔は、この 3 走行ではどれも **0 本**です。emo2 の実走ではキャラの
 `animation1400` と `1402` が同じ時刻に重なることが無かったためで、条件 4 は
-`fixtures/P13` `fixtures/P14` の形が来たときにだけ働く見張りです。
+`fixtures/P13` `fixtures/P14` `fixtures/P15` `fixtures/P16` の形が来たときにだけ働く見張りです。
 
 > **一度この表が 267 / 64 / 22 本になっていました。** 条件 4 を足したとき、本数を
 > グループをまたいで数えていたためです。落ちた 42 本（長時間 release）は
@@ -413,10 +413,10 @@ python tools/perf/judge-perf.py --selftest
 「1 つも走らなかった」が見分けられない点検には意味がないため）。
 
 終了コードは 0（全件一致）／1（1 件でも食い違い）／3（`fixtures/` を読めない・または自己較正
-そのものが想定外の例外で落ちた。このときの最後の行は `JUDGE-PERF RESULT code=3`）です。
-最後の行は決まった ASCII の形 `SELFTEST RESULT ok=<n> ng=<m>` です（ok は終了コードが期待どおり
+そのものが想定外の例外で落ちた。どちらも `SELFTEST RESULT` は出ず、stderr の最後の行が `JUDGE-PERF RESULT code=3`）です。
+0 と 1 のときの最後の行は決まった ASCII の形 `SELFTEST RESULT ok=<n> ng=<m>` です（ok は終了コードが期待どおり
 だった fixture の数・ng は食い違いの全件＝終了コードのほか、色なしの双子・`contains`・
-4 つの終了コードの再現漏れ・フィールド名の重複・差し替えの較正の食い違いも数えます）。
+4 つの終了コードの再現漏れ・フィールド名の重複・[tick] の名前一覧のずれ・差し替えの較正の食い違いも数えます）。
 検体では作れない場面（想定外の例外・明示指定の 2 系列など）は `judge_perf_selftest_inproc.py` が
 判定の関数を差し替えて確かめ、`差し替えの較正: <N> 件・食い違い <M> 件` の 1 行に出ます
 （1 件も走らなかったら、それ自体を食い違いとして終了コード 1 にします）。
@@ -457,7 +457,7 @@ python tools/perf/judge-perf.py --selftest
 | `A1_steady_alloc_fail` | 1 | 定常状態で表示用バッファの確保が 1 回でもあれば不合格（判定式⑶） |
 | `R1_perf_line_missing_field`・`R2_perf_line_undated`・`R3_perf_line_cache_hit_not_bool` | 2 | perf 行の必須の欄の欠け・行頭の時刻の欠け・`cache_hit` の値の誤りは、行を捨てずに判定不能（要件 2.5） |
 | `P15_other_stop_messages` | 0 | 「末尾残留」と「bind から外れた ID の再生を停止」もアニメの終わりとして数える（数えないと条件 4 が間隔を全部落とす） |
-| `P16_same_scope_stop_inside_interval` | 0 | 同じグループの 2 本目が区間 `(a, b]` の途中で止まる。条件 4 は a で数えて落とす（b だけで数えると不合格に化ける） |
+| `P16_same_scope_stop_inside_interval` | 0 | 同じグループの 2 本目が遅い区間 `(a, b]` だけを覆い、途中で止まる。期待 0 は既知の穴（下の「同じグループの 2 本目が、遅い区間だけを覆って走っていると」）の記録で、見分けるのは条件 4 が a で数えるか b で数えるか（b だけで数えると 1 に変わる） |
 | `S1_explicit_19_intervals`・`S2_explicit_20_intervals`・`S3_explicit_over_limit` | 2・0・1 | 明示指定の系列の間隔が 19 本で判定不能・20 本で判定できる・19 本でも上限超過なら不合格（§12 の 4 番） |
 | `T2_tick_lines_absent` | 0 | catch-up はあるが `[tick]` 行が 1 本も無い（仮説は判定不能・合否には効かない） |
 | `U1_bom_run_log` | 0 | BOM 付きの `run.log`・`cpu.csv` も同じに読める |
@@ -676,11 +676,11 @@ Python の各道具（`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`ju
    数えると、上限を超えた区間をケロが覆っただけで不合格が合格へ反転します
    （`fixtures/P14_other_scope_animation_overlap` に記録。実際に一度そうなっていました
    ——第 8 節の検算表の注記）。
-   **残っているのは、発火の記録を出さない書き換えが同じ列に混ざる形だけです**
-   （`fixtures/P12_same_key_two_animations` に記録）。条件 4 は発火と停止の記録の収支から
-   本数を推定するので、記録を出さないものは数えられません。
-   窓の定義を変えたら、`P12`・`P13_same_key_two_animations_pass_side`・
-   `P14_other_scope_animation_overlap` の期待値を全部見直してください。
+   **残っている穴は 2 つです。** 1 つは発火の記録を出さない書き換えが同じ列に混ざる形
+   （`fixtures/P12_same_key_two_animations` に記録。条件 4 は発火と停止の記録の収支から本数を推定するので、記録を出さないものは数えられません）。
+   もう 1 つは同じグループの 2 本目が遅い区間だけを覆う形で、落とした中の上限超過の証跡が消えます（`fixtures/P16_same_scope_stop_inside_interval` に記録）。
+   窓の定義を変えたら、`P12`・`P13_same_key_two_animations_pass_side`・`P14_other_scope_animation_overlap`・
+   `P15_other_stop_messages`・`P16_same_scope_stop_inside_interval` の期待値を全部見直してください。
    `P13` は条件 4 を外すと合格（0）に化け、`P14` は条件 4 の数える範囲を広げると
    合格（0）に化けます。
 7. **条件 4 は間隔を減らすことしかしません。** 走行の相が変わって落ちる本数が増えれば、

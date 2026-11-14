@@ -219,7 +219,7 @@ def case_K2() -> g.Fixture:
     f = _healthy("K2_talk_spans_closed_and_open").cpu_series(count=12)
     f.talk_span(80.0, 85.0).cpu_point(82.0, 3.0).cpu_point(87.0, 9.0).cpu_point(91.0, 6.0)
     f._add(_at(90.0), g.talk_line(_at(90.0), "steady_talk"))
-    f._add(_at(92.0), g.talk_line(_at(92.0), "steady_talk").replace('"steady_talk"', '"steady_talk_replace"'))
+    f._add(_at(92.0), g.talk_line(_at(92.0), "steady_talk_replace"))
     return f.declare(
         "baseline", 0, "発話区間は終わりで閉じ、入れ子の開始は畳み、終わりの無い発話は走行の最後で閉じる", build="release",
         emit_metrics=True,
@@ -235,7 +235,7 @@ def case_K2() -> g.Fixture:
 
 
 def case_K3() -> g.Fixture:
-    f = _healthy("K3_talk_replace_opens_span").cpu_series(count=12).cpu_point(87.0, 9.0).cpu_point(92.0, 5.0)
+    f = _healthy("K3_talk_replace_opens_span").cpu_series(count=12).cpu_point(87.0, 9.0).cpu_point(93.0, 5.0)
     f._add(_at(90.0), g.talk_line(_at(90.0), "steady_talk_replace"))
     f._add(_at(95.0), g.talk_line(_at(95.0), "steady_talk_done"))
     return f.declare(
@@ -243,8 +243,9 @@ def case_K3() -> g.Fixture:
         emit_metrics=True,
         notes=[
             "90 秒に steady_talk_replace（差し替え）だけがあり、その前に開いた発話は無い。95 秒の",
-            "steady_talk_done で閉じ、92 秒の CPU 5.00 が発話中の頂になる。差し替えを始まりの組から",
+            "steady_talk_done で閉じ、93 秒の CPU 5.00 が発話中の頂になる。差し替えを始まりの組から",
             "外すと区間が 1 本も無くなり、頂が「-」（測っていない）に化ける（K2 の入れ子では見えない）。",
+            "87 秒の 9.00 は発話の外の囮で、区間を 90 秒より前から開くと頂が 9.00 に化ける。",
         ],
         contains=("metric=talk_peak_cpu_pct value=5.00",),
     )
@@ -391,12 +392,16 @@ def case_P16() -> g.Fixture:
         f.other_scope_span(at_sec=g.P14_SLOW_START_SEC + c - 0.010, duration_ms=200.0,
                            scope="0", animation_id="1402")
     return f.cpu_series().run_meta().declare(
-        "verdict", 0, "同じ scope の 2 本目が区間の途中で止まっても、区間の始め a で数えて落とす", build="release",
+        "verdict", 0, "同じ scope の 2 本目が遅い区間だけを覆う（残る穴・区間の始め a で数える）", build="release",
         notes=[
             "P14 の 400ms の間隔 10 本の各区間で、同じ scope=\"0\" の 1402 が a の 10ms 前に発火し、",
             "a から 190ms 後（区間 (a, b] の中）に止まる。a では 2 本走っているので、窓 C の条件 4 が",
-            "この 10 本を落とし、健全な 140 本で合格（0）になる。b では 1 本に戻っているので、",
-            "b だけで数えると 10 本が残り、上位 5% が 400ms＝不合格（1）に化ける。",
+            "この 10 本を落とし、残る 140 本で合格（0）になる。",
+            "【この fixture が固定している「残る穴」】落ちた 10 本は上限超過そのもので、同じ scope の",
+            "2 本目が遅い区間だけを覆うと証跡が消える（README・FRAME_INTERVAL_IDLE_MAX_ACTIVE の注記）。",
+            "期待 0 は正しさの主張ではなく、この既知の穴の記録である。この検体が見分けるのは",
+            "「a で数える」か「b で数える」かで、b では 1 本に戻っているので、b だけで数えると",
+            "10 本が残り、上位 5% が 400ms＝不合格（1）へ変わる。",
         ],
     )
 
