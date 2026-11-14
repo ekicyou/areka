@@ -14,7 +14,7 @@ use super::{DPI, EmoPresenter, PresentCommand, TargetId, World, derive_scale};
 
 /// presenter が最後に見た `GraphicsCore` の変化の印（[`EmoPresenter::refresh_after_device_change`] の控え）。
 ///
-/// World ごとに 1 つなので、1 つの World に presenter は 1 つの前提（本番は `emo2_boot/mod.rs` の 1 つだけ）。
+/// World ごとに 1 つなので、1 つの World に presenter は 1 つの前提（本番は `crates/areka/src/runtime/mod.rs` の 1 つだけ）。
 #[derive(Resource)]
 struct SeenGraphicsCore(Tick);
 
@@ -212,7 +212,7 @@ impl EmoPresenter {
     /// 表示成立点の状態照合が積んだ**窓寸 reconcile 要求**を取り出す（取り出しで消える・drain 契約）。
     ///
     /// `Some(新物理寸)` は「直近の表示成立で物理寸が前回適用寸から変わった（初回表示を含む）」ことを
-    /// 表す。呼び手（emo2_boot の frame drain フェーズ）は**同一フレーム内**で char 窓なら
+    /// 表す。呼び手（`areka` の `runtime::frame` の drain フェーズ）は**同一フレーム内**で char 窓なら
     /// `resize_window_to`（アンカー保存）・balloon 窓なら `resize_window_keep_position` を呼び、窓
     /// client を新物理寸へ合わせる（design Flow 2／Flow 3 手順 5・議題 #2 裁定）。未登録 target・
     /// 要求なしは `None`。

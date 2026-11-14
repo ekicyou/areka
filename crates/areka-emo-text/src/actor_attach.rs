@@ -317,7 +317,7 @@ impl TextLayerRuntime {
     ///
     /// 窓 DPI 変化（モニタ跨ぎ移動・表示スケール変更）で emo-present の適用 k が変わったとき、
     /// あるいは同じ k のままバルーン面の実寸や当該 scope の `validrect` が変わったとき、
-    /// 結線側（`emo2_boot` の DPI フェーズ）が新しい [`TextSlotView`] を携えて呼ぶ。view から
+    /// 結線側（`areka` の `runtime::frame` の DPI フェーズ）が新しい [`TextSlotView`] を携えて呼ぶ。view から
     /// binding を再構築し（[`register_actor_view`](Self::register_actor_view) と同一の導出）、
     /// 当該 actor の `ActorRender`（供給面・描画実行部・実測 metrics）を破棄する。次の
     /// [`present_frame`] の初回解決分岐が**新 k の物理寸**（`ceil(validrect 寸 × k)`／
