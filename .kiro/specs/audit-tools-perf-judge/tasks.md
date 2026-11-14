@@ -77,7 +77,7 @@
   - _Dispatch: mechanical — 9 本の検体の形と期待の終了コードを design の表が与える_
   - _Requirements: 2.1, 4.7, 4.8, 7.1_
 
-- [ ] 5. 発話の区切りの語を今の kanade に合わせる（#2・#74 の judge-perf の範囲の中）
+- [x] 5. 発話の区切りの語を今の kanade に合わせる（#2・#74 の judge-perf の範囲の中）
   - `J_TALK_START_EVENTS` を 9 語・`J_TALK_END_EVENTS` を 10 語にし（D4 の表）、`close_refused` を消し、足さない語は足さない（議題 7）。`talk_spans` の決めは変えない
   - 語の注記と judge-perf の範囲の中の行番号を、ファイル名と語・関数名で指す形に（#74）
   - 判定の検体 `K1_boot_talk_excluded`（baseline・`emit_metrics = yes`・`talk_peak_cpu_pct value=4.20`）を `generate_more` に置く（T2）
@@ -226,3 +226,4 @@
 - 3: README へ渡す分（13）: 286 行の表の `FRAME_INTERVAL_JUDGED_SERIES` の行に「空にできない（起動で assert）」。`FRAME_INTERVAL_MAX_MEAN_FACTOR` は窓 A の p95 の注記に使うので残す（合否には使わない）
 - 4.1: README へ渡す分（13）: 344・411 行の H1b を H11 へ、397〜399 行に「4 つの終了コードは全部要る」（#42）。H1b の裁定の記録は H11 の note
 - 4.2: `tools/perf/fixtures/.gitattributes` は `* -text`。fixtures の .py は LF のまま書く（CRLF にすると CRLF で入る）。検体を作り直すのは generate.py（generate_more.py 単独では書かない）
+- 5: design T2 の「5 秒の CPU 9.00」は D4 のもとでは満たせない（起動の挨拶も発話の区間）ので、実装に合わせて「12 秒（boot_talk_done の後）」へ直した。K1 が縛るのは「終わりの語が無いと区間が閉じず、挨拶の後の重さを巻き込む」こと

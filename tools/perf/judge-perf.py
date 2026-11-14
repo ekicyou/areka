@@ -37,7 +37,7 @@
 
   * **系統別**（`dispatcher`／`kanade`／`loop_ticker`）。分けるのは行末の `lane=` フィールド（古い記録は `target=`）で
     あって文言ではない——dispatcher と kanade は同じ文言を出すので、文言で数えると
-    2 系統が 1 つに潰れる（`ticker.rs:203-206, 223-226, 305-308`）
+    2 系統が 1 つに潰れる（`ticker.rs` の catch-up の 3 つの `info!`）
   * **各発生の周辺状況**: 時刻・定常状態かどうか・直前の表示成立点との差（秒）・
     直前 10 秒の表示成立点数（発話再生中かどうかの代理）・その時刻を覆う `[tick]` 窓の
     `wall_us` と `skipped`
@@ -93,7 +93,7 @@ profile で変わるため、profile が無いと途中で切れた長時間走�
 ログ行の形（実測で確定した契約面）
 --------------------------------
 areka は `tracing_subscriber::fmt().with_env_filter(..).init()` で初期化する
-（`crates/areka/src/main.rs:260-264`）。この既定書式が出す 1 行は次の形である：
+（`crates/areka/src/main.rs` の `main` の `tracing_subscriber::fmt()` の初期化）。この既定書式が出す 1 行は次の形である：
 
     <時刻>Z <水準> <スパン>: <target>: <メッセージ> <名前>=<値> <名前>=<値> ...
 
@@ -105,7 +105,7 @@ tracing-subscriber 0.3.23 を同一の初期化で走らせて採取した逐語
     target_id=TargetId(0) surface_id=1000 cache_hit=false t_cache_us=83 ...
 
 【重要】色付け（ANSI エスケープ）は既定で **有効** である。
-`tracing-subscriber-0.3.23/src/fmt/fmt_layer.rs:739-755` の `Default for Layer` は
+`tracing-subscriber-0.3.23/src/fmt/fmt_layer.rs` の `Default for Layer` は
 「ansi feature が有効で、かつ環境変数 `NO_COLOR` が未設定または空なら色を付ける」と
 決めており、出力先が端末かどうかを見ていない。`invoke-perf-run.ps1` は `NO_COLOR` を
 設定しないため、ファイルへリダイレクトした run.log にも色コードが入る。
@@ -476,17 +476,16 @@ PERCENTILE_METHOD = "nearest-rank（補間なし・ceil(q*n) 番目）"
 
 # --- ログの文言（J_*）--------------------------------------------------------
 
-#: perf サマリ行の固定文言（`presenter/timing.rs:53,206`）。
+#: perf サマリ行の固定文言（`presenter/timing.rs` の `perf(apply_show)` の `debug!`）。
 J_PERF_LINE_MESSAGE = "perf(apply_show): 段階別計時"
 
-#: 表示成立点の行の固定文言（`presenter/show.rs:480`）。
+#: 表示成立点の行の固定文言（`presenter/show.rs` の `apply(ShowSurface)` の `info!`/`debug!`）。
 #: 水準は、最初の表示と状態の替わりが INFO・コマ送りだけの適用が DEBUG。
 #: 性能の走行は `areka_emo_present=debug`（invoke-perf-run.ps1・invoke-followup-checks.ps1）で全部拾う。
 J_SHOW_LINE_MESSAGE = "apply(ShowSurface): 表示・マスクを更新"
 
 #: 進行境界スキップ（catch-up）の実文言。
-#: `ticker.rs:205`（dispatcher）／`ticker.rs:225`（kanade）が前者、
-#: `ticker.rs:307`（loop_ticker）が後者。
+#: `ticker.rs` の dispatcher・kanade の `info!` が前者、`loop_ticker` の `info!` が後者。
 #: 【重要な落とし穴】後者は前者を部分文字列として **含む**。素朴に「含む行を数える」と
 #: loop_ticker の 1 行が両方に数えられて二重計上になる。ゆえに必ず長いほうから先に判定する。
 J_CATCHUP_LOOP_MESSAGE = "loop ticker catch-up: skipped multiple boundaries, firing once"
@@ -496,9 +495,9 @@ J_CATCHUP_TICKER_MESSAGE = "ticker catch-up: skipped multiple boundaries, firing
 #: 活性アニメ本数の直接ログは無いため、この収支から推定する（design.md「収束判定」）。
 J_SERIKO_FIRE_MESSAGE = "seriko: loop 抽選発火"
 J_SERIKO_STOP_MESSAGES = (
-    "seriko: loop 末尾残留",  # looper.rs:342 最終コマ保持・再抽選対象へ
-    "seriko: loop 停止",  # looper.rs:372 負 surface でベース復帰
-    "seriko: loop bind から外れた ID の再生を停止",  # looper.rs:308
+    "seriko: loop 末尾残留",  # looper.rs 最終コマ保持・再抽選対象へ
+    "seriko: loop 停止",  # looper.rs 負 surface でベース復帰
+    "seriko: loop bind から外れた ID の再生を停止",  # looper.rs 再生の停止（bind 外れ）
 )
 
 #: catch-up の発行元 3 系統（`ticker.rs` の `lane = "…"`・古い記録は `target = "…"`）。
@@ -538,21 +537,22 @@ J_PERF_THREAD_MESSAGE = "perf(thread): スレッド別 CPU"
 J_PERF_PROCESS_MESSAGE = "perf(process): プロセス CPU"
 
 #: 発話（talk）区間の印。開始と終了で挟まれた区間の CPU 採取点が「発話中の頂」になる
-#: （要件 5.4・合否には載せない）。`areka-kanade/src/schedule/` の info! のフィールド
-#: `event = "…"` の値である（`target: "kanade"` は指示子なので target 位置に出る）。
+#: （要件 5.4・合否には載せない）。`areka-kanade/src/schedule/` の info! の `event = "…"` の値（`target: "kanade"` は target 位置に出る）。
 J_TALK_EVENT_FIELD = "event"
 J_TALK_START_EVENTS = (
-    "boot_talk",  # schedule/boot.rs:240,259
-    "steady_talk",  # schedule/steady.rs:763
-    "steady_talk_replace",  # schedule/steady.rs:799
-    "close_talk_start",  # schedule/close.rs:66
+    "boot_talk",  # schedule/boot.rs
+    "steady_talk", "steady_talk_replace",  # schedule/steady.rs
+    "sstp_send_started", "sstp_notify_talk",  # schedule/sstp.rs
+    "choice_script_started",  # schedule/steady_choice_script.rs
+    "close_talk_start",  # schedule/close.rs
+    "change_talk_start", "change_yielded_talk_start",  # schedule/change.rs
 )
 J_TALK_END_EVENTS = (
-    "steady_talk_done",  # schedule/steady.rs:851
-    "steady_talk_done_close",  # schedule/steady.rs:848
-    "talk_done_quit",  # schedule/mod.rs:523
-    "talk_done_interrupted_as_non_quit",  # schedule/mod.rs:538
-    "close_refused",  # schedule/close.rs:135
+    "steady_talk_done", "steady_talk_done_close",  # schedule/steady.rs
+    "boot_talk_done",  # schedule/boot.rs
+    "close_talk_done_quit",  # schedule/close.rs
+    "change_talk_done_unload", "change_cancelled", "change_pending_consumed",  # schedule/change.rs
+    "talk_done_quit", "talk_done_break_quit", "talk_done_interrupted_as_non_quit",  # schedule/mod.rs
 )
 
 #: 任意種の一覧（レポート [4] に「有る／無い」を必ず出す。無いことは欠落ではない）。

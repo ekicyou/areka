@@ -449,7 +449,7 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 | T | 置き場所 | 見ること | 直しを戻すと |
 |---|---|---|---|
 | T1 | `perf_selftest_common.check_tree` ⑴（4 本の自己較正） | `tempfile` の読み込みが 0・作った子が `target\perf-loop-tmp\` の下。根は `WORK_ROOT` の定数と比べず、自分のファイルの位置から別に求めた根（`tools/perf/` の親の親で、`Cargo.toml` と `tools/perf/` があるフォルダ）の `target\perf-loop-tmp\` と比べる | 1 本でも `TemporaryDirectory` に戻すと赤・根を `parents[1]` に戻すと赤 |
-| T2 | 判定の検体 `K1_boot_talk_excluded`（baseline・`emit_metrics = yes`） | `boot_talk`（2 秒）〜`boot_talk_done`（8 秒）・5 秒の CPU 9.00・後の発話 90〜95 秒・92.5 秒の CPU 4.20 → `contains = metric=talk_peak_cpu_pct value=4.20` | 終わりの組から `boot_talk_done` を外すと 9.00 で赤 |
+| T2 | 判定の検体 `K1_boot_talk_excluded`（baseline・`emit_metrics = yes`） | `boot_talk`（2 秒）〜`boot_talk_done`（8 秒）・12 秒（`boot_talk_done` の後）の CPU 9.00・後の発話 90〜95 秒・92.5 秒の CPU 4.20 → `contains = metric=talk_peak_cpu_pct value=4.20` | 終わりの組から `boot_talk_done` を外すと 9.00 で赤 |
 | T3 | rank のケース `other_process_rows` | `sample_ok` の写しに `Idle (0)`・`notepad.exe ( 900)` の `SampledProfile` と `Stack` を混ぜても、期待出力は areka の分だけ | 処理名の絞りを外すと赤 |
 | T4 | rank のケース `tid_reused` | 前回 5 s の TID を今回 1 s の別名のスレッドが使う・プロセスの差 3 s → 名簿外の残りの `share_pct` が 100 以下で期待どおり | 行の差に戻すと `200.00` で赤 |
 | T5 | 判定の検体 `M1_profile_empty`・`M2_profile_unknown`（verdict・exit 2） | `profile =`・`profile = medium` | `is None` に戻すと 0 で赤 |

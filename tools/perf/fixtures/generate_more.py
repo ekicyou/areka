@@ -168,5 +168,22 @@ def case_X3() -> g.Fixture:
     )
 
 
+def case_K1() -> g.Fixture:
+    f = _healthy().cpu_series(count=12).cpu_point(12.0, 9.0).cpu_point(92.5, 4.2)
+    for sec, event in ((2.0, "boot_talk"), (8.0, "boot_talk_done")):
+        at = g.T0 + g.timedelta(seconds=sec)
+        f._add(at, f'{g.ts(at)}  INFO kanade: 起動挨拶 event="{event}" talk_id=1')
+    f.talk_span(90.0, 95.0)
+    return _named(f, "K1_boot_talk_excluded").declare(
+        "baseline", 0, "起動の挨拶（boot_talk）は boot_talk_done で閉じ、その後の CPU の山を発話中の頂に巻き込まない", build="release",
+        emit_metrics=True,
+        notes=[
+            "boot_talk（2 秒）〜boot_talk_done（8 秒）で区間が閉じ、12 秒の CPU 9.00 は区間の外（起動の挨拶の後）。",
+            "boot_talk_done が終わりの組に無いと区間が最後まで開き、後の発話の頂 4.20 が 9.00 に化ける。",
+        ],
+        contains=("metric=talk_peak_cpu_pct value=4.20",),
+    )
+
+
 CASES = (case_N1, case_U1, case_L1, case_L2, case_L3, case_V1,
-         case_S1, case_S2, case_S3, case_B2, case_X3)
+         case_S1, case_S2, case_S3, case_B2, case_X3, case_K1)
