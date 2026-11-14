@@ -29,7 +29,7 @@
 //!
 //! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、発行点は 5 つ——
 //! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
-//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 4 点＝task 5.4 の 3 点＋task 6.5 の 4 点目）・[`log_chain`]
+//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 5 点＝task 5.4 の 3 点＋task 6.5 の 4 点目＋面の `move` のずれの相）・[`log_chain`]
 //! （遷移後の連鎖再解決＝task 5.6 から）・[`log_offset_rescale`]（拡大率遷移でのバルーン追従
 //! オフセットの追随＝`areka-P0-balloon-offset-dpi` の要件 3.7・design D10。呼び手は
 //! `runtime::frame::balloon_offset_follow`）である。
@@ -571,7 +571,7 @@ fn window_identity(world: &World, window: Entity) -> (Option<u32>, &'static str)
 // ---------------------------------------------------------------------------
 
 /// 整合待ちの記録を 1 行出す（拡大率の相・報告寸の突合・実表示寸の再スナップ・作業領域変化を
-/// 契機とする再スナップの 4 点が呼ぶ）。
+/// 契機とする再スナップ・面の `move` のずれの相の 5 点が呼ぶ＝[`HOLD_SITE_ALL`]）。
 ///
 /// 呼出側は [`is_enabled`] で前置ガードすること（本関数は行を組む＝確保する）。判定語
 /// （`decision`）と観測点語（`site`）は本モジュールの定数が単一の定義元であり、呼出側は

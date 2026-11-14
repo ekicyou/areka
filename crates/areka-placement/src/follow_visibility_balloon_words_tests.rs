@@ -7,8 +7,8 @@
 
 use super::evaluate_visibility_guard;
 use super::test_support::{
-    CLAMP_TAG, DPIS, HIDDEN_AFTER_CLAMP_TAG, OFFSCREEN_PULL_TAG, balloon_size, guard_events,
-    mixed_layout, point, px, right_wa, visible_in, win,
+    CLAMP_TAG, DPIS, HIDDEN_AFTER_CLAMP_TAG, NEAREST_TAG, OFFSCREEN_PULL_TAG, balloon_size,
+    guard_events, mixed_layout, point, px, right_wa, visible_in, win,
 };
 use super::{MonitorSnapshot, PlacementRoute};
 use crate::resolver::PointPx;
@@ -42,9 +42,10 @@ fn off_right(dpi: i32) -> PointPx {
     point(px(2000, dpi), px(240, dpi))
 }
 
-/// 見えていたバルーンが外へ出る提案は `ClampX` で寄せ、`OffscreenPull` は出さない。
+/// 見えていたバルーンが外へ出る提案は `ClampX` で寄せ、`OffscreenPull` も
+/// `HiddenAfterClampX` も出さない（寄せた後は作業領域と交わる正常系）。
 #[test]
-fn a_clamped_balloon_is_not_recorded_as_offscreen_pull() {
+fn a_clamped_balloon_is_recorded_as_clamp_x_only() {
     for dpi in DPIS {
         let layout = mixed_layout(dpi);
         let size = balloon_size(dpi);
@@ -61,11 +62,19 @@ fn a_clamped_balloon_is_not_recorded_as_offscreen_pull() {
             point(right_wa(dpi).right - size.w, proposed.y),
             "dpi={dpi}: X は右モニタの中へ寄る"
         );
+        assert!(
+            visible_in(&layout, pos, size),
+            "dpi={dpi}: 寄せた後は見える形"
+        );
         expect_one(&events, CLAMP_TAG);
         assert_eq!(
             guard_events(&events, OFFSCREEN_PULL_TAG).len(),
             0,
             "dpi={dpi}: 入力と提案が同じなのに OffscreenPull が出た"
+        );
+        assert!(
+            guard_events(&events, HIDDEN_AFTER_CLAMP_TAG).is_empty(),
+            "dpi={dpi}: 寄せた後に見えるのに HiddenAfterClampX が出た: {events:?}"
         );
     }
 }
@@ -85,6 +94,8 @@ fn a_kept_offscreen_balloon_is_not_recorded_as_offscreen_pull() {
         let (pos, events) = guard_balloon(&layout, old, proposed, dpi);
 
         assert_eq!(pos, proposed, "dpi={dpi}: 留置は位置を変えない");
+        // 捕捉の陽性の対: 決めた位置はどの作業領域にも属さず最近傍の warn が 1 行出る。
+        expect_one(&events, NEAREST_TAG);
         assert!(
             guard_events(&events, CLAMP_TAG).is_empty(),
             "dpi={dpi}: 留置で ClampX が出た"
@@ -126,31 +137,6 @@ fn a_balloon_still_hidden_after_clamp_is_recorded_as_hidden_after_clamp_x() {
         assert!(
             guard_events(&events, CLAMP_TAG).is_empty(),
             "dpi={dpi}: 寄せた後も見えないのに ClampX が出た: {events:?}"
-        );
-    }
-}
-
-/// 寄せた後に作業領域と交わる正常系は `ClampX` が 1 行・`HiddenAfterClampX` が 0 行（対）。
-#[test]
-fn a_balloon_visible_after_clamp_is_not_recorded_as_hidden_after_clamp_x() {
-    for dpi in DPIS {
-        let layout = mixed_layout(dpi);
-        let size = balloon_size(dpi);
-        let old = point(px(800, dpi), px(240, dpi));
-        let proposed = off_right(dpi);
-        assert!(visible_in(&layout, old, size), "dpi={dpi}");
-        assert!(!visible_in(&layout, proposed, size), "dpi={dpi}");
-
-        let (pos, events) = guard_balloon(&layout, old, proposed, dpi);
-
-        assert!(
-            visible_in(&layout, pos, size),
-            "dpi={dpi}: 寄せた後は見える形"
-        );
-        expect_one(&events, CLAMP_TAG);
-        assert!(
-            guard_events(&events, HIDDEN_AFTER_CLAMP_TAG).is_empty(),
-            "dpi={dpi}: 寄せた後に見えるのに HiddenAfterClampX が出た: {events:?}"
         );
     }
 }

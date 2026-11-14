@@ -1,10 +1,8 @@
 //! 単位空間契約の純関数のテスト
 //! （要件 2.2/2.4/2.5/3.1/3.3/3.6・7.5〜7.9・design「Unit Tests」1〜5）。
 //!
-//! 前半は task 1.2 が設計を駆動するために置いた最小限の主張、後半（「判断分岐の全網羅」節
-//! 以降）は task 1.3 が足した網羅——表示 DPI 行列（96 の倍数でない値を分子・分母の両側へ）・
-//! 負値・`i32::MIN` 近傍・飽和・作者基準 DPI の食い違い・[`OffsetRescale`] の 4 腕と
-//! 値を変えない縮退 3 経路の全到達・および design D8 の残差上限の実測である。
+//! 表示 DPI 行列（96 の倍数でない値を分子・分母の両側へ）・負値・`i32::MIN` 近傍・飽和・
+//! 作者基準 DPI の食い違い・[`OffsetRescale`] の 4 腕と値を変えない縮退 3 経路の全到達を見る。
 //!
 //! 期待値はすべて逐語（`assert_eq!`）で置く。近似比較はしない。
 //!
@@ -31,45 +29,8 @@ fn base_at(x: i32, y: i32, d: u16) -> OffsetBase {
 }
 
 // -------------------------------------------------------------------------
-// 遷移の変換規則（`rescale_follow_offset`）
-// -------------------------------------------------------------------------
-
-/// 拡大率を解決できない腕は値も基準も変えず、理由を値として返す（3.6・9.4）。
-#[test]
-fn zero_dpi_is_unresolved_with_reason() {
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 0), dpi(192)),
-        OffsetRescale::Unresolved {
-            reason: UnresolvedScale::ZeroBaseDpi
-        }
-    );
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 96), dpi(0)),
-        OffsetRescale::Unresolved {
-            reason: UnresolvedScale::ZeroCurrentDpi
-        }
-    );
-}
-
-// -------------------------------------------------------------------------
 // 供給時の換算（`scale_author_offset`）
 // -------------------------------------------------------------------------
-
-/// 恒等比は生値を素通しする（2.2）。
-#[test]
-fn identity_ratio_passes_raw_through() {
-    let (x, y) = scale_author_offset((7, -13), ScaleRatio::ONE);
-    assert_eq!((x.value, y.value), (7, -13));
-    assert!(!x.saturated && !y.saturated);
-}
-
-/// 大きさは既存の丸め権威へ委譲する（5/4 倍・2.4）。
-#[test]
-fn scales_author_offset_by_ratio() {
-    let k = ScaleRatio::new(120, 96).expect("120/96");
-    let (x, y) = scale_author_offset((10, -10), k);
-    assert_eq!((x.value, y.value), (13, -13));
-}
 
 /// 域を超える換算は回り込まず飽和し、その事実を値として返す（2.5）。
 #[test]

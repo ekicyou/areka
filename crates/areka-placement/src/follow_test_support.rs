@@ -570,7 +570,10 @@ impl SylphyaRig {
     /// 正典終了（アクター join）。
     pub(super) fn close(self) {
         self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.parts
+            .handle
+            .join()
+            .expect("sylphya のアクターが panic した");
     }
 }
 

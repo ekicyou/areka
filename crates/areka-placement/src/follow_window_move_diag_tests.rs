@@ -155,7 +155,7 @@ fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns()
 //   (3) 書込が起きない経路（べき等 skip・`WindowHandle` 未付与）ではレコードが出ない
 //   (4) 既定 `RUST_LOG=info` では 1 行も出ない（Req 1.7）
 //
-// 観測境界は tracing イベント本体（`test_support::capture`）——本レコードは
+// 観測境界は tracing イベント本体（`log_capture_kit::capture`）——本レコードは
 // `WindowPos` ミラーと違い「書込が起きた事実」そのものの証跡だからである。
 // 座標・寸・DPI は 96 の非倍数／非既定値を使い、取り違えを差で炙り出す。
 // -------------------------------------------------------------------------
@@ -236,8 +236,8 @@ fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     );
 }
 
-/// (1) 経路名は**呼出側が渡した route と 1:1**（`resize_window_to` は 3 経路の共通
-/// 反映口ゆえ、ここを取り違えると書き手の名指し＝Req 2.4 が丸ごと嘘になる）。
+/// (1) 経路名は**呼出側が渡した route と 1:1**（`resize_window_to` は多くの経路の共通
+/// 反映口ゆえ・ここではそのうち 3 経路を渡す、ここを取り違えると書き手の名指し＝Req 2.4 が丸ごと嘘になる）。
 #[test]
 fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
     for route in [
@@ -254,7 +254,7 @@ fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
             line.contains(&format!("route={}", route.as_str())),
             "route={route} を渡したのにレコードが一致しない: {line}"
         );
-        // 他 9 経路の語が混ざらない（取り違えの檻）。
+        // 渡していない残りの経路の語が混ざらない（取り違えの檻）。
         for other in PlacementRoute::ALL {
             if other == route {
                 continue;

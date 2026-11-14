@@ -9,7 +9,7 @@
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::*;
 use tracing::warn;
-use wintf::ecs::WindowPos;
+use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
 use super::super::dpi_sync::{self, HoldSite};
@@ -216,7 +216,8 @@ pub fn apply_char_shift(
 
 /// バルーン窓へずれを当てる（記録してから、そのキャラ窓の今の位置で追い直す）。書いたら `true`。
 ///
-/// バルーン窓・その持ち主のキャラ窓・キャラ窓の位置のどれかが無ければ `warn!` のうえ `false`。
+/// バルーン窓（`WindowHandle` まで）・その持ち主のキャラ窓・キャラ窓の位置のどれかが無ければ
+/// `warn!` のうえ `false`（記録は書かない）。
 pub fn apply_balloon_shift(
     world: &mut World,
     balloon: Entity,
@@ -232,7 +233,9 @@ pub fn apply_balloon_shift(
         );
         false
     };
-    if world.get_entity(balloon).is_err() {
+    // 窓の無い（破棄済み・`WindowHandle` の付く前の）バルーンへは書けない。当てたと記録すると
+    // 毎フレームの相が当て直さないので、記録の前に断る（窓ができたフレームで当て直す）。
+    if world.get::<WindowHandle>(balloon).is_none() {
         return skipped("no_balloon_window");
     }
     let owner = world

@@ -637,9 +637,8 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     let drag = Phase::Bubble(drag_event_at(char_window, start, (1450, 350)));
     assert!(!on_char_drag(&mut world, char_window, char_window, &drag));
 
-    // 保留 put（存在しないはず）があれば flush する越境フェンス。
-
     // --- ASSERT: ストア内容が seed 時点と完全一致（非 DragEnd 操作は何も書いていない）---
+    // 保留 put（存在しないはず）は rig.saved() が挟む barrier で flush される。
     let after = rig.saved();
     assert_eq!(
         before, after,

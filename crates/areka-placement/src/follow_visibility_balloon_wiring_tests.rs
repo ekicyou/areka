@@ -818,7 +818,7 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
 /// 本檻は `for dpi in DPIS` で**水準ごとに世界を組み直して** [`resize_window_to`] を直接呼ぶ
 /// だけであり、`DPI` を書き換えて `Changed<DPI>` のエッジを立てることは無い。追随の発火条件
 /// はそのエッジに限られる（本体の `runtime::frame::dpi` の相）ため、追随が入っても本檻には届かない
-/// ——上の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
+/// ——下の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
 /// 実機 SSP 裁定）は**是正後も真のまま**であり、主張は 1 文字も書き換えていない。
 ///
 /// 実測（task 6.4）: 追随の適用（本体の `runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`

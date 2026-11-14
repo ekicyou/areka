@@ -368,7 +368,7 @@ pub(super) fn evaluate_visibility_guard(
                 clamped = ?clamped,
                 ?size,
                 ?clamp_wa,
-                "{VISIBILITY_HIDDEN_AFTER_CLAMP_TAG} X を引き戻したが Y が画面の外のままで、寄せた後も全 work area と非交差（位置はそのまま）"
+                "{VISIBILITY_HIDDEN_AFTER_CLAMP_TAG} X を引き戻したが Y が画面の外のままで、寄せた後も全 work area と非交差（位置は ClampX と同じく X だけ寄せた値）"
             );
         } else {
             warn!(

@@ -498,7 +498,8 @@ pub fn anchor_changed_system(
 pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool {
     let Some(route) = route else {
         // route を名乗らない書込＝**ドラッグ経路のキャラ窓書込のみ**（`on_char_drag`／
-        // `on_char_drag_end`・本関数の doc の `None` の節）。利用者の明示操作ゆえ見送らない。
+        // `on_char_drag_end` と、ドラッグ中の組の相手を動かす `sticky_follow::move_partners`・
+        // 本関数の doc の `None` の節）。利用者の明示操作ゆえ見送らない。
         return false;
     };
     match route {
@@ -596,7 +597,8 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 /// route は後続タスクで遷移ガードの発火条件・warn 水準分岐の第一級入力にもなる。
 ///
 /// `None` は「本 target が観測を**所有しない**書込」であり、該当するのは
-/// **ドラッグ経路のキャラ窓書込のみ**である（[`on_char_drag`]／[`on_char_drag_end`]）——
+/// **ドラッグ経路のキャラ窓書込のみ**である（[`on_char_drag`]／[`on_char_drag_end`]と、
+/// ドラッグ中の組の相手を動かす `sticky_follow::move_partners`）——
 /// design「placement::diag > Risks」の裁定どおり、ドラッグ中の観測は wintf の `[drag]`
 /// target が所有し本 target を通らない（Req 2.4 の結論語彙も「[`PlacementRoute`] 名
 /// ＋ wintf `[drag]`／提案位置書込の 2 語」と規定されている）。ドラッグに随伴する
@@ -606,7 +608,9 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 /// [`PlacementRoute::MoveCue`] を新設し、スクリプト明示移動を名指しできるようにした
 /// （無記録のままだと Q3「ドラッグ以外の経路での消失」の観測に穴が残る）。
 ///
-/// `None` でも**挙動は完全に同一**であり、変わるのはレコードを出すか否かだけである。
+/// `None` ではレコードを出さないほか、route を入力にする 3 つも変わる: 札の見張り
+/// （[`deferral_covers_route`] が鳴らさない）・既定位置の追跡（[`track_default_char_pos`] が
+/// 追わない）・書込指令のタグ（`transition_diag::write_tag` が経路を名乗らない）。
 ///
 /// # runtime 関門（areka-P0-windowposition-limit C7・要件 2.1/2.2/2.6〜2.9/5.5）
 ///
@@ -1182,15 +1186,18 @@ pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: 
             );
             return false;
         };
-        let Some(pos) = wp
-            .position
-            .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
-        else {
-            warn!(
-                entity = ?window,
-                "WindowPos.position 不在（窓生成前・CW_USEDEFAULT 含む）のため現在位置を読めずリサイズしない"
-            );
-            return false;
+        let pos = match wp.position {
+            Some(p) if p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT => p,
+            p => {
+                // 印（窓生成直後）と不在（窓生成前）を言い分ける。
+                let what = if p.is_some() {
+                    "が CW_USEDEFAULT の印（窓生成直後）"
+                } else {
+                    "不在（窓生成前）"
+                };
+                warn!(entity = ?window, "WindowPos.position {what}のため現在位置を読めずリサイズしない");
+                return false;
+            }
         };
         (pos, wp.size)
     };

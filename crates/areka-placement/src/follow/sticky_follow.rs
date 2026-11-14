@@ -289,6 +289,7 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
     let delta = delta_from(session.dragged_start, final_pos);
     for (partner, pos) in move_partners(world, &session, delta) {
         // 次の起動は descript の向きで読み戻すので、記憶の形もそれにそろえる（4.8）。
+        // `Anchored` の無い相手は move_partners が先に外すので None は来ない（到達不能でも黙らない）。
         let Some(form) = saved_form_anchor(world, partner.window) else {
             warn!(
                 scope = partner.scope,

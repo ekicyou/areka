@@ -7,7 +7,7 @@ use wintf::ecs::{SizeI, WindowPos};
 use super::test_support::{
     LIMIT_CLAMP_TAG, LIMIT_TAG_PREFIX, LIMIT_UNRESOLVED_TAG, SylphyaRig, WINDOW_MOVE_TAG,
     assert_no_event, base_placement, base_world, contained, drag_end_event_at, drag_event_at,
-    limit_balloon_size, max_pos, odd_edge_wa, point_of, rect, window_pos_sized, world_with,
+    left_wa, limit_balloon_size, max_pos, odd_edge_wa, point_of, window_pos_sized, world_with,
 };
 use super::{BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end};
 use crate::resolver::PointPx;
@@ -481,7 +481,7 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
 /// したかが最終位置 1 つで判別できる配置にしてある。
 #[test]
 fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
-    let left_wa = rect(-1920, -40, 0, 1000);
+    let left_wa = left_wa();
     let mut placement = base_placement(true);
     placement.char_pos = PointPx { x: -800, y: 300 };
     placement.balloon_pos = PointPx { x: -500, y: 700 };

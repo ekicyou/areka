@@ -3,7 +3,7 @@
 //!
 //! # 接地点レコードは「源が古びていないか」を見張る口である
 //!
-//! [`ground_record_shows_the_current_48px_float_when_the_scale_is_lowered`] は、**作業領域源が
+//! [`ground_record_shows_the_48px_float_when_the_source_is_stale`] は、**作業領域源が
 //! 実行時の作業領域より古いとき、その差が実測値として行に出る**ことを固定する。拡大率を
 //! 下げるとタスクバーが低くなって実際の作業領域下端は**下がる**のに、源が古ければ接地点は
 //! 古い下端に留まる——実機で 6/6 再現した −48px の浮きである
@@ -85,11 +85,11 @@ fn ground_line_of(events: &[log_capture_kit::CapturedEvent]) -> String {
 // 接地点レコード（要件 5.3）
 // ---------------------------------------------------------------------------
 
-/// **源が古いときの差が行に出る**（名の `current` は是正前の呼び名・モジュールの説明のとおり
-/// 是正後も緑）: 源が古いまま拡大率を下げると接地点が起動時の作業領域下端に留まり、
+/// **源が古いときの差が行に出る**（モジュールの説明のとおり是正後も緑）: 源が古いまま
+/// 拡大率を下げると接地点が起動時の作業領域下端に留まり、
 /// 実際の下端との差が −48px になる。
 #[test]
-fn ground_record_shows_the_current_48px_float_when_the_scale_is_lowered() {
+fn ground_record_shows_the_48px_float_when_the_source_is_stale() {
     let _residue = drain_window_pos_commands();
     let (mut world, char_window) = world_with_stale_snapshot(LIVE_WA_BOTTOM_AT_100);
 
@@ -307,12 +307,12 @@ fn resize_under_filter(directives: &str) -> String {
     tracing::subscriber::with_default(subscriber, || {
         // 対照行は観測対象の**内側**で出す（同じ捕捉窓・同じ target・同じ directive を通る）。
         tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
-        resize_window_to(
+        assert!(resize_window_to(
             &mut world,
             char_window,
             NARROW,
             PlacementRoute::DpiReproject,
-        );
+        ));
     });
     let _drained = drain_window_pos_commands();
 

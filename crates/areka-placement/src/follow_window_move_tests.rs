@@ -401,5 +401,5 @@ fn resize_keep_position_on_sentinel_position_writes_nothing() {
     assert!(!ok, "印の位置へ寸を書いてはならない");
     assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
     assert_eq!(size_of(&world, balloon), SizeI::new(350, 200));
-    expect_one(&events, "WindowPos.position 不在");
+    expect_one(&events, "WindowPos.position が CW_USEDEFAULT の印");
 }

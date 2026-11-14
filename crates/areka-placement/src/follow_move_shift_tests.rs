@@ -23,7 +23,7 @@ use super::{
     rebase_shift_axes, shift_is_current,
 };
 use crate::resolver::{Anchor, PointPx};
-use log_capture_kit::capture;
+use log_capture_kit::{capture, expect_one};
 
 const W: i32 = 200;
 const H: i32 = 300;
@@ -167,6 +167,9 @@ fn a_huge_shift_pulled_back_by_our_own_clamp_does_not_warn_offscreen_pull() {
             capture(|| apply_char_shift(&mut world, window, (0, 9999), ScaleRatio::ONE));
 
         assert!(applied, "{anchor:?}: 当てる");
+        // 捕捉の陽性の対: この書込の遷移の行（経路 PatternMove）は 1 行在る（0 行が捕捉の
+        // 取りこぼしでない証・印の無い窓なので窓移動レコードは出ない）。
+        expect_one(&events, "kind=enqueue hwnd=0x1000 origin=PatternMove");
         assert!(
             guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
             "{anchor:?}: 自分の寄せを画面外からの引き寄せとして報告している: {events:?}"
@@ -287,6 +290,36 @@ fn missing_inputs_do_not_apply() {
     assert!(!ok);
     assert!(world.get::<MoveShiftApplied>(orphan).is_none());
     assert_skipped(&events, "no_char_window_position");
+}
+
+/// `WindowHandle` がまだ無いバルーン（窓の生成前）へは当てたと記録せず、理由つきの `warn!` で
+/// 戻る。窓ができた後の当て直しでずれが当たる（記録が無いので毎フレームの相が当て直す）。
+#[test]
+fn a_balloon_without_its_window_is_not_recorded_until_the_window_exists() {
+    let (mut world, window) = char_world(Anchor::Free, 600, 500);
+    let balloon = world.spawn(window_pos_sized(0, 0, 150, 100)).id();
+    let offset = PointPx { x: -170, y: -40 };
+    world
+        .entity_mut(window)
+        .insert(BalloonFollow::new(balloon, OffsetBase::unpinned(offset)));
+
+    let (ok, events) = capture(|| apply_balloon_shift(&mut world, balloon, (4, 6), k(3, 2)));
+    assert!(!ok);
+    assert!(world.get::<MoveShiftApplied>(balloon).is_none());
+    assert!(!shift_is_current(&world, balloon, (4, 6), k(3, 2)));
+    assert_skipped(&events, "no_balloon_window");
+
+    world.entity_mut(balloon).insert(fake_handle(0x2000));
+    assert!(apply_balloon_shift(&mut world, balloon, (4, 6), k(3, 2)));
+    assert!(shift_is_current(&world, balloon, (4, 6), k(3, 2)));
+    assert_eq!(
+        position_of(&world, balloon),
+        Point {
+            x: 600 - 170 + 6,
+            y: 500 - 40 + 9
+        }
+    );
+    let _residue = drain_window_pos_commands();
 }
 
 /// `move_shift_skipped` の `warn!` が理由 `reason` で 1 行出ている。
