@@ -25,7 +25,8 @@
 - `tools/perf/` の `.ps1` でないファイル全部（判定・順位表・比べ・台帳・自己較正・検体・目標定義・README）の、§File Structure Plan に挙げた直し。
 - 新しく置く 4 本のモジュール: `tools/perf/perf_lines.py`（行の読み方）・`tools/perf/perf_selftest_common.py`（自己較正の支え）・`tools/perf/judge_perf_selftest_inproc.py`（judge-perf の、検体では作れない場面の較正）・`tools/perf/fixtures/generate_more.py`（新しい判定の検体の組み立て）。
 - 直しの形が変わるために要る、範囲の外の 1 行ずつの直し: `.claude/agents/perf-measure.md`（#21・#66）・`.claude/agents/perf-analyze.md`（#66）・`.kiro/specs/talk-thread-count-growth/brief.md` への一言（議題 9）。どれも C20 で受け持つセッションが無い（C20 の 8 本＝roadmap「組済みのウェーブ」に、`.claude/agents/` と `talk-thread-count-growth` の持ち主は居ない）。
-- `audit-tools-perf-run` から受けた直し: `goals/draw-load-parity.toml` の `[sampling]` の注釈の wpaexporter の行と README の説明（`[sampling]` の段と `backend` の鍵は残す）・README の段③の理由の語の一覧に `no_record` を足す。
+- `audit-tools-perf-run` から受けた直し: `goals/draw-load-parity.toml` の `[sampling]` の注釈の wpaexporter の行と README の説明（`[sampling]` の段と `backend` の鍵は残す）・README の段③の理由の語の一覧に `no_record` を足す・README の §11 と §14 の 3 か所（perf-run の文 ①〜③・§File Structure Plan の README の表）。あちらは README を書かない（2026-11-14 の 2 回目の申し合わせ）。
+- 2 本とも手を入れる文書の申し合わせ（2026-11-14）: `.claude/skills/perf-loop-iteration/SKILL.md` はあちらが 37 行と 196 行の直後を直し、こちらは触らない。`.claude/agents/perf-measure.md`・`perf-analyze.md` はこちらだけが直す（理由の語を並べるときは、perf-loop が渡す語も並べるなら `no_record` を入れる）。
 
 ### Out of Boundary
 - `tools/perf/*.ps1`（`audit-tools-perf-run`）。古い行番号の 2 か所（`perf-loop.common.ps1:188`・`perf-loop.ps1:510`）もあちらが直す（議題 2）。
@@ -41,7 +42,8 @@
 
 ### Revalidation Triggers
 - `perf_lines` の関数の形（名前・引数・戻り値）を変えるとき: 4 本の道具と `generate.py` の自己較正を全部回す。`parse_fields` の名前と切り方（空白の直後の `名前=値`・同じ名前は後勝ち）を変えるときは、Rust の写しのテストを持つ見直しの spec へ知らせる（5.3）。
-- judge-perf の `SCRIPT_VERSION` を上げるとき: `goals/draw-load-parity.toml` の `judge_version` を同じコミットで上げる（`perf-loop.ps1` の preflight と perf-compare の門が突き合わせる）。
+- judge-perf の `SCRIPT_VERSION` を上げるとき: 版を字面で持つファイルを全部、同じコミットで上げる（D10 の一覧・`perf-loop.ps1` の preflight と perf-compare の門と compare の逐語の期待出力が突き合わせる）。
+- `perf_lines` の振る舞い（`parse_fields`・`read_cpu_csv`・`percentile` ほか、判定の数を決める読み方）を変えるとき: judge-perf の較正値を変えたのと同じに扱い、judge-perf の `SCRIPT_VERSION` と D10 の一覧を同じコミットで上げる（`percentile` は較正値 `PERCENTILE_METHOD` そのものの実装・`parse_fields` と `read_cpu_csv` は合否を直に決める）。版が上がらないと、比べと preflight の版の門が判定の変わったことを捕まえられない。
 - 終了コード・`key=value` の語・最後の行の形・引数を変えるとき: `audit-tools-perf-run` と申し合わせる（6.1・C20 の約束 ⑷）。この設計の中で変わるのは、申し合わせ済みの #6・#55・#67 と、知らせ済みの #5・#24・#25・#26 だけ。
 - kanade の `event=` の語を足す・消すとき: `J_TALK_START_EVENTS`・`J_TALK_END_EVENTS` を見直す（§設計の決め D4 の表）。
 
@@ -87,7 +89,7 @@ graph TB
 
 ### 設計の決め（研究 §8・§8.1 を閉じる）
 
-- **D1（#1 の一時フォルダ）**: 置き場は `<リポジトリ>\target\perf-loop-tmp\<接頭辞><uuid4 の 16 進>\`。リポジトリの根は `Path(__file__).resolve().parents[1]`（`tools/perf/` の 2 つ上）。`perf-loop.ps1` も同じ根の下に `perf-loop-selftest-<GUID>` の子を作り、子だけを消す（`perf-loop-tmp` そのものは誰も消さない）ので、子の名前が違えばぶつからない。道具ごとの接頭辞は今の `TemporaryDirectory(prefix=…)` の値をそのまま使う（`judge-followup-selftest-` ほか 4 つ）。作るのも消すのも `perf_selftest_common.work_dir(prefix)` の 1 か所（`with` を抜けるとき子を `shutil.rmtree`。消せなかったら理由を stderr に 1 行出して、結果は変えない）。
+- **D1（#1 の一時フォルダ）**: 置き場は `<リポジトリ>\target\perf-loop-tmp\<接頭辞><uuid4 の 16 進>\`。リポジトリの根は `Path(__file__).resolve().parents[2]`（`tools/perf/perf_selftest_common.py` の 3 つ上＝`parents[0]` は `tools/perf`・`[1]` は `tools`）。読み込みのときに `REPO_ROOT / "Cargo.toml"` があることを確かめ、無ければ理由を stderr に出して exit 3（根を取り違えたまま `tools\target\` の下に作らない・`.gitignore` の `target` はどの深さにも当たるので、取り違えは git では見えない）。`perf-loop.ps1` も同じ根の下に `perf-loop-selftest-<GUID>` の子を作り、子だけを消す（`perf-loop-tmp` そのものは誰も消さない）ので、子の名前が違えばぶつからない。道具ごとの接頭辞は今の `TemporaryDirectory(prefix=…)` の値をそのまま使う（`judge-followup-selftest-` ほか 4 つ）。作るのも消すのも `perf_selftest_common.work_dir(prefix)` の 1 か所（`with` を抜けるとき子を `shutil.rmtree`。消せなかったら理由を stderr に 1 行出して、結果は変えない）。
 - **D2（#40 の行の読み方の置き場）**: `tools/perf/perf_lines.py`。置くのは道具に依らない読み方だけで、判定式・較正値・道具の終了コード・道具に固有の文は置かない（読みの失敗の文の共通の部分は置き、道具ごとの末尾は呼び手が渡す）。失敗は呼び手が渡す作り手（`fail(message, details) -> Exception`）で起こす（`SelftestEnv.bad_input` と同じ型）。judge-perf は `from perf_lines import parse_fields, split_after_message, …` で同じ名前のまま読み込むので、`judge-perf.py` の `parse_fields` を名前で指す範囲の外の文（Rust の注記 10 ファイル・`judge-followup.py:125`）はずれない。名前が決まったので `audit-placement-follow` へ「置き場は `tools/perf/perf_lines.py` の `parse_fields`・judge-perf はその名前で読み込む」と知らせる（タスク 1 の完了条件）。
 - **D3（#41 の自己較正の支え）**: `tools/perf/perf_selftest_common.py`。置くのは、ケースのフォルダの並べ方（`.` と `_` で始まるフォルダを飛ばす・`case.txt` の無いフォルダを素材置き場として名を出す）・ケースの鍵の読み（知っている鍵の外は exit 3）・本体の `main` を同じプロセスで呼ぶ `invoke`・最初の違いを出す `first_difference`（違う行は `ascii()` で出す＝#25）・赤の下限の確かめと `SELFTEST RESULT ok=N ng=M` の行・一時フォルダ（D1）・木全体の見張り `check_tree`（下の T1・T13・T27）。道具ごとの違い（鍵の一覧・`_run_case`・期待出力の突き合わせ・赤の値）は道具に残す。judge-perf の自己較正（その場の `fixtures/` を読む・一時フォルダを使わない・報告の形が違う）は寄せない（研究 §1 の #41 の受け持ちに入っていない）。
 - **D4（#2 の語彙）**: kanade の `schedule/` が出す `event=` を全部読んで（`tracing::info!(target: "kanade", event = …)`）、次の 2 組にする。注記は行番号をやめて、ファイル名と語で指す（#74）。
@@ -108,7 +110,7 @@ graph TB
 - **D7（#4 の直し方・議題 9）**: perf-rank の中だけで、差の基準（basis=delta）で `perf(process)` の差が取れたときは、名簿外の残りの行の `cpu_us` を `max(プロセスの差 − 名簿の行の差の合計, 0)` に置き換える（行の差でなく）。役割別とスレッド別の表はその行の値を読むので、両方が直る。`perf(process)` の差が取れないとき（行が無い）は今どおり行の差（占有率はもともと出さない）。TID の照らし方（TID で照らす・新しい TID は全量・消えた TID は落とす・0 で止める）は Rust の `delta`（規則の正本）と同じまま変えない。だから使い回された TID の新しいスレッドは、その窓では 0 に見え、その CPU は名簿外の残りに入る（合計はプロセスの CPU を越えない）。README の「名簿は登録を消しません」（`thread_registry.rs` は同じ TID の登録を置き換える）を事実に合わせる。既存の期待出力（`full_ok`・`no_dump_unavailable`）は同じ値のまま（研究の照らし合わせ）。
 - **D8（#22 の役割名の畳み方）**: 役割別の表を作るときだけ、`re.sub(r"^(actor:.+)-\d+$", r"\1-*", role)` で畳む（`actor:sakura-talk-5` → `actor:sakura-talk-*`）。スレッド別の表は元の役割のまま。今 `crates/` で `-<数字>` で終わる役割名はトークのスレッド（`areka-sakura` の `drive.rs` の `sakura-talk-{id}`）だけ。
 - **D9（端末の文・議題 3）**: Python の道具の最後の行は ASCII の決まった形にする（`judge-perf.py`＝`SELFTEST RESULT ok=N ng=M`・失敗の締めは `JUDGE-PERF RESULT code=N`）。標準エラーへ出す失敗の文は、指摘が挙げた道具（`judge-perf.py` の枠の行と失敗の理由・`perf-rank.py` と `perf_rank_dump.py` の `RankError`・`judge-followup.py`・`perf-compare.py`・`fixtures/generate.py`）で英語の ASCII にする。報告の本文（`judge-followup.py` の標準出力の報告・`verdict.txt`・`rank.txt`・`compare.txt` の本文・`[selftest]` の行の題）は日本語のまま。`perf-ledger.py`・`perf_ledger_goal.py` の失敗の文は指摘に入っておらず、スキル（`SKILL.md` の「台帳が無い」の見分け）が日本語の語を読むので変えない。入口で `sys.stdout`・`sys.stderr` を `errors="backslashreplace"` に（今 `replace` の所も同じ形にそろえる）。
-- **D10（`SCRIPT_VERSION`）**: judge-perf は「較正値を変えたら上げる」（バナーの決め）。#2 でバナーの `J_TALK_*` が変わるので `0.4.0` → `0.5.0` に上げ、`goals/draw-load-parity.toml` の `judge_version` を同じコミットで `0.5.0` にする。字面の形（`SCRIPT_VERSION = (` の次の行の最初の引用符の中の最初の語）は変えないので、`perf-loop.common.ps1` の読み方は変わらない（6.1 の口の形は不変・値だけ）。版の文の中身は 0.5.0 の変更点の一文に書き替え、行は増やさない。ほかの道具（perf-rank・perf-compare・judge-followup の `0.1.0`）は上げない（決まりが無く、期待出力の版の字面を全部直すことになる）。
+- **D10（`SCRIPT_VERSION`）**: judge-perf は「較正値を変えたら上げる」（バナーの決め）。#2 でバナーの `J_TALK_*` が変わるので `0.4.0` → `0.5.0` に上げ、版を字面で持つ次のファイルを同じコミットで `0.5.0` にする（どれか 1 つでも残すと、比べの自己較正の版の門か逐語の比べ、または `perf-loop.ps1 selftest` の `goal-text-vs-goal-md` が赤になる）: `goals/draw-load-parity.toml` の `judge_version`・`goals/draw-load-parity.goal.md`（56 行の条件文の版）・`fixtures-loop/compare/goal.toml` と `fixtures-loop/compare/na_secondary/goal.toml` の `judge_version`・`fixtures-loop/compare/*/expected_compare.txt` 8 本の「judge-perf.py 0.4.0」。`fixtures-loop/ledger/` の `goal.toml` と `judge-stub.py` の `0.4.0` は偽の判定スクリプトと対になって閉じているので変えない。注記の「0.4.0 で足した」の類（`generate.py`・`judge_perf_catchup.py`・`perf-loop.common.ps1:464` の例）は来歴なので変えない。この版上げはタスク 6 で 1 回だけ行い、`fixtures-loop/compare/` を触るタスク 7 と、`goals/draw-load-parity.toml` を触るタスク 10 はタスク 6 の後に置く。字面の形（`SCRIPT_VERSION = (` の次の行の最初の引用符の中の最初の語）は変えないので、`perf-loop.common.ps1` の読み方は変わらない（6.1 の口の形は不変・値だけ）。版の文の中身は 0.5.0 の変更点の一文に書き替え、行は増やさない。ほかの道具（perf-rank・perf-compare・judge-followup の `0.1.0`）は上げない（決まりが無く、期待出力の版の字面を全部直すことになる）。
 - **D11（1,000 行の決まりの当て方・要件 7.1）**: `judge-perf.py`（4,159）と `fixtures/generate.py`（1,244）は、どのタスクの終わりでも着手のときの行数を越えない。新しい関数と新しい検体の組み立ては新しいファイル（D2・D3・D5・`judge_perf_selftest_inproc.py`）に置く。既存の関数の中の数行の書き換え・足しは、同じタスクの削りと差し引きで数える。1,000 行に近い `perf-ledger.py`（996）・`perf-compare.py`（969）・`perf-rank.py`（957）・`judge-followup.py`（931）も 1,000 行を越えない（`perf-ledger.py` は #59 の `SelftestEnv` の消しで相殺し、なお越えるなら #14・#20 の `entry.json` の検査を `perf_ledger_goal.py` へ置く）。
 - **D12（#6・#8 の較正）**: 検体では作れない場面（想定外の例外・明示指定 2 系列）は、新しい `judge_perf_selftest_inproc.py` が、judge-perf の `--selftest` から渡された本体の加群の関数と定数を `unittest.mock.patch.object` で差し替えて `main(argv)` を呼んで確かめる。judge-perf の `--selftest` の終わりに呼び出しを 1 つ足すだけ（D11 の差し引き）。
 
@@ -155,7 +157,7 @@ tools/perf/
 | `perf_rank_dump.py` | D6 の 2 回読み・事象ごとの列の確かめ・解決済みの枝の中で数える。`DumpScan.tids` を消す。文を英語に | #3・#23・#25・#61・#64 |
 | `perf-compare.py` | 311-327 を `perf_lines` へ。床の検査（`bool` を拒み `not floor > 0` で拒む）。数の取れた走行のどれにも副指標の鍵が無ければ exit 3。`compare.json` の各走行に `judge_stderr`（計測失敗の stderr にも添える・`compare.txt` は変えない）。`to_number` は `math.isfinite`。`encoding="utf-8-sig"`。stderr の文を英語に。79・99・103 の行番号を名前に | #7・#10〜#12・#26・#40・#56・#74 |
 | `perf_compare_selftest.py` | 支えを共通へ。`judge_stderr` の確かめ・`to_number("nan") is None` の 1 行 | #1・#12・#41 |
-| `judge-followup.py` | 132-209 を `perf_lines` へ（`_BARE_TIMESTAMP_RE`・`parse_stamp_value`・`to_int`・`to_float` は残す）。`DRAG_DX_PX` を消して `probe.log` の `step=gesture` 行の `dx`・`dy` を期待値に（無ければ判定不能）。625・616 の使われない `or`。stderr の文を英語に。107・109-110 の行番号を名前に | #13・#26・#40・#52・#53・#74 |
+| `judge-followup.py` | 132-209 を `perf_lines` へ（`_BARE_TIMESTAMP_RE`・`parse_stamp_value`・`to_int`・`to_float` は残す）。`DRAG_DX_PX` を消して `probe.log` の `step=gesture` 行の `dx`・`dy` を期待値に（無ければ判定不能）。625・616 の使われない `or`。stderr の文を英語に。106〜112 の出所の注記（`clickthrough/controller.rs:212`・`registry.rs:18-23` ほか Rust の行番号）を、ファイル名と項目の名（例「`clickthrough/registry.rs` の `DesiredState`」）に（`audit-wintf-input` の直しで行が動く・2026-11-14 にあちらへ伝えた） | #13・#26・#40・#52・#53・#74 |
 | `judge_followup_selftest.py` | 支えを共通へ。`followup-verdict.txt == 標準出力` の突き合わせ | #1・#31・#41 |
 | `perf-ledger.py` | `load_entry_json` で verdict が空なら exit 3・山括弧の値（`<` で始まり `>` で終わる）なら exit 3。`append` の `--iteration` を必須にし既定の枝を消す。`cmd_final` で許さない字を `_` に。`set-phase --best` を `math.isfinite`。目標定義の値の型を確かめて exit 3。`encoding="utf-8-sig"`。`write_text` に flush → `os.fsync`。`SelftestEnv` を消して `bind`。132・181-182 の文 | #14・#15・#19・#20・#54〜#57・#59・#81 |
 | `perf_ledger_goal.py` | 版の正規表現を `(?m)^SCRIPT_VERSION\s*=\s*\(?\s*"([^"\s]+)` に。goal-text の検査を `line.startswith((STATUS_PREFIX, FINAL_PREFIX))` に。`_final_release_idle_text` は拾えない・OSError のとき理由を stderr へ・`--goal` があれば `[goal].results_dir`・docstring を事実に。`formulas`・`main_model_recommended` を `GOAL_SCHEMA` から消す。型の確かめ（#55）。4,000 字の境目を「以内」に（`> 4000` で拒む）・223・117・555-556 の文 | #16〜#18・#55・#60・#81 |
@@ -188,6 +190,11 @@ README の直し（タスク 13 にまとめる）:
 | 919-920 | 段③は areka の処理の行だけを数える | #3 |
 | `[sampling]` の説明 | wpaexporter の道の説明を消す | 申し合わせ |
 | 579-591（§11） | Python の道具の最後の行と失敗の文（D9） | #24〜#26 |
+| 555（§11 の NOT_QUIET の項） | 関数名を `Test-MeasureQuietAfterOk` から `Test-MeasureRunComplete`（新しい `perf-loop.rundir.ps1`）に。文を「`-Resume` で使うのは `run.log`・`cpu.csv`・`run-meta.txt` が在り、`run-meta.txt` に `ended_utc` の行が在り、`quiet-after.txt` が QUIET の走行だけ。欠けた走行は `<走行>-INCOMPLETE-<時刻>`、静かでない走行は `<走行>-NOTQUIET-<時刻>` へ退ける（測ったものは消さない）」に | 申し合わせ（perf-run の文 ①） |
+| 563-573（§11 の端末の文字コードと子の出力） | 「読む所は 2 つ」と「pwsh の子」の項を「読む所は `perf-tool-base.ps1` の `Invoke-Child` 1 つ（`perf-loop.common.ps1` が読み込む）。`perf-loop.ps1` とその部品・`invoke-perf-run.ps1`・`invoke-followup-checks.ps1`・`invoke-cpu-sample.ps1` はどれも `Invoke-Child`（pwsh の子は同じファイルの `Invoke-PwshChild`）を使い、`tools/utf8-child.ps1` の `Invoke-Utf8Child` は `tools/perf` からは使わない。`invoke-cpu-sample.ps1` が回す xperf の出力だけは端末の文字コードで読む」に | 申し合わせ（perf-run の文 ②） |
+| 880-887（§14 の段③のコマンドの塊と項） | 塊に `-Cancel`（途中で止まった採取の取り消し・ランナーが使う）の 1 行。`-Probe` の注を「採れるか（必ず exit 0・1 行に available・reason・elevated・xperf_path）」、`-SelfTest` の注を「道具の点検（採取は試さない）」に。項「rank-run では、段③の採取はランナー（`invoke-perf-run.ps1 -SampleEtl`）が静かさの確かめの後、areka を起こす直前に始め、失敗したらランナーが取り消す。止めて記号を解くのは perf-loop（`-Stop`）。`-Stop` はまとめが通ったら元の ETL を消す」を足す | 申し合わせ（perf-run の文 ③） |
+
+- perf-run の文 ①〜④ の中身は `audit-tools-perf-run` の設計の「範囲の外で直す文」の表が正本（行番号はあちらの HEAD `1521bfd5`）。④（902-903 行に `no_record` を足す）は上の 901-906 行の直しに入っている。あちらの `.ps1` の振る舞いに合わせる文なので、あちらの着地の後に、着地した形と食い違わないかを確かめてから入れる（あちらが先に着地しなければ、着地した方が取り込みで合わせる）。
 
 - 触らないもの: `tools/perf/*.ps1`・`crates/`・`Cargo.*`・`vendors/`・`.claude/skills/`・`doc/`・完了した spec の文書と `results/`。
 
@@ -279,11 +286,11 @@ graph TB
 | 25 | D9（perf-rank・perf_rank_dump の文・`errors="backslashreplace"`・`first_difference` は `ascii()`） | T25 | 12 |
 | 26 | D9（judge-followup・perf-compare の stderr の文。報告の本文は標準出力のまま日本語） | T26 | 7・8 |
 | 27 | README の例を置き換え札に | T27 | 13 |
-| 28 | long の 3 本と dev の 1 本（`generate_more`） | L1〜L3・D1 | 4 |
+| 28 | long の 3 本と dev の 1 本（`generate_more`） | L1〜L3・V1 | 4 |
 | 29 | 明示指定の 19 本と 20 本（`generate_more`） | S1・S2 | 4 |
 | 30 | B1 と同じ入力を判定モードで（`generate_more`・`contains` で薄い定常の文を固定） | B2 | 4 |
 | 31 | `drag_fail` ケース・`followup-verdict.txt` の突き合わせ | F1 | 8 |
-| 32 | `no_diff_by_spread`・`judge_version_mismatch`（exit 4）のケース | P1・P2 | 7 |
+| 32 | `no_diff_by_spread`・`judge_version_mismatch`（exit 4）のケース | compare のケース `no_diff_by_spread`・`judge_version_mismatch` | 7 |
 | 33 | `write_fails` のケース（普通のファイルの下へ init・exit 4） | W1 | 9 |
 | 34 | `no_dump_unavailable` に本番の 2 つの引数・期待の 1 行を `reason=not_elevated` | 既存の検体 | 12 |
 | 35 | `cpu_us` の無い `perf(thread)` 行のケース（exit 4） | R1 | 12 |
@@ -325,7 +332,7 @@ graph TB
 | 71 | 作ったもの以外のフォルダがあれば名を出して止める | — | 4 |
 | 72 | H12c を `case_H12()` から作る | 双子の突き合わせ | 4 |
 | 73 | 確かめを `rmtree` の前へ | — | 4 |
-| 74 | 範囲の中の行番号を、ファイル名と関数名・定数名・語に（範囲の外の 3 か所はあちらが直す） | — | 5・7・8・13 |
+| 74 | 範囲の中の行番号を、ファイル名と関数名・定数名・語に（範囲の外の 3 か所はあちらが直す） | — | 4（`generate.py:195`）・5・7・8・13 |
 | 75 | `NO_COLOR` の説明を README と同じ趣旨に | — | 6 |
 | 76 | 較正値の範囲の終わり | — | 13 |
 | 77 | 538 行の見本のコメントを 2 行に | — | 6 |
@@ -364,7 +371,7 @@ def read_text_lines(path: Path, what: str, fail: Fail) -> list[str]: ...   # utf
 class CpuSample: at: datetime; percent: float
 
 def read_cpu_csv(path: Path, header: str, fail: Fail, *, broken_note: str = "") -> list[CpuSample]: ...
-def percentile(values: Sequence[float], q: float) -> float: ...   # ceil(q·n)、空の列は呼び手が先に弾く
+def percentile(values: Sequence[float], q: float) -> float: ...   # ceil(q·n)＝judge-perf の較正値 PERCENTILE_METHOD の実装（変えたら judge-perf の版を上げる）・空の列は呼び手が先に弾く
 ```
 - Preconditions: `fail` は例外を返す（投げない）。`read_cpu_csv` の文は今の judge-perf の文と同じ字面で、末尾だけ `broken_note`（judge-perf は「部分集計は出しません（要件 2.5）。」）。D9 で judge-perf・perf-rank の文を英語にするのは、呼び手が渡す文と `perf_lines` の中の文の両方（タスク 6・12 で合わせる）。
 - Postconditions: 行番号は空行を含めて 1 から数える（#51）。有限でない数の行は壊れた行（#7）。
@@ -380,7 +387,7 @@ def percentile(values: Sequence[float], q: float) -> float: ...   # ceil(q·n)�
 
 ##### Service Interface
 ```python
-REPO_ROOT: Path            # Path(__file__).resolve().parents[1]
+REPO_ROOT: Path            # Path(__file__).resolve().parents[2]・REPO_ROOT/"Cargo.toml" が無ければ exit 3
 WORK_ROOT: Path            # REPO_ROOT / "target" / "perf-loop-tmp"
 
 def guard_console() -> None: ...       # stdout・stderr を errors="backslashreplace"
@@ -437,12 +444,12 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 
 ### 新しいテスト（#1〜#27 の 1 件ずつ・4.7）
 
-どれも `perf-loop.ps1 selftest` が回す 5 本の `--selftest` のどれかで毎回回る。判定の検体は `generate_more` が作り（作り直してバイトが一致）、`fixtures-loop/` のケースは手書き。
+どれも `perf-loop.ps1 selftest` が回す 5 本の `--selftest` のどれかで毎回回る。T1〜T27 はこの設計の中の呼び名で、今ある検体 `T2_tick_lines_absent` とは別。新しい判定の検体の名は、今ある検体の頭の字（B・C・E・H・P・T・X）と重ならないように付ける（C3・X3 は今ある組の続き番号）。判定の検体は `generate_more` が作り（作り直してバイトが一致）、`fixtures-loop/` のケースは手書き。
 
 | T | 置き場所 | 見ること | 直しを戻すと |
 |---|---|---|---|
-| T1 | `perf_selftest_common.check_tree` ⑴（4 本の自己較正） | `tempfile` の読み込みが 0・作った子が `target\perf-loop-tmp\` の下 | 1 本でも `TemporaryDirectory` に戻すと赤 |
-| T2 | 判定の検体 `P1_boot_talk_excluded`（baseline・`emit_metrics = yes`） | `boot_talk`（2 秒）〜`boot_talk_done`（8 秒）・5 秒の CPU 9.00・後の発話 90〜95 秒・92.5 秒の CPU 4.20 → `contains = metric=talk_peak_cpu_pct value=4.20` | 終わりの組から `boot_talk_done` を外すと 9.00 で赤 |
+| T1 | `perf_selftest_common.check_tree` ⑴（4 本の自己較正） | `tempfile` の読み込みが 0・作った子が `target\perf-loop-tmp\` の下。根は `WORK_ROOT` の定数と比べず、自分のファイルの位置から別に求めた根（`tools/perf/` の親の親で、`Cargo.toml` と `tools/perf/` があるフォルダ）の `target\perf-loop-tmp\` と比べる | 1 本でも `TemporaryDirectory` に戻すと赤・根を `parents[1]` に戻すと赤 |
+| T2 | 判定の検体 `K1_boot_talk_excluded`（baseline・`emit_metrics = yes`） | `boot_talk`（2 秒）〜`boot_talk_done`（8 秒）・5 秒の CPU 9.00・後の発話 90〜95 秒・92.5 秒の CPU 4.20 → `contains = metric=talk_peak_cpu_pct value=4.20` | 終わりの組から `boot_talk_done` を外すと 9.00 で赤 |
 | T3 | rank のケース `other_process_rows` | `sample_ok` の写しに `Idle (0)`・`notepad.exe ( 900)` の `SampledProfile` と `Stack` を混ぜても、期待出力は areka の分だけ | 処理名の絞りを外すと赤 |
 | T4 | rank のケース `tid_reused` | 前回 5 s の TID を今回 1 s の別名のスレッドが使う・プロセスの差 3 s → 名簿外の残りの `share_pct` が 100 以下で期待どおり | 行の差に戻すと `200.00` で赤 |
 | T5 | 判定の検体 `M1_profile_empty`・`M2_profile_unknown`（verdict・exit 2） | `profile =`・`profile = medium` | `is None` に戻すと 0 で赤 |
@@ -476,12 +483,12 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 | L1_long_flat_pass | `run_meta(profile="long")`・`cpu_series(count=89)`（15 秒おき・1,320 秒・1.50%） | 0 |
 | L2_long_rising_fail | 同じ・89 点を 1.0 → 2.8% へ直線（傾き 0.08 %/分 > 0.05・平均 < 3.0） | 1（⑷b だけ不合格） |
 | L3_long_too_short | `profile="long"`・`cpu_series(count=25)`（360 秒） | 2 |
-| D1_dev_not_applicable | `run_meta(build="dev")`・case `build = dev` | 0（⑷a・⑷b 適用外） |
+| V1_dev_not_applicable | `run_meta(build="dev")`・case `build = dev` | 0（⑷a・⑷b 適用外） |
 | S1_explicit_19_intervals | `cycle_series(..., (150.0,), 19, cycle_period_ms=4000.0)` | 2 |
 | S2_explicit_20_intervals | 同じ 20 本 | 0 |
 | S3_explicit_over_limit | S2 の待ちを 200 ms（上限越え） | 1（T8 の材料にもする） |
 | B2_thin_steady_verdict | `B1_baseline_ok` と同じ入力・`mode = verdict`・`contains` で「VERDICT_MIN_STEADY_SEC」の文 | 2 |
-| M1・M2・N1・C3・P1・U1 | 上の T の表 | 上の T の表 |
+| M1・M2・N1・C3・K1・U1 | 上の T の表 | 上の T の表 |
 | X3_build_debug_arg | case `build = debug`（argparse の誤り） | 3 |
 
 - 境目の数は研究の実験（`target\` の下で回した）で確かめた値。`count=81`（ちょうど 1,200 秒）は 0、80 点は 2。
@@ -504,16 +511,16 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 | 1 | 行の読み方 `perf_lines.py`・4 本の道具と `generate.py` の付け替え・NaN と BOM と行番号＋T7・T13 の検体（`generate_more.py` を作って N1・U1 だけ置く）・`audit-placement-follow` へ置き場を知らせる | #7・#13・#40・#51 | `perf_lines.py`（新）・`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`judge-followup.py`・`fixtures/generate.py`・`fixtures/generate_more.py`（新）・rank の `cpu_nan` | 最初 |
 | 2 | 自己較正の支え `perf_selftest_common.py`・4 組の付け替え・一時フォルダ・`check_tree` ⑴⑵⑷＋T1 | #1・#41 | `perf_selftest_common.py`（新）・`*_selftest.py` 3 本・`perf-rank.py` | 1 の後 |
 | 3 | judge-perf の要らないコード | #36〜#39・#47〜#50・#81（catchup の頭書き） | `judge-perf.py`・`judge_perf_catchup.py`・`README.md` は 14 | 1 の後（2 と並べてよい） |
-| 4 | 判定の検体の手入れと long・dev・明示指定・薄い定常・build の検体 | #28〜#30・#42・#43・#68〜#73 | `fixtures/generate.py`・`fixtures/generate_more.py`・`fixtures/*`・`judge-perf.py`（#42 の数行） | 3 の後 |
+| 4 | 判定の検体の手入れと long・dev・明示指定・薄い定常・build の検体 | #28〜#30・#42・#43・#68〜#73・#74（`generate.py:195`） | `fixtures/generate.py`・`fixtures/generate_more.py`・`fixtures/*`・`judge-perf.py`（#42 の数行） | 3 の後 |
 | 5 | 発話の区切りの語彙＋T2 | #2・#74（judge-perf の範囲の中の行番号） | `judge-perf.py`・`generate_more.py`・検体 | 4 の後 |
-| 6 | judge-perf の入力と終了コードと端末の文・`judge_perf_selftest_inproc.py`・版 0.5.0 と `judge_version`＋T5・T6・T8・T9・T24 | #5・#6・#8・#9・#24・#44〜#46・#75・#77・D10 | `judge-perf.py`・`judge_perf_selftest_inproc.py`（新）・`generate_more.py`・検体・`goals/draw-load-parity.toml`（`judge_version` の 1 行） | 5 の後 |
-| 7 | perf-compare と自己較正＋T10〜T12・T26（compare） | #7（`to_number`）・#10〜#12・#26・#32・#56・#74 | `perf-compare.py`・`perf_compare_selftest.py`・`fixtures-loop/compare/` | 2 の後（3〜6 と並べてよい） |
+| 6 | judge-perf の入力と終了コードと端末の文・`judge_perf_selftest_inproc.py`・版 0.5.0 と `judge_version`＋T5・T6・T8・T9・T24 | #5・#6・#8・#9・#24・#44〜#46・#75・#77・D10 | `judge-perf.py`・`judge_perf_selftest_inproc.py`（新）・`generate_more.py`・検体・版を字面で持つファイル（D10 の一覧＝`goals/draw-load-parity.toml` の `judge_version`・`goals/draw-load-parity.goal.md`・`fixtures-loop/compare/` の `goal.toml` 2 本と `expected_compare.txt` 8 本） | 5 の後 |
+| 7 | perf-compare と自己較正＋T10〜T12・T26（compare） | #7（`to_number`）・#10〜#12・#26・#32・#56・#74 | `perf-compare.py`・`perf_compare_selftest.py`・`fixtures-loop/compare/` | 2 と 6 の後（6 の版上げが `fixtures-loop/compare/` を触るため） |
 | 8 | judge-followup と自己較正＋T26（followup） | #26・#31・#52・#53・#74 | `judge-followup.py`・`judge_followup_selftest.py`・`fixtures-loop/followup/` | 2 の後（7 と並べてよい） |
 | 9 | 台帳の本体＋T14・T15・T19・T20・W1 | #14・#15・#19・#20・#33・#54〜#57・#59・#81（perf-ledger） | `perf-ledger.py`・`perf_ledger_selftest.py`・`fixtures-loop/ledger/` | 2 の後（7・8 と並べてよい） |
-| 10 | 台帳の判定面と目標定義＋T16〜T18 | #16〜#18・#55・#58・#60・#81（goal・toml:80）・wpaexporter の注釈 | `perf_ledger_goal.py`・`perf_ledger_selftest.py`・`goals/draw-load-parity.toml`・`fixtures-loop/ledger/` | 9 の後 |
+| 10 | 台帳の判定面と目標定義＋T16〜T18 | #16〜#18・#55・#58・#60・#81（goal・toml:80）・wpaexporter の注釈 | `perf_ledger_goal.py`・`perf_ledger_selftest.py`・`goals/draw-load-parity.toml`・`fixtures-loop/ledger/` | 6 と 9 の後（6 の版上げが `goals/draw-load-parity.toml` を触るため） |
 | 11 | 順位表の dump＋T3・T23・R2・実機の確かめ（任意） | #3・#23・#25（dump の文）・#61・#62・#64 | `perf_rank_dump.py`・`perf-rank.py`（読む所）・`fixtures-loop/rank/` | 2 の後（7〜9 と並べてよい） |
 | 12 | 順位表のスレッドと引数と端末の文＋T4・T21・T22・T25・R1 | #4・#21・#22・#25・#34・#35・#63・#65・#66（エージェント定義）・#67 | `perf-rank.py`・`fixtures-loop/rank/`・`.claude/agents/perf-measure.md`・`perf-analyze.md`・`talk-thread-count-growth/brief.md` | 11 の後 |
-| 13 | 文書: README の直し全部・`check_tree` ⑸＋T27 | #3・#4・#21・#24〜#27・#29・#42・#62・#66・#68・#74・#76・#78〜#80・申し合わせの 2 件 | `README.md`・`perf_selftest_common.py` | 1〜12 の後 |
+| 13 | 文書: README の直し全部・`check_tree` ⑸＋T27 | #3・#4・#21・#24〜#27・#29・#42・#62・#66・#68・#74・#76・#78〜#80・申し合わせの 2 件・perf-run の文 ①〜④（あちらの着地の形と突き合わせて） | `README.md`・`perf_selftest_common.py` | 1〜12 の後 |
 | 14 | かけ直しの audit（上限なし・全部読む）→ 出た指摘を直す → 0 件まで（5 回目の打ち切りの決まり）・回ごとの組ごとの件数を記録 | 4.1・4.2・4.3・4.4 | 範囲の全部・`research.md`（記録） | 13 の後 |
 | 15 | 自己較正 `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` と全体テスト `pwsh -NoProfile -File tools/test-all.ps1` が緑・既定のブランチとの差分の確かめ（`.ps1`・`crates/`・`Cargo.*`・`vendors/`・`.claude/skills/` の差分 0・`judge-perf.py` と `generate.py` が着手のときの行数以下・どのファイルも 1,000 行の決まりを守る）・`audit-tools-perf-run` へ py の行が動いたことを知らせる（あちらの 2 か所の行番号の合わせ）・記録 | 4.5・4.6・6.2・6.4・6.6・7.1 | — | 14 の後 |
 
