@@ -18,8 +18,8 @@
 //! 確立系は兄弟モジュール [`super::zorder_pair_establish`]、維持系は
 //! [`super::zorder_pair_maintain`]、記録の**行を組む純関数**は
 //! [`super::zorder_pair_diag`] にある（本ファイルが 1,000 行の上限に迫るため分割した）。
-//! **記録を出すマクロは本ファイル内に置くこと**——`tracing` の出力先は呼び出し元の
-//! module path が既定であり、他ファイルへ移すとサインオフの grep 対象が分裂する。
+//! **記録を出すマクロは本ファイル内に置くこと**——出力先は組のモジュール 1 つに揃える（読み手の
+//! 絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, info, warn};
@@ -426,8 +426,8 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
 // `log_*`／`record_*` はその戻り値をそのまま本文にする（組立を二重に持たない）。
 // その純関数群は兄弟の [`zorder_pair_diag`](super::zorder_pair_diag) にある——
 // マクロを 1 つも含まない文字列組立だけをあちらへ置き、**マクロを呼ぶ側は本ファイルに
-// 残す**（`tracing` の出力先は呼び出し元の module path が既定であり、移すとサインオフの
-// grep 対象が分裂する）。
+// 残す**（出力先は組のモジュール 1 つに揃える。読み手の絞り込みは前方一致なので漏れはしないが、
+// 記録の関数を 1 つのファイルに集めて固定する）。
 //
 // # 出力先と水準
 //
@@ -549,9 +549,10 @@ fn measure_nearest_visible(hwnd: HWND, side: NeighborSide) -> Option<HWND> {
             Ok(None) => return None,
             Err(err) => {
                 warn!(
-                    "窓の最も近い可視の{side}の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} error={code:?} message={message}",
+                    "窓の最も近い可視の{side}の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} at={at} error={code:?} message={message}",
                     side = side.label(),
-                    hwnd = hwnd_field(Some(cursor)),
+                    hwnd = hwnd_field(Some(hwnd)),
+                    at = hwnd_field(Some(cursor)),
                     code = err.code(),
                     message = err.message(),
                 );
@@ -689,8 +690,9 @@ pub(crate) fn measure_windows_in_front(hwnd: HWND) -> FrontScan {
             }
             Err(err) => {
                 warn!(
-                    "手前側の走査に失敗しました（前面窓との相対は判定しません） hwnd={hwnd} error={code:?} message={message}",
-                    hwnd = hwnd_field(Some(cursor)),
+                    "手前側の走査に失敗しました（前面窓との相対は判定しません） hwnd={hwnd} at={at} error={code:?} message={message}",
+                    hwnd = hwnd_field(Some(hwnd)),
+                    at = hwnd_field(Some(cursor)),
                     code = err.code(),
                     message = err.message(),
                 );

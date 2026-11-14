@@ -236,3 +236,16 @@
 - 較正: 本番で引数を無視する（`let _ = foreground_visible;` で判定に使わない）形にして走らせ、`is_behind_foreground_reports_absence_rather_than_a_false_negative` が赤（`left: Some(false)` / `right: None`）。判定を入れて緑に戻した。
 - 消したもの: なし（git grep 不要）。
 - テストの数: `cargo test -p wintf --lib zorder_pair_sink` 13 本緑（本数は変わらない・1 本に行を 1 つ足した）。`zorder_pair` で 96 本緑・3 本 ignored。
+
+## 11.2
+
+- 33: `zorder_pair_sink_tests.rs` の前面窓の相対のテストの説明を「可視の子窓（トップレベル窓ではない）」に直した。
+- 34: 出力先の理由の文を「出力先は組のモジュール 1 つに揃える（読み手の絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）」に直した。指摘の 5 か所（`zorder_pair.rs` の頭と組立の節・`zorder_pair_sink.rs` の頭・`zorder_pair_record_tests.rs` の `LOG_TARGET` と出力先の検査）に加え、同じ誤った理由を書いていた `zorder_pair_diag.rs` の頭と `zorder_pair_maintain.rs` の頭も直した（説明だけ）。`zorder_pair_record_tests.rs` の頭の 9 行目と検査のテストの説明も「組のモジュールの出力先」に揃えた。
+- 34 の検査: `LOG_TARGET` を区切りの `:` まで含めた `"wintf::ecs::window::zorder_pair:"` にし、`every_record_is_visible_under_the_signoff_directive` で 6 種の判定語の**行ごとに**この出力先を含むことを確かめる形にした（前は出力全体への部分一致で、兄弟の出力先の行も通っていた）。
+- 35: 見送りの理由のテストの対照の説明を、数を書かない「理由の数だけの行がすべて相異なる」に直した。
+- 55: `measure_nearest_visible` と `measure_windows_in_front` の走査の失敗の `warn!` を、`hwnd=` が始めた窓・`at=` が失敗した窓の 2 欄にした（上限の `warn!` の `hwnd=` と意味が揃う）。`[zorder-pair]` のタグは無いので実機の grep の語は変わらない。この行を見るテストは無い（`git grep` で「走査に失敗」「at=」を wintf に 0 件）ので、既存のテストが緑のままであることで確かめた。
+- 56: `zorder_pair_record_tests.rs` の先頭に `const ALL_REASONS: [(SkipReason, &str); 6]` を置き、`skip_line_names_a_distinct_reason_for_every_skip` と `record_decision_reports_every_skip_reason_and_yields_no_fix` の 2 つの一覧をこれに替えた。テストのファイルで `SkipReason::ReleasedByChain` が現れるのは 1 か所だけ（`git grep -c`）。
+- 57: `zorder_pair_sink_tests.rs` の自前の `WA_INACTIVE`／`WA_ACTIVE` を消し、`windows::Win32::UI::WindowsAndMessaging::{WA_ACTIVE, WA_INACTIVE}` を使う（`drag/reentry.rs` と同じ・新しい feature は不要）。`dispatch_activate` の引数を `u32` にし、`WPARAM` へ入れるときに 1 度だけ広げる。
+- 消す前の確かめ: 自前の `WA_*` 定数はそのファイルの私的な定数で、消す前に同じファイルの 58・60 行で定義・同じファイルの 3 か所だけで使っていた。消した後の `git grep -n "const WA_" -- crates` は別の意味の `WA_BOTTOM`／`WA_LOW`／`WA_HIGH`（areka・areka-placement のテスト）だけで、活性の定数の自前の定義は 0 件。
+- 較正（34）: 本番の `log_sink_observed` の `debug!` に `target: "wintf::ecs::window::zorder_pair_sink"` を足して走らせ、`every_record_is_visible_under_the_signoff_directive` が赤（`[zorder-pair] sink-observed` の行が組のモジュールの出力先へ出ていない）。前の検査（出力全体に `wintf::ecs::window::zorder_pair` を含む）は、他の 5 種の行が前方一致の名を含むのでこの壊し方でも緑のままだった形。`target:` の 1 行を消して緑に戻し、`git diff` で本番の差分が意図した直し（説明と 55 の欄）だけであることを確かめた。
+- テストの数: `cargo test -p wintf --lib zorder_pair_sink` 13 本緑・`zorder_pair::record_tests` 13 本緑（本数は変わらない）。`cargo build -p wintf --tests`・`cargo fmt --all -- --check` 通過・clippy は自分が足した警告なし。

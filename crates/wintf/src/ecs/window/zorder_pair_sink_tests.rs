@@ -34,7 +34,7 @@ use std::rc::Rc;
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::WM_ACTIVATE;
+use windows::Win32::UI::WindowsAndMessaging::{WA_ACTIVE, WA_INACTIVE, WM_ACTIVATE};
 use windows::core::{PCWSTR, w};
 
 use super::{SinkObservationPending, is_behind_foreground, mark_pair_sink_observation};
@@ -53,11 +53,6 @@ use crate::executor::util::WindowMessage;
 
 /// ペア宣言の無い窓に付いていた目印を落とした記録。
 const ORPHAN_MARK: &str = "沈降観測の目印がペア宣言の無い窓";
-
-/// `WM_ACTIVATE` の非活性化（`WA_INACTIVE` = 0）。
-const WA_INACTIVE: usize = 0;
-/// `WM_ACTIVATE` の活性化（`WA_ACTIVE` = 1）。
-const WA_ACTIVE: usize = 1;
 
 // -------------------------------------------------------------------------
 // 実窓・World・巡回のヘルパ
@@ -96,11 +91,11 @@ impl Pair {
 }
 
 /// `WM_ACTIVATE` を 1 通配送する（本番と同じ配送表を通す）。
-fn dispatch_activate(world: &Rc<RefCell<EcsWorld>>, entity: Entity, activation_state: usize) {
+fn dispatch_activate(world: &Rc<RefCell<EcsWorld>>, entity: Entity, activation_state: u32) {
     let message = WindowMessage {
         hwnd: HWND(std::ptr::null_mut()),
         msg: WM_ACTIVATE,
-        wparam: WPARAM(activation_state),
+        wparam: WPARAM(activation_state as usize),
         lparam: LPARAM(0),
     };
     crate::ecs::dispatch_window_message(world, entity, &message);
@@ -326,7 +321,7 @@ fn the_sink_observation_issues_no_command_and_moves_nothing() {
 
 /// 記録には前面窓との相対の欄が必ず出る。
 ///
-/// テストの窓は非表示の子窓であり**決して前面窓になり得ない**（前面窓は必ずこの兄弟列の
+/// テストの窓は可視の子窓（トップレベル窓ではない）であり**決して前面窓になり得ない**（前面窓は必ずこの兄弟列の
 /// 外に居る）。ゆえに `behind_foreground=true` は構造的に起こらない——値そのものの
 /// 網羅は純関数 [`is_behind_foreground`] のテストが担う。
 #[test]

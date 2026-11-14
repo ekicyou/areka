@@ -28,8 +28,8 @@
 //! 満たす設計（design.md Requirements Traceability 4.1）に対し、本モジュールはその
 //! **証跡だけを残す**役である。
 //!
-//! 記録を出すマクロは [`zorder_pair`](super::zorder_pair) に置く（`tracing` の出力先は
-//! 呼び出し元の module path が既定であり、分けるとサインオフの grep 対象が分裂する）。
+//! 記録を出すマクロは [`zorder_pair`](super::zorder_pair) に置く（出力先は組のモジュール 1 つに
+//! 揃える。読み手の絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
 //! 本モジュールは記録用の関数を呼ぶだけである。
 
 use bevy_ecs::prelude::*;
