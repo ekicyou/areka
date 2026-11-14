@@ -21,6 +21,7 @@ import sys
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from unittest import mock
 
 #: tools/perf/perf_selftest_common.py の 3 つ上（[0]=tools/perf・[1]=tools・[2]=根）。
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,7 +56,7 @@ def work_dir(prefix: str) -> Iterator[Path]:
         try:
             shutil.rmtree(child)
         except OSError as exc:
-            sys.stderr.write(f"[perf-selftest] could not remove work dir {child}: {exc}\n")
+            sys.stderr.write(f"[perf-selftest] could not remove work dir {child}: {exc!a}\n")
 
 
 def list_case_dirs(root: Path, case_file: str, fail: Fail, *,
@@ -121,6 +122,27 @@ def invoke(main: Callable[[list[str]], int], argv: list[str],
             code = exc.code if isinstance(exc.code, int) else exit_fallback
     _stderr_seen.append(err.getvalue())
     return code, out.getvalue(), err.getvalue()
+
+
+#: 日本語の Windows が OSError に付ける文（「アクセスが拒否されました。」）。機械の言語に頼らず較正する。
+LOCALIZED_OS_ERROR = "\u30a2\u30af\u30bb\u30b9\u304c\u62d2\u5426\u3055\u308c\u307e\u3057\u305f\u3002"
+
+
+def localized_oserror_reasons(main: Callable[[list[str]], int], argv: list[str], exit_fallback: int,
+                              target: object, name: str, reached: str) -> list[str]:
+    """`target.name` が日本語の文の OSError を投げるとき、stderr が全行 ASCII か（D9・R5Z-1）。
+
+    `reached` が stderr に無ければ、差し替えた失敗の経路に届いていない（較正になっていない）。
+    """
+    def raiser(*_args, **_kwargs):
+        raise OSError(13, LOCALIZED_OS_ERROR)
+
+    with mock.patch.object(target, name, raiser):
+        _code, _out, err = invoke(main, argv, exit_fallback)
+    if reached not in err:
+        return [f"{name} raising OSError: stderr has no {ascii(reached)}: {ascii(err)}"]
+    return [f"{name} raising OSError: stderr line is not ASCII: {ascii(line)}"
+            for line in err.splitlines() if not ascii_outside_root(line)]
 
 
 def first_difference(label: str, want: str, got: str) -> str:

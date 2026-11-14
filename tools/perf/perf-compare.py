@@ -272,7 +272,7 @@ def load_goal(path: Path) -> Goal:
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, UnicodeDecodeError) as exc:
-        raise bad_input(f"cannot read goal file: {path}", [str(exc)]) from exc
+        raise bad_input(f"cannot read goal file: {path}", [ascii(str(exc))]) from exc
     except tomllib.TOMLDecodeError as exc:
         raise bad_input(f"goal file is not valid TOML: {path}", [str(exc)]) from exc
 
@@ -408,7 +408,7 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
             timeout=timeout_sec, check=False,
         )
     except OSError as exc:
-        result.fail(f"判定スクリプトを起動できません: {exc}", f"cannot start the judge script: {exc}")
+        result.fail(f"判定スクリプトを起動できません: {exc}", f"cannot start the judge script: {exc!a}")
         return result
     except subprocess.TimeoutExpired:
         result.fail(f"判定スクリプトが {timeout_sec:.0f} 秒で終わりません",
@@ -526,7 +526,7 @@ def primary_of(run: RunResult, goal: Goal) -> float:
     if value is None:
         raise CompareError(
             EXIT_MEASURE_FAILED,
-            f"decidable run {run.name} has no primary metric {goal.primary_metric}",
+            f"decidable run {run.name} has no primary metric {goal.primary_metric!a}",
             ["tool-side inconsistency (stopping instead of filling in 0).", str(run.directory)],
         )
     return value
@@ -888,7 +888,7 @@ def compare(args: argparse.Namespace) -> int:
             encoding="utf-8", newline="\n",
         )
     except OSError as exc:
-        raise bad_input(f"cannot write results: {out_dir}", [str(exc)]) from exc
+        raise bad_input(f"cannot write results: {out_dir}", [ascii(str(exc))]) from exc
 
     if decision.verdict == VERDICT_MEASURE_FAILED:
         names = ", ".join(name for name, _ in decision.undecidable)

@@ -25,6 +25,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 #: T8 で明示指定に足す、どの検体にも出ない系列。
 ABSENT_SERIES = ("TargetId(9)", "9999")
 
+#: 日本語の Windows が OSError に付ける文（「アクセスが拒否されました。」）。機械の言語に頼らず較正する。
+LOCALIZED_OS_ERROR = "\u30a2\u30af\u30bb\u30b9\u304c\u62d2\u5426\u3055\u308c\u307e\u3057\u305f\u3002"
+
 
 def _main(judge: types.ModuleType, argv: list[str]) -> tuple[int, str, str]:
     """`main` を呼び、終了コード・標準出力・標準エラーを返す。外へ抜けた例外は Python の既定の 1。"""
@@ -123,6 +126,25 @@ def run(judge: types.ModuleType) -> tuple[int, list[str]]:
         got = _read_case_code(judge, reader)
         if got != expected:
             reasons.append(f"case.txt {label}: got {got}, expected {expected}")
+
+    # OS の失敗の文は機械の言語で日本語になる（R5Z-1・D9）。日本語の文の OSError を投げさせ、
+    # case.txt の読み（自己較正の失敗の文）と run.log の読み（stderr）が ASCII のままか。
+    def localized_oserror(_self, *_a, **_k):
+        raise OSError(13, LOCALIZED_OS_ERROR)
+
+    checks += 1
+    with mock.patch.object(judge.Path, "read_text", localized_oserror):
+        try:
+            judge._selftest_read_case(FIXTURES / "H11_healthy_judged_series")
+            details = ["(no failure raised)"]
+        except judge.JudgeError as exc:
+            details = exc.details
+    if not details or not all(detail.isascii() for detail in details):
+        reasons.append(f"case.txt unreadable (localized OSError): details {ascii(details)}")
+    with mock.patch.object(judge.Path, "read_bytes", localized_oserror):
+        code, _out, err = _call(judge, "H11_healthy_judged_series")
+    if code != 3 or _non_ascii(err):
+        reasons.append(f"run.log unreadable (localized OSError): exit {code}, stderr {ascii(err)}")
 
     # T8: 明示指定 2 系列で A が上限越え・B が未観測なら不合格(1)。不合格が判定不能より先（#8）。
     # 未観測の系列は名指しされる。catch-up が 0 件の走行でも §9 の仮説の行は出る。

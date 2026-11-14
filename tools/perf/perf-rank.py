@@ -718,6 +718,15 @@ def run_selftest() -> int:
             reasons, reproduced = _run_case(case, temporary)
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
+        # OS の失敗の文は機械の言語で日本語になる。読み（perf_lines）と書き出しで stderr が ASCII か（D9・R5Z-1）。
+        work = temporary / "(localized-oserror)"
+        shutil.copytree(root / "full_ok", work)
+        argv = [str(work), "--stage", "all"]
+        results.append(("(localized-oserror)", "日本語の OSError の文でも stderr は ASCII", [
+            *selftest_common.localized_oserror_reasons(main, argv, EXIT_BAD_INPUT, Path, "read_bytes", "cannot read "),
+            *selftest_common.localized_oserror_reasons(main, argv, EXIT_BAD_INPUT, Path, "write_text",
+                                                       "cannot write the ranking"),
+        ]))
 
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
     results.append(("(import)", "支えは自己較正の中でだけ読む", _top_level_import_reasons()))
@@ -791,7 +800,7 @@ def main(argv: list[str]) -> int:
         try:
             out_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         except OSError as exc:
-            raise bad_input(f"cannot write the ranking: {out_path}", [str(exc)]) from exc
+            raise bad_input(f"cannot write the ranking: {out_path}", [ascii(str(exc))]) from exc
         print(f"{STDERR_PREFIX} wrote the ranking: {out_path}")
         return EXIT_OK
     except RankError as exc:

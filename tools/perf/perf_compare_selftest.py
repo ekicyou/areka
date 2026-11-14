@@ -46,6 +46,8 @@
 from __future__ import annotations
 
 import json
+import pathlib
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -181,25 +183,38 @@ def _check_json(env: SelftestEnv, case: SelftestCase, work: Path) -> list[str]:
     return reasons
 
 
-def _run_case(env: SelftestEnv, case: SelftestCase,
-              workspace: Path) -> tuple[list[str], set[int]]:
-    work = workspace / case.name
-    work.mkdir(parents=True)
-    reasons: list[str] = []
-    reproduced: set[int] = set()
-
+def _argv(case: SelftestCase, work: Path) -> list[str]:
     def resolve(name: str) -> str:
         return str((case.directory / case.values[name]).resolve())
 
     goal = case.values.get("goal", DEFAULT_GOAL_FILENAME)
-    argv = [
+    return [
         "--a", resolve("a1"), resolve("a2"),
         "--b", resolve("b1"), resolve("b2"),
         "--goal-file", str((case.directory / goal).resolve()),
         "--out-dir", str(work),
     ] + case.argv
 
-    code, _out, err = common.invoke(env.invoke, argv, env.fail_exit)
+
+def _localized_oserror_reasons(env: SelftestEnv, case: SelftestCase, work: Path) -> list[str]:
+    """OS の失敗の文は機械の言語で日本語になる。3 つの失敗の経路で stderr が ASCII のままか（D9・R5Z-1）。"""
+    work.mkdir(parents=True)
+    argv = _argv(case, work)
+    reasons: list[str] = []
+    for target, name, reached in ((pathlib.Path, "read_text", "cannot read goal file"),
+                                  (subprocess, "run", "cannot start the judge script"),
+                                  (pathlib.Path, "write_text", "cannot write results")):
+        reasons += common.localized_oserror_reasons(env.invoke, argv, env.fail_exit, target, name, reached)
+    return reasons
+
+
+def _run_case(env: SelftestEnv, case: SelftestCase,
+              workspace: Path) -> tuple[list[str], set[int]]:
+    work = workspace / case.name
+    work.mkdir(parents=True)
+    reasons: list[str] = []
+    reproduced: set[int] = set()
+    code, _out, err = common.invoke(env.invoke, _argv(case, work), env.fail_exit)
     if code == case.expected_exit:
         reproduced.add(code)
     else:
@@ -246,6 +261,9 @@ def run_selftest(env: SelftestEnv) -> int:
             reasons, reproduced = _run_case(env, case, temporary)
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
+        adopted = next(case for case in cases if case.name == "adopted")
+        results.append(("(localized-oserror)", "日本語の OSError の文でも stderr は ASCII",
+                        _localized_oserror_reasons(env, adopted, temporary / "(localized-oserror)")))
 
     results.append(("(to_number)", "有限でない値は None",
                     [] if all(env.to_number(v) is None for v in ("nan", "inf", "-inf"))

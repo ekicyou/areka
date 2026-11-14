@@ -3401,7 +3401,7 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        raise bad_input(f"cannot read {path}", [str(exc)]) from exc
+        raise bad_input(f"cannot read {path}", [ascii(str(exc))]) from exc
 
     fields: dict[str, str] = {}
     contains: list[str] = []

@@ -83,7 +83,7 @@ def read_text_lines(path: Path, what: str, fail: Fail) -> list[str]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        raise fail(f"cannot read {what}: {path}", [str(exc)]) from exc
+        raise fail(f"cannot read {what}: {path}", [ascii(str(exc))]) from exc
     text = raw.decode("utf-8-sig", errors="replace")
     return [strip_ansi(line.rstrip("\r")) for line in text.split("\n")]
 

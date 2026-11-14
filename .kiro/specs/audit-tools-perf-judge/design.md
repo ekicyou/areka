@@ -458,7 +458,7 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 | T8 | `judge_perf_selftest_inproc`（D12） | 明示指定 2 系列で A が上限越え・B が未観測 → 1 | 関門を元の順に戻すと 2 で赤 |
 | T9 | 判定の検体 `C3_undated_catchup_metric`（baseline・`emit_metrics = yes`） | `contains = metric=catchup_count value=-` | 0 を出す形に戻すと赤 |
 | T10 | compare のケース `floor_zero_rejected`・`floor_bool_rejected`（exit 3） | 床 0・`true` | 検査を戻すと ADOPTED で赤 |
-| T11 | compare のケース `unknown_metric_name`（exit 3） | `frame_interval_p95` | 戻すと ADOPTED で赤 |
+| T11 | compare のケース `unknown_metric_name`（exit 3） | `描画間隔_p95`（綴り違いの副指標名を日本語にする） | 戻すと ADOPTED で赤・失敗の文から `!a` を外すと stderr の ASCII の見張りで赤 |
 | T12 | compare のケース `measure_failed`（既存）に `compare.json` の `judge_stderr` の確かめ | 判定スクリプトの理由が残る | 欄を消すと赤 |
 | T13 | `check_tree` ⑵・判定の検体 `U1_bom_run_log`（0） | U+FEFF の字が 0・BOM 付きの run.log を読む | 字の比べに戻すと ⑵ で赤 |
 | T14 | ledger のケース `append_without_verdict`（exit 3） | | 戻すと 0 で赤 |
