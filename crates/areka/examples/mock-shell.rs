@@ -465,7 +465,7 @@ mod tests {
     use super::*;
     use std::future::Future;
     use std::time::Instant;
-    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::Foundation::HWND;
 
     /// 即時完了する Future を 1 回の poll で駆動する（run_setup 用）
     fn poll_ready<F: Future>(fut: F) -> F::Output {
@@ -870,7 +870,6 @@ mod tests {
             BalloonWindowMarker,
             WindowHandle {
                 hwnd: HWND(std::ptr::null_mut()),
-                instance: HINSTANCE(std::ptr::null_mut()),
             },
         ));
 
@@ -889,7 +888,6 @@ mod tests {
             BalloonWindowMarker,
             WindowHandle {
                 hwnd: HWND(std::ptr::null_mut()),
-                instance: HINSTANCE(std::ptr::null_mut()),
             },
         ));
 

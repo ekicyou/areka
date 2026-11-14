@@ -246,7 +246,7 @@
   - 完了の姿: 押下とダブルクリックのテストが本番と同じ累積器で緑で、押下の受け手に `info!` が残らない
   - _Requirements: 3.1, 3.3_
 
-- [ ] 15. `WindowHandle.instance` を消す（H1）
+- [x] 15. `WindowHandle.instance` を消す（H1）
 - [x] 15.1 門 GP: `audit-placement-core`・`audit-placement-follow` と申し合わせを確かめ直す
   - 両方のセッションと、`areka-placement` の 14 ファイル（follow の 1 本・core の 13 本）から `instance` の 1 欄を消すこと、こちらが先に着地してあちらが後で載せること、を確かめ直す
   - あちらの着地があれば 14 ファイルを読み直す。`wintf-visual-damage-redraw` が着いていれば `crates/wintf/tests/graphics/` の 4 本を、`wintf-winmsg-executor-import` が着いていれば窓の工場のインスタンスの取り方の道を読み直す
@@ -254,7 +254,7 @@
   - 完了の姿: 確かめの結果（日付・相手・答え）が research.md 12.2 に追記されている
   - _Depends: 1.1, 2.3, 3.2, 4.2, 5.3, 6.3, 7.2, 8.1, 10.2, 11.2, 12.2, 14.3_
   - _Requirements: 6.2_
-- [ ] 15.2 窓のハンドルの誰も読まない `instance` の欄を、構築の式の全部から消す（11）
+- [x] 15.2 窓のハンドルの誰も読まない `instance` の欄を、構築の式の全部から消す（11）
   - 11: `git grep -l "WindowHandle {"` で数え直し（着手のとき 65 本＋この spec が足したテスト）、全部の構築の式から `instance` の 1 欄と、それだけが使う import を消す
   - 窓のハンドルの欄と、Send／Sync の理由の説明の中のインスタンスの文を消す。窓の工場のインスタンスの取得の呼び出しと import の 1 語と説明を消す（ライブラリのクラス登録の説明は残す）
   - 完了の姿: `git grep -n "instance:" -- crates` で窓のハンドルの構築の欄が 0 件で、wintf・`areka`・`areka-placement` のビルドとテストのビルドが通る

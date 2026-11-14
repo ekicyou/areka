@@ -13,7 +13,6 @@ use std::time::Duration;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use log_capture_kit::{LineFormat, capture_lines};
-use windows::Win32::Foundation::HINSTANCE;
 use wintf::ecs::drag::{DragState, end_dragging, start_preparing, update_drag_state};
 use wintf::ecs::pointer::ButtonReleased;
 use wintf::ecs::{Point, WindowHandle};
@@ -80,13 +79,7 @@ fn fixture_with(hwnd: HWND, to_screen: crate::menu::ToScreen) -> Fixture {
         .register(Frame::Readme, supplier("説明書", "readmebutton.caption"));
     world.insert_non_send(wiring);
     let window = world
-        .spawn((
-            CharWindowMarker { scope: 0 },
-            WindowHandle {
-                hwnd,
-                instance: HINSTANCE::default(),
-            },
-        ))
+        .spawn((CharWindowMarker { scope: 0 }, WindowHandle { hwnd }))
         .id();
     Fixture {
         world,

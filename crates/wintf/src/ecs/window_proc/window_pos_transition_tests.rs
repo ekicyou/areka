@@ -559,13 +559,13 @@ pub(super) fn register_test_class() {
 
 /// 0x0 の不可視の道具窓を作る（`SetWindowPos` は不可視窓にも
 /// `WM_WINDOWPOSCHANGED` を**同期送達**するので表示は要らない）。
-pub(in crate::ecs::window_proc) fn create_test_window() -> (HWND, HINSTANCE) {
+pub(in crate::ecs::window_proc) fn create_test_window() -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     register_test_class();
     // SAFETY: Win32 境界。自プロセス所有の 0x0 窓を生成する。
     unsafe {
         let hinstance: HINSTANCE = GetModuleHandleW(None).expect("GetModuleHandleW").into();
-        let hwnd = CreateWindowExW(
+        CreateWindowExW(
             WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
             TEST_CLASS,
             w!("transition-msg"),
@@ -579,8 +579,7 @@ pub(in crate::ecs::window_proc) fn create_test_window() -> (HWND, HINSTANCE) {
             Some(hinstance),
             None,
         )
-        .expect("CreateWindowExW should create a test window");
-        (hwnd, hinstance)
+        .expect("CreateWindowExW should create a test window")
     }
 }
 
@@ -598,14 +597,14 @@ pub(in crate::ecs::window_proc) fn create_test_window() -> (HWND, HINSTANCE) {
 #[test]
 fn windowposchanged_received_inside_a_window_write_carries_in_swp_and_flush_elapsed() {
     clean_slate();
-    let (hwnd, instance) = create_test_window();
+    let hwnd = create_test_window();
 
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = world
         .borrow_mut()
         .world_mut()
         .spawn((
-            WindowHandle { hwnd, instance },
+            WindowHandle { hwnd },
             crate::ecs::window::WindowPos::default(),
             DPI::from_dpi(96, 96),
         ))

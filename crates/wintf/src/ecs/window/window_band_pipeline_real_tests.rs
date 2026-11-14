@@ -14,7 +14,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
 };
@@ -90,14 +90,7 @@ fn an_on_directive_and_a_pair_fix_in_the_same_pass_leave_the_balloon_in_the_band
     let mut world = World::new();
     world.insert_resource(ZOrderPairStrategy::ExplicitMaintenance);
     world.init_resource::<WindowBandQueue>();
-    let spawn = |world: &mut World, hwnd: HWND| {
-        world
-            .spawn(WindowHandle {
-                hwnd,
-                instance: HINSTANCE::default(),
-            })
-            .id()
-    };
+    let spawn = |world: &mut World, hwnd: HWND| world.spawn(WindowHandle { hwnd }).id();
     let character = spawn(&mut world, character_hwnd);
     let balloon = spawn(&mut world, balloon_hwnd);
     world.entity_mut(balloon).insert((

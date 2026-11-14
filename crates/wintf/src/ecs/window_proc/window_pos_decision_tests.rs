@@ -27,14 +27,14 @@ use crate::ecs::world::{EcsWorld, engage_tick_flush_guard};
 #[test]
 fn windowposchanged_does_not_flush_the_queue_while_the_lock_is_held() {
     let _residue = drain_window_pos_commands();
-    let (hwnd, instance) = create_test_window();
+    let hwnd = create_test_window();
 
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = world
         .borrow_mut()
         .world_mut()
         .spawn((
-            WindowHandle { hwnd, instance },
+            WindowHandle { hwnd },
             WindowPos::default(),
             DPI::from_dpi(96, 96),
         ))
@@ -108,14 +108,14 @@ fn initial_box_size() -> Option<BoxSize> {
 fn set_up() -> (Rc<RefCell<EcsWorld>>, Entity, HWND) {
     let _residue = drain_window_pos_commands();
     let _residue = DpiChangeContext::take();
-    let (hwnd, instance) = create_test_window();
+    let hwnd = create_test_window();
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = {
         let mut borrow = world.borrow_mut();
         let w = borrow.world_mut();
         let entity = w
             .spawn((
-                WindowHandle { hwnd, instance },
+                WindowHandle { hwnd },
                 WindowPos::default(),
                 BoxStyle {
                     size: initial_box_size(),

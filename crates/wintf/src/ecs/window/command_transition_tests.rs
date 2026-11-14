@@ -41,7 +41,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
 };
@@ -139,10 +139,7 @@ fn the_generic_window_pos_site_tags_the_command_it_enqueues() {
     let mut world = World::new();
     world.spawn((
         Window::default(),
-        WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        },
+        WindowHandle { hwnd },
         WindowPos {
             position: Some(Point { x: 10, y: 20 }),
             size: Some(SizeI {

@@ -20,7 +20,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, IsWindow, SW_SHOWNA, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE,
@@ -253,12 +253,7 @@ pub(super) fn fake_hwnd(v: usize) -> HWND {
 
 /// [`WindowHandle`] 付きの窓 entity を作る。
 pub(super) fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
+    world.spawn(WindowHandle { hwnd }).id()
 }
 
 /// バルーン窓へペア宣言を付ける（peer はキャラ窓）。

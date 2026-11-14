@@ -13,7 +13,6 @@ use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{CloseReason, KanadeMsg};
 use bevy_ecs::schedule::Schedules;
 use temp_path_kit::TempPath;
-use windows::Win32::Foundation::HINSTANCE;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased};
 
@@ -61,7 +60,6 @@ fn a_right_click_on_the_wired_menu_ends_in_one_close_request() {
             CharWindowMarker { scope: 1 },
             WindowHandle {
                 hwnd: HWND(0x1234 as *mut _),
-                instance: HINSTANCE::default(),
             },
         ))
         .id();
@@ -181,7 +179,6 @@ fn a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic() {
                     CharWindowMarker { scope },
                     WindowHandle {
                         hwnd: HWND((0x1000 + scope) as *mut _),
-                        instance: HINSTANCE::default(),
                     },
                 ))
                 .id()

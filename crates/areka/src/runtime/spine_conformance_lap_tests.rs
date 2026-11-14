@@ -68,10 +68,10 @@ use super::conformance_support::{
     StageSink, WaitInjection,
 };
 use super::{
-    ActorKey, CloseReason, Entity, GhostWindows, HINSTANCE, HWND, LoopDriver, Point,
-    PresentCommand, RecordedCall, RecordedStatus, ScriptedShioriHandle, SpineHarness,
-    TalkLifecycleSignal, WindowHandle, WindowPos, World, all_shown, capture_logs, count_level,
-    run_attach_phase, run_move_drain_with,
+    ActorKey, CloseReason, Entity, GhostWindows, HWND, LoopDriver, Point, PresentCommand,
+    RecordedCall, RecordedStatus, ScriptedShioriHandle, SpineHarness, TalkLifecycleSignal,
+    WindowHandle, WindowPos, World, all_shown, capture_logs, count_level, run_attach_phase,
+    run_move_drain_with,
 };
 use areka_kanade::{ChoiceInput, MouseButton, MouseEventKind, MouseInput};
 
@@ -307,7 +307,6 @@ struct LapLedgers {
 fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

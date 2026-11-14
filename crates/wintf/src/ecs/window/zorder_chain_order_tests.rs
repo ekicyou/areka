@@ -71,7 +71,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow,
@@ -553,12 +553,7 @@ pub(super) fn chain_schedule() -> Schedule {
 
 /// 実窓のハンドルを持つ entity を作る。
 pub(super) fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
+    world.spawn(WindowHandle { hwnd }).id()
 }
 
 /// 手前から奥へ並べた entity 列から、連続対をすべて横断 edge にした鎖を公開する。

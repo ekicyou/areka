@@ -1,6 +1,6 @@
 //! 整合ゲートの純判定と、待ち札の適用範囲の不変条件（設計 C5・Unit Tests 3）。
 
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{DPI, Point, SizeI, WindowHandle, WindowPos};
 
@@ -300,7 +300,6 @@ fn writable_world(hold: bool) -> (World, Entity) {
         },
         WindowHandle {
             hwnd: HWND(0x200usize as *mut _),
-            instance: HINSTANCE::default(),
         },
         Arrangement {
             offset: Offset { x: 10.0, y: 20.0 },

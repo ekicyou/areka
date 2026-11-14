@@ -334,3 +334,13 @@
 - 消したもの: ローカルの束縛 `entity_name`・`bounds_info` と、テストの 1 行と import の 1 語だけ（外から引く名は無い）。
 - 較正: design の「直したテストの較正」で 50・63 はテストを持たない／既にあるテストが緑のままで確かめる区分、51 は表に無い。51 は上の一時のテストで赤と緑を見た。
 - テストの数: `cargo test -p wintf --lib window_proc` 119 → 119 本緑。fmt 通る・clippy の警告で触ったファイルのものは 0。
+
+## 15.2
+
+- 11: `WindowHandle` の欄 `instance` を消した（`window/window_handle.rs`）。Send／Sync の理由の説明と Send+Sync のテストの説明から `HINSTANCE` の文を消した。`runtime/window_factory.rs` の `get_instance_handle()` の呼び出し・import の 1 語・ファイル頭の説明（`instance` は `get_instance_handle()` を使う、の文）・手順 6 の説明（`WindowHandle { hwnd }` に）を直した。ライブラリの共有クラスの説明（`get_instance_handle()` + 内蔵 `CS_DBLCLKS`）は残した。
+- 数え直し: 着手のときの `git grep -l "WindowHandle {"` は 62 本（`crates/` の外の spec 文書を含む。`crates/` の中は wintf・areka・areka-placement の 3 つだけ）。消した構築の欄は 74 行（52 ファイル）＋ 分解の束縛で渡していた 4 か所（`window_pos_transition_tests.rs`・`window_pos_decision_tests.rs` 2 か所・`mouse_move_dispatch_tests.rs`）。後者のために道具窓の `create_test_window`（`window_pos_transition_tests.rs`）は `(HWND, HINSTANCE)` でなく `HWND` を返すようにした（呼び手は上の 4 か所だけ）。
+- それだけが使っていた import: `HINSTANCE` 47 ファイル・`get_instance_handle` 1 ファイル（`wndproc_bridge_drag_test_support.rs`）・`runtime/spine.rs` の `HINSTANCE`（子のテストが `super::` から引いていただけ）を消した。
+- 消す前の git grep: `.instance` の読み取り・分解の束縛は木全体で 0（研究の 11 番のとおり）。`git grep -n "instance:" -- crates` の残りは dola の無関係な引数（`StoryboardInstance`）と、窓クラスの登録・窓の生成に使うローカルの `let hinstance`（`command_batch_tests.rs`・`window_pos_transition_tests.rs`・shiori-host32-helper）だけで、`WindowHandle` の構築の欄は 0。ほかの `instance` という名の欄は触っていない。
+- 較正: 欄を消すだけでテストは足していない（design の較正の表に 11 は無い）。
+- 確かめ: `cargo build -p wintf -p areka -p areka-placement --tests --examples` は警告 0・エラー 0。`cargo fmt --all -- --check` 通る。`cargo test -p wintf --lib window_handle` 11 本緑・`window_proc::window_pos` 34 本緑・`cursor::answer` 12 本緑・`cargo test -p areka-placement --lib dpi_sync` 15 本緑。
+- 追記（レビュー 1 回目）: `cargo build --tests --examples` は example の `mod tests` を組まないので、`crates/areka/examples/mock-shell.rs` の `mod tests` の `HINSTANCE` の import が残っていた。消して、example のテストのモジュールは `cargo test -p wintf -p areka -p areka-placement --examples --no-run` で確かめた（警告 0）。

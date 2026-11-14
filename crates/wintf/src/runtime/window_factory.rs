@@ -22,8 +22,7 @@
 //! # CS_DBLCLKS・GWLP_USERDATA（要件 2.5/2.3）
 //! クラスの `CS_DBLCLKS` はライブラリの共有クラスが内蔵するため wintf 側補填は設けない。
 //! `GWLP_USERDATA` はライブラリが占有するため wintf からは手詰めしない（Entity は
-//! クロージャ capture の `WndState` から読む）。HINSTANCE はライブラリ内部 `__ImageBase`
-//! （DLL 安全）で処理されるため、`instance` はライブラリの `get_instance_handle()` を使う。
+//! クロージャ capture の `WndState` から読む）。
 //!
 //! # 結線
 //! `create_windows`（`ecs::window::window_system`）は本ファクトリ経由でウィンドウを生成する
@@ -34,7 +33,7 @@
 use std::cell::RefCell;
 use std::rc::Weak;
 
-use crate::executor::util::{Window as LibWindow, WindowType, get_instance_handle};
+use crate::executor::util::{Window as LibWindow, WindowType};
 use bevy_ecs::prelude::Component;
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::world::World;
@@ -131,7 +130,7 @@ impl EcsWindowFactory {
     ///    `to_window_coords_for_creation`・旗は [`initial_pos_flags`]）／`SetWindowTextW`。
     ///    親の付け替え・位置合わせ・題の設定の失敗は `error!` を残して先へ進む。
     /// 5. `Window<WndState>` を [`WindowRegistry`]（NonSend）へ entity キーで格納。
-    /// 6. `WindowHandle{ hwnd, instance }`／`HasGraphicsResources` を entity へ insert
+    /// 6. `WindowHandle { hwnd }`／`HasGraphicsResources` を entity へ insert
     ///    （グラフィクス経路）。
     ///
     /// `ecs_world` は wndproc が capture する共有 World への弱参照（strong 所有者は
@@ -232,11 +231,9 @@ impl EcsWindowFactory {
         }
 
         // --- 6. WindowHandle / HasGraphicsResources を反映（グラフィクス経路） ---
-        let instance = get_instance_handle();
-        world.entity_mut(entity).insert((
-            WindowHandle { hwnd, instance },
-            HasGraphicsResources::default(),
-        ));
+        world
+            .entity_mut(entity)
+            .insert((WindowHandle { hwnd }, HasGraphicsResources::default()));
 
         debug!(entity = ?entity, hwnd = ?hwnd, "EcsWindowFactory: ウィンドウ生成・登録完了");
     }

@@ -35,7 +35,7 @@
 //! 余計に出る側（N+1 本）でも赤になる形にしてある。
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::core::w;
 
 use super::{OwnerEstablishFailed, measure_window_above};
@@ -157,10 +157,9 @@ fn establishes_on_the_cycle_the_second_handle_arrives() {
             "片方のハンドルが無い巡では確立しない"
         );
         // 2 巡目: キャラ窓にハンドルが付いた巡——ここで揃う
-        world.entity_mut(character).insert(WindowHandle {
-            hwnd: owner_hwnd,
-            instance: HINSTANCE::default(),
-        });
+        world
+            .entity_mut(character)
+            .insert(WindowHandle { hwnd: owner_hwnd });
         schedule.run(&mut world);
         // 3 巡目: もう新しい付与は無い
         schedule.run(&mut world);
@@ -477,10 +476,7 @@ fn retries_and_establishes_once_the_handles_are_replaced() {
     let owned_hwnd = create_test_window(w!("wintf-zorder-establish-replaced-balloon"));
     for (entity, hwnd) in [(character, owner_hwnd), (balloon, owned_hwnd)] {
         world.entity_mut(entity).remove::<WindowHandle>();
-        world.entity_mut(entity).insert(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        });
+        world.entity_mut(entity).insert(WindowHandle { hwnd });
     }
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, || schedule.run(&mut world));
 

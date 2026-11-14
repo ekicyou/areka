@@ -38,7 +38,7 @@ use crate::ecs::drag::{
 use crate::ecs::pointer::PhysicalPoint;
 use crate::ecs::window::{Window, WindowHandle, WindowPos};
 use crate::ecs::world::EcsWorld;
-use crate::executor::util::{Window as LibWindow, WindowMessage, WindowType, get_instance_handle};
+use crate::executor::util::{Window as LibWindow, WindowMessage, WindowType};
 
 /// 押した位置（窓の中の座標）。画面の座標は [`Rig::screen`] で窓の原点を足す。
 pub(super) const PRESS: PhysicalPoint = PhysicalPoint { x: 100, y: 100 };
@@ -108,10 +108,7 @@ impl Rig {
                     }),
                     ..Default::default()
                 },
-                WindowHandle {
-                    hwnd: rig.hwnd,
-                    instance: get_instance_handle(),
-                },
+                WindowHandle { hwnd: rig.hwnd },
             ));
         rig.window = Some(window);
         rig

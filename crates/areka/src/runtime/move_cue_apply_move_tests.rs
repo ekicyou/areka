@@ -12,7 +12,7 @@ use super::*;
 use areka_emo_compose::ScaleRatio;
 use areka_placement::follow::OffsetBase;
 use bevy_ecs::prelude::{Entity, World};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 
 use areka_placement::follow::{Anchored, BalloonFollow, MonitorSnapshot};
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
@@ -24,7 +24,6 @@ use wintf::ecs::{Point, WindowHandle, WindowPos};
 fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

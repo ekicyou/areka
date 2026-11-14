@@ -27,12 +27,12 @@ use crate::executor::util::WindowMessage;
 /// 見張りの行（成功の `trace` か失敗の `debug`）が 2 本残る（6 番）。
 #[test]
 fn every_mouse_move_arms_the_leave_watch() {
-    let (hwnd, instance) = create_test_window();
+    let hwnd = create_test_window();
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = world
         .borrow_mut()
         .world_mut()
-        .spawn(WindowHandle { hwnd, instance })
+        .spawn(WindowHandle { hwnd })
         .id();
     DISPATCH_TARGET.with(|cell| *cell.borrow_mut() = Some((world.clone(), entity)));
 

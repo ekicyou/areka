@@ -157,11 +157,9 @@ fn a_wait_resolved_by_writing_re_arms_the_record_for_the_next_wait() {
             // ⑵ 両端にハンドルが付く（本番では wintf の窓生成が HWND 取得後に付与する）。
             world.entity_mut(a).insert(WindowHandle {
                 hwnd: fake_hwnd(0x10),
-                instance: HINSTANCE::default(),
             });
             world.entity_mut(b).insert(WindowHandle {
                 hwnd: fake_hwnd(0x20),
-                instance: HINSTANCE::default(),
             });
             schedule.run(world);
 
@@ -227,11 +225,9 @@ fn a_wait_ended_by_a_non_carrying_pass_also_re_arms_the_record() {
         //    （`handle_missing` は偽）＝**持ち越さない巡**である。
         world.entity_mut(a).insert(WindowHandle {
             hwnd: fake_hwnd(0x10),
-            instance: HINSTANCE::default(),
         });
         world.entity_mut(b).insert(WindowHandle {
             hwnd: fake_hwnd(0x20),
-            instance: HINSTANCE::default(),
         });
         record_link(world, a, b, fake_hwnd(0x10), fake_hwnd(0x20));
         world.insert_resource(ZOrderChainPlan {
@@ -397,11 +393,9 @@ fn the_carried_mark_is_consumed_as_soon_as_the_handles_appear() {
     // 窓ハンドルが付く（本番では wintf の窓生成が HWND 取得後に付与する）。
     world.entity_mut(a).insert(WindowHandle {
         hwnd: fake_hwnd(0x10),
-        instance: HINSTANCE::default(),
     });
     world.entity_mut(b).insert(WindowHandle {
         hwnd: fake_hwnd(0x20),
-        instance: HINSTANCE::default(),
     });
 
     let (out, used) = run_once(&mut world, Script::default());
@@ -447,7 +441,6 @@ fn the_remaining_link_is_made_once_the_late_handle_attaches_and_the_mark_drops()
             schedule.run(world);
             world.entity_mut(c).insert(WindowHandle {
                 hwnd: fake_hwnd(0x30),
-                instance: HINSTANCE::default(),
             });
             // ⑶ ハンドルが付いた巡で b←c を張る。
             schedule.run(world);

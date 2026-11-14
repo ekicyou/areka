@@ -58,7 +58,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, IsWindow};
 use windows::core::{PCWSTR, w};
 
@@ -109,15 +109,11 @@ pub(super) fn spawn_scopes(
         let character = world
             .spawn(WindowHandle {
                 hwnd: character_hwnd,
-                instance: HINSTANCE::default(),
             })
             .id();
         let balloon = world
             .spawn((
-                WindowHandle {
-                    hwnd: balloon_hwnd,
-                    instance: HINSTANCE::default(),
-                },
+                WindowHandle { hwnd: balloon_hwnd },
                 KeepDirectlyAbove { peer: character },
             ))
             .id();

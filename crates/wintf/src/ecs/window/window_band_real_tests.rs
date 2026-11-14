@@ -11,7 +11,7 @@
 //! 窓の手伝いのうち `pub(super)` の 4 つは兄弟の `window_band_pipeline_real_tests.rs` も借りる。
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
+use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GWL_EXSTYLE, GetTopWindow, GetWindow,
     GetWindowRect, HWND_TOP, HWND_TOPMOST, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
@@ -165,14 +165,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
 
     let mut world = World::new();
     world.init_resource::<WindowBandQueue>();
-    let spawn = |world: &mut World, hwnd: HWND| {
-        world
-            .spawn(WindowHandle {
-                hwnd,
-                instance: HINSTANCE::default(),
-            })
-            .id()
-    };
+    let spawn = |world: &mut World, hwnd: HWND| world.spawn(WindowHandle { hwnd }).id();
     let (eb0, ec0, eb1, ec1) = (
         spawn(&mut world, b0),
         spawn(&mut world, c0),
@@ -296,14 +289,7 @@ fn owners_of_balloons_enter_the_band_from_behind_a_normal_window_on_real_windows
     world.init_resource::<WindowBandQueue>();
     let entities: Vec<Entity> = ours
         .iter()
-        .map(|&hwnd| {
-            world
-                .spawn(WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE::default(),
-                })
-                .id()
-        })
+        .map(|&hwnd| world.spawn(WindowHandle { hwnd }).id())
         .collect();
     run_op(&mut world, BandOp::Enter, &entities);
 

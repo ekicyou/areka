@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 
 use super::apply_zorder_chain;
 use super::double::{self, Call, Script, with_script};

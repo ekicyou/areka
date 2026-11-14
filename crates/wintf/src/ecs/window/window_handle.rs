@@ -21,13 +21,12 @@ use super::dpi::DPI;
 #[component(storage = "SparseSet", on_add = on_window_handle_add, on_remove = on_window_handle_remove)]
 pub struct WindowHandle {
     pub hwnd: HWND,
-    pub instance: HINSTANCE,
 }
 
-// SAFETY: `WindowHandle` は `hwnd: HWND` と `instance: HINSTANCE` を保持し、いずれも
+// SAFETY: `WindowHandle` は `hwnd: HWND` を保持し、これは
 // windows-rs では `*mut c_void` の newtype で、自動では Send/Sync を実装しない
 // （windows-rs 0.62.2）ため、自動導出されない。よってこの手動 impl は冗長ではなく
-// 必須である。健全性: HWND/HINSTANCE は不透明な OS ハンドル（値渡しで所有権・解放
+// 必須である。健全性: HWND は不透明な OS ハンドル（値渡しで所有権・解放
 // 責務を伴わない。ウィンドウ破棄は WM_NCDESTROY / DestroyWindow が担い、本構造体の
 // Drop ではない）であり、`WindowHandle` は ECS コンポーネントとしてメインスレッドの
 // システム・ライフサイクルフックからのみ参照される。`drag/context.rs` の
@@ -282,7 +281,7 @@ fn on_window_handle_remove(
 mod tests {
     use super::*;
 
-    /// `WindowHandle` は `hwnd: HWND` / `instance: HINSTANCE`（いずれも `*mut c_void`
+    /// `WindowHandle` は `hwnd: HWND`（`*mut c_void`
     /// newtype・非 Send/Sync）を内包するため手動 `unsafe impl Send/Sync` で Send+Sync を
     /// 表明している。本テストはその不変条件をコンパイル時に固定する回帰検知器
     /// （device 非依存・実 HWND 不要）。将来フィールドが追加され手動 impl が撤去されて
@@ -303,10 +302,7 @@ mod tests {
             WS_OVERLAPPEDWINDOW,
             None,
             |hwnd| {
-                let handle = WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE::default(),
-                };
+                let handle = WindowHandle { hwnd };
                 let position = crate::ecs::Point { x: 100, y: 200 };
                 let size = crate::ecs::SizeI {
                     width: 300,
