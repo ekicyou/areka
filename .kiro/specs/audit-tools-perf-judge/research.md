@@ -264,3 +264,38 @@
 - #28 の long と dev の検体の数（上の「#28 の long の検体」）。
 - タスクの切り方（§6 の 17〜20 本の見込み・案 B と案 C の組み合わせ）。
 - `audit-tools-perf-run` から受けた直し（要件の「申し合わせで受けた直し」の 2 件）を、どのタスクに入れるか。
+
+## 9. 設計の段の記録（2026-11-14・`/kiro-spec-design -y`）
+
+- **発見の種類**: light（今の道具の直し。外の新しい依存は無い＝Web の調べは要らない）。読むだけのサブエージェント 4 本（kanade の語彙・順位表の dump とスレッド・判定の検体と `generate.py`・共通モジュールの境目）に分けて読ませ、結論を設計に写した。実験の一時ファイルは `target\audit-perf-judge-research\` の下だけに置き、終わってから消した（`git status` は空のまま）。
+- **使った手引き**: スキル `kiro-spec-design`（rules の design-principles・design-discovery-light・design-synthesis・design-review-gate）・形の手本 `.kiro/specs/completed/audit-impl-watch/design.md`・ponytail の「いちばん小さな完全な変更」。
+
+### 9.1 §8・§8.1 の閉じ方（設計の決めの番号は design.md）
+
+| 事項 | 結論 | design |
+|---|---|---|
+| #1 の一時フォルダ | `<リポジトリ>\target\perf-loop-tmp\<接頭辞><uuid>\`（根は `Path(__file__).resolve().parents[1]`）。`perf-loop.ps1` も同じ根の下に GUID の子を作り子だけを消すので、子の名前で分ければぶつからない（`perf-loop.ps1` の 246・273・350 行を読んだ） | D1 |
+| #40 の置き場 | `tools/perf/perf_lines.py`。失敗は呼び手が渡す作り手で起こす（`SelftestEnv.bad_input` と同じ型）。judge-perf は同じ名前で読み込むので、Rust の注記 10 ファイルの「`judge-perf.py` の `parse_fields`」はずれない。置き場を `audit-placement-follow` へ知らせる | D2 |
+| #41 の置き場 | `tools/perf/perf_selftest_common.py`。judge-perf の自己較正（その場の検体・一時フォルダ無し・形が違う）は寄せない | D3 |
+| #2 の語彙 | 始まり 9 語・終わり 10 語の表。`close_refused` は `crates/` に無いので消す。終わりの印を出さない道（`force_quit`・`shiori_down`・`shiori_failed`・2 つの締め切り）は足さない（すぐ降ろしへ進み、区間はログの最後の行で閉じる） | D4 |
+| 検体の置き場 | `tools/perf/fixtures/generate_more.py`。`generate.py` の `main()` が実行時に読む（読み込み時だと `__main__` と循環） | D5 |
+| #3・#23・#61 の dump | 1 行ずつ 2 回読む（1 回目に areka の `SampledProfile` の (時刻, TID) を集め、2 回目にその組の `Stack` だけを数える）。列名の行の綴りは `invoke-cpu-sample.ps1` が Toolkit の書式として写した注記と検体で一致。実物の dump はツリーにも `target\` にも無い＝未解決フレームの綴りだけが確かめていない点。昇格の採取は開発者の手なので任意の確かめにした | D6 |
+| #4 | perf-rank の中だけで、名簿外の残り＝`max(プロセスの差 − 名簿の差の合計, 0)`。Rust の `delta` のテスト（`perf_thread_report_tests.rs`）は名簿外の残りの差を計算しないので食い違わない。既存の期待出力（`full_ok` 1.6 s・`no_dump_unavailable` 0.5 s）も同じ値。`thread_registry.rs` は同じ TID の登録を置き換える（README の「消しません」は古い） | D7 |
+| #22 | `^(actor:.+)-\d+$` → `\1-*`（役割別の表だけ）。今 `-<数字>` で終わる役割名は `sakura-talk-{id}` だけ | D8 |
+| #28 の検体の数 | long の平坦 89 点（1,320 秒）→ 0・直線の上り 89 点 → 1・25 点（360 秒）→ 2・dev → 0。境目は 81 点（1,200 秒）で 0・80 点で 2。明示指定は 4 秒周期で 19 本 → 2・20 本 → 0（1 秒周期だと定常が 60 秒に届かない）。どれも `target\` の下で実際に回して確かめた | §Testing Strategy |
+| 過去の `results/` | 書き替えない。#2・#3・#4・#21 で今後の数が変わることは design の Overview に書いた | Overview |
+| タスクの切り方 | 15 本（案 B＝共通モジュールを先に・案 C の「振る舞いの直しとテストの足し」は道具ごとのタスクの中で同じ順に）。20 本を越えない | §タスクの見取り図 |
+| 受けた直し 2 件 | wpaexporter の注釈＝タスク 10（toml）と 13（README）・`no_record`＝タスク 13 | File Structure Plan |
+
+### 9.2 合成（generalization・build vs adopt・simplification）
+
+- **一般化**: 写しの直し（#7 の NaN・#13 の BOM・#51 の行番号）は、#40 の共通モジュールの 1 か所で全部の道具に効く。一時フォルダ（#1）・ASCII の stderr（#25・#26）・BOM の字（#13）・README の例の道筋（#27）の見張りは、共通の自己較正の支えの `check_tree` 1 つにまとめ、4 本の自己較正が毎回回す（どれか 1 本を戻しても残りが赤になる）。
+- **作るか使うか**: 全部標準ライブラリ（`unittest.mock.patch.object` で検体の作れない場面を確かめる・`tomllib`・`math.isfinite`）。依存は足さない。
+- **削り**: judge-perf の自己較正は共通の支えへ寄せない（形が違い、寄せても縮まない）。`perf_lines` に道具の終了コードや固有の文を持たせない（作り手を渡す）。版は judge-perf だけ上げる（ほかの道具は決まりが無く、期待出力の字面を直すだけになる）。端末の文の「端末の文」タスクは作らず、道具ごとのタスクに畳んだ（同じファイルを 2 度触らない）。
+
+### 9.3 設計の段で見つけた事実
+
+- judge-perf の `--selftest` は argparse の `choices` で `build = debug` を拒むので、#43 の検体はコード 0 行で 3 を固定できる。baseline で run-meta が debug のときは今 0 を返す（指摘には入れない・判定モードの門は build の食い違いで 3 を返す）。
+- `talk_peak_cpu_pct` は定常に限らず全区間の CPU を見る（`cpu_max_pct` は定常だけ）。#2 の検体は起動の CPU の山を定常の前に置けば、直す前 9.00・直した後 4.20 で分かれる。
+- perf-rank の自己較正の一時フォルダの名はケースのフォルダ名を保つので、#65（`resolve().name`）で期待出力は変わらない。
+- `perf-ledger.py` は 996 行で、#14・#15・#19・#20・#54〜#57 を足すと 1,000 行を越えうる。#59 で `SelftestEnv` を消して相殺し、なお越えるなら `entry.json` の検査を `perf_ledger_goal.py` へ置く（design D11）。
