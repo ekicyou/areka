@@ -316,12 +316,12 @@ fn failed_partial_returns_err_and_drops_the_composite() {
 
 /// 6.1 の木の根の大きさ（DIP）。拡大 1.25 でも にじみの余白で全面にならない大きさ。
 const SIDE: f32 = 40.0;
-const BOTH: &[f32] = &[1.0, 1.25];
-const GREEN: [u8; 4] = [0, 255, 0, 255];
-const YELLOW: [u8; 4] = [0, 255, 255, 255];
+pub(super) const BOTH: &[f32] = &[1.0, 1.25];
+pub(super) const GREEN: [u8; 4] = [0, 255, 0, 255];
+pub(super) const YELLOW: [u8; 4] = [0, 255, 255, 255];
 
 /// `parent` の下に `(x, y)` の 8×8 の単色の件。
-fn item(world: &mut World, parent: Entity, x: f32, y: f32, bgra: [u8; 4]) -> Entity {
+pub(super) fn item(world: &mut World, parent: Entity, x: f32, y: f32, bgra: [u8; 4]) -> Entity {
     world
         .spawn((
             Visual::default(),
@@ -348,7 +348,7 @@ fn group_of_two(world: &mut World, root: Entity) -> Vec<Entity> {
     vec![g, red, blue]
 }
 
-fn with_clip(clip: Option<ClipShape>) -> Visual {
+pub(super) fn with_clip(clip: Option<ClipShape>) -> Visual {
     Visual {
         clip,
         ..Default::default()
@@ -375,7 +375,7 @@ fn content_with(
     }
 }
 
-fn rotated(rad: f32) -> VisualTransform {
+pub(super) fn rotated(rad: f32) -> VisualTransform {
     VisualTransform(Transform2D {
         rotation: rad,
         anchor: windows_numerics::Vector2 { X: 4.0, Y: 4.0 },
@@ -409,8 +409,11 @@ fn assert_same(got: &[u8], want: &[u8], width: u32, at: &str) {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum Want {
+pub(super) enum Want {
+    /// 範囲だけ（写し無し）。
     Partial,
+    /// 範囲だけで写しが `n` 個。
+    Shift(usize),
     /// 範囲だけで描くが絵は変わらない（重ね方で消される件の変化）。
     Hidden,
     Skip,
@@ -418,14 +421,14 @@ enum Want {
 }
 
 /// 1 フレームの変え方（`nodes[0]` は根・続きは組み立ての返した節）。
-type Change = fn(&mut World, &[Entity]);
+pub(super) type Change = fn(&mut World, &[Entity]);
 
 /// `setup` で組んだ木を全部で合成し、`steps` の各回に木を変えて本番と同じ `compose_planned` で合成する。
 /// 毎回、計画が `Want` の形で、入れ物が今の列で全部合成した答えとバイトで一致する。範囲だけの回は世代が
 /// 1 上がり・絵が変わり・描く矩形と写しの先の外が前の答えのまま（2.3）。何もしない回は世代と画素が
 /// 変わらない（3.2）。拡大は `scales` の各値。変化の覚えを持ち続けるので、変えない節の版は上がらない。
 /// 根の命令の列も持つ（`with_root`）と、範囲だけの回は `Full(Undecidable)` になる（R1）。
-fn check_frames(
+pub(super) fn check_frames(
     scales: &[f32],
     with_root: bool,
     setup: &dyn Fn(&mut World, Entity) -> Vec<Entity>,
@@ -457,15 +460,19 @@ fn check_frames(
             let comp = slot.as_mut().unwrap();
             let got = comp.read_all(warp_device()).unwrap();
             let want = match want {
-                Want::Partial | Want::Hidden if with_root => Want::Full(FullReason::Undecidable),
+                Want::Partial | Want::Hidden | Want::Shift(_) if with_root => {
+                    Want::Full(FullReason::Undecidable)
+                }
                 w => w,
             };
             match (&p, want) {
-                (ComposePlan::Partial(p), Want::Partial | Want::Hidden) => {
+                (ComposePlan::Partial(p), Want::Partial | Want::Hidden | Want::Shift(_)) => {
                     assert_eq!(comp.generation(), generation + 1, "{at}: 世代");
+                    let n = if let Want::Shift(n) = want { n } else { 0 };
+                    assert_eq!(p.shifts.len(), n, "{at}: 写しの数: {p:?}");
                     assert_eq!(
                         got != prev,
-                        matches!(want, Want::Partial),
+                        !matches!(want, Want::Hidden),
                         "{at}: 較正: 絵が変わるか"
                     );
                     let drawn: Vec<PxRect> = p
