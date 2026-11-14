@@ -198,7 +198,7 @@
   - _Dispatch: mechanical — 直す文の中身を design の README の表と perf-run の design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.1, 5.2, 5.4_
 
-- [ ] 14. かけ直しの audit で新しい指摘を 0 件にする
+- [x] 14. かけ直しの audit で新しい指摘を 0 件にする
   - 範囲（`tools/perf/` の git が追う `.ps1` でないファイル全部）に、件数の上限なし・全部読む作法で `/ponytail:ponytail-audit` をかける
   - 出た指摘（直しが生んだものを含む）を、番号と 3 つの組を付けて記録し、全部直す。要件 3 の 3 種類に当たるものだけ直さずに開発者へ議題にし、裁定と理由を記録して数から外す。依存が要ると分かったら足さずに議題にする
   - 議題 1 の当て: perf-ledger の失敗の文が `tech.md` の ASCII の決まりに反すると指摘されたら、`audit-tools-perf-run` へ知らせてから perf-ledger の文と `SKILL.md` の見分けの語を重ならない行だけで合わせる
@@ -240,3 +240,4 @@
 - 12.1: README へ渡す分（13）: 「名簿は登録を消しません」を事実に／段②に「使い回された TID は 0 と読まれ、その CPU は残りに入る」の 1 文
 - 12.2: README へ渡す分（13）: 830 行の段①の説明から「発話中の頂」を消す（#21）／1059 行は judge 側か rank 側かを確かめる／段②③④の理由の語と、段③の no_dump・declared_unavailable・0 バイトの dump が exit 4 になる点（#62・#66）を 901〜906 行あたりへ。perf-ledger の入口の reconfigure も backslashreplace にした（D9）
 - 13: perf-run は main に未着地のため、README の perf-run の文 ①〜③ は今の .ps1 の形のまま（後に着地した方が取り込みで合わせる）。④ の理由の語に `dry_run`・`no_record` を足した
+- 14: かけ直しは 7 回で収束（research.md §10）。議題 4 件は audit の決めごとで推奨案で裁定。範囲の外の申し送り（.ps1・SKILL.md・crates・doc）は §10.4 → /kiro-complete の棚卸で扱う
