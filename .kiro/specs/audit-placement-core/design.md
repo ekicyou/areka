@@ -336,7 +336,7 @@ sequenceDiagram
   pub(crate) struct BalloonUserMoved;
   ```
 - 印を付ける所は 2 つ。
-  - 利用者のドラッグ: 追随の持ち物の `follow/drag_follow.rs` の、ドラッグで基準を据え直す所（`L581` 近くの `reestablish`）に 1 か所だけ足す。キーワードの再導出（`follow/keyword_base.rs:L152`）は利用者の操作ではないので付けない。`audit-placement-follow` の着地の後に行い、触る前に相手と申し合わせる（相手が完了していれば、その完了の申し送りに残す）。
+  - 利用者のドラッグ: 追随の持ち物の `follow/drag_follow.rs` の、ドラッグで基準を据え直す所に 1 か所だけ足す。相手の指摘 3 の直しで、この塊は私有の関数 `reestablish_balloon_follow(world, balloon, balloon_pos)` に切り出され、`on_balloon_drag`（ドラッグ中）と `on_balloon_drag_end`（離したとき）の 2 か所から呼ばれる（2026-11-14 相手のセッションの知らせ）。insert はこの関数の中に置く（離したときも利用者が動かした事実なので付ける）。相手が守りの関数を `follow/visibility.rs` へ移していても、置き場は同じ関数の中。キーワードの再導出（`follow/keyword_base.rs:L152`）は利用者の操作ではないので付けない。`audit-placement-follow` の着地の後に行い、触る前に相手と申し合わせる（相手が完了していれば、その完了の申し送りに残す）。
   - 記憶からの戻し: `persist.rs` の `merge_scope` が、記憶の鍵（バルーンのずらしの x・y）から値を採ったスコープに付ける。
 - 印を外す所: U5 の `reinstall_balloon`（標準の部品で据え直す 3 か所が呼ぶ）。指摘 17 の初期化の後は記憶の鍵も無いので、次の起動でも付かない。
 - `face_windowposition.rs:L62-L64` の比べは `!world.entity(c).contains::<BalloonUserMoved>()` にする。値の比べ（`f.offset() == before...`）は消す。
