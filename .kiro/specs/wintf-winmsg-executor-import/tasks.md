@@ -1,13 +1,13 @@
 # 実装計画
 
-- [ ] 1. 元のリポジトリの写しを取り込む（コミット 1）
-- [ ] 1.1 手元の写しの状態を確かめる
+- [x] 1. 元のリポジトリの写しを取り込む（コミット 1）
+- [x] 1.1 手元の写しの状態を確かめる
   - 手元の写し `C:\home\maz\git\wintf-winmsg-executor` で GitHub から取りに行った（`git fetch origin`）後に、作業木の汚れが 0 行・`main` の先頭が `4f202758ea4eaa25b68d7d88f52af529f96e75df`・`main` と `origin/main` が同じ、の 3 つを見る
   - 作業木と `main` は動かさない
   - 1 つでも外れたら何も写さずに止まり、汚れの行・先頭の番号・2 つの番号を開発者へ示す
   - 3 つの条件の出力が記録として残り、3 つとも満たしたときだけ次へ進む
   - _Requirements: 1.5_
-- [ ] 1.2 クレートの中身を写してコミットする
+- [x] 1.2 クレートの中身を写してコミットする
   - 手元の写しの `4f20275` から `src`・`examples`・`README.md`・`LICENSE-MIT`・`LICENSE-APACHE`・`Cargo.toml` の 10 個だけを取り出し、`crates/wintf-winmsg-executor/` の下に同じ相対パスで置く
   - `.claude`・`.kiro`・`CLAUDE.md`・`.gitignore`・`Cargo.lock` が写しの下に無い
   - 写した 10 個の blob の番号が `4f20275` の 10 個とすべて同じ
