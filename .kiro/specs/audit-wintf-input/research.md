@@ -317,5 +317,44 @@
 - 10 節の 1 は閉じた: `plan_mouse_move`（`crates/areka/src/input_events/throttle.rs:54-66`）は位置が同じ呼び出しで送らない＝指摘 19 を直しても SHIORI へ送る `OnMouseMove` の数は変わらない（3 種類目に当たらない）。
 - 設計の段に残る調べ: 10 節の 2（許しを外したときにコンパイラが指すものの全部）・3（ローカル座標を引く時点の配置）・4（指摘 1 のテストの組み方）。
 
+## 13. 設計の段の調べ（2026-11-14・`/kiro-spec-design -y`）
+
+- 物差し: `kiro-spec-design` の手順（軽い調べ＝既存の仕組みの拡張・新しい依存なし・外の調べは要らない）。使った決まり: `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。体裁は完了した兄弟 `audit-emo-atlas` の `design.md`。ponytail（full）の「いちばん小さい完全な直し」。
+- 直す行を設計の段で開き直した（`main` `30a343eb` から範囲は不変）: `drag/` の `mod.rs`・`systems.rs`・`dispatch.rs`・`accumulator.rs`・`capture_guard.rs`・`context.rs`・`state/mod.rs`・`state/tests.rs` の頭、`pointer/` の `buffers.rs`・`types/mod.rs`・`dispatch/mod.rs`・`systems.rs`・`nchittest_cache.rs`・`mod.rs`、`clickthrough/` の全 5 本。範囲の外は判断に要る所だけ: `ecs/window/command.rs:840-867`・`window_handle.rs:19-37,140-163,208-283`・`components.rs:96-100`・`layout/hit_test/mod.rs:260-520`・`layout/arrangement.rs:68-73`・`layout/systems/window_pos_systems.rs:135-169`・`window_proc/mouse_move.rs:140-480`・`mouse_click.rs:95-140`・`mouse_dblclick_wheel.rs:70-110`・`world/mod.rs:110-230`・`ecs/mod.rs:20-45`・`runtime/mod.rs:280-350,600-715`・`crates/wintf/tests/drag/`・`crates/areka/src/runtime/frame/dpi.rs:170-235`・`input_events/mod.rs:455-505`・`balloon_moved.rs`・`runtime/balloon_hover.rs`・`crates/areka-placement/src/follow/drag_follow.rs:265-300`・`crates/areka/tests/window_link_real_run.rs:49-51,495-535`・`tools/perf/judge-followup.py:98-131`・`doc/click-through.md`・完了した `event-mouse-basic` の要件 4。
+
+### 10 節の調べの答え
+
+- **10 節の 2（指摘 5 でコンパイラが指すもの）**: コードを変えない段なのでビルドしていない。規則（許しを外し、指されたものを消すか `#[cfg(test)]`）と見込みの一覧（3 節の 5 に、口が消えて使われなくなる `ClickThroughHandle` の欄 `registry`・`wake_event` を足した）を設計に書いた。実装の段で確かめる。
+- **10 節の 3（ローカル座標を引く時点の配置）**: `GlobalArrangement.bounds` はスクリーン座標（`arrangement.rs:68-73`）。当たり判定はクライアント座標＋`WindowPos.position` を `bounds` と比べる（`hit_test_in_window_ex`）。移すのは tick の頭（レイアウトの前）なので、引く配置は当たり判定が entity を選んだのと同じ前の tick の配置＝表示と合う。ただしドラッグ中は窓の `Arrangement.offset` を写さない（`sync_window_arrangement_from_window_pos` の `Without<WindowDragging>`）ので `WindowPos.position` が `bounds` より先へ進む＝スクリーン座標の原点には窓の entity の `bounds` の左上を使う（差を取れば窓が動いても変わらない）。
+- **10 節の 4（指摘 1 のテストの組み方）**: `tests/drag/dispatch_test.rs` の `make_world` は系の登録を持たない。wintf の中のテストは `EcsWorld::new()` を広く使っている（`window_proc/keyboard_tests.rs` ほか 20 本）ので、範囲の中の新しいファイル `drag/dispatch_order_tests.rs` で `EcsWorld::new()` を作り `run_schedule(Input)` で本番の登録どおりに回す。直す前は `cleanup_drag_state` が登録されているので赤になる。
+
+### 設計の段で見つけたこと
+
+- **`is_primary` の書き手は 13 か所**（ドラッグの知らせ・範囲の外）: `areka-placement` 7（`balloon_limit_flip_tests.rs:315`・`balloon_lock_drag_tests.rs:244`・`follow_test_support.rs:51,105,116`・`persist_finalize_save_tests.rs:391`・`spawn_follow_pipeline_tests.rs:40`）・`areka` 4（`examples/mock-shell.rs:794`・`input_events/drag_tests.rs:430`・`runtime/frame_balloon_offset_follow_tests.rs:830`・`runtime/frame_chain_finalize_persist_restart_tests.rs:79`）・wintf のテスト 2（`tests/drag/dispatch_test.rs:106,513`）。要件の討議の「5 か所」は 3 節の 9 ⑹ が挙げた 2 ファイルの数。`move_cue_place_tests.rs:55`・`reset_pos_tests.rs:206`・`follow_work_area_tests.rs:260`・`frame_test_support.rs:618`・`lib.rs:166`・`emo2_real_run/common.rs:106` はモニタの `is_primary`（触らない）。
+- **`initial_inset` の読み手は 3 クレート 15 ファイル**（説明とテストの部品 `set_initial_inset` を含む・`design.md` の範囲の外の表）。
+- **`[DragStartEvent] Dispatching` を読むテスト**: `crates/areka/tests/window_link_real_run.rs:508,531`（`RUST_LOG` は `info`）。指摘 14 で `debug!` にするので、その `RUST_LOG` に `wintf::ecs::drag::dispatch=debug` を足す。
+- **perf の道具が読む記録**: `tools/perf/judge-followup.py` は `clickthrough: ex-style トグル適用` と欄 `desired`・`DesiredState` の綴りを読む（変えない）。行の番号の参照（`controller.rs:212`・`registry.rs:18-23`）はずれる＝`audit-tools-perf-judge` へ知らせる。起動の `debug!`（`ClickThroughController started`）はどの道具も読まない（`tools/perf/fixtures-loop/` の記録に残るだけ）。
+- **`Window` を外しても `WindowHandle` は外れない**（`Window` に `on_remove` のフックが無い）。指摘 21 の刈り方は `Window` と HWND の同じ `WindowHandle` の両方を見る。
+- **指摘 3 で `DraggingState` を入れないと**、偽の HWND で `client_to_window_coords` が失敗する範囲の外のテスト（`follow_drag_end_gate_tests.rs:248-251` ほか）が `DraggingState` を失う。窓を動かさないのは wintf の控えの `move_window` だけにした。
+- **指摘 19 の副作用**: `OnPointerMoved` の本番の受け手は 2 つ（`on_char_pointer_moved`・`on_balloon_pointer_moved`）。キャラの窓は下流の間引きで SHIORI へ送る数が変わらない（議題 9）。バルーンの窓は、止めたカーソルの下で中身が替わったときの選択肢の強調とバルーン滞在の記録（`BalloonHover`・バルーンが自動で閉じるのを抑える観測）が、次に動くまで更新されなくなる。キャラの窓の見張り（`char_watch_tests.rs:173`「止まったまま当たり判定が替わっても、動くまで出ない」）と向きは揃う。設計は議題 9 どおりに書き、`design.md` の「未解決の危うさ」の 1 として設計の討議へ渡す。
+- **指摘 18 の守りの順**: 守りを別の枠へ出すと、テストが状態を直に `Idle` へ戻したときに守りが残りうる。`start_preparing` は残った守りを先に落としてから捕捉を取る（逆順だと新しい捕捉を外す）。
+
+### 並走の兄弟との申し合わせ（設計の段で受けた知らせ）
+
+- **`audit-placement-core`（2026-11-14）**: この spec が先に実装して着地し、`balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs` の `is_primary: true` の行も消す。あちらはその後に、消した後の形の上でテストの部品（あちらの指摘 80）をまとめる。あちらが先に着地したら「後から着地する側が読み手を直す」どおりこちらが直す。
+- **`audit-wintf-window`（2026-11-14・あちらの開発者が承認・`requirements.md` の議題 11）**: ⑴ `check_threshold` は残し（指摘 7 の消すテストから 5 本を外す）、説明だけ直す。あちらの 62 が窓の手続きの写しを呼び出しに替える。⑵ `ecs/window_proc/mouse_*` の作りの直しはあちら。こちらは型の形の変化への機械的な追従だけ＝ローカル座標は窓の手続きの作る所を変えず、`transfer_buffers_to_world` の最後で全部の `PointerState` に書き直す形にした（3 節の 11 の案 甲を範囲の中で実現する形）。⑶ 着地は先に着いた方がそのまま・後の方が rebase。⑷ `WindowPointerTracking` はあちらが消す。
+
+### 合成（design-synthesis）
+
+- **まとめ（一般化）**: ローカル座標の書き手を 1 か所（tick の頭の移し）にまとめ、窓の手続きの 4 か所・クリック・ダブルクリックの道を同じ規則で覆った。窓探しは `find_owner_window` の 1 つ（指摘 12）。
+- **作るか使うか**: 定数は `windows` の `HTCLIENT`・`HTTRANSPARENT`（指摘 20）、窓探しは既存の `find_owner_window`、テストの World は既存の `EcsWorld::new`。新しく作るのは私的な小さな関数だけ（`drag_origin`・`local_point_of`・`answer`・`poll_once`）。
+- **減らす**: `DragStateSnapshot`（約 120 行）・`cleanup_drag_state`・`ClickThroughController`・速さと 5 件の履歴・仮の当たり判定・`DOUBLE_CLICK_BUFFERS`・`ClickThroughHandle` の 6 つの口と 2 つの欄。足す公開の欄は `PointerState.moved` だけ。
+- 取らなかった案: `DraggingState.initial_window_pos` を `Point` にする（議題 7 の範囲を越える・`dpi.rs` の置き直しの決めがある）／`moved` を前の位置との比べで立てる（比べのための控えが増える・下流の間引きの仕事）／指摘 3 で `DraggingState` を入れない（範囲の外のテストと下流の約束が崩れる）／`update_dragging` に entity を渡す（窓の手続きの呼び出しに触る）。
+
+### 設計の見直しの門（review gate）
+
+- 1 回目: 要件の番号 35 個のうち 4.2〜4.4 が表に行として無かった→行を分けて直した。`collision-probe` の例の `OnPointerMoved` を Revalidation Triggers に足した。
+- 2 回目（議題 11 を受けて）: 指摘 9⑴・7・11 の節、範囲の外の表、申し合わせの表、タスクの見込みを直した。機械の確かめ（要件の番号・境界の 4 節・ファイルの計画・部品とファイルの対応）は全部通った。
+
 ---
 読まなかった所は無い（範囲の 24 ファイルを全部読んだ）。テストもビルドも走らせていない。
