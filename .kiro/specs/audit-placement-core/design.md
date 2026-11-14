@@ -47,7 +47,7 @@
 
 ### Out of Boundary
 
-- `audit-placement-follow` の持ち物のファイル（読む・呼ぶのはよい。書かない・要件 8.1）。`follow.rs:L53` が引く `BALLOON_LIMIT_CLAMP_TAG`、`follow/offset_space.rs:L66` が引く根の `scale_signed`、`follow/*` が引く `clamp_rect_to_work_area`・`follow_balloon` の名前と形は変えない。
+- `audit-placement-follow` の持ち物のファイル（読む・呼ぶのはよい。書かない・要件 8.1）。例外は 1 か所だけ: 指摘 2 で `follow/drag_follow.rs` のドラッグで基準を据え直す所に `BalloonUserMoved` を付ける 1 行（設計の討議の議題 1・相手の着地の後に申し合わせて行う）。`follow.rs:L53` が引く `BALLOON_LIMIT_CLAMP_TAG`、`follow/offset_space.rs:L66` が引く根の `scale_signed`、`follow/*` が引く `clamp_rect_to_work_area`・`follow_balloon` の名前と形は変えない。
 - `follow/work_area_clamp.rs:L18` の「examples は `#[path]` で配置の層を取り込む」の古い文（追随の持ち物）。直さず、`audit-placement-follow` のセッション（終わっていればその完了の申し送り）へ知らせる（要件 7.4）。
 - wintf の `MonitorRecord`・矩形の型・`DESPAWNED_SKIP_TAG` の綴り・記録の出所 `areka_placement::diag`（要件 8.3・指摘 0 件）。
 - 作業領域の変化での辺への沿わせ直し（`window-snap` の件 1）。
@@ -282,10 +282,10 @@ sequenceDiagram
 | U1 着手の確かめ | — | 相手の着地・grep・名前の知らせ | S |
 | U2 resolver の 4 つの辺 | 1・48 | `resolver.rs`・`resolver_resolve_tests.rs`・`resolver_resolve_balloon_tests.rs`・`window-snap` の brief | M |
 | U3 resolver のテストの写しと `clamp_axis` | 14・15・37・79 | `resolver_*_tests.rs`・`resolver.rs`・`persist.rs`・`balloon_limit.rs`・`balloon_limit_tests.rs` | S |
-| U4 面の置き直しの比べ | 2 | `face_windowposition.rs`・`face_windowposition_tests.rs` | S |
+| U4 面の置き直しの比べ（動かした印） | 2 | `face_windowposition.rs`・`face_windowposition_tests.rs`・`persist.rs`（`merge_scope`）・`reseed.rs`（`reinstall_balloon`）・追随の `follow/drag_follow.rs`（1 行・相手の着地の後） | M |
 | U5 材料の合流と据え直し | 12・18・43・44 | `lib.rs`・`reseed.rs`・`face_windowposition.rs`・`reset_balloon_pos.rs`・`windowposition.rs`・`placement_windowposition_tests.rs` | S |
 | U6 測りの読み手の上限 | 3 | `areka-emo-atlas` の `image_arm.rs`・`image_arm_tests.rs` | S |
-| U7 手本 | 4・61 | `examples/window-placement.rs` | S |
+| U7 手本 | 4・61 | `examples/window-placement.rs`・`Cargo.toml`（`[[example]] test = true`） | S |
 | U8 環境変数で赤になるテスト | 5 | `shell_target.rs`・`runtime/assets.rs`・3 本のテスト | M |
 | U9 属性と規約の文 | 6・7・9・46・68 | `lib.rs`・`diag.rs`・`descript_window_keys.rs`・`resolver.rs`・`source.rs`・`zorder_group_ledger.rs`・`measure_first_frame.rs`・`spawn.rs`・`spawn_assembly_tests.rs`・`diag_tests.rs`・`chain_finalize_tests.rs` | S |
 | U10 古い名前 | 41 | 13 ファイル・`runtime-crate-split` の brief | M |
@@ -326,11 +326,22 @@ sequenceDiagram
 
 #### U4 指摘 2: 面の windowposition の置き直しの比べ
 
-- 両辺を同じ丸めで作る形（`research.md` 8 節 13）は、follow の持ち物に触れずには作れないと分かった（`research.md` 11.2）。追随の値は「基準の DPI で解いた標準の和を 1 回で換算した値」で、基準の DPI の窓寸は世界に残っていないので、解き直す側を同じ形にできない。
-- そこで `face_windowposition.rs:L62-L64` の比べを、軸ごとに差が `STANDARD_SLACK_PX`（3）以内なら「動かしていない」とみなす形にする。定数と比べはこのファイルの中に置く。
-- 3 の根拠: 標準のずらしは、寸法・作者のずらし・`windowposition` の調整量を、それぞれ丸めてから足す（キーワードの腕は中点を整数で切り捨てる）。基準の DPI での拡大率が 1（作者の DPI と主モニタの DPI が同じ・作者 96 と主モニタ 96 ほか）なら、移った先との比が 3 未満では、追随の値との差が軸ごとに 3px を越えない（Side の腕は 2px、キーワードの腕は 3px が上限・esearch.md 11.2 の見積もり）。
-- `shortcut:` の注釈: `shortcut: 丸めの差を 3px まで許す。基準の拡大率が 1 でない構成（作者 96・主モニタ 144 ほか）で拡大率が上がる移りでは差が 3px を越えて置き直さないことがあり、利用者が 3px 以内だけ動かしたバルーンも置き直す。追随の側に「動かした印」を持たせる段で、印の比べへ替える`。
-- follow の持ち物（`BalloonFollow`・`rescale_follow_offset`）には触れない＝議題へ戻す必要は無い（`research.md` 8 節 13 の条件）。
+- 両辺を同じ丸めで作る形（`research.md` 8 節 13）は作れない（`research.md` 11.2＝基準の DPI の窓寸が世界に残っていない）。丸めの差を許す形（3px）は、作者の DPI と主モニタの DPI が違う構成や、拡大率が 3 倍以上になる移りで取りこぼしが残り、3px 以内だけ動かしたバルーンを「動かしていない」と取り違える。そこで、値の比べをやめて「利用者が動かした」ことを状態で持つ（設計の討議の議題 1・2026-11-14 推奨案で承認）。
+- 新しい部品（キャラ窓の entity に付ける・crate の中）:
+  ```rust
+  /// 利用者がこのスコープのバルーンを標準の位置から動かした印。
+  /// 付ける: ドラッグで追随の基準を据え直したとき・記憶から戻したずらしを使ったとき。
+  /// 外す: 標準の位置へ据え直したとき（reinstall_balloon）。
+  #[derive(Component)]
+  pub(crate) struct BalloonUserMoved;
+  ```
+- 印を付ける所は 2 つ。
+  - 利用者のドラッグ: 追随の持ち物の `follow/drag_follow.rs` の、ドラッグで基準を据え直す所（`L581` 近くの `reestablish`）に 1 か所だけ足す。キーワードの再導出（`follow/keyword_base.rs:L152`）は利用者の操作ではないので付けない。`audit-placement-follow` の着地の後に行い、触る前に相手と申し合わせる（相手が完了していれば、その完了の申し送りに残す）。
+  - 記憶からの戻し: `persist.rs` の `merge_scope` が、記憶の鍵（バルーンのずらしの x・y）から値を採ったスコープに付ける。
+- 印を外す所: U5 の `reinstall_balloon`（標準の部品で据え直す 3 か所が呼ぶ）。指摘 17 の初期化の後は記憶の鍵も無いので、次の起動でも付かない。
+- `face_windowposition.rs:L62-L64` の比べは `!world.entity(c).contains::<BalloonUserMoved>()` にする。値の比べ（`f.offset() == before...`）は消す。
+- C20 の約束 ⑵（相手の持ち物の関数の形を変えない）: `drag_follow.rs` の関数の形は変えず、中に 1 行を足すだけ。相手の着地の後なので並走とはぶつからない（要件 8.1 の例外・設計の討議で承認）。
+- 実装の順: U4 は U5（`reinstall_balloon` を置く）の後に行う。
 
 #### U6 指摘 3: 測りの読み手の上限
 
@@ -342,7 +353,13 @@ sequenceDiagram
 
 - `examples/window-placement.rs:L300` の第 3 引数を `scope as u32` にし、`L298` と冒頭 `L10-L11` の説明を「スコープごとのバルーンの面 0」に直す。
 - 61: `L280-L284` の代わりの面を、測りと同じ `builtin_default_surface(scope)`（`measure.rs:L245`）にする。測りの関数が `pub` でなければ、手本が使う今の公開の入口（`prepared.default_surfaces`）の上で同じ答えになる形を選ぶ（公開は足すだけ）。
-- 手本は全体テストで走らない（`cargo test --workspace` は手本を組むだけ）。壊れたら落ちる確かめは、手本の中の `assert_eq!`（各スコープのバルーンの絵の面 0 の寸法が、そのスコープの測りの `balloon_size` と等しい）とする。手で走らせたとき（`AREKA_APP_SMOKE_EXIT_MS` の煙の走りを含む）に落ちる。
+- 全体テストで確かめる（設計の討議の議題 2・2026-11-14 推奨案で承認）: 手本の中の「スコープごとにどのバルーンの絵を使うか」（4）と「面が無いときの代わりの面」（61）を、窓も GPU も使わない小さな純粋な関数にし、手本の中に `#[cfg(test)] mod tests` の `#[test]` を置く。`crates/areka-placement/Cargo.toml` に次を足し、`cargo test` が手本の `#[test]` を走らせるようにする（`main` は走らない）。
+  ```toml
+  [[example]]
+  name = "window-placement"
+  test = true
+  ```
+  `Cargo.toml` のこの節は、`audit-placement-follow` が触る `log-capture-kit` の行とも、こちらの指摘 47 の `async-io` の行とも別。触る前に相手へ知らせる。
 
 ### 直したほうがよい
 
@@ -559,9 +576,9 @@ wintf の `ChainPlan.absent` の値の型だけが変わる（指摘 73・上の
 | 指摘 | テスト（置き場） | 直す前の結果 |
 |---|---|---|
 | 1 | T-R5 を書き直す: `top`・`left`・`right` の 2 スコープで、上は `y == wa.top`・x は Bottom と同じ連なり、左は `x == wa.left`・スコープ 1 の y がスコープ 0 の y − h1、右は `x == wa.right − w`。各スコープの位置に `project_anchor` を通しても同じ（べき等）。知らない値は Bottom と同じ幾何で `warn!` が呼び出し 1 回につき 1 行・正典の値では 0 行（`resolver_resolve_tests.rs`） | 上・左・右が下端に置かれて赤 |
-| 2 | 作者 96・`offsetx,129`・バルーン幅 400・`alignment,left`、基準 96 の `BalloonFollow` を 144 へ追随させた窓で面の `windowposition` を変えると置き直される。10px 動かした窓は置き直されない（`face_windowposition_tests.rs`） | 差 1px で「動かしてある」とされ赤 |
+| 2 | 作者 96・`offsetx,129`・バルーン幅 400・`alignment,left`、基準 96 の `BalloonFollow` を 144 へ追随させた窓で面の `windowposition` を変えると置き直される。ドラッグで 1px だけ動かした窓（`BalloonUserMoved` が付く）は置き直されない。記憶のずらしから戻した窓も置き直されない。標準へ据え直した後は印が外れて置き直される（`face_windowposition_tests.rs`） | 差 1px で「動かしてある」とされ赤 |
 | 3 | 小さな APNG を見出し `16385×1` の `AnimationInfo` で `read_first_frame` に渡すと `Err` で、文に上限 `16384` が出る（`image_arm_tests.rs`） | 寸法の食い違いの文で赤（上限の文が無い） |
-| 4・61 | 手本の中の `assert_eq!`（各スコープのバルーンの面 0 の寸法 ＝ そのスコープの測りの `balloon_size`）。手本は全体テストで走らないので、手で走らせたときに落ちる | scope 1 で寸法が食い違って落ちる |
+| 4・61 | 手本の中の `#[test]`（`[[example]] test = true` で全体テストに入る）: scope 1 のバルーンの絵の選びが scope 1 を返す・面が無いときの代わりの面が `builtin_default_surface(scope)` と等しい | scope 0 の絵を返して赤 |
 | 5 | 3 本（`measure_first_frame_tests` の該当・本体の `measure_bake_log_tests`・`measure_bake_count_tests`）が上限を明示して焼く。実装で 1 度、`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` を立てて緑を確かめる | 環境変数で赤 |
 | 10・11 | `TempDir::new()` の道が `target\test-roots\` の下にある（`placement_shared_test_support.rs`） | —（直しの形を固定する） |
 | 16 | 窓の x が `"12.5"`・バルーンのずらしの片方の軸だけの記憶で、`warn!` が鍵ごとに 1 行出て既定へ戻る（`persist_restore_tests.rs`） | 記録が 0 行で赤 |
@@ -605,11 +622,12 @@ wintf の `ChainPlan.absent` の値の型だけが変わる（指摘 73・上の
 
 単位の既定の並び:
 
-U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8 → U9 → U10 → U23 → U11 → U12 → U13 → U14 → U15 → U16 → U17 → U18 → U19 → U20 → U21 → U22 → U24 → U25 → **U26（最後の実装）** → U27 → U28
+U1 → U2 → U3 → U5 → U4 → U6 → U7 → U8 → U9 → U10 → U23 → U11 → U12 → U13 → U14 → U15 → U16 → U17 → U18 → U19 → U20 → U21 → U22 → U24 → U25 → **U26（最後の実装）** → U27 → U28
 
 - U23（`dpi_sync.rs` の式）を U11（同じファイルの項目を私有の子モジュールへ移す）の前に置くと、移す前に中身が直り、移す差分が 1 度で済む。
 - U9（属性と規約の文）を U11 の前に置くと、消す属性と cfg に替える属性（`source.rs:L131`）が重ならない。
 - U14（sylphya の口）を U15（配置の使い手）の前に置く。
+- U5（`reinstall_balloon` を置く）を U4（その中で印を外す）の前に置く。
 - U3 は `balloon_limit_tests.rs` に触る（37・79）。U26 も同じファイルに触るが、U26 が最後なので重ならない。
 
 ## タスクの見込み（要件 10）
@@ -627,7 +645,7 @@ U1 → U2 → U3 → U4 → U5 → U6 → U7 → U8 → U9 → U10 → U23 → U
 
 ## 設計の段で決めた事項（`research.md` 8 節 13〜20・7 節）
 
-1. **指摘 2（8 節 13）**: 同じ丸めの形は follow の持ち物に触れずには作れない（`research.md` 11.2）。軸ごとに 3px の許しを `shortcut:` の注釈つきで入れる。follow の持ち物に触れないので議題へは戻さない。
+1. **指摘 2（8 節 13）**: 同じ丸めの形は作れない（`research.md` 11.2）。差を許す形（3px）は取らず、「動かした印」`BalloonUserMoved` を状態で持つ（設計の討議の議題 1）。追随の持ち物の `drag_follow.rs` に 1 行を足すのは、相手の着地の後に申し合わせて行う。
 2. **指摘 9（8 節 14）**: 案 a（文を今の参照に合わせる）。参照は変えない。
 3. **指摘 1 のスコープ 1 以降（8 節 15）**: 上の辺は横の連なり（P2）のまま、左右の辺は辺ごとに下から上へ連ねる。`project_anchor` を通しても動かない形にするため。
 4. **指摘 5 の口（8 節 16）**: `load_shell_target_with_limits`（emo-present）と `build_shell_assets_with_limits`（本体・`pub(crate)`）を足す。今の関数の形は変えない。

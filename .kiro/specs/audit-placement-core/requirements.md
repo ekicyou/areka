@@ -202,7 +202,7 @@
 | `wintf-winmsg-executor-import` | 指摘 47＝根の `Cargo.toml` の `[workspace.dependencies]`（相手が触るのは `wintf-winmsg-executor` の 1 行・`Cargo.lock`・`crates/pilot/Cargo.toml`。`crates/wintf/Cargo.toml` と `async-io` の行はどこも触らない） | 相手が先 | 合意（11-14・相手の PR のマージを知らせてもらう） |
 | `audit-wintf-window` | 指摘 73＝wintf の `ChainPlan.absent`（`ecs/window/zorder_chain.rs`）・指摘 67＝wintf の `MISSING`（`ecs/window/transition_diag.rs`） | 相手が先（こちらは相手の着地の後に wintf の側まで直す） | 合意（11-14・相手の指摘は `absent` と `MISSING` に触らない。相手の 11 番〔`WindowHandle.instance` を消す〕が `areka-placement` の 14 ファイルの構築の式の 1 欄に及ぶ見込みで、相手の最後のタスクのときに改めて申し合わせる＝開発者の承認待ち） |
 | `audit-wintf-input` | 指摘 80＝`balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs`（相手はドラッグの知らせの `is_primary` の 2 行を消す） | 相手が先 | 合意（11-14・相手が遅れてこちらが先に着地するときは「後から着地する側が読み手を直す」に戻し、相手が直す） |
-| `audit-placement-follow` | `crates/areka-placement/Cargo.toml`（別の行）・相手の `move_window_with_route` の変化が `chain_realign.rs`・`dpi_sync_tests.rs` に響く・指摘 8 の `DPI_SYNC_HOLD_MAX_FRAMES` | 相手が先 | 合意（11-14・こちらが赤も含めて合わせる・`Cargo.toml` は相手が `log-capture-kit` の行、こちらが `async-io` の行だけ・`DPI_SYNC_HOLD_MAX_FRAMES` を `test-support` の内側へ移すのはこちらの実装のときでよい） |
+| `audit-placement-follow` | `crates/areka-placement/Cargo.toml`（別の行）・相手の `move_window_with_route` の変化が `chain_realign.rs`・`dpi_sync_tests.rs` に響く・指摘 8 の `DPI_SYNC_HOLD_MAX_FRAMES` | 相手が先 | 合意（11-14・こちらが赤も含めて合わせる・`Cargo.toml` は相手が `log-capture-kit` の行、こちらが `async-io` の行だけ・`DPI_SYNC_HOLD_MAX_FRAMES` を `test-support` の内側へ移すのはこちらの実装のときでよい。設計の討議〔2026-11-14〕で、指摘 2 の直しに相手の持ち物の `follow/drag_follow.rs` へ「動かした印」を付ける 1 行を足すと決めた＝要件 8.1 の例外・相手の着地の後に申し合わせて行う。`Cargo.toml` に `[[example]] test = true` の節を足すことも相手へ知らせる） |
 
 ## 確定した指摘の一覧（要件 3.2）
 
