@@ -18,8 +18,9 @@
 //! ゴースト一式をこの帯へ移すということである（要件 8.2）。よって独立性の主張は
 //! 「一式が同じ帯に居ても、ペアの隣接は同じように成立する」という形で確かめられる。
 //!
-//! **組と鎖は帯を書かない**。本番で窓を帯へ入れる・帯から出すのは帯の働きのファイル
-//! （`window_band.rs`）だけであり、ここで帯を作るのはテストが自分で生成した窓に対してだけである。
+//! **組と鎖は帯を書かない**。本番でゴーストの窓を帯へ入れる・帯から出すのは帯の働きの
+//! ファイル（`window_band.rs`。ほかの帯の書き手はその頭の doc に挙げてある）であり、ここで
+//! 帯を作るのはテストが自分で生成した窓に対してだけである。
 //! 組の是正が帯の窓を挿入位置に指すのは、キャラクターも帯に居るときだけである
 //! （`stay-on-top-directives` 要件 2.4・末尾の 1 件）。
 //!
@@ -33,136 +34,47 @@
 //! `HWND_TOP` は必ずその列の先頭になる）。
 //! 一方、常時最前面の印そのものはトップレベル窓でしか意味を持たないので、印を測る側は
 //! トップレベル窓で作る（印の読み戻しは割り込みの影響を受けず決定論的である）。
+//!
+//! # 明示実行へ隔離した 3 本
+//!
+//! 次の 3 本は `#[ignore]` と本体 1 行目の門（`require_explicit_real_window_run`）で
+//! 既定の走行から外してある（根治の引受先は `zorder-chain-residue` の A-1）。
+//!
+//! - `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`（帯の印だけを見る）
+//! - `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`
+//! - `a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band`
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, HWND_BOTTOM, HWND_NOTOPMOST,
-    SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WS_CHILD, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+    GWL_EXSTYLE, GetWindowLongPtrW, HWND_BOTTOM, HWND_NOTOPMOST, SW_SHOWNA, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_LAYERED,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
-use super::apply_zorder_pair_maintenance;
 use crate::api::{clear_window_owner, get_window_above, get_window_below, set_window_owner};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, decide_pair_fix,
-    measure_window_above, measure_window_below, measure_window_is_always_on_top,
+    measure_below_is_always_on_top, measure_window_above, measure_window_below,
+    measure_window_is_always_on_top,
 };
 use crate::ecs::window::{
-    KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, WindowHandle,
-    ZOrderPairStrategy, establish_owner_links,
+    KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, ZOrderPairStrategy,
+    flush_window_pos_commands,
 };
 
 use super::pair_fix_command;
-
-/// 兄弟の維持系テストと同じ捕捉条件（記録と、発行された指令の実施記録の両方）。
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-
-const FIX_TAG: &str = "[zorder-pair] fix";
-const SKIP_TAG: &str = "[zorder-pair] skip";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, FIX_TAG, SKIP_TAG, VERIFY_FAILED_TAG, assert_line_count,
+    create_banded_test_parent, create_test_child, create_window, destroy_test_window, insert_after,
+    lines_with, maintain_schedule, pair_schedule, require_explicit_real_window_run, spawn_window,
+};
 
 // -------------------------------------------------------------------------
-// 明示実行の門（実窓の重なり順を直に測る 2 本のみ）
+// 帯の印を測る実窓のヘルパ（共通の下ごしらえは `zorder_pair_test_support`）
 // -------------------------------------------------------------------------
-
-/// 実窓の重なり順を直に測る 2 本を明示実行へ限る門の環境変数。
-///
-/// 本ワークスペースの実行時環境変数は `AREKA_` 名前空間である（同じ流儀の先例:
-/// `crates/log-capture-kit/tests/capture_calibration_test.rs` の `MODE_ENV`）。
-const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
-
-/// 門が開いていなければ、判定を 1 行も実行せずに落とす。
-///
-/// # なぜ門を付けたか
-///
-/// この 2 本は実窓の位置関係を直に測るため、他プロセスの可視窓が owner 一組の間へ
-/// 割り込むと崩れる。既定の `cargo test` に置いたままだと間欠的な赤が出て、「全通過」
-/// という記録が全通過を意味しなくなる。よって既定の走行からは外し、狙って走らせる
-/// ときだけ走る形にした。
-///
-/// **判定そのものは 1 行も変えていない**——閾値も期待値も隔離前のままである。根治
-/// （判定の作り直し）の引受先は `.kiro/specs/zorder-chain-residue/brief.md`
-/// の A-1 で、そちらが「実窓の重なり順を割り込みに強い形で測る」を持つ。
-///
-/// # 門が閉じたまま呼ばれたら緑にしない
-///
-/// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実窓で測った」という
-/// 記録に化ける。既存の手本（`crates/areka/src/placement_tests/transition_signoff_tests.rs`
-/// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
-fn require_explicit_real_window_run() {
-    assert!(
-        std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
-        "{REAL_WINDOW_ZORDER_ENV} が未設定である。実窓の重なり順は他プロセスの可視窓に\
-         割り込まれて間欠的に赤くなるため明示実行へ隔離してある（判定は 1 行も走っていない）。\
-         走らせるには環境変数を与えて `cargo test -p wintf --lib <テスト名> -- --ignored --exact` \
-         とすること"
-    );
-}
-
-// -------------------------------------------------------------------------
-// 実窓・World・巡回のヘルパ（兄弟の維持系テストと同じレシピ）
-// -------------------------------------------------------------------------
-
-fn create_window(
-    title: PCWSTR,
-    ex_style: WINDOW_EX_STYLE,
-    style: WINDOW_STYLE,
-    parent: Option<HWND>,
-) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            ex_style,
-            w!("Static"),
-            title,
-            style,
-            0,
-            0,
-            0,
-            0,
-            parent,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window")
-    }
-}
-
-/// 兄弟列を閉じるための私有の親窓。`always_on_top` が真なら一式を常時最前面の帯へ入れる。
-///
-/// 可視で作る理由は維持系テストと同じ（実測層は可視の窓だけを隣と数えるため、
-/// 隠れた親の下の子窓では隣接そのものが測れない）。0x0 の道具窓を活性化を伴わない
-/// `SW_SHOWNA` で見せるので、画面にもタスクバーにも現れない。
-fn create_test_parent(title: PCWSTR, always_on_top: bool) -> HWND {
-    let ex_style = if always_on_top {
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0 | WS_EX_TOPMOST.0)
-    } else {
-        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0)
-    };
-    let parent = create_window(title, ex_style, WINDOW_STYLE(WS_POPUP.0), None);
-    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
-    unsafe {
-        let _ = ShowWindow(parent, SW_SHOWNA);
-    }
-    parent
-}
-
-fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(
-        title,
-        WINDOW_EX_STYLE(0),
-        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
-        Some(parent),
-    )
-}
 
 /// 本番のゴースト窓と同じ拡張スタイルのトップレベル窓（`WS_VISIBLE` は付けない
 /// ——画面に何も出さずに印だけを測るため）。
@@ -195,22 +107,6 @@ fn is_always_on_top(hwnd: HWND) -> bool {
     (ex_style_of(hwnd) as u32) & WS_EX_TOPMOST.0 != 0
 }
 
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する重なりのみの変更。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-        .expect("SetWindowPos should reorder self-owned test windows");
-    }
-}
-
 /// 活性化を伴わずに窓を見せる（実測層は可視の窓だけを隣と数えるため、隣接を測る窓は
 /// 可視でなければならない）。0x0 の道具窓なので画面にもタスクバーにも現れない。
 fn show_without_activating(hwnd: HWND) {
@@ -237,42 +133,6 @@ fn sink_to_bottom(hwnd: HWND) {
     }
 }
 
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する（子窓は親の破棄で連鎖する）。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-/// 維持系だけを載せた 1 巡分の schedule（単一スレッド実行器は記録の捕捉に必須）。
-fn maintain_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_zorder_pair_maintenance);
-    schedule
-}
-
-/// 本番と同じ順（確立 → 維持）で並べた schedule。
-fn pair_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems((establish_owner_links, apply_zorder_pair_maintenance).chain());
-    schedule
-}
-
-fn count_lines(out: &str, tag: &str) -> usize {
-    out.lines().filter(|l| l.contains(tag)).count()
-}
-
 // -------------------------------------------------------------------------
 // 要件 8.2: 常時最前面の政策を足しても、ペアの隣接は同じように成立する
 // -------------------------------------------------------------------------
@@ -294,7 +154,7 @@ struct ConvergenceOutcome {
 /// 「バルーン／割り込み／キャラ」の順（手前 → 背後）から是正を 1 巡走らせ、
 /// 隣接が成立するかと記録の本数を返す。返り値の 2 つ目は処理後の帯の所属。
 fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome, bool) {
-    let parent = create_test_parent(tag, always_on_top);
+    let parent = create_banded_test_parent(tag, always_on_top);
     assert_eq!(
         is_always_on_top(parent),
         always_on_top,
@@ -325,7 +185,7 @@ fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         // 1 巡目で判断し指令を積み、flush で OS の重なりが動き、2 巡目で実測照合する。
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
@@ -336,9 +196,9 @@ fn run_pair_convergence(tag: PCWSTR, always_on_top: bool) -> (ConvergenceOutcome
         character_directly_below_balloon: get_window_above(character_hwnd)
             .expect("GetWindow は成功するはず")
             == Some(balloon_hwnd),
-        fix_records: count_lines(&out, FIX_TAG),
-        verify_failed_records: count_lines(&out, VERIFY_FAILED_TAG),
-        skip_records: count_lines(&out, SKIP_TAG),
+        fix_records: lines_with(&out, FIX_TAG).len(),
+        verify_failed_records: lines_with(&out, VERIFY_FAILED_TAG).len(),
+        skip_records: lines_with(&out, SKIP_TAG).len(),
     };
     let band_after = is_always_on_top(parent);
     destroy_test_window(parent);
@@ -396,7 +256,7 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
 /// 保証にならない——実際に指令を発行して印を読み戻す必要がある。
 ///
 /// 末尾の対照は 2 つ置いてある。①帯から外す指令を出せば印は実際に落ちる（読み取りが
-/// 恒真ではない）。②帯の外の窓を帯の中の窓のすぐ手前へ入れると印が付く（＝挿入位置が
+/// 恒真ではない）。②帯の外の窓を帯の中の窓のすぐ背後へ入れると印が付く（＝挿入位置が
 /// 帯を跨ぐと所属が動くという OS の性質そのもの）。
 ///
 /// **本テストが帯を跨がないのは、挿入位置に相方そのものを渡しているからである**——
@@ -407,7 +267,7 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
 /// [`a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band`] が
 /// 持つ。対照②はその危険が実在する（＝是正が要る）ことを実測で確定させるために置いてある。
 #[test]
-#[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
+#[ignore = "帯から外す指令が効かない回がある（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
 fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
     require_explicit_real_window_run();
 
@@ -418,20 +278,21 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
         "前提: ペアの 2 窓とも常時最前面の帯に居るはず"
     );
 
-    // 腕①「バルーンをキャラのすぐ手前へ」（要件 1.2）
+    // 腕①（`PlaceAboveOverBelow` の `After`・要件 1.2）の形の指令。挿入位置にキャラそのものを渡すので
+    // バルーンはキャラのすぐ背後へ入る（本番はキャラの最も近い可視の手前の窓を渡す）。見るのは帯の印だけ。
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::After(character)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(is_always_on_top(balloon), "腕①でバルーンが帯から出た");
     assert!(is_always_on_top(character), "腕①でキャラが帯から出た");
 
     // 腕②「最上位へ」（キャラより手前に可視の窓が無い縁）
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::TopEdge));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(is_always_on_top(balloon), "腕②でバルーンが帯から出た");
 
     // 腕③「キャラをバルーンのすぐ背後へ」（要件 1.3）
     SetWindowPosCommand::enqueue(pair_fix_command(character, InsertSpec::After(balloon)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(is_always_on_top(character), "腕③でキャラが帯から出た");
     assert!(is_always_on_top(balloon), "腕③でバルーンが帯から出た");
 
@@ -460,10 +321,10 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
     let outsider = create_ghost_shaped_toplevel(w!("wintf-zorder-band-cmd-outsider"));
     assert!(!is_always_on_top(outsider), "前提: 帯の外で始まる");
     SetWindowPosCommand::enqueue(pair_fix_command(outsider, InsertSpec::After(balloon)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(
         is_always_on_top(outsider),
-        "対照②: 帯の中の窓のすぐ手前へ入れると常時最前面になる（OS の性質）"
+        "対照②: 帯の中の窓のすぐ背後へ入れると常時最前面になる（OS の性質）"
     );
 
     for hwnd in [character, balloon, control, outsider] {
@@ -508,9 +369,9 @@ fn the_pair_machinery_never_puts_ghost_shaped_windows_into_the_always_on_top_ban
     // 捕捉の中で回す。
     let _out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
@@ -601,7 +462,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
     };
 
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, insert_after));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(
         !is_always_on_top(balloon),
         "挿入位置が常時最前面の窓でも、バルーンに常時最前面の印を付けてはならない（要件 8.1）"
@@ -611,12 +472,12 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
         "キャラ窓も帯の外のままであるはず"
     );
 
-    // 対照: 同じ経路で帯の中の窓のすぐ手前へ入れる指令を出せば、印は実際に付く
+    // 対照: 同じ経路で帯の中の窓のすぐ背後へ入れる指令を出せば、印は実際に付く
     // （上の主張が「読み取りが常に偽」による恒真になっていない）。
     let outsider = create_ghost_shaped_toplevel(w!("wintf-zorder-aot-insert-outsider"));
     assert!(!is_always_on_top(outsider), "前提: 対照窓は帯の外で始まる");
     SetWindowPosCommand::enqueue(pair_fix_command(outsider, InsertSpec::After(foreign_top)));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert!(
         is_always_on_top(outsider),
         "対照: 帯の中の窓を挿入位置にすると常時最前面になる（この危険が実在する）"
@@ -644,7 +505,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
 /// 結果としてキャラのすぐ手前に入る。
 #[test]
 fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_character() {
-    let parent = create_test_parent(w!("wintf-zorder-aot-adjacency"), false);
+    let parent = create_banded_test_parent(w!("wintf-zorder-aot-adjacency"), false);
     let character_hwnd = create_test_child(parent, w!("character"));
     let intruder_hwnd = create_test_child(parent, w!("intruder"));
     let balloon_hwnd = create_test_child(parent, w!("balloon"));
@@ -686,7 +547,7 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
     );
 
     SetWindowPosCommand::enqueue(pair_fix_command(balloon_hwnd, InsertSpec::TopOfNormalBand));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert_eq!(
         measure_window_below(balloon_hwnd),
         Some(character_hwnd),
@@ -705,7 +566,7 @@ fn the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_charact
         balloon_hwnd,
         InsertSpec::After(intruder_hwnd),
     ));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert_ne!(
         measure_window_below(balloon_hwnd),
         Some(character_hwnd),
@@ -747,6 +608,43 @@ fn measuring_band_membership_answers_both_ways_and_falls_back_into_the_band_on_f
     assert!(
         out.contains("常時最前面かを読めませんでした"),
         "読めなかった事実が記録に残っていない: {out}"
+    );
+
+    for hwnd in [inside, outside] {
+        destroy_test_window(hwnd);
+    }
+}
+
+/// キャラ窓**自身**の帯の実測も 2 通りの答えを実際に返し、読めなかったときは帯の外へ倒す。
+///
+/// 挿入位置の窓の実測（直上のテスト）と倒す向きが逆である——こちらの真は「帯の窓を
+/// 挿入位置に指してよい」を開くので、読めないときに真へ倒すと帯の外のキャラのバルーンを
+/// 帯へ引き込む（要件 3.3）。倒したことは 1 度だけ記録に残す。
+#[test]
+fn measuring_the_character_band_answers_both_ways_and_falls_back_out_of_the_band_on_failure() {
+    let inside = create_always_on_top_toplevel(w!("wintf-zorder-below-band-inside"));
+    let outside = create_ghost_shaped_toplevel(w!("wintf-zorder-below-band-outside"));
+    assert!(
+        measure_below_is_always_on_top(inside),
+        "帯の中のキャラ窓は帯の中と読めるはず"
+    );
+    assert!(
+        !measure_below_is_always_on_top(outside),
+        "帯の外のキャラ窓は帯の外と読めるはず（読み取りが恒真になっていない）"
+    );
+
+    // 読めない窓（無効なハンドル）は帯の外として扱い、倒したことを 1 度だけ記録に残す。
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
+        assert!(
+            !measure_below_is_always_on_top(HWND::default()),
+            "読めなかったときは帯の外へ倒す（帯の外のキャラのバルーンを帯へ引き込まない）"
+        );
+    });
+    assert_line_count(
+        &out,
+        "キャラ窓が常時最前面かを読めませんでした",
+        1,
+        "読めなかった事実の記録",
     );
 
     for hwnd in [inside, outside] {
@@ -804,7 +702,7 @@ fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_ba
     );
 
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::TopOfNormalBand));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
 
     assert!(
         !is_always_on_top(balloon),
@@ -830,7 +728,7 @@ fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_ba
     sink_to_bottom(lone_character);
     sink_to_bottom(lone_balloon);
     SetWindowPosCommand::enqueue(pair_fix_command(lone_balloon, InsertSpec::TopOfNormalBand));
-    SetWindowPosCommand::flush();
+    flush_window_pos_commands();
     assert_ne!(
         measure_window_below(lone_balloon),
         Some(lone_character),
@@ -890,7 +788,7 @@ fn a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band(
     let mut schedule = maintain_schedule();
     let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
-        SetWindowPosCommand::flush();
+        flush_window_pos_commands();
         schedule.run(&mut world);
     });
 
@@ -907,9 +805,13 @@ fn a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band(
     for hwnd in [character_hwnd, intruder_hwnd, balloon_hwnd] {
         assert!(is_always_on_top(hwnd), "是正で帯から落ちた窓がある");
     }
-    assert_eq!(count_lines(&out, FIX_TAG), 1, "是正の記録は 1 本: {out}");
     assert_eq!(
-        count_lines(&out, VERIFY_FAILED_TAG),
+        lines_with(&out, FIX_TAG).len(),
+        1,
+        "是正の記録は 1 本: {out}"
+    );
+    assert_eq!(
+        lines_with(&out, VERIFY_FAILED_TAG).len(),
         0,
         "検証は通るはず: {out}"
     );

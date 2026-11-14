@@ -37,7 +37,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::Schedules;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
 };
@@ -88,12 +88,7 @@ fn destroy(windows: &[HWND]) {
 
 /// ハンドル付きの窓 entity を作る。
 fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
+    world.spawn(WindowHandle { hwnd }).id()
 }
 
 // -------------------------------------------------------------------------

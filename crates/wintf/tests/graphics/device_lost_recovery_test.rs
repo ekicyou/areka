@@ -6,7 +6,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::core::Interface;
 use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension, GlobalArrangement};
 use wintf::ecs::widget::brushes::{Brush, Brushes};
@@ -76,7 +76,6 @@ fn window_graphics_system_without_graphics_core_does_not_panic() {
             Window::default(),
             WindowHandle {
                 hwnd: HWND::default(),
-                instance: HINSTANCE::default(),
             },
             HasGraphicsResources,
         ))
@@ -205,10 +204,7 @@ fn device_loss_recovers_window_visual_surface_command_list_and_compositor() {
                     }),
                     ..Default::default()
                 },
-                WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE::default(),
-                },
+                WindowHandle { hwnd },
                 HasGraphicsResources,
                 // 窓の大きさはレイアウトが決める（窓の通知を回さないので箱の大きさで与える）
                 BoxStyle {

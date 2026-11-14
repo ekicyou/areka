@@ -13,7 +13,7 @@ use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 use bevy_ecs::world::World;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
@@ -173,7 +173,6 @@ fn execute_resetballoonpos_returns_the_balloon() {
                 raw += 1;
                 world.entity_mut(e.unwrap()).insert(WindowHandle {
                     hwnd: HWND(raw as *mut _),
-                    instance: HINSTANCE::default(),
                 });
             }
         }

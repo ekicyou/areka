@@ -1,7 +1,7 @@
 //! 遷移観測ログの**判定器**——観測行の解析・遷移の切り出し・判定量の集計（純関数・I/O 無し）。
 //!
-//! design.md の C7（`transition_judge`）が正本である。3 crate（wintf・areka-emo-present・areka）が
-//! 同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor`／
+//! design.md の C7（`transition_judge`）が正本である。4 crate（wintf・areka-emo-present・areka-placement・
+//! areka）が同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor`／
 //! `kind=windpi` の拡大率変化を起点に**遷移**へ切り分け（起点規約は
 //! [`split_transitions`]）、遷移ごとの判定量（[`TransitionSummary`]）を出す。
 //!
@@ -10,16 +10,16 @@
 //! `kind` 語・`stage` 語・フィールド名は**発行側のレコード純関数が単一の定義元**であり、本
 //! モジュールは `pub const` を参照するだけである（リテラルを書かない）。定義元は 3 箇所:
 //!
-//! - `wintf::ecs::window::transition_diag`（`monitor`／`write`／`flush`／`msg`／`enqueue`）
+//! - `wintf::ecs::window::transition_diag`（`monitor`／`windpi`／`write`／`flush`／`msg`／`enqueue`）
 //! - `areka_emo_present::presenter`（`surface` の平坦な再輸出）
-//! - [`super::transition_diag`]（`snapshot`／`hold`／`ground`／`chain`）
+//! - [`areka_placement::transition_diag`]（`snapshot`／`hold`／`ground`／`chain`／`offset`）
 //!
 //! 語を 1 つでもここで宣言し直すと、発行側が字面を変えたときに判定が静かに空振りする。
 //!
-//! # 辞書化の規則は `judge-perf.py` と同一
+//! # 辞書化の規則は perf の道具と同一
 //!
 //! 行の本体は `名前=値` の並びであり、値は**次の名前の直前まで**とする
-//! （`tools/perf/judge-perf.py:562,588-596` の `parse_fields` と同じ規則）。空白で切らないのは、
+//! （tools/perf/ の Python の道具の `parse_fields` と同じ規則）。空白で切らないのは、
 //! `Debug` 表現が値に空白を含み得るためである。ただし**同名フィールドは後勝ちにしない**——
 //! Python 側は後勝ちで上書きするが、本判定器は「1 行に同じ名前を 2 度出さない」を語彙の
 //! 不変条件として扱い、破れた行を [`RecordDefect::DuplicateField`] として記録する
@@ -42,12 +42,12 @@
 //!
 //! # 本番バイナリには含まれない（`#[cfg(test)]`）
 //!
-//! 判定器の消費者は決定論テスト（task 3.1／3.2）と実機ログのサインオフランナー
-//! （task 3.2 の `#[ignore]` テスト）だけであり、本番の実行経路からは 1 度も呼ばれない。
+//! 判定器の消費者は決定論テスト（この下の姉妹と `runtime/frame_transition_*`）と実機ログの
+//! サインオフランナー（`#[ignore]` テスト）だけであり、本番の実行経路からは 1 度も呼ばれない。
 //! areka は lib ターゲットを持たない bin crate ゆえ `pub` でも dead_code 免除されず、
 //! 本番ビルドへ置くと項目ごとに `#[allow(dead_code)]` を貼る羽目になって**以後の真の
-//! dead code を隠す**。`areka_placement::test_support` と同じ形（`#[cfg(test)]` のモジュール宣言）に
-//! して、許可属性を 1 つも置かずに済ませる。純関数であることは変わらないので、決定論テストと
+//! dead code を隠す**。`main.rs` が `#[cfg(test)]` の下で宣言する `placement_tests` に置いて、
+//! 許可属性を 1 つも置かずに済ませる。純関数であることは変わらないので、決定論テストと
 //! 実機サインオフが**同一実装**を回すという C7 の要件（I/O を持たない単一実装）は満たす。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -96,7 +96,7 @@ pub enum RecordDefect {
         /// 読めなかった値の字面。
         value: String,
     },
-    /// 3 crate のいずれも定義していない `kind` 語。
+    /// 定義元の 3 箇所のどれも定義していない `kind` 語。
     UnknownKind(String),
 }
 
@@ -255,7 +255,7 @@ pub struct TransitionSummary {
     pub origin: Option<TransitionOrigin>,
     /// 遷移に含まれる観測行の本数。
     pub records: usize,
-    /// 語彙の規約を破っていた行の本数。
+    /// 語彙の規約を破っていた行と、`diff`・`total_us` が数として読めない行の本数。
     pub malformed_records: u32,
     /// フレーム差が判定不能であること（要件 8.5）。
     ///
@@ -303,6 +303,8 @@ pub struct TransitionSummary {
     pub chain_realigned: u32,
     /// 接地点差の最大（絶対値が最大のものを**符号つき**で持つ。負＝浮き）。
     pub ground_diff_max: Option<i32>,
+    /// 接地点を測れなかった行（`diff=-`・作業領域の下端が不明）があった＝その scope を黙って通さない。
+    pub ground_diff_unmeasured: bool,
     /// **不可視ゆえ**再表示を見送られた窓（要件 4.6 で合否から除外する）。
     ///
     /// 見送りの理由は 2 語あるが、除外へ数えるのは
@@ -342,6 +344,7 @@ impl TransitionSummary {
             holds: 0,
             chain_realigned: 0,
             ground_diff_max: None,
+            ground_diff_unmeasured: false,
             skipped_windows: BTreeSet::new(),
             wall: WallClock::default(),
             visualize_to_write_us: BTreeMap::new(),
@@ -400,7 +403,7 @@ fn required_fields(kind: &str) -> Option<&'static [&'static str]> {
 // 行の解析
 // ---------------------------------------------------------------------------
 
-/// `名前=` の出現 1 件（`judge-perf.py::parse_fields` の正規表現に相当）。
+/// `名前=` の出現 1 件（tools/perf/ の Python の道具の `parse_fields` の正規表現に相当）。
 struct FieldKey {
     /// 名前の開始位置（バイト）。
     name_start: usize,
@@ -548,7 +551,7 @@ pub fn is_transition_origin(record: &TransitionRecord) -> bool {
 
 impl TransitionOrigin {
     /// 起点候補なら起点情報を返す（起点判定の**単一の決定点**）。
-    fn of(record: &TransitionRecord) -> Option<Self> {
+    pub(super) fn of(record: &TransitionRecord) -> Option<Self> {
         if record.kind != KIND_MONITOR && record.kind != KIND_WINDPI {
             return None;
         }
@@ -691,7 +694,6 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     let mut writes_in_order: Vec<(usize, WindowKey, Option<u32>, u32)> = Vec::new();
     // 窓ごと・フレームごとの「最後の書込 t_us」（実機専用量 visualize_to_write_us 用）。
     let mut last_write_us_per_window_frame: BTreeMap<(WindowKey, u32), u64> = BTreeMap::new();
-    let mut last_visualize_per_window: BTreeMap<WindowKey, (u32, u64)> = BTreeMap::new();
     // 窓ごとの**全ての**可視化（実機専用量は最大を採るので上書きしない）。
     let mut visualizes_per_window: BTreeMap<WindowKey, Vec<(u32, u64)>> = BTreeMap::new();
     let mut nonzero_frames_seen = 0_u32;
@@ -767,8 +769,6 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 if record.raw_field(FIELD_STAGE) == Some(SURFACE_STAGE_VISUALIZE)
                     && let Some(window) = record.surface_window()
                 {
-                    last_visualize_per_window
-                        .insert(window.clone(), (record.stamp.frame, record.stamp.t_us));
                     visualizes_per_window
                         .entry(window)
                         .or_default()
@@ -786,24 +786,22 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 }
             }
             KIND_GROUND => {
+                summary.ground_diff_unmeasured |= record.raw_field(FIELD_DIFF) == Some(MISSING);
                 if let Some(diff) = record.int_field::<i32>(FIELD_DIFF) {
-                    summary.ground_diff_max = Some(match summary.ground_diff_max {
-                        Some(current) if current.saturating_abs() >= diff.saturating_abs() => {
-                            current
-                        }
-                        _ => diff,
-                    });
+                    let current = summary.ground_diff_max.get_or_insert(diff);
+                    if diff.saturating_abs() > current.saturating_abs() {
+                        *current = diff;
+                    }
+                } else if record.is_well_formed() && record.field(FIELD_DIFF).is_some() {
+                    // 欄があり番兵でもないのに読めない（行の欠陥とは二重に数えない）。
+                    summary.malformed_records += 1;
                 }
             }
-            KIND_FLUSH => {
-                if record.raw_field(FIELD_STAGE) == Some(STAGE_END)
-                    && let Some(total) = record.int_field::<u64>(FIELD_TOTAL_US)
-                {
-                    summary.flush_total_us_max = Some(
-                        summary
-                            .flush_total_us_max
-                            .map_or(total, |max| max.max(total)),
-                    );
+            KIND_FLUSH if record.raw_field(FIELD_STAGE) == Some(STAGE_END) => {
+                if let Some(total) = record.int_field::<u64>(FIELD_TOTAL_US) {
+                    summary.flush_total_us_max = summary.flush_total_us_max.max(Some(total));
+                } else if record.is_well_formed() && record.field(FIELD_TOTAL_US).is_some() {
+                    summary.malformed_records += 1;
                 }
             }
             _ => {}
@@ -855,11 +853,13 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     // 可視化と書込の食い違い（見送り窓は要件 4.6 で除外する）。フレーム差は**最後の**
     // 可視化と**最後の**書込＝着地どうしの比較で採る（4.3 の「遷移後の寸法・位置で
     // 可視化されるとき」が問うのは着地のフレームだから）。
-    for (window, (visualize_frame, _)) in &last_visualize_per_window {
+    for (window, visualizes) in &visualizes_per_window {
         if summary.skipped_windows.contains(window) {
             continue;
         }
-        if let Some(write_frame) = last_write_frame_per_window.get(window) {
+        if let (Some((visualize_frame, _)), Some(write_frame)) =
+            (visualizes.last(), last_write_frame_per_window.get(window))
+        {
             summary
                 .mismatch_frames_per_window
                 .insert(window.clone(), write_frame.wrapping_sub(*visualize_frame));
@@ -955,7 +955,7 @@ pub use verdict::{
     Bounds, CHAIN_REALIGN_PER_TRANSITION, FLUSH_TOTAL_US_MAX, GROUND_DIFF_MAX,
     HOLD_FRAME_ALLOWANCE, PATH_A_WRITES_MAX, Quantity, Report, TRANSITION_FRAME_BOUND,
     TRANSITION_LOG_ENV, TransitionVerdict, VISUALIZE_TO_WRITE_US_MAX, Violation,
-    WRITES_PER_WINDOW_MAX, judge, judge_transition_log,
+    WRITES_PER_WINDOW_MAX, judge, judge_transition_log, or_missing,
 };
 
 #[cfg(test)]

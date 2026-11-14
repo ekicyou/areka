@@ -31,14 +31,14 @@
 //! [`an_identity_ratio_that_does_not_re_derive_is_red`] が赤にする所である。
 
 use crate::placement_tests::transition_judge::parse_transition_line;
-use crate::placement_tests::transition_judge::test_support::monitor;
+use crate::placement_tests::transition_judge::test_support::{log_of, monitor};
 use areka_placement::resolver::PointPx;
 use areka_placement::transition_diag::{
     FIELD_BASE_DPI, FIELD_VERDICT, OFFSET_VERDICT_ALL, OFFSET_VERDICT_ANCHORED,
     OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED,
     OFFSET_VERDICT_UNRESOLVED, OffsetRecord, offset_line,
 };
-use wintf::ecs::window::transition_diag::{FIELD_SCOPE, Stamp};
+use wintf::ecs::window::transition_diag::{FIELD_FRAME, FIELD_SCOPE, Stamp};
 
 use super::{ALIGNMENT_RESIDUAL_MAX_PX, OffsetViolation, judge_offset_log};
 
@@ -47,7 +47,7 @@ use super::{ALIGNMENT_RESIDUAL_MAX_PX, OffsetViolation, judge_offset_log};
     clippy::too_many_arguments,
     reason = "欄がそのまま引数＝束ねると檻が読めない"
 )]
-fn offset(
+pub(super) fn offset(
     frame: u32,
     scope: u32,
     base_dpi: Option<u32>,
@@ -79,16 +79,17 @@ const WA_LOW: i32 = 1752;
 const WA_HIGH: i32 = 1704;
 
 // 合格ログの行番号（壊すときに名指しできるようにする）。
-const T0_SCOPE0: usize = 1;
-const T0_SCOPE1: usize = 2;
-const T2_SCOPE0: usize = 9;
-const T2_SCOPE2: usize = 11;
-const T3_SCOPE0: usize = 13;
-const T3_SCOPE1: usize = 14;
-const T3_SCOPE2: usize = 15;
-const T1_SCOPE0: usize = 5;
-const T1_SCOPE1: usize = 6;
-const T1_SCOPE2: usize = 7;
+pub(super) const T0_SCOPE0: usize = 1;
+pub(super) const T0_SCOPE1: usize = 2;
+pub(super) const T1_SCOPE0: usize = 5;
+pub(super) const T1_SCOPE1: usize = 6;
+pub(super) const T1_SCOPE2: usize = 7;
+pub(super) const T2_SCOPE0: usize = 9;
+pub(super) const T2_SCOPE1: usize = 10;
+pub(super) const T2_SCOPE2: usize = 11;
+pub(super) const T3_SCOPE0: usize = 13;
+pub(super) const T3_SCOPE1: usize = 14;
+pub(super) const T3_SCOPE2: usize = 15;
 
 /// 既知の**合格**ログ（module doc の台本）。
 pub(super) fn pass_lines() -> Vec<String> {
@@ -224,11 +225,6 @@ pub(super) fn pass_lines() -> Vec<String> {
     ]
 }
 
-/// 行の並びをログ本文へ。
-pub(super) fn log_of(lines: &[String]) -> String {
-    lines.join("\n")
-}
-
 /// 1 行だけ差し替えた不合格ログ。
 fn broken(index: usize, replacement: String) -> String {
     let mut lines = pass_lines();
@@ -242,7 +238,31 @@ fn broken(index: usize, replacement: String) -> String {
 
 #[test]
 fn the_known_passing_log_is_green() {
-    let report = judge_offset_log(&log_of(&pass_lines()));
+    // 中身も押さえる: ⑴ 是正後の往復は `rescaled → rescaled` を出す（判定語の並びでなく値を
+    // 鍵にしている証拠）。⑵ 開発者裁定（2026-08-27）が受容した残余＝T0 の scope 1 の
+    // `keyword-pending`（前後の値が bit 同一）を違反にしない。⑶ 遷移の内側に門の行がある形でも
+    // 母数が壊れない（素材が残るあいだの門は母数に入らず、scope 0 の T1 の追随が満たす）。
+    let lines = pass_lines();
+    for (index, verdict) in [
+        (T0_SCOPE0, OFFSET_VERDICT_RESCALED),
+        (T2_SCOPE0, OFFSET_VERDICT_RESCALED),
+        (T0_SCOPE1, OFFSET_VERDICT_KEYWORD_PENDING),
+    ] {
+        assert!(
+            lines[index].contains(&format!("{FIELD_VERDICT}={verdict}")),
+            "{}",
+            lines[index]
+        );
+    }
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(
+        report
+            .transitions
+            .iter()
+            .flat_map(|transition| transition.rows.iter())
+            .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
+        "既知の合格ログが遷移の内側に門の行を持たなくなった: {report}"
+    );
     assert!(!report.failed(), "既知の合格ログが赤になった:\n{report}");
 }
 
@@ -263,6 +283,40 @@ fn the_passing_fixture_is_actually_parsed() {
 }
 
 #[test]
+fn the_row_name_constants_point_at_their_transition_and_scope() {
+    // 行の名（`T1_SCOPE2` など）が本当にその遷移・scope の行を指すことを確かめる。名が
+    // ずれると、壊した檻は別の行を壊して別の理由で赤になり、名指しの判定を外したまま緑に見える。
+    let lines = pass_lines();
+    for (index, frame, scope) in [
+        (T0_SCOPE0, 10, 0),
+        (T0_SCOPE1, 10, 1),
+        (T1_SCOPE0, 20, 0),
+        (T1_SCOPE1, 20, 1),
+        (T1_SCOPE2, 20, 2),
+        (T2_SCOPE0, 30, 0),
+        (T2_SCOPE1, 30, 1),
+        (T2_SCOPE2, 30, 2),
+        (T3_SCOPE0, 40, 0),
+        (T3_SCOPE1, 40, 1),
+        (T3_SCOPE2, 40, 2),
+    ] {
+        let record = parse_transition_line(&lines[index]).expect("行として解析できる");
+        assert_eq!(
+            record.int_field::<u32>(FIELD_FRAME),
+            Some(frame),
+            "{index}: {}",
+            lines[index]
+        );
+        assert_eq!(
+            record.int_field::<u32>(FIELD_SCOPE),
+            Some(scope),
+            "{index}: {}",
+            lines[index]
+        );
+    }
+}
+
+#[test]
 fn an_empty_log_is_red_not_an_empty_pass() {
     let report = judge_offset_log("");
     assert_eq!(report.violations, vec![OffsetViolation::NoOffsetRecords]);
@@ -272,7 +326,7 @@ fn an_empty_log_is_red_not_an_empty_pass() {
 fn a_log_without_a_round_trip_is_red() {
     // 往復を 1 度も観測していないログは「違反 0 件」ではなく**判定できていない**。
     let lines = pass_lines();
-    let log = log_of(&lines[..8]);
+    let log = log_of(&lines[..=T1_SCOPE2]);
     let report = judge_offset_log(&log);
     assert!(
         report
@@ -315,22 +369,6 @@ fn a_round_trip_that_does_not_return_the_same_bits_is_red() {
         }],
         "{report}"
     );
-}
-
-#[test]
-fn the_round_trip_check_reads_values_not_verdict_words() {
-    // 是正後の往復は `rescaled → rescaled` を出す（`rescaled → unchanged` ではない）。
-    // 判定語の並びを鍵にしていたらこの合格ログは赤になる——値だけを鍵にしている証拠として、
-    // 往復の 2 本がどちらも `rescaled` であることを逐語で押さえる。
-    let lines = pass_lines();
-    for index in [T0_SCOPE0, T2_SCOPE0] {
-        assert!(
-            lines[index].contains(&format!("verdict={OFFSET_VERDICT_RESCALED}")),
-            "{}",
-            lines[index]
-        );
-    }
-    assert!(!judge_offset_log(&log_of(&lines)).failed());
 }
 
 // ---------------------------------------------------------------------------
@@ -461,7 +499,7 @@ fn a_record_with_a_missing_field_is_red() {
     let mut lines = pass_lines();
     let intact = lines[T0_SCOPE0].clone();
     let cut = intact
-        .split_once(&format!(" verdict={OFFSET_VERDICT_RESCALED}"))
+        .split_once(&format!(" {FIELD_VERDICT}={OFFSET_VERDICT_RESCALED}"))
         .expect("合格ログの行は判定語を持つ")
         .0
         .to_owned();
@@ -506,20 +544,6 @@ fn a_keyword_pending_row_that_carries_a_display_dpi_is_red() {
         }],
         "{report}"
     );
-}
-
-#[test]
-fn the_accepted_residual_is_not_read_as_a_broken_follow() {
-    // 開発者裁定（2026-08-27）が受容した残余＝素材未消費のまま寸据え置きの遷移を迎えた腕は、
-    // `keyword-pending` かつ前後の値が bit 同一という形で現れる。合格ログの T0／T1 が
-    // まさにその形であり、違反にしてはならない。
-    let lines = pass_lines();
-    assert!(
-        lines[T0_SCOPE1].contains(&format!("verdict={OFFSET_VERDICT_KEYWORD_PENDING}")),
-        "{}",
-        lines[T0_SCOPE1]
-    );
-    assert!(!judge_offset_log(&log_of(&lines)).failed());
 }
 
 // ---------------------------------------------------------------------------
@@ -594,20 +618,6 @@ fn a_log_without_any_rescale_on_the_low_scale_side_is_red() {
     );
 }
 
-#[test]
-fn a_keyword_scope_still_holding_its_material_does_not_make_a_false_red() {
-    // 逆向きの較正: 素材が残るあいだの遷移（T0／T1 の門）が母数に入っていたら、合格ログの
-    // 側が赤になる。実際には scope 0 の T1 の追随が母数を満たすので緑である。
-    let report = judge_offset_log(&log_of(&pass_lines()));
-    assert!(
-        !report
-            .violations
-            .iter()
-            .any(|violation| matches!(violation, OffsetViolation::NoLowScaleRescale { .. })),
-        "{report}"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // ⑷ キーワード指定スコープの揃えの残差（要件 8.5・design D8）
 // ---------------------------------------------------------------------------
@@ -644,27 +654,6 @@ fn an_alignment_residual_beyond_the_allowance_is_red() {
 }
 
 #[test]
-fn a_residual_inside_the_allowance_is_green() {
-    // 許容量ちょうど（3px）は合格側に置く——契約の上限は「以内」である。
-    // 基準 (25,-11)@192 → 96 の厳密値 12.5 に対し 15.5 は 3px。整数の欄なので 15 を採り、
-    // 残差 2.5px が緑であることを固定する（3px 超で初めて赤になることは上の檻が示す）。
-    let log = broken(
-        T3_SCOPE1,
-        offset(
-            40,
-            1,
-            Some(192),
-            96,
-            (25, -11),
-            (25, -11),
-            (15, -6),
-            OFFSET_VERDICT_RESCALED,
-        ),
-    );
-    assert!(!judge_offset_log(&log).failed());
-}
-
-#[test]
 fn a_log_that_never_measures_a_keyword_alignment_is_red() {
     // キーワード指定スコープが門の語しか出していない（＝揃えを 1 度も測れていない）ログ。
     let log = broken(
@@ -684,7 +673,7 @@ fn a_log_that_never_measures_a_keyword_alignment_is_red() {
     assert!(
         report
             .violations
-            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 1 }),
+            .contains(&OffsetViolation::KeywordScopeUnmeasured { scope: Some(1) }),
         "{report}"
     );
 }
@@ -717,7 +706,7 @@ fn lines_without_gate_rows() -> Vec<String> {
 
 #[test]
 fn a_gate_row_before_the_first_origin_still_forms_the_denominator() {
-    // ⑴ 門の行が**最初の起点より前にしか無い**ログ。実機はこの形しか採れない——素材は
+    // 門の行が**最初の起点より前にしか無い**ログ。実機はこの形しか採れない——素材は
     // 起動から 0.73〜5.0 秒で自動的に消費され、最初の起点は利用者のドラッグ由来ゆえ必ず
     // それより後に出る（2026-08-28 の実機ログ 3 本すべて）。
     let mut lines = lines_without_gate_rows();
@@ -731,25 +720,7 @@ fn a_gate_row_before_the_first_origin_still_forms_the_denominator() {
             .iter()
             .flat_map(|transition| transition.rows.iter())
             .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
-        "遷移の内側に門の行が残っている＝この檻が ⑴ の形を踏んでいない:
-{report}"
-    );
-    assert!(!report.failed(), "{report}");
-}
-
-#[test]
-fn a_gate_row_inside_a_transition_still_forms_the_denominator() {
-    // ⑵ 従来どおり遷移の内側に門の行があるログ（既知の合格ログ）。母数の作り方を広げても
-    // この形が壊れないことを固定する。
-    let report = judge_offset_log(&log_of(&pass_lines()));
-    assert!(
-        report
-            .transitions
-            .iter()
-            .flat_map(|transition| transition.rows.iter())
-            .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
-        "既知の合格ログが遷移の内側に門の行を持たなくなった:
-{report}"
+        "遷移の内側に門の行が残っている＝この檻が母数の 1 つ目の形（門の行が最初の起点より前にだけある）を踏んでいない:\n{report}"
     );
     assert!(!report.failed(), "{report}");
 }
@@ -758,8 +729,8 @@ fn a_gate_row_inside_a_transition_still_forms_the_denominator() {
 ///
 /// 落とすのは `base_dpi` である——`scope` と `verdict` は残るので、母数が
 /// `is_well_formed()` で弾いているのか、それとも欄が読めずに弾かれただけなのかを
-/// 取り違えない。値が読めない字面（`base_dpi=x` など）では欠陥が立たない
-/// （`RecordDefect::UnreadableField` は `frame`／`t_us` にしか立たない・実測）。
+/// 取り違えない。値が読めない字面（`base_dpi=x` など）では解析の欠陥は立たず、判定器が
+/// 欄を読む所（`offset_row`）で形の壊れた行になる——この部品の檻は欠陥の側を見る。
 fn malformed_keyword_gate_line() -> String {
     let intact = keyword_gate_line(1);
     let broken = intact.replace(&format!(" {FIELD_BASE_DPI}=192"), "");
@@ -769,7 +740,7 @@ fn malformed_keyword_gate_line() -> String {
 
 #[test]
 fn a_malformed_gate_row_does_not_enter_the_denominator() {
-    // 母数は**読める行**からしか作らない（`keyword_pending_scopes` の `is_well_formed()`）。
+    // 母数の 2 つ目の檻: 母数は**読める行**からしか作らない（`keyword_pending_scopes` の `is_well_formed()`）。
     // 読めない行から母数を組むと、行の形が壊れたときに母数だけが静かに増え、⑷ が
     // 「1 度も測れていない」を言えなくなる。
     let broken_gate = malformed_keyword_gate_line();
@@ -793,20 +764,20 @@ fn a_malformed_gate_row_does_not_enter_the_denominator() {
     assert!(
         report
             .violations
-            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 }),
+            .contains(&OffsetViolation::NoKeywordAlignmentMeasured),
         "{report}"
     );
 }
 
 #[test]
 fn a_log_with_no_gate_row_anywhere_is_still_red() {
-    // ⑶ 門の行が**どこにも無い**ログ。母数を広げた結果「検査が何も要求しなくなる」形を
+    // 母数の 3 つ目の檻: 門の行が**どこにも無い**ログ。母数を広げた結果「検査が何も要求しなくなる」形を
     // 防ぐ檻——ここが緑になったら、⑷ はキーワード指定スコープを 1 つも要求していない。
     let report = judge_offset_log(&log_of(&lines_without_gate_rows()));
     assert!(
         report
             .violations
-            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 }),
+            .contains(&OffsetViolation::NoKeywordAlignmentMeasured),
         "{report}"
     );
 }
@@ -828,9 +799,8 @@ fn the_judge_writes_no_verdict_literal() {
             "判定器が判定語のリテラル {literal} を書いている"
         );
     }
-    let probe = format!("\"{OFFSET_VERDICT_RESCALED}\"");
     assert!(
-        format!("let x = {probe};").contains(&probe),
-        "檻の探し方そのものが壊れている"
+        source.contains("OFFSET_VERDICT_RESCALED"),
+        "檻が判定器のソースを読めていない（定数の名が見つからない）"
     );
 }

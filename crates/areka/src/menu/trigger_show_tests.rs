@@ -13,7 +13,7 @@ use std::time::Duration;
 use areka_kanade::KanadeMsg;
 use areka_kanade::resources::ResourceOutcome;
 use log_capture_kit::{LineFormat, capture_lines};
-use windows::Win32::Foundation::{E_ACCESSDENIED, HINSTANCE};
+use windows::Win32::Foundation::E_ACCESSDENIED;
 
 use super::*;
 use crate::input_events::RegionSource;
@@ -49,12 +49,7 @@ fn fixture() -> Fixture {
     let mut ecs = EcsWorld::new();
     let world = ecs.world_mut();
     world.insert_non_send(MouseWiring::new(tx, RegionSource::Mock(no_region)));
-    let window = world
-        .spawn(WindowHandle {
-            hwnd: fake_hwnd(),
-            instance: HINSTANCE::default(),
-        })
-        .id();
+    let window = world.spawn(WindowHandle { hwnd: fake_hwnd() }).id();
     Fixture {
         outer: Rc::new(RefCell::new(ecs)),
         kanade,
@@ -499,12 +494,7 @@ fn a_ready_plan_without_the_outer_world_reference_is_dropped_with_one_warning() 
     let (tx, _kanade) = channel::<KanadeMsg>();
     let mut world = World::new();
     world.insert_non_send(MouseWiring::new(tx.clone(), RegionSource::Mock(no_region)));
-    let window = world
-        .spawn(WindowHandle {
-            hwnd: fake_hwnd(),
-            instance: HINSTANCE::default(),
-        })
-        .id();
+    let window = world.spawn(WindowHandle { hwnd: fake_hwnd() }).id();
     let (reply, rx) = areka_actor::reply_channel::<QueryReply>();
     reply
         .send(vec![(

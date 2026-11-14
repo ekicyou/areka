@@ -16,7 +16,7 @@
 //!
 //! # 判定語のリテラルを書かない
 //!
-//! 6 つの判定語も欄名も、発行側（[`super::transition_diag`]）の `pub const` を参照するだけ
+//! 6 つの判定語も欄名も、発行側（[`areka_placement::transition_diag`]）の `pub const` を参照するだけ
 //! である。字面を 1 つでもここで書き直すと、発行側が語を変えたときに判定が静かに空振りする
 //! （[`super::transition_judge`] の module doc と同じ規律）。
 //!
@@ -56,10 +56,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use wintf::ecs::window::transition_diag::{FIELD_NEW_DPI, FIELD_OLD_DPI, FIELD_SCOPE, MISSING};
+use wintf::ecs::window::transition_diag::{FIELD_NEW_DPI, FIELD_SCOPE};
 
 use super::transition_judge::{
-    TransitionRecord, is_transition_origin, parse_transition_log, split_transitions,
+    TransitionOrigin, TransitionRecord, or_missing, parse_transition_log, split_transitions,
 };
 use areka_placement::transition_diag::{
     FIELD_BASE_DPI, FIELD_BASE_OFFSET, FIELD_NEW_OFFSET, FIELD_OLD_OFFSET, FIELD_VERDICT,
@@ -147,6 +147,11 @@ pub enum OffsetViolation {
         /// 何が読めなかったか。
         detail: String,
     },
+    /// 最初の起点より前（どの遷移にも属さない前置き）に、読めない追随レコードがある。
+    UnassignedMalformedRecord {
+        /// 何が読めなかったか。
+        detail: String,
+    },
     /// 語彙表に無い判定語。
     UnknownVerdict {
         /// 遷移番号。
@@ -224,10 +229,14 @@ pub enum OffsetViolation {
         /// 許容量（px）。
         max_px: i64,
     },
-    /// キーワード指定スコープの揃えを 1 度も測れていない（要件 8.5）。
-    NoKeywordAlignmentMeasured {
-        /// 門の判定語を 1 度でも出したスコープの数（0 なら点灯そのものが無い）。
-        keyword_scopes: usize,
+    /// キーワード指定スコープの揃えを 1 度も測れていない（要件 8.5）。母数（門の判定語を出した
+    /// スコープ）が空のときだけ立つ（母数があれば測れていないスコープごとに
+    /// [`Self::KeywordScopeUnmeasured`] が立つ）。
+    NoKeywordAlignmentMeasured,
+    /// 母数に入ったキーワード指定スコープのうち、揃えを 1 度も測れていないものがある（要件 8.5）。
+    KeywordScopeUnmeasured {
+        /// 測れていないスコープ。
+        scope: Option<u32>,
     },
 }
 
@@ -241,6 +250,10 @@ impl fmt::Display for OffsetViolation {
             Self::MalformedRecord { transition, detail } => {
                 write!(f, "遷移 {transition}: 追随レコードを読めない（{detail}）")
             }
+            Self::UnassignedMalformedRecord { detail } => write!(
+                f,
+                "最初の起点より前の追随レコードを読めない（{detail}・どの遷移にも属さない行でも捨てない）"
+            ),
             Self::UnknownVerdict {
                 transition,
                 scope,
@@ -248,7 +261,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: 語彙表に無い判定語 {FIELD_VERDICT}={verdict}（表は {OFFSET_VERDICT_ALL:?}）",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
             Self::UnexpectedVerdict {
                 transition,
@@ -258,7 +271,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: 判定語が期待の腕でない（実際 {verdict}・期待 {expected:?}）",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
             Self::ValueMoved {
                 transition,
@@ -269,7 +282,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: {verdict} は値を動かさない腕なのに動いた（{}→{}）",
-                scope_text(*scope),
+                or_missing(*scope),
                 point_text(*old_offset),
                 point_text(*new_offset)
             ),
@@ -280,7 +293,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: {OFFSET_VERDICT_KEYWORD_PENDING} は表示 DPI 読取より前の門なのに {FIELD_NEW_DPI}={new_dpi} を運んでいる",
-                scope_text(*scope)
+                or_missing(*scope)
             ),
             Self::RoundTripDrift {
                 scope,
@@ -292,7 +305,7 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "{FIELD_SCOPE}={}: {FIELD_NEW_DPI}={dpi} へ戻ったのに値が bit 同一でない（遷移 {first_transition} で {}・遷移 {again_transition} で {}）",
-                scope_text(*scope),
+                or_missing(*scope),
                 point_text(*first),
                 point_text(*again)
             ),
@@ -315,23 +328,20 @@ impl fmt::Display for OffsetViolation {
             } => write!(
                 f,
                 "遷移 {transition} {FIELD_SCOPE}={}: {axis} 軸の揃えの残差 {}.{:02}px が許容量 {max_px}px を超えた",
-                scope_text(*scope),
+                or_missing(*scope),
                 residual_hundredths / 100,
                 residual_hundredths % 100
             ),
-            Self::NoKeywordAlignmentMeasured { keyword_scopes } => write!(
+            Self::NoKeywordAlignmentMeasured => write!(
                 f,
-                "キーワード指定スコープの揃えを 1 度も測れていない（{OFFSET_VERDICT_KEYWORD_PENDING} を出したスコープ {keyword_scopes} 個・素材消費後に {OFFSET_VERDICT_RESCALED} の行が要る）"
+                "キーワード指定スコープの揃えを 1 度も測れていない（{OFFSET_VERDICT_KEYWORD_PENDING} を出したスコープが無い・素材消費後に {OFFSET_VERDICT_RESCALED} の行が要る）"
+            ),
+            Self::KeywordScopeUnmeasured { scope } => write!(
+                f,
+                "{FIELD_SCOPE}={}: キーワード指定スコープの揃えを 1 度も測れていない（素材消費後に比が恒等でない {OFFSET_VERDICT_RESCALED} の行が要る）",
+                or_missing(*scope)
             ),
         }
-    }
-}
-
-/// スコープ番号の表示（番兵は発行側と同じ字面）。
-fn scope_text(scope: Option<u32>) -> String {
-    match scope {
-        Some(scope) => scope.to_string(),
-        None => MISSING.to_owned(),
     }
 }
 
@@ -417,17 +427,32 @@ fn collect_offset_transitions(
     records: &[TransitionRecord],
     violations: &mut Vec<OffsetViolation>,
 ) -> Vec<OffsetTransition> {
+    let spans = split_transitions(records);
+    // 区切りに入らないのは最初の起点より前の前置きだけ（`split_transitions` の契約・
+    // `judge_transition_log` の `unassigned_malformed_records` と同じ数え方）。
+    let unassigned = records.len() - spans.iter().map(Vec::len).sum::<usize>();
+    for record in records[..unassigned]
+        .iter()
+        .filter(|record| record.kind == KIND_OFFSET)
+    {
+        if let Err(detail) = offset_row(0, record) {
+            violations.push(OffsetViolation::UnassignedMalformedRecord { detail });
+        }
+    }
     let mut transitions = Vec::new();
-    for (index, span) in split_transitions(records).into_iter().enumerate() {
-        let Some(origin) = span.first().filter(|record| is_transition_origin(record)) else {
-            continue;
-        };
-        let (Some(old_dpi), Some(new_dpi)) = (
-            origin.int_field::<u32>(FIELD_OLD_DPI),
-            origin.int_field::<u32>(FIELD_NEW_DPI),
-        ) else {
-            continue;
-        };
+    // 区間の先頭は必ず起点（`split_transitions` の契約）なので、起点の型の結果をそのまま使う。
+    let spans = spans.into_iter().enumerate().filter_map(|(index, span)| {
+        let origin = TransitionOrigin::of(span.first()?)?;
+        Some((index, origin, span))
+    });
+    for (
+        index,
+        TransitionOrigin {
+            old_dpi, new_dpi, ..
+        },
+        span,
+    ) in spans
+    {
         let mut rows = Vec::new();
         for record in span.iter().filter(|record| record.kind == KIND_OFFSET) {
             match offset_row(index, record) {
@@ -462,14 +487,25 @@ fn offset_row(transition: usize, record: &TransitionRecord) -> Result<OffsetRow,
         .to_owned();
     Ok(OffsetRow {
         transition,
-        scope: record.int_field::<u32>(FIELD_SCOPE),
-        base_dpi: record.int_field::<u32>(FIELD_BASE_DPI),
+        scope: optional_int_field(record, FIELD_SCOPE)?,
+        base_dpi: optional_int_field(record, FIELD_BASE_DPI)?,
         new_dpi,
         base_offset: point_field(record, FIELD_BASE_OFFSET)?,
         old_offset: point_field(record, FIELD_OLD_OFFSET)?,
         new_offset: point_field(record, FIELD_NEW_OFFSET)?,
         verdict,
     })
+}
+
+/// 無くてもよい数の欄を読む（無い・`-` は `None`・それ以外で数にならなければ `Err`）。
+fn optional_int_field(record: &TransitionRecord, name: &str) -> Result<Option<u32>, String> {
+    match record.field(name) {
+        Some(raw) => raw
+            .parse()
+            .map(Some)
+            .map_err(|error| format!("{name}={raw} を数として読めない: {error}")),
+        None => Ok(None),
+    }
 }
 
 /// `x,y` の欄を読む。
@@ -589,7 +625,10 @@ fn check_round_trip(transitions: &[OffsetTransition], violations: &mut Vec<Offse
                 seen.insert(key, (row.transition, row.new_offset));
             }
             Some(&(first_transition, first)) => {
-                round_trips += 1;
+                // 同じ遷移の中の二重の行は往復ではない（値の一致だけは下で確かめる）。
+                if first_transition != row.transition {
+                    round_trips += 1;
+                }
                 if first != row.new_offset {
                     violations.push(OffsetViolation::RoundTripDrift {
                         scope: row.scope,
@@ -662,7 +701,9 @@ fn residual_measurable(row: &OffsetRow) -> Option<u32> {
     if row.verdict != OFFSET_VERDICT_RESCALED || row.new_dpi == 0 {
         return None;
     }
-    row.base_dpi.filter(|base_dpi| *base_dpi != 0)
+    // 恒等比の行は作りから残差 0 なので、測った数に入れない。
+    row.base_dpi
+        .filter(|base_dpi| *base_dpi != 0 && *base_dpi != row.new_dpi)
 }
 
 /// 1 軸ぶんの残差（px の 1/100 単位・切り捨て）と、許容量を超えたか。
@@ -723,7 +764,7 @@ fn check_alignment_residual(
     violations: &mut Vec<OffsetViolation>,
 ) {
     let keyword_scopes = keyword_pending_scopes(records);
-    let mut measured = 0usize;
+    let mut measured_scopes = BTreeSet::new();
     for row in transitions
         .iter()
         .flat_map(|t| t.rows.iter())
@@ -732,7 +773,7 @@ fn check_alignment_residual(
         let Some(base_dpi) = residual_measurable(row) else {
             continue;
         };
-        measured += 1;
+        measured_scopes.insert(row.scope);
         for (axis, base, new) in [
             ("x", row.base_offset.0, row.new_offset.0),
             ("y", row.base_offset.1, row.new_offset.1),
@@ -749,10 +790,13 @@ fn check_alignment_residual(
             }
         }
     }
-    if measured == 0 {
-        violations.push(OffsetViolation::NoKeywordAlignmentMeasured {
-            keyword_scopes: keyword_scopes.len(),
-        });
+    if !keyword_scopes.is_empty() {
+        for &scope in keyword_scopes.difference(&measured_scopes) {
+            violations.push(OffsetViolation::KeywordScopeUnmeasured { scope });
+        }
+    } else {
+        // 母数が空なら、上の繰り返しは 1 行も通さない＝何も測れていない。
+        violations.push(OffsetViolation::NoKeywordAlignmentMeasured);
     }
 }
 
@@ -763,3 +807,7 @@ mod transition_judge_offset_tests;
 #[cfg(test)]
 #[path = "transition_judge_offset_signoff_tests.rs"]
 mod transition_judge_offset_signoff_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_offset_negative_tests.rs"]
+mod negative_tests;

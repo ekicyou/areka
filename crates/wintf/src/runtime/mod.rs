@@ -368,6 +368,8 @@ impl WinApp {
     /// # 戻り値
     /// 正常終了時 `Ok(())`。COM/DPI は `new()` で初期化済み。
     pub fn run(&self) -> Result<()> {
+        // 0. このスレッドを UI スレッドとして控える（ほかのスレッドの窓の書き込みは捨てる）。
+        crate::ecs::window::record_ui_thread();
         // 1. 新経路結線（self-ref 注入 + reconcile 登録）。
         self.wire_new_path();
 

@@ -15,7 +15,7 @@ use super::{
 /// （透明域のクリックは背後プロセスへ透過し本ハンドラには**到達しない**）。ゆえに毎押下（単クリック
 /// 含む）で 1 行だけ `info!` を出し捕捉を記録する（不在＝透明域透過の観測）。
 ///
-/// despawn → `on_window_handle_remove` → `PostMessage(WM_CLOSE)` → `WindowRegistry` 空遷移 →
+/// despawn → `reconcile_window_registry` が `DestroyWindow` → `WindowRegistry` 空遷移 →
 /// `run()` 復帰、という wintf の作法に委ねる。
 pub(super) fn on_shell_pressed(
     world: &mut World,

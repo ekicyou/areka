@@ -6,7 +6,7 @@
 //! 4 辺は 96 の倍数を避け、隠れた再スケールがあれば一致が崩れる檻にする。
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
@@ -61,7 +61,6 @@ fn world() -> World {
     ] {
         world.entity_mut(e).insert(WindowHandle {
             hwnd: HWND(raw as *mut _),
-            instance: HINSTANCE::default(),
         });
     }
     world

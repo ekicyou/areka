@@ -24,10 +24,7 @@ fn test_to_window_coords_overlapped_window() {
         });
 
     // 座標変換を実行
-    let window_handle = wintf::ecs::window::WindowHandle {
-        hwnd,
-        instance: windows::Win32::Foundation::HINSTANCE::default(),
-    };
+    let window_handle = wintf::ecs::window::WindowHandle { hwnd };
     let result = window_pos.to_window_coords(&window_handle);
 
     // クリーンアップ
@@ -85,10 +82,7 @@ fn test_to_window_coords_popup_window() {
         });
 
     // 座標変換を実行
-    let window_handle = wintf::ecs::window::WindowHandle {
-        hwnd,
-        instance: windows::Win32::Foundation::HINSTANCE::default(),
-    };
+    let window_handle = wintf::ecs::window::WindowHandle { hwnd };
     let result = window_pos.to_window_coords(&window_handle);
 
     // クリーンアップ
@@ -122,10 +116,7 @@ fn test_to_window_coords_invalid_hwnd() {
         });
 
     // 座標変換を実行 - Errが返されることを期待
-    let window_handle = wintf::ecs::window::WindowHandle {
-        hwnd: invalid_hwnd,
-        instance: windows::Win32::Foundation::HINSTANCE::default(),
-    };
+    let window_handle = wintf::ecs::window::WindowHandle { hwnd: invalid_hwnd };
     let result = window_pos.to_window_coords(&window_handle);
 
     // エラーが返されることを確認

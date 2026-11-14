@@ -78,3 +78,10 @@
 `runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
 
 - **要らない項目: `crates/areka/src/runtime/frame/wiring.rs` 322 行目の説明の文の古いパス**。`super::super::input_events::balloon` は `runtime` の下を指すが、`input_events` は本体の根（`crate::input_events::balloon`）にある。字面だけの直し。
+
+## audit-wintf-window からの申し送り（2026-11-14）
+
+`audit-wintf-window`（wintf の窓と窓の手続きの見直し）の完了の棚卸で、この spec の範囲で見つけたもの。直し方は決めない。場所は `audit-wintf-window` の着地の時点の行。
+
+- **件 1**: `crates/areka/src/runtime/frame_transition_atomicity_tests.rs:47`・`:527` が `crates/wintf/src/ecs/window_proc/window_pos.rs:464`・`:468-489` を行番号で指すが、今の `guarded_set_window_pos` の呼び出しは 475 行目あたり（前から外れていた）。名前で引く形にするとずれない。
+- **件 2**: `crates/areka/src/runtime/frame/zorder_drain.rs:52`・`zorder_descript.rs:33`・`zorder_drain_tests.rs:443` が、記録の出力先を 1 つに揃える理由を「grep 対象が 2 本に割れる」と書く。読み手の絞り込み（`RUST_LOG`）は前方一致なので漏れはしない。`audit-wintf-window` は同じ種類の文を「出力先は 1 つのモジュールに揃える（絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）」に直した（指摘 34・R2-1）。
