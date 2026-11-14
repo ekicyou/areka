@@ -17,6 +17,7 @@
   - crates.io への公開の引き継ぎ（`tools/crates-io.ps1` の公開の一覧と自分の検査・`.github/workflows/crates-io.yml` の注記・`doc/crates-io-publish.md`・スキル `/release` の手順のうち版上げで動かす行）。
   - steering の登記（`.kiro/steering/tech.md`・`.kiro/steering/structure.md`）。
   - 元のリポジトリ `ekicyou/wintf-winmsg-executor` の後始末（README に移転先を書く・archive）。開発者の許しを得てから行う。
+  - 要件に名指しの無い、同じ事実の古い記述の書き換え（2026-11-14 要件の討議の議題 2）: スキル `/update` の `SKILL.md`（`=` で固定した行の一覧・自前のクレートの例・版の表記）・`structure.md` の「その他の最上位」の `crates-io.yml` の説明・`tech.md` の「UI スレッド基盤の外部クレ化」の文・`crates/pilot/Cargo.toml` の 0.0.5 を固定する旨の注記。
 - **Out of scope**:
   - クレートの動きと公開面の変更。
   - `windows` 0.62 からの移行（`windows-bindgen` の束縛へ移すのは先進坑 `pilot-windows-rs-next` と、その後に起票する移行の本体）。
@@ -67,7 +68,7 @@
 5. The `Cargo.lock` shall crates.io 由来の `wintf-winmsg-executor` の項を持たない。
 6. The `Cargo.lock` shall この spec の前と比べて、`wintf-winmsg-executor` の出どころと版のほかに、外部のクレートの項を増やさず版も変えない（`windows`・`windows-core`・`async-task` はそれぞれ今の 1 つの版のまま）。
 7. When i686 の補助 exe（`shiori-host32-helper`）を組むとき, the areka のワークスペース shall 写したクレートを使って組み上げる。
-8. When 開発者が全体テスト（`tools/test-all.ps1 -Format -License`）を回すとき, the areka のワークスペース shall 緑で終わる。
+8. When 開発者が全体テスト（`tools/test-all.ps1 -Format -License`）を回すとき, the areka のワークスペース shall 緑で終わる。写したクレートの単体テストと doctest（本物の MessageBox を出すテストを含む）は全体テストから外さず、UI テストとして排他テストの机で回す（2026-11-14 要件の討議の議題 1。並走で揺れが出たら、原因の題名の取り違えを起票する）。
 9. When 全体テストのライセンスの段が第三者ライセンスの謝辞（`THIRD-PARTY-NOTICES.md`）を作り直すとき, the 謝辞 shall `wintf-winmsg-executor` の項に `MIT OR Apache-2.0` の表示と、フォーク元の著作権の表示（Timo Kröger と winmsg-executor の寄稿者）・フォークの著作権の表示を残す。
 
 ### Requirement 4: crates.io への公開の引き継ぎ
@@ -96,6 +97,7 @@
 7. The スキル `/release` の手順 shall 版上げで動かす根の `Cargo.toml` の行に `wintf-winmsg-executor` の `version` の行を足し、版を読む段・版を上げる段（代わりのやり方を含む）・上がった版の判定（足した行と消した行の数とその中身）・タグの前の確かめ・「次が変わったら見直す」の覚え書きを、その行の数に合わせる。
 8. When `/release` の版を上げる段が回った後, the `/release` の手順 shall 根の `Cargo.toml` の `[workspace.package]` の `version`・`dola` の `version`・`wintf-winmsg-executor` の `version` の 3 つがどれもリリースの版でなければ止まる。
 9. The この spec が書く文書 shall 日本語で書き、project の語をそのまま使う。
+10. The この spec shall In scope の「要件に名指しの無い、同じ事実の古い記述」の 4 か所を、新しい形（木の中の写し・公開するクレートは 3 つ）に書き換える。
 
 ### Requirement 6: 元のリポジトリの後始末
 **Objective:** As a 開発者, I want 元のリポジトリが移転したと分かる状態になること, so that 元のリポジトリを見た人が新しい置き場へ辿れ、古い置き場へ変更が入らない
