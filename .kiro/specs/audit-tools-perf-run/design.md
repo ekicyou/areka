@@ -46,7 +46,7 @@
 
 ### Allowed Dependencies
 
-- PowerShell 7 と .NET の標準（`ProcessStartInfo.ArgumentList`・`IO.File.ReadLines`・`Select-String`・PowerShell の構文木 `System.Management.Automation.Language.Parser`）。新しいモジュールもパッケージも足さない（要件 5.6）。
+- PowerShell 7 と .NET の標準（`ProcessStartInfo.ArgumentList`・`IO.File.ReadLines`・`Select-String`・PowerShell の構文木 `System.Management.Automation.Language.Parser`・`Add-Type` で組む .NET の標準だけの C#）。新しいモジュールもパッケージも足さない（要件 5.6）。
 - 範囲の中の読み込みの向きは下の「読み込みの向き」の図だけ。上流（左）から下流（右）への読み込みを足さない。
 - 範囲の外へは、今と同じ呼び先だけを使う: `python`（判定と台帳の道具・`judge-followup.py`）・`cargo`・`git`・`xperf.exe`・`invoke-cpu-sample.ps1` が呼ぶシンボルサーバ。`tools/utf8-child.ps1` は範囲の中から使わなくなる（ファイルはそのまま）。
 
@@ -79,10 +79,13 @@ graph LR
     Build[perf-loop.build]
     RunDir[perf-loop.rundir]
     Entry[perf-loop entry]
+    LoopTestBase[perf-loop.selftest-base]
     LoopTest[perf-loop.selftest]
+    LoopTest2[perf-loop.selftest2]
     Quiet[check-quiet]
     Runner[invoke-perf-run]
     RunnerTest[invoke-perf-run.selftest]
+    RunnerFacts[invoke-perf-run.facts]
     Sample[invoke-cpu-sample]
     Followup[invoke-followup-checks]
     EncCheck[encoding-check outside]
@@ -98,20 +101,24 @@ graph LR
     Measure --> RunDir
     Common --> Entry
     Measure --> Entry
-    Common --> LoopTest
-    Measure --> LoopTest
+    Common --> LoopTestBase
+    Measure --> LoopTestBase
+    LoopTestBase --> LoopTest
+    LoopTestBase --> LoopTest2
     Runner --> RunnerTest
+    Base --> RunnerFacts
+    RunnerFacts --> Runner
     Common --> EncCheck
 ```
 
-矢印は「読み込まれる側 → 読み込む側」。`perf-loop.measure.ps1` は自分の較正値（`$MEASURE_*`）を置いた後で `perf-loop.build.ps1` と `perf-loop.rundir.ps1` を読み込む（読み込む順の所在を 1 か所にするため。入口とテストは `common` と `measure` の 2 本を読むだけでよい）。`invoke-perf-run.selftest.ps1` は `invoke-perf-run.ps1 -SelfTest` のときだけ、ランナーの中から読み込まれる。
+矢印は「読み込まれる側 → 読み込む側」。`perf-loop.measure.ps1` は自分の較正値（`$MEASURE_*`）を置いた後で `perf-loop.build.ps1` と `perf-loop.rundir.ps1` を読み込む（読み込む順の所在を 1 か所にするため。入口とテストは `common` と `measure` の 2 本を読むだけでよい）。`invoke-perf-run.selftest.ps1` は `invoke-perf-run.ps1 -SelfTest` のときだけ、ランナーの中から読み込まれる。T2 の 2 本（`perf-loop.selftest.ps1`・`perf-loop.selftest2.ps1`）は骨組みの `perf-loop.selftest-base.ps1` だけを読み込み、骨組みが `common` と `measure` を読む。`invoke-perf-run.facts.ps1` はランナーが `perf-tool-base.ps1` の後で読み込む（`perf-tool-base.ps1` の関数に頼ってよい）。
 
 **読み込みの向きの決まり**（違反はレビューで誤りとして扱う）:
 
 - `perf-tool-base.ps1` は `perf-pwsh-child.ps1` だけを読み込む。呼び手の変数・関数に頼らず、`Set-StrictMode` を自分では呼ばず（呼び手の型のまま動く）、`StrictMode Latest` でも落ちない書き方にする。関数と定数を置くほかに副作用を持たない。
 - `perf-loop.common.ps1` は `perf-tool-base.ps1` だけを読み込み、単独で読み込めて副作用が無い（`encoding check` が頼る形）。
 - `perf-loop.build.ps1`・`perf-loop.rundir.ps1` は `common` と `measure` の定数に頼ってよいが、`perf-loop.ps1` の変数には頼らない。
-- 子の道具 4 本は `perf-tool-base.ps1` だけを読み込む（`perf-loop.common.ps1` を読み込まない）。
+- 子の道具 4 本は `perf-tool-base.ps1` だけを読み込む（`perf-loop.common.ps1` を読み込まない）。ランナーはそのほかに自分の切り出し `invoke-perf-run.facts.ps1`（と `-SelfTest` のときだけ `invoke-perf-run.selftest.ps1`）を読み込む。
 
 ### 技術
 
@@ -121,6 +128,7 @@ graph LR
 | 子のプロセス | .NET `System.Diagnostics.ProcessStartInfo`（`ArgumentList`） | 子の起こし方を 1 つに寄せる（5・19） | `Start-Process` は areka 本体を起こす 2 か所（ランナー・追随の検査）にだけ残す（標準出力をファイルへ落とし、待たずに PID を見るため） |
 | 構文の検査 | `System.Management.Automation.Language.Parser` | T2 で各入口に `trap` があることを確かめる（3） | 標準の部品 |
 | 採取 | Windows Performance Toolkit の `xperf.exe`（今の机の版） | 段③の採取 | `wpaexporter` の道は消す（16） |
+| dump の数え | `Add-Type` で組む C#（.NET の標準だけ・1 回だけ組む） | 段③の dump の `areka.exe!` のフレームを数える（`invoke-cpu-sample.ps1`） | 大きな dump を PowerShell の行ごとの処理で数えると何時間もかかるため。新しい依存ではない |
 
 新しい依存は 0（要件 5.6・5.7 の議題は無い）。
 
@@ -137,7 +145,9 @@ tools/perf/
 ├── perf-loop.measure.ps1       # 直す: 測る 8 本の本体（段③の採取の流れ・A/B の確かめを含む）
 ├── perf-loop.build.ps1         # 新: 実行体の用意（作る・写す・確かめる・A と B の突き合わせ）
 ├── perf-loop.rundir.ps1        # 新: 走行の出力先の扱い（完了の見方・脇へ退ける・-DryRun の印と作り直し）
+├── perf-loop.selftest-base.ps1 # 新: T2 の骨組み（common と measure を読み、偽の Exit-WithResult と検査の回し方を置く）
 ├── perf-loop.selftest.ps1      # 新: perf-loop 側の自分の検査（T2）
+├── perf-loop.selftest2.ps1     # 新: T2 の 2 本目（出力先と -Resume の束・入口の束・段③の束。1,000 行の番人のため分けた）
 ├── invoke-perf-run.ps1         # 直す: ランナー（採取の開始を受け持つ・強制終了の後に待つ・-SelfTest）
 ├── invoke-perf-run.selftest.ps1 # 新: ランナーの自分の検査の中身（T3。-SelfTest のときだけ読み込まれる）
 ├── invoke-perf-run.facts.ps1   # 新: ランナーが run-meta.txt に書くマシンとソースの識別（invoke-perf-run.ps1 から移した）
@@ -154,6 +164,8 @@ tools/perf/
 - `tools/perf/perf-loop.build.ps1` — `perf-loop.measure.ps1` と `perf-loop.common.ps1` から実行体の用意に関わる関数を移す（20）。直し 10・11・12・13・15 の置き場。
 - `tools/perf/perf-loop.rundir.ps1` — 走行の出力先の完了の見方・脇へ退ける・`-DryRun` の印を移す（20）。直し 2・6 の置き場。
 - `tools/perf/perf-loop.selftest.ps1` — T2。`SELFTEST_TOOLS` に足す（21）。
+- `tools/perf/perf-loop.selftest2.ps1` — T2 の 2 本目。出力先と `-Resume` の束・入口の束・段③の束を 1 本目から分けた（1,000 行の番人のため・6.2 で足した）。`SELFTEST_TOOLS` に足す。
+- `tools/perf/perf-loop.selftest-base.ps1` — T2 の 2 本が読み込む骨組み（`common` と `measure` の読み込み・偽の `Exit-WithResult`・`Assert-SelfTest`・検査の回し方）。8.1 で 2 本の写しを寄せた。
 - `tools/perf/invoke-perf-run.selftest.ps1` — T3 の中身。`invoke-perf-run.ps1 -SelfTest` が読み込む（22）。
 - `tools/perf/invoke-perf-run.facts.ps1` — `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.ps1` から字のまま移す（ランナーを 1,000 行の下に保つため・6.3 で足した）。`invoke-perf-run.ps1` が `perf-tool-base.ps1` の後で読み込む。
 
