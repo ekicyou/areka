@@ -102,3 +102,10 @@
 - 消した投函に合わせて直した説明（コードは変えない・行は増やさない）: `clickthrough/controller.rs:91`（窓の close の起点を「登録簿の掃除 `reconcile_window_registry` が `DestroyWindow` する」に）・`window/zorder_pair_maintain_detach_tests.rs:298-299`（「除去フックが `WM_CLOSE` を投函する」を「破棄は登録簿の掃除が行う」に）・`areka/src/menu/trigger_flow_tests.rs:805-807`（「投函するので空のハンドル」を「何も投函しない・実在の窓は要らないので空のハンドル」に）・`areka/examples/mock-shell.rs:423,437`・`areka/examples/emo-present/input.rs:18`（流れを「despawn → `reconcile_window_registry` が `DestroyWindow` → `WindowRegistry` 空遷移」に）
 - 直した後に `git grep -n -i "WM_CLOSE" -- crates` を引き直した: 残りはウィンドウ手続きの受け手（`window_proc/lifecycle.rs`・`mod.rs:52`・`world/tick_wake.rs`）・OS の閉鎖要求の説明（`window/components.rs:129`・`runtime/mod.rs:258` の「WM_CLOSE の despawn」＝受け手の despawn）・自前の窓のテストと道具（`tooltip/os_tests.rs`・`shiori-host32-ipc`・`pilot`・`real-run-kit`）だけで、ハンドルの外れから投げると書く説明は 0 件
 - 確かめ: `cargo build -p wintf -p areka --tests --examples` 緑・`cargo fmt --all -- --check` 緑
+
+## 5.2
+
+- 9: `crates/wintf/src/ecs/window/window_handle.rs` の `mod tests` に `framed_window_client_to_window_round_trips` を 1 本足した。`crate::api::with_test_window` で `WS_OVERLAPPEDWINDOW` の見えない実窓を作り、クライアント (100,200) 300×150 を `client_to_window_coords` で外枠へ、`window_to_client_coords` でクライアントへ戻すと元の値に戻ることを見る。外枠がクライアントより広い（差が 0 でない）ことも先に確かめる。`#[ignore]` なし。
+- 9 の較正: `window_to_client_rect` の `left: window_rect.left - left_diff` を `+ left_diff` に変えると `framed_window_client_to_window_round_trips` が赤（位置 `(84, 200)` ≠ `(100, 200)`）。明示の編集で戻し、`git diff` で戻ったことを確かめた。
+- 10: 消す前の `git grep -n "from_hwnd"`: コード（crates・examples・tools・テスト・fixture・設定）では `crates/wintf/src/ecs/window/components.rs:218` の定義の 1 か所だけ。ほかの当たりは `.kiro/specs/completed/` の過去の文書（`WindowStyle::from_hwnd` の記述と、別物の `get_entity_from_hwnd`・`WindowCoordinateConverter::from_hwnd`）と、この spec の文書だけ。`impl WindowStyle { from_hwnd }` を消し、それだけが使っていた `use crate::api::*;`（components.rs）も消した。消した後の `git grep "from_hwnd"` はコードで 0 件。
+- テストの数: `cargo test -p wintf --lib window_handle` 10 → 11（1 本足した）。`cargo test -p wintf --lib ecs::window` 474 passed・6 ignored。

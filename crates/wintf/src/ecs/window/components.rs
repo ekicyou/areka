@@ -15,7 +15,6 @@ use windows::Win32::Foundation::*;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use crate::api::*;
 use crate::ecs::Visual;
 
 use super::dpi::DPI;
@@ -210,15 +209,6 @@ impl Default for WindowStyle {
             // ウィンドウ生成後には残らない。
             ex_style: WS_EX_LAYERED,
         }
-    }
-}
-
-impl WindowStyle {
-    /// 新しい WindowStyle を作成
-    pub fn from_hwnd(hwnd: HWND) -> windows::core::Result<Self> {
-        let style = WINDOW_STYLE(get_window_long_ptr(hwnd, GWL_STYLE)? as u32);
-        let ex_style = WINDOW_EX_STYLE(get_window_long_ptr(hwnd, GWL_EXSTYLE)? as u32);
-        Ok(Self { style, ex_style })
     }
 }
 

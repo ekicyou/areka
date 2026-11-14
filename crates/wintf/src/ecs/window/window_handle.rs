@@ -292,4 +292,43 @@ mod tests {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<WindowHandle>();
     }
+
+    /// 枠のある様式（`WS_OVERLAPPEDWINDOW`）の見えない実窓で、クライアント → 外枠 →
+    /// クライアントの変換が元の値に戻ることを確かめる。既定の `WS_POPUP` は枠の差が 0 で、
+    /// `window_to_client_rect` の引き算の符号を誤っても赤にならないため、差が 0 でない窓で見る。
+    #[test]
+    fn framed_window_client_to_window_round_trips() {
+        crate::api::with_test_window(
+            WINDOW_EX_STYLE::default(),
+            WS_OVERLAPPEDWINDOW,
+            None,
+            |hwnd| {
+                let handle = WindowHandle {
+                    hwnd,
+                    instance: HINSTANCE::default(),
+                };
+                let position = crate::ecs::Point { x: 100, y: 200 };
+                let size = crate::ecs::SizeI {
+                    width: 300,
+                    height: 150,
+                };
+                let (x, y, w, h) = handle
+                    .client_to_window_coords(position, size)
+                    .expect("client_to_window_coords");
+                // 枠の差が 0 だと符号の誤りを見分けられないので、外枠が広がっていることを先に確かめる
+                assert!(
+                    x < position.x && y < position.y && w > size.width && h > size.height,
+                    "外枠がクライアントより広くない: ({x}, {y}, {w}, {h})"
+                );
+                let (back_pos, back_size) = handle
+                    .window_to_client_coords(x, y, w, h)
+                    .expect("window_to_client_coords");
+                assert_eq!((back_pos.x, back_pos.y), (position.x, position.y));
+                assert_eq!(
+                    (back_size.width, back_size.height),
+                    (size.width, size.height)
+                );
+            },
+        );
+    }
 }
