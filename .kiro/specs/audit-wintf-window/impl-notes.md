@@ -127,3 +127,13 @@
 - 両方を与えたときの値が今と同じこと: 直す前のコードの両方を与えた値は (492, 19, 316, 239)（⑴ の赤の期待値）。直した後に一時の `assert_eq!(result, (492, 19, 316, 239))` を入れて緑を確かめ、外した（この値は OS の枠の寸法によるので残さない）。
 - 消す前の確かめ: 消したのはテスト 1 本と説明だけ（公開の口ではない）。`git grep -n "to_window_coords_for_creation"` の使い手は `runtime/window_factory.rs:290` と本ファイルのテストだけ。
 - テストの数: `cargo test -p wintf --lib window_pos` 57 → 58（緑）。fmt・clippy（このファイルの警告 0）通る。
+
+## 6.2
+
+- 14: `WindowPos::set_window_pos`（公開の口・`SetWindowPos` を直に呼ぶ）を消した。私有の `build_flags` の本体を `build_flags_for_system` へ移し、私有の方を消した。`build_flags_for_system` の呼び手 3 つ（`graphics/systems/window_pos.rs:76`・`zorder_chain.rs:479`・`zorder_pair_maintain.rs:207`）とテスト（`window/window_pos/tests.rs`）は変えていない。
+- 消す前の確かめ: `git grep -nE "(^|[^_])set_window_pos\(|build_flags\("`（ツリー全体）で、`crates/` の使い手は定義の `window/window_pos/mod.rs` の 2 か所（`set_window_pos` の定義と、その中と `build_flags_for_system` の中の `build_flags()`）だけ。ほかの当たりは `raise_reset_window_pos(`（別の関数）と `.kiro/specs/completed/` の古い記録だけ。examples・tests・fixture・設定に使い手 0。消した後は同じ grep で `crates/` の定義・呼び出し 0（`raise_reset_window_pos` を除く）。
+- 16: `window/dpi.rs` の `DpiSuggestedRectPolicy::ApplyPosition` の説明に 2 行足した（直後の `WM_WINDOWPOSCHANGED` で中心を保つ補正が掛かり左上は大きさの差の半分ずれる・左上を保ちたい窓は `ExternalAuthority`）。振る舞いは変えない。
+- 17: `window/window_pos/mod.rs` の `SetWindowParentToLayoutRoot::apply` の、ありもしない `ensure_window_parent_system`（`git grep` で `crates/` に 0）を約束する説明を消し、`LayoutRoot` が無い枝に「親を付けない（本番は `EcsWorld::new` が先に作る前提）」の説明と `debug!(entity, "No LayoutRoot; Window entity left without ChildOf")` を足した。
+- 21: `window/dpi.rs` のテスト `test_to_physical_rounds_half_away_from_zero` の説明を「1.5 は 0 から遠い側へ（`f32::round`。偶数丸めの `round_ties_even` ではない）」に直した。
+- 較正: テストは足しも直しもしていない（説明と削除だけ）ので較正なし。
+- テストの数（変化なし）: `cargo test -p wintf --lib ecs::window::window_pos` 17・`ecs::window::dpi` 10・`ecs::window_proc::dpi_helpers` 22、すべて緑。`cargo build -p wintf -p areka -p areka-placement --tests` 警告 0・fmt 通る・clippy で 2 ファイルの警告 0。

@@ -229,8 +229,9 @@ impl WindowPos {
         self
     }
 
-    /// bool値からフラグを生成
-    fn build_flags(&self) -> SET_WINDOW_POS_FLAGS {
+    /// システム用フラグビルダー（公開用）: bool値からフラグを生成
+    /// apply_window_pos_changesシステムから利用
+    pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
         let mut flags = SET_WINDOW_POS_FLAGS(0);
 
         // 自動判定: position が None なら SWP_NOMOVE
@@ -282,12 +283,6 @@ impl WindowPos {
         flags
     }
 
-    /// システム用フラグビルダー（公開用）
-    /// apply_window_pos_changesシステムから利用
-    pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
-        self.build_flags()
-    }
-
     /// ZOrderに基づくhwnd_insert_afterを取得（公開用）
     /// apply_window_pos_changesシステムから利用
     pub fn get_hwnd_insert_after(&self) -> Option<HWND> {
@@ -299,26 +294,6 @@ impl WindowPos {
             ZOrder::Bottom => Some(HWND_BOTTOM),
             ZOrder::InsertAfter(hwnd) => Some(hwnd),
         }
-    }
-
-    /// SetWindowPos を呼び出す
-    pub fn set_window_pos(&self, hwnd: HWND) -> windows::core::Result<()> {
-        let (x, y) = if let Some(pos) = self.position {
-            (pos.x, pos.y)
-        } else {
-            (0, 0)
-        };
-
-        let (width, height) = if let Some(size) = self.size {
-            (size.width, size.height)
-        } else {
-            (0, 0)
-        };
-
-        let flags = self.build_flags();
-        let hwnd_insert_after = self.get_hwnd_insert_after();
-
-        unsafe { SetWindowPos(hwnd, hwnd_insert_after, x, y, width, height, flags) }
     }
 
     /// クライアント領域の座標・サイズをウィンドウ全体の座標・サイズに変換する。
@@ -439,9 +414,13 @@ impl Command for SetWindowParentToLayoutRoot {
                     entity_mut.insert(ChildOf(root));
                 }
             }
+        } else {
+            // LayoutRoot が無ければ親を付けない（本番は EcsWorld::new が Window より先に作る前提）
+            debug!(
+                entity = ?self.entity,
+                "No LayoutRoot; Window entity left without ChildOf"
+            );
         }
-        // LayoutRootが見つからない場合は何もしない
-        // 後のフレームで ensure_window_parent_system が処理する
     }
 }
 
