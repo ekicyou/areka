@@ -15,7 +15,7 @@
 //! # 窓 entity 構成（design「placement::spawn」の正本 bullet）
 //!
 //! キャラ窓・バルーン窓の**両方**が `DpiSuggestedRectPolicy::ExternalAuthority` を持つ
-//! （areka-P0-dpi-window-vanish 要件 4.3・D3。[`external_position_authority`] に理由を記載）。
+//! （areka-P0-dpi-window-vanish 要件 4.3・D3。[`EXTERNAL_POSITION_AUTHORITY`] に理由を記載）。
 //!
 //! - キャラ窓: `Name`＋`CharWindowMarker{scope}`＋`GhostWindowMarker`＋`Window{title}`
 //!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_ACCEPTFILES }`
@@ -78,7 +78,7 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::DeferredWorld;
-use tracing::debug;
+use tracing::{debug, warn};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_ACCEPTFILES, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
@@ -436,7 +436,8 @@ impl GhostWindows {
 /// 要するため）、次にそのバルーンを参照するキャラ窓を spawn する。
 ///
 /// 完了時に [`GhostWindows`] を Resource として挿入し、同じ内容を戻り値でも
-/// 返す（6.1・Resource 挿入＋戻り値の両方で公開）。
+/// 返す（6.1・Resource 挿入＋戻り値の両方で公開）。戻り値は Resource の写しで、
+/// 書いても Resource は変わらない（変えるなら World の Resource へ書く）。
 pub fn spawn_ghost_windows(
     world: &mut World,
     placements: &[ScopePlacement],
@@ -474,7 +475,7 @@ pub fn spawn_ghost_windows(
                 // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3）。バルーン窓も
                 // OS 直書きから外す——キャラ窓だけ外すと、DPI 跨ぎでバルーンだけが OS 提案
                 // 位置へ飛び、`balloon_pos − char_pos ≡ offset` の恒等式が構造的に崩れる。
-                external_position_authority(),
+                EXTERNAL_POSITION_AUTHORITY,
                 DragConfig::default(),
                 // limit 解決値の runtime 焼込み（windowposition-limit 2.7・C9/DD4）。
                 // `ScopePlacement.balloon_limit` の転写であり、キャラ窓には付けない
@@ -504,7 +505,7 @@ pub fn spawn_ghost_windows(
                 window_pos(p.char_pos.x, p.char_pos.y, p.char_size.w, p.char_size.h),
                 HitTest::none(),
                 // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3・S1 是正の源断ち）。
-                external_position_authority(),
+                EXTERNAL_POSITION_AUTHORITY,
                 // 解決済みアンカーの単一真実源を全 char 窓へ**無条件付与**する（4.2/1.6）。
                 // Free 窓も付ける——resize の identity 射影（project_anchor の Free 腕）が
                 // Anchored を読むため。二値吸着フラグ（旧 BottomSnap marker）は廃し、
@@ -638,9 +639,8 @@ fn window_style() -> WindowStyle {
 /// （診断レポート §1.1 の連鎖①〜④＝S1。実機セッション①で `applied=true` が 84/84）。
 ///
 /// 付与の責務が窓の所有者側にあること（wintf は読むだけ）は D3 の裁定である。
-fn external_position_authority() -> DpiSuggestedRectPolicy {
-    DpiSuggestedRectPolicy::ExternalAuthority
-}
+const EXTERNAL_POSITION_AUTHORITY: DpiSuggestedRectPolicy =
+    DpiSuggestedRectPolicy::ExternalAuthority;
 
 /// `ScopePlacement` 由来の位置・寸法（物理 px）だけを転記した `WindowPos`（U1）。
 fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
@@ -780,6 +780,14 @@ fn register_ghost_windows_via<R: ClickThroughRegistrar>(
     handle: Option<NonSend<R>>,
 ) {
     let Some(handle) = handle else {
+        // Added は 1 度きりなので、登録の口が無いと新しい窓は黙って取りこぼされる。
+        for (entity, _) in new_windows.iter() {
+            warn!(
+                event = "clickthrough_register_skipped",
+                ?entity,
+                "placement: クリック透過機構が無いので登録を見送った"
+            );
+        }
         return;
     };
     for (entity, wh) in new_windows.iter() {

@@ -116,3 +116,23 @@ fn t_i4_real_register_system_is_noop_without_registry_resource() {
     // no-op で完走（窓はそのまま）
     assert_eq!(ghost_window_entities(&mut world).len(), 4);
 }
+
+/// 指摘 26: 登録の口が無い World で新しい窓に `WindowHandle` が付くと、取りこぼしを
+/// `warn!` 1 行で残す（Added は 1 度きりなので黙ると見えなくなる）。
+#[test]
+fn t_i4_missing_registrar_warns_once_for_a_new_window() {
+    let mut world = World::new();
+    let gw = spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
+    let char0 = gw.char_window(0).unwrap();
+    world.entity_mut(char0).insert(fake_window_handle(0x50));
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(register_ghost_windows_click_through);
+    let ((), events) = log_capture_kit::capture(|| schedule.run(&mut world));
+
+    let skipped = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("clickthrough_register_skipped"))
+        .count();
+    assert_eq!(skipped, 1);
+}

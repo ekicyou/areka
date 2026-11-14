@@ -16,14 +16,20 @@ use crate::resolver::RectPx;
 /// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求・
 /// measure.rs テストと同一パターン）。
 pub fn with_com_initialized<F: FnOnce()>(f: F) {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // 初期化に成功（S_OK・S_FALSE）したときだけ後始末する（RPC_E_CHANGED_MODE で
+    // 他の初期化を壊さない）。
+    let initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
     f();
-    unsafe {
-        CoUninitialize();
+    if initialized {
+        unsafe {
+            CoUninitialize();
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "test_support_com_tests.rs"]
+mod com_tests;
 
 /// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。
 pub const WA: RectPx = RectPx {
