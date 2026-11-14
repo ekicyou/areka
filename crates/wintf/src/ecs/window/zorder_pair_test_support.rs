@@ -178,11 +178,11 @@ pub(super) fn create_hidden_test_child(parent: HWND, title: PCWSTR) -> HWND {
     )
 }
 
-/// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す（`api.rs` のテストと同じ手）。
+/// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す（`api.rs` のテストもこれを使う）。
 ///
 /// `SetWindowPos` の `hWndInsertAfter` は「位置決め対象の 1 つ手前に来る窓」であり、
 /// 対象はその**背面側**へ入る。
-pub(super) fn insert_after(hwnd: HWND, after: HWND) {
+pub(crate) fn insert_after(hwnd: HWND, after: HWND) {
     // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する重なりのみの変更。
     unsafe {
         SetWindowPos(
