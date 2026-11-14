@@ -25,7 +25,7 @@
   - 呼び名を 1 行ずつ置き換える: `command.rs` の中・`command_transition_tests.rs` の 3 か所・組と帯の実窓テスト 8 本の 43 か所。テストの中身と行数は変えない
   - 完了の姿: `git grep "SetWindowPosCommand::flush"` が木全体で 0 件で、wintf のビルドと書き込みのテストが緑。`zorder_pair_maintain_tests.rs` の行数が 978 から増えない
   - _Requirements: 3.1, 3.3, 3.4, 3.5, 6.1, 6.3, 8.1_
-- [ ] 2.2 `WM_WINDOWPOSCHANGED` の錠を取らない 2 回目の流しを消し、決定論テストで押さえる（41・59）
+- [x] 2.2 `WM_WINDOWPOSCHANGED` の錠を取らない 2 回目の流しを消し、決定論テストで押さえる（41・59）
   - 41: 窓の位置の変化の受け手の手順③の呼び出しと説明を消し、手順の説明を「① 借用 → ② 錠を取って流す」の 2 つにする。行番号で ③ を指す説明は手順②を名前で指す形に、入れ子の理由の説明 4 か所を「入れ子は錠を取らない直の流しの内側の ② で起きる」に直す。`FlushEpoch` は残す
   - 新しい兄弟のテストのファイル `window_proc/window_pos_decision_tests.rs` を作り、受け手のファイルからテストの時だけ子のモジュールとして宣言する。道具窓（`DISPATCH_TARGET` ほか 4 項目）は `window_pos_transition_tests.rs` の側を `pub(super)` にして借り、写さない
   - 41 のテスト: 錠を取ったまま 1 本積み、道具窓へ `WM_WINDOWPOSCHANGED` を配っても、キューを取り出すと 1 本返る

@@ -803,12 +803,12 @@ thread_local! {
 ///
 /// # 区間は入れ子になる（だから復元する）
 ///
-/// 一括 flush は自分の内側でもう一度開かれ得る。`guarded_set_window_pos` の中で
-/// `WM_WINDOWPOSCHANGED` が**同期送達**され（`command.rs` の `guarded_set_window_pos` doc・
-/// `world/vsync.rs` の再入防止ガードの説明）、その処理の手順③が
-/// `flush_window_pos_commands()` を無条件に呼ぶためである
-/// （`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）。`vsync.rs` の
-/// `IS_TICK_FLUSH_IN_PROGRESS` はこの直接呼出を塞がない（塞ぐのは再入する tick の側だけ）。
+/// 一括 flush は自分の内側でもう一度開かれ得る。入れ子は錠を取らない直の流しの内側の ② で
+/// 起きる: 錠（`world/vsync.rs` の `IS_TICK_FLUSH_IN_PROGRESS`）を取らずに
+/// `flush_window_pos_commands()` を直に呼ぶと、`guarded_set_window_pos` の中で
+/// `WM_WINDOWPOSCHANGED` が**同期送達**され（`command.rs` の `guarded_set_window_pos` doc）、
+/// その処理の手順②（`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）が錠を
+/// 取れて `flush_window_pos_commands()` をもう一度呼ぶためである。
 ///
 /// 内側の解除が起点を `None` へ潰すと、2 本目以降の書込のあいだ [`since_flush_us`] が
 /// `None` を返し、「そのメッセージは `SetWindowPos` の内側で受理された」という証跡が

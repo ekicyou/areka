@@ -500,7 +500,7 @@ fn message_handlers_emit_nothing_under_the_default_directives() {
 thread_local! {
     /// テスト窓の wndproc が配送先とする `(World, Entity)`。未設定なら配送しない
     /// （`CreateWindowExW`／`DestroyWindow` が送るメッセージを拾わないため）。
-    static DISPATCH_TARGET: RefCell<Option<(Rc<RefCell<EcsWorld>>, Entity)>> =
+    pub(super) static DISPATCH_TARGET: RefCell<Option<(Rc<RefCell<EcsWorld>>, Entity)>> =
         const { RefCell::new(None) };
 }
 
@@ -508,7 +508,7 @@ thread_local! {
 ///
 /// `runtime::wndproc_bridge::make_wndproc` と同じ規律（配送表は ECS 層が単一の真実の源・
 /// `None` なら既定手続きへ委譲）を最小限で再現する。
-unsafe extern "system" fn test_wndproc(
+pub(super) unsafe extern "system" fn test_wndproc(
     hwnd: HWND,
     msg: u32,
     wparam: WPARAM,
@@ -530,10 +530,10 @@ unsafe extern "system" fn test_wndproc(
     unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
 }
 
-const TEST_CLASS: PCWSTR = w!("wintf-transition-msg-test");
+pub(super) const TEST_CLASS: PCWSTR = w!("wintf-transition-msg-test");
 
 /// テスト窓クラスを 1 度だけ登録する。
-fn register_test_class() {
+pub(super) fn register_test_class() {
     use std::sync::Once;
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     static ONCE: Once = Once::new();
@@ -559,7 +559,7 @@ fn register_test_class() {
 
 /// 0x0 の不可視の道具窓を作る（`SetWindowPos` は不可視窓にも
 /// `WM_WINDOWPOSCHANGED` を**同期送達**するので表示は要らない）。
-fn create_test_window() -> (HWND, HINSTANCE) {
+pub(super) fn create_test_window() -> (HWND, HINSTANCE) {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     register_test_class();
     // SAFETY: Win32 境界。自プロセス所有の 0x0 窓を生成する。
@@ -592,7 +592,8 @@ fn create_test_window() -> (HWND, HINSTANCE) {
 /// 同期 send するため、`flush` の呼出がそのまま handler の呼出になる。
 ///
 /// あわせて **flush 区間の入れ子**（`command.rs::flush` の doc）を実配線で確かめる:
-/// handler の手順③が `flush_window_pos_commands()` を無条件に呼ぶため区間は入れ子に
+/// 入れ子は錠を取らない直の流しの内側の ② で起きる——本テストは錠を取らずに直に流すので、
+/// handler の手順②が錠を取れて `flush_window_pos_commands()` をもう一度呼び区間は入れ子に
 /// なるが、内側の解除が起点を消していれば `since_flush_us` が番兵に落ちて本檻が赤になる。
 #[test]
 fn windowposchanged_received_inside_a_window_write_carries_in_swp_and_flush_elapsed() {

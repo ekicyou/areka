@@ -386,9 +386,10 @@ fn flush_emits_nothing_under_the_default_directives() {
 
 #[test]
 fn a_nested_flush_epoch_restores_the_outer_one_instead_of_clearing_it() {
-    // 一括 flush は**入れ子になる**。`guarded_set_window_pos` の中で `WM_WINDOWPOSCHANGED` が
-    // 同期送達され、その処理の手順③（`window_proc/window_pos.rs:268`）が
-    // `flush_window_pos_commands()` を無条件に呼ぶためである。内側の解除が起点を消すと、
+    // 一括 flush は**入れ子になる**。入れ子は錠を取らない直の流しの内側の ② で起きる:
+    // `guarded_set_window_pos` の中で `WM_WINDOWPOSCHANGED` が同期送達され、その処理の
+    // 手順②（`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）が錠を取れて
+    // `flush_window_pos_commands()` をもう一度呼ぶためである。内側の解除が起点を消すと、
     // 2 本目以降の書込のあいだ `since_flush_us()` が `None` になり、
     // 「`WM_DPICHANGED` が `SetWindowPos` の内側で受理された」証跡（task 2.4 の `msg`
     // レコード）が失われる——本仕様が追っている当の機序が測れなくなる。

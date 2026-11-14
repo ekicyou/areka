@@ -19,7 +19,7 @@
 //!
 //! # コードが強制していない前提: 窓手続き側は Z 指令を積まない
 //!
-//! `WM_WINDOWPOSCHANGED` のハンドラは、その場で再び一括 flush を呼ぶ（`window_proc/window_pos.rs:290`）。
+//! `WM_WINDOWPOSCHANGED` のハンドラは、その場で再び一括 flush を呼ぶ（`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` の手順②）。
 //! この再入 flush が Z 指令の適用順と噛み合わないという事故が起きていないのは、**窓手続き側の
 //! 経路が Z 指令を積まない**からにすぎない。Z 指令は合流の対象外であり同一窓の仕切りとして
 //! 働くので、再入した flush が Z 指令を含むキューを掴めば、順序の意味が外側の区間と分かれる。
@@ -707,12 +707,12 @@ impl SetWindowPosCommand {
 ///
 /// # 時刻基準は入れ子になる
 ///
-/// 本関数は自分の内側でもう一度呼ばれ得る。`guarded_set_window_pos` の中で
-/// `WM_WINDOWPOSCHANGED` が**同期送達**され（[`guarded_set_window_pos`] の doc・
-/// `world/vsync.rs` の再入防止ガードの説明）、その処理の手順③が
-/// [`flush_window_pos_commands`] を無条件に呼ぶためである
-/// （`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）。`vsync.rs` の
-/// `IS_TICK_FLUSH_IN_PROGRESS` はこの直接呼出を塞がない（塞ぐのは再入する tick の側）。
+/// 本関数は自分の内側でもう一度呼ばれ得る。入れ子は錠を取らない直の流しの内側の ② で起きる:
+/// 錠（`world/vsync.rs` の `IS_TICK_FLUSH_IN_PROGRESS`）を取らずに本関数を直に呼ぶと、
+/// `guarded_set_window_pos` の中で `WM_WINDOWPOSCHANGED` が**同期送達**され
+/// （[`guarded_set_window_pos`] の doc）、その処理の手順②（`window_proc/window_pos.rs` の
+/// `WM_WINDOWPOSCHANGED` ハンドラ）が錠を取れて [`flush_window_pos_commands`] をもう一度
+/// 呼ぶためである。錠を取った流しの内側では手順②が錠に阻まれるので入れ子にならない。
 ///
 /// よって区間は「開くのは 1 箇所」ではなく「**内側は外側の起点を復元する**」形で守る
 /// （[`transition_diag::FlushEpoch`]）。これが成り立たないと、2 本目以降の書込の

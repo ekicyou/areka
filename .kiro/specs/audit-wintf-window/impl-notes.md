@@ -22,3 +22,14 @@
 - 消す前の `git grep "SetWindowPosCommand::flush"`: 前＝コード 46 件（command.rs 4・command_transition_tests.rs 3・実窓テスト 8 本 43）＋ spec 文書。後＝ `.kiro` を除くツリーで 0 件。`.kiro/` の中（この spec の文書と `completed/` の過去の spec）には指摘の説明・歴史の記録として残る（直さない）。areka・areka-placement からの参照は前から 0 件。
 - テストの数（`cargo test -p wintf --lib ecs::window`）: 後＝464 通過・6 無視。名の変更だけでテストの増減は無い。
 - レビュー 1 回目の直し: 同じ呼び出しが 2 つ並んだ `command.rs` の `test_flush_empty_queue_is_noop` の説明「便利関数経由でも同様に no-op」（包みが消えて偽になった）を「続けて流しても空のキューは no-op のまま」に替えた（行数は同じ）。`command_transition_tests.rs` の `flush_of_an_empty_queue_emits_no_records` の 2 つ目の呼び出しの前にも同じ趣旨の説明を 1 行足した（573→574 行）。`cargo test -p wintf --lib ecs::window::command`＝52 通過。
+
+## 2.2
+
+- 41: `window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` から、錠を取らない 2 回目の流し（手順③の `crate::ecs::window::flush_window_pos_commands()` の呼び出しと説明）を消した。手順の説明を「① 借用 → ② 錠を取って流す」の 2 手順にした。行番号で ③ を指す説明（`command.rs:22` の `window_pos.rs:290`・`command_transition_tests.rs` の `window_pos.rs:268`＝今は 390 行目）は「`WM_WINDOWPOSCHANGED` の手順②」と名前で指す形に、入れ子の理由の説明 4 か所（`command.rs` の `flush_window_pos_commands` の「時刻基準は入れ子になる」・`transition_diag.rs` の「区間は入れ子になる」・`command_transition_tests.rs` の `a_nested_flush_epoch_restores_the_outer_one_instead_of_clearing_it`・`window_pos_transition_tests.rs` の `windowposchanged_received_inside_a_window_write_carries_in_swp_and_flush_elapsed`）を「入れ子は錠を取らない直の流しの内側の ② で起きる」に直した。`FlushEpoch` は残した（直の流しの内側の ② で入れ子はまだ起きる）。
+- 59: `WM_WINDOWPOSCHANGED`（旧 83-84／300-301）と `WM_DPICHANGED`（旧 387-388／430-431）の中身の無い 2 段のブロックを外して字下げを戻した（振る舞いは変わらない。`DpiChangeContext` に `Drop` は無く、落ちる時点の違いは効かない）。
+- 新しいテストのファイル `window_proc/window_pos_decision_tests.rs`（`window_pos.rs` に `#[cfg(test)] #[path] mod decision_tests;`）。道具窓は `window_pos_transition_tests.rs` の `DISPATCH_TARGET`・`test_wndproc`・`TEST_CLASS`・`register_test_class`・`create_test_window` を `pub(super)` にして借りた（写さない）。
+- 41 のテスト `windowposchanged_does_not_flush_the_queue_while_the_lock_is_held`: `engage_tick_flush_guard()` を取ったまま 1 本積み、道具窓へ `SendMessageW(WM_WINDOWPOSCHANGED)` を配ると `drain_window_pos_commands()` が 1 本返す。直す前のコードで赤（left: 0, right: 1）。
+- 較正: ② の直後に `crate::ecs::window::flush_window_pos_commands();` を 1 度戻すと上のテストが赤（left: 0, right: 1）。戻して緑。
+- 消す前の `git grep`（`手順③`・`3ステップ`・`window_pos.rs:2xx`）: 前＝`crates/wintf` の中で `window_pos.rs:41・44・296`・`command.rs:22・712`・`command_transition_tests.rs:390`・`transition_diag.rs:808`・`window_pos_transition_tests.rs:595`。後＝0 件（`②③` の WM_DPICHANGED の手順は別物で残る）。消した呼び出しは関数ではないので、ほかの使い手は関係しない。
+- テストの数（`cargo test -p wintf --lib window_proc::window_pos`）: 前＝30・後＝31。`window_proc` 全体 109 通過。`window::command` 52・`transition_diag` 27 通過。
+- clippy の `collapsible_if`（`WM_DPICHANGED` の `if let` の入れ子）は直す前からある（HEAD でも出る）。範囲の外なので触っていない。
