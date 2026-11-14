@@ -13,7 +13,6 @@ use std::time::Duration;
 use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use log_capture_kit::{LineFormat, capture_lines};
-use windows::Win32::Foundation::HINSTANCE;
 use wintf::ecs::drag::{DragState, end_dragging, start_preparing, update_drag_state};
 use wintf::ecs::pointer::ButtonReleased;
 use wintf::ecs::{Point, WindowHandle};
@@ -80,13 +79,7 @@ fn fixture_with(hwnd: HWND, to_screen: crate::menu::ToScreen) -> Fixture {
         .register(Frame::Readme, supplier("説明書", "readmebutton.caption"));
     world.insert_non_send(wiring);
     let window = world
-        .spawn((
-            CharWindowMarker { scope: 0 },
-            WindowHandle {
-                hwnd,
-                instance: HINSTANCE::default(),
-            },
-        ))
+        .spawn((CharWindowMarker { scope: 0 }, WindowHandle { hwnd }))
         .id();
     Fixture {
         world,
@@ -802,9 +795,9 @@ fn a_query_that_cannot_be_sent_falls_back_on_the_next_tick() {
 /// 返事を待っている間に窓が消えていたら、記録して捨てる（計画を作らない・預かりも捨てる）。
 #[test]
 fn a_window_that_disappeared_while_waiting_drops_the_request() {
-    // この窓は途中で消す。消すと wintf が窓ハンドルへ `WM_CLOSE` を投函するので、実在の窓を
-    // 指しえない空のハンドルにしておく（空のハンドル宛ての投函は呼んだスレッド自身の
-    // メッセージ待ち行列に入るだけで、テストのスレッドはそれを汲まない）。
+    // この窓は途中で消す。ハンドルが外れても wintf は窓へ何も投函しない（OS の窓の破棄は
+    // 登録簿の掃除 `reconcile_window_registry` が行う）。実在の窓は要らないので、空の
+    // ハンドルにしておく。
     let mut f = fixture_with(HWND(std::ptr::null_mut()), shifted_to_screen);
     let now = Instant::now();
     assert!(handle_release(

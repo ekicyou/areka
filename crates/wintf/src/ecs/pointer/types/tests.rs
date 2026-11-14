@@ -118,15 +118,6 @@ fn test_pointer_leave_marker() {
 }
 
 #[test]
-fn test_window_pointer_tracking_default() {
-    let tracking = WindowPointerTracking::default();
-    assert!(!tracking.0);
-
-    let tracking_enabled = WindowPointerTracking(true);
-    assert!(tracking_enabled.0);
-}
-
-#[test]
 fn test_physical_point_new() {
     let pt = PhysicalPoint::new(100, 200);
     assert_eq!(pt.x, 100);

@@ -29,7 +29,7 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use tracing::Level;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
 };
@@ -89,12 +89,7 @@ fn owner_of(hwnd: HWND) -> Option<HWND> {
 
 /// ハンドル付きの窓 entity を作る。
 fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
+    world.spawn(WindowHandle { hwnd }).id()
 }
 
 /// 実窓 2 枚とペア宣言済みの World を組む。返すのは（World, バルーン entity, 両ハンドル）。

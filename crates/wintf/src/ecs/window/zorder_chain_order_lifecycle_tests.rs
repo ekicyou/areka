@@ -23,8 +23,8 @@
 //! - **横断 edge**（`s0 ← b1`）だけが本 spec の担当であり、
 //!   [`apply_zorder_chain`] が張る。
 //!
-//! したがって本ファイルの schedule は本番と同じ順序——**確立系 → 鎖の適用系**——で 2 つの
-//! 本番 system を回す。ペア機構を替え玉にしないのは、要件 6.3
+//! したがって本ファイルの schedule は本番の順序（確立系 → 層の適用 → ペア維持 → 鎖の適用系）
+//! のうち**確立系 → 鎖の適用系**の 2 つの本番 system を、同じ前後で回す。ペア機構を替え玉にしないのは、要件 6.3
 //! 「バルーンがキャラ窓の直上をグループ指定の有無にかかわらず保つ」が、
 //! **本物のペア edge の上でしか検査できない**主張だからである。
 //!
@@ -58,7 +58,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, IsWindow};
 use windows::core::{PCWSTR, w};
 
@@ -81,22 +81,26 @@ use crate::ecs::window::{
 /// 平坦な窓の列では **添字 `2i` がバルーン窓・`2i+1` がキャラ窓**である。この対応は
 /// [`balloon_offsets`] と各テストの期待値が共有する唯一の約束である。
 #[derive(Clone, Copy)]
-struct Scope {
+pub(super) struct Scope {
     /// バルーン窓（手前側・キャラ窓に所有される）。
-    balloon: Entity,
+    pub(super) balloon: Entity,
     /// キャラ窓（奥側・スコープの根）。
-    character: Entity,
+    pub(super) character: Entity,
 }
 
 /// スコープを `count` 個ぶん作る。
 ///
 /// 返すのは（窓の列, スコープの列）。窓の列は `[b0, s0, b1, s1, ...]` の平坦な並びであり、
-/// **生成順は重なりの前提にしない**——各テストは [`arrange_z`] で始点を明示的に組み、
-/// その成立を自己検査する。
+/// **生成順は重なりの前提にしない**——各テストは [`arrange_z`] か組の確立で始点を組み、
+/// その成立を自己検査する（兄弟の inversion は組の確立から始める）。
 ///
 /// バルーン窓の entity には本番と同じペア宣言（[`KeepDirectlyAbove`]）を付ける。これが
 /// [`establish_owner_links`] の入口であり、ペア edge は**本番の手順で**張られる。
-fn spawn_scopes(world: &mut World, count: usize, title: PCWSTR) -> (Vec<HWND>, Vec<Scope>) {
+pub(super) fn spawn_scopes(
+    world: &mut World,
+    count: usize,
+    title: PCWSTR,
+) -> (Vec<HWND>, Vec<Scope>) {
     let mut windows = Vec::with_capacity(count * 2);
     let mut scopes = Vec::with_capacity(count);
     for _ in 0..count {
@@ -105,15 +109,11 @@ fn spawn_scopes(world: &mut World, count: usize, title: PCWSTR) -> (Vec<HWND>, V
         let character = world
             .spawn(WindowHandle {
                 hwnd: character_hwnd,
-                instance: HINSTANCE::default(),
             })
             .id();
         let balloon = world
             .spawn((
-                WindowHandle {
-                    hwnd: balloon_hwnd,
-                    instance: HINSTANCE::default(),
-                },
+                WindowHandle { hwnd: balloon_hwnd },
                 KeepDirectlyAbove { peer: character },
             ))
             .id();
@@ -168,18 +168,20 @@ fn publish_released(world: &mut World) {
     });
 }
 
-/// 本番と同じ順序で 2 つの system を回す 1 巡（**確立系 → 鎖の適用系**）。
+/// 本番と同じ前後で 2 つの system を回す 1 巡（**確立系 → 鎖の適用系**）。
 ///
-/// 順序は design.md の結線（`establish_owner_links` → ペア維持 → `apply_zorder_chain`）に
-/// 従う。ペア維持系を載せないのは、あれが引き金駆動の**是正**の腕であって、本ファイルが
-/// 主張する「所有の鎖が構造で保つ」ことの前提ではないためである（維持を担うのは OS）。
+/// 本番の結線（`areka_placement::spawn::wire_zorder_pair`）は `establish_owner_links` →
+/// `apply_window_band` → `apply_zorder_pair_maintenance` → `apply_zorder_chain` の順である。
+/// 層の適用とペア維持系を載せないのは、層の指令をここでは積まないうえ、ペア維持が引き金駆動の
+/// **是正**の腕であって、本ファイルが主張する「所有の鎖が構造で保つ」ことの前提ではないため
+/// である（維持を担うのは OS）。
 ///
 /// 実行器は**単一スレッドを明示**する。実窓の操作は UI スレッド固定
 /// （[`NonSendMarker`](bevy_ecs::system::NonSendMarker)）の前提であり、兄弟の檻と同じ規律。
 ///
 /// **1 つの schedule を使い回すこと**——確立系は [`WindowHandle`] の付与を契機に動くので、
 /// 巡ごとに新しい schedule を作ると「前の巡で既に見た付与」を毎回新しく見てしまう。
-fn scope_chain_schedule() -> Schedule {
+pub(super) fn scope_chain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems((establish_owner_links, apply_zorder_chain).chain());
@@ -195,7 +197,7 @@ fn scope_chain_schedule() -> Schedule {
 /// `Some(1)` が**バルーンがキャラ窓の直上**である（要件 6.3）。どちらかが列に居なければ
 /// `None`。列（[`z_shape`]）には不可視の窓が 1 枚も混じらないので、この差はそのまま
 /// 「間に可視の窓が何枚あるか＋1」を意味する（module doc「測り方の但し書き」）。
-fn balloon_offsets(shape: &[usize], scope_count: usize) -> Vec<Option<isize>> {
+pub(super) fn balloon_offsets(shape: &[usize], scope_count: usize) -> Vec<Option<isize>> {
     (0..scope_count)
         .map(|scope| {
             let balloon = shape.iter().position(|v| *v == scope * 2);

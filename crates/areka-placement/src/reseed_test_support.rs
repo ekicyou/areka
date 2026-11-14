@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
 use crate::config::BalloonXMode;
@@ -97,7 +97,6 @@ pub(crate) fn world_from(placements: &[ScopePlacement], dpi: u16) -> (World, Gho
 pub(crate) fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

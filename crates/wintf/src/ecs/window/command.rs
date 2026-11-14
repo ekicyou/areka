@@ -4,12 +4,14 @@
 //! - `guarded_set_window_pos`: RAII ガード付き SetWindowPos ラッパー
 //! - `SetWindowPosCommand`: SetWindowPos 遅延実行キュー
 //! - `coalesce_geometry`: 同一 tick・同一窓のジオメトリ指令を 1 本へ畳む純関数
+//! - `flush_window_pos_commands`: 積まれた指令をまとめて流す（一括書込）
+//! - `drain_window_pos_commands`: 積まれた指令を流さずに取り出す（テストの検査用）
 //! - `find_owner_window`: エンティティの所属ウィンドウ特定
 //!
 //! # 遷移観測（`transition_diag`）
 //!
 //! 一括 flush はゴースト窓の窓矩形が実際に動く**唯一の共通経路**（経路 B）であり、
-//! DPI／拡大率遷移の時系列はここを通らないと 1 本に並ばない。よって `flush` は
+//! DPI／拡大率遷移の時系列はここを通らないと 1 本に並ばない。よって `flush_window_pos_commands` は
 //! 区間の開始・各書込・区間の終了の 3 種を専用 target へ記録する（design.md C2・要件 2.1）。
 //!
 //! 観測は**既定 OFF** である。`transition_diag::is_enabled()` が偽のときは行の組立も
@@ -19,7 +21,7 @@
 //!
 //! # コードが強制していない前提: 窓手続き側は Z 指令を積まない
 //!
-//! `WM_WINDOWPOSCHANGED` のハンドラは、その場で再び一括 flush を呼ぶ（`window_proc/window_pos.rs:290`）。
+//! `WM_WINDOWPOSCHANGED` のハンドラは、その場で再び一括 flush を呼ぶ（`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` の手順②）。
 //! この再入 flush が Z 指令の適用順と噛み合わないという事故が起きていないのは、**窓手続き側の
 //! 経路が Z 指令を積まない**からにすぎない。Z 指令は合流の対象外であり同一窓の仕切りとして
 //! 働くので、再入した flush が Z 指令を含むキューを掴めば、順序の意味が外側の区間と分かれる。
@@ -33,7 +35,7 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::time::Instant;
-use tracing::{debug, trace, warn};
+use tracing::{debug, error, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -175,7 +177,7 @@ pub unsafe fn guarded_set_window_pos(
 /// 出すと、破棄されたバッチの指令が縮退で書き直されたときに同じ指令が 2 度数えられる
 /// （本仕様の task 7.2 のレビューが実測で見つけた形）。対テストは
 /// `command_batch_tests::the_write_log_line_is_emitted_once_per_command_on_both_paths`。
-const WINDOW_WRITE_LOG_MESSAGE: &str = "[guarded_set_window_pos] Calling SetWindowPos";
+pub(super) const WINDOW_WRITE_LOG_MESSAGE: &str = "[guarded_set_window_pos] Calling SetWindowPos";
 
 /// `via=` の値: 1 本ずつの `SetWindowPos` で書いた。
 const VIA_SET_WINDOW_POS: &str = "SetWindowPos";
@@ -223,6 +225,36 @@ pub struct SetWindowPosCommand {
 thread_local! {
     /// SetWindowPosコマンドキュー
     static WINDOW_POS_COMMANDS: RefCell<Vec<SetWindowPosCommand>> = const { RefCell::new(Vec::new()) };
+}
+
+/// `WinApp::run` を回すスレッド（UI スレッド）の id。立つのは [`record_ui_thread`] の 1 回だけ。
+/// キューはスレッドごとで流すのは UI スレッドだけなので、ほかのスレッドの積み込みは断る。
+static UI_THREAD: std::sync::OnceLock<std::thread::ThreadId> = std::sync::OnceLock::new();
+
+/// 今のスレッドを UI スレッドとして控える。`WinApp::run` の頭で呼ぶ。2 度目からは何もしない。
+pub(crate) fn record_ui_thread() {
+    UI_THREAD.get_or_init(|| std::thread::current().id());
+}
+
+/// 今のスレッドで `hwnd` への書き込みを積んでよいか。
+///
+/// 控えが無い（`WinApp::run` を回していない・テストの実行ファイル）か、控えと同じスレッドなら
+/// true。違うスレッドなら `error!` を 1 行（窓・控えのスレッド・今のスレッド）残して false。
+/// 控えを引数で受けるのは、テストがプロセス全体の控えを立てずに 3 通りを試すため。
+fn admits_enqueue(hwnd: HWND, ui_thread: Option<std::thread::ThreadId>) -> bool {
+    let current = std::thread::current().id();
+    match ui_thread {
+        Some(ui) if ui != current => {
+            error!(
+                hwnd = ?hwnd,
+                ui_thread = ?ui,
+                current_thread = ?current,
+                "SetWindowPosCommand::enqueue called off the UI thread; command dropped"
+            );
+            false
+        }
+        _ => true,
+    }
 }
 
 /// 書込後の物理矩形を読み戻す（**観測が有効なときだけ**呼ぶ）。
@@ -359,6 +391,13 @@ fn begin_batch(count: usize) -> Option<HDWP> {
 ///
 /// 成功したら `Ok(())`、投入できなかったら `Err(理由)` を返す。並びはキューの順のまま、
 /// 引数は [`window_pos_args`] が組んだものそのままである（要件 10.3）。
+///
+/// 同じ窓が 2 度入った列（合流は Z 指令を仕切りにするので同じ窓の指令が 2 本残りうる）も
+/// そのまま積む。列 `[A を B の後へ][C を A の後へ][A を D の後へ]` では、1 本ずつ当てた
+/// ときと同じ Z の順に着くことを自分の不可視の窓で確かめてある（`command_batch_tests.rs` の
+/// `a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command`）。
+/// Wine・ReactOS の実装の読み（2 本目を既存の 1 項目へ畳む）は、この列の実際の Windows の
+/// 結果に合わない。ほかの列は確かめていない。
 ///
 /// # 自発書込の判定（要件 10.2）
 ///
@@ -598,7 +637,7 @@ pub(crate) fn coalesce_geometry(
         Some(index) => {
             merge_into(&mut queue[index], &cmd);
             // 4G 件を超えるキューは起こり得ないが、`as` の暗黙切り捨てで別の枠を指すより
-            // 飽和させて上限に張り付かせる（`flush` の `seq` と同じ扱い）。
+            // 飽和させて上限に張り付かせる（`flush_window_pos_commands` の `seq` と同じ扱い）。
             //
             // この腕は**到達不能**であって「どう書いても等価」ではない——`unwrap_or(0)` や
             // `as` へ替えれば別の枠を指す。変異検査で殺せないのは到達しないからであり、
@@ -653,7 +692,13 @@ impl SetWindowPosCommand {
     ///
     /// Z のみの指令と表示状態を変える指令は畳まれない（要件 10.3）。判定と理由は
     /// [`coalesce_geometry`] の doc を見ること。
+    ///
+    /// `WinApp::run` を回すスレッドから呼ぶ。ほかのスレッドから積んだ指令は `error!` を
+    /// 残して捨てる（合流にも画面更新の起こしにも記録の行にも渡さない）。
     pub fn enqueue(cmd: SetWindowPosCommand) {
+        if !admits_enqueue(cmd.hwnd, UI_THREAD.get().copied()) {
+            return;
+        }
         // 窓書込が積まれた＝次の画面更新に仕事がある（設計 C16 の `WINDOW_CMD`）。
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::WINDOW_CMD);
         trace!(
@@ -678,138 +723,134 @@ impl SetWindowPosCommand {
             }));
         }
     }
-
-    /// キュー内の全コマンドを実行し、キューをクリア
-    ///
-    /// World借用解放後に呼び出すこと。
-    ///
-    /// # 投入は 1 バッチ（設計 C8 の候補 B-2b・task 7.2）
-    ///
-    /// 取り出した指令列は [`apply_as_batch`] が `Begin`／`Defer`／`EndDeferWindowPos` の
-    /// **1 バッチ**で投入する。Z 専用指令は合流の対象外だが、`DeferWindowPos` は
-    /// per-window に `hwndInsertAfter` と flags を取れるので**同じバッチに同居**でき、
-    /// 適用の並びも引数もキューのままである（要件 10.3）。
-    ///
-    /// バッチが使えなかったときは 1 本ずつの `guarded_set_window_pos` へ**縮退**する
-    /// （[`apply_sequentially`]）。縮退は `warn!` を伴い、当該区間の書込レコードは
-    /// `in_batch=false` になる——静かに形が変わることはない。
-    ///
-    /// 自発書込カウンタはどちらの経路でも持ち上がる（バッチ側は `EndDeferWindowPos` が
-    /// 同期送達するメッセージまで含めてガードの内側・要件 10.2）。
-    ///
-    /// # 観測
-    ///
-    /// 区間の開始（`flush stage=begin`）・各指令の書込（`write stage=flush`）・区間の終了
-    /// （`flush stage=end`）を発行する。観測が無効なら計時も読み戻しも行わず、行も組まない
-    /// ——時刻基準を開く [`transition_diag::begin_flush`] も**観測が有効なときだけ**呼ぶ。
-    /// 失敗時の `warn!` は観測の有無によらず従来どおり出る。
-    ///
-    /// # 時刻基準は入れ子になる
-    ///
-    /// 本関数は自分の内側でもう一度呼ばれ得る。`guarded_set_window_pos` の中で
-    /// `WM_WINDOWPOSCHANGED` が**同期送達**され（[`guarded_set_window_pos`] の doc・
-    /// `world/vsync.rs` の再入防止ガードの説明）、その処理の手順③が
-    /// [`flush_window_pos_commands`] を無条件に呼ぶためである
-    /// （`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）。`vsync.rs` の
-    /// `IS_TICK_FLUSH_IN_PROGRESS` はこの直接呼出を塞がない（塞ぐのは再入する tick の側）。
-    ///
-    /// よって区間は「開くのは 1 箇所」ではなく「**内側は外側の起点を復元する**」形で守る
-    /// （[`transition_diag::FlushEpoch`]）。これが成り立たないと、2 本目以降の書込の
-    /// あいだ `since_flush_us` が `None` になり、「`WM_DPICHANGED` 等が `SetWindowPos` の
-    /// 内側で同期受理された」というメッセージ側の証跡が消える。
-    ///
-    /// 内側の flush は観測が有効なときしか区間を開かないが、有効／無効は同一スレッドの
-    /// subscriber が決めるため外側と内側で食い違わない。仮に食い違っても、開かなければ
-    /// 外側の起点はそのまま残り、開けば復元されるので、どちらでも外側は壊れない。
-    pub fn flush() {
-        // 前置ガード。偽なら時刻基準も開かず、以降の観測分岐はすべて素通りする
-        // ——確保も時刻読みも一切起きない（要件 10.4）。
-        let observe = transition_diag::is_enabled();
-        let _flush_epoch = observe.then(transition_diag::begin_flush);
-
-        WINDOW_POS_COMMANDS.with(|cell| {
-            let commands: Vec<_> = cell.borrow_mut().drain(..).collect();
-            if commands.is_empty() {
-                return;
-            }
-            let count = commands.len();
-            trace!(count = count, "SetWindowPosCommand::flush processing");
-
-            let flush_started = observe.then(Instant::now);
-            if observe {
-                transition_diag::emit_line(&transition_diag::flush_line(&FlushRecord {
-                    stamp: transition_diag::stamp(),
-                    stage: FlushStage::Begin,
-                    count,
-                    since_tick_us: transition_diag::since_tick_start_us(),
-                    total_us: None,
-                }));
-            }
-
-            // 所要と成否は指令ごとに持つ。**どちらも観測レコードにしか使わない**ので、
-            // 観測が無効なら器は長さ 0 のまま＝確保が 1 度も起きない（要件 10.4）。
-            // 失敗そのものは観測の有無によらず `warn!` が残す。
-            let mut call_us = vec![0u64; if observe { count } else { 0 }];
-            let mut ok = vec![false; if observe { count } else { 0 }];
-
-            // SAFETY: Win32 境界。バッチ投入も縮退も、渡すのは呼び出し側が保持する
-            // `HWND` と整数だけである。
-            let batched = unsafe { apply_as_batch(&commands, observe, &mut call_us) };
-            let in_batch = match batched {
-                Ok(()) => {
-                    ok.fill(true);
-                    true
-                }
-                Err(reason) => {
-                    // 縮退は無音にしない（要件 3.4・steering `logging.md`）。
-                    warn!(
-                        count = count,
-                        reason = reason.as_str(),
-                        "DeferWindowPos batch unavailable; falling back to one SetWindowPos per command"
-                    );
-                    // SAFETY: Win32 境界（上に同じ）。
-                    unsafe { apply_sequentially(&commands, observe, &mut call_us, &mut ok) };
-                    false
-                }
-            };
-
-            if observe {
-                for (index, cmd) in commands.iter().enumerate() {
-                    transition_diag::emit_line(&transition_diag::write_line(&WriteRecord {
-                        stamp: transition_diag::stamp(),
-                        stage: WriteStage::Flush,
-                        seq: u32::try_from(index).unwrap_or(u32::MAX),
-                        hwnd: cmd.hwnd,
-                        tag: cmd.tag,
-                        x: cmd.x,
-                        y: cmd.y,
-                        cx: cmd.width,
-                        cy: cmd.height,
-                        flags: cmd.flags.0,
-                        after: read_back_window_rect(cmd.hwnd),
-                        call_us: call_us.get(index).copied().unwrap_or(0),
-                        ok: ok.get(index).copied().unwrap_or(false),
-                        in_batch,
-                    }));
-                }
-            }
-
-            if observe {
-                transition_diag::emit_line(&transition_diag::flush_line(&FlushRecord {
-                    stamp: transition_diag::stamp(),
-                    stage: FlushStage::End,
-                    count,
-                    since_tick_us: transition_diag::since_tick_start_us(),
-                    total_us: Some(flush_started.map_or(0, transition_diag::elapsed_us)),
-                }));
-            }
-        });
-    }
 }
 
-/// SetWindowPosコマンドキューをフラッシュする便利関数
+/// キュー内の全コマンドを実行し、キューをクリア
+///
+/// World借用解放後に呼び出すこと。
+///
+/// # 投入は 1 バッチ（設計 C8 の候補 B-2b・task 7.2）
+///
+/// 取り出した指令列は [`apply_as_batch`] が `Begin`／`Defer`／`EndDeferWindowPos` の
+/// **1 バッチ**で投入する。Z 専用指令は合流の対象外だが、`DeferWindowPos` は
+/// per-window に `hwndInsertAfter` と flags を取れるので**同じバッチに同居**でき、
+/// 積む並びも引数もキューのままである（要件 10.3）。同じ窓が 2 度入った列について
+/// 確かめた範囲は [`apply_as_batch`] の doc にある。
+///
+/// バッチが使えなかったときは 1 本ずつの `guarded_set_window_pos` へ**縮退**する
+/// （[`apply_sequentially`]）。縮退は `warn!` を伴い、当該区間の書込レコードは
+/// `in_batch=false` になる——静かに形が変わることはない。
+///
+/// 自発書込カウンタはどちらの経路でも持ち上がる（バッチ側は `EndDeferWindowPos` が
+/// 同期送達するメッセージまで含めてガードの内側・要件 10.2）。
+///
+/// # 観測
+///
+/// 区間の開始（`flush stage=begin`）・各指令の書込（`write stage=flush`）・区間の終了
+/// （`flush stage=end`）を発行する。観測が無効なら計時も読み戻しも行わず、行も組まない
+/// ——時刻基準を開く [`transition_diag::begin_flush`] も**観測が有効なときだけ**呼ぶ。
+/// 失敗時の `warn!` は観測の有無によらず従来どおり出る。
+///
+/// # 時刻基準は入れ子になる
+///
+/// 本関数は自分の内側でもう一度呼ばれ得る。入れ子は錠を取らない直の流しの内側の ② で起きる:
+/// 錠（`world/vsync.rs` の `IS_TICK_FLUSH_IN_PROGRESS`）を取らずに本関数を直に呼ぶと、
+/// `guarded_set_window_pos` の中で `WM_WINDOWPOSCHANGED` が**同期送達**され
+/// （[`guarded_set_window_pos`] の doc）、その処理の手順②（`window_proc/window_pos.rs` の
+/// `WM_WINDOWPOSCHANGED` ハンドラ）が錠を取れて [`flush_window_pos_commands`] をもう一度
+/// 呼ぶためである。錠を取った流しの内側では手順②が錠に阻まれるので入れ子にならない。
+///
+/// よって区間は「開くのは 1 箇所」ではなく「**内側は外側の起点を復元する**」形で守る
+/// （[`transition_diag::FlushEpoch`]）。これが成り立たないと、2 本目以降の書込の
+/// あいだ `since_flush_us` が `None` になり、「`WM_DPICHANGED` 等が `SetWindowPos` の
+/// 内側で同期受理された」というメッセージ側の証跡が消える。
+///
+/// 内側の flush は観測が有効なときしか区間を開かないが、有効／無効は同一スレッドの
+/// subscriber が決めるため外側と内側で食い違わない。仮に食い違っても、開かなければ
+/// 外側の起点はそのまま残り、開けば復元されるので、どちらでも外側は壊れない。
 pub fn flush_window_pos_commands() {
-    SetWindowPosCommand::flush();
+    // 前置ガード。偽なら時刻基準も開かず、以降の観測分岐はすべて素通りする
+    // ——確保も時刻読みも一切起きない（要件 10.4）。
+    let observe = transition_diag::is_enabled();
+    let _flush_epoch = observe.then(transition_diag::begin_flush);
+
+    WINDOW_POS_COMMANDS.with(|cell| {
+        let commands: Vec<_> = cell.borrow_mut().drain(..).collect();
+        if commands.is_empty() {
+            return;
+        }
+        let count = commands.len();
+        trace!(count = count, "flush_window_pos_commands processing");
+
+        let flush_started = observe.then(Instant::now);
+        if observe {
+            transition_diag::emit_line(&transition_diag::flush_line(&FlushRecord {
+                stamp: transition_diag::stamp(),
+                stage: FlushStage::Begin,
+                count,
+                since_tick_us: transition_diag::since_tick_start_us(),
+                total_us: None,
+            }));
+        }
+
+        // 所要と成否は指令ごとに持つ。**どちらも観測レコードにしか使わない**ので、
+        // 観測が無効なら器は長さ 0 のまま＝確保が 1 度も起きない（要件 10.4）。
+        // 失敗そのものは観測の有無によらず `warn!` が残す。
+        let mut call_us = vec![0u64; if observe { count } else { 0 }];
+        let mut ok = vec![false; if observe { count } else { 0 }];
+
+        // SAFETY: Win32 境界。バッチ投入も縮退も、渡すのは呼び出し側が保持する
+        // `HWND` と整数だけである。
+        let batched = unsafe { apply_as_batch(&commands, observe, &mut call_us) };
+        let in_batch = match batched {
+            Ok(()) => {
+                ok.fill(true);
+                true
+            }
+            Err(reason) => {
+                // 縮退は無音にしない（要件 3.4・steering `logging.md`）。
+                warn!(
+                    count = count,
+                    reason = reason.as_str(),
+                    "DeferWindowPos batch unavailable; falling back to one SetWindowPos per command"
+                );
+                // SAFETY: Win32 境界（上に同じ）。
+                unsafe { apply_sequentially(&commands, observe, &mut call_us, &mut ok) };
+                false
+            }
+        };
+
+        if observe {
+            for (index, cmd) in commands.iter().enumerate() {
+                transition_diag::emit_line(&transition_diag::write_line(&WriteRecord {
+                    stamp: transition_diag::stamp(),
+                    stage: WriteStage::Flush,
+                    seq: u32::try_from(index).unwrap_or(u32::MAX),
+                    hwnd: cmd.hwnd,
+                    tag: cmd.tag,
+                    x: cmd.x,
+                    y: cmd.y,
+                    cx: cmd.width,
+                    cy: cmd.height,
+                    flags: cmd.flags.0,
+                    after: read_back_window_rect(cmd.hwnd),
+                    call_us: call_us.get(index).copied().unwrap_or(0),
+                    ok: ok.get(index).copied().unwrap_or(false),
+                    in_batch,
+                }));
+            }
+        }
+
+        if observe {
+            transition_diag::emit_line(&transition_diag::flush_line(&FlushRecord {
+                stamp: transition_diag::stamp(),
+                stage: FlushStage::End,
+                count,
+                since_tick_us: transition_diag::since_tick_start_us(),
+                total_us: Some(flush_started.map_or(0, transition_diag::elapsed_us)),
+            }));
+        }
+    });
 }
 
 /// キューの中身を**実行せずに**取り出す（テスト専用のシーム・design.md D11）。
@@ -820,7 +861,7 @@ pub fn flush_window_pos_commands() {
 /// # 本番からは呼ばないこと
 ///
 /// 取り出した指令は**二度と実行されない**——本番経路がこれを呼ぶと窓書込が黙って消える。
-/// 実行を伴う唯一の取り出し口は [`SetWindowPosCommand::flush`] である。
+/// 実行を伴う唯一の取り出し口は [`flush_window_pos_commands`] である。
 ///
 /// `pub` なのは areka 側の決定論テストが**別クレート**からキューを検査するためであり
 /// （クレート境界ゆえ `#[cfg(test)]` では届かない）、公開 API として提供する意図はない。
@@ -865,6 +906,10 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
 
     None
 }
+
+#[cfg(test)]
+#[path = "command_test_support.rs"]
+mod test_support;
 
 #[cfg(test)]
 #[path = "command_transition_tests.rs"]
@@ -933,8 +978,8 @@ mod tests {
         //
         // 末尾の `is_self_initiated()` はスレッド局所カウンタを読むので直列化は要らない
         // （錠は test-cage-determinism task 7.2 で退役）。
-        SetWindowPosCommand::flush();
-        // 便利関数経由でも同様に no-op
+        flush_window_pos_commands();
+        // 続けて流しても空のキューは no-op のまま
         flush_window_pos_commands();
         assert!(!is_self_initiated());
     }

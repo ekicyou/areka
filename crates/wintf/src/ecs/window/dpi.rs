@@ -146,6 +146,8 @@ impl DPI {
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DpiSuggestedRectPolicy {
     /// 既定: OS 提案位置を `SWP_NOSIZE` で適用する（従来挙動）。
+    /// 最後の着地点は提案の左上ではない: 直後の `WM_WINDOWPOSCHANGED` で中心を保つ補正が掛かり、
+    /// 左上は大きさの差の半分ずれる。左上を保ちたい窓は `ExternalAuthority` を付けて自分で置く。
     #[default]
     ApplyPosition,
     /// 位置権威が外部（ECS 側の配置システム）にある窓:
@@ -234,7 +236,7 @@ mod tests {
         // 150% スケール: 1.0 dip → 1.5 px → round() = 2 (half away from zero)
         let dpi = DPI::from_dpi(144, 144);
         assert_eq!(dpi.scale_x(), 1.5);
-        assert_eq!(dpi.to_physical_x(1.0), 2); // 1.5 を最近接整数へ（.round() の偶数丸めではない）
+        assert_eq!(dpi.to_physical_x(1.0), 2); // 1.5 は 0 から遠い側へ（`f32::round`。偶数丸めの `round_ties_even` ではない）
         assert_eq!(dpi.to_physical_x(3.0), 5); // 4.5 → 5（偶数丸めなら 4 になる）
     }
 

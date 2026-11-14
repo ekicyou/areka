@@ -21,7 +21,7 @@ use areka_sylphya::{
     spawn_sylphya,
 };
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragEndEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
@@ -285,7 +285,6 @@ fn pattern_shift_is_subtracted_before_saving() {
     // 窓へ書く口は実窓の印を要る（偽 HWND）。
     rig.world.entity_mut(shifted).insert(WindowHandle {
         hwnd: HWND(0x200 as *mut _),
-        instance: HINSTANCE::default(),
     });
     assert!(crate::follow::apply_char_shift(
         &mut rig.world,
@@ -381,7 +380,6 @@ fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
     let scope0 = rig.char_window(0);
     rig.world.entity_mut(scope0).insert(WindowHandle {
         hwnd: HWND(0x100 as *mut _),
-        instance: HINSTANCE::default(),
     });
     rig.world.get_mut::<WindowPos>(scope0).unwrap().position = Some(Point { x: 1700, y: 356 });
     let ev = Phase::Bubble(DragEndEvent {

@@ -299,7 +299,7 @@ pub fn get_process_times() -> Result<CpuTimes> {
     })
 }
 
-/// 試験の窓（定義済みの "Static"・見えない・0×0）を作る。壊すのは呼んだ側。
+/// 試験の窓（定義済みの "Static"・0×0）を作る。見えるかは `style` 次第（`WS_VISIBLE` を渡せば見える）。壊すのは呼んだ側。
 #[cfg(test)]
 pub(crate) fn create_test_window(
     ex: WINDOW_EX_STYLE,
@@ -428,25 +428,7 @@ mod tests {
         }
     }
 
-    /// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す。
-    ///
-    /// `SetWindowPos` の `hWndInsertAfter` は「位置決め対象の 1 つ手前に来る窓」であり、
-    /// 対象はその**背面側**へ入る（"insert after" は z オーダー列挙上の後ろ＝背面）。
-    fn insert_after(hwnd: HWND, after: HWND) {
-        // SAFETY: Win32 境界。自プロセス所有の実 HWND に対する z オーダーのみの変更。
-        unsafe {
-            SetWindowPos(
-                hwnd,
-                Some(after),
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            )
-            .expect("SetWindowPos should reorder self-owned test windows");
-        }
-    }
+    use crate::ecs::window::zorder_pair_test_support::insert_after;
 
     #[test]
     fn get_window_above_and_below_report_real_two_window_zorder() {

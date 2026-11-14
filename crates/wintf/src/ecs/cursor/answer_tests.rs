@@ -140,10 +140,7 @@ fn push_is_noop_without_query() {
     let window = world
         .borrow_mut()
         .world_mut()
-        .spawn(WindowHandle {
-            hwnd: hwnd(40),
-            instance: Default::default(),
-        })
+        .spawn(WindowHandle { hwnd: hwnd(40) })
         .id();
     push_cursor(world.borrow().world(), window, CursorTrigger::Refresh);
     push_cursor_rc(&world, window, CursorTrigger::Release);
@@ -157,12 +154,7 @@ fn removing_window_handle_forgets_only_that_window() {
     remember_shown(hwnd(50), cursor(1));
     remember_shown(hwnd(51), cursor(2));
     let mut world = World::new();
-    let window = world
-        .spawn(WindowHandle {
-            hwnd: hwnd(50),
-            instance: Default::default(),
-        })
-        .id();
+    let window = world.spawn(WindowHandle { hwnd: hwnd(50) }).id();
     world.entity_mut(window).remove::<WindowHandle>();
     assert_eq!(last_shown(hwnd(50)), None);
     assert_eq!(last_shown(hwnd(51)), Some(cursor(2)));

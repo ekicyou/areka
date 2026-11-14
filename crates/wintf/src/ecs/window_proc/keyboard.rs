@@ -1,6 +1,6 @@
 //! キーボード・システムキャンセル・アクティベーションメッセージハンドラ
 //!
-//! WM_KEYDOWN, WM_SYSKEYDOWN, WM_CANCELMODE, WM_ACTIVATE の処理を担当する。
+//! WM_KEYDOWN, WM_SYSKEYDOWN, WM_CANCELMODE, WM_ACTIVATE, WM_CAPTURECHANGED の処理を担当する。
 //! キーの押下は窓に差された [`OnKeyDown`] の関数へ渡す（wintf はアプリの近道を知らない）。
 
 #![allow(non_snake_case)]
@@ -171,7 +171,7 @@ pub(super) fn WM_ACTIVATE(
             entity,
             notified: true,
         } => {
-            tracing::info!(
+            debug!(
                 entity = ?entity,
                 "[WM_ACTIVATE] Window deactivated during drag, cancelling"
             );

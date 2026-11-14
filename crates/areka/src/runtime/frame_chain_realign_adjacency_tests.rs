@@ -14,7 +14,7 @@
 
 use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::prelude::World;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainFinalized, ScopeChainState};
@@ -416,7 +416,6 @@ pub(super) fn chain3_world() -> (World, GhostWindows) {
         ] {
             world.entity_mut(e).insert(WindowHandle {
                 hwnd: HWND(raw as *mut _),
-                instance: HINSTANCE::default(),
             });
             raw += 0x10;
         }

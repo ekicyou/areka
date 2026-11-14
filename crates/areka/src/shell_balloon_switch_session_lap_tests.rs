@@ -22,7 +22,7 @@ use bevy_ecs::hierarchy::Children;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::SampleRoot;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
 };
@@ -259,7 +259,6 @@ fn spawn_windows(rig: &mut SwitchRig) -> GhostWindows {
         for window in [windows.char_window(scope), windows.balloon_window(scope)] {
             world.entity_mut(window.unwrap()).insert(WindowHandle {
                 hwnd: HWND(raw as *mut _),
-                instance: HINSTANCE::default(),
             });
             raw += 0x10;
         }

@@ -2,7 +2,7 @@
 //! （要件 6.3／6.4／7.1／7.2／8.2／8.3／9.1／9.2／9.3／11.1／14.1／14.2／14.5）。
 //!
 //! 実機も実ディスプレイも要らない。`HWND` は Win32 へ 1 度も渡さない偽の値であり、
-//! 実行環境への 5 つの窓口（所有者の読み取り・撤去・付与・後押し・前面走査）は
+//! 実行環境への 6 つの窓口（所有者の読み取り・撤去・付与・生の 1 つ奥の読み取り・後押し・前面走査）は
 //! [`double`](super::double) の台本つき替え玉が受け止める。よって
 //! 「**何を・どの順で**実行環境へ頼んだか」をそのまま主張できる。
 //!
@@ -11,7 +11,7 @@
 //! 記録の捕捉ハーネス `capture_under_filter` はスレッドローカルの差し替えであり、
 //! 替え玉の台本も同じくスレッドローカルである。Bevy の**既定の実行器は多スレッド**なので、
 //! そのまま使うと system が別スレッドで走り、記録が 1 行も拾えないうえ台本にも当たらず、
-//! 検査が空虚に緑になる（既知の盲点＝`zorder_pair_establish_tests.rs:142-152`）。
+//! 検査が空虚に緑になる（既知の盲点＝`zorder_pair_test_support.rs` のモジュール文書「記録の捕捉」）。
 //! よって [`chain_schedule`] は `SingleThreadedExecutor` を明示する。
 //! 「出ないこと」を主張する窓には、同じ窓に**確かに出る記録**を併置して本数で固定する。
 //!
@@ -25,11 +25,14 @@ use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 
 use super::apply_zorder_chain;
 use super::double::{self, Call, Script, with_script};
 use crate::ecs::test_support::capture_under_filter;
+use crate::ecs::window::zorder_pair_test_support::{
+    assert_line_count, fake_hwnd, lines_with, spawn_window,
+};
 use crate::ecs::window::{
     ChainPlan, ChainSegment, CrossEdge, CrossOwnerLink, WindowHandle, ZOrderChainPlan,
 };
@@ -47,27 +50,12 @@ const LINK_FAILED: &str = "[zorder-chain] link-failed";
 // 道具立て
 // ===========================================================================
 
-/// Win32 へは渡さない偽ハンドル（値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
-
 /// 適用系だけを載せた 1 巡分の schedule（**単一スレッドの実行器を明示**）。
 fn chain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_chain);
     schedule
-}
-
-/// 窓ハンドル付きの entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
 }
 
 /// 望む繋ぎ 1 本（区間つき）。
@@ -135,22 +123,6 @@ fn run_once(world: &mut World, script: Script) -> (String, Script) {
         })
     });
     (out, used)
-}
-
-/// 指定タグの行をすべて取り出す。
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
-}
-
-/// 指定タグの行がちょうど `expected` 本であることを固定する。
-fn assert_line_count(out: &str, tag: &str, expected: usize, what: &str) {
-    let found = lines_with(out, tag);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{tag}` は {expected} 本のはずが {} 本\n---捕捉全文---\n{out}",
-        found.len()
-    );
 }
 
 /// 1 行から `key=value` を切り出す。
@@ -454,6 +426,11 @@ fn an_edge_without_handles_is_skipped_with_a_reason_and_the_rest_are_linked() {
         1,
         "ハンドルの無い窓へ書き込もうとしている: {:?}",
         used.calls
+    );
+    // 1 本書けても待ちの付与が残る巡は印を戻す（落とすと残りは計画が変わるまで張られない）。
+    assert!(
+        world.resource::<ZOrderChainPlan>().dirty,
+        "窓ハンドル待ちの付与が残るのに印が落ちている"
     );
 }
 

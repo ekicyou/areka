@@ -62,17 +62,31 @@ unsafe impl Send for OwnerEstablishFailed {}
 unsafe impl Sync for OwnerEstablishFailed {}
 
 // ============================================================================
-// establish_owner_links - 確立系（Added<WindowHandle> 駆動）
+// establish_owner_links - 確立系（ハンドルか宣言の付与で駆動）
 // ============================================================================
+
+/// 確立前の組の宣言を持つ窓（宣言は付いた巡を見るため `Ref` で読む）。
+type DeclarationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        Ref<'static, KeepDirectlyAbove>,
+        Option<&'static OwnerEstablishFailed>,
+    ),
+    Without<OwnerLink>,
+>;
 
 /// 案 A: 両窓の OS ハンドルが揃った巡に owner を 1 回だけ張る（冪等）。
 ///
 /// # 何を契機に動くか
 ///
-/// 契機は [`WindowHandle`] の**付与**である（`Added<WindowHandle>` パターン・
-/// `register_ghost_windows_click_through` の先例）。ペアの 2 窓へのハンドル付与は同じ巡とは
-/// 限らない（生成順はバルーン → キャラ）ため、**宣言を持つ窓を毎巡走査し、その巡に
-/// どちらかのハンドルが付いた場合だけ**手順へ入る。付与が無い巡は判断そのものを行わない
+/// 契機は [`WindowHandle`] と宣言（[`KeepDirectlyAbove`]）の**付与**である
+/// （`Added<WindowHandle>` パターン・`register_ghost_windows_click_through` の先例）。
+/// ペアの 2 窓へのハンドル付与は同じ巡とは限らない（生成順はバルーン → キャラ）ため、
+/// **宣言を持つ窓を毎巡走査し、その巡に宣言かどちらかのハンドルが付いた場合だけ**手順へ入る。
+/// 宣言を見るのは、ハンドルの付いた窓に後から宣言を付けた組も張るためである。
+/// 付与が無い巡は判断そのものを行わない
 /// ——これが「毎フレーム巡回では動かない」（維持系と共通の受動性）の実装である。
 ///
 /// # 手順（design.md「案 A の確立フロー」2）
@@ -110,10 +124,7 @@ pub fn establish_owner_links(
     strategy: Option<Res<ZOrderPairStrategy>>,
     // 同じフレームに公開済みの望む鎖（未挿入は鎖なし）。
     chain: Option<Res<ZOrderChainPlan>>,
-    declarations: Query<
-        (Entity, &KeepDirectlyAbove, Option<&OwnerEstablishFailed>),
-        Without<OwnerLink>,
-    >,
+    declarations: DeclarationQuery,
     // すべての entity に当たるクエリ。`Err` は「その実体がもう無い」、`Ok(None)` は
     // 「実体はあるがハンドルがまだ無い」——見送りの理由を分けるためこの形にする。
     handles: Query<Option<Ref<WindowHandle>>>,
@@ -127,21 +138,25 @@ pub fn establish_owner_links(
         let owned = handles.get(entity).ok().flatten();
         let peer_lookup = handles.get(peer);
 
-        // この巡でどちらかにハンドルが付いたか（付与が無い巡は判断そのものを行わない）。
-        let handle_added = owned.as_ref().is_some_and(Ref::is_added)
+        // この巡で宣言かどちらかのハンドルが付いたか（付与が無い巡は判断そのものを行わない）。
+        // 宣言を見るのは、ハンドルの付いた窓に後から宣言を付けた組も張るため。
+        let added = declaration.is_added()
+            || owned.as_ref().is_some_and(Ref::is_added)
             || peer_lookup
                 .as_ref()
                 .ok()
                 .and_then(Option::as_ref)
                 .is_some_and(Ref::is_added);
-        if !handle_added {
+        if !added {
             continue;
         }
 
         // ストラテジの判定を生存・ハンドルより先に置くのは、案 B では**そもそも owner を
         // 張らない**ためである（[`decide_pair_fix`](super::zorder_pair::decide_pair_fix) は
         // 生存を先に見るが、あちらは是正の判断であり順序の意味が違う）。案 B で相手の不在を
-        // 理由に挙げると、owner を張らない本当の理由が記録から消える。
+        // 理由に挙げると、owner を張らない本当の理由が記録から消える。案 B では初めの
+        // [`ReassertZOrder`] も入れず、z の変化を知らせる仕組みも無いので、組は外から要求が
+        // 挿されたときだけ直る。
         if matches!(strategy, ZOrderPairStrategy::ExplicitMaintenance) {
             record_decision(
                 entity,
@@ -197,8 +212,8 @@ pub fn establish_owner_links(
                 commands.entity(entity).insert((
                     OwnerLink { owner_hwnd },
                     // 初期隣接の確定（維持系が消費する一回限りの要求）。確立は窓の
-                    // 生成直後・ペアにつき 1 度きりであり、他の挿入元（要件 2.6 の再表示・
-                    // z 変化検知）はこれより後にしか動かない——ゆえにここでの挿入が
+                    // 生成直後・ペアにつき 1 度きりであり、外から挿す口（要件 2.6 の再表示・
+                    // 今は挿す側が無い）もこれより後にしか動かない——ゆえにここでの挿入が
                     // 検証待ちの要求を踏み潰すことはない。
                     ReassertZOrder::default(),
                 ));

@@ -9,7 +9,7 @@
 //! 対象: crates/wintf/src/ecs/graphics/systems/window_pos.rs
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -135,10 +135,7 @@ fn invalidate_invalidates_all_and_removes_command_lists() {
         let window = world
             .spawn((
                 Window::default(),
-                WindowHandle {
-                    hwnd,
-                    instance: HINSTANCE::default(),
-                },
+                WindowHandle { hwnd },
                 HasGraphicsResources,
             ))
             .id();
@@ -314,7 +311,6 @@ fn apply_window_pos_skips_cw_usedefault() {
         Window::default(),
         WindowHandle {
             hwnd: HWND::default(),
-            instance: HINSTANCE::default(),
         },
         WindowPos {
             position: Some(Point {
@@ -342,7 +338,6 @@ fn apply_window_pos_fallback_on_invalid_hwnd() {
         Window::default(),
         WindowHandle {
             hwnd: HWND::default(),
-            instance: HINSTANCE::default(),
         },
         WindowPos {
             position: Some(Point { x: 10, y: 20 }),
@@ -374,7 +369,6 @@ fn apply_window_pos_ignores_non_window_entities() {
     world.spawn((
         WindowHandle {
             hwnd: HWND::default(),
-            instance: HINSTANCE::default(),
         },
         WindowPos {
             position: Some(Point { x: 1, y: 2 }),

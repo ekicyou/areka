@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use wintf::ecs::SizeI;
 use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::layout::{Arrangement, Offset};
@@ -22,7 +22,6 @@ use log_capture_kit::CapturedEvent;
 pub(super) fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
-        instance: HINSTANCE::default(),
     }
 }
 

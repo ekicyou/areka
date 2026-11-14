@@ -351,14 +351,13 @@ mod wiring {
     use bevy_ecs::schedule::SingleThreadedExecutor;
     use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::Mutex;
-    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
     use wintf::ecs::{Point, WindowPos, WindowStyle};
 
     pub(super) fn fake_handle(raw: usize) -> WindowHandle {
         WindowHandle {
             hwnd: HWND(raw as *mut _),
-            instance: HINSTANCE::default(),
         }
     }
 

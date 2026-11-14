@@ -420,7 +420,7 @@ fn on_shell_drag(
 ///
 /// Phase::Bubble で DoubleClick::Left を検出し、
 /// ShellWindowMarker / BalloonWindowMarker を持つ全エンティティを despawn する。
-/// despawn → on_window_handle_remove → PostMessage(WM_CLOSE) → PostQuitMessage(0)
+/// despawn → reconcile_window_registry が DestroyWindow → WindowRegistry 空遷移 → run() 復帰
 fn on_shell_pressed(
     world: &mut World,
     _sender: Entity,
@@ -434,7 +434,7 @@ fn on_shell_pressed(
                 tracing::info!("ダブルクリック検出 — アプリケーションを終了します");
 
                 // 全ウィンドウエンティティを収集して despawn
-                // （on_window_handle_remove → WM_CLOSE → PostQuitMessage）
+                // （reconcile_window_registry → DestroyWindow → WindowRegistry 空遷移）
                 let windows: Vec<Entity> = world
                     .query_filtered::<Entity, Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>>()
                     .iter(world)
@@ -465,7 +465,7 @@ mod tests {
     use super::*;
     use std::future::Future;
     use std::time::Instant;
-    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::Foundation::HWND;
 
     /// 即時完了する Future を 1 回の poll で駆動する（run_setup 用）
     fn poll_ready<F: Future>(fut: F) -> F::Output {
@@ -870,7 +870,6 @@ mod tests {
             BalloonWindowMarker,
             WindowHandle {
                 hwnd: HWND(std::ptr::null_mut()),
-                instance: HINSTANCE(std::ptr::null_mut()),
             },
         ));
 
@@ -889,7 +888,6 @@ mod tests {
             BalloonWindowMarker,
             WindowHandle {
                 hwnd: HWND(std::ptr::null_mut()),
-                instance: HINSTANCE(std::ptr::null_mut()),
             },
         ));
 

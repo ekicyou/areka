@@ -24,9 +24,10 @@
 //!
 //! `tracing` の既定の出力先は**呼び出し元の module path** である。行を組む純関数
 //! （[`zorder_chain_diag`](super::zorder_chain_diag)）の側からマクロを撃つと、出力先が
-//! 行組立の層の名前になり、記録を出す場所が増えるたびに grep の対象が割れていく。
-//! よって鎖系 7 語の**マクロ呼出はこの 1 ファイルに集約**し、出力先を
-//! `wintf::ecs::window::zorder_chain` の 1 本に固定する（design.md の同節・初版の申し送り 2.1）。
+//! 行組立の層の名前になる。絞り込みは出力先の前方一致なので読み手から漏れはしないし、
+//! 実機の grep もタグの字面で行うが、記録の関数を 1 つのファイルに集めて固定するために、
+//! 鎖系 7 語の**マクロ呼出はこの 1 ファイルに集約**し、出力先を
+//! `wintf::ecs::window::zorder_chain` の 1 本に揃える（design.md の同節・初版の申し送り 2.1）。
 //!
 //! 例外は保全語彙 2 語（`[zorder-group] applied`／`rejected`）である。あちらは design.md
 //! 「保全する既存語彙（要件 9.5）と、その新しい住処」が移設先ファイルを
@@ -112,7 +113,8 @@ pub struct ChainPlan {
 pub struct ZOrderChainPlan {
     /// 望む鎖。`None` は既定状態（指定ゼロ＝1 命令も出さない・要件 6）。
     pub chain: Option<ChainPlan>,
-    /// 内容が変わったことを示す。適用系が読んだら false へ戻す。
+    /// 内容が変わったことを示す。適用系が読んだら false へ戻す。ただし窓ハンドル待ちの付与が
+    /// 1 本でも残る巡は、書けた本数に依らず true へ戻す（持ち越し）。
     pub dirty: bool,
 }
 
@@ -542,8 +544,8 @@ pub(crate) fn log_chain_settled(
 /// 鎖系 7 語のうち、**これだけは areka から呼ばれる**——不在は「宣言と在庫の食い違い」
 /// であり、それを知っているのは台帳と在庫を持つ側だからである。よって保全語彙 2 語
 /// （[`log_group_applied`](super::zorder_chain_diag::log_group_applied) 等）と同じく
-/// crate の外へ開いてある。出力先は本モジュールのままなので、grep の対象は割れない。
-/// 呼び手は指令消化の相（areka の `emo2_boot/frame/zorder_drain.rs`）であり、材料は
+/// crate の外へ開いてある。出力先は本モジュールのまま（記録の関数をこのファイルに揃える）。
+/// 呼び手は指令消化の相（areka の `runtime/frame/zorder_drain.rs`）であり、材料は
 /// [`ChainPlan::absent`] が `(group_id, element)` の対で運ぶ。同じ内容が続く間は
 /// 1 度だけ出す（連呼の抑止は呼び手側の控えが持つ）。
 pub fn log_chain_absent(group_id: u32, element: &str) {

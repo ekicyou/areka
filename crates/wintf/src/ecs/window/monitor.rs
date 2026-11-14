@@ -13,7 +13,7 @@
 //! ## 使用例
 //!
 //! ```rust,ignore
-//! use wintf::ecs::monitor::{Monitor, enumerate_monitors};
+//! use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
 //!
 //! // 全モニターを列挙
 //! let monitors = enumerate_monitors();
@@ -27,7 +27,7 @@ use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use std::fmt;
-use tracing::warn;
+use tracing::error;
 use windows::Win32::Foundation::{LPARAM, RECT};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetMonitorInfoW, HMONITOR, MONITORINFOEXW,
@@ -229,7 +229,21 @@ impl std::error::Error for MonitorError {}
 
 /// システムの全モニターを列挙
 pub fn enumerate_monitors() -> Vec<Monitor> {
-    let mut monitors = Vec::new();
+    let (monitors, failures) = try_enumerate_monitors();
+    for (hmonitor, e) in failures {
+        error!(hmonitor = ?hmonitor, error = %e, "Failed to get monitor info");
+    }
+    monitors.unwrap_or_else(|| {
+        error!("EnumDisplayMonitors failed");
+        Vec::new()
+    })
+}
+
+/// [`enumerate_monitors`] と同じ列挙。失敗は何もログに残さず、取れた列（`EnumDisplayMonitors`
+/// の失敗なら `None`）と、1 台ずつの情報取得の失敗の列を返す。情報取得の失敗は列挙が途中で
+/// 失敗しても捨てない（失敗が続く間に毎刻みログを出さないよう、呼び手が 1 回だけ残すため）。
+pub(crate) fn try_enumerate_monitors() -> (Option<Vec<Monitor>>, Vec<(HMONITOR, MonitorError)>) {
+    let mut found: (Vec<Monitor>, Vec<(HMONITOR, MonitorError)>) = (Vec::new(), Vec::new());
 
     // EnumDisplayMonitorsのコールバック関数
     extern "system" fn enum_proc(
@@ -238,24 +252,20 @@ pub fn enumerate_monitors() -> Vec<Monitor> {
         _rect: *mut RECT,
         lparam: LPARAM,
     ) -> BOOL {
-        let monitors = unsafe { &mut *(lparam.0 as *mut Vec<Monitor>) };
-        if let Ok(monitor) = Monitor::from_hmonitor(hmonitor) {
-            monitors.push(monitor);
-        } else {
-            warn!(hmonitor = ?hmonitor, "Failed to get monitor info");
+        let (monitors, failures) =
+            unsafe { &mut *(lparam.0 as *mut (Vec<Monitor>, Vec<(HMONITOR, MonitorError)>)) };
+        match Monitor::from_hmonitor(hmonitor) {
+            Ok(monitor) => monitors.push(monitor),
+            Err(e) => failures.push((hmonitor, e)),
         }
         BOOL(1)
     }
 
-    let monitors_ptr = &mut monitors as *mut Vec<Monitor> as isize;
-    let result = unsafe { EnumDisplayMonitors(None, None, Some(enum_proc), LPARAM(monitors_ptr)) };
+    let found_ptr = &mut found as *mut (Vec<Monitor>, Vec<(HMONITOR, MonitorError)>) as isize;
+    let result = unsafe { EnumDisplayMonitors(None, None, Some(enum_proc), LPARAM(found_ptr)) };
 
-    if !result.as_bool() {
-        warn!("EnumDisplayMonitors failed");
-        return Vec::new();
-    }
-
-    monitors
+    let (monitors, failures) = found;
+    (result.as_bool().then_some(monitors), failures)
 }
 
 #[cfg(test)]

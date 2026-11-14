@@ -8,7 +8,7 @@
 //! - **是正判断の全分岐**——`decide_pair_fix` がトリガ種別・両窓の生存・実測隣接から
 //!   何を決めるか（design.md「Testing Strategy > Unit Tests」の 1・2）。
 //!
-//! 適用系（`SetWindowPos` 発行・検証・ログ）は後続タスクの担当ゆえ本ファイルには無い。
+//! 適用系（`SetWindowPos` 発行・検証・ログ）は維持系のテスト（`zorder_pair_maintain_tests.rs` ほか）が持つ。
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
@@ -18,10 +18,7 @@ use super::{
     PairTrigger, ReassertZOrder, SkipReason, ZOrderPairStrategy, decide_pair_fix,
 };
 
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 
 /// `T: Send + Sync` を型検査で要求するだけのヘルパ。
 ///
@@ -284,8 +281,7 @@ fn intruder_back() -> HWND {
     fake_hwnd(0x00F2)
 }
 
-const ALL_TRIGGERS: [PairTrigger; 4] = [
-    PairTrigger::Establish,
+const ALL_TRIGGERS: [PairTrigger; 3] = [
     PairTrigger::Reassert,
     PairTrigger::RaisedAbove,
     PairTrigger::RaisedBelow,
@@ -418,31 +414,30 @@ fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
     matrix
 }
 
-/// 確立・再断行では、バルーンをキャラのすぐ手前へ——挿入位置は「キャラの最も近い可視の手前の窓」。
+/// 再断行では、バルーンをキャラのすぐ手前へ——挿入位置は「キャラの最も近い可視の手前の窓」。
 ///
 /// `SetWindowPos` の `hWndInsertAfter` は指定窓の**背後**へ対象を置くため、
 /// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなくキャラの最も近い可視の手前の窓である。
 /// ここを取り違えると割り込み窓とキャラの間ではなく、キャラの直後へ落ちてしまう。
 #[test]
-fn decide_pair_fix_places_balloon_directly_above_character_on_establish_and_reassert() {
-    for trigger in [PairTrigger::Establish, PairTrigger::Reassert] {
-        for strategy in ALL_STRATEGIES {
-            assert_eq!(
-                decide_pair_fix(&intruded(trigger, strategy)),
-                PairFixDecision::PlaceAboveOverBelow {
-                    insert_after: InsertSpec::After(intruder_front()),
-                },
-                "{trigger:?}／{strategy:?}: バルーンはキャラの最も近い可視の手前の窓の背後へ入る"
-            );
-            // 対照: キャラ自身を挿入位置にすると「すぐ背後」になってしまう（上下反転）
-            assert_ne!(
-                decide_pair_fix(&intruded(trigger, strategy)),
-                PairFixDecision::PlaceAboveOverBelow {
-                    insert_after: InsertSpec::After(character()),
-                },
-                "{trigger:?}／{strategy:?}: キャラ自身を挿入位置にはしない"
-            );
-        }
+fn decide_pair_fix_places_balloon_directly_above_character_on_reassert() {
+    let trigger = PairTrigger::Reassert;
+    for strategy in ALL_STRATEGIES {
+        assert_eq!(
+            decide_pair_fix(&intruded(trigger, strategy)),
+            PairFixDecision::PlaceAboveOverBelow {
+                insert_after: InsertSpec::After(intruder_front()),
+            },
+            "{trigger:?}／{strategy:?}: バルーンはキャラの最も近い可視の手前の窓の背後へ入る"
+        );
+        // 対照: キャラ自身を挿入位置にすると「すぐ背後」になってしまう（上下反転）
+        assert_ne!(
+            decide_pair_fix(&intruded(trigger, strategy)),
+            PairFixDecision::PlaceAboveOverBelow {
+                insert_after: InsertSpec::After(character()),
+            },
+            "{trigger:?}／{strategy:?}: キャラ自身を挿入位置にはしない"
+        );
     }
 }
 
@@ -597,10 +592,10 @@ fn decide_pair_fix_follows_the_band_table_for_the_place_above_arm() {
             }
         }
     }
-    // 手前へ寄せる腕は Establish・Reassert（全ストラテジ）と RaisedBelow（案 B）で出る＝7 組。
+    // 手前へ寄せる腕は Reassert（全ストラテジ）と RaisedBelow（案 B）で出る＝4 組。
     assert_eq!(
         checked,
-        7 * rows.len(),
+        4 * rows.len(),
         "表の行が手前へ寄せる腕で確かめられていない"
     );
 }
@@ -653,7 +648,7 @@ fn decide_pair_fix_handles_raised_below_per_strategy() {
 
 /// 案 A・raise assist 無効では、重なりの変化を契機とする両トリガが見送られる。
 ///
-/// この構成では z 変化検知そのものを結線しない（design.md「WM_WINDOWPOSCHANGED z 変化検知」）
+/// z 変化検知そのものを結線しない（design.md「WM_WINDOWPOSCHANGED z 変化検知」）
 /// ——万一トリガが届いても判断側で止まることを固定する。
 #[test]
 fn decide_pair_fix_skips_z_change_triggers_when_raise_assist_is_disabled() {
@@ -677,7 +672,7 @@ fn decide_pair_fix_skips_z_change_triggers_when_raise_assist_is_disabled() {
             "{trigger:?}: raise assist 有効時は見送り理由が変わる"
         );
     }
-    // 対照: 確立・再断行は raise assist の有無に関わらず処理される
+    // 対照: 再断行は raise assist の有無に関わらず処理される
     assert_eq!(
         decide_pair_fix(&intruded(PairTrigger::Reassert, disabled)),
         PairFixDecision::PlaceAboveOverBelow {
@@ -732,7 +727,7 @@ fn decide_pair_fix_skips_with_peer_missing_when_either_window_is_gone() {
 /// 生存していてもハンドルが未付与なら、不在とは別の理由で見送る。
 #[test]
 fn decide_pair_fix_skips_with_handle_missing_before_any_measurement() {
-    let base = intruded(PairTrigger::Establish, ZOrderPairStrategy::default());
+    let base = intruded(PairTrigger::Reassert, ZOrderPairStrategy::default());
     for (label, obs) in [
         (
             "バルーンのハンドル未付与",

@@ -80,7 +80,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow,
     IsWindowVisible, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
@@ -404,14 +404,12 @@ fn unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
         let character = world
             .spawn(WindowHandle {
                 hwnd: set[scope_start + 1],
-                instance: HINSTANCE::default(),
             })
             .id();
         let balloon = world
             .spawn((
                 WindowHandle {
                     hwnd: set[scope_start],
-                    instance: HINSTANCE::default(),
                 },
                 KeepDirectlyAbove { peer: character },
             ))

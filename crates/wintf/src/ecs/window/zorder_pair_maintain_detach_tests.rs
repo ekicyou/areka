@@ -34,112 +34,37 @@
 //! [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, IsWindow, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WS_POPUP,
-};
-use windows::core::{PCWSTR, w};
+use bevy_ecs::schedule::Schedule;
+use windows::Win32::Foundation::HWND;
+use windows::core::w;
 
-use super::apply_zorder_pair_maintenance;
 use crate::api::{clear_window_owner, set_window_owner};
 use crate::ecs::test_support::capture_under_filter;
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, DETACHED_MARK, SET_WINDOW_POS_TAG, SIGNOFF_DIRECTIVES, SKIP_TAG,
+    assert_line_count, create_test_window, destroy_test_window, hwnd_hex, is_alive,
+    issue_control_command, lines_with, owner_of, pair_schedule, spawn_window,
+};
 use crate::ecs::window::{
-    KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderPairStrategy,
-    establish_owner_links,
+    IssuedPairFix, KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderPairStrategy,
+    flush_window_pos_commands,
 };
 
-/// 実機サインオフが用いる `RUST_LOG` 相当（design.md「Real-Machine Signoff」の wintf 側）。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
-
-/// 切離しが走った記録の判定語。
-const DETACHED_MARK: &str = "owner を切り離しました";
 /// 切離しに失敗した記録の判定語。
 const DETACH_FAILED_MARK: &str = "owner の切離しに失敗しました";
-/// 見送りの記録タグ（理由必須）。
-const SKIP_TAG: &str = "[zorder-pair] skip";
 
 // -------------------------------------------------------------------------
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
 
-/// 自プロセス所有の非表示トップレベル窓を作る（確立系のテストと同一のレシピ）。
-///
-/// owner 関係はトップレベル窓の間でのみ意味を持つため `WS_POPUP`（親なし）で作る
-/// ——子窓に対する `GWLP_HWNDPARENT` の書込は owner ではなく親の付け替えになる。
-fn create_test_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a hidden test window")
-    }
-}
-
-/// 生成したテスト窓を破棄する（本番の registry drop 相当）。
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-/// OS 側が持つ owner を読み戻す（`GetWindow(GW_OWNER)`）。owner 無しは `None`。
-fn owner_of(hwnd: HWND) -> Option<HWND> {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { GetWindow(hwnd, GW_OWNER) }.ok()
-}
-
-/// 窓がまだ実在するか（破棄に巻き込まれていないか）。
-fn is_alive(hwnd: HWND) -> bool {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { IsWindow(Some(hwnd)) }.as_bool()
-}
-
-fn hwnd_hex(hwnd: HWND) -> String {
-    format!("0x{:X}", hwnd.0 as usize)
-}
-
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
-/// 確立系と維持系を載せた 1 巡分の schedule。
-///
-/// 本番と同じ順（確立 → 維持）で並べる。切離しは維持系の中で走る。
-fn pair_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems((establish_owner_links, apply_zorder_pair_maintenance).chain());
-    schedule
-}
-
 /// 実窓 2 枚のペアを World へ載せ、owner を実際に張るところまで進める。
 ///
-/// 返すのは（バルーン窓 entity, キャラ窓 entity）。確立系が初期隣接の確定のために入れる
-/// 再断行の要求はここで外す——**重なりの是正は維持系のテストの担当**であり、本ファイルが
-/// 見るのは切離しだけである（残すと実窓の重なりを動かす指令が飛び、破棄の観測に無関係な
-/// 記録が混じる）。
+/// 返すのは（バルーン窓 entity, キャラ窓 entity）。**重なりの是正は維持系のテストの担当**で
+/// あり、本ファイルが見るのは切離しだけである。確立系と維持系は chain でつながるため、確立系が
+/// 入れた再断行の要求は同じ巡の維持系がもう使い、非表示の窓どうしは隣と測れないので是正の
+/// 指令がキューに積まれ、出した印 [`IssuedPairFix`] も付く。よって要求と印を外し、積まれた
+/// 指令も捕捉窓の外で流し切る（キューはスレッドローカルに残るため、流し忘れると後の捕捉の
+/// flush に前の巡の 1 本が混じる）。
 fn establish_pair(
     world: &mut World,
     schedule: &mut Schedule,
@@ -161,26 +86,11 @@ fn establish_pair(
         world.entity(balloon).contains::<OwnerLink>(),
         "前提: 張れた事実の記録が付いているはず"
     );
-    world.entity_mut(balloon).remove::<ReassertZOrder>();
+    world
+        .entity_mut(balloon)
+        .remove::<(ReassertZOrder, IssuedPairFix)>();
+    flush_window_pos_commands();
     (balloon, character)
-}
-
-fn lines_with<'a>(out: &'a str, mark: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(mark)).collect()
-}
-
-/// 指定の判定語を含む行がちょうど `expected` 本であることを確かめる。
-///
-/// 「0 本でないこと」だけを見ると余計に出る側の欠陥（毎巡同じ切離しを繰り返す等）を
-/// 見逃すため、常に本数で固定する。
-fn assert_line_count(out: &str, mark: &str, expected: usize, what: &str) {
-    let found = lines_with(out, mark);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{mark}` の行は {expected} 本のはずが {} 本だった\n---捕捉全文---\n{out}",
-        found.len()
-    );
 }
 
 // -------------------------------------------------------------------------
@@ -241,12 +151,20 @@ fn character_first_despawn_detaches_the_owner_and_spares_the_balloon() {
     // キャラ窓の実体が消える（窓そのものはまだ実在する）。
     world.entity_mut(character).despawn();
 
-    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
+        // 対照: 捕捉が生きていれば必ず現れる 1 本（窓は動かさない）。
+        issue_control_command(balloon_hwnd);
     });
 
     assert_line_count(&out, DETACHED_MARK, 1, "切離しの記録は 1 本だけ");
     assert_line_count(&out, DETACH_FAILED_MARK, 0, "切離しは成功しているはず");
+    assert_line_count(
+        &out,
+        SET_WINDOW_POS_TAG,
+        1,
+        "切離しの巡は窓へ書き込まず、対照の 1 本だけが出るはず（下ごしらえの残りも混じらない）",
+    );
     let detached = lines_with(&out, DETACHED_MARK)[0];
     assert!(
         detached.contains(&format!("entity={balloon:?}")),
@@ -295,8 +213,8 @@ fn character_first_despawn_detaches_the_owner_and_spares_the_balloon() {
 
 /// 相手の実体が残っていても、OS のハンドルが外れていれば切り離す。
 ///
-/// ハンドルの除去は窓の破棄要求そのもの（`WindowHandle` の除去フックが `WM_CLOSE` を
-/// 投函する）であり、その時点で相手の窓はもう無くなる。実体の消滅を待つと破棄に間に合わない
+/// ハンドルが外れた相手の窓は、OS の窓として当てにできない（破棄は登録簿の掃除
+/// `reconcile_window_registry` が行う）。実体の消滅を待つと破棄に間に合わない
 /// ため、こちらの形でも切離しへ入る。記録の `peer_state` で 2 つの形を見分けられる。
 #[test]
 fn peer_losing_its_handle_also_detaches_the_owner() {

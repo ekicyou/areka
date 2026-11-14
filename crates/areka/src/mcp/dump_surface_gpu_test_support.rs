@@ -28,7 +28,7 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{KanadeMsg, MonotonicMs, RaiseOutcome, ShioriMethod};
 use areka_mcp::tools::{Answer, Pending, ToolCall, ToolRequest, dump_balloon, dump_surface};
 use bevy_ecs::world::World;
-use windows::Win32::Foundation::{GENERIC_READ, HINSTANCE, HWND};
+use windows::Win32::Foundation::{GENERIC_READ, HWND};
 use windows::Win32::Graphics::Imaging::{
     GUID_WICPixelFormat32bppRGBA, IWICBitmapSource, WICBitmapDitherTypeNone,
     WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
@@ -342,7 +342,6 @@ fn spawn_windows(rig: &mut SwitchRig, dpi: u16) {
     for &window in &all {
         world.entity_mut(window).insert(WindowHandle {
             hwnd: HWND(raw as *mut _),
-            instance: HINSTANCE::default(),
         });
         raw += 0x10;
     }

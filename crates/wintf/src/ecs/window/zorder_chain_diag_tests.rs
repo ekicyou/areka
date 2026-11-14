@@ -16,8 +16,8 @@
 //! 1 件も当てられなかった。ここでは**隣り合う欄の対**を実際の字面のまま名指しで固定し、
 //! 間に別の欄が割り込んだ瞬間に赤くなるようにしてある。
 
+use crate::ecs::window::zorder_pair_test_support::fake_hwnd;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use windows::core::HRESULT;
 
 use super::{
@@ -40,11 +40,6 @@ const DEFAULT_DIRECTIVES: &str = "info";
 
 /// 本モジュールの記録の出力先（module path 既定）。
 const LOG_TARGET: &str = "wintf::ecs::window::zorder_chain_diag";
-
-/// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
 
 /// テスト用の Entity を 2 つ採る（空の World から順に確保するだけ）。
 fn two_entities() -> (Entity, Entity) {
@@ -139,7 +134,7 @@ fn the_two_preserved_group_tags_kept_their_exact_spelling_through_the_move() {
     );
 }
 
-/// 名簿に載っていない 8 つ目・3 つ目のタグはモジュール本体に存在しない。
+/// 名簿の外のタグはモジュール本体に存在しない。
 ///
 /// 直上の 2 つは「登録されているものが正しい」ことしか言わない——**それ以外に無い**は
 /// 名簿を読むだけでは決して言えず、余分な定数とそれを使う行組立を足しても名簿は沈黙する。
@@ -244,7 +239,7 @@ fn the_preserved_tags_have_exactly_one_home_in_this_crate() {
         assert_eq!(
             homes,
             vec!["ecs/window/zorder_chain_diag.rs".to_string()],
-            "`{tag}` の住処が 1 つではない（grep 対象が分裂する）"
+            "`{tag}` の住処が 1 つではない（出力先が割れて RUST_LOG の指定から外れうる・写しが食い違う）"
         );
     }
 
@@ -315,10 +310,10 @@ fn a_tail_segment_renders_as_the_tail_word_not_a_group_number() {
 
 /// 区間が取れない呼び出しでも欄は落ちず、番兵が入る（繋いだ行・張り失敗の行の両方）。
 ///
-/// **本番の呼び出しはここへ来ない**——区間は望む鎖（`CrossEdge::segment`）が運び、撤去では
-/// 帳簿の控えから出るので、実際に流れるのは常に `Some(..)` である。ここで固定するのは
-/// `Option` を残してある理由そのもの、すなわち「値が取れなくても**欄が消えない**」ことで
-/// ある——消えると「記録が出ていない」と「その経路にはその値が無い」の区別が事後に付かない。
+/// 繋いだ行の本番の呼び出しはここへ来ない（区間は望む鎖の `CrossEdge::segment` が運ぶ）。
+/// 張り失敗の行は、組の結び目の張り直し（`restore_pair`）の失敗で本番も `None` を渡す。
+/// ここで固定するのは「値が取れなくても**欄が消えない**」ことである——消えると
+/// 「記録が出ていない」と「その経路にはその値が無い」の区別が事後に付かない。
 #[test]
 fn a_segmentless_call_still_carries_the_field_filled_with_the_sentinel() {
     let (owned, owner) = two_entities();
@@ -398,7 +393,7 @@ fn the_unlinked_line_carries_the_reason_beside_the_handles() {
     );
 }
 
-/// 区間が分からない撤去でも欄は落ちず番兵になる（グループごと消えた後の撤去）。
+/// 区間が分からない撤去でも欄は落ちず番兵になる（本番の撤去は帳簿の区間を常に渡す・防御の固定）。
 #[test]
 fn an_unknown_segment_renders_the_sentinel_instead_of_dropping_the_field() {
     let (owned, _) = two_entities();
@@ -438,7 +433,7 @@ fn the_four_detach_reasons_render_as_four_distinct_words() {
 #[test]
 fn the_settled_line_carries_the_declaration_and_the_measurement_together() {
     let line = settled_line(
-        Some(fake_hwnd(0xA0)),
+        Some(fake_hwnd(0xC0)),
         Some(fake_hwnd(0xB0)),
         &[fake_hwnd(0xA0), fake_hwnd(0xB0), fake_hwnd(0xC0)],
         &[fake_hwnd(0xA0), fake_hwnd(0xB0), fake_hwnd(0xC0)],
@@ -447,7 +442,7 @@ fn the_settled_line_carries_the_declaration_and_the_measurement_together() {
 
     assert_eq!(
         line,
-        "[zorder-chain] settled nudged_hwnd=0xA0 insert_after=0xB0 \
+        "[zorder-chain] settled nudged_hwnd=0xC0 insert_after=0xB0 \
          declared=0xA0,0xB0,0xC0 measured=0xA0,0xB0,0xC0 nudge_ok=true"
     );
 }

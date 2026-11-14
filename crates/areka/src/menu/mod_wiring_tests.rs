@@ -21,7 +21,6 @@ use areka_kanade::{ClickButton, CloseReason, MouseButton, MouseEventKind, MouseI
 use bevy_ecs::schedule::Schedules;
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
-use windows::Win32::Foundation::HINSTANCE;
 use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased, Phase, PointerState};
 use wintf::ecs::{Input, Point, WindowHandle};
 
@@ -98,7 +97,6 @@ fn spawn_char_window(world: &mut World) -> Entity {
             CharWindowMarker { scope: 0 },
             WindowHandle {
                 hwnd: HWND(0x1234 as *mut _),
-                instance: HINSTANCE::default(),
             },
         ))
         .id()

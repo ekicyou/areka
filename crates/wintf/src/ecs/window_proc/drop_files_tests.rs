@@ -217,8 +217,10 @@ fn dispatch_null_hdrop_warns_once_without_call() {
 }
 
 /// 設計テスト 6（要件 1.7）: `DropReadError` の 2 変種は `files_dropped_read_failed` の `error` 欄で
-/// 読み分けられる（`NullHandle`／`Query` は何番目・何本のうちかを載せる）。`Query` の腕は実物の
-/// `HDROP` でしか踏めないので、ここでは記録の語だけを固定する。
+/// 読み分けられる（`NullHandle`／`Query` は何番目・何本のうちかを載せる）。実物の `HDROP` を読む
+/// 通常の道は `dispatch_real_hdrop_delivers_the_same_two_paths` が固定する。`Query` の腕は
+/// 形の正しい `HDROP` でも踏めない（空のパスで一覧が終わるので、数えたパスの長さは 0 にならない）
+/// ため、ここでは記録の語だけを固定する。
 #[test]
 fn read_error_variants_are_distinguishable_in_the_record() {
     let (_, hooked, _) = drop_world();
@@ -241,4 +243,78 @@ fn read_error_variants_are_distinguishable_in_the_record() {
         "Query が何番目・何本のうちかを載せていない: {errors:?}"
     );
     assert_ne!(errors[0], errors[1]);
+}
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GlobalAlloc(flags: u32, bytes: usize) -> *mut core::ffi::c_void;
+}
+
+/// `GPTR`（`GMEM_FIXED | GMEM_ZEROINIT`）: 取っ手がそのまま番地になり、0 で埋まる。
+const GPTR: u32 = 0x0040;
+
+/// research.md 12.1 の形の `HDROP` を組む: `DROPFILES` の頭（20 バイト・`pFiles=20`・
+/// `fWide=1`）の後に NUL で区切った UTF-16 のパスを並べ、終わりにもう 1 つ NUL。
+/// 片付けは受け手の `DragFinish`（`GlobalFree`）が行う。
+fn build_hdrop(paths: &[Vec<u16>]) -> usize {
+    const HEAD: usize = 20;
+    let mut wide: Vec<u16> = Vec::new();
+    for p in paths {
+        wide.extend_from_slice(p);
+        wide.push(0);
+    }
+    wide.push(0);
+    let bytes = HEAD + wide.len() * 2;
+    // SAFETY: 確かめた大きさを確保し、その範囲にだけ書く。
+    unsafe {
+        let mem = GlobalAlloc(GPTR, bytes) as *mut u8;
+        assert!(!mem.is_null(), "GlobalAlloc が失敗した");
+        (mem as *mut u32).write_unaligned(HEAD as u32); // pFiles
+        (mem.add(16) as *mut u32).write_unaligned(1); // fWide（pt と fNC は 0 のまま）
+        std::ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, mem.add(HEAD), wide.len() * 2);
+        mem as usize
+    }
+}
+
+/// research.md 49 番: 日本語を含むパス 2 本（存在しなくてよい）の実物の `HDROP` を
+/// `WM_DROPFILES` で配ると、OS から読んだ一覧が同じ 2 本で受け手へ届く。比べは UTF-16 のまま
+/// （コンソールの文字コードに依らない）。長さを 1 つ間違えると最後の 1 文字が欠けて赤になる。
+#[test]
+fn dispatch_real_hdrop_delivers_the_same_two_paths() {
+    use crate::ecs::window_proc::dispatch_window_message;
+    use crate::executor::util::WindowMessage;
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::WM_DROPFILES;
+
+    let expected: Vec<Vec<u16>> = [r"C:\投げ込み\ゴースト.nar", r"D:\伺か\シェル フォルダ"]
+        .iter()
+        .map(|s| s.encode_utf16().collect())
+        .collect();
+    let (world, hooked, _) = drop_world();
+    let m = WindowMessage {
+        hwnd: HWND(std::ptr::null_mut()),
+        msg: WM_DROPFILES,
+        wparam: WPARAM(build_hdrop(&expected)),
+        lparam: LPARAM(0),
+    };
+
+    let (ret, events) = log_capture_kit::capture(|| dispatch_window_message(&world, hooked, &m));
+
+    assert_eq!(ret, Some(LRESULT(0)));
+    let got: Vec<Vec<Vec<u16>>> = received(&world)
+        .unwrap_or_default()
+        .iter()
+        .map(|list| {
+            list.iter()
+                .map(|p| p.as_os_str().encode_wide().collect())
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        got,
+        vec![expected],
+        "届いた一覧が組んだ 2 本と違う: {events:?}"
+    );
+    assert_eq!(warn_count(&events), 0, "警告以上が出ている: {events:?}");
 }

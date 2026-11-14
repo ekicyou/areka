@@ -24,6 +24,8 @@ mod zorder_pair_diag;
 mod zorder_pair_establish;
 mod zorder_pair_maintain;
 mod zorder_pair_sink;
+#[cfg(test)]
+pub(crate) mod zorder_pair_test_support;
 
 pub use command::*;
 pub use components::*;

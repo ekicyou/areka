@@ -1,6 +1,6 @@
 //! マウス移動・ヒットテスト・離脱ハンドラ
 //!
-//! WM_NCHITTEST, WM_MOUSEMOVE, WM_MOUSELEAVE
+//! WM_SETCURSOR, WM_NCHITTEST, WM_MOUSEMOVE, WM_MOUSELEAVE
 
 #![allow(non_snake_case)]
 
@@ -8,10 +8,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+use super::lifecycle::DESPAWNED_SKIP_TAG;
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
@@ -93,14 +94,14 @@ pub(super) fn WM_NCHITTEST(
     crate::ecs::pointer::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, world)
 }
 
-/// 当該ウィンドウに属し、exclude と異なるエンティティの PointerState 保持者を収集する。
+/// 当該ウィンドウに属し、`exclude`（`None` なら除くもの無し）と異なる PointerState 保持者を収集する。
 ///
-/// WM_MOUSEMOVE の leave 処理で使用するヘルパー関数。
-/// `find_owner_window` でウィンドウスコーピングを行い、他ウィンドウの PointerState を保護する。
+/// `leave_pointer` が使う。`find_owner_window` でウィンドウスコーピングを行い、他ウィンドウの
+/// PointerState を保護する。
 pub(super) fn collect_entities_to_leave(
     world: &mut bevy_ecs::world::World,
     window_entity: bevy_ecs::prelude::Entity,
-    exclude: bevy_ecs::prelude::Entity,
+    exclude: Option<bevy_ecs::prelude::Entity>,
 ) -> Vec<bevy_ecs::prelude::Entity> {
     use crate::ecs::pointer::PointerState;
     use crate::ecs::window::find_owner_window;
@@ -108,17 +109,57 @@ pub(super) fn collect_entities_to_leave(
     let mut result = Vec::new();
     let mut query = world.query::<(bevy_ecs::prelude::Entity, &PointerState)>();
     for (e, _) in query.iter(world) {
-        if e != exclude && find_owner_window(world, e) == Some(window_entity) {
+        if Some(e) != exclude && find_owner_window(world, e) == Some(window_entity) {
             result.push(e);
         }
     }
     result
 }
 
+/// 窓 `window_entity` に属する PointerState の持ち主のうち `keep` 以外から PointerState を外し、
+/// PointerLeave を付ける（ほかの窓の PointerState は残す）。`WM_MOUSEMOVE` は移す先を `keep` に、
+/// `WM_MOUSELEAVE` は `None` で呼ぶ。
+fn leave_pointer(world: &mut bevy_ecs::world::World, window_entity: Entity, keep: Option<Entity>) {
+    use crate::ecs::pointer::{PointerLeave, PointerState};
+
+    for old_entity in collect_entities_to_leave(world, window_entity, keep) {
+        if let Ok(mut entity_ref) = world.get_entity_mut(old_entity) {
+            entity_ref.remove::<PointerState>();
+            entity_ref.insert(PointerLeave);
+            debug!(
+                old_entity = ?old_entity,
+                new_entity = ?keep,
+                window = ?window_entity,
+                "PointerState moved, Leave marker inserted"
+            );
+        }
+    }
+}
+
+/// 離脱の見張り（`TME_LEAVE`）を掛ける。`WM_MOUSEMOVE` のたびに呼ぶ（状態を持たない）。
+fn track_mouse_leave(hwnd: HWND) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+    };
+    let mut tme = TRACKMOUSEEVENT {
+        cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+        dwFlags: TME_LEAVE,
+        hwndTrack: hwnd,
+        dwHoverTime: 0,
+    };
+    // 失敗は debug!: 返す相手が無く、次の移動でまた呼ぶので立ち直り、warn! だと移動のたびに溢れる（`cursor/answer.rs` と同じ）。
+    // SAFETY: 有効な TRACKMOUSEEVENT。
+    match unsafe { TrackMouseEvent(&mut tme) } {
+        Ok(()) => trace!(?hwnd, "TrackMouseEvent(TME_LEAVE) set"),
+        Err(e) => debug!(?hwnd, error = %e, "TrackMouseEvent(TME_LEAVE) failed"),
+    }
+}
+
 /// WM_MOUSEMOVE: マウス移動メッセージ
 ///
 /// 位置をPointerBufferに蓄積し、hit_testでヒットしたエンティティにPointerStateを付与。
-/// 初回移動時にTrackMouseEventを設定。
+/// 移動のたびに（World の借用の外で）離脱の見張りを掛ける。
+/// 移す先の entity が破棄済みなら位置を積まず、[`DESPAWNED_SKIP_TAG`] の `debug!` を残す。
 #[inline]
 pub(super) fn WM_MOUSEMOVE(
     world: &Rc<RefCell<EcsWorld>>,
@@ -127,14 +168,11 @@ pub(super) fn WM_MOUSEMOVE(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    use crate::ecs::pointer::{
-        PointerLeave, PointerState, WindowPointerTracking, push_pointer_sample, set_modifier_state,
-    };
+    use crate::ecs::pointer::{PointerState, push_pointer_sample, set_modifier_state};
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
     use std::time::Instant;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
-    };
+
+    track_mouse_leave(hwnd);
 
     // 位置取得（物理ピクセル、クライアント座標）
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
@@ -153,41 +191,6 @@ pub(super) fn WM_MOUSEMOVE(
 
     {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            // TrackMouseEvent 設定（ウィンドウに対して）
-            if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(window_entity) {
-                let needs_tracking = entity_ref
-                    .get::<WindowPointerTracking>()
-                    .is_none_or(|t| !t.0);
-
-                if needs_tracking {
-                    let mut tme = TRACKMOUSEEVENT {
-                        cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
-                        dwFlags: TME_LEAVE,
-                        hwndTrack: hwnd,
-                        dwHoverTime: 0,
-                    };
-                    let _ = unsafe { TrackMouseEvent(&mut tme) };
-
-                    if entity_ref.get::<WindowPointerTracking>().is_some() {
-                        if let Some(mut tracking) = entity_ref.get_mut::<WindowPointerTracking>() {
-                            tracking.0 = true;
-                        }
-                    } else {
-                        drop(entity_ref);
-                        world_borrow
-                            .world_mut()
-                            .entity_mut(window_entity)
-                            .insert(WindowPointerTracking(true));
-                    }
-
-                    trace!(
-                        entity = ?window_entity,
-                        hwnd = ?hwnd,
-                        "TrackMouseEvent(TME_LEAVE) set"
-                    );
-                }
-            }
-
             // hit_test でヒットしたエンティティを取得
             let hit_entity = hit_test_in_window(
                 world_borrow.world(),
@@ -195,19 +198,9 @@ pub(super) fn WM_MOUSEMOVE(
                 HitTestPoint::new(x as f32, y as f32),
             );
 
-            // WindowPosを取得してスクリーン座標を計算
-            let window_pos = world_borrow
-                .world()
-                .get::<crate::ecs::window::WindowPos>(window_entity);
-            let (screen_x, screen_y) = if let Some(wp) = window_pos {
-                if let Some(pos) = wp.position {
-                    (x + pos.x, y + pos.y)
-                } else {
-                    (x, y)
-                }
-            } else {
-                (x, y)
-            };
+            // スクリーン座標（押下と同じ規則）
+            let (screen_x, screen_y) =
+                super::mouse_click::screen_point(world_borrow.world(), window_entity, x, y);
 
             // ドラッグ処理（thread_local DragState + DragAccumulatorResource）
             // ヒットテスト結果に関わらず、Preparing/Dragging状態なら処理を続ける
@@ -227,13 +220,8 @@ pub(super) fn WM_MOUSEMOVE(
                             let current_pos =
                                 crate::ecs::pointer::PhysicalPoint::new(screen_x, screen_y);
 
-                            // 閾値チェック
-                            let dx = current_pos.x - start_pos.x;
-                            let dy = current_pos.y - start_pos.y;
-                            let distance_sq = dx * dx + dy * dy;
-                            let threshold_sq = drag_config.threshold * drag_config.threshold;
-
-                            if distance_sq >= threshold_sq {
+                            if crate::ecs::drag::check_threshold(current_pos, drag_config.threshold)
+                            {
                                 // 閾値到達：Dragging状態に遷移
                                 crate::ecs::drag::start_dragging(current_pos);
 
@@ -322,117 +310,52 @@ pub(super) fn WM_MOUSEMOVE(
                 _ => {}
             }
 
-            // ヒットしたエンティティが存在する場合
-            if let Some(target_entity) = hit_entity {
-                // 当該ウィンドウに属し、target_entity と異なるエンティティを Leave 対象として収集
-                let entities_to_leave = collect_entities_to_leave(
-                    world_borrow.world_mut(),
-                    window_entity,
-                    target_entity,
+            // 当たった entity、無ければ窓の entity（窓の空白）へ PointerState を移す
+            let target_entity = hit_entity.unwrap_or(window_entity);
+            leave_pointer(world_borrow.world_mut(), window_entity, Some(target_entity));
+
+            // 移す先に PointerState を挿入または維持（消えた entity なら位置を積まない）
+            let target_alive = if let Ok(entity_ref) =
+                world_borrow.world_mut().get_entity_mut(target_entity)
+            {
+                let needs_insert = entity_ref.get::<PointerState>().is_none();
+                tracing::trace!(
+                    entity = ?target_entity,
+                    needs_insert,
+                    "[WM_MOUSEMOVE] PointerState check"
                 );
+                drop(entity_ref);
 
-                // 古いエンティティからPointerStateを削除し、PointerLeaveを付与
-                for old_entity in entities_to_leave {
-                    if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(old_entity)
-                    {
-                        entity_ref.remove::<PointerState>();
-                        entity_ref.insert(PointerLeave);
-                        debug!(
-                            old_entity = ?old_entity,
-                            new_entity = ?target_entity,
-                            "PointerState moved, Leave marker inserted"
-                        );
-                    }
-                }
-
-                // 新しいエンティティにPointerStateを挿入または維持
-                if let Ok(entity_ref) = world_borrow.world_mut().get_entity_mut(target_entity) {
-                    let needs_insert = entity_ref.get::<PointerState>().is_none();
-                    tracing::trace!(
+                if needs_insert {
+                    world_borrow
+                        .world_mut()
+                        .entity_mut(target_entity)
+                        .insert(PointerState {
+                            client_point: crate::ecs::pointer::PhysicalPoint::new(x, y),
+                            local_point: crate::ecs::pointer::PhysicalPoint::new(x, y),
+                            shift_down: shift,
+                            ctrl_down: ctrl,
+                            ..Default::default()
+                        });
+                    debug!(
                         entity = ?target_entity,
-                        needs_insert,
-                        "[WM_MOUSEMOVE] PointerState check"
-                    );
-                    drop(entity_ref);
-
-                    if needs_insert {
-                        world_borrow
-                            .world_mut()
-                            .entity_mut(target_entity)
-                            .insert(PointerState {
-                                client_point: crate::ecs::pointer::PhysicalPoint::new(x, y),
-                                local_point: crate::ecs::pointer::PhysicalPoint::new(x, y),
-                                shift_down: shift,
-                                ctrl_down: ctrl,
-                                ..Default::default()
-                            });
-                        debug!(
-                            entity = ?target_entity,
-                            x, y,
-                            "PointerState inserted (Enter)"
-                        );
-                    }
-                } else {
-                    tracing::warn!(
-                        entity = ?target_entity,
-                        "[WM_MOUSEMOVE] Failed to get entity_mut"
+                        hit = hit_entity.is_some(),
+                        x, y,
+                        "PointerState inserted (Enter)"
                     );
                 }
-
-                // PointerStateが存在することを保証した上で、バッファに蓄積
-                push_pointer_sample(target_entity, x as f32, y as f32, Instant::now());
-                set_modifier_state(target_entity, shift, ctrl);
+                true
             } else {
-                // hit_test失敗（Windowの空白部分）
-                // Windowエンティティに対して処理
-                let target_entity = window_entity;
-
-                // 当該ウィンドウに属し、target_entity と異なるエンティティを Leave 対象として収集
-                let entities_to_leave = collect_entities_to_leave(
-                    world_borrow.world_mut(),
-                    window_entity,
-                    target_entity,
+                // bevy 0.19 の get_entity_mut(Entity) が失敗するのは NotSpawned（破棄済み）だけ
+                debug!(
+                    entity = ?target_entity,
+                    "{DESPAWNED_SKIP_TAG} WM_MOUSEMOVE: 対象 entity は既に破棄済み（despawn）→ 位置を積まずに打ち切り"
                 );
+                false
+            };
 
-                // 古いエンティティからPointerStateを削除し、PointerLeaveを付与
-                for old_entity in entities_to_leave {
-                    if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(old_entity)
-                    {
-                        entity_ref.remove::<PointerState>();
-                        entity_ref.insert(PointerLeave);
-                        debug!(
-                            old_entity = ?old_entity,
-                            new_entity = ?target_entity,
-                            "PointerState moved to Window, Leave marker inserted"
-                        );
-                    }
-                }
-
-                // PointerStateを挿入または維持
-                if let Ok(entity_ref) = world_borrow.world_mut().get_entity_mut(target_entity) {
-                    let needs_insert = entity_ref.get::<PointerState>().is_none();
-                    drop(entity_ref);
-
-                    if needs_insert {
-                        world_borrow
-                            .world_mut()
-                            .entity_mut(target_entity)
-                            .insert(PointerState {
-                                client_point: crate::ecs::pointer::PhysicalPoint::new(x, y),
-                                local_point: crate::ecs::pointer::PhysicalPoint::new(x, y),
-                                shift_down: shift,
-                                ctrl_down: ctrl,
-                                ..Default::default()
-                            });
-                        debug!(
-                            entity = ?target_entity,
-                            x, y,
-                            "PointerState inserted on Window (no hit)"
-                        );
-                    }
-                }
-
-                // PointerStateが存在することを保証した上で、バッファに蓄積
+            // PointerStateが存在することを保証した上で、バッファに蓄積
+            if target_alive {
                 push_pointer_sample(target_entity, x as f32, y as f32, Instant::now());
                 set_modifier_state(target_entity, shift, ctrl);
             }
@@ -443,7 +366,8 @@ pub(super) fn WM_MOUSEMOVE(
     // これにより同期発火するWM_WINDOWPOSCHANGEDがWorldを借用でき、
     // WindowPos.positionが正しく更新される
     if let Some((drag_hwnd, new_x, new_y)) = deferred_set_window_pos {
-        let _ = unsafe {
+        // SAFETY: Win32 境界。借用を返した後に窓の位置だけを書く。
+        if let Err(e) = unsafe {
             crate::ecs::window::guarded_set_window_pos(
                 drag_hwnd,
                 None,
@@ -453,7 +377,16 @@ pub(super) fn WM_MOUSEMOVE(
                 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
             )
-        };
+        } {
+            error!(
+                event = "drag_move_window_failed",
+                hwnd = ?drag_hwnd,
+                x = new_x,
+                y = new_y,
+                error = %e,
+                "ドラッグで窓を動かせなかった"
+            );
+        }
     }
 
     Some(LRESULT(0))
@@ -486,47 +419,12 @@ pub(crate) fn dragging_window_origin(
 pub(super) fn WM_MOUSELEAVE(
     world: &Rc<RefCell<EcsWorld>>,
     window_entity: Entity,
-    hwnd: HWND,
+    _hwnd: HWND,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    use crate::ecs::pointer::{PointerLeave, PointerState, WindowPointerTracking};
-    use crate::ecs::window::find_owner_window;
-
-    {
-        if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            // PointerStateを持つ全エンティティを収集（当該ウィンドウに属するもののみ）
-            let mut entities_with_pointer_state = Vec::new();
-            {
-                let world_mut = world_borrow.world_mut();
-                let mut query = world_mut.query::<(bevy_ecs::prelude::Entity, &PointerState)>();
-                for (e, _) in query.iter(world_mut) {
-                    if find_owner_window(world_mut, e) == Some(window_entity) {
-                        entities_with_pointer_state.push(e);
-                    }
-                }
-            }
-
-            // 当該ウィンドウのエンティティからPointerStateを削除し、PointerLeaveを付与
-            for entity in entities_with_pointer_state {
-                if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
-                    entity_ref.remove::<PointerState>();
-                    entity_ref.insert(PointerLeave);
-                    debug!(
-                        entity = ?entity,
-                        hwnd = ?hwnd,
-                        "PointerLeave marker inserted (scoped to window)"
-                    );
-                }
-            }
-
-            // WindowPointerTrackingを無効化
-            if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(window_entity) {
-                if let Some(mut tracking) = entity_ref.get_mut::<WindowPointerTracking>() {
-                    tracking.0 = false;
-                }
-            }
-        }
+    if let Ok(mut world_borrow) = world.try_borrow_mut() {
+        leave_pointer(world_borrow.world_mut(), window_entity, None);
     }
 
     Some(LRESULT(0))
@@ -560,7 +458,7 @@ mod tests {
         let target = world.spawn((ChildOf(window), PointerState::default())).id();
         let other = world.spawn((ChildOf(window), PointerState::default())).id();
 
-        let result = collect_entities_to_leave(&mut world, window, target);
+        let result = collect_entities_to_leave(&mut world, window, Some(target));
 
         // other は収集される。target（exclude）は含まれない。
         assert!(result.contains(&other), "exclude 以外の保持者を収集");
@@ -577,7 +475,7 @@ mod tests {
         // PointerState なしの子（収集されないはず）
         let _no_state = world.spawn(ChildOf(window)).id();
 
-        let result = collect_entities_to_leave(&mut world, window, target);
+        let result = collect_entities_to_leave(&mut world, window, Some(target));
         assert!(
             result.is_empty(),
             "PointerState 不在エンティティは収集されない"
@@ -602,7 +500,7 @@ mod tests {
             .spawn((ChildOf(window_b), PointerState::default()))
             .id();
 
-        let result = collect_entities_to_leave(&mut world, window_a, target_a);
+        let result = collect_entities_to_leave(&mut world, window_a, Some(target_a));
 
         assert!(
             result.contains(&widget_a),
@@ -622,7 +520,7 @@ mod tests {
         let window = spawn_window(&mut world, "W");
         let target = world.spawn((ChildOf(window), PointerState::default())).id();
 
-        let result = collect_entities_to_leave(&mut world, window, target);
+        let result = collect_entities_to_leave(&mut world, window, Some(target));
         assert!(result.is_empty());
     }
 }
@@ -630,3 +528,7 @@ mod tests {
 #[cfg(test)]
 #[path = "mouse_move_drag_origin_tests.rs"]
 mod mouse_move_drag_origin_tests;
+
+#[cfg(test)]
+#[path = "mouse_move_dispatch_tests.rs"]
+mod dispatch_tests;

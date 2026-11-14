@@ -1,6 +1,5 @@
 use crate::ecs::*;
 use bevy_ecs::prelude::*;
-use bevy_ecs::system::SystemState;
 
 // Note: init_window_arrangement システムは廃止されました。
 // Arrangementは以下のライフタイムフックで自動挿入されます：
@@ -8,6 +7,13 @@ use bevy_ecs::system::SystemState;
 // - LayoutRoot::on_add
 // - Monitor::on_add
 // Arrangement::on_add が GlobalArrangement と ArrangementTreeChanged を自動挿入します。
+
+/// 生成を待っている窓の 3 条件。生成に失敗した印の付いた実体は、印が外されるまで作り直さない。
+type PendingWindow = (
+    With<Window>,
+    Without<WindowHandle>,
+    Without<crate::runtime::window_factory::WindowCreationFailed>,
+);
 
 /// 未作成のWindowを検出してライブラリ経由で作成する排他システム。
 ///
@@ -22,7 +28,7 @@ use bevy_ecs::system::SystemState;
 ///   [`EcsWindowFactory::create_window`] を呼ぶ（ライブラリの `Window<WndState>` を生成し
 ///   style/pos/title を反映、`WindowRegistry` へ格納、`WindowHandle`+`HasGraphicsResources`
 ///   を insert）。これが設計公認の単一上向きエッジ（ecs→runtime）。
-pub fn create_windows(world: &mut World) {
+pub fn create_windows(world: &mut World, pending: &mut QueryState<Entity, PendingWindow>) {
     // self-ref（外側 World への Weak）を取得。未注入なら no-op（headless テスト等）。
     let Some(self_ref) = world.get_non_send::<crate::ecs::world::EcsWorldSelfRef>() else {
         // self-ref 不在では何もしない（panic なし・二重生成なし）。
@@ -31,19 +37,8 @@ pub fn create_windows(world: &mut World) {
     let ecs_world: std::rc::Weak<std::cell::RefCell<crate::ecs::world::EcsWorld>> =
         self_ref.0.clone();
 
-    // 宣言的クエリで未生成 Window Entity を収集（borrow を即解放）。生成に失敗した印の
-    // 付いた実体は、印が外されるまで作り直さない。
-    type Pending = (
-        With<Window>,
-        Without<WindowHandle>,
-        Without<crate::runtime::window_factory::WindowCreationFailed>,
-    );
-    let mut system_state: SystemState<Query<Entity, Pending>> = SystemState::new(world);
-    let entities_to_create: Vec<Entity> = system_state
-        .get(world)
-        .expect("window query validation should succeed")
-        .iter()
-        .collect();
+    // 宣言的クエリで未生成 Window Entity を収集（borrow を即解放）。
+    let entities_to_create: Vec<Entity> = pending.iter(world).collect();
 
     // 各 Entity をファクトリ経由で生成（ライブラリ生成・registry 格納・handle 反映）。
     for entity in entities_to_create {
@@ -58,6 +53,7 @@ pub fn create_windows(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy_ecs::system::RunSystemOnce;
 
     /// `EcsWorldSelfRef` 未注入時は `create_windows` は何もしない（早期 return）。
     /// `Window` Entity を spawn しても `WindowHandle` は付かず、panic も二重生成も起きない。
@@ -73,7 +69,7 @@ mod tests {
         let entity = world.spawn(Window::default()).id();
 
         // self-ref 不在ゆえ no-op（panic しない）。
-        create_windows(&mut world);
+        world.run_system_once(create_windows).unwrap();
 
         // WindowHandle は付与されないべき（生成されていない）。
         assert!(

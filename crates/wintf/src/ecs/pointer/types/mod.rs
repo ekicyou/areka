@@ -195,17 +195,6 @@ impl Default for PointerState {
 pub struct PointerLeave;
 
 // ============================================================================
-// WindowPointerTracking コンポーネント
-// ============================================================================
-
-/// TrackMouseEvent 状態追跡
-///
-/// ウィンドウエンティティに自動付与される。
-/// `true` = TrackMouseEvent(TME_LEAVE) が有効
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct WindowPointerTracking(pub bool);
-
-// ============================================================================
 // PointerBuffer
 // ============================================================================
 

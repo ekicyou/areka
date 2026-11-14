@@ -171,7 +171,7 @@ pub(super) struct PresentTarget {
     /// **未消費の窓寸 reconcile 要求**（表示成立点の状態照合が積む・design Flow 1 キー決定／議題 #2 裁定）。
     ///
     /// 表示成立点で今回の物理寸（k 適用後の scaled 寸）を**前回適用の物理寸**と照合し、異なるときだけ
-    /// `Some(新物理寸)` を置く。呼び手（emo2_boot の frame drain フェーズ）は
+    /// `Some(新物理寸)` を置く。呼び手（`areka` の `runtime::frame` の drain フェーズ）は
     /// [`EmoPresenter::take_pending_resize`] で取り出し、同一フレーム内で窓 client を合わせる。
     ///
     /// # なぜ「エッジ」ではなく「状態」なのか（議題 #2 裁定）

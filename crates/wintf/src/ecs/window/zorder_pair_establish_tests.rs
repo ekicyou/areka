@@ -35,94 +35,28 @@
 //! 余計に出る側（N+1 本）でも赤になる形にしてある。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
-};
-use windows::core::{PCWSTR, w};
+use windows::Win32::Foundation::HWND;
+use windows::core::w;
 
-use super::{OwnerEstablishFailed, establish_owner_links, measure_window_above};
+use super::OwnerEstablishFailed;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::ZOrderPairStrategy;
-use crate::ecs::window::{KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle};
+use crate::ecs::window::zorder_pair_test_support::{
+    OWNER_ESTABLISHED_TAG, SIGNOFF_DIRECTIVES, SKIP_TAG, assert_line_count, create_test_window,
+    declare_pair, destroy_test_window, establish_schedule, fake_hwnd, lines_with, owner_of,
+    spawn_window,
+};
+use crate::ecs::window::{OwnerLink, ReassertZOrder, WindowHandle};
 
-/// 実機サインオフが用いる `RUST_LOG` 相当（design.md「Real-Machine Signoff」の wintf 側）。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
-
-const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
 const OWNER_ESTABLISH_FAILED_TAG: &str = "[zorder-pair] owner-establish-failed";
-const SKIP_TAG: &str = "[zorder-pair] skip";
 
 // -------------------------------------------------------------------------
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
 
-/// 自プロセス所有の非表示トップレベル窓を作る（`api.rs` のテスト生成レシピと同一）。
-///
-/// owner 関係はトップレベル窓の間でのみ意味を持つため `WS_POPUP`（親なし）で作る。
-fn create_test_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a hidden test window")
-    }
-}
-
-/// 生成したテスト窓を破棄する（後始末）。
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
-/// OS 側が持つ owner を読み戻す（`GetWindow(GW_OWNER)`）。owner 無しは `None`。
-fn owner_of(hwnd: HWND) -> Option<HWND> {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { GetWindow(hwnd, GW_OWNER) }.ok()
-}
-
-/// Win32 へは渡さない偽ハンドル（値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
-    HWND(v as *mut _)
-}
-
-/// [`WindowHandle`] 付きの窓 entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world
-        .spawn(WindowHandle {
-            hwnd,
-            instance: HINSTANCE::default(),
-        })
-        .id()
-}
-
 /// ハンドル未付与の窓 entity を作る（実体はあるが OS のハンドルがまだ無い状態）。
 fn spawn_handleless_window(world: &mut World) -> Entity {
     world.spawn_empty().id()
-}
-
-/// バルーン窓へペア宣言を付ける（peer はキャラ窓）。
-fn declare_pair(world: &mut World, balloon: Entity, character: Entity) {
-    world
-        .entity_mut(balloon)
-        .insert(KeepDirectlyAbove { peer: character });
 }
 
 /// 既にあるハンドルを付け直して、同じハンドルでの付与巡をもう一度作る。
@@ -137,37 +71,6 @@ fn retrigger_handle(world: &mut World, entity: Entity) {
         .expect("再付与の対象はハンドルを持っているはず");
     world.entity_mut(entity).remove::<WindowHandle>();
     world.entity_mut(entity).insert(handle);
-}
-
-/// 確立系だけを載せた 1 巡分の schedule。
-///
-/// **シングルスレッド実行器を明示する**——既定の多スレッド実行器ではシステムが別スレッドで
-/// 走りうるため、[`capture_under_filter`]（スレッドローカルの dispatcher 差し替え）が
-/// 1 行も拾えず、記録の検査が空虚に緑になる。
-fn establish_schedule() -> Schedule {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(establish_owner_links);
-    schedule
-}
-
-/// 捕捉した出力から、指定タグを含む行をすべて取り出す。
-fn lines_with<'a>(out: &'a str, tag: &str) -> Vec<&'a str> {
-    out.lines().filter(|l| l.contains(tag)).collect()
-}
-
-/// 指定タグの行がちょうど `expected` 本であることを確かめる。
-///
-/// 「0 本でないこと」だけを見ると余計に出る側の欠陥（同じ確立が 2 度走る等）を
-/// 見逃すため、常に本数で固定する。
-fn assert_line_count(out: &str, tag: &str, expected: usize, what: &str) {
-    let found = lines_with(out, tag);
-    assert_eq!(
-        found.len(),
-        expected,
-        "{what}: `{tag}` の行は {expected} 本のはずが {} 本だった\n---捕捉全文---\n{out}",
-        found.len()
-    );
 }
 
 // -------------------------------------------------------------------------
@@ -254,10 +157,9 @@ fn establishes_on_the_cycle_the_second_handle_arrives() {
             "片方のハンドルが無い巡では確立しない"
         );
         // 2 巡目: キャラ窓にハンドルが付いた巡——ここで揃う
-        world.entity_mut(character).insert(WindowHandle {
-            hwnd: owner_hwnd,
-            instance: HINSTANCE::default(),
-        });
+        world
+            .entity_mut(character)
+            .insert(WindowHandle { hwnd: owner_hwnd });
         schedule.run(&mut world);
         // 3 巡目: もう新しい付与は無い
         schedule.run(&mut world);
@@ -281,6 +183,48 @@ fn establishes_on_the_cycle_the_second_handle_arrives() {
     destroy_test_window(owner_hwnd);
 }
 
+/// ハンドルの付いた窓 2 枚に**後から**組の宣言を付けても、宣言が付いた巡で owner を張る。
+///
+/// ハンドルの付与の巡は宣言の前に過ぎているので、宣言の付与を見なければ確立系は
+/// 二度と手順へ入らず、記録も出ないまま組が守られない（research.md 3 節の 4）。
+#[test]
+fn establishes_when_the_declaration_is_added_after_the_handles() {
+    let owner_hwnd = create_test_window(w!("wintf-zorder-establish-latedecl-char"));
+    let owned_hwnd = create_test_window(w!("wintf-zorder-establish-latedecl-balloon"));
+
+    let mut world = World::new();
+    world.insert_resource(ZOrderPairStrategy::default());
+    let character = spawn_window(&mut world, owner_hwnd);
+    let balloon = spawn_window(&mut world, owned_hwnd);
+
+    let mut schedule = establish_schedule();
+    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
+        // 1 巡目: ハンドルは付いたが宣言が無い——何もしない
+        schedule.run(&mut world);
+        // 2 巡目: 宣言だけが付いた巡——ここで張る
+        declare_pair(&mut world, balloon, character);
+        schedule.run(&mut world);
+        // 3 巡目: 新しい付与は無い
+        schedule.run(&mut world);
+    });
+
+    assert_line_count(
+        &out,
+        OWNER_ESTABLISHED_TAG,
+        1,
+        "宣言が付いた巡で 1 回だけ張る",
+    );
+    assert_eq!(
+        owner_of(owned_hwnd),
+        Some(owner_hwnd),
+        "OS 側でバルーン窓の owner がキャラ窓になっているはず"
+    );
+    assert!(world.entity(balloon).contains::<ReassertZOrder>());
+
+    destroy_test_window(owned_hwnd);
+    destroy_test_window(owner_hwnd);
+}
+
 // -------------------------------------------------------------------------
 // 見送り（理由つき・同じ捕捉窓に必ず出る記録を併置する）
 // -------------------------------------------------------------------------
@@ -290,7 +234,7 @@ fn establishes_on_the_cycle_the_second_handle_arrives() {
 /// 2 つのペアを同じ World・同じ捕捉窓に置くのは、「確立が出ないこと」の主張が
 /// 捕捉の死によって空虚に成立しないようにするためである。
 ///
-/// 欠けたまま何巡しても見送りの記録は増えない——確立系はハンドルが付いた巡だけ動き、
+/// 欠けたまま何巡しても見送りの記録は増えない——確立系はハンドルか宣言が付いた巡だけ動き、
 /// 毎フレーム巡回では動かない（design.md「Responsibilities & Constraints」の受動性）。
 /// 3 巡回すのはこの性質を本数で固定するためである。
 #[test]
@@ -504,21 +448,42 @@ fn records_failure_once_and_does_not_retry_on_the_same_handles() {
     );
 }
 
-// -------------------------------------------------------------------------
-// 確立直後の実測（記録の付随フィールド）
-// -------------------------------------------------------------------------
-
-/// 実測の失敗は「手前に誰も居ない」と同じ `None` へ潰れるが、黙って消えはしない。
+/// 失敗したあと窓が作り直されて**別のハンドル**が付けば、確立をもう一度試みて張る。
 ///
-/// 無効ハンドルでの走査は必ず失敗する。値としては不在（記録では番兵）になり、
-/// 失敗そのものは記録に残る（[areka-log-first-no-silent-failure]）。
+/// 失敗の印が抑えるのは「同じハンドルの組での繰り返し」だけで、「二度と試さないこと」
+/// ではない（[`OwnerEstablishFailed`] の約束）。比べを「失敗があるか」だけにすると
+/// ここで張られず赤になる（research.md 3 節の 29）。
 #[test]
-fn measure_window_above_maps_failure_to_absence_and_records_it() {
-    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
-        assert_eq!(measure_window_above(HWND::default()), None);
-    });
-    assert!(
-        !out.trim().is_empty(),
-        "走査の失敗は記録に残るはず（黙って None へ潰さない）"
+fn retries_and_establishes_once_the_handles_are_replaced() {
+    let mut world = World::new();
+    world.insert_resource(ZOrderPairStrategy::default());
+    let character = spawn_window(&mut world, HWND::default());
+    let balloon = spawn_window(&mut world, HWND::default());
+    declare_pair(&mut world, balloon, character);
+
+    let mut schedule = establish_schedule();
+    let failed = capture_under_filter(SIGNOFF_DIRECTIVES, || schedule.run(&mut world));
+    assert_line_count(
+        &failed,
+        OWNER_ESTABLISH_FAILED_TAG,
+        1,
+        "null のハンドルでは失敗する",
     );
+    assert!(world.entity(balloon).contains::<OwnerEstablishFailed>());
+
+    // 窓の作り直し: 両方の窓に実窓の別のハンドルを付け直す（除去 → 付与）。
+    let owner_hwnd = create_test_window(w!("wintf-zorder-establish-replaced-char"));
+    let owned_hwnd = create_test_window(w!("wintf-zorder-establish-replaced-balloon"));
+    for (entity, hwnd) in [(character, owner_hwnd), (balloon, owned_hwnd)] {
+        world.entity_mut(entity).remove::<WindowHandle>();
+        world.entity_mut(entity).insert(WindowHandle { hwnd });
+    }
+    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || schedule.run(&mut world));
+
+    assert_line_count(&out, OWNER_ESTABLISHED_TAG, 1, "別のハンドルの組では張る");
+    assert_line_count(&out, OWNER_ESTABLISH_FAILED_TAG, 0, "張れたので失敗は無い");
+    assert_eq!(owner_of(owned_hwnd), Some(owner_hwnd));
+
+    destroy_test_window(owned_hwnd);
+    destroy_test_window(owner_hwnd);
 }

@@ -44,10 +44,7 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
 use windows::Win32::Foundation::HWND;
 
-use super::zorder_pair_diag::hwnd_field;
-
-/// 値が取得できなかったフィールドの番兵（既存ペア機構と同じ字面）。
-pub(crate) const UNKNOWN: &str = "-";
+use super::zorder_pair_diag::{UNKNOWN, hwnd_field, tristate_field};
 
 /// 繋いだ事実の記録タグ（debug 水準・要件 9.1）。
 const LINKED_TAG: &str = "[zorder-chain] linked";
@@ -91,8 +88,8 @@ pub(crate) fn chain_record_tags() -> [&'static str; 7] {
 
 /// 組の受け渡しの記録タグ 3 種（逆転・非隣接の組の外しと結び直し・輪の見送り）。
 ///
-/// 既存の 7 語の一覧 [`chain_record_tags`] は隣接の spec と実機の確かめの道具が読む名簿
-/// なので変えない（要件 7.4）。新しい語はこの別の一覧に置く。
+/// 既存の 7 語の一覧 [`chain_record_tags`] は、隣接の spec が字面を固定したテストが読む名簿
+/// なので変えない（要件 7.4・実機の手順は字面を自前で持つ）。新しい語はこの別の一覧に置く。
 #[cfg(test)]
 pub(crate) fn pair_handover_tags() -> [&'static str; 3] {
     [PAIR_RELEASED_TAG, PAIR_RESTORED_TAG, LINK_REFUSED_TAG]
@@ -170,14 +167,6 @@ fn segment_field(segment: Option<ChainSegment>) -> String {
     }
 }
 
-/// 真偽値をログ用表現へ（判定そのものが取れなかった場合は番兵）。
-fn tristate_field(value: Option<bool>) -> String {
-    match value {
-        Some(v) => v.to_string(),
-        None => UNKNOWN.to_string(),
-    }
-}
-
 /// 窓の列をログ用の 1 フィールドへ（空列は番兵）。
 fn hwnd_list_field(hwnds: &[HWND]) -> String {
     if hwnds.is_empty() {
@@ -213,8 +202,8 @@ fn text_field(value: &str) -> String {
 /// # `Option` は防御であって、本番は常に実値である
 ///
 /// 区間は望む鎖が運んでくる——[`CrossEdge::segment`](super::zorder_chain::CrossEdge) に
-/// 載って届き、撤去のときは帳簿の控え
-/// （[`CrossOwnerLink::segment`](super::zorder_chain::CrossOwnerLink)）から出る。
+/// 載って届く。付与は望む鎖に在る繋ぎからしか作られないので、適用系（`execute_ops`）が
+/// 望む鎖から区間を引く検索は必ず当たる。
 /// よって**本番の呼び出しは常に `Some(..)`** であり、`gN` か `tail` のどちらかが必ず入る。
 ///
 /// 引数が `Option` なのは、値が取れなかったときに**欄そのものを落とさない**ための防御で
@@ -245,8 +234,10 @@ pub(crate) fn linked_line(
 /// **張った時点の owner の窓ハンドル**を載せる。これは撤去前の照合に使った値そのもの
 /// であり、`Diverged`（帳簿と OS の現況が食い違う）の行を読むときに要る。
 ///
-/// `segment` が `None` になるのはグループごと消えた後の撤去である。欄は落とさず番兵に
-/// する——落とすと「記録が出ていない」と「その経路にはその値が無い」の区別が付かなくなる。
+/// 区間は帳簿の控え（[`CrossOwnerLink::segment`](super::zorder_chain::CrossOwnerLink)）から
+/// 出るので、本番の呼び出し（`detach_one`）は常に `Some(..)` である。`Option` は欄を落とさない
+/// ための防御で、取れないときは番兵 `-` を入れる——落とすと「記録が出ていない」と
+/// 「その経路にはその値が無い」の区別が付かなくなる。
 pub(crate) fn unlinked_line(
     segment: Option<ChainSegment>,
     owned: Entity,
@@ -269,8 +260,9 @@ pub(crate) fn unlinked_line(
 /// 「指令は出したが効かなかった」の判定が 2 行の突合になり、過去に同型の誤診を生んでいる
 /// （既存ペア機構 [`zorder_pair_diag::fix_line`](super::zorder_pair_diag::fix_line) と同じ規律）。
 ///
-/// - `nudged_hwnd`: 後押しで差し直した窓（鎖の先頭）
-/// - `insert_after`: その挿入位置（鎖の 2 番目）——参照するのは自分のゴースト窓 2 枚だけ
+/// - `nudged_hwnd`: 後押しで差し直した窓（鎖の根）
+/// - `insert_after`: その挿入位置（錨＝根の 1 つ手前。錨の直後が既に根なら先頭）
+///   ——参照するのは自分のゴースト窓 2 枚だけ
 /// - `declared`: 宣言した鎖の並び（手前から奥）
 /// - `measured`: 後押しの直後に前面走査が**実際に出会った**並び（不可視の窓は読み飛ばす・要件 9.3）
 /// - `nudge_ok`: 後押しそのものの成否（design.md「Error Handling」——後押しの失敗は
@@ -330,8 +322,9 @@ pub(crate) fn skipped_line(reason: ChainSkipReason) -> String {
 /// 失敗した繋ぎ **1 本だけ**を飛ばして残りは張る、というのが design.md の裁定である。
 /// よってこの行は「どの区間のどの対が張れなかったか」を単独で読めなければならない。
 ///
-/// 区間の扱いは [`linked_line`] と同じ——本番は常に実値であり、`Option` は欄を落とさない
-/// ための防御である（取れないときは番兵 `-`）。
+/// 区間は呼び手で違う。鎖の付与の失敗は望む鎖の区間（`Some(..)`）を載せ、組の結び目の
+/// 張り直し（`restore_pair`）の失敗は区間を持たないので `None` を渡し、番兵 `-` が入る
+/// （`segment=-`）。欄を落とさないのは [`linked_line`] と同じ理由である。
 pub(crate) fn link_failed_line(
     segment: Option<ChainSegment>,
     owned_hwnd: Option<HWND>,
@@ -350,9 +343,10 @@ pub(crate) fn link_failed_line(
 
 /// 外し失敗の行（純関数・error 水準で出す・要件 8.2）。
 ///
-/// 区間を載せないのは、撤去が起こる局面（グループの解除・窓の退去）では区間そのものが
-/// 既に消えていることがあるためである。所有側の窓ハンドルも同様に載せない——
-/// `clear_window_owner` は被所有側だけを引数に取るので、失敗の主語はそちらである。
+/// 区間を載せないのは、この行を鎖の撤去（`detach_one`・区間は帳簿にある）と組の結び目の
+/// 外し（`release_pair`・区間を持たない）の両方が出すためで、両方で同じ形にしてある。
+/// 所有側の窓ハンドルも載せない——`clear_window_owner` は被所有側だけを引数に取るので、
+/// 失敗の主語はそちらである。
 pub(crate) fn unlink_failed_line(owned_hwnd: Option<HWND>, error: &windows::core::Error) -> String {
     format!(
         "{UNLINK_FAILED_TAG} owned_hwnd={owned_h} error={code:?}",

@@ -1,6 +1,6 @@
 //! マウスボタン押下・解放メッセージハンドラ
 //!
-//! WM_*BUTTONDOWN, WM_*BUTTONUP の処理を担当する。
+//! WM_*BUTTONDOWN, WM_*BUTTONUP の処理を担当する。WM_*BUTTONDBLCLK も押下としてここの共通処理を通る。
 
 #![allow(non_snake_case)]
 
@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 use windows::Win32::Foundation::*;
 
 use crate::ecs::world::EcsWorld;
@@ -19,9 +19,12 @@ type HandlerResult = Option<LRESULT>;
 /// ボタンメッセージハンドラ共通処理
 ///
 /// hit_test でヒット対象エンティティを特定し、ButtonBuffer に記録する。
-/// PointerState がない場合は付与する。
+/// PointerState がない場合は付与する。当たらないときは窓の entity に記録する。
+/// `double_click` が true（`WM_*BUTTONDBLCLK` の 2 回目の押下）なら、当たった entity の
+/// PointerState にボタンから決めたダブルクリックの種類を入れる。押下・ドラッグ準備の決まりはふつうの押下と同じ。
 #[inline]
-fn handle_button_message(
+#[allow(clippy::too_many_arguments)]
+pub(super) fn handle_button_message(
     world: &Rc<RefCell<EcsWorld>>,
     window_entity: Entity,
     hwnd: HWND,
@@ -29,6 +32,7 @@ fn handle_button_message(
     lparam: LPARAM,
     button: crate::ecs::pointer::PointerButton,
     is_down: bool,
+    double_click: bool,
 ) -> HandlerResult {
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
@@ -51,22 +55,10 @@ fn handle_button_message(
     let ctrl = (wparam_val & 0x08) != 0;
 
     // スクリーン座標を事前計算（フォールバック処理でも使用）
-    let (screen_x, screen_y) = if let Ok(world_borrow) = world.try_borrow() {
-        let window_pos = world_borrow
-            .world()
-            .get::<crate::ecs::window::WindowPos>(window_entity);
-        if let Some(wp) = window_pos {
-            if let Some(pos) = wp.position {
-                (x + pos.x, y + pos.y)
-            } else {
-                (x, y)
-            }
-        } else {
-            (x, y)
-        }
-    } else {
-        (x, y)
-    };
+    let (screen_x, screen_y) = world
+        .try_borrow()
+        .map(|w| screen_point(w.world(), window_entity, x, y))
+        .unwrap_or((x, y));
 
     // hit_test でターゲットエンティティを特定し、PointerState を確保
     {
@@ -76,61 +68,65 @@ fn handle_button_message(
                 window_entity,
                 HitTestPoint::new(x as f32, y as f32),
             ) {
-                // ヒットしたエンティティの名前とGlobalArrangement.boundsをログ出力
-                let entity_name = world_borrow
-                    .world()
-                    .get::<bevy_ecs::name::Name>(target_entity)
-                    .map(|n| n.as_str().to_string())
-                    .unwrap_or_else(|| format!("{:?}", target_entity));
-                let bounds_info = world_borrow
-                    .world()
-                    .get::<crate::ecs::layout::GlobalArrangement>(target_entity)
-                    .map(|g| {
-                        format!(
-                            "({:.0},{:.0})-({:.0},{:.0})",
-                            g.bounds.left, g.bounds.top, g.bounds.right, g.bounds.bottom
-                        )
-                    })
-                    .unwrap_or_else(|| "no bounds".to_string());
-                info!(
+                // 当たった entity の名前と GlobalArrangement.bounds を記録（文字列は debug が開いているときだけ組む）
+                debug!(
                     target_entity = ?target_entity,
-                    entity_name = %entity_name,
+                    entity_name = %world_borrow
+                        .world()
+                        .get::<bevy_ecs::name::Name>(target_entity)
+                        .map(|n| n.as_str().to_string())
+                        .unwrap_or_else(|| format!("{:?}", target_entity)),
                     client_x = x,
                     client_y = y,
                     screen_x,
                     screen_y,
-                    bounds = %bounds_info,
+                    bounds = %world_borrow
+                        .world()
+                        .get::<crate::ecs::layout::GlobalArrangement>(target_entity)
+                        .map(|g| {
+                            format!(
+                                "({:.0},{:.0})-({:.0},{:.0})",
+                                g.bounds.left, g.bounds.top, g.bounds.right, g.bounds.bottom
+                            )
+                        })
+                        .unwrap_or_else(|| "no bounds".to_string()),
                     button = ?button,
                     is_down,
+                    double_click,
                     "[handle_button_message] hit_test result"
                 );
 
-                // PointerState がない場合は付与
-                if world_borrow
-                    .world()
-                    .get::<PointerState>(target_entity)
-                    .is_none()
+                let double_click_kind = if double_click {
+                    double_click_of(button)
+                } else {
+                    crate::ecs::pointer::DoubleClick::None
+                };
+
+                // PointerState がない場合は付与（ボタンの状態は次の tick の溜めの転送が入れる）
+                if let Some(mut ps) = world_borrow
+                    .world_mut()
+                    .get_mut::<PointerState>(target_entity)
                 {
+                    if double_click {
+                        ps.double_click = double_click_kind;
+                    }
+                } else {
                     world_borrow
                         .world_mut()
                         .entity_mut(target_entity)
                         .insert(PointerState {
                             client_point: PhysicalPoint::new(x, y),
                             local_point: PhysicalPoint::new(x, y),
-                            left_down: button == crate::ecs::pointer::PointerButton::Left
-                                && is_down,
-                            right_down: button == crate::ecs::pointer::PointerButton::Right
-                                && is_down,
-                            middle_down: button == crate::ecs::pointer::PointerButton::Middle
-                                && is_down,
                             shift_down: shift,
                             ctrl_down: ctrl,
+                            double_click: double_click_kind,
                             ..Default::default()
                         });
                     debug!(
                         entity = ?target_entity,
                         button = ?button,
                         is_down,
+                        double_click,
                         "PointerState inserted on button event"
                     );
                 }
@@ -151,7 +147,7 @@ fn handle_button_message(
                         };
                         if let Some((entity_with_config, drag_config)) = drag_entity {
                             if drag_config.enabled && drag_config.left_button {
-                                tracing::info!(
+                                debug!(
                                     hit_entity = ?target_entity,
                                     drag_entity = ?entity_with_config,
                                     x = screen_x,
@@ -215,6 +211,46 @@ fn handle_button_message(
     Some(LRESULT(0))
 }
 
+/// ダブルクリックの種類をボタンから決める（Left → DoubleClick::Left ほか）。
+fn double_click_of(button: crate::ecs::pointer::PointerButton) -> crate::ecs::pointer::DoubleClick {
+    use crate::ecs::pointer::{DoubleClick, PointerButton};
+    match button {
+        PointerButton::Left => DoubleClick::Left,
+        PointerButton::Right => DoubleClick::Right,
+        PointerButton::Middle => DoubleClick::Middle,
+        PointerButton::XButton1 => DoubleClick::XButton1,
+        PointerButton::XButton2 => DoubleClick::XButton2,
+    }
+}
+
+/// クライアント座標を画面座標に直す（窓の `WindowPos.position` を足す。位置が無いか、
+/// 生成時の既定の `CW_USEDEFAULT` のままならそのまま）。
+/// ドラッグの押した位置（押下）と今の位置（移動）が同じ規則で揃うよう、ここだけで計算する。
+pub(super) fn screen_point(
+    world: &bevy_ecs::world::World,
+    window_entity: Entity,
+    x: i32,
+    y: i32,
+) -> (i32, i32) {
+    match world
+        .get::<crate::ecs::window::WindowPos>(window_entity)
+        .and_then(|wp| wp.position)
+        .filter(|p| p.x != windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT)
+    {
+        Some(pos) => (x + pos.x, y + pos.y),
+        None => (x, y),
+    }
+}
+
+/// X ボタンの番号（`GET_XBUTTON_WPARAM`＝wParam の上の語）をボタンの種類に直す。1 なら XButton1、ほかは XButton2。
+pub(super) fn xbutton_of(wparam: WPARAM) -> crate::ecs::pointer::PointerButton {
+    if ((wparam.0 >> 16) & 0xFFFF) as u16 == 1 {
+        crate::ecs::pointer::PointerButton::XButton1
+    } else {
+        crate::ecs::pointer::PointerButton::XButton2
+    }
+}
+
 /// WM_LBUTTONDOWN: 左ボタン押下
 #[inline]
 pub(super) fn WM_LBUTTONDOWN(
@@ -232,6 +268,7 @@ pub(super) fn WM_LBUTTONDOWN(
         lparam,
         crate::ecs::pointer::PointerButton::Left,
         true,
+        false,
     )
 }
 
@@ -262,6 +299,7 @@ pub(super) fn WM_LBUTTONUP(
         lparam,
         crate::ecs::pointer::PointerButton::Left,
         false,
+        false,
     );
     push_release_cursor(world, entity);
     result
@@ -284,6 +322,7 @@ pub(super) fn WM_RBUTTONDOWN(
         lparam,
         crate::ecs::pointer::PointerButton::Right,
         true,
+        false,
     )
 }
 
@@ -303,6 +342,7 @@ pub(super) fn WM_RBUTTONUP(
         wparam,
         lparam,
         crate::ecs::pointer::PointerButton::Right,
+        false,
         false,
     );
     push_release_cursor(world, entity);
@@ -326,6 +366,7 @@ pub(super) fn WM_MBUTTONDOWN(
         lparam,
         crate::ecs::pointer::PointerButton::Middle,
         true,
+        false,
     )
 }
 
@@ -346,6 +387,7 @@ pub(super) fn WM_MBUTTONUP(
         lparam,
         crate::ecs::pointer::PointerButton::Middle,
         false,
+        false,
     );
     push_release_cursor(world, entity);
     result
@@ -360,14 +402,8 @@ pub(super) fn WM_XBUTTONDOWN(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    // GET_XBUTTON_WPARAM: HIWORD of wParam
-    let xbutton = ((wparam.0 >> 16) & 0xFFFF) as u16;
-    let button = if xbutton == 1 {
-        crate::ecs::pointer::PointerButton::XButton1
-    } else {
-        crate::ecs::pointer::PointerButton::XButton2
-    };
-    handle_button_message(world, entity, hwnd, wparam, lparam, button, true)
+    let button = xbutton_of(wparam);
+    handle_button_message(world, entity, hwnd, wparam, lparam, button, true, false)
 }
 
 /// WM_XBUTTONUP: 拡張ボタン解放
@@ -379,13 +415,8 @@ pub(super) fn WM_XBUTTONUP(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    let xbutton = ((wparam.0 >> 16) & 0xFFFF) as u16;
-    let button = if xbutton == 1 {
-        crate::ecs::pointer::PointerButton::XButton1
-    } else {
-        crate::ecs::pointer::PointerButton::XButton2
-    };
-    let result = handle_button_message(world, entity, hwnd, wparam, lparam, button, false);
+    let button = xbutton_of(wparam);
+    let result = handle_button_message(world, entity, hwnd, wparam, lparam, button, false, false);
     push_release_cursor(world, entity);
     result
 }
@@ -500,6 +531,46 @@ mod tests {
         let (entity, config) = result.expect("最近傍の DragConfig を返す");
         assert_eq!(entity, start);
         assert_eq!(config.threshold, 3); // 祖先の 99 ではなく start の 3
+    }
+
+    #[test]
+    fn test_screen_point_adds_window_position_or_keeps_client_point() {
+        use super::screen_point;
+        use crate::ecs::Point;
+        use crate::ecs::window::WindowPos;
+        let mut world = World::new();
+        let placed = world
+            .spawn(WindowPos {
+                position: Some(Point { x: 100, y: -20 }),
+                ..Default::default()
+            })
+            .id();
+        let unplaced = world
+            .spawn(WindowPos {
+                position: None,
+                ..Default::default()
+            })
+            .id();
+        let bare = world.spawn_empty().id();
+        // 生成時の既定（位置が CW_USEDEFAULT）は足さない（足すと負の x で桁あふれ）
+        let default_pos = world.spawn(WindowPos::default()).id();
+        assert_eq!(screen_point(&world, placed, 5, 7), (105, -13));
+        assert_eq!(screen_point(&world, default_pos, -5, 7), (-5, 7));
+        assert_eq!(screen_point(&world, unplaced, 5, 7), (5, 7));
+        assert_eq!(screen_point(&world, bare, 5, 7), (5, 7));
+    }
+
+    #[test]
+    fn test_xbutton_of_reads_hiword_of_wparam() {
+        use super::xbutton_of;
+        use crate::ecs::pointer::PointerButton;
+        use windows::Win32::Foundation::WPARAM;
+        // 下の語（修飾キー）は読み分けに効かない
+        assert_eq!(
+            xbutton_of(WPARAM((1 << 16) | 0x04)),
+            PointerButton::XButton1
+        );
+        assert_eq!(xbutton_of(WPARAM(2 << 16)), PointerButton::XButton2);
     }
 }
 
