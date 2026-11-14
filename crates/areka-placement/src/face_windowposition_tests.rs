@@ -115,7 +115,6 @@ fn drag_balloon(world: &mut World, windows: &GhostWindows, scope: usize, dx: i32
         target: b,
         start_position: Point::new(0, 0),
         position: Point::new(dx, 0),
-        is_primary: true,
         timestamp: Instant::now(),
     });
     assert!(!on_balloon_drag(world, b, b, &ev));
