@@ -16,7 +16,7 @@ use wintf::ecs::window::transition_diag::{
     RECORD_PREFIX_TAG,
 };
 
-use super::test_support::{monitor, msg, windpi};
+use super::test_support::{log_of, monitor, msg, windpi};
 use super::{
     is_transition_origin, parse_transition_line, parse_transition_log, split_transitions, summarize,
 };
@@ -80,7 +80,7 @@ fn the_monitor_and_window_origins_of_one_display_setting_change_form_one_transit
         windpi(10, "42v1", 96, 192),
         windpi(10, "43v1", 96, 192),
     ];
-    let log = lines.join("\n");
+    let log = log_of(&lines);
     let records = parse_transition_log(&log);
     let transitions = split_transitions(&records);
 
@@ -93,13 +93,12 @@ fn the_monitor_and_window_origins_of_one_display_setting_change_form_one_transit
 fn several_windows_crossing_together_form_one_transition() {
     // ⑵ の水増し側。モニタ間の移動ではキャラ窓とバルーン窓がそれぞれ `windpi` を出す。
     // 畳まないと**窓の数だけ**遷移が増える。
-    let log = [
+    let log = log_of(&[
         windpi(10, "42v1", 192, 144),
         windpi(10, "43v1", 192, 144),
         windpi(10, "44v1", 192, 144),
         windpi(10, "45v1", 192, 144),
-    ]
-    .join("\n");
+    ]);
     assert_eq!(directions(&log), [(192, 144)]);
 }
 
@@ -107,12 +106,11 @@ fn several_windows_crossing_together_form_one_transition() {
 fn other_records_between_two_origins_of_the_same_change_do_not_break_the_coalescing() {
     // 同一フレームの内側では、起点のあいだに別種別の行（メッセージ受理など）が挟まる。
     // 挟まっても同じ変化であることは変わらない。
-    let log = [
+    let log = log_of(&[
         monitor(10, 96, 192, 1752, 1704),
         msg(10, 5, MSG_DPICHANGED, "0x1"),
         windpi(10, "42v1", 96, 192),
-    ]
-    .join("\n");
+    ]);
     assert_eq!(directions(&log), [(96, 192)]);
 }
 
@@ -124,14 +122,14 @@ fn other_records_between_two_origins_of_the_same_change_do_not_break_the_coalesc
 fn the_same_scale_change_in_a_later_frame_is_a_new_transition() {
     // 対が同じでもフレームが違えば別の変化である。ここを畳むと、往復を繰り返したログが
     // 1 本の遷移に潰れて「往復が 1 度も観測されていない」の偽の赤になる。
-    let log = [windpi(10, "42v1", 192, 144), windpi(11, "42v1", 192, 144)].join("\n");
+    let log = log_of(&[windpi(10, "42v1", 192, 144), windpi(11, "42v1", 192, 144)]);
     assert_eq!(directions(&log), [(192, 144), (192, 144)]);
 }
 
 #[test]
 fn the_opposite_direction_in_the_same_frame_is_a_new_transition() {
     // 同一フレームでも対が違えば別の変化である（畳むと往復の片道が消える）。
-    let log = [windpi(10, "42v1", 192, 144), windpi(10, "42v1", 144, 192)].join("\n");
+    let log = log_of(&[windpi(10, "42v1", 192, 144), windpi(10, "42v1", 144, 192)]);
     assert_eq!(directions(&log), [(192, 144), (144, 192)]);
 }
 
@@ -139,23 +137,22 @@ fn the_opposite_direction_in_the_same_frame_is_a_new_transition() {
 fn frames_are_compared_by_difference_so_the_counter_may_wrap() {
     // D14: `frame` は u32 で周回する。差分で見るかぎり `u32::MAX` の次の `0` は
     // 「同一フレーム」ではない（絶対値の大小比較を判定語に使っていないことの裏取り）。
-    let log = [
+    let log = log_of(&[
         windpi(u32::MAX, "42v1", 192, 144),
         windpi(0, "42v1", 192, 144),
-    ]
-    .join("\n");
+    ]);
     assert_eq!(directions(&log), [(192, 144), (192, 144)]);
 }
 
 // ---------------------------------------------------------------------------
-// 充足判定が畳み込みの前後で水増しされない（逐語ログ）
+// 充足判定が畳み込みの前後で水増しされない（3 往復の形のログ）
 // ---------------------------------------------------------------------------
 
-/// 表示設定の変更で 3 往復したログの逐語（起点行だけを抜き出した形）。
+/// 表示設定の変更で 3 往復したログの形を写した合成の行（起点行だけ・値は合成）。
 ///
 /// 1 つの変化につき `monitor` 1 行 ＋ 窓 4 枚ぶんの `windpi` 4 行＝**5 行**が出る。
 /// 起点行を素朴に数えると 30 本だが、拡大率の変化は 6 回である。
-const VERBATIM_ROUND_TRIP_LOG: &str = "\
+const ROUND_TRIP_ORIGIN_LOG: &str = "\
 DEBUG wintf::transition: [transition] frame=10 t_us=0 kind=monitor entity=2v0 old_dpi=192 new_dpi=144 old_wa=0,0,2880,1704 new_wa=0,0,2880,1704
 DEBUG wintf::transition: [transition] frame=10 t_us=1 kind=windpi entity=42v1 old_dpi=192 new_dpi=144
 DEBUG wintf::transition: [transition] frame=10 t_us=2 kind=windpi entity=43v1 old_dpi=192 new_dpi=144
@@ -189,20 +186,20 @@ DEBUG wintf::transition: [transition] frame=60 t_us=4 kind=windpi entity=45v1 ol
 ";
 
 #[test]
-fn the_verbatim_fixture_uses_the_current_vocabulary() {
-    // 逐語の字面は発行側の語彙から離れ得る。離れたら以下の檻は「起点が 1 つも無いログ」を
+fn the_synthetic_fixture_uses_the_current_vocabulary() {
+    // 合成の字面は発行側の語彙から離れ得る。離れたら以下の檻は「起点が 1 つも無いログ」を
     // 測ることになり、水増しの検査が空振りする。
     for word in [KIND_MONITOR, KIND_WINDPI] {
         assert!(
-            VERBATIM_ROUND_TRIP_LOG.contains(&format!("{FIELD_KIND}={word}")),
-            "{word} の行が逐語ログから消えている"
+            ROUND_TRIP_ORIGIN_LOG.contains(&format!("{FIELD_KIND}={word}")),
+            "{word} の行が合成ログから消えている"
         );
     }
     for name in [FIELD_OLD_DPI, FIELD_NEW_DPI] {
-        assert!(VERBATIM_ROUND_TRIP_LOG.contains(&format!("{name}=")));
+        assert!(ROUND_TRIP_ORIGIN_LOG.contains(&format!("{name}=")));
     }
-    assert!(VERBATIM_ROUND_TRIP_LOG.contains(RECORD_PREFIX_TAG));
-    let records = parse_transition_log(VERBATIM_ROUND_TRIP_LOG);
+    assert!(ROUND_TRIP_ORIGIN_LOG.contains(RECORD_PREFIX_TAG));
+    let records = parse_transition_log(ROUND_TRIP_ORIGIN_LOG);
     assert_eq!(records.len(), 30, "起点行 30 本（変化 6 回 × 5 行）");
     assert!(records.iter().all(|record| record.is_well_formed()));
 }
@@ -211,7 +208,7 @@ fn the_verbatim_fixture_uses_the_current_vocabulary() {
 fn the_round_trip_count_is_not_inflated_by_the_duplicated_origins() {
     // 起点行は 30 本あるが変化は 6 回である。畳まないと各方向 15 回と数えられ、報告される
     // 遷移本数と、手順書が運用者に目で確かめさせる往復の本数が実態の 5 倍で刷られる。
-    let observed = directions(VERBATIM_ROUND_TRIP_LOG);
+    let observed = directions(ROUND_TRIP_ORIGIN_LOG);
     assert_eq!(
         observed,
         [
@@ -224,21 +221,13 @@ fn the_round_trip_count_is_not_inflated_by_the_duplicated_origins() {
         ],
         "遷移は 6 本（起点行 30 本ではない）"
     );
-
-    let down = observed.iter().filter(|d| **d == (192, 144)).count();
-    let up = observed.iter().filter(|d| **d == (144, 192)).count();
-    assert_eq!(
-        (down, up),
-        (3, 3),
-        "各方向 3 回（起点行を数えた 15 回ではない）"
-    );
 }
 
 #[test]
-fn every_origin_line_of_the_verbatim_log_is_recognized_as_an_origin_candidate() {
+fn every_origin_line_of_the_synthetic_log_is_recognized_as_an_origin_candidate() {
     // 畳み込みを「`windpi` を起点に採らない」で実現していたら、遷移の本数は 6 本のまま
     // 緑になる。候補として認められていること自体を別に測り、その抜け道を塞ぐ。
-    let records = parse_transition_log(VERBATIM_ROUND_TRIP_LOG);
+    let records = parse_transition_log(ROUND_TRIP_ORIGIN_LOG);
     assert_eq!(
         records.iter().filter(|r| is_transition_origin(r)).count(),
         30

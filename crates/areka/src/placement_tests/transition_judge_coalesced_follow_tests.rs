@@ -38,8 +38,8 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::test_support::{
-    balloon_kind, char_kind, enqueue_merged_into, flush, ground, monitor, summarize_lines, surface,
-    write,
+    balloon_kind, char_kind, enqueue_merged_into, flush, ground, monitor, replace_once,
+    summarize_lines, surface, write,
 };
 use super::{
     Bounds, Quantity, TransitionSummary, Violation, WindowKey, judge, parse_transition_log,
@@ -560,18 +560,13 @@ fn the_recaptured_transition_still_flags_a_companion_that_lands_a_frame_late() {
     // 実機ログの形のままでは「違反が立たないこと」しか測れない。合流先の書込（scope=1 の
     // バルーンの seq=0）を 1 フレーム遅らせると、同じ入力が従来どおり違反として立つ——
     // 是正が要件 4.3 の見張りを殺していないことの対である。
-    let needle = "frame=14884 t_us=157617 kind=write";
-    assert_eq!(
-        RECAPTURE_TRANSITION_3.matches(needle).count(),
-        1,
-        "置換対象はちょうど 1 行にあるはず"
+    let lines: Vec<String> = RECAPTURE_TRANSITION_3.lines().map(str::to_owned).collect();
+    let late = replace_once(
+        &lines,
+        "frame=14884 t_us=157617 kind=write",
+        "frame=14885 t_us=157617 kind=write",
     );
-    let late = RECAPTURE_TRANSITION_3.replace(needle, "frame=14885 t_us=157617 kind=write");
-
-    let records = parse_transition_log(&late);
-    let transitions = split_transitions(&records);
-    assert_eq!(transitions.len(), 1);
-    let summary = summarize(&transitions[0]);
+    let summary = summarize_lines(&late);
     assert_eq!(
         summary.balloon_pairs_checked, 2,
         "対は 2 組とも検査できたままである（測れなくなったのではない）"
@@ -581,4 +576,79 @@ fn the_recaptured_transition_still_flags_a_companion_that_lands_a_frame_late() {
         "scope=1 の随伴が 1 フレーム遅れて着地したことは違反として立つ"
     );
     assert!(flagged_as_another_frame(&summary));
+}
+
+// ---------------------------------------------------------------------------
+// 直の書込と合流先の書込が同じ窓に混ざる形（audit の指摘 14 ⑴）
+// ---------------------------------------------------------------------------
+
+/// 随伴の着地が 2 本ある遷移を組む（起点フレームと次フレームに 1 本ずつ）。
+///
+/// `direct_later` が真なら起点フレームは合流先の書込（`KeepPositionResize` の枠へ畳まれた
+/// 随伴）、次フレームは直の書込（`origin=BalloonFollow`）である。偽なら並びが逆になる。
+/// キャラ窓は次フレームに 1 本だけ書かれる＝**後ろの着地**とだけ同じフレームである。
+fn mixed_landing_lines(direct_later: bool) -> Vec<String> {
+    let landing = |frame: u32, t_us: u64, direct: bool| -> Vec<String> {
+        let origin = if direct {
+            PlacementRoute::BalloonFollow
+        } else {
+            PlacementRoute::KeepPositionResize
+        };
+        let mut lines = Vec::new();
+        if !direct {
+            lines.push(enqueue_merged_into(
+                frame,
+                t_us,
+                BALLOON_HWND,
+                PlacementRoute::BalloonFollow.as_str(),
+                "0",
+                balloon_kind(),
+                "0",
+            ));
+        }
+        lines.push(write(
+            frame,
+            t_us + 10,
+            STAGE_FLUSH,
+            0,
+            BALLOON_HWND,
+            origin.as_str(),
+            "0",
+            balloon_kind(),
+            400,
+        ));
+        lines
+    };
+    let mut lines = vec![monitor(ORIGIN_FRAME, 192, 96, 1704, 1752)];
+    lines.extend(landing(ORIGIN_FRAME, 1_000, !direct_later));
+    lines.extend(landing(ORIGIN_FRAME + 1, 2_000, direct_later));
+    lines.push(write(
+        ORIGIN_FRAME + 1,
+        2_100,
+        STAGE_FLUSH,
+        1,
+        CHAR_HWND,
+        PlacementRoute::DpiReproject.as_str(),
+        "0",
+        char_kind(),
+        500,
+    ));
+    lines
+}
+
+#[test]
+fn the_later_landing_wins_when_direct_and_merged_writes_mix_in_one_window() {
+    // 合流先の引き当ては本文の走査の後に行う。後ろにある直の書込を、前にある合流先の書込が
+    // 上書きすると、着地が起点フレームに化けて同一フレームの随伴が「遅れた」と読まれる。
+    for direct_later in [true, false] {
+        let summary = summarize_lines(&mixed_landing_lines(direct_later));
+        assert_eq!(
+            summary.balloon_pairs_checked, 1,
+            "direct_later={direct_later}"
+        );
+        assert!(
+            summary.balloon_same_frame,
+            "後ろの着地（次フレーム）がキャラ窓と同じフレーム: direct_later={direct_later}"
+        );
+    }
 }

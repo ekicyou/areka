@@ -1,27 +1,24 @@
-//! 配置判断の遷移観測レコード（`snapshot`／`hold`／`ground`／`chain`）に対する決定論テスト。
+//! 配置判断の遷移観測レコード（`snapshot`／`hold`／`ground`／`chain`／`offset`）に対する決定論テスト。
 //!
 //! 固定するのは 3 つである。
 //!
-//! - **語彙**——4 つのレコード種別語・段階語・理由語・フィールド名が字面で固定され、上流 2 crate
+//! - **語彙**——5 つのレコード種別語・段階語・理由語・フィールド名が字面で固定され、上流 2 crate
 //!   （wintf・areka-emo-present）の語彙と交わらないこと。
-//! - **行の形**——4 種のレコード純関数が逐語で同じ行を組み、欠損は番兵で埋めてフィールドを
-//!   落とさないこと（正例）。語を壊した入力が語彙表を素通りしないこと（負例）。
+//! - **行の形**——5 種のレコード純関数が逐語で同じ行を組み、欠損は番兵で埋めてフィールドを
+//!   落とさないこと。宣言した欄の表と組んだ行の欄が過不足なく一致すること。
 //! - **World からの転写**——刻印は World 資源（`FrameCount`＋`TickStart`）から組み（D1）、
 //!   書込タグは窓の marker から scope と種別を読むこと。
 //!
 //! 接地点レコードを実際に発行する側（`resize_window_to`）の検証は
 //! `follow_transition_diag_tests.rs` が持つ（発行点は `follow` 配下ゆえ）。
 
-use windows::Win32::Foundation::RECT;
-use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::window::transition_diag::{
-    self as base, FIELD_ENTITY, FIELD_SCOPE, FIELD_STAGE, FIELD_WIN_KIND, MISSING, Stamp,
-};
+use wintf::ecs::window::transition_diag::{self as base, MISSING, Stamp};
 
 use super::*;
 use crate::chain_finalize::ChainDeferReason;
 use crate::diag::{PlacementRoute, WindowKind};
-use crate::resolver::{PointPx, RectPx, SizePx};
+use crate::follow::test_support::{code_only, monitor_with_work_area_bottom, rect};
+use crate::resolver::{PointPx, SizePx};
 use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 /// 任意の刻印（純関数は時刻を読まないので、テストは好きな値で行を組める）。
@@ -34,23 +31,6 @@ fn stamp() -> Stamp {
 
 fn ent(raw: u32) -> Entity {
     Entity::from_raw_u32(raw).expect("テスト用 entity index は有効")
-}
-
-fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
-    RectPx {
-        left,
-        top,
-        right,
-        bottom,
-    }
-}
-
-/// 行を `名前=値` の辞書へ（`judge-perf.py::parse_fields` と同じ規則＝空白区切り・後勝ち）。
-fn field_value<'a>(line: &'a str, name: &str) -> &'a str {
-    let needle = format!("{name}=");
-    line.split_whitespace()
-        .find_map(|token| token.strip_prefix(&needle))
-        .unwrap_or_else(|| panic!("フィールド `{name}` が行に無い: {line}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +88,32 @@ fn hold_and_chain_words_are_fixed_and_distinct() {
     assert_eq!(CHAIN_STAGE_ARMED, "armed");
     assert_eq!(CHAIN_STAGE_REALIGNED, "realigned");
     assert_eq!(CHAIN_STAGE_DEFERRED, "deferred");
+    assert_eq!(
+        HOLD_DECISION_ALL,
+        &[
+            HOLD_DECISION_PROCEED,
+            HOLD_DECISION_HOLD,
+            HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
+        ]
+    );
+    assert_eq!(
+        HOLD_SITE_ALL,
+        &[
+            HOLD_SITE_DPI,
+            HOLD_SITE_RECONCILE,
+            HOLD_SITE_RESNAP,
+            HOLD_SITE_WORK_AREA_RESNAP,
+            HOLD_SITE_PATTERN_MOVE,
+        ]
+    );
+    assert_eq!(
+        CHAIN_STAGE_ALL,
+        &[
+            CHAIN_STAGE_ARMED,
+            CHAIN_STAGE_REALIGNED,
+            CHAIN_STAGE_DEFERRED
+        ]
+    );
 
     for words in [
         HOLD_DECISION_ALL,
@@ -130,7 +136,7 @@ fn hold_and_chain_words_are_fixed_and_distinct() {
     }
 }
 
-/// 1 行に同じフィールド名を 2 度出さない（`judge-perf.py::parse_fields` は後勝ち＝先の値が消える）。
+/// 1 行に同じフィールド名を 2 度出さない（tools/perf/ の Python の道具の `parse_fields` は後勝ち＝先の値が消える）。
 #[test]
 fn no_placement_line_repeats_a_field_name() {
     let lines = [
@@ -197,7 +203,7 @@ fn no_placement_line_repeats_a_field_name() {
 }
 
 // ---------------------------------------------------------------------------
-// 行の形（正例）
+// 行の形
 // ---------------------------------------------------------------------------
 
 /// 作業領域源の同期レコード——台数と、モニタごとの `拡大率:左,上,右,下`。
@@ -340,127 +346,81 @@ fn chain_line_carries_the_stage_counts_and_reason() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// 行の形（負例）——語を壊した入力が語彙表を素通りしない
-// ---------------------------------------------------------------------------
-
-#[test]
-fn a_broken_stage_word_does_not_pass_the_chain_vocabulary() {
-    let good = chain_line(&ChainRecord {
-        stamp: stamp(),
-        stage: CHAIN_STAGE_REALIGNED,
-        scopes: 1,
-        moved: 1,
-        reason: None,
-    });
-    assert!(CHAIN_STAGE_ALL.contains(&field_value(&good, FIELD_STAGE)));
-
-    let broken = good.replace("stage=realigned", "stage=realign");
-    assert!(
-        !CHAIN_STAGE_ALL.contains(&field_value(&broken, FIELD_STAGE)),
-        "壊した語が語彙表を素通りした: {broken}"
-    );
-}
-
-#[test]
-fn a_broken_decision_word_does_not_pass_the_hold_vocabulary() {
-    let good = hold_line(&HoldRecord {
-        stamp: stamp(),
-        entity: ent(1),
-        scope: Some(0),
-        win_kind: WindowKind::Char.as_str(),
-        window_dpi: 96,
-        table_dpi: Some(192),
-        since_frame: 2,
-        decision: HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
-        site: HOLD_SITE_DPI,
-    });
-    assert!(HOLD_DECISION_ALL.contains(&field_value(&good, FIELD_DECISION)));
-
-    let broken = good.replace("decision=proceed-after-timeout", "decision=timeout");
-    assert!(
-        !HOLD_DECISION_ALL.contains(&field_value(&broken, FIELD_DECISION)),
-        "壊した語が語彙表を素通りした: {broken}"
-    );
-}
-
-/// 必須フィールド列は実際の行と過不足なく一致する（判定器が参照する単一の定義元）。
+/// 必須フィールド列は、組んだ行の欄の名から接頭の 3 欄（`frame`・`t_us`・`kind`）を除いた
+/// 集合と過不足なく一致する（判定器が参照する単一の定義元）。スナップショットはモニタ 0 台で
+/// 組む（`m<i>` はモニタごとの欄で表に載らない）。
 #[test]
 fn the_declared_field_lists_match_the_lines_that_are_actually_built() {
-    let ground = ground_line(&GroundRecord {
-        stamp: stamp(),
-        scope: Some(0),
-        ground_y: 1,
-        wa_bottom: Some(2),
-        route: PlacementRoute::Resnap,
-    });
-    for name in GROUND_FIELDS {
-        assert!(
-            ground.contains(&format!("{name}=")),
-            "接地点レコードに必須フィールド `{name}` が無い: {ground}"
+    let lines = [
+        (
+            SNAPSHOT_FIELDS,
+            snapshot_line(&SnapshotRecord {
+                stamp: stamp(),
+                monitors: &[],
+            }),
+        ),
+        (
+            HOLD_FIELDS,
+            hold_line(&HoldRecord {
+                stamp: stamp(),
+                entity: ent(1),
+                scope: None,
+                win_kind: MISSING,
+                window_dpi: 96,
+                table_dpi: None,
+                since_frame: 0,
+                decision: HOLD_DECISION_HOLD,
+                site: HOLD_SITE_DPI,
+            }),
+        ),
+        (
+            GROUND_FIELDS,
+            ground_line(&GroundRecord {
+                stamp: stamp(),
+                scope: Some(0),
+                ground_y: 1,
+                wa_bottom: Some(2),
+                route: PlacementRoute::Resnap,
+            }),
+        ),
+        (
+            CHAIN_FIELDS,
+            chain_line(&ChainRecord {
+                stamp: stamp(),
+                stage: CHAIN_STAGE_DEFERRED,
+                scopes: 2,
+                moved: 0,
+                reason: Some(HOLD_SITE_DPI),
+            }),
+        ),
+        (
+            OFFSET_FIELDS,
+            offset_line(&OffsetRecord {
+                stamp: stamp(),
+                scope: None,
+                base_dpi: None,
+                new_dpi: 96,
+                base_offset: PointPx { x: 0, y: 0 },
+                old_offset: PointPx { x: 0, y: 0 },
+                new_offset: PointPx { x: 0, y: 0 },
+                verdict: OFFSET_VERDICT_ANCHORED,
+            }),
+        ),
+    ];
+    for (declared, line) in lines {
+        let mut built: Vec<&str> = line
+            .split_whitespace()
+            .filter_map(|token| token.split_once('=').map(|(name, _)| name))
+            .skip(3)
+            .collect();
+        built.sort_unstable();
+        let mut declared = declared.to_vec();
+        declared.sort_unstable();
+        assert_eq!(
+            declared, built,
+            "宣言した欄と組んだ行の欄が食い違う: {line}"
         );
     }
-    assert_eq!(
-        GROUND_FIELDS,
-        &[
-            FIELD_SCOPE,
-            FIELD_GROUND_Y,
-            FIELD_WA_BOTTOM,
-            FIELD_DIFF,
-            FIELD_ROUTE
-        ]
-    );
-
-    let hold = hold_line(&HoldRecord {
-        stamp: stamp(),
-        entity: ent(1),
-        scope: None,
-        win_kind: MISSING,
-        window_dpi: 96,
-        table_dpi: None,
-        since_frame: 0,
-        decision: HOLD_DECISION_HOLD,
-        site: HOLD_SITE_DPI,
-    });
-    for name in HOLD_FIELDS {
-        assert!(
-            hold.contains(&format!("{name}=")),
-            "整合待ちレコードに必須フィールド `{name}` が無い: {hold}"
-        );
-    }
-    assert_eq!(HOLD_FIELDS[0], FIELD_ENTITY);
-    assert_eq!(HOLD_FIELDS[2], FIELD_WIN_KIND);
-    assert_eq!(CHAIN_FIELDS[0], FIELD_STAGE);
-    assert_eq!(SNAPSHOT_FIELDS, &[FIELD_MONITORS]);
-
-    let offset = offset_line(&OffsetRecord {
-        stamp: stamp(),
-        scope: None,
-        base_dpi: None,
-        new_dpi: 96,
-        base_offset: PointPx { x: 0, y: 0 },
-        old_offset: PointPx { x: 0, y: 0 },
-        new_offset: PointPx { x: 0, y: 0 },
-        verdict: OFFSET_VERDICT_ANCHORED,
-    });
-    for name in OFFSET_FIELDS {
-        assert!(
-            offset.contains(&format!("{name}=")),
-            "追随レコードに必須フィールド `{name}` が無い: {offset}"
-        );
-    }
-    assert_eq!(
-        OFFSET_FIELDS,
-        &[
-            FIELD_SCOPE,
-            FIELD_BASE_DPI,
-            base::FIELD_NEW_DPI,
-            FIELD_BASE_OFFSET,
-            FIELD_OLD_OFFSET,
-            FIELD_NEW_OFFSET,
-            FIELD_VERDICT
-        ]
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -528,23 +488,7 @@ fn the_write_tag_falls_back_to_sentinels_for_untracked_routes_and_unmarked_windo
 #[test]
 fn the_live_work_area_bottom_uses_the_running_monitor_table() {
     let mut world = World::new();
-    world.spawn(Monitor {
-        handle: 1,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1800,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1752,
-        },
-        dpi: 96,
-        is_primary: true,
-    });
+    world.spawn(monitor_with_work_area_bottom(1752));
 
     assert_eq!(
         live_work_area_bottom(&mut world, rect(1000, 1157, 1382, 1704)),
@@ -566,23 +510,7 @@ fn the_live_work_area_bottom_is_none_without_any_monitor() {
 #[test]
 fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
     let mut world = World::new();
-    world.spawn(Monitor {
-        handle: 1,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1800,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1752,
-        },
-        dpi: 96,
-        is_primary: true,
-    });
+    world.spawn(monitor_with_work_area_bottom(1752));
     let char_window = world.spawn(CharWindowMarker { scope: 0 }).id();
 
     let (_, events) = log_capture_kit::capture(|| {
@@ -649,17 +577,10 @@ fn log_chain_emits_exactly_one_record_per_stage() {
 // 追随レコード（`kind=offset`・要件 3.7／8.3・design D10）
 // ---------------------------------------------------------------------------
 
-/// 種別語と判定語 6 値が字面で固定され、種別が全数表に載っている。
-///
-/// 全数表への追加を怠ると、判定側は行を `UnknownKind` として落とすだけで**赤にならない**
-/// ——種別の取りこぼしを構造で捕まえる唯一の口が全数表である。
+/// 判定語 6 値が字面で固定されている（種別が全数表に載ることは
+/// `placement_record_kinds_are_fixed` の配列の一致が見る）。
 #[test]
 fn the_offset_kind_and_its_six_verdict_words_are_fixed() {
-    assert!(
-        PLACEMENT_KIND_ALL.contains(&KIND_OFFSET),
-        "全数表が追随の種別を載せていない"
-    );
-
     assert_eq!(OFFSET_VERDICT_RESCALED, "rescaled");
     assert_eq!(OFFSET_VERDICT_ANCHORED, "anchored");
     assert_eq!(OFFSET_VERDICT_UNCHANGED, "unchanged");
@@ -757,7 +678,7 @@ fn log_offset_rescale_emits_exactly_one_record_per_call() {
 /// ——濾過テストでは検出できない退行であり、固定できるのは本文走査だけである。
 #[test]
 fn the_offset_record_is_built_behind_the_front_guard() {
-    let code = code_only_lines(include_str!("transition_diag.rs"));
+    let code = code_only(include_str!("transition_diag.rs"));
     let body = code
         .split("pub fn log_offset_rescale(")
         .nth(1)
@@ -782,13 +703,4 @@ fn the_offset_record_is_built_behind_the_front_guard() {
         code.contains("pub fn offset_line("),
         "説明文を落とす処理が本文まで落としている"
     );
-}
-
-/// 説明行（`//` 始まり）を落とした本文。doc の字面を主張と取り違えないための前処理。
-fn code_only_lines(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }

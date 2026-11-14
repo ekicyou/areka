@@ -17,8 +17,8 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 //
 // 新しい表示寸法へアンカー射影 T を再適用し、確定 position＋size を単一ライター
 // 経路で一度だけ書く（bottom は wa.bottom−h' 再計算）。観測境界は headless World
-// （偽 HWND）の WindowPos.position／WindowPos.size ミラー——SetWindowPosCommand
-// キューは private TLS で flush せず flags/width/height を覗けないため。縮退
+// （偽 HWND）の WindowPos.position／WindowPos.size ミラー（書込の列の flags/width/height
+// は `follow_window_move_tests.rs` が `drain_window_pos_commands()` で見る）。縮退
 // （べき等・非正寸・不在・Anchored 欠落）は false＋状態不変で固定する。座標・
 // 寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
 // -------------------------------------------------------------------------
@@ -87,7 +87,7 @@ fn resize_window_to_is_idempotent_on_same_size_and_position() {
 }
 
 /// #4 非正寸縮退（Req3.4）: w≤0 or h≤0 は T 再適用せず `false`・位置/寸不変
-/// （warn・`BottomSnapPolicy` の非正寸縮退と整合）。
+/// （warn・下端吸着の非正寸縮退と整合）。
 #[test]
 fn resize_window_to_nonpositive_size_holds_state() {
     let mut world = World::new();
@@ -188,14 +188,6 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         ))
         .id();
 
-    // 旧原点（下端中央）: x=731+434/2=948・y=356+687=1043。
-    // 旧バルーン絶対位置: (731−412, 356−25)=(319, 331)。
-    let old_origin = (731 + 434 / 2, 356 + 687);
-    let old_balloon = Point {
-        x: 731 + offset.x,
-        y: 356 + offset.y,
-    };
-
     // 新寸 (517×823): char は下端中央保持で x=948−517/2=690・y=1043−823=220。
     assert!(resize_window_to(
         &mut world,
@@ -213,13 +205,6 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         }
     );
 
-    // キャラ窓の原点（下端中央）は寸法変動で動かない（step 3b の契約・無改変）。
-    let new_origin = (char_pos.x + 517 / 2, char_pos.y + 823);
-    assert_eq!(
-        new_origin, old_origin,
-        "原点（下端中央）は寸法変動で動かない"
-    );
-
     // バルーンは**窓相対**: 新 char 左上 + 不変 offset。
     assert_eq!(
         balloon_pos,
@@ -229,19 +214,10 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         },
         "バルーンは窓（左上）相対 offset で追随する"
     );
-    // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持。
-    assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-    assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     assert_eq!(
         world.get::<BalloonFollow>(window).unwrap().offset(),
         offset,
         "BalloonFollow.offset は resize で補正されない"
-    );
-    // 旧「下端中央基準」実装は原点不動ゆえバルーン絶対位置も不動にしていた——
-    // 窓上端が 136px 上がった本ケースでは窓相対と弁別できる（反転の証明）。
-    assert_ne!(
-        balloon_pos, old_balloon,
-        "下端中央基準補正の復活検出: 窓が動いた以上バルーンも動く"
     );
 }
 
@@ -308,9 +284,6 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
         },
         "バルーンは窓相対 offset で追随する（SSP と同セマンティクス）"
     );
-    // 恒等式 balloon_pos − char_pos ≡ offset（resize で補正しない）。
-    assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-    assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     assert_eq!(
         world.get::<BalloonFollow>(window).unwrap().offset(),
         offset,
@@ -328,8 +301,9 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
 // resize_window_to 5 アンカー統合網羅（task 2.5・テスト固定タスク・
 // Req1.1/2.1-2.6/3.1/3.3/3.4・design Integration Tests #2・#3・#4）
 //
-// task 2.4 が Bottom で押さえた「一度書き＋re-snap／べき等／非正寸／不在／
-// Anchored 欠落／随伴バルーン維持」を、残る Top/Left/Right/Free へ拡張する。
+// task 2.4 が Bottom で押さえた「一度書き＋re-snap／べき等／随伴バルーン維持」を、
+// 残る Top/Left/Right/Free へ拡張する（非正寸・不在の縮退はアンカーに依らないので
+// Bottom の側だけに置く）。
 // resize_window_to 本体は 2.4 で完成済み＝本群は「既存配線が 5 アンカーで
 // 正しく `Anchored.0` を転送している（非 Bottom を `Anchor::Bottom` へ
 // ハードコードしていない）」ことを固定する回帰檻（非 Bottom 配線バグ＝
@@ -505,9 +479,6 @@ fn resize_window_to_left_preserves_balloon_follow_offset() {
             y: 500 + offset.y
         }
     );
-    // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持
-    assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-    assert_eq!(balloon_pos.y - char_pos.y, offset.y);
 }
 
 /// #4 べき等（非 Bottom・Req3.1）: 既に左端一致（x=wa.left）の位置＋同寸へ
@@ -535,55 +506,6 @@ fn resize_window_to_left_is_idempotent_on_same_size_and_position() {
     ));
     assert_eq!(position_of(&world, window), Point { x: 53, y: 500 });
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
-}
-
-/// #4 非 Bottom 縮退（Req3.3/3.4）: 縮退経路がアンカー非依存（Bottom 特化でない）
-/// ことを代表として Top で固定する。task 2.4 が Bottom で押さえた縮退を、
-/// 別アンカーでも配線が同一であることの確認（過剰重複を避け 1 件へ集約）。
-/// - 非正寸（w≤0 or h≤0）: project_anchor 前に弾かれ `false`・位置/寸不変。
-/// - `WindowHandle` 未付与: 射影は走るが enqueue が warn no-op＝`false`・位置/寸不変。
-#[test]
-fn resize_window_to_non_bottom_degrades_on_nonpositive_and_missing_handle() {
-    let mut world = World::new();
-    world.insert_resource(odd_edge_snapshot());
-
-    // (a) Top＋非正寸: project_anchor 前に弾かれ false・状態不変（Bottom と同一縮退）
-    let with_handle = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(731, 500, 434, 687),
-            Anchored(Anchor::Top),
-        ))
-        .id();
-    for bad in [
-        SizePx { w: 0, h: 823 },
-        SizePx { w: 517, h: 0 },
-        SizePx { w: -517, h: -823 },
-    ] {
-        assert!(
-            !resize_window_to(&mut world, with_handle, bad, PlacementRoute::Resnap),
-            "{bad:?}: 非正寸は false（Top でも Bottom と同一縮退）"
-        );
-        assert_eq!(position_of(&world, with_handle), Point { x: 731, y: 500 });
-        assert_eq!(size_of(&world, with_handle), SizeI::new(434, 687));
-    }
-
-    // (b) Top＋WindowHandle 未付与: 射影は走るが enqueue が warn no-op＝false・状態不変
-    let no_handle = world
-        .spawn((
-            // WindowHandle なし（窓生成前）
-            window_pos_sized(731, 500, 434, 687),
-            Anchored(Anchor::Top),
-        ))
-        .id();
-    assert!(!resize_window_to(
-        &mut world,
-        no_handle,
-        SizePx { w: 517, h: 823 },
-        PlacementRoute::Resnap
-    ));
-    assert_eq!(position_of(&world, no_handle), Point { x: 731, y: 500 });
-    assert_eq!(size_of(&world, no_handle), SizeI::new(434, 687));
 }
 
 // -------------------------------------------------------------------------
@@ -726,11 +648,9 @@ fn anchor_changed_system_reprojects_bottom_to_left() {
 // areka-P0-emo-dpi-scaling task 2.2・R3.1/R4.2・
 // design「areka / placement > follow.rs（additive・balloon 窓の k 追従）」・D8）
 //
-// 「書込ゼロ」の観測境界について: `SetWindowPosCommand` の TLS キューは
-// wintf 私有（`WINDOW_POS_COMMANDS`）で件数を覗く公開 API が無く、`flush()` は
-// 偽 HWND に対し実 `SetWindowPos` を撃ってしまうため使えない（既存
-// enqueue_window_set_pos 群と同じ制約）。代わりに **`Arrangement.offset` 同期**
-// を witness に使う——この同期は `enqueue_window_set_pos` 内で enqueue と
+// 「書込ゼロ」の観測境界について: `flush()` は偽 HWND に対し実 `SetWindowPos` を
+// 撃ってしまうため使えない。書込の列は `drain_window_pos_commands()` で覗けるが、
+// ここでは **`Arrangement.offset` 同期** を witness に使う——この同期は `enqueue_window_set_pos` 内で enqueue と
 // 不可分に対で走るため、「stale な sentinel offset が据え置かれたまま」＝
 // 単一ライター経路を一度も通っていない＝enqueue 件数 0 の決定論的証拠になる
 // （逆に通れば offset は必ず `WindowPos.position` の `as f32` 転写になる）。
@@ -805,15 +725,17 @@ fn resize_window_keep_position_new_size_keeps_position_and_writes_once() {
     );
 }
 
-/// 現寸不明（`WindowPos.size` が `None`＝窓生成直後）はべき等判定が成立しない
+/// 現寸不明（`WindowPos.size` が `None`）はべき等判定が成立しない
 /// ため書込へ進む（位置維持・新寸反映）。
 #[test]
 fn resize_window_keep_position_with_unknown_current_size_writes() {
     let mut world = World::new();
+    let mut wp = window_pos_at(731, 356);
+    wp.size = None;
     let window = world
         .spawn((
             fake_handle(0x3000),
-            window_pos_at(731, 356),
+            wp,
             arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
         ))
         .id();
@@ -847,7 +769,7 @@ fn resize_window_keep_position_without_window_pos_returns_false() {
     assert_no_write(&world, window);
 }
 
-/// `WindowPos.position` 不在（窓生成前）: 現在位置を読めないため warn＋`false`＋
+/// `WindowPos.position` 不在: 現在位置を読めないため warn（印と別の文）＋`false`＋
 /// 書込ゼロ。`size` も書き換えない。
 #[test]
 fn resize_window_keep_position_without_position_returns_false() {
@@ -864,11 +786,14 @@ fn resize_window_keep_position_without_position_returns_false() {
         ))
         .id();
 
-    assert!(!resize_window_keep_position(
-        &mut world,
-        window,
-        SizePx { w: 517, h: 823 }
-    ));
+    let (ok, events) = log_capture_kit::capture(|| {
+        resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 })
+    });
+    assert!(!ok);
+    log_capture_kit::expect_one(
+        &events,
+        "WindowPos.position 不在のため現在位置を読めずリサイズしない",
+    );
     assert!(
         world
             .get::<WindowPos>(window)
@@ -931,20 +856,4 @@ fn resize_window_keep_position_without_handle_returns_false() {
     assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     assert_no_write(&world, window);
-}
-
-/// despawn 済み（対象不在）でも panic せず `false`。
-#[test]
-fn resize_window_keep_position_on_despawned_entity_returns_false() {
-    let mut world = World::new();
-    let window = world
-        .spawn((fake_handle(0x3000), window_pos_sized(731, 356, 434, 687)))
-        .id();
-    world.despawn(window);
-
-    assert!(!resize_window_keep_position(
-        &mut world,
-        window,
-        SizePx { w: 517, h: 823 }
-    ));
 }

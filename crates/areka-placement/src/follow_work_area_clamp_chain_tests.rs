@@ -6,15 +6,17 @@
 
 use bevy_ecs::prelude::*;
 
-use super::test_support::{point, rect, window_pos_sized};
+use super::test_support::{guard_events, point, rect, window_pos_sized};
+use super::work_area_clamp::{
+    WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG, resolve_chain_in_work_area,
+};
 use super::{
     ChainClampOutcome, ChainPlacement, ClampScene, MonitorSnapshot, WORK_AREA_CLAMP_TAG,
-    WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG, place_chain_in_work_area,
-    resolve_chain_in_work_area,
+    place_chain_in_work_area,
 };
 use crate::chain_finalize::{ChainRect, ChainSlot, KeepReason, PairDecision};
 use crate::resolver::PointPx;
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 fn slot(scope: usize, r: ChainRect, decision: PairDecision) -> ChainSlot {
     ChainSlot {
@@ -291,13 +293,6 @@ fn world_chain(
     (world, slots, targets)
 }
 
-fn tagged<'a>(events: &'a [CapturedEvent], tag: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.message().contains(tag))
-        .collect()
-}
-
 /// World を組んでも核と同じ置き方になり（⑴⑵・3 体の鎖）、寄せた窓は `Clamp`（info・場面・
 /// スコープ・how・from・to・作業領域）、収まっていた窓は `Keep`（debug・reason=fits）を残す。
 #[test]
@@ -335,7 +330,7 @@ fn world_entry_places_like_core_and_logs_clamp_and_keep() {
     assert_eq!(keep.level, tracing::Level::DEBUG);
     assert_eq!(keep.expect_field("scope"), "2");
     assert_eq!(keep.expect_field("reason"), "\"fits\"");
-    assert!(tagged(&events, WORK_AREA_UNRESOLVED_TAG).is_empty());
+    assert!(guard_events(&events, WORK_AREA_UNRESOLVED_TAG).is_empty());
 }
 
 /// 組の決めが Keep の窓は今の位置のまま `Keep`（reason は組の理由の語）。場面は `scene_of` が決める。
@@ -356,7 +351,7 @@ fn world_entry_logs_kept_reason() {
     let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
     assert_eq!(keep.expect_field("scene"), "\"remembered-join\"");
     assert_eq!(keep.expect_field("reason"), "\"explicitly-placed\"");
-    assert!(tagged(&events, WORK_AREA_CLAMP_TAG).is_empty());
+    assert!(guard_events(&events, WORK_AREA_CLAMP_TAG).is_empty());
 }
 
 /// ⑹ モニタの写しの無い World → 並べた位置のまま `Unresolved` の warn が出る（要件 7.4）。
@@ -416,4 +411,46 @@ fn unreadable_height_is_unresolved_and_others_continue() {
     let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
     assert_eq!(warn.expect_field("reason"), "\"no-window-height\"");
     assert_eq!(warn.expect_field("scope"), "1");
+}
+
+/// 指摘 11 ⑹ 写しは有るが空の World → 並べた位置のまま `Unresolved`（reason=no-work-area）。
+#[test]
+fn world_with_empty_snapshot_warns_no_work_area() {
+    let rects = [HEAD, cr(1000, 900, 1108, 800)];
+    let decisions = [PairDecision::JoinLeft, PairDecision::JoinLeft];
+    let (world, slots, targets) = world_chain(
+        &rects,
+        &decisions,
+        Some(MonitorSnapshot { work_areas: vec![] }),
+    );
+
+    let (out, events) =
+        capture(|| place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::DpiRealign));
+
+    assert_eq!(out[0].to, point(-1108, 900));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved);
+    let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(warn.expect_field("scope"), "1");
+    assert_eq!(warn.expect_field("reason"), "\"no-work-area\"");
+}
+
+/// 指摘 20: 高さが 0 以下（未確定の印 `CW_USEDEFAULT` を含む）のスロットは、高さが読めない
+/// のと同じ `Unresolved`（no-window-height）。直す前は高さ 0 の矩形で寄せを計算していた（`Flipped`）。
+#[test]
+fn sentinel_height_is_unresolved() {
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+    for h in [0, CW_USEDEFAULT] {
+        let rects = [HEAD, cr(1000, 900, 1108, h)];
+        let decisions = [PairDecision::JoinLeft, PairDecision::JoinLeft];
+        let (world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
+
+        let (out, events) = capture(|| {
+            place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack)
+        });
+
+        assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved, "h={h}");
+        let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
+        assert_eq!(warn.expect_field("reason"), "\"no-window-height\"", "h={h}");
+    }
 }
