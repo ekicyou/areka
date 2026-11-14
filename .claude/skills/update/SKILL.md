@@ -15,7 +15,7 @@ pasta の `/update`（pasta の PR #185）を areka へ移したもの。areka �
 | B. 下限の引き上げ | `Cargo.toml` の要求の版を、互換の範囲の最新へ上げる | 見送る（下の「推奨の決め方」） |
 | C. 互換の無い更新 | メジャー（`0.x` は MINOR、`0.0.x` は PATCH）を上げる。`=` で固定した版を動かすのもここ。`Cargo.toml` と、必要ならコードを直す | 依存ごとに見積もって決める |
 
-調べる対象に入れないもの: ワークスペースの自分のクレート（`dola`・`wintf` など `path` の依存）、`vendors/` のサブモジュール（ビルドの依存ではない）、GitHub Actions の版。
+調べる対象に入れないもの: ワークスペースの自分のクレート（`dola`・`wintf`・`wintf-winmsg-executor` など `path` の依存）、`vendors/` のサブモジュール（ビルドの依存ではない）、GitHub Actions の版。
 
 ## 行う時期
 
@@ -29,7 +29,7 @@ pasta の `/update`（pasta の PR #185）を areka へ移したもの。areka �
 2. 段 2 と段 3 では何も変えない。変えるのは、段 3 で承認された分だけである。
 3. コミットは、A で 1 つ、B で 1 つ、C は依存ごとに 1 つずつにする。どのコミットも、それだけを戻せば元に戻る形にする（`Cargo.lock` の差分と、それに対応する `THIRD-PARTY-NOTICES.md` の差分を同じコミットに入れる）。`git add` にはファイルのパスを並べる。
 4. 各コミットの前に、段 4 の「コミットごとの検証」を通す。全体テスト（`tools/test-all.ps1`）は、全部のコミットの後に 1 回だけ回す（何度も回さない）。
-5. `cargo publish` を実行しない。版の表記（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola` の `version`）を変えない。
+5. `cargo publish` を実行しない。版の表記（`[workspace.package]` の `version`・`[workspace.dependencies]` の `dola`・`wintf-winmsg-executor` の `version`）を変えない。
 
 ## 段 1. 始める前の確認
 
@@ -46,7 +46,7 @@ pasta の `/update`（pasta の PR #185）を areka へ移したもの。areka �
 | コマンド | 分かること |
 |----------|-----------|
 | `cargo update --dry-run --verbose` | A（`Updating`・`Adding` の行）。最後の `Unchanged … (available: …)` の行は、直接の依存の要求に止められている間接の依存（C の候補を上げれば動くことがある） |
-| `cargo upgrade --dry-run --incompatible --pinned` | 直接の依存ごとの `old req`・`compatible`・`latest`。`latest` が `compatible` と同じ行は B の候補、違う行は C の候補。`=` の行（`rmcp`・`rectangle-pack`・`wintf-winmsg-executor`）は、`latest` が今と違えば C の候補 |
+| `cargo upgrade --dry-run --incompatible --pinned` | 直接の依存ごとの `old req`・`compatible`・`latest`。`latest` が `compatible` と同じ行は B の候補、違う行は C の候補。`=` の行（`rmcp`・`rectangle-pack`）は、`latest` が今と違えば C の候補 |
 | `cargo deny check` | 勧告・ライセンス・取得元。勧告に当たった依存は、どの区分でも「入れる」を推奨にする |
 | `cargo search image-webp --limit 1` | 公開版が 0.2.5 以上なら、根の `Cargo.toml` の `[patch.crates-io]` を外せる（`tech.md` の `image-webp` の項の「取り外し条件」）。C の候補として出す |
 
@@ -99,7 +99,7 @@ C. 互換の無い更新
 ### 推奨の決め方
 
 - **A**: 入れる。新しく入る依存が `cargo deny check` に通らないときは、その依存を引き込んだ更新だけを `cargo update -p <名前> --precise <今の版>` で据え置く案にする。
-- **B**: 見送る。`wintf` と `dola` は crates.io に出しており、根の `[workspace.dependencies]` の下限を上げると、使う側の選べる版が狭まる。上げるのは次のときだけである: 勧告の修正版を必須にしたい／areka が新しい版で入った API を使っている（`Cargo.lock` の版でしか試していないため、使っていれば下限が嘘になる）。
+- **B**: 見送る。`wintf`・`dola`・`wintf-winmsg-executor` は crates.io に出しており、根の `[workspace.dependencies]` の下限を上げると、使う側の選べる版が狭まる。上げるのは次のときだけである: 勧告の修正版を必須にしたい／areka が新しい版で入った API を使っている（`Cargo.lock` の版でしか試していないため、使っていれば下限が嘘になる）。
 - **C**: 次の順に当て、最初に当てはまったものにする。
   1. 勧告の修正が新しいメジャーにしか無い → 入れる。
   2. `image-webp` の公開版が取り外し条件を満たした → 入れる（手順は `tech.md` の `image-webp` の項）。

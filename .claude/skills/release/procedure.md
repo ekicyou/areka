@@ -88,9 +88,9 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 
 ### 1.3 今の版と、そのタグを確かめる
 
-- 根の `Cargo.toml` の `[workspace.package]` の `version` と `[workspace.dependencies]` の `dola` の `version` を読み、同じ値なら `{旧版}` とする。違えば止まる。
+- 根の `Cargo.toml` の `[workspace.package]` の `version` と `[workspace.dependencies]` の `dola` の `version` と `wintf-winmsg-executor` の `version` の 3 行を読み、同じ値なら `{旧版}` とする。違えば止まる。
 - `git ls-remote --quiet --tags {remote} refs/tags/v{旧版}` が 1 行であること。0 行なら前の回が「マージの後・タグの前」で止まっている。版を上げずに止まり、題が `chore(release): v{旧版}` のマージ済みの PR を `gh pr list --state merged --search "chore(release): v{旧版} in:title" --json number,mergeCommit` で示して、その squash のコミットで段 5 から続けるかを開発者に聞く。
-- 判定: 2 行の版が一致し、`v{旧版}` が在る。
+- 判定: 3 行の版が一致し、`v{旧版}` が在る。
 
 ### 1.4 次のリリースへの申し送りを読む
 
@@ -114,9 +114,9 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 ### 2.1 版上げの道具で根の `Cargo.toml` と `Cargo.lock` の版を上げる
 
 - **いつものやり方**: 1.5 で道具が在ると分かったら、指示が無い回は `cargo set-version --bump patch --workspace`、指示がある回は `cargo set-version {版} --workspace` を回す。`--locked` は付けない（`Cargo.lock` を書き直すので、付けると失敗する）。
-- **代わりのやり方**（道具が無いか、根の `Cargo.toml` の 2 行目＝`dola` の行が動かなかったとき）: 2 行を Edit で直し、`cargo update -w` で `Cargo.lock` を揃える。
+- **代わりのやり方**（道具が無いか、根の `Cargo.toml` の `dola` の行か `wintf-winmsg-executor` の行が動かなかったとき）: 3 行を Edit で直し、`cargo update -w` で `Cargo.lock` を揃える。
 - どちらのやり方を使ったかを覚え、最後の報告に書く。
-- 判定: 根の `Cargo.toml` の 2 行がどちらも `{版}` を読む。正しく上がったかの判定は 3.2 が持つ。
+- 判定: 根の `Cargo.toml` の 3 行（`[workspace.package]` の `version`・`dola` の `version`・`wintf-winmsg-executor` の `version`）がどれも `{版}` を読む。読まなければ止まる。正しく上がったかの判定は 3.2 が持つ。
 
 ### 2.2 `dist/README.txt` の「時点」の行の日付を直す
 
@@ -263,7 +263,7 @@ else echo "desk: id=$ID repo=$R"; fi
 |---|---|---|
 | 動いたファイルの集まり | `git diff --numstat HEAD` | `Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` の 3 つが在り、ほかに在ってよいのは `dist/README.txt` だけ。その版の見どころのファイルは、まだ git に入っていない新しいファイルなので、ここには出ず、次の行に出る |
 | 新しいファイル | `git status --porcelain` の `??` の行 | `doc/release-notes/v{版}.md` の 1 行だけ（ほかの物は 1 行も無い） |
-| `Cargo.toml` | `git diff -U0 HEAD -- Cargo.toml` | 足した行 2・消した行 2。`[workspace.package]` の `version` の行と `dola` の行で、どちらも `{旧版}` が `{版}` になっただけ |
+| `Cargo.toml` | `git diff -U0 HEAD -- Cargo.toml` | 足した行 3・消した行 3。`[workspace.package]` の `version` の行と `wintf-winmsg-executor` の行と `dola` の行で、どれも `{旧版}` が `{版}` になっただけ |
 | `Cargo.lock` | `git diff -U0 HEAD -- Cargo.lock` | 消した行は全部 `version = "{旧版}"`、足した行は全部 `version = "{版}"` で、どちらも `N` 行。それ以外の行（外部のクレートの行を含む）は 0 行 |
 | `THIRD-PARTY-NOTICES.md` | `git diff -U0 HEAD -- THIRD-PARTY-NOTICES.md` | 消した行は全部「`- {ワークスペースのクレートの名前} {旧版}`」、足した行は全部同じ名前の「`{版}`」で、数が同じ。それ以外の行は 0 行 |
 | `dist/README.txt` | `git diff -U0 HEAD -- dist/README.txt` | 足した行 1・消した行 1 で、「時点」の行の日付だけ（同じ日に 2 回目の版上げなら 0 行でよい） |
@@ -321,7 +321,7 @@ else echo "desk: id=$ID repo=$R"; fi
 ### 5.1 タグを打つコミットを確かめる
 
 - `git fetch --quiet {remote} main` の後、`git merge-base --is-ancestor {sha} {remote}/main` が 0 であること。
-- `git show {sha}:Cargo.toml` の 2 行の版が `{版}` と 1 字違わず同じであること。タグの名前は `v{版}`。
+- `git show {sha}:Cargo.toml` の 3 行の版が `{版}` と 1 字違わず同じであること。タグの名前は `v{版}`。
 - `git ls-remote --quiet --tags {remote} refs/tags/v{版}` が 0 行であることを、もう一度確かめる。
 - 手元のタグを読む。`git rev-parse --verify --quiet refs/tags/v{版}^{commit}` が失敗する（手元に無い）か、`{sha}` を返すこと。別のコミットを返したら止まる（手元のタグも消さない）。
 - 判定: 4 つとも当たる。外れたら止まって報告する。
@@ -384,7 +384,7 @@ else echo "desk: id=$ID repo=$R"; fi
 開発者がその回に明示して承認したときだけ行う（「タグを付け直してよい」）。承認は 1 回の付け直しにだけ効く。
 
 1. どこにも公開していないことを確かめる。`gh release view v{版} --json isDraft` が「無い」（下書きも無い）、`pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version {版}` が公開する全部のクレートの名前を出す、winget の PR が無い。1 つでも外れたら、付け直さずに止まる。
-2. 直しは、ふつうの PR で main に入っていること。`git fetch --quiet {remote} main` の後、`git rev-parse {remote}/main` を新しい `{sha}` とし、5.1 の 1・2 つ目（main からの到達・`Cargo.toml` の 2 行の版）と、そのコミットでの `git show {sha}:doc/release-notes/v{版}.md` が在ることを確かめる。
+2. 直しは、ふつうの PR で main に入っていること。`git fetch --quiet {remote} main` の後、`git rev-parse {remote}/main` を新しい `{sha}` とし、5.1 の 1・2 つ目（main からの到達・`Cargo.toml` の 3 行の版）と、そのコミットでの `git show {sha}:doc/release-notes/v{版}.md` が在ることを確かめる。
 3. 付け直して、その 1 本だけを押す。この 2 つは許可の一覧に入れない。開発者が、そのたびに許可の確認に答える。
 
    ```bash
@@ -428,7 +428,7 @@ else echo "desk: id=$ID repo=$R"; fi
 
 | 見えた事実 | 始める位置 |
 |---|---|
-| この枝の版上げの PR が無く、作業木の変更が版上げの 5 つのファイルの内側だけで、根の `Cargo.toml` の 2 行が同じ版 | PR を出す前に切れた回。`{版}` は作業木の `Cargo.toml` の版、`{旧版}` は `git show HEAD:Cargo.toml` の版。「確かめた main」は `git merge-base {remote}/main HEAD`（枝が取り込んである main）。1.2 と、1.3・1.5 のタグの確かめ（`v{旧版}` が在り、`v{版}` が無い）を回してから、2.2 から続ける（見どころのファイルが在れば書き直さず、2.3 の読み直しと `-Check` から。段 3 が全部を判定し直す） |
+| この枝の版上げの PR が無く、作業木の変更が版上げの 5 つのファイルの内側だけで、根の `Cargo.toml` の 3 行が同じ版 | PR を出す前に切れた回。`{版}` は作業木の `Cargo.toml` の版、`{旧版}` は `git show HEAD:Cargo.toml` の版。「確かめた main」は `git merge-base {remote}/main HEAD`（枝が取り込んである main）。1.2 と、1.3・1.5 のタグの確かめ（`v{旧版}` が在り、`v{版}` が無い）を回してから、2.2 から続ける（見どころのファイルが在れば書き直さず、2.3 の読み直しと `-Check` から。段 3 が全部を判定し直す） |
 | この枝の版上げの PR が無く、作業木がきれいで、先頭のコミットの題（`git log -1 --format=%s`）が `chore(release): v` で始まる | コミットの後・PR の前に切れた回。`{版}` は `git show HEAD:Cargo.toml` の版。4.1 の push から。「確かめた main」は覚えていない物として扱う |
 | この枝の版上げの PR が無く、上の 2 行に当たらず、`git status --porcelain` が 0 行 | 段 1 から（新しい回） |
 | この枝の版上げの PR が開いている | `git status --porcelain` が 0 行でなければ止まる。`{旧版}` は `git show {remote}/main:Cargo.toml` の版。「確かめた main」は覚えていない物として、4.2 から（4.2 の 2〜6 を必ず 1 回行う。3.1 を回していない main との組み合わせをマージしない） |
@@ -445,7 +445,7 @@ else echo "desk: id=$ID repo=$R"; fi
 次が変わったら、この文書を見直す。
 
 - `release.yml`・`crates-io.yml` のきっかけ（タグ `v*` の push）・待ちの上限・Release に添える物の数（今は 5 つ）・Release の本文のもと（今はその版の見どころのファイル）。
-- 版の置き場（今は根の `Cargo.toml` の 2 行だけ）。3 行目が増えたら段 2 と 3.2 を直す。
+- 版の置き場（今は根の `Cargo.toml` の 3 行だけ）。4 行目が増えたら段 1.3・2.1・3.2・5.1 と再開の表を直す。
 - `tools/test-all.ps1`・`tools/package.ps1`・`tools/crates-io.ps1`・`tools/release-notes.ps1` の引数の名前や終了コードの意味。
 - `areka-impl-watch.exe` のコマンドの名前・引数・出力の 1 行・終了コードの意味（`doc/impl-watch.md`）。変われば「机の段」の呼ぶ形と終わり方の表を合わせ直す。
 - 見どころのファイルの置き場所・名前（今は `doc/release-notes/v{版}.md`）。
