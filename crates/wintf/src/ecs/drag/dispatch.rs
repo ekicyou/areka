@@ -14,8 +14,6 @@ pub struct DragStartEvent {
     pub target: Entity,
     /// ドラッグ開始位置（物理ピクセル、スクリーン座標）
     pub position: PhysicalPoint,
-    /// 左ボタンドラッグかどうか
-    pub is_primary: bool,
     /// イベント発生時刻
     pub timestamp: Instant,
 }
@@ -29,8 +27,6 @@ pub struct DragEvent {
     pub start_position: PhysicalPoint,
     /// 現在位置（物理ピクセル、スクリーン座標）
     pub position: PhysicalPoint,
-    /// 左ボタンドラッグかどうか
-    pub is_primary: bool,
     /// イベント発生時刻
     pub timestamp: Instant,
 }
@@ -44,8 +40,6 @@ pub struct DragEndEvent {
     pub position: PhysicalPoint,
     /// キャンセルされたかどうか
     pub cancelled: bool,
-    /// 左ボタンドラッグかどうか
-    pub is_primary: bool,
     /// イベント発生時刻
     pub timestamp: Instant,
 }
@@ -162,7 +156,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                 let event = DragStartEvent {
                     target: entity,
                     position: start_pos,
-                    is_primary: true,
                     timestamp,
                 };
 
@@ -207,7 +200,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     target: entity,
                     position: end_pos,
                     cancelled,
-                    is_primary: true,
                     timestamp: Instant::now(),
                 };
 
@@ -323,7 +315,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                 target: entity,
                 start_position: start_pos,
                 position: flush_result.current_position,
-                is_primary: true,
                 timestamp: Instant::now(),
             };
 

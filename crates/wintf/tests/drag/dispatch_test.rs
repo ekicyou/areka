@@ -102,7 +102,6 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
     assert_eq!(events.len(), 1, "DragStartEvent は 1 件書き込まれるべき");
     assert_eq!(events[0].target, target);
     assert_eq!((events[0].position.x, events[0].position.y), (110, 210));
-    assert!(events[0].is_primary);
 }
 
 /// Started 遷移で DragConfig.move_window と DragConstraint が WindowDragContextResource に転送される。

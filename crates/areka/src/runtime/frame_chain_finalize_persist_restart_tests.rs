@@ -76,7 +76,6 @@ fn first_run(ghost: &MinimalGhost, drag: bool) -> [Point; 2] {
             target: body,
             position: Point::new(cursor.0 + DRAG_DX, cursor.1),
             cancelled: false,
-            is_primary: true,
             timestamp: Instant::now(),
         });
         assert!(!on_char_drag_end(&mut world, body, body, &ev));

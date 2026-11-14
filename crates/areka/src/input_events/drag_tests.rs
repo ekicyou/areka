@@ -427,7 +427,6 @@ fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<Ca
     let ev = Phase::Bubble(DragStartEvent {
         target,
         position: PhysicalPoint::new(0, 0),
-        is_primary: true,
         timestamp: Instant::now(),
     });
     capture(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1

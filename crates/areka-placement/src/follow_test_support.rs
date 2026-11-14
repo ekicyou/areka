@@ -47,7 +47,6 @@ pub(super) fn drag_event(target: Entity) -> DragEvent {
         target,
         start_position: Point::new(0, 0),
         position: Point::new(10, 10),
-        is_primary: true,
         timestamp: Instant::now(),
     }
 }
@@ -101,7 +100,6 @@ pub(super) fn drag_event_at(target: Entity, start: (i32, i32), cursor: (i32, i32
         target,
         start_position: Point::new(start.0, start.1),
         position: Point::new(cursor.0, cursor.1),
-        is_primary: true,
         timestamp: Instant::now(),
     }
 }
@@ -112,7 +110,6 @@ pub(super) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEv
         target,
         position: Point::new(cursor.0, cursor.1),
         cancelled: false,
-        is_primary: true,
         timestamp: Instant::now(),
     }
 }

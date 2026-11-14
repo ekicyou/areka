@@ -48,8 +48,6 @@ pub struct DragConfig {
     pub move_window: bool,
     /// 有効なボタン（左ボタンのみデフォルト）
     pub left_button: bool,
-    pub right_button: bool,
-    pub middle_button: bool,
 }
 
 impl Default for DragConfig {
@@ -59,8 +57,6 @@ impl Default for DragConfig {
             enabled: true,
             move_window: true,
             left_button: true,
-            right_button: false,
-            middle_button: false,
         }
     }
 }
@@ -126,8 +122,6 @@ mod tests {
         assert!(c.enabled);
         assert!(c.move_window);
         assert!(c.left_button, "左ボタンは既定で有効");
-        assert!(!c.right_button, "右ボタンは既定で無効");
-        assert!(!c.middle_button, "中ボタンは既定で無効");
     }
 
     /// 全 None の DragConstraint は座標を素通しする（制約なし）。

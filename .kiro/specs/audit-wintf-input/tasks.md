@@ -40,7 +40,7 @@
   - _Requirements: 2.1, 4.6, 4.7, 7.2_
 
 - [ ] 3. ドラッグの公開の形を減らし、名前と記録を直す
-- [ ] 3.1 使われないドラッグの設定の欄（右・中のボタン）と、ドラッグの知らせ 3 つの主ボタンの印を消す
+- [x] 3.1 使われないドラッグの設定の欄（右・中のボタン）と、ドラッグの知らせ 3 つの主ボタンの印を消す
   - ドラッグの設定から右・中のボタンの欄を消し、既定の値とそのテストの行・窓の手続きのテストの 1 行を直す（左のボタンの欄は読み手があるので残す・議題 2）。
   - ドラッグの始まり・途中・終わりの知らせから主ボタンの印を消し、書く所 3 つと範囲の外の書き手を直す（設計の数え方で 13 か所＝`areka-placement` 7・`areka` 4・wintf の結合テスト 2。結合テストの 1 か所（`dispatch_test.rs:513`）は 2.1 が消す 2 本の中にあるので、このタスクで直すのは 12 か所）。モニタの記録の主の印は別物なので触らない（C20 の約束 ⑶）。
   - 触る前に `audit-placement-core` へ行を伝える（`audit-placement-follow` は着地済み）。
@@ -181,3 +181,5 @@
 - areka は bin だけのクレート＝クレートのテストは `cargo test -p areka --bin areka`（`--lib` は動かない）。ドラッグの配りを変えたタスクは `areka-placement` と `areka` のクレートのテストも回す（2.1）。
 - `drag_origin` は設計の `(Option<HWND>, Point)` でなく `Result<Point, String>`（HWND は別に控える・design.md 349 も追随）。`WindowPos::default().position` は `Some(CW_USEDEFAULT)` で `None` ではない＝位置の無い窓のテストは `position: None` を明示する（2.2）。
 - `cargo test -p areka --bin areka` を clippy と並べて回したとき 1 本だけ赤・回し直しで緑（名は取れず）。7.2 の全体テストで再び出たら名を控える（2.2 のレビュー）。
+- `cargo test -p areka --all-targets`／`--tests` は `crates/areka/tests/` の実機起動のテスト（`#[ignore]` 無し）まで回す＝排他テストの机が要る。机の無い確かめは `--bin areka` と `--example mock-shell`、ほかの残りは `cargo test --workspace --all-targets --no-run` で拾う（`build --all-targets` は example のテストを組まない・3.1）。
+- `audit-placement-core` と: この spec が先に着地。向こうの 2.4 が `follow/drag_follow.rs` の `reestablish_balloon_follow` に 1 行足す＝3.2 の読み手の直しと近くで重なれば後から着地する側（向こう）が合わせる（11-14 の伝言）。

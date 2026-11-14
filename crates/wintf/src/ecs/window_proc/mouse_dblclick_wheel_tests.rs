@@ -210,10 +210,7 @@ fn w2_left_dblclick_on_window_without_drag_does_not_prepare() {
 /// W2: ドラッグを許した窓でも、右ボタンのダブルクリックの押下では準備に入らない。
 #[test]
 fn w2_right_dblclick_does_not_prepare() {
-    let (world, window) = setup(Some(DragConfig {
-        right_button: true,
-        ..Default::default()
-    }));
+    let (world, window) = setup(Some(DragConfig::default()));
 
     send(&world, window, WM_RBUTTONDBLCLK, 60, 60);
 

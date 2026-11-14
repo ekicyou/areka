@@ -240,7 +240,6 @@ impl Rig {
             target: self.balloon,
             position: PhysicalPoint::new(1711, 953),
             cancelled: false,
-            is_primary: true,
             timestamp: Instant::now(),
         };
         let balloon = self.balloon;
