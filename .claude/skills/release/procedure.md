@@ -6,7 +6,19 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 
 ## 読み方
 
-- **置き換える語**: `{remote}`＝`git remote`（名前だけを出す。`-v` は付けない）で読んだリモートの名前。`{枝}`＝`git branch --show-current` で読んだ、ハーネスが用意した作業の枝。`{版}`＝その回に出す版。`{旧版}`＝上げる前の版。`{sha}`＝版上げの PR の squash のコミット。`{確かめた main}`＝手元の確かめ（段 3）を回した作業木が取り込んでいる main の先端の SHA（1.1 で覚える）。`{番号}`＝版上げの PR の番号。`{id}`＝走りの番号。
+- **置き換える語**: コマンドの中の波かっこは次の値に置き換える。文脈を失ったら、右の方法で取り直す。
+
+  | 語 | 意味 | 取り直し方 |
+  |---|---|---|
+  | `{remote}` | リモートの名前 | `git remote`（名前だけを出す。`-v` は付けない） |
+  | `{枝}` | ハーネスが用意した作業の枝 | `git branch --show-current` |
+  | `{版}` | その回に出す版 | 「再開のときの事実の読み方」の表 |
+  | `{旧版}` | 上げる前の版 | 同上（新しい回は 1.3） |
+  | `{sha}` | 版上げの PR の squash のコミット | `gh pr view {番号} --json mergeCommit` |
+  | `{確かめた main}` | 手元の確かめ（段 3）を回した作業木が取り込んでいる main の先端の SHA（1.1 で覚える） | 取り直せない。覚えていなければ、4.2 の「再開で覚えていないとき」のとおりにする |
+  | `{番号}` | 版上げの PR の番号 | `gh pr list --head {枝} --state all --json number,title` |
+  | `{id}` | 走りの番号 | 6.1 の `gh run list` |
+  | `{試行}` | 待つ試行の番号（新しい走りは 1。再実行のたびに 1 増える） | `gh run view {id} --json attempt` |
 - **`git` の決まり**: `git fetch`・`git push`・`git ls-remote` には必ず `--quiet` を付け、標準エラーは捨てる。成否は終了コードと、その後の読み直し（`ls-remote`・`gh`）で決める。
 - **判定**: 各項目の「判定」は、その場で取り直したコマンドの出力と終了コードで確かめる。当たらなければ、その項目に書いた止まり方で止まる。
 - **始める場所**: ハーネスのワークツリーの枝で始める。`{枝}` が `main` なら止まる。手順は枝を作らない。新しい回は、main から切った新しいワークツリーの枝で始めるのが基本（前の回を出した枝で次の回を打つときは、版を引数で指示する＝「再開のときの事実の読み方」）。
@@ -15,8 +27,8 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 ### してはいけない事
 
 - 接続先の URL を印字するコマンド（`git remote -v` など、`doc/crates-io-publish.md` 7 節の一覧）。
-- `git push --tags`・`git push --follow-tags`・`--force` の付く push（手元にだけ在るタグを押し出さない）。
-- `git tag -d`・`git push --delete`。押したタグは、どの段でも動かさず、消さない。
+- `git push --tags`・`git push --follow-tags`・`--force` の付く push（手元にだけ在るタグを押し出さない）。ただし「タグの付け直し」の 1 本は除く。
+- `git tag -d`・`git push --delete`。押したタグは消さない。動かすのは「タグの付け直し」の条件を満たしたときだけ。
 - `tools/test-all.ps1 -Format`（ソースを書き換える）。
 - `git add -A`・`git add .`。足す物は名前を挙げる。
 - main へ直接 push する操作（0 回）。
@@ -28,21 +40,44 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 - **順調な経路では止まらない**: PR のマージとタグの push は、その前の判定が全部当たったときだけ、開発者に聞かずに行う。
 - **止まる所**: 判定が当たらないとき・走りが赤のとき・この文書に無い状態を見たとき・許可の判定にコマンドを断られたとき。止まったら、見えた事実と、どの項目で止まったかを報告する。
 - **取り返しのつく所で止まる**: 段 1〜3 の欠けは、PR を出す前に止まる。main にも GitHub にも何も出ていない。作業木は消さずに残し、欠けた確かめの名前を報告する。
-- **タグの後は直さない**: 赤の原因がタグのコミットに在れば、同じ版で出し直さず、起票して次の版で出す。タグは動かさない。
+- **タグの後は直さない**: 赤の原因がタグのコミットに在れば、同じ版で出し直さず、起票して次の版で出す。タグは動かさない。例外は「タグの付け直し」だけ（どこにも公開していない・開発者がその回に明示して承認した）。
 - **マージの後にタグを打てなくなったとき**（段 5 の判定が外れた・許可の判定に断られた）: main の版は上がったまま待つ。後で再開すれば、同じ squash のコミットにタグを打てる。
 - **`git` の失敗**: 標準エラーを捨てているので、終了コードが 0 でないときは、事実の読み直し（`ls-remote`・`gh pr view`）で何が起きたかを確かめてから報告する。接続先を出して調べることはしない。
 - **許可の判定に断られたとき**: 言い換えず、別の道具へ回さない。そのコマンドと断られた理由を示して止まる。
 - **机の待ちは止まりに数えない**: 「机の段」の排他テストの机の番待ちと、停止要請の後の再開待ちは止まりではない。開発者に承認を求めず、1 行だけ伝えて、待ちが終わればそのまま続ける。机が使えないときも止まらず、机の段を飛ばして続ける。
+- **止まるときの報告の形**: 残りの項目を行わず、次の形で報告して終える。版が決まる前（1.5 より前）に止まるときは、1 行目を「リリースを開始できない（止まった項目: <番号>・理由）」とし、何も公開していないことを書く。
+
+  ```
+  リリース未完了: v{版}（止まった項目: <番号>・理由）
+  - 公開済みの公開先: <GitHub Release・crates.io のクレート・winget のうち出ているもの。無ければ「なし」>
+  - 残っている公開先: <出ていない公開先と、その走りの結論。無ければ「なし」>
+  - 原因の区分: <6.3 の表の行／当たらなかった判定の名前>
+  - 公開前に止めた場合: どの公開先にも公開していない
+  - 次に誰が何をするか: <開発者 / エージェント と、その内容>
+  - 再開の方法: 同じワークツリーで /release をもう 1 度打つ（「再開のときの事実の読み方」で続きを決める）
+  ```
+
+  公開済みかは、`gh release view v{版} --json isDraft`（無い・下書きは未公開）と `pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version {版}`（出た名前が未公開のクレート）で読む。
 
 ## 段 1: 前提を確かめる
 
-### 1.1 作業木と枝を確かめ、main の最新を取り込む
+### 1.1 操作の権限と作業木を確かめ、main の最新を取り込む
 
-- `git status --porcelain` が 0 行であること。
-- `git fetch --quiet {remote} main` の後、`git merge-base --is-ancestor {remote}/main HEAD` が 0 でなければ `git merge {remote}/main` で取り込む。衝突したら止まる。
-- `git diff --name-only {remote}/main...HEAD` を読む。0 件であること。
+最初の 2 つは何も変えない。どちらかが欠けたら、何も変えずに止まる。
+
+- **必要な操作**: 次の 4 つがどれも終了コード 0 で、2 つ目の出力が `ADMIN true`・`MAINTAIN true`・`WRITE true` のどれかであること。欠けたら、できない操作（上から順に: GitHub の認証、PR の統合の権限と squash の許可、リリースの走りの閲覧、リモートのタグの読み取り）を示して止まる。
+
+  ```bash
+  gh auth status
+  gh repo view --json viewerPermission,squashMergeAllowed -q '.viewerPermission + " " + (.squashMergeAllowed|tostring)'
+  gh run list --workflow release.yml --limit 1 --json databaseId
+  git ls-remote --quiet --tags {remote} 'refs/tags/v*'
+  ```
+
+- **作業木**: `git status --porcelain` が 0 行で、`git fetch --quiet {remote} main` の後、`git merge-tree --write-tree {remote}/main HEAD` の 1 行目と `git rev-parse '{remote}/main^{tree}'` が同じであること。`git merge-tree` は、枝を main に取り込んだ結果のツリーを、何も変えずに計算する。main のツリーと同じなら、枝は main に無い内容を持たない（squash で入ったコミットは、中身が同じなので通る）。違えば、`git status --short`・`git log --oneline --no-merges {remote}/main..HEAD`・`git diff --stat {remote}/main...HEAD` を示して止まる。
+- **取り込み**: `git merge-base --is-ancestor {remote}/main HEAD` が 0 でなければ `git merge --no-edit {remote}/main` で取り込む。衝突したら `git merge --abort` を回し、衝突したファイルを示して止まる。
 - `git rev-parse {remote}/main` を「確かめた main」として覚える（段 3 の確かめは、この main を取り込んだ作業木で回す。途中で `fetch` が挟まっても、確かめていない main を「確かめた」と取り違えない）。
-- 判定: `git merge-base --is-ancestor {remote}/main HEAD` が終了コード 0 で、枝の差分が 0 件で、「確かめた main」の SHA を覚えた。欠けたら、どれが欠けたかを報告して止まる。
+- 判定: 必要な操作が揃い、ツリーが main と同じで、`git merge-base --is-ancestor {remote}/main HEAD` が終了コード 0 で、「確かめた main」の SHA を覚えた。欠けたら、どれが欠けたかを報告して止まる。
 
 ### 1.2 根の 3 つのファイルを触る開いた PR が 0 本であることを確かめる
 
@@ -96,7 +131,7 @@ areka のリリース 1 回分の手順。段・コマンド・判定・表は�
 - `v{旧版}` のタグが手元に無いとき（`git rev-parse -q --verify refs/tags/v{旧版}` が 0 でない）は、先に `git fetch --quiet {remote} refs/tags/v{旧版}:refs/tags/v{旧版}` で、その 1 本だけを取る。
 - 一覧から見どころを選び、`doc/release-notes/README.md` の決まり（形・口調・必ず載せるもの・書かないもの）に従って、`doc/release-notes/v{版}.md` を新しく書く。決まりは同書が正本で、ここには写さない。ほかの版の見どころのファイルは触らない。
 - 書いたら、同書の「必ず載せるもの」を読み直し、一覧と 1.4 の材料に当たる変更が全部載っているかを自分で確かめる（口調と「必ず載せるもの」は機械では見ない。開発者は最後の報告で全文を読む）。
-- その場で `pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version {版}` を回し、欠けが出たら直してから段 3 へ進む（3.1 の全体テストも同じファイルの形を見るので、欠けたまま進むと、長い全体テストが終わりの近くで赤になる）。
+- その場で `pwsh -NoProfile -File tools/release-notes.ps1 -Check -Version {版}` を回し、欠けが出たら直してから段 3 へ進む（3.1 の全体テストも同じファイルの形を見るので、欠けたまま進むと、長い全体テストが終わりの近くで赤になる）。直すのは 3 回まで。3 回直しても欠けが残れば、作業木をそのまま残して止まり、欠けの名前を報告する（「取り返しのつく所で止まる」）。
 - 判定: `doc/release-notes/v{版}.md` が在り、その場の `-Check` が終了コード 0。PR を出す前の判定は 3.5 が持つ。
 
 ## 机の段
@@ -278,7 +313,7 @@ else echo "desk: id=$ID repo=$R"; fi
 ### 4.3 squash マージする
 
 - マージの直前に main をもう一度読み（`git fetch --quiet {remote} main`）、動いていたら 4.2 に戻る。
-- `gh pr merge {番号} --squash`（`--delete-branch` は付けない。枝は、公開の後に見どころの直しを頼まれたときに使う）。
+- PR の CI は待たない（段 3 で全部を確かめてある）。`gh pr merge {番号} --squash --subject "chore(release): v{版}"`（`--subject` で squash のコミットの件名を版上げの題だけにする。`--delete-branch` は付けない。枝は、公開の後に見どころの直しを頼まれたときに使う）。
 - 判定: `gh pr view {番号} --json state,mergeCommit` が `MERGED` を返す。squash のコミット `{sha}` を覚える。マージの成否はこの読み直しだけで決める。
 
 ## 段 5: タグを打つ
@@ -293,18 +328,25 @@ else echo "desk: id=$ID repo=$R"; fi
 
 ### 5.2 タグを打って push する
 
-- 手元に `v{版}` が無ければ `git tag v{版} {sha}`（注釈なし）。5.1 で `{sha}` を返した回は、打ち直さない。
+- 手元に `v{版}` が無ければ `git tag -a v{版} -m "Release v{版}" {sha}`（注釈付き。これまでに押した注釈なしのタグは、そのまま触らない）。5.1 で `{sha}` を返した回は、打ち直さない。
 - push の前に、`git rev-parse --verify --quiet refs/tags/v{版}^{commit}` が `{sha}` を返すことを確かめる。返さなければ push せずに止まる。
 - `git push --quiet {remote} refs/tags/v{版}`。タグは名前を指して 1 本だけ押す。
 - タグを打つのは squash のコミットで、その後に main へ入ったコミットには打たない。`{sha}` を名指しするので、main が先へ進んでいても変わらない。
-- 判定: `git ls-remote --quiet --tags {remote} refs/tags/v{版}` が `{sha}` を返す。
+- 判定: `git ls-remote --quiet --tags {remote} refs/tags/v{版} 'refs/tags/v{版}^{}'` の `^{}` の行（タグが指すコミット）が `{sha}` を返す（注釈なしのタグは `^{}` の行が無く、名前の行がコミットを指す）。
 
 ## 段 6: 見守る
 
 ### 6.1 2 本の走りを見つけて裏で待つ
 
 - `gh run list --workflow release.yml --event push --json databaseId,headSha,headBranch,status,conclusion` から、`headBranch` が `v{版}` で `headSha` が `{sha}` の走りを取る。`crates-io.yml` も同じ。数分待っても見つからなければ報告する。
-- 走りごとに `gh run watch {id} --exit-status --interval 60` を裏で回し、終わりの知らせを待つ。Release の走りは最長 150 分、公開の走りは Release の緑を最長 120 分待ってから出す。裏の待ちが上限で切れたら掛け直す。走りの状態は `gh run view {id} --json status,conclusion` でいつでも読み直せる。
+- 走りごとに、次の 1 行を Bash の `run_in_background` で回し、終わりの知らせを待つ（新しい走りの `{試行}` は 1）。
+
+  ```bash
+  until [ "$(gh run view {id} --json attempt -q .attempt)" -ge {試行} ]; do sleep 10; done; gh run watch {id} --exit-status --interval 60
+  ```
+
+  Release の走りは最長 150 分、公開の走りは Release の緑を最長 120 分待ってから出す。裏の待ちが上限で切れたら掛け直す。走りの状態は `gh run view {id} --json status,conclusion,attempt` でいつでも読み直せる。`--exit-status` の終了コードは判定に使わない（判定は 6.2）。
+- **再実行の後の追い方**: `gh run rerun {id}` は同じ走りの番号のまま試行を 1 つ足す。`{試行}` を再実行の前の `attempt` に 1 を足した値にして、上の 1 行を掛け直す。1 行の頭の `until` が、新しい試行が立つまで待つので、終わった前の試行を読み違えない。`gh run watch` は走りのいちばん新しい試行を追う。
 - 判定: 2 本の走りの番号が取れ、どちらも終わった（`gh run view {id} --json status` が `completed`）。
 
 ### 6.2 緑を判定する
@@ -329,7 +371,7 @@ else echo "desk: id=$ID repo=$R"; fi
 | 見えたこと | 当てはめ | してよいこと |
 |---|---|---|
 | Release の走りが赤 | その版の Release が残っていない（下書きも無い）、かつ原因が通信の失敗・時間切れ・取り消し | 開発者が決めたら、同じ走りを「Re-run」する（`gh run rerun {id}` か画面） |
-| Release の走りが赤 | 上の 2 つのどちらかを満たさない。または、タグのコミットの直しが要る | 同じ版で出し直さない。タグを動かさない。原因を直す spec を `/kiro-discovery` で起票し、直したら次の版で出す |
+| Release の走りが赤 | 上の 2 つのどちらかを満たさない。または、タグのコミットの直しが要る | 同じ版で出し直さない。タグを動かさない。原因を直す spec を `/kiro-discovery` で起票し、直したら次の版で出す。どの公開先にも出ていなければ、開発者は「タグの付け直し」も選べる |
 | 公開の走りが赤 | `doc/crates-io-publish.md` 5 節の切り分けに当てはめる | 同じ版のまま「Re-run」か「Run workflow」で残りを出してよい。次の版で出し直すのは、タグのコミットのコードや公開前の確かめのスクリプトの誤りのときだけで、そのときは起票する |
 | 公開の走りだけが赤 | Release の走りは `release.yml` が固定した版の Rust、公開の走りは最新の安定版 | 版の差を先に疑う |
 | Release の公開より後の段（winget など。公開の走りを除く）が赤 | — | 同じ版で出し直さない。原因を直す spec を起票する |
@@ -337,16 +379,33 @@ else echo "desk: id=$ID repo=$R"; fi
 - 起票は、開発者の判断を得てから、主文脈がこの作業の枝で `/kiro-discovery` を回す。起票のコミットは、この枝から起票だけの PR として出す（マージは開発者の指示で）。`/kiro-discovery` が brief と roadmap に書く分は、起票の成果物で、この手順の「roadmap を書き換えない」には当たらない。起票の PR が main に入るまで、見どころの直しは待つ（枝に起票のコミットが残っていると、直しの PR に混ざる）。
 - 判定: 赤が 0 件、または赤のすべてに開発者の判断があり、やり直しの結果が緑か、起票した spec の名前を覚えた。赤が無い回は何もしない。
 
+### タグの付け直し
+
+開発者がその回に明示して承認したときだけ行う（「タグを付け直してよい」）。承認は 1 回の付け直しにだけ効く。
+
+1. どこにも公開していないことを確かめる。`gh release view v{版} --json isDraft` が「無い」（下書きも無い）、`pwsh -NoProfile -File tools/crates-io.ps1 -Pending -Version {版}` が公開する全部のクレートの名前を出す、winget の PR が無い。1 つでも外れたら、付け直さずに止まる。
+2. 直しは、ふつうの PR で main に入っていること。`git fetch --quiet {remote} main` の後、`git rev-parse {remote}/main` を新しい `{sha}` とし、5.1 の 1・2 つ目（main からの到達・`Cargo.toml` の 2 行の版）と、そのコミットでの `git show {sha}:doc/release-notes/v{版}.md` が在ることを確かめる。
+3. 付け直して、その 1 本だけを押す。この 2 つは許可の一覧に入れない。開発者が、そのたびに許可の確認に答える。
+
+   ```bash
+   git tag -f -a v{版} -m "Release v{版}" {sha}
+   git push --quiet --force {remote} refs/tags/v{版}
+   ```
+
+4. 5.2 の判定のコマンドで、タグが新しい `{sha}` を指すことを確かめ、新しい走りを `{試行}` 1 として 6.1 から追う。
+
 ## 段 7: 報告する
 
 日本語で、次を 1 つの報告にまとめて終える。記録のコミットは作らず、roadmap も書き換えない（記録は GitHub の Release の頁。6.3 の起票で `/kiro-discovery` が書く分は除く）。
 
+- 1 行目: 6.2 が全部緑なら `リリース完了: v{版}`。起票して次の版へ回した赤が残るなら `リリース未完了: v{版}（起票: <spec の名前>）`。
 - 版・タグのコミット `{sha}`・GitHub Release の URL。
 - Release の走りと公開の走りの結果（在れば winget の PR の URL・赤で起票した spec の名前）。
 - 版上げのやり方（いつものやり方か代わりのやり方）。
 - 途中で main を取り込んだ回は、取り込んだ題名と、見どころに足したかどうか。
 - 使った申し送りと、「消してよい申し送り」（1.4）。
 - 途中で気付いた事（範囲の外の問題は、開発者の判断を得て `/kiro-discovery` で起票する）。
+- 手順との食い違い: <なし / この文書どおりに動かなかった箇所>。リリースの間は、この文書・`SKILL.md`・道具を直さない。直すのは別の PR。
 - 机の段を飛ばした・途中でやめたときは、その訳（`desk: skip …` の訳や、出た文）。
 - **見どころの全文**: `doc/release-notes/v{版}.md` の中身をそのまま載せる。開発者はここで読む。「直しが要れば言ってください。公開の頁と main のファイルを直します」と添える。
 
@@ -374,7 +433,7 @@ else echo "desk: id=$ID repo=$R"; fi
 | この枝の版上げの PR が無く、上の 2 行に当たらず、`git status --porcelain` が 0 行 | 段 1 から（新しい回） |
 | この枝の版上げの PR が開いている | `git status --porcelain` が 0 行でなければ止まる。`{旧版}` は `git show {remote}/main:Cargo.toml` の版。「確かめた main」は覚えていない物として、4.2 から（4.2 の 2〜6 を必ず 1 回行う。3.1 を回していない main との組み合わせをマージしない） |
 | この枝の版上げの PR が `MERGED` で、`git ls-remote --quiet --tags {remote} refs/tags/v{版}` が 0 行 | 段 5 から（段 2〜4 をやり直さない）。`{sha}` はその PR の `mergeCommit`。手元にだけタグが在るときの扱いは 5.1 と 5.2 が持つ |
-| この枝の版上げの PR が `MERGED` で、リモートのタグが在る。引数の版の指示は無いか、`{版}` と同じ | 段 6 から。`{sha}` はその PR の `mergeCommit` で、リモートのタグがそれを指すことを確かめる（違えば止まる）。6.1 で走りを読み直し、6.2 を当てる。全部緑なら段 7 の報告だけを行って終える。**新しい版は始めない** |
+| この枝の版上げの PR が `MERGED` で、リモートのタグが在る。引数の版の指示は無いか、`{版}` と同じ | 段 6 から。`{sha}` はその PR の `mergeCommit` で、リモートのタグがそれを指すことを 5.2 の判定のコマンドで確かめる（違えば止まる。「タグの付け直し」をした版は、付け直した先のコミットを `{sha}` とする）。6.1 で走りを読み直し、6.2 を当てる。全部緑なら段 7 の報告だけを行って終える。**新しい版は始めない** |
 | この枝の版上げの PR が `MERGED` で、リモートのタグが在る。引数で `{版}` より新しい版が指示されている | 前の回の 6.2 を先に当て、全部緑のときだけ、指示の版の新しい回として段 1 から。緑でなければ、前の回の段 6 から |
 
 - 上のどれにも当たらなければ、止まって、見えた事実（PR・作業木の変更・枝の差分）を報告する。
@@ -391,12 +450,12 @@ else echo "desk: id=$ID repo=$R"; fi
 - `areka-impl-watch.exe` のコマンドの名前・引数・出力の 1 行・終了コードの意味（`doc/impl-watch.md`）。変われば「机の段」の呼ぶ形と終わり方の表を合わせ直す。
 - 見どころのファイルの置き場所・名前（今は `doc/release-notes/v{版}.md`）。
 - `winget.yml` が main に入る（6.2 の見守りの相手が増える）。
-- この文書の節の名前（「再開のときの事実の読み方」「止まり方の決まり」「机の段」「公開の後に見どころの直しを頼まれたら」「開発者の設定」）。`SKILL.md` が名前で指している。
+- この文書の節の名前（「再開のときの事実の読み方」「止まり方の決まり」「机の段」「タグの付け直し」「公開の後に見どころの直しを頼まれたら」「開発者の設定」）。`SKILL.md` が名前で指している。
 
 ## 開発者の設定（初めて打つ前に）
 
 この手順は、開発者に聞かずに `gh pr merge` とタグの push を行う。自動モードの見張りがこれを止めるときは、開発者の設定（`C:\Users\maz-o\.claude\settings.json` の `autoMode.allow`）に、次の文のルールを足してもらう。手順の側から設定は触らない。
 
-> Release: when the user's message is the `/release` command (optionally with a version), the agent may push its harness worktree branch, create the version-bump PR with `gh pr create --base main` titled `chore(release): v{version}`, squash-merge that PR with `gh pr merge --squash`, create the tag `v{version}` on that squash commit and push only that tag (`git push <remote> refs/tags/v{version}`). When the user then asks for a fix of the highlights of that version, the agent may also run `gh release edit v{version} --notes-file` and create and squash-merge a PR that changes only `doc/release-notes/v{version}.md`. This does not cover `--admin`, bypassing required checks, merging any other PR, pushing directly to main, `--force`, `--tags`, moving or deleting a pushed tag, `gh run rerun`, or `gh release delete`.
+> Release: when the user's message is the `/release` command (optionally with a version), the agent may push its harness worktree branch, create the version-bump PR with `gh pr create --base main` titled `chore(release): v{version}`, squash-merge that PR with `gh pr merge --squash`, create the tag `v{version}` on that squash commit and push only that tag (`git push <remote> refs/tags/v{version}`). When the user then asks for a fix of the highlights of that version, the agent may also run `gh release edit v{version} --notes-file` and create and squash-merge a PR that changes only `doc/release-notes/v{version}.md`. This does not cover `--admin`, bypassing required checks, merging any other PR, pushing directly to main, `--force`, `--tags`, moving or deleting a pushed tag, `gh run rerun`, or `gh release delete`. The guarded re-tag of 「タグの付け直し」 (`git tag -f` and `git push --force` of that one tag, only when nothing was published) is never allowed automatically: the developer approves it in chat and then answers the permission prompt each time.
 
-外へ出るコマンド（`git push`・`gh pr create`・`gh pr merge`・`gh release edit`・`gh run rerun`）は、1 回のツール呼び出しに単独の 1 行で打つ。`cd … &&` や `; echo` とつなぐと、許可の規則（`Bash(gh pr merge:*)` など）に当たらず、断られる。
+外へ出るコマンド（`git push`・`gh pr create`・`gh pr merge`・`gh release edit`・`gh run rerun`）は、1 回のツール呼び出しに単独の 1 行で打つ。`cd … &&` や `; echo` とつなぐと、許可の規則（`Bash(gh pr merge:*)` など）に当たらず、断られる。手元だけで終わるコマンド（読むだけの `git`・`gh … view`・6.1 の待ちの 1 行など）は、この決まりに入らない。
