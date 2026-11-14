@@ -597,8 +597,13 @@ fn double_click_of(button: PointerButton) -> DoubleClick;
 | `window/zorder_pair_establish_tests.rs` | 524 | 4・29 番の 2 本・約 80 行 | 下ごしらえの写し（Z3） |
 | `window_proc/drop_files_tests.rs` | 244 | 49 番・約 60 行 | — |
 | `window_proc/mouse_move.rs` | 632 | `track_mouse_leave`・`leave_pointer` | 旗の扱いと 2 つの枝の写し・約 90 行 |
+| `window/command.rs` | 941 | 1 番の `UI_THREAD`・`record_ui_thread`・`admits_enqueue` と `enqueue` の説明・7 番の「違う」の枝の `has_repeated_window`（見積もり 970〜1,000 行） | 12 番の `flush` の包み・41 番に伴う説明 |
+| `window/zorder_chain_apply.rs` | 930 | 3 番の新しい規則の説明 | 53 番の `ExecOutcome` の組み立て・`:265-299` の長い説明の書き直し |
+| `window/zorder_pair.rs` | 929 | 30 番の理由の 1 行 | 28・31・34 番の説明の直し（行は増やさない） |
+| `window/zorder_pair_tests.rs` | 934 | 30 番のテストの直し（行は増やさない） | — |
 
-新しい 4 本はどれも数百行に収まる。番人の例外表へ新しいファイルを足さない。
+- `window/command.rs` は上限に届きうる。Q4 の頭で行数を測り、直した後に 1,000 行を越えるなら、1 番の `UI_THREAD`・`record_ui_thread`・`admits_enqueue`（とその説明）を兄弟の `window/command_ui_thread.rs` へ出し、`command.rs` からは `use` で呼ぶ（`structure.md` の兄弟の置き方）。越えないなら `command.rs` に置く。
+- 新しい 4 本（と、要れば `command_ui_thread.rs`）はどれも数百行に収まる。番人の例外表へ新しいファイルを足さない。
 
 ### 回し方
 
