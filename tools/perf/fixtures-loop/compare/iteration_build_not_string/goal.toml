@@ -1,0 +1,13 @@
+[goal]
+name = "selftest-iteration-build-not-string"
+judge_version = "0.5.0"
+
+[levels]
+iteration_build = ["リリース"]
+
+[primary_metric]
+name = "steady_idle_cpu_mean_pct"
+noise_floor_pct = 0.30
+
+[secondary_metrics]
+must_not_regress = ["frame_interval_p95_ms", "catchup_count", "alloc_count"]

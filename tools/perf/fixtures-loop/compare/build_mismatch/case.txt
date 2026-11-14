@@ -1,0 +1,21 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 採否の走行ビルドと違うビルドの走行が混ざると判定不能（計測失敗）
+goal = ../goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_dev
+b2 = ../runs/idle_620_p95_150
+exit = 4
+verdict = MEASURE_FAILED
+
+before_idle_cpu_pct = 9.35
+noise_pct = 0.30
+
+stderr_substr = measure failed
+stderr_substr = run-meta.txt build = dev
+judge_stderr_substr = run-meta.txt build = dev
+
+note = b1 は adopted の B1 と同じ走行で、run-meta.txt の build だけを dev にしたもの。
+note = perf-compare.py は [levels].iteration_build（release）を --build として judge-perf.py へ渡し、
+note = judge-perf.py は cpu.csv の隣の run-meta.txt を自分で読むので、食い違いで
+note = 止まる（終了コード 3）。--build を渡し忘れると食い違いが見えず ADOPTED になって赤になる。

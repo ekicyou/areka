@@ -1,0 +1,10 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 時刻の読めない catch-up がある走行は合否判定では判定不能
+mode = verdict
+build = release
+exit = 2
+
+note = C3 と同じ入力を合否判定で読む。定常状態に catch-up は 0 件だが、時刻の無い 1 本が
+note = 定常の中か外か分からないので、判定式⑵ は「0 件」と言い切らず判定不能（2）にする。
+
+contains = 時刻不明 1 件

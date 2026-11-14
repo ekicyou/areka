@@ -11,7 +11,7 @@ verdict = MEASURE_FAILED
 before_idle_cpu_pct = 9.35
 noise_pct = 0.30
 
-stderr_substr = 計測失敗
+stderr_substr = measure failed
 stderr_substr = b2
 
 note = b2 は表示成立点の行 が 1 本も無い走行で、judge-perf.py が必要ログ種の欠落
@@ -21,3 +21,6 @@ note = 判定不能を含む側（B）の平均と差は空にし、A 側の平�
 note = 測れた事実は残し、測れていない事実を数字で埋めない。
 note = judge-perf.py の終了コード 1（不合格）はここへ来ない。合否が付いたということは
 note = 数値は採れているという意味なので、比較の入力としては使える（集計モードは 1 を返さない）。
+
+stderr_substr = required log kinds are missing
+judge_stderr_substr = required log kinds are missing

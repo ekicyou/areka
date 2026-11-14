@@ -1,4 +1,4 @@
-perf-rank 0.1.0 run=sample_ok_counts stages=function top=3
+perf-rank 0.2.0 run=sample_ok_counts stages=function top=3
 
 [3] 関数  unit=samples  出所=dump.txt（CPU サンプリング）
   samples_total                         16

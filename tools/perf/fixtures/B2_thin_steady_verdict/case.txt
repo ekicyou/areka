@@ -1,0 +1,10 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 定常状態が薄い走行は合否判定では判定不能
+mode = verdict
+build = release
+exit = 2
+
+note = B1 と同じ入力を合否判定で読む。定常の時間幅が下限の 60 秒に届かないので、
+note = 判定不能（2）になり、理由に薄い定常の文が出る。
+
+contains = 秒しかありません（下限 VERDICT_MIN_STEADY_SEC=60 秒）

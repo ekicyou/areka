@@ -1,0 +1,3 @@
+title=台帳を書けない場所（普通のファイルの下）への init は exit 4 で止まる（W1）
+stderr_substr=台帳を書けません
+note=blocker は普通のファイルなので、その下にフォルダを作れない。

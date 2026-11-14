@@ -1,0 +1,6 @@
+title = 0 バイトの dump.txt でも段①だけなら止めない（dump は段②③だけが読む）
+exit = 0
+argv = --stage process --top 3
+
+note = empty_dump と同じ入力を --stage process で回す。dump を段を問わず読む実装は
+note = 使わない dump の壊れで exit 4 になって赤になる。

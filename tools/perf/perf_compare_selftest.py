@@ -14,7 +14,7 @@
 1 ケース＝1 ディレクトリ（`fixtures-loop/compare/<名前>/`）:
 
     case.txt              期待値台帳（下記）。この 1 ファイルを人も機械も読む
-    expected_compare.txt  `compare.txt` と逐語一致する期待出力（必須）
+    expected_compare.txt  `compare.txt` と逐語一致する期待出力（exit が 3 でなければ必須）
 
 `case.txt` に書ける項目:
 
@@ -22,7 +22,7 @@
     goal                  目標定義ファイル（ケースからの相対・既定 `goal.toml`）
     a1 a2 b1 b2           走行ディレクトリ（ケースからの相対・必須）
     exit                  期待終了コード（必須）
-    verdict               期待採否（必須）
+    verdict               期待採否（exit が 3 でなければ必須・3 のケースには書かない）
     before_idle_cpu_pct   `compare.json` の同名の鍵と突き合わせる（任意）
     after_idle_cpu_pct    同上
     delta_pct             同上
@@ -30,6 +30,7 @@
     secondary             同上（台帳の `secondary:` に載る 1 行）
     argv                  追加の引数（空白区切り・任意）
     stderr_substr         標準エラーに必ず現れる文字列（何行でも書ける）
+    judge_stderr_substr   compare.json の各走行の judge_stderr に必ず現れる文字列（何行でも）
     note                  覚え書き（判定には使わない）
 
 数の 4 項目は **書かなければ「null（測れていない）であること」を期待する**——書き忘れと
@@ -44,13 +45,13 @@
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
-import tempfile
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+import perf_selftest_common as common
 
 # =============================================================================
 # 定数（自己較正だけの較正値。採否の判断には一切関与しない）
@@ -64,8 +65,8 @@ CASE_SINGLE_KEYS = (
     "title", "goal", "exit", "verdict", "a1", "a2", "b1", "b2", "argv",
     "before_idle_cpu_pct", "after_idle_cpu_pct", "delta_pct", "noise_pct", "secondary",
 )
-#: 無ければ較正にならない項目。
-CASE_REQUIRED_KEYS = ("exit", "verdict", "a1", "a2", "b1", "b2")
+#: 無ければ較正にならない項目（`verdict` は exit が入力不正でないときだけ・`_read_case`）。
+CASE_REQUIRED_KEYS = ("exit", "a1", "a2", "b1", "b2")
 #: `compare.json` の同名の鍵と突き合わせる項目。
 CASE_JSON_KEYS = (
     "verdict", "before_idle_cpu_pct", "after_idle_cpu_pct",
@@ -97,6 +98,11 @@ class SelftestEnv:
     pct_decimals: int
     ok_exit: int
     fail_exit: int
+    #: 指標の値を数にする本体の `to_number`（有限でない値は None であることを較正する）。
+    to_number: Callable[[str | None], float | None]
+    #: 入力不正の終了コード。この終了コードで終わるケースは結果の書き出しに届かない
+    #: ので、期待出力（expected_compare.txt）も compare.json も要らない。
+    bad_input_exit: int
 
 
 @dataclass
@@ -108,64 +114,33 @@ class SelftestCase:
     values: dict[str, str]
     argv: list[str]
     stderr_substrings: list[str]
+    judge_stderr_substrings: list[str]
 
 
 def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     """ケース 1 件の台帳（case.txt）を読む。知らない項目は拒む（黙って無視しない）。"""
     case_path = directory / SELFTEST_CASE_FILENAME
-    values: dict[str, str] = {}
-    substrings: list[str] = []
-    for lineno, raw in enumerate(case_path.read_text(encoding="utf-8").splitlines(), 1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        key, separator, value = line.partition("=")
-        if not separator:
-            raise env.bad_input(f"{case_path}:{lineno}: `名前 = 値` の形で書きます（{line!r}）")
-        key, value = key.strip(), value.strip()
-        if key == "stderr_substr":
-            substrings.append(value)
-        elif key in CASE_SINGLE_KEYS:
-            values[key] = value
-        elif key != "note":
-            raise env.bad_input(
-                f"{case_path}:{lineno}: 知らない項目です: {key!r}",
-                [f"使えるのは {'・'.join(CASE_SINGLE_KEYS)}・stderr_substr・note です。"],
-            )
+    values, multi = common.read_case_fields(
+        case_path, frozenset(CASE_SINGLE_KEYS) | {"note"}, frozenset({"stderr_substr", "judge_stderr_substr"}),
+        env.bad_input,
+    )
+    values.pop("note", None)
     for required in CASE_REQUIRED_KEYS:
         if required not in values:
-            raise env.bad_input(f"{case_path}: {required} がありません")
+            raise env.bad_input(f"{case_path}: {required} is missing")
     try:
         expected_exit = int(values["exit"])
     except ValueError as exc:
-        raise env.bad_input(
-            f"{case_path}: exit が整数ではありません（{values['exit']!r}）"
-        ) from exc
+        raise env.bad_input(f"{case_path}: exit is not an integer ({values['exit']!a})") from exc
+    # 入力不正のケースは compare.json を書かないので verdict を突き合わせられない（書けば素通りの期待になる）。
+    if (expected_exit == env.bad_input_exit) == ("verdict" in values):
+        raise env.bad_input(f"{case_path}: verdict is required unless exit = {env.bad_input_exit},"
+                            " and must not be written when it is")
     return SelftestCase(
         directory.name, directory, values.get("title") or "(説明なし)", expected_exit,
-        values, values.get("argv", "").split(), substrings,
+        values, values.get("argv", "").split(), multi["stderr_substr"],
+        multi["judge_stderr_substr"],
     )
-
-
-def _invoke(env: SelftestEnv, argv: list[str]) -> tuple[int, str, str]:
-    """実運用と同じ入口 `main(argv)` を呼ぶ（自己較正だけの近道は作らない）。"""
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = env.invoke(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else env.fail_exit
-    return code, out.getvalue(), err.getvalue()
-
-
-def _first_difference(what: str, want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"{what} {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return f"{what}: 差はありません"
 
 
 def _matches(env: SelftestEnv, expected: str, actual) -> bool:
@@ -183,21 +158,52 @@ def _matches(env: SelftestEnv, expected: str, actual) -> bool:
 def _check_json(env: SelftestEnv, case: SelftestCase, work: Path) -> list[str]:
     json_path = work / env.json_filename
     if not json_path.is_file():
-        return [f"{env.json_filename} が作られていません"]
+        return [f"{env.json_filename} was not written"]
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     reasons: list[str] = []
     for key in CASE_JSON_KEYS:
         if key in case.values and not _matches(env, case.values[key], payload.get(key)):
             reasons.append(
-                f"{env.json_filename} の {key}: "
-                f"期待 {case.values[key]!r} 実際 {payload.get(key)!r}"
+                f"{env.json_filename} {key}: "
+                f"want {ascii(case.values[key])} got {ascii(payload.get(key))}"
             )
+    judge_stderr = " ".join(
+        str(payload.get(name, {}).get("judge_stderr", "")) for name in ("a1", "a2", "b1", "b2")
+    )
+    for substring in case.judge_stderr_substrings:
+        if substring not in judge_stderr:
+            reasons.append(f"{env.json_filename} judge_stderr does not contain {ascii(substring)}")
     for key in CASE_NULLABLE_NUMBER_KEYS:
         if key not in case.values and payload.get(key) is not None:
             reasons.append(
-                f"{env.json_filename} の {key}: 期待 null（測れていない側）"
-                f" 実際 {payload.get(key)!r}"
+                f"{env.json_filename} {key}: want null (not measured)"
+                f" got {ascii(payload.get(key))}"
             )
+    return reasons
+
+
+def _argv(case: SelftestCase, work: Path) -> list[str]:
+    def resolve(name: str) -> str:
+        return str((case.directory / case.values[name]).resolve())
+
+    goal = case.values.get("goal", DEFAULT_GOAL_FILENAME)
+    return [
+        "--a", resolve("a1"), resolve("a2"),
+        "--b", resolve("b1"), resolve("b2"),
+        "--goal-file", str((case.directory / goal).resolve()),
+        "--out-dir", str(work),
+    ] + case.argv
+
+
+def _localized_oserror_reasons(env: SelftestEnv, case: SelftestCase, work: Path) -> list[str]:
+    """OS の失敗の文は機械の言語で日本語になる。3 つの失敗の経路で stderr が ASCII のままか（D9・R5Z-1）。"""
+    work.mkdir(parents=True)
+    argv = _argv(case, work)
+    reasons: list[str] = []
+    for target, name, reached in ((Path, "read_text", "cannot read goal file"),
+                                  (subprocess, "run", "cannot start the judge script"),
+                                  (Path, "write_text", "cannot write results")):
+        reasons += common.localized_oserror_reasons(env.invoke, argv, env.fail_exit, target, name, reached)
     return reasons
 
 
@@ -207,89 +213,64 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
     work.mkdir(parents=True)
     reasons: list[str] = []
     reproduced: set[int] = set()
-
-    def resolve(name: str) -> str:
-        return str((case.directory / case.values[name]).resolve())
-
-    goal = case.values.get("goal", DEFAULT_GOAL_FILENAME)
-    argv = [
-        "--a", resolve("a1"), resolve("a2"),
-        "--b", resolve("b1"), resolve("b2"),
-        "--goal-file", str((case.directory / goal).resolve()),
-        "--out-dir", str(work),
-    ] + case.argv
-
-    code, _out, err = _invoke(env, argv)
+    code, _out, err = common.invoke(env.invoke, _argv(case, work), env.fail_exit)
     if code == case.expected_exit:
         reproduced.add(code)
     else:
-        reasons.append(f"終了コード: 期待 {case.expected_exit} 実際 {code}")
+        reasons.append(f"exit code: want {case.expected_exit} got {code}")
 
+    if case.expected_exit == env.bad_input_exit:
+        return reasons + _stderr_reasons(case, err), reproduced
     reasons += _check_json(env, case, work)
 
     expected_path = case.directory / SELFTEST_EXPECTED_FILENAME
     produced = work / env.text_filename
     if not expected_path.is_file():
         reasons.append(
-            f"{SELFTEST_EXPECTED_FILENAME} がありません"
-            "（期待出力の無いケースは較正になりません）"
+            f"{SELFTEST_EXPECTED_FILENAME} is missing"
+            " (a case without an expected output does not calibrate)"
         )
     elif not produced.is_file():
-        reasons.append(f"{env.text_filename} が作られていません")
+        reasons.append(f"{env.text_filename} was not written")
     else:
-        want = expected_path.read_text(encoding="utf-8").replace("\r\n", "\n")
-        got = produced.read_text(encoding="utf-8").replace("\r\n", "\n")
+        want = common.read_normalized(expected_path)
+        got = common.read_normalized(produced)
         if want != got:
-            reasons.append(_first_difference(env.text_filename, want, got))
+            reasons.append(common.first_difference(env.text_filename, want, got))
 
-    for substring in case.stderr_substrings:
-        if substring not in err:
-            reasons.append(f"標準エラーに {substring!r} が出ていません")
-    return reasons, reproduced
+    return reasons + _stderr_reasons(case, err), reproduced
+
+
+def _stderr_reasons(case: SelftestCase, err: str) -> list[str]:
+    return [f"stderr does not contain {ascii(s)}: {ascii(err)}"
+            for s in case.stderr_substrings if s not in err]
 
 
 def run_selftest(env: SelftestEnv) -> int:
     """fixtures-loop/compare/ の既知ケースを逐語再現する（要件 6.7・3.6）。"""
-    if not env.fixtures_root.is_dir():
-        raise env.bad_input(f"自己較正のケース置き場がありません: {env.fixtures_root}")
+    directories, materials = common.list_case_dirs(
+        env.fixtures_root, SELFTEST_CASE_FILENAME, env.bad_input, materials_allowed=True
+    )
+    cases = [_read_case(env, child) for child in directories]
 
-    cases: list[SelftestCase] = []
-    materials: list[str] = []
-    for child in sorted(env.fixtures_root.iterdir()):
-        if not child.is_dir() or child.name.startswith((".", "_")):
-            continue
-        if (child / SELFTEST_CASE_FILENAME).is_file():
-            cases.append(_read_case(env, child))
-        else:
-            materials.append(child.name)
-    if not cases:
-        raise env.bad_input(
-            f"自己較正のケースが 1 件もありません: {env.fixtures_root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
-        )
-
-    ok_count = ng_count = 0
+    results: list[tuple[str, str, list[str]]] = []
     reproduced_all: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="perf-compare-selftest-") as temporary:
+    with common.work_dir("perf-compare-selftest-") as temporary:
         for case in cases:
-            reasons, reproduced = _run_case(env, case, Path(temporary))
+            reasons, reproduced = _run_case(env, case, temporary)
             reproduced_all |= reproduced
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
+            results.append((case.name, case.title, reasons))
+        adopted = next(case for case in cases if case.name == "adopted")
+        results.append(("(localized-oserror)", "日本語の OSError の文でも stderr は ASCII",
+                        _localized_oserror_reasons(env, adopted, temporary / "(localized-oserror)")))
 
-    for name in materials:
-        print(f"[selftest] {name} --  {SELFTEST_CASE_FILENAME} が無いので素材置き場として飛ばす")
-
-    for code in env.required_red_exits:
-        if code not in reproduced_all:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
+    results.append(("(to_number)", "有限でない値は None",
+                    [] if all(env.to_number(v) is None for v in ("nan", "inf", "-inf"))
+                    and env.to_number("1.5") == 1.5 else ["to_number does not turn nan/inf into None"]))
+    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
+    results.append(("(check_tree)", "木全体の見張り",
+                    common.check_tree(ascii_stderr=True, readme_examples=True)))
+    ng_count = common.finish(
+        results, materials, SELFTEST_CASE_FILENAME, reproduced_all, env.required_red_exits
+    )
     return env.ok_exit if ng_count == 0 else env.fail_exit

@@ -23,7 +23,7 @@ RECORD iteration_cap -> FINAL
 RECORD goal_met_candidate -> FINAL
 TOOLFIX toolfix_ok -> @PREVIOUS@
 TOOLFIX toolfix_fail -> FINAL
-FINAL (終端・遷移なし)
+FINAL (terminal, no transitions)
 BASELINE
 TOOLFIX
 RANK

@@ -1,0 +1,7 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = run-meta.txt に名前 = 値 の行が無ければ判定不能
+mode = baseline
+exit = 2
+
+note = run-meta.txt はあるが見出しだけで、マシン条件が 1 つも書いていない。レポートに
+note = マシン条件を載せられない（要件 4.5）ので、集計モードでも判定不能（2）にする。

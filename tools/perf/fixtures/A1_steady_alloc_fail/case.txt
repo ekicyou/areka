@@ -1,0 +1,10 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 定常状態で表示用バッファの確保が 1 回でもあれば不合格
+mode = verdict
+build = release
+exit = 1
+
+note = H11 の芯の定常状態の perf 行 1 本だけ alloc_mask=1 にした。判定式⑶ は定常状態の
+note = alloc_* 合計 0 を求めるので不合格（1）になり、確保の起きた適用を名指しする。
+
+contains = 確保が起きた適用: 1 回

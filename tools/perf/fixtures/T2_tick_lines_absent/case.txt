@@ -4,8 +4,8 @@ mode = baseline
 exit = 0
 emit_metrics = yes
 
-note = C1 から任意種の行（[tick]・perf(thread)・perf(process)）と発話区間の印を
-note = すべて落とした走行。任意種が無くても集計は成立し、終了コードは 0 である
+note = C1 と同じ catch-up（起動過渡の 3 件）を置き、任意種の行（[tick]・perf(thread)・
+note = perf(process)）・発話区間の印・CPU の山をすべて置かない baseline の走行。任意種が無くても集計は成立し、終了コードは 0 である
 note = （任意種は必要ログ種ではない）。
 note = ただし [tick] が無ければ「フレーム駆動の負荷が起床を遅らせる」仮説は
 note = 数値で確かめようがない。ここで 不成立 と書くと「調べたが違った」と読まれる

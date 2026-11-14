@@ -1,0 +1,2 @@
+title=goal-check は台帳の goal と目標定義の [goal].name が違えば拒む（トークンを書かない）
+stderr_substr=[goal].name

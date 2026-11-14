@@ -1,0 +1,14 @@
+# ÿþ is not UTF-8
+[goal]
+name = "selftest-goal-not-utf8"
+judge_version = "0.5.0"
+
+[levels]
+iteration_build = "release"
+
+[primary_metric]
+name = "steady_idle_cpu_mean_pct"
+noise_floor_pct = 0.30
+
+[secondary_metrics]
+must_not_regress = ["frame_interval_p95_ms", "catchup_count", "alloc_count"]
