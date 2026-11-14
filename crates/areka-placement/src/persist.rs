@@ -41,7 +41,7 @@ use super::follow::{
     AnchorSource, Anchored, MonitorSnapshot, OffsetBase, RestoredWindow, keep_restored_groups,
     origin_position, project_anchor, work_area_for_window,
 };
-use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
 use super::spawn::GhostWindows;
 use super::sticky_group_ledger::StickyGroupLedger;
 
@@ -151,14 +151,6 @@ pub fn balloon_offset_entries(scope: u32, offset_persist: PointPx) -> Vec<(Persi
             offset_persist.y.to_string(),
         ),
     ]
-}
-
-/// 1 軸クランプ（`lo ≤ v ≤ hi`・逆転区間は `lo` 優先・非 panic）。
-///
-/// resolver `clamp_axis`／follow の縮退流儀と同じ min/max 書き（`i32::clamp` は
-/// 逆転区間で panic するため使わない＝「パニックしない」契約の防波堤）。
-fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
-    v.min(hi).max(lo)
 }
 
 /// 復元専用射影＝アンカー辺再導出（[`project_anchor`]・5.2）＋補軸 clamp（5.1）

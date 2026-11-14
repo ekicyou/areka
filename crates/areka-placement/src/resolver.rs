@@ -175,8 +175,8 @@ pub struct ScopePlacement {
 ///
 /// 消費者が 2 つあるからである: P5（[`resolve_placement`]・採寸寸での初期解決）と、
 /// 実表示寸確定時の一度きりの再導出（`follow::window_move::resize_window_to`）。
-/// 幾何を書き写すと片方だけ直したときに静かに割れる（`clamp_axis` を
-/// `balloon_limit.rs` へ逐語再掲した件で既に登記済みのドリフト面と同型）。
+/// 幾何を書き写すと片方だけ直したときに静かに割れる（`clamp_axis` も同じ理由で
+/// 1 つにし、`balloon_limit.rs`・`persist.rs` から呼ぶ）。
 ///
 /// - 水平: `char_x + (char_w − balloon_w) / 2`（中点は整数除算＝0 方向切り捨て・DD8。
 ///   丸め権威の新設ではない）
@@ -417,7 +417,7 @@ pub fn resolve_placement(
 /// 1 軸クランプ（`lo ≤ v ≤ hi`）。窓が work area より大きく `hi < lo` に逆転する
 /// 場合は `lo`（left／top）側を優先する（DD12「画面内に正しく出現」の安全弁）。
 /// `i32::clamp` は逆転区間で panic するため使わない（resolver は panic しない契約）。
-fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
+pub(crate) fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
     v.min(hi).max(lo)
 }
 
@@ -517,7 +517,7 @@ mod resolve_test_support;
 mod resolve_tests;
 #[cfg(test)]
 #[path = "resolver_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "resolver_union_tests.rs"]
 mod union_tests;

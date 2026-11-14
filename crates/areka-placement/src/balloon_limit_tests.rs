@@ -3,13 +3,14 @@
 //! 行列: はみ出し方向 4 辺の**単独**と**複合**（4 隅）× k=1 相当（dpi=96）および
 //! k≠1 相当（dpi=120/144/192）の寸法組 × 作業領域より大きいバルーン（逆転区間）×
 //! 非はみ出し（無補正）× 冪等性 × キャラ窓の既存クランプ（`resolver.rs` の
-//! `clamp_axis`）との意味論同値。
+//! `clamp_axis`）との意味論同値（本番の関数を直に使う）。
 //!
 //! limit の有効／無効（limit={0,1}）は**呼び出し側（関門）の責務**であり本層は
 //! 「常にクランプする式」しか持たない（design C5「limit=0 は呼び出し側で skip」）。
 //! ゆえに本檻は limit の分岐を持たず、式そのものの判断分岐だけを全網羅する。
 
 use super::*;
+use crate::resolver::test_support::px;
 
 // ---------------------------------------------------------------------------
 // 檻の道具（本体とは独立にここへ置く・resolver 檻 `resolver_test_support.rs` と同流儀）
@@ -17,20 +18,6 @@ use super::*;
 
 /// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当（3.4・U5・要件 2.10）。
 const DPIS: [i32; 4] = [96, 120, 144, 192];
-
-/// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制）。
-///
-/// 本体は物理 px しか見ない（要件 2.10）。同じ論理形状を各 DPI の物理値で与えたとき
-/// 期待値も同じ物理式から出ることを固定する（隠れた `/96` 変換や丸めがあれば
-/// 96 以外の水準で崩れる）。
-fn px(logical: i32, dpi: i32) -> i32 {
-    assert_eq!(
-        (logical * dpi) % 96,
-        0,
-        "テスト入力は厳密整除になる論理値（4 の倍数）で構築する"
-    );
-    logical * dpi / 96
-}
 
 /// 左上が原点**でない**作業領域（クランプ境界の left/top 依存を暴く）。
 fn work_area(dpi: i32) -> RectPx {
@@ -52,14 +39,6 @@ fn balloon_size(dpi: i32) -> SizePx {
 
 fn point(x: i32, y: i32) -> PointPx {
     PointPx { x, y }
-}
-
-/// `resolver.rs` の private な `clamp_axis` を**本体の import とは独立に**逐語再掲した参照実装。
-///
-/// キャラ窓の既存クランプと同一の意味論であることを檻側で突合するための基準
-/// （逆転区間 `hi < lo` では `lo`＝left/top 側が勝つ・`i32::clamp` は panic するため使わない）。
-fn clamp_axis_reference(v: i32, lo: i32, hi: i32) -> i32 {
-    v.min(hi).max(lo)
 }
 
 /// 矩形 (pos, size) が area へ 4 辺内包されているか（right/bottom は排他側）。
@@ -277,7 +256,7 @@ fn t_bl4_oversized_balloon_prefers_left_top() {
                 } else {
                     assert_eq!(
                         got.x,
-                        clamp_axis_reference(pos.x, wa.left, wa.right - sz.w),
+                        clamp_axis(pos.x, wa.left, wa.right - sz.w),
                         "dpi={dpi} {label}: 非超過軸は通常クランプ"
                     );
                 }
@@ -289,7 +268,7 @@ fn t_bl4_oversized_balloon_prefers_left_top() {
                 } else {
                     assert_eq!(
                         got.y,
-                        clamp_axis_reference(pos.y, wa.top, wa.bottom - sz.h),
+                        clamp_axis(pos.y, wa.top, wa.bottom - sz.h),
                         "dpi={dpi} {label}: 非超過軸は通常クランプ"
                     );
                 }
@@ -348,63 +327,6 @@ fn t_bl5_clamp_is_idempotent() {
                     "dpi={dpi} sz={sz:?} pos={pos:?}: 補正後は無補正へ収束"
                 );
             }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// T-BL6: キャラ窓の既存クランプ（resolver `clamp_axis`）との意味論同値
-// ---------------------------------------------------------------------------
-
-/// 2 軸独立に `clamp_axis` を適用したものと厳密に一致する（グリッド全走査・超過寸込み）。
-#[test]
-fn t_bl6_matches_clamp_axis_semantics() {
-    for dpi in DPIS {
-        let wa = work_area(dpi);
-        let oversized = SizePx {
-            w: (wa.right - wa.left) + px(200, dpi),
-            h: (wa.bottom - wa.top) + px(200, dpi),
-        };
-        for sz in [balloon_size(dpi), oversized] {
-            for pos in position_grid(wa, dpi) {
-                let expected = point(
-                    clamp_axis_reference(pos.x, wa.left, wa.right - sz.w),
-                    clamp_axis_reference(pos.y, wa.top, wa.bottom - sz.h),
-                );
-                assert_eq!(
-                    clamp_rect_to_work_area(pos, sz, wa),
-                    expected,
-                    "dpi={dpi} sz={sz:?} pos={pos:?}: clamp_axis と同一意味論"
-                );
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// T-BL7: 2 関数の整合と事後条件（グリッド全走査）
-// ---------------------------------------------------------------------------
-
-/// `limit_correction` は「クランプ結果が入力と異なるときだけ Some」であり、
-/// `Some` の中身は `clamp_rect_to_work_area` と一致する。
-/// 収まる寸法なら結果は必ず 4 辺内包（事後条件）。
-#[test]
-fn t_bl7_correction_agrees_with_clamp_and_contains() {
-    for dpi in DPIS {
-        let wa = work_area(dpi);
-        let sz = balloon_size(dpi);
-        for pos in position_grid(wa, dpi) {
-            let clamped = clamp_rect_to_work_area(pos, sz, wa);
-            let expected = if clamped == pos { None } else { Some(clamped) };
-            assert_eq!(
-                limit_correction(pos, sz, wa),
-                expected,
-                "dpi={dpi} pos={pos:?}: 補正要否と補正値の整合"
-            );
-            assert!(
-                contained(clamped, sz, wa),
-                "dpi={dpi} pos={pos:?}: 事後条件＝4 辺内包"
-            );
         }
     }
 }

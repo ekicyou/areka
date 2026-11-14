@@ -29,7 +29,7 @@
 use tracing::{info, warn};
 
 use super::follow::{MonitorSnapshot, work_area_for_window};
-use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx};
+use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
 
 // =============================================================================
 // 観測タグ（design「C10: 観測」・以降の全関門が本モジュールの定数を共有する）
@@ -79,17 +79,6 @@ pub(crate) const BALLOON_LIMIT_RELEASE_CONTEXT: &str = "release-gate";
 // =============================================================================
 // クランプ核
 // =============================================================================
-
-/// 1 軸クランプ（`lo ≤ v ≤ hi`）。
-///
-/// バルーンが作業領域より大きく `hi < lo` に逆転する場合は `lo`（left／top）側を
-/// 優先する（要件 2.4）。これは**キャラ窓の既存クランプと同一の意味論**であり、
-/// 式も `resolver.rs` の `clamp_axis`（P4）と逐語同一に保つ
-/// ——バルーンとキャラで画面内維持の意味が割れないことが本仕様の要点である。
-/// `i32::clamp` は逆転区間で panic するため使わない（本層は panic しない契約）。
-fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
-    v.min(hi).max(lo)
-}
 
 /// 矩形 `(pos, size)` を `area` 内へ 4 辺クランプした位置を返す（物理 px）。
 ///

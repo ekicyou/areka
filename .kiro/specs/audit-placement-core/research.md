@@ -841,3 +841,7 @@
   - wintf の `ChainPlan.absent` を `Vec<(u32, char, u32)>` に、`log_chain_absent(group_id, kind, scope)` にする（行の綴りは同じ）。本体の `ZOrderAbsentReports.reported`・`report_absent_elements` も同じ値の型にする。
   - 根の `Cargo.toml` の `[workspace.dependencies]` に `async-io` を足し、`areka-placement`・`areka`・`wintf` の `Cargo.toml` を `async-io = { workspace = true }` にする（版は同じ・`Cargo.lock` は変わらない）。
   - 配置の `diag.rs` の私有の `UNKNOWN` を wintf の `transition_diag::MISSING` に替える（私有なので外の名前は変わらない）。
+
+### 17.4 タスク 2.2 で寄せなかった写し
+
+- 2.2: `reseed_test_support.rs` の `fake_handle`・`position_of` は寄せない。対になる写しが追随の持ち物のテストだけの `follow_test_support.rs`（`follow.rs` が `#[cfg(test)]` の `test_support` として載せる）にあり、触ると追随の持ち場に入る（要件 8.1）。完了の申し送り（タスク 8.2）で `audit-placement-follow` へ渡す。`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs` の `fake_handle` の写しはタスク 7.2 で直す。

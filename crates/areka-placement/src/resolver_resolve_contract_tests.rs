@@ -16,34 +16,6 @@ use crate::shared_test_support::MEASURE_DPI;
 // `!anchor.is_free()` で導出可能ゆえ格納しない。
 // ------------------------------------------------------------------
 
-/// 4.2: cascade 解決済み `alignment` が 5 値アンカーとして `ScopePlacement.anchor`
-/// へ伝搬する（`Bottom`→`Bottom`・`Seam("top"/"left"/"right")`→対応辺・
-/// `Seam(未知)`→`Bottom`（フォールバック）・`Free`→`Free`）。吸着ドラッグ／
-/// リサイズの射影 T（後続 task）が消費する情報伝搬の檻。
-#[test]
-fn anchor_propagates_five_values_from_resolved_alignment() {
-    for dpi in DPIS {
-        let wa = work_area(dpi);
-        let (w, h) = (px(400, dpi), px(600, dpi));
-        let cases = [
-            (Alignment::Bottom, Anchor::Bottom),
-            (Alignment::Seam("top".to_owned()), Anchor::Top),
-            (Alignment::Seam("left".to_owned()), Anchor::Left),
-            (Alignment::Seam("right".to_owned()), Anchor::Right),
-            (Alignment::Seam("unknown-value".to_owned()), Anchor::Bottom),
-            (Alignment::Free, Anchor::Free),
-        ];
-        for (alignment, expected) in cases {
-            let cfg = cfg_of(vec![(0, scope_cfg(alignment.clone(), Some(0), None))]);
-            let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
-            assert_eq!(
-                out[0].anchor, expected,
-                "dpi={dpi} alignment={alignment:?}: anchor の伝搬"
-            );
-        }
-    }
-}
-
 /// 4.2 補: 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
 /// スコープは既定 `ScopeConfig`（＝Bottom）ゆえ `Anchor::Bottom`。
 #[test]

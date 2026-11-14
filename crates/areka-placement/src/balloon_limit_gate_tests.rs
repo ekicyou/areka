@@ -23,6 +23,7 @@ use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::super::resolver::{Anchor, ScopeInput, resolve_placement};
 use super::*;
 use crate::follow::OffsetBase;
+use crate::resolver::test_support::px;
 use crate::shared_test_support::MEASURE_DPI;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
@@ -420,19 +421,6 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
 
 /// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当。
 const GATE_DPIS: [i32; 4] = [96, 120, 144, 192];
-
-/// 論理基準値 → 各 DPI の物理 px（`balloon_limit_tests.rs` と同一の道具・厳密整除を強制）。
-///
-/// 関門は物理 px しか見ない。同じ論理形状を各水準の物理値で与えたとき期待値も同じ
-/// 物理式から出ることを固定する（隠れた `/96` 変換があれば 96 以外の水準で崩れる）。
-fn px(logical: i32, dpi: i32) -> i32 {
-    assert_eq!(
-        (logical * dpi) % 96,
-        0,
-        "テスト入力は厳密整除になる論理値（4 の倍数）で構築する"
-    );
-    logical * dpi / 96
-}
 
 /// 矩形 (pos, size) が area へ 4 辺内包されているか（檻側の独立実装）。
 fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {

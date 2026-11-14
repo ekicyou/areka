@@ -650,7 +650,7 @@
 **バルーンの descript の文字組み（`vertical`・`origin`・`validrect`・`wordwrappoint`・`font.*`・`arrow0`／`arrow1`）**（8 行）
 
 - areka 拡張キー `writing_mode` の存在・語彙・正典キー `vertical` との優先順位（正典は areka 独自キーの存在にも、両キー併記時の解決にも沈黙）
-- バルーン文字の描画開始点——宣言された `origin` の validrect 外クランプ（areka 独自「origin クランプ正準」）の撤去（本表の別行にあるバルーン窓の画面内維持のクランプ〔`crates/areka-placement/src/balloon_limit.rs::clamp_axis`〕とは別種のクランプであり、そちらは撤去していない）
+- バルーン文字の描画開始点——宣言された `origin` の validrect 外クランプ（areka 独自「origin クランプ正準」）の撤去（本表の別行にあるバルーン窓の画面内維持のクランプ〔`crates/areka-placement/src/balloon_limit.rs::clamp_rect_to_work_area`〕とは別種のクランプであり、そちらは撤去していない）
 - フォント縦書き異体の挙動等価（SSP の `@` フォント機構に対する areka 裁量。正典は「指定フォントの `@` 付き縦書き異体を自動使用し、無ければ環境の標準ゴシックの縦書き異体へ自動差し替え」と定める）（縮退の判断あり）
 - 会話中の書字方向切替（正典はサーフェス毎の縦横切替を認めるが、切替時に何が起きるかは「崩れる」としか書かない）（縮退の判断あり）
 - 縦書きで列が並ぶ範囲の上限（＝列がどこで打ち止めになりスクロールが始まるか。正典に該当キーも該当文も無い）
