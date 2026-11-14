@@ -1,0 +1,14 @@
+## 状態
+- goal: draw-load-parity
+- iteration: 0
+- phase: PREFLIGHT
+- pending_run: -
+- streak_no_gain: 0
+- best_idle_cpu_pct: -
+- baseline_idle_cpu_pct: -
+- started_at: 2026-08-23T00:00:00Z
+- run: -
+- capabilities: -
+- previous_phase: -
+- toolfix_used: 0
+- not_quiet_retries: 0

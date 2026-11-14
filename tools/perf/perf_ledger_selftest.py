@@ -7,9 +7,9 @@
 `python tools/perf/perf-ledger.py --selftest` である。
 
 **なぜ本体を import しないか**: 本体のファイル名にはハイフンがあり、Python の
-モジュール名として import できない。そこで本体が起動時に `run_selftest(env)` へ
-`SelftestEnv` を渡す（＝逆向きの import を作らない＝循環しない）。`env.invoke` は
-本体の `main(argv)` そのものであり、**自己較正だけの近道は作らない**。
+モジュール名として import できない。そこで本体が起動時に `bind(<本体モジュール>)` で
+自分を渡す（`perf_ledger_goal` と同じ・逆向きの import を作らない＝循環しない）。走らせる
+入口は本体の `main(argv)` そのものであり、**自己較正だけの近道は作らない**。
 
 1 ケース＝1 ディレクトリ（`fixtures-loop/ledger/<名前>/`）:
 
@@ -20,18 +20,27 @@
     ledger.md             最初から置いておく台帳（任意。無ければ `init` で作る）
 
 `@LEDGER@` は複製先の `ledger.md`、`@DIR@` は複製先ディレクトリに置き換える。
-「緑だけの自己較正は較正になっていない」ため、`env.required_red_exits` に挙げた
+「緑だけの自己較正は較正になっていない」ため、本体の `SELFTEST_REQUIRED_RED_EXITS` に挙げた
 終了コードを 1 件も再現していなければ自己較正そのものを不合格にする。
 """
 
 from __future__ import annotations
 
 import shutil
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import perf_selftest_common as common
+
+#: 本体モジュール（`bind()` が入れる）。
+CORE = None
+
+
+def bind(core) -> None:
+    """本体モジュールを受け取る（`perf-ledger.py` が起動時に 1 度だけ呼ぶ）。"""
+    global CORE
+    CORE = core
+
 
 # =============================================================================
 # 定数（自己較正だけの較正値。台帳の値の判断には一切関与しない）
@@ -48,23 +57,6 @@ SELFTEST_DIR_PLACEHOLDER = "@DIR@"
 CRLF, LF = "\r\n", "\n"
 
 
-@dataclass(frozen=True)
-class SelftestEnv:
-    """本体から渡される道具立て（本体を import しないための唯一の受け口）。"""
-
-    fixtures_root: Path
-    #: 実運用と同じ入口（本体の `main(argv)`）。
-    invoke: Callable[[list[str]], int]
-    #: 期待の書けていないケースを拒むときに投げる例外を作る（本体の `bad_input`）。
-    fail: Callable[..., Exception]
-    #: 周の記録の見出しの先頭（`## 周 `）。状態ブロック書き換えの不変条件検査に使う。
-    entry_heading_prefix: str
-    ok_code: int
-    fail_code: int
-    #: 1 件も再現しなければ自己較正を不合格にする終了コード。
-    required_red_exits: tuple[int, ...]
-
-
 @dataclass
 class SelftestCase:
     """1 ケース＝1 ディレクトリ。`steps.txt` の各行を実運用と同じ入口へ流す。"""
@@ -76,17 +68,17 @@ class SelftestCase:
     steps: list[tuple[int, list[str]]]
 
 
-def _read_case(directory: Path, env: SelftestEnv) -> SelftestCase:
+def _read_case(directory: Path) -> SelftestCase:
     case_path = directory / SELFTEST_CASE_FILENAME
     steps_path = directory / SELFTEST_STEPS_FILENAME
     for path in (case_path, steps_path):
         if not path.is_file():
-            raise env.fail(
+            raise CORE.bad_input(
                 f"自己較正のケースに {path.name} がありません: {directory}",
                 ["期待の書いていないケースは、走らせても合否を言えません。"],
             )
     fields, multi = common.read_case_fields(
-        case_path, frozenset({"title", "note"}), frozenset({"stderr_substr"}), env.fail
+        case_path, frozenset({"title", "note"}), frozenset({"stderr_substr"}), CORE.bad_input
     )
     title = fields.get("title", "")
     substrings = multi["stderr_substr"]
@@ -98,17 +90,17 @@ def _read_case(directory: Path, env: SelftestEnv) -> SelftestCase:
             continue
         head, separator, rest = line.partition(SELFTEST_STEP_SEPARATOR)
         if not separator or not rest.split():
-            raise env.fail(
+            raise CORE.bad_input(
                 f"{steps_path}:{lineno}: 手順の書き方が違います",
                 [f"`<期待終了コード>{SELFTEST_STEP_SEPARATOR}<引数…>` の形で書きます（引数は空白区切り）。"],
             )
         try:
             expected = int(head.strip())
         except ValueError as exc:
-            raise env.fail(f"{steps_path}:{lineno}: 期待終了コードが整数ではありません（{head!r}）") from exc
+            raise CORE.bad_input(f"{steps_path}:{lineno}: 期待終了コードが整数ではありません（{head!r}）") from exc
         steps.append((expected, rest.split()))
     if not steps:
-        raise env.fail(f"{steps_path} に手順が 1 つもありません", ["何も走らせないケースは較正になりません。"])
+        raise CORE.bad_input(f"{steps_path} に手順が 1 つもありません", ["何も走らせないケースは較正になりません。"])
     return SelftestCase(directory.name, directory, title or "(説明なし)", substrings, steps)
 
 
@@ -121,12 +113,14 @@ def _entry_region(path: Path, prefix: str) -> str:
     return "" if index < 0 else text[index:]
 
 
-def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[list[str], set[int]]:
+def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]:
     """ケースを 1 つ走らせ、食い違いの一覧と「実際に再現した終了コード」を返す。"""
     work = workspace / case.name
     shutil.copytree(case.directory, work)
     ledger = work / SELFTEST_LEDGER_FILENAME
 
+    # 周の記録の見出しの先頭（`## 周 `）。状態ブロック書き換えの不変条件検査に使う。
+    prefix = CORE.ENTRY_HEADING_FORMAT.split("{")[0]
     reasons: list[str] = []
     reproduced: set[int] = set()
     stdout_all = stderr_all = ""
@@ -137,15 +131,15 @@ def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[li
             )
             for token in raw_argv
         ]
-        before = _entry_region(ledger, env.entry_heading_prefix)
-        code, out, err = common.invoke(env.invoke, argv, env.fail_code)
+        before = _entry_region(ledger, prefix)
+        code, out, err = common.invoke(CORE.main, argv, CORE.EXIT_FAIL)
         stdout_all += out
         stderr_all += err
         if code == expected:
             reproduced.add(code)
         else:
             reasons.append(f"{argv[0]}: 期待 {expected} 実際 {code}")
-        if argv[0] == "set-phase" and _entry_region(ledger, env.entry_heading_prefix) != before:
+        if argv[0] == "set-phase" and _entry_region(ledger, prefix) != before:
             reasons.append("set-phase が周の記録を書き換えました（状態ブロックだけを書き換えること）")
 
     expected_stdout = case.directory / SELFTEST_EXPECTED_STDOUT
@@ -168,18 +162,18 @@ def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[li
     return reasons, reproduced
 
 
-def run_selftest(env: SelftestEnv) -> int:
+def run_selftest() -> int:
     """`fixtures-loop/ledger/` の既知ケースを逐語再現する（要件 6.7）。"""
     directories, _ = common.list_case_dirs(
-        env.fixtures_root, SELFTEST_CASE_FILENAME, env.fail, materials_allowed=False
+        CORE.script_dir() / CORE.SELFTEST_FIXTURES_DIRNAME / CORE.SELFTEST_LEDGER_SUBDIR, SELFTEST_CASE_FILENAME, CORE.bad_input, materials_allowed=False
     )
-    cases = [_read_case(child, env) for child in directories]
+    cases = [_read_case(child) for child in directories]
 
     results: list[tuple[str, str, list[str]]] = []
     reproduced_all: set[int] = set()
     with common.work_dir("perf-ledger-selftest-") as temporary:
         for case in cases:
-            reasons, reproduced = _run_case(case, temporary, env)
+            reasons, reproduced = _run_case(case, temporary)
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
 
@@ -187,6 +181,6 @@ def run_selftest(env: SelftestEnv) -> int:
     results.append(("(check_tree)", "木全体の見張り",
                     common.check_tree(ascii_stderr=False, readme_examples=False)))
     ng_count = common.finish(
-        results, [], SELFTEST_CASE_FILENAME, reproduced_all, env.required_red_exits
+        results, [], SELFTEST_CASE_FILENAME, reproduced_all, CORE.SELFTEST_REQUIRED_RED_EXITS
     )
-    return env.ok_code if ng_count == 0 else env.fail_code
+    return CORE.EXIT_OK if ng_count == 0 else CORE.EXIT_FAIL

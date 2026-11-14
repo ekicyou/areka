@@ -80,7 +80,7 @@
 * `perf_ledger_selftest.py`——`--selftest` のハーネス。
 
 本ファイルの名前にはハイフンがあり Python のモジュールとして import できないので、依存は
-常に「本体 → 兄弟」の一方向に保つ。兄弟へは起動時に本体を渡す（`bind()`／`SelftestEnv`）。
+常に「本体 → 兄弟」の一方向に保つ。兄弟へは起動時に本体を渡す（どちらも `bind()`）。
 逆向きの import は作らない＝循環しない。定数を足すときは本ファイルの定数節へ足す。
 """
 
@@ -89,6 +89,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import math
 import os
 import re
 import sys
@@ -99,7 +100,7 @@ from pathlib import Path
 
 # 兄弟モジュール（`perf_ledger_goal.py`／`perf_ledger_selftest.py`）は本ファイルと同じ
 # ディレクトリに置く。本ファイルの名前にはハイフンがあり import できないので、依存は
-# 常に「本体 → 兄弟」の一方向で、兄弟へは起動時に `bind(...)`／`SelftestEnv` で本体を渡す。
+# 常に「本体 → 兄弟」の一方向で、兄弟へは起動時に `bind(...)` で本体を渡す。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import perf_ledger_goal  # noqa: E402
@@ -129,8 +130,8 @@ KEY_LINE_RE = re.compile(r"^- ([a-z][a-z0-9_]*): (.+)$")
 KEY_LINE_FORMAT = "- {key}: {value}"
 EMPTY_VALUE = "-"
 
-#: 状態ブロックの鍵（この順で書く。`init` が作るのもこの 10 行）。
-#: `run`・`capabilities` は後から書かれる鍵なので、無い台帳も読める（`-` を補う）。
+#: 状態ブロックの鍵（この順で書く。`init` が作るのもこの全部の行）。
+#: `STATE_LATE_KEYS` の鍵は後から足した鍵なので、無い台帳も読める（`-` を補う）。
 STATE_KEYS = (
     "goal", "iteration", "phase", "pending_run", "streak_no_gain",
     "best_idle_cpu_pct", "baseline_idle_cpu_pct", "started_at", "run", "capabilities",
@@ -178,8 +179,7 @@ PHASE_TRANSITIONS: dict[str, dict[str, str]] = {
     "SELECT": {"ok": "IMPLEMENT", "no_candidate": "FINAL"},
     # `implement_blocked` は task 7.5 の追加。実装係が計画を実物へ当てられずに止まった周も、
     # 「差し戻して記録して次の周へ」の 1 本道へ戻す必要がある（行き先の無い出来事があると、
-    # スキルが表に聞かずに自分で行き先を決めることになる）。**設計 C2 の表には未記載**
-    # ——9.4（登記）で追補すること。
+    # スキルが表に聞かずに自分で行き先を決めることになる）。設計 C2 の表へは 9.4 で追補済み。
     "IMPLEMENT": {"ok": "TEST", "implement_blocked": "RECORD"},
     "TEST": {
         "tests_green_followup_pass": "REMEASURE",
@@ -270,7 +270,7 @@ SELFTEST_FIXTURES_DIRNAME = "fixtures-loop"
 SELFTEST_LEDGER_SUBDIR = "ledger"
 #: 「緑だけの自己較正は較正になっていない」（D7）。ここに挙げた終了コードを期待する
 #: ケースが 1 つも再現していなければ、自己較正そのものを不合格にする。
-SELFTEST_REQUIRED_RED_EXITS = (EXIT_BAD_INPUT,)
+SELFTEST_REQUIRED_RED_EXITS = (EXIT_BAD_INPUT, EXIT_IO_ERROR)
 
 #: 標準出力は機械が読む値（JSON）だけに使い、人向けの報告は標準エラーへ出す。
 STDERR_PREFIX = "[perf-ledger]"
@@ -333,7 +333,7 @@ def read_text(path: Path) -> str:
     if not path.is_file():
         raise bad_input(f"台帳がありません: {path}", ["先に `init` で作ってください（周 0 の手順）。"])
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8-sig")
     except OSError as exc:
         raise io_failure(f"台帳を読めません: {path}", [str(exc)]) from exc
     except UnicodeDecodeError as exc:
@@ -345,7 +345,10 @@ def write_text(path: Path, text: str) -> None:
     temporary = path.with_name(path.name + ".tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        temporary.write_text(text, encoding="utf-8", newline="\n")
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())  # 差し替えの後に電源が落ちても空の台帳を残さない
         os.replace(temporary, path)
     except OSError as exc:
         with contextlib.suppress(OSError):
@@ -485,6 +488,8 @@ def _to_ledger_value(key: str, value, int_keys: tuple[str, ...], float_keys: tup
         except ValueError as exc:
             what = "整数" if integral else "数"
             raise bad_input(f"{key} は{what}でなければなりません（{value!r}）") from exc
+        if not math.isfinite(number):
+            raise bad_input(f"{key} は有限の数でなければなりません（{value!r}）")
         return str(number) if integral else FLOAT_FORMAT.format(number)
     if not isinstance(value, (str, int, float)):
         raise bad_input(f"{key} に書けない型です（{type(value).__name__}）", ["値は文字列か数です。"])
@@ -607,11 +612,10 @@ def load_goal_toml(path: Path) -> dict:
             ],
         )
     try:
-        with path.open("rb") as handle:
-            return tomllib.load(handle)
+        return tomllib.loads(path.read_text(encoding="utf-8-sig"))
     except OSError as exc:
         raise io_failure(f"目標定義ファイルを読めません: {path}", [str(exc)]) from exc
-    except tomllib.TOMLDecodeError as exc:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
         raise bad_input(f"目標定義ファイルが TOML として読めません: {path}", [str(exc)]) from exc
 
 
@@ -632,14 +636,22 @@ def resolve_ledger(args) -> Path:
             "台帳の在り処が分かりません",
             ["`--ledger <path>`・`--goal <名前>`・`--goal-file <toml>` のいずれかを指定してください。"],
         )
-    table = load_goal_toml(toml_path).get(GOAL_TABLE) or {}
-    missing = [key for key in GOAL_REQUIRED_KEYS if not table.get(key)]
-    if missing:
-        raise bad_input(
-            f"目標定義ファイルの [{GOAL_TABLE}] に {'・'.join(missing)} がありません: {toml_path}",
-            [f"必須は {'・'.join(GOAL_REQUIRED_KEYS)}（どちらもリポジトリ根からの相対）です。"],
-        )
+    table = goal_path_table(toml_path, GOAL_REQUIRED_KEYS,
+                            f"必須は {'・'.join(GOAL_REQUIRED_KEYS)}（どちらもリポジトリ根からの相対）です。")
     return repo_root(args) / table["spec_dir"] / table["ledger"]
+
+
+def goal_path_table(toml_path: Path, keys: tuple[str, ...], hint: str) -> dict:
+    """目標定義の [goal] を読み、`keys` が空でない文字列であることを確かめる（違えば exit 3）。"""
+    table = load_goal_toml(toml_path).get(GOAL_TABLE)
+    table = table if isinstance(table, dict) else {}
+    missing = [key for key in keys if not table.get(key)]
+    if missing:
+        raise bad_input(f"目標定義ファイルの [{GOAL_TABLE}] に {'・'.join(missing)} がありません: {toml_path}", [hint])
+    if wrong := [key for key in keys if not isinstance(table[key], str)]:
+        raise bad_input(f"目標定義ファイルの [{GOAL_TABLE}] の {'・'.join(wrong)} が文字列ではありません: {toml_path}",
+                        [hint])
+    return table
 
 
 def resolve_goal_name(args) -> str:
@@ -647,7 +659,8 @@ def resolve_goal_name(args) -> str:
         return args.goal_name
     toml_path = goal_toml_path(args)
     if toml_path is not None:
-        name = (load_goal_toml(toml_path).get(GOAL_TABLE) or {}).get("name")
+        table = load_goal_toml(toml_path).get(GOAL_TABLE)
+        name = table.get("name") if isinstance(table, dict) else None
         if name:
             return str(name)
     if getattr(args, "goal", None):
@@ -695,13 +708,8 @@ def resolve_summary_path(args) -> Path:
             "まとめの書き出し先が分かりません",
             ["`--out <path>`、または [goal].spec_dir と results_dir のある目標定義ファイルを渡してください。"],
         )
-    table = load_goal_toml(toml_path).get(GOAL_TABLE) or {}
-    missing = [key for key in ("spec_dir", "results_dir") if not table.get(key)]
-    if missing:
-        raise bad_input(
-            f"目標定義ファイルの [{GOAL_TABLE}] に {'・'.join(missing)} がありません: {toml_path}",
-            ["`--out <path>` で書き出し先を直に指すこともできます。"],
-        )
+    table = goal_path_table(toml_path, ("spec_dir", "results_dir"),
+                            "`--out <path>` で書き出し先を直に指すこともできます。")
     return repo_root(args) / table["spec_dir"] / table["results_dir"] / SUMMARY_FILENAME
 
 
@@ -784,7 +792,7 @@ def load_entry_json(path: Path) -> dict[str, str]:
     if not path.is_file():
         raise bad_input(f"追記する値のファイルがありません: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except OSError as exc:
         raise io_failure(f"{path} を読めません", [str(exc)]) from exc
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -862,27 +870,8 @@ SUBCOMMANDS = {
 
 # 兄弟モジュールへ本体を渡す（本体は名前にハイフンがあり import できないため）。
 perf_ledger_goal.bind(sys.modules[__name__])
+perf_ledger_selftest.bind(sys.modules[__name__])
 SUBCOMMANDS.update(perf_ledger_goal.COMMANDS)
-
-
-# =============================================================================
-# 自己較正（--selftest）——ハーネスは perf_ledger_selftest.py（本体は道具立てを渡すだけ）
-# =============================================================================
-
-
-def run_selftest() -> int:
-    """`fixtures-loop/ledger/` の既知ケースを逐語再現する（要件 6.7）。"""
-    return perf_ledger_selftest.run_selftest(
-        perf_ledger_selftest.SelftestEnv(
-            fixtures_root=script_dir() / SELFTEST_FIXTURES_DIRNAME / SELFTEST_LEDGER_SUBDIR,
-            invoke=main,
-            fail=bad_input,
-            entry_heading_prefix=ENTRY_HEADING_FORMAT.split("{")[0],
-            ok_code=EXIT_OK,
-            fail_code=EXIT_FAIL,
-            required_red_exits=SELFTEST_REQUIRED_RED_EXITS,
-        )
-    )
 
 
 # =============================================================================
@@ -972,7 +961,7 @@ def main(argv: list[str]) -> int:
                 parser.error("--selftest・--samples はサブコマンドと一緒に使えません")
             if args.selftest and args.samples:
                 parser.error("--selftest と --samples は一緒に使えません")
-            return run_selftest() if args.selftest else perf_ledger_goal.print_samples()
+            return perf_ledger_selftest.run_selftest() if args.selftest else perf_ledger_goal.print_samples()
         if not args.subcommand:
             parser.error(
                 f"サブコマンドがありません（{'・'.join(SUBCOMMANDS)}・--selftest・--samples のいずれか）"

@@ -1,0 +1,2 @@
+title=set-phase の --best に nan・inf を渡すと exit 3（state が不正な JSON を出さない）
+stderr_substr=有限の数

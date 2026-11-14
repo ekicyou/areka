@@ -132,7 +132,7 @@
   - _Dispatch: mechanical — 端末の文の英語化・ケース 1 本・定数の削除を既存の形で直す_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.4, 5.5, 7.1, 7.6_
 
-- [ ] 9. (P) 台帳の本体を直す（#14・#15・#19・#20・#33・#54〜#57・#59・#81 の perf-ledger）
+- [x] 9. (P) 台帳の本体を直す（#14・#15・#19・#20・#33・#54〜#57・#59・#81 の perf-ledger）
 - [x] 9.1 台帳の書き込みの入力の確かめ（#14・#15・#19・#20）
   - `load_entry_json` で verdict が空なら exit 3（#14・ケース `append_without_verdict`＝T14）。`append` の `--iteration` を必須にして既定の枝を消し、`steps.txt` 5 本を合わせる（#15・ケース `append_without_iteration`＝T15）。`cmd_final` で許さない字を `_` に（#19・ケース `final_top_remaining_symbols`＝T19）。山括弧の値をひな型のままとして exit 3（#20・ケース `append_template_placeholder`＝T20）
   - 終わった姿: perf-ledger の `--selftest` が 4 ケースを含めて緑で、直しを戻すとそれぞれ 0 か 3 で赤
@@ -140,7 +140,7 @@
   - _Depends: 2.2_
   - _Dispatch: mechanical — 既存の exit 3 の検査の形に沿って 4 つの入力の確かめとケースを足す_
   - _Requirements: 2.1, 4.7, 4.8, 7.2_
-- [ ] 9.2 台帳の書き込みの安全と支えの片付け（#33・#54〜#57・#59・#81）
+- [x] 9.2 台帳の書き込みの安全と支えの片付け（#33・#54〜#57・#59・#81）
   - ケース `write_fails`（普通のファイルの下へ init・exit 4＝W1）を足す（#33）。`--best` を `math.isfinite` に（#54）。目標定義の値の型を確かめて exit 3（#55 の perf-ledger の分・申し合わせ済み）。`encoding="utf-8-sig"`（#56）。flush → `os.fsync` → replace（#57）。selftest も `bind(core)` にして `SelftestEnv` を消す（#59）。perf-ledger の注記 3 か所を事実に（#81）
   - 失敗の文は日本語のまま（議題 1）
   - 終わった姿: perf-ledger の `--selftest` が W1 を含めて緑、`SelftestEnv` が grep で 0 件、`perf-ledger.py` が 1,000 行以下（越えるなら #14・#20 の検査を `perf_ledger_goal.py` へ置く）
@@ -234,3 +234,4 @@
 - 7.2: perf-compare の `main` の `reconfigure(errors="replace")` が残る（D9 は全部 `backslashreplace` にそろえる）。8・12.2 のときに残りの `replace` も合わせる。perf-compare の未決の理由は日本語（報告・compare.json）と英語（stderr）の 2 つを持つ
 - 8: `DRAG_DX_PX` は judge-followup の側では 0 件。`invoke-followup-checks.ps1` は作り手の定数として持ち続け、48 行の注記「judge-followup.py と対」は古くなった（`audit-tools-perf-run` へ知らせる）。show.rs の出所の注記の「info!」は実際は `show_line!` の `tracing::event!`（14 の audit で拾う候補）
 - 9.1: `--iteration` 必須で `empty_values_are_rejected_cleanly` の append の手順は意味を失い、status だけに減らした。`TOP_REMAINING_BAD_RE` は perf-ledger の `_TOP_REMAINING_PATTERN` の補集合を写して持つ（2 か所）。perf-ledger.py は 991 行
+- 9.2: 「`SelftestEnv` が grep で 0 件」は perf-ledger の範囲（research #59）の意味で満たした。perf-compare と judge-followup は自分の `SelftestEnv` を持ち続ける（範囲の外・design.md:53 はそちらでは今も事実）。`_to_ledger_value` の isfinite は `--best` と append の entry の浮動小数の両方に効く
