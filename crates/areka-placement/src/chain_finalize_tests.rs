@@ -1,9 +1,9 @@
 // =============================================================================
 // 実表示寸での連鎖再解決の檻（scg 要件 7.1/7.2/7.3・design C6）
 //
-// 判定は純関数ゆえ GPU も World も要さない。物理 px を直接与えるため DPI 水準は
-// 「幅の組」を変えることで表現する（resolver 檻の DPIS ループと同じ意図で、
-// 等幅・不等幅の双方を同一経路で検定する）。
+// 判定は純関数ゆえ GPU も World も要さない。物理 px を直接与える。規則の網羅
+// （組ごとの決め・基準・非正寸・空入力・極端な値）は chain_finalize_resolve_tests.rs が持ち、
+// ここは実機の再現・欠陥の式の否定・2 度目は何もしない・停滞の診断だけを置く。
 // =============================================================================
 
 use super::*;
@@ -28,14 +28,19 @@ fn repositioned(scope: usize, current_x: i32, w: i32, default_x: i32) -> ScopeCh
     }
 }
 
-/// **そもそも既定配置ではない**スコープを組む補助（保存位置が復元された scope・scg 7.3）。
-fn restored(scope: usize, current_x: i32, w: i32) -> ScopeChainState {
-    ScopeChainState {
-        scope,
-        current_x,
-        width: w,
-        default_x: None,
-    }
+/// 起動の並べ直しを印なしで通す（台本の印・組・覚えた印が無い形の
+/// `finalize_chain_once_with` と同じ順: [`boot_pair_decision`] → [`resolve_chain`]）。
+fn boot_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
+    let slots: Vec<ChainSlot> = states
+        .iter()
+        .map(|s| ChainSlot {
+            scope: s.scope,
+            current_x: s.current_x,
+            width: s.width,
+            decision: boot_pair_decision(s, false, false, None),
+        })
+        .collect();
+    resolve_chain(&slots)
 }
 
 /// 指示を適用した後の X 列を作る（事後条件の検証用）。
@@ -82,7 +87,7 @@ fn emo2_surface_swap_gap_is_closed_by_moving_the_follower_only() {
         untouched(1, 1340, 672),
     ];
 
-    let moves = finalize_chain(&states);
+    let moves = boot_chain(&states);
 
     assert_eq!(
         moves.len(),
@@ -108,52 +113,12 @@ fn emo2_surface_swap_gap_is_closed_by_moving_the_follower_only() {
     );
 }
 
-// -----------------------------------------------------------------------------
-// 規則の全網羅（不等幅・等幅を同一経路で）
-// -----------------------------------------------------------------------------
-
-/// 不等幅 3 スコープ: 全隣接ペアの隙間が 0 になる指示が出る。幅差が隙間へ漏れない。
-#[test]
-fn unequal_widths_are_all_made_flush() {
-    let widths = [400, 320, 200];
-    // 配置時から全スコープの幅が変わり、素朴には隙間だらけの状態を作る。
-    let states = [
-        untouched(0, 1000, widths[0]),
-        untouched(1, 500, widths[1]),
-        untouched(2, 100, widths[2]),
-    ];
-
-    let moves = finalize_chain(&states);
-    let xs = apply(&states, &moves);
-
-    assert_eq!(xs[0], 1000, "起点は不動");
-    assert_eq!(xs[1], 680, "1000 − 320");
-    assert_eq!(xs[2], 480, "680 − 200");
-    assert_all_pairs_flush(&states, &xs, "不等幅 400/320/200");
-}
-
-/// 等幅でも同一の式で処理される（等幅を特殊扱いしない・scg 2.5 と同旨）。
-#[test]
-fn equal_widths_use_the_same_rule() {
-    let states = [
-        untouched(0, 1000, 320),
-        untouched(1, 500, 320),
-        untouched(2, 0, 320),
-    ];
-
-    let moves = finalize_chain(&states);
-    let xs = apply(&states, &moves);
-
-    assert_eq!(xs, vec![1000, 680, 360], "等幅でも前スコープ左端 − 自幅");
-    assert_all_pairs_flush(&states, &xs, "等幅 320×3");
-}
-
 /// 欠陥式（前スコープの幅を引く）へ戻ってはならない。不等幅でのみ判別できる。
 #[test]
 fn previous_width_subtraction_is_rejected() {
     let states = [untouched(0, 1000, 400), untouched(1, 0, 320)];
 
-    let moves = finalize_chain(&states);
+    let moves = boot_chain(&states);
     let xs = apply(&states, &moves);
 
     assert_eq!(xs[1], 680, "自スコープの幅を引く（1000 − 320）");
@@ -163,176 +128,20 @@ fn previous_width_subtraction_is_rejected() {
     );
 }
 
-// -----------------------------------------------------------------------------
-// 明示的な再配置の尊重（7.3）
-// -----------------------------------------------------------------------------
-
-/// 明示的に再配置されたスコープは動かさず、以後の連鎖はその**実位置**を基準にする。
-#[test]
-fn repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis() {
-    let states = [
-        untouched(0, 1000, 400),
-        // 台本の移動指令で 680（既定）から 900 へ動かされている
-        repositioned(1, 900, 320, 680),
-        untouched(2, 0, 200),
-    ];
-
-    let moves = finalize_chain(&states);
-
-    assert!(
-        moves.iter().all(|m| m.scope != 1),
-        "明示的に再配置されたスコープへ指示を出さない（7.3）"
-    );
-    let xs = apply(&states, &moves);
-    assert_eq!(xs[1], 900, "実位置のまま据え置く");
-    assert_eq!(
-        xs[2], 700,
-        "以後の連鎖は実位置 900 を基準にする（900 − 200）"
-    );
-}
-
-/// **印の無い記憶から戻したスコープは、現在位置に関わらず動かさない**（scg 7.3）。
-///
-/// 覚えた印のある組の隣り合わせは `boot_pair_decision`（`chain_finalize_resolve_tests.rs`）が持つ
-/// （dpi-realign-remembered-chain 要件 6.3）。ここは印なし（`NoRememberedMark`）の形。
-///
-/// 前回セッションで利用者がドラッグした位置は「既定配置」ではない。既定位置と比較する形の
-/// 判定では、復元位置が既定位置として台帳に載ってしまうと `current_x == default_x` が成立し
-/// 未接触と誤判定される——**セッションを跨ぐと利用者のドラッグが隣接位置へ引き戻される**。
-/// 記憶から戻したスコープは既定位置を持たず（`default_x == None`）、ここが印の無い `None` を
-/// 動かさないことで防ぐ。
-#[test]
-fn restored_scope_without_a_mark_is_never_pulled_back_even_when_it_sits_still() {
-    let states = [
-        untouched(0, 1000, 400),
-        // 復元位置 900。既定位置は台帳から落とされている（None）。
-        restored(1, 900, 320),
-        untouched(2, 0, 200),
-    ];
-
-    let moves = finalize_chain(&states);
-
-    assert!(
-        moves.iter().all(|m| m.scope != 1),
-        "復元されたスコープへ指示を出さない（7.3・セッションを跨ぐドラッグの保護）"
-    );
-    let xs = apply(&states, &moves);
-    assert_eq!(xs[1], 900, "復元位置のまま据え置く");
-    assert_eq!(
-        xs[2], 700,
-        "以後の連鎖は復元位置 900 を基準にする（900 − 200）"
-    );
-    // 既定位置を持っていたら引き戻されていた値。ここへ動いてはならない。
-    assert_ne!(
-        xs[1], 680,
-        "既定位置として扱うと 1000 − 320 = 680 へ引き戻される（是正前の挙動）"
-    );
-}
-
-/// 印の無い記憶から戻したスコープが**たまたま隣接位置に居ても**指示は出ない
-/// （位置に依らず印で決まる）。
-#[test]
-fn restored_scope_without_a_mark_is_excluded_regardless_of_where_it_sits() {
-    let states = [untouched(0, 1000, 400), restored(1, 680, 320)];
-
-    assert!(
-        finalize_chain(&states).is_empty(),
-        "復元スコープは既に隣接していても対象外（判定が位置ではなく由来で決まる）"
-    );
-}
-
-/// 起点スコープが動かされていても、後続は起点の実位置へ隣接する。
-#[test]
-fn follower_chains_from_the_actual_position_of_a_moved_origin() {
-    let states = [repositioned(0, 1500, 400, 1000), untouched(1, 680, 320)];
-
-    let moves = finalize_chain(&states);
-    let xs = apply(&states, &moves);
-
-    assert_eq!(xs[0], 1500, "起点は動かさない");
-    assert_eq!(xs[1], 1180, "1500 − 320（既定値 1000 ではなく実位置基準）");
-    assert_all_pairs_flush(&states, &xs, "起点が移動済み");
-}
-
-// -----------------------------------------------------------------------------
-// 冗長駆動の回避・縮退入力
-// -----------------------------------------------------------------------------
-
-/// 既に隣接している列には指示を出さない（べき等・冗長な書き込みを作らない）。
-#[test]
-fn already_flush_chain_emits_no_moves() {
-    let states = [
-        untouched(0, 1000, 400),
-        untouched(1, 680, 320),
-        untouched(2, 480, 200),
-    ];
-
-    assert!(
-        finalize_chain(&states).is_empty(),
-        "既に隣接なら指示は空（べき等）"
-    );
-}
-
 /// 二度目の適用は空になる（一度きりの確定という結線側の契約を、判定側でも壊さない）。
 #[test]
 fn applying_twice_is_a_no_op_the_second_time() {
     let states = [untouched(0, 1000, 400), untouched(1, 0, 320)];
-    let moves = finalize_chain(&states);
+    let moves = boot_chain(&states);
     assert!(!moves.is_empty(), "一度目は指示が出る");
 
     let xs = apply(&states, &moves);
     let settled = [untouched(0, xs[0], 400), untouched(1, xs[1], 320)];
     assert!(
-        finalize_chain(&settled).is_empty(),
+        boot_chain(&settled).is_empty(),
         "確定後の状態を再投入しても指示は出ない"
     );
 }
-
-/// 非正寸は動かさない（縮退入力で暴走座標を作らない）。実位置は次の基準になる。
-#[test]
-fn non_positive_width_is_skipped_and_keeps_its_place() {
-    let states = [
-        untouched(0, 1000, 400),
-        untouched(1, 700, 0),
-        untouched(2, 400, 200),
-    ];
-
-    let moves = finalize_chain(&states);
-
-    assert!(
-        moves.iter().all(|m| m.scope != 1),
-        "非正寸のスコープへ指示を出さない"
-    );
-    let xs = apply(&states, &moves);
-    assert_eq!(xs[1], 700, "実位置のまま");
-    assert_eq!(
-        xs[2], 500,
-        "700 − 200（非正寸スコープの実位置を基準にする）"
-    );
-}
-
-/// 空入力・単一スコープは常に空（動かす相手が居ない）。
-#[test]
-fn empty_and_single_scope_yield_no_moves() {
-    assert!(finalize_chain(&[]).is_empty(), "空入力は空");
-    assert!(
-        finalize_chain(&[untouched(0, 1000, 400)]).is_empty(),
-        "単一スコープは連鎖の相手が居ない"
-    );
-}
-
-/// 極端入力でも panic しない（飽和演算）。
-#[test]
-fn saturating_arithmetic_does_not_panic_on_extremes() {
-    let states = [untouched(0, i32::MIN, 400), untouched(1, 0, i32::MAX)];
-    let moves = finalize_chain(&states);
-    assert_eq!(moves.len(), 1, "指示は出る（値は飽和）");
-    assert_eq!(moves[0].new_x, i32::MIN, "飽和して下限に張り付く");
-}
-
-// -----------------------------------------------------------------------------
-// 補助
-// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 // 確定が見送られ続けたときの一発診断（scg 6.5）
@@ -394,59 +203,71 @@ fn defer_reason_names_the_scope_and_the_condition() {
     assert_eq!(ChainDeferReason::NoGhostWindows.scope(), None);
     assert_eq!(ChainDeferReason::NoScopes.scope(), None);
 
-    // 全経路が本文を持つ（Display の取りこぼしを塞ぐ）。
-    for reason in [
-        ChainDeferReason::NoGhostWindows,
-        ChainDeferReason::NoScopes,
-        ChainDeferReason::NoCharWindow { scope: 0 },
-        ChainDeferReason::NotShownYet { scope: 0 },
-        ChainDeferReason::UnusableShownSize {
-            scope: 0,
-            w: 0,
-            h: 0,
-        },
-        ChainDeferReason::NoWindowPos { scope: 0 },
-        ChainDeferReason::IncompleteWindowPos { scope: 0 },
-        ChainDeferReason::DpiSyncHeld { scope: 0 },
-        landing,
-    ] {
+    // 全理由が本文を持つ（Display の取りこぼしを塞ぐ）。
+    for reason in ALL_REASONS {
         assert!(!reason.to_string().is_empty(), "理由 {reason:?} の本文が空");
     }
 }
 
-/// 見送り理由の**固定語**（観測レコードの `reason=`）が全経路そろい、互いに異なる
+/// 見送り理由ごとの、[`ALL_REASONS`] での番号と固定語（観測レコードの `reason=`）。
+///
+/// 網羅の `match` ゆえ、理由を 1 つ足すとここが組めなくなる。番号を振る人は [`ALL_REASONS`]
+/// へも同じ位置に足す（番号が列の位置と合わなければ下のテストが赤になる）。
+fn expected(reason: ChainDeferReason) -> (usize, &'static str) {
+    match reason {
+        ChainDeferReason::NoGhostWindows => (0, "no-ghost-windows"),
+        ChainDeferReason::NoScopes => (1, "no-scopes"),
+        ChainDeferReason::NoCharWindow { .. } => (2, "no-char-window"),
+        ChainDeferReason::NotShownYet { .. } => (3, "not-shown-yet"),
+        ChainDeferReason::UnusableShownSize { .. } => (4, "unusable-shown-size"),
+        ChainDeferReason::NoWindowPos { .. } => (5, "no-window-pos"),
+        ChainDeferReason::IncompleteWindowPos { .. } => (6, "incomplete-window-pos"),
+        ChainDeferReason::ResnapNotLanded { .. } => (7, "resnap-not-landed"),
+        ChainDeferReason::DpiSyncHeld { .. } => (8, "dpi-sync-held"),
+    }
+}
+
+/// 見送り理由の全部（[`expected`] の番号の順）。
+const ALL_REASONS: [ChainDeferReason; 9] = [
+    ChainDeferReason::NoGhostWindows,
+    ChainDeferReason::NoScopes,
+    ChainDeferReason::NoCharWindow { scope: 0 },
+    ChainDeferReason::NotShownYet { scope: 0 },
+    ChainDeferReason::UnusableShownSize {
+        scope: 0,
+        w: 0,
+        h: 0,
+    },
+    ChainDeferReason::NoWindowPos { scope: 0 },
+    ChainDeferReason::IncompleteWindowPos { scope: 0 },
+    ChainDeferReason::ResnapNotLanded {
+        scope: 0,
+        shown: (1, 1),
+        window: (2, 2),
+    },
+    ChainDeferReason::DpiSyncHeld { scope: 0 },
+];
+
+/// 見送り理由の**固定語**（観測レコードの `reason=`）が全理由そろい、互いに異なる
 /// （`areka-P0-dpi-transition-atomicity` 設計 Data Models の `chain` 行）。
 ///
-/// 本文（[`std::fmt::Display`]）は値を含むので機械判定に使えない。判定側が辞書引きするのは
-/// こちらの語である——重複すると 2 つの原因が 1 語に潰れて切り分けが効かなくなる。
+/// [`ALL_REASONS`] の番号が 0〜N−1 をちょうど 1 度ずつ埋め（列の位置＝[`expected`] の番号）、
+/// 各理由の語が表と等しいことを確かめる。本文（[`std::fmt::Display`]）は値を含むので機械判定に
+/// 使えない。判定側が辞書引きするのはこちらの語である——重複すると 2 つの原因が 1 語に潰れて
+/// 切り分けが効かなくなる。
 #[test]
 fn every_defer_reason_has_a_distinct_machine_word() {
-    let all = [
-        ChainDeferReason::NoGhostWindows,
-        ChainDeferReason::NoScopes,
-        ChainDeferReason::NoCharWindow { scope: 0 },
-        ChainDeferReason::NotShownYet { scope: 0 },
-        ChainDeferReason::UnusableShownSize {
-            scope: 0,
-            w: 0,
-            h: 0,
-        },
-        ChainDeferReason::NoWindowPos { scope: 0 },
-        ChainDeferReason::IncompleteWindowPos { scope: 0 },
-        ChainDeferReason::ResnapNotLanded {
-            scope: 0,
-            shown: (1, 1),
-            window: (2, 2),
-        },
-        ChainDeferReason::DpiSyncHeld { scope: 0 },
-    ];
-    let mut words: Vec<&str> = all.iter().map(|reason| reason.as_str()).collect();
-    let count = words.len();
+    for (i, reason) in ALL_REASONS.into_iter().enumerate() {
+        let (n, word) = expected(reason);
+        assert_eq!(n, i, "ALL_REASONS の {i} 番目の {reason:?} は表では {n} 番");
+        assert_eq!(reason.as_str(), word, "{reason:?} の語が表と違う");
+    }
+    let mut words: Vec<&str> = ALL_REASONS.iter().map(|reason| reason.as_str()).collect();
     words.sort_unstable();
     words.dedup();
     assert_eq!(
         words.len(),
-        count,
+        ALL_REASONS.len(),
         "見送り理由の語が重複している: {words:?}"
     );
     for word in &words {
@@ -456,11 +277,6 @@ fn every_defer_reason_has_a_distinct_machine_word() {
             "理由語に空白がある（1 行 1 レコードの分解が壊れる）: {word}"
         );
     }
-    // 遷移後の解き直し専用の理由（起動時確定では起こらない）。
-    assert_eq!(
-        ChainDeferReason::DpiSyncHeld { scope: 3 }.as_str(),
-        "dpi-sync-held"
-    );
     assert_eq!(ChainDeferReason::DpiSyncHeld { scope: 3 }.scope(), Some(3));
 }
 

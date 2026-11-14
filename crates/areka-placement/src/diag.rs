@@ -239,8 +239,10 @@ pub enum PlacementRoute {
 impl PlacementRoute {
     /// 全経路（檻が語彙の網羅と一意性を固定するための単一の列）。
     ///
-    /// バリアントを増やしたら[`as_str`](Self::as_str) の網羅 match がコンパイルを止め、
-    /// ここへの追加漏れは檻（`placement_route_all_covers_thirteen_distinct_variants`）が捕まえる。
+    /// バリアントを増やすと、[`as_str`](Self::as_str) と [`is_system_reanchor`](Self::is_system_reanchor)
+    /// に加えて檻の表（`diag_tests.rs` の `expected`・網羅の `match`）も組めなくなる。表で番号を
+    /// 振る人がここへも足し、檻（`placement_route_all_lists_every_route_once_in_order`）が
+    /// 列の番号が 0〜N−1 をちょうど 1 度ずつ埋めることを確かめる。
     // 消費者は in-source 檻（`#[cfg(test)]`）だけである。檻専用の列であることが存在理由
     // そのもの（語彙の網羅・一意性の単一の錨）。
     pub const ALL: [PlacementRoute; 13] = [
@@ -289,9 +291,9 @@ impl PlacementRoute {
     /// `follow::window_move::enqueue_window_set_pos` が既定位置を書込先へ追随させるか）と、
     /// 可視性の遷移ガード（`follow::visibility::route_applies_visibility_guard` が
     /// 「可視 → 全 work area 非交差」を阻止するか）。**両者は同一の区分**であることを設計が
-    /// 明言している（D9 が挙げる 6 経路と S3 の保護対象が同じ集合）ので、列を 2 本持つと
-    /// 片方だけを直したときに静かに食い違う。ゆえに定義をここ 1 本にし、可視性側は本関数へ
-    /// 委譲する。
+    /// 明言している（D9 が挙げる経路と S3 の保護対象が同じ集合。今は `PatternMove` を足した
+    /// 7 経路）ので、列を 2 本持つと片方だけを直したときに静かに食い違う。ゆえに定義をここ
+    /// 1 本にし、可視性側は本関数へ委譲する。
     ///
     /// 将来この 2 つの区分を**意図的に**割るなら、そのときは列を割ったうえで理由を設計へ
     /// 登記すること（黙って片方へ腕を足さない）。
@@ -300,9 +302,11 @@ impl PlacementRoute {
     ///
     /// 経路語彙が増えたとき、新しい語をどちら側へ置くかを**必ず**書かせるため。既定の腕
     /// （`_ => false`）を置くと、新設経路が黙って「明示操作」に倒れて既定位置が追随しなくなる。
+    /// 各経路の答えは檻の表（`diag_tests.rs` の `expected`）と突き合わせる
+    /// （`placement_route_answers_match_the_table`）。
     pub const fn is_system_reanchor(self) -> bool {
         match self {
-            // 表示環境の変化を受けた基盤側の置き直し（D9 の 6 経路）。
+            // 表示環境の変化を受けた基盤側の置き直し（D9 の経路・下の `PatternMove` と合わせて 7 経路）。
             PlacementRoute::AnchorChange
             | PlacementRoute::Resnap
             | PlacementRoute::DpiReproject

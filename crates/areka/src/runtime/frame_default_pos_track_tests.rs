@@ -4,7 +4,7 @@
 //! # ここが押さえる是正
 //!
 //! 連鎖の対象判定は「現在位置が既定位置と一致するか」で明示的な再配置を除外する
-//! （`drain_resnap::collect_chain_states`＋`chain_finalize::finalize_chain`・
+//! （`drain_resnap::collect_chain_states`＋`chain_finalize::boot_pair_decision`・
 //! `scope-chain-gap` 7.3）。拡大率が変わるとキャラ窓は新しい寸で下端中央を保ったまま
 //! 置き直され、左上 X が動く——既定位置が spawn 時のまま据え置かれると、**誰も触っていない
 //! スコープ**が「明示的に動かされた」へ倒れて連鎖の解き直しが空振りする。要件 6.2 が
@@ -142,7 +142,7 @@ fn drag_char_window_right(harness: &mut FrameHarness, scope: usize, dx: i32) {
 /// **是正前は赤・是正後は緑**: 拡大率の再射影のあとでも、連鎖の対象判定が「明示的に
 /// 動かされた」へ倒れない。
 ///
-/// 判定器そのもの（`collect_chain_states`＋`finalize_chain`）を通して観る——既定位置と現在位置を
+/// 判定器そのもの（`collect_chain_states`＋`boot_pair_decision`）を通して観る——既定位置と現在位置を
 /// 直接比べるだけだと、判定器が既定位置を読まなくなっても緑のままになる。
 #[test]
 fn a_scale_change_leaves_the_scope_eligible_for_the_chain() {

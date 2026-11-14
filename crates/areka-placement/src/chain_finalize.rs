@@ -102,44 +102,6 @@ pub struct ChainMove {
     pub new_x: i32,
 }
 
-/// 実表示寸で連鎖を解き直し、動かすべきスコープと新 X の列を返す（要件 7.1/7.2/7.3）。
-///
-/// `states` は**スコープ昇順**で渡すこと（連鎖は前スコープの結果に依存するため順序が意味を持つ）。
-///
-/// # 判定
-///
-/// 先頭スコープは基準として素通しし、以降のスコープ `n` について:
-///
-/// 1. 幅が非正（`width <= 0`）なら**動かさない**。実位置を次の基準にする（表示未確立などの
-///    縮退入力で暴走した座標を作らない・`resize_window_to` の非正寸ガードと同じ考え方）。
-/// 2. `default_x != Some(current_x)`＝**既定配置のままではない**なら動かさない。実位置を次の
-///    基準にする。これは 2 通りを畳んだもの——`Some(d)` かつ `d != current_x`（台本の移動指令や
-///    利用者のドラッグで動かされた）と、`None`（そもそも既定配置ではない＝保存位置の復元）。
-/// 3. それ以外は `new_x = 前スコープの結果 X − 自スコープの幅`。`current_x` と異なるときだけ
-///    [`ChainMove`] を積み、いずれにせよ `new_x` を次の基準にする。
-///
-/// # 事後条件
-///
-/// 返した指示をすべて適用すると、**連続する未接触ペア**について
-/// `x(n−1) == x(n) + w(n)`（隙間 0）が実表示寸で成立する。
-///
-/// 空入力・単一スコープでは常に空列（動かす相手が居ない）。飽和演算ゆえ極端入力でも panic しない。
-// 本番（`finalize_chain_once_with`）は World から台本の印・組・覚えた印を読んで
-// boot_pair_decision を直接呼ぶ。ここは同じ規則を印なしで通す檻の口（chain_finalize_tests.rs）。
-#[cfg(test)]
-pub fn finalize_chain(states: &[ScopeChainState]) -> Vec<ChainMove> {
-    let slots: Vec<ChainSlot> = states
-        .iter()
-        .map(|s| ChainSlot {
-            scope: s.scope,
-            current_x: s.current_x,
-            width: s.width,
-            decision: boot_pair_decision(s, false, false, None),
-        })
-        .collect();
-    resolve_chain(&slots)
-}
-
 /// 起動の並べ直しで組 (n−1, n) に当てる決め（dpi-realign-remembered-chain design BootRemembered）。
 ///
 /// | 条件 | 決め |
@@ -366,11 +328,14 @@ pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
 
     for s in slots {
         let target = match (prev, s.decision) {
-            (Some((base_x, _)), PairDecision::JoinLeft) if s.width > 0 => {
+            (Some((base_x, prev_w)), PairDecision::JoinLeft)
+                if join_usable(s.decision, s.width, prev_w) =>
+            {
                 Some(base_x.saturating_sub(s.width))
             }
-            // 前の窓の幅を足す式なので、前の窓の幅が非正なら式が立たない。
-            (Some((base_x, prev_w)), PairDecision::JoinRight) if s.width > 0 && prev_w > 0 => {
+            (Some((base_x, prev_w)), PairDecision::JoinRight)
+                if join_usable(s.decision, s.width, prev_w) =>
+            {
                 Some(base_x.saturating_add(prev_w))
             }
             // 先頭（本体）・Keep・非正寸は動かさない。
@@ -402,14 +367,23 @@ pub fn mark_non_positive_widths(slots: &mut [ChainSlot]) {
     for i in 1..slots.len() {
         let prev_w = slots[i - 1].width;
         let s = &mut slots[i];
-        let usable = match s.decision {
-            PairDecision::JoinLeft => s.width > 0,
-            PairDecision::JoinRight => s.width > 0 && prev_w > 0,
-            PairDecision::Keep(_) => true,
-        };
-        if !usable {
+        if !matches!(s.decision, PairDecision::Keep(_)) && !join_usable(s.decision, s.width, prev_w)
+        {
             s.decision = PairDecision::Keep(KeepReason::NonPositiveWidth);
         }
+    }
+}
+
+/// 付ける決めの式が今の幅で立つか（[`resolve_chain`] と [`mark_non_positive_widths`] の共通の決まり）。
+///
+/// 片方だけ緩めると、動かした窓に "non-positive-width" と記録してしまうので 1 か所に置く。
+/// JoinLeft は自分の幅を引く式、JoinRight は前の窓の幅を足す式なので前の窓の幅も要る。
+/// Keep は式を持たないので `false`。
+fn join_usable(decision: PairDecision, width: i32, prev_width: i32) -> bool {
+    match decision {
+        PairDecision::JoinLeft => width > 0,
+        PairDecision::JoinRight => width > 0 && prev_width > 0,
+        PairDecision::Keep(_) => false,
     }
 }
 
@@ -436,6 +410,10 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 /// 試みるため、**約 10 秒**ぶんに相当する。窓は起動窓（`ghost_session::open_ghost_windows`）の時点で既に生えており、
 /// この待ちで残るのは GPU 装着と初回 `ShowSurface` の landing だけゆえ、正常起動が閾値に届く
 /// ことはない（＝正常系で診断が出ない余裕を持たせた値）。
+///
+/// 数えるのはこの診断を呼ぶ巡の数で、時間ではない。tick の門（`AREKA_TICK_GATE`・既定は無効）を
+/// 開けて巡が間引かれると、時間で見た警告は間引きの割合だけ遅れる（「約 10 秒」はそのぶん延びる）。
+/// 時間で数えるのは、門を既定で開ける段で直す。
 pub const CHAIN_FINALIZE_STALL_FRAMES: u32 = 600;
 
 /// 確定の見送りを数える（診断を一度だけ出すための状態・scg 6.5）。
@@ -575,6 +553,9 @@ impl fmt::Display for ChainDeferReason {
 /// - 閾値（[`CHAIN_FINALIZE_STALL_FRAMES`]）に**到達したちょうどその 1 回**だけ `true`。
 /// - それ以前は `false`（毎フレームの見送りは無音）。
 /// - 報告後は数えることもやめて常に `false`（同じ停滞で溢れさせない）。
+///
+/// 数えるのはこの関数を呼ぶ巡の数である。tick の門で巡が間引かれると、時間で見た警告は
+/// 間引きの割合だけ遅れる（[`CHAIN_FINALIZE_STALL_FRAMES`]）。
 pub fn note_chain_deferral(stall: &mut ChainFinalizeStall) -> bool {
     if stall.reported {
         return false;

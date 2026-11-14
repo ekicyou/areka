@@ -177,6 +177,11 @@ fn empty_single_and_extremes() {
         slot(1, 0, 10, PairDecision::JoinRight),
     ]);
     assert_eq!(moves[0].new_x, i32::MAX, "飽和して上限に張り付く");
+    let moves = resolve_chain(&[
+        slot(0, i32::MIN, 400, BODY),
+        slot(1, 0, i32::MAX, PairDecision::JoinLeft),
+    ]);
+    assert_eq!(moves[0].new_x, i32::MIN, "飽和して下限に張り付く");
 }
 
 /// 記憶から戻したスコープの決め: 印の 3 通り＋印なし（6.3・6.4）。

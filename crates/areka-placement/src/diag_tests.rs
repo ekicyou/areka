@@ -42,70 +42,66 @@ fn record_tags_are_fixed() {
     assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
 }
 
-/// 経路語彙 13 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
-#[test]
-fn placement_route_vocabulary_is_fixed() {
-    assert_eq!(PlacementRoute::SpawnInitial.as_str(), "SpawnInitial");
-    assert_eq!(PlacementRoute::Restore.as_str(), "Restore");
-    assert_eq!(PlacementRoute::AnchorChange.as_str(), "AnchorChange");
-    assert_eq!(PlacementRoute::Resnap.as_str(), "Resnap");
-    assert_eq!(PlacementRoute::DpiReproject.as_str(), "DpiReproject");
-    assert_eq!(
-        PlacementRoute::KeepPositionResize.as_str(),
-        "KeepPositionResize"
-    );
-    assert_eq!(PlacementRoute::BalloonFollow.as_str(), "BalloonFollow");
-    assert_eq!(
-        PlacementRoute::ReportedSizeReconcile.as_str(),
-        "ReportedSizeReconcile"
-    );
-    assert_eq!(PlacementRoute::MoveCue.as_str(), "MoveCue");
-    assert_eq!(
-        PlacementRoute::BalloonLimitRelease.as_str(),
-        "BalloonLimitRelease"
-    );
-    assert_eq!(PlacementRoute::WorkAreaResnap.as_str(), "WorkAreaResnap");
-    assert_eq!(PlacementRoute::ChainRealign.as_str(), "ChainRealign");
-    assert_eq!(PlacementRoute::PatternMove.as_str(), "PatternMove");
+/// 経路ごとの、[`PlacementRoute::ALL`] での番号・表示語・[`PlacementRoute::is_system_reanchor`]
+/// の答え（Req 2.4 の結論語彙・D9／D13／D16）。
+///
+/// 網羅の `match` ゆえ、経路を 1 つ足すとここが組めなくなる。番号を振る人は `ALL` へも同じ
+/// 位置に足す（番号が列の位置と合わなければ下のテストが赤になる）。
+fn expected(route: PlacementRoute) -> (usize, &'static str, bool) {
+    match route {
+        PlacementRoute::SpawnInitial => (0, "SpawnInitial", false),
+        PlacementRoute::Restore => (1, "Restore", false),
+        PlacementRoute::AnchorChange => (2, "AnchorChange", true),
+        PlacementRoute::Resnap => (3, "Resnap", true),
+        PlacementRoute::DpiReproject => (4, "DpiReproject", true),
+        PlacementRoute::KeepPositionResize => (5, "KeepPositionResize", false),
+        PlacementRoute::BalloonFollow => (6, "BalloonFollow", false),
+        PlacementRoute::ReportedSizeReconcile => (7, "ReportedSizeReconcile", true),
+        PlacementRoute::MoveCue => (8, "MoveCue", false),
+        PlacementRoute::BalloonLimitRelease => (9, "BalloonLimitRelease", false),
+        PlacementRoute::WorkAreaResnap => (10, "WorkAreaResnap", true),
+        PlacementRoute::ChainRealign => (11, "ChainRealign", true),
+        PlacementRoute::PatternMove => (12, "PatternMove", true),
+    }
 }
 
-/// `ALL` は 13 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
+/// `ALL` の各要素の番号が 0〜N−1 をちょうど 1 度ずつ埋める（列の位置＝表の番号）。
+///
+/// 表の番号が重なる・`ALL` に同じ経路が 2 度ある・並びが表と違う、のどれでも赤になる。
 #[test]
-fn placement_route_all_covers_thirteen_distinct_variants() {
-    let all = PlacementRoute::ALL;
-    assert_eq!(
-        all.len(),
-        13,
-        "経路語彙は 13 種（dpi-transition-atomicity 要件 9.4・D13・windowposition-limit C10・seriko-pattern-calls の PatternMove）"
-    );
-    for route in [
-        PlacementRoute::SpawnInitial,
-        PlacementRoute::Restore,
-        PlacementRoute::AnchorChange,
-        PlacementRoute::Resnap,
-        PlacementRoute::DpiReproject,
-        PlacementRoute::KeepPositionResize,
-        PlacementRoute::BalloonFollow,
-        PlacementRoute::ReportedSizeReconcile,
-        PlacementRoute::MoveCue,
-        PlacementRoute::BalloonLimitRelease,
-        PlacementRoute::WorkAreaResnap,
-        PlacementRoute::ChainRealign,
-        PlacementRoute::PatternMove,
-    ] {
-        assert!(all.contains(&route), "ALL に {route} が無い");
+fn placement_route_all_lists_every_route_once_in_order() {
+    for (i, route) in PlacementRoute::ALL.into_iter().enumerate() {
+        let (n, _, _) = expected(route);
+        assert_eq!(n, i, "ALL の {i} 番目の {route} は表では {n} 番");
     }
-    let mut names: Vec<&str> = all.iter().map(|r| r.as_str()).collect();
+}
+
+/// 各経路の表示語と再据え付けの判定が表の答えと等しく、表示語が重ならない。
+#[test]
+fn placement_route_answers_match_the_table() {
+    for route in PlacementRoute::ALL {
+        let (_, word, reanchor) = expected(route);
+        assert_eq!(route.as_str(), word, "{route:?} の表示語が表と違う");
+        assert_eq!(
+            route.is_system_reanchor(),
+            reanchor,
+            "{route:?} の再据え付けの判定が表と違う"
+        );
+    }
+    let mut names: Vec<&str> = PlacementRoute::ALL.iter().map(|r| r.as_str()).collect();
     names.sort_unstable();
-    let before = names.len();
     names.dedup();
-    assert_eq!(before, names.len(), "表示語が重複している: {names:?}");
+    assert_eq!(
+        names.len(),
+        PlacementRoute::ALL.len(),
+        "表示語が重複している: {names:?}"
+    );
 }
 
 /// 経路語は**行の値として**成立していなければならない（要件 2.7・判定側の辞書化規則）。
 ///
-/// `judge-perf.py::parse_fields` と同形の切り出しは `名前=値` を空白で割るため、値に空白が
-/// 混じると `origin=` の値が途中で切れて経路の名指しが壊れる。番兵（`-`）と同じ字面も
+/// tools/perf/ の Python の道具の `parse_fields` と同形の切り出しは `名前=値` を空白で割る
+/// ため、値に空白が混じると `origin=` の値が途中で切れて経路の名指しが壊れる。番兵（`-`）と同じ字面も
 /// 「経路が判らなかった書込」と衝突するので禁じる。
 #[test]
 fn placement_route_words_are_single_tokens_and_never_the_sentinel() {
@@ -364,7 +360,7 @@ fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
     assert_eq!(events[0].level, Level::DEBUG);
 }
 
-/// 全 13 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
+/// `ALL` の全経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
 #[test]
 fn window_move_record_line_renders_every_route() {
     for route in PlacementRoute::ALL {
