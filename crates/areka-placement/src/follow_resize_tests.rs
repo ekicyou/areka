@@ -730,10 +730,12 @@ fn resize_window_keep_position_new_size_keeps_position_and_writes_once() {
 #[test]
 fn resize_window_keep_position_with_unknown_current_size_writes() {
     let mut world = World::new();
+    let mut wp = window_pos_at(731, 356);
+    wp.size = None;
     let window = world
         .spawn((
             fake_handle(0x3000),
-            window_pos_at(731, 356),
+            wp,
             arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
         ))
         .id();

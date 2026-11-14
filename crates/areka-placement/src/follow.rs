@@ -120,7 +120,7 @@ pub use self::window_move::{
 // 追随相（`runtime::…`）が収束の保証（design D16）で `follow_balloon` を呼ぶため、
 // この 2 項目だけは私有再束縛から公開へ格上げする。
 pub use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
-// 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
+// キーワード由来のバルーン基本位置の一度きりの再導出（`resize_window_to` が使う）。
 use self::keyword_base::rederive_keyword_balloon_offset;
 // 面の `move` のずれ（task 6.1〜6.3）。当てる口の呼び手は毎フレームのずれの相
 // （`runtime::…` の `move_shift`）。ドラッグの終わりと保存の側は当てた分を 0 にする・引く口、
@@ -130,6 +130,7 @@ pub use self::move_shift::{
 };
 use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::move_shift::{origin_position, rebase_shift};
+// 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
 pub use self::sticky_follow::sync_drag_writer;
 pub(crate) use self::sticky_follow::{is_char_drag_partner, is_char_dragging};
 // ドラッグの始めの控え。呼び手は areka の `input_events::drag`。

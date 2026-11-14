@@ -19,7 +19,7 @@ use super::super::windowposition::scale_signed;
 use super::{
     Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, PlacementRoute,
     PointPx, RectPx, SizePx, apply_visibility_guard, follow_balloon, is_char_drag_partner,
-    move_window_with_route, project_anchor, rect_at, work_area_for_window,
+    is_char_dragging, move_window_with_route, project_anchor, rect_at, work_area_for_window,
 };
 
 const ZERO: PointPx = PointPx { x: 0, y: 0 };
@@ -130,14 +130,22 @@ fn is_placed(p: &wintf::ecs::Point) -> bool {
     p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT
 }
 
-/// 利用者がドラッグ中の窓か、キャラ窓のドラッグに連れ動く組の相手か。どちらも当てない（次の
-/// ドラッグの出来事が古いずれで書き戻してちらつき、相手は保存の元の位置もずれる）。記録を
+/// 利用者がドラッグ中の窓か、キャラ窓のドラッグに連れ動く組の相手か、持ち主のバルーンがドラッグ中の
+/// キャラ窓か。どれも当てない（次のドラッグの出来事が古いずれで書き戻してちらつき、相手は保存の元の
+/// 位置もずれ、バルーンは追いで跳ぶ）。ドラッグ中は `DraggingState` に加えて控え（`CharDragSession`）
+/// でも見る（多窓のとき dispatch が DragEnd の前に `DraggingState` を落とすことがある）。記録を
 /// 変えないので、ドラッグの後に当て直される。見送りは失敗でなく毎フレーム起こるので `debug!` で残す。
 fn defers_for_drag(world: &World, window: Entity) -> bool {
-    let reason = if world.get::<DraggingState>(window).is_some() {
+    let reason = if world.get::<DraggingState>(window).is_some() || is_char_dragging(world, window)
+    {
         "dragging"
     } else if is_char_drag_partner(world, window) {
         "drag_partner"
+    } else if world
+        .get::<BalloonFollow>(window)
+        .is_some_and(|f| world.get::<DraggingState>(f.balloon).is_some())
+    {
+        "balloon_dragging"
     } else {
         return false;
     };
@@ -154,7 +162,8 @@ fn defers_for_drag(world: &World, window: Entity) -> bool {
 ///
 /// 窓・位置（`CW_USEDEFAULT` の印を含む）・寸・作業領域のどれかが無ければ `warn!` のうえ
 /// `false`（記録は変えないので、当て直し待ちの印も立ったまま残り、次のフレームで当て直す）。
-/// ドラッグ中の窓とキャラ窓のドラッグの組の相手は `debug!` のうえ `false`（記録は変えない）。
+/// ドラッグ中の窓・キャラ窓のドラッグの組の相手・持ち主のバルーンがドラッグ中の窓は `debug!` のうえ
+/// `false`（記録は変えない）。
 pub fn apply_char_shift(
     world: &mut World,
     window: Entity,

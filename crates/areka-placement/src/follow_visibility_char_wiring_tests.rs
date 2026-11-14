@@ -600,7 +600,7 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
 
 /// wintf 正典の未確定センチネル（`== i32::MIN`）。**本体の import とは独立に**
 /// 定義元から直接引き、判定式が正典と同式であることを檻側でも固定する
-/// （`window_pos.rs:41`／`monitor_systems.rs:408` と同じ値）。
+/// （`WindowPos::default`（wintf `window_pos/mod.rs`）と `monitor_systems.rs` の窓中心の判定 `window_center` と同じ値）。
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT as SENTINEL;
 
 /// 手順 3 の位置センチネル打ち切りが名乗る語（**本体の文言とは独立に literal で置く**）。

@@ -144,9 +144,12 @@ fn move_window_to_balloon_without_handle_still_moves_target() {
         ))
         .id();
 
-    assert!(move_window_to(&mut world, window, 907, 1201));
+    let (ok, events) = capture(|| move_window_to(&mut world, window, 907, 1201));
+    assert!(ok);
     assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
     assert_eq!(position_of(&world, balloon), Point { x: 70, y: 80 });
+    let warned = expect_one(&events, "WindowHandle 未付与");
+    assert_eq!(warned.level, tracing::Level::WARN);
 }
 
 // -------------------------------------------------------------------------

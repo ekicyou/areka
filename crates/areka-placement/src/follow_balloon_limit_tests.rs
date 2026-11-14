@@ -456,14 +456,14 @@ fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
         "探針: 提案位置の中心が右モニタに属していない（檻が弁別力を失う）"
     );
 
-    enqueue_window_set_pos(
+    assert!(enqueue_window_set_pos(
         &mut world,
         balloon,
         proposed.x,
         proposed.y,
         None,
         Some(PlacementRoute::BalloonFollow),
-    );
+    ));
 
     assert_eq!(
         point_of(&world, balloon),

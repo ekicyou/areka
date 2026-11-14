@@ -568,7 +568,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
             "復元 char_pos が既定へ落ちている（scope{} の window 保存欠落）",
             p.scope
         );
-        // balloon 往復健全性（純関数側は persist.rs 8.5 群で証明済み・ここは結線の確認）。
+        // balloon 往復健全性（純関数側は persist_restore_tests.rs の 8.5 群で証明済み・ここは結線の確認）。
         // 保存基準＝ランタイム基準（char 左上）ゆえ、保存値は生 offset そのもの。
         let offset_tl = PointPx {
             x: bf.x - cf.x,

@@ -51,7 +51,7 @@ fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
 
     assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
-    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（spawn.rs T-V1 と同型）。
+    // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（spawn_cleanup_tests.rs の T-V1 と同型）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
         "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"

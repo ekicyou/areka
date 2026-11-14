@@ -26,7 +26,7 @@ pub(super) fn fake_handle(raw: usize) -> WindowHandle {
     }
 }
 
-/// position 初期値付きの WindowPos。
+/// position 初期値付きの WindowPos（寸は `WindowPos::default` の `CW_USEDEFAULT` の印のまま）。
 pub(super) fn window_pos_at(x: i32, y: i32) -> WindowPos {
     WindowPos {
         position: Some(Point { x, y }),
