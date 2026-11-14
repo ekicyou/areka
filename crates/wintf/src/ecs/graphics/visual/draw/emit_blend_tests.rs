@@ -105,6 +105,7 @@ fn draw(content: &VisualDrawContent, world_mat: Matrix3x2, mix: MixMode) -> Draw
     DrawCommand::Draw(DrawItem {
         hash: 0,
         entity: Entity::PLACEHOLDER,
+        version: 0,
         world_mat,
         world_aabb: content.local_aabb,
         command_list: content.command_list.clone(),
@@ -304,6 +305,8 @@ fn blend_under_rectangle_clip() {
     // 矩形の切り抜き (12,2)-(28,18) の中は下の画素と混ざり、外は下の画素のまま。
     let mut commands = under();
     commands.push(DrawCommand::PushClipRect(ClipRect {
+        entity: Entity::PLACEHOLDER,
+        version: 0,
         world_aabb: Aabb::new(12.0, 2.0, 28.0, 18.0),
     }));
     commands.push(source(MixMode::Blend(D2D1_BLEND_MODE_MULTIPLY)));
@@ -329,6 +332,8 @@ fn push_ellipse_clip() -> DrawCommand {
     .cast()
     .unwrap();
     DrawCommand::PushClipGeometry(ClipGeometry {
+        entity: Entity::PLACEHOLDER,
+        version: 0,
         world_mat: Matrix3x2::identity(),
         geometry: ellipse,
         world_aabb: Aabb::new(8.0, 3.0, 32.0, 17.0),

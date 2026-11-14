@@ -178,4 +178,35 @@ mod surface_composite_lifetime_tests {
         sg.clear();
         assert!(sg.composite().is_none(), "描画面を放した後に入れ物が残る");
     }
+
+    // 入れ物を作る回の理由（要件 3.1, 3.4）: 初めての作成は First、捨てた後・同じ大きさで
+    // 描画面を差し替えた後の作成は Recreated。
+    #[test]
+    fn note_composite_created_tells_first_from_recreated() {
+        use crate::ecs::graphics::damage::FullReason;
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore作成失敗");
+        let resource =
+            WucGraphicsResource::new(core.d2d_device().expect("d2d")).expect("WucGraphicsResource");
+        let (s1, b1) = make_surface(&resource, 16, 16);
+        let (s2, b2) = make_surface(&resource, 16, 16);
+
+        let mut sg = SurfaceGraphics::new(s1, b1, (16, 16));
+        assert_eq!(sg.note_composite_created(), FullReason::First);
+        fill_composite(&mut sg);
+
+        *sg.composite_slot() = None; // 合成の失敗で捨てた
+        assert_eq!(sg.note_composite_created(), FullReason::Recreated);
+        fill_composite(&mut sg);
+
+        sg.set_surface(s2, b2, (16, 16)); // 同じ大きさの差し替え
+        assert!(sg.composite().is_none());
+        assert_eq!(sg.note_composite_created(), FullReason::Recreated);
+        fill_composite(&mut sg);
+
+        sg.clear();
+        assert_eq!(sg.note_composite_created(), FullReason::Recreated);
+    }
 }

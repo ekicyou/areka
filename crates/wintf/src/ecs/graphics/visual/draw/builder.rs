@@ -64,7 +64,7 @@ pub(crate) fn build(
     if let Ok((_, _, _, Some(c), version, _)) = nodes.get(root) {
         out.push(draw_item(
             root,
-            version,
+            version.map_or(0, |v| v.0),
             c,
             Matrix3x2::identity(),
             c.local_aabb,
@@ -99,7 +99,17 @@ pub(crate) fn build(
             continue;
         }
         let size = &arrangement.size;
-        let plan = plan_clip(factory, visual.clip.as_ref(), size, unit_rect, world, eff);
+        let version = version.map_or(0, |v| v.0);
+        let plan = plan_clip(
+            factory,
+            entity,
+            version,
+            visual.clip.as_ref(),
+            size,
+            unit_rect,
+            world,
+            eff,
+        );
         let (clip, new_eff) = match plan {
             Err(e) => {
                 error!(
@@ -128,6 +138,8 @@ pub(crate) fn build(
                 continue;
             }
             out.push(DrawCommand::PushOpacity(OpacityLayer {
+                entity,
+                version,
                 opacity,
                 world_aabb,
             }));
@@ -157,7 +169,7 @@ pub(crate) fn build(
 /// 描く 1 件。
 fn draw_item(
     entity: Entity,
-    version: Option<&VisualVersion>,
+    version: u64,
     c: &VisualDrawContent,
     world_mat: Matrix3x2,
     world_aabb: Aabb,
@@ -165,12 +177,13 @@ fn draw_item(
     DrawCommand::Draw(DrawItem {
         hash: hash_draw(
             entity,
-            version.map_or(0, |v| v.0),
+            version,
             c.interpolation_mode,
             c.mix_mode,
             &world_mat,
         ),
         entity,
+        version,
         world_mat,
         world_aabb,
         command_list: c.command_list.clone(),
@@ -185,8 +198,11 @@ fn draw_item(
 /// 矩形は世界の行列が軸に沿えば `PushClipRect`、回転・せん断なら単位矩形＋実効の変換の
 /// `PushClipGeometry` へ上げる（図形は `unit_rect` を共有する）。角丸は `size` の path geometry、
 /// 任意の図形はそのまま `PushClipGeometry`。図形の作成と外接矩形の失敗は `Err`（0 の矩形に化かさない）。
+#[allow(clippy::too_many_arguments)]
 fn plan_clip(
     factory: &ID2D1Factory,
+    entity: Entity,
+    version: u64,
     clip: Option<&ClipShape>,
     size: &crate::ecs::Size,
     unit_rect: &ID2D1Geometry,
@@ -201,6 +217,8 @@ fn plan_clip(
         let world_aabb = geometry_bounds(&geometry, &world_mat)?;
         windows::core::Result::Ok((
             DrawCommand::PushClipGeometry(ClipGeometry {
+                entity,
+                version,
                 world_mat,
                 world_aabb,
                 geometry,
@@ -225,7 +243,11 @@ fn plan_clip(
             if world.axis_aligned {
                 let world_aabb = clip_rect.transform(world.world_mat);
                 (
-                    DrawCommand::PushClipRect(ClipRect { world_aabb }),
+                    DrawCommand::PushClipRect(ClipRect {
+                        entity,
+                        version,
+                        world_aabb,
+                    }),
                     DrawCommand::PopClipRect,
                     world_aabb,
                 )

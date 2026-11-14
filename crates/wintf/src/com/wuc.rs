@@ -193,9 +193,10 @@ mod tests {
         // updateoffset には atlas 内配置位置（しばしば非ゼロ）が返る。これが本番コードの
         // 「offset を SetTransform の平行移動へ適用する」ロジックの入力となる。
         //
-        // 実測所見（要件 10.2）: WUC の BeginDraw は Some(部分矩形) を渡すと
-        // E_INVALIDARG (0x80070057) を返す（本開発機で確認）。本番 render_surface も
-        // None のみを渡す（begin_draw(None)）ため、None を主経路の必須 assert とする。
+        // 実測所見（要件 10.2）: WUC の BeginDraw に Some(部分矩形) を渡すと、作りたての描画面では
+        // E_INVALIDARG (0x80070057) で断られ、全面を 1 度描いた後は通る（2026-11-14 実測・本開発機）。
+        // 本番 render_surface は全面を写した後の範囲だけの回にだけ部分矩形を渡す。ここは作りたての
+        // 描画面なので None を主経路の必須 assert とする。
         // 確かめるのは BeginDraw／EndDraw が通ることだけ。atlas offset は WUC の配置しだいで
         // 値を主張できないので、観測としてテスト出力へ残すに留める。
         let (_dc, offset) = surface_interop
