@@ -4,7 +4,7 @@
 
 - 範囲: 受け持ちの 56 ファイル＋この spec で作った 2 本（`crates/areka-placement/src/follow_visibility_balloon_words_tests.rs`・`crates/areka/src/placement_tests/transition_judge_offset_negative_tests.rs`）＝58 ファイル。組は 3 つ（組 A＝本番 12・組 B＝追従のテスト 30・組 C＝判定器 16）。
 - やり方: 回ごとに 3 組へ別々の読み係を当て、件数の上限なし・全部の行を読む作法で `/ponytail:ponytail-audit` の見方をかけた。指摘は全部直し、直しはタスク単位のレビュー（kiro-review）を通してからコミットした。
-- 数から外したもの: 裁定で残した指摘 21（組の相手のずれ）・8 の `GroupShift` の `#[allow]`・28 の `MonitorDpiEntry`／`anchor_changed_system`・議題 11（接続宣言の `#[cfg(test)]` 12 個）・`MonitorSnapshot`・設計の議題 6 案 乙で残した「directive で濾した出力を集める部品の写し」（3 回目の組 B が挙げた 1 件）。
+- 数から外したもの: 裁定で残した指摘 21（組の相手のずれ）・`GroupShift` の `#[allow]`（議題 5・要件 2.5）・28 の `MonitorDpiEntry`／`anchor_changed_system`・議題 11（接続宣言の `#[cfg(test)]` 12 個）・`MonitorSnapshot`・設計の議題 6 案 乙で残した「directive で濾した出力を集める部品の写し」（3 回目の組 B が挙げた 1 件）。
 - 要件 4 の議題に当たる指摘: 0 件（2 回目の組 A が「種類 3 の疑い」とした「ドラッグ中の窓へ面の `move` のずれを当てる」は、ukadoc の `move` の項 https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#move の原文「ベースレイヤの表示位置を、元の表示位置から指定座標分ずらす。」がドラッグとの関わりを書かないので、要件 4.2 の確かめのうえ指摘 5 と同じ読みで種類 3 に当たらないとし、直した）。
 
 ### 回ごとの組ごとの件数
@@ -21,7 +21,7 @@
 
 ### 判定
 
-**5 回目で打ち切った・残りは直し済み**（要件 5.3）。5 回目の指摘 14 件に「必ず直す」と本番の振る舞いに関わるもの（届く経路）が 0 件だったので、5 回目の指摘を全部直したところでかけ直しを打ち切った。
+**5 回目で打ち切った・残りは直し済み**（要件 5.3）。5 回目の指摘 14 件に「必ず直す」と本番の振る舞いに関わるもの（届く経路）が 0 件だったので、5 回目の指摘を全部直したところでかけ直しを打ち切った。打ち切ることは 2026-11-14 に、5 回目の結果が出た時点で開発者へチャットで一言知らせた。
 
 ### 実機のログでの判定の確かめ（判定器を厳しくした回）
 
@@ -47,3 +47,8 @@
 - 公開の形の変化は、`pub use self::work_area_clamp::{..}` に足した `ChainPlacement`・`ChainClampOutcome` の 2 つ、`pub(crate)` へ狭めた `VisibilityVerdict`（と `position`）・`guard_visibility` の 2 つ、消した `DragPositionPolicy`・`BottomSnapPolicy` の 2 つだけ（`git diff 30a343eb -- crates/areka-placement/src` の `pub` の行で確かめた。ほかは `pub(crate)`／`#[cfg(test)]` の中のテストの部品）。
 - 終了の道（`app_exit` ほか）に触る直しは無い（本番で変えたのは `crates/areka-placement/src` の `follow*`・`transition_diag.rs` と、テスト専用の判定器 `crates/areka/src/placement_tests/transition_judge*.rs` だけ）。
 - 記録の無い失敗の道は足していない: 直しで足した早期の戻りは、どれも `warn!`（保存しなかった・位置が未確定・窓が無い）か、失敗でない見送りの `debug!`（ドラッグ中・組の相手・札）を出す。タスクごとのレビューと 5 回の audit で確かめた。
+
+## 最終の確かめ（`/kiro-validate-impl`）
+
+- 2026-11-14・排他テストの机を取って実施。DECISION: **GO**（OWNERSHIP: LOCAL・要件 51/51 の受け入れ条件に当たりあり・設計からのずれ無し・依存の新しい矢印は設計が許す `MoveShift → DpiSync` だけ・範囲の外の変更は設計の「Modified Files（範囲の外）」の 3 ファイルだけ・止まったタスク無し）。
+- 直さなくてよい小さな点（後で `audit-placement-core` の後にまとめてよい）: `move_shift.rs` の `is_placed` と `drag_follow.rs` の `known_position` が同じ `CW_USEDEFAULT` の判定を別々に持つ。`drag_follow.rs` はちょうど 1,000 行で、この先 1 行足すなら設計の逃げ道どおり守りの関数を `visibility.rs` へ移す。
