@@ -50,7 +50,7 @@
 
 - wintf の中: `ecs/graphics/visual/draw/`（`DrawCommand`・`build`・`emit`）、`ecs/graphics/composite.rs`、`ecs/graphics/systems/render.rs`、`ecs/graphics/components.rs`（`SurfaceGraphics`）、`numerics`（`Aabb`・`CalcHash`）。
 - 外: 既に使っている `windows` の D2D（`ID2D1Bitmap1::CopyFromBitmap`・`ID2D1DeviceContext::CreateBitmap`・`PushAxisAlignedClip`・`Clear`）、`std::collections::HashMap`、`std::time::Instant`、`tracing`。
-- 依存の向き: `numerics` → `visual::draw::{command, diff, emit}` → `graphics::damage` → `graphics::composite` → `graphics::systems::render`。左から右へだけ読む（`diff.rs` は `damage.rs` を読まない・`emit.rs` は `diff.rs` の `PxRect`・`DamageEntry` だけを読む）。
+- 依存の向き: `numerics` → `visual::draw::{command, diff, emit}` → `graphics::damage` → `graphics::composite` → `graphics::systems::render`。左から右へだけ読む（`diff.rs` は `damage.rs` を読まない・`emit.rs` は `diff.rs` の `PxRect`・`DamageEntry` だけを読み、`diff.rs` は混ぜ方の見分けに `emit.rs` の `draw_method` だけを読む）。
 - 依存（crate）を足さない。最長増加部分列は自前で書く（C20 の約束）。
 
 ### Revalidation Triggers
@@ -164,8 +164,15 @@ flowchart TD
     Empty -->|yes| Presented{presented}
     Presented -->|yes| Skip[Skip]
     Presented -->|no| PresentOnly[Present only]
-    Empty -->|no| Partial[Partial]
+    Empty -->|no| RootP{root list present}
+    RootP -->|yes| FullUnd2[Full undecidable R1]
+    RootP -->|no| Close[close rects over touching items and drop covered shifts]
+    Close --> Cover2{closed rect covers surface}
+    Cover2 -->|yes| FullCover2[Full covers surface]
+    Cover2 -->|no| Partial[Partial]
 ```
+
+- 図の下の段（根の命令の列・閉じ・覆われた写し）は 6.1・6.2 の WARP の実測で足した規則（Risks の R1・ScrollCheck の「受け入れたら」）。
 
 - 全部（Full）と範囲だけ（Partial）は入れ物へ合成して世代を 1 上げる。描画面へは、Full は全面を、Partial は `PartialPlan.present_rect`（描く矩形と写しの先の外接矩形）だけを写す（2.6・2.9）。写すだけ（PresentOnly）は前の答えを描画面へ写すだけ（2.8）。何もしない（Skip）は合成も写しもしない（2.5）。
 - どの道でも、合成（または Skip・PresentOnly）を終えたら控えの項の列を今の列に置き換える。今の列を項にできなかった回は控えを空にする（次の回は「前の列が無い」）。
