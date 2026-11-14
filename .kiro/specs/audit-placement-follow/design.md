@@ -147,7 +147,7 @@ crates/areka/src/placement_tests/
 └── transition_judge_*_tests.rs ほか             # 14 ⑴・15・16・19・22・26 の直し
 ```
 
-新しいファイルの名は `structure.md` の導出規則に従う: `follow_visibility_balloon_words_tests.rs` は `follow.rs`＋モジュール `visibility_balloon_words_tests`、`transition_judge_offset_negative_tests.rs` は最長の stem `transition_judge_offset`＋モジュール `negative_tests`（`transition_judge.rs` に `offset_negative_tests` のモジュールは無いので前向きにも衝突しない）。どちらも本番のファイル側には `#[cfg(test)] #[path = "…"] mod …;` の接続宣言だけを足す。
+新しいファイルの名は `structure.md` の導出規則に従う: `follow_visibility_balloon_words_tests.rs` は `follow.rs`＋モジュール `visibility_balloon_words_tests`、`transition_judge_offset_negative_tests.rs` は最長の stem `transition_judge_offset`＋モジュール `negative_tests`（`transition_judge.rs` に `offset_negative_tests` のモジュールは無いので前向きにも衝突しない）。どちらも本番のファイル側には `#[cfg(test)] #[path = "…"] mod …;` の接続宣言だけを足す。 `transition_judge_offset.rs` の今の 2 つの接続宣言はモジュール名に stem をそのまま使っている（`mod transition_judge_offset_tests;`・`mod transition_judge_offset_signoff_tests;`）が、名を変えるとテストの名（モジュールの道）が変わるので触らず、新しい宣言だけを `structure.md` の形（`mod negative_tests;`）にする（同じファイルに 2 つの形が並ぶのは承知のうえ・設計の検証の重くはない点）。
 
 ### Modified Files（範囲の外）
 
@@ -289,6 +289,7 @@ graph TB
 - `rebase_shift_axes`: 記録の当てた分を軸ごとに 0 にし、印を立てて記録を入れ直す。`dpi_sync::defers_window_write(world, window, HoldSite::PatternMove)` が真なら書かずに戻る。偽なら `apply_char_shift` を呼ぶ。
 - `apply_char_shift`: 書けたら今と同じく印の無い記録で置き換える。書けなかったとき（`no_window_position`・`no_work_area`・`write_refused`）は記録を変えない（印が立ったまま残る）。
 - `shift_is_current`: 記録に印が立っていれば偽。
+- `reset_applied`（ドラッグの終わり・`drag_follow.rs` の `on_char_drag_end` と `on_balloon_drag_end` が呼ぶ）: `applied` を 0 にするのに合わせて印も `false` に戻す（1 行）。戻さないと、印が立ったまま利用者が窓を離したとき、毎フレームの相が置いた所へずれを足し直して窓が跳び、完了した `seriko-pattern-calls` の決め（ドラッグの終わりは置いた所を新しい元の位置にする・task 6.2）を壊す（設計の検証の重い問題 1）。
 - 署名は 4 つとも変えない。呼び手 `runtime/move_cue_place.rs`・`runtime/frame/move_shift.rs` は直さない。
 - テスト（`follow_move_shift_tests.rs`）: ⑴ 札のある窓で絶対の軸の当て直しを呼んでも書込の列が空で panic しない・`shift_is_current` が偽・札を外して `apply_char_shift` を呼ぶと当たる。⑵ 作業領域の無い World で当て直しの後に `shift_is_current` が偽。直す前は ⑴ が panic・⑵ が真。
 
@@ -318,7 +319,7 @@ graph TB
 **6. `ClampX` の後も見えない窓（`follow/visibility.rs`・`follow_test_support.rs`・手順書）**
 - `evaluate_visibility_guard` で判定が `ClampX(clamped)` のとき、`rect_at(clamped, size)` がどの作業領域とも交わらなければ `ClampX` の行の代わりに `[visibility-guard] HiddenAfterClampX` の行を同じ欄・同じ `warn!` で出す。位置は今と同じ（`verdict.position()`）。
 - 語の定数 `VISIBILITY_HIDDEN_AFTER_CLAMP_TAG` を `visibility.rs` に、テストの写し `HIDDEN_AFTER_CLAMP_TAG` を `follow_test_support.rs` に足す（今の 4 語と同じ置き方）。`guard_visibility` の事後条件の説明（「寄せた後は作業領域と交わる」）を「射影が Y を決めた正常系でだけ成り立つ。バルーンでは成り立たないことがあり、そのときは `HiddenAfterClampX`」に直す。
-- 手順書 `areka-P0-dpi-window-vanish/diagnosis-procedure.md` の O17 の次に新しい語の行を足し、「3 語は接頭辞 `[visibility-guard]` を共有する」を今の語の数に直す。
+- 手順書 `areka-P0-dpi-window-vanish/diagnosis-procedure.md` の O17 の次に新しい語の行を足し、「3 語は接頭辞 `[visibility-guard]` を共有する」を「4 語」に直す（手順書の表に載る O17〜O19 と新しい語の 4 つ。手順書の表に無い `OffscreenPull` は数えず、表にも足さない）。
 - テスト（`follow_visibility_balloon_words_tests.rs`）: 下に揃えたキャラ窓 y=640・バルーン offset (100,−1000)・提案 (1600,−360)・500×300 で `HiddenAfterClampX` が 1 行・`ClampX` が 0 行・位置は x=1420。交わる正常系では `ClampX` が 1 行・`HiddenAfterClampX` が 0 行（対）。
 
 **7. 保存を黙って捨てる道（`follow/drag_follow.rs`）**
@@ -454,6 +455,7 @@ graph TB
 - 狭める（C20 のうち・要件 7.8）: `VisibilityVerdict`・`guard_visibility` を `pub(crate)` にし、`follow.rs` の再公開の行を消す。crate の中のテストは `super::visibility::{…}` で引く（`follow` の子のモジュールなので届く）。`DragPositionPolicy`・`BottomSnapPolicy` は 23 で消す。
 - 狭めない: `MonitorDpiEntry`（公開の欄 `MonitorDpiTable.entries` の要素の型で、本体のテストが欄を読む）と `anchor_changed_system`（議題 4・5）。理由は `research.md` 13.2。
 - 足す: `ChainPlacement`・`ChainClampOutcome` を `pub use self::work_area_clamp::{…}` へ（名で呼べるようにするだけ）。
+- 消す・狭める名前の参照の後始末（要件 6.3・6.4・設計の検証の重い問題 2）: 範囲の中のテスト `follow_anchor_tests.rs:93-112`（`BottomSnapPolicy.resolve` を呼ぶ）は、`project_anchor(Bottom, ..)` の期待の値で書き直す（19 の `:18-81` と合わせて消すのではなく、Bottom の腕の確かめとして 1 本だけ残す）。説明のリンクは、消す名前（`[`BottomSnapPolicy`]`・`drag_follow.rs:48`・`window_move.rs:116`）はふつうの文の語へ、狭める名前（`[`guard_visibility`]`・`drag_follow.rs:367,425` の `pub fn follow_balloon` の説明）はリンクを外して文の語にする。範囲の外の核の説明 4 行（`persist.rs:227,238`・`persist_restore_tests.rs:295`・`resolver.rs:438` の `BottomSnapPolicy`）は直さず、核へ伝える一覧に入れる。
 - 申し送る（要件 7.9）: `on_balloon_drag`・`sync_drag_writer`・`WORK_AREA_CLAMP_TAG`・`AnchorSource`・`WorkAreaResolution`・`work_area_for_window_with_origin`・`move_window_with_route`・`MonitorSources::is_empty`・`MonitorDpiEntry`・`transition_diag.rs` の語と欄と行の組み立ての大半を `runtime-crate-split/brief.md` へ。
 - 手順: 下げる前にツリー全体（`vendors/` を除く・テストと examples と文字列を含む）を grep し直して使い手 0 を確かめ、`audit-placement-core` のセッションへ一言知らせる。下げた後にコンパイラが `private_interfaces` か `dead_code` を出したら、その項目は狭めずに申し送りの側へ回す（`#[allow]` を足さない）。
 
@@ -484,7 +486,7 @@ pub enum OffsetViolation {
 }
 ```
 
-- 不変条件: `awaiting_reapply == true` の記録は、`applied` が「今の位置 − 元の位置」の実際の値（絶対の軸は 0）を持つ。`apply_char_shift` が書けたときだけ `false` の記録へ置き換わる。
+- 不変条件: `awaiting_reapply == true` の記録は、`applied` が「今の位置 − 元の位置」の実際の値（絶対の軸は 0）を持つ。`apply_char_shift` が書けたとき、または利用者のドラッグの終わり（`reset_applied`）でだけ `false` になる。
 - 新しい語の行は `ClampX` の行と同じ欄（`entity`・`route`・`old_rect`・`proposed`・`clamped`・`size`・`clamp_wa`）を持つ。1 回の判定で `ClampX` と `HiddenAfterClampX` のどちらか 1 行だけが出る。
 - 新しい違反の腕は `Display` で 1 行の日本語の文を持ち、`{FIELD_SCOPE}` などの語は発行側の定数を参照する（判定器はリテラルを書かない決まりのまま）。
 
@@ -502,7 +504,7 @@ pub enum OffsetViolation {
 
 | 指摘 | 壊れたら落ちるテスト | 置く所 |
 |---|---|---|
-| 1 | 札のある窓で書かない・`shift_is_current` が偽／書けなかった後に偽 | `follow_move_shift_tests.rs` |
+| 1 | 札のある窓で書かない・`shift_is_current` が偽／書けなかった後に偽／印が立った窓を `DragEnd` で離すと `shift_is_current` が真で、毎フレームの相を回しても書込の列が空 | `follow_move_shift_tests.rs` |
 | 2 | `ChainRealign`・`PatternMove` でバルーンが引き戻される／`MoveCue` は引き戻さない | `follow_window_move_tests.rs` |
 | 3 | 最終の `WindowPos` と最後の `DragEvent` が違うときに `BalloonFollow.offset()` が保存値と同じ／補正の前の位置 | `follow_balloon_drag_tests.rs` |
 | 4 | バルーンの寄せと留置で `OffscreenPull` 0 行 | `follow_visibility_balloon_words_tests.rs` |
@@ -529,7 +531,7 @@ pub enum OffsetViolation {
 |---|---|---|---|
 | `follow/window_move.rs`（例外表） | 1,231 | 2（自前の式 約 17 行を 1 呼び出しへ）・8（属性 1 行）・20（`.filter`）・22 | 終わりの行数が 1,231 を越えない。新しいテストはここに書かない。上限の下には入らないので表は残す |
 | `placement_tests/transition_judge_tests.rs`（例外表） | 1,039 | 19（−41）・15（置き換え）・22（一覧を足さず 1 文で指す） | 1,000 行以下にし、番人の例外表の項目と件数の定数を消す（`every_over_limit_exception_is_still_over_the_limit` があるので、下に入ったら消すのは必須） |
-| `placement_tests/transition_judge_verdict_tests.rs`（例外表） | 1,037 | 19（約 −13）・15（置き換え・行は増やさない） | 終わりの行数が 1,037 を越えない。表は残す |
+| `placement_tests/transition_judge_verdict_tests.rs`（例外表） | 1,037 | 19（約 −13）・15（置き換え・行は増やさない） | 終わりの行数が 1,037 を越えない。見込みは約 1,024 行で表は残る。1,000 行以下に入ったら、`transition_judge_tests.rs` と同じく例外表の項目と件数の定数を消す（要件 8.3・番人の `every_over_limit_exception_is_still_over_the_limit`） |
 | `placement_tests/transition_judge.rs` | 999 | 22（説明）・23（`of` の見え方） | 1,000 を越えない（説明は書き換えで、足すときは同じ説明の古い文を削る） |
 | `follow/drag_follow.rs` | 978 | 3（関数へ切る）・7・20・22（`:517-518` の済んだ話を消す） | 1,000 を越えない。越える見込みなら、`guard_balloon_position`（守りの関数・約 70 行）を守りの本体のある `follow/visibility.rs`（365 行）へ移す |
 | `follow_visibility_balloon_wiring_tests.rs` | 962 | 16・18 で減る・22 | 新しいテストは新しいファイルへ（4・6） |
@@ -544,7 +546,7 @@ pub enum OffsetViolation {
   - 指摘 2 で核のテスト（`chain_realign.rs` の周り・`dpi_sync_tests.rs` ほか）が赤になったら、合わせるのは後から着地する核の側。ただしこの spec の枝の先で赤のまま着地はできない（全体テスト緑・要件 5.5）ので、この spec の枝の先で赤になった範囲の外のテストは、この spec が最小の直しで緑に戻して着地し、直した所を核のセッションへ知らせる。核は自分の書き換えの上でそれに合わせる。
   - この spec は `crates/areka-placement/Cargo.toml` を触らない（議題 6 は案 乙）。`Cargo.toml` の直し（`async-io` をワークスペースの表へ移すほか）は核だけが行う。
   - 核は後で `DPI_SYNC_HOLD_MAX_FRAMES` ほかテストだけが使う公開を `cfg(any(test, feature = "test-support"))` の内側へ移す。判定器のテストは本体の `test-support` の機能で届くので、この spec の側の直しは要らない。
-  - 28 で狭める前に、核のセッションへ一言知らせる（要件 7.8）。16・22・24 の範囲の外の写しと古い参照は相手の持ち物として残し、一覧を伝える。
+  - 28 で狭める前に、核のセッションへ一言知らせる（要件 7.8）。16・22・24 の範囲の外の写しと古い参照は相手の持ち物として残し、一覧を伝える。23 で `BottomSnapPolicy` を消すと古くなる核の説明 4 行（`persist.rs:227,238`・`persist_restore_tests.rs:295`・`resolver.rs:438`）もこの一覧に入れる。
 - **`audit-wintf-window`**（前の段）: wintf の `Monitor` は変えない（型・欄・関数とも今のまま）。消すのは `WindowHandle.instance` だけで、この spec に届くのは `follow_test_support.rs` の `fake_handle` の `instance: HINSTANCE::default(),` の 1 行だけ。後から着地する側が合わせる（相手は最後のタスクで行い、行う前に知らせる）。この spec はその行に別の直しを入れない。
 - **`audit-wintf-input`**（後の段・この spec の後に着地）: wintf の `DraggingState.initial_inset` を `initial_window_pos` へ改名し、`is_primary` の欄を消す。読み手（`follow/drag_follow.rs` の `policy_mapped_position`・`follow_test_support.rs` の `dragging_state`・`drag_event*`）は、この spec の着地の後に相手が直す。この spec はその欄に別の直しを入れない。16 で `follow_test_support.rs` へ上げる部品はファイルの末尾に足す。
 - **`audit-tools-perf-judge`**（後の段）: `transition_judge.rs` の 22 行・403 行の `judge-perf.py` の行番号の参照は、この spec が 22 で「tools/perf/ の Python の道具の `parse_fields` と同じ規則」と関数の名だけで指す形に直す（ファイル名は書かない）。どちらの順で着地してもずれない。
