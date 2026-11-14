@@ -24,7 +24,7 @@ bevy_utils = "0.19"
 thiserror = "2"
 tracing = "0.1"
 toml = "1"
-wintf-winmsg-executor = "=0.0.5"
+wintf-winmsg-executor = { version = "0.1.0", path = "crates/wintf-winmsg-executor" }
 event-listener = "5"
 async-channel = "2"
 bitflags = "2"

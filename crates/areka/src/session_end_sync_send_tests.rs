@@ -258,7 +258,11 @@ type SendKey = (String, &'static str, bool);
 /// - 標準のツールチップ（areka-P0-wintf-tooltip）: UI スレッドが自分で作ったツールチップの窓へ
 ///   `TTM_*` などを送る。宛先が同じスレッドの窓なので送信は窓の手続きの直接の呼び出しになり、
 ///   キューを通らない＝join と輪にならない。
-const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 3] = [
+/// - UI スレッドの土台（wintf-winmsg-executor-import で木の中へ写した `wintf-winmsg-executor`）:
+///   `util::Window` の窓の手続きが `WM_NCCREATE` を、差し替えたばかりの同じ窓の手続きへ送り直す
+///   （同じスレッドの窓なので直接の呼び出し）。`lib.rs` の 2 か所はクレートの中の
+///   `#[cfg(test)] mod` で、テストが自分のスレッドのモーダルの窓へ `WM_CLOSE` を送る。
+const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 5] = [
     (
         "crates/shiori-host32-ipc/src/lib.rs",
         "SendMessageTimeoutW(",
@@ -276,6 +280,18 @@ const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 3] = [
         "SendMessageW(",
         false,
         9,
+    ),
+    (
+        "crates/wintf-winmsg-executor/src/lib.rs",
+        "SendMessageW(",
+        true,
+        2,
+    ),
+    (
+        "crates/wintf-winmsg-executor/src/util/window.rs",
+        "SendMessageW(",
+        false,
+        1,
     ),
 ];
 

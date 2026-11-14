@@ -101,6 +101,116 @@ pub(crate) fn solid(rect: D2D_RECT_F, bgra: [u8; 4]) -> VisualDrawContent {
     }
 }
 
+/// 親の中の `(x, y)` に `w`×`h` の配置。
+pub(crate) fn at(x: f32, y: f32, w: f32, h: f32) -> crate::ecs::layout::Arrangement {
+    crate::ecs::layout::Arrangement {
+        offset: crate::ecs::Offset { x, y },
+        size: crate::ecs::Size {
+            width: w,
+            height: h,
+        },
+        ..Default::default()
+    }
+}
+
+pub(crate) fn rect(left: f32, top: f32, right: f32, bottom: f32) -> D2D_RECT_F {
+    D2D_RECT_F {
+        left,
+        top,
+        right,
+        bottom,
+    }
+}
+
+pub(crate) fn px(left: i32, top: i32, right: i32, bottom: i32) -> PxRect {
+    PxRect {
+        left,
+        top,
+        right,
+        bottom,
+    }
+}
+
+/// 市松の `side`×`side` の絵を 8×8 の矩形へ `DrawBitmap` で描く中身（補間が絵の縁の外ににじみうる・
+/// `side` が 8 より大きければ中身の中で縮める）。
+pub(crate) fn checker(
+    bgra: [u8; 4],
+    mode: D2D1_INTERPOLATION_MODE,
+    side: u32,
+) -> VisualDrawContent {
+    let dc = warp_dc();
+    let data: Vec<u8> = (0..side * side)
+        .flat_map(|i| {
+            if (i % side + i / side).is_multiple_of(2) {
+                bgra
+            } else {
+                CLEAR
+            }
+        })
+        .collect();
+    let props = D2D1_BITMAP_PROPERTIES1 {
+        pixelFormat: D2D1_PIXEL_FORMAT {
+            format: DXGI_FORMAT_B8G8R8A8_UNORM,
+            alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+        },
+        dpiX: 96.0,
+        dpiY: 96.0,
+        bitmapOptions: D2D1_BITMAP_OPTIONS_NONE,
+        colorContext: ManuallyDrop::new(None),
+    };
+    unsafe {
+        let bitmap = dc
+            .CreateBitmap(
+                D2D_SIZE_U {
+                    width: side,
+                    height: side,
+                },
+                Some(data.as_ptr() as *const _),
+                side * 4,
+                &props,
+            )
+            .unwrap();
+        let list = dc.CreateCommandList().unwrap();
+        dc.SetTarget(&list);
+        dc.BeginDraw();
+        let dest = rect(0.0, 0.0, 8.0, 8.0);
+        dc.DrawBitmap(&bitmap, Some(&dest), 1.0, mode, None, None);
+        dc.EndDraw(None, None).unwrap();
+        dc.SetTarget(None);
+        list.Close().unwrap();
+        VisualDrawContent {
+            interpolation_mode: mode,
+            ..VisualDrawContent::new(Aabb::new(0.0, 0.0, 8.0, 8.0), list)
+        }
+    }
+}
+
+/// 市松の絵の件 A・B（同じ変形 `t`・補間 `mode`・絵の大きさ `side`・B は A の動く範囲にかかる）と、
+/// B の上の小さい件。返すのは [A, B, 小さい件]。
+pub(crate) fn checker_pair(
+    w: &mut World,
+    root: Entity,
+    t: crate::numerics::Transform2D,
+    mode: D2D1_INTERPOLATION_MODE,
+    side: u32,
+) -> Vec<Entity> {
+    let mut spawn = |x, y, c: VisualDrawContent| {
+        let parts = (Visual::default(), at(x, y, 8.0, 8.0), c, ChildOf(root));
+        w.spawn((parts, VisualTransform(t))).id()
+    };
+    let a = spawn(4.5, 4.25, checker(RED, mode, side));
+    let b = spawn(15.0, 13.0, checker(BLUE, mode, side));
+    let small = (
+        at(18.0, 16.0, 3.0, 3.0),
+        solid(rect(0.0, 0.0, 3.0, 3.0), RED),
+    );
+    vec![
+        a,
+        b,
+        w.spawn((Visual::default(), small, ChildOf(root))).id(),
+    ]
+}
+
 /// 読み戻した絵（行を詰めた BGRA）。
 pub(crate) struct Pixels {
     pub width: u32,
@@ -169,17 +279,45 @@ pub(crate) fn render_tree_to_pixels(
 }
 
 /// 根 `root` の下の木を組んだ描く列。`viewport` が `None` なら本番と同じ根の `Arrangement.size`。
+/// 呼ぶたびに変化の覚えを新しくするので、全部の節の版が上がる（続くフレームは [`TreeFrames`]）。
 pub(crate) fn tree_commands(
     world: &mut World,
     root: Entity,
     viewport: Option<Aabb>,
+) -> Vec<DrawCommand> {
+    TreeFrames::new(world).commands(world, root, viewport)
+}
+
+/// 続くフレームの描く列を組む。変化の覚えを持ち続けるので、変えない節の版は上がらない（本番の係と同じ）。
+pub(crate) struct TreeFrames(SystemState<Query<'static, 'static, FillData>>);
+
+impl TreeFrames {
+    pub(crate) fn new(world: &mut World) -> Self {
+        Self(SystemState::new(world))
+    }
+
+    /// [`tree_commands`] と同じ列（この覚えの前の呼び出しからの変化だけ版を上げる）。
+    pub(crate) fn commands(
+        &mut self,
+        world: &mut World,
+        root: Entity,
+        viewport: Option<Aabb>,
+    ) -> Vec<DrawCommand> {
+        build_commands(world, root, viewport, &mut self.0)
+    }
+}
+
+fn build_commands(
+    world: &mut World,
+    root: Entity,
+    viewport: Option<Aabb>,
+    fill_state: &mut SystemState<Query<FillData>>,
 ) -> Vec<DrawCommand> {
     let top = world
         .get::<Children>(root)
         .map(|c| c.to_vec())
         .unwrap_or_default();
     let mut visited = Vec::new();
-    let mut fill_state: SystemState<Query<FillData>> = SystemState::new(world);
     let mut fill_nodes = fill_state.get_mut(world).unwrap();
     fill_world_visuals(
         root,
