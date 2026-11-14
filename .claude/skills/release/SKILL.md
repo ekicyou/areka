@@ -17,7 +17,7 @@ Perform exactly one release by executing `procedure.md` (next to this file) from
 ## Outline (details are in procedure.md)
 
 1. 前提を確かめる — work tree, main, open PRs on the 3 root files, current and next version, tags, handover notes in the roadmap.
-2. 版を上げる — root `Cargo.toml` (2 lines), `Cargo.lock`, the date line of `dist/README.txt`, and the highlights file `doc/release-notes/v{版}.md`.
+2. 版を上げる — root `Cargo.toml` (3 lines), `Cargo.lock`, the date line of `dist/README.txt`, and the highlights file `doc/release-notes/v{版}.md`.
 3. 手元で確かめる — full tests with `-License` (about 19 minutes), diff range table, startup check (opens a window), pre-publish check, highlights check.
 4. 版上げの PR — commit the 5 files, open the PR, take in main if it moved, squash merge. No approval stop.
 5. タグ — tag the squash commit and push that one tag. No approval stop.

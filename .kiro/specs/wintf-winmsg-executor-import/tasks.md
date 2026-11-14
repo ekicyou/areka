@@ -42,33 +42,33 @@
   - `cargo fmt --all -- --check` が緑
   - _Requirements: 1.3, 1.6_
 
-- [ ] 4. 文書を新しい形に書き換える（コミット 4）
-- [ ] 4.1 (P) 公開の手順書を 3 つのクレートの形にする
+- [x] 4. 文書を新しい形に書き換える（コミット 4）
+- [x] 4.1 (P) 公開の手順書を 3 つのクレートの形にする
   - 冒頭と 1 節: 出すのは 3 つ・写しは `wintf` の土台・出す順は `dola` と写しの後に `wintf`（cargo が決める）・crates.io の写しの版は次のリリースで 0.0.5 からリリースの版へ飛ぶ
   - 2 節: Trusted Publishing の設定の対象を 3 つにし、写しの設定（`ekicyou`／`areka`／`crates-io.yml`／environment は空）を取り込みが本線に入った後の最初のリリースのタグより前に済ませる旨を書く。初回のリリースの前提の文は済んだ話に直す
   - 3・4 節の「2 クレート」を 3 つに。5 節に「写しの Trusted Publishing が無いまま回った」ときの止まり方とやり直し（Re-run か同じ版で Run workflow・既に出た物は飛ばす）を足す。6 節の予備の手順の例と対象を 3 つに
   - 手順書に「2 クレート」「2 つとも」の記述が残らず、3 つのクレートと写しの設定・止まり方・版の飛びが読める
   - _Boundary: 手順書_
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.9_
-- [ ] 4.2 (P) steering に写しを登記する
+- [x] 4.2 (P) steering に写しを登記する
   - `tech.md`: Key Libraries の項を木の中の写し（ワークスペースの版・「版＋path」の依存・`MIT OR Apache-2.0`・crates.io へ出す・`windows` 0.62 の 4 つの機能を直書き）に書き直し、窓のクラスの記述は残す。「crates.io への公開」で出すクレートを 3 つ・版上げで動かす根の行を 3 行に。「外部クレ化」の文を置き場が木の中に移った形に直す
   - `structure.md`: 新しい節「UI Thread Foundation Crate（wintf-winmsg-executor）」（置き場・役割・公開・ライセンス・edition・由来）を足し、「その他の最上位」の `crates-io.yml` の説明を 3 つに、「外部クレ化完了」の語を直す
   - 2 つの文書に `=0.0.5` と 2 つだけのクレートの並びが残らず、写しの節が読める
   - _Boundary: steering の登記_
   - _Requirements: 5.5, 5.6, 5.9, 5.10_
-- [ ] 4.3 (P) `/release` の手順の行数を 3 行にする
+- [x] 4.3 (P) `/release` の手順の行数を 3 行にする
   - `SKILL.md` の根の `Cargo.toml` の行数を 3 行に
   - `procedure.md` の段 1.3（3 行を読み一致を判定）・段 2.1（代わりのやり方の条件と、3 行がどれもリリースの版でなければ止まる判定）・段 3.2 の表（足した行 3・消した行 3）・段 5.1・再開の表・「見直すきっかけ」を 3 行に合わせる
   - 手順に「2 行」の記述が残らず、版上げの後に 3 行を確かめて止まる判定が読める
   - _Boundary: `/release` の手順_
   - _Requirements: 5.7, 5.8, 5.9_
-- [ ] 4.4 (P) `/update` と README の古い記述を書き換える
+- [x] 4.4 (P) `/update` と README の古い記述を書き換える
   - `/update` の `SKILL.md`: 自分のクレートの例に写しを足す・版の表記に写しの `version` を足す・`=` で固定した行の一覧から写しを外す・crates.io に出しているクレートの文を 3 つに
   - `README.md` の crates.io に版を出しているクレートの文と、`doc/README.md` の手順書の説明を 3 つに
   - 書き換えた行が木の中の写しと 3 つのクレートを示している
   - _Boundary: 古い記述の書き換え_
   - _Requirements: 5.9, 5.10_
-- [ ] 4.5 古い記述が残っていないことを確かめ、コミット 4 を作る
+- [x] 4.5 古い記述が残っていないことを確かめ、コミット 4 を作る
   - `git grep` で `=0.0.5`・`"0.0.5"` と、`wintf・dola`／`dola・wintf` の並びを探し、完了 spec・この spec のフォルダ（`.kiro/specs/wintf-winmsg-executor-import/`）・`roadmap*.md`・`crates/pilot/examples/` の記録・`THIRD-PARTY-NOTICES.md`・`crates/shiori-host32-helper/src/main.rs` の doc コメントのほかで 0 件
   - `tools/encoding-check.ps1` が緑
   - 4.1〜4.4 の変更が 1 つのコミットに入っている
