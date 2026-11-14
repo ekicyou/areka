@@ -524,8 +524,8 @@ fn external_authority_attached_to_every_ghost_window_of_every_scope() {
 /// キャラ窓とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd ハンドラ
 /// （`OnDragEnd`）は Free 含む**全**キャラ窓に付く（非 Free は最終再固定・Free は
 /// 保存専用アーム・1.1・task 2.2）。バルーン窓にも `OnDragEnd`（`on_balloon_drag_end`）が
-/// 付く（単独ドラッグ確定 offset の永続 write-through・2.1・task 2.3）。`Anchored` は
-/// char 窓のみ（Free/非 Free とも無条件付与）・バルーン窓には付かない（4.2/1.6）。
+/// 付く（単独ドラッグ確定 offset の永続 write-through・2.1・task 2.3）。`Anchored` の
+/// 付き方は別のテスト（`Anchored(anchor)` の保持）が固定する。
 #[test]
 fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
     let mut world = World::new();
@@ -568,17 +568,6 @@ fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
         world.get::<OnDragEnd>(free_char).is_some(),
         "Free キャラ窓にも OnDragEnd が付く（全アンカー結線・保存専用アーム・1.1・task 2.2）"
     );
-    // Anchored は char 窓のみ（Free/非 Free とも付与）・バルーン窓には付かない（4.2/1.6）
-    assert_eq!(
-        world.get::<Anchored>(snap_char).copied(),
-        Some(Anchored(Anchor::Bottom)),
-        "非 Free キャラ窓は Anchored(Bottom) を保持"
-    );
-    assert_eq!(
-        world.get::<Anchored>(free_char).copied(),
-        Some(Anchored(Anchor::Free)),
-        "Free キャラ窓も Anchored(Free) を保持"
-    );
     for scope in [0usize, 1] {
         let balloon = gw.balloon_window(scope).unwrap();
         assert!(
@@ -588,10 +577,6 @@ fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
         assert!(
             world.get::<OnDragEnd>(balloon).is_some(),
             "scope{scope}: バルーン窓に OnDragEnd（on_balloon_drag_end）が付く（単独ドラッグ確定 offset 保存・task 2.3）"
-        );
-        assert!(
-            world.get::<Anchored>(balloon).is_none(),
-            "scope{scope}: バルーン窓に Anchored は付けない（char 窓のみ）"
         );
     }
 }

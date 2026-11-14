@@ -50,7 +50,7 @@
 //! 行頭が `//` の行を落としてから探す。落とし過ぎ・落とし漏れが無いことは、素の全文には
 //! 語があり、コードだけの本文には無い、という対照で示す。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -62,7 +62,8 @@ use wintf::ecs::WindowStyle;
 use super::spawn_ghost_windows;
 use super::test_support::{ghost_window_entities, titles, two_scope_placements};
 use crate::test_support::zorder_pair_deferred::{
-    BAND_NEEDLES, DEFERRED_NEEDLES, code_only, deferred_hits, rust_sources_under,
+    assert_needles_are_detected, assert_roster_covers, assert_vocabulary_absent, code_only,
+    deferred_hits, rust_sources_under, zorder_production_sources,
 };
 
 /// 重なり順の 2 機構が全部を書いた、配置の crate の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
@@ -93,54 +94,17 @@ fn read_source(relative: &str) -> String {
 /// 先送り語彙は、本フィーチャーの配置の crate の本番ファイルのコードに 1 つも無い。
 #[test]
 fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources() {
-    let mut scanned_files = 0usize;
-    let mut scanned_code_bytes = 0usize;
-
-    for relative in PRODUCTION_FILES {
-        let raw = read_source(relative);
-        assert!(
-            raw.len() > 1_000,
-            "{relative}: 本番ファイルにしては短すぎる（読み違えの疑い）: {} バイト",
-            raw.len()
-        );
-        let code = code_only(&raw);
-        assert!(
-            !code.trim().is_empty(),
-            "{relative}: コメントを落としたら本文が空になった（走査が空振りしている）"
-        );
-
-        let hits = deferred_hits(&code);
-        assert!(
-            hits.is_empty(),
-            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯の語を持つのは本体の受け口と取り出しの相だけ）: {hits:?}"
-        );
-
-        scanned_files += 1;
-        scanned_code_bytes += code.len();
-    }
-
-    assert_eq!(
-        scanned_files,
-        PRODUCTION_FILES.len(),
-        "対象ファイルを全部読めていない"
-    );
-    assert!(
-        scanned_code_bytes > 10_000,
-        "読んだコードが少なすぎる（走査が実体に届いていない）: {scanned_code_bytes} バイト"
+    assert_vocabulary_absent(
+        Path::new(env!("CARGO_MANIFEST_DIR")),
+        &PRODUCTION_FILES,
+        "本体の受け口と取り出しの相",
     );
 }
 
 /// 走査の道具が実際に語を見つけられること、そしてコメントだけを落としていることを固定する。
 #[test]
 fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
-    for (needle, why) in DEFERRED_NEEDLES.into_iter().chain(BAND_NEEDLES) {
-        let sample = format!("let handle = SomeApi::{needle}(hwnd);");
-        let hits = deferred_hits(&sample);
-        assert!(
-            hits.iter().any(|(n, _)| *n == needle),
-            "語 `{needle}`（{why}）を検出できていない: {hits:?}"
-        );
-    }
+    assert_needles_are_detected();
     assert_eq!(
         deferred_hits("ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,")
             .iter()
@@ -245,29 +209,6 @@ fn ghost_windows_carry_no_always_on_top_minimize_or_taskbar_bits() {
     }
 }
 
-/// 配置の `src` 配下の `.rs` を、`CARGO_MANIFEST_DIR` からの相対パス（`/` 区切り）で返す。
-fn all_source_files() -> Vec<String> {
-    rust_sources_under(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
-}
-
-/// 重なり順の 2 機構（ペア・グループ）が全部を書いた、配置の crate の本番ファイル
-/// ＝ファイル名が `zorder_` で始まり、テストでもテスト専用の道具立てでもないもの。
-///
-/// 共有ファイルへ足した継ぎ目（`spawn.rs`／`diag.rs`）はこの名前の規則に合わないので、
-/// 名簿へ人が載せたままになる。よって下の検査は「実物 ⊆ 名簿」の向きだけを機械化し、
-/// 名簿が実物より多いことは許す（多い側は ③ が実在で押さえる）。
-fn zorder_production_sources() -> Vec<String> {
-    all_source_files()
-        .into_iter()
-        .filter(|relative| {
-            let name = relative.rsplit('/').next().unwrap_or(relative);
-            name.starts_with("zorder_")
-                && !name.ends_with("_tests.rs")
-                && !name.ends_with("_test_support.rs")
-        })
-        .collect()
-}
-
 /// 走査対象の一覧が、実在する本番ファイルへ両方向で追随していることを固定する。
 ///
 /// 上の 2 つのテストは `PRODUCTION_FILES` に**載っているものだけ**を読む。名簿が実物から
@@ -279,7 +220,8 @@ fn zorder_production_sources() -> Vec<String> {
 /// 結線されないテスト専用の道具立て（`*_test_support.rs`）だけである。
 #[test]
 fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
-    let actual = zorder_production_sources();
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let actual = zorder_production_sources(manifest);
 
     // ① 道具の較正（この crate の実物で）: 既知の正例が挙がり、木に在る既知の偽例（テスト）は挙がらない。
     assert!(
@@ -287,7 +229,7 @@ fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
         "実物の走査が効いていない（既知の本番ファイルを見つけられない）: {actual:?}"
     );
     assert!(
-        all_source_files().contains(&"src/zorder_group_ledger_tests.rs".to_string()),
+        rust_sources_under(manifest).contains(&"src/zorder_group_ledger_tests.rs".to_string()),
         "較正の外れが失われた: 既知のテストファイルが木に無い（別の対照へ差し替えること）"
     );
     assert!(
@@ -295,21 +237,6 @@ fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
         "テストファイルを本番ファイルとして数えている: {actual:?}"
     );
 
-    // ② 実物が名簿から漏れていない。
-    let missing: Vec<&String> = actual
-        .iter()
-        .filter(|relative| !PRODUCTION_FILES.contains(&relative.as_str()))
-        .collect();
-    assert!(
-        missing.is_empty(),
-        "本番ファイルが先送り語彙の走査対象に載っていない（名簿へ足すこと）: {missing:?}"
-    );
-
-    // ③ 名簿の項目が実在する（改名・移動で名簿だけが取り残されない）。
-    for relative in PRODUCTION_FILES {
-        assert!(
-            source_path(relative).is_file(),
-            "走査対象の一覧に実在しないファイルが載っている: {relative}"
-        );
-    }
+    // ②③ 実物が名簿から漏れず、名簿の項目が実在する（共有の支えが両方向を見る）。
+    assert_roster_covers(manifest, &PRODUCTION_FILES, &actual);
 }

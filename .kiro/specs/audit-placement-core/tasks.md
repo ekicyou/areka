@@ -169,7 +169,7 @@
   - _Dispatch: mechanical — 小さな直しで、テストの期待値は設計が示す_
   - _Requirements: 4.1, 6.6_
 
-- [ ] 6.3 spawn のテストの写しと重なりを消す（U18・指摘 25・64・65・66・69）
+- [x] 6.3 spawn のテストの写しと重なりを消す（U18・指摘 25・64・65・66・69）
   - 中身の重なるテストのファイルとその宣言を消す。
   - 窓を作る道具を spawn のテストの支えへ、Z 順の対の先送りの共通の走査を共有のテストの支えへ移し、crate と本体の両方の片割れから呼ぶ。
   - 本体の重なる 3 つの assert と経緯の注記を消す。
@@ -267,3 +267,4 @@
 - 5.2 のレビューの提案（8.1 で拾う）: `Effect::PersistRemove` の doc にタスク番号（「5.2 が…」）が入っている。無いファイルから鍵を消すと `format-version = 1` だけのファイルができる（読み手は鍵が無いのと同じに扱うので害は無い）。
 - 7.2 の前提: `audit-wintf-input` が自分の 7.1 でドラッグの知らせの `Messages<…>` を消し、`balloon_lock_drag_tests.rs`（L99-101・L444 付近）と `follow_drag_end_gate_tests.rs`（L66-72 付近）を直す。相手が先に着地し、7.2 はその後の形の上でテストの小道具をまとめる。
 - 6.1: 指摘 54 の `emo2_utf8_fixture_decodes_to_the_same_text_as_before` は消さずに説明だけを直した（research の 54 が許すもう 1 つの直し方）。設計 U16 の「較正の当たりは残る所にあるので移す物は無い」は誤りで、この crate の本文の `shell::parse` の呼び出しはこのテストにしか無く、`measure_template_tests.rs` の較正の当たりになっている。
+- 6.3: `cargo test -p areka` の `mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 度だけ赤（単独の回し直しで緑・範囲の外）。1 の spine の揺れと並べて完了の棚卸で見る。

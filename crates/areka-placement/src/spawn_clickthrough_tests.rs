@@ -7,20 +7,6 @@ use super::test_support::{
 };
 
 // -------------------------------------------------------------------------
-// stand-in 即終了（`on_ghost_pressed`）の退役（areka-P0-input-events task 3.2・6.1）
-//
-// 旧テスト `double_click_left_despawns_all_ghost_windows` /
-// `non_left_double_click_and_tunnel_do_not_despawn_ghost_windows` は stand-in
-// 即終了（プレーンなダブルクリックで全窓 despawn）の挙動を檻にしていたが、
-// 本 task で stand-in を退役し正規ハンドラ（`on_char_pointer_pressed`）へ
-// 差し替えたため仕様退役＝除去した（[[obsolete-vs-broken-test-policy]]）。
-// 正規ハンドラの挙動檻（プレーン dblclick は despawn せず DoubleClick 送出／
-// Ctrl+左 dblclick で暫定退避 despawn）は input_events の task 2.7 檻が所有し、
-// task 4.4 で再カバーされる。本 spawn.rs 側は登録の存在
-// （`t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers`）で足る。
-// -------------------------------------------------------------------------
-
-// -------------------------------------------------------------------------
 // T-I4: clickthrough 登録 system（6.1・task 5.2）
 //
 // 実 `ClickThroughRegistryHandle` は wintf 内部（`new` は pub(crate)）でしか

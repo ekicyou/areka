@@ -63,3 +63,50 @@ pub(super) fn fake_window_handle(raw: isize) -> wintf::ecs::WindowHandle {
         hwnd: HWND(raw as *mut core::ffi::c_void),
     }
 }
+
+/// 自プロセス所有の非表示トップレベル窓を作る（wintf 側の確立系テストと同一レシピ）。
+///
+/// owner 関係はトップレベル窓の間でのみ意味を持つため `WS_POPUP`（親なし）で作る。
+/// 重なり管理の結線テスト（ペア・鎖）の 2 ファイルが共に使う。
+#[cfg(test)]
+pub(super) fn create_test_window(title: windows::core::PCWSTR) -> windows::Win32::Foundation::HWND {
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
+    };
+    use windows::core::w;
+    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
+    unsafe {
+        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
+        CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("Static"),
+            title,
+            WINDOW_STYLE(WS_POPUP.0),
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
+        )
+        .expect("CreateWindowExW should create a hidden test window")
+    }
+}
+
+/// 生成したテスト窓を破棄する（後始末）。
+#[cfg(test)]
+pub(super) fn destroy_test_window(hwnd: windows::Win32::Foundation::HWND) {
+    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する。
+    unsafe {
+        let _ = windows::Win32::UI::WindowsAndMessaging::DestroyWindow(hwnd);
+    }
+}
+
+/// ハンドル付きの窓 entity を作る。
+#[cfg(test)]
+pub(super) fn spawn_window(world: &mut World, hwnd: windows::Win32::Foundation::HWND) -> Entity {
+    world.spawn(wintf::ecs::WindowHandle { hwnd }).id()
+}

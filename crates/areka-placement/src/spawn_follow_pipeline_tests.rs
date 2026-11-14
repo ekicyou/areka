@@ -252,11 +252,6 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
 
 /// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16・task 8.3）。
 ///
-/// 仕様退役: 2026-07-11 要件 4.8 —— 本テストの旧版
-/// `t_i4_char_move_restores_initial_offset_after_balloon_solo_move` が檻に
-/// していた「次のキャラ窓移動で初期 offset へスナップバック」は仕様として
-/// 退役し、調整後 offset の記憶・追従が正となった（記憶挙動の檻へ書き換え）。
-///
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World 上で、
 /// spawn が付けた**実際の** `OnDrag` ハンドラ（バルーン窓の
 /// `on_balloon_drag`）を呼んで検証する＝結線の檻を兼ねる。

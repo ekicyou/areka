@@ -38,57 +38,24 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::Schedules;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
-};
-use windows::core::{PCWSTR, w};
+use windows::core::w;
 use wintf::ecs::window::{ZOrderChainPlan, drain_window_pos_commands};
-use wintf::ecs::{FrameFinalize, KeepDirectlyAbove, WindowHandle};
+use wintf::ecs::{FrameFinalize, KeepDirectlyAbove};
 
+use super::test_support::{create_test_window, destroy_test_window, spawn_window};
 use super::wire_zorder_pair;
+use crate::test_support::zorder_pair_deferred::code_only;
 use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
-// 実窓・World のヘルパ（`spawn_zorder_pair_wiring_tests.rs` と同一レシピ）
+// 実窓・World のヘルパ（窓を作る道具は `spawn_test_support.rs` の共有）
 // -------------------------------------------------------------------------
-
-/// 自プロセス所有の非表示トップレベル窓を作る。
-fn create_test_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a hidden test window")
-    }
-}
 
 /// 作った窓をすべて破棄する（作った枚数と壊す枚数を必ず揃える）。
 fn destroy(windows: &[HWND]) {
     for hwnd in windows {
-        // SAFETY: Win32 境界。自プロセスが生成した窓を破棄する。
-        unsafe {
-            let _ = DestroyWindow(*hwnd);
-        }
+        destroy_test_window(*hwnd);
     }
-}
-
-/// ハンドル付きの窓 entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world.spawn(WindowHandle { hwnd }).id()
 }
 
 // -------------------------------------------------------------------------
@@ -265,15 +232,6 @@ fn the_wiring_chains_the_four_systems_with_a_sync_point() {
         raw.contains("スコープ間には一切張らない"),
         "対照の前提が崩れている（素の全文に説明文が無い）"
     );
-}
-
-/// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// 空白の連なりを 1 つに詰める（改行や字下げの入り方で檻が壊れないようにする）。

@@ -30,15 +30,14 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use tracing::Level;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
-};
-use windows::core::{PCWSTR, w};
+use windows::Win32::UI::WindowsAndMessaging::{GW_OWNER, GetWindow};
+use windows::core::w;
 use wintf::ecs::{
-    FrameFinalize, KeepDirectlyAbove, ReassertZOrder, WindowHandle, ZOrderPairStrategy,
+    FrameFinalize, KeepDirectlyAbove, ReassertZOrder, ZOrderPairStrategy,
     apply_zorder_pair_maintenance, establish_owner_links,
 };
 
+use super::test_support::{create_test_window, destroy_test_window, spawn_window};
 use super::wire_zorder_pair;
 use crate::diag::zorder_pair_strategy_line;
 use log_capture_kit::capture;
@@ -47,49 +46,10 @@ use log_capture_kit::capture;
 // 実窓・World のヘルパ
 // -------------------------------------------------------------------------
 
-/// 自プロセス所有の非表示トップレベル窓を作る（wintf 側の確立系テストと同一レシピ）。
-///
-/// owner 関係はトップレベル窓の間でのみ意味を持つため `WS_POPUP`（親なし）で作る。
-fn create_test_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a hidden test window")
-    }
-}
-
-/// 生成したテスト窓を破棄する（後始末）。
-fn destroy_test_window(hwnd: HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する。
-    unsafe {
-        let _ = DestroyWindow(hwnd);
-    }
-}
-
 /// OS 側が持つ owner を読み戻す（`GetWindow(GW_OWNER)`）。owner 無しは `None`。
 fn owner_of(hwnd: HWND) -> Option<HWND> {
     // SAFETY: Win32 境界。読み取りのみ。
     unsafe { GetWindow(hwnd, GW_OWNER) }.ok()
-}
-
-/// ハンドル付きの窓 entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world.spawn(WindowHandle { hwnd }).id()
 }
 
 /// 実窓 2 枚とペア宣言済みの World を組む。返すのは（World, バルーン entity, 両ハンドル）。
@@ -124,28 +84,6 @@ fn request_was_consumed(world: &World, balloon_window: Entity) -> bool {
 // -------------------------------------------------------------------------
 // ストラテジ Resource
 // -------------------------------------------------------------------------
-
-/// 結線は実行時ストラテジを**案 A・補助浮上なし**で明示挿入する（要件 5.6）。
-#[test]
-fn wire_inserts_plan_a_strategy_resource() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-
-    assert!(
-        world.get_resource::<ZOrderPairStrategy>().is_none(),
-        "前提: 結線の前にストラテジは入っていない"
-    );
-
-    wire_zorder_pair(&mut world);
-
-    assert_eq!(
-        *world.resource::<ZOrderPairStrategy>(),
-        ZOrderPairStrategy::OwnerLink {
-            raise_assist: false
-        },
-        "結線が入れる既定は案 A（owner 関係）・補助浮上なし（要件 5.6）"
-    );
-}
 
 /// 結線は**挿入した当の値**を起動時ログへ 1 行残す（要件 5.6・task 5.1 の観測条項）。
 ///

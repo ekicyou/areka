@@ -240,6 +240,8 @@ pub mod measure_template {
 
 /// 割った `spawn_zorder_pair_deferred_tests` の 2 つの片割れ（配置の crate と本体）が共に使う
 /// 語の表と走査器（spec: placement-crate-split 要件 3.6・5.3）。写しを作らず、ここに 1 つだけ置く。
+/// 名簿の走査（[`assert_vocabulary_absent`]・[`assert_roster_covers`]）と探針の自己検査
+/// （[`assert_needles_are_detected`]）もここにあり、片割れは名簿と実物での較正だけを持つ。
 /// [`measure_template`] の `code_only` とは中身が違う（こちらは `//` の行を落とすだけ）のでまとめない。
 pub mod zorder_pair_deferred {
     /// 先送り語彙（小文字）と、それが何の入口かの説明。
@@ -313,6 +315,87 @@ pub mod zorder_pair_deferred {
         }
         found.sort();
         found
+    }
+
+    /// `manifest/src` 配下の重なり順の本番ファイル＝ファイル名が `zorder_` で始まり、テストでも
+    /// テスト専用の道具立て（`*_test_support.rs`）でもないもの（`manifest` からの相対パス）。
+    pub fn zorder_production_sources(manifest: &std::path::Path) -> Vec<String> {
+        rust_sources_under(manifest)
+            .into_iter()
+            .filter(|relative| {
+                let name = relative.rsplit('/').next().unwrap_or(relative);
+                name.starts_with("zorder_")
+                    && !name.ends_with("_tests.rs")
+                    && !name.ends_with("_test_support.rs")
+            })
+            .collect()
+    }
+
+    /// 名簿の各ファイルを実際に読み、コメントを落とした本文に先送りの語も帯の語も無いことを主張する。
+    /// 帯の語を持つ持ち主は `band_owners`（失敗の文言にだけ使う）。
+    pub fn assert_vocabulary_absent(
+        manifest: &std::path::Path,
+        roster: &[&str],
+        band_owners: &str,
+    ) {
+        let mut scanned_code_bytes = 0usize;
+        for relative in roster {
+            let path = manifest.join(relative);
+            let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+                panic!("本番ファイルを読めなかった（{}）: {e}", path.display())
+            });
+            assert!(
+                raw.len() > 1_000,
+                "{relative}: 本番ファイルにしては短すぎる（読み違えの疑い）: {} バイト",
+                raw.len()
+            );
+            let code = code_only(&raw);
+            assert!(
+                !code.trim().is_empty(),
+                "{relative}: コメントを落としたら本文が空になった（走査が空振りしている）"
+            );
+            let hits = deferred_hits(&code);
+            assert!(
+                hits.is_empty(),
+                "{relative}: 先送りの語か帯の語が本番コードに現れている（帯の語を持つのは {band_owners} だけ）: {hits:?}"
+            );
+            scanned_code_bytes += code.len();
+        }
+        assert!(
+            scanned_code_bytes > 10_000,
+            "読んだコードが少なすぎる（走査が実体に届いていない）: {scanned_code_bytes} バイト"
+        );
+    }
+
+    /// 探針の自己検査: 表の語はどれも、その語を含む合成の 1 行から見つかる。
+    pub fn assert_needles_are_detected() {
+        for (needle, why) in DEFERRED_NEEDLES.into_iter().chain(BAND_NEEDLES) {
+            let sample = format!("let handle = SomeApi::{needle}(hwnd);");
+            let hits = deferred_hits(&sample);
+            assert!(
+                hits.iter().any(|(n, _)| *n == needle),
+                "語 `{needle}`（{why}）を検出できていない: {hits:?}"
+            );
+        }
+    }
+
+    /// 名簿が実物へ両方向で追随していること: ⑴ 実在する本番ファイルが名簿から漏れていない、
+    /// ⑵ 名簿の各項目が実在する。`actual` は [`zorder_production_sources`] の結果。
+    pub fn assert_roster_covers(manifest: &std::path::Path, roster: &[&str], actual: &[String]) {
+        let missing: Vec<&String> = actual
+            .iter()
+            .filter(|relative| !roster.contains(&relative.as_str()))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "本番ファイルが先送り語彙の走査対象に載っていない（名簿へ足すこと）: {missing:?}"
+        );
+        for relative in roster {
+            assert!(
+                manifest.join(relative).is_file(),
+                "走査対象の一覧に実在しないファイルが載っている: {relative}"
+            );
+        }
     }
 
     /// 本文に現れる先送りの語と帯の語（小文字にして探す）。
