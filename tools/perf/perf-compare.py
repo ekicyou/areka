@@ -441,7 +441,7 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
         if found != goal.judge_version:
             result.fail(
                 f"判定スクリプトの版が違います: 目標定義 {goal.judge_version} ／ 走行 {found}",
-                f"judge script version mismatch: goal {goal.judge_version} / run {found}",
+                f"judge script version mismatch: goal {goal.judge_version!a} / run {found!a}",
             )
             return result
 
@@ -449,7 +449,7 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
         result.fail(
             f"主指標 {goal.primary_metric} の値が {result.raw(goal.primary_metric)!r} です"
             "（測れていません）",
-            f"primary metric {goal.primary_metric} is {result.raw(goal.primary_metric)!a} (not measured)",
+            f"primary metric {goal.primary_metric!a} is {result.raw(goal.primary_metric)!a} (not measured)",
         )
     return result
 
@@ -863,7 +863,7 @@ def compare(args: argparse.Namespace) -> int:
     for metric in goal.must_not_regress:
         if measured and not any(metric in r.metrics for r in measured):
             raise bad_input(
-                f"secondary metric {metric} appears in none of the measured runs",
+                f"secondary metric {metric!a} appears in none of the measured runs",
                 ["check the spelling of the metric name (must_not_regress in the goal file)."],
             )
     decision = decide(runs, goal)

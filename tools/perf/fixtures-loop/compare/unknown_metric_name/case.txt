@@ -8,7 +8,8 @@ b2 = ../runs/idle_620_p95_150
 exit = 3
 
 stderr_substr = perf-compare: bad input
-stderr_substr = secondary metric frame_interval_p95 appears in none
+stderr_substr = secondary metric '\u63cf\u753b\u9593\u9694_p95' appears in none
 
 note = adopted と同じ 4 本の走行を読む。入力不正（exit 3）で終わるので結果は書かれない。
 note = 検査を戻すと ADOPTED（exit 0）になって赤になる。
+note = 綴り違いの名前を日本語にしてあるのは、失敗の文が名前を ascii で出すこと（!a）の較正を兼ねるため（!a を外すと stderr の ASCII の見張りで赤）。

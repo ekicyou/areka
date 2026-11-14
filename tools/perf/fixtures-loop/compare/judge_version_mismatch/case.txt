@@ -9,7 +9,7 @@ exit = 4
 verdict = MEASURE_FAILED
 
 stderr_substr = measure failed
-stderr_substr = judge script version mismatch: goal 0.0.1 / run 0.5.0
+stderr_substr = judge script version mismatch: goal '0.0.1' / run '0.5.0'
 
 note = 版が違えば判定式か較正値が違い、前後で意味の違う数を引き算することになる（設計 C1）。
 note = goal.toml は本番の写しの judge_version だけを 0.0.1 にした。検査を戻すと ADOPTED になる。

@@ -81,7 +81,7 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     try:
         expected = int(fields["exit"])
     except ValueError as exc:
-        raise env.bad_input(f"{path}: exit is not an integer ({fields['exit']!r})") from exc
+        raise env.bad_input(f"{path}: exit is not an integer ({fields['exit']!a})") from exc
     return SelftestCase(directory.name, directory, fields.get("title", "(説明なし)"), expected,
                         fields.get("stderr_substr", ""))
 

@@ -228,7 +228,7 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
 
 
 def _stderr_reasons(case: SelftestCase, err: str) -> list[str]:
-    return [f"stderr does not contain {ascii(s)}"
+    return [f"stderr does not contain {ascii(s)}: {ascii(err)}"
             for s in case.stderr_substrings if s not in err]
 
 

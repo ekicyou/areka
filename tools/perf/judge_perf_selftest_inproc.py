@@ -201,4 +201,21 @@ def run(judge: types.ModuleType) -> tuple[int, list[str]]:
             reasons.append(f"selftest with {count} in-process check(s) printed no count line")
         if (count == 0) != ("【較正になっていない】差し替えの較正" in text):
             reasons.append(f"selftest with {count} in-process check(s): wrong 'not calibrated' line")
+
+    # [tick] の名前の一覧が逐語サンプルとずれたら、自己較正は不合格(1)で ng に 1 つ数える（tick_failures）。
+    # 検体 1 件では赤の検体が欠けて ng が 0 にならないので、差し替え無しの同じ走行との差で見る。
+    def selftest_code_ng(fields) -> tuple[int, int]:
+        out = io.StringIO()
+        with mock.patch.object(judge, "_selftest_collect", lambda _root: [one]), \
+                mock.patch.object(sys.modules[__name__], "run", lambda _judge: (1, [])), \
+                mock.patch.object(judge, "J_TICK_WINDOW_FIELDS", fields), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = judge.run_selftest()
+        return code, int(_last_line(out.getvalue()).rsplit("ng=", 1)[-1])
+
+    checks += 1
+    base = selftest_code_ng(judge.J_TICK_WINDOW_FIELDS)
+    drift = selftest_code_ng(judge.J_TICK_WINDOW_FIELDS[::-1])
+    if drift != (1, base[1] + 1):
+        reasons.append(f"tick field list drift: (exit, ng) {drift}, expected (1, {base[1] + 1})")
     return checks, reasons

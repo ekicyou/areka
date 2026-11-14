@@ -201,8 +201,8 @@ def talk_line(at: datetime, event: str) -> str:
     """発話（talk）の開始・置換・終了 info!（`areka-kanade/src/schedule/steady.rs` の steady_talk・steady_talk_replace・steady_talk_done）。
 
     `target: "kanade"` は指示子なので target 位置に出る。`event` はフィールドなので
-    メッセージの後ろに引用符付きで出る。発話中の CPU の頂（要件 5.4）はこの 2 本で挟まれた
-    区間の採取点から採る。
+    メッセージの後ろに引用符付きで出る。発話中の CPU の頂（要件 5.4）は開始（または置換）と
+    終了で挟まれた区間の採取点から採る。
     """
     if event == "steady_talk":
         return f'{ts(at)}  INFO kanade: 応答にスクリプト——再生起動 event="{event}" talk_id=7 origin="mouse"'
