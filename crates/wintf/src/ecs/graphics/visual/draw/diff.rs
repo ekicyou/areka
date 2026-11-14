@@ -71,7 +71,8 @@ impl PxRect {
     }
 }
 
-/// 項の種類。`Draw { unbounded }` は重ね方が `SOURCE_OVER` でない件（絵を切り抜きまで広げて合成する）。
+/// 項の種類。`Draw { unbounded }` は重ね方が `SOURCE_OVER` でない件（絵を切り抜きまで広げて合成する）と、
+/// 縮める `HIGH_QUALITY_CUBIC` の件（答えが描く範囲で変わる・R1）。どちらも範囲は矩形の切り抜きか全面。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EntryKind {
     Draw { unbounded: bool },
@@ -201,11 +202,25 @@ fn unbounded(mix: MixMode) -> bool {
     matches!(draw_method(mix, true), DrawMethod::Image(c) if c != D2D1_COMPOSITE_MODE_SOURCE_OVER)
 }
 
+/// 縮める `HIGH_QUALITY_CUBIC` の件（D2D は先に縮めた絵を作り、その答えが描く範囲で変わる・WARP で測った・
+/// R1）。`linear` の小さい方の特異値が 1 未満。拡大 1 の回転を縮めない扱いにするため 1e-4 の幅を取る。
+fn downscaling_hqc(linear: [f32; 4], interpolation: D2D1_INTERPOLATION_MODE) -> bool {
+    if interpolation != D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC {
+        return false;
+    }
+    let [a, b, c, d] = linear.map(f64::from);
+    let sum = a * a + b * b + c * c + d * d;
+    let det = a * d - b * c;
+    let min_sq = (sum - (sum * sum - 4.0 * det * det).max(0.0).sqrt()) / 2.0;
+    min_sq.sqrt() < 1.0 - 1e-4
+}
+
 /// 件が画素を変えうる範囲（物理・整数・外向き・2.1）。有限でない値・`i32` に収まらない値は `None`。
 ///
 /// - `SOURCE_OVER` で描く件: `exact` を外向きに丸め、補間が最近傍でなければ各辺に `ceil(2 × s)`
 ///   （`s`＝`linear` の列の長さの大きい方・1 未満なら 1）を足し、親の鎖の切り抜きで切る。
-/// - 重ね方が `SOURCE_OVER` でない件: 親の鎖の矩形の切り抜き。無ければ描画面の全面。
+/// - 重ね方が `SOURCE_OVER` でない件と、縮める `HIGH_QUALITY_CUBIC` の件: 親の鎖の矩形の切り抜き。
+///   無ければ描画面の全面。
 pub(crate) fn item_bounds(
     exact: [f32; 4],
     linear: [f32; 4],
@@ -217,7 +232,7 @@ pub(crate) fn item_bounds(
     if !exact.iter().chain(&linear).all(|v| v.is_finite()) {
         return None;
     }
-    if unbounded(mix) {
+    if unbounded(mix) || downscaling_hqc(linear, interpolation) {
         let full = PxRect {
             left: 0,
             top: 0,
@@ -276,7 +291,7 @@ pub(crate) fn item_entry(
         id: finish(id, parent.key.map(|k| k.0)),
         shape: finish(shape, parent.key.map(|k| k.1)),
         kind: EntryKind::Draw {
-            unbounded: unbounded(mix),
+            unbounded: unbounded(mix) || downscaling_hqc(linear, interpolation),
         },
         parent: parent.index,
         end: 0,

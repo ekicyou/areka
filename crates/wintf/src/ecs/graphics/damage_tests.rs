@@ -188,8 +188,9 @@ fn partial_is_bounding_rect_of_removed_prev_and_added_moved_now() {
     ];
     let prev = [vec![outside_rect], prev.to_vec(), vec![clip]].concat();
     let p = partial(plan(&input(&prev, &now)));
-    // 消えた (2,40)-(8,50)・動いた (10,10)-(20,20)・足された (90,70)-(120,90) を描画面で切る
-    let want = rect(2, 10, 100, 80);
+    // 消えた (2,40)-(8,50)・動いた (10,10)-(20,20)・足された (90,70)-(120,90) を描画面で切り、
+    // 縁にかかる b (30,5)-(40,15) を丸ごと含める（R1）
+    let want = rect(2, 5, 100, 80);
     assert_eq!(p.rects, vec![want]);
     assert!(p.shifts.is_empty());
     assert_eq!(p.area, want.area());
@@ -389,24 +390,60 @@ fn whole_surface_candidate_accepts_shift_without_root_list() {
     assert_eq!(p.area, 100 * 20);
     assert_eq!(p.present_rect, rect(0, 0, 100, 80));
     assert_eq!(p.items_redrawn, 1);
+}
 
-    // S1: 根の命令の列を持てば描画面の全面の候補も写さない
+#[test]
+fn s1_root_list_present_with_change_is_full_undecidable() {
+    // 根の命令の列の中の絵の答えは描く範囲で変わりうるので、写しも範囲だけも使わない（R1）
+    let (prev, now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
     let i = PlanInput {
         root_present: true,
         ..input(&prev, &now)
     };
-    let p = partial(plan(&i));
-    assert!(p.shifts.is_empty());
-    assert_eq!(p.rects, vec![rect(10, 10, 30, 75)]);
+    assert_eq!(plan(&i), ComposePlan::Full(FullReason::Undecidable));
+    // 変わらない回は何もしない・写すだけのまま
+    let i = PlanInput {
+        root_present: true,
+        ..input(&prev, &prev)
+    };
+    assert_eq!(plan(&i), ComposePlan::Skip);
+    let i = PlanInput {
+        presented: false,
+        ..i
+    };
+    assert_eq!(plan(&i), ComposePlan::PresentOnly);
+}
+
+// ---- 描く矩形を、交わる件の範囲で閉じる（R1） ----
+
+#[test]
+fn drawn_rect_grows_by_touching_items_in_a_chain_but_not_by_apart_ones() {
+    let b = item(2, rect(18, 18, 30, 30));
+    let c = item(3, rect(28, 28, 40, 40));
+    let apart = item(4, rect(60, 60, 70, 70));
+    let prev = [
+        item(1, rect(10, 10, 20, 20)),
+        b.clone(),
+        c.clone(),
+        apart.clone(),
+    ];
+    // 1 を右へ 2 動かす: 変化 (10,10)-(22,20) に b がかかり、広がった矩形に c がかかる
+    let now = [item(5, rect(12, 10, 22, 20)), b, c, apart];
+    let p = partial(plan(&input(&prev, &now)));
+    assert_eq!(p.rects, vec![rect(10, 10, 40, 40)]);
+    assert_eq!(p.items_redrawn, 3);
 }
 
 #[test]
-fn s1_root_list_present_falls_back() {
-    let (prev, now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
-    assert_falls_back(&PlanInput {
-        root_present: true,
-        ..input(&prev, &now)
-    });
+fn drawn_rect_grown_to_whole_surface_is_full_covers_surface() {
+    // 動かない背景の件が描画面の全面を覆う
+    let back = item(9, rect(-10, -10, 200, 200));
+    let prev = [back.clone(), item(1, rect(10, 10, 20, 20))];
+    let now = [back, item(2, rect(12, 10, 22, 20))];
+    assert_eq!(
+        plan(&input(&prev, &now)),
+        ComposePlan::Full(FullReason::CoversSurface)
+    );
 }
 
 #[test]

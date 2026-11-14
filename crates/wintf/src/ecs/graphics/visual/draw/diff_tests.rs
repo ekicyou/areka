@@ -192,6 +192,44 @@ fn non_source_over_item_spreads_to_rect_clip_or_whole_surface() {
     assert_eq!(o.bounds, r(5, 5, 15, 15));
 }
 
+/// 縮める `HIGH_QUALITY_CUBIC` の件は先に縮めた絵の答えが描く範囲で変わる（WARP で測った・R1）ので、
+/// `SOURCE_OVER` でない件と同じく矩形の切り抜きか全面まで広げる。拡大・回転だけの件は自分の範囲。
+#[test]
+fn downscaling_high_quality_cubic_spreads_like_non_source_over() {
+    let hqc = D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC;
+    let mat = Matrix3x2::translation(5.0, 5.0);
+    let c = layer(Layer::ClipRect, Aabb::new(1.5, 2.0, 40.0, 30.2), &root());
+    let in_c = root().inner(0, &c);
+    for (scale, want) in [((0.8, 0.8), r(1, 2, 40, 31)), ((1.0, 0.5), r(1, 2, 40, 31))] {
+        let a = item(1, mat, hqc, OVER, &in_c, scale).unwrap();
+        assert_eq!(a.kind, EntryKind::Draw { unbounded: true }, "{scale:?}");
+        assert_eq!(a.bounds, want, "{scale:?}");
+    }
+    let a = item(1, mat, hqc, OVER, &root(), (0.8, 0.8)).unwrap();
+    assert_eq!(a.bounds, r(0, 0, 200, 100));
+    // 拡大と、拡大 1 の回転（f32 の誤差で特異値が 1 をわずかに下回る）は縮めない
+    let (sin, cos) = 0.5f32.sin_cos();
+    let turn = Matrix3x2 {
+        M11: cos,
+        M12: sin,
+        M21: -sin,
+        M22: cos,
+        ..mat
+    };
+    for (m, s) in [
+        (mat, (1.25, 1.25)),
+        (turn, (1.0, 1.0)),
+        (turn, (1.25, 1.25)),
+    ] {
+        let a = item(1, m, hqc, OVER, &root(), s).unwrap();
+        assert_eq!(a.kind, EntryKind::Draw { unbounded: false }, "{s:?}");
+        assert_ne!(a.bounds, r(0, 0, 200, 100), "{s:?}");
+    }
+    // ほかの補間は縮めても自分の範囲
+    let l = item(1, mat, LINEAR, OVER, &root(), (0.8, 0.8)).unwrap();
+    assert_eq!(l.kind, EntryKind::Draw { unbounded: false });
+}
+
 #[test]
 fn margin_per_interpolation_and_nearest_is_zero() {
     let exact = [10.25, 10.0, 20.25, 20.0];

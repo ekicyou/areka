@@ -186,6 +186,33 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
         };
     }
 
+    // R1: 根の命令の列の中の絵の答えは描く範囲で変わりうる（WARP で測った）ので範囲だけでは描かない
+    if input.root_present {
+        return ComposePlan::Full(FullReason::Undecidable);
+    }
+    // R1: 絵を変形して描く件の答えは描く範囲（件の範囲 ∩ 切り抜き）で 1 段変わりうる（WARP で測った）ので、
+    // 描く矩形（写しの帯も）を交わる件の範囲で閉じる＝件を丸ごと描く。中身は見えないので全部の件で閉じる
+    // shortcut: 1 つの矩形につき最悪 O(n²)、件が多くて重ければ範囲で引ける表にする
+    for r in rects.iter_mut() {
+        loop {
+            let mut grown = *r;
+            for e in now
+                .iter()
+                .filter(|e| matches!(e.kind, EntryKind::Draw { .. }))
+            {
+                if !e.bounds.intersect(grown).is_empty() {
+                    grown = grown.union(e.bounds.intersect(surface));
+                }
+            }
+            if grown == *r {
+                break;
+            }
+            *r = grown;
+        }
+        if *r == surface {
+            return ComposePlan::Full(FullReason::CoversSurface);
+        }
+    }
     // `emit_within` が描く件と同じ数え方
     let items_redrawn = now
         .iter()
