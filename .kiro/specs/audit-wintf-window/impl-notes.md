@@ -278,3 +278,13 @@
 - 赤（直す前）: 今のコードのままで `left: 1, right: 2`（旗が立った 2 度目は掛けない）。
 - 較正: `track_mouse_leave` の頭に thread_local の「1 度だけ」の門を入れる → `every_mouse_move_arms_the_leave_watch` が赤（`left: 1, right: 2`）。門を外して緑に戻した。
 - テストの数: `window_proc::mouse_move` 8→9（足した 1 本）・`pointer::types` 22→21（消した 1 本）。
+
+## 13.3
+
+- 45: `WM_MOUSEMOVE` の当たった枝と当たらない枝を `let target_entity = hit_entity.unwrap_or(window_entity);` の 1 本にまとめた。`get_entity_mut` の失敗はどちらでも今の当たった枝の `warn!`「[WM_MOUSEMOVE] Failed to get entity_mut」。挿入の `debug!`「PointerState inserted (Enter)」に `hit`（当たったか）の欄を足し、当たらない枝だけの字面「PointerState inserted on Window (no hit)」「PointerState moved to Window, Leave marker inserted」は無くなった。`PointerState` の構築（`local_point` の欄を含む）は中身を変えず、`WM_MOUSEMOVE` の中の 1 か所になった（申し合わせ ⒞）。
+- 離脱の付け外しを `leave_pointer(world, window_entity, keep: Option<Entity>)` に出した（`debug!`「PointerState moved, Leave marker inserted」に `old_entity`・`new_entity`＝keep・`window`）。`WM_MOUSEMOVE` は `Some(target_entity)`、`WM_MOUSELEAVE` は `None` で呼ぶ。`WM_MOUSELEAVE` の自前の集め直しは消え、字面「PointerLeave marker inserted (scoped to window)」も無くなった（使っていた `hwnd` は `_hwnd` に）。
+- `collect_entities_to_leave` の `exclude` を `Option<Entity>` にし、既存のテスト 4 本の引数を `Some(..)` に直した（主張は変えない）。
+- 消した字面の git grep: `git grep "PointerState inserted on Window\|PointerState moved to Window\|PointerLeave marker inserted"` は `mouse_move.rs` の本番の行だけ（テスト・fixture・設定・areka 側からの参照は 0）。完了 spec の文書・記録に出てくるのは残す字面（「PointerState moved, Leave marker inserted」「PointerState inserted (Enter)」）だけ。
+- 48: `mouse_move_dispatch_tests.rs` に `mouse_leave_leaves_only_the_window_it_reached` を足した。窓 A・B（`Window` 付きの素の entity）に `PointerState` の子を 1 つずつ置き、`dispatch_window_message` で A へ `WM_MOUSELEAVE` → A の子は `PointerState` 無し・`PointerLeave` 付き、B の子はそのまま。続けて B へ配ると B の子も離脱になる。窓は作らない（受け手は Win32 を呼ばない）。
+- 較正: `collect_entities_to_leave` の窓の絞り込み（`find_owner_window(world, e) == Some(window_entity)`）を外す → `mouse_leave_leaves_only_the_window_it_reached` と `test_collect_protects_other_windows_pointer_state` が赤。戻して緑。戻した後の行は元の形（`git diff` で確かめた）。
+- テストの数: `cargo test -p wintf --lib window_proc::mouse_move` 9→10 緑。行数: `mouse_move.rs` 612→530・`mouse_move_dispatch_tests.rs` 56→111。build・fmt 通る・clippy に足した警告は無い（`drop(entity_ref)` の `drop_non_drop` は元の 2 か所から 1 か所に減っただけ）。

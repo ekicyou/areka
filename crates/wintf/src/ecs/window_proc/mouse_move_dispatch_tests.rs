@@ -6,13 +6,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use windows::Win32::Foundation::{LPARAM, WPARAM};
+use bevy_ecs::hierarchy::ChildOf;
+use bevy_ecs::prelude::Entity;
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, SendMessageW, WM_MOUSEMOVE};
 
 use super::super::window_pos::window_pos_transition_tests::{DISPATCH_TARGET, create_test_window};
+use crate::ecs::pointer::{PointerLeave, PointerState};
 use crate::ecs::test_support::capture_under_filter;
-use crate::ecs::window::WindowHandle;
+use crate::ecs::window::{Window, WindowHandle};
 use crate::ecs::world::EcsWorld;
+use crate::executor::util::WindowMessage;
 
 /// 同じ窓へ `WM_MOUSEMOVE` を 2 回配ると、離脱の見張り（`TME_LEAVE`）を 2 回掛ける——
 /// 見張りの行（成功の `trace` か失敗の `debug`）が 2 本残る（6 番）。
@@ -53,4 +58,54 @@ fn every_mouse_move_arms_the_leave_watch() {
         .filter(|l| l.contains("TrackMouseEvent(TME_LEAVE)"))
         .count();
     assert_eq!(armed, 2, "移動のたびに見張りを掛ける。ログ:\n{log}");
+}
+
+/// `WM_MOUSELEAVE` は届いた窓の部品だけを離脱にする（48 番）——窓 A へ配ると A の子は
+/// `PointerState` を外して `PointerLeave` が付き、B の子の `PointerState` は残る。続けて B へ
+/// 配ると B の子も離脱になる。
+#[test]
+fn mouse_leave_leaves_only_the_window_it_reached() {
+    let world = Rc::new(RefCell::new(EcsWorld::new()));
+    let (window_a, child_a, window_b, child_b) = {
+        let mut w = world.borrow_mut();
+        let w = w.world_mut();
+        let window_a = w.spawn(Window::default()).id();
+        let window_b = w.spawn(Window::default()).id();
+        let child_a = w.spawn((ChildOf(window_a), PointerState::default())).id();
+        let child_b = w.spawn((ChildOf(window_b), PointerState::default())).id();
+        (window_a, child_a, window_b, child_b)
+    };
+    let leave = |target: Entity| {
+        let m = WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_MOUSELEAVE,
+            wparam: WPARAM(0),
+            lparam: LPARAM(0),
+        };
+        crate::ecs::dispatch_window_message(&world, target, &m);
+    };
+    // (PointerState がある, PointerLeave がある)
+    let state = |e: Entity| {
+        let w = world.borrow();
+        let w = w.world();
+        (
+            w.get::<PointerState>(e).is_some(),
+            w.get::<PointerLeave>(e).is_some(),
+        )
+    };
+
+    leave(window_a);
+    assert_eq!(state(child_a), (false, true), "A の子は離脱になる");
+    assert_eq!(
+        state(child_b),
+        (true, false),
+        "B の子の PointerState は残る"
+    );
+
+    leave(window_b);
+    assert_eq!(
+        state(child_b),
+        (false, true),
+        "B へ配ると B の子も離脱になる"
+    );
 }
