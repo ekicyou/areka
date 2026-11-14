@@ -4,12 +4,11 @@
 //! 窓は偽の部品（`BalloonWindowMarker`＋`DragConfig`）だけで組み、記録は
 //! `log-capture-kit`（`test_support::capture`）で取る。
 
-use std::collections::BTreeSet;
-
 use wintf::ecs::drag::DragConfig;
 
 use super::super::spawn::BalloonWindowMarker;
 use super::*;
+use crate::shared_test_support::scopes;
 use log_capture_kit::{CapturedEvent, capture};
 
 fn spawn_balloon(world: &mut World, scope: usize) -> Entity {
@@ -27,10 +26,6 @@ fn world_with_balloons() -> (World, [Entity; 2]) {
 
 fn movable(world: &World, e: Entity) -> bool {
     world.get::<DragConfig>(e).unwrap().move_window
-}
-
-fn scopes(raw: &[u32]) -> BTreeSet<u32> {
-    raw.iter().copied().collect()
 }
 
 fn reason(world: &World, scope: u32) -> Option<HoldReason> {

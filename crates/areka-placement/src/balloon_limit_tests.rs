@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::resolver::test_support::px;
+use crate::test_support::{contained, point};
 
 // ---------------------------------------------------------------------------
 // 檻の道具（本体とは独立にここへ置く・resolver 檻 `resolver_test_support.rs` と同流儀）
@@ -35,21 +36,6 @@ fn balloon_size(dpi: i32) -> SizePx {
         w: px(400, dpi),
         h: px(300, dpi),
     }
-}
-
-fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
-}
-
-/// 矩形 (pos, size) が area へ 4 辺内包されているか（right/bottom は排他側）。
-///
-/// 右下辺の算出は `saturating_add`——本檻は極値入力（`i32::MAX` 位置）も与えるため、
-/// **判定道具の側が先に溢れて**本体の欠陥を隠すことがあってはならない。
-fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x.saturating_add(size.w) <= area.right
-        && pos.y.saturating_add(size.h) <= area.bottom
 }
 
 /// 位置グリッド（十分外側〜内側〜十分外側）。等値・冪等・事後条件の全面走査に使う。

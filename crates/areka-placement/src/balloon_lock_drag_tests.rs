@@ -7,11 +7,11 @@
 //! wintf がドラッグの始まりに控える `WindowDragContextResource` もそのまま通る。
 //! 止めたドラッグでは wintf が窓を動かさないので、バルーンの `WindowPos` は書き換えない。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
@@ -21,7 +21,7 @@ use wintf::ecs::drag::{
     WindowDragContext, WindowDragContextResource, dispatch_drag_events,
 };
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{PhysicalPoint, Point, SizeI, Window, WindowHandle, WindowPos};
+use wintf::ecs::{PhysicalPoint, Point, SizeI, Window, WindowPos};
 
 use super::super::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag, on_balloon_drag_end,
@@ -32,6 +32,8 @@ use super::super::resolver::{Anchor, PointPx, RectPx};
 use super::super::spawn::{BalloonKeywordBase, CharWindowMarker};
 use super::*;
 use crate::config::BalloonXMode;
+use crate::shared_test_support::scopes;
+use crate::test_support::{SharedFakeIo, fake_handle};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
@@ -46,22 +48,6 @@ const KEYWORD_BASE: BalloonKeywordBase = BalloonKeywordBase {
     mode: BalloonXMode::CenterTop,
     adjust: PointPx { x: 13, y: -7 },
 };
-
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
-fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
 
 fn window_pos(p: Point, w: i32, h: i32) -> WindowPos {
     WindowPos {
@@ -89,7 +75,7 @@ impl Rig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
+            io: Box::new(SharedFakeIo::new(store.clone())),
             runtime_sink: None,
         });
         let mut world = World::new();
@@ -221,7 +207,7 @@ impl Rig {
         load_scope(
             PersistScope::Ghost,
             &self.roots,
-            &SharedFakeIo(self.store.clone()),
+            &SharedFakeIo::new(self.store.clone()),
         )
         .into_iter()
         .filter(
@@ -253,10 +239,6 @@ fn held_logs(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .iter()
         .filter(|e| e.field_str("event") == Some("balloon_drag_held"))
         .collect()
-}
-
-fn scopes(raw: &[u32]) -> BTreeSet<u32> {
-    raw.iter().copied().collect()
 }
 
 /// 止めたドラッグ（6.1・6.6）: 追従のずれ・位置・記憶・キーワードの素材が変わらず、記録が 1 件。

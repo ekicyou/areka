@@ -20,12 +20,13 @@
 //! 捕捉が生きていることがその時点で証明されている）。
 
 use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
-use super::super::resolver::{Anchor, ScopeInput, resolve_placement};
+use super::super::resolver::{ScopeInput, resolve_placement};
 use super::*;
-use crate::follow::OffsetBase;
 use crate::resolver::test_support::px;
 use crate::shared_test_support::MEASURE_DPI;
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use crate::shared_test_support::{assert_no_event, placement_sized};
+use crate::test_support::{contained, point};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
@@ -50,10 +51,6 @@ fn snapshot(areas: &[RectPx]) -> MonitorSnapshot {
     }
 }
 
-fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
-}
-
 /// resolver 出力相当の placement を組む。
 ///
 /// `balloon_pos` は檻側で `char_pos + balloon_offset` から作る——resolver 出力時点の
@@ -65,18 +62,7 @@ fn placement(
     balloon_offset: PointPx,
     balloon_limit: bool,
 ) -> ScopePlacement {
-    ScopePlacement {
-        scope,
-        char_pos,
-        char_size: CSZ,
-        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
-        balloon_size: BSZ,
-        balloon_offset,
-        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        balloon_limit,
-        anchor: Anchor::Free,
-        balloon_keyword_base: None,
-    }
+    placement_sized(scope, char_pos, balloon_offset, balloon_limit, CSZ, BSZ)
 }
 
 /// キャラ窓を下辺から 20px はみ出させる（縦 600 → 800・上端 300 なら下端 1100 > 1080）。
@@ -88,18 +74,6 @@ fn placement(
 fn char_overflowing(mut p: ScopePlacement) -> ScopePlacement {
     p.char_size = SizePx { w: CSZ.w, h: 800 };
     p
-}
-
-/// 本文に `needle` を含むイベントが 1 件も無いことを主張する。
-///
-/// 呼び手は**同じ `events` から [`expect_one`] で 1 件取り出した後**に呼ぶこと
-/// （捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert!(hits.is_empty(), "`{needle}` が出てはならない: {hits:?}");
 }
 
 /// `balloon_pos` 以外の全フィールドが入力と同一であることを主張する（DD6 の中核）。
@@ -421,37 +395,6 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
 
 /// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当。
 const GATE_DPIS: [i32; 4] = [96, 120, 144, 192];
-
-/// 矩形 (pos, size) が area へ 4 辺内包されているか（檻側の独立実装）。
-fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x + size.w <= area.right
-        && pos.y + size.h <= area.bottom
-}
-
-/// 寸法を明示して placement を組む（[`placement`] の DPI 可変版）。
-fn placement_sized(
-    scope: usize,
-    char_pos: PointPx,
-    balloon_offset: PointPx,
-    balloon_limit: bool,
-    char_size: SizePx,
-    balloon_size: SizePx,
-) -> ScopePlacement {
-    ScopePlacement {
-        scope,
-        char_pos,
-        char_size,
-        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
-        balloon_size,
-        balloon_offset,
-        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        balloon_limit,
-        anchor: Anchor::Free,
-        balloon_keyword_base: None,
-    }
-}
 
 /// 要件 7.1 の行列を**関門の層で**閉じる: `limit {0,1}` × はみ出し方向 4 辺（単独）と
 /// 4 隅（複合）× k=1（dpi=96）および k≠1（120/144/192）の全交差。

@@ -12,9 +12,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
     spawn_sylphya,
@@ -37,32 +36,22 @@ use areka_placement::reset_pos::DefaultPlacementBasis;
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement};
 use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
-use areka_placement::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
+use areka_placement::test_support::{
+    SharedFakeIo, WA, synth_declared_dpi_ghost, with_com_initialized,
+};
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 /// ドラッグでずらしたバルーンのずらし（標準のずらしと必ず違う値）。
 const DRAGGED: PointPx = PointPx { x: 777, y: -333 };
 
-/// 偽の保存先を共有し、commit の回数を数える。
-struct SharedFakeIo(Arc<FakePersistIo>, Arc<AtomicUsize>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.1.fetch_add(1, Ordering::SeqCst);
-        self.0.commit(path, content)
-    }
-}
-
 /// 起動の準備の配置で組んだ窓・材料・記憶の送り口を持つ World。
 struct Rig {
     world: World,
     windows: GhostWindows,
     placements: Vec<ScopePlacement>,
-    shared: Arc<FakePersistIo>,
-    commits: Arc<AtomicUsize>,
+    /// 偽の保存先（アクターへ渡した口の clone・commit の回数を数える）。
+    io: SharedFakeIo,
     roots: ScopeRoots,
     parts: SylphyaParts,
 }
@@ -73,15 +62,14 @@ impl Rig {
     fn new(ghost: &Path, balloon: &Path, basis: Option<DefaultPlacementBasis>) -> Self {
         let prepared = prepare_ghost_windows_with_work_area(ghost, balloon, WA, Some(96))
             .expect("起動の配置の準備は成功する");
-        let shared = Arc::new(FakePersistIo::new());
-        let commits = Arc::new(AtomicUsize::new(0));
+        let io = SharedFakeIo::new(Arc::new(FakePersistIo::new()));
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone(), commits.clone())),
+            io: Box::new(io.clone()),
             runtime_sink: None,
         });
         let mut world = World::new();
@@ -113,8 +101,7 @@ impl Rig {
             world,
             windows,
             placements: prepared.placements,
-            shared,
-            commits,
+            io,
             roots,
             parts,
         }
@@ -149,19 +136,15 @@ impl Rig {
 
     fn load(&self) -> HashMap<PersistKey, String> {
         self.parts.publisher.barrier().expect("barrier が返る");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.shared.clone(), Arc::default()),
-        )
-        .into_iter()
-        .collect()
+        load_scope(PersistScope::Ghost, &self.roots, &self.io)
+            .into_iter()
+            .collect()
     }
 
     /// アクターが処理し終えた時点の commit の回数。
     fn commit_count(&self) -> usize {
         self.parts.publisher.barrier().expect("barrier が返る");
-        self.commits.load(Ordering::SeqCst)
+        self.io.commit_count()
     }
 
     fn finish(self) {

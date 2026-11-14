@@ -3,11 +3,17 @@
 //! 外のテストも使う支えは `test_support`、見本のゴーストの入口は `sample_test_support`
 //! （spec: placement-crate-split 設計 D8）。
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use log_capture_kit::CapturedEvent;
 use temp_path_kit::TempPath;
 use wintf::ecs::DPI;
+
+use crate::follow::OffsetBase;
+use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::test_support::point;
 
 use super::sample_test_support::balloon_root;
 
@@ -22,6 +28,46 @@ pub(super) fn write_self_alpha_one_descript(dir: &Path, key: &str) {
         format!("charset,UTF-8\n{key},1\n"),
     )
     .expect("descript.txt に透過の宣言 1 を書く");
+}
+
+/// バルーンの関門の檻が使う placement（`balloon_pos` は `char_pos + balloon_offset`・寸法は呼び手が渡す）。
+pub(super) fn placement_sized(
+    scope: usize,
+    char_pos: PointPx,
+    balloon_offset: PointPx,
+    balloon_limit: bool,
+    char_size: SizePx,
+    balloon_size: SizePx,
+) -> ScopePlacement {
+    ScopePlacement {
+        scope,
+        char_pos,
+        char_size,
+        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
+        balloon_size,
+        balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
+        balloon_limit,
+        anchor: Anchor::Free,
+        balloon_keyword_base: None,
+    }
+}
+
+/// スコープ番号の並びを集合にする。
+pub(super) fn scopes(raw: &[u32]) -> BTreeSet<u32> {
+    raw.iter().copied().collect()
+}
+
+/// 捕捉したイベントに `needle` を含むメッセージが無いことを主張する。
+///
+/// 空虚化しないための前提として、呼び手は**同じ `events` から対の観測点を 1 件取り出した後**に
+/// 呼ぶこと（捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
+pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
+    let hits: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(needle))
+        .collect();
+    assert!(hits.is_empty(), "`{needle}` が出てはならない: {hits:?}");
 }
 
 /// 決定論テストが [`super::resolver::resolve_placement`] へ渡す**採寸 DPI**（正典既定 96）。

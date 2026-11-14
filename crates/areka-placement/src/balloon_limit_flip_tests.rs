@@ -12,17 +12,17 @@ use std::collections::BTreeSet;
 use std::time::Instant;
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragEndEvent;
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{Point, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{Point, SizeI, WindowPos};
 
 use super::*;
 use crate::balloon_lock::{apply_script_balloon_lock, seed_balloon_lock};
-use crate::follow::{OffsetBase, move_window_to, on_balloon_drag_end};
-use crate::resolver::Anchor;
+use crate::follow::{move_window_to, on_balloon_drag_end};
+use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::spawn_ghost_windows;
+use crate::test_support::{fake_handle, point};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 const CLAMP_TAG: &str = "[balloon-limit] Clamp";
@@ -38,10 +38,6 @@ const WA: RectPx = RectPx {
 const CSZ: SizePx = SizePx { w: 1108, h: 800 };
 /// バルーンの寸（幅 872）。
 const BSZ: SizePx = SizePx { w: 872, h: 400 };
-
-fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
-}
 
 fn rect_of(pos: PointPx, size: SizePx) -> RectPx {
     RectPx {
@@ -67,18 +63,7 @@ fn left_side_offset() -> PointPx {
 }
 
 fn placement(scope: usize, char_pos: PointPx, offset: PointPx, limit: bool) -> ScopePlacement {
-    ScopePlacement {
-        scope,
-        char_pos,
-        char_size: CSZ,
-        balloon_pos: point(char_pos.x + offset.x, char_pos.y + offset.y),
-        balloon_size: BSZ,
-        balloon_offset: offset,
-        balloon_offset_base: OffsetBase::unpinned(offset),
-        balloon_limit: limit,
-        anchor: Anchor::Free,
-        balloon_keyword_base: None,
-    }
+    placement_sized(scope, char_pos, offset, limit, CSZ, BSZ)
 }
 
 // ---------------------------------------------------------------------------
@@ -208,12 +193,6 @@ fn boot_gate_does_not_flip_when_limit_is_disabled() {
 // ---------------------------------------------------------------------------
 // 書き込みの関門（要件 5.3・5.6・5.7・5.8）
 // ---------------------------------------------------------------------------
-
-fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
 
 fn point_of(world: &World, entity: Entity) -> PointPx {
     let p = world

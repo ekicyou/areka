@@ -22,6 +22,7 @@ use areka_emo_compose::ScaleRatio;
 use super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::shared_test_support::{TempDir, synth_balloon_dir};
 use super::*;
+use crate::shared_test_support::assert_no_event;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 /// 観測点 4 の本文（実機サインオフの grep 対象・フィールド名ごと契約）。
@@ -54,21 +55,6 @@ fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<CapturedE
         merge_scope_windowpositions(&mut cfg, &windowpositions, &[0], ScaleRatio::ONE);
     });
     (cfg, events)
-}
-
-/// 警告本文 `needle` を含むイベントが 1 件も無いことを主張する。
-///
-/// 空虚化しないための前提として、呼び手は**同じ `events` から観測点 4 を 1 件取り出した後**に
-/// 呼ぶこと（捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` の警告が出てはならない: {hits:?}"
-    );
 }
 
 // ------------------------------------------------------------------

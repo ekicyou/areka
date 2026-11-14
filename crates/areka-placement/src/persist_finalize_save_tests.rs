@@ -11,11 +11,11 @@
 //! `non_dragend_operations_leave_persist_store_byte_invariant` と同じやり方）。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
     spawn_sylphya,
@@ -36,6 +36,7 @@ use crate::follow::{Anchored, OffsetBase, on_char_drag_end};
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use crate::test_support::SharedFakeIo;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 記録の target（ドラッグの確定と同じ）。
@@ -51,17 +52,6 @@ const SCOPES: [(usize, PointPx, SizePx); 3] = [
 
 /// 記憶にある体の値（「書き換えない」を噛ませるための、どの書く値とも重ならない値）。
 pub(super) const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
-
-/// 共有の偽の保存先（アクターへ渡す分と、観測する分が同じストアを指す）。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
 
 pub(super) struct Rig {
     pub(super) world: World,
@@ -80,7 +70,7 @@ impl Rig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone())),
+            io: Box::new(SharedFakeIo::new(shared.clone())),
             runtime_sink: None,
         });
         let mut world = World::new();
@@ -150,7 +140,7 @@ impl Rig {
         load_scope(
             PersistScope::Ghost,
             &self.roots,
-            &SharedFakeIo(self.shared.clone()),
+            &SharedFakeIo::new(self.shared.clone()),
         )
         .into_iter()
         .collect()

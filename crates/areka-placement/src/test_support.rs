@@ -9,9 +9,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::resolver::RectPx;
+use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
+use wintf::ecs::WindowHandle;
+
+use crate::resolver::{PointPx, RectPx, SizePx};
 
 /// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求・
 /// measure.rs テストと同一パターン）。
@@ -30,6 +36,57 @@ pub fn with_com_initialized<F: FnOnce()>(f: F) {
 #[cfg(test)]
 #[path = "test_support_com_tests.rs"]
 mod com_tests;
+
+/// 共有の偽の保存先（アクターへ渡す分と、`load_scope` で観測する分が同じストアを指す）。
+/// clone は同じストアと同じ commit の数を共有する。
+#[derive(Clone)]
+pub struct SharedFakeIo {
+    store: Arc<FakePersistIo>,
+    commits: Arc<AtomicUsize>,
+}
+impl SharedFakeIo {
+    pub fn new(store: Arc<FakePersistIo>) -> Self {
+        Self {
+            store,
+            commits: Arc::default(),
+        }
+    }
+    /// この口（と clone）を通った commit の回数。
+    pub fn commit_count(&self) -> usize {
+        self.commits.load(Ordering::SeqCst)
+    }
+}
+impl PersistIo for SharedFakeIo {
+    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+        self.store.read(path)
+    }
+    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        self.commits.fetch_add(1, Ordering::SeqCst);
+        self.store.commit(path, content)
+    }
+}
+
+/// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム）。
+pub fn fake_handle(raw: usize) -> WindowHandle {
+    WindowHandle {
+        hwnd: HWND(raw as *mut _),
+    }
+}
+
+pub fn point(x: i32, y: i32) -> PointPx {
+    PointPx { x, y }
+}
+
+/// 矩形 (pos, size) が area へ 4 辺内包されているか（right/bottom は排他側）。
+///
+/// 右下辺の算出は `saturating_add`——極値入力（`i32::MAX` 位置）を与える檻でも、
+/// **判定道具の側が先に溢れて**本体の欠陥を隠すことがあってはならない。
+pub fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
+    pos.x >= area.left
+        && pos.y >= area.top
+        && pos.x.saturating_add(size.w) <= area.right
+        && pos.y.saturating_add(size.h) <= area.bottom
+}
 
 /// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。
 pub const WA: RectPx = RectPx {

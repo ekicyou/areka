@@ -6,10 +6,10 @@
 //! と同じやり方）。主モニタは偽の `Monitor` entity で置く。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
     spawn_sylphya,
@@ -36,7 +36,7 @@ use crate::resolver::{
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{WA, with_com_initialized};
+use crate::test_support::{SharedFakeIo, WA, with_com_initialized};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（物理 px）。
@@ -60,16 +60,6 @@ const EXPECTED: [PointPx; 2] = [
     },
 ];
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 struct Rig {
     world: World,
     shared: Arc<FakePersistIo>,
@@ -87,7 +77,7 @@ impl Rig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone())),
+            io: Box::new(SharedFakeIo::new(shared.clone())),
             runtime_sink: None,
         });
         let mut world = World::new();
@@ -176,7 +166,7 @@ impl Rig {
         load_scope(
             PersistScope::Ghost,
             &self.roots,
-            &SharedFakeIo(self.shared.clone()),
+            &SharedFakeIo::new(self.shared.clone()),
         )
         .into_iter()
         .collect()

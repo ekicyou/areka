@@ -127,21 +127,10 @@ fn load_restored_state_mount_resolve_failure_is_empty() {
 //   NonSend リソース存在 → persist_put（Ghost 固定・fire-and-forget）／不在 → debug!＋no-op。
 // ------------------------------------------------------------------
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use crate::test_support::SharedFakeIo;
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{SylphyaInit, spawn_sylphya};
 use std::sync::Arc;
-
-/// 共有 fake IO（アクターへ `Box<dyn PersistIo>` として移送しつつ、同一ストアを別ハンドルの
-/// `load_scope` で観測するための newtype ラッパ。actor.rs の write-through 檻と同流儀）。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
 
 /// 存在檻（7.1/1.1）: headless World に `PersistWiring` を挿入して `persist_entries` を呼ぶと、
 /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる
@@ -156,7 +145,7 @@ fn persist_entries_with_wiring_write_through_to_ghost_scope() {
     };
     let parts = spawn_sylphya(SylphyaInit {
         roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
+        io: Box::new(SharedFakeIo::new(shared.clone())),
         runtime_sink: None,
     });
 
@@ -177,7 +166,11 @@ fn persist_entries_with_wiring_write_through_to_ghost_scope() {
         .expect("barrier should resolve while actor is alive");
 
     // アクターと同一ストアを別ハンドルの load_scope で観測（実 IO 通過＝persist_put 投函の証明）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let loaded = load_scope(
+        PersistScope::Ghost,
+        &roots,
+        &SharedFakeIo::new(shared.clone()),
+    );
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {
