@@ -160,7 +160,7 @@
   - _Dispatch: mechanical — 説明の書き直しは研究の 3 節の 16 が中身を与え、片付けは 1 行にするだけ_
   - _Requirements: 2.1, 5.4_
 
-- [ ] 7. 確かめ
+- [x] 7. 確かめ
 - [x] 7.1 同じ範囲へ audit をかけ直し、新しい指摘が 0 件になるまで直す
   - 範囲の 24 ファイルと新しいテストのファイル 1 本に、件数の上限なし・全部読む作法で `/ponytail:ponytail-audit` をかけ直す。新しい指摘（直しが生んだものを含む）を直してかけ直す。
   - 新しい指摘が要件 3 の 3 種類に当たるときは直さずに開発者へ議題として出す。
@@ -169,7 +169,7 @@
   - _Dispatch: standard, effort high — かけ直しで出る新しい指摘の中身は前もって決まらず、直しのコードを考える_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 7.2 全体テストを 1 回回し、並走の約束と決まりを確かめる
+- [x] 7.2 全体テストを 1 回回し、並走の約束と決まりを確かめる
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す。触っていないクレートだけが赤なら、そのクレートだけを 1 回回し直す。
   - `main` との差分で、`Cargo.lock` と各 `Cargo.toml`・`vendors/`・`crates/wintf/src/ecs/tooltip/`・モニタの記録の名と記録の的の行が 0 行であること、番人の例外表に足した行が 0 であることを確かめる。タスクが 18 本で 20 を越えていないことも記録する。
   - 終わったとき: 全体テストが緑で、上の差分の確かめが全部 0。
@@ -188,3 +188,4 @@
 - 6.2 へ申し送り（5.2 のレビュー）: `clickthrough/controller.rs` の `ClickThroughRegistryHandle` の説明（「破棄追随」「World 生存を確認して」＝5.1 前の刈る条件）・`doc/click-through.md` 4.3 の「dedupe（冪等）」・`controller.rs` の「結線は task 3.2 の責務」。起動の `debug!` の旧い文言は `tools/perf/fixtures-loop/followup/*/run.log` の 3 行目に検体のデータとして残るだけで、読む道具は無い。
 - 5.3 の「wintf のテストのどこにもカーソルを動かす呼び出しが無い」は、普通に走るテスト（`--ignored` 無し）の話。`SetCursorPos` が残るのは `crates/wintf/src/ecs/tooltip/os_tests.rs` の `#[ignore]` の実機の試しだけで、`tooltip/` はこの spec の範囲の外（7.2 で差分 0）。
 - 7.1 の指摘 24 で、ドラッグの知らせ 3 つの `Messages` の登録と書き込みを消した（読み手は 2.1 で消えた `cleanup_drag_state` だけだった）。進行役の決めで範囲の外の 10 本＋コンパイラが指した `mouse_dblclick_wheel_tests.rs` に触った（`audit-placement-core` へ行を伝え済み）。テストは受け手の呼ばれた数で数える（`drag/seen_test_support.rs`）。
+- 7.2（2026-11-15・コミット f4030b51e・排他テストの机で 1 回）: `tools/test-all.ps1` は 14 段すべて緑（x64 workspace tests 897 秒。机なしで 1 度赤だった `emo2_mcp_real_run` も含めて緑）。着手前の main との差分は `Cargo.lock`・各 `Cargo.toml`・`vendors/`・`crates/wintf/src/ecs/tooltip/`・番人の例外表・コードのモニタの記録の名（`MonitorRecord`・`DESPAWNED_SKIP_TAG`・`areka_placement::diag`）がすべて 0 行。タスクは 18 本（上限 20 以内）。
