@@ -11,7 +11,7 @@
 （段③は昇格した PowerShell が要る）、**採れなかった段は空欄ではなく理由を書く**
 ——黙って続けないための決まりである（要件 2.11）。
 
-    [1] プロセス  cpu.csv（1 コア換算 %）から定常平均・p50・p95・最大・発話中の頂
+    [1] プロセス  cpu.csv（1 コア換算 %）から定常平均・p50・p95・最大
     [2] スレッド  perf(thread)／perf(process) の 2 スナップショットの差から役割別の CPU 秒
     [3] 関数      dump.txt（CPU サンプリング）から自己時間・包含時間・記号解決率
     [4] 相        [tick] kind=window 行から tick/秒・省略率・13 本のスケジュール別
@@ -45,6 +45,7 @@ cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊�
 from __future__ import annotations
 
 import argparse
+import contextlib
 import re
 import shutil
 import sys
@@ -98,9 +99,6 @@ STDERR_PREFIX = "perf-rank:"
 #: （task 3.2 の実測で 60 秒を据え置き）。片方だけ動かすと 2 つの道具が別の定常を語る。
 WARMUP_EXCLUDE_SEC = 60.0
 
-#: 「発話中」とみなす表示成立点の前後の秒数（設計 C9 の「前後 10 秒」）。
-TALK_PEAK_WINDOW_SEC = 10.0
-
 #: 段②が差を取る相手を選ぶときの目安（設計 C9 の「60 秒前」）。
 PERF_THREAD_WINDOW_SEC = 60.0
 
@@ -117,11 +115,10 @@ CPU_CSV_HEADER = ("timestamp", "cpu_percent_1core")
 #: 行を見つけるための固定文言。実行体側の書式の権威は次のとおり:
 #:   perf(thread)／perf(process) … crates/areka/src/perf_thread_report.rs
 #:   [tick] kind=window           … crates/wintf/src/ecs/world/tick_diag.rs
-#:   apply(ShowSurface)／perf(apply_show) … judge-perf.py の同名定数
+#:   perf(apply_show)             … judge-perf.py の同名定数
 THREAD_LINE_MESSAGE = "perf(thread): スレッド別 CPU"
 PROCESS_LINE_MESSAGE = "perf(process): プロセス CPU"
 TICK_WINDOW_MARKER = "[tick] kind=window"
-SHOW_LINE_MESSAGE = "apply(ShowSurface): 表示・マスクを更新"
 APPLY_SHOW_MESSAGE = "perf(apply_show): 段階別計時"
 
 #: 名簿外の残りを表す役割名（`perf_thread_report.rs` の `ROLE_UNREGISTERED_REST`）。
@@ -202,7 +199,6 @@ class TickRow:
 class LogScan:
     first_at: datetime | None = None
     first_apply_show_at: datetime | None = None
-    show_times: list[datetime] = field(default_factory=list)
     threads: list[ThreadRow] = field(default_factory=list)
     processes: list[ProcessRow] = field(default_factory=list)
     ticks: list[TickRow] = field(default_factory=list)
@@ -212,12 +208,12 @@ def _need_int(fields: dict[str, str], key: str, line_no: int, broken: list[str])
     """観測行から整数を 1 つ取る。取れなければ理由を積んで 0 を返す（後で exit 4）。"""
     raw = fields.get(key)
     if raw is None:
-        broken.append(f"{line_no} 行目: フィールド {key} がありません")
+        broken.append(f"line {line_no}: field {key} is missing")
         return 0
     try:
         return int(raw)
     except ValueError:
-        broken.append(f"{line_no} 行目: フィールド {key} が整数ではありません（{raw!r}）")
+        broken.append(f"line {line_no}: field {key} is not an integer ({raw!a})")
         return 0
 
 
@@ -230,7 +226,7 @@ def scan_run_log(path: Path) -> LogScan:
     scan = LogScan()
     broken: list[str] = []
 
-    for line_no, line in enumerate(read_text_lines(path, "走行ログ（run.log）"), start=1):
+    for line_no, line in enumerate(read_text_lines(path, "run log (run.log)"), start=1):
         if not line.strip():
             continue
         at = parse_timestamp(line)
@@ -240,11 +236,6 @@ def scan_run_log(path: Path) -> LogScan:
         if APPLY_SHOW_MESSAGE in line:
             if at is not None and scan.first_apply_show_at is None:
                 scan.first_apply_show_at = at
-            continue
-
-        if SHOW_LINE_MESSAGE in line:
-            if at is not None:
-                scan.show_times.append(at)
             continue
 
         index = line.find(THREAD_LINE_MESSAGE)
@@ -279,7 +270,7 @@ def scan_run_log(path: Path) -> LogScan:
 
     if broken:
         raise measure_failed(
-            f"走行ログの観測行が {len(broken)} 箇所読めません。部分的な順位表は出しません。",
+            f"run.log has {len(broken)} unreadable observation lines; no partial ranking is written.",
             broken[:20],
         )
     return scan
@@ -296,7 +287,7 @@ def read_cpu_csv(path: Path) -> list[CpuSample]:
 def read_run_meta(path: Path) -> dict[str, str]:
     """`[見出し]` と `名前 = 値` を平らな辞書にする（順位表は見出しを使わない）。"""
     meta: dict[str, str] = {}
-    for line in read_text_lines(path, "実行条件（run-meta.txt）"):
+    for line in read_text_lines(path, "run conditions (run-meta.txt)"):
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or stripped.startswith("["):
             continue
@@ -310,7 +301,7 @@ def read_run_meta(path: Path) -> dict[str, str]:
 
 
 def stage_process(scan: LogScan, cpu: list[CpuSample], meta: dict[str, str] | None) -> list[str]:
-    """cpu.csv から定常平均・分位点・最大と、発話中の頂を出す（unit=cpu）。"""
+    """cpu.csv から定常平均・分位点・最大を出す（unit=cpu）。"""
     # 定常の起点は judge-perf.py と同じ「最初の perf 行」。順位付けの走行では
     # perf(apply_show) を点けないこともあるので、無ければ最初の時刻つき行へ倒す。
     if scan.first_apply_show_at is not None:
@@ -325,20 +316,12 @@ def stage_process(scan: LogScan, cpu: list[CpuSample], meta: dict[str, str] | No
     basis = "steady" if steady else "all"
     values = [s.percent for s in (steady if steady else cpu)]
 
-    peak: float | None = None
-    window = timedelta(seconds=TALK_PEAK_WINDOW_SEC)
-    for show_at in scan.show_times:
-        for sample in cpu:
-            if show_at - window <= sample.at <= show_at + window:
-                peak = sample.percent if peak is None else max(peak, sample.percent)
-
     lines = [
         f"[1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準={basis}",
         scalar("steady_mean_pct", fmt(sum(values) / len(values), 2)),
         scalar("p50_pct", fmt(percentile(values, 0.50), 2)),
         scalar("p95_pct", fmt(percentile(values, 0.95), 2)),
         scalar("max_pct", fmt(max(values), 2)),
-        scalar("talk_peak_pct", fmt(peak, 2)),
         scalar("samples_total", str(len(cpu))),
         scalar("samples_steady", str(len(steady))),
         note(
@@ -348,10 +331,6 @@ def stage_process(scan: LogScan, cpu: list[CpuSample], meta: dict[str, str] | No
     ]
     if not steady:
         lines.append(note("定常状態に採取点が 1 つも無いので、全採取点で代用した（basis=all）"))
-    lines.append(note(
-        f"発話中の頂＝apply(ShowSurface) の前後 {TALK_PEAK_WINDOW_SEC:.1f} 秒に"
-        "重なる採取点の最大（合否外）"
-    ))
     lines.append(note(
         f"SSP 参考値 idle={SSP_REFERENCE_IDLE_PCT:.2f} "
         f"talk_peak={SSP_REFERENCE_TALK_PEAK_PCT:.2f}"
@@ -583,11 +562,11 @@ def build_report(
     run_log, cpu_csv = run_dir / "run.log", run_dir / "cpu.csv"
     meta_path, dump_path = run_dir / "run-meta.txt", run_dir / "dump.txt"
 
-    for path, what in ((run_log, "走行ログ（run.log）"), (cpu_csv, "CPU 時系列（cpu.csv）")):
+    for path, what in ((run_log, "run log (run.log)"), (cpu_csv, "CPU series (cpu.csv)")):
         if not path.is_file():
-            raise measure_failed(f"{what} がありません: {path}")
+            raise measure_failed(f"{what} is missing: {path}")
         if path.stat().st_size == 0:
-            raise measure_failed(f"{what} が空です: {path}")
+            raise measure_failed(f"{what} is empty: {path}")
 
     scan = scan_run_log(run_log)
     cpu = read_cpu_csv(cpu_csv)
@@ -595,25 +574,14 @@ def build_report(
 
     # 0 バイトの dump は「在るが空」＝採取の失敗として parse_dump が止める（#62）。
     dump_present = dump_path.is_file()
-    if sampling == "true":
-        if not dump_present:
-            raise measure_failed(
-                f"段③は利用可と指定されたのに dump がありません: {dump_path}",
-                ["--sampling-available true は採取が成立したという申告なので、"
-                 "成果物が無いのは道具の不具合として扱う。"],
-            )
-        available = True
-    elif sampling == "false":
-        available = False
-    else:
-        available = dump_present
+    available = sampling == "auto" and dump_present
 
     dump: DumpScan | None = None
     reason = unavailable_reason
     if available:
         dump = parse_dump(dump_path)
     elif reason is None:
-        reason = "no_dump" if sampling != "false" else "declared_unavailable"
+        reason = "declared_unavailable" if sampling == "false" else "no_dump"
 
     lines = [
         f"perf-rank {SCRIPT_VERSION} run={run_dir.resolve().name} stages={','.join(stages)} top={top}"
@@ -658,12 +626,12 @@ def _read_case(directory: Path) -> SelftestCase:
     )
     if "exit" not in values:
         raise bad_input(
-            f"{case_path}: exit がありません（期待終了コードの無いケースは較正になりません）"
+            f"{case_path}: exit is missing (a case without an expected exit code is not a calibration)"
         )
     try:
         expected_exit = int(values["exit"])
     except ValueError as exc:
-        raise bad_input(f"{case_path}: exit が整数ではありません（{values['exit']!r}）") from exc
+        raise bad_input(f"{case_path}: exit is not an integer ({values['exit']!a})") from exc
     return SelftestCase(
         directory.name, directory, values.get("title") or "(説明なし)", expected_exit,
         values.get("argv", "").split(), values.get("dump_path"), multi["stderr_substr"],
@@ -726,9 +694,9 @@ def run_selftest() -> int:
             reproduced_all |= reproduced
             results.append((case.name, case.title, reasons))
 
-    # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例は、その直しのタスクで真にする）。
+    # 木全体の見張り（⑶ stderr の ASCII は有効・⑸ README の例は文書のタスクで真にする）。
     results.append(("(check_tree)", "木全体の見張り",
-                    selftest_common.check_tree(ascii_stderr=False, readme_examples=False)))
+                    selftest_common.check_tree(ascii_stderr=True, readme_examples=False)))
     ng_count = selftest_common.finish(
         results, materials, SELFTEST_CASE_FILENAME, reproduced_all, SELFTEST_REQUIRED_RED_EXITS
     )
@@ -742,7 +710,7 @@ class Parser(argparse.ArgumentParser):
     """引数不正の終了コードを 3 に揃える（argparse の既定 2 は使わない）。"""
 
     def error(self, message: str):  # type: ignore[override]
-        sys.stderr.write(f"{STDERR_PREFIX} 引数が不正です: {message}\n")
+        sys.stderr.write(f"{STDERR_PREFIX} invalid arguments: {message}\n")
         sys.stderr.write(self.format_usage())
         raise SystemExit(EXIT_BAD_INPUT)
 
@@ -759,8 +727,8 @@ def build_parser() -> Parser:
                         help=f"各段の上位件数（既定 {DEFAULT_TOP}）")
     parser.add_argument("--out", default=OUTPUT_FILENAME,
                         help=f"出力先（相対なら走行ディレクトリの中・既定 {OUTPUT_FILENAME}）")
-    parser.add_argument("--sampling-available", default="auto", choices=("auto", "true", "false"),
-                        help="段③が採れたか（既定 auto＝dump.txt の有無で決める）")
+    parser.add_argument("--sampling-available", default="auto", choices=("auto", "false"),
+                        help="段③が採れたか（既定 auto＝dump.txt の有無で決める・false＝採れなかったと申告）")
     parser.add_argument("--unavailable-reason", default=None,
                         help="段③が採れなかった理由（採取側から渡す）")
     parser.add_argument("--selftest", action="store_true", help="自己較正（fixtures-loop/rank/）")
@@ -775,12 +743,12 @@ def main(argv: list[str]) -> int:
             return run_selftest()
 
         if args.run_dir is None:
-            raise bad_input("走行ディレクトリを指定してください（--selftest を除いて必須です）")
+            raise bad_input("run directory is required (except with --selftest)")
         if args.top < 1:
-            raise bad_input(f"--top は 1 以上です（{args.top}）")
+            raise bad_input(f"--top must be 1 or more ({args.top})")
         run_dir = Path(args.run_dir)
         if not run_dir.is_dir():
-            raise bad_input(f"走行ディレクトリがありません: {run_dir}")
+            raise bad_input(f"run directory not found: {run_dir}")
 
         stages = STAGE_ALL if args.stage == "all" else (args.stage,)
         lines = build_report(
@@ -793,11 +761,11 @@ def main(argv: list[str]) -> int:
         try:
             out_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         except OSError as exc:
-            raise bad_input(f"順位表を書けません: {out_path}", [str(exc)]) from exc
+            raise bad_input(f"cannot write the ranking: {out_path}", [str(exc)]) from exc
         print(f"{STDERR_PREFIX} 順位表を書きました: {out_path}")
         return EXIT_OK
     except RankError as exc:
-        label = {EXIT_BAD_INPUT: "入力不正", EXIT_MEASURE_FAILED: "計測失敗"}.get(exc.code, "失敗")
+        label = {EXIT_BAD_INPUT: "bad input", EXIT_MEASURE_FAILED: "measurement failed"}.get(exc.code, "failed")
         sys.stderr.write(f"{STDERR_PREFIX} {label}: {exc.message}\n")
         for detail in exc.details:
             sys.stderr.write(f"  - {detail}\n")
@@ -805,4 +773,8 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    # 端末の文字コードで落ちない（読む側を直す・D9）。自己較正の StringIO は通らない入口。
+    for _stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(AttributeError, OSError):
+            _stream.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
     sys.exit(main(sys.argv[1:]))

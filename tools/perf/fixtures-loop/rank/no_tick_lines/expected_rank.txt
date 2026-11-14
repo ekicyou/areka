@@ -5,11 +5,9 @@ perf-rank 0.1.0 run=no_tick_lines stages=process,thread,function,phase top=3
   p50_pct                             2.00
   p95_pct                             4.00
   max_pct                             4.00
-  talk_peak_pct                          -
   samples_total                          3
   samples_steady                         2
   注記: 定常＝起点から 60.0 秒（WARMUP_EXCLUDE_SEC）を除く。起点=first_log_line 2026-08-23T12:00:00Z ／ 定常の始まり 2026-08-23T12:01:00Z
-  注記: 発話中の頂＝apply(ShowSurface) の前後 10.0 秒に重なる採取点の最大（合否外）
   注記: SSP 参考値 idle=3.05 talk_peak=4.64（2026-08-15 実測・参考値・合否外）
   注記: 実行条件 run-meta.txt がありません
 

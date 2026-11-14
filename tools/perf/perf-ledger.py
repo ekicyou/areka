@@ -951,7 +951,7 @@ def build_parser() -> Parser:
 def main(argv: list[str]) -> int:
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(AttributeError, OSError):
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
 
     parser = build_parser()
     args = parser.parse_args(argv)

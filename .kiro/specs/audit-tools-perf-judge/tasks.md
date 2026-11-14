@@ -169,7 +169,7 @@
   - _Dispatch: standard, effort high — dump の 2 回読みと事象ごとの列の確かめは取り違えやすい数え方_
   - _Requirements: 2.1, 2.3, 4.7, 4.8, 5.5, 7.4, 7.6_
 
-- [ ] 12. 順位表のスレッド・引数・端末の文を直す（#4・#21・#22・#25・#34・#35・#63・#65・#66・#67）
+- [x] 12. 順位表のスレッド・引数・端末の文を直す（#4・#21・#22・#25・#34・#35・#63・#65・#66・#67）
 - [x] 12.1 スレッドの数え方を直す（#4・#22・#63・#65）
   - 差の基準で `perf(process)` の差が取れたとき、名簿外の残りの行の `cpu_us` を `max(プロセスの差 − 名簿の行の差の合計, 0)` に（D7・#4・ケース `tid_reused`＝T4）。TID の照らし方は Rust の `delta` と同じまま
   - 役割別の表を作るときだけ `actor:…-<数字>` を `-*` に畳む（D8・#22・ケース `talk_threads_folded`＝T22）。`perf(process)` の欄を `snap`・`cpu_us` だけに（#63）。`run_dir.resolve().name`（#65）
@@ -177,7 +177,7 @@
   - 終わった姿: perf-rank の `--selftest` が T4・T22 を含めて緑で、既存の `full_ok`・`no_dump_unavailable` の期待出力が同じ値のまま、行の差に戻すと T4 が `200.00` で赤
   - _Dispatch: standard — スレッドの残りの差（D7）と役割の畳み（D8）の新しい数え方を足す_
   - _Requirements: 2.1, 4.7, 4.8, 5.1, 5.3, 7.1_
-- [ ] 12.2 順位表の出力・引数・端末の文を直す（#21・#25・#34・#35・#66・#67）
+- [x] 12.2 順位表の出力・引数・端末の文を直す（#21・#25・#34・#35・#66・#67）
   - `talk_peak_pct` と窓の定数・注記を消し、期待出力 3 本を直す（#21・T21）。`.claude/agents/perf-measure.md` の当たる行を直す
   - `--sampling-available` から `true` の選択肢と分岐を消し、`unresolved_dump` を `auto` に（#67・申し合わせ済み）。`no_dump_unavailable` に本番の 2 つの引数と期待の 1 行 `reason=not_elevated`（#34）。`cpu_us` の無い `perf(thread)` 行のケース（exit 4＝R1・#35）
   - perf-rank の `RankError` と stderr の文を英語の ASCII に、`errors="backslashreplace"` に（#25・D9）。`perf_lines` の読みの失敗の文に続く perf-rank の末尾も合わせる。`fixtures-loop/rank/` の `stderr_substr` のうち当たるものを合わせ、rank の自己較正で `check_tree` ⑶ を入れる（T25 の ⑶）
@@ -238,3 +238,4 @@
 - 10: 14 の audit で拾う候補: `check_goal_text` が `# summary` の節の見出しの下にある／`cmd_summary` の docstring の「results/summary.md」／ledger の selftest は想定外の例外で NG にならず落ちる
 - 11: フレームの数は今までどおり SampledProfile の行の Image!Function も数える（D6 の図は Stack の行だけだが、期待出力と ps1 の `Measure-ArekaFrames` を変えないため。スタックのあるサンプルの最上位フレームは 2 回数わる）。R2 の赤は `exists()` では出ない（0 バイトでも真）ので直しの前の `is_file() and st_size > 0` で見た。実機の dump での確かめは未（議題 3・開発者の昇格の窓が要る）
 - 12.1: README へ渡す分（13）: 「名簿は登録を消しません」を事実に／段②に「使い回された TID は 0 と読まれ、その CPU は残りに入る」の 1 文
+- 12.2: README へ渡す分（13）: 830 行の段①の説明から「発話中の頂」を消す（#21）／1059 行は judge 側か rank 側かを確かめる／段②③④の理由の語と、段③の no_dump・declared_unavailable・0 バイトの dump が exit 4 になる点（#62・#66）を 901〜906 行あたりへ。perf-ledger の入口の reconfigure も backslashreplace にした（D9）
