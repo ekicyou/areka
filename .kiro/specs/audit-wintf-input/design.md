@@ -63,7 +63,8 @@
 - **クリック透過の対象（指摘 21）**: `Window` を持たない entity と、`WindowHandle` の HWND が登録の HWND と違う対象は、評価の前に刈られる。本番の登録（`areka-placement` の `register_ghost_windows_click_through`・`Added<WindowHandle>` で登録）は wintf の窓だけなので変わらない。
 - **記録の段（指摘 14）**: `[DragStartEvent] Dispatching` ほか 5 か所が `debug!` になる。この文言を読む範囲の外のテストは `crates/areka/tests/window_link_real_run.rs:508,531` だけで、その `RUST_LOG`（`:49-50`）に `wintf::ecs::drag::dispatch=debug` を足す。
 - **始めの位置が取れないドラッグ（指摘 3）**: 控え（`WindowDragContext`）の `initial_window_pos` が `None` になり（`move_window` は `DragConfig` のまま）、`warn!` が 1 行出る。偽の HWND で `client_to_window_coords` が失敗するテスト（`WindowDragContextResource` を読むのは `crates/areka/src/input_events/drag_test_support.rs`・`crates/areka-placement/src/balloon_lock.rs`・`balloon_lock_drag_tests.rs`・`follow_drag_end_gate_tests.rs`）は、`initial_window_pos` と `WARN` の行の数を確かめ直す（実装の頭で grep し、`areka-placement` の側で直しが要るなら申し合わせる）。
-- **行の番号の参照**: `tools/perf/judge-followup.py:106,111` が `controller.rs:212`・`registry.rs:18-23` の行の番号を書いている。文言と綴りは変えないが行はずれる＝`audit-tools-perf-judge` へ知らせる（直すのは向こう）。
+- **行の番号の参照**: `tools/perf/judge-followup.py:106,111` が `controller.rs:212`・`registry.rs:18-23` の行の番号を書いている。文言と綴りは変えないが行はずれる＝`audit-tools-perf-judge` へ知らせる（直すのは向こう）。実装の後、向こうが完了済みで受け手がいないので、こちらで `:212` → `:206` に直した（`/kiro-validate-impl`）。
+- **ドラッグの知らせの `Messages`（実装の後の audit の指摘 24・タスク 7.1）**: `DragStartEvent`・`DragEvent`・`DragEndEvent` から `Message` を外し、`EcsWorld` の `Messages<Drag*>` の登録・`FrameFinalize` の `update()`・`dispatch` の書き込みを消した（唯一の読み手 `cleanup_drag_state` を指摘 1 で消したため・製品の読み手 0）。テストは受け手の呼ばれた数で数える（`drag/seen_test_support.rs`）。範囲の外で触ったのは `ecs/world/mod.rs`・`window_proc/{keyboard,mouse_click,mouse_dblclick_wheel}_tests.rs`・`runtime/wndproc_bridge_drag_{cancel,release}_tests.rs`・`runtime/wndproc_bridge_drag_test_support.rs`・`tests/drag/dispatch_test.rs`・`areka-placement` の `balloon_lock_drag_tests.rs`・`follow_drag_end_gate_tests.rs`・`areka` の `input_events/drag_test_support.rs`（進行役の決め・`audit-placement-core` へ行を伝え済み・中身は research.md 15 節）。
 
 ## Architecture
 
@@ -135,7 +136,7 @@ crates/wintf/src/ecs/drag/
                               #     #[cfg(test)] #[path = "dispatch_order_tests.rs"] mod order_tests; で読む
 ```
 
-新しいファイルはこの 1 本だけ。ほかのテストは今のファイルの中へ置く（どれも直した後に 1,000 行を十分下回る・「1,000 行の見通し」）。`drag/state/tests.rs`（848 行）には足さない。
+実装の後の audit（タスク 7.1・指摘 24）で `crates/wintf/src/ecs/drag/seen_test_support.rs`（`#[cfg(test)]`・ドラッグの受け手の呼ばれた数を数える部品）を足した＝新しいファイルは 2 本。設計の段の見込みは次の 1 文のとおり 1 本だった: 新しいファイルはこの 1 本だけ。ほかのテストは今のファイルの中へ置く（どれも直した後に 1,000 行を十分下回る・「1,000 行の見通し」）。`drag/state/tests.rs`（848 行）には足さない。
 
 消すファイル: なし（`drag/systems.rs` は `rearm_tick_while_dragging` が残る）。
 

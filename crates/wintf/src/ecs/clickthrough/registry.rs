@@ -129,8 +129,8 @@ impl ClickThroughRegistry {
 
     /// 述語が `false` を返す対象を一括除去する（窓破棄追随のバルク版・R7.2 非破壊）。
     ///
-    /// 「World 上に生存しない窓」をまとめて刈り取る（`prune_dead_targets` が World 参照で
-    /// 述語を与える）。除去件数を返す。
+    /// wintf の窓（`Window` と、登録の HWND と同じ `WindowHandle` を持つもの）でない対象を
+    /// まとめて刈り取る（`prune_dead_targets` が World 参照で述語を与える）。除去件数を返す。
     pub(crate) fn retain<F: FnMut(&ClickThroughTarget) -> bool>(&mut self, mut keep: F) -> usize {
         let before = self.targets.len();
         self.targets.retain(|t| keep(t));
