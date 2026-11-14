@@ -72,16 +72,16 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     path = directory / env.case_filename
     if not path.is_file():
         raise env.bad_input(
-            f"ケースに {env.case_filename} がありません: {directory}",
-            ["期待終了コードの書いていないケースは、走らせても合否を言えません。"],
+            f"case has no {env.case_filename}: {directory}",
+            ["a case without an expected exit code cannot say pass or fail."],
         )
     fields, _ = common.read_case_fields(path, CASE_KEYS, frozenset(), env.bad_input)
     if "exit" not in fields:
-        raise env.bad_input(f"{path} に exit がありません", ["必須項目: exit（任意: title・stderr_substr）"])
+        raise env.bad_input(f"{path}: exit is missing", ["required: exit (optional: title, stderr_substr)"])
     try:
         expected = int(fields["exit"])
     except ValueError as exc:
-        raise env.bad_input(f"{path} の exit が整数ではありません（{fields['exit']!r}）") from exc
+        raise env.bad_input(f"{path}: exit is not an integer ({fields['exit']!r})") from exc
     return SelftestCase(directory.name, directory, fields.get("title", "(説明なし)"), expected,
                         fields.get("stderr_substr", ""))
 
@@ -103,7 +103,7 @@ def run_selftest(env: SelftestEnv) -> int:
             if code == case.expected:
                 reproduced.add(code)
             else:
-                reasons.append(f"終了コード: 期待 {case.expected} 実際 {code}")
+                reasons.append(f"exit code: want {case.expected} got {code}")
             if case.stderr_substr and case.stderr_substr not in err:
                 reasons.append(f"stderr does not contain {case.stderr_substr!r}: {ascii(err)}")
             # .ps1 が実際に読むのは標準出力でなく followup-verdict.txt（#31）。
@@ -117,11 +117,9 @@ def run_selftest(env: SelftestEnv) -> int:
                 want = common.read_normalized(expected_stdout)
                 got = stdout.replace("\r\n", "\n")
                 if want != got:
-                    reasons.append(common.first_difference("標準出力", want, got))
+                    reasons.append(common.first_difference("stdout", want, got))
             else:
-                reasons.append(
-                    f"{env.expected_stdout_filename} がありません（本文の逐語再現を確かめられません）"
-                )
+                reasons.append(f"{env.expected_stdout_filename} is missing (cannot check the body verbatim)")
             results.append((case.name, case.title, reasons))
 
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。

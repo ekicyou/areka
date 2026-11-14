@@ -22,7 +22,7 @@
     goal                  目標定義ファイル（ケースからの相対・既定 `goal.toml`）
     a1 a2 b1 b2           走行ディレクトリ（ケースからの相対・必須）
     exit                  期待終了コード（必須）
-    verdict               期待採否（必須）
+    verdict               期待採否（exit が 3 でなければ必須・3 のケースには書かない）
     before_idle_cpu_pct   `compare.json` の同名の鍵と突き合わせる（任意）
     after_idle_cpu_pct    同上
     delta_pct             同上
@@ -64,8 +64,8 @@ CASE_SINGLE_KEYS = (
     "title", "goal", "exit", "verdict", "a1", "a2", "b1", "b2", "argv",
     "before_idle_cpu_pct", "after_idle_cpu_pct", "delta_pct", "noise_pct", "secondary",
 )
-#: 無ければ較正にならない項目。
-CASE_REQUIRED_KEYS = ("exit", "verdict", "a1", "a2", "b1", "b2")
+#: 無ければ較正にならない項目（`verdict` は exit が入力不正でないときだけ・`_read_case`）。
+CASE_REQUIRED_KEYS = ("exit", "a1", "a2", "b1", "b2")
 #: `compare.json` の同名の鍵と突き合わせる項目。
 CASE_JSON_KEYS = (
     "verdict", "before_idle_cpu_pct", "after_idle_cpu_pct",
@@ -126,13 +126,15 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     values.pop("note", None)
     for required in CASE_REQUIRED_KEYS:
         if required not in values:
-            raise env.bad_input(f"{case_path}: {required} がありません")
+            raise env.bad_input(f"{case_path}: {required} is missing")
     try:
         expected_exit = int(values["exit"])
     except ValueError as exc:
-        raise env.bad_input(
-            f"{case_path}: exit が整数ではありません（{values['exit']!r}）"
-        ) from exc
+        raise env.bad_input(f"{case_path}: exit is not an integer ({values['exit']!r})") from exc
+    # 入力不正のケースは compare.json を書かないので verdict を突き合わせられない（書けば素通りの期待になる）。
+    if (expected_exit == env.bad_input_exit) == ("verdict" in values):
+        raise env.bad_input(f"{case_path}: verdict is required unless exit = {env.bad_input_exit},"
+                            " and must not be written when it is")
     return SelftestCase(
         directory.name, directory, values.get("title") or "(説明なし)", expected_exit,
         values, values.get("argv", "").split(), multi["stderr_substr"],

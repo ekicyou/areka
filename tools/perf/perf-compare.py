@@ -52,7 +52,8 @@ A＝変更前・B＝変更後で、`A1 → B1 → A2 → B2` の順に採る（`
 ないから悪化と断ずることはできず、かといって「観測が無いこと」を悪化として扱うと、
 既定 OFF の観測（設計 C14・C15）を点けずに採った走行が必ず WORSE になり、採否が
 計測の点灯忘れで決まってしまう。ゆえに `NA` は判定に効かせず、代わりに表と
-`worse_secondaries` の外側に必ず名前を出して、見落としを防ぐ。
+`worse_secondaries` の外側に必ず名前を出して、見落としを防ぐ。ただし数の取れた走行の
+どれにもその名前の行が無いときは綴り違いとみなし、NA にせず入力不正（3）で止める（#11）。
 
 判定スクリプトとの関係（別プロセスで呼ぶ・import しない）
 ----------------------------------------------------------
@@ -118,7 +119,8 @@ judge-perf と共有の `perf_lines.py` を使う。
 --------------------------------------------------------------------------
     0  判定できた（ADOPTED / NO_DIFF / WORSE のいずれか。改善したという意味ではない）
     1  `--selftest` の食い違い＝この道具自身が壊れている
-    3  引数不正・走行ディレクトリが無い・目標定義ファイルが読めない
+    3  引数不正・走行ディレクトリが無い・目標定義ファイルが読めない（UTF-8 でない・TOML でない・
+       節や値の型が違う）・ばらつきの床が正の数でない（#10）・副指標の名前がどの走行にも無い（#11）
     4  計測失敗（MEASURE_FAILED）
 
 `2`（判定不能）は返さない——判定不能な走行があれば、それは `4`（計測失敗）である。
@@ -208,7 +210,6 @@ DEFAULT_JUDGE_SCRIPT = "tools/perf/judge-perf.py"
 #: 走行ディレクトリの中の成果物。
 RUN_LOG_FILENAME = "run.log"
 CPU_CSV_FILENAME = "cpu.csv"
-RUN_META_FILENAME = "run-meta.txt"
 
 OUTPUT_TEXT_FILENAME = "compare.txt"
 OUTPUT_JSON_FILENAME = "compare.json"
@@ -269,15 +270,21 @@ def default_repo_root() -> Path:
 def load_goal(path: Path) -> Goal:
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise bad_input(f"cannot read goal file: {path}", [str(exc)]) from exc
     except tomllib.TOMLDecodeError as exc:
         raise bad_input(f"goal file is not valid TOML: {path}", [str(exc)]) from exc
 
-    primary = raw.get("primary_metric") or {}
-    secondary = raw.get("secondary_metrics") or {}
-    levels = raw.get("levels") or {}
-    goal = raw.get("goal") or {}
+    # 型の違う値を通すと後で traceback（終了コード 1）になるので、ここで入力不正（3）にする。
+    tables = {key: raw.get(key, {}) for key in ("primary_metric", "secondary_metrics", "levels", "goal")}
+    for key, table in tables.items():
+        if not isinstance(table, dict):
+            raise bad_input(f"{path}: [{key}] must be a table ({table!r})")
+    primary, secondary, levels, goal = tables.values()
+    for table, key in (("levels", "iteration_build"), ("goal", "name"),
+                       ("goal", "judge_version"), ("goal", "judge_script")):
+        if not isinstance(tables[table].get(key, ""), str):
+            raise bad_input(f"{path}: [{table}].{key} must be a string ({tables[table][key]!r})")
 
     name = primary.get("name")
     if not isinstance(name, str) or not name:
@@ -389,9 +396,6 @@ def measure_run(name: str, directory: Path, goal: Goal, judge: Path,
             "--mode", "baseline", "--emit-metrics"]
     if build:
         argv += ["--build", build]
-    meta = directory / RUN_META_FILENAME
-    if meta.is_file():
-        argv += ["--meta", str(meta)]
 
     try:
         completed = subprocess.run(
@@ -576,7 +580,7 @@ def decide(runs: dict[str, RunResult], goal: Goal) -> Decision:
         names = "・".join(name for name, _ in undecidable)
         return Decision(
             VERDICT_MEASURE_FAILED, mean_a, mean_b, delta, noise, spread, secondaries,
-            worse, undecidable, f"判定不能の走行があります（{names}）。3 本で決めない",
+            worse, undecidable, f"判定不能の走行があります（{names}）。残りの走行で決めない",
         )
 
     assert delta is not None and noise is not None  # 判定不能が無ければ 4 本とも数がある
@@ -884,7 +888,7 @@ def compare(args: argparse.Namespace) -> int:
     if decision.verdict == VERDICT_MEASURE_FAILED:
         names = ", ".join(name for name, _ in decision.undecidable)
         sys.stderr.write(
-            f"{STDERR_PREFIX} measure failed: undecidable runs ({names}); not deciding on 3 runs\n")
+            f"{STDERR_PREFIX} measure failed: undecidable runs ({names}); not deciding on the remaining runs\n")
         for name, _reason in decision.undecidable:
             sys.stderr.write(f"  - {name}: {runs[name].undecidable_reason_en}\n")
             for line in runs[name].judge_stderr.splitlines():

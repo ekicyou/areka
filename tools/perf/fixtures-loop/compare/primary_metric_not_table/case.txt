@@ -1,0 +1,14 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = [primary_metric] が表でない目標定義は入力不正
+goal = goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_p95_150
+b2 = ../runs/idle_620_p95_150
+exit = 3
+
+stderr_substr = perf-compare: bad input
+stderr_substr = [primary_metric] must be a table
+
+note = adopted と同じ 4 本の走行を読む。入力不正（exit 3）で終わるので結果は書かれない。
+note = 検査を戻すと AttributeError の traceback で自己較正ごと落ちる（終了コード 3 にならない）。

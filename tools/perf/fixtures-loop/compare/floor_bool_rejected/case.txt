@@ -6,7 +6,6 @@ a2 = ../runs/idle_940_p95_150
 b1 = ../runs/idle_610_p95_150
 b2 = ../runs/idle_620_p95_150
 exit = 3
-verdict = ADOPTED
 
 stderr_substr = perf-compare: bad input
 stderr_substr = noise_floor_pct must be a number (True)
