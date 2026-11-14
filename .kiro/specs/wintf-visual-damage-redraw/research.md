@@ -134,3 +134,36 @@
 - その後 `/kiro-design wintf-visual-damage-redraw`。
 - 要件の討議の議題 1（2026-11-14）: 平行移動の写し（要件 5）は本 spec に入れる（開発者「分けてもよいけど、どうせすぐ開発することになる」）。§8 の 1 の R4（同じビットマップの中の重なる写しの可否・不可なら写しのための作業用の絵をどう持つか）と R5（物理ピクセルの整数の移動の判定）、写しの作業用の絵が入れ物の枚数の決め（`wintf-d2d-composite-rules` の要件 4.1・Revalidation Triggers）に当たるかは設計の段で決める。件 1 を外した分（2〜3 タスク）で規模は 10〜15 に収まる見込み。
 - 要件の討議の自明な直し（2026-11-14）: §8 の 6 は要件 2.5・2.8・4.1 に入れた（写し終えていない回は次の回に写す・印の持ち方は設計）。§8 の 4・5 は要件 2.1 に「画素を変えうる範囲」として入れ、どれだけ広げるか（囲む切り抜きまでか全部へ倒すか・余白の画素数）は設計で決める。
+
+## 10. 設計の段の調べと決め（2026-11-14・`/kiro-spec-design -y`）
+
+> 種類: 既存の作りの拡張＝軽い調べ（`design-discovery-light`）。読んだ所: `composite.rs`・`systems/render.rs`・`visual/draw/{command,builder,emit}.rs`・`visual/draw_content.rs`・`components.rs`・`readback.rs`・`systems/surface.rs`・`composite_tests.rs`・`tests/graphics/composite_systems_test.rs`、完了 spec の `wintf-d2d-composite-rules`（要件 4・Revalidation Triggers）と `wintf-visual-tree`（Revalidation Triggers）、steering の `tech.md`・`logging.md`・`structure.md`。使った規則: kiro-spec-design の `design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`。新しい crate は調べていない（足さない約束）。
+
+### 10.1 §5 の要調査の答え
+
+- **R1**: D2D の `ID2D1RenderTarget::Clear` は `PushAxisAlignedClip` の切り抜きの中だけを塗る（文書）。描く矩形は恒等の変換で整数の物理ピクセルに置くので、`PER_PRIMITIVE` でも覆いは 0 か 1（`emit` と同じ旗を使い、旗の混在を避ける）。層と描く矩形の縁の交わりは WARP のテストで確かめ、ずれる組み合わせは規則で全部へ倒す（テストは緩めない）。
+- **R2**: `draw_content.rs` の文書どおり、`SOURCE_OVER` でない重ね方は絵を今の軸に沿う切り抜きまで広げて合成する。範囲は親の鎖の矩形の切り抜きの交わり（無ければ描画面の全面＝理由 `covers_surface`）。重ね方ごとに「透明の源で下を変えないもの」を見分ける作りは取らない（`SOURCE_OVER` 以外は全部広げる側＝答えを崩さない側）。
+- **R3**: 余白は補間が `NEAREST_NEIGHBOR` でなければ `ceil(2 × s)` 画素（`s`＝物理の行列の線形の部分の列の長さの大きい方・1 未満なら 1。三次の核の半径 2 素を拡大した分）。`GetImageLocalBounds` で命令の列の本当の範囲を取る案は取らない: 範囲の約束は今の間引き（`build` の `content_world_aabb ∩ 有効な矩形`）が既に `local_aabb` に頼っており、差分の描き直しだけ別の範囲を使うと 2 つの約束が食い違う。`local_aabb` の外へはみ出す中身は使い手の約束の破れ（`VisualDrawContent` の文書に足す）。
+- **R4**: 同じビットマップの中の写しは使えない。D2D の `ID2D1Bitmap::CopyFromBitmap` の文書は元と先が同じ場合を書いていないが、下の D3D11 の `CopySubresourceRegion` の文書は「元と先は別の subresource（同じ資源の別の subresource は可）」と書く（https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-copysubresourceregion ）。入れ物はミップの無い 2D のテクスチャ＝subresource は 1 つなので、重ならない帯どうしでも同じ入れ物の中の写しは決まりの外。決め: 写す範囲の大きさの作業用の絵（入れ物と同じ形式）を合成 1 回の中だけ作り、入れ物 → 作業用の絵 → 入れ物の 2 度の写しにする。作業用の絵はフレームをまたいで持たず、答えを持たない＝入れ物ではない。`wintf-d2d-composite-rules` 4.3（入れ物は 1 枚・増えるメモリは 1 枚分まで）の「持ち続ける分」は変わらないので、あちらの Revalidation Triggers（入れ物の枚数・寿命の変更）には当たらないと判断した。ただし合成のあいだだけは写す範囲の分のメモリが一時に増える＝設計の討議で開発者に確かめる点として残す。写しは `BeginDraw` の前に行う（`CopyFromBitmap` の文書の「的の批の流し」を避ける）。
+- **R5**: 平行移動の量は、`emit` が D2D に渡すのと同じ f32 の物理の行列（`world_mat × 拡大`）の平行移動の差を f64 で取り、整数のときだけ写す。線形の部分はビットで同じ・外接矩形の 4 辺もちょうど同じ量だけずれていること。拡大 1.25 で差が整数にならない動きは写さない（5.2）。整数の差で画素がずれないことは WARP のテスト（1.0・1.25・小数の位置）で固め、ずれれば「位置そのものも整数」へ条件を狭める。
+- **R6**: 範囲の外のまま（設計の Risks に記す）。
+
+### 10.2 §8 の残りの答え
+
+- 3（層の鍵）: 層の命令に `entity`・`version` を足す（`command.rs`）。図形の切り抜きの形の変化は節の版の上がりで拾う。`wintf-d2d-composite-rules` の Revalidation Triggers の「`DrawItem` の欄・`DrawCommand` の命令の増減（`wintf-visual-damage-redraw` が列を読む）」はまさに本 spec を名指しした項で、本 spec が持ち主として足す。
+- 5（範囲の余白）: R3 のとおり。
+- 7（範囲の形）: 普通の範囲は 1 つの外接矩形。矩形の列を持つのは平行移動の写しの帯（最大 4 つ）だけ。
+- 9（口の形）: 比べと計画は COM を持たない比べの項（`DamageEntry`）を受ける。鍵と範囲の規則は素の値を受ける小さな関数に置く。
+- 10（前の列の置き場）: `SurfaceComposite`。控えは項の列（COM 無し）と根の命令の列の参照と拡大と「写し終えたか」。中身を保つ決め（4.4）は変えず、控えを足すだけ。
+
+### 10.3 合成の見直し（design-synthesis）
+
+- **一般化**: 「描画の木を持たない描画面」は「項の列が前も今も空の描画面」として同じ計画の道に乗る（特別な分岐を持たない・4.1）。全部の合成の理由 7 種は 1 つの列挙の型にまとめ、記録の欄 `reason` と計画の答えを同じ型にする。
+- **作るか借りるか**: 最長増加部分列は std だけで数十行（C20 の約束で crate を足さない）。変わった範囲の写しの仕組みとして DXGI の `Present1` の dirty rect は WUC の描画面では使えない（部分の `BeginDraw` を断る）ので取らない。写しは D2D の `CopyFromBitmap`（既に読み戻しで使っている）。
+- **削ったもの**: 離れた変化を別の矩形のまま描くこと（1 つの外接矩形で足りる・必要になれば計画の答えの形はそのまま矩形の列を持てる）／描く矩形の中で層ごと飛ばすこと（層の作りに触らない）／重ね方ごとの「範囲の外を変えない」見分け（全部広げる側）／根の命令の列の範囲を取って写しの条件を広げること（根の列を持つ描画面では写さない）／作業用の絵の使い回し（持ち続けると入れ物の枚数の決めに触る）。
+
+### 10.4 設計の討議へ渡す点（答えで作りが変わりうるもの）
+
+1. 写しのための作業用の絵を合成 1 回の中だけ作る形（R4）で、`wintf-d2d-composite-rules` 4.3 の「増えるメモリは 1 枚分まで」を満たすとみなしてよいか（一時の分を数えるなら、写しの範囲を帯に刻むなどの別の形が要る）。
+2. 普通の範囲を 1 つの外接矩形にまとめる（離れた 2 か所の変化で間も描き直す）でよいか。
+3. 根の命令の列を持つ描画面・不透明度の層の中の切り抜きでは平行移動の写しを使わない（普通の範囲で描く）制限でよいか。
