@@ -113,7 +113,7 @@
   - _Dispatch: mechanical — 判定の式と定数と 4 つの組の期待は設計が与える・関数に切るだけ_
   - _Requirements: 2.1, 4.7_
 
-- [ ] 5. クリック透過を直す
+- [x] 5. クリック透過を直す
 - [x] 5.1 クリック透過の対象を wintf の窓だけにし、同じ HWND の再登録で記録を崩さないようにする
   - 登録は HWND が変わったときだけ適用の記録を戻す（同じ HWND なら何もしない）。登録の口の説明も「HWND が変わったときだけ記録を戻す」に。
   - 対象を刈るとき、`Window` と、登録の HWND と同じ `WindowHandle` を持つ窓だけを残す。説明の「汎用の対象」を「wintf の窓だけ」に直す（議題 10）。
@@ -134,7 +134,7 @@
   - _Dispatch: standard — コンパイラが指すものの仕分けと、空の型を関数にする書き換えが runtime の起動と RAII に及ぶ_
   - _Requirements: 2.1, 2.3, 5.1, 5.3, 7.3_
 
-- [ ] 5.3 カーソルの見張りの 1 回分を関数に切り、利用者のカーソルを動かさないテストに替える
+- [x] 5.3 カーソルの見張りの 1 回分を関数に切り、利用者のカーソルを動かさないテストに替える
   - カーソルを 1 回読み、前と違うときだけ最新の位置へ書いてから知らせる私的な関数を切り（読めなければ何もしない）、見張りのループはそれを回すだけにする。読めなかったときの `trace!` は読む側に残す。
   - 本物のカーソルを動かすテストと、同じ式を比べるだけのテストを消す。
   - 終わったとき: 偽の読み手で「同じ位置を 2 回返すと知らせは 1 回」「知らせの中で読むともう新しい位置が入っている」の 2 本が緑（差分の守りを外すと前者が、順を逆にすると後者が赤）、wintf のテストのどこにもカーソルを動かす呼び出しが無い。
@@ -186,3 +186,4 @@
 - `areka-placement/src/follow/drag_follow.rs` は 1000 行ちょうど＝空き 0 行（3.2 の後）。`audit-placement-core` が 1 行足すなら向こうで空きを作る（伝え済み）。
 - 範囲の外の例の説明 2 か所が、クリック透過の刈る条件を今も「Entity の生存確認」と書く（`crates/areka/examples/mock-shell.rs:135`・`crates/areka/examples/emo-present/systems.rs:17`）。5.1 で条件が「wintf の窓（`Window`＋同じ HWND の `WindowHandle`）だけ」に変わった＝完了の棚卸で拾う（5.1 のレビュー）。
 - 6.2 へ申し送り（5.2 のレビュー）: `clickthrough/controller.rs` の `ClickThroughRegistryHandle` の説明（「破棄追随」「World 生存を確認して」＝5.1 前の刈る条件）・`doc/click-through.md` 4.3 の「dedupe（冪等）」・`controller.rs` の「結線は task 3.2 の責務」。起動の `debug!` の旧い文言は `tools/perf/fixtures-loop/followup/*/run.log` の 3 行目に検体のデータとして残るだけで、読む道具は無い。
+- 5.3 の「wintf のテストのどこにもカーソルを動かす呼び出しが無い」は、普通に走るテスト（`--ignored` 無し）の話。`SetCursorPos` が残るのは `crates/wintf/src/ecs/tooltip/os_tests.rs` の `#[ignore]` の実機の試しだけで、`tooltip/` はこの spec の範囲の外（7.2 で差分 0）。
