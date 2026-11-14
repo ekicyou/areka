@@ -147,6 +147,11 @@ pub enum OffsetViolation {
         /// 何が読めなかったか。
         detail: String,
     },
+    /// 最初の起点より前（どの遷移にも属さない前置き）に、読めない追随レコードがある。
+    UnassignedMalformedRecord {
+        /// 何が読めなかったか。
+        detail: String,
+    },
     /// 語彙表に無い判定語。
     UnknownVerdict {
         /// 遷移番号。
@@ -241,6 +246,10 @@ impl fmt::Display for OffsetViolation {
             Self::MalformedRecord { transition, detail } => {
                 write!(f, "遷移 {transition}: 追随レコードを読めない（{detail}）")
             }
+            Self::UnassignedMalformedRecord { detail } => write!(
+                f,
+                "最初の起点より前の追随レコードを読めない（{detail}・どの遷移にも属さない行でも捨てない）"
+            ),
             Self::UnknownVerdict {
                 transition,
                 scope,
@@ -417,8 +426,20 @@ fn collect_offset_transitions(
     records: &[TransitionRecord],
     violations: &mut Vec<OffsetViolation>,
 ) -> Vec<OffsetTransition> {
+    let spans = split_transitions(records);
+    // 区切りに入らないのは最初の起点より前の前置きだけ（`split_transitions` の契約・
+    // `judge_transition_log` の `unassigned_malformed_records` と同じ数え方）。
+    let unassigned = records.len() - spans.iter().map(Vec::len).sum::<usize>();
+    for record in records[..unassigned]
+        .iter()
+        .filter(|record| record.kind == KIND_OFFSET)
+    {
+        if let Err(detail) = offset_row(0, record) {
+            violations.push(OffsetViolation::UnassignedMalformedRecord { detail });
+        }
+    }
     let mut transitions = Vec::new();
-    for (index, span) in split_transitions(records).into_iter().enumerate() {
+    for (index, span) in spans.into_iter().enumerate() {
         let Some(origin) = span.first().filter(|record| is_transition_origin(record)) else {
             continue;
         };
@@ -462,14 +483,25 @@ fn offset_row(transition: usize, record: &TransitionRecord) -> Result<OffsetRow,
         .to_owned();
     Ok(OffsetRow {
         transition,
-        scope: record.int_field::<u32>(FIELD_SCOPE),
-        base_dpi: record.int_field::<u32>(FIELD_BASE_DPI),
+        scope: optional_int_field(record, FIELD_SCOPE)?,
+        base_dpi: optional_int_field(record, FIELD_BASE_DPI)?,
         new_dpi,
         base_offset: point_field(record, FIELD_BASE_OFFSET)?,
         old_offset: point_field(record, FIELD_OLD_OFFSET)?,
         new_offset: point_field(record, FIELD_NEW_OFFSET)?,
         verdict,
     })
+}
+
+/// 無くてもよい数の欄を読む（無い・`-` は `None`・それ以外で数にならなければ `Err`）。
+fn optional_int_field(record: &TransitionRecord, name: &str) -> Result<Option<u32>, String> {
+    match record.field(name) {
+        Some(raw) => raw
+            .parse()
+            .map(Some)
+            .map_err(|error| format!("{name}={raw} を数として読めない: {error}")),
+        None => Ok(None),
+    }
 }
 
 /// `x,y` の欄を読む。
@@ -763,3 +795,7 @@ mod transition_judge_offset_tests;
 #[cfg(test)]
 #[path = "transition_judge_offset_signoff_tests.rs"]
 mod transition_judge_offset_signoff_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_offset_negative_tests.rs"]
+mod negative_tests;

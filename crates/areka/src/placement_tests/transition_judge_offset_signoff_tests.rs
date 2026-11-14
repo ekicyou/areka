@@ -387,7 +387,7 @@ use wintf::ecs::window::transition_diag::FIELD_KIND;
 ///
 /// `raw_path` は環境変数の値（未設定なら `None`）。I/O の失敗も「追随レコード 0 行」も `Err`
 /// にする——どれも「違反 0 件」を作れてしまう入力だからである（要件 8.5）。
-fn signoff_offset_log(raw_path: Option<&str>) -> Result<(OffsetReport, String), String> {
+pub(super) fn signoff_offset_log(raw_path: Option<&str>) -> Result<(OffsetReport, String), String> {
     let Some(raw_path) = raw_path.map(str::trim).filter(|path| !path.is_empty()) else {
         return Err(format!(
             "{TRANSITION_LOG_ENV} が未設定である。実機ログの絶対パスを PowerShell で与えて \
@@ -403,7 +403,8 @@ fn signoff_offset_log(raw_path: Option<&str>) -> Result<(OffsetReport, String), 
     if report.rows == 0 {
         return Err(format!(
             "{TRANSITION_LOG_ENV}={raw_path} に追随レコードが 1 行も無い（{} 文字）。\
-             観測 target と水準が有効になっていない採取を「発生 0 回」の根拠にしない（要件 8.5・doc §2）",
+             観測 target と水準が有効になっていない採取を「発生 0 回」の根拠にしない（要件 8.5・doc §2）。\
+             判定の報告:\n{report}",
             log.len()
         ));
     }

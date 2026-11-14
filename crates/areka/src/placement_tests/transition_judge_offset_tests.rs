@@ -753,8 +753,8 @@ fn a_gate_row_inside_a_transition_still_forms_the_denominator() {
 ///
 /// 落とすのは `base_dpi` である——`scope` と `verdict` は残るので、母数が
 /// `is_well_formed()` で弾いているのか、それとも欄が読めずに弾かれただけなのかを
-/// 取り違えない。値が読めない字面（`base_dpi=x` など）では欠陥が立たない
-/// （`RecordDefect::UnreadableField` は `frame`／`t_us` にしか立たない・実測）。
+/// 取り違えない。値が読めない字面（`base_dpi=x` など）では解析の欠陥は立たず、判定器が
+/// 欄を読む所（`offset_row`）で形の壊れた行になる——この部品の檻は欠陥の側を見る。
 fn malformed_keyword_gate_line() -> String {
     let intact = keyword_gate_line(1);
     let broken = intact.replace(&format!(" {FIELD_BASE_DPI}=192"), "");
