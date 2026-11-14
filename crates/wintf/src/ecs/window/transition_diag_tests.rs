@@ -2,7 +2,7 @@
 //!
 //! 本ファイルが固定するのは 4 つである。
 //!
-//! - **行の逐語書式**——5 種のレコードが design.md「Data Models > Logical Data Model
+//! - **行の逐語書式**——6 種のレコードが design.md「Data Models > Logical Data Model
 //!   （レコード語彙）」の表どおりの `kind` 語・`stage` 語・フィールド名・並びで 1 行に載ること。
 //!   判定側（別 crate の `transition_judge`・サインオフ手順書の grep 語）は**この行の字面**を
 //!   直接読むため、字面が黙って変わると手順と判定が同時に嘘になる。

@@ -79,7 +79,7 @@ pub const KIND_MONITOR: &str = "monitor";
 /// # 語の選び方
 ///
 /// 既存の 11 語——wintf の 5 語（`monitor`／`write`／`flush`／`msg`／`enqueue`＝
-/// [`KIND_ALL`]）・areka-emo-present の 1 語（`surface`）・areka の 5 語（`snapshot`／
+/// [`KIND_ALL`] から `windpi` を除いた 5 語）・areka-emo-present の 1 語（`surface`）・areka の 5 語（`snapshot`／
 /// `hold`／`ground`／`chain`／`offset`＝`PLACEMENT_KIND_ALL`）——のいずれとも衝突せず、
 /// フィールド名 [`FIELD_WIN_KIND`] と同じ「窓の」の接頭で**窓の DPI** と読める最短の語と
 /// して `windpi` を採る。
@@ -95,7 +95,7 @@ pub const KIND_ENQUEUE: &str = "enqueue";
 
 /// wintf が発行する `kind` 語の全体（判定側の語彙照合・語の一意性テストが参照する）。
 ///
-/// areka／areka-emo-present が足す `snapshot`／`surface`／`hold`／`ground`／`chain` は
+/// areka／areka-emo-present が足す `snapshot`／`surface`／`hold`／`ground`／`chain`／`offset` は
 /// それぞれの crate のレコード純関数が定義する（wintf は上位 crate の語彙を持たない）。
 pub const KIND_ALL: &[&str] = &[
     KIND_MONITOR,

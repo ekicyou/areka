@@ -33,3 +33,9 @@
 - 消す前の `git grep`（`手順③`・`3ステップ`・`window_pos.rs:2xx`）: 前＝`crates/wintf` の中で `window_pos.rs:41・44・296`・`command.rs:22・712`・`command_transition_tests.rs:390`・`transition_diag.rs:808`・`window_pos_transition_tests.rs:595`。後＝0 件（`②③` の WM_DPICHANGED の手順は別物で残る）。消した呼び出しは関数ではないので、ほかの使い手は関係しない。
 - テストの数（`cargo test -p wintf --lib window_proc::window_pos`）: 前＝30・後＝31。`window_proc` 全体 109 通過。`window::command` 52・`transition_diag` 27 通過。
 - clippy の `collapsible_if`（`WM_DPICHANGED` の `if let` の入れ子）は直す前からある（HEAD でも出る）。範囲の外なので触っていない。
+
+## 2.3
+
+- 直したもの（説明だけ・3 か所）: `window/transition_diag.rs` の `KIND_WINDPI` の説明（「wintf の 5 語（…＝[`KIND_ALL`]）」→「[`KIND_ALL`] から `windpi` を除いた 5 語」。既存の 11 語＝5＋1＋5 は `windpi` を選んだ時点の勘定なので数は残した）・`KIND_ALL` の説明の上位の語の列に `offset` を足した（`PLACEMENT_KIND_ALL` は snapshot／hold／ground／chain／offset の 5 語）・`window/transition_diag_tests.rs` の頭「5 種のレコード」→「6 種」（`KIND_ALL` は 6 語）。
+- 直す前の食い違い: `KIND_ALL` は monitor／windpi／write／flush／msg／enqueue の 6 語なのに説明は 5 語でこれを `KIND_ALL` と呼んでいた。上位の列は `offset` が抜けていた。
+- `MonitorRecord` の差分 0 行（`git diff | grep -c MonitorRecord` = 0）。説明だけの直しなので較正と消す前の `git grep` は当たらない。
