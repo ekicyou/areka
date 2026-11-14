@@ -832,3 +832,178 @@ clippy の指摘を機械的に直す指摘は 0。
 1. **6 番の `TrackMouseEvent` の失敗の記録は `debug!`**。要件 8.2（`error!`＋`Err`）と `logging.md`（立ち直れる失敗は `warn!`）の字面からは外れるが、窓の手続きの中で `Err` を返す相手が無い・次の `WM_MOUSEMOVE` でまた呼ぶので立ち直る・失敗が続く場面で `warn!` だと移動のたびに溢れる・`cursor/answer.rs:225` が同じ失敗を `debug!` で残す、の 4 つを理由とし、本番の説明にも 1 行書く（設計の検証の重大な点 1）。
 2. **15 番の 0 台の判定は `apply_monitor_snapshot` の頭へ**。戻り値を `Option<usize>` にし、0 台なら `None`（表を変えない）。`detect_display_change_system` は `None` なら旗を下ろさず次の刻みで読み直し、0 台が続く間は `Local<bool>` で覚えて `warn!` と頭の `info!` を続きの最初の 1 回だけ出す。空の一覧を渡すテストを 1 本足す（設計の検証の重大な点 3）。選ばなかった案＝0 台でも旗を下ろして次の `WM_DISPLAYCHANGE` を待つ（一時的な失敗の後に知らせが来なければ古い表が残る）。
 
+## 14. 実装の記録（2026-11-14・タスク 1.1〜15.2）
+
+- 測った時点は作業枝の `f88c9516b`（15.2 の後）。タスク 1 つにコミット 1 つ（`git log --oneline origin/main..HEAD` の `feat(audit-wintf-window): <番号> …` の 34 本＝小タスク 1.1〜15.2）。門 GI（13.1）と門 GP（15.1）の確かめは 12.2 節の終わりの 2 項にあり、ここでは繰り返さない。
+- 実装の途中で書いた控えはこの節へ移し、控えのファイルは消した。
+
+### 14.1 確定した 63 件と直した小タスク（要件 1.6・1.8・3.1）
+
+63 件は、どれもちょうど 1 つの小タスクで直した（tasks.md の小タスクの見出しの番号を数え、1〜63 が 1 回ずつ現れ、抜けも重なりも 0 であることを確かめた）。大タスクは 17（design.md の組 Q1〜Q4・C1・P1・Z1〜Z6・I1・I2・H1・V1・V2）で 20 に収まり、2 本目の spec は切らなかった（要件 1.8）。
+
+| 番号 | 小タスク | 番号 | 小タスク | 番号 | 小タスク | 番号 | 小タスク |
+|---|---|---|---|---|---|---|---|
+| 1 | 4.1 | 17 | 6.2 | 33 | 11.2 | 49 | 3.2 |
+| 2 | 6.1 | 18 | 6.3 | 34 | 11.2 | 50 | 14.3 |
+| 3 | 7.1 | 19 | 9.2 | 35 | 11.2 | 51 | 14.3 |
+| 4 | 10.1 | 20 | 2.3 | 36 | 12.1 | 52 | 5.3 |
+| 5 | 11.1 | 21 | 6.2 | 37 | 12.1 | 53 | 7.1 |
+| 6 | 13.2 | 22 | 7.2 | 38 | 12.1 | 54 | 7.2 |
+| 7 | 4.2 | 23 | 7.2 | 39 | 12.2 | 55 | 11.2 |
+| 8 | 5.1 | 24 | 7.2 | 40 | 12.1 | 56 | 11.2 |
+| 9 | 5.2 | 25 | 8.1 | 41 | 2.2 | 57 | 11.2 |
+| 10 | 5.2 | 26 | 7.2 | 42 | 3.1 | 58 | 12.2 |
+| 11 | 15.2 | 27 | 7.2 | 43 | 3.2 | 59 | 2.2 |
+| 12 | 2.1 | 28 | 10.2 | 44 | 13.4 | 60 | 14.2 |
+| 13 | 1.1 | 29 | 10.1 | 45 | 13.3 | 61 | 14.1 |
+| 14 | 6.2 | 30 | 10.2 | 46 | 14.1 | 62 | 13.4 |
+| 15 | 6.3 | 31 | 10.2 | 47 | 14.2 | 63 | 14.3 |
+| 16 | 6.2 | 32 | 9.1 | 48 | 13.3 | | |
+
+### 14.2 7 番の門の結果と、申し送り 4 件の扱い（要件 2.1・2.3）
+
+- **7 番の門（タスク 4.2）＝「同じ」の枝**。`command_batch_tests.rs` の `a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command` で、自分の不可視の窓 4 枚（A〜D）を毎回 `0,1,2,3` に並べ直し、Z だけの列 `[A を B の後へ][C を A の後へ][A を D の後へ]` を ⑴ 1 本ずつ `guarded_set_window_pos` で当てる ⑵ キューに積んで `flush_window_pos_commands` で流す、の 2 通りで比べた。2 回とも ⑴＝`[1, 2, 3, 0]`（B,C,D,A）・⑵＝`[1, 2, 3, 0]`。⑵ がバッチの道を通ったこと（書込レコード 3 本とも `in_batch=true`）も同じテストで見る。Wine・ReactOS の読み（2 本目を畳む）なら `[1, 3, 0, 2]` になるはずで、**この列の実際の Windows の結果には当たらない**。
+- 「同じ」の枝なので本番のコードは変えず（1 本ずつの道へ回す判定も `debug!` も足さない）、説明だけを直した。`apply_as_batch` の説明は、確かめたのは上の 1 本の列だけ・ほかの列は確かめていない、と範囲を絞って書く（レビューの差し戻しで一般の決まりの書き方から絞った）。`flush_window_pos_commands` の説明は確かめた範囲を `apply_as_batch` の説明へ指すだけ。門のテストは確かめとして残した。
+- 直した後の `window/command.rs` は **984 行**（1,000 行以下。`command_ui_thread.rs` は作らなかった）。4.2 の直後は 983 行で、説明を絞った差し戻しの後に 984 行になった。
+- **申し送り 4 件**（4 節）: ⑴＝2 番で直した（6.1）・⑷＝41 番で直した（2.2）・⑵ と ⑶＝指摘にしない（討議の決め 6）。⑶ の説明（`DpiSuggestedRectPolicy::ApplyPosition` の着地点）は 16 番で直した（6.2）。
+
+### 14.3 公開の口の変化（要件 3.5）と、コードの実物との突き合わせ
+
+design.md「公開の口の変化」の表の行を 1 つずつ、作業枝の木で `git grep` して確かめた。0.x の壊す変更として次の版でまとめて出す（`#[deprecated]` は挟まない）。
+
+| 番号 | 口 | 表の変化 | コードの実物（`git grep`） | 突き合わせ |
+|---|---|---|---|---|
+| 1 | `wintf::ecs::SetWindowPosCommand::enqueue` | 形は同じ・UI スレッドの外から積むと `error!` を残して捨てる | `command.rs:697` の頭で `admits_enqueue(cmd.hwnd, UI_THREAD.get().copied())`。控えは `runtime/mod.rs:372` の `record_ui_thread()`（`pub(crate)`）。判定の `admits_enqueue` は私有 | 一致 |
+| 2 | `wintf::ecs::WindowPos::to_window_coords_for_creation` | 形は同じ・片方だけ与えたとき与えた側に枠を足す | `window_pos/mod.rs:335` の定義。呼び手は `runtime/window_factory.rs:287` の 1 か所 | 一致 |
+| 3 | `wintf::ecs::apply_zorder_chain`・`ZOrderChainPlan.dirty` | 形は同じ・ハンドル待ちが残る巡は印を戻す | `zorder_chain_apply.rs:273-274` が `plan.dirty = handle_missing;`・`*carry_announced = handle_missing;`（書けた本数に依らない） | 一致 |
+| 4 | `wintf::ecs::establish_owner_links` | 形は同じ・後から付けた宣言でも owner を張る | `zorder_pair_establish.rs:143` が `declaration.is_added()` を条件に含む | 一致 |
+| 6 | `wintf::ecs::WindowPointerTracking` | 消える | `git grep -c "WindowPointerTracking" -- crates` が 0 件（型・テスト・`ecs/mod.rs` の再公開とも） | 一致 |
+| 7 | `wintf::ecs::flush_window_pos_commands` | 「違う」の枝のときだけ、重なった列を 1 本ずつ当てる | 門は「同じ」の枝。`has_repeated_window` は 0 件で、流しの本体（`command.rs:769`）は振る舞いを変えず説明だけが変わった | **変化なし**（表の条件の枝を取らなかった） |
+| 10 | `wintf::ecs::WindowStyle::from_hwnd` | 消える | `git grep "from_hwnd" -- crates` が 0 件 | 一致 |
+| 11 | `wintf::ecs::WindowHandle` の欄 `instance` | 消える | `pub instance` は 0 件。`git grep -n "instance:" -- crates` で `WindowHandle` の構築の欄は 0 件（残りは別物の `StoryboardInstance` の引数と、窓クラスの登録に使うローカルの `let hinstance` だけ） | 一致 |
+| 12 | `wintf::ecs::SetWindowPosCommand::flush` | 消える | `git grep "SetWindowPosCommand::flush" -- crates` が 0 件。自由関数 `flush_window_pos_commands` は `ecs/mod.rs:55` で再公開 | 一致 |
+| 14 | `wintf::ecs::WindowPos::set_window_pos` | 消える | `fn set_window_pos` と私有の `fn build_flags(` が 0 件（`raise_reset_window_pos` は別物）。`build_flags_for_system` は残り、呼び手 3 つは変わらない | 一致 |
+| 15 | `wintf::ecs::window::monitor::enumerate_monitors` | 形は同じ・失敗を `error!` で残す | `monitor.rs:244`（`hmonitor`・`error` の欄）と `:253` が `error!`。返す値（失敗で空の `Vec`）は同じ | 一致 |
+
+表に無かった公開の口の変化（実装で分かったもの）:
+
+| 口 | 変化 | 使い手への響き |
+|---|---|---|
+| `wintf::ecs::layout::detect_display_change_system`（`pub`・`ecs::layout` の再公開） | 6.3（15 番の範囲の外の追従）で system の引数に `Local<bool>`（0 台の続きの控え）が 1 つ増えた | system として登録する形（`ecs/world/mod.rs:231`・`crates/wintf/tests/window/monitor_hierarchy_test.rs:260` の `add_systems`）は直さずに通る。関数として直に呼ぶ使い手は木の中に 0 |
+
+クレートの外から見えない口の形の変化（表に入れない）: `create_windows`（`pub(crate) mod window_system`・問い合わせの状態を引数で受ける）・`apply_monitor_snapshot`（`pub(crate)`・戻り値が `Option<usize>`）・`PairTrigger::Establish`（消えた）・`is_behind_foreground`（引数 `foreground_visible`）・`collect_entities_to_leave`（`exclude` が `Option<Entity>`）・`handle_button_message`（`pub(super)`・`double_click` の引数）・`WINDOW_WRITE_LOG_MESSAGE`（`pub(super)`）・`zorder_pair_diag` の `UNKNOWN`／`tristate_field`（`pub(crate)`）。
+
+**0.x の変更の知らせに載せる 1 行**: 枠つきの窓に位置だけ・大きさだけを与えたとき、生成の直後の位置が正しくなった（次の刻みで枠の厚みぶん跳ばない。タスク 6.1・2 番）。
+
+### 14.4 消した項目と、消す前の `git grep`（要件 6.3）
+
+どれもツリー全体（テスト・fixture・設定・文字列を含む）で引いた。`.kiro/` の中（この spec の文書と `completed/` の過去の spec の記録）に残る名は、指摘の説明・歴史の記録なので直していない。
+
+| タスク | 消したもの | 消す前の `git grep` | 消した後 |
+|---|---|---|---|
+| 1.1 | 書き込みのテストの 3 本のファイルの道具 7 項目の写し（`fake_hwnd`・`clean_slate`・`transition_lines`・`lines_of_kind`・`emit_control`・`SIGNOFF_DIRECTIVES`・`CONTROL_LINE`）・字面 `[coalesce-probe] alive` | `command_(batch\|coalesce\|transition)_tests::<7 項目>` は 0 件（どれも私的な項目）。`coalesce-probe` は合流のテストが定数を通して読むだけ | `coalesce-probe` 0 件 |
+| 2.1 | メソッド `SetWindowPosCommand::flush`（と中身の無い旧 `flush_window_pos_commands` の包み） | コード 46 件（`command.rs` 4・`command_transition_tests.rs` 3・組と帯の実窓テスト 8 本 43）＋ spec 文書。areka・areka-placement は 0 | `.kiro` の外で 0 件 |
+| 2.2 | `WM_WINDOWPOSCHANGED` の手順③の呼び出しと、行番号で ③ を指す説明 | `手順③`・`3ステップ`・`window_pos.rs:2xx` が `window_pos.rs:41・44・296`・`command.rs:22・712`・`command_transition_tests.rs:390`・`transition_diag.rs:808`・`window_pos_transition_tests.rs:595` | 0 件（`WM_DPICHANGED` の別の ②③ は残る） |
+| 5.1 | ハンドルの外れで投げる `PostMessageW(hwnd, WM_CLOSE)` | ハンドルの外れから投げる行は `window_handle.rs:280` の 1 件だけ（ほかの `WM_CLOSE` の投函は `tooltip/os_tests.rs:446`・`shiori-host32-ipc/src/send_timeout_tests.rs:101` の自前の窓のテスト）。`on_window_handle_remove` の使い手はフックの登録だけ。`"sending WM_CLOSE"` を読むテスト・道具は 0 | `crates/wintf/src/ecs/window` の `PostMessageW` が 0 件。ハンドルの外れから投げると書く説明も 0 件 |
+| 5.2 | `WindowStyle::from_hwnd`（と、それだけが使っていた `components.rs` の `use crate::api::*;`） | コードでは `components.rs:218` の定義だけ（`get_entity_from_hwnd`・`WindowCoordinateConverter::from_hwnd` は別物で `.kiro/specs/completed/` にだけ出る） | コードで 0 件 |
+| 5.3 | `create_windows` の中の型の別名と `SystemState` の import（公開の口ではない） | 直に呼ぶ所は `window_system.rs` 1・`runtime/window_factory_creation_tests.rs` 2・`runtime/window_factory.rs` 2 | `create_windows(&mut` が crates で 0 件 |
+| 6.1 | テスト「position.x だけ CW_USEDEFAULT でも素通し」1 本と古い説明 | `to_window_coords_for_creation` の使い手は `runtime/window_factory.rs` とこのファイルのテストだけ | ― |
+| 6.2 | `WindowPos::set_window_pos`・私有の `build_flags` | `(^\|[^_])set_window_pos\(\|build_flags\(` で crates の使い手は定義の `window_pos/mod.rs` の 2 か所だけ（ほかは別物の `raise_reset_window_pos(` と completed の記録）。examples・tests・fixture・設定は 0 | crates の定義・呼び出し 0 件 |
+| 7.1 | 呼び出し元の `ExecOutcome { … }` の組み立て（型は残す） | 関数・型・口は消していない | ― |
+| 7.2 | 鎖の側の `UNKNOWN`・`tristate_field`・`zorder_chain_tests.rs` の重なった主張 6 行と `SET_WINDOW_POS_FLAGS` の import | 鎖の側の 2 つは `zorder_chain_diag.rs` と子のテストの中だけ（`zorder_chain_diag::UNKNOWN` を名指す所は 0）。`SET_WINDOW_POS_FLAGS` は消した 2 行だけ | `fn tristate_field\|const UNKNOWN` は `zorder_pair_diag.rs` の 2 行だけ |
+| 8.1 | 鎖の順のテストの足場 7 つ（`chain_schedule`・`spawn_window`・`publish_full_chain`・`schedule`・`spawn_scopes`・`balloon_offsets`・`place_after` の写し） | どれも私的な関数。同じ名の関数がほかのテストのファイルにあるが別のモジュールの別物 | outsider・inversion に自前の定義 0 件 |
+| 9.1 | 組の実窓テスト 11 本のファイルの下ごしらえの写し | どれも私的な `fn`／`const`。当たるのは別のモジュールの同じ名の定義だけ。文字列で読むのは `areka` の `zorder_inversion_branch_coverage_tests.rs` のテスト名だけで、テスト名は変えていない | 消したものへの参照 0 件 |
+| 9.2 | 実窓の門の写し 3 つと、帯の窓の手伝い 4 つの写し | 消したのは私的な `fn`／`const`。同じ名の別物（`command_batch_tests.rs` の `destroy(windows: &[HWND])` ほか）は触っていない | 門の定義は `zorder_pair_test_support.rs` の 1 組だけ |
+| 10.2 | `PairTrigger::Establish` | `PairTrigger::Establish\|Establish\b` で `zorder_pair.rs` の定義・表の行・腕と `zorder_pair_tests.rs` の 3 か所だけ（ほかは `.claude/skills/kiro-impl/SKILL.md` の英語で別物） | crates で 0 件 |
+| 11.2 | `zorder_pair_sink_tests.rs` の自前の `WA_INACTIVE`／`WA_ACTIVE` | 同じファイルの定義と 3 か所の使い手だけ | 活性の定数の自前の定義 0 件（`WA_BOTTOM` ほかは別の意味） |
+| 12.2 | テスト `measure_window_below_maps_failure_to_absence_and_records_it` とその節の見出し・`measure_window_below` の use | 定義 1 か所と、research.md・completed の記録だけ。コード・fixture・設定は 0 | ― |
+| 13.2 | 型 `WindowPointerTracking`・そのテスト・`ecs/mod.rs` の再公開 | crates では `ecs/mod.rs:35`・`pointer/types/mod.rs:198,206`・`pointer/types/tests.rs:122,125`・`window_proc/mouse_move.rs`（8 か所）だけ。areka・areka-placement・examples・`crates/*/tests`・fixture・設定は 0 | crates で 0 件 |
+| 13.3 | 字面「PointerState inserted on Window (no hit)」「PointerState moved to Window, Leave marker inserted」「PointerLeave marker inserted (scoped to window)」 | `mouse_move.rs` の本番の行だけ（テスト・fixture・設定・areka からの参照は 0） | ― |
+| 13.4 | `Preparing` の腕の手書きの閾値の判定（ローカルの束縛だけ） | 外から引く名は無い | ― |
+| 14.1 | `handle_double_click_message`（約 120 行） | crates では定義と 4 つの呼び出しだけ。tools・テスト・fixture・設定は 0。`doc/COMPAT_ARCHITECTURE.md:368` の 1 件は直した。ログの字面 `Double-click detected` を読む所は 0 | ― |
+| 14.3 | `entity_name`・`bounds_info` の束縛・テストの `DragAccumulatorResource` の挿入 1 行 | 下げた `info!` の字面（`hit_test result`・`Calling start_preparing`・`deactivated during drag, cancelling`）を読むテスト・tools・doc は 0 | ― |
+| 15.2 | `WindowHandle` の欄 `instance`・それだけが使う `HINSTANCE` の import（47 ファイル）・`get_instance_handle` の import 1 つ・`runtime/spine.rs` の `HINSTANCE` | `git grep -l "WindowHandle {"` は着手のとき 62 本（crates の中は wintf・areka・areka-placement）。`.instance` の読み取り・分解の束縛は木全体で 0 | 構築の欄 74 行（52 ファイル）と分解の束縛 4 か所を消した。`instance:` の構築の欄 0 件 |
+
+### 14.5 design.md からの小さなずれ
+
+| タスク | ずれ | 扱い |
+|---|---|---|
+| 14.3 | 50 番（ファイル頭の一覧）を I2 の 14.3 にまとめ、`mouse_move.rs` の頭の 1 行（`WM_SETCURSOR`）もそこで直した。`keyboard.rs` には `WM_CAPTURECHANGED` を足した。`mouse_dblclick_wheel.rs` の分かれた説明は 14.1 の作り直しで既に無く、頭に 1 行足した | tasks.md の頭の決めどおり |
+| 9.1 | `window/command.rs` の `WINDOW_WRITE_LOG_MESSAGE` を `pub(super)` にした（修飾子だけ・行数 984 のまま）。共有の道具の `SET_WINDOW_POS_TAG` が手写しでなくこの定数そのものを読む | design.md の Z3 の表に無い `command.rs` への手 |
+| 5.3 | tasks.md に挙げた 3 か所のほかに、`runtime/window_factory.rs` の `create_windows_new_path_spawns_registers_and_handles_without_class_error` の直の呼び出し 2 か所も `run_system_once` へ替えた（引数が増えてビルドが通らなくなるため・範囲の外） | design.md に無い範囲の外の追従 |
+| 4.1 | `admits_enqueue` に引数 `hwnd` を足した（`admits_enqueue(hwnd, ui_thread)`）。`error!` の行に窓を載せるため。3 項目は `command.rs` に置いた（直した後 976 行で 1,000 行に届かないので `command_ui_thread.rs` は作らない） | design.md の形の引数が 1 つ増えた |
+| 13.2 | 道具窓を借りるため、`window_pos.rs` の `mod window_pos_transition_tests` を `pub(super)` に、`DISPATCH_TARGET`・`create_test_window` を `pub(in crate::ecs::window_proc)` に広げた（2.2 で `pub(super)` にした道具窓の 5 項目のうちの 2 つ） | テストの時だけの可視性で本番は変わらない |
+| 5.1 | `WM_CLOSE` の投函を消して偽になった範囲の外の説明を直した（コメントだけ・行は増やさない）: `ecs/clickthrough/controller.rs:91`・`areka/src/menu/trigger_flow_tests.rs:805-807`・`areka/examples/mock-shell.rs:423,437`・`areka/examples/emo-present/input.rs:18`（範囲の中では `zorder_pair_maintain_detach_tests.rs:298-299`・`lifecycle.rs` の「投函契約と」の語・テスト `wm_close_skips_stale_entity_as_normal_teardown` の説明と腕の注） | 要件 6.1 の最小の追従 |
+| 6.3 | `detect_display_change_system` の引数が 8 個になり `#[allow(clippy::too_many_arguments)]` を付けた（`clip_sync.rs`・`zorder_chain_apply.rs` の前例）。公開の口の引数が増えた（14.3 の表の外の行） | 討議の決め 2 の形のまま |
+| 1.1 | 合流のテストの `CONTROL_LINE` の値を `"[coalesce-probe] alive"` から共有の `"[transition-probe] alive"` にそろえた（定数を通してしか読まないので振る舞いは同じ） | ― |
+| 7.2 | `zorder_chain_apply.rs` の前例の場所を行番号から `window_proc/window_pos.rs` の `WM_DPICHANGED` の名に替えた | ― |
+| 8.1 | inversion の少し変えた写し 3 つは引数で表せたので、lifecycle 版を引数つきで呼ぶ形にした（lifecycle は fmt で 661→665 行） | ― |
+| 9.1 | 測りのテストの `assert!(is_window_visible(parent), …)` を共有の `create_banded_test_parent` に移した（`create_test_parent` を通る全ファイルにかかる）。名の違うものは `use … as …` で受け、テストの本文 76 本の差分は 0 | ― |
+| 11.2 | 34 番の誤った理由の文を、指摘の 5 か所に加えて `zorder_pair_diag.rs`・`zorder_pair_maintain.rs` の頭でも直した | 説明だけ |
+| 12.1 | 40 番と同じ向きの誤り（常に手前のテストの腕①のコメント「すぐ手前」＝実は `InsertSpec::After` ですぐ背後）も直した（784 行） | 説明だけ |
+| 13.4 | `ecs/drag/state/mod.rs:618-621` の `check_threshold` の説明（「本番呼び出しがゼロ」「`mouse_move.rs` 内にインライン複製」）は 62 番の直しで事実に合わなくなったが、12.2 の門 GI ⒝ の申し合わせで `audit-wintf-input` が説明を直すので触っていない | あちらの持ち物 |
+| 14.1 | `doc/COMPAT_ARCHITECTURE.md:368` の定義点を `handle_button_message` に直した（範囲の外）。振る舞いの差: 消した受け手は既にある `PointerState` の `shift_down`／`ctrl_down` を直に書いていたが、新しい道はふつうの押下と同じく `set_modifier_state` の溜め（次の tick）に任せる。ログの `Double-click detected` の行は無くなり、`hit_test result` の行が出る | 字面を読む所は 0 |
+| 14.3 | ダブルクリックの印が `debug` の行にしか出なくなるので、`hit_test result` の行に `double_click` の欄を足した | ― |
+| 10.1 | 宣言を窓の生成の前に付ける areka の経路（`spawn.rs:593`）では、宣言の付いた巡にまだハンドルが無ければ `reason=HandleMissing` の見送りの記録が組ごとに 1 本増えうる（実機では確かめていない・窓の振る舞いは変わらない） | 記録だけ |
+| 15.2 | 道具窓の `create_test_window`（`window_pos_transition_tests.rs`）は `(HWND, HINSTANCE)` でなく `HWND` を返す形にした（呼び手 4 か所）。`crates/areka/examples/mock-shell.rs` の `mod tests` の `HINSTANCE` の import も消した（`--examples` のビルドでは組まれず、`cargo test … --examples --no-run` で確かめた） | ― |
+
+### 14.6 タスクごとの較正（壊し方と赤になったテスト）
+
+足したテストと確かめを直したテストは、本番に壊し方を 1 度入れて赤を見てから明示の編集で戻し、差分が意図した直しだけに戻ったことを確かめた。
+
+| タスク | 番号 | 壊し方 | 赤になったテスト |
+|---|---|---|---|
+| 2.1 | 12 | `pub fn flush_window_pos_commands() {` に空白を 1 つ入れる | `command_transition_tests::flush_keeps_the_front_guard_so_the_default_run_pays_no_observation_cost` |
+| 2.2 | 41 | ② の直後に `flush_window_pos_commands()` の呼び出しを戻す | `windowposchanged_does_not_flush_the_queue_while_the_lock_is_held`（left: 0, right: 1） |
+| 3.1 | 42 | `use_bypass` を `is_echo` だけにする／`skip_box_style` から `dpi_context.is_some()` を落とす | どちらも `after_a_dpi_change_window_pos_is_marked_and_box_style_is_left_alone` |
+| 3.2 | 49 | `drop_files.rs` の `vec![0u16; len as usize + 1]` の `+ 1` を落とす | `dispatch_real_hdrop_delivers_the_same_two_paths`（`.nar` が `.na`） |
+| 4.1 | 1 | 比べを外す（`Some(ui)` だけにする）／`error!` を消す | `enqueue_is_admitted_on_the_recorded_ui_thread`／`enqueue_off_the_recorded_ui_thread_is_dropped_with_one_error` |
+| 4.2 | 7 | `apply_as_batch` の積み上げを `.rev()` にする | `a_queue_with_the_same_window_twice_lands_in_the_same_order_as_one_write_per_command`（キュー側 `[1, 0, 3, 2]`） |
+| 5.2 | 9 | `window_to_client_rect` の `- left_diff` を `+ left_diff` にする | `framed_window_client_to_window_round_trips`（`(84, 200)`） |
+| 6.1 | 2 | 直す前の素通し／早戻りを `!position_given \|\| !size_given` にする | `test_to_window_coords_for_creation_position_only_adds_frame_to_position`・`test_to_window_coords_for_creation_size_only_adds_frame_to_size` |
+| 6.3 | 15 | 0 台の判定を `if false && …` にする | `empty_snapshot_keeps_monitor_table_and_returns_none`（`Some(0)` ≠ `None`） |
+| 7.1 | 3 | 持ち越しを「書けなかったとき」に戻す（`handle_missing && !acted`） | `an_edge_without_handles_is_skipped_with_a_reason_and_the_rest_are_linked`・`the_remaining_link_is_made_once_the_late_handle_attaches_and_the_mark_drops` |
+| 7.2 | 24 | `settled_line` の `nudged` と `after` を入れ替える | `the_settled_line_carries_the_declaration_and_the_measurement_together`・`the_four_signoff_fields_of_the_settled_line_stay_adjacent_in_this_order` |
+| 9.1 | 32 | （確かめ）共有の `issue_control_command` から流しを外す | 組のテスト 13 本（`maintain::tests` 6・`survivor_tests` 2・`sink::tests` 2・`release_tests` 3） |
+| 10.1 | 4・29 | `declaration.is_added() \|\|` を外す／比べを `failed.is_some()` にする | `establishes_when_the_declaration_is_added_after_the_handles`／`retries_and_establishes_once_the_handles_are_replaced` |
+| 10.2 | 30 | `(RaisedBelow, ExplicitMaintenance)` の腕を `Skip(EchoOrIrrelevant)` にする | `decide_pair_fix_follows_the_band_table_for_the_place_above_arm`・`decide_pair_fix_handles_raised_below_per_strategy` |
+| 11.1 | 5 | 引数 `foreground_visible` を判定に使わない | `is_behind_foreground_reports_absence_rather_than_a_false_negative`（`Some(false)` ≠ `None`） |
+| 11.2 | 34 | `log_sink_observed` の `debug!` に兄弟の `target:` を足す | `every_record_is_visible_under_the_signoff_directive`（前の検査はこの壊し方で緑のままだった） |
+| 12.2 | 39 | `establish_pair` の流しの 1 行を外す | `character_first_despawn_detaches_the_owner_and_spares_the_balloon`（left: 2, right: 1） |
+| 13.2 | 6 | `track_mouse_leave` に「1 度だけ」の門を入れる | `every_mouse_move_arms_the_leave_watch`（left: 1, right: 2） |
+| 13.3 | 48 | `collect_entities_to_leave` の窓の絞り込みを外す | `mouse_leave_leaves_only_the_window_it_reached`・`test_collect_protects_other_windows_pointer_state` |
+| 13.4 | 44 | 直す前の `let _ =` のまま | `failed_drag_window_move_is_logged_as_error`（0 本） |
+| 14.1 | 46 | 予備の枝の `record_button_down(window_entity, button)` を外す | `w3_left_dblclick_without_hit_records_press_on_window` |
+| 14.2 | 47・60 | `screen_point` の `x + pos.x` を `x` に／`xbutton_of` の `== 1` を `== 2` に | `test_screen_point_adds_window_position_or_keeps_client_point`・`w1_left_dblclick_prepares_and_crossing_threshold_starts`／`test_xbutton_of_reads_hiword_of_wparam` |
+| 14.3 | 51 | （一時のテスト・残していない）資源の挿入を消す前に「ダブルクリック → 閾値越え → 離す → 終了 1 件」 | 一時のテストが消す前に赤（left: 0, right: 1）・消した後に緑 |
+
+較正の当たらないもの（足したテスト・直したテストが無い・説明だけ・振る舞いを変えない直し）: 1.1・2.3・5.1・5.3（既にあるテストが緑のまま）・6.2・8.1・9.2（門の内側は `#[ignore]` で既定の走行に入らない）・12.1・15.2。
+
+### 14.7 テストの数（範囲を絞った走行・`--ignored` なし）
+
+| タスク | 走行 | 前 → 後 |
+|---|---|---|
+| 1.1 | `--lib command` | 63 通過・1 無視 → 同じ（名と結果の一覧の差分 0） |
+| 2.2 | `--lib window_proc::window_pos` | 30 → 31 |
+| 3.1 | `--lib window_proc::window_pos` | 31 → 34 |
+| 3.2 | `--lib window_proc::drop_files` | 6 → 7 |
+| 4.1 | `--lib command_threadlocal_tests` | 3 → 6 |
+| 4.2 | `--lib command_batch_tests` | 8 → 9 |
+| 5.2 | `--lib window_handle` | 10 → 11 |
+| 6.1 | `--lib window_pos` | 57 → 58 |
+| 6.3 | `--lib monitor`／`monitor_systems` | 38 → 39／21 → 22 |
+| 7.1 | `--lib zorder_chain_apply` | 53 → 54 |
+| 8.1 | `--lib zorder_chain_order` | 11 → 11 |
+| 9.1 | `--lib zorder_pair -- --list` | 97 → 97（一覧の差分 0・走行は 94 緑・3 無視） |
+| 9.2 | `--lib window_band`／`always_on_top` | 16 緑・3 無視／6 緑・3 無視 → 同じ |
+| 10.1 | `--lib zorder_pair_establish` | 9 → 11 |
+| 10.2 | `--lib zorder_pair` | 96 緑・3 無視（改名 1・増減 0） |
+| 12.2 | `--lib zorder_pair_maintain` | 33 → 32（弱いテスト 1 本を消した） |
+| 13.2 | `window_proc::mouse_move`／`pointer::types` | 8 → 9／22 → 21 |
+| 13.3 | `--lib window_proc::mouse_move` | 9 → 10 |
+| 13.4 | `--lib window_proc::mouse_move` | 10 → 11 |
+| 14.1 | `--lib window_proc` | 116 → 117 |
+| 14.2 | `--lib window_proc` | 117 → 119 |
+| 14.3 | `--lib window_proc` | 119 → 119 |
+
+A-1 の 3 本（`#[ignore]`）は既定の走行に入らないまま（`-- --list --ignored` で 3 本だけ・12.1 で確かめた）。番人の 2 本は増えなかった: `zorder_chain_order_tests.rs` は 977 → 972 行（15.2 で `instance` の欄の行だけ減った）・`zorder_pair_maintain_tests.rs` は 978 → 784 行。
