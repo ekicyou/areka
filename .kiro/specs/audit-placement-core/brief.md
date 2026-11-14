@@ -134,3 +134,9 @@
 - **要件定義のモデル**: Opus（今ある crate の中の直しで、新しい境目は作らない）。
 - **分割の案**: 今は無し（指摘を見てから決める）。
 - **古くなった記述**: 受け持ちの 16 ファイル（`crates/areka-placement/` の `follow*`・`transition_*` でないもの・`diag.rs`・`persist.rs` ほか）の説明に、旧い名前 `emo2_boot`・`Emo2Wiring` が残る。roadmap の C19 の約束 ⑵ では C21 の `runtime-crate-split` が直す予定だが、この spec が先に通るので、ここで直せば同 spec の手が減る（直すなら同 spec の brief へ申し送る）。⑸ の `crates/areka/examples/collision-probe.rs:90` の件は、もう当たらない（前の測りのとおり・今は `SampleRoot::acquire("emo2")` の説明）。
+
+## audit-wintf-input からの申し送り（2026-11-15）
+
+- **件 1: 窓の位置が取れないドラッグで (0,0) を基準に窓を動かしうる**: `audit-wintf-input` で、ドラッグを始めた窓の位置が取れないとき（`crates/wintf/src/ecs/drag/dispatch.rs` の `drag_origin` が `Err`）は、`warn!` を 1 行残して `WindowDragContext.initial_window_pos` を `None` にし、wndproc は窓を動かさなくなった。ところが `DraggingState.initial_window_pos` は `(f32, f32)` のままで、そのときは `(0.0, 0.0)` が入る（同じファイルの `origin.unwrap_or(Point { x: 0, y: 0 })`）。`crates/areka-placement/src/follow/drag_follow.rs` の `policy_mapped_position`（276 行あたり）はこの値を基準に生座標を復元するので、非 Free アンカーのキャラ窓は (0,0) からのずれの位置へ動きうる。振る舞いは `audit-wintf-input` の前と同じで、位置が取れないのは窓に `WindowPos`／配置が無いときだけ（実機ではまず起きない）。
+- **論点**: 直すには `DraggingState` に「位置が分からない」を持たせる（`Option` にする・印を足す・挿入しない、のどれか）必要があり、wintf の型の形を変える。C20 の約束 ⑶（`areka-placement` が使う wintf の型は足すだけ）に触れるので `audit-wintf-input` では直さなかった。この spec か C20 の着地の後の spec で、`DraggingState` を組み立てる 9 ファイル（`git grep -n "DraggingState {" -- crates`）とあわせて決める。`drag_follow.rs` はちょうど 1,000 行（`audit-wintf-input` の着地の時点）で、1 行も足せない。
+- **参照**: `.kiro/specs/completed/audit-wintf-input/tasks.md` の `## Implementation Notes`・`design.md` の Revalidation Triggers。

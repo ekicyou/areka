@@ -1,0 +1,8 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 明示指定の系列の間隔が 19 本では判定不能
+mode = verdict
+build = release
+exit = 2
+
+note = 判定対象の系列の窓の間隔が 19 本。下限の 20 本に 1 本足りないので、
+note = 合否を出さず判定不能（2）にする。S2 と対で境目を固定する。

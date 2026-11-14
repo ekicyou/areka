@@ -1,5 +1,5 @@
 {
-  "hypothesis": "変化が無い tick で 13 本を回さない（tick gate）",
+  "hypothesis": "変化が無い tick で 13 本を回さない（tick gate | A/B）",
   "candidate": "stage=phase rank=1 item=tick_all share=0.41",
   "files_changed": "crates/wintf/src/ecs/world/tick_gate.rs",
   "runs": "A1=iter-1/a1 B1=iter-1/b1 A2=iter-1/a2 B2=iter-1/b2",

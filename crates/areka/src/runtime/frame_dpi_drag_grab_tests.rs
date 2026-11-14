@@ -31,8 +31,8 @@ const DROP: Point = Point { x: -1500, y: 1000 };
 /// 窓の位置の式（wndproc・`drag_follow` と同じ形）: 始めの左上を整数で読み、カーソルの差を足す。
 fn top_left_at(drag: &DraggingState, cursor: Point) -> Point {
     Point {
-        x: drag.initial_inset.0 as i32 + (cursor.x - drag.drag_start_pos.x),
-        y: drag.initial_inset.1 as i32 + (cursor.y - drag.drag_start_pos.y),
+        x: drag.initial_window_pos.0 as i32 + (cursor.x - drag.drag_start_pos.x),
+        y: drag.initial_window_pos.1 as i32 + (cursor.y - drag.drag_start_pos.y),
     }
 }
 
@@ -59,7 +59,7 @@ fn dragging_char0() -> (FrameHarness, bevy_ecs::entity::Entity, DraggingState) {
     let top_left = pos_of(&harness.world, window).expect("前提: キャラ窓に位置がある");
     let drag = DraggingState {
         drag_start_pos: Point::new(top_left.x + GRAB.0, top_left.y + GRAB.1),
-        initial_inset: (top_left.x as f32, top_left.y as f32),
+        initial_window_pos: (top_left.x as f32, top_left.y as f32),
     };
     harness.world.entity_mut(window).insert(drag);
     (harness, window, drag)
@@ -75,7 +75,7 @@ fn drag_of(harness: &FrameHarness, window: bevy_ecs::entity::Entity) -> Dragging
 
 /// DraggingState は比べる形を持たないので、2 つの欄を組で比べる。
 fn fields(drag: DraggingState) -> (Point, (f32, f32)) {
-    (drag.drag_start_pos, drag.initial_inset)
+    (drag.drag_start_pos, drag.initial_window_pos)
 }
 
 /// 純関数に実測の形を入れると、掴んだ点が (169,605) へ縮み、始めの左上が整数の値になる。
@@ -134,8 +134,8 @@ fn a_dragging_char_window_rescales_its_grab_point_with_the_measured_shape() {
         "始めのカーソルが変わった"
     );
     let grab_after = (
-        drag.drag_start_pos.x - drag.initial_inset.0 as i32,
-        drag.drag_start_pos.y - drag.initial_inset.1 as i32,
+        drag.drag_start_pos.x - drag.initial_window_pos.0 as i32,
+        drag.drag_start_pos.y - drag.initial_window_pos.1 as i32,
     );
     assert_eq!(grab_after, (169, 605), "掴んだ点が比で置き直っていない");
 
@@ -184,7 +184,7 @@ fn a_balloon_window_size_write_keeps_the_grab_point() {
     let top_left = pos_of(&harness.world, balloon).expect("前提: バルーン窓に位置がある");
     let drag = DraggingState {
         drag_start_pos: Point::new(top_left.x + 40, top_left.y + 30),
-        initial_inset: (top_left.x as f32, top_left.y as f32),
+        initial_window_pos: (top_left.x as f32, top_left.y as f32),
     };
     harness.world.entity_mut(balloon).insert(drag);
     assert!(

@@ -7,7 +7,7 @@
 //!    レジストリの各対象窓を 1 回巡回し、ヒットテスト→`resolve_transition`→
 //!    差分時のみ `apply_click_through`→成功時のみ `last_applied` 書き戻し、を行う。
 //!    `tick_bridge::tick_one_frame` と同じ「同期コア切り出し」規律でテスト隔離する。
-//! 3. [`ClickThroughController::start`] / [`ClickThroughHandle`]（async ループ＋RAII）:
+//! 3. [`start_click_through`] / [`ClickThroughHandle`]（async ループ＋RAII）:
 //!    `spawn_local` で UI スレッドに投入する二重起床（カーソル移動 notify／VSync tick）
 //!    の listen-before-work ループと、その生存期間を束ねる RAII ハンドル。
 
@@ -21,10 +21,10 @@ use event_listener::Event;
 use tracing::{debug, trace, warn};
 
 use crate::ecs::PointF;
-use crate::ecs::drag::{DragStateSnapshot, snapshot_drag_state};
+use crate::ecs::drag::{DragState, snapshot_drag_state};
 use crate::ecs::hit_test_in_window;
 use crate::ecs::world::EcsWorld;
-use crate::ecs::{PhysicalPoint, WindowPos};
+use crate::ecs::{PhysicalPoint, Window, WindowHandle, WindowPos};
 use crate::win_style::{apply_click_through, apply_layered_companion};
 use windows::Win32::Foundation::{HWND, POINT};
 
@@ -53,24 +53,20 @@ use super::{ClickThroughRegistry, CursorMonitorBridge, DesiredState};
 ///
 /// # 純粋性
 /// `&World`・I/O・グローバル状態・副作用を持たない決定的関数。`last_applied` の
-/// 真実源（[`super::ClickThroughRegistry`]）への書き戻しは呼び出し側（タスク 3.1）の
+/// 真実源（[`super::ClickThroughRegistry`]）への書き戻しは呼び出し側（`evaluate_targets`）の
 /// 責務であり、本関数は計算のみを担う。
 pub(crate) fn resolve_transition(
     hit: Option<Entity>,
-    drag: &DragStateSnapshot,
+    drag: &DragState,
     last_applied: DesiredState,
 ) -> Option<DesiredState> {
     // 望ましい状態を判定する。
     let desired = match drag {
         // ドラッグ移動中: 透過 ON へは絶対に遷移させない。強制 Opaque。
-        DragStateSnapshot::Dragging { .. } | DragStateSnapshot::JustStarted { .. } => {
-            DesiredState::Opaque
-        }
+        DragState::Dragging { .. } | DragState::JustStarted { .. } => DesiredState::Opaque,
         // それ以外（Idle / Preparing / JustEnded）は非ドラッグ写像に委ねる。
         // JustEnded は抑止解除サイクルとして現在の hit に従い再収束する（R5.2）。
-        DragStateSnapshot::Idle
-        | DragStateSnapshot::Preparing { .. }
-        | DragStateSnapshot::JustEnded { .. } => match hit {
+        DragState::Idle | DragState::Preparing { .. } | DragState::JustEnded { .. } => match hit {
             Some(_) => DesiredState::Opaque,
             None => DesiredState::Transparent,
         },
@@ -84,27 +80,25 @@ pub(crate) fn resolve_transition(
     }
 }
 
-/// World 上に生存しない対象窓をレジストリから刈り取る（窓破棄追随・R7.2 / Lifecycle）。
+/// 対象のうち、`Window` と、登録の HWND と同じ `WindowHandle` を持つ窓だけを残す
+/// （窓の破棄と付け替えに追随・R7.2 / Lifecycle）。対象は wintf の窓だけ。
 ///
-/// 除去条件: window Entity が既に despawn 済み（`world.get_entity(window).is_err()`）。
-/// これが「窓破棄」の正準シグナルである。areka の窓 close は `world.despawn(entity)` で
-/// 行われ（登録簿の掃除 `reconcile_window_registry` が `DestroyWindow` する起点）、Entity と共に
-/// 対象が消える。したがって Entity 生存確認だけで破棄追随が成立する。
+/// 刈る条件: window Entity が despawn 済み・`Window` を外した（`Window` に `on_remove` の
+/// フックが無いので `WindowHandle` は残る）・`WindowHandle` の HWND が登録の HWND と違う。
+/// areka の窓 close は `world.despawn(entity)` で行われ（登録簿の掃除
+/// `reconcile_window_registry` が `DestroyWindow` する起点）、Entity と共に対象が消える。
 ///
-/// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み窓の無効 HWND へ
-/// `apply_click_through` を撃つ経路（`Err` スパム）を構造的に断つ。除去件数を返す
-/// （テスト・観測用）。areka の窓登録／破棄（task 4.1）は非同期ゆえ、機構側は「今 World に
-/// 在る Entity の対象だけを見る」ことで窓ライフサイクルに追随する（既存窓ライフサイクル
-/// ファイルは不変）。
-///
-/// NOTE: `remove::<Window>` のみ（Entity は残す）で HWND が破棄される稀な過渡状態は、
-/// `evaluate_targets` の `apply_click_through` が `Err` をグレースフルに warn+skip する
-/// 既存経路（`last_applied` 据え置き・次サイクル再試行）が受け止める。prune は「Entity 消滅」
-/// という単一・明快な破棄シグナルに限定し、`Window` コンポーネント有無へ結合しない
-/// （eval コアの純粋性を保ち、`Window` を持たない汎用対象も破棄までは監視できる）。
+/// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み・付け替え前の HWND へ
+/// `ScreenToClient`／`apply_click_through` を撃つ経路を断つ。除去件数を返す（テスト・観測用）。
+/// areka の窓登録／破棄は非同期ゆえ、機構側は「今 World に在る wintf の窓だけを
+/// 見る」ことで窓ライフサイクルに追随する。
 pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegistry) -> usize {
-    // Entity が World 上に生存している対象のみ残す（despawn 済みは刈り取る）。
-    registry.retain(|t| world.get_entity(t.window).is_ok())
+    registry.retain(|t| {
+        world.get::<Window>(t.window).is_some()
+            && world
+                .get::<WindowHandle>(t.window)
+                .is_some_and(|h| h.hwnd == t.hwnd)
+    })
 }
 
 /// settled な `&World` に対しレジストリの全対象窓を 1 回巡回評価する同期コア
@@ -148,7 +142,7 @@ pub(crate) fn evaluate_targets(
     mut screen_to_client: impl FnMut(HWND) -> Option<PointF>,
 ) {
     // 窓破棄追随（R7.2 / Error Handling: Lifecycle）: 巡回前に、World 上に生存しない対象
-    // （despawn 済み Entity・`Window` コンポーネント喪失）をレジストリから刈り取る。これにより
+    // （despawn 済み Entity・`Window` 喪失・`WindowHandle` の HWND の違い）をレジストリから刈り取る。これにより
     // 破棄済み窓の無効 HWND へ `apply_click_through` を撃たない（Err スパム回避）。
     prune_dead_targets(world, registry);
 
@@ -157,7 +151,7 @@ pub(crate) fn evaluate_targets(
 
     // 巡回中に `registry` を可変借用して書き戻すため、対象の列挙を先にスナップショット
     // する（`iter` の不変借用と `set_last_applied` の可変借用の重複を避ける）。
-    // 対象は areka で 2 窓のみ・汎用でも小数のため Vec 収集のコストは無視できる。
+    // 対象は areka で 2 窓のみ・wintf の窓は小数のため Vec 収集のコストは無視できる。
     let targets: Vec<(Entity, windows::Win32::Foundation::HWND, DesiredState, bool)> = registry
         .iter()
         .map(|t| (t.window, t.hwnd, t.last_applied, t.layered_applied))
@@ -257,115 +251,73 @@ fn screen_to_client_point(hwnd: HWND, screen: PhysicalPoint) -> Option<PointF> {
 ///
 /// - **単一 wake event を引数で受ける**: async ループはただ 1 つの共有
 ///   `Arc<event_listener::Event>` を listen する。この wake event を (a) カーソルワーカ
-///   （`CursorMonitorBridge::spawn(wake_event.clone())`）と (b) VSync tick 源（後続
-///   タスク 3.2 が post-tick で notify）の **両方** が notify することで、futures/select
+///   （`CursorMonitorBridge::spawn(wake_event.clone())`）と (b) VSync tick 源（`WinApp::run` が
+///   起こす中継 `tick_bridge::relay_vblank` が vblank ごとに notify）の **両方** が notify することで、futures/select
 ///   コンビネータ（tokio/futures 非依存・R4.2）無しに二重起床を実現する。tick 源への
-///   結線は task 3.2 の責務のため、`start` は wake event を **引数** で受ける。
+///   結線は `WinApp` の責務（`wire_click_through` が event を作り、`run` が `relay_vblank` へ
+///   渡す）のため、`start` は wake event を **引数** で受ける。
 /// - **レジストリを共有可能化**（`Rc<RefCell<ClickThroughRegistry>>`）: areka は窓を
-///   非同期生成するため、task 3.2/4.1 が `start` **後** に対象窓を登録／破棄時に除去
-///   できるよう、返す [`ClickThroughHandle`] 経由で register/remove を公開する。
-pub(crate) struct ClickThroughController;
+///   非同期生成するため、アプリ側が `start` **後** に対象窓を登録／破棄時に除去
+///   できるよう、呼び手が同じ表を [`ClickThroughRegistryHandle`] に包んで World へ据える。
+///
+/// ワーカ生成・event 共有・async ループの
+/// `spawn_local` を束ね、[`ClickThroughHandle`]（RAII）を返す。
+///
+/// - `world`: UI スレッド所有 World への `Weak`（`run_async_tick` と同じ寿命規律・
+///   shutdown で `upgrade()` が `None` を返しループが安全終了）。
+/// - `registry`: 共有レジストリ（start 後の登録／除去を許すため `Rc<RefCell<..>>`）。
+/// - `wake_event`: 二重起床の単一 wake event。ワーカが notify し、VSync tick 源
+///   （`WinApp::run` が起こす `tick_bridge::relay_vblank`）も同一 event を vblank ごとに notify する。
+/// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では判定を
+///   回さずに終える（[`run_click_through`] 参照）。
+///
+/// # Postconditions
+/// カーソルワーカ稼働・async ループ稼働。返した `ClickThroughHandle` の drop で
+/// 機構停止（ワーカ join・async ループは `run()` が旗を下ろした後の最初の起床か、world drop で終了）。
+pub(crate) fn start_click_through(
+    world: Weak<RefCell<EcsWorld>>,
+    registry: Rc<RefCell<ClickThroughRegistry>>,
+    wake_event: Arc<Event>,
+    running: Rc<Cell<bool>>,
+) -> ClickThroughHandle {
+    // ワーカは同一 wake event で起床通知する（カーソル移動 → notify）。
+    // ワーカは handle（RAII で唯一の強所有・drop で stop/join）と async ループ（座標読み）
+    // で共有する。**join を handle 単独が駆動する**ため、handle が唯一の強 `Rc` を持ち、
+    // ループには `Weak` を渡す。こうすることで:
+    //   - handle drop → 強 `Rc` が 0 → ワーカ即 stop/join（ループが park 中でも遅延しない）。
+    //   - ループは毎起床 `upgrade()` し、`None`（handle drop 済み）なら shutdown として終了。
+    // UI スレッド単独所有ゆえ `Rc`/`Weak`（非 `Arc`）で十分（内部 `latest_pos` は `Arc<AtomicI64>`）。
+    let monitor = Rc::new(CursorMonitorBridge::spawn(Arc::clone(&wake_event)));
 
-impl ClickThroughController {
-    /// UI スレッドで機構を起動する。ワーカ生成・event 共有・async ループの
-    /// `spawn_local` を束ね、[`ClickThroughHandle`]（RAII）を返す。
-    ///
-    /// - `world`: UI スレッド所有 World への `Weak`（`run_async_tick` と同じ寿命規律・
-    ///   shutdown で `upgrade()` が `None` を返しループが安全終了）。
-    /// - `registry`: 共有レジストリ（start 後の登録／除去を許すため `Rc<RefCell<..>>`）。
-    /// - `wake_event`: 二重起床の単一 wake event。ワーカが notify し、VSync tick 源
-    ///   （task 3.2）も同一 event を post-tick で notify する。
-    /// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では判定を
-    ///   回さずに終える（[`run_click_through`] 参照）。
-    ///
-    /// # Postconditions
-    /// カーソルワーカ稼働・async ループ稼働。返した `ClickThroughHandle` の drop で
-    /// 機構停止（ワーカ join・async ループは `run()` が旗を下ろした後の最初の起床か、world drop で終了）。
-    pub(crate) fn start(
-        world: Weak<RefCell<EcsWorld>>,
-        registry: Rc<RefCell<ClickThroughRegistry>>,
-        wake_event: Arc<Event>,
-        running: Rc<Cell<bool>>,
-    ) -> ClickThroughHandle {
-        // ワーカは同一 wake event で起床通知する（カーソル移動 → notify）。
-        // ワーカは handle（RAII で唯一の強所有・drop で stop/join）と async ループ（座標読み）
-        // で共有する。**join を handle 単独が駆動する**ため、handle が唯一の強 `Rc` を持ち、
-        // ループには `Weak` を渡す。こうすることで:
-        //   - handle drop → 強 `Rc` が 0 → ワーカ即 stop/join（ループが park 中でも遅延しない）。
-        //   - ループは毎起床 `upgrade()` し、`None`（handle drop 済み）なら shutdown として終了。
-        // UI スレッド単独所有ゆえ `Rc`/`Weak`（非 `Arc`）で十分（内部 `latest_pos` は `Arc<AtomicI64>`）。
-        let monitor = Rc::new(CursorMonitorBridge::spawn(Arc::clone(&wake_event)));
+    // async 判定・適用ループを UI スレッドへ投入（実行はメッセージループに委ねる）。
+    let join = crate::executor::spawn_local(run_click_through(
+        Arc::clone(&wake_event),
+        Weak::clone(&world),
+        Rc::clone(&registry),
+        Rc::downgrade(&monitor),
+        running,
+    ));
 
-        // async 判定・適用ループを UI スレッドへ投入（実行はメッセージループに委ねる）。
-        let join = crate::executor::spawn_local(run_click_through(
-            Arc::clone(&wake_event),
-            Weak::clone(&world),
-            Rc::clone(&registry),
-            Rc::downgrade(&monitor),
-            running,
-        ));
+    debug!("click-through started (UI-thread eval loop + cursor worker)");
 
-        debug!("ClickThroughController started (UI-thread eval loop + cursor worker)");
-
-        ClickThroughHandle {
-            monitor,
-            registry,
-            wake_event,
-            _join: join,
-        }
+    ClickThroughHandle {
+        _monitor: monitor,
+        _join: join,
     }
 }
 
-/// クリック透過機構の生存期間を束ねる RAII ハンドル。
+/// クリック透過機構の生存期間を束ねる RAII ハンドル。持つだけで、口は無い
+/// （登録・除去は呼び手が同じ表を包んだ [`ClickThroughRegistryHandle`] で行う）。
 ///
-/// - `monitor`: カーソルワーカ。drop でワーカを stop/join（`CursorMonitorBridge::Drop`）。
-/// - `registry`: 共有レジストリ。[`register`]/[`remove`] で start 後の窓登録／除去を行う。
-/// - `wake_event`: 手動起床（テスト・強制再評価）にも使える wake event の保持。
+/// - `_monitor`: カーソルワーカの唯一の強参照。drop でワーカを stop/join（`CursorMonitorBridge::Drop`）。
 /// - `_join`: async ループの JoinHandle。ループは `world` の `Weak` が upgrade 不能に
 ///   なった時点（shutdown）で自ら終了する（`run_async_tick` と同じ終了規律）。
-///
-/// [`register`]: ClickThroughHandle::register
-/// [`remove`]: ClickThroughHandle::remove
 pub(crate) struct ClickThroughHandle {
-    monitor: Rc<CursorMonitorBridge>,
-    registry: Rc<RefCell<ClickThroughRegistry>>,
-    wake_event: Arc<Event>,
+    _monitor: Rc<CursorMonitorBridge>,
     _join: crate::executor::JoinHandle<()>,
 }
 
-impl ClickThroughHandle {
-    /// 監視対象窓を登録する（start 後・areka の非同期窓生成に追随）。
-    pub(crate) fn register(&self, window: Entity, hwnd: windows::Win32::Foundation::HWND) {
-        self.registry.borrow_mut().register(window, hwnd);
-    }
-
-    /// 監視対象窓を除去する（ウィンドウ破棄時・R7.2 非破壊）。存在すれば `true`。
-    pub(crate) fn remove(&self, window: Entity) -> bool {
-        self.registry.borrow_mut().remove(window)
-    }
-
-    /// 共有レジストリへの参照（結線・テスト用）。
-    pub(crate) fn registry(&self) -> &Rc<RefCell<ClickThroughRegistry>> {
-        &self.registry
-    }
-
-    /// 共有 wake event への参照（VSync tick 源の結線・強制再評価・テスト用）。
-    pub(crate) fn wake_event(&self) -> &Arc<Event> {
-        &self.wake_event
-    }
-
-    /// 手動でループを 1 回起床する（テスト・強制再評価用）。
-    pub(crate) fn wake(&self) {
-        self.wake_event.notify(usize::MAX);
-    }
-
-    /// ワーカ最新カーソル座標（screen physical）を読む（テスト・結線用）。
-    pub(crate) fn latest_cursor(&self) -> PhysicalPoint {
-        self.monitor.latest_cursor()
-    }
-}
-
-/// アプリ側（`crates/areka`・task 4.1）が監視対象窓を登録／除去するための **公開** ハンドル。
+/// アプリ側（`crates/areka`）が監視対象窓を登録／除去するための **公開** ハンドル。
 ///
 /// クリック透過機構は `WinApp::run`（`runtime/mod.rs` 結線点）で起動され、その共有レジストリ
 /// （`Rc<RefCell<ClickThroughRegistry>>`）がこの newtype に包まれて World へ **NonSend リソース**
@@ -375,13 +327,13 @@ impl ClickThroughHandle {
 ///
 /// # なぜ NonSend リソースか
 /// areka は窓を **非同期生成**する（`run_setup` は command 経由で後から `&mut World` を得る）。
-/// `ClickThroughController::start` は `run()` 冒頭で走るため、登録面を World に置いておけば
+/// [`start_click_through`] は `run()` 冒頭で走るため、登録面を World に置いておけば
 /// start 後の任意タイミングで登録できる。レジストリ本体は UI スレッド単独所有（`!Send`）ゆえ
 /// NonSend リソースが妥当（`Rc`/`RefCell` は `!Send`）。
 ///
 /// # 破棄追随
-/// 登録済み窓が破棄されても、[`remove`](Self::remove) の明示除去に加え、機構内部の
-/// [`prune_dead_targets`] が毎評価で World 生存を確認して自動的に刈り取る（二重の安全弁）。
+/// 除去の口は無い。機構内部の [`prune_dead_targets`] が毎評価で、`Window` と登録の HWND と
+/// 同じ `WindowHandle` を持つ wintf の窓だけを残して刈り取る（despawn で十分）。
 pub struct ClickThroughRegistryHandle {
     registry: Rc<RefCell<ClickThroughRegistry>>,
 }
@@ -392,25 +344,23 @@ impl ClickThroughRegistryHandle {
         Self { registry }
     }
 
-    /// 監視対象窓を登録する（areka の非同期窓生成に追随・task 4.1）。
+    /// 監視対象窓を登録する（areka の非同期窓生成に追随）。
     ///
-    /// 同一 window Entity の再登録は HWND 更新＋`last_applied` リセット（dedupe）。
+    /// 同一 window Entity の再登録は重複させず、HWND が変わったときだけ記録を戻す
+    /// （同じ HWND なら何もしない）。
     pub fn register(&self, window: Entity, hwnd: windows::Win32::Foundation::HWND) {
         self.registry.borrow_mut().register(window, hwnd);
     }
 
-    /// 監視対象窓を明示除去する（窓破棄時・R7.2 非破壊）。存在すれば `true`。
-    pub fn remove(&self, window: Entity) -> bool {
-        self.registry.borrow_mut().remove(window)
-    }
-
-    /// 登録済み対象窓数（テスト・観測用）。
-    pub fn len(&self) -> usize {
+    /// 登録済み対象窓数。使い手はテストだけ。
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
         self.registry.borrow().len()
     }
 
-    /// 登録済み対象が無いか（テスト・観測用）。
-    pub fn is_empty(&self) -> bool {
+    /// 登録済み対象が無いか。使い手はテストだけ。
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.registry.borrow().is_empty()
     }
 }
@@ -425,8 +375,8 @@ impl ClickThroughRegistryHandle {
 /// 所有者 drop 済み）でも終える。
 ///
 /// 起床後は当該フレームの **ECS tick 完了後（post-tick）** の settled World を 1 回だけ
-/// 評価する。wake event を tick 源が post-tick で notify する結線は task 3.2 の責務で
-/// あり、本ループは「起床したら settled World を評価する」ことのみ担う。
+/// 評価する。wake event を tick 源が notify する結線は `WinApp` の責務（`wire_click_through` が
+/// event を作り、`run` が `tick_bridge::relay_vblank` へ渡す）であり、本ループは「起床したら settled World を評価する」ことのみ担う。
 async fn run_click_through(
     wake_event: Arc<Event>,
     world: Weak<RefCell<EcsWorld>>,

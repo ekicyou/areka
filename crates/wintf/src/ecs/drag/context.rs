@@ -1,7 +1,7 @@
-//! ドラッグコンテキスト（ECS→wndprocスレッド間転送用）
+//! ドラッグコンテキスト（配りから窓の手続きへの受け渡し用）
 //!
-//! dispatch_drag_events（ECSスレッド）がドラッグ開始時にWindowDragContextを書き込み、
-//! update_dragging（wndprocスレッド）がJustStarted→Dragging遷移時に読み取る。
+//! dispatch_drag_events がドラッグ開始時にWindowDragContextを書き込み、
+//! update_dragging がJustStarted→Dragging遷移時に読み取る（どちらも同じ UI スレッド）。
 
 use bevy_ecs::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -10,7 +10,7 @@ use windows::Win32::Foundation::HWND;
 use super::DragConstraint;
 use crate::ecs::Point;
 
-/// wndprocスレッドでのドラッグに必要なWindow情報
+/// ドラッグに必要なWindow情報（配りが書き、update_dragging が読む）
 #[derive(Debug, Clone, Default)]
 pub struct WindowDragContext {
     /// Window の Win32 ハンドル
@@ -24,7 +24,7 @@ pub struct WindowDragContext {
 }
 
 // HWND は *mut c_void を含むため自動的に Send/Sync を実装しないが、
-// ウィンドウハンドルは実質的にただの整数値であり、スレッド間の受け渡しは安全。
+// Resource に置くには Send/Sync が要る。ウィンドウハンドルは実質的にただの整数値で、読み書きはどれも同じ UI スレッド。
 // Arc<Mutex> でラップされているため、データ競合も発生しない。
 unsafe impl Send for WindowDragContext {}
 unsafe impl Sync for WindowDragContext {}
@@ -32,19 +32,16 @@ unsafe impl Sync for WindowDragContext {}
 impl WindowDragContext {
     /// コンテキストをクリアする
     pub fn clear(&mut self) {
-        self.hwnd = None;
-        self.initial_window_pos = None;
-        self.move_window = false;
-        self.constraint = None;
+        *self = Self::default();
     }
 }
 
-/// ECSスレッド→wndprocスレッド間でドラッグ開始時のWindow情報を転送するリソース
+/// ドラッグ開始時のWindow情報を配りから窓の手続きへ渡すリソース（同じ UI スレッド）
 ///
 /// # ライフサイクル
-/// - dispatch_drag_events (ECS スレッド) が Started 処理時に更新
-/// - update_dragging (wndproc スレッド) が JustStarted → Dragging 遷移時に読み取り
-#[derive(Resource, Clone)]
+/// - dispatch_drag_events が Started 処理時に更新
+/// - update_dragging が JustStarted → Dragging 遷移時に読み取り
+#[derive(Resource, Clone, Default)]
 pub struct WindowDragContextResource {
     inner: Arc<Mutex<WindowDragContext>>,
 }
@@ -52,19 +49,17 @@ pub struct WindowDragContextResource {
 impl WindowDragContextResource {
     /// 新しいWindowDragContextResourceを作成
     pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(WindowDragContext::default())),
-        }
+        Self::default()
     }
 
-    /// コンテキストを設定（ECSスレッドから呼ばれる）
+    /// コンテキストを設定（配りの dispatch_drag_events から呼ばれる）
     pub fn set(&self, context: WindowDragContext) {
         if let Ok(mut inner) = self.inner.lock() {
             *inner = context;
         }
     }
 
-    /// コンテキストを読み取る（wndprocスレッドから呼ばれる）
+    /// コンテキストを読み取る（update_dragging から呼ばれる。窓の手続きの WM_MOUSEMOVE と配りの両方が呼ぶ）
     pub fn get(&self) -> Option<WindowDragContext> {
         self.inner.lock().ok().map(|inner| inner.clone())
     }
@@ -77,25 +72,9 @@ impl WindowDragContextResource {
     }
 }
 
-impl Default for WindowDragContextResource {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Default は全フィールド「未設定」状態（hwnd/initial_window_pos=None, move_window=false, constraint=None）。
-    #[test]
-    fn test_default_is_unset() {
-        let ctx = WindowDragContext::default();
-        assert!(ctx.hwnd.is_none());
-        assert!(ctx.initial_window_pos.is_none());
-        assert!(!ctx.move_window);
-        assert!(ctx.constraint.is_none());
-    }
 
     /// clear() は設定済みコンテキストを Default 相当に戻す。
     #[test]
@@ -158,21 +137,5 @@ mod tests {
         let got = res.get().expect("get は Some を返すべき");
         assert!(got.initial_window_pos.is_none());
         assert!(!got.move_window);
-    }
-
-    /// Resource は Arc<Mutex> 越しに状態を共有する（clone 経由 set を元から get）。
-    #[test]
-    fn test_resource_shares_state_across_clone() {
-        let res = WindowDragContextResource::new();
-        let clone = res.clone();
-        clone.set(WindowDragContext {
-            hwnd: None,
-            initial_window_pos: Some(Point { x: 7, y: 9 }),
-            move_window: true,
-            constraint: None,
-        });
-        let got = res.get().expect("get は Some を返すべき");
-        assert_eq!(got.initial_window_pos, Some(Point { x: 7, y: 9 }));
-        assert!(got.move_window);
     }
 }

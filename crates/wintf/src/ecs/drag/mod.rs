@@ -9,24 +9,25 @@ mod capture_guard;
 mod context;
 mod dispatch;
 mod reentry;
+#[cfg(test)]
+pub(crate) mod seen_test_support;
 mod state;
 mod systems;
 
 pub use accumulator::{
     DragAccumulator, DragAccumulatorResource, DragTransition, FlushResult, install_drag_accumulator,
 };
-pub use capture_guard::CaptureGuard;
 pub use context::{WindowDragContext, WindowDragContextResource};
 pub use dispatch::{
     DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart, dispatch_drag_events,
 };
 pub(crate) use reentry::handle_message_while_world_busy;
 pub use state::{
-    DragClose, DragState, DragStateSnapshot, cancel_dragging, cancel_dragging_on_capture_lost,
-    check_threshold, end_dragging, end_dragging_on_release, read_drag_state, snapshot_drag_state,
-    start_dragging, start_preparing, update_drag_state, update_dragging,
+    DragClose, DragState, cancel_dragging, cancel_dragging_on_capture_lost, check_threshold,
+    end_dragging, end_dragging_on_release, read_drag_state, snapshot_drag_state, start_dragging,
+    start_preparing, update_drag_state, update_dragging,
 };
-pub use systems::{cleanup_drag_state, rearm_tick_while_dragging};
+pub use systems::rearm_tick_while_dragging;
 
 use crate::ecs::pointer::PhysicalPoint;
 use bevy_ecs::prelude::*;
@@ -49,8 +50,6 @@ pub struct DragConfig {
     pub move_window: bool,
     /// 有効なボタン（左ボタンのみデフォルト）
     pub left_button: bool,
-    pub right_button: bool,
-    pub middle_button: bool,
 }
 
 impl Default for DragConfig {
@@ -60,8 +59,6 @@ impl Default for DragConfig {
             enabled: true,
             move_window: true,
             left_button: true,
-            right_button: false,
-            middle_button: false,
         }
     }
 }
@@ -76,8 +73,8 @@ impl Default for DragConfig {
 pub struct DraggingState {
     /// ドラッグ開始位置（スクリーン座標、物理ピクセル）
     pub drag_start_pos: PhysicalPoint,
-    /// ドラッグ開始時のBoxStyle.inset (left, top)（物理ピクセル）
-    pub initial_inset: (f32, f32),
+    /// ドラッグを始めたときの窓の位置（枠を含むスクリーン座標・物理ピクセル・整数の値）
+    pub initial_window_pos: (f32, f32),
 }
 
 /// ドラッグ制約コンポーネント
@@ -127,8 +124,6 @@ mod tests {
         assert!(c.enabled);
         assert!(c.move_window);
         assert!(c.left_button, "左ボタンは既定で有効");
-        assert!(!c.right_button, "右ボタンは既定で無効");
-        assert!(!c.middle_button, "中ボタンは既定で無効");
     }
 
     /// 全 None の DragConstraint は座標を素通しする（制約なし）。

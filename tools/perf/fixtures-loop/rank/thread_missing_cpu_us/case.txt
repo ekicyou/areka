@@ -1,0 +1,10 @@
+title = cpu_us の無い perf(thread) 行（壊れた観測として止める・部分的な順位表は出さない）
+exit = 4
+argv = --stage thread
+
+stderr_substr = line 2:
+stderr_substr = field cpu_us is missing
+
+note = 観測行の欄が欠けたら、0 で埋めて順位を続けず exit 4 で止める（順位表は上位から読まれるので、
+note = 1 行の欠けが順位を入れ替える・R1）。exit 4 の他の 3 本は全部 dump 由来で、run.log の
+note = 道はこのケースだけが縛る。_need_int が理由を積まずに 0 を返すと緑になって赤が出る。

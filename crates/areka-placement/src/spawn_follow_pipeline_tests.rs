@@ -37,7 +37,6 @@ fn drag_event(target: Entity) -> DragEvent {
         target,
         start_position: Point::new(0, 0),
         position: Point::new(10, 10),
-        is_primary: true,
         timestamp: Instant::now(),
     }
 }

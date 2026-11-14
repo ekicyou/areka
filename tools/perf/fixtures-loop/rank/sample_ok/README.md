@@ -4,8 +4,8 @@
 **書式に合わせて手で書き起こした断片**である。実機のトレースから採ったものではない。
 
 - 使う側: `tools/perf/invoke-cpu-sample.ps1 -SelfTest`（合格側＝`areka.exe` のフレームが
-  1 つ以上数えられること）と、後続タスクの `tools/perf/perf-rank.py`（段③の順位表と
-  記号解決率）。
+  1 つ以上数えられること）と、`tools/perf/perf-rank.py` の自己較正（`full_ok/` と
+  `sample_ok_counts/` がこの断片を借りて、段③の順位表と記号解決率を出す）。
 - 対になる不合格側は `invoke-cpu-sample.ps1` の中に直書きしてある（`areka.exe` を
   1 つも含まない同じ書式の 2 行。関門が 0 と数えることを毎回確かめる）。
 
@@ -24,7 +24,9 @@
 `FIXTURE_EXPECT_AREKA_FRAMES` / `FIXTURE_EXPECT_RESOLVED_FRAMES` /
 `FIXTURE_EXPECT_UNRESOLVED_FRAMES` / `FIXTURE_EXPECT_TIDS`）を必ず同時に書き換えること。**
 `-SelfTest` はこの定数と**厳密一致**で突き合わせる（「1 つ以上」ではない）ので、
-片方だけ変えると自己較正が赤になる。逆に言えば、厳密一致だからこそ下の
+片方だけ変えると自己較正が赤になる。同じとき、この断片を借りる `full_ok/expected_rank.txt` と
+`sample_ok_counts/expected_rank.txt` を出し直し、この断片を写して手を入れた
+`missing_column/dump.txt` と `other_process_rows/dump.txt` も実物の書式に合わせて作り直すこと。逆に言えば、厳密一致だからこそ下の
 ThreadStartImage の罠が効く——数える列を取り違えた実装は 16 ではなく 32 を返して赤になる。
 
 ## 内容

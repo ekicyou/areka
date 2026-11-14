@@ -8,6 +8,8 @@
 するためである。
 
     python generate.py            # fixtures/ を作り直す（差分が出なければ登録内容と一致）
+                                  # 作ったもの以外のフォルダがあれば名を出して止まる
+                                  # 名が空か重なる検体があっても止まる（書く前に）
 
 作り直したあと `git status` が汚れなければ、コミットされている fixture は下の定義どおりで
 ある。汚れたら、どちらかが変わっている（生成条件を変えたのか、fixture を手で触ったのか）。
@@ -39,8 +41,8 @@ fixture と表が別々に腐るので、置き場所を 1 つにしてある。
       - 明示指定した系列が定常状態の perf 行を 1 本も出していない（H20）
       - 明示指定した系列が判定窓に間隔を 1 本も残していない（H21）
     どちらも「他の系列が上限内だから合格」に化ける経路であり、判定不能でなければならない
-  * 明示指定から漏れた系列は、どれだけ遅くても合格を止めない（H1b）。これは欠陥ではなく
-    all-or-nothing の指定がもたらす **既知の代償** であり、記録として固定しておく
+  * 明示指定から漏れた系列は、どれだけ遅くても合格を止めない。これは欠陥ではなく
+    all-or-nothing の指定がもたらす **既知の代償** であり、H11 の note に記録してある
 
 【remediation 1 で足したもの（P13）】「同じ鍵に 2 本のアニメが混ざる」形は、混ざり方の位相で
 倒れる向きが変わる。P12 は **偽の不合格** の側だけを固定していて、**偽の合格** の側には
@@ -59,9 +61,13 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# 行の読み方は親フォルダの perf_lines と共有する。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from perf_lines import strip_ansi  # noqa: E402
 HERE = Path(__file__).resolve().parent
 
 #: 全 fixture の時刻の起点。実時刻に依存させない（同じ入力からは必ず同じ出力）。
@@ -192,17 +198,16 @@ def thread_report_lines(at: datetime, snap: int, t_s: int) -> list[str]:
 
 
 def talk_line(at: datetime, event: str) -> str:
-    """発話（talk）の開始・終了 info!（`areka-kanade/src/schedule/steady.rs:763,851`）。
+    """発話（talk）の開始・置換・終了 info!（`areka-kanade/src/schedule/steady.rs` の steady_talk・steady_talk_replace・steady_talk_done）。
 
     `target: "kanade"` は指示子なので target 位置に出る。`event` はフィールドなので
-    メッセージの後ろに引用符付きで出る。発話中の CPU の頂（要件 5.4）はこの 2 本で挟まれた
-    区間の採取点から採る。
+    メッセージの後ろに引用符付きで出る。発話中の CPU の頂（要件 5.4）は開始（または置換）と
+    終了で挟まれた区間の採取点から採る。
     """
     if event == "steady_talk":
-        return (
-            f"{ts(at)}  INFO kanade: 応答にスクリプト——再生起動 "
-            f'event="{event}" talk_id=7 origin="mouse"'
-        )
+        return f'{ts(at)}  INFO kanade: 応答にスクリプト——再生起動 event="{event}" talk_id=7 origin="mouse"'
+    if event == "steady_talk_replace":  # 置換は新しい talk_id を採番する（steady.rs の逐語）
+        return f'{ts(at)}  INFO kanade: active talk 中に置き換える出所の Value——単一 slot 置換（新 talk_id 採番） event="{event}" talk_id=8 origin="mouse"'
     return f'{ts(at)}  INFO kanade: talk 完了——定常運転へ復帰 event="{event}"'
 
 
@@ -257,7 +262,6 @@ def stop_line(at: datetime, scope: str = "1", animation_id: str = "0") -> str:
 # ゆえに「エスケープを落とした結果」は色なしの双子と **バイト等価** になる。
 # 生成時にその等価性を検査する（下の build_colored）。
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)")
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARN|ERROR)\b")
 _FIELD_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)=")
@@ -279,10 +283,6 @@ def colorize(line: str) -> str:
         lambda m: f"{_ITALIC}{m.group(1)}{_RESET}{_DIM}={_RESET}", line
     )
     return line
-
-
-def strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
 
 
 # =============================================================================
@@ -360,11 +360,11 @@ class Fixture:
 
     def other_scope_span(self, at_sec: float, duration_ms: float,
                          scope: str = "1", animation_id: str = "0") -> "Fixture":
-        """別 scope のアニメが `at_sec` から `duration_ms` のあいだ走っていた記録を置く。
+        """`scope` のアニメが `at_sec` から `duration_ms` のあいだ走っていた記録を置く（既定は別 scope の "1"）。
 
-        発火と停止の 2 行だけを置く（コマ適用の記録は置かない——別 scope のアニメは
-        別の対象へコマを出すので、判定対象の系列の列には混ざらないからである）。
-        窓 C の条件 4 が「判定対象系列の scope だけを数える」ことを確かめる素材である。
+        発火と停止の 2 行だけを置く（コマ適用の記録は置かない——判定対象の系列の列には混ぜない）。
+        別 scope なら窓 C の条件 4 が「判定対象系列の scope だけを数える」ことを（P14）、
+        同じ scope="0" なら区間の始め a で数えることを（P16）確かめる素材である。
         """
         start = T0 + timedelta(seconds=at_sec)
         stop = start + timedelta(microseconds=round(duration_ms * 1000))
@@ -493,21 +493,20 @@ class Fixture:
 
     # --- 書き出し ---
     def write(self) -> Path:
-        if self.dir.exists():
-            shutil.rmtree(self.dir)
-        self.dir.mkdir(parents=True)
-
         self.rows.sort(key=lambda r: (r[0], r[1]))
         text = "".join(line + "\n" for _at, _i, line in self.rows)
         if self.colored:
             colored = "".join(colorize(line) + "\n" for _at, _i, line in self.rows)
             if strip_ansi(colored) != text:
                 raise SystemExit(
-                    f"{self.name}: 色付けが文字を変えている（色を落としても双子と一致しない）"
+                    f"{self.name}: coloring changed the text (stripped output differs from the twin)"
                 )
             if "\x1b[" not in colored:
-                raise SystemExit(f"{self.name}: 色付き fixture にエスケープが 1 つも入っていない")
+                raise SystemExit(f"{self.name}: colored fixture contains no escape sequence")
             text = colored
+        if self.dir.exists():
+            shutil.rmtree(self.dir)
+        self.dir.mkdir(parents=True)
         (self.dir / "run.log").write_text(text, encoding="utf-8", newline="\n")
 
         if not self.drop_cpu_csv:
@@ -653,22 +652,22 @@ def case_C1() -> Fixture:
             "verdict", 0, "catch-up が 3 系統とも起動過渡だけにある（合格側）",
             build="release", emit_metrics=True,
             notes=[
-                "H11 と同じ健全な走行に、catch-up を 3 系統（dispatcher・kanade・",
+                "H11 の判定対象の系列（指定外の 1001 は無い）と同じ走行に、catch-up を 3 系統（dispatcher・kanade・",
                 "loop_ticker）から 1 件ずつ、いずれも起動過渡（定常状態より前）に置いた。",
                 "判定式⑵ が数えるのは定常状態だけなので合格（終了コード 0）である。",
                 "同時に、この走行には任意種の行（[tick] kind=window・perf(thread)・",
                 "perf(process)）と発話区間の印が入っている。任意種は 1 本も無くても",
                 "判定が成立しなければならず、有っても判定を動かしてはならない。",
-                "その「有る側」がこの fixture である（無い側は既存の 17 件すべて）。",
+                "その「有る側」がこの fixture である（無い側は T2 など、任意種を置かない他の走行）。",
                 "[tick] の窓は catch-up が起きた 3 窓だけ壁時計合計が 4.5 倍あるので、",
                 "「フレーム駆動の負荷が起床を遅らせる」仮説は 成立 と印字されなければならない。",
                 "終了コードはこれらの中身を 1 つも反映しないため、contains 行で本文を固定する。",
             ],
             contains=(
                 "仮説: 成立",
-                "target=dispatcher",
-                "target=kanade",
-                "target=loop_ticker",
+                "lane=dispatcher",
+                "lane=kanade",
+                "lane=loop_ticker",
                 "metric=steady_idle_cpu_mean_pct value=1.61",
                 "metric=frame_interval_p95_ms value=150.000",
                 "metric=catchup_count value=0",
@@ -699,7 +698,8 @@ def case_C2() -> Fixture:
             "verdict", 1, "catch-up が 3 系統とも定常状態にある（不合格側）",
             build="release",
             notes=[
-                "C1 と同じ走行で、catch-up の 3 件だけを定常状態へ移したもの。",
+                "C1 の系列に、catch-up の 3 件を定常状態へ移して置いたもの。[tick] の窓は残るが、",
+                "壁時計合計はどれも平常で、発話区間・スレッド報告・CPU の山は置いていない。",
                 "判定式⑵ は定常状態の catch-up 0 件を求めるので不合格（終了コード 1）である。",
                 "C1 と対にして置いてあるのは、合格側だけ・不合格側だけでは「数えているのか",
                 "数えていないのか」が区別できないためである。",
@@ -709,9 +709,9 @@ def case_C2() -> Fixture:
             ],
             contains=(
                 "仮説: 不成立",
-                "target=dispatcher",
-                "target=kanade",
-                "target=loop_ticker",
+                "lane=dispatcher",
+                "lane=kanade",
+                "lane=loop_ticker",
             ),
         )
     )
@@ -729,8 +729,8 @@ def case_T2() -> Fixture:
             "baseline", 0, "catch-up はあるが [tick] 行が 1 本も無い（仮説は判定不能）",
             emit_metrics=True,
             notes=[
-                "C1 から任意種の行（[tick]・perf(thread)・perf(process)）と発話区間の印を",
-                "すべて落とした走行。任意種が無くても集計は成立し、終了コードは 0 である",
+                "C1 と同じ catch-up（起動過渡の 3 件）を置き、任意種の行（[tick]・perf(thread)・",
+                "perf(process)）・発話区間の印・CPU の山をすべて置かない baseline の走行。任意種が無くても集計は成立し、終了コードは 0 である",
                 "（任意種は必要ログ種ではない）。",
                 "ただし [tick] が無ければ「フレーム駆動の負荷が起床を遅らせる」仮説は",
                 "数値で確かめようがない。ここで 不成立 と書くと「調べたが違った」と読まれる",
@@ -766,6 +766,12 @@ def case_H11() -> Fixture:
                 "同じ対象の下に、判定対象に指定していない系列（surface_id=1001・180ms）も",
                 "置いてある。指定外の系列があっても合格を止めないこと——これが「対象を",
                 "明示指定すれば除外は意図的になる」という規則の生きている姿である。",
+                "【task 3.2 の裁定の記録】指定外の系列は、どれだけ遅くても合格を止めない。",
+                "これは欠陥ではなく、判定対象の列挙が全部か無しかであることがもたらす",
+                "既知の代償で、書き漏らした系列は黙って対象外になる。だから列挙の完全性が",
+                "合否の意味を支える。レポートには外した系列が名指しで並ぶ。対象を増やした",
+                "ときはこの期待値も一緒に見直す（判定は系列ごとなので、2 本以上に増やせば",
+                "遅い指定外の系列は赤になる）。",
                 "これは赤ケースと同格に重要である。判定を壊して何もかも不合格にすれば赤は",
                 "出るので、赤だけでは判定が生きていることを確かめられない。",
                 "合格が出ることまで見て初めて、判定が生きていると言える。",
@@ -803,13 +809,9 @@ def case_H12() -> Fixture:
 
 
 def case_H12_colored() -> Fixture:
-    fixture = (
-        Fixture("H12c_judged_series_at_boundary_colored")
-        .boot()
-        .cycle_series(JUDGED_TARGET, JUDGED_SURFACE, (BOUNDARY_MS,), MAIN_CYCLES)
-        .cpu_series()
-        .run_meta()
-    )
+    fixture = case_H12()
+    fixture.name = "H12c_judged_series_at_boundary_colored"
+    fixture.dir = HERE / fixture.name
     fixture.declare(
         "verdict", 0, "色付きログ（色を落とす経路の較正）", build="release",
         twin="H12_judged_series_at_boundary",
@@ -843,36 +845,6 @@ def case_H13() -> Fixture:
                 "不合格（終了コード 1）でなければならない。",
                 "H12 と対で置いてあり、2 つの終了コードが違うことが「境界がここにある」",
                 "という主張そのものである。片方だけでは境界を測ったことにならない。",
-            ],
-        )
-    )
-
-
-def case_H1b() -> Fixture:
-    return (
-        Fixture("H1b_unpinned_slow_series")
-        .boot()
-        .cycle_series(JUDGED_TARGET, JUDGED_SURFACE, MAIN_WAITS_MS, MAIN_CYCLES)
-        .series("TargetId(0)", "1005", 300.0, 31)
-        .cpu_series()
-        .run_meta()
-        .declare(
-            "verdict", 0, "指定外の遅い系列は合格を止めない（明示指定の代償・記録）",
-            build="release",
-            notes=[
-                "判定対象の系列は健全だが、同じ対象の下に 300ms 間隔の遅い系列",
-                "（surface_id=1005）が並んでいる走行。judge-perf.py はこれを合格",
-                "（終了コード 0）にする。遅い系列は判定対象に指定されていないからである。",
-                "【これは欠陥ではなく、明示指定の代償である】判定対象の列挙は全部か無しかで、",
-                "書き漏らした系列は黙って対象外になり、どれだけ遅くても合格を止めない。",
-                "だから列挙の完全性が合否の意味を支えている。ここでその代償を記録として",
-                "固定しておき、対象を増やしたときにこの期待値も一緒に見直させる。",
-                "レポートには外した系列が名指しで並ぶので、読み手が見落とすことはない。",
-                "期待値が 0 なのは意図であって、見落としではない。",
-                "【以前この fixture が固定していたもの】判定対象が自動選別だった頃、この形は",
-                "「速い系列の裾に遅い系列が丸ごと吸収されて合格に化ける」欠陥の再現だった。",
-                "判定を系列ごとに行う形（FRAME_INTERVAL_JUDGE_GRANULARITY）は今も生きており、",
-                "対象を 2 本以上に増やせばこの入力は再び赤になる。",
             ],
         )
     )
@@ -1224,7 +1196,7 @@ def case_B1() -> Fixture:
 
 
 CASES = (
-    case_H11, case_H12, case_H12_colored, case_H13, case_H1b, case_H14,
+    case_H11, case_H12, case_H12_colored, case_H13, case_H14,
     case_H20, case_H21, case_P12, case_P13, case_P14,
     case_C1, case_C2, case_T2,
     case_E1, case_E2, case_E3, case_X1, case_X2, case_B1,
@@ -1232,11 +1204,18 @@ CASES = (
 
 
 def main() -> int:
-    for factory in CASES:
-        path = factory().write()
+    import generate_more  # 実行時に読む（読み込み時だと循環になる）
+    made = [f() for f in CASES + generate_more.CASES]
+    names = generate_more.check_names([fx.name for fx in made])
+    stray = sorted(p.name for p in HERE.iterdir()
+                   if p.is_dir() and not p.name.startswith(("_", ".")) and p.name not in names)
+    if stray:
+        raise SystemExit(f"stray fixture folder(s) with no generator: {', '.join(stray)} (delete them)")
+    for fx in made:
+        path = fx.write()
         size = sum(p.stat().st_size for p in path.iterdir())
-        print(f"  {path.name:44s} {size:>9,d} バイト")
-    print(f"{len(CASES)} 件の fixture を生成しました: {HERE}")
+        print(f"  {path.name:44s} {size:>9,d} bytes")
+    print(f"generated {len(made)} fixtures: {HERE}")
     return 0
 
 

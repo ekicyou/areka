@@ -10,7 +10,7 @@
 [goal]
 name = "selftest-na-secondary"
 judge_script = "tools/perf/judge-perf.py"
-judge_version = "0.4.0"
+judge_version = "0.5.0"
 
 [levels]
 iteration_build = "release"

@@ -1,0 +1,10 @@
+title = areka.exe のフレームが全部アドレスのままの dump（PDB が無い・記号解決の失敗として止める）
+exit = 4
+argv = --stage function
+
+stderr_substr = areka.exe
+stderr_substr = 0 resolved frames
+
+note = PDB が見つからないと行は areka.exe!0x00007ff6… の形になる。この行は未解決であって
+note = areka の解決フレームではない。areka のフレームを解決済みの枝の外で数える実装は
+note = ここで 4 と数えて関門を通し、順位表がアドレスだけで埋まる（緑になる）。

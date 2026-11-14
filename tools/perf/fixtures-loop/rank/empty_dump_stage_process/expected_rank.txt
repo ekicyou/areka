@@ -1,0 +1,13 @@
+perf-rank 0.2.0 run=empty_dump_stage_process stages=process top=3
+
+[1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=all
+  steady_mean_pct                     2.00
+  p50_pct                             2.00
+  p95_pct                             2.00
+  max_pct                             2.00
+  samples_total                          1
+  samples_steady                         0
+  注記: 定常＝起点から 60.0 秒（WARMUP_EXCLUDE_SEC）を除く。起点=first_log_line 2026-08-23T15:00:00Z ／ 定常の始まり 2026-08-23T15:01:00Z
+  注記: 定常状態に採取点が 1 つも無いので、全採取点で代用した（basis=all）
+  注記: SSP 参考値 idle=3.05 talk_peak=4.64（2026-08-15 実測・参考値・合否外）
+  注記: 実行条件 run-meta.txt がありません

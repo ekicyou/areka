@@ -1,0 +1,8 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 有限でない CPU の値は壊れた行（判定不能）
+mode = verdict
+build = release
+exit = 2
+
+note = cpu.csv に nan の値が 1 行ある。有限でない値を数として読むと、比べが全部
+note = 偽になって平均や傾きが黙って狂う。壊れた行として数え、判定不能（2）にする。

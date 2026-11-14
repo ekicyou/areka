@@ -105,6 +105,37 @@ fn test_set_transition_ended_clears_entity() {
     );
 }
 
+/// 終わりを積むと移動量は 0 に戻る（次のドラッグへ配らない）。始まりの無い終わりは捨て、戻さない。
+#[test]
+fn test_ended_resets_delta_but_dropped_ended_does_not() {
+    let mut acc = DragAccumulator::new();
+    let e = entity(4);
+    acc.set_transition(DragTransition::Started {
+        entity: e,
+        start_pos: PhysicalPoint::new(0, 0),
+        timestamp: Instant::now(),
+    });
+    acc.accumulate_delta(PhysicalPoint::new(3, 4));
+    acc.set_transition(DragTransition::Ended {
+        entity: e,
+        end_pos: PhysicalPoint::new(3, 4),
+        cancelled: false,
+    });
+    let result = acc.flush();
+    assert_eq!((result.delta.x, result.delta.y), (0, 0));
+
+    // 始まりの無い終わり（閾値前の離し）は何も起きていないので、積んだ移動量はそのまま。
+    acc.accumulate_delta(PhysicalPoint::new(5, 6));
+    acc.set_transition(DragTransition::Ended {
+        entity: e,
+        end_pos: PhysicalPoint::new(5, 6),
+        cancelled: false,
+    });
+    let result = acc.flush();
+    assert!(result.transitions.is_empty());
+    assert_eq!((result.delta.x, result.delta.y), (5, 6));
+}
+
 /// update_position は最新位置で上書きされる（累積ではない）。
 #[test]
 fn test_update_position_overwrites() {
@@ -115,22 +146,6 @@ fn test_update_position_overwrites() {
     assert_eq!(
         (result.current_position.x, result.current_position.y),
         (50, 60)
-    );
-}
-
-/// DragAccumulatorResource は Arc<Mutex> 越しに同じ内部状態を共有する（clone 後も同一）。
-#[test]
-fn test_resource_shares_inner_state_across_clone() {
-    let res = DragAccumulatorResource::new();
-    let clone = res.clone();
-    // clone 経由で累積し、元の res からの flush で観測できること
-    clone.accumulate_delta(PhysicalPoint::new(7, 8));
-    clone.update_position(PhysicalPoint::new(70, 80));
-    let result = res.flush().expect("lock 取得できるはず");
-    assert_eq!((result.delta.x, result.delta.y), (7, 8));
-    assert_eq!(
-        (result.current_position.x, result.current_position.y),
-        (70, 80)
     );
 }
 

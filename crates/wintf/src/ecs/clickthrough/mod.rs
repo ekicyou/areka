@@ -5,25 +5,16 @@
 //!
 //! 監視対象レジストリ（[`ClickThroughRegistry`]）、カーソル監視ワーカ
 //! （[`CursorMonitorBridge`]）、UI スレッド判定・適用ループ
-//! （[`ClickThroughController`]／[`ClickThroughHandle`]）を提供する。
-//!
-//! NOTE: `ClickThroughController::start` の runtime 結線は task 3.2 で `runtime/mod.rs` から
-//! 行う（`ClickThroughRegistryHandle` を NonSend リソースとして World へ挿入し、areka の
-//! 窓登録（task 4.1）へ橋渡しする）。一部の内部 API（`ClickThroughHandle` の一部アクセサ等）は
-//! まだ全消費されないため、モジュール限定で dead_code/unused を許可する。
-#![allow(dead_code, unused_imports)]
+//! （[`start_click_through`]／[`ClickThroughHandle`]）を提供する。
 
 mod controller;
 mod monitor;
 mod registry;
 
-/// areka（task 4.1）が監視対象窓を登録するための **公開** ハンドル型。`runtime/mod.rs`
-/// （task 3.2）が World へ NonSend リソースとして挿入する。
+/// areka が監視対象窓を登録するための **公開** ハンドル型。`runtime/mod.rs` の
+/// `wire_click_through` が World へ NonSend リソースとして挿入する。
 pub use controller::ClickThroughRegistryHandle;
 
-pub(crate) use controller::{
-    ClickThroughController, ClickThroughHandle, evaluate_targets, prune_dead_targets,
-    resolve_transition,
-};
+pub(crate) use controller::{ClickThroughHandle, start_click_through};
 pub(crate) use monitor::CursorMonitorBridge;
-pub(crate) use registry::{ClickThroughRegistry, ClickThroughTarget, DesiredState};
+pub(crate) use registry::{ClickThroughRegistry, DesiredState};

@@ -16,8 +16,8 @@
 //! 約 1 周期で復帰し、ハングしない。
 //!
 //! # 生存期間（RAII）
-//! `VsyncEventBridge` を構造テンプレとし、`Arc<event_listener::Event>`＋`Arc<AtomicI64>`
-//! 最新座標＋`Arc<AtomicBool>` stop_flag＋`Option<JoinHandle>` を保持する。`Drop` で
+//! `VsyncEventBridge` を構造テンプレとし、`Arc<AtomicI64>` 最新座標＋`Arc<AtomicBool>`
+//! stop_flag＋`Option<JoinHandle>` を保持する（`Arc<event_listener::Event>` はワーカへ渡すだけ）。`Drop` で
 //! stop フラグを立ててワーカを `join()` する（`stop_flag.store(true)→join` の順序）。
 
 use std::sync::Arc;
@@ -50,15 +50,13 @@ fn unpack(v: i64) -> (i32, i32) {
 /// カーソル監視ワーカスレッドの起床を共有 `event_listener::Event` へ橋渡しする
 /// RAII ユニット。
 ///
-/// - 共有 `Event`（`Arc` で clone をワーカスレッドへ move・UI ループと同一 `Arc`）
+/// - 共有 `Event`（ワーカスレッドへ move するだけで持たない・UI ループと同一 `Arc`）
 /// - 最新カーソル座標（`Arc<AtomicI64>`・pack 済み・UI 側が [`latest_cursor`] で読む）
 /// - 停止フラグ（`Arc<AtomicBool>`）
 /// - スレッドハンドル（`Option<JoinHandle<()>>`・take は `Drop`/`stop` のみ）
 ///
 /// [`latest_cursor`]: CursorMonitorBridge::latest_cursor
 pub(crate) struct CursorMonitorBridge {
-    /// 共有カーソル移動通知イベント。ワーカが移動ごとに `notify(usize::MAX)`。
-    cursor_event: Arc<event_listener::Event>,
     /// pack(x,y) の最新カーソル座標。UI 側が [`latest_cursor`] で読む。
     ///
     /// [`latest_cursor`]: CursorMonitorBridge::latest_cursor
@@ -72,27 +70,25 @@ pub(crate) struct CursorMonitorBridge {
 impl CursorMonitorBridge {
     /// カーソル監視ワーカを起動してブリッジを生成する。
     ///
-    /// `cursor_event` は UI ループ（`ClickThroughController` の listen 対象）と共有する
+    /// `cursor_event` は UI ループ（[`super::start_click_through`] が回す判定ループの listen 対象）と共有する
     /// 同一 `Arc`。ワーカは `while !stop { GetCursorPos; if moved { store; notify } }` を
     /// 固定短周期でループする。
     pub(crate) fn spawn(cursor_event: Arc<event_listener::Event>) -> Self {
         let latest_pos = Arc::new(AtomicI64::new(0));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
-        // clone をワーカスレッドへ move（Event/latest_pos/stop_flag とも Arc で共有）。
-        let thread_event = Arc::clone(&cursor_event);
+        // Event はそのままワーカスレッドへ move、latest_pos/stop_flag は clone を move して共有する。
         let thread_latest = Arc::clone(&latest_pos);
         let thread_stop = Arc::clone(&stop_flag);
 
         let handle = thread::Builder::new()
             .name("wintf-cursor-monitor".to_owned())
-            .spawn(move || cursor_loop(thread_event, thread_latest, thread_stop))
+            .spawn(move || cursor_loop(cursor_event, thread_latest, thread_stop))
             .expect("failed to spawn wintf-cursor-monitor thread");
 
         debug!("CursorMonitorBridge started (wintf-cursor-monitor thread spawned)");
 
         Self {
-            cursor_event,
             latest_pos,
             stop_flag,
             handle: Some(handle),
@@ -106,11 +102,6 @@ impl CursorMonitorBridge {
     pub(crate) fn latest_cursor(&self) -> PhysicalPoint {
         let (x, y) = unpack(self.latest_pos.load(Ordering::Acquire));
         PhysicalPoint::new(x, y)
-    }
-
-    /// 共有カーソル移動通知イベントへの参照を返す（テスト・結線用）。
-    pub(crate) fn event(&self) -> &Arc<event_listener::Event> {
-        &self.cursor_event
     }
 
     /// ワーカスレッドを停止し join する（`stop_flag → join` の順序）。
@@ -151,43 +142,61 @@ fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: 
     let mut prev: Option<(i32, i32)> = None;
 
     while !stop.load(Ordering::Acquire) {
-        let mut pt = POINT::default();
-
-        // SAFETY: Win32 境界。`GetCursorPos` は書き込み先 `POINT` への可変ポインタを
-        // 取り、現在のカーソル位置（screen physical）を書き込んで `Result<()>` を返す。
-        // `pt` は本スレッドローカルなスタック変数で有効な領域を指し、共有状態には
-        // 触れない。失敗時は当該反復をスキップする（grace）。
-        let got = unsafe { GetCursorPos(&mut pt) };
-
-        match got {
-            Ok(()) => {
-                let cur = (pt.x, pt.y);
-                if prev != Some(cur) {
-                    // 移動検知。順序不変条件: store（Release）→ notify を厳守する。
-                    // 逆順だと UI 側が 1 通知分古い座標を読む稀レースが生じる。
-                    latest.store(pack(cur.0, cur.1), Ordering::Release);
-                    event.notify(usize::MAX);
-                    prev = Some(cur);
-                }
-            }
-            Err(_) => {
-                // 稀な失敗。当該反復の notify をスキップして継続する（panic しない）。
-                trace!("GetCursorPos failed; skipping this iteration");
-            }
-        }
+        poll_once(read_cursor, &mut prev, &latest, || {
+            event.notify(usize::MAX);
+        });
 
         // 固定短周期で待機（stop 後は最大約 1 周期で join へ復帰）。
         thread::sleep(POLL_INTERVAL);
     }
 }
 
+/// 本物のカーソル位置（screen physical）を 1 回読む。失敗したら `None`。
+fn read_cursor() -> Option<(i32, i32)> {
+    let mut pt = POINT::default();
+
+    // SAFETY: Win32 境界。`GetCursorPos` は書き込み先 `POINT` への可変ポインタを
+    // 取り、現在のカーソル位置（screen physical）を書き込んで `Result<()>` を返す。
+    // `pt` は本スレッドローカルなスタック変数で有効な領域を指し、共有状態には
+    // 触れない。
+    match unsafe { GetCursorPos(&mut pt) } {
+        Ok(()) => Some((pt.x, pt.y)),
+        Err(_) => {
+            // 稀な失敗。当該反復の notify をスキップして継続する（panic しない）。
+            trace!("GetCursorPos failed; skipping this iteration");
+            None
+        }
+    }
+}
+
+/// カーソルを 1 回読み、前と違うときだけ最新の位置へ書いてから `notify` を呼ぶ。知らせたら `true`。
+/// `read` が `None`（`GetCursorPos` の失敗）なら何もしない。
+fn poll_once(
+    read: impl FnOnce() -> Option<(i32, i32)>,
+    prev: &mut Option<(i32, i32)>,
+    latest: &AtomicI64,
+    notify: impl FnOnce(),
+) -> bool {
+    let Some(cur) = read() else {
+        return false;
+    };
+    if *prev == Some(cur) {
+        return false;
+    }
+    // 移動検知。順序不変条件: store（Release）→ notify を厳守する。
+    // 逆順だと UI 側が 1 通知分古い座標を読む稀レースが生じる。
+    latest.store(pack(cur.0, cur.1), Ordering::Release);
+    notify();
+    *prev = Some(cur);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ecs::world::thread_registry::{self, ROLE_CURSOR_MONITOR, ThreadEntry};
-    use event_listener::{Event, Listener};
+    use event_listener::Event;
     use std::time::Duration;
-    use windows::Win32::UI::WindowsAndMessaging::SetCursorPos;
 
     /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
     ///
@@ -261,74 +270,41 @@ mod tests {
         drop(bridge);
     }
 
-    /// `latest_cursor` は pack 済み値を PhysicalPoint として復元する。
-    /// 初期状態（未起動相当）は (0,0)。ワーカ稼働後は最新座標を反映する。
+    /// 偽のカーソルが同じ位置を 2 回返すと、知らせは 1 回だけ（差分の守り）。
     #[test]
-    fn latest_cursor_reads_stored_position() {
-        let bridge = CursorMonitorBridge::spawn(Arc::new(Event::new()));
+    fn poll_once_notifies_once_for_the_same_position_twice() {
+        let latest = AtomicI64::new(0);
+        let mut prev = None;
+        let mut notified = 0;
 
-        // ワーカが 1 反復以上回れば実カーソル座標がストアされる。少し待つ。
-        // 実座標に依存しない不変条件のみ検証: latest_cursor が unpack と一致すること。
-        thread::sleep(Duration::from_millis(60));
-        let raw = bridge.latest_pos.load(Ordering::Acquire);
-        let (ex, ey) = unpack(raw);
-        let p = bridge.latest_cursor();
-        assert_eq!(
-            (p.x, p.y),
-            (ex, ey),
-            "latest_cursor は latest_pos の unpack と一致"
-        );
+        let first = poll_once(|| Some((10, 20)), &mut prev, &latest, || notified += 1);
+        let second = poll_once(|| Some((10, 20)), &mut prev, &latest, || notified += 1);
 
-        drop(bridge);
+        assert!(first, "初めの位置は知らせるはず");
+        assert!(!second, "同じ位置の 2 回目は知らせないはず");
+        assert_eq!(notified, 1, "同じ位置を 2 回読んでも知らせは 1 回のはず");
     }
 
-    /// notify on cursor move + UI reads latest（store→notify 効果の観測）。
-    ///
-    /// listener を移動の**前**に arm し、`SetCursorPos` で既知座標へ強制移動、
-    /// タイムアウト内に listener が起床し、かつ `latest_cursor()` が移動を反映することを
-    /// 確認する。対話デスクトップが無い CI 等で `SetCursorPos` が拒否される環境では
-    /// 誤検出を避けるため、その場合は RAII/順序規律パスの検証に切替える。
+    /// 知らせの中で最新の位置を読むと、もう新しい位置が入っている（書いてから知らせる順）。
     #[test]
-    fn notify_on_move_and_ui_reads_latest() {
-        let event = Arc::new(Event::new());
-        let bridge = CursorMonitorBridge::spawn(Arc::clone(&event));
+    fn poll_once_stores_the_position_before_notifying() {
+        let latest = AtomicI64::new(pack(1, 2));
+        let mut prev = Some((1, 2));
+        let mut seen = None;
 
-        // 移動の前に listen() を arm（notify/listen レース回避）。
-        let listener = event.listen();
+        poll_once(
+            || Some((-30, 40)),
+            &mut prev,
+            &latest,
+            || {
+                seen = Some(unpack(latest.load(Ordering::Acquire)));
+            },
+        );
 
-        // 既知座標へ強制移動（現在位置と必ず異なるよう 2 点試す）。
-        // SAFETY: Win32 境界。`SetCursorPos` は screen physical 座標にカーソルを
-        // 移動する。副作用はカーソル位置のみで共有状態には触れない。対話デスクトップが
-        // 無い環境では `Err` を返しうるため戻り値を検査する。
-        let target = (137, 149);
-        let moved = unsafe { SetCursorPos(target.0, target.1) };
-
-        if moved.is_err() {
-            // 非対話環境。移動観測は不能なので、決定的な RAII 収束のみ確認する。
-            trace!("SetCursorPos rejected (headless/non-interactive); asserting RAII only");
-            drop(bridge);
-            return;
-        }
-
-        // タイムアウト内に移動 notify が届けば Some。
-        let got = listener.wait_timeout(Duration::from_millis(500));
-
-        if got.is_some() {
-            // 起床したなら UI 側は最新座標を読める（store→notify 順序の効果）。
-            // 別プロセス等がさらにカーソルを動かした可能性はあるため、少なくとも
-            // 初期 (0,0) から更新されていること＝何らかの移動が反映されたことを確認する。
-            let p = bridge.latest_cursor();
-            assert_ne!(
-                (p.x, p.y),
-                (0, 0),
-                "移動 notify 後は latest_cursor が更新済みであるべき"
-            );
-        } else {
-            // 環境要因（他プロセスの即時再移動でカーソルが target と一致し差分ガードに
-            // 掛かる等）で notify を観測できないことがある。決定的失敗にはしない。
-            trace!("no move notify observed within timeout (environment-dependent)");
-        }
-
-        drop(bridge);
+        assert_eq!(
+            seen,
+            Some((-30, 40)),
+            "知らせの中では新しい位置が読めるはず"
+        );
     }
 }

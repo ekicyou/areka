@@ -1,0 +1,7 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = run-meta.txt の profile が short・long 以外なら判定不能
+mode = verdict
+build = release
+exit = 2
+
+note = profile = medium。M1 と同じ理由で、知らない値も判定不能（2）にする。

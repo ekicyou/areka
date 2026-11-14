@@ -66,6 +66,7 @@ model: opus
 ## 手順
 
 1. 順位表を読み、4 段それぞれの上位を把握する。段③が `UNAVAILABLE` なら段①②④だけで進める。
+   `UNAVAILABLE` の理由語は段②＝`no_perf_thread_lines`・段④＝`no_tick_lines`・段③＝`no_dump`／`declared_unavailable`／採取側の語（`not_elevated`・`no_xperf`・`start_failed`・`no_pdb`・`probe_failed`・`dry_run`・`no_record`）。
 2. 台帳を読み、既試行と現在の周番号・`streak_no_gain` を把握する。
 3. 最上位から順にカタログへ引き当て、除外の規則を当てる。最初に残った 1 つを選ぶ。
 4. 選んだ候補について、触るファイルを実際に読み、変更計画と足す決定論テスト（実装と同じディレクトリの `<名前>_tests.rs`）を決める。

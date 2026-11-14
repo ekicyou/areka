@@ -18,12 +18,11 @@ use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::{
-    DragAccumulatorResource, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
-    DraggingState, WindowDragContextResource, dispatch_drag_events,
+    DragAccumulatorResource, DragTransition, DraggingState, WindowDragContextResource,
+    dispatch_drag_events,
 };
 use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
@@ -157,9 +156,6 @@ impl Rig {
         // `dispatch_drag_events` が引く資源（wintf の `EcsWorld::new` と同じ登録）。
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
-        world.init_resource::<Messages<DragStartEvent>>();
-        world.init_resource::<Messages<DragEvent>>();
-        world.init_resource::<Messages<DragEndEvent>>();
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![WORK_AREA],
         });
@@ -243,14 +239,14 @@ impl Rig {
             .position = Some(to);
     }
 
-    /// 開始の配りで入った `DraggingState.initial_inset` を窓の位置にする（製品と同じ意味の値）。
+    /// 開始の配りで入った `DraggingState.initial_window_pos` を窓の位置にする（製品と同じ意味の値）。
     ///
     /// 偽の HWND では wintf の開始の腕の枠の座標変換が失敗し、`(0,0)` のまま入る。
-    pub(super) fn set_initial_inset(&mut self, entity: Entity, at: Point) {
+    pub(super) fn set_initial_window_pos(&mut self, entity: Entity, at: Point) {
         self.world
             .get_mut::<DraggingState>(entity)
             .expect("開始が配られて DraggingState があるはず")
-            .initial_inset = (at.x as f32, at.y as f32);
+            .initial_window_pos = (at.x as f32, at.y as f32);
     }
 
     /// 受け口を落とす（以後の送出は失敗する）。

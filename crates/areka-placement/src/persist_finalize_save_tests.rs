@@ -386,7 +386,6 @@ fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
         target: scope0,
         position: Point::new(0, 0),
         cancelled: false,
-        is_primary: true,
         timestamp: Instant::now(),
     });
     assert!(!on_char_drag_end(&mut rig.world, scope0, scope0, &ev));
