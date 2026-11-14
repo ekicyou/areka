@@ -12,15 +12,9 @@
 //! - T7-5: 速いドラッグ（開始と終了が同じ配り）でキャラ窓が行き先へ置かれ 1 件保存
 //!   （修正前は赤）。
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Instant;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{
-    Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
-    spawn_sylphya,
-};
+use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::{
@@ -29,8 +23,9 @@ use wintf::ecs::drag::{
 };
 use wintf::ecs::{PhysicalPoint, Point, Window, WindowPos};
 
-use super::super::persist::PersistWiring;
-use super::test_support::{fake_handle, position_of, rect, window_pos_at, window_pos_sized};
+use super::test_support::{
+    SylphyaRig, fake_handle, position_of, rect, window_pos_at, window_pos_sized,
+};
 use super::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag_end, on_char_drag_end,
     project_anchor,
@@ -57,39 +52,17 @@ const KEYWORD_BASE: BalloonKeywordBase = BalloonKeywordBase {
     adjust: PointPx { x: 13, y: -7 },
 };
 
-/// アクターへ渡す口と観測する口が同じストアを指す偽の IO。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// キャラ窓とバルーン窓を入れた World と、偽の記憶の書き手。
 struct Rig {
     world: World,
-    parts: SylphyaParts,
-    roots: ScopeRoots,
-    store: Arc<FakePersistIo>,
+    sylphya: SylphyaRig,
     char_w: Entity,
     balloon: Entity,
 }
 
 impl Rig {
     fn new() -> Self {
-        let store = Arc::new(FakePersistIo::new());
-        let roots = ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
-            runtime_sink: None,
-        });
+        let sylphya = SylphyaRig::fake();
 
         // `dispatch_drag_events` が引くリソース（wintf の `EcsWorld::new` と同じ登録）。
         // 開始の腕は `Messages<DragStartEvent>` を `resource_mut` で引くので無いと落ちる。
@@ -102,9 +75,7 @@ impl Rig {
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![rect(0, 0, 1920, 1200)],
         });
-        world.insert_non_send(PersistWiring {
-            publisher: parts.publisher.clone(),
-        });
+        sylphya.wire(&mut world);
 
         // 製品と同じく窓 entity 自身が `Window` を持つ（開始の腕が窓を見つけて
         // 偽の HWND で枠の座標変換を試みる経路を通す）。`WindowPos` は明示する
@@ -141,9 +112,7 @@ impl Rig {
 
         Self {
             world,
-            parts,
-            roots,
-            store,
+            sylphya,
             char_w,
             balloon,
         }
@@ -163,20 +132,11 @@ impl Rig {
 
     /// 投函済みの保存がすべて書き終わってから Ghost スコープを読む。
     fn saved(&self) -> Vec<(PersistKey, String)> {
-        self.parts
-            .publisher
-            .barrier()
-            .expect("barrier should resolve while actor is alive");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.store.clone()),
-        )
+        self.sylphya.saved()
     }
 
     fn close(self) {
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.sylphya.close();
     }
 }
 

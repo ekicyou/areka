@@ -3,7 +3,9 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
-use super::test_support::{drag_end_event_at, drag_event, fake_handle, point_of, rect};
+use super::test_support::{
+    assert_no_event, drag_end_event_at, drag_event, fake_handle, point_of, rect,
+};
 use super::{
     BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
     resize_window_to,
@@ -12,7 +14,7 @@ use crate::config::BalloonXMode;
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{BalloonKeywordBase, spawn_ghost_windows};
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // 実表示寸確定時のキーワード基本位置の再導出（要件 4.2/4.3/4.5/4.7/5.2・
@@ -172,18 +174,6 @@ fn user_drags_balloon_to(world: &mut World, balloon: Entity, to: Point) {
     assert!(
         !on_balloon_drag_end(world, balloon, balloon, &end),
         "DragEnd ハンドラはイベントを消費しない"
-    );
-}
-
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&str> = events
-        .iter()
-        .map(CapturedEvent::message)
-        .filter(|m| m.contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
     );
 }
 

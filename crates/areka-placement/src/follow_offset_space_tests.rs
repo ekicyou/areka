@@ -19,12 +19,8 @@ use super::OffsetBase;
 use super::offset_space::{
     OffsetRescale, ScaledAxis, UnresolvedScale, rescale_follow_offset, scale_author_offset,
 };
+use super::test_support::{dpi, k_axis};
 use crate::resolver::PointPx;
-
-/// 表示 DPI（両軸同値）。
-fn dpi(v: u16) -> DPI {
-    DPI::from_dpi(v, v)
-}
 
 /// 基準対（係留済み）。
 fn base_at(x: i32, y: i32, d: u16) -> OffsetBase {
@@ -652,11 +648,6 @@ fn supply_scales_by_non_multiple_ratios_verbatim() {
 const SHELL_AUTHOR_DPI: u32 = 96;
 /// バルーンの作者基準 DPI（同上・シェルとわざと違える）。
 const BALLOON_AUTHOR_DPI: u32 = 120;
-
-/// 表示 DPI `d` における軸ごとの拡大率（`k_axis(d) = d ÷ author_dpi_axis`・app_scale=1）。
-fn k_axis(display_dpi: u32, author_dpi: u32) -> ScaleRatio {
-    ScaleRatio::new(display_dpi, author_dpi).expect("非ゼロ DPI")
-}
 
 /// 供給時は軸ごとに換算され、遷移の追随では作者基準 DPI が約分で消える（D5）。
 ///

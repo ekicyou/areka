@@ -239,7 +239,7 @@ mod sticky_follow_drag_tests;
 mod sticky_follow_tests;
 #[cfg(test)]
 #[path = "follow_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "follow_transition_diag_tests.rs"]
 mod transition_diag_tests;

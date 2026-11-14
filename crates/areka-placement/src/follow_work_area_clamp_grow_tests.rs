@@ -6,7 +6,7 @@
 
 use bevy_ecs::prelude::*;
 
-use super::test_support::{dragging_state, fake_handle, point, point_of, rect};
+use super::test_support::{dragging_state, fake_handle, guard_events, point, point_of, rect};
 use super::{
     MonitorSnapshot, PlacementRoute, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
     WORK_AREA_UNRESOLVED_TAG, clamp_grown_free_default, resize_window_to,
@@ -16,7 +16,7 @@ use crate::follow::OffsetBase;
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use log_capture_kit::{ExpectField, capture, expect_one};
 use wintf::ecs::window::drain_window_pos_commands;
 
 const SCOPE: usize = 0;
@@ -60,13 +60,6 @@ fn world_free(snap: Option<MonitorSnapshot>) -> (World, Entity) {
 
 fn grow(world: &World, window: Entity, route: PlacementRoute, size: SizePx) -> PointPx {
     clamp_grown_free_default(world, window, Anchor::Free, route, DEFAULT_POS, size)
-}
-
-fn tagged<'a>(events: &'a [CapturedEvent], tag: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.message().contains(tag))
-        .collect()
 }
 
 /// ⑶ 200% で y=864 の 640×840 が 1108×1368 になると、下端が 1704 以下へ収まり x は変わらない
@@ -135,7 +128,7 @@ fn explicitly_placed_or_remembered_windows_are_kept() {
         let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
         assert_eq!(keep.level, tracing::Level::DEBUG);
         assert_eq!(keep.expect_field("reason"), format!("\"{reason}\""));
-        assert!(tagged(&events, WORK_AREA_CLAMP_TAG).is_empty());
+        assert!(guard_events(&events, WORK_AREA_CLAMP_TAG).is_empty());
     }
 }
 
@@ -166,7 +159,7 @@ fn other_routes_anchors_and_non_char_windows_are_untouched_and_silent() {
     });
     assert!(outs.iter().all(|p| *p == DEFAULT_POS), "{outs:?}");
     assert!(
-        tagged(&events, "[work-area-clamp]").is_empty(),
+        guard_events(&events, "[work-area-clamp]").is_empty(),
         "{:?}",
         events.iter().map(|e| e.message()).collect::<Vec<_>>()
     );
@@ -207,7 +200,7 @@ fn grown_window_that_still_fits_is_kept() {
         expect_one(&events, WORK_AREA_KEEP_TAG).expect_field("reason"),
         "\"fits\""
     );
-    assert!(tagged(&events, WORK_AREA_CLAMP_TAG).is_empty());
+    assert!(guard_events(&events, WORK_AREA_CLAMP_TAG).is_empty());
 }
 
 /// ⑹ モニタの写しが無いと動かさず `Unresolved` の warn が出る（要件 7.4）。空の写しも同じ
@@ -228,7 +221,7 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
 
     assert_eq!((a, b), (DEFAULT_POS, DEFAULT_POS));
     assert_ne!(c, DEFAULT_POS);
-    let warns = tagged(&events, WORK_AREA_UNRESOLVED_TAG);
+    let warns = guard_events(&events, WORK_AREA_UNRESOLVED_TAG);
     assert_eq!(warns.len(), 2);
     assert!(warns.iter().all(|w| w.level == tracing::Level::WARN));
     assert_eq!(warns[0].expect_field("scene"), "\"surface-grow\"");

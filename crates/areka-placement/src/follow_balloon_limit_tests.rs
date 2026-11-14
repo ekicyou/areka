@@ -1,17 +1,19 @@
-use crate::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
 use wintf::ecs::{Point, SizeI, WindowPos, WindowStyle};
 
-use super::test_support::{CLAMP_TAG as GUARD_CLAMP_TAG, fake_handle, point_of, rect};
+use super::test_support::{
+    CLAMP_TAG as GUARD_CLAMP_TAG, LIMIT_CLAMP_TAG, LIMIT_TAG_PREFIX, LIMIT_UNRESOLVED_TAG,
+    WINDOW_MOVE_TAG, assert_no_event, base_placement, base_world, contained, left_wa,
+    limit_balloon_size, max_pos, odd_edge_snapshot, odd_edge_wa, point_of, world_with,
+};
 use super::{
     BalloonFollowTrigger, MonitorSnapshot, PlacementRoute, enqueue_window_set_pos, follow_balloon,
     move_window_to, resize_window_keep_position,
 };
-use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use crate::source::GhostTitles;
-use crate::spawn::{BalloonLimit, GhostWindows, spawn_ghost_windows};
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use crate::resolver::{PointPx, SizePx};
+use crate::spawn::{BalloonLimit, GhostWindows};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // runtime 関門の wiring 檻（task 3.3・design「C7: runtime 関門」・
@@ -36,93 +38,8 @@ use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 // 手で組んだ World では「spawn が付け忘れても緑」になってしまうため。
 // -------------------------------------------------------------------------
 
-/// 補正ログの判定語（本体定数とは独立に檻側へ literal で置く）。
-const LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
-/// 解決不能（縮退）の判定語。
-const LIMIT_UNRESOLVED_TAG: &str = "[balloon-limit] Unresolved";
-/// 2 段 grep 第 1 段の接頭辞（「関門が何かを言った」ことの一括検出）。
-const LIMIT_TAG_PREFIX: &str = "[balloon-limit]";
 /// 3 関門を弁別する契機ラベル（起動時関門の `boot-gate` と対）。
 const RUNTIME_CONTEXT: &str = "runtime-gate";
-/// 窓移動レコードの判定語（`placement::diag` の手順書語彙）。
-const WINDOW_MOVE_TAG: &str = "[diag.window_move]";
-
-/// 単一モニタの作業領域（全 4 辺が 96 の非倍数・原点非 (0,0)＝隠れた再スケール檻）。
-fn wa() -> RectPx {
-    rect(53, 37, 1877, 1043)
-}
-
-/// 左隣モニタ（負座標）。5.5「基準はキャラ窓の帰属モニタ」の弁別に使う。
-fn left_wa() -> RectPx {
-    rect(-1920, -40, 0, 1000)
-}
-
-fn single_monitor() -> MonitorSnapshot {
-    MonitorSnapshot {
-        work_areas: vec![wa()],
-    }
-}
-
-fn balloon_size() -> SizePx {
-    SizePx { w: 223, h: 158 }
-}
-
-/// 作業領域内へ収めたときの位置上限（右下側）。檻側の独立計算（実装を呼ばない）。
-fn max_pos(area: RectPx, size: SizePx) -> PointPx {
-    PointPx {
-        x: area.right - size.w,
-        y: area.bottom - size.h,
-    }
-}
-
-/// 4 辺内包しているか（檻側の独立実装）。
-fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x + size.w <= area.right
-        && pos.y + size.h <= area.bottom
-}
-
-/// 基準となる 1 scope ぶんの配置（恒等式 `balloon_offset ≡ balloon_pos − char_pos` 成立）。
-///
-/// - キャラ窓 (1301,411) 434×600 → 矩形は作業領域に完全内包・中心も内包（帰属が最近傍
-///   フォールバックへ落ちない＝基準モニタの解決が正常腕で決まる）
-/// - バルーン (1601,811) 223×158 → 同じく内包（＝**書込前は補正不要**の状態から始める）
-fn base_placement(balloon_limit: bool) -> ScopePlacement {
-    ScopePlacement {
-        scope: 0,
-        char_pos: PointPx { x: 1301, y: 411 },
-        char_size: SizePx { w: 434, h: 600 },
-        balloon_pos: PointPx { x: 1601, y: 811 },
-        balloon_size: balloon_size(),
-        balloon_offset: PointPx { x: 300, y: 400 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 300, y: 400 }),
-        balloon_limit,
-        anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
-    }
-}
-
-/// 実 spawn で World を組み、偽 `WindowHandle` を付けて単一ライターを通れるようにする。
-fn world_with(placement: ScopePlacement, snapshot: MonitorSnapshot) -> (World, Entity, Entity) {
-    let mut world = World::new();
-    world.insert_resource(snapshot);
-    let titles = GhostTitles::from_scope_titles([(0, "むらさき".to_string())]);
-    let ghost_windows = spawn_ghost_windows(&mut world, &[placement], &titles);
-    let char_window = ghost_windows
-        .char_window(0)
-        .expect("キャラ窓が spawn される");
-    let balloon = ghost_windows
-        .balloon_window(0)
-        .expect("バルーン窓が spawn される");
-    world.entity_mut(char_window).insert(fake_handle(0x1000));
-    world.entity_mut(balloon).insert(fake_handle(0x2000));
-    (world, char_window, balloon)
-}
-
-fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
-    world_with(base_placement(balloon_limit), single_monitor())
-}
 
 /// [`base_world`] のキャラ窓を下辺から 8px はみ出させた World（縦 600 → 640・下端 1051 > 1043）。
 ///
@@ -132,7 +49,7 @@ fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
 fn char_overflowing_world(balloon_limit: bool) -> (World, Entity, Entity) {
     let mut placement = base_placement(balloon_limit);
     placement.char_size.h = 640;
-    world_with(placement, single_monitor())
+    world_with(placement, odd_edge_snapshot())
 }
 
 /// 作業領域の右下からはみ出す提案位置（両軸ともはみ出す＝4 辺のうち 2 辺を同時に検査）。
@@ -142,19 +59,7 @@ fn out_of_area() -> PointPx {
 
 /// [`out_of_area`] を作業領域内へ収めた位置（檻側の独立計算）。
 fn out_of_area_corrected() -> PointPx {
-    max_pos(wa(), balloon_size())
-}
-
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&str> = events
-        .iter()
-        .map(CapturedEvent::message)
-        .filter(|m| m.contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
-    );
+    max_pos(odd_edge_wa(), limit_balloon_size())
 }
 
 /// 探針の自己検査: 提案位置が本当にはみ出していて、補正後は本当に収まっていること。
@@ -164,11 +69,11 @@ fn assert_no_event(events: &[CapturedEvent], needle: &str) {
 #[test]
 fn probe_self_check_out_of_area_is_really_outside_and_corrected_is_inside() {
     assert!(
-        !contained(out_of_area(), balloon_size(), wa()),
+        !contained(out_of_area(), limit_balloon_size(), odd_edge_wa()),
         "探針が作業領域内に収まっている（檻が空虚になる）"
     );
     assert!(
-        contained(out_of_area_corrected(), balloon_size(), wa()),
+        contained(out_of_area_corrected(), limit_balloon_size(), odd_edge_wa()),
         "補正後の期待値が作業領域内に収まっていない（期待値の算出が誤り）"
     );
     assert_ne!(
@@ -321,7 +226,7 @@ fn move_window_to_clamps_the_trailing_balloon_but_never_the_char_window() {
         y: char_target.y + 400,
     };
     assert!(
-        !contained(proposed, balloon_size(), wa()),
+        !contained(proposed, limit_balloon_size(), odd_edge_wa()),
         "探針: 随伴の提案位置がはみ出していない（檻が空虚）"
     );
     assert_eq!(point_of(&world, balloon), out_of_area_corrected());
@@ -361,11 +266,11 @@ fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area(
     let new_size = SizePx { w: 400, h: 300 };
     // 探針: 位置は動かさないのに、新寸だと右辺・下辺の両方がはみ出す。
     assert!(
-        contained(before, balloon_size(), wa()),
+        contained(before, limit_balloon_size(), odd_edge_wa()),
         "探針: リサイズ前は収まっている前提"
     );
     assert!(
-        !contained(before, new_size, wa()),
+        !contained(before, new_size, odd_edge_wa()),
         "探針: 新寸でもはみ出さない（檻が空虚）"
     );
 
@@ -374,7 +279,7 @@ fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area(
     assert!(ok);
     assert_eq!(
         point_of(&world, balloon),
-        max_pos(wa(), new_size),
+        max_pos(odd_edge_wa(), new_size),
         "寸法変更だけの書込が補正されていない（経路⑦が素通り）"
     );
     // 2.9: 位置だけを補正し、寸はそのまま書かれる。
@@ -443,7 +348,11 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
 
     // 最終位置は limit のもの（ガードが触れない Y が収まっている）。
     assert_eq!(point_of(&world, balloon), out_of_area_corrected());
-    assert!(contained(point_of(&world, balloon), balloon_size(), wa()));
+    assert!(contained(
+        point_of(&world, balloon),
+        limit_balloon_size(),
+        odd_edge_wa()
+    ));
 }
 
 // -------------------------------------------------------------------------
@@ -527,17 +436,17 @@ fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
     placement.balloon_pos = PointPx { x: -500, y: 700 };
     placement.balloon_offset = PointPx { x: 300, y: 400 };
     let snapshot = MonitorSnapshot {
-        work_areas: vec![left_wa(), wa()],
+        work_areas: vec![left_wa(), odd_edge_wa()],
     };
     let (mut world, _char_window, balloon) = world_with(placement, snapshot);
     let proposed = PointPx { x: 100, y: 950 };
 
     // 探針: 提案位置の中心は**右**モニタに属する（基準を取り違えれば結果が変わる配置）。
     let center = PointPx {
-        x: proposed.x + balloon_size().w / 2,
-        y: proposed.y + balloon_size().h / 2,
+        x: proposed.x + limit_balloon_size().w / 2,
+        y: proposed.y + limit_balloon_size().h / 2,
     };
-    let right = wa();
+    let right = odd_edge_wa();
     assert!(
         center.x >= right.left
             && center.x < right.right
@@ -557,7 +466,7 @@ fn the_reference_work_area_is_the_one_the_char_window_belongs_to() {
 
     assert_eq!(
         point_of(&world, balloon),
-        max_pos(left_wa(), balloon_size()),
+        max_pos(left_wa(), limit_balloon_size()),
         "キャラ窓が属する左モニタではなくバルーン側のモニタを基準にしている（5.5 違反）"
     );
 }
@@ -666,7 +575,7 @@ fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
             balloon,
             proposed.x,
             proposed.y,
-            Some(balloon_size()),
+            Some(limit_balloon_size()),
             Some(PlacementRoute::KeepPositionResize),
         )
     });
@@ -721,7 +630,7 @@ fn a_write_that_already_fits_produces_no_correction_and_no_log() {
     let (mut world, _char_window, balloon) = base_world(true);
     let inside = PointPx { x: 900, y: 500 };
     assert!(
-        contained(inside, balloon_size(), wa()),
+        contained(inside, limit_balloon_size(), odd_edge_wa()),
         "探針: 検査対象の位置が収まっていない"
     );
 

@@ -504,3 +504,16 @@
 > 2026-11-14 の結果: 14 節の 2 つはどちらも推奨案で確定した（2026-11-04 開発者「audit系は推奨案でよい」の常の承認・進行役が `requirements.md` の議題 6 を案 乙へ書き換え、議題 11 を足した）。1＝案 乙、2＝消さない（直す対象に数えない）。
 >
 > 同じ日の並走の事実（進行役から）: C20 は 2 つの段に分かれた（前の段＝`wintf-visual-damage-redraw`・`wintf-winmsg-executor-import`・`audit-wintf-window`・本 spec、後の段＝`audit-wintf-input`・`audit-tools-perf-run`・`audit-tools-perf-judge`・`audit-placement-core`）。`audit-wintf-window` は wintf の `Monitor` を変えず、`WindowHandle.instance` だけを消す（本 spec に届くのは `follow_test_support.rs` の `instance: HINSTANCE::default(),` の 1 行・後から着地する側が合わせる）。`audit-wintf-input` は本 spec の後に着地し、`initial_inset` の改名と `is_primary` の削除の読み手を相手が直す。本 spec は `crates/areka-placement/Cargo.toml` を触らない。
+
+## 核へ伝える一覧（実装の段）
+
+`audit-placement-core`（同じ crate の核）の持ち物で、この spec が直さずに残したもの。相手のセッションへこの一覧を伝える（要件 6.4）。
+
+### 指摘 16（task 1.1・追従の側）で残した範囲の外の写し
+
+- `SharedFakeIo`（共有の偽の記憶）の写し: `persist_finalize_save_tests.rs`・`persist_io_wiring_tests.rs`・`reset_pos_tests.rs`・`balloon_lock_drag_tests.rs`。範囲の中の 8 つと本物のファイルの組み立て 2 つは `follow_test_support.rs` の `SylphyaRig`（`fake`・`over_fs`・`wire`・`saved`・`close`）と `plant_minimal_ghost` へまとめた。相手の側も同じ部品で言えるが、`follow_test_support.rs` は `follow` の子のモジュールなので、使うなら置き場所（crate の共通の支え）を相手が決める。
+- `assert_no_event` の写し: `balloon_limit_gate_tests.rs`・`placement_windowposition_vocab_tests.rs`。
+- `contained`（4 辺内包）の写し: `balloon_limit_gate_tests.rs`・`balloon_limit_tests.rs`。
+- `dpi(v)` の写し: `balloon_offset_persist_roundtrip_tests.rs`。
+- 行の頭が `//` の行を落とす `code_only` の写し: `spawn_zorder_chain_wiring_tests.rs`・`zorder_group_ledger_state_tests.rs`・`test_support.rs` の `zorder_pair_deferred::code_only`（`measure_template::code_only` は文字列とブロックコメントも扱う別物）。この spec の 2 つ（`follow_transition_diag_tests.rs`・`transition_diag_tests.rs`）は `follow_test_support::code_only` の 1 つにした。
+- `fake_handle`・`position_of`・`px` の写し: `reseed_test_support.rs`・`resolver_test_support.rs` ほか。

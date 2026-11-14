@@ -6,26 +6,22 @@
 //! 直接呼ぶ（受け手へのつなぎは task 3.2）。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{
-    Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-};
+use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::window::drain_window_pos_commands;
 
-use super::super::persist::PersistWiring;
 use super::super::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 use super::sticky_follow::{
     CharDragSession, begin_char_drag, drag_anchor, drag_wintf_moves, finish_char_drag,
     follow_partners_on_drag,
 };
-use super::test_support::{fake_handle, position_of, single_monitor_snapshot, window_pos_sized};
+use super::test_support::{
+    SylphyaRig, fake_handle, point, position_of, single_monitor_snapshot, window_pos_sized,
+};
 use super::{Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift};
 use crate::resolver::{Anchor, PointPx};
 use log_capture_kit::{CapturedEvent, capture};
@@ -75,10 +71,6 @@ fn world_with_snapshot() -> World {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     world
-}
-
-fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
 }
 
 fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
@@ -146,34 +138,13 @@ fn bottom_partner_takes_only_horizontal_delta() {
     finish(world);
 }
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 終わりは最終の量で相手を書き、相手の位置を記憶の形（下吸着なら下端中央）で書き、
 /// `sticky_follow`（drag）を 1 行記録して控えを外す（4.5・9.3）。
 #[test]
 fn finish_writes_partner_persists_logs_and_clears_session() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Bottom, (900, WA_BOTTOM - H));
     group(&mut world, &["0", "1"]);
@@ -203,11 +174,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
     assert_eq!(e.field("dx"), Some("37"));
     assert_eq!(e.field("dy"), Some("-20"));
 
-    parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> =
-        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
-            .into_iter()
-            .collect();
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(
         loaded.get(&key(Axis::X)),
@@ -223,8 +190,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
         axis: Axis::X
     }));
 
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
     finish(world);
 }
 
@@ -232,20 +198,9 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
 /// （seriko-pattern-calls task 6.2・要件 7.8）。窓はずれたまま動く。
 #[test]
 fn finish_persists_partner_position_without_its_pattern_shift() {
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
     let mut world = world_with_snapshot();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
     let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
     group(&mut world, &["0", "1"]);
@@ -266,18 +221,13 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
             y: 150 + 25 - 20
         }
     );
-    parts.publisher.barrier().expect("barrier");
-    let loaded: HashMap<PersistKey, String> =
-        load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()))
-            .into_iter()
-            .collect();
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
     // 揃えない置き方の記憶は左上のまま。
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(loaded.get(&key(Axis::X)), Some(&(900 + 37).to_string()));
     assert_eq!(loaded.get(&key(Axis::Y)), Some(&(150 - 20).to_string()));
 
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
     finish(world);
 }
 

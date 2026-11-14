@@ -7,9 +7,9 @@ use wintf::ecs::{WindowHandle, WindowPos};
 use super::super::diag::DESPAWNED_SKIP_TAG;
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, UNRESOLVED_TAG, balloon_size, char_size,
-    drag_end_event_at, drag_event_at, dragging_state, fake_handle, gap_center_x, grounded_y,
-    guard_events, left_wa, mixed_layout, narrow_char_size, point, point_of, px, right_wa,
-    unguarded_projection, visible_in, wide_char_size, window_pos_sized,
+    drag_end_event_at, drag_event_at, dragging_state, fake_handle, gap_bound_char_world,
+    grounded_y, guard_events, left_wa, mixed_layout, narrow_char_size, point, point_of, px,
+    right_wa, unguarded_projection, visible_in, wide_char_size, window_pos_sized,
 };
 use super::{
     Anchored, BalloonFollow, MonitorSnapshot, PlacementRoute, on_char_drag, on_char_drag_end,
@@ -74,26 +74,9 @@ fn char_with_far_balloon_world(
     balloon_pos: PointPx,
     offset: PointPx,
 ) -> (World, Entity, Entity) {
-    let c = char_size(dpi);
     let b = balloon_size(dpi);
-    let start = char_start_pos(dpi);
-    let mut world = World::new();
-    world.insert_resource(mixed_layout(dpi));
-    let balloon = world
-        .spawn((
-            fake_handle(0x2000),
-            window_pos_sized(balloon_pos.x, balloon_pos.y, b.w, b.h),
-        ))
-        .id();
-    let char_window = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(start.x, start.y, c.w, c.h),
-            Anchored(Anchor::Bottom),
-            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
-        ))
-        .id();
-    (world, char_window, balloon)
+    let balloon_pos = window_pos_sized(balloon_pos.x, balloon_pos.y, b.w, b.h);
+    char_with_balloon_window_pos(dpi, balloon_pos, offset)
 }
 
 /// 引き金の表（D13 帰結⑴⑵ の**キャラ窓と同一の表**）を固定する。
@@ -699,27 +682,16 @@ fn gap_bound_char_world_with_balloon(
     balloon_pos: PointPx,
     offset: PointPx,
 ) -> (World, Entity, Entity, PointPx) {
-    let old = wide_char_size(dpi);
-    let old_pos = PointPx {
-        x: gap_center_x(dpi) - old.w / 2,
-        y: left_wa().bottom - old.h,
-    };
-    let mut world = World::new();
-    world.insert_resource(mixed_layout(dpi));
+    let (mut world, char_window, old_pos) = gap_bound_char_world(dpi);
     let balloon = world
         .spawn((
             fake_handle(0x2000),
             window_pos_sized(balloon_pos.x, balloon_pos.y, balloon_size.w, balloon_size.h),
         ))
         .id();
-    let char_window = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
-            Anchored(Anchor::Bottom),
-            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
-        ))
-        .id();
+    world
+        .entity_mut(char_window)
+        .insert(BalloonFollow::new(balloon, OffsetBase::unpinned(offset)));
     (world, char_window, balloon, old_pos)
 }
 

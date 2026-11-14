@@ -7,7 +7,7 @@
 「核へ伝える一覧」は `research.md` の末尾の節「核へ伝える一覧（実装の段）」1 か所に書き溜める（範囲の外の写し・古い参照・`BottomSnapPolicy` の説明 4 行・出荷の作りの `should_panic`・2.2 で直した範囲の外の所）。4.6 がこれを `audit-placement-core` のセッションへ送る。
 
 - [ ] 1. 準備: テストの組み立て部品をまとめる
-- [ ] 1.1 追従のテストの組み立て部品を共通の部品のファイルへ上げて写しを消す（指摘 16 の追従の側）
+- [x] 1.1 追従のテストの組み立て部品を共通の部品のファイルへ上げて写しを消す（指摘 16 の追従の側）
   - 最初に `main` を取り込む。同じ段の `audit-wintf-window` が先に着地していれば、`follow_test_support.rs` の `instance` の 1 行を合わせる（設計「並走の申し合わせと着地の順」）。`research.md` の末尾に節「核へ伝える一覧（実装の段）」を作る
   - 設計の 16 の一覧（limit の 2 ファイルの組み立てと定数・`left_wa`・`assert_no_event`・`dpi(v)`・`k_axis`・`point`／`pt`・`tagged`・`SharedFakeIo` と sylphya の組み立て・`gap_bound_char_world` の写し・`char_with_far_balloon_world`・`code_only`・同じ `Monitor` の値）を共通の部品へ上げ、範囲の中の写しを消して部品を呼ぶ形にする
   - 上げる部品は部品のファイルの末尾へ足し、`audit-wintf-input` が直すドラッグの欄の行と `audit-wintf-window` が直す `instance` の行には触らない
@@ -204,3 +204,6 @@
   - 終了の道に触る直しが無いこと、記録の無い失敗の道を足していないことを差分で確かめる
   - 完了の状態: 全体テストが緑で、上の静的な確かめの結果が検証の記録に残る
   - _Requirements: 5.5, 7.1, 7.4, 7.5, 7.6, 7.7, 8.1, 8.4, 8.5, 8.7, 8.8, 9.1, 9.2_
+
+## Implementation Notes
+- 1.1: 範囲の外の `point()` の写し（`balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`balloon_limit_tests.rs`）は「核へ伝える一覧」に未記載。4.6 で核へ送るときに足す。`follow.rs` の `mod test_support` は `pub(crate)`（`#[cfg(test)]` の内側）にした

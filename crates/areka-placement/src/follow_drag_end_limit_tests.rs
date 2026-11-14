@@ -5,12 +5,13 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{SizeI, WindowPos};
 
 use super::test_support::{
-    drag_end_event_at, drag_event_at, fake_handle, point_of, rect, window_pos_sized,
+    LIMIT_CLAMP_TAG, LIMIT_TAG_PREFIX, LIMIT_UNRESOLVED_TAG, SylphyaRig, WINDOW_MOVE_TAG,
+    assert_no_event, base_placement, base_world, contained, drag_end_event_at, drag_event_at,
+    limit_balloon_size, max_pos, odd_edge_wa, point_of, rect, window_pos_sized, world_with,
 };
 use super::{BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end};
-use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use crate::source::GhostTitles;
-use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use crate::resolver::PointPx;
+use crate::spawn::GhostWindows;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
@@ -33,52 +34,14 @@ use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 // 忘れても緑」を避けられる（`follow_balloon_limit_tests.rs` と同じ流儀）。
 // -------------------------------------------------------------------------
 
-/// 補正ログの判定語（本体定数とは独立に檻側へ literal で置く）。
-const LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
-/// 解決不能（縮退）の判定語。
-const LIMIT_UNRESOLVED_TAG: &str = "[balloon-limit] Unresolved";
-/// 2 段 grep 第 1 段の接頭辞（「関門が何かを言った」ことの一括検出）。
-const LIMIT_TAG_PREFIX: &str = "[balloon-limit]";
 /// 3 関門を弁別する契機ラベル（起動時 `boot-gate`・runtime `runtime-gate` と対）。
 const RELEASE_CONTEXT: &str = "release-gate";
-/// 窓移動レコードの判定語（`placement::diag` の手順書語彙）。
-const WINDOW_MOVE_TAG: &str = "[diag.window_move]";
 /// 永続 write-through 直前に出る保存ログの判定語（順序固定の前段マーカー）。
 const PERSIST_SAVE_TAG: &str = "balloon DragEnd 保存";
 
-/// 単一モニタの作業領域（全 4 辺が 96 の非倍数・原点非 (0,0)＝隠れた再スケール檻）。
-fn wa() -> RectPx {
-    rect(53, 37, 1877, 1043)
-}
-
-fn single_monitor() -> MonitorSnapshot {
-    MonitorSnapshot {
-        work_areas: vec![wa()],
-    }
-}
-
-fn balloon_size() -> SizePx {
-    SizePx { w: 223, h: 158 }
-}
-
+/// [`base_placement`] のキャラ窓の左上。
 fn char_pos() -> PointPx {
-    PointPx { x: 1301, y: 411 }
-}
-
-/// 作業領域内へ収めたときの位置上限（右下側）。檻側の独立計算（実装を呼ばない）。
-fn max_pos(area: RectPx, size: SizePx) -> PointPx {
-    PointPx {
-        x: area.right - size.w,
-        y: area.bottom - size.h,
-    }
-}
-
-/// 4 辺内包しているか（檻側の独立実装）。
-fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x + size.w <= area.right
-        && pos.y + size.h <= area.bottom
+    base_placement(true).char_pos
 }
 
 /// ユーザーがバルーンを引きずって離した位置（右下 2 辺を同時にはみ出す）。
@@ -88,7 +51,7 @@ fn release_outside() -> PointPx {
 
 /// [`release_outside`] を作業領域内へ収めた位置（檻側の独立計算）。
 fn release_outside_corrected() -> PointPx {
-    max_pos(wa(), balloon_size())
+    max_pos(odd_edge_wa(), limit_balloon_size())
 }
 
 /// 作業領域内で離した位置（補正不要）。
@@ -104,43 +67,6 @@ fn raw_offset(release: PointPx) -> PointPx {
     }
 }
 
-/// 基準となる 1 scope ぶんの配置（キャラ窓・バルーンとも作業領域に内包）。
-fn base_placement(balloon_limit: bool) -> ScopePlacement {
-    ScopePlacement {
-        scope: 0,
-        char_pos: char_pos(),
-        char_size: SizePx { w: 434, h: 600 },
-        balloon_pos: PointPx { x: 1601, y: 811 },
-        balloon_size: balloon_size(),
-        balloon_offset: PointPx { x: 300, y: 400 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 300, y: 400 }),
-        balloon_limit,
-        anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
-    }
-}
-
-/// 実 spawn で World を組み、偽 `WindowHandle` を付けて単一ライターを通れるようにする。
-fn world_with(placement: ScopePlacement, snapshot: MonitorSnapshot) -> (World, Entity, Entity) {
-    let mut world = World::new();
-    world.insert_resource(snapshot);
-    let titles = GhostTitles::from_scope_titles([(0, "むらさき".to_string())]);
-    let ghost_windows = spawn_ghost_windows(&mut world, &[placement], &titles);
-    let char_window = ghost_windows
-        .char_window(0)
-        .expect("キャラ窓が spawn される");
-    let balloon = ghost_windows
-        .balloon_window(0)
-        .expect("バルーン窓が spawn される");
-    world.entity_mut(char_window).insert(fake_handle(0x1000));
-    world.entity_mut(balloon).insert(fake_handle(0x2000));
-    (world, char_window, balloon)
-}
-
-fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
-    world_with(base_placement(balloon_limit), single_monitor())
-}
-
 /// wndproc（`move_window=true`）がドラッグでバルーン窓を動かし切った状態を作る。
 ///
 /// 実 flow では ECS はここに一切関与しない——だからこそ解放時が唯一の観測点になる。
@@ -148,8 +74,8 @@ fn wndproc_moved_balloon_to(world: &mut World, balloon: Entity, pos: PointPx) {
     world.entity_mut(balloon).insert(window_pos_sized(
         pos.x,
         pos.y,
-        balloon_size().w,
-        balloon_size().h,
+        limit_balloon_size().w,
+        limit_balloon_size().h,
     ));
 }
 
@@ -168,18 +94,6 @@ fn set_stale_offset(world: &mut World, char_window: Entity) {
     // 関心事ではないので未係留のままにする。
     let follow = BalloonFollow::new(follow.balloon, OffsetBase::unpinned(stale_offset()));
     world.entity_mut(char_window).insert(follow);
-}
-
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&str> = events
-        .iter()
-        .map(CapturedEvent::message)
-        .filter(|m| m.contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
-    );
 }
 
 /// `needle` を含むイベントが**ちょうど 1 件**在ることを主張し、その添字を返す。
@@ -208,15 +122,19 @@ fn index_of(events: &[CapturedEvent], needle: &str) -> usize {
 #[test]
 fn probe_self_check_release_positions_are_really_outside_and_inside() {
     assert!(
-        !contained(release_outside(), balloon_size(), wa()),
+        !contained(release_outside(), limit_balloon_size(), odd_edge_wa()),
         "探針: 画面外解放の位置が作業領域内に収まっている（檻が空虚になる）"
     );
     assert!(
-        contained(release_outside_corrected(), balloon_size(), wa()),
+        contained(
+            release_outside_corrected(),
+            limit_balloon_size(),
+            odd_edge_wa()
+        ),
         "探針: 補正後の期待値が作業領域内に収まっていない（期待値の算出が誤り）"
     );
     assert!(
-        contained(release_inside(), balloon_size(), wa()),
+        contained(release_inside(), limit_balloon_size(), odd_edge_wa()),
         "探針: 域内解放の位置がはみ出している（無補正の檻が空虚になる）"
     );
     // 順序固定の弁別力: 生 offset と「補正位置から導いた offset」が別物であること。
@@ -274,7 +192,7 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
 // -------------------------------------------------------------------------
 
 /// 画面外で解放すると、**永続へ書かれるのは生 offset**・表示位置だけが補正される
-/// （要件 2.5／5.4・DD6）。実 publisher（`spawn_sylphya` ＋ `SharedFakeIo`）で
+/// （要件 2.5／5.4・DD6）。実 publisher（`SylphyaRig::fake`）で
 /// barrier→`load_scope` し、保存値が生値であることを実 IO 越しに固定する。
 ///
 /// 順序（永続 write-through → 表示補正）は 3 通りで噛む:
@@ -283,42 +201,12 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
 ///   - 捕捉ログの**出現順**が「保存 → 補正」（`index_of` は捕捉順の添字を返す）
 #[test]
 fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the_display() {
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
+    use areka_sylphya::{Axis, PersistKey};
 
-    use areka_sylphya::persist::{FakePersistIo, PersistIo};
-    use areka_sylphya::{
-        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-    };
-
-    use super::super::persist::PersistWiring;
-
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・persist.rs と同流儀）。
-    struct SharedFakeIo(Arc<FakePersistIo>);
-    impl PersistIo for SharedFakeIo {
-        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-            self.0.read(path)
-        }
-        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-            self.0.commit(path, content)
-        }
-    }
-
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
 
     let (mut world, char_window, balloon) = base_world(true);
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     let released_at = release_outside();
     wndproc_moved_balloon_to(&mut world, balloon, released_at);
     set_stale_offset(&mut world, char_window);
@@ -343,7 +231,11 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         corrected,
         "解放位置が作業領域内へ補正されていない（要件 2.5 後段）"
     );
-    assert!(contained(point_of(&world, balloon), balloon_size(), wa()));
+    assert!(contained(
+        point_of(&world, balloon),
+        limit_balloon_size(),
+        odd_edge_wa()
+    ));
 
     // --- in-session の相対位置には焼き付かない（DD6） ---
     assert_eq!(
@@ -406,11 +298,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     assert_eq!(save.expect_field("persist_y"), expected_raw.y.to_string());
 
     // --- 実 IO 越しの保存値が生 offset であること ---
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-    let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let loaded = rig.saved();
     for (axis, value) in [(Axis::X, expected_raw.x), (Axis::Y, expected_raw.y)] {
         assert!(
             loaded.contains(&(
@@ -433,8 +321,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     }
 
     // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
 }
 
 // -------------------------------------------------------------------------
@@ -602,7 +489,7 @@ fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
     let (mut world, _char_window, balloon) = world_with(
         placement,
         MonitorSnapshot {
-            work_areas: vec![left_wa, wa()],
+            work_areas: vec![left_wa, odd_edge_wa()],
         },
     );
     let released_at = PointPx { x: 100, y: 950 };
@@ -610,10 +497,10 @@ fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
 
     // 探針: 解放位置の中心は右モニタに属する（基準を取り違えれば結果が変わる配置）。
     let center = PointPx {
-        x: released_at.x + balloon_size().w / 2,
-        y: released_at.y + balloon_size().h / 2,
+        x: released_at.x + limit_balloon_size().w / 2,
+        y: released_at.y + limit_balloon_size().h / 2,
     };
-    let right = wa();
+    let right = odd_edge_wa();
     assert!(
         center.x >= right.left
             && center.x < right.right
@@ -631,7 +518,7 @@ fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
 
     assert_eq!(
         point_of(&world, balloon),
-        max_pos(left_wa, balloon_size()),
+        max_pos(left_wa, limit_balloon_size()),
         "キャラ窓が属する左モニタではなくバルーン側のモニタを基準にしている（要件 5.5 違反）"
     );
 }

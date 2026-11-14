@@ -12,8 +12,6 @@
 //! 接地点レコードを実際に発行する側（`resize_window_to`）の検証は
 //! `follow_transition_diag_tests.rs` が持つ（発行点は `follow` 配下ゆえ）。
 
-use windows::Win32::Foundation::RECT;
-use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{
     self as base, FIELD_ENTITY, FIELD_SCOPE, FIELD_STAGE, FIELD_WIN_KIND, MISSING, Stamp,
 };
@@ -21,6 +19,7 @@ use wintf::ecs::window::transition_diag::{
 use super::*;
 use crate::chain_finalize::ChainDeferReason;
 use crate::diag::{PlacementRoute, WindowKind};
+use crate::follow::test_support::{code_only, monitor_with_work_area_bottom};
 use crate::resolver::{PointPx, RectPx, SizePx};
 use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
@@ -528,23 +527,7 @@ fn the_write_tag_falls_back_to_sentinels_for_untracked_routes_and_unmarked_windo
 #[test]
 fn the_live_work_area_bottom_uses_the_running_monitor_table() {
     let mut world = World::new();
-    world.spawn(Monitor {
-        handle: 1,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1800,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1752,
-        },
-        dpi: 96,
-        is_primary: true,
-    });
+    world.spawn(monitor_with_work_area_bottom(1752));
 
     assert_eq!(
         live_work_area_bottom(&mut world, rect(1000, 1157, 1382, 1704)),
@@ -566,23 +549,7 @@ fn the_live_work_area_bottom_is_none_without_any_monitor() {
 #[test]
 fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
     let mut world = World::new();
-    world.spawn(Monitor {
-        handle: 1,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1800,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1752,
-        },
-        dpi: 96,
-        is_primary: true,
-    });
+    world.spawn(monitor_with_work_area_bottom(1752));
     let char_window = world.spawn(CharWindowMarker { scope: 0 }).id();
 
     let (_, events) = log_capture_kit::capture(|| {
@@ -757,7 +724,7 @@ fn log_offset_rescale_emits_exactly_one_record_per_call() {
 /// ——濾過テストでは検出できない退行であり、固定できるのは本文走査だけである。
 #[test]
 fn the_offset_record_is_built_behind_the_front_guard() {
-    let code = code_only_lines(include_str!("transition_diag.rs"));
+    let code = code_only(include_str!("transition_diag.rs"));
     let body = code
         .split("pub fn log_offset_rescale(")
         .nth(1)
@@ -782,13 +749,4 @@ fn the_offset_record_is_built_behind_the_front_guard() {
         code.contains("pub fn offset_line("),
         "説明文を落とす処理が本文まで落としている"
     );
-}
-
-/// 説明行（`//` 始まり）を落とした本文。doc の字面を主張と取り違えないための前処理。
-fn code_only_lines(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }

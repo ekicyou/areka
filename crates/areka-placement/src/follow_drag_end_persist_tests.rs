@@ -4,8 +4,8 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
 use super::test_support::{
-    drag_end_event_at, dragging_state, fake_handle, position_of, rect, window_pos_at,
-    window_pos_sized,
+    SylphyaRig, drag_end_event_at, dragging_state, fake_handle, plant_minimal_ghost, position_of,
+    rect, window_pos_at, window_pos_sized,
 };
 use super::{Anchored, BalloonFollow, MonitorSnapshot, on_char_drag_end};
 use crate::resolver::Anchor;
@@ -22,7 +22,7 @@ use crate::resolver::SizePx;
 // offset = balloon_pos − char_pos を**再導出**（in-session BalloonFollow.offset は
 // 使わない）し、その左上基準値を基準変換せずそのまま
 // BalloonOffset entries として Ghost 永続スコープへ即時 write-through する。
-// 実 publisher（spawn_sylphya + SharedFakeIo）で barrier→load_scope し、保存値が
+// 実 publisher（`SylphyaRig::fake`）で barrier→load_scope し、保存値が
 // 最終確定位置由来の persist 値に一致することを固定する（Issue 1 対応・2.1/8.1）。
 // -------------------------------------------------------------------------
 
@@ -33,45 +33,16 @@ use crate::resolver::SizePx;
 /// stale な offset を仕込んで弁別する。
 #[test]
 fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
+    use areka_sylphya::{Axis, PersistKey};
 
-    use areka_sylphya::persist::{FakePersistIo, PersistIo};
-    use areka_sylphya::{
-        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-    };
-
-    use super::super::persist::PersistWiring;
     use super::on_balloon_drag_end;
     use crate::spawn::BalloonWindowMarker;
 
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・persist.rs と同流儀）。
-    struct SharedFakeIo(Arc<FakePersistIo>);
-    impl PersistIo for SharedFakeIo {
-        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-            self.0.read(path)
-        }
-        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-            self.0.commit(path, content)
-        }
-    }
-
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo(shared.clone())),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::fake();
 
     let mut world = World::new();
     // UI スレッド常駐の保存投函口を挿入（persist_entries が引く NonSend リソース）。
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
 
     // char 窓（Bottom・emo2 実寸）と、単独ドラッグで wndproc が最終確定位置へ移した
     // balloon 窓。値はいずれも 96 の倍数を避け、隠れた dpi/96 再スケールの檻とする。
@@ -129,14 +100,8 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
         "on_balloon_drag_end は in-session offset を変異させない（保存専用）"
     );
 
-    // barrier 復帰＝上記 put の write-through 保存まで完了（同一送信端 FIFO）。
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-
     // 別ハンドルの load_scope で scope1 の BalloonOffset を観測（実 IO 通過＝投函の証明）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+    let loaded = rig.saved();
     assert!(
         loaded.contains(&(
             PersistKey::BalloonOffset {
@@ -161,8 +126,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
     );
 
     // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
 }
 
 /// Task 8.2 保存→復元 往復値等価の END-TO-END 統合檻（Req8.1・Req7.2・design
@@ -194,53 +158,25 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 /// （100・0・96 系）と重ならない。
 #[test]
 fn round_trip_save_restore_value_equivalence_over_real_fs() {
-    use areka_ghost::sylphya_wiring::profile_areka_root;
     use areka_parsers::charset::DefaultEncoding;
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{
-        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-    };
-    use temp_path_kit::TempPath;
 
-    use super::super::persist::{PersistWiring, apply_restored_placements, load_restored_state};
+    use areka_sylphya::{Axis, PersistKey, PersistScope};
+
+    use super::super::persist::{apply_restored_placements, load_restored_state};
     use super::on_balloon_drag_end;
     use crate::resolver::ScopePlacement;
     use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
     // --- fixture: 最小解決可能ゴースト（persist.rs plant_minimal_ghost 同型）---------
-    // 一時ディレクトリは共通窓口経由。名前にプロセス識別子が入るので**プロセス間でも
-    // 一意**になり、panic をまたぐ後始末（Drop での再帰削除）も窓口が担う。
-    let temp = TempPath::new("follow-round-trip-e2e-8-2");
-    let root = temp.path().to_path_buf();
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
-    std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-
     // 永続ファイルは load_restored_state が読む場所と同一＝profile_areka_root(shiori.dir)。
     // shiori.dir は resolve が root/ghost/master へ解決する（persist.rs load 檻が証明）。
-    // FsPersistIo::commit は親ディレクトリを作らないため、書込先を先に用意する
-    // （本番 boot 経路は profile/areka を別途用意する・ここでは檻の前提を満たす）。
-    let profile_root = profile_areka_root(&ghost_master);
-    std::fs::create_dir_all(&profile_root).expect("create profile/areka");
+    let (_temp, root, profile_root) = plant_minimal_ghost("follow-round-trip-e2e-8-2");
 
     // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
-    let roots = ScopeRoots {
-        ghost: Some(profile_root.clone()),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::over_fs(profile_root);
 
     // 7.2 の無関係 key を DragEnd save に**先立って**植える（read-modify-write の温存対象）。
-    parts.publisher.persist_put(
+    rig.parts.publisher.persist_put(
         PersistScope::Ghost,
         vec![(PersistKey::BootCount, "1".to_string())],
     );
@@ -253,9 +189,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     };
 
     let mut world = World::new();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     world.insert_resource(MonitorSnapshot {
         work_areas: snapshot.work_areas.clone(),
     });
@@ -327,15 +261,9 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         "保存値は char 左上基準の生 offset（Bottom でも char_size を混ぜない）"
     );
 
-    // --- barrier: 上記 3 件の put（BootCount／WindowPos／BalloonOffset）が実 FS へ確定 ---
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-
     // 実アクターと同一 roots・実 FsPersistIo で読み戻し、保存 entries を直接確認（往復の中間証拠）。
     // 保存 x は**原点＝下端中央**基準（左上 1427 ＋ w/2=217 → 1644）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+    let loaded = rig.saved();
     assert!(
         loaded.contains(&(
             PersistKey::WindowPos {
@@ -424,9 +352,8 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     assert_eq!(out[0].char_size, char_size);
     assert_eq!(out[0].anchor, Anchor::Bottom);
 
-    // 正典終了（アクター join）——temp dir は temp の Drop が片付ける。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    // 正典終了（アクター join）——temp dir は `_temp` の Drop が片付ける。
+    rig.close();
 }
 
 /// 実機サインオフ再現檻（多窓・2 スコープ・Bottom）: DragEnd 時に `DraggingState` を
@@ -460,52 +387,27 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 /// 座標は 96 の非倍数を用い（隠れた dpi/96 再スケールの副次檻）、scope 間・既定値と重ねない。
 #[test]
 fn dragged_char_persists_even_without_dragging_state_at_dragend() {
-    use areka_ghost::sylphya_wiring::profile_areka_root;
     use areka_parsers::charset::DefaultEncoding;
-    use areka_sylphya::persist::FsPersistIo;
-    use areka_sylphya::{
-        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
-    };
-    use temp_path_kit::TempPath;
 
-    use super::super::persist::{PersistWiring, apply_restored_placements, load_restored_state};
+    use areka_sylphya::{Axis, PersistKey};
+
+    use super::super::persist::{apply_restored_placements, load_restored_state};
     use super::on_balloon_drag_end;
     use crate::resolver::ScopePlacement;
     use crate::spawn::{BalloonWindowMarker, CharWindowMarker};
 
     // --- fixture: 最小解決可能ゴースト（round_trip 8.2 と同型）------------------------
-    let temp = TempPath::new("follow-dragend-no-dragging-state-repro");
-    let root = temp.path().to_path_buf();
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
-    std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-    let profile_root = profile_areka_root(&ghost_master);
-    std::fs::create_dir_all(&profile_root).expect("create profile/areka");
+    let (_temp, root, profile_root) = plant_minimal_ghost("follow-dragend-no-dragging-state-repro");
 
     // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
-    let roots = ScopeRoots {
-        ghost: Some(profile_root.clone()),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(FsPersistIo),
-        runtime_sink: None,
-    });
+    let rig = SylphyaRig::over_fs(profile_root);
 
     // work area 下端 1200・単一モニタ。両スコープの Bottom 吸着 y を確定する。
     let snapshot = MonitorSnapshot {
         work_areas: vec![rect(0, 0, 1920, 1200)],
     };
     let mut world = World::new();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    rig.wire(&mut world);
     world.insert_resource(MonitorSnapshot {
         work_areas: snapshot.work_areas.clone(),
     });
@@ -601,16 +503,10 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         &Phase::Bubble(drag_end_event_at(s1_balloon, (0, 0))),
     ));
 
-    // --- barrier: put が実 FS へ確定 ---------------------------------------------
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-
     // 実 FS を直接読み、両スコープの WindowPos が保存されていることを中間確認する
     // （実機で欠落した [window.0] がここで存在すべき＝修正前はここで RED）。
     // 保存 x は**原点＝下端中央**基準（左上 ＋ char_w/2）。
-    let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+    let loaded = rig.saved();
     for (scope, cf, cw) in [(0u32, s0_char_final, 434), (1u32, s1_char_final, 400)] {
         assert!(
             loaded.contains(&(
@@ -707,6 +603,5 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         );
     }
 
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    rig.close();
 }

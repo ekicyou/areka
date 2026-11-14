@@ -28,12 +28,12 @@ use std::sync::{Arc, Mutex};
 
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
-use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{MISSING, TRANSITION_TARGET};
 
-use super::test_support::{fake_handle, rect, window_pos_sized};
+use super::test_support::{
+    code_only, fake_handle, monitor_with_work_area_bottom, rect, window_pos_sized,
+};
 use super::{Anchored, MonitorSnapshot, PlacementRoute, resize_window_to};
 use crate::diag::WindowKind;
 use crate::resolver::{Anchor, SizePx};
@@ -49,27 +49,6 @@ const NARROW: SizePx = SizePx { w: 382, h: 547 };
 const BOOT_WA_BOTTOM: i32 = 1704;
 /// 100% へ落とした後の**実際の**作業領域下端（タスクバーが低くなる）。
 const LIVE_WA_BOTTOM_AT_100: i32 = 1752;
-
-/// 実行時のモニタ表 1 台（作業領域の下端だけが関心）。
-fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
-    Monitor {
-        handle: 1,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom: 1800,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3200,
-            bottom,
-        },
-        dpi: 96,
-        is_primary: true,
-    }
-}
 
 /// 起動時 snapshot（`BOOT_WA_BOTTOM` で固定）＋実行時モニタ表＋下端吸着のキャラ窓 1 枚。
 ///
@@ -374,15 +353,6 @@ fn the_ground_record_lights_up_under_the_signoff_directive() {
 // ---------------------------------------------------------------------------
 // 本文走査（ログ濾過テストでは原理的に見えない退行）
 // ---------------------------------------------------------------------------
-
-/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 /// 要件 10.6／10.4: 接地点レコードは「下端吸着のとき」かつ「観測が有効なとき」に**限って**
 /// 組む。前置ガードを外すと、既定運転でも毎回モニタ表を舐めて `String` を確保する形になる

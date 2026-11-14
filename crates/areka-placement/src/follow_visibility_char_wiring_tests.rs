@@ -5,9 +5,9 @@ use wintf::ecs::{Point, WindowPos};
 
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, OFFSCREEN_PULL_TAG, UNRESOLVED_TAG,
-    drag_event_at, dragging_state, fake_handle, gap_center_x, guard_events, left_wa, mixed_layout,
-    narrow_char_size, point_of, px, right_wa, unguarded_projection, visible_in, wide_char_size,
-    win, window_pos_sized,
+    drag_event_at, dragging_state, fake_handle, gap_bound_char_world, gap_center_x, guard_events,
+    left_wa, mixed_layout, narrow_char_size, point_of, px, right_wa, unguarded_projection,
+    visible_in, wide_char_size, win, window_pos_sized,
 };
 use super::{
     Anchored, MonitorSnapshot, PlacementRoute, WorkAreaResolution, on_char_drag, project_anchor,
@@ -39,30 +39,6 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 // -------------------------------------------------------------------------
 
 use super::route_applies_visibility_guard;
-
-/// 「旧矩形は可視・新提案は全 work area 非交差」へ落ちるキャラ窓 World を組む。
-///
-/// 旧寸 [`wide_char_size`] の窓を、下端中央付替え（`resize_window_to` 手順 3b）後の
-/// 中心が帯へ落ちる位置に置く。新寸 [`narrow_char_size`] は帯より狭いので、射影 T が
-/// 出す提案矩形は帯へ収まり **どの work area とも交差しない**——S3 が言う
-/// 「非ドラッグ要因で不可視へ遷移する」状態そのものを合成する。
-fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
-    let old = wide_char_size(dpi);
-    let old_pos = PointPx {
-        x: gap_center_x(dpi) - old.w / 2,
-        y: left_wa().bottom - old.h,
-    };
-    let mut world = World::new();
-    world.insert_resource(mixed_layout(dpi));
-    let e = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
-            Anchored(Anchor::Bottom),
-        ))
-        .id();
-    (world, e, old_pos)
-}
 
 /// 発火条件の**表そのもの**を固定する（D13 帰結⑴⑵）。挙動側の檻（下 2 件）と
 /// 二段構えにしてあるのは、語彙が 13 種あるのに `resize_window_to` を実際に通るのは
