@@ -284,6 +284,13 @@ function Get-BalloonFollowSources {
     return [pscustomobject]@{ Sources = $sources; NotDone = $notDone; Ready = ($sources.Count -gt 0 -and $notDone.Count -eq 0) }
 }
 
+# 表示成立点に届かなかったときの probe 行の欄（純関数）。areka が先に終わったら exited と実際に待った時間、ほかは timeout と上限
+function Get-ShowReadyMissFields {
+    param([bool]$Exited, [long]$WaitedMs)
+    if ($Exited) { return @("waited_ms=$WaitedMs", 'result=exited') }
+    return @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
+}
+
 # 判定器（judge-followup.py）の終了コードを返す値へ写す（純関数）: 0・1・2 はそのまま、
 # 3（読取不能）とほか（起こせない -1 を含む）は 1＝実走の失敗（perf-loop が 1 度だけ採り直す）
 function Convert-FollowupJudgeExit {
@@ -411,6 +418,12 @@ function Invoke-FollowupSelfChecks {
                     throw "$($case.Req -join ','): ready=$($r.Ready) not_done='$($r.NotDone -join ',')' (want $($case.Ready) / '$($case.NotDone)')"
                 }
             }
+        }
+        'show-ready-miss' = {
+            $got = (Get-ShowReadyMissFields -Exited $true -WaitedMs 1234) -join ' '
+            if ($got -ne 'waited_ms=1234 result=exited') { throw "exited: $got" }
+            $got = (Get-ShowReadyMissFields -Exited $false -WaitedMs 1234) -join ' '
+            if ($got -ne "waited_ms=$SHOW_READY_TIMEOUT_MS result=timeout") { throw "timeout: $got" }
         }
         'judge-exit-map' = {
             foreach ($pair in @(@(0, 0), @(1, 1), @(2, 2), @(3, 1), @(4, 1), @(-1, 1), @(255, 1))) {
@@ -586,10 +599,11 @@ try {
     Write-Info "[invoke-followup-checks] started (process ID $($proc.Id)). Waiting for the show-ready point."
 
     # --- 表示成立点を待つ（ここから先が観測の前提）------------------------------
+    $waitClock = [Diagnostics.Stopwatch]::StartNew()
     $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt -Process $proc `
         -Pattern $LOG_MARKER_SHOW_READY -TimeoutMs $SHOW_READY_TIMEOUT_MS
     if (-not $showReady) {
-        Write-Probe -Check 'session' -Step 'show_ready' -Fields @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
+        Write-Probe -Check 'session' -Step 'show_ready' -Fields (Get-ShowReadyMissFields -Exited $proc.HasExited -WaitedMs $waitClock.ElapsedMilliseconds)
         if ($proc.HasExited) { Stop-Run $EXIT_FAIL "areka exited before the show-ready point (exit code $($proc.ExitCode)). Check $errLogPath and $runLogPath." }
         Stop-Run $EXIT_FAIL "the show-ready point (apply(ShowSurface)) did not appear within $SHOW_READY_TIMEOUT_MS ms. Check $runLogPath."
     }

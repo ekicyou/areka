@@ -226,7 +226,8 @@ stateDiagram-v2
     [*] --> NoDir
     NoDir --> Rerun: dir missing
     [*] --> HasDir
-    HasDir --> Untouched: no run.log
+    HasDir --> Untouched: no run.log but DRY-RUN.txt
+    HasDir --> Incomplete: no run.log and no DRY-RUN.txt
     HasDir --> Incomplete: run.log but no ended_utc or no quiet-after
     HasDir --> NotQuiet: quiet-after verdict not QUIET
     HasDir --> Complete: all present and QUIET
@@ -236,7 +237,8 @@ stateDiagram-v2
     Complete --> [*]: reuse
 ```
 
-- `run.log` の無い出力先（`-DryRun` の置き土産）は脇へ退けず、今までどおり `Clear-MeasureDryRunDir` の決まり（6 の後）に任せる。
+- `run.log` の無い出力先のうち `-DryRun` の印（`DRY-RUN.txt`）の在る出力先は脇へ退けず、今までどおり `Clear-MeasureDryRunDir` の決まり（6 の後）に任せる。
+- `run.log` も `DRY-RUN.txt` も無い出力先（静かさの確かめの間に止まった走行）は `-INCOMPLETE-` へ退けて採り直す（消さない・`-Resume` で「既に在る」の 3 にしない）。
 - 退けた先は `<走行>-INCOMPLETE-<時刻>` と `<走行>-NOTQUIET-<時刻>`。測ったものは消さない。
 
 ## 直し方の一覧（指摘ごと）
@@ -452,7 +454,7 @@ function Assert-MeasureAbDistinct   { param([Parameter(Mandatory)][string]$BinA,
 
 ```powershell
 # 2: 完了の印。完了なら $true。run.log の在る未完了・静かでない走行は脇へ退けて $false。
-#    run.log の無い出力先と、在らない出力先は触らずに $false。
+#    -DryRun の印（DRY-RUN.txt）の在る出力先と在らない出力先は触らずに $false。run.log も DRY-RUN.txt も無い出力先（静かさの確かめの間に止まった走行）は -INCOMPLETE へ退けて $false（消さない）。
 function Test-MeasureRunComplete { param([Parameter(Mandatory)][string]$Dir) }
 # 脇へ退ける唯一の口。'<Dir>-<Tag>-<UTC の数字だけの時刻>' へ Move-Item。戻り: 退けた先
 function Move-MeasureRunAside    { param([Parameter(Mandatory)][string]$Dir, [ValidateSet('INCOMPLETE','NOTQUIET')][string]$Tag) }
@@ -671,6 +673,22 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 
 - 3（引数・前提の不正）で止まる道が増える: `-Goal` と `-GoalFile`（26）・`final -BinDir` に `-Build` が無い（10）・`ab_sequence` の不正（34）・A と B が同じ実行体（15）・`-DryRun` の出力先に他のファイルが在る（6）・`-SampleEtl` と `-DryRun`（ランナー）・走行の後の静かさの確かめの 3。
 - 4 で止まる道が増える: python の版が 3.11 未満か無い（25・preflight）・`-Stop` の子を起こせない（1）。
+- 8.1 の audit のかけ直しで足した 3 の道（どれも理由の 1 行つき）:
+  - 目標定義の値が在るのに読めない: 整数で読めない値（`Get-MeasureTomlInt`）・1 行の配列で読めないか空の配列（`Get-MeasureTomlArray`）。
+  - 目標定義の `[quiet] retry_max`・`retry_wait_sec` が 0 以上の整数でない: 入口の `Get-GoalConfig` で、ビルドと走行の前に（`-DryRun` でも）。走行の後の `Invoke-MeasureQuietAfter` の確かめも残す。
+  - 目標定義の `[goal_runtime] checkin_minutes` が整数で読めない（`Get-GoalConfig`）。
+  - 走行の出力先が既に在る（`Assert-MeasureRunDirFree`）: `measure-baseline`・`rank-run`・`measure-ab`・`final` で、ビルドより前に確かめる（`-Resume` で済んだ走行・`-DryRun` の印だけの出力先は除く）。
+  - `followup` の出力先に判定が既に在るのに `-Resume` が無い。
+  - 明示した `-Ledger` のファイルが無い・明示した `-GoalFile` のファイルが無い（`selftest` でも）。
+  - `invoke-cpu-sample.ps1 -Stop` で `-SymCache` のフォルダを作れない（既定の置き場の `LOCALAPPDATA` が解けないときも）。`perf-loop` はその 3 を 3 のまま返す。
+  - `-RunDir` を読まないサブコマンド（`measure-baseline`・`rank-run`・`rank`・`final` のほか）へ `-RunDir` を渡した。
+  - `followup` へ渡した `-BinDir` に実行体が無い（検査の子を起こさない。`-DryRun` では止めない）。
+  - `compare -Iter` の周の作業場が無い。
+  - 知らない引数。
+- 8.1 の audit のかけ直しで足した 4 の道:
+  - 走行の後の静かさの確かめの子が 0・2・3・4 のほか（落ちた 1・起こせない -1 など）で終わった（確かめ直さない）。
+  - `measure-ab` で A と B の一方だけ 32bit SHIORI ヘルパが無い（走る前に。`-DryRun` では確かめない）。
+- 読み手（スキルの表の 3・4）の扱いは今のまま。
 - どの道も「理由の 1 行」と「0 でない終了コード」の両方で表す（要件 5.2）。
 
 ## Testing Strategy
@@ -687,7 +705,7 @@ function Write-MeasureDryRunMark { param([Parameter(Mandatory)][string]$Dir, [Pa
 - **土台**: `load-standalone`（20：新しい pwsh で `common` だけを読み込み `Invoke-Child`・`Invoke-PwshChild` が呼べる・何も出力しない）・`toml-reader`（17：単引用符・注釈・見出しの 2 つの書き方・配列・`[]`・小数・整数）・`keyvalue-parse`（18：値の中の `=`）・`child-args-and-encoding`（5・19：空白を含む引数が 1 つのまま届く・`-ReadEncoding` が効く）・`pwsh-child-args`（21：引数名の形は素で・ほかは単引用符で括る）・`pwsh-child-error`（7：わざと落ちる子の最後の 1 行が理由の文で、ESC を含まない）・`kill-wait`（8：ファイルを握って眠る子を `Stop-ChildProcess` した後、そのファイルの入ったフォルダの名前を替えられる）・`utc-stamp`（35）。
 - **終わり方**: `exit-trap`（3：`common` と `trap { Exit-OnUnexpectedError $_ }` だけの小さなスクリプトを子として回し、RESULT 行と 4 を見る。同じ子で `finally` が本物の `exit` でも回ることを見る）・`trap-present`（3：構文木で 5 本の入口の頭に `trap` が在ること）・`quiet-after-codes`（3：偽の静かさの確かめが 3 → 3、4 → 4）・`child-exit-map`（21）。
 - **入口**（`perf-loop.ps1` を子として、`-DryRun` か引数の確かめで終わる形で起こす）: `case-normalize`（4：`Rank-Run -Build Release -DryRun -BinDir <空の一時> -OutRoot <一時>` の RESULT 行の `<sub>` が `rank-run`、`measure-baseline -Build Release -DryRun -BinDir <空の一時> -OutRoot <一時>` の出力の build が `release`）・`goal-and-goalfile`（26）・`relative-paths`（27：`Resolve-LoopPath` を `Set-Location` の後に呼ぶ）・`preflight-code`（25）・`goal-text-count`（33）・`probe-parse`（36：`xperf_path` に空白と括弧を含む行）。
-- **出力先と -Resume**: `resume-incomplete`（2：`ended_utc` の無い出力先と `quiet-after.txt` の無い出力先が `-INCOMPLETE-` へ・静かでない出力先が `-NOTQUIET-` へ・揃った出力先は使われる・`run.log` の無い出力先は触られない）・`dryrun-clear`（6：`DRY-RUN.txt` とほかのファイルを置いた出力先で 3・ファイルが残る／印だけなら作り直される）・`loopdir-vocab`（21）。
+- **出力先と -Resume**: `resume-incomplete`（2：`ended_utc` の無い出力先と `quiet-after.txt` の無い出力先が `-INCOMPLETE-` へ・静かでない出力先が `-NOTQUIET-` へ・揃った出力先は使われる・`-DryRun` の印の在る出力先は触られない・`run.log` も印も無い出力先（静かさの確かめの間に止まった走行）が `-INCOMPLETE-` へ）・`dryrun-clear`（6：`DRY-RUN.txt` とほかのファイルを置いた出力先で 3・ファイルが残る／印だけなら作り直される）・`loopdir-vocab`（21）。
 - **段③**: `sampling-order`（1・9：偽のビルド・可否・ランナー・停止で、呼ばれる順が「ビルド → 可否 → ランナー（`-SampleEtl` 付き）→ `-Stop`」で、`perf-loop` が `-Start` を呼ばない）・`sampling-stop-after-run`（1：ランナーが 0 で採取の開始を報告したら必ず `-Stop`・`-Stop` の子が `Code -1` なら `xperf -stop` を書いた警告と 4）・`sampling-reason`（30）・`rank-no-record`（24：`sampling.txt` も dump も無い走行で、偽の `Get-SamplingProbe` が呼ばれず、`--unavailable-reason no_record` が渡る）・`not-quiet-evidence`（28）・`run-not-moved`（8：偽のランナーが 1 で返り `moved to:` の行が無く出力先が残っているとき、採り直さずに 4・ランナーの呼び出し 1 回）。
 - **実行体**: `exe-after-build`（11）・`helper-refresh`（12）・`final-bindir`（10）・`ab-same-exe`（15）・`ab-sequence`（34：`["A","B"]` で 3・偽のビルドもランナーも呼ばれない）・`followup-resume-first`（13：済んだ出力先と `-Resume` で、偽の `cargo` も検体の問い合わせも呼ばれない）・`followup-retry-on-1`（14：1 回目が 1 で判定なし、2 回目が判定ありで 0・呼び出し 2 回）・`followup-verdict-shape`（21）。
 

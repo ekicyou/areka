@@ -5,7 +5,7 @@
 - 振る舞いの変わる 5 本の `SCRIPT_VERSION` を小さい版の数で 1 つ上げた（申し合わせ済み B）: `perf-loop.ps1` 1.0.0 → 1.1.0・`invoke-perf-run.ps1` 1.1.0 → 1.2.0・`invoke-cpu-sample.ps1` 1.0.0 → 1.1.0・`check-quiet.ps1` 1.0.1 → 1.1.0・`invoke-followup-checks.ps1` 0.1.1 → 0.2.0。
 - `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest`: 毎回のかけ直しの直しの後に回し、最後（8 回目の直しの後）も `SELFTEST RESULT ok=12 ng=0`・`PERF-LOOP RESULT selftest code=0`。内訳の数は T2 1 本目 `ok=23`（着手の 20）・2 本目 `ok=27`（着手の 16）・T3 `ok=7`（着手の 6）（検査を足した分だけ増えた。道具の数 12 は同じ）。
 - `pwsh -NoProfile -File tools/encoding-check.ps1`: `encoding check: all passed`。
-- 1,000 行の番人: 長い順に `invoke-followup-checks.ps1` 973 行・`invoke-perf-run.ps1` 920 行・`perf-loop.measure.ps1` 909 行で、どのファイルも 1,000 行の下（16 本で 8,238 行）。
+- 1,000 行の番人: 長い順に `invoke-followup-checks.ps1` 987 行・`invoke-perf-run.ps1` 920 行・`perf-loop.measure.ps1` 909 行で、どのファイルも 1,000 行の下（16 本で 8,267 行・8.1 のレビューの直しの後に `wc -l` で数え直した）。
 - 範囲に 1 本足した: `tools/perf/perf-loop.selftest-base.ps1`（T2 の 2 本が写しで持っていた骨組み＝偽物の記録・終了の口・回し方を 1 か所へ寄せた。1 回目の指摘 B8）。
 
 ## 8.1 同じ範囲への audit のかけ直し
@@ -26,6 +26,8 @@
 | 6 | 2026-11-15 | 5 | 3 | 2 | 2 | 12 | 1 | 1（A1 A と B でヘルパの有無が違う比較） |
 | 7 | 2026-11-15 | 4 | 5 | 2 | 2 | 13 | 1 | 1（A1 -DryRun が揃った bin-A を書き替える） |
 | 8 | 2026-11-15 | 3 | 5 | 2 | 2 | 12 | 0 | 0 |
+
+8.7 の打ち切りは、8 回目の「必ず直す」が 0 件だったことで判じた。ただし 8 回目の直しには終了コードとファイルの扱いの変わる直しが入っている（`-RunDir`・followup の `-BinDir`・`compare -Iter`・目標定義の負の回数と待ち秒数に新しい 3、`-Resume` で静かさの確かめの間に止まった走行を `-INCOMPLETE` へ退ける、followup が表示の成立を待つ間に areka が終わったら待たずに終える）。開発者への 1 行の知らせにもこのことを入れる。
 
 - 回ごとの指摘の中身は、1 回目が想定外の失敗の道・終了コードの写し・関門の速さ、2〜4 回目が 1 回目の直しの取り残し（同じ形の別の所）と試しの抜け、5〜7 回目が打ち間違いの扱い・端の場合（画面の端・PID の使い回し・空の配列）・試しの抜けへ移った。
 - 5 回目で打ち切れなかった: 5 回目の指摘に「必ず直す」かつ道具の振る舞い（終了コード）に関わるもの（-Ledger）が 1 件あったので、要件 8.7 の打ち切りの決まりに当たらず、進行役の判断（2026-11-15・要件 8.2 のとおり 0 件まで繰り返し、8.7 の条件が初めて成り立った回で打ち切る・10 回目で止めて仰ぐ）に従って続けた。6・7 回目にも「必ず直す」が 1 件ずつ出た（どちらも直した）。
@@ -70,6 +72,8 @@
 7 回目（13 件・全部直した）: -DryRun の prepare-ab が揃った bin-A を書き替えて A の実行体を失う（必ず直す）→ 揃った一式は -DryRun でも書き替えない → T2「dryrun-keeps-real-set」・`checkin_minutes` の読めない値を 3・`Assert-MeasureAbDistinct` の写しのループを 1 つに・ヘルパの元の道の 3 つの写しを `Get-MeasureHelperSource` に・T2 を本番と同じ `$ErrorActionPreference = 'Stop'` で回す・`-Checks` の渡し方の試し → T2「followup-checks-arg」・`-Stop` の 3 を 3 のまま・関門を通ったらまとめたトレースを消す・受け入れの判定の試し → T2「compare-core」・届かない死んだ確かめ・T3 の -DryRun -SampleEtl の試しが理由の語まで見る・クリック透過の点が画面の外で止められたら判定不能・balloon_follow の動かす操作が無いときの理由の語 `no_required_mover`。
 
 8 回目（12 件・全部直した・「必ず直す」0 件）: 縮めた引数名（-B・-R）の束ねの穴を `shortcut:` に足す・check-quiet とランナーの型の付いた引数の穴も `shortcut:` で明記・静かさの確かめの間に止まった走行（run.log も印も無い）を -Resume で退ける → T2「resume-incomplete」の stopped-in-quiet・読まないサブコマンドへの -RunDir を 3 → T2「bad-params」・followup の `-BinDir` に実行体が無ければ子を起こさずに 3 → T2「followup-exe-choice」・`compare -Iter` の打ち間違いを 3 → T2「bad-params」・目標定義の負の `retry_max`・`retry_wait_sec` を 3 → T2「quiet-after-codes」・T2 が子の perf-loop から自分をまた回し始めたら増え続けずに赤（環境変数 `PERF_LOOP_SELFTEST_NESTED`）・rank-run の `-Stop` 3 の試し → T2「stop-bad-args」・ランナーの失敗の理由の行を後始末の警告の後に・followup の表示の成立を待つ間に areka が落ちたら待たずに 1 と終了コード・閉じない括りとカンマが ThreadStartImage!Function の側に在る行を後ろから数えて読む → T1「symbol commas」。
+
+8.1 のレビューの直し（2026-11-15・提案 2 件も全部直した）: 目標定義の負の `[quiet] retry_max`・`retry_wait_sec`（と整数で読めない値）を、走行の後でなく入口の `Get-GoalConfig` でビルドと走行の前に 3（`-DryRun` でも止まる。走行の後の確かめも残す）→ T2「quiet-after-codes」の goal config の項・followup が表示の成立を待つ間に areka が終わったとき、probe の行を `result=timeout waited_ms=<上限>` でなく `result=exited` と実際に待った時間にする（純関数 `Get-ShowReadyMissFields`。`judge-followup.py` は `show_ready` の行を読まない）→ T1「show-ready-miss」。どちらも直しの前の形で赤（`Get-GoalConfig` が 3 で止まらない・関数が無い）を見て、写しの部屋（`target\perf-loop-tmp\`・後で消した）で直しを壊すと赤に戻ることを見た。design の `Test-MeasureRunComplete` の注釈・状態図・「そのほかの止まる道」も今の振る舞いに合わせた。
 
 ### 赤の確かめ（直しの前の形で落ちることを見た）
 

@@ -143,6 +143,14 @@ function Get-GoalConfig {
     if ($null -eq $checkin -and $null -ne ($rawCheckin = Get-TomlRaw -Toml $toml -Section 'goal_runtime' -Key 'checkin_minutes')) {
         Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [goal_runtime] checkin_minutes cannot be read as an integer: $rawCheckin"
     }
+    # 走行の後の静かさの確かめの回数・待ち秒数も、ビルドと走行の前に確かめる（-DryRun でも。後の Invoke-MeasureQuietAfter の確かめも残す）
+    foreach ($quietKey in 'retry_max', 'retry_wait_sec') {
+        $rawQuiet = Get-TomlRaw -Toml $toml -Section 'quiet' -Key $quietKey
+        $quiet = Get-TomlInt -Toml $toml -Section 'quiet' -Key $quietKey
+        if ($null -ne $rawQuiet -and ($null -eq $quiet -or $quiet -lt 0)) {
+            Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [quiet] $quietKey must be an integer 0 or more: $rawQuiet"
+        }
+    }
 
     $ledgerPath = $null
     if ($specDir -and $ledgerRel) {

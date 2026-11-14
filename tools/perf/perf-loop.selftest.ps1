@@ -384,6 +384,12 @@ $SelfTestChecks = @(
             $code = Get-SelfTestExitCode { Invoke-MeasureQuietAfter -RunDir (Join-Path $script:SelfTestRoot 'run') }
             $calls = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Invoke-PwshChild' }).Count
             Assert-SelfTest ($code -eq 3 -and $calls -eq 0) "${bad}: exit $code with $calls check-quiet calls (want 3 and none)"
+            # 入口の目標定義の読み（Get-GoalConfig）で、ビルドと走行の前に 3（-DryRun でも）
+            $goalPath = Join-Path $script:SelfTestRoot 'quiet-bad.toml'
+            New-Item -ItemType Directory -Force -Path $script:SelfTestRoot | Out-Null
+            Set-Content -LiteralPath $goalPath -Value "[quiet]`n$bad`n" -Encoding utf8
+            $code = Get-SelfTestExitCode { $null = Get-GoalConfig -GoalFilePath $goalPath -RepoRoot $script:SelfTestRoot }
+            Assert-SelfTest ($code -eq 3) "goal config ${bad}: exit $code (want 3 before any build or run)"
         }
         $script:GoalConfig = $null
         foreach ($case in @(@(3, 3, 1), @(4, 4, 1), @(1, 4, 1), @(-1, 4, 1), @(2, 2, ($MEASURE_QUIET_RETRY_MAX_DEFAULT + 1)))) {

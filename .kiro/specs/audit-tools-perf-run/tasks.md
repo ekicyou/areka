@@ -160,7 +160,7 @@
   - _Requirements: 3.1, 4.1_
 
 - [ ] 8. 仕上げの確かめ
-- [ ] 8.1 版を上げ、自分の検査を回し、audit をかけ直して新しい指摘を 0 件にする
+- [x] 8.1 版を上げ、自分の検査を回し、audit をかけ直して新しい指摘を 0 件にする
   - 振る舞いの変わる 5 本（入口・ランナー・段③の採取・静かさの確かめ・追随の検査）の `SCRIPT_VERSION` を小さい版の数 1 つ上げる（申し合わせ済み B）
   - `perf-loop.ps1 selftest` が `ok=11 ng=0`（T2 を分けたなら 12）で緑、どのファイルも 1,000 行の下であることを確かめる
   - 範囲（足した 5 本を含む）へ `/ponytail:ponytail-audit` を上限なし・全部読む作法でかけ直し、出た指摘を直して 0 件まで繰り返す。5 回目は要件 8.7 の打ち切りの決まりに従う
@@ -196,3 +196,4 @@
 - 7.1: レビューで、design の 35 のうち追随の検査の `Stop-Run`（色なしで標準エラーへ）を持つタスクが無いと分かったので、進行役が `Write-Host -ForegroundColor Red` の 2 か所を `Write-Problem` へ替えた（measure は RESULT 行を全部の行から探すので影響なし・`LastLine` は理由の行になる）。BOM を落とす条件も「バッファの頭がファイルの頭」へ直した。窓が閉じる道と強制終了の 2 か所は実走でしか通らない
 - 7.2: `followup -DryRun` は検体の問い合わせより前で止まるので、DRY-RUN.txt の `-GhostRoot`・`-BalloonRoot` は `<sample>` の仮置き。`[followup] required` の名前の検査は `-Resume` の済みの後。偽の子は答えが尽きると添字の例外で落ちる（赤にはなる）。13 のビルドする側と `-BinDir` 側の検査は無い（8.1 の audit で見る）
 - README の申し合わせ（11-15 の audit-tools-perf-judge の知らせ）: 相手のタスク 13 は `tools/perf/README.md` の perf-run の文（§11 の `Test-MeasureQuietAfterOk`・`Invoke-Child` の項・§14 の段③の -Probe／-SelfTest の注記など）を今の .ps1 の形のまま書いた。後に着地した側が取り込みで §11・§14 のその数か所を合わせる。相手が先に着地したら、こちらの `/kiro-complete` の取り込みで合わせる（8.2 の R1〜R4 の記録に書く）
+- 8.1: audit のかけ直しは 8 回（指摘 31・15・11・10・13・12・13・12）。5〜7 回目に「必ず直す」かつ振る舞いに効く指摘が残ったので 8.7 は 8 回目で初めて成り立ち、8 回目の 12 件を直して打ち切った（検証の記録 verification.md）。追随の検査の実行体・検体が無いときの終了コードは頭書の約束どおり 1 のまま（進行役の決め）。T2 の骨組みは `perf-loop.selftest-base.ps1` へ。`invoke-followup-checks.ps1` は 987 行で、次に足すときは分ける
