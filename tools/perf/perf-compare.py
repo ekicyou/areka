@@ -59,8 +59,8 @@ A＝変更前・B＝変更後で、`A1 → B1 → A2 → B2` の順に採る（`
 各走行の集計は `judge-perf.py --mode baseline --emit-metrics` を **subprocess** で呼び、
 標準出力の `metric=<名前> value=<値>` 行だけを読む（設計 C10）。import しないのは、
 同じ周に別の担当が判定スクリプトを触っている可能性があり、輸入すると 2 つの道具が
-同時に倒れるためである（`perf-rank.py` と同じ理由）。行の読み方は `judge-perf.py` の
-`parse_fields` の規則を写してあり、写した箇所には出典を注記してある。
+同時に倒れるためである（`perf-rank.py` と同じ理由）。行の読み方（`parse_fields`）は
+judge-perf と共有の `perf_lines.py` を使う。
 
 `--build` は `[levels].iteration_build` から渡す。`judge-perf.py` は `--build` と
 `run-meta.txt` の `build` が食い違えば止まるので、A/B の 4 本が採否の走行ビルドで
@@ -135,7 +135,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 import tomllib
@@ -149,6 +148,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import perf_compare_selftest  # noqa: E402
+from perf_lines import parse_fields  # noqa: E402
 
 # --- 定数（較正値・語彙）-----------------------------------------------------
 
@@ -307,25 +307,6 @@ def load_goal(path: Path) -> Goal:
 
 
 # --- 判定スクリプトの呼び出しと読み取り --------------------------------------
-
-#: `名前=` を見つける正規表現（judge-perf.py `_FIELD_KEY_RE` の写し・出典を残す）。
-_FIELD_KEY_RE = re.compile(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=")
-
-
-def parse_fields(tail: str) -> dict[str, str]:
-    """`名前=値` の並びを辞書にする（judge-perf.py `parse_fields` の写し）。
-
-    値は次の名前の直前まで（空白を含んでよい）。同じ名前が 2 度出たら後勝ちである。
-    写しであるから、judge-perf.py 側の読み口を変えたときはここも一緒に変えること。
-    """
-    keys = list(_FIELD_KEY_RE.finditer(tail))
-    fields: dict[str, str] = {}
-    for i, m in enumerate(keys):
-        start = m.end()
-        end = keys[i + 1].start() if i + 1 < len(keys) else len(tail)
-        fields[m.group(1)] = tail[start:end].strip()
-    return fields
-
 
 def parse_metric_lines(stdout: str) -> dict[str, str]:
     """`metric=<名前> value=<値>` の行だけを拾う（`--emit-metrics` の読み口）。

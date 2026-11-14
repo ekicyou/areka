@@ -22,7 +22,7 @@
   - 終わった姿: judge-perf の `--selftest` が今ある検体の全部で同じ結果のまま緑で、judge-perf の中に行の読み方の写しが残っていない
   - _Dispatch: standard — 新しい共通モジュールへ写しを寄せ、読み方の振る舞いの直し（#7・#13・#51）を伴う_
   - _Requirements: 2.1, 2.3, 5.1, 5.3, 7.1_
-- [ ] 1.2 残りの道具を行の読み方のモジュールへ付け替える（#40・#7 の rank の分・#13）
+- [x] 1.2 残りの道具を行の読み方のモジュールへ付け替える（#40・#7 の rank の分・#13）
   - perf-rank・`perf_rank_dump`・perf-compare・judge-followup・`fixtures/generate.py` の写しを消して `perf_lines` を読む（`generate.py` は親のフォルダを `sys.path` へ入れる）。perf-compare と perf-rank は判定スクリプトを今までどおり読まない
   - rank のケース `cpu_nan`（有限でない CPU で exit 4）を足す（T7 の rank の分）
   - 終わった姿: 4 本の道具の `--selftest` が今ある全ケースで緑、`cpu_nan` が緑で、`isfinite` を外すと 0 で赤になる。5 か所の写しが grep で 0 件
@@ -219,3 +219,4 @@
 ## Implementation Notes
 
 - 1.1: `perf_lines.read_cpu_csv` は design の形に加えて `read_fail`（読めないときの作り手）を取り、`header` は tuple。読めない cpu.csv は今どおり exit 3。perf-rank も `read_fail=bad_input` で渡す（1.2）
+- 1.2: perf-rank の cpu.csv の行番号は空行を含む実の行番号になった（#51）。perf-rank の注記「較正値（…）も同じ理由で写し」の「も」は先行の写しが無くなったので 14 の audit で拾う候補

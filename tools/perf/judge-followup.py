@@ -46,13 +46,21 @@ import contextlib
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 # 兄弟モジュール（`judge_followup_selftest.py`）は本ファイルと同じディレクトリに在る。
 # 依存は常に「本体 → 兄弟」の一方向で、兄弟へは起動時に `SelftestEnv` で本体を渡す
 # （本ファイルの名前にはハイフンがあり、兄弟からは import できない＝循環しない）。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from perf_lines import (  # noqa: E402
+    parse_fields,
+    parse_timestamp,
+    read_text_lines as _read_text_lines,
+    split_after_message,
+    to_utc_datetime,
+)
 
 import judge_followup_selftest  # noqa: E402
 
@@ -122,17 +130,11 @@ WIN_KIND_CHAR = "char"
 WIN_KIND_BALLOON = "balloon"
 
 # =============================================================================
-# 行の解析（`judge-perf.py::parse_fields` と同じ規則）
+# 行の解析（共有の `perf_lines.py` を使う。ここに置くのは probe.log 固有の分だけ）
 # =============================================================================
 
-#: 順に、ANSI エスケープ（CSI シーケンス・読み込み時に落とす）／行頭の時刻
-#: （`tracing-subscriber` 既定の SystemTime タイマは RFC3339・UTC・小数 6 桁）／
-#: `probe.log` のフィールド値としての時刻／`名前=` の出現位置（値は次の `名前=` の
-#: 直前までとする＝空白を含んでよい）。
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-_TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z\s")
+#: `probe.log` のフィールド値としての時刻（行頭の時刻とは違い、末尾の `Z` で終わる）。
 _BARE_TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z$")
-_FIELD_KEY_RE = re.compile(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=")
 
 
 class JudgeError(Exception):
@@ -149,63 +151,17 @@ def bad_input(message: str, details: list[str] | None = None) -> JudgeError:
     return JudgeError(EXIT_BAD_INPUT, message, details)
 
 
-def strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
-
-
-def _to_datetime(raw: str) -> datetime | None:
-    if "." in raw:
-        head, frac = raw.split(".", 1)
-        raw = f"{head}.{(frac + '000000')[:6]}"
-    else:
-        raw = raw + ".000000"
-    try:
-        return datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def parse_timestamp(line: str) -> datetime | None:
-    """行頭の時刻を返す。時刻で始まらない行（複数行メッセージの続き）は None。"""
-    m = _TIMESTAMP_RE.match(line)
-    return _to_datetime(m.group(1)) if m else None
-
-
 def parse_stamp_value(value: str | None) -> datetime | None:
     """`probe.log` のフィールド値としての時刻を返す。読めなければ None。"""
     if not value:
         return None
     m = _BARE_TIMESTAMP_RE.match(value.strip())
-    return _to_datetime(m.group(1)) if m else None
-
-
-def parse_fields(tail: str) -> dict[str, str]:
-    """`名前=値` の並びを辞書にする。値は次の名前の直前まで（空白を含んでよい）。"""
-    keys = list(_FIELD_KEY_RE.finditer(tail))
-    fields: dict[str, str] = {}
-    for i, m in enumerate(keys):
-        start = m.end()
-        end = keys[i + 1].start() if i + 1 < len(keys) else len(tail)
-        fields[m.group(1)] = tail[start:end].strip()
-    return fields
-
-
-def split_after_message(line: str, message: str) -> str | None:
-    """固定文言より後ろ（＝フィールドの並び）を返す。文言が無ければ None。"""
-    idx = line.find(message)
-    return None if idx < 0 else line[idx + len(message):]
+    return to_utc_datetime(m.group(1)) if m else None
 
 
 def read_text_lines(path: Path, what: str) -> list[str]:
-    """テキストを行に割って返す。ANSI を落とし、行末の CR も落とす。"""
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise bad_input(f"{what} を読めません: {path}", [str(exc)]) from exc
-    text = raw.decode("utf-8", errors="replace")
-    if text.startswith("﻿"):
-        text = text[1:]
-    return [strip_ansi(line.rstrip("\r")) for line in text.split("\n")]
+    """テキストを行に割って返す。読めなければ exit 3。"""
+    return _read_text_lines(path, what, bad_input)
 
 
 def to_int(value: str | None) -> int | None:

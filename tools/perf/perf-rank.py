@@ -34,8 +34,8 @@ cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊�
 返さない**——順位表は合否を出さないので、判定できるかどうかという状態が無い。
 
 判定スクリプトとの関係: `judge-perf.py` は import しない（同じ周に別の担当が触っている
-可能性があり、輸入すると 2 つの道具が同時に倒れる）。行の読み方の規則だけを写して
-あり、写した箇所には出典を注記してある。較正値（`WARMUP_EXCLUDE_SEC`・SSP 参考値）も
+可能性があり、輸入すると 2 つの道具が同時に倒れる）。行の読み方は judge-perf と共有の
+`perf_lines.py` を読む（judge-perf 本体は読まない）。較正値（`WARMUP_EXCLUDE_SEC`・SSP 参考値）も
 同じ理由で写しであり、値を動かすときは両方を同時に動かすこと。
 
 段③（dump の解析）と、順位表が共有する土台（失敗の運び方・固定幅の描画・数の書式）は
@@ -46,18 +46,24 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import csv
 import io
-import math
-import re
 import shutil
 import sys
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from perf_lines import (  # noqa: E402
+    CpuSample,
+    parse_fields,
+    parse_timestamp,
+    percentile,
+    read_cpu_csv as _read_cpu_csv,
+    read_text_lines as _read_text_lines,
+)
 
 from perf_rank_dump import (  # noqa: E402
     EXIT_BAD_INPUT,
@@ -141,74 +147,16 @@ SELFTEST_REQUIRED_RED_EXITS = (EXIT_MEASURE_FAILED,)
 OUTPUT_FILENAME = "rank.txt"
 
 
-# --- 行の解析（judge-perf.py からの写し）-------------------------------------
-
-#: ANSI エスケープ（CSI シーケンス）。読み込み時に落とす。judge-perf.py の写し。
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-
-#: 行頭の時刻（tracing-subscriber 既定の RFC3339・UTC）。judge-perf.py の写し。
-_TIMESTAMP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z\s")
-
-#: `名前=` の出現位置。値は次の `名前=` の直前まで（空白を含んでよい・後勝ち）。
-#: judge-perf.py の `_FIELD_KEY_RE` の写し——2 つの道具が同じ行を別々に読んだら、
-#: 順位表と判定が静かに食い違う。
-_FIELD_KEY_RE = re.compile(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=")
-
-
-def strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
-
-
-def parse_timestamp(line: str) -> datetime | None:
-    """行頭の時刻を返す。時刻で始まらない行（続き行）は None。judge-perf.py の写し。"""
-    m = _TIMESTAMP_RE.match(line)
-    if not m:
-        return None
-    raw = m.group(1)
-    if "." in raw:
-        head, frac = raw.split(".", 1)
-        raw = f"{head}.{(frac + '000000')[:6]}"
-    else:
-        raw = raw + ".000000"
-    try:
-        return datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def parse_fields(tail: str) -> dict[str, str]:
-    """`名前=値` の並びを辞書にする。値は次の名前の直前まで。judge-perf.py の写し。"""
-    keys = list(_FIELD_KEY_RE.finditer(tail))
-    fields: dict[str, str] = {}
-    for i, m in enumerate(keys):
-        start = m.end()
-        end = keys[i + 1].start() if i + 1 < len(keys) else len(tail)
-        fields[m.group(1)] = tail[start:end].strip()
-    return fields
-
+# --- 行の解析（perf_lines.py に共有。bad_input は読めないファイル用）------
 
 def read_text_lines(path: Path, what: str) -> list[str]:
-    """テキストを行に割って返す。ANSI と CR と BOM を落とす。読めなければ exit 3。"""
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise bad_input(f"{what} を読めません: {path}", [str(exc)]) from exc
-    text = raw.decode("utf-8", errors="replace")
-    if text.startswith("﻿"):
-        text = text[1:]
-    return [strip_ansi(line).rstrip("\r") for line in text.split("\n")]
+    """テキストを行に割って返す。読めなければ exit 3。"""
+    return _read_text_lines(path, what, bad_input)
 
 
 def iso_z(at: datetime) -> str:
     """注記に載せる時刻（秒まで・UTC）。注記は目印であって観測ではないので小数は出さない。"""
     return at.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def percentile(values: list[float], q: float) -> float:
-    """nearest-rank の分位点。judge-perf.py の `percentile` の写し。空列では呼ばない。"""
-    ordered = sorted(values)
-    rank = max(1, math.ceil(q * len(ordered)))
-    return ordered[min(rank, len(ordered)) - 1]
 
 
 # --- run.log の走査 ----------------------------------------------------------
@@ -349,48 +297,9 @@ def scan_run_log(path: Path) -> LogScan:
 # --- cpu.csv・run-meta.txt ---------------------------------------------------
 
 
-@dataclass
-class CpuSample:
-    at: datetime
-    percent: float
-
-
 def read_cpu_csv(path: Path) -> list[CpuSample]:
-    """CPU 時系列を読む。ヘッダは契約と厳密一致（版ずれを黙って通さない）。"""
-    lines = read_text_lines(path, "CPU 時系列（cpu.csv）")
-    rows = [row for row in csv.reader(lines) if row]
-    if not rows:
-        raise measure_failed(f"CPU 時系列 CSV が空です: {path}")
-
-    header = tuple(cell.strip() for cell in rows[0])
-    if header != CPU_CSV_HEADER:
-        raise measure_failed(
-            "CPU 時系列 CSV のヘッダが契約と違います（採取スクリプトの版ずれの疑い）。",
-            [f"期待: {','.join(CPU_CSV_HEADER)}", f"実際: {','.join(header)}"],
-        )
-
-    samples: list[CpuSample] = []
-    broken: list[str] = []
-    for line_no, row in enumerate(rows[1:], start=2):
-        if len(row) < 2:
-            broken.append(f"{line_no} 行目: 列が足りません（{row!r}）")
-            continue
-        at = parse_timestamp(row[0].strip() + " ")
-        if at is None:
-            broken.append(f"{line_no} 行目: 時刻を読めません（{row[0]!r}）")
-            continue
-        try:
-            percent = float(row[1].strip())
-        except ValueError:
-            broken.append(f"{line_no} 行目: CPU 値が数値ではありません（{row[1]!r}）")
-            continue
-        samples.append(CpuSample(at=at, percent=percent))
-
-    if broken:
-        raise measure_failed(f"CPU 時系列 CSV に読めない行が {len(broken)} 本あります。", broken[:20])
-    if not samples:
-        raise measure_failed(f"CPU 時系列 CSV に観測が 1 点もありません: {path}")
-    return samples
+    """CPU 時系列を読む。ファイルを読めなければ exit 3・中身の不備は exit 4。"""
+    return _read_cpu_csv(path, CPU_CSV_HEADER, measure_failed, read_fail=bad_input)
 
 
 def read_run_meta(path: Path) -> dict[str, str]:

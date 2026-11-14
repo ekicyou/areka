@@ -59,8 +59,13 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# 行の読み方は親フォルダの perf_lines と共有する（ANSI 除去を二重に持たない）。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from perf_lines import strip_ansi  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -257,7 +262,6 @@ def stop_line(at: datetime, scope: str = "1", animation_id: str = "0") -> str:
 # ゆえに「エスケープを落とした結果」は色なしの双子と **バイト等価** になる。
 # 生成時にその等価性を検査する（下の build_colored）。
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)")
 _LEVEL_RE = re.compile(r"\b(DEBUG|INFO|WARN|ERROR)\b")
 _FIELD_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)=")
@@ -279,10 +283,6 @@ def colorize(line: str) -> str:
         lambda m: f"{_ITALIC}{m.group(1)}{_RESET}{_DIM}={_RESET}", line
     )
     return line
-
-
-def strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
 
 
 # =============================================================================

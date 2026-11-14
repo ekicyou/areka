@@ -1047,7 +1047,7 @@ def _parse_perf_line(
     )
 
 
-# CPU 時系列 CSV は perf_lines の `read_cpu_csv`・`CpuSample` で読む（呼び出しは run_judge）。
+# CPU 時系列 CSV は perf_lines の `read_cpu_csv`・`CpuSample` で読む（呼び出しは load_inputs）。
 
 
 # =============================================================================

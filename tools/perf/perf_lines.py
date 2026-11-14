@@ -107,17 +107,16 @@ def read_cpu_csv(
     行番号は空行も含めて 1 から数える。有限でない CPU 値（NaN・inf）は壊れた行。
     ファイル自体を読めないときは `read_fail`（省けば `fail`）で起こす。
     """
-    expected = header
     lines = read_text_lines(path, "CPU 時系列（cpu.csv）", read_fail or fail)
     rows = [(no, row) for no, row in enumerate(csv.reader(lines), start=1) if row]
     if not rows:
         raise fail(f"CPU 時系列 CSV が空です: {path}", [])
 
     got = tuple(cell.strip() for cell in rows[0][1])
-    if got != expected:
+    if got != header:
         raise fail(
             "CPU 時系列 CSV のヘッダが契約と違います（採取スクリプトの版ずれの疑い）。",
-            [f"期待: {','.join(expected)}", f"実際: {','.join(got)}"],
+            [f"期待: {','.join(header)}", f"実際: {','.join(got)}"],
         )
 
     samples: list[CpuSample] = []
