@@ -344,6 +344,47 @@ fn planned_partial_uses_the_previous_record_on_each_call() {
     }
 }
 
+/// 記録の水準を閉じた回と開いた回で、計画と入れ物の画素が同じ（6.3）。
+#[test]
+fn record_level_does_not_change_plan_or_pixels() {
+    let run = |directives: &str| {
+        let mut out = Vec::new();
+        crate::ecs::test_support::capture_under_filter(directives, || {
+            let mut world = World::new();
+            let (root, red) = tree(&mut world);
+            let list = root_list();
+            let dc = warp_dc();
+            let mut slot = Some(SurfaceComposite::new(&dc, (32, 32)).unwrap());
+            let mut fresh = Some(FullReason::First);
+            // 初めて・動かす・何も変えない（同じ命令の列をもう 1 度渡す）
+            let mut now = Vec::new();
+            for step in [Some((2.0, 2.0)), Some((5.0, 4.0)), None] {
+                if let Some((x, y)) = step {
+                    world.entity_mut(red).insert(at(x, y, 5.0, 5.0));
+                    now = tree_commands(&mut world, root, None);
+                }
+                let p = planned(&dc, &mut slot, fresh.take(), 1.0, Some(&list), &now);
+                let comp = slot.as_mut().unwrap();
+                out.push((p, comp.read_all(warp_device()).unwrap()));
+                comp.mark_presented();
+            }
+        });
+        out
+    };
+    let closed = run("off");
+    let open = run("wintf::damage=debug");
+    assert!(
+        matches!(closed[1].0, ComposePlan::Partial(_)),
+        "{:?}",
+        closed[1].0
+    );
+    assert_eq!(closed[2].0, ComposePlan::Skip);
+    for (i, (c, o)) in closed.iter().zip(&open).enumerate() {
+        assert_eq!(c.0, o.0, "{i} 回目の計画が記録の水準で変わった");
+        assert!(c.1 == o.1, "{i} 回目の画素が記録の水準で変わった");
+    }
+}
+
 #[test]
 fn planned_failure_drops_the_composite_and_its_record() {
     let dc = warp_dc();

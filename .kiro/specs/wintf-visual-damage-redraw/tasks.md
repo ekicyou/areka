@@ -96,7 +96,7 @@
   - _Depends: 4.3, 5.1_
   - _Requirements: 2.5, 2.6, 2.7, 2.8, 2.9, 3.5, 3.6, 4.1, 4.2, 4.3_
 
-- [ ] 5.3 描き直しの量の記録の 1 行を残す
+- [x] 5.3 描き直しの量の記録の 1 行を残す
   - 係の頭で記録の水準が開いているかを 1 度見て、開いているときだけ合成と写しの所要を測る。計画・描く矩形・答えは記録の有無で変えない
   - 描画面 1 枚 1 回ごとに、実体名・道（全部・範囲だけ・写すだけ・何もしない）・全部の理由・描き直した件数・描く列の件数・描き直した面積・描画面の面積・写した面積・露出した帯の面積・描画面へ写した面積・合成の所要・写しの所要を target `wintf::damage` の `debug!` 1 行に残す
   - `[tick]`・`perf(…)` の行の文言と欄と `tools/perf/` には触らない（C20 の約束）
@@ -148,3 +148,4 @@
 - 4.3: `compose_planned` と `mark_presented` に `cfg_attr(not(test), expect(dead_code))` が残る。5.2 で外す。「項にできない回は控えを空にし次の回が `Full(NoPrev)`」を `compose_planned` で直に固めるテストは無い（6.1 で足せるなら足す）。
 - 5.1: `SurfaceGraphics::note_composite_created` に `cfg_attr(not(test), expect(dead_code))` が付いている。5.2 で外す。呼ぶのは係が入れ物を作る枝（置き場が空か大きさ違い）だけ。
 - 5.2: `DAMAGE_TARGET`・`FullReason::as_str` に `cfg_attr(not(test), expect(dead_code))` が付いている。5.3 で外す。wintf の描画面を描く実 GPU のテストは `#[ignore]` でなく普通の `cargo test -p wintf` で回る（机は要らない）。Skip の回に BeginDraw しない・Partial の回に部分の矩形を渡すことを係の単位で固めるテストは無い（6.3 で見る）。
+- 5.3: テストの道具 `tree_commands`（emit_test_support.rs）は呼ぶたびに `SystemState::new` を作るので全部の節の版が上がり、変わらない配置でも全件が変わった扱いになる（本番の `update_draw_trees` は持続する係で、変わらない回は列を組み直さない＝Skip）。6.1・6.2 で複数フレームを組むときは、動かさない件の版が上がらないよう SystemState を持ち続けるか列を使い回す。
