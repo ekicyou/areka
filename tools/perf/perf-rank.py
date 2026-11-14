@@ -45,11 +45,8 @@ cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊�
 from __future__ import annotations
 
 import argparse
-import contextlib
-import io
 import shutil
 import sys
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -64,6 +61,8 @@ from perf_lines import (  # noqa: E402
     read_cpu_csv as _read_cpu_csv,
     read_text_lines as _read_text_lines,
 )
+
+import perf_selftest_common as selftest_common  # noqa: E402
 
 from perf_rank_dump import (  # noqa: E402
     EXIT_BAD_INPUT,
@@ -651,25 +650,10 @@ def script_dir() -> Path:
 def _read_case(directory: Path) -> SelftestCase:
     """ケース 1 件の台帳（case.txt）を読む。知らない項目は拒む（黙って無視しない）。"""
     case_path = directory / SELFTEST_CASE_FILENAME
-    values: dict[str, str] = {}
-    substrings: list[str] = []
-    for lineno, raw in enumerate(case_path.read_text(encoding="utf-8").splitlines(), 1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        key, separator, value = line.partition("=")
-        if not separator:
-            raise bad_input(f"{case_path}:{lineno}: `名前 = 値` の形で書きます（{line!r}）")
-        key, value = key.strip(), value.strip()
-        if key == "stderr_substr":
-            substrings.append(value)
-        elif key in ("title", "exit", "argv", "dump_path"):
-            values[key] = value
-        elif key != "note":
-            raise bad_input(
-                f"{case_path}:{lineno}: 知らない項目です: {key!r}",
-                ["使えるのは title・exit・argv・dump_path・stderr_substr・note です。"],
-            )
+    values, multi = selftest_common.read_case_fields(
+        case_path, frozenset({"title", "exit", "argv", "dump_path", "note"}),
+        frozenset({"stderr_substr"}), bad_input,
+    )
     if "exit" not in values:
         raise bad_input(
             f"{case_path}: exit がありません（期待終了コードの無いケースは較正になりません）"
@@ -680,29 +664,8 @@ def _read_case(directory: Path) -> SelftestCase:
         raise bad_input(f"{case_path}: exit が整数ではありません（{values['exit']!r}）") from exc
     return SelftestCase(
         directory.name, directory, values.get("title") or "(説明なし)", expected_exit,
-        values.get("argv", "").split(), values.get("dump_path"), substrings,
+        values.get("argv", "").split(), values.get("dump_path"), multi["stderr_substr"],
     )
-
-
-def _invoke(argv: list[str]) -> tuple[int, str, str]:
-    """実運用と同じ入口 `main(argv)` を呼ぶ（自己較正だけの近道は作らない）。"""
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = main(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else EXIT_BAD_INPUT
-    return code, out.getvalue(), err.getvalue()
-
-
-def _first_difference(want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"rank.txt {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return "rank.txt: 差はありません"
 
 
 def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]:
@@ -716,7 +679,7 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
 
     reasons: list[str] = []
     reproduced: set[int] = set()
-    code, _out, err = _invoke([str(work)] + case.argv)
+    code, _out, err = selftest_common.invoke(main, [str(work)] + case.argv, EXIT_BAD_INPUT)
     if code == case.expected_exit:
         reproduced.add(code)
     else:
@@ -732,10 +695,10 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
         elif not produced.is_file():
             reasons.append(f"{OUTPUT_FILENAME} が作られていません")
         else:
-            want = expected_path.read_text(encoding="utf-8").replace("\r\n", "\n")
-            got = produced.read_text(encoding="utf-8").replace("\r\n", "\n")
+            want = selftest_common.read_normalized(expected_path)
+            got = selftest_common.read_normalized(produced)
             if want != got:
-                reasons.append(_first_difference(want, got))
+                reasons.append(selftest_common.first_difference(OUTPUT_FILENAME, want, got))
     elif produced.is_file():
         reasons.append(f"失敗したのに {OUTPUT_FILENAME} を書いています（途中結果を残さないこと）")
 
@@ -748,48 +711,22 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
 def run_selftest() -> int:
     """fixtures-loop/rank/ の既知ケースを逐語再現する（要件 6.7・7.5）。"""
     root = script_dir() / SELFTEST_FIXTURES_DIRNAME / SELFTEST_RANK_SUBDIR
-    if not root.is_dir():
-        raise bad_input(f"自己較正のケース置き場がありません: {root}")
+    directories, materials = selftest_common.list_case_dirs(
+        root, SELFTEST_CASE_FILENAME, bad_input, materials_allowed=True
+    )
+    cases = [_read_case(child) for child in directories]
 
-    cases: list[SelftestCase] = []
-    materials: list[str] = []
-    for child in sorted(root.iterdir()):
-        if not child.is_dir() or child.name.startswith((".", "_")):
-            continue
-        if (child / SELFTEST_CASE_FILENAME).is_file():
-            cases.append(_read_case(child))
-        else:
-            materials.append(child.name)
-    if not cases:
-        raise bad_input(
-            f"自己較正のケースが 1 件もありません: {root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
-        )
-
-    ok_count = ng_count = 0
+    results: list[tuple[str, str, list[str]]] = []
     reproduced_all: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="perf-rank-selftest-") as temporary:
+    with selftest_common.work_dir("perf-rank-selftest-") as temporary:
         for case in cases:
-            reasons, reproduced = _run_case(case, Path(temporary))
+            reasons, reproduced = _run_case(case, temporary)
             reproduced_all |= reproduced
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
+            results.append((case.name, case.title, reasons))
 
-    for name in materials:
-        print(f"[selftest] {name} --  {SELFTEST_CASE_FILENAME} が無いので素材置き場として飛ばす")
-
-    for code in SELFTEST_REQUIRED_RED_EXITS:
-        if code not in reproduced_all:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
+    ng_count = selftest_common.finish(
+        results, materials, SELFTEST_CASE_FILENAME, reproduced_all, SELFTEST_REQUIRED_RED_EXITS
+    )
     return EXIT_OK if ng_count == 0 else EXIT_FAIL
 
 

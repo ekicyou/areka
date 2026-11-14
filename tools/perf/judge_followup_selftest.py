@@ -22,19 +22,21 @@
     expected_stdout.txt   標準出力と逐語一致する期待本文（必須）
     probe.log / run.log   判定の材料（本体が読む 2 つ）
 
-判定は出力ディレクトリへ `followup-verdict.txt` を書くため、ケースは一時ディレクトリへ
-複製してから走らせる（fixture を汚さない）。
+判定は出力ディレクトリへ `followup-verdict.txt` を書くため、ケースは一時ディレクトリ
+（`perf_selftest_common.work_dir`）へ複製してから走らせる（fixture を汚さない）。
 """
 
 from __future__ import annotations
 
-import contextlib
-import io
 import shutil
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+import perf_selftest_common as common
+
+#: `case.txt` に書ける項目（これ以外は書き間違いとして拒む）。
+CASE_KEYS = frozenset({"exit", "title"})
 
 
 @dataclass(frozen=True)
@@ -71,13 +73,7 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
             f"ケースに {env.case_filename} がありません: {directory}",
             ["期待終了コードの書いていないケースは、走らせても合否を言えません。"],
         )
-    fields: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, _, value = stripped.partition("=")
-        fields[key.strip()] = value.strip()
+    fields, _ = common.read_case_fields(path, CASE_KEYS, frozenset(), env.bad_input)
     if "exit" not in fields:
         raise env.bad_input(f"{path} に exit がありません", ["必須項目: exit（任意: title）"])
     try:
@@ -87,51 +83,19 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     return SelftestCase(directory.name, directory, fields.get("title", "(説明なし)"), expected)
 
 
-def _invoke(env: SelftestEnv, argv: list[str]) -> tuple[int, str]:
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = env.invoke(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else env.bad_input_exit
-    return code, out.getvalue()
-
-
-def _first_difference(want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"標準出力 {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return "差はありません"
-
-
 def run_selftest(env: SelftestEnv) -> int:
-    root = env.fixtures_root
-    if not root.is_dir():
-        raise env.bad_input(
-            f"自己較正のケース置き場がありません: {root}",
-            ["判定スクリプトと同じ場所の fixtures-loop/followup/ を見ます（相対位置のみ）。"],
-        )
-    cases = [
-        _read_case(env, child)
-        for child in sorted(root.iterdir())
-        if child.is_dir() and not child.name.startswith((".", "_"))
-    ]
-    if not cases:
-        raise env.bad_input(
-            f"自己較正のケースが 1 件もありません: {root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
-        )
+    directories, _ = common.list_case_dirs(
+        env.fixtures_root, env.case_filename, env.bad_input, materials_allowed=False
+    )
+    cases = [_read_case(env, child) for child in directories]
 
-    ok_count = ng_count = 0
+    results: list[tuple[str, str, list[str]]] = []
     reproduced: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="judge-followup-selftest-") as temporary:
+    with common.work_dir("judge-followup-selftest-") as temporary:
         for case in cases:
-            work = Path(temporary) / case.name
+            work = temporary / case.name
             shutil.copytree(case.directory, work)
-            code, stdout = _invoke(env, [str(work)])
+            code, stdout, _err = common.invoke(env.invoke, [str(work)], env.bad_input_exit)
             reasons: list[str] = []
             if code == case.expected:
                 reproduced.add(code)
@@ -139,27 +103,17 @@ def run_selftest(env: SelftestEnv) -> int:
                 reasons.append(f"終了コード: 期待 {case.expected} 実際 {code}")
             expected_stdout = case.directory / env.expected_stdout_filename
             if expected_stdout.is_file():
-                want = expected_stdout.read_text(encoding="utf-8").replace("\r\n", "\n")
+                want = common.read_normalized(expected_stdout)
                 got = stdout.replace("\r\n", "\n")
                 if want != got:
-                    reasons.append(_first_difference(want, got))
+                    reasons.append(common.first_difference("標準出力", want, got))
             else:
                 reasons.append(
                     f"{env.expected_stdout_filename} がありません（本文の逐語再現を確かめられません）"
                 )
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
+            results.append((case.name, case.title, reasons))
 
-    for code in env.required_red_exits:
-        if code not in reproduced:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
+    ng_count = common.finish(
+        results, [], env.case_filename, reproduced, env.required_red_exits
+    )
     return env.ok_exit if ng_count == 0 else env.fail_exit

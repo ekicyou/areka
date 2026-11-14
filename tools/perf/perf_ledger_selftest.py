@@ -26,13 +26,12 @@
 
 from __future__ import annotations
 
-import contextlib
-import io
 import shutil
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+import perf_selftest_common as common
 
 # =============================================================================
 # 定数（自己較正だけの較正値。台帳の値の判断には一切関与しない）
@@ -46,8 +45,7 @@ SELFTEST_EXPECTED_STDOUT = "expected_stdout.txt"
 SELFTEST_STEP_SEPARATOR = " :: "
 SELFTEST_LEDGER_PLACEHOLDER = "@LEDGER@"
 SELFTEST_DIR_PLACEHOLDER = "@DIR@"
-#: `case.txt` に書ける項目（これ以外は書き間違いとして拒む）。
-SELFTEST_CASE_FIELDS = ("title", "stderr_substr", "note")
+CRLF, LF = "\r\n", "\n"
 
 
 @dataclass(frozen=True)
@@ -87,22 +85,11 @@ def _read_case(directory: Path, env: SelftestEnv) -> SelftestCase:
                 f"自己較正のケースに {path.name} がありません: {directory}",
                 ["期待の書いていないケースは、走らせても合否を言えません。"],
             )
-    title = ""
-    substrings: list[str] = []
-    for raw in case_path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        if key == "title":
-            title = value
-        elif key == "stderr_substr":
-            substrings.append(value)
-        elif key not in SELFTEST_CASE_FIELDS:
-            raise env.fail(
-                f"{case_path} の知らない項目です: {key!r}",
-                [f"使えるのは {'・'.join(SELFTEST_CASE_FIELDS)} です。"],
-            )
+    fields, multi = common.read_case_fields(
+        case_path, frozenset({"title", "note"}), frozenset({"stderr_substr"}), env.fail
+    )
+    title = fields.get("title", "")
+    substrings = multi["stderr_substr"]
 
     steps: list[tuple[int, list[str]]] = []
     for lineno, raw in enumerate(steps_path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -125,34 +112,13 @@ def _read_case(directory: Path, env: SelftestEnv) -> SelftestCase:
     return SelftestCase(directory.name, directory, title or "(説明なし)", substrings, steps)
 
 
-def _invoke(env: SelftestEnv, argv: list[str]) -> tuple[int, str, str]:
-    """実運用と同じ入口 `main(argv)` を呼ぶ（自己較正だけの近道は作らない）。"""
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = env.invoke(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else env.fail_code
-    return code, out.getvalue(), err.getvalue()
-
-
 def _entry_region(path: Path, prefix: str) -> str:
     """台帳のうち「周の記録」の部分だけを取り出す（状態ブロック書き換えの検査用）。"""
     if not path.is_file():
         return ""
-    text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    text = common.read_normalized(path)
     index = text.find("\n" + prefix)
     return "" if index < 0 else text[index:]
-
-
-def _first_difference(label: str, want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"{label} {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return f"{label}: 差はありません"
 
 
 def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[list[str], set[int]]:
@@ -172,7 +138,7 @@ def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[li
             for token in raw_argv
         ]
         before = _entry_region(ledger, env.entry_heading_prefix)
-        code, out, err = _invoke(env, argv)
+        code, out, err = common.invoke(env.invoke, argv, env.fail_code)
         stdout_all += out
         stderr_all += err
         if code == expected:
@@ -184,16 +150,17 @@ def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[li
 
     expected_stdout = case.directory / SELFTEST_EXPECTED_STDOUT
     if expected_stdout.is_file():
-        want = expected_stdout.read_text(encoding="utf-8").replace("\r\n", "\n")
-        if want != stdout_all.replace("\r\n", "\n"):
-            reasons.append(_first_difference("標準出力", want, stdout_all.replace("\r\n", "\n")))
+        want = common.read_normalized(expected_stdout)
+        got = stdout_all.replace(CRLF, LF)
+        if want != got:
+            reasons.append(common.first_difference("標準出力", want, got))
 
     expected_ledger = case.directory / SELFTEST_EXPECTED_LEDGER
     if expected_ledger.is_file():
-        want = expected_ledger.read_text(encoding="utf-8").replace("\r\n", "\n")
-        got = ledger.read_text(encoding="utf-8").replace("\r\n", "\n") if ledger.is_file() else ""
+        want = common.read_normalized(expected_ledger)
+        got = common.read_normalized(ledger) if ledger.is_file() else ""
         if want != got:
-            reasons.append(_first_difference("台帳", want, got))
+            reasons.append(common.first_difference("台帳", want, got))
 
     for substring in case.stderr_substrings:
         if substring not in stderr_all:
@@ -203,39 +170,20 @@ def _run_case(case: SelftestCase, workspace: Path, env: SelftestEnv) -> tuple[li
 
 def run_selftest(env: SelftestEnv) -> int:
     """`fixtures-loop/ledger/` の既知ケースを逐語再現する（要件 6.7）。"""
-    root = env.fixtures_root
-    if not root.is_dir():
-        raise env.fail(f"自己較正のケース置き場がありません: {root}")
-    cases = [
-        _read_case(child, env)
-        for child in sorted(root.iterdir())
-        if child.is_dir() and not child.name.startswith((".", "_"))
-    ]
-    if not cases:
-        raise env.fail(
-            f"自己較正のケースが 1 件もありません: {root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
-        )
+    directories, _ = common.list_case_dirs(
+        env.fixtures_root, SELFTEST_CASE_FILENAME, env.fail, materials_allowed=False
+    )
+    cases = [_read_case(child, env) for child in directories]
 
-    ok_count = ng_count = 0
+    results: list[tuple[str, str, list[str]]] = []
     reproduced_all: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="perf-ledger-selftest-") as temporary:
+    with common.work_dir("perf-ledger-selftest-") as temporary:
         for case in cases:
-            reasons, reproduced = _run_case(case, Path(temporary), env)
+            reasons, reproduced = _run_case(case, temporary, env)
             reproduced_all |= reproduced
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
+            results.append((case.name, case.title, reasons))
 
-    for code in env.required_red_exits:
-        if code not in reproduced_all:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
+    ng_count = common.finish(
+        results, [], SELFTEST_CASE_FILENAME, reproduced_all, env.required_red_exits
+    )
     return env.ok_code if ng_count == 0 else env.fail_code

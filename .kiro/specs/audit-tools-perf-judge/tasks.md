@@ -37,7 +37,7 @@
   - _Requirements: 2.1, 4.7, 4.8, 5.2, 7.1_
 
 - [ ] 2. 自己較正の支えを 1 つにまとめ、一時フォルダを `target` の下へ（#1・#41）
-- [ ] 2.1 自己較正の支えのモジュールを作り、4 組の自己較正を付け替える（D1・D3）
+- [x] 2.1 自己較正の支えのモジュールを作り、4 組の自己較正を付け替える（D1・D3）
   - ケースのフォルダの並べ方・ケースの鍵の読み（知らない鍵は exit 3）・`invoke`・`first_difference`（違う行は `ascii()`）・赤の下限と `SELFTEST RESULT ok=N ng=M` の行・一時フォルダ `work_dir(prefix)` を `perf_selftest_common` に置く。道具ごとの違い（鍵の一覧・ケースの回し方・期待出力の突き合わせ・赤の値）は道具に残す
   - リポジトリの根は `Path(__file__).resolve().parents[2]` で、読み込みのときに `Cargo.toml` を確かめ、無ければ理由を stderr に出して exit 3。一時フォルダは `<根>\target\perf-loop-tmp\<接頭辞><uuid4>\`、消せなかったら理由を 1 行出して結果は変えない
   - `judge_followup_selftest.py`・`perf_compare_selftest.py`・`perf_ledger_selftest.py`・perf-rank の自己較正の 4 か所の `TemporaryDirectory` を `work_dir` に替える。judge-perf の自己較正は寄せない
@@ -221,3 +221,4 @@
 - 1.1: `perf_lines.read_cpu_csv` は design の形に加えて `read_fail`（読めないときの作り手）を取り、`header` は tuple。読めない cpu.csv は今どおり exit 3。perf-rank も `read_fail=bad_input` で渡す（1.2）
 - 1.2: perf-rank の cpu.csv の行番号は空行を含む実の行番号になった（#51）。perf-rank の注記「較正値（…）も同じ理由で写し」の「も」は先行の写しが無くなったので 14 の audit で拾う候補
 - 1.3: U1 は run.log と cpu.csv の両方に BOM。run.log は探して読むので BOM に左右されず、赤を作るのは cpu.csv の見出しの一致。judge-perf の selftest の `contains` は stdout だけを見る（stderr の理由は縛れない）
+- 2.1: `perf_selftest_common` の根の確かめは道具の読み込みのたびに走る（.ps1 は `$PSScriptRoot` から呼ぶので本番は壊れない）。`list_case_dirs` は `fail` を、`finish` は `materials`・`case_file` を取る。design の `guard_console` は持ち主のタスクが無く未実装

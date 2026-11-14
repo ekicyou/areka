@@ -44,13 +44,12 @@
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+import perf_selftest_common as common
 
 # =============================================================================
 # 定数（自己較正だけの較正値。採否の判断には一切関与しない）
@@ -113,25 +112,11 @@ class SelftestCase:
 def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
     """ケース 1 件の台帳（case.txt）を読む。知らない項目は拒む（黙って無視しない）。"""
     case_path = directory / SELFTEST_CASE_FILENAME
-    values: dict[str, str] = {}
-    substrings: list[str] = []
-    for lineno, raw in enumerate(case_path.read_text(encoding="utf-8").splitlines(), 1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        key, separator, value = line.partition("=")
-        if not separator:
-            raise env.bad_input(f"{case_path}:{lineno}: `名前 = 値` の形で書きます（{line!r}）")
-        key, value = key.strip(), value.strip()
-        if key == "stderr_substr":
-            substrings.append(value)
-        elif key in CASE_SINGLE_KEYS:
-            values[key] = value
-        elif key != "note":
-            raise env.bad_input(
-                f"{case_path}:{lineno}: 知らない項目です: {key!r}",
-                [f"使えるのは {'・'.join(CASE_SINGLE_KEYS)}・stderr_substr・note です。"],
-            )
+    values, multi = common.read_case_fields(
+        case_path, frozenset(CASE_SINGLE_KEYS) | {"note"}, frozenset({"stderr_substr"}),
+        env.bad_input,
+    )
+    values.pop("note", None)
     for required in CASE_REQUIRED_KEYS:
         if required not in values:
             raise env.bad_input(f"{case_path}: {required} がありません")
@@ -143,29 +128,8 @@ def _read_case(env: SelftestEnv, directory: Path) -> SelftestCase:
         ) from exc
     return SelftestCase(
         directory.name, directory, values.get("title") or "(説明なし)", expected_exit,
-        values, values.get("argv", "").split(), substrings,
+        values, values.get("argv", "").split(), multi["stderr_substr"],
     )
-
-
-def _invoke(env: SelftestEnv, argv: list[str]) -> tuple[int, str, str]:
-    """実運用と同じ入口 `main(argv)` を呼ぶ（自己較正だけの近道は作らない）。"""
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = env.invoke(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else env.fail_exit
-    return code, out.getvalue(), err.getvalue()
-
-
-def _first_difference(what: str, want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"{what} {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return f"{what}: 差はありません"
 
 
 def _matches(env: SelftestEnv, expected: str, actual) -> bool:
@@ -219,7 +183,7 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
         "--out-dir", str(work),
     ] + case.argv
 
-    code, _out, err = _invoke(env, argv)
+    code, _out, err = common.invoke(env.invoke, argv, env.fail_exit)
     if code == case.expected_exit:
         reproduced.add(code)
     else:
@@ -237,10 +201,10 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
     elif not produced.is_file():
         reasons.append(f"{env.text_filename} が作られていません")
     else:
-        want = expected_path.read_text(encoding="utf-8").replace("\r\n", "\n")
-        got = produced.read_text(encoding="utf-8").replace("\r\n", "\n")
+        want = common.read_normalized(expected_path)
+        got = common.read_normalized(produced)
         if want != got:
-            reasons.append(_first_difference(env.text_filename, want, got))
+            reasons.append(common.first_difference(env.text_filename, want, got))
 
     for substring in case.stderr_substrings:
         if substring not in err:
@@ -250,46 +214,20 @@ def _run_case(env: SelftestEnv, case: SelftestCase,
 
 def run_selftest(env: SelftestEnv) -> int:
     """fixtures-loop/compare/ の既知ケースを逐語再現する（要件 6.7・3.6）。"""
-    if not env.fixtures_root.is_dir():
-        raise env.bad_input(f"自己較正のケース置き場がありません: {env.fixtures_root}")
+    directories, materials = common.list_case_dirs(
+        env.fixtures_root, SELFTEST_CASE_FILENAME, env.bad_input, materials_allowed=True
+    )
+    cases = [_read_case(env, child) for child in directories]
 
-    cases: list[SelftestCase] = []
-    materials: list[str] = []
-    for child in sorted(env.fixtures_root.iterdir()):
-        if not child.is_dir() or child.name.startswith((".", "_")):
-            continue
-        if (child / SELFTEST_CASE_FILENAME).is_file():
-            cases.append(_read_case(env, child))
-        else:
-            materials.append(child.name)
-    if not cases:
-        raise env.bad_input(
-            f"自己較正のケースが 1 件もありません: {env.fixtures_root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
-        )
-
-    ok_count = ng_count = 0
+    results: list[tuple[str, str, list[str]]] = []
     reproduced_all: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="perf-compare-selftest-") as temporary:
+    with common.work_dir("perf-compare-selftest-") as temporary:
         for case in cases:
-            reasons, reproduced = _run_case(env, case, Path(temporary))
+            reasons, reproduced = _run_case(env, case, temporary)
             reproduced_all |= reproduced
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
+            results.append((case.name, case.title, reasons))
 
-    for name in materials:
-        print(f"[selftest] {name} --  {SELFTEST_CASE_FILENAME} が無いので素材置き場として飛ばす")
-
-    for code in env.required_red_exits:
-        if code not in reproduced_all:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
+    ng_count = common.finish(
+        results, materials, SELFTEST_CASE_FILENAME, reproduced_all, env.required_red_exits
+    )
     return env.ok_exit if ng_count == 0 else env.fail_exit
