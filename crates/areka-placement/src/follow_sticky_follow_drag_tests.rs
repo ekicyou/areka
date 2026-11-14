@@ -22,7 +22,9 @@ use super::sticky_follow::{
 use super::test_support::{
     SylphyaRig, fake_handle, point, position_of, single_monitor_snapshot, window_pos_sized,
 };
-use super::{Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift};
+use super::{
+    AnchorSource, Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift,
+};
 use crate::resolver::{Anchor, PointPx};
 use log_capture_kit::{CapturedEvent, capture};
 
@@ -226,6 +228,69 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
     let key = |axis| PersistKey::WindowPos { scope: 1, axis };
     assert_eq!(loaded.get(&key(Axis::X)), Some(&(900 + 37).to_string()));
     assert_eq!(loaded.get(&key(Axis::Y)), Some(&(150 - 20).to_string()));
+
+    rig.close();
+    finish(world);
+}
+
+/// 組の相手の記憶の形も descript の向きで選ぶ（指摘 11 ⑵・4.8）: descript は下吸着で台本が
+/// 揃えない置き方へ変えた相手は、左上でなく下端中央の x で書く。
+#[test]
+fn finish_persists_partner_in_descript_form_not_current_anchor() {
+    let rig = SylphyaRig::fake();
+    let mut world = world_with_snapshot();
+    rig.wire(&mut world);
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    world.entity_mut(partner.char).insert(AnchorSource {
+        descript: Anchor::Bottom,
+        by_script: true,
+    });
+    group(&mut world, &["0", "1"]);
+
+    begin_char_drag(&mut world, dragged.char);
+    finish_char_drag(&mut world, dragged.char, point(537, 180));
+
+    assert_eq!(position_of(&world, partner.char), Point { x: 937, y: 130 });
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    let key = |axis| PersistKey::WindowPos { scope: 1, axis };
+    assert_eq!(loaded.get(&key(Axis::X)), Some(&(937 + W / 2).to_string()));
+    assert_eq!(loaded.get(&key(Axis::Y)), Some(&130.to_string()));
+
+    rig.close();
+    finish(world);
+}
+
+/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（指摘 11 ⑵）。
+#[test]
+fn partner_without_anchored_is_warned_and_left_unmoved() {
+    let rig = SylphyaRig::fake();
+    let mut world = world_with_snapshot();
+    rig.wire(&mut world);
+    let dragged = spawn_char(&mut world, 0, Anchor::Free, (500, 200));
+    let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
+    world.entity_mut(partner.char).remove::<Anchored>();
+    group(&mut world, &["0", "1"]);
+
+    begin_char_drag(&mut world, dragged.char);
+    let ((), events) = capture(|| finish_char_drag(&mut world, dragged.char, point(537, 180)));
+
+    assert_eq!(position_of(&world, partner.char), Point { x: 900, y: 150 });
+    let warned: Vec<_> = events
+        .iter()
+        .filter(|e| e.message().contains("組の相手の向きが読めない"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{events:?}");
+    assert_eq!(warned[0].level, tracing::Level::WARN);
+    assert_eq!(warned[0].field("scope"), Some("1"));
+    let loaded: HashMap<PersistKey, String> = rig.saved().into_iter().collect();
+    assert!(
+        !loaded.contains_key(&PersistKey::WindowPos {
+            scope: 1,
+            axis: Axis::X
+        }),
+        "{loaded:?}"
+    );
 
     rig.close();
     finish(world);

@@ -89,7 +89,7 @@
   - 旧い名前 `emo2_boot` を本番のファイルから無くす
   - 完了の状態: 本番のファイルで `rg -n 'emo2_boot|Emo2Wiring'` が 0 件、ビルドが緑（説明だけの直しなのでテストは足さない）
   - _Requirements: 2.2, 2.8, 3.1_
-- [ ] 3.6 本番の分岐のうち、書込の札・保存の形・ハンドラの守り・書けない記録のテストを足す（指摘 11 の ⑴〜⑷）
+- [x] 3.6 本番の分岐のうち、書込の札・保存の形・ハンドラの守り・書けない記録のテストを足す（指摘 11 の ⑴〜⑷）
   - ⑴ 移動だけと寸つきの 2 本で書込の列の `flags`・`w`・`h` を見る。「書込の列は私有で覗けない」の説明を直す
   - ⑵ descript の向きで保存の形を選ぶ分岐を、Bottom の Free の窓・組の相手・相手にアンカーが無いときの `warn!` の 3 本で固める
   - ⑶ 他の窓宛ての知らせを無視するテストに、バルーンのドラッグの終わりの `Tunnel` と他の窓宛ての 2 つを足す
@@ -208,3 +208,4 @@
 ## Implementation Notes
 - 1.1: 範囲の外の `point()` の写し（`balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`balloon_limit_tests.rs`）は「核へ伝える一覧」に未記載。4.6 で核へ送るときに足す。`follow.rs` の `mod test_support` は `pub(crate)`（`#[cfg(test)]` の内側）にした
 - 2.2: 範囲の外の本体に古い「唯一の位置ライター」が 2 か所残る（`crates/areka/src/runtime/frame/drain_resnap.rs` の `move_window_to` の呼び出しの上・`crates/areka/src/runtime/frame_chain_finalize_tests.rs`）。直さず、4.6 で核へ伝える一覧に足す（または 3.5／4.1 が受け持ちなら直す）
+- 3.6: `sticky_follow.rs` の `warn!`「記憶の形が決まらない」（`saved_form_anchor` が None の腕）は届かない（アンカーの無い相手は `move_partners` が先に外す）。5.1 の audit のかけ直しで拾うか判断する

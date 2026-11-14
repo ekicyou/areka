@@ -651,14 +651,23 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
 }
 
 /// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
-/// on_char_drag／on_char_drag_end／on_balloon_drag はすべて no-op。
+/// on_char_drag／on_char_drag_end／on_balloon_drag／on_balloon_drag_end はすべて no-op。
+/// on_balloon_drag_end は `Tunnel` も無視する（指摘 11 ⑶）。
 #[test]
 fn drag_handlers_ignore_events_targeting_other_entities() {
+    use super::on_balloon_drag_end;
+    use crate::spawn::BalloonWindowMarker;
+
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     let other = world.spawn_empty().id();
+    // 守りを外せば保存まで進み、追従の基準を最終位置から出し直す（offset が変わる）形。
     let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(701, 383)))
+        .spawn((
+            fake_handle(0x2000),
+            window_pos_at(701, 383),
+            BalloonWindowMarker { scope: 0 },
+        ))
         .id();
     let initial = PointPx { x: 11, y: 22 };
     let start = (1400, 600);
@@ -690,6 +699,18 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
         world.get::<BalloonFollow>(window).unwrap().offset(),
         initial
     );
+
+    // on_balloon_drag_end: `Tunnel`（自分宛でも）と、target=other の Bubble → offset 不変
+    for ev in [
+        Phase::Tunnel(drag_end_event_at(balloon, (10, 10))),
+        Phase::Bubble(drag_end_event_at(other, (10, 10))),
+    ] {
+        assert!(!on_balloon_drag_end(&mut world, other, balloon, &ev));
+        assert_eq!(
+            world.get::<BalloonFollow>(window).unwrap().offset(),
+            initial
+        );
+    }
 }
 
 /// (+) MonitorSnapshot 不在（未挿入）: ポリシーは identity

@@ -17,8 +17,8 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 //
 // 新しい表示寸法へアンカー射影 T を再適用し、確定 position＋size を単一ライター
 // 経路で一度だけ書く（bottom は wa.bottom−h' 再計算）。観測境界は headless World
-// （偽 HWND）の WindowPos.position／WindowPos.size ミラー——SetWindowPosCommand
-// キューは private TLS で flush せず flags/width/height を覗けないため。縮退
+// （偽 HWND）の WindowPos.position／WindowPos.size ミラー（書込の列の flags/width/height
+// は `follow_window_move_tests.rs` が `drain_window_pos_commands()` で見る）。縮退
 // （べき等・非正寸・不在・Anchored 欠落）は false＋状態不変で固定する。座標・
 // 寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
 // -------------------------------------------------------------------------
@@ -726,11 +726,9 @@ fn anchor_changed_system_reprojects_bottom_to_left() {
 // areka-P0-emo-dpi-scaling task 2.2・R3.1/R4.2・
 // design「areka / placement > follow.rs（additive・balloon 窓の k 追従）」・D8）
 //
-// 「書込ゼロ」の観測境界について: `SetWindowPosCommand` の TLS キューは
-// wintf 私有（`WINDOW_POS_COMMANDS`）で件数を覗く公開 API が無く、`flush()` は
-// 偽 HWND に対し実 `SetWindowPos` を撃ってしまうため使えない（既存
-// enqueue_window_set_pos 群と同じ制約）。代わりに **`Arrangement.offset` 同期**
-// を witness に使う——この同期は `enqueue_window_set_pos` 内で enqueue と
+// 「書込ゼロ」の観測境界について: `flush()` は偽 HWND に対し実 `SetWindowPos` を
+// 撃ってしまうため使えない。書込の列は `drain_window_pos_commands()` で覗けるが、
+// ここでは **`Arrangement.offset` 同期** を witness に使う——この同期は `enqueue_window_set_pos` 内で enqueue と
 // 不可分に対で走るため、「stale な sentinel offset が据え置かれたまま」＝
 // 単一ライター経路を一度も通っていない＝enqueue 件数 0 の決定論的証拠になる
 // （逆に通れば offset は必ず `WindowPos.position` の `as f32` 転写になる）。

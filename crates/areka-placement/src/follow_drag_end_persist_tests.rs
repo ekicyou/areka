@@ -605,3 +605,47 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
 
     rig.close();
 }
+
+/// 記憶の形は descript の向きで選ぶ（指摘 11 ⑵・areka-P0-window-link-directives 要件 4.8）:
+/// descript は下吸着で台本が揃えない置き方へ変えた（`by_script`）幅 200 の窓を (100,300) で
+/// 離すと、記憶は下端中央の x=200 になる（今の向き `Free` の形なら左上の 100）。
+#[test]
+fn char_drag_end_persists_in_descript_form_not_current_anchor() {
+    use areka_sylphya::{Axis, PersistKey};
+
+    use super::AnchorSource;
+    use crate::spawn::CharWindowMarker;
+
+    let rig = SylphyaRig::fake();
+    let mut world = World::new();
+    rig.wire(&mut world);
+    let window = world
+        .spawn((
+            fake_handle(0x1000),
+            window_pos_sized(100, 300, 200, 300),
+            Anchored(Anchor::Free),
+            AnchorSource {
+                descript: Anchor::Bottom,
+                by_script: true,
+            },
+            CharWindowMarker { scope: 0 },
+            dragging_state((100, 300), (0, 0)),
+        ))
+        .id();
+
+    let ev = Phase::Bubble(drag_end_event_at(window, (0, 0)));
+    assert!(!on_char_drag_end(&mut world, window, window, &ev));
+
+    assert_eq!(position_of(&world, window), Point { x: 100, y: 300 });
+    let loaded = rig.saved();
+    let key = |axis| PersistKey::WindowPos { scope: 0, axis };
+    assert!(
+        loaded.contains(&(key(Axis::X), "200".to_string())),
+        "記憶の x が descript の向き（下端中央）の形でない: {loaded:?}"
+    );
+    assert!(
+        loaded.contains(&(key(Axis::Y), "300".to_string())),
+        "{loaded:?}"
+    );
+    rig.close();
+}

@@ -257,13 +257,15 @@ fn move_window_to_syncs_arrangement_offset_of_single_window() {
 //
 // 既存 move 専用発行口の一般化。`None` は移動専用の後方互換（position のみ
 // ミラー・size 不変・SWP_NOSIZE 継続）、`Some` は位置＋寸を一度に反映
-// （WindowPos.size も bypass ミラー）。観測境界は `WindowPos.position`／
-// `WindowPos.size` のミラー——`SetWindowPosCommand` キューは private TLS で
-// flush せず flags/width/height を覗けないため（design Validation の指定）。
+// （WindowPos.size も bypass ミラー）。観測は `WindowPos.position`／`WindowPos.size`
+// のミラーと、書込の列を `drain_window_pos_commands()` で取り出した指令の
+// `flags`・`width`・`height`（`SWP_NOSIZE` の付け外し・指摘 11 ⑴）。
 // 座標・寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
 // -------------------------------------------------------------------------
 
 use super::enqueue_window_set_pos;
+use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
+use wintf::ecs::window::drain_window_pos_commands;
 
 /// `None`（後方互換・移動専用）: position のみ更新し size は触らない
 /// （既存移動専用挙動＝SWP_NOSIZE 継続の観測境界）。
@@ -274,12 +276,20 @@ fn enqueue_window_set_pos_none_updates_position_leaves_size() {
         .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
         .id();
 
+    let _residue = drain_window_pos_commands();
     assert!(enqueue_window_set_pos(
         &mut world, window, 1531, 883, None, None
     ));
     assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });
     // size は不変（移動専用＝寸法を書かない）
     assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    // 書込の列: 1 件・`SWP_NOSIZE` 付き・寸は 0（指摘 11 ⑴）。
+    let cmds = drain_window_pos_commands();
+    assert_eq!(cmds.len(), 1, "移動だけの書込は 1 件");
+    let cmd = &cmds[0];
+    assert_eq!((cmd.x, cmd.y), (1531, 883));
+    assert_eq!(cmd.flags, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    assert_eq!((cmd.width, cmd.height), (0, 0));
 }
 
 /// `Some`: 位置と寸法の**双方**が更新される（WindowPos.size = SizeI::new(w,h)）。
@@ -290,6 +300,7 @@ fn enqueue_window_set_pos_some_updates_position_and_size() {
         .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
         .id();
 
+    let _residue = drain_window_pos_commands();
     assert!(enqueue_window_set_pos(
         &mut world,
         window,
@@ -300,6 +311,13 @@ fn enqueue_window_set_pos_some_updates_position_and_size() {
     ));
     assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    // 書込の列: 1 件・`SWP_NOSIZE` を外し・寸を載せる（指摘 11 ⑴）。
+    let cmds = drain_window_pos_commands();
+    assert_eq!(cmds.len(), 1, "寸つきの書込は 1 件");
+    let cmd = &cmds[0];
+    assert_eq!((cmd.x, cmd.y), (907, 1201));
+    assert_eq!(cmd.flags, SWP_NOZORDER | SWP_NOACTIVATE);
+    assert_eq!((cmd.width, cmd.height), (517, 823));
 }
 
 /// 不在/未付与（Req3.3）: `WindowHandle` 無し entity は `false`＋位置/寸法不変

@@ -12,6 +12,7 @@ use wintf::ecs::WindowPos;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
 
+use super::move_shift::MoveShiftApplied;
 use super::test_support::{
     OFFSCREEN_PULL_TAG, drag_end_event_at, drag_event, fake_handle, guard_events, position_of,
     single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
@@ -265,6 +266,38 @@ fn missing_inputs_do_not_apply() {
         (10, 20),
         ScaleRatio::ONE
     ));
+
+    // 書けない（`WindowHandle` が無い）: 当てた分の記録を書かない（指摘 11 ⑷）。
+    let mut world = World::new();
+    world.insert_resource(single_monitor_snapshot());
+    let refused = world.spawn(window_pos_sized(100, 100, W, H)).id();
+    let (ok, events) = capture(|| apply_char_shift(&mut world, refused, (10, 20), ScaleRatio::ONE));
+    assert!(!ok);
+    assert_eq!(position_of(&world, refused), Point { x: 100, y: 100 });
+    assert!(world.get::<MoveShiftApplied>(refused).is_none());
+    assert_skipped(&events, "write_refused");
+
+    // 持ち主のキャラ窓が無いバルーン: 記録を書かない（指摘 11 ⑷）。
+    let mut world = World::new();
+    let orphan = world
+        .spawn((fake_handle(0x2000), window_pos_sized(0, 0, 150, 100)))
+        .id();
+    let (ok, events) =
+        capture(|| apply_balloon_shift(&mut world, orphan, (10, 20), ScaleRatio::ONE));
+    assert!(!ok);
+    assert!(world.get::<MoveShiftApplied>(orphan).is_none());
+    assert_skipped(&events, "no_char_window_position");
+}
+
+/// `move_shift_skipped` の `warn!` が理由 `reason` で 1 行出ている。
+fn assert_skipped(events: &[log_capture_kit::CapturedEvent], reason: &str) {
+    let skipped: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("move_shift_skipped"))
+        .collect();
+    assert_eq!(skipped.len(), 1, "{events:?}");
+    assert_eq!(skipped[0].level, tracing::Level::WARN);
+    assert_eq!(skipped[0].field_str("reason"), Some(reason), "{events:?}");
 }
 
 /// バルーンのずれは倍率をかけてキャラ窓の今の位置から追い直し、キャラ窓が動いても残る。
