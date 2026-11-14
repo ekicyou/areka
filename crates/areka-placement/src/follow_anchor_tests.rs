@@ -1,7 +1,5 @@
-use bevy_ecs::prelude::*;
-
 use super::MonitorSnapshot;
-use super::test_support::{fake_handle, odd_edge_snapshot, rect, single_monitor_snapshot};
+use super::test_support::{odd_edge_snapshot, rect, single_monitor_snapshot};
 use crate::resolver::PointPx;
 
 // -------------------------------------------------------------------------
@@ -325,37 +323,4 @@ fn project_anchor_is_idempotent_at_anchor_aligned_positions() {
             "{anchor:?}: T∘T = T（べき等）"
         );
     }
-}
-
-// -------------------------------------------------------------------------
-// Anchored（Component・task 2.2・Req4.2/1.4）
-//
-// 解決済みアンカーを窓 entity へ 1 つだけ紐づけ、drag／resize が読む単一の
-// 真実源として付与・読み出しできることを固定する（表現のみ）。spawn 時付与
-// （task 3.1）・`Changed<Anchored>` 反応 system（task 2.6）・`BottomSnap`→
-// `Anchored` 移行（task 2.7）は後続 task の領分ゆえ先取りしない。
-// -------------------------------------------------------------------------
-
-use super::Anchored;
-
-/// 観測可能な完了条件（4.2/1.4）: 任意の窓 entity へ 5 値アンカーのうち任意の
-/// 1 つを付与し、`world.get::<Anchored>()` で読み出せる。付け替えると読み出しも
-/// 変わる＝単一値を保持する（drag／resize が読む単一真実源・二重格納しない）。
-#[test]
-fn anchored_component_attaches_and_reads_back_on_window_entity() {
-    let mut world = World::new();
-
-    // 5 値のうち任意の 1 つ（Left）を窓 entity へ付与して読み出せる
-    let e = world
-        .spawn((fake_handle(0x1000), Anchored(Anchor::Left)))
-        .id();
-    assert_eq!(world.get::<Anchored>(e), Some(&Anchored(Anchor::Left)));
-
-    // 別 anchor（Bottom）でも 1 件確認＝「5 値のうち任意の 1 つを保持できる」
-    let e2 = world.spawn(Anchored(Anchor::Bottom)).id();
-    assert_eq!(world.get::<Anchored>(e2), Some(&Anchored(Anchor::Bottom)));
-
-    // 付け替えたら読み出しも変わる（単一値の保持・格納は 1 つだけ）
-    world.entity_mut(e).insert(Anchored(Anchor::Top));
-    assert_eq!(world.get::<Anchored>(e), Some(&Anchored(Anchor::Top)));
 }

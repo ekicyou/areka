@@ -374,6 +374,11 @@ fn extreme_balloon_shift_does_not_overflow() {
         (i64::MAX, i64::MIN),
         ScaleRatio::ONE
     ));
+    assert_eq!(
+        position_of(&world, balloon).y,
+        i32::MIN,
+        "500 − 600 + i64::MIN は i32 の下端で止まる"
+    );
     assert!(apply_char_shift(
         &mut world,
         window,
@@ -381,6 +386,14 @@ fn extreme_balloon_shift_does_not_overflow() {
         ScaleRatio::ONE
     ));
     assert!(move_window_to(&mut world, window, 700, 450));
+    assert_eq!(
+        position_of(&world, balloon),
+        Point {
+            x: i32::MAX,
+            y: i32::MIN
+        },
+        "追う足し算は両軸とも i32 の端で止まる（回り込まない）"
+    );
 }
 
 /// キャラ窓のドラッグの終わりで当てた分は 0 になり、利用者が置いた所が新しい元の位置になる

@@ -111,17 +111,6 @@ fn every_placement_route_is_classified_for_the_hold_watch() {
     }
 }
 
-/// 分類表に同じ語が 2 度現れない（重複で「網羅している」ように見せない）。
-#[test]
-fn the_classification_table_has_no_duplicate_route() {
-    for (i, (route, _)) in EXPECTED.iter().enumerate() {
-        assert!(
-            !EXPECTED[i + 1..].iter().any(|(other, _)| other == route),
-            "分類表に {route} が重複している"
-        );
-    }
-}
-
 /// route を名乗らない書込（＝ドラッグ経路のキャラ窓書込）は鳴らない。
 ///
 /// `None` は「観測を所有しない書込」でありドラッグ以外に発行元が無い——利用者の明示操作

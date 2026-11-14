@@ -188,14 +188,6 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         ))
         .id();
 
-    // 旧原点（下端中央）: x=731+434/2=948・y=356+687=1043。
-    // 旧バルーン絶対位置: (731−412, 356−25)=(319, 331)。
-    let old_origin = (731 + 434 / 2, 356 + 687);
-    let old_balloon = Point {
-        x: 731 + offset.x,
-        y: 356 + offset.y,
-    };
-
     // 新寸 (517×823): char は下端中央保持で x=948−517/2=690・y=1043−823=220。
     assert!(resize_window_to(
         &mut world,
@@ -213,13 +205,6 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         }
     );
 
-    // キャラ窓の原点（下端中央）は寸法変動で動かない（step 3b の契約・無改変）。
-    let new_origin = (char_pos.x + 517 / 2, char_pos.y + 823);
-    assert_eq!(
-        new_origin, old_origin,
-        "原点（下端中央）は寸法変動で動かない"
-    );
-
     // バルーンは**窓相対**: 新 char 左上 + 不変 offset。
     assert_eq!(
         balloon_pos,
@@ -229,19 +214,10 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         },
         "バルーンは窓（左上）相対 offset で追随する"
     );
-    // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持。
-    assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-    assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     assert_eq!(
         world.get::<BalloonFollow>(window).unwrap().offset(),
         offset,
         "BalloonFollow.offset は resize で補正されない"
-    );
-    // 旧「下端中央基準」実装は原点不動ゆえバルーン絶対位置も不動にしていた——
-    // 窓上端が 136px 上がった本ケースでは窓相対と弁別できる（反転の証明）。
-    assert_ne!(
-        balloon_pos, old_balloon,
-        "下端中央基準補正の復活検出: 窓が動いた以上バルーンも動く"
     );
 }
 
@@ -308,9 +284,6 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
         },
         "バルーンは窓相対 offset で追随する（SSP と同セマンティクス）"
     );
-    // 恒等式 balloon_pos − char_pos ≡ offset（resize で補正しない）。
-    assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-    assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     assert_eq!(
         world.get::<BalloonFollow>(window).unwrap().offset(),
         offset,
@@ -505,9 +478,6 @@ fn resize_window_to_left_preserves_balloon_follow_offset() {
             y: 500 + offset.y
         }
     );
-    // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持
-    assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-    assert_eq!(balloon_pos.y - char_pos.y, offset.y);
 }
 
 /// #4 べき等（非 Bottom・Req3.1）: 既に左端一致（x=wa.left）の位置＋同寸へ

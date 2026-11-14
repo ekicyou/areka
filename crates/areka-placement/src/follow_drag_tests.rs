@@ -3,6 +3,7 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::pointer::Phase;
+use wintf::ecs::window::drain_window_pos_commands;
 
 use super::test_support::{
     SylphyaRig, drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle,
@@ -91,17 +92,18 @@ fn on_char_drag_without_window_pos_is_noop() {
     assert_eq!(position_of(&world, balloon), Point { x: 70, y: 80 });
 }
 
-/// BalloonFollow の無い entity への Bubble は no-op（false・panic なし）。
+/// BalloonFollow の無い entity への Bubble は no-op（窓へ 1 つも書かない・panic なし）。
 #[test]
 fn on_char_drag_without_balloon_follow_is_noop() {
     let mut world = World::new();
     let window = world
         .spawn((fake_handle(0x1000), window_pos_at(50, 60)))
         .id();
+    let _residue = drain_window_pos_commands();
 
     let ev = Phase::Bubble(drag_event(window));
     assert!(!on_char_drag(&mut world, window, window, &ev));
-    assert_eq!(position_of(&world, window), Point { x: 50, y: 60 });
+    assert!(drain_window_pos_commands().is_empty(), "窓へ書いた");
 }
 
 /// (a)(b) 単一ライター・振動なし: 連続 DragEvent の**各適用直後**に WindowPos が

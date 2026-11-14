@@ -20,6 +20,7 @@
 
 use bevy_ecs::prelude::*;
 
+use super::offset_space::{OffsetRescale, rescale_follow_offset};
 use super::test_support::{dpi, point};
 use super::{BalloonFollow, OffsetBase};
 
@@ -27,6 +28,15 @@ use super::{BalloonFollow, OffsetBase};
 fn some_entity() -> Entity {
     let mut world = World::new();
     world.spawn_empty().id()
+}
+
+/// 本番の追随と同じ手順で表示 DPI `d` へ追随させる（基準対から引き直して現在値へ書く）。
+fn follow_to(follow: &mut BalloonFollow, d: u16) {
+    match rescale_follow_offset(follow.base(), dpi(d)) {
+        OffsetRescale::Rescaled { offset, .. } => follow.apply_rescaled(offset),
+        OffsetRescale::Unchanged => follow.apply_rescaled(follow.base().offset),
+        other => panic!("係留済みの基準からの追随のはずが {other:?}"),
+    }
 }
 
 #[test]
@@ -129,15 +139,17 @@ fn repeated_apply_rescaled_always_derives_from_the_same_base() {
     };
     let mut follow = BalloonFollow::new(some_entity(), base);
 
-    follow.apply_rescaled(point(128, 64));
-    follow.apply_rescaled(point(80, 40));
-    follow.apply_rescaled(point(64, 32));
+    let mut walked = Vec::new();
+    for d in [192, 120, 96] {
+        follow_to(&mut follow, d);
+        walked.push(follow.offset());
+    }
 
     assert_eq!(follow.base(), base);
     assert_eq!(
-        follow.offset(),
-        point(64, 32),
-        "往復して元の値へ戻れば現在値も元へ戻る（基準が動かないため）"
+        walked,
+        vec![point(128, 64), point(80, 40), point(64, 32)],
+        "どの段も同じ基準から引き直す——120 が (80,40) なのは 192 の値から引かないため・96 で元へ戻る"
     );
 }
 
@@ -152,8 +164,13 @@ fn apply_rescaled_after_reestablish_derives_from_the_reestablished_base() {
     );
 
     follow.reestablish(point(70, 70), dpi(120));
-    follow.apply_rescaled(point(140, 140));
+    follow_to(&mut follow, 240);
 
+    assert_eq!(
+        follow.offset(),
+        point(140, 140),
+        "120 を基準に 240 へ倍になる（元の 96 の基準から引けば 175）"
+    );
     assert_eq!(
         follow.base(),
         OffsetBase {

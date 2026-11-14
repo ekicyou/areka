@@ -124,7 +124,7 @@
   - ⑵ 往復の鍵の基準の付け替えで区切る・⑶ 残差の境ちょうど 3.0 px が緑・⑷ 安定の判定を全部回す・期待の判定の恒等と非恒等の腕・壊れた点の欄・`base_dpi=0` の行で 0 割りしない、を 1 本ずつ（3.8 の新しいファイル）
   - 完了の状態: 足したテストが緑で、各分岐を壊すと赤になる。`transition_judge_offset_tests.rs` に行を足していない
   - _Requirements: 3.1, 5.6, 5.7, 8.1_
-- [ ] 3.11 追従の側の失敗しえないテスト・名と違うテストを直し、7 経路の表の重複を消す（指摘 15 の追従の側・18）
+- [x] 3.11 追従の側の失敗しえないテスト・名と違うテストを直し、7 経路の表の重複を消す（指摘 15 の追従の側・18）
   - 設計の 15 の表のうち追従の側の行（軸の独立・手で値を渡す 2 本・自明な 1 行・溢れの値・部品の付け外しだけ・常に成り立つ「変わらない」・先に落ちる重複・戻り値の `assert!`・包みと中身の比べと本番の `work_area.rs` の名指しの説明・算数の言い直し 5 か所）を直すか消す（記録の語のテスト `transition_diag_tests.rs`・`follow_transition_diag_tests.rs` の行は 3.12 が受け持つ）
   - 18: キャラ窓の配線のテストの 7 経路の表を消し、バルーンの配線のテストの `fired == 7` の数を外す（`Drag` の腕と経路ごとの一致は残す）
   - 完了の状態: 直したテストが緑で、直したそれぞれがその主張を壊すと赤になる形になっている（消したテストは、同じ主張を固めるテストが別に在る）
@@ -210,3 +210,4 @@
 - 2.2: 範囲の外の本体に古い「唯一の位置ライター」が 2 か所残る（`crates/areka/src/runtime/frame/drain_resnap.rs` の `move_window_to` の呼び出しの上・`crates/areka/src/runtime/frame_chain_finalize_tests.rs`）。直さず、4.6 で核へ伝える一覧に足す（または 3.5／4.1 が受け持ちなら直す）
 - 3.6: `sticky_follow.rs` の `warn!`「記憶の形が決まらない」（`saved_form_anchor` が None の腕）は届かない（アンカーの無い相手は `move_partners` が先に外す）。5.1 の audit のかけ直しで拾うか判断する
 - 3.10: `transition_judge_offset_negative_tests.rs` は合格ログの行を数（`lines[14]` ほか）で引く。緑を期待するテストは並びが変わると元の行のまま緑になる余地があるので、5.1 で檻の前提の 1 行（`assert!(lines[14].contains("scope=1"))` の形）を足すか判断する
+- 3.11: 消した `visibility_guard_route_table_matches_the_d13_decision` の名を、完了済みの `areka-P0-dpi-window-vanish` の `diagnosis-procedure.md`・`diagnosis-report.md` が挙げる（当時の記録なので直さない）。4.6 で範囲の外の古い参照の一覧へ 1 行足す

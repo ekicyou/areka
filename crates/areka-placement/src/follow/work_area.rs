@@ -73,8 +73,7 @@ impl MonitorSnapshot {
 /// # 判別付き版への委譲（task 2.2・D6）
 ///
 /// 本関数は [`work_area_for_window_with_origin`] の**戻り値から判別を落とすだけ**の
-/// 薄いラッパである（契約不変＝既存呼出元の挙動は 1 bit も変わらない。等価性は
-/// `work_area_for_window_delegates_to_with_origin` が檻で固定する）。
+/// 薄いラッパである（契約不変＝既存呼出元の挙動は 1 bit も変わらない）。
 pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Option<RectPx> {
     work_area_for_window_with_origin(snapshot, window).map(|(wa, _)| wa)
 }

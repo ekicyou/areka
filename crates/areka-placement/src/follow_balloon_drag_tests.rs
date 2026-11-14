@@ -1,6 +1,7 @@
 use crate::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
+use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::drag_follow::BALLOON_DRAG_BASE_UNPINNED_TAG;
@@ -283,12 +284,14 @@ fn on_balloon_drag_without_positions_is_graceful() {
     assert!(!on_balloon_drag(&mut world, balloon2, balloon2, &ev));
     assert_eq!(world.get::<BalloonFollow>(char2).unwrap().offset(), initial);
 
-    // 所有キャラ窓が 1 つも無いバルーン → no-op（panic なし）
+    // 所有キャラ窓が 1 つも無いバルーン → no-op（窓へ 1 つも書かない・panic なし）
     let orphan = world
         .spawn((fake_handle(0x5000), window_pos_at(10, 20)))
         .id();
+    let _residue = drain_window_pos_commands();
     let ev = Phase::Bubble(drag_event(orphan));
     assert!(!on_balloon_drag(&mut world, orphan, orphan, &ev));
+    assert!(drain_window_pos_commands().is_empty(), "窓へ書いた");
 }
 
 // -------------------------------------------------------------------------

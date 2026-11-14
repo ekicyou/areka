@@ -98,12 +98,6 @@ fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
             "route={route} の引き金判定がキャラ窓の表と食い違う"
         );
     }
-    // 表が「全部真」「全部偽」へ潰れていないこと（自明な述語への退化の検出）。
-    let fired = PlacementRoute::ALL
-        .into_iter()
-        .filter(|r| BalloonFollowTrigger::Placement(*r).applies_visibility_guard())
-        .count();
-    assert_eq!(fired, 7, "発火する引き金が 7 種でない（表が潰れている）");
 }
 
 /// **Req 3.4 の本体**: 非ドラッグの配置系 4 経路が引き金のとき、offset 恒等式が出した
