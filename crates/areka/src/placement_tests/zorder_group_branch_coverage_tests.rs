@@ -19,6 +19,9 @@
 //!    （＝ディスクに在るだけでコンパイルされないファイルを「覆っている」と数えない）、
 //! ⑷ 11 分岐のどれもが少なくとも 1 行を持ち、表に**未知の分岐名が現れない**。
 //!
+//! 検査の本体は兄弟の `zorder_branch_coverage_test_support.rs`（`check_table`）に 1 つだけ在り、
+//! 完了 spec の表と逆転の spec の表（`zorder_inversion_branch_coverage_tests.rs`）が共に通す。
+//!
 //! 改名・削除・宣言外しのいずれもこの場で赤になる。
 //!
 //! # 範囲
@@ -32,8 +35,7 @@
 //! 表を分ける」流儀に揃えてある。wintf 側の分岐は `zorder_chain_tests.rs`／`zorder_chain_apply_tests.rs` が
 //! 自前で覆う。
 
-use std::collections::BTreeSet;
-
+use super::zorder_branch_coverage_test_support::check_table;
 use crate::crate_source_test_support::crate_source;
 
 /// 要件 10.2 が名指しする 11 分岐。並びも語も要件本文の逐語である。
@@ -385,112 +387,9 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
 ];
 
-/// 註釈の行を落とす——説明文に書いてあるだけの綴りを「在る」と数えないため
-/// （`tick_gate_config_producers_tests.rs` と同じ流儀）。改行コードは先に揃える。
-fn code_only(src: &str) -> String {
-    let normalized = src.replace("\r\n", "\n");
-    let body = normalized
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    // 先頭行も「行頭」として探せるよう、番兵の改行を 1 つ前置きする。
-    format!("\n{body}\n")
-}
-
-/// 見出しからテストファイルの中身を引く。見出しが表に無ければその場で落とす。
-fn source_of(label: &str) -> &'static str {
-    TEST_FILES
-        .iter()
-        .find(|(name, _, _)| *name == label)
-        .map(|(_, src, _)| *src)
-        .unwrap_or_else(|| panic!("対応表が知らないテストファイルの見出しを指している: {label}"))
-}
-
-/// 表に載る分岐の見出しは、要件 10.2 の 11 個のいずれかでなければならない。
-///
-/// 綴り違いの分岐名を足しても表の行数が増えるだけで気づけないので、こちら側から挟む。
+/// 11 分岐のどれもを、実在して実行されるテストが覆い、表のテストファイルがクレートへ
+/// 組み込まれている（検査は `check_table`）。
 #[test]
-fn t_zbc1_the_table_names_no_branch_outside_the_eleven() {
-    let known: BTreeSet<&str> = BRANCHES.into_iter().collect();
-    for (branch, file, name) in COVERAGE {
-        assert!(
-            known.contains(branch),
-            "要件 10.2 に無い分岐名が表に載っている: {branch}（{file}::{name}）"
-        );
-    }
-}
-
-/// 11 分岐のどれもが、少なくとも 1 本のテストで覆われていなければならない。
-#[test]
-fn t_zbc2_every_one_of_the_eleven_branches_has_at_least_one_test() {
-    let covered: BTreeSet<&str> = COVERAGE.iter().map(|(branch, _, _)| *branch).collect();
-    for branch in BRANCHES {
-        assert!(
-            covered.contains(branch),
-            "要件 10.2 の分岐「{branch}」を覆うテストが 1 本も表に無い"
-        );
-    }
-    assert_eq!(
-        covered.len(),
-        BRANCHES.len(),
-        "覆われた分岐の数が 11 でない（覆われている: {covered:?}）"
-    );
-}
-
-/// 名指ししたテストは実在し、かつ `#[test]` が付いている＝実行される。
-///
-/// 改名・削除はここで落ちる。`#[test]` を外して私設ヘルパーへ格下げする形も落ちる
-/// （名前だけ残っていても「実行されるテスト」ではないため）。
-#[test]
-fn t_zbc3_every_named_test_exists_and_is_executed() {
-    for (branch, file, name) in COVERAGE {
-        let code = code_only(source_of(file));
-        assert!(
-            code.contains(&format!("\nfn {name}(")),
-            "分岐「{branch}」の錨 {file}::{name} が実在しない（改名か削除）"
-        );
-        assert!(
-            code.contains(&format!("\n#[test]\nfn {name}(")),
-            "分岐「{branch}」の錨 {file}::{name} に #[test] が付いていない（実行されない）"
-        );
-    }
-}
-
-/// 表に載るテストファイルは、本番ファイルの `#[path = …]` 宣言でクレートへ組み込まれている。
-///
-/// `include_str!` はディスクのファイルを読むだけなので、モジュール宣言を外された
-/// テストファイルも「実在する」ままになる。そこだけは別の証拠で押さえる。
-#[test]
-fn t_zbc4_every_listed_test_file_is_compiled_into_the_crate() {
-    for (label, _, owner) in TEST_FILES {
-        let file_name = label
-            .rsplit('/')
-            .next()
-            .expect("見出しはファイル名で終わる");
-        let owner_code = code_only(owner);
-        assert!(
-            owner_code.contains(&format!("#[path = \"{file_name}\"]")),
-            "{label} を組み込む #[path] 宣言が本番ファイルに無い（テストが 1 本も走らない）"
-        );
-    }
-}
-
-/// 註釈の除去が両方向で効いていることの較正。
-///
-/// 除去が効いていないと、説明文に名前が書いてあるだけのテストを「実在する」と数える。
-/// 除去が効き過ぎるとコード行まで消えて、何を消しても緑になる。両側から挟む。
-#[test]
-fn t_zbc5_the_comment_stripper_is_calibrated_in_both_directions() {
-    let sample = "/// #[test]\n/// fn t_only_in_a_comment() {}\n#[test]\nfn t_real_one() {}\n";
-    let code = code_only(sample);
-
-    assert!(
-        !code.contains("t_only_in_a_comment"),
-        "註釈にしか無い名前が除去後も残っている（説明文だけで表が緑になる）"
-    );
-    assert!(
-        code.contains("\n#[test]\nfn t_real_one("),
-        "コード行の #[test] つき関数が除去で消えている（何を消しても緑になる）"
-    );
+fn t_zbc_the_table_covers_every_branch_with_executed_tests() {
+    check_table(&BRANCHES, &TEST_FILES, &COVERAGE);
 }

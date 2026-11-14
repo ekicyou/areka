@@ -25,7 +25,7 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge, log_chain_absent};
+use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
 
 use super::compose_chain;
 use crate::zorder_group_ledger::{
@@ -668,9 +668,8 @@ fn the_invariant_checker_catches_every_broken_shape() {
 /// 不在要素の記録材料が、areka 側から**そのまま鎖の語彙へ渡せる**形で届く。
 ///
 /// `[zorder-chain] absent` を出すのは指令消化の相（出口）であって本合成ではない。
-/// ここで固定するのは「出口を立てる task が、計画から `group_id` と要素の字面を取り出して
-/// [`log_chain_absent`] へ渡せる」ことである——欄の型か可視性のどちらかが欠けていれば、
-/// このテストはそもそもコンパイルできない（引受先が居ない欄を残さないための対照）。
+/// ここで固定するのは、計画から `group_id` と要素の字面が読めること。出口が
+/// `log_chain_absent` へ渡す呼び出しは `zorder_drain.rs` と wintf のテストが通す。
 #[test]
 fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary() {
     let groups = [tag_group(1, &["0", "1"]), tag_group(2, &["4", "5"])];
@@ -687,11 +686,6 @@ fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary
         ],
         "不在要素が宣言したグループを名乗っていない"
     );
-
-    // 出口が行うことをそのまま写した呼び出し（型と可視性の実証）。
-    for (group_id, element) in &plan.absent {
-        log_chain_absent(*group_id, element);
-    }
 }
 
 // ===========================================================================
@@ -730,30 +724,4 @@ fn t_zcc16_dropping_the_same_scope_pair_exclusion_is_caught() {
     );
     // 摂動体は不変条件だけでは掴めない——だからペアの検査器が要る。
     assert!(chain_invariant_violations(&mutant).is_empty());
-}
-
-/// 摂動⑵——グループ境界を跨いで余分に繋ぐと（後のグループの先頭が 2 枚を所有する形）、
-/// 不変条件①が赤で止める。
-#[test]
-fn t_zcc17_linking_across_a_group_boundary_breaks_the_single_owner_invariant() {
-    let groups = [tag_group(1, &["b0", "s0"]), tag_group(2, &["b1", "s1"])];
-    let inventory = Inventory::full(&[0, 1]);
-
-    let plan = composed(&groups, &inventory);
-    assert_eq!(plan.cross_edges, vec![edge(s(0), b(1), g(1))]);
-
-    // グループ境界を跨ぐ繋ぎを 1 本足す（後のグループの先頭が 2 枚を所有する）。
-    let mut cross_edges = plan.cross_edges.clone();
-    cross_edges.push(edge(b(0), b(1), ChainSegment::Tail));
-    let mutant = ChainPlan {
-        members: plan.members.clone(),
-        cross_edges,
-        absent: plan.absent.clone(),
-    };
-
-    let violations = chain_invariant_violations(&mutant);
-    assert!(
-        violations.iter().any(|v| v.starts_with('①')),
-        "境界跨ぎの余分な繋ぎを掴めていない: {violations:?}"
-    );
 }

@@ -202,7 +202,7 @@
   - _Dispatch: standard — 集合と表で引く形へ書き換え、出す順と答えを保つ_
   - _Requirements: 4.1, 7.3_
 
-- [ ] 6.7 Z 順の鎖のテストの道具と分岐の表の検査をまとめる（U22・指摘 31・32・34・74）
+- [x] 6.7 Z 順の鎖のテストの道具と分岐の表の検査をまとめる（U22・指摘 31・32・34・74）
   - 鎖の末尾のテストの「未解決の欠陥」の説明を今の事実に縮める。
   - tail と inversion の Win32 の道具を 6.6 のテストの支えへまとめ、走査の上限と握りの確かめを入れる。
   - 本体に分岐の表の検査の支え（新しいファイル）を置き、2 つの表の検査と名前の重なりの検査をそこから呼ぶ。重なる呼び出しのテストを消す。
@@ -268,3 +268,4 @@
 - 7.2 の前提: `audit-wintf-input` が自分の 7.1 でドラッグの知らせの `Messages<…>` を消し、`balloon_lock_drag_tests.rs`（L99-101・L444 付近）と `follow_drag_end_gate_tests.rs`（L66-72 付近）を直す。相手が先に着地し、7.2 はその後の形の上でテストの小道具をまとめる。
 - 6.1: 指摘 54 の `emo2_utf8_fixture_decodes_to_the_same_text_as_before` は消さずに説明だけを直した（research の 54 が許すもう 1 つの直し方）。設計 U16 の「較正の当たりは残る所にあるので移す物は無い」は誤りで、この crate の本文の `shell::parse` の呼び出しはこのテストにしか無く、`measure_template_tests.rs` の較正の当たりになっている。
 - 6.3: `cargo test -p areka` の `mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 度だけ赤（単独の回し直しで緑・範囲の外）。1 の spine の揺れと並べて完了の棚卸で見る。
+- 6.7 のレビューの提案（8.1 で拾う）: 本体の `check_table` の較正は錨の欠け・知らない分岐・覆われない分岐の 3 通りだけで、`#[test]` の欠け・`#[path]` の欠け・分岐名の重なりは較正していない。tail のテストの頭の説明は wintf の実窓のファイルを 3 つ挙げるが、今は `zorder_chain_order_inversion_tests.rs` を足して 4 つ。

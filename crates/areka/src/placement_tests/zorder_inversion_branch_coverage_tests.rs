@@ -8,8 +8,7 @@
 //! 本機能の判断は areka（解釈・合成・公開）と wintf（組の外し・結び直し・輪の確かめ）に
 //! またがるので、wintf 側の錨もファイルを読んで（`include_str!`）同じ検査に掛ける。
 
-use std::collections::BTreeSet;
-
+use super::zorder_branch_coverage_test_support::check_table;
 use crate::crate_source_test_support::crate_source;
 
 /// 要件 8.2 の 10 分岐（並びも語も要件本文の逐語）と、design の Testing Strategy「替え玉で 1 巡」の
@@ -385,69 +384,9 @@ const COVERAGE: [(&str, &str, &str); 52] = [
     ),
 ];
 
-/// 註釈の行を落とす（説明文に書いてあるだけの綴りを「在る」と数えない）。改行コードは先に揃える。
-fn code_only(src: &str) -> String {
-    let normalized = src.replace("\r\n", "\n");
-    let body = normalized
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("\n{body}\n")
-}
-
-fn source_of(label: &str) -> &'static str {
-    TEST_FILES
-        .iter()
-        .find(|(name, _, _)| *name == label)
-        .map(|(_, src, _)| *src)
-        .unwrap_or_else(|| panic!("対応表が知らないテストファイルの見出しを指している: {label}"))
-}
-
+/// 表に載る分岐名は知っている名前だけで、どの分岐も覆われ、錨は実在して実行され、
+/// テストファイルはそれぞれの crate へ組み込まれている（検査は `check_table`）。
 #[test]
-fn t_zic1_the_table_names_only_known_branches_and_covers_all_of_them() {
-    let known: BTreeSet<&str> = BRANCHES.into_iter().collect();
-    assert_eq!(known.len(), BRANCHES.len(), "分岐名が重複している");
-    for (branch, file, name) in COVERAGE {
-        assert!(
-            known.contains(branch),
-            "未知の分岐名: {branch}（{file}::{name}）"
-        );
-    }
-    let covered: BTreeSet<&str> = COVERAGE.iter().map(|(branch, _, _)| *branch).collect();
-    for branch in BRANCHES {
-        assert!(
-            covered.contains(branch),
-            "分岐「{branch}」を覆うテストが表に無い"
-        );
-    }
-}
-
-#[test]
-fn t_zic2_every_named_test_exists_and_is_executed() {
-    for (branch, file, name) in COVERAGE {
-        let code = code_only(source_of(file));
-        assert!(
-            code.contains(&format!("\nfn {name}(")),
-            "分岐「{branch}」の錨 {file}::{name} が実在しない（改名か削除）"
-        );
-        assert!(
-            code.contains(&format!("\n#[test]\nfn {name}(")),
-            "分岐「{branch}」の錨 {file}::{name} に #[test] が付いていない（実行されない）"
-        );
-    }
-}
-
-#[test]
-fn t_zic3_every_listed_test_file_is_compiled_into_its_crate() {
-    for (label, _, owner) in TEST_FILES {
-        let file_name = label
-            .rsplit('/')
-            .next()
-            .expect("見出しはファイル名で終わる");
-        assert!(
-            code_only(owner).contains(&format!("#[path = \"{file_name}\"]")),
-            "{label} を組み込む #[path] 宣言が本番ファイルに無い（テストが 1 本も走らない）"
-        );
-    }
+fn t_zic_the_table_covers_every_branch_with_executed_tests() {
+    check_table(&BRANCHES, &TEST_FILES, &COVERAGE);
 }

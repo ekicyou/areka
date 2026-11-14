@@ -16,10 +16,7 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, IsWindow,
-    SW_SHOWNOACTIVATE, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
-};
+use windows::Win32::UI::WindowsAndMessaging::DestroyWindow;
 use windows::core::w;
 use wintf::ecs::window::{PairReleased, ZOrderChainPlan, apply_zorder_chain};
 use wintf::ecs::{
@@ -31,6 +28,7 @@ use super::compose_chain;
 use crate::zorder_group_ledger::{
     GroupElement, GroupWindowKind, ZOrderGroupLedger, parse_zorder_tokens,
 };
+use crate::zorder_test_support::{create_window, is_window, owner_shape, z_shape};
 
 const B0: usize = 0;
 const S0: usize = 1;
@@ -51,92 +49,6 @@ fn element_at(index: usize) -> GroupElement {
             GroupWindowKind::Char
         },
     }
-}
-
-// ---------------------------------------------------------------------------
-// 実窓（0x0・可視・本番のゴースト窓と同じ拡張スタイル）と走査
-// ---------------------------------------------------------------------------
-
-fn create_raw_window() -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を作り、活性化せずに表示する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        let hwnd = CreateWindowExW(
-            WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-            w!("Static"),
-            w!("zorder-chain-inversion-areka"),
-            WINDOW_STYLE(WS_POPUP.0),
-            10,
-            10,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window");
-        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        hwnd
-    }
-}
-
-thread_local! {
-    static IME_ANCHOR_MADE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// 鎖の窓を作る。スレッド既定の不可視 IME 窓が鎖の窓に付かないよう、受け皿を先に 1 枚作る
-/// （兄弟 `zorder_chain_tail_order_tests.rs` の `ensure_ime_anchor` と同じ理由）。
-fn create_window() -> HWND {
-    IME_ANCHOR_MADE.with(|made| {
-        if !made.replace(true) {
-            let _ = create_raw_window();
-        }
-    });
-    create_raw_window()
-}
-
-fn is_window(hwnd: HWND) -> bool {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { IsWindow(Some(hwnd)) }.as_bool()
-}
-
-/// 前面から `GW_HWNDNEXT` で降り、`set` の生きている窓の添字だけを手前から並べる。
-/// 他プロセスの窓が走査の途中で消えると切れるので、全部拾えるまで有界回数やり直す。
-fn z_shape(set: &[Option<HWND>]) -> Vec<usize> {
-    let wanted = set.iter().flatten().count();
-    let mut best = Vec::new();
-    for _ in 0..8 {
-        let mut seen = Vec::new();
-        // SAFETY: Win32 境界。読み取り専用の走査。
-        let mut cursor = unsafe { GetTopWindow(None) }.ok();
-        while let Some(hwnd) = cursor {
-            if let Some(i) = set.iter().position(|w| *w == Some(hwnd)) {
-                seen.push(i);
-                if seen.len() == wanted {
-                    return seen;
-                }
-            }
-            // SAFETY: Win32 境界。読み取り専用の走査。
-            cursor = unsafe { GetWindow(hwnd, GW_HWNDNEXT) }.ok();
-        }
-        if seen.len() > best.len() {
-            best = seen;
-        }
-    }
-    best
-}
-
-/// 添字ごとの持ち主（`GetWindow(GW_OWNER)`・`set` の外の持ち主と窓の無い枠は `None`）。
-fn owner_shape(set: &[Option<HWND>]) -> Vec<Option<usize>> {
-    set.iter()
-        .map(|h| {
-            // SAFETY: Win32 境界。読み取りのみ。
-            let owner = h.and_then(|h| unsafe { GetWindow(h, GW_OWNER) }.ok())?;
-            set.iter().position(|w| *w == Some(owner))
-        })
-        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +109,7 @@ impl Rig {
 
     /// 添字 `index` の実体へ窓を作って付ける（窓が後から現れる）。
     fn attach_window(&mut self, index: usize) {
-        let hwnd = create_window();
+        let hwnd = create_window(w!("zorder-chain-inversion-areka"));
         self.made.push(hwnd);
         self.hwnds[index] = Some(hwnd);
         let entity = self.entities[index].expect("実体が在る");
