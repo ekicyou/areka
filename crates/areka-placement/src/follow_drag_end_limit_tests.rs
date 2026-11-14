@@ -81,7 +81,7 @@ fn wndproc_moved_balloon_to(world: &mut World, balloon: Entity, pos: PointPx) {
 
 /// in-session offset へ「解放位置由来でも補正位置由来でもない」値を仕込む。
 ///
-/// 解放時補正が `BalloonFollow.offset` を書き換えたら（＝焼き付けたら）この値が消える。
+/// 解放のときに生 offset から出し直されればこの値は消え、補正位置から出し直されれば別の値になる。
 fn stale_offset() -> PointPx {
     PointPx { x: 999, y: 888 }
 }
@@ -197,7 +197,7 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
 ///
 /// 順序（永続 write-through → 表示補正）は 3 通りで噛む:
 ///   - 保存された `BalloonOffset` が生 offset（補正由来 offset とは別値）
-///   - `BalloonFollow.offset` が仕込んだ stale 値のまま（補正が焼き付いていない）
+///   - `BalloonFollow.offset` が補正の前の生 offset から出し直されている（補正が焼き付いていない）
 ///   - 捕捉ログの**出現順**が「保存 → 補正」（`index_of` は捕捉順の添字を返す）
 #[test]
 fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the_display() {
@@ -237,14 +237,14 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         odd_edge_wa()
     ));
 
-    // --- in-session の相対位置には焼き付かない（DD6） ---
+    // --- in-session の相対位置は補正の前の位置から出し直す（DD6・指摘 3） ---
     assert_eq!(
         world
             .get::<BalloonFollow>(char_window)
             .expect("spawn が BalloonFollow を付ける")
             .offset(),
-        stale_offset(),
-        "解放時補正が BalloonFollow.offset を書き換えた（補正の焼き付き・DD6 違反）"
+        expected_raw,
+        "BalloonFollow.offset が補正の前の生 offset でない（補正の焼き付き・DD6 違反）"
     );
 
     // --- キャラ窓は動かない（要件 2.8） ---

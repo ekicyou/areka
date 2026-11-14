@@ -543,60 +543,65 @@ pub fn on_balloon_drag(
                 return false;
             };
 
-            // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、確定 offset を組む。
-            // ここは**読取だけ**で閉じる（可変借用は次の段で 1 窓ずつ取る）。
-            let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos)>();
-            let targets: Vec<(Entity, PointPx)> = chars
-                .iter(world)
-                .filter(|(_, follow, _)| follow.balloon == entity)
-                .filter_map(|(char_window, _, char_wp)| {
-                    let char_pos = char_wp.position?;
-                    // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
-                    // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
-                    debug_assert!(
-                        balloon_pos.x.checked_sub(char_pos.x).is_some()
-                            && balloon_pos.y.checked_sub(char_pos.y).is_some(),
-                        "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
-                    );
-                    Some((
-                        char_window,
-                        PointPx {
-                            x: balloon_pos.x - char_pos.x,
-                            y: balloon_pos.y - char_pos.y,
-                        },
-                    ))
-                })
-                .collect();
-
-            for (char_window, new_offset) in targets {
-                // **表示 DPI を先に読んでから**追従 Component を可変で借りる
-                // （同時借用を避ける順序・design「Modified Files」drag_follow の項）。
-                let current_dpi = world.get::<DPI>(char_window).copied();
-                let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
-                    continue;
-                };
-                match current_dpi {
-                    // 確立点: ドラッグで決まった相対位置を新しい**基準**として焼き直す。
-                    // 作者指定と同一の追随規則がここから効く（要件 3.5・design D14）。
-                    Some(dpi) => follow.reestablish(new_offset, dpi),
-                    None => {
-                        // 表示 DPI を読めない窓（DPI component 未付与）。値は確定して
-                        // いるが「どの表示 DPI に属するか分からない」ので、永続値の腕と
-                        // 同じ**未係留**の基準として確立する——基準 DPI を発明すると
-                        // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される
-                        // （要件 5.2／5.4）。無ログの縮退経路は作らない（要件 9.4）。
-                        let balloon = follow.balloon;
-                        *follow = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
-                        warn!(
-                            entity = ?char_window,
-                            balloon = ?entity,
-                            offset = ?new_offset,
-                            "{BALLOON_DRAG_BASE_UNPINNED_TAG} キャラ窓の表示 DPI を読めないため追従オフセットの基準を未係留で確立した（最初の観測で係留される）"
-                        );
-                    }
-                }
-            }
+            reestablish_balloon_follow(world, entity, balloon_pos);
             false
+        }
+    }
+}
+
+/// `BalloonFollow.balloon == balloon` のキャラ窓を逆引きし、追従の基準を `balloon_pos − char_pos`
+/// から確立し直す。ドラッグ中（[`on_balloon_drag`]）と、離したときの保存の直後（指摘 3）が呼ぶ。
+fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: Point) {
+    // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、確定 offset を組む。
+    // ここは**読取だけ**で閉じる（可変借用は次の段で 1 窓ずつ取る）。
+    let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos)>();
+    let targets: Vec<(Entity, PointPx)> = chars
+        .iter(world)
+        .filter(|(_, follow, _)| follow.balloon == balloon)
+        .filter_map(|(char_window, _, char_wp)| {
+            let char_pos = char_wp.position?;
+            // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
+            // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
+            debug_assert!(
+                balloon_pos.x.checked_sub(char_pos.x).is_some()
+                    && balloon_pos.y.checked_sub(char_pos.y).is_some(),
+                "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
+            );
+            Some((
+                char_window,
+                PointPx {
+                    x: balloon_pos.x - char_pos.x,
+                    y: balloon_pos.y - char_pos.y,
+                },
+            ))
+        })
+        .collect();
+
+    for (char_window, new_offset) in targets {
+        // **表示 DPI を先に読んでから**追従 Component を可変で借りる
+        // （同時借用を避ける順序・design「Modified Files」drag_follow の項）。
+        let current_dpi = world.get::<DPI>(char_window).copied();
+        let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
+            continue;
+        };
+        match current_dpi {
+            // 確立点: ドラッグで決まった相対位置を新しい**基準**として焼き直す。
+            // 作者指定と同一の追随規則がここから効く（要件 3.5・design D14）。
+            Some(dpi) => follow.reestablish(new_offset, dpi),
+            None => {
+                // 表示 DPI を読めない窓（DPI component 未付与）。値は確定して
+                // いるが「どの表示 DPI に属するか分からない」ので、永続値の腕と
+                // 同じ**未係留**の基準として確立する——基準 DPI を発明すると
+                // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される
+                // （要件 5.2／5.4）。無ログの縮退経路は作らない（要件 9.4）。
+                *follow = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
+                warn!(
+                    entity = ?char_window,
+                    balloon = ?balloon,
+                    offset = ?new_offset,
+                    "{BALLOON_DRAG_BASE_UNPINNED_TAG} キャラ窓の表示 DPI を読めないため追従オフセットの基準を未係留で確立した（最初の観測で係留される）"
+                );
+            }
         }
     }
 }
@@ -637,8 +642,8 @@ pub fn on_balloon_drag(
 ///
 /// バルーンの `WindowPos.position` 不在／[`BalloonWindowMarker`] 不在／追従元キャラ窓
 /// （その `WindowPos.position`・[`Anchored`]・`WindowPos.size` のいずれか）不在は
-/// `debug!`＋skip する。`BalloonFollow.offset`（in-session 表現）は本ハンドラでは
-/// 変異させない（連続ドラッグ側 [`on_balloon_drag`] が所有）。
+/// `debug!`＋skip する。`BalloonFollow.offset`（in-session 表現）は保存の直後に最終確定位置から
+/// 出し直す（補正の前の位置・[`reestablish_balloon_follow`]）。最後の OnDrag の値のまま残さない。
 ///
 /// # 解放時の limit 補正と**順序の固定**（areka-P0-windowposition-limit C8・要件 2.5/5.4）
 ///
@@ -652,6 +657,7 @@ pub fn on_balloon_drag(
 ///
 /// 1. 解放位置の取得（`WindowPos.position`＝wndproc の最終確定位置）
 /// 2. 生 offset（`balloon_pos − char_pos`）の導出と永続 write-through
+///    2′. 同じ最終確定位置から追従の基準を出し直す（[`reestablish_balloon_follow`]・指摘 3）
 /// 3. キーワード素材の退役（[`retire_keyword_base_on_save`]・要件 4.7）
 /// 4. `BalloonLimit(true)` かつ補正が要るときだけ表示位置を補正
 ///
@@ -769,6 +775,9 @@ pub(crate) fn on_balloon_drag_end(
             );
             let entries = balloon_offset_entries(scope as u32, persist);
             persist_entries(world, entries);
+
+            // ②′ 追従の基準を最終確定位置から出し直す（補正の前・最後の OnDrag の値を残さない）。
+            reestablish_balloon_follow(world, entity, balloon_pos);
 
             // ③ キーワード素材の退役（要件 4.7・task 4.6）。**②と同じ観測点**であること
             // 自体が要点なので、②の直後に置く（詳細は [`retire_keyword_base_on_save`]）。

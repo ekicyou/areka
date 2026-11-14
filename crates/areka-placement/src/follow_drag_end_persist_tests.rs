@@ -91,13 +91,13 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
     let ev = Phase::Bubble(drag_end_event_at(balloon, (0, 0)));
     assert!(!on_balloon_drag_end(&mut world, balloon, balloon, &ev));
 
-    // キャラ窓は不動・BalloonFollow.offset（in-session 表現）も on_balloon_drag_end では
-    // 変えない（保存は最終確定位置から独立に導出する）。
+    // キャラ窓は不動・BalloonFollow.offset（in-session 表現）は保存と同じ最終確定位置から
+    // 出し直される（保存は stale な in-session offset を使わない・指摘 3）。
     assert_eq!(position_of(&world, char_w), char_pos);
     assert_eq!(
         world.get::<BalloonFollow>(char_w).unwrap().offset(),
-        stale_offset,
-        "on_balloon_drag_end は in-session offset を変異させない（保存専用）"
+        expected,
+        "on_balloon_drag_end の後の in-session offset が保存値と違う"
     );
 
     // 別ハンドルの load_scope で scope1 の BalloonOffset を観測（実 IO 通過＝投函の証明）。

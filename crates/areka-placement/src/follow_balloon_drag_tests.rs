@@ -5,8 +5,8 @@ use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::drag_follow::BALLOON_DRAG_BASE_UNPINNED_TAG;
 use super::test_support::{
-    drag_event, drag_event_at, dragging_state, fake_handle, position_of, single_monitor_snapshot,
-    window_pos_at, window_pos_sized,
+    drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle, position_of,
+    single_monitor_snapshot, window_pos_at, window_pos_sized,
 };
 use super::{Anchored, BalloonFollow, move_window_to, on_char_drag};
 use crate::resolver::Anchor;
@@ -363,4 +363,146 @@ fn on_balloon_drag_without_display_dpi_establishes_unpinned_base_and_warns() {
     // (c) 無ログの縮退経路は作らない（要件 9.4）。
     let rec = expect_one(&events, BALLOON_DRAG_BASE_UNPINNED_TAG);
     assert_eq!(rec.level, tracing::Level::WARN, "未係留の確立は warn 水準");
+}
+
+// -------------------------------------------------------------------------
+// 離したときの追従の基準の出し直し（指摘 3・DD6・要件 3.1／8.1）
+// 最後の OnDrag の知らせと最終確定位置はずれ得る。離した後の追従の基準は、保存した値と
+// 同じ最終確定位置から出し直され、補正の前の位置を指す。
+// -------------------------------------------------------------------------
+
+/// 保存ログ（`balloon DragEnd 保存`）の persist 値を読む。
+fn saved_offset(events: &[log_capture_kit::CapturedEvent]) -> PointPx {
+    use log_capture_kit::ExpectField;
+    let save = expect_one(events, "balloon DragEnd 保存");
+    PointPx {
+        x: save
+            .expect_field("persist_x")
+            .parse()
+            .expect("persist_x は整数"),
+        y: save
+            .expect_field("persist_y")
+            .parse()
+            .expect("persist_y は整数"),
+    }
+}
+
+/// 最後の `DragEvent` の位置と違う最終の位置で離すと、追従のオフセットが保存した値と同じになる。
+#[test]
+fn releasing_at_a_position_past_the_last_drag_reestablishes_the_follow_from_the_saved_offset() {
+    use super::on_balloon_drag_end;
+    use crate::spawn::BalloonWindowMarker;
+
+    let mut world = World::new();
+    let balloon = world
+        .spawn((
+            fake_handle(0x2000),
+            window_pos_at(1729, 401),
+            BalloonWindowMarker { scope: 0 },
+        ))
+        .id();
+    let char_dpi = DPI::from_dpi(144, 144);
+    let char_w = world
+        .spawn((
+            fake_handle(0x1000),
+            window_pos_sized(1207, 653, 434, 600),
+            Anchored(Anchor::Bottom),
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: -412, y: -25 })),
+        ))
+        .id();
+    // spawn の後に刻む（spawn の束では既定の 96 が残る・既存のテストと同じ置き方）。
+    world.entity_mut(char_w).insert(char_dpi);
+
+    // 最後の OnDrag の知らせ（offset = (522, −252)）。
+    assert!(!on_balloon_drag(
+        &mut world,
+        balloon,
+        balloon,
+        &Phase::Bubble(drag_event(balloon))
+    ));
+    // 知らせの後に wndproc が窓をさらに動かした最終確定位置。
+    world.get_mut::<WindowPos>(balloon).unwrap().position = Some(Point { x: 1531, y: 377 });
+
+    let (_, events) = capture(|| {
+        on_balloon_drag_end(
+            &mut world,
+            balloon,
+            balloon,
+            &Phase::Bubble(drag_end_event_at(balloon, (0, 0))),
+        )
+    });
+
+    let saved = saved_offset(&events);
+    assert_eq!(
+        saved,
+        PointPx { x: 324, y: -276 },
+        "保存値は最終確定位置 − キャラ窓"
+    );
+    let follow = *world.get::<BalloonFollow>(char_w).unwrap();
+    assert_eq!(
+        follow.offset(),
+        saved,
+        "離した後の追従のオフセットが最後の OnDrag の値のまま（指摘 3）"
+    );
+    assert_eq!(
+        follow.base(),
+        OffsetBase {
+            offset: saved,
+            dpi: Some(char_dpi)
+        },
+        "出し直した基準がキャラ窓の表示 DPI へ係留されていない"
+    );
+}
+
+/// 上限の補正が要る形で離すと、出し直した基準は補正の前の位置（DD6: 保存 → 出し直し → 補正）。
+#[test]
+fn the_reestablished_follow_base_is_the_position_before_the_limit_correction() {
+    use super::on_balloon_drag_end;
+    use super::test_support::{base_world, limit_balloon_size, max_pos, odd_edge_wa, point_of};
+
+    let (mut world, char_w, balloon) = base_world(true);
+    let size = limit_balloon_size();
+    // 最後の OnDrag の知らせの位置（作業領域の中）。
+    world
+        .entity_mut(balloon)
+        .insert(window_pos_sized(1500, 700, size.w, size.h));
+    assert!(!on_balloon_drag(
+        &mut world,
+        balloon,
+        balloon,
+        &Phase::Bubble(drag_event(balloon))
+    ));
+    // 右下へはみ出して離す。
+    let released = PointPx { x: 1800, y: 1100 };
+    world
+        .entity_mut(balloon)
+        .insert(window_pos_sized(released.x, released.y, size.w, size.h));
+    let char_pos = point_of(&world, char_w);
+
+    let (_, events) = capture(|| {
+        on_balloon_drag_end(
+            &mut world,
+            balloon,
+            balloon,
+            &Phase::Bubble(drag_end_event_at(balloon, (0, 0))),
+        )
+    });
+
+    let corrected = max_pos(odd_edge_wa(), size);
+    assert_ne!(corrected, released, "檻の前提: 補正が要る形");
+    assert_eq!(
+        point_of(&world, balloon),
+        corrected,
+        "表示位置だけが補正される"
+    );
+    let raw = PointPx {
+        x: released.x - char_pos.x,
+        y: released.y - char_pos.y,
+    };
+    assert_eq!(saved_offset(&events), raw);
+    assert_eq!(
+        world.get::<BalloonFollow>(char_w).unwrap().offset(),
+        raw,
+        "出し直した基準が補正の前の位置でない（補正の焼き付き・または最後の OnDrag の値のまま）"
+    );
 }
