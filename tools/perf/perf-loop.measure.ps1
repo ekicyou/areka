@@ -106,6 +106,10 @@ $MEASURE_TRACE_SUFFIX      = '-trace.etl'
 #: A/B の側 → 出力先の小部屋（design C5 の配置）
 $MEASURE_SIDE_LEAF = @{ 'A' = 'bin-A'; 'B' = 'bin-B' }
 
+# 実行体の用意と出力先の扱い（自分の較正値 $MEASURE_* を置いた後で読み込む）
+. (Join-Path $PSScriptRoot 'perf-loop.build.ps1')
+. (Join-Path $PSScriptRoot 'perf-loop.rundir.ps1')
+
 # =============================================================================
 # 目標定義の引数（節・鍵そのものの読み口 Get-MeasureToml／-Int／-Array は
 # perf-loop.common.ps1 に置いてある。本ファイルの行数上限のため＝要件 2.10）
@@ -124,44 +128,25 @@ function Get-MeasureGoalArgsPython {
 # =============================================================================
 # 場所（ゴースト・実行体・出力先）と前提
 # =============================================================================
-# 既定の在り処は検体の窓口に尋ねる（Get-NarSamplePath は perf-loop.common.ps1・1 検体 1 回）。
+# 既定の在り処は検体の窓口に尋ねる（Get-NarSamplePath は perf-tool-base.ps1・1 検体 1 回・止めない）。
+# 窓口が答えられなければ 4 で止める（空のパスで走らせない）。
+function Get-MeasureSamplePath {
+    param([Parameter(Mandatory = $true)][string]$Key)
+    $r = Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key $Key
+    if (-not $r.Ok) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message $r.Message }
+    return $r.Value
+}
+
 function Get-MeasureGhostRoot {
-    $path = if ($script:GhostRootArg) { $script:GhostRootArg } else { Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key 'folder' }
+    $path = if ($script:GhostRootArg) { $script:GhostRootArg } else { Get-MeasureSamplePath -Key 'folder' }
     return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
 }
 
 function Get-MeasureBalloonRoot {
-    $path = if ($script:BalloonRootArg) { $script:BalloonRootArg } else { Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key "balloon.$MEASURE_SAMPLE_BALLOON_NAME" }
+    $path = if ($script:BalloonRootArg) { $script:BalloonRootArg } else { Get-MeasureSamplePath -Key "balloon.$MEASURE_SAMPLE_BALLOON_NAME" }
     return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
 }
 
-# 実行体の在り処（-BinDir が最優先・無ければ target\<release|debug>）。
-function Get-MeasureBinDir {
-    param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
-    if ($BinDir) { return [System.IO.Path]::GetFullPath($BinDir).TrimEnd('\') }
-    $sub = if ($Build -eq 'release') { 'release' } else { 'debug' }
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot (Join-Path 'target' $sub))).TrimEnd('\')
-}
-
-# 実行体が在るか。無いときは何を打てばよいかを必ず示す（黙って落とさない）。
-# -DryRun のときだけは止めずに $false を返す（配管の確認は実行体が無くてもできる）。
-function Test-MeasureExeReady {
-    param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
-    $dir = Get-MeasureBinDir -BinDir $BinDir -Build $Build
-    $exe = Join-Path $dir $MEASURE_AREKA_EXE
-    if (Test-Path -LiteralPath $exe -PathType Leaf) { return $true }
-    $releaseDebug = Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT
-    $hint = if ($Build -eq 'release') {
-        "Set CARGO_PROFILE_RELEASE_DEBUG=$releaseDebug in the environment from PowerShell and run cargo build --release -p $MEASURE_AREKA_PACKAGE first (stage 3 needs the symbols)"
-    } else {
-        "Run cargo build -p $MEASURE_AREKA_PACKAGE first"
-    }
-    if ($script:DryRunMode) {
-        Write-Info "[perf-loop] -DryRun: executable not found ($exe). Skipping this run. $hint"
-        return $false
-    }
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "executable not found: $exe. $hint"
-}
 
 function Assert-MeasureIter {
     if ($script:IterArg -lt 1) {
@@ -185,39 +170,6 @@ function Convert-MeasureChildExit {
     return $EXIT_MEASURE_FAILED
 }
 
-# 走行の成果物が揃っているか（-Resume の完了印）。
-function Test-MeasureRunComplete {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    foreach ($name in @($MEASURE_FILE_RUN_LOG, $MEASURE_FILE_CPU_CSV, $MEASURE_FILE_RUN_META)) {
-        if (-not (Test-Path -LiteralPath (Join-Path $Dir $name) -PathType Leaf)) { return $false }
-    }
-    return (Test-MeasureQuietAfterOk -Dir $Dir)
-}
-
-# -DryRun の置き土産（DRY-RUN.txt があって run.log が無い出力先）だけを作り直す。
-# 実走の成果物がある出力先には触らない——測ったものを黙って消さないため。
-function Clear-MeasureDryRunDir {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    if (-not (Test-Path -LiteralPath $Dir)) { return }
-    $isDry  = Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_DRYRUN) -PathType Leaf
-    $hasRun = Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_RUN_LOG) -PathType Leaf
-    if ($isDry -and -not $hasRun) {
-        Write-Info "[perf-loop] recreating the output folder of the previous -DryRun: $Dir"
-        Remove-Item -LiteralPath $Dir -Recurse -Force
-    }
-}
-
-# 走行を省いたことを出力先に残す（-DryRun 専用。測定結果と取り違えないための札）。
-function Write-MeasureDryRunMark {
-    param([Parameter(Mandatory = $true)][string]$Dir, [Parameter(Mandatory = $true)][string]$Reason)
-    New-LoopDir -Path $Dir | Out-Null
-    $lines = @(
-        'This is -DryRun (test only) output. Do not treat it as a measurement result.',
-        "reason: $Reason",
-        "time: $(Get-UtcStamp)"
-    )
-    Set-Content -LiteralPath (Join-Path $Dir $MEASURE_FILE_DRYRUN) -Value (($lines -join "`n") + "`n") -Encoding utf8 -NoNewline
-}
 
 # =============================================================================
 # 実走・静寂・合否・順位表（8 本が共有する 4 つの動作）
@@ -430,136 +382,6 @@ function Invoke-MeasureRank {
     return $outPath
 }
 
-# =============================================================================
-# A/B のビルドと複製（prepare-ab／measure-ab）
-# =============================================================================
-
-function Test-MeasureBinDirComplete {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return $false }
-    if (-not (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_AREKA_EXE) -PathType Leaf)) { return $false }
-    return (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_BUILD) -PathType Leaf)
-}
-
-# BUILD.txt に書く git の事実（どのツリーから作った実行体かを後から突き合わせるため）。
-function Get-MeasureGitFacts {
-    $git = Get-Command 'git' -ErrorAction SilentlyContinue
-    if (-not $git) { return [pscustomobject]@{ Head = $PERF_LOOP_EMPTY; Dirty = $PERF_LOOP_EMPTY } }
-    $head = Invoke-Child -Exe $git.Source -Arguments @('-C', $repoRoot, 'rev-parse', 'HEAD') -Quiet
-    $stat = Invoke-Child -Exe $git.Source -Arguments @('-C', $repoRoot, 'status', '--porcelain') -Quiet
-    $headText = if ($head.Code -eq 0) { $head.LastLine } else { $PERF_LOOP_EMPTY }
-    $dirty = if ($stat.Code -ne 0) { $PERF_LOOP_EMPTY }
-             elseif ((@($stat.Out) -join '').Trim()) { 'true' }
-             else { 'false' }
-    return [pscustomobject]@{ Head = $headText; Dirty = $dirty }
-}
-
-function Get-MeasureSha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $PERF_LOOP_EMPTY }
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
-# cargo を回す（Cargo.toml には触らない＝記号は環境変数で付ける・要件 2.4／8.6）。
-function Invoke-MeasureCargo {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments, [Parameter(Mandatory = $true)][string]$Label)
-    $cargo = Get-Command 'cargo' -ErrorAction SilentlyContinue
-    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo not found (cannot build A/B)' }
-    $releaseDebug = Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT
-    Write-Info "[perf-loop] ${Label}: cargo $($Arguments -join ' ') (CARGO_PROFILE_RELEASE_DEBUG=$releaseDebug)"
-    return Invoke-Child -Exe $cargo.Source -Arguments $Arguments -Environment @{ CARGO_PROFILE_RELEASE_DEBUG = $releaseDebug }
-}
-
-# 片側（A＝変更前／B＝変更後）の実行体一式を作って小部屋へ複製する。
-# 32bit ヘルパが作れないときは止めずに大きく警告して続ける——A と B を同じ手順で
-# 作る限り条件は揃っており、ヘルパの有無は run-meta.txt と BUILD.txt に残るためである。
-function Invoke-MeasureBuildSide {
-    param(
-        [Parameter(Mandatory = $true)][ValidateSet('A', 'B')][string]$Side,
-        [Parameter(Mandatory = $true)][string]$BinDir
-    )
-    if ($script:ResumeMode -and (Test-MeasureBinDirComplete -Dir $BinDir)) {
-        Write-Info "[perf-loop] -Resume: not recreating the $Side side executable set: $BinDir"
-        return $BinDir
-    }
-    $manifest    = Join-Path $repoRoot 'Cargo.toml'
-    $releaseDir  = Join-Path $repoRoot 'target\release'
-    $helperDir   = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET 'release'))
-    $helperState = 'skipped'
-
-    if ($script:DryRunMode) {
-        Write-Info "[perf-loop] -DryRun: no cargo build for the $Side side (copies the existing target\release if it can)."
-    } else {
-        $build = Invoke-MeasureCargo -Label "$Side side release build" `
-            -Arguments @('build', '--release', '-p', $MEASURE_AREKA_PACKAGE, '--manifest-path', $manifest)
-        if ($build.Code -ne 0) {
-            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "$Side side release build failed (exit code $($build.Code)): $($build.LastLine)"
-        }
-        $helper = Invoke-MeasureCargo -Label "$Side side 32bit SHIORI helper build" `
-            -Arguments @('build', '--release', '-p', $MEASURE_HELPER_PACKAGE, '--target', $MEASURE_HELPER_TARGET, '--manifest-path', $manifest)
-        if ($helper.Code -eq 0) {
-            $helperState = 'built'
-        } else {
-            # 古い（別ツリーの）ヘルパを黙って混ぜない。missing と記して複製もしない
-            # ——絶対値の合否を出す走行（measure-baseline／final）はこれを見て拒む。
-            $helperState = 'missing'
-            Write-Problem "[perf-loop] warning: could not build the 32bit SHIORI helper (exit code $($helper.Code)): $($helper.LastLine)"
-            Write-Problem "[perf-loop] warning: a run without the helper has no real SHIORI and no talk, a different condition (check rustup target add $MEASURE_HELPER_TARGET). If A and B share the condition, the comparison itself still holds."
-        }
-    }
-
-    New-LoopDir -Path $BinDir | Out-Null
-    $exeSrc = Join-Path $releaseDir $MEASURE_AREKA_EXE
-    if (Test-Path -LiteralPath $exeSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $exeSrc -Destination (Join-Path $BinDir $MEASURE_AREKA_EXE) -Force
-    } elseif ($script:DryRunMode) {
-        Write-MeasureDryRunMark -Dir $BinDir -Reason "target\release\$MEASURE_AREKA_EXE does not exist yet (not built under -DryRun)"
-        Write-Info "[perf-loop] -DryRun: placed only the mark for the $Side side copy: $BinDir"
-        return $BinDir
-    } else {
-        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "build passed but the executable is missing: $exeSrc"
-    }
-
-    $pdbSrc = Join-Path $releaseDir $MEASURE_AREKA_PDB
-    $pdbState = 'no_pdb'
-    if (Test-Path -LiteralPath $pdbSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $pdbSrc -Destination (Join-Path $BinDir $MEASURE_AREKA_PDB) -Force
-        $pdbState = $MEASURE_AREKA_PDB
-    } else {
-        Write-Problem "[perf-loop] warning: no PDB ($pdbSrc). Stage 3 (per-function attribution) cannot resolve symbols."
-    }
-
-    $helperSrc = Join-Path $helperDir $MEASURE_HELPER_EXE
-    if ($helperState -eq 'missing') {
-        Write-Problem "[perf-loop] warning: the helper build failed, so it is not copied (BUILD.txt says helper=missing)."
-    } elseif (Test-Path -LiteralPath $helperSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $helperSrc -Destination (Join-Path $BinDir $MEASURE_HELPER_EXE) -Force
-        if ($helperState -eq 'skipped') { $helperState = 'copied' }
-    } else {
-        Write-Problem "[perf-loop] warning: no 32bit SHIORI helper ($helperSrc). The run will have no real SHIORI."
-        $helperState = 'missing'
-    }
-
-    $git = Get-MeasureGitFacts
-    $lines = @(
-        "side=$Side",
-        "time_utc=$(Get-UtcStamp)",
-        "goal=$($script:GoalName)",
-        "git_head=$($git.Head)",
-        "git_dirty=$($git.Dirty)",
-        "release_debug_env=$(Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT)",
-        "exe=$MEASURE_AREKA_EXE",
-        "exe_sha256=$(Get-MeasureSha256 -Path (Join-Path $BinDir $MEASURE_AREKA_EXE))",
-        "pdb=$pdbState",
-        "helper=$helperState",
-        "helper_sha256=$(Get-MeasureSha256 -Path (Join-Path $BinDir $MEASURE_HELPER_EXE))",
-        "dry_run=$(Format-LoopBool $script:DryRunMode)"
-    )
-    Set-Content -LiteralPath (Join-Path $BinDir $MEASURE_FILE_BUILD) -Value (($lines -join "`n") + "`n") -Encoding utf8 -NoNewline
-    foreach ($line in $lines) { Write-Info "  $line" }
-    Write-Info "[perf-loop] $Side side executable set: $BinDir"
-    return $BinDir
-}
 
 # =============================================================================
 # measure-baseline — 25 分 × 1 本（-Build release|dev）

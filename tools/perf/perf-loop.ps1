@@ -37,7 +37,7 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
   followup          followup/{run.log, probe.log, followup.txt, followup-verdict.txt}
   final             <build>/ ごとに走行 5 つ＋verdict.txt（spec の results へも写す）
 
-子の道具の出力は**必ず UTF-8 として読む**（perf-loop.common.ps1 の Invoke-Child）。
+子の道具の出力は**必ず UTF-8 として読む**（perf-tool-base.ps1 の Invoke-Child）。
 端末の既定コードページが CP932 の環境でも、道具が UTF-8 で書いた文字が化けないため。
 これは字面を比べる検査（goal-text と goals/*.goal.md の一致）の前提である。
 
@@ -186,7 +186,7 @@ $SUBCOMMANDS_MEASURE = @(
     'measure-baseline', 'rank-run', 'rank', 'prepare-ab', 'measure-ab', 'compare', 'followup', 'final'
 )
 $SUBCOMMANDS = $SUBCOMMANDS_ENTRY + $SUBCOMMANDS_MEASURE
-$BUILD_KINDS = @('dev', 'release')
+# -Build の語彙 $BUILD_KINDS と終了コード $EXIT_* は perf-loop.common.ps1 に置く
 
 # 自己較正を回す道具の一覧（順序も較正値＝この順で回す）。
 #   Task  … その道具を作ったタスク（tasks.md 5.1〜6.4）
@@ -204,14 +204,6 @@ $SELFTEST_TOOLS = @(
 
 #: 自己較正の最後に回す自前の検査（道具ではなく文書との一致を見る＝tasks.md (7.1)）。
 $SELFTEST_GOAL_TEXT_NAME = 'goal-text-vs-goal-md'
-
-# 終了コード
-$EXIT_OK             = 0
-$EXIT_RUN_FAILED     = 1
-$EXIT_NOT_QUIET      = 2
-$EXIT_BAD_ARGS       = 3
-$EXIT_MEASURE_FAILED = 4
-$EXIT_UNAVAILABLE    = 5
 
 # 判定語（読む側＝perf-loop-iteration スキル・台帳と突き合わせる字面）
 $STAGE_AVAILABLE     = 'AVAILABLE'
@@ -243,9 +235,7 @@ $script:DryRunMode     = [bool]$DryRun
 
 . (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-
-# 計測サブコマンド 8 本の本体（共通部品と較正値の後・$repoRoot の後に読むこと）
+# 計測サブコマンド 8 本の本体（共通部品と較正値の後に読むこと。$repoRoot・$EXIT_* は共通部品が置く）
 . (Join-Path $PSScriptRoot 'perf-loop.measure.ps1')
 
 # =============================================================================
