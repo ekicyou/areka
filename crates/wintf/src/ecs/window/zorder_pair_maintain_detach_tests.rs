@@ -41,11 +41,13 @@ use windows::core::w;
 use crate::api::{clear_window_owner, set_window_owner};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair_test_support::{
-    DETACHED_MARK, SIGNOFF_DIRECTIVES, SKIP_TAG, assert_line_count, create_test_window,
-    destroy_test_window, hwnd_hex, is_alive, lines_with, owner_of, pair_schedule, spawn_window,
+    CAPTURE_DIRECTIVES, DETACHED_MARK, SET_WINDOW_POS_TAG, SIGNOFF_DIRECTIVES, SKIP_TAG,
+    assert_line_count, create_test_window, destroy_test_window, hwnd_hex, is_alive,
+    issue_control_command, lines_with, owner_of, pair_schedule, spawn_window,
 };
 use crate::ecs::window::{
-    KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderPairStrategy,
+    IssuedPairFix, KeepDirectlyAbove, OwnerLink, ReassertZOrder, WindowHandle, ZOrderPairStrategy,
+    flush_window_pos_commands,
 };
 
 /// 切離しに失敗した記録の判定語。
@@ -57,10 +59,12 @@ const DETACH_FAILED_MARK: &str = "owner の切離しに失敗しました";
 
 /// 実窓 2 枚のペアを World へ載せ、owner を実際に張るところまで進める。
 ///
-/// 返すのは（バルーン窓 entity, キャラ窓 entity）。確立系が初期隣接の確定のために入れる
-/// 再断行の要求はここで外す——**重なりの是正は維持系のテストの担当**であり、本ファイルが
-/// 見るのは切離しだけである（残すと実窓の重なりを動かす指令が飛び、破棄の観測に無関係な
-/// 記録が混じる）。
+/// 返すのは（バルーン窓 entity, キャラ窓 entity）。**重なりの是正は維持系のテストの担当**で
+/// あり、本ファイルが見るのは切離しだけである。確立系と維持系は chain でつながるため、確立系が
+/// 入れた再断行の要求は同じ巡の維持系がもう使い、非表示の窓どうしは隣と測れないので是正の
+/// 指令がキューに積まれ、出した印 [`IssuedPairFix`] も付く。よって要求と印を外し、積まれた
+/// 指令も捕捉窓の外で流し切る（キューはスレッドローカルに残るため、流し忘れると後の捕捉の
+/// flush に前の巡の 1 本が混じる）。
 fn establish_pair(
     world: &mut World,
     schedule: &mut Schedule,
@@ -82,7 +86,10 @@ fn establish_pair(
         world.entity(balloon).contains::<OwnerLink>(),
         "前提: 張れた事実の記録が付いているはず"
     );
-    world.entity_mut(balloon).remove::<ReassertZOrder>();
+    world
+        .entity_mut(balloon)
+        .remove::<(ReassertZOrder, IssuedPairFix)>();
+    flush_window_pos_commands();
     (balloon, character)
 }
 
@@ -144,12 +151,20 @@ fn character_first_despawn_detaches_the_owner_and_spares_the_balloon() {
     // キャラ窓の実体が消える（窓そのものはまだ実在する）。
     world.entity_mut(character).despawn();
 
-    let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
         schedule.run(&mut world);
+        // 対照: 捕捉が生きていれば必ず現れる 1 本（窓は動かさない）。
+        issue_control_command(balloon_hwnd);
     });
 
     assert_line_count(&out, DETACHED_MARK, 1, "切離しの記録は 1 本だけ");
     assert_line_count(&out, DETACH_FAILED_MARK, 0, "切離しは成功しているはず");
+    assert_line_count(
+        &out,
+        SET_WINDOW_POS_TAG,
+        1,
+        "切離しの巡は窓へ書き込まず、対照の 1 本だけが出るはず（下ごしらえの残りも混じらない）",
+    );
     let detached = lines_with(&out, DETACHED_MARK)[0];
     assert!(
         detached.contains(&format!("entity={balloon:?}")),

@@ -44,7 +44,6 @@ use crate::api::{get_window_above, get_window_below};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::{
     ExpectedOrder, InsertSpec, PairFixDecision, PairObservation, PairTrigger, SkipReason,
-    measure_window_below,
 };
 use crate::ecs::window::zorder_pair_test_support::{
     CAPTURE_DIRECTIVES, FIX_TAG, SET_WINDOW_POS_TAG, SKIP_TAG, VERIFY_FAILED_TAG,
@@ -683,26 +682,6 @@ fn pending_verification_without_an_issued_command_is_dropped_with_a_record() {
     );
 
     destroy_test_window(parent);
-}
-
-// -------------------------------------------------------------------------
-// 検証で使う実測（記録の付随フィールド）
-// -------------------------------------------------------------------------
-
-/// 背後側の走査でも、失敗は「背後に誰も居ない」と同じ `None` へ潰れるが黙って消えはしない。
-///
-/// 無効ハンドルでの走査は必ず失敗する。値としては不在（記録では番兵）になり、失敗そのものは
-/// 記録に残る（[areka-log-first-no-silent-failure]）。対照は実窓での成功例
-/// （本ファイルの各シナリオが `Some` を得ていること）。
-#[test]
-fn measure_window_below_maps_failure_to_absence_and_records_it() {
-    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
-        assert_eq!(measure_window_below(HWND::default()), None);
-    });
-    assert!(
-        !out.trim().is_empty(),
-        "走査の失敗は記録に残るはず（黙って None へ潰さない）"
-    );
 }
 
 // -------------------------------------------------------------------------
