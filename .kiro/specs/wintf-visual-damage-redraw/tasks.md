@@ -80,7 +80,7 @@
   - _Requirements: 1.1, 2.5, 2.7, 3.1, 3.3_
 
 - [ ] 5. 係への組み込みと記録
-- [ ] 5.1 描画面が入れ物を持ったことがあるかを覚える
+- [x] 5.1 描画面が入れ物を持ったことがあるかを覚える
   - 描画面の描画の部品に「入れ物を持ったことがある」を持たせ、入れ物を作る回に初めてか作り直しかを返す口を足す
   - 描画面の作成・作り直し（`set_surface`）と放し（`clear`）が入れ物を捨てる今の作りに乗る＝新しい描画面の次の回は入れ物が新しく、必ず全部合成して全面を写す（4.3）
   - 完了の姿: 初めての作成で初めて、捨てた後の作成で作り直しが返り、同じ大きさで描画面を差し替えた後の作成でも作り直しが返るテストが通る
@@ -146,3 +146,4 @@
 - 4.1: 入れ物の控えの欄と口に `cfg_attr(not(test), expect(dead_code))` が付いている。4.3 で外す。`same_root` の COM の同一性は windows-core 0.62 の `IUnknown` の `PartialEq` に頼る＝bindgen へ移すとき同じ意味かを確かめる。
 - 4.2: `compose_partial` と `entries` の再公開に `cfg_attr(not(test), expect(...))` が付いている。4.3 で外す。範囲だけの WARP のテストでは小さい描画面（16×16）だとにじみの余白で計画が全面（CoversSurface）になる＝32×32 以上で組む。
 - 4.3: `compose_planned` と `mark_presented` に `cfg_attr(not(test), expect(dead_code))` が残る。5.2 で外す。「項にできない回は控えを空にし次の回が `Full(NoPrev)`」を `compose_planned` で直に固めるテストは無い（6.1 で足せるなら足す）。
+- 5.1: `SurfaceGraphics::note_composite_created` に `cfg_attr(not(test), expect(dead_code))` が付いている。5.2 で外す。呼ぶのは係が入れ物を作る枝（置き場が空か大きさ違い）だけ。
