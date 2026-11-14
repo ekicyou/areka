@@ -141,7 +141,7 @@ pub(crate) fn on_char_drag(
 /// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`saved_form_anchor`]
 /// （descript の向き＝次の起動の読み戻しの向き・4.8）の形にして [`char_pos_entries`]→
 /// [`persist_entries`] へ渡し、Ghost 永続スコープへ即時 write-through する（fire-and-forget・
-/// 非ブロッキング）。marker 不在（防御）は `debug!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
+/// 非ブロッキング）。marker 不在（防御）は「位置を保存しなかった」の `warn!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
 /// このドラッグの確定と、起動の最後に並べ終えた時点（[`crate::persist::persist_unremembered_char_positions`]）の
 /// 2 つ——`on_char_drag`（ドラッグ中）・[`move_window_to`]・[`resize_window_to`]・復元時再射影は書かない。
 pub fn on_char_drag_end(
@@ -178,9 +178,9 @@ pub fn on_char_drag_end(
                 None => {
                     let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
                     else {
-                        debug!(
+                        warn!(
                             ?entity,
-                            "DraggingState も WindowPos.position も無いため位置保存を skip（防御・no-op）"
+                            "DraggingState も WindowPos.position も無いため位置を保存しなかった"
                         );
                         return false;
                     };
@@ -206,7 +206,7 @@ pub fn on_char_drag_end(
             // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
             // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
             // スコープは CharWindowMarker から逆引き（usize→u32）。marker 不在（防御）は
-            // debug＋skip（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
+            // warn＋skip（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
             match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
                 Some(scope) => {
                     // 原点（下端中央）基準へ移してから保存する。左上 x のまま保存すると、
@@ -252,10 +252,7 @@ pub fn on_char_drag_end(
                     persist_entries(world, entries);
                 }
                 None => {
-                    debug!(
-                        ?entity,
-                        "CharWindowMarker 不在のため位置保存を skip（防御・no-op）"
-                    );
+                    warn!(?entity, "CharWindowMarker が無いため位置を保存しなかった");
                 }
             }
             false
@@ -641,8 +638,8 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
 /// # 縮退（panic しない・log-first・no-op）
 ///
 /// バルーンの `WindowPos.position` 不在／[`BalloonWindowMarker`] 不在／追従元キャラ窓
-/// （その `WindowPos.position`・[`Anchored`]・`WindowPos.size` のいずれか）不在は
-/// `debug!`＋skip する。`BalloonFollow.offset`（in-session 表現）は保存の直後に最終確定位置から
+/// （その `WindowPos.position`・`WindowPos.size` のいずれか）不在は「位置を保存しなかった」の
+/// `warn!`＋skip する（[`Anchored`] は記録だけが使うので無くても保存する・指摘 7）。`BalloonFollow.offset`（in-session 表現）は保存の直後に最終確定位置から
 /// 出し直す（補正の前の位置・[`reestablish_balloon_follow`]）。最後の OnDrag の値のまま残さない。
 ///
 /// # 解放時の limit 補正と**順序の固定**（areka-P0-windowposition-limit C8・要件 2.5/5.4）
@@ -693,26 +690,28 @@ pub(crate) fn on_balloon_drag_end(
             // 更新済み・on_balloon_drag と同源。ev.position(cursor) は使わない）。
             let Some(balloon_pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
             else {
-                debug!(
+                warn!(
                     ?entity,
-                    "バルーン窓の WindowPos.position 不在のため offset 保存を skip（防御・no-op）"
+                    "バルーン窓の WindowPos.position が無いため位置を保存しなかった"
                 );
                 return false;
             };
 
             // scope はバルーン窓自身の BalloonWindowMarker（追従元 char と同番号）。
             let Some(scope) = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope) else {
-                debug!(
+                warn!(
                     ?entity,
-                    "BalloonWindowMarker 不在のためバルーン offset 保存を skip（防御・no-op）"
+                    "BalloonWindowMarker が無いためバルーンの位置を保存しなかった"
                 );
                 return false;
             };
 
             // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、最終 char_pos・anchor・
             // char_size を読む（in-session の BalloonFollow.offset は SAVE に使わない）。
-            let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos, &Anchored)>();
-            let mut found: Option<(Entity, Point, Anchor, SizePx)> = None;
+            // anchor は記録だけが使うので任意（無くても保存する・指摘 7）。
+            let mut chars =
+                world.query::<(Entity, &BalloonFollow, &WindowPos, Option<&Anchored>)>();
+            let mut found: Option<(Entity, Point, Option<Anchor>, SizePx)> = None;
             for (char_window, follow, char_wp, anchored) in chars.iter(world) {
                 if follow.balloon != entity {
                     continue;
@@ -726,7 +725,7 @@ pub(crate) fn on_balloon_drag_end(
                 found = Some((
                     char_window,
                     char_pos,
-                    anchored.0,
+                    anchored.map(|a| a.0),
                     SizePx {
                         w: size.width,
                         h: size.height,
@@ -735,9 +734,9 @@ pub(crate) fn on_balloon_drag_end(
                 break;
             }
             let Some((char_window, char_pos, anchor, char_size)) = found else {
-                debug!(
+                warn!(
                     ?entity,
-                    "追従元キャラ窓（位置/anchor/寸法）不在のためバルーン offset 保存を skip（防御・no-op）"
+                    "追従元キャラ窓（位置/寸法）が無いためバルーンの位置を保存しなかった"
                 );
                 return false;
             };
@@ -827,7 +826,7 @@ pub(crate) fn on_balloon_drag_end(
 ///
 /// # 縮退を持たない理由（要件 6.3 の適用範囲）
 ///
-/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `debug!`＋skip している
+/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `warn!`＋skip している
 /// （保存値の導出に同じ entity が要る）。ここへ到達した時点で対象は確定しており、解決に
 /// 失敗する余地が無い。素材を持たない窓（`Side`・保存値が効いた scope・消費済み）は縮退
 /// ではなく**正常な no-op** ゆえ警告も出さない——出すと `Side` のバルーンをドラッグする

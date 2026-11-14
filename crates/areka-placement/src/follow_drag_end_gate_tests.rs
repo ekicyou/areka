@@ -409,3 +409,99 @@ fn cancel_after_threshold_persists_as_today() {
 
     rig.close();
 }
+
+/// 表のテストで外す部品（指摘 7）。
+#[derive(Debug, Clone, Copy)]
+enum Missing {
+    /// バルーン窓の `BalloonWindowMarker`。
+    BalloonMarker,
+    /// キャラ窓の `CharWindowMarker`。
+    CharMarker,
+    /// キャラ窓の `Anchored`（記録だけが使うので、バルーンの保存は書かれる）。
+    CharAnchored,
+}
+
+/// 指摘 7（要件 3.1・3.3・5.6・5.7・8.4）: 部品を 1 つずつ外してドラッグを終える。
+/// 印の無いバルーン・印の無いキャラ窓は「位置を保存しなかった」の `warn!` が 1 行、
+/// `Anchored` の無いキャラ窓ではバルーンの相対位置が保存される（直す前は保存されず赤）。
+#[test]
+fn drag_end_without_a_part_warns_or_still_saves() {
+    const SKIPPED: &str = "位置を保存しなかった";
+    for missing in [
+        Missing::BalloonMarker,
+        Missing::CharMarker,
+        Missing::CharAnchored,
+    ] {
+        let mut rig = Rig::new();
+        let dragged = match missing {
+            Missing::BalloonMarker => {
+                rig.world
+                    .entity_mut(rig.balloon)
+                    .remove::<BalloonWindowMarker>();
+                rig.balloon
+            }
+            Missing::CharMarker => {
+                rig.world
+                    .entity_mut(rig.char_w)
+                    .remove::<CharWindowMarker>();
+                rig.char_w
+            }
+            Missing::CharAnchored => {
+                rig.world.entity_mut(rig.char_w).remove::<Anchored>();
+                rig.balloon
+            }
+        };
+        rig.put(started(dragged));
+        rig.tick();
+        let balloon_final = Point { x: 773, y: 409 };
+        if dragged == rig.balloon {
+            rig.world
+                .get_mut::<WindowPos>(rig.balloon)
+                .unwrap()
+                .position = Some(balloon_final);
+        }
+        rig.put(ended(dragged, false));
+        let ((), events) = log_capture_kit::capture(|| rig.tick());
+        let skipped = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN && e.message().contains(SKIPPED))
+            .count();
+
+        let saved = rig.saved();
+        match missing {
+            Missing::BalloonMarker | Missing::CharMarker => {
+                assert_eq!(skipped, 1, "{missing:?}: warn! が 1 行でない: {events:?}");
+            }
+            Missing::CharAnchored => {
+                assert_eq!(
+                    skipped, 0,
+                    "{missing:?}: 保存したのに warn! が出た: {events:?}"
+                );
+                let scope = SCOPE as u32;
+                assert!(
+                    same_pairs(
+                        &balloon_offset_keys(&saved),
+                        &[
+                            (
+                                PersistKey::BalloonOffset {
+                                    scope,
+                                    axis: Axis::X
+                                },
+                                (balloon_final.x - CHAR_START.x).to_string()
+                            ),
+                            (
+                                PersistKey::BalloonOffset {
+                                    scope,
+                                    axis: Axis::Y
+                                },
+                                (balloon_final.y - CHAR_START.y).to_string()
+                            ),
+                        ]
+                    ),
+                    "Anchored の無いキャラ窓でバルーンの相対位置が保存されていない: {saved:?}"
+                );
+            }
+        }
+        rig.close();
+    }
+}
