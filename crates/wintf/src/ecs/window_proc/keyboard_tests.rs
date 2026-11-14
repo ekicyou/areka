@@ -1,14 +1,13 @@
 //! `WM_ACTIVATE` の非活性化がドラッグを中断する範囲と、閾値前（準備中）の取り消しで
 //! 終了の知らせを配らないことの決定論テスト。
 //!
-//! 知らせの件数は `dispatch_drag_events` を 1 回呼んだ後の `Messages<DragEndEvent>` を
-//! `drain` して数える。累積器の返す形（`FlushResult`）には触らない。
+//! 知らせの件数は `dispatch_drag_events` を 1 回呼んだ後に、終了の受け手が呼ばれた数で数える
+//! （`drag::seen_test_support`）。累積器の返す形（`FlushResult`）には触らない。
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_ESCAPE;
@@ -16,6 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_ACTIVATE, WM_CANCELMODE, WM_CAPTURECHANGED, WM_KEYDOWN,
 };
 
+use crate::ecs::drag::seen_test_support::{take, watch};
 use crate::ecs::drag::{
     DragAccumulatorResource, DragEndEvent, DragState, DragTransition, cancel_dragging,
     dispatch_drag_events, snapshot_drag_state, start_dragging, start_preparing,
@@ -97,6 +97,7 @@ fn setup_preparing() -> (Rc<RefCell<EcsWorld>>, Entity) {
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     // 累積器は EcsWorld::new が資源と wndproc 側の控えへ置いたものをそのまま使う（入れ直すと控えとずれる）。
     let entity = world.borrow_mut().world_mut().spawn_empty().id();
+    watch(world.borrow_mut().world_mut(), entity);
     start_preparing(entity, PhysicalPoint::new(10, 20), HWND::default());
     assert!(matches!(snapshot_drag_state(), DragState::Preparing { .. }));
     (world, entity)
@@ -113,12 +114,12 @@ fn send(world: &Rc<RefCell<EcsWorld>>, entity: Entity, msg: u32, wparam: usize) 
     crate::ecs::dispatch_window_message(world, entity, &message);
 }
 
-/// 1 回の画面更新として配り、届いた終了の知らせを読み出す。
+/// 1 回の画面更新として配り、終了の受け手に届いた知らせを読み出す。
 fn dispatch_once(world: &Rc<RefCell<EcsWorld>>) -> Vec<DragEndEvent> {
     let mut w = world.borrow_mut();
     let w = w.world_mut();
     dispatch_drag_events(w);
-    w.resource_mut::<Messages<DragEndEvent>>().drain().collect()
+    take::<DragEndEvent>(w)
 }
 
 /// 準備中の取り消しは状態を取り消しの印つきの休む状態へ落とし、終了の知らせを配らない。

@@ -241,13 +241,14 @@ pub fn update_dragging(
     drag_context: Option<&crate::ecs::drag::WindowDragContextResource>,
 ) {
     update_drag_state(|state| {
-        match *state {
+        match state {
             DragState::JustStarted {
                 entity,
                 start_pos,
                 start_time,
                 ..
             } => {
+                let (entity, start_pos, start_time) = (*entity, *start_pos, *start_time);
                 // WindowDragContextResource から Window 情報を読み取り
                 // 窓を動かすのは、控えが動かすと言い、かつ始めの位置があるときだけ
                 let (hwnd, initial_window_pos, move_window, constraint) = match drag_context
@@ -287,27 +288,12 @@ pub fn update_dragging(
                 };
             }
             DragState::Dragging {
-                entity,
-                start_pos,
-                current_pos: old_pos,
-                start_time,
-                hwnd,
-                initial_window_pos,
-                move_window,
-                constraint,
+                current_pos: cur,
+                prev_pos,
                 ..
             } => {
-                *state = DragState::Dragging {
-                    entity,
-                    start_pos,
-                    current_pos,
-                    prev_pos: old_pos,
-                    start_time,
-                    hwnd,
-                    initial_window_pos,
-                    move_window,
-                    constraint,
-                };
+                *prev_pos = *cur;
+                *cur = current_pos;
             }
             _ => {}
         }

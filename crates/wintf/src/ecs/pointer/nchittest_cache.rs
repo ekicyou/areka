@@ -258,44 +258,6 @@ mod tests {
         clear_nchittest_cache();
     }
 
-    /// HTTRANSPARENT がキャッシュに格納・取得できることを検証
-    #[test]
-    fn test_cache_httransparent_storage() {
-        let hwnd = HWND(5001 as *mut std::ffi::c_void);
-        let screen_point = (300, 400);
-        let httransparent = LRESULT(HTTRANSPARENT as isize);
-
-        // HTTRANSPARENT を挿入
-        insert(hwnd, screen_point, httransparent);
-
-        // 同じ座標で HTTRANSPARENT が取得できる
-        let result = lookup(hwnd, screen_point);
-        assert_eq!(result, Some(httransparent));
-        assert_eq!(result.unwrap().0, -1);
-
-        // クリーンアップ
-        clear_nchittest_cache();
-    }
-
-    /// HTCLIENT と HTTRANSPARENT が異なる HWND で共存できることを検証
-    #[test]
-    fn test_cache_htclient_and_httransparent_coexist() {
-        let hwnd1 = HWND(6001 as *mut std::ffi::c_void);
-        let hwnd2 = HWND(6002 as *mut std::ffi::c_void);
-        let screen_point = (150, 250);
-        let htclient = LRESULT(HTCLIENT as isize);
-        let httransparent = LRESULT(HTTRANSPARENT as isize);
-
-        insert(hwnd1, screen_point, htclient);
-        insert(hwnd2, screen_point, httransparent);
-
-        assert_eq!(lookup(hwnd1, screen_point), Some(htclient));
-        assert_eq!(lookup(hwnd2, screen_point), Some(httransparent));
-
-        // クリーンアップ
-        clear_nchittest_cache();
-    }
-
     /// 透過になるのは「当たりなし」かつ「左を押していない」ときだけ
     #[test]
     fn test_answer_four_combinations() {

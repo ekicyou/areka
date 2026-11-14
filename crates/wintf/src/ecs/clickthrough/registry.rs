@@ -78,21 +78,14 @@ impl ClickThroughRegistry {
         }
     }
 
-    /// 監視対象窓を除去する（ウィンドウライフサイクル追随・R7.2 非破壊）。
-    ///
-    /// 対象が存在すれば `true`、無ければ `false` を返す。
-    pub(crate) fn remove(&mut self, window: Entity) -> bool {
-        let before = self.targets.len();
-        self.targets.retain(|t| t.window != window);
-        self.targets.len() != before
-    }
-
-    /// 登録済み対象窓数。
+    /// 登録済み対象窓数。使い手はテストだけ。
+    #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.targets.len()
     }
 
-    /// 登録済み対象が無いか。
+    /// 登録済み対象が無いか。使い手はテストだけ。
+    #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.targets.is_empty()
     }
@@ -136,8 +129,8 @@ impl ClickThroughRegistry {
 
     /// 述語が `false` を返す対象を一括除去する（窓破棄追随のバルク版・R7.2 非破壊）。
     ///
-    /// `remove` は Entity 指定の単発除去だが、本メソッドは「World 上に生存しない窓」を
-    /// まとめて刈り取る（`prune_dead_targets` が World 参照で述語を与える）。除去件数を返す。
+    /// 「World 上に生存しない窓」をまとめて刈り取る（`prune_dead_targets` が World 参照で
+    /// 述語を与える）。除去件数を返す。
     pub(crate) fn retain<F: FnMut(&ClickThroughTarget) -> bool>(&mut self, mut keep: F) -> usize {
         let before = self.targets.len();
         self.targets.retain(|t| keep(t));
@@ -169,24 +162,6 @@ mod tests {
 
         assert_eq!(reg.last_applied(e), Some(DesiredState::Opaque));
         assert_eq!(reg.len(), 1);
-    }
-
-    #[test]
-    fn register_then_remove() {
-        let mut world = World::new();
-        let e = world.spawn_empty().id();
-        let mut reg = ClickThroughRegistry::new();
-
-        assert!(reg.is_empty());
-        reg.register(e, hwnd(1));
-        assert!(!reg.is_empty());
-        assert!(reg.last_applied(e).is_some());
-
-        assert!(reg.remove(e));
-        assert!(reg.is_empty());
-        assert_eq!(reg.last_applied(e), None);
-        // 二重除去は false。
-        assert!(!reg.remove(e));
     }
 
     #[test]

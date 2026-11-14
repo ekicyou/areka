@@ -745,7 +745,7 @@ mod tests {
     /// 1. クリック透過機構が起動し（ワーカ＋判定ループ）、返る `ClickThroughHandle` を得る。
     /// 2. 登録面 `ClickThroughRegistryHandle`（NonSend リソース）が World へ挿入される
     ///    （areka task 4.1 が `get_non_send` で取得し窓登録する登録面）。
-    /// 3. 登録面経由の register/remove が反映される（共有レジストリ）。
+    /// 3. 登録面経由の register が反映される（共有レジストリ）。
     /// 4. `ClickThroughHandle` を drop するとワーカが stop/join されハングしない（RAII）。
     ///
     /// フル `run()` のメッセージループ（実 vblank relay 駆動）は回さず、`wire_new_path` と同様に
@@ -773,8 +773,6 @@ mod tests {
             // 登録面経由の register が共有レジストリへ反映される（areka 4.1 の登録経路）。
             reg_handle.register(e, windows::Win32::Foundation::HWND::default());
             assert_eq!(reg_handle.len(), 1, "登録面 register が反映される");
-            assert!(reg_handle.remove(e), "登録面 remove が反映される");
-            assert!(reg_handle.is_empty());
         }
 
         // handle drop でワーカ stop/join。ハングせず復帰すれば RAII 健全。

@@ -106,7 +106,7 @@ let wake_event = Arc::new(event_listener::Event::new());
 
 let handle = start_click_through(
     Rc::downgrade(&self.world), // Weak<RefCell<EcsWorld>>: shutdown で upgrade None → ループ終了
-    Rc::clone(&registry),      // Rc<RefCell<ClickThroughRegistry>>: start 後も register/remove 可能
+    Rc::clone(&registry),      // Rc<RefCell<ClickThroughRegistry>>: start 後も register 可能
     Arc::clone(&wake_event),   // Arc<event_listener::Event>: 二重起床の単一 wake event
     running,                   // Rc<Cell<bool>>: run() のループが戻った後の起床では判定を回さない
 );
@@ -146,7 +146,7 @@ fn register_click_through_windows(
 }
 ```
 
-窓破棄時の除去は機構内 `prune_dead_targets`（`Window` と、登録の HWND と同じ `WindowHandle` を持つ wintf の窓だけを残す・`evaluate_targets` 冒頭で自動除去）が担うため、アプリ側の明示 `remove` は必須ではない（despawn で十分）。
+窓破棄時の除去は機構内 `prune_dead_targets`（`Window` と、登録の HWND と同じ `WindowHandle` を持つ wintf の窓だけを残す・`evaluate_targets` 冒頭で自動除去）が担う。アプリ側の除去の口は無い（despawn で十分）。
 
 ### 4.4 areka の DComp（WUC）オプトイン
 

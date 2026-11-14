@@ -25,7 +25,7 @@ pub enum DragTransition {
 }
 
 /// ドラッグ累積器（wndproc→ECS転送用）
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DragAccumulator {
     /// 前回flush以降の累積デルタ
     accumulated_delta: PhysicalPoint,
@@ -43,12 +43,7 @@ pub struct DragAccumulator {
 impl DragAccumulator {
     /// 新しいDragAccumulatorを作成
     pub fn new() -> Self {
-        Self {
-            accumulated_delta: PhysicalPoint::new(0, 0),
-            current_dragging_entity: None,
-            current_pos: PhysicalPoint::new(0, 0),
-            pending_transitions: Vec::new(),
-        }
+        Self::default()
     }
 
     /// デルタを累積
@@ -111,12 +106,6 @@ impl DragAccumulator {
     }
 }
 
-impl Default for DragAccumulator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// flush()の返却値
 #[derive(Debug)]
 pub struct FlushResult {
@@ -134,7 +123,7 @@ pub struct FlushResult {
 }
 
 /// DragAccumulatorのECSリソースラッパー
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Default)]
 pub struct DragAccumulatorResource {
     inner: Arc<Mutex<DragAccumulator>>,
 }
@@ -142,9 +131,7 @@ pub struct DragAccumulatorResource {
 impl DragAccumulatorResource {
     /// 新しいDragAccumulatorResourceを作成
     pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(DragAccumulator::new())),
-        }
+        Self::default()
     }
 
     /// デルタを累積（wndprocから呼ばれる）
@@ -191,12 +178,6 @@ impl DragAccumulatorResource {
                 None
             }
         }
-    }
-}
-
-impl Default for DragAccumulatorResource {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

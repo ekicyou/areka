@@ -13,11 +13,10 @@
 use std::time::Instant;
 
 use areka_sylphya::{Axis, PersistKey};
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::{
-    DragAccumulatorResource, DragConfig, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
-    OnDragEnd, WindowDragContextResource, dispatch_drag_events,
+    DragAccumulatorResource, DragConfig, DragTransition, OnDragEnd, WindowDragContextResource,
+    dispatch_drag_events,
 };
 use wintf::ecs::{PhysicalPoint, Point, Window, WindowPos};
 
@@ -63,13 +62,9 @@ impl Rig {
         let sylphya = SylphyaRig::fake();
 
         // `dispatch_drag_events` が引くリソース（wintf の `EcsWorld::new` と同じ登録）。
-        // 開始の腕は `Messages<DragStartEvent>` を `resource_mut` で引くので無いと落ちる。
         let mut world = World::new();
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
-        world.init_resource::<Messages<DragStartEvent>>();
-        world.init_resource::<Messages<DragEvent>>();
-        world.init_resource::<Messages<DragEndEvent>>();
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![rect(0, 0, 1920, 1200)],
         });

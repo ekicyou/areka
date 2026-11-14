@@ -161,7 +161,7 @@
   - _Requirements: 2.1, 5.4_
 
 - [ ] 7. 確かめ
-- [ ] 7.1 同じ範囲へ audit をかけ直し、新しい指摘が 0 件になるまで直す
+- [x] 7.1 同じ範囲へ audit をかけ直し、新しい指摘が 0 件になるまで直す
   - 範囲の 24 ファイルと新しいテストのファイル 1 本に、件数の上限なし・全部読む作法で `/ponytail:ponytail-audit` をかけ直す。新しい指摘（直しが生んだものを含む）を直してかけ直す。
   - 新しい指摘が要件 3 の 3 種類に当たるときは直さずに開発者へ議題として出す。
   - 5 回目で 0 件に収まらず、5 回目に「必ず直す」と本番の振る舞いに関わる指摘が無ければ、開発者に一言知らせて 5 回目の指摘を直したところで打ち切る。
@@ -187,3 +187,4 @@
 - 範囲の外の例の説明 2 か所が、クリック透過の刈る条件を今も「Entity の生存確認」と書く（`crates/areka/examples/mock-shell.rs:135`・`crates/areka/examples/emo-present/systems.rs:17`）。5.1 で条件が「wintf の窓（`Window`＋同じ HWND の `WindowHandle`）だけ」に変わった＝完了の棚卸で拾う（5.1 のレビュー）。
 - 6.2 へ申し送り（5.2 のレビュー）: `clickthrough/controller.rs` の `ClickThroughRegistryHandle` の説明（「破棄追随」「World 生存を確認して」＝5.1 前の刈る条件）・`doc/click-through.md` 4.3 の「dedupe（冪等）」・`controller.rs` の「結線は task 3.2 の責務」。起動の `debug!` の旧い文言は `tools/perf/fixtures-loop/followup/*/run.log` の 3 行目に検体のデータとして残るだけで、読む道具は無い。
 - 5.3 の「wintf のテストのどこにもカーソルを動かす呼び出しが無い」は、普通に走るテスト（`--ignored` 無し）の話。`SetCursorPos` が残るのは `crates/wintf/src/ecs/tooltip/os_tests.rs` の `#[ignore]` の実機の試しだけで、`tooltip/` はこの spec の範囲の外（7.2 で差分 0）。
+- 7.1 の指摘 24 で、ドラッグの知らせ 3 つの `Messages` の登録と書き込みを消した（読み手は 2.1 で消えた `cleanup_drag_state` だけだった）。進行役の決めで範囲の外の 10 本＋コンパイラが指した `mouse_dblclick_wheel_tests.rs` に触った（`audit-placement-core` へ行を伝え済み）。テストは受け手の呼ばれた数で数える（`drag/seen_test_support.rs`）。

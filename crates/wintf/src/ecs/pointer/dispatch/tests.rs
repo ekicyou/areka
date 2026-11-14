@@ -25,49 +25,6 @@ fn test_build_bubble_path_hierarchy() {
 }
 
 #[test]
-fn test_dispatch_with_no_handlers() {
-    let mut world = World::new();
-    let entity = world.spawn(PointerState::default()).id();
-
-    // ハンドラなしでもパニックしない
-    dispatch_pointer_events(&mut world);
-
-    // エンティティがまだ存在することを確認
-    assert!(world.get_entity(entity).is_ok());
-}
-
-#[test]
-fn test_dispatch_with_handler() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static CALL_COUNT: AtomicU32 = AtomicU32::new(0);
-
-    fn test_handler(
-        _world: &mut World,
-        _sender: Entity,
-        _entity: Entity,
-        ev: &Phase<PointerState>,
-    ) -> bool {
-        if ev.is_bubble() {
-            CALL_COUNT.fetch_add(1, Ordering::SeqCst);
-        }
-        false // 伝播続行
-    }
-
-    CALL_COUNT.store(0, Ordering::SeqCst);
-
-    let mut world = World::new();
-    let entity = world
-        .spawn((PointerState::default(), OnPointerMoved(test_handler)))
-        .id();
-
-    dispatch_pointer_events(&mut world);
-
-    // Bubble フェーズでハンドラが呼ばれたことを確認
-    assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 1);
-    assert!(world.get_entity(entity).is_ok());
-}
-
-#[test]
 fn test_dispatch_moved_fires_every_tick_without_new_position() {
     // 位置の知らせが届かない tick でも、移動の受け手は tick ごとに 1 回ずつ呼ばれる。
     // 止まったカーソルの下のバルーン滞在・選択肢の強調の観測が、この毎 tick の配りを当てにする。

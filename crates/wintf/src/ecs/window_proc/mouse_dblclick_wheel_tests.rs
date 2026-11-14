@@ -10,14 +10,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use bevy_ecs::message::Messages;
-use bevy_ecs::prelude::{Entity, World};
+use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_LBUTTONDBLCLK, WM_LBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDBLCLK,
 };
 use windows_numerics::Matrix3x2;
 
+use crate::ecs::drag::seen_test_support::{take, watch};
 use crate::ecs::drag::{
     DragConfig, DragEndEvent, DragStartEvent, DragState, cancel_dragging, dispatch_drag_events,
     snapshot_drag_state,
@@ -77,6 +77,7 @@ fn setup(config: Option<DragConfig>) -> (Rc<RefCell<EcsWorld>>, Entity) {
         }
         let widget = w.spawn(arrangement(150.0, 250.0, 250.0, 300.0)).id();
         w.entity_mut(window).add_children(&[widget]);
+        watch(w, window);
         window
     };
     (world, window)
@@ -93,16 +94,12 @@ fn send(world: &Rc<RefCell<EcsWorld>>, window: Entity, msg: u32, x: i32, y: i32)
     crate::ecs::dispatch_window_message(world, window, &message);
 }
 
-/// 1 回の画面更新として配り、届いた開始・終了の知らせを読み出す。
+/// 1 回の画面更新として配り、開始・終了の受け手に届いた知らせを読み出す。
 fn dispatch_once(world: &Rc<RefCell<EcsWorld>>) -> (Vec<DragStartEvent>, Vec<DragEndEvent>) {
     let mut w = world.borrow_mut();
     let w = w.world_mut();
     dispatch_drag_events(w);
-    (drain::<DragStartEvent>(w), drain::<DragEndEvent>(w))
-}
-
-fn drain<E: bevy_ecs::message::Message>(world: &mut World) -> Vec<E> {
-    world.resource_mut::<Messages<E>>().drain().collect()
+    (take::<DragStartEvent>(w), take::<DragEndEvent>(w))
 }
 
 fn is_preparing() -> bool {

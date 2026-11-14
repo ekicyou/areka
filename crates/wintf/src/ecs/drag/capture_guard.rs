@@ -60,12 +60,3 @@ impl Drop for CaptureGuard {
         }
     }
 }
-
-impl std::fmt::Debug for CaptureGuard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CaptureGuard")
-            .field("hwnd", &format_args!("0x{:X}", self.hwnd.0 as usize))
-            .field("released", &self.released)
-            .finish()
-    }
-}

@@ -659,25 +659,18 @@ fn eval_skips_apply_for_destroyed_window() {
 // ClickThroughRegistryHandle（areka 登録面・NonSend リソース）
 // ========================================================================
 
-/// 公開ハンドル経由の register/remove が共有レジストリへ反映される（areka 4.1 の登録面）。
+/// 公開ハンドル経由の register が共有レジストリへ反映される（areka 4.1 の登録面）。
 #[test]
-fn registry_handle_register_remove_reflects_shared_registry() {
+fn registry_handle_register_reflects_shared_registry() {
     let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
     let handle = ClickThroughRegistryHandle::new(StdRc::clone(&registry));
 
     let mut w = World::new();
     let e = w.spawn_empty().id();
-    let hwnd = create_test_hwnd();
+    handle.register(e, fake_hwnd(1));
 
-    assert!(handle.is_empty());
-    handle.register(e, hwnd);
     assert_eq!(handle.len(), 1);
     assert_eq!(registry.borrow().len(), 1, "共有レジストリへ反映される");
-
-    assert!(handle.remove(e));
-    assert!(handle.is_empty());
-    assert!(registry.borrow().is_empty());
-    destroy_test_hwnd(hwnd);
 }
 
 // ========================================================================
@@ -698,23 +691,6 @@ fn start_then_drop_joins_worker_without_hanging() {
         Arc::clone(&wake),
         StdRc::new(std::cell::Cell::new(true)),
     );
-
-    // start 後も共有の表へ直に register/remove できること（呼び手が同じ表を持つ）。
-    let mut w = World::new();
-    let e = w.spawn_empty().id();
-    let hwnd = create_test_hwnd();
-    registry.borrow_mut().register(e, hwnd);
-    assert_eq!(
-        registry.borrow().len(),
-        1,
-        "start 後の register が反映される"
-    );
-    assert!(
-        registry.borrow_mut().remove(e),
-        "start 後の remove が反映される"
-    );
-    assert!(registry.borrow().is_empty());
-    destroy_test_hwnd(hwnd);
 
     // drop で唯一の強 Rc<CursorMonitorBridge> が落ち、ワーカが stop/join。
     // ハングせず復帰すれば RAII は健全。

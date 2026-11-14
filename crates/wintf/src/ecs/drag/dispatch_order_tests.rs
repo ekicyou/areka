@@ -4,6 +4,7 @@
 //! 世界は `EcsWorld::new()` の本番の登録どおりに組み、`Input` の段を回す。
 //! ドラッグの状態はスレッド局所なので、各テストの頭で「何もない」へ戻す。
 
+use crate::ecs::drag::seen_test_support::{take, watch};
 use crate::ecs::drag::{
     DragAccumulatorResource, DragConfig, DragEvent, DragStartEvent, DragState, DragTransition,
     DraggingState, WindowDragContext, WindowDragContextResource, update_drag_state,
@@ -14,7 +15,6 @@ use crate::ecs::window::{Window, WindowPos};
 use crate::ecs::world::{EcsWorld, Input};
 use crate::ecs::{Point, SizeI};
 use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use std::time::Instant;
 
@@ -22,7 +22,7 @@ fn force_idle() {
     update_drag_state(|state| *state = DragState::Idle);
 }
 
-/// 位置 `(x, y)` の窓（`WindowHandle` は無い）と、その子を 1 つ作り、子を返す。
+/// 位置 `(x, y)` の窓（`WindowHandle` は無い・配られた知らせを控える）と、その子を 1 つ作り、子を返す。
 fn spawn_window_child(world: &mut World, x: i32, y: i32) -> Entity {
     let window = world
         .spawn((
@@ -37,6 +37,7 @@ fn spawn_window_child(world: &mut World, x: i32, y: i32) -> Entity {
             },
         ))
         .id();
+    watch(world, window);
     world.spawn(ChildOf(window)).id()
 }
 
@@ -139,10 +140,7 @@ fn delta_of_previous_drag_is_not_dispatched_to_next() {
     push(world, started(b, 510, 610));
     world.run_schedule(Input);
 
-    let events: Vec<DragEvent> = world
-        .resource_mut::<Messages<DragEvent>>()
-        .drain()
-        .collect();
+    let events = take::<DragEvent>(world);
     assert!(
         events.is_empty(),
         "前の移動量で DragEvent を配らない: {events:?}"
@@ -165,6 +163,7 @@ fn start_on_window_without_position_warns_and_leaves_origin_none() {
             },
         ))
         .id();
+    watch(world, window);
     let child = world
         .spawn((
             ChildOf(window),
@@ -189,10 +188,7 @@ fn start_on_window_without_position_warns_and_leaves_origin_none() {
         .expect("控えが書かれる");
     assert_eq!(ctx.initial_window_pos, None, "始めの位置は無い");
     assert!(ctx.move_window, "動かすかは DragConfig のまま真");
-    let starts: Vec<DragStartEvent> = world
-        .resource_mut::<Messages<DragStartEvent>>()
-        .drain()
-        .collect();
+    let starts = take::<DragStartEvent>(world);
     assert_eq!(starts.len(), 1, "始まりの知らせは 1 件: {starts:?}");
     assert!(
         world.get::<DraggingState>(child).is_some(),

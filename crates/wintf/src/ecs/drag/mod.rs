@@ -9,6 +9,8 @@ mod capture_guard;
 mod context;
 mod dispatch;
 mod reentry;
+#[cfg(test)]
+pub(crate) mod seen_test_support;
 mod state;
 mod systems;
 

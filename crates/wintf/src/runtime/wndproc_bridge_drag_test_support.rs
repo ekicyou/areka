@@ -19,7 +19,6 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
 
-use bevy_ecs::message::{Message, Messages};
 use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
@@ -31,6 +30,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use super::{WndState, make_wndproc};
 use crate::ecs::Point;
+use crate::ecs::drag::seen_test_support::{take, watch};
 use crate::ecs::drag::{
     DragAccumulatorResource, DragConfig, DragEndEvent, DragStartEvent, DragState, cancel_dragging,
     dispatch_drag_events, snapshot_drag_state, start_preparing,
@@ -183,12 +183,12 @@ impl Rig {
         );
     }
 
-    /// 配る段を 1 回回し、届いた知らせ `E` を読み出す。
-    pub fn dispatch<E: Message>(&self) -> Vec<E> {
+    /// 配る段を 1 回回し、受け手に届いた知らせ `E` を読み出す。
+    pub fn dispatch<E: Clone + Send + Sync + 'static>(&self) -> Vec<E> {
         let mut w = self.world.borrow_mut();
         let w = w.world_mut();
         dispatch_drag_events(w);
-        w.resource_mut::<Messages<E>>().drain().collect()
+        take::<E>(w)
     }
 
     /// 配る段を 1 回回し、届いた終了の知らせを読み出す。
@@ -216,10 +216,11 @@ impl Rig {
 }
 
 /// ドラッグの対象になる窓の entity（`Window`＋`WindowPos`＋`DragConfig`）を置く。
+/// 配られた知らせを控える受け手も付ける（[`Rig::dispatch`] が読む）。
 pub(super) fn spawn_drag_window(world: &Rc<RefCell<EcsWorld>>, origin: PhysicalPoint) -> Entity {
-    world
-        .borrow_mut()
-        .world_mut()
+    let mut w = world.borrow_mut();
+    let w = w.world_mut();
+    let entity = w
         .spawn((
             Window::default(),
             // クライアント領域の左上の画面の座標。既定の位置は CW_USEDEFAULT で、
@@ -237,7 +238,9 @@ pub(super) fn spawn_drag_window(world: &Rc<RefCell<EcsWorld>>, origin: PhysicalP
                 ..Default::default()
             },
         ))
-        .id()
+        .id();
+    watch(w, entity);
+    entity
 }
 
 /// 窓の中の座標を `WM_MOUSEMOVE`／ボタンの lParam の形へ詰める。

@@ -332,9 +332,8 @@ pub(crate) struct ClickThroughHandle {
 /// NonSend リソースが妥当（`Rc`/`RefCell` は `!Send`）。
 ///
 /// # 破棄追随
-/// 登録済み窓が破棄されても、[`remove`](Self::remove) の明示除去に加え、機構内部の
-/// [`prune_dead_targets`] が毎評価で、`Window` と登録の HWND と同じ `WindowHandle` を持つ
-/// wintf の窓だけを残して自動的に刈り取る（二重の安全弁）。
+/// 除去の口は無い。機構内部の [`prune_dead_targets`] が毎評価で、`Window` と登録の HWND と
+/// 同じ `WindowHandle` を持つ wintf の窓だけを残して刈り取る（despawn で十分）。
 pub struct ClickThroughRegistryHandle {
     registry: Rc<RefCell<ClickThroughRegistry>>,
 }
@@ -353,18 +352,15 @@ impl ClickThroughRegistryHandle {
         self.registry.borrow_mut().register(window, hwnd);
     }
 
-    /// 監視対象窓を明示除去する（窓破棄時・R7.2 非破壊）。存在すれば `true`。
-    pub fn remove(&self, window: Entity) -> bool {
-        self.registry.borrow_mut().remove(window)
-    }
-
-    /// 登録済み対象窓数（テスト・観測用）。
-    pub fn len(&self) -> usize {
+    /// 登録済み対象窓数。使い手はテストだけ。
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
         self.registry.borrow().len()
     }
 
-    /// 登録済み対象が無いか（テスト・観測用）。
-    pub fn is_empty(&self) -> bool {
+    /// 登録済み対象が無いか。使い手はテストだけ。
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.registry.borrow().is_empty()
     }
 }

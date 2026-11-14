@@ -6,37 +6,67 @@
 //!
 //! NOTE: Started 経路は最終的に `update_dragging`（thread_local DRAG_STATE 操作）を呼ぶが、
 //! 本テストが検証するのは World 側の効果（DraggingState 挿入・WindowDragging マーカー・
-//! DragStartEvent メッセージ・DragEndEvent メッセージ・Arrangement.offset 同期）であり、
+//! 受け手に届く DragStartEvent・DragEvent・DragEndEvent・Arrangement.offset 同期）であり、
 //! thread_local 状態機械そのものは src/ecs/drag/state.rs の in-source テストで検証済み。
 
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use std::time::Instant;
 use wintf::ecs::drag::{
     DragAccumulatorResource, DragConstraint, DragEndEvent, DragEvent, DragStartEvent,
-    DragTransition, DraggingState, WindowDragContextResource, WindowDragging, dispatch_drag_events,
+    DragTransition, DraggingState, OnDrag, OnDragEnd, OnDragStart, WindowDragContextResource,
+    WindowDragging, dispatch_drag_events,
 };
 use wintf::ecs::layout::{Arrangement, Offset};
+use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::{Window, WindowPos};
 use wintf::ecs::{PhysicalPoint, Point, SizeI};
 
 /// dispatch_drag_events が必要とするリソースを登録した World を生成する。
-/// production の `EcsWorld::new`（src/ecs/world/mod.rs:59-67）と同じ登録を行う。
+/// production の `EcsWorld::new` と同じ登録を行い、受け手に届いた知らせの溜め（[`Seen`]）も置く。
 fn make_world() -> World {
     let mut world = World::new();
     world.insert_resource(DragAccumulatorResource::new());
     world.insert_resource(WindowDragContextResource::new());
-    world.init_resource::<Messages<DragStartEvent>>();
-    world.init_resource::<Messages<DragEvent>>();
-    world.init_resource::<Messages<DragEndEvent>>();
+    world.init_resource::<Seen>();
     world
 }
 
-/// Messages から書き込まれたメッセージを drain して取得する。
-fn drain_messages<E: bevy_ecs::message::Message + Clone>(world: &mut World) -> Vec<E> {
-    let mut reader = world.resource_mut::<Messages<E>>();
-    // update() で current → previous へ移し、MessageReader で読む簡便化として drain を使う
-    reader.drain().collect()
+/// [`watch`] した entity の受け手に届いた知らせ（泡の段で 1 件ずつ）。
+#[derive(Resource, Default)]
+struct Seen {
+    starts: Vec<DragStartEvent>,
+    drags: Vec<DragEvent>,
+    ends: Vec<DragEndEvent>,
+}
+
+fn seen_start(world: &mut World, _: Entity, _: Entity, ev: &Phase<DragStartEvent>) -> bool {
+    if let Phase::Bubble(e) = ev {
+        world.resource_mut::<Seen>().starts.push(e.clone());
+    }
+    false
+}
+
+fn seen_drag(world: &mut World, _: Entity, _: Entity, ev: &Phase<DragEvent>) -> bool {
+    if let Phase::Bubble(e) = ev {
+        world.resource_mut::<Seen>().drags.push(e.clone());
+    }
+    false
+}
+
+fn seen_end(world: &mut World, _: Entity, _: Entity, ev: &Phase<DragEndEvent>) -> bool {
+    if let Phase::Bubble(e) = ev {
+        world.resource_mut::<Seen>().ends.push(e.clone());
+    }
+    false
+}
+
+/// `entity` に、届いた知らせを [`Seen`] へ控える受け手を付ける（1 つの経路に 1 か所だけ）。
+fn watch(world: &mut World, entity: Entity) {
+    world.entity_mut(entity).insert((
+        OnDragStart(seen_start),
+        OnDrag(seen_drag),
+        OnDragEnd(seen_end),
+    ));
 }
 
 // =============================================================================
@@ -44,7 +74,7 @@ fn drain_messages<E: bevy_ecs::message::Message + Clone>(world: &mut World) -> V
 // =============================================================================
 
 /// Started 遷移で、ドラッグ対象に DraggingState が挿入され、Window 祖先に WindowDragging が付与され、
-/// DragStartEvent が 1 件書き込まれる。
+/// DragStartEvent が受け手に 1 件届く。
 #[test]
 fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
     let mut world = make_world();
@@ -63,6 +93,7 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
             },
         ))
         .id();
+    watch(&mut world, window);
     // ドラッグ対象（Window の子）
     let target = world.spawn(ChildOf(window)).id();
 
@@ -98,8 +129,8 @@ fn dispatch_started_inserts_dragging_state_and_marker_and_event() {
     );
 
     // DragStartEvent が 1 件
-    let events = drain_messages::<DragStartEvent>(&mut world);
-    assert_eq!(events.len(), 1, "DragStartEvent は 1 件書き込まれるべき");
+    let events = &world.resource::<Seen>().starts;
+    assert_eq!(events.len(), 1, "DragStartEvent は 1 件届くべき");
     assert_eq!(events[0].target, target);
     assert_eq!((events[0].position.x, events[0].position.y), (110, 210));
 }
@@ -167,7 +198,7 @@ fn dispatch_started_writes_drag_context_resource() {
 // dispatch_drag_events: Ended 遷移
 // =============================================================================
 
-/// Ended 遷移で DraggingState が削除され、WindowDragging が除去され、DragEndEvent が書き込まれ、
+/// Ended 遷移で DraggingState が削除され、WindowDragging が除去され、DragEndEvent が受け手に届き、
 /// Arrangement.offset が WindowPos.position に同期される。
 #[test]
 fn dispatch_ended_removes_state_marker_and_syncs_offset() {
@@ -190,6 +221,7 @@ fn dispatch_ended_removes_state_marker_and_syncs_offset() {
             },
         ))
         .id();
+    watch(&mut world, window);
     let target = world.spawn(ChildOf(window)).id();
 
     // 開始を配ってドラッグ中の記録と印を入れる（Ended で外れるはず）
@@ -233,7 +265,7 @@ fn dispatch_ended_removes_state_marker_and_syncs_offset() {
     );
 
     // DragEndEvent が 1 件、cancelled=false
-    let events = drain_messages::<DragEndEvent>(&mut world);
+    let events = &world.resource::<Seen>().ends;
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].target, target);
     assert_eq!((events[0].position.x, events[0].position.y), (350, 450));
@@ -258,6 +290,7 @@ fn dispatch_ended_cancelled_propagates_flag() {
             Arrangement::default(),
         ))
         .id();
+    watch(&mut world, window);
     let target = world.spawn(ChildOf(window)).id();
 
     world
@@ -279,7 +312,7 @@ fn dispatch_ended_cancelled_propagates_flag() {
 
     dispatch_drag_events(&mut world);
 
-    let events = drain_messages::<DragEndEvent>(&mut world);
+    let events = &world.resource::<Seen>().ends;
     assert_eq!(events.len(), 1);
     assert!(
         events[0].cancelled,
@@ -331,8 +364,6 @@ fn record_end(
 /// 配り終えた時点でドラッグ中の記録（DraggingState）と印（WindowDragging）が外れている。
 #[test]
 fn dispatch_started_and_ended_in_one_flush_delivers_both_in_order() {
-    use wintf::ecs::drag::{OnDragEnd, OnDragStart};
-
     let mut world = make_world();
     world.init_resource::<ReceivedOrder>();
 
@@ -350,6 +381,7 @@ fn dispatch_started_and_ended_in_one_flush_delivers_both_in_order() {
             Arrangement::default(),
         ))
         .id();
+    watch(&mut world, window);
     let target = world
         .spawn((
             ChildOf(window),
@@ -373,10 +405,10 @@ fn dispatch_started_and_ended_in_one_flush_delivers_both_in_order() {
 
     dispatch_drag_events(&mut world);
 
-    let starts = drain_messages::<DragStartEvent>(&mut world);
+    let starts = &world.resource::<Seen>().starts;
     assert_eq!(starts.len(), 1, "DragStartEvent は 1 件届くべき");
     assert_eq!(starts[0].target, target);
-    let ends = drain_messages::<DragEndEvent>(&mut world);
+    let ends = &world.resource::<Seen>().ends;
     assert_eq!(ends.len(), 1, "DragEndEvent は 1 件届くべき");
     assert_eq!(ends[0].target, target);
     assert!(!ends[0].cancelled);
@@ -401,7 +433,7 @@ fn dispatch_started_and_ended_in_one_flush_delivers_both_in_order() {
 // dispatch_drag_events: DragEvent（累積デルタ非ゼロ）
 // =============================================================================
 
-/// current_dragging_entity があり累積デルタが非ゼロのとき DragEvent が書き込まれ、
+/// current_dragging_entity があり累積デルタが非ゼロのとき DragEvent が受け手に届き、
 /// start_position が DraggingState.drag_start_pos から取得される。
 #[test]
 fn dispatch_emits_drag_event_when_delta_nonzero() {
@@ -412,6 +444,7 @@ fn dispatch_emits_drag_event_when_delta_nonzero() {
             initial_window_pos: (0.0, 0.0),
         })
         .id();
+    watch(&mut world, target);
 
     let acc = world.resource::<DragAccumulatorResource>();
     // Started でドラッグ対象を確定（current_dragging_entity = target）
@@ -426,9 +459,9 @@ fn dispatch_emits_drag_event_when_delta_nonzero() {
 
     dispatch_drag_events(&mut world);
 
-    // DragEvent が書き込まれる（target は Window 祖先を持たないが、Started 処理は
+    // DragEvent が届く（target は Window 祖先を持たないが、Started 処理は
     // window_entity=None でも DraggingState を挿入し、DragEvent 経路は別途デルタで発火する）
-    let events = drain_messages::<DragEvent>(&mut world);
+    let events = &world.resource::<Seen>().drags;
     assert_eq!(
         events.len(),
         1,
@@ -453,6 +486,7 @@ fn dispatch_no_drag_event_when_delta_zero() {
             initial_window_pos: (0.0, 0.0),
         })
         .id();
+    watch(&mut world, target);
 
     let acc = world.resource::<DragAccumulatorResource>();
     acc.set_transition(DragTransition::Started {
@@ -465,23 +499,24 @@ fn dispatch_no_drag_event_when_delta_zero() {
 
     dispatch_drag_events(&mut world);
 
-    let events = drain_messages::<DragEvent>(&mut world);
+    let events = &world.resource::<Seen>().drags;
     assert!(
         events.is_empty(),
         "デルタゼロでは DragEvent を発火しないべき"
     );
 }
 
-/// flush 結果がないと判断される条件はないが、遷移もデルタもない（current_dragging_entity=None）
-/// 場合はメッセージが一切発火しない（パニックなし）。
+/// 遷移もデルタもない（current_dragging_entity=None）場合は、受け手の付いた entity が在っても
+/// 何も届かない（パニックなし）。
 #[test]
 fn dispatch_noop_when_no_transition_and_no_entity() {
     let mut world = make_world();
+    let watched = world.spawn_empty().id();
+    watch(&mut world, watched);
 
     // 何も set せずに呼ぶ → flush は Some だが transition=None, entity=None
     dispatch_drag_events(&mut world);
 
-    assert!(drain_messages::<DragStartEvent>(&mut world).is_empty());
-    assert!(drain_messages::<DragEvent>(&mut world).is_empty());
-    assert!(drain_messages::<DragEndEvent>(&mut world).is_empty());
+    let seen = world.resource::<Seen>();
+    assert!(seen.starts.is_empty() && seen.drags.is_empty() && seen.ends.is_empty());
 }

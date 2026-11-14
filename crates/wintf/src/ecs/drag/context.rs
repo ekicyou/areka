@@ -41,7 +41,7 @@ impl WindowDragContext {
 /// # ライフサイクル
 /// - dispatch_drag_events が Started 処理時に更新
 /// - update_dragging が JustStarted → Dragging 遷移時に読み取り
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Default)]
 pub struct WindowDragContextResource {
     inner: Arc<Mutex<WindowDragContext>>,
 }
@@ -49,9 +49,7 @@ pub struct WindowDragContextResource {
 impl WindowDragContextResource {
     /// 新しいWindowDragContextResourceを作成
     pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(WindowDragContext::default())),
-        }
+        Self::default()
     }
 
     /// コンテキストを設定（配りの dispatch_drag_events から呼ばれる）
@@ -74,25 +72,9 @@ impl WindowDragContextResource {
     }
 }
 
-impl Default for WindowDragContextResource {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Default は全フィールド「未設定」状態（hwnd/initial_window_pos=None, move_window=false, constraint=None）。
-    #[test]
-    fn test_default_is_unset() {
-        let ctx = WindowDragContext::default();
-        assert!(ctx.hwnd.is_none());
-        assert!(ctx.initial_window_pos.is_none());
-        assert!(!ctx.move_window);
-        assert!(ctx.constraint.is_none());
-    }
 
     /// clear() は設定済みコンテキストを Default 相当に戻す。
     #[test]

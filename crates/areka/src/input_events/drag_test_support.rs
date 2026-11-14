@@ -18,12 +18,11 @@ use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
     PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
 };
-use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::{
-    DragAccumulatorResource, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
-    DraggingState, WindowDragContextResource, dispatch_drag_events,
+    DragAccumulatorResource, DragTransition, DraggingState, WindowDragContextResource,
+    dispatch_drag_events,
 };
 use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
@@ -157,9 +156,6 @@ impl Rig {
         // `dispatch_drag_events` が引く資源（wintf の `EcsWorld::new` と同じ登録）。
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
-        world.init_resource::<Messages<DragStartEvent>>();
-        world.init_resource::<Messages<DragEvent>>();
-        world.init_resource::<Messages<DragEndEvent>>();
         world.insert_resource(MonitorSnapshot {
             work_areas: vec![WORK_AREA],
         });

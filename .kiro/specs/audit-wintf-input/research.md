@@ -364,3 +364,59 @@
 - 議題 1（指摘 19）: 推奨案で確定（2026-11-04 開発者「audit系は推奨案でよい」の常の承認による）。配り方は変えず、毎 tick 配る理由を説明に書いて檻に入れる。理由＝バルーンの窓の受け手（`balloon_moved.rs:114-116`）が毎 tick の知らせでバルーン滞在（`BalloonHover`）を立て直し、バルーン可視性の相（`balloon_visibility_phase`）がそれで自動で閉じるのを抑える。滞在は非表示へ移るときに消される（`clear_balloon_hover`）ので、止めたカーソルの下で出直したバルーンは、毎 tick の配りが無いとカーソルを動かすまで閉じうる。要件の議題 9 の決めも合わせて改めた。
 - 設計の検証の重い指摘 1（指摘 3 の直しが `balloon_drag_held` とぶつかる）は自明な直しとして直した＝控えの `move_window` は `DragConfig` のまま・位置の取れないことは `initial_window_pos: None` で伝え、`update_dragging` が `ctx.move_window && initial_window_pos.is_some()` で決める。
 - 設計の検証の重い指摘 3（タスクの表の 8 行目が議題 11 と矛盾）・受け手の数（2→3）・`window-snap/brief.md:33` の文字列での参照も自明な直しとして直した。
+
+## 15. 実装の後の audit のかけ直し（2026-11-15・タスク 7.1）
+
+- 物差しは 2 節と同じ（`/ponytail:ponytail-audit`・ponytail 5.3.3・件数の上限なし・全部読む）。範囲は要件の 24 ファイルに、実装で足した `drag/dispatch_order_tests.rs` を加えた 25 ファイル（7,387 行・かけ直しの前）。25 本とも全行を読んだ。読まなかった所は無い。
+- 数えるのは新しい指摘だけ。次は新しい指摘に数えない: 直し済みの 23 件・議題 11 で残した `check_threshold`・窓の手続きが `PointerState` を作る所（議題 11）・範囲の外の clippy の機械的な指摘（`collapsible_if` ほか・`clippy-199-lints` の持ち物）・`tooltip/`。
+- 組は 3 節と同じ 3 つ（必ず直す・直したほうがよい・できれば）。番号は 3 節に続けて 24 から振る。
+
+### 1 回目
+
+| 組 | 件数 | 指摘 |
+|---|---|---|
+| 必ず直す | 0 | — |
+| 直したほうがよい | 3 | 24・25・26 |
+| できれば | 3 | 27・28・29 |
+| 計 | 6 | 6 件とも直した（24 は進行役の許しの後に直した） |
+
+- **24. ドラッグの知らせ 3 つの `Messages` を、製品の誰も読まない（直しが生んだ）**（`drag/dispatch.rs:172-174,217-219,335-337`・範囲の外の `ecs/world/mod.rs:139-141,378-398`）: 配りは知らせのたびに `Messages<DragStartEvent>`・`Messages<DragEvent>`・`Messages<DragEndEvent>` へ写しを書き、`EcsWorld` は 3 つを登録して毎フレーム `update()` を回す。読み手だった `cleanup_drag_state`（`MessageReader<DragEndEvent>`）をタスク 2.1 で消したので、ツリー全体（`examples` を含む grep）で製品の読み手は 0。読むのはテストだけ（wintf の `drag/dispatch_order_tests.rs`・`window_proc/keyboard_tests.rs`・`mouse_click_tests.rs`・`runtime/wndproc_bridge_drag_{cancel,release}_tests.rs`・`wndproc_bridge_drag_test_support.rs`・`tests/drag/dispatch_test.rs`、`areka-placement` の `balloon_lock_drag_tests.rs:99-101,444`・`follow_drag_end_gate_tests.rs:66-72`、`areka` の `input_events/drag_test_support.rs:160-162`）。いちばん小さい直し＝3 つの書き込みと登録と `update()` を消し、テストの数え方を受け手（`OnDragStart`・`OnDragEnd`・`OnDrag`）の呼ばれた数に替える。要件 3 の 3 種類には当たらない（完了した `event-drag-system` の要件にも、記憶の決めにも `Messages` の口は無い・SSP に無い仕組み）。直しが範囲の外の 10 ファイル（`ecs/world/mod.rs` と上のテスト 9 本・走っている `audit-placement-core` の 2 ファイルを含む）に及ぶので、いったん進行役へ渡し、その許し（10 ファイルと、同じ消しでコンパイラが指すファイル）と `audit-placement-core` への行の知らせの後に直した。
+  - 製品: `drag/dispatch.rs` の 3 つの書き込みと 3 つの知らせの `derive(Message)`、`ecs/world/mod.rs` の 3 つの登録と `FrameFinalize` の `update()` 3 つを消した。配りの記録（`[DragStartEvent] Dispatching` ほか）の文言・欄・段は変えていない。
+  - テストは数え方だけを替え、確かめることは変えていない（受け手の呼ばれた数で数える）。wintf の中のテストは、範囲の中に足した `drag/seen_test_support.rs`（`#[cfg(test)]`・受け手 3 つと溜め）の `watch`／`take` を使う: `drag/dispatch_order_tests.rs`・`window_proc/keyboard_tests.rs`・`mouse_click_tests.rs`・`runtime/wndproc_bridge_drag_test_support.rs`（対象の窓に受け手を付け、`dispatch` の読み出しを替えた）・`wndproc_bridge_drag_cancel_tests.rs`。wintf の結合テスト `tests/drag/dispatch_test.rs` は自分の受け手 3 つと溜め（`Seen`）を持つ。`areka-placement` の `balloon_lock_drag_tests.rs` は、止めたドラッグの終わりの受け手だけが出す記録（`balloon_drag_held`）が 1 件であることで終わりの受け手が 1 回呼ばれたことを確かめる形にし、`follow_drag_end_gate_tests.rs` と `areka` の `input_events/drag_test_support.rs` は要らなくなった登録の行と `use` を消した。
+  - コンパイラが指した 10 ファイルの外のファイルは 1 本: `window_proc/mouse_dblclick_wheel_tests.rs`（同じ `Messages` の読み出し・同じ形で受け手の数に替えた）。
+  - 数え方の替えが本物を見ていることの確かめ: 終わりの腕の受け手の配りを一時的に外すと、wintf のテストのうち終わりを 1 件と数える 10 本（`mouse_click_tests`・`wndproc_bridge_drag_{cancel,release}_tests` の t01・t02・t07・t07b・t10）が赤になり、戻すと緑。
+- **25. 落ちえない・同じことを 2 度確かめるテスト（直しが生んだものを含む）**: `pointer/types/tests.rs` の 3 本（`PointerState` の既定＝4.1 で `derive` になって `derive` の事実だけになった・`ButtonBuffer` と `WheelBuffer` の 2 本＝`buffers.rs` の 2 本と同じ確かめ）、`pointer/nchittest_cache.rs` の 2 本（`test_cache_multiple_hwnds` と同じ 1／−1 の出し入れ）、`pointer/dispatch/tests.rs` の 2 本（受け手の無い配りは何もしない＝落ちえない・`test_dispatch_with_handler`＝毎 tick の檻の 1 回目と同じ）、`drag/context.rs` の `test_default_is_unset`（`derive` の事実）、`clickthrough/controller_tests.rs` の `start_then_drop_joins_worker_without_hanging` の中ほど（5.2 で表を直に触る形にした結果 `RefCell` の振る舞いだけを確かめる・本物の HWND は OS へ渡らない）。直し＝消した（残るテストがそれぞれの仕組みを覆う）。
+- **26. `ClickThroughRegistryHandle` の `remove`・`len`・`is_empty` を製品の誰も使わない**（`clickthrough/controller.rs:356-369`）: 使い手はテスト 2 本だけ（`controller_tests.rs`・範囲の外の `runtime/mod.rs` の結線のテスト）。除去は `prune_dead_targets` が毎評価で行うので、説明の「二重の安全弁」も当たらない。直し＝`remove` を消し（`ClickThroughRegistry::remove` とそのテストも）、`len`・`is_empty` は `#[cfg(test)]` の `pub(crate)` にした。説明と `doc/click-through.md` の 2 行（109・149）、`runtime/mod.rs` の結線のテストの説明 1 行と `remove` の 2 行を直した。
+- **27. `CaptureGuard` の手書きの `Debug` が要らなくなった（直しが生んだ）**（`drag/capture_guard.rs:64-71`）: 1.1 で守りが `DragState` の外へ出て、`Debug` を求める所が無くなった（その文字列を見るテストも 1.1 で消えた）。直し＝消した。
+- **28. `update_dragging` の移動中の腕が、2 つの欄を変えるために 9 つの欄を組み直す**（`drag/state/mod.rs:289-311`）: 直し＝`match state` にして、移動中の腕は `prev_pos`・`current_pos` の 2 つだけを書き換える（約 20 行減る・振る舞いは同じ・今のテスト `test_update_dragging_dragging_updates_prev_pos` ほかが覆う）。
+- **29. 手書きの `Default` 3 つ**（`drag/accumulator.rs` の `DragAccumulator`・`DragAccumulatorResource`、`drag/context.rs` の `WindowDragContextResource`）: 3 節の 23 の `registry.rs` と同じ形。直し＝`#[derive(Default)]` にし、`new()` は `Self::default()` にした。
+- 数えなかったもの（決めごと）: ドラッグの知らせ 3 つと `DragTransition::Started` の `timestamp`・`DragState` の `start_time` は製品で読まれないが、設計の Non-Goals が残すと決めており（議題 3 で消すのは `PointerState` の速さと時刻だけ）、消すと完了した `event-drag-system` の要件 3.5（ドラッグ経過時間をイベント情報に含める）を閉じる＝要件 3 の 1 種類目に当たる。窓の位置が取れないときに `DraggingState.initial_window_pos` が (0,0) で入るのは設計の決めごと 5（`DraggingState` は今どおり入れる）。`drag_origin` の「`WindowHandle` が無ければ位置をそのまま使う」は 2.2 の実装の決め。
+
+### 2 回目
+
+| 組 | 件数 |
+|---|---|
+| 必ず直す | 0 |
+| 直したほうがよい | 0 |
+| できれば | 0 |
+| 計 | 0 |
+
+- 1 回目の直し（24 を除く 5 件）を入れた範囲の 25 ファイルを読み直した（直したファイルは全行・ほかは直しが及ぶ所）。直しが生んだ新しい指摘は 0。このとき 24 は進行役の決めを待っていた（新しい指摘には数えない）。
+- 確かめ: `cargo test --workspace --all-targets --no-run`・`cargo test -p wintf`・`cargo test -p areka-placement`・`cargo test -p areka --bin areka`・`cargo test -p areka --example mock-shell`・`cargo test -p log-capture-kit --test file_length_guard_test`・`cargo clippy -p wintf --all-targets`（範囲の中の警告は前からの `collapsible_if` ほか＝`clippy-199-lints` の持ち物）・`cargo fmt --all -- --check`。
+
+### 3 回目（24 を直した後）
+
+| 組 | 件数 |
+|---|---|
+| 必ず直す | 0 |
+| 直したほうがよい | 0 |
+| できれば | 0 |
+| 計 | 0 |
+
+- 範囲は 24 の直しで足した `drag/seen_test_support.rs` を加えた 26 ファイル。24 の直しで変わった範囲の中の 3 本（`drag/dispatch.rs`・`drag/mod.rs`・`drag/dispatch_order_tests.rs`）と新しい 1 本は全行、ほかは 1・2 回目からの変わりが無いことを差分で確かめた。直しが生んだ新しい指摘は 0。
+- 範囲の外で目に留まった古い説明（`ecs/world/mod.rs` の「ECS→wndprocスレッド間転送用」・`tests/drag/dispatch_test.rs` の頭の `state.rs` の参照）は範囲の外の持ち物として数えない（要件 5.4）。
+- 確かめ: 2 回目と同じ 8 つのコマンドがどれも緑。
+
+### 判定
+
+- **0 件で終わった**（3 回目で新しい指摘 0・1 回目の 6 件は全部直した・5 回目での打ち切りは使っていない）。要件 3 の議題に当たる新しい指摘は 0（ドラッグの知らせの `timestamp` は設計の Non-Goals の決めごとで、数えなかったものに書いた）。

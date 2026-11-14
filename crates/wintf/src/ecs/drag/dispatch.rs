@@ -3,12 +3,11 @@
 //! DragStateからイベントを生成し、Phase<T>でTunnel/Bubble配信する。
 
 use crate::ecs::pointer::{EventHandler, PhysicalPoint, build_bubble_path};
-use bevy_ecs::message::Message;
 use bevy_ecs::prelude::*;
 use std::time::Instant;
 
 /// ドラッグ開始イベント
-#[derive(Message, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct DragStartEvent {
     /// ドラッグ対象エンティティ
     pub target: Entity,
@@ -19,7 +18,7 @@ pub struct DragStartEvent {
 }
 
 /// ドラッグ中イベント
-#[derive(Message, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct DragEvent {
     /// ドラッグ対象エンティティ
     pub target: Entity,
@@ -32,7 +31,7 @@ pub struct DragEvent {
 }
 
 /// ドラッグ終了イベント
-#[derive(Message, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct DragEndEvent {
     /// ドラッグ対象エンティティ
     pub target: Entity,
@@ -169,10 +168,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     "[DragStartEvent] Dispatching"
                 );
 
-                world
-                    .resource_mut::<bevy_ecs::message::Messages<DragStartEvent>>()
-                    .write(event.clone());
-
                 let path = build_bubble_path(world, entity);
                 crate::ecs::pointer::dispatch_event_for_handler::<DragStartEvent, OnDragStart>(
                     world,
@@ -213,10 +208,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     cancelled,
                     "[DragEndEvent] Dispatching"
                 );
-
-                world
-                    .resource_mut::<bevy_ecs::message::Messages<DragEndEvent>>()
-                    .write(event.clone());
 
                 let path = build_bubble_path(world, entity);
                 crate::ecs::pointer::dispatch_event_for_handler::<DragEndEvent, OnDragEnd>(
@@ -331,10 +322,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                 delta_y = flush_result.current_position.y - start_pos.y,
                 "[DragEvent] Dispatching"
             );
-
-            world
-                .resource_mut::<bevy_ecs::message::Messages<DragEvent>>()
-                .write(event.clone());
 
             let path = build_bubble_path(world, entity);
             crate::ecs::pointer::dispatch_event_for_handler::<DragEvent, OnDrag>(
