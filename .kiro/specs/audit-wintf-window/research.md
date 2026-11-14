@@ -797,6 +797,7 @@ clippy の指摘を機械的に直す指摘は 0。
 - **`wintf-visual-damage-redraw`**: `crates/wintf/tests/graphics/` の 4 本（11 番が 1 行ずつ直す）に触りうる。後に着いた方が rebase する。
 - **`wintf-winmsg-executor-import`**: ソースの重なり 0（取りまとめの側の測り）。
 - 全体テストは排他テストの机を通す。
+- **門 GI の確かめ（2026-11-14・相手 `audit-wintf-input` のセッション・タスク 13.1）**: ⒜ はい（`WindowPointerTracking` は型・既定のテスト・`ecs/mod.rs` の再公開までこの spec が丸ごと消す。あちらの tasks 6.1 はそのテストを消す対象から外してある）。⒝ はい（あちらは `check_threshold`・`state/tests.rs` の 5 本・再公開を残し、説明だけ直す。`mouse_move.rs` の閾値の写しを呼び出しに替えるのはこの spec）。⒞ はい（`PointerState` を作る 4 か所の `local_point` は変えない）。足し: あちらの機械的な追従はテストのファイル（`keyboard_tests.rs`・`mouse_click_tests.rs`・`mouse_dblclick_wheel_tests.rs`・`mouse_move_drag_origin_tests.rs`）にもあり、どれも `DragStateSnapshot`→`DragState` か欄名の置き換えだけ。あちらの設計・タスク（`45b8cd22`）は main に未着地で、窓の手続きのコードにはまだ手が入っていない。
 
 ### 12.3 まとめの 3 つの見方（`rules/design-synthesis.md`）
 
