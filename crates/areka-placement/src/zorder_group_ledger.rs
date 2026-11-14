@@ -664,8 +664,7 @@ impl ZOrderGroupLedger {
     /// 版そのものは design が定めた台帳の一部であり、状態遷移の檻
     /// （`zorder_group_ledger_state_tests.rs`）が「いつ進み、いつ進まないか」を全数で
     /// 押さえている。読み口を消すとその不変条件を主張する手段が無くなるので、
-    /// **この 1 項目だけ**に許可を与える（モジュール全体の許可は結線の着地とともに撤去済み）。
-    #[allow(dead_code)]
+    /// 呼ぶのは検査（テスト）だけで、公開の項目として残す。
     pub fn version(&self) -> u64 {
         self.version
     }

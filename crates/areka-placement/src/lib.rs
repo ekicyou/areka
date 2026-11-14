@@ -5,14 +5,24 @@
 //! 座標単位契約（design 正本 U1〜U5）に従い、配置パイプラインの座標・寸法は
 //! **すべて物理 px 単一通貨**とする（論理 DIP・`BoxStyle` は持ち込まない）。
 //!
-//! 依存の向き（この約束が名指すのは `resolver`・`config`・`measure`・`spawn`・`follow`・`diag`
-//! の 6 つだけで、ほかのモジュールの参照はこの約束の外）:
+//! 依存の向き（この約束が名指すのは `config`・`resolver`・`measure`・`spawn`・`follow`・`diag`
+//! の 6 つの向きだけで、ほかの 21 のモジュール（`test_support` を含む）は互いに広く引き合う）:
 //! `config`（areka-parsers・tracing）← `resolver`（std・tracing・wintf の DPI・`config`）←
-//! `measure`（emo-atlas・emo-compose・emo-present）← `spawn`／`follow`（wintf・bevy_ecs ほか・
-//! 同じ段どうしは引き合ってよい）← 本体のシーム。左のモジュールは右を import しない。
+//! `measure`（emo-atlas・emo-compose・emo-present のほか、`error`・`descript_window_keys` を引く）←
+//! `spawn`／`follow` と同じ段のモジュール（wintf・bevy_ecs ほか・同じ段どうしは引き合ってよい）←
+//! 本体のシーム。左のモジュールは右を import しない。
 //! [`diag`] は最下流: 配置のモジュールを 1 つも引かない（ほかの crate からは bevy_ecs の
 //! `Entity`・wintf の `ZOrderPairStrategy`・tracing を引く）。
 //! 失敗の型 [`PlacementError`] は `error.rs`（配置のモジュールを引かない）に置き、根から出し直す。
+//!
+//! 同じ段には輪がある:
+//! - `chain_finalize`↔`chain_realign`（`chain_finalize` の `on_insert` の hook が `chain_realign` を引く）
+//! - `chain_realign`→`spawn`→`chain_finalize`→`chain_realign`
+//! - `follow` と同じ段のモジュール（`balloon_limit`・`dpi_sync`・`persist`・`spawn`・`sticky_group_ledger`・
+//!   `transition_diag`）との両向き
+//!
+//! 根を引く子もある: `reset_pos`→根の `primary_monitor`・`reseed`→根の `scale_then_merge`・
+//! `ScopeWindowPositions`・`follow/offset_space`→根の `scale_signed`。
 //!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
 //! 配置準備の合成ルート [`prepare_ghost_windows`]（task 6.1・design「main.rs seam」）
@@ -66,9 +76,6 @@ pub mod zorder_group_ledger;
 /// 権威へ委譲し符号のみ保存する）。`windowposition.x/y` と `\![move]` の dx/dy は
 /// どちらも「作者基準 px で書かれた画面オフセット」であり、**同じ写像を通す**
 /// （片方だけ素通しにすると高 DPI で両者の意味論が割れる）。
-// examples の `#[path]` include ビルドでは本再エクスポートの消費者（emo2_boot）が居ないため
-// 未使用警告が出る（frame.rs の同型 allow と同じ事情・`areka` は lib target を持たない bin crate）。
-#[allow(unused_imports)]
 pub use windowposition::scale_signed;
 /// 見本のゴーストの入口（配置のテストだけ・要件 3.2）。
 #[cfg(test)]
@@ -120,7 +127,6 @@ const DEFAULT_AUTHOR_DPI: u16 = 96;
 /// D12 の裁定により、要件 1.1 の**正典出力点**は placement の全判断が読む権威
 /// [`follow::MonitorSnapshot`] の構築点である（列挙の忠実転写点＝以後の判断が
 /// 実際に見る値そのもの）。本タグはその出所を名乗る。
-#[allow(dead_code)] // 消費者は main.rs シーム（`#[path]` include する example には構築点が無い）
 pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
 
 /// [`prepare_ghost_windows`] のモニタ列挙点の**呼出点タグ**（要件 1.1・design D12）。
@@ -459,8 +465,7 @@ fn prepare_stages_for_shell(
 /// 供給時の飽和を記録する語（areka-P0-balloon-offset-dpi 要件 2.5・task 4.1）。
 ///
 /// 語彙は綴りごと契約であり、実機ログの grep と決定論テストが同じ定数を参照する
-/// （`balloon_limit.rs` の `*_TAG` と同じ流儀）。綴りを逐語で固定する檻は task 4.3 の所有で、
-/// 本コミット時点ではまだ無い。
+/// （`balloon_limit.rs` の `*_TAG` と同じ流儀）。
 pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturated";
 
 /// `descript` の `balloon.offsetx`／`offsety`（**作者空間**の生値）を、合流欄の空間である
@@ -788,7 +793,6 @@ fn scope_windowposition(
 /// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
-#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手は example とテスト）
 pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -837,7 +841,6 @@ pub fn prepare_ghost_windows_for_shell(
 /// （実 DPI に依存すると採寸期待値が機械ごとに変わり決定論が壊れる）。既存の work area
 /// 注入と同じ「実列挙由来の値を引数で差し替える」形に揃え、新しい機構は導入しない。
 /// `None` は「primary モニタ DPI 取得不能」の縮退分岐（要件 1.4）を檻に入れるための入力。
-#[allow(dead_code)] // scaffold（task 6.1）: テスト専用の偽装境界（本番は prepare_ghost_windows）
 pub fn prepare_ghost_windows_with_work_area(
     ghost_root: &Path,
     balloon_root: &Path,

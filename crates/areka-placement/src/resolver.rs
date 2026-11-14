@@ -427,7 +427,6 @@ pub(crate) fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
 /// M1 では `DragConstraint` を付与しない（DD8: 無制約＝仮想デスクトップ全域
 /// ドラッグ可）ため未結線だが、制約を適用する将来の消費側の正規算出規則として
 /// ここで提供・テストする（07-05 の単一モニタ誤釘付けの欠陥面を消す規則）。
-#[allow(dead_code)] // DD8: M1 は DragConstraint 非付与＝将来の消費側向け正規規則（テストのみが消費）
 pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
     monitor_bounds.iter().copied().reduce(|a, b| RectPx {
         left: a.left.min(b.left),

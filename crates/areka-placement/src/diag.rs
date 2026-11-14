@@ -32,7 +32,7 @@
 //!
 //! 本モジュールは placement の**最下流**であり、`World`・表示基盤の型に依存しない。
 //! 扱うのは素の数値・文字列と、**下記 2 つの例外**だけである。wintf `Monitor` からの
-//! 転写は呼出側（`mod.rs`／`follow.rs`）の仕事である。
+//! 転写は呼出側（`lib.rs`／`follow.rs`）の仕事である。
 //!
 //! - [`Entity`] は **wintf 側ログ（`entity = ?e`）との結合キー**だから受ける。同じ `Debug`
 //!   表現で出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
@@ -52,8 +52,7 @@
 //
 // ゆえに**モジュール大の `#![allow(dead_code)]` は撤去した**（残すと以後の真の dead code を
 // 隠すため・tasks.md Implementation Notes「1.4 で全 API を配線したらこの属性を外すこと」）。
-// 残る個別 `#[allow(dead_code)]` は 2 箇所だけで、いずれも実在の理由を各所へ明記してある
-// （areka は bin crate ゆえ `pub` でも dead_code 免除されない）。
+// 配置は lib の crate で、`pub` の項目は dead_code の警告を受けないので、個別の許可も要らない。
 
 use std::fmt;
 
@@ -148,7 +147,7 @@ const UNKNOWN: &str = "-";
 /// 要件 2.4 の「最終位置を書き込んだ主体」を名指しするための結論語彙）。
 ///
 /// 消失の診断で最後に要るのは「どこに居たか」ではなく「**誰が最後に書いたか**」である。
-/// 位置を書ける経路は 10 あり、ログ上でそれらが見分けられなければ書き手を名指しできない。
+/// 位置を書ける経路は 13 あり、ログ上でそれらが見分けられなければ書き手を名指しできない。
 /// 表示語（[`PlacementRoute::as_str`]）は診断手順書の判定語そのものゆえ檻で固定する。
 ///
 /// # 語彙は「実在の書込トリガ」と 1:1 でなければならない（D13）
@@ -162,9 +161,8 @@ const UNKNOWN: &str = "-";
 pub enum PlacementRoute {
     /// spawn 初期配置（`placement::spawn` の窓生成時）。
     // 単一ライターを通らない経路（spawn は entity 組立時に `WindowPos` を直接持たせる）ゆえ
-    // 現状どこからも構築されない。design「Service Interface」が定める 9 語の一部であり、
+    // 現状どこからも構築されない。design「Service Interface」が定める語彙の一部であり、
     // D13 帰結⑷「語彙のみ保持・将来の配線先として予約」ゆえ削らない。
-    #[allow(dead_code)]
     SpawnInitial,
     /// 位置永続化の復元マージ（可視化保証は position-persist の所有＝可視性ガード適用外）。
     // 起動時の復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージするので
@@ -242,10 +240,9 @@ impl PlacementRoute {
     /// 全経路（檻が語彙の網羅と一意性を固定するための単一の列）。
     ///
     /// バリアントを増やしたら[`as_str`](Self::as_str) の網羅 match がコンパイルを止め、
-    /// ここへの追加漏れは檻（`placement_route_all_covers_ten_distinct_variants`）が捕まえる。
-    // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
-    // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
-    #[allow(dead_code)]
+    /// ここへの追加漏れは檻（`placement_route_all_covers_thirteen_distinct_variants`）が捕まえる。
+    // 消費者は in-source 檻（`#[cfg(test)]`）だけである。檻専用の列であることが存在理由
+    // そのもの（語彙の網羅・一意性の単一の錨）。
     pub const ALL: [PlacementRoute; 13] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,

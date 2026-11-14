@@ -42,7 +42,7 @@ fn record_tags_are_fixed() {
     assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
 }
 
-/// 経路語彙 12 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
+/// 経路語彙 13 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
 #[test]
 fn placement_route_vocabulary_is_fixed() {
     assert_eq!(PlacementRoute::SpawnInitial.as_str(), "SpawnInitial");
@@ -364,7 +364,7 @@ fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
     assert_eq!(events[0].level, Level::DEBUG);
 }
 
-/// 全 10 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
+/// 全 13 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
 #[test]
 fn window_move_record_line_renders_every_route() {
     for route in PlacementRoute::ALL {

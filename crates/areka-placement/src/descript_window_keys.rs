@@ -4,7 +4,7 @@
 //!
 //! 組み込みの既定の面（本体側 0・それ以外 10）を持つのはこのモジュールだけ。
 //! 既定の面はゴーストの descript だけから読む（シェルの KV を引数に持たない＝要件 1.6 を型で守る）。
-//! I/O を持たず、`crate::` を参照しない（手本の `#[path]` 取り込みでも組める）。
+//! I/O を持たない（`config` だけを `super::config` で引く）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -185,7 +185,6 @@ pub struct BalloonSyncScale {
 impl BalloonSyncScale {
     /// スコープのバルーンの倍率をシェルに連動させるか（ゴーストの段かシェルの段のどちらかが `true`・要件 6.3）。
     // 本番で読む下流は shell-balloon-scale-setting（本 spec は持つだけ・要件 6.6）。
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn is_synced(&self, scope: u32) -> bool {
         self.ghost || self.shell_scopes.contains(&scope)
     }

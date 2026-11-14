@@ -175,14 +175,14 @@ fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
 
 /// T-I1 補: 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）を持つ。
 /// `spawn_ghost_windows` 自体はポインタハンドラを付けない（依存方向
-/// input_events→placement・placement は `crate::` パスを持てないため）。
+/// input_events→placement）。
 /// spawn 直後に `input_events::attach_char_pointer_handlers` を呼ぶと、キャラ窓は
 /// 正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝stand-in
 /// `on_ghost_pressed` を退役して差し替え）を持ち、バルーン窓はポインタハンドラを
 /// 一切持たない（M1 はバルーンにマウス送出なし・DD-IE-12）。ハンドラ実挙動の檻は
 /// input_events の task 2.7 檻＝proven-wiring ゆえ存在の有無だけ固定する
 /// （[[test-only-decision-branches-not-proven-wiring]]）。本テストは `#[cfg(test)]`
-/// ゆえ `crate::` パス使用可（example の `#[path]` include 不変条件は非テストコード限定）。
+/// ゆえ `crate::` パスを使ってよい。
 #[test]
 fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
     let mut world = World::new();

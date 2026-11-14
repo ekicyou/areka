@@ -199,7 +199,7 @@ fn repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis() {
 /// 前回セッションで利用者がドラッグした位置は「既定配置」ではない。既定位置と比較する形の
 /// 判定では、復元位置が既定位置として台帳に載ってしまうと `current_x == default_x` が成立し
 /// 未接触と誤判定される——**セッションを跨ぐと利用者のドラッグが隣接位置へ引き戻される**。
-/// 起動シーム（`main.rs`）が復元済みスコープの既定位置を落とし、ここが印の無い `None` を
+/// 記憶から戻したスコープは既定位置を持たず（`default_x == None`）、ここが印の無い `None` を
 /// 動かさないことで防ぐ。
 #[test]
 fn restored_scope_without_a_mark_is_never_pulled_back_even_when_it_sits_still() {

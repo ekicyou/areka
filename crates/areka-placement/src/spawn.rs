@@ -31,8 +31,7 @@
 //!   なおキャラ窓へのポインタハンドラ（`OnPointerMoved`／`OnPointerPressed`）は
 //!   **本モジュールでは付けない**——マウス移動／ダブルクリックを kanade へ配信する結線は
 //!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
-//!   input_events→placement。placement は `crate::` パスを持たず `super::`／外部 crate のみ
-//!   参照する＝example の `#[path]` include で成立させるため。areka-P0-input-events）。
+//!   input_events→placement。areka-P0-input-events）。
 //!   **終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる・R15.1）は右クリック
 //!   メニューの「終了」が送る（結線済みの Ctrl+左ダブルクリックの入口は areka-P0-popup-menu-minimal
 //!   で除去）。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
@@ -191,10 +190,7 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// 持つ entity への書き込みだけを補正するため、「キャラ窓に付いていない」ことが
 /// そのまま「limit の補正でキャラ窓の位置を変更しない」（2.8）の証明になる——
 /// 檻の主張ではなく構造の帰結である。
-// 消費者（runtime 関門・`follow::enqueue_window_set_pos`）が入るのは task 3.3 だが、
-// `#[allow(dead_code)]` は付けない——spawn が構築し檻が読むため lint は鳴らず、
-// 不要な allow は本当に未結線の項目を隠すだけである（隣接 markers の allow は
-// 「構築側が未実装」だった過渡状態の名残で、本 Component は事情が異なる）。
+// spawn が構築し、runtime 関門（`follow::enqueue_window_set_pos`）と檻が読む。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonLimit(pub bool);
 
@@ -534,8 +530,7 @@ pub fn spawn_ghost_windows(
                 BalloonFollow::new(balloon_window, p.balloon_offset_base),
                 // マウス入力配線（areka-P0-input-events）: キャラ窓のポインタ移動／押下を
                 // kanade へ配信する `OnPointerMoved`／`OnPointerPressed` は**ここでは付けない**。
-                // 依存方向は input_events→placement（placement は `crate::` パスを持てない＝
-                // example の `#[path]` include で成立させるため）ゆえ、ハンドラ装着は spawn
+                // 依存方向は input_events→placement ゆえ、ハンドラ装着は spawn
                 // 直後に `input_events::attach_char_pointer_handlers` が行う（stand-in 即終了
                 // `on_ghost_pressed` は退役。Ctrl+左ダブルクリック暫定退避もそのハンドラ側の
                 // 責務・DD-IE-7）。

@@ -7,8 +7,6 @@
 //!   採寸が焼く絵は資産の 0 番のコマと同じ寸法になる
 //! - 1 枚目が全透明の動く絵は静止画として見えるが、採寸は記録を出さない焼き（`bake_quiet`）を
 //!   通るので、この `warn!` は出ない（例外 D4 は解けた・spec: emo-bake-log-overlap 要件 1.5）
-//!
-//! examples が配置を `#[path]` で取り込むので `crate::` を使わない。
 use std::path::Path;
 
 use areka_emo_atlas::{DecodeError, DecodedImage, ElementDecoder};
