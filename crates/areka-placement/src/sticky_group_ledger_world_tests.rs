@@ -283,3 +283,13 @@ fn without_ledger_directives_are_dropped_with_warning() {
     assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
     assert!(world.get_resource::<StickyGroupLedger>().is_none());
 }
+
+/// シェルの切り替えの記録の `when` は `replace`（起動の `seed` と取り違えない）。
+#[test]
+fn replace_records_absent_scope_with_when_replace() {
+    let (mut world, _) = world_with_free_windows();
+    seed_sticky_descript(&mut world, None);
+    let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("0,7")));
+    let absent = one(&events, "sticky_member_absent");
+    assert_eq!(absent.field_str("when"), Some("replace"));
+}

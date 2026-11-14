@@ -396,3 +396,20 @@ fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
         .collect();
     assert_eq!(got, vec![(Anchor::Free, false), (Anchor::Free, false)]);
 }
+
+/// 作業領域を引けないスコープは `warn!`（`reseed_work_area_missing`）を残してから窓の矩形で代える。
+#[test]
+fn t_rs04b_missing_work_area_warns_before_substituting_the_window_rect() {
+    let (mut world, windows) = booted_world(96);
+    world.remove_resource::<MonitorSnapshot>();
+
+    let ((), events) =
+        capture(|| apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[]));
+
+    let missing: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reseed_work_area_missing"))
+        .collect();
+    assert!(!missing.is_empty(), "{events:?}");
+    assert!(missing.iter().all(|e| e.level == tracing::Level::WARN));
+}

@@ -65,9 +65,14 @@ pub fn seed_balloon_lock(world: &mut World, descript: &BTreeSet<u32>) {
 
 /// シェルの切り替えの後始末: descript の段だけを取り替え、台本の lock は保ち、書き手を呼ぶ（要件 4.4・5.4）。
 pub fn replace_balloon_lock_descript(world: &mut World, descript: &BTreeSet<u32>) {
-    world
-        .get_resource_or_insert_with(BalloonLockLedger::default)
-        .descript = descript.clone();
+    if !world.contains_resource::<BalloonLockLedger>() {
+        warn!(
+            event = "balloon_lock_ledger_missing",
+            directive = "descript_replace"
+        );
+        world.init_resource::<BalloonLockLedger>();
+    }
+    world.resource_mut::<BalloonLockLedger>().descript = descript.clone();
     sync_balloon_drag_writer(world);
 }
 

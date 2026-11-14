@@ -259,7 +259,7 @@ pub fn apply_reset_sticky(world: &mut World) -> bool {
 }
 
 /// 帳簿の descript の組を取り替え、拒否と窓の無いスコープを記録する（3.6・3.8・3.9・6.5）。
-fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
+fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str, when: &'static str) {
     let result = world
         .resource_mut::<StickyGroupLedger>()
         .replace_descript(raw);
@@ -272,7 +272,7 @@ fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
                 .find(|group| group.source == StickySource::Descript)
                 .map(|group| group.members.clone());
             if let Some(members) = members {
-                warn_absent_members(world, &members, "seed");
+                warn_absent_members(world, &members, when);
             }
         }
         Err(reason) => {
@@ -286,7 +286,7 @@ fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
 /// 起動で帳簿を据え、descript の `seriko.sticky-window` の組を入れる（3.8・3.9）。
 pub fn seed_sticky_descript(world: &mut World, raw: Option<&str>) {
     world.insert_resource(StickyGroupLedger::default());
-    apply_descript(world, raw, "descript_seed");
+    apply_descript(world, raw, "descript_seed", "seed");
 }
 
 /// シェルの切り替えで descript の組だけを取り替える（台本の組は保つ・6.5）。
@@ -295,7 +295,7 @@ pub fn replace_sticky_descript(world: &mut World, raw: Option<&str>) {
         warn_no_ledger("descript_replace");
         return;
     }
-    apply_descript(world, raw, "descript_replace");
+    apply_descript(world, raw, "descript_replace", "replace");
 }
 
 #[cfg(test)]

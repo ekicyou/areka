@@ -210,7 +210,7 @@
   - _Dispatch: mechanical — 道具と検査の関数を 1 つの支えへ移す_
   - _Requirements: 4.1, 7.3_
 
-- [ ] 6.8 (P) 記録の無い縮退と記録の取り違えを直す（U24・指摘 35・36・40・78）
+- [x] 6.8 (P) 記録の無い縮退と記録の取り違えを直す（U24・指摘 35・36・40・78）
   - 作業領域が無いときの reseed は `warn!` を出してから窓の矩形で代える。
   - 張り付きのグループの記録に呼んだ時機（seed／replace）を渡す。
   - バルーンの錠の帳簿が無いときの差し替えで `warn!` を出してから帳簿を据える。
@@ -269,3 +269,4 @@
 - 6.1: 指摘 54 の `emo2_utf8_fixture_decodes_to_the_same_text_as_before` は消さずに説明だけを直した（research の 54 が許すもう 1 つの直し方）。設計 U16 の「較正の当たりは残る所にあるので移す物は無い」は誤りで、この crate の本文の `shell::parse` の呼び出しはこのテストにしか無く、`measure_template_tests.rs` の較正の当たりになっている。
 - 6.3: `cargo test -p areka` の `mcp::check_script::check_script_tests::omitted_or_matching_name_answers_with_the_running_ghost` が 1 度だけ赤（単独の回し直しで緑・範囲の外）。1 の spine の揺れと並べて完了の棚卸で見る。
 - 6.7 のレビューの提案（8.1 で拾う）: 本体の `check_table` の較正は錨の欠け・知らない分岐・覆われない分岐の 3 通りだけで、`#[test]` の欠け・`#[path]` の欠け・分岐名の重なりは較正していない。tail のテストの頭の説明は wintf の実窓のファイルを 3 つ挙げるが、今は `zorder_chain_order_inversion_tests.rs` を足して 4 つ。
+- 6.8 のレビューの提案（8.1 で拾う）: `reseed.rs` の `restore_empty` の行の文がまだ「配置の解決が空を返した」のまま（「記憶の重ね合わせが空を返した」に揃える）。

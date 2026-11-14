@@ -72,7 +72,7 @@ pub fn apply_shell_descript(
             warn!(
                 event = "reseed_skipped",
                 scope,
-                reason = "resolve_empty",
+                reason = "restore_empty",
                 "reseed: 配置の解決が空を返した（見た目の値を入れ直さない）"
             );
             continue;
@@ -227,8 +227,13 @@ pub(crate) fn resolve_standard_scopes(
     for running in running_scopes {
         let scope = running.input.scope;
         // 引けなければ窓の矩形で代える（架空の矩形は作らない）。
-        let work_area =
-            work_area_for_window(&snapshot, running.char_rect).unwrap_or(running.char_rect);
+        let work_area = work_area_for_window(&snapshot, running.char_rect).unwrap_or_else(|| {
+            warn!(
+                event = "reseed_work_area_missing",
+                scope, "reseed: 窓の作業領域を引けない（窓の矩形で代える）"
+            );
+            running.char_rect
+        });
         // 自分の要素はちょうど 1 件（resolver・merge の事後条件）。破れたら黙って進めない。
         let Some(placement) = resolve_placement(&cfg, work_area, &inputs, running.dpi)
             .into_iter()

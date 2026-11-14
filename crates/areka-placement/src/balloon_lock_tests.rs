@@ -194,3 +194,14 @@ fn writer_touches_only_move_window() {
     assert!(drag.enabled);
     assert_eq!(drag.threshold, 9);
 }
+
+/// 帳簿が無い所への descript の差し替えも警告 1 件の上で帳簿を据える。
+#[test]
+fn replace_without_ledger_warns_and_installs() {
+    let (mut world, e) = world_with_balloons();
+
+    let ((), events) = capture(|| replace_balloon_lock_descript(&mut world, &scopes(&[0])));
+
+    assert_eq!(count(&events, "balloon_lock_ledger_missing"), 1);
+    assert!(!movable(&world, e[0]));
+}
