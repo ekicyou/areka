@@ -65,7 +65,7 @@
   - _Requirements: 2.1, 2.3, 5.5, 7.1_
 
 - [ ] 4. 判定の検体を手入れし、足りない場面の検体を足す（#28〜#30・#42・#43・#68〜#73・#74 の `generate.py:195`）
-- [ ] 4.1 検体の生成器の手入れ（#42・#68〜#74）
+- [x] 4.1 検体の生成器の手入れ（#42・#68〜#74）
   - H1b を消し、「指定の外の遅い系列は合格を止めない」の裁定の記録を H11 の note へ移す（#68・README は 13 へ）。C1・C2・T2 の note を事実に（#69）。端末の文を英語に（#70）。作ったもの以外のフォルダがあれば名を出して止める（#71）。H12c を `case_H12()` から作る（#72）。確かめを `rmtree` の前へ（#73）。`generate.py:195` の行番号を名前へ（#74）
   - 4 つの終了コードを全部求め、定数と assert を消す（#42・judge-perf の数行は同じタスクの削りと差し引く）
   - 終わった姿: `generate.py` を回して検体が H1b を除いてバイトで同じ（H12c は双子の突き合わせが緑）、judge-perf の `--selftest` が緑、H1b の名が grep で 0 件
@@ -224,3 +224,4 @@
 - 2.1: `perf_selftest_common` の根の確かめは道具の読み込みのたびに走る（.ps1 は `$PSScriptRoot` から呼ぶので本番は壊れない）。`list_case_dirs` は `fail` を、`finish` は `materials`・`case_file` を取る。design の `guard_console` は持ち主のタスクが無く未実装
 - 2.2: `check_tree(*, ascii_stderr, readme_examples)`（design の `stderr_texts` の代わりに `invoke` が本体の stderr を集める）。⑶ は 7.2・8・12.2 が自分の selftest の `ascii_stderr=True` で、⑸ は 13 が 4 か所の `readme_examples=True` で有効にする。⑸ は README の code block の中のドライブ文字の絶対パスを全部拾うので、13 は #27 の行に加えて 765 行（`pending_run: C:\...`）と 886 行（`-PdbDir C:\repo\...`）も置き換え札にするか、検査を絞る
 - 3: README へ渡す分（13）: 286 行の表の `FRAME_INTERVAL_JUDGED_SERIES` の行に「空にできない（起動で assert）」。`FRAME_INTERVAL_MAX_MEAN_FACTOR` は窓 A の p95 の注記に使うので残す（合否には使わない）
+- 4.1: README へ渡す分（13）: 344・411 行の H1b を H11 へ、397〜399 行に「4 つの終了コードは全部要る」（#42）。H1b の裁定の記録は H11 の note

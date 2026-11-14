@@ -183,13 +183,6 @@ EXIT_CODE_TABLE = (
 SELFTEST_FIXTURES_DIRNAME = "fixtures"
 SELFTEST_CASE_FILENAME = "case.txt"
 
-#: 自己較正が「毎回赤も作る」ことの関門（D7・steering「検証の道具そのものが壊れる・較正せよ」）。
-#: ここに挙げた終了コードは、それを期待する fixture が **1 つ以上実際に走って再現している**
-#: ことを要求する。緑しか走らない自己較正は、道具が壊れていても緑を出すので較正にならない。
-#: （1=不合格・2=判定不能。終了コード定数 EXIT_FAIL / EXIT_INCONCLUSIVE より前に置くので
-#:   数値で書き、定義後に取り違えが無いことを検査する。）
-SELFTEST_REQUIRED_RED_CODES = (1, 2)
-
 #: 総合判定の決め方（要件 4.2 の運用形・D7「沈黙を PASS にしない」）。
 VERDICT_PRECEDENCE = (
     "不合格が 1 つでもあれば 不合格(1)／"
@@ -704,10 +697,6 @@ EXIT_OK = 0
 EXIT_FAIL = 1  # 合否判定モード専用。集計モードは返さない
 EXIT_INCONCLUSIVE = 2
 EXIT_BAD_INPUT = 3
-
-# バナーの SELFTEST_REQUIRED_RED_CODES は定数定義より前にあるため数値で書いてある。
-# ここで取り違えが無いことを確かめる（赤の関門が別のコードを見張っていたら意味が無い）。
-assert SELFTEST_REQUIRED_RED_CODES == (EXIT_FAIL, EXIT_INCONCLUSIVE)
 
 
 class JudgeError(Exception):
@@ -3669,7 +3658,7 @@ def run_selftest() -> int:
             f"実際に再現 {len(reproduced)} 件"
             + (f"  （{'・'.join(c.name for c in reproduced)}）" if reproduced else "")
         )
-        if code in SELFTEST_REQUIRED_RED_CODES and not reproduced:
+        if not reproduced:  # 4 つの終了コードを毎回再現する（D7・#42）
             red_missing.append(labels[code])
 
     mismatches = [(c, got) for c, got, ok in results if not ok]
@@ -3687,7 +3676,7 @@ def run_selftest() -> int:
     for label in red_missing:
         report.line(
             f"  【較正になっていない】期待「{label}」を再現した fixture が 1 件もありません。"
-            "赤が出ない自己較正は、道具が壊れていても緑を返します（D7）。"
+            "4 つの終了コードが毎回再現されない自己較正は、道具が壊れていても緑を返します（D7）。"
         )
 
     for name, needle in missing_text:
