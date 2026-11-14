@@ -767,3 +767,18 @@
 
 - 相手が `follow` の `VisibilityVerdict`・`guard_visibility` を `pub(crate)` にした。この spec の範囲で名で呼ぶ所は 0（grep で確かめた。範囲の外の `frame_balloon_offset_follow_tests.rs:L199` の doc が名を書くだけ）。相手への知らせは要らない。
 - `completed/` の古い記録に残る消えたテストの名は、当時の記録なので直さない（相手と同じ判断）。
+
+## 16. 先の段の 4 本の着地の後の確かめ（2026-11-14・`main` 71594918 を取り込んだ後）
+
+`#458`・`#459`・`#460`（`audit-placement-follow`）・`#461`（`audit-wintf-window`）の差分（`7e0373f4..71594918`）を、この spec が名指す所と突き合わせた。要件・設計・タスクは変えない。
+
+- 80 件のうち先の段が直したものは 0 件。範囲の中で動いたのは、`#461` の 11 番（`WindowHandle.instance` を消す）で 15 ファイルの構築の式とその import だけ（各 1〜7 行・`dpi_sync_tests.rs`・`face_windowposition_tests.rs`・`spawn_zorder_*_wiring_tests.rs`・`zorder_chain_*_order_tests.rs`・`pt/reset_balloon_pos_tests.rs` ほか）。指摘の中身には触れていない。設計の行番号のうち、`spawn_zorder_pair_wiring_tests.rs`・`spawn_zorder_chain_wiring_tests.rs`（窓を作る道具・指摘 64）と `zorder_chain_tail_order_tests.rs`（指摘 31）は数行ずれた。タスク 1 の grep で読み替える。
+- 範囲の外の触る所（本体の `move_cue_place.rs`・`assets.rs`・`switch_assets.rs`・`frame/drain_resnap.rs`・`frame/zorder_drain.rs`・`main.rs`、`shell_target.rs`、`areka-emo-atlas` の `decode`、`areka-sylphya`）は、どの着地も触っていない。
+- 設計の前提はそのまま成り立つ。
+  - 指摘 2: 追随の側の `reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: Point)` が `follow/drag_follow.rs:L557` にあり、`on_balloon_drag`（`L543`）と離したとき（`L793`）から呼ばれる。印を付ける 1 行はこの関数の中に置く。`face_windowposition.rs:L64` の値の比べは残っている。
+  - 指摘 47: 3 つの `Cargo.toml` の `async-io` の行は同じ版のまま（`#458` は触っていない）。
+  - 指摘 67: wintf の `transition_diag::MISSING`（`pub const`・`"-"`）がある。配置の `diag.rs:L145` の私有の `UNKNOWN` は残っている。
+  - 指摘 73: `ChainPlan.absent` は `Vec<(u32, String)>`、`log_chain_absent(group_id, element: &str)` のまま。`#461` は同じファイルの doc と `dirty` の持ち越しの説明だけを直した。
+  - 指摘 7（`[[example]]`）: `crates/areka-placement/Cargo.toml` に `[[example]]` の節は無く、追随の側も触っていない。
+  - 15 節の件: `BottomSnapPolicy` を指す 4 行（`persist.rs:L227`・`L238`・`persist_restore_tests.rs:L295`・`resolver.rs:L438`）は残っている。
+- 重なる相手のうち、まだ着地していないのは `audit-wintf-input`（指摘 80・タスク 7.2）だけ。指摘 80 を最後にする順は変えない。
