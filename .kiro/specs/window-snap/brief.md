@@ -127,4 +127,5 @@
   - 直す形: 起動の位置を 4 つの辺それぞれで解き、作業領域が変わったときも 4 つの辺で沿わせ直す。網羅台帳の 8 行を `implemented` にし、持ち主を書く。
   - 起票の理由: 触る場所（吸着の向き `Anchor` と、作業領域に沿わせる所）が本 spec の「推す形」の 1 段目の土台と同じで、議題 1（土台の持ち主）の答えに含まれる。夢の段のまま待たせたくないときは、着手のときに本 spec の最初の段として切り出す（要件の段で決める）。
   - 接する spec: `window-work-area-clamp`（起動の並べ直しと記憶から戻す所を作業領域へ寄せる・`resolver.rs` の近く）。
+  - **2026-11-14 追記（`audit-placement-core` の要件の討議・議題 1）**: 件 1 のうち「起動で窓を最初に置く位置を 4 つの辺それぞれで解く」は、`audit-placement-core` が指摘 1 として直す（今は `crates/areka-placement/src/resolver.rs` の `resolve_placement`。並べ直し〔`reset_pos.rs`〕でも同じく下端に置かれ、記憶から戻す所や `project_anchor` が上端へ直すので経路ごとに位置が割れる・正典どおりの値にも呼ぶたびに警告が出る、を audit で見つけた）。この件に残るのは「作業領域が変わったときに 4 つの辺で沿わせ直す」（本体の `runtime` の側）と、網羅台帳の 8 行を `implemented` にして持ち主を書くこと。`audit-placement-core` の着地のときに、この行の数え方を見直す。
 - 本文 Current State の「`\![set,alignmenttodesktop]`・`\![set,sticky-window]`・… は網羅台帳で absent」は古い。完了 `window-link-directives`（2026-10-23）がこの 2 つを実装した（網羅台帳 `sakura-script.toml` は `implemented`）。本文 議題 1 の「どれも未実装」も、残るのは時間をかける `\![move]`／`\![moveasync]` だけ。
