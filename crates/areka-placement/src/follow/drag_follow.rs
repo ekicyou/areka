@@ -213,14 +213,14 @@ pub fn on_char_drag_end(
                     // サーフェス寸が変わったとき「同じ左上」が別の中央を指し、復元で
                     // キャラ・バルーンが横へずれる（実機: むらさき 382 で保存→434 で復元）。
                     // 現寸が読めないときは左上のまま（防御・従来挙動）。
-                    let char_size =
-                        world
-                            .get::<WindowPos>(entity)
-                            .and_then(|wp| wp.size)
-                            .map(|s| SizePx {
-                                w: s.width,
-                                h: s.height,
-                            });
+                    let char_size = world
+                        .get::<WindowPos>(entity)
+                        .and_then(|wp| wp.size)
+                        .filter(|s| s.width > 0 && s.height > 0)
+                        .map(|s| SizePx {
+                            w: s.width,
+                            h: s.height,
+                        });
                     // 形は descript の向き（次の起動はそれで読み戻す・4.8）。
                     let form = saved_form_anchor(world, entity).unwrap_or(anchor);
                     let saved = match char_size {

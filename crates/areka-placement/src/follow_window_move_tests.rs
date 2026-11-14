@@ -374,3 +374,32 @@ fn move_cue_move_leaves_offscreen_balloon_in_place() {
         "MoveCue で守りが喋っている: {events:?}"
     );
 }
+
+// -------------------------------------------------------------------------
+// 位置が未確定の印（`CW_USEDEFAULT`）の窓へ寸だけを書かない（指摘 20）
+// -------------------------------------------------------------------------
+
+/// 位置が `CW_USEDEFAULT`（窓生成直後の印）のバルーンへ位置を保った寸を書くと、
+/// 「位置が無い」と同じく偽で書込の列が空。直す前は印の位置のまま書いていた。
+#[test]
+fn resize_keep_position_on_sentinel_position_writes_nothing() {
+    use super::resize_window_keep_position;
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+
+    let mut world = World::new();
+    let balloon = world
+        .spawn((
+            fake_handle(0x2000),
+            window_pos_sized(CW_USEDEFAULT, CW_USEDEFAULT, 350, 200),
+        ))
+        .id();
+
+    let _residue = drain_window_pos_commands();
+    let (ok, events) =
+        capture(|| resize_window_keep_position(&mut world, balloon, SizePx { w: 517, h: 823 }));
+
+    assert!(!ok, "印の位置へ寸を書いてはならない");
+    assert!(drain_window_pos_commands().is_empty(), "書込の列が空でない");
+    assert_eq!(size_of(&world, balloon), SizeI::new(350, 200));
+    expect_one(&events, "WindowPos.position 不在");
+}

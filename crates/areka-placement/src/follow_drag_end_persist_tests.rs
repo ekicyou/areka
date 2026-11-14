@@ -649,3 +649,37 @@ fn char_drag_end_persists_in_descript_form_not_current_anchor() {
     );
     rig.close();
 }
+
+/// 寸が未確定の印（`CW_USEDEFAULT`）の Bottom の窓を (100,300) で離すと、寸が無いのと同じく
+/// 記憶の x は左上の 100 のまま（指摘 20）。直す前は印の幅の半分を足した値を書いていた。
+#[test]
+fn char_drag_end_with_sentinel_size_persists_top_left_x() {
+    use areka_sylphya::{Axis, PersistKey};
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
+
+    use crate::spawn::CharWindowMarker;
+
+    let rig = SylphyaRig::fake();
+    let mut world = World::new();
+    rig.wire(&mut world);
+    let window = world
+        .spawn((
+            fake_handle(0x1000),
+            window_pos_sized(100, 300, CW_USEDEFAULT, CW_USEDEFAULT),
+            Anchored(Anchor::Bottom),
+            CharWindowMarker { scope: 0 },
+            dragging_state((100, 300), (0, 0)),
+        ))
+        .id();
+
+    let ev = Phase::Bubble(drag_end_event_at(window, (0, 0)));
+    assert!(!on_char_drag_end(&mut world, window, window, &ev));
+
+    let loaded = rig.saved();
+    let key = |axis| PersistKey::WindowPos { scope: 0, axis };
+    assert!(
+        loaded.contains(&(key(Axis::X), "100".to_string())),
+        "記憶の x が左上のままでない: {loaded:?}"
+    );
+    rig.close();
+}

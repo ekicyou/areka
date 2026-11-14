@@ -205,6 +205,7 @@ pub fn place_chain_in_work_area(
                 .get::<WindowPos>(e)
                 .and_then(|wp| wp.size)
                 .map(|s| s.height)
+                .filter(|&h| h > 0)
         })
         .collect();
     let rects: Vec<ChainRect> = slots

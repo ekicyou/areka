@@ -1182,10 +1182,13 @@ pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: 
             );
             return false;
         };
-        let Some(pos) = wp.position else {
+        let Some(pos) = wp
+            .position
+            .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
+        else {
             warn!(
                 entity = ?window,
-                "WindowPos.position 不在（窓生成前）のため現在位置を読めずリサイズしない"
+                "WindowPos.position 不在（窓生成前・CW_USEDEFAULT 含む）のため現在位置を読めずリサイズしない"
             );
             return false;
         };

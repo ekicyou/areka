@@ -434,3 +434,19 @@ fn world_with_empty_snapshot_warns_no_work_area() {
     assert_eq!(warn.expect_field("scope"), "1");
     assert_eq!(warn.expect_field("reason"), "\"no-work-area\"");
 }
+
+/// 指摘 20: 高さが未確定の印（0）のスロットは、高さが読めないのと同じ `Unresolved`
+/// （no-window-height）。直す前は高さ 0 の矩形で寄せを計算していた（`Flipped`）。
+#[test]
+fn sentinel_height_is_unresolved() {
+    let rects = [HEAD, cr(1000, 900, 1108, 0)];
+    let decisions = [PairDecision::JoinLeft, PairDecision::JoinLeft];
+    let (world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
+
+    let (out, events) =
+        capture(|| place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack));
+
+    assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved);
+    let warn = expect_one(&events, WORK_AREA_UNRESOLVED_TAG);
+    assert_eq!(warn.expect_field("reason"), "\"no-window-height\"");
+}
