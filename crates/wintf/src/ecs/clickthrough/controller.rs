@@ -7,7 +7,7 @@
 //!    レジストリの各対象窓を 1 回巡回し、ヒットテスト→`resolve_transition`→
 //!    差分時のみ `apply_click_through`→成功時のみ `last_applied` 書き戻し、を行う。
 //!    `tick_bridge::tick_one_frame` と同じ「同期コア切り出し」規律でテスト隔離する。
-//! 3. [`ClickThroughController::start`] / [`ClickThroughHandle`]（async ループ＋RAII）:
+//! 3. [`start_click_through`] / [`ClickThroughHandle`]（async ループ＋RAII）:
 //!    `spawn_local` で UI スレッドに投入する二重起床（カーソル移動 notify／VSync tick）
 //!    の listen-before-work ループと、その生存期間を束ねる RAII ハンドル。
 
@@ -257,106 +257,63 @@ fn screen_to_client_point(hwnd: HWND, screen: PhysicalPoint) -> Option<PointF> {
 ///   結線は task 3.2 の責務のため、`start` は wake event を **引数** で受ける。
 /// - **レジストリを共有可能化**（`Rc<RefCell<ClickThroughRegistry>>`）: areka は窓を
 ///   非同期生成するため、task 3.2/4.1 が `start` **後** に対象窓を登録／破棄時に除去
-///   できるよう、返す [`ClickThroughHandle`] 経由で register/remove を公開する。
-pub(crate) struct ClickThroughController;
-
-impl ClickThroughController {
-    /// UI スレッドで機構を起動する。ワーカ生成・event 共有・async ループの
-    /// `spawn_local` を束ね、[`ClickThroughHandle`]（RAII）を返す。
-    ///
-    /// - `world`: UI スレッド所有 World への `Weak`（`run_async_tick` と同じ寿命規律・
-    ///   shutdown で `upgrade()` が `None` を返しループが安全終了）。
-    /// - `registry`: 共有レジストリ（start 後の登録／除去を許すため `Rc<RefCell<..>>`）。
-    /// - `wake_event`: 二重起床の単一 wake event。ワーカが notify し、VSync tick 源
-    ///   （task 3.2）も同一 event を post-tick で notify する。
-    /// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では判定を
-    ///   回さずに終える（[`run_click_through`] 参照）。
-    ///
-    /// # Postconditions
-    /// カーソルワーカ稼働・async ループ稼働。返した `ClickThroughHandle` の drop で
-    /// 機構停止（ワーカ join・async ループは `run()` が旗を下ろした後の最初の起床か、world drop で終了）。
-    pub(crate) fn start(
-        world: Weak<RefCell<EcsWorld>>,
-        registry: Rc<RefCell<ClickThroughRegistry>>,
-        wake_event: Arc<Event>,
-        running: Rc<Cell<bool>>,
-    ) -> ClickThroughHandle {
-        // ワーカは同一 wake event で起床通知する（カーソル移動 → notify）。
-        // ワーカは handle（RAII で唯一の強所有・drop で stop/join）と async ループ（座標読み）
-        // で共有する。**join を handle 単独が駆動する**ため、handle が唯一の強 `Rc` を持ち、
-        // ループには `Weak` を渡す。こうすることで:
-        //   - handle drop → 強 `Rc` が 0 → ワーカ即 stop/join（ループが park 中でも遅延しない）。
-        //   - ループは毎起床 `upgrade()` し、`None`（handle drop 済み）なら shutdown として終了。
-        // UI スレッド単独所有ゆえ `Rc`/`Weak`（非 `Arc`）で十分（内部 `latest_pos` は `Arc<AtomicI64>`）。
-        let monitor = Rc::new(CursorMonitorBridge::spawn(Arc::clone(&wake_event)));
-
-        // async 判定・適用ループを UI スレッドへ投入（実行はメッセージループに委ねる）。
-        let join = crate::executor::spawn_local(run_click_through(
-            Arc::clone(&wake_event),
-            Weak::clone(&world),
-            Rc::clone(&registry),
-            Rc::downgrade(&monitor),
-            running,
-        ));
-
-        debug!("ClickThroughController started (UI-thread eval loop + cursor worker)");
-
-        ClickThroughHandle {
-            monitor,
-            registry,
-            wake_event,
-            _join: join,
-        }
-    }
-}
-
-/// クリック透過機構の生存期間を束ねる RAII ハンドル。
+///   できるよう、呼び手が同じ表を [`ClickThroughRegistryHandle`] に包んで World へ据える。
 ///
-/// - `monitor`: カーソルワーカ。drop でワーカを stop/join（`CursorMonitorBridge::Drop`）。
-/// - `registry`: 共有レジストリ。[`register`]/[`remove`] で start 後の窓登録／除去を行う。
-/// - `wake_event`: 手動起床（テスト・強制再評価）にも使える wake event の保持。
-/// - `_join`: async ループの JoinHandle。ループは `world` の `Weak` が upgrade 不能に
-///   なった時点（shutdown）で自ら終了する（`run_async_tick` と同じ終了規律）。
+/// ワーカ生成・event 共有・async ループの
+/// `spawn_local` を束ね、[`ClickThroughHandle`]（RAII）を返す。
 ///
-/// [`register`]: ClickThroughHandle::register
-/// [`remove`]: ClickThroughHandle::remove
-pub(crate) struct ClickThroughHandle {
-    monitor: Rc<CursorMonitorBridge>,
+/// - `world`: UI スレッド所有 World への `Weak`（`run_async_tick` と同じ寿命規律・
+///   shutdown で `upgrade()` が `None` を返しループが安全終了）。
+/// - `registry`: 共有レジストリ（start 後の登録／除去を許すため `Rc<RefCell<..>>`）。
+/// - `wake_event`: 二重起床の単一 wake event。ワーカが notify し、VSync tick 源
+///   （task 3.2）も同一 event を post-tick で notify する。
+/// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では判定を
+///   回さずに終える（[`run_click_through`] 参照）。
+///
+/// # Postconditions
+/// カーソルワーカ稼働・async ループ稼働。返した `ClickThroughHandle` の drop で
+/// 機構停止（ワーカ join・async ループは `run()` が旗を下ろした後の最初の起床か、world drop で終了）。
+pub(crate) fn start_click_through(
+    world: Weak<RefCell<EcsWorld>>,
     registry: Rc<RefCell<ClickThroughRegistry>>,
     wake_event: Arc<Event>,
-    _join: crate::executor::JoinHandle<()>,
+    running: Rc<Cell<bool>>,
+) -> ClickThroughHandle {
+    // ワーカは同一 wake event で起床通知する（カーソル移動 → notify）。
+    // ワーカは handle（RAII で唯一の強所有・drop で stop/join）と async ループ（座標読み）
+    // で共有する。**join を handle 単独が駆動する**ため、handle が唯一の強 `Rc` を持ち、
+    // ループには `Weak` を渡す。こうすることで:
+    //   - handle drop → 強 `Rc` が 0 → ワーカ即 stop/join（ループが park 中でも遅延しない）。
+    //   - ループは毎起床 `upgrade()` し、`None`（handle drop 済み）なら shutdown として終了。
+    // UI スレッド単独所有ゆえ `Rc`/`Weak`（非 `Arc`）で十分（内部 `latest_pos` は `Arc<AtomicI64>`）。
+    let monitor = Rc::new(CursorMonitorBridge::spawn(Arc::clone(&wake_event)));
+
+    // async 判定・適用ループを UI スレッドへ投入（実行はメッセージループに委ねる）。
+    let join = crate::executor::spawn_local(run_click_through(
+        Arc::clone(&wake_event),
+        Weak::clone(&world),
+        Rc::clone(&registry),
+        Rc::downgrade(&monitor),
+        running,
+    ));
+
+    debug!("click-through started (UI-thread eval loop + cursor worker)");
+
+    ClickThroughHandle {
+        _monitor: monitor,
+        _join: join,
+    }
 }
 
-impl ClickThroughHandle {
-    /// 監視対象窓を登録する（start 後・areka の非同期窓生成に追随）。
-    pub(crate) fn register(&self, window: Entity, hwnd: windows::Win32::Foundation::HWND) {
-        self.registry.borrow_mut().register(window, hwnd);
-    }
-
-    /// 監視対象窓を除去する（ウィンドウ破棄時・R7.2 非破壊）。存在すれば `true`。
-    pub(crate) fn remove(&self, window: Entity) -> bool {
-        self.registry.borrow_mut().remove(window)
-    }
-
-    /// 共有レジストリへの参照（結線・テスト用）。
-    pub(crate) fn registry(&self) -> &Rc<RefCell<ClickThroughRegistry>> {
-        &self.registry
-    }
-
-    /// 共有 wake event への参照（VSync tick 源の結線・強制再評価・テスト用）。
-    pub(crate) fn wake_event(&self) -> &Arc<Event> {
-        &self.wake_event
-    }
-
-    /// 手動でループを 1 回起床する（テスト・強制再評価用）。
-    pub(crate) fn wake(&self) {
-        self.wake_event.notify(usize::MAX);
-    }
-
-    /// ワーカ最新カーソル座標（screen physical）を読む（テスト・結線用）。
-    pub(crate) fn latest_cursor(&self) -> PhysicalPoint {
-        self.monitor.latest_cursor()
-    }
+/// クリック透過機構の生存期間を束ねる RAII ハンドル。持つだけで、口は無い
+/// （登録・除去は呼び手が同じ表を包んだ [`ClickThroughRegistryHandle`] で行う）。
+///
+/// - `_monitor`: カーソルワーカの唯一の強参照。drop でワーカを stop/join（`CursorMonitorBridge::Drop`）。
+/// - `_join`: async ループの JoinHandle。ループは `world` の `Weak` が upgrade 不能に
+///   なった時点（shutdown）で自ら終了する（`run_async_tick` と同じ終了規律）。
+pub(crate) struct ClickThroughHandle {
+    _monitor: Rc<CursorMonitorBridge>,
+    _join: crate::executor::JoinHandle<()>,
 }
 
 /// アプリ側（`crates/areka`・task 4.1）が監視対象窓を登録／除去するための **公開** ハンドル。
@@ -369,7 +326,7 @@ impl ClickThroughHandle {
 ///
 /// # なぜ NonSend リソースか
 /// areka は窓を **非同期生成**する（`run_setup` は command 経由で後から `&mut World` を得る）。
-/// `ClickThroughController::start` は `run()` 冒頭で走るため、登録面を World に置いておけば
+/// [`start_click_through`] は `run()` 冒頭で走るため、登録面を World に置いておけば
 /// start 後の任意タイミングで登録できる。レジストリ本体は UI スレッド単独所有（`!Send`）ゆえ
 /// NonSend リソースが妥当（`Rc`/`RefCell` は `!Send`）。
 ///

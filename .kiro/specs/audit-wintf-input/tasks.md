@@ -124,7 +124,7 @@
   - _Dispatch: standard — 再登録の条件と刈る条件の新しい枝と、本物の HWND を使うテストを組む_
   - _Requirements: 2.1, 4.6, 4.7_
 
-- [ ] 5.2 クリック透過のモジュール全体の dead_code の許しを外し、空の型を関数にする
+- [x] 5.2 クリック透過のモジュール全体の dead_code の許しを外し、空の型を関数にする
   - モジュールの頭の dead_code と使われない import の許しと NOTE を消し、コンパイラが指すものを、製品から使われなければ消し、テストだけが使うなら `#[cfg(test)]` にする（個別の `#[allow(dead_code)]` は置かない）。使われない再公開も外す。登録の口の公開の型は残す。
   - 関数 1 つの空のコントローラーの型を消して、crate の中の起動の関数にする。ランタイムの起動の呼び出しと説明、テストの呼び出しを直す。起動の `debug!` の文言から型の名を外す。ハンドルの終わりの RAII（止める・待つ）は保つ。
   - テストがハンドルの登録・削除の口を使う所は、テストが持つ共有の表を直に触る形にする。`doc/click-through.md` のコントローラーの名・刈る条件の行を直す。
@@ -185,3 +185,4 @@
 - `audit-placement-core` と: この spec が先に着地。向こうの 2.4 が `follow/drag_follow.rs` の `reestablish_balloon_follow` に 1 行足す＝3.2 の読み手の直しと近くで重なれば後から着地する側（向こう）が合わせる（11-14 の伝言）。
 - `areka-placement/src/follow/drag_follow.rs` は 1000 行ちょうど＝空き 0 行（3.2 の後）。`audit-placement-core` が 1 行足すなら向こうで空きを作る（伝え済み）。
 - 範囲の外の例の説明 2 か所が、クリック透過の刈る条件を今も「Entity の生存確認」と書く（`crates/areka/examples/mock-shell.rs:135`・`crates/areka/examples/emo-present/systems.rs:17`）。5.1 で条件が「wintf の窓（`Window`＋同じ HWND の `WindowHandle`）だけ」に変わった＝完了の棚卸で拾う（5.1 のレビュー）。
+- 6.2 へ申し送り（5.2 のレビュー）: `clickthrough/controller.rs` の `ClickThroughRegistryHandle` の説明（「破棄追随」「World 生存を確認して」＝5.1 前の刈る条件）・`doc/click-through.md` 4.3 の「dedupe（冪等）」・`controller.rs` の「結線は task 3.2 の責務」。起動の `debug!` の旧い文言は `tools/perf/fixtures-loop/followup/*/run.log` の 3 行目に検体のデータとして残るだけで、読む道具は無い。

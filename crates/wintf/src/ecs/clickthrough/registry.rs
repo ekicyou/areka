@@ -97,7 +97,8 @@ impl ClickThroughRegistry {
         self.targets.is_empty()
     }
 
-    /// 指定 window の `last_applied` を読む（未登録なら `None`）。
+    /// 指定 window の `last_applied` を読む（未登録なら `None`）。使い手はテストだけ。
+    #[cfg(test)]
     pub(crate) fn last_applied(&self, window: Entity) -> Option<DesiredState> {
         self.targets
             .iter()

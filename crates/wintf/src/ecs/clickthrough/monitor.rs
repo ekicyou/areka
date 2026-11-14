@@ -16,8 +16,8 @@
 //! 約 1 周期で復帰し、ハングしない。
 //!
 //! # 生存期間（RAII）
-//! `VsyncEventBridge` を構造テンプレとし、`Arc<event_listener::Event>`＋`Arc<AtomicI64>`
-//! 最新座標＋`Arc<AtomicBool>` stop_flag＋`Option<JoinHandle>` を保持する。`Drop` で
+//! `VsyncEventBridge` を構造テンプレとし、`Arc<AtomicI64>` 最新座標＋`Arc<AtomicBool>`
+//! stop_flag＋`Option<JoinHandle>` を保持する（`Arc<event_listener::Event>` はワーカへ渡すだけ）。`Drop` で
 //! stop フラグを立ててワーカを `join()` する（`stop_flag.store(true)→join` の順序）。
 
 use std::sync::Arc;
@@ -50,15 +50,13 @@ fn unpack(v: i64) -> (i32, i32) {
 /// カーソル監視ワーカスレッドの起床を共有 `event_listener::Event` へ橋渡しする
 /// RAII ユニット。
 ///
-/// - 共有 `Event`（`Arc` で clone をワーカスレッドへ move・UI ループと同一 `Arc`）
+/// - 共有 `Event`（ワーカスレッドへ move するだけで持たない・UI ループと同一 `Arc`）
 /// - 最新カーソル座標（`Arc<AtomicI64>`・pack 済み・UI 側が [`latest_cursor`] で読む）
 /// - 停止フラグ（`Arc<AtomicBool>`）
 /// - スレッドハンドル（`Option<JoinHandle<()>>`・take は `Drop`/`stop` のみ）
 ///
 /// [`latest_cursor`]: CursorMonitorBridge::latest_cursor
 pub(crate) struct CursorMonitorBridge {
-    /// 共有カーソル移動通知イベント。ワーカが移動ごとに `notify(usize::MAX)`。
-    cursor_event: Arc<event_listener::Event>,
     /// pack(x,y) の最新カーソル座標。UI 側が [`latest_cursor`] で読む。
     ///
     /// [`latest_cursor`]: CursorMonitorBridge::latest_cursor
@@ -72,27 +70,25 @@ pub(crate) struct CursorMonitorBridge {
 impl CursorMonitorBridge {
     /// カーソル監視ワーカを起動してブリッジを生成する。
     ///
-    /// `cursor_event` は UI ループ（`ClickThroughController` の listen 対象）と共有する
+    /// `cursor_event` は UI ループ（[`super::start_click_through`] が回す判定ループの listen 対象）と共有する
     /// 同一 `Arc`。ワーカは `while !stop { GetCursorPos; if moved { store; notify } }` を
     /// 固定短周期でループする。
     pub(crate) fn spawn(cursor_event: Arc<event_listener::Event>) -> Self {
         let latest_pos = Arc::new(AtomicI64::new(0));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
-        // clone をワーカスレッドへ move（Event/latest_pos/stop_flag とも Arc で共有）。
-        let thread_event = Arc::clone(&cursor_event);
+        // Event はそのままワーカスレッドへ move、latest_pos/stop_flag は clone を move して共有する。
         let thread_latest = Arc::clone(&latest_pos);
         let thread_stop = Arc::clone(&stop_flag);
 
         let handle = thread::Builder::new()
             .name("wintf-cursor-monitor".to_owned())
-            .spawn(move || cursor_loop(thread_event, thread_latest, thread_stop))
+            .spawn(move || cursor_loop(cursor_event, thread_latest, thread_stop))
             .expect("failed to spawn wintf-cursor-monitor thread");
 
         debug!("CursorMonitorBridge started (wintf-cursor-monitor thread spawned)");
 
         Self {
-            cursor_event,
             latest_pos,
             stop_flag,
             handle: Some(handle),
@@ -106,11 +102,6 @@ impl CursorMonitorBridge {
     pub(crate) fn latest_cursor(&self) -> PhysicalPoint {
         let (x, y) = unpack(self.latest_pos.load(Ordering::Acquire));
         PhysicalPoint::new(x, y)
-    }
-
-    /// 共有カーソル移動通知イベントへの参照を返す（テスト・結線用）。
-    pub(crate) fn event(&self) -> &Arc<event_listener::Event> {
-        &self.cursor_event
     }
 
     /// ワーカスレッドを停止し join する（`stop_flag → join` の順序）。

@@ -681,7 +681,7 @@ fn registry_handle_register_remove_reflects_shared_registry() {
 }
 
 // ========================================================================
-// ClickThroughController::start / ClickThroughHandle（RAII・shutdown）
+// start_click_through / ClickThroughHandle（RAII・shutdown）
 // ========================================================================
 
 /// RAII: `start`→`drop(handle)` でカーソルワーカが確実に stop/join され、ハングしない。
@@ -692,24 +692,27 @@ fn start_then_drop_joins_worker_without_hanging() {
     let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
     let wake = Arc::new(Event::new());
 
-    let handle = ClickThroughController::start(
+    let handle = start_click_through(
         StdRc::downgrade(&world),
         StdRc::clone(&registry),
         Arc::clone(&wake),
         StdRc::new(std::cell::Cell::new(true)),
     );
 
-    // handle 経由の register/remove が共有レジストリへ反映されること。
+    // start 後も共有の表へ直に register/remove できること（呼び手が同じ表を持つ）。
     let mut w = World::new();
     let e = w.spawn_empty().id();
     let hwnd = create_test_hwnd();
-    handle.register(e, hwnd);
+    registry.borrow_mut().register(e, hwnd);
     assert_eq!(
         registry.borrow().len(),
         1,
         "start 後の register が反映される"
     );
-    assert!(handle.remove(e), "start 後の remove が反映される");
+    assert!(
+        registry.borrow_mut().remove(e),
+        "start 後の remove が反映される"
+    );
     assert!(registry.borrow().is_empty());
     destroy_test_hwnd(hwnd);
 
@@ -757,7 +760,7 @@ fn eval_loop_stops_without_a_check_once_the_loop_has_returned() {
         e
     };
 
-    let handle = ClickThroughController::start(
+    let handle = start_click_through(
         StdRc::downgrade(&world),
         StdRc::clone(&registry),
         Arc::clone(&wake),
@@ -766,7 +769,7 @@ fn eval_loop_stops_without_a_check_once_the_loop_has_returned() {
     crate::executor::block_on(async {}); // 待ちを立てさせる
     let held_while_waiting = (
         StdRc::strong_count(&world) - 1,
-        StdRc::strong_count(&handle.monitor) - 1,
+        StdRc::strong_count(&handle._monitor) - 1,
     );
 
     // 対照: ループが回っている間の起床は判定を回す（起床が届く仕掛けの確認）。
