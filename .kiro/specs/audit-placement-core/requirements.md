@@ -76,6 +76,7 @@
 7. The 本見直し shall `measure_first_frame_tests.rs` の `fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake` を、動く絵の上限の環境変数（`AREKA_ANIMATED_IMAGE_MAX_FRAMES`・`AREKA_ANIMATED_IMAGE_MAX_PIXELS`）を立てて走らせても、立てずに走らせても、同じ結果になる形に直す（`audit-emo-atlas` の件 1）
 8. When 2.7 を直した, the 本見直し shall `crates/areka/src/placement_tests/measure_bake_log_tests.rs` と `measure_bake_count_tests.rs`（ギャップ分析で、こちらも同じ環境変数で赤になると分かった＝指摘 5）も、同じ環境変数を立てて走らせたときに結果が変わらないことを確かめ、変わるなら同じに直す
 9. The 本見直し shall 受け持つファイルの説明のうち今のコードを指す所に残る古い名前（`emo2_boot`・`Emo2Wiring`・要件の段の `30a343eb` で 13 ファイル・27 行）を今の名前（`runtime` ほか）に直し、直したファイルと行の数を `runtime-crate-split` の brief へ申し送る（同 spec が直す数を減らすため。同 brief の「`areka-placement` の 4 行は棚卸㊲で直した」の記述と数が合わなければ、その記述も正す）
+10. When 指摘 13 の直しで本体の `crates/areka/src/runtime/move_cue_place.rs` を直した, the 本見直し shall 完了の申し送りに「`move_cue_place.rs` を直した」ことと直した中身を 1 行書く（C21 の見込みの `runtime-crate-split` が `runtime/` を新しい crate へ動かすので、次の棚卸で同 spec の brief へ渡すため・2026-11-14「areka棚卸」の依頼）
 
 ### Requirement 3: 直す対象を要件の討議で確定する
 
