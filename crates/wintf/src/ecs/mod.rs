@@ -30,9 +30,9 @@ pub use drag::{
 pub use graphics::*;
 pub use layout::*;
 pub use pointer::{
-    CursorVelocity, DoubleClick, EventHandler, OnPointerEntered, OnPointerExited, OnPointerMoved,
-    OnPointerPressed, OnPointerReleased, Phase, PhysicalPoint, PointerButton, PointerEventHandler,
-    PointerLeave, PointerState, WheelDelta, clear_transient_pointer_state, debug_pointer_leave,
+    DoubleClick, EventHandler, OnPointerEntered, OnPointerExited, OnPointerMoved, OnPointerPressed,
+    OnPointerReleased, Phase, PhysicalPoint, PointerButton, PointerEventHandler, PointerLeave,
+    PointerState, WheelDelta, clear_transient_pointer_state, debug_pointer_leave,
     debug_pointer_state_changes, dispatch_pointer_events,
 };
 pub use tooltip::{

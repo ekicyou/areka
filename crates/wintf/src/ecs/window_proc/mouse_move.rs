@@ -157,7 +157,7 @@ fn track_mouse_leave(hwnd: HWND) {
 
 /// WM_MOUSEMOVE: マウス移動メッセージ
 ///
-/// 位置をPointerBufferに蓄積し、hit_testでヒットしたエンティティにPointerStateを付与。
+/// 位置を溜め（最新の 1 つ）に置き、hit_testでヒットしたエンティティにPointerStateを付与。
 /// 移動のたびに（World の借用の外で）離脱の見張りを掛ける。
 /// 移す先の entity が破棄済みなら位置を積まず、[`DESPAWNED_SKIP_TAG`] の `debug!` を残す。
 #[inline]
@@ -170,7 +170,6 @@ pub(super) fn WM_MOUSEMOVE(
 ) -> HandlerResult {
     use crate::ecs::pointer::{PointerState, push_pointer_sample, set_modifier_state};
     use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
-    use std::time::Instant;
 
     track_mouse_leave(hwnd);
 
@@ -356,7 +355,7 @@ pub(super) fn WM_MOUSEMOVE(
 
             // PointerStateが存在することを保証した上で、バッファに蓄積
             if target_alive {
-                push_pointer_sample(target_entity, x as f32, y as f32, Instant::now());
+                push_pointer_sample(target_entity, crate::ecs::pointer::PhysicalPoint::new(x, y));
                 set_modifier_state(target_entity, shift, ctrl);
             }
         }
