@@ -13,7 +13,11 @@ use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, SendMessageW, WM_MOUSEMOVE};
 
 use super::super::window_pos::window_pos_transition_tests::{DISPATCH_TARGET, create_test_window};
-use crate::ecs::pointer::{PointerLeave, PointerState};
+use crate::ecs::drag::{
+    DragStateSnapshot, WindowDragContext, WindowDragContextResource, cancel_dragging,
+    snapshot_drag_state, start_dragging, start_preparing, update_dragging,
+};
+use crate::ecs::pointer::{PhysicalPoint, PointerLeave, PointerState};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::{Window, WindowHandle};
 use crate::ecs::world::EcsWorld;
@@ -107,5 +111,53 @@ fn mouse_leave_leaves_only_the_window_it_reached() {
         state(child_b),
         (false, true),
         "B へ配ると B の子も離脱になる"
+    );
+}
+
+/// 取っ手が空の窓をドラッグで動かす形（`move_window` が真）で `WM_MOUSEMOVE` を配ると、
+/// 窓の移動の書き込みが失敗し、`drag_move_window_failed` の `error` が 1 本残る（44 番）。
+#[test]
+fn failed_drag_window_move_is_logged_as_error() {
+    // DRAG_STATE は thread_local。前のテストの残りを JustEnded へ落としてから始める。
+    cancel_dragging();
+
+    let world = Rc::new(RefCell::new(EcsWorld::new()));
+    let entity = world.borrow_mut().world_mut().spawn_empty().id();
+
+    // Dragging まで進める。窓の文脈は取っ手が無く（空の取っ手になる）、窓を動かす形。
+    start_preparing(entity, PhysicalPoint::new(10, 20), HWND::default());
+    start_dragging(PhysicalPoint::new(40, 50));
+    let ctx = WindowDragContextResource::new();
+    ctx.set(WindowDragContext {
+        move_window: true,
+        ..Default::default()
+    });
+    update_dragging(PhysicalPoint::new(40, 50), Some(&ctx));
+    assert!(matches!(
+        snapshot_drag_state(),
+        DragStateSnapshot::Dragging {
+            move_window: true,
+            ..
+        }
+    ));
+
+    let log = capture_under_filter("wintf::ecs::window_proc::mouse_move=error", || {
+        let m = WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_MOUSEMOVE,
+            wparam: WPARAM(0),
+            lparam: LPARAM((60 << 16) | 50),
+        };
+        crate::ecs::dispatch_window_message(&world, entity, &m);
+    });
+    cancel_dragging();
+
+    let failed = log
+        .lines()
+        .filter(|l| l.contains("ERROR") && l.contains("drag_move_window_failed"))
+        .count();
+    assert_eq!(
+        failed, 1,
+        "窓の移動の失敗を error で 1 本残す。ログ:\n{log}"
     );
 }

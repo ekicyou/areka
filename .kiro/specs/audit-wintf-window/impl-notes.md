@@ -288,3 +288,13 @@
 - 48: `mouse_move_dispatch_tests.rs` に `mouse_leave_leaves_only_the_window_it_reached` を足した。窓 A・B（`Window` 付きの素の entity）に `PointerState` の子を 1 つずつ置き、`dispatch_window_message` で A へ `WM_MOUSELEAVE` → A の子は `PointerState` 無し・`PointerLeave` 付き、B の子はそのまま。続けて B へ配ると B の子も離脱になる。窓は作らない（受け手は Win32 を呼ばない）。
 - 較正: `collect_entities_to_leave` の窓の絞り込み（`find_owner_window(world, e) == Some(window_entity)`）を外す → `mouse_leave_leaves_only_the_window_it_reached` と `test_collect_protects_other_windows_pointer_state` が赤。戻して緑。戻した後の行は元の形（`git diff` で確かめた）。
 - テストの数: `cargo test -p wintf --lib window_proc::mouse_move` 9→10 緑。行数: `mouse_move.rs` 612→530・`mouse_move_dispatch_tests.rs` 56→111。build・fmt 通る・clippy に足した警告は無い（`drop(entity_ref)` の `drop_non_drop` は元の 2 か所から 1 か所に減っただけ）。
+
+## 13.4
+
+- 44: `window_proc/mouse_move.rs` の借用の外の `guarded_set_window_pos` の `let _ =` を `if let Err(e)` にし、`error!(event = "drag_move_window_failed", hwnd, x, y, error)` で残す（`tracing` の取り込みに `error` を足した）。
+- 44 のテスト: `mouse_move_dispatch_tests.rs` に `failed_drag_window_move_is_logged_as_error` を足した。`start_preparing`→`start_dragging`→`update_dragging`（窓の文脈は `move_window: true`・取っ手なし）で `Dragging`（取っ手が空）にし、`dispatch_window_message` で `WM_MOUSEMOVE` を配ると、`mouse_move=error` の絞りで `ERROR` かつ `drag_move_window_failed` の行がちょうど 1。
+- 較正: 本番が `let _ =` のまま（直す前）にテストを回し、`failed_drag_window_move_is_logged_as_error` が赤（`left == right` 失敗・0 本）。直した後は緑。
+- 62 ⒜: `Preparing` の腕の手書きの判定（`dx`・`dy`・`distance_sq`・`threshold_sq`・`>=`）5 行を消し、`crate::ecs::drag::check_threshold(current_pos, drag_config.threshold)` の呼び出しに替えた。中身は同じ（二乗の距離の `>=`・始めの点はスレッドの持ち物の `Preparing` の `start_pos`＝直前の写しと同じ値）。腕の `start_pos` の束縛は `DragTransition::Started` の組み立てでまだ使うので残した。`ecs/drag/` は触っていない。
+- 消す前の `git grep`: 消したのはローカルの束縛だけ（`dx`・`dy`・`distance_sq`・`threshold_sq`）で、外から引く名は無い。
+- 古くなった説明: `ecs/drag/state/mod.rs:618-621` の `check_threshold` の説明（「本番呼び出しがゼロ」「本番の閾値判定は `mouse_move.rs` 内にインライン複製」）はこの直しで事実と合わなくなったが、`ecs/drag/` はあちら（`audit-wintf-input`）の持ち物で、申し合わせ（12.2 門 GI ⒝）で説明の直しはあちらが持つので触っていない。
+- テストの数: `cargo test -p wintf --lib window_proc::mouse_move` 10→11 本緑。`window_proc` 全体 116 本緑。`drag::state` 32 本緑（`check_threshold` の 5 本を含む）。

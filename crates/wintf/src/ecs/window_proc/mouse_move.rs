@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -228,13 +228,8 @@ pub(super) fn WM_MOUSEMOVE(
                             let current_pos =
                                 crate::ecs::pointer::PhysicalPoint::new(screen_x, screen_y);
 
-                            // 閾値チェック
-                            let dx = current_pos.x - start_pos.x;
-                            let dy = current_pos.y - start_pos.y;
-                            let distance_sq = dx * dx + dy * dy;
-                            let threshold_sq = drag_config.threshold * drag_config.threshold;
-
-                            if distance_sq >= threshold_sq {
+                            if crate::ecs::drag::check_threshold(current_pos, drag_config.threshold)
+                            {
                                 // 閾値到達：Dragging状態に遷移
                                 crate::ecs::drag::start_dragging(current_pos);
 
@@ -372,7 +367,8 @@ pub(super) fn WM_MOUSEMOVE(
     // これにより同期発火するWM_WINDOWPOSCHANGEDがWorldを借用でき、
     // WindowPos.positionが正しく更新される
     if let Some((drag_hwnd, new_x, new_y)) = deferred_set_window_pos {
-        let _ = unsafe {
+        // SAFETY: Win32 境界。借用を返した後に窓の位置だけを書く。
+        if let Err(e) = unsafe {
             crate::ecs::window::guarded_set_window_pos(
                 drag_hwnd,
                 None,
@@ -382,7 +378,16 @@ pub(super) fn WM_MOUSEMOVE(
                 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
             )
-        };
+        } {
+            error!(
+                event = "drag_move_window_failed",
+                hwnd = ?drag_hwnd,
+                x = new_x,
+                y = new_y,
+                error = %e,
+                "ドラッグで窓を動かせなかった"
+            );
+        }
     }
 
     Some(LRESULT(0))
