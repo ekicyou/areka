@@ -1,8 +1,8 @@
 //! 範囲だけの描き直しの答え（WARP・要件 7.3 の写し以外）。範囲だけで合成した入れ物と、全部合成した入れ物が
 //! バイトで一致する。
 
-use super::composite::{SurfaceComposite, compose_or_drop};
-use super::damage::{ComposePlan, PartialPlan, PlanInput, RegionShift, plan};
+use super::composite::{SurfaceComposite, compose_or_drop, compose_planned};
+use super::damage::{ComposePlan, FullReason, PartialPlan, PlanInput, RegionShift, plan};
 use super::visual::emit_test_support::*;
 use super::visual::*;
 use crate::ecs::layout::Arrangement;
@@ -243,6 +243,123 @@ fn shift_copies_previous_pixels_through_work_bitmap() {
         dc.GetTransform(&mut after);
     }
     assert_eq!(after, Matrix3x2::identity());
+}
+
+/// 本番の係と同じ `compose_planned` を呼ぶ（入れ物を作った回だけ `fresh`）。
+fn planned(
+    dc: &ID2D1DeviceContext,
+    slot: &mut Option<SurfaceComposite>,
+    fresh: Option<FullReason>,
+    s: f32,
+    list: Option<&ID2D1CommandList>,
+    commands: &[DrawCommand],
+) -> ComposePlan {
+    let size = slot.as_ref().unwrap().size();
+    let (p, _) = compose_planned(slot, dc, fresh, scale(s), list, commands, size).unwrap();
+    p
+}
+
+#[test]
+fn planned_skip_keeps_generation_and_pixels() {
+    let mut world = World::new();
+    let (root, _) = tree(&mut world);
+    let list = root_list();
+    let commands = tree_commands(&mut world, root, None);
+    let dc = warp_dc();
+    let mut slot = Some(SurfaceComposite::new(&dc, (32, 32)).unwrap());
+    let first = planned(
+        &dc,
+        &mut slot,
+        Some(FullReason::First),
+        1.0,
+        Some(&list),
+        &commands,
+    );
+    assert_eq!(first, ComposePlan::Full(FullReason::First));
+    let comp = slot.as_mut().unwrap();
+    assert_eq!(comp.generation(), 1);
+    assert!(comp.prev_entries().is_some(), "成功で控えを置く");
+    // 写し終えていない回は写すだけ（合成しない）。
+    let (generation, bytes) = (comp.generation(), comp.read_all(warp_device()).unwrap());
+    let p = planned(&dc, &mut slot, None, 1.0, Some(&list), &commands);
+    assert_eq!(p, ComposePlan::PresentOnly);
+    slot.as_mut().unwrap().mark_presented();
+    // 写し終えた後の変わらない回は何もしない。
+    let p = planned(&dc, &mut slot, None, 1.0, Some(&list), &commands);
+    assert_eq!(p, ComposePlan::Skip);
+    let comp = slot.as_ref().unwrap();
+    assert_eq!(
+        comp.generation(),
+        generation,
+        "何もしない・写すだけで世代が変わらない"
+    );
+    assert!(
+        comp.read_all(warp_device()).unwrap() == bytes,
+        "画素が変わらない"
+    );
+}
+
+#[test]
+fn planned_partial_uses_the_previous_record_on_each_call() {
+    for s in [1.0f32, 1.25] {
+        let mut world = World::new();
+        let (root, red) = tree(&mut world);
+        let list = root_list();
+        let dc = warp_dc();
+        let size = (32.0 * s).ceil() as u32;
+        let mut slot = Some(SurfaceComposite::new(&dc, (size, size)).unwrap());
+        let before = tree_commands(&mut world, root, None);
+        planned(
+            &dc,
+            &mut slot,
+            Some(FullReason::First),
+            s,
+            Some(&list),
+            &before,
+        );
+        slot.as_mut().unwrap().mark_presented();
+        // 動かす → 戻す。戻す回が 1 回目の控えを使えば「変わらない」になり画素を誤る。
+        for (x, y) in [(5.0, 4.0), (2.0, 2.0), (6.0, 3.0)] {
+            world.entity_mut(red).insert(at(x, y, 5.0, 5.0));
+            let now = tree_commands(&mut world, root, None);
+            let generation = slot.as_ref().unwrap().generation();
+            let p = planned(&dc, &mut slot, None, s, Some(&list), &now);
+            assert!(
+                matches!(p, ComposePlan::Partial(_)),
+                "拡大 {s} ({x}, {y}): 範囲だけの計画でない: {p:?}"
+            );
+            let comp = slot.as_mut().unwrap();
+            assert_eq!(
+                comp.generation(),
+                generation + 1,
+                "範囲だけの回に世代が 1 上がる"
+            );
+            let (_, _, want) = composed(s, Some(&list), &now);
+            assert!(
+                comp.read_all(warp_device()).unwrap() == want,
+                "拡大 {s} ({x}, {y}): 全部の合成とバイトで違う"
+            );
+            comp.mark_presented();
+        }
+    }
+}
+
+#[test]
+fn planned_failure_drops_the_composite_and_its_record() {
+    let dc = warp_dc();
+    let mut slot = Some(SurfaceComposite::new(&dc, (32, 32)).unwrap());
+    let open = unsafe { dc.CreateCommandList().unwrap() };
+    let result = compose_planned(
+        &mut slot,
+        &dc,
+        Some(FullReason::First),
+        scale(1.0),
+        Some(&open),
+        &[],
+        (32, 32),
+    );
+    assert!(result.is_err());
+    assert!(slot.is_none(), "失敗で入れ物と控えを捨てる");
 }
 
 #[test]

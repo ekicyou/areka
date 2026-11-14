@@ -1,8 +1,8 @@
 //! 描画面ごとの入れ物（要件 4.1, 4.2, 4.4, 4.8）。描画面 1 枚の合成の結果を持ち、合成と写しの
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
-use super::damage::{PartialPlan, RegionShift};
-use super::visual::{DamageEntry, DrawCommand, emit, emit_within};
+use super::damage::{ComposePlan, FullReason, PartialPlan, PlanInput, RegionShift, plan};
+use super::visual::{DamageEntry, DrawCommand, emit, emit_within, entries};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -32,28 +32,12 @@ pub(crate) struct SurfaceComposite {
     /// GPU から読んだ回数（5.4 のテストの的）。
     gpu_reads: AtomicU64,
     /// 前の合成の項の列（無い＝比べられない）。入れ物と同じ寿命（捨てれば控えも消える）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     prev_entries: Option<Vec<DamageEntry>>,
     /// 前の合成の根の命令の列（参照を持つので番地の使い回しで取り違えない）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     prev_root: Option<ID2D1CommandList>,
     /// 前の合成の拡大 (x, y)。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     prev_scale: (f32, f32),
     /// 前の合成の入れ物を描画面へ写し終えた。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     presented: bool,
 }
 
@@ -107,6 +91,57 @@ pub(crate) fn compose_or_drop(
     result
 }
 
+/// 描画面 1 枚の、この回の計画を立てて入れ物へ合成する（1.1・2.5・2.7・3.1・3.3）。`fresh` は入れ物を今
+/// 作った回の理由。全部・範囲だけは失敗なら入れ物と控えを捨てて `Err`、写すだけ・何もしないは合成しない。
+/// 成功で控えを今の項の列（項にできなければ空）に置き換える。返すのは計画と今の項の列。置き場が空なら
+/// 何もしない（`Skip`）。本番の係と WARP のテストが同じこの関数を呼ぶ。
+#[cfg_attr(not(test), expect(dead_code, reason = "5.2 の描画面の係が使い始める"))]
+pub(crate) fn compose_planned(
+    slot: &mut Option<SurfaceComposite>,
+    dc: &ID2D1DeviceContext,
+    fresh: Option<FullReason>,
+    scale: Matrix3x2,
+    root_list: Option<&ID2D1CommandList>,
+    tree: &[DrawCommand],
+    size: (u32, u32),
+) -> windows::core::Result<(ComposePlan, Option<Vec<DamageEntry>>)> {
+    let scale_xy = (scale.M11, scale.M22);
+    let now = entries(tree, scale_xy, size);
+    let Some(composite) = slot.as_ref() else {
+        return Ok((ComposePlan::Skip, now));
+    };
+    let planned = plan(&PlanInput {
+        fresh,
+        same_root: composite.same_root(root_list),
+        same_scale: composite.same_scale(scale_xy),
+        root_present: root_list.is_some(),
+        prev: composite.prev_entries(),
+        now: now.as_deref(),
+        presented: composite.presented(),
+        surface: size,
+    });
+    let composed = match &planned {
+        ComposePlan::Full(_) => {
+            compose_or_drop(slot, |c| c.compose(dc, scale, root_list, tree))?;
+            true
+        }
+        ComposePlan::Partial(p) => {
+            // `plan` は `now` が在るときだけ範囲だけを返す。
+            let list = now.as_deref().unwrap_or_default();
+            compose_or_drop(slot, |c| {
+                c.compose_partial(dc, scale, root_list, tree, list, p)
+            })?;
+            true
+        }
+        ComposePlan::PresentOnly | ComposePlan::Skip => false,
+    };
+    if let Some(c) = slot.as_mut() {
+        // 控えと呼び手（記録）の両方が列を使う。
+        c.remember(now.clone(), root_list, scale_xy, composed);
+    }
+    Ok((planned, now))
+}
+
 impl SurfaceComposite {
     /// `dc` で入れ物と 1×1 の写し先を作る。
     pub(crate) fn new(dc: &ID2D1DeviceContext, size: (u32, u32)) -> windows::core::Result<Self> {
@@ -141,48 +176,28 @@ impl SurfaceComposite {
     }
 
     /// 前の合成の項の列（新しい入れ物は無い）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     pub(crate) fn prev_entries(&self) -> Option<&[DamageEntry]> {
         self.prev_entries.as_deref()
     }
 
     /// 根の命令の列が前の合成と同じ参照か（COM の参照の同一性・両方無いも同じ）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     pub(crate) fn same_root(&self, root_list: Option<&ID2D1CommandList>) -> bool {
         self.prev_root.as_ref() == root_list
     }
 
     /// 拡大が前の合成とビットで同じか。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     pub(crate) fn same_scale(&self, (x, y): (f32, f32)) -> bool {
         let (px, py) = self.prev_scale;
         (px.to_bits(), py.to_bits()) == (x.to_bits(), y.to_bits())
     }
 
     /// 前の合成の入れ物を描画面へ写し終えたか（新しい入れ物は偽）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     pub(crate) fn presented(&self) -> bool {
         self.presented
     }
 
     /// 合成か Skip・PresentOnly を終えた回に控えを置き換える。`composed` なら `presented` を偽にする
     /// （1.1・2.8）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     pub(crate) fn remember(
         &mut self,
         entries: Option<Vec<DamageEntry>>,
@@ -199,10 +214,7 @@ impl SurfaceComposite {
     }
 
     /// 入れ物を描画面へ写し終えた印を付ける（2.8）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
+    #[cfg_attr(not(test), expect(dead_code, reason = "5.2 の描画面の係が使い始める"))]
     pub(crate) fn mark_presented(&mut self) {
         self.presented = true;
     }
@@ -253,10 +265,6 @@ impl SurfaceComposite {
     /// 直接しない・決め D6）、描く矩形ごとに軸に沿う切り抜きの中を透明に塗って根の命令の列と `emit_within`
     /// で描く。`entries` は `tree` から作った列。成功したら世代を 1 上げる。戻るとき `dc` は的なし・変換は
     /// 恒等（写しの失敗では `dc` に触っていない）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
-    )]
     pub(crate) fn compose_partial(
         &mut self,
         dc: &ID2D1DeviceContext,
