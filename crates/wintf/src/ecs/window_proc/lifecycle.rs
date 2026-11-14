@@ -79,12 +79,9 @@ pub(super) fn WM_PAINT(
 ///
 /// # 陳腐化した id の打ち切り（要件 6.2/6.3・design D16・タスク 7.5）
 ///
-/// 本ハンドラへ届く `entity` は**既に破棄済み**のことがある。`on_window_handle_remove`
-/// （`window/window_handle.rs:258-282`）が entity の despawn を検知して `:279` で
-/// `PostMessageW(hwnd, WM_CLOSE)` を**非同期に**投函するため、ポンプが本ハンドラを回す
-/// 時点では despawn が先行し得るからである（終了経路が 2 系統あり、ユーザーが窓を閉じた
-/// 場合は `WM_CLOSE` が先・自動終了では despawn が先——diagnosis-report §2.3.4 の訂正
-/// ブロックが両セッションの対比で確定した）。
+/// 本ハンドラへ届く `entity` は**既に破棄済み**のことがある。despawn から登録簿の掃除
+/// （`reconcile_window_registry` が `DestroyWindow` する）までの間に利用者や OS が投げた
+/// `WM_CLOSE` が届くと来る。
 ///
 /// そのまま `despawn` を叩くと `bevy_ecs` が `Could not despawn entity` を `warn!` で出す
 /// （`bevy_ecs-0.18.1` `src/world/mod.rs:1462-1469`）。これは終了処理の**正常終了系**であり、
@@ -92,7 +89,7 @@ pub(super) fn WM_PAINT(
 /// **同一の区別**をこの呼出点へも敷く: entity 不在＝正常終了系ゆえ [`DESPAWNED_SKIP_TAG`]
 /// の `debug!` で打ち切る。
 ///
-/// **`WM_CLOSE` の投函契約と窓破棄の正準シグナル（`world.despawn(entity)`・
+/// **窓破棄の正準シグナル（`world.despawn(entity)`・
 /// `clickthrough/controller.rs:90`）は変更していない**（D16 帰結⑶）——変えたのは受け手が
 /// 陳腐化 id をどう報告するかだけであり、生存 entity に対する挙動は従来と同一である。
 ///
@@ -321,10 +318,9 @@ mod tests {
     ///
     /// # 経路
     ///
-    /// `on_window_handle_remove`（`window_handle.rs:258-282`）は entity の despawn を検知して
-    /// `:279` で `PostMessageW(hwnd, WM_CLOSE)` を**非同期に**投函する。終了経路が
-    /// 「despawn が先・`WM_CLOSE` が後」になる場合（smoke 自動終了）、ポンプが本ハンドラを
-    /// 回す時点で `entity` は**既に破棄済み**である（diagnosis-report §2.3.4 の訂正ブロック）。
+    /// despawn から登録簿の掃除（`reconcile_window_registry` が `DestroyWindow` する）までの
+    /// 間に利用者や OS が投げた `WM_CLOSE` が届くと、本ハンドラが回る時点で `entity` は
+    /// **既に破棄済み**である。
     ///
     /// # なぜ「捕捉に警告が無い」を根拠にできないか（空虚性 9 例目）
     ///
@@ -380,7 +376,7 @@ mod tests {
         // ── ⑵ 本体アーム ──────────────────────────────────────────
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let entity = spawn_window_entity(&world);
-        // 実機の終了経路の再現: `WM_CLOSE` がポンプで回る前に entity は破棄済みになる。
+        // despawn の後・登録簿の掃除の前に `WM_CLOSE` が届いた形の再現: entity は破棄済み。
         assert!(
             world.borrow_mut().world_mut().despawn(entity),
             "探針前提: 先行 despawn は成功する（以後この id は陳腐化している）"

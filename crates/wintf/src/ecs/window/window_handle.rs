@@ -267,17 +267,13 @@ fn on_window_handle_remove(
         debug!(
             entity = ?entity,
             hwnd = ?hwnd,
-            "Entity being removed, sending WM_CLOSE"
+            "Entity being removed, window handle released"
         );
 
-        // アプリに通知（ウィンドウカウント更新 & 必要ならメッセージ送信）
+        // アプリに通知（ウィンドウカウント更新）。OS の窓の破棄はここでは行わず、
+        // 登録簿の掃除（`reconcile_window_registry`）が `RemovedComponents<Window>` を見て行う。
         if let Some(mut app) = world.get_resource_mut::<crate::ecs::app::App>() {
             app.on_window_destroyed(entity);
-        }
-
-        // ウィンドウクローズを非同期で要求
-        unsafe {
-            let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
         }
     }
 }

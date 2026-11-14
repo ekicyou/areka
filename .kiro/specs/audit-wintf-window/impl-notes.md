@@ -91,3 +91,14 @@
 - 消したもの: なし（git grep 不要）
 - テストの数: `cargo test -p wintf --lib command_batch_tests` 8 → 9（全部緑）
 - レビュー 1 回目の差し戻し: 説明が 1 本の列の測りを一般の決まりにしていたので、`apply_as_batch` の doc を「列 `[A を B の後へ][C を A の後へ][A を D の後へ]` では同じ順に着く・Wine・ReactOS の読みはこの列の実際の Windows の結果に合わない・ほかの列は確かめていない」に絞り、`flush_window_pos_commands` の doc は確かめた範囲を `apply_as_batch` の doc へ指すだけにした（説明だけ・較正のやり直しは不要）
+
+## 5.1
+
+- 8: `window/window_handle.rs` の `on_window_handle_remove` から `PostMessageW(hwnd, WM_CLOSE)` の 3 行と「ウィンドウクローズを非同期で要求」の説明を消した。debug の文を `"Entity being removed, window handle released"` に、通知の説明を「ウィンドウカウント更新。OS の窓の破棄は登録簿の掃除（`reconcile_window_registry`）が `RemovedComponents<Window>` を見て行う」に直した。`forget_last_shown` と `on_window_destroyed` は残した。登録簿の掃除による破棄の道は変えていない
+- `window_proc/lifecycle.rs`: 陳腐化した id の段落を「despawn から登録簿の掃除までの間に利用者や OS が投げた `WM_CLOSE` が届くと来る」に直した。同じファイルの「`WM_CLOSE` の投函契約と窓破棄の正準シグナルは変更していない」から「投函契約と」を外し、テスト `wm_close_skips_stale_entity_as_normal_teardown` の説明の「経路」と本体アームの 1 行の注も同じ形に直した。`DESPAWNED_SKIP_TAG` とその説明（`:34`・`:38`）の差分は 0
+- 消す前の確かめ（直す前の木）: `git grep -n "WM_CLOSE"` で、ハンドルの外れから投げる行は `window_handle.rs:280` の 1 件だけ（ほかの `PostMessageW(.., WM_CLOSE, ..)` は `tooltip/os_tests.rs:446`・`shiori-host32-ipc/src/send_timeout_tests.rs:101` の自前の窓を閉じるテストだけ）。`git grep -n "on_window_handle_remove"` の使い手は `window_handle.rs:21` のフックの登録だけ。`"sending WM_CLOSE"` の文字列を読むテスト・道具は無い（`.kiro/specs/completed/` の古い記録とログにだけ出る）。直した後の木で `git grep -n "PostMessageW" -- crates/wintf/src/ecs/window` は 0 件
+- 較正: 足したテスト・確かめを直したテストは無い（消すだけ）ので当たらない
+- テストの数: `cargo test -p wintf --lib window_proc::lifecycle` 10 緑・`window::window_handle` 1 緑・`cursor::answer` 12 緑・`zorder_pair_establish` 9 緑・`zorder_pair_maintain` 33 緑（3 ignored）。増減なし
+- 消した投函に合わせて直した説明（コードは変えない・行は増やさない）: `clickthrough/controller.rs:91`（窓の close の起点を「登録簿の掃除 `reconcile_window_registry` が `DestroyWindow` する」に）・`window/zorder_pair_maintain_detach_tests.rs:298-299`（「除去フックが `WM_CLOSE` を投函する」を「破棄は登録簿の掃除が行う」に）・`areka/src/menu/trigger_flow_tests.rs:805-807`（「投函するので空のハンドル」を「何も投函しない・実在の窓は要らないので空のハンドル」に）・`areka/examples/mock-shell.rs:423,437`・`areka/examples/emo-present/input.rs:18`（流れを「despawn → `reconcile_window_registry` が `DestroyWindow` → `WindowRegistry` 空遷移」に）
+- 直した後に `git grep -n -i "WM_CLOSE" -- crates` を引き直した: 残りはウィンドウ手続きの受け手（`window_proc/lifecycle.rs`・`mod.rs:52`・`world/tick_wake.rs`）・OS の閉鎖要求の説明（`window/components.rs:129`・`runtime/mod.rs:258` の「WM_CLOSE の despawn」＝受け手の despawn）・自前の窓のテストと道具（`tooltip/os_tests.rs`・`shiori-host32-ipc`・`pilot`・`real-run-kit`）だけで、ハンドルの外れから投げると書く説明は 0 件
+- 確かめ: `cargo build -p wintf -p areka --tests --examples` 緑・`cargo fmt --all -- --check` 緑

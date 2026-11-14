@@ -802,9 +802,9 @@ fn a_query_that_cannot_be_sent_falls_back_on_the_next_tick() {
 /// 返事を待っている間に窓が消えていたら、記録して捨てる（計画を作らない・預かりも捨てる）。
 #[test]
 fn a_window_that_disappeared_while_waiting_drops_the_request() {
-    // この窓は途中で消す。消すと wintf が窓ハンドルへ `WM_CLOSE` を投函するので、実在の窓を
-    // 指しえない空のハンドルにしておく（空のハンドル宛ての投函は呼んだスレッド自身の
-    // メッセージ待ち行列に入るだけで、テストのスレッドはそれを汲まない）。
+    // この窓は途中で消す。ハンドルが外れても wintf は窓へ何も投函しない（OS の窓の破棄は
+    // 登録簿の掃除 `reconcile_window_registry` が行う）。実在の窓は要らないので、空の
+    // ハンドルにしておく。
     let mut f = fixture_with(HWND(std::ptr::null_mut()), shifted_to_screen);
     let now = Instant::now();
     assert!(handle_release(

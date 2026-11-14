@@ -295,8 +295,8 @@ fn character_first_despawn_detaches_the_owner_and_spares_the_balloon() {
 
 /// 相手の実体が残っていても、OS のハンドルが外れていれば切り離す。
 ///
-/// ハンドルの除去は窓の破棄要求そのもの（`WindowHandle` の除去フックが `WM_CLOSE` を
-/// 投函する）であり、その時点で相手の窓はもう無くなる。実体の消滅を待つと破棄に間に合わない
+/// ハンドルが外れた相手の窓は、OS の窓として当てにできない（破棄は登録簿の掃除
+/// `reconcile_window_registry` が行う）。実体の消滅を待つと破棄に間に合わない
 /// ため、こちらの形でも切離しへ入る。記録の `peer_state` で 2 つの形を見分けられる。
 #[test]
 fn peer_losing_its_handle_also_detaches_the_owner() {
