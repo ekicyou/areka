@@ -1,10 +1,12 @@
 [package]
 name = "wintf-winmsg-executor"
+workspace = "../.."
 description = "Per-thread async executor for Windows (fork of winmsg-executor)"
-repository = "https://github.com/ekicyou/wintf-winmsg-executor"
-version = "0.0.5"
+repository.workspace = true
+version.workspace = true
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = true
 readme = "README.md"
 keywords = ["windows", "async", "executor", "winapi", "message-loop"]
 categories = ["asynchronous", "os::windows-apis"]

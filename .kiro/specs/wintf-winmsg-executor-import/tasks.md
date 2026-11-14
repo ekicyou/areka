@@ -14,21 +14,21 @@
   - コミットの本文に元のリポジトリ `ekicyou/wintf-winmsg-executor` とコミット番号 `4f202758ea4eaa25b68d7d88f52af529f96e75df` が書かれている（この時点ではワークスペースが解決できなくてよい）
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6_
 
-- [ ] 2. ワークスペースへ組み込み、公開の一覧を 3 つにする（コミット 2・分けない）
-- [ ] 2.1 写しの manifest を areka 向けに直す
+- [x] 2. ワークスペースへ組み込み、公開の一覧を 3 つにする（コミット 2・分けない）
+- [x] 2.1 写しの manifest を areka 向けに直す
   - 変えるのは 4 点だけ: ワークスペースの指し先を足す・版をワークスペースの版に・`repository` をワークスペースのもの（areka）に・`publish = true` を足す
   - `license = "MIT OR Apache-2.0"`・edition 2021・`description`・`readme`・`keywords`・`categories`・`include`・docs.rs の設定・直書きの依存 2 つ（`async-task` 4.7.1 既定の機能なし・`windows` 0.62 の 4 つの機能）は元のまま。`authors` は足さない
   - 2.3 までの変更と同じコミットに入れるため、ここではコミットしない
   - `git diff` で写しの manifest の差が上の 4 点だけになっている
   - _Requirements: 1.7, 2.1, 2.2, 2.3, 2.4_
-- [ ] 2.2 使う側の依存を写しへ替え、`Cargo.lock` を揃える
+- [x] 2.2 使う側の依存を写しへ替え、`Cargo.lock` を揃える
   - 根の `Cargo.toml` の `[workspace.dependencies]` の `wintf-winmsg-executor` の行を、行の位置を動かさずに `dola` と同じ「版（その時点のワークスペースの版）＋木の中の置き場」の形にする
   - `crates/pilot/Cargo.toml` の直書き `"0.0.5"` をワークスペースの依存にし、その上の 0.0.5 を固定する旨の注記を、木の中の写しをワークスペースの依存で使う旨に書き換える
   - ワークスペースのクレートだけを解き直して `Cargo.lock` を揃える（外部のクレートは動かさない）
   - `git diff -- Cargo.lock` が `wintf-winmsg-executor` の項の中だけ（版の 1 行・出どころと checksum の行の消し）で、`windows`・`windows-core`・`async-task` が 1 項ずつのまま
   - `cargo tree -i wintf-winmsg-executor` で 6 つの使う側が木の中の写しを引き、`cargo metadata` で写しの版・license・repository・publish・edition が設計どおり
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.10_
-- [ ] 2.3 公開の一覧と較正の見本と公開の段の注記を直し、コミット 2 を作る
+- [x] 2.3 公開の一覧と較正の見本と公開の段の注記を直し、コミット 2 を作る
   - 公開前の確認の道具の較正値（公開する一覧）を `dola`・`wintf`・`wintf-winmsg-executor` の 3 つにし、較正の正しい見本に写しの項を 1 つ足す。判定の関数・誤った見本・大きさの較正・包む段・公開の順の出し方（`-p` を並べるだけ）は変えない
   - 公開の段 `crates-io.yml` の 1 行目の注記を 3 つのクレートの形にする（きっかけ・権限・段・認証は変えない）
   - 道具を引数なしで回すと `green (publish list: dola, wintf, wintf-winmsg-executor)` で緑、`-Version 9.9.9` で写しの名前を含む失敗（終了コード 1）になる
