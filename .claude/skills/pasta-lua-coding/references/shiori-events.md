@@ -6,10 +6,12 @@
 ベースウェア（SSP など）は、出来事を SHIORI/3.0 のリクエスト（イベント）として送ってくる。pasta は 1 つのイベントを次の順で処理し、結果を SHIORI/3.0 の応答文字列にして返す。
 
 1. 結果を待っているコールバック（[OnPastaCallBack](#onpastacallbackコールバック応答)）への応答なら、待っているシーンを再開する。
-2. `REG` にそのイベントのハンドラがあれば、ハンドラを呼ぶ（[REG](#reg)）。
-3. ハンドラが無ければ、イベント名でシーンを探して実行する（[シーン関数フォールバック](#シーン関数フォールバック)）。
+2. 仮想時刻の読み取りの返事（[OnPastaClock](#onpastaclock仮想時刻の読み取り)）なら、時計のずれを覚えて 204 No Content を返す。
+3. `REG:register` で重ねたハンドラ（鎖）があれば、新しく登録した順に呼ぶ（[ハンドラを重ねる](#ハンドラを重ねるregregister)）。
+4. 鎖が無いか、鎖が全部見送れば、`REG` にあるそのイベントのハンドラを呼ぶ（[REG](#reg)）。
+5. それも無ければ、イベント名でシーンを探して実行する（[シーン関数フォールバック](#シーン関数フォールバック)）。
 
-処理中にエラーが起きると 500 応答になる（[エラーハンドリング](#エラーハンドリング)）。
+処理中に Lua のエラーが起きて止まると、既定では止まった理由を表記にした 200 応答、表記を出さない設定（`balloon_warning = false`）では 500 応答になる（[エラーハンドリング](#エラーハンドリング)）。
 
 ## REG
 
@@ -44,9 +46,9 @@ end
 - `SHIORI/` で始まらない文字列は、そのまま `Value` になる。さくらスクリプトへの変換やウェイトの挿入は行われない。
 - ハンドラが返した文字列は、`SHIORI/` で始まれば `Value` ではなく応答全体として扱われる。この規則はハンドラの戻り値だけに適用され、コルーチン（シーン）の出力には適用されない。
 - 200 以外の応答は、`RES` の関数で作った応答を返せば、そのステータスのままベースウェアへ届く。`RES.warn(理由)` で理由付きの 204、`RES.not_enough()` で 311、`RES.advice()` で 312、`RES.err(理由)` で 500 を返せる。
-- シーンの出力を応答にするには、シーンのコルーチンを返す。`SCENE.co_exec(act, 名前)` は、[シーン関数フォールバック](#シーン関数フォールバック)と同じ探し方でシーンを探し、見つかればそのコルーチンを、見つからなければ `nil` を返す。
-- コルーチンの途中で[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)により中断した場合、残りは次の OnTalk の機会に出力される。
-- 1 つのイベントに登録できるハンドラは 1 つである。同じキーに代入し直すと、前のハンドラは置き換わる。
+- シーンの出力を応答にするには、シーンのコルーチンを返す。`SCENE.co_exec(act, 名前)` は、[シーン関数フォールバック](#シーン関数フォールバック)と同じ探し方でシーンを探し、見つかればそのコルーチンを、見つからなければ `nil` を返す。候補の条件は `act` の変数で評価し、名前に合うシーンはあっても条件を満たす候補が無いときも `nil` を返す（止まらない）。
+- コルーチンの途中で[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)により中断した場合、残りは次の自然なおしゃべり（仮想ディスパッチャが起こす OnTalk）の機会に出力される。外から起こした `OnTalk` では続きは出ない（[OnTalk](#ontalk)）。
+- `REG` のキーに置けるハンドラは、1 つのイベントに 1 つである。同じキーに代入し直すと、前のハンドラは置き換わる。1 つのイベントにハンドラを重ねるときは、`REG:register` を使う（[ハンドラを重ねる](#ハンドラを重ねるregregister)）。
 
 ```lua
 local REG = require("pasta.shiori.event.register")
@@ -58,32 +60,165 @@ REG.OnMouseDoubleClick = function(act)
 end
 ```
 
+### ハンドラを重ねる（`REG:register`）
+
+`REG:register(イベント名, 関数)` は、1 つのイベントにハンドラを重ねて登録する。`REG` のキーに代入したハンドラを置き換えず、前のハンドラを変数に取っておく必要も無い。イベント名には、`On` で始まらないリソースの ID（`sakura.recommendsites` など）も書ける。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+
+REG:register("OnSecondChange", function(act)
+    if act.req.reference[3] == "1" then  -- トークを再生できるときだけ
+        -- ここに毎秒の処理を書く
+    end
+    -- 何も返さなければ、次のハンドラへ回る
+end)
+```
+
+- `:` を付けて `REG:register(…)` と呼ぶ。`REG.register(…)` と書いたとき、イベント名が文字列でないとき、関数でない値を渡したときは、その場でエラーになり、何も登録されない。
+- 1 つのイベントに重ねたハンドラの並び（鎖）は、新しく登録したものから順に呼ばれる。
+- 呼ばれたハンドラが偽の値（`nil`・`false`）を返すと、次のハンドラ（1 つ前に登録したもの）へ回る。真の値を返すと、そこで止まり、古いハンドラは呼ばれない。
+- 鎖のハンドラが全部見送ると、鎖の底として `REG` のキーのハンドラ（既定ハンドラか、ゴーストが代入したもの）が呼ばれ、それも無ければイベント名でシーンを探して実行する（[シーン関数フォールバック](#シーン関数フォールバック)）。
+- 既定ハンドラが置き換わるのは、`REG` のキーに代入したときだけである。`REG:register` で重ねても、既定ハンドラは鎖の底に残る。たとえば OnSecondChange に何を重ねても、全部が見送った秒には既定の OnSecondChange が動く。
+- ハンドラは、呼ばれるごとに新しい `act` を受け取る。見送ったハンドラが `act` に積んだ台詞は、後のハンドラの出力に混ざらない。
+- 見張り役は無い。新しいハンドラが応答した回は、古いハンドラは呼ばれない。毎回必ず動かしたい処理も、新しいハンドラが止めた回は動かない。
+
+鎖のハンドラの戻り値は、次のように読む。
+
+| 戻り値 | 鎖の動き | 応答 |
+| ------ | -------- | ---- |
+| `nil`（何も返さない）・`false` | 見送って次のハンドラへ回る | 後のハンドラか鎖の底の応答 |
+| `true` | ここで止める | 204 No Content |
+| 文字列 | ここで止める | [REG の戻り値の表](#reg)のとおり。空文字列 `""` も止まり、204 No Content |
+| シーンのコルーチン（thread） | ここで止める | REG の戻り値の表のとおり |
+| ほかの真の値（数・表など） | ここで止める | 204 No Content |
+
+`REG:register` は、その登録を外す関数を返す。外した次のイベントから、そのハンドラは呼ばれない。ほかのハンドラの順は変わらず、外す関数を 2 回呼んでも何も起きない。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+
+-- 初回の演出の間、毎秒の処理を全部止める門
+local off = REG:register("OnSecondChange", function(act)
+    return true  -- ここで止めて 204
+end)
+
+-- 演出が終わったら門を外す
+off()
+```
+
+門を置く `true` のハンドラは、OnSecondChange の既定ハンドラ（ランダムトーク・時報・コールバックのタイムアウト処理など）も、ゴーストが重ねたほかのハンドラ（表情を戻す・窓あわせなどの毎秒の処理）も止める。ランダムトークと時報を止めるだけなら、門ではなく [`＞自動トーク停止`](https://ekicyou.github.io/pasta/grammar/call-jump.html#自動トーク停止自動トーク再開) を使う。毎秒の処理まで止めるときに、鎖の門を使う。
+
 ### 既定ハンドラと上書き
 
-次の 3 つのイベントには、pasta が既定のハンドラを `REG` に登録している。`REG` の同じキーに代入すると、既定ハンドラは置き換わる。
+次の表のイベントとリソースの ID（13 行）には、pasta が既定のハンドラを `REG` に登録している。ゴーストが `REG` の同じキーにハンドラを代入すると、そのイベントでは既定ハンドラの代わりにゴーストのハンドラが呼ばれる。
 
 | イベント | 既定ハンドラの動作 |
 | -------- | ------------------ |
 | `OnBoot` | イベント名でシーンを探して実行する（シーン関数フォールバックと同じ動作） |
 | `OnChoiceSelectEx` | 選ばれた選択肢のシーンを実行する（[OnChoiceSelectEx](#onchoiceselectex)） |
+| `OnMouseDoubleClick` | つつきのショートカットのシーンを探して実行する。無ければイベント名でシーンを探して実行する（[OnMouseDoubleClick](#onmousedoubleclick)） |
+| `OnMouseMove` | 撫でを判定し、撫でたと決めたときは撫でのショートカットのシーンを探して実行する。それ以外はイベント名でシーンを探して実行する（[OnMouseMove](#onmousemove)） |
 | `OnSecondChange` | コールバックのタイムアウト処理と、仮想ディスパッチャによる OnTalk・OnHour の発行を行う（[OnSecondChange](#onsecondchange)） |
+| `OnPastaScene` | デバッグが有効なとき、名前で指名したシーンを再生する（[OnPastaScene](#onpastascene名前でシーンを再生)） |
+| `OnPastaSceneAt` | デバッグが有効なとき、ファイルと行で指名したシーンを再生する（[OnPastaSceneAt](#onpastasceneat位置でシーンを再生)） |
+| `OnPastaDumpVariables` | デバッグが有効なとき、グローバル変数をファイルに書き出す（[OnPastaDumpVariables](#onpastadumpvariablesグローバル変数を書き出す)） |
+| `OnPastaCallFunction` | Reference0 の名前を、辞書の `＞名前` と同じ探し方で呼ぶ（[OnPastaCallFunction](#onpastacallfunction名前を外から呼ぶ)） |
+| `OnPastaSetSaveVariable` | Reference2 の型に従って Reference1 をグローバル変数に代入する（[OnPastaSetSaveVariable](#onpastasetsavevariableグローバル変数に代入)） |
+| `sakura.recommendsites`・`kero.recommendsites`・`sakura.portalsites`（と、別名表の置き換え先にある `char<数字>.recommendsites`） | メニューのシーンを動かし、`＞おすすめ項目`・`＞おすすめ区切り` で並べた項目をメニューの中身として返す（[おすすめメニュー](https://ekicyou.github.io/pasta/grammar/call-jump.html#おすすめメニュー)・[リソースの問い合わせを受ける](#リソースの問い合わせを受ける)） |
+| `sakura.recommendbuttoncaption`・`kero.recommendbuttoncaption`・`sakura.portalbuttoncaption`（と、別名表の置き換え先にある `char<数字>.recommendsites.caption`） | 結びついた名前の単語から 1 つを、ボタンの名前として返す（[ボタンの名前](https://ekicyou.github.io/pasta/grammar/call-jump.html#ボタンの名前)） |
+| `OnRecommendsiteChoice` | 選ばれた項目の 3 つ目の引数のシーンを実行する。項目に 3 つ目の引数が無ければ、イベント名でシーンを探して実行する（[選んだ後のトーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#選んだ後のトーク)） |
 
-既定ハンドラは、エンジンの起動処理（SHIORI 応答関数の読み込み）の中で登録される。既定ハンドラを上書きする代入は、それより後に実行されるように置く（起動の順序は [起動シーケンス](startup.md#2-起動シーケンス)）。
+既定ハンドラは、ゴーストが登録したハンドラを上書きしない。既定ハンドラは、エンジンの起動処理（SHIORI 応答関数の読み込み）の中で、`REG` のそのキーがまだ空のときだけ登録される。そのため、ゴーストのハンドラは `scripts/main.lua`（既定ハンドラの登録より前に実行される）に書いても、辞書ファイル（`.pasta`）の Lua ブロック（登録より後に評価される）に書いてもよい（起動の順序は [起動シーケンス](startup.md#2-起動シーケンス)）。
 
-- 辞書ファイル（`.pasta`）の Lua ブロックは、既定ハンドラの登録より後に評価される。そこで代入すれば上書きできる。
-- `scripts/main.lua` は、既定ハンドラの登録より前に実行される。`main.lua` で上書きするときは、先に `require("pasta.shiori.event")` を呼んで既定ハンドラを登録させてから代入する。
+既定ハンドラを変数に取っておき、自分のハンドラから呼ぶ（既定ハンドラを包む）ときだけ、置き場所に気を付ける。`main.lua` では既定ハンドラがまだ登録されていないので、先に `require("pasta.shiori.event")` を呼んで既定ハンドラを登録させてから `local default = REG.イベント名` で取る。辞書の Lua ブロックでは、そのまま取れる。
 
 ```lua
 -- scripts/main.lua
 require("pasta.shiori.event")  -- 既定ハンドラを先に登録させる
 local REG = require("pasta.shiori.event.register")
+local default = REG.OnBoot
 
 REG.OnBoot = function(act)
-    return "\\0\\s[0]起動しました。\\e"
+    -- ここに起動時の処理を書く
+    return default(act)
 end
 ```
 
-既定ハンドラを持たないイベントのハンドラは、どちらに書いてもよい。
+いくつもの場所で同じイベントのハンドラを包み合うと、どれが外側になるかは読み込みの順で決まり、前のハンドラを呼び忘れると既定ハンドラが黙って止まる。包むのをやめて `REG:register` で重ねれば、前のハンドラを取っておく必要が無く、既定ハンドラはいつも鎖の底に残る（[ハンドラを重ねる](#ハンドラを重ねるregregister)）。
+
+毎秒の処理を足す例。包む書き方では、前のハンドラを取っておき、自分の処理の後で呼ぶ。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+local prev = REG.OnSecondChange
+
+REG.OnSecondChange = function(act)
+    -- ここに毎秒の処理を書く
+    return prev(act)
+end
+```
+
+重ねる書き方では、前のハンドラに触れない。何も返さなければ、次のハンドラへ回る。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+
+REG:register("OnSecondChange", function(act)
+    -- ここに毎秒の処理を書く
+end)
+```
+
+演出の間だけ毎秒のイベントを全部止める門の例。包む書き方では、門は一番外側に包み、条件を満たさない回は前のハンドラを呼ぶ。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+local prev = REG.OnSecondChange
+
+REG.OnSecondChange = function(act)
+    if SAVE["初回待ち"] then
+        return nil  -- 何もしない（204）
+    end
+    return prev(act)
+end
+```
+
+重ねる書き方では、門は `true` を返して止め、演出が終わったら外す。後から登録した門は、先に登録したハンドラより先に呼ばれる。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+
+local off = REG:register("OnSecondChange", function(act)
+    if SAVE["初回待ち"] then
+        return true  -- ここで止めて 204
+    end
+end)
+
+-- 演出が終わったら
+off()
+```
+
+### リソースの問い合わせを受ける
+
+ベースウェアは、イベントのほかに、メニューの中身やボタンの名前などの**リソース**をゴーストに問い合わせる。リソースの ID（`sakura.recommendsites` など）は `On` で始まらないが、イベント名と同じく `REG` のキーにして受けられる。ハンドラが返した文字列が、そのリソースの値になる（[REG の戻り値の表](#reg)のとおり。`nil` なら 204 No Content）。
+
+おすすめメニューの中身は、ふつうは辞書のシーン `＊おすすめメニュー` などで書く（[おすすめメニュー](https://ekicyou.github.io/pasta/grammar/call-jump.html#おすすめメニュー)）。すでに Lua で中身を作っているゴーストは、その受け手がそのまま動く。
+
+```lua
+-- scripts/main.lua
+local REG = require("pasta.shiori.event.register")
+
+-- 項目の名前と URL をバイト値 1 で区切り、項目の後ろにバイト値 2 を置く
+REG["sakura.recommendsites"] = function(act)
+    return "カクヨム\1https://kakuyomu.jp/\2"
+        .. "青空文庫\1https://www.aozora.gr.jp/\2"
+end
+```
+
+組み込みの受け手（[既定ハンドラと上書き](#既定ハンドラと上書き)の表のリソースの ID と `OnRecommendsiteChoice`）との勝ち負けは、ほかのイベントの既定ハンドラと同じである。
+
+- `REG["sakura.recommendsites"]`・`REG.OnRecommendsiteChoice` などに代入したハンドラは、組み込みの受け手の代わりに呼ばれる。置き場所は `scripts/main.lua` でも辞書の Lua ブロックでもよい。このとき、そのメニューのシーン（`＊おすすめメニュー` など）は使われない。
+- `REG:register` で重ねたハンドラは、組み込みの受け手より先に呼ばれる。`nil`・`false` を返すと、組み込みの受け手（辞書のメニューのシーン）へ回る（[ハンドラを重ねる](#ハンドラを重ねるregregister)）。
 
 ### act.req
 
@@ -123,7 +258,10 @@ end
 | `wday` / `num_days_from_sunday` | 曜日（日曜が 0） |
 
 - リクエストに `X-Pasta-Time` ヘッダ（RFC 3339 形式の日時）があると、`act.req.date` は現在時刻ではなくその日時で作られる。形式が正しくないときは、リクエストの処理がエラーになる。
+- `act.req.date` の値は、SSP のプロセスの中の OS の時計（`X-Pasta-Time` があればその日時）である。SSP によっては（2.9.18 の「現在時刻の仮想的変更」など）、この OS の時計そのものが仮想時刻になるため、`act.req.date` も仮想時刻に従う。そうでない SSP では、`act.req.date` は仮想時刻に従わない。
+- 時報の判定（[OnHour](#onhour)）と[日時変数](https://ekicyou.github.io/pasta/grammar/variables.html#日時変数)は、どちらの場合も仮想時刻に従う（[OnPastaClock](#onpastaclock仮想時刻の読み取り)）。おしゃべりの間隔・撫での判定・コールバックの待ち時間は、時刻の設定し直しによる飛びを差し引いて数える（[時刻の飛び](#時刻の飛び)）。
 - `act.req` は読み取り専用として扱う。書き換えたときの動作は定めない。
+- ハンドラに渡す `act` の `var` には、ハンドラを呼ぶ前に、Reference と日時の変数（`act.var.r0`・`act.var.hour` など）が入っている（[イベントのシーンを選ぶ前の転記](https://ekicyou.github.io/pasta/grammar/variables.html#イベントのシーンを選ぶ前の転記)）。`REG:register` で重ねたハンドラも、1 つずつ新しく作った `act` で同じものを受け取る。
 - DSL のシーンから Reference や日時を使うには、[エンジンが値を入れる変数](https://ekicyou.github.io/pasta/grammar/variables.html#エンジンが値を入れる変数)（[リクエスト変数](https://ekicyou.github.io/pasta/grammar/variables.html#リクエスト変数reference)・[日時変数](https://ekicyou.github.io/pasta/grammar/variables.html#日時変数)）を使う。
 
 ## RES
@@ -145,8 +283,9 @@ local RES = require("pasta.shiori.res")
 | `RES.warn(reason, dic)` | 204 No Content | `X-Warn-Reason` ヘッダに `reason` を入れる |
 | `RES.build(code, dic)` | `code` | 任意のステータス（`"200 OK"` など）で応答を作る。上の関数はすべてこれを使う |
 
-- `dic` は追加するヘッダの表（ヘッダ名 → 値）で、省略できる。`RES.ok`・`RES.err`・`RES.warn` は、渡された `dic` の表に `Value` などを書き込んでから使う。
+- `dic` は追加するヘッダの表（ヘッダ名 → 値）で、省略できる。`RES.ok`・`RES.err`・`RES.warn` は、渡された `dic` の表を書き換えない（写した表に `Value` などを足して使う）。同じ表を後の応答に使い回しても、前の `Value` や理由のヘッダは混ざらない。
 - 応答は、1 行目が `SHIORI/3.0 ステータス`、続いて `Charset`・`Sender`・`SecurityLevel` の 3 ヘッダ、`dic` のヘッダ、最後に空行という形になる。行末は CR LF。`dic` のヘッダの並び順は定まらない。
+- ヘッダの値に入った CR と LF は、1 文字ごとに半角の空白 1 つになる（CR LF の組は空白 2 つ）。値に改行が入っても応答は割れず、`Value` は 1 行のまま末尾の `\e` も残る。改行の無い値はそのまま出る。
 - 3 つの標準ヘッダの値は `RES.env` の表から取る。既定値は `charset = "UTF-8"`・`sender = "Pasta"`・`security_level = "local"` で、書き換えるとそれ以降のすべての応答に反映される。
 
 ```lua
@@ -195,10 +334,17 @@ end
 | 起動・終了 | `OnClose` | なし（同名のシーンを実行） |
 | 起動・終了 | `OnGhostChanged` | なし（同名のシーンを実行） |
 | 選択肢 | `OnChoiceSelectEx` | あり（選択肢のルーティング） |
-| マウス | `OnMouseDoubleClick` | なし（同名のシーンを実行） |
+| マウス | `OnMouseDoubleClick` | あり（つつきのショートカット・同名のシーンを実行） |
+| マウス | `OnMouseMove` | あり（撫での判定とショートカット・同名のシーンを実行） |
 | 時間 | `OnSecondChange` | あり（コールバックのタイムアウト処理・仮想ディスパッチャ） |
 | 時間 | `OnMinuteChange` | なし（同名のシーンを実行） |
 | コールバック | `OnPastaCallBack{N}` | `REG` より先に処理される |
+| 時計 | `OnPastaClock` | `REG` より先に処理される（仮想時刻の読み取り） |
+| デバッグ | `OnPastaScene` | あり（名前で指名したシーンを再生。デバッグが有効なときだけ） |
+| デバッグ | `OnPastaSceneAt` | あり（位置で指名したシーンを再生。デバッグが有効なときだけ） |
+| デバッグ | `OnPastaDumpVariables` | あり（グローバル変数をファイルに書き出す。デバッグが有効なときだけ） |
+| 外からの操作 | `OnPastaCallFunction` | あり（`＞名前` と同じ呼び出し。いつでも） |
+| 外からの操作 | `OnPastaSetSaveVariable` | あり（グローバル変数への代入。いつでも） |
 
 ここに無いイベントも、`REG` にハンドラを登録するか、同名のシーンを書けば応答できる。
 
@@ -246,6 +392,8 @@ REG.OnBoot = function(act)
     return "\\0\\s[0]起動しました。シェル: " .. shell_name .. "\\e"
 end
 ```
+
+応えるシーン（`＊OnBoot`）が無いと、既定ハンドラは何も返さない（204 No Content）。このとき SSP は立ち絵を出さず、立ち絵は最初の台詞と一緒に出る。pasta は、書いていない立ち絵を推測で出さない。
 
 `REG.OnBoot` を上書きすると、`＊OnBoot` シーンは自動では実行されなくなる。上書きする代入の置き場所は [既定ハンドラと上書き](#既定ハンドラと上書き) のとおり。
 
@@ -313,6 +461,10 @@ end
    - `reference[2]` が無いか、グローバルシーンの登録名でないとき（手書きのさくらスクリプトで出した選択肢、`reference[2]` を送らないベースウェアなど）は、最後に `init_scene` を呼んだグローバルシーンの配下から探す。このグローバルシーンは、Call から戻っても呼び出し元には戻らない。
 3. 見つからなければ 204 No Content を返す。
 
+- 1 と 2 の検索では、候補の条件をそのイベントの `act` の変数（Reference と日時の変数が入っている）で評価する（[条件で候補を絞る](https://ekicyou.github.io/pasta/grammar/block-structure.html#条件で候補を絞る)）。
+- 1 の `＊OnChoiceSelectEx` は、条件を満たす候補が無ければ無いものとして 2 へ進む。
+- 2 で、ローカルとグローバルのどちらにも選べるシーンが無く、どちらかが条件漏れ（名前に合うシーンはあるが条件を満たす候補が無い）だったときは、204 ではなく止まるエラー `【条件に合うシーンが無い：OnChoiceSelectEx ＞選択 ID】` になる（[条件に合うシーンが無いとき](https://ekicyou.github.io/pasta/grammar/call-jump.html#条件に合うシーンが無いとき)）。
+
 ```pasta
 ＊メニュー
     ぱすた：どれにする？
@@ -352,21 +504,48 @@ end
 | `act.req.reference[5]` | 左ボタンなら `0`、右ボタンなら `1` |
 | `act.req.reference[6]` | 入力の種類（`touch`・`pen` など） |
 
+既定ハンドラは、つつきのショートカットのシーン（`＊つっつき反応…`・`＊OnPoke…`）を探して実行する。どれも無ければ、`OnMouseDoubleClick` という名前でシーンを探して実行する（[シーン関数フォールバック](#シーン関数フォールバック)と同じ探し方）。探す順と決まりは [つつき・撫でのショートカット](#つつき撫でのショートカット) のとおり。左ボタンと右ボタン、マウス・タッチ・ペンは区別しない。
+
 ```pasta
+＊つっつき反応Head
+    ぱすた：頭をつつかないで。
+
 ＊OnMouseDoubleClick
     ぱすた：なあに？
 ```
+
+`REG.OnMouseDoubleClick` を登録すると、そのハンドラだけが呼ばれ、ショートカットのシーンも `＊OnMouseDoubleClick` も自動では探されなくなる（[自前のハンドラの優先](#自前のハンドラの優先)）。
 
 ```lua
 REG.OnMouseDoubleClick = function(act)
     local scope = act.req.reference[3]
     local hit_area = act.req.reference[4]
     if scope == "0" and hit_area == "Head" then
-        return "\\0\\s[0]頭をなでないで。\\e"
+        return "\\0\\s[0]頭をつつかないで。\\e"
     end
     return nil
 end
 ```
+
+### OnMouseMove
+
+マウスカーソルがキャラクターの上で動いたときに送られる。動いている間は短い間隔で続けて届く。
+
+| Reference | 内容 |
+| --------- | ---- |
+| `act.req.reference[0]` | マウスカーソルの x 座標（ローカル座標） |
+| `act.req.reference[1]` | マウスカーソルの y 座標（ローカル座標） |
+| `act.req.reference[3]` | 本体なら `0`、相方なら `1`（SSP では `2` 以降もある） |
+| `act.req.reference[4]` | 当たり判定の識別子 |
+
+既定ハンドラは、届くたびに撫でを判定する（[撫での判定](#撫での判定)）。撫でたと決めたときは、撫でのショートカットのシーン（`＊さわり反応…`・`＊OnTouch…`）を探して実行する。撫でたと決めなかったとき、およびショートカットのシーンが 1 つも見つからなかったときは、`OnMouseMove` という名前でシーンを探して実行する（[シーン関数フォールバック](#シーン関数フォールバック)と同じ探し方）。撫でたと決めなかった回は、`OnMouseMove` のほかの名前を探さない。
+
+```pasta
+＊さわり反応Head
+    ぱすた：えへへ、なでなでされちゃった。
+```
+
+`REG.OnMouseMove` を登録すると、そのハンドラだけが呼ばれ、撫での判定もショートカットのシーンの検索も行われない（[自前のハンドラの優先](#自前のハンドラの優先)）。
 
 ### OnSecondChange
 
@@ -380,12 +559,13 @@ end
 | `act.req.reference[3]` | トークを再生できるとき `1`、それ以外は `0` |
 | `act.req.reference[4]` | OS で何も操作されずに放置されている時間（秒、SSP） |
 
-既定ハンドラは、次の 2 つを順に行う。
+既定ハンドラは、次の 3 つを順に行う。前の手順が応答を生んだ回は、その応答を返し、後の手順は行わない。
 
-1. 結果を待っているコールバックのうち、待ち時間の上限を過ぎたものをタイムアウトとして処理する（[OnPastaCallBack](#onpastacallbackコールバック応答)）。この処理が応答を生んだ回は、その応答を返し、2 は行わない（その回の OnHour・OnTalk は発行されない）。
+1. 結果を待っているコールバックのうち、待ち時間の上限を過ぎたものをタイムアウトとして処理する（[OnPastaCallBack](#onpastacallbackコールバック応答)）。この処理が応答を生んだ回は、その回の OnHour・OnTalk は発行されない。
 2. [仮想ディスパッチャ](#仮想ディスパッチャ)を呼び、OnHour（時報）・OnTalk（ランダムトーク）を発行する。
+3. 何も発行しなかった回で、Status に[ブロック対象のキーワード](#ブロック対象-status-キーワード)が無く、仮想時刻の読み取りを予約していれば、読み取りのさくらスクリプトを返す（[OnPastaClock](#onpastaclock仮想時刻の読み取り)）。
 
-`REG.OnSecondChange` を上書きすると、OnTalk・OnHour の発行、コールバックのタイムアウト処理、デバッグのシーン再生がすべて止まる。毎秒の処理を足すときは、既定ハンドラを変数に取っておき、上書きしたハンドラから呼び出す（代入の置き場所は [既定ハンドラと上書き](#既定ハンドラと上書き) のとおり）。
+`REG.OnSecondChange` を上書きすると、OnTalk・OnHour の発行、コールバックのタイムアウト処理、仮想時刻の読み取りがすべて止まる。毎秒の処理を足すときは、`REG:register` で重ねる（[ハンドラを重ねる](#ハンドラを重ねるregregister)）か、既定ハンドラを変数に取っておき、上書きしたハンドラから呼び出す（代入の置き場所は [既定ハンドラと上書き](#既定ハンドラと上書き) のとおり）。
 
 ```lua
 local REG = require("pasta.shiori.event.register")
@@ -407,16 +587,55 @@ end
 再開したシーンは、通常のイベントで実行したシーンと同じ規則で扱われる。
 
 - 出力の無いまま中断したときは、応答を返さずに同じイベントの中で再開を続け、出力が得られるかシーンが終わるまで進める。
-- [チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)で中断したときは、残りが次の OnTalk の機会に出力される。
+- [チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)で中断したときは、残りが次の自然なおしゃべり（仮想ディスパッチャが起こす OnTalk）の機会に出力される。
 - もう一度 `act:get_property` を呼んで中断したときは、新しいイベント名の待機になる。
 
 待ち時間の上限（`act:get_property` の既定は 5 秒）を過ぎた待機は、OnSecondChange の既定ハンドラがタイムアウトとして処理する（[get_property](script-api.md#get_propertyname_or_names-timeout-timeout_message)）。
 
 - 待っていたシーンは、`timeout_message`（既定は `"callback timeout: get_property"`）を理由とするエラーで終わり、警告ログにイベント名と理由が出る。
-- その回の OnSecondChange の応答は、`X-Error-Reason` に `timeout_message` の文字列そのものを持つ 500 Internal Server Error になる。
+- その回の OnSecondChange の応答は、`X-Error-Reason` に `timeout_message` の文字列そのものを持つ。既定では、途中の台詞の後に `【時間切れ：理由】` の表記を `Value` に持つ 200 OK になる。表記を出さない設定（`balloon_warning = false`）では、`Value` の無い 500 Internal Server Error になる（[時間切れ](https://ekicyou.github.io/pasta/reference/runtime-failures.html#時間切れ)）。
 - シーンがそのエラーを `pcall` で捕まえて続けたときは、再開したシーンと同じ規則（前の箇条書き）で扱われ、出力があればその回の OnSecondChange の応答（200 OK）になる。
 - 1 回の OnSecondChange で複数の待機がタイムアウトしたときは、`{N}` の小さい順に処理し、最初に応答を生んだ待機の応答を使う。残りの待機の応答は、警告ログを出して捨てられる。
 - タイムアウトした後に届いた結果は、待っていない `OnPastaCallBack{N}` として扱われる。
+
+理由付きの時間切れの応答は、表記を出すかどうかで次のように変わる（ヘッダは抜粋）。
+
+```text
+表記を出す設定（既定）:
+  SHIORI/3.0 200 OK
+  Value: （途中の台詞）【時間切れ：callback timeout: get_property】\e
+  X-Error-Reason: callback timeout: get_property
+
+表記を出さない設定（balloon_warning = false）:
+  SHIORI/3.0 500 Internal Server Error
+  X-Error-Reason: callback timeout: get_property
+```
+
+### OnPastaClock（仮想時刻の読み取り）
+
+SSP の仮想時刻（開発用パレットなどで進めた時刻）は、SHIORI のリクエストのヘッダには載らない。SSP によっては、SSP のプロセスの中の OS の時計そのものを仮想時刻にするため、`act.req.date` がそのまま仮想時刻になる（[act.req](#actreq)）。そうしない SSP のために、pasta は、SSP に仮想の日時を読ませて、OS の時計とのずれ（秒）を覚える。
+
+1. `OnMinuteChange`・`OnHourTimeSignal` は、毎分・毎時の決まった時機に届く。pasta は、これらが OS の時計で見込んだ時機から外れて届くと、仮想時刻が動いたとみなして読み取りを予約する。
+2. 予約の後、何も出さない最初の OnSecondChange の応答で、`\![get,property,OnPastaClock,system.year,system.month,system.day,system.hour,system.minute,system.second]\e` を返す（[OnSecondChange](#onsecondchange)）。
+3. SSP は、`OnPastaClock` のイベントで仮想の日時を送り返す。
+
+| Reference | 内容 |
+| --------- | ---- |
+| `act.req.reference[0]` | 年 |
+| `act.req.reference[1]` | 月 |
+| `act.req.reference[2]` | 日 |
+| `act.req.reference[3]` | 時 |
+| `act.req.reference[4]` | 分 |
+| `act.req.reference[5]` | 秒 |
+
+- このイベントは `REG` より先に処理される。pasta は、返事の日時と OS の時計の差をずれとして覚え、204 No Content を返す。このとき `REG` のハンドラは呼ばれず、シーンも探さない。ハンドラを登録する必要はない。
+- ずれが 2 秒以内なら、0（仮想時刻なし）とみなす。SSP が OS の時計そのものを仮想時刻にするときは、返事の日時と `act.req.date` が同じなので、ずれはいつも 0 になる。読み取りは、時刻を設定し直した直後に 1 回走るだけである。
+- 値が読めないときは、ずれを 0 に戻し、警告ログを出す。OS の時計で動き続ける。
+- `SecurityLevel` が `external` の `OnPastaClock` は、返事として扱わない。通常のイベントとして `REG`・シーン関数フォールバックへ進む。
+- `X-Pasta-Time` ヘッダのあるリクエストでは、ずれを使わない。その日時をそのまま使う。
+- ずれは保存しない。SHIORI の load から unload までの間だけ保たれる。
+
+覚えたずれは、時報の判定（[OnHour](#onhour)）と[日時変数](https://ekicyou.github.io/pasta/grammar/variables.html#日時変数)に使われる。`act.req.date` には足されない（[act.req](#actreq)）。SSP が OS の時計を書き換えるときは、ずれは 0 のままで、設定し直しは[時刻の飛び](#時刻の飛び)として扱われる。
 
 ### OnMinuteChange
 
@@ -441,12 +660,552 @@ end
 
 正時の時報は、OnMinuteChange ではなく [OnHour](#onhour) で書ける。
 
+### OnPastaScene（名前でシーンを再生）
+
+名前で指名したシーンを、その場で再生する。pasta の組み込みのイベントで、ベースウェアが自分から送ることはない。AI エージェントなどが、SSP の MCP サーバーの `raise_event` で送る（[MCP からの呼び方](#mcp-からの呼び方)）。デバッグを有効にしたときだけ動く（[開発用のイベントの共通の決まり](#開発用のイベントの共通の決まり)）。
+
+| Reference | 内容 |
+| --------- | ---- |
+| `act.req.reference[0]` | グローバルシーンの名前（必須）。`＊会話` なら `会話` |
+| `act.req.reference[1]` | ローカルシーンの名前（省略できる）。`・挨拶` なら `挨拶`。空の文字列は省略と同じ |
+| `act.req.reference[2]` | ローカル変数の TOML のインライン表（省略できる）。`{ '天気' = '雨' }` なら、再生するシーンの `＄天気` が `雨` になる。空の文字列は省略と同じ（[ローカル変数を入れる](#シーンを再生するイベントの共通の決まり)） |
+
+- Reference1 を省略すると、Reference0 のグローバルシーンを再生する。Reference1 を渡すと、Reference0 のグローバルシーンの中にある Reference1 のローカルシーンを再生する。
+- 名前は、辞書に書いたとおりの、番号の付かない名前で渡す。`会話_1` のような登録名では指名できない。
+- 名前は完全一致で探す。`会話` で `＊会話2` は再生しない。見つからなくても、前方一致で探し直すことはない。
+- 照合用の名前への揃え方と、`[scene.alias]` の別名の当て方は、ふだんのシーンの検索と同じである（[search_scene](pasta-search.md#search_scenename-global_scene_name)・[シーン名の別名](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の別名)）。別名を当てるのはグローバルシーンの名前だけで、ローカルシーンの名前には当てない。既定の別名表では、`会話` を渡すと `OnTalk` に置き換わり、`＊OnTalk` と `＊会話` の両方が候補になる。
+- 同じ名前のグローバルシーンが複数あれば、ほかのシーンと同じくシャッフル＆順次消費で 1 つを選ぶ。
+- ローカルシーンを指名したときは、その名前のローカルシーンを持つグローバルシーンだけを候補にし、その中からシャッフル＆順次消費で 1 つを選ぶ。同じ名前のグローバルシーンのうち片方だけがローカルシーンを持つときも、持つ方が毎回選ばれる。
+
+見つからないときは再生せず、失敗の表記とログの警告を出す。チェイントークで中断しているシーンは、そのまま残る。
+
+| 場合 | 表記 | ログの警告 |
+| ---- | ---- | ---------- |
+| グローバルシーンが無い | `【シーンが見つからない：OnPastaScene ＊会話】` | `OnPastaScene: scene not found: global='会話'` |
+| グローバルシーンはあるが、その中にローカルシーンが無い | `【シーンが見つからない：OnPastaScene ＊会話 ・挨拶】` | `OnPastaScene: scene not found: global='会話', local='挨拶'` |
+| Reference0 が無い | `【名前にならない値：OnPastaScene Reference0（値なし）】` | `OnPastaScene: bad argument: Reference0=nil` |
+| Reference0 が空の文字列 | `【名前にならない値：OnPastaScene Reference0（空文字列）】` | `OnPastaScene: bad argument: Reference0=''` |
+| Reference2 が TOML のインライン表として読めない | `【表にできない値：OnPastaScene Reference2（"{ 天気 = "雨" }"）】` | ``OnPastaScene: bad argument: Reference2='{ 天気 = "雨" }' (invalid unquoted key, expected letters, numbers, `-`, `_`)`` |
+| Reference2 が表でない | `【表にできない値：OnPastaScene Reference2（"3"）】` | `OnPastaScene: bad argument: Reference2='3' (not an inline table)` |
+| Reference2 のキーがローカル変数の名前にならない | `【名前にならない値：OnPastaScene Reference2（"1"）】` | `OnPastaScene: bad argument: Reference2 key='1' (not a local variable name)` |
+| Reference2 の値が配列か表 | `【代入できない値：OnPastaScene Reference2 ＄a（表）】` | `OnPastaScene: bad argument: Reference2 key='a' (table is not assignable)` |
+
+```pasta
+＊会話
+    ぱすた：今日はいい天気だね。
+
+    ・挨拶
+        ぱすた：こんにちは。
+
+＊天気を言う
+    ぱすた：今日は＄天気、これで＄回数　回目だね。
+```
+
+この辞書に `OnPastaScene` を Reference0 `会話`・Reference1 `挨拶` で送ると、`・挨拶` を再生し、その台詞が応答の `Value` になる。
+
+Reference2 でローカル変数を入れて再生するときは、次のように送る。
+
+```text
+raise_event(event = "OnPastaScene", references = ["天気を言う", "", "{ '天気' = '雨', '回数' = 3 }"], ghost_name = "<ルート>")
+```
+
+`＊天気を言う` を再生し、その台詞（`今日は雨、これで3回目だね。`）が応答の `Value` になる。Reference1 の空の文字列は、ローカルシーンを指名しないことを表す。
+
+### OnPastaSceneAt（位置でシーンを再生）
+
+ファイルと行で指名したシーンを、その場で再生する。`OnPastaScene` と同じく pasta の組み込みのイベントで、デバッグを有効にしたときだけ動く（[開発用のイベントの共通の決まり](#開発用のイベントの共通の決まり)）。同じ名前のシーンが複数あっても、狙った 1 つを再生できる。
+
+| Reference | 内容 |
+| --------- | ---- |
+| `act.req.reference[0]` | `.pasta` ファイルのパス（必須）。`ghost/master/` からの相対パスか、絶対パス |
+| `act.req.reference[1]` | 行（必須）。エディタと同じく 1 から数える。半角の数字だけで書いた 1 以上の整数 |
+| `act.req.reference[2]` | ローカル変数の TOML のインライン表（省略できる）。`OnPastaScene` の Reference2 と同じ（[ローカル変数を入れる](#シーンを再生するイベントの共通の決まり)） |
+
+- 相対パスは、ゴーストの `ghost/master/` からの相対パスとして扱う（`dic/boot.pasta`）。SSP の今のフォルダには左右されない。絶対パスは、そのパスのファイルとして扱う。
+- パスの区切りは `/` と `\` のどちらでもよい。ファイル名の大文字・小文字は、VSCode からのシーンの再生と同じ規則で突き合わせる（Windows では区別しない）。
+- 行からシーンを引く規則は、VSCode の「▶ シーンを実行」と同じである（[シーン再生](https://ekicyou.github.io/pasta/debug/dev-actions.html#シーン再生-シーンを実行)）。その行を含むシーンのうち、最も内側のシーンを再生する。グローバルシーンの中のローカルシーンの行ならローカルシーン、ローカルシーンより前の行ならグローバルシーンになる。どのシーンにも含まれない行（最初のシーンより前の行）では、その行より下にある最も近いシーンを再生する。
+- ファイルの最後のシーンはファイルの終わりまで続くとみなすので、辞書に読み込まれたファイルの行は、ファイルの行数を超える行も含めて、必ずどれかのシーンに当たる。位置で見つからないのは、辞書に読み込まれていないファイルを指したときである。
+- 同じ名前のシーンが複数あっても、指した位置のシーンそのものを再生する。
+- ファイルは開かない。読み込みのときに作った、行からシーンを引くための表だけを使う。
+- 行の `"４２"`（全角の数字）・`" 42"`（前後の空白）・`"0"`・`"1.5"`・`"abc"` は誤りになる。
+
+見つからないときと引数の誤りでは再生せず、失敗の表記とログの警告を出す。チェイントークで中断しているシーンは、そのまま残る。表記のパスは渡された文字列のまま出る。
+
+| 場合 | 表記 | ログの警告 |
+| ---- | ---- | ---------- |
+| 辞書に無いファイルを指した | `【シーンが見つからない：OnPastaSceneAt dic/無い.pasta:1】` | `OnPastaSceneAt: scene not found: file='dic/無い.pasta', line=1` |
+| Reference0 が無い | `【名前にならない値：OnPastaSceneAt Reference0（値なし）】` | `OnPastaSceneAt: bad argument: Reference0=nil` |
+| Reference0 が空の文字列 | `【名前にならない値：OnPastaSceneAt Reference0（空文字列）】` | `OnPastaSceneAt: bad argument: Reference0=''` |
+| 行が 1 以上の整数でない | `【数にできない値：OnPastaSceneAt Reference1（"４２"）】` | `OnPastaSceneAt: bad argument: Reference1='４２'` |
+| 行が無い | `【数にできない値：OnPastaSceneAt Reference1（値なし）】` | `OnPastaSceneAt: bad argument: Reference1=nil` |
+| Reference2 が TOML のインライン表として読めない | `【表にできない値：OnPastaSceneAt Reference2（"{ 天気 = "雨" }"）】` | ``OnPastaSceneAt: bad argument: Reference2='{ 天気 = "雨" }' (invalid unquoted key, expected letters, numbers, `-`, `_`)`` |
+| Reference2 が表でない | `【表にできない値：OnPastaSceneAt Reference2（"3"）】` | `OnPastaSceneAt: bad argument: Reference2='3' (not an inline table)` |
+| Reference2 のキーがローカル変数の名前にならない | `【名前にならない値：OnPastaSceneAt Reference2（"1"）】` | `OnPastaSceneAt: bad argument: Reference2 key='1' (not a local variable name)` |
+| Reference2 の値が配列か表 | `【代入できない値：OnPastaSceneAt Reference2 ＄a（表）】` | `OnPastaSceneAt: bad argument: Reference2 key='a' (table is not assignable)` |
+
+```text
+raise_event(event = "OnPastaSceneAt", references = ["dic/boot.pasta", "42", "{ '天気' = '雨' }"], ghost_name = "<ルート>")
+```
+
+`dic/boot.pasta` の 42 行目のシーンを、`＄天気` が `雨` の状態で再生する。
+
+### シーンを再生するイベントの共通の決まり
+
+`OnPastaScene`・`OnPastaSceneAt` の 2 つに共通する決まりである。デバッグが有効なときだけ動くことなど、[OnPastaDumpVariables](#onpastadumpvariablesグローバル変数を書き出す) とも共通する決まりは、[開発用のイベントの共通の決まり](#開発用のイベントの共通の決まり)にある。
+
+**再生と続き**
+
+- 受け取ったその場で再生する。Status に[ブロック対象のキーワード](#ブロック対象-status-キーワード)（選択肢の表示中の `choosing` など）が含まれていても止めない（ほかのイベントのハンドラと同じ）。
+- 再生すると、再生したシーンの台詞の有無にかかわらず、チェイントークで待っている続きを捨て、[`＊チェイントーク中断`](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク中断) も実行しない。VSCode からのシーンの再生と同じである（[続きが捨てられるとき](https://ekicyou.github.io/pasta/grammar/call-jump.html#続きが捨てられるとき)）。
+- 再生したシーンが `＞チェイントーク` で区切れば、その残りが新しい続きになる。
+- シーンを再生しなかったとき（見つからない・引数の誤り・デバッグが無効・`SecurityLevel` が `external`）は、待っている続きに触れない。
+- このイベントの応答には、再生したシーンの最初の[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)までの出力だけが載る。残りは、ほかのイベントで実行したシーンと同じく、次の自然なおしゃべり（仮想ディスパッチャが起こす OnTalk）の機会に出る。
+- 再生したシーンの実行がエラーで止まったときは、ほかのイベントと同じく止まるエラーの応答になる（[エラーハンドリング](#エラーハンドリング)）。
+
+**ローカル変数を入れる（Reference2）**
+
+- Reference2 に TOML のインライン表を 1 つ渡すと、キーを名前、値をその値として、再生するシーンのローカル変数に入れる。`{ '天気' = '雨' }` なら、シーンの `＄天気` が `雨` になる。Lua のブロックからは `var.天気` で読める。
+- Reference2 が無いか空の文字列なら、何も入れない。`{}` も何も入れない。
+- 入れるのは、シーンが見つかったときだけである。見つからないときと引数の誤りでは、何も入れない。
+- キーは TOML のキーの書き方で書く。日本語のキーは引用符で包む（`'天気'`・`"天気"`）。包まない `{ 天気 = '雨' }` は、TOML として読めないので誤りになる。
+- キーは、`＄名前` と書けるローカル変数の名前でなければならない。`'1'`・`'__x__'`・`'a b'` は誤りになる。
+- `raise_event` の `references` は JSON の文字列である。キーと値を TOML のリテラル文字列 `'…'` で書けば、JSON の `\"` が要らない。`\` を含む値も、リテラル文字列なら書いたとおりに入る（`'C:\dic'`）。
+
+値の型は、次のように入る。
+
+| TOML の値 | `＄キー` に入る値 |
+| --------- | ----------------- |
+| 文字列（`'雨'`） | 文字列 |
+| 整数（`3`） | 数（2^53 を超える整数は丸まる） |
+| 浮動小数点数（`1.5`） | 数 |
+| 真偽値（`true`） | 真偽値。台詞では `true` と出る |
+| 日付・時刻（`1979-05-27`・`1979-05-27T07:32:00Z`・`07:32:00`） | 書いたとおりの文字列 |
+| 配列・表（`[1]`・`{}`・`'a'.b = 1`） | 誤り（代入できない値） |
+
+届く範囲と、ほかの値との後勝ちは次のとおりである。
+
+- 入れた値は、ふだんのローカル変数と同じく、`＞` で呼んだシーン・ローカルシーン・`＞チェイントーク` の後の続きでも読める（[ローカル変数](https://ekicyou.github.io/pasta/grammar/variables.html#ローカル変数)）。
+- 入れるのは、シーンを再生する前の 1 回だけである。本文で同じ名前に代入すると、代入した値が勝つ。
+- 転記された変数（[イベントのシーンを選ぶ前の転記](https://ekicyou.github.io/pasta/grammar/variables.html#イベントのシーンを選ぶ前の転記)）と同じ名前のキーでは、Reference2 の値が勝つ。`{ 'r0' = '上書き' }` なら、`＄r0` は `上書き` になる。
+- 次のイベントには持ち越さない。Reference2 を付けずに同じシーンを再生すると、`＄天気` は `【値の無い変数：＄天気】` になる。
+- グローバル変数（`＄＊名前`）には入らない。
+
+`OnPastaScene` で Reference2 を付けてグローバルシーンを再生するときは、Reference1 を空の文字列にする（`references = ["天気を言う", "", "{ '天気' = '雨' }"]`）。Reference1 に表を渡すと、それをローカルシーンの名前として探すので、シーンが見つからない失敗になる。
+
+**失敗の出方**
+
+- 見つからないときと引数の誤りは、ほかの実行時の失敗と同じ `【種類：対象（説明）】` の形の表記で出す。対象は、イベント名と、探した名前（`＊グローバルシーン名 ・ローカルシーン名`）・位置（`ファイル:行`）・誤った引数（`ReferenceN`）を半角の空白でつないだものである（[実行時の失敗の出力](https://ekicyou.github.io/pasta/reference/runtime-failures.html)）。
+- 表記は既定でこのイベントの応答（200 OK の `Value`）に載る。表記を出さない設定（`[logging]` の `balloon_warning = false`）では 204 No Content になる。ログの警告は、どちらの設定でも出る。
+- 引数は Reference0・Reference1・Reference2 の順に確かめ、最初の誤りだけを出す。Reference2 の誤りは、シーンを探す前に出る。
+- Reference2 のキーに誤りが複数あれば、キーを並べ替えて、最初のキーの誤りだけを出す。`{ 'b' = [1], '1' = 2 }` では、`'1'` の名前の誤りだけが出る。
+- `Value` の中では、表記に入ったパスや Reference2 の `\` が `\\` になる（さくらスクリプトとして働かないように直す）。`{ 'C:\dic' = 1 }` の表記は `【名前にならない値：OnPastaScene Reference2（"C:\\dic"）】` になる。
+
+### OnPastaDumpVariables（グローバル変数を書き出す）
+
+動いているゴーストのグローバル変数（`＄＊名前`。Lua の `save` の表）を、そのときの値で TOML のファイルに書き出す。喋らない。`OnPastaScene` と同じく pasta の組み込みのイベントで、デバッグを有効にしたときだけ動く（[開発用のイベントの共通の決まり](#開発用のイベントの共通の決まり)）。グローバル変数の保存（`save.toml`）はランタイムの終了時なので、動いている間の値は、このイベントで書き出して確かめる。
+
+- 引数は見ない。Reference は無くてよい。
+- 書き出す先は `ghost/master/profile/pasta/debug/variables.toml` である。前のファイルは置き換え、フォルダが無ければ作る。
+- 応答は、いつも 204 No Content である。ファイルは応答を返す前に書き終えているので、応答の直後に読めば、そのときの値がある。
+- 書き出しの変換はセーブと同じで、`[persistence]` の `obfuscate` によらず、いつもテキストの TOML で書く（[@pasta_persistence](pasta-persistence.md)）。
+- TOML に書けない値（関数など）は、そのキーを飛ばして残りを書き、ログに警告 `key '名前' was not saved: 理由` を書く。セーブと同じである（[書ける値と書けない値](pasta-persistence.md#書ける値と書けない値)）。
+- グローバル変数・`save.toml`・チェイントークで待っている続きは変えない。何度送っても、そのときの値でファイルを置き換えるだけである。
+
+ファイルを書けない（フォルダが作れない・書き込みが拒まれた）ときは、ログに警告を 1 行書いて 204 No Content を返す。書きかけのファイルは残さず、前のファイルも消さない。失敗の表記は出ない。
+
+| 場合 | 表記 | ログの警告 |
+| ---- | ---- | ---------- |
+| ファイルを書けない | （出ない） | `OnPastaDumpVariables: could not write <パス>: <理由>` |
+
+グローバル変数が `＄＊好感度＝３`・`＄＊名前＝「まさお」` のとき、`variables.toml` は次のようになる。
+
+```toml
+好感度 = 3
+名前 = "まさお"
+```
+
+### 開発用のイベントの共通の決まり
+
+`OnPastaScene`・`OnPastaSceneAt`・`OnPastaDumpVariables` の 3 つ（開発用のイベント）に共通する決まりである。
+
+**デバッグが有効なときだけ動く**
+
+- `pasta.toml` の `[debug]` の `enabled = true` か、環境変数 `PASTA_DEBUG` でデバッグを有効にしたときだけ働く（[[debug]](https://ekicyou.github.io/pasta/reference/pasta-toml.html#debugデバッグ)・[デバッグの有効化](https://ekicyou.github.io/pasta/debug/index.html#デバッグの有効化)）。
+- デバッグが無効なときは、何もせずに 204 No Content を返し、ログに警告を 1 行書く。
+- `SecurityLevel` が `external` のリクエストは、デバッグが有効でも何もせずに 204 No Content を返し、ログに警告を 1 行書く。
+- 断るときは引数を見ないので、失敗の表記は出ない。204 の理由は、pasta のログ（既定は `profile/pasta/logs/pasta.log`）でだけ分かる。
+
+警告のイベント名は届いたもの、後半はイベントごとに次のとおりである。
+
+| 場合 | ログの警告 |
+| ---- | ---------- |
+| デバッグが無効 | `OnPastaScene: debug is disabled; scene not played`（`OnPastaSceneAt` も `scene not played`）・`OnPastaDumpVariables: debug is disabled; variables not dumped` |
+| `SecurityLevel` が `external` | `OnPastaScene: SecurityLevel external is refused; scene not played`（`OnPastaSceneAt` も `scene not played`）・`OnPastaDumpVariables: SecurityLevel external is refused; variables not dumped` |
+
+**作者のハンドラとシーン関数フォールバック**
+
+- 3 つの既定ハンドラは、ゴーストが同じキーに登録したハンドラを上書きしない（[既定ハンドラと上書き](#既定ハンドラと上書き)）。
+- 3 つのイベントには既定ハンドラがあるので、[シーン関数フォールバック](#シーン関数フォールバック)は起きない。デバッグが無効なときも、`＊OnPastaScene` や `＊OnPastaScene朝` のような、イベント名で始まる名前のシーンを前方一致で再生することはない。
+
+### MCP からの呼び方
+
+AI エージェントが SSP・areka の MCP の道具を直に呼んで、辞書を試す手順である。VSCode の拡張の 3 つのコマンドも、同じ順で道具を呼ぶ（[開発支援アクション](https://ekicyou.github.io/pasta/debug/dev-actions.html)）。MCP の窓口の番号は [SSP と areka の MCP の窓口](https://ekicyou.github.io/pasta/debug/vscode-setup.html#ssp-と-areka-の-mcp-の窓口) にある。
+
+`raise_event` は、イベントを SHIORI に送り、返った台本を再生して、ツールの結果にも台本を載せる。`event` にイベント名を、`references` に Reference0 から順の値を文字列で渡す。
+
+**相手を確かめる**
+
+```text
+get_property(property_name = "baseware.name", ghost_name = "<ルート>")
+```
+
+- どの道具にも、`ghost_name` にゴーストのルートフォルダ（`ghost/master/` を持つフォルダ）の絶対パスを渡す。違うゴーストへ送らないためである。
+- 最初に `get_property` で `baseware.name` を聞く。`SSP`・`areka` のような名前が返れば、そのゴーストはその相手で動いている。
+- `NG:Cannot find active ghost from specified name` が返れば、そのゴーストはその相手で動いていない。ほかの道具を呼ばず、ほかの相手を確かめる。
+
+**読み込み直して、終わりを待つ**
+
+```text
+get_log(log_type = "error", ghost_name = "<ルート>", max_count = 1)
+reload(target = "shiori", ghost_name = "<ルート>")
+get_log(log_type = "error", ghost_name = "<ルート>", since_id = <覚えた番号>)
+```
+
+辞書を書き換えたあとは、イベントを送る前に、MCP の `reload` に `target = "shiori"` を渡して SHIORI を読み込み直す。これは呼び出す側の務めである。
+
+- シーンの一覧と、行からシーンを引くための表は、SHIORI の読み込みのときに作られ、辞書のファイルを書き換えても変わらない。
+- 読み込み直さないと、書き足したシーンや名前を変えたシーンは見つからず、`OnPastaSceneAt` の行は書き換える前の辞書の行として引かれる。行がずれると、狙ったものとは違うシーンが、失敗も出さずに再生されることがある。
+
+`reload` は読み込み直しを頼むだけで、終わるのを待たない。終わる前に `raise_event` を呼ぶと、イベントは SHIORI に届かず、台本も載らない。
+
+- `reload` を呼ぶ前に、pasta のログ（既定は `ghost/master/profile/pasta/logs/pasta.log`。場所は [`[logging]`](https://ekicyou.github.io/pasta/reference/pasta-toml.html#loggingログ出力) の `file_path` で変わる）の終わりの位置を覚える。
+- `reload` の後は、pasta のログに増えた行に `SHIORI load entry completed` の行が出るまで待つ。この行が読み込みの終わりの印である。`loaded=true` なら読み込めた。`loaded=false` なら読み込めていない。
+- 印の行が出ないときは、[読み込みの終わりを確かめられない](https://ekicyou.github.io/pasta/debug/troubleshooting.html#読み込みの終わりを確かめられない)を見る。
+
+**誤りを数える**
+
+- `reload` を呼ぶ前に、`get_log` に `log_type = "error"`・`max_count = 1` を渡して、ベースウェアの誤りの記録の最後の番号を覚える。記録は `#番号 時刻 [表示の語] 名前 : 本文` の形の行で、`#120` なら 120 である。`(no log entries)` なら 0 とする。
+- 終わりの印が出たら、`get_log` に `log_type = "error"`・`since_id = <覚えた番号>` を渡して、読み込み直しで増えた記録だけを取る。表示の語に `warn` を含まない記録を誤りと数える。
+- pasta のログの増えた行のうち、印の行より前の `ERROR` の行も誤りと数える。
+- 誤りがあれば、シーンを送らずに辞書を直す。警告だけなら送ってよい。
+
+**シーンを再生する**
+
+```text
+raise_event(event = "OnPastaScene", references = ["会話"], ghost_name = "<ルート>")
+raise_event(event = "OnPastaScene", references = ["会話", "挨拶"], ghost_name = "<ルート>")
+raise_event(event = "OnPastaSceneAt", references = ["dic/boot.pasta", "42"], ghost_name = "<ルート>")
+```
+
+- 1 行目は `＊会話` を、2 行目は `＊会話` の中の `・挨拶` を、3 行目は `dic/boot.pasta` の 42 行目のシーンを再生する。
+- [OnPastaScene](#onpastascene名前でシーンを再生) は、名前を完全一致で探す。`会話` で `＊会話2` は再生しない。同じ名前のシーンが複数あれば、その中から 1 つを選ぶ。狙った 1 つを確かに再生したいときは、ほかと重ならない名前で指名するか、[OnPastaSceneAt](#onpastasceneat位置でシーンを再生) で位置を指す。
+- 再生したときは、ツールの結果に、最初のチェイントークまでの台本が載る。見つからないときと引数の誤りでは、失敗の表記が載る。
+- 何も載らないとき（`OK:the ghost returned no script.`。204）は、pasta のログで理由を見る（[シーンを再生するイベントの共通の決まり](#シーンを再生するイベントの共通の決まり)）。
+
+**グローバル変数を書き出す**
+
+```text
+raise_event(event = "OnPastaDumpVariables", ghost_name = "<ルート>")
+```
+
+- グローバル変数を `ghost/master/profile/pasta/debug/variables.toml` に書き出す（[OnPastaDumpVariables](#onpastadumpvariablesグローバル変数を書き出す)）。ツールの結果には何も載らない（204）ので、そのファイルを読む。
+
+**応答が無いとき**
+
+`raise_event` の結果に `No response from server`（areka では `did not respond within`）が出ても、ゴーストがシーンを再生しなかったとは限らない。台本は、ベースウェアの台本の記録から読み直す。
+
+```text
+get_log(log_type = "script", ghost_name = "<ルート>", max_count = 1)
+raise_event(event = "OnPastaSceneAt", references = ["dic/boot.pasta", "42"], ghost_name = "<ルート>")
+get_log(log_type = "script", ghost_name = "<ルート>", since_id = <覚えた番号>)
+```
+
+- `raise_event` を送る前に、`log_type = "script"`・`max_count = 1` で、台本の記録の最後の番号を覚える。
+- 応答が無ければ、`since_id = <覚えた番号>` で増えた記録を数秒のあいだ引き直す。表示の語にイベント名を含む記録（`[Ghost:OnPastaSceneAt]` の形）が、そのイベントで再生した台本である。
+- 増えた記録に無ければ、再生したかは確かめられない。
+
+**変数を書く・読み出す**
+
+```text
+raise_event(event = "OnPastaSetSaveVariable", references = ["pasta_talk_interval_min", "60", "number"], ghost_name = "<ルート>")
+raise_event(event = "OnPastaDumpVariables", references = [], ghost_name = "<ルート>")
+```
+
+- 1 行目は、グローバル変数 `＄＊pasta_talk_interval_min` に数値の `60` を代入する。引数と型の決まりは [OnPastaSetSaveVariable](#onpastasetsavevariableグローバル変数に代入) にある。
+- 2 行目は、今の保存変数（`＄＊名前`）をファイルに書き出させる。値はツールの結果に載らない。書き出したファイルの場所は [保存変数を表示](https://ekicyou.github.io/pasta/debug/dev-actions.html#保存変数を表示) にある。読み込み直さずに送れば、動いている間の値が見える。
+
+### OnPastaCallFunction（＞名前を外から呼ぶ）
+
+名前で指名したものを、辞書の `＞名前` と同じ探し方で呼ぶ。pasta の組み込みのイベントで、ベースウェアが自分から送ることはない。AI エージェントなどが、SSP の MCP サーバーの `raise_event` で送る。試験の間だけ [`＞自動トーク停止`](https://ekicyou.github.io/pasta/grammar/call-jump.html#自動トーク停止自動トーク再開) を呼ぶ、といった使い方をする。デバッグの有無によらず働く。
+
+| Reference | 内容 |
+| --------- | ---- |
+| `act.req.reference[0]` | 呼ぶ名前（必須）。`＞自動トーク停止` なら `自動トーク停止` |
+| `act.req.reference[1]` 以降 | 呼び先に渡す引数（省略できる） |
+
+**探し方**
+
+- 辞書のシーンの外に `＞名前` を書いたのと同じに探す。[スコープ解決アルゴリズム](https://ekicyou.github.io/pasta/grammar/call-jump.html#スコープ解決アルゴリズム)の 5 段のうち、実行中のグローバルシーンが無いので、3 段目以降（act のメソッド・`GLOBAL` テーブル・すべてのグローバルシーン）から探す。
+- `GLOBAL` の関数（`自動トーク停止`・`ゴースト終了` など）と、`act` のメソッドにも届く。
+- グローバルシーンは前方一致で探す。`初回` で `＊初回起動` も候補になる。候補が複数あれば、シャッフル＆順次消費で 1 つを選ぶ（[候補の選択](https://ekicyou.github.io/pasta/grammar/call-jump.html#候補の選択)）。呼ぶたびに順送りが進む。
+- 照合用の名前への揃え方と、`[scene.alias]` の別名の当て方は、`＞名前` と同じである（[シーン名の別名](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の別名)）。
+- 候補の条件は、このイベントの `act` の変数で評価する。グローバル変数（`＄＊名前`）はいつもどおり読め、ローカル変数には Reference と日時の変数が入っている（`＄ｒ０` は呼ぶ名前）。
+- ローカルシーンは探さない。ローカルシーンを指して再生するときは [OnPastaScene](#onpastascene名前でシーンを再生) を使う（[OnPastaCallFunction と OnPastaScene の違い](#onpastacallfunction-と-onpastascene-の違い)）。
+
+**引数**
+
+- Reference1 から、値の無い最初の Reference の手前までを、受け取った文字列のまま、順に引数として渡す。数に直すことはしない。空の文字列も 1 つの引数として渡す。
+- シーンを呼んだときは、Reference1 がシーン引数の `＄０`、Reference2 が `＄１` になる（[シーン引数](https://ekicyou.github.io/pasta/grammar/variables.html#シーン引数)）。`GLOBAL` の関数を呼んだときは、関数が `act, Reference1, Reference2, …` の順に引数を受け取る。
+
+**応答**
+
+- 呼び先が台詞を出せば、その最初の[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)までの出力を `Value` にして 200 OK を返す。残りは、ほかのイベントで実行したシーンと同じく、次の自然なおしゃべり（仮想ディスパッチャが起こす OnTalk）の機会に出る。
+- 呼び先が何も出さなければ（`自動トーク停止` など）、204 No Content を返す。
+- 呼び先の戻り値は、応答に載らない。
+- 受け取ったその場で呼ぶ。Status に[ブロック対象のキーワード](#ブロック対象-status-キーワード)が含まれていても止めない（ほかのイベントのハンドラと同じ）。
+- 呼び先の実行がエラーで止まったときは、ほかのイベントと同じく止まるエラーの応答になる（[エラーハンドリング](#エラーハンドリング)）。
+
+**失敗の出方**
+
+見つからないとき・条件を満たす候補が無いときと、引数の誤りでは何も呼ばず、失敗の表記とログの警告を出す。条件を満たす候補が無いときも止まるエラーにはしない。表記の形と、表記を出さない設定（`balloon_warning = false`）で 204 No Content になることは、[シーンを再生するイベントの共通の決まり](#シーンを再生するイベントの共通の決まり)の「失敗の出方」と同じである。ただし、表記はデバッグの有無によらず出る。
+
+| 場合 | 表記 | ログの警告 |
+| ---- | ---- | ---------- |
+| 名前が見つからない | `【シーンが見つからない：OnPastaCallFunction ＞無い名前】` | `OnPastaCallFunction: handler not found: name='無い名前'` |
+| 名前に合うシーンはあるが、条件を満たす候補が無い | `【条件に合うシーンが無い：OnPastaCallFunction ＞秘密】` | `OnPastaCallFunction: no scene meets the conditions: name='秘密'` |
+| Reference0 が無い | `【名前にならない値：OnPastaCallFunction Reference0（値なし）】` | `OnPastaCallFunction: bad argument: Reference0=nil` |
+| Reference0 が空の文字列 | `【名前にならない値：OnPastaCallFunction Reference0（空文字列）】` | `OnPastaCallFunction: bad argument: Reference0=''` |
+
+**断り**
+
+- `SecurityLevel` が `external` のリクエストは、何も呼ばずに 204 No Content を返し、ログに警告 `OnPastaCallFunction: SecurityLevel external is refused; nothing done` を書く。ほかの機械から `ゴースト終了` などを呼べないようにするためである。MCP からは `local` で届くので、断られない。
+- 断るときは引数を見ないので、失敗の表記は出ない。
+
+**作者のハンドラで止める**
+
+既定ハンドラは、ゴーストが `REG.OnPastaCallFunction` に登録したハンドラを上書きしない（[既定ハンドラと上書き](#既定ハンドラと上書き)）。外から呼ばせたくないときは、何もしないハンドラを登録する。いつも 204 No Content を返すようになる。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+
+REG.OnPastaCallFunction = function() end  -- 外からの呼び出しを受け付けない
+```
+
+既定ハンドラがあるので、[シーン関数フォールバック](#シーン関数フォールバック)は起きない。`＊OnPastaCallFunction` のような、イベント名で始まる名前のシーンを前方一致で実行することはない。
+
+**MCP からの呼び方**
+
+```text
+raise_event(event = "OnPastaCallFunction", references = ["自動トーク停止"])
+raise_event(event = "OnPastaCallFunction", references = ["自動トーク再開"])
+raise_event(event = "OnPastaCallFunction", references = ["初回起動"])
+```
+
+- 1 行目は自動トークを止め、2 行目は再開する。どちらも台詞を出さないので、ツールの結果には何も載らない（204）。
+- 3 行目は `＊初回起動` を呼び、最初のチェイントークまでの台本がツールの結果に載る。
+- 辞書を書き換えたあとは、呼ぶ前に `reload(target = "shiori")` で SHIORI を読み込み直す（[MCP からの呼び方](#mcp-からの呼び方)）。
+
+### OnPastaSetSaveVariable（グローバル変数に代入）
+
+グローバル変数 `＄＊名前` に、外から値を代入する。`OnPastaCallFunction` と同じく pasta の組み込みのイベントで、デバッグの有無によらず働く。試験の間だけ [`＄＊pasta_talk_interval_min`](https://ekicyou.github.io/pasta/grammar/variables.html#予約グローバル変数pasta_-で始まる名前) を縮める、といった使い方をする。
+
+| Reference | 内容 |
+| --------- | ---- |
+| `act.req.reference[0]` | 変数の名前（必須）。`＄＊会員番号` なら `会員番号` |
+| `act.req.reference[1]` | 代入する値。届いた文字列をそのまま使う（引用符は要らない） |
+| `act.req.reference[2]` | 型。`number`・`string`・`boolean`・`delete` のどれか。省くか空の文字列なら `string` |
+
+**型ごとの代入**
+
+型の名前は英小文字で、そのとおりに書く。`Number`・`数値` は型の名前にならず、失敗になる（下の表）。
+
+| 型（Reference2） | Reference1 | 代入される値 |
+| ---------------- | ---------- | ------------ |
+| 省く・空・`string` | 文字列（空の文字列も） | その文字列のまま。`01`・`"01"`・`60`・`null` も文字列になる |
+| `number` | 数として読める文字列（`60`・`-1.5`・`0x10`・`1e3`。前後に空白があってもよい） | 数値。無限大と非数になるもの（`inf`・`nan`）は失敗 |
+| `boolean` | `true`・`false` | 真偽値。ほかの文字列（`TRUE`・`1`）は失敗 |
+| `delete` | 見ない（無くても、何でもよい） | 変数を消す（値の無い状態に戻す） |
+
+- 型を省けば、届いた文字列がそのまま文字列として入る。`01` を送れば文字列の `01` になる。
+- 名前は区切らない。`a.b` は、`a` の中の `b` ではなく、`a.b` という名前の 1 つの変数になる。
+- `pasta_` で始まる[予約グローバル変数](https://ekicyou.github.io/pasta/grammar/variables.html#予約グローバル変数pasta_-で始まる名前)にも代入できる。トークの間隔の変数は `number` を付けて送る。付けないと文字列の `60` が入り、トークの間隔には使われない。代入した値は、次にトーク間隔を計算するときから反映される。
+- 代入した値は、その後に読む `＄＊名前`（Lua の `save.名前`）にすぐ見える。保存は、ほかのグローバル変数と同じく、ランタイムの終了時に行われる（[グローバル変数の保存先](https://ekicyou.github.io/pasta/grammar/variables.html#グローバル変数の保存先)）。代入するたびにファイルへ書き出すことはしない。
+
+**応答**
+
+- 代入したとき・消したときは、204 No Content を返す。ログは出さない。
+- 変数の値を読み出して返すことはしない。
+
+**失敗の出方**
+
+失敗では変数を変えず、失敗の表記とログの警告を出す。表記の出方は `OnPastaCallFunction` と同じである（デバッグの有無によらず出る。`balloon_warning = false` では 204 No Content）。表の例は、名前 `会員番号` に送ったときである。
+
+| 場合 | 表記 | ログの警告 |
+| ---- | ---- | ---------- |
+| `number` で、Reference1 が数にならない（`abc`・空・無い・`inf`・`nan`） | `【数にできない値：OnPastaSetSaveVariable ＄＊会員番号（abc）】` | `OnPastaSetSaveVariable: not a number: name='会員番号', Reference1='abc'` |
+| `boolean` で、Reference1 が `true`・`false` でない（`TRUE`・`1`・空・無い） | `【代入できない値：OnPastaSetSaveVariable ＄＊会員番号（TRUE）】` | `OnPastaSetSaveVariable: not a boolean: name='会員番号', Reference1='TRUE'` |
+| 型の名前を知らない（`Number`・`数値`） | `【型の名前にならない値：OnPastaSetSaveVariable ＄＊会員番号（Number）】` | `OnPastaSetSaveVariable: unknown type: name='会員番号', Reference2='Number'` |
+| 型が省かれた・空・`string` で、Reference1 が無い | `【代入できない値：OnPastaSetSaveVariable ＄＊会員番号（値なし）】` | `OnPastaSetSaveVariable: no value: name='会員番号', Reference1=nil` |
+| Reference0 が無い | `【名前にならない値：OnPastaSetSaveVariable Reference0（値なし）】` | `OnPastaSetSaveVariable: bad argument: Reference0=nil` |
+| Reference0 が空の文字列 | `【名前にならない値：OnPastaSetSaveVariable Reference0（空文字列）】` | `OnPastaSetSaveVariable: bad argument: Reference0=''` |
+
+- 表記には、誤った値を引用符で包まずにそのまま入れる。Reference1 の誤りは Reference1 を、型の名前の誤りは Reference2 を入れる。値が無ければ「値なし」、空なら「空文字列」と出る。
+- 型の名前は Reference1 より先に見る。型の名前が誤っていれば、Reference1 が何でも型の名前の失敗になる。
+- Reference1 が無いときも、変数は消さない。消すのは `delete` を送ったときだけである。
+
+**断り**
+
+- `SecurityLevel` が `external` のリクエストは、代入せずに 204 No Content を返し、ログに警告 `OnPastaSetSaveVariable: SecurityLevel external is refused; nothing done` を書く。MCP からは `local` で届くので、断られない。
+- 断るときは引数を見ないので、失敗の表記は出ない。
+
+**作者のハンドラで止める**
+
+`OnPastaCallFunction` と同じく、ゴーストが `REG.OnPastaSetSaveVariable` にハンドラを登録すると、既定ハンドラは動かない（[既定ハンドラと上書き](#既定ハンドラと上書き)）。
+
+```lua
+local REG = require("pasta.shiori.event.register")
+
+REG.OnPastaSetSaveVariable = function() end  -- 外からの代入を受け付けない
+```
+
+既定ハンドラがあるので、`＊OnPastaSetSaveVariable` のような名前のシーンへの[シーン関数フォールバック](#シーン関数フォールバック)は起きない。
+
+**MCP からの呼び方**
+
+```text
+raise_event(event = "OnPastaSetSaveVariable", references = ["pasta_talk_interval_min", "60", "number"])
+raise_event(event = "OnPastaSetSaveVariable", references = ["会員番号", "01"])
+raise_event(event = "OnPastaSetSaveVariable", references = ["会員番号", "", "delete"])
+```
+
+- 1 行目は `＄＊pasta_talk_interval_min` に数値の `60` を代入する。
+- 2 行目は型を省いたので、`＄＊会員番号` に文字列の `01` を代入する。
+- 3 行目は `＄＊会員番号` を消す。`delete` では Reference1 を見ないが、Reference2 の手前を埋めるために空の文字列を置く。
+
+### OnPastaCallFunction と OnPastaScene の違い
+
+どちらも名前で指名して、その場で動かすイベントである。違いは次のとおり。
+
+| | `OnPastaCallFunction` | `OnPastaScene` |
+| - | --------------------- | -------------- |
+| いつ働くか | いつでも | デバッグが有効なときだけ |
+| 探し方 | `＞名前` と同じ。グローバルシーンは前方一致。`GLOBAL` の関数・`act` のメソッドにも届く | シーンだけを完全一致で探す |
+| ローカルシーン | 指せない | Reference1 で指せる |
+| 引数 | Reference1 以降を渡せる | 渡せない |
+| 見つからないとき | 失敗の表記とログの警告 | 失敗の表記とログの警告 |
+| `SecurityLevel` が `external` | 断る（204） | 断る（204） |
+
+- `＊挨拶` と `＊挨拶2` があるとき、`OnPastaCallFunction` の `挨拶` はどちらも候補にするが、`OnPastaScene` の `挨拶` は `＊挨拶` だけを再生する。
+- `自動トーク停止` のような `GLOBAL` の関数は、`OnPastaCallFunction` でだけ呼べる。
+
+## つつき・撫でのショートカット
+
+`OnMouseDoubleClick`（つつき）と `OnMouseMove`（撫で）の既定ハンドラは、触られたキャラクターと部位に合わせた名前のシーンを探す。作者は、決まった名前のグローバルシーンを書くだけで、誰のどこを触られたかで反応を変えられる。
+
+### 探す順
+
+次の 9 段を上から順に探し、最初に見つかったシーンを実行する。各段の日本語の名前の次に、英字の名前を探す。
+
+| 段 | つつき | 撫で |
+| -- | ------ | ---- |
+| 1 | `つっつき反応<アクター名><部位>` | `さわり反応<アクター名><部位>` |
+| 2 | `OnPoke<アクター名><部位>` | `OnTouch<アクター名><部位>` |
+| 3 | `つっつき反応<アクター名>その他` | `さわり反応<アクター名>その他` |
+| 4 | `OnPoke<アクター名>Other` | `OnTouch<アクター名>Other` |
+| 5 | `つっつき反応<部位>` | `さわり反応<部位>` |
+| 6 | `OnPoke<部位>` | `OnTouch<部位>` |
+| 7 | `つっつき反応その他` | `さわり反応その他` |
+| 8 | `OnPokeOther` | `OnTouchOther` |
+| 9 | `OnMouseDoubleClick` | `OnMouseMove` |
+
+- `<アクター名>` は触られたキャラクターのアクター名（[アクター名の決め方](#アクター名の決め方)）、`<部位>` は当たり判定の識別子（Reference4）である。部位の名前は、シェルが送ってきたとおりに（英字も日本語も変えずに）入れる。
+- アクター名が決まらないときは、アクター名を含む段（1〜4）を飛ばす。
+- 部位が空（当たり判定の外）のつつきでは、部位を含む段（1・2・5・6）を飛ばす。部位が空のマウスの移動では、撫でたと決めない。
+- 9 段のどれにもシーンが無ければ 204 No Content を返す。
+- 1〜8 段は名前の完全一致で探し、条件を見ない。9 段（`OnMouseDoubleClick`・`OnMouseMove`）は [シーン関数フォールバック](#シーン関数フォールバック)と同じ探し方で、条件で絞る。
+- ショートカットのシーンでも、Reference と日時の変数は最初から入っている（[イベントのシーンを選ぶ前の転記](https://ekicyou.github.io/pasta/grammar/variables.html#イベントのシーンを選ぶ前の転記)）。`＞transfer_req_to_var` を呼ぶのは、途中で取り直したいときだけである。
+
+```pasta
+＊つっつき反応女の子Head
+    女の子：頭をつつかないで。
+
+＊つっつき反応男の子その他
+    男の子：わっ、ぼくのこと、つついた？
+
+＊さわり反応その他
+    女の子：くすぐったいよ。
+```
+
+### アクター名の決め方
+
+スコープ番号（Reference3）から、pasta.toml の `[actor."名前"]` の `spot` がその番号に等しいアクターを探す（[pasta.toml リファレンス](https://ekicyou.github.io/pasta/reference/pasta-toml.html#spot)）。`spot` は読み込み時の設定の値で引く。シーンの `％` 行でスポットを入れ替えても、引く値は変わらない。
+
+| `spot` が等しいアクター | アクター名 |
+| ----------------------- | ---------- |
+| 1 人 | そのアクターの名前 |
+| 0 人 | 決まらない |
+| 2 人以上 | そのスポットで最後に話したアクターの名前。まだ誰も話していなければ決まらない |
+
+スコープ番号そのものを入れた名前（`つっつき反応1Head` など）は探さない。
+
+### 撫での判定
+
+- 同じキャラクターの同じ部位の上で、マウスの移動が途切れずに 2 秒続くと、1 回「撫でた」と決める。2 秒を過ぎた後の最初の `OnMouseMove` で決まる。
+- 時間は、リクエストの時刻を 1 秒より細かく測る（設定し直しなどの[時刻の飛び](#時刻の飛び)は差し引く）。
+- 一度撫でたと決めた後は、数え直すまで次の「撫でた」を決めない。同じ所を撫で続けても 1 回である。
+- 次のときは、撫での時間を数え直す。
+  - 部位かキャラクターが変わったとき
+  - 前の移動から 2 秒より長く途切れたとき
+  - 時刻が前の移動より戻ったとき
+  - 部位が空（当たり判定の外）の移動を受けたとき
+- 判定の状態は 1 つだけ持つ。保存せず、ゴーストを読み直すと初めからになる。
+- 2 秒のしきい値と途切れの秒数は、設定では変えられない。
+
+### 抑止
+
+- Status ヘッダに、仮想イベント（OnTalk・OnHour）と同じ[ブロック対象のキーワード](#ブロック対象-status-キーワード)（`talking` など）が含まれている間は、撫でたと決めず、撫での時間を数え直す。抑止が解けてから、改めて 2 秒撫で続けると撫でたと決まる。
+- トークが終わってバルーンが残っているだけ（Status が `balloon(…)` だけ）のときは抑止しない。
+- 抑止の間も、`OnMouseMove` という名前のシーンは今までどおり探す。抑止するのは撫での判定と撫でのショートカットだけである。
+- つつきは抑止しない。しゃべっている途中でも探して返す（トークは打ち切られる）。
+- [自動トークを止めている](https://ekicyou.github.io/pasta/grammar/call-jump.html#自動トーク停止自動トーク再開)間は、つつき・撫でとも 1〜8 段を探さず、9 段目の `OnMouseDoubleClick`・`OnMouseMove` という名前のシーンだけを探す。撫では、Status による抑止と同じく撫でたと決めず、撫での時間を数え直す。`REG` に置いた自前のハンドラは変わらない。
+
+### 名前の一致
+
+- 1〜8 段は、名前と完全に一致するシーンだけを候補にする（照合用の名前どうしを比べる。[search_scene_exact](pasta-search.md#search_scene_exactname-global_scene_name)）。`つっつき反応胸` を探すときに `＊つっつき反応胸右` は選ばない。部位 `女` で `＊つっつき反応女の子Head` は選ばない。
+- 9 段目の `OnMouseDoubleClick`・`OnMouseMove` は、今までどおり前方一致で探す（[シーン関数フォールバック](#シーン関数フォールバック)）。
+- 見つかった段に同じ名前のシーンが複数あれば、ほかのシーンと同じくシャッフル＆順次消費で 1 つを選ぶ。
+- 接頭辞だけの名前のシーン（`＊つっつき反応`・`＊OnPoke`・`＊さわり反応`・`＊OnTouch`）は、どの段の名前とも一致しないため呼ばれない。
+
+### `その他`・`Other` という名前の部位
+
+部位の名前が `その他`・`Other` のシェルでも、部位を特別扱いせず、上の表のとおりに名前を作って上から探す。たとえば部位 `その他` のつつきでは、5 段目の名前が 7 段目と同じ `つっつき反応その他` になり、5 段目で見つかる。
+
+### 自前のハンドラの優先
+
+ゴーストが `REG.OnMouseDoubleClick`・`REG.OnMouseMove` にハンドラを登録すると、そのイベントでは既定ハンドラは一切動かない。ショートカットのシーンを探さず、撫での判定もしない。登録の置き場所は `main.lua` でも辞書の Lua ブロックでもよい（[既定ハンドラと上書き](#既定ハンドラと上書き)）。
+
+### 空のシーンで反応を止める
+
+見つかったショートカットのシーンが何も出力しなければ、204 No Content を返し、それより下の段は探さない。本文の無いシーンを部位の名前で書くと、その部位では反応しなくなる。
+
+```pasta
+＃ 閉じるボタンの当たり判定では、その他の反応を鳴らさない
+＊つっつき反応Close
+
+＊つっつき反応その他
+    ぱすた：なあに？
+```
+
 ## シーン関数フォールバック
 
-`REG` にハンドラが無いイベントは、イベント名を検索キーにしてシーンを探し、見つかったシーンを実行する。既定の OnBoot ハンドラも同じ動作をする。
+鎖のハンドラが無いか全部見送り、`REG` にもハンドラが無いイベントは、イベント名を検索キーにしてシーンを探し、見つかったシーンを実行する。既定の OnBoot ハンドラも同じ動作をする。
 
 ```text
 イベント到着
+  ↓
+REG:register で重ねたハンドラ（鎖）を新しい順に呼ぶ
+  ├─ どれかが真の値を返した → そこで止めて、戻り値から応答（鎖の戻り値の表のとおり）
+  └─ 鎖が無い・全部見送った
   ↓
 REG[イベント名] がある？
   ├─ ある → ハンドラを実行 → 戻り値から応答（REG の戻り値の表のとおり）
@@ -457,7 +1216,8 @@ REG[イベント名] がある？
 
 - シーンの探し方は、Call と同じ 5 段の検索である（[スコープ解決アルゴリズム](https://ekicyou.github.io/pasta/grammar/call-jump.html#スコープ解決アルゴリズム)）。イベントの開始時点では実行中のグローバルシーンが無いため、3 段目以降（act のメソッド・`GLOBAL` テーブル・すべてのグローバルシーン）から探される。
 - グローバルシーンは前方一致で探される。同名のシーンを複数定義すると、シャッフル＆順次消費で 1 つが選ばれる。`＊OnBoot朝` のように、イベント名で始まる名前のシーンも候補になる。
-- 見つかったシーンはコルーチンとして実行され、出力が `Value` になる。シーンがチェイントークで中断した場合、残りは次の OnTalk の機会に出力される（[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)）。
+- 候補の条件は、Reference と日時の変数が入った `act` の変数で評価する（[条件で候補を絞る](https://ekicyou.github.io/pasta/grammar/block-structure.html#条件で候補を絞る)）。名前に合うシーンはあっても条件を満たす候補が無ければ、見つからないときと同じく 204 No Content を返す。失敗表記は出さない。
+- 見つかったシーンはコルーチンとして実行され、出力が `Value` になる。シーンがチェイントークで中断した場合、残りは次の自然なおしゃべり（仮想ディスパッチャが起こす OnTalk）の機会に出力される（[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)）。
 
 DSL で書いたシーンは、イベント名と同じ名前にするだけでそのイベントに応答する。
 
@@ -484,30 +1244,45 @@ OnBoot = ["起動"]
     ぱすた：こんにちは。
 ```
 
-この例の `＊起動` は `OnBoot` という名前で登録され、OnBoot のシーンとして実行される。`[scene.alias]` を書くと既定の表（`OnTalk = ["会話"]`）は丸ごと置き換わるため、`＊会話` をランダムトークに使い続けるには `OnTalk = ["会話"]` も書く。
+この例の `＊起動` は `OnBoot` という名前で登録され、OnBoot のシーンとして実行される。`[scene.alias]` は書いたキーの既定の別名だけを置き換え、書かなかったキーの既定の別名は残す。この例の `OnTalk = ["会話"]` の行は、既定と同じなので省いてもよい。
 
 ## エラーハンドリング
 
-イベントの処理全体（コールバックの再開・`REG` のハンドラ・シーンの実行）は、SHIORI のリクエスト処理関数の中で `xpcall` により保護されている。エラーが起きると 500 Internal Server Error を返し、`X-Error-Reason` ヘッダにエラーメッセージの最初の行を入れる。エラーの値が文字列でないときは `"Unknown error"` になる。
+イベントの処理全体（コールバックの再開・`REG` のハンドラ・シーンの実行）は、SHIORI のリクエスト処理関数の中で `xpcall` により保護されている。エラーが起きて処理が止まると（止まるエラー）、`X-Error-Reason` ヘッダにエラーメッセージの最初の行を入れた応答を返す。エラーの値が文字列でないときは `"Unknown error"` になる。応答の形は、`pasta.toml` の `[logging]` の `balloon_warning` で変わる。
+
+- 表記を出す設定（既定）: 200 OK を返し、`Value` に、エラーまでに積んだ台詞と、その後に止まった理由の表記（`【スクリプトのエラー：止まった場所（エラー文）】`）を入れる。止まった理由はバルーンに出る。
+- 表記を出さない設定（`balloon_warning = false`）: これまでどおり、`Value` の無い 500 Internal Server Error を返す。バルーンには何も出ないので、`X-Error-Reason` の行とログの警告で理由を見る。
+
+`scripts/main.lua` に次のハンドラを書いた例を示す（ヘッダは抜粋）。
 
 ```lua
+local REG = require("pasta.shiori.event.register")
+
 REG.OnBoot = function(act)
     error("何かがおかしい")
 end
--- 応答: SHIORI/3.0 500 Internal Server Error
---       X-Error-Reason: （発生位置）: 何かがおかしい
+-- 応答（表記を出す設定。既定）:
+--   SHIORI/3.0 200 OK
+--   Value: 【スクリプトのエラー：OnBoot（scripts\\main.lua:4: 何かがおかしい）】\e
+--   X-Error-Reason: （発生位置）: 何かがおかしい
+-- 応答（balloon_warning = false）:
+--   SHIORI/3.0 500 Internal Server Error
+--   X-Error-Reason: （発生位置）: 何かがおかしい
 ```
 
-- `error("…")` のメッセージには、通常、発生位置（ファイル名と行番号）が前に付く。
-- シーンの実行中にエラーが起きた場合も 500 になり、そのシーンは再開されない。
-- 500 応答の読み方は [ゴーストが起動しない・喋らないとき](startup.md#4-ゴーストが起動しない喋らないとき) を参照。
+- `error("…")` のメッセージには、通常、発生位置（ファイル名と行番号）が前に付く。`X-Error-Reason` には Lua のエラー文の最初の行がそのまま入り、中身は表記を出すかどうかで変わらない。
+- 表記の中の場所は、ゴーストのフォルダーから見た形に直して出す。`Value` の `\\` はさくらスクリプトで `\` を表す書き方で、バルーンには `scripts\main.lua:4:` と出る。
+- シーンの実行中にエラーが起きた場合も同じで、表記の止まった場所はシーンの名前になる。止まったシーンは再開されない。
+- ID が `On` で始まらない要求（`version` などのリソースの要求）と NOTIFY の要求では、設定にかかわらず表記を出さない。
+- 表記の形・止まった場所の示し方・出る応答の詳細は [止まるエラーの表記](https://ekicyou.github.io/pasta/reference/runtime-failures.html#止まるエラーの表記)、設定は [表記の切り替え](https://ekicyou.github.io/pasta/reference/runtime-failures.html#表記の切り替え) を参照。
+- ゴーストの読み込みに失敗しているときの 500 応答（表記は出ない）の読み方は [ゴーストが起動しない・喋らないとき](startup.md#4-ゴーストが起動しない喋らないとき) を参照。
 
 ## 仮想ディスパッチャ
 
 OnTalk（ランダムトーク）と OnHour（時報）は、ベースウェアが送るイベントではない。OnSecondChange の既定ハンドラが呼ぶ仮想ディスパッチャが、条件を判定して発行する「仮想イベント」である。発行されたシーンの出力は、その OnSecondChange への応答になる。
 
 - 仮想イベントは `REG` を通らず、シーンを直接探して実行する。`REG.OnTalk`・`REG.OnHour` を登録しても呼ばれない。
-- 状態（次の正時・次のトーク時刻）は、SHIORI の load から unload までの間だけ保たれる。unload で Lua の実行環境ごと破棄され、次の load で初めからになる。
+- 状態（次の正時・次のトーク時刻・前に見た時刻の飛びの通し番号）は、SHIORI の load から unload までの間だけ保たれる。unload で Lua の実行環境ごと破棄され、次の load で初めからになる。
 
 ```lua
 local dispatcher = require("pasta.shiori.event.virtual_dispatcher")
@@ -527,7 +1302,7 @@ local co = dispatcher.dispatch(act)
 
 1. `act.req.date` が無ければ `nil` を返す。
 2. `act.req.status` に[ブロック対象のキーワード](#ブロック対象-status-キーワード)が含まれていれば `nil` を返す（`is_blocked` で判定）。
-3. デバッグの[シーン再生](https://ekicyou.github.io/pasta/debug/dev-actions.html#シーン再生-シーンを実行)で再生を求められたシーンがあれば、そのシーンを返す。このときに限り、2 の判定を 1 回だけ無視する。
+3. [自動トークを止めている](#自動トークを止めている間)なら `nil` を返す。
 4. OnHour を判定する（[check_hour](#check_houract)）。発行するならそのシーンを返す。
 5. OnTalk を判定する（[check_talk](#check_talkact)）。
 
@@ -548,6 +1323,20 @@ local co = dispatcher.dispatch(act)
 | `minimizing` | 最小化中 | バルーンが表示されていない |
 
 ブロックされた OnHour は、ブロックが解けた最初の OnSecondChange で発行される。
+
+### 自動トークを止めている間
+
+[`＞自動トーク停止`](https://ekicyou.github.io/pasta/grammar/call-jump.html#自動トーク停止自動トーク再開)で止めている間は、`dispatch` は OnHour・OnTalk の判定に進まず、止まっているシーンの続き（チェイントークで中断したシーンの残り）も返さない。待っている続きは捨てない。
+
+Status による抑止とは、時報の扱いが違う。
+
+- Status による抑止: 抑止が解けた最初の OnSecondChange で、その間に過ぎた正時の時報を出す。
+- 自動トークの停止: 止めている間に過ぎた正時の時報は、再開した後にも出さない。
+
+`＞自動トーク再開` で再開すると、仮想ディスパッチャの時計を決め直す（`restart_timers(act)`）。
+
+- 次のトーク時刻を未設定に戻す。再開した後の最初の [check_talk](#check_talkact) が、そこから間隔を数え直す。
+- 次の正時を、再開した時刻の次の正時にする（今の値より後になるときだけ。仮想時刻の基準が変わっていれば置き換える）。`act.req.date` が無いときは未設定に戻し、次の [check_hour](#check_houract) が決める。
 
 ### is_blocked(status)
 
@@ -573,18 +1362,19 @@ end
 
 ### OnHour
 
-正時（毎時 0 分 0 秒）を過ぎた最初の OnSecondChange で、時報のシーンを発行する。シーンは次の 4 つの候補を順に探し、最初に見つかった候補を実行する。
+正時（毎時 0 分 0 秒）を過ぎた最初の OnSecondChange で、時報のシーンを発行する。正時は SSP の仮想時刻で数える（[OnPastaClock](#onpastaclock仮想時刻の読み取り)）。仮想時刻を使っていなければ、OS の時計で数える。シーンは次の 4 つの候補を順に探し、最初に見つかった候補を実行する。
 
 1. `時報{HH}`（時刻別のシーン。例: `時報12` は正午専用）
 2. `OnHour{HH}`（時刻別のシーン、英語名）
 3. `時報その他`（汎用の時報シーン）
 4. `OnHourOther`（汎用の時報シーン、英語名）
 
-- `{HH}` は `act.req.date.hour` を 0 埋めした 2 桁（`00`〜`23`）である。
+- `{HH}` は、仮想時刻の「時」を 0 埋めした 2 桁（`00`〜`23`）である。仮想時刻を使っていなければ `act.req.date.hour` と同じである。
 - 候補の探し方は[シーン関数フォールバック](#シーン関数フォールバック)と同じ（前方一致）。
-- 4 つの候補がどれも無ければ、何も発行しない。
+- ある候補の名前のシーンがあっても、条件を満たすものが無ければ、次の候補を試す。
+- 4 つの候補がどれも無ければ（どれも条件を満たさないときも）、時報は発行せず、その回は OnTalk の判定へ進む（[check_talk](#check_talkact)）。
 - `OnHour` という名前そのものは候補に無い。`＊OnHour` という名前のシーンは時報では実行されない。
-- 候補を探す前に、[日時変数](https://ekicyou.github.io/pasta/grammar/variables.html#日時変数)（`＄時` など）に値が入る。
+- 候補を探す前に、[日時変数](https://ekicyou.github.io/pasta/grammar/variables.html#日時変数)（`＄時` など）に仮想の日時の値が入る。
 
 ```pasta
 ＊時報12
@@ -604,16 +1394,21 @@ OnHour の判定と発行を行う。発行するシーンのコルーチンか 
 local co = dispatcher.check_hour(act)
 ```
 
+- 現在時刻は、仮想時刻（OS の時計にずれを足した時刻）である。
 - 最初の呼び出しでは、次の正時を計算して記録するだけで、何も発行しない。
+- 前の呼び出しから[時刻の飛び](#時刻の飛び)があれば、次の正時を決め直す。決め直しは現在時刻の 70 秒前から数えるので、70 秒ほど前までに過ぎた正時は、1 回だけ時報になる。
 - 現在時刻が記録した正時に達していれば、次の正時を記録し直してから、4 つの候補でシーンを探す。
+- 一度に何時間分も進んでいても、時報は 1 回だけである。`{HH}` は進んだ先の時になる。
 
 ### OnTalk
 
 一定の間隔で、ランダムトークのシーン（`OnTalk`）を発行する。
 
 - 同名の `＊OnTalk` を複数定義すると、シャッフル＆順次消費で 1 つが選ばれる。前方一致で探すため、`OnTalk` で始まる名前のシーンも候補になる。
-- `＊会話` も候補になる。既定の別名表（`OnTalk = ["会話"]`）により、`＊会話` は `OnTalk` という名前で登録されるためである。`＊OnTalk` と `＊会話` を混ぜて書いても、すべてが同じ名前の候補になり、シャッフル＆順次消費で 1 つが選ばれる。`＊会話・朝` のように別名で始まるだけの名前は候補にならない（[シーン名の別名](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の別名)）。
-- 前のシーンがチェイントークで中断していれば、新しい OnTalk のシーンの代わりに、その続きを出力する（[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)）。
+- `＊会話` も候補になる。既定の別名表の `OnTalk = ["会話"]` により、`＊会話` は `OnTalk` という名前で登録されるためである。`＊OnTalk` と `＊会話` を混ぜて書いても、すべてが同じ名前の候補になり、シャッフル＆順次消費で 1 つが選ばれる。`＊会話・朝` のように別名で始まるだけの名前は候補にならない（[シーン名の別名](https://ekicyou.github.io/pasta/grammar/call-jump.html#シーン名の別名)）。
+- 前のシーンがチェイントークで中断していれば、新しい OnTalk のシーンの代わりに、その続きを出力する（[チェイントーク](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク)）。続きを出すのは、仮想ディスパッチャが起こす自然なおしゃべりだけである。
+- 外から起こした `OnTalk`（`\![raise,OnTalk]` や開発用パレットなど）は、ベースウェアが送る通常のイベントとして扱われ、シーン関数フォールバックで新しいトークを始める。待っている続きは、ほかのイベントと同じく、そのシーンが台詞（字のある台詞か選択肢）を出したときだけ捨てられ、`＊チェイントーク中断` があればその台詞が代わりに出る（[続きが捨てられるとき](https://ekicyou.github.io/pasta/grammar/call-jump.html#続きが捨てられるとき)・[チェイントーク中断](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク中断)）。
+- act を通さずに Lua で作ったコルーチンをハンドラが返したときは、出力が空でなければ台詞を出したものとして続きを捨てるが、[`＊チェイントーク中断`](https://ekicyou.github.io/pasta/grammar/call-jump.html#チェイントーク中断) の台詞は付かない。
 
 ```pasta
 ＊OnTalk
@@ -633,9 +1428,29 @@ OnTalk の判定と発行を行う。発行するシーンのコルーチンか 
 local co = dispatcher.check_talk(act)
 ```
 
+- トークの間隔は、[時刻の飛び](#時刻の飛び)を差し引いた時計で数える。仮想時刻を進めても、ランダムトークは早まらない。
 - 最初の呼び出しでは、次のトーク時刻（現在時刻に `talk_interval_min`〜`talk_interval_max` の範囲の乱数秒を足した時刻）を決めるだけで、何も発行しない。
-- 現在時刻が次のトーク時刻に達していても、次の正時までの残りが `hour_margin` 秒未満のときは発行しない（時報を優先する）。
+- 現在時刻が次のトーク時刻に達していても、次の正時までの残りが `hour_margin` 秒未満のときは発行しない（時報を優先する）。この残りは、正時と同じく仮想時刻で数える。
 - 発行するときは、次のトーク時刻を決め直してから、チェイントークの続きか新しい `OnTalk` のシーンを返す。次のトーク時刻は、シーンが見つかったかどうかに関わらず決め直される。
+
+### 時刻の飛び
+
+pasta は、OnSecondChange が届くたびに、前の OnSecondChange からの時刻の差を見る。差が 2 秒より戻ったか 90 秒より進んだら「時刻の飛び」とみなす。開発用パレットの「現在時刻の仮想的変更」で Apply・Reset したときが、これにあたる。
+
+- 飛びがあると、時報の次の正時を決め直す（[check_hour](#check_houract)）。仮想時刻を入れ直しても、余分な時報は出ない。
+- おしゃべりの間隔・撫での判定・コールバックの待ち時間（[get_property](script-api.md#get_propertyname_or_names-timeout-timeout_message)）は、飛びの分を差し引いた時計で数える。仮想時刻を 3 時間進めても、次のおしゃべりまでの残りは変わらない。
+- スリープから復帰した後の最初の差は、飛びとみなさない（`OnSysSuspend` か `OnSysResume` が届いた後の最初の飛び）。時報は 1 回出て、おしゃべりはすぐ出る。
+- `X-Pasta-Time` ヘッダのあるリクエストでは、飛びを見ない。その日時をそのまま使う。
+- 飛びの記録は保存しない。SHIORI の load から unload までの間だけ保たれる。
+
+仮想時刻を使わずに OS の時計を手で動かしたときも、90 秒より進めたか 2 秒より戻せば飛びになる。
+
+| 操作 | 時報 | おしゃべり |
+| ---- | ---- | ---------- |
+| 10 時 30 分から 9 時 30 分へ戻す | 10 時に出る | 残りの間隔を待つ |
+| 10 時 30 分から 12 時 10 分へ進める | 13 時まで出ない | 残りの間隔を待つ |
+
+SSP が 90 秒より長く OnSecondChange を送らなかったとき（デバッガでゴーストを止めたときなど）も、その間の時刻の差は飛びになる。止まっている間にまたいだ正時の時報は出ない。
 
 ### pasta.toml 設定
 
@@ -645,7 +1460,7 @@ local co = dispatcher.check_talk(act)
 | ---- | -- | ------ | ---- |
 | `talk_interval_min` | 整数 | `180` | ランダムトークの最小間隔（秒） |
 | `talk_interval_max` | 整数 | `300` | ランダムトークの最大間隔（秒） |
-| `hour_margin` | 整数 | `30` | 正時の何秒前からランダムトークを控えるか（秒） |
+| `hour_margin` | 整数 | `30` | 正時の何秒前からランダムトークを控えるか（秒）。数でない値・NaN・無限大は `30` になる |
 
 ```toml
 [ghost]
@@ -669,7 +1484,7 @@ dispatcher._reset()
 
 -- 内部状態の取得
 local state = dispatcher._get_internal_state()
--- { next_hour_unix = 次の正時の Unix 時刻, next_talk_time = 次のトーク時刻 }
+-- { next_hour_unix = 次の正時の Unix 時刻（仮想時刻）, next_talk_time = 次のトーク時刻, seen_epoch = 前に見た時刻の飛びの通し番号 }
 
 -- シーンを探して実行する関数の差し替え（nil を渡すと解除）
 dispatcher._set_scene_executor(function(event_name, act)

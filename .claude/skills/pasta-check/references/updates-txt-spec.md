@@ -1,7 +1,7 @@
 # updates.txt 仕様
 
 SSP（伺かベースウェア）のネットワーク更新ファイル仕様。
-pasta_check の `generate_update_files()` が自動生成する（release の段 4）。
+pasta_check の `generate_update_files()` が自動生成する（release の段 5）。
 
 ## フォーマット (Version 3)
 
@@ -82,7 +82,7 @@ pasta_check は UTF-8 の `install.txt`・`descript.txt` だけを扱い、文�
 
 ### エラー
 
-次の場合は `Error: ` に続けてメッセージを表示し、終了コード 1 で終了する。段 5 に進まないため nar は作成しない。最初に見つかった 1 件だけを表示する。
+次の場合は `Error: ` に続けてメッセージを表示し、終了コード 1 で終了する。段 6 に進まないため nar は作成しない。最初に見つかった 1 件だけを表示する。
 
 | 条件 | メッセージ |
 |------|-----------|
@@ -121,10 +121,10 @@ Warning: bundled balloon "<フォルダ>": descript.txt has no homeurl; the ball
 
 ### 進捗表示
 
-段 4 では、生成したバルーン用 `updates.txt` ごとにフォルダと登録件数を表示する。
+段 5 では、生成したバルーン用 `updates.txt` ごとにフォルダと登録件数を表示する。
 
 ```
-[4/5] Generating update files...
+[5/6] Generating update files...
   Generated updates.txt (52 entries)
   Generated balloon/emo2-kakukaku/updates.txt (20 entries)
 ```
@@ -151,8 +151,8 @@ file,descript.txt\x01f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3\x01size=789\x01date=2026-0
 
 ## 実装箇所
 
-- 生成: `crates/pasta_check/src/update_files.rs`
-- 同梱バルーンの判定: `crates/pasta_check/src/balloon.rs`
+- 生成: `pasta_check` クレートの `src/update_files.rs`
+- 同梱バルーンの判定: `pasta_check` クレートの `src/balloon.rs`
 - MD5 計算: `md5` クレート
 
 ## SSP 参考仕様
