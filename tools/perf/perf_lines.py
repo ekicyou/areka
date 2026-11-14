@@ -83,7 +83,7 @@ def read_text_lines(path: Path, what: str, fail: Fail) -> list[str]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        raise fail(f"{what} を読めません: {path}", [str(exc)]) from exc
+        raise fail(f"cannot read {what}: {path}", [str(exc)]) from exc
     text = raw.decode("utf-8-sig", errors="replace")
     return [strip_ansi(line.rstrip("\r")) for line in text.split("\n")]
 
@@ -107,42 +107,42 @@ def read_cpu_csv(
     行番号は空行も含めて 1 から数える。有限でない CPU 値（NaN・inf）は壊れた行。
     ファイル自体を読めないときは `read_fail`（省けば `fail`）で起こす。
     """
-    lines = read_text_lines(path, "CPU 時系列（cpu.csv）", read_fail or fail)
+    lines = read_text_lines(path, "CPU series (cpu.csv)", read_fail or fail)
     rows = [(no, row) for no, row in enumerate(csv.reader(lines), start=1) if row]
     if not rows:
-        raise fail(f"CPU 時系列 CSV が空です: {path}", [])
+        raise fail(f"cpu.csv is empty: {path}", [])
 
     got = tuple(cell.strip() for cell in rows[0][1])
     if got != header:
         raise fail(
-            "CPU 時系列 CSV のヘッダが契約と違います（採取スクリプトの版ずれの疑い）。",
-            [f"期待: {','.join(header)}", f"実際: {','.join(got)}"],
+            "cpu.csv header differs from the contract (capture script version mismatch?)",
+            [f"expected: {','.join(header)}", f"actual: {ascii(','.join(got))}"],
         )
 
     samples: list[CpuSample] = []
     broken: list[str] = []
     for line_no, row in rows[1:]:
         if len(row) < 2:
-            broken.append(f"{line_no} 行目: 列が足りません（{row!r}）")
+            broken.append(f"line {line_no}: too few columns ({ascii(row)})")
             continue
         at = parse_timestamp(row[0].strip() + " ")
         if at is None:
-            broken.append(f"{line_no} 行目: 時刻を読めません（{row[0]!r}）")
+            broken.append(f"line {line_no}: unreadable timestamp ({ascii(row[0])})")
             continue
         try:
             percent = float(row[1].strip())
         except ValueError:
-            broken.append(f"{line_no} 行目: CPU 値が数値ではありません（{row[1]!r}）")
+            broken.append(f"line {line_no}: CPU value is not a number ({ascii(row[1])})")
             continue
         if not math.isfinite(percent):
-            broken.append(f"{line_no} 行目: CPU 値が有限の数ではありません（{row[1]!r}）")
+            broken.append(f"line {line_no}: CPU value is not finite ({ascii(row[1])})")
             continue
         samples.append(CpuSample(at=at, percent=percent))
 
     if broken:
-        raise fail(f"CPU 時系列 CSV に読めない行が {len(broken)} 本あります。{broken_note}", broken[:20])
+        raise fail(f"cpu.csv has {len(broken)} unreadable rows{broken_note}", broken[:20])
     if not samples:
-        raise fail(f"CPU 時系列 CSV に観測が 1 点もありません: {path}", [])
+        raise fail(f"cpu.csv has no sample: {path}", [])
     return samples
 
 

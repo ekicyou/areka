@@ -2,8 +2,8 @@ title = CPU 値が NaN の行がある cpu.csv（壊れた観測として止め�
 exit = 4
 argv = --stage process
 
-stderr_substr = 有限の数ではありません
-stderr_substr = 3 行目
+stderr_substr = CPU value is not finite
+stderr_substr = line 3:
 
 note = float("nan") は例外を出さずに通るので、有限性を確かめないと NaN が定常平均・p95・
 note = 最大へ入り、順位表が静かに壊れる。壊れた観測は順位表を出さず exit 4 で止める。

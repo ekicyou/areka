@@ -64,7 +64,7 @@ run.log・cpu.csv の指定は要らない。詳しくは「自己較正（--sel
     1  不合格（判定モード専用。集計モードは 1 を返さない）
     2  判定不能——必要ログ種の欠落・段フィールドの欠落・観測ゼロ・定常状態が空。
        部分集計は一切出さない（要件 2.5。沈黙を合格として読ませない）
-    3  引数不正・ファイル読取不能
+    3  引数不正・ファイル読取不能・想定外の例外（traceback を stderr へ）
 
 `--selftest` も同じ体系に載せる: `0`=全 fixture が期待どおり／`1`=1 つでも食い違い（＝道具が
 壊れている＝不合格）／`3`=fixture 置き場そのものが読めない（引数・ファイルの問題）。`2` は
@@ -118,6 +118,7 @@ from __future__ import annotations
 import argparse
 import functools
 import sys
+import traceback
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -175,7 +176,7 @@ EXIT_CODE_TABLE = (
     ("0", "合格（適用される判定式が全て合格。適用外だけで 0 にはしない）"),
     ("1", "不合格（判定式のいずれかが確定的に不合格）"),
     ("2", "判定不能（観測ゼロ・必要ログ種の欠落・定常状態が空・データ不足）"),
-    ("3", "引数不正・ファイル読取不能"),
+    ("3", "引数不正・ファイル読取不能・想定外の例外"),
 )
 
 #: 自己較正（`--selftest`）の較正値。集計・判定の数値には一切関与しないため、
@@ -881,7 +882,7 @@ def unquote_field(value: str) -> str:
 
 def scan_log(path: Path) -> LogScan:
     """run.log を 1 度だけなめて必要なものを全部集める。"""
-    lines = read_text_lines(path, "実走ログ（run.log）", bad_input)
+    lines = read_text_lines(path, "run log (run.log)", bad_input)
     scan = LogScan()
     bad_lines: list[str] = []
 
@@ -960,10 +961,8 @@ def scan_log(path: Path) -> LogScan:
 
     if bad_lines:
         raise inconclusive(
-            "perf サマリ行に必要なフィールドが揃っていません。"
-            f"欠落のある行が {len(bad_lines)} 本あります。部分集計は出しません（要件 2.5）。",
-            bad_lines[:20]
-            + ([f"…ほか {len(bad_lines) - 20} 本"] if len(bad_lines) > 20 else []),
+            f"{len(bad_lines)} perf summary lines lack required fields (requirement 2.5)",
+            bad_lines[:20] + ([f"... and {len(bad_lines) - 20} more"] if len(bad_lines) > 20 else []),
         )
     return scan
 
@@ -977,11 +976,11 @@ def _parse_perf_line(
 
     missing = [name for name in J_PERF_REQUIRED_FIELDS if name not in fields]
     if missing:
-        bad_lines.append(f"{line_no} 行目: 欠落フィールド {', '.join(missing)}")
+        bad_lines.append(f"line {line_no}: missing fields {', '.join(missing)}")
         return None
 
     if at is None:
-        bad_lines.append(f"{line_no} 行目: 行頭の時刻を読めません（コマ適用間隔が出せません）")
+        bad_lines.append(f"line {line_no}: no leading timestamp (frame intervals cannot be computed)")
         return None
 
     numbers: dict[str, int] = {}
@@ -989,14 +988,12 @@ def _parse_perf_line(
         try:
             numbers[name] = int(fields[name])
         except ValueError:
-            bad_lines.append(
-                f"{line_no} 行目: {name} が整数ではありません（値 {fields[name]!r}）"
-            )
+            bad_lines.append(f"line {line_no}: {name} is not an integer (value {ascii(fields[name])})")
             return None
 
     raw_hit = fields["cache_hit"]
     if raw_hit not in ("true", "false"):
-        bad_lines.append(f"{line_no} 行目: cache_hit が true/false ではありません（値 {raw_hit!r}）")
+        bad_lines.append(f"line {line_no}: cache_hit is not true/false (value {ascii(raw_hit)})")
         return None
 
     return PerfRecord(
@@ -1021,7 +1018,7 @@ def _parse_perf_line(
 
 def read_run_meta(path: Path) -> list[tuple[str, list[tuple[str, str]]]]:
     """`[見出し]` と `名前 = 値` の並びを、順序を保ったまま読む。"""
-    lines = read_text_lines(path, "実行条件（run-meta.txt）", bad_input)
+    lines = read_text_lines(path, "run conditions (run-meta.txt)", bad_input)
     sections: list[tuple[str, list[tuple[str, str]]]] = []
     current: list[tuple[str, str]] = []
     title = "(見出しなし)"
@@ -1042,8 +1039,8 @@ def read_run_meta(path: Path) -> list[tuple[str, list[tuple[str, str]]]]:
         sections.append((title, current))
     if not sections:
         raise inconclusive(
-            f"実行条件（run-meta.txt）から測定マシンの条件を読み取れません: {path}",
-            ["要件 4.5 はマシン条件の併記を求めており、条件なしの集計は出しません。"],
+            f"run-meta.txt has no machine conditions: {path}",
+            ["requirement 4.5 needs the machine conditions in the report"],
         )
     return sections
 
@@ -2281,7 +2278,7 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
     #       現れないので、除外一覧にも判定対象にも出てこない）
     #   (b) 定常状態には現れるが、判定窓に間隔を 1 本も残していない
     # 他の系列がどれだけ上限内でも、対象と決めた系列を測れていないのだから合格ではない。
-    # 判定対象の絞り込みより **前** に置く（表が空でもこの理由が出るように）。
+    # 理由は判定対象の絞り込みより **前** に集める（表が空でもこの理由が出るように）。
     steady_series = {record.series_key for record in agg.steady_perf}
     unmeasured: list[str] = []
     for key in FRAME_INTERVAL_JUDGED_SERIES:
@@ -2312,23 +2309,7 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             "測れていません:"
         )
         reasons.extend(f"  - {text}" for text in unmeasured)
-        reasons.append(
-            "明示指定した対象を測れていないので、他の系列が上限内でも走行の合格としては"
-            "読ませません（判定不能）。明示指定は all-or-nothing であり、"
-            "指定した系列が観測されていることまで含めて初めて合格が意味を持ちます。"
-        )
-        return result(
-            status=STATUS_INCONCLUSIVE,
-            measured=f"明示指定 {len(unmeasured)} 系列を測れていない",
-            observations=(
-                f"判定窓の系列 {len(table)} 本／明示指定 "
-                f"{len(FRAME_INTERVAL_JUDGED_SERIES)} 系列のうち "
-                f"{len(unmeasured)} 系列が未計測"
-            ),
-            reasons=reasons,
-        )
 
-    # 表・判定対象が空のときは上の関門が明示指定の系列を未計測として先に返している。
     judged: dict[tuple[str, str], list[float]] = {}
     excluded: list[str] = []
     #: 明示指定した系列のうち、間隔が FRAME_INTERVAL_MIN_SAMPLES に満たないもの。
@@ -2350,10 +2331,10 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             )
 
     # 判定窓で消えた系列も除外として名指しする（表に鍵が無いので上の走査には現れない）。
-    # 明示指定した系列がここに来ることは無い——上の関門で先に判定不能を返しているため。
+    # 明示指定した系列は関門の未観測に名指し済みなので、ここでは数えない。
     # 窓 A の注記（note）を捨てないこと: 消えた系列が「遅いから消えた」のか「速いが散発的な
     # だけ」なのかは窓 A の p95 を見ないと分からず、README §12 項目 1 の見直しの材料になる。
-    for key, note in vanished:
+    for key, note in (v for v in vanished if v[0] not in FRAME_INTERVAL_JUDGED_SERIES):
         excluded.append(
             f"{key[0]} / surface_id={key[1]}（判定窓の間隔 0 本）: "
             f"FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。{note}"
@@ -2421,6 +2402,24 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             measured="  ".join(measured_parts),
             observations=observations,
             reasons=reasons + [f"上限を超えた系列: {'・'.join(failures)}"],
+        )
+
+    # 【不合格が先】未観測は関門で集めるだけにし、上限越えを確かめた後で判定不能にする（#8）。
+    if unmeasured:
+        reasons.append(
+            "明示指定した対象を測れていないので、他の系列が上限内でも走行の合格としては"
+            "読ませません（判定不能）。明示指定は all-or-nothing であり、"
+            "指定した系列が観測されていることまで含めて初めて合格が意味を持ちます。"
+        )
+        return result(
+            status=STATUS_INCONCLUSIVE,
+            measured=f"明示指定 {len(unmeasured)} 系列を測れていない",
+            observations=(
+                f"判定窓の系列 {len(table)} 本／明示指定 "
+                f"{len(FRAME_INTERVAL_JUDGED_SERIES)} 系列のうち "
+                f"{len(unmeasured)} 系列が未計測"
+            ),
+            reasons=reasons,
         )
 
     # 明示指定した系列の観測が薄すぎるときは合格を返さない（不合格は上で既に返している）。
@@ -3027,18 +3026,16 @@ def check_required(scan: LogScan, cpu: list[CpuSample], run_log: Path) -> None:
     missing: list[str] = []
     if not scan.perf:
         missing.append(
-            f"perf サマリ行（固定文言 {J_PERF_LINE_MESSAGE!r}）が 1 本もありません。"
-            " RUST_LOG に areka_emo_present=debug が乗っていない疑いがあります。"
+            f"no perf summary line (message {ascii(J_PERF_LINE_MESSAGE)}); "
+            "RUST_LOG may lack areka_emo_present=debug"
         )
     if scan.show_count == 0:
-        missing.append(
-            f"表示成立点の行（固定文言 {J_SHOW_LINE_MESSAGE!r}）が 1 本もありません。"
-        )
+        missing.append(f"no show line (message {ascii(J_SHOW_LINE_MESSAGE)})")
     if not cpu:
-        missing.append("CPU 時系列に観測が 1 点もありません。")
+        missing.append("no CPU sample")
     if missing:
         raise inconclusive(
-            f"必要ログ種が欠けています（{run_log}）。部分集計は出しません（要件 2.5）。",
+            f"required log kinds are missing ({run_log}; requirement 2.5)",
             missing,
         )
 
@@ -3074,29 +3071,26 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
 
     if require_build and not args.build:
         raise bad_input(
-            "判定モードでは --build dev|release の明示が要ります。",
+            "verdict mode needs --build dev|release",
             [
-                "要件 4.3/4.4 により、適用する判定式がビルド種別で変わります"
-                "（⑴〜⑶は両ビルド・⑷は release のみ）。",
-                "run-meta.txt からの推定で判定範囲を決めると、取り違えが黙って通ります。",
+                "requirements 4.3/4.4: the formulas depend on the build (1-3 both, 4 release only)",
+                "guessing the build from run-meta.txt would let a mix-up pass silently",
             ],
         )
 
-    for path, what in ((run_log, "実走ログ"), (cpu_csv, "CPU 時系列")):
+    for path, what in ((run_log, "run log"), (cpu_csv, "CPU series")):
         if not path.is_file():
-            raise bad_input(f"{what}のファイルがありません: {path}")
+            raise bad_input(f"{what} file not found: {path}")
     if not meta_path.is_file():
         # 明示指定されたパスが無いのは引数の誤り（3）。自動探索で見つからないのは
         # 走行に条件ファイルが無いということ＝欠落（2）。両者は直し方が違うので分ける。
         if meta_given:
-            raise bad_input(f"--meta が指すファイルがありません: {meta_path}")
+            raise bad_input(f"--meta file not found: {meta_path}")
         raise inconclusive(
-            f"実行条件（run-meta.txt）が見つかりません: {meta_path}",
+            f"run-meta.txt not found: {meta_path}",
             [
-                "要件 4.5 は測定マシンの条件をレポートへ併記することを求めており、",
-                "条件を書けない集計は出しません。",
-                "既定では cpu.csv と同じディレクトリを探します。別の場所にある場合は",
-                "--meta <パス> で指定してください。",
+                "requirement 4.5 needs the machine conditions in the report",
+                "it is looked up next to cpu.csv; pass --meta <path> if it is elsewhere",
             ],
         )
 
@@ -3104,7 +3098,7 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
     scan = scan_log(run_log)
     cpu = read_cpu_csv(
         cpu_csv, J_CPU_CSV_HEADER, inconclusive,
-        broken_note="部分集計は出しません（要件 2.5）。", read_fail=bad_input,
+        broken_note=" (requirement 2.5)", read_fail=bad_input,
     )
     check_required(scan, cpu, run_log)
 
@@ -3112,8 +3106,7 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
     build = args.build or meta_build
     if args.build and meta_build and args.build != meta_build:
         raise bad_input(
-            "--build と run-meta.txt の build が食い違っています（別の走行のログを"
-            "組み合わせている疑い）。",
+            "--build differs from run-meta.txt build (logs of another run?)",
             [f"--build = {args.build}", f"run-meta.txt build = {meta_build}"],
         )
 
@@ -3124,14 +3117,12 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
         # 枝へ入れず、切れた長時間走行が黙って「適用外・終了コード 0」になる（build だけ突合する非対称）。
         # 終了コードは 2: run-meta.txt が無い場合と同じく「走行条件を書けない＝データ不足」で、引数の誤り(3)ではない。
         raise inconclusive(
-            f"run-meta.txt の profile が short・long のどちらでもありません（{meta_profile!r}）: {meta_path}",
+            f"run-meta.txt profile is neither short nor long ({ascii(meta_profile)}): {meta_path}",
             [
-                "判定モードは profile で判定式⑷b の適用条件を決めます"
-                f"（LONG_RUN_MIN_SPAN_SEC={LONG_RUN_MIN_SPAN_SEC:.0f} 秒に届かない走行のうち、"
-                "profile=long は途中で切れた長時間走行として判定不能にする）。",
-                "profile が short・long 以外のまま判定すると、途中で切れた長時間走行が「適用外」として"
-                "黙って終了コード 0 になります（要件 5.1・D7）。",
-                "invoke-perf-run.ps1 は profile を必ず書き出します。手で作った run-meta.txt なら profile = short か long を書いてください。",
+                "verdict mode uses profile for formula 4b: a run shorter than "
+                f"LONG_RUN_MIN_SPAN_SEC={LONG_RUN_MIN_SPAN_SEC:.0f} s with profile=long is inconclusive",
+                "with any other profile a cut-short long run would silently exit 0 (requirement 5.1, D7)",
+                "invoke-perf-run.ps1 always writes profile; a hand-made run-meta.txt needs profile = short or long",
             ],
         )
 
@@ -3268,7 +3259,7 @@ def run_baseline(args: argparse.Namespace) -> int:
     report.line("=" * 78)
     report.line("集計は以上。合否判定（要件 4.2 の判定式⑴〜⑷）と収束判定（要件 5.1）は")
     report.line("--mode verdict が行う。")
-    report.line("=" * 78)
+    report.line(f"JUDGE-PERF RESULT code={EXIT_OK}")  # 最後の行は ASCII の決まった形（D9）
 
     if getattr(args, "emit_metrics", False):
         report.lines.extend(render_metrics(agg))
@@ -3360,8 +3351,7 @@ def run_verdict(args: argparse.Namespace) -> int:
 
     report.line("")
     report.line("=" * 78)
-    report.line(f"判定は以上。終了コード {code}（{summary}）")
-    report.line("=" * 78)
+    report.line(f"JUDGE-PERF RESULT code={code}")  # 最後の行は ASCII の決まった形（D9・総合の語は [7]）
 
     if getattr(args, "emit_metrics", False):
         report.lines.extend(render_metrics(agg))
@@ -3424,16 +3414,13 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
     path = directory / SELFTEST_CASE_FILENAME
     if not path.is_file():
         raise bad_input(
-            f"fixture に {SELFTEST_CASE_FILENAME} がありません: {directory}",
-            [
-                "期待終了コードの書いていない fixture は、走らせても合否を言えません"
-                "（誰にも数えられない fixture を置かないこと）。",
-            ],
+            f"fixture has no {SELFTEST_CASE_FILENAME}: {directory}",
+            ["a fixture without an expected exit code cannot be judged"],
         )
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise bad_input(f"{path} を読めません", [str(exc)]) from exc
+        raise bad_input(f"cannot read {path}", [str(exc)]) from exc
 
     fields: dict[str, str] = {}
     contains: list[str] = []
@@ -3444,7 +3431,7 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
         key, _, value = stripped.partition("=")
         key = key.strip()
         if key not in ("mode", "exit", "build", "twin", "title", "note", "contains", "emit_metrics"):
-            raise bad_input(f"{path} に知らない鍵があります（{key!r}）", ["書き損じの鍵は、その検査を黙って消します。"])
+            raise bad_input(f"unknown key in {path} ({ascii(key)})", ["a misspelt key silently drops its check"])
         if key == "note":  # 人が読む説明。機械は使わない
             continue
         if key == "contains":  # 何度でも書ける（上書きせず積む）
@@ -3455,18 +3442,18 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
     missing = [name for name in ("mode", "exit") if name not in fields]
     if missing:
         raise bad_input(
-            f"{path} に {'・'.join(missing)} がありません",
-            ["必須項目: mode・exit（任意: build・twin・title・note・contains・emit_metrics）"],
+            f"{path} lacks {', '.join(missing)}",
+            ["required: mode, exit (optional: build, twin, title, note, contains, emit_metrics)"],
         )
     if fields["mode"] not in MODES:
         raise bad_input(
-            f"{path} の mode が不正です（{fields['mode']!r}）",
-            [f"指定できるのは {'・'.join(sorted(MODES))} です。"],
+            f"bad mode in {path} ({ascii(fields['mode'])})",
+            [f"allowed: {', '.join(sorted(MODES))}"],
         )
     try:
         expected = int(fields["exit"])
     except ValueError as exc:
-        raise bad_input(f"{path} の exit が整数ではありません（{fields['exit']!r}）") from exc
+        raise bad_input(f"exit in {path} is not an integer ({ascii(fields['exit'])})") from exc
 
     return SelftestCase(
         name=directory.name,
@@ -3484,11 +3471,8 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
 def _selftest_collect(root: Path) -> list[SelftestCase]:
     if not root.is_dir():
         raise bad_input(
-            f"fixture 置き場がありません: {root}",
-            [
-                "自己較正は判定スクリプトと同じ場所の "
-                f"{SELFTEST_FIXTURES_DIRNAME}/ を見ます（相対位置のみ・絶対パスは持ちません）。",
-            ],
+            f"fixture folder not found: {root}",
+            [f"the selftest reads {SELFTEST_FIXTURES_DIRNAME}/ next to this script"],
         )
     cases = [
         _selftest_read_case(child)
@@ -3497,8 +3481,8 @@ def _selftest_collect(root: Path) -> list[SelftestCase]:
     ]
     if not cases:
         raise bad_input(
-            f"fixture が 1 件もありません: {root}",
-            ["fixture の無い自己較正は、何も確かめずに緑を返します（D7）。"],
+            f"no fixture in {root}",
+            ["a selftest without fixtures checks nothing and stays green (D7)"],
         )
     return cases
 
@@ -3687,14 +3671,14 @@ def run_selftest() -> int:
             "parse_fields は後勝ちで上書きするので、先に書いた値が黙って消えます。"
         )
 
-    code = (
-        EXIT_OK
-        if not (
-            mismatches or twin_failed or red_missing or missing_text
-            or vocabulary_failures
-        )
-        else EXIT_FAIL
-    )
+    # 検体では作れない場面（想定外の例外・明示指定 2 系列・最後の行）は差し替えで確かめる（D12）
+    import judge_perf_selftest_inproc  # noqa: E402
+
+    inproc_failures = judge_perf_selftest_inproc.run(sys.modules[__name__])
+    for reason in inproc_failures:
+        report.line(f"  【食い違い】差し替えの較正: {reason}")
+    failed = [*mismatches, *twin_failed, *red_missing, *missing_text, *vocabulary_failures, *inproc_failures]
+    code = EXIT_FAIL if failed else EXIT_OK
     if code == EXIT_OK:
         report.line("  合格・不合格・判定不能・引数不正のいずれも期待どおり再現しました。")
     else:
@@ -3703,9 +3687,8 @@ def run_selftest() -> int:
             "実走の判定に使う前に、どちらが正しいかを決めてください。"
         )
     report.line("")
-    report.line("=" * 78)
-    report.line(f"自己較正は以上。終了コード {code}")
-    report.line("=" * 78)
+    report.line("=" * 78)  # 最後の行は ASCII の決まった形（D9・ok は期待どおりの fixture・ng は食い違いの件数）
+    report.line(f"SELFTEST RESULT ok={len(results) - len(mismatches)} ng={len(failed)}")
     print(report.render())
     return code
 
@@ -3729,8 +3712,8 @@ class Parser(argparse.ArgumentParser):
     """引数不正の終了コードを 3 に揃える（argparse の既定は 2＝判定不能と衝突する）。"""
 
     def error(self, message: str):  # type: ignore[override]
-        sys.stderr.write(f"[judge-perf] 引数が不正です: {message}\n")
-        sys.stderr.write(self.format_usage())
+        sys.stderr.write(f"[judge-perf] bad arguments: {message}\n{self.format_usage()}")
+        sys.stderr.write(f"JUDGE-PERF RESULT code={EXIT_BAD_INPUT}\n")
         raise SystemExit(EXIT_BAD_INPUT)
 
 
@@ -3774,9 +3757,9 @@ def build_parser() -> Parser:
 
 
 def main(argv: list[str]) -> int:
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    try:  # 符号化できない字も消さずに逃がして出す（D9）
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
+        sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[union-attr]
     except (AttributeError, OSError):
         pass
 
@@ -3788,17 +3771,14 @@ def main(argv: list[str]) -> int:
             args.run_log or args.cpu_csv or args.mode or args.build or args.meta
             or args.emit_metrics
         ):
-            parser.error(
-                "--selftest は他の引数と一緒に使えません"
-                "（fixture 側が入力もモードもビルド種別も、--emit-metrics の要否も持っています）"
-            )
+            parser.error("--selftest takes no other arguments (the fixtures carry inputs, mode, build and --emit-metrics)")
         try:
             return run_selftest()
         except JudgeError as exc:
-            sys.stderr.write(f"[judge-perf] 自己較正を開始できません: {exc.message}\n")
+            sys.stderr.write(f"[judge-perf] selftest cannot start: {exc.message}\n")
             for detail in exc.details:
                 sys.stderr.write(f"  - {detail}\n")
-            sys.stderr.write(f"[judge-perf] 終了コード {exc.code}\n")
+            sys.stderr.write(f"JUDGE-PERF RESULT code={exc.code}\n")
             return exc.code
 
     # --selftest でないなら、実走ログ・CPU 時系列・モードは必須である
@@ -3813,20 +3793,21 @@ def main(argv: list[str]) -> int:
         if not value
     ]
     if lacking:
-        parser.error(f"次の指定がありません: {'・'.join(lacking)}")
+        parser.error(f"missing: {', '.join(lacking)}")
 
     try:
         return MODES[args.mode](args)
     except JudgeError as exc:
-        label = {
-            EXIT_INCONCLUSIVE: "判定不能",
-            EXIT_BAD_INPUT: "入力不正",
-        }.get(exc.code, "失敗")
+        label = {EXIT_INCONCLUSIVE: "inconclusive", EXIT_BAD_INPUT: "bad input"}.get(exc.code, "failed")
         sys.stderr.write(f"[judge-perf] {label}: {exc.message}\n")
         for detail in exc.details:
             sys.stderr.write(f"  - {detail}\n")
-        sys.stderr.write(f"[judge-perf] 部分集計は出していません。終了コード {exc.code}\n")
+        sys.stderr.write(f"[judge-perf] no partial report was written\nJUDGE-PERF RESULT code={exc.code}\n")
         return exc.code
+    except Exception:  # 想定外の例外は道具の故障。Python の既定の 1（不合格）と読ませない（#6）
+        traceback.print_exc()
+        sys.stderr.write(f"JUDGE-PERF RESULT code={EXIT_BAD_INPUT}\n")
+        return EXIT_BAD_INPUT
 
 
 if __name__ == "__main__":

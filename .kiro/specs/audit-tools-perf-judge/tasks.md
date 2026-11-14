@@ -92,7 +92,7 @@
   - 終わった姿: M1・M2・C3 が緑で、`is None` に戻すと M1 が 0 で、0 を出す形に戻すと C3 で赤になる
   - _Dispatch: standard — 入力の関門と数の出し方に新しい分岐を足す_
   - _Requirements: 2.1, 4.7, 4.8, 7.1, 7.2_
-- [ ] 6.2 差し替えの較正を作り、想定外の例外・関門の順・最後の行を直す（#6・#8・#24・D9・D12）
+- [x] 6.2 差し替えの較正を作り、想定外の例外・関門の順・最後の行を直す（#6・#8・#24・D9・D12）
   - `main` に `except Exception` を置き、traceback を stderr に出して終了コード 3（#6・申し合わせ済み）。関門は未観測を集めるだけにし、不合格の確かめの後で判定不能にする（#8）
   - 最後の行を ASCII の決まった形（`SELFTEST RESULT ok=N ng=M`・失敗の締めは `JUDGE-PERF RESULT code=N`）に、枠の行と失敗の理由を英語の ASCII に、`sys.stdout`・`sys.stderr` を `errors="backslashreplace"` に（#24・D9）。報告の本文は日本語のまま
   - judge-perf の読みの失敗の文は、呼び手の文と `perf_lines` の共通の部分の両方を英語の ASCII にする（`perf_lines` の文の持ち主はこのタスク・perf-rank の末尾は 12.2）。判定の検体のうち stderr の文を見る `contains` を `generate.py`／`generate_more.py` の `declare` で直して作り直す（`generate.py` は D11 を守る）
@@ -228,3 +228,4 @@
 - 4.2: `tools/perf/fixtures/.gitattributes` は `* -text`。fixtures の .py は LF のまま書く（CRLF にすると CRLF で入る）。検体を作り直すのは generate.py（generate_more.py 単独では書かない）
 - 5: design T2 の「5 秒の CPU 9.00」は D4 のもとでは満たせない（起動の挨拶も発話の区間）ので、実装に合わせて「12 秒（boot_talk_done の後）」へ直した。K1 が縛るのは「終わりの語が無いと区間が閉じず、挨拶の後の重さを巻き込む」こと
 - 6.1: README へ渡す分（13）の候補: profile は short・long 以外で判定不能／時刻の無い catch-up があると `catchup_count` は `-`（978 行あたり）／case.txt の鍵の一覧と知らない鍵は exit 3（389 行あたり）／検体の一覧に M1・M2・C3／baseline の注意書きは定常の点数（12）で比べる
+- 6.2: judge-perf の verdict・baseline の標準出力の締めも `JUDGE-PERF RESULT code=N`（「判定は以上」を置き換え）。perf-loop の止まりの文の LastLine はこの行になり、理由は stderr と verdict.txt に残る（`audit-tools-perf-run` へ知らせる・6.3 の知らせと一緒に）。`--emit-metrics` では metric の行が RESULT の後に続く／`SELFTEST RESULT` の ok は検体の数・ng は理由の数／`--selftest` の想定外の例外は今も exit 1（14 の audit で拾う候補）。perf_lines の失敗の文は英語の ASCII
