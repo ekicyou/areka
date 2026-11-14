@@ -111,3 +111,4 @@
   - `crates/areka/src/runtime/frame_transition_atomicity_tests.rs:57,150` の `transition_judge.rs:609-613` は、今は `summarize` の `KIND_WRITE` の腕（`path_a_writes` を数える所）。行の番号でなく名で指すのがよい。
   - 古い「唯一の位置ライター」: `crates/areka/src/runtime/frame/drain_resnap.rs`（`move_window_to` の呼び出しの上）・`crates/areka/src/runtime/frame_chain_finalize_tests.rs`（明示的な再配置の行）。今の `move_window_to` は位置の書き手の 1 つであって唯一ではない。
   - `crates/areka/src/runtime/frame_work_area_resnap_hold_tests.rs` の `the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites` は `debug_assert!` に依る `should_panic` で、`cargo test --release` では赤になる。`#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]` を付けるのがよい。
+  - `crates/areka/src/runtime/frame/move_shift.rs`（毎フレームの相）の注「当てられなかったとき（材料が無い）は口の中で warn! 済み」は、`audit-placement-follow` の audit のかけ直しで足した見送り（ドラッグ中の窓・組の相手・持ち主のバルーンがドラッグ中のキャラ窓は `debug!` で見送り、記録を変えずに後で当て直す）を書いていない。戻り値は捨てているので振る舞いに害は無い。注を事実に合わせるのがよい。
