@@ -1,6 +1,6 @@
 ---
 name: kiro-complete
-description: 'Kiro仕様駆動開発のSpec完了ワークフローを実行する。未解決問題の棚卸（原則その場で解決・spec の外に手が届いても直す・裁定や他specとの重なり等の例外だけ/kiro-discoveryで起票）→DoD静的ゲート→コミット→completedフォルダ移動→spec.json更新→参照パス修正（spec文書＋ソース全域）→アーカイブのコミット→全体テスト1回（整形・ライセンス込み・移動後）を裏で起動し、その待ち時間にROADMAP更新・スキルドキュメント同期・PR文面の下書きを並行実施→判定と最終コミット→PR作成→squashマージまでを中断なく完遂する。mainへの統合はこのPRが唯一の経路（直push禁止）。Use when: 実装完了を承認する, 承認してください, 完了を承認, spec承認, approve implementation, kiro承認完了。DO NOT USE when: 実装が完了したのみ（承認の明示がない場合）、タスクが終わっただけ'
+description: 'Kiro仕様駆動開発のSpec完了ワークフローを実行する。未解決問題の棚卸（原則その場で解決・spec の外に手が届いても直す・他specと重なるものはbriefへ申し送り・裁定や spec 1 本規模の例外だけ/kiro-discoveryで起票）→DoD静的ゲート→コミット→completedフォルダ移動→spec.json更新→参照パス修正（spec文書＋ソース全域）→アーカイブのコミット→全体テスト1回（整形・ライセンス込み・移動後）を裏で起動し、その待ち時間にROADMAP更新・スキルドキュメント同期・PR文面の下書きを並行実施→判定と最終コミット→PR作成→squashマージまでを中断なく完遂する。mainへの統合はこのPRが唯一の経路（直push禁止）。Use when: 実装完了を承認する, 承認してください, 完了を承認, spec承認, approve implementation, kiro承認完了。DO NOT USE when: 実装が完了したのみ（承認の明示がない場合）、タスクが終わっただけ'
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion
 argument-hint: <feature-name>
 ---
@@ -43,6 +43,7 @@ argument-hint: <feature-name>
 - **ベースライン完了基準を内蔵** — DoD・コミット規約はこのスキルが既定値を持つ。`.kiro/steering/workflow.md` が存在すればそれを優先（任意）
 - **mainへの統合はPRが唯一の経路** — フィーチャーブランチはハーネスのワークツリーが供給。1 feature = 1 branch = 1 PR。`{default-branch}` への直接 push は一切行わない
 - **繰り返し仕様は移動しない** — 繰り返し実行型の仕様は常に `.kiro/specs/` 直下に留まる
+- **未解決問題を取りこぼさない** — アーカイブした後では拾い漏れに気付けない。DoD ゲートより前に棚卸しし、原則その場で直し、例外に当たるものだけ申し送り・起票する（冒頭ステップ）
 - **移動はコードを壊し得る** — ソースが spec 文書を実ファイル読みしていればアーカイブ移動で壊れる。参照検索はソース全域まで及ぼし（ステップ4-2）、**全体テストは移動をコミットした後に回す**（ステップ5）
 - **全体テストは 1 回・移動の後で回す** — 全体テストの 1 回は約 19 分かかる。以前は移動の前（DoD ゲート）と後（移動後ゲート）で 2 回回していたが、**移動後の 1 回は移動前の 1 回を包含する**（同じコードに加えて移動の影響まで見る）ので、整形・ライセンスも込みで移動後の 1 回にまとめる。確かめる範囲は減らず、待ち時間が半分になる
 - **待ち時間は並行レーンで使う** — 全体テストは裏で回し、その間にテストの結果に左右されない作業（ROADMAP・steering・スキル文書の更新、PR 文面の下書き、`gh` の認証確認）を進める。並行レーンで触ってよいものは**テストが読まないファイルだけ**に限る（ステップ6）
@@ -153,6 +154,7 @@ else echo "desk: id=$ID repo=$R"; fi
 | 再開の待ち | `exit=3` | 見張りを立て直して続ける |
 | 再開の待ち | `exit=1`・`a resume wait for <ID> is already running` | 前の再開の待ちが走っている。何もしない |
 | `merge --wait` | `exit=1`・`a merge wait for <ID> is already running` | 自分の待ちが走っていれば何もしない。覚えが無ければ `cancel --id <ID>` → 申し込み直す → 1 行（`kiro-complete` だけの行。`merge --wait` を呼ぶのは前置きステップの 5 と 7 だけで、そのときはどの机も持っていない） |
+| `merge --wait` | `exit=3`・`not applied: return the test and sole desks before merge`／`not applied: a desk request is waiting; merge after it is granted and returned` | この識別に机の持ち主か机の申し込みが残っている（前置きの時点ではこのスキルはまだ机を持たないので、同じ作業木のほかのセッションか残りの記録）。状態を変えずに断られた。`cancel` しない。1 行伝えて開発者の指示を待つ |
 | `request --wait` | `exit=0`・`granted test` | 番が来た（ステップ5-2 の「全体テストの前後の机」の 2） |
 | `request --wait` | `exit=3`・`not applied: desks are held; only a merge holder may add the test desk` | 机を持ったまま別の組を申し込んだ。状態は変わっていない。`status` を読まずに、持っている机を `return --id <ID>`（`--desk` なし。マージの机は返さない）で返してから申し込み直し、1 行で知らせる |
 | `request --wait` | `exit=3`・`not applied: a different desk request is already waiting` | この識別で別の組の申し込みが待っている。状態は変わっていない。`status` を読まない（`return` は申し込みを外さない）。**`kiro-impl` と違う**: マージの机を持つ間は排他テストの机のほかの組を申し込めず、別の組の申し込みを持つ者はマージの机を申し込めないので、この手順の中では起きない（前のセッションの残りなどの思わぬ状態）。`cancel` はマージの机も外すので呼ばない。1 行伝えて開発者の指示を待つ |
@@ -209,35 +211,37 @@ pwsh -NoProfile -File <メインの作業コピー>\tools\impl-watch-install.ps1
    - `merge --wait` が `exit=3` で、自分の `cancel` の後でない（申し込みが消えた）: 開発者へ 1 行伝え、見張りを立ててから 5 の形で申し込み直す。自分の `cancel`（下の「中断条件」）の後の 3 は何もしない。
    - 番を持っている間に見張りが `exit=3`（記録が消えた）: ステップ8 の PR のマージへ進まない。見張りを立て直して 5 の形で申し込み直し、番が来てから 6 の形で既定の枝を取り込み直して続ける。知らせが手順の途中に来たら覚えておき、ステップ8 の PR のマージの前で番を持っていることを確かめる（ステップ8 の「マージの机」）。
 
-### 冒頭ステップ: 未解決問題の棚卸（原則その場で解決・例外だけ `/kiro-discovery` で起票）
+### 冒頭ステップ: 未解決問題の棚卸（原則その場で解決・例外だけ既存 spec へ申し送り／`/kiro-discovery` で起票）
 
-DoD ゲートより前に、**実装中に発生した未解決問題のうち未起票のもの**を棚卸しし、**原則このブランチでその場で解決**し、手順 3 の例外に当たるものだけを `/kiro-discovery` で起票する。完了してアーカイブした後では拾い漏れに気付けなくなるので、必ず最初に行う（繰り返し仕様でも行う）。その場の修正も全体テスト（ステップ5）の対象になるよう、テストの起動より前に済ませる。
+DoD ゲートより前に、**実装中に発生した未解決問題のうち未起票のもの**を棚卸しし、**原則このブランチでその場で解決**し、手順 3 の例外に当たるものだけを申し送りまたは起票する。完了してアーカイブした後では拾い漏れに気付けなくなるので、必ず最初に行う（繰り返し仕様でも行う）。その場の修正も全体テスト（ステップ5）の対象になるよう、テストの起動より前に済ませる。
 
 1. **未解決問題を洗い出す**。拾う元は次の通り。
    - `tasks.md` の `## Implementation Notes`・`_Blocked:_` の付いたタスク
-   - `design.md` の Open Questions / Risks
+   - `design.md` の Open Questions / Risks / Revalidation Triggers
    - 実装・レビュー・最終検証（`/kiro-validate-impl`）の報告に残った未対応の指摘・先送り
    - 会話の中で「別 spec で」「後で」と決めたもの
-2. **起票済みかを確かめる**。`.kiro/specs/`（`completed/` を含む）の brief.md と `.kiro/steering/roadmap.md` を検索し、既に担当 spec・roadmap の行があるものは除く。本 spec の中で解決済みのものも除く。**「直さない」と裁定済みのものも除く**（触るコードのコメント・roadmap・完了 spec の台帳に取り下げの記録が無いかを確かめる）。
-3. **原則としてその場で解決する**。起票は例外で、次の**どれかに当たるものだけ**を手順 4 の起票へ回す（当たらなければ直す。迷ったら直す）。小さな問題を起票に回す率が高すぎた反省から（2026-10-17 開発者「なるべくその場で解決しクローズ」「多少契約スコープが広がるのは許容」）、**本 spec の境界・要件の外のファイルや別クレートに手が届くことは起票の理由にならない**。
-   - 直し方が複数あり、開発者の裁定・要件の追加や改訂が要る（直し方が 1 通りに決まるなら、設計の小さな判断は自分で下して直す）
-   - 進行中の他 spec の担当範囲（brief・roadmap の行）と重なる・その spec のブランチと衝突する
-   - 規模が spec 1 本に相当する（目安: このブランチで数時間では終わらない・新しい仕組みや新しい依存の追加が要る）
-   - 直したことを確かめるのに実機・GPU・高負荷のテストを新たに何度も回す必要がある（排他テストの机やひとり占めを何度も取らないと確かめられない）
+2. **起票済みかを確かめる**。`.kiro/specs/`（`completed/` を含む）の brief.md と `.kiro/steering/roadmap.md` を検索する。本 spec の中で解決済みのものは除く。**「直さない」と裁定済みのものも除く**（触るコードのコメント・roadmap・完了 spec の台帳に取り下げの記録が無いかを確かめる）。
+3. **原則としてその場で解決する**。次の**どれかに当たるものだけ**を手順 4・5 へ回す（当たらなければ直す。迷ったら直す）。小さな問題を起票に回す率が高すぎた反省から（2026-10-17 開発者「なるべくその場で解決しクローズ」「多少契約スコープが広がるのは許容」）、**本 spec の境界・要件の外のファイルや別クレートに手が届くことは理由にならない**。
+   - 直し方が複数あり、開発者の裁定・要件の追加や改訂が要る（直し方が 1 通りに決まるなら、設計の小さな判断は自分で下して直す）→ 手順 5
+   - 進行中の他 spec の担当範囲（brief・roadmap の行）と重なる・その spec のブランチと衝突する → 手順 4
+   - 規模が spec 1 本に相当する（目安: このブランチで数時間では終わらない・新しい仕組みや新しい依存の追加が要る）→ 手順 5
+   - 直したことを確かめるのに実機・GPU・高負荷のテストを新たに何度も回す必要がある（排他テストの机やひとり占めを何度も取らないと確かめられない）→ 手順 5
 
    公開 API・データ形式の小さな変更、触るファイルが十数個・数百行になること、本 spec の要件に無い直しになることは、上に当たらない限り直してよい。
 
    解決の作法:
    - バグ修正には、直す前に赤になる決定論テストを 1 本添える（doc・文言だけの修正は不要）。
    - 修正は 1 件 1 コミット（`fix(<feature>): …` 等）で、ステップ2 の前に積む。触るのが本 spec の外なら、コミットの本文にその旨を 1 行書く。
-   - 直しに伴って他のテストが赤になったら、それも直す。着手して上の起票の条件に当たると分かったときだけ、その修正を戻して手順 4 の起票へ回す。
+   - 直しに伴って他のテストが赤になったら、それも直す。着手して上の例外に当たると分かったときだけ、その修正を戻して手順 4・5 へ回す。
    - 解決したものは `tasks.md` の `## Implementation Notes` に「完了時にその場で解決」として 1 行ずつ記録し、PR の body（ステップ8）にも載せる。
-4. **残った未起票のものを `/kiro-discovery` で起票する**。Skill ツールで `kiro-discovery` を起動する。1 件ずつでも、まとめて 1 回でもよい。
-   - 起票する件ごとに、手順 3 のどの条件に当たったかを 1 行で添える（PR の body にも載せる）。条件を言えないものは起票せず手順 3 へ戻して直す。
-   - 触る場所が同じ既存の起票（roadmap の行・brief）があれば、新しい spec を立てずにその brief へ「件 N」として足す。
+4. **担当 spec が既にあるものは、その brief.md へ申し送る**（新しく起票しない）。本 spec で変えた契約・挙動（`design.md` の Revalidation Triggers に当たるもの、後続 spec が前提にしている実行経路・出力・警告の文言など）が、担当 spec の brief.md に反映されていなければ、その brief.md に「申し送り（{feature-name} より）」として追記する。書くのは、変わった事実・見直しが要る論点・参照先（本 spec の design.md の節など）。担当 spec の要件・設計を先回りで決めない（論点として渡すだけ）。担当 spec が要件フェーズ以降に進んでいる（requirements.md がある）場合は、brief.md への追記に加えて開発者に報告する。
+   - 手順 3 で他 spec と重なると分かった問題も、新しい spec を立てずにその brief.md へ「件 N」として足す。
+   - 申し送り先の spec が要件の段より先に進んでいれば、brief.md に加えて roadmap のその spec の行にも 1 行足す（着地の前に拾われるように）。
+5. **担当の無いものを `/kiro-discovery` で起票する**。Skill ツールで `kiro-discovery` を起動する。1 件ずつでも、まとめて 1 回でもよい。
+   - 起票する件ごとに、手順 3 のどの例外に当たったかを 1 行で添える（PR の body にも載せる）。言えないものは起票せず手順 3 へ戻して直す。
    - **ハーネスの「別の作業として切り出す」チップ（`spawn_task`）は使わない。** チップは開発者が 1 件ずつ押して指示する手間を生み、roadmap の台帳にも載らない（2026-10-04 開発者「スキルの指示とチップスがぶつかってる」）。出してしまっていたら `dismiss_task` で取り下げて起票し直す。
    - **起票は全体テストの起動（ステップ5）より前に済ませる。** 起票は `.kiro/specs/` の直下に spec ディレクトリ（brief.md 付き）を作る。テストの中にはこの直下を 2 回数えて突き合わせるもの（`crates/ukadoc-survey/tests/consistency/documents_non_vacuity.rs` の数え直し）があり、テストの最中にディレクトリが増えると偶発的に赤になる。
-5. 起票した brief.md・roadmap.md の変更はステップ2でまとめてコミットする。**その場で解決した件数と起票した件数をそれぞれ明示して記録する。0 件なら「0 件」と書く**（黙って飛ばさない）。
+6. 申し送り・起票した brief.md・roadmap.md の変更はステップ2でまとめてコミットする。**その場で解決した件数・申し送った件数・起票した件数をそれぞれ明示して記録する。0 件なら「0 件」と書く**（黙って飛ばさない）。
 
 ### ステップ0: 決定的解決（portable context）
 
@@ -430,7 +434,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 ```
 
 - **必ず `run_in_background` で起動し、完了通知を待つ**（約 19 分・2026-09-24 実測で x64 全テストだけ 838 秒）。前面で回すとツールの時間切れで途中の結果しか残らないうえ、待ち時間に何もできない。起動したらすぐステップ6 へ進む（机の番を待つ間に進めていたら、その続き）。
-- **段**（末尾の一覧に出る名前は英語）: `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `dola toml feature tests`（機能 `toml` を有効にした `dola` のテスト・取り寄せが赤でも回る）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `release notes check`（リリースノートの道具の自分の検査・`tools/release-notes.ps1 -SelfTest`）→ `roadmap overview check`（俯瞰の HTML の道具の自分の検査・`.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest`）→ `i686 helper sync check`（隣の helper を揃える道具の自分の検査・`tools/sync-i686-helper.ps1 -SelfTest`）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）→ `i686 helper beside areka.exe`（最後の段・`target\debug\` の `areka.exe` の隣の helper を i686 版へ揃える）。
+- **段**（末尾の一覧に出る名前は英語）: `add i686 target`（i686 ターゲット導入）→ `build i686 artifacts`（helper・偽 DLL 2 つ）→ `cargo fmt (format)`（`cargo fmt --all`・`-Format`）→ `fmt --check` → `x64 workspace tests`（`--no-fail-fast -j 4`）→ `dola toml feature tests`（機能 `toml` を有効にした `dola` のテスト・取り寄せが赤でも回る）→ `i686 tests (host-32)` → `crates.io pre-publish check (package only)`（`wintf`・`dola`・`wintf-winmsg-executor` の公開前の確認）→ `encoding check`（道具の文字コードの判定・`tools/encoding-check.ps1`・約 40 秒）→ `release notes check`（リリースノートの道具の自分の検査・`tools/release-notes.ps1 -SelfTest`）→ `roadmap overview check`（俯瞰の HTML の道具の自分の検査・`.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest`）→ `i686 helper sync check`（隣の helper を揃える道具の自分の検査・`tools/sync-i686-helper.ps1 -SelfTest`）→ `cargo deny check` → `cargo about generate`（この 2 段は `-License`）→ `i686 helper beside areka.exe`（最後の段・`target\debug\` の `areka.exe` の隣の helper を i686 版へ揃える）。
 - **Format Gate**: `-Format` が「`cargo fmt --all` で整形 → `--check` で確認」をテストの前の段で行う。整形差分はステップ7 のコミットに取り込む。`cargo fmt` が構文エラーで失敗したら中断して報告する（コンパイルできないコードが残っている）。Rust ワークスペースでないリポジトリはチェックリストに「(整形対象不在により省略)」と注記する。
 - **License Gate**: MIT 配布を守るライセンス健全性ゲート。`-License` がテストの後に直列で回す（テストと同時に回すと rustc がメモリ不足で落ちる）。
   - (a) 汚染ゲート `cargo deny check`: 強コピーレフト（GPL/LGPL/AGPL/MPL 等）や許可外ライセンスの混入を検出する（`deny.toml` があるときだけ意味を持つ）。
@@ -603,7 +607,7 @@ PR の**作成またはマージ（API）が失敗**した場合（コンフリ�
 
 ```
 - [ ] 前置きステップ: マージの机を申し込み（merge --wait）→ 番（last: を報告に添えた）→ ステップ8 の後に merged（PR 番号とマージ後のコミット）。机が使えずに飛ばしたときは、その訳（環境変数が無い・実行ファイルが無い・値が断られた・失敗の 1 行）を記録
-- [ ] 冒頭ステップ: 実装中の未解決問題のうち未起票のものを棚卸し済み——原則その場で解決（spec の外に手が届いても可・バグはテスト付き・1 件 1 コミット・Implementation Notes に記録）、手順 3 の例外に当たるものだけ `/kiro-discovery` で起票済み（起票は 1 件ごとに当たった条件を添える。解決件数・起票件数をそれぞれ記録。0 件なら「0 件」）。起票は全体テストの起動より前
+- [ ] 冒頭ステップ: 実装中の未解決問題のうち未起票のものを棚卸し済み——原則その場で解決（spec の外に手が届いても可・バグはテスト付き・1 件 1 コミット・Implementation Notes に記録）、手順 3 の例外に当たるものだけ、担当 spec があればその brief.md へ申し送り、担当が無ければ `/kiro-discovery` で起票（起票は 1 件ごとに当たった例外を添える。解決件数・申し送り件数・起票件数をそれぞれ記録。0 件なら「0 件」）。起票は全体テストの起動より前
 - [ ] ステップ0で `{remote}` / `{default-branch}` を決定的解決済み・既定ブランチとの衝突なし（衝突すればテスト前に取り込み済み）
 - [ ] DoD 静的ゲート通過（Spec Gate。workflow.md が存在すればテストを伴わない追加ゲートも）
 - [ ] 未コミットファイルをコミット済み（ステップ2）

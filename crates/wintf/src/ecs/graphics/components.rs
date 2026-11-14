@@ -5,6 +5,7 @@ use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush, Visual};
 
 use super::composite::SurfaceComposite;
+use super::damage::FullReason;
 
 /// GPU 資源を使う窓の印（在ることだけに意味がある）
 ///
@@ -180,6 +181,9 @@ pub struct SurfaceGraphics {
     pub size: (u32, u32),
     /// 描画面ごとの入れ物（要件 4.3）。描画面の入れ替えと放しで一緒に放す（4.5）。
     composite: Option<SurfaceComposite>,
+    /// 入れ物を持ったことがあるか（全部の理由の「初めて」と「作り直し」の見分け・3.4）。
+    /// 入れ物を捨てても `set_surface`・`clear` でも戻さない。
+    composed_before: bool,
 }
 
 // SAFETY 条件: WindowGraphics と同様。CompositionDrawingSurface / CompositionSurfaceBrush への
@@ -200,6 +204,17 @@ impl SurfaceGraphics {
             brush: Some(brush),
             size,
             composite: None,
+            composed_before: false,
+        }
+    }
+
+    /// 入れ物を作る回に呼ぶ: 初めてなら `First`、前に持ったことがあれば `Recreated`（3.1）
+    pub(crate) fn note_composite_created(&mut self) -> FullReason {
+        let before = std::mem::replace(&mut self.composed_before, true);
+        if before {
+            FullReason::Recreated
+        } else {
+            FullReason::First
         }
     }
 
