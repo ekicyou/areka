@@ -210,7 +210,8 @@ fn char_window_world(scope: usize, dpi: u16) -> (World, Entity) {
 }
 
 /// (2) 全フィールドの檻: 書込成功で**ちょうど 1 行**、route・entity・kind・scope・
-/// 物理位置・物理寸・DPI が揃う（1 つでも落ちたら赤）。
+/// 物理位置・物理寸・DPI が揃う（1 つでも落ちたら赤）。entity は wintf 側ログ（`entity = ?e`）と
+/// 同じ `Debug` 表現で出る——Req 1.9 の scope 別計数（2 段 grep）の結合キー。
 #[test]
 fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     let (mut world, e) = char_window_world(1, 192);
@@ -233,28 +234,6 @@ fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
              x=690 y=220 w=517 h=823 dpi=192"
         )
     );
-}
-
-/// (2) 結合キーの檻: entity は wintf 側ログ（`entity = ?e`＝`Debug` 表現・scope を
-/// 持たない）と同一表現で出る——Req 1.9 の scope 別計数（2 段 grep）の成立条件。
-#[test]
-fn window_move_record_entity_matches_wintf_debug_rendering() {
-    let (mut world, e) = char_window_world(0, 120);
-
-    let (_, events) = capture(|| {
-        resize_window_to(
-            &mut world,
-            e,
-            SizePx { w: 517, h: 823 },
-            PlacementRoute::Resnap,
-        )
-    });
-    let line = only_window_move_line(&events);
-    assert!(
-        line.contains(&format!("entity={e:?}")),
-        "wintf 側ログと結合できる Debug 表現になっていない: {line}"
-    );
-    assert!(line.contains("scope=0") && line.contains("kind=char"));
 }
 
 /// (1) 経路名は**呼出側が渡した route と 1:1**（`resize_window_to` は 3 経路の共通

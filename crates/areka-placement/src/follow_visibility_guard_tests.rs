@@ -203,90 +203,13 @@ fn guard_empty_snapshot_keeps_position() {
 //
 // バルーンは**別規則を持たない**——キャラ窓とまったく同一の純関数・同一の
 // 遷移規則へ、バルーン矩形（`char_pos + offset` と バルーン寸）を渡すだけ。
+// `guard_visibility` は窓の種類を持たないので、バルーンの寸は下の横断檻が
+// キャラ窓の寸と並べて全部の腕へ通す（寸だけを変えた写しは置かない）。
 //
-// 前提（windowposition-limit 7.3）: 以下 3 檻の「部分的なはみ出しには触らない」
+// 前提（windowposition-limit 7.3）: 「部分的なはみ出しには触らない」
 // 「画面外へ留置されたものは引き戻さない」はガードの規則としていまも真である。
 // `windowposition.limit` が有効なバルーンについては、この後に走る関門が別途
 // 作業領域内へ補正する——ガード自体は不変で、限界の面倒を見るのは関門である。
-
-/// キャラ窓が右端で clamp された合成で、offset 恒等式が出したバルーン提案位置
-/// だけが全 work area と非交差になるケース → バルーン矩形も ClampX で救われる。
-#[test]
-fn guard_clamps_balloon_rect_that_alone_becomes_invisible() {
-    for dpi in DPIS {
-        let snapshot = mixed_layout(dpi);
-        let wa = right_wa(dpi);
-        let c_size = char_size(dpi);
-        let b_size = balloon_size(dpi);
-
-        // キャラ窓は右端ぎりぎりに clamp 済み（可視）
-        let char_pos = point(wa.right - c_size.w, grounded_y(wa, c_size));
-        assert!(overlaps(win(char_pos, c_size), wa), "前提: キャラは可視");
-
-        // offset 恒等式（キャラの右上へ出す）が work area の外を指す
-        let offset = point(px(320, dpi), -px(200, dpi));
-        let proposed = point(char_pos.x + offset.x, char_pos.y + offset.y);
-        let old_balloon = win(point(px(800, dpi), proposed.y), b_size);
-        assert!(overlaps(old_balloon, wa), "前提: 旧バルーンは可視だった");
-        assert!(
-            !overlaps(win(proposed, b_size), wa) && !overlaps(win(proposed, b_size), left_wa()),
-            "前提: 提案バルーン矩形はどの work area とも交差しない"
-        );
-
-        let verdict = guard_visibility(Some(old_balloon), proposed, b_size, wa, &snapshot);
-        let VisibilityVerdict::ClampX(got) = verdict else {
-            panic!("dpi={dpi}: バルーンも同一規則で ClampX（got {verdict:?}）");
-        };
-        assert_eq!(got.y, proposed.y, "dpi={dpi}: バルーンの Y も変更しない");
-        assert!(
-            got.x >= wa.left && got.x <= wa.right - b_size.w,
-            "dpi={dpi}: バルーン X も clamp_wa の水平範囲内"
-        );
-        assert!(
-            overlaps(win(got, b_size), wa),
-            "dpi={dpi}: clamp 後のバルーン矩形は work area と交差する（Req 3.4）"
-        );
-        // clamp によりキャラと部分的に重なり得る＝許容（見えない会話より重なった会話）
-    }
-}
-
-/// バルーンが交差を保っているあいだは素通し（キャラと同一規則）。
-#[test]
-fn guard_keeps_balloon_rect_while_intersecting() {
-    for dpi in DPIS {
-        let snapshot = mixed_layout(dpi);
-        let wa = right_wa(dpi);
-        let b_size = balloon_size(dpi);
-        let proposed = point(px(600, dpi), px(200, dpi));
-        let old = win(point(px(500, dpi), px(200, dpi)), b_size);
-        assert_eq!(
-            guard_visibility(Some(old), proposed, b_size, wa, &snapshot),
-            VisibilityVerdict::Keep(proposed),
-            "dpi={dpi}: 交差維持のバルーンは素通し"
-        );
-    }
-}
-
-/// ユーザーが画面外へ留置したバルーンは引き戻さない（キャラと同一規則）。
-#[test]
-fn guard_respects_balloon_parked_off_screen() {
-    for dpi in DPIS {
-        let snapshot = mixed_layout(dpi);
-        let wa = right_wa(dpi);
-        let b_size = balloon_size(dpi);
-        let old = win(point(wa.right + px(200, dpi), px(200, dpi)), b_size);
-        assert!(
-            !overlaps(old, wa) && !overlaps(old, left_wa()),
-            "前提: 旧バルーンは既に非交差（ユーザー留置）"
-        );
-        let proposed = point(wa.right + px(600, dpi), px(200, dpi));
-        assert_eq!(
-            guard_visibility(Some(old), proposed, b_size, wa, &snapshot),
-            VisibilityVerdict::Keep(proposed),
-            "dpi={dpi}: 留置バルーンは尊重する"
-        );
-    }
-}
 
 /// Y 不変の横断檻: 全分岐・キャラ／バルーン両寸で `position().y == proposed.y`
 /// （Y は射影 T の所有・D6）。分岐の識別（Keep か ClampX か）も同時に固定する。

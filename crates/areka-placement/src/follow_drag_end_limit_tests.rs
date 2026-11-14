@@ -11,7 +11,6 @@ use super::test_support::{
 };
 use super::{BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end};
 use crate::resolver::PointPx;
-use crate::spawn::GhostWindows;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
@@ -250,7 +249,8 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     // --- キャラ窓は動かない（要件 2.8） ---
     assert_eq!(point_of(&world, char_window), char_pos());
 
-    // --- 補正ログ（要件 6.1・DD7） ---
+    // --- 補正ログ（要件 6.1・DD7）。ちょうど 1 件＝単一ライター内の runtime 関門でもう一度
+    // クランプされても冪等で、記録も二重にならない（DD6・`base_world` は `GhostWindows` を持つ） ---
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
     assert_eq!(clamp.level, tracing::Level::INFO, "補正の記録は info 水準");
     assert_eq!(clamp.expect_field("scope"), "0");
@@ -521,40 +521,4 @@ fn the_release_correction_uses_the_work_area_of_the_char_window_monitor() {
         max_pos(left_wa, limit_balloon_size()),
         "キャラ窓が属する左モニタではなくバルーン側のモニタを基準にしている（要件 5.5 違反）"
     );
-}
-
-// -------------------------------------------------------------------------
-// runtime 関門との二重適用が無害であること（DD6 の「クランプは冪等」）
-// -------------------------------------------------------------------------
-
-/// 解放時補正が渡した補正後位置は、単一ライター内の runtime 関門でもう一度クランプ
-/// されるが、クランプは冪等ゆえ結果が変わらず補正ログも二重にならない。
-///
-/// `expect_one`（ちょうど 1 件）が二重ログを直接禁じ、`GhostWindows` が居る実 World で
-/// あることが「runtime 関門が実際に働ける状態で通した」ことを担保する。
-#[test]
-fn the_release_correction_is_idempotent_through_the_runtime_gate() {
-    let (mut world, _char_window, balloon) = base_world(true);
-    assert!(
-        world.get_resource::<GhostWindows>().is_some(),
-        "探針: runtime 関門が基準を引ける状態でなければ二重適用を検査できない"
-    );
-    wndproc_moved_balloon_to(&mut world, balloon, release_outside());
-
-    let (_, events) = capture(|| {
-        on_balloon_drag_end(
-            &mut world,
-            balloon,
-            balloon,
-            &Phase::Bubble(drag_end_event_at(balloon, (0, 0))),
-        )
-    });
-
-    let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
-    assert_eq!(
-        clamp.expect_field("context"),
-        format!("{RELEASE_CONTEXT:?}"),
-        "runtime 関門が二度目の補正ログを出している（冪等でない）"
-    );
-    assert_eq!(point_of(&world, balloon), release_outside_corrected());
 }

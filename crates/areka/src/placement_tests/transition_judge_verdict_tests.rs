@@ -24,7 +24,7 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::test_support::{
-    COMPLIANT_FRAME, compliant_transition_lines, flush, ground, monitor, replace_once,
+    COMPLIANT_FRAME, compliant_transition_lines, flush, ground, log_of, monitor, replace_once,
     summarize_lines, surface, write,
 };
 use super::transition_judge_reobservation_tests::REOBSERVATION_TRANSITION_1;
@@ -124,15 +124,16 @@ fn a_bounds_that_arms_nothing_is_never_a_pass() {
 #[test]
 fn a_slice_that_does_not_start_at_an_origin_is_never_a_pass() {
     // 起点の無い区間は「何も起きなかった遷移」ではなく**遷移として読めていない**入力である。
-    // 上限は 1 つも破られないので、起点の欠落そのものを違反にしないと合格に化ける。
-    let summary = super::summarize(&[]);
-    assert!(summary.origin.is_none());
+    // 上限は 1 つも破られないので、起点の欠落そのものを違反にしないと合格に化ける。対照の
+    // 列から起点（先頭の `monitor`）だけを落とし、空でない区切りで確かめる。
+    let records = super::parse_transition_log(&log_of(&compliant_transition_lines()[1..]));
+    let summary = super::summarize(&records.iter().collect::<Vec<_>>());
+    assert!(summary.records > 0 && summary.origin.is_none());
     assert_eq!(
         violations(&summary, &Bounds::deterministic()),
         vec![
             Violation::MissingOrigin,
             Violation::Unmeasured(Quantity::FramesToLastWrite),
-            Violation::Unmeasured(Quantity::GroundDiff),
         ]
     );
 }
@@ -403,6 +404,9 @@ fn an_invisible_balloon_that_still_follows_in_the_same_frame_is_a_pass() {
             .contains(&WindowKey::of(0, WindowKind::Balloon)),
         "バルーンは見送り窓として集計されている"
     );
+    // 除外は 1 窓だけで判定対象が残る＝全窓除外の違反（下の節）も立たない。
+    assert_eq!(summary.writes_per_window.len(), 2);
+    assert_eq!(summary.skipped_windows.len(), 1, "除外は 1 窓だけ");
     assert_eq!(judge(&summary, &Bounds::deterministic()), Ok(()));
     assert_eq!(judge(&summary, &Bounds::signoff()), Ok(()));
 }
@@ -1006,22 +1010,6 @@ fn excluding_every_written_window_is_a_violation_not_a_pass() {
         violations.contains(&Violation::AllWrittenWindowsExcluded { windows: 2 }),
         "全窓除外を違反として立てていない: {violations:?}"
     );
-}
-
-#[test]
-fn a_transition_that_still_judges_one_window_does_not_raise_the_exclusion_violation() {
-    // 上の陽性の対。除外が全窓に及んでいなければこの違反は立たない——立つようにすると、
-    // 定常の形（発話していないバルーンだけが不可視で見送られる）が毎回不合格になる。
-    let summary = summarize_lines(&one_scope_with_a_skipped_balloon(COMPLIANT_FRAME));
-    assert_eq!(summary.writes_per_window.len(), 2);
-    assert_eq!(summary.skipped_windows.len(), 1, "除外は 1 窓だけ");
-    for bounds in [Bounds::deterministic(), Bounds::signoff()] {
-        assert_eq!(
-            judge(&summary, &bounds),
-            Ok(()),
-            "1 窓でも判定対象が残っていれば合格である"
-        );
-    }
 }
 
 #[test]

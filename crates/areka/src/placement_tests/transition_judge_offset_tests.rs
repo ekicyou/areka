@@ -237,7 +237,31 @@ fn broken(index: usize, replacement: String) -> String {
 
 #[test]
 fn the_known_passing_log_is_green() {
-    let report = judge_offset_log(&log_of(&pass_lines()));
+    // 中身も押さえる: ⑴ 是正後の往復は `rescaled → rescaled` を出す（判定語の並びでなく値を
+    // 鍵にしている証拠）。⑵ 開発者裁定（2026-08-27）が受容した残余＝T0 の scope 1 の
+    // `keyword-pending`（前後の値が bit 同一）を違反にしない。⑶ 遷移の内側に門の行がある形でも
+    // 母数が壊れない（素材が残るあいだの門は母数に入らず、scope 0 の T1 の追随が満たす）。
+    let lines = pass_lines();
+    for (index, verdict) in [
+        (T0_SCOPE0, OFFSET_VERDICT_RESCALED),
+        (T2_SCOPE0, OFFSET_VERDICT_RESCALED),
+        (T0_SCOPE1, OFFSET_VERDICT_KEYWORD_PENDING),
+    ] {
+        assert!(
+            lines[index].contains(&format!("verdict={verdict}")),
+            "{}",
+            lines[index]
+        );
+    }
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(
+        report
+            .transitions
+            .iter()
+            .flat_map(|transition| transition.rows.iter())
+            .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
+        "既知の合格ログが遷移の内側に門の行を持たなくなった: {report}"
+    );
     assert!(!report.failed(), "既知の合格ログが赤になった:\n{report}");
 }
 
@@ -310,22 +334,6 @@ fn a_round_trip_that_does_not_return_the_same_bits_is_red() {
         }],
         "{report}"
     );
-}
-
-#[test]
-fn the_round_trip_check_reads_values_not_verdict_words() {
-    // 是正後の往復は `rescaled → rescaled` を出す（`rescaled → unchanged` ではない）。
-    // 判定語の並びを鍵にしていたらこの合格ログは赤になる——値だけを鍵にしている証拠として、
-    // 往復の 2 本がどちらも `rescaled` であることを逐語で押さえる。
-    let lines = pass_lines();
-    for index in [T0_SCOPE0, T2_SCOPE0] {
-        assert!(
-            lines[index].contains(&format!("verdict={OFFSET_VERDICT_RESCALED}")),
-            "{}",
-            lines[index]
-        );
-    }
-    assert!(!judge_offset_log(&log_of(&lines)).failed());
 }
 
 // ---------------------------------------------------------------------------
@@ -503,20 +511,6 @@ fn a_keyword_pending_row_that_carries_a_display_dpi_is_red() {
     );
 }
 
-#[test]
-fn the_accepted_residual_is_not_read_as_a_broken_follow() {
-    // 開発者裁定（2026-08-27）が受容した残余＝素材未消費のまま寸据え置きの遷移を迎えた腕は、
-    // `keyword-pending` かつ前後の値が bit 同一という形で現れる。合格ログの T0／T1 が
-    // まさにその形であり、違反にしてはならない。
-    let lines = pass_lines();
-    assert!(
-        lines[T0_SCOPE1].contains(&format!("verdict={OFFSET_VERDICT_KEYWORD_PENDING}")),
-        "{}",
-        lines[T0_SCOPE1]
-    );
-    assert!(!judge_offset_log(&log_of(&lines)).failed());
-}
-
 // ---------------------------------------------------------------------------
 // ⑶ 低い拡大率側で追随が出ていること（要件 8.4）
 // ---------------------------------------------------------------------------
@@ -585,20 +579,6 @@ fn a_log_without_any_rescale_on_the_low_scale_side_is_red() {
         vec![OffsetViolation::NoLowScaleRescale {
             low_side_transitions: 2,
         }],
-        "{report}"
-    );
-}
-
-#[test]
-fn a_keyword_scope_still_holding_its_material_does_not_make_a_false_red() {
-    // 逆向きの較正: 素材が残るあいだの遷移（T0／T1 の門）が母数に入っていたら、合格ログの
-    // 側が赤になる。実際には scope 0 の T1 の追随が母数を満たすので緑である。
-    let report = judge_offset_log(&log_of(&pass_lines()));
-    assert!(
-        !report
-            .violations
-            .iter()
-            .any(|violation| matches!(violation, OffsetViolation::NoLowScaleRescale { .. })),
         "{report}"
     );
 }
@@ -712,7 +692,7 @@ fn lines_without_gate_rows() -> Vec<String> {
 
 #[test]
 fn a_gate_row_before_the_first_origin_still_forms_the_denominator() {
-    // ⑴ 門の行が**最初の起点より前にしか無い**ログ。実機はこの形しか採れない——素材は
+    // 門の行が**最初の起点より前にしか無い**ログ。実機はこの形しか採れない——素材は
     // 起動から 0.73〜5.0 秒で自動的に消費され、最初の起点は利用者のドラッグ由来ゆえ必ず
     // それより後に出る（2026-08-28 の実機ログ 3 本すべて）。
     let mut lines = lines_without_gate_rows();
@@ -727,23 +707,6 @@ fn a_gate_row_before_the_first_origin_still_forms_the_denominator() {
             .flat_map(|transition| transition.rows.iter())
             .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
         "遷移の内側に門の行が残っている＝この檻が ⑴ の形を踏んでいない:
-{report}"
-    );
-    assert!(!report.failed(), "{report}");
-}
-
-#[test]
-fn a_gate_row_inside_a_transition_still_forms_the_denominator() {
-    // ⑵ 従来どおり遷移の内側に門の行があるログ（既知の合格ログ）。母数の作り方を広げても
-    // この形が壊れないことを固定する。
-    let report = judge_offset_log(&log_of(&pass_lines()));
-    assert!(
-        report
-            .transitions
-            .iter()
-            .flat_map(|transition| transition.rows.iter())
-            .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
-        "既知の合格ログが遷移の内側に門の行を持たなくなった:
 {report}"
     );
     assert!(!report.failed(), "{report}");

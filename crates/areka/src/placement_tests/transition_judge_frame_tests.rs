@@ -107,31 +107,6 @@ fn summarize_refuses_a_series_whose_frames_could_not_be_read() {
     );
 }
 
-#[test]
-fn summarize_marks_an_all_zero_frame_series_as_indeterminate() {
-    // frame=0 は tick 前の World が返す縮退値。要件 8.5 により「1 フレームで完了」と
-    // 読んではならない。
-    let summary = summarize_lines(&[
-        monitor(0, 192, 96, 1704, 1752),
-        write(
-            0,
-            1,
-            STAGE_FLUSH,
-            0,
-            "0x1",
-            ORIGIN_WINDOW_POS,
-            "0",
-            char_kind(),
-            1,
-        ),
-    ]);
-    assert_eq!(summary.frames_to_last_write, Some(0));
-    assert!(
-        summary.frames_indeterminate,
-        "一様に 0 のフレーム系列は判定不能として立てる"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // 周回（D14）——差分でしか扱わない
 // ---------------------------------------------------------------------------

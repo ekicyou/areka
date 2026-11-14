@@ -623,48 +623,6 @@ fn summarize_reads_the_flush_total_only_from_the_end_of_the_interval() {
 }
 
 #[test]
-fn summarize_keeps_the_first_write_time_instead_of_the_latest() {
-    let summary = summarize_lines(&[
-        monitor(10, 192, 96, 1704, 1752),
-        write(
-            10,
-            103_000,
-            STAGE_FLUSH,
-            0,
-            "0x1",
-            ORIGIN_WINDOW_POS,
-            "0",
-            char_kind(),
-            1,
-        ),
-        write(
-            10,
-            255_000,
-            STAGE_FLUSH,
-            1,
-            "0x2",
-            ORIGIN_WINDOW_POS,
-            "0",
-            balloon_kind(),
-            1,
-        ),
-        write(
-            10,
-            271_000,
-            STAGE_FLUSH,
-            2,
-            "0x2",
-            ORIGIN_WINDOW_POS,
-            "0",
-            balloon_kind(),
-            1,
-        ),
-    ]);
-    assert_eq!(summary.wall.first_write_t_us, Some(103_000));
-    assert_eq!(summary.wall.last_write_t_us, Some(271_000));
-}
-
-#[test]
 fn summarize_excludes_a_skipped_char_window_from_the_companion_check() {
     // 見送りはキャラ窓側にも起こり得る（不可視のキャラ窓）。対の片側が除外なら
     // 随伴の同一フレーム性は検査しない——検査した上で「一致」と答えると、
@@ -827,7 +785,11 @@ fn summarize_collects_wall_clock_values_as_reference_only() {
             16_200,
         ),
     ]);
-    assert_eq!(summary.wall.first_write_t_us, Some(103_000));
+    assert_eq!(
+        summary.wall.first_write_t_us,
+        Some(103_000),
+        "最初の書込の時刻を保つ（後の書込で上書きしない）"
+    );
     assert_eq!(summary.wall.last_write_t_us, Some(255_000));
     assert_eq!(summary.wall.sum_call_us, 36_700);
 }

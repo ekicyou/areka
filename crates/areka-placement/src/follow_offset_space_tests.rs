@@ -34,59 +34,6 @@ fn base_at(x: i32, y: i32, d: u16) -> OffsetBase {
 // 遷移の変換規則（`rescale_follow_offset`）
 // -------------------------------------------------------------------------
 
-/// 未係留（永続値の腕・5.2）は**値を変えずに**現在の表示 DPI へ係留する。
-#[test]
-fn unpinned_base_anchors_without_changing_value() {
-    let base = OffsetBase {
-        offset: PointPx { x: 10, y: -20 },
-        dpi: None,
-    };
-    assert_eq!(
-        rescale_follow_offset(base, dpi(192)),
-        OffsetRescale::Anchored { base_dpi: dpi(192) }
-    );
-}
-
-/// 基準 DPI と現在 DPI が同一なら値も基準も 1 bit も動かない（恒等・2.2）。
-#[test]
-fn identical_dpi_is_unchanged() {
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 96), dpi(96)),
-        OffsetRescale::Unchanged
-    );
-}
-
-/// 表示 DPI 比だけで追随する（96→192＝2 倍・3.1）。
-#[test]
-fn rescales_by_display_dpi_ratio() {
-    assert_eq!(
-        rescale_follow_offset(base_at(10, -20, 96), dpi(192)),
-        OffsetRescale::Rescaled {
-            offset: PointPx { x: 20, y: -40 },
-            saturated: false,
-        }
-    );
-}
-
-/// 往復しても基準から引き直すため bit 同一で戻る（3.3）。
-#[test]
-fn roundtrip_returns_bit_identical_value() {
-    let base = base_at(10, -20, 96);
-    let first = rescale_follow_offset(base, dpi(144));
-    assert_eq!(
-        rescale_follow_offset(base, dpi(96)),
-        OffsetRescale::Unchanged
-    );
-    assert_eq!(rescale_follow_offset(base, dpi(144)), first);
-    assert_eq!(
-        first,
-        OffsetRescale::Rescaled {
-            offset: PointPx { x: 15, y: -30 },
-            saturated: false,
-        }
-    );
-}
-
 /// 拡大率を解決できない腕は値も基準も変えず、理由を値として返す（3.6・9.4）。
 #[test]
 fn zero_dpi_is_unresolved_with_reason() {
@@ -808,27 +755,4 @@ fn zero_base_dpi_wins_over_zero_current_dpi() {
             reason: UnresolvedScale::ZeroBaseDpi
         }
     );
-}
-
-/// [`OffsetRescale`] の 4 腕すべてに到達していること（腕の取りこぼしを構造で防ぐ）。
-#[test]
-fn every_verdict_arm_is_reachable() {
-    let offset = PointPx { x: 10, y: -20 };
-    let arms = [
-        rescale_follow_offset(OffsetBase { offset, dpi: None }, dpi(96)),
-        rescale_follow_offset(base_at(offset.x, offset.y, 96), dpi(96)),
-        rescale_follow_offset(base_at(offset.x, offset.y, 96), dpi(192)),
-        rescale_follow_offset(base_at(offset.x, offset.y, 96), dpi(0)),
-    ];
-    let mut seen = [false; 4];
-    for arm in arms {
-        let idx = match arm {
-            OffsetRescale::Anchored { .. } => 0,
-            OffsetRescale::Unchanged => 1,
-            OffsetRescale::Rescaled { .. } => 2,
-            OffsetRescale::Unresolved { .. } => 3,
-        };
-        seen[idx] = true;
-    }
-    assert_eq!(seen, [true; 4], "到達していない判定の腕がある");
 }

@@ -19,15 +19,27 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 /// 対象窓の WindowPos が期待座標へ更新される（物理 px 素通し・U4）。
 /// 座標は 96 の倍数を避けた値を使い、隠れた dpi/96 再スケールがあれば
 /// 完全一致が崩れる檻とする（07-05 欠陥の再発防止・3.2/3.3）。
+/// `Arrangement.offset` も同じ位置へ同期される（下の「Arrangement.offset 同期」の節）。
 #[test]
 fn move_window_to_updates_window_pos_physical_px() {
     let mut world = World::new();
     let window = world
-        .spawn((fake_handle(0x1234), window_pos_at(10, 20)))
+        .spawn((
+            fake_handle(0x1234),
+            window_pos_at(10, 20),
+            arrangement_at(10.0, 20.0),
+        ))
         .id();
 
     assert!(move_window_to(&mut world, window, 1531, 883));
     assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });
+    assert_eq!(
+        arrangement_offset_of(&world, window),
+        Offset {
+            x: 1531.0,
+            y: 883.0
+        }
+    );
 }
 
 /// WindowHandle 未付与（窓生成前）は false を返し、位置も変更しない。
@@ -51,16 +63,24 @@ fn move_window_to_on_despawned_entity_returns_false() {
 }
 
 /// BalloonFollow を持つ対象の移動はバルーンも offset 維持で随伴移動する
-/// （T-I4: 移動後も balloon_pos − char_pos ≡ offset が保存される）。
+/// （T-I4: 移動後も balloon_pos − char_pos ≡ offset が保存される）。両窓の
+/// `Arrangement.offset` も移動後の位置へ同期される。
 #[test]
 fn move_window_to_moves_balloon_with_offset_preserved() {
     let mut world = World::new();
-    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
+    let balloon = world
+        .spawn((
+            fake_handle(0x2000),
+            window_pos_at(0, 0),
+            arrangement_at(0.0, 0.0),
+        ))
+        .id();
     let offset = PointPx { x: -412, y: -25 };
     let window = world
         .spawn((
             fake_handle(0x1000),
             window_pos_at(50, 60),
+            arrangement_at(50.0, 60.0),
             BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
@@ -80,6 +100,15 @@ fn move_window_to_moves_balloon_with_offset_preserved() {
     // offset 保存則（balloon_pos − char_pos ≡ offset）
     assert_eq!(balloon_pos.x - char_pos.x, offset.x);
     assert_eq!(balloon_pos.y - char_pos.y, offset.y);
+    for (entity, pos) in [(window, char_pos), (balloon, balloon_pos)] {
+        assert_eq!(
+            arrangement_offset_of(&world, entity),
+            Offset {
+                x: pos.x as f32,
+                y: pos.y as f32
+            }
+        );
+    }
 }
 
 /// 対象自身に WindowHandle が無ければ false で、バルーンも動かさない。
@@ -135,9 +164,10 @@ fn move_window_to_balloon_without_handle_still_moves_target() {
 
 use wintf::ecs::layout::Offset;
 
-/// (a) 実 on_char_drag（Bubble DragEvent＋DraggingState・8.2R 単一ライター）:
+/// 実 on_char_drag（Bubble DragEvent＋DraggingState・8.2R 単一ライター）:
 /// 移動後、キャラ窓・随伴バルーンとも Arrangement.offset が
-/// WindowPos.position と一致する（GA ヒットテスト境界の追従・4.8）。
+/// WindowPos.position と一致する（GA ヒットテスト境界の追従・4.8）。`move_window_to` の
+/// 同期は上の節の 2 本（単独の窓・随伴の組）が見る。
 #[test]
 fn on_char_drag_syncs_arrangement_offset_of_char_and_balloon() {
     let mut world = World::new();
@@ -185,69 +215,6 @@ fn on_char_drag_syncs_arrangement_offset_of_char_and_balloon() {
             y: balloon_pos.y as f32
         },
         "バルーンの Arrangement.offset が WindowPos に追従する（クリック死の檻）"
-    );
-}
-
-/// (b) move_window_to: 対象キャラ窓・随伴バルーンとも Arrangement.offset が
-/// 移動後の WindowPos.position と一致する。
-#[test]
-fn move_window_to_syncs_arrangement_offset_of_target_and_balloon() {
-    let mut world = World::new();
-    let balloon = world
-        .spawn((
-            fake_handle(0x2000),
-            window_pos_at(0, 0),
-            arrangement_at(0.0, 0.0),
-        ))
-        .id();
-    let offset = PointPx { x: -412, y: -25 };
-    let window = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_at(50, 60),
-            arrangement_at(50.0, 60.0),
-            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
-        ))
-        .id();
-
-    assert!(move_window_to(&mut world, window, 907, 1201));
-
-    assert_eq!(
-        arrangement_offset_of(&world, window),
-        Offset {
-            x: 907.0,
-            y: 1201.0
-        }
-    );
-    assert_eq!(
-        arrangement_offset_of(&world, balloon),
-        Offset {
-            x: (907 + offset.x) as f32,
-            y: (1201 + offset.y) as f32
-        }
-    );
-}
-
-/// (c) move_window_to（BalloonFollow なしの単独窓）: 自身の Arrangement.offset
-/// が同期される（バルーン単独移動＝enqueue 共通経路の檻）。
-#[test]
-fn move_window_to_syncs_arrangement_offset_of_single_window() {
-    let mut world = World::new();
-    let window = world
-        .spawn((
-            fake_handle(0x1000),
-            window_pos_at(10, 20),
-            arrangement_at(10.0, 20.0),
-        ))
-        .id();
-
-    assert!(move_window_to(&mut world, window, 1531, 883));
-    assert_eq!(
-        arrangement_offset_of(&world, window),
-        Offset {
-            x: 1531.0,
-            y: 883.0
-        }
     );
 }
 
