@@ -217,7 +217,7 @@ fn test_get_hwnd_insert_after_maps_each_zorder() {
     );
 }
 
-// ===== to_window_coords_for_creation (CW_USEDEFAULT passthrough — device-independent) =====
+// ===== to_window_coords_for_creation =====
 
 #[test]
 fn test_to_window_coords_for_creation_passes_through_cw_usedefault() {
@@ -230,20 +230,45 @@ fn test_to_window_coords_for_creation_passes_through_cw_usedefault() {
     assert_eq!(h, CW_USEDEFAULT);
 }
 
+/// 枠つきの窓（`WS_OVERLAPPEDWINDOW`）で位置と大きさを両方与えたときの外枠の値。
+/// 片方だけのテストの期待値はここから出す。枠が 0 でないことも確かめる。
+fn overlapped_both_given() -> (i32, i32, i32, i32) {
+    let mut both = WindowPos::new();
+    both.position = Some(Point { x: 500, y: 50 });
+    both.size = Some(SizeI {
+        width: 300,
+        height: 200,
+    });
+    let result = both.to_window_coords_for_creation(WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0), 96);
+    let (x, y, w, h) = result;
+    assert!(
+        x < 500 && y < 50 && w > 300 && h > 200,
+        "枠が 0: {result:?}"
+    );
+    result
+}
+
 #[test]
-fn test_to_window_coords_for_creation_passes_through_when_position_x_is_cw_usedefault() {
-    // position.x のみ CW_USEDEFAULT でも素通し（size は具体値）
+fn test_to_window_coords_for_creation_position_only_adds_frame_to_position() {
+    // 位置だけ与えると、位置に枠の分を足し、大きさは既定のまま返す
+    let (bx, by, _, _) = overlapped_both_given();
     let mut pos = WindowPos::new();
-    pos.position = Some(Point {
-        x: CW_USEDEFAULT,
-        y: 0,
-    });
+    pos.position = Some(Point { x: 500, y: 50 });
+    let got = pos.to_window_coords_for_creation(WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0), 96);
+    assert_eq!(got, (bx, by, CW_USEDEFAULT, CW_USEDEFAULT));
+}
+
+#[test]
+fn test_to_window_coords_for_creation_size_only_adds_frame_to_size() {
+    // 大きさだけ与えると、位置は既定のまま、大きさに枠の分を足して返す
+    let (_, _, bw, bh) = overlapped_both_given();
+    let mut pos = WindowPos::new();
     pos.size = Some(SizeI {
-        width: 100,
-        height: 100,
+        width: 300,
+        height: 200,
     });
-    let (x, y, w, h) = pos.to_window_coords_for_creation(WINDOW_STYLE(0), WINDOW_EX_STYLE(0), 96);
-    assert_eq!((x, y, w, h), (CW_USEDEFAULT, 0, 100, 100));
+    let got = pos.to_window_coords_for_creation(WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0), 96);
+    assert_eq!(got, (CW_USEDEFAULT, CW_USEDEFAULT, bw, bh));
 }
 
 #[test]

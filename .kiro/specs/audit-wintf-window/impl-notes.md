@@ -118,3 +118,12 @@
 - 較正: 振る舞いを変えない直し（design.md「直したテストの較正」で 52 は既にあるテストが緑のままであることで確かめる組）なので、壊し方は入れていない。
 - 消したもの: 関数の中の型の別名と `SystemState` の import だけ（公開の口ではない）。`git grep -n "create_windows(&mut"` は直した後 crates で 0 件。
 - テストの数: `cargo test -p wintf --lib window_system` 1 → 1、`--lib window_factory` 12 → 12（どちらも緑）。`cargo build -p wintf -p areka -p areka-placement --tests` 通る。
+
+## 6.1
+
+- 直したもの（2 番）: `window/window_pos/mod.rs` の `WindowPos::to_window_coords_for_creation`。位置も大きさも既定（`x == CW_USEDEFAULT`・`width == CW_USEDEFAULT`）ならそのまま返し API を呼ばない。それ以外は空の `RECT` を `AdjustWindowRectExForDpi` に渡して枠の 4 辺を得て、与えた側にだけ足す（既定の側は `CW_USEDEFAULT` のまま）。API の失敗は今どおり `warn!` を残して元の値を返す。口の形は同じ。古い説明（「CW_USEDEFAULTが含まれる場合は変換せずそのまま返す」・「dpi=96により」）は消した。呼び手（`runtime/window_factory.rs:290`）と `initial_pos_flags` は触っていない。`window_factory.rs:14-16` の「位置だけ・大きさだけの窓も、出た後の刻みで跳ばない」は、この直しで枠つきの窓でも成り立つようになったので直していない。
+- テスト（`window/window_pos/tests.rs`）: 「position.x だけ CW_USEDEFAULT でも素通し」の 1 本を消し、`WS_OVERLAPPEDWINDOW`・96 DPI の 2 本に改めた。`test_to_window_coords_for_creation_position_only_adds_frame_to_position`（位置だけ → 両方を与えたときの (x, y)・大きさは既定）と `test_to_window_coords_for_creation_size_only_adds_frame_to_size`（大きさだけ → 位置は既定・両方を与えたときの (w, h)）。期待値は道具 `overlapped_both_given`（両方を与えた値を求め、枠が 0 でないことを確かめる）から出す。
+- 較正: ⑴ 直す前のコード（素通し）で 2 本とも赤（位置だけ: 得た (500, 50, 既定, 既定)・期待 (492, 19, 既定, 既定)／大きさだけ: 得た (既定, 既定, 300, 200)・期待 (既定, 既定, 316, 239)）。⑵ 直した後に早戻りの条件を `!position_given || !size_given`（片方でも既定なら素通し）へ壊して 2 本とも赤、戻して緑。赤になったテストは上の 2 本。
+- 両方を与えたときの値が今と同じこと: 直す前のコードの両方を与えた値は (492, 19, 316, 239)（⑴ の赤の期待値）。直した後に一時の `assert_eq!(result, (492, 19, 316, 239))` を入れて緑を確かめ、外した（この値は OS の枠の寸法によるので残さない）。
+- 消す前の確かめ: 消したのはテスト 1 本と説明だけ（公開の口ではない）。`git grep -n "to_window_coords_for_creation"` の使い手は `runtime/window_factory.rs:290` と本ファイルのテストだけ。
+- テストの数: `cargo test -p wintf --lib window_pos` 57 → 58（緑）。fmt・clippy（このファイルの警告 0）通る。
