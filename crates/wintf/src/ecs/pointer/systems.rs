@@ -5,7 +5,7 @@
 
 use bevy_ecs::prelude::*;
 
-use super::types::{DoubleClick, PointerLeave, PointerState, WheelDelta};
+use super::types::{PointerLeave, PointerState, WheelDelta};
 
 // ============================================================================
 // システム
@@ -19,9 +19,8 @@ pub fn clear_transient_pointer_state(
     mut commands: Commands,
     leave_query: Query<Entity, With<PointerLeave>>,
 ) {
-    // double_click, wheel をリセット（1フレームのみ有効）
+    // wheel をリセット（1フレームのみ有効）
     for mut pointer in query.iter_mut() {
-        pointer.double_click = DoubleClick::None;
         pointer.wheel = WheelDelta::default();
     }
 
@@ -67,15 +66,6 @@ pub fn debug_pointer_state_changes(
         // ここでは移動・ボタン変化のみログ出力したい場合、
         // 別途フラグ管理が必要だが、デバッグ用なので許容
 
-        // ダブルクリック検出時のみログ
-        if pointer.double_click != DoubleClick::None {
-            debug!(
-                entity = ?entity,
-                double_click = ?pointer.double_click,
-                "[PointerState Changed] DoubleClick detected"
-            );
-        }
-
         // ホイール回転時のみログ
         if pointer.wheel.vertical != 0 || pointer.wheel.horizontal != 0 {
             debug!(
@@ -110,32 +100,39 @@ pub fn debug_pointer_leave(leave_query: Query<Entity, Added<PointerLeave>>) {
 mod tests {
     use super::*;
 
-    /// clear_transient_pointer_state は double_click を None に、wheel を既定値にリセットする。
-    /// （1フレームのみ有効な状態の FrameFinalize クリア）
+    /// ボタンの旗は配り（Input）の後に下り、wheel は clear_transient_pointer_state
+    /// （FrameFinalize）で既定値に戻る。
     #[test]
-    fn test_clear_transient_resets_double_click_and_wheel() {
+    fn test_button_flag_falls_after_dispatch_and_wheel_resets() {
         let mut world = World::new();
         let e = world
             .spawn(PointerState {
-                double_click: DoubleClick::Left,
                 wheel: WheelDelta {
                     vertical: 120,
                     horizontal: -60,
                 },
-                // ボタン状態は transient ではないので保持されることを確認する
                 left_down: true,
                 ..Default::default()
             })
             .id();
+
+        assert!(
+            world.get::<PointerState>(e).unwrap().left_down,
+            "押した tick は真"
+        );
+        crate::ecs::pointer::dispatch_pointer_events(&mut world);
+        assert!(
+            !world.get::<PointerState>(e).unwrap().left_down,
+            "配りの後は偽"
+        );
 
         let mut schedule = Schedule::default();
         schedule.add_systems(clear_transient_pointer_state);
         schedule.run(&mut world);
 
         let s = world.get::<PointerState>(e).unwrap();
-        assert_eq!(s.double_click, DoubleClick::None, "double_click はリセット");
         assert_eq!(s.wheel, WheelDelta::default(), "wheel はリセット");
-        assert!(s.left_down, "ボタン状態は transient ではなく保持される");
+        assert!(!s.left_down, "偽のまま");
     }
 
     /// clear_transient_pointer_state は PointerLeave マーカーを除去する。

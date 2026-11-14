@@ -13,10 +13,6 @@ fn test_button_buffer_state() {
     buffer.record_up();
     assert!(buffer.down_received);
     assert!(buffer.up_received);
-
-    buffer.reset();
-    assert!(!buffer.down_received);
-    assert!(!buffer.up_received);
 }
 
 #[test]

@@ -17,7 +17,7 @@ pub type PhysicalPoint = Point;
 
 /// ダブルクリック種別（1フレームのみ有効）
 ///
-/// FrameFinalize で None にリセットされる。
+/// dispatch_pointer_events の末尾で None にリセットされる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DoubleClick {
     #[default]
@@ -119,7 +119,7 @@ pub struct PointerState {
     pub ctrl_down: bool,
 
     // === ダブルクリック（1フレームのみ有効）===
-    /// ダブルクリック検出（FrameFinalizeでNoneにリセット）
+    /// ダブルクリック検出（dispatch_pointer_events の末尾で None にリセット）
     pub double_click: DoubleClick,
 
     // === ボタン解放（1フレームのみ有効）===
@@ -170,12 +170,6 @@ impl ButtonBuffer {
     /// ボタン解放を記録
     pub fn record_up(&mut self) {
         self.up_received = true;
-    }
-
-    /// バッファをリセット
-    pub fn reset(&mut self) {
-        self.down_received = false;
-        self.up_received = false;
     }
 }
 

@@ -64,8 +64,7 @@ pub(crate) fn record_button_down(entity: Entity, button: PointerButton) {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry((entity, button)).or_default();
         buffer.record_down();
-        // デバッグ用に info レベルで出力
-        tracing::info!(
+        tracing::debug!(
             entity = ?entity,
             button = ?button,
             "[ButtonBuffer] record_button_down"
@@ -81,8 +80,7 @@ pub(crate) fn record_button_up(entity: Entity, button: PointerButton) {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry((entity, button)).or_default();
         buffer.record_up();
-        // デバッグ用に info レベルで出力
-        tracing::info!(
+        tracing::debug!(
             entity = ?entity,
             button = ?button,
             "[ButtonBuffer] record_button_up"
@@ -133,94 +131,61 @@ pub(crate) fn set_modifier_state(entity: Entity, shift: bool, ctrl: bool) {
 /// マルチスレッドで実行されるシステムがアクセスできるように転送する。
 pub(crate) fn transfer_buffers_to_world(world: &mut World) {
     // POINTER_BUFFERSからPointerStateへ位置情報を転送
-    POINTER_BUFFERS.with(|buffers| {
-        let mut buffers = buffers.borrow_mut();
+    // 1 tick 分だけ渡す（取り出して空にする）
+    let points: Vec<(Entity, PhysicalPoint)> =
+        POINTER_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
+    for (entity, point) in points {
+        // Worldから該当エンティティのPointerStateを取得（無ければ捨てる）
+        if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
+            pointer_state.client_point = point;
+            pointer_state.local_point = point;
 
-        for (entity, point) in buffers.iter() {
-            // Worldから該当エンティティのPointerStateを取得（無ければ捨てる）
+            tracing::trace!(
+                entity = ?entity,
+                x = point.x,
+                y = point.y,
+                "[transfer_buffers_to_world] PointerState updated"
+            );
+        }
+    }
+
+    // BUTTON_BUFFERS から PointerState へ、この tick に押された・離された旗を移す。
+    // `*_down` は「この tick に押された」の旗で、配り（dispatch_pointer_events）の後に下りる。
+    let button_bufs: Vec<((Entity, PointerButton), ButtonBuffer)> =
+        BUTTON_BUFFERS.with(|buffers| buffers.borrow_mut().drain().collect());
+    for ((entity, button), buf) in button_bufs.iter() {
+        // 解放の旗は押下と独立に立てる。同じ tick に押下と解放が入っても解放を落とさない。
+        if buf.up_received
+            && let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity)
+        {
+            match button {
+                PointerButton::Left => pointer_state.released.left = true,
+                PointerButton::Right => pointer_state.released.right = true,
+                PointerButton::Middle => pointer_state.released.middle = true,
+                PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
+                PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
+            }
+        }
+
+        if buf.down_received {
+            // ボタンが押された瞬間
             if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                pointer_state.client_point = *point;
-                pointer_state.local_point = *point;
+                match button {
+                    PointerButton::Left => pointer_state.left_down = true,
+                    PointerButton::Right => pointer_state.right_down = true,
+                    PointerButton::Middle => pointer_state.middle_down = true,
+                    PointerButton::XButton1 => pointer_state.xbutton1_down = true,
+                    PointerButton::XButton2 => pointer_state.xbutton2_down = true,
+                }
 
                 tracing::trace!(
                     entity = ?entity,
-                    x = point.x,
-                    y = point.y,
-                    "[transfer_buffers_to_world] PointerState updated"
+                    button = ?button,
+                    "[transfer_buffers_to_world] Button pressed"
                 );
             }
         }
-        // 1 tick 分だけ渡す
-        buffers.clear();
-    });
-
-    // BUTTON_BUFFERSからPointerStateへボタン状態を転送
-    // down_receivedがtrueの場合のみ、ボタンが押されたとしてtrue設定
-    // up_receivedがtrueの場合のみ、ボタンが離されたとしてfalse設定
-    // どちらでもない場合は既存の状態を維持（エッジ検出）
-    BUTTON_BUFFERS.with(|buffers| {
-        let buffers = buffers.borrow();
-
-        for ((entity, button), buf) in buffers.iter() {
-            // 解放の旗は押下優先の分岐とは独立に立てる。同じ tick に押下と解放が
-            // 入っても（下の `if/else if` が押下を選んでも）解放を落とさない。
-            if buf.up_received
-                && let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity)
-            {
-                match button {
-                    PointerButton::Left => pointer_state.released.left = true,
-                    PointerButton::Right => pointer_state.released.right = true,
-                    PointerButton::Middle => pointer_state.released.middle = true,
-                    PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
-                    PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
-                }
-            }
-
-            if buf.down_received {
-                // ボタンが押された瞬間
-                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                    match button {
-                        PointerButton::Left => pointer_state.left_down = true,
-                        PointerButton::Right => pointer_state.right_down = true,
-                        PointerButton::Middle => pointer_state.middle_down = true,
-                        PointerButton::XButton1 => pointer_state.xbutton1_down = true,
-                        PointerButton::XButton2 => pointer_state.xbutton2_down = true,
-                    }
-
-                    tracing::trace!(
-                        entity = ?entity,
-                        button = ?button,
-                        "[transfer_buffers_to_world] Button pressed"
-                    );
-                }
-            } else if buf.up_received {
-                // ボタンが離された瞬間
-                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                    match button {
-                        PointerButton::Left => pointer_state.left_down = false,
-                        PointerButton::Right => pointer_state.right_down = false,
-                        PointerButton::Middle => pointer_state.middle_down = false,
-                        PointerButton::XButton1 => pointer_state.xbutton1_down = false,
-                        PointerButton::XButton2 => pointer_state.xbutton2_down = false,
-                    }
-
-                    tracing::trace!(
-                        entity = ?entity,
-                        button = ?button,
-                        "[transfer_buffers_to_world] Button released"
-                    );
-                }
-            }
-        }
-    });
-
-    // BUTTON_BUFFERSをリセット（転送完了後）
-    BUTTON_BUFFERS.with(|buffers| {
-        let mut buffers = buffers.borrow_mut();
-        for buf in buffers.values_mut() {
-            buf.reset();
-        }
-    });
+    }
 
     // WHEEL_BUFFERS（窓ごと）から、その窓の中でポインタの状態を持つ entity（高々 1 つ）へ移す。
     // 持ち主が居なければ捨てる（要件 6.10）。どちらでも溜めは毎回空にする（1 tick 分だけ渡す）。
@@ -255,16 +220,15 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
     }
 
     // MODIFIER_STATEからPointerStateへ修飾キー状態を転送
-    MODIFIER_STATE.with(|state| {
-        let state = state.borrow();
-
-        for (entity, (shift_down, ctrl_down)) in state.iter() {
-            if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                pointer_state.shift_down = *shift_down;
-                pointer_state.ctrl_down = *ctrl_down;
-            }
+    // 届かない tick は前の値のまま（PointerState の欄が持つ）
+    let modifiers: Vec<(Entity, (bool, bool))> =
+        MODIFIER_STATE.with(|state| state.borrow_mut().drain().collect());
+    for (entity, (shift_down, ctrl_down)) in modifiers {
+        if let Some(mut pointer_state) = world.get_mut::<PointerState>(entity) {
+            pointer_state.shift_down = shift_down;
+            pointer_state.ctrl_down = ctrl_down;
         }
-    });
+    }
 }
 
 // ============================================================================
@@ -384,40 +348,54 @@ mod tests {
     }
 
     #[test]
-    fn test_transfer_buffers_to_world_button_edge_detection_and_reset() {
+    fn test_transfer_buffers_to_world_empties_all_three_buffers() {
         reset_all_buffers();
         let mut world = World::new();
         let e = world.spawn(PointerState::default()).id();
 
-        // down のみ受信 → left_down = true
+        push_pointer_sample(e, PhysicalPoint::new(1, 2));
+        record_button_down(e, PointerButton::Left);
+        set_modifier_state(e, true, false);
+        transfer_buffers_to_world(&mut world);
+
+        assert!(POINTER_BUFFERS.with(|b| b.borrow().is_empty()), "位置は空");
+        assert!(BUTTON_BUFFERS.with(|b| b.borrow().is_empty()), "ボタンは空");
+        assert!(
+            MODIFIER_STATE.with(|b| b.borrow().is_empty()),
+            "修飾キーは空"
+        );
+    }
+
+    #[test]
+    fn test_transfer_buffers_to_world_press_is_true_only_in_its_tick() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let e = world.spawn(PointerState::default()).id();
+
+        // 押下を移すと、その tick だけ真
         record_button_down(e, PointerButton::Left);
         transfer_buffers_to_world(&mut world);
         assert!(
             world.get::<PointerState>(e).unwrap().left_down,
-            "down 受信で押下状態 true"
+            "押した tick は真"
         );
 
-        // transfer 後 ButtonBuffer は reset される（down_received/up_received=false）。
-        // フラグなしの transfer では既存の押下状態が維持される（エッジ検出）。
-        transfer_buffers_to_world(&mut world);
+        // 配りの後は偽で、知らせの無い次の tick も偽のまま
+        crate::ecs::pointer::dispatch_pointer_events(&mut world);
         assert!(
-            world.get::<PointerState>(e).unwrap().left_down,
-            "イベントなしでは押下状態を維持"
+            !world.get::<PointerState>(e).unwrap().left_down,
+            "配りの後は偽"
         );
-
-        // up 受信 → left_down = false
-        record_button_up(e, PointerButton::Left);
         transfer_buffers_to_world(&mut world);
         assert!(
             !world.get::<PointerState>(e).unwrap().left_down,
-            "up 受信で押下状態 false"
+            "次の tick も偽"
         );
     }
 
     #[test]
     fn test_transfer_buffers_to_world_sets_released_flag_even_with_down() {
-        // 同じ tick に押下と解放が入ると、押下優先の `if/else if` では解放が捨てられる。
-        // 解放の旗は独立した文で立てるため、押下状態と同時に立つ。
+        // 同じ tick に押下と解放が入っても、解放の旗は押下の旗と同時に立つ。
         reset_all_buffers();
         let mut world = World::new();
         let e = world.spawn(PointerState::default()).id();
@@ -427,7 +405,7 @@ mod tests {
         transfer_buffers_to_world(&mut world);
 
         let s = world.get::<PointerState>(e).unwrap();
-        assert!(s.right_down, "押下優先の既存分岐は不変");
+        assert!(s.right_down, "押下の旗も立つ");
         assert!(s.released.right, "同 tick でも解放の旗は落ちない");
         assert!(s.released.any(), "any() が真");
         assert!(!s.released.left, "他のボタンの旗は立たない");
