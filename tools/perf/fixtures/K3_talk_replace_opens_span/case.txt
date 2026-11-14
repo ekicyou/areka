@@ -1,0 +1,12 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 開いた発話の無いところの steady_talk_replace も発話の始まりとして数える
+mode = baseline
+build = release
+exit = 0
+emit_metrics = yes
+
+note = 90 秒に steady_talk_replace（差し替え）だけがあり、その前に開いた発話は無い。95 秒の
+note = steady_talk_done で閉じ、92 秒の CPU 5.00 が発話中の頂になる。差し替えを始まりの組から
+note = 外すと区間が 1 本も無くなり、頂が「-」（測っていない）に化ける（K2 の入れ子では見えない）。
+
+contains = metric=talk_peak_cpu_pct value=5.00

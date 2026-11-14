@@ -234,6 +234,22 @@ def case_K2() -> g.Fixture:
     )
 
 
+def case_K3() -> g.Fixture:
+    f = _healthy("K3_talk_replace_opens_span").cpu_series(count=12).cpu_point(87.0, 9.0).cpu_point(92.0, 5.0)
+    f._add(_at(90.0), g.talk_line(_at(90.0), "steady_talk_replace"))
+    f._add(_at(95.0), g.talk_line(_at(95.0), "steady_talk_done"))
+    return f.declare(
+        "baseline", 0, "開いた発話の無いところの steady_talk_replace も発話の始まりとして数える", build="release",
+        emit_metrics=True,
+        notes=[
+            "90 秒に steady_talk_replace（差し替え）だけがあり、その前に開いた発話は無い。95 秒の",
+            "steady_talk_done で閉じ、92 秒の CPU 5.00 が発話中の頂になる。差し替えを始まりの組から",
+            "外すと区間が 1 本も無くなり、頂が「-」（測っていない）に化ける（K2 の入れ子では見えない）。",
+        ],
+        contains=("metric=talk_peak_cpu_pct value=5.00",),
+    )
+
+
 def _profile(name: str, profile: str) -> g.Fixture:
     return _healthy(name).cpu_series(count=12).run_meta(profile=profile)
 
@@ -277,7 +293,7 @@ def case_C3() -> g.Fixture:
         contains=(
             "metric=catchup_count value=-",
             "metric=catchup_dispatcher value=1",
-            "target=(lane 欄なし): 1 件",
+            "lane=(lane 欄なし): 1 件",
         ),
     )
 
@@ -321,7 +337,7 @@ def case_A1() -> g.Fixture:
 def _bad_perf(name: str, edit, what: str) -> g.Fixture:
     f = _edit_perf_row(_healthy(name).cpu_series(count=12), 100.0, edit)
     return f.declare(
-        "verdict", 2, f"perf 行の{what}は判定不能", build="release",
+        "verdict", 2, f"{what} perf 行は判定不能", build="release",
         notes=[
             f"H11 の芯の定常状態の perf 行 1 本を、{what}形にした（要件 2.5）。",
             "その行を黙って捨てると残りの行で合格（0）に化けるので、判定不能（2）にする。",
@@ -365,7 +381,43 @@ def case_P15() -> g.Fixture:
     )
 
 
+def case_P16() -> g.Fixture:
+    # P14 と同じ寸法で、重なるアニメを判定対象と **同じ** scope="0" にし、停止を区間 (a, b] の中に置く。
+    f = (g.Fixture("P16_same_scope_stop_inside_interval").boot()
+         .cycle_series(g.JUDGED_TARGET, g.JUDGED_SURFACE, g.MAIN_WAITS_MS, g.P14_HEALTHY_CYCLES)
+         .cycle_series(g.JUDGED_TARGET, g.JUDGED_SURFACE, (g.P14_SLOW_INTERVAL_MS,), g.P14_SLOW_CYCLES,
+                       start_sec=g.P14_SLOW_START_SEC))
+    for c in range(g.P14_SLOW_CYCLES):
+        f.other_scope_span(at_sec=g.P14_SLOW_START_SEC + c - 0.010, duration_ms=200.0,
+                           scope="0", animation_id="1402")
+    return f.cpu_series().run_meta().declare(
+        "verdict", 0, "同じ scope の 2 本目が区間の途中で止まっても、区間の始め a で数えて落とす", build="release",
+        notes=[
+            "P14 の 400ms の間隔 10 本の各区間で、同じ scope=\"0\" の 1402 が a の 10ms 前に発火し、",
+            "a から 190ms 後（区間 (a, b] の中）に止まる。a では 2 本走っているので、窓 C の条件 4 が",
+            "この 10 本を落とし、健全な 140 本で合格（0）になる。b では 1 本に戻っているので、",
+            "b だけで数えると 10 本が残り、上位 5% が 400ms＝不合格（1）に化ける。",
+        ],
+    )
+
+
+def check_names(names: list[str]) -> set[str]:
+    """検体の名が空でなく重ならないことを確かめる（generate.py の main() が書く前に呼ぶ）。"""
+    if "" in names or len(set(names)) != len(names):  # 空の名は write() が fixtures/ ごと消す・重なりは黙って上書き
+        raise SystemExit("every fixture needs its own non-empty name")
+    return set(names)
+
+
+for _bad in (["", "a"], ["a", "a"]):  # 自己確認: 空の名と重なる名は止まる
+    try:
+        check_names(_bad)
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError(f"check_names let {_bad} through")
+
+
 CASES = (case_N1, case_U1, case_L1, case_L2, case_L3, case_L4, case_L5, case_V1,
-         case_S1, case_S2, case_S3, case_B2, case_X3, case_K1, case_K2,
+         case_S1, case_S2, case_S3, case_B2, case_X3, case_K1, case_K2, case_K3,
          case_M1, case_M2, case_C3, case_C4, case_E4, case_A1,
-         case_R1, case_R2, case_R3, case_P15)
+         case_R1, case_R2, case_R3, case_P15, case_P16)

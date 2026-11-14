@@ -230,13 +230,13 @@ def render(
     for target in targets:
         total = analysis.total_by_target.get(target, 0)
         steady = analysis.steady_by_target.get(target, 0)
-        emit(f"    系統 target={target}: 全区間 {total} 件（うち定常状態 {steady} 件）")
+        emit(f"    系統 lane={target}: 全区間 {total} 件（うち定常状態 {steady} 件）")
     others = sorted(set(analysis.total_by_target) - set(targets))
     for target in others:
         total = analysis.total_by_target.get(target, 0)
         steady = analysis.steady_by_target.get(target, 0)
         emit(
-            f"    系統 target={target}: 全区間 {total} 件（うち定常状態 {steady} 件）"
+            f"    系統 lane={target}: 全区間 {total} 件（うち定常状態 {steady} 件）"
             "   ← 既知の 3 系統に無い値（ticker.rs と本スクリプトの語彙がずれた疑い）"
         )
     if analysis.undated:

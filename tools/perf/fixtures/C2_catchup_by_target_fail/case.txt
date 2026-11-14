@@ -14,6 +14,6 @@ note = 1.000 であり、仮説は 不成立 と印字されなければなら�
 note = 仮説の語は終了コードを動かさないので contains 行で固定する。
 
 contains = 仮説: 不成立
-contains = target=dispatcher
-contains = target=kanade
-contains = target=loop_ticker
+contains = lane=dispatcher
+contains = lane=kanade
+contains = lane=loop_ticker

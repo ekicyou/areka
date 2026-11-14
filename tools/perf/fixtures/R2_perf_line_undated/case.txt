@@ -1,5 +1,5 @@
 # judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
-title = perf 行の行頭に時刻が無いは判定不能
+title = 行頭に時刻が無い perf 行は判定不能
 mode = verdict
 build = release
 exit = 2

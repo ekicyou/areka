@@ -241,7 +241,8 @@ FRAME_INTERVAL_SERIES_KEY = ("target_id", "surface_id")
 #:     **上限の 4 倍で動いているアニメが判定の窓から丸ごと消えて合格に化ける**
 #: 後者は「速い系列だけが残って合格」という、本 spec が二度踏んだ形そのものである
 #: （fixture P13 がその位相を固定している。P12 は前者）。
-#: ゆえに、区間の両端のいずれかで推定活性本数がこの値を超える間隔は判定に使わない。
+#: ゆえに、区間の始め a で推定活性本数がこの値を超える間隔は判定に使わない（b の本数は
+#: 条件 3 により a 以下＝(a, b] には停止しか無いので、b を見る必要は無い）。
 #:
 #: 【数える範囲＝判定対象系列に対応する scope のアニメだけ（0.3.2 の是正）】
 #: 活性本数は **系列ごと**（FRAME_INTERVAL_SERIES_SCOPE がその系列に結び付けた scope）に
@@ -280,8 +281,8 @@ FRAME_INTERVAL_IDLE_MAX_ACTIVE = 1
 #:      f が存在しない系列・時刻は対象外
 #:   2. a - f <= FRAME_INTERVAL_CYCLE_SPAN_MS（＝サイクルの内側にある適用だけを起点にする）
 #:   3. 区間 (a, b] に新しい「loop 抽選発火」が無い（サイクルとサイクルの間の空白を落とす）
-#:   4. a と b の **両方** で、**その系列に対応する scope の**（＝条件 1 と同じ scope の）
-#:      推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下
+#:   4. a で、**その系列に対応する scope の**（＝条件 1 と同じ scope の）推定活性アニメ本数が
+#:      FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下（b の本数は条件 3 により a 以下＝(a, b] には停止しか無い）
 #:      （＝同じ鍵に 2 本のアニメが混ざった区間を落とす。別 scope のアニメは数えない）
 #:
 #: 条件 3 が「まばたきは数秒に 1 回しか起きない」という **正常な空白** を落とし、
@@ -296,7 +297,7 @@ FRAME_INTERVAL_IDLE_MAX_ACTIVE = 1
 FRAME_INTERVAL_WINDOW = (
     "窓 C（発火起点）: 「loop 抽選発火」時刻 f を起点に、a - f <= "
     "FRAME_INTERVAL_CYCLE_SPAN_MS かつ区間 (a, b] に次の発火を含まず、"
-    "さらに両端で **同じ scope の** 推定活性アニメ本数が "
+    "さらに a で **同じ scope の** 推定活性アニメ本数が "
     "FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下の間隔だけを判定に使う"
     "（別 scope のアニメは数えない）。"
     "停止ログは終端に使わない（最後のコマの適用より先に出るため。活性本数の収支には使う）。"
@@ -1257,8 +1258,8 @@ def judge_window_intervals(
          a 以前で最も新しいものを f とする（存在しなければ対象外）
       2. a - f <= FRAME_INTERVAL_CYCLE_SPAN_MS
       3. 区間 (a, b] に次の発火が無い
-      4. a と b の **両方** で、**1 と同じ scope の** 推定活性アニメ本数が
-         FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下（別 scope のアニメは数えない）
+      4. a で、**1 と同じ scope の** 推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下
+         （別 scope は数えない。b の本数は条件 3 により a 以下。b だけで数えると途中で止まる 2 本目を見逃す・P16）
 
     【なぜこの形か（task 3.2）】この系列の生の差分は性質の違う 4 種類を混ぜている——
     サイクル内のコマ間隔（判定したいのはこれ）／サイクルとサイクルの間の空白（まばたきは
@@ -1310,10 +1311,8 @@ def judge_window_intervals(
                 continue
             if _has_time_in_half_open(fires, a, b):
                 continue
-            if (
-                active_count_at(timeline, a) > FRAME_INTERVAL_IDLE_MAX_ACTIVE
-                or active_count_at(timeline, b) > FRAME_INTERVAL_IDLE_MAX_ACTIVE
-            ):
+            # b は見ない: 条件 3 で (a, b] に発火が無いので、b の本数は a 以下である。
+            if active_count_at(timeline, a) > FRAME_INTERVAL_IDLE_MAX_ACTIVE:
                 continue
             by_series[key].append((b - a).total_seconds() * 1000.0)
     return by_series
@@ -1565,7 +1564,7 @@ def render_calibration(report: Report) -> None:
         (
             "FRAME_INTERVAL_IDLE_MAX_ACTIVE",
             FRAME_INTERVAL_IDLE_MAX_ACTIVE,
-            "判定窓の条件 4＝両端の推定活性アニメ本数の上限。"
+            "判定窓の条件 4＝区間の始め a の推定活性アニメ本数の上限（b は条件 3 により a 以下）。"
             "同じ鍵に 2 本のアニメが混ざるとその差はどちらのコマ間隔でもなくなる"
             "（位相しだいで偽の合格へ倒れる）。"
             "数えるのは **その系列に対応する scope だけ**（0.3.2）",
@@ -1666,12 +1665,12 @@ def render_calibration(report: Report) -> None:
         (
             "CONVERGENCE_SLOPE_MAX_PCT_PER_MIN",
             CONVERGENCE_SLOPE_MAX_PCT_PER_MIN,
-            "収束判定・暫定・task 7.2 で確定",
+            "収束判定・recompose-budget task 7.2 で確定",
         ),
         (
             "CONVERGENCE_WINDOW_DIFF_MAX_PCT",
             CONVERGENCE_WINDOW_DIFF_MAX_PCT,
-            "収束判定・暫定・task 7.2 で確定",
+            "収束判定・recompose-budget task 7.2 で確定",
         ),
         (
             "CONVERGENCE_MIN_SAMPLES_PER_WINDOW",
@@ -1802,7 +1801,7 @@ def render_intervals(report: Report, agg: Aggregation, section: str = "7") -> No
         "上限ではない（task 3.2）。"
     )
     report.line(
-        f"  窓 C の条件 4: 両端の推定活性アニメ本数 <= "
+        f"  窓 C の条件 4: 区間の始め a の推定活性アニメ本数 <= "
         f"{FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本。"
         "同じ鍵に 2 本のアニメが混ざった区間の差は、どちらのアニメのコマ間隔でもない。"
     )
@@ -1888,7 +1887,7 @@ def render_catchup(report: Report, agg: Aggregation, section: str = "9") -> None
         report.sub(label)
         report.line(f"  合計 {len(events)} 件")
         for (kind, target), count in sorted(counts.items()):
-            report.line(f"    文言={kind}  target={target}: {count} 件")
+            report.line(f"    文言={kind}  lane={target}: {count} 件")
 
     # --- 0.4.0: 系統別・各発生の時刻突合と仮説の数値（要件 2.9）--------------
     judge_perf_catchup.render(
@@ -2468,7 +2467,7 @@ def judge_catchup(agg: "Aggregation", steady: SteadyState) -> FormulaResult:
     if in_steady:
         counts: Counter = Counter((kind, target) for _at, kind, target in in_steady)
         for (kind, target), count in sorted(counts.items()):
-            reasons.append(f"  文言={kind}  target={target}: {count} 件")
+            reasons.append(f"  文言={kind}  lane={target}: {count} 件")
         return FormulaResult(
             tag="⑵",
             title="定常状態の進行境界スキップ（catch-up）件数",
@@ -3220,9 +3219,10 @@ def run_baseline(args: argparse.Namespace) -> int:
         f"{FRAME_INTERVAL_CYCLE_SPAN_MS:.0f}ms 以上離れた適用」であって、"
         "会話中でも発火直後の適用は窓に入る。",
         "同一の (target_id, surface_id) に 2 本のアニメが重なると互いを隠す"
-        "（混ざった列の隣接差はどちらのコマ間隔でもなくなる）。窓 C はこれを塞いでいない。",
+        "（混ざった列の隣接差はどちらのコマ間隔でもなくなる）。窓 C の条件 4 が塞ぐのは 2 本目が"
+        "自分の発火を記録する形だけで、記録の無い書き換えが混ざる形は塞いでいない（fixture P12）。",
         "活性アニメ本数は発火・停止 info! の収支からの間接推定であり、直接の観測ではない"
-        "（要件 5.1 の傍証にのみ使う。判定式⑴の窓はこの推定を使っていない）。",
+        "（要件 5.1 の傍証と、判定式⑴の窓 C の条件 4 に使う）。",
     ]
     if not agg.steady_perf:
         caveats.insert(

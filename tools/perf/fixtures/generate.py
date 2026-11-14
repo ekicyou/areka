@@ -9,6 +9,7 @@
 
     python generate.py            # fixtures/ を作り直す（差分が出なければ登録内容と一致）
                                   # 作ったもの以外のフォルダがあれば名を出して止まる
+                                  # 名が空か重なる検体があっても止まる（書く前に）
 
 作り直したあと `git status` が汚れなければ、コミットされている fixture は下の定義どおりで
 ある。汚れたら、どちらかが変わっている（生成条件を変えたのか、fixture を手で触ったのか）。
@@ -665,9 +666,9 @@ def case_C1() -> Fixture:
             ],
             contains=(
                 "仮説: 成立",
-                "target=dispatcher",
-                "target=kanade",
-                "target=loop_ticker",
+                "lane=dispatcher",
+                "lane=kanade",
+                "lane=loop_ticker",
                 "metric=steady_idle_cpu_mean_pct value=1.61",
                 "metric=frame_interval_p95_ms value=150.000",
                 "metric=catchup_count value=0",
@@ -709,9 +710,9 @@ def case_C2() -> Fixture:
             ],
             contains=(
                 "仮説: 不成立",
-                "target=dispatcher",
-                "target=kanade",
-                "target=loop_ticker",
+                "lane=dispatcher",
+                "lane=kanade",
+                "lane=loop_ticker",
             ),
         )
     )
@@ -1206,9 +1207,7 @@ CASES = (
 def main() -> int:
     import generate_more  # 実行時に読む（読み込み時だと循環になる）
     made = [f() for f in CASES + generate_more.CASES]
-    names = {fx.name for fx in made}
-    if "" in names or len(names) != len(made):  # 空の名は write() が fixtures/ ごと消す・重なりは黙って上書き
-        raise SystemExit("every fixture needs its own non-empty name")
+    names = generate_more.check_names([fx.name for fx in made])
     stray = sorted(p.name for p in HERE.iterdir()
                    if p.is_dir() and not p.name.startswith(("_", ".")) and p.name not in names)
     if stray:

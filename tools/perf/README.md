@@ -302,8 +302,10 @@ areka は前回の窓の位置を `run-meta.txt` の `areka_profile_dir` が指�
 1. その列に対応する発火のうち、a 以前で最も新しいものを f とする（無ければ対象外）
 2. `a − f ≤ 172 ミリ秒`（＝ a がサイクルの内側にある）
 3. 区間 `(a, b]` に次の発火が無い
-4. a と b の**両方**で、**その列に対応するグループ**（条件 1 と同じ `scope`）の中で
-   同時に走っているアニメの推定本数が 1 本以下
+4. a の時点で、**その列に対応するグループ**（条件 1 と同じ `scope`）の中で
+   同時に走っているアニメの推定本数が 1 本以下（b の本数は条件 3 により a 以下です。
+   `(a, b]` には停止しか無いので、b を見る必要はありません。b だけで数えると区間の途中で
+   止まった 2 本目を見逃します＝`fixtures/P16_same_scope_stop_inside_interval`）
 
 条件 3 が「まばたきは数秒に 1 回しか起きない」という**正常な空白**を落とし、条件 2 が
 発火と無関係な適用（会話で別の絵に切り替わる等）を落とします。
@@ -396,6 +398,8 @@ python tools/perf/judge-perf.py --selftest
 固定しているのか」の説明も入っているので、その 1 ファイルを読めば意図が分かります。
 鍵は `mode`・`exit`（必須）と `build`・`twin`・`title`・`note`・`contains`・`emit_metrics` です。
 知らない鍵は黙って捨てず **exit 3** で止めます（綴りを誤った鍵の確かめが消えるため）。
+`=` の無い行、同じ鍵の 2 度書き（何度でも書ける `contains`・`note` を除く）、UTF-8 で読めない
+`case.txt` も同じく exit 3 です（後に書いた値が黙って勝つ・読めない台帳を飛ばす形を作らないため）。
 `contains = <文字列>` はレポートの本文にその文字列があることを求め、`emit_metrics = yes` は
 `--emit-metrics` を付けて走らせます（終了コードが中身を 1 つも映さない走行の数値を固定するため）。
 期待値をスクリプト側の表に持たせていないのは、fixture と期待値が別々に古びて静かに
@@ -408,9 +412,11 @@ python tools/perf/judge-perf.py --selftest
 走らなかった場合、`--selftest` は**それ自体を失敗**として終了コード 1 を返します（「全部通った」と
 「1 つも走らなかった」が見分けられない点検には意味がないため）。
 
-終了コードは 0（全件一致）／1（1 件でも食い違い）／3（`fixtures/` を読めない）です。
-最後の行は決まった ASCII の形 `SELFTEST RESULT ok=<n> ng=<m>` です（ok は期待どおりだった
-fixture の数・ng は食い違いの数）。
+終了コードは 0（全件一致）／1（1 件でも食い違い）／3（`fixtures/` を読めない・または自己較正
+そのものが想定外の例外で落ちた。このときの最後の行は `JUDGE-PERF RESULT code=3`）です。
+最後の行は決まった ASCII の形 `SELFTEST RESULT ok=<n> ng=<m>` です（ok は終了コードが期待どおり
+だった fixture の数・ng は食い違いの全件＝終了コードのほか、色なしの双子・`contains`・
+4 つの終了コードの再現漏れ・フィールド名の重複・差し替えの較正の食い違いも数えます）。
 検体では作れない場面（想定外の例外・明示指定の 2 系列など）は `judge_perf_selftest_inproc.py` が
 判定の関数を差し替えて確かめ、`差し替えの較正: <N> 件・食い違い <M> 件` の 1 行に出ます
 （1 件も走らなかったら、それ自体を食い違いとして終了コード 1 にします）。
@@ -442,6 +448,7 @@ fixture の数・ng は食い違いの数）。
 | `C4_undated_catchup_verdict` | 2 | 同じ入力を合否判定で読むと、判定式⑵ は「0 件」と言い切れず判定不能 |
 | `K1_boot_talk_excluded` | 0 | 起動の挨拶は `boot_talk_done` で閉じ、その後の CPU の山を発話中の頂に巻き込まない |
 | `K2_talk_spans_closed_and_open` | 0 | 発話は `steady_talk_done` で閉じ、`steady_talk_replace` の入れ子は畳み、終わりの無い発話は走行の最後で閉じる（`talk_peak_cpu_pct` で固定） |
+| `K3_talk_replace_opens_span` | 0 | 開いた発話の無いところの `steady_talk_replace` も発話の始まりとして数える（K2 の入れ子では見えない） |
 | `L1_long_flat_pass`・`L2_long_rising_fail`・`L3_long_too_short` | 0・1・2 | 長い走行（20 分超）の平坦は合格・上り続けると⑷b だけ不合格・20 分に届かなければ判定不能 |
 | `L4_long_window_diff_fail`・`L5_long_slope_fail` | 1・1 | ⑷b の 2 つの条件を 1 つずつ: 末尾窓 − 中間窓だけが越える・後半窓の傾きだけが越える |
 | `M1_profile_empty`・`M2_profile_unknown` | 2 | `profile` は `short`・`long` 以外では（空でも未知の語でも）判定不能 |
@@ -450,6 +457,7 @@ fixture の数・ng は食い違いの数）。
 | `A1_steady_alloc_fail` | 1 | 定常状態で表示用バッファの確保が 1 回でもあれば不合格（判定式⑶） |
 | `R1_perf_line_missing_field`・`R2_perf_line_undated`・`R3_perf_line_cache_hit_not_bool` | 2 | perf 行の必須の欄の欠け・行頭の時刻の欠け・`cache_hit` の値の誤りは、行を捨てずに判定不能（要件 2.5） |
 | `P15_other_stop_messages` | 0 | 「末尾残留」と「bind から外れた ID の再生を停止」もアニメの終わりとして数える（数えないと条件 4 が間隔を全部落とす） |
+| `P16_same_scope_stop_inside_interval` | 0 | 同じグループの 2 本目が区間 `(a, b]` の途中で止まる。条件 4 は a で数えて落とす（b だけで数えると不合格に化ける） |
 | `S1_explicit_19_intervals`・`S2_explicit_20_intervals`・`S3_explicit_over_limit` | 2・0・1 | 明示指定の系列の間隔が 19 本で判定不能・20 本で判定できる・19 本でも上限超過なら不合格（§12 の 4 番） |
 | `T2_tick_lines_absent` | 0 | catch-up はあるが `[tick]` 行が 1 本も無い（仮説は判定不能・合否には効かない） |
 | `U1_bom_run_log` | 0 | BOM 付きの `run.log`・`cpu.csv` も同じに読める |
@@ -609,7 +617,9 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 日本語のままです。スキルがその語で台帳の状態を見分けるため）。最後の行は道具ごとに決まった
 形です。`judge-perf.py` は `JUDGE-PERF RESULT code=<n>`（失敗の文の後ろにも付き、想定外の例外は
 exit 3）、`--selftest` は `SELFTEST RESULT ok=<n> ng=<m>`、`perf-compare.py` は `PERF-COMPARE RESULT ...`、
-`judge-followup.py` は報告の最後の `FOLLOWUP VERDICT ...` です。
+`judge-followup.py` は報告の最後の `FOLLOWUP VERDICT ...`、`perf-rank.py` は書けたときの
+`perf-rank: wrote the ranking: <path>`、`perf-ledger.py` は `status`／`final` で
+`PERF-LOOP STATUS ...`／`PERF-LOOP FINAL: ...` です。
 Python の各道具（`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`judge-followup.py`・
 `perf-ledger.py`）は標準出力・標準エラーを端末の文字コードによらず UTF-8 で書くので、どの字も
 書けて例外では落ちません（`backslashreplace` は UTF-8 にも書けない孤立サロゲートだけの備えです）。
@@ -960,8 +970,9 @@ pwsh -File tools/perf/invoke-cpu-sample.ps1 -SelfTest                   # 道具
   段③＝`no_dump`（dump が無い）・`declared_unavailable`（採取側が「使えない」と宣言した）です。
   どれも順位表を書けた扱いで exit 0 です。
 - **逆に、段③が使える環境で走ったのに `areka.exe!` の解決フレームが 0 なら計測失敗（exit 4）です。**
-  記号の解けていない dump は、見た目が正常でも中身が空だからです。**0 バイトの `dump.txt` も
-  計測失敗（exit 4）で、`no_dump` にはなりません**（在るのに空は採取の失敗です）。
+  記号の解けていない dump は、見た目が正常でも中身が空だからです。**段②か段③を出すときは、
+  0 バイトの `dump.txt` も計測失敗（exit 4）で、`no_dump` にはなりません**（在るのに空は採取の
+  失敗です）。dump を使わない段①④だけの走行は、dump が空でも止めません。
 - **段③は areka の処理の行だけを数えます。** 採取はシステム全体なので、dump には Idle や他の
   プロセスの行も入ります。`perf-rank.py` は処理名が `areka.exe (` で始まる `SampledProfile` の行と、
   その（時刻, TID）に当たる `Stack` の行だけを数えます。

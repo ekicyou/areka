@@ -12,4 +12,4 @@ note = 欄の無い行を既知の系統へ寄せず (lane 欄なし) と名指�
 
 contains = metric=catchup_count value=-
 contains = metric=catchup_dispatcher value=1
-contains = target=(lane 欄なし): 1 件
+contains = lane=(lane 欄なし): 1 件
