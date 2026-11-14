@@ -66,7 +66,7 @@ def list_case_dirs(root: Path, case_file: str, fail: Fail, *,
     偽ならどのフォルダもケースとして返す（`case_file` の無いことは道具の読みが拒む）。
     """
     if not root.is_dir():
-        raise fail(f"自己較正のケース置き場がありません: {root}")
+        raise fail(f"selftest case folder not found: {root}")
     cases: list[Path] = []
     materials: list[str] = []
     for child in sorted(root.iterdir()):
@@ -78,8 +78,8 @@ def list_case_dirs(root: Path, case_file: str, fail: Fail, *,
             cases.append(child)
     if not cases:
         raise fail(
-            f"自己較正のケースが 1 件もありません: {root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
+            f"selftest has no cases: {root}",
+            ["a selftest without cases checks nothing and returns green."],
         )
     return cases, materials
 
@@ -98,15 +98,15 @@ def read_case_fields(path: Path, allowed: frozenset[str], multi: frozenset[str],
             continue
         key, separator, value = line.partition("=")
         if not separator:
-            raise fail(f"{path}:{lineno}: `名前 = 値` の形で書きます（{line!r}）")
+            raise fail(f"{path}:{lineno}: write `name = value` (got {line!a})")
         key, value = key.strip(), value.strip()
         if key in multi:
             multiple[key].append(value)
         elif key in allowed:
             single[key] = value
         else:
-            names = "・".join(sorted(allowed | multi))
-            raise fail(f"{path}:{lineno}: 知らない項目です: {key!r}", [f"使えるのは {names} です。"])
+            names = ", ".join(sorted(allowed | multi))
+            raise fail(f"{path}:{lineno}: unknown key: {key!a}", [f"allowed keys: {names}"])
     return single, multiple
 
 
@@ -201,11 +201,38 @@ def _readme_example_paths(readme: Path) -> list[str]:
     return reasons
 
 
+def _helper_failure_texts() -> list[str]:
+    """支えが自分で組む失敗の文（道具の stderr へそのまま出る）を、わざと 4 通り失敗させて集める。"""
+    def fail(message: str, details: list[str] | tuple[str, ...] = ()) -> Exception:
+        return ValueError(" | ".join([message, *details]))
+
+    texts: list[str] = []
+    with work_dir("perf-selftest-check-") as folder:
+        bad = folder / "case.txt"
+        attempts = [
+            lambda: list_case_dirs(folder / "missing", "case.txt", fail, materials_allowed=False),
+            lambda: list_case_dirs(folder, "case.txt", fail, materials_allowed=False),
+        ]
+        for body in ("no separator", "unknown = 1"):
+            attempts.append(lambda body=body: (bad.write_text(body, encoding="utf-8"),
+                                               read_case_fields(bad, frozenset({"title"}),
+                                                                frozenset(), fail)))
+        for attempt in attempts:
+            try:
+                attempt()
+            except ValueError as exc:
+                texts.append(str(exc))
+            else:
+                texts.append("(no failure raised)")
+    return texts
+
+
 def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
     """木全体の見張り。食い違いの理由（ASCII）を返す。空なら合格。
 
     ⑴ tools/perf の .py が tempfile を読まない・`work_dir` の子が別に求めた根の target\\perf-loop-tmp の下
-    ⑵ tools/perf の .py に U+FEFF の字が無い ⑷ `first_difference` が ASCII を出す。
+    ⑵ tools/perf の .py に U+FEFF の字が無い ⑷ `first_difference` が ASCII を出す
+    ⑹ 支え自身の失敗の文（ケース置き場・case.txt の読み）が ASCII。
     ⑶（`invoke` が受けた stderr の全行が ASCII）と ⑸（README の例の道筋）は道具の側から真にする。
     """
     reasons: list[str] = []
@@ -220,6 +247,9 @@ def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
             reasons.append(f"(1) {name} imports tempfile (use perf_selftest_common.work_dir)")
         if any(bom in text for bom in _BOM_TEXTS):
             reasons.append(f"(2) {name} has a U+FEFF character (decode with utf-8-sig)")
+    for text in _helper_failure_texts():
+        if not text.isascii() or text == "(no failure raised)":
+            reasons.append(f"(6) helper failure message is not ASCII (or not raised): {ascii(text)}")
     for child in _children_made:
         if child.resolve().parent != work_root:
             reasons.append(f"(1) work dir {ascii(str(child))} is not under {ascii(str(work_root))}")

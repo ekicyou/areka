@@ -1,4 +1,4 @@
-perf-rank 0.1.0 run=no_tick_lines stages=process,thread,function,phase top=3
+perf-rank 0.2.0 run=no_tick_lines stages=process,thread,function,phase top=3
 
 [1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=steady
   steady_mean_pct                     3.00
@@ -15,7 +15,7 @@ perf-rank 0.1.0 run=no_tick_lines stages=process,thread,function,phase top=3
   注記: perf(thread) 行が 1 本も無い。順位付けの走行では areka::perf=debug を点けること。
 
 [3] 関数 UNAVAILABLE reason=no_dump
-  注記: 段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。昇格した PowerShell から回すと採れる。
+  注記: 段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。
 
 [4] 相 UNAVAILABLE reason=no_tick_lines
   注記: [tick] kind=window 行が 1 本も無い。順位付けの走行では wintf::tick=debug を点けること。

@@ -1,4 +1,4 @@
-perf-rank 0.1.0 run=tid_reused stages=thread top=5
+perf-rank 0.2.0 run=tid_reused stages=thread top=5
 
 [2] スレッド  unit=cpu  出所=perf(thread)／perf(process)  基準=delta
   window_s                            60.0

@@ -1,4 +1,4 @@
-perf-rank 0.1.0 run=no_dump_unavailable stages=process,thread,function,phase top=3
+perf-rank 0.2.0 run=no_dump_unavailable stages=process,thread,function,phase top=3
 
 [1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=all
   steady_mean_pct                     3.00

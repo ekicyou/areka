@@ -390,12 +390,10 @@ def rank_rows(counts: dict[str, int], whole: float, top: int, head: str) -> list
 def stage_function(dump: DumpScan | None, reason: str | None, top: int) -> list[str]:
     """dump から自己時間・包含時間・記号解決率（unit=samples）。"""
     if dump is None:
+        hint = "昇格した PowerShell から回すと採れる。" if reason == "not_elevated" else ""
         return [
             f"[3] 関数 UNAVAILABLE reason={reason}",
-            note(
-                "段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。"
-                "昇格した PowerShell から回すと採れる。"
-            ),
+            note(f"段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。{hint}"),
         ]
 
     samples_total = len(dump.samples)

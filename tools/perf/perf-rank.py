@@ -45,6 +45,7 @@ cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊�
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import re
 import shutil
@@ -63,8 +64,6 @@ from perf_lines import (  # noqa: E402
     read_cpu_csv as _read_cpu_csv,
     read_text_lines as _read_text_lines,
 )
-
-import perf_selftest_common as selftest_common  # noqa: E402
 
 from perf_rank_dump import (  # noqa: E402
     EXIT_BAD_INPUT,
@@ -91,7 +90,7 @@ from perf_rank_dump import (  # noqa: E402
 # --- 定数（較正値・語彙）-----------------------------------------------------
 
 #: 順位表の版。書式か集計規則を変えたら上げる（fixture の期待出力も一緒に変わる）。
-SCRIPT_VERSION = "0.1.0"
+SCRIPT_VERSION = "0.2.0"
 
 STDERR_PREFIX = "perf-rank:"
 
@@ -115,7 +114,8 @@ CPU_CSV_HEADER = ("timestamp", "cpu_percent_1core")
 #: 行を見つけるための固定文言。実行体側の書式の権威は次のとおり:
 #:   perf(thread)／perf(process) … crates/areka/src/perf_thread_report.rs
 #:   [tick] kind=window           … crates/wintf/src/ecs/world/tick_diag.rs
-#:   perf(apply_show)             … judge-perf.py の同名定数
+#:   perf(apply_show)             … crates/areka-emo-present/src/presenter/timing.rs
+#:                                  （judge-perf.py の J_PERF_LINE_MESSAGE と同じ文言）
 THREAD_LINE_MESSAGE = "perf(thread): スレッド別 CPU"
 PROCESS_LINE_MESSAGE = "perf(process): プロセス CPU"
 TICK_WINDOW_MARKER = "[tick] kind=window"
@@ -139,7 +139,7 @@ SELFTEST_FIXTURES_DIRNAME = "fixtures-loop"
 SELFTEST_RANK_SUBDIR = "rank"
 SELFTEST_CASE_FILENAME = "case.txt"
 SELFTEST_EXPECTED_FILENAME = "expected_rank.txt"
-SELFTEST_REQUIRED_RED_EXITS = (EXIT_MEASURE_FAILED,)
+SELFTEST_REQUIRED_RED_EXITS = (EXIT_OK, EXIT_BAD_INPUT, EXIT_MEASURE_FAILED)
 
 OUTPUT_FILENAME = "rank.txt"
 
@@ -573,7 +573,8 @@ def build_report(
     meta = read_run_meta(meta_path) if meta_path.is_file() else None
 
     # 0 バイトの dump は「在るが空」＝採取の失敗として parse_dump が止める（#62）。
-    dump_present = dump_path.is_file()
+    # dump を使うのは段②③だけ。段①④だけの走行は dump の壊れで止めない。
+    dump_present = dump_path.is_file() and ("thread" in stages or "function" in stages)
     available = sampling == "auto" and dump_present
 
     dump: DumpScan | None = None
@@ -619,6 +620,8 @@ def script_dir() -> Path:
 
 def _read_case(directory: Path) -> SelftestCase:
     """ケース 1 件の台帳（case.txt）を読む。知らない項目は拒む（黙って無視しない）。"""
+    import perf_selftest_common as selftest_common  # 自己較正だけが読む（リポジトリの外の実運用を止めない）
+
     case_path = directory / SELFTEST_CASE_FILENAME
     values, multi = selftest_common.read_case_fields(
         case_path, frozenset({"title", "exit", "argv", "dump_path", "note"}),
@@ -639,6 +642,7 @@ def _read_case(directory: Path) -> SelftestCase:
 
 
 def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]:
+    import perf_selftest_common as selftest_common
     work = workspace / case.name
     shutil.copytree(case.directory, work)
     if case.dump_path:
@@ -649,7 +653,9 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
 
     reasons: list[str] = []
     reproduced: set[int] = set()
-    code, _out, err = selftest_common.invoke(main, [str(work)] + case.argv, EXIT_BAD_INPUT)
+    code, out, err = selftest_common.invoke(main, [str(work)] + case.argv, EXIT_BAD_INPUT)
+    if not out.isascii():
+        reasons.append(f"標準出力に ASCII でない行があります: {out.strip()!a}")
     if code == case.expected_exit:
         reproduced.add(code)
     else:
@@ -678,8 +684,20 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
     return reasons, reproduced
 
 
+def _top_level_import_reasons() -> list[str]:
+    """`perf_selftest_common` を頭で読むと、Cargo.toml の無い所の実運用が exit 3 で止まる。"""
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    for node in tree.body:
+        names = [alias.name for alias in getattr(node, "names", [])] + [getattr(node, "module", None)]
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and "perf_selftest_common" in names:
+            return [f"line {node.lineno}: perf_selftest_common is imported at module level"]
+    return []
+
+
 def run_selftest() -> int:
     """fixtures-loop/rank/ の既知ケースを逐語再現する（要件 6.7・7.5）。"""
+    import perf_selftest_common as selftest_common
+
     root = script_dir() / SELFTEST_FIXTURES_DIRNAME / SELFTEST_RANK_SUBDIR
     directories, materials = selftest_common.list_case_dirs(
         root, SELFTEST_CASE_FILENAME, bad_input, materials_allowed=True
@@ -695,6 +713,7 @@ def run_selftest() -> int:
             results.append((case.name, case.title, reasons))
 
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
+    results.append(("(import)", "支えは自己較正の中でだけ読む", _top_level_import_reasons()))
     results.append(("(check_tree)", "木全体の見張り",
                     selftest_common.check_tree(ascii_stderr=True, readme_examples=True)))
     ng_count = selftest_common.finish(
@@ -762,7 +781,7 @@ def main(argv: list[str]) -> int:
             out_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         except OSError as exc:
             raise bad_input(f"cannot write the ranking: {out_path}", [str(exc)]) from exc
-        print(f"{STDERR_PREFIX} 順位表を書きました: {out_path}")
+        print(f"{STDERR_PREFIX} wrote the ranking: {out_path}")
         return EXIT_OK
     except RankError as exc:
         label = {EXIT_BAD_INPUT: "bad input", EXIT_MEASURE_FAILED: "measurement failed"}.get(exc.code, "failed")
