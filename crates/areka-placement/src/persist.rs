@@ -292,12 +292,10 @@ fn project_restore_parts(
 ///
 /// IO は本番実装 [`FsPersistIo`]（sylphya 内で FS に触れる唯一の型）。返り値は決定論的順序
 /// （[`load_scope`] の契約）。
-pub fn load_restored_state(
-    ghost_root: &Path,
-    default_encoding: DefaultEncoding,
-) -> Vec<(PersistKey, String)> {
+pub fn load_restored_state(ghost_root: &Path) -> Vec<(PersistKey, String)> {
     // ゴーストの descript が在って読めるときだけ戻す（不在の根を永続の根にしない）。
-    if let Err(err) = read_ghost_names(ghost_root, default_encoding) {
+    // charset の無い descript は SSP の既定（Ansi）で読む（どの呼び手も Ansi だった・指摘 51）。
+    if let Err(err) = read_ghost_names(ghost_root, DefaultEncoding::Ansi) {
         warn!(
             ghost_root = %ghost_root.display(),
             error = ?err,

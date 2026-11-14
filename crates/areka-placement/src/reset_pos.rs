@@ -13,19 +13,19 @@
 
 use bevy_ecs::prelude::*;
 use tracing::{info, warn};
+use wintf::ecs::WindowPos;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{DPI, WindowPos};
 
 use super::chain_finalize::ScriptPlaced;
 use super::chain_realign::note_script_moved;
 use super::config::build_placement_config;
 use super::follow::{move_window_to, rebase_shift};
 use super::persist::persist_unremembered_char_positions;
-use super::primary_monitor;
 use super::reseed::BalloonPlacementInputs;
-use super::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
+use super::resolver::{ScopeInput, SizePx, resolve_placement};
 use super::source::DescriptSource;
 use super::spawn::GhostWindows;
+use super::{primary_monitor, square_dpi, work_area_px};
 
 /// 標準の位置の材料——窓の組の descript の値と走っているバルーンの配置の値
 /// （design ResetPos State Management・areka-P0-window-link-directives 設計の決め 7）。
@@ -66,15 +66,8 @@ pub fn reset_window_positions(world: &mut World) -> bool {
     let Some(primary) = primary_monitor(&monitors) else {
         return skipped("no_primary_monitor");
     };
-    let wa = primary.work_area;
-    let work_area = RectPx {
-        left: wa.left,
-        top: wa.top,
-        right: wa.right,
-        bottom: wa.bottom,
-    };
-    let dpi = u16::try_from(primary.dpi).unwrap_or(u16::MAX);
-    let primary_dpi = DPI::from_dpi(dpi, dpi);
+    let work_area = work_area_px(primary);
+    let primary_dpi = square_dpi(primary.dpi);
 
     let size_of = |entity: Option<Entity>| {
         let size = world.get::<WindowPos>(entity?)?.size?;

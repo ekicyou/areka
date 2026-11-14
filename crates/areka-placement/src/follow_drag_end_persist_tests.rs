@@ -158,8 +158,6 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 /// （100・0・96 系）と重ならない。
 #[test]
 fn round_trip_save_restore_value_equivalence_over_real_fs() {
-    use areka_parsers::charset::DefaultEncoding;
-
     use areka_sylphya::{Axis, PersistKey, PersistScope};
 
     use super::super::persist::{apply_restored_placements, load_restored_state};
@@ -298,7 +296,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     );
 
     // --- restore 側: mount 解決経由で実ファイルを読み、merge へ流す ------------------
-    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+    let entries = load_restored_state(&root);
 
     // 7.2: 無関係 key BootCount が DragEnd save 後も不変で残る（read-modify-write 温存）。
     assert!(
@@ -387,8 +385,6 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 /// 座標は 96 の非倍数を用い（隠れた dpi/96 再スケールの副次檻）、scope 間・既定値と重ねない。
 #[test]
 fn dragged_char_persists_even_without_dragging_state_at_dragend() {
-    use areka_parsers::charset::DefaultEncoding;
-
     use areka_sylphya::{Axis, PersistKey};
 
     use super::super::persist::{apply_restored_placements, load_restored_state};
@@ -529,7 +525,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
     }
 
     // --- restore: mount 解決経由で読み、両スコープの合成 placement を merge ----------
-    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+    let entries = load_restored_state(&root);
     let synth = |scope: usize, size: SizePx| ScopePlacement {
         scope,
         char_pos: PointPx { x: 100, y: 100 }, // 既定（saved と別位置＝復元優先の証明）

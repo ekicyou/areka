@@ -115,7 +115,7 @@
   - _Dispatch: standard — 3 種類の置き方で公開の段を切り替え、本体の呼び手を直す_
   - _Requirements: 2.3, 7.1, 8.2, 8.6, 8.7_
 
-- [ ] 4.5 主モニタの作業領域の写しを 1 つにし、使い手の無い引数と関数を消す（U12・指摘 13・51・62）
+- [x] 4.5 主モニタの作業領域の写しを 1 つにし、使い手の無い引数と関数を消す（U12・指摘 13・51・62）
   - 主モニタの作業領域を写す公開の関数と、DPI を両軸へ飽和で写す crate の中の関数を置き、配置の 3 か所と本体の move_cue_place から使う（切り詰めを飽和に替える）。
   - 記憶を戻す関数の使われない文字コードの引数を消し、本体の 2 つの呼び手とテストを直す。
   - 使い手が 1 か所の小さな関数を消し、本体の呼び手で直に書く。
@@ -263,3 +263,4 @@
 - 2.1 のレビューの提案（8.1 のかけ直しで拾う）: `resolver.rs` の「射影を通しても動かない（べき等）」の doc は作業領域に収まる寸法に限ると書き足す。`from_alignment` の知らない値の `warn!` にスコープ番号が載らなくなった（消した側の `warn!` は持っていた）。
 - 2.4: 追随の持ち物 `follow/drag_follow.rs` の `reestablish_balloon_follow` に印の 1 行（`mark_user_moved`）を足し、1,000 行に収めるため同じ関数のコメント 2 行を 1 行にまとめた。完了の申し送り（8.2）で `audit-placement-follow` へ渡す。1,000 行の番人は crate のテストでは回らないので `cargo test -p log-capture-kit --test file_length_guard_test` を確かめに入れる。
 - 4.4 のレビュー（8.1・8.2 で拾う）: `crates/areka/examples/collision-probe.rs:103・107・111` と `doc/COMPAT_ARCHITECTURE.md:212` の `lib.rs` の行番号はこの spec の前から古い（`load_scope_windowpositions` は今 L582・`prepare_stages` は L381）。
+- 4.5: 追随の持ち物 `follow_drag_end_persist_tests.rs` を 4 行直した（`load_restored_state` の引数を消したため・避けられない）。8.2 の申し送りで `audit-placement-follow` へ渡す。同じく申し送りの候補: 作業領域の写しが追随の側に 2 か所残る（`follow/work_area.rs:L49-L54`・`transition_diag.rs:L681`）・`follow/work_area.rs:L42` に古い名前 `primary_work_area`。

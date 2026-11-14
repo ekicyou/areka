@@ -44,7 +44,7 @@ fn load_restored_state_reads_planted_sylphya_toml() {
     )
     .expect("plant sylphya.toml");
 
-    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+    let entries = load_restored_state(&root);
 
     assert!(
         entries.contains(&(
@@ -80,7 +80,7 @@ fn load_restored_state_absent_file_is_empty() {
     let temp = unique_temp_dir("load-absent-file");
     let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない
-    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+    let entries = load_restored_state(&root);
     assert!(entries.is_empty(), "永続ファイル不在は空縮退: {entries:?}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -101,7 +101,7 @@ fn load_restored_state_survives_missing_default_shell() {
     )
     .expect("plant sylphya.toml");
 
-    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+    let entries = load_restored_state(&root);
 
     assert!(
         entries.contains(&(PersistKey::BootCount, "7".to_string())),
@@ -114,7 +114,7 @@ fn load_restored_state_survives_missing_default_shell() {
 fn load_restored_state_mount_resolve_failure_is_empty() {
     let temp = unique_temp_dir("load-mount-fail");
     let root = temp.path().join("no_such_ghost");
-    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+    let entries = load_restored_state(&root);
     assert!(
         entries.is_empty(),
         "mount 解決失敗は空縮退（起動を止めない）"

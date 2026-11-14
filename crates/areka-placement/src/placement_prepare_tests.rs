@@ -325,6 +325,14 @@ fn prepare_never_reads_or_writes_ghost_dat() {
 // 起動時 k₀ の導出（task 4.3・design D7／Flow 3 手順2・要件 1.4/3.3）
 // ------------------------------------------------------------------
 
+/// 表示 DPI を両軸へ写すとき、`u16` に収まらない値は切り詰めず `u16::MAX` へ飽和する（指摘 13）。
+#[test]
+fn square_dpi_saturates_instead_of_truncating() {
+    assert_eq!(square_dpi(144), DPI::from_dpi(144, 144));
+    // 70000 を `as u16` で切り詰めると 4464 になる。
+    assert_eq!(square_dpi(70_000), DPI::from_dpi(u16::MAX, u16::MAX));
+}
+
 /// k₀ = primary モニタ DPI ÷ 作者基準 DPI（既約有理・連続 k・D2/D7）。
 ///
 /// 整数倍（192/96=2/1）だけでなく **非整数倍**（120/96=5/4・112/96=7/6）も

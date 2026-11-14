@@ -240,8 +240,7 @@ pub(crate) fn prepare_ghost_windows(
     // 復元マージ（design C4・要件 1.4）: snapshot 構築直後・spawn closure へ渡す前に、
     // 永続先読み（load_restored_state）→ 純関数 merge（apply_restored_placements）で
     // 保存位置を反映した placements を得る。`prepared` を placements/titles へ分解し、
-    // merge 済み placements（value 渡し）と titles を closure へ move する
-    // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
+    // merge 済み placements（value 渡し）と titles を closure へ move する。
     // 作者基準 DPI は `prepared` 分解の前に取り出して呼び手へ返す（`Copy` 値の転記）。
     let author_dpi = prepared.author_dpi;
     // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う・
@@ -259,12 +258,8 @@ pub(crate) fn prepare_ghost_windows(
     // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
     // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
     // （`windowposition-limit` の開発者裁定）を踏襲する。
-    let (placements, restored_scopes, restored_clamped) = crate::restore_merged_placements(
-        &cfg.ghost_root,
-        prepared.placements,
-        &sources.snapshot,
-        areka_parsers::charset::DefaultEncoding::Ansi,
-    );
+    let (placements, restored_scopes, restored_clamped) =
+        crate::restore_merged_placements(&cfg.ghost_root, prepared.placements, &sources.snapshot);
     let titles = prepared.titles;
 
     // 投函の後、作業プールの async タスク → CommandSender → Input スケジュールで

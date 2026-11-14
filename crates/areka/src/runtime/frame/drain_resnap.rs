@@ -13,7 +13,7 @@ use wintf::ecs::{SizeI, WindowPos};
 use areka_placement::balloon_lock::apply_script_balloon_lock;
 use areka_placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
-    boot_pair_decision, mark_non_positive_widths, moved_default_pos, note_chain_deferral,
+    boot_pair_decision, mark_non_positive_widths, note_chain_deferral,
 };
 use areka_placement::chain_realign;
 use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
@@ -585,11 +585,13 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
                 );
                 continue;
             };
-            let mut pos = moved_default_pos(old_default, m.to.x);
-            if m.to.y != m.from.y {
-                pos.y = m.to.y;
-            }
-            ghost_windows.set_default_char_pos(m.scope, pos);
+            // Y は既定の Y を残し、寄せが縦に収めたときだけ寄せた後の Y を載せる（window-work-area-clamp 要件 7.5）。
+            let y = if m.to.y != m.from.y {
+                m.to.y
+            } else {
+                old_default.y
+            };
+            ghost_windows.set_default_char_pos(m.scope, PointPx { x: m.to.x, y });
         }
     }
 

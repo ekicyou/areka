@@ -23,7 +23,6 @@ use areka_actor::ReplySender;
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::EmoWorld;
 use areka_emo_present::PresentOutcome;
-use areka_parsers::charset::DefaultEncoding;
 use areka_sylphya::PersistKey;
 use tracing::{debug, error, info};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
@@ -236,7 +235,7 @@ fn build_shell(
         author_dpi: load_balloon_author_dpi(balloon_dir),
         windowpositions: load_scope_windowpositions(balloon_dir, &scope_ids),
     };
-    let restored = load_restored_state(ghost_root, DefaultEncoding::Ansi);
+    let restored = load_restored_state(ghost_root);
     Ok(SwapBuilt::Shell {
         assets,
         source,

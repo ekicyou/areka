@@ -458,7 +458,7 @@ fn prepare_stages_for_shell(
         },
         // 採寸 DPI（追従オフセットの基準 DPI・要件 3.1）。両軸に同じ表示 DPI を置く
         // ——k₀ の分子は軸によらず 1 つだからである（軸差は分母＝作者基準 DPI にある）。
-        measure_dpi: DPI::from_dpi(measure_dpi as u16, measure_dpi as u16),
+        measure_dpi: square_dpi(measure_dpi),
         default_surfaces,
         balloon_dontmove,
     })
@@ -891,13 +891,24 @@ fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
             reason: "enumerate_monitors() が 0 台を返した".to_string(),
         });
     };
+    Ok(work_area_px(monitor))
+}
+
+/// モニタの work area（`RECT`・物理 px）を [`RectPx`] へ単位変換なしで写す（指摘 13・中核の側の写し）。
+pub fn work_area_px(monitor: &Monitor) -> RectPx {
     let wa = monitor.work_area;
-    Ok(RectPx {
+    RectPx {
         left: wa.left,
         top: wa.top,
         right: wa.right,
         bottom: wa.bottom,
-    })
+    }
+}
+
+/// 表示 DPI を両軸へ写す（`u16` に収まらない値は切り詰めず `u16::MAX` へ飽和する）。
+pub(crate) fn square_dpi(dpi: u32) -> DPI {
+    let dpi = u16::try_from(dpi).unwrap_or(u16::MAX);
+    DPI::from_dpi(dpi, dpi)
 }
 
 #[cfg(test)]
