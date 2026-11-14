@@ -249,7 +249,7 @@ fn the_known_passing_log_is_green() {
         (T0_SCOPE1, OFFSET_VERDICT_KEYWORD_PENDING),
     ] {
         assert!(
-            lines[index].contains(&format!("verdict={verdict}")),
+            lines[index].contains(&format!("{FIELD_VERDICT}={verdict}")),
             "{}",
             lines[index]
         );
@@ -499,7 +499,7 @@ fn a_record_with_a_missing_field_is_red() {
     let mut lines = pass_lines();
     let intact = lines[T0_SCOPE0].clone();
     let cut = intact
-        .split_once(&format!(" verdict={OFFSET_VERDICT_RESCALED}"))
+        .split_once(&format!(" {FIELD_VERDICT}={OFFSET_VERDICT_RESCALED}"))
         .expect("合格ログの行は判定語を持つ")
         .0
         .to_owned();
@@ -740,7 +740,7 @@ fn malformed_keyword_gate_line() -> String {
 
 #[test]
 fn a_malformed_gate_row_does_not_enter_the_denominator() {
-    // 母数は**読める行**からしか作らない（`keyword_pending_scopes` の `is_well_formed()`）。
+    // 母数の 2 つ目の檻: 母数は**読める行**からしか作らない（`keyword_pending_scopes` の `is_well_formed()`）。
     // 読めない行から母数を組むと、行の形が壊れたときに母数だけが静かに増え、⑷ が
     // 「1 度も測れていない」を言えなくなる。
     let broken_gate = malformed_keyword_gate_line();

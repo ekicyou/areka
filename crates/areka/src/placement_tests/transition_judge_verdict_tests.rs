@@ -845,7 +845,7 @@ fn the_report_prints_the_quantities_even_when_both_families_pass() {
         "sync_stage_writes=",
         "balloon_same_frame=",
         "chain_realigned=",
-        "ground_diff_max=",
+        "ground_diff_max=0 ground_unmeasured=false",
         "flush_total_us_max=",
         "writes=",
         "mismatch_frames=",

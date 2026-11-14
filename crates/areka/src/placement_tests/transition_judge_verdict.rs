@@ -198,7 +198,7 @@ impl Bounds {
 pub enum Quantity {
     /// 起点から最終書込までのフレーム差（＝窓書込が 1 件も無い）。
     FramesToLastWrite,
-    /// 接地点差（`ground` レコードが無い・`diff` が読めない）。
+    /// 接地点差（`ground` レコードが無い・どの行の `diff` も読めない・`diff=-`（作業領域の下端が不明）の行がある）。
     GroundDiff,
     /// 一括書込の総所要（`flush stage=end` が無い・`total_us` が読めない）。
     FlushTotalUs,
@@ -684,7 +684,7 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         f,
         "    量: frames_to_last_write={} writes={} path_a_writes={} sync_stage_writes={} \
          balloon_same_frame={}(pairs={}) holds={} chain_realigned={} ground_diff_max={} \
-         flush_total_us_max={} malformed={} frames_indeterminate={}",
+         ground_unmeasured={} flush_total_us_max={} malformed={} frames_indeterminate={}",
         or_missing(summary.frames_to_last_write),
         summary.writes,
         summary.path_a_writes,
@@ -694,6 +694,7 @@ fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> 
         summary.holds,
         summary.chain_realigned,
         or_missing(summary.ground_diff_max),
+        summary.ground_diff_unmeasured,
         or_missing(summary.flush_total_us_max),
         summary.malformed_records,
         summary.frames_indeterminate,
