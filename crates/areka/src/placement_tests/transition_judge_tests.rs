@@ -10,9 +10,9 @@ use areka_emo_present::presenter::{
     SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
-    FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_SCOPE, FIELD_WIN_KIND, KIND_ALL,
-    KIND_MONITOR, KIND_WRITE, MISSING, MSG_DPICHANGED, ORIGIN_DPI_SUGGESTED, ORIGIN_WINDOW_POS,
-    STAGE_BEGIN, STAGE_END, STAGE_FLUSH, STAGE_SYNC,
+    FIELD_ENTITY, FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_SCOPE, FIELD_STAGE,
+    FIELD_WIN_KIND, KIND_ALL, KIND_MONITOR, KIND_WRITE, MISSING, MSG_DPICHANGED,
+    ORIGIN_DPI_SUGGESTED, ORIGIN_WINDOW_POS, STAGE_BEGIN, STAGE_END, STAGE_FLUSH, STAGE_SYNC,
 };
 
 use super::test_support::{
@@ -208,7 +208,7 @@ fn parse_reports_a_missing_required_field() {
 
 #[test]
 fn parse_reports_an_unknown_kind_word() {
-    let line = record(7, 0, "monitr", "entity=2v0");
+    let line = record(7, 0, "monitr", &format!("{FIELD_ENTITY}=2v0"));
     let parsed = parse_transition_line(&line).expect("タグを含む行は解析結果を返す");
     assert!(
         parsed
@@ -797,7 +797,8 @@ fn summarize_collects_wall_clock_values_as_reference_only() {
 #[test]
 fn summarize_counts_malformed_records_instead_of_dropping_them() {
     let mut lines = vec![monitor(10, 192, 96, 1704, 1752)];
-    lines.push(record(10, 1, "surfac", "stage=upload"));
+    let body = format!("{FIELD_STAGE}={SURFACE_STAGE_UPLOAD}");
+    lines.push(record(10, 1, "surfac", &body));
     let summary = summarize_lines(&lines);
     assert_eq!(summary.records, 2);
     assert_eq!(

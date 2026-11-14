@@ -558,7 +558,7 @@ const FAMILY_SIGNOFF: &str = "signoff:";
 fn sample_window() -> WindowKey {
     WindowKey {
         scope: Some(0),
-        kind: "char".to_owned(),
+        kind: areka_placement::diag::WindowKind::Char.as_str().to_owned(),
     }
 }
 

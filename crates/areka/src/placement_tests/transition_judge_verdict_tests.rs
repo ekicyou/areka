@@ -858,10 +858,9 @@ fn the_report_prints_the_quantities_even_when_both_families_pass() {
         );
     }
     // 窓ごとの行は窓の鍵つきで出る（どの窓の量かが読めないと比較に使えない）。
-    assert!(
-        rendered.contains(&format!("{FIELD_SCOPE}=0 {FIELD_WIN_KIND}=char")),
-        "窓ごとの量に窓の鍵が無い:\n{rendered}"
-    );
+    let kind = WindowKind::Char.as_str();
+    let key = format!("{FIELD_SCOPE}=0 {FIELD_WIN_KIND}={kind}");
+    assert!(rendered.contains(&key), "窓の鍵が無い:\n{rendered}");
 }
 
 #[test]

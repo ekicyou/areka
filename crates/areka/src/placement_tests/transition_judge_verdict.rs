@@ -200,7 +200,7 @@ pub enum Quantity {
     FramesToLastWrite,
     /// 接地点差（`ground` レコードが無い・どの行の `diff` も読めない・`diff=-`（作業領域の下端が不明）の行がある）。
     GroundDiff,
-    /// 一括書込の総所要（`flush stage=end` が無い・`total_us` が読めない）。
+    /// 一括書込の総所要（`flush stage=end` が無い・どの end 行の `total_us` も読めない）。
     FlushTotalUs,
     /// 当該キャラ窓の随伴の同一フレーム性（対を検査できていない＝`balloon_same_frame` は空虚な真）。
     BalloonSameFrame(WindowKey),
