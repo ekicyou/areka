@@ -1,7 +1,8 @@
 //! 描画面ごとの入れ物（要件 4.1, 4.2, 4.4, 4.8）。描画面 1 枚の合成の結果を持ち、合成と写しの
 //! 手順を持つ（WUC と ECS を知らない）。本番の係（`render_surface`）と WARP のテストが同じ手順を呼ぶ。
 
-use super::visual::{DamageEntry, DrawCommand, emit};
+use super::damage::{PartialPlan, RegionShift};
+use super::visual::{DamageEntry, DrawCommand, emit, emit_within};
 use std::mem::ManuallyDrop;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -246,6 +247,100 @@ impl SurfaceComposite {
             self.generation += 1;
         }
         result
+    }
+
+    /// 計画 `plan` の範囲だけを描き直す（2.2・2.3・5.1）。先に各写しを作業用の絵を通して行い（重なる写しを
+    /// 直接しない・決め D6）、描く矩形ごとに軸に沿う切り抜きの中を透明に塗って根の命令の列と `emit_within`
+    /// で描く。`entries` は `tree` から作った列。成功したら世代を 1 上げる。戻るとき `dc` は的なし・変換は
+    /// 恒等（写しの失敗では `dc` に触っていない）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "4.3 の compose_planned が使い始める")
+    )]
+    pub(crate) fn compose_partial(
+        &mut self,
+        dc: &ID2D1DeviceContext,
+        scale: Matrix3x2,
+        root_list: Option<&ID2D1CommandList>,
+        tree: &[DrawCommand],
+        entries: &[DamageEntry],
+        plan: &PartialPlan,
+    ) -> windows::core::Result<()> {
+        // 写しは BeginDraw の前（入れ物が的に付いていない時点）に行う。
+        for shift in &plan.shifts {
+            self.shift(dc, shift)?;
+        }
+        let identity = Matrix3x2::identity();
+        // SAFETY: Windows API 境界。`dc` は UI スレッドの係だけが使う共有の DC（呼び手の約束）。
+        let result = unsafe {
+            dc.SetTarget(&self.bitmap);
+            dc.SetDpi(96.0, 96.0);
+            dc.BeginDraw();
+            dc.SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
+            let dc6 = if tree.is_empty() {
+                None
+            } else {
+                dc.cast::<ID2D1DeviceContext6>().ok()
+            };
+            for r in &plan.rects {
+                dc.SetTransform(&identity);
+                let clip = D2D_RECT_F {
+                    left: r.left as f32,
+                    top: r.top as f32,
+                    right: r.right as f32,
+                    bottom: r.bottom as f32,
+                };
+                // 整数の縁なので覆いは 0 か 1。
+                dc.PushAxisAlignedClip(&clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+                dc.SetTransform(&scale);
+                dc.Clear(Some(&D2D1_COLOR_F::default()));
+                if let Some(list) = root_list {
+                    dc.DrawImage(
+                        list,
+                        None,
+                        None,
+                        D2D1_INTERPOLATION_MODE_LINEAR,
+                        D2D1_COMPOSITE_MODE_SOURCE_OVER,
+                    );
+                }
+                if !tree.is_empty() {
+                    emit_within(dc, dc6.as_ref(), scale, tree, entries, *r);
+                }
+                dc.PopAxisAlignedClip();
+            }
+            let result = dc.EndDraw(None, None);
+            dc.SetTransform(&identity);
+            dc.SetTarget(None);
+            result
+        };
+        if result.is_ok() {
+            self.generation += 1;
+        }
+        result
+    }
+
+    /// 入れ物の `shift.src` を `shift.dst` へ写す。作業用の絵（`src` の大きさ・入れ物と同じ形式）は
+    /// この呼び出しの中だけ持つ。
+    fn shift(&self, dc: &ID2D1DeviceContext, shift: &RegionShift) -> windows::core::Result<()> {
+        let src = shift.src;
+        // 計画の写しは描画面の中（負でない・空でない）。
+        let size = ((src.right - src.left) as u32, (src.bottom - src.top) as u32);
+        let work = create_bitmap(dc, size, D2D1_BITMAP_OPTIONS_NONE)?;
+        let src_rect = D2D_RECT_U {
+            left: src.left as u32,
+            top: src.top as u32,
+            right: src.right as u32,
+            bottom: src.bottom as u32,
+        };
+        let dst = D2D_POINT_2U {
+            x: shift.dst.0,
+            y: shift.dst.1,
+        };
+        // SAFETY: Windows API 境界。元と先はどちらの写しでも別の絵（重ならない）。
+        unsafe {
+            work.CopyFromBitmap(None, &self.bitmap, Some(&src_rect))?;
+            self.bitmap.CopyFromBitmap(Some(&dst), &work, None)
+        }
     }
 
     /// `dst`（`BeginDraw` の中の DC）を透明に塗り、入れ物を整数の `offset` に `NEAREST_NEIGHBOR`・

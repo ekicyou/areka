@@ -17,15 +17,7 @@ mod emit;
 mod emit_blend_tests;
 #[cfg(test)]
 mod emit_layer_tests;
-pub(crate) use emit::emit;
-#[cfg_attr(
-    not(test),
-    expect(
-        unused_imports,
-        reason = "範囲だけの合成（タスク 4.2）が使い始めたら外す"
-    )
-)]
-pub(crate) use emit::emit_within;
+pub(crate) use emit::{emit, emit_within};
 #[cfg(test)]
 pub(crate) mod emit_test_support;
 #[cfg(test)]

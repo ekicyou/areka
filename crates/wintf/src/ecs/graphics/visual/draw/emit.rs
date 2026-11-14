@@ -80,10 +80,6 @@ pub(crate) fn emit(
 /// 層の命令は全部そのまま積み降ろし、層の旗は変えない。範囲の外の画素は呼び手の切り抜きが守るので、
 /// 飛ばすのは性能のためだけ。前提: `entries` は同じ `commands` から作った列（Pop 以外の命令と
 /// 1 対 1）。項の無い件は飛ばさずに描く。
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "範囲だけの合成（タスク 4.2）が使い始めたら外す")
-)]
 pub(crate) fn emit_within(
     dc: &ID2D1DeviceContext,
     dc6: Option<&ID2D1DeviceContext6>,
@@ -92,6 +88,18 @@ pub(crate) fn emit_within(
     entries: &[DamageEntry],
     rect: PxRect,
 ) {
+    // 列のずれは静かに画素を誤らせる（別の件の bounds で飛ばす）。
+    debug_assert_eq!(
+        entries.len(),
+        commands
+            .iter()
+            .filter(|c| !matches!(
+                c,
+                DrawCommand::PopClipRect | DrawCommand::PopClipGeometry | DrawCommand::PopOpacity
+            ))
+            .count(),
+        "entries は同じ commands から作った列でない"
+    );
     play(dc, dc6, root, commands, Some((entries, rect)));
 }
 
