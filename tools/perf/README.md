@@ -457,7 +457,7 @@ python tools/perf/judge-perf.py --selftest
 | `A1_steady_alloc_fail` | 1 | 定常状態で表示用バッファの確保が 1 回でもあれば不合格（判定式⑶） |
 | `R1_perf_line_missing_field`・`R2_perf_line_undated`・`R3_perf_line_cache_hit_not_bool` | 2 | perf 行の必須の欄の欠け・行頭の時刻の欠け・`cache_hit` の値の誤りは、行を捨てずに判定不能（要件 2.5） |
 | `P15_other_stop_messages` | 0 | 「末尾残留」と「bind から外れた ID の再生を停止」もアニメの終わりとして数える（数えないと条件 4 が間隔を全部落とす） |
-| `P16_same_scope_stop_inside_interval` | 0 | 同じグループの 2 本目が遅い区間 `(a, b]` だけを覆い、途中で止まる。期待 0 は既知の穴（下の「同じグループの 2 本目が、遅い区間だけを覆って走っていると」）の記録で、見分けるのは条件 4 が a で数えるか b で数えるか（b だけで数えると 1 に変わる） |
+| `P16_same_scope_stop_inside_interval` | 0 | 同じグループの 2 本目が遅い区間 `(a, b]` だけを覆い、途中で止まる。期待 0 は既知の穴（上の「同じグループの 2 本目が、遅い区間だけを覆って走っていると」）の記録で、見分けるのは条件 4 が a で数えるか b で数えるか（b だけで数えると 1 に変わる） |
 | `S1_explicit_19_intervals`・`S2_explicit_20_intervals`・`S3_explicit_over_limit` | 2・0・1 | 明示指定の系列の間隔が 19 本で判定不能・20 本で判定できる・19 本でも上限超過なら不合格（§12 の 4 番） |
 | `T2_tick_lines_absent` | 0 | catch-up はあるが `[tick]` 行が 1 本も無い（仮説は判定不能・合否には効かない） |
 | `U1_bom_run_log` | 0 | BOM 付きの `run.log`・`cpu.csv` も同じに読める |
