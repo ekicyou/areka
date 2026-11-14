@@ -421,3 +421,52 @@
 
 - `audit-tools-perf-judge`: Python の 4 本の自分の検査が OS の一時フォルダを使う（7 節）。`README.md:553` の「`-BinDir` を渡さない走行（…final）」の文は、今の `final` の振る舞いと合わない（10）。`goals/draw-load-parity.toml` の `[sampling]` の注釈は、使えない `wpaexporter` を選べるように書いている（16）。
 - `audit-tools-scripts`（C21）: `encoding check` は `Invoke-PwshChild` の 3 行の届き方を見るが、子が想定外の失敗で落ちたときの表示（7）は見ていない。足すかは相手の持ち物。
+
+## 14. 設計の段の調べと決め（2026-11-14・`kiro-spec-design`）
+
+> 設計の段のサブエージェントが、要件の討議で設計へ回した事項と 11 節の調べもの 1〜6 を、コードを読んで解いた記録。実際の計測の走行・xperf・`%LOCALAPPDATA%\areka-diag\perf-loop\` には触っていない。使った手順は `kiro-spec-design` の規則（設計の原則・軽い調べ・まとめの 3 つの見方・設計の関門）と、ponytail の「いちばん小さな完全な変更」。調べの種類は軽い調べ（今ある道具の拡張・新しい依存なし）。
+
+### 14.1 調べもの 11 節の答え
+
+1. **子の pwsh の想定外の失敗の表示（7）**: 前置きの後で `& '<script>'` が投げた失敗は、`-Command` の段まで上がり、pwsh の既定のエラー表示（色の符号つき・地域語）で出る。前置きの中で `try { & '<script>' ... } catch { [Console]::Error.WriteLine(<素の文>); exit 1 }` と包めば、表示の前に捕まえられる。スクリプトの中の `exit` は例外ではないので包みに掛からず、正常の道の出力は 1 字も変わらない（`encoding check` の「perf real」の 3 行はそのまま）。`$PSStyle.OutputRendering` には触らない。あわせて `Invoke-Child` の「最後の 1 行」を選ぶ前に色の符号を落とす。
+2. **`xperf -stop`（1・9）**: カーネルの採取（NT Kernel Logger）は機械に 1 つしか無い。こちらの `-Start` が通ったときだけそのセッションはこちらのもので、そのときだけ止めてよい。そこで取り消し（`-Cancel`）は「ランナーが自分で採取を始めた後の失敗の道」でだけ呼ぶ。本物で確かめるのは昇格した机の次の実走（要件 7.3 の裁定）。
+3. **`ended_utc` を完了の印にしてよいか（2）**: よい。`invoke-perf-run.ps1` は `run-meta.txt` の `[結果]` 節（`ended_utc`・`elapsed_sec` ほか）を、走行の健全性の確かめが全部通った最後にだけ書く。失敗の道（`Stop-Run`）は出力先を `-FAILED` へ退けるので、出力先の名前のまま `[結果]` が無いのは途中で消えた走行だけ。`-DryRun` の出力先は `run.log` を持たないので別に扱う。今までの本物の走行はどれも `[結果]` と `quiet-after.txt` を持つ（ランナー 1.1.0 と perf-loop の後ろの確かめ）。
+4. **想定外の失敗の終了コード（3）**: `perf-loop.ps1` は 4。スキルの表は 1 を「同じ引数で 1 回だけやり直す」、4 を「TOOLFIX へ」と読む。想定外の失敗は道具の不具合で、やり直しでは直らないので TOOLFIX が正しい。`perf-loop.ps1` は既に「サブコマンドが終了コードを返さなかった（道具の不具合）」を 4 にしている＝体系の中。子の道具はそれぞれの体系の中で、`perf-loop` が正しく読む番号にそろえた（`check-quiet` 4・`invoke-cpu-sample` 1・`invoke-followup-checks` 1・`invoke-perf-run` 1）。あわせて、走行の後の静かさの確かめが 3 を返したときに「静かでない」と読み違えていた所を 3 で止める形に直す。
+5. **`common` を単独で読み込む形（20）**: `common` が読み込むのを新しい共通部品 `perf-tool-base.ps1`（とその中の `perf-pwsh-child.ps1`）だけにし、呼び手の変数に頼る関数を測る側の新しい 2 本へ移せば、`StrictMode 3.0` のまま単独で読み込めて副作用も無い。`Invoke-Child`・`Invoke-PwshChild` は共通部品に移っても、`common` を読み込めば同じ名前・同じ引数で呼べる。新しく足す引数は `-ReadEncoding`（任意）だけで、`$OutputEncoding` という名は `encoding check` の規則 C が代入と読むので使わない。
+6. **大きさが実走でしか分からない直し（23・29・31）**: 決定論のテストで「同じ数になる」「元が消える」「最初の 1 件で止まる」までを縛り、効き目は次の実走で確かめるものとして番号ごとに残す（設計の Testing Strategy の 8 行）。
+
+### 14.2 設計へ回した事項の決め
+
+| 事項 | 決め | 理由 |
+|---|---|---|
+| 20 の分け直しの形 | 案 B（仕事ごとに新しいファイル）。`perf-tool-base.ps1`（道具どうしの共通部品）・`perf-loop.build.ps1`（実行体の用意）・`perf-loop.rundir.ps1`（出力先の扱い）・`perf-loop.selftest.ps1`（T2）・`invoke-perf-run.selftest.ps1`（T3 の中身） | 案 A は 1,000 行を越え、テストから関数を読み込めない。案 C はテストを 2 度書く |
+| 3 の終了コード | `perf-loop.ps1` は 4（スキルの表の 4 の行に「想定外の失敗」を足す） | 上の 14.1 の 4 |
+| 9 の採取と静かさの確かめの順 | ランナーに採取の開始を任せる（`invoke-perf-run.ps1 -SampleEtl`）。静かさの確かめが通った後、areka を起こす直前に始め、失敗の道ではランナーが取り消す。止めて記号を解くのは perf-loop | 「確かめが通った」と「起こす」の間を知っているのはランナーだけ。証拠のファイル（`quiet-before.txt`）の置き場と `quiet_mode` の意味が変わらない |
+| 17 の読み口の置き場 | 読み口だけのファイルではなく、道具どうしの共通部品 `perf-tool-base.ps1` の中（子の起こし方・表示・時刻・検体の在り処と同じファイル） | 17・18・19・35 の写しが同じ 5 本に散っており、1 本の共通部品に寄せると読み込みの行が 1 つで済む。`perf-loop.common.ps1` を子の道具が読み込む形は、`Stop-Run` など同じ名前の関数がぶつかるので採らない |
+| 24 の理由の語 | `no_record`（申し合わせ済み・`perf-rank.py` は自由な文として受ける） | 「記録が無い」をそのまま言う語。今の机の可否を古い走行に書かない |
+| 15 の止まる番号 | 3（前提の不正）。スキルの REMEASURE に、A と B の `exe_sha256` が同じときの進め方（DECIDE で `measure_failed`・`reason: same_executable`）を 1 段足す | 走行を 1 本も回していないので計測失敗（4＝TOOLFIX）ではない。既にある遷移（REMEASURE の ok → DECIDE の measure_failed → RECORD）だけで進められ、台帳の道具を変えずに済む |
+| 19 の寄せ方 | 範囲の中の子の起こし方を `Invoke-Child` 1 つにする（`invoke-perf-run.ps1`・`invoke-followup-checks.ps1` も移る）。areka 本体を起こす `Start-Process` 2 か所は残す | `Invoke-Utf8Child`（`tools/`）のファイルは範囲の外なので残すが、範囲の中から使う理由は無い。ただし README §11 の文が古くなるので申し合わせ待ち A（決まらなければ `invoke-cpu-sample.ps1` の分だけにする） |
+| 36 の出どころ | `-Probe` の 1 行の後ろに `elevated=`・`xperf_path=`（行の最後）を足し、preflight はそこから出す | xperf の既定の在り処を 1 か所にする。`capabilities=` の鍵と並びは同じ |
+| 1 の後始末 | 新しい `-Cancel` の組（`xperf -stop` と ETL の削除）を `invoke-cpu-sample.ps1` に足す | 失敗の道で `-Stop`（まとめと記号の解決で数分）を回すのは無駄。要件 3.4 の「止まる道」に当たる |
+| 10 の振る舞い | `final` は `-BinDir` を使う。`-BinDir` には `-Build` も要る（無ければ 3） | 1 つの実行体を release と dev の 2 本として測らないため |
+| 25 の python | 合否に使う（3.11 未満か無ければ 4）。`pwsh=` の行は版だけ | `#Requires -Version 7.0` で pwsh の確かめは落ちない。python は `tomllib` が要る |
+
+### 14.3 申し合わせ（`audit-tools-perf-judge`・2026-11-14 の返事）
+
+- 済み: 16（`goals/*.toml` の `[sampling] backend` は残し、PowerShell が読まなくなる。注釈と README は相手）・24（`no_record`・Python の変更なし・README の一覧は相手）・35（`time_utc` に `Z`・解いて読む Python なし）・14（ps1 で判定器の 3 を 1 に写す・`judge-followup.py` は変えない）・10（`final` が `-BinDir` を使う・README はそのまま）。
+- 相手の予定でこちらが読む口（こちらの変更は要らない）: Python の想定外の失敗が 1 から 3 へ・`goal-check` の型の誤りが 1 から 3 へ・`perf-rank.py --sampling-available` から `true` が無くなる・Python の最後の行が ASCII へ。
+- 申し合わせ件 #74: 範囲の `*.ps1` の注釈で、ほかのファイルを行番号で指す所を、ファイル名と関数・定数の名前で指す形に替える（落とす順に依らない普通のタスク）。対象は設計の「直し方の一覧」の下の 5 か所。外のクレートを版つきで指す 1 か所（`fmt_layer.rs`）は残す。
+- 範囲の外で直す文は設計の「範囲の外で直す文（申し合わせ用）」の表が正本（`SKILL.md` の 2 か所はこの spec・README の 4 か所は相手が書く・エージェントの文はこの spec では触らない）。
+- まだ待つもの: A（README §11 の子の読み方の段・19）と B（5 本の `SCRIPT_VERSION` を上げる）。どちらも決まらないときの形を設計に書いた。
+
+### 14.4 まとめの 3 つの見方
+
+- **一般化**: 「写しの寄せ」（17・18・19・35・8 の待ち）は全部「子の道具 4 本と perf-loop が同じ下回りを別々に持つ」の 1 つの問題で、1 本の共通部品で受ける。「途中で止まったときの後始末」（1・3・8）は「失敗の道は 1 つの口を通る」の 1 つの問題で、各入口の `trap` と既にある `Stop-Run` で受ける。
+- **作るか使うか**: TOML の読みは、外部モジュールを足さない決まり（依存 0）なので今の最小の解釈器を 1 つに寄せて使う（Python の `tomllib` を呼ぶ案は、子のプロセスが増え、python の無い机で静かさの確かめまで止まるので採らない）。子の起こし方は .NET の `ProcessStartInfo.ArgumentList` をそのまま使う。
+- **削る**: `wpaexporter` の道・`pwshOk`・`$DEFAULT_GOAL`・二重の `-Resume`・届かない `default` の枝・`Invoke-NativeCommand` と一時の受け皿のファイル・perf-loop 側の `Test-Elevated`／`Find-XperfPath`・4 つの TOML の写しを消す。テストのための差し込みの口（環境変数で振る舞いを替える仕掛け）は作らず、読み込んだ後に関数を定義し直す形で偽物を作る。
+
+### 14.5 リスクと手当て
+
+- ランナーと `invoke-cpu-sample.ps1` の間に新しいつなぎができる → 採取の持ち主を「始めるのと失敗の後の取り消しはランナー・成功の後の停止は perf-loop」に決め、T2 `sampling-order`・T3 `sampling-cancel-on-stop`・T1 `cancel-mode` で縛る。背景の走行がプロセスごと消された場合だけは後始末ができない（理由の文で手の打ち方を示す）。
+- `encoding check` の形を崩す → T2 `load-standalone` で毎回試す。前置きの文は規則 C で構文解析されるので、正しい pwsh の文にする。
+- 行数の番人 → `invoke-perf-run.ps1`（約 940）と `invoke-followup-checks.ps1`（約 900）は検査の中身を別ファイルか小さな関数にとどめる。`perf-loop.selftest.ps1` が 1,000 行に近づいたら束ごとに 2 本目へ分ける。
