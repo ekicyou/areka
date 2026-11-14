@@ -508,7 +508,7 @@ CASES: tuple[Callable[[], g.Fixture], ...]
 
 | # | タスク | 指摘 | 触るファイル | 並べてよいか |
 |---|---|---|---|---|
-| 1 | 行の読み方 `perf_lines.py`・4 本の道具と `generate.py` の付け替え・NaN と BOM と行番号＋T7・T13 の検体（`generate_more.py` を作って N1・U1 だけ置く）・`audit-placement-follow` へ置き場を知らせる | #7・#13・#40・#51 | `perf_lines.py`（新）・`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`judge-followup.py`・`fixtures/generate.py`・`fixtures/generate_more.py`（新）・rank の `cpu_nan` | 最初 |
+| 1 | 行の読み方 `perf_lines.py`・4 本の道具と `generate.py` の付け替え・NaN と BOM と行番号＋T7・T13 の検体（`generate_more.py` を作って N1・U1 だけ置く）・`audit-placement-follow` への置き場の知らせは要らない（11-14 着地・注記はファイルを名指さない形） | #7・#13・#40・#51 | `perf_lines.py`（新）・`judge-perf.py`・`perf-rank.py`・`perf-compare.py`・`judge-followup.py`・`fixtures/generate.py`・`fixtures/generate_more.py`（新）・rank の `cpu_nan` | 最初 |
 | 2 | 自己較正の支え `perf_selftest_common.py`・4 組の付け替え・一時フォルダ・`check_tree` ⑴⑵⑷＋T1 | #1・#41 | `perf_selftest_common.py`（新）・`*_selftest.py` 3 本・`perf-rank.py` | 1 の後 |
 | 3 | judge-perf の要らないコード | #36〜#39・#47〜#50・#81（catchup の頭書き） | `judge-perf.py`・`judge_perf_catchup.py`・`README.md` は 14 | 1 の後（2 と並べてよい） |
 | 4 | 判定の検体の手入れと long・dev・明示指定・薄い定常・build の検体 | #28〜#30・#42・#43・#68〜#73・#74（`generate.py:195`） | `fixtures/generate.py`・`fixtures/generate_more.py`・`fixtures/*`・`judge-perf.py`（#42 の数行） | 3 の後 |

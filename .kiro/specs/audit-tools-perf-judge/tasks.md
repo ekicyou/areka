@@ -31,7 +31,7 @@
 - [ ] 1.3 新しい判定の検体の置き場を作り、N1・U1 を置く（D5・T7・T13）
   - `fixtures/generate_more.py` を作り、`generate.py` の `main()` が実行時に読み込んで `CASES + generate_more.CASES` を作る形にする（読み込み時の循環を作らない）
   - 判定の検体 `N1_cpu_nan`（exit 2）・`U1_bom_run_log`（exit 0）を `generate_more` に置き、作り直してバイトが一致することを確かめる
-  - `audit-placement-follow` のセッションへ「置き場は `tools/perf/perf_lines.py` の `parse_fields`・judge-perf はその名前で読み込む」と知らせる（共有の覚え書きの置き場に残す）
+  - `audit-placement-follow` への置き場の知らせは要らない（2026-11-14 に着地し、`transition_judge.rs`・`transition_diag_tests.rs` の注記は「tools/perf/ の Python の道具の `parse_fields`」とファイルを名指さない形になった）。`presenter/timing.rs` の `judge-perf.py::parse_fields` の注記は、judge-perf が同じ名前で読み込むので指し先が残る（`crates/` には触らない）
   - 終わった姿: judge-perf の `--selftest` が N1・U1 を含めて緑、`generate.py` を回しても `git status` が汚れず、`generate.py` が着手のときの行数以下
   - _Dispatch: mechanical — 置き場の形（実行時の読み込み）と 2 本の検体の期待値を design が与える_
   - _Requirements: 2.1, 4.7, 4.8, 5.2, 7.1_
