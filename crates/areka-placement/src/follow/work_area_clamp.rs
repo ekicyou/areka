@@ -3,7 +3,7 @@
 //!
 //! - 場面の語 [`ClampScene`] と記録の語（`[work-area-clamp] Clamp`／`Keep`／`Unresolved`）を
 //!   1 か所に置く（要件 9.1・9.2・7.4）
-//! - [`resolve_chain_in_work_area`] は組ごとの決めで解いた鎖を、前の窓の置いた後の矩形が属する
+//! - `resolve_chain_in_work_area` は組ごとの決めで解いた鎖を、前の窓の置いた後の矩形が属する
 //!   モニタの作業領域の中に置く純関数の核（要件 1・2・7）
 //! - [`place_chain_in_work_area`] はその World の口。窓の高さと作業領域を World から読んで核を呼び、
 //!   寄せた・寄せなかった・取れなかったを記録する（要件 7.4・9.1・9.2）
@@ -15,9 +15,9 @@
 //! 隣の位置は `chain_finalize::resolve_chain` に 2 スロットを渡して得る（式を写さない）。
 //! 判定の入力は窓の幾何と組の決めだけで、ゴーストや初回起動を名指ししない（要件 7.8）。
 //!
-//! examples（`collision-probe`・`window-placement`）は `#[path]` で配置の層を取り込むが
-//! 呼び手（起動の並べ直し・詰め直し）を持たないので、そちらのビルドでは本ファイルの項目が
-//! 未使用に見える。ゆえに項目ごとに `#[allow(dead_code)]` を付ける。
+//! 公開の口の呼び手は `runtime::…`（起動の並べ直し・詰め直し）。核の
+//! `resolve_chain_in_work_area` は World の口の中身と同じ道を檻が直に歩くためだけの口なので
+//! `#[cfg(test)]` に置く。
 
 use bevy_ecs::prelude::{Entity, World};
 use tracing::{debug, info, warn};
@@ -35,17 +35,13 @@ use super::{
 };
 
 /// 寄せて動かした（info!）。
-#[allow(dead_code)] // 出す口は task 1.2 の World の口・examples には呼び手が無い
 pub const WORK_AREA_CLAMP_TAG: &str = "[work-area-clamp] Clamp";
 /// 判定したが動かさなかった（debug!）。
-#[allow(dead_code)] // 同上
 pub(crate) const WORK_AREA_KEEP_TAG: &str = "[work-area-clamp] Keep";
 /// 作業領域が取れず寄せなかった（warn!）。
-#[allow(dead_code)] // 同上
 pub(crate) const WORK_AREA_UNRESOLVED_TAG: &str = "[work-area-clamp] Unresolved";
 
 /// 寄せの場面（記録の語彙・判断は変えない）。
-#[allow(dead_code)] // 場面を選ぶ呼び手は起動の並べ直しと詰め直し・examples には無い
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClampScene {
     /// 起動の並べ直し（記憶に位置の無い窓）。
@@ -60,7 +56,6 @@ pub enum ClampScene {
     RestoreGroup,
 }
 
-#[allow(dead_code)] // 同上
 impl ClampScene {
     /// 記録に載せる場面の語。
     pub(crate) fn as_str(self) -> &'static str {
@@ -76,7 +71,6 @@ impl ClampScene {
 
 /// 鎖の 1 スロットをどう置いたか。
 // 要件 2.5: 公開の `ChainPlacement::outcome` が名指すので開ける。
-#[allow(dead_code)] // 読む呼び手は task 1.2 以降・examples には無い
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChainClampOutcome {
     /// 並べた位置のまま（y だけ収めた場合を含む）。
@@ -92,7 +86,6 @@ pub enum ChainClampOutcome {
 }
 
 /// 鎖の 1 スロットの置き場（呼び手が書く値と記録の値）。
-#[allow(dead_code)] // 同上
 // 要件 2.5: 公開の `place_chain_in_work_area` が名指すので開ける。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainPlacement {
@@ -115,7 +108,7 @@ pub struct ChainPlacement {
 /// 作業領域が取れなければ並べた位置のまま `Unresolved`（要件 7.4）。
 ///
 /// 事前条件: `mark_non_positive_widths` を通した後の `slots`。長さが違えば短い方に揃える。
-#[allow(dead_code)] // 呼び手は task 1.2 の World の口・examples には無い
+#[cfg(test)]
 pub(crate) fn resolve_chain_in_work_area(
     slots: &[ChainSlot],
     rects: &[ChainRect],
@@ -199,7 +192,6 @@ fn resolve_chain_with(
 /// 核を呼び、スロットごとに記録を 1 行出す: 置いた位置が並べた位置と違えば `Clamp`（info!）、
 /// 収まっていた・動かさない窓は `Keep`（debug!）、モニタの写しが無い・窓の高さが読めない・
 /// 作業領域が引けないときは `Unresolved`（warn!・ほかのスロットは続ける・要件 7.4）。
-#[allow(dead_code)] // 呼び手は起動の並べ直しと詰め直し（task 2.x）・examples には無い
 pub fn place_chain_in_work_area(
     world: &World,
     slots: &[ChainSlot],
@@ -213,6 +205,7 @@ pub fn place_chain_in_work_area(
                 .get::<WindowPos>(e)
                 .and_then(|wp| wp.size)
                 .map(|s| s.height)
+                .filter(|&h| h > 0)
         })
         .collect();
     let rects: Vec<ChainRect> = slots
@@ -240,17 +233,12 @@ pub fn place_chain_in_work_area(
         let scene = scene_of(p.scope).as_str();
         let (scope, from, to) = (p.scope, p.from, p.to);
         let how = match p.outcome {
-            ChainClampOutcome::Fits => "fits",
-            ChainClampOutcome::Flipped => "flipped",
-            ChainClampOutcome::Edge => "edge",
+            ChainClampOutcome::Fits => Some("fits"),
+            ChainClampOutcome::Flipped => Some("flipped"),
+            ChainClampOutcome::Edge => Some("edge"),
             ChainClampOutcome::Kept(reason) => {
                 debug!(scene, scope, reason = reason.as_str(), at = ?from, "{WORK_AREA_KEEP_TAG} 組の決めで動かさない窓");
-                base = ChainRect {
-                    x: to.x,
-                    y: to.y,
-                    ..*r
-                };
-                continue;
+                None
             }
             ChainClampOutcome::Unresolved => {
                 let reason = if snapshot.is_none() {
@@ -261,19 +249,16 @@ pub fn place_chain_in_work_area(
                     "no-work-area"
                 };
                 warn!(scene, scope, reason, at = ?to, "{WORK_AREA_UNRESOLVED_TAG} 作業領域が取れず寄せずに並べた位置へ置く");
-                base = ChainRect {
-                    x: to.x,
-                    y: to.y,
-                    ..*r
-                };
-                continue;
+                None
             }
         };
-        if to != p.joined {
-            let work_area = work_area_for_window(snapshot.unwrap_or(&empty), rect_of(base));
-            info!(scene, scope, how, joined = ?p.joined, from = ?from, to = ?to, work_area = ?work_area, "{WORK_AREA_CLAMP_TAG} キャラ窓を作業領域の中へ寄せた");
-        } else {
-            debug!(scene, scope, reason = "fits", at = ?to, "{WORK_AREA_KEEP_TAG} 並べた位置が作業領域に収まっている");
+        if let Some(how) = how {
+            if to != p.joined {
+                let work_area = work_area_for_window(snapshot.unwrap_or(&empty), rect_of(base));
+                info!(scene, scope, how, joined = ?p.joined, from = ?from, to = ?to, work_area = ?work_area, "{WORK_AREA_CLAMP_TAG} キャラ窓を作業領域の中へ寄せた");
+            } else {
+                debug!(scene, scope, reason = "fits", at = ?to, "{WORK_AREA_KEEP_TAG} 並べた位置が作業領域に収まっている");
+            }
         }
         base = ChainRect {
             x: to.x,

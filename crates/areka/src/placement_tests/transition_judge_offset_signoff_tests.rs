@@ -105,7 +105,7 @@
 //! 根の絶対パスは §2.4 と同じく `nar-sample-path` の `folder=` の行から得る。
 //!
 //! *理由*: 保存値が効いたスコープでは、キーワード再導出の素材が落ちる
-//! （`crates/areka-placement/src/persist.rs:388` 付近の規約。保存値優先の順位が静かに
+//! （`crates/areka-placement/src/persist.rs` の `merge_scope` の規約。保存値優先の順位が静かに
 //! 反転しないための**正しい規約**であって欠陥ではない）。その結果、**保存値が残っている
 //! 環境では門の行（`verdict=keyword-pending`）が 1 行も出ず**、判定 ⑷ の母数が空になる
 //! （**偽の赤**＝「揃えを 1 度も測れていない」）。実測では、2 本目の採取でキーワード指定
@@ -150,10 +150,12 @@
 //!             Select-String '^folder=').Line.Substring(7)
 //! $BALLOON = (cargo run -q -p sample-ghost-kit --bin nar-sample-path -- `
 //!             emo2-kakukaku-offsetdpi | Select-String '^folder=').Line.Substring(7)
-//! $LOG     = "<絶対パス>\signoff.log"
+//! $LOG     = "<ワークツリーの絶対パス>\target\transition-signoff\signoff.log"
 //! $env:RUST_LOG = "wintf::transition=debug"
 //! & $AREKA $GHOST $BALLOON 2>&1 | Tee-Object -FilePath $LOG
 //! ```
+//!
+//! ログの置き場はワークツリーの `target` の下である（実機の根・ログは `target` の下だけに置く）。
 //!
 //! **コマンドは PowerShell（本リポジトリの主たるシェル）の形で書いてある。** `VAR=値 コマンド`
 //! という先頭への環境変数付与は POSIX シェルの記法であり、PowerShell には無い——貼ると
@@ -376,9 +378,10 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
-use super::transition_judge_offset_tests::{log_of, pass_lines};
+use super::transition_judge_offset_tests::pass_lines;
 use super::{OffsetReport, judge_offset_log};
 use crate::placement_tests::transition_judge::TRANSITION_LOG_ENV;
+use crate::placement_tests::transition_judge::test_support::log_of;
 use areka_placement::transition_diag::KIND_OFFSET;
 use wintf::ecs::window::transition_diag::FIELD_KIND;
 
@@ -386,7 +389,7 @@ use wintf::ecs::window::transition_diag::FIELD_KIND;
 ///
 /// `raw_path` は環境変数の値（未設定なら `None`）。I/O の失敗も「追随レコード 0 行」も `Err`
 /// にする——どれも「違反 0 件」を作れてしまう入力だからである（要件 8.5）。
-fn signoff_offset_log(raw_path: Option<&str>) -> Result<(OffsetReport, String), String> {
+pub(super) fn signoff_offset_log(raw_path: Option<&str>) -> Result<(OffsetReport, String), String> {
     let Some(raw_path) = raw_path.map(str::trim).filter(|path| !path.is_empty()) else {
         return Err(format!(
             "{TRANSITION_LOG_ENV} が未設定である。実機ログの絶対パスを PowerShell で与えて \
@@ -402,7 +405,8 @@ fn signoff_offset_log(raw_path: Option<&str>) -> Result<(OffsetReport, String), 
     if report.rows == 0 {
         return Err(format!(
             "{TRANSITION_LOG_ENV}={raw_path} に追随レコードが 1 行も無い（{} 文字）。\
-             観測 target と水準が有効になっていない採取を「発生 0 回」の根拠にしない（要件 8.5・doc §2）",
+             観測 target と水準が有効になっていない採取を「発生 0 回」の根拠にしない（要件 8.5・doc §2）。\
+             判定の報告:\n{report}",
             log.len()
         ));
     }
@@ -486,7 +490,6 @@ fn a_log_without_any_offset_record_is_an_error_not_an_empty_pass() {
         let error = signoff_offset_log(path.to_str()).expect_err("追随レコード 0 行は失敗");
         assert!(error.contains(TRANSITION_LOG_ENV), "{error}");
     }
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }
 
 #[test]
@@ -503,6 +506,4 @@ fn the_runner_reads_the_same_pure_function_as_the_deterministic_tests() {
     assert_eq!(report, judge_offset_log(&log), "入口が別の判定を通っている");
     assert!(!report.failed(), "既知の合格ログが赤になった:\n{report}");
     assert_eq!(report.transitions.len(), 4, "{report}");
-
-    fs::remove_file(&path).expect("一時ファイルを消せるはず");
 }

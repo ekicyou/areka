@@ -54,10 +54,13 @@ impl VisualDrawContent {
     /// - `local_aabb`: コンテンツがローカル座標で占める AABB。
     ///   **論理単位（96DPI）** で与えること。DPI に依存した値を
     ///   入れると、モニタ跨ぎや DPI 変更時に内在プロパティとしての不変性が
-    ///   崩れるため注意。
+    ///   崩れるため注意。`local_aabb` の外へはみ出す中身は、間引きと差分の描き直しで欠ける。
     /// - `command_list`: このコンテンツの描画コマンド列。呼び出し側で
     ///   [`ID2D1CommandList::Close`] 済みであることを想定する。
-    /// - `interpolation_mode`: 描画時の補間モード。
+    /// - `interpolation_mode`: 描画時の補間モード。D2D は命令の列を描くときこの値を使わず中の命令の補間が
+    ///   効く（WARP で測った・2026-11-14）。wintf はにじみの余白と、外の変形（物理の行列）で縮める
+    ///   `HIGH_QUALITY_CUBIC` の規則にだけ使う。中身の中で縮める絵はこの値を見ずに描く矩形を件ごと
+    ///   閉じる規則で扱う（WARP で全部の答えと一致を確かめた）ので、この値を変えても扱いは変わらない。
     /// - `composite_mode`: 描画時の合成モード（`MixMode::Composite` に包む）。
     #[inline]
     pub fn new_ex(

@@ -211,7 +211,7 @@ crates/areka/src/
 - `tools/perf/fixtures/generate.py:211` を直して `fixtures/` を作り直す。`tools/perf/fixtures-loop/*/run.log` は 1 語だけをスクリプトで置き換える（5.8）。
 - `tools/load-flake.ps1` — `-Binary` に `areka-placement-lib` を足す（説明 52 行・注 68 行・`ValidateSet` 69 行・209 行の選び）（3.13）。
 - `doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/briefing-assets.md`・`doc/ukadoc-coverage/ledger/assets.toml`・`ledger/sakura-script.toml`・`.kiro/steering/structure.md`（5.6）。
-- `.kiro/specs/audit-placement-core/brief.md`・`.kiro/specs/audit-placement-follow/brief.md`（5.9 と申し送り）。
+- `.kiro/specs/audit-placement-core/brief.md`・`.kiro/specs/completed/audit-placement-follow/brief.md`（5.9 と申し送り）。
 - `.kiro/steering/roadmap.md` — この枝の途中では書かない。C18 の②の「触るファイル」に足す分（`log-capture-kit/src`・wintf の `test_crash_report.rs` の説明・`tools/load-flake.ps1`・本体の 5 ファイル〔D7〕）は棚卸のセッションへ伝える（11-06 に `log-capture-kit/src` ほかは伝え済み・残りは設計の確定のときに伝える）。新旧のパスの対応表の判定器の行（「本体のテスト専用のモジュール」＝`crates/areka/src/placement_tests/`）と本体に残すテストの 1 行は、完了の段（`/kiro-complete`）で書く。
 - `Cargo.lock`・`THIRD-PARTY-NOTICES.md` — 道具が作り直す（8.8）。
 

@@ -20,7 +20,7 @@ use super::{
 use super::super::balloon_lock::{balloon_drag_held, end_balloon_drag};
 use super::super::persist::saved_form_anchor;
 use super::sticky_follow::{
-    drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
+    CharDragSession, drag_anchor, drag_wintf_moves, finish_char_drag, follow_partners_on_drag,
 };
 
 /// バルーン単独ドラッグで確定した相対位置を、キャラ窓の表示 DPI を読めないまま
@@ -45,7 +45,7 @@ pub(super) const BALLOON_DRAG_BASE_UNPINNED_TAG: &str = "[balloon-drag] BaseUnpi
 /// 組に入った窓（吸着なしでも・設計の決め 12）は `move_window: false` で、wndproc は窓を
 /// 動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
 /// DragEvent のカーソル座標から生ドラッグ座標を復元し（[`policy_mapped_position`]）、
-/// [`project_anchor`] 適用済み（`Bottom` は [`BottomSnapPolicy`] へ委譲）の座標を
+/// [`project_anchor`] 適用済み（`Bottom` は下端吸着）の座標を
 /// **一度だけ**書く——反映段階で既に正しい座標が確定しているため、v1 の
 /// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。ドラッグと
 /// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（Req1.6）。
@@ -141,7 +141,7 @@ pub(crate) fn on_char_drag(
 /// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`saved_form_anchor`]
 /// （descript の向き＝次の起動の読み戻しの向き・4.8）の形にして [`char_pos_entries`]→
 /// [`persist_entries`] へ渡し、Ghost 永続スコープへ即時 write-through する（fire-and-forget・
-/// 非ブロッキング）。marker 不在（防御）は `debug!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
+/// 非ブロッキング）。marker 不在（防御）は「位置を保存しなかった」の `warn!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
 /// このドラッグの確定と、起動の最後に並べ終えた時点（[`crate::persist::persist_unremembered_char_positions`]）の
 /// 2 つ——`on_char_drag`（ドラッグ中）・[`move_window_to`]・[`resize_window_to`]・復元時再射影は書かない。
 pub fn on_char_drag_end(
@@ -178,16 +178,18 @@ pub fn on_char_drag_end(
                 None => {
                     let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
                     else {
-                        debug!(
+                        warn!(
                             ?entity,
-                            "DraggingState も WindowPos.position も無いため位置保存を skip（防御・no-op）"
+                            "DraggingState も WindowPos.position も無いため位置を保存しなかった"
                         );
+                        world.remove_resource::<CharDragSession>(); // 控えを残さない
                         return false;
                     };
                     pos
                 }
             };
             if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None, None) {
+                world.remove_resource::<CharDragSession>();
                 return false;
             }
             // 面の move のずれは、利用者が置いた所を元の位置として 0 から（task 6.2）。
@@ -206,21 +208,21 @@ pub fn on_char_drag_end(
             // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
             // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
             // スコープは CharWindowMarker から逆引き（usize→u32）。marker 不在（防御）は
-            // debug＋skip（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
+            // warn＋skip（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
             match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
                 Some(scope) => {
                     // 原点（下端中央）基準へ移してから保存する。左上 x のまま保存すると、
                     // サーフェス寸が変わったとき「同じ左上」が別の中央を指し、復元で
                     // キャラ・バルーンが横へずれる（実機: むらさき 382 で保存→434 で復元）。
                     // 現寸が読めないときは左上のまま（防御・従来挙動）。
-                    let char_size =
-                        world
-                            .get::<WindowPos>(entity)
-                            .and_then(|wp| wp.size)
-                            .map(|s| SizePx {
-                                w: s.width,
-                                h: s.height,
-                            });
+                    let char_size = world
+                        .get::<WindowPos>(entity)
+                        .and_then(|wp| wp.size)
+                        .filter(|s| s.width > 0 && s.height > 0)
+                        .map(|s| SizePx {
+                            w: s.width,
+                            h: s.height,
+                        });
                     // 形は descript の向き（次の起動はそれで読み戻す・4.8）。
                     let form = saved_form_anchor(world, entity).unwrap_or(anchor);
                     let saved = match char_size {
@@ -252,10 +254,7 @@ pub fn on_char_drag_end(
                     persist_entries(world, entries);
                 }
                 None => {
-                    debug!(
-                        ?entity,
-                        "CharWindowMarker 不在のため位置保存を skip（防御・no-op）"
-                    );
+                    warn!(?entity, "CharWindowMarker が無いため位置を保存しなかった");
                 }
             }
             false
@@ -304,7 +303,7 @@ fn policy_mapped_position(
         // 不在は非正寸法（＝寸法不明）として project_anchor の identity 縮退へ委ねる
         .unwrap_or(SizePx { w: 0, h: 0 });
     // drag と resize（resize_window_to）が同一 project_anchor を通ることで座標系変換を
-    // 二重化しない（Req1.6）。bottom は project_anchor 内で BottomSnapPolicy へ委譲。
+    // 二重化しない（Req1.6）。bottom は project_anchor 内で下端吸着へ委譲。
     let mapped = project_anchor(anchor, raw, size, world.get_resource::<MonitorSnapshot>());
     Some(Point {
         x: mapped.x,
@@ -364,7 +363,7 @@ impl BalloonFollowTrigger {
 /// offset 恒等式（`pos + offset`）が出した提案位置は、キャラ窓が可視のままでも
 /// offset ぶん外側のバルーンだけを全 work area 非交差へ落とし得る——「キャラは見えて
 /// いるのに会話が読めない」状態であり、Req 3.4 が名指しで防ぐものである。よって恒等式の
-/// **後**に、キャラ窓とまったく同一の純関数（[`guard_visibility`]）・同一の遷移規則を
+/// **後**に、キャラ窓とまったく同一の純関数（`guard_visibility`）・同一の遷移規則を
 /// バルーン矩形へ適用する（[`guard_balloon_position`]）。発火可否は書込自身の route では
 /// なく `trigger`（随伴の引き金）が決める。
 pub fn follow_balloon(
@@ -422,7 +421,7 @@ pub fn follow_balloon(
 ///   （`SWP_NOSIZE`）で寸を変えないため、新旧で同じ寸を使うのが正しい。
 /// - **`raw`（clamp 先の引き元）** = 提案位置そのもの。キャラ窓では「射影 T が Y に用いた
 ///   矩形」を貫通させる必要があるが、バルーンには射影段が無く、提案位置以外に clamp 先を
-///   決める基準が存在しない（別の矩形から引き直すと [`guard_visibility`] の事後条件が崩れる）。
+///   決める基準が存在しない（別の矩形から引き直すと `guard_visibility` の事後条件が崩れる）。
 ///
 /// # 縮退（log-first・Req 3.3／6.2/6.3）
 ///
@@ -482,13 +481,11 @@ fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> 
     // 旧矩形＝**現在位置** × 現寸。位置が未確定なら旧矩形不明＝安全側 clamp。
     // 負座標は正当（左モニタは `-1920..0`）ゆえ、位置の未確定は符号ではなく
     // wintf 正典のセンチネル `CW_USEDEFAULT` そのもので判定する
-    // （`crates/wintf/src/ecs/graphics/systems/window_pos.rs:41`
-    //   ／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:408`
-    // と同じ式。素通しすると `WindowPos::default()` 由来の窓が
-    // 「もともと画面外に留置されていた」と誤判定され安全側の腕が死ぬ）。
+    // （wintf 正典 `window_pos.rs` の `apply_window_pos_changes`／`monitor_systems.rs` の
+    // `window_center` と同型——正典が見るのは `position.x` で、ここは位置の両軸を見る点だけが異なる。
+    // 素通しすると `WindowPos::default()` 由来の窓が「もともと画面外に留置」と誤判定され安全側の腕が死ぬ）。
     let old_rect = window_pos
-        .and_then(|wp| wp.position)
-        .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
+        .and_then(known_position)
         .map(|p| rect_at(PointPx { x: p.x, y: p.y }, size));
 
     evaluate_visibility_guard(
@@ -514,8 +511,8 @@ fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> 
 /// `BalloonFollow.offset = balloon_pos − char_pos`（物理 px・再スケールなし・U4）
 /// へ更新するだけ。既存 consumer（[`on_char_drag`]／[`move_window_to`]）は
 /// 無改変で調整後 offset を読む（DD16・4.4 の恒等式
-/// `balloon_pos − char_pos ≡ offset` は更新後も不変）。記憶はセッション内のみ
-/// （永続化 ghost.dat は M-life の領分）。
+/// `balloon_pos − char_pos ≡ offset` は更新後も不変）。ghost.dat への保存は離したときの
+/// `on_balloon_drag_end` が行う。
 ///
 /// イベントは消費しない（常に `false`＝伝播続行。[`on_char_drag`] と同じ規約）。
 pub fn on_balloon_drag(
@@ -543,60 +540,79 @@ pub fn on_balloon_drag(
                 return false;
             };
 
-            // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、確定 offset を組む。
-            // ここは**読取だけ**で閉じる（可変借用は次の段で 1 窓ずつ取る）。
-            let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos)>();
-            let targets: Vec<(Entity, PointPx)> = chars
-                .iter(world)
-                .filter(|(_, follow, _)| follow.balloon == entity)
-                .filter_map(|(char_window, _, char_wp)| {
-                    let char_pos = char_wp.position?;
-                    // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
-                    // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
-                    debug_assert!(
-                        balloon_pos.x.checked_sub(char_pos.x).is_some()
-                            && balloon_pos.y.checked_sub(char_pos.y).is_some(),
-                        "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
-                    );
-                    Some((
-                        char_window,
-                        PointPx {
-                            x: balloon_pos.x - char_pos.x,
-                            y: balloon_pos.y - char_pos.y,
-                        },
-                    ))
-                })
-                .collect();
-
-            for (char_window, new_offset) in targets {
-                // **表示 DPI を先に読んでから**追従 Component を可変で借りる
-                // （同時借用を避ける順序・design「Modified Files」drag_follow の項）。
-                let current_dpi = world.get::<DPI>(char_window).copied();
-                let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
-                    continue;
-                };
-                match current_dpi {
-                    // 確立点: ドラッグで決まった相対位置を新しい**基準**として焼き直す。
-                    // 作者指定と同一の追随規則がここから効く（要件 3.5・design D14）。
-                    Some(dpi) => follow.reestablish(new_offset, dpi),
-                    None => {
-                        // 表示 DPI を読めない窓（DPI component 未付与）。値は確定して
-                        // いるが「どの表示 DPI に属するか分からない」ので、永続値の腕と
-                        // 同じ**未係留**の基準として確立する——基準 DPI を発明すると
-                        // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される
-                        // （要件 5.2／5.4）。無ログの縮退経路は作らない（要件 9.4）。
-                        let balloon = follow.balloon;
-                        *follow = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
-                        warn!(
-                            entity = ?char_window,
-                            balloon = ?entity,
-                            offset = ?new_offset,
-                            "{BALLOON_DRAG_BASE_UNPINNED_TAG} キャラ窓の表示 DPI を読めないため追従オフセットの基準を未係留で確立した（最初の観測で係留される）"
-                        );
-                    }
-                }
-            }
+            reestablish_balloon_follow(world, entity, balloon_pos);
             false
+        }
+    }
+}
+
+/// 窓の位置。`CW_USEDEFAULT` の印（窓生成前・位置未確定）は無いのと同じに扱う。
+fn known_position(wp: &WindowPos) -> Option<Point> {
+    wp.position
+        .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
+}
+
+/// `BalloonFollow.balloon == balloon` のキャラ窓を逆引きし、追従の基準を `balloon_pos − char_pos`
+/// から確立し直す。ドラッグ中（[`on_balloon_drag`]）と、離したときの保存の直後（指摘 3）が呼ぶ。
+fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: Point) {
+    // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、確定 offset を組む。
+    // ここは**読取だけ**で閉じる（可変借用は次の段で 1 窓ずつ取る）。
+    let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos)>();
+    let targets: Vec<(Entity, PointPx)> = chars
+        .iter(world)
+        .filter(|(_, follow, _)| follow.balloon == balloon)
+        .filter_map(|(char_window, _, char_wp)| {
+            let Some(char_pos) = known_position(char_wp) else {
+                warn!(
+                    entity = ?char_window,
+                    ?balloon,
+                    position = ?char_wp.position,
+                    "追従元キャラ窓の位置が無い・未確定（CW_USEDEFAULT の印）ため追従の基準を確立し直さない"
+                );
+                return None;
+            };
+            // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
+            // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
+            debug_assert!(
+                balloon_pos.x.checked_sub(char_pos.x).is_some()
+                    && balloon_pos.y.checked_sub(char_pos.y).is_some(),
+                "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
+            );
+            Some((
+                char_window,
+                PointPx {
+                    x: balloon_pos.x - char_pos.x,
+                    y: balloon_pos.y - char_pos.y,
+                },
+            ))
+        })
+        .collect();
+
+    for (char_window, new_offset) in targets {
+        // **表示 DPI を先に読んでから**追従 Component を可変で借りる
+        // （同時借用を避ける順序・design「Modified Files」drag_follow の項）。
+        let current_dpi = world.get::<DPI>(char_window).copied();
+        let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
+            continue;
+        };
+        match current_dpi {
+            // 確立点: ドラッグで決まった相対位置を新しい**基準**として焼き直す。
+            // 作者指定と同一の追随規則がここから効く（要件 3.5・design D14）。
+            Some(dpi) => follow.reestablish(new_offset, dpi),
+            None => {
+                // 表示 DPI を読めない窓（DPI component 未付与）。値は確定して
+                // いるが「どの表示 DPI に属するか分からない」ので、永続値の腕と
+                // 同じ**未係留**の基準として確立する——基準 DPI を発明すると
+                // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される
+                // （要件 5.2／5.4）。無ログの縮退経路は作らない（要件 9.4）。
+                *follow = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
+                warn!(
+                    entity = ?char_window,
+                    balloon = ?balloon,
+                    offset = ?new_offset,
+                    "{BALLOON_DRAG_BASE_UNPINNED_TAG} キャラ窓の表示 DPI を読めないため追従オフセットの基準を未係留で確立した（最初の観測で係留される）"
+                );
+            }
         }
     }
 }
@@ -636,9 +652,9 @@ pub fn on_balloon_drag(
 /// # 縮退（panic しない・log-first・no-op）
 ///
 /// バルーンの `WindowPos.position` 不在／[`BalloonWindowMarker`] 不在／追従元キャラ窓
-/// （その `WindowPos.position`・[`Anchored`]・`WindowPos.size` のいずれか）不在は
-/// `debug!`＋skip する。`BalloonFollow.offset`（in-session 表現）は本ハンドラでは
-/// 変異させない（連続ドラッグ側 [`on_balloon_drag`] が所有）。
+/// （その `WindowPos.position`・`WindowPos.size` のいずれか）不在は「位置を保存しなかった」の
+/// `warn!`＋skip する（[`Anchored`] は記録だけが使うので無くても保存する・指摘 7）。`BalloonFollow.offset`（in-session 表現）は保存の直後に最終確定位置から
+/// 出し直す（補正の前の位置・[`reestablish_balloon_follow`]）。最後の OnDrag の値のまま残さない。
 ///
 /// # 解放時の limit 補正と**順序の固定**（areka-P0-windowposition-limit C8・要件 2.5/5.4）
 ///
@@ -652,6 +668,7 @@ pub fn on_balloon_drag(
 ///
 /// 1. 解放位置の取得（`WindowPos.position`＝wndproc の最終確定位置）
 /// 2. 生 offset（`balloon_pos − char_pos`）の導出と永続 write-through
+///    2′. 同じ最終確定位置から追従の基準を出し直す（[`reestablish_balloon_follow`]・指摘 3）
 /// 3. キーワード素材の退役（[`retire_keyword_base_on_save`]・要件 4.7）
 /// 4. `BalloonLimit(true)` かつ補正が要るときだけ表示位置を補正
 ///
@@ -687,31 +704,33 @@ pub(crate) fn on_balloon_drag_end(
             // 更新済み・on_balloon_drag と同源。ev.position(cursor) は使わない）。
             let Some(balloon_pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
             else {
-                debug!(
+                warn!(
                     ?entity,
-                    "バルーン窓の WindowPos.position 不在のため offset 保存を skip（防御・no-op）"
+                    "バルーン窓の WindowPos.position が無いため位置を保存しなかった"
                 );
                 return false;
             };
 
             // scope はバルーン窓自身の BalloonWindowMarker（追従元 char と同番号）。
             let Some(scope) = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope) else {
-                debug!(
+                warn!(
                     ?entity,
-                    "BalloonWindowMarker 不在のためバルーン offset 保存を skip（防御・no-op）"
+                    "BalloonWindowMarker が無いためバルーンの位置を保存しなかった"
                 );
                 return false;
             };
 
             // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、最終 char_pos・anchor・
             // char_size を読む（in-session の BalloonFollow.offset は SAVE に使わない）。
-            let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos, &Anchored)>();
-            let mut found: Option<(Entity, Point, Anchor, SizePx)> = None;
+            // anchor は記録だけが使うので任意（無くても保存する・指摘 7）。
+            let mut chars =
+                world.query::<(Entity, &BalloonFollow, &WindowPos, Option<&Anchored>)>();
+            let mut found: Option<(Entity, Point, Option<Anchor>, SizePx)> = None;
             for (char_window, follow, char_wp, anchored) in chars.iter(world) {
                 if follow.balloon != entity {
                     continue;
                 }
-                let Some(char_pos) = char_wp.position else {
+                let Some(char_pos) = known_position(char_wp) else {
                     continue;
                 };
                 let Some(size) = char_wp.size else {
@@ -720,7 +739,7 @@ pub(crate) fn on_balloon_drag_end(
                 found = Some((
                     char_window,
                     char_pos,
-                    anchored.0,
+                    anchored.map(|a| a.0),
                     SizePx {
                         w: size.width,
                         h: size.height,
@@ -729,9 +748,9 @@ pub(crate) fn on_balloon_drag_end(
                 break;
             }
             let Some((char_window, char_pos, anchor, char_size)) = found else {
-                debug!(
+                warn!(
                     ?entity,
-                    "追従元キャラ窓（位置/anchor/寸法）不在のためバルーン offset 保存を skip（防御・no-op）"
+                    "追従元キャラ窓（位置/寸法）が無い・位置が未確定のためバルーンの位置を保存しなかった"
                 );
                 return false;
             };
@@ -769,6 +788,9 @@ pub(crate) fn on_balloon_drag_end(
             );
             let entries = balloon_offset_entries(scope as u32, persist);
             persist_entries(world, entries);
+
+            // ②′ 追従の基準を最終確定位置から出し直す（補正の前・最後の OnDrag の値を残さない）。
+            reestablish_balloon_follow(world, entity, balloon_pos);
 
             // ③ キーワード素材の退役（要件 4.7・task 4.6）。**②と同じ観測点**であること
             // 自体が要点なので、②の直後に置く（詳細は [`retire_keyword_base_on_save`]）。
@@ -818,7 +840,7 @@ pub(crate) fn on_balloon_drag_end(
 ///
 /// # 縮退を持たない理由（要件 6.3 の適用範囲）
 ///
-/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `debug!`＋skip している
+/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `warn!`＋skip している
 /// （保存値の導出に同じ entity が要る）。ここへ到達した時点で対象は確定しており、解決に
 /// 失敗する余地が無い。素材を持たない窓（`Side`・保存値が効いた scope・消費済み）は縮退
 /// ではなく**正常な no-op** ゆえ警告も出さない——出すと `Side` のバルーンをドラッグする

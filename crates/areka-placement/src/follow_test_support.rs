@@ -25,7 +25,7 @@ pub(super) fn fake_handle(raw: usize) -> WindowHandle {
     }
 }
 
-/// position 初期値付きの WindowPos。
+/// position 初期値付きの WindowPos（寸は `WindowPos::default` の `CW_USEDEFAULT` の印のまま）。
 pub(super) fn window_pos_at(x: i32, y: i32) -> WindowPos {
     WindowPos {
         position: Some(Point { x, y }),
@@ -52,7 +52,7 @@ pub(super) fn drag_event(target: Entity) -> DragEvent {
     }
 }
 
-pub(super) fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
+pub(crate) fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
     RectPx {
         left,
         top,
@@ -141,7 +141,7 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 pub(super) const DPIS: [i32; 3] = [96, 120, 192];
 
 /// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制。
-/// `resolver.rs` の `px()` が donor・Req 5.6）。
+/// `resolver_test_support.rs` の `px()` が donor・Req 5.6）。
 pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     assert_eq!(
         (logical * dpi) % 96,
@@ -242,7 +242,6 @@ pub(super) const CLAMP_TAG: &str = "[visibility-guard] ClampX";
 pub(super) const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
 /// 同上（work area を解決できず判定不能・Req 3.3）。
 pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
-/// 3 語に共通の接頭辞（「ガードが何かを言った」ことの一括検出）。
 /// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
 /// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
 ///
@@ -253,6 +252,7 @@ pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 /// 狂わないようにするためである。
 pub(super) const OFFSCREEN_PULL_TAG: &str = "[visibility-guard] OffscreenPull";
 
+/// `[visibility-guard]` の判定語すべてに共通の接頭辞（「ガードが何かを言った」ことの一括検出）。
 pub(super) const GUARD_TAG_PREFIX: &str = "[visibility-guard]";
 
 /// 幅広のキャラ窓寸（論理 320×400）。論理 320／32 はいずれも 8 の倍数ゆえ、
@@ -312,4 +312,306 @@ pub(super) fn guard_events<'a>(
         .iter()
         .filter(|e| e.message().contains(needle))
         .collect()
+}
+
+// -------------------------------------------------------------------------
+// 範囲の中のテストに写してあった組み立て（audit-placement-follow・指摘 16）
+// -------------------------------------------------------------------------
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use areka_emo_compose::ScaleRatio;
+use areka_sylphya::persist::{FakePersistIo, FsPersistIo, PersistIo};
+use areka_sylphya::{
+    PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
+};
+use temp_path_kit::TempPath;
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::DPI;
+use wintf::ecs::window::monitor::Monitor;
+
+use super::super::persist::PersistWiring;
+use super::{Anchored, OffsetBase};
+use crate::resolver::ScopePlacement;
+use crate::source::GhostTitles;
+use crate::spawn::spawn_ghost_windows;
+
+/// 補正ログの判定語（本体定数とは独立に檻側へ literal で置く）。
+pub(super) const LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
+/// 解決不能（縮退）の判定語。
+pub(super) const LIMIT_UNRESOLVED_TAG: &str = "[balloon-limit] Unresolved";
+/// 2 段 grep 第 1 段の接頭辞（「関門が何かを言った」ことの一括検出）。
+pub(super) const LIMIT_TAG_PREFIX: &str = "[balloon-limit]";
+/// 窓移動レコードの判定語（`placement::diag` の手順書語彙）。
+pub(super) const WINDOW_MOVE_TAG: &str = "[diag.window_move]";
+
+/// [`odd_edge_snapshot`] の作業領域（全 4 辺が 96 の非倍数・原点非 (0,0)）。
+pub(super) fn odd_edge_wa() -> RectPx {
+    odd_edge_snapshot().work_areas[0]
+}
+
+/// limit の檻のバルーンの寸（223×158）。
+pub(super) fn limit_balloon_size() -> SizePx {
+    SizePx { w: 223, h: 158 }
+}
+
+/// 作業領域内へ収めたときの位置上限（右下側）。檻側の独立計算（実装を呼ばない）。
+pub(super) fn max_pos(area: RectPx, size: SizePx) -> PointPx {
+    PointPx {
+        x: area.right - size.w,
+        y: area.bottom - size.h,
+    }
+}
+
+/// 4 辺内包しているか（檻側の独立実装）。
+pub(super) fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
+    pos.x >= area.left
+        && pos.y >= area.top
+        && pos.x + size.w <= area.right
+        && pos.y + size.h <= area.bottom
+}
+
+/// limit の檻の基準となる 1 scope ぶんの配置（恒等式 `balloon_offset ≡ balloon_pos − char_pos` 成立）。
+///
+/// - キャラ窓 (1301,411) 434×600 → 矩形は作業領域に完全内包・中心も内包（帰属が最近傍
+///   フォールバックへ落ちない＝基準モニタの解決が正常腕で決まる）
+/// - バルーン (1601,811) 223×158 → 同じく内包（＝**書込前は補正不要**の状態から始める）
+pub(super) fn base_placement(balloon_limit: bool) -> ScopePlacement {
+    ScopePlacement {
+        scope: 0,
+        char_pos: PointPx { x: 1301, y: 411 },
+        char_size: SizePx { w: 434, h: 600 },
+        balloon_pos: PointPx { x: 1601, y: 811 },
+        balloon_size: limit_balloon_size(),
+        balloon_offset: PointPx { x: 300, y: 400 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 300, y: 400 }),
+        balloon_limit,
+        anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
+    }
+}
+
+/// 実 spawn で World を組み、偽 `WindowHandle` を付けて単一ライターを通れるようにする。
+pub(super) fn world_with(
+    placement: ScopePlacement,
+    snapshot: MonitorSnapshot,
+) -> (World, Entity, Entity) {
+    let mut world = World::new();
+    world.insert_resource(snapshot);
+    let titles = GhostTitles::from_scope_titles([(0, "むらさき".to_string())]);
+    let ghost_windows = spawn_ghost_windows(&mut world, &[placement], &titles);
+    let char_window = ghost_windows
+        .char_window(0)
+        .expect("キャラ窓が spawn される");
+    let balloon = ghost_windows
+        .balloon_window(0)
+        .expect("バルーン窓が spawn される");
+    world.entity_mut(char_window).insert(fake_handle(0x1000));
+    world.entity_mut(balloon).insert(fake_handle(0x2000));
+    (world, char_window, balloon)
+}
+
+/// [`base_placement`] を [`odd_edge_snapshot`] の上に実 spawn した World。
+pub(super) fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
+    world_with(base_placement(balloon_limit), odd_edge_snapshot())
+}
+
+/// `needle` を含むログが 1 件も無いこと。
+pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
+    let hits: Vec<&str> = events
+        .iter()
+        .map(CapturedEvent::message)
+        .filter(|m| m.contains(needle))
+        .collect();
+    assert!(
+        hits.is_empty(),
+        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
+    );
+}
+
+/// 縦横同じ値の DPI。
+pub(super) fn dpi(v: u16) -> DPI {
+    DPI::from_dpi(v, v)
+}
+
+/// 表示 DPI と作者基準 DPI の比（軸ごとの拡大率・app_scale=1）。
+pub(super) fn k_axis(display_dpi: u32, author_dpi: u32) -> ScaleRatio {
+    ScaleRatio::new(display_dpi, author_dpi).expect("非ゼロ DPI")
+}
+
+/// 「旧矩形は可視・新提案は全 work area 非交差」へ落ちるキャラ窓 World を組む。
+///
+/// 旧寸 [`wide_char_size`] の窓を、下端中央付替え（`resize_window_to` 手順 3b）後の
+/// 中心が帯へ落ちる位置に置く。新寸 [`narrow_char_size`] は帯より狭いので、射影 T が
+/// 出す提案矩形は帯へ収まり **どの work area とも交差しない**——S3 が言う
+/// 「非ドラッグ要因で不可視へ遷移する」状態そのものを合成する。
+pub(super) fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
+    let old = wide_char_size(dpi);
+    let old_pos = PointPx {
+        x: gap_center_x(dpi) - old.w / 2,
+        y: left_wa().bottom - old.h,
+    };
+    let mut world = World::new();
+    world.insert_resource(mixed_layout(dpi));
+    let e = world
+        .spawn((
+            fake_handle(0x1000),
+            window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
+            Anchored(Anchor::Bottom),
+        ))
+        .id();
+    (world, e, old_pos)
+}
+
+/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
+pub(crate) fn code_only(source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// 実行時のモニタ表 1 台（3200×1800・96・主モニタ。作業領域の下端だけが関心）。
+pub(crate) fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
+    Monitor {
+        handle: 1,
+        bounds: RECT {
+            left: 0,
+            top: 0,
+            right: 3200,
+            bottom: 1800,
+        },
+        work_area: RECT {
+            left: 0,
+            top: 0,
+            right: 3200,
+            bottom,
+        },
+        dpi: 96,
+        is_primary: true,
+    }
+}
+
+/// アクターへ渡す口と観測する口が同じストアを指す偽の IO。
+struct SharedFakeIo(Arc<FakePersistIo>);
+impl PersistIo for SharedFakeIo {
+    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+        self.0.read(path)
+    }
+    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        self.0.commit(path, content)
+    }
+}
+
+/// 実 publisher（`spawn_sylphya`）と、同じ所を読み戻す口の組。
+pub(super) struct SylphyaRig {
+    pub(super) parts: SylphyaParts,
+    roots: ScopeRoots,
+    reader: Box<dyn PersistIo>,
+}
+
+impl SylphyaRig {
+    /// 偽の記憶（共有ストア・Ghost の根は `/g`）。
+    pub(super) fn fake() -> Self {
+        let store = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(store.clone())),
+            runtime_sink: None,
+        });
+        Self {
+            parts,
+            roots,
+            reader: Box::new(SharedFakeIo(store)),
+        }
+    }
+
+    /// 実ファイル（`FsPersistIo`）。`profile_root` は Ghost スコープの保存先。
+    pub(super) fn over_fs(profile_root: PathBuf) -> Self {
+        let roots = ScopeRoots {
+            ghost: Some(profile_root),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(FsPersistIo),
+            runtime_sink: None,
+        });
+        Self {
+            parts,
+            roots,
+            reader: Box::new(FsPersistIo),
+        }
+    }
+
+    /// UI スレッド常駐の保存投函口を World へ挿す（persist_entries が引く NonSend リソース）。
+    pub(super) fn wire(&self, world: &mut World) {
+        world.insert_non_send(PersistWiring {
+            publisher: self.parts.publisher.clone(),
+        });
+    }
+
+    /// 投函済みの保存がすべて書き終わってから Ghost スコープを読む（同一送信端 FIFO）。
+    pub(super) fn saved(&self) -> Vec<(PersistKey, String)> {
+        self.parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+        load_scope(PersistScope::Ghost, &self.roots, self.reader.as_ref())
+    }
+
+    /// 正典終了（アクター join）。
+    pub(super) fn close(self) {
+        self.parts.publisher.close();
+        self.parts
+            .handle
+            .join()
+            .expect("sylphya のアクターが panic した");
+    }
+}
+
+/// 最小解決可能ゴースト（`ghost/master/descript.txt`・`shell/master`）と保存先
+/// `profile/areka` を一時フォルダに植える。返すのは（窓口・ゴーストの根・保存先）。
+/// 窓口が落ちるとフォルダごと消える（panic をまたいでも）。
+pub(super) fn plant_minimal_ghost(label: &str) -> (TempPath, PathBuf, PathBuf) {
+    use areka_ghost::sylphya_wiring::profile_areka_root;
+
+    let temp = TempPath::new(label);
+    let root = temp.path().to_path_buf();
+    let ghost_master = root.join("ghost").join("master");
+    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+    std::fs::write(
+        ghost_master.join("descript.txt"),
+        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
+    )
+    .expect("write ghost descript");
+    std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+    // FsPersistIo::commit は親ディレクトリを作らないため、書込先を先に用意する。
+    let profile_root = profile_areka_root(&ghost_master);
+    std::fs::create_dir_all(&profile_root).expect("create profile/areka");
+    (temp, root, profile_root)
+}
+
+/// 手順書 §3.3 の grep 判定語（`ClampX` で寄せた後も全 work area と非交差・本体とは独立の literal）。
+pub(super) const HIDDEN_AFTER_CLAMP_TAG: &str = "[visibility-guard] HiddenAfterClampX";
+
+/// 見送りの `debug!` がちょうど 1 行で理由が `reason`、`warn!` は出ない（見送りは失敗でない）。
+pub(super) fn assert_deferred(events: &[CapturedEvent], reason: &str) {
+    let deferred: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("move_shift_deferred"))
+        .collect();
+    assert_eq!(deferred.len(), 1, "{events:?}");
+    assert_eq!(deferred[0].level, tracing::Level::DEBUG);
+    assert_eq!(deferred[0].field_str("reason"), Some(reason), "{events:?}");
+    assert!(
+        events.iter().all(|e| e.level != tracing::Level::WARN),
+        "見送りで warn! を出した: {events:?}"
+    );
 }

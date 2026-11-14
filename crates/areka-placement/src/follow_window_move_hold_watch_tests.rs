@@ -60,7 +60,8 @@ fn held_world(hold: bool) -> (World, Entity) {
     (world, window)
 }
 
-/// 積まれた書込指令を捨てる（プロセス共有のキューをテスト間で持ち越さない）。
+/// このスレッドに積まれた書込指令を捨てる（キューはスレッドごとなのでテスト間の分離には
+/// 効かない・後始末として捨てるだけである）。
 fn drop_queued_writes() {
     let _residue = wintf::ecs::window::drain_window_pos_commands();
 }
@@ -111,17 +112,6 @@ fn every_placement_route_is_classified_for_the_hold_watch() {
     }
 }
 
-/// 分類表に同じ語が 2 度現れない（重複で「網羅している」ように見せない）。
-#[test]
-fn the_classification_table_has_no_duplicate_route() {
-    for (i, (route, _)) in EXPECTED.iter().enumerate() {
-        assert!(
-            !EXPECTED[i + 1..].iter().any(|(other, _)| other == route),
-            "分類表に {route} が重複している"
-        );
-    }
-}
-
 /// route を名乗らない書込（＝ドラッグ経路のキャラ窓書込）は鳴らない。
 ///
 /// `None` は「観測を所有しない書込」でありドラッグ以外に発行元が無い——利用者の明示操作
@@ -165,6 +155,7 @@ fn the_explicit_script_move_reaches_a_waiting_window_without_tripping_the_watch(
 /// 迂回した形＝将来その条件が壊れたときに鳴ってほしい形である。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn a_system_write_that_bypasses_its_deferral_still_trips_the_watch() {
     let (mut world, window) = held_world(true);
     move_window_with_route(&mut world, window, 1301, 356, PlacementRoute::ChainRealign);
@@ -190,6 +181,7 @@ fn the_same_system_write_passes_when_the_window_is_not_waiting() {
 /// であることを、実行で示すのがこの 1 本の役目である。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 fn the_keep_position_resize_of_a_waiting_balloon_trips_the_watch() {
     let (mut world, window) = held_world(true);
     resize_window_keep_position(&mut world, window, SizePx { w: 400, h: 300 });

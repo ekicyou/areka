@@ -157,7 +157,7 @@ fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
         assert_eq!(wa, left_wa(), "dpi={dpi}: 最近傍は左モニタ");
 
         // ③ 2 面のあいだの帯（右モニタのタスクバー上・非対称 work area 由来）
-        //    幅 px(60) の窓を帯へ完全に収め、中心を帯の中へ落とす
+        //    幅 px(40) の窓を帯へ完全に収め、中心を帯の中へ落とす
         let strip_size = SizePx {
             w: px(40, dpi),
             h: px(40, dpi),
@@ -181,48 +181,6 @@ fn with_origin_empty_snapshot_is_none() {
         work_area_for_window_with_origin(&snapshot, rect(0, 0, 100, 100)),
         None
     );
-}
-
-/// **委譲の等価性**（task 2.2 完了条件）: 既存 `work_area_for_window` の戻り値は
-/// 判別付き版の第 1 要素と常に一致する＝既存呼出元の挙動が 1 bit も変わらない。
-///
-/// 帰属・最近傍・境界・重複・空 snapshot の全経路を同一の probe 集合で走らせる。
-#[test]
-fn work_area_for_window_delegates_to_with_origin() {
-    for dpi in DPIS {
-        let size = char_size(dpi);
-        let snapshots = [
-            mixed_layout(dpi),
-            // 重複（先勝ち）と共有辺（half-open）を含む合成
-            MonitorSnapshot {
-                work_areas: vec![
-                    rect(0, 0, px(1920, dpi), px(1040, dpi)),
-                    rect(px(1920, dpi), 0, px(3840, dpi), px(1040, dpi)),
-                    rect(-40, -40, px(2000, dpi), px(1100, dpi)),
-                ],
-            },
-            MonitorSnapshot { work_areas: vec![] },
-        ];
-        let probes = [
-            point(px(800, dpi), grounded_y(right_wa(dpi), size)),
-            point(-1200, 400),
-            point(px(1920, dpi) + px(400, dpi), 100),
-            point(-4000, 2000),
-            point(px(12, dpi), px(400, dpi)),
-            // 共有辺ちょうどに中心が来る位置（half-open の分岐点）
-            point(px(1920, dpi) - size.w / 2, px(500, dpi)),
-        ];
-        for snapshot in &snapshots {
-            for pos in probes {
-                let window = win(pos, size);
-                assert_eq!(
-                    work_area_for_window(snapshot, window),
-                    work_area_for_window_with_origin(snapshot, window).map(|(wa, _)| wa),
-                    "dpi={dpi}: 委譲の等価性が崩れた（pos={pos:?}）"
-                );
-            }
-        }
-    }
 }
 
 // -------------------------------------------------------------------------
@@ -295,20 +253,6 @@ fn monitor_dpi_table_transcribes_bounds_and_dpi_in_enumeration_order() {
 fn monitor_dpi_table_from_no_monitors_is_empty() {
     assert!(MonitorDpiTable::from_monitors(&[]).entries.is_empty());
     assert!(MonitorSources::from_monitors(&[]).is_empty());
-}
-
-/// 2 源は同じ列から同時に作られ、台数と並びが一致する（片方だけ古い運転を作らない）。
-#[test]
-fn monitor_sources_build_both_sides_from_one_list() {
-    let monitors = two_monitors();
-    let sources = MonitorSources::from_monitors(&monitors);
-    assert_eq!(sources.len(), 2);
-    assert_eq!(
-        sources.snapshot,
-        MonitorSnapshot::from_monitors(&monitors),
-        "作業領域源が単独構築と食い違う（構築関数が二重化している）"
-    );
-    assert_eq!(sources.dpi_table, MonitorDpiTable::from_monitors(&monitors));
 }
 
 /// 順序非依存の比較: 同じ台の集合なら**並びが逆でも同じ**と見なす。

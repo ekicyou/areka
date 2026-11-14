@@ -1,9 +1,6 @@
 //! `transition_judge` の**解析・切り出し・集計**の決定論テスト（task 3.1）。
 //!
-//! テーマ別の姉妹モジュール:
-//!
-//! - `transition_judge_frame_tests` — フレーム刻印の扱い（周回・縮退・読めない値・同一フレーム性）
-//! - `transition_judge_reobservation_tests` — 再観測ログの逐語再現
+//! テーマ別の姉妹モジュールは `transition_judge.rs` の接続宣言が正本である（ここに一覧を写さない）。
 //!
 //! ここは 1 つの判定量につき 1 つの分岐を突く粒度で並べる。
 
@@ -13,14 +10,14 @@ use areka_emo_present::presenter::{
     SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
-    FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_SCOPE, FIELD_WIN_KIND, KIND_ALL,
-    KIND_MONITOR, KIND_MSG, KIND_WRITE, MISSING, MSG_DPICHANGED, ORIGIN_DPI_SUGGESTED,
-    ORIGIN_WINDOW_POS, STAGE_BEGIN, STAGE_END, STAGE_FLUSH, STAGE_SYNC,
+    FIELD_ENTITY, FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_SCOPE, FIELD_STAGE,
+    FIELD_WIN_KIND, KIND_ALL, KIND_MONITOR, KIND_WRITE, MISSING, MSG_DPICHANGED,
+    ORIGIN_DPI_SUGGESTED, ORIGIN_WINDOW_POS, STAGE_BEGIN, STAGE_END, STAGE_FLUSH, STAGE_SYNC,
 };
 
 use super::test_support::{
-    balloon_kind, chain, char_kind, enqueue, flush, ground, hold, monitor, msg, parse_ok, record,
-    summarize_lines, surface, write,
+    balloon_kind, chain, char_kind, enqueue, flush, ground, hold, log_of, monitor, msg, parse_ok,
+    record, summarize_lines, surface, write,
 };
 use super::{
     RecordDefect, WindowKey, is_transition_origin, parse_transition_line, parse_transition_log,
@@ -153,7 +150,7 @@ fn parse_reads_the_sentinel_as_an_absent_value() {
 
 #[test]
 fn parse_treats_a_repeated_field_name_as_malformed_instead_of_last_wins() {
-    // judge-perf.py の辞書化は後勝ちだが、判定器は「1 行に同名を 2 度出さない」を
+    // tools/perf/ の Python の道具の辞書化は後勝ちだが、判定器は「1 行に同名を 2 度出さない」を
     // 語彙の不変条件として扱う。後勝ちで飲み込むと接頭語の kind= が潰される退行が消える。
     let line = format!(
         "{} {FIELD_SCOPE}=9",
@@ -211,7 +208,7 @@ fn parse_reports_a_missing_required_field() {
 
 #[test]
 fn parse_reports_an_unknown_kind_word() {
-    let line = record(7, 0, "monitr", "entity=2v0");
+    let line = record(7, 0, "monitr", &format!("{FIELD_ENTITY}=2v0"));
     let parsed = parse_transition_line(&line).expect("タグを含む行は解析結果を返す");
     assert!(
         parsed
@@ -224,7 +221,7 @@ fn parse_reports_an_unknown_kind_word() {
 
 #[test]
 fn required_fields_cover_every_kind_word_the_three_crates_define() {
-    // 語彙の定義元は 3 箇所（wintf・emo-present・areka）。どれか 1 語でも表から漏れると
+    // 語彙の定義元は 3 箇所（wintf・emo-present・areka-placement）。どれか 1 語でも表から漏れると
     // その種別の行が「未知の種別」として全件欠陥になり、判定が静かに空振りする。
     for kind in KIND_ALL
         .iter()
@@ -270,7 +267,7 @@ fn split_starts_a_transition_at_each_dpi_changing_monitor_record() {
             1,
         ),
     ];
-    let records = parse_transition_log(&lines.join("\n"));
+    let records = parse_transition_log(&log_of(&lines));
     let transitions = split_transitions(&records);
     assert_eq!(transitions.len(), 2);
     assert_eq!(transitions[0].len(), 2);
@@ -315,7 +312,7 @@ fn split_drops_records_before_the_first_origin() {
             1,
         ),
     ];
-    let records = parse_transition_log(&lines.join("\n"));
+    let records = parse_transition_log(&log_of(&lines));
     let transitions = split_transitions(&records);
     assert_eq!(transitions.len(), 1);
     assert_eq!(
@@ -601,7 +598,7 @@ fn summarize_excludes_windows_whose_redisplay_was_skipped() {
     // 本例はまさにその欠陥形（キャラは frame 10・随伴は frame 20）であり、検査される。
     assert_eq!(
         summary.balloon_pairs_checked, 1,
-        "両窓とも書込があるので対は検査できる（キャラ側は `last_write_frame_per_window`・バルーン側は `last_follow_frame_per_window` 由来）"
+        "両窓とも書込があるので対は検査できる（キャラ側は `last_write_frame_per_window`・バルーン側は `follow_landing_per_window` 由来）"
     );
     assert!(
         !summary.balloon_same_frame,
@@ -623,48 +620,6 @@ fn summarize_reads_the_flush_total_only_from_the_end_of_the_interval() {
         Some(171_000),
         "開始行の値を総所要として拾ってはならない"
     );
-}
-
-#[test]
-fn summarize_keeps_the_first_write_time_instead_of_the_latest() {
-    let summary = summarize_lines(&[
-        monitor(10, 192, 96, 1704, 1752),
-        write(
-            10,
-            103_000,
-            STAGE_FLUSH,
-            0,
-            "0x1",
-            ORIGIN_WINDOW_POS,
-            "0",
-            char_kind(),
-            1,
-        ),
-        write(
-            10,
-            255_000,
-            STAGE_FLUSH,
-            1,
-            "0x2",
-            ORIGIN_WINDOW_POS,
-            "0",
-            balloon_kind(),
-            1,
-        ),
-        write(
-            10,
-            271_000,
-            STAGE_FLUSH,
-            2,
-            "0x2",
-            ORIGIN_WINDOW_POS,
-            "0",
-            balloon_kind(),
-            1,
-        ),
-    ]);
-    assert_eq!(summary.wall.first_write_t_us, Some(103_000));
-    assert_eq!(summary.wall.last_write_t_us, Some(271_000));
 }
 
 #[test]
@@ -830,7 +785,11 @@ fn summarize_collects_wall_clock_values_as_reference_only() {
             16_200,
         ),
     ]);
-    assert_eq!(summary.wall.first_write_t_us, Some(103_000));
+    assert_eq!(
+        summary.wall.first_write_t_us,
+        Some(103_000),
+        "最初の書込の時刻を保つ（後の書込で上書きしない）"
+    );
     assert_eq!(summary.wall.last_write_t_us, Some(255_000));
     assert_eq!(summary.wall.sum_call_us, 36_700);
 }
@@ -838,7 +797,8 @@ fn summarize_collects_wall_clock_values_as_reference_only() {
 #[test]
 fn summarize_counts_malformed_records_instead_of_dropping_them() {
     let mut lines = vec![monitor(10, 192, 96, 1704, 1752)];
-    lines.push(record(10, 1, "surfac", "stage=upload"));
+    let body = format!("{FIELD_STAGE}={SURFACE_STAGE_UPLOAD}");
+    lines.push(record(10, 1, "surfac", &body));
     let summary = summarize_lines(&lines);
     assert_eq!(summary.records, 2);
     assert_eq!(
@@ -866,7 +826,7 @@ fn summarize_keeps_an_untagged_write_visible_under_the_sentinel_key() {
 
 #[test]
 fn summarize_ignores_records_that_are_not_part_of_the_judged_quantities() {
-    // msg／enqueue は台帳の裏取り用であり、判定量そのものは動かさない。
+    // msg／enqueue は台帳の裏取り用で判定量を動かさない（畳まれていない enqueue は追随でない）。
     let summary = summarize_lines(&[
         monitor(10, 192, 96, 1704, 1752),
         msg(10, 124_000, MSG_DPICHANGED, "0x1"),
@@ -889,7 +849,7 @@ fn summarize_ignores_records_that_are_not_part_of_the_judged_quantities() {
             .is_some_and(|origin| origin.old_dpi == 192 && origin.new_dpi == 96),
         "起点の新旧 DPI は要約が持つ"
     );
-    assert_ne!(KIND_MSG, KIND_MONITOR);
+    assert!(summary.balloon_follow_windows.is_empty());
 }
 
 // ---------------------------------------------------------------------------
