@@ -22,7 +22,7 @@
 //! 共に使う [`crate::test_support::measure_template`] に 1 つだけあり、どちらの片割れも自分の
 //! crate の実物で走査器を較正する。
 //!
-//! `measure_tests.rs` は 981 行で追記の余地が無いため、本ファイルを兄弟として新設した
+//! `measure_tests.rs` は 1,000 行の上限に近いため、本ファイルを兄弟として新設した
 //! （要件 7.12）。検体は共有の受け口（`placement_shared_test_support.rs`）経由でのみ受け、
 //! `vendors/sample_ghost/` の直パスは書かない（要件 7.11）。
 

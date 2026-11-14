@@ -40,7 +40,3 @@ pub(crate) fn r_post_and_komainu_shell_root() -> PathBuf {
 pub(crate) fn konnoyayame_shell_root() -> PathBuf {
     KONNOYAYAME.folder().join("shell/master")
 }
-
-#[cfg(test)]
-#[path = "sample_test_support_tests.rs"]
-mod tests;

@@ -152,7 +152,7 @@
 
 - [ ] 6. テストの整理と小さな直し
 
-- [ ] 6.1 測りのテストの写しを消し、一時フォルダを target の下に揃える（U16・指摘 10・11・21・54・59・60）
+- [x] 6.1 測りのテストの写しを消し、一時フォルダを target の下に揃える（U16・指摘 10・11・21・54・59・60）
   - 固定の名前の一時フォルダを共有の一時フォルダの道具へ、測りのテストの写しを共有の支えへ替える。
   - 一時フォルダの道がワークツリーの `target\test-roots\` の下にあることを確かめるテストを 1 本足す。
   - 重なるテスト・中身が 0 になるファイルとその宣言を消し、数と文を今の値に直す（較正の当たりが残る所にあることを確かめてから消す）。
@@ -266,3 +266,4 @@
 - 4.5: 追随の持ち物 `follow_drag_end_persist_tests.rs` を 4 行直した（`load_restored_state` の引数を消したため・避けられない）。8.2 の申し送りで `audit-placement-follow` へ渡す。同じく申し送りの候補: 作業領域の写しが追随の側に 2 か所残る（`follow/work_area.rs:L49-L54`・`transition_diag.rs:L681`）・`follow/work_area.rs:L42` に古い名前 `primary_work_area`。
 - 5.2 のレビューの提案（8.1 で拾う）: `Effect::PersistRemove` の doc にタスク番号（「5.2 が…」）が入っている。無いファイルから鍵を消すと `format-version = 1` だけのファイルができる（読み手は鍵が無いのと同じに扱うので害は無い）。
 - 7.2 の前提: `audit-wintf-input` が自分の 7.1 でドラッグの知らせの `Messages<…>` を消し、`balloon_lock_drag_tests.rs`（L99-101・L444 付近）と `follow_drag_end_gate_tests.rs`（L66-72 付近）を直す。相手が先に着地し、7.2 はその後の形の上でテストの小道具をまとめる。
+- 6.1: 指摘 54 の `emo2_utf8_fixture_decodes_to_the_same_text_as_before` は消さずに説明だけを直した（research の 54 が許すもう 1 つの直し方）。設計 U16 の「較正の当たりは残る所にあるので移す物は無い」は誤りで、この crate の本文の `shell::parse` の呼び出しはこのテストにしか無く、`measure_template_tests.rs` の較正の当たりになっている。

@@ -79,3 +79,19 @@ pub(super) fn synth_balloon_dir(root: &TempDir, name: &str, extra_lines: &str) -
     .expect("balloons0.png 複写");
     balloon_dir
 }
+
+/// 一時フォルダの道は、ワークツリーの `target\test-roots\` の下にある（`%TEMP%` の下ではない）。
+#[test]
+fn temp_dir_lives_under_the_worktree_target_test_roots() {
+    let dir = TempDir::new();
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/test-roots")
+        .canonicalize()
+        .expect("ワークツリーの target/test-roots が在る（窓口が作る）");
+    let path = dir.path().canonicalize().expect("一時フォルダが実在する");
+    assert!(
+        path.starts_with(&base),
+        "一時フォルダが target/test-roots の外: {}",
+        path.display()
+    );
+}

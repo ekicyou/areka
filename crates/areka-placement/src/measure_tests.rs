@@ -1,28 +1,13 @@
 use super::*;
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::descript_window_keys::DefaultSurfaces;
 use crate::error::PlacementError;
 use crate::sample_test_support::{balloon_root, emo2_root};
-use crate::shared_test_support::write_self_alpha_one_descript;
+use crate::shared_test_support::{TempDir, write_self_alpha_one_descript};
+use crate::test_support::with_com_initialized;
 use log_capture_kit::{ExpectField, capture, expect_one};
-
-/// COM 初期化下でクロージャを実行する（`WicDecoderArm` は COM 必須・
-/// emo-atlas `wic_arm.rs` テストと同一パターン）。
-fn with_com_initialized<F: FnOnce()>(f: F) {
-    unsafe {
-        // 既に初期化済みでも RPC_E_CHANGED_MODE を許容し続行する。
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    f();
-    unsafe {
-        CoUninitialize();
-    }
-}
 
 /// 組み込みの既定の面で測る（今の期待値はどれも組み込みの面 0／10 の大きさ）。
 type Measured = Result<MeasuredSizes, PlacementError>;
@@ -33,38 +18,6 @@ fn measure_builtin(s: &Path, b: &Path, ids: &[usize], k: &MeasureScaling) -> Mea
 /// emo2 検体のゴーストフォルダ配下を `rel` で引く。
 fn emo2(rel: &str) -> PathBuf {
     emo2_root().join(rel)
-}
-
-// ── テスト用一時ディレクトリ（emo-present balloon.rs と同じ std-only 最小実装）──
-
-static TEMP_COUNTER: AtomicU32 = AtomicU32::new(0);
-
-/// Drop 時に自身を再帰削除する一時ディレクトリ。
-struct TempDir {
-    path: PathBuf,
-}
-
-impl TempDir {
-    fn new() -> Self {
-        let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "areka-placement-measure-{}-{}",
-            std::process::id(),
-            n
-        ));
-        std::fs::create_dir_all(&path).expect("一時ディレクトリ作成");
-        TempDir { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
 }
 
 /// emo2 fixture の実寸（物理 px・PNG 実デコード実測値）。
@@ -109,55 +62,12 @@ fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
         assert_eq!(out.scopes[1].char_size.w, SCOPE1_W);
         assert_eq!(out.scopes[1].char_size.h, SCOPE1_H);
         // バルーン面 0 は **scope ごとに解決した系列**の原寸（scope0=balloons0.png・
-        // scope1=balloonk0.png）。厳密値の対比は
-        // [`measure_emo2_fixture_yields_per_scope_balloon_sizes`] が担う。
+        // scope1=balloonk0.png）。本体側と相方側で寸が異なることが判別力の源で、
+        // 1 回の共通採寸では scope1 も 400×224 になって落ちる（要件 3.1）。
         assert_eq!(out.scopes[0].balloon_size.w, BALLOON0_W);
         assert_eq!(out.scopes[0].balloon_size.h, BALLOON0_H);
         assert_eq!(out.scopes[1].balloon_size.w, BALLOON1_W);
         assert_eq!(out.scopes[1].balloon_size.h, BALLOON1_H);
-        for s in &out.scopes {
-            // 要件の観測文言どおり「非ゼロ物理 px」も明示的に固定する。
-            assert!(s.char_size.w > 0 && s.char_size.h > 0, "char 原寸は非ゼロ");
-            assert!(
-                s.balloon_size.w > 0 && s.balloon_size.h > 0,
-                "balloon 原寸は非ゼロ"
-            );
-        }
-    });
-}
-
-/// 観測可能な完了状態（tasks 4.2・要件 3.1）: 実 fixture で**本体側と相方側が
-/// 異なるバルーン寸**を得る。
-///
-/// emo2-kakukaku は `balloons0.png`（400×224）と `balloonk0.png`（288×203）を併せ持ち、
-/// scope0 の接頭辞連鎖は `balloons` へ・scope1 の連鎖は `balloonk` へ解決する
-/// （系列解決権威 `resolve_balloon_faces`）。バルーンを「全スコープ共通だから 1 回だけ」
-/// 採る実装では scope1 も 400×224 になり、本檻が落ちる。
-#[test]
-fn measure_emo2_fixture_yields_per_scope_balloon_sizes() {
-    with_com_initialized(|| {
-        let out = measure_builtin(
-            &emo2("shell/master"),
-            &balloon_root(),
-            &[0, 1],
-            &MeasureScaling::IDENTITY,
-        )
-        .expect("emo2 fixture の採寸は成功する");
-
-        assert_eq!(
-            (out.scopes[0].balloon_size.w, out.scopes[0].balloon_size.h),
-            (BALLOON0_W, BALLOON0_H),
-            "scope0 は本体側系列（balloons0.png）の実寸"
-        );
-        assert_eq!(
-            (out.scopes[1].balloon_size.w, out.scopes[1].balloon_size.h),
-            (BALLOON1_W, BALLOON1_H),
-            "scope1 は相方側系列（balloonk0.png）の実寸——本体側の寸ではない"
-        );
-        assert_ne!(
-            out.scopes[0].balloon_size, out.scopes[1].balloon_size,
-            "本体側と相方側のバルーン寸は互いに異なる（1 回の共通採寸では再現不能）"
-        );
     });
 }
 
@@ -324,57 +234,6 @@ fn balloonk_absent_yields_identical_size_for_all_scopes() {
                 s.scope
             );
         }
-    });
-}
-
-/// 要件 5.5（tasks 5.1）本体側 scope の採寸非回帰: 相方側系列を**持つ**実 fixture でも、
-/// scope0 の採寸結果は本仕様適用前と同一である。
-///
-/// 適用前（merge-base 969a9b3 の `measure_balloon_surface0`）は、バルーンディレクトリから
-/// **固定名 `balloons0.png`**（大小無視）だけを探して 1 度採寸し、その 1 値を全 scope へ配って
-/// いた。適用後の scope0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
-/// `balloonp0def*` を持たないため面 0 は同じ `balloons0.png` へ解決する。
-///
-/// 檻の作りは「同一採寸器を、本体側 1 枚だけを置いた対照ディレクトリへも通し、実 fixture の
-/// scope0 と一致することを見る」——対照ディレクトリでは相方側が存在し得ないため、その採寸は
-/// 定義上**適用前の固定名採寸そのもの**である。scope0 の連鎖に相方側が紛れ込めば落ちる。
-#[test]
-fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
-    with_com_initialized(|| {
-        // 対照: 本体側 1 枚だけのバルーン（＝適用前の固定名採寸と同値になる検体）。
-        let control_dir = TempDir::new();
-        std::fs::copy(
-            balloon_root().join("balloons0.png"),
-            control_dir.path().join("balloons0.png"),
-        )
-        .expect("balloons0.png の複写");
-        write_self_alpha_one_descript(control_dir.path(), "use_self_alpha");
-        let control = measure_builtin(
-            &emo2("shell/master"),
-            control_dir.path(),
-            &[0],
-            &MeasureScaling::IDENTITY,
-        )
-        .expect("対照ディレクトリの採寸は成功する");
-
-        // 実 fixture（相方側 `balloonk0.png` を併せ持つ）。
-        let actual = measure_builtin(
-            &emo2("shell/master"),
-            &balloon_root(),
-            &[0, 1],
-            &MeasureScaling::IDENTITY,
-        )
-        .expect("emo2 fixture の採寸は成功する");
-
-        assert_eq!(
-            actual.scopes[0].balloon_size, control.scopes[0].balloon_size,
-            "scope0 の採寸は適用前の固定名 balloons0.png 採寸と同一（要件 5.5）"
-        );
-        // 判別力（この等式が空虚でないことの自己検証）: 相方側 scope は別寸を得ている。
-        assert_ne!(
-            actual.scopes[1].balloon_size, control.scopes[0].balloon_size,
-            "相方側まで同寸なら本 fixture は判別力を持たない"
-        );
     });
 }
 
@@ -662,7 +521,7 @@ fn apply_scaling_empty_input_is_empty_output() {
 /// # 変異キルの実態（誇張しない）
 ///
 /// 「先頭スコープの char 寸を全スコープへ撒く」変異は、**既存**の
-/// [`apply_scaling_maps_balloon_per_scope`]（`measure.rs:829` の char 寸アサート
+/// [`apply_scaling_maps_balloon_per_scope`]（`measure_tests.rs` の char 寸アサート
 /// 左 (434,687) / 右 (336,400)）と `apply_scaling_identity_is_passthrough`・
 /// emo2 実採寸テスト群でも落ちる。本テストは**共倒れ**であり、char 軸の席保全は
 /// task 2.3 時点で既に本物の檻に入っている。
@@ -977,12 +836,13 @@ fn placement_read_honours_the_files_own_charset_declaration() {
 /// 妥当な並びではない）。適用前の `read_to_string` はここで読取失敗になる。
 const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsakura.surface.alias\n{\n\x92\xCA\x8F\xED,[0]\n}\n";
 
-/// 要件 6.3: `charset,UTF-8` を宣言する emo2 固定物は、復号を挟んでも適用前と
-/// 同一の文字列・同一の解析結果を産む（UTF-8 経路の差分 0）。
+/// パーサ層の UTF-8 陽性対照: `charset,UTF-8` を宣言する emo2 固定物は、復号を挟んでも
+/// 適用前と同一の文字列・同一の解析結果を産む（要件 6.3）。
 ///
-/// 直上の Shift_JIS 検査の**陽性対照**でもある。復号経路が UTF-8 の固定物を壊して
-/// いれば、「Shift_JIS が読めるようになった」だけでは成功と言えない。COM も WIC も
-/// 要らない純粋な読取＋解析ゆえ `with_com_initialized` を挟まない。
+/// 測りの経路は通らない——読みと解析を直に呼ぶパーサ層の性質であり、直上の Shift_JIS 検査の
+/// 対照である。本体の `areka_parsers::shell::parse` の呼び出しは、`measure_template_tests.rs`
+/// の走査の較正（当たり）が実物から拾う唯一の呼び出しでもある。COM も WIC も要らないため
+/// `with_com_initialized` を挟まない。
 #[test]
 fn emo2_utf8_fixture_decodes_to_the_same_text_as_before() {
     let path = emo2("shell/master/surfaces.txt");
