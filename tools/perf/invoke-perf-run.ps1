@@ -42,6 +42,7 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   LOG_MARKER_SMOKE_GATE           有界自動終了が有効化された証跡のログ文言。
                                   これが実行ログに無い実走は「有界でない」＝採取失敗とみなす
   CSV_HEADER                      CPU 時系列 CSV のヘッダ行（design「CPU 時系列 CSV スキーマ」）
+  CPU_SAMPLE_SCRIPT               -SampleEtl が呼ぶ段③の採取のスクリプト（同じフォルダ）
   CHECK_QUIET_SCRIPT              -AutoQuiet が呼ぶ自動静寂確認スクリプトのファイル名
                                   （同じフォルダに置く。実装: tools/perf/check-quiet.ps1）
   QUIET_STAGE_BEFORE  = 'before'  自動静寂確認の段階名。出力は quiet-before.txt（-OutDir 直下）
@@ -114,6 +115,12 @@ CPU の「1 コア換算」について:
       -GhostRoot C:\絶対パス\emo2 -OutDir C:\出力先\A1 `
       -AutoQuiet -Goal draw-load-parity `
       -BinDir C:\出力先\bin-A -RustLogExtra 'wintf::tick=debug,areka::perf=debug'
+
+  -SampleEtl <path>（spec audit-tools-perf-run）
+      静かさの確かめと run-meta.txt の前半の後、areka を起こす直前に invoke-cpu-sample.ps1 -Start で
+      段③の採取を 1 回始め、'[invoke-perf-run] sampling start: code=<n> reason=<語>' を出す
+      （始められなくても走行は続ける）。止めるのは perf-loop（-Stop）。この後の失敗の道では
+      出力先を退ける前に -Cancel で取り消す。-DryRun とは一緒に使えない（3）。
 ================================================================================
 #>
 
@@ -146,6 +153,8 @@ param(
     [string]$RustLogExtra,
     # 起動せず、前提検証と実行条件の記録だけを行う（測定にはならない）
     [switch]$DryRun,
+    # 段③の採取の出力先（ETL）。在れば areka を起こす直前に採取を始める（-DryRun と排他）
+    [string]$SampleEtl,
     # 道具そのものの点検（中身は invoke-perf-run.selftest.ps1）。静かさの関門より前で終わる
     [switch]$SelfTest
 )
@@ -159,6 +168,7 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 # 表示・時刻・子の起こし方・目標定義の読みは共通部品から（子の pwsh の前置きもここ経由で読まれる）
 . (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
+. (Join-Path $PSScriptRoot 'invoke-perf-run.facts.ps1')
 
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
@@ -187,6 +197,7 @@ $KILL_WAIT_MS                   = 10000
 $LOG_MARKER_SMOKE_GATE          = 'smoke 自動 close ゲート有効'
 $CSV_HEADER                     = 'timestamp,cpu_percent_1core'
 $CHECK_QUIET_SCRIPT             = 'check-quiet.ps1'
+$CPU_SAMPLE_SCRIPT              = 'invoke-cpu-sample.ps1'
 $QUIET_STAGE_BEFORE             = 'before'
 $QUIET_RETRY_MAX_DEFAULT        = 3
 $QUIET_RETRY_WAIT_SEC_DEFAULT   = 60
@@ -213,6 +224,34 @@ $script:OutDirPath      = ''
 $script:OutDirCreated   = $false
 # 強制終了の後の待ちが時間切れになった（出力先のファイルを握ったままかもしれない）
 $script:ArekaNotStopped = $false
+# 採取を始めた印（始めた ETL。-Start が 0 のときだけ立つ）。Stop-RunSampling が見る
+$script:SamplingEtl     = ''
+
+# 段③の採取を始め、決まった 1 行を出す（perf-loop が読む）。始められなくても走行は続ける
+function Start-RunSampling {
+    param([Parameter(Mandatory)][string]$Etl)
+    $r = Invoke-PwshChild -ScriptPath (Join-Path $PSScriptRoot $CPU_SAMPLE_SCRIPT) -Arguments @('-Start', '-Etl', $Etl) -Quiet
+    $reason = 'ok'
+    if ($r.Code -eq 0) { $script:SamplingEtl = $Etl }
+    else {
+        $m = [regex]::Match((@($r.Out) -join "`n"), 'INVOKE-CPU-SAMPLE RESULT start code=\S+ .*?\breason=(\S+)')
+        $reason = if ($m.Success) { $m.Groups[1].Value } else { 'start_failed' }
+    }
+    Write-Info "[invoke-perf-run] sampling start: code=$($r.Code) reason=$reason"
+}
+
+# 採取を始めた後の失敗の道で取り消す。印が無ければ呼ばない（ほかの道具のカーネルの採取を止めないため）
+function Stop-RunSampling {
+    if (-not $script:SamplingEtl) { return }
+    $etl = $script:SamplingEtl
+    $script:SamplingEtl = ''
+    try {
+        $r = Invoke-PwshChild -ScriptPath (Join-Path $PSScriptRoot $CPU_SAMPLE_SCRIPT) -Arguments @('-Cancel', '-Etl', $etl) -Quiet
+        if ($r.Code -ne 0) { throw "exit code $($r.Code): $($r.LastLine)" }
+    } catch {
+        Write-Problem "[invoke-perf-run] could not cancel the CPU sampling ($($_.Exception.Message)). If no other tool is sampling, run 'xperf -stop' by hand."
+    }
+}
 
 # areka を子孫まで強制終了して終わるまで待つ（32bit の SHIORI ヘルパが run.log を受け継いでいても止める）
 function Stop-ArekaProcess {
@@ -246,6 +285,7 @@ function Stop-Run {
 
     Write-Problem "[invoke-perf-run] failed: $Message"
     if ($Process) { Stop-ArekaProcess -Process $Process }
+    Stop-RunSampling
     if ($script:ArekaNotStopped) {
         Write-Problem "[invoke-perf-run] areka did not end within $KILL_WAIT_MS ms after it was killed. The out dir was left as is: $script:OutDirPath"
         exit $EXIT_RUN_FAILED
@@ -327,100 +367,6 @@ function Test-SmokeMarker {
     return [bool](Select-String -LiteralPath $Path -Pattern $Marker -SimpleMatch -List -Quiet -Encoding utf8)
 }
 
-# マシン識別（要件 4.5 の「測定マシンの条件」素材）。取得できない項目は理由を値として残す。
-function Get-MachineFacts {
-    $facts = [ordered]@{}
-    $facts['hostname']              = [Environment]::MachineName
-    $facts['logical_processors']    = [Environment]::ProcessorCount
-    $facts['os_version']            = [Environment]::OSVersion.VersionString
-    $facts['powershell_version']    = $PSVersionTable.PSVersion.ToString()
-    $facts['dotnet_version']        = [Environment]::Version.ToString()
-
-    try {
-        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
-        $facts['os_caption']        = $os.Caption
-        $facts['os_build']          = $os.BuildNumber
-        $facts['total_memory_mb']   = [math]::Round($os.TotalVisibleMemorySize / 1024)
-    } catch {
-        $facts['os_caption']        = "(unavailable: $($_.Exception.Message))"
-    }
-    try {
-        $cpu = @(Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop)
-        $facts['cpu_model']         = ($cpu | ForEach-Object { $_.Name.Trim() }) -join ' / '
-        $facts['cpu_sockets']       = $cpu.Count
-        $facts['cpu_cores_physical']= ($cpu | Measure-Object -Property NumberOfCores -Sum).Sum
-        $facts['cpu_max_clock_mhz'] = ($cpu | Measure-Object -Property MaxClockSpeed -Maximum).Maximum
-    } catch {
-        $facts['cpu_model']         = "(unavailable: $($_.Exception.Message))"
-    }
-    $facts['power_scheme']          = Get-ActivePowerScheme
-    return $facts
-}
-
-# 今の電源設定を powrprof の API から '<GUID> (<名前>)' の形で取る。名前は UTF-16 で来るので
-# 端末の文字コードに依らない（powercfg は端末の文字コードで書き、437 の端末では日本語の名前が ? に落ちる）。
-# 取れないときは '(unavailable: <理由>)' を返す（走行は止めない）。
-function Get-ActivePowerScheme {
-    try {
-        if (-not ('ArekaPerfRun.PowerScheme' -as [type])) {
-            Add-Type -Namespace ArekaPerfRun -Name PowerScheme -MemberDefinition @'
-[DllImport("powrprof.dll")]
-public static extern uint PowerGetActiveScheme(IntPtr userRootPowerKey, out IntPtr activePolicyGuid);
-[DllImport("powrprof.dll")]
-public static extern uint PowerReadFriendlyName(IntPtr rootPowerKey, ref Guid schemeGuid, IntPtr subGroupGuid, IntPtr settingGuid, byte[] buffer, ref uint bufferSize);
-[DllImport("kernel32.dll")]
-public static extern IntPtr LocalFree(IntPtr mem);
-'@
-        }
-        $api = [ArekaPerfRun.PowerScheme]
-        $guidPtr = [IntPtr]::Zero
-        $rc = $api::PowerGetActiveScheme([IntPtr]::Zero, [ref]$guidPtr)
-        if ($rc -ne 0) { return "(unavailable: PowerGetActiveScheme returned $rc)" }
-        try {
-            $guid = [System.Runtime.InteropServices.Marshal]::PtrToStructure($guidPtr, [type][guid])
-        } finally {
-            [void]$api::LocalFree($guidPtr)
-        }
-        # 1 回目で大きさを聞き、2 回目で名前（UTF-16・終端の NUL 付き）を読む
-        $size = [uint32]0
-        $rc = $api::PowerReadFriendlyName([IntPtr]::Zero, [ref]$guid, [IntPtr]::Zero, [IntPtr]::Zero, $null, [ref]$size)
-        if ($rc -ne 0 -or $size -eq 0) { return "$guid (unavailable: PowerReadFriendlyName returned $rc)" }
-        $buffer = [byte[]]::new($size)
-        $rc = $api::PowerReadFriendlyName([IntPtr]::Zero, [ref]$guid, [IntPtr]::Zero, [IntPtr]::Zero, $buffer, [ref]$size)
-        if ($rc -ne 0) { return "$guid (unavailable: PowerReadFriendlyName returned $rc)" }
-        $name = [System.Text.Encoding]::Unicode.GetString($buffer, 0, [int]$size).TrimEnd([char]0)
-        return "$guid ($name)"
-    } catch {
-        return "(unavailable: $($_.Exception.Message))"
-    }
-}
-
-# ソース識別（同一手順の再測が同一コードに対して行われたかを後から突き合わせるため）
-function Get-SourceFacts {
-    param([string]$RepoRoot)
-    $facts = [ordered]@{}
-    try {
-        # git は UTF-8 で書くので、共通部品の Invoke-Child（既定で UTF-8）で読む
-        $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $git) { throw 'command not found: git' }
-        $head = Invoke-Child -Exe $git.Source -Arguments @('-C', $RepoRoot, 'rev-parse', 'HEAD') -Quiet
-        if ($head.Code -eq 0) {
-            $facts['git_head'] = ($head.Out -join "`n").Trim()
-            $branch = Invoke-Child -Exe $git.Source -Arguments @('-C', $RepoRoot, 'rev-parse', '--abbrev-ref', 'HEAD') -Quiet
-            if ($branch.Code -eq 0) { $facts['git_branch'] = ($branch.Out -join "`n").Trim() }
-            $status = Invoke-Child -Exe $git.Source -Arguments @('-C', $RepoRoot, 'status', '--porcelain') -Quiet
-            if ($status.Code -eq 0) {
-                $facts['git_dirty_files'] = @($status.Out | Where-Object { $_.Trim().Length -gt 0 }).Count
-            }
-        } else {
-            $facts['git_head'] = '(unavailable: git rev-parse HEAD failed)'
-        }
-    } catch {
-        $facts['git_head'] = "(unavailable: cannot run git: $($_.Exception.Message))"
-    }
-    return $facts
-}
-
 # --- 版 1.1.0 で足した補助（自動静寂確認・実行体の所在・追加ログ指定） -------------
 
 # 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む薄い引き口
@@ -484,6 +430,9 @@ if ($SelfTest) {
 # =============================================================================
 if ($ConfirmQuiet -and $AutoQuiet) {
     Stop-Run $EXIT_BAD_ARGS "-ConfirmQuiet and -AutoQuiet cannot be used together. Use only one: -ConfirmQuiet if a person checked, -AutoQuiet to let the machine check."
+}
+if ($SampleEtl -and $DryRun) {
+    Stop-Run $EXIT_BAD_ARGS "-SampleEtl and -DryRun cannot be used together (a dry run starts nothing to sample)."
 }
 if (-not $ConfirmQuiet -and -not $AutoQuiet -and -not $DryRun) {
     Write-Problem @"
@@ -789,6 +738,8 @@ $proc = $null
 $prevSmokeEnv = [Environment]::GetEnvironmentVariable($SMOKE_EXIT_ENV_NAME)
 $prevRustLog  = $env:RUST_LOG
 $prevNoColor  = $env:NO_COLOR
+# 段③の採取は静かさの確かめと run-meta.txt の前半の後、areka を起こす直前に 1 回だけ
+if ($SampleEtl) { Start-RunSampling -Etl $SampleEtl }
 
 try {
     # 子プロセスへ渡す環境変数（本スクリプト自身のプロセスに設定して継承させる）。

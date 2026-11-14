@@ -140,6 +140,7 @@ tools/perf/
 ├── perf-loop.selftest.ps1      # 新: perf-loop 側の自分の検査（T2）
 ├── invoke-perf-run.ps1         # 直す: ランナー（採取の開始を受け持つ・強制終了の後に待つ・-SelfTest）
 ├── invoke-perf-run.selftest.ps1 # 新: ランナーの自分の検査の中身（T3。-SelfTest のときだけ読み込まれる）
+├── invoke-perf-run.facts.ps1   # 新: ランナーが run-meta.txt に書くマシンとソースの識別（invoke-perf-run.ps1 から移した）
 ├── invoke-cpu-sample.ps1       # 直す: 段③の採取（-Cancel・止める順・引数の渡し方・dump の読み方）
 ├── check-quiet.ps1             # 直す: 静かさの確かめ（共通の読み口・trap）
 └── invoke-followup-checks.ps1  # 直す: 追随の検査（判定の 3 の写し・増えた分だけ読む・trap）
@@ -154,6 +155,7 @@ tools/perf/
 - `tools/perf/perf-loop.rundir.ps1` — 走行の出力先の完了の見方・脇へ退ける・`-DryRun` の印を移す（20）。直し 2・6 の置き場。
 - `tools/perf/perf-loop.selftest.ps1` — T2。`SELFTEST_TOOLS` に足す（21）。
 - `tools/perf/invoke-perf-run.selftest.ps1` — T3 の中身。`invoke-perf-run.ps1 -SelfTest` が読み込む（22）。
+- `tools/perf/invoke-perf-run.facts.ps1` — `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.ps1` から字のまま移す（ランナーを 1,000 行の下に保つため・6.3 で足した）。`invoke-perf-run.ps1` が `perf-tool-base.ps1` の後で読み込む。
 
 ### 直すファイル（範囲の中）
 

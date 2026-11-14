@@ -164,6 +164,67 @@ $PerfRunSelfTestChecks = @(
             }
         }
     } }
+
+    [pscustomobject]@{ Name = 'sampling-cancel-on-stop'; Body = {
+        $realChild = ${function:Invoke-PwshChild}
+        # 偽の段③の採取: 呼ばれた引数を残し、決まった結果を返す
+        $calls = [System.Collections.Generic.List[string]]::new()
+        $info = [System.Collections.Generic.List[string]]::new()
+        $script:FakeSample = @{ Code = 0; Out = @('INVOKE-CPU-SAMPLE RESULT start code=0 version=x etl=e') }
+        function Invoke-PwshChild { param([string]$ScriptPath, [string[]]$Arguments, [switch]$Quiet)
+            $calls.Add("$(Split-Path -Leaf $ScriptPath) $($Arguments -join ' ')")
+            return [pscustomobject]@{ Code = $script:FakeSample.Code; Out = $script:FakeSample.Out; Err = @(); LastLine = 'x' } }
+        function Write-Info { param([string]$Message) $info.Add($Message) }
+        function Write-Problem { param([string]$Message) }
+        $etl = Join-Path $script:SelfTestRoot 'cpu.etl'
+
+        # 印が立っていなければ（-SampleEtl なし・始められなかった）取り消さない
+        $script:SamplingEtl = ''
+        Stop-RunSampling
+        Assert-SelfTest ($calls.Count -eq 0) "no mark: expected no call, got '$($calls -join ' | ')'"
+        foreach ($case in @(
+                @{ Code = 5; Out = @('INVOKE-CPU-SAMPLE RESULT start code=5 version=x available=false reason=not_elevated'); Reason = 'not_elevated' }
+                @{ Code = 1; Out = @('INVOKE-CPU-SAMPLE RESULT start code=1 version=x'); Reason = 'start_failed' })) {
+            $script:FakeSample = $case; $calls.Clear(); $info.Clear()
+            Start-RunSampling -Etl $etl
+            Stop-RunSampling
+            Assert-SelfTest ($calls.Count -eq 1 -and $calls[0] -eq "invoke-cpu-sample.ps1 -Start -Etl $etl") "start code $($case.Code): calls '$($calls -join ' | ')'"
+            Assert-SelfTest ($info -contains "[invoke-perf-run] sampling start: code=$($case.Code) reason=$($case.Reason)") "start code $($case.Code): line '$($info -join ' | ')'"
+        }
+
+        # 始められたら印が立ち、取り消しは -Cancel を 1 回だけ呼んで印を下ろす
+        $script:FakeSample = @{ Code = 0; Out = @('INVOKE-CPU-SAMPLE RESULT start code=0 version=x etl=e') }
+        $calls.Clear(); $info.Clear()
+        Start-RunSampling -Etl $etl
+        Assert-SelfTest ($info -contains '[invoke-perf-run] sampling start: code=0 reason=ok') "start ok: line '$($info -join ' | ')'"
+        Stop-RunSampling
+        Stop-RunSampling
+        Assert-SelfTest ($calls.Count -eq 2 -and $calls[1] -eq "invoke-cpu-sample.ps1 -Cancel -Etl $etl") "mark set: calls '$($calls -join ' | ')'"
+
+        # 配線: Stop-Run は出力先を退ける前に取り消し、採取を始めるのは -SampleEtl のときだけ
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'invoke-perf-run.ps1'), [ref]$null, [ref]$null)
+        $cmds = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true))
+        $stopRun = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Stop-Run' }, $true)
+        $inStopRun = @($cmds | Where-Object { $_.Extent.StartOffset -ge $stopRun.Extent.StartOffset -and $_.Extent.EndOffset -le $stopRun.Extent.EndOffset })
+        $cancelAt = @($inStopRun | Where-Object { $_.GetCommandName() -eq 'Stop-RunSampling' } | ForEach-Object { $_.Extent.StartOffset })
+        $moveAt = @($inStopRun | Where-Object { $_.GetCommandName() -eq 'Move-FailedOutDir' } | ForEach-Object { $_.Extent.StartOffset })
+        Assert-SelfTest ($cancelAt.Count -eq 1 -and $moveAt.Count -eq 1 -and $cancelAt[0] -lt $moveAt[0]) "Stop-Run: Stop-RunSampling at '$cancelAt', Move-FailedOutDir at '$moveAt'"
+        $starts = @($cmds | Where-Object { $_.GetCommandName() -eq 'Start-RunSampling' })
+        Assert-SelfTest ($starts.Count -eq 1) "Start-RunSampling called $($starts.Count) times in the runner (want 1)"
+        $guard = $starts[0].Parent
+        while ($guard -and -not ($guard -is [System.Management.Automation.Language.IfStatementAst])) { $guard = $guard.Parent }
+        Assert-SelfTest ($guard -and $guard.Clauses[0].Item1.Extent.Text -eq '$SampleEtl') 'Start-RunSampling is not under if ($SampleEtl)'
+
+        # -SampleEtl と -DryRun は一緒に使えない（3・出力先を作る前に止まる）。ほかの引数は -DryRun が 0 で通る形
+        $bin = Join-Path $script:SelfTestRoot 'bin'
+        $ghost = Join-Path $script:SelfTestRoot 'ghost'
+        $null = New-Item -ItemType Directory -Path (Join-Path $ghost 'ghost\master'), $bin
+        $null = New-Item -ItemType File -Path (Join-Path $ghost 'ghost\master\descript.txt'), (Join-Path $bin 'areka.exe')
+        $out = Join-Path $script:SelfTestRoot 'dry-out'
+        $r = & $realChild -ScriptPath (Join-Path $PSScriptRoot 'invoke-perf-run.ps1') -Quiet -Arguments @('-DryRun', '-SampleEtl', $etl,
+            '-OutDir', $out, '-Profile', 'short', '-Build', 'dev', '-BinDir', $bin, '-GhostRoot', $ghost, '-BalloonRoot', $bin)
+        Assert-SelfTest ($r.Code -eq 3 -and -not (Test-Path -LiteralPath $out)) "-DryRun -SampleEtl: exit code $($r.Code) (want 3), out dir made: $(Test-Path -LiteralPath $out)"
+    } }
 )
 
 function Invoke-PerfRunSelfTest {

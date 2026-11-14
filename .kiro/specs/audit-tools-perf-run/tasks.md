@@ -122,7 +122,7 @@
   - _Depends: 3.2_
   - _Dispatch: standard — 1 行の書き手と読み手をまたぐ統合と、道の削除_
   - _Requirements: 3.1, 3.3, 4.1, 6.4_
-- [ ] 6.3 ランナーが静かさの確かめの後に採取を始め、失敗の道では取り消す
+- [x] 6.3 ランナーが静かさの確かめの後に採取を始め、失敗の道では取り消す
   - 任意の引数 `-SampleEtl` を足し（`-DryRun` と一緒なら 3）、静かさの確かめが通り `run-meta.txt` の前半を書いた後、areka を起こす直前に 1 回だけ採取を始めて `[invoke-perf-run] sampling start: code=<n> reason=<語>` を出す。始められなくても走行は続ける（9・1・30）
   - 採取を始めた後の失敗の道（`Stop-Run`・`trap`）は、出力先を退ける前に `-Cancel` を呼ぶ。0 で終わるときは呼ばない（1）
   - 検査: T3 `sampling-cancel-on-stop`
@@ -191,3 +191,4 @@
 - 5.2: S2 の段は台帳の語にそろえて「`verdict: MEASURE_FAILED`・`reason: same_executable`（出来事は `measure_failed`）」と書いた（design の 2 か所も同じ字面へ）。T2 は 892 行で、次に T2 へ検査を足すタスク（6.2）が足す前に束ごとに `perf-loop.selftest2.ps1` へ分け、`SELFTEST_TOOLS` に足す（以後の期待は ok=12）
 - 6.1: `-Stop` は `xperf -d` が 0 でも、まとめた先が無ければ通らなかった扱いにして元の ETL を消さない（レビューの指摘を進行役が直した・偽の xperf は `-d` の先に空のファイルを作る）。この枝そのものの検査は無い。`-SelfTest` の可否の確かめはまだ本物の採取を試す（6.2 で `-SkipCapture`）
 - 6.2: T2 を `perf-loop.selftest.ps1`（20 本）と `perf-loop.selftest2.ps1`（出力先と -Resume の束・入口の束・probe-parse の 9 本）に分け、`perf-loop.ps1 selftest` の期待は ok=12。消す前の grep の件数（wpaexporter ほか）: HEAD で invoke-cpu-sample 22・perf-loop.common 4・perf-loop 5・goals 1 → 後で範囲の中 0（invoke-cpu-sample の `XPERF_DEFAULT_PATH`・`Test-Elevated` の 5 件は段③の採取の唯一の持ち場として残す）。範囲の外に残る `[sampling] backend`（goals の toml・perf_ledger_goal.py の必須の鍵・fixtures-loop の 5 本）は audit-tools-perf-judge の受け持ち
+- 6.3: ランナーの 1,000 行の余地のため `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.facts.ps1` へ字のまま移した（design の File Structure Plan に足した）。T3 は ok=6。採取の開始の行の理由の語は ok／子の `reason=`／start_failed。0 で終わる道は採取を動かしたまま返す（止めるのは perf-loop の `-Stop`）
