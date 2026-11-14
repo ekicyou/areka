@@ -29,6 +29,10 @@
 //! （`crate::ecs::drag::handle_message_while_world_busy`）へ渡してから `None` を返す。
 //! 画面更新の途中の非活性化などでドラッグの状態が休まず残るのを防ぐため。5 種以外は今どおり
 //! 何もせずに飛ばす。World の破棄中（`upgrade()`→`None`）は例外なく飛ばす。
+//!
+//! `try_borrow` 失敗（再入）のときに届いた `WM_CLOSE` は、閉じる要求が捨てられたことを
+//! `warn!(wm_close_world_busy)` に残す（ライブラリは `WM_CLOSE` を既定の手続きへ渡さず
+//! `LRESULT(0)` を返すので、窓は壊れずに要求だけが消える）。
 
 use std::cell::RefCell;
 use std::pin::Pin;
@@ -38,7 +42,7 @@ use crate::executor::util::WindowMessage;
 use bevy_ecs::prelude::Entity;
 use tracing::warn;
 use windows::Win32::Foundation::LRESULT;
-use windows::Win32::UI::WindowsAndMessaging::WM_ENDSESSION;
+use windows::Win32::UI::WindowsAndMessaging::{WM_CLOSE, WM_ENDSESSION};
 
 use crate::ecs::dispatch_window_message;
 use crate::ecs::drag::handle_message_while_world_busy;
@@ -72,7 +76,8 @@ pub(crate) struct WndState {
 ///    だけは受け手を呼べない帰結を `warn!(os_session_end_world_busy)` に残してから飛ばす。
 ///    その後、ドラッグを終える 5 種（ESC の押下・`WM_CANCELMODE`・非活性化の `WM_ACTIVATE`・
 ///    `WM_CAPTURECHANGED`・`WM_LBUTTONUP`）は `handle_message_while_world_busy(entity, &msg)` で
-///    World を使わずにドラッグの状態を休ませる（戻り値は使わない）。どの場合も `None` を返す。
+///    World を使わずにドラッグの状態を休ませる（戻り値は使わない）。`WM_CLOSE` は捨てたことを
+///    `warn!(wm_close_world_busy)` に残す。どの場合も `None` を返す。
 /// 4. 成功時のみ `dispatch_window_message(&world, entity, &msg)` を呼ぶ。
 //
 // `EcsWindowFactory::create_window`（`create_windows` 経由）がウィンドウ生成時に呼び、
@@ -96,6 +101,14 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
                     entity = ?entity,
                     "[WM_ENDSESSION] World が借用中でセッションの終了の受け手を呼べない → \
                      後始末をせずに終わるので起動中の印が残り、次の起動は前回落ちた扱い（Ref6/7 付き）になる"
+                );
+            }
+            // 閉じる要求はここで捨てられる（ライブラリは WM_CLOSE を既定の手続きへ渡さない）ので黙って流さない。
+            if msg.msg == WM_CLOSE {
+                warn!(
+                    event = "wm_close_world_busy",
+                    entity = ?entity,
+                    "[WM_CLOSE] World が借用中で閉じる要求を扱えない → 要求を捨てた（閉じ直せば閉じる）"
                 );
             }
             // ドラッグを終える 5 種だけは捨てずに、World を使わないドラッグの扱いへ渡す。
@@ -219,6 +232,36 @@ mod tests {
         );
         assert_eq!(
             busy_warns(msg(WM_ERASEBKGND)),
+            (None, 0),
+            "他のメッセージで警告した"
+        );
+    }
+
+    /// World の借用中に届いた `WM_CLOSE` は受け手を呼べずに捨てられるので、`warn!(wm_close_world_busy)`
+    /// を 1 件残す（戻りは `None`。ライブラリが `WM_CLOSE` を既定の手続きへ渡さず `LRESULT(0)` を返す）。
+    /// 他のメッセージでは記録しない。
+    #[test]
+    fn closure_warns_close_while_world_borrowed() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let state = make_state(&world);
+        let wndproc = make_wndproc();
+        let boxed = Box::pin(state);
+        let busy = |m: WindowMessage| {
+            let (ret, events) = log_capture_kit::capture(|| wndproc(boxed.as_ref(), m));
+            let n = events
+                .iter()
+                .filter(|e| {
+                    e.field_str("event") == Some("wm_close_world_busy")
+                        && e.level == tracing::Level::WARN
+                })
+                .count();
+            (ret, n)
+        };
+
+        let _held = world.borrow_mut();
+        assert_eq!(busy(msg(WM_CLOSE)), (None, 1));
+        assert_eq!(
+            busy(msg(WM_ERASEBKGND)),
             (None, 0),
             "他のメッセージで警告した"
         );
