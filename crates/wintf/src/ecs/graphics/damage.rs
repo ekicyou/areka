@@ -41,6 +41,19 @@ pub(crate) struct RegionShift {
     pub dst: (u32, u32),
 }
 
+impl RegionShift {
+    /// 写しの先の矩形。
+    fn dst_rect(&self) -> PxRect {
+        let (x, y) = (self.dst.0 as i32, self.dst.1 as i32);
+        PxRect {
+            left: x,
+            top: y,
+            right: x + self.src.right - self.src.left,
+            bottom: y + self.src.bottom - self.src.top,
+        }
+    }
+}
+
 /// 範囲だけの合成の計画。
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PartialPlan {
@@ -52,7 +65,7 @@ pub(crate) struct PartialPlan {
     pub area: u64,
     /// 写した面積。
     pub shift_area: u64,
-    /// 写しの切り抜きの中で描き直した面積。
+    /// 写しの切り抜きの中で描き直した面積（閉じた後の帯の `rects` の面積の和）。
     pub exposed_area: u64,
     /// 描画面へ写す矩形＝`rects` と `shifts` の先の外接矩形（2.6）。
     pub present_rect: PxRect,
@@ -111,7 +124,8 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
     let d = diff(prev, now);
     let mut shifts: Vec<RegionShift> = Vec::new();
     let mut rects: Vec<PxRect> = Vec::new();
-    let mut exposed_area = 0;
+    // `rects` と同じ並び: 写しの帯ならその写しの番号
+    let mut band_of: Vec<Option<usize>> = Vec::new();
     // 写しに取られた部分木の項（普通の範囲に数えない・5.3）
     let mut taken_prev = vec![false; prev.len()];
     let mut taken_now = vec![false; now.len()];
@@ -121,14 +135,15 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
             let Some((dx, dy, dst)) = scroll_check(prev, now, c, surface) else {
                 return false;
             };
+            let k = shifts.len();
             shifts.push(RegionShift {
                 src: dst.offset(-dx, -dy),
                 // `dst` は描画面の中なので負でない
                 dst: (dst.left as u32, dst.top as u32),
             });
             for band in bands(c.r_out, dst).into_iter().filter(|b| !b.is_empty()) {
-                exposed_area += band.area();
                 rects.push(band);
+                band_of.push(Some(k));
             }
             taken_prev[c.prev.clone()].fill(true);
             taken_now[c.now.clone()].fill(true);
@@ -175,6 +190,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
             return ComposePlan::Full(FullReason::CoversSurface);
         }
         rects.push(damage);
+        band_of.push(None);
     }
 
     if rects.is_empty() && shifts.is_empty() {
@@ -213,6 +229,19 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
             return ComposePlan::Full(FullReason::CoversSurface);
         }
     }
+    // 閉じた描く矩形が写しの先を覆えば写しは無駄（先は描き直す）なので落とし、その帯は普通の描く矩形
+    let keep: Vec<bool> = shifts
+        .iter()
+        .map(|s| !covered(s.dst_rect(), &rects))
+        .collect();
+    let exposed_area = rects
+        .iter()
+        .zip(&band_of)
+        .filter(|(_, k)| k.is_some_and(|k| keep[k]))
+        .map(|(r, _)| r.area())
+        .sum();
+    let mut keep = keep.into_iter();
+    shifts.retain(|_| keep.next() == Some(true));
     // `emit_within` が描く件と同じ数え方
     let items_redrawn = now
         .iter()
@@ -221,16 +250,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> ComposePlan {
         .count() as u32;
     let present_rect = shifts.iter().fold(
         rects.iter().fold(PxRect::default(), |acc, r| acc.union(*r)),
-        |acc, s| {
-            let (w, h) = (s.src.right - s.src.left, s.src.bottom - s.src.top);
-            let (x, y) = (s.dst.0 as i32, s.dst.1 as i32);
-            acc.union(PxRect {
-                left: x,
-                top: y,
-                right: x + w,
-                bottom: y + h,
-            })
-        },
+        |acc, s| acc.union(s.dst_rect()),
     );
     ComposePlan::Partial(PartialPlan {
         area: rects.iter().map(|r| r.area()).sum(),
@@ -339,6 +359,26 @@ fn bands(out: PxRect, inner: PxRect) -> [PxRect; 4] {
             ..out
         },
     ]
+}
+
+/// `target` が `rects` の和に覆われる（`target` から各矩形を引いて残りが無い）。
+fn covered(target: PxRect, rects: &[PxRect]) -> bool {
+    let mut rest = vec![target];
+    for &r in rects {
+        rest = rest
+            .into_iter()
+            .flat_map(|p| {
+                let i = p.intersect(r);
+                if i.is_empty() {
+                    vec![p]
+                } else {
+                    bands(p, i).to_vec()
+                }
+            })
+            .filter(|p| !p.is_empty())
+            .collect();
+    }
+    rest.is_empty()
 }
 
 /// 候補を入れ物の中の写しで済ませてよいか（条件 S2〜S9・S1 は呼び手）。よければ `(dx, dy)` と写しの先 `D`。

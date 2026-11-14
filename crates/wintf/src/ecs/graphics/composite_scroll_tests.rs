@@ -91,11 +91,21 @@ const INTEGER_STEPS: &[(&str, Want, Change)] = &[
     ("下へ 8", Want::Shift(1), |w, n| scroll(w, n, 0.0, 8.0)),
 ];
 
+/// 切り抜きの中の後の 2 歩は、帯を交わる件で閉じると写しの先を覆うので写しを落として描き直す（R1）。
+const RECT_CLIP_STEPS: &[(&str, Want, Change)] = &[
+    INTEGER_STEPS[0],
+    INTEGER_STEPS[1],
+    ("斜め（右下へ 4・4）", Want::Partial, |w, n| {
+        scroll(w, n, 0.0, 0.0)
+    }),
+    ("下へ 8", Want::Partial, |w, n| scroll(w, n, 0.0, 8.0)),
+];
+
 #[test]
 fn integer_scroll_inside_rect_clip_copies_and_matches_full_bytes() {
-    check_frames(BOTH, false, &scroll_box, INTEGER_STEPS);
+    check_frames(BOTH, false, &scroll_box, RECT_CLIP_STEPS);
     // 根の命令の列を持つ描画面では写さない（S1）
-    check_frames(BOTH, true, &scroll_box, INTEGER_STEPS);
+    check_frames(BOTH, true, &scroll_box, RECT_CLIP_STEPS);
 }
 
 #[test]

@@ -363,6 +363,48 @@ fn clip_rect_candidate_accepts_shift_with_band_and_keeps_normal_range_outside() 
     assert_eq!(p.items_redrawn, 1);
 }
 
+/// `clip_case` の E の中の件 [3] を `b`（前の範囲）に置き換える。
+fn clip_case_with_c1(b: PxRect) -> (Vec<DamageEntry>, Vec<DamageEntry>) {
+    let (mut prev, mut now) = clip_case(rect(10, 10, 60, 60), -5.0, 0.0);
+    prev[3] = node(20, 20, item_kind(), Some(2), 4, b);
+    now[3] = shifted(&prev[3], 30, -5.0, 0.0);
+    (prev, now)
+}
+
+#[test]
+fn shift_whose_destination_is_covered_by_closed_band_is_dropped() {
+    // 件 (10,10)-(56,60) が帯 (55,10)-(60,60) にかかり、閉じた帯が D (10,10)-(55,60) を覆う＝写しは無駄
+    let (prev, now) = clip_case_with_c1(rect(15, 10, 61, 60));
+    let p = partial(plan(&input(&prev, &now)));
+    assert!(p.shifts.is_empty(), "{p:?}");
+    assert_eq!(p.rects, vec![rect(10, 10, 60, 60), rect(70, 70, 90, 80)]);
+    // 落とした写しの帯は普通の描く矩形
+    assert_eq!((p.shift_area, p.exposed_area), (0, 0));
+    assert_eq!(p.area, 50 * 50 + 20 * 10);
+    assert_eq!(p.present_rect, rect(10, 10, 90, 80));
+    assert_eq!(p.items_redrawn, 3);
+}
+
+#[test]
+fn shift_kept_when_closed_band_leaves_part_of_destination_counts_closed_band_as_exposed() {
+    // 件 (30,10)-(56,20) で帯が (30,10)-(60,60) へ広がるが、D の左 (10,10)-(30,60) は写しのまま
+    let (prev, now) = clip_case_with_c1(rect(35, 10, 61, 20));
+    let p = partial(plan(&input(&prev, &now)));
+    assert_eq!(
+        p.shifts,
+        vec![RegionShift {
+            src: rect(15, 10, 60, 60),
+            dst: (10, 10),
+        }]
+    );
+    assert_eq!(p.rects, vec![rect(30, 10, 60, 60), rect(70, 70, 90, 80)]);
+    assert_eq!(p.shift_area, 45 * 50);
+    // 閉じた後の帯の面積（`area` と同じ矩形で数える）
+    assert_eq!(p.exposed_area, 30 * 50);
+    assert_eq!(p.area, 30 * 50 + 20 * 10);
+    assert_eq!(p.present_rect, rect(10, 10, 90, 80));
+}
+
 #[test]
 fn whole_surface_candidate_accepts_shift_without_root_list() {
     let a = item(10, rect(10, 10, 30, 20));
