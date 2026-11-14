@@ -1007,3 +1007,152 @@ design.md「公開の口の変化」の表の行を 1 つずつ、作業枝の�
 | 14.3 | `--lib window_proc` | 119 → 119 |
 
 A-1 の 3 本（`#[ignore]`）は既定の走行に入らないまま（`-- --list --ignored` で 3 本だけ・12.1 で確かめた）。番人の 2 本は増えなかった: `zorder_chain_order_tests.rs` は 977 → 972 行（15.2 で `instance` の欄の行だけ減った）・`zorder_pair_maintain_tests.rs` は 978 → 784 行。
+
+## 15. かけ直し（タスク 17.1・V2・2026-11-14）
+
+- 物差し: 1 回目のギャップ分析（この文書の頭・1〜3 節）と同じ **ponytail 5.3.3** の `/ponytail:ponytail-audit`。作法のうち「最大 20 件」と「読まなかった所（Not checked）」は外し、件数の上限なしで全部読む（要件 1.4・5.4）。
+- やり方: 1 回目は範囲の全部を 4 つの束に分け、束ごとに 1 人の読み手が頭から終わりまで読んだ（束 1＝`window/` のうち下の 2 つを除く 20 本・束 2＝`window/zorder_chain*` 14 本・束 3＝`window/zorder_pair*` 19 本・束 4＝`window_proc/` 20 本）。2 回目からは、前の回の直しで変わったファイルだけを読み直した（`completed/audit-wintf-runtime` の 15 節と同じ形）。返った指摘は根拠の行を読み直してから直し、確かめを直したもの・振る舞いを変えたものは較正で赤を見た。
+- 基点: `HEAD` `995ab6518`（16.2 の後）。直しのコミットは 1 回目の 2 本（`cda6f1c9d`＝束 1・束 4 の 11 件・`7b11f67b2`＝束 2・束 3 の 15 件）・2 回目の `0c99f0b36`（6 件と追いの 2 点）・3 回目の `4624ad7a4`（2 件）。4 回目は直しが無いのでコミットも無い。
+
+### 15.1 範囲の数え直し（要件 1.1・1.2）
+
+範囲は 1 節と同じ（`git ls-files crates/wintf/src/ecs/window crates/wintf/src/ecs/window_proc`）。
+
+| 時点 | 本番 | テスト | 計 | 行（空行を含む） |
+|---|---:|---:|---:|---:|
+| 着手（main `30a343eb`・1 節） | 27 | 42 | 69 | 33,925 |
+| かけ直しの始め（`995ab6518`） | 27 | 46 | **73** | 33,306 |
+| かけ直しの直しの後（`4624ad7a4`） | 27 | 46 | **73** | 33,373 |
+
+- 着手との差: 消えた 0・増えた 4（`git diff --name-status --diff-filter=ADR 30a343eb..995ab6518` で確かめた。改名も 0）。増えた 4 本はどれもこの spec が作ったテストのファイルで、tasks.md 17.1 の「新しい 4 本」に当たる。`command_ui_thread.rs` は作らなかった（14.2）。
+
+| 増えたファイル | 作った小タスク |
+|---|---|
+| `window/command_test_support.rs` | 1.1（`56eaff60c`） |
+| `window/zorder_pair_test_support.rs` | 9.1（`205427fd4`） |
+| `window_proc/window_pos_decision_tests.rs` | 2.2（`ead58d7dd`） |
+| `window_proc/mouse_move_dispatch_tests.rs` | 13.2（`396240a64`） |
+
+- **読んだ数（1 回目）: 73 / 73**（20＋14＋19＋20。範囲の数と一致）。新しい 4 本も読んだ。
+- かけ直しの直しはファイルを足しも消しもしていない（`git diff --name-status --diff-filter=ADR 995ab6518..HEAD` は 0 件）。範囲の数は直しの後も 73。
+
+### 15.2 回ごとの件数（要件 5.4）
+
+| 回 | 基点 | 読んだもの | 必ず直す | 直したほうがよい | できれば | 計 |
+|---|---|---|---:|---:|---:|---:|
+| 1 | `995ab6518` | 範囲の全部 73 / 73 | **0** | **11** | **15** | **26** |
+| 2 | `7b11f67b2` | 1 回目に直したファイル 35 / 35（束 A＝`zorder_*` 20・束 B＝ほか 15）と、範囲の外の 2 本（`layout/systems/monitor_systems.rs`・`monitor_systems_tests.rs`）の変えた所 | **0** | **1** | **5** | **6** |
+| 3 | `0c99f0b36` | 2 回目に直したファイル 13 / 13（範囲の 11・範囲の外の 2） | **0** | **0** | **2** | **2** |
+| 4 | `4624ad7a4` | 3 回目に直したファイル 3 / 3 | **0** | **0** | **0** | **0** |
+
+- **判定: 0 件で収束**（4 回目で 0 件。5 回目の打ち切りには当たらない）。
+- 各回の読み手は、前の回の指摘が全部直っていることも確かめた（2 回目＝1 回目の 26 件・3 回目＝2 回目の 6 件・4 回目＝3 回目の 2 件。どれも「全部直っている」）。
+- 番号は回ごとに振った。1 回目は「R<束>-<連番>」（束 1〜4）、2 回目は「R2B-」（束 B）・「R2A-」（束 A）、3 回目は「R3r-」。3 節の 1〜63 番とは別の番号。
+
+### 15.3 指摘と直し
+
+「較正」は 14 節と同じ作法（本番に 1 度壊し方を入れて赤を見て、手か控えのコピーで戻し `git diff`／`cmp` で戻ったのを確かめた）。「—」は説明だけ・写しの片付けだけで、赤にする道が無いもの。
+
+**1 回目（26 件）**
+
+| 番号 | 組 | 場所 | 中身 | 直し | 較正（壊し方 → 赤のテスト） |
+|---|---|---|---|---|---|
+| R1-1 | Should | `window/window_pos/tests.rs:233-272` | 生成のテストの期待値を、調べる関数そのもの（`overlapped_both_given`）で出していた。幅から `-frame.left` を抜いても緑 | 期待値を `AdjustWindowRectExForDpi`（`RECT{500,50,800,250}`・`WS_OVERLAPPEDWINDOW`・96）から直に出す `overlapped_expected` に替え、両方を与えたときのテストを足した | 幅から `- frame.left` を抜く → `..._both_given_adds_frame`・`..._size_only_adds_frame_to_size`。y を `position.y + frame.left` に → `..._both_given_adds_frame`・`..._position_only_adds_frame_to_position` |
+| R1-2 | Should | `window_band_pipeline_real_tests.rs`・`window_band_real_tests.rs` | `insert_after`・`raise_to_top`・`CAPTURE_DIRECTIVES`・`FIX_TAG`・`VERIFY_FAILED_TAG` が `zorder_pair_test_support.rs` の写し | 写しを消して共有のものを使う（`#[ignore]`・門・テスト名は同じ） | —（消す前の grep はファイルの中だけ） |
+| R1-3 | Should | `transition_diag.rs`・`window_band_pipeline_real_tests.rs` | 定義が areka-placement にあるもの（`PLACEMENT_KIND_ALL`・`PlacementRoute`・`wire_zorder_pair` ほか）を「areka」と書く | areka-placement に直した（判定器が本当に `areka` にある 1 か所は残した） | — |
+| R1-4 | Nice | `window_pos/mod.rs:232-233,:286-287` | `build_flags_for_system`・`get_hwnd_insert_after` の説明が呼び手を 1 つだけ挙げ「（公開用）」と書く | 本番の呼び手 3 つ（`apply_window_pos_changes`・`nudge_command`・`pair_fix_command`）を挙げた | — |
+| R1-5 | Nice | `monitor.rs:244-254`・範囲の外の `layout/systems/monitor_systems.rs` | 列挙が失敗し続けると `error!` が毎刻み出る | クレートの中だけの `try_enumerate_monitors`（ログを出さない）を足し、刻みの system は `monitors_or_log_failure` で続きの最初の回だけ `error!` を出す。公開の `enumerate_monitors` は形もログも同じ | `if !zero_streak` を `if true` に → `enumeration_failure_is_logged_once_per_streak` |
+| R1-6 | Nice | `command.rs`・`command_batch_tests.rs`・`command_transition_tests.rs` | 消えた `flush` を名指す | `flush_window_pos_commands` に直し、頭の一覧に `flush_window_pos_commands`・`drain_window_pos_commands` を足した | — |
+| R1-7 | Nice | `components.rs:3-6` | 頭の一覧が `window_handle.rs` の `WindowHandle` を挙げ、`OnCloseRequest` ほか 5 つが抜ける | 一覧を実物に合わせた | — |
+| R1-8 | Nice | `window_band.rs:7-8` | 「`HWND_TOPMOST` を書くのはここだけ」が誤り | ほかに `tooltip/os.rs` と `WindowPos::get_hwnd_insert_after` があると書いた（`ZOrder::TopMost`／`NoTopMost` を積む本番の呼び手は grep で 0） | — |
+| R2-1 | Should | `zorder_chain.rs:23-29,:546`・`zorder_chain_tests.rs:631,:678` | 記録の出口を集める理由が「grep の対象が割れる」（34 番と同じ偽の理由） | `zorder_pair.rs:21-22` と同じ言い方に直した（検査は同じ） | — |
+| R2-2 | Should | `zorder_chain_diag.rs`・`zorder_chain_diag_tests.rs` | 区間の `Some`／`None` の説明が呼び手の事実と逆 | 繋いだ行・外した行は常に `Some`、張り失敗は `restore_pair` が `None` と書き、外し失敗に区間を載せない理由を直した | — |
+| R2-3 | Should | `zorder_chain_apply.rs:33-36,:870` | 挿入の位置が取り下げた nudge の形のまま。「実窓の檻は別 task」が古い | 「錨（根の 1 つ手前）か先頭」・「下の `zorder_chain_order_*_tests`」に直した | — |
+| R2-4 | Should | `zorder_chain_apply_tests.rs:14` | 盲点の指し先が `zorder_pair_establish_tests.rs:142-152`（9.1 で移った） | `zorder_pair_test_support.rs` のモジュール文書「記録の捕捉」を指す | — |
+| R2-5 | Nice | `zorder_chain_diag_tests.rs:142` | 「8 つ目・3 つ目」 | 「名簿の外のタグ」に | — |
+| R2-6 | Nice | `zorder_chain_order_lifecycle_tests.rs:26,:171-175` | 本番の順から `apply_window_band` が抜ける | `wire_zorder_pair` どおりの 4 つの順に書いた | — |
+| R3-1 | Should | `zorder_pair_tests.rs:427,:655,:679` | 1 要素の `for`・古い「確立・再断行」 | `let trigger = PairTrigger::Reassert;`・「再断行」に（名・assert は同じ） | — |
+| R3-2 | Should | `zorder_pair.rs:159`・`zorder_pair_deferred_vocabulary_tests.rs:29` | 「areka main が挿入」「areka の main.rs の結線 1 行」 | `areka_placement::spawn::wire_zorder_pair`（areka の `ghost_session.rs` から呼ぶ）に | — |
+| R3-3 | Should | `zorder_pair.rs:629-642` | `measure_below_is_always_on_top` の失敗の戻り（偽）にテストが無い | 既定の走りのテストを `zorder_pair_maintain_always_on_top_tests.rs` に足した（帯の中→真・ゴースト形→偽・`HWND::default()`→偽と記録 1 本） | 失敗の戻りを `true` に → `measuring_the_character_band_answers_both_ways_and_falls_back_out_of_the_band_on_failure` |
+| R3-4 | Should | `zorder_pair_test_support.rs:108-135` | `create_window` が `crate::api::create_test_window` の写し | その呼び出しにした（`CreateWindowExW` の import も外した） | — |
+| R3-5 | Nice | `zorder_pair_*_tests.rs` の 6 本 | 共有の道具の写し（`SIGNOFF_DIRECTIVES`・`fake_hwnd`・`lines_with`・`released_skips`・`count`・生の `DestroyWindow`・`create_hidden_popup`・`Trio`） | 共有の 1 つにまとめた（形の違う `measure_tests.rs` の `Trio` は残した・テスト名は同じ） | —（消す前の grep はファイルの中だけ） |
+| R3-6 | Nice | `measure_tests.rs:36-44`・`always_on_top_tests.rs:69` | 入れ替わった `as` の別名 | 共有の名をそのまま使う | — |
+| R3-7 | Nice | `establish_tests.rs:499-508`・`sink_tests.rs:645-648` | `!out.is_empty()` だけの弱いテスト | 前者は消した（同じ枝は `measure_tests.rs` が 1 本で数える）。後者は「手前側の走査に失敗しました」が 1 本と数える | 失敗の枝の `warn!` を外す → `measure_windows_in_front_reports_failure_as_an_incomplete_chain`（1 本のはずが 0 本） |
+| R3-8 | Nice | `zorder_pair_test_support.rs:76` | `REAL_WINDOW_ZORDER_ENV` が `pub(super)` だが中だけで使う | 私有に | — |
+| R3-9 | Nice | `zorder_pair_maintain.rs:406-409` | 宣言の無い要求を落とすとき `ReassertZOrder` だけ消し、`IssuedPairFix` が残る（説明 :113 は両方と書く） | `remove::<(ReassertZOrder, IssuedPairFix)>()`。テスト `dropping_an_orphan_request_also_drops_its_issued_fix` を足した | 直す前に足したテストが赤（`IssuedPairFix` が残る）→ 直して緑 |
+| R4-1 | Nice | `window_proc/mouse_click.rs:228-241` | `screen_point` が既定の `Some(CW_USEDEFAULT)` を足す（debug で桁あふれの panic になりうる） | 位置の x が `CW_USEDEFAULT` なら足さない（`filter`）。既にあるテストに assert を 1 つ足した | フィルタを抜く → `test_screen_point_adds_window_position_or_keeps_client_point` |
+| R4-2 | Nice | `window_proc/window_pos.rs:3-4` | センター補正がここにあると書く | `dpi_helpers.rs` にあり、ここは呼ぶだけ、と直した | — |
+| R4-3 | Nice | `window_proc/mouse_move.rs:343-352` | 破棄済みの窓で `get_entity_mut` が失敗しても `warn!` を出して位置を積む | `DESPAWNED_SKIP_TAG` の `debug!` を残して積まない（届かなくなる `warn!` の枝は消した）。テスト `mouse_move_to_a_despawned_window_skips_with_debug` を足した | 破棄済みの枝で積む側へ倒す → 同テスト（`Sample added` の assert。この assert を足す前は緑のままだったので足した） |
+
+**2 回目（6 件と追いの 2 点）**
+
+| 番号 | 組 | 場所 | 中身 | 直し | 較正 |
+|---|---|---|---|---|---|
+| R2B-1 | Should | `window_proc/window_pos.rs:512`・`window_pos_tests.rs:246,:672` | R1-7 で行がずれ、`window/components.rs:29-31` を指す 3 か所が外れた | 行番号でなく「`window/components.rs` の `DpiChangeContext` の doc」と名で指す | — |
+| R2B-2 | Nice | `monitor.rs:250-254`（R1-5 の続き） | 1 台ずつの情報取得の失敗の `error!` がまだ毎刻み出る | `try_enumerate_monitors` はログを出さず、失敗の列を列挙の成否によらず返す。刻みの system は続きの最初の回だけ 1 本にまとめて出す。公開の `enumerate_monitors` のログは前と同じ順と形 | `!zero_streak &&` を外す → `monitor_info_failures_are_logged_once_per_streak`（1 本のはずが 3 本）。追い: 列挙の失敗で先に戻る形に → 同テスト（1 本のはずが 0 本） |
+| R2A-1 | Nice | `zorder_pair_maintain.rs:517,:530`（R3-9 の続き） | 見送りの枝と計画の組めない枝が `ReassertZOrder` だけ消す | 両方で `remove::<(ReassertZOrder, IssuedPairFix)>()`。既にあるテスト `request_for_a_missing_peer_issues_no_command` に持ち越しを先に置いて確かめる。追い: 届かない枝は黙って落とさず `debug!` を 1 行出す | 見送りの枝を `remove::<ReassertZOrder>()` に戻す → 同テスト |
+| R2A-2 | Nice | `zorder_pair_deferred_vocabulary_tests.rs`・`zorder_pair_maintain_always_on_top_tests.rs` | 「帯を書くのは `window_band.rs` だけ」が R1-8 の事実と食い違う | 「ゴーストの窓の帯を書くのは `window_band.rs`（ほかの書き手はその頭の doc）・`zorder_*` は帯を書かない」に（説明と assert の文だけ） | — |
+| R2A-3 | Nice | `zorder_chain_diag.rs:205` | 宙に浮いた「この検索」 | 「適用系（`execute_ops`）が望む鎖から区間を引く検索」に | — |
+| R2A-4 | Nice | `zorder_chain_tests.rs`・`zorder_chain_diag_tests.rs`・`zorder_chain_release_tests.rs` | ローカルの `fake_hwnd` 3 本（共有と同じ本体） | `zorder_pair_test_support::fake_hwnd` を使う | —（消す前の grep はファイルの中だけ） |
+
+**3 回目（2 件）**
+
+| 番号 | 組 | 場所 | 中身 | 直し | 較正 |
+|---|---|---|---|---|---|
+| R3r-1 | Nice | `zorder_chain_diag_tests.rs:242` | assert の文の理由が「grep 対象が分裂する」（34 番・R2-1 と同じ偽の理由） | 「出力先が割れて RUST_LOG の指定から外れうる・写しが食い違う」に（判定は同じ） | — |
+| R3r-2 | Nice | `zorder_pair_maintain.rs:534-538` | R2A-1 の追いで足した `tracing::debug!` の直書きが「記録のマクロは `zorder_pair.rs` に置く」決まりを破る | `zorder_pair.rs` に `pub(crate) fn log_pair_fix_unplanned(entity, peer)` を足して呼ぶ（文言・水準・欄は同じ。maintain の直書きは grep で 0） | —（届かない枝・同列の記録の関数も出力先のテストを持たない） |
+
+### 15.4 要件 4 で残すと裁定した指摘
+
+**0 件**（無し）。4 回の 34 件は全部直した。
+
+決めどおり残したもの（指摘に数えない。読み手も指摘にしなかった）:
+
+- A-1 の 3 本の隔離（`#[ignore]` と環境変数の門・議題 9）。かけ直しの直しでも `#[ignore]` と門の呼び出しの差分は 0 行。
+- 案 B（`ExplicitMaintenance`）の語（28 番の決め・`zorder_pair_deferred_vocabulary_tests.rs` が守る）。
+- `ecs/drag/state/mod.rs` の `check_threshold` とそのテスト 5 本は `audit-wintf-input` の持ち物（門 GI ⒝）。説明の古さもあちらが直す（14 節の 13.4 の行）。
+
+### 15.5 範囲の外で見つけたもの（数えない）と申し送り
+
+どれも作業枝の木（`4624ad7a4`）で `git grep`／行の読み直しをして、まだ残っていることを確かめた。直したもの（R1-5・R2B-2 の `monitor_systems.rs`）は下の 15.6。
+
+| 相手 | 場所 | 中身 |
+|---|---|---|
+| `audit-wintf-input` | `ecs/pointer/nchittest_cache.rs:25,:142` | WM_MOUSELEAVE の受け手を「handlers.rs L820-876」と指す古い参照 |
+| `audit-wintf-input` | `ecs/pointer/buffers.rs:144-179` | `POINTER_BUFFERS` の窓ごとの項目が窓の破棄の後も消えない |
+| `audit-wintf-input` | `ecs/drag/state/mod.rs:618-621` | `check_threshold` の説明が「本番呼び出しがゼロ」「`mouse_move.rs` 内にインライン複製」のまま（62 番の直しで事実に合わなくなった・門 GI ⒝ であちらが直す） |
+| `audit-placement-follow` | `areka-placement` の `follow/drag_follow.rs:486`・`follow/window_move.rs:255`・`follow_visibility_char_wiring_tests.rs:660` | `CW_USEDEFAULT` の確かめとして `monitor_systems.rs:408` を指すが、その行は今 436 行目あたり（前から外れていた・R1-5 でさらにずれた） |
+| `audit-emo2-boot-frame` | `crates/areka/src/runtime/frame_transition_atomicity_tests.rs:47,:527` | `window_pos.rs:464`・`:468-489` の行番号が古い（今の `guarded_set_window_pos` の呼び出しは 475 行目） |
+| `audit-emo2-boot-frame` | `crates/areka/src/runtime/frame/zorder_drain.rs:52`・`zorder_descript.rs:33`・`zorder_drain_tests.rs:443` | 34 番・R2-1 と同じ種類の偽の理由（「grep 対象が 2 本に割れる」） |
+| 完了した `audit-wintf-layout-widget`（完了の棚卸） | `ecs/layout/hit_test/mod.rs:509-513` の `hit_test_in_window_ex` | R4-1 と同じく、位置が `CW_USEDEFAULT` でも足す |
+| 完了した `audit-wintf-runtime`（完了の棚卸） | `runtime/wndproc_bridge.rs:91-104` | World の借用中に届いた `WM_CLOSE` を既定の手続きへ渡す |
+| 完了した `audit-wintf-runtime`（完了の棚卸） | `api.rs:302` の `create_test_window` | 説明は「見えない」だが、子の窓には `WS_VISIBLE` が付く |
+| 完了した `audit-wintf-runtime`（完了の棚卸） | `api.rs:435` | テストの中だけの `insert_after` が `zorder_pair_test_support.rs` の同じ関数の写し |
+| 完了した `audit-emo-present`・`audit-emo-text-*`（完了の棚卸） | `areka-emo-present`・`areka-emo-text` の 9 か所 | もう無い `emo2_boot` のパスを指す説明 |
+| この spec（完了の棚卸） | `tasks.md:271`（16.1） | `_Requirements:` の 8.8 は requirements.md に無い（要件 8 は 6 まで） |
+| この spec（完了の 0.x の知らせ） | — | 6.1（2 番）の 1 行は 14.3 の終わりにある。完了のときに版の知らせへ写す |
+
+### 15.6 範囲の外のファイルへ及んだ直し
+
+| ファイル | 番号 | 中身 |
+|---|---|---|
+| `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | R1-5・R2B-2 | `detect_display_change_system` が `try_enumerate_monitors` を呼び、`monitors_or_log_failure` で列挙の失敗と情報取得の失敗を続きの最初の回だけ記録する（6.3 で触ったファイル） |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems_tests.rs` | R1-5・R2B-2 | `enumeration_failure_is_logged_once_per_streak`・`monitor_info_failures_are_logged_once_per_streak` を足した |
+
+- 公開の口の形は変えていない（`enumerate_monitors` の署名とログ・`detect_display_change_system` の引数は同じ。`try_enumerate_monitors`・`monitors_or_log_failure` はクレートの中だけ）。14.3 の表への追記は無い。
+
+### 15.7 テストの数（範囲を絞った走行・`--ignored` なし）
+
+直す前の数は測っていないので、直した後の数と、足した・消した本数だけを書く。
+
+| 走行 | 直した後 | 足した・消した |
+|---|---|---|
+| `--lib window_pos` | 60 緑 | +1（R1-1。R4-1 は既にある本へ assert を足しただけ） |
+| `--lib monitor` | 41 緑 | +2（R1-5・R2B-2 で 1 本ずつ） |
+| `--lib window_proc` | 120 緑 | +1（R4-3） |
+| `--lib zorder_pair` | 96 緑・3 無視 | +2・−1（R3-3・R3-9 で足し、R3-7 で消した） |
+| `--lib zorder_chain` | 123 緑 | 0 |
+| `-p areka zorder_inversion_branch_coverage` | 3 緑 | 0 |
+
+- テストの関数名は、消した 1 本（`measure_window_above_maps_failure_to_absence_and_records_it`・消す前の grep は `crates/` で定義の 1 か所だけ）と足した 6 本のほかは変わっていない（変えたファイルの `#[test]` の名を `995ab6518` と突き合わせた）。A-1 の 3 本は無視のまま。
+- 直しの各回で build（wintf・areka・areka-placement の tests と examples）は警告 0、`cargo fmt --all -- --check` は通った。
