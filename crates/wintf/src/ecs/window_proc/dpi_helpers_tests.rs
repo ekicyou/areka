@@ -421,7 +421,7 @@ fn box_style_not_found_fallback_keeps_its_literal_and_warn_level() {
 // dpi_suggested_position_decision tests
 //
 // 位置づけ（design.md「Testing Strategy」1.）: **分岐網羅の補助**。
-// S1（OS 提案位置の素通し）の赤→緑の正証跡は `window_proc/mod.rs` の
+// S1（OS 提案位置の素通し）の赤→緑の正証跡は `window_proc/window_pos_tests.rs` の
 // dispatch 檻（タスク 4.3）が担う——是正前の欠陥は wndproc の無条件
 // 書込＝実配線に在るため、新設純関数上の模擬では証明力が足りない。
 // ここで固定するのは「判断関数の 3 分岐が仕様どおりの答えを返すこと」と

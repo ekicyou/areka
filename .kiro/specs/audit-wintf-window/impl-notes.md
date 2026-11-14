@@ -52,3 +52,14 @@
   - どちらも戻して本番の差分 0 を `cmp` で確かめた
 - 消したもの: なし（git grep 不要）
 - テストの数: `cargo test -p wintf --lib window_proc::window_pos` 31 → 34（全部緑）
+
+## 3.2
+
+- 変えたもの（テストと説明だけ・本番は変えない）
+  - 49: `window_proc/drop_files_tests.rs` に `dispatch_real_hdrop_delivers_the_same_two_paths` を足した。テストの中の `#[link(name = "kernel32")] unsafe extern "system"` で `GlobalAlloc` を宣言し（`GPTR`）、research.md 12.1 の形（`DROPFILES` の頭 20 バイト・`pFiles=20`・`fWide=1`・NUL 区切りの UTF-16 のパス 2 本・終わりの NUL）の HDROP を組んで `dispatch_window_message` へ `WM_DROPFILES` で配る。パスは `C:\投げ込み\ゴースト.nar`・`D:\伺か\シェル フォルダ`（存在しない・ファイルは作らない）。届いた一覧を UTF-16 のまま比べ、警告 0 も確かめる。片付けは受け手の `DragFinish`
+  - 43: `window_proc/dpi_helpers_tests.rs` の説明の `window_proc/mod.rs` を `window_proc/window_pos_tests.rs` に 1 語直した（`git grep "fn s1_"` が `window_pos_tests.rs:396` ほかを指す）
+- 49 の続き（レビュー 1 回目の差し戻し）: `read_error_variants_are_distinguishable_in_the_record` の説明「`Query` の腕は実物の `HDROP` でしか踏めない」を、通常の道は新しいテストが固定し、`Query` の腕は形の正しい `HDROP` でも踏めない（空のパスで一覧が終わる）ので記録の語だけを固定する、に書き直した（説明だけ）
+- 較正: `drop_files.rs` の `vec![0u16; len as usize + 1]` の `+ 1` を落とす → `dispatch_real_hdrop_delivers_the_same_two_paths` が赤（`.nar` が `.na`・`フォルダ` が `フォル`）。戻して `drop_files.rs` の差分 0 を確かめた
+- 消したもの: なし（git grep 不要）
+- `Cargo.toml`・`Cargo.lock` の差分 0
+- テストの数: `cargo test -p wintf --lib window_proc::drop_files` 6 → 7（全部緑）・`window_proc::dpi_helpers` 22（緑のまま）
