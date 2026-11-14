@@ -47,7 +47,7 @@
   - _Dispatch: standard — 3 か所の手順を 1 つの関数へまとめて呼び手を配線する_
   - _Requirements: 4.1, 4.3_
 
-- [ ] 2.4 面の置き直しを「利用者が動かした印」で決める（U4・指摘 2）
+- [x] 2.4 面の置き直しを「利用者が動かした印」で決める（U4・指摘 2）
   - 利用者がバルーンを動かした印（crate の中の部品）を足し、記憶のずらしから値を採ったスコープに付け、2.3 の据え直しの関数で外す。
   - 面の置き直しの判定を値の比べから印の有無に替え、値の比べを消す。
   - 追随の持ち物の `reestablish_balloon_follow` の中に印を付ける 1 行だけを足す（関数の形は変えない）。触る前に `audit-placement-follow` と申し合わせ、相手が完了していればその完了の申し送りに残す。キーワードの再導出の所には付けない。関数が無い・形や置き場が違うときは、1 の読み替えに従い、相手と申し合わせて置き場を決める。
@@ -261,3 +261,4 @@
 
 - 1: `cargo test -p areka` の `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は込み具合で待ちの期限が切れて揺れることがある（範囲の外・単独の回し直しで緑）。続けば完了の棚卸で起票する。
 - 2.1 のレビューの提案（8.1 のかけ直しで拾う）: `resolver.rs` の「射影を通しても動かない（べき等）」の doc は作業領域に収まる寸法に限ると書き足す。`from_alignment` の知らない値の `warn!` にスコープ番号が載らなくなった（消した側の `warn!` は持っていた）。
+- 2.4: 追随の持ち物 `follow/drag_follow.rs` の `reestablish_balloon_follow` に印の 1 行（`mark_user_moved`）を足し、1,000 行に収めるため同じ関数のコメント 2 行を 1 行にまとめた。完了の申し送り（8.2）で `audit-placement-follow` へ渡す。1,000 行の番人は crate のテストでは回らないので `cargo test -p log-capture-kit --test file_length_guard_test` を確かめに入れる。

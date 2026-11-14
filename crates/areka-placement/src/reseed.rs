@@ -25,6 +25,7 @@ use wintf::ecs::{DPI, Point, WindowPos};
 use super::config::BalloonXMode;
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
+use super::face_windowposition::mark_by_base;
 use super::follow::{
     AnchorSource, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
     resize_window_to, sync_drag_writer, work_area_for_window,
@@ -89,8 +90,9 @@ pub fn apply_shell_descript(
     sync_drag_writer(world);
 }
 
-/// バルーンを標準の部品で据え直す 3 手（`BalloonFollow` を入れる → `BalloonKeywordBase` を
-/// 入れるか外す → [`follow_balloon`] で置き直す）。シェルの切り替えの入れ直し・面の
+/// バルーンを標準の部品で据え直す 4 手（`BalloonFollow` を入れる → `BalloonKeywordBase` を
+/// 入れるか外す → 利用者が動かした印を外す（記憶のずらしなら付ける・[`mark_by_base`]） →
+/// [`follow_balloon`] で置き直す）。シェルの切り替えの入れ直し・面の
 /// `windowposition` の置き直し・バルーン位置初期化の 3 か所が呼ぶ（crate の中でこの手順を書く
 /// 所はここだけ）。
 ///
@@ -115,6 +117,7 @@ pub(crate) fn reinstall_balloon(
             world.entity_mut(c).remove::<BalloonKeywordBase>();
         }
     }
+    mark_by_base(world, c, base);
     follow_balloon(
         world,
         c,

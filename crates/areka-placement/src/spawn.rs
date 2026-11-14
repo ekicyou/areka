@@ -97,6 +97,7 @@ use wintf::ecs::{
 use super::chain_finalize::AdjacencyMark;
 use super::config::BalloonXMode;
 use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
+use super::face_windowposition::mark_by_base;
 use super::follow::{
     AnchorSource, Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag,
     on_char_drag_end,
@@ -551,6 +552,8 @@ pub fn spawn_ghost_windows(
         world
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
+        // 記憶から戻したずらしなら利用者が動かした印を付ける（指摘 2）。
+        mark_by_base(world, char_window, p.balloon_offset_base);
 
         // キーワード再導出の素材（windowposition-limit 4.7・実機サインオフ是正）:
         // `Some` の scope のキャラ窓にだけ後付けする。`Side` と保存値が効いた scope には

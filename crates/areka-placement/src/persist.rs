@@ -562,6 +562,8 @@ fn merge_scope(
     let (balloon_offset, balloon_offset_base, balloon_keyword_base) = match (saved_bx, saved_by) {
         // 保存 offset は**char 左上基準**（ランタイム BalloonFollow.offset と同一基準）ゆえ
         // 基準変換なしで採用する（2.3・[`balloon_offset_entries`] の基準記述）。
+        // 未係留の基準は「記憶から戻した」の印の源でもある（窓を組むときに
+        // `face_windowposition::BalloonUserMoved` を付ける・指摘 2）。
         (Some(x), Some(y)) => {
             let saved = PointPx { x, y };
             (saved, OffsetBase::unpinned(saved), None)
