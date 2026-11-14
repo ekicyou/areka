@@ -10,14 +10,12 @@
 //! 兄弟の `window_band_real_tests.rs` のものを借りる。
 //!
 //! 並びは本番の `crates/areka-placement/src/spawn.rs` の `wire_zorder_pair` と同じである
-//! （並びそのものの固定は areka 側の兄弟のテスト `spawn_window_band_wiring_tests.rs` が持つ）。
+//! （並びそのものの固定は areka-placement 側のテスト `spawn_window_band_wiring_tests.rs` が持つ）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-};
+use windows::Win32::UI::WindowsAndMessaging::HWND_TOP;
 use windows::core::w;
 
 use super::real_tests::{create_ghost_shaped, destroy, in_band, relative_order};
@@ -25,32 +23,13 @@ use super::{BandOp, WindowBandQueue, apply_window_band};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::measure_window_below;
 use crate::ecs::window::zorder_pair_diag::hwnd_field;
-use crate::ecs::window::zorder_pair_test_support::require_explicit_real_window_run;
+use crate::ecs::window::zorder_pair_test_support::{
+    CAPTURE_DIRECTIVES, FIX_TAG, VERIFY_FAILED_TAG, insert_after, require_explicit_real_window_run,
+};
 use crate::ecs::window::{
     KeepDirectlyAbove, ReassertZOrder, WindowHandle, ZOrderPairStrategy, apply_zorder_chain,
     apply_zorder_pair_maintenance, establish_owner_links, flush_window_pos_commands,
 };
-
-const CAPTURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window::zorder_pair=debug,wintf::ecs::window::command=debug";
-const FIX_TAG: &str = "[zorder-pair] fix";
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-
-fn insert_after(hwnd: HWND, after: HWND) {
-    // SAFETY: Win32 境界。自分で作った窓の重なりだけを変える。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .expect("SetWindowPos should reorder a self-owned test window");
-}
 
 /// オンの指令と同じ巡に組の是正が要る場面: 帯を当てる前は組が帯の外で隣り合っておらず、
 /// 是正は帯を当てた後の観測から決まり、流れた後もバルーンは帯の中でキャラクターのすぐ
@@ -102,7 +81,7 @@ fn an_on_directive_and_a_pair_fix_in_the_same_pass_leave_the_balloon_in_the_band
         .resource_mut::<WindowBandQueue>()
         .push(BandOp::Enter, vec![character, balloon]);
 
-    // 本番の `wire_zorder_pair`（areka の spawn.rs）と同じ並び・同じ同期点。
+    // 本番の `wire_zorder_pair`（areka-placement の spawn.rs）と同じ並び・同じ同期点。
     let mut schedule = Schedule::default();
     schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(

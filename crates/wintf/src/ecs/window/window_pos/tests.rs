@@ -230,28 +230,56 @@ fn test_to_window_coords_for_creation_passes_through_cw_usedefault() {
     assert_eq!(h, CW_USEDEFAULT);
 }
 
-/// 枠つきの窓（`WS_OVERLAPPEDWINDOW`）で位置と大きさを両方与えたときの外枠の値。
-/// 片方だけのテストの期待値はここから出す。枠が 0 でないことも確かめる。
-fn overlapped_both_given() -> (i32, i32, i32, i32) {
-    let mut both = WindowPos::new();
-    both.position = Some(Point { x: 500, y: 50 });
-    both.size = Some(SizeI {
+/// 枠つきの窓（`WS_OVERLAPPEDWINDOW`）でクライアント矩形 {500,50,800,250} の外枠の値。
+/// 調べる関数を通さず、`AdjustWindowRectExForDpi` を矩形へ直に当てて出す。枠が 0 でないことも確かめる。
+fn overlapped_expected() -> (i32, i32, i32, i32) {
+    let mut rect = RECT {
+        left: 500,
+        top: 50,
+        right: 800,
+        bottom: 250,
+    };
+    unsafe {
+        AdjustWindowRectExForDpi(
+            &mut rect,
+            WS_OVERLAPPEDWINDOW,
+            false,
+            WINDOW_EX_STYLE(0),
+            96,
+        )
+    }
+    .expect("AdjustWindowRectExForDpi");
+    let expected = (
+        rect.left,
+        rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
+    );
+    let (x, y, w, h) = expected;
+    assert!(
+        x < 500 && y < 50 && w > 300 && h > 200,
+        "枠が 0: {expected:?}"
+    );
+    expected
+}
+
+#[test]
+fn test_to_window_coords_for_creation_both_given_adds_frame() {
+    // 位置と大きさを両方与えると、外枠の矩形をそのまま返す
+    let mut pos = WindowPos::new();
+    pos.position = Some(Point { x: 500, y: 50 });
+    pos.size = Some(SizeI {
         width: 300,
         height: 200,
     });
-    let result = both.to_window_coords_for_creation(WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0), 96);
-    let (x, y, w, h) = result;
-    assert!(
-        x < 500 && y < 50 && w > 300 && h > 200,
-        "枠が 0: {result:?}"
-    );
-    result
+    let got = pos.to_window_coords_for_creation(WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0), 96);
+    assert_eq!(got, overlapped_expected());
 }
 
 #[test]
 fn test_to_window_coords_for_creation_position_only_adds_frame_to_position() {
     // 位置だけ与えると、位置に枠の分を足し、大きさは既定のまま返す
-    let (bx, by, _, _) = overlapped_both_given();
+    let (bx, by, _, _) = overlapped_expected();
     let mut pos = WindowPos::new();
     pos.position = Some(Point { x: 500, y: 50 });
     let got = pos.to_window_coords_for_creation(WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0), 96);
@@ -261,7 +289,7 @@ fn test_to_window_coords_for_creation_position_only_adds_frame_to_position() {
 #[test]
 fn test_to_window_coords_for_creation_size_only_adds_frame_to_size() {
     // 大きさだけ与えると、位置は既定のまま、大きさに枠の分を足して返す
-    let (_, _, bw, bh) = overlapped_both_given();
+    let (_, _, bw, bh) = overlapped_expected();
     let mut pos = WindowPos::new();
     pos.size = Some(SizeI {
         width: 300,

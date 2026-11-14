@@ -5,17 +5,17 @@
 //! - **要求語彙タグ**——`SetWindowPosCommand` が `WriteTag` を運び、`new()` の 7 引数は
 //!   変わらないこと。タグを付けない生成は番兵（`UNTAGGED`）になり、「付け忘れた経路」が
 //!   行の上で見分けられること。
-//! - **一括書込の 3 種**——`flush` が `flush stage=begin`／各指令の `write stage=flush`／
+//! - **一括書込の 3 種**——`flush_window_pos_commands` が `flush stage=begin`／各指令の `write stage=flush`／
 //!   `flush stage=end` を発行すること。**偽の窓ハンドル**（`SetWindowPos` が必ず失敗する）
 //!   でも 3 種とも出て、`ok=false` になること。
 //! - **検査用の口**——`drain_window_pos_commands` が積まれた指令を**実行せずに**そのまま
 //!   返し、キューを空にすること。
-//! - **既定 OFF**——観測 target を点けていない運転では `flush` が観測行を 1 行も出さず、
+//! - **既定 OFF**——観測 target を点けていない運転では `flush_window_pos_commands` が観測行を 1 行も出さず、
 //!   読み戻し（`GetWindowRect`）も計時も行わないこと。
 //!
 //! # 実行形態の明示（要件 7.6）
 //!
-//! 本ファイルの検証はすべて**テストスレッド上の直接呼出**である。`flush` は bevy の
+//! 本ファイルの検証はすべて**テストスレッド上の直接呼出**である。`flush_window_pos_commands` は bevy の
 //! スケジュール実行器を介さないため、`tracing` のスレッド局所 subscriber
 //! （[`capture_under_filter`]）で確実に捕捉できる。多スレッド実行器の相での「出ないこと」は
 //! 一切主張しない。
@@ -25,9 +25,9 @@
 //!
 //! # 自発書込カウンタはスレッド局所である（要件 7.7）
 //!
-//! `flush` は `guarded_set_window_pos` を通り `SELF_INITIATED_DEPTH` を一時的に持ち上げる。
+//! `flush_window_pos_commands` は `guarded_set_window_pos` を通り `SELF_INITIATED_DEPTH` を一時的に持ち上げる。
 //! このカウンタは**スレッドごとに独立**であり（`command.rs` の `thread_local!`）、持ち上げ・
-//! 同期送達・判定・解放がすべて `flush` を呼んだこのスレッドの内側で閉じる。並列に走る
+//! 同期送達・判定・解放がすべて `flush_window_pos_commands` を呼んだこのスレッドの内側で閉じる。並列に走る
 //! 他テストの `is_self_initiated()`／`in_swp` 検査はこの値を読めないので、一括書込を呼ぶ
 //! テストを直列化する錠は要らない（スレッド局所であることの本体は
 //! `command_threadlocal_tests.rs`）。

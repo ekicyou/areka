@@ -4,12 +4,14 @@
 //! - `guarded_set_window_pos`: RAII ガード付き SetWindowPos ラッパー
 //! - `SetWindowPosCommand`: SetWindowPos 遅延実行キュー
 //! - `coalesce_geometry`: 同一 tick・同一窓のジオメトリ指令を 1 本へ畳む純関数
+//! - `flush_window_pos_commands`: 積まれた指令をまとめて流す（一括書込）
+//! - `drain_window_pos_commands`: 積まれた指令を流さずに取り出す（テストの検査用）
 //! - `find_owner_window`: エンティティの所属ウィンドウ特定
 //!
 //! # 遷移観測（`transition_diag`）
 //!
 //! 一括 flush はゴースト窓の窓矩形が実際に動く**唯一の共通経路**（経路 B）であり、
-//! DPI／拡大率遷移の時系列はここを通らないと 1 本に並ばない。よって `flush` は
+//! DPI／拡大率遷移の時系列はここを通らないと 1 本に並ばない。よって `flush_window_pos_commands` は
 //! 区間の開始・各書込・区間の終了の 3 種を専用 target へ記録する（design.md C2・要件 2.1）。
 //!
 //! 観測は**既定 OFF** である。`transition_diag::is_enabled()` が偽のときは行の組立も
@@ -635,7 +637,7 @@ pub(crate) fn coalesce_geometry(
         Some(index) => {
             merge_into(&mut queue[index], &cmd);
             // 4G 件を超えるキューは起こり得ないが、`as` の暗黙切り捨てで別の枠を指すより
-            // 飽和させて上限に張り付かせる（`flush` の `seq` と同じ扱い）。
+            // 飽和させて上限に張り付かせる（`flush_window_pos_commands` の `seq` と同じ扱い）。
             //
             // この腕は**到達不能**であって「どう書いても等価」ではない——`unwrap_or(0)` や
             // `as` へ替えれば別の枠を指す。変異検査で殺せないのは到達しないからであり、

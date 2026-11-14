@@ -229,6 +229,15 @@ impl std::error::Error for MonitorError {}
 
 /// システムの全モニターを列挙
 pub fn enumerate_monitors() -> Vec<Monitor> {
+    try_enumerate_monitors().unwrap_or_else(|| {
+        error!("EnumDisplayMonitors failed");
+        Vec::new()
+    })
+}
+
+/// [`enumerate_monitors`] と同じ列挙。`EnumDisplayMonitors` の失敗はログに残さず `None` で返す
+/// （失敗が続く間に毎刻みログを出さないよう、呼び手が 1 回だけ残すため）。
+pub(crate) fn try_enumerate_monitors() -> Option<Vec<Monitor>> {
     let mut monitors = Vec::new();
 
     // EnumDisplayMonitorsのコールバック関数
@@ -250,11 +259,10 @@ pub fn enumerate_monitors() -> Vec<Monitor> {
     let result = unsafe { EnumDisplayMonitors(None, None, Some(enum_proc), LPARAM(monitors_ptr)) };
 
     if !result.as_bool() {
-        error!("EnumDisplayMonitors failed");
-        return Vec::new();
+        return None;
     }
 
-    monitors
+    Some(monitors)
 }
 
 #[cfg(test)]

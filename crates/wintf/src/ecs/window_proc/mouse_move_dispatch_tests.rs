@@ -20,6 +20,7 @@ use crate::ecs::drag::{
 use crate::ecs::pointer::{PhysicalPoint, PointerLeave, PointerState};
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::{Window, WindowHandle};
+use crate::ecs::window_proc::lifecycle::DESPAWNED_SKIP_TAG;
 use crate::ecs::world::EcsWorld;
 use crate::executor::util::WindowMessage;
 
@@ -160,4 +161,37 @@ fn failed_drag_window_move_is_logged_as_error() {
         failed, 1,
         "窓の移動の失敗を error で 1 本残す。ログ:\n{log}"
     );
+}
+
+/// 窓の entity が破棄済みのとき `WM_MOUSEMOVE` は位置を積まず、[`DESPAWNED_SKIP_TAG`] の
+/// `debug!` 1 行で打ち切る（警告 0・位置を積まない）。
+#[test]
+fn mouse_move_to_a_despawned_window_skips_with_debug() {
+    let world = Rc::new(RefCell::new(EcsWorld::new()));
+    let entity = world.borrow_mut().world_mut().spawn(Window::default()).id();
+    assert!(world.borrow_mut().world_mut().despawn(entity));
+    let message = WindowMessage {
+        hwnd: HWND(std::ptr::null_mut()),
+        msg: WM_MOUSEMOVE,
+        wparam: WPARAM(0),
+        lparam: LPARAM((5 << 16) | 5),
+    };
+
+    let (_, events) =
+        log_capture_kit::capture(|| crate::ecs::dispatch_window_message(&world, entity, &message));
+
+    let skips: Vec<_> = events
+        .iter()
+        .filter(|e| e.message().contains(DESPAWNED_SKIP_TAG))
+        .collect();
+    assert_eq!(skips.len(), 1, "{events:?}");
+    assert_eq!(skips[0].level, tracing::Level::DEBUG);
+    assert!(
+        events.iter().all(|e| e.level > tracing::Level::WARN),
+        "{events:?}"
+    );
+    // 位置を積まない（捕捉は TRACE まで拾う。受けた行が対照）
+    let has = |m: &str| events.iter().any(|e| e.message().contains(m));
+    assert!(has("[WM_MOUSEMOVE] Received"), "{events:?}");
+    assert!(!has("[push_pointer_sample] Sample added"), "{events:?}");
 }

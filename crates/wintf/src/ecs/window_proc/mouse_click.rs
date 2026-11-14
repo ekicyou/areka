@@ -223,7 +223,8 @@ fn double_click_of(button: crate::ecs::pointer::PointerButton) -> crate::ecs::po
     }
 }
 
-/// クライアント座標を画面座標に直す（窓の `WindowPos.position` を足す。位置が無ければそのまま）。
+/// クライアント座標を画面座標に直す（窓の `WindowPos.position` を足す。位置が無いか、
+/// 生成時の既定の `CW_USEDEFAULT` のままならそのまま）。
 /// ドラッグの押した位置（押下）と今の位置（移動）が同じ規則で揃うよう、ここだけで計算する。
 pub(super) fn screen_point(
     world: &bevy_ecs::world::World,
@@ -234,6 +235,7 @@ pub(super) fn screen_point(
     match world
         .get::<crate::ecs::window::WindowPos>(window_entity)
         .and_then(|wp| wp.position)
+        .filter(|p| p.x != windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT)
     {
         Some(pos) => (x + pos.x, y + pos.y),
         None => (x, y),
@@ -550,7 +552,10 @@ mod tests {
             })
             .id();
         let bare = world.spawn_empty().id();
+        // 生成時の既定（位置が CW_USEDEFAULT）は足さない（足すと負の x で桁あふれ）
+        let default_pos = world.spawn(WindowPos::default()).id();
         assert_eq!(screen_point(&world, placed, 5, 7), (105, -13));
+        assert_eq!(screen_point(&world, default_pos, -5, 7), (-5, 7));
         assert_eq!(screen_point(&world, unplaced, 5, 7), (5, 7));
         assert_eq!(screen_point(&world, bare, 5, 7), (5, 7));
     }

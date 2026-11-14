@@ -86,7 +86,7 @@ fn enumerated_monitor_work_area_reconstructs_all_four_edges() {
 use crate::ecs::types::{Point, SizeI};
 use crate::ecs::{DPI, WindowPos};
 
-/// 檻へ注入する「新しいモニタ列挙結果」。実 OS 列挙（`enumerate_monitors`）の代役。
+/// 檻へ注入する「新しいモニタ列挙結果」。実 OS 列挙（`try_enumerate_monitors`）の代役。
 #[derive(Resource, Clone)]
 pub(super) struct InjectedMonitors(pub(super) Vec<Monitor>);
 
@@ -588,4 +588,25 @@ fn monitor_containing_uses_half_open_bounds() {
         monitor_containing(&monitors, (-1, 1000)).is_none(),
         "左外は含まない"
     );
+}
+
+/// 列挙の失敗が続く間、`error!` は続きの最初の 1 回だけ出る（`EnumDisplayMonitors` を
+/// 失敗させる継ぎ目は無いので、`detect_display_change_system` が列挙の結果を渡す
+/// [`monitors_or_log_failure`] を、その巡の `zero_streak` で直に呼ぶ）。
+#[test]
+fn enumeration_failure_is_logged_once_per_streak() {
+    const FAILED: &str = "EnumDisplayMonitors failed";
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        // 続きの 1 巡目（zero_streak は偽）→ 2・3 巡目（真）
+        for zero_streak in [false, true, true] {
+            assert!(monitors_or_log_failure(None, zero_streak).is_empty());
+        }
+    });
+    assert_eq!(out.matches(FAILED).count(), 1, "{out}");
+
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+        let got = monitors_or_log_failure(Some(vec![synthetic_monitor()]), false);
+        assert_eq!(got.len(), 1);
+    });
+    assert!(!out.contains(FAILED), "{out}");
 }

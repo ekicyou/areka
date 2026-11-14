@@ -14,16 +14,17 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GWL_EXSTYLE, GetTopWindow, GetWindow,
-    GetWindowRect, HWND_TOP, HWND_TOPMOST, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_POPUP,
+    GetWindowRect, HWND_TOP, HWND_TOPMOST, SW_SHOWNA, ShowWindow, WINDOW_EX_STYLE, WS_EX_LAYERED,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
 use super::{BandOp, WindowBandQueue, apply_window_band};
 use crate::api::{clear_window_owner, get_window_long_ptr, is_window_visible, set_window_owner};
 use crate::ecs::window::WindowHandle;
-use crate::ecs::window::zorder_pair_test_support::require_explicit_real_window_run;
+use crate::ecs::window::zorder_pair_test_support::{
+    insert_after, require_explicit_real_window_run,
+};
 
 fn create_toplevel(title: PCWSTR, ex_style: u32, x: i32) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -78,22 +79,6 @@ fn shape(hwnd: HWND) -> (RECT, u32) {
     (rect, ex_style(hwnd) & !WS_EX_TOPMOST.0)
 }
 
-fn raise_to_top(hwnd: HWND, insert_after: HWND) {
-    // SAFETY: Win32 境界。自分で作った窓の重なりだけを変える。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(insert_after),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .expect("SetWindowPos should reorder a self-owned test window");
-}
-
 /// 最上から辿った重なりの列（手前 → 奥）。
 fn desktop_z() -> Vec<HWND> {
     let mut out = Vec::new();
@@ -146,7 +131,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
     set_window_owner(b1, c1).expect("owner");
     set_window_owner(c0, b1).expect("owner");
     set_window_owner(b0, c0).expect("owner");
-    raise_to_top(c1, HWND_TOP);
+    insert_after(c1, HWND_TOP);
     let ours = [b0, c0, b1, c1];
     let original = relative_order(&ours);
     assert_eq!(original, ours, "前提: 手前から B0・C0・B1・C1 の持ち主の列");
@@ -195,7 +180,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
 
     // 手前へ出す（帯の外）: 先に普通の窓の対照を最上へ置き、出した後は普通の窓の最上（要件 2.9）。
     let normal_probe = create_ghost_shaped(w!("wintf-band-real-normal-probe"), 120);
-    raise_to_top(normal_probe, HWND_TOP);
+    insert_after(normal_probe, HWND_TOP);
     assert!(
         visible_in_front_of(&ours).contains(&normal_probe),
         "前提: 普通の窓の対照が自分の窓より手前に居る"
@@ -227,7 +212,7 @@ fn band_ops_keep_the_owned_chain_order_and_shape_on_real_windows() {
         WS_EX_LAYERED.0 | WS_EX_TOOLWINDOW.0 | WS_EX_TOPMOST.0,
         140,
     );
-    raise_to_top(band_probe, HWND_TOPMOST);
+    insert_after(band_probe, HWND_TOPMOST);
     assert!(
         visible_in_front_of(&ours).contains(&band_probe),
         "前提: 帯の窓の対照が自分の窓より手前に居る"
@@ -272,11 +257,11 @@ fn owners_of_balloons_enter_the_band_from_behind_a_normal_window_on_real_windows
     let b0 = create_ghost_shaped(w!("wintf-band-behind-b0"), 100);
     set_window_owner(b1, c1).expect("owner");
     set_window_owner(b0, c0).expect("owner");
-    raise_to_top(c1, HWND_TOP);
-    raise_to_top(c0, HWND_TOP);
+    insert_after(c1, HWND_TOP);
+    insert_after(c0, HWND_TOP);
     // 他のアプリの窓の代わり（描かれる普通の窓）を組より手前へ。
     let other = create_toplevel(w!("wintf-band-behind-other"), 0, 120);
-    raise_to_top(other, HWND_TOP);
+    insert_after(other, HWND_TOP);
     let ours = [b0, c0, b1, c1];
     assert_eq!(
         relative_order(&[other, b0, c0, b1, c1]),

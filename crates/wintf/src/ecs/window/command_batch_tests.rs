@@ -23,7 +23,7 @@
 //! メッセージポンプは要らない——`EndDeferWindowPos` は同一スレッドの窓へ同期 send する。
 //!
 //! 一括書込が持ち上げる `SELF_INITIATED_DEPTH` は**スレッドごとに独立**である
-//! （`command.rs` の `thread_local!`）。持ち上げ・同期送達・判定・解放はすべて `flush` を
+//! （`command.rs` の `thread_local!`）。持ち上げ・同期送達・判定・解放はすべて `flush_window_pos_commands` を
 //! 呼んだこのテストスレッドの内側で閉じるので、並列に走る他テストの `is_self_initiated()`
 //! ／`in_swp` 検査には見えない。よって本ファイルのテストは直列化の錠を取らない。
 //!

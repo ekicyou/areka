@@ -12,6 +12,7 @@ use tracing::{debug, error, trace};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+use super::lifecycle::DESPAWNED_SKIP_TAG;
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
@@ -158,6 +159,7 @@ fn track_mouse_leave(hwnd: HWND) {
 ///
 /// 位置をPointerBufferに蓄積し、hit_testでヒットしたエンティティにPointerStateを付与。
 /// 移動のたびに（World の借用の外で）離脱の見張りを掛ける。
+/// 移す先の entity が破棄済みなら位置を積まず、[`DESPAWNED_SKIP_TAG`] の `debug!` を残す。
 #[inline]
 pub(super) fn WM_MOUSEMOVE(
     world: &Rc<RefCell<EcsWorld>>,
@@ -312,8 +314,10 @@ pub(super) fn WM_MOUSEMOVE(
             let target_entity = hit_entity.unwrap_or(window_entity);
             leave_pointer(world_borrow.world_mut(), window_entity, Some(target_entity));
 
-            // 移す先に PointerState を挿入または維持
-            if let Ok(entity_ref) = world_borrow.world_mut().get_entity_mut(target_entity) {
+            // 移す先に PointerState を挿入または維持（消えた entity なら位置を積まない）
+            let target_alive = if let Ok(entity_ref) =
+                world_borrow.world_mut().get_entity_mut(target_entity)
+            {
                 let needs_insert = entity_ref.get::<PointerState>().is_none();
                 tracing::trace!(
                     entity = ?target_entity,
@@ -340,16 +344,21 @@ pub(super) fn WM_MOUSEMOVE(
                         "PointerState inserted (Enter)"
                     );
                 }
+                true
             } else {
-                tracing::warn!(
+                // bevy 0.19 の get_entity_mut(Entity) が失敗するのは NotSpawned（破棄済み）だけ
+                debug!(
                     entity = ?target_entity,
-                    "[WM_MOUSEMOVE] Failed to get entity_mut"
+                    "{DESPAWNED_SKIP_TAG} WM_MOUSEMOVE: 対象 entity は既に破棄済み（despawn）→ 位置を積まずに打ち切り"
                 );
-            }
+                false
+            };
 
             // PointerStateが存在することを保証した上で、バッファに蓄積
-            push_pointer_sample(target_entity, x as f32, y as f32, Instant::now());
-            set_modifier_state(target_entity, shift, ctrl);
+            if target_alive {
+                push_pointer_sample(target_entity, x as f32, y as f32, Instant::now());
+                set_modifier_state(target_entity, shift, ctrl);
+            }
         }
     }
 

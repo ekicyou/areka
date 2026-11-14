@@ -1,7 +1,7 @@
 //! ウィンドウ位置・サイズ・DPI変更メッセージハンドラ
 //!
 //! WM_WINDOWPOSCHANGED, WM_DPICHANGED の処理を担当する。
-//! DPI変更時のセンター座標補正ロジックもこのモジュールに含まれる。
+//! DPI変更時のセンター座標補正ロジックは `dpi_helpers.rs` にあり、ここはそれを呼ぶだけ。
 
 #![allow(non_snake_case)]
 

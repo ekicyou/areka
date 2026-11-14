@@ -2,7 +2,7 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::super::{
     BoxInset, BoxPosition, BoxSize, BoxStyle, Dimension, LayoutRoot, LengthPercentageAuto, Rect,
@@ -164,7 +164,7 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 
 /// ディスプレイ構成変更を検知し、Monitorエンティティを更新
 ///
-/// 実モニタ列挙（`enumerate_monitors`）はこの入口だけが行い、反映そのものは
+/// 構成の変化のときの実モニタ列挙（`try_enumerate_monitors`）はこの入口だけが行い、反映そのものは
 /// [`apply_monitor_snapshot`] が担う（合成モニタ表を注入して檻に入れられるようにするための
 /// 挙動不変の抽出・S4 是正の前提）。
 ///
@@ -172,7 +172,8 @@ fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
 ///
 /// 列挙が 0 台（列挙の失敗を含む）なら [`apply_monitor_snapshot`] は表を変えずに `None` を
 /// 返す。そのときは構成の変化の旗を下ろさずに戻り、次の刻みで読み直す。0 台が続く間は
-/// `zero_streak` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）は続きの最初の 1 回だけ出す。
+/// `zero_streak` で覚え、`warn!`（0 台）と頭の `info!`（構成の変化）と列挙の失敗の `error!`
+/// （[`monitors_or_log_failure`]）は続きの最初の 1 回だけ出す。
 ///
 /// # 遷移観測の刻印は World 資源から組む（design D1）
 ///
@@ -210,7 +211,10 @@ pub fn detect_display_change_system(
     };
 
     // 新しいモニターリストを取得
-    let new_monitors = crate::ecs::window::monitor::enumerate_monitors();
+    let new_monitors = monitors_or_log_failure(
+        crate::ecs::window::monitor::try_enumerate_monitors(),
+        *zero_streak,
+    );
     debug!(
         count = new_monitors.len(),
         "[detect_display_change_system] Found monitors"
@@ -241,6 +245,20 @@ pub fn detect_display_change_system(
 
     // フラグをリセット
     app.reset_display_change();
+}
+
+/// 列挙の結果を受け取り、失敗（`None`）なら空を返す。失敗の `error!` は 0 台が続いていない
+/// （`zero_streak` が偽の）ときだけ出す——失敗が続く間は続きの最初の 1 回だけ残す。
+fn monitors_or_log_failure(
+    enumerated: Option<Vec<crate::ecs::Monitor>>,
+    zero_streak: bool,
+) -> Vec<crate::ecs::Monitor> {
+    enumerated.unwrap_or_else(|| {
+        if !zero_streak {
+            error!("[detect_display_change_system] EnumDisplayMonitors failed");
+        }
+        Vec::new()
+    })
 }
 
 /// モニタ列挙結果（実列挙でも合成でもよい）をモニタ表へ反映する。

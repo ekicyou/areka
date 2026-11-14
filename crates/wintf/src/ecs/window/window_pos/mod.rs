@@ -229,8 +229,9 @@ impl WindowPos {
         self
     }
 
-    /// システム用フラグビルダー（公開用）: bool値からフラグを生成
-    /// apply_window_pos_changesシステムから利用
+    /// bool の欄から `SetWindowPos` のフラグを組む
+    /// 呼び手: `apply_window_pos_changes`（graphics/systems/window_pos.rs）、
+    /// `nudge_command`（zorder_chain.rs）、`pair_fix_command`（zorder_pair_maintain.rs）
     pub fn build_flags_for_system(&self) -> SET_WINDOW_POS_FLAGS {
         let mut flags = SET_WINDOW_POS_FLAGS(0);
 
@@ -283,8 +284,9 @@ impl WindowPos {
         flags
     }
 
-    /// ZOrderに基づくhwnd_insert_afterを取得（公開用）
-    /// apply_window_pos_changesシステムから利用
+    /// ZOrder から `SetWindowPos` の hwnd_insert_after を得る
+    /// 呼び手: `apply_window_pos_changes`（graphics/systems/window_pos.rs）、
+    /// `nudge_command`（zorder_chain.rs）、`pair_fix_command`（zorder_pair_maintain.rs）
     pub fn get_hwnd_insert_after(&self) -> Option<HWND> {
         match self.zorder {
             ZOrder::NoChange => None,

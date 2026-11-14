@@ -2,7 +2,7 @@
 //!
 //! design.md の C1（`transition_diag`）が正本である。1 回の遷移に含まれる窓書込・
 //! サーフェス更新・モニタ表更新・メッセージ受理を**単一のフレーム番号系列**の 1 本の
-//! 時系列へ並べるために、3 つの crate（wintf・areka-emo-present・areka）が同じ target と
+//! 時系列へ並べるために、3 つの crate（wintf・areka-emo-present・areka-placement）の行を組む関数が同じ target と
 //! 同じ接頭語で行を出す。その語彙をここ 1 箇所に閉じ込める。
 //!
 //! # 行の形
@@ -79,7 +79,7 @@ pub const KIND_MONITOR: &str = "monitor";
 /// # 語の選び方
 ///
 /// 既存の 11 語——wintf の 5 語（`monitor`／`write`／`flush`／`msg`／`enqueue`＝
-/// [`KIND_ALL`] から `windpi` を除いた 5 語）・areka-emo-present の 1 語（`surface`）・areka の 5 語（`snapshot`／
+/// [`KIND_ALL`] から `windpi` を除いた 5 語）・areka-emo-present の 1 語（`surface`）・areka-placement の 5 語（`snapshot`／
 /// `hold`／`ground`／`chain`／`offset`＝`PLACEMENT_KIND_ALL`）——のいずれとも衝突せず、
 /// フィールド名 [`FIELD_WIN_KIND`] と同じ「窓の」の接頭で**窓の DPI** と読める最短の語と
 /// して `windpi` を採る。
@@ -95,7 +95,7 @@ pub const KIND_ENQUEUE: &str = "enqueue";
 
 /// wintf が発行する `kind` 語の全体（判定側の語彙照合・語の一意性テストが参照する）。
 ///
-/// areka／areka-emo-present が足す `snapshot`／`surface`／`hold`／`ground`／`chain`／`offset` は
+/// areka-placement／areka-emo-present が足す `snapshot`／`surface`／`hold`／`ground`／`chain`／`offset` は
 /// それぞれの crate のレコード純関数が定義する（wintf は上位 crate の語彙を持たない）。
 pub const KIND_ALL: &[&str] = &[
     KIND_MONITOR,
@@ -140,9 +140,9 @@ pub const MSG_ALL: &[&str] = &[MSG_DPICHANGED, MSG_WINDOWPOSCHANGED, MSG_DISPLAY
 // 経路語彙（origin）のうち wintf が自分で名乗るもの
 // ---------------------------------------------------------------------------
 //
-// areka の配置経路語彙（`PlacementRoute`）は areka が定義し、wintf は `&'static str` として
-// 受け取るだけである（依存方向 wintf ← areka）。以下の 2 語は表示基盤自身が積む書込の
-// 出所であり、areka の経路語彙とは交わらない。定義元をここ 1 箇所にするのは、積み上げ元
+// 配置経路語彙（`PlacementRoute`）は areka-placement が定義し、wintf は `&'static str` として
+// 受け取るだけである（依存方向 wintf ← areka-placement）。以下の 2 語は表示基盤自身が積む書込の
+// 出所であり、areka-placement の経路語彙とは交わらない。定義元をここ 1 箇所にするのは、積み上げ元
 // （`zorder_pair_maintain`／`graphics::systems::window_pos`）と判定側が同じ語を見るためである。
 
 /// ペアの重なり維持系（`zorder_pair_maintain::pair_fix_command`）が積む Z のみの書込。
@@ -327,11 +327,11 @@ pub struct Stamp {
 /// 窓書込を要求した経路の語彙タグ。
 ///
 /// 「どの経路が・どの窓へ」を書込レコードの 1 行に載せるためのもので、wintf は中身の
-/// 意味を知らない（areka の `PlacementRoute` などを `&'static str` として受け取るだけ＝
-/// 依存方向 wintf ← areka を保つ）。
+/// 意味を知らない（areka-placement の `PlacementRoute` などを `&'static str` として受け取るだけ＝
+/// 依存方向 wintf ← areka-placement を保つ）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WriteTag {
-    /// 要求元の経路語彙（例: areka の `PlacementRoute::as_str()`・`"zorder-pair"`）。
+    /// 要求元の経路語彙（例: areka-placement の `PlacementRoute::as_str()`・`"zorder-pair"`）。
     pub origin: &'static str,
     /// キャラ番号（持たない窓は `None`＝行では番兵）。
     pub scope: Option<u32>,
