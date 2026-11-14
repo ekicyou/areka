@@ -149,7 +149,7 @@ tools/perf/
 |---|---|---|
 | `perf_lines.py`（新規） | §Components の「行の読み方」の API。U+FEFF の字は書かず `decode("utf-8-sig")`。`read_cpu_csv` は `math.isfinite` でない値を壊れた行に・行番号を振ってから空行を飛ばす | #40・#7・#13・#51 |
 | `perf_selftest_common.py`（新規） | §Components の「自己較正の支え」の API | #41・#1・#25 ほか |
-| `judge_perf_selftest_inproc.py`（新規） | `run(judge) -> list[str]`（食い違いの理由の一覧）。T6・T8・T24 の 3 つの確かめと、日本語の文の OSError での読みの失敗の 2 つ（`case.txt` の失敗の文・走行の入力の stderr が ASCII・根の道筋は伏せて見る） | #6・#8・#24 |
+| `judge_perf_selftest_inproc.py`（新規） | `run(judge) -> tuple[int, list[str]]`（確かめの数と食い違いの理由の一覧。確かめが 0 件なら較正されていないとして赤）。T6・T8・T24 の 3 つの確かめと、日本語の文の OSError での読みの失敗の 2 つ（`case.txt` の失敗の文・走行の入力の stderr が ASCII・根の道筋は伏せて見る） | #6・#8・#24 |
 | `fixtures/generate_more.py`（新規） | §Testing Strategy の判定の検体の組み立て・`CASES` | #2・#5・#7・#9・#13・#28〜#30・#43 |
 | `judge-perf.py` | 754-822・1116-1164・1209-1213 を `perf_lines` の読み込みへ（`_FIELD_KEY_RE`・`CpuSample` は同じ名前で読み込む・`read_cpu_csv` は `J_CPU_CSV_HEADER` と `inconclusive` と「要件 2.5」の文を渡す）。#2 の 2 組（D4）。`main` に `except Exception`（traceback を stderr・3）。関門 2473-2524 は未観測を集めるだけにして `if failures:` の後で判定不能。`render_metrics` は時刻の読めない catch-up があれば `catchup_count` を `-`。profile の関門を `(meta_profile or "").strip().lower() not in ("short", "long")`。#36〜#39 の消し・#48 の `partial`・#49・#50・#42〜#46・#74〜#77 の文。終わりの行（D9）。版（D10）。`--selftest` の終わりで `judge_perf_selftest_inproc.run(sys.modules[__name__])` | #2・#5〜#9・#13・#24・#36〜#46・#48〜#51・#74〜#77 |
 | `judge_perf_catchup.py` | 定常の catch-up を呼び手から受ける（#39）・`_timedelta_seconds` を消す・頭書きの「3,500 行」 | #39・#47・#81 |
@@ -413,11 +413,12 @@ def finish(results: list[tuple[str, bool, list[str]]], reproduced: set[int], req
 | Requirements | 4.7・4.8 |
 
 ```python
-def run(judge: types.ModuleType) -> list[str]: ...   # 食い違いの理由の一覧（空なら合格）
+def run(judge: types.ModuleType) -> tuple[int, list[str]]: ...   # (確かめの数, 食い違いの理由の一覧)。理由が空で数が 1 以上なら合格
 ```
 - T6: `judge.scan_log` を `RuntimeError` を投げる関数に差し替え、`fixtures/H11_*` で `main([... "--mode", "verdict", ...])` → 3・stderr に `Traceback` と最後の行 `JUDGE-PERF RESULT code=3`。
 - T8: `judge.FRAME_INTERVAL_JUDGED_SERIES` を 2 系列（今の系列と、検体に無い系列）に差し替え、明示指定の系列が上限を越える検体（`generate_more` の `S3_explicit_over_limit`）で `main` → 1（不合格が判定不能より先）。
 - T24: 判定不能の検体（`E1_*`）で `main` → stderr の全行が ASCII・最後の行が `JUDGE-PERF RESULT code=2`。
+- 日本語の文の OSError: `Path.read_text`／`read_bytes` を `OSError(13, 日本語の文)` を投げる関数に差し替え、`case.txt` の失敗の文と走行の入力の stderr が ASCII のままで `[Errno 13]` を含むこと（含まなければ、文を `ascii(str(exc))` でなく別の形にした直しも赤にならない）。
 - 差し替えは `with unittest.mock.patch.object(...)` の中だけ。出力は `io.StringIO` へ。乱数・時計・一時フォルダを使わない。
 
 ### 判定の検体の組み立て（`fixtures/generate_more.py`）

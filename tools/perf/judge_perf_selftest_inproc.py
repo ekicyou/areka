@@ -141,11 +141,11 @@ def run(judge: types.ModuleType) -> tuple[int, list[str]]:
             details = ["(no failure raised)"]
         except judge.JudgeError as exc:
             details = exc.details
-    if not details or not all(detail.isascii() for detail in details):
+    if not details or not all(detail.isascii() for detail in details) or not any("[Errno 13]" in d for d in details):
         reasons.append(f"case.txt unreadable (localized OSError): details {ascii(details)}")
     with mock.patch.object(judge.Path, "read_bytes", localized_oserror):
         code, _out, err = _call(judge, "H11_healthy_judged_series")
-    if code != 3 or "cannot read " not in err or _non_ascii(err):
+    if code != 3 or "cannot read " not in err or "[Errno 13]" not in err or _non_ascii(err):
         reasons.append(f"run input unreadable (localized OSError): exit {code}, stderr {ascii(err)}")
 
     # T8: 明示指定 2 系列で A が上限越え・B が未観測なら不合格(1)。不合格が判定不能より先（#8）。
