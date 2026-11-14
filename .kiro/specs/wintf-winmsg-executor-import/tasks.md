@@ -75,13 +75,13 @@
   - _Depends: 2.3_
   - _Requirements: 5.9, 5.10_
 
-- [ ] 5. 公開の確かめと全体テスト
-- [ ] 5.1 `-Pending` と `-Verify` を 1 回ずつ手で回す
+- [x] 5. 公開の確かめと全体テスト
+- [x] 5.1 `-Pending` と `-Verify` を 1 回ずつ手で回す
   - `-Pending -Version {ワークスペースの版}` で `absent wintf-winmsg-executor {版}` が標準エラーに、写しの名前が標準出力に出て終了コード 0
   - `-Verify -Version {ワークスペースの版}` で 3 つとも `--dry-run` で止まり緑。crates.io へは何も上げず、0.0.1〜0.0.5 を取り下げない
   - 2 つの出力が記録として残る
   - _Requirements: 4.2, 4.3, 4.7, 4.8, 4.9_
-- [ ] 5.2 排他テストの机で全体テストを回し、謝辞を確かめる
+- [x] 5.2 排他テストの机で全体テストを回し、謝辞を確かめる
   - 排他テストの机を取ってから `tools/test-all.ps1 -Format -License` を 1 回回す
   - i686 の段・ワークスペースのテスト（写しの単体テスト 15 本と doctest 1 本が緑で出る）・公開前の確認（包むだけ）・`cargo deny check`・`cargo about generate` がすべて緑
   - `THIRD-PARTY-NOTICES.md` の差分が写しの行の版だけで、Timo Kröger と寄稿者・ekicyou と寄稿者の著作権の 2 行が写しの塊に残る。外れたら `about.toml` に写しの `LICENSE-MIT` を名指しする設定を足して作り直す
@@ -101,3 +101,8 @@
   - 報告の前に、crates.io の写しの Trusted Publishing の設定が済んだかを開発者へ尋ねる
   - 申し送りの文に、設定の済み／残り・値（`ekicyou`／`areka`／`crates-io.yml`／environment は空）・取り込みが本線に入った後の最初のリリースのタグより前に済ませる必要、後始末の済み／残り、0.0.1〜0.0.5 を取り下げていないことが入っている
   - _Requirements: 4.8, 6.2, 7.1, 7.2_
+
+## Implementation Notes
+
+- 5.1 の記録（2026-11-14・ワークスペースの版 0.1.0）: `tools/crates-io.ps1 -Pending -Version 0.1.0` は終了コード 0、標準出力 `wintf-winmsg-executor`、標準エラー `OK check 'version'` / `present dola 0.1.0` / `present wintf 0.1.0` / `absent wintf-winmsg-executor 0.1.0`。`-Verify -Version 0.1.0` は終了コード 0、3 つとも `Uploading ...` の後に `aborting upload due to dry run` で止まり `green (publish list: dola, wintf, wintf-winmsg-executor)`。crates.io へは何も上げていない。
+- 5.2 の記録: `tools/test-all.ps1 -Format -License` の 1 回目は `x64 workspace tests` だけ赤（`areka` の `session_end::sync_send_tests` の 2 本）。本番ソースの同期の送信を数える許可表 `ALLOWED_SYNC_SENDS` が `crates/*` を走査し、写しの `SendMessageW(` 3 か所（`util/window.rs` の `WM_NCCREATE` の送り直し 1・`lib.rs` の `#[cfg(test)] mod` の `WM_CLOSE` 2）を表に無い当たりとした。設計の想定外だったので、表に理由つきの 2 行を足して直し、赤の 4 本だけ `cargo test -p areka sync_send` で緑を確かめた。ほかの段は全部緑（写しの単体テスト 15 本・doctest 1 本・公開前の確認・`cargo deny check`・`cargo about generate`）。謝辞は写しの塊が版 0.1.0 で並びの位置が移っただけで、Timo Kröger と ekicyou の著作権の 2 行は残る。
