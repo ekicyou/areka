@@ -141,7 +141,7 @@
   - _Dispatch: standard, effort high — 書く道を 1 本にまとめ、消す道と失敗の道を足す_
   - _Requirements: 6.6, 8.2, 8.4, 9.1, 9.2_
 
-- [ ] 5.3 バルーン位置の初期化で記憶の鍵を 1 回で消す（U15・指摘 17・50）
+- [x] 5.3 バルーン位置の初期化で記憶の鍵を 1 回で消す（U15・指摘 17・50）
   - 配置の記憶の側に、鍵を消す口（書く口の兄弟・配線が無ければ同じく何もしない）を足す。
   - 初期化は戻せた全スコープのずらしの鍵を集めて、繰り返しの後に 1 回だけ消す。説明を「記憶の鍵を消す」に直す。
   - `sakura-script.toml` の `\![execute,resetballoonpos]` の項目と `COMPAT_ARCHITECTURE.md` の 8 章を同じ変更で直す。
@@ -265,3 +265,4 @@
 - 4.4 のレビュー（8.1・8.2 で拾う）: `crates/areka/examples/collision-probe.rs:103・107・111` と `doc/COMPAT_ARCHITECTURE.md:212` の `lib.rs` の行番号はこの spec の前から古い（`load_scope_windowpositions` は今 L582・`prepare_stages` は L381）。
 - 4.5: 追随の持ち物 `follow_drag_end_persist_tests.rs` を 4 行直した（`load_restored_state` の引数を消したため・避けられない）。8.2 の申し送りで `audit-placement-follow` へ渡す。同じく申し送りの候補: 作業領域の写しが追随の側に 2 か所残る（`follow/work_area.rs:L49-L54`・`transition_diag.rs:L681`）・`follow/work_area.rs:L42` に古い名前 `primary_work_area`。
 - 5.2 のレビューの提案（8.1 で拾う）: `Effect::PersistRemove` の doc にタスク番号（「5.2 が…」）が入っている。無いファイルから鍵を消すと `format-version = 1` だけのファイルができる（読み手は鍵が無いのと同じに扱うので害は無い）。
+- 7.2 の前提: `audit-wintf-input` が自分の 7.1 でドラッグの知らせの `Messages<…>` を消し、`balloon_lock_drag_tests.rs`（L99-101・L444 付近）と `follow_drag_end_gate_tests.rs`（L66-72 付近）を直す。相手が先に着地し、7.2 はその後の形の上でテストの小道具をまとめる。

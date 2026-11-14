@@ -6,13 +6,15 @@
 //! （形式・原子性・寛容読取・スコープ分離）は sylphya の領分であり、本モジュールは
 //! その契約（[`areka_sylphya::PersistKey`]／[`areka_sylphya::Axis`]）を消費するのみ。
 //!
-//! 記憶への送り口は [`persist_entries`] 1 つで、今の呼び手は次の 5 か所:
+//! 記憶への送り口は書く [`persist_entries`] と消す [`forget_entries`] の 2 つで、書く呼び手は次の 4 か所:
 //! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置）
 //! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
 //! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
 //! - 起動の最後に並べ終えた時点（[`persist_unremembered_char_positions`]・記憶に位置が無い
 //!   キャラだけ）
-//! - バルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・標準のずらし）
+//!
+//! 消す呼び手はバルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・ずらしの鍵）
+//! だけ。
 //!
 //! 戻す側（[`apply_restored_placements`]）は純関数のままで、送り口に届かない。
 //! 並べ終えた時点の時機は、完了 spec `areka-P0-position-persist` の要件 1.9（ドラッグの確定でだけ
@@ -669,8 +671,8 @@ fn warn_unusable_pair(
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。[`persist_entries`] の呼び手（今の 5 か所はモジュールの doc に並べる）が、
-/// この publisher の clone 送信端から保存 entries を投函する。
+/// State Management・軸B）。[`persist_entries`] の呼び手（今の 4 か所はモジュールの doc に並べる）が、
+/// この publisher の clone 送信端から保存 entries を投函する（[`forget_entries`] も同じ）。
 pub struct PersistWiring {
     /// sylphya アクターへの変異投函の送信端（`persist_put` の fire-and-forget 投函に用いる）。
     pub publisher: SylphyaPublisher,
@@ -702,6 +704,21 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
     let entries = with_adjacency_marks(world, entries);
     // Ghost スコープ固定（7.1）。fire-and-forget＝UI スレッド非ブロッキング（同期 IO を持ち込まない）。
     wiring.publisher.persist_put(PersistScope::Ghost, entries);
+}
+
+/// 記憶から `keys` を消す送り口（[`persist_entries`] の兄弟・Ghost スコープ固定・fire-and-forget）。
+///
+/// [`PersistWiring`] 不在は [`persist_entries`] と同じく `debug!` ＋ no-op。消す鍵に隣り合いの印は
+/// 足さない（位置を書かないので印の時機ではない）。
+pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
+    let Some(wiring) = world.get_non_send::<PersistWiring>() else {
+        debug!(
+            key_count = keys.len(),
+            "PersistWiring 不在: 鍵を消す投函を no-op（fallback boot 経路の縮退・6.2）"
+        );
+        return;
+    };
+    wiring.publisher.persist_remove(PersistScope::Ghost, keys);
 }
 
 /// 送る束に窓の位置の鍵（[`PersistKey::WindowPos`]）があれば、触れる組 (k−1, k)・(k, k+1) の

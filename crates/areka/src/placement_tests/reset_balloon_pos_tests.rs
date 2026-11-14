@@ -5,12 +5,14 @@
 //! `spawn_ghost_windows` で組み、材料は準備が運んだ [`DefaultPlacementBasis`] を置く。標準の位置は
 //! 準備が解いた位置そのもの（同じ窓寸・作業領域・DPI）なので、ドラッグでずらした後に初期化すると
 //! そこへ戻ることを確かめる。記憶は実物のアクター（`spawn_sylphya`）と偽の保存先に置いて読み戻す
-//! （`reset_pos_tests.rs` と同じやり方）。
+//! （`reset_pos_tests.rs` と同じやり方）。初期化は記憶のずらしの鍵を消す（次の起動は
+//! キーワードから標準を導き直す・audit-placement-core 指摘 17・50）。
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
@@ -25,7 +27,10 @@ use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::runtime::switch_assets::{SwapBuilt, SwitchBuildRequest, build_swap};
 use areka_placement::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
-use areka_placement::persist::PersistWiring;
+use areka_placement::persist::{
+    PersistWiring, apply_restored_placements, balloon_offset_entries, char_pos_entries,
+    persist_entries,
+};
 use areka_placement::prepare_ghost_windows_with_work_area;
 use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use areka_placement::reset_pos::DefaultPlacementBasis;
@@ -39,12 +44,14 @@ use temp_path_kit::TempPath;
 /// ドラッグでずらしたバルーンのずらし（標準のずらしと必ず違う値）。
 const DRAGGED: PointPx = PointPx { x: 777, y: -333 };
 
-struct SharedFakeIo(Arc<FakePersistIo>);
+/// 偽の保存先を共有し、commit の回数を数える。
+struct SharedFakeIo(Arc<FakePersistIo>, Arc<AtomicUsize>);
 impl PersistIo for SharedFakeIo {
     fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
         self.0.read(path)
     }
     fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        self.1.fetch_add(1, Ordering::SeqCst);
         self.0.commit(path, content)
     }
 }
@@ -55,6 +62,7 @@ struct Rig {
     windows: GhostWindows,
     placements: Vec<ScopePlacement>,
     shared: Arc<FakePersistIo>,
+    commits: Arc<AtomicUsize>,
     roots: ScopeRoots,
     parts: SylphyaParts,
 }
@@ -66,13 +74,14 @@ impl Rig {
         let prepared = prepare_ghost_windows_with_work_area(ghost, balloon, WA, Some(96))
             .expect("起動の配置の準備は成功する");
         let shared = Arc::new(FakePersistIo::new());
+        let commits = Arc::new(AtomicUsize::new(0));
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone())),
+            io: Box::new(SharedFakeIo(shared.clone(), commits.clone())),
             runtime_sink: None,
         });
         let mut world = World::new();
@@ -105,6 +114,7 @@ impl Rig {
             windows,
             placements: prepared.placements,
             shared,
+            commits,
             roots,
             parts,
         }
@@ -142,10 +152,16 @@ impl Rig {
         load_scope(
             PersistScope::Ghost,
             &self.roots,
-            &SharedFakeIo(self.shared.clone()),
+            &SharedFakeIo(self.shared.clone(), Arc::default()),
         )
         .into_iter()
         .collect()
+    }
+
+    /// アクターが処理し終えた時点の commit の回数。
+    fn commit_count(&self) -> usize {
+        self.parts.publisher.barrier().expect("barrier が返る");
+        self.commits.load(Ordering::SeqCst)
     }
 
     fn finish(self) {
@@ -187,10 +203,10 @@ fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
 }
 
 /// 7.1・7.2・7.3・9.5: ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
-/// 部品のずらしの基準とキーワードの素材が標準どおりに入り、記憶に標準のずらしが届き、
+/// 部品のずらしの基準とキーワードの素材が標準どおりに入り、記憶のずらしの鍵が消え、
 /// スコープごとに 1 行記録される。キャラクターの窓・`Anchored`・`AnchorSource`・組の帳簿は変わらない。
 #[test]
-fn dragged_balloons_return_to_standard_and_are_persisted() {
+fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
     with_com_initialized(|| {
         let kw_root = TempPath::new("placement-prepare");
         let (kw_ghost, kw_balloon) = keyword_fixture(&kw_root);
@@ -214,6 +230,9 @@ fn dragged_balloons_return_to_standard_and_are_persisted() {
                 .unwrap();
             rig.world.insert_resource(ledger.clone());
             rig.drag_balloons();
+            for scope in rig.windows.scopes().collect::<Vec<_>>() {
+                persist_entries(&rig.world, balloon_offset_entries(scope as u32, DRAGGED));
+            }
 
             let scopes: Vec<usize> = rig.windows.scopes().collect();
             let chars_before: Vec<(Point, Option<Anchored>, Option<AnchorSource>)> = scopes
@@ -264,12 +283,12 @@ fn dragged_balloons_return_to_standard_and_are_persisted() {
                     chars_before[i],
                     "{case}: キャラクターの窓は触らない"
                 );
-                // 記憶には標準のずらし（7.3）。
+                // 記憶のずらしの鍵は消える（7.3・指摘 17）。
                 let off = p.balloon_offset_base.offset;
                 assert_eq!(
                     saved_offset(&store, p.scope as u32),
-                    Some((off.x.to_string(), off.y.to_string())),
-                    "{case}: 記憶に標準のずらし: {store:?}"
+                    None,
+                    "{case}: 記憶にずらしが残らない: {store:?}"
                 );
                 // 記録の欄（9.5）。
                 let log = logs
@@ -306,6 +325,74 @@ fn dragged_balloons_return_to_standard_and_are_persisted() {
             );
             rig.finish();
         }
+    });
+}
+
+/// 指摘 17・50: 初期化は戻した全スコープのずらしの鍵を 1 回の commit で消し、ほかの表（窓の位置・
+/// 隣り合いの印）は残す。次の起動の戻しは記憶のずらしを使わず、キーワードの標準（起動の準備の
+/// ずらしの基準とキーワードの素材）になる。
+#[test]
+fn reset_forgets_offsets_in_one_commit_and_next_boot_uses_the_keyword_standard() {
+    with_com_initialized(|| {
+        let root = TempPath::new("placement-prepare");
+        let (ghost, balloon) = keyword_fixture(&root);
+        let mut rig = Rig::new(&ghost, &balloon, None);
+        let scopes: Vec<usize> = rig.windows.scopes().collect();
+        assert_eq!(scopes.len(), 2, "前提: 2 スコープの検体");
+        assert!(
+            rig.placements
+                .iter()
+                .all(|p| p.balloon_keyword_base.is_some()),
+            "前提: どのスコープもキーワードの素材を持つ"
+        );
+        rig.drag_balloons();
+        for &scope in &scopes {
+            let c = rig.pos(rig.char_window(scope));
+            let mut entries = char_pos_entries(scope as u32, PointPx { x: c.x, y: c.y });
+            entries.extend(balloon_offset_entries(scope as u32, DRAGGED));
+            persist_entries(&rig.world, entries);
+        }
+        let seeded = rig.load();
+        for &scope in &scopes {
+            assert!(
+                saved_offset(&seeded, scope as u32).is_some(),
+                "前提: ずらしを覚えている"
+            );
+        }
+        let before = rig.commit_count();
+
+        assert!(reset_balloon_positions(
+            &mut rig.world,
+            BalloonResetTrigger::Menu
+        ));
+
+        assert_eq!(
+            rig.commit_count() - before,
+            1,
+            "2 スコープでも commit は 1 回"
+        );
+        let store = rig.load();
+        let kept: HashMap<PersistKey, String> = seeded
+            .into_iter()
+            .filter(|(k, _)| !matches!(k, PersistKey::BalloonOffset { .. }))
+            .collect();
+        assert!(!kept.is_empty(), "前提: ずらしのほかの表がある");
+        assert_eq!(store, kept, "ずらしの鍵だけが消え、ほかの表は残る");
+
+        let entries: Vec<(PersistKey, String)> = store.into_iter().collect();
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![WA],
+        };
+        let restored = apply_restored_placements(rig.placements.clone(), &entries, &snapshot);
+        for (r, p) in restored.iter().zip(&rig.placements) {
+            assert_eq!(
+                (r.balloon_offset_base, r.balloon_keyword_base),
+                (p.balloon_offset_base, p.balloon_keyword_base),
+                "scope={}: 次の起動はキーワードの標準",
+                p.scope
+            );
+        }
+        rig.finish();
     });
 }
 

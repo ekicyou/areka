@@ -4,13 +4,16 @@
 //! 標準の位置は、シェルの切り替えが部品を入れ直すのと同じ [`resolve_standard_scopes`] で解き
 //! （記憶は重ねない）、同じ [`reinstall_balloon`] で据え直す。材料（[`DefaultPlacementBasis`]）は起動とシェルの切り替えが同じ形で置き、
 //! 窓の今の DPI で解くので、同じシェル・同じ拡大率なら同じ位置になる（7.4）。
+//! 記憶のずらしの鍵は戻せた全スコープの分を集めて 1 回で消す（次の起動はキーワードから標準を
+//! 導き直す・7.3・audit-placement-core 指摘 17・50）。
 //! キャラクターの窓・`Anchored`・`AnchorSource`・窓の組の帳簿には触らない（7.2）。
 
+use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::world::World;
 use tracing::{info, warn};
 use wintf::ecs::WindowPos;
 
-use super::persist::{balloon_offset_entries, persist_entries};
+use super::persist::forget_entries;
 use super::reseed::{StandardScope, reinstall_balloon, resolve_standard_scopes};
 use super::reset_pos::DefaultPlacementBasis;
 use super::spawn::GhostWindows;
@@ -33,7 +36,7 @@ impl BalloonResetTrigger {
     }
 }
 
-/// すべてのバルーンを各キャラクターの窓に対する標準の位置へ戻し、記憶へ書く。1 つでも戻せたら真。
+/// すべてのバルーンを各キャラクターの窓に対する標準の位置へ戻し、記憶の鍵を消す。1 つでも戻せたら真。
 ///
 /// 材料（[`DefaultPlacementBasis`]・[`GhostWindows`]）が無ければ
 /// `warn!(event = "balloon_pos_reset_skipped", reason)` を出して何もしない。標準の位置を解けなかった
@@ -68,13 +71,16 @@ pub fn reset_balloon_positions(world: &mut World, trigger: BalloonResetTrigger) 
         }
     }
 
-    let mut reset = false;
+    let mut forget = Vec::new();
     for StandardScope { running, placement } in resolved {
         let scope = running.input.scope;
         let base = placement.balloon_offset_base;
         reinstall_balloon(world, &running, base, placement.balloon_keyword_base);
-        // 記憶へ標準のずらしを書く（次の起動も標準の位置に出る・7.3・裁定 8）。
-        persist_entries(world, balloon_offset_entries(scope as u32, base.offset));
+        let scope_u32 = scope as u32;
+        forget.extend([Axis::X, Axis::Y].map(|axis| PersistKey::BalloonOffset {
+            scope: scope_u32,
+            axis,
+        }));
         let to = world
             .get::<WindowPos>(running.balloon_window)
             .and_then(|wp| wp.position);
@@ -88,7 +94,11 @@ pub fn reset_balloon_positions(world: &mut World, trigger: BalloonResetTrigger) 
             trigger = trigger.as_str(),
             "バルーンを標準の位置へ戻した"
         );
-        reset = true;
+    }
+    let reset = !forget.is_empty();
+    if reset {
+        // 記憶のずらしの鍵を 1 回で消す（次の起動もキーワードから標準の位置に出る・7.3・裁定 8）。
+        forget_entries(world, forget);
     }
     reset
 }
