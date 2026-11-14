@@ -1,4 +1,4 @@
-//! 追随レコードの判定器の負のテスト（audit の指摘 12・13・27）。
+//! 追随レコードの判定器の負のテスト（audit の指摘 12・13・14・27）。
 //!
 //! 壊れた行・読めない欄が**合格に化けない**ことを固定する。どれも既知の合格ログ
 //! [`pass_lines`] を 1 箇所ずつ壊して作る。
@@ -13,8 +13,9 @@ use super::{OffsetViolation, judge_offset_log};
 use crate::placement_tests::transition_judge::parse_transition_line;
 use crate::placement_tests::transition_judge::test_support::log_of;
 use areka_placement::transition_diag::{
-    FIELD_BASE_DPI, FIELD_BASE_OFFSET, KIND_OFFSET, OFFSET_VERDICT_KEYWORD_PENDING,
-    OFFSET_VERDICT_RESCALED,
+    FIELD_BASE_DPI, FIELD_BASE_OFFSET, FIELD_NEW_OFFSET, KIND_OFFSET, OFFSET_VERDICT_ANCHORED,
+    OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_SATURATED,
+    OFFSET_VERDICT_UNCHANGED, OFFSET_VERDICT_UNRESOLVED,
 };
 use wintf::ecs::window::transition_diag::{FIELD_KIND, FIELD_SCOPE};
 
@@ -179,6 +180,220 @@ fn a_keyword_scope_measured_only_at_an_identity_ratio_is_red() {
         OFFSET_VERDICT_RESCALED,
     );
     lines[14] = gate(40, 1);
+    let report = judge_offset_log(&log_of(&lines));
+    assert_eq!(
+        report.violations,
+        vec![OffsetViolation::KeywordScopeUnmeasured { scope: Some(1) }],
+        "{report}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 判定器の分岐（audit の指摘 14 ⑵⑶⑷）
+// ---------------------------------------------------------------------------
+
+/// 合格ログの scope 0 の T2・T3（往復の戻り）を、基準を据え直した行へ替える。
+fn scope0_rebased(t2: String, t3: String) -> Vec<String> {
+    let mut lines = pass_lines();
+    lines[9] = t2;
+    lines[13] = t3;
+    lines
+}
+
+#[test]
+fn a_rebased_base_offset_splits_the_round_trip_key() {
+    // 14 ⑵ T2 の前にドラッグで基準が (12,20)@96 へ据え直された。T0 の (20,40) と T2 の
+    // (24,40) は別の基準の値なので、往復の破れに数えない。
+    let lines = scope0_rebased(
+        offset(
+            30,
+            0,
+            Some(96),
+            192,
+            (12, 20),
+            (10, 20),
+            (24, 40),
+            OFFSET_VERDICT_RESCALED,
+        ),
+        offset(
+            40,
+            0,
+            Some(96),
+            96,
+            (12, 20),
+            (24, 40),
+            (12, 20),
+            OFFSET_VERDICT_RESCALED,
+        ),
+    );
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(!report.failed(), "{report}");
+}
+
+#[test]
+fn a_rebased_base_dpi_splits_the_round_trip_key() {
+    // 14 ⑵ 基準の値は (10,20) のまま、属する DPI だけが 192 へ据え直された。T0 の (20,40) と
+    // T2 の (10,20) は別の基準の値なので、往復の破れに数えない。
+    let lines = scope0_rebased(
+        offset(
+            30,
+            0,
+            Some(192),
+            192,
+            (10, 20),
+            (10, 20),
+            (10, 20),
+            OFFSET_VERDICT_UNCHANGED,
+        ),
+        offset(
+            40,
+            0,
+            Some(192),
+            96,
+            (10, 20),
+            (10, 20),
+            (5, 10),
+            OFFSET_VERDICT_RESCALED,
+        ),
+    );
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(!report.failed(), "{report}");
+}
+
+#[test]
+fn a_residual_of_exactly_the_allowance_is_green() {
+    // 14 ⑶ 基準 (24,-12)@192 を 96 へ引き直した厳密値は (12,-6)。x の 15 は残差ちょうど 3.0px
+    // ＝許容量「以内」なので緑。
+    let mut lines = pass_lines();
+    lines[14] = offset(
+        40,
+        1,
+        Some(192),
+        96,
+        (24, -12),
+        (24, -12),
+        (15, -6),
+        OFFSET_VERDICT_RESCALED,
+    );
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(!report.failed(), "{report}");
+}
+
+#[test]
+fn every_stable_verdict_that_moved_the_value_is_red() {
+    // 14 ⑷ 値を動かさない 4 語のどれで値が動いても `ValueMoved` が立つ（T3 の scope 2 に置く）。
+    for (base_dpi, new_dpi, verdict) in [
+        (None, 96, OFFSET_VERDICT_ANCHORED),
+        (Some(96), 96, OFFSET_VERDICT_UNCHANGED),
+        (Some(192), 0, OFFSET_VERDICT_KEYWORD_PENDING),
+        (Some(192), 96, OFFSET_VERDICT_UNRESOLVED),
+    ] {
+        let mut lines = pass_lines();
+        lines[15] = offset(40, 2, base_dpi, new_dpi, (7, 7), (7, 7), (4, 4), verdict);
+        let report = judge_offset_log(&log_of(&lines));
+        assert!(
+            report.violations.iter().any(|violation| matches!(
+                violation,
+                OffsetViolation::ValueMoved { transition: 3, scope: Some(2), verdict: moved, .. }
+                    if moved == verdict
+            )),
+            "{verdict}: {report}"
+        );
+    }
+}
+
+#[test]
+fn a_non_identity_ratio_expects_rescaled_or_saturated() {
+    // 14 ⑷ 比が恒等でない腕（T0 の scope 0・96 → 192）。飽和は許し、据え置きの語は赤。
+    let mut lines = pass_lines();
+    lines[1] = offset(
+        10,
+        0,
+        Some(96),
+        192,
+        (10, 20),
+        (10, 20),
+        (20, 40),
+        OFFSET_VERDICT_SATURATED,
+    );
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(!report.failed(), "{report}");
+
+    lines[1] = offset(
+        10,
+        0,
+        Some(96),
+        192,
+        (10, 20),
+        (20, 40),
+        (20, 40),
+        OFFSET_VERDICT_UNCHANGED,
+    );
+    let report = judge_offset_log(&log_of(&lines));
+    assert_eq!(
+        report.violations,
+        vec![OffsetViolation::UnexpectedVerdict {
+            transition: 0,
+            scope: Some(0),
+            verdict: OFFSET_VERDICT_UNCHANGED.to_owned(),
+            expected: &[OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_SATURATED],
+        }],
+        "{report}"
+    );
+}
+
+#[test]
+fn an_identity_ratio_with_the_current_value_on_the_base_expects_unchanged() {
+    // 14 ⑷ 恒等比の腕で現在値が基準と同じ（T2 の scope 1・192 → 192）なら、期待は据え置きの語。
+    let mut lines = pass_lines();
+    lines[10] = offset(
+        30,
+        1,
+        Some(192),
+        192,
+        (25, -11),
+        (25, -11),
+        (25, -11),
+        OFFSET_VERDICT_RESCALED,
+    );
+    let report = judge_offset_log(&log_of(&lines));
+    assert_eq!(
+        report.violations,
+        vec![OffsetViolation::UnexpectedVerdict {
+            transition: 2,
+            scope: Some(1),
+            verdict: OFFSET_VERDICT_RESCALED.to_owned(),
+            expected: &[OFFSET_VERDICT_UNCHANGED],
+        }],
+        "{report}"
+    );
+}
+
+#[test]
+fn an_unreadable_point_field_is_a_malformed_record() {
+    // 14 ⑷ `new_offset=abc` は `x,y` の形でない＝形の壊れた行。
+    let lines = t0_scope0_with(
+        &format!(" {FIELD_NEW_OFFSET}=20,40 "),
+        &format!(" {FIELD_NEW_OFFSET}=abc "),
+    );
+    assert!(malformed_in_t0(&lines, FIELD_NEW_OFFSET));
+}
+
+#[test]
+fn a_zero_base_dpi_is_not_divided_by() {
+    // 14 ⑷ `base_dpi=0` の `rescaled` は残差を測らない（0 割りしない）。scope 1 の測れる行は
+    // これだけなので、測れていないとして立つ。
+    let mut lines = pass_lines();
+    lines[14] = offset(
+        40,
+        1,
+        Some(0),
+        96,
+        (25, -11),
+        (25, -11),
+        (13, -6),
+        OFFSET_VERDICT_RESCALED,
+    );
     let report = judge_offset_log(&log_of(&lines));
     assert_eq!(
         report.violations,
