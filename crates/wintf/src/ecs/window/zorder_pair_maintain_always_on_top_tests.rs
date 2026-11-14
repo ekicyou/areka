@@ -33,6 +33,15 @@
 //! `HWND_TOP` は必ずその列の先頭になる）。
 //! 一方、常時最前面の印そのものはトップレベル窓でしか意味を持たないので、印を測る側は
 //! トップレベル窓で作る（印の読み戻しは割り込みの影響を受けず決定論的である）。
+//!
+//! # 明示実行へ隔離した 3 本
+//!
+//! 次の 3 本は `#[ignore]` と本体 1 行目の門（`require_explicit_real_window_run`）で
+//! 既定の走行から外してある（根治の引受先は `zorder-chain-residue` の A-1）。
+//!
+//! - `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`（帯の印だけを見る）
+//! - `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`
+//! - `a_pair_inside_the_band_is_fixed_directly_above_the_character_within_the_band`
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
@@ -250,7 +259,7 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
 /// 保証にならない——実際に指令を発行して印を読み戻す必要がある。
 ///
 /// 末尾の対照は 2 つ置いてある。①帯から外す指令を出せば印は実際に落ちる（読み取りが
-/// 恒真ではない）。②帯の外の窓を帯の中の窓のすぐ手前へ入れると印が付く（＝挿入位置が
+/// 恒真ではない）。②帯の外の窓を帯の中の窓のすぐ背後へ入れると印が付く（＝挿入位置が
 /// 帯を跨ぐと所属が動くという OS の性質そのもの）。
 ///
 /// **本テストが帯を跨がないのは、挿入位置に相方そのものを渡しているからである**——
@@ -261,7 +270,7 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
 /// [`a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band`] が
 /// 持つ。対照②はその危険が実在する（＝是正が要る）ことを実測で確定させるために置いてある。
 #[test]
-#[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
+#[ignore = "帯から外す指令が効かない回がある（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
 fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
     require_explicit_real_window_run();
 
@@ -272,7 +281,8 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
         "前提: ペアの 2 窓とも常時最前面の帯に居るはず"
     );
 
-    // 腕①「バルーンをキャラのすぐ手前へ」（要件 1.2）
+    // 腕①（`PlaceAboveOverBelow` の `After`・要件 1.2）の形の指令。挿入位置にキャラそのものを渡すので
+    // バルーンはキャラのすぐ背後へ入る（本番はキャラの最も近い可視の手前の窓を渡す）。見るのは帯の印だけ。
     SetWindowPosCommand::enqueue(pair_fix_command(balloon, InsertSpec::After(character)));
     flush_window_pos_commands();
     assert!(is_always_on_top(balloon), "腕①でバルーンが帯から出た");
@@ -317,7 +327,7 @@ fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
     flush_window_pos_commands();
     assert!(
         is_always_on_top(outsider),
-        "対照②: 帯の中の窓のすぐ手前へ入れると常時最前面になる（OS の性質）"
+        "対照②: 帯の中の窓のすぐ背後へ入れると常時最前面になる（OS の性質）"
     );
 
     for hwnd in [character, balloon, control, outsider] {
@@ -465,7 +475,7 @@ fn a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_ban
         "キャラ窓も帯の外のままであるはず"
     );
 
-    // 対照: 同じ経路で帯の中の窓のすぐ手前へ入れる指令を出せば、印は実際に付く
+    // 対照: 同じ経路で帯の中の窓のすぐ背後へ入れる指令を出せば、印は実際に付く
     // （上の主張が「読み取りが常に偽」による恒真になっていない）。
     let outsider = create_ghost_shaped_toplevel(w!("wintf-zorder-aot-insert-outsider"));
     assert!(!is_always_on_top(outsider), "前提: 対照窓は帯の外で始まる");

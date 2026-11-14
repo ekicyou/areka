@@ -63,13 +63,16 @@
 //! 位置・寸法・窓スタイル・表示状態には一切書き込まない（要件 1.6／5.x）。指令は必ず
 //! [`pair_fix_command`] が組み、そこで `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` に固定される。
 //!
-//! # 本モジュールが担わないもの（後続タスクの担当）
+//! # G8 PASS により足さないと決めたもの
+//!
+//! 完了 spec `areka-P0-ghost-window-zorder` の判定表（`verification/plan-a-gate.md`）は
+//! G1〜G8 全 PASS で、tasks.md 5.2〜5.7 は実施しないと決まっている。引き受け手は居ない。
 //!
 //! - 切離しの適用時点を早める強化——相手の消滅を検知した巡ではなく、窓の登録が実際に
-//!   取り崩される直前で外す形。実機ゲート G8 が「切離しが間に合わない順序」を FAIL と
-//!   判定した場合にのみ後続タスクが足す（design.md「破棄経路」）。
-//! - 重なりが動いたことの検知（案 B／補助浮上のトリガ供給）。要求さえ届けば本 system は
-//!   トリガ種別によらず同じ手順で処理する。
+//!   取り崩される直前で外す形。G8 で PASS と判定済み（tasks.md 5.2 は不実施）。
+//! - 重なりが動いたことの検知（案 B／補助浮上のトリガ供給）。z の変化を知らせる仕組みは
+//!   無い（[`ReassertZOrder`] の説明）。本 system が
+//!   受けるのは維持系の再主張の要求だけである。
 //!
 //! 記録を出すマクロは隣の [`zorder_pair`](super::zorder_pair) に置く（出力先は組のモジュール 1 つに
 //! 揃える。読み手の絞り込みは前方一致なので漏れはしないが、記録の関数を 1 つのファイルに集めて固定する）。
@@ -254,7 +257,7 @@ pub(crate) type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle
 /// 「相手の窓はもう無い／今まさに無くなる」を意味し、owner を残す理由が消えている。
 /// 実体の消滅（despawn）と実際の `DestroyWindow`（登録の取り崩し）の**間**に本処理が入る
 /// のが標準の形であり、その間隔で塞ぎ切れない順序（同一巡で両者が消える・アプリ終了経路）は
-/// 実機ゲート G8 の判定対象である。
+/// 実機ゲート G8 で PASS と判定済み（tasks.md 5.2 は不実施）。
 ///
 /// # 他スコープへは届かない
 ///
@@ -381,8 +384,7 @@ pub fn apply_zorder_pair_maintenance(
     //
     // 見ているのは**この巡の頭**の状態である。同じ巡でこの system より後に挿入された
     // 要求はここには映らず、次に回る画面更新——最悪でも心拍（30 フレーム）——まで待つ。
-    // 現状の確立系は本 system の前に走る（areka `crates/areka-placement/src/spawn.rs:721-728` の
-    // `(establish_owner_links, apply_zorder_pair_maintenance).chain()`）ので、その巡の
+    // `areka-placement` の組の結線では確立系が本 system より前に走るので、その巡の
     // うちに拾われる。後ろに置く生産者を足すときは、その側で旗を立てること。
     if !requests.is_empty() || !orphans.is_empty() {
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ZORDER);

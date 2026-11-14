@@ -249,3 +249,14 @@
 - 消す前の確かめ: 自前の `WA_*` 定数はそのファイルの私的な定数で、消す前に同じファイルの 58・60 行で定義・同じファイルの 3 か所だけで使っていた。消した後の `git grep -n "const WA_" -- crates` は別の意味の `WA_BOTTOM`／`WA_LOW`／`WA_HIGH`（areka・areka-placement のテスト）だけで、活性の定数の自前の定義は 0 件。
 - 較正（34）: 本番の `log_sink_observed` の `debug!` に `target: "wintf::ecs::window::zorder_pair_sink"` を足して走らせ、`every_record_is_visible_under_the_signoff_directive` が赤（`[zorder-pair] sink-observed` の行が組のモジュールの出力先へ出ていない）。前の検査（出力全体に `wintf::ecs::window::zorder_pair` を含む）は、他の 5 種の行が前方一致の名を含むのでこの壊し方でも緑のままだった形。`target:` の 1 行を消して緑に戻し、`git diff` で本番の差分が意図した直し（説明と 55 の欄）だけであることを確かめた。
 - テストの数: `cargo test -p wintf --lib zorder_pair_sink` 13 本緑・`zorder_pair::record_tests` 13 本緑（本数は変わらない）。`cargo build -p wintf --tests`・`cargo fmt --all -- --check` 通過・clippy は自分が足した警告なし。
+
+## 12.1
+
+- 36: `zorder_pair_maintain.rs` の旗の立て直しの説明から `spawn.rs:721-728` と 2 本の chain の字面を外し、「`areka-placement` の組の結線では確立系が本 system より前に走る」に直した（B-6 を閉じる・台帳は 16.2）。
+- 37: 同じファイルの頭の見出し「本モジュールが担わないもの（後続タスクの担当）」を「G8 PASS により足さないと決めたもの」に直し、完了 spec `areka-P0-ghost-window-zorder` の判定表が G1〜G8 全 PASS で tasks.md 5.2〜5.7 は実施しないことを書いた。切離しを早める強化は「G8 で PASS と判定済み（tasks.md 5.2 は不実施）」、重なりの変化の検知は「z の変化を知らせる仕組みは無い（`ReassertZOrder` の説明＝10.2 で直した `zorder_pair.rs`）」に。切離しの関数の説明の「G8 の判定対象である」も「G8 で PASS と判定済み（tasks.md 5.2 は不実施）」に直した。11.2 が直した頭の記録の段落は触っていない。
+- 38: 「2 本」と書いていた門の説明は 9.2 で `zorder_pair_test_support.rs` へ移り、本数を言わない形になっていた。常に手前のテストのファイルの頭に「明示実行へ隔離した 3 本」の節を足してテストの名前 3 つを並べた。`pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares` の `#[ignore]` の理由の文を「帯から外す指令が効かない回がある（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）」に替えた（環境変数の案内は兄弟の 2 本と同じく残した）。属性と本体 1 行目の門の呼び出しは 3 本とも変えていない。
+- 40: 挿入位置に帯の窓を渡す対照の「すぐ手前」を「すぐ背後」に直した。research.md の 5 か所は今の行で 3 か所（テストの説明の対照②・対照②の失敗文・対照の行のコメント）。残りの 2 か所（元の `:459`・`:622`）は「すぐ手前」の語を含んでいなかった。ほかの「すぐ手前」はバルーンがキャラの上に来る話で正しく、触っていない。
+- 較正: 説明だけの直しで、足したテスト・直したテストは無い。
+- 消したもの: なし（git grep 不要）。古い字面が他に残っていないことを `git grep "spawn.rs:72\|apply_zorder_pair_maintenance).chain\|後続タスクの担当\|G8 の判定対象\|2 本のみ"`（crates）で確かめた。当たるのは本物のコード 2 行（`examples/tooltip_demo.rs:223`・`zorder_pair_test_support.rs:298` のスケジュールの組み立て）だけ。
+- テストの数: `cargo test -p wintf --lib zorder_pair` は 96 緑・3 ignored（10.2 の後と同じ）。`-- --list --ignored` は A-1 の 3 本だけ。行数: `zorder_pair_maintain.rs` 563→565・常に手前 774→783・`zorder_pair_maintain_tests.rs` は触っていない（805）。build 通る・fmt 通る。
+- 40 と同じ向きの誤り（取りまとめの指示で足した）: 常に手前のテストの腕①のコメント「バルーンをキャラのすぐ手前へ」は、組む指令が `InsertSpec::After(character)` なのでバルーンをキャラのすぐ背後へ置く（`InsertSpec::After` は `ZOrder::InsertAfter`＝指した窓のすぐ背後・`zorder_pair.rs` の `InsertSpec` の説明）。本番の腕①（`PlaceAboveOverBelow`）はキャラの最も近い可視の手前の窓を渡して結果としてすぐ手前に入る。コメントを「腕①の形の指令・挿入位置にキャラそのものを渡すのでバルーンはキャラのすぐ背後へ入る・見るのは帯の印だけ」に直した（コメントだけ・1 行増え 784 行）。
