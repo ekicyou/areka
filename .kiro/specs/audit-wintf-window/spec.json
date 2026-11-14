@@ -1,0 +1,22 @@
+{
+  "feature_name": "audit-wintf-window",
+  "created_at": "2026-11-14T12:27:23+09:00",
+  "updated_at": "2026-11-14T12:29:08+09:00",
+  "language": "ja",
+  "phase": "requirements-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": false
+    },
+    "design": {
+      "generated": false,
+      "approved": false
+    },
+    "tasks": {
+      "generated": false,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false
+}
