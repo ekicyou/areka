@@ -438,7 +438,7 @@ fn the_four_detach_reasons_render_as_four_distinct_words() {
 #[test]
 fn the_settled_line_carries_the_declaration_and_the_measurement_together() {
     let line = settled_line(
-        Some(fake_hwnd(0xA0)),
+        Some(fake_hwnd(0xC0)),
         Some(fake_hwnd(0xB0)),
         &[fake_hwnd(0xA0), fake_hwnd(0xB0), fake_hwnd(0xC0)],
         &[fake_hwnd(0xA0), fake_hwnd(0xB0), fake_hwnd(0xC0)],
@@ -447,7 +447,7 @@ fn the_settled_line_carries_the_declaration_and_the_measurement_together() {
 
     assert_eq!(
         line,
-        "[zorder-chain] settled nudged_hwnd=0xA0 insert_after=0xB0 \
+        "[zorder-chain] settled nudged_hwnd=0xC0 insert_after=0xB0 \
          declared=0xA0,0xB0,0xC0 measured=0xA0,0xB0,0xC0 nudge_ok=true"
     );
 }

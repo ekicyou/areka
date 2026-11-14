@@ -25,9 +25,7 @@
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-};
+use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
 use windows::core::HRESULT;
 
 use super::{
@@ -583,6 +581,7 @@ fn the_nudge_moves_only_the_zorder() {
     for (label, anchor_next) in [("素直な枝", None), ("切り替えた枝", Some(members[2]))] {
         let cmd = nudge_command(&members, anchor_next).expect("窓が 2 枚以上あれば後押しが出る");
 
+        // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7（全一致がそれも含む）。
         assert_eq!(
             cmd.flags,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
@@ -593,12 +592,6 @@ fn the_nudge_moves_only_the_zorder() {
             (cmd.x, cmd.y, cmd.width, cmd.height),
             (0, 0, 0, 0),
             "{label}: 位置・寸法の欄に値が入っている"
-        );
-        // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7。
-        assert_eq!(
-            cmd.flags & SET_WINDOW_POS_FLAGS(0x0004),
-            SET_WINDOW_POS_FLAGS(0),
-            "{label}: Z を触らない指令になっている（後押しとして効かない形）"
         );
     }
 }

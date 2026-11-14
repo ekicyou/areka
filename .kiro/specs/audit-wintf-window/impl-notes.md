@@ -159,3 +159,16 @@
 - 消したもの: 関数・型・口は消していない（呼び出し元の構造体の組み立てだけ）ので git grep 不要。
 - 印を立てる `areka` の側（`crates/areka/src/runtime/frame/zorder_drain.rs`）は直していない。
 - テストの数: `cargo test -p wintf --lib zorder_chain_apply` 53 → 54（足した 1 本）すべて緑・`cargo test -p areka zorder_drain` 34 緑。`cargo build -p wintf -p areka -p areka-placement --tests` 警告 0・fmt 通る・clippy の触ったファイルの警告は前からある `field_reassign_with_default`（`zorder_chain_apply_tests.rs:387-388`・`zorder_chain_apply_nudge_tests.rs` の末尾の 1 本）だけで、足したものは 0。
+
+## 7.2
+
+- 22: `zorder_chain_apply.rs` の節の見出し・窓口の節の見出し・替え玉の器の説明の「5」を「6」に、`zorder_chain_apply_tests.rs` の冒頭の窓口の列に「生の 1 つ奥の読み取り」を足して 6 つにした。
+- 23: `zorder_chain.rs` で触ったのは `ZOrderChainPlan::dirty` の説明（窓ハンドル待ちの付与が 1 本でも残る巡は書けた本数に依らず true へ戻す＝7.1 の後の規則）と、`log_chain_absent` の説明のパス（`emo2_boot/frame/zorder_drain.rs` → `runtime/frame/zorder_drain.rs`）の 2 か所だけ。`audit-placement-core` の 73・67 の行には触れていない。`zorder_chain_apply.rs` の前例の場所は行番号をやめて `window_proc/window_pos.rs` の `WM_DPICHANGED` に替えた。
+- 24: `zorder_chain_diag.rs` の `settled_line` の説明 2 行を「鎖の根」「錨＝根の 1 つ手前。錨の直後が既に根なら先頭」に直し、`zorder_chain_diag_tests.rs` の `the_settled_line_carries_the_declaration_and_the_measurement_together` の例の値を `nudged_hwnd=0xC0 insert_after=0xB0` に揃えた（行の書式は変えていない）。
+- 26: `zorder_pair_diag.rs` の `UNKNOWN` と `tristate_field` を `pub(crate)` にし、`zorder_chain_diag.rs` は `hwnd_field` と同じ `use` で借りて自前の 2 つを消した（字面は同じ `-`）。
+- 27: `pair_handover_tags` の説明の 1 行を「既存の 7 語の名簿は、隣接の spec が字面を固定したテストが読む（実機の手順は字面を自前で持つ）」に直した。
+- 54: `zorder_chain_tests.rs` の `the_nudge_moves_only_the_zorder` で `SWP_NOZORDER` を生の数値で言い直す 6 行を消し、理由の 1 行コメントを上のフラグの全一致の主張の上へ移した。`SET_WINDOW_POS_FLAGS` の import も消した。
+- 説明の追従（コメントだけ）: `zorder_chain_apply_nudge_tests.rs` の `a_wait_ended_by_a_non_carrying_pass_also_re_arms_the_record` の「経路は 3 つ」を本番の「出口は 2 つ」（⑴ 待ちの付与が残らない巡＝書けた形と持ち越さない形・⑵ `NoChange`）に揃え、次の 1 本の見出しと「⑵ の 1 本」の参照も直した。
+- 較正（24）: `settled_line` の `nudged` と `after` の材料を入れ替えると、`the_settled_line_carries_the_declaration_and_the_measurement_together` と `the_four_signoff_fields_of_the_settled_line_stay_adjacent_in_this_order` の 2 本が赤。明示の編集で戻し、差分が意図どおりに戻ったのを確かめた。
+- 消す前の git grep: 鎖の側の `UNKNOWN` の使い手は `zorder_chain_diag.rs` の中と子のテスト `zorder_chain_diag_tests.rs`（`use super::UNKNOWN`・借りた名前で解決する）だけ、`zorder_chain_diag::UNKNOWN` を名指す場所は 0。鎖の側の `tristate_field` の使い手は `settled_line` だけ。`SET_WINDOW_POS_FLAGS` は `zorder_chain_tests.rs` では消した 2 行だけ。消した後、鎖の側に番兵と三値の欄の定義は 0（`git grep "fn tristate_field\|const UNKNOWN"` は `zorder_pair_diag.rs` の 2 行だけ）。
+- テストの数: `cargo test -p wintf --lib zorder_chain` 123 緑・`--lib zorder_pair` 94 緑（3 ignored・本数は変わらない）。`cargo build -p wintf --tests` 警告 0・fmt 通る・clippy の触ったファイルの警告 0。`zorder_chain_order_tests.rs`（977）と `zorder_pair_maintain_tests.rs`（978）は触っていない。

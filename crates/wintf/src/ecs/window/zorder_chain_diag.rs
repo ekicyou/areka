@@ -44,10 +44,7 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
 use windows::Win32::Foundation::HWND;
 
-use super::zorder_pair_diag::hwnd_field;
-
-/// 値が取得できなかったフィールドの番兵（既存ペア機構と同じ字面）。
-pub(crate) const UNKNOWN: &str = "-";
+use super::zorder_pair_diag::{UNKNOWN, hwnd_field, tristate_field};
 
 /// 繋いだ事実の記録タグ（debug 水準・要件 9.1）。
 const LINKED_TAG: &str = "[zorder-chain] linked";
@@ -91,8 +88,8 @@ pub(crate) fn chain_record_tags() -> [&'static str; 7] {
 
 /// 組の受け渡しの記録タグ 3 種（逆転・非隣接の組の外しと結び直し・輪の見送り）。
 ///
-/// 既存の 7 語の一覧 [`chain_record_tags`] は隣接の spec と実機の確かめの道具が読む名簿
-/// なので変えない（要件 7.4）。新しい語はこの別の一覧に置く。
+/// 既存の 7 語の一覧 [`chain_record_tags`] は、隣接の spec が字面を固定したテストが読む名簿
+/// なので変えない（要件 7.4・実機の手順は字面を自前で持つ）。新しい語はこの別の一覧に置く。
 #[cfg(test)]
 pub(crate) fn pair_handover_tags() -> [&'static str; 3] {
     [PAIR_RELEASED_TAG, PAIR_RESTORED_TAG, LINK_REFUSED_TAG]
@@ -166,14 +163,6 @@ impl std::fmt::Display for ChainSegment {
 fn segment_field(segment: Option<ChainSegment>) -> String {
     match segment {
         Some(s) => s.to_string(),
-        None => UNKNOWN.to_string(),
-    }
-}
-
-/// 真偽値をログ用表現へ（判定そのものが取れなかった場合は番兵）。
-fn tristate_field(value: Option<bool>) -> String {
-    match value {
-        Some(v) => v.to_string(),
         None => UNKNOWN.to_string(),
     }
 }
@@ -269,8 +258,9 @@ pub(crate) fn unlinked_line(
 /// 「指令は出したが効かなかった」の判定が 2 行の突合になり、過去に同型の誤診を生んでいる
 /// （既存ペア機構 [`zorder_pair_diag::fix_line`](super::zorder_pair_diag::fix_line) と同じ規律）。
 ///
-/// - `nudged_hwnd`: 後押しで差し直した窓（鎖の先頭）
-/// - `insert_after`: その挿入位置（鎖の 2 番目）——参照するのは自分のゴースト窓 2 枚だけ
+/// - `nudged_hwnd`: 後押しで差し直した窓（鎖の根）
+/// - `insert_after`: その挿入位置（錨＝根の 1 つ手前。錨の直後が既に根なら先頭）
+///   ——参照するのは自分のゴースト窓 2 枚だけ
 /// - `declared`: 宣言した鎖の並び（手前から奥）
 /// - `measured`: 後押しの直後に前面走査が**実際に出会った**並び（不可視の窓は読み飛ばす・要件 9.3）
 /// - `nudge_ok`: 後押しそのものの成否（design.md「Error Handling」——後押しの失敗は

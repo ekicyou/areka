@@ -24,7 +24,7 @@ use super::zorder_pair::{ExpectedOrder, InsertSpec, PeerLoss, SkipReason};
 ///
 /// フィールドごと落とさないのは、落とすと「記録が出ていない」のと「その経路には
 /// その値が無い」の区別が事後に付かなくなるためである。
-const UNKNOWN: &str = "-";
+pub(crate) const UNKNOWN: &str = "-";
 
 /// owner 確立の記録タグ（grep 判定語）。
 const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
@@ -54,7 +54,7 @@ pub(crate) fn hwnd_field(hwnd: Option<HWND>) -> String {
 ///
 /// 「取れなかった」を `false` へ潰さない——潰すと「沈まなかった」という**異常**と
 /// 「測れなかった」という**観測の欠落**が同じ字面になる。
-fn tristate_field(value: Option<bool>) -> String {
+pub(crate) fn tristate_field(value: Option<bool>) -> String {
     match value {
         Some(v) => v.to_string(),
         None => UNKNOWN.to_string(),
