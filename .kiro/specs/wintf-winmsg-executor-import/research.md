@@ -157,3 +157,51 @@ areka の今の木でも、引数なしの `crates-io.ps1` を回して緑（約
 
 - 要件の討議（`/kiro-requirements-discussion wintf-winmsg-executor-import`）で、7 節の議題を決める。議題 9 は要件の境界（In scope）に足すかどうかの決めになる。
 - その後、`/kiro-design wintf-winmsg-executor-import` で設計へ進む。設計では 8 節の 1〜3 を確かめ、7 節の決めを design.md に写す。
+
+## 10. 設計の段の調べと決め（2026-11-14・`/kiro-spec-design -y`）
+
+- 調べの種類: light（既に在る型の拡張）。サブエージェントは使わず、主の文脈で Grep／Read と WebFetch・`gh api` だけ。手元の試しは組み立てなし（読むだけ）。置き場は `target\design-research\`（cargo の `cargo_publish.rs` の写し・git に入れない）。
+- 使ったスキルとその指針: `kiro-spec-design`（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。開発者の裁定のメモ: windows-rs の移行は bindgen（`windows` を使わない）・外部クレートはそのまま使う・`windows-core` は `windows` と同じ系列・crates.io の公開の決め（`wintf`・`dola` だけ→今回 3 つ）。
+- 2026-11-14 の要件の討議で決まった物（設計の前提）: 写しの MessageBox のテストは全体テストに残し UI テストとして排他テストの机で回す・名指しの無い古い記述 4 か所も書き換える・要件 4.9（areka の CI が出す）。
+
+### 10.1 Research Needed の答え
+
+1. **謝辞の著作権の 2 行**（要件 3.9）: 今の `THIRD-PARTY-NOTICES.md` の 3360〜3368 行目は、`wintf-winmsg-executor 0.0.5` だけの「MIT License」の塊で、著作権の 2 行を持つ。cargo-about は `MIT OR Apache-2.0` から `accepted` の先頭の `MIT` を選び、クレートのフォルダのライセンスのファイルを出どころ（crates.io／path）に依らず読むので、写しの `LICENSE-MIT` から同じ塊を作る見込み。実物の確かめは全体テスト `-License` の後の差分で行う（設計の Validation）。外れたときの予備は `about.toml` の `clarify`。
+2. **MessageBox のテストの並走の揺れ**: 写しの `src/lib.rs` を読んだ。`FindWindowW` で窓を探すのは `running_spawned_with_modal_dialog`・`message_loop_with_modal_dialog` の 2 本だけで、題名はどちらも一意。同じ題名 `reenter_filter_closure` の 3 本は窓を探さない（入れ子のメッセージループが終わると MessageBox も閉じる）。全体テストは排他テストの机（`doc/impl-watch.md`）で 1 本ずつしか回らないので、別のワークツリーの全体テストとも重ならない。**決め**: 軽い並走の試しはしない（負荷テストを繰り返さない決まり）。揺れが出たら起票する。
+3. **Trusted Publishing が 1 つだけ無いときの止まり方**（要件 5.3）:
+   - crates.io の鍵の交換（`src/controllers/trustpub/tokens/exchange/mod.rs`）は、持ち主・リポジトリ・ワークフローのファイル名・environment が合う設定を集め、1 つも無ければ 400（`No Trusted Publishing config found for repository ...`）。在れば、合った設定のクレートの番号（`crate_ids`）だけを鍵に記録する。鍵の有効は 30 分。
+   - cargo の複数クレートの公開（`src/cargo/ops/registry/publish.rs`・`PublishPlan`）は、依存の済んだクレートの集まり（`BTreeSet<PackageId>`＝名前の順）を `pop_first` で 1 つずつ上げ、上げに失敗すると `?` でそこで止まる。失敗の文には `note: the following crates have not been published yet:` と残りの名前が付く。依存の済んだ集まりを全部上げてから、索引に載るのを待って次の集まりへ進む。
+   - よって `dola`・`wintf-winmsg-executor`・`wintf` の 3 つが残っている回で、写しだけ設定が無いと、鍵は `dola`・`wintf` に効く形で出て、cargo は `dola` を上げた後に写しで断られて止まる＝「`dola` だけ上がった」状態。`dola` が既に出ている回なら何も上がらない。要件 5.3 の文（「途中で止まり、一部のクレートだけが上がった状態になりうる」）は正しい。断られたときの crates.io の文は確かめていない（手順書には書かない）。
+   - 出典: crates.io の `main` の上のファイル（WebFetch・2026-11-14）・cargo の `master` の `src/cargo/ops/registry/publish.rs`（`gh api`・2026-11-14）。何も公開していない。
+4. **v0.2.0 の公開の決め（案 A／案 B）との関係**: この spec は一覧を 3 つにする。案 B になったときに写しも外すかは、その決めを持つ下流の spec が決める（design.md の Out of Boundary に書いた）。
+
+### 10.2 ギャップ分析の議題の決め（設計で決めた物）
+
+| 議題 | 決め | 理由 |
+|---|---|---|
+| 1 コミットの切り方 | 4 つ: ⑴ 10 個の写し（本文に元と `4f20275`）⑵ manifest・依存・`Cargo.lock`・一覧と見本・公開の段の注記 ⑶ `cargo fmt --all` の出力だけ ⑷ 文書 | ⑴ で blob の番号を突き合わせられ、⑶ が整形だけと示せる。ギャップの案から整形と manifest の順を入れ替えた（⑴ の直後はワークスペースが解決できないことがあるので、整形は解決できる ⑵ の後に回す）。依存と一覧は包む段が赤にならないよう同じコミット |
+| 3 依存をワークスペースへ寄せない | 寄せない（直書き） | 寄せると公開する manifest の `windows` の機能が 27 になり要件 1.7 と食い違う。メモの「版を直書きしない」は `windows-core` の型の割れを防ぐ決まりで、写しは `windows-core` を直接使わず、`Cargo.lock` の `windows` は 1 版のまま |
+| 4 manifest の寄せ方 | `workspace = "../.."`・`version.workspace`・`repository.workspace` を足す・`authors` は足さない | 他のクレートと同じ形。`authors` は crates.io の説明を変える |
+| 5 `publish` の行 | `publish = true` を書く | `dola` に倣う |
+| 6 較正の見本 | 正しい見本に 1 項を手で足す・誤った見本は足さない | 見本は道具の外の固定値が強い。今の `wintf does not publish` の正規表現は `"wintf"` の閉じの引用符まで含むので写しの項に当たらない（読んで確かめた） |
+| 7 `/release` の直し方 | 行数を 3 に決め打ちで直す・「見直すきっかけ」は「4 行目が増えたら」 | 3.2 の判定の強さを保つ。`Cargo.lock` と謝辞の判定は `N` を使うので直さない |
+| 10 元のリポジトリの確かめ | `git fetch` してから 3 条件を見る。後始末は一時の作業の写し（`target\` の下に clone）から README の PR → squash → archive | 要件 1.5 の文のとおり。手元の写しの作業木を動かさない |
+
+### 10.3 設計で見つけた物
+
+- 要件 5.10 の 4 か所のほかに、同じ事実の古い記述が 3 か所在った: `/update` の `SKILL.md` 102 行目（「`wintf` と `dola` は crates.io に出しており」）・`README.md` 60 行目（「crates.io に版を出しているのは…`wintf`・`dola` だけ」）・`doc/README.md` 34 行目。どれも 1 行で、要件の「同じ事実の古い記述を書き換える」の狙いに入るので、範囲に入れた（設計の討議で確かめてよい）。
+- 残す物: 完了 spec・`crates/pilot/examples/` の報告書と例のコメント・`crates/shiori-host32-helper/src/main.rs` の doc コメントの「0.0.5」は、その時点に確かめた版の記録として残す。
+- `/release` の段 3.2 の謝辞の判定（「`- {ワークスペースのクレートの名前} {旧版}`」）は、写しの塊の行 `- wintf-winmsg-executor {版}` にも当てはまる。`Cargo.lock` の判定の `N`（`cargo metadata` の `packages` の数）も写しで 1 増えるだけで合う。
+- 元のリポジトリの README の移転の案内は、リンクをリポジトリの根（`https://github.com/ekicyou/areka`）と置き場のパスの文字で示す。取り込みの PR が本線に入る前に後始末をしても切れたリンクにならない。
+
+### 10.4 まとめ（synthesis）
+
+- **一般化**: 要件 4.x と 5.7 は「公開するクレートの数の決め打ちを 2→3 にする」1 つの問題の変種だが、一般化（案 B）は取らない。較正の見本と `/release` の判定は、固定値である方が誤りを見逃さない。
+- **作るか使うか**: 新しく作る物は無い。写しは `git archive`、依存は `dola` の型、`Cargo.lock` は `cargo update -w`、版上げは既存の `cargo set-version --workspace`（path の行も上げる）、公開の順は cargo に任せる。
+- **削る**: 道具に誤った見本を足さない・`test-all.ps1`／`deny.toml`／`release.yml` は直さない・`about.toml` は外れたときだけ・写しのテストは直さない。
+
+### 10.5 危うさの見直し
+
+- 写しだけ Trusted Publishing が無いまま最初のリリースのタグが打たれる → `dola` だけ上がる。手順書 2・5 節と完了の報告で手当て（手順書には止まり方とやり直しを書く）。
+- 謝辞の塊が崩れる → 全体テスト `-License` の差分で見つけ、`about.toml` の `clarify` で直す。
+- 写しの MessageBox のテストの揺れ → 排他テストの机で起きにくい。起きたら起票。
