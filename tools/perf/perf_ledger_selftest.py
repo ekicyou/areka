@@ -142,27 +142,27 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
         if code == expected:
             reproduced.add(code)
         else:
-            reasons.append(f"{argv[0]}: 期待 {expected} 実際 {code}")
+            reasons.append(f"{argv[0]}: exit code: want {expected} got {code}")
         if argv[0] == "set-phase" and _entry_region(ledger, prefix) != before:
-            reasons.append("set-phase が周の記録を書き換えました（状態ブロックだけを書き換えること）")
+            reasons.append("set-phase rewrote an iteration entry (it may rewrite only the state block)")
 
     expected_stdout = case.directory / SELFTEST_EXPECTED_STDOUT
     if expected_stdout.is_file():
         want = common.read_normalized(expected_stdout)
         got = stdout_all.replace(CRLF, LF)
         if want != got:
-            reasons.append(common.first_difference("標準出力", want, got))
+            reasons.append(common.first_difference("stdout", want, got))
 
     expected_ledger = case.directory / SELFTEST_EXPECTED_LEDGER
     if expected_ledger.is_file():
         want = common.read_normalized(expected_ledger)
         got = common.read_normalized(ledger) if ledger.is_file() else ""
         if want != got:
-            reasons.append(common.first_difference("台帳", want, got))
+            reasons.append(common.first_difference("ledger", want, got))
 
     for substring in case.stderr_substrings:
         if substring not in stderr_all:
-            reasons.append(f"標準エラーに {substring!r} が出ていません")
+            reasons.append(f"stderr does not contain {ascii(substring)}")
     return reasons, reproduced
 
 
@@ -170,10 +170,10 @@ def _goal_text_check_reasons() -> list[str]:
     """goal-text の検査（`check_goal_text`）を直に呼ぶ: 終端の前置きで始まる行と 4,000 字の境目。"""
     limit = perf_ledger_goal.GOAL_TEXT_MAX_CHARS
     probes = (
-        ("行頭の FINAL の前置き", f"目標\n{CORE.FINAL_PREFIX}GOAL_MET run=12345678 が出たら達成\n", False),
-        ("行頭の STATUS の前置き", f"{CORE.STATUS_PREFIX}iter=<n> を返す\n", False),
-        (f"ちょうど {limit} 字", "a" * limit, True),
-        (f"{limit + 1} 字", "a" * (limit + 1), False),
+        ("line starting with the FINAL prefix", f"目標\n{CORE.FINAL_PREFIX}GOAL_MET run=12345678 が出たら達成\n", False),
+        ("line starting with the STATUS prefix", f"{CORE.STATUS_PREFIX}iter=<n> を返す\n", False),
+        (f"exactly {limit} chars", "a" * limit, True),
+        (f"{limit + 1} chars", "a" * (limit + 1), False),
     )
     reasons: list[str] = []
     for label, text, should_pass in probes:
@@ -183,7 +183,7 @@ def _goal_text_check_reasons() -> list[str]:
         except CORE.LedgerError:
             passed = False
         if passed != should_pass:
-            reasons.append(f"{label}: 期待 {'通す' if should_pass else '拒む'} 実際 {'通した' if passed else '拒んだ'}")
+            reasons.append(f"{label}: want {'pass' if should_pass else 'reject'} got {'passed' if passed else 'rejected'}")
     return reasons
 
 

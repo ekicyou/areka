@@ -493,6 +493,8 @@ def _to_ledger_value(key: str, value, int_keys: tuple[str, ...], float_keys: tup
         # 負になれるのは差（delta_pct）だけ。負の回数や CPU を書くと STATUS 行の文法に乗らない。
         if number < 0 and key != "delta_pct":
             raise bad_input(f"{key} は 0 以上でなければなりません（{value!r}）")
+        if number == 0 and key != "delta_pct":
+            number = abs(number)  # -0.0 は「0 以上」を通るが -0.00 と書かれ STATUS 行の文法に乗らない
         return str(number) if integral else FLOAT_FORMAT.format(number)
     if not isinstance(value, (str, int, float)):
         raise bad_input(f"{key} に書けない型です（{type(value).__name__}）", ["値は文字列か数です。"])

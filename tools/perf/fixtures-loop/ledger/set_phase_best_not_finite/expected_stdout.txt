@@ -1,10 +1,11 @@
+PERF-LOOP STATUS iter=0 phase=RANK judge=NA idle_cpu=0.00 baseline=- delta=- noise=- verdict=NA streak=0/3 iters_left=30 next=SELECT
 {
   "goal": "draw-load-parity",
   "iteration": 0,
-  "phase": "PREFLIGHT",
+  "phase": "RANK",
   "pending_run": null,
   "streak_no_gain": 0,
-  "best_idle_cpu_pct": null,
+  "best_idle_cpu_pct": 0.0,
   "baseline_idle_cpu_pct": null,
   "started_at": "2026-08-23T00:00:00Z",
   "run": null,

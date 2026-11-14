@@ -1,3 +1,3 @@
-title=set-phase の --best に nan・inf を渡すと exit 3（state が不正な JSON を出さない）
+title=set-phase の --best に nan・inf を渡すと exit 3（state が不正な JSON を出さない）・-0 は 0.00 と書き status が通る
 stderr_substr=有限の数
 stderr_substr=0 以上
