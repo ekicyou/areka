@@ -131,7 +131,7 @@ impl EcsWorld {
         // ドラッグ累積器の登録
         crate::ecs::drag::install_drag_accumulator(&mut world);
 
-        // ドラッグコンテキスト（ECS→wndprocスレッド間転送用）の登録
+        // ドラッグコンテキスト（ECS のシステムから同じ UI スレッドの wndproc へ値を渡す）の登録
         world.insert_resource(crate::ecs::drag::WindowDragContextResource::new());
 
         // スケジュールの登録

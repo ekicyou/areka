@@ -132,7 +132,7 @@ fn main() -> Result<()> {
 /// 通常は存在する。ごく初期の tick で未挿入の可能性に備え `Option<NonSend<..>>` で防御し、
 /// 未挿入なら no-op する（`Added` は次 tick で再度観測されるため取りこぼさない）。
 /// `register` は `&self`（内部可変は `Rc<RefCell<..>>`）ゆえ `NonSend` で足りる。
-/// 窓破棄時の除去は機構内 `prune_dead_targets`（Entity 生存確認）が担うため明示 remove は不要。
+/// 窓破棄時の除去は機構内 `prune_dead_targets`（`Window` を持ち、`WindowHandle` の HWND が登録と同じ Entity だけを残す）が担うため明示 remove は不要。
 fn register_click_through_windows(
     new_windows: Query<
         (Entity, &WindowHandle),

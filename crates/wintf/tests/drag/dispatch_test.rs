@@ -7,7 +7,7 @@
 //! NOTE: Started 経路は最終的に `update_dragging`（thread_local DRAG_STATE 操作）を呼ぶが、
 //! 本テストが検証するのは World 側の効果（DraggingState 挿入・WindowDragging マーカー・
 //! 受け手に届く DragStartEvent・DragEvent・DragEndEvent・Arrangement.offset 同期）であり、
-//! thread_local 状態機械そのものは src/ecs/drag/state.rs の in-source テストで検証済み。
+//! thread_local 状態機械そのものは src/ecs/drag/state/ の in-source テストで検証済み。
 
 use bevy_ecs::prelude::*;
 use std::time::Instant;
