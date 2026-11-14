@@ -186,7 +186,7 @@
 | 3 バルーン位置初期化が標準のずらしを生の px で保存する（指摘 17・1 種類目と 3 種類目） | 推奨案（案 1）で直す | 範囲の外の `areka-sylphya` に鍵を消す口を足し（足すだけ）、初期化では鍵を消す。`window-link-directives` の裁定 8「次の起動も標準の位置に出る」と、ukadoc https://ukatech.shillest.net/ukadoc-spec/descript_balloon.html#windowposition.x 「center(SSPのみ top でも同じ)でシェルの中央上に固定。」に戻す |
 | 4 先送りの檻の `t_zpd50`（指摘 30・2 種類目の候補） | 推奨案で直す | 消す。檻のファイルの説明の要件 13.5 の受け持ちは `t_zpd30` へ書き換える |
 | 5 C20 のあいだに公開を狭める直し（要件 8.6） | 推奨案で、例外として認める | 指摘 8・19・42・45・51・62 は、C20 のうちに直す（使い手は本体の本番の数か所と、`test-support` を付けて組む本体のテストだけで、C20 の兄弟はどれも触らない）。直す前に、響く相手（`audit-placement-follow` ほか）へ名前を知らせる（要件 8.7） |
-| 6 範囲の外へ直しを広げる（要件 7.4） | 推奨案で広げる＋重なりは順を申し合わせる | 指摘 3 は `areka-emo-atlas` で、5 は `areka-emo-present` の `shell_target.rs` と本体の資産の道で、13 は本体の `runtime/move_cue_place.rs` まで、17 は `areka-sylphya` で直す（どれも足すだけか、持ち主の見直しが完了済みで並走の無い所）。80 は範囲の中だけでまとめる。並走の相手と重なる所は、下の「実装の順」の表のとおり、相手が先に着地してから実装する |
+| 6 範囲の外へ直しを広げる（要件 7.4） | 推奨案で広げる＋重なりは順を申し合わせる（申し合わせの結果、この spec は重なる相手のどれよりも後に実装する） | 指摘 3 は `areka-emo-atlas` で、5 は `areka-emo-present` の `shell_target.rs` と本体の資産の道で、13 は本体の `runtime/move_cue_place.rs` まで、17 は `areka-sylphya` で直す（どれも足すだけか、持ち主の見直しが完了済みで並走の無い所）。80 は範囲の中だけでまとめる。並走の相手と重なる所は、下の「実装の順」の表のとおり、相手が先に着地してから実装する |
 | 7 2 本目の spec を切るか（要件 10） | 推奨案と違う形＝**切らずに 1 本で行う** | 2026-11-14 開発者「議題７、１本でやらない？」。80 件をこの spec で直す。要件 10.2 は当たらない。C20 の約束に触れる 47・67・73 は、下の「実装の順」の表のとおり、相手の spec の着地の後に実装して約束とぶつけない。70・71 は doc を直す形（形は変えない） |
 
 ### 実装の順（要件 8.9）
@@ -195,11 +195,11 @@
 
 | 相手の spec | 重なる所 | 順 | 申し合わせ |
 |---|---|---|---|
-| `wintf-visual-damage-redraw` | 指摘 5＝`areka-emo-present`（相手の件 1 は `presenter/`・こちらは `shell_target.rs`） | 相手が先 | 申し合わせ中 |
-| `wintf-winmsg-executor-import` | 指摘 47＝根の `Cargo.toml`・`crates/wintf/Cargo.toml` | 相手が先 | 申し合わせ中 |
-| `audit-wintf-window` | 指摘 73＝wintf の `ChainPlan.absent`（`ecs/window/zorder_chain.rs`）・指摘 67＝wintf の `MISSING`（`ecs/window/transition_diag.rs`） | 相手が先（こちらは相手の着地の後に wintf の側まで直す） | 申し合わせ中 |
-| `audit-wintf-input` | 指摘 80＝`balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs`（相手はドラッグの知らせの `is_primary` の 2 行を消す） | 相手が先 | 申し合わせ中（「後から着地する側が読み手を直す」は合意済み） |
-| `audit-placement-follow` | `crates/areka-placement/Cargo.toml`（別の行）・相手の `move_window_with_route` の変化が `chain_realign.rs`・`dpi_sync_tests.rs` に響く・指摘 8 の `DPI_SYNC_HOLD_MAX_FRAMES` | 相手が先 | 申し合わせ中（赤が出たら後から着地する側が直す・`DPI_SYNC_HOLD_MAX_FRAMES` を `test-support` の内側へ移すのは合意済み） |
+| `wintf-visual-damage-redraw` | 重なり無し（相手は 11-14 の要件の討議で件 1 を外し、`areka-emo-present` に触らなくなった＝触るのは wintf の `ecs/graphics/` と `numerics/` だけ） | 順は問わない | 合意（11-14） |
+| `wintf-winmsg-executor-import` | 指摘 47＝根の `Cargo.toml` の `[workspace.dependencies]`（相手が触るのは `wintf-winmsg-executor` の 1 行・`Cargo.lock`・`crates/pilot/Cargo.toml`。`crates/wintf/Cargo.toml` と `async-io` の行はどこも触らない） | 相手が先 | 合意（11-14・相手の PR のマージを知らせてもらう） |
+| `audit-wintf-window` | 指摘 73＝wintf の `ChainPlan.absent`（`ecs/window/zorder_chain.rs`）・指摘 67＝wintf の `MISSING`（`ecs/window/transition_diag.rs`） | 相手が先（こちらは相手の着地の後に wintf の側まで直す） | 合意（11-14・相手の指摘は `absent` と `MISSING` に触らない。相手の 11 番〔`WindowHandle.instance` を消す〕が `areka-placement` の 14 ファイルの構築の式の 1 欄に及ぶ見込みで、相手の最後のタスクのときに改めて申し合わせる＝開発者の承認待ち） |
+| `audit-wintf-input` | 指摘 80＝`balloon_lock_drag_tests.rs`・`balloon_limit_flip_tests.rs`（相手はドラッグの知らせの `is_primary` の 2 行を消す） | 相手が先 | 合意（11-14・相手が遅れてこちらが先に着地するときは「後から着地する側が読み手を直す」に戻し、相手が直す） |
+| `audit-placement-follow` | `crates/areka-placement/Cargo.toml`（別の行）・相手の `move_window_with_route` の変化が `chain_realign.rs`・`dpi_sync_tests.rs` に響く・指摘 8 の `DPI_SYNC_HOLD_MAX_FRAMES` | 相手が先 | 合意（11-14・こちらが赤も含めて合わせる・`Cargo.toml` は相手が `log-capture-kit` の行、こちらが `async-io` の行だけ・`DPI_SYNC_HOLD_MAX_FRAMES` を `test-support` の内側へ移すのはこちらの実装のときでよい） |
 
 ## 確定した指摘の一覧（要件 3.2）
 
