@@ -8,9 +8,9 @@ use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, BakeResult, DecodeError,
-    DecodedImage, ElementDecoder, LoopCount, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha,
-    bake, bake_quiet,
+    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, BakeResult,
+    DecodeError, DecodedImage, ElementDecoder, LoopCount, MemoryDecoder, PackConfig, SurfaceSet,
+    UseSelfAlpha, bake, bake_quiet, bake_with_limits,
 };
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
 
@@ -228,7 +228,13 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
         Way::WrappedQuiet => {
             bake_quiet(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default())
         }
-        Way::RawBake => bake(&sets, &dec, PackConfig::default()),
+        // 上限は既定を焼く（環境変数に左右されない・audit-placement-core 要件 2.7）。
+        Way::RawBake => bake_with_limits(
+            &sets,
+            &dec,
+            PackConfig::default(),
+            AnimationLimits::default(),
+        ),
     });
     let warns = events
         .iter()

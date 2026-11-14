@@ -726,7 +726,7 @@
 
 ### 11.4 指摘 5・13・17・36・73 の口と呼び手
 
-- 5: 資産の道で焼くのは `areka-emo-present` の `shell_target.rs:L621-L622`（`bake`／`bake_quiet`）と `balloon.rs:L806-L807`。測りの 2 本が動く絵を登録するのはシェルの側だけ（`measure_bake_log_tests.rs:L169-L180`）なので、上限の口はシェルの側だけに足す。本体は `areka-emo-atlas` に直に依存している（`crates/areka/Cargo.toml:L58`）。`build_shell_assets` の呼び手は本番 2 か所（`assets.rs:L252`・`switch_assets.rs:L219`）とテスト。
+- 5: 資産の道で焼くのは `areka-emo-present` の `shell_target.rs:L621-L622`（`bake`／`bake_quiet`）と `balloon.rs:L806-L807`。測りの 2 本が動く絵を登録するのはシェルの側だけ（`measure_bake_log_tests.rs:L169-L180`）なので、上限の口はシェルの側だけに足す。本体は `areka-emo-atlas` に直に依存している（`crates/areka/Cargo.toml:L58`）。`build_shell_assets` の呼び手は本番 2 か所（`assets.rs:L252`・`switch_assets.rs:L219`）とテスト。実装で、測りの数のテスト（`measure_bake_count_tests.rs`）の動く絵の検体ではバルーンの面 2 枚（`balloons0.png`・`balloons1.png`）も動く絵だと分かったので、バルーンの側の上限の口（`balloon.rs` の `build_balloon_target_from_faces_with_limits` と本体の `build_balloon_assets_with_limits`）も足した。
 - 13: 3 か所とも、主モニタを引いた後の `RECT`→`RectPx` の写しが同じ。並べ直しは DPI も要るので、`Option<RectPx>` を返す形でなく、モニタ 1 つを写す `work_area_px` にした。
 - 17: sylphya の書き込みは、投函 `SylphyaMsg::PersistPut` → `SylphyaCore::apply` の効果 `SetDottedGlobal`・`PersistSave` → アクターの実行（`actor.rs:L715`・`L731`）→ `save_scope`（`persist/mod.rs:L301-L417`・錠・既存の読み・`apply_entry`・`to_toml_string_over(base, doc)`・commit）。`to_toml_string_over` は `doc` を `base` に重ねるだけなので、消すには `base` の表からも消す要がある。`LastRunning` の「空文字は無し」の約束は、バルーンのずらしでは壊れた値と見分けがつかないので取らない。
 - 36: `apply_descript`（`sticky_group_ledger.rs:L262`）は既に `action`（`descript_seed`／`descript_replace`）を受けるが、`L275` が `"seed"` を固定で渡す。呼び手は crate の中の 2 か所だけ。
@@ -736,7 +736,7 @@
 
 - **まとめられる形**: 記録の無い縮退（16・26・35・40）は、どれも「今の縮退の手前に `warn!` を 1 行」で同じ形。写し（11・14・32・37・64・65・76・77・80）は、どれも今ある支え（`test_support.rs`・`placement_shared_test_support.rs`・`spawn_test_support.rs`）か新しい 2 つの支えへ寄せる。公開を狭める 6 件（8・19・42・45・51・62）は、表の 3 種類の置き方で 1 つに決めた。
 - **作るか使うか**: 新しい依存は使わない（`visibility` のような crate は足さない）。`image` の上限は確保の前の確かめを自前の `pixel_len` で持つ（`image` の `Limits` は `new` で効かない）。
-- **削ったもの**: 指摘 27 の `macro_rules!`（テストの網羅の `match` で足りる）・指摘 13 の `primary_work_area`（`work_area_px` で足りる）・指摘 2 の「動かした印」（追随の持ち物に触れる）・指摘 5 のバルーンの側の上限の口（測りのテストが使わない）。
+- **削ったもの**: 指摘 27 の `macro_rules!`（テストの網羅の `match` で足りる）・指摘 13 の `primary_work_area`（`work_area_px` で足りる）・指摘 2 の「動かした印」（追随の持ち物に触れる）。指摘 5 のバルーンの側の上限の口は、設計では削ったが、測りの数のテストの動く絵の検体でバルーンの面 2 枚（`balloons0.png`・`balloons1.png`）も動く絵だったので、実装で足した（11.4）。
 
 ## 13. 設計の検証の材料（`design.md` の決めの要点）
 

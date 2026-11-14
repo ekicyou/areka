@@ -11,16 +11,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use areka_emo_atlas::{AlphaParams, AtlasTable, ElementDecoder, WicDecoderArm};
+use areka_emo_atlas::{AlphaParams, AnimationLimits, AtlasTable, ElementDecoder, WicDecoderArm};
 use areka_emo_compose::EmoWorld;
 use areka_emo_present::BalloonLoadError;
 use areka_emo_present::balloon::{
-    build_balloon_target_from_faces, load_balloon_use_self_alpha, resolve_balloon_faces,
+    build_balloon_target_from_faces_with_limits, load_balloon_use_self_alpha, resolve_balloon_faces,
 };
 use areka_emo_present::balloon_definitions::{
     ScopeBalloonDefinitions, load_scope_balloon_definitions,
 };
-use areka_emo_present::shell_target::load_shell_target;
+use areka_emo_present::shell_target::load_shell_target_with_limits;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::resolve_with_shell;
 use areka_sakura::ActorKey;
@@ -327,6 +327,28 @@ pub fn build_shell_assets(
     default_surfaces: &DefaultSurfaces,
     decoder: &impl ElementDecoder,
 ) -> Result<ShellAssets, BootWiringError> {
+    build_shell_assets_with_limits(
+        ghost_root,
+        shell,
+        scopes,
+        author_dpi,
+        default_surfaces,
+        decoder,
+        AnimationLimits::from_env(),
+    )
+}
+
+/// [`build_shell_assets`] の動く絵の上限を外から渡す版（環境変数に左右されないテストのため・
+/// spec: audit-placement-core 要件 2.7・2.8）。
+pub(crate) fn build_shell_assets_with_limits(
+    ghost_root: &Path,
+    shell: Option<&str>,
+    scopes: &[u32],
+    author_dpi: u16,
+    default_surfaces: &DefaultSurfaces,
+    decoder: &impl ElementDecoder,
+    limits: AnimationLimits,
+) -> Result<ShellAssets, BootWiringError> {
     // マウント解決で shell dir を得る（起点 ghost/master/descript.txt・placement source と同経路）。
     let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell)
         .map_err(BootWiringError::Mount)?;
@@ -340,7 +362,7 @@ pub fn build_shell_assets(
     // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
     // （`areka_emo_present::shell_target`）。採寸（`areka_placement::measure`）も同じ入口を通るので、
     // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
-    let mut target = load_shell_target(&shell_dir, decoder)?;
+    let mut target = load_shell_target_with_limits(&shell_dir, decoder, limits)?;
     let atlas = target.atlas().clone();
     let bake_failures = target.bake_errors().iter().map(|e| e.to_string()).collect();
 
@@ -445,6 +467,24 @@ pub fn build_balloon_assets(
     author_dpi: u16,
     decoder: &impl ElementDecoder,
 ) -> Result<BalloonAssets, BootWiringError> {
+    build_balloon_assets_with_limits(
+        balloon_root,
+        scopes,
+        author_dpi,
+        decoder,
+        AnimationLimits::from_env(),
+    )
+}
+
+/// [`build_balloon_assets`] の動く絵の上限を外から渡す版（環境変数に左右されないテストのため・
+/// spec: audit-placement-core 要件 2.7・2.8）。
+pub(crate) fn build_balloon_assets_with_limits(
+    balloon_root: &Path,
+    scopes: &[u32],
+    author_dpi: u16,
+    decoder: &impl ElementDecoder,
+    limits: AnimationLimits,
+) -> Result<BalloonAssets, BootWiringError> {
     // バルーン: scope ごとに 解決 → 構築 → 定義読込 を **同一箇所で**導出する（単一導出点）。
     // 系列解決（`resolve_balloon_faces`）は scope あたり 1 回だけ呼び、その戻りを構築
     // （`build_balloon_target_from_faces`）と定義読込（`load_scope_balloon_definitions`）の双方へ
@@ -470,8 +510,13 @@ pub fn build_balloon_assets(
     let use_self_alpha = load_balloon_use_self_alpha(balloon_root);
     for &scope in scopes {
         let faces = resolve_balloon_faces(balloon_root, scope)?;
-        let (emo_world, atlas) =
-            build_balloon_target_from_faces(balloon_root, decoder, &faces, use_self_alpha)?;
+        let (emo_world, atlas) = build_balloon_target_from_faces_with_limits(
+            balloon_root,
+            decoder,
+            &faces,
+            use_self_alpha,
+            limits,
+        )?;
         // 面 0 必在（R1.7）は `resolve_balloon_faces` が権威として施行済みゆえ先頭は必ず存在する。
         // 万一の不在は権威の契約違反であり、log-first で真因を残して構築失敗に畳む（無言で
         // 定義なしのバルーンを組まない）。

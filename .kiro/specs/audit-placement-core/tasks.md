@@ -73,12 +73,12 @@
   - _Dispatch: standard — 手本から純粋な関数を切り出し、テストと example の節を足す_
   - _Requirements: 4.1, 6.6_
 
-- [ ] 3.3 (P) 動く絵の上限の環境変数に左右されないテストにする（U8・指摘 5）
+- [x] 3.3 (P) 動く絵の上限の環境変数に左右されないテストにする（U8・指摘 5）
   - シェルの絵を読む入口に、上限を受け取る兄弟の入口を足す（今の入口は環境変数の上限を渡す形のまま）。採寸の道は今のまま。
   - 本体の資産の組み立てに上限を受け取る兄弟を crate の中に足す（今の関数の形と呼び手は変えない）。
   - 3 本のテストが上限を明示して焼くようにする。
   - 終わったと言える状態: 3 本のテストが、`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` を立てても立てなくても同じに緑（1 度ずつ回して確かめる）。`shell_target.rs` が 1,000 行を越えていない。
-  - _Boundary: areka-emo-present のシェルの読み・本体の資産の組み立てとその 2 本のテスト・measure_first_frame_tests_
+  - _Boundary: areka-emo-present のシェルとバルーンの読み・本体の資産の組み立てとその 2 本のテスト・measure_first_frame_tests_
   - _Dispatch: standard — 2 つの crate に上限を受け取る兄弟の入口を足して配線する_
   - _Requirements: 2.7, 2.8, 6.7, 8.2_
 

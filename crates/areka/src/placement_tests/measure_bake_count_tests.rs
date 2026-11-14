@@ -11,13 +11,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, WicDecoderArm,
+    AnimatedImage, AnimationInfo, AnimationLimits, DecodeError, DecodedImage, ElementDecoder,
+    WicDecoderArm,
 };
 use areka_emo_present::balloon::resolve_balloon_faces;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::runtime::assets::{build_balloon_assets, build_shell_assets};
+use crate::runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
 use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
@@ -113,10 +114,24 @@ fn measure_then_assets(
     measure_with_reader(&measure, shell_dir, balloon_dir, &SCOPES, &defaults).expect("採寸は通る");
     let assets = CountingDecoder::new();
     let scopes: Vec<u32> = SCOPES.iter().map(|&s| s as u32).collect();
-    build_shell_assets(ghost_root, None, &scopes, 96, &defaults, &assets)
-        .unwrap_or_else(|e| panic!("シェルの資産は組める: {e:?}"));
-    build_balloon_assets(balloon_dir, &scopes, 96, &assets)
-        .unwrap_or_else(|e| panic!("バルーンの資産は組める: {e:?}"));
+    build_shell_assets_with_limits(
+        ghost_root,
+        None,
+        &scopes,
+        96,
+        &defaults,
+        &assets,
+        AnimationLimits::default(),
+    )
+    .unwrap_or_else(|e| panic!("シェルの資産は組める: {e:?}"));
+    build_balloon_assets_with_limits(
+        balloon_dir,
+        &scopes,
+        96,
+        &assets,
+        AnimationLimits::default(),
+    )
+    .unwrap_or_else(|e| panic!("バルーンの資産は組める: {e:?}"));
     (measure, assets)
 }
 

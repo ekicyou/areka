@@ -11,12 +11,13 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use areka_emo_atlas::{
-    AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage, LoopCount, MemoryDecoder,
+    AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, DecodedImage, LoopCount,
+    MemoryDecoder,
 };
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::runtime::assets::{build_balloon_assets, build_shell_assets};
+use crate::runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::measure_with_reader;
@@ -223,11 +224,27 @@ fn boot_preparation_records_each_once() {
     let (measured, measure_events) =
         capture(|| measure_with_reader(&dec, &shell_dir, &balloon_dir, &SCOPES, &defaults));
     measured.expect("採寸は通る");
-    let (shell, shell_events) =
-        capture(|| build_shell_assets(root.path(), None, &scopes, 96, &defaults, &dec));
+    let (shell, shell_events) = capture(|| {
+        build_shell_assets_with_limits(
+            root.path(),
+            None,
+            &scopes,
+            96,
+            &defaults,
+            &dec,
+            AnimationLimits::default(),
+        )
+    });
     shell.unwrap_or_else(|e| panic!("シェルの資産は組める: {e:?}"));
-    let (balloon, balloon_events) =
-        capture(|| build_balloon_assets(&balloon_dir, &scopes, 96, &dec));
+    let (balloon, balloon_events) = capture(|| {
+        build_balloon_assets_with_limits(
+            &balloon_dir,
+            &scopes,
+            96,
+            &dec,
+            AnimationLimits::default(),
+        )
+    });
     balloon.unwrap_or_else(|e| panic!("バルーンの資産は組める: {e:?}"));
 
     assert_eq!(counts(&measure_events), want(&[]), "採寸の窓");

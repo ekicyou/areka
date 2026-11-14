@@ -182,8 +182,8 @@ crates/areka/src/placement_tests/
 
 範囲の外（裁定で認めた最小の箇所）:
 - `crates/areka-emo-atlas/src/decode/image_arm.rs` と `image_arm_tests.rs` — 3。
-- `crates/areka-emo-present/src/shell_target.rs` — 5。
-- `crates/areka/src/runtime/assets.rs` — 5（`build_shell_assets_with_limits`）。`runtime/move_cue_place.rs` — 13。`main.rs`・`runtime/switch_assets.rs` — 51。`runtime/frame/drain_resnap.rs` — 62。`runtime/frame/zorder_drain.rs` と同じ所のテスト — 73。本体のテストのうち 8・19・42 の名前を使うもの（`ghost_session_restart_tests.rs`・`runtime/frame/switch_finish_tests.rs` の `reason` の呼び出し）。
+- `crates/areka-emo-present/src/shell_target.rs`・`balloon.rs` — 5。
+- `crates/areka/src/runtime/assets.rs` — 5（`build_shell_assets_with_limits`・`build_balloon_assets_with_limits`）。`runtime/move_cue_place.rs` — 13。`main.rs`・`runtime/switch_assets.rs` — 51。`runtime/frame/drain_resnap.rs` — 62。`runtime/frame/zorder_drain.rs` と同じ所のテスト — 73。本体のテストのうち 8・19・42 の名前を使うもの（`ghost_session_restart_tests.rs`・`runtime/frame/switch_finish_tests.rs` の `reason` の呼び出し）。
 - `crates/areka-sylphya/src/actor.rs`・`persist/mod.rs` と兄弟のテスト — 17。
 - `crates/wintf/src/ecs/window/zorder_chain.rs` — 73。根の `Cargo.toml`・`crates/areka/Cargo.toml`・`crates/wintf/Cargo.toml` — 47。
 - `.kiro/specs/window-snap/brief.md`・`.kiro/specs/runtime-crate-split/brief.md`・`.kiro/specs/clippy-199-lints/brief.md` — 申し送り。
@@ -286,7 +286,7 @@ sequenceDiagram
 | U5 材料の合流と据え直し | 12・18・43・44 | `lib.rs`・`reseed.rs`・`face_windowposition.rs`・`reset_balloon_pos.rs`・`windowposition.rs`・`placement_windowposition_tests.rs` | S |
 | U6 測りの読み手の上限 | 3 | `areka-emo-atlas` の `image_arm.rs`・`image_arm_tests.rs` | S |
 | U7 手本 | 4・61 | `examples/window-placement.rs`・`Cargo.toml`（`[[example]] test = true`） | S |
-| U8 環境変数で赤になるテスト | 5 | `shell_target.rs`・`runtime/assets.rs`・3 本のテスト | M |
+| U8 環境変数で赤になるテスト | 5 | `shell_target.rs`・`balloon.rs`・`runtime/assets.rs`・3 本のテスト | M |
 | U9 属性と規約の文 | 6・7・9・46・68 | `lib.rs`・`diag.rs`・`descript_window_keys.rs`・`resolver.rs`・`source.rs`・`zorder_group_ledger.rs`・`measure_first_frame.rs`・`spawn.rs`・`spawn_assembly_tests.rs`・`diag_tests.rs`・`chain_finalize_tests.rs` | S |
 | U10 古い名前 | 41 | 13 ファイル・`runtime-crate-split` の brief | M |
 | U11 公開を狭める | 8・19・42・45 | `dpi_sync.rs`・`balloon_lock.rs`・`balloon_limit.rs`・`lib.rs`・`source.rs`・`test_support.rs`・本体のテスト | M |
@@ -367,7 +367,8 @@ sequenceDiagram
 
 - `areka-emo-present/src/shell_target.rs` に `pub fn load_shell_target_with_limits(shell_dir, decoder, limits: AnimationLimits) -> Result<ShellTarget, ShellLoadError>` を足す。中の `load_shell_target_with` に `limits` を渡し、記録を出す道は `bake_with_limits(.., limits)` で焼く。`load_shell_target` は `AnimationLimits::from_env()` を渡す（今の振る舞い）。記録を出さない道（採寸）は今のまま `bake_quiet`（採寸の読み手は動く絵の道に入らないので上限を使わない・doc に 1 行）。
 - 本体の `runtime/assets.rs` の `build_shell_assets` の中身を `pub(crate) fn build_shell_assets_with_limits(.., limits)` へ移し、`build_shell_assets` はそれを `AnimationLimits::from_env()` で呼ぶ（形は変えない・呼び手 `assets.rs:L252`・`switch_assets.rs:L219` は触らない）。
-- テスト: `measure_first_frame_tests.rs` の `Way::RawBake` は `bake_with_limits(.., AnimationLimits::default())`。本体の `measure_bake_log_tests.rs:L227`・`measure_bake_count_tests.rs:L116` は `build_shell_assets_with_limits(.., AnimationLimits::default())`。
+- `areka-emo-present/src/balloon.rs` に `pub fn build_balloon_target_from_faces_with_limits(.., limits)` を足し、本体の `build_balloon_assets` も同じ形で `pub(crate) fn build_balloon_assets_with_limits(.., limits)` へ中身を移す（測りの数のテストの動く絵の検体ではバルーンの面 2 枚も動く絵のため・`research.md` 11.4）。
+- テスト: `measure_first_frame_tests.rs` の `Way::RawBake` は `bake_with_limits(.., AnimationLimits::default())`。本体の `measure_bake_log_tests.rs:L227`・`measure_bake_count_tests.rs:L116` は `build_shell_assets_with_limits(.., AnimationLimits::default())` と `build_balloon_assets_with_limits(.., AnimationLimits::default())`。
 - 実装での確かめ（1 度だけ）: 3 本を `AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` を立てて走らせ、立てないときと同じに緑（要件 2.7・2.8）。
 
 #### U9 指摘 6・7・9・46・68: 属性と規約の文
@@ -648,7 +649,7 @@ U1 → U2 → U3 → U5 → U4 → U6 → U7 → U8 → U9 → U10 → U23 → U
 1. **指摘 2（8 節 13）**: 同じ丸めの形は作れない（`research.md` 11.2）。差を許す形（3px）は取らず、「動かした印」`BalloonUserMoved` を状態で持つ（設計の討議の議題 1）。追随の持ち物の `drag_follow.rs` に 1 行を足すのは、相手の着地の後に申し合わせて行う。
 2. **指摘 9（8 節 14）**: 案 a（文を今の参照に合わせる）。参照は変えない。
 3. **指摘 1 のスコープ 1 以降（8 節 15）**: 上の辺は横の連なり（P2）のまま、左右の辺は辺ごとに下から上へ連ねる。`project_anchor` を通しても動かない形にするため。
-4. **指摘 5 の口（8 節 16）**: `load_shell_target_with_limits`（emo-present）と `build_shell_assets_with_limits`（本体・`pub(crate)`）を足す。今の関数の形は変えない。
+4. **指摘 5 の口（8 節 16）**: `load_shell_target_with_limits`・`build_balloon_target_from_faces_with_limits`（emo-present）と `build_shell_assets_with_limits`・`build_balloon_assets_with_limits`（本体・`pub(crate)`）を足す。今の関数の形は変えない。
 5. **指摘 13（8 節 17）**: `work_area_px(&Monitor) -> RectPx`（公開に足す）と `square_dpi(u32) -> DPI`（crate の中）を `lib.rs` に置き、本体の `move_cue_place.rs:L86-L95` も `work_area_px` を使う。
 6. **指摘 27（8 節 18）**: テストの網羅の `match` で入れ忘れを組めなくする（本番の形は変えない・`macro_rules!` は使わない）。
 7. **指摘 70・71（8 節 19）**: doc を直す。戻り値と数え方は変えない。
