@@ -427,3 +427,136 @@ fn entries_undecidable_when_any_value_is_not_finite_or_unbalanced() {
         None
     );
 }
+
+// ---- 前と今の項の列の比べ（要件 1.2・1.3・1.6・7.1） ----
+
+/// `id` だけを持つ項（比べは `id` しか見ない）。
+fn e(id: u64) -> DamageEntry {
+    DamageEntry {
+        id,
+        shape: 0,
+        kind: EntryKind::Draw { unbounded: false },
+        parent: None,
+        end: 0,
+        bounds: PxRect::default(),
+        exact: [0.0; 4],
+        linear: [1.0, 0.0, 0.0, 1.0],
+        origin: [0.0; 2],
+    }
+}
+
+fn es(ids: &[u64]) -> Vec<DamageEntry> {
+    ids.iter().copied().map(e).collect()
+}
+
+#[test]
+fn lis_mask_empty_monotone_reverse_and_known() {
+    assert!(lis_mask(&[]).is_empty());
+    assert_eq!(lis_mask(&[0, 1, 2, 3]), vec![true; 4]);
+    let rev = lis_mask(&[3, 2, 1, 0]);
+    assert_eq!(rev.iter().filter(|&&b| b).count(), 1);
+    // 長さ 3 の答えは [1,2,4] だけ
+    assert_eq!(
+        lis_mask(&[3, 1, 2, 0, 4]),
+        vec![false, true, true, false, true]
+    );
+    // 長さの等しい答えが複数（[2,3] と [0,1] など）でも同じ入力から同じ答え
+    let seq = [2, 3, 0, 1];
+    let a = lis_mask(&seq);
+    assert_eq!(a.iter().filter(|&&b| b).count(), 2);
+    assert_eq!(a, lis_mask(&seq));
+}
+
+#[test]
+fn diff_of_empty_lists() {
+    let d = diff(&[], &[]);
+    assert!(d.is_unchanged());
+    assert!(d.kept.is_empty());
+    let d = diff(&[], &es(&[1, 2]));
+    assert_eq!(d.added, vec![0, 1]);
+    assert!(!d.is_unchanged());
+    let d = diff(&es(&[1, 2]), &[]);
+    assert_eq!(d.removed, vec![0, 1]);
+}
+
+#[test]
+fn diff_same_list_is_unchanged_and_kept_in_order() {
+    let l = es(&[5, 6, 7]);
+    let d = diff(&l, &l);
+    assert!(d.is_unchanged());
+    assert_eq!(d.kept, vec![(0, 0), (1, 1), (2, 2)]);
+}
+
+#[test]
+fn diff_monotone_with_insert_and_remove_moves_nothing() {
+    let d = diff(&es(&[1, 2, 3, 4]), &es(&[1, 9, 3, 4, 8]));
+    assert_eq!(d.removed, vec![1]);
+    assert_eq!(d.added, vec![1, 4]);
+    assert!(d.moved.is_empty());
+    assert_eq!(d.kept, vec![(0, 0), (2, 2), (3, 3)]);
+}
+
+#[test]
+fn diff_all_replaced() {
+    let d = diff(&es(&[1, 2, 3]), &es(&[4, 5]));
+    assert_eq!(d.removed, vec![0, 1, 2]);
+    assert_eq!(d.added, vec![0, 1]);
+    assert!(d.moved.is_empty() && d.kept.is_empty());
+}
+
+#[test]
+fn diff_reverse_moves_all_but_one() {
+    let d = diff(&es(&[1, 2, 3, 4]), &es(&[4, 3, 2, 1]));
+    assert!(d.removed.is_empty() && d.added.is_empty());
+    assert_eq!(d.moved.len(), 3);
+    assert_eq!(d.kept.len(), 1);
+}
+
+#[test]
+fn diff_reorder_only_moves_len_minus_lis() {
+    // 前の番号の列（今の順）は [4,0,1,2,3] → 最長増加部分列の長さ 4
+    let d = diff(&es(&[10, 11, 12, 13, 14]), &es(&[14, 10, 11, 12, 13]));
+    assert!(d.removed.is_empty() && d.added.is_empty());
+    assert_eq!(d.moved, vec![0]);
+    assert_eq!(d.kept, vec![(0, 1), (1, 2), (2, 3), (3, 4)]);
+    // [1,3,0,4,2] の最長増加部分列の長さは 3（[1,3,4] など）
+    let d = diff(&es(&[10, 11, 12, 13, 14]), &es(&[11, 13, 10, 14, 12]));
+    assert_eq!(d.moved.len(), 5 - 3);
+    assert_eq!(d.kept.len(), 3);
+    assert!(d.moved.windows(2).all(|w| w[0] < w[1]));
+    assert!(
+        d.kept
+            .windows(2)
+            .all(|w| w[0].0 < w[1].0 && w[0].1 < w[1].1)
+    );
+}
+
+#[test]
+fn diff_many_same_ids_pair_kth_with_kth() {
+    // x の前は 0,1,3・今は 0,2 → (0,0)・(1,2)、前の 3 は消えた。y は (2,1)。
+    // 前の番号の列（今の順）は [0,2,1] → 動いたのは 1 つ
+    let (x, y) = (7, 8);
+    let d = diff(&es(&[x, x, y, x]), &es(&[x, y, x]));
+    assert_eq!(d.removed, vec![3]);
+    assert!(d.added.is_empty());
+    assert_eq!(d.moved.len(), 1);
+    assert_eq!(d.kept.len(), 2);
+    // 今の項が多い側では余りが足された
+    let d = diff(&es(&[x, x]), &es(&[x, x, x, x]));
+    assert_eq!(d.kept, vec![(0, 0), (1, 1)]);
+    assert_eq!(d.added, vec![2, 3]);
+    assert!(d.removed.is_empty() && d.moved.is_empty());
+}
+
+#[test]
+fn diff_same_input_gives_same_answer() {
+    let prev = es(&[3, 1, 4, 1, 5, 9, 2, 6, 5, 3]);
+    let now = es(&[2, 7, 1, 8, 2, 8, 1, 8, 3, 5, 9]);
+    let a = diff(&prev, &now);
+    assert_eq!(a, diff(&prev, &now));
+    // 答えは番号の順
+    for v in [&a.removed, &a.added, &a.moved] {
+        assert!(v.windows(2).all(|w| w[0] < w[1]));
+    }
+    assert!(a.kept.windows(2).all(|w| w[0].1 < w[1].1));
+}

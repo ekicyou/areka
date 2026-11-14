@@ -7,6 +7,7 @@ use super::emit::{DrawMethod, draw_method};
 use crate::numerics::*;
 use bevy_ecs::prelude::Entity;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COMPOSITE_MODE_SOURCE_OVER;
 use windows::Win32::Graphics::Direct2D::*;
@@ -398,4 +399,83 @@ pub(crate) fn entries(
     }
     // push と pop が対でない列は決められない
     stack.is_empty().then_some(out)
+}
+
+/// 前と今の項の列の比べ（1.2・1.3）。番号はどれも昇順。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Diff {
+    /// 前の番号。
+    pub removed: Vec<u32>,
+    /// 今の番号。
+    pub added: Vec<u32>,
+    /// 今の番号。
+    pub moved: Vec<u32>,
+    /// (前, 今)・動かなかった。
+    pub kept: Vec<(u32, u32)>,
+}
+
+impl Diff {
+    /// 消えた・足された・動いた項が無い。
+    pub fn is_unchanged(&self) -> bool {
+        self.removed.is_empty() && self.added.is_empty() && self.moved.is_empty()
+    }
+}
+
+/// 前と今の項の列を `id` で比べる。同じ `id` が何度も在るときは前の k 番目と今の k 番目を対にし、
+/// 余りを消えた・足されたにする。対の取れた今の項の前の番号の列（今の順）の最長増加部分列に
+/// 入らない項が動いた（1.3）。表は引くだけに使い、答えは列の番号の順（1.6）。
+pub(crate) fn diff(prev: &[DamageEntry], now: &[DamageEntry]) -> Diff {
+    // 番号は `entries` が u32 に収まる長さしか作らない
+    let mut by_id: HashMap<u64, VecDeque<u32>> = HashMap::new();
+    for (i, e) in prev.iter().enumerate() {
+        by_id.entry(e.id).or_default().push_back(i as u32);
+    }
+    let mut paired = vec![false; prev.len()];
+    let mut pairs: Vec<(u32, u32)> = Vec::new();
+    let mut out = Diff::default();
+    for (j, e) in now.iter().enumerate() {
+        match by_id.get_mut(&e.id).and_then(VecDeque::pop_front) {
+            Some(i) => {
+                paired[i as usize] = true;
+                pairs.push((i, j as u32));
+            }
+            None => out.added.push(j as u32),
+        }
+    }
+    out.removed = (0..prev.len() as u32)
+        .filter(|&i| !paired[i as usize])
+        .collect();
+    let seq: Vec<u32> = pairs.iter().map(|p| p.0).collect();
+    for (pair, keep) in pairs.into_iter().zip(lis_mask(&seq)) {
+        if keep {
+            out.kept.push(pair);
+        } else {
+            out.moved.push(pair.1);
+        }
+    }
+    out
+}
+
+/// `seq`（相異なる値）の最長増加部分列に入る位置の印。O(n log n) の忍耐の並べ方で、末尾の積みと
+/// 前の印から最後の積みの末尾を辿る（同じ入力からはいつも同じ答え）。
+pub(crate) fn lis_mask(seq: &[u32]) -> Vec<bool> {
+    // tails[k]: 長さ k + 1 の増加部分列の末尾で値の最も小さい位置
+    let mut tails: Vec<usize> = Vec::new();
+    let mut before: Vec<Option<usize>> = vec![None; seq.len()];
+    for (i, &v) in seq.iter().enumerate() {
+        let k = tails.partition_point(|&t| seq[t] < v);
+        before[i] = k.checked_sub(1).map(|k| tails[k]);
+        if k == tails.len() {
+            tails.push(i);
+        } else {
+            tails[k] = i;
+        }
+    }
+    let mut mask = vec![false; seq.len()];
+    let mut cur = tails.last().copied();
+    while let Some(i) = cur {
+        mask[i] = true;
+        cur = before[i];
+    }
+    mask
 }
