@@ -187,3 +187,4 @@
 - 隣の spec audit-tools-perf-judge（11-15 の知らせ）: judge-perf を 0.5.0 に上げ、標準出力の最後の行が `JUDGE-PERF RESULT code=N` に、自己較正は `SELFTEST RESULT ok=N ng=M` になる（まだ main に未着地）。着地の後は perf-loop.measure の止まりの文に埋まる `LastLine` がこの行になる。8.1 で合わせるか決める
 - 4.2: ランナーは 940 行で、1,000 行の番人まで約 60 行しか残っていない。6.3 で `-SampleEtl` を足す前に、まとまった塊（`Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` の約 100 行、または `Get-FailedDirName`・`Move-FailedOutDir`・`Select-ProcessCpuValue`・`Test-SmokeMarker` の純関数）を兄弟のファイルへ出す。退けの失敗は元の終了コードが 2〜4 でも 1（perf-loop は 4 で止まる）。`Stop-Run` の時間切れの枝そのものは本物の `exit` のため検査が無い
 - 5.1: 32bit ヘルパの SHA-256 での写し直しは `-BinDir` の無い走行だけ（A/B の部屋は B のビルドが共有の元を作り直すので、上書きすると A を B のヘルパで測る）。design の `Sync-MeasureShioriHelper` の形を `-Build` 付きへ直した
+- 1.1 の直し（5.1 の後）: `Stop-ChildProcess` は直下の子しか待たず、孫がファイルを握ったまま戻ることがあった（T2 `kill-wait` が 1 回揺れた）。強制終了の前に CIM で子孫を集め、同じ締め切りの中で子と子孫を待つ形へ直した。子孫を集め損ねても Kill は必ず走り、標準エラーへ 1 行出す（`kill-snapshot-fails`）

@@ -193,18 +193,56 @@ function Invoke-PwshChild {
 # =============================================================================
 
 # 子孫まで強制終了して（Kill($true)＝32bit の SHIORI ヘルパが run.log を受け継いでいても止める）、
-# 終わるまで待つ。戻り: 終わったら $true・時間切れなら $false（$null や既に終わったものは $true）。
+# 子と子孫が全部終わるまで待つ（孫が握ったファイルが返った後も残らないように）。
+# 戻り: 全部終わったら $true・時間切れなら $false（$null や既に終わったものは $true）。
 function Stop-ChildProcess {
     param([System.Diagnostics.Process]$Process, [int]$WaitMs = 10000)
     if (-not $Process) { return $true }
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($WaitMs)
+    $tree = @($Process)
     try {
         if ($Process.HasExited) { return $true }
+    } catch { $null = $_ }
+    # 一覧が取れなくても子は止める（待つ相手が子だけに減ることを 1 行で知らせる）
+    try { $tree += @(Get-DescendantProcess -Process $Process) }
+    catch { Write-Problem "[perf-tool-base] descendant snapshot failed: $($_.Exception.Message)" }
+    try {
         $Process.Kill($true)
     } catch {
         # 止める間に自分で終わった（または止める権限が無い）。終わったかは下の待ちで決める。
         $null = $_
     }
-    try { return [bool]$Process.WaitForExit($WaitMs) } catch { return $false }
+    $allExited = $true
+    foreach ($p in $tree) {
+        $left = [int][Math]::Max(0, ($deadline - [DateTime]::UtcNow).TotalMilliseconds)
+        try { if (-not $p.WaitForExit($left)) { $allExited = $false } } catch { $allExited = $false }
+    }
+    return $allExited
+}
+
+# 子孫の Process を止める前に集める。各々の Handle を開いておき、終わった後に PID が使い回されても別物を待たない。
+# 親より先に生まれたものは、親の PID が使い回される前の古い親子関係なので外す。
+function Get-DescendantProcess {
+    param([System.Diagnostics.Process]$Process)
+    $all = @(Get-CimInstance -ClassName Win32_Process -Property ProcessId, ParentProcessId, CreationDate -ErrorAction Stop)
+    $found = @()
+    $queue = [System.Collections.Generic.Queue[object]]::new()
+    $queue.Enqueue([pscustomobject]@{ Id = $Process.Id; Start = $Process.StartTime })
+    while ($queue.Count -gt 0) {
+        $parent = $queue.Dequeue()
+        foreach ($c in $all) {
+            if ($c.ParentProcessId -ne $parent.Id -or $c.ProcessId -eq $parent.Id -or $c.CreationDate -lt $parent.Start) { continue }
+            try {
+                $p = [System.Diagnostics.Process]::GetProcessById([int]$c.ProcessId)
+                $null = $p.Handle
+                # 一覧を取った後で PID が使い回された別物は外す（CIM の時刻はマイクロ秒止まりなので 1ms の幅で比べる）
+                if ([Math]::Abs(($p.StartTime - $c.CreationDate).TotalMilliseconds) -gt 1) { $p.Dispose(); continue }
+                $found += $p
+                $queue.Enqueue([pscustomobject]@{ Id = $p.Id; Start = $c.CreationDate })
+            } catch { $null = $_ }
+        }
+    }
+    return $found
 }
 
 # =============================================================================

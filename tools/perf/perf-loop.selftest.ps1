@@ -230,9 +230,14 @@ $SelfTestChecks = @(
                 Start-Sleep -Milliseconds 100
             }
             Assert-SelfTest (Test-Path -LiteralPath $ready) 'child did not start holding the file'
+            # 待つ相手に孫が入ることを固定する（孫を待たない抜けは Kill が速いので実の走行では再現しにくい）
+            $gcPidSeen = [int](Get-Content -LiteralPath $ready -Raw)
+            Assert-SelfTest (@(Get-DescendantProcess -Process $process).Id -contains $gcPidSeen) 'Get-DescendantProcess did not find the grandchild'
             $stopped = Stop-ChildProcess -Process $process -WaitMs 10000
             Assert-SelfTest $stopped 'Stop-ChildProcess returned false'
             Assert-SelfTest $process.HasExited 'Stop-ChildProcess returned before the child exited'
+            $gcLeft = Get-Process -Id $gcPidSeen -ErrorAction SilentlyContinue
+            Assert-SelfTest (-not $gcLeft -or $gcLeft.HasExited) 'Stop-ChildProcess returned before the grandchild exited'
             try { Rename-Item -LiteralPath $held -NewName 'held-moved' -ErrorAction Stop }
             catch { throw "folder still held after Stop-ChildProcess: $($_.Exception.Message)" }
         } finally {
@@ -244,6 +249,28 @@ $SelfTestChecks = @(
                 $gc = Get-Process -Id $gcPid -ErrorAction SilentlyContinue
                 if ($gc) { $gc.Kill(); $null = $gc.WaitForExit(10000); $gc.Dispose() }
             }
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'kill-snapshot-fails'; Body = {
+        # 子孫の一覧取りが投げても子は止め、そのことを 1 行で知らせる
+        $script:SelfTestProblems = [System.Collections.Generic.List[string]]::new()
+        function Write-Problem { param([string]$Message) $script:SelfTestProblems.Add($Message) }
+        function Get-DescendantProcess { param($Process) throw 'snapshot boom' }
+        $psi = [System.Diagnostics.ProcessStartInfo]::new((Get-PwshPath))
+        foreach ($a in @('-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 60')) { $psi.ArgumentList.Add($a) }
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::Start($psi)
+        try {
+            $stopped = Stop-ChildProcess -Process $process -WaitMs 3000
+            Assert-SelfTest $stopped 'Stop-ChildProcess returned false'
+            Assert-SelfTest $process.HasExited 'child not killed when the snapshot threw'
+            $msg = @($script:SelfTestProblems) -join ' | '
+            Assert-SelfTest ($script:SelfTestProblems.Count -eq 1 -and $msg.Contains('descendant snapshot failed') -and $msg.Contains('snapshot boom')) "warning: $(ConvertTo-SelfTestAscii $msg)"
+        } finally {
+            if (-not $process.HasExited) { $process.Kill($true); $null = $process.WaitForExit(10000) }
+            $process.Dispose()
         }
     } }
 
