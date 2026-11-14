@@ -112,11 +112,13 @@ Phase内の仕様完了状況に応じて進捗バーとパーセンテージを
 
 ### Step 7. 完了コミット
 
-仕様移動・メタデータ更新・参照パス修正・ROADMAP更新をコミットする。
+コミットは 2 回に分ける。全体テストの前に、移動・メタデータ更新・参照パス修正をアーカイブのコミットにする（このコミットを全体テストが検査する）。テストの後に、整形の差分と待ち時間に書いた ROADMAP・steering・スキル文書の更新を最終コミットにする。
 
 ```bash
 git add -A
-git commit -m "chore(specs): <spec-name> を完了フォルダに移動"
+git commit -m "chore(<spec-name>): spec完了・アーカイブ"            # 全体テストの前
+git add -A
+git commit -m "chore(<spec-name>): 完了の文書更新（ROADMAP・steering・整形）"   # 全体テストの後
 ```
 
 ### Step 8. リモート同期（PRベース）
@@ -131,6 +133,7 @@ git commit -m "chore(specs): <spec-name> を完了フォルダに移動"
 **PR 可**: 現在ブランチを push して PR を作成し、squash マージする。
 
 ```bash
+git push -u <remote> <current-branch>
 gh pr create --base <default-branch> --head <current-branch> --title "<subject>" --body "<body>"
 gh pr merge --squash --delete-branch --subject "<subject>" --body "<body>"
 ```
@@ -150,7 +153,7 @@ gh pr merge --squash --delete-branch --subject "<subject>" --body "<body>"
 - [ ] `spec.json` の `phase` が `"completed"` + `updated_at` 更新済み
 - [ ] 移動元（`.kiro/specs/<spec-name>/`）にファイルが残っていない
 - [ ] 参照パス更新済み
-- [ ] `.kiro/steering/roadmap.md`（正本）更新済み（該当する場合: Specs 状態 `[x]` + 完了数インクリメント）
+- [ ] `.kiro/steering/roadmap.md`（正本）更新済み（該当する場合: 仕様テーブルの状態列 ✅ + 完了数インクリメント）
 - [ ] 完了コミット済み
 - [ ] PRベースでmainへ統合済み（PR可の場合）／ローカル保持（PR不可の場合）
 

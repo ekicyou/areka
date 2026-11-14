@@ -96,7 +96,7 @@ Provide output in the language specified in spec.json with:
 
 **If Design Needs Revision (NO-GO Decision)**:
 - Address critical issues identified in review
-- Re-run `/kiro-spec-design {feature}` with improvements
+- Re-run `/kiro-design {feature}` with improvements
 - Re-validate with `/kiro-validate-design {feature}`
 
 **Note**: Design validation is recommended but optional. Quality review helps catch issues early.
