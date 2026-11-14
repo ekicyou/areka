@@ -30,7 +30,7 @@ prepare-ab／measure-ab／compare／followup／final）が呼び出し側の sco
     引数・前提の不正は 3、静寂でないは 2 をそのまま返す（tasks.md 7.3）。
  ⒟ **絶対値の合否を出す走行（measure-baseline／final）は実 SHIORI を伴うこと。**
     32bit ヘルパが無いと発話が起きず、アイドルの絶対値は別条件の値になる。
-    採取ランナーは警告だけで走ってしまう（invoke-perf-run.ps1:709-710）ので、
+    採取ランナーは警告だけで走ってしまう（invoke-perf-run.ps1 の shiori_helper_present の注記）ので、
     合否を出す前に run-meta.txt の shiori_helper_present を関門にして 4 で止める。
     相対比較（rank-run／measure-ab）は警告 1 行を残して続ける。
 
@@ -314,7 +314,7 @@ function Get-MeasureShioriHelperPresent {
 #   -Absolute（measure-baseline／final＝**絶対値の合否**を出す走行）… 無ければ 4 で止める。
 #     ヘルパが無いと SHIORI が居らず発話が起きない。発話の無い走行は「アイドル 3.0% 未満」
 #     を満たしやすい**別条件**であり、その合否を台帳へ載せると静かに嘘をつく。
-#     採取ランナーは警告を出すだけで走ってしまう（invoke-perf-run.ps1:709-710）ので、
+#     採取ランナーは警告を出すだけで走ってしまう（invoke-perf-run.ps1 の shiori_helper_present の注記）ので、
 #     絶対値の合否を出す側でここを関門にする。
 #   それ以外（rank-run／measure-ab＝**相対比較**）… 警告と 1 行の記録を残して続ける
 #     （A と B が同じ条件なら差そのものは読める）。
@@ -518,7 +518,7 @@ function Invoke-SubRank {
         Stop-Run -Code $EXIT_BAD_ARGS -Message "run output folder not found: $dir (check -RunDir or -Iter)"
     }
     $rankPath = Join-Path $dir $MEASURE_FILE_RANK
-    if ($script:ResumeMode -and (Test-ResumeArtifact -Path $rankPath -Resume)) {
+    if (Test-ResumeArtifact -Path $rankPath -Resume:$script:ResumeMode) {
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
     if ($script:DryRunMode -and -not (Test-Path -LiteralPath (Join-Path $dir $MEASURE_FILE_RUN_LOG) -PathType Leaf)) {
@@ -658,7 +658,7 @@ function Invoke-SubCompare {
 #
 # **中止と判定を取り違えないこと**: invoke-followup-checks.ps1 は中止のときにも
 #   FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=-
-# の 1 行を出す（invoke-followup-checks.ps1:222-231 の Stop-Run）。行が在ることだけを
+# の 1 行を出す（invoke-followup-checks.ps1 の Stop-Run）。行が在ることだけを
 # 見て 0 を返すと、**起動できなかった走行が「判定できた」ことになる**。
 # 判定まで届いた印は次の 2 つが揃うこと:
 #   ⒜ judge-followup.py が書く followup-verdict.txt が在る
@@ -769,7 +769,8 @@ function Invoke-SubFinal {
     $builds = if ($script:BuildExplicit) {
         @($script:BuildKind)
     } else {
-        Get-MeasureTomlArray -Section 'target' -Key 'builds_final' -Default $MEASURE_BUILDS_FINAL_DEFAULT
+        # 4: 目標定義の語も小文字にそろえる（判定へ渡る --build は dev／release だけを受ける）
+        @(Get-MeasureTomlArray -Section 'target' -Key 'builds_final' -Default $MEASURE_BUILDS_FINAL_DEFAULT | ForEach-Object { $_.ToLowerInvariant() })
     }
     Write-Info "[perf-loop] final goal $($script:GoalName) / level $longProfile / build $($builds -join ', ') / out $dir"
 

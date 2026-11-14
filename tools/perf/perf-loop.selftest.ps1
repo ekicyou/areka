@@ -373,6 +373,108 @@ $SelfTestChecks = @(
             Assert-SelfTest ($calls -eq $case.Calls) "runner $runnerCode was called $calls times (want $($case.Calls))"
         }
     } }
+
+    # -------------------------------------------------------------------------
+    # 入口の束（4・25・26・27・33）。入口を子として起こすときは必ず空の -BinDir と一時の -OutRoot（-DryRun）
+    # -------------------------------------------------------------------------
+
+    [pscustomobject]@{ Name = 'case-normalize'; Body = {
+        $entry = Join-Path $PSScriptRoot 'perf-loop.ps1'
+        $bin = Join-Path $script:SelfTestRoot 'empty-bin'
+        $null = New-Item -ItemType Directory -Path $bin -Force
+        $out = Join-Path $script:SelfTestRoot 'out-case'
+        $r = Invoke-PwshChild -ScriptPath $entry -Arguments @('Rank-Run', '-Build', 'Release', '-Iter', '1', '-DryRun', '-BinDir', $bin, '-OutRoot', $out) -Quiet
+        $last = ($r.Out | Select-Object -Last 1)
+        Assert-SelfTest ($r.Code -eq 0 -and $last -clike 'PERF-LOOP RESULT rank-run code=0 dir=*') "Rank-Run: code $($r.Code), last line: $(ConvertTo-SelfTestAscii $last)"
+        $r = Invoke-PwshChild -ScriptPath $entry -Arguments @('measure-baseline', '-Build', 'Release', '-DryRun', '-BinDir', $bin, '-OutRoot', $out) -Quiet
+        Assert-SelfTest ($r.Code -eq 0) "measure-baseline: code $($r.Code): $(ConvertTo-SelfTestAscii $r.LastLine)"
+        Assert-SelfTest ([bool](@($r.Lines) -cmatch '/ build release /')) "measure-baseline did not use build 'release': $(ConvertTo-SelfTestAscii (@($r.Lines) -join ' | '))"
+        # final の builds_final の各語も小文字にそろえる
+        function Write-Info { param([string]$Message) Add-SelfTestCall -Name 'Write-Info' -Arguments @($Message) }
+        function Write-Problem { param([string]$Message) }
+        function Get-MeasureTomlArray { param($Section, $Key, $Default) @('Release', 'DEV') }
+        function Test-MeasureExeReady { param($BinDir, $Build) Add-SelfTestCall -Name 'Test-MeasureExeReady' -Arguments @($Build); $false }
+        function Write-MeasureDryRunMark { param($Dir, $Reason) }
+        $script:BuildExplicit = $false
+        $script:DateStamp = $null
+        $script:GoalConfig = $null
+        $script:GoalName = 'selftest'
+        $script:ResumeMode = $false
+        $script:RunDirArg = Join-Path $script:SelfTestRoot 'final'
+        $code = Get-SelfTestExitCode { Invoke-SubFinal }
+        $builds = @($script:SelfTestCalls | Where-Object { $_.Name -eq 'Test-MeasureExeReady' } | ForEach-Object { $_.Arguments[0] })
+        Assert-SelfTest ($code -eq 0 -and ($builds -join ',') -ceq 'release,dev') "final builds_final: code $code, builds '$($builds -join ',')' (want 'release,dev')"
+    } }
+
+    [pscustomobject]@{ Name = 'goal-and-goalfile'; Body = {
+        $entry = Join-Path $PSScriptRoot 'perf-loop.ps1'
+        $bin = Join-Path $script:SelfTestRoot 'empty-bin'
+        $null = New-Item -ItemType Directory -Path $bin -Force
+        $out = Join-Path $script:SelfTestRoot 'out-goal'
+        $goalFile = Join-Path $PSScriptRoot 'goals\draw-load-parity.toml'
+        $base = @('rank-run', '-Iter', '1', '-DryRun', '-BinDir', $bin, '-OutRoot', $out, '-GoalFile', $goalFile)
+        $r = Invoke-PwshChild -ScriptPath $entry -Arguments $base -Quiet
+        Assert-SelfTest ($r.Code -eq 0) "-GoalFile alone: code $($r.Code) (want 0): $(ConvertTo-SelfTestAscii $r.LastLine)"
+        $r = Invoke-PwshChild -ScriptPath $entry -Arguments ($base + @('-Goal', 'draw-load-parity')) -Quiet
+        Assert-SelfTest ($r.Code -eq 3) "explicit -Goal with -GoalFile: code $($r.Code) (want 3): $(ConvertTo-SelfTestAscii $r.LastLine)"
+        Assert-SelfTest ([bool](@($r.Err) -match '-Goal and -GoalFile')) "no reason line naming -Goal and -GoalFile: $(ConvertTo-SelfTestAscii (@($r.Err) -join ' | '))"
+    } }
+
+    [pscustomobject]@{ Name = 'relative-paths'; Body = {
+        # PowerShell の今の場所（プロセスの今の場所ではない）につなぐ
+        $here = Join-Path $script:SelfTestRoot 'cwd'
+        $null = New-Item -ItemType Directory -Path $here -Force
+        Push-Location -LiteralPath $here
+        try {
+            $got = Resolve-LoopPath 'a\b'
+            Assert-SelfTest ($got -eq (Join-Path $here 'a\b')) "relative: $(ConvertTo-SelfTestAscii $got)"
+            $got = Resolve-LoopPath '..\c'
+            Assert-SelfTest ($got -eq (Join-Path $script:SelfTestRoot 'c')) "parent: $(ConvertTo-SelfTestAscii $got)"
+        } finally { Pop-Location }
+        Assert-SelfTest ((Resolve-LoopPath 'C:\x\y') -eq 'C:\x\y') 'absolute path must stay as it is'
+        Assert-SelfTest ([string]::IsNullOrEmpty((Resolve-LoopPath ''))) 'empty must stay empty'
+        # 入口は 7 つのパスの引数をどれも一度だけ Resolve-LoopPath に通す
+        $text = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'perf-loop.ps1'))
+        foreach ($name in @('OutRoot', 'RunDir', 'BinDir', 'GhostRoot', 'BalloonRoot', 'GoalFile', 'Ledger')) {
+            $n = [regex]::Matches($text, "Resolve-LoopPath\s+\`$$name\b").Count
+            Assert-SelfTest ($n -eq 1) "perf-loop.ps1 passes `$$name to Resolve-LoopPath $n times (want 1)"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'preflight-code'; Body = {
+        $ok = @{ JudgeMatch = $true; JudgeNote = 'j'; PythonOk = $true; PythonNote = 'p'; SelftestOk = $true; SelftestNgCount = 0; GoalCheck = 'ok'; GoalCheckNote = 'g' }
+        $r = Get-PreflightCode @ok
+        Assert-SelfTest ($r.Code -eq 0 -and -not $r.Reason) "all ok: code $($r.Code) reason '$($r.Reason)'"
+        $r = Get-PreflightCode @ok -GoalCheck 'skipped'
+        Assert-SelfTest ($r.Code -eq 0) "goal-check skipped: code $($r.Code)"
+        # 順: 判定スクリプトの版 -> python の版 -> 自分の検査 -> goal-check（最初に落ちたものが理由）
+        $cases = @(
+            @{ Over = @{ JudgeMatch = $false; PythonOk = $false; SelftestOk = $false; SelftestNgCount = 2; GoalCheck = 'ng' }; Want = 'judge' }
+            @{ Over = @{ PythonOk = $false; PythonNote = 'python not found'; SelftestOk = $false; SelftestNgCount = 2; GoalCheck = 'ng' }; Want = 'python not found' }
+            @{ Over = @{ PythonOk = $false; PythonNote = '3.10.4' }; Want = '3.10.4' }
+            @{ Over = @{ SelftestOk = $false; SelftestNgCount = 2; GoalCheck = 'ng' }; Want = '2 red' }
+            @{ Over = @{ GoalCheck = 'ng'; GoalCheckNote = 'version differs' }; Want = 'version differs' }
+        )
+        foreach ($case in $cases) {
+            $a = $ok.Clone()
+            foreach ($k in $case.Over.Keys) { $a[$k] = $case.Over[$k] }
+            $r = Get-PreflightCode @a
+            Assert-SelfTest ($r.Code -eq 4 -and $r.Reason.Contains($case.Want)) "want code 4 with '$($case.Want)': code $($r.Code) reason '$(ConvertTo-SelfTestAscii $r.Reason)'"
+        }
+    } }
+
+    [pscustomobject]@{ Name = 'goal-text-count'; Body = {
+        $report = "goal-text: 1012 `u{6587}`u{5B57}"
+        $header = "# copy`n`u{672C}`u{6587}`u{306F} 1,012 `u{5B57}`n---`nbody"
+        $r = Test-GoalTextCharCount -ErrText $report -MdText $header
+        Assert-SelfTest $r.Ok "same count must be ok: $(ConvertTo-SelfTestAscii $r.Note)"
+        $r = Test-GoalTextCharCount -ErrText 'goal-text: no count here' -MdText $header
+        Assert-SelfTest (-not $r.Ok) 'count unreadable from goal-text must be red'
+        $r = Test-GoalTextCharCount -ErrText ($report -replace '1012', '1013') -MdText $header
+        Assert-SelfTest (-not $r.Ok) 'different count must be red'
+        $r = Test-GoalTextCharCount -ErrText 'goal-text: no count here' -MdText "# copy`n---`nbody"
+        Assert-SelfTest $r.Ok "no count in the copy header must be skipped (ok): $(ConvertTo-SelfTestAscii $r.Note)"
+    } }
 )
 
 # =============================================================================

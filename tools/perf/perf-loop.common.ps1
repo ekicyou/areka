@@ -21,7 +21,8 @@ perf-tool-base.ps1（表示・時刻・子の起こし方・目標定義の読�
                        Get-MeasureToml / Get-MeasureTomlInt / Get-MeasureTomlArray
                        Get-Measure* は $script:GoalConfig.Toml を引く節・鍵の読み口で、
                        呼び手は計測の本体（perf-loop.measure.ps1）＝置き場だけがここ
-  出力先の配置       … Get-LoopDir / Resolve-RunDir / New-LoopDir / Test-ResumeArtifact
+  出力先の配置       … Get-LoopDir / Resolve-RunDir / Resolve-LoopPath / New-LoopDir / Test-ResumeArtifact
+  preflight の判定   … Get-PreflightCode / Test-GoalTextCharCount（純関数）
                        %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\… の唯一の所在
 
 なぜ別ファイルなのか:
@@ -200,7 +201,7 @@ function Get-MeasureTomlArray {
 }
 
 # judge-perf.py の SCRIPT_VERSION の先頭語（例 "0.4.0"）を、スクリプトを起動せずに読む。
-# 判定スクリプトは複数行の括弧つき文字列で版を持つ（judge-perf.py:150）ため、
+# 判定スクリプトは複数行の括弧つき文字列で版を持つ（judge-perf.py の SCRIPT_VERSION の定義）ため、
 # 最初の引用符の中の最初の空白までを版と見る。読めなければ $null（呼び手が計測失敗にする）。
 function Get-JudgeScriptVersion {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -291,14 +292,16 @@ function Resolve-RunDir {
         [string]$Date,
         [string]$Leaf
     )
-    if ($RunDir) {
-        $path = $RunDir
-        if (-not [System.IO.Path]::IsPathFullyQualified($path)) {
-            $path = Join-Path (Get-Location).Path $path
-        }
-        return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
-    }
+    if ($RunDir) { return (Resolve-LoopPath $RunDir).TrimEnd('\') }
     return (Get-LoopDir -Kind $Kind -Iter $Iter -Date $Date -Leaf $Leaf)
+}
+
+# パスの引数を PowerShell の今の場所（プロセスの今の場所ではない）につないで絶対にする。空なら空を返す。
+# 入口（perf-loop.ps1）がパスの引数ごとに一度だけ呼ぶ（27＝解き方を 1 通りにする）。
+function Resolve-LoopPath {
+    param([string]$Path)
+    if (-not $Path) { return $Path }
+    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 }
 
 # 出力先を作る（既にあれば何もしない）。
@@ -346,6 +349,44 @@ function Find-XperfPath {
     if ($found) { return $found.Source }
     if ($DefaultPath -and (Test-Path -LiteralPath $DefaultPath -PathType Leaf)) { return $DefaultPath }
     return $null
+}
+
+# preflight の合否（純関数）。順に見て最初に落ちたものを理由にする:
+# 判定スクリプトの版 → python の版 → 自分の検査 → goal-check。どれか落ちれば 4（計測失敗）。
+# goal-check の 'skipped'（台帳がまだ無い）は落ちたことにしない。
+function Get-PreflightCode {
+    param(
+        [bool]$JudgeMatch, [string]$JudgeNote,
+        [bool]$PythonOk, [string]$PythonNote,
+        [bool]$SelftestOk, [int]$SelftestNgCount,
+        [string]$GoalCheck, [string]$GoalCheckNote
+    )
+    $reason = if (-not $JudgeMatch) { "judge script version differs from the goal definition ($JudgeNote)" }
+    elseif (-not $PythonOk)         { "python check failed: $PythonNote" }
+    elseif (-not $SelftestOk)       { "tool selftest has $SelftestNgCount red" }
+    elseif ($GoalCheck -eq 'ng')    { "ledger vs goal definition check (goal-check) failed: $GoalCheckNote" }
+    else                            { '' }
+    $code = if ($reason) { $EXIT_MEASURE_FAILED } else { $EXIT_OK }
+    return [pscustomobject]@{ Code = $code; Reason = $reason }
+}
+
+# goal-text の字数の突き合わせ（純関数）。写しの頭書（「本文は 1,012 字」）に字数が無いときだけ飛ばす（Ok）。
+# 頭書に在るのに goal-text の報告（標準エラーの「1012 文字」）から読めないときと、数が違うときは赤。
+# 突き合わせる日本語（「本文は」「字」「文字」）は字句を ASCII に保つため `u{} で書く（字は同じ）。
+function Test-GoalTextCharCount {
+    param([string]$ErrText, [string]$MdText)
+    if ($MdText -notmatch "`u{672C}`u{6587}`u{306F}\s*([\d,]+)\s*`u{5B57}") {
+        return [pscustomobject]@{ Ok = $true; Note = 'no char count in the copy header (count check skipped)' }
+    }
+    $declared = [int](($Matches[1]) -replace ',', '')
+    if ($ErrText -notmatch "(\d+)\s*`u{6587}`u{5B57}") {
+        return [pscustomobject]@{ Ok = $false; Note = "cannot read the char count from the goal-text report (the copy header says $declared chars)" }
+    }
+    $reported = [int]$Matches[1]
+    if ($reported -ne $declared) {
+        return [pscustomobject]@{ Ok = $false; Note = "the copy header says $declared chars but goal-text reports $reported (fix only the number in the header)" }
+    }
+    return [pscustomobject]@{ Ok = $true; Note = "$reported chars, also matches the copy header" }
 }
 
 # 真偽を字面へ（capabilities 行・preflight.txt の値）。

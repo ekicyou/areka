@@ -67,13 +67,11 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
 較正値・調整値の一覧（変更する場合はここだけを書き換える）
 --------------------------------------------------------------------------------
   SCRIPT_VERSION              本スクリプトの版
-  DEFAULT_GOAL                -Goal を省いたときの目標の名前
   SELFTEST_TOOLS              自己較正を回す道具の一覧と順序（下の表）
   CHECKIN_DEFAULT_MINUTES     CLAUDE_CODE_GOAL_CHECKIN_MINUTES 未設定時の実効値（30 分・
                               Claude Code の既定。公式文書 code.claude.com/docs/en/goal.md）
   CHECKIN_WARN_BELOW_MINUTES  これ未満なら警告（25 分水準の計測に check-in が割り込む）
   PYTHON_MIN_VERSION          tomllib が要る最低の Python（3.11）
-  PWSH_MIN_MAJOR              最低の PowerShell（7）
   XPERF_DEFAULT_PATH          PATH に xperf が無いときに見に行く既定の位置
                               （invoke-cpu-sample.ps1 の同名定数の写し）
   RELEASE_PDB_RELPATH         段③の記号解決に要る PDB の在り処
@@ -82,7 +80,7 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
   0 … 完了（段③が UNAVAILABLE でも preflight は 0 で続行を許す）
   1 … 実走の失敗
   2 … 静寂でない（再試行の上限を超えた）
-  3 … 引数・前提の不正（未知のサブコマンド・目標定義ファイルが無い・未実装の受け口）
+  3 … 引数・前提の不正（未知のサブコマンド・目標定義ファイルが無い・-Goal と -GoalFile の同時指定）
   4 … 計測失敗＝MEASURE_FAILED（自己較正が赤・判定スクリプトの版不一致・空採取・
       記号解決ゼロ）。想定外の失敗（道具の不具合）もここに入る。台帳へは MEASURE_FAILED として記録される
   5 … 能力不足＝UNAVAILABLE（昇格なし・xperf なし・PDB なし）。**停止の理由にしない**。
@@ -172,12 +170,10 @@ $PSNativeCommandUseErrorActionPreference = $false
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
 $SCRIPT_VERSION             = '1.0.0'
-$DEFAULT_GOAL               = 'draw-load-parity'
 $CHECKIN_DEFAULT_MINUTES    = 30
 $CHECKIN_WARN_BELOW_MINUTES = 25
 $CHECKIN_ENV_NAME           = 'CLAUDE_CODE_GOAL_CHECKIN_MINUTES'
 $PYTHON_MIN_VERSION         = [Version]'3.11'
-$PWSH_MIN_MAJOR             = 7
 $XPERF_DEFAULT_PATH         = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
 $RELEASE_PDB_RELPATH        = 'target\release\areka.pdb'
 $PDB_BUILD_HINT             = 'set CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and run cargo build --release to get it'
@@ -222,27 +218,18 @@ $STAGE_UNAVAILABLE   = 'UNAVAILABLE'
 $VERDICT_PREFLIGHT_OK = 'PREFLIGHT_OK'
 $VERDICT_PREFLIGHT_NG = 'PREFLIGHT_NG'
 
+# 語は小文字にそろえてから確かめる（4: `Rank-Run`・`Release` を語彙の字面へ。判定へ渡る語も小文字）
+if ($Sub) { $Sub = $Sub.ToLowerInvariant() }
+if ($Build) { $Build = $Build.ToLowerInvariant() }
+
 # =============================================================================
 # script scope の状態（共通部品が読む。dot-source より先に置くこと）
 # =============================================================================
 $script:CurrentSub  = if ($Sub) { $Sub } else { '-' }
 $script:CurrentDir  = '-'
 $script:OutRootPath = $null
-$script:GoalName    = if ($Goal) { $Goal } else { $DEFAULT_GOAL }
+$script:GoalName    = $Goal
 $script:DateStamp   = $Date
-
-# 計測サブコマンド（perf-loop.measure.ps1）が読む引数。**引数を読む所在はここだけ**に
-# しておく——8 本の本体が $PSBoundParameters や param 変数を直に触ると、どの引数が
-# 効くのかが 8 か所に散るためである。
-$script:IterArg        = $Iter
-$script:RunDirArg      = $RunDir
-$script:BuildKind      = $Build
-$script:BuildExplicit  = $PSBoundParameters.ContainsKey('Build')
-$script:BinDirArg      = $BinDir
-$script:GhostRootArg   = $GhostRoot
-$script:BalloonRootArg = $BalloonRoot
-$script:ResumeMode     = [bool]$Resume
-$script:DryRunMode     = [bool]$DryRun
 
 . (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
 
@@ -309,25 +296,12 @@ function Test-GoalTextMatchesGoalMd {
         $right = $body.Trim()
         if ($left -ceq $right) {
             # 本文が一致していても、写しのヘッダが書いている字数（「本文は 1,012 字」）は
-            # テンプレートを直すと黙ってずれる。goal-text 自身が報告した字数と突き合わせる。
-            # 突き合わせる日本語（「文字」「本文は」「字」）は字句を ASCII に保つため `u{} で書く（字は同じ）。
-            $reported = $null
-            $errText = (@($text.Err) -join "`n")
-            if ($errText -match "(\d+)\s*`u{6587}`u{5B57}") { $reported = [int]$Matches[1] }
-            $declared = $null
-            if ($mdText -match "`u{672C}`u{6587}`u{306F}\s*([\d,]+)\s*`u{5B57}") { $declared = [int](($Matches[1]) -replace ',', '') }
-            if ($null -ne $reported -and $null -ne $declared -and $reported -ne $declared) {
-                $detail = @(
-                    "the char count in the header of $goalMdPath differs from what goal-text reports",
-                    "  goal-text : $reported chars",
-                    "  goal.md   : $declared chars",
-                    '  The body matches, so fix only the number in the header.'
-                )
-                return [pscustomobject]@{ Ok = $false; Code = 1; Note = "body matches, header char count differs ($declared != $reported)"; Lines = $detail }
+            # テンプレートを直すと黙ってずれる。goal-text 自身が報告した字数と突き合わせる（33）。
+            $count = Test-GoalTextCharCount -ErrText (@($text.Err) -join "`n") -MdText $mdText
+            if (-not $count.Ok) {
+                return [pscustomobject]@{ Ok = $false; Code = 1; Note = "body matches, but $($count.Note)"; Lines = @("copy: $goalMdPath") }
             }
-            $note = "body of $(Format-LoopValue $reported) chars matches"
-            if ($null -ne $declared) { $note += " (also matches the $declared chars in the copy header)" }
-            return [pscustomobject]@{ Ok = $true; Code = 0; Note = $note; Lines = @() }
+            return [pscustomobject]@{ Ok = $true; Code = 0; Note = "body matches ($($count.Note))"; Lines = @() }
         }
 
         # 食い違いは黙って通さない。最初に違う行を名指しする。
@@ -476,15 +450,14 @@ function Invoke-SubPreflight {
     $judgeMatch = ($judgeActual -and $goalConfig.JudgeVersion -and ($judgeActual -eq $goalConfig.JudgeVersion))
 
     # --- Python / PowerShell の版 --------------------------------------------
+    # python が無いか $PYTHON_MIN_VERSION 未満なら 4（25）。PowerShell は #Requires で 7 以上と決まっているので版を書くだけ。
     $python = Get-PythonCommand
     $pythonVersion = Get-PythonVersionText -Python $python
-    $pythonOk = $false
-    if ($pythonVersion) {
-        $parsed = [Version]$pythonVersion
-        $pythonOk = ($parsed -ge $PYTHON_MIN_VERSION)
-    }
+    $pythonOk = [bool]($pythonVersion -and ([Version]$pythonVersion -ge $PYTHON_MIN_VERSION))
+    $pythonNote = if (-not $python) { 'python not found' }
+                  elseif (-not $pythonVersion) { 'cannot read the python version' }
+                  else { "python $pythonVersion (need $PYTHON_MIN_VERSION or later)" }
     $pwshVersion = $PSVersionTable.PSVersion.ToString()
-    $pwshOk = ($PSVersionTable.PSVersion.Major -ge $PWSH_MIN_MAJOR)
 
     # --- check-in 間隔の実効値 -----------------------------------------------
     # 環境変数が未設定なら Claude Code の既定 30 分が効いている。25 分未満だと
@@ -508,7 +481,7 @@ function Invoke-SubPreflight {
 
     # --- 台帳（あれば版一致まで goal-check で確かめる） ------------------------
     # goal-check は必須キー・判定スクリプトの版・閾値・台帳の goal 名を突き合わせ、
-    # 走行トークンが無ければ作る／既にあれば変えない（perf_ledger_goal.py:430-447）。
+    # 走行トークンが無ければ作る／既にあれば変えない（perf_ledger_goal.py の goal-check の、走行トークンを作る・変えない所）。
     # 台帳が無い状態では呼べない（周 0 の手順は init → goal-check → goal-text）ので、
     # -Ledger で明示されたか、目標定義から導いた台帳が実在するときだけ呼ぶ。
     # 実在すれば呼んで構わない——トークンは書き換わらず、まだ無ければここで作られた 1 つを
@@ -517,7 +490,10 @@ function Invoke-SubPreflight {
     $ledgerExists = ($ledgerPath -and (Test-Path -LiteralPath $ledgerPath -PathType Leaf))
     $goalCheck = 'skipped'
     $goalCheckNote = 'no ledger yet (create it with perf-ledger.py init, then goal-check, then goal-text)'
-    if ($ledgerExists) {
+    if ($ledgerExists -and -not $python) {
+        $goalCheck = 'ng'
+        $goalCheckNote = 'python not found'
+    } elseif ($ledgerExists) {
         $goalCheckArgs = @((Join-Path $PSScriptRoot 'perf-ledger.py'), 'goal-check', '--ledger', $ledgerPath)
         if ($script:GoalFilePath) { $goalCheckArgs += @('--goal-file', $script:GoalFilePath) }
         else { $goalCheckArgs += @('--goal', $script:GoalName) }
@@ -538,18 +514,11 @@ function Invoke-SubPreflight {
     # --- 合否 -----------------------------------------------------------------
     # 段③が使えないこと（5＝能力不足）は preflight を止めない。止めるのは
     # 「道具が壊れている」＝自己較正の赤と判定スクリプトの版不一致だけ（要件 2.11）。
-    $code = $EXIT_OK
-    $failReason = ''
-    if (-not $judgeMatch) {
-        $code = $EXIT_MEASURE_FAILED
-        $failReason = "judge script version differs from the goal definition (goal $judgeDeclared / $(Format-LoopValue $judgeActual))"
-    } elseif (-not $selftest.Ok) {
-        $code = $EXIT_MEASURE_FAILED
-        $failReason = "tool selftest has $($selftest.NgCount) red"
-    } elseif ($goalCheck -eq 'ng') {
-        $code = $EXIT_MEASURE_FAILED
-        $failReason = "ledger vs goal definition check (goal-check) failed: $goalCheckNote"
-    }
+    $outcome = Get-PreflightCode -JudgeMatch ([bool]$judgeMatch) -JudgeNote "goal $judgeDeclared / $(Format-LoopValue $judgeActual)" `
+        -PythonOk $pythonOk -PythonNote $pythonNote -SelftestOk $selftest.Ok -SelftestNgCount $selftest.NgCount `
+        -GoalCheck $goalCheck -GoalCheckNote $goalCheckNote
+    $code = $outcome.Code
+    $failReason = $outcome.Reason
     $verdict = if ($code -eq $EXIT_OK) { $VERDICT_PREFLIGHT_OK } else { $VERDICT_PREFLIGHT_NG }
 
     # --- 報告（preflight.txt と標準出力へ同じ文面） ---------------------------
@@ -589,7 +558,7 @@ function Invoke-SubPreflight {
         "judge_version_script=$(Format-LoopValue $judgeActual)",
         "judge_version_match=$(Format-LoopBool $judgeMatch)",
         "python=$(Format-LoopValue $pythonVersion) min=$($PYTHON_MIN_VERSION.ToString()) ok=$(Format-LoopBool $pythonOk)",
-        "pwsh=$pwshVersion min=$PWSH_MIN_MAJOR ok=$(Format-LoopBool $pwshOk)",
+        "pwsh=$pwshVersion",
         "checkin_minutes=$checkinMinutes source=$checkinSource recommended=$checkinRecommended warn_below=$CHECKIN_WARN_BELOW_MINUTES",
         "checkin_warn=$(Format-LoopBool $checkinWarn)",
         "ledger=$(Format-LoopValue $ledgerPath)",
@@ -643,6 +612,31 @@ if ($Iter -lt 0) {
 if ($Date -and $Date -notmatch '^\d{8}$') {
     Stop-Run -Code $EXIT_BAD_ARGS -Message "-Date must be 8 digits yyyyMMdd (got: '$Date')"
 }
+if ($PSBoundParameters.ContainsKey('Goal') -and $GoalFile) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Goal and -GoalFile were both given; pass only one (got: -Goal '$Goal' -GoalFile '$GoalFile')"
+}
+
+# パスの引数は PowerShell の今の場所につないで、ここで一度だけ絶対にする（27）
+$OutRoot     = Resolve-LoopPath $OutRoot
+$RunDir      = Resolve-LoopPath $RunDir
+$BinDir      = Resolve-LoopPath $BinDir
+$GhostRoot   = Resolve-LoopPath $GhostRoot
+$BalloonRoot = Resolve-LoopPath $BalloonRoot
+$GoalFile    = Resolve-LoopPath $GoalFile
+$Ledger      = Resolve-LoopPath $Ledger
+
+# 計測サブコマンド（perf-loop.measure.ps1）が読む引数。**引数を読む所在はここだけ**に
+# しておく——8 本の本体が $PSBoundParameters や param 変数を直に触ると、どの引数が
+# 効くのかが 8 か所に散るためである。
+$script:IterArg        = $Iter
+$script:RunDirArg      = $RunDir
+$script:BuildKind      = $Build
+$script:BuildExplicit  = $PSBoundParameters.ContainsKey('Build')
+$script:BinDirArg      = $BinDir
+$script:GhostRootArg   = $GhostRoot
+$script:BalloonRootArg = $BalloonRoot
+$script:ResumeMode     = [bool]$Resume
+$script:DryRunMode     = [bool]$DryRun
 
 $script:OutRootPath = Resolve-OutRoot -OutRoot $OutRoot
 if (-not $script:OutRootPath) {
