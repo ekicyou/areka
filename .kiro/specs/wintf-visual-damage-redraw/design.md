@@ -135,8 +135,8 @@ crates/wintf/src/ecs/graphics/
 - `crates/wintf/src/ecs/graphics/components.rs` — `SurfaceGraphics` に `composed_before: bool`（初めてと作り直しの見分け・3.4）と、それを読み書きする口。
 - `crates/wintf/src/ecs/graphics/composite_tests.rs` — `compose_or_drop` の呼び方の追随（1 件）。
 - `crates/wintf/src/ecs/graphics/visual/draw/emit_blend_tests.rs`・`emit_layer_tests.rs` — 命令の構造体の足した欄の追随。
-- `crates/wintf/tests/graphics/composite_systems_test.rs` — 実 GPU で、節を 1 つ変えた回と、変わらない回の画面の答え（7.5・7.4）。
-- `crates/wintf/src/ecs/graphics/visual/draw/README.md` — 構想の文を、作りの要点（項・比べ・計画・写し・記録）へ書き直す。
+- `crates/wintf/tests/graphics/composite_systems_test.rs` — 実 GPU で、節を 1 つ変えた回と、変わらない回の画面の答え（7.5・7.4）と、範囲だけの道と全部の道のバイトの一致 3 件。
+- `crates/wintf/src/ecs/graphics/visual/draw/README.md` — 構想の文を、作りの要点（項・比べ・計画・写し・記録）へ書き直す。平行移動の写しが効く木の形（スクロールの区画が自分の描画面を持ち、根の命令の列も下に重なる絵も無い）と、中身が描画面 1 枚に収まるなら中身を `OwnSurface` にして位置だけ動かせば描き直しも写しも 0 で済むこと（位置だけの変化では描き直しの印が立たない）を書く。
 - `crates/wintf/src/ecs/graphics/visual/version.rs` — 注記の「フェーズ3 の blit」を「平行移動の写し（`damage.rs`）」へ。
 - `.kiro/steering/tech.md` — Testing の節: 差分の描き直しの答えは全部描いた答えとバイトで一致（±1 でない）。
 - `.kiro/steering/structure.md` — `graphics/visual/` の描画の道の記述に、比べ・計画・範囲だけの描き直しを足す。
@@ -287,7 +287,7 @@ pub struct OpacityLayer { pub entity: Entity, pub version: u64, pub opacity: f32
 - 平行移動を除いた鍵 `shape`: 種類の印・`entity`・`version`（件はさらに補間と混ぜ方・不透明度の層は `opacity`）・親の `shape` の hash。位置と大きさを含めない（5.3。大きさと線形の部分の一致は平行移動の判定 S5 で確かめる）。
 - 物理の値: `exact`＝世界の外接矩形を拡大で物理へ写した f32 の矩形（丸め前）。`linear`・`origin`＝`world_mat × 拡大` の線形の部分と平行移動（件と図形の切り抜き。矩形の切り抜きと不透明度の層は `origin`＝`exact` の左上・`linear`＝恒等）。`emit` が D2D に渡すのと同じ f32 の掛け算で求める。
 - 画素を変えうる範囲 `bounds`（物理・整数・外向き・2.1）:
-  - 重ね方が `SOURCE_OVER` の件・ブレンドの件・範囲の外の混ぜ方の件（`SOURCE_OVER` で描かれる）: `exact` を外向きに丸め、補間が `NEAREST_NEIGHBOR` でなければ各辺に `ceil(2 × s)` 画素を足す（`s`＝`linear` の列の長さの大きい方・1 未満なら 1。補間の核の半径 2 素の画素を拡大した分＝R3 の決め）。
+  - 重ね方が `SOURCE_OVER` の件・ブレンドの件・範囲の外の混ぜ方の件（`SOURCE_OVER` で描かれる）: `exact` を外向きに丸め、補間が `NEAREST_NEIGHBOR` でなければ各辺に `ceil(2 × s)` 画素を足す（`s`＝`linear` の列の長さの大きい方・1 未満なら 1。補間の核の半径 2 素の画素を拡大した分＝R3 の決め）。そのうえで親の鎖の矩形の切り抜き・図形の切り抜きの `bounds` との交わりに切る（切り抜きの外は D2D が描かないので答えは変わらず、小さい切り抜きの中の大きい件の変化が全面へ倒れにくくなる。不透明度の層の範囲では切らない＝層の範囲は中身を切る保証が無い）。
   - 重ね方が `SOURCE_OVER` でない件（D2D は絵を今の軸に沿う切り抜きまで広げて合成する）: 親の鎖の矩形の切り抜きの `bounds` の交わり。矩形の切り抜きが無ければ描画面の全面（R2 の決め）。
   - 層: `exact` を外向きに丸めた矩形（中身の件は自分の範囲を持つので層に余白は足さない）。
 - 中身の範囲は `VisualDrawContent.local_aabb` を信じる（今の間引き `build` も同じ約束に頼っている）。`local_aabb` の外へはみ出す中身は使い手の約束の破れで、差分の描き直しでも間引きでも答えが欠ける（`VisualDrawContent::new_ex` の文書に 1 行足す）。
@@ -494,7 +494,8 @@ impl SurfaceComposite {
 **Contracts**: Batch [x]
 
 - Trigger: 今どおり `Changed<SurfaceGraphicsDirty>` の描画面（印の立て方は変えない）。
-- 手順: (1) 入れ物を作る回は `SurfaceGraphics::note_composite_created()` が `First`（その `SurfaceGraphics` が入れ物を持ったことが無い）か `Recreated` を返し、`fresh` にする。(2) `entries(tree, scale, size)` で今の項の列を作る（木が無ければ空の列）。(3) `plan`。(4) Full＝`compose_or_drop(slot, |c| c.compose(…))`・Partial＝`compose_or_drop(slot, |c| c.compose_partial(…))`・PresentOnly と Skip は合成しない。(5) 成功（Skip・PresentOnly を含む）で `remember`。(6) Skip 以外は今どおり `begin_draw(None)` → `copy_to` → `end_draw`、成功で `mark_presented`。
+- 手順: (1) 入れ物を作る回は `SurfaceGraphics::note_composite_created()` が `First`（その `SurfaceGraphics` が入れ物を持ったことが無い）か `Recreated` を返し、`fresh` にする。(2)〜(5) は `composite.rs` の 1 つの関数 `compose_planned`（下）に任せる。(6) Skip 以外は今どおり `begin_draw(None)` → `copy_to` → `end_draw`、成功で `mark_presented`。(7) 記録の 1 行。
+- `compose_planned(slot, dc, fresh, scale, root_list, tree, size) -> windows::core::Result<(ComposePlan, Option<Vec<DamageEntry>>)>`: (2) `entries(tree, scale, size)` で今の項の列を作る（木が無ければ空の列）。(3) `plan`。(4) Full＝`compose_or_drop(slot, |c| c.compose(…))`・Partial＝`compose_or_drop(slot, |c| c.compose_partial(…))`・PresentOnly と Skip は合成しない。(5) 成功（Skip・PresentOnly を含む）で `remember`。本番の係と WARP のテストが同じ関数を呼ぶ（`composite.rs` の冒頭の約束と同じ形）ので、`remember` の呼び忘れや Skip・失敗の回の順の誤りを WARP のテストで見つけられる。`render.rs` に残るのは WUC への写し・`mark_presented`・記録だけ。
 - 失敗: 範囲版の合成・作業用の絵の作成と写しの失敗は `compose_or_drop` が入れ物を捨て、`on_stage_failure(STAGE_COMPOSE)` に乗る（失いなら係を抜ける・失いでなければ `error!`＋実体名＋HRESULT と描き直しの印・3.5・3.6）。次の回は入れ物が新しいので `Recreated` で全部。
 - 写しの失敗（`BeginDraw`・`EndDraw` の失いでない失敗）では入れ物と控えが残り `presented = false` のまま。次の回に比べが「変わらない」と答えても PresentOnly で写す（2.8）。
 - 同じ回の中で描く（遅らせない・2.7）。
@@ -565,13 +566,15 @@ stateDiagram-v2
 
 ### Integration Tests（WARP・バイトの一致・7.3）
 
-- 足場: 前の列で全部合成した入れ物 A に、今の列の計画（`Partial` であることを毎回確かめる＝範囲だけの道を通ったことの証）で `compose_partial` を走らせ、今の列で全部合成した入れ物 B と `read_all` のバイトで比べる。描く矩形の外の画素が前の答えのまま（A の前の写しと比べる・2.3）も確かめる。拡大 1.0 と 1.25。
+- 足場: 前の列で全部合成した入れ物 A に、本番と同じ `compose_planned` で今の列を合成し（計画が `Partial` であることを毎回確かめる＝範囲だけの道を通ったことの証）、今の列で全部合成した入れ物 B と `read_all` のバイトで比べる。描く矩形の外の画素が前の答えのまま（A の前の写しと比べる・2.3）も確かめる。拡大 1.0 と 1.25。
+- 続けて変える件: 5〜6 フレーム続けて木を変え（足す・動かす・何も変えない・層を変える・戻す）、毎フレーム `compose_planned` の入れ物を全部合成の答えとバイトで比べる（控えが古いと誤りが次の全部の合成まで残る＝1 回きりの比べでは見えない）。
 - `composite_damage_tests.rs`: 足す・消す・動かす・描く中身を差し替える・並べ替える・矩形と図形の切り抜きを足す・外す・形を変える・不透明度の層を足す・外す・値を変える・ブレンドの件と `SOURCE_OVER` でない重ね方の件を変える・補間 `LINEAR`／`HIGH_QUALITY_CUBIC` の件を小数の位置で動かす・根の命令の列と木を両方持つ。範囲だけの回で世代が 1 上がり、Skip で世代と画素が変わらない（7.4）。
 - `composite_scroll_tests.rs`: 矩形の切り抜きの中の件を整数の物理ピクセル（上下・左右・斜め・拡大 1.25 で整数になる量）だけ動かす・切り抜きの外へ出る件と入る件がある・小数の位置の件を含む、で写しを使い（計画に `RegionShift` が在ることを確かめる）全部の答えとバイトで一致。整数でない量・下に重なる絵が在る場合は写さずに一致。
 
 ### E2E Tests（実 GPU・7.5）
 
 - `tests/graphics/composite_systems_test.rs`: 描画の木を持つ描画面で 1 フレーム描き、節を 1 つ動かしたフレームの WUC の描画面の画素が今の答えになる。続けて描き直しの印だけを立てた（何も変えない）フレームで、描画面の画素が前のまま残る。
+- 実 GPU のバイトの一致（3 件）: 同じ装置の描画面 2 枚（前を全部描いてから範囲だけの道で今へ／初めから今を全部）を `SurfaceReadback::read_all` で読んでバイトで比べる。件は、小数の位置の `LINEAR` の件を動かす・描く矩形の縁をまたぐ不透明度の層・拡大 1.25 の整数の平行移動の写し。範囲だけの道は層の中間の面の原点が全部の道と違い、同じ GPU の中でも 1 段ずれうる＝WARP の緑では保証できない。ずれたら、テストを緩めずその組み合わせを全部へ倒す（R1・R5 と同じ方針）。
 
 ### 既存のテストの追随
 
@@ -593,6 +596,6 @@ stateDiagram-v2
 - **D3** 層の鍵は節の実体と版（図形の番地を使わない・gap §8 の 3）。
 - **D4** `SOURCE_OVER` でない重ね方の件の範囲は囲む矩形の切り抜き（無ければ全面）。にじみの余白は `ceil(2 × s)` 画素（R2・R3・gap §8 の 4・5）。
 - **D5** 普通の範囲は 1 つの外接矩形にまとめる。矩形を列で持つのは平行移動の写しの帯だけ（gap §8 の 7）。
-- **D6** 入れ物の中の写しは作業用の絵を通す（同じビットマップの中の写しは D3D11 の `CopySubresourceRegion` の「元と先は別の subresource」に当たり使えない＝R4）。作業用の絵は 1 回の合成の中だけ持つので、入れ物の枚数と寿命の決め（`wintf-d2d-composite-rules` 4.3）は変えない。
+- **D6** 入れ物の中の写しは作業用の絵を通す（R4: D2D の `ID2D1Bitmap::CopyFromBitmap` は自分自身を元にできるかを文書に書いていない。D3D11 の `CopySubresourceRegion1` はドライバが `CopyWithOverlap` を支えれば同じ subresource の重なる写しを許すが、支えないドライバでは戻り値なしに捨てられる＝記録の無い失敗の道になるので使わない）。作業用の絵は 1 回の合成の中だけ持つので、入れ物の枚数と寿命の決め（`wintf-d2d-composite-rules` 4.3）は変えない。
 - **D7** 描く矩形の中の再生は件だけを飛ばし、層は全部積む（層の作りに触らない）。
 - **D8** 根の命令の列を持つ描画面では平行移動の写しを使わない（根の列の範囲を決めない・条件 S1）。
