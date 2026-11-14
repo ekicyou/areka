@@ -73,7 +73,7 @@ class CatchupAnalysis:
     #: `[tick]` 窓の総数と、壁時計合計を読めた窓の数。
     tick_windows: int = 0
     tick_windows_with_wall: int = 0
-    #: catch-up を覆った窓の数（同じ窓に複数の catch-up が入れば 1 と数える）。
+    #: catch-up を覆った窓の数（同じ窓に複数の catch-up が入れば 1 と数える・wall_us の有無を問わない）。
     matched_windows: int = 0
     mean_wall_all_us: float | None = None
     mean_wall_catchup_us: float | None = None
@@ -166,11 +166,9 @@ def analyze(
     if windows and (ticks_total + skipped_total) > 0:
         analysis.skip_ratio = skipped_total / (ticks_total + skipped_total)
 
-    matched: dict[datetime, int] = {}
-    for row in analysis.rows:
-        if row.tick is not None and row.tick.wall_us is not None:
-            matched[row.tick.at] = row.tick.wall_us
-    analysis.matched_windows = len(matched)
+    covering = {row.tick.at: row.tick.wall_us for row in analysis.rows if row.tick is not None}
+    matched = {at: wall for at, wall in covering.items() if wall is not None}
+    analysis.matched_windows = len(covering)
 
     if not windows:
         analysis.verdict_word = "判定不能"
@@ -188,7 +186,9 @@ def analyze(
     if not matched:
         analysis.verdict_word = "判定不能"
         analysis.verdict_reason = (
-            "catch-up の時刻を覆う [tick] 窓が 1 つも無い"
+            "catch-up の時刻を覆う [tick] 窓はあるが wall_us を読めない"
+            if covering
+            else "catch-up の時刻を覆う [tick] 窓が 1 つも無い"
             "（catch-up と [tick] の点灯区間が重なっていない）"
         )
         return analysis
@@ -223,7 +223,7 @@ def render(
 ) -> None:
     """§9 の追補を印字する。`emit` は 1 行を受け取る関数（`Report.line`）。"""
     emit("")
-    emit(f"-- 系統別・各発生の突合（要件 2.9・0.4.0 で追加） " + "-" * 30)
+    emit("-- 系統別・各発生の突合（要件 2.9・0.4.0 で追加） " + "-" * 30)
     emit("  系統は行末の lane フィールド（古い記録は target・tracing のフィールドであって")
     emit("  メタデータの target 指示子ではない）で分ける。dispatcher と kanade は文言が")
     emit("  同一なので、文言では分けられない（ticker.rs）。")
@@ -255,13 +255,13 @@ def render(
     if not analysis.rows:
         emit("    （時刻を読めた catch-up がありません）")
     for row in analysis.rows[:max_rows]:
-        since = "     -" if row.since_last_show_s is None else f"{row.since_last_show_s:6.3f}"
+        since = f"{'-':>7s}" if row.since_last_show_s is None else f"{row.since_last_show_s:6.3f}s"
         wall = _fmt_int(row.tick.wall_us) if row.tick else "-"
         skipped = _fmt_int(row.tick.skipped) if row.tick else "-"
         emit(
             f"    {row.at.strftime('%H:%M:%S.%f')}  "
             f"{'定常' if row.in_steady else '過渡'}  {row.target:<14s} "
-            f"{since}s  {row.shows_in_window:>7d}  {wall:>12s}  {skipped:>12s}"
+            f"{since}  {row.shows_in_window:>7d}  {wall:>12s}  {skipped:>12s}"
         )
     if len(analysis.rows) > max_rows:
         emit(f"    …ほか {len(analysis.rows) - max_rows} 件（表示上限 {max_rows} 行）")
@@ -269,7 +269,7 @@ def render(
     emit("")
     emit("  仮説「フレーム駆動の負荷が CPU 競合でティッカーの起床を遅らせる」（要件 2.9）:")
     emit(
-        f"    規則: catch-up を覆った [tick] 窓の wall_us 平均 ÷ 全 [tick] 窓の wall_us 平均。"
+        "    規則: catch-up を覆った [tick] 窓の wall_us 平均 ÷ 全 [tick] 窓の wall_us 平均。"
     )
     emit(
         f"          比 >= {ratio_min:.3f} なら 成立・下回れば 不成立・"

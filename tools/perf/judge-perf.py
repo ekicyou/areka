@@ -92,8 +92,8 @@ profile で変わるため、profile が無いと途中で切れた長時間走�
 
 ログ行の形（実測で確定した契約面）
 --------------------------------
-areka は `tracing_subscriber::fmt().with_env_filter(..).init()` で初期化する
-（`crates/areka/src/main.rs` の `main` の `tracing_subscriber::fmt()` の初期化）。この既定書式が出す 1 行は次の形である：
+areka は `tracing_subscriber::registry().with(fmt::layer().with_filter(EnvFilter..))..init()` で
+初期化する（`crates/areka/src/log_history.rs` の `init()`）。この fmt 層の既定書式が出す 1 行は次の形である：
 
     <時刻>Z <水準> <スパン>: <target>: <メッセージ> <名前>=<値> <名前>=<値> ...
 
@@ -121,7 +121,7 @@ import sys
 import traceback
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # 0.4.0 の §9 追補（表の組み立てと印字）は兄弟モジュールにある。判定式は 1 つも無く、
@@ -379,7 +379,7 @@ FRAME_INTERVAL_COMPARE_DECIMALS = 3
 # --- 定常状態の開始境界 -------------------------------------------------------
 
 #: 起動過渡（初回確保・ウォームアップ）として集計から外す秒数。
-#: 実走の最初の観測時刻を 0 秒として数える。
+#: 最初の perf 行の時刻を 0 秒として数える。
 #: task 3.2 のベースライン（3 走行）で 60 秒とも起動過渡が落ちていることを確認し据え置いた。
 WARMUP_EXCLUDE_SEC = 60.0
 
@@ -440,10 +440,10 @@ CPU_SAMPLE_GAP_FACTOR = 1.5
 #: 収束判定（要件 5.1・5.3）。時系列を等分する窓の数。
 CONVERGENCE_WINDOW_COUNT = 4
 
-#: 収束判定: 後半窓の回帰傾きの上限（パーセント毎分）。task 7.2（長時間水準の最終判定）で確定する暫定値。
+#: 収束判定: 後半窓の回帰傾きの上限（パーセント毎分）。recompose-budget の task 7.2（長時間水準の最終判定）で確定した値。
 CONVERGENCE_SLOPE_MAX_PCT_PER_MIN = 0.05
 
-#: 収束判定: 末尾窓平均 − 中間窓平均 の上限（パーセント）。task 7.2（長時間水準の最終判定）で確定する暫定値。
+#: 収束判定: 末尾窓平均 − 中間窓平均 の上限（パーセント）。recompose-budget の task 7.2（長時間水準の最終判定）で確定した値。
 CONVERGENCE_WINDOW_DIFF_MAX_PCT = 0.3
 
 #: 収束判定: 窓の切り方。**採取点の個数**で等分する（時間で等分しない）。
@@ -551,32 +551,32 @@ J_TALK_END_EVENTS = (
 
 #: 任意種の一覧（レポート [4] に「有る／無い」を必ず出す。無いことは欠落ではない）。
 J_OPTIONAL_LOG_KINDS = (
-    ("フレーム駆動の窓 [tick]", J_TICK_LINE_MESSAGE),
-    ("スレッド別 CPU perf(thread)", J_PERF_THREAD_MESSAGE),
-    ("プロセス CPU perf(process)", J_PERF_PROCESS_MESSAGE),
-    ("発話区間の印 event=", "／".join(J_TALK_START_EVENTS[:2]) + " ほか"),
+    "フレーム駆動の窓 [tick] kind=window",
+    "スレッド別 CPU perf(thread)",
+    "プロセス CPU perf(process)",
+    "発話区間の印 event=",
 )
 
 #: 【要件 2.12 の関門】1 行の中に同じフィールド名を 2 度出さないこと。`parse_fields` は
 #: 後勝ちで上書きするので、名前が重なった行は先に書いた値が黙って消える（数値が 1 つ
 #: 静かに入れ替わっても、どのテストも赤にならない種類の壊れ方である）。
 #: ここに置いた逐語サンプルを `--selftest` が毎回読み直し、名前の重複が無いことを確かめる。
-#: 【出所】`[tick]` と catch-up は 45 秒の実走ログからの逐語。`perf(thread)` /
-#: `perf(process)` は design.md C14 の行契約からの逐語（実装は別タスク）。
+#: 【出所】`[tick]` は 45 秒の実走ログからの逐語。catch-up は同じ実走ログの逐語の欄名を今の
+#: `lane=` へ替えたもの。`perf(apply_show)` は今の `presenter/timing.rs` の `debug!` の欄の順。
+#: `perf(thread)` / `perf(process)` は design.md C14 の行契約からの逐語。
 J_LINE_VOCABULARY_SAMPLES = (
     (
-        "perf(apply_show)（既存・不変）",
+        "perf(apply_show)",
         '2026-08-14T04:17:25.043998Z DEBUG actor{actor="emo-text"}: '
         "areka_emo_present::presenter::timing: perf(apply_show): 段階別計時 "
         "target_id=TargetId(0) surface_id=1000 cache_hit=false t_cache_us=83 "
-        "t_compose_us=0 t_resample_us=0 t_mask_us=0 t_upload_us=40 t_total_us=120 "
-        "alloc_compose_dst=0 alloc_resample_dst=0 alloc_xmap=0 alloc_mask=0 "
-        "key_hash=0x9f3a2b1c4d5e6f70",
+        "t_compose_us=0 t_mask_us=0 t_upload_us=40 t_total_us=120 "
+        "alloc_compose_dst=0 alloc_mask=0 key_hash=0x9f3a2b1c4d5e6f70 frame=12",
     ),
     (
-        "catch-up（既存・target フィールドを 0.4.0 で読む）",
+        "catch-up（lane フィールド・古い記録は target）",
         "2026-08-22T19:18:27.526356Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker: "
-        'loop ticker catch-up: skipped multiple boundaries, firing once target="loop_ticker"',
+        'loop ticker catch-up: skipped multiple boundaries, firing once lane="loop_ticker"',
     ),
     (
         "[tick] kind=window（0.4.0 の任意種）",
@@ -801,7 +801,7 @@ def _catchup_target(line: str) -> str:
     fields = parse_fields(line)
     raw = next((fields[k] for k in J_CATCHUP_TARGET_FIELDS if k in fields), None)
     if raw is None:
-        return "(target 欄なし)"
+        return "(lane 欄なし)"
     return unquote_field(raw)
 
 
@@ -1280,8 +1280,8 @@ def judge_window_intervals(
     （fixture P14 がその形を固定している）。
 
     【この窓が判定できないもの】FRAME_INTERVAL_SERIES_SCOPE に対応の無い系列は起点 f を
-    持てないので間隔が 0 本になる。黙って消えないよう、呼び出し側（`vanished_series()`）が
-    perf レコードから数え直して除外として名指しする。
+    持てないので間隔が 0 本になる。黙って消えないよう、判定式⑴（`judge_frame_interval`）が
+    `vanished_series()` で perf レコードから数え直して除外として名指しする。
     条件 4 の活性本数は発火・停止 info! の収支からの **間接推定** なので、発火の記録を
     出さない書き換えが同じ鍵に混ざる形は今も見張れない（fixture P12 がその形）。
     """
@@ -1409,7 +1409,7 @@ def judged_interval_pool(agg: "Aggregation") -> list[float]:
     """
     pool: list[float] = []
     for key in FRAME_INTERVAL_JUDGED_SERIES:
-        pool.extend(agg.intervals_judge.get(tuple(key), []))
+        pool.extend(agg.intervals_judge.get(key, []))
     return pool
 
 
@@ -1440,11 +1440,6 @@ def render_metrics(agg: "Aggregation") -> list[str]:
     steady_allocs = sum(
         record.allocs[name] for record in agg.steady_perf for name in J_PERF_ALLOC_FIELDS
     )
-    steady_span = (
-        (agg.steady_perf[-1].at - agg.steady_from).total_seconds()
-        if agg.steady_perf
-        else 0.0
-    )
     known = sum(analysis.total_by_target.get(t, 0) for t in J_CATCHUP_TARGETS)
     other = sum(analysis.total_by_target.values()) - known
 
@@ -1473,7 +1468,7 @@ def render_metrics(agg: "Aggregation") -> list[str]:
                     percentile(intervals, 0.95) if intervals else None,
                     FRAME_INTERVAL_COMPARE_DECIMALS),
         _metric("frame_interval_samples", str(len(intervals))),
-        _metric("catchup_count", "-" if any(e[0] is None for e in agg.scan.catchup) else str(len(agg.steady_catchup))),
+        _metric("catchup_count", METRIC_UNAVAILABLE if any(e[0] is None for e in agg.scan.catchup) else str(len(agg.steady_catchup))),
         _metric("catchup_count_total", str(len(agg.scan.catchup))),
     ]
     for target in J_CATCHUP_TARGETS:
@@ -1482,7 +1477,7 @@ def render_metrics(agg: "Aggregation") -> list[str]:
         _metric("catchup_other", str(other)),
         _metric("alloc_count", str(steady_allocs)),
         _metric("steady_apply_count", str(len(agg.steady_perf))),
-        _metric_num("steady_span_sec", steady_span, 1),
+        _metric_num("steady_span_sec", steady_state_status(agg).span_sec, 1),
         _metric("tick_window_count", str(analysis.tick_windows)),
         _metric_num("tick_skip_ratio", analysis.skip_ratio, METRIC_RATIO_DECIMALS),
         _metric_num("catchup_tick_load_ratio", analysis.ratio, METRIC_RATIO_DECIMALS),
@@ -1723,7 +1718,7 @@ def render_calibration(report: Report) -> None:
         ),
         (
             "J_OPTIONAL_LOG_KINDS",
-            [name for name, _ in J_OPTIONAL_LOG_KINDS],
+            list(J_OPTIONAL_LOG_KINDS),
             "有れば読む・無くても欠落ではない（既定 OFF の観測なので点灯しない走行には出ない）",
         ),
     ]
@@ -1882,13 +1877,11 @@ def render_catchup(report: Report, agg: Aggregation, section: str = "9") -> None
     report.head(f"[{section}] 進行境界スキップ（catch-up）件数（要件 2.2・判定式⑵の入力）")
     report.line("  数え方: 長い文言（loop_ticker）を先に判定してから短い文言を数える。")
     report.line("  短いほうは長いほうの部分文字列であり、素朴に数えると二重計上になる。")
-    if not agg.scan.catchup:
+    # 0 件でも下の §9 追補（仮説の語）は出す（無い走行で節を黙って短くしない）。
+    sections = (("全区間", agg.scan.catchup), ("定常状態", agg.steady_catchup)) if agg.scan.catchup else ()
+    if not sections:
         report.line("  0 件（全区間）")
-        return
-    for label, events in (
-        ("全区間", agg.scan.catchup),
-        ("定常状態", agg.steady_catchup),
-    ):
+    for label, events in sections:
         counts: Counter = Counter()
         for _at, kind, target in events:
             counts[(kind, target)] += 1
@@ -2140,8 +2133,10 @@ def vanished_series(
     どれも外れる条件は本 spec が直そうとしている鈍化そのものである。とくに 3 つ目は倒錯して
     いて、適用 2 回（間隔 1 本）の系列は FRAME_INTERVAL_MIN_SAMPLES で捕まるのに、適用 1 回の
     **もっと遅い** 系列はすり抜ける。遅いほど見逃されるという逆転を残してはならない。
-    そこで走行の perf レコードそのものから「判定され得た系列」を数え直し、表に無い鍵を
-    除外として名指しする。呼び出し側はこれを `excluded` に足す。
+    明示指定した系列（FRAME_INTERVAL_JUDGED_SERIES）がこの形で消えた走行は、
+    `judge_frame_interval` の明示指定の関門が合格を止める（判定不能・#36）。この関数は
+    走行の perf レコードそのものから「判定され得た系列」を数え直し、表に無い鍵を返す。
+    呼び出し側は明示指定に無い系列だけを `excluded` に足す——**報告だけ** で合否は動かさない。
 
     【窓 A の p95 を併記する理由】
     消えた系列が「遅いから消えた（＝本 spec が追っている鈍化）」のか「速いが散発的なだけ
@@ -2736,7 +2731,7 @@ def judge_idle_cpu(
     empty_b = (
         "20 分超に満たない走行では適用外（終了コードに寄与しない）。"
         "ただし profile=long の走行が 20 分に届かない場合は途中で切れた走行として判定不能。"
-        "この分岐は profile に依存するため、判定モードは run-meta.txt に profile が無い入力を"
+        "この分岐は profile に依存するため、判定モードは run-meta.txt の profile が short／long でない入力を"
         "読み込み時点で判定不能(2) として拒む（適用外へ黙って落とさない）。"
     )
 
@@ -2986,8 +2981,8 @@ def render_convergence(report: Report, agg: "Aggregation", convergence: Converge
     report.line(f"    うち時刻を読めなかった行: {undated} 件（時刻が無いのでどの窓にも入らない）")
     report.line("    窓に入らない残りの内訳: 定常状態の最初の採取点より前／最後の採取点より後／")
     report.line(
-        f"    窓と窓の隙間（隙間は最大でも CPU 刻み 1 つ分＝約 "
-        f"{CPU_SAMPLE_INTERVAL_EXPECTED_SEC:.0f} 秒）。"
+        f"    窓と窓の隙間（隣り合う CPU 採取点の間＝ふつうは約 "
+        f"{CPU_SAMPLE_INTERVAL_EXPECTED_SEC:.0f} 秒・cpu.csv に欠測があればそれより長い）。"
     )
     report.line("    窓別件数は傍証であり、全体件数と一致しないのは上の理由による（数え落としではない）。")
 
@@ -3015,7 +3010,8 @@ def render_verdict(report: Report, results: list[FormulaResult]) -> None:
 # =============================================================================
 
 
-def check_required(scan: LogScan, cpu: list[CpuSample], run_log: Path) -> None:
+def check_required(scan: LogScan, run_log: Path) -> None:
+    """必要ログ種の関門（CPU の採取点が 0 の cpu.csv は `read_cpu_csv` が先に断る）。"""
     missing: list[str] = []
     if not scan.perf:
         missing.append(
@@ -3024,8 +3020,6 @@ def check_required(scan: LogScan, cpu: list[CpuSample], run_log: Path) -> None:
         )
     if scan.show_count == 0:
         missing.append(f"no show line (message {ascii(J_SHOW_LINE_MESSAGE)})")
-    if not cpu:
-        missing.append("no CPU sample")
     if missing:
         raise inconclusive(
             f"required log kinds are missing ({run_log}; requirement 2.5)",
@@ -3093,7 +3087,7 @@ def load_inputs(args: argparse.Namespace, require_build: bool) -> Inputs:
         cpu_csv, J_CPU_CSV_HEADER, inconclusive,
         broken_note=" (requirement 2.5)", read_fail=bad_input,
     )
-    check_required(scan, cpu, run_log)
+    check_required(scan, run_log)
 
     meta_build = meta_lookup(sections, "build")
     build = args.build or meta_build
@@ -3174,12 +3168,8 @@ def render_required_check(report: Report, inputs: Inputs) -> None:
     report.sub("任意種の有無（0.4.0・無いことは欠落ではない）")
     report.line("  既定 OFF の観測なので、点灯せずに採った走行には 1 本も出ない。")
     report.line("  判定式はどれもこれらを読まないので、有無は合否を動かさない。")
-    for label, count in (
-        ("フレーム駆動の窓 [tick] kind=window", len(scan.tick_windows)),
-        ("スレッド別 CPU perf(thread)", scan.thread_report_lines),
-        ("プロセス CPU perf(process)", scan.process_report_lines),
-        ("発話区間の印 event=", len(scan.talk_events)),
-    ):
+    counts = (len(scan.tick_windows), scan.thread_report_lines, scan.process_report_lines, len(scan.talk_events))
+    for label, count in zip(J_OPTIONAL_LOG_KINDS, counts, strict=True):
         report.line(f"  {label:<38s}: {count} 本" + ("" if count else "  → 無し"))
 
 
@@ -3252,10 +3242,9 @@ def run_baseline(args: argparse.Namespace) -> int:
     report.line("=" * 78)
     report.line("集計は以上。合否判定（要件 4.2 の判定式⑴〜⑷）と収束判定（要件 5.1）は")
     report.line("--mode verdict が行う。")
-    report.line(f"JUDGE-PERF RESULT code={EXIT_OK}")  # 最後の行は ASCII の決まった形（D9）
-
     if getattr(args, "emit_metrics", False):
         report.lines.extend(render_metrics(agg))
+    report.line(f"JUDGE-PERF RESULT code={EXIT_OK}")  # 最後の行は ASCII の決まった形（D9・指標の行より後）
 
     print(report.render())
     return EXIT_OK
@@ -3289,7 +3278,7 @@ def run_verdict(args: argparse.Namespace) -> int:
     report.line("  モード       : verdict（要件 4.2 の判定式⑴〜⑷・収束判定 要件 5.1）")
     report.line(f"  スクリプト版 : {SCRIPT_VERSION}")
     report.line(f"  ビルド種別   : {build}")
-    report.line(f"  水準         : {inputs.profile or '(run-meta.txt に profile 無し)'}")
+    report.line(f"  水準         : {inputs.profile}")  # 判定モードは short／long でなければ読み込みで断る
     render_machine_conditions(report, inputs.sections, inputs.scan)
     render_calibration(report)
     render_inputs(report, inputs)
@@ -3344,10 +3333,9 @@ def run_verdict(args: argparse.Namespace) -> int:
 
     report.line("")
     report.line("=" * 78)
-    report.line(f"JUDGE-PERF RESULT code={code}")  # 最後の行は ASCII の決まった形（D9・総合の語は [7]）
-
     if getattr(args, "emit_metrics", False):
         report.lines.extend(render_metrics(agg))
+    report.line(f"JUDGE-PERF RESULT code={code}")  # 最後の行は ASCII の決まった形（D9・総合の語は [7]・指標の行より後）
 
     print(report.render())
     return code
@@ -3412,15 +3400,17 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
         )
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise bad_input(f"cannot read {path}", [str(exc)]) from exc
 
     fields: dict[str, str] = {}
     contains: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
+        if not stripped or stripped.startswith("#"):
             continue
+        if "=" not in stripped:
+            raise bad_input(f"line without '=' in {path}: {ascii(stripped)}", ["write name = value"])
         key, _, value = stripped.partition("=")
         key = key.strip()
         if key not in ("mode", "exit", "build", "twin", "title", "note", "contains", "emit_metrics"):
@@ -3430,6 +3420,8 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
         if key == "contains":  # 何度でも書ける（上書きせず積む）
             contains.append(value.strip())
             continue
+        if key in fields:
+            raise bad_input(f"{key} written twice in {path}", ["the later value would silently win"])
         fields[key] = value.strip()
 
     missing = [name for name in ("mode", "exit") if name not in fields]
@@ -3667,9 +3659,13 @@ def run_selftest() -> int:
     # 検体では作れない場面（想定外の例外・明示指定 2 系列・最後の行）は差し替えで確かめる（D12）
     import judge_perf_selftest_inproc  # noqa: E402
 
-    inproc_failures = judge_perf_selftest_inproc.run(sys.modules[__name__])
+    inproc_checks, inproc_failures = judge_perf_selftest_inproc.run(sys.modules[__name__])
+    report.line(f"  差し替えの較正: {inproc_checks} 件・食い違い {len(inproc_failures)} 件")
     for reason in inproc_failures:
         report.line(f"  【食い違い】差し替えの較正: {reason}")
+    if not inproc_checks:  # 1 つも走らない差し替えの較正は、壊れていても緑を返す（D7）
+        inproc_failures = ["no in-process check ran"]
+        report.line("  【較正になっていない】差し替えの較正が 1 件も走っていません。")
     failed = [*mismatches, *twin_failed, *red_missing, *missing_text, *vocabulary_failures, *inproc_failures]
     code = EXIT_FAIL if failed else EXIT_OK
     if code == EXIT_OK:
@@ -3773,6 +3769,10 @@ def main(argv: list[str]) -> int:
                 sys.stderr.write(f"  - {detail}\n")
             sys.stderr.write(f"JUDGE-PERF RESULT code={exc.code}\n")
             return exc.code
+        except Exception:  # 想定外の例外は道具の故障（3）。fixture の不合格(1)と読ませない（#6）
+            traceback.print_exc()
+            sys.stderr.write(f"JUDGE-PERF RESULT code={EXIT_BAD_INPUT}\n")
+            return EXIT_BAD_INPUT
 
     # --selftest でないなら、実走ログ・CPU 時系列・モードは必須である
     # （argparse の必須指定から外した分をここで明示的に見る。落ちたら従来どおり exit 3）。
