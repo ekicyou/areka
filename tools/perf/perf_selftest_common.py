@@ -134,6 +134,11 @@ def first_difference(label: str, want: str, got: str) -> str:
     return f"{label}: no difference"
 
 
+def ascii_outside_root(text: str, root: Path = REPO_ROOT) -> bool:
+    """根の道筋を伏せたうえで ASCII か。根は利用者が選ぶ場所で、日本語のフォルダでも道具の誤りではない。"""
+    return text.replace(str(root), "<root>").isascii()
+
+
 def read_normalized(path: Path) -> str:
     """utf-8 で読み、CRLF を LF にそろえる。"""
     return path.read_text(encoding="utf-8").replace("\r\n", "\n")
@@ -232,7 +237,8 @@ def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
 
     ⑴ tools/perf の .py が tempfile を読まない・`work_dir` の子が別に求めた根の target\\perf-loop-tmp の下
     ⑵ tools/perf の .py に U+FEFF の字が無い ⑷ `first_difference` が ASCII を出す
-    ⑹ 支え自身の失敗の文（ケース置き場・case.txt の読み）が ASCII。
+    ⑹ 支え自身の失敗の文（ケース置き場・case.txt の読み）が ASCII ⑺ ASCII の見張りが根の道筋を伏せる
+    （⑶ ⑹ と道具の標準出力の見張りは `ascii_outside_root` で、日本語の根で赤にならない）。
     ⑶（`invoke` が受けた stderr の全行が ASCII）と ⑸（README の例の道筋）は道具の側から真にする。
     """
     reasons: list[str] = []
@@ -248,7 +254,7 @@ def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
         if any(bom in text for bom in _BOM_TEXTS):
             reasons.append(f"(2) {name} has a U+FEFF character (decode with utf-8-sig)")
     for text in _helper_failure_texts():
-        if not text.isascii() or text == "(no failure raised)":
+        if not ascii_outside_root(text) or text == "(no failure raised)":
             reasons.append(f"(6) helper failure message is not ASCII (or not raised): {ascii(text)}")
     for child in _children_made:
         if child.resolve().parent != work_root:
@@ -256,8 +262,11 @@ def check_tree(*, ascii_stderr: bool, readme_examples: bool) -> list[str]:
     if ascii_stderr:
         for text in _stderr_seen:
             for line in text.splitlines():
-                if not line.isascii():
+                if not ascii_outside_root(line):
                     reasons.append(f"(3) stderr line is not ASCII: {ascii(line)}")
+    fake_root = REPO_ROOT / "\u3042"
+    if not ascii_outside_root(f"x: {fake_root / 'case.txt'}", fake_root) or ascii_outside_root("\u3042"):
+        reasons.append("(7) ascii_outside_root does not mask a non-ASCII repository root")
     sample = first_difference("x", "\u00b5", "\u2014")
     if not sample.isascii():
         reasons.append(f"(4) first_difference is not ASCII: {ascii(sample)}")

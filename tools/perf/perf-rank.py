@@ -29,7 +29,7 @@
 終了コード（judge-perf.py・perf-ledger.py と同じ体系）: 0＝順位表を書けた（段が
 UNAVAILABLE でも、理由を書けているなら 0）／1＝`--selftest` の食い違い＝この道具自身が
 壊れている／3＝引数不正・走行ディレクトリが無い・読めない／4＝計測失敗（run.log か
-cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊れている・dump が在るのに空・dump の既知の
+cpu.csv が無いか空・cpu.csv のヘッダが契約違い・観測行が壊れている・dump が在るのに空（段②③を出すとき）・dump の既知の
 列名行が無い・段③が利用可なのに `areka.exe!` の解決フレームが 0）。**2（判定不能）は
 返さない**——順位表は合否を出さないので、判定できるかどうかという状態が無い。
 
@@ -134,7 +134,7 @@ SCHEDULE_NAMES = (
 
 STAGE_ALL = ("process", "thread", "function", "phase")
 
-#: 自己較正の置き場と、そこで必ず再現していなければならない赤。
+#: 自己較正の置き場と、そこで少なくとも 1 件は再現していなければならない終了コード（緑の 0 も含む）。
 SELFTEST_FIXTURES_DIRNAME = "fixtures-loop"
 SELFTEST_RANK_SUBDIR = "rank"
 SELFTEST_CASE_FILENAME = "case.txt"
@@ -654,7 +654,7 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
     reasons: list[str] = []
     reproduced: set[int] = set()
     code, out, err = selftest_common.invoke(main, [str(work)] + case.argv, EXIT_BAD_INPUT)
-    if not out.isascii():
+    if not selftest_common.ascii_outside_root(out):
         reasons.append(f"標準出力に ASCII でない行があります: {out.strip()!a}")
     if code == case.expected_exit:
         reproduced.add(code)
@@ -684,13 +684,20 @@ def _run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]
     return reasons, reproduced
 
 
-def _top_level_import_reasons() -> list[str]:
+def _top_level_import_reasons(source: str | None = None) -> list[str]:
     """`perf_selftest_common` を頭で読むと、Cargo.toml の無い所の実運用が exit 3 で止まる。"""
-    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
-    for node in tree.body:
-        names = [alias.name for alias in getattr(node, "names", [])] + [getattr(node, "module", None)]
-        if isinstance(node, (ast.Import, ast.ImportFrom)) and "perf_selftest_common" in names:
-            return [f"line {node.lineno}: perf_selftest_common is imported at module level"]
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8") if source is None else source)
+    # 関数の中の import は許す（頭の try／if の中は頭と同じに読まれるので見る）。
+    pending = list(tree.body)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [alias.name for alias in node.names] + [getattr(node, "module", None)]
+            if "perf_selftest_common" in names:
+                return [f"line {node.lineno}: perf_selftest_common is imported at module level"]
+        pending.extend(ast.iter_child_nodes(node))
     return []
 
 
@@ -714,6 +721,10 @@ def run_selftest() -> int:
 
     # 木全体の見張り（⑶ stderr の ASCII・⑸ README の例とも有効）。
     results.append(("(import)", "支えは自己較正の中でだけ読む", _top_level_import_reasons()))
+    # 見張り自身の較正: global 文で倒れず、頭の try の中の import を見逃さない。
+    probe = "global g\ntry:\n    import perf_selftest_common\nexcept ImportError:\n    pass\n"
+    results.append(("(import-probe)", "頭の try の中の import も見つける",
+                    [] if _top_level_import_reasons(probe) else ["import inside top-level try was missed"]))
     results.append(("(check_tree)", "木全体の見張り",
                     selftest_common.check_tree(ascii_stderr=True, readme_examples=True)))
     ng_count = selftest_common.finish(
