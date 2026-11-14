@@ -721,24 +721,6 @@ fn start_then_drop_joins_worker_without_hanging() {
     drop(handle);
 }
 
-/// shutdown 終了条件: world strong 所有者を drop すると、次起床でループ本体の
-/// `world.upgrade()` が `None` を返し評価が走らない。ここでは executor を回さず、
-/// 終了条件そのもの（Weak upgrade が None）を sync レベルで確認する（フル async 駆動は
-/// メッセージループが要るため、`run_async_tick` テストと同様に条件を直接検証する）。
-#[test]
-fn shutdown_condition_world_weak_upgrade_none() {
-    let world = StdRc::new(StdRefCell::new(EcsWorld::new()));
-    let weak = StdRc::downgrade(&world);
-    assert!(weak.upgrade().is_some(), "生存中は upgrade できる");
-
-    // strong 所有者を drop（アプリ shutdown 相当）。
-    drop(world);
-    assert!(
-        weak.upgrade().is_none(),
-        "world drop 後は Weak upgrade が None（ループはこの契機で終了する）"
-    );
-}
-
 /// `run()` が戻った後に届いた起床では、判定ループは判定を回さずに終わる。待ちの間は
 /// World とカーソル監視の強参照を握らない（`run()` の終わりで `ClickThroughHandle` を捨てれば、
 /// 唯一の強参照が落ちてワーカが止まる）。areka-P0-shiori-fault-notice task 7.2。

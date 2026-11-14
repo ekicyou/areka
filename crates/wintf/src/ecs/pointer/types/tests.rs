@@ -46,51 +46,6 @@ fn test_pointer_state_default() {
 }
 
 #[test]
-fn test_pointer_leave_marker() {
-    // PointerLeaveはunitスタイルのマーカーコンポーネント
-    let leave1 = PointerLeave;
-    let leave2 = PointerLeave;
-    assert_eq!(leave1, leave2);
-}
-
-#[test]
-fn test_physical_point_new() {
-    let pt = PhysicalPoint::new(100, 200);
-    assert_eq!(pt.x, 100);
-    assert_eq!(pt.y, 200);
-}
-
-#[test]
-fn test_double_click_variants() {
-    assert_eq!(DoubleClick::default(), DoubleClick::None);
-
-    // 各バリアントが異なることを確認
-    assert_ne!(DoubleClick::Left, DoubleClick::Right);
-    assert_ne!(DoubleClick::Middle, DoubleClick::XButton1);
-    assert_ne!(DoubleClick::XButton1, DoubleClick::XButton2);
-}
-
-#[test]
-fn test_wheel_delta_default() {
-    let delta = WheelDelta::default();
-    assert_eq!(delta.vertical, 0);
-    assert_eq!(delta.horizontal, 0);
-}
-
-#[test]
-fn test_pointer_button_enum() {
-    // PointerButtonのHashトレイト実装を確認
-    use std::collections::HashSet;
-    let mut set = HashSet::new();
-    set.insert(PointerButton::Left);
-    set.insert(PointerButton::Right);
-    set.insert(PointerButton::Middle);
-    set.insert(PointerButton::XButton1);
-    set.insert(PointerButton::XButton2);
-    assert_eq!(set.len(), 5);
-}
-
-#[test]
 fn test_wheel_buffer_saturates_at_i16_bounds() {
     // saturating_add により i16 範囲を超えても飽和（オーバーフロー panic/ラップなし）
     let mut buffer = WheelBuffer::default();

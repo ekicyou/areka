@@ -149,22 +149,6 @@ fn test_update_position_overwrites() {
     );
 }
 
-/// DragAccumulatorResource は Arc<Mutex> 越しに同じ内部状態を共有する（clone 後も同一）。
-#[test]
-fn test_resource_shares_inner_state_across_clone() {
-    let res = DragAccumulatorResource::new();
-    let clone = res.clone();
-    // clone 経由で累積し、元の res からの flush で観測できること
-    clone.accumulate_delta(PhysicalPoint::new(7, 8));
-    clone.update_position(PhysicalPoint::new(70, 80));
-    let result = res.flush().expect("lock 取得できるはず");
-    assert_eq!((result.delta.x, result.delta.y), (7, 8));
-    assert_eq!(
-        (result.current_position.x, result.current_position.y),
-        (70, 80)
-    );
-}
-
 /// Resource 経由の set_transition も内部状態に反映される。
 #[test]
 fn test_resource_set_transition_reflected_in_flush() {

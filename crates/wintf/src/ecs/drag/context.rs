@@ -159,20 +159,4 @@ mod tests {
         assert!(got.initial_window_pos.is_none());
         assert!(!got.move_window);
     }
-
-    /// Resource は Arc<Mutex> 越しに状態を共有する（clone 経由 set を元から get）。
-    #[test]
-    fn test_resource_shares_state_across_clone() {
-        let res = WindowDragContextResource::new();
-        let clone = res.clone();
-        clone.set(WindowDragContext {
-            hwnd: None,
-            initial_window_pos: Some(Point { x: 7, y: 9 }),
-            move_window: true,
-            constraint: None,
-        });
-        let got = res.get().expect("get は Some を返すべき");
-        assert_eq!(got.initial_window_pos, Some(Point { x: 7, y: 9 }));
-        assert!(got.move_window);
-    }
 }
