@@ -16,8 +16,8 @@ use super::{
     saved_adjacency, with_adjacency_marks,
 };
 use crate::chain_finalize::AdjacencyMark;
-use crate::follow::OffsetBase;
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::sticky_group_ledger::StickyGroupLedger;
@@ -29,16 +29,15 @@ const Y: i32 = 400;
 
 fn placement(scope: usize, x: i32, w: i32) -> ScopePlacement {
     ScopePlacement {
-        scope,
-        char_pos: PointPx { x, y: Y },
-        char_size: SizePx { w, h: H },
-        balloon_pos: PointPx { x: x - 200, y: Y },
-        balloon_size: SizePx { w: 223, h: 158 },
-        balloon_offset: PointPx { x: -200, y: 0 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: -200, y: 0 }),
-        balloon_limit: false,
         anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
+        ..placement_sized(
+            scope,
+            PointPx { x, y: Y },
+            PointPx { x: -200, y: 0 },
+            false,
+            SizePx { w, h: H },
+            SizePx { w: 223, h: 158 },
+        )
     }
 }
 

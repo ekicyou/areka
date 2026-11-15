@@ -13,8 +13,9 @@
 //!
 //! # 走査の範囲・語の表・行コメントを除いてから探す理由
 //!
-//! 配置の片割れの頭の説明のとおり。要件は「**本フィーチャーにおいて**足さない」ことを言うので、
-//! 走査は 2 つの機構が全部を書いた本番ファイルに限る。常に手前の帯の語（`BAND_NEEDLES`）を
+//! 配置の片割れの頭の説明のとおり。重なり順の 2 機構（ペア機構＝`areka-P0-ghost-window-zorder`・
+//! グループ機構＝`areka-P0-scope-zorder-pinning`）の要件は「**本フィーチャーにおいて**足さない」
+//! ことを言う（要件の文の引用）ので、走査は 2 つの機構が全部を書いた本番ファイルに限る。常に手前の帯の語（`BAND_NEEDLES`）を
 //! areka 側で持つのは受け口（`runtime/window_state_cue.rs`）と取り出しの相
 //! （`runtime/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
 
@@ -41,7 +42,7 @@ const BAND_FILES: [&str; 2] = [
     "src/runtime/frame/window_state.rs",
 ];
 
-/// 先送り語彙は、本フィーチャーの本体の本番ファイルのコードに 1 つも無い。
+/// 先送り語彙は、重なり順の 2 機構が書いた本体の本番ファイルのコードに 1 つも無い。
 #[test]
 fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources() {
     assert_vocabulary_absent(

@@ -97,9 +97,9 @@
 //!      `descript.txt`**（`source.rs:158-169`・読取失敗は `Err` で呼び手へ返す）・**バルーンの `descript.txt`**
 //!      （`source.rs:214-218`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
-//!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:384-396` ＋ probe 自身の
+//!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:379-390` ＋ probe 自身の
 //!      [`load_shell_assets`]）
-//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:423` の `measure_balloon_surface0`）と
+//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:417` の `measure_balloon_surface0`）と
 //!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:576` の `load_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は

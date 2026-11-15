@@ -5,7 +5,7 @@
 //! （当て直しで y=864）。記憶の x は下端中央の原点（左上 + 320）。
 
 use super::*;
-use crate::follow::OffsetBase;
+use crate::shared_test_support::placement_sized;
 
 const CSZ: SizePx = SizePx { w: 640, h: 840 };
 const BSZ: SizePx = SizePx { w: 200, h: 300 };
@@ -24,21 +24,9 @@ fn desk() -> MonitorSnapshot {
 }
 
 fn placement(scope: usize) -> ScopePlacement {
-    let balloon_offset = PointPx { x: -200, y: 0 };
     ScopePlacement {
-        scope,
-        char_pos: DEFAULT,
-        char_size: CSZ,
-        balloon_pos: PointPx {
-            x: DEFAULT.x + balloon_offset.x,
-            y: DEFAULT.y,
-        },
-        balloon_size: BSZ,
-        balloon_offset,
-        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        balloon_limit: true,
         anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
+        ..placement_sized(scope, DEFAULT, PointPx { x: -200, y: 0 }, true, CSZ, BSZ)
     }
 }
 

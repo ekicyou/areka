@@ -207,7 +207,7 @@ fn merge_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
     assert_no_event(&events, X_WARN);
 }
 
-/// 数値指定の経路は本仕様の前後で 1 ビットも変わらない（要件 5.1 の回帰境界）。
+/// 数値指定の経路はキーワード語彙を足す前後で 1 ビットも変わらない（要件 5.1 の回帰境界）。
 /// 数値が読めている限り生値は参照されず、モードは `Side` のまま・調整量は生値どおり。
 #[test]
 fn merge_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {

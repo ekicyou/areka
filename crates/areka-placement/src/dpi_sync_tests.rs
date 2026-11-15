@@ -347,10 +347,8 @@ fn writable_world(hold: bool) -> (World, Entity) {
 /// `debug_assert!` ゆえテストビルドでは panic する——すり抜け経路が増えたときに、実機ログを
 /// 待たずに檻が落ちる（実機では `warn!` として見える）。
 ///
-/// 経路語が `ChainRealign`（システム由来・遷移後の連鎖の解き直し）なのは本番の経路語の是正に
-/// 追随したものである。本テストは当初 `move_window_to`（＝`MoveCue`）で書いていたが、
-/// スクリプトの明示操作は**見送らないことが正しい**と本番コードが裁定しており、鳴らすのは
-/// 偽の警報だった。監視が生きていることを示す役目は経路語を差し替えて保つ——分類そのものは
+/// 経路語は `ChainRealign`（システム由来・遷移後の連鎖の解き直し）を使う。台本の明示操作
+/// （`MoveCue`）は見送らない側なので鳴らない（下の対のテスト）。分類そのものは
 /// `follow_window_move_hold_watch_tests.rs` が全経路語＋route 無しで固定する。
 #[test]
 #[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]

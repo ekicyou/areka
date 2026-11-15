@@ -65,8 +65,8 @@ pub(crate) enum LimitVocab {
 /// # 不変量（数値経路の回帰境界・design C1 Invariants）
 ///
 /// **`x_num.is_some()` なら常に [`XVocab::Numeric`]** ——数値が読めていれば生文字列を
-/// 一切参照しない。これが要件 5.1（数値指定の変換を本仕様の前後で同一に保つ）を
-/// 型と構造で保証する境界であり、キーワード語彙の追加が数値経路へ 1 ビットも
+/// 一切参照しない。これが areka-P0-windowposition-limit の要件 5.1（数値指定の変換を、
+/// キーワード語彙を足す前後で同一に保つ）を型と構造で保証する境界であり、キーワード語彙の追加が数値経路へ 1 ビットも
 /// 波及しないことの担保である。
 ///
 /// # 語彙の細則（DD8・areka 裁量）
@@ -123,7 +123,7 @@ pub(crate) fn classify_limit_vocab(limit_raw: Option<&str>) -> LimitVocab {
 /// 符号付き長さの k 倍（**大きさは既存丸め権威 [`ScaleRatio::scale_len`] へ委譲**し、
 /// 符号だけを本層で保存する・R3.6）。
 ///
-/// 本仕様は新しい丸め規約を導入しない——`scale_len` の規約（round half away from zero・
+/// 新しい丸め規約は導入しない（areka-P0-kero-balloon R3.6）——`scale_len` の規約（round half away from zero・
 /// 非ゼロ長は最小 1px・恒等 k は素通し）をそのまま継承する。
 ///
 /// `i32::MIN` は [`i32::unsigned_abs`] で絶対値を取るためパニックしない。`scale_len` は
@@ -146,7 +146,7 @@ pub fn scale_signed(v: i32, k: ScaleRatio) -> i32 {
 ///
 /// **両軸とも未指定なら `None`** を返す（R3.4）。呼び手はこれを
 /// [`apply_windowposition`] へそのまま渡すことで `balloon_offset` を一切触らず、
-/// resolver 出力を本仕様適用前と厳密同一に保つ。
+/// resolver 出力を `windowposition` の供給（areka-P0-kero-balloon）を入れる前と厳密同一に保つ。
 ///
 /// # 符号規約（実機確定済み・R7.6）
 ///
@@ -284,7 +284,7 @@ mod tests {
     }
 
     /// 縮小 k でも「非ゼロ長は最小 1px」という既存権威 `ScaleRatio::scale_len` の
-    /// 規約をそのまま継承する（本仕様で新しい丸め規約を導入しない・R3.6）。
+    /// 規約をそのまま継承する（新しい丸め規約を導入しない・areka-P0-kero-balloon R3.6）。
     /// k=1/4 で |1| → round(0.25)=0 → 権威が 1 へ引き上げる。符号は保存される。
     #[test]
     fn to_screen_adjust_inherits_scale_len_minimum_one_rule() {

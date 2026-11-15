@@ -287,7 +287,7 @@ fn project_restore_parts(
     (projected, result)
 }
 
-/// 起動時の永続値先読み（本モジュール**唯一の IO 点**・design C1・A1 シーム）。
+/// 起動時とシェルの切り替え（本体の資産づくり）の永続値先読み（本モジュール**唯一の IO 点**・design C1・A1 シーム）。
 ///
 /// ゴーストの descript を確かめ（[`read_ghost_names`]）、Ghost 永続スコープ root
 /// （[`profile_areka_root`]`(&`[`shiori_dir`]`(ghost_root))`＝boot 結線と同じ SHIORI の置き場の
@@ -733,7 +733,6 @@ fn with_adjacency_marks(
             _ => None,
         })
         .flat_map(|k| [k, k + 1])
-        .filter(|&n| n >= 1)
         .collect();
     push_adjacency_marks(world, &mut entries, touched);
     entries

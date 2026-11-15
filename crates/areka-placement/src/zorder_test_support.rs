@@ -175,9 +175,6 @@ fn scan_z_once<H: Copy + Into<Option<HWND>>>(set: &[H]) -> Vec<usize> {
     let mut cursor = unsafe { GetTopWindow(None) }.ok();
     let mut steps = 0usize;
     while let Some(hwnd) = cursor {
-        if hwnd.is_invalid() {
-            break;
-        }
         if let Some(i) = set.iter().position(|h| (*h).into() == Some(hwnd))
             && !seen.contains(&i)
         {

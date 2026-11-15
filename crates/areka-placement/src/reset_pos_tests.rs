@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use areka_sylphya::{Axis, PersistKey};
+use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HWND, RECT};
 use wintf::ecs::window::drain_window_pos_commands;
@@ -19,16 +19,15 @@ use super::{DefaultPlacementBasis, reset_window_positions};
 use crate::config::build_placement_config;
 use areka_emo_compose::ScaleRatio;
 
-use crate::follow::{
-    Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, shift_is_current,
-};
-use crate::persist::finalize_save_tests::Store;
+use crate::follow::{Anchored, BalloonFollow, MonitorSnapshot, apply_char_shift, shift_is_current};
+use crate::persist::finalize_save_tests::{Store, window_pos};
 use crate::prepare_ghost_windows_with_work_area;
 use crate::reseed::BalloonPlacementInputs;
 use crate::resolver::{
     Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
 };
 use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::shared_test_support::placement_sized;
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::test_support::{WA, with_com_initialized};
@@ -81,19 +80,15 @@ impl Rig {
         let placements: Vec<ScopePlacement> = SCOPES
             .iter()
             .map(|&(scope, char_pos, char_size)| ScopePlacement {
-                scope,
-                char_pos,
-                char_size,
-                balloon_pos: PointPx {
-                    x: char_pos.x + BALLOON_OFFSET.x,
-                    y: char_pos.y + BALLOON_OFFSET.y,
-                },
-                balloon_size: SizePx { w: 223, h: 158 },
-                balloon_offset: BALLOON_OFFSET,
-                balloon_offset_base: OffsetBase::unpinned(BALLOON_OFFSET),
-                balloon_limit: false,
                 anchor: Anchor::Bottom,
-                balloon_keyword_base: None,
+                ..placement_sized(
+                    scope,
+                    char_pos,
+                    BALLOON_OFFSET,
+                    false,
+                    char_size,
+                    SizePx { w: 223, h: 158 },
+                )
             })
             .collect();
         let gw = spawn_ghost_windows(
@@ -168,11 +163,6 @@ fn monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monit
         dpi: 96,
         is_primary,
     }
-}
-
-fn saved(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String, String)> {
-    let get = |axis| map.get(&PersistKey::WindowPos { scope, axis }).cloned();
-    Some((get(Axis::X)?, get(Axis::Y)?))
 }
 
 fn reset_events(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
@@ -252,7 +242,7 @@ fn shifted_windows_return_to_default_and_are_persisted() {
     for scope in 0..2 {
         let w = SCOPES[scope].2.w;
         assert_eq!(
-            saved(&store, scope as u32),
+            window_pos(&store, scope as u32),
             Some((
                 (EXPECTED[scope].x + w / 2).to_string(),
                 EXPECTED[scope].y.to_string()
@@ -290,7 +280,7 @@ fn reset_rebases_the_pattern_shift() {
     assert_eq!(rig.char_pos(1), EXPECTED[1]);
     let store = rig.load();
     assert_eq!(
-        saved(&store, 1).map(|(x, _)| x),
+        window_pos(&store, 1).map(|(x, _)| x),
         Some((EXPECTED[1].x + SCOPES[1].2.w / 2).to_string()),
         "記憶は並べた位置（ずれを引かない）"
     );
@@ -360,7 +350,7 @@ fn missing_material_only_warns() {
                 "{reason}: scope {scope} は動かない"
             );
         }
-        assert_eq!(saved(&rig.load(), 0), None, "{reason}: 記憶へ書かない");
+        assert_eq!(window_pos(&rig.load(), 0), None, "{reason}: 記憶へ書かない");
         rig.finish();
     }
 }
@@ -473,7 +463,7 @@ fn reset_clears_script_placed_mark_and_persists() {
     let store = rig.load();
     let w = SCOPES[0].2.w;
     assert_eq!(
-        saved(&store, 0),
+        window_pos(&store, 0),
         Some((
             (EXPECTED[0].x + w / 2).to_string(),
             EXPECTED[0].y.to_string()

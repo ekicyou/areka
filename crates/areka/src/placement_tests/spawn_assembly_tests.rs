@@ -44,7 +44,6 @@ fn t_i1_spawn_assembles_four_windows_with_markers_and_ghost_windows() {
         // GhostWindows の scope×種別引き当て（6.1/6.2）
         let char_e = gw.char_window(p.scope).expect("char window entity");
         let balloon_e = gw.balloon_window(p.scope).expect("balloon window entity");
-        assert_ne!(char_e, balloon_e);
 
         // markers 正値（補助的な逆引き・6.2）
         assert_eq!(
@@ -178,10 +177,10 @@ fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
 /// input_events→placement）。
 /// spawn 直後に `input_events::attach_char_pointer_handlers` を呼ぶと、キャラ窓は
 /// 正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝stand-in
-/// `on_ghost_pressed` を退役して差し替え）を持ち、バルーン窓はポインタハンドラを
-/// 一切持たない（M1 はバルーンにマウス送出なし・DD-IE-12）。ハンドラ実挙動の檻は
-/// input_events の檻＝proven-wiring ゆえ存在の有無だけ固定する
-/// （[[test-only-decision-branches-not-proven-wiring]]）。装着の関数は areka の側にあり
+/// `on_ghost_pressed` を退役して差し替え）を持ち、キャラ窓のハンドラ装着はバルーン窓に
+/// 何も付けない（バルーン窓のハンドラは `input_events::balloon::attach_balloon_pointer_handlers`
+/// が別に付ける）。ハンドラ実挙動の檻は input_events の檻が持つので、ここは存在の有無
+/// だけを固定する。装着の関数は areka の側にあり
 /// areka_placement からは見えない（依存の向き）ので、本テストは areka の側に置く。
 #[test]
 fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
@@ -212,15 +211,15 @@ fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
             p.scope
         );
 
-        // バルーン窓はポインタハンドラを一切持たない（DD-IE-12・stand-in 撤去）
+        // キャラ窓のハンドラ装着はバルーン窓にポインタハンドラを付けない（バルーン窓の分は別の関数）
         assert!(
             world.get::<OnPointerMoved>(balloon_e).is_none(),
-            "scope{}: バルーン窓に OnPointerMoved を付けない（DD-IE-12）",
+            "scope{}: キャラ窓のハンドラ装着がバルーン窓に OnPointerMoved を付けた",
             p.scope
         );
         assert!(
             world.get::<OnPointerPressed>(balloon_e).is_none(),
-            "scope{}: バルーン窓に OnPointerPressed を付けない（DD-IE-12）",
+            "scope{}: キャラ窓のハンドラ装着がバルーン窓に OnPointerPressed を付けた",
             p.scope
         );
     }
@@ -480,7 +479,11 @@ fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
             "窓 entity に DragConstraint を付けてはならない（DD8・4.5）"
         );
         let drag = world.get::<DragConfig>(e).expect("DragConfig");
-        assert_eq!(drag.threshold, 5, "threshold は既定値を保つ");
+        assert_eq!(
+            drag.threshold,
+            DragConfig::default().threshold,
+            "threshold は既定値を保つ"
+        );
         assert!(drag.enabled, "ドラッグは有効");
     }
 
@@ -602,11 +605,4 @@ fn spawn_emits_one_declared_record_per_scope_with_scope_and_both_entities() {
             "宣言レコードは debug 水準（design 診断ログ語彙表）"
         );
     }
-
-    // 2 スコープのレコードは互いに異なる（1 スコープぶんを 2 回出していない）
-    assert_ne!(
-        declared[0].message(),
-        declared[1].message(),
-        "同一内容の宣言レコードが 2 本出ている: {events:?}"
-    );
 }

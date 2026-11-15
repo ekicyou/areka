@@ -92,14 +92,32 @@ fn load_restored_state_survives_missing_default_shell() {
 }
 
 /// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし・6.1/6.3）。
+/// 空は「記憶のファイルが無い」と同じ結果なので、ゴーストを読めなかったことは `warn!` の
+/// 1 行だけが伝える（その行が ghost_root を運ぶ）。
 #[test]
 fn load_restored_state_mount_resolve_failure_is_empty() {
     let temp = unique_temp_dir("load-mount-fail");
     let root = temp.path().join("no_such_ghost");
-    let entries = load_restored_state(&root);
+    let (entries, events) = capture(|| load_restored_state(&root));
     assert!(
         entries.is_empty(),
         "mount 解決失敗は空縮退（起動を止めない）"
+    );
+    let warns: Vec<_> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    assert_eq!(
+        warns.len(),
+        1,
+        "読めないゴーストの warn が 1 行: {events:?}"
+    );
+    assert!(
+        warns[0]
+            .field("ghost_root")
+            .is_some_and(|v| v.contains("no_such_ghost")),
+        "warn が ghost_root を運ぶ: {:?}",
+        warns[0]
     );
 }
 

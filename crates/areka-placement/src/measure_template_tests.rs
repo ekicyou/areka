@@ -32,6 +32,7 @@ use areka_emo_atlas::WicDecoderArm;
 use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
 use areka_emo_present::shell_target::load_shell_target;
 
+use super::first_frame::FirstFrameDecoder;
 use super::{build_shell_assets, compose_size};
 use crate::descript_window_keys::builtin_default_surface;
 use crate::sample_test_support::{konnoyayame_shell_root, r_post_and_komainu_shell_root};
@@ -86,8 +87,9 @@ fn assert_both_paths_agree(template: &Template) {
         let decoder = WicDecoderArm::new().expect("WicDecoderArm（COM 初期化済みスレッド）");
         let mut composer = Composer::new();
 
-        // A: 採寸経路（`measure.rs` が本番で通る 2 段そのもの）。
-        let (measure_world, measure_atlas) = build_shell_assets(&template.shell_dir, &decoder)
+        // A: 採寸経路（`measure.rs` が本番で通る 2 段と、1 枚目だけで読む本番の読み手）。
+        let reader = FirstFrameDecoder::new(&decoder);
+        let (measure_world, measure_atlas) = build_shell_assets(&template.shell_dir, &reader)
             .unwrap_or_else(|e| panic!("{}: 採寸経路の資産構築に失敗: {e}", template.name));
         let measured = |id: u32, composer: &mut Composer| -> (i32, i32) {
             let size =

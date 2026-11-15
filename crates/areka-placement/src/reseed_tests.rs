@@ -5,7 +5,6 @@
 
 use std::fs;
 
-use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::{DPI, Point, WindowPos};
@@ -15,6 +14,7 @@ use super::test_support::{
 };
 use super::{BalloonPlacementInputs, apply_shell_descript};
 use crate::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
+use crate::persist::balloon_offset_entries;
 use crate::resolver::{Anchor, PointPx, ScopePlacement};
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::TempDir;
@@ -42,25 +42,6 @@ fn follow_of(world: &World, windows: &GhostWindows, scope: usize) -> BalloonFoll
 
 fn char_window_count(world: &mut World) -> usize {
     world.query::<&CharWindowMarker>().iter(world).count()
-}
-
-fn saved_balloon_offset(scope: u32, x: i32, y: i32) -> Vec<(PersistKey, String)> {
-    vec![
-        (
-            PersistKey::BalloonOffset {
-                scope,
-                axis: Axis::X,
-            },
-            x.to_string(),
-        ),
-        (
-            PersistKey::BalloonOffset {
-                scope,
-                axis: Axis::Y,
-            },
-            y.to_string(),
-        ),
-    ]
 }
 
 /// 新しいシェルのずらしと揃え方がキャラ窓の部品に入り、窓の位置とスコープの集合は保たれ、
@@ -104,7 +85,6 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
 
     // 窓の位置とスコープの集合は不変・窓は増えない。
     assert_eq!(char_positions(&world, &windows), before);
-    assert_eq!(windows.scopes().collect::<Vec<_>>(), vec![0, 1]);
     assert_eq!(
         world
             .resource::<GhostWindows>()
@@ -141,7 +121,7 @@ fn t_rs02_saved_balloon_offset_survives_the_reseed() {
         &windows,
         &new_shell(&[]),
         &no_balloon(),
-        &saved_balloon_offset(0, -123, -45),
+        &balloon_offset_entries(0, PointPx { x: -123, y: -45 }),
     );
 
     let f0 = follow_of(&world, &windows, 0);
@@ -189,6 +169,43 @@ fn t_rs03_author_offset_is_scaled_by_the_window_dpi() {
             x: CHAR0.w + 30,
             y: 40
         }
+    );
+}
+
+/// 同じ作業領域でも窓の DPI が違うスコープは、それぞれの DPI で解く（同じ作業領域と DPI の窓
+/// だけを 1 度にまとめる）。拡大率の移り変わりの途中で、スコープ 0 が 96・スコープ 1 が 192 の形。
+#[test]
+fn t_rs03b_scopes_with_different_window_dpis_are_solved_with_their_own_dpi() {
+    let (mut world, windows) = booted_world(96);
+    let dpi192 = DPI::from_dpi(192, 192);
+    for window in [windows.char_window(1), windows.balloon_window(1)] {
+        world.entity_mut(window.unwrap()).insert(dpi192);
+    }
+
+    apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[]);
+
+    let f0 = follow_of(&world, &windows, 0);
+    assert_eq!(
+        (f0.offset(), f0.base().dpi),
+        (
+            PointPx {
+                x: CHAR0.w + 30,
+                y: 40
+            },
+            Some(DPI::from_dpi(96, 96))
+        )
+    );
+    let f1 = follow_of(&world, &windows, 1);
+    assert_eq!(
+        (f1.offset(), f1.base().dpi),
+        (
+            PointPx {
+                x: -BALLOON.w - 14,
+                y: 18
+            },
+            Some(dpi192)
+        ),
+        "スコープ 1 がスコープ 0 の DPI で解かれた"
     );
 }
 

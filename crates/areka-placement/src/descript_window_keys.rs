@@ -191,7 +191,7 @@ pub struct BalloonSyncScale {
 
 impl BalloonSyncScale {
     /// スコープのバルーンの倍率をシェルに連動させるか（ゴーストの段かシェルの段のどちらかが `true`・要件 6.3）。
-    // 本番で読む下流は shell-balloon-scale-setting（本 spec は持つだけ・要件 6.6）。
+    // 本番で読む下流は shell-balloon-scale-setting（shell-scale-linkage は持つだけ・要件 6.6）。
     pub fn is_synced(&self, scope: u32) -> bool {
         self.ghost || self.shell_scopes.contains(&scope)
     }

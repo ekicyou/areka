@@ -10,7 +10,7 @@
 //! 2. **保存値が無い腕は素通し**——配置式が出した基準対（`Some(採寸 DPI)`）をそのまま運ぶ。
 //!
 //! あわせて、保存値の採否の優先順位（要件 5.5）と「補正を焼き付けない」規約（要件 5.6）が
-//! 本タスクで動いていないことを、同じ入力の `balloon_offset` で突き合わせる。
+//! 基準対を足しても動かないことを、同じ入力の `balloon_offset` で突き合わせる。
 
 use super::*;
 use crate::follow::OffsetBase;
@@ -37,7 +37,7 @@ fn restored_persisted_arm_carries_unpinned_base_equal_to_saved_value() {
         OffsetBase::unpinned(saved),
         "保存値採用腕の基準対は未係留（dpi: None・採寸 DPI を係留しない）かつ保存値と bit 同一である"
     );
-    // 5.5／5.6 の非回帰: 採否の優先順位も「焼き付けない」規約も本タスクで動かない。
+    // 5.5／5.6 の非回帰: 採否の優先順位も「焼き付けない」規約も基準対で動かない。
     assert_eq!(
         out[0].balloon_offset, saved,
         "保存値があれば保存値が勝つ（優先順位は不変）・生値のまま採る"

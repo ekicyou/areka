@@ -10,25 +10,14 @@
 //! ゆえに本檻は limit の分岐を持たず、式そのものの判断分岐だけを全網羅する。
 
 use super::*;
-use crate::resolver::test_support::px;
+// DPI の水準（96＝k=1 相当、120/144/192＝k≠1 相当）と、左上が原点でない作業領域は resolver の
+// テストと共有する。
+use crate::resolver::test_support::{DPIS, offset_work_area, px};
 use crate::test_support::{contained, point};
 
 // ---------------------------------------------------------------------------
-// 檻の道具（兄弟の檻 `balloon_limit_gate_tests.rs` も使う）
+// 檻の道具
 // ---------------------------------------------------------------------------
-
-/// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当（U5・要件 2.10）。
-pub(super) const DPIS: [i32; 4] = [96, 120, 144, 192];
-
-/// 左上が原点**でない**作業領域（クランプ境界の left/top 依存を暴く）。
-pub(super) fn work_area(dpi: i32) -> RectPx {
-    RectPx {
-        left: px(64, dpi),
-        top: px(40, dpi),
-        right: px(64 + 1920, dpi),
-        bottom: px(40 + 1080, dpi),
-    }
-}
 
 /// 検証用バルーン寸（論理 400x300）。
 fn balloon_size(dpi: i32) -> SizePx {
@@ -62,7 +51,7 @@ fn position_grid(area: RectPx, dpi: i32) -> Vec<PointPx> {
 #[test]
 fn t_bl1_inside_is_not_corrected() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
         let pos = point(wa.left + px(100, dpi), wa.top + px(80, dpi));
 
@@ -83,7 +72,7 @@ fn t_bl1_inside_is_not_corrected() {
 #[test]
 fn t_bl1b_flush_edges_are_not_corrected() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
         let flush = [
             point(wa.left, wa.top),                   // 左上ぴったり
@@ -111,7 +100,7 @@ fn t_bl1b_flush_edges_are_not_corrected() {
 #[test]
 fn t_bl2_single_edge_overflow_each_side() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
         let over = px(200, dpi);
         let inx = wa.left + px(100, dpi);
@@ -159,7 +148,7 @@ fn t_bl2_single_edge_overflow_each_side() {
 #[test]
 fn t_bl3_composite_corner_overflow() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
         let sz = balloon_size(dpi);
         let over = px(240, dpi);
         let (lo_x, hi_x) = (wa.left, wa.right - sz.w);
@@ -209,7 +198,7 @@ fn t_bl3_composite_corner_overflow() {
 #[test]
 fn t_bl4_oversized_balloon_prefers_left_top() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
         let wide = SizePx {
             w: (wa.right - wa.left) + px(400, dpi),
             h: px(300, dpi),
@@ -293,7 +282,7 @@ fn t_bl4b_degenerate_area_prefers_left_top() {
 #[test]
 fn t_bl5_clamp_is_idempotent() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
         let oversized = SizePx {
             w: (wa.right - wa.left) + px(200, dpi),
             h: (wa.bottom - wa.top) + px(200, dpi),
@@ -358,4 +347,7 @@ fn t_bl8_extreme_values_do_not_panic() {
 fn t_bl9_observation_tags_are_stable_literals() {
     assert_eq!(BALLOON_LIMIT_CLAMP_TAG, "[balloon-limit] Clamp");
     assert_eq!(BALLOON_LIMIT_UNRESOLVED_TAG, "[balloon-limit] Unresolved");
+    // 起動時関門の契機ラベルも手順書が `context="boot-gate"` で grep する（ほかの 2 つの関門の
+    // ラベルは追随のテストが literal で持つ）。
+    assert_eq!(BALLOON_LIMIT_BOOT_CONTEXT, "boot-gate");
 }

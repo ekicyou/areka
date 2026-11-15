@@ -122,7 +122,7 @@ impl StickyGroupLedger {
         &self.groups
     }
 
-    /// 他の機能が「この窓はどの組か」を確かめる口（裁定 7）。
+    /// 他の機能が「この窓はどの組か」を確かめる口（areka-P0-window-link-directives の裁定 7）。
     pub fn group_of(&self, scope: u32) -> Option<&StickyGroup> {
         self.groups
             .iter()

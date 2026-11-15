@@ -32,10 +32,8 @@
 //!
 //! ## 終了手段
 //!
-//! - **キャラ窓／バルーン窓の不透明域をダブルクリック**: 全ゴースト窓
-//!   （`GhostWindowMarker`）を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰
-//!   （`spawn_ghost_windows` 組込みの `on_ghost_pressed`）
-//! - **Ctrl+C**（コンソールから起動した場合）
+//! - **Ctrl+C**（コンソールから起動した場合）。窓のダブルクリックでは終わらない（ダブルクリックを
+//!   受けるのは本体の `input_events` の結線で、この example は付けない）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
 //!   env ゲート（main.rs の smoke ゲートと同名・同義。hands-off のビルド/起動確認用。
 //!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）
@@ -139,6 +137,8 @@ struct PendingTarget {
     window: Entity,
     /// 初回 `apply(ShowSurface)` で表示する surface id。
     surface_id: u32,
+    /// 作者基準 DPI（採寸が descript から読んだ値・キャラ窓はシェル、バルーン窓はバルーンの値）。
+    author_dpi: u16,
     /// ログ用ラベル。
     label: String,
     /// target のアセット（`attach_target` で move 消費・装着後は `None`）。
@@ -196,7 +196,7 @@ fn main() -> Result<()> {
     println!(
         "  scope1: キャラ窓 surface10（エモ・scope0 の左）＋バルーン窓（右隣・scope0 に重畳＝正常）"
     );
-    println!("  操作  : キャラ窓の不透明域ドラッグでバルーン追従／不透明域ダブルクリックで終了");
+    println!("  操作  : キャラ窓の不透明域ドラッグでバルーン追従／終了は Ctrl+C");
     println!("  受け入れ: rustdoc の手動観測プロトコル ①〜⑤（dpi≠96 必須・96 のみは不合格）");
     println!();
 
@@ -254,7 +254,7 @@ fn build_and_spawn(world: &mut World) {
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
 
-    // placement 本体の窓組立（markers・WindowPos・DragConfig・BalloonFollow・double-click close）。
+    // placement 本体の窓組立（markers・WindowPos・DragConfig・BalloonFollow）。
     let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
 
     // ここから先は example 側の装着アセット構築（6.3: placement 本体は EmoPresenter 非依存）。
@@ -280,7 +280,7 @@ fn build_and_spawn(world: &mut World) {
     let shell_table = shell_target.atlas().clone();
 
     let mut pending = Vec::new();
-    for scope in windows.scopes().collect::<Vec<_>>() {
+    for scope in windows.scopes() {
         let Some(scope_u32) = target_scope(scope) else {
             tracing::error!(
                 scope,
@@ -299,6 +299,7 @@ fn build_and_spawn(world: &mut World) {
                 target: TargetId(scope_u32 * 2),
                 window: char_e,
                 surface_id,
+                author_dpi: prepared.author_dpi.shell,
                 label: format!("scope{scope} char surface{surface_id}"),
                 assets: Some((emo_world, shell_table.clone())),
             });
@@ -311,6 +312,7 @@ fn build_and_spawn(world: &mut World) {
                     target: TargetId(scope_u32 * 2 + 1),
                     window: balloon_e,
                     surface_id: 0,
+                    author_dpi: prepared.author_dpi.balloon,
                     label: format!("scope{scope} balloon surface0"),
                     assets: Some((b_world, b_table)),
                 }),
@@ -401,12 +403,9 @@ fn boot_present_system(world: &mut World) {
         let Some((emo_world, atlas)) = t.assets.take() else {
             continue;
         };
-        boot.presenter.attach_target(
-            t.target, t.window, emo_world, atlas,
-            // 作者基準 DPI は正典既定の 96（ukadoc・D1・emo2 は宣言なし）。採寸も emo2 の descript から
-            // 同じ 96 を読むので、窓の大きさと表示の大きさが合う。本番は boot が descript の実値を供給する。
-            96,
-        );
+        // 作者基準 DPI は採寸と同じ値（`PreparedPlacement::author_dpi`）なので、窓の大きさと表示の大きさが合う。
+        boot.presenter
+            .attach_target(t.target, t.window, emo_world, atlas, t.author_dpi);
         boot.presenter.apply(
             world,
             PresentCommand::ShowSurface {

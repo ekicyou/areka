@@ -254,7 +254,7 @@ fn t_k5_center_midpoint_is_integer_division_toward_zero() {
         right: 1920,
         bottom: 1080,
     };
-    // (差, キャラ幅, バルーン幅, 期待する中点項)
+    // (キャラ幅, バルーン幅, 期待する中点項)
     let cases = [
         // 正の奇数差 201 → 100（100.5 を 0 方向へ切り捨て）
         (401, 200, 100),

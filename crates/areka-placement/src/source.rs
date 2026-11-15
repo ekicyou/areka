@@ -97,7 +97,7 @@ impl GhostTitles {
 pub struct DescriptSource {
     /// ghost/master/descript.txt の生 KV（読取失敗時は空・継続）。
     pub ghost_kv: BTreeMap<String, String>,
-    /// shell/<dir>/descript.txt の生 KV（読取失敗は致命 `Err`）。
+    /// shell/<dir>/descript.txt の生 KV（読取失敗は呼び手へ `Err`）。
     pub shell_kv: BTreeMap<String, String>,
     /// 解決済み shell ディレクトリ（`MountModel.shell.dir`・measure が消費）。
     pub shell_dir: PathBuf,

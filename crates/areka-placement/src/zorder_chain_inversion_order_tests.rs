@@ -1,5 +1,5 @@
 //! ぱすたと同じ指定 `\![reset,zorder]\![set,zorder,s0,b0,s1]` から、**台帳 → 合成（areka）→
-//! 受け口 → 確立系・維持系・鎖の適用系（wintf・確定段の並び）→ 実窓の重なり**を 1 本に
+//! 受け口 → 確立系・維持系・鎖の適用系（wintf・確定段から帯の適用系を除いた並び）→ 実窓の重なり**を 1 本に
 //! 繋いで測るテスト（`areka-P0-zorder-scope-inversion` 要件 1.2・3.3・4.5・6.1・6.2・6.4・8.4）。
 //!
 //! 兄弟の wintf 側の実窓の檻（`zorder_chain_order_inversion_tests.rs`）は計画を手で組む。
@@ -28,7 +28,7 @@ use super::compose_chain;
 use crate::zorder_group_ledger::{
     GroupElement, GroupWindowKind, ZOrderGroupLedger, parse_zorder_tokens,
 };
-use crate::zorder_test_support::{create_window, is_window, owner_shape, z_shape};
+use crate::zorder_test_support::{create_window, is_window, owner_shape, teardown, z_shape};
 
 const B0: usize = 0;
 const S0: usize = 1;
@@ -52,7 +52,7 @@ fn element_at(index: usize) -> GroupElement {
 }
 
 // ---------------------------------------------------------------------------
-// 足場: 窓 4 枚・台帳・本番の確定段の 3 本
+// 足場: 窓 4 枚・台帳・本番の確定段のうち 3 本
 // ---------------------------------------------------------------------------
 
 struct Rig {
@@ -70,7 +70,8 @@ impl Rig {
     fn new(without_window: &[usize]) -> Self {
         let mut schedule = Schedule::default();
         schedule.set_executor(SingleThreadedExecutor::new());
-        // 確定段と同じ並び（`spawn.rs` の `wire_zorder_pair`）。
+        // 確定段（`spawn.rs` の `wire_zorder_pair`）と同じ順。本番は確立系と維持系のあいだに
+        // 帯の適用系も挟むが、このテストの窓は帯を持たないので回さない。
         schedule.add_systems(
             (
                 establish_owner_links,
@@ -200,20 +201,15 @@ impl Rig {
 
 impl Drop for Rig {
     fn drop(&mut self) {
-        // 手前（所有される側）から壊せば道連れは起きない。壊れていればそのまま飛ばす。
+        // 手前（所有される側）から壊せば道連れは起きない。もう壊れた窓は `DestroyWindow` が
+        // 失敗するだけで、`teardown` はその失敗を捨てる。
         let order = z_shape(&self.hwnds);
-        for hwnd in order
+        let windows: Vec<HWND> = order
             .iter()
             .filter_map(|i| self.hwnds[*i])
             .chain(self.made.iter().copied())
-        {
-            if is_window(hwnd) {
-                // SAFETY: Win32 境界。このテストが作った窓を壊す。
-                unsafe {
-                    let _ = DestroyWindow(hwnd);
-                }
-            }
-        }
+            .collect();
+        teardown(&windows);
     }
 }
 
@@ -221,7 +217,7 @@ impl Drop for Rig {
 // テスト
 // ===========================================================================
 
-/// ぱすたと同じ指定から、台帳が `b1` を補い、合成と確定段の 3 本が前 3 枚を成り立たせる
+/// ぱすたと同じ指定から、台帳が `b1` を補い、合成と確定段のうち 3 本が前 3 枚を成り立たせる
 /// （要件 1.2・3.3・8.4 の前段）。続く解除で各スコープが組へ戻る（要件 4.5）。
 #[test]
 fn the_pasta_directive_lands_s0_b0_b1_s1_on_real_windows() {

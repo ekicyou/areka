@@ -1,8 +1,11 @@
+use std::sync::{Arc, Mutex};
+
 use bevy_ecs::entity::Entity;
 use tracing::Level;
+use tracing_subscriber::EnvFilter;
 
 use super::*;
-use log_capture_kit::{capture, capture_under_filter};
+use log_capture_kit::{capture, ensure_interest_probes};
 
 /// 合成モニタレコード（実 wintf `Monitor` 不要＝純データ）。
 fn rec(handle: isize, is_primary: bool) -> MonitorRecord {
@@ -340,10 +343,49 @@ fn log_window_move_emits_the_assembled_record_at_debug() {
 // Req 1.7: 既定では 1 行も出ない・手順書の RUST_LOG でのみ点灯
 // ------------------------------------------------------------------
 
-/// 与えた `RUST_LOG` 相当の directive で本モジュールの全出力を実際に濾して集める
-/// （捕捉の窓が生きていなければ `capture_under_filter` が panic する＝「出ない」が空振りしない）。
+/// 番兵の宛先。窓の内側で 1 行出し、捕捉の窓が本当に生きていることを同じ窓の内側で示す。
+const SENTINEL_TARGET: &str = "areka_placement::diag_tests::sentinel";
+
+/// 与えた `RUST_LOG` 相当の directive で本モジュールの全出力を実際に濾して集める。
+/// 番兵の行が捕まらなければ panic する（「出ない」が空振りしない）。
+///
+/// 共有の `capture_under_filter` は log-capture-kit の `env-filter` の機能の下にあり、
+/// その機能を有効にしてよいのは wintf だけ（log-capture-kit の見張りの決まり）なので、
+/// 番兵を含めた同じ形をここに持つ。
 fn emit_all_under_filter(directives: &str) -> String {
-    capture_under_filter(directives, || {
+    ensure_interest_probes();
+
+    #[derive(Clone)]
+    struct VecWriter(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for VecWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .expect("捕捉バッファのロック取得に失敗")
+                .extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let sink = buf.clone();
+    let filter = EnvFilter::new(directives).add_directive(
+        format!("{SENTINEL_TARGET}=trace")
+            .parse()
+            .expect("番兵の指令は定数から組むので常に解釈できる"),
+    );
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_ansi(false)
+        .with_writer(move || VecWriter(sink.clone()))
+        .finish();
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::callsite::rebuild_interest_cache();
+        tracing::trace!(target: SENTINEL_TARGET, "capture window is live");
         log_monitor_snapshot(&[rec(1, true)], "prepare_ghost_windows");
         log_window_move(&WindowMoveRecord {
             route: PlacementRoute::SpawnInitial,
@@ -359,7 +401,19 @@ fn emit_all_under_filter(directives: &str) -> String {
         log_zorder_pair_strategy(ZOrderPairStrategy::OwnerLink {
             raise_assist: false,
         });
-    })
+    });
+
+    let out = String::from_utf8(buf.lock().expect("捕捉バッファのロック取得に失敗").clone())
+        .expect("UTF-8");
+    let (sentinel, rest): (Vec<&str>, Vec<&str>) = out
+        .split_inclusive('\n')
+        .partition(|line| line.contains(SENTINEL_TARGET));
+    assert_eq!(
+        sentinel.len(),
+        1,
+        "番兵が捕まらない＝捕捉の窓が生きていない: {out}"
+    );
+    rest.concat()
 }
 
 /// 既定水準（`RUST_LOG=info`＝`main.rs` のフォールバック）では **1 行も出ない**（Req 1.7）。

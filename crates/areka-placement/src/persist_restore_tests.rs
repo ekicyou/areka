@@ -168,9 +168,6 @@ fn snapshot_of(rects: Vec<RectPx>) -> MonitorSnapshot {
     MonitorSnapshot { work_areas: rects }
 }
 
-/// 復元テスト共通の char 寸（物理 px）。bottom 揃え y = wa.bottom − 600。
-const SZ: SizePx = SizePx { w: 400, h: 600 };
-
 /// 5.3: 域内 Free は恒等（identity 射影＋両軸 clamp が域内で no-op）。
 #[test]
 fn project_restore_free_inside_work_area_is_identity() {
@@ -178,7 +175,7 @@ fn project_restore_free_inside_work_area_is_identity() {
     // 窓 (500..900, 300..900) は wa 内へ完全に収まる
     let pos = PointPx { x: 500, y: 300 };
     assert_eq!(
-        project_restore(Anchor::Free, pos, SZ, &snap),
+        project_restore(Anchor::Free, pos, CSZ, &snap),
         pos,
         "域内 Free は不要な再射影をしない＝恒等（5.3）"
     );
@@ -191,7 +188,7 @@ fn project_restore_bottom_already_anchored_inside_is_identity() {
     // bottom 揃え y = 1040 − 600 = 440・x は wa 内
     let pos = PointPx { x: 500, y: 440 };
     assert_eq!(
-        project_restore(Anchor::Bottom, pos, SZ, &snap),
+        project_restore(Anchor::Bottom, pos, CSZ, &snap),
         pos,
         "既に下端一致＋x 域内なら恒等（5.3・べき等）"
     );
@@ -204,9 +201,8 @@ fn project_restore_bottom_y_outside_snaps_bottom_and_preserves_x() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
     // 保存 y=2000 は現 work area 下端 1040 の外
     let pos = PointPx { x: 500, y: 2000 };
-    let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
+    let out = project_restore(Anchor::Bottom, pos, CSZ, &snap);
     assert_eq!(out.y, 1040 - 600, "下端吸着維持: y = wa.bottom − h（5.2）");
-    assert_eq!(out.y + SZ.h, 1040, "下端が wa.bottom に一致＝域内（5.1）");
     assert_eq!(out.x, 500, "水平位置（X 意図）は保持（5.2）");
 }
 
@@ -216,13 +212,12 @@ fn project_restore_bottom_y_outside_snaps_bottom_and_preserves_x() {
 fn project_restore_bottom_x_outside_clamps_into_work_area() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
     let pos = PointPx { x: 3000, y: 440 }; // x は wa 右外
-    let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
+    let out = project_restore(Anchor::Bottom, pos, CSZ, &snap);
     assert_eq!(
         out.x,
         1920 - 400,
         "x を [wa.left, wa.right−w] 内へ clamp（5.1）"
     );
-    assert_eq!(out.x + SZ.w, 1920, "右端が wa.right に一致＝域内");
     assert_eq!(out.y, 1040 - 600, "下端吸着は維持（5.2）");
 }
 
@@ -257,7 +252,7 @@ fn project_restore_bottom_partially_visible_keeps_saved_x() {
 fn project_restore_left_pins_left_edge_and_clamps_y() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
     let pos = PointPx { x: 3000, y: 2000 }; // x/y とも外
-    let out = project_restore(Anchor::Left, pos, SZ, &snap);
+    let out = project_restore(Anchor::Left, pos, CSZ, &snap);
     assert_eq!(out.x, 0, "左端固定: x = wa.left（5.2）");
     assert_eq!(
         out.y,
@@ -271,7 +266,7 @@ fn project_restore_left_pins_left_edge_and_clamps_y() {
 fn project_restore_free_clamps_both_axes_with_identity_projection() {
     let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
     let pos = PointPx { x: 3000, y: 2000 }; // 両軸とも外
-    let out = project_restore(Anchor::Free, pos, SZ, &snap);
+    let out = project_restore(Anchor::Free, pos, CSZ, &snap);
     assert_eq!(
         out,
         PointPx {
@@ -289,7 +284,7 @@ fn project_restore_empty_snapshot_is_identity() {
     let pos = PointPx { x: 3000, y: 2000 };
     for anchor in ALL_ANCHORS {
         assert_eq!(
-            project_restore(anchor, pos, SZ, &snap),
+            project_restore(anchor, pos, CSZ, &snap),
             pos,
             "空 snapshot は identity 縮退: {anchor:?}"
         );
@@ -306,14 +301,13 @@ fn project_restore_off_all_monitors_uses_nearest_work_area() {
     let snap = snapshot_of(vec![a, b]);
     // 窓中心 (5000+200, 500+300)=(5200,800) は B が最近傍
     let pos = PointPx { x: 5000, y: 500 };
-    let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
+    let out = project_restore(Anchor::Bottom, pos, CSZ, &snap);
     assert_eq!(out.y, 1040 - 600, "最近傍 B の下端へ吸着");
     assert_eq!(
         out.x,
         3840 - 400,
         "x を最近傍 B の [left, right−w] 内へ clamp（5.1）"
     );
-    assert!(out.x >= b.left, "x は B 内");
 }
 
 // ------------------------------------------------------------------

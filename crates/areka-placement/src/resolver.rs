@@ -231,7 +231,7 @@ pub fn keyword_balloon_pos(
 ///   `char_x(n) = base_x(n) − default_x(n).unwrap_or(0)`（左方向オフセット・
 ///   0＝基準密着・2.10・DD3）。連鎖の `char_x(n−1)` は **P4 クランプ後**の実配置
 ///   （後続スコープは前スコープの実際の位置の左隣に置く）。
-///   なお旧 `window-placement` R2.9（前スコープの幅を引く）は本仕様
+///   なお旧 `window-placement` R2.9（前スコープの幅を引く）は
 ///   areka-P0-scope-chain-gap で上書きされた（`doc/COMPAT_ARCHITECTURE.md` §8 参照）。
 /// - **P3（free・DD10）**: `alignment=Free` のとき原点は **work area 左上**。
 ///   `char_x = work_area.left + default_x`／`char_y = work_area.top + default_y`。
@@ -447,7 +447,7 @@ pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
 /// 5 値アンカー種別（純粋値・`seriko.alignmenttodesktop` の解決済み解釈結果・4.2）。
 ///
 /// 「シェル座標系のどの辺を work area の対応辺へ固定するか」を表す不変値。
-/// wintf/bevy 非依存で `resolver` に在住し（U5・純粋 DPI 檻が wintf 非依存で走る）、
+/// 型そのものは wintf/bevy の型を持たない純粋値として `resolver` に置き、
 /// 後続で `ScopePlacement.anchor` として spawn へ運ばれ `Anchored(Anchor)` Component
 /// として char 窓へ焼き込まれる。射影 T（`project_anchor`）は follow 層が所有する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

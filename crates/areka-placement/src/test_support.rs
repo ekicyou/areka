@@ -4,8 +4,8 @@
 //! `#[cfg(test)]` だけの項目と共有のテスト用の crate
 //! （`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）には頼らない——本体のテストを組むときの
 //! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる（spec: placement-crate-split 要件 3.3・3.4）。
-//! 見本のゴーストの入口は crate ごとの `sample_test_support`、一時フォルダと合成の検体は
-//! `shared_test_support` にある。ログの判定の補助は `log_capture_kit` を直に使う（要件 3.1）。
+//! 見本のゴーストの入口は crate ごとの `sample_test_support`、配置のテストだけが使う一時フォルダと
+//! 合成の検体は `shared_test_support` にある（本体のテストも使う合成の検体はここに置く）。ログの判定の補助は `log_capture_kit` を直に使う（要件 3.1）。
 
 use std::collections::BTreeMap;
 use std::fs;

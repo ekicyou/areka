@@ -681,18 +681,11 @@ fn t_zcc16_dropping_the_same_scope_pair_exclusion_is_caught() {
         absent: plan.absent.clone(),
     };
 
-    assert_ne!(
-        plan.cross_edges, mutant.cross_edges,
-        "除外が効いていない（本番の出力が既に連続対を全部張っている）"
-    );
+    // 本番の出力にペアの繋ぎが無いことは `composed` が確かめている。
     assert_eq!(
         pair_edges_written(&mutant, &scopes),
         vec![0, 1],
         "摂動体ではスコープ内ペアの繋ぎが現れる（検査器が赤を出せる）"
-    );
-    assert!(
-        pair_edges_written(&plan, &scopes).is_empty(),
-        "本番の出力にはペアの繋ぎが 1 本も無い"
     );
     // 摂動体は不変条件だけでは掴めない——だからペアの検査器が要る。
     assert!(chain_invariant_violations(&mutant).is_empty());

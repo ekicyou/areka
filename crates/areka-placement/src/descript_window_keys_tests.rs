@@ -303,6 +303,15 @@ fn shell_syncscale_ignores_leading_zero_scope() {
     assert!(events.is_empty(), "{events:?}");
 }
 
+/// u32 に収まらない `char<n>.` の番号は集合に入れない（`4294967296` が 0 番へ切り詰められない）。
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn shell_syncscale_ignores_scope_beyond_u32() {
+    let shell = kv(&[("char4294967296.balloon.syncscale", "true")]);
+    let sync = read_balloon_syncscale(&kv(&[]), &shell);
+    assert_eq!(sync, BalloonSyncScale::default());
+}
+
 /// ゴーストとシェルの両方が書けば論理和（要件 6.3）。ゴーストが `false` でもシェルの `true` が効く。
 #[test]
 fn ghost_and_shell_syncscale_combine_by_or() {

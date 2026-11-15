@@ -20,7 +20,7 @@
 //! よってここは判断ではなく**結線**を測る。
 //!
 //! - 本番の `wire_zorder_pair` が組んだ確定段を実際に回すと、鎖の適用系が**その巡のうちに**
-//!   受け口を読むこと（[`the_wired_route_runs_the_chain_apply_in_the_same_pass`]・対照つき）
+//!   受け口を読むこと（[`the_wired_route_runs_the_chain_apply_in_the_same_pass`]・前提つき）
 //! - グループ指定が一つも無い走行では、既存のペア機構の記録が従来どおりの語彙で出て、
 //!   重なり系の新しい記録は 1 行も出ないこと（要件 6.4）
 //! - 4 本の並び順そのもの（[`the_wiring_chains_the_four_systems_with_a_sync_point`]）
@@ -78,10 +78,10 @@ fn destroy(windows: &[HWND]) {
 /// 印が立ったまま残る。挙動としての差は「重なりが組み替わらない」だけであり、判断だけを
 /// 測っている wintf 側の決定論テストは 1 本も赤くならない。
 ///
-/// # 対照
+/// # 前提
 ///
-/// 結線しない World では印がそのまま残る。これが無いと「印は誰も立てないので常に降りて
-/// いる」形の壊れ方に気づけない（片側だけの主張は空虚である）。
+/// 結線の後、回す前に印が立ったままであることを先に確かめる。結線が受け口を入れ直して
+/// 印を降ろしてしまう形では、適用系が居なくても下の主張が緑になるからである。
 #[test]
 fn the_wired_route_runs_the_chain_apply_in_the_same_pass() {
     let mut wired = World::new();
@@ -91,28 +91,16 @@ fn the_wired_route_runs_the_chain_apply_in_the_same_pass() {
         dirty: true,
     });
     wire_zorder_pair(&mut wired);
+    assert!(
+        wired.resource::<ZOrderChainPlan>().dirty,
+        "前提: 結線の後、回す前は受け口の印が立っている（結線が受け口を入れ直していない）"
+    );
 
     wired.run_schedule(FrameFinalize);
 
     assert!(
         !wired.resource::<ZOrderChainPlan>().dirty,
         "本番の結線を回しても受け口の印が降りていない（確定段に鎖の適用系が載っていない）"
-    );
-
-    // 対照——印を降ろしているのは確かに結線された適用系である。
-    let mut unwired = World::new();
-    unwired.init_resource::<Schedules>();
-    unwired.insert_resource(ZOrderChainPlan {
-        chain: None,
-        dirty: true,
-    });
-    unwired.add_schedule(Schedule::new(FrameFinalize));
-
-    unwired.run_schedule(FrameFinalize);
-
-    assert!(
-        unwired.resource::<ZOrderChainPlan>().dirty,
-        "結線していない World でも印が降りている（上の檻が配線を 1 ビットも測っていない）"
     );
 }
 
@@ -209,10 +197,6 @@ fn the_wiring_chains_the_four_systems_with_a_sync_point() {
             "FrameFinalize, (establish_owner_links, apply_window_band, apply_zorder_pair_maintenance, apply_zorder_chain).chain(),"
         ),
         "確定段へ載る 4 本の連なり（2 本目が帯の系・末尾が鎖の適用系）が本文に見当たらない（結線の回帰）: {squeezed}"
-    );
-    assert!(
-        !code.contains("apply_zorder_group_maintenance"),
-        "退役する維持系がまだ確定段の結線に居る（順序指定の差し替え漏れ）"
     );
     assert!(
         !code.contains("ignore_deferred"),

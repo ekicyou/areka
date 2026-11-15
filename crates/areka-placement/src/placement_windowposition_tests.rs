@@ -238,10 +238,9 @@ fn prepare_windowposition_adjust_is_identical_for_both_balloon_sides() {
         let contribution_left = s0.balloon_offset.x - (-s0.balloon_size.w);
         let contribution_right = s1.balloon_offset.x - s1.char_size.w;
         assert_eq!(contribution_left, 266, "Left 置きの基本位置は −balloon_w");
-        assert_eq!(contribution_right, 266, "Right 置きの基本位置は +char_w");
         assert_eq!(
-            contribution_left, contribution_right,
-            "同一 wp 生値の寄与は置き側に依らず同一（R3.3 の実機確定形）"
+            contribution_right, 266,
+            "Right 置きの基本位置は +char_w・同一 wp 生値の寄与は置き側に依らず同一（R3.3 の実機確定形）"
         );
         assert_eq!(s0.balloon_offset.y, -129);
         assert_eq!(s1.balloon_offset.y, -129);
@@ -250,7 +249,8 @@ fn prepare_windowposition_adjust_is_identical_for_both_balloon_sides() {
 
 /// 要件 3.4／design Postconditions: `windowposition` の数値指定が**どの層にも無い**
 /// とき（かつ descript の `balloon.offsetx/offsety` も無いとき）`balloon_offset` は
-/// `None` のまま＝resolver 出力は本仕様適用前と bit 同一である。
+/// `None` のまま＝resolver 出力は `windowposition` の供給（areka-P0-kero-balloon）を入れる前と
+/// bit 同一である。
 ///
 /// 観測面は resolver の出力そのもの: left 置き＝`−balloon_w`・right 置き＝`+char_w`
 /// （P5 の基本位置ちょうど・y はゼロ）。
@@ -272,7 +272,7 @@ fn prepare_without_windowposition_keeps_resolver_output_bit_identical() {
                 x: -s0.balloon_size.w,
                 y: 0
             },
-            "scope0（left 置き）は基本位置ちょうど＝本仕様適用前と同一"
+            "scope0（left 置き）は基本位置ちょうど＝windowposition の供給を入れる前と同一"
         );
         let s1 = &p.placements[1];
         assert_eq!(
@@ -281,7 +281,7 @@ fn prepare_without_windowposition_keeps_resolver_output_bit_identical() {
                 x: s1.char_size.w,
                 y: 0
             },
-            "scope1（right 置き）も基本位置ちょうど＝本仕様適用前と同一"
+            "scope1（right 置き）も基本位置ちょうど＝windowposition の供給を入れる前と同一"
         );
     });
 }

@@ -260,36 +260,13 @@ fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
         "先送りしたプロパティの名前が sylphya の語彙表に先行登録されている\
          （要件 13.5 は名前だけの登録も禁じる）: {hits:?}"
     );
-
-    // 完全名・短縮形の双方を名指しでも確かめる（部分語の走査が将来ゆるんでも
-    // この 2 行は名前そのものを見張る）。
-    for forbidden in [DEFERRED_PROPERTY, "seriko.zorder"] {
-        let listed: Vec<(&str, &str)> = vocabulary_tables()
-            .into_iter()
-            .flat_map(|(table, names)| {
-                names
-                    .into_iter()
-                    .filter(move |name| *name == forbidden)
-                    .map(move |name| (table, name))
-            })
-            .collect();
-        assert!(
-            listed.is_empty(),
-            "語彙表に {forbidden} が載っている: {listed:?}"
-        );
-    }
 }
 
 /// 走査した語彙表 6 本が実在し・空でなく・同じ述語が既知の名前を必ず拾う（恒真回避）。
 #[test]
 fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
+    // 表の本数は t_zpd12 が名簿と突き合わせ、6 本の実在は下の名指しが確かめる。
     let tables = vocabulary_tables();
-    assert_eq!(
-        tables.len(),
-        6,
-        "この檻が読む語彙表の本数が変わっている\
-         （見ているのは檻の側の名簿であって、sylphya 側の表の増減は t_zpd12 の担当）"
-    );
     for (table, names) in &tables {
         assert!(!names.is_empty(), "語彙表 {table} が空（走査が空振りする）");
     }

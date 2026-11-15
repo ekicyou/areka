@@ -8,7 +8,9 @@
 //!
 //! 書込は起動の連鎖の確定と同じ 3 手——[`move_window_to`]（`MoveCue`・バルーンは今のずらしで
 //! 付いて動く）→ 既定の位置を自分で記し、台本の印 `ScriptPlaced` を外す →
-//! [`persist_unremembered_char_positions`] で記憶へ書く。
+//! [`persist_unremembered_char_positions`] で記憶へ書く。確定と違い、並べた位置を面の `move` の
+//! ずれの新しい元の位置にし（`rebase_shift`）、拡大率の後の詰め直しが寄せない窓として記す
+//! （[`note_script_moved`]）。
 //! `Anchored`・バルーンのずらし・吸い付きの設定は変えない（SSP 2.9.18 の実測 M9 と同じ）。
 
 use bevy_ecs::prelude::*;

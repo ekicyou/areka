@@ -31,13 +31,12 @@ windows = { workspace = true }
 # ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
 # 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
 # 依存方向の規律により [dependencies] へは決して置かない。
-# `env-filter` は実濾過の捕捉（`capture_under_filter`）のため。引く tracing-subscriber は下の行と同じ。
-log-capture-kit = { path = "../log-capture-kit", features = ["env-filter"] }
+log-capture-kit = { path = "../log-capture-kit" }
 # 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
 # テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
 # log-capture-kit と同じく [dependencies] へは決して置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
-# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（同 spec）。
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（spec: areka-P0-test-cage-determinism）。
 # 依存 0（std のみ）の leaf・publish = false・テスト専用。log-capture-kit と同じく
 # [dependencies] へは決して置かない。
 temp-path-kit = { path = "../temp-path-kit" }
@@ -47,6 +46,6 @@ tracing-subscriber = { workspace = true }
 async-io = { workspace = true }
 
 [[example]]
-# 手本の中の `#[test]`（絵の選び・代わりの面）を `cargo test -p areka-placement` で走らせる（`main` は走らない）。
+# 手本の中の `#[test]`（絵の選び・u32 に収まらないスコープ）を `cargo test -p areka-placement` で走らせる（`main` は走らない）。
 name = "window-placement"
 test = true

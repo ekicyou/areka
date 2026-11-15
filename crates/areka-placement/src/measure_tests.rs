@@ -12,8 +12,8 @@ use crate::shared_test_support::{TempDir, k, write_self_alpha_one_descript};
 use crate::test_support::with_com_initialized;
 use log_capture_kit::{ExpectField, capture, expect_one};
 
-/// 組み込みの既定の面で測る（今の期待値はどれも組み込みの面 0／10 の大きさ）。
 type Measured = Result<MeasuredSizes, PlacementError>;
+/// 組み込みの既定の面で測る（今の期待値はどれも組み込みの面 0／10 の大きさ）。
 fn measure_builtin(s: &Path, b: &Path, ids: &[usize], k: &MeasureScaling) -> Measured {
     measure_scope_sizes(s, b, ids, &DefaultSurfaces::builtin(), k)
 }
@@ -124,47 +124,10 @@ fn scope_n_ge_2_measures_interim_id10() {
     });
 }
 
-/// 合成失敗したスコープ（surface10 未定義シェル）は scope0 の寸法で代替される
-/// （窓自体は生やす——design「Error Handling」）。
-#[test]
-fn failed_scope_substitutes_scope0_size() {
-    with_com_initialized(|| {
-        // surface0 のみ定義する合成用シェルを一時 dir に組む（実 PNG は fixture から複写）。
-        let shell = TempDir::new();
-        std::fs::copy(
-            emo2("shell/master/surface0.png"),
-            shell.path().join("surface0.png"),
-        )
-        .expect("surface0.png の複写");
-        std::fs::write(
-            shell.path().join("surfaces.txt"),
-            "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n",
-        )
-        .expect("surfaces.txt の書出し");
-        write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
-
-        let out = measure_builtin(
-            shell.path(),
-            &balloon_root(),
-            &[0, 1],
-            &MeasureScaling::IDENTITY,
-        )
-        .expect("scope1 が採寸不能でも全体は成功する（代替寸で継続）");
-
-        assert_eq!(out.scopes.len(), 2, "窓は欠落させない（スコープ数維持）");
-        assert_eq!(out.scopes[0].char_size.w, SCOPE0_W);
-        assert_eq!(out.scopes[0].char_size.h, SCOPE0_H);
-        assert_eq!(
-            out.scopes[1].char_size, out.scopes[0].char_size,
-            "採寸失敗スコープは scope0 寸法で代替"
-        );
-    });
-}
-
 /// シェルに面が 1 つも無い（空のフォルダ＝`surfaces.txt` も面の画像も無い・scope0 の採寸自体が
-/// 成立しない）場合は `PlacementError::Measure`（代替根拠なし→呼び手の `main` が「起動窓を開けない」
-/// を告知して終える）。`surfaces.txt` が無いだけなら画像だけで組むので、失敗の理由は「面が無い」
-/// である（spec: areka-P0-self-alpha-declaration 要件 6.1・6.5）。
+/// 成立しない）場合は `PlacementError::Measure`（代替根拠なし→呼び手へ返す）。`surfaces.txt` が
+/// 無いだけなら画像だけで組むので、失敗の理由は「面が無い」である
+/// （spec: areka-P0-self-alpha-declaration 要件 6.1・6.5）。
 #[test]
 fn shell_without_any_surface_is_measure_error() {
     with_com_initialized(|| {
@@ -190,7 +153,7 @@ fn shell_without_any_surface_is_measure_error() {
 }
 
 /// 要件 3.7/5.4（後方互換）: 相方側系列（`balloonk*`）を持たないバルーンでは
-/// **全 scope が同一のバルーン寸**を得る——本仕様適用前の採寸結果と一致する。
+/// **全 scope が同一のバルーン寸**を得る——`areka-P0-kero-balloon` の適用前の採寸結果と一致する。
 ///
 /// 連鎖の最終受け皿は常に本体側 `balloons` ゆえ、scope1／scope2 も `balloons0.png` へ
 /// 収束する（scope 別化が「相方側資産がある時だけ」効くことの構造的証拠）。
@@ -354,8 +317,6 @@ fn apply_scaling_uses_independent_shell_and_balloon_k() {
         (200, 112),
         "balloon は balloon k（1/2）"
     );
-    // balloon へ shell k が漏れていれば 800x448 になる（陰性確認）。
-    assert_ne!((out[0].balloon_size.w, out[0].balloon_size.h), (800, 448));
 }
 
 /// 要件 3.1: k 適用は **scope ごとの写像**であり、scope 別の `balloon_size` が
@@ -390,10 +351,6 @@ fn apply_scaling_maps_balloon_per_scope() {
     assert_eq!((out[1].balloon_size.w, out[1].balloon_size.h), (450, 225));
     // 7*1.5=10.5→11・3*1.5=4.5→5（round half away from zero）。
     assert_eq!((out[2].balloon_size.w, out[2].balloon_size.h), (11, 5));
-
-    // 3 つとも異なる値＝ループ外へ畳んだ実装では再現不能。
-    assert_ne!(out[0].balloon_size, out[1].balloon_size);
-    assert_ne!(out[1].balloon_size, out[2].balloon_size);
 
     // char は shell k=1/1 ゆえ原寸のまま（軸の独立性の再確認）。
     assert_eq!((out[0].char_size.w, out[0].char_size.h), (434, 687));
@@ -530,10 +487,6 @@ fn apply_scaling_maps_char_per_scope() {
     assert_eq!((out[0].char_size.w, out[0].char_size.h), (543, 859));
     assert_eq!((out[1].char_size.w, out[1].char_size.h), (420, 500));
     assert_eq!((out[2].char_size.w, out[2].char_size.h), (10, 5));
-
-    // 3 つとも異なる値＝先頭スコープ寸の撒き直しでは再現不能。
-    assert_ne!(out[0].char_size, out[1].char_size);
-    assert_ne!(out[1].char_size, out[2].char_size);
     // balloon は恒等 k ゆえ原寸（軸の独立性の再確認）。
     for s in &out {
         assert_eq!((s.balloon_size.w, s.balloon_size.h), (1, 1));

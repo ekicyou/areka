@@ -184,7 +184,7 @@ pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
 /// その値を本型に束ねて 2 つの消費者へ配る:
 ///
 /// 1. 採寸の k₀（[`build_measure_scaling`] → `measure_scope_sizes`・要件 3.3）
-/// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → `main` →
+/// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → 本体の `ghost_session` →
 ///    `runtime::wire_runtime` → `build_boot_assets` → `attach_target`・要件 1.1）
 ///
 /// 同じ宣言が 2 経路で食い違わないこと（＝読取が 1 度であること）が本型の存在理由である。
@@ -228,7 +228,7 @@ pub struct PreparedPlacement {
     ///
     /// `author_dpi` と**同じ搬送の形**である（areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
     /// descript を読むのは準備の中の 1 度だけなので、重なりの基底もそのときの読取結果を
-    /// ここへ載せて `main` → `wire_runtime` → 台帳へ配る。ここで搬送せずに結線の側で
+    /// ここへ載せて本体の `ghost_session` → `wire_runtime` → 台帳へ配る。ここで搬送せずに結線の側で
     /// 読み直すと、配置と重なりが**別々の宣言**を見る余地が生まれる（`author_dpi` を搬送に
     /// した理由そのもの）。
     ///
@@ -486,7 +486,7 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 /// # 拡大率 1（要件 2.2）
 ///
 /// `k` が恒等なら [`follow::scale_author_offset`] は生値を素通しする（丸め権威
-/// `ScaleRatio::scale_len` の恒等素通し）ので、本仕様の適用前と同一の出力になる。
+/// `ScaleRatio::scale_len` の恒等素通し）ので、この換算（areka-P0-balloon-offset-dpi）を入れる前と同一の出力になる。
 /// **唯一の例外は `i32::MIN`** ——`scale_signed` が `-i32::MAX` へ飽和させる（既存権威の
 /// 挙動であり `windowposition` 由来の調整量も今日すでに同じ。回り込みは起きず、飽和は
 /// 下の `warn!` で必ず記録に出る）。作者が書ける生値の受理範囲は実質 `i32::MIN + 1..=i32::MAX`
@@ -824,7 +824,7 @@ pub fn prepare_ghost_windows_for_shell(
 /// 実モニタ列挙（`enumerate_monitors`）に由来する 2 つの値——work area（配置解決の
 /// 基準矩形・2.12）と primary モニタ DPI（起動 k₀ の分子・D7）——だけを合成値で
 /// 置き換え、それ以外（load→config→measure→resolve）は本番と同一経路を通す
-/// （記憶 prefer-x64-fake-boundary-tests の流儀。headless 環境でも emo2 fixture
+/// （実機の境界を偽の値で置き換えて x64 の決定論テストで確かめる形。headless 環境でも emo2 fixture
 /// の観測可能な完了状態を決定論的に検証できる）。
 ///
 /// `primary_dpi` を偽装境界に含めるのは、**テスト機の実 DPI が制御できない**ためである

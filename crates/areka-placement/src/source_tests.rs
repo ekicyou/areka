@@ -13,7 +13,7 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 /// 名前にプロセス識別子と連番が入り**プロセス間でも一意**になる。
 ///
 /// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える（後始末は要らない）。
-/// 永続の読み戻しの檻（`persist_io_wiring_tests.rs`）も使う。
+/// 永続の読み戻しとシェル名つきの檻（`persist_io_wiring_tests.rs`・`source_shell_tests.rs`）も使う。
 pub(crate) fn unique_temp_dir(tag: &str) -> TempPath {
     TempPath::new(&format!("placement-{tag}"))
 }

@@ -48,9 +48,9 @@
 //!   なし。さらに `BalloonLimit(p.balloon_limit)`＝`windowposition.limit` 解決値の
 //!   runtime 焼込みを**バルーン窓側にだけ**持つ（areka-P0-windowposition-limit 2.7/2.8・
 //!   C9/DD4。キャラ窓には付けない＝「limit の補正でキャラ窓を動かさない」の構造保証）。
-//!   M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
-//!   M-dialogue／choice-render の領分。さらに同一スコープのキャラ窓を指す
-//!   `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
+//!   ポインタハンドラは本モジュールでは付けない——入力の層
+//!   （`input_events::balloon::attach_balloon_pointer_handlers`）が spawn の直後に付ける。
+//!   さらに同一スコープのキャラ窓を指す `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
 //!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
 //!   キャラ窓 entity を要するため後付け＝生成順は不変。同時に scope とペア両窓を結ぶ
 //!   `declared` 記録を出す＝scope を知る層は areka だけ・6.1））
@@ -181,7 +181,7 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
 /// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
 /// 毎起動 `descript.txt` から解決し直す）。
-/// 例外は並べ直しだけが読む材料 `reset_pos::DefaultPlacementBasis`（descript の値とバルーンの材料を置き、limit は並べ直しのたびに解き直すので運び手ではない）。
+/// 例外は並べ直し・バルーン位置初期化・面の windowposition の置き直し・`balloon.syncscale` の読み直しが読む材料 `reset_pos::DefaultPlacementBasis`（descript の値とバルーンの材料を置き、limit は並べ直しのたびに解き直すので運び手ではない）。
 ///
 /// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
 ///
@@ -452,9 +452,9 @@ pub fn spawn_ghost_windows(
         // marker は BalloonWindowMarker・DragConfig::default() 付与＝単独ドラッグ可
         // （4.5）・OnDrag(on_balloon_drag) で単独ドラッグの相対位置記憶
         // （4.8・DD16）・BalloonFollow なし。
-        // M1 はバルーンにマウス送出なし＝ポインタハンドラを付けない（DD-IE-12・
-        // stand-in の `on_ghost_pressed` 登録は撤去済み。バルーン入力は
-        // M-dialogue／choice-render の領分でリゾルバは shell 窓専用）。
+        // ポインタハンドラはここでは付けない（入力の層の
+        // `input_events::balloon::attach_balloon_pointer_handlers` が spawn の直後に付ける。
+        // stand-in の `on_ghost_pressed` 登録は撤去済み）。
         let balloon_window = world
             .spawn((
                 Name::new(format!("Ghost-Balloon-Window-{}", p.scope)),

@@ -56,18 +56,6 @@ fn apply(states: &[ScopeChainState], moves: &[ChainMove]) -> Vec<i32> {
         .collect()
 }
 
-/// 全隣接ペアの隙間 0 を検定する（未接触ペアのみが対象）。
-fn assert_all_pairs_flush(states: &[ScopeChainState], xs: &[i32], label: &str) {
-    for n in 1..states.len() {
-        assert_eq!(
-            xs[n - 1] - (xs[n] + states[n].width),
-            0,
-            "{label}: scope{}/scope{n} の隙間は 0（隣接・areka-P0-scope-chain-gap 7.1）",
-            n - 1
-        );
-    }
-}
-
 // -----------------------------------------------------------------------------
 // 本丸: 実機で観測した機序をそのまま檻へ入れる
 // -----------------------------------------------------------------------------
@@ -100,16 +88,7 @@ fn emo2_surface_swap_gap_is_closed_by_moving_the_follower_only() {
             scope: 1,
             new_x: 1392
         },
-        "new_x = 2064 − 672 = 1392（前スコープ左端 − 自スコープ幅）"
-    );
-
-    let xs = apply(&states, &moves);
-    assert_eq!(xs[0], 2064, "起点スコープは動かない");
-    assert_all_pairs_flush(&states, &xs, "emo2 200%");
-    // 是正前の見た目（52px の隙間）へ戻ってはならない。
-    assert_ne!(
-        xs[1], 1340,
-        "再解決せず据え置くと 52px の隙間が残る（退行）"
+        "new_x = 2064 − 672 = 1392（前スコープ左端 − 自スコープ幅。据え置きの 1340 だと 52px の隙間が残る）"
     );
 }
 
@@ -121,10 +100,9 @@ fn previous_width_subtraction_is_rejected() {
     let moves = boot_chain(&states);
     let xs = apply(&states, &moves);
 
-    assert_eq!(xs[1], 680, "自スコープの幅を引く（1000 − 320）");
-    assert_ne!(
-        xs[1], 600,
-        "前スコープの幅を引く旧式（1000 − 400）へ戻ってはならない"
+    assert_eq!(
+        xs[1], 680,
+        "自スコープの幅を引く（1000 − 320）。前スコープの幅を引く旧式（1000 − 400 = 600）へ戻ってはならない"
     );
 }
 

@@ -66,7 +66,7 @@ fn conversion_preserves_sign_on_both_axes() {
 // 2. 拡大率 1（要件 2.2・7.5）
 // -------------------------------------------------------------------------
 
-/// 拡大率 1 では合流欄が**本仕様の適用前と bit 同一**である（要件 2.2）。
+/// 拡大率 1 では合流欄が**換算を入れる前（生値のまま）と bit 同一**である（要件 2.2）。
 ///
 /// `ScaleRatio::new(96, 96)` は正準形 1/1 へ約分されるため、`ONE` を直に渡した場合と
 /// 区別されない——DPI の絶対値ではなく比だけが効くことも同時に固定する。
@@ -197,7 +197,7 @@ fn shell_axis_and_balloon_axis_sum_in_the_same_space() {
     assert_eq!(cfg.scopes[&0].balloon_offset, Some((145, -10)));
 }
 
-/// 拡大率 1 では、合流後の値も本仕様の適用前と bit 同一である（要件 2.2／2.3）。
+/// 拡大率 1 では、合流後の値も換算を入れる前と bit 同一である（要件 2.2／2.3）。
 #[test]
 fn merged_value_at_identity_matches_the_pre_spec_sum() {
     let mut cfg = cfg_with_offset(Some((266, -129)));
@@ -313,8 +313,17 @@ fn balloon_offset_saturated_tag_is_spelled_verbatim() {
 ///
 /// scope 1 は `kero.balloon.offsetx` を宣言していないので `windowposition` 由来だけが
 /// 載る＝換算対象の有無で結果が分かれることも同時に固定する。
+///
+/// 合流後の値は**配置解決の出力まで届く**（要件 2.3・7.1）。上の純関数の側の檻は
+/// `PlacementConfig` を直に組んで合成したが、ここは同じ準備を解いた出力 `ScopePlacement`
+/// （`prepare_ghost_windows_with_work_area` と同じ `resolve`）でも観測する。
+///
+/// 手計算: バルーン面 0 は native 400×224 で、バルーン軸 5/3 倍して 400×5/3=666.67→**667**。
+/// scope 0 は `balloon.alignment,left` ゆえ基本位置の寄与は −balloon_w = −667。
+/// これに上の合流値 (643, −295) が載る ⇒ balloon_offset = (−667+643, −295) = **(−24, −295)**。
+/// 是正前は (−667+543, −255) = (−124, −255) になり落ちる。
 #[test]
-fn prepare_merges_each_supply_in_its_own_axis() {
+fn prepare_merges_each_supply_in_its_own_axis_and_reaches_the_placement() {
     with_com_initialized(|| {
         let root = TempDir::new();
         let (ghost_root, balloon_dir) =
@@ -333,27 +342,8 @@ fn prepare_merges_each_supply_in_its_own_axis() {
             Some((443, -215)),
             "scope 1 は作者オフセット未宣言ゆえ windowposition 由来だけが載る"
         );
-    });
-}
 
-/// 合流後の値が**配置解決の出力まで届く**こと（要件 2.3・7.1）。
-///
-/// 上の純関数の側の檻は `PlacementConfig` を直に組んで合成したが、本檻は実配置経路
-/// （`prepare_ghost_windows_with_work_area`）の出力 `ScopePlacement` で観測する。
-///
-/// 手計算: バルーン面 0 は native 400×224 で、バルーン軸 5/3 倍して 400×5/3=666.67→**667**。
-/// scope 0 は `balloon.alignment,left` ゆえ基本位置の寄与は −balloon_w = −667。
-/// これに上の合流値 (643, −295) が載る ⇒ balloon_offset = (−667+643, −295) = **(−24, −295)**。
-/// 是正前は (−667+543, −255) = (−124, −255) になり落ちる。
-#[test]
-fn prepare_merged_offset_reaches_the_resolved_placement() {
-    with_com_initialized(|| {
-        let root = TempDir::new();
-        let (ghost_root, balloon_dir) =
-            synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (100, -40));
-
-        let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(240))
-            .expect("合成ゴーストの配置準備は成功する");
+        let p = stages.resolve(WA);
 
         let s0 = &p.placements[0];
         assert_eq!(
@@ -361,22 +351,14 @@ fn prepare_merged_offset_reaches_the_resolved_placement() {
             "バルーン幅は 400×5/3=667（手計算の錨）"
         );
         assert_eq!(s0.balloon_offset, PointPx { x: -24, y: -295 });
-        // 恒等式（resolver 出力時点の事後条件）は供給元が増えても保たれる。
-        assert_eq!(
-            s0.balloon_offset,
-            PointPx {
-                x: s0.balloon_pos.x - s0.char_pos.x,
-                y: s0.balloon_pos.y - s0.char_pos.y
-            }
-        );
     });
 }
 
-/// 拡大率 1 の経路は本仕様の前後で**同一出力**である（要件 2.2／7.5）。
+/// 拡大率 1 の経路は換算を入れる前と後で**同一出力**である（要件 2.2／7.5）。
 ///
 /// 是正前と同じ「生値どうしの素の和」(100+266, −40−129) = (366, −169)。
 /// **本檻は是正前も通る**——要件 7.5 が求める不動点の錨であって、7.4 の対の片割れでは
-/// ない（対は上の 2 本が担う）。
+/// ない（対は上の 1 本が担う）。
 #[test]
 fn prepare_at_identity_scale_matches_the_pre_spec_merge() {
     with_com_initialized(|| {
@@ -407,8 +389,15 @@ fn prepare_at_identity_scale_matches_the_pre_spec_merge() {
 ///
 /// 是正前（換算ステップが無い）は生値が素通しするだけで飽和が起きず、記録が 0 件に
 /// なって本檻は落ちる（要件 7.4）。
+///
+/// 同じ記録で**順序**も見る: 値の一致ではなく**記録の並び**で順序を直に観測する。
+/// 換算ステップは飽和したときだけ記録を出し、`windowposition` の合流ステップは scope
+/// ごとに必ず観測点 1 行（`WINDOWPOSITION_SUPPLY_NEEDLE`）を出す。この行を**合流ステップが
+/// 走った時刻の目印**として使う。両者を同じ捕捉窓で拾えば、**換算の警告が合流の観測点より
+/// 前に並ぶ**ことがそのまま呼出順の証拠になる。この主張は値の算術に一切依存しないので、
+/// 丸めや軸の割り当てを将来触っても順序だけを見張り続ける。
 #[test]
-fn prepare_records_saturation_with_the_contract_tag() {
+fn prepare_records_saturation_with_the_contract_tag_before_the_supply_point() {
     with_com_initialized(|| {
         let root = TempDir::new();
         let (ghost_root, balloon_dir) =
@@ -432,26 +421,6 @@ fn prepare_records_saturation_with_the_contract_tag() {
         assert_eq!(hit.expect_field("axis"), "\"x\"");
         assert_eq!(hit.expect_field("raw"), "2147483647");
         assert_eq!(hit.expect_field("saturated_value"), "2147483647");
-    });
-}
-
-/// **順序**の檻: 値の一致ではなく**記録の並び**で順序を直に観測する。
-///
-/// 換算ステップは飽和したときだけ記録を出し、`windowposition` の合流ステップは scope
-/// ごとに必ず観測点 1 行（`WINDOWPOSITION_SUPPLY_NEEDLE`）を出す。本群はこの行を**合流ステップが
-/// 走った時刻の目印**として使う。両者を同じ捕捉窓で
-/// 拾えば、**換算の警告が合流の観測点より前に並ぶ**ことがそのまま呼出順の証拠になる。
-///
-/// この主張は値の算術に一切依存しないので、丸めや軸の割り当てを将来触っても順序だけを
-/// 見張り続ける。是正前は警告そのものが出ないので落ちる。
-#[test]
-fn prepare_logs_the_conversion_before_the_windowposition_supply_point() {
-    with_com_initialized(|| {
-        let root = TempDir::new();
-        let (ghost_root, balloon_dir) =
-            synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (i32::MAX, -40));
-
-        let (_, events) = capture(|| merged_offset(&ghost_root, &balloon_dir, 240));
 
         let index_of = |needle: &str| -> usize {
             events

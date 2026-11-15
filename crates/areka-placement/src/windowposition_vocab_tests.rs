@@ -100,9 +100,9 @@ fn classify_x_vocab_classifies_non_numeric_non_keyword_as_invalid() {
 
 /// 不変量（design C1 Invariants）: `x_num.is_some()` なら**常に** `Numeric`。
 ///
-/// 数値経路は生文字列を一切参照しない——これが要件 5.1（数値指定の変換を本仕様の前後で
-/// 同一に保つ）を型と構造で保証する回帰境界である。生値がキーワードでも大文字混在でも
-/// 不正値でも空でも、数値が読めていれば結果は数値そのものでなければならない。
+/// 数値経路は生文字列を一切参照しない——これが areka-P0-windowposition-limit の要件 5.1
+/// （数値指定の変換を、キーワード語彙を足す前後で同一に保つ）を型と構造で保証する回帰境界である。
+/// 生値がキーワードでも大文字混在でも不正値でも空でも、数値が読めていれば結果は数値そのものでなければならない。
 #[test]
 fn classify_x_vocab_never_consults_raw_when_numeric_parsed() {
     for num in [i32::MIN, -190, -1, 0, 1, 266, i32::MAX] {

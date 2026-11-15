@@ -414,7 +414,8 @@ fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable
 /// 要件 3.3／7.2 の錨（実 fixture・偽装境界の end-to-end）: 注入した primary DPI から
 /// 導かれた k₀ 倍後の**物理窓寸**で `ScopePlacement` が組み上がる。
 ///
-/// - primary 96（＝emo2 の作者基準 DPI）: 既存期待値のまま（434×687 等・要件 7.2）
+/// - primary 96（＝emo2 の作者基準 DPI）の native 寸（要件 7.2）は
+///   [`prepare_emo2_returns_two_scope_placements`] が確かめる
 /// - primary 192: 全寸がちょうど 2 倍
 /// - primary 112（k=7/6・非整数）: 丸めは単一権威 `scaled_extent` に一致する。
 ///   とくに 687×7/6 は **ちょうど 801.5** ゆえ、round half away from zero なら 802・
@@ -424,18 +425,6 @@ fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable
 #[test]
 fn prepare_emo2_scales_window_sizes_by_k0() {
     with_com_initialized(|| {
-        let native =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
-                .expect("k₀=1/1 の準備は成功する");
-        assert_eq!(
-            native.placements[0].char_size,
-            SizePx {
-                w: SCOPE0_W,
-                h: SCOPE0_H
-            },
-            "primary DPI＝作者基準 DPI では既存の native 寸のまま（要件 7.2）"
-        );
-
         let doubled =
             prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))
                 .expect("k₀=2/1 の準備は成功する");
@@ -481,26 +470,6 @@ fn prepare_emo2_scales_window_sizes_by_k0() {
             SizePx { w: 506, h: 802 },
             "非整数 k₀ でも丸めは scaled_extent 単一権威（687×7/6＝ちょうど 801.5→802）"
         );
-    });
-}
-
-/// 要件 1.4: primary モニタ DPI が取得できなくても**採寸は成立し窓寸が得られる**
-/// （表示を失わない縮退）。96 相当ゆえ emo2（author 96）では native 寸に一致する。
-#[test]
-fn prepare_emo2_without_primary_dpi_still_measures() {
-    with_com_initialized(|| {
-        let degraded =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, None)
-                .expect("primary DPI 不明でも準備は成功する（表示を失わない）");
-        assert_eq!(
-            degraded.placements[0].char_size,
-            SizePx {
-                w: SCOPE0_W,
-                h: SCOPE0_H
-            },
-            "96 相当の k₀ ＝ 従来と同じ native 採寸"
-        );
-        assert_eq!(degraded.placements.len(), 2);
     });
 }
 
@@ -564,7 +533,7 @@ fn prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value() {
     });
 }
 
-/// f32 近道の混入検出（D4・記憶 areka の丸め単一権威）: `scaled_extent` の整数演算と
+/// f32 近道の混入検出（D4・寸法の丸めは `scaled_extent` だけが行う）:`scaled_extent` の整数演算と
 /// `as_f32` 乗算が **1px 食い違う**検体を実経路へ通す。
 ///
 /// 検体: 作者基準 DPI 168・primary DPI 186 → k₀=31/28。emo2 の scope0 幅 434 に対し
@@ -749,6 +718,9 @@ fn build_measure_scaling_returns_the_dpi_it_took_as_numerator() {
 /// 採寸 DPI は**起動時の主モニタ DPI**であって、窓がいま載っているモニタの DPI では
 /// ない（design D15・意図された挙動）。縮退の腕でも基準対は未係留にならず、96 相当が
 /// 刻まれることを併せて固定する（要件 1.5 の縮退が基準対の腕を変えないこと）。
+/// 縮退の腕は、primary モニタ DPI が取れなくても準備が成功して 2 スコープの窓寸が得られる
+/// こと（要件 1.4）の end-to-end の確かめも兼ねる（縮退の k₀ そのものは
+/// [`build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable`] が持つ）。
 #[test]
 fn prepare_stamps_measure_dpi_onto_balloon_offset_base() {
     with_com_initialized(|| {

@@ -10,8 +10,8 @@ use log_capture_kit::ExpectField;
 // -------------------------------------------------------------------------
 // T-V1: despawn 掃除（areka-P0-dpi-window-vanish 要件 6.1/6.4・D8）
 //
-// 檻は「判断が下される場所」＝本ファイル（`remove_entry_of` と on_remove hook）
-// に置く（記憶 test-only-decision-branches-not-proven-wiring の教訓）。
+// 檻は「判断が下される場所」（`spawn.rs` の `remove_entry_of` と on_remove hook）の
+// 兄弟に置く。
 // -------------------------------------------------------------------------
 
 /// 生存 scope の「動いていないこと」を判定するための可観測状態の束。

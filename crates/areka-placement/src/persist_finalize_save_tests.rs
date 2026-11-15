@@ -32,8 +32,9 @@ use super::{
     persist_unremembered_char_positions,
 };
 use crate::chain_finalize::AdjacencyMark;
-use crate::follow::{Anchored, OffsetBase, on_char_drag_end};
+use crate::follow::{Anchored, on_char_drag_end};
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::test_support::SharedFakeIo;
@@ -122,19 +123,15 @@ impl Rig {
         let placements: Vec<ScopePlacement> = SCOPES
             .iter()
             .map(|&(scope, char_pos, char_size)| ScopePlacement {
-                scope,
-                char_pos,
-                char_size,
-                balloon_pos: PointPx {
-                    x: char_pos.x - 200,
-                    y: char_pos.y,
-                },
-                balloon_size: SizePx { w: 223, h: 158 },
-                balloon_offset: PointPx { x: -200, y: 0 },
-                balloon_offset_base: OffsetBase::unpinned(PointPx { x: -200, y: 0 }),
-                balloon_limit: false,
                 anchor: Anchor::Bottom,
-                balloon_keyword_base: None,
+                ..placement_sized(
+                    scope,
+                    char_pos,
+                    PointPx { x: -200, y: 0 },
+                    false,
+                    char_size,
+                    SizePx { w: 223, h: 158 },
+                )
             })
             .collect();
         spawn_ghost_windows(
@@ -194,7 +191,11 @@ fn seed_entries() -> Vec<(PersistKey, String)> {
     entries
 }
 
-fn window_pos(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String, String)> {
+/// 読み戻した記憶からスコープの窓の位置（x・y の両方）を取る（並べ直しの檻も使う）。
+pub(crate) fn window_pos(
+    map: &HashMap<PersistKey, String>,
+    scope: u32,
+) -> Option<(String, String)> {
     Some((
         map.get(&PersistKey::WindowPos {
             scope,

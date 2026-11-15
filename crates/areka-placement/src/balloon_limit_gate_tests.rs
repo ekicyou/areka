@@ -21,9 +21,8 @@
 
 use super::super::config::{BalloonXMode, ScopeConfig};
 use super::super::resolver::{ScopeInput, resolve_placement};
-use super::tests::{DPIS, work_area};
 use super::*;
-use crate::resolver::test_support::px;
+use crate::resolver::test_support::{DPIS, offset_work_area, px};
 use crate::shared_test_support::MEASURE_DPI;
 use crate::shared_test_support::{assert_no_event, cfg_of, placement_sized};
 use crate::test_support::{contained, point};
@@ -125,16 +124,9 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
         point(0, 310),
         "表示位置は作業領域の左辺へ補正される（要件 2.2）"
     );
+    // 表示位置だけが動き、相対位置はそのまま＝関門の後は
+    // balloon_offset ≡ balloon_pos − char_pos が成り立たない。それが正しい（DD6 の再スコープ）。
     assert_only_balloon_pos_may_differ(&before, &out[0]);
-    // 恒等式は関門通過後に崩れる——それが正しい（DD6 の再スコープ）。
-    assert_ne!(
-        point(
-            out[0].balloon_pos.x - out[0].char_pos.x,
-            out[0].balloon_pos.y - out[0].char_pos.y
-        ),
-        out[0].balloon_offset,
-        "補正後は balloon_offset ≡ balloon_pos − char_pos が成立しない（DD6）"
-    );
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(hit.level, tracing::Level::INFO, "補正の記録は info（DD7）");
@@ -376,10 +368,7 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
             out[0].balloon_pos, expected,
             "{what}: 表示位置は作業領域内へ補正される"
         );
-        assert_eq!(
-            out[0].balloon_offset, offset,
-            "{what}: 論理相対位置は 1 ビットも変わらない（DD6）"
-        );
+        // 論理相対位置（balloon_offset）を含め、ほかの欄は 1 ビットも変わらない（DD6）。
         assert_only_balloon_pos_may_differ(&before, &out[0]);
     }
 }
@@ -418,7 +407,7 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
 
     for dpi in DPIS {
         // 左上が原点**でない**作業領域（境界の left/top 依存を暴く）。
-        let area = work_area(dpi);
+        let area = offset_work_area(dpi);
         let csz = SizePx {
             w: px(400, dpi),
             h: px(600, dpi),

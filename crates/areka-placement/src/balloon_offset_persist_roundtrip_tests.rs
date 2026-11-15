@@ -14,7 +14,7 @@
 //!   意味が変わって初回起動時に一度崩れる（実測で再現済み）。**それでも現行仕様で問題なし**
 //!   と裁定され、追跡 spec を立てないことまで決められている。
 //! - **費用の前提が変わってもなお踏襲**: 2026-08-14 の裁定は費用（DPI 変化の検出・
-//!   再スケールの基準・保存形式の版管理の 3 つ）を理由としており、本仕様は要件 3 の実装で
+//!   再スケールの基準・保存形式の版管理の 3 つ）を理由としており、`areka-P0-balloon-offset-dpi` は要件 3 の実装で
 //!   **前 2 つを作ってしまった**。この変化を開発者へ提示したうえで、2026-08-27 に改めて
 //!   **裁定の継承が選ばれた**——残る 3 つ目（保存形式の版管理）を導入しないこと、および
 //!   先行 2 spec の記録を書き換えないことが、追従の利得より優先される。
@@ -91,7 +91,7 @@ const SAVED: PointPx = PointPx { x: -512, y: -48 };
 /// 配置式が出す既定オフセット（保存値が無いときに残る値）。[`SAVED`] とは別の値。
 const FORMULA_DEFAULT: PointPx = PointPx { x: -50, y: 10 };
 
-/// 復元先の表示 DPI の候補。**保存側の拡大率とは無関係**であることが本仕様の要点ゆえ、
+/// 復元先の表示 DPI の候補。**保存側の拡大率とは無関係**であることが復元の要点ゆえ、
 /// 採寸 DPI と一致する水準（120）も、しない水準（96／144／192）も並べる。
 ///
 /// 144 は 96 の倍数でない（要件 7.6）。
@@ -191,15 +191,14 @@ fn roundtrip(anchor: Anchor, saved: PointPx) -> ScopePlacement {
 /// ここが持つのは「どの腕でどちらを呼ぶか」の対応だけである。その対応が本番と一致して
 /// いることは相の結合の檻（`frame_balloon_offset_follow_tests.rs`・
 /// `frame_balloon_offset_keyword_gate_tests.rs`・`frame_balloon_offset_roundtrip_tests.rs`）が World 上で
-/// 固定している——ただし**恒等比の腕だけは 2026-08-28 までどの World 檻も固定していなかった**
-/// （戻りの遷移が 1 本も無かった）。その穴を塗り直したのが上記 3 ファイル目である。本ファイルは
+/// 固定している（恒等比の腕は 3 ファイル目の戻りの遷移が固定する）。本ファイルは
 /// **腕そのものを毎回 assert する**ことで、写し取った対応が黙ってずれないようにする。
 fn observe(follow: &mut BalloonFollow, current: DPI) -> OffsetRescale {
     let verdict = rescale_follow_offset(follow.base(), current);
     match verdict {
         OffsetRescale::Anchored { base_dpi } => follow.anchor_base_dpi(base_dpi),
         OffsetRescale::Rescaled { offset, .. } => follow.apply_rescaled(offset),
-        // 恒等比の腕も**基準から引き直す**（2026-08-28 実装時是正・本番と同じ写し）。
+        // 恒等比の腕も**基準から引き直す**（本番と同じ写し）。
         OffsetRescale::Unchanged => {
             let base_offset = follow.base().offset;
             follow.apply_rescaled(base_offset);

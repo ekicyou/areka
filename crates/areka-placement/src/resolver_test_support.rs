@@ -26,3 +26,13 @@ pub(super) fn work_area(dpi: i32) -> RectPx {
         bottom: px(1080, dpi),
     }
 }
+
+/// 左上が原点でない work area（クランプ境界の left/top 依存を暴く）。
+pub(crate) fn offset_work_area(dpi: i32) -> RectPx {
+    RectPx {
+        left: px(64, dpi),
+        top: px(40, dpi),
+        right: px(64 + 1920, dpi),
+        bottom: px(40 + 1080, dpi),
+    }
+}

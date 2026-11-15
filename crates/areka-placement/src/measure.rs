@@ -15,8 +15,8 @@
 //! - 合成失敗したスコープは scope0 の寸法で代替し `warn!`（窓自体は生やす——
 //!   寸法だけ暫定・design「Error Handling」）
 //! - scope0 の採寸自体／いずれかのスコープのバルーン面 0 の採寸が成立しない場合は
-//!   代替の根拠が無いため [`PlacementError::Measure`]（log-first・呼び手の `main` が
-//!   「起動窓を開けない」を告知して終える）
+//!   代替の根拠が無いため [`PlacementError::Measure`]（log-first・呼び手へ `Err` を返す。初回の
+//!   起動では `main` が「起動窓を開けない」を告知して終え、ゴーストの切り替えでは切り替えの失敗になる）
 //! - 採寸に使ったアセット（`EmoWorld`／`AtlasTable`／WIC デコーダ）は本関数の
 //!   ローカルとして採寸後に**破棄**される。戻り値は素の数値（[`ScopeInput`]）のみ
 //!   （アセット所有・装着は起動（`runtime`）の領分＝二重ロードは M1 受容トレードオフ）
@@ -65,7 +65,7 @@ pub struct MeasuredSizes {
     pub scopes: Vec<ScopeInput>,
 }
 
-/// 採寸時の表示スケール（boot が D7 で構築: primary モニタ DPI ÷ 各 author_dpi）。
+/// 採寸時の表示スケール（配置の準備が D7 で構築: primary モニタ DPI ÷ 各 author_dpi）。
 ///
 /// シェル（キャラ surface）とバルーンは作者基準 DPI（`seriko.dpi`／`dpi`）が別々に
 /// 宣言され得るため、k も別軸で持つ（要件 1.1・design「measure.rs（k₀ 適用・R7.8 席保全）」）。
@@ -100,10 +100,7 @@ enum SizeKind {
 }
 
 impl SizeKind {
-    /// 既存 Measure エラーの reason 接頭辞。
-    ///
-    /// バルーン起因の失敗は `balloon:` を冠する既存流儀（本ファイルの
-    /// `measure_balloon_surface0` と同一）に合わせる。
+    /// Measure エラーの reason 接頭辞（バルーン起因の失敗だけ `balloon: ` を冠する）。
     fn reason_prefix(self) -> &'static str {
         match self {
             SizeKind::Char => "",
@@ -119,7 +116,8 @@ impl SizeKind {
 /// - 合成失敗したスコープは scope0 の寸法で代替し `warn!`（窓自体は生やす）
 /// - scope0 の採寸自体（shell アセット構築含む）・いずれかのスコープのバルーン面 0 の
 ///   採寸が成立しない場合は代替根拠が無いため `Err(PlacementError::Measure)`
-///   （log-first・呼び手の `main` が「起動窓を開けない」を告知して終える）。
+///   （log-first・呼び手へ返す。初回の起動では `main` が「起動窓を開けない」を告知して終え、
+///   ゴーストの切り替えでは切り替えの失敗になる）。
 ///   balloon 起因の失敗は `reason` に `balloon:` 接頭辞を付け、**当該スコープ番号**で
 ///   報告する（バルーン専用 variant は持たない）
 /// - 採寸に使ったアセットは本関数のローカルとして return 時に破棄される
@@ -128,18 +126,15 @@ impl SizeKind {
 ///
 /// # 2 段構成（design「measure.rs（k₀ 適用・R7.8 席保全）」）
 ///
-/// 1. **native 採寸** [`measure_native_scope_sizes`]（既存ロジック・per-scope ループと
-///    [`ScopeInput`] の構造を温存）
+/// 1. **native 採寸** [`measure_native_scope_sizes`]（per-scope ループで [`ScopeInput`] を組む）
 /// 2. **k 適用** [`apply_scaling`]（`scaled_extent` 経由で char=`scaling.shell`・
 ///    balloon=`scaling.balloon` を **各 `ScopeInput` へ個別に**写像）
 ///
 /// (2) は per-scope の写像であり、`balloon_size` は実際に scope 別値である
-/// （`areka-P0-emo-dpi-scaling` が要件 7.8 として保全した席を、本 spec の scope 別採寸が
-/// 使い切った形）。`MeasureScaling::IDENTITY` 指定時は `ScaleRatio::scale_len` が素通しゆえ
-/// native 採寸の出力と厳密に同一である（要件 7.2）。
+/// （scope 別のバルーン採寸は `areka-P0-kero-balloon` 要件 3.1）。`MeasureScaling::IDENTITY`
+/// 指定時は `ScaleRatio::scale_len` が素通しゆえ native 採寸の出力と厳密に同一である（要件 7.2）。
 ///
-/// 失敗の scope 帰属は (1) native 段・(2) k 適用段のいずれでも**実スコープ番号**で一貫する
-/// （バルーン採寸が scope ループ内へ移り、帰属先が定まらない状況が無くなった）。
+/// 失敗の scope 帰属は (1) native 段・(2) k 適用段のいずれでも**実スコープ番号**で一貫する。
 pub fn measure_scope_sizes(
     shell_dir: &Path,
     balloon_root: &Path,
@@ -400,7 +395,7 @@ fn build_shell_assets(
 ///
 /// どのファイルが当該 scope の面 0 かは系列解決権威
 /// [`resolve_balloon_faces`]（`areka-emo-present`）だけが決める。採寸側は接頭辞連鎖も
-/// ディレクトリ走査も固定名（かつての `balloons0.png` 決め打ち）も持たない——列挙規則が
+/// ディレクトリ走査も固定名も持たない——列挙規則が
 /// 独立 2 実装へ分かれると「採寸した窓寸 ≠ 実際に合成された枠」という実機でしか現れない
 /// 欠陥になるため（design「最重要の構造リスク」）。合成も権威の
 /// [`build_balloon_target_from_faces_quiet`]（記録を出さない兄弟の入口）をそのまま用い、
@@ -414,8 +409,7 @@ fn build_shell_assets(
 /// # 失敗
 ///
 /// `error!`＋[`PlacementError::Measure`]（`reason` に `balloon:` 接頭辞）。scope ループ内から
-/// 呼ばれるため、帰属は**実 scope 番号**である（全 scope 共通の 1 回採寸ではなくなった＝
-/// 「帰属先が定まらない」状況自体が消えた・要件 3.1）。
+/// 呼ばれるため、帰属は**実 scope 番号**である（要件 3.1）。
 ///
 /// なお design の Service Interface は `scope: u32` と記すが、placement 層の scope 通貨は
 /// `usize`（[`ScopeInput::scope`]・[`PlacementError::Measure`]）である。境界変換を呼び手へ
@@ -509,7 +503,7 @@ pub mod test_support;
 #[path = "measure_template_tests.rs"]
 mod template_tests;
 
-// 測りが descript の既定の面で合成することの 3 通り（descript-window-keys 要件 7.2）。
+// 測りが descript の既定の面で合成することの 4 通り（descript-window-keys 要件 7.2）。
 #[cfg(test)]
 #[path = "measure_default_surface_tests.rs"]
 mod default_surface_tests;
