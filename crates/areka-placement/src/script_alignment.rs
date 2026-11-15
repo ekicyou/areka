@@ -37,13 +37,11 @@ pub fn parse_alignment_word(args: &[&str]) -> AlignmentWord {
     let Some(raw) = args.first() else {
         return AlignmentWord::Missing;
     };
+    if let Some(anchor) = Anchor::from_word(raw) {
+        return AlignmentWord::Anchor(anchor);
+    }
     match raw.trim().to_ascii_lowercase().as_str() {
         "" => AlignmentWord::Missing,
-        "top" => AlignmentWord::Anchor(Anchor::Top),
-        "bottom" => AlignmentWord::Anchor(Anchor::Bottom),
-        "left" => AlignmentWord::Anchor(Anchor::Left),
-        "right" => AlignmentWord::Anchor(Anchor::Right),
-        "free" => AlignmentWord::Anchor(Anchor::Free),
         "default" => AlignmentWord::Default,
         _ => AlignmentWord::Unknown(raw.to_string()),
     }

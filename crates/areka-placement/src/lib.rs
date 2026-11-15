@@ -67,7 +67,8 @@ pub mod spawn;
 pub mod sticky_group_ledger;
 pub mod transition_diag;
 mod windowposition;
-/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる、World も Win32 も触らない純関数。
+/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる純関数（World も Win32 も触らない）と、
+/// その鎖を受け口へ置く `publish_chain_plan`（World に触るのはこれだけ）。
 pub mod zorder_chain_compose;
 /// スコープ窓 Z 順グループの台帳と、タグ／descript 共通のトークン解釈・拒否判定
 /// （純関数・Win32／ECS 非依存）。
@@ -152,7 +153,7 @@ pub const WORK_AREA_SYNC_CONTEXT: &str = "work_area_sync";
 
 /// wintf のモニタ列挙結果を診断レコードへ**忠実転写**する純関数（要件 1.1）。
 ///
-/// [`diag`] は placement の最下流であり `World`・wintf の型を知らない（design
+/// [`diag`] は placement の最下流であり `World`・wintf の `Monitor` を知らない（design
 /// 「Allowed Dependencies」）。転写は wintf `Monitor` を既に import している本 `lib.rs` の
 /// 仕事であり、ここが「wintf 型 → 純データ」の唯一の境界である。
 ///
@@ -545,7 +546,8 @@ fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow:
 
 /// 作者の空間のバルーンのずらしをシェル軸で物理 px へ換算し（[`apply_author_balloon_offset_scale`]）、
 /// 続けてバルーンの `windowposition` を合流する（[`merge_scope_windowpositions`]）。起動の準備と
-/// シェルの切り替えの入れ直しの 2 か所が呼ぶ（順の決まりを書く所はここだけ）。
+/// `reseed` の `resolve_standard_scopes` の 2 か所が呼ぶ（後者はシェルの切り替え・面の `windowposition`
+/// の置き直し・バルーン位置初期化が通る。順の決まりを書く所はここだけ）。
 ///
 /// 順を入れ替えると `windowposition` の調整量にもシェル軸の k が掛かって二重に換算される
 /// （合流欄 `ScopeConfig.balloon_offset` は加算欄で、加算の時点で両辺が物理 px でなければならない）。

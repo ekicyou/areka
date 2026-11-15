@@ -11,7 +11,8 @@
 //! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
 //! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
 //! - 起動の最後に並べ終えた時点と、既定の位置への並べ直し（`reset_pos` の `reset_window_positions`）
-//!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ）
+//!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラの位置と、
+//!   印の無い古い記憶の隣り合いの印）
 //!
 //! 記憶の位置を寄せて表示した起動（[`RestoredPositionsClamped`]）では、送り口（[`persist_entries`] と、
 //! 並べ終えた時点の保存が呼ぶその本体）が 4 か所のどの束からも、印の無い古い記憶へ隣り合いの印を
@@ -26,7 +27,8 @@
 //! キャラが起動のたびに並べ直されないようにするため（記録は `doc/COMPAT_ARCHITECTURE.md` 8 章）。
 //! 決定論的な変換——寛容 parse（[`parse_px`]）と保存 entries 構築
 //! （[`char_pos_entries`]／[`balloon_offset_entries`]）——のほか、復元 merge・
-//! 再射影・`PersistWiring` も本モジュールにある。
+//! 再射影も本モジュールにある。送り口と保存の側（`PersistWiring`・[`persist_entries`] ほか）は子の
+//! モジュール `save`（`persist_save.rs`）にあり、ここから公開する。
 //!
 //! バルーン相対オフセットの基準変換（アンカー辺基準）は 2026-07-31 の実機裁定で撤去した
 //! ——保存基準はランタイム（[`super::follow::BalloonFollow`]`.offset`）と同じ **char 窓左上**

@@ -83,7 +83,7 @@ pub struct StickyGroupLedger {
 impl StickyGroupLedger {
     /// 台本の組を足す。重なりがあれば何も変えずに拒否（要件 3.1・3.4）。
     pub fn try_add_script_group(&mut self, members: BTreeSet<u32>) -> Result<(), StickyReject> {
-        self.reject_overlap(&members, |_| true)?;
+        self.reject_overlap(&members)?;
         self.groups.push(StickyGroup {
             members,
             source: StickySource::Script,
@@ -110,7 +110,8 @@ impl StickyGroupLedger {
         };
         let tokens: Vec<&str> = raw.split(',').collect();
         let members = parse_sticky_tokens(&tokens)?;
-        self.reject_overlap(&members, |group| group.source == StickySource::Script)?;
+        // 上の retain の後に残るのは台本の組だけ。
+        self.reject_overlap(&members)?;
         self.groups.push(StickyGroup {
             members,
             source: StickySource::Descript,
@@ -143,16 +144,11 @@ impl StickyGroupLedger {
             .unwrap_or_default()
     }
 
-    /// `considered` に当たる組と `members` が重なれば、重なった ID（昇順）で拒否する。
-    fn reject_overlap(
-        &self,
-        members: &BTreeSet<u32>,
-        considered: impl Fn(&StickyGroup) -> bool,
-    ) -> Result<(), StickyReject> {
+    /// 帳簿の組と `members` が重なれば、重なった ID（昇順）で拒否する。
+    fn reject_overlap(&self, members: &BTreeSet<u32>) -> Result<(), StickyReject> {
         let scopes: BTreeSet<u32> = self
             .groups
             .iter()
-            .filter(|group| considered(group))
             .flat_map(|group| group.members.intersection(members).copied())
             .collect();
         if scopes.is_empty() {

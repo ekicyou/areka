@@ -29,7 +29,7 @@ use super::{
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。書く呼び手 4 か所（モジュールの doc に並べる。3 か所は [`persist_entries`]、
+/// State Management・軸B）。書く呼び手 4 か所（`persist` のモジュールの doc に並べる。3 か所は [`persist_entries`]、
 /// 並べ終えた時点の保存はその本体 `send_entries`）が、この publisher の clone 送信端から保存 entries を
 /// 投函する（[`forget_entries`] も同じ）。
 pub struct PersistWiring {
@@ -223,7 +223,9 @@ fn push_adjacency_marks(
 /// 書くのは次の 3 つを満たすスコープだけ:
 ///
 /// - 既定の位置 [`GhostWindows::default_char_pos`] が `Some`＝記憶に位置が無い。`None` は
-///   記憶から戻したスコープで、書き換えない（寄せ直して表示している場合を含む・1.2）。
+///   記憶から戻したスコープで、位置は書き換えない（寄せ直して表示している場合を含む・1.2）。
+///   ただし印の無い古い記憶には、画面の並びから決めた隣り合いの印だけを足す
+///   （dpi-realign-remembered-chain 6.5・寄せた起動では足さない）。
 /// - 今の位置（x・y）が既定の位置と同じ。違うのは並べ終える前にドラッグされた窓（ドラッグの
 ///   確定が書く）か、SHIORI の移動の指示で動いた窓（その回かぎり・1.7）で、どちらも書かない。
 ///   台本が縦にだけ動かした窓も見逃さないよう x・y の両方で比べる。システムの置き直しは既定の
@@ -234,7 +236,8 @@ fn push_adjacency_marks(
 ///
 /// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
 /// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y（1.5）と、[`persist_entries`] が
-/// 足す触れる組の隣り合いの印（dpi-realign-remembered-chain 6.2・寄せた起動の古い記憶の鍵は除く）で、
+/// 足す触れる組の隣り合いの印（dpi-realign-remembered-chain 6.2・寄せた起動の古い記憶の鍵は除く）と、
+/// 上の古い記憶の印で、
 /// 全スコープの分を 1 つの束にして [`persist_entries`] の本体で 1 回送る（待たない。書き込みの失敗は送った先が
 /// 記録し、UI の側へは戻らない＝起動は続く・4.1）。読めない窓は `warn!` を出して飛ばし、
 /// 残りを書く（4.2）。書いた・書かなかったは target `areka::persist::save` に残す（4.3）。

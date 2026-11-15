@@ -37,26 +37,19 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::Schedules;
-use windows::Win32::Foundation::HWND;
 use windows::core::w;
 use wintf::ecs::window::{ZOrderChainPlan, drain_window_pos_commands};
 use wintf::ecs::{FrameFinalize, KeepDirectlyAbove};
 
-use super::test_support::{create_test_window, destroy_test_window, spawn_window};
+use super::test_support::{create_test_window, spawn_window};
 use super::wire_zorder_pair;
 use crate::test_support::zorder_pair_deferred::code_only;
+use crate::zorder_test_support::teardown;
 use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
-// 実窓・World のヘルパ（窓を作る道具は `spawn_test_support.rs` の共有）
+// 実窓・World のヘルパ（窓を作る道具は `spawn_test_support.rs`、壊す道具は `zorder_test_support.rs` の共有）
 // -------------------------------------------------------------------------
-
-/// 作った窓をすべて破棄する（作った枚数と壊す枚数を必ず揃える）。
-fn destroy(windows: &[HWND]) {
-    for hwnd in windows {
-        destroy_test_window(*hwnd);
-    }
-}
 
 // -------------------------------------------------------------------------
 // 必須の檻——鎖の適用系が本番の結線の上を走っている
@@ -137,7 +130,7 @@ fn a_run_without_group_declarations_keeps_the_pair_records_in_their_old_vocabula
     let (_, events) = capture(|| world.run_schedule(FrameFinalize));
     let commands = drain_window_pos_commands();
 
-    destroy(&[char_hwnd, balloon_hwnd]);
+    teardown(&[balloon_hwnd, char_hwnd]);
     let _residue = drain_window_pos_commands();
 
     let messages: Vec<String> = events.iter().map(|e| e.message().to_string()).collect();

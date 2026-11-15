@@ -285,9 +285,11 @@ pub fn resolve_placement(
 
     for input in scopes {
         let sc = cfg.scopes.get(&input.scope).unwrap_or(&default_scope_cfg);
-        // 1 度だけ引く。Seam が Bottom に落ちた＝知らない値（DD9）
+        // 1 度だけ引く。Seam が 5 つの語のどれでもない＝知らない値（DD9）
         let anchor = Anchor::from_alignment(&sc.alignment);
-        if let (Alignment::Seam(value), Anchor::Bottom) = (&sc.alignment, anchor) {
+        if let Alignment::Seam(value) = &sc.alignment
+            && Anchor::from_word(value).is_none()
+        {
             warn!(
                 scope = input.scope,
                 value = %value,
@@ -473,7 +475,7 @@ impl Anchor {
     /// **優先度チェーンの読取り・解決は行わない**（config.rs の領分・Req6.3）。
     /// 既に解決済みの `Alignment` を解釈消費するのみ:
     /// - `Bottom`→`Bottom`・`Free`→`Free`
-    /// - `Seam(s)`: `s.trim().to_ascii_lowercase()` で正規化し `"top"`→`Top`・
+    /// - `Seam(s)`: [`Anchor::from_word`]（`s.trim().to_ascii_lowercase()` で正規化）で `"top"`→`Top`・
     ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
     ///   window-placement DD9「未知は bottom 相当」を継承）。`Seam` は descript に書かれたままの
     ///   値（未知アンカーの警告に載せる）なので、大文字小文字はここでそろえる（`bottom`／`free` を
@@ -485,13 +487,22 @@ impl Anchor {
         match alignment {
             Alignment::Bottom => Anchor::Bottom,
             Alignment::Free => Anchor::Free,
-            Alignment::Seam(value) => match value.trim().to_ascii_lowercase().as_str() {
-                "top" => Anchor::Top,
-                "left" => Anchor::Left,
-                "right" => Anchor::Right,
-                // 未知アンカー指定は bottom 相当へフォールバック（DD9・警告は呼び出し側）
-                _ => Anchor::Bottom,
-            },
+            // 未知アンカー指定は bottom 相当へフォールバック（DD9・警告は呼び出し側）
+            Alignment::Seam(value) => Anchor::from_word(value).unwrap_or(Anchor::Bottom),
+        }
+    }
+
+    /// 吸着の 5 つの語（`top`・`bottom`・`left`・`right`・`free`）を読む。前後の空白を除き、
+    /// 大文字小文字は区別しない。ほかの値は `None`。descript の値（[`Anchor::from_alignment`]）と
+    /// 台本の引数（`script_alignment::parse_alignment_word`）が同じこの決まりを通る。
+    pub(crate) fn from_word(raw: &str) -> Option<Anchor> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "top" => Some(Anchor::Top),
+            "bottom" => Some(Anchor::Bottom),
+            "left" => Some(Anchor::Left),
+            "right" => Some(Anchor::Right),
+            "free" => Some(Anchor::Free),
+            _ => None,
         }
     }
 

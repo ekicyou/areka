@@ -14,6 +14,7 @@ use super::test_support::{
     BALLOON, CHAR0, booted_world, char_positions, new_shell, position_of, world_from,
 };
 use super::{BalloonPlacementInputs, apply_shell_descript};
+use crate::face_windowposition::BalloonUserMoved;
 use crate::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
 use crate::persist::balloon_offset_entries;
 use crate::resolver::{Anchor, PointPx, ScopePlacement};
@@ -128,6 +129,13 @@ fn t_rs02_saved_balloon_offset_survives_the_reseed() {
     let f0 = follow_of(&world, &windows, 0);
     assert_eq!(f0.offset(), PointPx { x: -123, y: -45 });
     assert_eq!(f0.base().dpi, None, "保存値は起動と同じく未係留で運ぶ");
+    // 記憶から戻したバルーンは利用者が動かしたものとして、次の面の置き直しで動かさない。
+    let moved = |scope| {
+        let c = windows.char_window(scope).unwrap();
+        world.entity(c).contains::<BalloonUserMoved>()
+    };
+    assert!(moved(0), "記憶から戻した scope 0 に動かした印が無い");
+    assert!(!moved(1), "標準の位置の scope 1 に動かした印がある");
     // 保存の無い scope は新しいシェルの値。
     assert_eq!(
         follow_of(&world, &windows, 1).offset(),

@@ -478,11 +478,18 @@ fn finish_shell(
     // （balloon-scroll-arrows 要件 1.7・面の書き手 `select_balloon_face` と同じ取り方）。
     let mut balloon = balloon.clone();
     for (&scope, &face) in &wiring.balloon_faces {
-        if let Some(definitions) = wiring.balloon_definitions.get(&scope) {
-            let model = &definitions.for_face(face).model;
-            let wp = (model.windowposition(), model.windowposition_raw().clone());
-            balloon.windowpositions.insert(scope as usize, wp);
-        }
+        let Some(definitions) = wiring.balloon_definitions.get(&scope) else {
+            // 面の書き手は束の無いスコープの面を記録しないので、ふだんは起きない。
+            debug!(
+                scope,
+                face,
+                "finish_shell: 面の定義の束が無いので、読み込みの面 0 の windowposition で解く"
+            );
+            continue;
+        };
+        let model = &definitions.for_face(face).model;
+        let wp = (model.windowposition(), model.windowposition_raw().clone());
+        balloon.windowpositions.insert(scope as usize, wp);
     }
     match world.get_resource::<GhostWindows>().cloned() {
         Some(windows) => {

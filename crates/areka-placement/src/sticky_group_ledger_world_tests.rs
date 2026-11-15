@@ -10,8 +10,8 @@ use super::super::follow::Anchored;
 use super::super::resolver::Anchor;
 use super::super::spawn::CharWindowMarker;
 use super::*;
-use crate::shared_test_support::{events_with, scopes};
-use log_capture_kit::{CapturedEvent, capture};
+use crate::shared_test_support::{events_with, one_event_with, scopes};
+use log_capture_kit::capture;
 
 fn spawn_char(world: &mut World, scope: usize, anchor: Anchor) -> Entity {
     world
@@ -49,16 +49,6 @@ fn groups(world: &World) -> Vec<StickyGroup> {
     world.resource::<StickyGroupLedger>().groups().to_vec()
 }
 
-fn one<'a>(events: &'a [CapturedEvent], event: &str) -> &'a CapturedEvent {
-    let hits = events_with(events, event);
-    assert_eq!(
-        hits.len(),
-        1,
-        "`{event}` がちょうど 1 件ではない: {events:?}"
-    );
-    hits[0]
-}
-
 /// 台本の組を作ると帳簿に入り、組の一覧が記録され、両方の `move_window` が偽になる（3.1・9.2）。
 #[test]
 fn set_sticky_adds_group_logs_and_resyncs_writer() {
@@ -74,7 +64,7 @@ fn set_sticky_adds_group_logs_and_resyncs_writer() {
             source: StickySource::Script,
         }]
     );
-    let logged = one(&events, "sticky_groups");
+    let logged = one_event_with(&events, "sticky_groups");
     assert_eq!(logged.level, tracing::Level::INFO);
     assert_eq!(logged.field_str("action"), Some("set"));
     let shown = logged.field("groups").unwrap();
@@ -105,7 +95,7 @@ fn set_sticky_rejects_without_change_and_logs_reason() {
         let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(raw)));
         assert!(!ok, "{raw:?}");
         assert_eq!(groups(&world), before, "{raw:?}");
-        let rejected = one(&events, "sticky_group_rejected");
+        let rejected = one_event_with(&events, "sticky_group_rejected");
         assert_eq!(rejected.level, tracing::Level::WARN);
         assert_eq!(rejected.field_str("source"), Some("script"));
         assert!(rejected.field("tokens").unwrap().contains(raw[0]));
@@ -114,7 +104,7 @@ fn set_sticky_rejects_without_change_and_logs_reason() {
             "{raw:?}"
         );
         assert_eq!(
-            one(&events, "sticky_groups").field_str("action"),
+            one_event_with(&events, "sticky_groups").field_str("action"),
             Some("set")
         );
     }
@@ -132,7 +122,7 @@ fn set_sticky_accepts_absent_scope_with_warning() {
     let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(&["2", "5"])));
     assert!(ok);
     assert_eq!(groups(&world)[0].members, scopes(&[2, 5]));
-    let absent = one(&events, "sticky_member_absent");
+    let absent = one_event_with(&events, "sticky_member_absent");
     assert_eq!(absent.level, tracing::Level::WARN);
     assert_eq!(absent.field("scope"), Some("5"));
     assert_eq!(absent.field_str("when"), Some("set"));
@@ -159,7 +149,7 @@ fn reset_sticky_removes_script_groups_only() {
             source: StickySource::Descript,
         }]
     );
-    let logged = one(&events, "sticky_groups");
+    let logged = one_event_with(&events, "sticky_groups");
     assert_eq!(logged.field_str("action"), Some("reset"));
     assert!(logged.field("groups").unwrap().contains("Descript"));
     assert!(!move_window(&world, e[0]));
@@ -180,7 +170,7 @@ fn seed_installs_ledger_from_descript_value() {
         }]
     );
     assert_eq!(
-        one(&events, "sticky_groups").field_str("action"),
+        one_event_with(&events, "sticky_groups").field_str("action"),
         Some("descript_seed")
     );
     assert!(!move_window(&world, e[0]));
@@ -197,7 +187,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
         assert!(groups(&world).is_empty(), "{raw:?}");
         assert!(events_with(&events, "sticky_group_rejected").is_empty());
         assert_eq!(
-            one(&events, "sticky_groups").field_str("action"),
+            one_event_with(&events, "sticky_groups").field_str("action"),
             Some("descript_seed")
         );
     }
@@ -205,7 +195,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
     let (mut world, _) = world_with_free_windows();
     let ((), events) = capture(|| seed_sticky_descript(&mut world, Some("0")));
     assert!(groups(&world).is_empty());
-    let rejected = one(&events, "sticky_group_rejected");
+    let rejected = one_event_with(&events, "sticky_group_rejected");
     assert_eq!(rejected.field_str("source"), Some("descript"));
     assert!(rejected.field("reason").unwrap().contains("TooFewScopes"));
 }
@@ -216,7 +206,7 @@ fn seed_accepts_absent_scope_with_warning() {
     let (mut world, _) = world_with_free_windows();
     let ((), events) = capture(|| seed_sticky_descript(&mut world, Some("0,7")));
     assert_eq!(groups(&world)[0].members, scopes(&[0, 7]));
-    let absent = one(&events, "sticky_member_absent");
+    let absent = one_event_with(&events, "sticky_member_absent");
     assert_eq!(absent.field("scope"), Some("7"));
     assert_eq!(absent.field_str("when"), Some("seed"));
 }
@@ -235,7 +225,7 @@ fn replace_keeps_script_groups_and_rejects_overlap() {
 
     let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("1,0")));
     assert_eq!(
-        one(&events, "sticky_groups").field_str("action"),
+        one_event_with(&events, "sticky_groups").field_str("action"),
         Some("descript_replace")
     );
     assert_eq!(groups(&world).len(), 2);
@@ -248,7 +238,7 @@ fn replace_keeps_script_groups_and_rejects_overlap() {
             source: StickySource::Script,
         }]
     );
-    let rejected = one(&events, "sticky_group_rejected");
+    let rejected = one_event_with(&events, "sticky_group_rejected");
     assert_eq!(rejected.field_str("source"), Some("descript"));
     assert!(rejected.field("reason").unwrap().contains("AlreadyGrouped"));
     // 前の descript の組（0・1）は外れたので wintf が書く。
@@ -263,12 +253,21 @@ fn without_ledger_directives_are_dropped_with_warning() {
     let (mut world, _) = world_with_free_windows();
     let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(&["0", "1"])));
     assert!(!ok);
-    assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
+    assert_eq!(
+        one_event_with(&events, "sticky_skipped").level,
+        tracing::Level::WARN
+    );
     let (ok, events) = capture(|| apply_reset_sticky(&mut world));
     assert!(!ok);
-    assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
+    assert_eq!(
+        one_event_with(&events, "sticky_skipped").level,
+        tracing::Level::WARN
+    );
     let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("0,1")));
-    assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
+    assert_eq!(
+        one_event_with(&events, "sticky_skipped").level,
+        tracing::Level::WARN
+    );
     assert!(world.get_resource::<StickyGroupLedger>().is_none());
 }
 
@@ -278,6 +277,6 @@ fn replace_records_absent_scope_with_when_replace() {
     let (mut world, _) = world_with_free_windows();
     seed_sticky_descript(&mut world, None);
     let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("0,7")));
-    let absent = one(&events, "sticky_member_absent");
+    let absent = one_event_with(&events, "sticky_member_absent");
     assert_eq!(absent.field_str("when"), Some("replace"));
 }

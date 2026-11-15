@@ -181,7 +181,7 @@ fn t_zgp8_reject_too_few_elements_counted_before_expansion() {
 // ---------------------------------------------------------------------------
 
 /// 解釈できないトークンが 1 つでもあれば、そのタグによる変更を一切行わない
-/// （要件 8.1）。拒否理由は受け取ったトークンをそのまま伴う。
+/// （要件 8.1）。拒否理由は受け取ったトークンをそのまま（大文字小文字も）伴う。
 #[test]
 fn t_zgp9_reject_unparsable_token_carries_the_received_token() {
     for (tokens, expected) in [
@@ -192,6 +192,8 @@ fn t_zgp9_reject_unparsable_token_carries_the_received_token() {
         (["+1", "0"].as_slice(), "+1"),
         (["0", ""].as_slice(), ""),
         (["4294967296", "0"].as_slice(), "4294967296"),
+        // 語は小文字にしてから読むが、拒否には書かれたままの綴りを載せる。
+        (["0", "Balloon0x"].as_slice(), "Balloon0x"),
     ] {
         assert_eq!(
             expect_reject(tokens),

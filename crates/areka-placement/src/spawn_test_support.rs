@@ -89,15 +89,6 @@ pub(super) fn create_test_window(title: windows::core::PCWSTR) -> windows::Win32
     }
 }
 
-/// 生成したテスト窓を破棄する（後始末）。
-#[cfg(test)]
-pub(super) fn destroy_test_window(hwnd: windows::Win32::Foundation::HWND) {
-    // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する。
-    unsafe {
-        let _ = windows::Win32::UI::WindowsAndMessaging::DestroyWindow(hwnd);
-    }
-}
-
 /// ハンドル付きの窓 entity を作る。
 #[cfg(test)]
 pub(super) fn spawn_window(world: &mut World, hwnd: windows::Win32::Foundation::HWND) -> Entity {

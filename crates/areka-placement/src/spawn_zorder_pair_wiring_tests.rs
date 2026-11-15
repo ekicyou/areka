@@ -37,9 +37,10 @@ use wintf::ecs::{
     apply_zorder_pair_maintenance, establish_owner_links,
 };
 
-use super::test_support::{create_test_window, destroy_test_window, spawn_window};
+use super::test_support::{create_test_window, spawn_window};
 use super::wire_zorder_pair;
 use crate::diag::zorder_pair_strategy_line;
+use crate::zorder_test_support::teardown;
 use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
@@ -169,8 +170,7 @@ fn wired_frame_finalize_establishes_owner_and_consumes_the_request_in_one_pass()
         "確立系が挿した再断行の要求は同じ巡の維持系が受け取る（未適用のまま残らない）"
     );
 
-    destroy_test_window(balloon_hwnd);
-    destroy_test_window(char_hwnd);
+    teardown(&[balloon_hwnd, char_hwnd]);
 }
 
 /// 対照（順序の主張の較正）: 同じ 2 本を**逆順**に載せると、要求は未適用のまま 1 巡持ち越される。
@@ -199,6 +199,5 @@ fn reversed_order_leaves_the_request_unconsumed_for_one_pass() {
         "逆順では要求が未適用のまま残る＝上のテストの主張は順序を実際に見ている"
     );
 
-    destroy_test_window(balloon_hwnd);
-    destroy_test_window(char_hwnd);
+    teardown(&[balloon_hwnd, char_hwnd]);
 }

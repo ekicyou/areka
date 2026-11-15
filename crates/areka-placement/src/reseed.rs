@@ -7,7 +7,8 @@
 //! （[`resolve_placement`]・起動と同じく全スコープを昇順で 1 度に通す＝連鎖 P2 を保つ）→
 //! 利用者のドラッグの記憶を重ねる（[`apply_restored_placements`]）。
 //! 結果からはスコープごとの揃え方（`Anchored`）・バルーンのずらしの基準（`BalloonFollow`）・
-//! キーワードの素材（`BalloonKeywordBase`）だけを取り、キャラ窓の位置は捨てる。
+//! キーワードの素材（`BalloonKeywordBase`）・画面の内に保つ指定（`BalloonLimit`）と、利用者が
+//! 動かした印（記憶から戻したずらしなら付け、標準なら外す）だけを取り、キャラ窓の位置は捨てる。
 //!
 //! [`apply_shell_descript`] が触らないもの: キャラ窓の位置（`WindowPos`）・スコープの集合（起動時の
 //! [`GhostWindows`]）。揃え方が変わったときのキャラ窓の置き直しは、続けて呼ぶ

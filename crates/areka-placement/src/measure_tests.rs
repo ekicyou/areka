@@ -796,7 +796,7 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 /// 適用前と同一の文字列・同一の解析結果を産む（要件 6.3）。
 ///
 /// 測りの経路は通らない——読みと解析を直に呼ぶパーサ層の性質であり、直上の Shift_JIS 検査の
-/// 対照である。本体の `areka_parsers::shell::parse` の呼び出しは、`measure_template_tests.rs`
+/// 対照である。本文の `areka_parsers::shell::parse` の呼び出しは、`measure_template_tests.rs`
 /// の走査の較正（当たり）が実物から拾う唯一の呼び出しでもある。COM も WIC も要らないため
 /// `with_com_initialized` を挟まない。
 #[test]

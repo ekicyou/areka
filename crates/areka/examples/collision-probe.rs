@@ -100,15 +100,15 @@
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:379-390` ＋ probe 自身の
 //!      [`load_shell_assets`]）
 //!    - **バルーンパッケージの面定義・面画像**（`measure.rs:417` の `measure_balloon_surface0`）と
-//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:579` の `load_scope_windowpositions`）
+//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:581` の `load_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
-//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages_for_shell`＝`crates/areka-placement/src/lib.rs:381-455` が読取の全体像）。
+//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages_for_shell`＝`crates/areka-placement/src/lib.rs:382-456` が読取の全体像）。
 //!
 //! # 作者基準 DPI の出所（k 論証への影響・実測済み）
 //!
-//! 採寸経路（`prepare_stages_for_shell`・`crates/areka-placement/src/lib.rs:394-405`）は **descript から読んだ実 author_dpi**
+//! 採寸経路（`prepare_stages_for_shell`・`crates/areka-placement/src/lib.rs:395-406`）は **descript から読んだ実 author_dpi**
 //! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
 //! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
 //! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、

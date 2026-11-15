@@ -141,8 +141,8 @@ struct PendingTarget {
     author_dpi: u16,
     /// ログ用ラベル。
     label: String,
-    /// target のアセット（`attach_target` で move 消費・装着後は `None`）。
-    assets: Option<(EmoWorld, AtlasTable)>,
+    /// target のアセット（`attach_target` で move 消費）。
+    assets: (EmoWorld, AtlasTable),
 }
 
 /// 起動時に構築した presenter・装着待ち target 群を束ね、GPU 資源が揃うまで attach/apply を
@@ -301,7 +301,7 @@ fn build_and_spawn(world: &mut World) {
                 surface_id,
                 author_dpi: prepared.author_dpi.shell,
                 label: format!("scope{scope} char surface{surface_id}"),
-                assets: Some((emo_world, shell_table.clone())),
+                assets: (emo_world, shell_table.clone()),
             });
         }
 
@@ -314,7 +314,7 @@ fn build_and_spawn(world: &mut World) {
                     surface_id: 0,
                     author_dpi: prepared.author_dpi.balloon,
                     label: format!("scope{scope} balloon surface0"),
-                    assets: Some((b_world, b_table)),
+                    assets: (b_world, b_table),
                 }),
                 Err(e) => {
                     // build_balloon_target は内部で error! 済み。窓は配置済みのまま装着だけ欠く。
@@ -399,10 +399,8 @@ fn boot_present_system(world: &mut World) {
         .remove_non_send::<PlacementBoot>()
         .expect("直上で存在確認済み");
 
-    for t in boot.pending.iter_mut() {
-        let Some((emo_world, atlas)) = t.assets.take() else {
-            continue;
-        };
+    for t in std::mem::take(&mut boot.pending) {
+        let (emo_world, atlas) = t.assets;
         // 作者基準 DPI は採寸と同じ値（`PreparedPlacement::author_dpi`）なので、窓の大きさと表示の大きさが合う。
         boot.presenter
             .attach_target(t.target, t.window, emo_world, atlas, t.author_dpi);

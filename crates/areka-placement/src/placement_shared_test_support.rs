@@ -82,6 +82,17 @@ pub(super) fn events_with<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'
         .collect()
 }
 
+/// 欄 `event` が `name` のイベントがちょうど 1 件あることを主張し、それを返す。
+pub(super) fn one_event_with<'a>(events: &'a [CapturedEvent], name: &str) -> &'a CapturedEvent {
+    let hits = events_with(events, name);
+    assert_eq!(
+        hits.len(),
+        1,
+        "`{name}` がちょうど 1 件ではない: {events:?}"
+    );
+    hits[0]
+}
+
 /// 捕捉したイベントに `needle` を含むメッセージが無いことを主張する。
 ///
 /// 空虚化しないための前提として、呼び手は**同じ `events` から対の観測点を 1 件取り出した後**に

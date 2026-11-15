@@ -131,15 +131,61 @@ fn balloon_switch_resolves_the_face_windowposition_with_the_new_author_dpi() {
     }
 }
 
+/// 面 0（descript）が `windowposition.x,0`、面 2（自分の設定ファイル）が `windowposition.x,40`・
+/// `windowposition.limit,0` のバルーンの束。設定ファイルから本番と同じ `load_scope_balloon_definitions`
+/// で作る（一時フォルダはワークツリーの `target\` の下）。
+fn two_face_windowposition_definitions(scope: u32) -> ScopeBalloonDefinitions {
+    use areka_emo_atlas::{AlphaParams, MemoryDecoder, UseSelfAlpha};
+    let dir = temp_path_kit::TempPath::under_target("switch-face-windowposition");
+    let prefix = if scope == 0 { "balloons" } else { "balloonk" };
+    let write = |name: &str, text: &str| std::fs::write(dir.child(name), text).expect("ファイル");
+    write("descript.txt", "windowposition.x,0\r\n");
+    write(
+        &format!("{prefix}2s.txt"),
+        "windowposition.x,40\r\nwindowposition.limit,0\r\n",
+    );
+    for face in [0, 2] {
+        write(&format!("{prefix}{face}.png"), "");
+    }
+    let faces =
+        areka_emo_present::balloon::resolve_balloon_faces(dir.path(), scope).expect("面 0 は在る");
+    let alpha = AlphaParams {
+        use_self_alpha: UseSelfAlpha::On,
+    };
+    let defs = areka_emo_present::balloon_definitions::load_scope_balloon_definitions(
+        dir.path(),
+        scope,
+        &faces,
+        &MemoryDecoder::new(),
+        alpha,
+    );
+    assert_ne!(
+        defs.for_face(2).model.windowposition(),
+        defs.face0().model.windowposition(),
+        "前提: 面 2 は面 0 と違う windowposition"
+    );
+    defs
+}
+
 /// シェルの切り替えは、今出している面の `windowposition` で解き直す（balloon-scroll-arrows 要件 1.7）。
-/// 切り替えの読み込みはバルーンのフォルダの面 0 だけを読むので、ここでは読み込みの値を空にし、
-/// 今の面（面 2・束に無いので面 0 の定義）を `windowposition.x,40`・`windowposition.limit,0` にする。
-/// 後始末の後のずらし・画面の内に保つ指定・材料は、読み込みが今の面の値を返した対照と同じになる。
+/// 切り替えの読み込みはバルーンのフォルダの面 0 だけを読むので、ここでは読み込みの値を面 0 の値
+/// （`windowposition.x,0`）にし、今の面 2 は自分の設定ファイルで `windowposition.x,40`・
+/// `windowposition.limit,0` を持つ。後始末の後のずらし・画面の内に保つ指定・材料は、読み込みが
+/// 今の面の値を返した対照と同じになる（面 0 の値のままなら x が 40 少なく、limit が 1）。
 #[test]
 fn shell_switch_resolves_with_the_current_face_windowposition() {
-    let model =
-        areka_parsers::balloon::parse_str("windowposition.x,40\nwindowposition.limit,0", None);
-    let wp = (model.windowposition(), model.windowposition_raw().clone());
+    let defs = [0, 1].map(two_face_windowposition_definitions);
+    let wp_of = |face: u32| -> BTreeMap<usize, _> {
+        (0..2)
+            .map(|scope| {
+                let model = &defs[scope].for_face(face).model;
+                (
+                    scope,
+                    (model.windowposition(), model.windowposition_raw().clone()),
+                )
+            })
+            .collect()
+    };
     let run = |loaded: BTreeMap<usize, _>| {
         let (world, windows) = reseed_tests::booted_world(96);
         let finish = SwapFinish::Shell {
@@ -154,13 +200,9 @@ fn shell_switch_resolves_with_the_current_face_windowposition() {
         };
         let mut rig = rig_on(world, SkinKind::Shell, false, finish);
         for scope in [0, 1] {
-            let face0 = FaceDefinition {
-                model: model.clone(),
-                arrows: Default::default(),
-            };
             rig.wiring
                 .balloon_definitions
-                .insert(scope, ScopeBalloonDefinitions::single(scope, face0));
+                .insert(scope, defs[scope as usize].clone());
             rig.wiring.balloon_faces.insert(scope, 2);
         }
         answer(&mut rig, 0, Ok(()));
@@ -182,15 +224,11 @@ fn shell_switch_resolves_with_the_current_face_windowposition() {
             .clone();
         (follow, limit, basis)
     };
-    let control = run([(0, wp.clone()), (1, wp.clone())].into());
+    let control = run(wp_of(2));
     assert_eq!(
         control.1,
         areka_placement::spawn::BalloonLimit(false),
         "対照: 今の面の limit 0"
     );
-    assert_eq!(
-        run(BTreeMap::new()),
-        control,
-        "(scope 0 の追随, limit, 材料)"
-    );
+    assert_eq!(run(wp_of(0)), control, "(scope 0 の追随, limit, 材料)");
 }
