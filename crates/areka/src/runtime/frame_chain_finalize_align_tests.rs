@@ -13,6 +13,7 @@ use super::chain_finalize_persist_test_support::spawn_shown;
 use super::test_support::{PerTargetSizes, placement_basis, pos_of};
 use super::*;
 
+use areka_placement::chain_finalize::AdjacencyMark;
 use areka_placement::config::build_placement_config;
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
@@ -161,6 +162,29 @@ fn boot_finalize_skips_side_edge_scopes_as_the_chain_base() {
         "scope 2 の基準は本体（辺のスコープを飛ばす）"
     );
     assert_ne!(x_of(&world, 2), x2_before, "前提: 幅が変わったので動いた");
+}
+
+/// ⑷ の例外: 辺のスコープの次が記憶から戻したスコープなら、覚えた印はその辺のスコープとの
+/// 隣り合いなので、辺のスコープを鎖に残し、次のスコープは辺のスコープの隣へ付く。
+#[test]
+fn boot_finalize_keeps_a_side_edge_scope_as_the_base_of_a_remembered_next_scope() {
+    let shown = sizes(&SPAWN);
+    let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
+    {
+        let mut gw = world.resource_mut::<GhostWindows>();
+        assert!(gw.clear_default_char_pos(2));
+        gw.set_remembered_adjacency(2, Some(AdjacencyMark::Left));
+    }
+
+    finalize_chain_once_with(&shown, &mut world);
+
+    let x1 = x_of(&world, 1);
+    assert_eq!(x1, WA.right - 278, "辺のスコープは辺のまま");
+    assert_eq!(
+        x_of(&world, 2),
+        x1 - 300,
+        "記憶の印 left は辺のスコープとの隣り合いなので、その隣へ付く"
+    );
 }
 
 /// ⑸ 幅が本当に変わったときは、その幅で resolver の式（`defaultx` 込み）を当て直す。

@@ -261,7 +261,8 @@ impl AdjacencyMark {
 // 組ごとの決めからの解き（dpi-realign-remembered-chain 要件 1.3・1.5・6.3・6.4）
 // ---------------------------------------------------------------------------
 
-/// 組 (n−1, n) をどうするか（先頭のスコープの値は読まない）。
+/// 鎖の前のスロットとの組をどうするか（ふつうは組 (n−1, n)。呼び手が左右の辺のスコープを鎖から
+/// 外すと、外したスコープを飛ばした前のスロットとの組になる。先頭のスロットの値は読まない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PairDecision {
     /// n を n−1 の左に付ける（new_x = base_x − width(n)）。
@@ -309,9 +310,9 @@ pub enum KeepReason {
     RememberedSeparate,
     /// 起動: 印の無い古い記憶。
     NoRememberedMark,
-    /// 起動: 記憶に位置の無い、左右の辺に揃えるスコープ（resolver の P1'・指摘 485）。
+    /// 起動: 記憶に位置の無い、左右の辺に揃えるスコープ（resolver の P1'）。
     DesktopEdge,
-    /// 起動: 記憶に位置の無い、x を書いた Free のスコープ（resolver の P3・指摘 485）。
+    /// 起動: 記憶に位置の無い、x を書いた Free のスコープ（resolver の P3）。
     FreePosition,
     /// 幅が 0 以下（縮退入力）。
     NonPositiveWidth,
@@ -346,11 +347,11 @@ pub struct ChainSlot {
     pub current_x: i32,
     /// 今のキャラ窓幅（物理 px）。
     pub width: i32,
-    /// 組 (scope−1, scope) の決め（先頭では読まない）。
+    /// 前のスロットとの組の決め（先頭のスロットでは読まない）。
     pub decision: PairDecision,
 }
 
-/// 本体から昇順に解き、動かす窓と新しい x を返す（今の x と同じものは含めない）。
+/// 先頭のスロットから昇順に解き、動かす窓と新しい x を返す（今の x と同じものは含めない）。
 ///
 /// 組の基準は前の窓の**解いた後の** x（1.5）。
 /// JoinLeft: new_x = base_x − width(n)。JoinLeftOffset: new_x = base_x − width(n) − offset。
@@ -383,7 +384,7 @@ pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
             {
                 Some(base_x.saturating_add(prev_w))
             }
-            // 先頭（本体）・Keep・非正寸は動かさない。
+            // 先頭のスロット・Keep・非正寸は動かさない。
             _ => None,
         };
         let resulting_x = match target {

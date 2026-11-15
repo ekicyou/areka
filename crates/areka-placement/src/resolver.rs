@@ -475,8 +475,8 @@ impl Anchor {
     /// **優先度チェーンの読取り・解決は行わない**（config.rs の領分・Req6.3）。
     /// 既に解決済みの `Alignment` を解釈消費するのみ:
     /// - `Bottom`→`Bottom`・`Free`→`Free`
-    /// - `Seam(s)`: [`Anchor::from_word`]（`s.trim().to_ascii_lowercase()` で正規化）で `"top"`→`Top`・
-    ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
+    /// - `Seam(s)`: [`Anchor::from_word`]（`s.trim().to_ascii_lowercase()` で正規化）で 5 つの語（`"top"`・
+    ///   `"bottom"`・`"left"`・`"right"`・`"free"`）はそれぞれのアンカー・それ以外（未知値）→`Bottom`（フォールバック・
     ///   window-placement DD9「未知は bottom 相当」を継承）。`Seam` は descript に書かれたままの
     ///   値（未知アンカーの警告に載せる）なので、大文字小文字はここでそろえる（`bottom`／`free` を
     ///   大文字小文字を区別せずに比べる config.rs と同じ決まり）。

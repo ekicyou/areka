@@ -9,12 +9,12 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::{Point, WindowPos};
 
-use super::super::follow::{AnchorSource, Anchored, MonitorSnapshot, OffsetBase, begin_char_drag};
+use super::super::follow::{AnchorSource, Anchored, MonitorSnapshot, begin_char_drag};
 use super::super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::super::source::GhostTitles;
 use super::super::spawn::{GhostWindows, spawn_ghost_windows};
 use super::*;
-use crate::shared_test_support::{events_with, one_event_with};
+use crate::shared_test_support::{events_with, one_event_with, placement_sized};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 作業領域（左 53・上 37・右 1877・下 1043）。
@@ -36,19 +36,15 @@ fn world() -> World {
         work_areas: vec![WA],
     });
     let placement = ScopePlacement {
-        scope: 0,
-        char_pos: CHAR_POS,
-        char_size: CHAR_SIZE,
-        balloon_pos: PointPx {
-            x: CHAR_POS.x + OFFSET.x,
-            y: CHAR_POS.y + OFFSET.y,
-        },
-        balloon_size: SizePx { w: 223, h: 158 },
-        balloon_offset: OFFSET,
-        balloon_offset_base: OffsetBase::unpinned(OFFSET),
-        balloon_limit: true,
         anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
+        ..placement_sized(
+            0,
+            CHAR_POS,
+            OFFSET,
+            true,
+            CHAR_SIZE,
+            SizePx { w: 223, h: 158 },
+        )
     };
     let gw = spawn_ghost_windows(
         &mut world,

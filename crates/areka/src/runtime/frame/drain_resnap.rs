@@ -484,7 +484,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
 
     // 組ごとの決め（dpi-realign-remembered-chain design BootRemembered）。記憶に位置の無い
     // スコープ（既定の位置がある）は、既定のままなら resolver と同じ揃え方の規則で解き直し
-    // （`boot_default_decision`・指摘 485）、既定から動かされたか台本の `\![move]` が置いた窓
+    // （`boot_default_decision`）、既定から動かされたか台本の `\![move]` が置いた窓
     // （x が既定のままでも・scg 7.3）は動かさない。記憶から戻したスコープ（既定の位置が無い）は
     // 「台本の印 → 組の窓 → 覚えた印」の順で決める（6.3〜6.5）。基準は前の窓の解いた後の x（resolve_chain）。
     //
@@ -494,7 +494,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv));
     if cfg.is_none() {
         warn!(
-            "chain_finalize: 配置の材料（DefaultPlacementBasis）が無いので、記憶に位置の無いスコープを下端の揃え方・defaultx 0 として解く（指摘 485）"
+            "chain_finalize: 配置の材料（DefaultPlacementBasis）が無いので、記憶に位置の無いスコープを下端の揃え方・defaultx 0 として解く"
         );
     }
     let fallback = ScopeConfig::default();
@@ -534,7 +534,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
             debug!(
                 scope = s.scope,
                 x = s.current_x,
-                "chain_finalize: 左右の辺のスコープは動かさず、横の連なりの基準にもしない（resolver と同じ・指摘 485）"
+                "chain_finalize: 左右の辺のスコープは動かさず、横の連なりの基準にもしない（resolver と同じ）"
             );
             continue;
         }

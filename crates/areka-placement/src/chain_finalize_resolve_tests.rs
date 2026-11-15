@@ -314,7 +314,7 @@ fn boot_restored_scope_follows_the_remembered_mark() {
     }
 }
 
-/// `defaultx` だけ空けて左へ置く: new_x = 前の x − 自分の幅 − offset（resolver の P2・指摘 485）。
+/// `defaultx` だけ空けて左へ置く: new_x = 前の x − 自分の幅 − offset（resolver の P2）。
 /// 幅が非正なら動かさず、語は "non-positive-width" に改まる。
 #[test]
 fn join_left_offset_keeps_the_defaultx_gap() {
@@ -338,7 +338,7 @@ fn join_left_offset_keeps_the_defaultx_gap() {
     assert!(resolve_chain(&slots).is_empty());
 }
 
-/// 既定のままのスコープの決めは resolver の揃え方の規則と同じ（指摘 485）。
+/// 既定のままのスコープの決めは resolver の揃え方の規則と同じ。
 #[test]
 fn boot_default_decision_follows_the_resolver_rules() {
     let cases = [
