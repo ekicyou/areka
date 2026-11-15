@@ -37,7 +37,7 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement};
 use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 use areka_placement::test_support::{
-    SharedFakeIo, WA, synth_declared_dpi_ghost, with_com_initialized,
+    KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, synth_declared_dpi_ghost, with_com_initialized,
 };
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -159,6 +159,11 @@ fn saved_offset(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String
     Some((get(Axis::X)?, get(Axis::Y)?))
 }
 
+/// 記憶に入れた [`DRAGGED`] のずらし（`saved_offset` の形）。
+fn dragged_saved() -> Option<(String, String)> {
+    Some((DRAGGED.x.to_string(), DRAGGED.y.to_string()))
+}
+
 fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
     events
         .iter()
@@ -167,7 +172,7 @@ fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
         .collect()
 }
 
-/// キーワードのバルーン（`windowposition.x,center`）で組む合成の検体（`reseed_tests` t_rs05 と同じ）。
+/// キーワードのバルーン（`windowposition.x,center`）で組む合成の検体（本文は `reseed_tests` t_rs05 と同じ共有の定数）。
 fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
     let (ghost, balloon) = synth_declared_dpi_ghost(
         root.path(),
@@ -177,11 +182,8 @@ fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
         "96",
         None,
     );
-    fs::write(
-        balloon.join("descript.txt"),
-        "charset,UTF-8\ndpi,96\nwindowposition.x,center\nwindowposition.y,-20\n",
-    )
-    .expect("キーワードのバルーンを書けるはず");
+    fs::write(balloon.join("descript.txt"), KEYWORD_BALLOON_DESCRIPT)
+        .expect("キーワードのバルーンを書けるはず");
     (ghost, balloon)
 }
 
@@ -266,7 +268,7 @@ fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
                     chars_before[i],
                     "{case}: キャラクターの窓は触らない"
                 );
-                // 記憶のずらしの鍵は消える（7.3・指摘 17）。
+                // 記憶のずらしの鍵は消える（7.3）。
                 let off = p.balloon_offset_base.offset;
                 assert_eq!(
                     saved_offset(&store, p.scope as u32),
@@ -311,7 +313,7 @@ fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
     });
 }
 
-/// 指摘 17・50: 初期化は戻した全スコープのずらしの鍵を 1 回の commit で消し、ほかの表（窓の位置・
+/// 初期化は戻した全スコープのずらしの鍵を 1 回の commit で消し、ほかの表（窓の位置・
 /// 隣り合いの印）は残す。次の起動の戻しは記憶のずらしを使わず、キーワードの標準（起動の準備の
 /// ずらしの基準とキーワードの素材）になる。
 #[test]
@@ -424,7 +426,7 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
 type Strip = fn(&mut World);
 
 /// 7.1: 材料（`DefaultPlacementBasis`・`GhostWindows`）が無ければ `warn!` だけで何もしない
-/// （バルーンは動かず、記憶へ書かない）。
+/// （バルーンは動かず、記憶のずらしも消さない）。
 #[test]
 fn missing_material_only_warns() {
     with_com_initialized(|| {
@@ -439,6 +441,12 @@ fn missing_material_only_warns() {
         for (reason, strip) in cases {
             let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
             rig.drag_balloons();
+            persist_entries(&rig.world, balloon_offset_entries(0, DRAGGED));
+            assert_eq!(
+                saved_offset(&rig.load(), 0),
+                dragged_saved(),
+                "前提: ずらしを覚えている"
+            );
             let before: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
             strip(&mut rig.world);
             let (reset, events) =
@@ -454,8 +462,8 @@ fn missing_material_only_warns() {
             assert_eq!(after, before, "{reason}: バルーンは動かない");
             assert_eq!(
                 saved_offset(&rig.load(), 0),
-                None,
-                "{reason}: 記憶へ書かない"
+                dragged_saved(),
+                "{reason}: 記憶のずらしは消さない"
             );
             rig.finish();
         }
@@ -463,12 +471,15 @@ fn missing_material_only_warns() {
 }
 
 /// 標準の位置を解けないスコープ（窓の部品が欠けた）は scope・reason つきの `warn!` で外し、
-/// 残りのスコープは戻す。
+/// 残りのスコープは戻す。記憶のずらしの鍵も戻したスコープの分だけ消し、外したスコープの分は残す。
 #[test]
 fn unresolved_scope_is_skipped_with_scope_and_the_rest_reset() {
     with_com_initialized(|| {
         let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
         rig.drag_balloons();
+        let mut entries = balloon_offset_entries(0, DRAGGED);
+        entries.extend(balloon_offset_entries(1, DRAGGED));
+        persist_entries(&rig.world, entries);
         let b0 = rig.windows.balloon_window(0).unwrap();
         rig.world.get_mut::<WindowPos>(b0).unwrap().size = None;
         let stuck = rig.balloon_pos(0);
@@ -494,6 +505,17 @@ fn unresolved_scope_is_skipped_with_scope_and_the_rest_reset() {
         let logs = events_named(&events, "balloon_pos_reset");
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].field_str("trigger"), Some("script"));
+        let store = rig.load();
+        assert_eq!(
+            saved_offset(&store, 0),
+            dragged_saved(),
+            "外したスコープのずらしは残る: {store:?}"
+        );
+        assert_eq!(
+            saved_offset(&store, 1),
+            None,
+            "戻したスコープのずらしは消える: {store:?}"
+        );
         rig.finish();
     });
 }

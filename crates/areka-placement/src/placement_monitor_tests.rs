@@ -82,11 +82,11 @@ fn primary_work_area_no_primary_substitutes_first() {
 }
 
 // ------------------------------------------------------------------
-// MonitorSnapshot::from_monitors（task 8.1・DD15・実モニタ→snapshot 忠実転写）
+// MonitorSnapshot::from_monitors（DD15・実モニタ→snapshot 忠実転写）
 // ------------------------------------------------------------------
 
 /// `MonitorSnapshot::from_monitors` は全モニタの work area（物理 px）を列挙順の
-/// まま**単位変換なしで忠実転写**する（`primary_work_area` と同じ U 契約）。
+/// まま**単位変換なしで忠実転写**する（`work_area_px` と同じ U 契約）。
 #[test]
 fn monitor_snapshot_from_monitors_transcribes_all_work_areas_in_order() {
     let monitors = [

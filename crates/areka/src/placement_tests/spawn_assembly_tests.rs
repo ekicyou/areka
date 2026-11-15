@@ -180,16 +180,16 @@ fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
 /// 正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝stand-in
 /// `on_ghost_pressed` を退役して差し替え）を持ち、バルーン窓はポインタハンドラを
 /// 一切持たない（M1 はバルーンにマウス送出なし・DD-IE-12）。ハンドラ実挙動の檻は
-/// input_events の task 2.7 檻＝proven-wiring ゆえ存在の有無だけ固定する
-/// （[[test-only-decision-branches-not-proven-wiring]]）。本テストは `#[cfg(test)]`
-/// ゆえ `crate::` パスを使ってよい。
+/// input_events の檻＝proven-wiring ゆえ存在の有無だけ固定する
+/// （[[test-only-decision-branches-not-proven-wiring]]）。装着の関数は areka の側にあり
+/// areka_placement からは見えない（依存の向き）ので、本テストは areka の側に置く。
 #[test]
 fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
     let mut world = World::new();
     let placements = two_scope_placements();
 
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-    // spawn は crate::-free ゆえハンドラを付けない。装着は input_events が担う。
+    // spawn は areka を見られないのでハンドラを付けない。装着は input_events が担う。
     crate::input_events::attach_char_pointer_handlers(&mut world);
 
     for e in ghost_window_entities(&mut world) {
@@ -200,7 +200,7 @@ fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
         let char_e = gw.char_window(p.scope).unwrap();
         let balloon_e = gw.balloon_window(p.scope).unwrap();
 
-        // キャラ窓は正規の移動／押下ハンドラを両方持つ（task 3.2 差し替え）
+        // キャラ窓は正規の移動／押下ハンドラを両方持つ
         assert!(
             world.get::<OnPointerMoved>(char_e).is_some(),
             "scope{}: キャラ窓は OnPointerMoved を持つ",
@@ -227,7 +227,7 @@ fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
 }
 
 // -------------------------------------------------------------------------
-// anchor 伝搬（4.2・DD15 基盤・task 3.1）
+// anchor 伝搬（4.2・DD15 基盤）
 //
 // 旧 `bottom_snap_marker_attached_to_snapping_char_windows_only`（二値吸着 marker
 // の有無検証）を、解決済み 5 値アンカーの entity 表現（`Anchored`）付与検証へ
@@ -314,7 +314,7 @@ fn anchor_source_attached_to_all_char_windows_with_descript_anchor() {
 }
 
 // -------------------------------------------------------------------------
-// balloon limit 伝搬（windowposition-limit 2.7/2.8・design C9/DD4・task 3.1）
+// balloon limit 伝搬（areka-P0-windowposition-limit 2.7/2.8・design C9/DD4）
 //
 // `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → `BalloonLimit`
 // Component の一方向転写（DD4）の最終段を固定する。`Anchored` 同型だが**付く側が
@@ -523,8 +523,8 @@ fn external_authority_attached_to_every_ghost_window_of_every_scope() {
 /// は「非 Free アンカーのキャラ窓のみ false（単一ライター・DD15 v2・4.7）、Free
 /// キャラ窓とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd ハンドラ
 /// （`OnDragEnd`）は Free 含む**全**キャラ窓に付く（非 Free は最終再固定・Free は
-/// 保存専用アーム・1.1・task 2.2）。バルーン窓にも `OnDragEnd`（`on_balloon_drag_end`）が
-/// 付く（単独ドラッグ確定 offset の永続 write-through・2.1・task 2.3）。`Anchored` の
+/// 保存専用アーム・1.1）。バルーン窓にも `OnDragEnd`（`on_balloon_drag_end`）が
+/// 付く（単独ドラッグ確定 offset の永続 write-through・2.1）。`Anchored` の
 /// 付き方は別のテスト（`Anchored(anchor)` の保持）が固定する。
 #[test]
 fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
@@ -566,7 +566,7 @@ fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
     );
     assert!(
         world.get::<OnDragEnd>(free_char).is_some(),
-        "Free キャラ窓にも OnDragEnd が付く（全アンカー結線・保存専用アーム・1.1・task 2.2）"
+        "Free キャラ窓にも OnDragEnd が付く（全アンカー結線・保存専用アーム・1.1）"
     );
     for scope in [0usize, 1] {
         let balloon = gw.balloon_window(scope).unwrap();
@@ -576,7 +576,7 @@ fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
         );
         assert!(
             world.get::<OnDragEnd>(balloon).is_some(),
-            "scope{scope}: バルーン窓に OnDragEnd（on_balloon_drag_end）が付く（単独ドラッグ確定 offset 保存・task 2.3）"
+            "scope{scope}: バルーン窓に OnDragEnd（on_balloon_drag_end）が付く（単独ドラッグ確定 offset 保存）"
         );
     }
 }

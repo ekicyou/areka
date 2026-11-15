@@ -117,7 +117,7 @@ fn the_decision_and_site_words_come_from_the_single_source() {
         transition_diag::HOLD_SITE_PATTERN_MOVE
     );
     // 2 つの「再スナップ」は**別語**である（同じ語だと、ログ上でどちらの点が見送ったのか
-    // 判らない＝task 6.5 が解いた曖昧さがそのまま観測面へ戻る）。
+    // 判らない＝語を分けて解いた曖昧さがそのまま観測面へ戻る）。
     assert_ne!(HoldSite::Resnap.as_str(), HoldSite::WorkAreaResnap.as_str());
 }
 
@@ -347,11 +347,11 @@ fn writable_world(hold: bool) -> (World, Entity) {
 /// `debug_assert!` ゆえテストビルドでは panic する——すり抜け経路が増えたときに、実機ログを
 /// 待たずに檻が落ちる（実機では `warn!` として見える）。
 ///
-/// 経路語が `ChainRealign`（システム由来・遷移後の連鎖の解き直し）なのは task 7.5 の是正に
+/// 経路語が `ChainRealign`（システム由来・遷移後の連鎖の解き直し）なのは本番の経路語の是正に
 /// 追随したものである。本テストは当初 `move_window_to`（＝`MoveCue`）で書いていたが、
 /// スクリプトの明示操作は**見送らないことが正しい**と本番コードが裁定しており、鳴らすのは
 /// 偽の警報だった。監視が生きていることを示す役目は経路語を差し替えて保つ——分類そのものは
-/// `follow_window_move_hold_watch_tests.rs` が 12 語＋route 無しで固定する。
+/// `follow_window_move_hold_watch_tests.rs` が全経路語＋route 無しで固定する。
 #[test]
 #[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 #[should_panic(expected = "DpiSyncHold")]
@@ -372,7 +372,7 @@ fn the_same_write_passes_when_the_window_is_not_waiting() {
 }
 
 /// 明示操作（`\![move]`＝`MoveCue`）は同じ札のある窓へ届いても鳴らない——上の 2 本と
-/// **同じ土台**で、変えるのは経路語 1 点だけである（task 7.5）。
+/// **同じ土台**で、変えるのは経路語 1 点だけである。
 #[test]
 fn the_explicit_move_is_not_watched_on_a_waiting_window() {
     let (mut world, window) = writable_world(true);

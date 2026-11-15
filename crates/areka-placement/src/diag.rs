@@ -42,16 +42,16 @@
 //!   古いまま**になりうる。列挙をそのまま受ければ網羅 match がコンパイラに守られる。
 //!   いずれも `World` を要さない `Copy` 値であり、最下流という位置は動かない。
 
-// 配線状況（task 1.4 完了時点）: 本モジュールの API は**全面配線済み**である。
+// 呼び手: 本モジュールの API はすべて本番から呼ばれる。
 // - モニタスナップショット側（`MonitorRecord`・`monitor_snapshot_header_line`／
-//   `monitor_record_line`・`log_monitor_snapshot`）: `main.rs` の `MonitorSnapshot` 構築点
-//   （要件 1.1 正典出力点）と `placement::prepare_ghost_windows` の列挙点が呼ぶ。
+//   `monitor_record_line`・`log_monitor_snapshot`）: `areka` の `main.rs`（`boot_monitor_snapshot`・
+//   要件 1.1 正典出力点）・`runtime/frame/work_area_sync.rs`（作業領域の同期）と
+//   `prepare_ghost_windows_for_shell` の列挙点が呼ぶ。
 // - 窓移動レコード側（`WindowKind`・`WindowMoveRecord`・`window_move_record_line`・
-//   `log_window_move`・`WINDOW_MOVE_RECORD_TAG`）: `follow.rs` の単一ライター
+//   `log_window_move`・`WINDOW_MOVE_RECORD_TAG`）: `follow::window_move` の単一ライター
 //   `enqueue_window_set_pos` が書込成功時に呼ぶ。
 //
-// ゆえに**モジュール大の `#![allow(dead_code)]` は撤去した**（残すと以後の真の dead code を
-// 隠すため・tasks.md Implementation Notes「1.4 で全 API を配線したらこの属性を外すこと」）。
+// モジュール大の `#![allow(dead_code)]` は付けない（以後の真の dead code を隠すため）。
 // 配置は lib の crate で、`pub` の項目は dead_code の警告を受けないので、個別の許可も要らない。
 
 use std::fmt;
@@ -127,15 +127,13 @@ pub const ZORDER_PAIR_STRATEGY_TAG: &str = "[zorder-pair] strategy-selected";
 /// この打ち切りは「entity 不在＝破棄済み（正常終了系・`debug!`）」と「entity は実在するが
 /// 接地点規約の component が欠落（真の異常・`warn!`）」を**区別**するために入れたものだが、
 /// 区別は水準だけでなく**本文でも**引けなければ終了時ログの読み手に伝わらない。消費入口は
-/// 追従層（`resize_window_to`／`resize_window_keep_position`）とフレーム層（再スナップ相・
-/// 報告回収相）に分かれて 4 箇所あり、各所が独自の文言を持つと grep 語が静かに分裂する
-/// （tasks.md Implementation Notes 1.4「同一文言の複製」の教訓）。ゆえに**共通の接頭辞だけを
-/// 本定数が持ち**、後続の説明文は各消費点が自分の相を名乗る形にする。
+/// 追従層・フレーム層・終了処理に散らばり、各所が独自の文言を持つと grep 語が静かに分裂する。
+/// ゆえに**共通の接頭辞だけを本定数が持ち**、後続の説明文は各消費点が自分の相を名乗る形にする。
 ///
 /// # target について（本定数だけの例外）
 ///
 /// 本モジュールの**出力**はすべて [`DIAG_TARGET`] を通るが、本定数を用いる `debug!` は
-/// 各消費点の既定 target（`areka_placement::follow`／`areka::runtime::frame`）へ出る——
+/// 各消費点のモジュールの既定 target へ出る——
 /// 終了時ログの静穏性（要件 6.2）は診断手順の点灯有無に依らず成立すべきものだからである。
 /// 本モジュールが持つのは語彙であって出力点ではない。
 pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
@@ -202,7 +200,7 @@ pub enum PlacementRoute {
     ///
     /// 関門（`enqueue_window_set_pos` 内）が行う補正は本語を名乗らない——そちらは
     /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
-    // 発行者は `follow::drag_follow::apply_release_limit_correction`（task 3.4）ただ 1 箇所。
+    // 発行者は `follow::drag_follow::apply_release_limit_correction` ただ 1 箇所。
     BalloonLimitRelease,
     /// 作業領域の変化を契機とする現寸での再スナップ
     /// （areka-P0-dpi-transition-atomicity C6 `work_area_sync::resnap_for_work_area_change`）。
@@ -212,9 +210,8 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ
     /// （D13 の 1 語＝1 実在トリガ）。混同すると「作業領域が動いたから移した」のか
     /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
-    // 発行者は `runtime::frame::work_area_sync::resnap_for_work_area_change`（task 5.2 で
-    // 着地）。語彙を task 2.4 で先に建てたのは、判定器（task 3.1）と単一の窓書込口の札が
-    // 同じ語を見るためである。
+    // 発行者は `runtime::frame::work_area_sync::resnap_for_work_area_change`。
+    // 語彙をここに置くのは、判定器と単一の窓書込口の札が同じ語を見るためである。
     WorkAreaResnap,
     /// DPI 遷移後の連鎖（隣接ペア）再解決
     /// （areka-P0-dpi-transition-atomicity C4 `chain_realign::realign_chain_once_with`）。
@@ -222,7 +219,7 @@ pub enum PlacementRoute {
     /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
     /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
     /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
-    // 発行者は `placement::chain_realign::realign_chain_once_with`（task 5.6 で着地）。
+    // 発行者は `placement::chain_realign::realign_chain_once_with`。
     ChainRealign,
     /// 面の `move` のずれを窓の位置へ当てる書込（seriko-pattern-calls「MoveShiftPlacement」・
     /// `follow::move_shift::apply_char_shift`）。
@@ -384,7 +381,7 @@ pub struct MonitorRecord {
 ///
 /// `enqueue_window_set_pos` の成功時に組む想定で、種別・scope は
 /// `CharWindowMarker`／`BalloonWindowMarker`、`dpi` は `DPI` component から
-/// 呼出側（`follow.rs`・タスク 1.4）が読んで詰める。
+/// 呼出側（`follow::window_move`）が読んで詰める。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowMoveRecord {
     /// 位置を書いた経路（＝要件 2.4 の書き手の名指し）。

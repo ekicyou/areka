@@ -2,8 +2,9 @@
 //!
 //! # なぜ areka 側に置くのか（実窓の檻の中で本ファイルだけが例外である理由）
 //!
-//! 実窓の檻のうち 3 ファイル（`zorder_chain_order_tests.rs`／
-//! `zorder_chain_order_lifecycle_tests.rs`／`zorder_chain_order_outsider_tests.rs`）は
+//! 実窓の檻のうち 4 ファイル（`zorder_chain_order_tests.rs`／
+//! `zorder_chain_order_lifecycle_tests.rs`／`zorder_chain_order_outsider_tests.rs`／
+//! `zorder_chain_order_inversion_tests.rs`）は
 //! wintf に在る。それらが測るのは「**渡された並びを実窓へ書けるか**」であり、
 //! 並びそのものは檻が手で組んでよい。
 //!
@@ -19,7 +20,7 @@
 //!
 //! を 1 本に繋いで測る。
 //!
-//! # 入力は必ず**非昇順**で与える（task 2.1 のレビューの申し送り）
+//! # 入力は必ず**非昇順**で与える
 //!
 //! 決定論の檻のうち「スコープ ID 昇順」を実際に主張できているのは 1 本だけで、他は
 //! 入力が既に昇順だったため昇順性を 1 度も測っていなかった。同じ空虚を実窓で繰り返さない
@@ -129,7 +130,10 @@ fn element_at(index: usize) -> GroupElement {
 // World と本番の 1 巡
 // ---------------------------------------------------------------------------
 
-/// 本番と同じ順序で 2 つの system を回す 1 巡（**確立系 → 鎖の適用系**）。
+/// **確立系 → 鎖の適用系**の 2 つの system だけを順に回す 1 巡。
+///
+/// 本番の [`wire_zorder_pair`](crate::spawn::wire_zorder_pair) はこの 2 つのあいだに
+/// 帯の適用系と組の維持系も挟むが、本ファイルはそれらを回さない。
 ///
 /// 同一スコープの「バルーンがキャラ窓の直上」は既存のペア機構
 /// （[`establish_owner_links`]）が張る繋ぎであり、本 spec は 1 本も触らない。

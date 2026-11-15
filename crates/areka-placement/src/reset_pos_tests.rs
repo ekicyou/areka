@@ -1,19 +1,14 @@
 //! 並べ直し（[`reset_window_positions`]）の檻（areka-P0-move-canon 要件 8.6・8.8・8.9・9.2・
 //! design Testing Strategy `reset_pos_tests.rs`）。
 //!
-//! 窓の一式は本番と同じ `spawn_ghost_windows` で組み、記憶は実物のアクター（`spawn_sylphya`）と
-//! 偽の保存先 `FakePersistIo` に置いて `barrier` の後に読み戻す（`persist_finalize_save_tests.rs`
-//! と同じやり方）。主モニタは偽の `Monitor` entity で置く。
+//! 窓の一式は本番と同じ `spawn_ghost_windows` で組み、記憶は `persist_finalize_save_tests.rs` の
+//! [`Store`]（実物のアクターと偽の保存先）に置いて `barrier` の後に読み戻す。主モニタは偽の
+//! `Monitor` entity で置く。
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{
-    Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
-    spawn_sylphya,
-};
+use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HWND, RECT};
 use wintf::ecs::window::drain_window_pos_commands;
@@ -27,7 +22,7 @@ use areka_emo_compose::ScaleRatio;
 use crate::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, shift_is_current,
 };
-use crate::persist::PersistWiring;
+use crate::persist::finalize_save_tests::Store;
 use crate::prepare_ghost_windows_with_work_area;
 use crate::reseed::BalloonPlacementInputs;
 use crate::resolver::{
@@ -36,7 +31,7 @@ use crate::resolver::{
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{SharedFakeIo, WA, with_com_initialized};
+use crate::test_support::{WA, with_com_initialized};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（物理 px）。
@@ -60,26 +55,28 @@ const EXPECTED: [PointPx; 2] = [
     },
 ];
 
+/// 窓の一式の全窓（キャラ・バルーン）へ偽の HWND を付ける（窓へ書く口が実窓の印を要る）。
+pub(crate) fn give_fake_hwnds(world: &mut World, windows: &GhostWindows) {
+    let mut raw = 0x100;
+    for scope in windows.scopes() {
+        for entity in [windows.char_window(scope), windows.balloon_window(scope)] {
+            raw += 1;
+            world.entity_mut(entity.unwrap()).insert(WindowHandle {
+                hwnd: HWND(raw as *mut _),
+            });
+        }
+    }
+}
+
 struct Rig {
     world: World,
-    shared: Arc<FakePersistIo>,
-    roots: ScopeRoots,
-    parts: SylphyaParts,
+    store: Store,
 }
 
 impl Rig {
     /// 2 スコープの窓の一式（ずらした位置）・主と副のモニタ・記憶の送り口・材料を持つ World。
     fn new() -> Self {
-        let shared = Arc::new(FakePersistIo::new());
-        let roots = ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(shared.clone())),
-            runtime_sink: None,
-        });
+        let store = Store::new();
         let mut world = World::new();
         let placements: Vec<ScopePlacement> = SCOPES
             .iter()
@@ -104,21 +101,11 @@ impl Rig {
             &placements,
             &GhostTitles::from_scope_titles(SCOPES.iter().map(|&(s, _, _)| (s, format!("s{s}")))),
         );
-        let mut raw = 0x100;
-        for scope in gw.scopes() {
-            for entity in [gw.char_window(scope), gw.balloon_window(scope)] {
-                raw += 1;
-                world.entity_mut(entity.unwrap()).insert(WindowHandle {
-                    hwnd: HWND(raw as *mut _),
-                });
-            }
-        }
+        give_fake_hwnds(&mut world, &gw);
         // 副モニタを先に置く（先頭を選んでしまう誤りを噛ませる）。
         world.spawn(monitor(2, (-1280, 0, 0, 984), false));
         world.spawn(monitor(1, WORK, true));
-        world.insert_non_send(PersistWiring {
-            publisher: parts.publisher.clone(),
-        });
+        store.wire(&mut world);
         world.insert_resource(DefaultPlacementBasis {
             source: DescriptSource {
                 ghost_kv: Default::default(),
@@ -131,12 +118,7 @@ impl Rig {
                 windowpositions: Default::default(),
             },
         });
-        Rig {
-            world,
-            shared,
-            roots,
-            parts,
-        }
+        Rig { world, store }
     }
 
     fn gw(&self) -> &GhostWindows {
@@ -162,20 +144,12 @@ impl Rig {
     }
 
     fn load(&self) -> HashMap<PersistKey, String> {
-        self.parts.publisher.barrier().expect("barrier が返る");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo::new(self.shared.clone()),
-        )
-        .into_iter()
-        .collect()
+        self.store.load()
     }
 
     fn finish(self) {
         let _residue = drain_window_pos_commands();
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.store.finish();
     }
 }
 

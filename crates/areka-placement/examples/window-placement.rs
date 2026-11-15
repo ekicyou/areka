@@ -31,7 +31,7 @@
 //!
 //! - **キャラ窓／バルーン窓の不透明域をダブルクリック**: 全ゴースト窓
 //!   （`GhostWindowMarker`）を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰
-//!   （`spawn_ghost_windows` 組込みの `on_ghost_pressed`・placement task 5.1）
+//!   （`spawn_ghost_windows` 組込みの `on_ghost_pressed`）
 //! - **Ctrl+C**（コンソールから起動した場合）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
 //!   env ゲート（main.rs の smoke ゲートと同名・同義。hands-off のビルド/起動確認用。
@@ -97,9 +97,6 @@ use areka_emo_present::{
     EmoPresenter, PresentCommand, ShellTarget, TargetId, build_balloon_target, load_shell_target,
 };
 
-use areka_placement::descript_window_keys::{
-    DefaultSurfaces, builtin_default_surface, first_existing,
-};
 use areka_placement::spawn::{
     GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
 };
@@ -246,8 +243,8 @@ fn build_and_spawn(world: &mut World) {
         );
     }
 
-    // MonitorSnapshot（task 8.1・DD15 基盤）: 実モニタ work area 集合を忠実転写した
-    // Resource を挿入（bottom 吸着ドラッグ（4.7・task 8.2）の消費用・セッション内固定）。
+    // MonitorSnapshot（DD15 基盤）: 実モニタ work area 集合を忠実転写した
+    // Resource を挿入（bottom 吸着ドラッグ（4.7）の消費用・セッション内固定）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
@@ -279,17 +276,24 @@ fn build_and_spawn(world: &mut World) {
 
     let mut pending = Vec::new();
     for scope in windows.scopes().collect::<Vec<_>>() {
-        // 初期 surface id: 測りと同じく、候補の並びのうちシェルに在る最初の面（窓寸法と表示 surface の原寸が一致する）。
+        let Some(scope_u32) = target_scope(scope) else {
+            tracing::error!(
+                scope,
+                "window-placement: スコープ番号が TargetId の u32 に収まらない — このスコープの装着を飛ばす（窓は配置済み）"
+            );
+            continue;
+        };
+        // 初期 surface id: 測りと同じ答え（窓寸法と表示 surface の原寸が一致する）。
         let probe = shell_target.build_world();
-        let surface_id = initial_char_surface(&prepared.default_surfaces, scope, |id| {
-            probe.surface(id).is_some()
-        });
+        let surface_id = prepared
+            .default_surfaces
+            .initial_surface(scope, |id| probe.surface(id).is_some());
 
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
             let emo_world = shell_target.build_world();
             pending.push(PendingTarget {
-                target: TargetId((scope as u32) * 2),
+                target: TargetId(scope_u32 * 2),
                 window: char_e,
                 surface_id,
                 label: format!("scope{scope} char surface{surface_id}"),
@@ -299,9 +303,9 @@ fn build_and_spawn(world: &mut World) {
 
         // バルーン窓 target（TargetId = 2*scope+1・そのスコープのバルーンの面 0）。
         if let Some(balloon_e) = windows.balloon_window(scope) {
-            match build_balloon_target(&balloon_dir, &decoder, balloon_scope(scope)) {
+            match build_balloon_target(&balloon_dir, &decoder, scope_u32) {
                 Ok((b_world, b_table)) => pending.push(PendingTarget {
-                    target: TargetId((scope as u32) * 2 + 1),
+                    target: TargetId(scope_u32 * 2 + 1),
                     window: balloon_e,
                     surface_id: 0,
                     label: format!("scope{scope} balloon surface0"),
@@ -353,19 +357,12 @@ fn build_shell_material(
     }
 }
 
-/// キャラ窓に最初に出す面: 測り（`measure.rs` の `initial_surface`）と同じく、候補の並びのうち
-/// シェルに在る最初の面、どれも無ければ組み込みの既定の面（窓寸法と表示の原寸が一致する）。
-fn initial_char_surface(
-    defaults: &DefaultSurfaces,
-    scope: usize,
-    exists: impl Fn(u32) -> bool,
-) -> u32 {
-    first_existing(&defaults.candidates(scope), exists).unwrap_or(builtin_default_surface(scope))
-}
-
-/// バルーン窓に貼る絵のスコープ（`build_balloon_target` の第 3 引数）: 窓のスコープそのもの。
-fn balloon_scope(scope: usize) -> u32 {
-    scope as u32
+/// 窓のスコープの u32 の値（キャラ窓 `TargetId(2*scope)`・バルーン窓 `TargetId(2*scope+1)`・
+/// `build_balloon_target` の第 3 引数）。`2*scope+1` が u32 に収まらないスコープは `None`
+/// （切り詰めて別のスコープの target や絵にしない）。
+fn target_scope(scope: usize) -> Option<u32> {
+    let scope = u32::try_from(scope).ok()?;
+    scope.checked_mul(2)?.checked_add(1).map(|_| scope)
 }
 
 // ---------------------------------------------------------------------------
@@ -429,14 +426,25 @@ fn boot_present_system(world: &mut World) {
 // ---------------------------------------------------------------------------
 
 /// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（main.rs の smoke ゲートと同義:
-/// 未設定・空・非数値・負値はゲート OFF）。
+/// 未設定・空・非数値・負値はゲート OFF。書かれているのに読めない値は `warn!` を残す）。
 fn smoke_exit_ms() -> Option<u64> {
     let value = std::env::var(SMOKE_EXIT_ENV).ok()?;
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
     }
-    trimmed.parse::<u64>().ok()
+    match trimmed.parse::<u64>() {
+        Ok(ms) => Some(ms),
+        Err(error) => {
+            tracing::warn!(
+                env = SMOKE_EXIT_ENV,
+                value = %value,
+                %error,
+                "window-placement: smoke 自動 close の値がミリ秒の数として読めない — ゲートは OFF"
+            );
+            None
+        }
+    }
 }
 
 /// env ゲート付き smoke 自動 close を結線する（main.rs `fn main` の `smoke_exit_ms` のゲートと
@@ -480,14 +488,14 @@ fn install_smoke_exit(app: &WinApp) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     #[test]
     fn each_scope_balloon_uses_its_own_scope_picture() {
         // `build_balloon_target` に渡すのと同じ値で、手本と同じバルーンの絵の選びを読む（ファイルを読むだけ）。
         let dir = balloon_root();
         let first_prefix = |scope: usize| {
-            areka_emo_present::balloon::resolve_balloon_faces_quiet(&dir, balloon_scope(scope))
+            let scope = target_scope(scope).expect("小さいスコープは収まる");
+            areka_emo_present::balloon::resolve_balloon_faces_quiet(&dir, scope)
                 .expect("emo2 の同梱バルーンの面")[0]
                 .prefix
                 .clone()
@@ -497,16 +505,11 @@ mod tests {
     }
 
     #[test]
-    fn missing_face_falls_back_to_the_measure_answer() {
-        // descript が kero の既定の面に 12 を書き、シェルに候補（12・10）のどれも無い。
-        let kv = BTreeMap::from([("kero.seriko.defaultsurface".to_string(), "12".to_string())]);
-        let defaults = areka_placement::descript_window_keys::read_default_surfaces(&kv);
-        assert_eq!(
-            initial_char_surface(&defaults, 1, |_| false),
-            builtin_default_surface(1)
-        );
-        // 在る面があればそれ（候補の先頭から）。
-        assert_eq!(initial_char_surface(&defaults, 1, |id| id == 10), 10);
-        assert_eq!(initial_char_surface(&defaults, 1, |_| true), 12);
+    fn scope_whose_target_id_does_not_fit_u32_is_skipped() {
+        assert_eq!(target_scope(1), Some(1));
+        // 2*scope+1 が u32 に収まる最大のスコープまでは通し、その次から切り詰めずに外す。
+        assert_eq!(target_scope(0x7FFF_FFFF), Some(0x7FFF_FFFF));
+        assert_eq!(target_scope(0x8000_0000), None);
+        assert_eq!(target_scope(1usize << 32), None);
     }
 }

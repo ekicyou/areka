@@ -19,7 +19,7 @@ use super::spawn::GhostWindows;
 ///
 /// 付ける: ドラッグで追随の基準を据え直したとき（追随の `reestablish_balloon_follow`）・記憶から
 /// 戻したずらしを使ったとき（[`mark_by_base`]）。外す: 標準の位置へ据え直したとき（[`reinstall_balloon`]）。
-/// 値の比べで決めないのは、追随の換算と解き直しの丸めが食い違うから（指摘 2）。
+/// 値の比べで決めないのは、追随の換算と解き直しの丸めが食い違うから。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct BalloonUserMoved;
 
@@ -59,25 +59,24 @@ pub fn apply_face_windowposition(
         );
         false
     };
-    let Some(old) = world.get_resource::<DefaultPlacementBasis>().cloned() else {
+    let Some(basis) = world.get_resource::<DefaultPlacementBasis>() else {
         return skipped("no_default_basis");
     };
-    if old.balloon.windowpositions.get(&scope) == Some(&wp) {
+    if basis.balloon.windowpositions.get(&scope) == Some(&wp) {
         return false;
     }
     let Some(windows) = world.get_resource::<GhostWindows>().cloned() else {
         return skipped("no_ghost_windows");
     };
-    let mut new = old.clone();
+    let mut new = basis.clone();
     new.balloon.windowpositions.insert(scope, wp);
-    world.insert_resource(new.clone());
+    world.insert_resource(new);
 
-    let standard_of = |world: &World, basis: &DefaultPlacementBasis| {
-        resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
-            .into_iter()
-            .find(|s| s.running.input.scope == scope)
-    };
-    let moved = match standard_of(world, &new) {
+    let basis = world.resource::<DefaultPlacementBasis>();
+    let standard = resolve_standard_scopes(world, &windows, &basis.source, &basis.balloon)
+        .into_iter()
+        .find(|s| s.running.input.scope == scope);
+    let moved = match standard {
         Some(StandardScope { running, placement }) => {
             let untouched = !world
                 .entity(running.char_window)

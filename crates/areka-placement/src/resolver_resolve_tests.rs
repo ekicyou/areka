@@ -293,7 +293,7 @@ fn t_r3_default_y_ignored_under_bottom() {
 }
 
 // ------------------------------------------------------------------
-// T-R5: 上・左・右の辺で最初の位置を解く（指摘 1・4.2）・知らない値は bottom
+// T-R5: 上・左・右の辺で最初の位置を解く（4.2）・知らない値は bottom
 // ------------------------------------------------------------------
 
 /// T-R5 の 2 スコープ（スコープ 0 だけ `defaultx` を持つ）を 1 つの値で組む。
@@ -393,6 +393,62 @@ fn t_r5_top_left_right_resolve_on_their_own_edge() {
     }
 }
 
+/// T-R5: 辺がスコープごとに違うとき、左右の辺の縦の連なりは辺ごとに別で、左右の辺の
+/// スコープは横の連なり（P2）を進めない。`[right, left, bottom, right]` で、スコープ 1（左）は
+/// スコープ 0（右）の上に積まれず下端から、スコープ 2（下）は右下から始まり、スコープ 3（右）は
+/// スコープ 0 の上に積もうとして作業領域の上端で止まる。
+#[test]
+fn t_r5_mixed_edges_chain_per_edge() {
+    for dpi in DPIS {
+        let wa = offset_work_area(dpi);
+        let (w0, h0) = (px(400, dpi), px(600, dpi));
+        let (w1, h1) = (px(320, dpi), px(400, dpi));
+        let (w2, h2) = (px(200, dpi), px(300, dpi));
+        let (w3, h3) = (px(240, dpi), px(600, dpi));
+        // スコープ 3 がスコープ 0 の上に収まらず、上端で止まる組み合わせであること
+        assert!(wa.bottom - h0 - h3 < wa.top, "dpi={dpi}: 前提");
+        let seam = |v: &str| scope_cfg(Alignment::Seam(v.to_owned()), None, None);
+        let cfg = cfg_of(vec![
+            (0, seam("right")),
+            (1, seam("left")),
+            (2, scope_cfg(Alignment::Bottom, None, None)),
+            (3, seam("right")),
+        ]);
+        let inputs = [
+            input(0, w0, h0),
+            input(1, w1, h1),
+            input(2, w2, h2),
+            input(3, w3, h3),
+        ];
+
+        let out = resolve_placement(&cfg, wa, &inputs, MEASURE_DPI);
+
+        let got: Vec<PointPx> = out.iter().map(|s| s.char_pos).collect();
+        assert_eq!(
+            got,
+            vec![
+                PointPx {
+                    x: wa.right - w0,
+                    y: wa.bottom - h0,
+                },
+                PointPx {
+                    x: wa.left,
+                    y: wa.bottom - h1,
+                },
+                PointPx {
+                    x: wa.right - w2,
+                    y: wa.bottom - h2,
+                },
+                PointPx {
+                    x: wa.right - w3,
+                    y: wa.top,
+                },
+            ],
+            "dpi={dpi}: 辺ごとに連ね、左右の辺は横の連なりを進めない"
+        );
+    }
+}
+
 /// T-R5: 知らない値は Bottom と同じ幾何・`anchor` も Bottom（DD9）。
 #[test]
 fn t_r5_unknown_seam_value_resolves_like_bottom() {
@@ -417,7 +473,8 @@ fn t_r5_unknown_seam_value_resolves_like_bottom() {
 }
 
 /// T-R5: 知らない値の警告は呼び出し 1 回につき 1 行、正典の値（`top`・`left`・`right`）
-/// では 0 行（並べ直しのたびに出ていた警告の 2 乗を止める）。
+/// では 0 行（並べ直しのたびに出ていた警告の 2 乗を止める）。警告はどのスコープの値かを
+/// `scope` に載せる（知らない値はスコープ 1 に置き、0 の決め打ちを暴く）。
 #[test]
 fn t_r5_warns_once_per_call_only_for_unknown_value() {
     let wa = work_area(96);
@@ -425,26 +482,32 @@ fn t_r5_warns_once_per_call_only_for_unknown_value() {
     let warns = |cfg: &PlacementConfig| {
         let (_, events) = capture(|| resolve_placement(cfg, wa, &inputs, MEASURE_DPI));
         events
-            .iter()
+            .into_iter()
             .filter(|e| e.level == tracing::Level::WARN)
-            .count()
+            .collect::<Vec<_>>()
     };
 
     for value in ["top", "left", "right"] {
         assert_eq!(
-            warns(&seam_cfg(value, 0)),
+            warns(&seam_cfg(value, 0)).len(),
             0,
             "{value}: 正典の値は警告しない"
         );
     }
     let one_unknown = cfg_of(vec![
+        (0, scope_cfg(Alignment::Bottom, None, None)),
         (
-            0,
+            1,
             scope_cfg(Alignment::Seam("unknown-value".to_owned()), None, None),
         ),
-        (1, scope_cfg(Alignment::Bottom, None, None)),
     ]);
-    assert_eq!(warns(&one_unknown), 1, "知らない値の警告は 1 行");
+    let events = warns(&one_unknown);
+    assert_eq!(events.len(), 1, "知らない値の警告は 1 行");
+    assert_eq!(
+        events[0].field("scope"),
+        Some("1"),
+        "警告はスコープ番号を載せる"
+    );
 }
 
 // ------------------------------------------------------------------

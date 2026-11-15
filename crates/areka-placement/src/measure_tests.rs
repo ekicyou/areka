@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 
 use crate::descript_window_keys::DefaultSurfaces;
 use crate::error::PlacementError;
-use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::sample_test_support::{
+    BALLOON0_H, BALLOON0_W, BALLOON1_H, BALLOON1_W, SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W,
+    balloon_root, emo2_root,
+};
 use crate::shared_test_support::{TempDir, write_self_alpha_one_descript};
 use crate::test_support::with_com_initialized;
 use log_capture_kit::{ExpectField, capture, expect_one};
@@ -19,21 +22,6 @@ fn measure_builtin(s: &Path, b: &Path, ids: &[usize], k: &MeasureScaling) -> Mea
 fn emo2(rel: &str) -> PathBuf {
     emo2_root().join(rel)
 }
-
-/// emo2 fixture の実寸（物理 px・PNG 実デコード実測値）。
-/// scope0 初期 surface（surface0 ← surface0.png・記憶 areka-emo2-surface0-baked-balloon と一致）。
-const SCOPE0_W: i32 = 434;
-const SCOPE0_H: i32 = 687;
-/// scope1 初期 surface（surface10 ← CityPop/surface0010.png）。
-const SCOPE1_W: i32 = 336;
-const SCOPE1_H: i32 = 400;
-/// scope0 のバルーン面 0（`balloons0.png`＝本体側系列・PNG IHDR 実測）。
-const BALLOON0_W: i32 = 400;
-const BALLOON0_H: i32 = 224;
-/// scope1 のバルーン面 0（`balloonk0.png`＝相方側系列・PNG IHDR 実測）。
-/// 本体側と**異なる**寸であることが本 fixture の判別力の源である。
-const BALLOON1_W: i32 = 288;
-const BALLOON1_H: i32 = 203;
 
 /// 観測可能な完了状態（tasks 4.1）: emo2 fixture の shell/balloon に対し
 /// `measure_scope_sizes` が scope0・scope1・balloon の原寸（非ゼロ物理 px）を
@@ -302,11 +290,6 @@ fn apply_scaling_identity_is_passthrough() {
     )
     .expect("96/96 も恒等");
     assert_eq!(same, natives);
-    assert_eq!(
-        MeasureScaling::default().shell,
-        ScaleRatio::ONE,
-        "既定は恒等"
-    );
 }
 
 /// 要件 2.5/3.1/3.3: 整数 k・非整数 k とも `scaled_extent` の丸め規約で k 倍される。
@@ -524,14 +507,14 @@ fn apply_scaling_empty_input_is_empty_output() {
 /// [`apply_scaling_maps_balloon_per_scope`]（`measure_tests.rs` の char 寸アサート
 /// 左 (434,687) / 右 (336,400)）と `apply_scaling_identity_is_passthrough`・
 /// emo2 実採寸テスト群でも落ちる。本テストは**共倒れ**であり、char 軸の席保全は
-/// task 2.3 時点で既に本物の檻に入っている。
+/// 既に本物の檻に入っている。
 ///
 /// 本テストの役割は排他キルではなく、**非恒等 k（5/4）での char per-scope 写像を
 /// 明文化する冗長な錨**——既存の per-scope 検査はいずれも shell k=1/1 か
 /// GPU/COM を要する実 fixture 経路であり、「k≠1 のとき各スコープが自分の原寸から
 /// 個別に k 倍される」ことを GPU 非依存の純関数層で述べた行は他に無い。
 ///
-/// 期待値 543×859／420×500 は task 4.3 の実機観測（primary DPI=120）と同一であり、
+/// 期待値 543×859／420×500 は実機観測（primary DPI=120）と同一であり、
 /// 434×1.25=542.5→543 が round half away from zero の生証拠でもある。
 #[test]
 fn apply_scaling_maps_char_per_scope() {
@@ -621,13 +604,12 @@ fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
 // 既存の i32 ガード／負値テストは `Err` の中身だけを見ており、design
 // 「Error Handling」表の `k 倍寸の i32 超過（採寸）→ error!` 行は無検査だった。
 //
-// 捕捉は共有ハーネス [`crate::test_support`]（`#[cfg(test)]` 限定）を使う。
+// 捕捉は共有機構 `log_capture_kit::capture` を使う。
 // **素朴な `with_default` 捕捉は非決定的に取りこぼす**——`tracing` の callsite interest
 // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
 // 他テスト（同じ `error!` callsite を踏む `apply_scaling_guards_i32_overflow` 等）が
 // 先に登録すると `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
-// 機構と対策は共有機構 `log_capture_kit` の crate doc（および `test_support` の
-// モジュール doc）を参照。
+// 機構と対策は共有機構 `log_capture_kit` の crate doc を参照。
 
 /// design「Error Handling」: k 適用失敗は **`error!`**＋帰属情報
 /// （`scope`／`kind`／`k`／`reason`）を残す（silent wrap の禁止）。
@@ -801,11 +783,11 @@ fn measure_emo2_fixture_applies_k_end_to_end() {
 /// 「stream did not contain valid UTF-8」で読取失敗になり、`PlacementError::Measure`
 /// を返していた。
 ///
-/// **この検査がここに居る理由**: タスク 4.2 が固定するのは `charset::decode` と
+/// **この検査がここに居る理由**: 文字コードの読みの檻が固定するのは `charset::decode` と
 /// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
-/// `measure.rs` の読取が実際に `decode` を通っているかどうかには触れない。配線を
-/// `read_to_string` へ戻してもパーサ層の検査は緑のまま通り抜ける。本番経路が復号を
-/// 経由することを押さえるのは、読取点の兄弟にあたる本ファイルの役目。
+/// 採寸の本番経路（`measure.rs` が呼ぶ `load_shell_target_quiet`）の読取が実際に `decode` を
+/// 通っているかどうかには触れない。配線を `read_to_string` へ戻してもパーサ層の検査は緑のまま
+/// 通り抜ける。本番経路が復号を経由することを押さえるのは、採寸の入口を呼ぶ本ファイルの役目。
 #[test]
 fn placement_read_honours_the_files_own_charset_declaration() {
     with_com_initialized(|| {

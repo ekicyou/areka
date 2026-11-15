@@ -1,7 +1,8 @@
 //! 武装の後に台本が置いた窓の記録（`dpi-realign-remembered-chain` 要件 3.1・8.2）の決定論テスト。
 //!
 //! 記録に積まれるのは武装中の `ScriptPlaced` の差し込み（付け直しを含む）と受け口
-//! [`note_script_moved`] の呼び出しだけで、武装の前・解決の後・武装していないあいだは積まれない。
+//! [`note_script_moved`] の呼び出しだけで、同じ窓は 1 つだけ入る。武装の前・解決の後・
+//! 武装していないあいだは積まれない。
 
 use bevy_ecs::prelude::*;
 
@@ -35,11 +36,12 @@ fn insertions_and_calls_while_armed_are_recorded_including_reinsert() {
     arm_chain_realign(&mut world, Vec::new());
 
     world.entity_mut(a).insert(ScriptPlaced);
-    // 同じ窓へ付け直しても（`\![move]` は動かすたびに差し込む）もう一度積まれる。
+    // 同じ窓へ付け直しても（`\![move]` は動かすたびに差し込む）記録は 1 つのまま増えない。
     world.entity_mut(a).insert(ScriptPlaced);
     note_script_moved(&mut world, b);
+    note_script_moved(&mut world, b);
 
-    assert_eq!(recorded(&world), Some(vec![a, a, b]));
+    assert_eq!(recorded(&world), Some(vec![a, b]));
 }
 
 #[test]
@@ -78,6 +80,8 @@ fn nothing_is_recorded_after_resolution() {
 fn nothing_is_recorded_while_unarmed() {
     // 起動の確定が済んでいない World（武装そのものが起きない）でも差し込みと受け口は静かに抜ける。
     let mut world = World::new();
+    arm_chain_realign(&mut world, Vec::new());
+    assert_eq!(recorded(&world), None, "起動の確定の前は武装しない");
     let a = world.spawn(ScriptPlaced).id();
     world.entity_mut(a).insert(ScriptPlaced);
     note_script_moved(&mut world, a);

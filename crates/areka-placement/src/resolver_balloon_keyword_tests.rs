@@ -4,8 +4,7 @@
 //! （`BalloonXMode::CenterTop`／`CenterBottom`・要件 4.2/4.3）と、その周辺の
 //! 回帰境界（`Side`＝数値指定・未指定の bit 同一維持・要件 4.5/5.2）である。
 //!
-//! `resolver_resolve_tests.rs` は既に 1,000 行規模ゆえ、本仕様の追加分は別ファイルへ
-//! 置く（ファイル分割規約）。既存の T-R8 群（`Side` の全表）は**無改変のまま**
+//! 本仕様の追加分は `resolver_resolve_tests.rs` とは別のファイルに置く。既存の T-R8 群（`Side` の全表）は**無改変のまま**
 //! 緑であることが要件 5.2 の主檻であり、本ファイルはその補強として `Side` の
 //! 閉じた式を逐語で再検定する。
 //!
@@ -39,7 +38,7 @@ fn keyword_cfg(
 }
 
 /// キャラ寸とバルーン寸を独立に与える採寸入力（中央揃えの検定には
-/// `balloon_w ≠ char_w / 2` が要る＝`resolver_resolve_tests` の `input` は使えない）。
+/// `balloon_w ≠ char_w / 2` が要る＝`resolve_test_support::input` は使えない）。
 fn input(scope: usize, char_size: SizePx, balloon_size: SizePx) -> ScopeInput {
     ScopeInput {
         scope,
@@ -189,31 +188,6 @@ fn t_k2_center_bottom_places_below_shell_center() {
                 "dpi={dpi} [{label}]: balloon_offset ≡ balloon_pos − char_pos"
             );
         }
-    }
-}
-
-/// T-K1/T-K2 補: 中央上と中央下は水平が同一で垂直だけが異なる
-/// （`bottom` が `center` の単なる別名へ退行していないことの判別）。
-#[test]
-fn t_k12_center_top_and_bottom_differ_only_in_y() {
-    for dpi in DPIS {
-        let wa = work_area(dpi);
-        let (top, cs, bs) = resolve_one(dpi, wa, BalloonXMode::CenterTop, BalloonSide::Left, None);
-        let (bot, _, _) = resolve_one(dpi, wa, BalloonXMode::CenterBottom, BalloonSide::Left, None);
-
-        assert_eq!(
-            top.balloon_pos.x, bot.balloon_pos.x,
-            "dpi={dpi}: 水平は同一式"
-        );
-        assert_eq!(
-            bot.balloon_pos.y - top.balloon_pos.y,
-            cs.h + bs.h,
-            "dpi={dpi}: 垂直差＝char_h + balloon_h（上に接する↔下に接する）"
-        );
-        assert_ne!(
-            top.balloon_pos.y, bot.balloon_pos.y,
-            "dpi={dpi}: bottom が center の別名へ退行してはならない"
-        );
     }
 }
 

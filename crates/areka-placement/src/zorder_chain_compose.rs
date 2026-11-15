@@ -72,12 +72,6 @@
 //! `absent` に載るのは**グループが名前を挙げた要素**だけで、宣言順のまま並ぶ
 //! （要件 1.4「取り除かない」・要件 8.4「対応する窓が無いことを記録する」）。
 //! 後方参加のスコープは誰も宣言していないので、その窓が欠けても不在要素にはならない。
-//!
-//! # `dead_code` 許可は残っていない
-//!
-//! 指令消化の相（`runtime/frame/zorder_drain.rs`）が出口をここへ差し替えたことで、
-//! 合成の純関数にも不在要素の正準表記にも本番の呼び手が付いた。段階的実装のあいだ
-//! モジュール全体を覆っていた許可は撤去してある。
 
 use std::collections::HashSet;
 
@@ -94,8 +88,8 @@ const SCOPE_BLOCK: [GroupWindowKind; 2] = [GroupWindowKind::Balloon, GroupWindow
 
 /// 要素 1 つを省略記法（`bN`／`sN`）の字面へ。
 ///
-/// 記録行に載る不在要素の正準表記であり、指令消化の相が受理行の `members=` 欄で
-/// 使っている字面と同じものである（行の中で照らし合わせられる）。
+/// 指令消化の相（`runtime/frame/zorder_drain.rs`）が受理行の `members=`・`normalized=`
+/// 欄と、拒否の理由 `DuplicateElement` に使う字面である。
 pub fn element_text(element: &GroupElement) -> String {
     format!("{}{}", kind_char(element.kind), element.scope)
 }

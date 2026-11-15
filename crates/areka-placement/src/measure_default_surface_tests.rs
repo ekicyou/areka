@@ -9,14 +9,14 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::descript_window_keys::{DefaultSurfaces, read_default_surfaces};
-use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::sample_test_support::{SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W, balloon_root, emo2_root};
 use crate::test_support::with_com_initialized;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 /// emo2 の面 0（surface0.png）の原寸。
-const SURFACE0: (i32, i32) = (434, 687);
+const SURFACE0: (i32, i32) = (SCOPE0_W, SCOPE0_H);
 /// emo2 の面 10（CityPop/surface0010.png）の原寸。
-const SURFACE10: (i32, i32) = (336, 400);
+const SURFACE10: (i32, i32) = (SCOPE1_W, SCOPE1_H);
 
 fn ghost_kv(pairs: &[(&str, &str)]) -> DefaultSurfaces {
     let kv: BTreeMap<String, String> = pairs

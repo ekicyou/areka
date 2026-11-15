@@ -6,13 +6,13 @@ use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 // ------------------------------------------------------------------
-// windowposition → 初期既定位置（task 4.3・要件 3.2/3.4/3.5/3.6/6.3/7.6）
+// windowposition → 初期既定位置（要件 3.2/3.4/3.5/3.6/6.3/7.6）
 // ------------------------------------------------------------------
 
-/// 観測点 4（design Monitoring・要件 6.3/7.6）: `prepare_stages` が scope ごとに
+/// 観測点 4（design Monitoring・要件 6.3/7.6）: `merge_scope_windowpositions` が scope ごとに
 /// **scope・wp 生値・バルーンの左右・変換後の調整量**を info レベルで記録する。
 ///
-/// 実機サインオフ（task 6.1）は本行を `RUST_LOG=info` で grep し、SSP 実測と突合して
+/// 実機サインオフは本行を `RUST_LOG=info` で grep し、SSP 実測と突合して
 /// x 方向の符号規約を確定させた（R7.6）。ゆえに**フィールド名と値の形そのものが契約**
 /// である。`balloon_side` は調整量の計算に効かなくなった後も、基本位置がどちらだったかを
 /// ログだけで再構成するために記録し続ける（実機診断の要）。
@@ -61,12 +61,12 @@ fn prepare_windowposition_logs_scope_raw_side_and_converted_adjust() {
     });
 }
 
-/// **参照実装（SSP）実測との突合**（要件 7.6 の実機確定・task 6.1）。
+/// **参照実装（SSP）実測との突合**（要件 7.6 の実機確定）。
 ///
 /// areka は「ukadoc 準拠 SSP 代替」であり、正典が沈黙する `windowposition.x` の
 /// 基本位置・符号の向きについては **SSP の実挙動が正解表**である。実機（DPI 120＝
 /// k=5/4・DPI aware）で同一ゴースト emo2 ＋バルーン emo2-kakukaku を SSP に読ませた
-/// 実測（task 6.1）:
+/// 実測:
 ///
 /// | 窓 | SSP 実測 | 相対オフセット |
 /// |---|---|---|
@@ -200,7 +200,7 @@ fn prepare_windowposition_adjust_scales_with_balloon_k_not_shell_k() {
     });
 }
 
-/// **檻 9 の配置面の対（R3.3 の実機確定形・R7.6／task 6.1）**: 同一の `windowposition`
+/// **檻 9 の配置面の対（R3.3 の実機確定形・R7.6）**: 同一の `windowposition`
 /// 生値は、バルーンの置き側（Left／Right）に依らず**同一の調整量**として基本位置へ
 /// 加算される。
 ///

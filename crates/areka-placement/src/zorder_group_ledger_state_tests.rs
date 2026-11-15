@@ -13,14 +13,14 @@
 //!
 //! 拒否分岐の檻はすべて [`assert_ledger_unchanged`] を通す。この道具は台帳**全体**
 //! （グループ列・各グループの ID・要素列・出所・次に配る ID・版）を丸ごと比較する
-//! ので、task 1.3 の完了状態「拒否が返ったケースで台帳の内容が呼び出し前と完全に
+//! ので、「拒否が返ったケースで台帳の内容が呼び出し前と完全に
 //! 一致する」を欄ごとの抜き取りではなく構造で押さえる（要件 3.2／8.1）。
 //!
 //! # 「動かない」主張は両側から挟む
 //!
 //! 版（[`ZOrderGroupLedger::version`]）は「増えない」側だけを見ると、そもそも一度も
 //! 増えない実装が素通りする。[`t_zgl15_version_moves_only_when_the_contents_move`] は
-//! 増える 3 経路と増えない 3 経路を同じ 1 本で挟む（task 1.2 の差し戻しの教訓）。
+//! 増える 3 経路と増えない 3 経路を同じ 1 本で挟む。
 
 use super::*;
 use crate::test_support::zorder_pair_deferred::code_only;
@@ -57,7 +57,7 @@ fn expect_added(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> u32 {
 
 /// 再指定としての拒否を期待し、伴うスコープ列を取り出す。
 ///
-/// 台帳が呼び出し前と完全に一致することも同時に確かめる（task 1.3 の完了状態）。
+/// 台帳が呼び出し前と完全に一致することも同時に確かめる。
 fn expect_cross_reject(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> Vec<u32> {
     let before = ledger.clone();
     let reject = match add_tag(ledger, tokens) {
@@ -422,7 +422,7 @@ fn t_zgl14_reset_frees_tag_scopes_but_not_base_scopes() {
 /// 版は台帳の内容が実際に動いたときだけ進む。
 ///
 /// 「進まない」側だけを見ると一度も進まない実装が素通りするので、進む 3 経路と
-/// 進まない 3 経路を同じ 1 本で挟む（task 1.2 の差し戻しの教訓）。
+/// 進まない 3 経路を同じ 1 本で挟む。
 #[test]
 fn t_zgl15_version_moves_only_when_the_contents_move() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -569,7 +569,7 @@ fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
 // 完了状態: 拒否の全経路で台帳が完全に一致する
 // ---------------------------------------------------------------------------
 
-/// task 1.3 の完了状態の総取り。台帳がどんな状態にあっても、拒否された呼び出しの
+/// 台帳がどんな状態にあっても、拒否された呼び出しの
 /// 前後で台帳**全体**が完全に一致する（要件 3.2／8.1 の部分適用禁止）。
 ///
 /// 前状態を 3 通り（タグ 1 本／基底のみ／基底＋タグ 2 本）用意し、それぞれで

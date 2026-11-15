@@ -11,7 +11,7 @@ use log_capture_kit::ExpectField;
 // T-V1: despawn 掃除（areka-P0-dpi-window-vanish 要件 6.1/6.4・D8）
 //
 // 檻は「判断が下される場所」＝本ファイル（`remove_entry_of` と on_remove hook）
-// に置く（記憶 test-only-decision-branches-not-proven-wiring・タスク 1.4 の教訓）。
+// に置く（記憶 test-only-decision-branches-not-proven-wiring の教訓）。
 // -------------------------------------------------------------------------
 
 /// 生存 scope の「動いていないこと」を判定するための可観測状態の束。
@@ -152,7 +152,7 @@ fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
 
 /// T-V1: 掃除の前後で**生存 scope** の位置・寸法・追従関係が変化しない（6.4）。
 ///
-/// 空虚性回避（記憶 2.2 の教訓・タスク 2.2 Implementation Notes）:
+/// 空虚性回避:
 /// ①探針は 2 scope で、位置・寸法・offset・追従先がすべて**互いに異なる**ことを
 /// 事前に `assert_ne!` で自己検査する（＝「全部同じ値」なら不変主張が不動点に落ちて
 /// 何も検出できない）。②「レジストリに scope 1 が残っている」も同時に主張する

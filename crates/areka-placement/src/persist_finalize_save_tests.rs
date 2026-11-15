@@ -53,16 +53,16 @@ const SCOPES: [(usize, PointPx, SizePx); 3] = [
 /// 記憶にある体の値（「書き換えない」を噛ませるための、どの書く値とも重ならない値）。
 pub(super) const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
 
-pub(super) struct Rig {
-    pub(super) world: World,
-    shared: Arc<FakePersistIo>,
+/// 記憶の実物のアクター（`spawn_sylphya`）と偽の保存先 `FakePersistIo`（Ghost の根は `/g`）。
+/// 並べ直しの檻（`reset_pos_tests.rs`）も使う。
+pub(crate) struct Store {
+    pub(crate) shared: Arc<FakePersistIo>,
     roots: ScopeRoots,
-    pub(super) parts: SylphyaParts,
+    pub(crate) parts: SylphyaParts,
 }
 
-impl Rig {
-    /// 3 スコープの窓の一式と、記憶の送り口（`wired` のときだけ）を持つ World を組む。
-    pub(super) fn new(wired: bool) -> Self {
+impl Store {
+    pub(crate) fn new() -> Self {
         let shared = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
@@ -73,6 +73,50 @@ impl Rig {
             io: Box::new(SharedFakeIo::new(shared.clone())),
             runtime_sink: None,
         });
+        Store {
+            shared,
+            roots,
+            parts,
+        }
+    }
+
+    /// 記憶の送り口を World へ挿す。
+    pub(crate) fn wire(&self, world: &mut World) {
+        world.insert_non_send(PersistWiring {
+            publisher: self.parts.publisher.clone(),
+        });
+    }
+
+    /// 送ったものの書き込みが済むのを待ってから、記憶を読み戻す。
+    pub(crate) fn load(&self) -> HashMap<PersistKey, String> {
+        self.parts
+            .publisher
+            .barrier()
+            .expect("barrier はアクターが生きている間は返る");
+        load_scope(
+            PersistScope::Ghost,
+            &self.roots,
+            &SharedFakeIo::new(self.shared.clone()),
+        )
+        .into_iter()
+        .collect()
+    }
+
+    pub(crate) fn finish(self) {
+        self.parts.publisher.close();
+        let _ = self.parts.handle.join();
+    }
+}
+
+pub(super) struct Rig {
+    pub(super) world: World,
+    pub(super) store: Store,
+}
+
+impl Rig {
+    /// 3 スコープの窓の一式と、記憶の送り口（`wired` のときだけ）を持つ World を組む。
+    pub(super) fn new(wired: bool) -> Self {
+        let store = Store::new();
         let mut world = World::new();
         let placements: Vec<ScopePlacement> = SCOPES
             .iter()
@@ -98,16 +142,9 @@ impl Rig {
             &GhostTitles::from_scope_titles(SCOPES.iter().map(|&(s, _, _)| (s, format!("s{s}")))),
         );
         if wired {
-            world.insert_non_send(PersistWiring {
-                publisher: parts.publisher.clone(),
-            });
+            store.wire(&mut world);
         }
-        Rig {
-            world,
-            shared,
-            roots,
-            parts,
-        }
+        Rig { world, store }
     }
 
     pub(super) fn char_window(&self, scope: usize) -> Entity {
@@ -131,24 +168,12 @@ impl Rig {
         persist_entries(&self.world, entries);
     }
 
-    /// 送ったものの書き込みが済むのを待ってから、記憶を読み戻す。
     pub(super) fn load(&self) -> HashMap<PersistKey, String> {
-        self.parts
-            .publisher
-            .barrier()
-            .expect("barrier はアクターが生きている間は返る");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo::new(self.shared.clone()),
-        )
-        .into_iter()
-        .collect()
+        self.store.load()
     }
 
     pub(super) fn finish(self) {
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.store.finish();
     }
 }
 
@@ -361,7 +386,7 @@ fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
     rig.seed(seed_entries());
     let before = rig.load();
 
-    rig.shared.fail_next_commit();
+    rig.store.shared.fail_next_commit();
     persist_unremembered_char_positions(&rig.world);
     let after_fail = rig.load();
     assert_eq!(after_fail, before, "失敗した書き込みは記憶を変えない");
@@ -500,17 +525,19 @@ fn writes_in_descript_form_even_when_current_anchor_is_free() {
     rig.finish();
 }
 
-/// テスト（dpi-realign-remembered-chain 6.5・8.6 ⑸）: 印の無い古い記憶のスコープ 1 には、位置を
-/// 書かずに画面の並びから決めた印だけが書き足され、`info!` が残る。覚えた印のあるスコープ 2 と
-/// スコープ 0（前の窓が無い）には書き足さない。種は印を連れてこないよう送り口へ直接入れる。
-#[test]
-fn old_memory_gets_only_the_adjacency_mark_added() {
+/// 全スコープが記憶から戻り、スコープ 1・2 が位置だけの古い記憶（印なし）で、スコープ 2 は覚えた
+/// 印を持ち、スコープ 1 がスコープ 0 の左に隣り合う rig と、種を入れた直後の記憶。種は印を連れて
+/// こないよう送り口へ直接入れる（`persist_restore_group_tests.rs` の寄せた起動の檻も使う）。
+pub(super) fn old_memory_rig() -> (Rig, HashMap<PersistKey, String>) {
     let mut rig = Rig::new(true);
     let mut seed = seed_entries();
     for scope in [1, 2] {
         seed.extend(char_pos_entries(scope, SENTINEL_POS));
     }
-    rig.parts.publisher.persist_put(PersistScope::Ghost, seed);
+    rig.store
+        .parts
+        .publisher
+        .persist_put(PersistScope::Ghost, seed);
     let before = rig.load();
     assert!(
         !before
@@ -535,6 +562,15 @@ fn old_memory_gets_only_the_adjacency_mark_added() {
         .as_mut()
         .unwrap()
         .x = 1483 - 381;
+    (rig, before)
+}
+
+/// テスト（dpi-realign-remembered-chain 6.5・8.6 ⑸）: 印の無い古い記憶のスコープ 1 には、位置を
+/// 書かずに画面の並びから決めた印だけが書き足され、`info!` が残る。覚えた印のあるスコープ 2 と
+/// スコープ 0（前の窓が無い）には書き足さない。
+#[test]
+fn old_memory_gets_only_the_adjacency_mark_added() {
+    let (rig, before) = old_memory_rig();
 
     let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let mut after = rig.load();

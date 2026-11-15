@@ -329,7 +329,7 @@ fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
 ///
 /// `t_zpd10` は**名簿に載っている表だけ**を読む。名簿から漏れた表へ名前を足しても
 /// `t_zpd10` は緑のままなので、名簿が実物へ追随していることを別に主張する必要がある
-/// （task 7.2 の
+/// （
 /// `spawn_zorder_pair_deferred_tests::the_scanned_roster_covers_every_zorder_production_source_in_this_crate`
 /// と同じ形）。
 ///

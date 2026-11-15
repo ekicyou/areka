@@ -47,6 +47,12 @@ impl DefaultSurfaces {
     pub fn candidates(&self, scope: usize) -> Vec<u32> {
         fallback_candidates(scope, self.surface(scope))
     }
+
+    /// スコープに最初に出す面: 候補の並びのうちシェルに在る最初の面、どれも無ければ組み込みの既定の面
+    /// （測りと手本が同じ答えを使うので、窓の大きさと表示する面の原寸が一致する）。
+    pub fn initial_surface(&self, scope: usize, exists: impl Fn(u32) -> bool) -> u32 {
+        first_existing(&self.candidates(scope), exists).unwrap_or(builtin_default_surface(scope))
+    }
 }
 
 /// 戻り先の候補の並び: descript の既定の面、それが組み込みの既定の面と違えば続けて組み込みの既定の面。
@@ -115,17 +121,16 @@ pub fn read_balloon_dontmove(
     scopes: &[usize],
 ) -> BTreeSet<u32> {
     let mut locked = BTreeSet::new();
+    // ゴーストの段は全スコープに共通なので 1 回だけ読む（読めない記録もスコープの数だけ重ねない）。
+    let ghost = ghost_kv
+        .get(BALLOON_DONTMOVE)
+        .and_then(|raw| read_flag("all", BALLOON_DONTMOVE, raw));
     for &scope in scopes {
         // 読めない段は書かれていないものとして次の段へ進む（要件 4.5）。
         let shell = scoped_entry(shell_kv, scope, BALLOON_DONTMOVE)
             .and_then(|(key, raw)| read_flag(scope, &key, raw));
-        let ghost = || {
-            ghost_kv
-                .get(BALLOON_DONTMOVE)
-                .and_then(|raw| read_flag(scope, BALLOON_DONTMOVE, raw))
-        };
         // 収まらない番号の窓は在り得ないので、集合には入れない（`read_balloon_syncscale` と同じ）。
-        if shell.or_else(ghost).unwrap_or(false)
+        if shell.or(ghost).unwrap_or(false)
             && let Ok(scope) = u32::try_from(scope)
         {
             locked.insert(scope);
@@ -135,14 +140,14 @@ pub fn read_balloon_dontmove(
 }
 
 /// 動かせない指定の値を読む（`0`・`false` → 許す・`1`・`true` → 禁止・それ以外は記録して読めない）。
-fn read_flag(scope: usize, key: &str, raw: &str) -> Option<bool> {
+fn read_flag(scope: impl std::fmt::Display, key: &str, raw: &str) -> Option<bool> {
     match raw.trim() {
         "0" | "false" => Some(false),
         "1" | "true" => Some(true),
         _ => {
             warn!(
                 event = "descript_value_unreadable",
-                scope,
+                %scope,
                 %key,
                 value = %raw,
                 "descript_value_unreadable: 動かせない指定が 0・1・true・false のどれでもない——次の段で決める"

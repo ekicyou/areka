@@ -16,6 +16,7 @@ use wintf::ecs::drag::DragEndEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
+use super::gate_tests::snapshot;
 use super::*;
 use crate::balloon_lock::{apply_script_balloon_lock, seed_balloon_lock};
 use crate::follow::{move_window_to, on_balloon_drag_end};
@@ -24,8 +25,6 @@ use crate::source::GhostTitles;
 use crate::spawn::spawn_ghost_windows;
 use crate::test_support::{fake_handle, point};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
-
-const CLAMP_TAG: &str = "[balloon-limit] Clamp";
 
 /// 開発者の机の主の画面の作業領域（4.4 の 1 回目と同じ形）。
 const WA: RectPx = RectPx {
@@ -45,12 +44,6 @@ fn rect_of(pos: PointPx, size: SizePx) -> RectPx {
         top: pos.y,
         right: pos.x + size.w,
         bottom: pos.y + size.h,
-    }
-}
-
-fn snapshot() -> MonitorSnapshot {
-    MonitorSnapshot {
-        work_areas: vec![WA],
     }
 }
 
@@ -156,7 +149,7 @@ fn fitting_balloon_is_left_alone() {
 fn boot_gate_flips_keeps_offset_and_logs_how() {
     let flip = placement(1, left_edge_char(), left_side_offset(), true);
     let push = placement(0, point(-200, 100), left_side_offset(), true);
-    let (out, events) = capture(|| apply_balloon_limit(vec![flip, push], &snapshot()));
+    let (out, events) = capture(|| apply_balloon_limit(vec![flip, push], &snapshot(&[WA])));
 
     assert_eq!(out[0].balloon_pos, point(1108, 904));
     assert_eq!(
@@ -169,7 +162,7 @@ fn boot_gate_flips_keeps_offset_and_logs_how() {
 
     let clamps: Vec<&CapturedEvent> = events
         .iter()
-        .filter(|e| e.message().contains(CLAMP_TAG))
+        .filter(|e| e.message().contains(BALLOON_LIMIT_CLAMP_TAG))
         .collect();
     assert_eq!(clamps.len(), 2, "{events:?}");
     assert_eq!(clamps[0].expect_field("scope"), "1");
@@ -182,10 +175,12 @@ fn boot_gate_flips_keeps_offset_and_logs_how() {
 #[test]
 fn boot_gate_does_not_flip_when_limit_is_disabled() {
     let p = placement(1, left_edge_char(), left_side_offset(), false);
-    let (out, events) = capture(|| apply_balloon_limit(vec![p], &snapshot()));
+    let (out, events) = capture(|| apply_balloon_limit(vec![p], &snapshot(&[WA])));
     assert_eq!(out[0].balloon_pos, point(-872, 904));
     assert!(
-        !events.iter().any(|e| e.message().contains(CLAMP_TAG)),
+        !events
+            .iter()
+            .any(|e| e.message().contains(BALLOON_LIMIT_CLAMP_TAG)),
         "{events:?}"
     );
 }
@@ -205,7 +200,7 @@ fn point_of(world: &World, entity: Entity) -> PointPx {
 /// 実 spawn の World（キャラ窓は作業領域の中ほど・バルーンは左隣）。
 fn world_with(scope: usize, limit: bool) -> (World, Entity, Entity) {
     let mut world = World::new();
-    world.insert_resource(snapshot());
+    world.insert_resource(snapshot(&[WA]));
     let titles = GhostTitles::from_scope_titles([(scope, "むらさき".to_string())]);
     let p = placement(scope, point(1200, 904), left_side_offset(), limit);
     let gw = spawn_ghost_windows(&mut world, &[p], &titles);
@@ -225,7 +220,7 @@ fn write_gate_flips_and_returns_to_the_original_side() {
     let (_, events) = capture(|| move_window_to(&mut world, char_window, 0, 904));
     assert_eq!(point_of(&world, char_window), point(0, 904));
     assert_eq!(point_of(&world, balloon), point(1108, 904));
-    let clamp = expect_one(&events, CLAMP_TAG);
+    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(clamp.expect_field("how"), "\"flipped\"");
     assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
 
@@ -233,7 +228,7 @@ fn write_gate_flips_and_returns_to_the_original_side() {
     let (_, events) = capture(|| move_window_to(&mut world, char_window, -200, 904));
     assert_eq!(point_of(&world, balloon), point(0, 904));
     assert_eq!(
-        expect_one(&events, CLAMP_TAG).expect_field("how"),
+        expect_one(&events, BALLOON_LIMIT_CLAMP_TAG).expect_field("how"),
         "\"pushed\""
     );
 
@@ -249,7 +244,11 @@ fn write_gate_flips_and_returns_to_the_original_side() {
             .iter()
             .any(|e| e.message().contains("[diag.window_move]"))
     );
-    assert!(!events.iter().any(|e| e.message().contains(CLAMP_TAG)));
+    assert!(
+        !events
+            .iter()
+            .any(|e| e.message().contains(BALLOON_LIMIT_CLAMP_TAG))
+    );
 }
 
 /// `limit=0` のバルーンは書き込みの関門でも並べ替えない。
@@ -295,7 +294,7 @@ fn release_correction_never_flips() {
     let (_, events) =
         capture(|| on_balloon_drag_end(&mut world, balloon, balloon, &Phase::Bubble(ev)));
     assert_eq!(point_of(&world, balloon), point(0, 904));
-    let clamp = expect_one(&events, CLAMP_TAG);
+    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(clamp.expect_field("context"), "\"release-gate\"");
 }
 
@@ -308,7 +307,7 @@ fn flip_is_the_same_for_every_scope() {
             placement(1, left_edge_char(), left_side_offset(), true),
             placement(2, left_edge_char(), left_side_offset(), true),
         ],
-        &snapshot(),
+        &snapshot(&[WA]),
     );
     assert!(out.iter().all(|p| p.balloon_pos == point(1108, 904)));
 }

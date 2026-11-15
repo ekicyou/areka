@@ -1,8 +1,8 @@
-//! I/O 層: surface／バルーンの原寸採寸（task 4.1・DD5）。
+//! I/O 層: surface／バルーンの原寸採寸（DD5）。
 //!
-//! emo2-boot と同じ中身の公開 API 経路（シェル読み込みの権威。emo2-boot は `load_shell_target`・
-//! 採寸は記録を出さない `areka_emo_present::shell_target::load_shell_target_quiet` →
-//! `ShellTarget::take_world` → `Composer::compose`）で、各スコープの初期 surface と
+//! 起動（`ghost_session`・`runtime`）と同じ中身の公開 API 経路（シェル読み込みの権威。
+//! 起動は `load_shell_target`・採寸は記録を出さない
+//! `areka_emo_present::shell_target::load_shell_target_quiet` → `ShellTarget::take_world` → `Composer::compose`）で、各スコープの初期 surface と
 //! **そのスコープが解決した**バルーン面 0 を **bind なし合成**し、原寸
 //! （物理 px [`SizePx`]）を得る。
 //!
@@ -19,7 +19,7 @@
 //!   「起動窓を開けない」を告知して終える）
 //! - 採寸に使ったアセット（`EmoWorld`／`AtlasTable`／WIC デコーダ）は本関数の
 //!   ローカルとして採寸後に**破棄**される。戻り値は素の数値（[`ScopeInput`]）のみ
-//!   （アセット所有・装着は emo2-boot の領分＝二重ロードは M1 受容トレードオフ）
+//!   （アセット所有・装着は起動（`runtime`）の領分＝二重ロードは M1 受容トレードオフ）
 //!
 //! 呼び出しスレッドは COM 初期化済みであること（`WicDecoderArm` 前提・本番は
 //! MTA UI スレッド）。wintf へは依存しない。
@@ -47,7 +47,7 @@ use areka_emo_present::balloon::{
 use areka_emo_present::shell_target::load_shell_target_quiet;
 use tracing::{error, warn};
 
-use super::descript_window_keys::{DefaultSurfaces, builtin_default_surface, first_existing};
+use super::descript_window_keys::DefaultSurfaces;
 use super::resolver::{ScopeInput, SizePx};
 use crate::error::PlacementError;
 
@@ -82,19 +82,12 @@ pub struct MeasureScaling {
 impl MeasureScaling {
     /// 恒等スケール（k=1/1・要件 7.2 の既存等倍経路）。
     ///
-    /// 既存呼び手のシグネチャ追随（task 5）と既存 emo2 期待値（434×687 等）の
+    /// 既存呼び手のシグネチャ追随と既存 emo2 期待値（434×687 等）の
     /// 不変性検証に用いる。
     pub const IDENTITY: MeasureScaling = MeasureScaling {
         shell: ScaleRatio::ONE,
         balloon: ScaleRatio::ONE,
     };
-}
-
-impl Default for MeasureScaling {
-    /// 既定は恒等（k 未確定時の縮退値）。
-    fn default() -> Self {
-        MeasureScaling::IDENTITY
-    }
 }
 
 /// k 適用対象の寸法種別（失敗 reason の帰属表示・log フィールドに用いる）。
@@ -128,7 +121,7 @@ impl SizeKind {
 ///   採寸が成立しない場合は代替根拠が無いため `Err(PlacementError::Measure)`
 ///   （log-first・呼び手の `main` が「起動窓を開けない」を告知して終える）。
 ///   balloon 起因の失敗は `reason` に `balloon:` 接頭辞を付け、**当該スコープ番号**で
-///   報告する（バルーン専用 variant は持たない・task 1 の失敗型を消費）
+///   報告する（バルーン専用 variant は持たない）
 /// - 採寸に使ったアセットは本関数のローカルとして return 時に破棄される
 ///
 /// 呼び出しスレッドは COM 初期化済みであること（本番＝MTA UI スレッド）。
@@ -228,22 +221,20 @@ fn measure_baked(
     // スコープの測る面: 候補の並びのうちシェルに在る最初の面。どれも無ければ組み込みの面で
     // 合成し、今の失敗の扱い（本体側は Err・相方側は本体側の大きさ）へ委ねる（要件 2.4）。
     let initial_surface = |scope: usize| {
-        let candidates = default_surfaces.candidates(scope);
-        match first_existing(&candidates, |id| shell_world.surface(id).is_some()) {
-            Some(id) => {
-                if id != candidates[0] {
-                    warn!(
-                        event = "default_surface_missing",
-                        scope,
-                        missing = candidates[0],
-                        to = id,
-                        "default_surface_missing: descript の既定の面がシェルに無い——組み込みの面で測る"
-                    );
-                }
-                id
-            }
-            None => builtin_default_surface(scope),
+        let exists = |id| shell_world.surface(id).is_some();
+        let id = default_surfaces.initial_surface(scope, exists);
+        let wanted = default_surfaces.surface(scope);
+        // どの候補も無いときは記録せず、合成の失敗の扱いへ委ねる。
+        if id != wanted && exists(id) {
+            warn!(
+                event = "default_surface_missing",
+                scope,
+                missing = wanted,
+                to = id,
+                "default_surface_missing: descript の既定の面がシェルに無い——組み込みの面で測る"
+            );
         }
+        id
     };
 
     // 基準採寸: scope0 初期 surface。失敗は代替根拠が無い＝ hard Err。
@@ -513,7 +504,6 @@ mod tests;
 pub mod test_support;
 
 // 採寸と表示の外形の一致（検体 2 体）と、読み込みの複製が戻っていないことの本文走査。
-// `measure_tests.rs` は 1,000 行の上限に余裕が無いので兄弟として置く
 // （spec: areka-P0-shell-implicit-surface 要件 7.12）。
 #[cfg(test)]
 #[path = "measure_template_tests.rs"]

@@ -9,7 +9,7 @@
 //! 結果からはスコープごとの揃え方（`Anchored`）・バルーンのずらしの基準（`BalloonFollow`）・
 //! キーワードの素材（`BalloonKeywordBase`）だけを取り、キャラ窓の位置は捨てる。
 //!
-//! [`apply_shell_descript`] が触らないもの: 窓の位置（`WindowPos`）・スコープの集合（起動時の
+//! [`apply_shell_descript`] が触らないもの: キャラ窓の位置（`WindowPos`）・スコープの集合（起動時の
 //! [`GhostWindows`]）。揃え方が変わったときのキャラ窓の置き直しは、続けて呼ぶ
 //! [`reanchor_char_windows`] が今の窓寸のまま行う（窓の大きさとスコープの集合は変えない）。
 //! ファイルは読まない（新しいシェルの値・走っているバルーンの `windowposition` と作者の DPI・
@@ -73,7 +73,7 @@ pub fn apply_shell_descript(
                 event = "reseed_skipped",
                 scope,
                 reason = "restore_empty",
-                "reseed: 配置の解決が空を返した（見た目の値を入れ直さない）"
+                "reseed: 記憶の重ね合わせが空を返した（見た目の値を入れ直さない）"
             );
             continue;
         };
@@ -319,8 +319,9 @@ fn running_scope(
     let char_size = char_wp.size.ok_or("char_size_unknown")?;
     let balloon_size = world
         .get::<WindowPos>(balloon_window)
-        .and_then(|wp| wp.size)
-        .ok_or("balloon_window_gone")?;
+        .ok_or("balloon_window_gone")?
+        .size
+        .ok_or("balloon_size_unknown")?;
     let dpi = *world.get::<DPI>(char_window).ok_or("char_dpi_unknown")?;
     if dpi.dpi_x == 0 {
         return Err("char_dpi_zero");

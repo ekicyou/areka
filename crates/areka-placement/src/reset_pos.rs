@@ -131,4 +131,4 @@ pub fn reset_window_positions(world: &mut World) -> bool {
 
 #[cfg(test)]
 #[path = "reset_pos_tests.rs"]
-mod reset_pos_tests;
+pub(crate) mod reset_pos_tests;

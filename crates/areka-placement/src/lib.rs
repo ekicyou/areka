@@ -12,7 +12,7 @@
 //! `spawn`／`follow` と同じ段のモジュール（wintf・bevy_ecs ほか・同じ段どうしは引き合ってよい）←
 //! 本体のシーム。左のモジュールは右を import しない。
 //! [`diag`] は最下流: 配置のモジュールを 1 つも引かない（ほかの crate からは bevy_ecs の
-//! `Entity`・wintf の `ZOrderPairStrategy`・tracing を引く）。
+//! `Entity`・wintf の `ZOrderPairStrategy` と `transition_diag::MISSING`・tracing を引く）。
 //! 失敗の型 [`PlacementError`] は `error.rs`（配置のモジュールを引かない）に置き、根から出し直す。
 //!
 //! 同じ段には輪がある:
@@ -21,14 +21,15 @@
 //! - `follow` と同じ段のモジュール（`balloon_limit`・`dpi_sync`・`persist`・`spawn`・`sticky_group_ledger`・
 //!   `transition_diag`）との両向き
 //!
-//! 根を引く子もある: `reset_pos`→根の `primary_monitor`・`reseed`→根の `scale_then_merge`・
+//! 根を引く子もある: `reset_pos`→根の `primary_monitor`・`square_dpi`・`work_area_px`、
+//! `reseed`→根の `scale_then_merge`・
 //! `ScopeWindowPositions`・`follow/offset_space`→根の `scale_signed`。
 //!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
-//! 配置準備の合成ルート [`prepare_ghost_windows`]（task 6.1・design「main.rs seam」）
+//! 配置準備の合成ルート [`prepare_ghost_windows`]（design「main.rs seam」）
 //! を持つ。design File Structure の「mod.rs＝モジュール公開面」に従い、
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
-//! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
+//! ここ（合成ルート）に実装する（シームの結線自体は main.rs 側）。
 
 pub mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
@@ -112,17 +113,9 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// `primary モニタ DPI 取得不能（boot）` 行・要件 1.4）。
 ///
 /// この縮退は**恒久的な情報損失ではない**——窓生成後は窓の実 DPI が正であり、
-/// `Changed<DPI>` を観測する `runtime::frame::run_dpi_phase`（task 4.2）と
+/// `Changed<DPI>` を観測する `runtime::frame::run_dpi_phase` と
 /// 表示成立点の状態照合（design Flow 1／Flow 3 手順5）が k を自己補正する（D7）。
 const FALLBACK_PRIMARY_DPI: u32 = 96;
-
-/// 作者基準 DPI の既定値（ukadoc 正典・design D1）。
-///
-/// 縮退梯子（無宣言＝96 debug／不正・0＝96 warn）の単一権威は
-/// [`source`] の `parse_author_dpi` であり、ここは placement の準備自体が
-/// 成立しなかったときに [`AuthorDpi::DEFAULT`] が採る同値の既定にすぎない
-/// （読取器を二重化しない）。
-const DEFAULT_AUTHOR_DPI: u16 = 96;
 
 /// `MonitorSnapshot` 構築点（`main.rs`）の**呼出点タグ**
 /// （areka-P0-dpi-window-vanish 要件 1.1・design D12）。
@@ -160,7 +153,7 @@ pub const WORK_AREA_SYNC_CONTEXT: &str = "work_area_sync";
 /// wintf のモニタ列挙結果を診断レコードへ**忠実転写**する純関数（要件 1.1）。
 ///
 /// [`diag`] は placement の最下流であり `World`・wintf の型を知らない（design
-/// 「Allowed Dependencies」）。転写は wintf `Monitor` を既に import している本 mod.rs の
+/// 「Allowed Dependencies」）。転写は wintf `Monitor` を既に import している本 `lib.rs` の
 /// 仕事であり、ここが「wintf 型 → 純データ」の唯一の境界である。
 ///
 /// - 単位変換も丸めも行わない（U 契約: 配置パイプラインの座標は**物理 px 単一通貨**）
@@ -186,7 +179,7 @@ pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
 
 /// 起動時 k₀ の分母となる作者基準 DPI の対（design D1・Flow 3 手順1）。
 ///
-/// descript 読取は `prepare_stages` で **1 度だけ**行い（shell＝
+/// descript 読取は `prepare_stages_for_shell` で **1 度だけ**行い（shell＝
 /// `DescriptSource::shell_author_dpi()`・balloon＝[`source::load_balloon_author_dpi`]）、
 /// その値を本型に束ねて 2 つの消費者へ配る:
 ///
@@ -210,8 +203,8 @@ pub struct AuthorDpi {
 impl AuthorDpi {
     /// 正典既定（96/96）——placement の準備自体が失敗して宣言値を読めなかったときの縮退値。
     pub const DEFAULT: AuthorDpi = AuthorDpi {
-        shell: DEFAULT_AUTHOR_DPI,
-        balloon: DEFAULT_AUTHOR_DPI,
+        shell: source::DEFAULT_AUTHOR_DPI,
+        balloon: source::DEFAULT_AUTHOR_DPI,
     };
 }
 
@@ -224,7 +217,7 @@ impl AuthorDpi {
 pub struct PreparedPlacement {
     /// スコープごとの解決済み配置（`resolve_placement` の出力そのまま・scope 昇順）。
     pub placements: Vec<ScopePlacement>,
-    /// 窓タイトルの正本（spawn（task 5.1）が消費）。
+    /// 窓タイトルの正本（spawn が消費）。
     pub titles: GhostTitles,
     /// 採寸 k₀ に使った作者基準 DPI（areka-P0-emo-dpi-scaling task 4.3）。
     ///
@@ -312,7 +305,7 @@ impl PreparedStages {
 /// [`FALLBACK_PRIMARY_DPI`]（96 相当）から k₀ を導く。作者基準 DPI が 96 なら k₀=1/1＝
 /// 従来どおりの native 採寸であり、96 以外を宣言していればその宣言に対する 96 相当の比
 /// （例: author=192 → k₀=1/2）となる。いずれにせよ窓は生え、窓生成後に窓の実 DPI が
-/// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile（task 4.2）で k を自己補正する
+/// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile で k を自己補正する
 /// ——つまりこの縮退は**回復可能**であり、表示の喪失にはならない（要件 1.4/4.1）。
 ///
 /// # 戻り値の第 2 要素＝採寸 DPI（areka-P0-balloon-offset-dpi 要件 1.1／1.5／3.1）
@@ -371,26 +364,17 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
 }
 
 /// 準備パイプラインの work area 非依存部を同期実行する:
-/// `load_descript_source` → `build_placement_config` → `measure_scope_sizes`。
+/// `load_descript_source_for_shell` → `build_placement_config` → `measure_scope_sizes`。
 ///
-/// 失敗は [`PlacementError`] のまま呼び手へ返す（告知と終了は
-/// 呼び手の `main` の分担）。
+/// 失敗は [`PlacementError`] のまま呼び手へ返す（告知と、終了するかどうかは呼び手の分担）。
 /// 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11・テストで固定）。
 ///
 /// `primary_dpi` は起動時 k₀ の分子（primary モニタ DPI・物理 DPI 値）。取得不能
 /// （モニタ 0 台等）は `None` を渡す——[`build_measure_scaling`] が `error!`＋96 相当へ
 /// 縮退させる（要件 1.4）。
-#[cfg(any(test, feature = "test-support"))]
-fn prepare_stages(
-    ghost_root: &Path,
-    balloon_root: &Path,
-    primary_dpi: Option<u32>,
-) -> Result<PreparedStages, PlacementError> {
-    prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, None)
-}
-
-/// [`prepare_stages`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
-/// `shell` は [`source::load_descript_source_for_shell`] へそのまま渡す（`None` は今日の規則）。
+///
+/// `shell` は [`source::load_descript_source_for_shell`] へそのまま渡す（`None` は今日の規則・
+/// areka-P0-shell-balloon-switch 要件 6.4）。
 fn prepare_stages_for_shell(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -405,7 +389,7 @@ fn prepare_stages_for_shell(
     let balloon_dontmove =
         descript_window_keys::read_balloon_dontmove(&src.ghost_kv, &src.shell_kv, &scope_ids);
     // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
-    // 読み込み済みの生 KV（`load_descript_source` の戻り）から、balloon は別パッケージ
+    // 読み込み済みの生 KV（`load_descript_source_for_shell` の戻り）から、balloon は別パッケージ
     // ゆえ `load_balloon_author_dpi` の 1 回の寛容読取から得る（パーサ改造なし・再 I/O なし）。
     // 得た値は採寸 k₀ と attach（`PreparedPlacement::author_dpi` 経由）の双方へ配られる。
     let author_dpi = AuthorDpi {
@@ -495,8 +479,8 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 ///
 /// # 受理規約は変えない（要件 2.6）
 ///
-/// 「両軸が揃ったときのみ採用する」判断は `config.rs` の `offset_x.zip(offset_y)` が持ち、
-/// 本ステップは触らない。`None`（未宣言・片軸のみ宣言）はそのまま `None` で通す
+/// どの軸を採るか（軸ごとに決まり、書かれない軸は 0）は `config.rs` の `resolve_scope` が持ち、
+/// 本ステップは触らない。`None`（どちらの軸も未宣言）はそのまま `None` で通す
 /// ——非該当であって縮退ではないので記録もしない。
 ///
 /// # 拡大率 1（要件 2.2）
@@ -582,6 +566,12 @@ pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPo
 ///
 /// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
 /// [`scale_then_merge`] だけを通す（areka-P0-shell-balloon-switch 要件 2.7）。
+///
+/// # 失敗（log-first・表示を失わない）
+///
+/// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
+/// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
+/// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
 pub fn load_scope_windowpositions(
     balloon_root: &Path,
     scope_ids: &[usize],
@@ -615,17 +605,11 @@ pub fn load_scope_windowpositions(
 ///
 /// scope ごとに `info!` で scope・wp 生値・バルーンの左右・変換後の調整量（物理 px）と、
 /// **解決済みの limit 値・水平配置モードの実値**（windowposition-limit 要件 6.2）を記録する。
-/// 実機サインオフ（R7.6・task 6.1）はこの行を grep して SSP 実測と突合し、x 方向の符号規約を
+/// 実機サインオフ（R7.6）はこの行を grep して SSP 実測と突合し、x 方向の符号規約を
 /// **確定させた**——確定形は「左右で反転しない素の画面座標オフセット」（`windowposition.rs` の
 /// `to_screen_adjust`「符号規約」節）。`balloon_side` は調整量の計算には効かなくなったが、
 /// 基本位置（Left＝`char_x − balloon_w`／Right＝`char_x + char_w`）がどちらだったかを実機ログ
 /// だけで再構成できるようにするため記録し続ける。
-///
-/// # 失敗（log-first・表示を失わない）
-///
-/// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
-/// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
-/// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
 ///
 /// 純関数（ファイルは読まない。読むのは [`load_scope_windowpositions`]）。
 fn merge_scope_windowpositions(
@@ -786,14 +770,14 @@ fn scope_windowposition(
     Some((model.windowposition(), model.windowposition_raw().clone()))
 }
 
-/// 窓配置の準備処理（design「main.rs seam」・task 6.1）。
+/// 窓配置の準備処理（design「main.rs seam」）。
 ///
-/// `load_descript_source` → `build_placement_config` → `measure_scope_sizes` →
+/// `load_descript_source_for_shell` → `build_placement_config` → `measure_scope_sizes` →
 /// `enumerate_monitors()` の `is_primary` モニタ work area 取得（2.12）→
 /// `resolve_placement` の順に**同期実行**し、Send な結果のみの
 /// [`PreparedPlacement`] を返す。
 ///
-/// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と終了は呼び手の `main` の
+/// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と、終了するかどうかは呼び手の
 ///   分担）
 /// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
@@ -853,7 +837,7 @@ pub fn prepare_ghost_windows_with_work_area(
     work_area: RectPx,
     primary_dpi: Option<u32>,
 ) -> Result<PreparedPlacement, PlacementError> {
-    Ok(prepare_stages(ghost_root, balloon_root, primary_dpi)?.resolve(work_area))
+    Ok(prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, None)?.resolve(work_area))
 }
 
 /// モニタ列挙結果から primary モニタを選ぶ（2.12・work area と k₀ DPI の共通の出所）。
@@ -864,7 +848,8 @@ pub fn prepare_ghost_windows_with_work_area(
 /// - 0 台: `None`（架空の既定モニタは発明しない。work area 側の致命判定は
 ///   [`work_area_of`]・DPI 側の縮退は [`build_measure_scaling`] がそれぞれ担う）
 ///
-/// crate の中から使える（並べ直し [`reset_pos`] と `\![move]` の `primaryscreen`）。
+/// 使い手は crate の中の並べ直し [`reset_pos`] と、本体の `\![move]` の `primaryscreen`
+/// （`crates/areka/src/runtime/move_cue_place.rs`）。
 pub fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
     if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
         return Some(primary);
@@ -886,7 +871,7 @@ pub fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
 /// - `work_area`（`RECT`・物理 px）を **単位変換なしで忠実転写**する
 ///   （U 契約: どちらも物理 px 通貨）
 /// - `None`（モニタ 0 台）: `error!`＋`Err(PlacementError::Monitor)`（架空の既定矩形は
-///   発明しない・告知と終了は呼び手の分担）
+///   発明しない・告知と、終了するかどうかは呼び手の分担）
 fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
     let Some(monitor) = monitor else {
         error!("モニタが 1 台も列挙されない——primary work area の出所がない");
@@ -897,7 +882,7 @@ fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
     Ok(work_area_px(monitor))
 }
 
-/// モニタの work area（`RECT`・物理 px）を [`RectPx`] へ単位変換なしで写す（指摘 13・中核の側の写し）。
+/// モニタの work area（`RECT`・物理 px）を [`RectPx`] へ単位変換なしで写す。
 pub fn work_area_px(monitor: &Monitor) -> RectPx {
     let wa = monitor.work_area;
     RectPx {

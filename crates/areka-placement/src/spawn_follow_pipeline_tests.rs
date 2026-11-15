@@ -10,7 +10,7 @@ use crate::follow::BalloonFollow;
 use crate::resolver::{PointPx, ScopePlacement, SizePx};
 
 // -------------------------------------------------------------------------
-// T-I4: follow 幾何（task 5.3・design Testing Strategy 4・要件 4.2）
+// T-I4: follow 幾何（design Testing Strategy 4・要件 4.2）
 //
 // 実パイプライン統合: `build_placement_config`（KV 実経路）→
 // `resolve_placement`（非 96 倍数の合成 work_area・原点非 (0,0)）→
@@ -249,7 +249,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     }
 }
 
-/// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16・task 8.3）。
+/// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16）。
 ///
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World 上で、
 /// spawn が付けた**実際の** `OnDrag` ハンドラ（バルーン窓の

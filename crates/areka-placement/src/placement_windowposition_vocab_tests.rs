@@ -1,7 +1,7 @@
 //! `windowposition` 語彙（`limit`／`x` キーワード）の**取得経路への結線**の檻
 //! （areka-P0-windowposition-limit task 2.2・design C3「取得経路の拡張」）。
 //!
-//! 分類器そのものの檻は `windowposition_vocab_tests.rs`（task 2.1・純関数）が持つ。
+//! 分類器そのものの檻は `windowposition_vocab_tests.rs`（純関数）が持つ。
 //! 本ファイルが固定するのはその 1 段上——**2 層マージ済みのバルーン定義から生値を取り出し、
 //! 分類結果を `ScopeConfig` の実値へ反映し、不正値に scope 付きの警告を出し、観測点 4 へ
 //! 解決済み実値を載せる**という結線そのもの（要件 1.3/1.4/4.6/6.2/6.3）である。
@@ -12,7 +12,7 @@
 //! - **ログ**（警告 2 種と観測点 4 の `limit`／`x_mode` フィールド）
 //!   ＝実機サインオフが grep する契約面（要件 6.2/6.3）
 //!
-//! ログ捕捉ハーネス（`test_support::capture`）は既に較正済みであり、同じ観測点 4 の
+//! ログ捕捉ハーネス（`log_capture_kit::capture`）は既に較正済みであり、同じ観測点 4 の
 //! 行を `placement_windowposition_tests.rs` が捕捉して値を検査している。本ファイルの
 //! 各テストも**必ず観測点 4 の行を 1 件捕捉すること**を先に主張してから「警告が無い」側の
 //! 主張を行う（捕捉ゼロで恒真になる空虚な主張を作らない）。
@@ -20,7 +20,7 @@
 use areka_emo_compose::ScaleRatio;
 
 use super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
-use super::shared_test_support::{TempDir, synth_balloon_dir};
+use super::shared_test_support::{TempDir, cfg_of, synth_balloon_dir};
 use super::*;
 use crate::shared_test_support::assert_no_event;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
@@ -32,24 +32,13 @@ const LIMIT_WARN: &str = "windowposition.limit が 0/1 以外";
 /// `x` 不正値の縮退警告の本文（要件 4.6/6.3）。
 const X_WARN: &str = "windowposition.x が数値でもキーワード";
 
-/// scope 0 のみを持つ最小の `PlacementConfig`（全欄は正典既定）。
-fn cfg_scope0() -> PlacementConfig {
-    let mut cfg = PlacementConfig {
-        scopes: Default::default(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
-    };
-    cfg.scopes.insert(0, ScopeConfig::default());
-    cfg
-}
-
 /// 合成バルーン定義 1 つを読んで（`load_scope_windowpositions`）`merge_scope_windowpositions` を通し、
 /// 解決後の構成と捕捉ログを返す（k は恒等＝語彙の観測に丸めを混ぜない）。
 fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<CapturedEvent>) {
     let root = TempDir::new();
     let balloon_dir = synth_balloon_dir(&root, dir_name, extra_lines);
-    let mut cfg = cfg_scope0();
+    // scope 0 のみ（全欄は正典既定）
+    let mut cfg = cfg_of(vec![(0, ScopeConfig::default())]);
     let (_, events) = capture(|| {
         let windowpositions = load_scope_windowpositions(&balloon_dir, &[0]);
         merge_scope_windowpositions(&mut cfg, &windowpositions, &[0], ScaleRatio::ONE);
@@ -122,7 +111,7 @@ fn merge_scope_windowpositions_reflects_keyword_x_modes() {
 // 不正値の警告付き縮退（要件 1.3/4.6/6.3・design C3 (a)）
 // ------------------------------------------------------------------
 
-/// **task 2.2 の完了状態**: 不正な `limit` と不正な `x` を含む定義を通すと、
+/// 不正な `limit` と不正な `x` を含む定義を通すと、
 /// 警告が 2 種とも出て、構成にも観測点 4 にも**既定値**が現れる。
 ///
 /// `Center`（大文字混在）が不正値になることは意図的な設計である——キーワードは小文字の

@@ -5,15 +5,16 @@
 //! 拡大率で物理 px へ置き換わること、拡大率 1 では従来と同一であること、受理規約
 //! （両軸が揃ったときのみ採用）が変わらないこと、飽和が回り込まないこと。
 //!
-//! `prepare_stages` の**呼出順**そのものと、飽和が実際に警告として出ること、および
-//! 合流後の値を実配置経路で観測することは task 4.3 の所有である。本ファイルは 4.3 が
-//! 追記する土台でもある（design「新規テストファイル」の `balloon_offset_supply_tests.rs`）。
+//! `prepare_stages_for_shell` の**呼出順**そのものと、飽和が実際に警告として出ること、および
+//! 合流後の値を実配置経路で観測することは、下の「供給結線」の群が持つ（design「新規テスト
+//! ファイル」の `balloon_offset_supply_tests.rs`）。
 
 use areka_emo_compose::ScaleRatio;
 
 use super::config::{PlacementConfig, ScopeConfig};
 use super::windowposition::{apply_windowposition, to_screen_adjust};
 use super::*;
+use crate::shared_test_support::cfg_of;
 
 /// テスト用 k（非ゼロ前提）。
 fn k(num: u32, den: u32) -> ScaleRatio {
@@ -22,20 +23,13 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 
 /// scope 1 つだけを持つ最小の `PlacementConfig`。`offset` をそのまま合流欄へ置く。
 fn cfg_with_offset(offset: Option<(i32, i32)>) -> PlacementConfig {
-    let mut cfg = PlacementConfig {
-        scopes: Default::default(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
-    };
-    cfg.scopes.insert(
+    cfg_of(vec![(
         0,
         ScopeConfig {
             balloon_offset: offset,
             ..ScopeConfig::default()
         },
-    );
-    cfg
+    )])
 }
 
 /// 換算ステップを scope 0 に対して 1 度走らせ、合流欄の値を返す。
@@ -96,7 +90,7 @@ fn identity_scale_is_byte_identical_to_the_raw_value() {
     }
 }
 
-/// **要件 2.2 の字面に対する唯一の例外**（task 1.3 → 4.1 申し送り）。
+/// **要件 2.2 の字面に対する唯一の例外**。
 ///
 /// 恒等比でも `i32::MIN` だけは生値が素通しにならず `-i32::MAX` へ飽和する。出所は
 /// 既存の単一丸め権威 `scale_signed`（`v.unsigned_abs()` が `2^31` になり `i32` へ
@@ -128,10 +122,10 @@ fn identity_scale_saturates_only_at_i32_min() {
 // 3. 受理規約は不変（要件 2.6）
 // -------------------------------------------------------------------------
 
-/// 未宣言・片軸のみ宣言（＝`config.rs` の `offset_x.zip(offset_y)` が `None` を出す腕）は
+/// 未宣言（＝`config.rs` の `resolve_scope` が `None` を出す腕）は
 /// 換算ステップを素通りし、`None` のまま残る（要件 2.6）。
 ///
-/// 「両軸が揃ったときのみ採用する」判断は `config.rs` の所有であり、本ステップは
+/// どの軸を採るか（片軸だけなら書かれない軸は 0）は `config.rs` の所有であり、本ステップは
 /// その結果を受け取るだけで**採否そのものを 1 bit も変えない**。
 #[test]
 fn unset_offset_stays_unset_across_every_scale() {
@@ -156,7 +150,7 @@ fn unknown_scope_does_not_create_a_scope_entry() {
 
 /// `i32` 域を超えた軸は**回り込ませず飽和値**（`±i32::MAX`）を採る（要件 2.5）。
 ///
-/// 飽和が警告として記録されることの固定は task 4.3 の所有。ここが押さえるのは
+/// 飽和が警告として記録されることの固定は下の「供給結線」の群の所有。ここが押さえるのは
 /// 「採る値が回り込みではない」ことである。
 #[test]
 fn out_of_range_conversion_saturates_instead_of_wrapping() {
@@ -221,14 +215,14 @@ fn merged_value_at_identity_matches_the_pre_spec_sum() {
 }
 
 // =========================================================================
-// task 4.3: 供給結線（`prepare_stages` の実経路）
+// 供給結線（`prepare_stages_for_shell` の実経路）
 //
 // ここから下が固定するのは**結線**である——⑴ 換算ステップが `windowposition` の
 // 合流より**前**に走ること、⑵ 合流後の値が両供給元を同一空間で加算した結果で
 // あること、⑶ 飽和が契約の語で**記録に出る**こと（要件 2.3／2.5／7.1／7.4）。
 //
 // 上の 4.1 群は純関数と 2 ステップの直列合成を固定したが、本番の呼出順そのものと
-// 記録の発生は踏んでいない。本群は `prepare_stages`（＝`scale_then_merge` で
+// 記録の発生は踏んでいない。本群は `prepare_stages_for_shell`（＝`scale_then_merge` で
 // `apply_author_balloon_offset_scale` と `merge_scope_windowpositions` を並べている当の関数）
 // を回して踏む。
 //
@@ -288,15 +282,15 @@ fn synth_ghost_with_author_offset(
     (ghost_root, balloon_dir)
 }
 
-/// scope 0 の合流欄を `prepare_stages` の出力から取り出す。
+/// scope 0 の合流欄を `prepare_stages_for_shell` の出力から取り出す。
 fn merged_offset(ghost_root: &Path, balloon_dir: &Path, primary_dpi: u32) -> Option<(i32, i32)> {
-    let stages = prepare_stages(ghost_root, balloon_dir, Some(primary_dpi))
+    let stages = prepare_stages_for_shell(ghost_root, balloon_dir, Some(primary_dpi), None)
         .expect("合成ゴーストの準備は成功する");
     stages.cfg.scopes[&0].balloon_offset
 }
 
 // -------------------------------------------------------------------------
-// 6. 語彙（task 1.3 → 4.1 申し送り: 綴りの檻）
+// 6. 語彙（綴りの檻）
 // -------------------------------------------------------------------------
 
 /// 飽和の記録語の綴りを**逐語で**固定する（`balloon_limit.rs`／`drag_follow.rs` の
@@ -311,10 +305,10 @@ fn balloon_offset_saturated_tag_is_spelled_verbatim() {
 }
 
 // -------------------------------------------------------------------------
-// 7. 合流後の値（要件 2.3・7.1・task 4.3 第 2 項）
+// 7. 合流後の値（要件 2.3・7.1）
 // -------------------------------------------------------------------------
 
-/// **本番経路**（`prepare_stages`）で、`descript` 由来と `windowposition` 由来が
+/// **本番経路**（`prepare_stages_for_shell`）で、`descript` 由来と `windowposition` 由来が
 /// **それぞれの軸**で物理 px へ換算されたうえで加算されること（要件 2.3／1.2）。
 ///
 /// 検体: `seriko.dpi,120`／balloon `dpi,144`／primary=240 ⇒ k_shell=2/1・k_balloon=5/3。
@@ -336,8 +330,8 @@ fn prepare_merges_each_supply_in_its_own_axis() {
         let (ghost_root, balloon_dir) =
             synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (100, -40));
 
-        let stages =
-            prepare_stages(&ghost_root, &balloon_dir, Some(240)).expect("合成ゴーストの準備");
+        let stages = prepare_stages_for_shell(&ghost_root, &balloon_dir, Some(240), None)
+            .expect("合成ゴーストの準備");
 
         assert_eq!(
             stages.cfg.scopes[&0].balloon_offset,
@@ -354,7 +348,7 @@ fn prepare_merges_each_supply_in_its_own_axis() {
 
 /// 合流後の値が**配置解決の出力まで届く**こと（要件 2.3・7.1）。
 ///
-/// task 4.1 の純関数側は `PlacementConfig` を直に組んで合成したが、本檻は実配置経路
+/// 上の純関数の側の檻は `PlacementConfig` を直に組んで合成したが、本檻は実配置経路
 /// （`prepare_ghost_windows_with_work_area`）の出力 `ScopePlacement` で観測する。
 ///
 /// 手計算: バルーン面 0 は native 400×224 で、バルーン軸 5/3 倍して 400×5/3=666.67→**667**。
@@ -408,10 +402,10 @@ fn prepare_at_identity_scale_matches_the_pre_spec_merge() {
 }
 
 // -------------------------------------------------------------------------
-// 8. 飽和の記録（要件 2.5・9.4・task 4.3 第 3 項）
+// 8. 飽和の記録（要件 2.5・9.4）
 // -------------------------------------------------------------------------
 
-/// 飽和が**契約の語で記録に出る**こと（要件 2.5）。task 4.1 は「採る値が回り込みでは
+/// 飽和が**契約の語で記録に出る**こと（要件 2.5）。上の純関数の側の檻は「採る値が回り込みでは
 /// ない」までを固定したが、記録そのものは踏んでいなかった。
 ///
 /// 検体: k_shell=2/1 に対し `sakura.balloon.offsetx,2147483647`（`i32::MAX`）。
@@ -451,7 +445,7 @@ fn prepare_records_saturation_with_the_contract_tag() {
     });
 }
 
-/// **順序**の檻の第 2 面（task 4.3 第 1 項）: 値の一致ではなく**記録の並び**で順序を
+/// **順序**の檻の第 2 面: 値の一致ではなく**記録の並び**で順序を
 /// 直に観測する。
 ///
 /// 換算ステップは飽和したときだけ記録を出し、`windowposition` の合流ステップは scope

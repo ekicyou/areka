@@ -147,7 +147,7 @@ pub struct ScopePlacement {
     /// `persist::merge_scope`）。要件 4.7 は While 節（状態）ゆえ、**セッション中に**
     /// 保存値が生まれたとき（バルーン単独ドラッグの DragEnd 書込）も同じ観測点で素材が
     /// 退役する（`follow::drag_follow::retire_keyword_base_on_save`）——起動時の規則
-    /// だけでは状態条件を満たさない（task 4.6）。
+    /// だけでは状態条件を満たさない。
     ///
     /// # なぜ「採寸した寸」ではなく「実表示寸」で導出し直す必要があるのか
     ///
@@ -222,7 +222,8 @@ pub fn keyword_balloon_pos(
 ///   `Right` は `x = work_area.right − w` で、y は辺ごとに下から上へ連ねる
 ///   （`y(0) = bottom − h(0)`・`y(n) = y(n−1) − h(n)`・クランプ後の値で連ねる）。
 ///   左右の辺のスコープは P2 の横の連なりを進めず、`default_x`／`default_y` は使わない。
-///   どの辺も、解いた位置は `follow::project_anchor` を通しても動かない（べき等）。
+///   窓寸が作業領域に収まるとき、どの辺も、解いた位置は `follow::project_anchor` を
+///   通しても動かない（べき等。収まらない窓では成り立つとは限らない）。
 ///   作業領域が変わったときに辺へ沿わせ直す所は持たない（`window-snap` の件 1）。
 /// - **P2（X・bottom・連鎖基準）**: `base_x(0) = work_area.right − w(0)`、
 ///   `base_x(n≥1) = char_x(n−1) − w(n)`（**自スコープの幅**を引く＝隣接・隣接ペアの
@@ -259,8 +260,9 @@ pub fn keyword_balloon_pos(
 ///   の doc 参照）。offset は
 ///   配置時に確定し以後静的（4.4: 正式規則は balloon 表示系の後続へ委ねる）。
 /// - **Seam の warn**: `Alignment::Seam` の解釈はスコープごとに [`Anchor::from_alignment`]
-///   を 1 度だけ引き、知らない値のときだけそこが `warn!` を 1 行出す（正典の
-///   `top`・`left`・`right` では出さない・T-R5 で固定）。知らない値の幾何は Bottom と同一。
+///   を 1 度だけ引き、知らない値のときだけ本関数がスコープ番号つきの `warn!` を 1 行出す
+///   （正典の `top`・`left`・`right` では出さない・T-R5 で固定）。知らない値の幾何は
+///   Bottom と同一。
 ///
 /// `scopes` 入力に `cfg.scopes` 未収載のスコープ番号が来た場合は
 /// `ScopeConfig::default()`（＝Bottom・オフセットなし）で配置する（2.2 の既定と
@@ -282,8 +284,15 @@ pub fn resolve_placement(
 
     for input in scopes {
         let sc = cfg.scopes.get(&input.scope).unwrap_or(&default_scope_cfg);
-        // 1 度だけ引く（知らない値の warn! は from_alignment が 1 行出す・DD9）
+        // 1 度だけ引く。Seam が Bottom に落ちた＝知らない値（DD9）
         let anchor = Anchor::from_alignment(&sc.alignment);
+        if let (Alignment::Seam(value), Anchor::Bottom) = (&sc.alignment, anchor) {
+            warn!(
+                scope = input.scope,
+                value = %value,
+                "alignmenttodesktop の未知アンカー指定（bottom 相当で解釈・4.2/DD9）"
+            );
+        }
         let SizePx { w, h } = input.char_size;
 
         // P1: bottom 相当の Y＝work area 下端固定・default_y は無視（2.4）。
@@ -464,8 +473,11 @@ impl Anchor {
     /// - `Bottom`→`Bottom`・`Free`→`Free`
     /// - `Seam(s)`: `s.trim().to_ascii_lowercase()` で正規化し `"top"`→`Top`・
     ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
-    ///   window-placement DD9「未知は bottom 相当」を継承）＋`warn!`。正規化は防御
+    ///   window-placement DD9「未知は bottom 相当」を継承）。正規化は防御
     ///   （parsers 側で正規化済み前提だが大小文字・前後空白へ念のため備える）。
+    ///
+    /// 未知値の `warn!` はここでは出さない——どのスコープの値かを知る呼び出し側
+    /// （[`resolve_placement`]）がスコープ番号つきで出す。
     pub fn from_alignment(alignment: &Alignment) -> Anchor {
         match alignment {
             Alignment::Bottom => Anchor::Bottom,
@@ -474,14 +486,8 @@ impl Anchor {
                 "top" => Anchor::Top,
                 "left" => Anchor::Left,
                 "right" => Anchor::Right,
-                // 未知アンカー指定は bottom 相当へフォールバック（DD9）＋警告を残す
-                _ => {
-                    warn!(
-                        value = %value,
-                        "alignmenttodesktop の未知アンカー指定（bottom 相当で解釈・4.2/DD9）"
-                    );
-                    Anchor::Bottom
-                }
+                // 未知アンカー指定は bottom 相当へフォールバック（DD9・警告は呼び出し側）
+                _ => Anchor::Bottom,
             },
         }
     }

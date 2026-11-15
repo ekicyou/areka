@@ -16,11 +16,11 @@ use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 
 pub(crate) const CHAR0: SizePx = SizePx { w: 434, h: 687 };
-pub(crate) const CHAR1: SizePx = SizePx { w: 278, h: 357 };
+const CHAR1: SizePx = SizePx { w: 278, h: 357 };
 pub(crate) const BALLOON: SizePx = SizePx { w: 223, h: 158 };
 
 /// 起動時のシェル（Bottom・バルーンは左・ずらし無し）で組んだ 2 スコープの配置。
-pub(crate) fn boot_placements() -> Vec<ScopePlacement> {
+fn boot_placements() -> Vec<ScopePlacement> {
     let scope = |scope, char_pos: PointPx, char_size, keyword| {
         let offset = PointPx {
             x: -BALLOON.w,

@@ -10,6 +10,7 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
+use super::tests::write_minimal_ghost_descript;
 use super::*;
 use crate::error::PlacementError;
 
@@ -18,13 +19,7 @@ use crate::error::PlacementError;
 fn two_shell_ghost(tag: &str) -> TempPath {
     let temp = TempPath::new(&format!("placement-source-shell-{tag}"));
     let root = temp.path();
-    let ghost_master = root.join("ghost").join("master");
-    fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
+    write_minimal_ghost_descript(root);
     write_shell(root, "master", "charset,UTF-8\nname,既定\nseriko.dpi,96\n");
     write_shell(root, "second", "charset,UTF-8\nname,二番\nseriko.dpi,144\n");
     temp

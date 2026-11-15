@@ -27,9 +27,9 @@
 //!
 //! | 主張 | 置き場所 |
 //! |---|---|
-//! | 復元経路が運ぶ**基準対**の腕分け（保存値あり／欠損／片軸）＝採否の優先順位（要件 5.5） | `persist_restore_offset_base_tests.rs`（task 2.2） |
-//! | 変換規則そのもの（丸め・往復・縮退・全腕の到達） | `follow_offset_space_tests.rs`（task 1.2〜） |
-//! | 遷移 × アンカーの相の結合（`FrameHarness` で本番の相順を回す） | `frame_balloon_offset_follow_tests.rs`（task 6.5） |
+//! | 復元経路が運ぶ**基準対**の腕分け（保存値あり／欠損／片軸）＝採否の優先順位（要件 5.5） | `persist_restore_offset_base_tests.rs` |
+//! | 変換規則そのもの（丸め・往復・縮退・全腕の到達） | `follow_offset_space_tests.rs` |
+//! | 遷移 × アンカーの相の結合（`FrameHarness` で本番の相順を回す） | `frame_balloon_offset_follow_tests.rs` |
 //! | **保存 → 復元 → 係留 → 追随**を 1 本に貫いた往復 | **本ファイル** |
 //!
 //! 本ファイルだけが、保存 entries の構築（[`balloon_offset_entries`]）から復元 merge
@@ -176,8 +176,8 @@ fn placement_from_formula(anchor: Anchor) -> ScopePlacement {
             offset: FORMULA_DEFAULT,
             dpi: Some(MEASURE_DPI),
         },
-        // 画面内維持の関門を有効にしたまま往復させる——復元が「補正後の表示位置」を
-        // オフセットへ焼き付けないこと（要件 5.6）は、関門が効き得る形でしか主張できない。
+        // 画面内維持の関門を有効にしておく——関門を通しても補正後の表示位置がオフセットへ
+        // 焼き付かないこと（要件 5.6）は、関門が効き得る形でしか主張できない（3. の檻）。
         balloon_limit: true,
         anchor,
         balloon_keyword_base: None,
@@ -185,11 +185,8 @@ fn placement_from_formula(anchor: Anchor) -> ScopePlacement {
 }
 
 /// 保存 → 復元の 1 往復。保存側は**本番の保存 entries 構築**を通す。
-fn roundtrip(anchor: Anchor, saved: Option<PointPx>) -> ScopePlacement {
-    let entries = match saved {
-        Some(v) => balloon_offset_entries(0, v),
-        None => vec![],
-    };
+fn roundtrip(anchor: Anchor, saved: PointPx) -> ScopePlacement {
+    let entries = balloon_offset_entries(0, saved);
     let out =
         apply_restored_placements(vec![placement_from_formula(anchor)], &entries, &snapshot());
     out.into_iter().next().expect("1 スコープ分が返る")
@@ -234,13 +231,12 @@ fn follow_of(placement: &ScopePlacement) -> BalloonFollow {
 /// 5.2／5.6／7.2: 保存 entries の構築から復元 merge までを通した往復で、採用された
 /// オフセットは保存値と **bit 同一**であり、基準対は**未係留**のまま運ばれる。
 ///
-/// アンカー 5 腕すべてで成立する（保存・復元の往復はアンカーに依らない）。関門
-/// （`balloon_limit: true`）を有効にしたまま通しているので、「補正後の表示位置を
-/// オフセットへ焼き付けない」（要件 5.6）も同時に押さえている。
+/// アンカー 5 腕すべてで成立する（保存・復元の往復はアンカーに依らない）。起動時関門を
+/// 通した後の「補正後の表示位置をオフセットへ焼き付けない」（要件 5.6）は 3. の檻が持つ。
 #[test]
 fn a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit() {
     for anchor in ANCHORS {
-        let out = roundtrip(anchor, Some(SAVED));
+        let out = roundtrip(anchor, SAVED);
         assert_eq!(
             out.balloon_offset, SAVED,
             "{anchor:?}: 保存 → 復元の往復で採用値が変わった（換算も補正も入ってはならない）"
@@ -266,7 +262,7 @@ fn a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit() {
 fn the_first_observation_anchors_without_moving_the_value_at_any_restore_dpi() {
     for anchor in ANCHORS {
         for d in RESTORE_DPIS {
-            let out = roundtrip(anchor, Some(SAVED));
+            let out = roundtrip(anchor, SAVED);
             let mut follow = follow_of(&out);
             assert_eq!(follow.offset(), SAVED, "{anchor:?}/{d}: 復元直後（⑴）");
             assert_eq!(follow.base().dpi, None, "{anchor:?}/{d}: ⑴ は未係留");
@@ -343,7 +339,7 @@ fn restore_then_anchor_then_follow_runs_as_three_distinct_stages() {
     );
 
     // ⑴ 復元——未係留のまま、保存値と bit 同一。
-    let out = roundtrip(Anchor::Free, Some(SAVED));
+    let out = roundtrip(Anchor::Free, SAVED);
     let mut follow = follow_of(&out);
     assert_eq!(follow.offset(), SAVED, "⑴ 復元直後の値は保存値と bit 同一");
     assert_eq!(follow.base(), OffsetBase::unpinned(SAVED), "⑴ は未係留");
@@ -404,7 +400,7 @@ fn restore_then_anchor_then_follow_runs_as_three_distinct_stages() {
 /// 1 度目は必ず係留であり、追随はその後にしか来ない（段の**順序**の固定）。
 #[test]
 fn the_follow_never_precedes_the_anchoring() {
-    let out = roundtrip(Anchor::Free, Some(SAVED));
+    let out = roundtrip(Anchor::Free, SAVED);
     let mut follow = follow_of(&out);
 
     // 復元直後にいきなり「別の」表示 DPI を観測しても、腕は係留である。
@@ -435,10 +431,12 @@ fn the_follow_never_precedes_the_anchoring() {
 // 3. 復元は補正を焼き付けない（要件 5.6・保存・復元 3）
 // ---------------------------------------------------------------------------
 
-/// 5.6: 復元は**補正後の表示位置をオフセットへ焼き付けない**。
+/// 5.6: 復元の後に起動時関門（[`crate::balloon_limit::apply_balloon_limit`]・本番の
+/// `restore_merged_placements` が復元の直後に通す）を通しても、**補正後の表示位置は
+/// オフセットへ焼き付かない**。
 ///
-/// 画面外へ大きく外れる保存値（関門が効き得る値）を通しても、`balloon_offset` は保存値の
-/// まま——復元が動かすのは `balloon_pos` の導出であって、保存された相対量ではない。
+/// 画面外へ大きく外れる保存値を通すと関門は `balloon_pos` を作業領域内へ補正する（証人）が、
+/// `balloon_offset` は保存値のまま——動くのは表示位置であって、保存された相対量ではない。
 #[test]
 fn the_restore_never_bakes_a_correction_into_the_saved_offset() {
     // 作業領域（0..1920 × 0..1040）から確実に外れる相対量。
@@ -447,7 +445,15 @@ fn the_restore_never_bakes_a_correction_into_the_saved_offset() {
         y: -7_000,
     };
     for anchor in ANCHORS {
-        let out = roundtrip(anchor, Some(far_off));
+        let restored = roundtrip(anchor, far_off);
+        let out = crate::balloon_limit::apply_balloon_limit(vec![restored], &snapshot())
+            .into_iter()
+            .next()
+            .expect("1 スコープ分が返る");
+        assert_ne!(
+            out.balloon_pos, restored.balloon_pos,
+            "{anchor:?}: 証人——関門が表示位置を補正していない（焼き付けの有無を見分けられない）"
+        );
         assert_eq!(
             out.balloon_offset, far_off,
             "{anchor:?}: 画面外でもオフセットは生値のまま（補正を焼き付けない）"

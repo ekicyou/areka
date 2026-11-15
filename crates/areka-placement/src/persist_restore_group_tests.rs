@@ -131,18 +131,6 @@ fn partner_visible_group_keeps_per_window_results() {
     assert_eq!(xs(&restore(&entries)), vec![2000, 2240]);
 }
 
-/// 寄せた位置を記憶へ書き戻さない: 同じ記憶から何度戻しても同じ結果（純関数・要件 4.5）。
-#[test]
-fn group_shift_is_pure_and_repeatable() {
-    let off = PointPx { x: -200, y: 0 };
-    let mut entries = remembered(0, 5000, off, None);
-    entries.extend(remembered(1, 5640, off, Some("right")));
-    let before = entries.clone();
-    let a = restore(&entries);
-    assert_eq!(entries, before);
-    assert_eq!(a, restore(&entries));
-}
-
 /// 判定は組の寄せの後の配置で読む: 全員が外の組は寄せたので真・どれも見えている組は偽（要件 4.6）。
 #[test]
 fn judgement_reads_the_layout_after_the_group_shift() {
@@ -163,43 +151,18 @@ fn judgement_reads_the_layout_after_the_group_shift() {
 }
 
 mod clamped_flag_at_finalize {
-    use super::super::finalize_save_tests::{Rig, SENTINEL_POS, find, seed_entries};
-    use super::super::{
-        RestoredPositionsClamped, char_pos_entries, persist_unremembered_char_positions,
-    };
-    use crate::chain_finalize::AdjacencyMark;
-    use crate::spawn::GhostWindows;
-    use areka_sylphya::{PersistKey, PersistScope};
+    use super::super::finalize_save_tests::{find, old_memory_rig};
+    use super::super::{RestoredPositionsClamped, persist_unremembered_char_positions};
+    use areka_sylphya::PersistKey;
     use log_capture_kit::capture;
-    use wintf::ecs::WindowPos;
 
     const SKIP: &str = "記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない";
     const ADDED: &str = "古い記憶に隣り合いの印だけを書き足した";
 
-    /// 印の無い古い記憶のスコープ 1（スコープ 0 の左に隣り合う）を持つ rig。`flag` を据えて保存を呼ぶ。
+    /// 印の無い古い記憶のスコープ 1（スコープ 0 の左に隣り合う）を持つ rig（[`old_memory_rig`]）に
+    /// `flag` を据えて保存を呼ぶ。
     fn run(flag: Option<bool>) -> (bool, Vec<log_capture_kit::CapturedEvent>) {
-        let mut rig = Rig::new(true);
-        let mut seed = seed_entries();
-        seed.extend(char_pos_entries(1, SENTINEL_POS));
-        rig.parts.publisher.persist_put(PersistScope::Ghost, seed);
-        let before = rig.load();
-        for scope in [0, 1, 2] {
-            rig.mark_remembered(scope);
-        }
-        // スコープ 2 は覚えた印あり＝古い記憶はスコープ 1 だけ。
-        assert!(
-            rig.world
-                .resource_mut::<GhostWindows>()
-                .set_remembered_adjacency(2, Some(AdjacencyMark::Separate))
-        );
-        let entity = rig.char_window(1);
-        rig.world
-            .get_mut::<WindowPos>(entity)
-            .unwrap()
-            .position
-            .as_mut()
-            .unwrap()
-            .x = 1483 - 381;
+        let (mut rig, before) = old_memory_rig();
         if let Some(f) = flag {
             rig.world.insert_resource(RestoredPositionsClamped(f));
         }
@@ -229,13 +192,12 @@ mod clamped_flag_at_finalize {
         assert!(find(&events, ADDED, 1).is_empty());
     }
 
-    /// 資源が偽・無い起動は今どおり書き足す。
+    /// 資源が偽の起動は今どおり書き足す（資源が無い起動は同じ rig の
+    /// `finalize_save_tests::old_memory_gets_only_the_adjacency_mark_added` が持つ）。
     #[test]
-    fn false_or_absent_adds_the_mark() {
-        for flag in [Some(false), None] {
-            let (added, events) = run(flag);
-            assert!(added, "{flag:?} で印が書き足されない");
-            assert!(!events.iter().any(|e| e.message().contains(SKIP)));
-        }
+    fn false_adds_the_mark() {
+        let (added, events) = run(Some(false));
+        assert!(added, "偽で印が書き足されない");
+        assert!(!events.iter().any(|e| e.message().contains(SKIP)));
     }
 }

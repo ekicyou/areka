@@ -1,7 +1,7 @@
 //! descript KV → `PlacementConfig` 変換。
 //!
 //! 4 層カスケード・両表記寛容（`defaultx`/`defaultleft` 等）・scope 検出・
-//! zorder/sticky/dpi 転記シーム。入力は BTreeMap×2（純粋・panic しない）。
+//! zorder/sticky 転記シーム。入力は BTreeMap×2（純粋・panic しない）。
 //!
 //! 依存規約（lib.rs）: areka-parsers の出力形（`kv::parse_kv` の
 //! `BTreeMap<String, String>`）のみを消費し、wintf/bevy_ecs を import しない。
@@ -39,8 +39,8 @@ pub enum BalloonSide {
 /// バルーン水平配置モード（P5 の基本位置分岐・既定 `Side`＝現行挙動）。
 ///
 /// `windowposition.x` のキーワード語彙（`center`/`top`/`bottom`）を保持する枠。
-/// 語彙の分類・警告と実際の幾何は後続タスク（C1 分類・C4 P5 幾何）の所有であり、
-/// 本 enum はその解決結果を scope 別に持ち回るためだけに存在する。
+/// 語彙の分類は `windowposition.rs` の `classify_x_vocab`、警告は取得経路（`lib.rs`）、実際の
+/// 幾何は resolver の P5 が持ち、本 enum はその解決結果を scope 別に持ち回るためだけに存在する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BalloonXMode {
     /// 数値指定・未指定（現行の [`BalloonSide`] 分岐へ委譲・bit 同一）。
@@ -63,10 +63,11 @@ pub struct ScopeConfig {
     pub default_y: Option<i32>,
     /// `balloon.alignment`（`left` 既定／`right`）。暫定 offset の向き決定にのみ使用（1.2・DD7）。
     pub balloon_alignment: BalloonSide,
-    /// `balloon.offsetx`/`balloon.offsety`（両方あるときのみ Some・emo2 は未使用＝None）。
+    /// `balloon.offsetx`/`balloon.offsety`。軸ごとに決まり、書かれない軸は 0。どちらも無ければ
+    /// None（emo2 は未使用＝None）。
     pub balloon_offset: Option<(i32, i32)>,
     /// `windowposition.limit` の解決値（正典既定 `true`＝画面内へ維持する・1.2）。
-    /// 供給元はバルーン定義側の取得経路（task 2.2）であり descript KV ではない。
+    /// 供給元はバルーン定義側の取得経路であり descript KV ではない。
     /// 未収載 scope が [`ScopeConfig::default()`] で配置される既存契約により、
     /// バルーン定義が読めなかった scope でも limit は有効になる（1.2）。
     pub balloon_limit: bool,
@@ -98,16 +99,14 @@ pub struct PlacementConfig {
     pub scopes: BTreeMap<usize, ScopeConfig>,
     /// shell `seriko.zorder` の生転記。
     ///
-    /// ⚠ 2026-08-31 訂正: 以前ここには「実挙動なし」と書いてあったが、
-    /// `areka-P0-scope-zorder-pinning` の着地で**実挙動が付いた**——`main.rs` が読み出し、
-    /// `runtime::frame::wiring::seed_zorder_descript_base` を通って起動時の基底グループになる
+    /// 起動では `ghost_session.rs` が読み出して `runtime::wire_runtime` へ渡し、
+    /// `runtime::frame::wiring::seed_zorder_descript_base` を通って基底グループになる。
+    /// シェルの切り替えでは `runtime/frame/switch.rs` が据え直す
     /// （解釈器はタグ入口と共通・`runtime::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
     /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
     /// areka-P0-window-link-directives 要件 3.8）。
     pub sticky_window_raw: Option<String>,
-    /// shell `seriko.dpi` の生転記（96 素通しシーム・DD11）。
-    pub shell_dpi_raw: Option<String>,
 }
 
 /// KV → 構成（純粋・パニックしない・数値化不能は None＋`warn!`）。
@@ -135,7 +134,6 @@ pub fn build_placement_config(
         zorder_raw: shell_kv.get("seriko.zorder").cloned(),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         sticky_window_raw: shell_kv.get("seriko.sticky-window").cloned(),
-        shell_dpi_raw: shell_kv.get("seriko.dpi").cloned(),
     }
 }
 
@@ -250,7 +248,9 @@ fn resolve_scope(
         }
     };
 
-    // balloon offset は両成分が揃ったときのみ Some（design「両方あるときのみ」）
+    // X と Y は別々に決まる。片方だけなら書かれない軸は 0（標準の位置）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.balloon.offsetx_2c_5ea7_6a19:1
+    // 「X座標とY座標はそれぞれ独立に決まる。」
     let offset_x = parse_i32(
         cascade2(ghost_kv, shell_kv, scope, &["balloon.offsetx"]),
         "balloon.offsetx",
@@ -261,7 +261,8 @@ fn resolve_scope(
         "balloon.offsety",
         scope,
     );
-    let balloon_offset = offset_x.zip(offset_y);
+    let balloon_offset = (offset_x.is_some() || offset_y.is_some())
+        .then(|| (offset_x.unwrap_or(0), offset_y.unwrap_or(0)));
 
     // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。本関数は KV の
     // 純粋転記に徹し、正典既定をそのまま置く（実供給は `lib.rs` の
@@ -647,46 +648,49 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-C5: zorder/sticky/dpi の raw 転記シーム（5.2・DD11）
+    // T-C5: zorder/sticky の raw 転記シーム（5.2・DD11）
     // ------------------------------------------------------------------
 
-    /// T-C5: shell の `seriko.zorder`／`seriko.sticky-window`／`seriko.dpi` を
-    /// 生文字列のまま転記する（実挙動フィールドなし）。値中のカンマも保持。
+    /// T-C5: shell の `seriko.zorder`／`seriko.sticky-window` を
+    /// 生文字列のまま転記する（解釈は転記の先が行う）。値中のカンマも保持。
     #[test]
     fn t_c5_seam_fields_raw_transcription() {
         let shell_kv = areka_parsers::kv::parse_kv(
             "seriko.zorder,1,0\n\
-             seriko.sticky-window,0,1\n\
-             seriko.dpi,120\n",
+             seriko.sticky-window,0,1\n",
         );
         let cfg = build_placement_config(&empty(), &shell_kv);
         assert_eq!(cfg.zorder_raw.as_deref(), Some("1,0"));
         assert_eq!(cfg.sticky_window_raw.as_deref(), Some("0,1"));
-        assert_eq!(cfg.shell_dpi_raw.as_deref(), Some("120"));
     }
 
     /// T-C5: 未指定なら None。ghost 側の同名キーは転記対象でない（所在は shell descript）。
     #[test]
     fn t_c5_seam_fields_absent_and_shell_only() {
-        let ghost = kv(&[("seriko.zorder", "1"), ("seriko.dpi", "144")]);
+        let ghost = kv(&[("seriko.zorder", "1"), ("seriko.sticky-window", "0,1")]);
         let cfg = build_placement_config(&ghost, &empty());
         assert_eq!(cfg.zorder_raw, None);
         assert_eq!(cfg.sticky_window_raw, None);
-        assert_eq!(cfg.shell_dpi_raw, None);
     }
 
-    /// T-C5 補: `balloon.offsetx/offsety` は両方あるときのみ Some、片方では None。
+    /// `balloon.offsetx`／`offsety` は軸ごとに決まる。片方だけなら書かれた軸を使い、
+    /// 書かれない軸は 0（標準の位置）。どちらも無ければ None。
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.balloon.offsetx_2c_5ea7_6a19:1
+    /// 「X座標とY座標はそれぞれ独立に決まる。」
     #[test]
-    fn t_c5_balloon_offset_requires_both_components() {
-        let shell = kv(&[
-            ("sakura.balloon.offsetx", "30"),
-            ("sakura.balloon.offsety", "-5"),
-        ]);
-        let cfg = build_placement_config(&empty(), &shell);
-        assert_eq!(cfg.scopes[&0].balloon_offset, Some((30, -5)));
-
-        let shell = kv(&[("sakura.balloon.offsetx", "30")]);
-        let cfg = build_placement_config(&empty(), &shell);
-        assert_eq!(cfg.scopes[&0].balloon_offset, None);
+    fn balloon_offset_axes_are_independent() {
+        let offset = |pairs: &[(&str, &str)]| {
+            build_placement_config(&empty(), &kv(pairs)).scopes[&0].balloon_offset
+        };
+        assert_eq!(
+            offset(&[
+                ("sakura.balloon.offsetx", "30"),
+                ("sakura.balloon.offsety", "-5"),
+            ]),
+            Some((30, -5))
+        );
+        assert_eq!(offset(&[("sakura.balloon.offsetx", "30")]), Some((30, 0)));
+        assert_eq!(offset(&[("sakura.balloon.offsety", "-5")]), Some((0, -5)));
+        assert_eq!(offset(&[("sakura.defaultx", "1")]), None);
     }
 }

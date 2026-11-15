@@ -203,7 +203,7 @@ fn t_r8_balloon_none_picks_the_side_facing_the_area_center() {
     }
 }
 
-/// T-R8（指摘 48）: `balloon.alignment=none` でキャラ窓の中心がちょうど作業領域の中央の
+/// T-R8: `balloon.alignment=none` でキャラ窓の中心がちょうど作業領域の中央の
 /// ときは左側に付く（「中央より左なら右側」の境は左側＝`<` を `<=` に変えると赤）。
 #[test]
 fn t_r8_balloon_none_at_exact_center_goes_left() {

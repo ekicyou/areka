@@ -306,8 +306,10 @@ pub fn save_scope(
     entries: Vec<(PersistKey, String)>,
 ) -> PersistOutcome {
     let keys: Vec<PersistKey> = entries.iter().map(|(key, _)| *key).collect();
-    update_scope(scope, roots, io, keys, |doc, _base| {
+    update_scope(scope, roots, io, keys, |doc, base| {
         for (key, value) in entries {
+            // 手で書いた `"00"` などの綴りを残すと、正準の綴りと並んで古い値が読み戻される。
+            remove_other_spellings(doc, base, key);
             apply_entry(doc, key, Some(value));
         }
     })
@@ -317,6 +319,7 @@ pub fn save_scope(
 ///
 /// 名指しの鍵だけを消し、知らない表・知らない値・ほかの鍵は残す。鍵を消して空になった表
 /// （`[balloon-offset."N"]` とその親など）は書かない。失敗と控えの扱いは [`save_scope`] と同じ。
+/// スコープ別の鍵は、読みが同じスコープとして読む綴り（手で書いた `"00"` など）もすべて消す。
 pub fn remove_scope_keys(
     scope: PersistScope,
     roots: &ScopeRoots,
@@ -328,8 +331,49 @@ pub fn remove_scope_keys(
         for key in names {
             apply_entry(doc, key, None);
             remove_toml_path(base, &toml_path(key));
+            remove_other_spellings(doc, base, key);
         }
     })
+}
+
+/// スコープ別の鍵について、読み（[`doc_to_entries`] の `parse::<u32>()`）が同じスコープになる ID
+/// （正準の綴り `scope.to_string()` も、手で書いた `"00"` なども）を doc と土台の表から消す。
+fn remove_other_spellings(doc: &mut FormatDoc, base: &mut toml::Table, key: PersistKey) {
+    let same = |scope: u32, id: &str| id.parse::<u32>() == Ok(scope);
+    let scope = match key {
+        PersistKey::WindowPos { scope, axis } => {
+            for (_, pair) in doc.window.iter_mut().filter(|(id, _)| same(scope, id)) {
+                set_axis(pair, axis, None);
+            }
+            scope
+        }
+        PersistKey::BalloonOffset { scope, axis } => {
+            for (_, pair) in doc
+                .balloon_offset
+                .iter_mut()
+                .filter(|(id, _)| same(scope, id))
+            {
+                set_axis(pair, axis, None);
+            }
+            scope
+        }
+        PersistKey::WindowAdjacent { scope } => {
+            doc.window_adjacent.retain(|id, _| !same(scope, id));
+            scope
+        }
+        _ => return,
+    };
+    let mut path = toml_path(key);
+    let ids: Vec<String> = match base.get(&path[0]) {
+        Some(toml::Value::Table(table)) => {
+            table.keys().filter(|id| same(scope, id)).cloned().collect()
+        }
+        _ => Vec::new(),
+    };
+    for id in ids {
+        path[1] = id;
+        remove_toml_path(base, &path);
+    }
 }
 
 /// 保存と消しの 1 本の道（錠 → 既存の読み → `edit` で doc と土台の表に手を入れる → 控え／commit）。

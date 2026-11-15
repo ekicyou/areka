@@ -21,7 +21,7 @@
 //!
 //! `windowposition.x` の符号規約は実機（SSP 参照実装）で確定済みであり、バルーンの
 //! 置き側（`BalloonSide`）に依存しない——ゆえに本モジュールは `BalloonSide` を受け取らない
-//! （[`to_screen_adjust`] の「符号規約」節・R7.6／task 6.1）。
+//! （[`to_screen_adjust`] の「符号規約」節・R7.6）。
 
 use areka_emo_compose::ScaleRatio;
 
@@ -148,7 +148,7 @@ pub fn scale_signed(v: i32, k: ScaleRatio) -> i32 {
 /// [`apply_windowposition`] へそのまま渡すことで `balloon_offset` を一切触らず、
 /// resolver 出力を本仕様適用前と厳密同一に保つ。
 ///
-/// # 符号規約（実機確定済み・R7.6／task 6.1）
+/// # 符号規約（実機確定済み・R7.6）
 ///
 /// 正典（ukadoc）は x 方向の基本位置を明示せず、`windowposition.x` を「数値指定の場合
 /// シェル側が+、シェルから離れる側が-」と記述する。しかし **参照実装 SSP の実挙動は
@@ -234,10 +234,10 @@ mod tests {
     ///
     /// **本檻の主張は「調整量はバルーンの置き側（`BalloonSide`）に依らず同一である」**
     /// ——`windowposition.x` は SSP 実測どおり素の画面座標オフセットであり、Left／Right で
-    /// 反転しない（R3.3 の実機確定形・R7.6／task 6.1）。関数が side を受け取らないこと自体が
+    /// 反転しない（R3.3 の実機確定形・R7.6）。関数が side を受け取らないこと自体が
     /// その主張の構造的な施行であり、本檻は**同一 wp 生値が置き側の別なく単一の期待値へ
     /// 落ちること**を全分岐で固定する。side を跨いだ同一性を実配置で観測する檻は
-    /// `mod.rs` の `prepare_windowposition_adjust_is_identical_for_both_balloon_sides`
+    /// `placement_windowposition_tests.rs` の `prepare_windowposition_adjust_is_identical_for_both_balloon_sides`
     /// （両 scope が Left／Right で同一の wp 生値を読む合成 fixture）が担う。
     ///
     /// 期待値は literal（実装式の再実装ではない）。x の実値は emo2 実測——

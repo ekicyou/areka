@@ -1,4 +1,4 @@
-//! I/O 層: descript 供給源（task 2.2）。
+//! I/O 層: descript 供給源。
 //!
 //! `areka_parsers::package::resolve_with_shell` → ghost/shell descript.txt 読込
 //! （`charset::decode` 既定 Ansi → `kv::parse_kv`）→ (ghost_kv, shell_kv, shell_dir, titles)。
@@ -39,7 +39,7 @@ const NAME_SUFFIX: &str = ".name";
 /// `areka_emo_present::scale::DEFAULT_AUTHOR_DPI` と同値だが、本モジュールの依存規約
 /// （冒頭 doc: areka-parsers＋std＋tracing のみ・emo 系へは依存しない）を守るため
 /// 定数のためだけの依存辺は張らず、ここへ局所定義する。
-const DEFAULT_AUTHOR_DPI: u16 = 96;
+pub(crate) const DEFAULT_AUTHOR_DPI: u16 = 96;
 
 /// shell descript の作者基準 DPI キー（ukadoc `seriko.dpi`・SSP 2.7.21+）。
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.dpi_2c_63a8_5968DPI:1
@@ -75,7 +75,7 @@ impl GhostTitles {
 
 #[cfg(any(test, feature = "test-support"))]
 impl GhostTitles {
-    /// テスト専用コンストラクタ（`titles` は非公開フィールドのため、spawn（task 5.1）
+    /// テスト専用コンストラクタ（`titles` は非公開フィールドのため、spawn
     /// 等の headless テストが fixture I/O（`load_descript_source`）なしで
     /// `GhostTitles` を構築する唯一の経路。テストか `test-support` のときだけで本番公開面は不変）。
     pub fn from_scope_titles<I>(titles: I) -> Self
@@ -92,7 +92,7 @@ impl GhostTitles {
 ///
 /// `ghost_kv`/`shell_kv` は `kv::parse_kv` の出力形（`BTreeMap<String, String>`）
 /// そのままで、`config::build_placement_config(&ghost_kv, &shell_kv)` へ直接
-/// 供給できる（task 2.1 との結線契約）。
+/// 供給できる（`config` との結線契約）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DescriptSource {
     /// ghost/master/descript.txt の生 KV（読取失敗時は空・継続）。
@@ -120,26 +120,27 @@ impl DescriptSource {
     }
 }
 
-/// `ghost_root` から shell dir を解決し、ghost/shell descript.txt を charset
-/// 対応（既定 Ansi）で読み `DescriptSource` を返す（design「placement::source」・DD4）。
-///
-/// 失敗契約（design「Error Handling」・log-first）:
-/// - resolve 失敗 → `error!`＋`Err(PlacementError::Mount)`
-/// - shell descript 読取失敗 → `error!`＋`Err(PlacementError::DescriptRead)`
-/// - ghost descript 読取失敗 → `warn!`＋空 KV で継続（shell 側だけで emo2 は成立。
-///   resolve 成功直後ゆえ通常は読めるが、TOCTOU への防御として寛容経路を維持する）
+/// シェル名なし（既定のシェル）で [`load_descript_source_for_shell`] を呼ぶ。失敗契約も同じ。
 // 本番の呼び手は無い（起動はシェル名つきの `load_descript_source_for_shell` を通る）・テストだけが使う
 #[cfg(any(test, feature = "test-support"))]
 pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, PlacementError> {
     load_descript_source_for_shell(ghost_root, None)
 }
 
-/// `load_descript_source`（テストのビルドだけ）のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+/// `ghost_root` から shell dir を解決し、ghost/shell descript.txt を charset
+/// 対応（既定 Ansi）で読み `DescriptSource` を返す（design「placement::source」・DD4・
+/// areka-P0-shell-balloon-switch 要件 6.4）。
 ///
 /// `shell` が `Some(名)` なら `ghost_root/shell/<名>` の `descript.txt` を読む。`None` は
 /// 今日の規則（`areka_parsers::package::resolve_with_shell` の名前なし）。名前の先が無ければ
 /// 既定のシェルへ黙って戻らず、`error!`＋`Err(PlacementError::Mount)` を返す。
-/// 名前の検査はしない（渡す側が目録に在る名前だけを渡す）。失敗契約は `load_descript_source` と同じ。
+/// 名前の検査はしない（渡す側が目録に在る名前だけを渡す）。
+///
+/// 失敗契約（design「Error Handling」・log-first）:
+/// - resolve 失敗 → `error!`＋`Err(PlacementError::Mount)`
+/// - shell descript 読取失敗 → `error!`＋`Err(PlacementError::DescriptRead)`
+/// - ghost descript 読取失敗 → `warn!`＋空 KV で継続（shell 側だけで emo2 は成立。
+///   resolve 成功直後ゆえ通常は読めるが、TOCTOU への防御として寛容経路を維持する）
 pub fn load_descript_source_for_shell(
     ghost_root: &Path,
     shell: Option<&str>,
@@ -296,7 +297,7 @@ fn char_name_scope_of(key: &str) -> Option<usize> {
 
 #[cfg(test)]
 #[path = "source_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 #[cfg(test)]
 #[path = "source_shell_tests.rs"]

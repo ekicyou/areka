@@ -9,7 +9,7 @@ use crate::config::{Alignment, build_placement_config};
 use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
-// anchor 伝搬（4.2・DD15 基盤・task 1.2）
+// anchor 伝搬（4.2・DD15 基盤）
 //
 // 旧 `bottom_snap`（二値）伝搬テストを 5 値アンカー検証へ意味を保って差し替え
 // （単一真実源＝`ScopePlacement.anchor`・Req1.6）。二値の吸着フラグは

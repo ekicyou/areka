@@ -11,7 +11,10 @@ use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 
 /// emo2 の面 0（surface0.png）の原寸。
-const SURFACE0: SizePx = SizePx { w: 434, h: 687 };
+const SURFACE0: SizePx = SizePx {
+    w: crate::sample_test_support::SCOPE0_W,
+    h: crate::sample_test_support::SCOPE0_H,
+};
 
 /// 相方側の既定の面を 0・ゴーストの動かせない指定を `true` にした合成ゴーストを準備すると、
 /// 準備の結果の既定の面は測りに使った値（相方側の窓が面 0 の大きさ）で、動かせない指定も載る。

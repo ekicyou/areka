@@ -10,16 +10,12 @@
 
 use std::collections::BTreeSet;
 
-/// 註釈の行を落とす（説明文に書いてあるだけの綴りを「在る」と数えない）。改行コードは先に揃える。
+use areka_placement::test_support::zorder_pair_deferred;
+
+/// 註釈の行を落とす（説明文に書いてあるだけの綴りを「在る」と数えない）。
 fn code_only(src: &str) -> String {
-    let normalized = src.replace("\r\n", "\n");
-    let body = normalized
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    // 先頭行も「行頭」として探せるよう、番兵の改行を 1 つ前置きする。
-    format!("\n{body}\n")
+    // 先頭行も「行頭」として探せるよう、番兵の改行を前後に置く。
+    format!("\n{}\n", zorder_pair_deferred::code_only(src))
 }
 
 /// 見出しからテストファイルの中身を引く。見出しが表に無ければその場で落とす。
@@ -91,30 +87,41 @@ fn the_comment_stripper_is_calibrated_in_both_directions() {
     );
 }
 
-/// 検査そのものが赤を出せることの較正（実在しない錨・未知の分岐名・覆われない分岐を 1 つずつ通す）。
+/// 検査そのものが赤を出せることの較正（正しい表から 1 か所だけ壊した形を 1 つずつ通す）。
 #[test]
-fn check_table_fails_on_a_missing_anchor_an_unknown_branch_and_an_uncovered_branch() {
-    let files = [(
+fn check_table_fails_on_every_broken_shape() {
+    type Files = &'static [(&'static str, &'static str, &'static str)];
+    const FILES: Files = &[(
         "a/x_tests.rs",
         "#[test]\nfn t_one() {}\n",
         "#[path = \"x_tests.rs\"]\nmod x;",
     )];
-    let ok = [("b", "a/x_tests.rs", "t_one")];
-    check_table(&["b"], &files, &ok);
+    const NO_TEST_ATTR: Files = &[(
+        "a/x_tests.rs",
+        "fn t_one() {}\n",
+        "#[path = \"x_tests.rs\"]\nmod x;",
+    )];
+    const NO_PATH_ATTR: Files = &[("a/x_tests.rs", "#[test]\nfn t_one() {}\n", "mod x;")];
+    const OK: &[(&str, &str, &str)] = &[("b", "a/x_tests.rs", "t_one")];
+    check_table(&["b"], FILES, OK);
     let run = |branches: &'static [&'static str],
+               files: Files,
                coverage: &'static [(&'static str, &'static str, &'static str)]| {
-        std::panic::catch_unwind(|| check_table(branches, &files, coverage)).is_err()
+        std::panic::catch_unwind(|| check_table(branches, files, coverage)).is_err()
     };
     assert!(
-        run(&["b"], &[("b", "a/x_tests.rs", "t_gone")]),
+        run(&["b"], FILES, &[("b", "a/x_tests.rs", "t_gone")]),
         "実在しない錨を通した"
     );
     assert!(
-        run(&["b"], &[("c", "a/x_tests.rs", "t_one")]),
+        run(&["b"], FILES, &[("c", "a/x_tests.rs", "t_one")]),
         "未知の分岐名を通した"
     );
+    assert!(run(&["b", "d"], FILES, OK), "覆われない分岐を通した");
+    assert!(run(&["b", "b"], FILES, OK), "重複した分岐名を通した");
+    assert!(run(&["b"], NO_TEST_ATTR, OK), "#[test] の無い錨を通した");
     assert!(
-        run(&["b", "d"], &[("b", "a/x_tests.rs", "t_one")]),
-        "覆われない分岐を通した"
+        run(&["b"], NO_PATH_ATTR, OK),
+        "#[path] で組み込まれていないファイルを通した"
     );
 }

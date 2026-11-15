@@ -9,18 +9,11 @@ use super::*;
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 
-/// emo2 fixture の native 採寸値（`measure.rs` テストの同名定数と同一の実測値）。
-/// k₀ 適用後の期待値はこれらの `scaled_extent` 倍として書く。
-const SCOPE0_W: i32 = 434;
-const SCOPE0_H: i32 = 687;
-const SCOPE1_W: i32 = 336;
-const SCOPE1_H: i32 = 400;
-/// バルーン面 0 は **scope ごとに解決した系列**の実寸である（要件 3.1）——
-/// scope0＝本体側 `balloons0.png`・scope1＝相方側 `balloonk0.png`。
-const BALLOON0_W: i32 = 400;
-const BALLOON0_H: i32 = 224;
-const BALLOON1_W: i32 = 288;
-const BALLOON1_H: i32 = 203;
+// emo2 fixture の native 採寸値（共有の 1 組）。k₀ 適用後の期待値はこれらの `scaled_extent` 倍
+// として書く。バルーン面 0 は **scope ごとに解決した系列**の実寸である（要件 3.1）。
+use crate::sample_test_support::{
+    BALLOON0_H, BALLOON0_W, BALLOON1_H, BALLOON1_W, SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W,
+};
 
 /// 既約有理 k のテスト用短縮構築（0 入力はテストの誤りゆえ expect）。
 fn k(num: u32, den: u32) -> ScaleRatio {
@@ -48,7 +41,7 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 /// バルーン寸が scope 別になっても**基本位置**が動かないのは、右置き（scope1）の基準 x が
 /// キャラ窓の右端＝バルーン幅に依存しないためである（resolver P5 は無改変）。
 ///
-/// **task 4.3（要件 3.2/7.2）＋ task 6.1 の実機確定（R7.6）**: 基本位置へ当該 scope の
+/// **要件 3.2/7.2 ＋実機確定（R7.6）**: 基本位置へ当該 scope の
 /// `windowposition` 由来の調整量が合流する。x は**左右で反転しない素の画面座標オフセット**
 /// （SSP 実測で確定・`windowposition.rs` の `to_screen_adjust`「符号規約」節）ゆえ、
 /// k₀=1/1 の本検体では wp 生値がそのまま加算される:
@@ -74,7 +67,13 @@ fn prepare_emo2_returns_two_scope_placements() {
         let s0 = &p.placements[0];
         assert_eq!(s0.scope, 0);
         assert_eq!(s0.char_pos, PointPx { x: 1486, y: 353 });
-        assert_eq!(s0.char_size, SizePx { w: 434, h: 687 });
+        assert_eq!(
+            s0.char_size,
+            SizePx {
+                w: SCOPE0_W,
+                h: SCOPE0_H
+            }
+        );
         assert_eq!(
             s0.balloon_pos,
             PointPx { x: 1352, y: 224 },
@@ -231,12 +230,12 @@ fn prepared_placement_is_send() {
 }
 
 /// 準備段階の失敗（ghost_root 不在→Mount）は
-/// `PlacementError` として呼び手へ返る（告知と終了は呼び手の `main` の分担）。
+/// `PlacementError` として呼び手へ返る（告知と、終了するかどうかは呼び手の分担）。
 /// 失敗は load（モニタ列挙より前）で起きるため headless でも決定論。
 #[test]
 fn prepare_missing_root_returns_mount_err_to_caller() {
-    // 不在の root は共通窓口が配るディレクトリの下に取る（窓口は宛先を返すだけで
-    // 実体を作らないので、`no_such_ghost` は確実に不在のまま・プロセス間でも一意）。
+    // 不在の root は共通窓口が配るディレクトリの下に取る（窓口が作るのは配るディレクトリ
+    // だけで、その下の `no_such_ghost` は作らないので確実に不在のまま・プロセス間でも一意）。
     let temp = TempDir::new();
     let root = temp.path().join("no_such_ghost");
     let err = prepare_ghost_windows(&root, &balloon_root()).expect_err("不在 root は Err");
@@ -322,10 +321,10 @@ fn prepare_never_reads_or_writes_ghost_dat() {
 }
 
 // ------------------------------------------------------------------
-// 起動時 k₀ の導出（task 4.3・design D7／Flow 3 手順2・要件 1.4/3.3）
+// 起動時 k₀ の導出（design D7／Flow 3 手順2・要件 1.4/3.3）
 // ------------------------------------------------------------------
 
-/// 表示 DPI を両軸へ写すとき、`u16` に収まらない値は切り詰めず `u16::MAX` へ飽和する（指摘 13）。
+/// 表示 DPI を両軸へ写すとき、`u16` に収まらない値は切り詰めず `u16::MAX` へ飽和する。
 #[test]
 fn square_dpi_saturates_instead_of_truncating() {
     assert_eq!(square_dpi(144), DPI::from_dpi(144, 144));
@@ -623,7 +622,7 @@ fn prepare_k0_rounding_matches_integer_authority_not_f32() {
 /// design Flow 3 手順1（**1 度だけ読む**）: 準備が読んだ作者基準 DPI が
 /// `PreparedPlacement` に載って attach 側（`wire_runtime`→`attach_target`）へ渡る。
 ///
-/// 単一読取の証拠は「読取器（task 2.1）を直接呼んだ値と、準備の戻り値が一致すること」。
+/// 単一読取の証拠は「読取器を直接呼んだ値と、準備の戻り値が一致すること」。
 /// 本番 fixture（emo2）は 96/96 ゆえ既定との区別が付かない——宣言値との区別は
 /// [`prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value`] が担う。
 #[test]
@@ -640,7 +639,7 @@ fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
                 shell: 96,
                 balloon: 96
             },
-            "emo2 は shell/balloon とも DPI 無宣言＝正典既定 96（task 2.1 実測）"
+            "emo2 は shell/balloon とも DPI 無宣言＝正典既定 96（実測）"
         );
 
         let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))

@@ -2,12 +2,10 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Window;
 
 use super::spawn_ghost_windows;
-use super::test_support::{
-    fake_window_handle, ghost_window_entities, titles, two_scope_placements,
-};
+use super::test_support::{fake_window_handle, titles, two_scope_placements};
 
 // -------------------------------------------------------------------------
-// T-I4: clickthrough 登録 system（6.1・task 5.2）
+// T-I4: clickthrough 登録 system（6.1）
 //
 // 実 `ClickThroughRegistryHandle` は wintf 内部（`new` は pub(crate)）でしか
 // 構築できないため、headless の「登録呼び出しが発生する」観測は偽装境界
@@ -98,26 +96,7 @@ fn t_i4_register_system_ignores_non_ghost_windows() {
     assert!(registrar_calls(&world).is_empty());
 }
 
-/// T-I4 補: 実 system（design 正本 signature）は
-/// `ClickThroughRegistryHandle` 未挿入の headless World で no-op（panic
-/// しない・ごく初期 tick の未挿入への Option 防御＝donor と同じ作法）。
-#[test]
-fn t_i4_real_register_system_is_noop_without_registry_resource() {
-    let mut world = World::new();
-    let placements = two_scope_placements();
-    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-    let char0 = gw.char_window(0).unwrap();
-    world.entity_mut(char0).insert(fake_window_handle(0x50));
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(register_ghost_windows_click_through);
-    schedule.run(&mut world);
-
-    // no-op で完走（窓はそのまま）
-    assert_eq!(ghost_window_entities(&mut world).len(), 4);
-}
-
-/// 指摘 26: 登録の口が無い World で新しい窓に `WindowHandle` が付くと、取りこぼしを
+/// 登録の口が無い World で新しい窓に `WindowHandle` が付くと、取りこぼしを
 /// `warn!` 1 行で残す（Added は 1 度きりなので黙ると見えなくなる）。
 #[test]
 fn t_i4_missing_registrar_warns_once_for_a_new_window() {

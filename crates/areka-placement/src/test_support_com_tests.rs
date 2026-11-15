@@ -1,4 +1,4 @@
-//! `with_com_initialized` が自分で初期化に成功したときだけ後始末する檻（指摘 57）。
+//! `with_com_initialized` が自分で初期化に成功したときだけ後始末する檻。
 
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
 

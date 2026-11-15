@@ -190,6 +190,20 @@ fn missing_partner_scope_is_skipped_silently() {
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
 }
 
+/// 窓の一式（`GhostWindows`）がまだ無いときは印を足さず、飛ばしたことを `debug!` に残す。
+#[test]
+fn missing_ghost_windows_adds_no_mark_and_logs_debug() {
+    let world = World::new();
+    let (out, events) = capture(|| with_adjacency_marks(&world, pos_batch(1)));
+    assert_eq!(out, pos_batch(1));
+    assert!(
+        events
+            .iter()
+            .any(|e| e.target == SAVE_TARGET && e.level == tracing::Level::DEBUG),
+        "{events:?}"
+    );
+}
+
 /// 印の項目の鍵と語、読み戻し（知らない語は warn! して無し・鍵なしは無し）。
 #[test]
 fn adjacency_entry_and_saved_adjacency_round_trip() {

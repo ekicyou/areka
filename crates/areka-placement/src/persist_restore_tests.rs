@@ -518,7 +518,12 @@ fn apply_scopes_do_not_cross() {
     assert_eq!(
         out[0].balloon_offset,
         PointPx { x: -30, y: 20 },
-        "scope0 保存 offset"
+        "scope0 保存 offset（左上基準のまま・基準変換なし・2.3）"
+    );
+    assert_eq!(
+        out[0].balloon_pos,
+        PointPx { x: 770, y: 520 },
+        "balloon_pos ≡ 最終 char_pos + 保存 offset"
     );
     // scope1 は完全恒等（scope0 の entries に汚染されない）
     assert_eq!(
@@ -557,41 +562,6 @@ fn apply_balloon_offset_absent_keeps_default_following_char() {
             y: 500 + default_offset.y
         },
         "既定 offset が最終 char_pos に追従する（2.4）"
-    );
-}
-
-/// 2.3: 保存 BalloonOffset 両軸あり → そのまま左上基準 offset として採用し
-/// balloon_pos へ反映する（Free・保存基準＝ランタイム基準）。
-#[test]
-fn apply_saved_balloon_offset_is_derived_free() {
-    let snap = snapshot_of(vec![]); // identity
-    let placements = vec![placement(
-        0,
-        Anchor::Free,
-        PointPx { x: 100, y: 100 },
-        CSZ,
-        PointPx { x: -50, y: 0 }, // 既定（保存値で上書きされる）
-        BSZ,
-    )];
-    let entries = vec![
-        wp(0, Axis::X, "800"),
-        wp(0, Axis::Y, "500"),
-        bo(0, Axis::X, "-30"),
-        bo(0, Axis::Y, "20"),
-    ];
-
-    let out = apply_restored_placements(placements, &entries, &snap);
-
-    assert_eq!(out[0].char_pos, PointPx { x: 800, y: 500 });
-    assert_eq!(
-        out[0].balloon_offset,
-        PointPx { x: -30, y: 20 },
-        "保存値＝左上基準 offset（基準変換なし・2.3）"
-    );
-    assert_eq!(
-        out[0].balloon_pos,
-        PointPx { x: 770, y: 520 },
-        "balloon_pos ≡ 最終 char_pos + 導出 offset"
     );
 }
 
@@ -636,31 +606,6 @@ fn apply_saved_balloon_offset_is_char_top_left_basis_bottom() {
         "下端中央基準の足し戻しが復活していない"
     );
     assert_eq!(out[0].balloon_pos, PointPx { x: 600, y: 70 });
-}
-
-/// 6.1: 片軸破損（非数値）→ 当該 scope の char_pos は既定を保持（両軸揃わないと差替えない）。
-#[test]
-fn apply_one_axis_corrupt_keeps_default() {
-    let snap = snapshot_of(vec![]); // identity
-    let default = PointPx { x: 100, y: 100 };
-    let placements = vec![placement(
-        0,
-        Anchor::Free,
-        default,
-        CSZ,
-        PointPx { x: -50, y: 0 },
-        BSZ,
-    )];
-    // Y が非数値 → 両軸揃わず＝既定保持。
-    let entries = vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "abc")];
-
-    let out = apply_restored_placements(placements.clone(), &entries, &snap);
-
-    assert_eq!(
-        out[0].char_pos, default,
-        "片軸破損は既定 char_pos 保持（6.1）"
-    );
-    assert_eq!(out[0], placements[0], "破損時は当該 scope 恒等");
 }
 
 /// 16（要件 9.2）: 在るが読めない鍵（窓の x = "12.5"）と、片方の軸だけの鍵（ずらしの y だけ）は、
@@ -742,29 +687,6 @@ fn apply_saved_pos_is_reprojected_into_work_area() {
     );
 }
 
-/// scope の usize と PersistKey の u32 の一致取り（大きめ scope でも取り違えない）。
-#[test]
-fn apply_matches_scope_usize_to_persist_u32() {
-    let snap = snapshot_of(vec![]);
-    let placements = vec![placement(
-        3,
-        Anchor::Free,
-        PointPx { x: 10, y: 10 },
-        CSZ,
-        PointPx { x: 0, y: 0 },
-        BSZ,
-    )];
-    let entries = vec![wp(3, Axis::X, "77"), wp(3, Axis::Y, "88")];
-
-    let out = apply_restored_placements(placements, &entries, &snap);
-
-    assert_eq!(
-        out[0].char_pos,
-        PointPx { x: 77, y: 88 },
-        "scope 3 の u32 一致"
-    );
-}
-
 /// char-position-save-on-exit 2.4/2.6（design テスト 6）: `has_saved_char_pos` は x・y の
 /// 両方が数字のときだけ真で、`merge_scope` が記憶の値を採るかどうかと全部の組で一致する。
 #[test]
@@ -832,11 +754,26 @@ fn has_saved_char_pos_agrees_with_merge_scope() {
         has_saved_char_pos(&[wp(0, Axis::X, "100"), wp(0, Axis::Y, "100")], 0),
         "既定と同じ値の記憶が「記憶なし」に倒れている（2.6）"
     );
-    // scope の usize と PersistKey の u32 の一致取り。
-    assert!(has_saved_char_pos(
-        &[wp(3, Axis::X, "77"), wp(3, Axis::Y, "88")],
-        3
-    ));
+    // scope の usize と PersistKey の u32 の一致取り（判定も写像も・大きめ scope でも取り違えない）。
+    let scope3 = [wp(3, Axis::X, "77"), wp(3, Axis::Y, "88")];
+    assert!(has_saved_char_pos(&scope3, 3));
+    let out = apply_restored_placements(
+        vec![placement(
+            3,
+            Anchor::Free,
+            default,
+            CSZ,
+            PointPx { x: 0, y: 0 },
+            BSZ,
+        )],
+        &scope3,
+        &snap,
+    );
+    assert_eq!(
+        out[0].char_pos,
+        PointPx { x: 77, y: 88 },
+        "scope 3 の u32 一致"
+    );
 }
 
 // ------------------------------------------------------------------

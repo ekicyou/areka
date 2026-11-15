@@ -159,16 +159,6 @@ fn monitor_record_line_carries_every_field() {
         "[diag.monitor] index=0 handle=65537 bounds=0,0,1920,1080 \
          work_area=0,0,1920,1040 dpi=120 primary=true"
     );
-    for key in [
-        "index=",
-        "handle=",
-        "bounds=",
-        "work_area=",
-        "dpi=",
-        "primary=",
-    ] {
-        assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
-    }
 }
 
 /// 負座標・非プライマリ・3200 超座標（混在 DPI マルチモニタ実機相当）も忠実転写。
@@ -210,33 +200,6 @@ fn window_move_record_line_carries_every_field() {
             "[diag.window_move] route=DpiReproject entity={entity:?} kind=char scope=1 \
              x=-1500 y=640 w=336 h=400 dpi=192"
         )
-    );
-    for key in [
-        "route=", "entity=", "kind=", "scope=", "x=", "y=", "w=", "h=", "dpi=",
-    ] {
-        assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
-    }
-}
-
-/// entity は wintf 側ログ（`entity = ?e`＝`Debug` 表現）との**結合キー**ゆえ、
-/// 同一の `Debug` 表現で出す（手順書④の 2 段 grep が成立する条件）。
-#[test]
-fn window_move_record_entity_uses_debug_rendering_of_wintf_logs() {
-    let entity = ent(4242);
-    let record = WindowMoveRecord {
-        route: PlacementRoute::Resnap,
-        entity,
-        kind: WindowKind::Balloon,
-        scope: 0,
-        x: 0,
-        y: 0,
-        size: None,
-        dpi: None,
-    };
-    let line = window_move_record_line(&record);
-    assert!(
-        line.contains(&format!("entity={:?}", entity)),
-        "wintf の `entity = ?e` と同じ Debug 表現ではない: {line}"
     );
 }
 
@@ -281,29 +244,6 @@ fn zorder_pair_declared_line_carries_every_field() {
             "[zorder-pair] declared scope=1 char_entity={char_entity:?} \
              balloon_entity={balloon_entity:?}"
         )
-    );
-    for key in ["scope=", "char_entity=", "balloon_entity="] {
-        assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
-    }
-}
-
-/// 2 つの entity フィールドは wintf 側レコード（`entity=…`／`peer=…`）と**同一の
-/// `Debug` 表現**で出る——scope を持たない wintf 記録との 2 段 grep はこの一致だけが
-/// 結合条件である（要件 6.1）。役割の取り違え（char と balloon の入れ替え）も同時に固定する。
-#[test]
-fn zorder_pair_declared_line_entities_use_debug_rendering_and_keep_their_roles() {
-    let char_entity = ent(11);
-    let balloon_entity = ent(22);
-    let line = zorder_pair_declared_line(0, char_entity, balloon_entity);
-    assert!(
-        line.contains(&format!("char_entity={char_entity:?}"))
-            && line.contains(&format!("balloon_entity={balloon_entity:?}")),
-        "wintf の `entity = ?e` と同じ Debug 表現で結合できない: {line}"
-    );
-    assert_ne!(
-        line,
-        zorder_pair_declared_line(0, balloon_entity, char_entity),
-        "キャラ窓とバルーン窓を入れ替えても同じ行になる（役割が読めない）"
     );
 }
 
@@ -358,27 +298,6 @@ fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
         zorder_pair_declared_line(2, char_entity, balloon_entity)
     );
     assert_eq!(events[0].level, Level::DEBUG);
-}
-
-/// `ALL` の全経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
-#[test]
-fn window_move_record_line_renders_every_route() {
-    for route in PlacementRoute::ALL {
-        let record = WindowMoveRecord {
-            route,
-            entity: ent(1),
-            kind: WindowKind::Char,
-            scope: 0,
-            x: 0,
-            y: 0,
-            size: Some((1, 1)),
-            dpi: Some(96),
-        };
-        assert!(
-            window_move_record_line(&record).contains(&format!("route={}", route.as_str())),
-            "route={route} がレコードに現れない"
-        );
-    }
 }
 
 // ------------------------------------------------------------------

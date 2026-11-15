@@ -1,4 +1,4 @@
-//! シェルの見た目の値の入れ直し（task 9.2・要件 2.7）の決定論テスト。
+//! シェルの見た目の値の入れ直し（要件 2.7）の決定論テスト。
 //!
 //! 窓は bare `World` に spawn の本物で組み、偽 HWND の `WindowHandle` で窓書込の口を通す
 //! （`SetWindowPosCommand` は enqueue だけで flush しない＝実窓には触れない）。
@@ -8,7 +8,7 @@ use std::fs;
 use areka_sylphya::{Axis, PersistKey};
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::DragConfig;
-use wintf::ecs::{DPI, Point};
+use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::test_support::{
     BALLOON, CHAR0, booted_world, char_positions, new_shell, position_of, world_from,
@@ -20,7 +20,9 @@ use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::TempDir;
 use crate::source::{load_balloon_author_dpi, load_descript_source_for_shell};
 use crate::spawn::{BalloonKeywordBase, CharWindowMarker, GhostWindows};
-use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
+use crate::test_support::{
+    KEYWORD_BALLOON_DESCRIPT, WA, synth_declared_dpi_ghost, with_com_initialized,
+};
 use crate::{load_scope_windowpositions, prepare_ghost_windows_with_work_area};
 use log_capture_kit::{ExpectField, capture};
 
@@ -215,6 +217,35 @@ fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
     );
 }
 
+/// バルーン窓が無いスコープと、バルーン窓の大きさが読めないスコープは別の理由で読み飛ばす。
+#[test]
+fn t_rs04c_balloon_window_gone_and_size_unknown_have_their_own_reasons() {
+    let cases: [(&str, fn(&mut World, Entity)); 2] = [
+        ("balloon_window_gone", |world, balloon| {
+            world.entity_mut(balloon).remove::<WindowPos>();
+        }),
+        ("balloon_size_unknown", |world, balloon| {
+            world.get_mut::<WindowPos>(balloon).unwrap().size = None;
+        }),
+    ];
+    for (reason, strip) in cases {
+        let (mut world, windows) = booted_world(96);
+        strip(&mut world, windows.balloon_window(1).unwrap());
+
+        let ((), events) = capture(|| {
+            apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[])
+        });
+
+        let skipped: Vec<_> = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("reseed_skipped"))
+            .collect();
+        assert_eq!(skipped.len(), 1, "{reason}: {events:?}");
+        assert_eq!(skipped[0].field("scope"), Some("1"), "{reason}");
+        assert_eq!(skipped[0].field_str("reason"), Some(reason));
+    }
+}
+
 /// 起動の準備と同じ入力（同じゴースト・同じバルーン・同じ窓寸・同じ DPI）なら、入れ直した
 /// 部品は起動の配置と一致する。バルーンの `windowposition` の数値（emo2）・キーワードと y の
 /// 調整（合成バルーンの `center`／`-20`）が、シェルの差し替えをまたいで残ることの錨。
@@ -228,11 +259,8 @@ fn t_rs05_reseed_matches_boot_for_the_same_inputs() {
         let root = TempDir::new();
         let (kw_ghost, kw_balloon) =
             synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
-        fs::write(
-            kw_balloon.join("descript.txt"),
-            "charset,UTF-8\ndpi,96\nwindowposition.x,center\nwindowposition.y,-20\n",
-        )
-        .expect("キーワードのバルーンを書けるはず");
+        fs::write(kw_balloon.join("descript.txt"), KEYWORD_BALLOON_DESCRIPT)
+            .expect("キーワードのバルーンを書けるはず");
         let chain_root = TempDir::new();
         let (chain_ghost, chain_balloon) = synth_declared_dpi_ghost(
             chain_root.path(),

@@ -62,10 +62,6 @@ pub fn parse_px(value: &str) -> Option<i32> {
     value.trim().parse::<i32>().ok()
 }
 
-/// キャラ窓位置の保存 entries を構築する（design C1・純関数・1.6）。
-///
-/// スコープ別の [`PersistKey::WindowPos`]（X/Y）へ `pos` を i32 の `Display` で
-/// 文字列化して載せる。値ドメインは物理 px・仮想スクリーン絶対 i32（負値可）。
 /// 窓位置（左上基準）を**原点＝下端中央の x** へ移す（保存方向・Bottom のみ）。
 ///
 /// 伺かの立ち絵は足元中央が接地点＝原点。左上 x をそのまま保存すると、サーフェス寸が
@@ -109,6 +105,10 @@ pub fn saved_form_anchor(world: &World, window: Entity) -> Option<Anchor> {
     }
 }
 
+/// キャラ窓位置の保存 entries を構築する（design C1・純関数・1.6）。
+///
+/// スコープ別の [`PersistKey::WindowPos`]（X/Y）へ `pos` を i32 の `Display` で
+/// 文字列化して載せる。値ドメインは物理 px・仮想スクリーン絶対 i32（負値可）。
 pub fn char_pos_entries(scope: u32, pos: PointPx) -> Vec<(PersistKey, String)> {
     vec![
         (
@@ -292,7 +292,7 @@ fn project_restore_parts(
 /// ゴーストの descript を確かめ（[`read_ghost_names`]）、Ghost 永続スコープ root
 /// （[`profile_areka_root`]`(&`[`shiori_dir`]`(ghost_root))`＝boot 結線と同じ SHIORI の置き場の
 /// 綴り・単一権威）を導出し、[`load_scope`]`(Ghost, ..)` で永続 entries を読む。シェルは
-/// 解決しない（既定のシェルが無くても保存した状態を戻す・指摘 46）。
+/// 解決しない（既定のシェルが無くても保存した状態を戻す）。
 ///
 /// 全縮退は warn/debug ＋ 空 `Vec`（起動を止めない・panic しない・Req6.1/6.3）:
 /// - ゴーストの descript の不在・読めない → `warn!` ＋ 空（本関数で処理）。
@@ -302,7 +302,7 @@ fn project_restore_parts(
 /// （[`load_scope`] の契約）。
 pub fn load_restored_state(ghost_root: &Path) -> Vec<(PersistKey, String)> {
     // ゴーストの descript が在って読めるときだけ戻す（不在の根を永続の根にしない）。
-    // charset の無い descript は SSP の既定（Ansi）で読む（どの呼び手も Ansi だった・指摘 51）。
+    // charset の無い descript は SSP の既定（Ansi）で読む（どの呼び手も Ansi だった）。
     if let Err(err) = read_ghost_names(ghost_root, DefaultEncoding::Ansi) {
         warn!(
             ghost_root = %ghost_root.display(),
@@ -449,16 +449,22 @@ fn restored_windows(
 /// まま）を返す。片方だけ・数字でない値・鍵なしは `None`（[`merge_scope`] と
 /// [`has_saved_char_pos`] が共有する唯一の読み取り＝判定を 2 か所に書かない）。
 fn saved_char_pos(entries: &[(PersistKey, String)], scope: u32) -> Option<PointPx> {
+    let key_of = |axis| PersistKey::WindowPos { scope, axis };
     Some(PointPx {
-        x: saved_axis(entries, scope, Axis::X)?,
-        y: saved_axis(entries, scope, Axis::Y)?,
+        x: saved_axis(entries, key_of, Axis::X)?,
+        y: saved_axis(entries, key_of, Axis::Y)?,
     })
 }
 
-/// 保存 WindowPos の 1 軸を [`parse_px`] で読む（採否は決めない＝判定は [`saved_char_pos`]
-/// だけが持つ。復元ログが軸ごとの読みを出すためにも使う）。
-fn saved_axis(entries: &[(PersistKey, String)], scope: u32, axis: Axis) -> Option<i32> {
-    entry_value(entries, PersistKey::WindowPos { scope, axis }).and_then(parse_px)
+/// 保存値（`key_of` が組む鍵＝WindowPos か BalloonOffset）の 1 軸を [`parse_px`] で読む
+/// （採否は決めない＝窓位置の判定は [`saved_char_pos`] だけが持つ。復元ログが軸ごとの読みを
+/// 出すためにも使う）。
+fn saved_axis(
+    entries: &[(PersistKey, String)],
+    key_of: impl Fn(Axis) -> PersistKey,
+    axis: Axis,
+) -> Option<i32> {
+    entry_value(entries, key_of(axis)).and_then(parse_px)
 }
 
 /// スコープのキャラクター窓の位置（x・y の両方）が記憶にあるか
@@ -521,11 +527,10 @@ fn merge_scope(
     snapshot: &MonitorSnapshot,
 ) -> (ScopePlacement, Option<(PointPx, PointPx)>) {
     let scope = placement.scope as u32;
-    warn_unusable_pair(entries, scope, |axis| PersistKey::WindowPos { scope, axis });
-    warn_unusable_pair(entries, scope, |axis| PersistKey::BalloonOffset {
-        scope,
-        axis,
-    });
+    let window_key = |axis| PersistKey::WindowPos { scope, axis };
+    let offset_key = |axis| PersistKey::BalloonOffset { scope, axis };
+    warn_unusable_pair(entries, scope, window_key);
+    warn_unusable_pair(entries, scope, offset_key);
 
     // --- char_pos: 保存 WindowPos が両軸とも parse できたときのみ差替え＋再射影（1.4/1.5/6.1）---
     let saved_window = saved_char_pos(entries, scope);
@@ -543,23 +548,9 @@ fn merge_scope(
         None => (placement.char_pos, None),
     };
 
-    // --- balloon: 保存 offset があれば基準逆変換で導出、無ければ既定 offset 保持（2.3/2.4）---
-    let saved_bx = entry_value(
-        entries,
-        PersistKey::BalloonOffset {
-            scope,
-            axis: Axis::X,
-        },
-    )
-    .and_then(parse_px);
-    let saved_by = entry_value(
-        entries,
-        PersistKey::BalloonOffset {
-            scope,
-            axis: Axis::Y,
-        },
-    )
-    .and_then(parse_px);
+    // --- balloon: 保存 offset があればそのまま採用、無ければ既定 offset 保持（2.3/2.4）---
+    let saved_bx = saved_axis(entries, offset_key, Axis::X);
+    let saved_by = saved_axis(entries, offset_key, Axis::Y);
     // キーワード再導出の素材は**保存値が効いた scope では落とす**（windowposition-limit
     // 要件 4.7「永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」）。
     // 落とさないと、実表示寸確定の再導出がユーザーの保存した相対位置をキーワード既定へ
@@ -574,7 +565,7 @@ fn merge_scope(
         // 保存 offset は**char 左上基準**（ランタイム BalloonFollow.offset と同一基準）ゆえ
         // 基準変換なしで採用する（2.3・[`balloon_offset_entries`] の基準記述）。
         // 未係留の基準は「記憶から戻した」の印の源でもある（窓を組むときに
-        // `face_windowposition::BalloonUserMoved` を付ける・指摘 2）。
+        // `face_windowposition::BalloonUserMoved` を付ける）。
         (Some(x), Some(y)) => {
             let saved = PointPx { x, y };
             (saved, OffsetBase::unpinned(saved), None)
@@ -595,13 +586,13 @@ fn merge_scope(
 
     // 復元マージの計測ログ（実機診断・保存↔復元の座標突合）: saved_window＝保存された
     // 窓位置（無ければ default 保持）、default_char＝resolver 既定、char_pos＝復元後の窓位置、
-    // balloon_offset（左上基準・現 char_size で逆変換済み）、balloon_pos＝最終バルーン位置。
+    // balloon_offset（左上基準・保存値ならそのまま）、balloon_pos＝最終バルーン位置。
     tracing::info!(
         target: "areka::persist::restore",
         scope = placement.scope,
         anchor = ?placement.anchor,
-        saved_win_x = ?saved_axis(entries, scope, Axis::X),
-        saved_win_y = ?saved_axis(entries, scope, Axis::Y),
+        saved_win_x = ?saved_axis(entries, window_key, Axis::X),
+        saved_win_y = ?saved_axis(entries, window_key, Axis::Y),
         default_char_x = placement.char_pos.x, default_char_y = placement.char_pos.y,
         char_x = char_pos.x, char_y = char_pos.y,
         char_w = placement.char_size.w, char_h = placement.char_size.h,
@@ -631,7 +622,7 @@ fn merge_scope(
 }
 
 /// x・y の組の鍵のうち、在るが読めない鍵と、相方の鍵が無い鍵に `warn!` を 1 行ずつ出す
-/// （指摘 16・要件 9.2）。どちらも [`merge_scope`] は採らずに既定へ戻る。相方が在って
+/// （spec: audit-placement-core 要件 9.2）。どちらも [`merge_scope`] は採らずに既定へ戻る。相方が在って
 /// 読めないときは、相方の行だけを出す。
 fn warn_unusable_pair(
     entries: &[(PersistKey, String)],
@@ -663,7 +654,7 @@ fn warn_unusable_pair(
 }
 
 // ---------------------------------------------------------------------------
-// State Management（PersistWiring）＋保存投函ヘルパ（design C1・task 2.1・
+// State Management（PersistWiring）＋保存投函ヘルパ（design C1・
 // Req1.1 ドラッグ確定即時書込／1.9 発火規律／6.2 保存失敗縮退／7.1 Ghost スコープ固定）
 // ---------------------------------------------------------------------------
 
@@ -727,7 +718,8 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
 ///
 /// 印は書く時点の画面の並び（各キャラ窓の [`WindowPos`]）で決める: n が組（[`StickyGroupLedger`]）に
 /// 入っていれば `none`、そうでなければ [`judge_adjacency`] の結果。組の相手のスコープが窓の一式に
-/// 無ければログなしで飛ばし、矩形の読めない窓に触れる組は印を書かず `warn!` を出す。
+/// 無ければログなしで飛ばし、矩形の読めない窓に触れる組は印を書かず `warn!` を出す。窓の一式
+/// （[`GhostWindows`]）そのものが無いときは印を足さず `debug!` を出す。
 /// 束にもう有る印の鍵は足さない（同じ画面の並びから決めるので値は同じ・1 つにまとめる）。
 fn with_adjacency_marks(
     world: &World,
@@ -759,6 +751,11 @@ fn push_adjacency_marks(
         return added;
     }
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        debug!(
+            target: "areka::persist::save",
+            pair_count = pairs.len(),
+            "隣り合いの印: 窓の一式（GhostWindows）が無いので印を書かない"
+        );
         return added;
     };
     let in_set: BTreeSet<usize> = ghost_windows.scopes().collect();
@@ -803,7 +800,7 @@ fn push_adjacency_marks(
 ///
 /// 起動の最後の並べ直しが済んだ直後に 1 度だけ呼ばれ、記憶に位置が無いキャラクター窓の位置を
 /// 記憶へ送る。[`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない・1.4）、
-/// 書くのは次の 2 つを満たすスコープだけ:
+/// 書くのは次の 3 つを満たすスコープだけ:
 ///
 /// - 既定の位置 [`GhostWindows::default_char_pos`] が `Some`＝記憶に位置が無い。`None` は
 ///   記憶から戻したスコープで、書き換えない（寄せ直して表示している場合を含む・1.2）。
@@ -909,7 +906,7 @@ pub fn persist_unremembered_char_positions(world: &World) {
             w: size.width,
             h: size.height,
         };
-        // 既定の位置はずれに付いて動くので今の位置で比べ、書くのはずれを引いた元の位置（task 6.2）。
+        // 既定の位置はずれに付いて動くので今の位置で比べ、書くのはずれを引いた元の位置。
         let saved =
             char_pos_to_origin_x(anchor, origin_position(world, entity, current), char_size);
         info!(
@@ -961,7 +958,7 @@ mod balloon_offset_persist_roundtrip_tests;
 mod entries_tests;
 #[cfg(test)]
 #[path = "persist_finalize_save_tests.rs"]
-mod finalize_save_tests;
+pub(crate) mod finalize_save_tests;
 #[cfg(test)]
 #[path = "persist_io_wiring_tests.rs"]
 mod io_wiring_tests;

@@ -3,7 +3,7 @@
 //! 要件 2.2／4.7／4.9／5.5／6.1）。
 //!
 //! クランプ**式**そのものの行列（4 辺 × k=1/k≠1 × 逆転区間 × 冪等）は
-//! `balloon_limit_tests.rs`（task 1.3）が持つ。本ファイルが固定するのはその 1 段上——
+//! `balloon_limit_tests.rs` が持つ。本ファイルが固定するのはその 1 段上——
 //! **関門の判断分岐**である:
 //!
 //! - `balloon_limit` の有効判定（要件 2.7 の関門側の腕）
@@ -14,17 +14,18 @@
 //!
 //! # ログ檻の非空虚性
 //!
-//! 捕捉ハーネス（`test_support::capture`）は較正済みだが、「◯◯のログが無い」は
+//! 捕捉ハーネス（`log_capture_kit::capture`）は較正済みだが、「◯◯のログが無い」は
 //! 捕捉ゼロでも真になってしまう。本ファイルの「無い」側の主張は**必ず同じ捕捉集合から
 //! [`expect_one`] で 1 件取り出した後**に行う（`expect_one` は 0 件で panic するので、
 //! 捕捉が生きていることがその時点で証明されている）。
 
-use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
+use super::super::config::{BalloonXMode, ScopeConfig};
 use super::super::resolver::{ScopeInput, resolve_placement};
+use super::tests::{DPIS, work_area};
 use super::*;
 use crate::resolver::test_support::px;
 use crate::shared_test_support::MEASURE_DPI;
-use crate::shared_test_support::{assert_no_event, placement_sized};
+use crate::shared_test_support::{assert_no_event, cfg_of, placement_sized};
 use crate::test_support::{contained, point};
 use log_capture_kit::{ExpectField, capture, expect_one};
 
@@ -45,7 +46,7 @@ const CSZ: SizePx = SizePx { w: 400, h: 600 };
 /// バルーン窓寸。
 const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
-fn snapshot(areas: &[RectPx]) -> MonitorSnapshot {
+pub(super) fn snapshot(areas: &[RectPx]) -> MonitorSnapshot {
     MonitorSnapshot {
         work_areas: areas.to_vec(),
     }
@@ -304,19 +305,13 @@ fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
 /// はみ出しである。
 #[test]
 fn boot_gate_clamps_keyword_derived_initial_position() {
-    let mut cfg = PlacementConfig {
-        scopes: Default::default(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
-    };
-    cfg.scopes.insert(
+    let cfg = cfg_of(vec![(
         0,
         ScopeConfig {
             balloon_x_mode: BalloonXMode::CenterTop,
             ..ScopeConfig::default()
         },
-    );
+    )]);
     let placements = resolve_placement(
         &cfg,
         WA,
@@ -390,11 +385,8 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
 }
 
 // ---------------------------------------------------------------------------
-// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差（要件 7.1・task 4.3）
+// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差（要件 7.1）
 // ---------------------------------------------------------------------------
-
-/// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当。
-const GATE_DPIS: [i32; 4] = [96, 120, 144, 192];
 
 /// 要件 7.1 の行列を**関門の層で**閉じる: `limit {0,1}` × はみ出し方向 4 辺（単独）と
 /// 4 隅（複合）× k=1（dpi=96）および k≠1（120/144/192）の全交差。
@@ -424,14 +416,9 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
         ("右下", (1000, 580), (1720, 780)),
     ];
 
-    for dpi in GATE_DPIS {
+    for dpi in DPIS {
         // 左上が原点**でない**作業領域（境界の left/top 依存を暴く）。
-        let area = RectPx {
-            left: px(64, dpi),
-            top: px(40, dpi),
-            right: px(64 + 1920, dpi),
-            bottom: px(40 + 1080, dpi),
-        };
+        let area = work_area(dpi);
         let csz = SizePx {
             w: px(400, dpi),
             h: px(600, dpi),

@@ -1,29 +1,14 @@
 use super::*;
-use temp_path_kit::TempPath;
+use crate::source::tests::{unique_temp_dir, write_minimal_ghost_descript};
 
 // ------------------------------------------------------------------
 // load_restored_state（唯一の IO 点・8.1 前哨・6.1/6.3 寛容縮退）
 // ------------------------------------------------------------------
 
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**になる。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("placement-persist-{tag}"))
-}
-
 /// 最小ゴーストパッケージ（ghost/master/descript.txt ＋ shell/master dir）を組む。
-/// resolve が成功する最小構成（source.rs の失敗経路テストと同型）。
+/// resolve が成功する最小構成。
 fn plant_minimal_ghost(root: &Path) {
-    let _ = std::fs::remove_dir_all(root);
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
+    write_minimal_ghost_descript(root);
     std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
 }
 
@@ -70,8 +55,6 @@ fn load_restored_state_reads_planted_sylphya_toml() {
         entries.contains(&(PersistKey::BootCount, "1".to_string())),
         "植えた BootCount が読める: {entries:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// 起動時先読み: 永続ファイル不在（profile 未作成）→ 空（load_scope の不在縮退・6.1）。
@@ -82,11 +65,10 @@ fn load_restored_state_absent_file_is_empty() {
     plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない
     let entries = load_restored_state(&root);
     assert!(entries.is_empty(), "永続ファイル不在は空縮退: {entries:?}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// 起動時先読み: 既定のシェル（shell/master）が無くても、ゴーストの永続値は読める
-/// （永続の置き場は SHIORI の置き場だけで決まり、シェルの解決に縛られない・指摘 46）。
+/// （永続の置き場は SHIORI の置き場だけで決まり、シェルの解決に縛られない）。
 #[test]
 fn load_restored_state_survives_missing_default_shell() {
     let temp = unique_temp_dir("load-no-shell");
@@ -123,7 +105,7 @@ fn load_restored_state_mount_resolve_failure_is_empty() {
 
 // ------------------------------------------------------------------
 // PersistWiring / persist_entries（保存投函ヘルパ・design C1 State Management・
-//   task 2.1・Req1.1/1.9/6.2/7.1・Testing Strategy §1/§6）
+//   Req1.1/1.9/6.2/7.1・Testing Strategy §1/§6）
 //   NonSend リソース存在 → persist_put（Ghost 固定・fire-and-forget）／不在 → debug!＋no-op。
 // ------------------------------------------------------------------
 

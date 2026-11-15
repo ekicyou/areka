@@ -223,3 +223,135 @@ fn a_failed_commit_degrades_the_removal_and_leaves_the_file_intact() {
         "ERROR persist commit failed が出る: {events:?}"
     );
 }
+
+/// どの鍵も、保存してから消すとファイルに何も残らない（消しの置き場が保存の置き場と同じ）。
+#[test]
+fn every_key_saved_then_removed_leaves_nothing_in_the_file() {
+    let keys = [
+        PersistKey::WindowPos {
+            scope: 2,
+            axis: Axis::X,
+        },
+        PersistKey::WindowPos {
+            scope: 2,
+            axis: Axis::Y,
+        },
+        offset(2, Axis::X),
+        offset(2, Axis::Y),
+        PersistKey::WindowAdjacent { scope: 2 },
+        PersistKey::BootCount,
+        PersistKey::VanishCount,
+        PersistKey::LastGhost,
+        PersistKey::LastBalloon,
+        PersistKey::LastShell,
+        PersistKey::LastRunning,
+        PersistKey::BasewareRoots,
+    ];
+    for key in keys {
+        let io = FakePersistIo::new();
+        let saved = save_scope(
+            PersistScope::Ghost,
+            &ghost_roots(),
+            &io,
+            vec![(key, "v".to_string())],
+        );
+        assert_eq!(saved, PersistOutcome::Saved, "{key:?}");
+        assert_eq!(
+            load_scope(PersistScope::Ghost, &ghost_roots(), &io),
+            vec![(key, "v".to_string())],
+            "{key:?}: 保存した値が読める（消しの前提）"
+        );
+
+        let removed = remove_scope_keys(PersistScope::Ghost, &ghost_roots(), &io, vec![key]);
+
+        assert_eq!(removed, PersistOutcome::Saved, "{key:?}");
+        assert_eq!(
+            load_scope(PersistScope::Ghost, &ghost_roots(), &io),
+            vec![],
+            "{key:?}: 消した鍵が読める"
+        );
+        let table = stored_table(&io);
+        assert_eq!(
+            table.keys().collect::<Vec<_>>(),
+            vec!["format-version"],
+            "{key:?}: ファイルに残りがある: {table:?}"
+        );
+    }
+}
+
+/// 手で書いた `"00"` のような ID も読みは同じスコープ（`parse::<u32>()`）なので、消しはそれも消す。
+#[test]
+fn removal_also_drops_hand_written_spellings_of_the_same_scope() {
+    let io = FakePersistIo::new();
+    io.commit(
+        &ghost_file(),
+        "format-version = 1\n[balloon-offset.\"00\"]\nx = \"5\"\ny = \"6\"\n[window-adjacent]\n\"00\" = \"left\"\n[window.\"1\"]\nx = \"1\"\ny = \"2\"\n",
+    )
+    .unwrap();
+
+    let mut keys = both_offsets(&[0]);
+    keys.push(PersistKey::WindowAdjacent { scope: 0 });
+    let outcome = remove_scope_keys(PersistScope::Ghost, &ghost_roots(), &io, keys);
+
+    assert_eq!(outcome, PersistOutcome::Saved);
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &ghost_roots(), &io),
+        vec![
+            (
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::X
+                },
+                "1".to_string()
+            ),
+            (
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::Y
+                },
+                "2".to_string()
+            ),
+        ],
+        "\"00\" の綴りの鍵が残っている: {:?}",
+        stored_table(&io)
+    );
+}
+
+/// 保存も同じ。手で書いた `"00"` の綴りを残すと、正準の `"0"` と並んで古い値が読み戻される。
+#[test]
+fn saving_also_drops_hand_written_spellings_of_the_same_key() {
+    let io = FakePersistIo::new();
+    io.commit(
+        &ghost_file(),
+        "format-version = 1\n[balloon-offset.\"00\"]\nx = \"5\"\ny = \"6\"\n[window-adjacent]\n\"00\" = \"left\"\n",
+    )
+    .unwrap();
+
+    let adjacent = PersistKey::WindowAdjacent { scope: 0 };
+    let outcome = save_scope(
+        PersistScope::Ghost,
+        &ghost_roots(),
+        &io,
+        vec![
+            (offset(0, Axis::X), "9".to_string()),
+            (adjacent, "right".to_string()),
+        ],
+    );
+
+    assert_eq!(outcome, PersistOutcome::Saved);
+    let mut loaded = load_scope(PersistScope::Ghost, &ghost_roots(), &io);
+    loaded.sort_by_key(|(key, _)| key.to_canonical_key());
+    let mut expected = vec![
+        (offset(0, Axis::X), "9".to_string()),
+        // 保存しなかった軸は、手で書いた綴りの値がそのまま残る。
+        (offset(0, Axis::Y), "6".to_string()),
+        (adjacent, "right".to_string()),
+    ];
+    expected.sort_by_key(|(key, _)| key.to_canonical_key());
+    assert_eq!(
+        loaded,
+        expected,
+        "古い綴りの値が残っている: {:?}",
+        stored_table(&io)
+    );
+}

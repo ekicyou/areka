@@ -19,8 +19,8 @@
 //!
 //! # 依存規約
 //!
-//! クランプ核は `resolver` の物理 px 値型（[`PointPx`]／[`SizePx`]／[`RectPx`]）以外に
-//! 依存しない純関数であり、wintf／bevy_ecs を import しない
+//! クランプ核は `resolver` の物理 px 値型（[`PointPx`]／[`SizePx`]／[`RectPx`]）と、キャラ窓と
+//! 共有する 1 軸のクランプ（[`clamp_axis`]）だけに依存する純関数であり、wintf／bevy_ecs を import しない
 //! （design「Boundary Commitments / Allowed Dependencies」）。起動時関門
 //! [`apply_balloon_limit`] だけは [`MonitorSnapshot`]（bevy Resource derive だが
 //! headless 構築可）と [`work_area_for_window`] を消費してよい——決定論性は保たれ、
@@ -40,7 +40,7 @@ mod test_open {
     ///
     /// 実機サインオフの grep 判定語であり、`[balloon-limit] ` 接頭辞 1 語で本機能の記録を
     /// 全部拾えることが 2 段 grep の第 1 段になる（`[zorder-pair] ` の先例と同じ手口）。
-    /// 出力点は各関門（task 2.4／3.3／3.4）が持ち、本モジュールは語彙だけを所有する。
+    /// 出力点は各関門が持ち、本モジュールは語彙だけを所有する。
     pub const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
 }
 // 外へはテストのビルド（`test-support`）でだけ開く。crate の中は関門が使う（道と名前は同じ）。
@@ -57,13 +57,13 @@ pub(crate) const BALLOON_LIMIT_UNRESOLVED_TAG: &str = "[balloon-limit] Unresolve
 
 /// 起動時関門であることを表す契機ラベル（要件 6.1 の「契機」欄）。
 ///
-/// runtime 関門（task 3.3）と解放時補正（task 3.4）は [`super::diag::PlacementRoute`] を
+/// runtime 関門と解放時補正は [`super::diag::PlacementRoute`] を
 /// 契機に持つが、起動時関門は窓書込より前のデータ変換であり route 語彙を持たない。
 /// 補正ログの `context` フィールドで 3 関門を弁別できるようにするための語である
 /// （実機サインオフの 2 段 grep で「どの関門が動いたか」を切り分ける）。
 pub(crate) const BALLOON_LIMIT_BOOT_CONTEXT: &str = "boot-gate";
 
-/// runtime 関門（`enqueue_window_set_pos` 内・task 3.3）であることを表す契機ラベル。
+/// runtime 関門（`enqueue_window_set_pos` 内）であることを表す契機ラベル。
 ///
 /// runtime 関門は [`super::diag::PlacementRoute`] も併せて出せる（元書込の route ＝
 /// DD7「関門内の補正は元書込の route を保つ」）が、route だけでは起動時関門・解放時
@@ -72,7 +72,7 @@ pub(crate) const BALLOON_LIMIT_BOOT_CONTEXT: &str = "boot-gate";
 /// 切り分けられる（`BALLOON_LIMIT_BOOT_CONTEXT` の doc と対を成す規約）。
 pub(crate) const BALLOON_LIMIT_RUNTIME_CONTEXT: &str = "runtime-gate";
 
-/// バルーン単独ドラッグの解放時補正（`on_balloon_drag_end`・task 3.4）であることを
+/// バルーン単独ドラッグの解放時補正（`on_balloon_drag_end`）であることを
 /// 表す契機ラベル。
 ///
 /// 解放時補正は [`super::diag::PlacementRoute::BalloonLimitRelease`] という専用 route を

@@ -2,8 +2,8 @@
 //!
 //! 行列: はみ出し方向 4 辺の**単独**と**複合**（4 隅）× k=1 相当（dpi=96）および
 //! k≠1 相当（dpi=120/144/192）の寸法組 × 作業領域より大きいバルーン（逆転区間）×
-//! 非はみ出し（無補正）× 冪等性 × キャラ窓の既存クランプ（`resolver.rs` の
-//! `clamp_axis`）との意味論同値（本番の関数を直に使う）。
+//! 非はみ出し（無補正）× 冪等性。1 軸のクランプはキャラ窓と共有する（`resolver.rs` の
+//! `clamp_axis`）ので、期待値は作業領域の辺から直に書く（同じ関数を期待値にしない）。
 //!
 //! limit の有効／無効（limit={0,1}）は**呼び出し側（関門）の責務**であり本層は
 //! 「常にクランプする式」しか持たない（design C5「limit=0 は呼び出し側で skip」）。
@@ -14,14 +14,14 @@ use crate::resolver::test_support::px;
 use crate::test_support::{contained, point};
 
 // ---------------------------------------------------------------------------
-// 檻の道具（本体とは独立にここへ置く・resolver 檻 `resolver_test_support.rs` と同流儀）
+// 檻の道具（兄弟の檻 `balloon_limit_gate_tests.rs`・`balloon_limit_flip_tests.rs` も使う）
 // ---------------------------------------------------------------------------
 
 /// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当（3.4・U5・要件 2.10）。
-const DPIS: [i32; 4] = [96, 120, 144, 192];
+pub(super) const DPIS: [i32; 4] = [96, 120, 144, 192];
 
 /// 左上が原点**でない**作業領域（クランプ境界の left/top 依存を暴く）。
-fn work_area(dpi: i32) -> RectPx {
+pub(super) fn work_area(dpi: i32) -> RectPx {
     RectPx {
         left: px(64, dpi),
         top: px(40, dpi),
@@ -232,7 +232,11 @@ fn t_bl4_oversized_balloon_prefers_left_top() {
             ("tall", tall, false, true),
             ("huge", huge, true, true),
         ] {
-            for pos in [far_left_top, far_right_bottom] {
+            // 非超過軸の期待値: 左上から外れた入力は left/top 辺、右下から外れた入力は right/bottom 辺へ寄る。
+            for (pos, near_x, near_y) in [
+                (far_left_top, wa.left, wa.top),
+                (far_right_bottom, wa.right - sz.w, wa.bottom - sz.h),
+            ] {
                 let got = clamp_rect_to_work_area(pos, sz, wa);
                 if expect_left {
                     assert_eq!(
@@ -240,11 +244,7 @@ fn t_bl4_oversized_balloon_prefers_left_top() {
                         "dpi={dpi} {label}: 幅超過軸は left 辺一致（{pos:?}）"
                     );
                 } else {
-                    assert_eq!(
-                        got.x,
-                        clamp_axis(pos.x, wa.left, wa.right - sz.w),
-                        "dpi={dpi} {label}: 非超過軸は通常クランプ"
-                    );
+                    assert_eq!(got.x, near_x, "dpi={dpi} {label}: 非超過軸は通常クランプ");
                 }
                 if expect_top {
                     assert_eq!(
@@ -252,11 +252,7 @@ fn t_bl4_oversized_balloon_prefers_left_top() {
                         "dpi={dpi} {label}: 高さ超過軸は top 辺一致（{pos:?}）"
                     );
                 } else {
-                    assert_eq!(
-                        got.y,
-                        clamp_axis(pos.y, wa.top, wa.bottom - sz.h),
-                        "dpi={dpi} {label}: 非超過軸は通常クランプ"
-                    );
+                    assert_eq!(got.y, near_y, "dpi={dpi} {label}: 非超過軸は通常クランプ");
                 }
             }
         }

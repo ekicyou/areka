@@ -122,6 +122,16 @@ fn first_existing_picks_the_first_present_candidate() {
     assert_eq!(first_existing(&[12, 13], exists), None);
 }
 
+/// 最初に出す面: 候補の先頭から在る面、どれも無ければ組み込みの既定の面（測りと手本が使う答え）。
+#[test]
+fn initial_surface_is_first_present_candidate_else_builtin() {
+    // descript が kero の既定の面に 12 を書いた（候補は 12・10）。
+    let ds = read_default_surfaces(&kv(&[("kero.seriko.defaultsurface", "12")]));
+    assert_eq!(ds.initial_surface(1, |_| false), builtin_default_surface(1));
+    assert_eq!(ds.initial_surface(1, |id| id == 10), 10);
+    assert_eq!(ds.initial_surface(1, |_| true), 12);
+}
+
 /// シェルのスコープ個別 `0` がゴーストの `true` に勝つ（要件 4.1・4.2）。
 #[test]
 fn shell_scope_value_beats_ghost_balloon_dontmove() {
@@ -213,8 +223,22 @@ fn unreadable_ghost_value_locks_nothing() {
     assert!(locked.is_empty());
     assert_eq!(events.len(), 2, "{events:?}");
     let keys: Vec<&str> = events.iter().map(|e| e.expect_field("key")).collect();
-    assert_eq!(keys, ["kero.balloon.dontmove", "balloon.dontmove"]);
-    assert!(events.iter().all(|e| e.expect_field("scope") == "1"));
+    // ゴーストの段はスコープの前に 1 回だけ読む。
+    assert_eq!(keys, ["balloon.dontmove", "kero.balloon.dontmove"]);
+    let scopes: Vec<&str> = events.iter().map(|e| e.expect_field("scope")).collect();
+    assert_eq!(scopes, ["all", "1"]);
+}
+
+/// 読めないゴーストの値の記録は、スコープがいくつあっても 1 件（ゴーストの鍵のスコープは「all」）。
+#[test]
+fn unreadable_ghost_value_warns_once_for_all_scopes() {
+    let ghost = kv(&[("balloon.dontmove", "2")]);
+    let (locked, events) = capture(|| read_balloon_dontmove(&ghost, &kv(&[]), &[0, 1]));
+    assert!(locked.is_empty());
+    assert_eq!(events.len(), 1, "{events:?}");
+    let ev = expect_one(&events, "descript_value_unreadable");
+    assert_eq!(ev.expect_field("key"), "balloon.dontmove");
+    assert_eq!(ev.expect_field("scope"), "all");
 }
 
 /// ゴーストの `balloon.syncscale,true` はすべてのスコープを連動させ、鍵ごとに警告より下の段の記録を 1 件残す

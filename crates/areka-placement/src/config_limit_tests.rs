@@ -1,8 +1,8 @@
 //! `ScopeConfig` の limit / 水平配置モード保持枠の檻（要件 1.2・1.4／設計 C3）。
 //!
-//! 本タスク（1.2）が固定するのは**保持枠の既定値と縮退経路**のみである。
-//! `windowposition.limit` の語彙分類・警告・幾何・runtime 関門は後続タスク
-//! （2.1／2.2／2.3）の所有であり、ここでは扱わない。
+//! ここで固定するのは**保持枠の既定値と縮退経路**のみである。
+//! `windowposition.limit` の語彙分類・警告・幾何・runtime 関門は、取得経路（`lib.rs` の
+//! `merge_scope_windowpositions`）とその先が持ち、ここでは扱わない。
 
 use std::collections::BTreeMap;
 
@@ -42,12 +42,13 @@ fn t_l1_scope_config_default_enables_limit_and_side_mode() {
 }
 
 // ------------------------------------------------------------------
-// T-L2: descript KV 経路では保持枠が既定のまま（1.2・本タスクは未結線）
+// T-L2: descript KV 経路では保持枠が既定のまま（1.2）
 // ------------------------------------------------------------------
 
 /// T-L2: descript KV（ghost/shell）には `windowposition` 系キーが存在しないため、
 /// `build_placement_config` が返す全 scope の limit は既定＝有効・モードは `Side`。
-/// バルーン定義側からの反映は task 2.2 の取得経路が所有する。
+/// バルーン定義側からの反映は `build_placement_config` の外、`lib.rs` の `scale_then_merge` が呼ぶ
+/// 取得経路（`merge_scope_windowpositions`）が行う。
 #[test]
 fn t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes() {
     // emo2 実測相当（scope0/1）＋ char2（scope は足さない・areka-P0-emily-ghost-verification）

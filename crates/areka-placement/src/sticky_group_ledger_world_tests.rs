@@ -1,8 +1,8 @@
-//! 帳簿の World の側の薄い関数の決定論の檻（task 2.1・要件 3.1・3.4〜3.9・6.5・9.2・
+//! 帳簿の World の側の薄い関数の決定論の檻（要件 3.1・3.4〜3.9・6.5・9.2・
 //! design「StickyGroupLedger」）。
 //!
 //! 窓は偽の部品（`CharWindowMarker`＋`Anchored`＋`DragConfig`）だけで組み、記録は
-//! `log-capture-kit`（`test_support::capture`）で取る。
+//! `log-capture-kit`（`log_capture_kit::capture`）で取る。
 
 use std::collections::BTreeSet;
 
@@ -12,6 +12,7 @@ use super::super::follow::Anchored;
 use super::super::resolver::Anchor;
 use super::super::spawn::CharWindowMarker;
 use super::*;
+use crate::shared_test_support::events_with;
 use log_capture_kit::{CapturedEvent, capture};
 
 fn spawn_char(world: &mut World, scope: usize, anchor: Anchor) -> Entity {
@@ -54,15 +55,8 @@ fn groups(world: &World) -> Vec<StickyGroup> {
     world.resource::<StickyGroupLedger>().groups().to_vec()
 }
 
-fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
 fn one<'a>(events: &'a [CapturedEvent], event: &str) -> &'a CapturedEvent {
-    let hits = events_of(events, event);
+    let hits = events_with(events, event);
     assert_eq!(
         hits.len(),
         1,
@@ -91,8 +85,8 @@ fn set_sticky_adds_group_logs_and_resyncs_writer() {
     assert_eq!(logged.field_str("action"), Some("set"));
     let shown = logged.field("groups").unwrap();
     assert!(shown.contains("Script") && shown.contains("0") && shown.contains("1"));
-    assert!(events_of(&events, "sticky_group_rejected").is_empty());
-    assert!(events_of(&events, "sticky_member_absent").is_empty());
+    assert!(events_with(&events, "sticky_group_rejected").is_empty());
+    assert!(events_with(&events, "sticky_member_absent").is_empty());
 
     assert!(!move_window(&world, e[0]));
     assert!(!move_window(&world, e[1]));
@@ -207,7 +201,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
         let (mut world, _) = world_with_free_windows();
         let ((), events) = capture(|| seed_sticky_descript(&mut world, raw));
         assert!(groups(&world).is_empty(), "{raw:?}");
-        assert!(events_of(&events, "sticky_group_rejected").is_empty());
+        assert!(events_with(&events, "sticky_group_rejected").is_empty());
         assert_eq!(
             one(&events, "sticky_groups").field_str("action"),
             Some("descript_seed")

@@ -1,6 +1,7 @@
 //! 配置の外のテストも使う支え（`test-support` の機能か、配置自身のテストのときだけ立つ）。
 //!
-//! 頼るのは配置の型・`windows`・std だけ。`#[cfg(test)]` だけの項目と共有のテスト用の crate
+//! 頼るのは配置の型・`windows`・`wintf`・`areka_sylphya`・`areka_parsers`・std だけ。
+//! `#[cfg(test)]` だけの項目と共有のテスト用の crate
 //! （`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）には頼らない——本体のテストを組むときの
 //! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる（spec: placement-crate-split 要件 3.3・3.4）。
 //! 見本のゴーストの入口は crate ごとの `sample_test_support`、一時フォルダと合成の検体は
@@ -19,8 +20,7 @@ use wintf::ecs::WindowHandle;
 
 use crate::resolver::{PointPx, RectPx, SizePx};
 
-/// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求・
-/// measure.rs テストと同一パターン）。
+/// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求する）。
 pub fn with_com_initialized<F: FnOnce()>(f: F) {
     // 初期化に成功（S_OK・S_FALSE）したときだけ後始末する（RPC_E_CHANGED_MODE で
     // 他の初期化を壊さない）。
@@ -96,6 +96,11 @@ pub const WA: RectPx = RectPx {
     bottom: 1040,
 };
 
+/// キーワードのバルーン（`windowposition.x,center`・`windowposition.y,-20`）の descript の本文。
+/// [`synth_declared_dpi_ghost`] が組んだバルーンの `descript.txt` へ書いて使う。
+pub const KEYWORD_BALLOON_DESCRIPT: &str =
+    "charset,UTF-8\ndpi,96\nwindowposition.x,center\nwindowposition.y,-20\n";
+
 /// 宣言 DPI 付きの最小合成ゴーストを一時ディレクトリへ組む（テスト補助）。
 ///
 /// `prepare_never_reads_or_writes_ghost_dat` の合成ゴーストと同型（emo2 の実 PNG を
@@ -111,7 +116,7 @@ pub const WA: RectPx = RectPx {
 /// 置かない）。ゆえに全 scope の連鎖が本体側系列へ収束し、バルーン寸は scope に依らず
 /// 同一になる——本補助を使う檻は同時に要件 3.7（`balloonk*` 不在時の後方互換）の錨でもある。
 ///
-/// `balloon_windowposition`（task 4.3）: `Some((x, y))` ならバルーン既定設定へ
+/// `balloon_windowposition`: `Some((x, y))` ならバルーン既定設定へ
 /// `windowposition.x`/`.y` を宣言する（面別上書き `balloons0s.txt` は置かないので、
 /// 確定値はこの基層のみが供給する）。`None` なら**どの層にも `windowposition` が無い**
 /// ＝要件 3.4 の「数値指定なし」検体になる。
@@ -203,7 +208,7 @@ pub mod measure_template {
     ///
     /// 説明文（`//!`・`///`・`//`）の中の綴りを拾って偽陽性にせず、文字列リテラルへ逃がした綴りも
     /// 数えないための下拵え。本関数が扱えるのはコメントと通常の文字列リテラルだけで、
-    /// 二重引用符の文字リテラルと生文字列（`r"…"`・`r#"…"#`）は扱わない。これらが持ち込まれると
+    /// 二重引用符の文字リテラル（`'"'`・`'\"'`）と生文字列（`r"…"`・`r#"…"#`・`br"…"`・`cr"…"`）は扱わない。これらが持ち込まれると
     /// その `"` を文字列の始まりと読み違え、以降の本文を丸ごと文字列の中身として飲み込む——
     /// つまり失敗の向きは「赤になる」ではなく**静かに見逃す**である。だから散文で戒めるのではなく、
     /// 走査の前に [`assert_no_blind_spot_literals`] でこの 2 形式が 0 件であることを機械で主張する。
@@ -268,8 +273,9 @@ pub mod measure_template {
         out
     }
 
-    /// 二重引用符の文字リテラルの綴り（この綴り自体を走査対象へ書かないよう、文字列で持つ）。
-    const CHAR_QUOTE_LITERAL: &str = "'\"'";
+    /// 二重引用符の文字リテラルの綴り 2 通り（素の `"` と、逆斜線で逃がした `\"`。この綴り自体を
+    /// 走査対象へ書かないよう、文字列で持つ）。
+    const CHAR_QUOTE_LITERALS: [&str; 2] = ["'\"'", "'\\\"'"];
 
     /// [`code_only`] の前提条件を生のソースに対して主張する。
     ///
@@ -278,17 +284,22 @@ pub mod measure_template {
     /// 本文の判定の**前**に確かめる。走査対象のファイルは今日すべて、どちらの形式も 0 件である。
     pub fn assert_no_blind_spot_literals(raw: &str, file: &str) {
         assert!(
-            !raw.contains(CHAR_QUOTE_LITERAL),
+            !CHAR_QUOTE_LITERALS.iter().any(|form| raw.contains(form)),
             "{file}: 二重引用符の文字リテラルが持ち込まれた。走査器はこの形式を扱えない\
              （本物の呼び出しを静かに見逃す）。こういうリテラルを持ち込む前に走査器を強くすること"
         );
         let bytes = raw.as_bytes();
         for i in 0..bytes.len() {
-            // 生文字列の始まり＝識別子の途中でない `r` に `"` か `#` が続く形。
+            // 生文字列の始まり＝識別子の途中でない `r`（`br`・`cr` の接頭辞も含む）に `"` か `#` が続く形。
             if bytes[i] != b'r' {
                 continue;
             }
-            if i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
+            let start = if i > 0 && matches!(bytes[i - 1], b'b' | b'c') {
+                i - 1
+            } else {
+                i
+            };
+            if start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
                 continue;
             }
             if matches!(bytes.get(i + 1), Some(b'"') | Some(b'#')) {

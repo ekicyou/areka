@@ -220,7 +220,7 @@ pub(crate) fn owner_shape<H: Copy + Into<Option<HWND>>>(set: &[H]) -> Vec<Option
 
 /// Z のみを動かす素の指令（助走専用——本番の経路ではない）。挿入位置に渡すのは常にこの
 /// テストが作った窓である（他プロセスの窓だと、読み書きの間に消えて黙って失敗する）。
-pub(crate) fn place_after(hwnd: HWND, after: HWND) {
+fn place_after(hwnd: HWND, after: HWND) {
     // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす（活性化・移動・寸法変更なし）。
     unsafe {
         let _ = SetWindowPos(

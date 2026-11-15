@@ -11,6 +11,7 @@ use log_capture_kit::CapturedEvent;
 use temp_path_kit::TempPath;
 use wintf::ecs::DPI;
 
+use crate::config::{PlacementConfig, ScopeConfig};
 use crate::follow::OffsetBase;
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::test_support::point;
@@ -53,9 +54,26 @@ pub(super) fn placement_sized(
     }
 }
 
+/// スコープごとの構成だけを持つ `PlacementConfig`（descript 由来の生の値はどれも未指定）。
+pub(super) fn cfg_of(scopes: Vec<(usize, ScopeConfig)>) -> PlacementConfig {
+    PlacementConfig {
+        scopes: scopes.into_iter().collect(),
+        zorder_raw: None,
+        sticky_window_raw: None,
+    }
+}
+
 /// スコープ番号の並びを集合にする。
 pub(super) fn scopes(raw: &[u32]) -> BTreeSet<u32> {
     raw.iter().copied().collect()
+}
+
+/// 捕捉したイベントのうち、欄 `event` が `name` のものだけを順に取り出す。
+pub(super) fn events_with<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(name))
+        .collect()
 }
 
 /// 捕捉したイベントに `needle` を含むメッセージが無いことを主張する。
@@ -100,7 +118,7 @@ impl TempDir {
     }
 }
 
-/// バルーン定義だけの最小合成ディレクトリを組む（テスト補助・task 2.2）。
+/// バルーン定義だけの最小合成ディレクトリを組む（テスト補助）。
 ///
 /// 中身は既定設定 `descript.txt` ＋ 面 0 の画像 1 枚のみ。`resolve_balloon_faces` は
 /// **ファイル名の列挙**しか行わない（画像を復号しない）ため、これだけで面 0 の連鎖が

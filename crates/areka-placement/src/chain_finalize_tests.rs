@@ -199,31 +199,28 @@ fn defer_reason_names_the_scope_and_the_condition() {
     assert!(text.contains("764"), "実表示寸を載せる: {text}");
     assert!(text.contains("868"), "窓寸を載せて食い違いを示す: {text}");
 
-    // 世界全体に関わる理由はスコープを持たない（偽のスコープ番号を作らない）。
-    assert_eq!(ChainDeferReason::NoGhostWindows.scope(), None);
-    assert_eq!(ChainDeferReason::NoScopes.scope(), None);
-
     // 全理由が本文を持つ（Display の取りこぼしを塞ぐ）。
     for reason in ALL_REASONS {
         assert!(!reason.to_string().is_empty(), "理由 {reason:?} の本文が空");
     }
 }
 
-/// 見送り理由ごとの、[`ALL_REASONS`] での番号と固定語（観測レコードの `reason=`）。
+/// 見送り理由ごとの、[`ALL_REASONS`] での番号と固定語（観測レコードの `reason=`）と、
+/// スコープを持つか（世界全体に関わる理由は持たない＝偽のスコープ番号を作らない）。
 ///
 /// 網羅の `match` ゆえ、理由を 1 つ足すとここが組めなくなる。番号を振る人は [`ALL_REASONS`]
 /// へも同じ位置に足す（番号が列の位置と合わなければ下のテストが赤になる）。
-fn expected(reason: ChainDeferReason) -> (usize, &'static str) {
+fn expected(reason: ChainDeferReason) -> (usize, &'static str, bool) {
     match reason {
-        ChainDeferReason::NoGhostWindows => (0, "no-ghost-windows"),
-        ChainDeferReason::NoScopes => (1, "no-scopes"),
-        ChainDeferReason::NoCharWindow { .. } => (2, "no-char-window"),
-        ChainDeferReason::NotShownYet { .. } => (3, "not-shown-yet"),
-        ChainDeferReason::UnusableShownSize { .. } => (4, "unusable-shown-size"),
-        ChainDeferReason::NoWindowPos { .. } => (5, "no-window-pos"),
-        ChainDeferReason::IncompleteWindowPos { .. } => (6, "incomplete-window-pos"),
-        ChainDeferReason::ResnapNotLanded { .. } => (7, "resnap-not-landed"),
-        ChainDeferReason::DpiSyncHeld { .. } => (8, "dpi-sync-held"),
+        ChainDeferReason::NoGhostWindows => (0, "no-ghost-windows", false),
+        ChainDeferReason::NoScopes => (1, "no-scopes", false),
+        ChainDeferReason::NoCharWindow { .. } => (2, "no-char-window", true),
+        ChainDeferReason::NotShownYet { .. } => (3, "not-shown-yet", true),
+        ChainDeferReason::UnusableShownSize { .. } => (4, "unusable-shown-size", true),
+        ChainDeferReason::NoWindowPos { .. } => (5, "no-window-pos", true),
+        ChainDeferReason::IncompleteWindowPos { .. } => (6, "incomplete-window-pos", true),
+        ChainDeferReason::ResnapNotLanded { .. } => (7, "resnap-not-landed", true),
+        ChainDeferReason::DpiSyncHeld { .. } => (8, "dpi-sync-held", true),
     }
 }
 
@@ -252,15 +249,21 @@ const ALL_REASONS: [ChainDeferReason; 9] = [
 /// （`areka-P0-dpi-transition-atomicity` 設計 Data Models の `chain` 行）。
 ///
 /// [`ALL_REASONS`] の番号が 0〜N−1 をちょうど 1 度ずつ埋め（列の位置＝[`expected`] の番号）、
-/// 各理由の語が表と等しいことを確かめる。本文（[`std::fmt::Display`]）は値を含むので機械判定に
-/// 使えない。判定側が辞書引きするのはこちらの語である——重複すると 2 つの原因が 1 語に潰れて
+/// 各理由の語とスコープの有無が表と等しいことを確かめる。本文（[`std::fmt::Display`]）は
+/// 値を含むので機械判定に使えない。判定側が辞書引きするのはこちらの語である——重複すると 2 つの原因が 1 語に潰れて
 /// 切り分けが効かなくなる。
 #[test]
 fn every_defer_reason_has_a_distinct_machine_word() {
     for (i, reason) in ALL_REASONS.into_iter().enumerate() {
-        let (n, word) = expected(reason);
+        let (n, word, has_scope) = expected(reason);
         assert_eq!(n, i, "ALL_REASONS の {i} 番目の {reason:?} は表では {n} 番");
         assert_eq!(reason.as_str(), word, "{reason:?} の語が表と違う");
+        // ALL_REASONS のスコープ番号はどれも 0。
+        assert_eq!(
+            reason.scope(),
+            has_scope.then_some(0),
+            "{reason:?} のスコープの有無が表と違う"
+        );
     }
     let mut words: Vec<&str> = ALL_REASONS.iter().map(|reason| reason.as_str()).collect();
     words.sort_unstable();
@@ -277,7 +280,6 @@ fn every_defer_reason_has_a_distinct_machine_word() {
             "理由語に空白がある（1 行 1 レコードの分解が壊れる）: {word}"
         );
     }
-    assert_eq!(ChainDeferReason::DpiSyncHeld { scope: 3 }.scope(), Some(3));
 }
 
 /// 停滞診断の初期化で、**2 度目の待ちでも警告が一度は出る**ようになる

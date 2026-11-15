@@ -9,7 +9,7 @@
 //! - 未指定（`Numeric(None)`／`Value(true)`）と不正値（`Invalid`）の**区別**（要件 7.2）。
 //!
 //! 本層は分類だけを持ち、警告の発行は呼び出し側（`merge_scope_windowpositions`・
-//! scope 文脈付き・task 2.2）が所有する（design C1 Invariants）。ゆえに本檻は
+//! scope 文脈付き）が所有する（design C1 Invariants）。ゆえに本檻は
 //! `warn` の有無を主張せず、`Invalid` という**警告可能な戻り値**が出ることだけを固定する。
 
 use super::*;
@@ -51,18 +51,6 @@ fn classify_x_vocab_accepts_lowercase_keywords() {
     );
 }
 
-/// `Side` は分類結果に現れない（design C1 の型注記）——キーワード語彙は
-/// 中央上／中央下の 2 値しか作らず、`Side` は「キーワードでない」ことの表現である。
-#[test]
-fn classify_x_vocab_keyword_never_yields_side_mode() {
-    for raw in ["center", "top", "bottom"] {
-        match classify_x_vocab(None, Some(raw)) {
-            XVocab::Keyword(mode) => assert_ne!(mode, BalloonXMode::Side, "raw={raw}"),
-            other => panic!("raw={raw} はキーワードとして分類されるべき: {other:?}"),
-        }
-    }
-}
-
 /// 大文字混在は**キーワードとして受理しない**（DD8: 小文字の完全一致のみ）。
 /// `Invalid` へ落ちることで呼び出し側の warn が焚かれ、作者が綴りに気づける（要件 4.6）。
 #[test]
@@ -80,6 +68,7 @@ fn classify_x_vocab_rejects_mixed_case_keywords() {
 
 /// 未指定は `Numeric(None)`＝「調整なし」（既存 [`to_screen_adjust`] の入力語彙そのまま）。
 /// 生値そのものが無い状態であり、警告の対象ではない（要件 1.2 の x 側対応物）。
+/// 不正値（`Invalid`・下の檻）とは別の値になる＝未指定と不正値を区別する（要件 7.2）。
 #[test]
 fn classify_x_vocab_unspecified_is_numeric_none() {
     assert_eq!(classify_x_vocab(None, None), XVocab::Numeric(None));
@@ -107,18 +96,6 @@ fn classify_x_vocab_classifies_non_numeric_non_keyword_as_invalid() {
             "raw={raw:?}"
         );
     }
-}
-
-/// **未指定と不正値を区別する**（要件 7.2 が明記）。
-/// 同じ「数値が読めなかった」状態でも、未指定は無警告で既定へ、不正値は警告付き縮退へ
-/// 分岐する——現行の「非数値を無警告で未指定と同一視する」挙動の是正点そのもの（要件 4.6）。
-#[test]
-fn classify_x_vocab_distinguishes_unspecified_from_invalid() {
-    let unspecified = classify_x_vocab(None, None);
-    let invalid = classify_x_vocab(None, Some("centre"));
-    assert_eq!(unspecified, XVocab::Numeric(None));
-    assert_eq!(invalid, XVocab::Invalid);
-    assert_ne!(unspecified, invalid);
 }
 
 /// 不変量（design C1 Invariants）: `x_num.is_some()` なら**常に** `Numeric`。
@@ -167,6 +144,7 @@ fn classify_limit_vocab_accepts_zero_and_one() {
 }
 
 /// 未指定は正典既定 1（有効）へ（要件 1.2）。警告の対象ではない。
+/// 不正値（`Invalid`・下の檻）とは別の値になる＝未指定と不正値を区別する（要件 7.2）。
 #[test]
 fn classify_limit_vocab_unspecified_is_canonical_default_enabled() {
     assert_eq!(classify_limit_vocab(None), LimitVocab::Value(true));
@@ -186,17 +164,6 @@ fn classify_limit_vocab_classifies_out_of_domain_as_invalid() {
             "raw={raw:?}"
         );
     }
-}
-
-/// **未指定と不正値を区別する**（要件 7.2）。どちらも最終的には既定 1 へ落ちるが、
-/// 不正値だけが警告経路を通る（要件 1.3／6.3: ログの無い縮退経路を作らない）。
-#[test]
-fn classify_limit_vocab_distinguishes_unspecified_from_invalid() {
-    let unspecified = classify_limit_vocab(None);
-    let invalid = classify_limit_vocab(Some("2"));
-    assert_eq!(unspecified, LimitVocab::Value(true));
-    assert_eq!(invalid, LimitVocab::Invalid);
-    assert_ne!(unspecified, invalid);
 }
 
 /// x 側と同じく、kv 層 trim 済みの値に対して本層の `trim` は恒等（DD8）。

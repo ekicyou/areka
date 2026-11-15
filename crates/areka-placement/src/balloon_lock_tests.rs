@@ -1,15 +1,15 @@
-//! 動かせない指定の帳簿と書き手の決定論の檻（task 5.1・要件 4.1・4.3・4.4・5.1〜5.4・5.8・
+//! 動かせない指定の帳簿と書き手の決定論の檻（要件 4.1・4.3・4.4・5.1〜5.4・5.8・
 //! 6.2・7.3・design「BalloonLock」）。
 //!
 //! 窓は偽の部品（`BalloonWindowMarker`＋`DragConfig`）だけで組み、記録は
-//! `log-capture-kit`（`test_support::capture`）で取る。
+//! `log-capture-kit`（`log_capture_kit::capture`）で取る。
 
 use wintf::ecs::drag::DragConfig;
 
 use super::super::spawn::BalloonWindowMarker;
 use super::*;
-use crate::shared_test_support::scopes;
-use log_capture_kit::{CapturedEvent, capture};
+use crate::shared_test_support::{events_with, scopes};
+use log_capture_kit::capture;
 
 fn spawn_balloon(world: &mut World, scope: usize) -> Entity {
     world
@@ -30,13 +30,6 @@ fn movable(world: &World, e: Entity) -> bool {
 
 fn reason(world: &World, scope: u32) -> Option<HoldReason> {
     hold_reason(world.resource::<BalloonLockLedger>(), scope)
-}
-
-fn count(events: &[CapturedEvent], event: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .count()
 }
 
 /// descript の段だけ: 書かれたスコープだけ動かせず、ほかは動かせる（4.1・4.3）。
@@ -78,7 +71,7 @@ fn script_lock_applies_only_to_writing_scope() {
 
     assert!(!movable(&world, e[0]));
     assert!(movable(&world, e[1]));
-    assert_eq!(count(&events, "balloon_move_locked"), 1);
+    assert_eq!(events_with(&events, "balloon_move_locked").len(), 1);
     assert_eq!(
         reason(&world, 0),
         Some(HoldReason {
@@ -100,8 +93,8 @@ fn script_unlock_releases_only_its_scope() {
 
     assert!(movable(&world, e[0]));
     assert!(!movable(&world, e[1]));
-    assert_eq!(count(&events, "balloon_move_unlocked"), 1);
-    assert_eq!(count(&events, "balloon_move_unlock_held"), 0);
+    assert_eq!(events_with(&events, "balloon_move_unlocked").len(), 1);
+    assert_eq!(events_with(&events, "balloon_move_unlock_held").len(), 0);
 }
 
 /// descript の段の間は unlock で解けず、`balloon_move_unlock_held` が 1 件（5.3・5.8）。
@@ -114,8 +107,8 @@ fn unlock_cannot_release_descript_tier() {
     let ((), events) = capture(|| apply_script_balloon_lock(&mut world, 0, false));
 
     assert!(!movable(&world, e[0]));
-    assert_eq!(count(&events, "balloon_move_unlocked"), 1);
-    assert_eq!(count(&events, "balloon_move_unlock_held"), 1);
+    assert_eq!(events_with(&events, "balloon_move_unlocked").len(), 1);
+    assert_eq!(events_with(&events, "balloon_move_unlock_held").len(), 1);
     assert_eq!(
         reason(&world, 0),
         Some(HoldReason {
@@ -145,7 +138,7 @@ fn lock_without_ledger_warns_and_seeds_empty() {
 
     let ((), events) = capture(|| apply_script_balloon_lock(&mut world, 1, true));
 
-    assert_eq!(count(&events, "balloon_lock_ledger_missing"), 1);
+    assert_eq!(events_with(&events, "balloon_lock_ledger_missing").len(), 1);
     assert!(movable(&world, e[0]));
     assert!(!movable(&world, e[1]));
 }
@@ -197,6 +190,6 @@ fn replace_without_ledger_warns_and_installs() {
 
     let ((), events) = capture(|| replace_balloon_lock_descript(&mut world, &scopes(&[0])));
 
-    assert_eq!(count(&events, "balloon_lock_ledger_missing"), 1);
+    assert_eq!(events_with(&events, "balloon_lock_ledger_missing").len(), 1);
     assert!(!movable(&world, e[0]));
 }

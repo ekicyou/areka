@@ -10,20 +10,20 @@ use std::time::Instant;
 use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::{DPI, Point, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
 use super::apply_face_windowposition;
 use crate::follow::{
     BalloonFollow, MonitorSnapshot, OffsetRescale, on_balloon_drag, rescale_follow_offset,
 };
 use crate::persist::{apply_restored_placements, balloon_offset_entries};
-use crate::reseed::resolve_standard_scopes;
+use crate::reseed::{StandardScope, resolve_standard_scopes};
 use crate::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use crate::reset_pos::DefaultPlacementBasis;
+use crate::reset_pos::reset_pos_tests::give_fake_hwnds;
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::test_support::{WA, with_com_initialized};
@@ -67,15 +67,7 @@ fn booted_with(restored: &[(PersistKey, String)]) -> (World, GhostWindows) {
     let placements = apply_restored_placements(prepared.placements, restored, &snapshot);
     world.insert_resource(snapshot);
     let windows = spawn_ghost_windows(&mut world, &placements, &prepared.titles);
-    let mut raw = 0x100;
-    for scope in windows.scopes() {
-        for e in [windows.char_window(scope), windows.balloon_window(scope)] {
-            raw += 1;
-            world.entity_mut(e.unwrap()).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-        }
-    }
+    give_fake_hwnds(&mut world, &windows);
     // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
     world.flush();
     for scope in windows.scopes() {
@@ -103,6 +95,15 @@ fn follow(world: &World, windows: &GhostWindows, scope: usize) -> BalloonFollow 
 
 fn basis(world: &World) -> DefaultPlacementBasis {
     world.resource::<DefaultPlacementBasis>().clone()
+}
+
+/// 今の材料で解いたスコープ 0 の標準の位置。
+fn standard_of_scope0(world: &World, windows: &GhostWindows) -> StandardScope {
+    let b = basis(world);
+    resolve_standard_scopes(world, windows, &b.source, &b.balloon)
+        .into_iter()
+        .find(|s| s.running.input.scope == 0)
+        .expect("スコープ 0 の標準の位置を解ける")
 }
 
 /// 本番のドラッグの口（[`on_balloon_drag`]）で、スコープのバルーンを横へ `dx` だけずらす
@@ -143,12 +144,11 @@ fn standard_balloon_moves_to_the_new_face_position() {
         let (moved, events) = capture(|| apply_face_windowposition(&mut world, 0, other_face()));
         assert!(moved, "標準の位置のバルーンは置き直す");
 
-        let b = basis(&world);
-        assert_eq!(b.balloon.windowpositions.get(&0), Some(&other_face()));
-        let want = resolve_standard_scopes(&world, &windows, &b.source, &b.balloon)
-            .into_iter()
-            .find(|s| s.running.input.scope == 0)
-            .expect("スコープ 0 の標準の位置を解ける");
+        assert_eq!(
+            basis(&world).balloon.windowpositions.get(&0),
+            Some(&other_face())
+        );
+        let want = standard_of_scope0(&world, &windows);
         let base = want.placement.balloon_offset_base;
         assert_ne!(
             base.offset, old_offset,
@@ -183,7 +183,7 @@ fn standard_balloon_moves_to_the_new_face_position() {
 }
 
 /// 1px だけドラッグしたバルーンも位置とずらしを保ち、材料だけが新しい面の値になる
-/// （動かした量でなく、動かしたことで決める・指摘 2）。
+/// （動かした量でなく、動かしたことで決める）。
 #[test]
 fn dragged_balloon_keeps_its_position() {
     with_com_initialized(|| {
@@ -255,9 +255,37 @@ fn same_value_does_nothing() {
     });
 }
 
+/// 材料（`DefaultPlacementBasis`）・窓の一式（`GhostWindows`）が無ければ `warn!` を 1 行出して
+/// 何もしない。
+#[test]
+fn missing_material_only_warns() {
+    with_com_initialized(|| {
+        for reason in ["no_default_basis", "no_ghost_windows"] {
+            let (mut world, _windows) = booted();
+            if reason == "no_default_basis" {
+                world.remove_resource::<DefaultPlacementBasis>();
+            } else {
+                world.remove_resource::<GhostWindows>();
+            }
+            let (moved, events) =
+                capture(|| apply_face_windowposition(&mut world, 0, other_face()));
+            assert!(!moved, "{reason}: 何もしない");
+            let skips: Vec<_> = events
+                .iter()
+                .filter(|e| e.field_str("event") == Some("balloon_face_windowposition_skipped"))
+                .collect();
+            assert_eq!(skips.len(), 1, "{reason}: warn が 1 行: {events:?}");
+            assert_eq!(skips[0].level, tracing::Level::WARN);
+            assert_eq!(skips[0].field_str("reason"), Some(reason));
+            assert!(face_logs(&events).is_empty(), "{reason}: {events:?}");
+            let _ = drain_window_pos_commands();
+        }
+    });
+}
+
 /// 96 で面を変えて標準の位置へ置き、144 へ移ってずらしを追随させただけのバルーンは、また面を
 /// 変えると新しい面の標準の位置へ置き直される（追随の値と 144 で解き直した値は丸めで 1px
-/// 食い違う・指摘 2）。
+/// 食い違う）。
 #[test]
 fn balloon_followed_from_96_to_144_moves_to_the_new_face_position() {
     with_com_initialized(|| {
@@ -284,11 +312,7 @@ fn balloon_followed_from_96_to_144_moves_to_the_new_face_position() {
                 other => panic!("96 の基準は 144 へ追随する: {other:?}"),
             }
         }
-        let old = basis(&world);
-        let standard_144 = resolve_standard_scopes(&world, &windows, &old.source, &old.balloon)
-            .into_iter()
-            .find(|s| s.running.input.scope == 0)
-            .expect("スコープ 0 の標準の位置を解ける")
+        let standard_144 = standard_of_scope0(&world, &windows)
             .placement
             .balloon_offset_base
             .offset;
@@ -302,21 +326,18 @@ fn balloon_followed_from_96_to_144_moves_to_the_new_face_position() {
             apply_face_windowposition(&mut world, 0, third_face()),
             "利用者が動かしていないバルーンは置き直す"
         );
-        let b = basis(&world);
-        let want = resolve_standard_scopes(&world, &windows, &b.source, &b.balloon)
-            .into_iter()
-            .find(|s| s.running.input.scope == 0)
-            .unwrap();
         assert_eq!(
             follow(&world, &windows, 0).base(),
-            want.placement.balloon_offset_base
+            standard_of_scope0(&world, &windows)
+                .placement
+                .balloon_offset_base
         );
         let _ = drain_window_pos_commands();
     });
 }
 
 /// 記憶から戻したバルーンは、記憶の値が標準の値と同じでも置き直さない
-/// （値の違いでなく、記憶から戻したことで決める・指摘 2）。
+/// （値の違いでなく、記憶から戻したことで決める）。
 #[test]
 fn balloon_restored_from_memory_keeps_its_position() {
     with_com_initialized(|| {

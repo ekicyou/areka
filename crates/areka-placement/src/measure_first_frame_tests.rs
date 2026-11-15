@@ -67,7 +67,8 @@ fn insert(dec: &mut MemoryDecoder, rel: &str, px: Px) {
     dec.insert(path(rel), 2, 2, 8, img.bgra, img.has_alpha);
 }
 
-/// 5 つの口の呼ばれた回数を数える包み（このファイルの中だけで使う）。
+/// 読む口のうち 3 つ（`decode`・`decode_first_frame`・`decode_frames`）の呼ばれた回数を数える包み
+/// （このファイルの中だけで使う）。
 #[derive(Default)]
 struct Counting {
     inner: MemoryDecoder,

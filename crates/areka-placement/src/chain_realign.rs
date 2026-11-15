@@ -97,8 +97,19 @@ pub struct ChainRealignPending {
     /// 武装の時点で控えた、変わる直前のキャラ窓の矩形（スコープ, 矩形）。
     /// 控えられなかったスコープは入らない（要件 1.1・7.2）。
     pub before: Vec<(usize, ChainRect)>,
-    /// 武装中に台本が置いた窓（同じ窓が何度入ってもよい・要件 3.1）。
+    /// 武装中に台本が置いた窓（同じ窓は 1 つだけ入る・要件 3.1）。
+    ///
+    /// 解き直しが待ちで止まったまま台本が同じ窓を何度も置いても、記録は窓の数より増えない。
     pub script_moved: Vec<Entity>,
+}
+
+impl ChainRealignPending {
+    /// 台本が置いた窓を記録に足す（もう入っている窓は足さない）。
+    fn note(&mut self, window: Entity) {
+        if !self.script_moved.contains(&window) {
+            self.script_moved.push(window);
+        }
+    }
 }
 
 /// 全キャラ窓の今の矩形を控える（`dpi-realign-remembered-chain` 要件 1.1・7.2）。
@@ -186,7 +197,7 @@ pub fn arm_chain_realign(world: &mut World, before: Vec<(usize, ChainRect)>) {
 /// `script_moved` に積む（`dpi-realign-remembered-chain` 要件 3.1）。武装していなければ何もしない。
 pub(super) fn note_script_placed_after_arm(mut world: DeferredWorld, hook: HookContext) {
     if let Some(mut pending) = world.get_resource_mut::<ChainRealignPending>() {
-        pending.script_moved.push(hook.entity);
+        pending.note(hook.entity);
     }
 }
 
@@ -194,7 +205,7 @@ pub(super) fn note_script_placed_after_arm(mut world: DeferredWorld, hook: HookC
 /// 武装中なら窓を `script_moved` に積む（要件 3.1）。武装していなければ何もしない。
 pub fn note_script_moved(world: &mut World, char_window: Entity) {
     if let Some(mut pending) = world.get_resource_mut::<ChainRealignPending>() {
-        pending.script_moved.push(char_window);
+        pending.note(char_window);
     }
 }
 

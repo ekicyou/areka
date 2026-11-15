@@ -93,8 +93,8 @@
 //! 2. **本 probe は `pasta.dll` を一切ロードしない**: SHIORI（`pasta.dll`）も host-32 helper も起動しない
 //!    ため、`0x8007007E`（DLL LOAD 失敗）の経路自体が存在しない。**読むものは少なくない**が、いずれも
 //!    データファイルの読取であって DLL のロードではない——実際の読取先は次のとおり:
-//!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:153-155`・寛容読取）・**shell の
-//!      `descript.txt`**（`source.rs:157-168`・読取失敗は致命）・**バルーンの `descript.txt`**
+//!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:154-156`・寛容読取）・**shell の
+//!      `descript.txt`**（`source.rs:158-169`・読取失敗は致命）・**バルーンの `descript.txt`**
 //!      （`source.rs:208-212`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
@@ -112,7 +112,7 @@
 //! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
 //! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
 //! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、
-//! これは in-repo テスト `crates/areka-placement/src/source_tests.rs:264-268`
+//! これは in-repo テスト `crates/areka-placement/src/source_tests.rs:236-240`
 //! （`shell_author_dpi_emo2_fixture_is_default_96`）と実行ログ（`primary_dpi=192 shell_author_dpi=96
 //! balloon_author_dpi=96` ／ `apply(ShowSurface): ... author_dpi=96 window_dpi=Some((192,192))`）の
 //! 双方で確認できる。**`seriko.dpi` を宣言する別ゴーストへ差し替えると窓寸（採寸 k₀）と表示 k が

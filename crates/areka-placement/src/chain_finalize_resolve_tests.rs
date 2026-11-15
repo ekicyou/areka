@@ -184,27 +184,6 @@ fn empty_single_and_extremes() {
     assert_eq!(moves[0].new_x, i32::MIN, "飽和して下限に張り付く");
 }
 
-/// 記憶から戻したスコープの決め: 印の 3 通り＋印なし（6.3・6.4）。
-#[test]
-fn remembered_decision_covers_three_marks_and_none() {
-    assert_eq!(
-        remembered_decision(Some(AdjacencyMark::Left)),
-        PairDecision::JoinLeft
-    );
-    assert_eq!(
-        remembered_decision(Some(AdjacencyMark::Right)),
-        PairDecision::JoinRight
-    );
-    assert_eq!(
-        remembered_decision(Some(AdjacencyMark::Separate)),
-        PairDecision::Keep(KeepReason::RememberedSeparate)
-    );
-    assert_eq!(
-        remembered_decision(None),
-        PairDecision::Keep(KeepReason::NoRememberedMark)
-    );
-}
-
 /// 動かさない理由の固定語（ログの語・7.1 の判別に使う）。
 #[test]
 fn keep_reason_fixed_words() {

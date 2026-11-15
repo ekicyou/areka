@@ -1,7 +1,7 @@
-//! ECS 組立: キャラ窓／バルーン窓 entity spawn と公開データ構造（task 5.1）。
+//! ECS 組立: キャラ窓／バルーン窓 entity spawn と公開データ構造。
 //!
 //! 解決済み配置（[`ScopePlacement`]）から窓 entity を組み立て、識別子
-//! （markers・[`GhostWindows`]）を後続（emo2-boot）へ公開する
+//! （markers・[`GhostWindows`]）を後続（`ghost_session`・`runtime`）へ公開する
 //! （design「placement::spawn」・要件 1.1/1.2/1.5/4.1/4.5/5.1/6.1/6.2/6.3/7.2）。
 //!
 //! # 座標単位契約（design U1/U2）
@@ -27,7 +27,7 @@
 //!   委譲。組に入った窓は直後の `sync_drag_writer` が Free でも false に付け直す・設計の決め 12）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
 //!   さらに `OnDragEnd(on_char_drag_end)` を持つ（最終カーソル位置への同写像適用＋
 //!   確定位置の永続 write-through・非 Free は最終再固定・Free は保存専用アーム・
-//!   DD15 v2 (3)・1.1・task 2.2）。
+//!   DD15 v2 (3)・1.1）。
 //!   なおキャラ窓へのポインタハンドラ（`OnPointerMoved`／`OnPointerPressed`）は
 //!   **本モジュールでは付けない**——マウス移動／ダブルクリックを kanade へ配信する結線は
 //!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
@@ -42,8 +42,8 @@
 //!   終了経路からは呼ばない）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
-//!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
-//!   確定 offset の永続 write-through（2.1・design C3・task 2.3。`on_balloon_drag` は連続
+//!   相対位置記憶（4.8・DD16）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
+//!   確定 offset の永続 write-through（2.1・design C3。`on_balloon_drag` は連続
 //!   イベントで保存トリガではなく、DragEnd 確定点でのみ 1 ドラッグ 1 書込）・`BalloonFollow`
 //!   なし。さらに `BalloonLimit(p.balloon_limit)`＝`windowposition.limit` 解決値の
 //!   runtime 焼込みを**バルーン窓側にだけ**持つ（areka-P0-windowposition-limit 2.7/2.8・
@@ -55,7 +55,7 @@
 //!   キャラ窓 entity を要するため後付け＝生成順は不変。同時に scope とペア両窓を結ぶ
 //!   `declared` 記録を出す＝scope を知る層は areka だけ・6.1））
 //!
-//! # clickthrough 登録（task 5.2）
+//! # clickthrough 登録
 //!
 //! [`register_ghost_windows_click_through`] が `Added<WindowHandle>` で
 //! [`GhostWindowMarker`] 窓を αマスク clickthrough 機構
@@ -223,7 +223,7 @@ pub struct BalloonLimit(pub bool);
 ///
 /// 起動時だけに置いていた頃は、実表示寸が採寸寸と一致する**ふつうの**ゴースト
 /// （＝再解決が同寸 skip で素材を消費しない）で、ドラッグ後の寸法変化がキーワード既定を
-/// 利用者の相対位置へ上書きしていた（2026-08-14 の feature 検証で確認・task 4.6 で是正）。
+/// 利用者の相対位置へ上書きしていた（2026-08-14 の feature 検証で確認して是正）。
 ///
 /// # 一度きりである理由と、その限界
 ///
@@ -249,7 +249,7 @@ pub struct BalloonKeywordBase {
 }
 
 // ---------------------------------------------------------------------------
-// GhostWindows（後続 emo2-boot への引き渡し正本・6.1/6.2）
+// GhostWindows（後続 `ghost_session`・`runtime` への引き渡し正本・6.1/6.2）
 // ---------------------------------------------------------------------------
 
 /// スコープ 1 体ぶんの窓 entity 対（キャラ窓＋バルーン窓）。
@@ -266,7 +266,7 @@ pub struct ScopeWindows {
     /// 既定配置のままであり、ゴースト台本の移動指令や利用者のドラッグで動いた
     /// スコープは一致しなくなる——移動側へフックを足さずに除外できる。
     ///
-    /// # 初期値は spawn 時の resolver 出力だが、そこに固定はされない（atom task 5.5）
+    /// # 初期値は spawn 時の resolver 出力だが、そこに固定はされない
     ///
     /// 拡大率が変わればキャラ窓は新しい寸で下端中央を保ったまま置き直され、**誰も触って
     /// いないスコープの位置も動く**。この基準を spawn 時の値に固定したままだと、遷移後は
@@ -297,7 +297,7 @@ pub struct ScopeWindows {
     pub remembered_adjacency: Option<AdjacencyMark>,
 }
 
-/// 後続（emo2-boot）への引き渡し正本（6.1/6.2）。
+/// 後続（`ghost_session`・`runtime`）への引き渡し正本（6.1/6.2）。
 ///
 /// 「スコープ×種別 → Entity」の唯一の正本（markers は補助的な逆引き）。
 /// spawn 完了時に Resource 挿入＋戻り値の両方で公開される。ゴーストの切替などで
@@ -451,9 +451,9 @@ pub fn spawn_ghost_windows(
         // バルーン窓（design「窓 entity 構成（バルーン窓）」: キャラ窓と同型・
         // marker は BalloonWindowMarker・DragConfig::default() 付与＝単独ドラッグ可
         // （4.5）・OnDrag(on_balloon_drag) で単独ドラッグの相対位置記憶
-        // （4.8・DD16・task 8.3）・BalloonFollow なし。
+        // （4.8・DD16）・BalloonFollow なし。
         // M1 はバルーンにマウス送出なし＝ポインタハンドラを付けない（DD-IE-12・
-        // task 3.2：stand-in `on_ghost_pressed` 登録を撤去。バルーン入力は
+        // stand-in の `on_ghost_pressed` 登録は撤去済み。バルーン入力は
         // M-dialogue／choice-render の領分でリゾルバは shell 窓専用）。
         let balloon_window = world
             .spawn((
@@ -483,7 +483,7 @@ pub fn spawn_ghost_windows(
                 BalloonLimit(p.balloon_limit),
                 OnDrag(on_balloon_drag),
                 // バルーン単独ドラッグ確定 offset の永続 write-through（2.1・8.1・
-                // design C3・task 2.3）。on_balloon_drag は連続イベント（in-session offset
+                // design C3）。on_balloon_drag は連続イベント（in-session offset
                 // 更新）で保存トリガではない——DragEnd 確定点でのみ 1 ドラッグ 1 書込する。
                 OnDragEnd(on_balloon_drag_end),
             ))
@@ -519,7 +519,7 @@ pub fn spawn_ghost_windows(
                 },
                 // 非 Free アンカー（Bottom/Top/Left/Right）のキャラ窓は
                 // move_window=false＝wndproc は窓を動かさず on_char_drag が単一ライター
-                // （DD15 v2・4.7・task 8.2R）。Free は従来どおり wndproc 直接移動（4.1）。
+                // （DD15 v2・4.7）。Free は従来どおり wndproc 直接移動（4.1）。
                 // 二値吸着フラグは持たず anchor 単一値から導出する（Req1.6）。
                 // threshold 等は既定を保つ。
                 DragConfig {
@@ -538,7 +538,7 @@ pub fn spawn_ghost_windows(
             ))
             .id();
 
-        // DragEnd 最終適用＋位置保存の結線（1.1/1.9/4.7/1.6・design C2/C3・task 2.2）:
+        // DragEnd 最終適用＋位置保存の結線（1.1/1.9/4.7/1.6・design C2/C3）:
         // Free 含む**全**キャラ窓へ OnDragEnd を無条件結線する（吸着はドラッグ中の制約で
         // あって保存条件ではない・1.1）。非 Free は on_char_drag_end が Anchored を読んで
         // project_anchor でアンカー辺へ最終再固定し（最終 DragEvent 欠落の穴埋め・DD15 v2 (3)）、
@@ -548,7 +548,7 @@ pub fn spawn_ghost_windows(
         world
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
-        // 記憶から戻したずらしなら利用者が動かした印を付ける（指摘 2）。
+        // 記憶から戻したずらしなら利用者が動かした印を付ける。
         mark_by_base(world, char_window, p.balloon_offset_base);
 
         // キーワード再導出の素材（windowposition-limit 4.7・実機サインオフ是正）:
@@ -705,7 +705,7 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 /// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）で、`Schedules` 資源が既在の
 /// World（`EcsWorld` 内 World）に対し、schedule 実行外で同期に呼ぶ（クリック透過登録と同じ作法）。
 pub fn wire_zorder_pair(world: &mut World) {
-    // 挿入と記録は**同じ束縛**から行う（要件 5.6・task 5.1 の観測条項）。値を 2 度書くと
+    // 挿入と記録は**同じ束縛**から行う（要件 5.6 の観測条項）。値を 2 度書くと
     // 片方だけ変えたときに記録が静かに嘘をつく——起動時ログは「どの方式で動いているか」を
     // 名乗る唯一の手段ゆえ、嘘をつける形にしてはならない。
     let strategy = ZOrderPairStrategy::OwnerLink {
@@ -728,7 +728,7 @@ pub fn wire_zorder_pair(world: &mut World) {
 }
 
 // ---------------------------------------------------------------------------
-// clickthrough 登録 system（task 5.2・6.1）
+// clickthrough 登録 system（6.1）
 // ---------------------------------------------------------------------------
 
 /// clickthrough 登録面の偽装境界（fake boundary）シーム。
@@ -759,8 +759,9 @@ impl ClickThroughRegistrar for ClickThroughRegistryHandle {
 /// `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を厳密に 1 回
 /// 登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
 /// `ClickThroughRegistryHandle` は `WinApp::run` の結線で NonSend リソース
-/// として挿入される。ごく初期の tick で未挿入の可能性へ `Option` で防御する
-/// （headless でも no-op で安全）。schedule への結線は `ghost_session::register_systems`
+/// として挿入される。未挿入（headless・ごく初期の tick）なら新しい窓ごとに
+/// `clickthrough_register_skipped` を warn し、その窓は登録されないまま残る
+/// （`Added` は 1 度きりなので後から拾い直さない）。schedule への結線は `ghost_session::register_systems`
 /// が `FrameFinalize` へ行う。
 pub fn register_ghost_windows_click_through(
     new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,

@@ -30,9 +30,8 @@
 //! 錨はすべて areka 側に在る。11 番目（窓の出現・破棄に伴う繋ぎ直しの導出）のうち、
 //! **何を繋ぐか**を在庫から導く段（`compose_chain` と drain 相の差分公開）は areka 側に在るので
 //! ここで覆う。導かれた鎖の差から**どの繋ぎを切って張るか**を組む段（`plan_chain_ops`）と、
-//! 重なりの是正の要否・見送りの理由語は wintf 側に在り、別クレートのファイルを読めないため
-//! ここには載せない——`tick_gate_config_producers_tests.rs` が示した「クレートの境界で
-//! 表を分ける」流儀に揃えてある。wintf 側の分岐は `zorder_chain_tests.rs`／`zorder_chain_apply_tests.rs` が
+//! 重なりの是正の要否・見送りの理由語は wintf 側に在るので、ここには載せない。
+//! wintf 側の分岐は `zorder_chain_tests.rs`／`zorder_chain_apply_tests.rs` が
 //! 自前で覆う。
 
 use super::zorder_branch_coverage_test_support::check_table;

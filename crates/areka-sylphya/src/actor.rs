@@ -244,7 +244,7 @@ pub enum Effect {
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
     },
-    /// 永続の鍵を消す（記憶の側）。5.2 が [`crate::persist::remove_scope_keys`] を実行する。
+    /// 永続の鍵を消す（記憶の側）。実行は [`crate::persist::remove_scope_keys`] を呼ぶ。
     PersistRemove {
         /// スコープ。
         scope: PersistScope,
