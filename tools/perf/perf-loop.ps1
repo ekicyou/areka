@@ -37,7 +37,7 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
   followup          followup/{run.log, probe.log, followup.txt, followup-verdict.txt}
   final             <build>/ ごとに走行 5 つ＋verdict.txt（spec の results へも写す）
 
-子の道具の出力は**必ず UTF-8 として読む**（perf-loop.common.ps1 の Invoke-Child）。
+子の道具の出力は**必ず UTF-8 として読む**（perf-tool-base.ps1 の Invoke-Child）。
 端末の既定コードページが CP932 の環境でも、道具が UTF-8 で書いた文字が化けないため。
 これは字面を比べる検査（goal-text と goals/*.goal.md の一致）の前提である。
 
@@ -67,24 +67,20 @@ perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
 較正値・調整値の一覧（変更する場合はここだけを書き換える）
 --------------------------------------------------------------------------------
   SCRIPT_VERSION              本スクリプトの版
-  DEFAULT_GOAL                -Goal を省いたときの目標の名前
   SELFTEST_TOOLS              自己較正を回す道具の一覧と順序（下の表）
   CHECKIN_DEFAULT_MINUTES     CLAUDE_CODE_GOAL_CHECKIN_MINUTES 未設定時の実効値（30 分・
                               Claude Code の既定。公式文書 code.claude.com/docs/en/goal.md）
   CHECKIN_WARN_BELOW_MINUTES  これ未満なら警告（25 分水準の計測に check-in が割り込む）
   PYTHON_MIN_VERSION          tomllib が要る最低の Python（3.11）
-  PWSH_MIN_MAJOR              最低の PowerShell（7）
-  XPERF_DEFAULT_PATH          PATH に xperf が無いときに見に行く既定の位置
-                              （invoke-cpu-sample.ps1 の同名定数の写し）
   RELEASE_PDB_RELPATH         段③の記号解決に要る PDB の在り処
 
 終了コード（design C5 の体系。全てのサブコマンドで同じ意味）:
   0 … 完了（段③が UNAVAILABLE でも preflight は 0 で続行を許す）
   1 … 実走の失敗
   2 … 静寂でない（再試行の上限を超えた）
-  3 … 引数・前提の不正（未知のサブコマンド・目標定義ファイルが無い・未実装の受け口）
+  3 … 引数・前提の不正（未知のサブコマンド・目標定義ファイルが無い・-Goal と -GoalFile の同時指定）
   4 … 計測失敗＝MEASURE_FAILED（自己較正が赤・判定スクリプトの版不一致・空採取・
-      記号解決ゼロ）。台帳へは MEASURE_FAILED として記録される
+      記号解決ゼロ）。想定外の失敗（道具の不具合）もここに入る。台帳へは MEASURE_FAILED として記録される
   5 … 能力不足＝UNAVAILABLE（昇格なし・xperf なし・PDB なし）。**停止の理由にしない**。
       preflight は段③を UNAVAILABLE と記して 0 で返す（順位表は段①②④で続く）
 
@@ -118,8 +114,12 @@ param(
     # 目標定義ファイルを直接指定する（-Goal の代わり。試験・別所在用）
     [string]$GoalFile,
 
-    # 周番号（iter-<n> の <n>）。周の作業場を使うサブコマンドが読む
-    [int]$Iter = 0,
+    # 周番号（iter-<n> の <n>）。周の作業場を使うサブコマンドが読む。
+    # 字で受けて入口で整数にする（型の変換の失敗を PowerShell の束ねに任せると RESULT 行の無い 1 になる）。
+    # shortcut: 値の無い '-Iter'・同じ名前の 2 度の指定・いくつもの引数に当たる縮めた名前（-B・-R）は、なお束ねの段で
+    # RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
+    # 呼び手（スキル・エージェント）が手で打つ形でそうなるようになったら、引数を全部受け皿で受けて自分で解く形にする
+    [string]$Iter = '0',
 
     # 走行の出力先を直接指定する（既定の配置を使わないとき）
     [string]$RunDir,
@@ -151,8 +151,20 @@ param(
 
     # **試験専用**。areka を起動せず、配管（出力先・-Resume・RESULT 行）だけを確かめる。
     # 静寂確認・cargo build・サンプリング・追随チェックも行わない（測定にはならない）
-    [switch]$DryRun
+    [switch]$DryRun,
+
+    # 知らない引数・余った位置引数の受け皿（打ち間違いを 3 と RESULT 行で返すため。使い道はほかに無い）
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$UnknownArgs
 )
+
+# 想定外の失敗は理由の 1 行と RESULT 行で 4（道具の不具合）。共通部品を読み込む前なら自分で RESULT 行を出す。
+trap {
+    if (Get-Command -Name 'Exit-OnUnexpectedError' -CommandType Function -ErrorAction Ignore) { Exit-OnUnexpectedError $_ }
+    [Console]::Error.WriteLine("[perf-loop] FAILED: unexpected failure (tool bug): $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+    [Console]::Out.WriteLine('PERF-LOOP RESULT - code=4 dir=-')
+    exit 4
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
@@ -163,14 +175,11 @@ $PSNativeCommandUseErrorActionPreference = $false
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION             = '1.0.0'
-$DEFAULT_GOAL               = 'draw-load-parity'
+$SCRIPT_VERSION             = '1.1.0'
 $CHECKIN_DEFAULT_MINUTES    = 30
 $CHECKIN_WARN_BELOW_MINUTES = 25
 $CHECKIN_ENV_NAME           = 'CLAUDE_CODE_GOAL_CHECKIN_MINUTES'
 $PYTHON_MIN_VERSION         = [Version]'3.11'
-$PWSH_MIN_MAJOR             = 7
-$XPERF_DEFAULT_PATH         = 'C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\xperf.exe'
 $RELEASE_PDB_RELPATH        = 'target\release\areka.pdb'
 $PDB_BUILD_HINT             = 'set CARGO_PROFILE_RELEASE_DEBUG=line-tables-only and run cargo build --release to get it'
 $PREFLIGHT_FILE             = 'preflight.txt'
@@ -186,10 +195,11 @@ $SUBCOMMANDS_MEASURE = @(
     'measure-baseline', 'rank-run', 'rank', 'prepare-ab', 'measure-ab', 'compare', 'followup', 'final'
 )
 $SUBCOMMANDS = $SUBCOMMANDS_ENTRY + $SUBCOMMANDS_MEASURE
-$BUILD_KINDS = @('dev', 'release')
+# -Build の語彙 $BUILD_KINDS と終了コード $EXIT_* は perf-loop.common.ps1 に置く
 
 # 自己較正を回す道具の一覧（順序も較正値＝この順で回す）。
-#   Task  … その道具を作ったタスク（tasks.md 5.1〜6.4）
+#   Task  … その道具を作ったタスク（数字だけは areka-P0-draw-load-parity の tasks.md 5.1〜6.4・
+#           'spec 名 番号' の形はその spec の tasks.md の番号）
 #   Kind  … py＝python スクリプト／ps＝PowerShell スクリプト
 $SELFTEST_TOOLS = @(
     [pscustomobject]@{ Task = '6.1'; Kind = 'py'; File = 'judge-perf.py';             Arguments = @('--selftest') }
@@ -200,18 +210,13 @@ $SELFTEST_TOOLS = @(
     [pscustomobject]@{ Task = '5.3'; Kind = 'ps'; File = 'invoke-cpu-sample.ps1';     Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = '5.1'; Kind = 'ps'; File = 'check-quiet.ps1';           Arguments = @('-SelfTest') }
     [pscustomobject]@{ Task = '6.4'; Kind = 'ps'; File = 'invoke-followup-checks.ps1'; Arguments = @('-SelfTest') }
+    [pscustomobject]@{ Task = 'audit-tools-perf-run 1.4'; Kind = 'ps'; File = 'perf-loop.selftest.ps1'; Arguments = @() }
+    [pscustomobject]@{ Task = 'audit-tools-perf-run 6.2'; Kind = 'ps'; File = 'perf-loop.selftest2.ps1'; Arguments = @() }
+    [pscustomobject]@{ Task = 'audit-tools-perf-run 2.1'; Kind = 'ps'; File = 'invoke-perf-run.ps1'; Arguments = @('-SelfTest') }
 )
 
 #: 自己較正の最後に回す自前の検査（道具ではなく文書との一致を見る＝tasks.md (7.1)）。
 $SELFTEST_GOAL_TEXT_NAME = 'goal-text-vs-goal-md'
-
-# 終了コード
-$EXIT_OK             = 0
-$EXIT_RUN_FAILED     = 1
-$EXIT_NOT_QUIET      = 2
-$EXIT_BAD_ARGS       = 3
-$EXIT_MEASURE_FAILED = 4
-$EXIT_UNAVAILABLE    = 5
 
 # 判定語（読む側＝perf-loop-iteration スキル・台帳と突き合わせる字面）
 $STAGE_AVAILABLE     = 'AVAILABLE'
@@ -219,33 +224,22 @@ $STAGE_UNAVAILABLE   = 'UNAVAILABLE'
 $VERDICT_PREFLIGHT_OK = 'PREFLIGHT_OK'
 $VERDICT_PREFLIGHT_NG = 'PREFLIGHT_NG'
 
+# 語は小文字にそろえてから確かめる（4: `Rank-Run`・`Release` を語彙の字面へ。判定へ渡る語も小文字）
+if ($Sub) { $Sub = $Sub.ToLowerInvariant() }
+if ($Build) { $Build = $Build.ToLowerInvariant() }
+
 # =============================================================================
 # script scope の状態（共通部品が読む。dot-source より先に置くこと）
 # =============================================================================
 $script:CurrentSub  = if ($Sub) { $Sub } else { '-' }
 $script:CurrentDir  = '-'
 $script:OutRootPath = $null
-$script:GoalName    = if ($Goal) { $Goal } else { $DEFAULT_GOAL }
+$script:GoalName    = $Goal
 $script:DateStamp   = $Date
-
-# 計測サブコマンド（perf-loop.measure.ps1）が読む引数。**引数を読む所在はここだけ**に
-# しておく——8 本の本体が $PSBoundParameters や param 変数を直に触ると、どの引数が
-# 効くのかが 8 か所に散るためである。
-$script:IterArg        = $Iter
-$script:RunDirArg      = $RunDir
-$script:BuildKind      = $Build
-$script:BuildExplicit  = $PSBoundParameters.ContainsKey('Build')
-$script:BinDirArg      = $BinDir
-$script:GhostRootArg   = $GhostRoot
-$script:BalloonRootArg = $BalloonRoot
-$script:ResumeMode     = [bool]$Resume
-$script:DryRunMode     = [bool]$DryRun
 
 . (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-
-# 計測サブコマンド 8 本の本体（共通部品と較正値の後・$repoRoot の後に読むこと）
+# 計測サブコマンド 8 本の本体（共通部品と較正値の後に読むこと。$repoRoot・$EXIT_* は共通部品が置く）
 . (Join-Path $PSScriptRoot 'perf-loop.measure.ps1')
 
 # =============================================================================
@@ -308,25 +302,12 @@ function Test-GoalTextMatchesGoalMd {
         $right = $body.Trim()
         if ($left -ceq $right) {
             # 本文が一致していても、写しのヘッダが書いている字数（「本文は 1,012 字」）は
-            # テンプレートを直すと黙ってずれる。goal-text 自身が報告した字数と突き合わせる。
-            # 突き合わせる日本語（「文字」「本文は」「字」）は字句を ASCII に保つため `u{} で書く（字は同じ）。
-            $reported = $null
-            $errText = (@($text.Err) -join "`n")
-            if ($errText -match "(\d+)\s*`u{6587}`u{5B57}") { $reported = [int]$Matches[1] }
-            $declared = $null
-            if ($mdText -match "`u{672C}`u{6587}`u{306F}\s*([\d,]+)\s*`u{5B57}") { $declared = [int](($Matches[1]) -replace ',', '') }
-            if ($null -ne $reported -and $null -ne $declared -and $reported -ne $declared) {
-                $detail = @(
-                    "the char count in the header of $goalMdPath differs from what goal-text reports",
-                    "  goal-text : $reported chars",
-                    "  goal.md   : $declared chars",
-                    '  The body matches, so fix only the number in the header.'
-                )
-                return [pscustomobject]@{ Ok = $false; Code = 1; Note = "body matches, header char count differs ($declared != $reported)"; Lines = $detail }
+            # テンプレートを直すと黙ってずれる。goal-text 自身が報告した字数と突き合わせる（33）。
+            $count = Test-GoalTextCharCount -ErrText (@($text.Err) -join "`n") -MdText $mdText
+            if (-not $count.Ok) {
+                return [pscustomobject]@{ Ok = $false; Code = 1; Note = "body matches, but $($count.Note)"; Lines = @("copy: $goalMdPath") }
             }
-            $note = "body of $(Format-LoopValue $reported) chars matches"
-            if ($null -ne $declared) { $note += " (also matches the $declared chars in the copy header)" }
-            return [pscustomobject]@{ Ok = $true; Code = 0; Note = $note; Lines = @() }
+            return [pscustomobject]@{ Ok = $true; Code = 0; Note = "body matches ($($count.Note))"; Lines = @() }
         }
 
         # 食い違いは黙って通さない。最初に違う行を名指しする。
@@ -413,36 +394,6 @@ function Invoke-SubSelfTest {
 # 能力確認（preflight）
 # =============================================================================
 
-# python の版を「3.13.15」の形で得る（読めなければ $null）。
-function Get-PythonVersionText {
-    param([pscustomobject]$Python)
-    if (-not $Python) { return $null }
-    $result = Invoke-Child -Exe $Python.Exe -Arguments (@($Python.Prefix) + @('-c', 'import sys;print("%d.%d.%d" % sys.version_info[:3])')) -Quiet
-    if ($result.Code -ne 0) { return $null }
-    if ($result.LastLine -match '^\d+\.\d+') { return $result.LastLine }
-    return $null
-}
-
-# invoke-cpu-sample.ps1 -Probe の 1 行（available=… reason=…）を読む。
-function Get-SamplingProbe {
-    $path = Join-Path $PSScriptRoot 'invoke-cpu-sample.ps1'
-    $result = Invoke-PwshChild -ScriptPath $path -Arguments @('-Probe') -Quiet
-    $available = $false
-    $reason = 'probe_failed'
-    foreach ($line in $result.Lines) {
-        if ($line -match '^available=(true|false)(\s+reason=(\S+))?') {
-            $available = ($Matches[1] -eq 'true')
-            if ($Matches.Count -ge 4 -and $Matches[3]) { $reason = $Matches[3] }
-            elseif ($available) { $reason = 'ok' }
-        }
-    }
-    if ($result.Code -ne 0 -and -not $available) {
-        # -Probe は必ず 0 で返る約束（design C8）。非ゼロは道具自身の異常。
-        $reason = 'probe_failed'
-    }
-    return [pscustomobject]@{ Available = $available; Reason = $reason; Code = $result.Code; Lines = $result.Lines }
-}
-
 function Invoke-SubPreflight {
     $dir = New-LoopDir -Path (Get-LoopDir -Kind goal)
     $script:CurrentDir = $dir
@@ -450,11 +401,12 @@ function Invoke-SubPreflight {
     Write-Info "[perf-loop] version $SCRIPT_VERSION / preflight goal $($script:GoalName) / out dir $dir"
 
     # --- 環境の見立て ---------------------------------------------------------
-    $elevated  = Test-Elevated
-    $xperfPath = Find-XperfPath -DefaultPath $XPERF_DEFAULT_PATH
+    # 昇格と xperf の在り処は -Probe の 1 回の結果から読む（ここで探し直さない）
+    $probe     = Get-SamplingProbe
+    $elevated  = $probe.Elevated
+    $xperfPath = $probe.XperfPath
     $pdbPath   = Join-Path $repoRoot $RELEASE_PDB_RELPATH
     $pdbFound  = Test-Path -LiteralPath $pdbPath -PathType Leaf
-    $probe     = Get-SamplingProbe
 
     # 段③（関数別の帰属）の可否。順に見て、最初に足りないものを理由にする。
     $stage = $STAGE_AVAILABLE
@@ -475,15 +427,14 @@ function Invoke-SubPreflight {
     $judgeMatch = ($judgeActual -and $goalConfig.JudgeVersion -and ($judgeActual -eq $goalConfig.JudgeVersion))
 
     # --- Python / PowerShell の版 --------------------------------------------
+    # python が無いか $PYTHON_MIN_VERSION 未満なら 4（25）。PowerShell は #Requires で 7 以上と決まっているので版を書くだけ。
     $python = Get-PythonCommand
     $pythonVersion = Get-PythonVersionText -Python $python
-    $pythonOk = $false
-    if ($pythonVersion) {
-        $parsed = [Version]$pythonVersion
-        $pythonOk = ($parsed -ge $PYTHON_MIN_VERSION)
-    }
+    $pythonOk = [bool]($pythonVersion -and ([Version]$pythonVersion -ge $PYTHON_MIN_VERSION))
+    $pythonNote = if (-not $python) { 'python not found' }
+                  elseif (-not $pythonVersion) { 'cannot read the python version' }
+                  else { "python $pythonVersion (need $PYTHON_MIN_VERSION or later)" }
     $pwshVersion = $PSVersionTable.PSVersion.ToString()
-    $pwshOk = ($PSVersionTable.PSVersion.Major -ge $PWSH_MIN_MAJOR)
 
     # --- check-in 間隔の実効値 -----------------------------------------------
     # 環境変数が未設定なら Claude Code の既定 30 分が効いている。25 分未満だと
@@ -498,7 +449,7 @@ function Invoke-SubPreflight {
             $checkinMinutes = $parsedCheckin
             $checkinSource = 'env'
         } else {
-            $checkinNote = "env var $CHECKIN_ENV_NAME value '$checkinRaw' is not an integer (using the default $CHECKIN_DEFAULT_MINUTES min)"
+            $checkinNote = "env var $CHECKIN_ENV_NAME value '$checkinRaw' is not a positive integer (using the default $CHECKIN_DEFAULT_MINUTES min)"
             $checkinSource = 'default'
         }
     }
@@ -507,7 +458,7 @@ function Invoke-SubPreflight {
 
     # --- 台帳（あれば版一致まで goal-check で確かめる） ------------------------
     # goal-check は必須キー・判定スクリプトの版・閾値・台帳の goal 名を突き合わせ、
-    # 走行トークンが無ければ作る／既にあれば変えない（perf_ledger_goal.py:430-447）。
+    # 走行トークンが無ければ作る／既にあれば変えない（perf_ledger_goal.py の goal-check の、走行トークンを作る・変えない所）。
     # 台帳が無い状態では呼べない（周 0 の手順は init → goal-check → goal-text）ので、
     # -Ledger で明示されたか、目標定義から導いた台帳が実在するときだけ呼ぶ。
     # 実在すれば呼んで構わない——トークンは書き換わらず、まだ無ければここで作られた 1 つを
@@ -516,7 +467,10 @@ function Invoke-SubPreflight {
     $ledgerExists = ($ledgerPath -and (Test-Path -LiteralPath $ledgerPath -PathType Leaf))
     $goalCheck = 'skipped'
     $goalCheckNote = 'no ledger yet (create it with perf-ledger.py init, then goal-check, then goal-text)'
-    if ($ledgerExists) {
+    if ($ledgerExists -and -not $python) {
+        $goalCheck = 'ng'
+        $goalCheckNote = 'python not found'
+    } elseif ($ledgerExists) {
         $goalCheckArgs = @((Join-Path $PSScriptRoot 'perf-ledger.py'), 'goal-check', '--ledger', $ledgerPath)
         if ($script:GoalFilePath) { $goalCheckArgs += @('--goal-file', $script:GoalFilePath) }
         else { $goalCheckArgs += @('--goal', $script:GoalName) }
@@ -537,18 +491,11 @@ function Invoke-SubPreflight {
     # --- 合否 -----------------------------------------------------------------
     # 段③が使えないこと（5＝能力不足）は preflight を止めない。止めるのは
     # 「道具が壊れている」＝自己較正の赤と判定スクリプトの版不一致だけ（要件 2.11）。
-    $code = $EXIT_OK
-    $failReason = ''
-    if (-not $judgeMatch) {
-        $code = $EXIT_MEASURE_FAILED
-        $failReason = "judge script version differs from the goal definition (goal $judgeDeclared / $(Format-LoopValue $judgeActual))"
-    } elseif (-not $selftest.Ok) {
-        $code = $EXIT_MEASURE_FAILED
-        $failReason = "tool selftest has $($selftest.NgCount) red"
-    } elseif ($goalCheck -eq 'ng') {
-        $code = $EXIT_MEASURE_FAILED
-        $failReason = "ledger vs goal definition check (goal-check) failed: $goalCheckNote"
-    }
+    $outcome = Get-PreflightCode -JudgeMatch ([bool]$judgeMatch) -JudgeNote "goal $judgeDeclared / $(Format-LoopValue $judgeActual)" `
+        -PythonOk $pythonOk -PythonNote $pythonNote -SelftestOk $selftest.Ok -SelftestNgCount $selftest.NgCount `
+        -GoalCheck $goalCheck -GoalCheckNote $goalCheckNote
+    $code = $outcome.Code
+    $failReason = $outcome.Reason
     $verdict = if ($code -eq $EXIT_OK) { $VERDICT_PREFLIGHT_OK } else { $VERDICT_PREFLIGHT_NG }
 
     # --- 報告（preflight.txt と標準出力へ同じ文面） ---------------------------
@@ -588,14 +535,13 @@ function Invoke-SubPreflight {
         "judge_version_script=$(Format-LoopValue $judgeActual)",
         "judge_version_match=$(Format-LoopBool $judgeMatch)",
         "python=$(Format-LoopValue $pythonVersion) min=$($PYTHON_MIN_VERSION.ToString()) ok=$(Format-LoopBool $pythonOk)",
-        "pwsh=$pwshVersion min=$PWSH_MIN_MAJOR ok=$(Format-LoopBool $pwshOk)",
+        "pwsh=$pwshVersion",
         "checkin_minutes=$checkinMinutes source=$checkinSource recommended=$checkinRecommended warn_below=$CHECKIN_WARN_BELOW_MINUTES",
         "checkin_warn=$(Format-LoopBool $checkinWarn)",
         "ledger=$(Format-LoopValue $ledgerPath)",
         "ledger_exists=$(Format-LoopBool $ledgerExists)",
         "goal_check=$goalCheck",
         "selftest=$selftestWord ok=$($selftest.OkCount) ng=$($selftest.NgCount)",
-        "sampling_backend=$(Format-LoopValue $goalConfig.SamplingBackend)",
         "capabilities=$capabilities",
         "verdict=$verdict",
         "code=$code"
@@ -633,15 +579,53 @@ if ($SUBCOMMANDS -notcontains $Sub) {
     Write-Problem "[perf-loop] available subcommands: $($SUBCOMMANDS -join ', ')"
     Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-'
 }
+# -RunDir を読むのは 4 本だけ。ほかへ渡されたら黙って無視せず 3
+$SUBCOMMANDS_RUNDIR = @('measure-baseline', 'rank-run', 'rank', 'final')
+if ($RunDir -and $SUBCOMMANDS_RUNDIR -notcontains $Sub) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-RunDir is read only by $($SUBCOMMANDS_RUNDIR -join ', ') (got it with '$Sub')"
+}
+if ($UnknownArgs) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown arguments: $($UnknownArgs -join ' ')"
+}
 if ($BUILD_KINDS -notcontains $Build) {
     Stop-Run -Code $EXIT_BAD_ARGS -Message "-Build must be $($BUILD_KINDS -join ' or ') (got: '$Build')"
 }
-if ($Iter -lt 0) {
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Iter must be 0 or more (got: $Iter)"
+$iterNumber = 0
+if (-not [int]::TryParse($Iter, [Globalization.NumberStyles]::AllowLeadingSign, [Globalization.CultureInfo]::InvariantCulture, [ref]$iterNumber) -or $iterNumber -lt 0) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Iter must be an integer 0 or more (got: '$Iter')"
 }
 if ($Date -and $Date -notmatch '^\d{8}$') {
     Stop-Run -Code $EXIT_BAD_ARGS -Message "-Date must be 8 digits yyyyMMdd (got: '$Date')"
 }
+if ($PSBoundParameters.ContainsKey('Goal') -and $GoalFile) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "-Goal and -GoalFile were both given; pass only one (got: -Goal '$Goal' -GoalFile '$GoalFile')"
+}
+
+# パスの引数は PowerShell の今の場所につないで、ここで一度だけ絶対にする（27）
+$OutRoot     = Resolve-LoopPath $OutRoot
+$RunDir      = Resolve-LoopPath $RunDir
+$BinDir      = Resolve-LoopPath $BinDir
+$GhostRoot   = Resolve-LoopPath $GhostRoot
+$BalloonRoot = Resolve-LoopPath $BalloonRoot
+$GoalFile    = Resolve-LoopPath $GoalFile
+$Ledger      = Resolve-LoopPath $Ledger
+# 明示した -Ledger が無いのは打ち間違い（goal-check を黙って飛ばして緑にしない）
+if ($Ledger -and -not (Test-Path -LiteralPath $Ledger -PathType Leaf)) {
+    Stop-Run -Code $EXIT_BAD_ARGS -Message "ledger not found: $Ledger (check -Ledger)"
+}
+
+# 計測サブコマンド（perf-loop.measure.ps1）が読む引数。**引数を読む所在はここだけ**に
+# しておく——8 本の本体が $PSBoundParameters や param 変数を直に触ると、どの引数が
+# 効くのかが 8 か所に散るためである。
+$script:IterArg        = $iterNumber   # 整数（-Iter の param は字の型のまま）
+$script:RunDirArg      = $RunDir
+$script:BuildKind      = $Build
+$script:BuildExplicit  = $PSBoundParameters.ContainsKey('Build')
+$script:BinDirArg      = $BinDir
+$script:GhostRootArg   = $GhostRoot
+$script:BalloonRootArg = $BalloonRoot
+$script:ResumeMode     = [bool]$Resume
+$script:DryRunMode     = [bool]$DryRun
 
 $script:OutRootPath = Resolve-OutRoot -OutRoot $OutRoot
 if (-not $script:OutRootPath) {
@@ -660,7 +644,8 @@ if (Test-Path -LiteralPath $goalCandidate -PathType Leaf) {
         # -GoalFile で別名のファイルを渡したときは、出力先は定義側の名前に従う
         $script:GoalName = $script:GoalConfig.Name
     }
-} elseif ($Sub -ne $SUB_SELFTEST) {
+} elseif ($Sub -ne $SUB_SELFTEST -or $GoalFile) {
+    # selftest でも、明示した -GoalFile が無いのは打ち間違い（既定の目標で緑にして見逃さない）
     Stop-Run -Code $EXIT_BAD_ARGS -Message "goal definition file not found: $goalCandidate (check -Goal or -GoalFile)"
 }
 
@@ -678,7 +663,6 @@ switch ($Sub) {
     'compare'          { Invoke-SubCompare }
     'followup'         { Invoke-SubFollowup }
     'final'            { Invoke-SubFinal }
-    default            { Stop-Run -Code $EXIT_BAD_ARGS -Message "unknown subcommand: '$Sub'" -Sub '-' }
 }
 
 # ここへは来ない（各サブコマンドは必ず Exit-WithResult で終わる）。来たら道具の不具合。

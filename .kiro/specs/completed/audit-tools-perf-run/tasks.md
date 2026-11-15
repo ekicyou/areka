@@ -1,0 +1,202 @@
+# 実装計画
+
+指摘の番号（1〜36・申し合わせ件 #74）は `research.md` の 5 節と `design.md` の「直し方の一覧」の番号。検査の名前（T1＝既にある `-SelfTest`・T2＝`perf-loop.selftest.ps1`・T3＝`invoke-perf-run.ps1 -SelfTest`）は `design.md` の Testing Strategy の名前。どのタスクも、足したテストを同じタスクの中で `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` から回して緑にしてから終える。実際の計測の走行（`measure-baseline`・`rank-run`・`measure-ab`・`followup`・`final` の本走）は回さない（要件 7.1）。作業のフォルダはワークツリーの `target\perf-loop-tmp\` の下だけ。どのファイルも 1,000 行の番人の下に収める。`perf-loop.selftest.ps1` が約 950 行を越えるタスクは、同じタスクの中で検査の束ごとに `perf-loop.selftest2.ps1` へ分けて `SELFTEST_TOOLS` に足し、以後の期待の数を 1 つ上げる（design の File Structure Plan）。
+
+- [x] 1. 土台: 共通部品への寄せと分け直し、perf-loop 側の自分の検査の置き場
+- [x] 1.1 道具どうしの共通部品を新しく作り、子の pwsh の前置きで想定外の失敗を受け止める
+  - 表示・時刻（末尾に `Z`）・子の起こし方（引数を 1 つずつ渡し、任意で読む文字コードを選べる・最後の 1 行は色の符号を落としてから選ぶ）・pwsh と python の在り処・子孫まで止めて終わるまで待つ強制終了・目標定義の読み口（節の見出しの見方 1 通り・引用符の外だけで注釈を落とす・単引用符・整数・小数・1 行の配列・空の配列）・`key=value` の行の読み・検体の在り処の問い合わせを、関数と定数だけのファイル 1 本に置く（17・18・19・35・8・5）
+  - 読み込んでも何も走らず、StrictMode を自分で切り替えず、呼び手の変数に頼らない。端末へ出す文の字句は ASCII だけで、端末の文字コードには触れない
+  - 子の pwsh の前置きは、スクリプトの呼び出しを包んで捕まえた失敗を理由の 1 行で標準エラーへ書き 1 で終える。正常の道の出力は今と 1 字も変わらない（7）
+  - 終わった姿: 新しいファイルが在り、子の pwsh の前置きが変わり、既にある 3 本の `-SelfTest` と `perf-loop.ps1 selftest` が今と同じく緑
+  - _Dispatch: standard — 新しい共通部品の中身を設計の一覧から書き起こす_
+  - _Requirements: 3.1, 5.2, 5.3, 5.4, 5.5, 5.6_
+- [x] 1.2 perf-loop の共通部品を分け直し、実行体の用意と出力先の扱いを新しい 2 本へ移す
+  - perf-loop の共通部品は新しい共通部品だけを読み込み、表示・子の起こし方・目標定義の読み・検体の在り処の写しを消す。`Invoke-Child`・`Invoke-PwshChild` の名前と引数は、単独で読み込んだ呼び手（`encoding check`）から今と同じに見える
+  - 終了コードの定数・ビルドの種類・リポジトリの根を入口から共通部品へ移し、共通部品だけが入口の変数に頼っていた所（20）を無くす
+  - 実行体の作る・写す・確かめる・A と B の用意の関数を実行体の用意のファイルへ、完了の見方・脇へ退ける・`-DryRun` の印の関数を出力先の扱いのファイルへ移す。測る側は自分の較正値を置いた後でその 2 本を読み込む。この段で変わる振る舞いは、共通部品の時刻を使うことで `preflight.txt`・`BUILD.txt`・`DRY-RUN.txt`・`sampling.txt` の時刻の末尾に `Z` が付くこと（35・申し合わせ済み）だけで、ほかは変えない
+  - 終わった姿: 図の読み込みの向きどおりに読み込まれ、どのファイルも 1,000 行の下、`perf-loop.ps1 selftest` と全体テストの `encoding check` の段が緑
+  - _Dispatch: standard — 分けた後の読み込みの向きと入口の変数に頼る所の直しが要る_
+  - _Requirements: 3.1, 3.2, 5.1, 6.4, 6.6_
+- [x] 1.3 子の道具 4 本の写しを共通部品へ寄せる
+  - 静かさの確かめ・ランナー・段③の採取・追随の検査の 4 本は新しい共通部品だけを読み込み（perf-loop の共通部品は読み込まない）、表示・時刻・目標定義の読み・子の起こし方・検体の在り処・python 探しの写しを消す（17・18・19・35）
+  - ランナーと追随の検査は `tools/utf8-child.ps1` の子の起こし方から共通部品の起こし方へ移る。areka 本体を起こす 2 か所はそのまま残す
+  - 静かさの確かめの目標定義の読みは共通部品の読み口の上の薄い引き口にし、鍵と型の検査は今のまま。追随の検査の 6 桁の時刻は名を替えて残す。段③の採取の失敗の文は標準エラーへ出す
+  - 消す前に、消す名前がツリー全体で直すファイルの中にしか無いことを確かめ、件数を控える。各ファイルに同じ名前の定義が 0 件であることも確かめる
+  - 終わった姿: 4 本の中に写しの定義が 0 件、静かさの確かめの既にある TOML の検査（単引用符を 1 件足す）が寄せた読み口を通り、既にある 3 本の `-SelfTest` が緑
+  - _Dispatch: mechanical — 写しを消して共通部品の同じ名前へ寄せる_
+  - _Requirements: 3.1, 3.2, 3.3, 4.7, 5.4_
+- [x] 1.4 perf-loop 側の自分の検査（T2）を作り、土台の束の検査を入れて `selftest` から回す
+  - 検査の骨組み: 共通部品と測る側を読み込み、偽物は関数の定義し直しで作り、呼ばれた順と引数を残す。終了の口を定義し直して本物の `exit` で検査が終わらないようにする。赤の検査だけ 1 行ずつと最後の結果の 1 行を ASCII で出し、0 か 1 で終える
+  - 作業のフォルダは `target\perf-loop-tmp\selftest-<GUID>\` の下だけで、終わったら消す。本物の `cargo`・`python`・`xperf` を呼ばない
+  - 土台の束: `load-standalone`・`toml-reader`・`keyvalue-parse`・`child-args-and-encoding`・`pwsh-child-args`・`pwsh-child-error`・`kill-wait`・`utc-stamp`
+  - 入口の `SELFTEST_TOOLS` に T2 の 1 行を足し、頭書の `Task` の欄の注記を「どの spec の tasks.md か」が分かる形にする
+  - 終わった姿: `perf-loop.ps1 selftest` の結果の 1 行が `ok=10 ng=0`、土台の束のどれかをわざと壊すとその検査の名前が `NG` で出る
+  - _Dispatch: standard — 偽物と終了の口を差し替える検査の骨組みを新しく書く_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.5_
+
+- [x] 2. ランナーの自分の検査（T3）の置き場
+- [x] 2.1 ランナーに `-SelfTest` を足し、カウンタの値の選び方と目印の読み方を純関数にして試す
+  - `-SelfTest` は静かさの関門より前で検査のファイルを読み込んで回し、結果の 1 行で終える。`run-meta.txt` も出力先も作らない
+  - カウンタの結果から PID で値を選ぶ所と、目印を最初の 1 件まで読む所を、それぞれ純関数に出す（22・31）
+  - 検査: `counter-select`・`quiet-retry-settings`・`smoke-marker`
+  - 入口の `SELFTEST_TOOLS` に T3 の 1 行を足す
+  - 終わった姿: `perf-loop.ps1 selftest` の結果の 1 行が `ok=11 ng=0`（道具 10 本と goal-text。T2 を分けたなら 12）
+  - _Dispatch: standard — 純関数を切り出し、静かさの関門の前の入口を足す_
+  - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1_
+
+- [x] 3. 想定外の失敗の終わり方と入口の引数の確かめ
+- [x] 3.1 5 本の入口の頭に `trap` を置き、決まった終了コードと最後の行で終える
+  - perf-loop は理由の 1 行と `PERF-LOOP RESULT <sub> code=4 dir=<path>` で 4、共通部品を読み込む前の失敗でも RESULT 行を自分で出して 4。静かさの確かめは 4（`-SelfTest` では 1）、ランナー・段③の採取・追随の検査は 1（3）
+  - 届かない `default` の枝を消し、段③の採取は引数なしを 3 と RESULT 行 `none` で受ける。走行の後の静かさの確かめが 3 を返したら 3 で止める
+  - スキル `perf-loop-iteration` の終了コードの表の 4 の行に「想定外の失敗（道具の不具合）もここに入る」を足す（S1。ほかの行は触らない）
+  - 検査: `exit-trap`（本物の `exit` でも `finally` が回ることを含む）・`trap-present`（構文木で 5 本の頭）・`quiet-after-codes`・`child-exit-map`、T1 `no-args`
+  - 終わった姿: わざと落ちる子が RESULT 行と決まった終了コードで終わり、5 本どれかの `trap` を消すと `trap-present` が赤になる
+  - _Dispatch: standard — 5 本の入口に終了コードの決まった `trap` を足す_
+  - _Requirements: 3.1, 3.2, 5.2, 5.3, 6.2, 6.6_
+- [x] 3.2 入口の引数を正規化し、preflight の合否と字数の突き合わせを純関数にする
+  - サブコマンドとビルドの種類を小文字にしてから確かめ、`[target] builds_final` の各語も小文字にそろえる（4）。`-Goal`（明示）と `-GoalFile` の同時指定は 3（26）。パスの引数は入口で一度だけ今の場所につないで絶対にする（27）
+  - preflight の合否は「判定スクリプトの版 → python の版 → 自分の検査 → goal-check」の順で最初に落ちたものを理由にする純関数にし、python が無いか 3.11 未満なら 4（25）。`pwsh=` の行は版だけ。使わない値・二重の `-Resume`・届かない枝を消す（25）
+  - goal-text の字数が読めないときは赤、写しの頭書に字数が無いときだけ飛ばす純関数にする（33）
+  - 範囲の注釈でほかのファイルを行番号で指す 6 か所を、ファイル名と関数・定数の名前で指す形に替える（申し合わせ件 #74・外のクレートの 1 か所は残す）
+  - 検査: `case-normalize`（子として起こすときは必ず空の `-BinDir` と一時の `-OutRoot`）・`goal-and-goalfile`・`relative-paths`・`preflight-code`・`goal-text-count`
+  - 終わった姿: `Rank-Run -Build Release -DryRun ...` の RESULT 行の `<sub>` が `rank-run`、行番号で指す注釈の grep が外のクレートの 1 件だけ
+  - _Dispatch: standard — 引数の正規化と preflight の合否の新しい分岐_
+  - _Requirements: 3.1, 3.3, 4.1, 5.2, 7.1_
+
+- [x] 4. 走行の出力先と `-Resume`
+- [x] 4.1 完了の見方を厳しくし、足りない走行と静かでない走行を脇へ退ける
+  - 完了は「`run.log`・`cpu.csv`・`run-meta.txt` が在り、`run-meta.txt` に `ended_utc = ` の行が在り、`quiet-after.txt` の最後の `verdict=` が `QUIET`」。欠ければ `-INCOMPLETE-<時刻>`、静かでなければ `-NOTQUIET-<時刻>` へ退けて採り直す。`run.log` の無い出力先は触らない（2）
+  - `-DryRun` の出力先を作り直すのは、中身が印のファイル 2 つだけ（下位のフォルダ無し）のときに限り、ほかが在れば 3 で止めて何も消さない（6）
+  - 検査: `resume-incomplete`・`dryrun-clear`・`loopdir-vocab`
+  - 終わった姿: 測ったファイルはどの道でも消えず、5 つの状態の出力先それぞれで決まった扱いになることを検査が示す
+  - _Dispatch: standard — 完了の見方と退けの新しい分岐_
+  - _Requirements: 3.1, 4.1, 5.2, 7.2_
+- [x] 4.2 ランナーの強制終了の後に待ち、退けた先を決まった 1 行で渡し、perf-loop がそれを読む
+  - ランナーの強制終了の 4 か所を、子孫まで止めて終わるまで待つ共通の口に替える。退けは名前を決める純関数（既に在れば時刻を足す）を通し、退けた先を `[invoke-perf-run] moved to: <path>` で出す（8・28）
+  - 待ちが時間切れか退けに失敗したら、ランナーは理由の 1 行を出して 1 で終え、`moved to:` の行は出さない
+  - perf-loop はランナーの出力から退けた先を読んで静かでない証拠の場所を書き（読めなければ `<OutDir>-FAILED*`）、非ゼロで `moved to:` が無く出力先が元の名前のまま残っているときは採り直さずに 4（「失敗した走行を退けられなかった」）で止める
+  - この 2 つは同じ 1 行の約束の書き手と読み手なので 1 つのタスクで直す（ランナーと測る側をまたぐ統合のタスク）
+  - 検査: T3 `failed-dir-name`・`move-after-kill`（孫がファイルを握る場合を含む）、T2 `not-quiet-evidence`・`run-not-moved`
+  - 終わった姿: ファイルを握った孫が居ても退けが通り、退けられないときはランナーの呼び出し 1 回で 4 になることを検査が示す
+  - _Dispatch: standard — 書き手と読み手をまたぐ 1 行の約束の配線（形は設計が決めている）_
+  - _Requirements: 3.1, 4.1, 5.2, 5.3_
+
+- [x] 5. 実行体の用意と A/B の確かめ
+- [x] 5.1 ビルドを実行体の確かめより前へ移し、`final` の `-BinDir` と 32bit ヘルパの写しを直す
+  - `-BinDir` の無い走行では作業ツリーからのビルドを呼び手が先に回し、実行体の確かめをその後にする。走行の本体はビルドを呼ばない（11）
+  - `final` も `-BinDir` を実行体の確かめと走行へ渡し、`-BinDir` を渡すなら `-Build` も要る（無ければ 3）（10）
+  - 32bit ヘルパは隣に無いときに加え、元と SHA-256 が違うときも写す（12）
+  - 検査: `exe-after-build`・`final-bindir`・`helper-refresh`
+  - 終わった姿: 偽のビルドと確かめの呼ばれる順が「ビルド → 確かめ」で、`final -BinDir` が `-Build` 無しで 3 になることを検査が示す
+  - _Dispatch: standard — ビルドと確かめの順を入れ替え、引数の検査を足す_
+  - _Requirements: 3.1, 4.1, 5.2_
+- [x] 5.2 `measure-ab` に走る前の 2 つの確かめを足し、スキルの REMEASURE の節に 3 の扱いを足す
+  - `ab_sequence` が A と B ちょうど 2 回ずつかを B を作る前に確かめ、違えば 3（34）
+  - B を作った直後に `bin-A` と `bin-B` の `exe_sha256` を比べ、同じなら走る前に 3（どちらかが `-` なら比べない・`-DryRun` では比べない）（15）
+  - スキル `perf-loop-iteration` の REMEASURE の節に、`code=3` で 2 つの `exe_sha256` が同じときは DECIDE で `measure_failed`（`reason: same_executable`）にする 1 段を足す（S2）。読み手を同じ変更で直す
+  - 検査: `ab-sequence`（偽のビルドもランナーも呼ばれない）・`ab-same-exe`
+  - 終わった姿: 2 つの不正のどちらでも走行が 1 本も回らず 3 になり、スキルの差分が S2 の 1 段だけ
+  - _Dispatch: standard — 走る前の確かめ 2 つの新しい分岐とスキルの 1 段_
+  - _Requirements: 3.1, 3.2, 3.4, 4.1, 6.2, 6.6_
+
+- [x] 6. 段③の採取の始めと終わり
+- [x] 6.1 (P) 段③の採取の停止の順・取り消し・xperf の呼び方・dump の読み方を直す
+  - `-Stop` は最初に `xperf -d` でまとめ、まとめが通ったら元の ETL を消し、前提の確かめと記号の解決はその後（1・29）
+  - `-Cancel` を足す: xperf が無ければ 5、`xperf -stop` が 0 なら ETL を消して 0、非ゼロなら理由を標準エラーへ書いて 1（1）
+  - xperf は共通部品の子の起こし方で引数を 1 つずつ渡し、出力だけは端末の文字コードで読む。一時の受け皿のファイルと自前の呼び口を消す（5・19）
+  - dump は 1 行ずつ数える（23）
+  - T1 の自分を子として起こす検査は、偽の `xperf.cmd` を `target\perf-loop-tmp\` の下に作って子の `PATH` の先頭へ置き、記号の置き場も同じ下へ向ける
+  - 検査: T1 `stop-merges-first`・`args-with-spaces`・`cancel-mode`・`stream-counts`
+  - 終わった姿: 偽の xperf が受けた引数の記録で `-d` が最初、空白を含む引数が 1 つのまま、`-Cancel` で ETL が消えることを検査が示す
+  - _Boundary: invoke-cpu-sample_
+  - _Dispatch: standard — 停止の順と取り消しの新しい道_
+  - _Requirements: 3.1, 4.1, 4.5, 4.7, 5.3, 5.4_
+- [x] 6.2 可否の 1 行に昇格と xperf の在り処を載せ、preflight をそこから出し、`wpaexporter` の道を消す
+  - `-Probe` の 1 行の後ろに `elevated=` と `xperf_path=`（行の最後）を足す。`capabilities=` の鍵と並びは変えない（36）
+  - perf-loop の可否の読みはその 1 行から昇格・xperf・在り処・段③の可否を出し、preflight はその 1 回の結果だけを使う。perf-loop 側の昇格と xperf の探し方を消す（36）
+  - `-SelfTest` の可否の確かめは採取を試さない（24）。T1 に、可否の確かめの呼び出しが採取を飛ばす形（`-SkipCapture`）で呼ばれていることを構文木で確かめる検査 `probe-skip-capture` を足す
+  - `wpaexporter` の道（引数・定数・関数・RESULT の `backend=` の鍵・目標定義の `SamplingBackend`・preflight の `sampling_backend=` の行・`-Stop` へ渡す `-GoalFile`）を消す。消す前にツリー全体の grep で残る参照が直すファイルの中だけであることを確かめ、件数を控える（16）
+  - 1 行の書き手（段③の採取）と読み手（perf-loop）をまたぐ統合のタスク
+  - 検査: T2 `probe-parse`（在り処に空白と括弧を含む行）、T1 `probe-skip-capture`、既にある T1 が緑
+  - 終わった姿: 範囲の中の `wpaexporter`・`backend=` の参照が 0 件、`-SelfTest` の可否の確かめから採取の呼び出しを外すと `probe-skip-capture` が赤になる
+  - _Depends: 3.2_
+  - _Dispatch: standard — 1 行の書き手と読み手をまたぐ統合と、道の削除_
+  - _Requirements: 3.1, 3.3, 4.1, 6.4_
+- [x] 6.3 ランナーが静かさの確かめの後に採取を始め、失敗の道では取り消す
+  - 任意の引数 `-SampleEtl` を足し（`-DryRun` と一緒なら 3）、静かさの確かめが通り `run-meta.txt` の前半を書いた後、areka を起こす直前に 1 回だけ採取を始めて `[invoke-perf-run] sampling start: code=<n> reason=<語>` を出す。始められなくても走行は続ける（9・1・30）
+  - 採取を始めた後の失敗の道（`Stop-Run`・`trap`）は、出力先を退ける前に `-Cancel` を呼ぶ。0 で終わるときは呼ばない（1）
+  - 検査: T3 `sampling-cancel-on-stop`
+  - 終わった姿: 採取の印が立っているときだけ偽の `-Cancel` が呼ばれることを検査が示し、`-SampleEtl` を渡さない走行の振る舞いは今と同じ
+  - _Depends: 6.1_
+  - _Dispatch: standard — 採取の開始と取り消しの配線（順は設計が決めている）_
+  - _Requirements: 3.1, 3.4, 4.1, 5.3_
+- [x] 6.4 `rank-run` の段③の流れを組み替え、理由の語を子の出力から読む
+  - 流れを「ビルド → 実行体の確かめ → 可否 → ランナー（可否が真なら `-SampleEtl` 付き）→ 採取の開始が報告されたら直ちに `-Stop` → `sampling.txt` → 走行の後の静かさ → 順位表」にし、perf-loop は `-Start` を呼ばない（1・9）
+  - `-Stop` の子を起こせなかったときは手で打つ `xperf -stop` を書いた警告の 1 行を出して 4（1）
+  - 段③の理由の語は、開始はランナーの 1 行の `reason=`、停止は `-Stop` の RESULT 行の `reason=` から読む（30）
+  - `rank` は `sampling.txt` も dump も無いとき可否の試しを回さず `no_record` を渡す（24）
+  - 検査: `sampling-order`・`sampling-stop-after-run`・`sampling-reason`・`rank-no-record`
+  - 終わった姿: 偽の部品の呼ばれた順の記録が上の流れと一致し、ランナーが 0 で採取の開始を報告した道で必ず `-Stop` が 1 回呼ばれる
+  - _Depends: 5.1, 6.1, 6.2, 6.3_
+  - _Dispatch: standard, effort high — 6 つの部品の呼ぶ順をまたぐ組み替えで、取りこぼすと採取が止まらない_
+  - _Requirements: 3.1, 4.1, 5.2, 5.3_
+
+- [x] 7. 追随の検査
+- [x] 7.1 (P) 追随の検査の判定の写し・増えた分だけの読み・強制終了の待ちを直す
+  - 判定器の終了コードの写し方を純関数にし、0・1・2 はそのまま、3 とほかは 1（14）
+  - ログは読んだ位置と書きかけの最後の 1 行を覚え、増えた分だけ読む（32）
+  - 強制終了の 2 か所を子孫まで止めて待つ共通の口に替える（8）。窓が先に閉じたときは理由の 1 行で 1（3）
+  - 検査: T1 `judge-exit-map`・`incremental-log-reader`。その後に今までどおり判定器の自分の検査を回し、どちらかが赤なら非ゼロ
+  - 終わった姿: `invoke-followup-checks.ps1 -SelfTest` が緑で、書きかけの行が次の読みで 1 行として返り同じ行を 2 度返さないことを検査が示す
+  - _Boundary: invoke-followup-checks_
+  - _Dispatch: standard — 増えた分だけ読む読み手と写しの純関数_
+  - _Requirements: 3.1, 4.1, 4.7, 5.3_
+- [x] 7.2 `followup` の順を直し、判定まで届いたかの見方を純関数にする
+  - `-Resume` の済みを最初に見て、ビルドは `-BinDir` も `bin-B` も無いときだけ回す（13）
+  - 判定まで届いたかの見方を純関数に出し、子の 1 は 1 度だけ採り直す今の決まりを試す（14・21）
+  - 検査: `followup-resume-first`（偽の `cargo` も検体の問い合わせも呼ばれない）・`followup-retry-on-1`（呼び出し 2 回）・`followup-verdict-shape`
+  - 終わった姿: 済んだ出力先と `-Resume` で外の呼び出しが 0 回になることを検査が示す
+  - _Dispatch: standard — 順の入れ替えと判定の見方の純関数_
+  - _Requirements: 3.1, 4.1_
+
+- [x] 8. 仕上げの確かめ
+- [x] 8.1 版を上げ、自分の検査を回し、audit をかけ直して新しい指摘を 0 件にする
+  - 振る舞いの変わる 5 本（入口・ランナー・段③の採取・静かさの確かめ・追随の検査）の `SCRIPT_VERSION` を小さい版の数 1 つ上げる（申し合わせ済み B）
+  - `perf-loop.ps1 selftest` が `ok=11 ng=0`（T2 を分けたなら 12）で緑、どのファイルも 1,000 行の下であることを確かめる
+  - 範囲（足した 5 本を含む）へ `/ponytail:ponytail-audit` を上限なし・全部読む作法でかけ直し、出た指摘を直して 0 件まで繰り返す。5 回目は要件 8.7 の打ち切りの決まりに従う
+  - 終わった姿: 検証の記録に、かけ直しの回数と最後の 0 件、残す指摘 0 件・回す指摘 0 件、消す前の grep の件数が書かれている
+  - _Dispatch: standard — かけ直しで出る指摘の直しは前もって形が決まらない_
+  - _Requirements: 1.1, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 5.1, 8.1, 8.2, 8.3, 8.5, 8.7_
+- [x] 8.2 全体テストと既定のブランチとの差分で約束を確かめ、効き目と README の状態を記録する
+  - `pwsh -NoProfile -File tools/test-all.ps1` が緑（`encoding check` が新しいファイルも含めて通る）
+  - 既定のブランチとの差分で、要件 6.3 のファイル・`tools/utf8-child.ps1`・`tools/perf/*.py`・`fixtures*/`・`goals/`・`README.md`・`vendors/` に差分が無く、`.claude/` の差分は `SKILL.md` の S1・S2 だけ、外への約束の変更は申し合わせの表の分だけであることを確かめる
+  - 効き目を次の実走で確かめる 8 行（1・8・9・23・24・29・31・32）と、README の R1〜R4 が `main` に入ったか（まだなら相手が引き受けた記録と「着地待ち」）を記録する
+  - 終わった姿: 検証の記録に全体テストの結果・差分の確かめ・効き目の 8 行・R1〜R4 の状態が書かれている
+  - _Dispatch: mechanical — 決まった確かめを回して記録に書く_
+  - _Requirements: 1.2, 1.6, 1.7, 3.2, 4.6, 5.6, 5.7, 6.1, 6.3, 6.4, 6.5, 6.7, 6.8, 7.2, 7.3, 8.4, 8.6_
+
+## Implementation Notes
+- 1.1: perf-pwsh-child の捕まえた失敗の文は、例外の文が複数行だと標準エラーへ 2 行以上出て、スクリプトの外の失敗では ` (:0)` の形になる。1.4 の `pwsh-child-error` で改行を空白へ置き換えるかを決めて試す
+- 1.2: `Get-MeasureTomlArray` は共通部品の `Get-TomlStringArray` に寄せたので、引用符の無い配列は既定値に落ちる（今の目標定義はすべて引用符付き）。検体の問い合わせは止めない共通部品の上の `Get-MeasureSamplePath` が 4 で止める
+- 1.3: 消す前の grep の件数（4 本の外）: Get-PwshPath・Get-NarSampleMap・NAR_SAMPLE_ARGS・NarSampleMaps は 0、Write-Info・Write-Problem・Get-UtcStamp・Get-PythonCommand・Get-NarSamplePath は共通部品を読む perf-loop*.ps1 だけ。4 本の Invoke-Utf8Child の参照 9 → 0。invoke-cpu-sample の失敗の文は標準エラーへ移ったので、測る側の `LastLine` は `error: ...` の行になる
+- 1.4: T2 は 1 つの検査＝名前と scriptblock の `$SelfTestChecks`。偽物の呼ばれた順は `Add-SelfTestCall`、終了の口は `Exit-WithResult` を例外へ定義し直してある。`kill-wait` は孫にファイルを握らせて子孫まで止めることを確かめる（待ちを抜いた変異は捕まらない・本物の Process では見分けられないので受け入れた）。perf-pwsh-child の捕まえた失敗の文は改行を空白へつなぐ
+- 2.1: T3 の検査は `tools/perf/invoke-perf-run.selftest.ps1` の `$PerfRunSelfTestChecks`（T2 と同じ形・助けの関数は写しで独立）。ランナーは 909 行で、1,000 行の番人まで余裕が少ない
+- 3.1: 子の道具 4 本の `trap` は共通部品を読んだ後の関数と定数を使うので、共通部品が読めないと RESULT 行の無い exit 1 になり、元の原因も消える（ループからは perf-loop が先に 4 で落ちるので届かない・直に呼んだときだけ）。8.1 の audit で直すか決める。`exit-trap` の壊した写しは「頂上の最後の関数の定義の直後」に throw を差すので、本体の後ろに関数を置くと本物を読みにいく
+- 3.2: 件 #74 の 6 か所のうち `perf-ledger.py:930-932` は 1.2 で `Invoke-Child` と一緒に消えていたので、直したのは 5 か所。T2 は子の pwsh を起こす検査が増えて 1 回 60〜80 秒かかる
+- 4.1: `-DryRun` の出力先を「印 2 つだけ」に保つため、`Write-MeasureSamplingNote` は `-DryRun` で何も書かない（読み手は run.log の無い dry run では読む前に戻る）。`Test-MeasureQuietAfterOk` は `Test-MeasureRunComplete` へ畳んで消した（README の 555 行だけが名を残す・R1）。`dryrun-clear` は `$script:DryRunMode` を立てたまま終わる
+- 隣の spec audit-tools-perf-judge（11-15 の知らせ）: judge-perf を 0.5.0 に上げ、標準出力の最後の行が `JUDGE-PERF RESULT code=N` に、自己較正は `SELFTEST RESULT ok=N ng=M` になる（まだ main に未着地）。着地の後は perf-loop.measure の止まりの文に埋まる `LastLine` がこの行になる。8.1 で合わせるか決める
+- 4.2: ランナーは 940 行で、1,000 行の番人まで約 60 行しか残っていない。6.3 で `-SampleEtl` を足す前に、まとまった塊（`Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` の約 100 行、または `Get-FailedDirName`・`Move-FailedOutDir`・`Select-ProcessCpuValue`・`Test-SmokeMarker` の純関数）を兄弟のファイルへ出す。退けの失敗は元の終了コードが 2〜4 でも 1（perf-loop は 4 で止まる）。`Stop-Run` の時間切れの枝そのものは本物の `exit` のため検査が無い
+- 5.1: 32bit ヘルパの SHA-256 での写し直しは `-BinDir` の無い走行だけ（A/B の部屋は B のビルドが共有の元を作り直すので、上書きすると A を B のヘルパで測る）。design の `Sync-MeasureShioriHelper` の形を `-Build` 付きへ直した
+- 1.1 の直し（5.1 の後）: `Stop-ChildProcess` は直下の子しか待たず、孫がファイルを握ったまま戻ることがあった（T2 `kill-wait` が 1 回揺れた）。強制終了の前に CIM で子孫を集め、同じ締め切りの中で子と子孫を待つ形へ直した。子孫を集め損ねても Kill は必ず走り、標準エラーへ 1 行出す（`kill-snapshot-fails`）
+- 5.2: S2 の段は台帳の語にそろえて「`verdict: MEASURE_FAILED`・`reason: same_executable`（出来事は `measure_failed`）」と書いた（design の 2 か所も同じ字面へ）。T2 は 892 行で、次に T2 へ検査を足すタスク（6.2）が足す前に束ごとに `perf-loop.selftest2.ps1` へ分け、`SELFTEST_TOOLS` に足す（以後の期待は ok=12）
+- 6.1: `-Stop` は `xperf -d` が 0 でも、まとめた先が無ければ通らなかった扱いにして元の ETL を消さない（レビューの指摘を進行役が直した・偽の xperf は `-d` の先に空のファイルを作る）。この枝そのものの検査は無い。`-SelfTest` の可否の確かめはまだ本物の採取を試す（6.2 で `-SkipCapture`）
+- 6.2: T2 を `perf-loop.selftest.ps1`（20 本）と `perf-loop.selftest2.ps1`（出力先と -Resume の束・入口の束・probe-parse の 9 本）に分け、`perf-loop.ps1 selftest` の期待は ok=12。消す前の grep の件数（wpaexporter ほか）: HEAD で invoke-cpu-sample 22・perf-loop.common 4・perf-loop 5・goals 1 → 後で範囲の中 0（invoke-cpu-sample の `XPERF_DEFAULT_PATH`・`Test-Elevated` の 5 件は段③の採取の唯一の持ち場として残す）。範囲の外に残る `[sampling] backend`（goals の toml・perf_ledger_goal.py の必須の鍵・fixtures-loop の 5 本）は audit-tools-perf-judge の受け持ち
+- 6.3: ランナーの 1,000 行の余地のため `Get-MachineFacts`・`Get-ActivePowerScheme`・`Get-SourceFacts` を `invoke-perf-run.facts.ps1` へ字のまま移した（design の File Structure Plan に足した）。T3 は ok=6。採取の開始の行の理由の語は ok／子の `reason=`／start_failed。0 で終わる道は採取を動かしたまま返す（止めるのは perf-loop の `-Stop`）
+- 6.4: 採取が残る道は 3 つで、どれも design が受け入れている。ランナーが 0 で返ってから `-Stop` までの間の例外・ランナーの外からの強制終了・ランナーの `-Cancel` の失敗。`-Stop` が 1（`-d` も失敗し元の ETL も無い）のときも `xperf -stop` の警告を出すかは 8.1 の audit で決める。README の 884 行あたりに手で `-Start` する例が残る（R の受け持ち）
+- 7.1: レビューで、design の 35 のうち追随の検査の `Stop-Run`（色なしで標準エラーへ）を持つタスクが無いと分かったので、進行役が `Write-Host -ForegroundColor Red` の 2 か所を `Write-Problem` へ替えた（measure は RESULT 行を全部の行から探すので影響なし・`LastLine` は理由の行になる）。BOM を落とす条件も「バッファの頭がファイルの頭」へ直した。窓が閉じる道と強制終了の 2 か所は実走でしか通らない
+- 7.2: `followup -DryRun` は検体の問い合わせより前で止まるので、DRY-RUN.txt の `-GhostRoot`・`-BalloonRoot` は `<sample>` の仮置き。`[followup] required` の名前の検査は `-Resume` の済みの後。偽の子は答えが尽きると添字の例外で落ちる（赤にはなる）。13 のビルドする側と `-BinDir` 側の検査は無い（8.1 の audit で見る）
+- README の申し合わせ（11-15 の audit-tools-perf-judge の知らせ）: 相手のタスク 13 は `tools/perf/README.md` の perf-run の文（§11 の `Test-MeasureQuietAfterOk`・`Invoke-Child` の項・§14 の段③の -Probe／-SelfTest の注記など）を今の .ps1 の形のまま書いた。後に着地した側が取り込みで §11・§14 のその数か所を合わせる。相手が先に着地したら、こちらの `/kiro-complete` の取り込みで合わせる（8.2 の R1〜R4 の記録に書く）
+- 8.1: audit のかけ直しは 8 回（指摘 31・15・11・10・13・12・13・12）。5〜7 回目に「必ず直す」かつ振る舞いに効く指摘が残ったので 8.7 は 8 回目で初めて成り立ち、8 回目の 12 件を直して打ち切った（検証の記録 verification.md）。追随の検査の実行体・検体が無いときの終了コードは頭書の約束どおり 1 のまま（進行役の決め）。T2 の骨組みは `perf-loop.selftest-base.ps1` へ。`invoke-followup-checks.ps1` は 987 行で、次に足すときは分ける
+- 8.2: 全体テスト緑（11-15・`target\testall-8.2.log`）。`main` は audit-tools-perf-judge の PR #462 で進んでおり、README の R1〜R3・`JUDGE-PERF RESULT code=N` の最後の行・`invoke-followup-checks.ps1` 48 行の `DRAG_DX_PX` の注記は `/kiro-complete` の取り込みで合わせる
+- validate-impl（11-15）: GO。`/kiro-complete` の棚卸で片付けるもの（どれも振る舞いは今のままでよい）: (1) design の File Structure Plan のツリー・新しいファイル・読み込みの向きの図に `perf-loop.selftest-base.ps1`・`perf-loop.selftest2.ps1`・`invoke-perf-run.facts.ps1` が無い。技術の表に段③の数えの `Add-Type`（C#・.NET 標準）が無い (2) `perf-loop.common.ps1` の頭書の呼び手が置く変数に `DryRunMode`・`ResumeMode`・`BinDirArg`・`IterArg` が無い (3) 走行の前の静かさの確かめで `check-quiet` が 0/2/3/4 以外で終わるとランナーは 3、走行の後は 4。揃えるなら `Get-QuietAttemptStep` の `bad` を 3 だけにし、T3 に 1 件足す (4) 合流の後に `perf-loop.ps1 selftest` を 1 回回す（全体テストに selftest の段が無く、main の Python の自分の検査と合わせた形はこれでしか試せない）
+- 完了時にその場で解決: (1) `tools/perf/README.md` の R1〜R3（`-Resume` の項を `Test-MeasureRunComplete` と `-INCOMPLETE-`／`-NOTQUIET-` に・§11 の読む所を `perf-tool-base.ps1` の `Invoke-Child` 1 つに・§14 段③に `-Cancel`・`-Probe`／`-Stop`／`-SelfTest` の注とランナーの `-SampleEtl` を足した） (2) `invoke-followup-checks.ps1` の `DRAG_DX_PX` の注記を「probe.log の step=gesture 行の dx に書き、判定器がそれを期待の距離として読む」に (3) design の File Structure Plan・新しいファイル・読み込みの向きの図に `perf-loop.selftest-base.ps1`・`perf-loop.selftest2.ps1`・`invoke-perf-run.facts.ps1` を、技術の表と Allowed Dependencies に段③の数えの `Add-Type`（C#・.NET の標準だけ）を足した (4) `perf-loop.common.ps1` の頭書に `DryRunMode`・`ResumeMode`・`BinDirArg`・`IterArg` を足した (5) `Get-QuietAttemptStep` の `bad` を 3 だけにし、ほかの想定外は `counter`（4・走行の後と同じ）へ。T3 の `quiet-attempt-step` に 1・-1 → counter を足し、先に赤を確かめてから直した

@@ -38,9 +38,11 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   EXIT_WATCHDOG_MARGIN_SEC = 180  有界終了予定時刻からの猶予（超えたら停止させて失敗扱い）
   EARLY_EXIT_TOLERANCE_SEC = 30   予定より早く終わった場合に失敗とみなす差（秒）
   POLL_INTERVAL_MS = 250          終了監視のポーリング間隔（ミリ秒）
+  KILL_WAIT_MS = 10000            強制終了の後に終わるまで待つ上限（ミリ秒）。超えたら出力先を残して 1
   LOG_MARKER_SMOKE_GATE           有界自動終了が有効化された証跡のログ文言。
                                   これが実行ログに無い実走は「有界でない」＝採取失敗とみなす
   CSV_HEADER                      CPU 時系列 CSV のヘッダ行（design「CPU 時系列 CSV スキーマ」）
+  CPU_SAMPLE_SCRIPT               -SampleEtl が呼ぶ段③の採取のスクリプト（同じフォルダ）
   CHECK_QUIET_SCRIPT              -AutoQuiet が呼ぶ自動静寂確認スクリプトのファイル名
                                   （同じフォルダに置く。実装: tools/perf/check-quiet.ps1）
   QUIET_STAGE_BEFORE  = 'before'  自動静寂確認の段階名。出力は quiet-before.txt（-OutDir 直下）
@@ -60,12 +62,13 @@ CPU の「1 コア換算」について:
 
 終了コード:
   0 … 正常終了（採取完了、または -DryRun の検証完了）
-  1 … 実走の失敗（起動できない・異常終了・予定より早い終了・応答なし）
+  1 … 実走の失敗（起動できない・異常終了・予定より早い終了・応答なし）。
+      失敗した走行の出力先を退けられなかったときも 1（退けた先は '[invoke-perf-run] moved to: <path>' の行）
   2 … 静寂状態の確認がない（-ConfirmQuiet 欠落）＝起動拒否（要件 2.7）。
       -AutoQuiet のときは、待って確かめ直しても静かにならなかった場合もこの 2 を返す（要件 2.8）
   3 … 引数・前提の不正（水準/ビルド種別の指定誤り・パス不正・出力先の作成不能。
       -AutoQuiet と -ConfirmQuiet の同時指定・-BinDir の不正もここ）
-  4 … CPU カウンタの取得失敗（-AutoQuiet の自動静寂確認がカウンタを読めなかった場合を含む）
+  4 … CPU カウンタの取得失敗（-AutoQuiet の自動静寂確認がカウンタを読めなかった、または確かめそのものが想定外に落ちた場合を含む）
   ※ judge-perf.py の終了コード（0=合格 / 1=不合格 / 2=判定不能 / 3=引数不正）とは
      別体系である。本スクリプトは合否を判定しない。
 
@@ -77,6 +80,9 @@ CPU の「1 コア換算」について:
 
   起動せず前提の検証と実行条件の記録だけを行う（配管の確認用）:
   pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -GhostRoot ... -BalloonRoot ... -DryRun
+
+  道具そのものの点検（areka を起こさず、run-meta.txt も出力先も作らない。0 緑／1 赤）:
+  pwsh -File tools/perf/invoke-perf-run.ps1 -SelfTest
 
 --------------------------------------------------------------------------------
 版 1.1.0 で足した引数（既存の呼び方は何も変わらない）
@@ -106,9 +112,15 @@ CPU の「1 コア換算」について:
   自動静寂確認つき・実行体の所在を指定・追加のログ指定つきで採る:
   pwsh -File tools/perf/invoke-perf-run.ps1 `
       -Profile short -Build release `
-      -GhostRoot C:\絶対パス\emo2 -OutDir C:\出力先\A1 `
+      -GhostRoot C:\絶対パス\emo2 -BalloonRoot C:\絶対パス\balloon -OutDir C:\出力先\A1 `
       -AutoQuiet -Goal draw-load-parity `
       -BinDir C:\出力先\bin-A -RustLogExtra 'wintf::tick=debug,areka::perf=debug'
+
+  -SampleEtl <path>（spec audit-tools-perf-run）
+      静かさの確かめと run-meta.txt の前半の後、areka を起こす直前に invoke-cpu-sample.ps1 -Start で
+      段③の採取を 1 回始め、'[invoke-perf-run] sampling start: code=<n> reason=<語>' を出す
+      （始められなくても走行は続ける）。止めるのは perf-loop（-Stop）。この後の失敗の道では
+      出力先を退ける前に -Cancel で取り消す。-DryRun とは一緒に使えない（3）。
 ================================================================================
 #>
 
@@ -140,21 +152,37 @@ param(
     # 実走時の RUST_LOG の既定値の末尾へ「,」で連結する追加指定
     [string]$RustLogExtra,
     # 起動せず、前提検証と実行条件の記録だけを行う（測定にはならない）
-    [switch]$DryRun
+    [switch]$DryRun,
+    # 段③の採取の出力先（ETL）。在れば areka を起こす直前に採取を始める（-DryRun と排他）
+    [string]$SampleEtl,
+    # 道具そのものの点検（中身は invoke-perf-run.selftest.ps1）。静かさの関門より前で終わる
+    [switch]$SelfTest
 )
+
+# shortcut: 値の無い引数（-Profile だけ）と型の付いた引数の読めない値は PowerShell の束ねの段で 1 になる
+# （script の中から捕まえる口が無い）。呼び手（perf-loop）がそうした形で渡すようになったら字で受けて自分で確かめる
+# 想定外の失敗は理由の 1 行と 1（実走の失敗＝perf-loop は 1 度だけ採り直す）。出力先は Stop-Run が退ける
+trap {
+    # 共通部品より前の失敗（読み込めない）でも元の原因の 1 行で 1（出力先はまだ無い）
+    if (-not (Get-Command -Name 'Stop-Run' -CommandType Function -ErrorAction Ignore)) {
+        [Console]::Error.WriteLine("[invoke-perf-run] failed: unexpected failure before the shared helpers loaded: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+        exit 1
+    }
+    Stop-Run $EXIT_RUN_FAILED (Format-UnexpectedError -ErrorRecord $_)
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 # 外部コマンド（git）の標準エラー出力で例外を投げさせない。終了コードは自前で見る。
 $PSNativeCommandUseErrorActionPreference = $false
-# 子の出力を端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）・子の pwsh の引数を UTF-8 の書き手の前置き付きで組む（Get-PwshChildArguments）
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'utf8-child.ps1')
-. (Join-Path $PSScriptRoot 'perf-pwsh-child.ps1')
+# 表示・時刻・子の起こし方・目標定義の読みは共通部品から（子の pwsh の前置きもここ経由で読まれる）
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
+. (Join-Path $PSScriptRoot 'invoke-perf-run.facts.ps1')
 
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION                 = '1.1.0'
+$SCRIPT_VERSION                 = '1.2.0'
 $SMOKE_EXIT_MS_SHORT            = 420000
 $SMOKE_EXIT_MS_LONG             = 1500000
 $SMOKE_EXIT_ENV_NAME            = 'AREKA_APP_SMOKE_EXIT_MS'
@@ -174,9 +202,11 @@ $COUNTER_RETRY_WAIT_SEC         = 2
 $EXIT_WATCHDOG_MARGIN_SEC       = 180
 $EARLY_EXIT_TOLERANCE_SEC       = 30
 $POLL_INTERVAL_MS               = 250
+$KILL_WAIT_MS                   = 10000
 $LOG_MARKER_SMOKE_GATE          = 'smoke 自動 close ゲート有効'
 $CSV_HEADER                     = 'timestamp,cpu_percent_1core'
 $CHECK_QUIET_SCRIPT             = 'check-quiet.ps1'
+$CPU_SAMPLE_SCRIPT              = 'invoke-cpu-sample.ps1'
 $QUIET_STAGE_BEFORE             = 'before'
 $QUIET_RETRY_MAX_DEFAULT        = 3
 $QUIET_RETRY_WAIT_SEC_DEFAULT   = 60
@@ -199,29 +229,79 @@ $FILE_RUN_META   = 'run-meta.txt'
 # =============================================================================
 
 # 出力先の後始末に使う状態（Stop-Run が参照する）
-$script:OutDirPath    = ''
-$script:OutDirCreated = $false
+$script:OutDirPath      = ''
+$script:OutDirCreated   = $false
+# 強制終了の後の待ちが時間切れになった（出力先のファイルを握ったままかもしれない）
+$script:ArekaNotStopped = $false
+# 採取を始めた印（始めた ETL。-Start が 0 のときだけ立つ）。Stop-RunSampling が見る
+$script:SamplingEtl     = ''
 
-function Write-Info {
-    param([string]$Message)
-    [Console]::Out.WriteLine($Message)
+# 段③の採取を始め、決まった 1 行を出す（perf-loop が読む）。始められなくても走行は続ける
+function Start-RunSampling {
+    param([Parameter(Mandatory)][string]$Etl)
+    $r = Invoke-PwshChild -ScriptPath (Join-Path $PSScriptRoot $CPU_SAMPLE_SCRIPT) -Arguments @('-Start', '-Etl', $Etl) -Quiet
+    $reason = 'ok'
+    if ($r.Code -eq 0) { $script:SamplingEtl = $Etl }
+    else {
+        $m = [regex]::Match((@($r.Out) -join "`n"), 'INVOKE-CPU-SAMPLE RESULT start code=\S+ .*?\breason=(\S+)')
+        $reason = if ($m.Success) { $m.Groups[1].Value } else { 'start_failed' }
+        # 語の無い失敗（xperf が始められない・子を起こせない）は子の訳の行を黙って落とさない
+        if (-not $m.Success) { Write-Problem "[invoke-perf-run] sampling not started: $($r.LastLine)" }
+    }
+    Write-Info "[invoke-perf-run] sampling start: code=$($r.Code) reason=$reason"
 }
 
-function Write-Problem {
-    param([string]$Message)
-    [Console]::Error.WriteLine($Message)
+# 採取を始めた後の失敗の道で取り消す。印が無ければ呼ばない（ほかの道具のカーネルの採取を止めないため）
+function Stop-RunSampling {
+    if (-not $script:SamplingEtl) { return }
+    $etl = $script:SamplingEtl
+    $script:SamplingEtl = ''
+    try {
+        $r = Invoke-PwshChild -ScriptPath (Join-Path $PSScriptRoot $CPU_SAMPLE_SCRIPT) -Arguments @('-Cancel', '-Etl', $etl) -Quiet
+        if ($r.Code -ne 0) { throw "exit code $($r.Code): $($r.LastLine)" }
+    } catch {
+        Write-Problem "[invoke-perf-run] could not cancel the CPU sampling ($($_.Exception.Message)). If no other tool is sampling, run 'xperf -stop' by hand."
+    }
 }
 
-function Get-UtcStamp {
-    [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fff', [Globalization.CultureInfo]::InvariantCulture) + 'Z'
+# areka を子孫まで強制終了して終わるまで待つ（32bit の SHIORI ヘルパが run.log を受け継いでいても止める）
+function Stop-ArekaProcess {
+    param([System.Diagnostics.Process]$Process)
+    if (-not (Stop-ChildProcess -Process $Process -WaitMs $KILL_WAIT_MS)) { $script:ArekaNotStopped = $true }
+}
+
+# 退けた先の名前: '<Leaf>-FAILED'、既に在れば時刻を足す（-SelfTest の failed-dir-name が固定する）
+function Get-FailedDirName {
+    param([Parameter(Mandatory)][string]$Parent, [Parameter(Mandatory)][string]$Leaf)
+    $name = "$Leaf-FAILED"
+    if (Test-Path -LiteralPath (Join-Path $Parent $name)) { $name += '-' + [DateTime]::UtcNow.ToString('HHmmssfff') }
+    return $name
+}
+
+# 出力先を退けて退けた先のパスを返す。退けられなければ投げる（-SelfTest の move-after-kill が固定する）
+function Move-FailedOutDir {
+    param([Parameter(Mandatory)][string]$Path)
+    $parent = Split-Path -Parent $Path
+    $leaf = Get-FailedDirName -Parent $parent -Leaf (Split-Path -Leaf $Path)
+    Rename-Item -LiteralPath $Path -NewName $leaf -ErrorAction Stop
+    return (Join-Path $parent $leaf)
 }
 
 # 失敗して終了する。理由を必ず表示し（黙って失敗しない）、作りかけの出力先は
-# 測定結果と取り違えられない名前へ退避する（部分成果を成果として残さない）。
+# 測定結果と取り違えられない名前へ退け、退けた先を決まった 1 行 '[invoke-perf-run] moved to: <path>' で出す
+# （perf-loop が読む）。-Process は止めてから退ける areka。止まらない・退けられないときは
+# 出力先をそのまま残して 1 で終える（moved to: の行は出さない＝perf-loop は採り直さずに 4）。
 function Stop-Run {
-    param([int]$Code, [string]$Message)
+    param([int]$Code, [string]$Message, [System.Diagnostics.Process]$Process)
 
+    if ($Process) { Stop-ArekaProcess -Process $Process }
+    Stop-RunSampling
+    # 理由の行は後始末の警告の後に出す（perf-loop が最後の行を失敗の理由として写す）
     Write-Problem "[invoke-perf-run] failed: $Message"
+    if ($script:ArekaNotStopped) {
+        Write-Problem "[invoke-perf-run] areka did not end within $KILL_WAIT_MS ms after it was killed. The out dir was left as is: $script:OutDirPath"
+        exit $EXIT_RUN_FAILED
+    }
 
     if ($script:OutDirCreated -and $script:OutDirPath -and (Test-Path -LiteralPath $script:OutDirPath)) {
         try {
@@ -232,17 +312,12 @@ function Stop-Run {
                 "reason: $Message"
             ) -join [Environment]::NewLine
             Set-Content -LiteralPath (Join-Path $script:OutDirPath 'FAILED.txt') -Value $errText -Encoding utf8
-
-            $parent = Split-Path -Parent $script:OutDirPath
-            $leaf   = (Split-Path -Leaf $script:OutDirPath) + '-FAILED'
-            if (Test-Path -LiteralPath (Join-Path $parent $leaf)) {
-                $leaf = $leaf + '-' + [DateTime]::UtcNow.ToString('HHmmssfff')
-            }
-            Rename-Item -LiteralPath $script:OutDirPath -NewName $leaf
-            Write-Problem "[invoke-perf-run] moved the partial output to $(Join-Path $parent $leaf) (not usable for judging)."
+            $moved = Move-FailedOutDir -Path $script:OutDirPath
         } catch {
-            Write-Problem "[invoke-perf-run] could not move the partial output: $($_.Exception.Message)"
+            Write-Problem "[invoke-perf-run] could not move the partial output $($script:OutDirPath): $($_.Exception.Message)"
+            exit $EXIT_RUN_FAILED
         }
+        Write-Info "[invoke-perf-run] moved to: $moved"
     }
     exit $Code
 }
@@ -267,10 +342,18 @@ function Get-ProcessCpuPercent1Core {
 
     $paths = @(($IdCounterTemplate -f $InstanceFilter), ($CpuCounterTemplate -f $InstanceFilter))
     $set = Get-Counter -Counter $paths -MaxSamples 1 -ErrorAction Stop
+    return Select-ProcessCpuValue -Samples $set.CounterSamples -TargetProcessId $TargetProcessId
+}
+
+# カウンタの結果（Path と CookedValue を持つ CounterSample の並び）から、ID Process が
+# TargetProcessId の枝番の CPU の値を選ぶ（純関数・-SelfTest の counter-select が固定する）。
+# 見つからなければ $null。
+function Select-ProcessCpuValue {
+    param([object[]]$Samples, [int]$TargetProcessId)
 
     $idByKey  = @{}
     $cpuByKey = @{}
-    foreach ($s in $set.CounterSamples) {
+    foreach ($s in @($Samples)) {
         $path = [string]$s.Path
         $cut  = $path.LastIndexOf('\')
         if ($cut -lt 0) { continue }
@@ -289,144 +372,42 @@ function Get-ProcessCpuPercent1Core {
     return $null
 }
 
-# マシン識別（要件 4.5 の「測定マシンの条件」素材）。取得できない項目は理由を値として残す。
-function Get-MachineFacts {
-    $facts = [ordered]@{}
-    $facts['hostname']              = [Environment]::MachineName
-    $facts['logical_processors']    = [Environment]::ProcessorCount
-    $facts['os_version']            = [Environment]::OSVersion.VersionString
-    $facts['powershell_version']    = $PSVersionTable.PSVersion.ToString()
-    $facts['dotnet_version']        = [Environment]::Version.ToString()
-
-    try {
-        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
-        $facts['os_caption']        = $os.Caption
-        $facts['os_build']          = $os.BuildNumber
-        $facts['total_memory_mb']   = [math]::Round($os.TotalVisibleMemorySize / 1024)
-    } catch {
-        $facts['os_caption']        = "(unavailable: $($_.Exception.Message))"
-    }
-    try {
-        $cpu = @(Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop)
-        $facts['cpu_model']         = ($cpu | ForEach-Object { $_.Name.Trim() }) -join ' / '
-        $facts['cpu_sockets']       = $cpu.Count
-        $facts['cpu_cores_physical']= ($cpu | Measure-Object -Property NumberOfCores -Sum).Sum
-        $facts['cpu_max_clock_mhz'] = ($cpu | Measure-Object -Property MaxClockSpeed -Maximum).Maximum
-    } catch {
-        $facts['cpu_model']         = "(unavailable: $($_.Exception.Message))"
-    }
-    $facts['power_scheme']          = Get-ActivePowerScheme
-    return $facts
-}
-
-# 今の電源設定を powrprof の API から '<GUID> (<名前>)' の形で取る。名前は UTF-16 で来るので
-# 端末の文字コードに依らない（powercfg は端末の文字コードで書き、437 の端末では日本語の名前が ? に落ちる）。
-# 取れないときは '(unavailable: <理由>)' を返す（走行は止めない）。
-function Get-ActivePowerScheme {
-    try {
-        if (-not ('ArekaPerfRun.PowerScheme' -as [type])) {
-            Add-Type -Namespace ArekaPerfRun -Name PowerScheme -MemberDefinition @'
-[DllImport("powrprof.dll")]
-public static extern uint PowerGetActiveScheme(IntPtr userRootPowerKey, out IntPtr activePolicyGuid);
-[DllImport("powrprof.dll")]
-public static extern uint PowerReadFriendlyName(IntPtr rootPowerKey, ref Guid schemeGuid, IntPtr subGroupGuid, IntPtr settingGuid, byte[] buffer, ref uint bufferSize);
-[DllImport("kernel32.dll")]
-public static extern IntPtr LocalFree(IntPtr mem);
-'@
-        }
-        $api = [ArekaPerfRun.PowerScheme]
-        $guidPtr = [IntPtr]::Zero
-        $rc = $api::PowerGetActiveScheme([IntPtr]::Zero, [ref]$guidPtr)
-        if ($rc -ne 0) { return "(unavailable: PowerGetActiveScheme returned $rc)" }
-        try {
-            $guid = [System.Runtime.InteropServices.Marshal]::PtrToStructure($guidPtr, [type][guid])
-        } finally {
-            [void]$api::LocalFree($guidPtr)
-        }
-        # 1 回目で大きさを聞き、2 回目で名前（UTF-16・終端の NUL 付き）を読む
-        $size = [uint32]0
-        $rc = $api::PowerReadFriendlyName([IntPtr]::Zero, [ref]$guid, [IntPtr]::Zero, [IntPtr]::Zero, $null, [ref]$size)
-        if ($rc -ne 0 -or $size -eq 0) { return "$guid (unavailable: PowerReadFriendlyName returned $rc)" }
-        $buffer = [byte[]]::new($size)
-        $rc = $api::PowerReadFriendlyName([IntPtr]::Zero, [ref]$guid, [IntPtr]::Zero, [IntPtr]::Zero, $buffer, [ref]$size)
-        if ($rc -ne 0) { return "$guid (unavailable: PowerReadFriendlyName returned $rc)" }
-        $name = [System.Text.Encoding]::Unicode.GetString($buffer, 0, [int]$size).TrimEnd([char]0)
-        return "$guid ($name)"
-    } catch {
-        return "(unavailable: $($_.Exception.Message))"
-    }
-}
-
-# ソース識別（同一手順の再測が同一コードに対して行われたかを後から突き合わせるため）
-function Get-SourceFacts {
-    param([string]$RepoRoot)
-    $facts = [ordered]@{}
-    try {
-        # git は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）
-        $head = Invoke-Utf8Child git @('-C', $RepoRoot, 'rev-parse', 'HEAD')
-        if ($head.Code -eq 0) {
-            $facts['git_head'] = $head.Out.Trim()
-            $branch = Invoke-Utf8Child git @('-C', $RepoRoot, 'rev-parse', '--abbrev-ref', 'HEAD')
-            if ($branch.Code -eq 0) { $facts['git_branch'] = $branch.Out.Trim() }
-            $status = Invoke-Utf8Child git @('-C', $RepoRoot, 'status', '--porcelain')
-            if ($status.Code -eq 0) {
-                $dirty = @($status.Out -split '\r?\n' | Where-Object { $_.Trim().Length -gt 0 }).Count
-                $facts['git_dirty_files'] = $dirty
-            }
-        } else {
-            $facts['git_head'] = '(unavailable: git rev-parse HEAD failed)'
-        }
-    } catch {
-        $facts['git_head'] = "(unavailable: cannot run git: $($_.Exception.Message))"
-    }
-    return $facts
+# run.log に目印が在るか（最初の 1 件で読むのを止める＝大きなログを丸ごと読まない。
+# -SelfTest の smoke-marker が固定する）
+function Test-SmokeMarker {
+    param([string]$Path, [string]$Marker = $LOG_MARKER_SMOKE_GATE)
+    return [bool](Select-String -LiteralPath $Path -Pattern $Marker -SimpleMatch -List -Quiet -Encoding utf8)
 }
 
 # --- 版 1.1.0 で足した補助（自動静寂確認・実行体の所在・追加ログ指定） -------------
 
-# 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む最小の解釈器。
-# 閾値・採取秒数・重いプロセス名は check-quiet.ps1 が自分で同じファイルから読む（二重に
-# 解釈して食い違わせないため、本スクリプトはこの 2 つ以外を読まない）。
-# 他の節・他のキーは黙って読み飛ばす。引用符の外の # 以降は注釈として落とす。
+# 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む薄い引き口
+# （読みは perf-tool-base の読み口）。閾値・採取秒数・重いプロセス名は check-quiet.ps1 が
+# 自分で同じファイルから読む（二重に解釈して食い違わせないため、この 2 つ以外を読まない）。
+# 鍵は在るのに整数で読めない値は投げる（黙って既定値へ落とさない。呼び手が 3 で止める）。
 function Read-QuietRetrySettingsFromToml {
     param([string]$Text)
     $out = @{}
-    $inQuiet = $false
-    foreach ($raw in ($Text -split "`r?`n")) {
-        $line = $raw.Trim()
-        if ($line -eq '' -or $line.StartsWith('#')) { continue }
-        if ($line -match '^\[([^\]]+)\]\s*$') { $inQuiet = ($Matches[1].Trim() -eq 'quiet'); continue }
-        if (-not $inQuiet) { continue }
-        if ($line -notmatch '^([A-Za-z0-9_]+)\s*=\s*(.+)$') { continue }
-        $key = $Matches[1]
-        $val = ($Matches[2]).Trim()
-
-        $inStr = $false
-        $cut = -1
-        for ($i = 0; $i -lt $val.Length; $i++) {
-            $ch = $val[$i]
-            if ($ch -eq '"') { $inStr = -not $inStr }
-            elseif ($ch -eq '#' -and -not $inStr) { $cut = $i; break }
-        }
-        if ($cut -ge 0) { $val = $val.Substring(0, $cut).Trim() }
-
-        if ($key -eq 'retry_max' -or $key -eq 'retry_wait_sec') {
-            $parsed = 0
-            if ([int]::TryParse($val, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)) {
-                $out[$key] = $parsed
-            }
-        }
+    $toml = Read-TomlSections -Text $Text
+    foreach ($key in 'retry_max', 'retry_wait_sec') {
+        $v = Get-TomlInt -Toml $toml -Section 'quiet' -Key $key
+        if ($null -ne $v) { $out[$key] = $v }
+        elseif ($null -ne ($raw = Get-TomlRaw -Toml $toml -Section 'quiet' -Key $key)) { throw "[quiet] $key cannot be read as an integer: $raw" }
     }
     return $out
 }
 
-# 本スクリプトを走らせている pwsh 自身を探す（子スクリプトも同じ版で走らせる）。
-function Get-PwshPath {
-    if ($PSHOME) {
-        $candidate = Join-Path $PSHOME 'pwsh.exe'
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
-    }
-    return 'pwsh'
+# 静かさの確かめ 1 回の答えから次の手を決める（-SelfTest の quiet-attempt-step が固定する）。
+# 戻り: 'go'（静か）・'bad'（3＝引数・前提の不正）・'counter'（4＝カウンタが読めない、ほかの想定外の終わり方も
+#       走行の後の確かめと同じく 4 に寄せる）・
+#       'unconfirmed'（2 で、確かめた回数が retry_max + 1 に届いた）・'wait'（2 で、まだ確かめ直せる）
+function Get-QuietAttemptStep {
+    param([int]$Code, [int]$Attempt, [int]$RetryMax)
+    if ($Code -eq 0) { return 'go' }
+    if ($Code -eq 3) { return 'bad' }
+    if ($Code -ne 2) { return 'counter' }
+    if ($Attempt -ge $RetryMax + 1) { return 'unconfirmed' }
+    return 'wait'
 }
 
 # check-quiet.ps1 を 1 回呼ぶ。報告は quiet-<Stage>.txt として OutDir に残り、
@@ -443,9 +424,9 @@ function Invoke-CheckQuietOnce {
     if ($GoalFilePath) { $quietArgs += @('-GoalFile', $GoalFilePath) }
     # 子の pwsh は前置きで標準出力・標準エラーを UTF-8 で書くので、UTF-8 で読む。
     # 写す順は標準出力の行、続いて標準エラーの行（交互の順は保たない）。
-    $result = Invoke-Utf8Child (Get-PwshPath) (Get-PwshChildArguments -ScriptPath $ScriptPath -Arguments $quietArgs)
-    foreach ($line in @($result.Out -split '\r?\n' | Where-Object { $_ -ne '' })) { Write-Info $line }
-    foreach ($line in $result.ErrLines) { Write-Info $line }
+    $result = Invoke-PwshChild -ScriptPath $ScriptPath -Arguments $quietArgs -Quiet
+    foreach ($line in @($result.Out | Where-Object { $_ -ne '' })) { Write-Info $line }
+    foreach ($line in @($result.Err | Where-Object { $_ -ne '' })) { Write-Info $line }
     return $result.Code
 }
 
@@ -460,6 +441,15 @@ function Format-Section {
     return ($lines -join [Environment]::NewLine)
 }
 
+# 道具そのものの点検: 静かさの関門より前で回して終わる（出力先も run-meta.txt も作らない）
+if ($SelfTest) {
+    . (Join-Path $PSScriptRoot 'invoke-perf-run.selftest.ps1')
+    $ng = Invoke-PerfRunSelfTest
+    $code = if ($ng -eq 0) { 0 } else { 1 }
+    Write-Info "INVOKE-PERF-RUN RESULT selftest code=$code ok=$script:SelfTestOk ng=$ng"
+    exit $code
+}
+
 # =============================================================================
 # 1. 静寂状態の確認関門（要件 2.7・2.8）— 何よりも先に見る。既定値で素通りしない
 #    -ConfirmQuiet は人の確認、-AutoQuiet は check-quiet.ps1 による機械の確認。
@@ -467,6 +457,9 @@ function Format-Section {
 # =============================================================================
 if ($ConfirmQuiet -and $AutoQuiet) {
     Stop-Run $EXIT_BAD_ARGS "-ConfirmQuiet and -AutoQuiet cannot be used together. Use only one: -ConfirmQuiet if a person checked, -AutoQuiet to let the machine check."
+}
+if ($SampleEtl -and $DryRun) {
+    Stop-Run $EXIT_BAD_ARGS "-SampleEtl and -DryRun cannot be used together (a dry run starts nothing to sample)."
 }
 if (-not $ConfirmQuiet -and -not $AutoQuiet -and -not $DryRun) {
     Write-Problem @"
@@ -546,7 +539,8 @@ if ($Goal -or $GoalFile) {
         Stop-Run $EXIT_BAD_ARGS "goal file not found: $goalCandidate"
     }
     $goalFileFull = (Resolve-Path -LiteralPath $goalCandidate).Path
-    $retrySettings = Read-QuietRetrySettingsFromToml ([IO.File]::ReadAllText($goalFileFull))
+    try { $retrySettings = Read-QuietRetrySettingsFromToml ([IO.File]::ReadAllText($goalFileFull)) }
+    catch { Stop-Run $EXIT_BAD_ARGS "goal file ${goalFileFull}: $($_.Exception.Message)" }
     if ($retrySettings.ContainsKey('retry_max'))      { $quietRetryMax  = [int]$retrySettings['retry_max'] }
     if ($retrySettings.ContainsKey('retry_wait_sec')) { $quietRetryWait = [int]$retrySettings['retry_wait_sec'] }
     if (-not $AutoQuiet) {
@@ -635,6 +629,8 @@ if ($AutoQuiet) {
     $maxQuietAttempts = $quietRetryMax + 1
     while ($true) {
         $quietAttempts++
+        # 前の回の報告を残さない（今回が報告を書く前に落ちたとき、古い報告を証拠と言わない）
+        Remove-Item -LiteralPath $quietPath -Force -ErrorAction Ignore
         Write-Info "[invoke-perf-run] quiet check $quietAttempts/$maxQuietAttempts ($CHECK_QUIET_SCRIPT)..."
         try {
             $quietCode = Invoke-CheckQuietOnce -ScriptPath $checkQuietPath -TargetOutDir $script:OutDirPath `
@@ -642,15 +638,18 @@ if ($AutoQuiet) {
         } catch {
             Stop-Run $EXIT_BAD_ARGS "cannot start the quiet-check script ($checkQuietPath): $($_.Exception.Message)"
         }
-        if ($quietCode -eq 0) { break }
-        if ($quietCode -eq 4) {
-            Stop-Run $EXIT_COUNTER_FAILED "quiet check could not read the performance counters ($CHECK_QUIET_SCRIPT exited with 4). The evidence is in quiet-$QUIET_STAGE_BEFORE.txt."
+        $step = Get-QuietAttemptStep -Code $quietCode -Attempt $quietAttempts -RetryMax $quietRetryMax
+        if ($step -eq 'go') { break }
+        if ($step -eq 'counter') {
+            # 4（とほかの想定外の終わり方）は確かめそのものが落ちた（カウンタ・道具の想定外の失敗）。報告が無ければ訳は上に写した子の最後の行にある
+            $evidence = if (Test-Path -LiteralPath $quietPath -PathType Leaf) { "The evidence is in quiet-$QUIET_STAGE_BEFORE.txt." } else { "It wrote no quiet-$QUIET_STAGE_BEFORE.txt; the reason is its last line above." }
+            Stop-Run $EXIT_COUNTER_FAILED "quiet check failed (counters could not be read, or the check itself failed: $CHECK_QUIET_SCRIPT exited with $quietCode). $evidence"
         }
-        if ($quietCode -ne 2) {
+        if ($step -eq 'bad') {
             Stop-Run $EXIT_BAD_ARGS "quiet check could not run ($CHECK_QUIET_SCRIPT exited with $quietCode). Bad arguments or preconditions."
         }
-        if ($quietAttempts -ge $maxQuietAttempts) {
-            Stop-Run $EXIT_QUIET_UNCONFIRMED "quiet check failed (checked $maxQuietAttempts times, never quiet). A CPU series taken while other load runs measures the machine, not areka, so areka is not started. The evidence is in quiet-$QUIET_STAGE_BEFORE.txt (see the moved folder below)."
+        if ($step -eq 'unconfirmed') {
+            Stop-Run $EXIT_QUIET_UNCONFIRMED "quiet check failed (checked $maxQuietAttempts times, never quiet). A CPU series taken while other load runs measures the machine, not areka, so areka is not started. The evidence is in quiet-$QUIET_STAGE_BEFORE.txt (in the folder of the moved to: line below)."
         }
         Write-Info "[invoke-perf-run] not quiet yet. Waiting $quietRetryWait s and checking again ($($maxQuietAttempts - $quietAttempts) left)."
         Start-Sleep -Seconds $quietRetryWait
@@ -772,6 +771,8 @@ $proc = $null
 $prevSmokeEnv = [Environment]::GetEnvironmentVariable($SMOKE_EXIT_ENV_NAME)
 $prevRustLog  = $env:RUST_LOG
 $prevNoColor  = $env:NO_COLOR
+# 段③の採取は静かさの確かめと run-meta.txt の前半の後、areka を起こす直前に 1 回だけ
+if ($SampleEtl) { Start-RunSampling -Etl $SampleEtl }
 
 try {
     # 子プロセスへ渡す環境変数（本スクリプト自身のプロセスに設定して継承させる）。
@@ -802,7 +803,7 @@ try {
     $lastError   = ''
     while ($true) {
         if ($proc.HasExited) {
-            Stop-Run $EXIT_RUN_FAILED "areka exited before the first CPU sample (exit code $($proc.ExitCode)). Check the run logs $runLogPath and $errLogPath."
+            Stop-Run $EXIT_RUN_FAILED "areka exited before the first CPU sample (exit code $($proc.ExitCode)). Check the run logs $runLogPath and $errLogPath." -Process $proc
         }
         try {
             $firstValue = Get-ProcessCpuPercent1Core -TargetProcessId $proc.Id -InstanceFilter "$instanceName*" `
@@ -813,8 +814,7 @@ try {
             $lastError = $_.Exception.Message
         }
         if ([DateTime]::UtcNow -ge $graceUntil) {
-            if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
-            Stop-Run $EXIT_COUNTER_FAILED "cannot read the CPU performance counter (waited $COUNTER_FIRST_SAMPLE_GRACE_SEC s): $lastError - is the counter name '$($COUNTER_PATH_PROC_CPU -f $instanceName)' valid on this machine? (where counter names are localized, edit the calibration values at the top)"
+            Stop-Run $EXIT_COUNTER_FAILED "cannot read the CPU performance counter (waited $COUNTER_FIRST_SAMPLE_GRACE_SEC s): $lastError - is the counter name '$($COUNTER_PATH_PROC_CPU -f $instanceName)' valid on this machine? (where counter names are localized, edit the calibration values at the top)" -Process $proc
         }
         Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
     }
@@ -828,8 +828,7 @@ try {
     while (-not $proc.HasExited) {
         $now = [DateTime]::UtcNow
         if ($now -ge $deadline) {
-            try { $proc.Kill() } catch { }
-            Stop-Run $EXIT_RUN_FAILED "areka did not exit by the planned time (smoke auto-exit ${smokeExitMs}ms + margin ${EXIT_WATCHDOG_MARGIN_SEC}s). Killed it. Check the run log $runLogPath."
+            Stop-Run $EXIT_RUN_FAILED "areka did not exit by the planned time (smoke auto-exit ${smokeExitMs}ms + margin ${EXIT_WATCHDOG_MARGIN_SEC}s). Killed it. Check the run log $runLogPath." -Process $proc
         }
         if ($now -ge $nextSampleAt) {
             $value    = $null
@@ -847,8 +846,7 @@ try {
                 if ($proc.HasExited) { break }   # 走行が終わっただけ＝異常ではない
                 $attempt++
                 if ($attempt -gt $COUNTER_RETRY_MAX) {
-                    try { $proc.Kill() } catch { }
-                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $COUNTER_RETRY_MAX times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed."
+                    Stop-Run $EXIT_COUNTER_FAILED "CPU sampling failed $($COUNTER_RETRY_MAX + 1) times in a row: $sampleErr - a series with gaps must not be judged, so this run ends as failed." -Process $proc
                 }
                 Start-Sleep -Seconds $COUNTER_RETRY_WAIT_SEC
             }
@@ -882,28 +880,25 @@ try {
     } else {
         $env:NO_COLOR = $prevNoColor
     }
-    if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
+    # 想定外の失敗ではこの後に trap の Stop-Run が退ける（時間切れなら Stop-Run が出力先を残して 1）
+    if ($proc -and -not $proc.HasExited) { Stop-ArekaProcess -Process $proc }
 }
 
 # =============================================================================
 # 7. 採取結果の健全性確認（黙って壊れた成果を残さない）
 # =============================================================================
 if ($exitCode -ne 0) {
-    Stop-Run $EXIT_RUN_FAILED "areka exited abnormally (exit code $exitCode). Check the run logs $runLogPath and $errLogPath."
+    Stop-Run $EXIT_RUN_FAILED "areka exited abnormally (exit code $exitCode). Check the run logs $runLogPath and $errLogPath." -Process $proc
 }
 $plannedSec = $smokeExitMs / 1000.0
 if ($elapsedSec -lt ($plannedSec - $EARLY_EXIT_TOLERANCE_SEC)) {
-    Stop-Run $EXIT_RUN_FAILED "areka exited earlier than planned (planned $([math]::Round($plannedSec)) s, actual $([math]::Round($elapsedSec)) s). It did not end by the smoke auto-exit, so this is not a valid measurement."
+    Stop-Run $EXIT_RUN_FAILED "areka exited earlier than planned (planned $([math]::Round($plannedSec)) s, actual $([math]::Round($elapsedSec)) s). It did not end by the smoke auto-exit, so this is not a valid measurement." -Process $proc
 }
 if (-not (Test-Path -LiteralPath $runLogPath -PathType Leaf) -or (Get-Item -LiteralPath $runLogPath).Length -eq 0) {
-    Stop-Run $EXIT_RUN_FAILED "run log $runLogPath is empty. A run without a log cannot be judged."
+    Stop-Run $EXIT_RUN_FAILED "run log $runLogPath is empty. A run without a log cannot be judged." -Process $proc
 }
-$logText = Get-Content -LiteralPath $runLogPath -Raw -Encoding utf8
-if ($logText -notmatch [regex]::Escape($LOG_MARKER_SMOKE_GATE)) {
-    Stop-Run $EXIT_RUN_FAILED "run log has no smoke auto-exit marker (LOG_MARKER_SMOKE_GATE). A run where $SMOKE_EXIT_ENV_NAME did not take effect is not a repeat of the same procedure."
-}
-if ($sampleCount -lt 1) {
-    Stop-Run $EXIT_COUNTER_FAILED "no CPU sample was taken."
+if (-not (Test-SmokeMarker -Path $runLogPath)) {
+    Stop-Run $EXIT_RUN_FAILED "run log has no smoke auto-exit marker (LOG_MARKER_SMOKE_GATE). A run where $SMOKE_EXIT_ENV_NAME did not take effect is not a repeat of the same procedure." -Process $proc
 }
 
 # =============================================================================

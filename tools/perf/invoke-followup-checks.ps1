@@ -45,18 +45,20 @@ invoke-followup-checks.ps1 — 見た目の追随をエージェント自身が�
   SAMPLE_BALLOON_NAME   その検体が同梱するバルーンの名前（窓口の `balloon.<名前>=` の鍵）
   SHOW_READY_TIMEOUT_MS 表示成立点を待つ上限
   SETTLE_MS             1 手ごとの反映待ち（クリック透過の再評価・窓書込の flush）
-  DRAG_DX_PX            ドラッグで動かす距離（px・judge-followup.py と対）
+  DRAG_DX_PX            ドラッグで動かす距離（px。probe.log の step=gesture 行の dx に書き、judge-followup.py はその値を期待の距離として読む）
   DRAG_STEPS            ドラッグ中に送る中間移動の回数
   DPI_WAIT_MS           DPI 変更の受理と表示成立を待つ上限
   EXIT_MARGIN_SEC       有界自動終了を過ぎてから強制終了するまでの猶予
+  KILL_WAIT_MS          強制終了の後に子孫まで終わるのを待つ上限（ミリ秒）
   TRANSPARENT_INSET_PX  透明とみなす点（窓の左上角からの内寄せ）
   OPAQUE_BOTTOM_PX      不透明とみなす点（下端中央からの上寄せ）
 
-終了コード（judge-followup.py の体系をそのまま返す）:
-  0 … 総合 PASS  1 … FAIL あり  2 … FAIL 無しで判定不能あり  3 … 引数不正・読取不能
-  1 は実走そのものに失敗した場合（起動できない・表示が成立しない）にも返す。
+終了コード（judge-followup.py の 0・1・2 はそのまま、判定器の 3＝読取不能とほかは 1 に写す）:
+  0 … 総合 PASS  1 … FAIL あり  2 … FAIL 無しで判定不能あり  3 … 本スクリプトの引数不正
+  1 は実走そのものに失敗した場合（起動できない・表示が成立しない・窓が先に閉じた）にも返す。
+  -SelfTest は自分の検査と判定器の較正のどちらかが赤なら非ゼロ。
 
-標準出力の末尾には必ず次の 1 行を出す（背景実行でも会話へ届く形・要件 1.9）:
+標準出力の末尾には必ず次の 1 行を出す（実走のとき。-SelfTest は終了コードだけ・背景実行でも会話へ届く形・要件 1.9）:
   FOLLOWUP RESULT overall=<…> clickthrough=<…> drag=<…> dpi=<…> balloon_follow=<…> code=<n> dir=<path>
 
 使い方:
@@ -97,14 +99,31 @@ param(
     [Parameter(ParameterSetName = 'SelfTest', Mandatory = $true)]
     [switch]$SelfTest
 )
+# shortcut: 必須の引数の欠けは PowerShell の束ねの段で RESULT 行の無い 1 になる（script の中から捕まえる口が無い）。
+# 呼び手（perf-loop）が引数を欠く形で呼ぶようになったら、必須を外して自分で確かめて 3 にする
+
+# 想定外の失敗は理由の 1 行と中止の形の FOLLOWUP RESULT 行で 1（perf-loop は 1 度だけ採り直す）
+trap {
+    # 共通部品より前の失敗（読み込めない）でも元の原因と中止の形の RESULT 行で 1
+    if (-not (Get-Command -Name 'Stop-Run' -CommandType Function -ErrorAction Ignore)) {
+        [Console]::Error.WriteLine("[invoke-followup-checks] stopped: unexpected failure before the shared helpers loaded: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+        [Console]::Out.WriteLine('FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code=1 dir=-')
+        exit 1
+    }
+    Stop-Run $EXIT_FAIL (Format-UnexpectedError -ErrorRecord $_)
+}
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
+# trap の Stop-Run が出力先の決まる前でも読める値
+$script:NoteLines  = @()
+$script:OutDirPath = '-'
+
 # =============================================================================
 # 較正値
 # =============================================================================
-$SCRIPT_VERSION        = '0.1.1'
+$SCRIPT_VERSION        = '0.2.0'
 $RUST_LOG_VALUE        = 'info,wintf::ecs::clickthrough=debug,wintf::transition=debug,areka_emo_present=debug'
 $SMOKE_EXIT_ENV_NAME   = 'AREKA_APP_SMOKE_EXIT_MS'
 $SAMPLE_NAME            = 'emo2'
@@ -115,6 +134,7 @@ $DRAG_DX_PX            = 80
 $DRAG_STEPS            = 8
 $DPI_WAIT_MS           = 8000
 $EXIT_MARGIN_SEC       = 20
+$KILL_WAIT_MS          = 10000
 $TRANSPARENT_INSET_PX  = 2
 $OPAQUE_BOTTOM_PX      = 10
 
@@ -129,15 +149,11 @@ $EXIT_BAD_ARGS = 3
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $judgePath = Join-Path $PSScriptRoot 'judge-followup.py'
 
-#: 検体の窓口の呼び出し（1 検体 1 回だけ呼ぶ＝呼ぶたびに展開し直すため）。
-$NAR_SAMPLE_ARGS   = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--manifest-path')
-$script:NarSampleMaps = @{}
-
 #: 表示成立点の実行ログの目印（本番のログの文言と字で突き合わせる）。
 $LOG_MARKER_SHOW_READY = 'apply\(ShowSurface\): 表示・マスクを更新'
 
-# 子の出力を端末の文字コードに依らず UTF-8 で読む（Invoke-Utf8Child）
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'utf8-child.ps1')
+# 表示・時刻・子の起こし方・検体の在り処・python 探しは共通部品から
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
 
 # =============================================================================
 # Win32（DPI 対応で読む・列挙・入力注入・窓の移動）
@@ -206,18 +222,16 @@ $SM_CYVIRTUALSCREEN = 79
 # =============================================================================
 # 小さな道具
 # =============================================================================
-function Get-UtcStamp {
+function Get-ProbeStamp {
     # run.log（tracing の RFC3339・UTC・小数 6 桁）と同じ形。判定側が両者を同じ物差しで
     # 並べるため、ここを崩してはならない。
     return [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture) + 'Z'
 }
 
-function Write-Info { param([string]$Text) Write-Host $Text }
-
 function Write-Probe {
     # probe.log へ 1 行足す（1 手 1 行・key=value・値に空白を入れない）
     param([string]$Check, [string]$Step, [string[]]$Fields)
-    $line = "probe: check=$Check step=$Step t=$(Get-UtcStamp)"
+    $line = "probe: check=$Check step=$Step t=$(Get-ProbeStamp)"
     if ($Fields) { $line += ' ' + ($Fields -join ' ') }
     Add-Content -LiteralPath $script:ProbeLogPath -Value $line -Encoding utf8
     $script:ProbeLines += $line
@@ -231,7 +245,7 @@ function Write-Note {
 
 function Stop-Run {
     param([int]$Code, [string]$Reason)
-    Write-Host "[invoke-followup-checks] stopped: $Reason" -ForegroundColor Red
+    Write-Problem "[invoke-followup-checks] stopped: $Reason"
     if ($script:NoteLines) {
         Write-Note "stopped: $Reason"
         Set-Content -LiteralPath $script:NotePath -Value ($script:NoteLines -join [Environment]::NewLine) -Encoding utf8
@@ -240,56 +254,13 @@ function Stop-Run {
     exit $Code
 }
 
-# 検体の窓口（`nar-sample-path`）を 1 回呼んで `key=value` の表にする。
-# perf-loop.common.ps1 の Get-NarSampleMap／Get-NarSamplePath と同形（Stop-Run の形だけが違う）。
-# 窓口は呼ぶたびに検体を展開し直すので、1 検体につき 1 回だけ呼んで表を取っておく。
-function Get-NarSampleMap {
-    param([Parameter(Mandatory = $true)][string]$Sample)
-    if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
-    $cargoArgs = @($NAR_SAMPLE_ARGS) + @((Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
-    $result = $null
-    # cargo（と窓口）は UTF-8 で書くので、端末の文字コードに依らず UTF-8 で読む
-    try { $result = Invoke-Utf8Child cargo $cargoArgs }
-    catch { Stop-Run $EXIT_FAIL "cannot call the sample lookup (cargo $($cargoArgs -join ' ')): $($_.Exception.Message)" }
-    if ($result.Code -ne 0) {
-        # 標準エラーは端末へ直に出なくなったので、止める前に行のまま写す
-        foreach ($errLine in $result.ErrLines) { Write-Info $errLine }
-        Stop-Run $EXIT_FAIL "the sample lookup failed (exit code $($result.Code), cargo $($cargoArgs -join ' ')). The reason is in the stderr lines above."
-    }
-    $lines = @($result.Out -split '\r?\n')
-    $map = @{}
-    foreach ($line in $lines) {
-        $text = "$line".Trim()
-        # 最初の '=' だけで割る（値は Windows の絶対パスで、後ろに '=' が来ても壊さない）
-        $sep = $text.IndexOf('=')
-        if ($sep -lt 1) { continue }
-        $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
-    }
-    $script:NarSampleMaps[$Sample] = $map
-    return $map
-}
-
-# 表から 1 つの鍵を取り出す。鍵が無ければ止める——同梱バルーンを持たない検体では
-# `balloon.<名前>=` の行そのものが出ないので、空を掴んだまま進むとパス無しで起動してしまう。
-function Get-NarSamplePath {
+# 検体の窓口の値（読みは共通部品の Get-NarSamplePath）。取れなければ止める——同梱バルーンを
+# 持たない検体では `balloon.<名前>=` の行そのものが出ず、空を掴んだまま進むとパス無しで起動してしまう。
+function Get-NarSampleValue {
     param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
-    $map = Get-NarSampleMap -Sample $Sample
-    if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
-        Stop-Run $EXIT_FAIL "the sample lookup output has no '$Key=' line (sample '$Sample', keys seen: $(($map.Keys | Sort-Object) -join ', '))."
-    }
-    return $map[$Key]
-}
-
-function Get-PythonCommand {
-    # 単一要素の配列を返すと PowerShell が文字列へ展開してしまうため、
-    # 実行体と前置引数を別の項として持つオブジェクトで返す。
-    foreach ($candidate in @('python', 'python3')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found) { return [pscustomobject]@{ Exe = $found.Source; Prefix = @() } }
-    }
-    $py = Get-Command 'py' -ErrorAction SilentlyContinue
-    if ($py) { return [pscustomobject]@{ Exe = $py.Source; Prefix = @('-3') } }
-    return $null
+    $r = Get-NarSamplePath -Sample $Sample -Key $Key
+    if (-not $r.Ok) { Stop-Run $EXIT_FAIL $r.Message }
+    return $r.Value
 }
 
 function Invoke-Judge {
@@ -298,37 +269,86 @@ function Invoke-Judge {
     param([pscustomobject]$Python, [string[]]$Arguments)
     # judge-followup.py は標準出力と標準エラーを UTF-8 に寄せて書くので、UTF-8 で読み、
     # 標準出力の行・標準エラーの行の順に行のまま写す（末尾の改行 1 つだけを落とす）
-    $argv = @($Python.Prefix) + $Arguments
-    $result = Invoke-Utf8Child $Python.Exe $argv
-    if ($result.Out) {
-        foreach ($outLine in (($result.Out -replace '\r?\n\z', '') -split '\r?\n')) { Write-Host $outLine }
-    }
-    foreach ($errLine in $result.ErrLines) { Write-Host $errLine }
+    $result = Invoke-PythonChild -Python $Python -Arguments $Arguments -Quiet
+    foreach ($outLine in $result.Out) { Write-Info $outLine }
+    foreach ($errLine in $result.Err) { if ($errLine -ne '') { Write-Info $errLine } }
     $script:JudgeExitCode = $result.Code
 }
 
-function Read-RunLogText {
-    # 子プロセスが書いている最中のファイルを共有読みする（Get-Content は共有違反になり得る）
+# balloon_follow が比べる前後の操作（drag・dpi のうち求められたもの）のうち、status=done に届かなかったもの（純関数）。
+# 戻り: Sources（求められた操作・必ず配列）・NotDone（届かなかった操作）・Ready（操作が 1 つ以上あり全部届いた）
+function Get-BalloonFollowSources {
+    param([string[]]$Requested, [string[]]$ProbeLines)
+    $sources = @(@('drag', 'dpi') | Where-Object { $Requested -contains $_ })
+    $notDone = @($sources | Where-Object { $s = $_; -not @($ProbeLines | Where-Object { $_ -match "check=$s step=status .*status=done" }).Count })
+    return [pscustomobject]@{ Sources = $sources; NotDone = $notDone; Ready = ($sources.Count -gt 0 -and $notDone.Count -eq 0) }
+}
+
+# 表示成立点に届かなかったときの probe 行の欄（純関数）。areka が先に終わったら exited と実際に待った時間、ほかは timeout と上限
+function Get-ShowReadyMissFields {
+    param([bool]$Exited, [long]$WaitedMs)
+    if ($Exited) { return @("waited_ms=$WaitedMs", 'result=exited') }
+    return @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
+}
+
+# 判定器（judge-followup.py）の終了コードを返す値へ写す（純関数）: 0・1・2 はそのまま、
+# 3（読取不能）とほか（起こせない -1 を含む）は 1＝実走の失敗（perf-loop が 1 度だけ採り直す）
+function Convert-FollowupJudgeExit {
+    param([int]$Code)
+    if ($Code -in 0, 1, 2) { return $Code }
+    return $EXIT_FAIL
+}
+
+# run.log の増えた分だけを読む読み手。位置と、改行の来ていない最後の 1 行のバイトを覚える
+# （バイトで持つので、UTF-8 の 1 文字が読みの間で割れても崩れない）。
+function New-RunLogTail {
     param([string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return '' }
+    return [pscustomobject]@{ Path = $Path; Position = [long]0; Pending = [byte[]]::new(0) }
+}
+
+# 前の読みの後に書き終わった行を返す（書きかけの最後の 1 行は次に回す・同じ行を 2 度返さない）。
+# 子プロセスが書いている最中のファイルを共有読みする（Get-Content は共有違反になり得る）。
+function Read-RunLogTail {
+    param([pscustomobject]$Tail)
+    if (-not (Test-Path -LiteralPath $Tail.Path)) { return @() }
     try {
         $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
-        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+        $stream = [System.IO.File]::Open($Tail.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
         try {
-            $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8)
-            return $reader.ReadToEnd()
+            $count = [int][Math]::Max(0, $stream.Length - $Tail.Position)
+            $buf = [byte[]]::new($Tail.Pending.Length + $count)
+            [Array]::Copy($Tail.Pending, $buf, $Tail.Pending.Length)
+            $null = $stream.Seek($Tail.Position, [System.IO.SeekOrigin]::Begin)
+            $read = 0
+            while ($read -lt $count) {
+                $n = $stream.Read($buf, $Tail.Pending.Length + $read, $count - $read)
+                if ($n -le 0) { break }
+                $read += $n
+            }
         } finally { $stream.Dispose() }
-    } catch { return '' }
+    } catch { return @() }
+    $end = $Tail.Pending.Length + $read
+    # 先頭の BOM はバッファの頭がファイルの頭のときだけ落とす（1 度目に BOM の途中までしか見えなくても次で落ちる）
+    $start = if (($Tail.Position - $Tail.Pending.Length) -eq 0 -and $end -ge 3 -and $buf[0] -eq 0xEF -and $buf[1] -eq 0xBB -and $buf[2] -eq 0xBF) { 3 } else { 0 }
+    $Tail.Position += $read
+    $lastNl = if ($end -gt 0) { [Array]::LastIndexOf($buf, [byte]10, $end - 1) } else { -1 }
+    $lines = @()
+    $from = $start
+    if ($lastNl -ge $start) {
+        $text = [System.Text.Encoding]::UTF8.GetString($buf, $start, $lastNl - $start)
+        $lines = @($text -split "`n" | ForEach-Object { $_.TrimEnd("`r") })
+        $from = $lastNl + 1
+    }
+    $Tail.Pending = [byte[]]::new($end - $from)
+    [Array]::Copy($buf, $from, $Tail.Pending, 0, $end - $from)
+    return $lines
 }
 
 function Get-RunLogLinesSince {
-    # 行頭の時刻が $Since 以降の行だけを返す（観測窓の内側だけを見るため）
-    param([string]$Path, [datetime]$Since)
-    $text = Read-RunLogText -Path $Path
-    if (-not $text) { return @() }
+    # 読み手の増えた分のうち、行頭の時刻が $Since 以降の行だけを返す（観測窓の内側だけを見るため）
+    param([pscustomobject]$Tail, [datetime]$Since)
     $out = New-Object System.Collections.Generic.List[string]
-    foreach ($line in ($text -split "`n")) {
-        $trimmed = $line.TrimEnd("`r")
+    foreach ($trimmed in @(Read-RunLogTail -Tail $Tail)) {
         if ($trimmed -match '^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)Z\s') {
             $stamp = [DateTime]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture,
                 [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal)
@@ -340,10 +360,16 @@ function Get-RunLogLinesSince {
 
 function Wait-RunLogPattern {
     # $Since 以降の行に正規表現が現れるまで待つ。現れたら $true
-    param([string]$Path, [datetime]$Since, [string]$Pattern, [int]$TimeoutMs)
+    # -Process が終わったら待たずに $false（起動直後に落ちた areka を上限まで待たない）
+    param([string]$Path, [datetime]$Since, [string]$Pattern, [int]$TimeoutMs, [System.Diagnostics.Process]$Process)
     $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+    $tail = New-RunLogTail -Path $Path
     while ([DateTime]::UtcNow -lt $deadline) {
-        foreach ($line in (Get-RunLogLinesSince -Path $Path -Since $Since)) {
+        if ($Process -and $Process.HasExited) {
+            foreach ($line in (Get-RunLogLinesSince -Tail $tail -Since $Since)) { if ($line -match $Pattern) { return $true } }
+            return $false
+        }
+        foreach ($line in (Get-RunLogLinesSince -Tail $tail -Since $Since)) {
             if ($line -match $Pattern) { return $true }
         }
         Start-Sleep -Milliseconds 200
@@ -361,6 +387,14 @@ function Get-WindowRectObject {
     }
 }
 
+# 操作の対象の窓の矩形。取れない＝窓が先に閉じたので、理由の 1 行で 1（実走の失敗）
+function Get-TargetRect {
+    param([pscustomobject]$Window)
+    $rect = Get-WindowRectObject -Hwnd $Window.Hwnd
+    if (-not $rect) { Stop-Run $EXIT_FAIL "the $($Window.Kind) window $($Window.Key) closed before the checks finished (GetWindowRect failed)." }
+    return $rect
+}
+
 function Format-Hwnd { param([IntPtr]$Hwnd) return ('0x{0:X}' -f [int64]$Hwnd) }
 
 function Test-ExTransparent {
@@ -369,24 +403,97 @@ function Test-ExTransparent {
     return [pscustomobject]@{ Ex = ('0x{0:X}' -f $ex); Transparent = (($ex -band $WS_EX_TRANSPARENT) -ne 0) }
 }
 
+# 自分の検査（-SelfTest で判定器の較正の前に回す）。1 検査 1 行を ASCII で出し、赤の数を返す。
+function Invoke-FollowupSelfChecks {
+    $checks = [ordered]@{
+        'balloon-follow-sources' = {
+            # 求められた操作が 1 つでも 0 でも配列のまま数える（StrictMode で 1 つの文字列の .Count を引かない）
+            $done = @('check=drag step=status status=done reason=-')
+            foreach ($case in @(@{ Req = @('clickthrough', 'drag', 'balloon_follow'); Ready = $true; NotDone = '' }
+                                @{ Req = @('drag', 'dpi', 'balloon_follow'); Ready = $false; NotDone = 'dpi' }
+                                @{ Req = @('dpi', 'balloon_follow'); Ready = $false; NotDone = 'dpi' }
+                                @{ Req = @('balloon_follow'); Ready = $false; NotDone = '' })) {
+                $r = Get-BalloonFollowSources -Requested $case.Req -ProbeLines $done
+                if ($r.Ready -ne $case.Ready -or ($r.NotDone -join ',') -ne $case.NotDone) {
+                    throw "$($case.Req -join ','): ready=$($r.Ready) not_done='$($r.NotDone -join ',')' (want $($case.Ready) / '$($case.NotDone)')"
+                }
+            }
+        }
+        'show-ready-miss' = {
+            $got = (Get-ShowReadyMissFields -Exited $true -WaitedMs 1234) -join ' '
+            if ($got -ne 'waited_ms=1234 result=exited') { throw "exited: $got" }
+            $got = (Get-ShowReadyMissFields -Exited $false -WaitedMs 1234) -join ' '
+            if ($got -ne "waited_ms=$SHOW_READY_TIMEOUT_MS result=timeout") { throw "timeout: $got" }
+        }
+        'judge-exit-map' = {
+            foreach ($pair in @(@(0, 0), @(1, 1), @(2, 2), @(3, 1), @(4, 1), @(-1, 1), @(255, 1))) {
+                $got = Convert-FollowupJudgeExit -Code $pair[0]
+                if ($got -ne $pair[1]) { throw "judge exit $($pair[0]) mapped to $got (want $($pair[1]))" }
+            }
+        }
+        'incremental-log-reader' = {
+            $dir = Join-Path $repoRoot ('target\perf-loop-tmp\followup-selftest-' + [Guid]::NewGuid().ToString('N'))
+            $null = New-Item -ItemType Directory -Force -Path $dir
+            try {
+                $path = Join-Path $dir 'run.log'
+                $tail = New-RunLogTail -Path $path
+                $nihon = "$([char]0x65E5)$([char]0x672C)$([char]0x8A9E)"
+                $jp = [Text.Encoding]::UTF8.GetBytes($nihon)
+                $add = {
+                    param([byte[]]$Bytes)
+                    $s = [IO.File]::Open($path, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+                    try { $s.Write($Bytes, 0, $Bytes.Length) } finally { $s.Dispose() }
+                }
+                $expect = {
+                    param([string]$Label, [string[]]$Want)
+                    $got = @(Read-RunLogTail -Tail $tail)
+                    if (($got.Count -ne $Want.Count) -or (($got -join "`n") -cne ($Want -join "`n"))) {
+                        throw "${Label}: got $($got.Count) lines [$($got -join '|')]"
+                    }
+                }
+                & $expect 'no file yet' @()
+                # BOM, one whole line, then a partial line without a newline
+                & $add ([byte[]](@(0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes("line1`npar")))
+                & $expect 'first read' @('line1')
+                & $expect 'no growth' @()
+                # the partial line completes; a Japanese word is split inside one character
+                & $add ([byte[]]([Text.Encoding]::UTF8.GetBytes("tial`n") + $jp[0..3]))
+                & $expect 'partial completed' @('partial')
+                & $add ([byte[]]($jp[4..($jp.Length - 1)] + [Text.Encoding]::UTF8.GetBytes("`r`nx`n")))
+                & $expect 'utf-8 split across reads' @($nihon, 'x')
+                & $expect 'nothing returned twice' @()
+            } finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+    $ng = 0
+    foreach ($name in $checks.Keys) {
+        try { & $checks[$name]; Write-Info "selftest ${name}: ok" }
+        catch { $ng++; Write-Info ("selftest ${name}: NG " + ($_.Exception.Message -replace '[^\x20-\x7E]', '?')) }
+    }
+    return $ng
+}
+
 # =============================================================================
 # -SelfTest（判定そのものの較正）
 # =============================================================================
 if ($SelfTest) {
     $python = Get-PythonCommand
     if (-not $python) {
-        Write-Host '[invoke-followup-checks] python not found (the selftest calls judge-followup.py).' -ForegroundColor Red
+        Write-Problem '[invoke-followup-checks] python not found (the selftest calls judge-followup.py).'
         exit $EXIT_BAD_ARGS
     }
+    $selfNg = Invoke-FollowupSelfChecks
     Invoke-Judge -Python $python -Arguments @($judgePath, '--selftest')
-    exit $script:JudgeExitCode
+    # 最後の行が判定器の緑の行のまま赤で終わらないよう、自分の検査の赤をその後に 1 行で言う
+    if ($selfNg -gt 0) { Write-Info "selftest own checks: ng=$selfNg (see the NG lines above)" }
+    if ($script:JudgeExitCode -ne 0) { exit $script:JudgeExitCode }
+    exit $(if ($selfNg -gt 0) { $EXIT_FAIL } else { 0 })
 }
 
 # =============================================================================
 # 引数の検証
 # =============================================================================
 $script:ProbeLines = @()
-$script:NoteLines = @()
 
 if (-not [System.IO.Path]::IsPathFullyQualified($OutDir)) {
     $OutDir = Join-Path (Get-Location).Path $OutDir
@@ -398,6 +505,8 @@ $script:NotePath     = Join-Path $script:OutDirPath 'followup.txt'
 $runLogPath          = Join-Path $script:OutDirPath 'run.log'
 $errLogPath          = Join-Path $script:OutDirPath 'run-stderr.log'
 Set-Content -LiteralPath $script:ProbeLogPath -Value '' -Encoding utf8 -NoNewline
+# 同じ出力先の前の回の判定を残さない（判定器が落ちた回に古い判定を RESULT 行へ写さない）
+Remove-Item -LiteralPath (Join-Path $script:OutDirPath 'followup-verdict.txt'), $script:NotePath -Force -ErrorAction Ignore
 
 # -Checks は配列でも 'a,b,c' の 1 文字列でも受ける（perf-loop.measure.ps1 は子 pwsh へ引用した
 # 1 文字列で渡す＝2026-08-23 周 1 の followup が exit 3「未知の検査名 'clickthrough,drag,…'」で止まった穴）。
@@ -424,7 +533,7 @@ if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
     Stop-Run $EXIT_FAIL "executable not found: $exePath (check -BinDir, or run cargo build -p areka first)"
 }
 
-if (-not $GhostRoot) { $GhostRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key 'folder' }
+if (-not $GhostRoot) { $GhostRoot = Get-NarSampleValue -Sample $SAMPLE_NAME -Key 'folder' }
 if (-not [System.IO.Path]::IsPathFullyQualified($GhostRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-GhostRoot must be an absolute path (a relative path makes SHIORI loading fail): '$GhostRoot'"
 }
@@ -432,7 +541,7 @@ $ghostRootFull = [System.IO.Path]::GetFullPath($GhostRoot).TrimEnd('\')
 if (-not (Test-Path -LiteralPath $ghostRootFull -PathType Container)) {
     Stop-Run $EXIT_BAD_ARGS "-GhostRoot folder not found: $ghostRootFull"
 }
-if (-not $BalloonRoot) { $BalloonRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key "balloon.$SAMPLE_BALLOON_NAME" }
+if (-not $BalloonRoot) { $BalloonRoot = Get-NarSampleValue -Sample $SAMPLE_NAME -Key "balloon.$SAMPLE_BALLOON_NAME" }
 if (-not [System.IO.Path]::IsPathFullyQualified($BalloonRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-BalloonRoot must be an absolute path: '$BalloonRoot'"
 }
@@ -490,10 +599,12 @@ try {
     Write-Info "[invoke-followup-checks] started (process ID $($proc.Id)). Waiting for the show-ready point."
 
     # --- 表示成立点を待つ（ここから先が観測の前提）------------------------------
-    $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt `
+    $waitClock = [Diagnostics.Stopwatch]::StartNew()
+    $showReady = Wait-RunLogPattern -Path $runLogPath -Since $launchedAt -Process $proc `
         -Pattern $LOG_MARKER_SHOW_READY -TimeoutMs $SHOW_READY_TIMEOUT_MS
     if (-not $showReady) {
-        Write-Probe -Check 'session' -Step 'show_ready' -Fields @("waited_ms=$SHOW_READY_TIMEOUT_MS", 'result=timeout')
+        Write-Probe -Check 'session' -Step 'show_ready' -Fields (Get-ShowReadyMissFields -Exited $proc.HasExited -WaitedMs $waitClock.ElapsedMilliseconds)
+        if ($proc.HasExited) { Stop-Run $EXIT_FAIL "areka exited before the show-ready point (exit code $($proc.ExitCode)). Check $errLogPath and $runLogPath." }
         Stop-Run $EXIT_FAIL "the show-ready point (apply(ShowSurface)) did not appear within $SHOW_READY_TIMEOUT_MS ms. Check $runLogPath."
     }
     Start-Sleep -Milliseconds 1500   # 2 キャラ分の初期配置が落ち着くまで
@@ -502,11 +613,15 @@ try {
     # --- 操作を注入できるかを実際に試す（推測しない）---------------------------
     $cursorBefore = New-Object AkFollowupW32+POINT
     $null = [AkFollowupW32]::GetCursorPos([ref]$cursorBefore)
-    $setRet = [AkFollowupW32]::SetCursorPos($cursorBefore.X + 7, $cursorBefore.Y + 5)
-    Start-Sleep -Milliseconds 60
-    $cursorAfter = New-Object AkFollowupW32+POINT
-    $null = [AkFollowupW32]::GetCursorPos([ref]$cursorAfter)
-    $cursorMoved = ($cursorAfter.X -ne $cursorBefore.X) -or ($cursorAfter.Y -ne $cursorBefore.Y)
+    # 右下の角にカーソルが居ると +7,+5 は画面の端で止められて動かない。動かなければ逆向きでもう 1 度だけ試す
+    foreach ($delta in @(@(7, 5), @(-7, -5))) {
+        $setRet = [AkFollowupW32]::SetCursorPos($cursorBefore.X + $delta[0], $cursorBefore.Y + $delta[1])
+        Start-Sleep -Milliseconds 60
+        $cursorAfter = New-Object AkFollowupW32+POINT
+        $null = [AkFollowupW32]::GetCursorPos([ref]$cursorAfter)
+        $cursorMoved = ($cursorAfter.X -ne $cursorBefore.X) -or ($cursorAfter.Y -ne $cursorBefore.Y)
+        if ($cursorMoved) { break }
+    }
     if ($cursorMoved) { $null = [AkFollowupW32]::SetCursorPos($cursorBefore.X, $cursorBefore.Y) }
 
     $probeInput = New-Object AkFollowupW32+INPUT
@@ -536,7 +651,7 @@ try {
     # キャラ窓とバルーン窓はクラス名も表題も同じ（実測: どちらも wintf-winmsg-executor）。
     # 見分けは本番のログしか持っていないので、[transition] の hwnd と win_kind の対で引く。
     $identity = @{}
-    foreach ($line in (Get-RunLogLinesSince -Path $runLogPath -Since $launchedAt)) {
+    foreach ($line in (Get-RunLogLinesSince -Tail (New-RunLogTail -Path $runLogPath) -Since $launchedAt)) {
         if ($line -match '\[transition\].*\bhwnd=(0x[0-9A-Fa-f]+)\b.*\bscope=(\S+)\s+win_kind=(char|balloon)\b') {
             $key = ('0x{0:X}' -f [Convert]::ToInt64($Matches[1], 16))
             $identity[$key] = [pscustomobject]@{ Scope = $Matches[2]; Kind = $Matches[3] }
@@ -605,22 +720,26 @@ try {
                 Write-Note 'clickthrough: inconclusive, the cursor cannot be moved (SetCursorPos was refused).'
             } else {
                 $begin = [DateTime]::UtcNow
-                $rect = Get-WindowRectObject -Hwnd $charWin.Hwnd
+                $rect = Get-TargetRect -Window $charWin
                 $points = @(
                     @{ Name = 'transparent'; X = $rect.X + $TRANSPARENT_INSET_PX; Y = $rect.Y + $TRANSPARENT_INSET_PX; Expect = 'true' },
                     @{ Name = 'opaque'; X = $rect.X + [int]($rect.W / 2); Y = $rect.Y + $rect.H - $OPAQUE_BOTTOM_PX; Expect = 'false' }
                 )
+                $allLanded = $true
                 foreach ($point in $points) {
                     $null = [AkFollowupW32]::SetCursorPos($point.X, $point.Y)
                     Start-Sleep -Milliseconds 80
                     $now = New-Object AkFollowupW32+POINT
                     $null = [AkFollowupW32]::GetCursorPos([ref]$now)
                     $landed = ($now.X -eq $point.X) -and ($now.Y -eq $point.Y)
+                    if (-not $landed) { $allLanded = $false }
                     Write-Probe -Check 'clickthrough' -Step 'probe_point' -Fields @(
                         "hwnd=$($charWin.Key)", "point=$($point.Name)", "x=$($point.X)", "y=$($point.Y)",
                         "moved=$($landed.ToString().ToLower())"
                     )
                     Start-Sleep -Milliseconds $SETTLE_MS
+                    # 窓が先に閉じていれば読んだ様式は 0（＝不透明）になり、本物の不一致に見える。閉じていれば 1 で止める
+                    $null = Get-TargetRect -Window $charWin
                     $ex = Test-ExTransparent -Hwnd $charWin.Hwnd
                     $observed = $ex.Transparent.ToString().ToLower()
                     $result = if ($observed -eq $point.Expect) { 'match' } else { 'mismatch' }
@@ -634,9 +753,11 @@ try {
                 Start-Sleep -Milliseconds $SETTLE_MS
                 Write-Probe -Check 'clickthrough' -Step 'window' -Fields @(
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
-                    "end_t=$(Get-UtcStamp)"
+                    "end_t=$(Get-ProbeStamp)"
                 )
-                Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=done', 'reason=-')
+                # 点が画面の外で止められたら、別の画素を読んだ結果を不一致と言わない（drag と同じ決まり）
+                if ($allLanded) { Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=done', 'reason=-') }
+                else { Write-Probe -Check 'clickthrough' -Step 'status' -Fields @('status=unavailable', 'reason=cursor_did_not_reach_target') }
             }
         }
 
@@ -650,13 +771,13 @@ try {
             } else {
                 $begin = [DateTime]::UtcNow
                 foreach ($pair in @(@($charWin, 'char'), @($balloonWin, 'balloon'))) {
-                    $rect = Get-WindowRectObject -Hwnd $pair[0].Hwnd
+                    $rect = Get-TargetRect -Window $pair[0]
                     Write-Probe -Check 'drag' -Step 'rect' -Fields @(
                         'phase=before', "hwnd=$($pair[0].Key)", "win_kind=$($pair[1])",
                         "x=$($rect.X)", "y=$($rect.Y)", "w=$($rect.W)", "h=$($rect.H)"
                     )
                 }
-                $charRect = Get-WindowRectObject -Hwnd $charWin.Hwnd
+                $charRect = Get-TargetRect -Window $charWin
                 $fromX = $charRect.X + [int]($charRect.W / 2)
                 $fromY = $charRect.Y + $charRect.H - $OPAQUE_BOTTOM_PX
                 $toX = $fromX + $DRAG_DX_PX
@@ -698,7 +819,7 @@ try {
                 )
                 Start-Sleep -Milliseconds $SETTLE_MS
                 foreach ($pair in @(@($charWin, 'char'), @($balloonWin, 'balloon'))) {
-                    $rect = Get-WindowRectObject -Hwnd $pair[0].Hwnd
+                    $rect = Get-TargetRect -Window $pair[0]
                     Write-Probe -Check 'drag' -Step 'rect' -Fields @(
                         'phase=after', "hwnd=$($pair[0].Key)", "win_kind=$($pair[1])",
                         "x=$($rect.X)", "y=$($rect.Y)", "w=$($rect.W)", "h=$($rect.H)"
@@ -706,7 +827,7 @@ try {
                 }
                 Write-Probe -Check 'drag' -Step 'window' -Fields @(
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
-                    "end_t=$(Get-UtcStamp)"
+                    "end_t=$(Get-ProbeStamp)"
                 )
                 if ($landed) {
                     Write-Probe -Check 'drag' -Step 'status' -Fields @('status=done', 'reason=-')
@@ -754,9 +875,9 @@ try {
                 Write-Note 'dpi: inconclusive, there are not 2 or more monitors with different DPI.'
             } else {
                 $begin = [DateTime]::UtcNow
-                $homeRect = Get-WindowRectObject -Hwnd $charWin.Hwnd
+                $homeRect = Get-TargetRect -Window $charWin
                 foreach ($pair in @(@($charWin, 'char'), @($balloonWin, 'balloon'))) {
-                    $rect = Get-WindowRectObject -Hwnd $pair[0].Hwnd
+                    $rect = Get-TargetRect -Window $pair[0]
                     Write-Probe -Check 'dpi' -Step 'rect' -Fields @(
                         'phase=before', "hwnd=$($pair[0].Key)", "win_kind=$($pair[1])",
                         "x=$($rect.X)", "y=$($rect.Y)", "w=$($rect.W)", "h=$($rect.H)"
@@ -787,7 +908,7 @@ try {
                 )
                 Start-Sleep -Milliseconds 1800
                 foreach ($pair in @(@($charWin, 'char'), @($balloonWin, 'balloon'))) {
-                    $rect = Get-WindowRectObject -Hwnd $pair[0].Hwnd
+                    $rect = Get-TargetRect -Window $pair[0]
                     Write-Probe -Check 'dpi' -Step 'rect' -Fields @(
                         'phase=after', "hwnd=$($pair[0].Key)", "win_kind=$($pair[1])",
                         "x=$($rect.X)", "y=$($rect.Y)", "w=$($rect.W)", "h=$($rect.H)"
@@ -795,7 +916,7 @@ try {
                 }
                 Write-Probe -Check 'dpi' -Step 'window' -Fields @(
                     "begin_t=$($begin.ToString('yyyy-MM-ddTHH:mm:ss.ffffff', [Globalization.CultureInfo]::InvariantCulture))Z",
-                    "end_t=$(Get-UtcStamp)"
+                    "end_t=$(Get-ProbeStamp)"
                 )
                 Write-Probe -Check 'dpi' -Step 'status' -Fields @('status=done', 'reason=-')
                 Write-Note "dpi: moved $homeDpi -> $($away.Dpi) and back (out=$moveOk back=$backOk)"
@@ -806,15 +927,13 @@ try {
         # 検査 4: balloon_follow（drag / dpi の前後の矩形を使う・自前の操作は無い）
         # =====================================================================
         if ($requested -contains 'balloon_follow') {
-            $sources = @('drag', 'dpi') | Where-Object { $requested -contains $_ }
-            $notDone = @()
-            foreach ($source in $sources) {
-                $done = @($script:ProbeLines | Where-Object { $_ -match "check=$source step=status .*status=done" }).Count -gt 0
-                if (-not $done) { $notDone += $source }
-            }
-            if ($notDone.Count -gt 0 -or $sources.Count -eq 0) {
+            $follow = Get-BalloonFollowSources -Requested $requested -ProbeLines $script:ProbeLines
+            if ($follow.Sources.Count -eq 0) {
+                Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=unavailable', 'reason=no_required_mover')
+                Write-Note 'balloon_follow: inconclusive, neither drag nor dpi is in the required checks (nothing moves the windows to compare).'
+            } elseif (-not $follow.Ready) {
                 Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=unavailable', 'reason=depends_on_drag_dpi')
-                Write-Note "balloon_follow: inconclusive, the operations to compare before and after ($($notDone -join ', ')) did not complete."
+                Write-Note "balloon_follow: inconclusive, the operations to compare before and after ($($follow.NotDone -join ', ')) did not complete."
             } else {
                 Write-Probe -Check 'balloon_follow' -Step 'status' -Fields @('status=done', 'reason=-')
             }
@@ -826,8 +945,8 @@ try {
     $deadline = $launchedAt.AddMilliseconds($ExitMs).AddSeconds($EXIT_MARGIN_SEC)
     while (-not $proc.HasExited) {
         if ([DateTime]::UtcNow -ge $deadline) {
-            try { $proc.Kill() } catch { }
-            Write-Note "warning: killed the process because the bounded auto-exit (${ExitMs}ms + margin ${EXIT_MARGIN_SEC}s) passed."
+            $stopped = Stop-ChildProcess -Process $proc -WaitMs $KILL_WAIT_MS
+            Write-Note "warning: killed the process tree because the bounded auto-exit (${ExitMs}ms + margin ${EXIT_MARGIN_SEC}s) passed (all exited=$stopped)."
             break
         }
         Start-Sleep -Milliseconds 250
@@ -841,7 +960,10 @@ try {
     [Environment]::SetEnvironmentVariable($SMOKE_EXIT_ENV_NAME, $prevSmoke)
     if ($null -eq $prevRustLog) { Remove-Item Env:\RUST_LOG -ErrorAction SilentlyContinue } else { $env:RUST_LOG = $prevRustLog }
     if ($null -eq $prevNoColor) { Remove-Item Env:\NO_COLOR -ErrorAction SilentlyContinue } else { $env:NO_COLOR = $prevNoColor }
-    if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
+    # 途中で止まった道でも、子孫（32bit の SHIORI ヘルパ）まで止めて終わるまで待つ
+    if ($proc -and -not (Stop-ChildProcess -Process $proc -WaitMs $KILL_WAIT_MS)) {
+        Write-Problem "[invoke-followup-checks] areka (process ID $($proc.Id)) or its descendants did not exit within $KILL_WAIT_MS ms."
+    }
 }
 
 # =============================================================================
@@ -850,7 +972,7 @@ try {
 Set-Content -LiteralPath $script:NotePath -Value ($script:NoteLines -join [Environment]::NewLine) -Encoding utf8
 
 Invoke-Judge -Python $python -Arguments @($judgePath, $script:OutDirPath)
-$overallCode = $script:JudgeExitCode
+$overallCode = Convert-FollowupJudgeExit -Code $script:JudgeExitCode
 
 $verdictPath = Join-Path $script:OutDirPath 'followup-verdict.txt'
 $summary = 'overall=- clickthrough=- drag=- dpi=- balloon_follow=-'

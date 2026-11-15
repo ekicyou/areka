@@ -85,3 +85,10 @@
 - **要件定義のモデル**: Opus（台本の中の直しで、新しい境目は作らない）。
 - **分割の案**: 無し。
 - **見つけた古い記述**: `package.ps1` の 144・148・668 行目は、`SMOKE_EXIT_ENV` と smoke の自動 close の行の在りかを `crates/areka/src/main.rs` と書くが、今は `crates/areka/src/smoke_exit.rs`（22・37・44 行目）にある。
+
+## 件 1（2026-11-14・`audit-tools-perf-run` の要件の討議から預かった）
+
+- **何を**: 全体テスト `tools/test-all.ps1` に、性能改善ループの道具の自分の検査 `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` の段を足す。今の全体テストは `tools/perf` の自分の検査を回していない（触るのは `encoding check` の段だけ）。
+- **なぜここで**: `audit-tools-perf-run` は、直したバグの回帰のテストを `perf-loop.ps1 selftest` から回す形にした（2026-11-14 開発者が推奨案で承認）。`test-all.ps1` はこの spec の持ち物で、C20 のあいだ `audit-tools-perf-run` は触らない。
+- **先に要るもの**: `audit-tools-perf-run` の着地（足される自分の検査が入る）と、`audit-tools-perf-judge` 側の Python の自分の検査 4 本（`judge_followup_selftest.py`・`perf-rank.py`・`perf_compare_selftest.py`・`perf_ledger_selftest.py`）が OS の一時フォルダでなくワークツリーの `target` の下を使うようになっていること（決まり「一時フォルダはワークツリーの `target` の下」）。まだなら、その直しを待つか、ここで申し合わせる。
+- **確かめること**: `selftest` は昇格・xperf・画面の操作を要らない（`audit-tools-perf-run` の research.md 7 節）。昇格した机では、`invoke-cpu-sample.ps1 -SelfTest` の中の試しが本物の採取を 5 秒する点を、全体テストの段として受け入れるか。

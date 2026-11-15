@@ -5,51 +5,50 @@ perf-loop.common.ps1 — perf-loop.ps1 が dot-source する共通部品
   spec: areka-P0-draw-load-parity（要件 1.2 / 2.10 / 2.11・design「計測の道具
         （tools/perf/）→ C5 perf-loop.ps1 → Batch / Job Contract」）
 
-このファイルは単体では何も実行しない。perf-loop.ps1 の先頭で
+このファイルは単体では何も実行しない（関数と定数を置くだけ）。perf-loop.ps1 の先頭で
 
     . (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
 
-として読み込むことで、次の 4 群の部品が呼び出し側の scope に入る。
+として読み込むことで、次の部品が呼び出し側の scope に入る。読み込むのは
+perf-tool-base.ps1（表示・時刻・子の起こし方・目標定義の読み・検体の在り処）だけで、
+単独で読み込んでも動く（tools/encoding-check.ps1 が Invoke-Child／Invoke-PwshChild を使う形）。
 
-  ⒜ 表示と終了      … Write-Info / Write-Problem / Exit-WithResult / Stop-Run
+  終了と定数        … Exit-WithResult / Stop-Run / Exit-OnUnexpectedError（trap から）・終了コード（$EXIT_*）・$BUILD_KINDS・$repoRoot
                        終了は必ず Exit-WithResult を通る。ここが標準出力の末尾へ
                        `PERF-LOOP RESULT <sub> code=<n> dir=<path>` の 1 行を出す
                        唯一の場所である（背景実行の終了で会話へ届く形＝要件 1.11）
-  ⒝ 子プロセスの起動 … Get-PythonCommand / Get-PwshPath / Invoke-Child
-                       出力を 1 行ずつ持ち帰り、終了コードを握り潰さない。
-                       **子の出力は端末のコードページに依らず必ず UTF-8 として読む**
-                       （python には PYTHONIOENCODING、pwsh には perf-pwsh-child.ps1 の
-                       前置き＝子の中で自分の標準出力・標準エラーだけを UTF-8 の書き手に
-                       替える文を渡し、読む側は ProcessStartInfo の StandardOutputEncoding を
-                       UTF-8 に固定する）。端末の文字コードの設定はどこでも書き替えない。
-                       素の `& $exe` 捕捉は親の端末のコードページで復号するため、
-                       CP932 の端末から回すと日本語が化けて字面の比較が偽の不一致になる
-  ⒞ 目標定義の読み   … Read-TomlSections / Get-GoalConfig / Get-JudgeScriptVersion
+  目標定義の引き口   … Get-GoalConfig / Get-JudgeScriptVersion
                        Get-MeasureToml / Get-MeasureTomlInt / Get-MeasureTomlArray
-                       TOML は最小の解釈器（外部モジュールを使わない）。
                        Get-Measure* は $script:GoalConfig.Toml を引く節・鍵の読み口で、
                        呼び手は計測の本体（perf-loop.measure.ps1）＝置き場だけがここ
-  ⒟ 出力先の配置     … Get-LoopDir / Resolve-RunDir / New-LoopDir / Test-ResumeArtifact
+  出力先の配置       … Get-LoopDir / Resolve-RunDir / Resolve-LoopPath / New-LoopDir / Test-ResumeArtifact
+  preflight の判定   … Get-PreflightCode / Test-GoalTextCharCount（純関数）/ Get-PythonVersionText
                        %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\… の唯一の所在
 
 なぜ別ファイルなのか:
   同じ入口が計測サブコマンド 8 本（measure-baseline／rank-run／rank／prepare-ab／
   measure-ab／compare／followup／final）まで持つ。1 ファイル 1,000 行の上限
   （要件・steering）に収めるため、入口（perf-loop.ps1）・共通部品（本ファイル）・
-  計測の本体（perf-loop.measure.ps1）の 3 枚に分けてある。
+  計測の本体（perf-loop.measure.ps1。実行体の用意 perf-loop.build.ps1 と出力先の扱い
+  perf-loop.rundir.ps1 を自分で読み込む）に分けてある。
 
 呼び出し側が事前に置いておく script scope の変数（Exit-WithResult ほかが読む）:
   $script:CurrentSub   … 実行中のサブコマンド名（RESULT 行の <sub>）
   $script:CurrentDir   … そのサブコマンドの出力先（無ければ '-'）
   $script:OutRootPath  … 出力先の根（既定は %LOCALAPPDATA%\areka-diag\perf-loop）
   $script:GoalName     … 目標の名前（出力先の第 2 階層）
+  次の 4 つは perf-loop.measure.ps1 と perf-loop.build.ps1 が読む（このファイルは読まない）:
+  $script:DryRunMode   … -DryRun の真偽（走らせずに配管だけを確かめる）
+  $script:ResumeMode   … -Resume の真偽（終わりきった走行と実行体を使い回す）
+  $script:BinDirArg    … -BinDir の値（無ければ空。実行体の所在の上書き）
+  $script:IterArg      … -Iter の値（整数。周の出力先 iter-<n> の番号）
 ================================================================================
 #>
 
 Set-StrictMode -Version 3.0
 
-# 子の PowerShell の引数を UTF-8 の書き手の前置き付きで組む Get-PwshChildArguments（前置きの唯一の所在）
-. (Join-Path $PSScriptRoot 'perf-pwsh-child.ps1')
+# 表示・時刻・子の起こし方・目標定義の読み・検体の在り処（道具どうしの共通部品）
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
 
 # =============================================================================
 # 較正値・調整値（perf-loop.ps1 の一覧と対応。変更はここだけ）
@@ -64,30 +63,26 @@ $PERF_LOOP_OUTROOT_SUBDIR = 'areka-diag\perf-loop'
 #: 周（iteration）の出力先に置く小部屋の語彙（design C5 の配置そのもの）。
 $PERF_LOOP_ITER_LEAVES = @('rank', 'A1', 'B1', 'A2', 'B2', 'bin-A', 'bin-B', 'followup')
 
-#: 値が無いことを表す字面（台帳・RESULT 行と同じ）。
-$PERF_LOOP_EMPTY = '-'
+#: 値が無いことを表す字面（台帳・RESULT 行と同じ・所在は perf-tool-base）。
+$PERF_LOOP_EMPTY = $PERF_TOOL_EMPTY
 
-#: 子プロセスの出力を読む文字符号。**端末のコードページに依らず必ず UTF-8**。
-#  BOM 無し（[Text.UTF8Encoding]::new($false)）で、書き出し側にも同じものを使う。
-$PERF_LOOP_CHILD_ENCODING = [System.Text.UTF8Encoding]::new($false)
+#: 終了コード（入口・測る側・実行体の用意・出力先の扱いが共に使う）
+$EXIT_OK             = 0
+$EXIT_RUN_FAILED     = 1
+$EXIT_NOT_QUIET      = 2
+$EXIT_BAD_ARGS       = 3
+$EXIT_MEASURE_FAILED = 4
+$EXIT_UNAVAILABLE    = 5
+
+#: 計測するビルドの種類（-Build の語彙）
+$BUILD_KINDS = @('dev', 'release')
+
+#: リポジトリの根（tools/perf の 2 つ上）
+$repoRoot = $PERF_TOOL_REPO_ROOT
 
 # =============================================================================
-# ⒜ 表示と終了
+# 終了
 # =============================================================================
-
-function Write-Info {
-    param([string]$Message)
-    [Console]::Out.WriteLine($Message)
-}
-
-function Write-Problem {
-    param([string]$Message)
-    [Console]::Error.WriteLine($Message)
-}
-
-function Get-UtcStamp {
-    [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fff', [Globalization.CultureInfo]::InvariantCulture)
-}
 
 # 終了する唯一の口。標準出力の末尾へ必ず RESULT 行を出してから exit する。
 # どの経路（正常・引数不正・計測失敗・能力不足）もここを通ること。
@@ -115,259 +110,15 @@ function Stop-Run {
     Exit-WithResult -Code $Code -Sub $Sub -Dir $Dir
 }
 
-# =============================================================================
-# ⒝ 子プロセスの起動
-# =============================================================================
-
-# 検体の窓口（`cargo run -p sample-ghost-kit --bin nar-sample-path -- <名前>`）を 1 回呼んで
-# 標準出力の `key=value` を表にする（invoke-followup-checks.ps1 と同形。Stop-Run の形だけが違う）。
-# 窓口は呼ぶたびに検体を展開し直すので、1 検体につき 1 回だけ呼んで表を取っておく。
-$script:NarSampleMaps = @{}
-function Get-NarSampleMap {
-    param([Parameter(Mandatory = $true)][string]$Sample)
-    if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
-    $cargo = Get-Command 'cargo' -ErrorAction SilentlyContinue
-    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo not found (cannot ask where the sample is)' }
-    $cargoArgs = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path',
-                   '--manifest-path', (Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
-    $r = Invoke-Child -Exe $cargo.Source -Arguments $cargoArgs -Quiet
-    if ($r.Code -ne 0) {
-        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "sample lookup failed (exit code $($r.Code), cargo $($cargoArgs -join ' ')): $($r.LastLine)"
-    }
-    $map = @{}
-    foreach ($line in $r.Out) {
-        $text = "$line".Trim()
-        # 最初の '=' だけで割る（値は Windows の絶対パスで、後ろに '=' が来ても壊さない）
-        $sep = $text.IndexOf('=')
-        if ($sep -lt 1) { continue }
-        $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
-    }
-    $script:NarSampleMaps[$Sample] = $map
-    return $map
-}
-
-# 表から 1 つの鍵を取り出す。鍵が無ければ止める——同梱バルーンを持たない検体では
-# `balloon.<名前>=` の行そのものが出ないので、空を掴んだまま進むとパス無しで走ってしまう。
-function Get-NarSamplePath {
-    param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
-    $map = Get-NarSampleMap -Sample $Sample
-    if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
-        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "sample lookup output has no '$Key=' line (sample '$Sample', keys found: $(($map.Keys | Sort-Object) -join ', '))"
-    }
-    return $map[$Key]
-}
-
-# python の在り処。単一要素の配列を返すと PowerShell が文字列へ展開するため、
-# 実行体と前置引数を別の項として持つオブジェクトで返す（invoke-followup-checks.ps1 と同形）。
-function Get-PythonCommand {
-    foreach ($candidate in @('python', 'python3')) {
-        $found = Get-Command $candidate -ErrorAction SilentlyContinue
-        if ($found) { return [pscustomobject]@{ Exe = $found.Source; Prefix = @() } }
-    }
-    $py = Get-Command 'py' -ErrorAction SilentlyContinue
-    if ($py) { return [pscustomobject]@{ Exe = $py.Source; Prefix = @('-3') } }
-    return $null
-}
-
-# 自分と同じ pwsh。子の .ps1 は必ず別プロセスで回す（Set-StrictMode や
-# $ErrorActionPreference の設定・exit の意味が混ざらないようにするため）。
-function Get-PwshPath {
-    $candidate = Join-Path $PSHOME 'pwsh.exe'
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
-    $found = Get-Command 'pwsh' -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
-    return $null
-}
-
-# 子プロセスを回して、出力（標準出力・標準エラー）と終了コードを持ち帰る。
-# 終了コードは握り潰さない——非ゼロは呼び手が読んで判断する。
-#
-# **子の出力は必ず UTF-8 として読む**（$PERF_LOOP_CHILD_ENCODING）。
-# `& $exe` の素の捕捉は [Console]::OutputEncoding（＝親の端末のコードページ）で復号するため、
-# 既定が CP932 の端末から回すと、UTF-8 で書く道具（perf-ledger.py は自分で UTF-8 へ
-# 切り替える＝perf-ledger.py:930-932）の出力が化けて、字面の比較が偽の不一致になる。
-# ここは端末のコードページに依らない形（ProcessStartInfo の StandardOutputEncoding）で
-# 読み、共有物である端末のコードページには触らない。
-# 戻り値: Code（int）・Out（string[]）・Err（string[]）・Lines（Out＋Err）・LastLine
-function Invoke-Child {
-    param(
-        [Parameter(Mandatory = $true)][string]$Exe,
-        [string[]]$Arguments = @(),
-        [hashtable]$Environment,
-        [switch]$Quiet
-    )
-    if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
-        return [pscustomobject]@{
-            Code     = -1
-            Out      = @()
-            Err      = @("executable not found: $Exe")
-            Lines    = @("executable not found: $Exe")
-            LastLine = "executable not found: $Exe"
-        }
-    }
-
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName               = $Exe
-    $startInfo.UseShellExecute        = $false
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError  = $true
-    $startInfo.StandardOutputEncoding = $PERF_LOOP_CHILD_ENCODING
-    $startInfo.StandardErrorEncoding  = $PERF_LOOP_CHILD_ENCODING
-    $startInfo.WorkingDirectory       = (Get-Location).Path
-    foreach ($argument in $Arguments) { $startInfo.ArgumentList.Add([string]$argument) }
-    if ($Environment) {
-        foreach ($key in $Environment.Keys) { $startInfo.Environment[[string]$key] = [string]$Environment[$key] }
-    }
-
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo = $startInfo
-    try {
-        $null = $process.Start()
-        # 先に非同期で読み始める（バッファが埋まって子が止まるのを避ける）
-        $outTask = $process.StandardOutput.ReadToEndAsync()
-        $errTask = $process.StandardError.ReadToEndAsync()
-        $process.WaitForExit()
-        $outText = $outTask.GetAwaiter().GetResult()
-        $errText = $errTask.GetAwaiter().GetResult()
-        $code = $process.ExitCode
-    } catch {
-        return [pscustomobject]@{
-            Code     = -1
-            Out      = @()
-            Err      = @("cannot start: $($_.Exception.Message)")
-            Lines    = @("cannot start: $($_.Exception.Message)")
-            LastLine = "cannot start: $($_.Exception.Message)"
-        }
-    } finally {
-        $process.Dispose()
-    }
-
-    $outLines = @()
-    if ($outText) { $outLines = @(($outText -replace "`r`n", "`n").TrimEnd("`n") -split "`n") }
-    $errLines = @()
-    if ($errText) { $errLines = @(($errText -replace "`r`n", "`n").TrimEnd("`n") -split "`n") }
-    $lines = @($outLines) + @($errLines)
-    if ($null -eq $code) { $code = -1 }
-    if (-not $Quiet) { foreach ($line in $lines) { Write-Info $line } }
-    # 「最後の 1 行」は報告に使うので、罫線（= や - だけの行）は飛ばして中身のある行を採る
-    $last = $PERF_LOOP_EMPTY
-    for ($i = $lines.Count - 1; $i -ge 0; $i--) {
-        if (-not $lines[$i]) { continue }
-        $trimmed = $lines[$i].Trim()
-        if ($trimmed -eq '') { continue }
-        if ($trimmed -match '^[=\-_*\s]+$') { continue }
-        $last = $trimmed
-        break
-    }
-    return [pscustomobject]@{
-        Code     = [int]$code
-        Out      = $outLines
-        Err      = $errLines
-        Lines    = $lines
-        LastLine = $last
-    }
-}
-
-# python スクリプトを回す（Get-PythonCommand の戻りを受ける）。
-# PYTHONIOENCODING／PYTHONUTF8 を渡して、子が必ず UTF-8 で書くようにする
-# （既定では端末のコードページで書く道具があり、CP932 の端末だと化ける）。
-function Invoke-PythonChild {
-    param(
-        [Parameter(Mandatory = $true)][pscustomobject]$Python,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [switch]$Quiet
-    )
-    $argv = @($Python.Prefix) + $Arguments
-    return Invoke-Child -Exe $Python.Exe -Arguments $argv -Quiet:$Quiet `
-        -Environment @{ PYTHONIOENCODING = 'utf-8'; PYTHONUTF8 = '1' }
-}
-
-# .ps1 を子 pwsh で回す。
-# 引数は Get-PwshChildArguments（perf-pwsh-child.ps1）で組む。PowerShell は出力先が渡された
-# handle でも [Console]::OutputEncoding（＝その端末のコードページ）で書くため、素の -File だと
-# CP932 の端末から回した子の出力が CP932 で来る。前置きは子の中でその子の標準出力・標準エラー
-# だけを UTF-8 の書き手に替えるので、親（Invoke-Child）は UTF-8 で読める。端末の文字コードの
-# 設定は子の中でも書き替えない（共有の端末は子が終わっても元のまま）。
-function Invoke-PwshChild {
-    param(
-        [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [string[]]$Arguments = @(),
-        [switch]$Quiet
-    )
-    $pwshPath = Get-PwshPath
-    if (-not $pwshPath) {
-        $msg = 'pwsh not found'
-        return [pscustomobject]@{ Code = -1; Out = @(); Err = @($msg); Lines = @($msg); LastLine = $msg }
-    }
-    if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
-        $msg = "script not found: $ScriptPath"
-        return [pscustomobject]@{ Code = -1; Out = @(); Err = @($msg); Lines = @($msg); LastLine = $msg }
-    }
-    $argv = Get-PwshChildArguments -ScriptPath $ScriptPath -Arguments $Arguments
-    return Invoke-Child -Exe $pwshPath -Arguments $argv -Quiet:$Quiet
+# 想定外の失敗（入口の頭の trap から呼ぶ）。理由を 1 行出し、4（計測失敗の枠＝道具の不具合）で終える。
+function Exit-OnUnexpectedError {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord)
+    Stop-Run -Code $EXIT_MEASURE_FAILED -Message (Format-UnexpectedError -ErrorRecord $ErrorRecord -Label 'unexpected failure (tool bug)')
 }
 
 # =============================================================================
-# ⒞ 目標定義（TOML）の読み
+# 目標定義の引き口（節・鍵の読みそのものは perf-tool-base.ps1）
 # =============================================================================
-
-# TOML を「節 → 鍵 → 値（文字列のまま）」の入れ子ハッシュへ。外部モジュールを使わない。
-# 解するのは 1 行に収まった素の値と 1 行の配列だけ（目標定義ファイルはこの制約で書く＝
-# tasks.md Implementation Notes (5.1)）。引用符の外の # 以降は注釈として落とす。
-function Read-TomlSections {
-    param([Parameter(Mandatory = $true)][string]$Text)
-    $result = @{}
-    $section = ''
-    foreach ($raw in ($Text -split "`r?`n")) {
-        $line = $raw.Trim()
-        if ($line -eq '' -or $line.StartsWith('#')) { continue }
-        if ($line -match '^\[([^\]]+)\]\s*$') {
-            $section = $Matches[1].Trim()
-            if (-not $result.ContainsKey($section)) { $result[$section] = @{} }
-            continue
-        }
-        if ($section -eq '') { continue }
-        if ($line -notmatch '^([A-Za-z0-9_]+)\s*=\s*(.+)$') { continue }
-        $key = $Matches[1]
-        $val = ($Matches[2]).Trim()
-
-        # 引用符の外にある # 以降を落とす
-        $inStr = $false
-        $cut = -1
-        for ($i = 0; $i -lt $val.Length; $i++) {
-            $ch = $val[$i]
-            if ($ch -eq '"') { $inStr = -not $inStr }
-            elseif ($ch -eq '#' -and -not $inStr) { $cut = $i; break }
-        }
-        if ($cut -ge 0) { $val = $val.Substring(0, $cut).Trim() }
-        $result[$section][$key] = $val
-    }
-    return $result
-}
-
-# 節・鍵を引いて文字列で返す（引用符は外す）。無ければ $null。
-function Get-TomlString {
-    param([hashtable]$Toml, [string]$Section, [string]$Key)
-    if (-not $Toml.ContainsKey($Section)) { return $null }
-    if (-not $Toml[$Section].ContainsKey($Key)) { return $null }
-    $val = [string]$Toml[$Section][$Key]
-    if ($val.Length -ge 2 -and $val.StartsWith('"') -and $val.EndsWith('"')) {
-        return $val.Substring(1, $val.Length - 2)
-    }
-    return $val
-}
-
-# 節・鍵を整数で引く。読めなければ $null。
-function Get-TomlInt {
-    param([hashtable]$Toml, [string]$Section, [string]$Key)
-    $raw = Get-TomlString -Toml $Toml -Section $Section -Key $Key
-    if ($null -eq $raw) { return $null }
-    $parsed = 0
-    $ok = [int]::TryParse($raw, [Globalization.NumberStyles]::Integer,
-        [Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)
-    if ($ok) { return $parsed }
-    return $null
-}
 
 # 目標定義ファイルの所在。-GoalFile が最優先、無ければ goals/<Goal>.toml。
 function Resolve-GoalFile {
@@ -377,8 +128,7 @@ function Resolve-GoalFile {
 }
 
 # 目標定義を読み、道具が要る値だけを取り出す。
-# 返す: Path・Name・SpecDir・LedgerRel・LedgerPath・ResultsDir・JudgeScript・JudgeScriptPath・
-#       JudgeVersion・CheckinMinutes・IdleCpuMaxPct・SamplingBackend・Toml
+# 返す: Path・Name・SpecDir・LedgerPath・ResultsDir・JudgeScriptPath・JudgeVersion・CheckinMinutes・Toml
 function Get-GoalConfig {
     param(
         [Parameter(Mandatory = $true)][string]$GoalFilePath,
@@ -394,8 +144,18 @@ function Get-GoalConfig {
     $judgeScript = Get-TomlString -Toml $toml -Section 'goal' -Key 'judge_script'
     $judgeVer    = Get-TomlString -Toml $toml -Section 'goal' -Key 'judge_version'
     $checkin     = Get-TomlInt    -Toml $toml -Section 'goal_runtime' -Key 'checkin_minutes'
-    $idleMax     = Get-TomlString -Toml $toml -Section 'target' -Key 'idle_cpu_release_max_pct'
-    $backend     = Get-TomlString -Toml $toml -Section 'sampling' -Key 'backend'
+    # 書いた値を黙って既定へ落とさない（読めなければ 3・Get-MeasureTomlInt と同じ決まり）
+    if ($null -eq $checkin -and $null -ne ($rawCheckin = Get-TomlRaw -Toml $toml -Section 'goal_runtime' -Key 'checkin_minutes')) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [goal_runtime] checkin_minutes cannot be read as an integer: $rawCheckin"
+    }
+    # 走行の後の静かさの確かめの回数・待ち秒数も、ビルドと走行の前に確かめる（-DryRun でも。後の Invoke-MeasureQuietAfter の確かめも残す）
+    foreach ($quietKey in 'retry_max', 'retry_wait_sec') {
+        $rawQuiet = Get-TomlRaw -Toml $toml -Section 'quiet' -Key $quietKey
+        $quiet = Get-TomlInt -Toml $toml -Section 'quiet' -Key $quietKey
+        if ($null -ne $rawQuiet -and ($null -eq $quiet -or $quiet -lt 0)) {
+            Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [quiet] $quietKey must be an integer 0 or more: $rawQuiet"
+        }
+    }
 
     $ledgerPath = $null
     if ($specDir -and $ledgerRel) {
@@ -410,15 +170,11 @@ function Get-GoalConfig {
         Path            = $GoalFilePath
         Name            = $name
         SpecDir         = $specDir
-        LedgerRel       = $ledgerRel
         LedgerPath      = $ledgerPath
         ResultsDir      = $resultsDir
-        JudgeScript     = $judgeScript
         JudgeScriptPath = $judgePath
         JudgeVersion    = $judgeVer
         CheckinMinutes  = $checkin
-        IdleCpuMaxPct   = $idleMax
-        SamplingBackend = $backend
         Toml            = $toml
     }
 }
@@ -436,33 +192,34 @@ function Get-MeasureToml {
     return $value
 }
 
+# 鍵が無ければ既定値。鍵は在るのに整数で読めなければ 3 で止める（書いた値を黙って既定へ落とさない）
 function Get-MeasureTomlInt {
     param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [int]$Default)
     if (-not $script:GoalConfig) { return $Default }
     $value = Get-TomlInt -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
-    if ($null -eq $value) { return $Default }
-    return $value
+    if ($null -ne $value) { return $value }
+    $raw = Get-TomlRaw -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -ne $raw) { Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [$Section] $Key cannot be read as an integer: $raw" }
+    return $Default
 }
 
-# 1 行の配列（["A", "B", "A", "B"]）を文字列の配列へ。読めなければ既定値を返す
+# 1 行の配列（["A", "B", "A", "B"]）を文字列の配列へ。鍵が無ければ既定値
 # （目標定義ファイルは配列を 1 行に保つ決まり＝tasks.md Implementation Notes (5.1)）。
+# 鍵は在るのに 1 行の配列として読めない・空の配列なら 3 で止める（どの呼び手も空の集合では回せない）。
 function Get-MeasureTomlArray {
     param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [string[]]$Default)
-    $raw = Get-MeasureToml -Section $Section -Key $Key
-    if (-not $raw) { return $Default }
-    $text = $raw.Trim()
-    if (-not ($text.StartsWith('[') -and $text.EndsWith(']'))) { return $Default }
-    $items = @()
-    foreach ($part in ($text.Substring(1, $text.Length - 2) -split ',')) {
-        $piece = $part.Trim().Trim('"').Trim()
-        if ($piece) { $items += $piece }
+    if (-not $script:GoalConfig) { return $Default }
+    $raw = Get-TomlRaw -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -eq $raw) { return $Default }
+    $items = Get-TomlStringArray -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -eq $items -or $items.Count -eq 0) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [$Section] $Key must be a non-empty one-line array of strings: $raw"
     }
-    if ($items.Count -eq 0) { return $Default }
     return $items
 }
 
 # judge-perf.py の SCRIPT_VERSION の先頭語（例 "0.4.0"）を、スクリプトを起動せずに読む。
-# 判定スクリプトは複数行の括弧つき文字列で版を持つ（judge-perf.py:150）ため、
+# 判定スクリプトは複数行の括弧つき文字列で版を持つ（judge-perf.py の SCRIPT_VERSION の定義）ため、
 # 最初の引用符の中の最初の空白までを版と見る。読めなければ $null（呼び手が計測失敗にする）。
 function Get-JudgeScriptVersion {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -533,13 +290,15 @@ function Get-LoopDir {
     return $path
 }
 
-# 出力先の名前に使う日付（既定は実行日のローカル時刻・yyyyMMdd）。
-# -Date で上書きできるのは、同じ日付の出力先を後から作り直す／試験で決定論にするため。
+# 出力先の名前に使う日付（既定は最初に聞かれた時のローカル時刻・yyyyMMdd）。1 回の呼び出しの中では
+# 一度決めたら変えない（日付をまたぐ final の走行フォルダと結果の写し先が別の日付にならない）。
+# 入口の -Date（$script:DateStamp）で上書きできるのは、同じ日付の出力先を後から作り直す／試験で決定論にするため。
+# 決めた今日は $script:LoopDateToday に置く（$script:DateStamp は「-Date が渡された」の印でもあるので書き替えない）。
+$script:LoopDateToday = $null
 function Get-LoopDateStamp {
-    param([string]$Date)
-    if ($Date) { return $Date }
     if ($script:DateStamp) { return $script:DateStamp }
-    return (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture)
+    if (-not $script:LoopDateToday) { $script:LoopDateToday = (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture) }
+    return $script:LoopDateToday
 }
 
 # 走行の出力先を決める唯一の口。-RunDir が与えられていればそれを使い（既定の配置の外へ
@@ -553,14 +312,16 @@ function Resolve-RunDir {
         [string]$Date,
         [string]$Leaf
     )
-    if ($RunDir) {
-        $path = $RunDir
-        if (-not [System.IO.Path]::IsPathFullyQualified($path)) {
-            $path = Join-Path (Get-Location).Path $path
-        }
-        return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
-    }
+    if ($RunDir) { return (Resolve-LoopPath $RunDir).TrimEnd('\') }
     return (Get-LoopDir -Kind $Kind -Iter $Iter -Date $Date -Leaf $Leaf)
+}
+
+# パスの引数を PowerShell の今の場所（プロセスの今の場所ではない）につないで絶対にする。空なら空を返す。
+# 入口（perf-loop.ps1）がパスの引数ごとに一度だけ呼ぶ（27＝解き方を 1 通りにする）。
+function Resolve-LoopPath {
+    param([string]$Path)
+    if (-not $Path) { return $Path }
+    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 }
 
 # 出力先を作る（既にあれば何もしない）。
@@ -590,24 +351,80 @@ function Test-ResumeArtifact {
 # 環境の見立て（preflight が読む）
 # =============================================================================
 
-# 管理者権限で走っているか（段③＝関数別の帰属に要る）。
-function Test-Elevated {
-    try {
-        $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch {
-        return $false
+# invoke-cpu-sample.ps1 -Probe の 1 行を読む（昇格・xperf の在り処・段③の可否の出どころはここだけ）:
+#   available=<真偽> reason=<語> elevated=<真偽> xperf_path=<パス|->（在り処は行の最後で空白や括弧を含み得る）
+# 戻り: Available・Reason・Elevated・XperfPath（無ければ $null）・Code・Lines。読めなければ reason=probe_failed。
+function Get-SamplingProbe {
+    $path = Join-Path $PSScriptRoot 'invoke-cpu-sample.ps1'
+    $result = Invoke-PwshChild -ScriptPath $path -Arguments @('-Probe') -Quiet
+    $probe = [pscustomobject]@{ Available = $false; Reason = 'probe_failed'; Elevated = $false; XperfPath = $null; Code = $result.Code; Lines = $result.Lines }
+    # -Probe は必ず 0 で返る約束。非ゼロは道具自身の異常
+    $read = $false
+    if ($result.Code -eq 0) {
+        foreach ($line in $result.Lines) {
+            if ($line -match '^available=(true|false) reason=(\S+) elevated=(true|false) xperf_path=(.+)$') {
+                $probe.Available = ($Matches[1] -eq 'true')
+                $probe.Reason    = $Matches[2]
+                $probe.Elevated  = ($Matches[3] -eq 'true')
+                $probe.XperfPath = if ($Matches[4] -eq '-') { $null } else { $Matches[4] }
+                $read = $true
+            }
+        }
     }
+    # 昇格と xperf の値もこの 1 行が唯一の出どころなので、読めなかった訳を黙って落とさない
+    if (-not $read) { Write-Problem "[perf-loop] warning: invoke-cpu-sample.ps1 -Probe failed (exit code $($result.Code)): $($result.LastLine) - elevated and xperf are reported as false." }
+    return $probe
 }
 
-# xperf.exe の所在（PATH → Windows Kits の既定位置）。無ければ $null。
-function Find-XperfPath {
-    param([string]$DefaultPath)
-    $found = Get-Command 'xperf.exe' -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
-    if ($DefaultPath -and (Test-Path -LiteralPath $DefaultPath -PathType Leaf)) { return $DefaultPath }
+# python の版を「3.13.15」の形で得る（読めなければ $null）。
+function Get-PythonVersionText {
+    param([pscustomobject]$Python)
+    if (-not $Python) { return $null }
+    $result = Invoke-Child -Exe $Python.Exe -Arguments (@($Python.Prefix) + @('-c', 'import sys;print("%d.%d.%d" % sys.version_info[:3])')) -Quiet
+    # 標準出力の最後の行だけ（python の警告は標準エラーに出るので混ぜない）
+    $out = @($result.Out | Where-Object { $_ })
+    if ($result.Code -ne 0 -or $out.Count -eq 0) { return $null }
+    $last = $out[-1].Trim()
+    if ($last -match '^\d+\.\d+') { return $last }
     return $null
+}
+
+# preflight の合否（純関数）。順に見て最初に落ちたものを理由にする:
+# 判定スクリプトの版 → python の版 → 自分の検査 → goal-check。どれか落ちれば 4（計測失敗）。
+# goal-check の 'skipped'（台帳がまだ無い）は落ちたことにしない。
+function Get-PreflightCode {
+    param(
+        [bool]$JudgeMatch, [string]$JudgeNote,
+        [bool]$PythonOk, [string]$PythonNote,
+        [bool]$SelftestOk, [int]$SelftestNgCount,
+        [string]$GoalCheck, [string]$GoalCheckNote
+    )
+    $reason = if (-not $JudgeMatch) { "judge script version differs from the goal definition ($JudgeNote)" }
+    elseif (-not $PythonOk)         { "python check failed: $PythonNote" }
+    elseif (-not $SelftestOk)       { "tool selftest has $SelftestNgCount red" }
+    elseif ($GoalCheck -eq 'ng')    { "ledger vs goal definition check (goal-check) failed: $GoalCheckNote" }
+    else                            { '' }
+    $code = if ($reason) { $EXIT_MEASURE_FAILED } else { $EXIT_OK }
+    return [pscustomobject]@{ Code = $code; Reason = $reason }
+}
+
+# goal-text の字数の突き合わせ（純関数）。写しの頭書（「本文は 1,012 字」）に字数が無いときだけ飛ばす（Ok）。
+# 頭書に在るのに goal-text の報告（標準エラーの「1012 文字」）から読めないときと、数が違うときは赤。
+# 突き合わせる日本語（「本文は」「字」「文字」）は字句を ASCII に保つため `u{} で書く（字は同じ）。
+function Test-GoalTextCharCount {
+    param([string]$ErrText, [string]$MdText)
+    if ($MdText -notmatch "`u{672C}`u{6587}`u{306F}\s*([\d,]+)\s*`u{5B57}") {
+        return [pscustomobject]@{ Ok = $true; Note = 'no char count in the copy header (count check skipped)' }
+    }
+    $declared = [int](($Matches[1]) -replace ',', '')
+    if ($ErrText -notmatch "(\d+)\s*`u{6587}`u{5B57}") {
+        return [pscustomobject]@{ Ok = $false; Note = "cannot read the char count from the goal-text report (the copy header says $declared chars)" }
+    }
+    $reported = [int]$Matches[1]
+    if ($reported -ne $declared) {
+        return [pscustomobject]@{ Ok = $false; Note = "the copy header says $declared chars but goal-text reports $reported (fix only the number in the header)" }
+    }
+    return [pscustomobject]@{ Ok = $true; Note = "$reported chars, also matches the copy header" }
 }
 
 # 真偽を字面へ（capabilities 行・preflight.txt の値）。
@@ -624,55 +441,4 @@ function Format-LoopValue {
     $text = [string]$Value
     if ($text.Trim() -eq '') { return $PERF_LOOP_EMPTY }
     return $text
-}
-
-# 32bit SHIORI ヘルパを実行体の隣へそろえる（合否判定の走行は shiori_helper_present=true が関門）。
-# measure-baseline／rank-run／final は target\<release|debug> の areka.exe を直に使うが、ヘルパは
-# --target i686 で別ディレクトリに出るので、在るのに隣に無い＝実 SHIORI 無しの走行になって exit 4 で
-# 25 分を失う（2026-08-23 baseline-20260823\release で実際に起きた）。無ければ何もしない（既存の関門が止める）。
-function Sync-MeasureShioriHelper {
-    param([Parameter(Mandatory = $true)][string]$BinDir)
-    $dest = Join-Path $BinDir $MEASURE_HELPER_EXE
-    if (Test-Path -LiteralPath $dest -PathType Leaf) { return }
-    $src = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE)))
-    if (-not (Test-Path -LiteralPath $src -PathType Leaf)) {
-        Write-Problem "[perf-loop] WARNING: 32bit SHIORI helper is in neither $dest nor $src. Run cargo build --release -p $MEASURE_HELPER_PACKAGE --target $MEASURE_HELPER_TARGET first (a pass/fail run stops with exit 4)."
-        return
-    }
-    Copy-Item -LiteralPath $src -Destination $dest -Force
-    Write-Info "[perf-loop] copied 32bit SHIORI helper next to the executable: $src -> $dest"
-}
-
-# 走行前に作業ツリーから実行体を作り直す（-BinDir 無しの走行＝followup／rank-run／measure-baseline／final）。
-# measure-ab は B 側を target\release に作って残すので、次の周の rank-run が前の周の B を黙って測り、
-# 逆に followup は prepare-ab が残した A（HEAD）を測っていた（2026-08-23 周 1〜3 で実際に起きた＝周 1 の
-# 「門 ON がドラッグを壊す」は A 実行体での失敗だった）。-BinDir が明示された走行と -DryRun は触らない。
-function Sync-MeasureWorktreeBuild {
-    param([Parameter(Mandatory = $true)][string]$Build, [string]$BinDir)
-    if ($BinDir) { return }
-    if ($script:DryRunMode) { return }
-    $manifest = Join-Path $repoRoot 'Cargo.toml'
-    $cargoArgs = @('build'); if ($Build -eq 'release') { $cargoArgs += '--release' }
-    $cargoArgs += @('-p', $MEASURE_AREKA_PACKAGE, '--manifest-path', $manifest)
-    $r = Invoke-MeasureCargo -Label "pre-run $Build build from the worktree" -Arguments $cargoArgs
-    if ($r.Code -ne 0) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message "pre-run $Build build failed (exit code $($r.Code)): $($r.LastLine)" }
-    $exe = Join-Path (Get-MeasureBinDir -BinDir '' -Build $Build) $MEASURE_AREKA_EXE
-    $git = Get-MeasureGitFacts
-    Write-Info "[perf-loop] executable to run: $exe sha256=$(Get-MeasureSha256 -Path $exe) git_head=$($git.Head) git_dirty=$($git.Dirty)"
-}
-
-# 走行後の静寂確認（quiet-after.txt）が NOT_QUIET だった走行は -Resume で再利用しない（設計: 静寂の確認は
-# 前後 2 回＝後ろが落ちた走行は疑わしい）。2026-08-23 周 3 で A1/B1（走行後 21.4%/20.5%）がそのまま
-# compare に使われた穴。NOT_QUIET の走行は `<走行>-NOTQUIET-<時刻>` へ退避し（測ったものは消さない）、$false を返す。
-function Test-MeasureQuietAfterOk {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    $path = Join-Path $Dir $MEASURE_FILE_QUIET_AFTER
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $true }   # 後ろの確認を持たない走行（-DryRun 等）は対象外
-    $verdict = @(Get-Content -LiteralPath $path -Encoding utf8 | Where-Object { $_ -match '^verdict=' } | Select-Object -Last 1)
-    if ($verdict.Count -eq 0 -or $verdict[0] -match '^verdict=QUIET$') { return $true }
-    $stamp = (Get-UtcStamp) -replace '[^0-9]', ''
-    $aside = "$Dir-NOTQUIET-$stamp"
-    Move-Item -LiteralPath $Dir -Destination $aside -Force
-    Write-Problem "[perf-loop] post-run quiet check was $($verdict[0]); run not reused, moved aside: $aside (will rerun)"
-    return $false
 }

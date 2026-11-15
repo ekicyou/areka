@@ -56,7 +56,8 @@ perf-loop.ps1）の仕事である（design C6）。
   0 … 静か（quiet-<Stage>.txt を残す）
   2 … 静かでない（quiet-<Stage>.txt を残す。CPU 超過 ／ 重いプロセス ／ その両方）
   3 … 引数・前提の不正（Stage/OutDir 欠落・目標定義ファイルが無い・値が不正）
-  4 … 計測失敗（性能カウンタが読めない）。分かる範囲を書いた quiet-<Stage>.txt を残す
+  4 … 計測失敗（性能カウンタが読めない）。分かる範囲を書いた quiet-<Stage>.txt を残す。
+      想定外の失敗（trap）も 4 で、そのときは quiet-<Stage>.txt を書かない（訳は最後の行）
   ※ -SelfTest のときだけ 0（道具は健全）／1（道具が壊れている）を返す
 
 使い方:
@@ -93,13 +94,36 @@ param(
     [switch]$SelfTest
 )
 
+# shortcut: 型の付いた引数の読めない値（-SampleSec abc）は PowerShell の束ねの段で RESULT 行の無い 1 になる
+# （script の中から捕まえる口が無い）。呼び手（ランナー・perf-loop）がそうした値を渡すようになったら字で受けて自分で確かめる
+# 想定外の失敗は理由の 1 行と RESULT 行で 4（計測失敗）。-SelfTest のときは 1（自分の検査が赤）
+trap {
+    # 共通部品より前の失敗（読み込めない）でも元の原因と RESULT 行を出す（決まった終了コードは字で持つ）
+    if (-not (Get-Variable -Name 'VERDICT_FAILED' -Scope Script -ErrorAction Ignore)) {
+        [Console]::Error.WriteLine("[check-quiet] failed: unexpected failure before the shared helpers loaded: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
+        if ($SelfTest) { [Console]::Out.WriteLine('CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_NG code=1 file=-'); exit 1 }
+        [Console]::Out.WriteLine("CHECK-QUIET RESULT stage=$(if ($Stage) { $Stage } else { '-' }) verdict=MEASURE_FAILED code=4 file=-")
+        exit 4
+    }
+    Write-Problem "[check-quiet] failed: $(Format-UnexpectedError -ErrorRecord $_)"
+    if ($SelfTest) {
+        Write-Info "CHECK-QUIET RESULT stage=selftest verdict=SELFTEST_NG code=$EXIT_SELFTEST_NG file=-"
+        exit $EXIT_SELFTEST_NG
+    }
+    Write-Info "CHECK-QUIET RESULT stage=$(if ($Stage) { $Stage } else { '-' }) verdict=$VERDICT_FAILED code=$EXIT_MEASURE file=-"
+    exit $EXIT_MEASURE
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# 表示・時刻・目標定義の読みは共通部品から（写しを持たない）
+. (Join-Path $PSScriptRoot 'perf-tool-base.ps1')
 
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION              = '1.0.1'
+$SCRIPT_VERSION              = '1.1.0'
 $DEFAULT_MACHINE_CPU_MAX_PCT = 10.0
 $DEFAULT_SAMPLE_SEC          = 20
 $DEFAULT_HEAVY_PROCESS_NAMES = @('cargo', 'rustc', 'rust-analyzer', 'msbuild', 'link', 'cl', 'areka', 'python')
@@ -130,13 +154,6 @@ $INV = [Globalization.CultureInfo]::InvariantCulture
 # =============================================================================
 # 補助関数
 # =============================================================================
-function Write-Info    { param([string]$Message) [Console]::Out.WriteLine($Message) }
-function Write-Problem { param([string]$Message) [Console]::Error.WriteLine($Message) }
-
-function Get-UtcStamp {
-    [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fff', $INV) + 'Z'
-}
-
 # 失敗して終了する。理由を必ず表示する（黙って失敗しない）。
 function Stop-Bad {
     param([int]$Code, [string]$Message)
@@ -226,7 +243,7 @@ function Format-QuietReport {
         "machine_cpu_mean_pct=$(Format-Pct $D.mean_pct)",
         "machine_cpu_max_pct=$(Format-Pct $D.max_pct)",
         "threshold_mean_pct=$(Format-Pct $D.threshold_pct)",
-        "heavy_process_names=$(@($D.heavy_names) -join ',')",
+        "heavy_process_names=$(Format-NameList $D.heavy_names)",
         "heavy_processes_found=$(@($D.heavy_list).Count)",
         "heavy_process_list=$(Format-HeavyList $D.heavy_list)",
         "target_pid_excluded=$(if ([int]$D.target_pid -gt 0) { [int]$D.target_pid } else { '-' })",
@@ -241,65 +258,25 @@ function Format-QuietReport {
     return (($lines -join "`n") + "`n")
 }
 
-# TOML の [quiet] 節だけを読む最小の解釈器（外部モジュールを使わない）。
+# TOML の [quiet] 節だけを読む薄い引き口（読みは perf-tool-base の Read-TomlSections／Get-Toml*）。
 # 読むのは machine_cpu_max_pct（小数）・sample_sec（整数）・heavy_process_names（文字列配列）・
 # heavy_process_cpu_min_pct（小数）・heavy_process_presence（文字列配列）。
-# 他の節・他のキーは黙って読み飛ばす。引用符の外の # 以降は注釈として落とす。
+# 他の節・他のキーは黙って読み飛ばす。鍵の一覧と型はここ 1 か所（$typed）。
+# 鍵は在るのに型どおりに読めない値は投げる（黙って既定値へ落とすと、書いた閾値が効かない）。
+# 空の配列（`[]`）は「名前を 1 つも置かない」という指定であって、既定へ落ちる合図ではない
+# （heavy_process_names・heavy_process_presence とも。黙って既定の名前を戻すと指定が効かない）。
 function Read-QuietSettingsFromToml {
     param([string]$Text)
     $out = @{}
-    $inQuiet = $false
-    foreach ($raw in ($Text -split "`r?`n")) {
-        $line = $raw.Trim()
-        if ($line -eq '' -or $line.StartsWith('#')) { continue }
-        if ($line -match '^\[([^\]]+)\]\s*$') { $inQuiet = ($Matches[1].Trim() -eq 'quiet'); continue }
-        if (-not $inQuiet) { continue }
-        if ($line -notmatch '^([A-Za-z0-9_]+)\s*=\s*(.+)$') { continue }
-        $key = $Matches[1]
-        $val = ($Matches[2]).Trim()
-
-        # 引用符の外にある # 以降を落とす
-        $inStr = $false
-        $cut = -1
-        for ($i = 0; $i -lt $val.Length; $i++) {
-            $ch = $val[$i]
-            if ($ch -eq '"') { $inStr = -not $inStr }
-            elseif ($ch -eq '#' -and -not $inStr) { $cut = $i; break }
-        }
-        if ($cut -ge 0) { $val = $val.Substring(0, $cut).Trim() }
-
-        switch ($key) {
-            'machine_cpu_max_pct' {
-                $parsed = 0.0
-                if ([double]::TryParse($val, [Globalization.NumberStyles]::Float, $INV, [ref]$parsed)) {
-                    $out['machine_cpu_max_pct'] = $parsed
-                }
-            }
-            'sample_sec' {
-                $parsedI = 0
-                if ([int]::TryParse($val, [Globalization.NumberStyles]::Integer, $INV, [ref]$parsedI)) {
-                    $out['sample_sec'] = $parsedI
-                }
-            }
-            'heavy_process_names' {
-                $names = @([regex]::Matches($val, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value })
-                if ($names.Count -gt 0) { $out['heavy_process_names'] = $names }
-            }
-            'heavy_process_cpu_min_pct' {
-                $parsedMin = 0.0
-                if ([double]::TryParse($val, [Globalization.NumberStyles]::Float, $INV, [ref]$parsedMin)) {
-                    $out['heavy_process_cpu_min_pct'] = $parsedMin
-                }
-            }
-            'heavy_process_presence' {
-                $presenceNames = @([regex]::Matches($val, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value })
-                # 空の配列（`[]`）は「在るだけで落とす名前を置かない」という指定であって、
-                # 既定へ落ちる合図ではない（黙って areka を戻すと指定が効かない）。
-                if ($presenceNames.Count -gt 0)  { $out['heavy_process_presence'] = $presenceNames }
-                elseif ($val -match '^\[\s*\]$') { $out['heavy_process_presence'] = @() }
-            }
-            default { }
-        }
+    $toml = Read-TomlSections -Text $Text
+    $typed = @{ machine_cpu_max_pct = 'Get-TomlDouble'; heavy_process_cpu_min_pct = 'Get-TomlDouble'
+                sample_sec = 'Get-TomlInt'; heavy_process_names = 'Get-TomlStringArray'; heavy_process_presence = 'Get-TomlStringArray' }
+    foreach ($k in $typed.Keys) {
+        $raw = Get-TomlRaw -Toml $toml -Section 'quiet' -Key $k
+        if ($null -eq $raw) { continue }
+        $v = & $typed[$k] -Toml $toml -Section 'quiet' -Key $k
+        if ($null -eq $v) { throw "[quiet] $k cannot be read as $($typed[$k] -replace '^Get-Toml', ''): $raw" }
+        $out[$k] = $v
     }
     return $out
 }
@@ -525,9 +502,20 @@ heavy_process_cpu_min_pct = 99.0
     if ($parsed['heavy_process_cpu_min_pct'] -ne 2.5) { $ng += "TOML: heavy_process_cpu_min_pct is $($parsed['heavy_process_cpu_min_pct'])" }
     if ((@($parsed['heavy_process_presence']) -join ',') -cne 'areka,ssp') { $ng += 'TOML: heavy_process_presence is parsed wrongly.' }
     # 空の配列は「指定なし」ではなく「1 つも置かない」（既定へ黙って落ちない）。
-    $emptyPresence = Read-QuietSettingsFromToml "[quiet]`nheavy_process_presence = []`n"
-    if (-not $emptyPresence.ContainsKey('heavy_process_presence') -or @($emptyPresence['heavy_process_presence']).Count -ne 0) {
-        $ng += 'TOML: an empty heavy_process_presence falls back to the default.'
+    $emptyLists = Read-QuietSettingsFromToml "[quiet]`nheavy_process_presence = []`nheavy_process_names = []`n"
+    foreach ($k in 'heavy_process_presence', 'heavy_process_names') {
+        if (-not $emptyLists.ContainsKey($k) -or @($emptyLists[$k]).Count -ne 0) { $ng += "TOML: an empty $k falls back to the default." }
+    }
+
+    # 単引用符の配列も読む（読み口を共通部品へ寄せても落とさない）
+    $single = Read-QuietSettingsFromToml "[quiet]`nheavy_process_names = ['cargo', 'link']`n"
+    if ((@($single['heavy_process_names']) -join ',') -cne 'cargo,link') { $ng += 'TOML: single-quoted heavy_process_names is parsed wrongly.' }
+
+    # 鍵は在るのに読めない値は既定へ落とさず投げる（呼び手が 3 で止める）
+    foreach ($bad in @("sample_sec = 20.0", "machine_cpu_max_pct = `"5`"", "heavy_process_names = cargo")) {
+        $threw = $false
+        try { $null = Read-QuietSettingsFromToml "[quiet]`n$bad`n" } catch { $threw = $true }
+        if (-not $threw) { $ng += "TOML: unreadable value '$bad' falls back to the default." }
     }
 
     if ($ng.Count -gt 0) {
@@ -572,7 +560,8 @@ if ($Goal -or $GoalFile) {
         Stop-Bad $EXIT_BAD_ARGS "goal definition file not found: $goalPath"
     }
     $goalPath = (Resolve-Path -LiteralPath $goalPath).Path
-    $settings = Read-QuietSettingsFromToml ([IO.File]::ReadAllText($goalPath))
+    try { $settings = Read-QuietSettingsFromToml ([IO.File]::ReadAllText($goalPath)) }
+    catch { Stop-Bad $EXIT_BAD_ARGS "goal definition file ${goalPath}: $($_.Exception.Message)" }
     if ($settings.ContainsKey('machine_cpu_max_pct')) { $effThresholdPct = [double]$settings['machine_cpu_max_pct'] }
     if ($settings.ContainsKey('sample_sec'))          { $effSampleSec    = [int]$settings['sample_sec'] }
     if ($settings.ContainsKey('heavy_process_names')) { $effHeavyNames   = @($settings['heavy_process_names']) }
@@ -582,13 +571,15 @@ if ($Goal -or $GoalFile) {
 
 if ($PSBoundParameters.ContainsKey('MachineCpuMaxPct'))  { $effThresholdPct = [double]$MachineCpuMaxPct }
 if ($PSBoundParameters.ContainsKey('SampleSec'))         { $effSampleSec    = [int]$SampleSec }
-if ($PSBoundParameters.ContainsKey('HeavyProcessNames')) { $effHeavyNames   = @($HeavyProcessNames) }
+# 名前の一覧は 'a,b' の 1 つの字でも受ける（pwsh -File では a,b が割れずに 1 つの名前になり、どの名前にも当たらない）
+if ($PSBoundParameters.ContainsKey('HeavyProcessNames')) { $effHeavyNames   = @($HeavyProcessNames -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 if ($PSBoundParameters.ContainsKey('HeavyProcessCpuMinPct')) { $effCpuMinPct = [double]$HeavyProcessCpuMinPct }
-if ($PSBoundParameters.ContainsKey('HeavyProcessPresence'))  { $effPresence  = @($HeavyProcessPresence) }
+if ($PSBoundParameters.ContainsKey('HeavyProcessPresence'))  { $effPresence  = @($HeavyProcessPresence -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 
 if ($effSampleSec -lt 1)      { Stop-Bad $EXIT_BAD_ARGS "invalid sample seconds (must be 1 or more): $effSampleSec" }
-if ($effThresholdPct -le 0.0) { Stop-Bad $EXIT_BAD_ARGS "invalid threshold (must be greater than 0): $effThresholdPct" }
-if ($effCpuMinPct -lt 0.0)    { Stop-Bad $EXIT_BAD_ARGS "invalid heavy process lower limit (must be 0 or more): $effCpuMinPct" }
+# 正の向きで書く（NaN は比べるとどれも偽なので、-le 0 の形だと素通りして判定が必ず静かになる）
+if (-not ($effThresholdPct -gt 0.0)) { Stop-Bad $EXIT_BAD_ARGS "invalid threshold (must be greater than 0): $effThresholdPct" }
+if (-not ($effCpuMinPct -ge 0.0)) { Stop-Bad $EXIT_BAD_ARGS "invalid heavy process lower limit (must be 0 or more): $effCpuMinPct" }
 
 try {
     if (-not (Test-Path -LiteralPath $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }

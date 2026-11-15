@@ -596,17 +596,19 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 も、親でも子の中でも使いません）。子のプロセスの出力は、端末が 932 でも 65001 でも同じに
 受け取れるよう、**読む側で UTF-8 として読みます**。
 
-- **読む所は 2 つ**です。perf-loop の部品 `Invoke-Child`（`perf-loop.common.ps1`）と、
-  `tools/utf8-child.ps1` の `Invoke-Utf8Child` です。どちらも端末を通さず、子の標準出力・
-  標準エラーを UTF-8 のバイトとして解きます。`perf-loop.ps1` とその部品（git・cargo・python・
-  pwsh の子）は `Invoke-Child` を、`invoke-perf-run.ps1`（git・静寂の確認）と
-  `invoke-followup-checks.ps1`（cargo・判定器）は `Invoke-Utf8Child` を使います。
-- **python の子**を perf-loop から回すとき（`Invoke-PythonChild`）は `PYTHONIOENCODING=utf-8` と
-  `PYTHONUTF8=1` を渡し、子が必ず UTF-8 で書くようにします。`invoke-followup-checks.ps1` が
-  回す `judge-followup.py` は、自分で標準出力と標準エラーを UTF-8 に寄せて書きます。
+- **読む所は 1 つ**です。共通の部品 `tools/perf/perf-tool-base.ps1` の `Invoke-Child` です。
+  端末を通さず、子の標準出力・標準エラーを既定で BOM の無い UTF-8 のバイトとして解きます。
+  `perf-loop.ps1` とその部品（`perf-loop.common.ps1` が読み込む）、`invoke-perf-run.ps1`・
+  `invoke-followup-checks.ps1`・`check-quiet.ps1`・`invoke-cpu-sample.ps1` は、どれも
+  `perf-tool-base.ps1` だけを読み込んで、この `Invoke-Child`（と、それを使う `Invoke-PythonChild`・
+  `Invoke-PwshChild`）で子を起こします。`xperf` の出力だけは `invoke-cpu-sample.ps1` が
+  `-ReadEncoding` で端末の文字コードを選んで読みます（`xperf` は端末の文字コードで書くため）。
+- **python の子**は `Invoke-PythonChild` で回し、`PYTHONIOENCODING=utf-8` と `PYTHONUTF8=1` を
+  渡して、子が必ず UTF-8 で書くようにします（perf-loop からも `invoke-followup-checks.ps1` の
+  判定器 `judge-followup.py` も同じです）。
 - **pwsh の子**は `perf-pwsh-child.ps1` の `Get-PwshChildArguments` が組んだ引数で起こします
-  （perf-loop からは `Invoke-PwshChild`、`invoke-perf-run.ps1` の静寂の確認は `Invoke-Utf8Child`
-  に直接渡します）。この前置きは子の中で `[Console]::SetOut`／`[Console]::SetError` を使い、
+  （`Invoke-PwshChild` がこの引数を組みます。`invoke-perf-run.ps1` の静寂の確認と段③の採取も
+  これを使います）。この前置きは子の中で `[Console]::SetOut`／`[Console]::SetError` を使い、
   その子自身の標準出力と標準エラーだけを BOM の無い UTF-8 の書き手に替えます。PowerShell は
   渡された出力先へも端末の文字コードで書くので、この前置きが無いと 932 の端末から回した子の
   出力は 932 のバイトで来ます。端末の文字コードの設定には触れないので、共有の端末は子が
@@ -872,7 +874,10 @@ brief に載っている古い数値ではありません（§16 の警告を参
 
 - **`-BinDir` を渡さない走行（followup／rank-run／measure-baseline／final）は、走行の直前に作業ツリーから実行体を作り直す**（`Sync-MeasureWorktreeBuild`・2026-08-23 TOOLFIX 4）。`measure-ab` は B 側を `target\release` に作って残し、`prepare-ab` は A 側（HEAD）を残すので、これが無いと次の周の `rank-run` が前の周の B を測り、`followup` は B でなく A を測る（周 1〜3 で実際に起きた＝周 1 の「門 ON がドラッグを壊す」は A 実行体での失敗だった）。走行ログに `[perf-loop] executable to run: … sha256=… git_head=… git_dirty=…` が 1 行出るので、run-meta の exe と突き合わせられる。
 
-- **走行後の静寂確認が NOT_QUIET だった走行は `-Resume` で再利用しない**（`Test-MeasureQuietAfterOk`・2026-08-23 TOOLFIX 5）。退避先は `<走行>-NOTQUIET-<時刻>`（測ったものは消さない）。周 3 で A1／B1（走行後 21.4%／20.5%）がそのまま compare に使われた穴。
+- **`-Resume` は終わりきった走行だけを再利用する**（`Test-MeasureRunComplete`・`perf-loop.rundir.ps1`）。終わりきったとは、`run.log`・`cpu.csv`・`run-meta.txt` の `ended_utc = ` の行（ランナーが成功の最後にだけ書く）・`quiet-after.txt` の `verdict=` の行がそろっていること。
+  - 走行後の静寂確認の最後の `verdict=` が `QUIET` でない走行は `<走行>-NOTQUIET-<時刻>` へ退けて採り直す（2026-08-23 TOOLFIX 5。周 3 で A1／B1（走行後 21.4%／20.5%）がそのまま compare に使われた穴）。
+  - `run.log` は在るが上のどれかが欠けた走行は `<走行>-INCOMPLETE-<時刻>` へ退けて採り直す。`run.log` も `DRY-RUN.txt` も無い出力先（静寂の確かめの間に止まった走行）も `-INCOMPLETE-` へ退ける（`-Resume` で「既に在る」の 3 にしない）。
+  - `DRY-RUN.txt` の在る出力先（`-DryRun` の置き土産）と、在らない出力先には触らない。退けた走行も消さない（測ったものは残す）。時刻は UTC の数字だけ。
 
 ---
 
@@ -947,8 +952,26 @@ pwsh -File tools/perf/invoke-cpu-sample.ps1 -Probe                     # 採れ�
 pwsh -File tools/perf/invoke-cpu-sample.ps1 -Start -Etl <ワークツリー>\target\perf\cpu.etl
 pwsh -File tools/perf/invoke-cpu-sample.ps1 -Stop  -Etl <ワークツリー>\target\perf\cpu.etl `
     -Out <ワークツリー>\target\perf\dump.txt -PdbDir <ワークツリー>\target\release
+pwsh -File tools/perf/invoke-cpu-sample.ps1 -Cancel -Etl <ワークツリー>\target\perf\cpu.etl   # 止めて ETL を消す
 pwsh -File tools/perf/invoke-cpu-sample.ps1 -SelfTest                   # 道具の点検
 ```
+
+- **`-Probe`** は昇格しているか・`xperf.exe` が在るか・実際に 5 秒だけ採って止められるかを見て、
+  `available=<真偽> reason=<語> elevated=<真偽> xperf_path=<パス|->` の 1 行で報告します（採れなくても
+  必ず exit 0）。`xperf_path` は空白や括弧を含み得るので行の最後に置きます（perf-loop が読みます）。
+- **`-Stop`** は採取を止めてトレースをまとめ、まとめが通ったら元の ETL を消してから記号を解き、
+  dump を書き出します。
+- **`-Cancel`** は採取を止めて ETL を消します（記号は解きません）。採取を始めた道具が失敗の道で
+  使うものです（カーネルの採取は 1 つなので、自分で始めた採取だけを取り消します）。
+- **`-SelfTest`** は同梱の dump 断片で「`areka.exe!` のフレームを数える」関門を合格側と不合格側の
+  両方で試し、続けて `-Probe` と同じ確認を行います（採取は試しません）。
+- **perf-loop の `rank-run` では手で `-Start` を打ちません。** `-Probe` が採れると言ったときだけ、
+  ランナー（`invoke-perf-run.ps1`）に `-SampleEtl <ETL>` を渡します。ランナーは静かさの確かめと
+  `run-meta.txt` の前半の後、areka を起こす直前に `-Start` で採取を 1 回始め、
+  `[invoke-perf-run] sampling start: code=<n> reason=<語>` の行を出します（始められなくても走行は
+  続けます）。走行が 0 で終われば採取は動いたまま返り、perf-loop が次の 1 手で `-Stop` を打ちます。
+  ランナーが失敗の道に入ったときは、出力先を退ける前に `-Cancel` で取り消します。`-SampleEtl` は
+  `-DryRun` と一緒に使えません（3）。
 
 - **記号（関数名）はビルド時の環境変数で付けます。** `Cargo.toml` には触れません。
 
