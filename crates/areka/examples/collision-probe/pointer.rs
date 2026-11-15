@@ -8,7 +8,7 @@ use super::{
 // Pointer handler（⑤ マウス経路照合＋解決 live ログ）
 // ---------------------------------------------------------------------------
 
-/// probe 窓の `OnPointerMoved` ハンドラ（⑤・donor `on_shell_pressed`＝`emo-present.rs:523` と同型）。
+/// probe 窓の `OnPointerMoved` ハンドラ（⑤・donor `on_shell_pressed`＝`emo-present/input.rs:20` と同型）。
 ///
 /// 記録行ごとに **本番マウス経路** `PointerState.client_point` と **クエリ系** `ScreenToClient(GetCursorPos())`
 /// をペア列（client_x/y・s2c_x/y・Δx/Δy）で live ログし、Δ=(0,0) の厳密一致を人手検証させる。加えて

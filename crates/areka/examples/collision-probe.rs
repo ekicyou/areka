@@ -50,7 +50,7 @@
 //!
 //! 1. **表示対象＝`surface1000`**: emo2 で collision を持つのは `surface1000` のみ。`surface0`
 //!    （`emo-present.rs`/`window-placement.rs` の既定）は collision を1つも持たず空集合しか観測できない。
-//! 2. **`BindSet` は有効 bind の実値集合** `[1101, 1206, 1302, 1502, 1800]`（`emo-present.rs:170` 相当）:
+//! 2. **`BindSet` は有効 bind の実値集合** `[1101, 1206, 1302, 1502, 1800]`（`emo-present/state.rs:53` 相当）:
 //!    `surface1000` は静的 element を持たず全パーツが bind 制御ゆえ、`BindSet::default()` では全透明の窓が
 //!    「成功」として出て人が狙える絵が無い（失敗としても観測されない）。
 //! 3. **窓 client 寸は本番の窓寸規則で与える**: `spawn_ghost_windows` を**意図的に誤った placeholder 寸**
@@ -60,7 +60,7 @@
 //!    `text_slot_view(...).surface_size()`（native 原寸）にしてはならない——k≠1.0 では窓が原寸へ
 //!    引き戻される（照会 1 トークンの取り違えが静かな欠陥になる）。placeholder を
 //!    誤寸にするのは「最終一致が本番 resize 経路を通ってしか成立しない」ことを構図で保証するため。
-//!    donor `emo-present.rs` の窓は `Anchored` 欠落で `resize_window_to` が不発（`follow.rs:554`）ゆえ、
+//!    donor `emo-present.rs` の窓は `Anchored` 欠落で `resize_window_to` が不発（`follow/window_move.rs:191-197`）ゆえ、
 //!    窓生成は `spawn_ghost_windows`（`Anchored` 無条件付与・`MonitorSnapshot` 挿入）を用いる。
 //!
 //! # 使い方
@@ -100,15 +100,15 @@
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:379-390` ＋ probe 自身の
 //!      [`load_shell_assets`]）
 //!    - **バルーンパッケージの面定義・面画像**（`measure.rs:417` の `measure_balloon_surface0`）と
-//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:581` の `load_scope_windowpositions`）
+//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:583` の `load_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
-//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages_for_shell`＝`crates/areka-placement/src/lib.rs:382-456` が読取の全体像）。
+//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages_for_shell`＝`crates/areka-placement/src/lib.rs:384-458` が読取の全体像）。
 //!
 //! # 作者基準 DPI の出所（k 論証への影響・実測済み）
 //!
-//! 採寸経路（`prepare_stages_for_shell`・`crates/areka-placement/src/lib.rs:395-406`）は **descript から読んだ実 author_dpi**
+//! 採寸経路（`prepare_stages_for_shell`・`crates/areka-placement/src/lib.rs:397-408`）は **descript から読んだ実 author_dpi**
 //! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
 //! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
 //! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、
@@ -146,7 +146,7 @@
 //!    物理寸権威**＝丸め単一権威 `ScaleRatio::scaled_extent` を通した値）と**一致**すること。加えて env
 //!    `AREKA_COLLISION_PROBE_EXPECT_K` 指定時のみ、実適用 k（[`EmoPresenter::applied_ratio`]）が期待値と
 //!    厳密一致することを assert する（未指定時は assert 無し）。**assert は必ず実窓（`GetClientRect`）に
-//!    対して行う**——`WindowPos.size` は enqueue 時点で bypass ミラー済み（`follow.rs:760-767`）のため、
+//!    対して行う**——`WindowPos.size` は enqueue 時点で bypass ミラー済み（`follow/window_move.rs:728-736`）のため、
 //!    `WindowPos` を読むと SetWindowPos が一度も走らなくても緑になる偽檻となる。捕捉する欠陥クラス:
 //!    本番 resize 経路への dpi/96 再スケール・論理 px 解釈の混入・**native 原寸と物理寸の取り違え**
 //!    （窓が原寸へ引き戻される静かな欠陥）。
@@ -173,7 +173,7 @@
 //!      狙点の供給源は**目視**（または ④ の read_back から導出した描画由来の点）に限る。本 probe は
 //!      `SetCursorPos`/`SendInput` を一切呼ばない。
 //!    - **マウス経路照合（設計討議#3）**: probe 窓へ `OnPointerMoved` ハンドラを1行装着し
-//!      （`OnPointerPressed(on_shell_pressed)` の donor 前例＝`emo-present.rs:523`）、記録行ごとに**本番
+//!      （`OnPointerPressed(on_shell_pressed)` の donor 前例＝`emo-present/input.rs:20`）、記録行ごとに**本番
 //!      マウス経路**の `PointerState.client_point` と `ScreenToClient(GetCursorPos())` を**ペア列（client_x/y・
 //!      s2c_x/y・Δx/Δy）**で実測表へ併記する。記録行の要求は **Δ=(0,0) の厳密一致**（両者とも同一 HWND の
 //!      client 物理 px 整数＝丸め誤差の正当源が無い）。**ペア列は Head/Bust（不透明画素）行のみ**——背景

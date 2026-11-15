@@ -15,7 +15,7 @@ pub(super) const HEAD_RECT: (i64, i64, i64, i64) = (93, 62, 271, 130);
 /// emo2 `surface1000` の Bust 当たり判定矩形（`surfaces.txt`: `collision1,133,270,229,326,Bust`・サーフェス px）。
 pub(super) const BUST_RECT: (i64, i64, i64, i64) = (133, 270, 229, 326);
 
-/// 有効 bind 実値集合（donor 必須逸脱 #2・`emo-present.rs:170` 相当）。腕組み=1101・口‥‥=1206・
+/// 有効 bind 実値集合（donor 必須逸脱 #2・`emo-present/state.rs:53` 相当）。腕組み=1101・口‥‥=1206・
 /// 目通常=1302・眉悲しみ=1502・髪飾りリボン=1800。`surface1000` は全パーツ bind 制御ゆえ既定 bind では
 /// 全透明になる（狙える絵が出ない）。
 pub(super) const REAL_BIND_IDS: [u32; 5] = [1101, 1206, 1302, 1502, 1800];

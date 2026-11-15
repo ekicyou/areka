@@ -2499,9 +2499,25 @@ ukadoc が沈黙している所で、測れば仕様の裏付けになるもの�
 
 - 指摘 13 で、本体の `crates/areka/src/runtime/move_cue_place.rs` の主モニタの作業領域の写しを、配置の crate の公開の関数 `areka_placement::work_area_px` に替えた（要件 2.10）。
 - 追随の持ち物の古い文（設計の `follow/work_area_clamp.rs:L18` の「examples は `#[path]` で配置の層を取り込む」）は、`audit-placement-follow` の着地（#460）でもう消えている（今の `work_area_clamp.rs` に `examples`・`#[path]` の文は 0 件）。
-- `audit-areka-app` の brief へ: 18.1〜18.9 の本体の分（81 の残り・略称・古い名指し・見送り点の数・記憶の継ぎ目・`assets_tests.rs`・記憶の帳面の名・task 番号・呼び手の数・届かない腕・512 ほかの写し）を件 1〜10 に、行を引き直して書いた。1 回目の 159（`collision-probe.rs` の行の番号と `prepare_stages`）は 2 回目の 295 と 7 回目で直したので渡していない。
+- `audit-areka-app` の brief へ: 18.1〜18.9 の本体の分（81 の残り・略称・古い名指し・見送り点の数・記憶の継ぎ目・`assets_tests.rs`・記憶の帳面の名・task 番号・呼び手の数・届かない腕・512 ほかの写し）を件 1〜10 に、行を引き直して書いた。1 回目の 159（`collision-probe.rs` の行の番号と `prepare_stages`）は渡していない。2 回目の 295 と 7 回目で直したうえ、8.1 の後の直し（`98077a7e`・`a131412e`）で 2 行ずれた `lib.rs` の 3 か所（`:583` の `load_scope_windowpositions`・`:384-458` の `prepare_stages_for_shell`・`:397-408` の作者基準 DPI）を 8.2 で直した。あわせて、着手の前から古かった行の番号（`follow.rs:554`→`follow/window_move.rs:191-197`・`follow.rs:760-767`→`follow/window_move.rs:728-736`・`emo-present.rs:170`→`emo-present/state.rs:53`・`emo-present.rs:523`→`emo-present/input.rs:20`）も `collision-probe.rs` と `collision-probe/{fixture,pointer,setup}.rs` で直した（コメントだけ）。ほかの行の番号（`source.rs`・`measure.rs`・`source_tests.rs`・`tick_bridge.rs`・`window-placement.rs`）は今のツリーと合う。
 - `audit-test-kits` の brief へ: `log-capture-kit/src/lib.rs:28` の「19 crate」（今は 20）。
-- `audit-placement-follow` は完了済み（`.kiro/specs/completed/`）なので、追随の持ち物の申し送りは受け手が無い。タスク 8.2 は brief を作らず、進行役へ一覧で返した（起票は進行役が決める）。
+- `audit-placement-follow` は完了済み（`.kiro/specs/completed/`）なので、追随の持ち物の申し送りは受け手が無い。タスク 8.2 は brief を作らず、進行役へ一覧で返した（起票は進行役が決める）。出どころと今の行（`crates/areka-placement/src/` の下・2026-11-15）:
+  - 18.10（8 回目の 494・495 の後と総括）: `follow/work_area_clamp.rs:489-496` の `joined_with_prev` が組を (n−1, n) で作る（`RestoredWindow::mark` の doc の L392-393・`keep_restored_groups` の doc の L404-411 も同じ）。同じファイル `:299` の `opposite` は `JoinLeftOffset` を反対の側へ回さない（記録だけ）。
+  - 18.1 の 83: `follow_test_support.rs:418` の `assert_no_event` が共有の支えの写し。
+  - 18.1 の 91 の残り: `follow/move_shift.rs:18` が `windowposition::scale_signed` を直に引く。18.3: 同じファイル `:96` の名前の無い「監査の指摘 1」。
+  - 18.1: 追随の持ち物の名前の無い task 番号（47 ファイル・215 行）と指摘番号（18 ファイル・39 行）（`git grep -nE "(task|タスク) ?[0-9]+"`・`"指摘 ?[0-9]+"`）。
+  - 18.2: `follow_test_support.rs` の `point:192`・`contained:365`（飽和加算でない）・`Store` の写し（530 行あたり）。記録の捕まえの手書きの写し `follow_transition_diag_tests.rs:284`・`follow_window_move_diag_tests.rs:487`（18.3 の改め: 番兵を足す形）。`follow_move_shift_tests.rs:35` の `k`・`follow_sticky_follow_drag_tests.rs:79` の `events_of`・`follow/sticky_follow.rs:379` の `scg`。
+  - 18.3 の 358・18.4 の 426: `follow_test_support.rs` の `position_of:37`・`drag_event:45`・`drag_end_event_at:108`・`window_pos_sized:118`・`point_of:298` を `pub(crate)` に開き、`spawn_follow_pipeline_tests.rs`・`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs` の写しを消す。18.3: `follow_drag_tests.rs:143-144` の記憶の帳面の名。
+  - 18.4: `follow/window_move.rs:525` の「本番では未結線」（`reanchor_char_windows` が書く）・`:129` の上流の一覧・`follow/keyword_base.rs:47`。`follow.rs:105` の `persist::apply_restored_placements` と名前の無い「task 1.4・2.4」。
+  - 18.5 の 431: `follow/visibility.rs:138` の `clamp_x_into`（`resolver::clamp_axis` の写し）。432: `follow/work_area.rs:45-56` の `from_monitors`（`work_area_px` の写し）と `:42` の doc の `primary_work_area`。Implementation Notes 4.5: `transition_diag.rs:675-685` の `live_work_area_bottom` の作業領域の写し。
+  - 18.6: `follow/sticky_follow.rs:311` の組のドラッグの終わりが `persist_entries` を相手ごとに呼ぶ（記憶へ N+1 回書く）。
+  - 18.7 の 491: `follow.rs:141` の `rect_at` を `pub(crate)` にし、`balloon_limit.rs`・`reseed.rs`・`persist.rs` の手で組む矩形を置き換える。
+  - 18.9 の 511: `follow_test_support.rs:465` の `code_only` と `:495` の `SharedFakeIo`。
+  - この spec が追随の持ち物を直した所（知らせ）: Implementation Notes 2.4 の `follow/drag_follow.rs:592` の `mark_user_moved`（今 1,000 行ちょうど）・4.5 の `follow_drag_end_persist_tests.rs` の 4 行。
+- 受け手なし・記録のみ（持ち主の見直しの spec が無い）:
+  - 18.3: 開発者の記憶の帳面の名が `crates/areka-kanade/src/actor_tests.rs:410`・`crates/areka-kanade/tests/kanade/resource_query_test.rs:14`（`audit-kanade` は完了済み）・`crates/dola/src/cue/command_tests.rs:191`（dola の見直しの spec は無い）にある。
+  - 18.4: `crates/areka-ghost/src/runtime.rs:117-118` の記憶の帳面の名。`crates/areka-sylphya/src/persist/mod.rs:121`（ほかに `:1`・`:4`・`:60`）の「4 key 族」（列挙は 10 の腕）。このファイルは走っている `sylphya-sqlite-kvs` が触る。
+  - 18.6: `tools/perf/judge-perf.py:27` が `parse_fields` を「空白区切り」と書き、`tools/perf/perf_lines.py:59` と食い違う（`audit-tools-perf-*` は完了済み・`audit-tools-scripts` は `tools/perf/` の外だけを持つ）。
 - 起票の候補（進行役が `/kiro-discovery` で起票する）: 164（`DraggingState` の「位置が分からない」・C20 の後）と、`defaultx` の読みが ukadoc（2.9.13）と違う件（18.10・SSP の測りの候補 S1〜S4 はその材料）。
 
 ### 19.3 突き合わせ
