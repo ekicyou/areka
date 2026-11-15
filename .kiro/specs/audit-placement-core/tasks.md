@@ -271,3 +271,4 @@
 - 6.7 のレビューの提案（8.1 で拾う）: 本体の `check_table` の較正は錨の欠け・知らない分岐・覆われない分岐の 3 通りだけで、`#[test]` の欠け・`#[path]` の欠け・分岐名の重なりは較正していない。tail のテストの頭の説明は wintf の実窓のファイルを 3 つ挙げるが、今は `zorder_chain_order_inversion_tests.rs` を足して 4 つ。
 - 6.8 のレビューの提案（8.1 で拾う）: `reseed.rs` の `restore_empty` の行の文がまだ「配置の解決が空を返した」のまま（「記憶の重ね合わせが空を返した」に揃える）。
 - 8.1: かけ直しは 9 回と連鎖の決まりの総括で、開発者の決め（2026-11-15）により打ち切った（research.md 18.10・18.11）。鎖の決まりは `chain_rule.rs` の 1 か所。crate ごとの確かめは `cargo test -p log-capture-kit` を crate 全体で回す（`temp_path_guard_test` の例外表が全体テストで赤になった）。`defaultx` の読みが ukadoc（2.9.13）と違う件は 8.2 で `/kiro-discovery` により起票する。
+- 完了の棚卸（2026-11-15・`/kiro-complete`）: その場で解決 0 件・申し送り 3 件（8.2 で `audit-areka-app`・`audit-test-kits`・`clippy-199-lints` の brief へ）・起票 2 件（`audit-placement-follow-residue`＝受け手の `audit-placement-follow` が完了済みで規模が spec 1 本・`defaultx-canon`＝意味論の改め・開発者の裁定と spec 1 本の規模）。1 と 6.3 の揺れのテストは、最後の 2 回の全体テスト（da71b351d・65f34d58e）で出なかったので起票しない。
