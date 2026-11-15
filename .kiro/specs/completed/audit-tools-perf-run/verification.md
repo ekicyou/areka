@@ -1,0 +1,162 @@
+# 検証の記録（audit-tools-perf-run）
+
+## 8.1 版の上げと自分の検査
+
+- 振る舞いの変わる 5 本の `SCRIPT_VERSION` を小さい版の数で 1 つ上げた（申し合わせ済み B）: `perf-loop.ps1` 1.0.0 → 1.1.0・`invoke-perf-run.ps1` 1.1.0 → 1.2.0・`invoke-cpu-sample.ps1` 1.0.0 → 1.1.0・`check-quiet.ps1` 1.0.1 → 1.1.0・`invoke-followup-checks.ps1` 0.1.1 → 0.2.0。
+- `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest`: 毎回のかけ直しの直しの後に回し、最後（8 回目の直しの後）も `SELFTEST RESULT ok=12 ng=0`・`PERF-LOOP RESULT selftest code=0`。内訳の数は T2 1 本目 `ok=23`（着手の 20）・2 本目 `ok=27`（着手の 16）・T3 `ok=7`（着手の 6）（検査を足した分だけ増えた。道具の数 12 は同じ）。
+- `pwsh -NoProfile -File tools/encoding-check.ps1`: `encoding check: all passed`。
+- 1,000 行の番人: 長い順に `invoke-followup-checks.ps1` 987 行・`invoke-perf-run.ps1` 920 行・`perf-loop.measure.ps1` 909 行で、どのファイルも 1,000 行の下（16 本で 8,267 行・8.1 のレビューの直しの後に `wc -l` で数え直した）。
+- 範囲に 1 本足した: `tools/perf/perf-loop.selftest-base.ps1`（T2 の 2 本が写しで持っていた骨組み＝偽物の記録・終了の口・回し方を 1 か所へ寄せた。1 回目の指摘 B8）。
+
+## 8.1 同じ範囲への audit のかけ直し
+
+- 範囲: `tools/perf/` 直下の `*.ps1` の全部（16 本＝着手の 8 本・設計で足した 7 本・このタスクで足した `perf-loop.selftest-base.ps1`）。`*.psm1` は 0 本。
+- やり方: 回ごとに 4 組（組 A＝入口と共通部品・実行体・出力先の 6 本／組 B＝測る側と T2 の 4 本／組 C＝ランナー・T3・静かさの確かめの 4 本／組 D＝段③の採取・追随の検査の 2 本）へ別々の読み係を当て、`/ponytail:ponytail-audit`（5.3.3）の見方を、件数の上限なし・全部の行を読む作法（要件 1）でかけた。どの回も「読まなかった所」は 0。指摘は全部この中で直し、直しごとに自分の検査を回して緑を確かめてから次の回へ進んだ。
+- 数え方: 組をまたいで同じ指摘は 1 件に数えた（例: 1 回目の申し送り 3.1 は 3 組が挙げた）。前の回に裁定した・設計が受け入れた形は数えない（要件 8.2）。
+
+### 回ごとの件数
+
+| 回 | 日付 | 組 A | 組 B | 組 C | 組 D | 重複を除いた計 | 必ず直す | うち振る舞いに効く |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 2026-11-15 | 14 | 8 | 5 | 10 | 31 | 1 | 0（D1＝関門の速さ。測る値は同じ） |
+| 2 | 2026-11-15 | 4 | 6 | 3 | 3 | 15 | 0 | 0 |
+| 3 | 2026-11-15 | 4 | 2 | 2 | 2 | 10＋隣の spec からの持ち込み 1 | 1 | 1（D1 balloon_follow の StrictMode） |
+| 4 | 2026-11-15 | 2 | 3 | 3 | 2 | 10 | 0 | 0 |
+| 5 | 2026-11-15 | 3 | 3 | 2 | 5 | 13 | 1 | 1（A1 -Ledger の打ち間違いで preflight が緑） |
+| 6 | 2026-11-15 | 5 | 3 | 2 | 2 | 12 | 1 | 1（A1 A と B でヘルパの有無が違う比較） |
+| 7 | 2026-11-15 | 4 | 5 | 2 | 2 | 13 | 1 | 1（A1 -DryRun が揃った bin-A を書き替える） |
+| 8 | 2026-11-15 | 3 | 5 | 2 | 2 | 12 | 0 | 0 |
+
+8.7 の打ち切りは、8 回目の「必ず直す」が 0 件だったことで判じた。ただし 8 回目の直しには終了コードとファイルの扱いの変わる直しが入っている（`-RunDir`・followup の `-BinDir`・`compare -Iter`・目標定義の負の回数と待ち秒数に新しい 3、`-Resume` で静かさの確かめの間に止まった走行を `-INCOMPLETE` へ退ける、followup が表示の成立を待つ間に areka が終わったら待たずに終える）。開発者への 1 行の知らせにもこのことを入れる。
+
+- 回ごとの指摘の中身は、1 回目が想定外の失敗の道・終了コードの写し・関門の速さ、2〜4 回目が 1 回目の直しの取り残し（同じ形の別の所）と試しの抜け、5〜7 回目が打ち間違いの扱い・端の場合（画面の端・PID の使い回し・空の配列）・試しの抜けへ移った。
+- 5 回目で打ち切れなかった: 5 回目の指摘に「必ず直す」かつ道具の振る舞い（終了コード）に関わるもの（-Ledger）が 1 件あったので、要件 8.7 の打ち切りの決まりに当たらず、進行役の判断（2026-11-15・要件 8.2 のとおり 0 件まで繰り返し、8.7 の条件が初めて成り立った回で打ち切る・10 回目で止めて仰ぐ）に従って続けた。6・7 回目にも「必ず直す」が 1 件ずつ出た（どちらも直した）。
+- 8 回目の 12 件は、どの組も「必ず直す」が 0 件で、要件 8.7 の条件（「必ず直す」と道具の振る舞いに関わるものが 1 件も無い）が初めて成り立った。12 件を全部直したところで打ち切った。
+
+### 判定
+
+**8 回目で打ち切った・残りは直し済み**（要件 8.7 の形。8.7 の条件が初めて成り立ったのが 8 回目だったため）。8 回目の指摘 12 件は全部直した。打ち切ったことは進行役へ知らせた。
+
+### 直した指摘（回ごと・指摘 → 直し → 試し）
+
+1 回目（31 件・直し 29・指摘に当たらない 1・裁定で今のまま 1）:
+- 段③の採取の関門（dump の数え直し）が 1 行 400 マイクロ秒で、7 分の採取の dump で何時間もかかる（必ず直す）→ 数える本体を .NET 標準だけの C#（Add-Type）へ移し約 5 マイクロ秒／行（48,021 行で 20.8 秒 → 0.2 秒・数は同じ）→ T1 の既存の厳密な数の検査が緑のまま。
+- 記号の総称型のカンマで数える列がずれる → 列が多すぎる行だけ括りの外のカンマで割り直す → T1「symbol commas」。列名行に Image!Function が無いと記号の無いせいにする → 列名行の不備と言う → T1。
+- 子の道具 4 本の trap が共通部品より前の失敗で元の原因を失い RESULT 行の無い 1 になる（申し送り 3.1）→ trap に共通部品より前の受け皿を置き、元の原因の 1 行と決まった終了コード・RESULT 行で終える → T2「trap-before-base」。
+- `-Stop` の `xperf -d` が落ちても採取を止めない（申し送り 6.4）→ -d が落ちたら `xperf -stop` を打ってから読む・perf-loop は 0・5 のほかの `-Stop` の終わりで手で止める警告を出す → T1「stop-merge-fails」・T2「stop-failed」。
+- 走行の後の静かさの確かめが落ちた子（1・-1）を「静かでない」と読み 3 分待って 2 → 2 のほかは 4 で止める → T2「quiet-after-codes」。
+- followup の実行体の選び（申し送り 7.2）に試しが無い・-DryRun で写しただけの bin-B を使う → 揃った一式だけを使う → T2「followup-exe-choice」。
+- -DryRun の写しの bin-A を本番が揃った一式と見る・作り直しで写さなかったヘルパと PDB が前の回のまま残る・helper=missing の一式へ共有のヘルパを写す・走行前のビルドがヘルパを作り直さない → それぞれ直した → T2「bin-set-stale」「worktree-build-helper」。
+- 日付をまたぐ final で走行と結果の写しが別の日付 → 1 回の呼び出しの中で日付を 1 度だけ決める → T2「loopdir-vocab」の日付の項。
+- 入口の読めない `-Iter`・知らない引数が RESULT 行の無い 1 → 字で受けて入口で確かめ、受け皿の引数で 3 と RESULT 行 → T2「bad-params」。
+- 子が先に終わると孫（ヘルパ）を止めない → 子孫を必ず集めて 1 つずつ止める → T2「kill-after-parent-exit」。
+- 可否の 1 行が読めない訳を黙って落とす → 1 行の警告 → T2「probe-parse」。
+- python の版・git の HEAD に標準エラーの警告が混ざる → 標準出力の最後の行だけ → （6 回目に T2「python-read」）。
+- 目標定義の [quiet] の読めない値が黙って既定へ落ちる（ランナー・静かさの確かめ）→ 3 で止める → T1・T3「quiet-retry-settings」。静かさの確かめの答えから次の手を決める所に試しが無い → 純関数 `Get-QuietAttemptStep` → T3「quiet-attempt-step」。
+- T3・T2 の後始末が使い回された PID の別のプロセスを止め得る → 握った者の Handle を開いて持ち帰る。
+- 写しと要らないコード: T2 の 2 本の骨組みの写し（`perf-loop.selftest-base.ps1` へ）・`Get-MeasureMovedDir`（`Get-MeasureLineWord` へ）・rank の出力先の 2 つの写し（`Get-MeasureRankDir`）・使われない目標定義の値 3 つ・`Get-LoopDateStamp -Date`・死んだ枝・同じ在り処の 2 度の探し・`Invoke-Child` の戻り値の手組み・`$PERF_LOOP_EMPTY` の二重の字面。
+- そのほか: カウンタの失敗の回数の文（3 → 4 回）・check-in の文（正の整数）・採取を始められない訳（`xperf -stop` の手引き）・followup の前の回の判定を残さない・Store の別名の python・`dryrun-clear` が `-DryRun` の印を持ち越す（申し送り 4.1）。
+- 指摘に当たらない 1 件: 「measure-ab -Resume が B を作り直して 2 つの B を混ぜる」は、揃った bin-B を -Resume では作り直さない（`Invoke-MeasureBuildSide` が早く戻る）ので起きない。
+- 裁定済み 1 件: 「`invoke-followup-checks.ps1` が `-BinDir` の実行体・検体の窓口が無いとき 3 でなく 1」は、頭書が「起動できない」を 1 と書く外への約束（終了コードの意味）に当たる。進行役の裁定（2026-11-15）で **1 のまま（頭書の約束どおり）**。指摘に当たらない扱いで、残す指摘にも回す指摘にも数えない。
+
+2 回目（15 件・全部直した）: Store から入れた python を捨てない（最後に回す）・followup が検査の子の隣へヘルパを写す・根が終わった後に PID の使い回しの別物の子を止めない・`-Iter` の束ねの残りの穴を `shortcut:` で明記・T3 の ready のファイルの書きかけを掴まない・空の `heavy_process_names = []` を「名前を置かない」と読む・[quiet] の鍵の一覧を 1 か所に・builds_final の語を 1 本目の前に全部確かめる・既に在る出力先をビルドの前に 3 で止める・SHIORI の関門と判定器の写しの試し・followup の前の -DryRun の印を消す・注釈の位置・使われない `HeaderFound`・括りの閉じない記号の試し・followup の -SelfTest の最後の行が自分の検査の赤を言う。試し: T2「exe-after-build」「final-bindir」「shiori-gate」「followup-exe-choice」、T1 の symbol commas。
+
+3 回目（10 件＋隣の spec `audit-tools-perf-judge` からの持ち込み 4 件のうち直すもの 1 件・全部直した）: balloon_follow の StrictMode で 1 つだけの要素の `.Count` が落ちる（必ず直す）→ 純関数 `Get-BalloonFollowSources` → T1「balloon-follow-sources」・`selftest -GoalFile` の無いファイルで既定の目標を緑にする → 3・TOML の見出しの後ろの注釈で鍵が前の節へ入る・`Assert-MeasureAbDistinct` の空の添字・cargo の無い訳の文・`iteration_build` の大小・measure-ab の出力先の確かめの試し・`-HeavyProcessNames a,b` が割れない・静かさの確かめの 4 の訳の文・二重の return・ランナーの使い方の例に `-BalloonRoot` が無い（持ち込み）。持ち込みのうち DRAG_DX_PX の注釈はこの枝ではまだ正しい・.py を行番号で指す注釈は 0 件・スキルの `--iteration` の文は下の「範囲の外」。
+
+4 回目（10 件・全部直した）: 段③の関門が記号の解けない `areka.exe!0x…` を数える・カーソルが画面の右下の角に居ると注入を不可と言う・静かさの確かめの古い報告を証拠と言う・NaN の閾値が素通り・ランナーの頭書の 4・走行前のヘルパの作り直しが落ちたとき古いヘルパで測る・揃った一式に -DryRun の印が残る・済んだ followup を -Resume 無しで黙って消す・builds_final の同じ語の 2 度・結果の写しの日付を走行の出力先から。試し: T1 の unresolved、T2「worktree-build-helper」「followup-resume-first」「final-bindir」「final-results-date」。
+
+5 回目（13 件・直し 12・設計が受け入れた形 1）: `-Ledger` の打ち間違い（必ず直す）→ 3 → T2「bad-params」・`$script:IterArg` を整数に・子の作業の場所を PSDrive の名でなく OS の道で・sampling.txt の使わない値・結果の写しの日付と followup -DryRun の試し・走行が先に終わった失敗の道でも子孫を止める・`-Stop` の打ち直しで前のまとめを読む・必須の引数の欠けを `shortcut:` で明記（2 本）・クリック透過の窓が先に閉じたら 1・前の回の followup.txt を残さない・`-Stop` の読み先の試し。受け入れ済み: 理由の行に入る OS の例外の文が地域語になり得る点（design の「想定外の失敗の終わり方」の ASCII の冠＋例外の文）。
+
+6 回目（12 件・全部直した）: measure-ab で A と B の一方だけヘルパが無い（必ず直す）→ 走る前に 4 → T1「ab-same-exe」・目標定義の在るのに読めない整数・配列・空の配列を 3 → T2「goal-values-strict」・作り直しの途中で止まった一式を揃ったと見ない・cargo の出力を会話へ流さない（落ちたときだけ最後の 8 行）・python の在り処と版の試し → T2「python-read」（`Get-PythonVersionText` を共通部品へ移した）・final の 2 本目の出力先を 1 本目の前に・measure-ab -Resume の試し → T2「ab-resume」・採取を始められない訳の行 → T3・静かさの確かめの頭書・記号の置き場が作れない → 3・followup の頭書の RESULT 行は実走のとき。
+
+7 回目（13 件・全部直した）: -DryRun の prepare-ab が揃った bin-A を書き替えて A の実行体を失う（必ず直す）→ 揃った一式は -DryRun でも書き替えない → T2「dryrun-keeps-real-set」・`checkin_minutes` の読めない値を 3・`Assert-MeasureAbDistinct` の写しのループを 1 つに・ヘルパの元の道の 3 つの写しを `Get-MeasureHelperSource` に・T2 を本番と同じ `$ErrorActionPreference = 'Stop'` で回す・`-Checks` の渡し方の試し → T2「followup-checks-arg」・`-Stop` の 3 を 3 のまま・関門を通ったらまとめたトレースを消す・受け入れの判定の試し → T2「compare-core」・届かない死んだ確かめ・T3 の -DryRun -SampleEtl の試しが理由の語まで見る・クリック透過の点が画面の外で止められたら判定不能・balloon_follow の動かす操作が無いときの理由の語 `no_required_mover`。
+
+8 回目（12 件・全部直した・「必ず直す」0 件）: 縮めた引数名（-B・-R）の束ねの穴を `shortcut:` に足す・check-quiet とランナーの型の付いた引数の穴も `shortcut:` で明記・静かさの確かめの間に止まった走行（run.log も印も無い）を -Resume で退ける → T2「resume-incomplete」の stopped-in-quiet・読まないサブコマンドへの -RunDir を 3 → T2「bad-params」・followup の `-BinDir` に実行体が無ければ子を起こさずに 3 → T2「followup-exe-choice」・`compare -Iter` の打ち間違いを 3 → T2「bad-params」・目標定義の負の `retry_max`・`retry_wait_sec` を 3 → T2「quiet-after-codes」・T2 が子の perf-loop から自分をまた回し始めたら増え続けずに赤（環境変数 `PERF_LOOP_SELFTEST_NESTED`）・rank-run の `-Stop` 3 の試し → T2「stop-bad-args」・ランナーの失敗の理由の行を後始末の警告の後に・followup の表示の成立を待つ間に areka が落ちたら待たずに 1 と終了コード・閉じない括りとカンマが ThreadStartImage!Function の側に在る行を後ろから数えて読む → T1「symbol commas」。
+
+8.1 のレビューの直し（2026-11-15・提案 2 件も全部直した）: 目標定義の負の `[quiet] retry_max`・`retry_wait_sec`（と整数で読めない値）を、走行の後でなく入口の `Get-GoalConfig` でビルドと走行の前に 3（`-DryRun` でも止まる。走行の後の確かめも残す）→ T2「quiet-after-codes」の goal config の項・followup が表示の成立を待つ間に areka が終わったとき、probe の行を `result=timeout waited_ms=<上限>` でなく `result=exited` と実際に待った時間にする（純関数 `Get-ShowReadyMissFields`。`judge-followup.py` は `show_ready` の行を読まない）→ T1「show-ready-miss」。どちらも直しの前の形で赤（`Get-GoalConfig` が 3 で止まらない・関数が無い）を見て、写しの部屋（`target\perf-loop-tmp\`・後で消した）で直しを壊すと赤に戻ることを見た。design の `Test-MeasureRunComplete` の注釈・状態図・「そのほかの止まる道」も今の振る舞いに合わせた。
+
+### 赤の確かめ（直しの前の形で落ちることを見た）
+
+- trap-before-base: HEAD の `check-quiet.ps1`・`invoke-cpu-sample.ps1` と壊した共通部品で、RESULT 行の無い 1（元の原因は「Format-UnexpectedError が無い」「$EXIT_RUN_FAILED が無い」）。直した後は元の原因の 1 行と `CHECK-QUIET RESULT stage=after verdict=MEASURE_FAILED code=4 file=-`。
+- 段③の関門: HEAD の数え方で総称型のカンマの行が 0 フレーム（直した後 1）、48,021 行に 20.8 秒（直した後 0.2 秒）。
+- 8 回目の試し: 7 回目までの本番（コミット `05b7e5114`）の 7 本を写しの部屋に戻して今の T2 を回し、`quiet-after-codes`（負の retry_max で 2）・`resume-incomplete`（stopped-in-quiet が退かない）・`bad-params`（followup の -RunDir が通る）・`followup-exe-choice`（実行体の無い -BinDir で子を起こして添字の例外）が赤。`stop-bad-args` は 7 回目の直しの後なので緑（試しの抜けの指摘）。
+- 6・7 回目の試し: 8.1 に着手する前の本番の 10 本（`git show 05b7e5114~1:tools/perf/<file>`）を写しの部屋に戻し、今の T2・T3 を回した（2026-11-15）。6・7 回目に足した試しのうち、直しの的になった `goal-values-strict`（引用符付きの整数で 3 にならない）・`python-read`・`ab-same-exe`（ヘルパの食い違いの行で添字の例外）・`dryrun-keeps-real-set`（本物の A の実行体が -DryRun で上書きされた）・`final-bindir`・T3 `sampling-cancel-on-stop`（訳の行 0）が赤。`ab-resume`・`followup-checks-arg`・`compare-core` は着手の前の形でも緑（どれも「試しが無い」の指摘で、今の振る舞いを縛る試しなので赤にならないのが正しい）。T2 1 本目 ng=8・2 本目 ng=13・T3 ng=3。
+- HEAD の `perf-loop.measure.ps1`・`perf-loop.build.ps1`・`perf-tool-base.ps1`・`perf-loop.ps1`・`perf-loop.common.ps1` を写しの部屋で戻して T2 を回し、`quiet-after-codes`・`stop-failed`・`followup-exe-choice`・`bin-set-stale`・`worktree-build-helper`・`kill-after-parent-exit`・`loopdir-vocab`（日付）・`bad-params`・`probe-parse`・`exe-after-build`・`final-bindir`・`followup-retry-on-1` が赤になることを見た。
+
+## 残す指摘・回す指摘
+
+- **残す指摘: 0 件**（要件 2.2 の 3 種類に当たる指摘は出なかった。1 回目の followup の終了コード 1 は裁定で「1 のまま（頭書の約束どおり）」＝指摘に当たらない扱い）。
+- **回す指摘: 0 件**（後の spec へ回した指摘は無い）。
+
+## 消す前の grep の件数（要件 3.3）
+
+ツリー全体（`target`・`vendors`・完了した spec の文書を除く・`*.ps1`・`*.py`・`*.md`・`*.toml`・`*.json`）で数えた。
+
+- 1.3（写しの消し・4 本の外）: `Get-PwshPath`・`Get-NarSampleMap`・`NAR_SAMPLE_ARGS`・`NarSampleMaps` は 0 件。`Write-Info`・`Write-Problem`・`Get-UtcStamp`・`Get-PythonCommand`・`Get-NarSamplePath` は共通部品を読む `perf-loop*.ps1` だけ。4 本の `Invoke-Utf8Child` の参照 9 → 0。
+- 6.2（`wpaexporter` の道）: HEAD で `invoke-cpu-sample.ps1` 22・`perf-loop.common.ps1` 4・`perf-loop.ps1` 5・`goals` 1 → 範囲の中 0（`invoke-cpu-sample.ps1` の `XPERF_DEFAULT_PATH`・`Test-Elevated` の 5 件は段③の採取の唯一の持ち場として残す）。範囲の外に残る `[sampling] backend`（goals の toml・`perf_ledger_goal.py` の必須の鍵・`fixtures-loop` の 5 本）は `audit-tools-perf-judge` の受け持ち。
+- 8.1（このタスクで消した名前）: `Get-MeasureMovedDir` 2（どちらも `perf-loop.measure.ps1`）→ 0。`Get-GoalConfig` の値 `LedgerRel`・`JudgeScript`・`IdleCpuMaxPct` は `perf-loop.common.ps1` の中だけ（読む所 0）→ 0（目標定義の鍵 `idle_cpu_release_max_pct` そのものは Python とスキルが読むので残る）。`Get-LoopDateStamp -Date` を渡す呼び出し 0。`HeaderFound` を読む所は `invoke-cpu-sample.ps1` の外に 0。`Get-MeasureSamplingNote` 1（`Invoke-MeasureRank`）→ `Get-MeasureSamplingReason` へ替えて 0。`Split-DumpFields` はこのタスクの中で足して消した（HEAD に 0）。
+
+## 範囲の外
+
+- スキル `perf-loop-iteration` の `SKILL.md` 45〜46 行の「`--iteration` を省くと n+1」は、`audit-tools-perf-judge` の枝では 3 で止まる形に変わる（相手の持ち物・まだ `main` に無い）。この spec の `.claude` の差分は S1・S2 だけなので触らない。
+- `judge-perf.py` 0.5.0 の最後の行 `JUDGE-PERF RESULT code=N`（相手の枝・未着地）は合わせていない。着地すれば `perf-loop.measure.ps1` の止まりの文に埋まる `LastLine` がその行になるだけで、終了コードの写しは変わらない。
+
+
+## 8.2 既定のブランチとの差分で約束を確かめる
+
+基準は `git merge-base HEAD main` ＝ `715949187`（この枝の分かれ目）。`git diff 715949187..HEAD` で数えた（この枝の変更だけ）。
+
+- 差分は 25 本。コードは `.claude/skills/perf-loop-iteration/SKILL.md` と `tools/perf/*.ps1` 16 本（新 8 本・直した 8 本）の 17 本だけ。ほかの 8 本は文書で、この spec の `.kiro/specs/audit-tools-perf-run/` の 7 本と、`.kiro/specs/audit-tools-scripts/brief.md` の 7 行の追記（要件の討議で決めた申し送りの件 1＝`test-all.ps1` に `perf-loop.ps1 selftest` の段を足す話。範囲の外のコードの直しではないので要件 6.2 に当たらない）。次は 0 件: `tools/perf/*.py`・`tools/perf/fixtures*/`・`tools/perf/goals/`・`tools/perf/README.md`・`vendors/`・`tools/utf8-child.ps1`・`Cargo.lock`・根の `Cargo.toml`・`tools/crates-io.ps1`・`.claude/agents/`（要件 6.2・6.3・6.8）。
+- `.claude/` の差分は `SKILL.md` の 2 か所だけ: S1（終了コードの表の 4 の行に「想定外の失敗（道具の不具合）もここに入る」）と S2（REMEASURE の節に `code=3` の 1 段）。申し合わせの表の文案どおり。
+- 外への約束の変更は design の「外への約束の変更と申し合わせ」の表の分（16・24・35・14・10・3・4・15・34・26・2・21・22・25・36・9・1・A・B）だけ。表に無い変更は見つからなかった（`SCRIPT_VERSION` の上げは B の 5 本）。
+- 備考: この枝を切った後に `main` が進んだ（`origin/main` は `2f22bd597`・隣の spec `audit-tools-perf-judge` が PR #462 `bf685d026` で着地済み）。上の差分は分かれ目からなので、`main` の進みは入らない。`/kiro-complete` の `main` の取り込みで次の 2 点を合わせる（下の R1〜R4）。
+
+## 8.2 効き目を次の実走で確かめる 8 行
+
+design の「指摘の表」の最後の列のうち、実走でしか確かめられない分。この spec は実走を回さない（要件 7）ので、次の実走（`/perf-loop-iteration` の段③を昇格した机で回す回）で見る。
+
+| 指摘 | 次の実走で見ること | 机で見る分 |
+|---|---|---|
+| 1 | 採取の開始がランナーの静かさの確かめの後・areka を起こす直前になり、ランナーが 0 で返った次の 1 手で `-Stop` が走る。本物の xperf のセッションが残らない | 一部（本物の xperf のセッション） |
+| 8 | areka の強制終了が子孫まで届き、終わるまで待ってから次へ進む。出力先の取り合い（退けの失敗）が起きない | 一部（取り合いの起きやすさ） |
+| 9 | ビルドが採取より前に終わり、xperf の重さが静かさの確かめを倒さない（`quiet-before` が QUIET のまま） | はい |
+| 23 | 大きな dump（実機の段③）の `-Stop` が、ファイルを 1 行ずつ読む道で重くならない | はい |
+| 24 | `preflight` の本物の 5 秒の採取が 1 回だけになる。`rank` は `sampling.txt` も dump も無いとき試しを回さず `no_record` | 一部（昇格した机での時間） |
+| 29 | `-Stop` はまとめが通ったら元の ETL を消す（走行の出力先が大きくならない） | はい（大きさ） |
+| 31 | 大きな `run.log` でもランナーの目印の読みが最初の 1 件で止まる（時間） | はい |
+| 32 | 追随の検査の `Wait-RunLogPattern` が増えた分だけ読む。効くかはログの大きさ次第 | 一部 |
+
+決定論で縛った分（T1〜T3 の検査）は 8.1 の自分の検査で緑。上の 8 行は「机でしか見えない効き目」だけで、直しの正しさの証拠は T1〜T3。
+
+## 8.2 README の R1〜R4 の状態（`main` に入ったか）
+
+`tools/perf/README.md` は `audit-tools-perf-judge` の持ち物（この spec は 0 行）。2026-11-15 に `origin/main` の README を読んで確かめた。
+
+隣の spec は先に着地した（PR #462）。着地したのは R4 だけで、R1〜R3 は今の `.ps1` の形に合わせる文なので、設計どおり「後に着地した側（この spec）が取り込みで合わせる」になった。
+
+| 印 | `main` の README | 状態 |
+|---|---|---|
+| R1（555 行あたり・`Test-MeasureQuietAfterOk` の項） | 875 行に `Test-MeasureQuietAfterOk` が残る（`Test-MeasureRunComplete` と `-INCOMPLETE-` の文は無い） | 着地待ち（相手が引き受けた記録: 隣の spec の design の README の表・555 行の行）。`/kiro-complete` の取り込みで合わせる |
+| R2（§11「読む所は 2 つ」） | 599〜608 行に「読む所は 2 つ」「`invoke-perf-run.ps1` と `invoke-followup-checks.ps1` は `Invoke-Utf8Child` を使います」が残る（`perf-tool-base.ps1`・`Invoke-Child` 1 つの文は無い） | 着地待ち（同上・563〜573 行の行）。取り込みで合わせる |
+| R3（§14 段③の `-Cancel`・`-SampleEtl`・`-Probe`／`-SelfTest` の注） | `-Cancel`・`-SampleEtl` の語が README に無い | 着地待ち（同上・880〜887 行の行）。取り込みで合わせる |
+| R4（理由の語に `no_record`） | 967 行に `no_record`（採取の記録が無い）が入っている | 着地済み（隣の spec が #24 の申し合わせで書いた） |
+
+取り込みの時に合わせるほかの 2 点（隣の spec の知らせ）: `judge-perf.py` 0.5.0 の最後の行 `JUDGE-PERF RESULT code=N`（`perf-loop.measure.ps1` の止まりの文に埋まる `LastLine` がこの行になるだけ・終了コードの写しは変わらない）。`invoke-followup-checks.ps1` 48 行の注記「`judge-followup.py` と対」（`DRAG_DX_PX` は判定器側で 0 件になったので古くなった）。
+
+## 8.2 全体テスト
+
+- 日付: 2026-11-15。排他の机を取って 1 回だけ回した（直しも回し直しも無し）。
+- 命令: `pwsh -NoProfile -File tools/test-all.ps1`
+- 結果: 終了コード 0・`all steps green`。全部の段が OK で、赤の段・赤のテストは 0。`test result: ok` の行は 165 行。
+- 主な段: `encoding check` 31 秒・OK（新しく足した `*.ps1` 8 本を含めて通った）・`dola toml feature tests` 61 秒・`i686 tests (host-32)` 44 秒・`crates.io pre-publish check (package only)` 12 秒・`release notes check`・`roadmap overview check`・`i686 helper sync check`・`sample fetch check`・`i686 helper beside areka.exe` がすべて OK。
+- 出力の全文: `target\testall-8.2.log`（ワークツリーの `target` の下・git の外）。
+
+## 8.2 要件ごとの証拠（記録で言えるもの）
+
+- 1.2（audit の前に `main` を取り込み、ファイルの数と行数を測り直す）: 8.1 の記録の 1,000 行の番人の行（16 本で 8,267 行）で測り直しを残した。
+- 1.6（外への約束の変更を指摘に書く）・6.4: 上の「外への約束の変更」の確かめのとおり、申し合わせの表に載せた分だけで、表に無い変更は 0。
+- 1.7・7.3（実走でしか確かめられない指摘）: 上の「効き目を次の実走で確かめる 8 行」に旨を書いた。どれも決定論の検査（T1〜T3）で形を先に縛ってあり、実走は効き目の確認だけ。
+- 3.2（壊れる読み手まで直す）: 全体テスト（`encoding check` を含む）が緑で、8.1 の「消す前の grep の件数」でツリー全体の参照 0 を確かめた。範囲の外の読み手は `SKILL.md` の S1・S2 だけを直し、README は R1〜R3 を `/kiro-complete` の取り込みで合わせる（上の状態の表）。
+- 4.6（GPU のテストは実 GPU）: この spec のテストは PowerShell の道具の検査（T1〜T3）で、GPU を使うものは 0。全体テストの GPU の段は実 GPU のまま緑。
+- 5.6・5.7（依存を足さない）: 差分に `Cargo.lock`・根の `Cargo.toml`・`tools/crates-io.ps1` は 0 件、足した `*.ps1` に `Import-Module`・`Install-Module`・`#requires -Module` の追加行は 0 件、Python は差分 0。依存なしで成り立たない直しは出なかったので、承認の議題は 0。
+- 7.2（既にある走行の成果物を書き替えない）: この spec は計測の走行を 1 本も回していない。`%LOCALAPPDATA%\areka-diag\perf-loop\` と `goals/` の台帳・結果には手を入れていない（差分に `goals/` は 0）。

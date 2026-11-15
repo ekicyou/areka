@@ -21,7 +21,8 @@ prepare-ab／measure-ab／compare／followup／final）が呼び出し側の sco
 --------------------------------------------------------------------------------
  ⒜ 実走は必ず invoke-perf-run.ps1（C7）を通す。**出力先は毎回まっさらな新規フォルダ**
     でなければならない（ランナー側の決まり）。失敗した走行の出力先はランナーが
-    `<leaf>-FAILED` へ退避するので、1 度だけの採り直しは同じ出力先で行える。
+    `<leaf>-FAILED` へ退避して `[invoke-perf-run] moved to: <path>` の 1 行で知らせるので、
+    1 度だけの採り直しは同じ出力先で行える。その行が無く出力先が残っていれば採り直さずに 4。
  ⒝ 静寂の確認は前後 2 回。前（quiet-before.txt）はランナーの `-AutoQuiet` が書く。
     後（quiet-after.txt）は**ここの仕事**で、check-quiet.ps1 -Stage after を呼ぶ。
     「静かでない」なら目標定義 [quiet] の retry_max 回だけ待って確かめ直し、
@@ -30,7 +31,7 @@ prepare-ab／measure-ab／compare／followup／final）が呼び出し側の sco
     引数・前提の不正は 3、静寂でないは 2 をそのまま返す（tasks.md 7.3）。
  ⒟ **絶対値の合否を出す走行（measure-baseline／final）は実 SHIORI を伴うこと。**
     32bit ヘルパが無いと発話が起きず、アイドルの絶対値は別条件の値になる。
-    採取ランナーは警告だけで走ってしまう（invoke-perf-run.ps1:709-710）ので、
+    採取ランナーは警告だけで走ってしまう（invoke-perf-run.ps1 の shiori_helper_present の注記）ので、
     合否を出す前に run-meta.txt の shiori_helper_present を関門にして 4 で止める。
     相対比較（rank-run／measure-ab）は警告 1 行を残して続ける。
 
@@ -106,6 +107,10 @@ $MEASURE_TRACE_SUFFIX      = '-trace.etl'
 #: A/B の側 → 出力先の小部屋（design C5 の配置）
 $MEASURE_SIDE_LEAF = @{ 'A' = 'bin-A'; 'B' = 'bin-B' }
 
+# 実行体の用意と出力先の扱い（自分の較正値 $MEASURE_* を置いた後で読み込む）
+. (Join-Path $PSScriptRoot 'perf-loop.build.ps1')
+. (Join-Path $PSScriptRoot 'perf-loop.rundir.ps1')
+
 # =============================================================================
 # 目標定義の引数（節・鍵そのものの読み口 Get-MeasureToml／-Int／-Array は
 # perf-loop.common.ps1 に置いてある。本ファイルの行数上限のため＝要件 2.10）
@@ -124,44 +129,25 @@ function Get-MeasureGoalArgsPython {
 # =============================================================================
 # 場所（ゴースト・実行体・出力先）と前提
 # =============================================================================
-# 既定の在り処は検体の窓口に尋ねる（Get-NarSamplePath は perf-loop.common.ps1・1 検体 1 回）。
+# 既定の在り処は検体の窓口に尋ねる（Get-NarSamplePath は perf-tool-base.ps1・1 検体 1 回・止めない）。
+# 窓口が答えられなければ 4 で止める（空のパスで走らせない）。
+function Get-MeasureSamplePath {
+    param([Parameter(Mandatory = $true)][string]$Key)
+    $r = Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key $Key
+    if (-not $r.Ok) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message $r.Message }
+    return $r.Value
+}
+
 function Get-MeasureGhostRoot {
-    $path = if ($script:GhostRootArg) { $script:GhostRootArg } else { Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key 'folder' }
+    $path = if ($script:GhostRootArg) { $script:GhostRootArg } else { Get-MeasureSamplePath -Key 'folder' }
     return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
 }
 
 function Get-MeasureBalloonRoot {
-    $path = if ($script:BalloonRootArg) { $script:BalloonRootArg } else { Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key "balloon.$MEASURE_SAMPLE_BALLOON_NAME" }
+    $path = if ($script:BalloonRootArg) { $script:BalloonRootArg } else { Get-MeasureSamplePath -Key "balloon.$MEASURE_SAMPLE_BALLOON_NAME" }
     return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
 }
 
-# 実行体の在り処（-BinDir が最優先・無ければ target\<release|debug>）。
-function Get-MeasureBinDir {
-    param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
-    if ($BinDir) { return [System.IO.Path]::GetFullPath($BinDir).TrimEnd('\') }
-    $sub = if ($Build -eq 'release') { 'release' } else { 'debug' }
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot (Join-Path 'target' $sub))).TrimEnd('\')
-}
-
-# 実行体が在るか。無いときは何を打てばよいかを必ず示す（黙って落とさない）。
-# -DryRun のときだけは止めずに $false を返す（配管の確認は実行体が無くてもできる）。
-function Test-MeasureExeReady {
-    param([string]$BinDir, [Parameter(Mandatory = $true)][string]$Build)
-    $dir = Get-MeasureBinDir -BinDir $BinDir -Build $Build
-    $exe = Join-Path $dir $MEASURE_AREKA_EXE
-    if (Test-Path -LiteralPath $exe -PathType Leaf) { return $true }
-    $releaseDebug = Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT
-    $hint = if ($Build -eq 'release') {
-        "Set CARGO_PROFILE_RELEASE_DEBUG=$releaseDebug in the environment from PowerShell and run cargo build --release -p $MEASURE_AREKA_PACKAGE first (stage 3 needs the symbols)"
-    } else {
-        "Run cargo build -p $MEASURE_AREKA_PACKAGE first"
-    }
-    if ($script:DryRunMode) {
-        Write-Info "[perf-loop] -DryRun: executable not found ($exe). Skipping this run. $hint"
-        return $false
-    }
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "executable not found: $exe. $hint"
-}
 
 function Assert-MeasureIter {
     if ($script:IterArg -lt 1) {
@@ -185,47 +171,35 @@ function Convert-MeasureChildExit {
     return $EXIT_MEASURE_FAILED
 }
 
-# 走行の成果物が揃っているか（-Resume の完了印）。
-function Test-MeasureRunComplete {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    foreach ($name in @($MEASURE_FILE_RUN_LOG, $MEASURE_FILE_CPU_CSV, $MEASURE_FILE_RUN_META)) {
-        if (-not (Test-Path -LiteralPath (Join-Path $Dir $name) -PathType Leaf)) { return $false }
-    }
-    return (Test-MeasureQuietAfterOk -Dir $Dir)
-}
-
-# -DryRun の置き土産（DRY-RUN.txt があって run.log が無い出力先）だけを作り直す。
-# 実走の成果物がある出力先には触らない——測ったものを黙って消さないため。
-function Clear-MeasureDryRunDir {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    if (-not (Test-Path -LiteralPath $Dir)) { return }
-    $isDry  = Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_DRYRUN) -PathType Leaf
-    $hasRun = Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_RUN_LOG) -PathType Leaf
-    if ($isDry -and -not $hasRun) {
-        Write-Info "[perf-loop] recreating the output folder of the previous -DryRun: $Dir"
-        Remove-Item -LiteralPath $Dir -Recurse -Force
-    }
-}
-
-# 走行を省いたことを出力先に残す（-DryRun 専用。測定結果と取り違えないための札）。
-function Write-MeasureDryRunMark {
-    param([Parameter(Mandatory = $true)][string]$Dir, [Parameter(Mandatory = $true)][string]$Reason)
-    New-LoopDir -Path $Dir | Out-Null
-    $lines = @(
-        'This is -DryRun (test only) output. Do not treat it as a measurement result.',
-        "reason: $Reason",
-        "time: $(Get-UtcStamp)"
-    )
-    Set-Content -LiteralPath (Join-Path $Dir $MEASURE_FILE_DRYRUN) -Value (($lines -join "`n") + "`n") -Encoding utf8 -NoNewline
-}
 
 # =============================================================================
 # 実走・静寂・合否・順位表（8 本が共有する 4 つの動作）
 # =============================================================================
 
+# 子の出力の決まった行から語を 1 つ読む（最後に合った行の 1 つ目の括り・無ければ $null）
+function Get-MeasureLineWord {
+    param([string[]]$Lines, [Parameter(Mandatory = $true)][string]$Pattern)
+    $word = $null
+    foreach ($line in @($Lines)) { if ($line -match $Pattern) { $word = $Matches[1] } }
+    return $word
+}
+
+# 走行の出力先が空いているか（-DryRun の印だけのフォルダは作り直す）。在れば 3 で止める。
+# ビルドより前に呼ぶ（既に在る出力先のためにビルドの数分と target\<build> の書き替えを使わない）。
+function Assert-MeasureRunDirFree {
+    param([Parameter(Mandatory = $true)][string]$Dir)
+    Clear-MeasureDryRunDir -Dir $Dir
+    if (Test-Path -LiteralPath $Dir) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "output folder already exists: $Dir (each capture makes a new folder. To capture again, delete it; to use the existing artifacts, add -Resume)"
+    }
+}
+
 # 実走を 1 本採る。失敗は 1 度だけ採り直し、なお失敗なら 4 で止まる（tasks.md 7.3）。
 # 静寂でない（ランナーの 2）は採り直さずそのまま 2 で止まる——待って確かめ直すのは
 # ランナー側が目標定義の回数だけ既に行っているためである（design C6・C7）。
+# 戻り: SamplingStarted（ランナーが '[invoke-perf-run] sampling start: code=0' を出した＝採取が動いたまま返った）と
+# SamplingReason（その行の reason=・行が無ければ start_failed・-SampleEtl が無ければ '-'）。
+# 採取を始めた後の失敗の道はランナーが -Cancel で止めて返るので、ここは 0 の道だけを返す（30）
 function Invoke-MeasureRun {
     param(
         [Parameter(Mandatory = $true)][string]$OutDir,
@@ -233,20 +207,17 @@ function Invoke-MeasureRun {
         [Parameter(Mandatory = $true)][string]$Build,
         [string]$BinDir,
         [string]$RustLogExtra,
+        [string]$SampleEtl,
         [string]$Label = 'run'
     )
     $runnerPath = Join-Path $PSScriptRoot 'invoke-perf-run.ps1'
     $ghostRoot   = Get-MeasureGhostRoot
     $balloonRoot = Get-MeasureBalloonRoot
     $attempts = $MEASURE_RUN_RETRY + 1
-    Sync-MeasureWorktreeBuild -Build $Build -BinDir $BinDir
-    if (-not $script:DryRunMode) { Sync-MeasureShioriHelper -BinDir (Get-MeasureBinDir -BinDir $BinDir -Build $Build) }
+    if (-not $script:DryRunMode) { Sync-MeasureShioriHelper -BinDir $BinDir -Build $Build }
 
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
-        Clear-MeasureDryRunDir -Dir $OutDir
-        if (Test-Path -LiteralPath $OutDir) {
-            Stop-Run -Code $EXIT_BAD_ARGS -Message "output folder already exists: $OutDir (each capture makes a new folder. To capture again, delete it; to use the existing artifacts, add -Resume)"
-        }
+        Assert-MeasureRunDirFree -Dir $OutDir
         $arguments = @(
             '-Profile', $RunProfile,
             '-Build', $Build,
@@ -262,15 +233,27 @@ function Invoke-MeasureRun {
         }
         if ($BinDir)       { $arguments += @('-BinDir', $BinDir) }
         if ($RustLogExtra) { $arguments += @('-RustLogExtra', $RustLogExtra) }
+        if ($SampleEtl)    { $arguments += @('-SampleEtl', $SampleEtl) }
 
         Write-Info "[perf-loop] capturing $Label ($attempt/$attempts, level $RunProfile, build $Build, out $OutDir)"
         $result = Invoke-PwshChild -ScriptPath $runnerPath -Arguments $arguments
-        if ($result.Code -eq 0) { return }
+        if ($result.Code -eq 0) {
+            if (-not $SampleEtl) { return [pscustomobject]@{ SamplingStarted = $false; SamplingReason = $PERF_LOOP_EMPTY } }
+            $startCode = Get-MeasureLineWord -Lines $result.Lines -Pattern '^\[invoke-perf-run\] sampling start: code=(-?\d+) '
+            $startWhy  = Get-MeasureLineWord -Lines $result.Lines -Pattern '^\[invoke-perf-run\] sampling start: code=\S+ reason=(\S+)'
+            return [pscustomobject]@{ SamplingStarted = ($startCode -eq '0'); SamplingReason = $(if ($startWhy) { $startWhy } else { 'start_failed' }) }
+        }
+        # ランナーの決まった 1 行 '[invoke-perf-run] moved to: <path>' から失敗した走行の退け先を読む（無ければ $null）
+        $moved = Get-MeasureLineWord -Lines $result.Lines -Pattern '^\[invoke-perf-run\] moved to: (.+?)\s*$'
         if ($result.Code -eq 2) {
-            Stop-Run -Code $EXIT_NOT_QUIET -Message "${Label}: the automatic quiet check did not pass (after waiting and rechecking as many times as goal [quiet] says). The evidence is $MEASURE_FILE_QUIET_BEFORE in the moved folder $OutDir-FAILED."
+            $evidence = if ($moved) { Join-Path $moved $MEASURE_FILE_QUIET_BEFORE } else { "$MEASURE_FILE_QUIET_BEFORE in $OutDir-FAILED*" }
+            Stop-Run -Code $EXIT_NOT_QUIET -Message "${Label}: the automatic quiet check did not pass (after waiting and rechecking as many times as goal [quiet] says). The evidence is $evidence"
         }
         if ($result.Code -eq 3) {
             Stop-Run -Code $EXIT_BAD_ARGS -Message "${Label}: the capture runner stopped on bad arguments or preconditions: $($result.LastLine)"
+        }
+        if (-not $moved -and (Test-Path -LiteralPath $OutDir)) {
+            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "${Label}: the failed run could not be moved aside, so it is not captured again: $OutDir (exit code $($result.Code)): $($result.LastLine)"
         }
         Write-Problem "[perf-loop] $Label failed (exit code $($result.Code)): $($result.LastLine)"
         if ($attempt -lt $attempts) { Write-Info "[perf-loop] capturing once more." }
@@ -288,6 +271,9 @@ function Invoke-MeasureQuietAfter {
     $checkPath = Join-Path $PSScriptRoot 'check-quiet.ps1'
     $retryMax  = Get-MeasureTomlInt -Section 'quiet' -Key 'retry_max' -Default $MEASURE_QUIET_RETRY_MAX_DEFAULT
     $waitSec   = Get-MeasureTomlInt -Section 'quiet' -Key 'retry_wait_sec' -Default $MEASURE_QUIET_RETRY_WAIT_DEFAULT
+    if ($retryMax -lt 0 -or $waitSec -lt 0) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [quiet] retry_max and retry_wait_sec must be 0 or more (got $retryMax / $waitSec)"
+    }
     for ($i = 0; $i -le $retryMax; $i++) {
         $arguments = @('-Stage', 'after', '-OutDir', $RunDir) + (Get-MeasureGoalArgsPwsh)
         $result = Invoke-PwshChild -ScriptPath $checkPath -Arguments $arguments -Quiet
@@ -295,8 +281,15 @@ function Invoke-MeasureQuietAfter {
             Write-Info "[perf-loop] quiet check after the run: quiet ($RunDir\$MEASURE_FILE_QUIET_AFTER)"
             return
         }
+        if ($result.Code -eq 3) {
+            Stop-Run -Code $EXIT_BAD_ARGS -Message "quiet check after the run stopped on bad arguments or settings: $($result.LastLine)"
+        }
         if ($result.Code -eq 4) {
             Stop-Run -Code $EXIT_MEASURE_FAILED -Message "quiet check after the run could not read the performance counters (measure failed): $($result.LastLine)"
+        }
+        # 静かでない（2）のほかは道具が回らなかった（落ちた・起こせない）。待って確かめ直さない
+        if ($result.Code -ne 2) {
+            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "quiet check after the run did not run (exit code $($result.Code), measure failed): $($result.LastLine)"
         }
         Write-Info "[perf-loop] quiet check after the run: not quiet ($($i + 1)/$($retryMax + 1)): $($result.LastLine)"
         if ($i -lt $retryMax) {
@@ -359,7 +352,7 @@ function Get-MeasureShioriHelperPresent {
 #   -Absolute（measure-baseline／final＝**絶対値の合否**を出す走行）… 無ければ 4 で止める。
 #     ヘルパが無いと SHIORI が居らず発話が起きない。発話の無い走行は「アイドル 3.0% 未満」
 #     を満たしやすい**別条件**であり、その合否を台帳へ載せると静かに嘘をつく。
-#     採取ランナーは警告を出すだけで走ってしまう（invoke-perf-run.ps1:709-710）ので、
+#     採取ランナーは警告を出すだけで走ってしまう（invoke-perf-run.ps1 の shiori_helper_present の注記）ので、
 #     絶対値の合否を出す側でここを関門にする。
 #   それ以外（rank-run／measure-ab＝**相対比較**）… 警告と 1 行の記録を残して続ける
 #     （A と B が同じ条件なら差そのものは読める）。
@@ -386,21 +379,21 @@ function Assert-MeasureShioriHelper {
 function Write-MeasureSamplingNote {
     param([Parameter(Mandatory = $true)][string]$RunDir, [bool]$Available, [Parameter(Mandatory = $true)][string]$Reason)
     if (-not (Test-Path -LiteralPath $RunDir -PathType Container)) { return }
+    if ($script:DryRunMode) { return }   # 6: -DryRun の出力先に印のほかのファイルを置かない（次の本番が 3 で止まる）
     $lines = @("available=$(Format-LoopBool $Available)", "reason=$Reason", "time_utc=$(Get-UtcStamp)")
     Set-Content -LiteralPath (Join-Path $RunDir $MEASURE_FILE_SAMPLING) -Value (($lines -join "`n") + "`n") -Encoding utf8 -NoNewline
 }
 
-function Get-MeasureSamplingNote {
+# sampling.txt の reason=（無ければ $null・行が読めなければ probe_failed）。可否は dump.txt の有無で決まるので読まない
+function Get-MeasureSamplingReason {
     param([Parameter(Mandatory = $true)][string]$RunDir)
     $path = Join-Path $RunDir $MEASURE_FILE_SAMPLING
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
-    $available = $false
     $reason = 'probe_failed'
     foreach ($line in (Get-Content -LiteralPath $path -Encoding utf8)) {
-        if ($line -match '^available=(true|false)\s*$') { $available = ($Matches[1] -eq 'true') }
-        elseif ($line -match '^reason=(\S+)\s*$')       { $reason = $Matches[1] }
+        if ($line -match '^reason=(\S+)\s*$') { $reason = $Matches[1] }
     }
-    return [pscustomobject]@{ Available = $available; Reason = $reason }
+    return $reason
 }
 
 # 4 段の順位表（perf-rank.py）。dump.txt が無ければ段③を UNAVAILABLE として続ける
@@ -416,8 +409,8 @@ function Invoke-MeasureRank {
     if (Test-Path -LiteralPath (Join-Path $RunDir $MEASURE_FILE_DUMP) -PathType Leaf) {
         $arguments += @('--sampling-available', 'auto')
     } else {
-        $note = Get-MeasureSamplingNote -RunDir $RunDir
-        $reason = if ($note) { $note.Reason } else { (Get-SamplingProbe).Reason }
+        $reason = Get-MeasureSamplingReason -RunDir $RunDir
+        if (-not $reason) { $reason = 'no_record' }   # 24: 可否の試しは回さない（今の機械の可否は過去の走行の理由ではない）
         $arguments += @('--sampling-available', 'false', '--unavailable-reason', $reason)
         Write-Info "[perf-loop] building the rank table with stage 3 (per-function attribution) as UNAVAILABLE reason=$reason (continuing with stages 1, 2, 4)."
     }
@@ -430,136 +423,6 @@ function Invoke-MeasureRank {
     return $outPath
 }
 
-# =============================================================================
-# A/B のビルドと複製（prepare-ab／measure-ab）
-# =============================================================================
-
-function Test-MeasureBinDirComplete {
-    param([Parameter(Mandatory = $true)][string]$Dir)
-    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return $false }
-    if (-not (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_AREKA_EXE) -PathType Leaf)) { return $false }
-    return (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_BUILD) -PathType Leaf)
-}
-
-# BUILD.txt に書く git の事実（どのツリーから作った実行体かを後から突き合わせるため）。
-function Get-MeasureGitFacts {
-    $git = Get-Command 'git' -ErrorAction SilentlyContinue
-    if (-not $git) { return [pscustomobject]@{ Head = $PERF_LOOP_EMPTY; Dirty = $PERF_LOOP_EMPTY } }
-    $head = Invoke-Child -Exe $git.Source -Arguments @('-C', $repoRoot, 'rev-parse', 'HEAD') -Quiet
-    $stat = Invoke-Child -Exe $git.Source -Arguments @('-C', $repoRoot, 'status', '--porcelain') -Quiet
-    $headText = if ($head.Code -eq 0) { $head.LastLine } else { $PERF_LOOP_EMPTY }
-    $dirty = if ($stat.Code -ne 0) { $PERF_LOOP_EMPTY }
-             elseif ((@($stat.Out) -join '').Trim()) { 'true' }
-             else { 'false' }
-    return [pscustomobject]@{ Head = $headText; Dirty = $dirty }
-}
-
-function Get-MeasureSha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $PERF_LOOP_EMPTY }
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
-# cargo を回す（Cargo.toml には触らない＝記号は環境変数で付ける・要件 2.4／8.6）。
-function Invoke-MeasureCargo {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments, [Parameter(Mandatory = $true)][string]$Label)
-    $cargo = Get-Command 'cargo' -ErrorAction SilentlyContinue
-    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo not found (cannot build A/B)' }
-    $releaseDebug = Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT
-    Write-Info "[perf-loop] ${Label}: cargo $($Arguments -join ' ') (CARGO_PROFILE_RELEASE_DEBUG=$releaseDebug)"
-    return Invoke-Child -Exe $cargo.Source -Arguments $Arguments -Environment @{ CARGO_PROFILE_RELEASE_DEBUG = $releaseDebug }
-}
-
-# 片側（A＝変更前／B＝変更後）の実行体一式を作って小部屋へ複製する。
-# 32bit ヘルパが作れないときは止めずに大きく警告して続ける——A と B を同じ手順で
-# 作る限り条件は揃っており、ヘルパの有無は run-meta.txt と BUILD.txt に残るためである。
-function Invoke-MeasureBuildSide {
-    param(
-        [Parameter(Mandatory = $true)][ValidateSet('A', 'B')][string]$Side,
-        [Parameter(Mandatory = $true)][string]$BinDir
-    )
-    if ($script:ResumeMode -and (Test-MeasureBinDirComplete -Dir $BinDir)) {
-        Write-Info "[perf-loop] -Resume: not recreating the $Side side executable set: $BinDir"
-        return $BinDir
-    }
-    $manifest    = Join-Path $repoRoot 'Cargo.toml'
-    $releaseDir  = Join-Path $repoRoot 'target\release'
-    $helperDir   = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET 'release'))
-    $helperState = 'skipped'
-
-    if ($script:DryRunMode) {
-        Write-Info "[perf-loop] -DryRun: no cargo build for the $Side side (copies the existing target\release if it can)."
-    } else {
-        $build = Invoke-MeasureCargo -Label "$Side side release build" `
-            -Arguments @('build', '--release', '-p', $MEASURE_AREKA_PACKAGE, '--manifest-path', $manifest)
-        if ($build.Code -ne 0) {
-            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "$Side side release build failed (exit code $($build.Code)): $($build.LastLine)"
-        }
-        $helper = Invoke-MeasureCargo -Label "$Side side 32bit SHIORI helper build" `
-            -Arguments @('build', '--release', '-p', $MEASURE_HELPER_PACKAGE, '--target', $MEASURE_HELPER_TARGET, '--manifest-path', $manifest)
-        if ($helper.Code -eq 0) {
-            $helperState = 'built'
-        } else {
-            # 古い（別ツリーの）ヘルパを黙って混ぜない。missing と記して複製もしない
-            # ——絶対値の合否を出す走行（measure-baseline／final）はこれを見て拒む。
-            $helperState = 'missing'
-            Write-Problem "[perf-loop] warning: could not build the 32bit SHIORI helper (exit code $($helper.Code)): $($helper.LastLine)"
-            Write-Problem "[perf-loop] warning: a run without the helper has no real SHIORI and no talk, a different condition (check rustup target add $MEASURE_HELPER_TARGET). If A and B share the condition, the comparison itself still holds."
-        }
-    }
-
-    New-LoopDir -Path $BinDir | Out-Null
-    $exeSrc = Join-Path $releaseDir $MEASURE_AREKA_EXE
-    if (Test-Path -LiteralPath $exeSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $exeSrc -Destination (Join-Path $BinDir $MEASURE_AREKA_EXE) -Force
-    } elseif ($script:DryRunMode) {
-        Write-MeasureDryRunMark -Dir $BinDir -Reason "target\release\$MEASURE_AREKA_EXE does not exist yet (not built under -DryRun)"
-        Write-Info "[perf-loop] -DryRun: placed only the mark for the $Side side copy: $BinDir"
-        return $BinDir
-    } else {
-        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "build passed but the executable is missing: $exeSrc"
-    }
-
-    $pdbSrc = Join-Path $releaseDir $MEASURE_AREKA_PDB
-    $pdbState = 'no_pdb'
-    if (Test-Path -LiteralPath $pdbSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $pdbSrc -Destination (Join-Path $BinDir $MEASURE_AREKA_PDB) -Force
-        $pdbState = $MEASURE_AREKA_PDB
-    } else {
-        Write-Problem "[perf-loop] warning: no PDB ($pdbSrc). Stage 3 (per-function attribution) cannot resolve symbols."
-    }
-
-    $helperSrc = Join-Path $helperDir $MEASURE_HELPER_EXE
-    if ($helperState -eq 'missing') {
-        Write-Problem "[perf-loop] warning: the helper build failed, so it is not copied (BUILD.txt says helper=missing)."
-    } elseif (Test-Path -LiteralPath $helperSrc -PathType Leaf) {
-        Copy-Item -LiteralPath $helperSrc -Destination (Join-Path $BinDir $MEASURE_HELPER_EXE) -Force
-        if ($helperState -eq 'skipped') { $helperState = 'copied' }
-    } else {
-        Write-Problem "[perf-loop] warning: no 32bit SHIORI helper ($helperSrc). The run will have no real SHIORI."
-        $helperState = 'missing'
-    }
-
-    $git = Get-MeasureGitFacts
-    $lines = @(
-        "side=$Side",
-        "time_utc=$(Get-UtcStamp)",
-        "goal=$($script:GoalName)",
-        "git_head=$($git.Head)",
-        "git_dirty=$($git.Dirty)",
-        "release_debug_env=$(Get-MeasureToml -Section 'levels' -Key 'release_debug_env' -Default $MEASURE_RELEASE_DEBUG_DEFAULT)",
-        "exe=$MEASURE_AREKA_EXE",
-        "exe_sha256=$(Get-MeasureSha256 -Path (Join-Path $BinDir $MEASURE_AREKA_EXE))",
-        "pdb=$pdbState",
-        "helper=$helperState",
-        "helper_sha256=$(Get-MeasureSha256 -Path (Join-Path $BinDir $MEASURE_HELPER_EXE))",
-        "dry_run=$(Format-LoopBool $script:DryRunMode)"
-    )
-    Set-Content -LiteralPath (Join-Path $BinDir $MEASURE_FILE_BUILD) -Value (($lines -join "`n") + "`n") -Encoding utf8 -NoNewline
-    foreach ($line in $lines) { Write-Info "  $line" }
-    Write-Info "[perf-loop] $Side side executable set: $BinDir"
-    return $BinDir
-}
 
 # =============================================================================
 # measure-baseline — 25 分 × 1 本（-Build release|dev）
@@ -576,12 +439,16 @@ function Invoke-SubMeasureBaseline {
 
     if ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $dir)) {
         Write-Info "[perf-loop] -Resume: using the existing run: $dir"
-    } elseif (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build) {
-        Invoke-MeasureRun -OutDir $dir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "baseline ($build)"
-        Invoke-MeasureQuietAfter -RunDir $dir
     } else {
-        Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
-        Exit-WithResult -Code $EXIT_OK -Dir $dir
+        # 11: ビルドを先に回してから実行体を確かめる（走行の本体はビルドを呼ばない）
+        Assert-MeasureRunDirFree -Dir $dir
+        Sync-MeasureWorktreeBuild -Build $build -BinDir $script:BinDirArg
+        if (-not (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build)) {
+            Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
+            Exit-WithResult -Code $EXIT_OK -Dir $dir
+        }
+        $null = Invoke-MeasureRun -OutDir $dir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "baseline ($build)"
+        Invoke-MeasureQuietAfter -RunDir $dir
     }
 
     $verdict = Invoke-MeasureJudge -RunDir $dir -Build $build
@@ -594,16 +461,17 @@ function Invoke-SubMeasureBaseline {
 # =============================================================================
 # 点灯した走行は観測行とサンプリングが CPU を押し上げるので**合否には使わない**
 # （Flow 2）。段③が使えない機械では採取を省き、段①②④で順位表を作る。
+# 順位付けの走行の出力先（rank-run と rank が共に使う）: -RunDir → -Date なら baseline-<date>\rank → iter-<n>\rank
+function Get-MeasureRankDir {
+    if ($script:RunDirArg) { return (Resolve-RunDir -RunDir $script:RunDirArg -Kind 'iter') }
+    if ($script:DateStamp) { return (Get-LoopDir -Kind 'baseline' -Date $script:DateStamp -Leaf 'rank') }
+    Assert-MeasureIter
+    return (Get-LoopDir -Kind 'iter' -Iter $script:IterArg -Leaf 'rank')
+}
+
 function Invoke-SubRankRun {
     $build = $script:BuildKind
-    $dir = if ($script:RunDirArg) {
-        Resolve-RunDir -RunDir $script:RunDirArg -Kind 'iter'
-    } elseif ($script:DateStamp) {
-        Get-LoopDir -Kind 'baseline' -Date $script:DateStamp -Leaf 'rank'
-    } else {
-        Assert-MeasureIter
-        Get-LoopDir -Kind 'iter' -Iter $script:IterArg -Leaf 'rank'
-    }
+    $dir = Get-MeasureRankDir
     $script:CurrentDir = $dir
     $shortProfile = Get-MeasureToml -Section 'levels' -Key 'short_profile' -Default $MEASURE_SHORT_PROFILE_DEFAULT
 
@@ -615,60 +483,67 @@ function Invoke-SubRankRun {
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
 
+    Assert-MeasureRunDirFree -Dir $dir
+    Sync-MeasureWorktreeBuild -Build $build -BinDir $script:BinDirArg
     if (-not (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build)) {
         Write-MeasureDryRunMark -Dir $dir -Reason "no executable, so the run was skipped (-DryRun)"
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
 
     # --- 段③（サンプリング）の可否を先に確かめる -----------------------------
+    # 採取を始めるのはランナー（静かさの確かめの後・areka を起こす直前）。ここは -Start を呼ばない（1・9）
     $samplePath = Join-Path $PSScriptRoot 'invoke-cpu-sample.ps1'
     $etlPath = Join-Path (Split-Path -Parent $dir) ((Split-Path -Leaf $dir) + $MEASURE_TRACE_SUFFIX)
-    $sampling = $false
-    $reason = 'ok'
+    $sampleEtl = ''
+    $reason = 'dry_run'
     if ($script:DryRunMode) {
-        $reason = 'dry_run'
         Write-Info '[perf-loop] -DryRun: no stage 3 (sampling).'
     } else {
         $probe = Get-SamplingProbe
-        if (-not $probe.Available) {
-            $reason = $probe.Reason
-            Write-Info "[perf-loop] stage 3 unavailable: reason=$reason. Skipping the capture and continuing with stages 1, 2, 4 (not a reason to stop)."
-        } else {
+        $reason = $probe.Reason
+        if ($probe.Available) {
             New-LoopDir -Path (Split-Path -Parent $etlPath) | Out-Null
-            $start = Invoke-PwshChild -ScriptPath $samplePath -Arguments @('-Start', '-Etl', $etlPath)
-            if ($start.Code -eq 0) {
-                $sampling = $true
-                Write-Info "[perf-loop] stage 3 capture started: $etlPath"
-            } else {
-                $reason = if ($start.Code -eq $EXIT_UNAVAILABLE) { 'not_elevated' } else { 'start_failed' }
-                Write-Problem "[perf-loop] could not start the stage 3 capture (exit code $($start.Code), reason=$reason): $($start.LastLine)"
-            }
+            $sampleEtl = $etlPath
+        } else {
+            Write-Info "[perf-loop] stage 3 unavailable: reason=$reason. Skipping the capture and continuing with stages 1, 2, 4 (not a reason to stop)."
         }
     }
+    $pdbDir = Get-MeasureBinDir -BinDir $script:BinDirArg -Build $build
 
-    # --- 順位付けの走行（点灯） ----------------------------------------------
-    Invoke-MeasureRun -OutDir $dir -RunProfile $shortProfile -Build $build -BinDir $script:BinDirArg `
-        -RustLogExtra $MEASURE_RANK_RUSTLOG_EXTRA -Label 'rank run'
-    Assert-MeasureShioriHelper -RunDir $dir -Label 'rank run' | Out-Null
+    # --- 順位付けの走行（点灯・可否が真ならランナーが採取を始める） -----------
+    $run = Invoke-MeasureRun -OutDir $dir -RunProfile $shortProfile -Build $build -BinDir $script:BinDirArg `
+        -RustLogExtra $MEASURE_RANK_RUSTLOG_EXTRA -SampleEtl $sampleEtl -Label 'rank run'
 
-    # --- 段③の停止と記号解決 -------------------------------------------------
-    if ($sampling) {
-        $pdbDir = Get-MeasureBinDir -BinDir $script:BinDirArg -Build $build
+    # --- 段③の停止と記号解決（採取が動いたまま返ったら次の 1 手で必ず止める） ---
+    $sampling = $false
+    if ($run.SamplingStarted) {
         $stopArgs = @('-Stop', '-Etl', $etlPath, '-Out', (Join-Path $dir $MEASURE_FILE_DUMP), '-PdbDir', $pdbDir)
-        if ($script:GoalFilePath) { $stopArgs += @('-GoalFile', $script:GoalFilePath) }
         $stop = Invoke-PwshChild -ScriptPath $samplePath -Arguments $stopArgs
         if ($stop.Code -eq 0) {
+            $sampling = $true
             $reason = 'ok'
         } elseif ($stop.Code -eq $EXIT_UNAVAILABLE) {
-            $sampling = $false
-            $reason = 'no_xperf'
+            $reason = Get-MeasureLineWord -Lines $stop.Lines -Pattern '^INVOKE-CPU-SAMPLE RESULT stop code=\S+ .*\breason=(\S+)'
+            if (-not $reason) { $reason = 'no_xperf' }
             Write-Problem "[perf-loop] stage 3 symbol resolution not possible, capability missing (reason=$reason). Continuing with stages 1, 2, 4."
+        } elseif ($stop.Code -eq $EXIT_BAD_ARGS) {
+            # 3 は採取を止めた後の前提の不備（-PdbDir・記号の置き場）。そのまま 3（直して -Stop を打ち直せばまとめた物を読む）
+            Stop-Run -Code $EXIT_BAD_ARGS -Message "stage 3 symbol resolution stopped on bad arguments or preconditions: $($stop.LastLine)"
+        } elseif ($stop.Code -eq -1) {
+            Write-Problem "[perf-loop] warning: the kernel CPU sampling may still be running. Run 'xperf -stop' in an elevated PowerShell by hand."
+            Stop-Run -Code $EXIT_MEASURE_FAILED -Message "could not start invoke-cpu-sample.ps1 -Stop: $($stop.LastLine)"
         } else {
+            # -Stop は -d が落ちても自分で -stop を打つが、それより前に落ちたなら採取が残っていることがある
+            Write-Problem "[perf-loop] warning: if 'xperf -loggers' still lists NT Kernel Logger and no other tool is sampling, run 'xperf -stop' in an elevated PowerShell by hand."
             Stop-Run -Code $EXIT_MEASURE_FAILED `
                 -Message "stage 3 symbol resolution failed (invoke-cpu-sample.ps1 exit code $($stop.Code)): $($stop.LastLine)"
         }
+    } elseif ($sampleEtl) {
+        $reason = $run.SamplingReason
+        Write-Problem "[perf-loop] the runner could not start the stage 3 capture (reason=$reason). Continuing with stages 1, 2, 4."
     }
     Write-MeasureSamplingNote -RunDir $dir -Available $sampling -Reason $reason
+    Assert-MeasureShioriHelper -RunDir $dir -Label 'rank run' | Out-Null
 
     Invoke-MeasureQuietAfter -RunDir $dir
     Invoke-MeasureRank -RunDir $dir | Out-Null
@@ -679,21 +554,14 @@ function Invoke-SubRankRun {
 # rank — 既にある走行から順位表だけを作り直す
 # =============================================================================
 function Invoke-SubRank {
-    $dir = if ($script:RunDirArg) {
-        Resolve-RunDir -RunDir $script:RunDirArg -Kind 'iter'
-    } elseif ($script:DateStamp) {
-        Get-LoopDir -Kind 'baseline' -Date $script:DateStamp -Leaf 'rank'
-    } else {
-        Assert-MeasureIter
-        Get-LoopDir -Kind 'iter' -Iter $script:IterArg -Leaf 'rank'
-    }
+    $dir = Get-MeasureRankDir
     $script:CurrentDir = $dir
     Write-Info "[perf-loop] rank run $dir"
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
         Stop-Run -Code $EXIT_BAD_ARGS -Message "run output folder not found: $dir (check -RunDir or -Iter)"
     }
     $rankPath = Join-Path $dir $MEASURE_FILE_RANK
-    if ($script:ResumeMode -and (Test-ResumeArtifact -Path $rankPath -Resume)) {
+    if (Test-ResumeArtifact -Path $rankPath -Resume:$script:ResumeMode) {
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
     if ($script:DryRunMode -and -not (Test-Path -LiteralPath (Join-Path $dir $MEASURE_FILE_RUN_LOG) -PathType Leaf)) {
@@ -729,24 +597,11 @@ function Invoke-SubMeasureAb {
     $binA = Join-Path $iterDir $MEASURE_SIDE_LEAF['A']
     $binB = Join-Path $iterDir $MEASURE_SIDE_LEAF['B']
     $shortProfile = Get-MeasureToml -Section 'levels' -Key 'short_profile' -Default $MEASURE_SHORT_PROFILE_DEFAULT
-    $abBuild = Get-MeasureToml -Section 'levels' -Key 'iteration_build' -Default $MEASURE_ITER_BUILD_DEFAULT
+    $abBuild = Get-MeasureAbBuild
     $sequence = Get-MeasureTomlArray -Section 'levels' -Key 'ab_sequence' -Default $MEASURE_AB_SEQUENCE_DEFAULT
-
-    if ($abBuild -ne 'release') {
-        # A/B のビルドは release 固定（判定式⑷a が release の式＝要件 5.3）。
-        # 目標定義が別の値を書いていたら、黙って release を作らずここで止める。
-        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [levels] iteration_build accepts only release (got: '$abBuild'). A/B executables are built as release (formula (4)a is the release formula, requirement 5.3)."
-    }
     Write-Info "[perf-loop] measure-ab iter $($script:IterArg) / level $shortProfile / build $abBuild / order $($sequence -join ' ')"
 
-    if (-not (Test-MeasureBinDirComplete -Dir $binA) -and -not $script:DryRunMode) {
-        Stop-Run -Code $EXIT_BAD_ARGS -Message "A side executable set not found: $binA (run prepare-ab -Iter $($script:IterArg) before making the change)"
-    }
-
-    # B 側（＝いまのツリー）を作る
-    Invoke-MeasureBuildSide -Side 'B' -BinDir $binB | Out-Null
-
-    # 走行の名前（A→A1, B→B1, A→A2, B→B2）。名前は出力先の語彙に無ければ止める。
+    # 走行の名前（A→A1, B→B1, A→A2, B→B2）。名前は出力先の語彙に無ければ止める。B を作る前に確かめる。
     $counts = @{ 'A' = 0; 'B' = 0 }
     $runs = @()
     foreach ($side in $sequence) {
@@ -761,6 +616,23 @@ function Invoke-SubMeasureAb {
         }
         $runs += [pscustomobject]@{ Name = $name; Side = $key; Dir = (Join-Path $iterDir $name) }
     }
+    if ($counts['A'] -ne 2 -or $counts['B'] -ne 2) {
+        # 34: 4 本の突き合わせは A と B が 2 本ずつのときだけ成り立つ
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [levels] ab_sequence must have A and B exactly twice each (got: $($sequence -join ' '))"
+    }
+
+    if (-not (Test-MeasureBinDirComplete -Dir $binA) -and -not $script:DryRunMode) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "A side executable set not found: $binA (run prepare-ab -Iter $($script:IterArg) before making the change)"
+    }
+
+    # 走る出力先が空いていることを B を作る前に確かめる（-Resume で使う済みの走行は除く）
+    foreach ($run in $runs) {
+        if (-not ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $run.Dir))) { Assert-MeasureRunDirFree -Dir $run.Dir }
+    }
+
+    # B 側（＝いまのツリー）を作り、A と同じ実行体なら走る前に止める（-DryRun では比べない・15）
+    Invoke-MeasureBuildSide -Side 'B' -BinDir $binB | Out-Null
+    if (-not $script:DryRunMode) { Assert-MeasureAbDistinct -BinA $binA -BinB $binB }
 
     foreach ($run in $runs) {
         if ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $run.Dir)) {
@@ -772,7 +644,7 @@ function Invoke-SubMeasureAb {
             Write-MeasureDryRunMark -Dir $run.Dir -Reason "no $($run.Side) side executable, so the run was skipped (-DryRun)"
             continue
         }
-        Invoke-MeasureRun -OutDir $run.Dir -RunProfile $shortProfile -Build $abBuild -BinDir $binDir -Label "run $($run.Name)"
+        $null = Invoke-MeasureRun -OutDir $run.Dir -RunProfile $shortProfile -Build $abBuild -BinDir $binDir -Label "run $($run.Name)"
         Assert-MeasureShioriHelper -RunDir $run.Dir -Label "run $($run.Name)" | Out-Null
         Invoke-MeasureQuietAfter -RunDir $run.Dir
     }
@@ -785,6 +657,16 @@ function Invoke-SubMeasureAb {
 # =============================================================================
 # compare — A B A B の 4 本から差とばらつきを出して採否を返す
 # =============================================================================
+# 目標定義 [levels] iteration_build を小文字にそろえて読む（判定へ渡る --build は dev／release だけを字のまま受ける）。
+# A/B のビルドは release 固定（判定式⑷a が release の式＝要件 5.3）。別の値なら走る前に 3 で止める（measure-ab・compare とも）
+function Get-MeasureAbBuild {
+    $abBuild = (Get-MeasureToml -Section 'levels' -Key 'iteration_build' -Default $MEASURE_ITER_BUILD_DEFAULT).ToLowerInvariant()
+    if ($abBuild -ne 'release') {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [levels] iteration_build accepts only release (got: '$abBuild'). A/B executables are built as release (formula (4)a is the release formula, requirement 5.3)."
+    }
+    return $abBuild
+}
+
 function Invoke-MeasureCompareCore {
     param([Parameter(Mandatory = $true)][string]$IterDir)
     $a1 = Join-Path $IterDir 'A1'
@@ -799,7 +681,7 @@ function Invoke-MeasureCompareCore {
         }
         Stop-Run -Code $EXIT_MEASURE_FAILED -Message "run artifacts not found: $dir\$MEASURE_FILE_RUN_LOG"
     }
-    $abBuild = Get-MeasureToml -Section 'levels' -Key 'iteration_build' -Default $MEASURE_ITER_BUILD_DEFAULT
+    $abBuild = Get-MeasureAbBuild
     $arguments = @(
         (Join-Path $PSScriptRoot 'perf-compare.py'),
         '--a', $a1, $a2,
@@ -821,6 +703,8 @@ function Invoke-SubCompare {
     $iterDir = Get-LoopDir -Kind 'iter' -Iter $script:IterArg
     $script:CurrentDir = $iterDir
     Write-Info "[perf-loop] compare iter $($script:IterArg) / $iterDir"
+    # 周の作業場そのものが無いのは -Iter の打ち間違い（計測の失敗の 4 にしない）
+    if (-not (Test-Path -LiteralPath $iterDir -PathType Container)) { Stop-Run -Code $EXIT_BAD_ARGS -Message "iteration folder not found: $iterDir (check -Iter)" }
     Invoke-MeasureCompareCore -IterDir $iterDir
     Exit-WithResult -Code $EXIT_OK -Dir $iterDir
 }
@@ -833,7 +717,7 @@ function Invoke-SubCompare {
 #
 # **中止と判定を取り違えないこと**: invoke-followup-checks.ps1 は中止のときにも
 #   FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=-
-# の 1 行を出す（invoke-followup-checks.ps1:222-231 の Stop-Run）。行が在ることだけを
+# の 1 行を出す（invoke-followup-checks.ps1 の Stop-Run）。行が在ることだけを
 # 見て 0 を返すと、**起動できなかった走行が「判定できた」ことになる**。
 # 判定まで届いた印は次の 2 つが揃うこと:
 #   ⒜ judge-followup.py が書く followup-verdict.txt が在る
@@ -850,18 +734,35 @@ function Test-MeasureFollowupComplete {
     return (Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_FOLLOWUP_VERDICT) -PathType Leaf)
 }
 
+# 判定まで届いたか（上の ⒜⒝）。RESULT 行は子の全部の行の最後のもの（理由の行は標準エラーへ出る）。
+# 戻り: Reached・ResultLine・Why（届かなかった理由の語・届いたら空）
+function Test-FollowupReachedVerdict {
+    param([string[]]$Lines = @(), [Parameter(Mandatory = $true)][string]$Dir)
+    $resultLine = $null
+    foreach ($line in $Lines) { if ($line -match '^FOLLOWUP RESULT ') { $resultLine = $line.Trim() } }
+    $judged = Test-Path -LiteralPath (Join-Path $Dir $MEASURE_FILE_FOLLOWUP_VERDICT) -PathType Leaf
+    $abortShape = ($resultLine -and ($resultLine -match 'clickthrough=-\s+drag=-\s+dpi=-\s+balloon_follow=-'))
+    $why = if (-not $resultLine) { 'no result line' }
+           elseif ($abortShape)  { 'the result line has the abort shape (all 4 checks are -)' }
+           elseif (-not $judged) { "no verdict output ($MEASURE_FILE_FOLLOWUP_VERDICT)" }
+           else                  { '' }
+    return [pscustomobject]@{ Reached = ($why -eq ''); ResultLine = $resultLine; Why = $why }
+}
+
+# 順（13）: -Resume の済み → 目標定義の検査の集合 → -DryRun → 実行体（-BinDir／bin-B／無ければビルドして
+# target\release）→ 検体の在り処 → 検査。済んだ -Resume と -DryRun は外を何も呼ばない。
 function Invoke-SubFollowup {
     Assert-MeasureIter
     $iterDir = Get-LoopDir -Kind 'iter' -Iter $script:IterArg
     $dir = Join-Path $iterDir 'followup'
     $script:CurrentDir = $dir
-    Sync-MeasureWorktreeBuild -Build 'release' -BinDir $script:BinDirArg
-    $binDir = if ($script:BinDirArg) {
-        [System.IO.Path]::GetFullPath($script:BinDirArg).TrimEnd('\')
-    } else {
-        $candidate = Join-Path $iterDir $MEASURE_SIDE_LEAF['B']
-        if (Test-Path -LiteralPath (Join-Path $candidate $MEASURE_AREKA_EXE) -PathType Leaf) { $candidate }
-        else { Get-MeasureBinDir -Build 'release' }
+    if (Test-MeasureFollowupComplete -Dir $dir) {
+        if ($script:ResumeMode) {
+            Write-Info "[perf-loop] -Resume: using the existing followup verdict: $dir"
+            Exit-WithResult -Code $EXIT_OK -Dir $dir
+        }
+        # 済んだ判定を黙って消さない（ほかの走行の出力先と同じ決まり）
+        Stop-Run -Code $EXIT_BAD_ARGS -Dir $dir -Message "output folder already has a followup verdict: $dir (to check again, delete it; to use it, add -Resume)"
     }
     $exitMs = Get-MeasureTomlInt -Section 'followup' -Key 'exit_ms' -Default $MEASURE_FOLLOWUP_EXIT_MS_DEFAULT
     # 必須の検査は目標定義 [followup] required が唯一の所在（要件 1.1）。ここで読んで
@@ -878,34 +779,33 @@ function Invoke-SubFollowup {
     }
     # 並びは固定語彙の順に揃える（目標定義の書き順で報告の並びが揺れないように）。
     $checksArg = (@($MEASURE_FOLLOWUP_CHECKS_ALL | Where-Object { $checks -contains $_ }) -join ',')
-
-    $checkerPath = Join-Path $PSScriptRoot 'invoke-followup-checks.ps1'
-    $arguments = @(
-        '-OutDir', $dir,
-        '-BinDir', $binDir,
-        '-ExitMs', "$exitMs",
-        '-Checks', $checksArg,
-        '-GhostRoot', (Get-MeasureGhostRoot),
-        '-BalloonRoot', (Get-MeasureBalloonRoot)
-    )
+    $candidate = Join-Path $iterDir $MEASURE_SIDE_LEAF['B']
+    # bin-B は揃った一式（BUILD.txt が在り、-DryRun の写しでない）のときだけ使う
+    $useTarget = (-not $script:BinDirArg) -and -not (Test-MeasureBinDirComplete -Dir $candidate)
+    $binDir = if ($script:BinDirArg) { [System.IO.Path]::GetFullPath($script:BinDirArg).TrimEnd('\') }
+              elseif ($useTarget)    { Get-MeasureBinDir -Build 'release' }
+              else                   { $candidate }
+    # 渡された -BinDir に実行体が無ければ検査の子を起こさずに 3（打つべきビルドを示す。-DryRun では止めない）
+    if ($script:BinDirArg) { $null = Test-MeasureExeReady -BinDir $binDir -Build 'release' }
+    $arguments = @('-OutDir', $dir, '-BinDir', $binDir, '-ExitMs', "$exitMs", '-Checks', $checksArg)
     Write-Info "[perf-loop] followup iter $($script:IterArg) / exe $binDir / checks $checksArg / limit $exitMs ms / out $dir"
-    Write-Info "[perf-loop] followup checker call: invoke-followup-checks.ps1 $($arguments -join ' ')"
-
-    if ($script:ResumeMode -and (Test-MeasureFollowupComplete -Dir $dir)) {
-        Write-Info "[perf-loop] -Resume: using the existing followup verdict: $dir"
-        Exit-WithResult -Code $EXIT_OK -Dir $dir
-    }
     if ($script:DryRunMode) {
         Write-MeasureDryRunMark -Dir $dir -Reason ('followup checks are not run under -DryRun (they need a real run and input injection). ' +
-            "arguments to pass: invoke-followup-checks.ps1 $($arguments -join ' ')")
+            "arguments to pass: invoke-followup-checks.ps1 $($arguments -join ' ') -GhostRoot <sample> -BalloonRoot <sample>")
         Write-Info '[perf-loop] -DryRun: followup checks were not run.'
         Exit-WithResult -Code $EXIT_OK -Dir $dir
     }
+    if ($useTarget) { Sync-MeasureWorktreeBuild -Build 'release' }
+    # 検査の子はヘルパを写さないので、実 SHIORI を伴うようここで隣へそろえる（走行の Invoke-MeasureRun と同じ口）
+    Sync-MeasureShioriHelper -BinDir $(if ($useTarget) { '' } else { $binDir }) -Build 'release'
+    $arguments += @('-GhostRoot', (Get-MeasureGhostRoot), '-BalloonRoot', (Get-MeasureBalloonRoot))
+    $checkerPath = Join-Path $PSScriptRoot 'invoke-followup-checks.ps1'
+    Write-Info "[perf-loop] followup checker call: invoke-followup-checks.ps1 $($arguments -join ' ')"
     $attempts = $MEASURE_RUN_RETRY + 1
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
-        # 前の回の置き土産（中止したときの followup.txt・古い判定）を残さない。
+        # 前の回の置き土産（中止したときの followup.txt・古い判定・-DryRun の印）を残さない。
         # 残すと「今回の判定」と取り違える。
-        foreach ($stale in @($MEASURE_FILE_FOLLOWUP, $MEASURE_FILE_FOLLOWUP_VERDICT)) {
+        foreach ($stale in @($MEASURE_FILE_FOLLOWUP, $MEASURE_FILE_FOLLOWUP_VERDICT, $MEASURE_FILE_DRYRUN)) {
             $stalePath = Join-Path $dir $stale
             if (Test-Path -LiteralPath $stalePath -PathType Leaf) { Remove-Item -LiteralPath $stalePath -Force }
         }
@@ -914,18 +814,12 @@ function Invoke-SubFollowup {
         if ($result.Code -eq 3) {
             Stop-Run -Code $EXIT_BAD_ARGS -Message "followup checks stopped on bad arguments or preconditions: $($result.LastLine)" -Dir $dir
         }
-        $resultLine = $null
-        foreach ($line in $result.Lines) { if ($line -match '^FOLLOWUP RESULT ') { $resultLine = $line.Trim() } }
-        $judged = Test-Path -LiteralPath (Join-Path $dir $MEASURE_FILE_FOLLOWUP_VERDICT) -PathType Leaf
-        $abortShape = ($resultLine -and ($resultLine -match 'clickthrough=-\s+drag=-\s+dpi=-\s+balloon_follow=-'))
-        if ($resultLine -and $judged -and -not $abortShape) {
-            Write-Info "[perf-loop] $resultLine"
+        $verdict = Test-FollowupReachedVerdict -Lines $result.Lines -Dir $dir
+        if ($verdict.Reached) {
+            Write-Info "[perf-loop] $($verdict.ResultLine)"
             Exit-WithResult -Code $EXIT_OK -Dir $dir
         }
-        $why = if (-not $resultLine) { 'no result line' }
-               elseif ($abortShape)  { 'the result line has the abort shape (all 4 checks are -)' }
-               else                  { "no verdict output ($MEASURE_FILE_FOLLOWUP_VERDICT)" }
-        Write-Problem "[perf-loop] followup checks did not reach a verdict (exit code $($result.Code), $why): $($result.LastLine)"
+        Write-Problem "[perf-loop] followup checks did not reach a verdict (exit code $($result.Code), $($verdict.Why)): $($result.LastLine)"
         if ($attempt -lt $attempts) { Write-Info '[perf-loop] running once more.' }
     }
     Stop-Run -Code $EXIT_MEASURE_FAILED -Message "followup checks did not reach a verdict in all $attempts tries (MEASURE_FAILED)" -Dir $dir
@@ -938,31 +832,51 @@ function Invoke-SubFollowup {
 # （25 分 × 2 は check-in を跨ぐ＝要件 1.11）、2 本目は -Resume を付けて回すと
 # 済んだ方を採り直さない。判定の出力は spec の results へも写す（要件 5.6）。
 function Invoke-SubFinal {
+    # 10: 1 つの実行体を release と dev の 2 つのビルドとして測らない
+    if ($script:BinDirArg -and -not $script:BuildExplicit) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message 'final with -BinDir needs -Build (one executable cannot be measured as both builds)'
+    }
     $dir = Resolve-RunDir -RunDir $script:RunDirArg -Kind 'final' -Date $script:DateStamp
     $script:CurrentDir = $dir
     $longProfile = Get-MeasureToml -Section 'levels' -Key 'long_profile' -Default $MEASURE_LONG_PROFILE_DEFAULT
     $builds = if ($script:BuildExplicit) {
         @($script:BuildKind)
     } else {
-        Get-MeasureTomlArray -Section 'target' -Key 'builds_final' -Default $MEASURE_BUILDS_FINAL_DEFAULT
+        # 4: 目標定義の語も小文字にそろえる（判定へ渡る --build は dev／release だけを受ける）
+        @(Get-MeasureTomlArray -Section 'target' -Key 'builds_final' -Default $MEASURE_BUILDS_FINAL_DEFAULT | ForEach-Object { $_.ToLowerInvariant() })
     }
     Write-Info "[perf-loop] final goal $($script:GoalName) / level $longProfile / build $($builds -join ', ') / out $dir"
 
-    $summary = @()
+    # 語は 1 本目を測る前に全部確かめる（2 本目の打ち間違いで 1 本目の 25 分を捨てない）
     foreach ($build in $builds) {
         if ($BUILD_KINDS -notcontains $build) {
             Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [target] builds_final has a value other than dev/release: '$build'" -Dir $dir
         }
+    }
+    if (@($builds | Sort-Object -Unique).Count -ne @($builds).Count) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Message "goal [target] builds_final names a build twice: $($builds -join ', ')" -Dir $dir
+    }
+    # どのビルドの出力先も空いていることを 1 本目を測る前に確かめる（-Resume で使う済みの走行は除く）
+    foreach ($build in $builds) {
+        $buildDir = Join-Path $dir $build
+        if (-not ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $buildDir))) { Assert-MeasureRunDirFree -Dir $buildDir }
+    }
+
+    $summary = @()
+    foreach ($build in $builds) {
         $buildDir = Join-Path $dir $build
         if ($script:ResumeMode -and (Test-MeasureRunComplete -Dir $buildDir)) {
             Write-Info "[perf-loop] -Resume: using the existing run: $buildDir"
-        } elseif (Test-MeasureExeReady -Build $build) {
-            Invoke-MeasureRun -OutDir $buildDir -RunProfile $longProfile -Build $build -Label "final verdict ($build)"
-            Invoke-MeasureQuietAfter -RunDir $buildDir
         } else {
-            Write-MeasureDryRunMark -Dir $buildDir -Reason "no executable, so the run was skipped (-DryRun)"
-            $summary += "final build=$build verdict=$PERF_LOOP_EMPTY dir=$buildDir"
-            continue
+            Assert-MeasureRunDirFree -Dir $buildDir
+            Sync-MeasureWorktreeBuild -Build $build -BinDir $script:BinDirArg
+            if (-not (Test-MeasureExeReady -BinDir $script:BinDirArg -Build $build)) {
+                Write-MeasureDryRunMark -Dir $buildDir -Reason "no executable, so the run was skipped (-DryRun)"
+                $summary += "final build=$build verdict=$PERF_LOOP_EMPTY dir=$buildDir"
+                continue
+            }
+            $null = Invoke-MeasureRun -OutDir $buildDir -RunProfile $longProfile -Build $build -BinDir $script:BinDirArg -Label "final verdict ($build)"
+            Invoke-MeasureQuietAfter -RunDir $buildDir
         }
         $verdict = Invoke-MeasureJudge -RunDir $buildDir -Build $build
         Copy-MeasureVerdictToResults -RunDir $buildDir -Build $build
@@ -980,7 +894,9 @@ function Copy-MeasureVerdictToResults {
     if (-not $script:GoalConfig.SpecDir -or -not $script:GoalConfig.ResultsDir) { return }
     $source = Join-Path $RunDir $MEASURE_FILE_VERDICT
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { return }
-    $stamp = Get-LoopDateStamp
+    # 写し先の日付は走行の出力先（final-<date>\<build>）の日付。-RunDir で前の final を読み直しても今日の日付にしない
+    $finalLeaf = Split-Path -Leaf (Split-Path -Parent $RunDir)
+    $stamp = if ($finalLeaf -match '^final-(\d{8})$') { $Matches[1] } else { Get-LoopDateStamp }
     $target = Join-Path (Join-Path (Join-Path $repoRoot $script:GoalConfig.SpecDir) $script:GoalConfig.ResultsDir) `
         (Join-Path "final-$stamp" $Build)
     New-LoopDir -Path $target | Out-Null
