@@ -78,9 +78,9 @@ pub struct SizePx {
 pub struct ScopeInput {
     /// スコープ番号（0=本体・1=相方・…）。
     pub scope: usize,
-    /// キャラ surface の原寸（物理 px・emo 採寸由来）。
+    /// キャラ surface の k₀ 倍後の物理寸（物理 px・emo 採寸由来）。
     pub char_size: SizePx,
-    /// バルーン surface の原寸（物理 px）。
+    /// バルーン surface の k₀ 倍後の物理寸（物理 px・emo 採寸由来）。
     pub balloon_size: SizePx,
 }
 
@@ -99,7 +99,8 @@ pub struct ScopePlacement {
     /// `windowposition.limit` による作業領域内への補正は下流の関門が所有する
     /// （起動時＝`main.rs` の `restore_merged_placements` が呼ぶ
     /// `balloon_limit::apply_balloon_limit`／実行時＝
-    /// `follow::window_move::enqueue_window_set_pos` の runtime 関門）。
+    /// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグの
+    /// 解放時＝`follow::drag_follow::on_balloon_drag_end`）。
     pub balloon_pos: PointPx,
     /// バルーン窓寸（入力の転記）。
     pub balloon_size: SizePx,
@@ -124,7 +125,7 @@ pub struct ScopePlacement {
     /// このスコープの `windowposition.limit` 解決値（正典既定 `true`＝画面内へ維持する）。
     ///
     /// resolver は**判定も補正もしない**——`ScopeConfig.balloon_limit` を転記して
-    /// 下流（起動時関門・spawn の `BalloonLimit` Component）へ運ぶだけの欄である
+    /// 下流（起動時関門・バルーン窓の `BalloonLimit` Component＝spawn で付け、`reseed::reinstall_balloon` などの置き直しで入れ直す）へ運ぶだけの欄である
     /// （design C4 Responsibilities「resolver は判定せず運ぶだけ」）。
     pub balloon_limit: bool,
     /// このスコープの解決済みアンカー種別（5 値・単一真実源）。
@@ -147,7 +148,7 @@ pub struct ScopePlacement {
     /// `persist::merge_scope`）。要件 4.7 は While 節（状態）ゆえ、**セッション中に**
     /// 保存値が生まれたとき（バルーン単独ドラッグの DragEnd 書込）も同じ観測点で素材が
     /// 退役する（`follow::drag_follow::retire_keyword_base_on_save`）——起動時の規則
-    /// だけでは状態条件を満たさない（task 4.6）。
+    /// だけでは状態条件を満たさない。
     ///
     /// # なぜ「採寸した寸」ではなく「実表示寸」で導出し直す必要があるのか
     ///
@@ -175,8 +176,8 @@ pub struct ScopePlacement {
 ///
 /// 消費者が 2 つあるからである: P5（[`resolve_placement`]・採寸寸での初期解決）と、
 /// 実表示寸確定時の一度きりの再導出（`follow::window_move::resize_window_to`）。
-/// 幾何を書き写すと片方だけ直したときに静かに割れる（`clamp_axis` を
-/// `balloon_limit.rs` へ逐語再掲した件で既に登記済みのドリフト面と同型）。
+/// 幾何を書き写すと片方だけ直したときに静かに割れる（`clamp_axis` も同じ理由で
+/// 1 つにし、`balloon_limit.rs`・`persist.rs` から呼ぶ）。
 ///
 /// - 水平: `char_x + (char_w − balloon_w) / 2`（中点は整数除算＝0 方向切り捨て・DD8。
 ///   丸め権威の新設ではない）
@@ -215,15 +216,23 @@ pub fn keyword_balloon_pos(
 /// 既定位置解決（純粋関数・パニックしない・入力順のまま返す・出力長＝入力長）。
 ///
 /// 配置規則（design「placement::resolver」正本）:
-/// - **P1（Y・bottom）**: `alignment=Bottom|Seam(_)` のとき `y = work_area.bottom − h`。
-///   `default_y`（defaulttop/defaulty）は無視（2.4）。
+/// - **P1（Y・bottom）**: `anchor=Bottom`（`alignment=Bottom` と知らない Seam 値）のとき
+///   `y = work_area.bottom − h`。`default_y`（defaulttop/defaulty）は無視（2.4）。
+/// - **P1'（上・左・右の辺）**: 最初の位置を吸着の辺（[`Anchor::from_alignment`]）と同じ辺で
+///   解く。`Top` は x が P2 の連なり・`y = work_area.top`。`Left` は `x = work_area.left`、
+///   `Right` は `x = work_area.right − w` で、y は辺ごとに下から上へ連ねる
+///   （`y(0) = bottom − h(0)`・`y(n) = y(n−1) − h(n)`・クランプ後の値で連ねる）。
+///   左右の辺のスコープは P2 の横の連なりを進めず、`default_x`／`default_y` は使わない。
+///   窓寸が作業領域に収まるとき、どの辺も、解いた位置は `follow::project_anchor` を
+///   通しても動かない（べき等。収まらない窓では成り立つとは限らない）。
+///   作業領域が変わったときに辺へ沿わせ直す所は持たない（`window-snap` の件 1）。
 /// - **P2（X・bottom・連鎖基準）**: `base_x(0) = work_area.right − w(0)`、
 ///   `base_x(n≥1) = char_x(n−1) − w(n)`（**自スコープの幅**を引く＝隣接・隣接ペアの
-///   隙間 0・scg 2.1/2.2）。
+///   隙間 0・areka-P0-scope-chain-gap 2.1/2.2）。
 ///   `char_x(n) = base_x(n) − default_x(n).unwrap_or(0)`（左方向オフセット・
 ///   0＝基準密着・2.10・DD3）。連鎖の `char_x(n−1)` は **P4 クランプ後**の実配置
 ///   （後続スコープは前スコープの実際の位置の左隣に置く）。
-///   なお旧 `window-placement` R2.9（前スコープの幅を引く）は本仕様
+///   なお旧 `window-placement` R2.9（前スコープの幅を引く）は
 ///   areka-P0-scope-chain-gap で上書きされた（`doc/COMPAT_ARCHITECTURE.md` §8 参照）。
 /// - **P3（free・DD10）**: `alignment=Free` のとき原点は **work area 左上**。
 ///   `char_x = work_area.left + default_x`／`char_y = work_area.top + default_y`。
@@ -235,7 +244,8 @@ pub fn keyword_balloon_pos(
 ///   の語彙解決値）で分岐する。
 ///   - `Side`（数値指定・未指定＝現行挙動・windowposition-limit 4.5/5.2 で**不変**）:
 ///     `balloon.alignment=Left`（既定）→ `balloon_x = char_x − balloon_w`、
-///     `Right` → `balloon_x = char_x + char_w`。`balloon_y = char_y`（上端揃え）。
+///     `Right` → `balloon_x = char_x + char_w`、`Auto`（正典 `none`）→ キャラ窓の中心が
+///     作業領域の中央より左なら `Right` の式、それ以外は `Left` の式。`balloon_y = char_y`（上端揃え）。
 ///   - `CenterTop`（`windowposition.x=center|top`・4.2）: シェル画像の中央上。
 ///     `balloon_x = char_x + (char_w − balloon_w) / 2`（中点は整数除算＝0 方向切り捨て・
 ///     DD8。丸め権威の新設ではない）・`balloon_y = char_y − balloon_h`
@@ -249,13 +259,11 @@ pub fn keyword_balloon_pos(
 ///   `measure.rs` の `char_size` が spawn の窓寸そのもの）。
 ///   **本関数はバルーンをクランプしない**（バルーンは work area 外へ素直にはみ出す）
 ///   ——`windowposition.limit` の補正は下流の関門が所有する（`ScopePlacement.balloon_pos`
-///   の doc 参照）。offset は
-///   配置時に確定し以後静的（4.4: 正式規則は balloon 表示系の後続へ委ねる）。
-/// - **Seam の warn**: `Alignment::Seam` の警告ログは config 側から本関数
-///   （シーム値を実際に消費する層）へ委ねられている（config.rs の Alignment doc・
-///   DD9）。tracing への `warn!` は I/O を持たない決定論的な副チャネルであり、
-///   `config::parse_i32` の `warn!` と同じリポジトリ規約に従う。挙動出力は
-///   Bottom と同一（T-R5 で固定）。
+///   の doc 参照）。
+/// - **Seam の warn**: `Alignment::Seam` の解釈はスコープごとに [`Anchor::from_alignment`]
+///   を 1 度だけ引き、知らない値のときだけ本関数がスコープ番号つきの `warn!` を 1 行出す
+///   （正典の `top`・`left`・`right` では出さない・T-R5 で固定）。知らない値の幾何は
+///   Bottom と同一。
 ///
 /// `scopes` 入力に `cfg.scopes` 未収載のスコープ番号が来た場合は
 /// `ScopeConfig::default()`（＝Bottom・オフセットなし）で配置する（2.2 の既定と
@@ -269,18 +277,23 @@ pub fn resolve_placement(
     let default_scope_cfg = ScopeConfig::default();
     let mut out = Vec::with_capacity(scopes.len());
     // P2 連鎖の前スコープ状態: クランプ後 char_x のみ（自スコープ幅を引く是正式では
-    // 前スコープの幅が不要・scg 2.1/2.2）
+    // 前スコープの幅が不要・areka-P0-scope-chain-gap 2.1/2.2）
     let mut prev: Option<i32> = None;
+    // 左右の辺の縦の連なり（辺ごと）: 前スコープのクランプ後 char_y
+    let mut prev_left_y: Option<i32> = None;
+    let mut prev_right_y: Option<i32> = None;
 
     for input in scopes {
         let sc = cfg.scopes.get(&input.scope).unwrap_or(&default_scope_cfg);
-
-        // Seam の warn はシーム値を消費する本層で発する（config.rs から委任・DD9）
-        if let Alignment::Seam(value) = &sc.alignment {
+        // 1 度だけ引く。Seam が 5 つの語のどれでもない＝知らない値（DD9）
+        let anchor = Anchor::from_alignment(&sc.alignment);
+        if let Alignment::Seam(value) = &sc.alignment
+            && Anchor::from_word(value).is_none()
+        {
             warn!(
                 scope = input.scope,
                 value = %value,
-                "alignmenttodesktop の未使用値（bottom として配置・2.8/DD9）"
+                "alignmenttodesktop の未知アンカー指定（bottom 相当で解釈・4.2/DD9）"
             );
         }
         let SizePx { w, h } = input.char_size;
@@ -290,38 +303,52 @@ pub fn resolve_placement(
         let bottom_y = work_area.bottom.saturating_sub(h);
 
         // P2: base_x(0)=right−w0・base_x(n≥1)=char_x(n−1)−w(n)（自スコープの幅＝
-        //     隣接・隙間 0・scg 2.1/2.2）・
-        //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3）。
-        //     free の X 未指定成分のフォールバック先でもある（2.6・その場合
-        //     default_x は None ゆえオフセット項は 0）
+        //     隣接・隙間 0・areka-P0-scope-chain-gap 2.1/2.2）・
+        //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3・
+        //     [`chain_gap`]）。free の X 未指定成分のフォールバック先でもある（2.6・free の
+        //     オフセット項は 0）
         let base_x = match prev {
             None => work_area.right.saturating_sub(w),
             Some(prev_x) => prev_x.saturating_sub(w),
         };
-        let bottom_x = base_x.saturating_sub(sc.default_x.unwrap_or(0));
+        let bottom_x = base_x.saturating_sub(chain_gap(anchor, sc.default_x));
+
+        // 左右の辺: 辺ごとに下から上へ連ねる（y(0)=bottom−h・y(n)=y(n−1)−h(n)）
+        let side_y = |prev_y: Option<i32>| prev_y.map_or(bottom_y, |py| py.saturating_sub(h));
 
         // P3: free は work area **左上**原点＋defaultleft/defaulttop（DD10）。
-        //     指定成分のみ適用し、未指定成分は bottom 相当値へ（2.6）
-        let (x, y) = if sc.alignment == Alignment::Free {
-            (
+        //     指定成分のみ適用し、未指定成分は bottom 相当値へ（2.6）。
+        //     上・左・右は吸着の辺（anchor）と同じ辺で解く（project_anchor でも動かない）
+        let (x, y) = match anchor {
+            Anchor::Free => (
                 sc.default_x
                     .map_or(bottom_x, |dx| work_area.left.saturating_add(dx)),
                 sc.default_y
                     .map_or(bottom_y, |dy| work_area.top.saturating_add(dy)),
-            )
-        } else {
-            (bottom_x, bottom_y)
+            ),
+            Anchor::Bottom => (bottom_x, bottom_y),
+            Anchor::Top => (bottom_x, work_area.top),
+            Anchor::Left => (work_area.left, side_y(prev_left_y)),
+            Anchor::Right => (work_area.right.saturating_sub(w), side_y(prev_right_y)),
         };
 
         // P4: キャラ窓のみ work area 内へクランプ（DD12・free 含む全 alignment）
         let x = clamp_axis(x, work_area.left, work_area.right.saturating_sub(w));
         let y = clamp_axis(y, work_area.top, work_area.bottom.saturating_sub(h));
 
-        prev = Some(x);
+        // 左右の辺のスコープは横の連なり（P2）を進めない
+        if joins_chain(anchor) {
+            prev = Some(x);
+        } else if anchor == Anchor::Left {
+            prev_left_y = Some(y);
+        } else {
+            prev_right_y = Some(y);
+        }
 
         // P5: バルーン暫定 offset（DD7・ここではクランプしない＝limit 補正は下流の関門が
         //     所有）。left（既定）＝キャラ左隣・
-        //     right＝キャラ右隣・上端揃え・balloon.offsetx/offsety があれば加算
+        //     right＝キャラ右隣・none＝作業領域の中央を向く側・上端揃え・
+        //     balloon.offsetx/offsety があれば加算
         // `windowposition.y` の数値調整量は `balloon_offset` 欄へ合流済み——モードに
         // よらず基本位置へ加算する（4.4）。
         let (ox, oy) = sc.balloon_offset.unwrap_or((0, 0));
@@ -389,7 +416,7 @@ pub fn resolve_placement(
             // 4.2/DD15: cascade 解決済み alignment を 5 値アンカーへ解釈（単一真実源・
             // Req1.6）。旧 bottom_snap（二値）はここでは格納せず、使用点で
             // !anchor.is_free() として導出する
-            anchor: Anchor::from_alignment(&sc.alignment),
+            anchor,
             // 実表示寸確定時の一度きりの再導出の素材（要件 4.7・実機サインオフ是正）。
             // `Side` は素材を持たない＝再導出が構造的に起こらない（4.5/5.2）。
             balloon_keyword_base: match sc.balloon_x_mode {
@@ -405,7 +432,7 @@ pub fn resolve_placement(
 /// 1 軸クランプ（`lo ≤ v ≤ hi`）。窓が work area より大きく `hi < lo` に逆転する
 /// 場合は `lo`（left／top）側を優先する（DD12「画面内に正しく出現」の安全弁）。
 /// `i32::clamp` は逆転区間で panic するため使わない（resolver は panic しない契約）。
-fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
+pub(crate) fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
     v.min(hi).max(lo)
 }
 
@@ -415,7 +442,6 @@ fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
 /// M1 では `DragConstraint` を付与しない（DD8: 無制約＝仮想デスクトップ全域
 /// ドラッグ可）ため未結線だが、制約を適用する将来の消費側の正規算出規則として
 /// ここで提供・テストする（07-05 の単一モニタ誤釘付けの欠陥面を消す規則）。
-#[allow(dead_code)] // DD8: M1 は DragConstraint 非付与＝将来の消費側向け正規規則（テストのみが消費）
 pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
     monitor_bounds.iter().copied().reduce(|a, b| RectPx {
         left: a.left.min(b.left),
@@ -428,14 +454,14 @@ pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
 /// 5 値アンカー種別（純粋値・`seriko.alignmenttodesktop` の解決済み解釈結果・4.2）。
 ///
 /// 「シェル座標系のどの辺を work area の対応辺へ固定するか」を表す不変値。
-/// wintf/bevy 非依存で `resolver` に在住し（U5・純粋 DPI 檻が wintf 非依存で走る）、
+/// 型そのものは wintf/bevy の型を持たない純粋値として `resolver` に置き、
 /// 後続で `ScopePlacement.anchor` として spawn へ運ばれ `Anchored(Anchor)` Component
 /// として char 窓へ焼き込まれる。射影 T（`project_anchor`）は follow 層が所有する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Anchor {
     /// 上端固定（`y = wa.top`・X 保持）。
     Top,
-    /// 下端固定（既定・`y = wa.bottom − h`・X 保持）。既存 `BottomSnapPolicy` の一般化元。
+    /// 下端固定（既定・`y = wa.bottom − h`・X 保持）。射影は follow の下端吸着の関数へ委ねる。
     Bottom,
     /// 左端固定（`x = wa.left`・Y 保持）。
     Left,
@@ -451,27 +477,34 @@ impl Anchor {
     /// **優先度チェーンの読取り・解決は行わない**（config.rs の領分・Req6.3）。
     /// 既に解決済みの `Alignment` を解釈消費するのみ:
     /// - `Bottom`→`Bottom`・`Free`→`Free`
-    /// - `Seam(s)`: `s.trim().to_ascii_lowercase()` で正規化し `"top"`→`Top`・
-    ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
-    ///   window-placement DD9「未知は bottom 相当」を継承）＋`warn!`。正規化は防御
-    ///   （parsers 側で正規化済み前提だが大小文字・前後空白へ念のため備える）。
+    /// - `Seam(s)`: [`Anchor::from_word`]（`s.trim().to_ascii_lowercase()` で正規化）で 5 つの語（`"top"`・
+    ///   `"bottom"`・`"left"`・`"right"`・`"free"`）はそれぞれのアンカー・それ以外（未知値）→`Bottom`（フォールバック・
+    ///   window-placement DD9「未知は bottom 相当」を継承）。`Seam` は descript に書かれたままの
+    ///   値（未知アンカーの警告に載せる）なので、大文字小文字はここでそろえる（`bottom`／`free` を
+    ///   大文字小文字を区別せずに比べる config.rs と同じ決まり）。
+    ///
+    /// 未知値の `warn!` はここでは出さない——どのスコープの値かを知る呼び出し側
+    /// （[`resolve_placement`]）がスコープ番号つきで出す。
     pub fn from_alignment(alignment: &Alignment) -> Anchor {
         match alignment {
             Alignment::Bottom => Anchor::Bottom,
             Alignment::Free => Anchor::Free,
-            Alignment::Seam(value) => match value.trim().to_ascii_lowercase().as_str() {
-                "top" => Anchor::Top,
-                "left" => Anchor::Left,
-                "right" => Anchor::Right,
-                // 未知アンカー指定は bottom 相当へフォールバック（DD9）＋警告を残す
-                _ => {
-                    warn!(
-                        value = %value,
-                        "alignmenttodesktop の未知アンカー指定（bottom 相当で解釈・4.2/DD9）"
-                    );
-                    Anchor::Bottom
-                }
-            },
+            // 未知アンカー指定は bottom 相当へフォールバック（DD9・警告は呼び出し側）
+            Alignment::Seam(value) => Anchor::from_word(value).unwrap_or(Anchor::Bottom),
+        }
+    }
+
+    /// 吸着の 5 つの語（`top`・`bottom`・`left`・`right`・`free`）を読む。前後の空白を除き、
+    /// 大文字小文字は区別しない。ほかの値は `None`。descript の値（[`Anchor::from_alignment`]）と
+    /// 台本の引数（`script_alignment::parse_alignment_word`）が同じこの決まりを通る。
+    pub(crate) fn from_word(raw: &str) -> Option<Anchor> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "top" => Some(Anchor::Top),
+            "bottom" => Some(Anchor::Bottom),
+            "left" => Some(Anchor::Left),
+            "right" => Some(Anchor::Right),
+            "free" => Some(Anchor::Free),
+            _ => None,
         }
     }
 
@@ -479,6 +512,21 @@ impl Anchor {
     /// bottom_snap 等の boolean が要る使用点は `!is_free()` で導出できる。
     pub fn is_free(self) -> bool {
         matches!(self, Anchor::Free)
+    }
+}
+
+/// 横の連なり（P2・鎖）に入る揃え方か（左右の辺は入らない・P1'）。起動の並べ直し・隣り合いの
+/// 印の保存・拡大率の後の詰め直しも同じこの決まりで組を作る（`chain_rule` の「鎖の規則」）。
+pub fn joins_chain(anchor: Anchor) -> bool {
+    !matches!(anchor, Anchor::Left | Anchor::Right)
+}
+
+/// P2 が前の窓の左に空ける隙間（`defaultx`）。下端・上端だけで、Free の `defaultx` は
+/// 左上からの位置（P3）なので 0。`default_x` は DPI で換算しない生の値。
+pub fn chain_gap(anchor: Anchor, default_x: Option<i32>) -> i32 {
+    match anchor {
+        Anchor::Bottom | Anchor::Top => default_x.unwrap_or(0),
+        Anchor::Left | Anchor::Right | Anchor::Free => 0,
     }
 }
 
@@ -505,7 +553,7 @@ mod resolve_test_support;
 mod resolve_tests;
 #[cfg(test)]
 #[path = "resolver_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "resolver_union_tests.rs"]
 mod union_tests;

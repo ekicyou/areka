@@ -1,12 +1,13 @@
 //! 望む鎖の合成——台帳のグループと窓の在庫から、「手前から奥へ並んだ窓の列」と
-//! 「本 spec が張る繋ぎの列」と「窓が無かった宣言要素」を導く純関数
+//! 「スコープをまたぐ繋ぎの列」と「窓が無かった宣言要素」を導く純関数
 //! （要件 1.1／1.2／1.4／2.5／3.6／6.1／6.2／8.4／10.1／14.1／14.4／15.1／15.2）。
 //!
 //! design.md「`zorder_chain_compose`（新設・純関数）」が正本である。
 //!
 //! # ここに在るのは判断だけである
 //!
-//! Win32 も World も 1 度も触らない。窓の在庫は
+//! 鎖の導出（[`compose_chain`]）は Win32 も World も 1 度も触らない（World に触るのは、結果を
+//! 受け口へ置く [`publish_chain_plan`] だけ）。窓の在庫は
 //! `resolve`（要素 1 つ → 実在する窓の `Entity`）という 1 本の関数として受け取り、
 //! スコープの一覧は値として受け取る。よって鎖の導出は実機も実ディスプレイも無しに
 //! 全分岐を固定できる（要件 10.1）。実際に `GhostWindows` を引くのは呼び出し側
@@ -33,7 +34,7 @@
 //! 要件 1〜3）。同じスコープの 2 枚は、隣り合う `[バルーン, キャラ窓]` のこともあれば、
 //! 逆転（`[キャラ窓, バルーン]`）や、間に他の窓が挟まる非隣接のこともある。
 //! 連続対のうち**同一スコープの（バルーン, キャラ窓）の順の連続**だけは、所有関係を
-//! **既存のスコープ内ペア機構が張っている**ので、本 spec は 1 本も張らない。よって連続対を
+//! **既存のスコープ内ペア機構が張っている**ので、鎖は 1 本も張らない。よって連続対を
 //! 舐めながら、この形だけを除く。除かずに張ると、同じ窓へ 2 つの機構が owner を書き合う。
 //! 逆転の連続（`[sN, bN]`）は組の結び目と向きが逆なので除かず、鎖の繋ぎとして張る。
 //!
@@ -43,13 +44,13 @@
 //! 連続する 2 枚の全部になり、一直線のまま保たれる。
 //!
 //! 片割れの窓しか実在しないスコープでは、この除外は起こらない——たとえば
-//! `[b0, b1, s1]` の `b0 ← b1` は**スコープをまたぐ**繋ぎなので、本 spec が張る。
+//! `[b0, b1, s1]` の `b0 ← b1` は**スコープをまたぐ**繋ぎなので、鎖が張る。
 //! 相方の居ないバルーンにはペア機構が owner を張れないので、書込先は衝突しない。
 //!
 //! # 並びの規則は 3 つだけ
 //!
-//! ⑴グループどうしは**登記の順**で連なる（先に登記されたグループほど手前・shell 設定
-//! 由来の基底が最前）。台帳の読み口が既にこの順で貸し出すので、ここでは受け取った順に
+//! ⑴グループどうしは**台帳の並び**で連なる（shell 設定由来の基底が最前・以降はタグの
+//! 追加順。ID の順ではない——据え直した基底はタグより大きい ID でも先頭に座る）。台帳の読み口が既にこの順で貸し出すので、ここでは受け取った順に
 //! 連ねるだけでよい（要件 3.6）。
 //! ⑵グループ内の並びは台帳が補った要素列の、書かれた順のまま（要件 1.1／1.2／2.1）。
 //! ⑶どのグループにも属さないスコープは、全グループの**後ろ**へ、**スコープ ID の昇順**で、
@@ -72,17 +73,12 @@
 //! `absent` に載るのは**グループが名前を挙げた要素**だけで、宣言順のまま並ぶ
 //! （要件 1.4「取り除かない」・要件 8.4「対応する窓が無いことを記録する」）。
 //! 後方参加のスコープは誰も宣言していないので、その窓が欠けても不在要素にはならない。
-//!
-//! # `dead_code` 許可は残っていない
-//!
-//! 指令消化の相（`emo2_boot/frame/zorder_drain.rs`）が出口をここへ差し替えたことで、
-//! 合成の純関数にも不在要素の正準表記にも本番の呼び手が付いた。段階的実装のあいだ
-//! モジュール全体を覆っていた許可は撤去してある。
 
 use std::collections::HashSet;
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
+use bevy_ecs::world::World;
+use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge, ZOrderChainPlan};
 
 use super::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrderGroup};
 
@@ -94,14 +90,18 @@ const SCOPE_BLOCK: [GroupWindowKind; 2] = [GroupWindowKind::Balloon, GroupWindow
 
 /// 要素 1 つを省略記法（`bN`／`sN`）の字面へ。
 ///
-/// 記録行に載る不在要素の正準表記であり、指令消化の相が受理行の `members=` 欄で
-/// 使っている字面と同じものである（行の中で照らし合わせられる）。
+/// 指令消化の相（`runtime/frame/zorder_drain.rs`）が受理行の `members=`・`normalized=`
+/// 欄と、拒否の理由 `DuplicateElement` に使う字面である。
 pub fn element_text(element: &GroupElement) -> String {
-    let prefix = match element.kind {
+    format!("{}{}", kind_char(element.kind), element.scope)
+}
+
+/// 正準表記の種別の字（`b`／`s`）。不在の組（[`ChainPlan::absent`]）も同じ表から取る。
+fn kind_char(kind: GroupWindowKind) -> char {
+    match kind {
         GroupWindowKind::Balloon => 'b',
         GroupWindowKind::Char => 's',
-    };
-    format!("{prefix}{}", element.scope)
+    }
 }
 
 /// 台帳のグループと窓の在庫から、望む鎖 1 本を組む。
@@ -128,10 +128,10 @@ pub fn compose_chain(
     // 区間はここでしか判らない——連結してしまえばグループの境界は列から消えるので、
     // 適用系が後から復元することはできない（要件 9.1 の記録材料）。
     let mut placed: Vec<(GroupElement, Entity, ChainSegment)> = Vec::new();
-    let mut absent: Vec<(u32, String)> = Vec::new();
+    let mut absent: Vec<(u32, char, u32)> = Vec::new();
     let mut named: HashSet<u32> = HashSet::new();
 
-    // ⑴ グループを登記の順で連ねる（要件 3.6）。各グループの中は書かれた順のまま。
+    // ⑴⑵ グループを登記の順で連ねる（要件 3.6）。各グループの中は書かれた順のまま。
     for group in groups {
         let segment = ChainSegment::Group(group.id);
         for element in &group.members {
@@ -141,12 +141,12 @@ pub fn compose_chain(
             match resolve(element) {
                 Some(entity) => placed.push((*element, entity, segment)),
                 // 不在は**宣言したグループの ID とともに**記録材料へ載せる（要件 8.4）。
-                None => absent.push((group.id, element_text(element))),
+                None => absent.push((group.id, kind_char(element.kind), element.scope)),
             }
         }
     }
 
-    // ⑵ どのグループにも属さないスコープを、スコープ ID の昇順で後ろへ連ねる
+    // ⑶ どのグループにも属さないスコープを、スコープ ID の昇順で後ろへ連ねる
     //    （要件 15.1／15.2）。重複した在庫は 1 度だけ数える（不変条件④）。
     let mut tail: Vec<u32> = all_scopes
         .iter()
@@ -166,7 +166,7 @@ pub fn compose_chain(
 
     let members: Vec<Entity> = placed.iter().map(|(_, entity, _)| *entity).collect();
 
-    // ⑶ 連続対のうち、同一スコープの（バルーン, キャラ窓）対を除いた残りが本 spec の繋ぎ。
+    // 連続対のうち、同一スコープの（バルーン, キャラ窓）対を除いた残りが鎖の繋ぎ。
     //
     //    区間は**手前側**（被所有側）の枠のものを採る。繋ぎは「この窓をどこへ繋いだか」を
     //    語る記録であり、主語は手前側だからである。よってグループの末尾から次のグループ
@@ -189,11 +189,49 @@ pub fn compose_chain(
 }
 
 /// 連続する 2 枚が「同一スコープのバルーン窓とキャラ窓」か——既存のペア機構が
-/// 所有関係を張っている対であり、本 spec は張らない（要件 6.3・境界）。
+/// 所有関係を張っている対であり、鎖は張らない（要件 6.3・境界）。
 fn is_intra_scope_pair(front: &GroupElement, back: &GroupElement) -> bool {
     front.scope == back.scope
         && front.kind == GroupWindowKind::Balloon
         && back.kind == GroupWindowKind::Char
+}
+
+/// 望む鎖が前回と違っていれば受け口へ置き、印を立てる（要件 4.1／6.1／7.1／14.5／15.3）。
+/// 呼び手は本体の指令消化の相（`runtime::frame::zorder_drain`）と、実窓の檻。
+///
+/// # 同じ内容の巡では触れない
+///
+/// 受け口の現在の内容と一致するなら、書きもせず印も立てない。印は適用系への
+/// 「書くべきものがある」の合図であり、何も動いていない巡に立てると適用系が毎巡
+/// 空振りして、表示に変化の無い巡を省く門を実質無効にする。
+///
+/// # 既定状態では受け口そのものを作らない
+///
+/// グループが 1 つも無い（＝合成が `None`）とき、受け口をまだ持っていなければ挿入しない。
+/// 適用系は仕事を得られず、指令を 1 本も出さない——要件 6.1／6.4 の「既定状態は従来と
+/// 同じ」は、判断ではなくこの**不在**で成り立つ。
+///
+/// # 一度出来た受け口は解除でも消さない
+///
+/// 解除（要件 4.1／4.2／15.4）で公開するのは「鎖が無い」という**内容**であって、
+/// 受け口の撤去ではない。Resource ごと消すと、適用系は自分が張った繋ぎを外す指示を
+/// 受け取れないまま鎖が残る。
+pub fn publish_chain_plan(world: &mut World, plan: Option<ChainPlan>) {
+    if world.get_resource::<ZOrderChainPlan>().is_none() {
+        if plan.is_none() {
+            // 望む鎖が無く受け口も無い＝既定状態（要件 6.1 の構造的な根拠）。
+            return;
+        }
+        world.init_resource::<ZOrderChainPlan>();
+    }
+
+    let mut receiver = world.resource_mut::<ZOrderChainPlan>();
+    if receiver.chain == plan {
+        // 何も動いていない＝公開も印立ても行わない（空振りの巡を作らない）。
+        return;
+    }
+    receiver.chain = plan;
+    receiver.dirty = true;
 }
 
 #[cfg(test)]

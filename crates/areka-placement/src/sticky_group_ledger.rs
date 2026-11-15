@@ -83,7 +83,7 @@ pub struct StickyGroupLedger {
 impl StickyGroupLedger {
     /// 台本の組を足す。重なりがあれば何も変えずに拒否（要件 3.1・3.4）。
     pub fn try_add_script_group(&mut self, members: BTreeSet<u32>) -> Result<(), StickyReject> {
-        self.reject_overlap(&members, |_| true)?;
+        self.reject_overlap(&members)?;
         self.groups.push(StickyGroup {
             members,
             source: StickySource::Script,
@@ -110,7 +110,8 @@ impl StickyGroupLedger {
         };
         let tokens: Vec<&str> = raw.split(',').collect();
         let members = parse_sticky_tokens(&tokens)?;
-        self.reject_overlap(&members, |group| group.source == StickySource::Script)?;
+        // 上の retain の後に残るのは台本の組だけ。
+        self.reject_overlap(&members)?;
         self.groups.push(StickyGroup {
             members,
             source: StickySource::Descript,
@@ -122,7 +123,7 @@ impl StickyGroupLedger {
         &self.groups
     }
 
-    /// 他の機能が「この窓はどの組か」を確かめる口（裁定 7）。
+    /// 他の機能が「この窓はどの組か」を確かめる口（areka-P0-window-link-directives の裁定 7）。
     pub fn group_of(&self, scope: u32) -> Option<&StickyGroup> {
         self.groups
             .iter()
@@ -143,16 +144,11 @@ impl StickyGroupLedger {
             .unwrap_or_default()
     }
 
-    /// `considered` に当たる組と `members` が重なれば、重なった ID（昇順）で拒否する。
-    fn reject_overlap(
-        &self,
-        members: &BTreeSet<u32>,
-        considered: impl Fn(&StickyGroup) -> bool,
-    ) -> Result<(), StickyReject> {
+    /// 帳簿の組と `members` が重なれば、重なった ID（昇順）で拒否する。
+    fn reject_overlap(&self, members: &BTreeSet<u32>) -> Result<(), StickyReject> {
         let scopes: BTreeSet<u32> = self
             .groups
             .iter()
-            .filter(|group| considered(group))
             .flat_map(|group| group.members.intersection(members).copied())
             .collect();
         if scopes.is_empty() {
@@ -259,7 +255,7 @@ pub fn apply_reset_sticky(world: &mut World) -> bool {
 }
 
 /// 帳簿の descript の組を取り替え、拒否と窓の無いスコープを記録する（3.6・3.8・3.9・6.5）。
-fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
+fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str, when: &'static str) {
     let result = world
         .resource_mut::<StickyGroupLedger>()
         .replace_descript(raw);
@@ -272,7 +268,7 @@ fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
                 .find(|group| group.source == StickySource::Descript)
                 .map(|group| group.members.clone());
             if let Some(members) = members {
-                warn_absent_members(world, &members, "seed");
+                warn_absent_members(world, &members, when);
             }
         }
         Err(reason) => {
@@ -286,7 +282,7 @@ fn apply_descript(world: &mut World, raw: Option<&str>, action: &'static str) {
 /// 起動で帳簿を据え、descript の `seriko.sticky-window` の組を入れる（3.8・3.9）。
 pub fn seed_sticky_descript(world: &mut World, raw: Option<&str>) {
     world.insert_resource(StickyGroupLedger::default());
-    apply_descript(world, raw, "descript_seed");
+    apply_descript(world, raw, "descript_seed", "seed");
 }
 
 /// シェルの切り替えで descript の組だけを取り替える（台本の組は保つ・6.5）。
@@ -295,7 +291,7 @@ pub fn replace_sticky_descript(world: &mut World, raw: Option<&str>) {
         warn_no_ledger("descript_replace");
         return;
     }
-    apply_descript(world, raw, "descript_replace");
+    apply_descript(world, raw, "descript_replace", "replace");
 }
 
 #[cfg(test)]

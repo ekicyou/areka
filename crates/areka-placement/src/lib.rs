@@ -5,20 +5,31 @@
 //! 座標単位契約（design 正本 U1〜U5）に従い、配置パイプラインの座標・寸法は
 //! **すべて物理 px 単一通貨**とする（論理 DIP・`BoxStyle` は持ち込まない）。
 //!
-//! 依存の向き（この約束が名指すのは `resolver`・`config`・`measure`・`spawn`・`follow`・`diag`
-//! の 6 つだけで、ほかのモジュールの参照はこの約束の外）:
+//! 依存の向き（この約束が名指すのは `config`・`resolver`・`measure`・`spawn`・`follow`・`diag`
+//! の 6 つの向きだけで、ほかの 21 のモジュール（`test_support` を含む）は互いに広く引き合う）:
 //! `config`（areka-parsers・tracing）← `resolver`（std・tracing・wintf の DPI・`config`）←
-//! `measure`（emo-atlas・emo-compose・emo-present）← `spawn`／`follow`（wintf・bevy_ecs ほか・
-//! 同じ段どうしは引き合ってよい）← 本体のシーム。左のモジュールは右を import しない。
+//! `measure`（emo-atlas・emo-compose・emo-present のほか、`error`・`descript_window_keys` を引く）←
+//! `spawn`／`follow` と同じ段のモジュール（wintf・bevy_ecs ほか・同じ段どうしは引き合ってよい）←
+//! 本体のシーム。左のモジュールは右を import しない。
 //! [`diag`] は最下流: 配置のモジュールを 1 つも引かない（ほかの crate からは bevy_ecs の
-//! `Entity`・wintf の `ZOrderPairStrategy`・tracing を引く）。
+//! `Entity`・wintf の `ZOrderPairStrategy` と `transition_diag::MISSING`・tracing を引く）。
 //! 失敗の型 [`PlacementError`] は `error.rs`（配置のモジュールを引かない）に置き、根から出し直す。
 //!
+//! 同じ段には輪がある:
+//! - `chain_finalize`↔`chain_realign`（`chain_finalize` の `on_insert` の hook が `chain_realign` を引く）
+//! - `chain_realign`→`spawn`→`chain_finalize`→`chain_realign`
+//! - `follow` と同じ段のモジュール（`balloon_limit`・`dpi_sync`・`persist`・`spawn`・`sticky_group_ledger`・
+//!   `transition_diag`）との両向き
+//!
+//! 根を引く子もある: `reset_pos`→根の `primary_monitor`・`square_dpi`・`work_area_px`、
+//! `reseed`→根の `scale_then_merge`・
+//! `ScopeWindowPositions`・`follow/offset_space`→根の `scale_signed`。
+//!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
-//! 配置準備の合成ルート [`prepare_ghost_windows`]（task 6.1・design「main.rs seam」）
+//! 配置準備の合成ルート [`prepare_ghost_windows`]（design「main.rs seam」）
 //! を持つ。design File Structure の「mod.rs＝モジュール公開面」に従い、
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
-//! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
+//! ここ（合成ルート）に実装する（シームの結線自体は本体の `ghost_session::prepare_ghost_windows`）。
 
 pub mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
@@ -27,6 +38,8 @@ pub mod balloon_syncscale;
 pub mod chain_finalize;
 /// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
 pub mod chain_realign;
+/// 鎖の規則（起動の確定・隣り合いの印の保存・拡大率の後の詰め直しが同じ規則で組を作る）。
+pub mod chain_rule;
 pub mod config;
 /// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び（descript-window-keys）。
 pub mod descript_window_keys;
@@ -56,7 +69,8 @@ pub mod spawn;
 pub mod sticky_group_ledger;
 pub mod transition_diag;
 mod windowposition;
-/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる純関数（Win32／ECS 非依存）。
+/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる純関数（World も Win32 も触らない）と、
+/// その鎖を受け口へ置く `publish_chain_plan`（World に触るのはこれだけ）。
 pub mod zorder_chain_compose;
 /// スコープ窓 Z 順グループの台帳と、タグ／descript 共通のトークン解釈・拒否判定
 /// （純関数・Win32／ECS 非依存）。
@@ -66,9 +80,6 @@ pub mod zorder_group_ledger;
 /// 権威へ委譲し符号のみ保存する）。`windowposition.x/y` と `\![move]` の dx/dy は
 /// どちらも「作者基準 px で書かれた画面オフセット」であり、**同じ写像を通す**
 /// （片方だけ素通しにすると高 DPI で両者の意味論が割れる）。
-// examples の `#[path]` include ビルドでは本再エクスポートの消費者（emo2_boot）が居ないため
-// 未使用警告が出る（frame.rs の同型 allow と同じ事情・`areka` は lib target を持たない bin crate）。
-#[allow(unused_imports)]
 pub use windowposition::scale_signed;
 /// 見本のゴーストの入口（配置のテストだけ・要件 3.2）。
 #[cfg(test)]
@@ -80,6 +91,9 @@ mod test_crash_report;
 /// 本番のビルドには含まれない（spec: placement-crate-split 要件 3.3・3.5）。
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+/// Z 順のテストが共に使う道具（台帳・鎖の合成のテストの写しを 1 つにまとめた）。
+#[cfg(test)]
+pub(crate) mod zorder_test_support;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -102,17 +116,9 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// `primary モニタ DPI 取得不能（boot）` 行・要件 1.4）。
 ///
 /// この縮退は**恒久的な情報損失ではない**——窓生成後は窓の実 DPI が正であり、
-/// `Changed<DPI>` を観測する `emo2_boot::frame::run_dpi_phase`（task 4.2）と
+/// `Changed<DPI>` を観測する `runtime::frame::run_dpi_phase` と
 /// 表示成立点の状態照合（design Flow 1／Flow 3 手順5）が k を自己補正する（D7）。
 const FALLBACK_PRIMARY_DPI: u32 = 96;
-
-/// 作者基準 DPI の既定値（ukadoc 正典・design D1）。
-///
-/// 縮退梯子（無宣言＝96 debug／不正・0＝96 warn）の単一権威は
-/// [`source`] の `parse_author_dpi` であり、ここは placement の準備自体が
-/// 成立しなかったときに [`AuthorDpi::DEFAULT`] が採る同値の既定にすぎない
-/// （読取器を二重化しない）。
-const DEFAULT_AUTHOR_DPI: u16 = 96;
 
 /// `MonitorSnapshot` 構築点（`main.rs`）の**呼出点タグ**
 /// （areka-P0-dpi-window-vanish 要件 1.1・design D12）。
@@ -120,20 +126,26 @@ const DEFAULT_AUTHOR_DPI: u16 = 96;
 /// D12 の裁定により、要件 1.1 の**正典出力点**は placement の全判断が読む権威
 /// [`follow::MonitorSnapshot`] の構築点である（列挙の忠実転写点＝以後の判断が
 /// 実際に見る値そのもの）。本タグはその出所を名乗る。
-#[allow(dead_code)] // 消費者は main.rs シーム（`#[path]` include する example には構築点が無い）
 pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
 
-/// [`prepare_ghost_windows`] のモニタ列挙点の**呼出点タグ**（要件 1.1・design D12）。
-///
-/// 同一運転内に列挙点は複数ある。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を
-/// 呼びつつタグだけを違えることで、ログ上で出所を弁別でき、かつ**同じ語彙**ゆえ
-/// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
-pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
+mod test_open {
+    /// [`prepare_ghost_windows`](crate::prepare_ghost_windows) のモニタ列挙点の**呼出点タグ**（要件 1.1・design D12）。
+    ///
+    /// 同一運転内に列挙点は複数ある。同じ共有ヘルパ [`diag::log_monitor_snapshot`](crate::diag::log_monitor_snapshot) を
+    /// 呼びつつタグだけを違えることで、ログ上で出所を弁別でき、かつ**同じ語彙**ゆえ
+    /// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
+    pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
+}
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は列挙点が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::PREPARE_GHOST_WINDOWS_CONTEXT;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::PREPARE_GHOST_WINDOWS_CONTEXT;
 
-/// 作業領域源の**実行時同期**（`emo2_boot::frame::work_area_sync`）の呼出点タグ
+/// 作業領域源の**実行時同期**（`runtime::frame::work_area_sync`）の呼出点タグ
 /// （areka-P0-dpi-transition-atomicity 要件 5.1・設計 C6）。
 ///
-/// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（[`PREPARE_GHOST_WINDOWS_CONTEXT`]）に
+/// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（`PREPARE_GHOST_WINDOWS_CONTEXT`）に
 /// 続く 3 つ目の出所である。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を呼び、タグだけを
 /// 違える（D12: 語彙は共有したまま出所を弁別する）——起動時の構成と同期後の構成が
 /// 同じ語彙で並ぶので、どのフレームで何が変わったかを grep 突合で追える。
@@ -143,8 +155,8 @@ pub const WORK_AREA_SYNC_CONTEXT: &str = "work_area_sync";
 
 /// wintf のモニタ列挙結果を診断レコードへ**忠実転写**する純関数（要件 1.1）。
 ///
-/// [`diag`] は placement の最下流であり `World`・wintf の型を知らない（design
-/// 「Allowed Dependencies」）。転写は wintf `Monitor` を既に import している本 mod.rs の
+/// [`diag`] は placement の最下流であり `World`・wintf の `Monitor` を知らない（design
+/// 「Allowed Dependencies」）。転写は wintf `Monitor` を既に import している本 `lib.rs` の
 /// 仕事であり、ここが「wintf 型 → 純データ」の唯一の境界である。
 ///
 /// - 単位変換も丸めも行わない（U 契約: 配置パイプラインの座標は**物理 px 単一通貨**）
@@ -170,19 +182,19 @@ pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
 
 /// 起動時 k₀ の分母となる作者基準 DPI の対（design D1・Flow 3 手順1）。
 ///
-/// descript 読取は [`prepare_stages`] で **1 度だけ**行い（shell＝
+/// descript 読取は `prepare_stages_for_shell` で **1 度だけ**行い（shell＝
 /// `DescriptSource::shell_author_dpi()`・balloon＝[`source::load_balloon_author_dpi`]）、
 /// その値を本型に束ねて 2 つの消費者へ配る:
 ///
 /// 1. 採寸の k₀（[`build_measure_scaling`] → `measure_scope_sizes`・要件 3.3）
-/// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → `main` →
-///    `emo2_boot::wire_emo2_boot` → `build_boot_assets` → `attach_target`・要件 1.1）
+/// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → 本体の `ghost_session` →
+///    `runtime::wire_runtime` → `build_boot_assets` → `attach_target`・要件 1.1）
 ///
 /// 同じ宣言が 2 経路で食い違わないこと（＝読取が 1 度であること）が本型の存在理由である。
 ///
 /// shell と balloon は別々のキー（`seriko.dpi`／`dpi`）で宣言され得るうえ、
 /// 素の `u16` 2 引数は**取り違えてもコンパイルが通る**。名前付きフィールドで束ね、
-/// 呼び手に「どちらの `u16` か」を選ばせない（`emo2_boot::frame` の `AuthorDpis` と同じ防御）。
+/// 呼び手に「どちらの `u16` か」を選ばせない（`runtime::frame` の `AuthorDpis` と同じ防御）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AuthorDpi {
     /// shell descript `seriko.dpi` 由来（縮退梯子適用済みの非ゼロ値）。
@@ -192,17 +204,11 @@ pub struct AuthorDpi {
 }
 
 impl AuthorDpi {
-    /// 正典既定（96/96）——placement の準備自体が失敗して宣言値を読めなかったときの縮退値。
+    /// 正典既定（96/96）。今の使い手はテストの組み立てだけ（準備に失敗した本番の道はこの値を使わない）。
     pub const DEFAULT: AuthorDpi = AuthorDpi {
-        shell: DEFAULT_AUTHOR_DPI,
-        balloon: DEFAULT_AUTHOR_DPI,
+        shell: source::DEFAULT_AUTHOR_DPI,
+        balloon: source::DEFAULT_AUTHOR_DPI,
     };
-}
-
-impl Default for AuthorDpi {
-    fn default() -> Self {
-        AuthorDpi::DEFAULT
-    }
 }
 
 /// placement 側の同期準備一括の結果（design「main.rs seam」正本）。
@@ -214,7 +220,7 @@ impl Default for AuthorDpi {
 pub struct PreparedPlacement {
     /// スコープごとの解決済み配置（`resolve_placement` の出力そのまま・scope 昇順）。
     pub placements: Vec<ScopePlacement>,
-    /// 窓タイトルの正本（spawn（task 5.1）が消費）。
+    /// 窓タイトルの正本（spawn が消費）。
     pub titles: GhostTitles,
     /// 採寸 k₀ に使った作者基準 DPI（areka-P0-emo-dpi-scaling task 4.3）。
     ///
@@ -225,7 +231,7 @@ pub struct PreparedPlacement {
     ///
     /// `author_dpi` と**同じ搬送の形**である（areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
     /// descript を読むのは準備の中の 1 度だけなので、重なりの基底もそのときの読取結果を
-    /// ここへ載せて `main` → `wire_emo2_boot` → 台帳へ配る。ここで搬送せずに結線の側で
+    /// ここへ載せて本体の `ghost_session` → `wire_runtime` → 台帳へ配る。ここで搬送せずに結線の側で
     /// 読み直すと、配置と重なりが**別々の宣言**を見る余地が生まれる（`author_dpi` を搬送に
     /// した理由そのもの）。
     ///
@@ -301,9 +307,12 @@ impl PreparedStages {
 /// `primary_dpi` が `None`（モニタ 0 台）または 0（列挙異常）のとき、`error!` のうえ
 /// [`FALLBACK_PRIMARY_DPI`]（96 相当）から k₀ を導く。作者基準 DPI が 96 なら k₀=1/1＝
 /// 従来どおりの native 採寸であり、96 以外を宣言していればその宣言に対する 96 相当の比
-/// （例: author=192 → k₀=1/2）となる。いずれにせよ窓は生え、窓生成後に窓の実 DPI が
-/// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile（task 4.2）で k を自己補正する
+/// （例: author=192 → k₀=1/2）となる。0（列挙異常）の腕では窓は生え、窓生成後に窓の実 DPI が
+/// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile で k を自己補正する
 /// ——つまりこの縮退は**回復可能**であり、表示の喪失にはならない（要件 1.4/4.1）。
+/// `None` の腕は、本番の [`prepare_ghost_windows_for_shell`] ではモニタ 0 台のときだけ起き、
+/// 採寸の直後に [`work_area_of`] が `Err(PlacementError::Monitor)` を返すので窓は生えない
+/// （窓が生えるのは作業領域を外から渡すテストの入口だけ）。
 ///
 /// # 戻り値の第 2 要素＝採寸 DPI（areka-P0-balloon-offset-dpi 要件 1.1／1.5／3.1）
 ///
@@ -321,7 +330,7 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
                 shell_author_dpi = author_dpi.shell,
                 balloon_author_dpi = author_dpi.balloon,
                 "placement: primary モニタ DPI を取得できない——96 相当で k₀ を導いて採寸を続行する\
-                 （窓生成後に窓の実 DPI が k を自己補正するため表示は失われない・要件 1.4）"
+                 （窓が生えれば窓の実 DPI が k を自己補正する。モニタ 0 台なら後で作業領域が無く失敗する・要件 1.4）"
             );
             FALLBACK_PRIMARY_DPI
         }
@@ -361,25 +370,17 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
 }
 
 /// 準備パイプラインの work area 非依存部を同期実行する:
-/// `load_descript_source` → `build_placement_config` → `measure_scope_sizes`。
+/// `load_descript_source_for_shell` → `build_placement_config` → `measure_scope_sizes`。
 ///
-/// 失敗は [`PlacementError`] のまま呼び手へ返す（告知と終了は
-/// 呼び手の `main` の分担）。
-/// 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11・テストで固定）。
+/// 失敗は [`PlacementError`] のまま呼び手へ返す（告知と、終了するかどうかは呼び手の分担）。
+/// 位置の記憶・復元（`profile/areka` の `sylphya.toml` の読み書き）は一切行わない（2.11・テストで固定）。
 ///
 /// `primary_dpi` は起動時 k₀ の分子（primary モニタ DPI・物理 DPI 値）。取得不能
 /// （モニタ 0 台等）は `None` を渡す——[`build_measure_scaling`] が `error!`＋96 相当へ
 /// 縮退させる（要件 1.4）。
-fn prepare_stages(
-    ghost_root: &Path,
-    balloon_root: &Path,
-    primary_dpi: Option<u32>,
-) -> Result<PreparedStages, PlacementError> {
-    prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, None)
-}
-
-/// [`prepare_stages`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
-/// `shell` は [`source::load_descript_source_for_shell`] へそのまま渡す（`None` は今日の規則）。
+///
+/// `shell` は [`source::load_descript_source_for_shell`] へそのまま渡す（`None` は今日の規則・
+/// areka-P0-shell-balloon-switch 要件 6.4）。
 fn prepare_stages_for_shell(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -394,7 +395,7 @@ fn prepare_stages_for_shell(
     let balloon_dontmove =
         descript_window_keys::read_balloon_dontmove(&src.ghost_kv, &src.shell_kv, &scope_ids);
     // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
-    // 読み込み済みの生 KV（`load_descript_source` の戻り）から、balloon は別パッケージ
+    // 読み込み済みの生 KV（`load_descript_source_for_shell` の戻り）から、balloon は別パッケージ
     // ゆえ `load_balloon_author_dpi` の 1 回の寛容読取から得る（パーサ改造なし・再 I/O なし）。
     // 得た値は採寸 k₀ と attach（`PreparedPlacement::author_dpi` 経由）の双方へ配られる。
     let author_dpi = AuthorDpi {
@@ -421,18 +422,20 @@ fn prepare_stages_for_shell(
         scopes = ?sizes.scopes,
         "placement: k₀ 倍後の物理窓寸で窓を生成する（起動採寸・要件 3.3）"
     );
-    // 作者空間 → 物理 px の換算（areka-P0-balloon-offset-dpi 要件 1.2/2.1/2.3・design D2/D3）。
-    // **`apply_scope_windowpositions` の直前**に置く——合流欄（`ScopeConfig.balloon_offset`）で
-    // 加算が起きる時点で、descript 由来も windowposition 由来もどちらも物理 px であることを
-    // 保証するためである（要件 2.3）。順序を入れ替えると windowposition の調整量まで
-    // シェル軸で二重に掛かる。
-    apply_author_balloon_offset_scale(&mut cfg, &scope_ids, scaling.shell);
     // 表示位置指定（`windowposition` 数値指定）→ 初期既定位置の調整量（areka-P0-kero-balloon
     // 要件 3.2/3.3/3.4/3.6・design D1'）。**採寸の後**に scope ごとの定義を権威から取得し、
-    // `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
+    // 作者空間 → 物理 px の換算（areka-P0-balloon-offset-dpi 要件 1.2/2.1/2.3・design D2/D3）の
+    // 後で `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
     // ——配置解決の式 P1〜P5 は無改変であり、永続値優先の復元規約（`persist.rs`）にも触れない。
-    let windowpositions =
-        apply_scope_windowpositions(&mut cfg, balloon_root, &scope_ids, scaling.balloon);
+    // 読んだ値は標準の位置の材料として返す（読み直さずに運ぶ）。
+    let windowpositions = load_scope_windowpositions(balloon_root, &scope_ids);
+    scale_then_merge(
+        &mut cfg,
+        &windowpositions,
+        &scope_ids,
+        scaling.shell,
+        scaling.balloon,
+    );
     let titles = src.titles.clone();
     Ok(PreparedStages {
         cfg,
@@ -448,7 +451,7 @@ fn prepare_stages_for_shell(
         },
         // 採寸 DPI（追従オフセットの基準 DPI・要件 3.1）。両軸に同じ表示 DPI を置く
         // ——k₀ の分子は軸によらず 1 つだからである（軸差は分母＝作者基準 DPI にある）。
-        measure_dpi: DPI::from_dpi(measure_dpi as u16, measure_dpi as u16),
+        measure_dpi: square_dpi(measure_dpi),
         default_surfaces,
         balloon_dontmove,
     })
@@ -457,8 +460,7 @@ fn prepare_stages_for_shell(
 /// 供給時の飽和を記録する語（areka-P0-balloon-offset-dpi 要件 2.5・task 4.1）。
 ///
 /// 語彙は綴りごと契約であり、実機ログの grep と決定論テストが同じ定数を参照する
-/// （`balloon_limit.rs` の `*_TAG` と同じ流儀）。綴りを逐語で固定する檻は task 4.3 の所有で、
-/// 本コミット時点ではまだ無い。
+/// （`balloon_limit.rs` の `*_TAG` と同じ流儀）。
 pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturated";
 
 /// `descript` の `balloon.offsetx`／`offsety`（**作者空間**の生値）を、合流欄の空間である
@@ -467,7 +469,8 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 ///
 /// # 呼び出し位置（D3・要件 2.3）
 ///
-/// [`prepare_stages`] が [`apply_scope_windowpositions`] を呼ぶ**直前**に走る。合流欄
+/// [`scale_then_merge`] が `windowposition` の合流（[`merge_scope_windowpositions`]）の**直前**に
+/// 呼ぶ。合流欄
 /// `ScopeConfig.balloon_offset` は加算欄であり、`windowposition` 由来の調整量は既に
 /// バルーン軸の k を掛けた物理 px として合流する——本ステップが先に走ることで、加算の
 /// 時点で両辺が同じ空間に揃う。逆順にすると windowposition の調整量にもシェル軸の k が
@@ -477,19 +480,18 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 ///
 /// `k` は**シェル軸**（`MeasureScaling::shell`）である——`balloon.offsetx`／`offsety` は
 /// ゴースト／シェルの `descript.txt` の語彙＝シェル作者の空間で書かれた値だからである。
-/// 割り当ての一覧は契約の定義元 [`follow::OffsetBase`] のモジュール doc
-/// （`placement/follow/offset_space.rs`）が持つ。
+/// 割り当ての一覧は契約の定義元 `follow/offset_space.rs` のモジュール doc が持つ。
 ///
 /// # 受理規約は変えない（要件 2.6）
 ///
-/// 「両軸が揃ったときのみ採用する」判断は `config.rs` の `offset_x.zip(offset_y)` が持ち、
-/// 本ステップは触らない。`None`（未宣言・片軸のみ宣言）はそのまま `None` で通す
+/// どの軸を採るか（軸ごとに決まり、書かれない軸は 0）は `config.rs` の `resolve_scope` が持ち、
+/// 本ステップは触らない。`None`（どちらの軸も未宣言）はそのまま `None` で通す
 /// ——非該当であって縮退ではないので記録もしない。
 ///
 /// # 拡大率 1（要件 2.2）
 ///
 /// `k` が恒等なら [`follow::scale_author_offset`] は生値を素通しする（丸め権威
-/// `ScaleRatio::scale_len` の恒等素通し）ので、本仕様の適用前と同一の出力になる。
+/// `ScaleRatio::scale_len` の恒等素通し）ので、この換算（areka-P0-balloon-offset-dpi）を入れる前と同一の出力になる。
 /// **唯一の例外は `i32::MIN`** ——`scale_signed` が `-i32::MAX` へ飽和させる（既存権威の
 /// 挙動であり `windowposition` 由来の調整量も今日すでに同じ。回り込みは起きず、飽和は
 /// 下の `warn!` で必ず記録に出る）。作者が書ける生値の受理範囲は実質 `i32::MIN + 1..=i32::MAX`
@@ -517,7 +519,7 @@ fn apply_author_balloon_offset_scale(
             );
             continue;
         };
-        // 未宣言・片軸のみ宣言は `None`（受理規約は `config.rs` の所有・要件 2.6）。
+        // どちらの軸も未宣言なら `None`（受理規約は `config.rs` の所有・要件 2.6）。
         // データ駆動の非該当であって縮退ではないので記録しない。
         let Some(raw) = sc.balloon_offset else {
             continue;
@@ -544,6 +546,50 @@ fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow:
     );
 }
 
+/// 作者の空間のバルーンのずらしをシェル軸で物理 px へ換算し（[`apply_author_balloon_offset_scale`]）、
+/// 続けてバルーンの `windowposition` を合流する（[`merge_scope_windowpositions`]）。起動の準備と
+/// `reseed` の `resolve_standard_scopes` の 2 か所が呼ぶ（後者はシェルの切り替え・面の `windowposition`
+/// の置き直し・バルーン位置初期化が通る。順の決まりを書く所はここだけ）。
+///
+/// 順を入れ替えると `windowposition` の調整量にもシェル軸の k が掛かって二重に換算される
+/// （合流欄 `ScopeConfig.balloon_offset` は加算欄で、加算の時点で両辺が物理 px でなければならない）。
+pub(crate) fn scale_then_merge(
+    cfg: &mut PlacementConfig,
+    windowpositions: &ScopeWindowPositions,
+    scope_ids: &[usize],
+    k_shell: ScaleRatio,
+    k_balloon: ScaleRatio,
+) {
+    apply_author_balloon_offset_scale(cfg, scope_ids, k_shell);
+    merge_scope_windowpositions(cfg, windowpositions, scope_ids, k_balloon);
+}
+
+/// scope ごとに読んだバルーンの `windowposition`（数値解釈と生値の対）。読めなかった scope は
+/// 載らない（見送りの `warn!` は読んだ側が出している）。
+pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPositionRaw)>;
+
+/// バルーンの `windowposition` を scope ごとに読む（ファイルを読む）。合流は [`scale_then_merge`]。
+///
+/// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
+/// [`scale_then_merge`] だけを通す（areka-P0-shell-balloon-switch 要件 2.7）。
+///
+/// # 失敗（log-first・表示を失わない）
+///
+/// 系列が解決できない scope（フォルダが読めない・面 0 が無い）は `warn!` のうえ供給を見送る
+/// （配置自体は基本位置で成立する）。起動の準備では、同じ事象を直前の採寸（`measure_scope_sizes`）が
+/// 既に `error!`＋`Err` で弾いている。シェルの差し替えはバルーンを測り直さないので採寸の記録が無く、
+/// フォルダが読めないときに scope 付きで残るのはこの `warn!` だけになる（面 0 が無いときは系列の
+/// 解決が scope 付きの `error!` を別に出す）。
+pub fn load_scope_windowpositions(
+    balloon_root: &Path,
+    scope_ids: &[usize],
+) -> ScopeWindowPositions {
+    scope_ids
+        .iter()
+        .filter_map(|&scope| scope_windowposition(balloon_root, scope).map(|wp| (scope, wp)))
+        .collect()
+}
+
 /// scope ごとの表示位置指定（`windowposition` 数値指定）を初期既定位置の調整量へ変換し
 /// `cfg.scopes[scope].balloon_offset` へ合流させる（要件 3.2/3.3/3.4/3.6・design D1'）。
 ///
@@ -567,55 +613,13 @@ fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow:
 ///
 /// scope ごとに `info!` で scope・wp 生値・バルーンの左右・変換後の調整量（物理 px）と、
 /// **解決済みの limit 値・水平配置モードの実値**（windowposition-limit 要件 6.2）を記録する。
-/// 実機サインオフ（R7.6・task 6.1）はこの行を grep して SSP 実測と突合し、x 方向の符号規約を
+/// 実機サインオフ（R7.6）はこの行を grep して SSP 実測と突合し、x 方向の符号規約を
 /// **確定させた**——確定形は「左右で反転しない素の画面座標オフセット」（`windowposition.rs` の
 /// `to_screen_adjust`「符号規約」節）。`balloon_side` は調整量の計算には効かなくなったが、
 /// 基本位置（Left＝`char_x − balloon_w`／Right＝`char_x + char_w`）がどちらだったかを実機ログ
 /// だけで再構成できるようにするため記録し続ける。
 ///
-/// # 失敗（log-first・表示を失わない）
-///
-/// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
-/// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
-/// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
-///
-/// 読んだ値は標準の位置の材料として返す（読み直さずに運ぶ）。
-fn apply_scope_windowpositions(
-    cfg: &mut PlacementConfig,
-    balloon_root: &Path,
-    scope_ids: &[usize],
-    k: ScaleRatio,
-) -> ScopeWindowPositions {
-    // 読むのは配置表に在る scope だけ（無い scope は下の合流が警告して見送る＝読む意味が無い）。
-    let present: Vec<usize> = scope_ids
-        .iter()
-        .copied()
-        .filter(|scope| cfg.scopes.contains_key(scope))
-        .collect();
-    let windowpositions = load_scope_windowpositions(balloon_root, &present);
-    merge_scope_windowpositions(cfg, &windowpositions, scope_ids, k);
-    windowpositions
-}
-
-/// scope ごとに読んだバルーンの `windowposition`（数値解釈と生値の対）。読めなかった scope は
-/// 載らない（見送りの `warn!` は読んだ側が出している）。
-pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPositionRaw)>;
-
-/// [`apply_scope_windowpositions`] の読む半分（ファイルを読む）。
-///
-/// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
-/// [`merge_scope_windowpositions`] だけを通す（areka-P0-shell-balloon-switch 要件 2.7）。
-pub fn load_scope_windowpositions(
-    balloon_root: &Path,
-    scope_ids: &[usize],
-) -> ScopeWindowPositions {
-    scope_ids
-        .iter()
-        .filter_map(|&scope| scope_windowposition(balloon_root, scope).map(|wp| (scope, wp)))
-        .collect()
-}
-
-/// [`apply_scope_windowpositions`] の合流の半分（純関数・ファイルを読まない）。
+/// 純関数（ファイルは読まない。読むのは [`load_scope_windowpositions`]）。
 fn merge_scope_windowpositions(
     cfg: &mut PlacementConfig,
     windowpositions: &ScopeWindowPositions,
@@ -669,7 +673,7 @@ fn merge_scope_windowpositions(
             x_mode = ?x_mode,
             "placement: windowposition を初期既定位置の調整量へ変換した（scope 別・要件 3.2/7.6）"
         );
-        windowposition::apply_windowposition(cfg, scope, adjust);
+        windowposition::apply_windowposition(sc, adjust);
     }
 }
 
@@ -774,19 +778,18 @@ fn scope_windowposition(
     Some((model.windowposition(), model.windowposition_raw().clone()))
 }
 
-/// 窓配置の準備処理（design「main.rs seam」・task 6.1）。
+/// 窓配置の準備処理（design「main.rs seam」）。
 ///
-/// `load_descript_source` → `build_placement_config` → `measure_scope_sizes` →
-/// `enumerate_monitors()` の `is_primary` モニタ work area 取得（2.12）→
-/// `resolve_placement` の順に**同期実行**し、Send な結果のみの
+/// `enumerate_monitors()` と `is_primary` のモニタの選択 → `load_descript_source_for_shell` →
+/// `build_placement_config` → `measure_scope_sizes` → そのモニタの work area の取り出し
+/// （2.12・0 台ならここで `Err`）→ `resolve_placement` の順に**同期実行**し、Send な結果のみの
 /// [`PreparedPlacement`] を返す。
 ///
-/// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と終了は呼び手の `main` の
+/// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と、終了するかどうかは呼び手の
 ///   分担）
-/// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
+/// - 位置の記憶・復元（`profile/areka` の `sylphya.toml` の読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
-#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手は example とテスト）
 pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -828,21 +831,21 @@ pub fn prepare_ghost_windows_for_shell(
 /// 実モニタ列挙（`enumerate_monitors`）に由来する 2 つの値——work area（配置解決の
 /// 基準矩形・2.12）と primary モニタ DPI（起動 k₀ の分子・D7）——だけを合成値で
 /// 置き換え、それ以外（load→config→measure→resolve）は本番と同一経路を通す
-/// （記憶 prefer-x64-fake-boundary-tests の流儀。headless 環境でも emo2 fixture
+/// （実機の境界を偽の値で置き換えて x64 の決定論テストで確かめる形。headless 環境でも emo2 fixture
 /// の観測可能な完了状態を決定論的に検証できる）。
 ///
 /// `primary_dpi` を偽装境界に含めるのは、**テスト機の実 DPI が制御できない**ためである
 /// （実 DPI に依存すると採寸期待値が機械ごとに変わり決定論が壊れる）。既存の work area
 /// 注入と同じ「実列挙由来の値を引数で差し替える」形に揃え、新しい機構は導入しない。
 /// `None` は「primary モニタ DPI 取得不能」の縮退分岐（要件 1.4）を檻に入れるための入力。
-#[allow(dead_code)] // scaffold（task 6.1）: テスト専用の偽装境界（本番は prepare_ghost_windows）
+#[cfg(any(test, feature = "test-support"))]
 pub fn prepare_ghost_windows_with_work_area(
     ghost_root: &Path,
     balloon_root: &Path,
     work_area: RectPx,
     primary_dpi: Option<u32>,
 ) -> Result<PreparedPlacement, PlacementError> {
-    Ok(prepare_stages(ghost_root, balloon_root, primary_dpi)?.resolve(work_area))
+    Ok(prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, None)?.resolve(work_area))
 }
 
 /// モニタ列挙結果から primary モニタを選ぶ（2.12・work area と k₀ DPI の共通の出所）。
@@ -853,21 +856,18 @@ pub fn prepare_ghost_windows_with_work_area(
 /// - 0 台: `None`（架空の既定モニタは発明しない。work area 側の致命判定は
 ///   [`work_area_of`]・DPI 側の縮退は [`build_measure_scaling`] がそれぞれ担う）
 ///
-/// crate の中から使える（並べ直し [`reset_pos`] と `\![move]` の `primaryscreen`）。
+/// 使い手は crate の中の並べ直し [`reset_pos`] と、本体の `\![move]` の `primaryscreen`
+/// （`crates/areka/src/runtime/move_cue_place.rs`）。
 pub fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
     if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
         return Some(primary);
     }
-    match monitors.first() {
-        Some(first) => {
-            warn!(
-                monitor_count = monitors.len(),
-                "primary フラグを持つモニタが見つからない（列挙異常）——先頭モニタで代替する"
-            );
-            Some(first)
-        }
-        None => None,
-    }
+    let first = monitors.first()?;
+    warn!(
+        monitor_count = monitors.len(),
+        "primary フラグを持つモニタが見つからない（列挙異常）——先頭モニタで代替する"
+    );
+    Some(first)
 }
 
 /// [`primary_monitor`] の work area（物理 px）を [`RectPx`] へ取り出す（2.12）。
@@ -875,7 +875,7 @@ pub fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
 /// - `work_area`（`RECT`・物理 px）を **単位変換なしで忠実転写**する
 ///   （U 契約: どちらも物理 px 通貨）
 /// - `None`（モニタ 0 台）: `error!`＋`Err(PlacementError::Monitor)`（架空の既定矩形は
-///   発明しない・告知と終了は呼び手の分担）
+///   発明しない・告知と、終了するかどうかは呼び手の分担）
 fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
     let Some(monitor) = monitor else {
         error!("モニタが 1 台も列挙されない——primary work area の出所がない");
@@ -883,13 +883,24 @@ fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
             reason: "enumerate_monitors() が 0 台を返した".to_string(),
         });
     };
+    Ok(work_area_px(monitor))
+}
+
+/// モニタの work area（`RECT`・物理 px）を [`RectPx`] へ単位変換なしで写す。
+pub fn work_area_px(monitor: &Monitor) -> RectPx {
     let wa = monitor.work_area;
-    Ok(RectPx {
+    RectPx {
         left: wa.left,
         top: wa.top,
         right: wa.right,
         bottom: wa.bottom,
-    })
+    }
+}
+
+/// 表示 DPI を両軸へ写す（`u16` に収まらない値は切り詰めず `u16::MAX` へ飽和する）。
+pub(crate) fn square_dpi(dpi: u32) -> DPI {
+    let dpi = u16::try_from(dpi).unwrap_or(u16::MAX);
+    DPI::from_dpi(dpi, dpi)
 }
 
 #[cfg(test)]

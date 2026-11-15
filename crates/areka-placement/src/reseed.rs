@@ -2,14 +2,15 @@
 //! 入れ直す（areka-P0-shell-balloon-switch 要件 2.7・design「Reseed」）。
 //!
 //! 起動と同じ純関数を同じ順で通す: 配置の設定（[`build_placement_config`]）→ 作者の空間の
-//! バルーンのずらしを物理 px へ（[`apply_author_balloon_offset_scale`]）→ バルーンの
-//! `windowposition` を合流（[`merge_scope_windowpositions`]）→ 配置の解決
+//! バルーンのずらしを物理 px へ換算してバルーンの `windowposition` を合流
+//! （[`scale_then_merge`]・起動と同じ 1 つの関数）→ 配置の解決
 //! （[`resolve_placement`]・起動と同じく全スコープを昇順で 1 度に通す＝連鎖 P2 を保つ）→
 //! 利用者のドラッグの記憶を重ねる（[`apply_restored_placements`]）。
 //! 結果からはスコープごとの揃え方（`Anchored`）・バルーンのずらしの基準（`BalloonFollow`）・
-//! キーワードの素材（`BalloonKeywordBase`）だけを取り、キャラ窓の位置は捨てる。
+//! キーワードの素材（`BalloonKeywordBase`）・画面の内に保つ指定（`BalloonLimit`）と、利用者が
+//! 動かした印（記憶から戻したずらしなら付け、標準なら外す）だけを取り、キャラ窓の位置は捨てる。
 //!
-//! [`apply_shell_descript`] が触らないもの: 窓の位置（`WindowPos`）・スコープの集合（起動時の
+//! [`apply_shell_descript`] が触らないもの: キャラ窓の位置（`WindowPos`）・スコープの集合（起動時の
 //! [`GhostWindows`]）。揃え方が変わったときのキャラ窓の置き直しは、続けて呼ぶ
 //! [`reanchor_char_windows`] が今の窓寸のまま行う（窓の大きさとスコープの集合は変えない）。
 //! ファイルは読まない（新しいシェルの値・走っているバルーンの `windowposition` と作者の DPI・
@@ -24,6 +25,7 @@ use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
+use super::face_windowposition::mark_by_base;
 use super::follow::{
     AnchorSource, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
     resize_window_to, sync_drag_writer, work_area_for_window,
@@ -31,8 +33,8 @@ use super::follow::{
 use super::persist::apply_restored_placements;
 use super::resolver::{Anchor, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
 use super::source::DescriptSource;
-use super::spawn::{BalloonKeywordBase, GhostWindows};
-use super::{ScopeWindowPositions, apply_author_balloon_offset_scale, merge_scope_windowpositions};
+use super::spawn::{BalloonKeywordBase, BalloonLimit, GhostWindows};
+use super::{ScopeWindowPositions, scale_then_merge};
 
 /// 走っているバルーンの配置の値（背景の資産づくりがバルーンのフォルダから読んでおいたもの）。
 ///
@@ -42,7 +44,8 @@ use super::{ScopeWindowPositions, apply_author_balloon_offset_scale, merge_scope
 pub struct BalloonPlacementInputs {
     /// バルーンの作者の DPI（`dpi`）。`windowposition` の換算の分母。
     pub author_dpi: u16,
-    /// scope ごとの `windowposition`（[`super::load_scope_windowpositions`] の結果）。
+    /// scope ごとの `windowposition`。読み込みは面 0 の値（[`super::load_scope_windowpositions`]）で、
+    /// シェルの切り替えの後始末が今出している面の値へ替え、面の書き手が面ごとに替える。
     pub windowpositions: ScopeWindowPositions,
 }
 
@@ -68,38 +71,59 @@ pub fn apply_shell_descript(
             warn!(
                 event = "reseed_skipped",
                 scope,
-                reason = "resolve_empty",
-                "reseed: 配置の解決が空を返した（見た目の値を入れ直さない）"
+                reason = "restore_empty",
+                "reseed: 記憶の重ね合わせが空を返した（見た目の値を入れ直さない）"
             );
             continue;
         };
 
-        let c = running.char_window;
-        replace_anchor(world, c, scope, p.anchor);
-        world.entity_mut(c).insert(BalloonFollow::new(
-            running.balloon_window,
-            p.balloon_offset_base,
-        ));
-        match p.balloon_keyword_base {
-            Some((mode, adjust)) => {
-                world
-                    .entity_mut(c)
-                    .insert(BalloonKeywordBase { mode, adjust });
-            }
-            None => {
-                world.entity_mut(c).remove::<BalloonKeywordBase>();
-            }
-        }
-        // 置き直しは記憶の復元と同じ明示の配置として扱う（可視性の遷移ガードは掛けない）。
-        follow_balloon(
-            world,
-            c,
-            running.char_pos,
-            BalloonFollowTrigger::Placement(PlacementRoute::Restore),
-        );
+        replace_anchor(world, running.char_window, scope, p.anchor);
+        reinstall_balloon(world, &running, &p);
     }
-    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す（設計の決め 12）。
+    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す
+    // （areka-P0-window-link-directives 設計の決め 12）。
     sync_drag_writer(world);
+}
+
+/// バルーンを標準の部品で据え直す 5 手（`BalloonFollow` を入れる → `BalloonKeywordBase` を
+/// 入れるか外す → 利用者が動かした印を外す（記憶のずらしなら付ける・[`mark_by_base`]） →
+/// バルーン窓の `BalloonLimit` を `placement.balloon_limit` で入れ直す →
+/// [`follow_balloon`] で置き直す）。`BalloonLimit` は置き直しの書き込みの関門が読むので、
+/// 置き直しより先に入れる。シェルの切り替えの入れ直し・面の
+/// `windowposition` の置き直し・バルーン位置初期化の 3 か所が呼ぶ（crate の中でこの手順を書く
+/// 所はここだけ）。
+///
+/// 置き直しは記憶の復元と同じ明示の配置として扱う（可視性の遷移ガードは掛けない）。
+pub(crate) fn reinstall_balloon(
+    world: &mut World,
+    running: &RunningScope,
+    placement: &ScopePlacement,
+) {
+    let c = running.char_window;
+    let base = placement.balloon_offset_base;
+    world
+        .entity_mut(c)
+        .insert(BalloonFollow::new(running.balloon_window, base));
+    match placement.balloon_keyword_base {
+        Some((mode, adjust)) => {
+            world
+                .entity_mut(c)
+                .insert(BalloonKeywordBase { mode, adjust });
+        }
+        None => {
+            world.entity_mut(c).remove::<BalloonKeywordBase>();
+        }
+    }
+    mark_by_base(world, c, base);
+    world
+        .entity_mut(running.balloon_window)
+        .insert(BalloonLimit(placement.balloon_limit));
+    follow_balloon(
+        world,
+        c,
+        running.char_pos,
+        BalloonFollowTrigger::Placement(PlacementRoute::Restore),
+    );
 }
 
 /// 吸着の向きの出どころを新しいシェルの向きにし、台本の印の無い窓だけ `Anchored` を取り替える
@@ -180,16 +204,16 @@ pub(crate) fn resolve_standard_scopes(
         // （起動では設定の全スコープに窓があるので、合流先が無いことは起きない）。
         cfg.scopes.entry(scope).or_default();
         // 窓の DPI は 0 を弾いてあり、作者の DPI は縮退梯子が常に非 0 を返すので `ONE` へは
-        // 落ちない。順序は起動の準備と同じ（シェル軸の換算 → 合流）。
+        // 落ちない。順序（シェル軸の換算 → 合流）は起動の準備と同じ関数が持つ。
         let k = |author: u16| {
             ScaleRatio::new(u32::from(running.dpi.dpi_x), u32::from(author))
                 .unwrap_or(ScaleRatio::ONE)
         };
-        apply_author_balloon_offset_scale(&mut cfg, &[scope], k(shell_author_dpi));
-        merge_scope_windowpositions(
+        scale_then_merge(
             &mut cfg,
             &balloon.windowpositions,
             &[scope],
+            k(shell_author_dpi),
             k(balloon.author_dpi),
         );
         running_scopes.push(running);
@@ -198,18 +222,30 @@ pub(crate) fn resolve_standard_scopes(
     // スコープの X に連なり（P2）、`balloon.alignment,none` の側はその仮の X の中心で決まる（P5）。
     let inputs: Vec<ScopeInput> = running_scopes.iter().map(|r| r.input).collect();
 
-    // 2 周目: スコープごとにその窓の作業領域と DPI で解き、自分の要素だけを取る。
+    // 2 周目: スコープごとにその窓の作業領域と DPI で解き、自分の要素だけを取る。同じ作業領域と
+    // DPI の窓は 1 度だけ解く（解き直すと、解決の中の知らない値の警告が窓の数だけ重なる）。
+    let mut solved: Vec<(RectPx, DPI, Vec<ScopePlacement>)> = Vec::new();
     let mut resolved = Vec::new();
     for running in running_scopes {
         let scope = running.input.scope;
         // 引けなければ窓の矩形で代える（架空の矩形は作らない）。
-        let work_area =
-            work_area_for_window(&snapshot, running.char_rect).unwrap_or(running.char_rect);
+        let work_area = work_area_for_window(&snapshot, running.char_rect).unwrap_or_else(|| {
+            warn!(
+                event = "reseed_work_area_missing",
+                scope, "reseed: 窓の作業領域を引けない（窓の矩形で代える）"
+            );
+            running.char_rect
+        });
+        let at = solved
+            .iter()
+            .position(|(wa, dpi, _)| *wa == work_area && *dpi == running.dpi)
+            .unwrap_or_else(|| {
+                let out = resolve_placement(&cfg, work_area, &inputs, running.dpi);
+                solved.push((work_area, running.dpi, out));
+                solved.len() - 1
+            });
         // 自分の要素はちょうど 1 件（resolver・merge の事後条件）。破れたら黙って進めない。
-        let Some(placement) = resolve_placement(&cfg, work_area, &inputs, running.dpi)
-            .into_iter()
-            .rfind(|p| p.scope == scope)
-        else {
+        let Some(placement) = solved[at].2.iter().rfind(|p| p.scope == scope).copied() else {
             warn!(
                 event = "reseed_skipped",
                 scope,
@@ -290,8 +326,9 @@ fn running_scope(
     let char_size = char_wp.size.ok_or("char_size_unknown")?;
     let balloon_size = world
         .get::<WindowPos>(balloon_window)
-        .and_then(|wp| wp.size)
-        .ok_or("balloon_window_gone")?;
+        .ok_or("balloon_window_gone")?
+        .size
+        .ok_or("balloon_size_unknown")?;
     let dpi = *world.get::<DPI>(char_window).ok_or("char_dpi_unknown")?;
     if dpi.dpi_x == 0 {
         return Err("char_dpi_zero");

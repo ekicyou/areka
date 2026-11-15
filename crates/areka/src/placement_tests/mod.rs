@@ -14,5 +14,6 @@ mod measure_template_tests;
 mod reset_balloon_pos_tests;
 mod spawn_assembly_tests;
 mod spawn_zorder_pair_deferred_tests;
+mod zorder_branch_coverage_test_support;
 mod zorder_group_branch_coverage_tests;
 mod zorder_inversion_branch_coverage_tests;

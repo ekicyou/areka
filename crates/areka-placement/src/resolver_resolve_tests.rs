@@ -6,8 +6,10 @@
 use super::resolve_test_support::{cfg_of, input, offset_work_area, scope_cfg};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
-use crate::config::Alignment;
+use crate::config::{Alignment, PlacementConfig};
+use crate::follow::{MonitorSnapshot, project_anchor};
 use crate::shared_test_support::MEASURE_DPI;
+use log_capture_kit::capture;
 
 // ------------------------------------------------------------------
 // T-R1: bottom 右下基準（P1＋P2 の scope0 項）
@@ -85,10 +87,10 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
 }
 
 // ------------------------------------------------------------------
-// T-R2: スコープ連鎖（P2・scg 2.1/2.2・2.10・DD3）
+// T-R2: スコープ連鎖（P2・areka-P0-scope-chain-gap 2.1/2.2・2.10・DD3）
 // ------------------------------------------------------------------
 
-/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0・scg 2.1/2.2）。
+/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
 /// `kero.defaultx=0` は基準密着であって右端に戻らない（DD3 の檻）。
 /// 3 スコープで一般連鎖と、隣接ペアの隙間が 0 であることを固定する。
 #[test]
@@ -117,33 +119,12 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
         assert_eq!(
             out[1].char_pos.x,
             x0 - w1,
-            "dpi={dpi}: base_x(1)=char_x(0)−w1・defaultx=0＝隣接・gap 0（scg 2.1/2.2）"
-        );
-        assert_ne!(
-            out[1].char_pos.x,
-            wa.right - w1,
-            "dpi={dpi}: kero.defaultx=0 が右端に戻ってはならない（DD3）"
-        );
-        assert_ne!(
-            out[1].char_pos.x,
-            x0 - w0,
-            "dpi={dpi}: 前スコープ幅を引く旧式へ戻ってはならない（不等幅でのみ判別可・scg 2.1/2.2）"
+            "dpi={dpi}: base_x(1)=char_x(0)−w1・defaultx=0＝隣接・gap 0（areka-P0-scope-chain-gap 2.1/2.2）"
         );
         assert_eq!(
             out[2].char_pos.x,
             (x0 - w1) - w2,
-            "dpi={dpi}: base_x(2)=char_x(1)−w2（一般連鎖・scg 2.1/2.2）"
-        );
-        // 隣接ペアの隙間はいずれも 0（scope n の右端＝scope n−1 の左端・scg 2.2）
-        assert_eq!(
-            out[0].char_pos.x - (out[1].char_pos.x + w1),
-            0,
-            "dpi={dpi}: scope0/scope1 の隙間 0（scg 2.1/2.2）"
-        );
-        assert_eq!(
-            out[1].char_pos.x - (out[2].char_pos.x + w2),
-            0,
-            "dpi={dpi}: scope1/scope2 の隙間 0（scg 2.1/2.2）"
+            "dpi={dpi}: base_x(2)=char_x(1)−w2（一般連鎖・areka-P0-scope-chain-gap 2.1/2.2）"
         );
         // Y は各スコープの h で独立に bottom 基準
         assert_eq!(out[1].char_pos.y, wa.bottom - h1, "dpi={dpi}");
@@ -151,22 +132,22 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
     }
 }
 
-/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0・scg 2.1/2.2）。
+/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
 ///
 /// 確定規則（SSP 実測 H1）は `char_x(0) = right − w(0)`・
 /// `char_x(n≥1) = char_x(n−1) − w(n)`。引くのは**自スコープの幅**ゆえ、隣接ペアの
-/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない・scg 2.2）。
+/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない・areka-P0-scope-chain-gap 2.2）。
 ///
 /// 本檻の要点は、不等幅（400/320/200）と等幅（320/320）を**同一のヘルパ**
-/// （同一式・同一 assert 形）で検定することにある（scg 2.5＝等幅を特殊扱いしない）。
+/// （同一式・同一 assert 形）で検定することにある（areka-P0-scope-chain-gap 2.5＝等幅を特殊扱いしない）。
 /// 期待値は幅列からの畳み込みで生成し、等幅側に手書き定数を置かない
 /// （偶然一致する定数では「同一式で配置されている」ことを主張できない）。
-/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する（scg 2.4/3.5）。
+/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する（areka-P0-scope-chain-gap 2.4/3.5）。
 #[test]
 fn t_r2_unequal_widths_leave_no_gap() {
     /// 幅列を確定規則で検定する**唯一の検定路**（不等幅・等幅で分岐しない）。
     /// 検定するのは P2（キャラ窓 X の連鎖）のみで、P5（バルーン）は混ぜない。
-    fn assert_chain_is_adjacent(dpi: i32, label: &str, widths: &[i32]) -> Vec<ScopePlacement> {
+    fn assert_chain_is_adjacent(dpi: i32, label: &str, widths: &[i32]) {
         let wa = work_area(dpi);
         let cfg = cfg_of(
             (0..widths.len())
@@ -186,58 +167,32 @@ fn t_r2_unequal_widths_leave_no_gap() {
             "dpi={dpi} [{label}]: 出力長＝入力長（空虚一致封じ）"
         );
 
-        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式・scg 2.5）
+        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式・areka-P0-scope-chain-gap 2.5）
         let mut expected_x = wa.right;
         for (n, &w) in widths.iter().enumerate() {
             expected_x -= w;
             assert_eq!(
                 out[n].char_pos.x, expected_x,
-                "dpi={dpi} [{label}]: scope{n} は char_x(n)=char_x(n−1)−w(n)（隣接・gap 0（scg 2.1/2.2））"
+                "dpi={dpi} [{label}]: scope{n} は char_x(n)=char_x(n−1)−w(n)（隣接・gap 0（areka-P0-scope-chain-gap 2.1/2.2））"
             );
         }
-        // 全隣接ペアの隙間 0（scope n の右端＝scope n−1 の左端）
-        for n in 1..widths.len() {
-            assert_eq!(
-                out[n - 1].char_pos.x - (out[n].char_pos.x + widths[n]),
-                0,
-                "dpi={dpi} [{label}]: scope{}/scope{n} の隙間 0（隣接・gap 0（scg 2.1/2.2））",
-                n - 1
-            );
-        }
-        out
     }
 
     for dpi in DPIS {
-        let wa = work_area(dpi);
-
-        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない（scg 2.2/3.1/3.2）
+        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない（areka-P0-scope-chain-gap 2.2/3.1/3.2）。
+        //     前スコープの幅を引く欠陥式は、不等幅でだけ期待値と食い違う（areka-P0-scope-chain-gap 3.2）
         let unequal = [px(400, dpi), px(320, dpi), px(200, dpi)];
-        let out_unequal = assert_chain_is_adjacent(dpi, "不等幅 400/320/200", &unequal);
-        // 欠陥式（前スコープの幅を引く）は不等幅でのみ判別できる（scg 3.2）
-        let x0 = wa.right - unequal[0];
-        assert_ne!(
-            out_unequal[1].char_pos.x,
-            x0 - unequal[0],
-            "dpi={dpi}: 前スコープ幅を引く旧式へ戻ってはならない（隣接・gap 0（scg 2.1/2.2））"
-        );
+        assert_chain_is_adjacent(dpi, "不等幅 400/320/200", &unequal);
 
         // (2) 等幅 2 スコープ: (1) と**同一のヘルパ＝同一式・同一 assert 形**で検定する
-        //     （scg 2.5＝等幅を特殊扱いしない）
+        //     （areka-P0-scope-chain-gap 2.5＝等幅を特殊扱いしない）
         let equal = [px(320, dpi), px(320, dpi)];
-        let out_equal = assert_chain_is_adjacent(dpi, "等幅 320/320", &equal);
-        // 等幅では是正式（自幅を引く）と欠陥式（前スコープ幅を引く）が数値的に一致する。
-        // すなわち等幅入力では本欠陥を構造的に観測できない——不等幅入力を必須とする理由
-        // そのものであり、(1) の assert_ne! を等幅側へ置けない根拠（scg 3.2）。
-        assert_eq!(
-            out_equal[1].char_pos.x,
-            (wa.right - equal[0]) - equal[0],
-            "dpi={dpi}: 等幅では是正式と欠陥式が一致（判別には不等幅入力が要る・scg 3.2）"
-        );
+        assert_chain_is_adjacent(dpi, "等幅 320/320", &equal);
     }
 }
 
 /// T-R2 補: 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
-/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・scg 2.1/2.2）。
+/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・areka-P0-scope-chain-gap 2.1/2.2）。
 #[test]
 fn t_r2_chain_defaultx_offsets_leftward_from_base() {
     for dpi in DPIS {
@@ -257,7 +212,7 @@ fn t_r2_chain_defaultx_offsets_leftward_from_base() {
         assert_eq!(
             out[1].char_pos.x,
             x0 - w1 - dx1,
-            "dpi={dpi}: char_x(1)=base_x(1)−defaultx(1)（base_x(1)=char_x(0)−w1・scg 2.1/2.2）"
+            "dpi={dpi}: char_x(1)=base_x(1)−defaultx(1)（base_x(1)=char_x(0)−w1・areka-P0-scope-chain-gap 2.1/2.2）"
         );
     }
 }
@@ -291,77 +246,222 @@ fn t_r3_default_y_ignored_under_bottom() {
 }
 
 // ------------------------------------------------------------------
-// T-R5: シーム値＝bottom 同一幾何出力（2.8・DD9）
+// T-R5: 上・左・右の辺で最初の位置を解く（4.2）・知らない値は bottom
 // ------------------------------------------------------------------
 
-/// T-R5: `Alignment::Seam(値)` は値によらず Bottom と同一**幾何**出力
-/// （位置・寸法・バルーン・DD9＝挙動出力不変）。ただし `anchor` は 5 値解釈で
-/// 相違する（`top`/`left`/`right`→対応辺・未知値→`Bottom` フォールバック・4.2）。
-/// 旧版は構造体全体一致だったが、`bottom_snap:bool`→`anchor:Anchor` のフィールド化
-/// （task 1.2）で幾何一致＋anchor 別検証へ意味を保って更新した。
+/// T-R5 の 2 スコープ（スコープ 0 だけ `defaultx`・`defaulty` を持つ。左右の辺はどちらも使わず、
+/// 上の辺は `defaulty` を使わないので、位置に出れば暴ける）を 1 つの値で組む。
+fn seam_cfg(value: &str, dx: i32) -> PlacementConfig {
+    cfg_of(vec![
+        (
+            0,
+            scope_cfg(Alignment::Seam(value.to_owned()), Some(dx), Some(dx)),
+        ),
+        (
+            1,
+            scope_cfg(Alignment::Seam(value.to_owned()), Some(0), None),
+        ),
+    ])
+}
+
+/// T-R5: `top` は y が作業領域の上端・x は Bottom と同じ連なり、`left` は x が左端・
+/// `right` は x が右端 − w で、左右の辺は下から上へ連ねる（スコープ 1 の y＝スコープ 0
+/// の y − h1・`defaultx` は使わない）。どの辺も `anchor` は同じ辺で、解いた位置は
+/// `project_anchor` を通しても動かない（並べ直し・起動・記憶の戻し・ドラッグで同じ位置）。
+/// 左上が原点でない作業領域で `left`／`top` への依存を暴く。
 #[test]
-fn t_r5_seam_output_identical_to_bottom() {
+fn t_r5_top_left_right_resolve_on_their_own_edge() {
     for dpi in DPIS {
-        let wa = work_area(dpi);
+        let wa = offset_work_area(dpi);
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![wa],
+        };
         let (w0, h0) = (px(400, dpi), px(600, dpi));
-        let (w1, h1) = (px(320, dpi), px(480, dpi));
+        let (w1, h1) = (px(320, dpi), px(400, dpi));
         let dx = px(40, dpi);
         let inputs = [input(0, w0, h0), input(1, w1, h1)];
+        let bottom = resolve_placement(
+            &cfg_of(vec![
+                (0, scope_cfg(Alignment::Bottom, Some(dx), None)),
+                (1, scope_cfg(Alignment::Bottom, Some(0), None)),
+            ]),
+            wa,
+            &inputs,
+            MEASURE_DPI,
+        );
+        let y0 = wa.bottom - h0;
+        let y1 = y0 - h1;
 
+        for (value, anchor, expected) in [
+            (
+                "top",
+                Anchor::Top,
+                [
+                    PointPx {
+                        x: bottom[0].char_pos.x,
+                        y: wa.top,
+                    },
+                    PointPx {
+                        x: bottom[1].char_pos.x,
+                        y: wa.top,
+                    },
+                ],
+            ),
+            (
+                "left",
+                Anchor::Left,
+                [PointPx { x: wa.left, y: y0 }, PointPx { x: wa.left, y: y1 }],
+            ),
+            (
+                "right",
+                Anchor::Right,
+                [
+                    PointPx {
+                        x: wa.right - w0,
+                        y: y0,
+                    },
+                    PointPx {
+                        x: wa.right - w1,
+                        y: y1,
+                    },
+                ],
+            ),
+        ] {
+            let out = resolve_placement(&seam_cfg(value, dx), wa, &inputs, MEASURE_DPI);
+            assert_eq!(out.len(), 2, "dpi={dpi} {value}");
+            for (s, want) in out.iter().zip(expected) {
+                assert_eq!(s.anchor, anchor, "dpi={dpi} {value}: anchor は同じ辺");
+                assert_eq!(
+                    s.char_pos, want,
+                    "dpi={dpi} {value} scope={}: 最初の位置はその辺で解く",
+                    s.scope
+                );
+                assert_eq!(
+                    project_anchor(anchor, s.char_pos, s.char_size, Some(&snapshot)),
+                    s.char_pos,
+                    "dpi={dpi} {value} scope={}: 射影を通しても動かない",
+                    s.scope
+                );
+            }
+        }
+    }
+}
+
+/// T-R5: 辺がスコープごとに違うとき、左右の辺の縦の連なりは辺ごとに別で、左右の辺の
+/// スコープは横の連なり（P2）を進めない。`[right, left, bottom, right]` で、スコープ 1（左）は
+/// スコープ 0（右）の上に積まれず下端から、スコープ 2（下）は右下から始まり、スコープ 3（右）は
+/// スコープ 0 の上に積もうとして作業領域の上端で止まる。
+#[test]
+fn t_r5_mixed_edges_chain_per_edge() {
+    for dpi in DPIS {
+        let wa = offset_work_area(dpi);
+        let (w0, h0) = (px(400, dpi), px(600, dpi));
+        let (w1, h1) = (px(320, dpi), px(400, dpi));
+        let (w2, h2) = (px(200, dpi), px(300, dpi));
+        let (w3, h3) = (px(240, dpi), px(600, dpi));
+        // スコープ 3 がスコープ 0 の上に収まらず、上端で止まる組み合わせであること
+        assert!(wa.bottom - h0 - h3 < wa.top, "dpi={dpi}: 前提");
+        let seam = |v: &str| scope_cfg(Alignment::Seam(v.to_owned()), None, None);
+        let cfg = cfg_of(vec![
+            (0, seam("right")),
+            (1, seam("left")),
+            (2, scope_cfg(Alignment::Bottom, None, None)),
+            (3, seam("right")),
+        ]);
+        let inputs = [
+            input(0, w0, h0),
+            input(1, w1, h1),
+            input(2, w2, h2),
+            input(3, w3, h3),
+        ];
+
+        let out = resolve_placement(&cfg, wa, &inputs, MEASURE_DPI);
+
+        let got: Vec<PointPx> = out.iter().map(|s| s.char_pos).collect();
+        assert_eq!(
+            got,
+            vec![
+                PointPx {
+                    x: wa.right - w0,
+                    y: wa.bottom - h0,
+                },
+                PointPx {
+                    x: wa.left,
+                    y: wa.bottom - h1,
+                },
+                PointPx {
+                    x: wa.right - w2,
+                    y: wa.bottom - h2,
+                },
+                PointPx {
+                    x: wa.right - w3,
+                    y: wa.top,
+                },
+            ],
+            "dpi={dpi}: 辺ごとに連ね、左右の辺は横の連なりを進めない"
+        );
+    }
+}
+
+/// T-R5: 知らない値は Bottom と同じ幾何・`anchor` も Bottom（DD9）。
+#[test]
+fn t_r5_unknown_seam_value_resolves_like_bottom() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        let dx = px(40, dpi);
+        let inputs = [
+            input(0, px(400, dpi), px(600, dpi)),
+            input(1, px(320, dpi), px(480, dpi)),
+        ];
         let bottom = cfg_of(vec![
             (0, scope_cfg(Alignment::Bottom, Some(dx), None)),
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
         let expected = resolve_placement(&bottom, wa, &inputs, MEASURE_DPI);
-        // 空 Vec 同士の空虚一致（RED スタブで観測）を封じる
+        // 空 Vec 同士の空虚一致を封じる
         assert_eq!(expected.len(), 2, "dpi={dpi}: 比較基準が空では無意味");
 
-        for (seam_value, expected_anchor) in [
-            ("top", Anchor::Top),
-            ("left", Anchor::Left),
-            ("right", Anchor::Right),
-            ("unknown-value", Anchor::Bottom),
-        ] {
-            let seam = cfg_of(vec![
-                (
-                    0,
-                    scope_cfg(Alignment::Seam(seam_value.to_owned()), Some(dx), None),
-                ),
-                (
-                    1,
-                    scope_cfg(Alignment::Seam(seam_value.to_owned()), Some(0), None),
-                ),
-            ]);
-            let out = resolve_placement(&seam, wa, &inputs, MEASURE_DPI);
-            assert_eq!(out.len(), 2, "dpi={dpi} seam={seam_value}");
-            for (s, b) in out.iter().zip(&expected) {
-                // 幾何（位置・寸法・バルーン）は Bottom と同一（DD9・挙動出力不変）
-                assert_eq!(s.scope, b.scope, "dpi={dpi} seam={seam_value}");
-                assert_eq!(
-                    s.char_pos, b.char_pos,
-                    "dpi={dpi} seam={seam_value}: Seam の char_pos は Bottom と同一"
-                );
-                assert_eq!(s.char_size, b.char_size, "dpi={dpi} seam={seam_value}");
-                assert_eq!(
-                    s.balloon_pos, b.balloon_pos,
-                    "dpi={dpi} seam={seam_value}: Seam の balloon_pos は Bottom と同一"
-                );
-                assert_eq!(
-                    s.balloon_size, b.balloon_size,
-                    "dpi={dpi} seam={seam_value}"
-                );
-                assert_eq!(
-                    s.balloon_offset, b.balloon_offset,
-                    "dpi={dpi} seam={seam_value}"
-                );
-                // anchor は 5 値解釈で相違（top/left/right→対応辺・未知→Bottom・4.2）
-                assert_eq!(
-                    s.anchor, expected_anchor,
-                    "dpi={dpi} seam={seam_value}: anchor は 5 値解釈で解決"
-                );
-            }
-        }
+        let out = resolve_placement(&seam_cfg("unknown-value", dx), wa, &inputs, MEASURE_DPI);
+        assert_eq!(out, expected, "dpi={dpi}: 知らない値は Bottom と同じ出力");
     }
+}
+
+/// T-R5: 知らない値の警告は呼び出し 1 回につき 1 行、正典の値（`top`・`left`・`right`）
+/// では 0 行（並べ直しのたびに出ていた警告の 2 乗を止める）。警告はどのスコープの値かを
+/// `scope` に載せる（知らない値はスコープ 1 に置き、0 の決め打ちを暴く）。
+#[test]
+fn t_r5_warns_once_per_call_only_for_unknown_value() {
+    let wa = work_area(96);
+    let inputs = [input(0, 400, 600), input(1, 320, 480)];
+    let warns = |cfg: &PlacementConfig| {
+        let (_, events) = capture(|| resolve_placement(cfg, wa, &inputs, MEASURE_DPI));
+        events
+            .into_iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .collect::<Vec<_>>()
+    };
+
+    for value in ["top", "left", "right"] {
+        assert_eq!(
+            warns(&seam_cfg(value, 0)).len(),
+            0,
+            "{value}: 正典の値は警告しない"
+        );
+    }
+    let one_unknown = cfg_of(vec![
+        (0, scope_cfg(Alignment::Bottom, None, None)),
+        (
+            1,
+            scope_cfg(Alignment::Seam("unknown-value".to_owned()), None, None),
+        ),
+    ]);
+    let events = warns(&one_unknown);
+    assert_eq!(events.len(), 1, "知らない値の警告は 1 行");
+    assert_eq!(
+        events[0].field("scope"),
+        Some("1"),
+        "警告はスコープ番号を載せる"
+    );
 }
 
 // ------------------------------------------------------------------
@@ -448,7 +548,7 @@ fn t_r6_chain_uses_clamped_previous_position() {
         let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}");
-        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（scg 2.1/2.2）
+        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（areka-P0-scope-chain-gap 2.1/2.2）
         assert_eq!(out[1].char_pos.x, wa.left, "dpi={dpi}: 連鎖先もクランプ");
 
         // ここまでは両基準が左端へ潰れて同値になるため 2.7 を判別しない。
@@ -473,19 +573,8 @@ fn t_r6_chain_uses_clamped_previous_position() {
         assert_eq!(
             out[1].char_pos.x,
             clamped_x0 - w1,
-            "dpi={dpi}: base_x(1)=クランプ後 char_x(0)−w1（2.7・scg 2.1/2.2）"
-        );
-        // クランプ前の位置（wa.left+2000）を連鎖基準にすると scope1 は右端クランプへ
-        // 落ちる。退行すればこの否定 assert が落ちる＝2.7 を判別する檻の本体。
-        assert_ne!(
-            out[1].char_pos.x,
-            wa.right - w1,
-            "dpi={dpi}: クランプ前の位置を連鎖基準にしてはならない（2.7）"
-        );
-        assert_eq!(
-            out[0].char_pos.x - (out[1].char_pos.x + w1),
-            0,
-            "dpi={dpi}: クランプが挟まっても隣接ペアの隙間は 0（scg 2.1/2.2）"
+            "dpi={dpi}: base_x(1)=クランプ後 char_x(0)−w1（2.7・areka-P0-scope-chain-gap 2.1/2.2）。\
+             クランプ前の位置（wa.left+2000）を連鎖基準にすると右端クランプ（right−w1）へ落ちる"
         );
     }
 }

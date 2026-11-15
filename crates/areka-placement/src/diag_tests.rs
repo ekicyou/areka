@@ -26,86 +26,65 @@ fn ent(raw: u32) -> Entity {
 // 語彙の固定（Req 1.2/2.4・診断手順書の grep 判定語と 1:1）
 // ------------------------------------------------------------------
 
-/// 専用 target のリテラル固定（Req 1.7・手順書の `RUST_LOG` 記述と 1:1）。
-#[test]
-fn diag_target_literal_is_fixed() {
-    assert_eq!(DIAG_TARGET, "areka_placement::diag");
-}
-
-/// レコード種別タグのリテラル固定（grep 判定語の錨）。
-#[test]
-fn record_tags_are_fixed() {
-    assert_eq!(MONITOR_SNAPSHOT_TAG, "[diag.monitor_snapshot]");
-    assert_eq!(MONITOR_RECORD_TAG, "[diag.monitor]");
-    assert_eq!(WINDOW_MOVE_RECORD_TAG, "[diag.window_move]");
-    assert_eq!(ZORDER_PAIR_DECLARED_TAG, "[zorder-pair] declared");
-    assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
-}
-
-/// 経路語彙 12 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
-#[test]
-fn placement_route_vocabulary_is_fixed() {
-    assert_eq!(PlacementRoute::SpawnInitial.as_str(), "SpawnInitial");
-    assert_eq!(PlacementRoute::Restore.as_str(), "Restore");
-    assert_eq!(PlacementRoute::AnchorChange.as_str(), "AnchorChange");
-    assert_eq!(PlacementRoute::Resnap.as_str(), "Resnap");
-    assert_eq!(PlacementRoute::DpiReproject.as_str(), "DpiReproject");
-    assert_eq!(
-        PlacementRoute::KeepPositionResize.as_str(),
-        "KeepPositionResize"
-    );
-    assert_eq!(PlacementRoute::BalloonFollow.as_str(), "BalloonFollow");
-    assert_eq!(
-        PlacementRoute::ReportedSizeReconcile.as_str(),
-        "ReportedSizeReconcile"
-    );
-    assert_eq!(PlacementRoute::MoveCue.as_str(), "MoveCue");
-    assert_eq!(
-        PlacementRoute::BalloonLimitRelease.as_str(),
-        "BalloonLimitRelease"
-    );
-    assert_eq!(PlacementRoute::WorkAreaResnap.as_str(), "WorkAreaResnap");
-    assert_eq!(PlacementRoute::ChainRealign.as_str(), "ChainRealign");
-    assert_eq!(PlacementRoute::PatternMove.as_str(), "PatternMove");
-}
-
-/// `ALL` は 13 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
-#[test]
-fn placement_route_all_covers_thirteen_distinct_variants() {
-    let all = PlacementRoute::ALL;
-    assert_eq!(
-        all.len(),
-        13,
-        "経路語彙は 13 種（dpi-transition-atomicity 要件 9.4・D13・windowposition-limit C10・seriko-pattern-calls の PatternMove）"
-    );
-    for route in [
-        PlacementRoute::SpawnInitial,
-        PlacementRoute::Restore,
-        PlacementRoute::AnchorChange,
-        PlacementRoute::Resnap,
-        PlacementRoute::DpiReproject,
-        PlacementRoute::KeepPositionResize,
-        PlacementRoute::BalloonFollow,
-        PlacementRoute::ReportedSizeReconcile,
-        PlacementRoute::MoveCue,
-        PlacementRoute::BalloonLimitRelease,
-        PlacementRoute::WorkAreaResnap,
-        PlacementRoute::ChainRealign,
-        PlacementRoute::PatternMove,
-    ] {
-        assert!(all.contains(&route), "ALL に {route} が無い");
+/// 経路ごとの、[`PlacementRoute::ALL`] での番号・表示語・[`PlacementRoute::is_system_reanchor`]
+/// の答え（Req 2.4 の結論語彙・D9／D13／D16）。
+///
+/// 網羅の `match` ゆえ、経路を 1 つ足すとここが組めなくなる。番号を振る人は `ALL` へも同じ
+/// 位置に足す（番号が列の位置と合わなければ下のテストが赤になる）。
+fn expected(route: PlacementRoute) -> (usize, &'static str, bool) {
+    match route {
+        PlacementRoute::SpawnInitial => (0, "SpawnInitial", false),
+        PlacementRoute::Restore => (1, "Restore", false),
+        PlacementRoute::AnchorChange => (2, "AnchorChange", true),
+        PlacementRoute::Resnap => (3, "Resnap", true),
+        PlacementRoute::DpiReproject => (4, "DpiReproject", true),
+        PlacementRoute::KeepPositionResize => (5, "KeepPositionResize", false),
+        PlacementRoute::BalloonFollow => (6, "BalloonFollow", false),
+        PlacementRoute::ReportedSizeReconcile => (7, "ReportedSizeReconcile", true),
+        PlacementRoute::MoveCue => (8, "MoveCue", false),
+        PlacementRoute::BalloonLimitRelease => (9, "BalloonLimitRelease", false),
+        PlacementRoute::WorkAreaResnap => (10, "WorkAreaResnap", true),
+        PlacementRoute::ChainRealign => (11, "ChainRealign", true),
+        PlacementRoute::PatternMove => (12, "PatternMove", true),
     }
-    let mut names: Vec<&str> = all.iter().map(|r| r.as_str()).collect();
+}
+
+/// `ALL` の各要素の番号が 0〜N−1 をちょうど 1 度ずつ埋める（列の位置＝表の番号）。
+///
+/// 表の番号が重なる・`ALL` に同じ経路が 2 度ある・並びが表と違う、のどれでも赤になる。
+#[test]
+fn placement_route_all_lists_every_route_once_in_order() {
+    for (i, route) in PlacementRoute::ALL.into_iter().enumerate() {
+        let (n, _, _) = expected(route);
+        assert_eq!(n, i, "ALL の {i} 番目の {route} は表では {n} 番");
+    }
+}
+
+/// 各経路の表示語と再据え付けの判定が表の答えと等しく、表示語が重ならない。
+#[test]
+fn placement_route_answers_match_the_table() {
+    for route in PlacementRoute::ALL {
+        let (_, word, reanchor) = expected(route);
+        assert_eq!(route.as_str(), word, "{route:?} の表示語が表と違う");
+        assert_eq!(
+            route.is_system_reanchor(),
+            reanchor,
+            "{route:?} の再据え付けの判定が表と違う"
+        );
+    }
+    let mut names: Vec<&str> = PlacementRoute::ALL.iter().map(|r| r.as_str()).collect();
     names.sort_unstable();
-    let before = names.len();
     names.dedup();
-    assert_eq!(before, names.len(), "表示語が重複している: {names:?}");
+    assert_eq!(
+        names.len(),
+        PlacementRoute::ALL.len(),
+        "表示語が重複している: {names:?}"
+    );
 }
 
 /// 経路語は**行の値として**成立していなければならない（要件 2.7・判定側の辞書化規則）。
 ///
-/// `judge-perf.py::parse_fields` と同形の切り出しは `名前=値` を空白で割るため、値に空白が
-/// 混じると `origin=` の値が途中で切れて経路の名指しが壊れる。番兵（`-`）と同じ字面も
+/// 手順書の grep は `route=<語>` を 1 語として当てるので、値に空白が混じると当たらなくなる。番兵（`-`）と同じ字面も
 /// 「経路が判らなかった書込」と衝突するので禁じる。
 #[test]
 fn placement_route_words_are_single_tokens_and_never_the_sentinel() {
@@ -163,16 +142,6 @@ fn monitor_record_line_carries_every_field() {
         "[diag.monitor] index=0 handle=65537 bounds=0,0,1920,1080 \
          work_area=0,0,1920,1040 dpi=120 primary=true"
     );
-    for key in [
-        "index=",
-        "handle=",
-        "bounds=",
-        "work_area=",
-        "dpi=",
-        "primary=",
-    ] {
-        assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
-    }
 }
 
 /// 負座標・非プライマリ・3200 超座標（混在 DPI マルチモニタ実機相当）も忠実転写。
@@ -214,33 +183,6 @@ fn window_move_record_line_carries_every_field() {
             "[diag.window_move] route=DpiReproject entity={entity:?} kind=char scope=1 \
              x=-1500 y=640 w=336 h=400 dpi=192"
         )
-    );
-    for key in [
-        "route=", "entity=", "kind=", "scope=", "x=", "y=", "w=", "h=", "dpi=",
-    ] {
-        assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
-    }
-}
-
-/// entity は wintf 側ログ（`entity = ?e`＝`Debug` 表現）との**結合キー**ゆえ、
-/// 同一の `Debug` 表現で出す（手順書④の 2 段 grep が成立する条件）。
-#[test]
-fn window_move_record_entity_uses_debug_rendering_of_wintf_logs() {
-    let entity = ent(4242);
-    let record = WindowMoveRecord {
-        route: PlacementRoute::Resnap,
-        entity,
-        kind: WindowKind::Balloon,
-        scope: 0,
-        x: 0,
-        y: 0,
-        size: None,
-        dpi: None,
-    };
-    let line = window_move_record_line(&record);
-    assert!(
-        line.contains(&format!("entity={:?}", entity)),
-        "wintf の `entity = ?e` と同じ Debug 表現ではない: {line}"
     );
 }
 
@@ -285,29 +227,6 @@ fn zorder_pair_declared_line_carries_every_field() {
             "[zorder-pair] declared scope=1 char_entity={char_entity:?} \
              balloon_entity={balloon_entity:?}"
         )
-    );
-    for key in ["scope=", "char_entity=", "balloon_entity="] {
-        assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
-    }
-}
-
-/// 2 つの entity フィールドは wintf 側レコード（`entity=…`／`peer=…`）と**同一の
-/// `Debug` 表現**で出る——scope を持たない wintf 記録との 2 段 grep はこの一致だけが
-/// 結合条件である（要件 6.1）。役割の取り違え（char と balloon の入れ替え）も同時に固定する。
-#[test]
-fn zorder_pair_declared_line_entities_use_debug_rendering_and_keep_their_roles() {
-    let char_entity = ent(11);
-    let balloon_entity = ent(22);
-    let line = zorder_pair_declared_line(0, char_entity, balloon_entity);
-    assert!(
-        line.contains(&format!("char_entity={char_entity:?}"))
-            && line.contains(&format!("balloon_entity={balloon_entity:?}")),
-        "wintf の `entity = ?e` と同じ Debug 表現で結合できない: {line}"
-    );
-    assert_ne!(
-        line,
-        zorder_pair_declared_line(0, balloon_entity, char_entity),
-        "キャラ窓とバルーン窓を入れ替えても同じ行になる（役割が読めない）"
     );
 }
 
@@ -362,27 +281,6 @@ fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
         zorder_pair_declared_line(2, char_entity, balloon_entity)
     );
     assert_eq!(events[0].level, Level::DEBUG);
-}
-
-/// 全 10 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
-#[test]
-fn window_move_record_line_renders_every_route() {
-    for route in PlacementRoute::ALL {
-        let record = WindowMoveRecord {
-            route,
-            entity: ent(1),
-            kind: WindowKind::Char,
-            scope: 0,
-            x: 0,
-            y: 0,
-            size: Some((1, 1)),
-            dpi: Some(96),
-        };
-        assert!(
-            window_move_record_line(&record).contains(&format!("route={}", route.as_str())),
-            "route={route} がレコードに現れない"
-        );
-    }
 }
 
 // ------------------------------------------------------------------
@@ -444,7 +342,15 @@ fn log_window_move_emits_the_assembled_record_at_debug() {
 // Req 1.7: 既定では 1 行も出ない・手順書の RUST_LOG でのみ点灯
 // ------------------------------------------------------------------
 
+/// 番兵の宛先。窓の内側で 1 行出し、捕捉の窓が本当に生きていることを同じ窓の内側で示す。
+const SENTINEL_TARGET: &str = "areka_placement::diag_tests::sentinel";
+
 /// 与えた `RUST_LOG` 相当の directive で本モジュールの全出力を実際に濾して集める。
+/// 番兵の行が捕まらなければ panic する（「出ない」が空振りしない）。
+///
+/// 共有の `capture_under_filter` は log-capture-kit の `env-filter` の機能の下にあり、
+/// その機能を有効にしてよいのは wintf だけ（log-capture-kit の見張りの決まり）なので、
+/// 番兵を含めた同じ形をここに持つ。
 fn emit_all_under_filter(directives: &str) -> String {
     ensure_interest_probes();
 
@@ -465,13 +371,20 @@ fn emit_all_under_filter(directives: &str) -> String {
 
     let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let sink = buf.clone();
+    let filter = EnvFilter::new(directives).add_directive(
+        format!("{SENTINEL_TARGET}=trace")
+            .parse()
+            .expect("番兵の指令は定数から組むので常に解釈できる"),
+    );
     let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(directives))
+        .with_env_filter(filter)
         .with_ansi(false)
         .with_writer(move || VecWriter(sink.clone()))
         .finish();
 
     tracing::subscriber::with_default(subscriber, || {
+        tracing::callsite::rebuild_interest_cache();
+        tracing::trace!(target: SENTINEL_TARGET, "capture window is live");
         log_monitor_snapshot(&[rec(1, true)], "prepare_ghost_windows");
         log_window_move(&WindowMoveRecord {
             route: PlacementRoute::SpawnInitial,
@@ -489,7 +402,17 @@ fn emit_all_under_filter(directives: &str) -> String {
         });
     });
 
-    String::from_utf8(buf.lock().expect("捕捉バッファのロック取得に失敗").clone()).expect("UTF-8")
+    let out = String::from_utf8(buf.lock().expect("捕捉バッファのロック取得に失敗").clone())
+        .expect("UTF-8");
+    let (sentinel, rest): (Vec<&str>, Vec<&str>) = out
+        .split_inclusive('\n')
+        .partition(|line| line.contains(SENTINEL_TARGET));
+    assert_eq!(
+        sentinel.len(),
+        1,
+        "番兵が捕まらない＝捕捉の窓が生きていない: {out}"
+    );
+    rest.concat()
 }
 
 /// 既定水準（`RUST_LOG=info`＝`main.rs` のフォールバック）では **1 行も出ない**（Req 1.7）。

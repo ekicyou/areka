@@ -36,11 +36,16 @@ log-capture-kit = { path = "../log-capture-kit" }
 # テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
 # log-capture-kit と同じく [dependencies] へは決して置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
-# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（同 spec）。
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（spec: areka-P0-test-cage-determinism）。
 # 依存 0（std のみ）の leaf・publish = false・テスト専用。log-capture-kit と同じく
 # [dependencies] へは決して置かない。
 temp-path-kit = { path = "../temp-path-kit" }
 # 実濾過（EnvFilter）の観測と捕捉の窓を差すテストが使う（本体の表と同じ版・ワークスペースの表から受ける）。
 tracing-subscriber = { workspace = true }
-# examples/window-placement.rs の smoke 自動 close の計時（本体・wintf と同じ版・Cargo.lock に新しいクレートは増えない）。
-async-io = { version = "2.6", default-features = false }
+# examples/window-placement.rs の smoke 自動 close の計時（本体・wintf と同じく workspace の表から引く・Cargo.lock に新しいクレートは増えない）。
+async-io = { workspace = true }
+
+[[example]]
+# 手本の中の `#[test]`（u32 に収まらないスコープ）を `cargo test -p areka-placement` で走らせる（`main` は走らない）。
+name = "window-placement"
+test = true

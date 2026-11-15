@@ -61,7 +61,7 @@ pub use key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
 pub use mirror::{MirrorImage, SharedMirror};
 pub use persist::{
     Axis, PersistFailure, PersistFailureCause, PersistKey, PersistOutcome, PersistScope,
-    ScopeRoots, load_scope, save_scope,
+    ScopeRoots, load_scope, remove_scope_keys, save_scope,
 };
 pub use pull::{PullShape, PullSource};
 pub use reader::SylphyaReader;

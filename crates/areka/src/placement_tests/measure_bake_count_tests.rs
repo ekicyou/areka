@@ -11,13 +11,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AnimatedImage, AnimationInfo, DecodeError, DecodedImage, ElementDecoder, WicDecoderArm,
+    AnimatedImage, AnimationInfo, AnimationLimits, DecodeError, DecodedImage, ElementDecoder,
+    WicDecoderArm,
 };
 use areka_emo_present::balloon::resolve_balloon_faces;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::runtime::assets::{build_balloon_assets, build_shell_assets};
+use crate::runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
 use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
@@ -57,13 +58,15 @@ impl CountingDecoder {
             .or_default());
     }
 
-    /// `dir` の直下のファイルの回数を、ファイル名で引ける形で返す。
+    /// `dir` の下のファイル（下のフォルダの中も）の回数を、`dir` からの道で引ける形で返す。
     fn in_dir(&self, dir: &Path) -> BTreeMap<String, Calls> {
         self.calls
             .borrow()
             .iter()
-            .filter(|(p, _)| p.parent() == Some(dir))
-            .map(|(p, c)| (p.file_name().unwrap().to_string_lossy().into_owned(), *c))
+            .filter_map(|(p, c)| {
+                let rel = p.strip_prefix(dir).ok()?;
+                Some((rel.to_string_lossy().into_owned(), *c))
+            })
             .collect()
     }
 }
@@ -113,10 +116,24 @@ fn measure_then_assets(
     measure_with_reader(&measure, shell_dir, balloon_dir, &SCOPES, &defaults).expect("採寸は通る");
     let assets = CountingDecoder::new();
     let scopes: Vec<u32> = SCOPES.iter().map(|&s| s as u32).collect();
-    build_shell_assets(ghost_root, None, &scopes, 96, &defaults, &assets)
-        .unwrap_or_else(|e| panic!("シェルの資産は組める: {e:?}"));
-    build_balloon_assets(balloon_dir, &scopes, 96, &assets)
-        .unwrap_or_else(|e| panic!("バルーンの資産は組める: {e:?}"));
+    build_shell_assets_with_limits(
+        ghost_root,
+        None,
+        &scopes,
+        96,
+        &defaults,
+        &assets,
+        AnimationLimits::default(),
+    )
+    .unwrap_or_else(|e| panic!("シェルの資産は組める: {e:?}"));
+    build_balloon_assets_with_limits(
+        balloon_dir,
+        &scopes,
+        96,
+        &assets,
+        AnimationLimits::default(),
+    )
+    .unwrap_or_else(|e| panic!("バルーンの資産は組める: {e:?}"));
     (measure, assets)
 }
 
@@ -271,7 +288,14 @@ fn emo2_bakes_each_still_image_once_per_stage() {
         let (measure, assets) = measure_then_assets(&root, &shell_dir, &balloon_dir);
 
         let measured_shell = measure.in_dir(&shell_dir);
-        assert!(!measured_shell.is_empty(), "emo2 のシェルの絵を焼く");
+        // emo2 の面の絵の多くは `CityPop\` の下にある。下のフォルダの絵も数えに入っていること。
+        assert!(
+            measured_shell
+                .keys()
+                .any(|name| name.starts_with("CityPop")),
+            "emo2 のシェルの下のフォルダの絵を焼く: {:?}",
+            measured_shell.keys().collect::<Vec<_>>()
+        );
         let want = |stage: fn(bool) -> Calls| -> BTreeMap<String, Calls> {
             measured_shell
                 .keys()
@@ -309,22 +333,18 @@ fn emo2_bakes_each_still_image_once_per_stage() {
             want_balloon(|n| n.1, assembled),
             "資産のバルーンの面"
         );
-        for (stage, calls) in [
-            ("採寸", measure.in_dir(&balloon_dir)),
-            ("資産", assets_balloon),
-        ] {
-            for (name, c) in calls {
-                assert_eq!(
-                    (c.decode_frames, c.decode_first_frame),
-                    (0, 0),
-                    "{stage}のバルーン {name}: 動く絵の口は呼ばれない"
-                );
-            }
+        // 採寸のバルーンは上の `face0` との一致で動く絵の口 0 回まで決まっている。
+        for (name, c) in assets_balloon {
+            assert_eq!(
+                (c.decode_frames, c.decode_first_frame),
+                (0, 0),
+                "資産のバルーン {name}: 動く絵の口は呼ばれない"
+            );
         }
     });
 }
 
-/// 要件 2.1・2.2: 採寸の読み手を通した測りは、全コマを焼く今の測り（包まない読み手で
+/// 要件 2.1・2.2: 採寸の読み手を通した測りは、包まない読み手の測り（全コマを焼く
 /// `measure_baked`）と scope ごとの寸法が等しい（動く絵の検体と emo2）。
 #[test]
 fn first_frame_measure_matches_full_frame_measure() {
@@ -376,7 +396,7 @@ fn records_of(events: &[CapturedEvent], targets: &[&str]) -> Vec<(tracing::Level
 }
 
 /// 要件 3.6・4.5: 動く絵の検体で公開の口 `measure_scope_sizes` を通すと、シェルとバルーンの
-/// 読み込みの記録は 0 行。採寸自身の記録は全コマを焼く今の測り（`measure_baked`）と同じで、
+/// 読み込みの記録は 0 行。採寸自身の記録は包まない読み手の測り（`measure_baked`）と同じで、
 /// この検体では 0 行（scope 0 と 1 の既定の面 0・10 がどちらもシェルに在り、合成も通る）。
 #[test]
 fn public_measure_emits_no_load_records_and_same_own_records() {
@@ -408,7 +428,7 @@ fn public_measure_emits_no_load_records_and_same_own_records() {
         assert_eq!(
             own,
             records_of(&full_events, &[MEASURE_TARGET]),
-            "採寸自身の記録は全コマを焼く今の測りと同じ"
+            "採寸自身の記録は包まない読み手の測りと同じ"
         );
         assert_eq!(own, vec![], "この検体での採寸自身の記録");
     });

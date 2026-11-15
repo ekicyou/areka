@@ -113,3 +113,11 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - `areka-emo-compose` のテストの `chunks_exact_to_as_chunks` の残り 3 件（`golden_tests_test_support.rs` の `opaque_pixel_count`・`composer_tests.rs` の 2 件）は、`audit-emo-atlas` が完了時の棚卸で `as_chunks::<4>()` に直した（`composer_tests.rs` の 2 件は clippy の勧めどおり `.contains(&[..])`）。`blit_transparent_alpha_tests.rs`・`golden_tests_surface1000_bind_tests.rs` の分は、それより前に消えていた。
 - `areka-sakura/src/drive.rs:325` の `drain_collect`（`self.sinks.drain(..).collect()`）は `std::mem::take(&mut self.sinks)` に直した。
 - 着地の後は `cargo clippy -p areka-emo-compose -p areka-sakura --all-targets -- -D warnings` が警告 0（ツールチェーンの clippy は rust-1.100.0 の版）。この spec は emo-compose と areka-sakura を直し直さなくてよい。
+
+## 2026-11-15 `audit-placement-core` の記録: 配置の crate の分は重ならず、消えた指摘も無い
+
+- `audit-placement-core`（タスク 8.2）が `cargo clippy -p areka-placement --all-targets --features test-support` を 1 回回し、着手の前（`main` との分かれ目 `2f664eb6`）と比べた。この spec の直しと重なる指摘は 0 件で、消えた指摘も 0 件。直しの途中で足した型の複雑さ（`type_complexity`）2 件（`chain_rule_tests.rs`・`reseed_tests.rs`）は、同じタスクで `type` の別名にして消した。
+- 今も残る配置の crate の指摘（どれもこの spec の前から）:
+  - 本番のコード 6 件: `type_complexity` 4 件（`follow/window_move.rs:438`・`follow/work_area.rs:285`・`spawn.rs:776`・`spawn.rs:789`）・`needless_lifetimes` 1 件（`persist.rs:329`）・`too_many_arguments` 1 件（`transition_diag.rs:754`）。上の Current State の `follow/window_move.rs:452`・`spawn.rs:719/732`・`persist.rs:287`・`transition_diag.rs:768` と同じもの（行は動いた）。`config.rs:165` は着手の前から出ない。
+  - テスト 14 件: `type_complexity` 3 件（`follow_balloon_limit_tests.rs:487`・`follow_drag_end_limit_tests.rs:410`・`persist_restore_tests.rs:654`）・`manual_is_multiple_of` 3 件（`zorder_chain_tail_order_tests.rs:110`・`zorder_chain_inversion_order_tests.rs:46`・`:101`）・`bool_assert_comparison` 4 件（`placement_windowposition_vocab_tests.rs:126`・`:168`・`:201`・`:219`）・`assign_op_pattern` 1 件（`follow_balloon_limit_tests.rs:384`）・`assertions_on_constants` 1 件（`balloon_offset_persist_roundtrip_tests.rs:327`）・`clone_on_copy` 1 件（`spawn_zorder_pair_deferred_tests.rs:184`）・`useless_vec` 1 件（`follow_drag_end_gate_tests.rs:337`）。`follow*`・`transition_*` は追随の持ち物（`audit-placement-follow` は完了済み）。
+- 同じ走りで依存の `wintf` に 53 件が出る（`--no-deps` を付けないと `-D warnings` はそこで止まる）。

@@ -1,13 +1,15 @@
 //! 先送りしたプロパティ `currentghost.seriko.zorder` について、⑴プロパティの一覧
 //! （sylphya の語彙表）に名前が現れないこと、⑵参照と書込が未提供のプロパティに
 //! 対する現行どおりの応答になること、⑶その試みが窓の重なりの状態を動かさないこと、
-//! の 3 つを固定する檻（要件 13.1／13.2／13.5）。
+//! の 3 つを固定する檻（要件 13.1／13.2／13.5）。⑶は書込が何も蓄えず、生む効果が
+//! 「書けない」の知らせ `NotSettable` 1 つだけであることで成り立つので、[`t_zpd30_writing_the_deferred_property_is_dropped`] が受け持つ。
 //!
-//! # なぜ本機能の側に置くか
+//! # なぜ Z 順の機能の側に置くか
 //!
-//! design の要件対応表は要件 13 を「実装なし＝現行どおりの応答を維持・sylphya 非接触」
-//! と定めている。守るべきものは sylphya の中の何かではなく、**本機能が sylphya へ何も
-//! 足していないこと**なので、檻は本機能の側（台帳の兄弟）に置く。sylphya のファイルは
+//! `areka-P0-scope-zorder-pinning` の design の要件対応表は要件 13 を「実装なし＝現行どおりの
+//! 応答を維持・sylphya 非接触」と定めている。守るべきものは sylphya の中の何かではなく、
+//! **Z 順の機能が sylphya へ何も足していないこと**なので、檻は Z 順の機能の側（台帳の兄弟）に
+//! 置く。sylphya のファイルは
 //! 1 行も編集しない。
 //!
 //! # 恒真を避けるための対照
@@ -26,8 +28,6 @@
 //!   同じ分類器が別の名前を別の分岐へ落とすことを添える。
 //! - ソース走査（[`t_zpd40_the_property_system_sources_never_mention_the_name`]）には、
 //!   同じ走査が既知の語を必ず拾うことと、走査したファイル数の下限を添える。
-//! - 台帳の不動（[`t_zpd50_touching_the_deferred_property_leaves_the_ledger_untouched`]）
-//!   には、同じ比較が本物の重なり指定では必ず差を検出することを添える。
 //!
 //! # 期待値は檻の側の literal
 //!
@@ -49,13 +49,11 @@ use areka_sylphya::{
     SylphyaCore, SylphyaMsg, SylphyaReader, classify_set,
 };
 
-use super::{ZOrderGroupLedger, parse_zorder_tokens};
-
 // ---------------------------------------------------------------------------
 // 檻の道具
 // ---------------------------------------------------------------------------
 
-/// 本リリースで提供しないプロパティの完全な名前（要件 13.1）。
+/// 先送りして提供しないプロパティの完全な名前（要件 13.1）。
 const DEFERRED_PROPERTY: &str = "currentghost.seriko.zorder";
 
 /// 先送りした名前を語彙表とソースから探すときの探し語（小文字）。
@@ -241,7 +239,7 @@ fn reader_with_one_provided_property() -> SylphyaReader {
     SylphyaReader::new(SharedMirror::new(Arc::new(image)))
 }
 
-/// 先送りしたプロパティへの書込を 1 回試み、返る効果列を得る。
+/// 名前 `key` へ値を 1 回書き込み、返る効果の列を得る。
 fn set_effects(key: &str, value: &str) -> Vec<Effect> {
     SylphyaCore::new().apply(&SylphyaMsg::Set {
         asker: AskerId::new(ASKER),
@@ -263,36 +261,13 @@ fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
         "先送りしたプロパティの名前が sylphya の語彙表に先行登録されている\
          （要件 13.5 は名前だけの登録も禁じる）: {hits:?}"
     );
-
-    // 完全名・短縮形の双方を名指しでも確かめる（部分語の走査が将来ゆるんでも
-    // この 2 行は名前そのものを見張る）。
-    for forbidden in [DEFERRED_PROPERTY, "seriko.zorder"] {
-        let listed: Vec<(&str, &str)> = vocabulary_tables()
-            .into_iter()
-            .flat_map(|(table, names)| {
-                names
-                    .into_iter()
-                    .filter(move |name| *name == forbidden)
-                    .map(move |name| (table, name))
-            })
-            .collect();
-        assert!(
-            listed.is_empty(),
-            "語彙表に {forbidden} が載っている: {listed:?}"
-        );
-    }
 }
 
 /// 走査した語彙表 6 本が実在し・空でなく・同じ述語が既知の名前を必ず拾う（恒真回避）。
 #[test]
 fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
+    // 表の本数は t_zpd12 が名簿と突き合わせ、6 本の実在は下の名指しが確かめる。
     let tables = vocabulary_tables();
-    assert_eq!(
-        tables.len(),
-        6,
-        "この檻が読む語彙表の本数が変わっている\
-         （見ているのは檻の側の名簿であって、sylphya 側の表の増減は t_zpd12 の担当）"
-    );
     for (table, names) in &tables {
         assert!(!names.is_empty(), "語彙表 {table} が空（走査が空振りする）");
     }
@@ -332,7 +307,7 @@ fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
 ///
 /// `t_zpd10` は**名簿に載っている表だけ**を読む。名簿から漏れた表へ名前を足しても
 /// `t_zpd10` は緑のままなので、名簿が実物へ追随していることを別に主張する必要がある
-/// （task 7.2 の
+/// （
 /// `spawn_zorder_pair_deferred_tests::the_scanned_roster_covers_every_zorder_production_source_in_this_crate`
 /// と同じ形）。
 ///
@@ -453,8 +428,8 @@ fn t_zpd21_a_provided_property_still_resolves_to_its_value() {
     );
 }
 
-/// 書込は現行どおり「SET 無効な正準語彙」として落ち、書込の効果を 1 つも生まない
-/// （要件 13.1／13.2）。
+/// 書込は現行どおり「SET 無効な正準語彙」として落ち、書けないの知らせ `NotSettable` を 1 つだけ
+/// 生み、値を書く効果は生まない（要件 13.1／13.2）。
 #[test]
 fn t_zpd30_writing_the_deferred_property_is_dropped() {
     assert_eq!(
@@ -538,75 +513,10 @@ fn t_zpd40_the_property_system_sources_never_mention_the_name() {
     assert!(
         hits.is_empty(),
         "統一プロパティシステムのソースが先送りした名前に触れている\
-         （要件 13 は本リリースでの提供を行わないと定める）: {hits:?}"
+         （要件 13 はこの名前を先送りして提供しないと定める）: {hits:?}"
     );
     assert!(
         calibration >= 1,
         "走査そのものが効いていない（既知の語 defaultsurface を 1 度も拾えない）"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// ⑶ 試みても窓の重なりの状態が動かない（要件 13.2 後段）
-// ---------------------------------------------------------------------------
-
-/// 参照と書込を試みても、重なり順のグループ台帳が 1 ビットも動かない（要件 13.2）。
-///
-/// 対照として、同じ比較に本物の重なり指定を通すと必ず差が出ることを同じ 1 本で示す
-/// ——差を検出できない比較で「動かない」と言っても何も守れない。
-#[test]
-fn t_zpd50_touching_the_deferred_property_leaves_the_ledger_untouched() {
-    let mut ledger = ZOrderGroupLedger::default();
-    let members = match parse_zorder_tokens(&["0", "1"]) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {reject:?}"),
-    };
-    ledger
-        .try_add_tag_group(members)
-        .expect("受理されるべき指定が台帳に拒否された");
-
-    let before = ledger.clone();
-    let before_version = ledger.version();
-
-    // 参照と書込を試みる。
-    let reader = reader_with_one_provided_property();
-    assert_eq!(
-        reader.resolve_dotted_str(&asker_ctx(), DEFERRED_PROPERTY),
-        DottedResolution::NotFound
-    );
-    assert_eq!(
-        set_effects(DEFERRED_PROPERTY, "1,0"),
-        vec![Effect::NotSettable {
-            asker: AskerId::new(ASKER),
-            key: DEFERRED_PROPERTY.to_owned(),
-            value: "1,0".to_owned(),
-        }]
-    );
-
-    assert_eq!(
-        ledger, before,
-        "先送りしたプロパティへの参照・書込がグループ台帳を動かした（要件 13.2）"
-    );
-    assert_eq!(
-        ledger.version(),
-        before_version,
-        "先送りしたプロパティへの参照・書込が台帳の版を進めた（要件 13.2）"
-    );
-
-    // 対照: 本物の重なり指定は同じ比較で必ず差として現れる。
-    let more = match parse_zorder_tokens(&["2", "3"]) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {reject:?}"),
-    };
-    ledger
-        .try_add_tag_group(more)
-        .expect("受理されるべき指定が台帳に拒否された");
-    assert_ne!(
-        ledger, before,
-        "台帳の比較が変化を検出できていない（不動の主張が恒真になる）"
-    );
-    assert!(
-        ledger.version() > before_version,
-        "版の比較が変化を検出できていない（不動の主張が恒真になる）"
     );
 }

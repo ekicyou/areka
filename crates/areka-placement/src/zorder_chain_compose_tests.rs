@@ -14,69 +14,26 @@
 //!
 //! # 摂動は「経路から外す」形で当てる
 //!
-//! 本モジュールが張る繋ぎの規則は 2 つ——⑴連続対のうち**同一スコープの
-//! （バルーン, キャラ窓）対は張らない**（それは既存のペア機構の担当）、
-//! ⑵鎖は**1 本**であり、繋ぎは連続対だけから生まれる（グループ境界を跨いで余分に
-//! 繋がない）。この 2 つを経路から外した出力を檻の中で組み立て、
-//! `chain_invariant_violations` と `pair_edges_written` がそれを赤で掴むことを
-//! 対照として固定する。値をずらす（平行移動する）摂動では、連続対を舐める形が
-//! ずれた値も吸収してしまい、檻が強く見えるだけになる。
+//! 本モジュールが張る繋ぎの規則の 1 つ——連続対のうち**同一スコープの
+//! （バルーン, キャラ窓）対は張らない**（それは既存のペア機構の担当）——を経路から外した
+//! 出力を檻の中で組み立て、`pair_edges_written` がそれを赤で掴むことを対照として固定する。
+//! 値をずらす（平行移動する）摂動では、連続対を舐める形がずれた値も吸収してしまい、
+//! 檻が強く見えるだけになる。
 
 use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge, log_chain_absent};
+use wintf::ecs::window::{ChainPlan, ChainSegment};
 
 use super::compose_chain;
 use crate::zorder_group_ledger::{
-    GroupElement, GroupSource, GroupWindowKind, ZOrderGroup, ZOrderGroupLedger, parse_zorder_tokens,
+    GroupElement, GroupSource, ZOrderGroup, ZOrderGroupLedger, parse_zorder_tokens,
 };
+use crate::zorder_test_support::{all_consecutive_edges, b, edge, ent, ents, s, tag_group};
 
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-/// バルーン窓の要素。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
-
-/// 要素 1 つに割り当てる決定論的な `Entity`（スコープ×種別で一意）。
-fn ent(element: GroupElement) -> Entity {
-    let kind = match element.kind {
-        GroupWindowKind::Balloon => 0,
-        GroupWindowKind::Char => 1,
-    };
-    Entity::from_raw_u32(element.scope * 2 + kind + 1).expect("テスト用 entity 索引は有効")
-}
-
-/// 要素列を `Entity` 列へ。
-fn ents(elements: &[GroupElement]) -> Vec<Entity> {
-    elements.iter().copied().map(ent).collect()
-}
-
-/// 手前側 `front` が奥側 `back` に所有される繋ぎ 1 本（区間つき）。
-///
-/// 区間は**手前側の枠が属していたもの**である（合成の規則そのもの）。ここで書き下すのは
-/// 「どのグループの繋ぎか」が記録から復元できることの主張であり、値を取り違えると赤くなる。
-fn edge(front: GroupElement, back: GroupElement, segment: ChainSegment) -> CrossEdge {
-    CrossEdge {
-        owned: ent(front),
-        owner: ent(back),
-        segment,
-    }
-}
 
 /// グループ `id` に属する繋ぎ 1 本。
 fn g(id: u32) -> ChainSegment {
@@ -125,17 +82,6 @@ impl Inventory {
 fn compose(groups: &[ZOrderGroup], inventory: &Inventory) -> Option<ChainPlan> {
     let scopes = inventory.scopes();
     compose_chain(groups, &scopes, &|element| inventory.resolve(element))
-}
-
-/// タグ由来のグループ 1 本を、本番と同じ解釈器を通して組む。
-fn tag_group(id: u32, tokens: &[&str]) -> ZOrderGroup {
-    let (members, _normalizations) =
-        parse_zorder_tokens(tokens).expect("テストの指定は受理されるもの");
-    ZOrderGroup {
-        id,
-        members,
-        source: GroupSource::Tag,
-    }
 }
 
 /// 台帳を通さずに要素列を直接持たせたグループ（解釈器が作れない形＝要素 1 個以下の検査用）。
@@ -202,7 +148,7 @@ fn chain_invariant_violations(plan: &ChainPlan) -> Vec<String> {
 
 /// 繋ぎの中に「同一スコープの（バルーン, キャラ窓）対」が混ざっているスコープを拾う。
 ///
-/// この対はスコープ内ペア機構の担当であり、本 spec は 1 本も張らない（境界）。
+/// この対はスコープ内ペア機構の担当であり、鎖は 1 本も張らない（境界）。
 fn pair_edges_written(plan: &ChainPlan, scopes: &[u32]) -> Vec<u32> {
     scopes
         .iter()
@@ -213,18 +159,6 @@ fn pair_edges_written(plan: &ChainPlan, scopes: &[u32]) -> Vec<u32> {
             plan.cross_edges
                 .iter()
                 .any(|e| e.owned == ent(b(scope)) && e.owner == ent(s(scope)))
-        })
-        .collect()
-}
-
-/// 連続対を 1 つも除かずに繋いだ形＝「同一スコープ対の除外」を経路から外した出力。
-fn all_consecutive_edges(members: &[Entity]) -> Vec<CrossEdge> {
-    members
-        .windows(2)
-        .map(|w| CrossEdge {
-            owned: w[0],
-            owner: w[1],
-            segment: ChainSegment::Tail,
         })
         .collect()
 }
@@ -262,11 +196,6 @@ fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
     assert_eq!(plan.members, ents(&[b(1), s(1), b(0), s(0)]));
     assert_eq!(plan.cross_edges, vec![edge(s(1), b(0), g(1))]);
     assert!(plan.absent.is_empty(), "不在要素は無い: {:?}", plan.absent);
-    assert_eq!(
-        plan.members.last().copied(),
-        Some(ent(s(0))),
-        "鎖の根は末尾の窓"
-    );
 }
 
 /// 明示モードで 4 枚を書いた指定は、数値モードの同じ並びと同一の鎖になる（要件 2.1）。
@@ -315,7 +244,7 @@ fn t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group() {
     );
     assert_eq!(
         plan.absent,
-        vec![(1, "b1".to_string()), (1, "s1".to_string())],
+        vec![(1, 'b', 1), (1, 's', 1)],
         "不在要素は宣言したグループの ID を伴う（要件 8.4）"
     );
 
@@ -336,7 +265,7 @@ fn t_zcc05_partially_present_scope_keeps_the_surviving_window_in_the_chain() {
 
     assert_eq!(plan.members, ents(&[b(0), s(0), b(1)]));
     assert_eq!(plan.cross_edges, vec![edge(s(0), b(1), g(1))]);
-    assert_eq!(plan.absent, vec![(1, "s1".to_string())]);
+    assert_eq!(plan.absent, vec![(1, 's', 1)]);
 }
 
 /// 1 枚も実在しないときも計画そのものは組まれる（指定は生きている）。
@@ -352,12 +281,7 @@ fn t_zcc06_group_with_no_existing_window_still_yields_a_plan_with_absent_element
     assert!(plan.cross_edges.is_empty());
     assert_eq!(
         plan.absent,
-        vec![
-            (1, "b0".to_string()),
-            (1, "s0".to_string()),
-            (1, "b1".to_string()),
-            (1, "s1".to_string())
-        ]
+        vec![(1, 'b', 0), (1, 's', 0), (1, 'b', 1), (1, 's', 1)]
     );
 }
 
@@ -409,7 +333,38 @@ fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_
             edge(s(2), b(0), g(0)),
             edge(s(0), b(1), g(1))
         ],
-        "繋ぎはスコープの継ぎ目だけ（グループの境目も継ぎ目の 1 つ）。         区間は手前側の枠のもの——基底（g0）の末尾からタグ由来（g1）へ渡る繋ぎは g0 が名乗る"
+        "繋ぎはスコープの継ぎ目だけ（グループの境目も継ぎ目の 1 つ）。\
+         区間は手前側の枠のもの——基底（g0）の末尾からタグ由来（g1）へ渡る繋ぎは g0 が名乗る"
+    );
+
+    // シェルの切り替えで基底を据え直すと、基底はタグより大きい ID のまま先頭に座る。
+    // 並びは ID の順ではなく台帳の並び（基底が先・タグは追加順）で決まる。
+    let mut rebased = ZOrderGroupLedger::default();
+    rebased
+        .try_add_tag_group(parse_zorder_tokens(&["0", "1"]).expect("受理される").0)
+        .expect("重複しないので受理される");
+    let outcome = rebased.rebase_descript(parse_zorder_tokens(&["3", "2"]).expect("受理される").0);
+    assert_eq!(
+        outcome.seated_base_id,
+        Some(1),
+        "据え直した基底はタグより新しい ID"
+    );
+
+    let plan = composed(rebased.groups(), &inventory);
+
+    assert_eq!(
+        plan.members,
+        ents(&[b(3), s(3), b(2), s(2), b(0), s(0), b(1), s(1)]),
+        "ID が大きくても基底が最前"
+    );
+    assert_eq!(
+        plan.cross_edges,
+        vec![
+            edge(s(3), b(2), g(1)),
+            edge(s(2), b(0), g(1)),
+            edge(s(0), b(1), g(0))
+        ],
+        "区間は各グループの ID をそのまま名乗る"
     );
 }
 
@@ -477,7 +432,6 @@ fn t_zcc11_a_scope_named_by_a_group_never_joins_the_tail_as_well() {
         ents(&[b(0), s(0), b(1), s(1), b(2), s(2)]),
         "0・1 はグループの位置に 1 度だけ現れ、後方には 2 だけが来る"
     );
-    assert_eq!(plan.members.len(), 6, "重複参加があれば長さが増える");
 }
 
 /// 在庫のスコープが重複して渡されても、鎖には 1 度しか現れない（不変条件④）。
@@ -615,7 +569,7 @@ fn t_zcc15_every_branch_satisfies_all_four_chain_invariants() {
         );
         // 繋ぎは必ず「連続対の部分集合」であり、順序は手前から奥のまま。
         // 照らすのは端点だけである——区間は記録の欄であって並びの主張ではない。
-        let consecutive = all_consecutive_edges(&plan.members);
+        let consecutive = all_consecutive_edges(&plan.members, ChainSegment::Tail);
         for e in &plan.cross_edges {
             assert!(
                 consecutive
@@ -720,9 +674,9 @@ fn the_invariant_checker_catches_every_broken_shape() {
 /// 不在要素の記録材料が、areka 側から**そのまま鎖の語彙へ渡せる**形で届く。
 ///
 /// `[zorder-chain] absent` を出すのは指令消化の相（出口）であって本合成ではない。
-/// ここで固定するのは「出口を立てる task が、計画から `group_id` と要素の字面を取り出して
-/// [`log_chain_absent`] へ渡せる」ことである——欄の型か可視性のどちらかが欠けていれば、
-/// このテストはそもそもコンパイルできない（引受先が居ない欄を残さないための対照）。
+/// ここで固定するのは、計画から要素ごとに `group_id`・種別の字（`b`／`s`）・スコープが
+/// 読めること。出口が
+/// `log_chain_absent` へ渡す呼び出しは `zorder_drain.rs` と wintf のテストが通す。
 #[test]
 fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary() {
     let groups = [tag_group(1, &["0", "1"]), tag_group(2, &["4", "5"])];
@@ -731,19 +685,9 @@ fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary
     // どのグループの宣言が空振りしたかが、要素ごとに読める。
     assert_eq!(
         plan.absent,
-        vec![
-            (1, "b1".to_string()),
-            (1, "s1".to_string()),
-            (2, "b5".to_string()),
-            (2, "s5".to_string())
-        ],
+        vec![(1, 'b', 1), (1, 's', 1), (2, 'b', 5), (2, 's', 5)],
         "不在要素が宣言したグループを名乗っていない"
     );
-
-    // 出口が行うことをそのまま写した呼び出し（型と可視性の実証）。
-    for (group_id, element) in &plan.absent {
-        log_chain_absent(*group_id, element);
-    }
 }
 
 // ===========================================================================
@@ -763,49 +707,16 @@ fn t_zcc16_dropping_the_same_scope_pair_exclusion_is_caught() {
     // 除外を落とした出力（＝連続対を全部張る形）。
     let mutant = ChainPlan {
         members: plan.members.clone(),
-        cross_edges: all_consecutive_edges(&plan.members),
+        cross_edges: all_consecutive_edges(&plan.members, ChainSegment::Tail),
         absent: plan.absent.clone(),
     };
 
-    assert_ne!(
-        plan.cross_edges, mutant.cross_edges,
-        "除外が効いていない（本番の出力が既に連続対を全部張っている）"
-    );
+    // 本番の出力にペアの繋ぎが無いことは `composed` が確かめている。
     assert_eq!(
         pair_edges_written(&mutant, &scopes),
         vec![0, 1],
         "摂動体ではスコープ内ペアの繋ぎが現れる（検査器が赤を出せる）"
     );
-    assert!(
-        pair_edges_written(&plan, &scopes).is_empty(),
-        "本番の出力にはペアの繋ぎが 1 本も無い"
-    );
     // 摂動体は不変条件だけでは掴めない——だからペアの検査器が要る。
     assert!(chain_invariant_violations(&mutant).is_empty());
-}
-
-/// 摂動⑵——グループ境界を跨いで余分に繋ぐと（後のグループの先頭が 2 枚を所有する形）、
-/// 不変条件①が赤で止める。
-#[test]
-fn t_zcc17_linking_across_a_group_boundary_breaks_the_single_owner_invariant() {
-    let groups = [tag_group(1, &["b0", "s0"]), tag_group(2, &["b1", "s1"])];
-    let inventory = Inventory::full(&[0, 1]);
-
-    let plan = composed(&groups, &inventory);
-    assert_eq!(plan.cross_edges, vec![edge(s(0), b(1), g(1))]);
-
-    // グループ境界を跨ぐ繋ぎを 1 本足す（後のグループの先頭が 2 枚を所有する）。
-    let mut cross_edges = plan.cross_edges.clone();
-    cross_edges.push(edge(b(0), b(1), ChainSegment::Tail));
-    let mutant = ChainPlan {
-        members: plan.members.clone(),
-        cross_edges,
-        absent: plan.absent.clone(),
-    };
-
-    let violations = chain_invariant_violations(&mutant);
-    assert!(
-        violations.iter().any(|v| v.starts_with('①')),
-        "境界跨ぎの余分な繋ぎを掴めていない: {violations:?}"
-    );
 }

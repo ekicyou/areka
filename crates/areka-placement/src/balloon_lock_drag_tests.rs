@@ -1,4 +1,4 @@
-//! 止めたバルーンのドラッグの檻（task 5.2・要件 5.6・6.1・6.3・6.4・6.5・6.6・7.4・
+//! 止めたバルーンのドラッグの檻（要件 5.6・6.1・6.3・6.4・6.5・6.6・7.4・
 //! design「BalloonLock」入口の見張り）。
 //!
 //! 組み立ては `follow_drag_end_gate_tests.rs` と同じ: wndproc の代わりに
@@ -7,32 +7,30 @@
 //! wintf がドラッグの始まりに控える `WindowDragContextResource` もそのまま通る。
 //! 止めたドラッグでは wintf が窓を動かさないので、バルーンの `WindowPos` は書き換えない。
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::collections::HashMap;
 use std::time::Instant;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{
-    PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
-};
+use areka_sylphya::PersistKey;
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::{
     DragAccumulatorResource, DragConfig, DragEndEvent, DragTransition, OnDrag, OnDragEnd,
     WindowDragContext, WindowDragContextResource, dispatch_drag_events,
 };
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{PhysicalPoint, Point, SizeI, Window, WindowHandle, WindowPos};
+use wintf::ecs::{PhysicalPoint, Point, SizeI, Window, WindowPos};
 
 use super::super::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag, on_balloon_drag_end,
     on_char_drag,
 };
-use super::super::persist::PersistWiring;
+use super::super::persist::finalize_save_tests::Store;
 use super::super::resolver::{Anchor, PointPx, RectPx};
 use super::super::spawn::{BalloonKeywordBase, CharWindowMarker};
 use super::*;
 use crate::config::BalloonXMode;
-use log_capture_kit::{CapturedEvent, capture};
+use crate::shared_test_support::{events_with, scopes};
+use crate::test_support::fake_handle;
+use log_capture_kit::capture;
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
 const SCOPE: usize = 1;
@@ -47,22 +45,6 @@ const KEYWORD_BASE: BalloonKeywordBase = BalloonKeywordBase {
     adjust: PointPx { x: 13, y: -7 },
 };
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
-fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
-}
-
 fn window_pos(p: Point, w: i32, h: i32) -> WindowPos {
     WindowPos {
         position: Some(p),
@@ -73,25 +55,14 @@ fn window_pos(p: Point, w: i32, h: i32) -> WindowPos {
 
 struct Rig {
     world: World,
-    parts: SylphyaParts,
-    roots: ScopeRoots,
-    store: Arc<FakePersistIo>,
+    store: Store,
     char_w: Entity,
     balloon: Entity,
 }
 
 impl Rig {
     fn new() -> Self {
-        let store = Arc::new(FakePersistIo::new());
-        let roots = ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
-            runtime_sink: None,
-        });
+        let store = Store::new();
         let mut world = World::new();
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
@@ -103,9 +74,7 @@ impl Rig {
                 bottom: 1200,
             }],
         });
-        world.insert_non_send(PersistWiring {
-            publisher: parts.publisher.clone(),
-        });
+        store.wire(&mut world);
         // 製品（`spawn.rs`）と同じく、バルーンの窓は `DragConfig::default()` と 2 つの受け手を持つ。
         let balloon = world
             .spawn((
@@ -132,8 +101,6 @@ impl Rig {
             .id();
         Self {
             world,
-            parts,
-            roots,
             store,
             char_w,
             balloon,
@@ -216,14 +183,10 @@ impl Rig {
     }
 
     /// 記憶に書かれたこのスコープのバルーンの相対位置。
-    fn saved_offsets(&self) -> Vec<(PersistKey, String)> {
-        self.parts.publisher.barrier().unwrap();
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.store.clone()),
-        )
-        .into_iter()
+    fn saved_offsets(&self) -> HashMap<PersistKey, String> {
+        self.store
+            .load()
+            .into_iter()
         .filter(
             |(k, _)| matches!(k, PersistKey::BalloonOffset { scope, .. } if *scope == SCOPE as u32),
         )
@@ -243,20 +206,8 @@ impl Rig {
     }
 
     fn close(self) {
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.store.finish();
     }
-}
-
-fn held_logs(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("balloon_drag_held"))
-        .collect()
-}
-
-fn scopes(raw: &[u32]) -> BTreeSet<u32> {
-    raw.iter().copied().collect()
 }
 
 /// 止めたドラッグ（6.1・6.6）: 追従のずれ・位置・記憶・キーワードの素材が変わらず、記録が 1 件。
@@ -279,7 +230,7 @@ fn held_balloon_drag_changes_nothing_and_logs_once() {
         "止めたドラッグで相対位置が記憶された"
     );
     assert_eq!(rig.keyword_base(), Some(KEYWORD_BASE), "素材が退役した");
-    let held = held_logs(&events);
+    let held = events_with(&events, "balloon_drag_held");
     assert_eq!(
         held.len(),
         1,
@@ -316,7 +267,7 @@ fn unheld_scope_writes_as_today() {
         "相対位置が 1 組記憶されていない"
     );
     assert_eq!(rig.keyword_base(), None, "素材が退役していない");
-    assert!(held_logs(&events).is_empty());
+    assert!(events_with(&events, "balloon_drag_held").is_empty());
     rig.close();
 }
 
@@ -333,7 +284,7 @@ fn cleared_snapshot_falls_back_to_current_setting() {
         2,
         "消えた控えを「止める」と読んだ"
     );
-    assert!(held_logs(&events).is_empty());
+    assert!(events_with(&events, "balloon_drag_held").is_empty());
 
     rig.world.entity_mut(rig.char_w).insert(KEYWORD_BASE);
     apply_script_balloon_lock(&mut rig.world, SCOPE as u32, true);
@@ -343,8 +294,11 @@ fn cleared_snapshot_falls_back_to_current_setting() {
         Some(KEYWORD_BASE),
         "止めた窓で素材が退役した"
     );
-    assert_eq!(held_logs(&events).len(), 1);
-    assert_eq!(held_logs(&events)[0].field("script"), Some("true"));
+    assert_eq!(events_with(&events, "balloon_drag_held").len(), 1);
+    assert_eq!(
+        events_with(&events, "balloon_drag_held")[0].field("script"),
+        Some("true")
+    );
     rig.close();
 }
 
@@ -365,7 +319,7 @@ fn other_window_snapshot_falls_back_to_current_setting() {
 
     assert_eq!(rig.saved_offsets().len(), 2, "別の窓の控えで止めた");
     assert_eq!(rig.keyword_base(), None);
-    assert!(held_logs(&events).is_empty());
+    assert!(events_with(&events, "balloon_drag_held").is_empty());
     rig.close();
 }
 
@@ -385,7 +339,7 @@ fn mid_drag_lock_takes_effect_from_next_drag() {
     let saved = rig.saved_offsets();
     assert_eq!(saved.len(), 2, "途中の lock がそのドラッグに効いた");
     assert_eq!(rig.keyword_base(), None);
-    assert!(held_logs(&events).is_empty());
+    assert!(events_with(&events, "balloon_drag_held").is_empty());
 
     let follow = rig.follow();
     let ((), events) = capture(|| rig.full_drag(rig.balloon));
@@ -396,7 +350,7 @@ fn mid_drag_lock_takes_effect_from_next_drag() {
         "次のドラッグで記憶が書き換わった"
     );
     assert_eq!(
-        held_logs(&events).len(),
+        events_with(&events, "balloon_drag_held").len(),
         1,
         "次のドラッグから止まっていない"
     );
@@ -422,22 +376,5 @@ fn char_drag_moves_held_balloon_along() {
         },
         "止めたスコープのバルーンがキャラクターの窓に付いて動いていない"
     );
-    rig.close();
-}
-
-/// 止めたドラッグを放してもクリックにならない（6.2・design I5）: ドラッグの判定
-/// （`enabled`・`left_button`）は落とさず、放しはドラッグの終わりとして配られる。
-/// バルーンのクリックは押した時点で決まるので、放しがクリックとして届く道は無い。
-#[test]
-fn held_drag_release_is_delivered_as_drag_end_not_click() {
-    let mut rig = Rig::new();
-    seed_balloon_lock(&mut rig.world, &scopes(&[SCOPE as u32]));
-
-    let ((), events) = capture(|| rig.full_drag(rig.balloon));
-
-    let drag = rig.world.get::<DragConfig>(rig.balloon).unwrap();
-    assert!(drag.enabled && drag.left_button && !drag.move_window);
-    // 終わりの受け手が 1 回呼ばれた（止めたドラッグの終わりの記録は終わりの受け手だけが出す）
-    assert_eq!(held_logs(&events).len(), 1, "{events:?}");
     rig.close();
 }

@@ -28,40 +28,9 @@ fn parse_px_tolerates_surrounding_whitespace() {
     assert_eq!(parse_px(" 42 "), Some(42));
 }
 
-#[test]
-fn parse_px_is_deterministic() {
-    for s in ["777", "-3", "x", ""] {
-        assert_eq!(parse_px(s), parse_px(s), "同一入力→同一出力: {s:?}");
-    }
-}
-
 // ------------------------------------------------------------------
 // char_pos_entries（保存 entries・1.6）: WindowPos X/Y の key/値等価
 // ------------------------------------------------------------------
-
-#[test]
-fn char_pos_entries_builds_windowpos_x_y_pairs() {
-    let entries = char_pos_entries(0, PointPx { x: 1486, y: 353 });
-    assert_eq!(
-        entries,
-        vec![
-            (
-                PersistKey::WindowPos {
-                    scope: 0,
-                    axis: Axis::X
-                },
-                "1486".to_string()
-            ),
-            (
-                PersistKey::WindowPos {
-                    scope: 0,
-                    axis: Axis::Y
-                },
-                "353".to_string()
-            ),
-        ]
-    );
-}
 
 #[test]
 fn char_pos_entries_carries_scope_and_negative_values() {
@@ -93,32 +62,8 @@ fn char_pos_entries_carries_scope_and_negative_values() {
 // ------------------------------------------------------------------
 
 #[test]
-fn balloon_offset_entries_builds_balloonoffset_x_y_pairs() {
-    let entries = balloon_offset_entries(0, PointPx { x: -400, y: 0 });
-    assert_eq!(
-        entries,
-        vec![
-            (
-                PersistKey::BalloonOffset {
-                    scope: 0,
-                    axis: Axis::X
-                },
-                "-400".to_string()
-            ),
-            (
-                PersistKey::BalloonOffset {
-                    scope: 0,
-                    axis: Axis::Y
-                },
-                "0".to_string()
-            ),
-        ]
-    );
-}
-
-#[test]
 fn balloon_offset_entries_carries_scope() {
-    let entries = balloon_offset_entries(2, PointPx { x: 336, y: 12 });
+    let entries = balloon_offset_entries(2, PointPx { x: -400, y: 12 });
     assert_eq!(
         entries,
         vec![
@@ -127,7 +72,7 @@ fn balloon_offset_entries_carries_scope() {
                     scope: 2,
                     axis: Axis::X
                 },
-                "336".to_string()
+                "-400".to_string()
             ),
             (
                 PersistKey::BalloonOffset {
@@ -138,16 +83,4 @@ fn balloon_offset_entries_carries_scope() {
             ),
         ]
     );
-}
-
-/// 保存した値が sylphya の寛容 parse で読み戻せること（key/値等価の往復・8.1 の前哨）。
-/// entries の String は parse_px でそのまま i32 へ戻る（Display ⇄ parse 対称）。
-#[test]
-fn entries_values_round_trip_through_parse_px() {
-    let pos = PointPx { x: -7, y: 1040 };
-    for (_, v) in char_pos_entries(0, pos) {
-        assert!(parse_px(&v).is_some(), "保存値 {v:?} は parse_px で読める");
-    }
-    assert_eq!(parse_px(&char_pos_entries(0, pos)[0].1), Some(pos.x));
-    assert_eq!(parse_px(&char_pos_entries(0, pos)[1].1), Some(pos.y));
 }

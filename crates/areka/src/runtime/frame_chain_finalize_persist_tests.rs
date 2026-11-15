@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use crate::app_exit::close_windows_for_restart;
 use crate::runtime::move_cue::{apply_move_directive, parse_move_directive};
 use areka_emo_compose::ScaleRatio;
-use areka_parsers::charset::DefaultEncoding;
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::{Anchored, move_window_to};
 use areka_placement::persist::persist_entries;
@@ -41,7 +40,6 @@ fn support_wired_world_delivers_positions_to_store() {
             ghost.root(),
             prep_placements(),
             &work_area_snapshot(),
-            DefaultEncoding::Ansi,
         );
         assert!(restored.is_empty(), "前提: 記憶が無い (real={real})");
 
@@ -80,7 +78,6 @@ fn support_wired_world_delivers_positions_to_store() {
                 ghost.root(),
                 prep_placements(),
                 &work_area_snapshot(),
-                DefaultEncoding::Ansi,
             );
             assert_eq!(
                 restored.into_keys().collect::<Vec<_>>(),
@@ -110,12 +107,8 @@ fn booted(store: &PersistStore, shown: &PerTargetSizes) -> (World, GhostWindows,
 
 /// 起動の準備の関数（`crate::restore_merged_placements`）が返した配置。記憶が無いことを確かめる。
 fn unremembered_placements(ghost: &MinimalGhost) -> Vec<ScopePlacement> {
-    let (placements, restored, _) = crate::restore_merged_placements(
-        ghost.root(),
-        prep_placements(),
-        &work_area_snapshot(),
-        DefaultEncoding::Ansi,
-    );
+    let (placements, restored, _) =
+        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
     assert!(restored.is_empty(), "前提: 記憶が無い");
     placements
 }

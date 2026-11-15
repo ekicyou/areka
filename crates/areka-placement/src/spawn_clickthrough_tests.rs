@@ -2,26 +2,11 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Window;
 
 use super::spawn_ghost_windows;
-use super::test_support::{
-    fake_window_handle, ghost_window_entities, titles, two_scope_placements,
-};
+use super::test_support::{titles, two_scope_placements};
+use crate::test_support::fake_handle;
 
 // -------------------------------------------------------------------------
-// stand-in 即終了（`on_ghost_pressed`）の退役（areka-P0-input-events task 3.2・6.1）
-//
-// 旧テスト `double_click_left_despawns_all_ghost_windows` /
-// `non_left_double_click_and_tunnel_do_not_despawn_ghost_windows` は stand-in
-// 即終了（プレーンなダブルクリックで全窓 despawn）の挙動を檻にしていたが、
-// 本 task で stand-in を退役し正規ハンドラ（`on_char_pointer_pressed`）へ
-// 差し替えたため仕様退役＝除去した（[[obsolete-vs-broken-test-policy]]）。
-// 正規ハンドラの挙動檻（プレーン dblclick は despawn せず DoubleClick 送出／
-// Ctrl+左 dblclick で暫定退避 despawn）は input_events の task 2.7 檻が所有し、
-// task 4.4 で再カバーされる。本 spawn.rs 側は登録の存在
-// （`t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers`）で足る。
-// -------------------------------------------------------------------------
-
-// -------------------------------------------------------------------------
-// T-I4: clickthrough 登録 system（6.1・task 5.2）
+// T-I4: clickthrough 登録 system（6.1）
 //
 // 実 `ClickThroughRegistryHandle` は wintf 内部（`new` は pub(crate)）でしか
 // 構築できないため、headless の「登録呼び出しが発生する」観測は偽装境界
@@ -77,8 +62,8 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
     // scope0 の 2 窓へ HWND 付与（wintf create_windows が付ける状況の模擬）
     let char0 = gw.char_window(0).unwrap();
     let balloon0 = gw.balloon_window(0).unwrap();
-    world.entity_mut(char0).insert(fake_window_handle(0x10));
-    world.entity_mut(balloon0).insert(fake_window_handle(0x20));
+    world.entity_mut(char0).insert(fake_handle(0x10));
+    world.entity_mut(balloon0).insert(fake_handle(0x20));
 
     schedule.run(&mut world);
     let mut calls = registrar_calls(&world);
@@ -91,7 +76,7 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
 
     // 後から HWND が付いた scope1 キャラ窓も追加で 1 回だけ登録される
     let char1 = gw.char_window(1).unwrap();
-    world.entity_mut(char1).insert(fake_window_handle(0x30));
+    world.entity_mut(char1).insert(fake_handle(0x30));
     schedule.run(&mut world);
     let calls = registrar_calls(&world);
     assert_eq!(calls.len(), 3);
@@ -106,27 +91,28 @@ fn t_i4_register_system_ignores_non_ghost_windows() {
     world.insert_non_send(FakeRegistrar::default());
     let mut schedule = register_schedule();
 
-    world.spawn((Window::default(), fake_window_handle(0x40)));
+    world.spawn((Window::default(), fake_handle(0x40)));
 
     schedule.run(&mut world);
     assert!(registrar_calls(&world).is_empty());
 }
 
-/// T-I4 補: 実 system（design 正本 signature）は
-/// `ClickThroughRegistryHandle` 未挿入の headless World で no-op（panic
-/// しない・ごく初期 tick の未挿入への Option 防御＝donor と同じ作法）。
+/// 登録の口が無い World で新しい窓に `WindowHandle` が付くと、取りこぼしを
+/// `warn!` 1 行で残す（Added は 1 度きりなので黙ると見えなくなる）。
 #[test]
-fn t_i4_real_register_system_is_noop_without_registry_resource() {
+fn t_i4_missing_registrar_warns_once_for_a_new_window() {
     let mut world = World::new();
-    let placements = two_scope_placements();
-    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+    let gw = spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
     let char0 = gw.char_window(0).unwrap();
-    world.entity_mut(char0).insert(fake_window_handle(0x50));
+    world.entity_mut(char0).insert(fake_handle(0x50));
 
     let mut schedule = Schedule::default();
     schedule.add_systems(register_ghost_windows_click_through);
-    schedule.run(&mut world);
+    let ((), events) = log_capture_kit::capture(|| schedule.run(&mut world));
 
-    // no-op で完走（窓はそのまま）
-    assert_eq!(ghost_window_entities(&mut world).len(), 4);
+    let skipped = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("clickthrough_register_skipped"))
+        .count();
+    assert_eq!(skipped, 1);
 }

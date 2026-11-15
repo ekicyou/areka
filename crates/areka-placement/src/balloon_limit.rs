@@ -6,6 +6,10 @@
 //! （要件 2.1）の唯一の所有者であり、辺の組み合わせによらず決定論的に同一規則で
 //! 補正する（要件 2.3）。
 //!
+//! 同じ式（[`clamp_rect_to_work_area`]・[`limit_correction`]）はキャラ窓を作業領域へ寄せる側
+//! （`follow::work_area_clamp` の詰め直し・大きくなった面の寄せ、`follow::move_shift` の面の
+//! `move` のずれ）も使う。式を変えるとキャラ窓の寄せも変わる。
+//!
 //! # 単位と丸め
 //!
 //! 入出力は**すべて物理 px**（座標単位契約 U1〜U5・要件 2.10）。k 適用後の実表示寸で
@@ -19,8 +23,8 @@
 //!
 //! # 依存規約
 //!
-//! クランプ核は `resolver` の物理 px 値型（[`PointPx`]／[`SizePx`]／[`RectPx`]）以外に
-//! 依存しない純関数であり、wintf／bevy_ecs を import しない
+//! クランプ核は `resolver` の物理 px 値型（[`PointPx`]／[`SizePx`]／[`RectPx`]）と、キャラ窓と
+//! 共有する 1 軸のクランプ（[`clamp_axis`]）だけに依存する純関数であり、wintf／bevy_ecs を import しない
 //! （design「Boundary Commitments / Allowed Dependencies」）。起動時関門
 //! [`apply_balloon_limit`] だけは [`MonitorSnapshot`]（bevy Resource derive だが
 //! headless 構築可）と [`work_area_for_window`] を消費してよい——決定論性は保たれ、
@@ -29,18 +33,25 @@
 use tracing::{info, warn};
 
 use super::follow::{MonitorSnapshot, work_area_for_window};
-use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx};
+use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
 
 // =============================================================================
 // 観測タグ（design「C10: 観測」・以降の全関門が本モジュールの定数を共有する）
 // =============================================================================
 
-/// limit 補正がバルーン位置を実際に動かしたことを表す判定語（要件 6.1・`info`）。
-///
-/// 実機サインオフの grep 判定語であり、`[balloon-limit] ` 接頭辞 1 語で本機能の記録を
-/// 全部拾えることが 2 段 grep の第 1 段になる（`[zorder-pair] ` の先例と同じ手口）。
-/// 出力点は各関門（task 2.4／3.3／3.4）が持ち、本モジュールは語彙だけを所有する。
-pub const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
+mod test_open {
+    /// limit 補正がバルーン位置を実際に動かしたことを表す判定語（要件 6.1・`info`）。
+    ///
+    /// 実機サインオフの grep 判定語であり、`[balloon-limit] ` 接頭辞 1 語で本機能の記録を
+    /// 全部拾えることが 2 段 grep の第 1 段になる（`[zorder-pair] ` の先例と同じ手口）。
+    /// 出力点は各関門が持ち、本モジュールは語彙だけを所有する。
+    pub const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
+}
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は関門が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::BALLOON_LIMIT_CLAMP_TAG;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::BALLOON_LIMIT_CLAMP_TAG;
 
 /// 作業領域が解決できず limit 補正を評価できなかったことを表す判定語（`warn`）。
 ///
@@ -50,13 +61,13 @@ pub(crate) const BALLOON_LIMIT_UNRESOLVED_TAG: &str = "[balloon-limit] Unresolve
 
 /// 起動時関門であることを表す契機ラベル（要件 6.1 の「契機」欄）。
 ///
-/// runtime 関門（task 3.3）と解放時補正（task 3.4）は [`super::diag::PlacementRoute`] を
+/// runtime 関門と解放時補正は [`super::diag::PlacementRoute`] を
 /// 契機に持つが、起動時関門は窓書込より前のデータ変換であり route 語彙を持たない。
 /// 補正ログの `context` フィールドで 3 関門を弁別できるようにするための語である
 /// （実機サインオフの 2 段 grep で「どの関門が動いたか」を切り分ける）。
 pub(crate) const BALLOON_LIMIT_BOOT_CONTEXT: &str = "boot-gate";
 
-/// runtime 関門（`enqueue_window_set_pos` 内・task 3.3）であることを表す契機ラベル。
+/// runtime 関門（`enqueue_window_set_pos` 内）であることを表す契機ラベル。
 ///
 /// runtime 関門は [`super::diag::PlacementRoute`] も併せて出せる（元書込の route ＝
 /// DD7「関門内の補正は元書込の route を保つ」）が、route だけでは起動時関門・解放時
@@ -65,7 +76,7 @@ pub(crate) const BALLOON_LIMIT_BOOT_CONTEXT: &str = "boot-gate";
 /// 切り分けられる（`BALLOON_LIMIT_BOOT_CONTEXT` の doc と対を成す規約）。
 pub(crate) const BALLOON_LIMIT_RUNTIME_CONTEXT: &str = "runtime-gate";
 
-/// バルーン単独ドラッグの解放時補正（`on_balloon_drag_end`・task 3.4）であることを
+/// バルーン単独ドラッグの解放時補正（`on_balloon_drag_end`）であることを
 /// 表す契機ラベル。
 ///
 /// 解放時補正は [`super::diag::PlacementRoute::BalloonLimitRelease`] という専用 route を
@@ -79,17 +90,6 @@ pub(crate) const BALLOON_LIMIT_RELEASE_CONTEXT: &str = "release-gate";
 // =============================================================================
 // クランプ核
 // =============================================================================
-
-/// 1 軸クランプ（`lo ≤ v ≤ hi`）。
-///
-/// バルーンが作業領域より大きく `hi < lo` に逆転する場合は `lo`（left／top）側を
-/// 優先する（要件 2.4）。これは**キャラ窓の既存クランプと同一の意味論**であり、
-/// 式も `resolver.rs` の `clamp_axis`（P4）と逐語同一に保つ
-/// ——バルーンとキャラで画面内維持の意味が割れないことが本仕様の要点である。
-/// `i32::clamp` は逆転区間で panic するため使わない（本層は panic しない契約）。
-fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
-    v.min(hi).max(lo)
-}
 
 /// 矩形 `(pos, size)` を `area` 内へ 4 辺クランプした位置を返す（物理 px）。
 ///
@@ -219,7 +219,7 @@ pub(crate) fn place_balloon_in_work_area(
 ///
 /// 内包判定の基準はバルーン窓ではなく**キャラ窓**が属するモニタの作業領域である。
 /// 帰属規則そのもの（窓中心 half-open ＋最近傍フォールバック）は
-/// [`work_area_for_window`] の既存規則をそのまま呼ぶだけで、本仕様は変更しない。
+/// [`work_area_for_window`] の既存規則をそのまま呼ぶだけで、ここでは変えない。
 ///
 /// # 縮退（design Error Handling「起動時関門で work area 解決不能（snapshot 空）」）
 ///
@@ -267,9 +267,9 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
         return p;
     };
 
-    // `None` は「クランプしても位置が動かない」＝書き込み不要の意（**内包の判定では
-    // ない**——逆転区間で既に左上に居るときははみ出したままでも `None`）。要件 6.1 が
-    // 求めるのは「実際に動かしたとき」の記録ゆえ、`None` ではログも書換も起こさない。
+    // `Fits` は「クランプしても位置が動かない」＝書き込み不要の意（**内包の判定では
+    // ない**——逆転区間で既に左上に居るときははみ出したままでも `Fits`）。要件 6.1 が
+    // 求めるのは「実際に動かしたとき」の記録ゆえ、`Fits` ではログも書換も起こさない。
     let place = place_balloon_in_work_area(p.balloon_pos, p.balloon_size, char_rect, area);
     let (BalloonPlace::Flipped(corrected) | BalloonPlace::Pushed(corrected)) = place else {
         return p;

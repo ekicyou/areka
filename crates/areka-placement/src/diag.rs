@@ -23,7 +23,7 @@
 //!
 //! 診断手順書の grep 判定語と出力書式は 1:1 で対応する（要件 1.5）。書式が意図せず
 //! 変われば手順書が静かに嘘になるため、**組立を純関数に切り出して in-source 檻で
-//! リテラル固定**する（本 spec の共通規約「判定は比・不変条件で」の意図された例外＝
+//! リテラル固定**する（areka-P0-dpi-window-vanish の共通規約「判定は比・不変条件で」の意図された例外＝
 //! ここで固定したいのは物理量ではなく手順書との語彙一致そのもの）。
 //! [`log_monitor_snapshot`]／[`log_window_move`] は純関数の戻り値をそのまま本文にする
 //! （組立を二重実装しない＝檻が本番の出力を本当に固定する）。
@@ -32,7 +32,7 @@
 //!
 //! 本モジュールは placement の**最下流**であり、`World`・表示基盤の型に依存しない。
 //! 扱うのは素の数値・文字列と、**下記 2 つの例外**だけである。wintf `Monitor` からの
-//! 転写は呼出側（`mod.rs`／`follow.rs`）の仕事である。
+//! 転写は呼出側（`lib.rs` の `monitor_records`）の仕事である。
 //!
 //! - [`Entity`] は **wintf 側ログ（`entity = ?e`）との結合キー**だから受ける。同じ `Debug`
 //!   表現で出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
@@ -42,24 +42,23 @@
 //!   古いまま**になりうる。列挙をそのまま受ければ網羅 match がコンパイラに守られる。
 //!   いずれも `World` を要さない `Copy` 値であり、最下流という位置は動かない。
 
-// 配線状況（task 1.4 完了時点）: 本モジュールの API は**全面配線済み**である。
+// 本番の呼び手:
 // - モニタスナップショット側（`MonitorRecord`・`monitor_snapshot_header_line`／
-//   `monitor_record_line`・`log_monitor_snapshot`）: `main.rs` の `MonitorSnapshot` 構築点
-//   （要件 1.1 正典出力点）と `placement::prepare_ghost_windows` の列挙点が呼ぶ。
+//   `monitor_record_line`・`log_monitor_snapshot`）: `areka` の `main.rs`（`boot_monitor_snapshot`・
+//   要件 1.1 正典出力点）・`runtime/frame/work_area_sync.rs`（作業領域の同期）と
+//   `prepare_ghost_windows_for_shell` の列挙点が呼ぶ。
 // - 窓移動レコード側（`WindowKind`・`WindowMoveRecord`・`window_move_record_line`・
-//   `log_window_move`・`WINDOW_MOVE_RECORD_TAG`）: `follow.rs` の単一ライター
+//   `log_window_move`・`WINDOW_MOVE_RECORD_TAG`）: `follow::window_move` の単一ライター
 //   `enqueue_window_set_pos` が書込成功時に呼ぶ。
-//
-// ゆえに**モジュール大の `#![allow(dead_code)]` は撤去した**（残すと以後の真の dead code を
-// 隠すため・tasks.md Implementation Notes「1.4 で全 API を配線したらこの属性を外すこと」）。
-// 残る個別 `#[allow(dead_code)]` は 2 箇所だけで、いずれも実在の理由を各所へ明記してある
-// （areka は bin crate ゆえ `pub` でも dead_code 免除されない）。
 
 use std::fmt;
 
 use bevy_ecs::entity::Entity;
 use tracing::debug;
 use wintf::ecs::ZOrderPairStrategy;
+// 値が取得できなかったフィールドの番兵は wintf の記録と同じ綴りを使う。
+// フィールド自体は落とさない（落とすと経路ごとに grep の当たり方が変わる）。
+use wintf::ecs::window::transition_diag::MISSING;
 
 /// 恒久観測の専用ログ target（design D1: 既定 OFF・診断手順が `RUST_LOG` で点灯）。
 ///
@@ -125,30 +124,22 @@ pub const ZORDER_PAIR_STRATEGY_TAG: &str = "[zorder-pair] strategy-selected";
 /// この打ち切りは「entity 不在＝破棄済み（正常終了系・`debug!`）」と「entity は実在するが
 /// 接地点規約の component が欠落（真の異常・`warn!`）」を**区別**するために入れたものだが、
 /// 区別は水準だけでなく**本文でも**引けなければ終了時ログの読み手に伝わらない。消費入口は
-/// 追従層（`resize_window_to`／`resize_window_keep_position`）とフレーム層（再スナップ相・
-/// 報告回収相）に分かれて 4 箇所あり、各所が独自の文言を持つと grep 語が静かに分裂する
-/// （tasks.md Implementation Notes 1.4「同一文言の複製」の教訓）。ゆえに**共通の接頭辞だけを
-/// 本定数が持ち**、後続の説明文は各消費点が自分の相を名乗る形にする。
+/// 追従層・フレーム層・終了処理に散らばり、各所が独自の文言を持つと grep 語が静かに分裂する。
+/// ゆえに**共通の接頭辞だけを本定数が持ち**、後続の説明文は各消費点が自分の相を名乗る形にする。
 ///
 /// # target について（本定数だけの例外）
 ///
 /// 本モジュールの**出力**はすべて [`DIAG_TARGET`] を通るが、本定数を用いる `debug!` は
-/// 各消費点の既定 target（`areka_placement::follow`／`areka::runtime::frame`）へ出る——
+/// 各消費点のモジュールの既定 target へ出る——
 /// 終了時ログの静穏性（要件 6.2）は診断手順の点灯有無に依らず成立すべきものだからである。
 /// 本モジュールが持つのは語彙であって出力点ではない。
 pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
-
-/// 値が取得できなかったフィールドの番兵。
-///
-/// フィールド自体は落とさない——落とすと経路ごとに grep の当たり方が変わり、
-/// 「出ていない」のか「そのフィールドが無い経路だった」のかを事後に区別できなくなる。
-const UNKNOWN: &str = "-";
 
 /// 窓位置・窓寸を書き込んだ**経路**（要件 1.2 の「変化を引き起こした経路」＝
 /// 要件 2.4 の「最終位置を書き込んだ主体」を名指しするための結論語彙）。
 ///
 /// 消失の診断で最後に要るのは「どこに居たか」ではなく「**誰が最後に書いたか**」である。
-/// 位置を書ける経路は 10 あり、ログ上でそれらが見分けられなければ書き手を名指しできない。
+/// 位置を書ける経路は 13 あり、ログ上でそれらが見分けられなければ書き手を名指しできない。
 /// 表示語（[`PlacementRoute::as_str`]）は診断手順書の判定語そのものゆえ檻で固定する。
 ///
 /// # 語彙は「実在の書込トリガ」と 1:1 でなければならない（D13）
@@ -158,21 +149,26 @@ const UNKNOWN: &str = "-";
 /// （[`MoveCue`](Self::MoveCue)）である。**1 語が 2 トリガを指すと route 名での切り分けが
 /// 原理的に不能になる**（DPI 変化ゼロの起動が「DPI 由来」を名乗る偽陽性が毎回出る）ため、
 /// 語彙側を完全化して 1:1 を保つ。
+///
+/// ただし今は [`MoveCue`](Self::MoveCue)・[`Restore`](Self::Restore) の 2 語が複数の呼び手を
+/// 持ち、語だけではどの呼び手かを見分けられない（呼び手は各変種の注に挙げる）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PlacementRoute {
-    /// spawn 初期配置（`placement::spawn` の窓生成時）。
+    /// spawn 初期配置（`spawn` の窓生成時）。
     // 単一ライターを通らない経路（spawn は entity 組立時に `WindowPos` を直接持たせる）ゆえ
-    // 現状どこからも構築されない。design「Service Interface」が定める 9 語の一部であり、
+    // 現状どこからも構築されない。design「Service Interface」が定める語彙の一部であり、
     // D13 帰結⑷「語彙のみ保持・将来の配線先として予約」ゆえ削らない。
-    #[allow(dead_code)]
     SpawnInitial,
     /// 位置永続化の復元マージ（可視化保証は position-persist の所有＝可視性ガード適用外）。
-    // 起動時の復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージするので
-    // この語を作らない。作るのはシェルの差し替えでバルーン窓を置き直す
-    // `placement::reseed::apply_shell_descript` の `follow_balloon` の引き金（記憶の復元と同じ
-    // 明示の配置として扱う）。
+    // 起動時の復元は spawn 前の `persist::restore_and_judge` が `ScopePlacement` をマージするので
+    // この語を作らない。作るのはバルーン窓を標準の部品で据え直す `reseed::reinstall_balloon` の
+    // `follow_balloon` の引き金（記憶の復元と同じ明示の配置として扱う）。呼び手は 3 つある:
+    // シェルの差し替え（`reseed::apply_shell_descript`）・面の windowposition の置き直し
+    // （`face_windowposition::apply_face_windowposition`）・バルーン位置初期化
+    // （`reset_balloon_pos::reset_balloon_positions`）。この語だけでは 3 つを見分けられない。
     Restore,
-    /// アンカー変化トリガ（`anchor_changed_system`）。
+    /// アンカー変化トリガ。本番で書くのはシェルの差し替えで新しい揃え方へ今の窓寸のまま置き直す
+    /// `reseed::reanchor_char_windows` だけ（`anchor_changed_system` は schedule に登録しない見本）。
     AnchorChange,
     /// 毎フレーム再スナップ（`resnap_from_sizes`）。
     Resnap,
@@ -192,10 +188,17 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) と別語にする（D13）。混同すると要件 1.9 の
     /// 受理回数突合（セッション②）に偽陽性が混入する。
     ReportedSizeReconcile,
-    /// `\![move]` cue によるスクリプト明示移動（`move_window_to` の**対象窓**）。
+    /// `\![move]` cue などの明示の操作による移動（`move_window_to` の**対象窓**）。
     ///
     /// 明示操作の尊重ゆえ遷移ガード適用外＝ドラッグ・[`Restore`](Self::Restore) と同族（D13）。
     /// 随伴バルーン側の書込は [`BalloonFollow`](Self::BalloonFollow) を持つ。
+    // 名は `\![move]` から来たが、作る道は 2 つある。1 つは `follow::move_window_to` で、呼び手は
+    // 台本の `\![move]`（本体の `runtime::move_cue_place`）とその連れ動き（`follow_sticky_move`）・
+    // 起動の連鎖の確定（本体の `runtime::frame::drain_resnap` の `finalize_chain_once_with`）・
+    // 位置の初期化（`reset_pos::reset_window_positions`＝台本・メニュー「シェル位置初期化」・近道）。
+    // もう 1 つは今の大きさのまま当て直す `follow::resize_window_to` で、呼び手は台本の吸着の向きの
+    // 変更（`script_alignment::apply_script_alignment`）とドラッグの終わりの当て直し
+    // （`finish_char_drag`）。この語だけではこれらを見分けられない。
     MoveCue,
     /// バルーン窓ドラッグ解放時の `windowposition.limit` 補正
     /// （`on_balloon_drag_end` の解放時補正・areka-P0-windowposition-limit DD7）。
@@ -207,7 +210,7 @@ pub enum PlacementRoute {
     ///
     /// 関門（`enqueue_window_set_pos` 内）が行う補正は本語を名乗らない——そちらは
     /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
-    // 発行者は `follow::drag_follow::apply_release_limit_correction`（task 3.4）ただ 1 箇所。
+    // 発行者は `follow::drag_follow::apply_release_limit_correction` ただ 1 箇所。
     BalloonLimitRelease,
     /// 作業領域の変化を契機とする現寸での再スナップ
     /// （areka-P0-dpi-transition-atomicity C6 `work_area_sync::resnap_for_work_area_change`）。
@@ -217,17 +220,17 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ
     /// （D13 の 1 語＝1 実在トリガ）。混同すると「作業領域が動いたから移した」のか
     /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
-    // 発行者は `runtime::frame::work_area_sync::resnap_for_work_area_change`（task 5.2 で
-    // 着地）。語彙を task 2.4 で先に建てたのは、判定器（task 3.1）と単一の窓書込口の札が
-    // 同じ語を見るためである。
+    // 発行者は `runtime::frame::work_area_sync::resnap_for_work_area_change`。
+    // 語彙をここに置くのは、判定器と単一の窓書込口の札が同じ語を見るためである。
     WorkAreaResnap,
     /// DPI 遷移後の連鎖（隣接ペア）再解決
     /// （areka-P0-dpi-transition-atomicity C4 `chain_realign::realign_chain_once_with`）。
     ///
     /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
-    /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
-    /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
-    // 発行者は `placement::chain_realign::realign_chain_once_with`（task 5.6 で着地）。
+    /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決めて
+    /// [`MoveCue`](Self::MoveCue) で書くのに対し、こちらは遷移後の新しい幅で左端を連ね直す
+    /// ——由来が違うので語も分ける。
+    // 発行者は `chain_realign::realign_chain_once_with`。
     ChainRealign,
     /// 面の `move` のずれを窓の位置へ当てる書込（seriko-pattern-calls「MoveShiftPlacement」・
     /// `follow::move_shift::apply_char_shift`）。
@@ -241,11 +244,12 @@ pub enum PlacementRoute {
 impl PlacementRoute {
     /// 全経路（檻が語彙の網羅と一意性を固定するための単一の列）。
     ///
-    /// バリアントを増やしたら[`as_str`](Self::as_str) の網羅 match がコンパイルを止め、
-    /// ここへの追加漏れは檻（`placement_route_all_covers_ten_distinct_variants`）が捕まえる。
-    // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
-    // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
-    #[allow(dead_code)]
+    /// バリアントを増やすと、[`as_str`](Self::as_str) と [`is_system_reanchor`](Self::is_system_reanchor)
+    /// に加えて檻の表（`diag_tests.rs` の `expected`・網羅の `match`）も組めなくなる。表で番号を
+    /// 振る人がここへも足し、檻（`placement_route_all_lists_every_route_once_in_order`）が
+    /// 列の番号が 0〜N−1 をちょうど 1 度ずつ埋めることを確かめる。
+    // 消費者は in-source 檻（`#[cfg(test)]`）だけである。檻専用の列であることが存在理由
+    // そのもの（語彙の網羅・一意性の単一の錨）。
     pub const ALL: [PlacementRoute; 13] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,
@@ -292,9 +296,9 @@ impl PlacementRoute {
     /// `follow::window_move::enqueue_window_set_pos` が既定位置を書込先へ追随させるか）と、
     /// 可視性の遷移ガード（`follow::visibility::route_applies_visibility_guard` が
     /// 「可視 → 全 work area 非交差」を阻止するか）。**両者は同一の区分**であることを設計が
-    /// 明言している（D9 が挙げる 6 経路と S3 の保護対象が同じ集合）ので、列を 2 本持つと
-    /// 片方だけを直したときに静かに食い違う。ゆえに定義をここ 1 本にし、可視性側は本関数へ
-    /// 委譲する。
+    /// 明言している（D9 が挙げる経路と S3 の保護対象が同じ集合。今は `PatternMove` を足した
+    /// 7 経路）ので、列を 2 本持つと片方だけを直したときに静かに食い違う。ゆえに定義をここ
+    /// 1 本にし、可視性側は本関数へ委譲する。
     ///
     /// 将来この 2 つの区分を**意図的に**割るなら、そのときは列を割ったうえで理由を設計へ
     /// 登記すること（黙って片方へ腕を足さない）。
@@ -303,9 +307,11 @@ impl PlacementRoute {
     ///
     /// 経路語彙が増えたとき、新しい語をどちら側へ置くかを**必ず**書かせるため。既定の腕
     /// （`_ => false`）を置くと、新設経路が黙って「明示操作」に倒れて既定位置が追随しなくなる。
+    /// 各経路の答えは檻の表（`diag_tests.rs` の `expected`）と突き合わせる
+    /// （`placement_route_answers_match_the_table`）。
     pub const fn is_system_reanchor(self) -> bool {
         match self {
-            // 表示環境の変化を受けた基盤側の置き直し（D9 の 6 経路）。
+            // 表示環境の変化を受けた基盤側の置き直し（D9 の経路・下の `PatternMove` と合わせて 7 経路）。
             PlacementRoute::AnchorChange
             | PlacementRoute::Resnap
             | PlacementRoute::DpiReproject
@@ -386,7 +392,7 @@ pub struct MonitorRecord {
 ///
 /// `enqueue_window_set_pos` の成功時に組む想定で、種別・scope は
 /// `CharWindowMarker`／`BalloonWindowMarker`、`dpi` は `DPI` component から
-/// 呼出側（`follow.rs`・タスク 1.4）が読んで詰める。
+/// 呼出側（`follow::window_move`）が読んで詰める。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowMoveRecord {
     /// 位置を書いた経路（＝要件 2.4 の書き手の名指し）。
@@ -432,15 +438,15 @@ pub fn monitor_record_line(record: &MonitorRecord, index: usize) -> String {
 
 /// 窓移動レコード行を組む（純関数・要件 1.2 の全フィールド）。
 ///
-/// 寸・DPI が取れない経路でもフィールドは落とさず [`UNKNOWN`] を置く（語彙不変）。
+/// 寸・DPI が取れない経路でもフィールドは落とさず [`MISSING`] を置く（語彙不変）。
 pub fn window_move_record_line(record: &WindowMoveRecord) -> String {
     let (w, h) = match record.size {
         Some((w, h)) => (w.to_string(), h.to_string()),
-        None => (UNKNOWN.to_string(), UNKNOWN.to_string()),
+        None => (MISSING.to_string(), MISSING.to_string()),
     };
     let dpi = match record.dpi {
         Some(dpi) => dpi.to_string(),
-        None => UNKNOWN.to_string(),
+        None => MISSING.to_string(),
     };
     format!(
         "{WINDOW_MOVE_RECORD_TAG} route={route} entity={entity:?} kind={kind} scope={scope} \
@@ -454,9 +460,10 @@ pub fn window_move_record_line(record: &WindowMoveRecord) -> String {
     )
 }
 
-/// 検出した全モニタの観測レコードを出力する（要件 1.1・起動時 1 回きりの有界出力）。
+/// 検出した全モニタの観測レコードを出力する（要件 1.1・1 回の呼び出しで有界の行数）。
 ///
-/// `context` は呼出点タグ（`"prepare_ghost_windows"`・`"monitor_snapshot"` 等）で、
+/// 呼ぶのは起動時の列挙・窓の準備・作業領域の同期で、作業領域が変わるたびにも出る。
+/// `context` は呼出点タグ（`"monitor_snapshot"`・`"prepare_ghost_windows"`・`"work_area_sync"`）で、
 /// 同一運転内に複数の列挙点があってもログ上で出所を弁別できるようにする。
 ///
 /// 出力は見出し 1 行＋モニタ 1 台 1 行。本文は純関数の組立結果そのもの
@@ -511,14 +518,14 @@ pub fn log_zorder_pair_declared(scope: usize, char_entity: Entity, balloon_entit
 /// 頭の中で翻訳しなければならない。
 ///
 /// `raise_assist` は案 A にしか無い概念だが、案 B でも**フィールドを落とさず**番兵
-/// [`UNKNOWN`] を置く（本モジュールの既定方針＝経路によって grep の当たり方を変えない）。
+/// [`MISSING`] を置く（本モジュールの既定方針＝経路によって grep の当たり方を変えない）。
 pub fn zorder_pair_strategy_line(strategy: ZOrderPairStrategy) -> String {
     let (plan, mechanism, raise_assist) = match strategy {
         ZOrderPairStrategy::OwnerLink { raise_assist } => {
             ("A", "owner-link", raise_assist.to_string())
         }
         ZOrderPairStrategy::ExplicitMaintenance => {
-            ("B", "explicit-maintenance", UNKNOWN.to_string())
+            ("B", "explicit-maintenance", MISSING.to_string())
         }
     };
     format!(

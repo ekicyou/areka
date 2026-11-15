@@ -589,8 +589,8 @@ fn reestablish_balloon_follow(world: &mut World, balloon: Entity, balloon_pos: P
         .collect();
 
     for (char_window, new_offset) in targets {
-        // **表示 DPI を先に読んでから**追従 Component を可変で借りる
-        // （同時借用を避ける順序・design「Modified Files」drag_follow の項）。
+        super::super::face_windowposition::mark_user_moved(world, char_window);
+        // 同時借用を避けるため表示 DPI を先に読んでから追従 Component を可変で借りる（design drag_follow の項）。
         let current_dpi = world.get::<DPI>(char_window).copied();
         let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
             continue;

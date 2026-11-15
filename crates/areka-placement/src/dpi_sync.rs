@@ -13,16 +13,16 @@
 //! 2 段書込である。実機の 12 遷移では表更新が先だった（確定台帳 L2＝経路 (a) は本採取では
 //! 未発火）ので、この経路を押さえるのは決定論テストだけである。
 //!
-//! # 見送るのは窓書込であって描画ではない（設計討議 議題 1）
+//! # 見送るのは窓書込であって描画ではない（areka-P0-dpi-transition-atomicity の設計討議 議題 1）
 //!
 //! 待ち札のある窓でも `apply_show`（描画）は止めない——発話もアニメも遅らせない。止めるのは
-//! 窓の矩形を書く 4 点だけである: 拡大率の相・報告寸の突合・**実表示寸の**再スナップ・
-//! **作業領域変化を契機とする**再スナップ（[`HoldSite`] の 4 語）。
+//! 窓の矩形を書く 5 点だけである: 拡大率の相・報告寸の突合・**実表示寸の**再スナップ・
+//! **作業領域変化を契機とする**再スナップ・面の `move` のずれの相（[`HoldSite`] の 5 語）。
 //!
 //! 「再スナップ」は日本語の同じ語が別々の 2 関数を指す——`resnap_shell_targets`（表示側の
 //! 物理寸が窓寸と食い違う窓を書き直す）と `resnap_for_work_area_change`（作業領域源が
 //! 差し替わったフレームに現寸のまま接地点を引き直す）である。設計 C5 の当初の列挙は前者だけを
-//! 指しており、後者が守備範囲の外に落ちていた（task 6.5 で 4 点目として加えた）。
+//! 指しており、後者が守備範囲の外に落ちていた（後から 4 点目として加えた）。
 //!
 //! # 有界（要件 4.4）
 //!
@@ -42,15 +42,86 @@ use super::transition_diag::{
     HOLD_SITE_WORK_AREA_RESNAP,
 };
 
-/// 整合待ちの上限フレーム数（設計 C5・C7）。
-///
-/// 判定器の許容（`transition_judge_verdict::HOLD_FRAME_ALLOWANCE`）はこの定数を参照する
-/// ——待ちの上限は本番の挙動そのものであり、判定語と同じく定義元は 1 つでなければならない。
-pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中はゲートが使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncOutcome, evaluate};
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncOutcome, evaluate};
+
+mod test_open {
+    use super::*;
+
+    /// 整合待ちの上限フレーム数（設計 C5・C7）。
+    ///
+    /// 判定器の許容（`transition_judge_verdict::HOLD_FRAME_ALLOWANCE`）はこの定数を参照する
+    /// ——待ちの上限は本番の挙動そのものであり、判定語と同じく定義元は 1 つでなければならない。
+    pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
+
+    /// 整合ゲートの判定（設計 C5）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DpiSyncDecision {
+        /// 表と一致した（または表を引けない）ので、そのまま処理する。
+        Proceed,
+        /// 不一致ゆえ当該窓の窓書込を見送る。
+        Hold,
+        /// 上限フレームを超えたので、警告の上で現在の源のまま処理する。
+        ProceedAfterTimeout,
+    }
+
+    impl DpiSyncDecision {
+        /// 観測レコードの判定語（定義元は [`transition_diag`] の 1 箇所）。
+        pub(crate) fn as_str(self) -> &'static str {
+            match self {
+                DpiSyncDecision::Proceed => HOLD_DECISION_PROCEED,
+                DpiSyncDecision::Hold => HOLD_DECISION_HOLD,
+                DpiSyncDecision::ProceedAfterTimeout => HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
+            }
+        }
+
+        /// 窓書込を見送るか。
+        pub(crate) fn is_hold(self) -> bool {
+            matches!(self, DpiSyncDecision::Hold)
+        }
+    }
+
+    /// 1 つの窓についてゲートを評価した結果（記録の材料をそのまま持つ）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct DpiSyncOutcome {
+        /// 判定。
+        pub decision: DpiSyncDecision,
+        /// 窓が持つ拡大率。
+        pub window_dpi: u32,
+        /// 帰属モニタの表が持つ拡大率（帰属なし・表なしは `None`）。
+        pub table_dpi: Option<u32>,
+        /// 待ち始めたフレーム番号（これから待ち始めるなら `now`）。
+        pub since_frame: u32,
+    }
+
+    /// 窓の拡大率と帰属モニタの表を突き合わせる（World を**読むだけ**）。
+    ///
+    /// 帰属は窓矩形の中心で決める。中心は表示基盤側の
+    /// [`window_center`] が求める——`WindowPos` の未確定表現（`CW_USEDEFAULT`）の扱いを含めて
+    /// 規則を 1 箇所に置くためである（素直に `position + size / 2` と書くと窓生成前の窓で
+    /// 整数桁溢れを起こす）。中心が求まらない窓・`DPI` を持たない窓・表そのものが無い World は
+    /// いずれも「表を引けない」＝[`Proceed`](DpiSyncDecision::Proceed) へ倒す。
+    pub fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
+        let window_dpi = world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32);
+        let table_dpi = owning_table_dpi(world, window);
+        let held_since = world
+            .get::<DpiSyncHold>(window)
+            .map(|hold| hold.since_frame);
+        DpiSyncOutcome {
+            decision: dpi_sync_decision(window_dpi, table_dpi, held_since, now),
+            window_dpi,
+            table_dpi,
+            since_frame: held_since.unwrap_or(now),
+        }
+    }
+}
 
 /// 整合待ちの札（ゴースト窓 entity へ付く）。
 ///
-/// 付いているあいだ、当該窓への窓書込は 4 つの点すべてで見送られる。付け外しは拡大率の相が
+/// 付いているあいだ、当該窓への窓書込は 5 つの点すべてで見送られる。付け外しは拡大率の相が
 /// 一元的に行い、ほかの点は**読むだけ**である（2 箇所で外すと、解除フレームに書込が 2 本出る）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DpiSyncHold {
@@ -58,34 +129,7 @@ pub struct DpiSyncHold {
     pub since_frame: u32,
 }
 
-/// 整合ゲートの判定（設計 C5）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DpiSyncDecision {
-    /// 表と一致した（または表を引けない）ので、そのまま処理する。
-    Proceed,
-    /// 不一致ゆえ当該窓の窓書込を見送る。
-    Hold,
-    /// 上限フレームを超えたので、警告の上で現在の源のまま処理する。
-    ProceedAfterTimeout,
-}
-
-impl DpiSyncDecision {
-    /// 観測レコードの判定語（定義元は [`transition_diag`] の 1 箇所）。
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            DpiSyncDecision::Proceed => HOLD_DECISION_PROCEED,
-            DpiSyncDecision::Hold => HOLD_DECISION_HOLD,
-            DpiSyncDecision::ProceedAfterTimeout => HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
-        }
-    }
-
-    /// 窓書込を見送るか。
-    pub(crate) fn is_hold(self) -> bool {
-        matches!(self, DpiSyncDecision::Hold)
-    }
-}
-
-/// 判定を下した観測点（設計 C5 の「4 点すべて」＝待ち札の守備範囲そのもの）。
+/// 判定を下した観測点（5 点すべて＝待ち札の守備範囲そのもの）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HoldSite {
     /// 拡大率の相（札の付け外しを行う唯一の点）。
@@ -94,12 +138,15 @@ pub enum HoldSite {
     Reconcile,
     /// **実表示寸**の再スナップ（`resnap_shell_targets`）。
     Resnap,
-    /// **作業領域変化を契機とする**再スナップ（`resnap_for_work_area_change`・task 6.5）。
+    /// **作業領域変化を契機とする**再スナップ（`resnap_for_work_area_change`）。
     ///
     /// [`Resnap`](HoldSite::Resnap) と別の語を持つ——「再スナップ」という日本語が別々の
     /// 2 関数を指しており、同じ語にするとログ上でどちらが見送ったのか判らないからである。
     WorkAreaResnap,
-    /// 面の `move` のずれの相（`emo2_boot/frame/move_shift.rs`・seriko-pattern-calls）。
+    /// 面の `move` のずれの相（`runtime/frame/move_shift.rs`・seriko-pattern-calls）。
+    ///
+    /// 台本の `\![move]` が絶対の位置へ書いた軸のずれを当て直す所
+    /// （`follow::move_shift::rebase_shift_axes`）も同じ語で見送る。
     PatternMove,
 }
 
@@ -160,42 +207,13 @@ pub fn current_frame(world: &World) -> u32 {
         .map_or(0, |frame| frame.0)
 }
 
-/// 1 つの窓についてゲートを評価した結果（記録の材料をそのまま持つ）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DpiSyncOutcome {
-    /// 判定。
-    pub decision: DpiSyncDecision,
-    /// 窓が持つ拡大率。
-    pub window_dpi: u32,
-    /// 帰属モニタの表が持つ拡大率（帰属なし・表なしは `None`）。
-    pub table_dpi: Option<u32>,
-    /// 待ち始めたフレーム番号（これから待ち始めるなら `now`）。
-    pub since_frame: u32,
-}
-
-/// 窓の拡大率と帰属モニタの表を突き合わせる（World を**読むだけ**）。
-///
-/// 帰属は窓矩形の中心で決める。中心は表示基盤側の
-/// [`window_center`] が求める——`WindowPos` の未確定表現（`CW_USEDEFAULT`）の扱いを含めて
-/// 規則を 1 箇所に置くためである（素直に `position + size / 2` と書くと窓生成前の窓で
-/// 整数桁溢れを起こす）。中心が求まらない窓・`DPI` を持たない窓・表そのものが無い World は
-/// いずれも「表を引けない」＝[`Proceed`](DpiSyncDecision::Proceed) へ倒す。
-pub fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
-    let window_dpi = world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32);
-    let table_dpi = world
-        .get::<WindowPos>(window)
-        .and_then(window_center)
-        .zip(world.get_resource::<MonitorDpiTable>())
-        .and_then(|((cx, cy), table)| table.dpi_for_point(cx, cy));
-    let held_since = world
-        .get::<DpiSyncHold>(window)
-        .map(|hold| hold.since_frame);
-    DpiSyncOutcome {
-        decision: dpi_sync_decision(window_dpi, table_dpi, held_since, now),
-        window_dpi,
-        table_dpi,
-        since_frame: held_since.unwrap_or(now),
-    }
+/// 帰属モニタの表の拡大率（中心が求まらない・`DPI` を持たない・表が無い窓は `None`＝進む）。
+fn owning_table_dpi(world: &World, window: Entity) -> Option<u32> {
+    world.get::<DPI>(window)?;
+    let (cx, cy) = world.get::<WindowPos>(window).and_then(window_center)?;
+    world
+        .get_resource::<MonitorDpiTable>()?
+        .dpi_for_point(cx, cy)
 }
 
 /// 拡大率の相のゲート適用——判定し、札を付け外しし、記録を 1 行出す。
@@ -237,18 +255,19 @@ pub fn apply_dpi_phase_gate(world: &mut World, window: Entity, now: u32) -> bool
     !outcome.decision.is_hold()
 }
 
-/// ほかの窓書込点（報告寸の突合・実表示寸の再スナップ・作業領域変化を契機とする再スナップ）の
-/// ゲート——**読むだけ**で札は触らない。
+/// ほかの窓書込点（報告寸の突合・実表示寸の再スナップ・作業領域変化を契機とする再スナップ・
+/// 面の `move` のずれの相）のゲート——**読むだけ**で札は触らない。
 ///
 /// 戻り値は**当該窓の窓書込を見送るか**（`true`＝この点では何も書かない）。見送った要求は
 /// 消費せず次フレームへ持ち越す（報告寸は presenter が保持し、実表示寸の再スナップは毎フレーム
 /// 表示側を読み直し、作業領域変化を契機とする再スナップは差し替え済みの作業領域源をそのまま
-/// 残す）。解除フレームに拡大率の相が新しい源・新しい寸で 1 本書き、持ち越された要求は
-/// べき等 skip で吸収される。
+/// 残し、面の `move` のずれの相は当てた分の記録が変わらないので毎フレーム当て直しを試みる）。
+/// 解除フレームに拡大率の相が新しい源・新しい寸で 1 本書き、持ち越された要求はべき等 skip で
+/// 吸収される。
 ///
-/// # 作業領域変化を契機とする再スナップだけは「次の機会」が自動では来ない（task 6.5）
+/// # 作業領域変化を契機とする再スナップだけは「次の機会」が自動では来ない
 ///
-/// ほかの 2 点は毎フレーム走るが、この点は**作業領域源が差し替わったフレームだけ**走る。
+/// ほかの点は毎フレーム走るが、この点は**作業領域源が差し替わったフレームだけ**走る。
 /// 見送ったフレームで捨てた `SnapshotChange` は二度と来ないので、この点だけを見ると
 /// 取り残されるように読める。取り残されない理由は**別の点が拾うから**である——札を外すのは
 /// 拡大率の相だけであり、その相は `Changed<DPI>` と札を持つ窓の**和集合**を対象に取る。
@@ -260,18 +279,15 @@ pub fn defers_window_write(world: &World, window: Entity, site: HoldSite) -> boo
     let Some(hold) = world.get::<DpiSyncHold>(window) else {
         return false;
     };
-    let since_frame = hold.since_frame;
-    let outcome = DpiSyncOutcome {
-        decision: DpiSyncDecision::Hold,
-        window_dpi: world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32),
-        table_dpi: world
-            .get::<WindowPos>(window)
-            .and_then(window_center)
-            .zip(world.get_resource::<MonitorDpiTable>())
-            .and_then(|((cx, cy), table)| table.dpi_for_point(cx, cy)),
-        since_frame,
-    };
-    log_hold(world, window, &outcome, site);
+    if transition_diag::is_enabled() {
+        let outcome = DpiSyncOutcome {
+            decision: DpiSyncDecision::Hold,
+            window_dpi: world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32),
+            table_dpi: owning_table_dpi(world, window),
+            since_frame: hold.since_frame,
+        };
+        log_hold(world, window, &outcome, site);
+    }
     true
 }
 

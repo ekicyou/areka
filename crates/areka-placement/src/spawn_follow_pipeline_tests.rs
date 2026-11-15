@@ -4,13 +4,15 @@ use wintf::ecs::drag::OnDrag;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
-use super::test_support::{fake_window_handle, titles};
+use super::test_support::titles;
 use super::{GhostWindows, spawn_ghost_windows};
 use crate::follow::BalloonFollow;
 use crate::resolver::{PointPx, ScopePlacement, SizePx};
+use crate::sample_test_support::{SCOPE0_H, SCOPE0_W};
+use crate::test_support::give_fake_handles;
 
 // -------------------------------------------------------------------------
-// T-I4: follow 幾何（task 5.3・design Testing Strategy 4・要件 4.2）
+// T-I4: follow 幾何（design Testing Strategy 4・要件 4.2）
 //
 // 実パイプライン統合: `build_placement_config`（KV 実経路）→
 // `resolve_placement`（非 96 倍数の合成 work_area・原点非 (0,0)）→
@@ -22,7 +24,6 @@ use crate::resolver::{PointPx, ScopePlacement, SizePx};
 // あり、兄弟モジュールのテストは自ファイル内という repo 慣行に従いここに置く。
 // -------------------------------------------------------------------------
 
-use std::collections::BTreeMap;
 use std::time::Instant;
 
 use wintf::ecs::drag::DragEvent;
@@ -30,8 +31,9 @@ use wintf::ecs::drag::DragEvent;
 use crate::config::build_placement_config;
 use crate::follow::move_window_to;
 use crate::resolver::{RectPx, ScopeInput, resolve_placement};
+use crate::test_support::kv;
 
-/// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow.rs と同型）。
+/// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow_test_support.rs と同型）。
 fn drag_event(target: Entity) -> DragEvent {
     DragEvent {
         target,
@@ -39,14 +41,6 @@ fn drag_event(target: Entity) -> DragEvent {
         position: Point::new(10, 10),
         timestamp: Instant::now(),
     }
-}
-
-/// `(key, value)` ペア列 → `parse_kv` 出力相当の `BTreeMap`（config テストと同じ流儀）。
-fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
 }
 
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World。
@@ -57,8 +51,8 @@ fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 ///   scope1＝バルーン right — 左右両変種を 1 パイプラインで通す
 /// - scope0 のキャラ寸は emo2 実寸（434×687）・他は 96 非倍数の合成値
 fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
-    let ghost_kv = kv_map(&[("sakura.name", "むらさき"), ("kero.name", "エモ")]);
-    let shell_kv = kv_map(&[
+    let ghost_kv = kv(&[("sakura.name", "むらさき"), ("kero.name", "エモ")]);
+    let shell_kv = kv(&[
         ("seriko.alignmenttodesktop", "bottom"),
         ("sakura.defaultx", "52"),
         ("sakura.balloon.offsetx", "29"),
@@ -77,7 +71,10 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
     let scopes = [
         ScopeInput {
             scope: 0,
-            char_size: SizePx { w: 434, h: 687 },
+            char_size: SizePx {
+                w: SCOPE0_W,
+                h: SCOPE0_H,
+            },
             balloon_size: SizePx { w: 401, h: 223 },
         },
         ScopeInput {
@@ -91,20 +88,6 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
     let mut world = World::new();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
     (world, gw, placements)
-}
-
-/// 全 4 窓へ偽 WindowHandle を付与する（4.2 の偽装境界パターン）。
-fn attach_fake_handles(world: &mut World, gw: &GhostWindows) {
-    let mut raw = 0x100isize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [
-            gw.char_window(scope).unwrap(),
-            gw.balloon_window(scope).unwrap(),
-        ] {
-            world.entity_mut(e).insert(fake_window_handle(raw));
-            raw += 0x10;
-        }
-    }
 }
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
@@ -199,7 +182,7 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
 #[test]
 fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     let (mut world, gw, placements) = real_pipeline_world();
-    attach_fake_handles(&mut world, &gw);
+    give_fake_handles(&mut world, &gw);
 
     let p1 = &placements[1];
     let char1 = gw.char_window(1).unwrap();
@@ -249,12 +232,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     }
 }
 
-/// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16・task 8.3）。
-///
-/// 仕様退役: 2026-07-11 要件 4.8 —— 本テストの旧版
-/// `t_i4_char_move_restores_initial_offset_after_balloon_solo_move` が檻に
-/// していた「次のキャラ窓移動で初期 offset へスナップバック」は仕様として
-/// 退役し、調整後 offset の記憶・追従が正となった（記憶挙動の檻へ書き換え）。
+/// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16）。
 ///
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World 上で、
 /// spawn が付けた**実際の** `OnDrag` ハンドラ（バルーン窓の
@@ -262,7 +240,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
 #[test]
 fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
     let (mut world, gw, placements) = real_pipeline_world();
-    attach_fake_handles(&mut world, &gw);
+    give_fake_handles(&mut world, &gw);
     let p = &placements[0];
     let char_e = gw.char_window(0).unwrap();
     let balloon_e = gw.balloon_window(0).unwrap();

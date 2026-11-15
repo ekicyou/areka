@@ -42,7 +42,6 @@ fn close_windows_for_restart_forgets_window_set_resources() {
         reported: false,
     });
     world.insert_resource(ChainRealignPending {
-        armed_frame: 7,
         before: Vec::new(),
         script_moved: Vec::new(),
     });

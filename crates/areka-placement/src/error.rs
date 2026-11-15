@@ -10,8 +10,10 @@ use areka_parsers::package::MountError;
 /// 配置準備パイプライン（resolve→descript 読込→採寸→解決）の観測可能な失敗。
 ///
 /// design「Error Handling」準拠: 安易な panic 禁止・失敗は `error!`＋`Err`。
-/// すべて main.rs シームを経て呼び手の `main` へ返り、「起動窓を開けない」の告知と
-/// 終了コード 1 になる（log-first）。
+/// 本番の呼び手は本体の `ghost_session::prepare_ghost_windows`（`prepare_ghost_windows_for_shell`
+/// を呼ぶ）で、失敗はそこで包まれて返る。初回の起動（`main`）では「起動窓を開けない」の告知と
+/// 終了コード 1 になり、ゴーストの切り替え（`reopen_ghost_windows`）では切り替えの失敗として
+/// 扱われて終了はしない（log-first）。
 #[derive(Debug, thiserror::Error)]
 pub enum PlacementError {
     /// ゴーストパッケージのマウント解決（`areka_parsers::package::resolve_with_shell`）失敗。
@@ -40,8 +42,7 @@ pub enum PlacementError {
     },
 
     /// モニタ列挙が 0 台で primary work area の出所がない（2.12 の基準を
-    /// 満たせない）。架空の既定矩形は発明せず呼び手へ返す（`main` が「起動窓を開けない」
-    /// を告知して終える）。task 6.1 で追加（mod.rs＝準備関数の置き場は本タスク境界内）。
+    /// 満たせない）。架空の既定矩形は発明せず呼び手へ返す（その後の扱いは型の doc のとおり）。
     #[error("モニタ列挙に失敗: {reason}")]
     Monitor {
         /// 失敗理由（列挙結果の状況を文字列化）。

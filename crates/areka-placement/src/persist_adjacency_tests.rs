@@ -16,8 +16,8 @@ use super::{
     saved_adjacency, with_adjacency_marks,
 };
 use crate::chain_finalize::AdjacencyMark;
-use crate::follow::OffsetBase;
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::sticky_group_ledger::StickyGroupLedger;
@@ -29,16 +29,15 @@ const Y: i32 = 400;
 
 fn placement(scope: usize, x: i32, w: i32) -> ScopePlacement {
     ScopePlacement {
-        scope,
-        char_pos: PointPx { x, y: Y },
-        char_size: SizePx { w, h: H },
-        balloon_pos: PointPx { x: x - 200, y: Y },
-        balloon_size: SizePx { w: 223, h: 158 },
-        balloon_offset: PointPx { x: -200, y: 0 },
-        balloon_offset_base: OffsetBase::unpinned(PointPx { x: -200, y: 0 }),
-        balloon_limit: false,
         anchor: Anchor::Bottom,
-        balloon_keyword_base: None,
+        ..placement_sized(
+            scope,
+            PointPx { x, y: Y },
+            PointPx { x: -200, y: 0 },
+            false,
+            SizePx { w, h: H },
+            SizePx { w: 223, h: 158 },
+        )
     }
 }
 
@@ -177,17 +176,53 @@ fn duplicate_mark_keys_are_merged_into_one() {
 }
 
 /// 組の相手が窓の一式に無い（1 体だけのゴースト・最後のスコープの右隣）ときはログなしで飛ばす。
+/// 並べ直しの材料は置く（材料が無いときの `debug!` は別のテストが見る）。
 #[test]
 fn missing_partner_scope_is_skipped_silently() {
-    let single = world_with(&[(0, 1000, 400)]);
+    let mut single = world_with(&[(0, 1000, 400)]);
+    with_basis(&mut single, &[]);
     let (out, events) = capture(|| with_adjacency_marks(&single, pos_batch(0)));
     assert!(marks(&out).is_empty());
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
 
-    let pair = world_with(&[(0, 1000, 400), (1, 600, 400)]);
+    let mut pair = world_with(&[(0, 1000, 400), (1, 600, 400)]);
+    with_basis(&mut pair, &[]);
     let (out, events) = capture(|| with_adjacency_marks(&pair, pos_batch(1)));
     assert_eq!(marks(&out), vec![(1, "left".to_string())]);
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
+}
+
+/// 窓の一式（`GhostWindows`）がまだ無いときは印を足さず、飛ばしたことを `debug!` に残す。
+#[test]
+fn missing_ghost_windows_adds_no_mark_and_logs_debug() {
+    let world = World::new();
+    let (out, events) = capture(|| with_adjacency_marks(&world, pos_batch(1)));
+    assert_eq!(out, pos_batch(1));
+    assert!(
+        events
+            .iter()
+            .any(|e| e.target == SAVE_TARGET && e.level == tracing::Level::DEBUG),
+        "{events:?}"
+    );
+}
+
+/// 並べ直しの材料（`DefaultPlacementBasis`）が無いときは、全スコープを下端・`defaultx` 0 として
+/// 印を決め、その決めを `debug!` 1 行に残す（黙って既定へ落とさない・audit-placement-core 507）。
+#[test]
+fn missing_basis_marks_with_the_bottom_rule_and_logs_debug() {
+    // 0: 1000..1400、1: 600..1000（0 の左に隙間 0）。
+    let world = world_with(&[(0, 1000, 400), (1, 600, 400)]);
+    let (out, events) = capture(|| with_adjacency_marks(&world, pos_batch(0)));
+    assert_eq!(marks(&out), vec![(1, "left".to_string())]);
+    let lines = events
+        .iter()
+        .filter(|e| {
+            e.target == SAVE_TARGET
+                && e.level == tracing::Level::DEBUG
+                && e.message().contains("DefaultPlacementBasis")
+        })
+        .count();
+    assert_eq!(lines, 1, "{events:?}");
 }
 
 /// 印の項目の鍵と語、読み戻し（知らない語は warn! して無し・鍵なしは無し）。
@@ -217,6 +252,62 @@ fn adjacency_entry_and_saved_adjacency_round_trip() {
             .iter()
             .any(|e| e.level == tracing::Level::WARN && e.field("scope") == Some("1")),
         "{events:?}"
+    );
+}
+
+/// 並べ直しの材料（shell の descript の値だけ）を置く（並べ終えた時点の保存のテストも使う）。
+pub(super) fn with_basis(world: &mut World, shell_kv: &[(&str, &str)]) {
+    world.insert_resource(crate::reset_pos::DefaultPlacementBasis {
+        source: crate::source::DescriptSource {
+            ghost_kv: Default::default(),
+            shell_kv: crate::test_support::kv(shell_kv),
+            shell_dir: std::path::PathBuf::from("shell/master"),
+            titles: GhostTitles::from_scope_titles((0..3).map(|s| (s, format!("s{s}")))),
+        },
+        balloon: crate::reseed::BalloonPlacementInputs {
+            author_dpi: 96,
+            windowpositions: Default::default(),
+        },
+    });
+}
+
+/// 左の組は隙間 0 のほか、そのスコープの `defaultx` の隙間（±2 px）も `left`。右の組は隙間 0
+/// だけが `right`（resolver の P2 は左へだけ空ける・audit-placement-core 494）。
+#[test]
+fn a_defaultx_gap_on_the_left_is_marked_left() {
+    for (x1, expected) in [
+        (1000 - 300 - 36, "left"),
+        (1000 - 300 - 38, "left"),
+        (1000 - 300, "left"),
+        (1000 - 300 - 60, "none"),
+        (1400, "right"),
+        (1400 + 36, "none"),
+    ] {
+        // 0: 1000..1400、1: x1..x1+300。
+        let mut world = world_with(&[(0, 1000, 400), (1, x1, 300)]);
+        with_basis(&mut world, &[("kero.defaultx", "36")]);
+        let out = with_adjacency_marks(&world, pos_batch(0));
+        assert_eq!(marks(&out), vec![(1, expected.to_string())], "x1={x1}");
+    }
+}
+
+/// 鎖の前の窓は、左右の辺に揃えるスコープ（descript の揃え方）を飛ばした一番近いスコープ。
+/// 辺のスコープ自身の印は `none`（鎖の外・audit-placement-core 494・495）。
+#[test]
+fn a_side_edge_scope_is_skipped_as_the_previous_chain_window() {
+    // 0: 1000..1400、1: 右の辺 2000..2300、2: 700..1000（本体の左に隙間 0）。
+    let mut world = world_with(&[(0, 1000, 400), (1, 2000, 300), (2, 700, 300)]);
+    with_basis(&mut world, &[("kero.seriko.alignmenttodesktop", "right")]);
+    let out = with_adjacency_marks(&world, pos_batch(0));
+    assert_eq!(
+        marks(&out),
+        vec![(2, "left".to_string())],
+        "本体の位置を書くと、本体を前の窓とする scope 2 の印を書く"
+    );
+    let out = with_adjacency_marks(&world, pos_batch(1));
+    assert_eq!(
+        marks(&out),
+        vec![(1, "none".to_string()), (2, "left".to_string())]
     );
 }
 

@@ -768,21 +768,17 @@ fn settle_session_mark(
 /// `ghost_session::open_ghost_windows` は実モニタの列挙と作業プール（`WintfTaskPool`）を要して
 /// テスト困難ゆえ、純粋シーム（load→apply）を本ヘルパへ抽出し単体で
 /// 檻に入れる（IO は [`areka_placement::persist::load_restored_state`] の 1 点のみ・merge は純関数）。
-///
-/// `default_encoding` は boot 結線・`source.rs` と同一の [`areka_parsers::charset::DefaultEncoding`]
-/// を渡すこと（mount 解決の一貫性のため）。呼び出し側は `DefaultEncoding::Ansi` を渡す。
 fn restore_merged_placements(
     ghost_root: &std::path::Path,
     placements: Vec<areka_placement::resolver::ScopePlacement>,
     snapshot: &areka_placement::follow::MonitorSnapshot,
-    default_encoding: areka_parsers::charset::DefaultEncoding,
 ) -> (
     Vec<areka_placement::resolver::ScopePlacement>,
     std::collections::BTreeMap<usize, Option<areka_placement::chain_finalize::AdjacencyMark>>,
     bool,
 ) {
     // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
-    let entries = areka_placement::persist::load_restored_state(ghost_root, default_encoding);
+    let entries = areka_placement::persist::load_restored_state(ghost_root);
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）と、記憶の位置を
     // 寄せて表示したかの判定（窓を作る閉包が `RestoredPositionsClamped` へ据える・window-work-area-clamp 4.6）。
     let (merged, clamped) =

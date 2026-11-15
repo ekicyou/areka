@@ -1,16 +1,11 @@
-//! descript の既定の面の読みと戻り先の候補の並びの決定論のテスト（descript-window-keys 要件 7.1）。
+//! descript の既定の面の読みと戻り先の候補の並び（descript-window-keys 要件 7.1）・バルーンの
+//! 動かせない指定（`balloon.dontmove`）・バルーンの倍率の連動（`balloon.syncscale`）の読みの決定論のテスト。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use super::*;
+use crate::test_support::kv;
 use log_capture_kit::{ExpectField, capture, expect_one};
-
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-        .collect()
-}
 
 /// 書かれていなければ組み込みの既定の面（本体側 0・相方側とスコープ 2 以降 10）で、記録も残さない（要件 1.1・1.2・1.4）。
 #[test]
@@ -97,26 +92,6 @@ fn unreadable_values_fall_back_to_builtin_with_one_warning_each() {
     }
 }
 
-/// 既定の面はゴーストの descript だけから読む。シェルの KV に同じ名前の鍵があっても使わない（要件 1.6）。
-///
-/// 読みの関数はシェルの KV を引数に持たない（型で守る）。ここではシェルの KV を渡す道が無いことを、
-/// ゴーストの KV だけを渡したときに組み込みの値になることで確かめる。
-#[test]
-fn shell_kv_with_same_key_is_not_used() {
-    let shell_kv = kv(&[
-        ("sakura.seriko.defaultsurface", "5"),
-        ("kero.seriko.defaultsurface", "12"),
-    ]);
-    let ghost_kv = kv(&[("name", "x")]);
-    let ds = read_default_surfaces(&ghost_kv);
-    assert_eq!(ds, DefaultSurfaces::builtin());
-    assert_ne!(
-        ds.surface(0),
-        5,
-        "シェルの値 {shell_kv:?} を拾ってはならない"
-    );
-}
-
 /// 候補の並びは descript の面、違えば続けて組み込みの面で、重ならない（要件 2.6）。
 #[test]
 fn fallback_candidates_do_not_overlap() {
@@ -140,6 +115,16 @@ fn first_existing_picks_the_first_present_candidate() {
     assert_eq!(first_existing(&[10, 0], exists), Some(10));
     assert_eq!(first_existing(&[12, 10], exists), Some(10));
     assert_eq!(first_existing(&[12, 13], exists), None);
+}
+
+/// 最初に出す面: 候補の先頭から在る面、どれも無ければ組み込みの既定の面（測りと手本が使う答え）。
+#[test]
+fn initial_surface_is_first_present_candidate_else_builtin() {
+    // descript が kero の既定の面に 12 を書いた（候補は 12・10）。
+    let ds = read_default_surfaces(&kv(&[("kero.seriko.defaultsurface", "12")]));
+    assert_eq!(ds.initial_surface(1, |_| false), builtin_default_surface(1));
+    assert_eq!(ds.initial_surface(1, |id| id == 10), 10);
+    assert_eq!(ds.initial_surface(1, |_| true), 12);
 }
 
 /// シェルのスコープ個別 `0` がゴーストの `true` に勝つ（要件 4.1・4.2）。
@@ -190,6 +175,31 @@ fn ghost_only_locks_every_scope() {
     );
 }
 
+/// u32 に収まらないスコープ番号は集合に入れない（`1 << 32` が 0 番へ切り詰められない）。
+#[test]
+fn scope_that_does_not_fit_u32_is_not_locked() {
+    let ghost = kv(&[("balloon.dontmove", "1")]);
+    assert_eq!(
+        read_balloon_dontmove(&ghost, &kv(&[]), &[1usize << 32]),
+        BTreeSet::new()
+    );
+}
+
+/// 動かせない指定の値は大文字小文字を区別しない（`TRUE`・`True` → 禁止・`FALSE` → 許す）。
+#[test]
+fn balloon_dontmove_words_ignore_case() {
+    for (raw, locked_scopes) in [
+        ("TRUE", BTreeSet::from([0])),
+        ("True", BTreeSet::from([0])),
+        ("FALSE", BTreeSet::new()),
+    ] {
+        let shell = kv(&[("sakura.balloon.dontmove", raw)]);
+        let (locked, events) = capture(|| read_balloon_dontmove(&kv(&[]), &shell, &[0]));
+        assert_eq!(locked, locked_scopes, "{raw}");
+        assert!(events.is_empty(), "{raw}: {events:?}");
+    }
+}
+
 /// どちらにも指定が無ければ禁止しない（要件 4.3）。
 #[test]
 fn nothing_written_locks_nothing() {
@@ -223,8 +233,22 @@ fn unreadable_ghost_value_locks_nothing() {
     assert!(locked.is_empty());
     assert_eq!(events.len(), 2, "{events:?}");
     let keys: Vec<&str> = events.iter().map(|e| e.expect_field("key")).collect();
-    assert_eq!(keys, ["kero.balloon.dontmove", "balloon.dontmove"]);
-    assert!(events.iter().all(|e| e.expect_field("scope") == "1"));
+    // ゴーストの段はスコープの前に 1 回だけ読む。
+    assert_eq!(keys, ["balloon.dontmove", "kero.balloon.dontmove"]);
+    let scopes: Vec<&str> = events.iter().map(|e| e.expect_field("scope")).collect();
+    assert_eq!(scopes, ["all", "1"]);
+}
+
+/// 読めないゴーストの値の記録は、スコープがいくつあっても 1 件（ゴーストの鍵のスコープは「all」）。
+#[test]
+fn unreadable_ghost_value_warns_once_for_all_scopes() {
+    let ghost = kv(&[("balloon.dontmove", "2")]);
+    let (locked, events) = capture(|| read_balloon_dontmove(&ghost, &kv(&[]), &[0, 1]));
+    assert!(locked.is_empty());
+    assert_eq!(events.len(), 1, "{events:?}");
+    let ev = expect_one(&events, "descript_value_unreadable");
+    assert_eq!(ev.expect_field("key"), "balloon.dontmove");
+    assert_eq!(ev.expect_field("scope"), "all");
 }
 
 /// ゴーストの `balloon.syncscale,true` はすべてのスコープを連動させ、鍵ごとに警告より下の段の記録を 1 件残す
@@ -294,6 +318,15 @@ fn shell_syncscale_ignores_leading_zero_scope() {
     assert!(events.is_empty(), "{events:?}");
 }
 
+/// u32 に収まらない `char<n>.` の番号は集合に入れない（`4294967296` が 0 番へ切り詰められない）。
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn shell_syncscale_ignores_scope_beyond_u32() {
+    let shell = kv(&[("char4294967296.balloon.syncscale", "true")]);
+    let sync = read_balloon_syncscale(&kv(&[]), &shell);
+    assert_eq!(sync, BalloonSyncScale::default());
+}
+
 /// ゴーストとシェルの両方が書けば論理和（要件 6.3）。ゴーストが `false` でもシェルの `true` が効く。
 #[test]
 fn ghost_and_shell_syncscale_combine_by_or() {
@@ -311,7 +344,7 @@ fn ghost_and_shell_syncscale_combine_by_or() {
     assert!(shell_only.is_synced(1));
 }
 
-/// `true` と前後の空白を除いて完全に一致するときだけ有効。ほかは「指定なし」で、警告を出さず
+/// 前後の空白を除いて大文字小文字を問わず `true` のときだけ有効。ほかは「指定なし」で、警告を出さず
 /// 警告より下の段に `synced = false` を残す（要件 6.4・6.7）。
 #[test]
 fn syncscale_values_other_than_true_mean_unspecified() {
@@ -320,7 +353,8 @@ fn syncscale_values_other_than_true_mean_unspecified() {
         (" true ", true),
         ("false", false),
         ("", false),
-        ("True", false),
+        ("True", true),
+        ("TRUE", true),
         ("1", false),
     ] {
         let (sync, events) = capture(|| {

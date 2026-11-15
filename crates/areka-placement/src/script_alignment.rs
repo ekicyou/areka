@@ -24,7 +24,7 @@ pub enum AlignmentWord {
 }
 
 /// `alignmenttodesktop`（`alignmentondesktop`）の後ろの引数を読む。最初の 1 つが方向で、
-/// 前後の空白を除き大文字小文字は区別しない（descript の読み `Anchor::from_alignment` と同じ）。
+/// 前後の空白を除き大文字小文字は区別しない（descript の `alignmenttodesktop` の読みと同じ）。
 /// 空の値は欠けた値として扱う。2 つ目以降（指令の 3 つ目以降の引数）は `debug!` だけ。
 pub fn parse_alignment_word(args: &[&str]) -> AlignmentWord {
     if args.len() > 1 {
@@ -37,13 +37,11 @@ pub fn parse_alignment_word(args: &[&str]) -> AlignmentWord {
     let Some(raw) = args.first() else {
         return AlignmentWord::Missing;
     };
+    if let Some(anchor) = Anchor::from_word(raw) {
+        return AlignmentWord::Anchor(anchor);
+    }
     match raw.trim().to_ascii_lowercase().as_str() {
         "" => AlignmentWord::Missing,
-        "top" => AlignmentWord::Anchor(Anchor::Top),
-        "bottom" => AlignmentWord::Anchor(Anchor::Bottom),
-        "left" => AlignmentWord::Anchor(Anchor::Left),
-        "right" => AlignmentWord::Anchor(Anchor::Right),
-        "free" => AlignmentWord::Anchor(Anchor::Free),
         "default" => AlignmentWord::Default,
         _ => AlignmentWord::Unknown(raw.to_string()),
     }

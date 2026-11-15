@@ -397,3 +397,69 @@ fn spawn_publish_barrier_read_is_deterministic_over_iterations() {
         parts.handle.join().expect("join");
     }
 }
+
+// === 鍵を消す投函: 鏡像と記憶の両方から消え、ほかの鍵は残る・無い鍵では像を出さない ===
+
+#[test]
+fn persist_remove_drops_the_key_from_mirror_and_file_and_keeps_others() {
+    let shared = std::sync::Arc::new(FakePersistIo::new());
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    let (parts, mirror) = spawn_parts(
+        SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(shared.clone()),
+            runtime_sink: None,
+        },
+        None,
+    );
+    let x = PersistKey::BalloonOffset {
+        scope: 0,
+        axis: Axis::X,
+    };
+    let y = PersistKey::BalloonOffset {
+        scope: 0,
+        axis: Axis::Y,
+    };
+    parts.publisher.persist_put(
+        PersistScope::Ghost,
+        vec![
+            (x, "5".into()),
+            (y, "6".into()),
+            (PersistKey::BootCount, "3".into()),
+        ],
+    );
+    parts
+        .publisher
+        .persist_remove(PersistScope::Ghost, vec![x, y]);
+    parts.publisher.barrier().expect("barrier");
+    let epoch = mirror.load().epoch;
+    // 無い鍵を消しても後継の像は出さない（epoch は実変化に対応する）。
+    parts.publisher.persist_remove(PersistScope::Ghost, vec![x]);
+    parts.publisher.barrier().expect("barrier");
+
+    let read = |key| parts.reader.resolve_dotted_str(&ctx("ghost/a"), key);
+    assert_eq!(
+        read("areka.balloon.offset.scope(0).x"),
+        DottedResolution::NotFound
+    );
+    assert_eq!(
+        read("areka.balloon.offset.scope(0).y"),
+        DottedResolution::NotFound
+    );
+    assert_eq!(
+        read("areka.boot.count"),
+        DottedResolution::Value("3".into())
+    );
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &shared),
+        vec![(PersistKey::BootCount, "3".into())],
+        "記憶からも消え、ほかの鍵は残る"
+    );
+    assert_eq!(mirror.load().epoch, epoch, "無い鍵の消しは像を出さない");
+
+    parts.publisher.close();
+    parts.handle.join().expect("join");
+}

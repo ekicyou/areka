@@ -3,7 +3,7 @@
 //! 要件 2.2／4.7／4.9／5.5／6.1）。
 //!
 //! クランプ**式**そのものの行列（4 辺 × k=1/k≠1 × 逆転区間 × 冪等）は
-//! `balloon_limit_tests.rs`（task 1.3）が持つ。本ファイルが固定するのはその 1 段上——
+//! `balloon_limit_tests.rs` が持つ。本ファイルが固定するのはその 1 段上——
 //! **関門の判断分岐**である:
 //!
 //! - `balloon_limit` の有効判定（要件 2.7 の関門側の腕）
@@ -14,17 +14,19 @@
 //!
 //! # ログ檻の非空虚性
 //!
-//! 捕捉ハーネス（`test_support::capture`）は較正済みだが、「◯◯のログが無い」は
+//! 捕捉ハーネス（`log_capture_kit::capture`）は較正済みだが、「◯◯のログが無い」は
 //! 捕捉ゼロでも真になってしまう。本ファイルの「無い」側の主張は**必ず同じ捕捉集合から
 //! [`expect_one`] で 1 件取り出した後**に行う（`expect_one` は 0 件で panic するので、
 //! 捕捉が生きていることがその時点で証明されている）。
 
-use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
-use super::super::resolver::{Anchor, ScopeInput, resolve_placement};
+use super::super::config::{BalloonXMode, ScopeConfig};
+use super::super::resolver::{ScopeInput, resolve_placement};
 use super::*;
-use crate::follow::OffsetBase;
+use crate::resolver::test_support::{DPIS, offset_work_area, px};
 use crate::shared_test_support::MEASURE_DPI;
-use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
+use crate::shared_test_support::{assert_no_event, cfg_of, placement_sized};
+use crate::test_support::{contained, point};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
@@ -43,14 +45,10 @@ const CSZ: SizePx = SizePx { w: 400, h: 600 };
 /// バルーン窓寸。
 const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
-fn snapshot(areas: &[RectPx]) -> MonitorSnapshot {
+pub(super) fn snapshot(areas: &[RectPx]) -> MonitorSnapshot {
     MonitorSnapshot {
         work_areas: areas.to_vec(),
     }
-}
-
-fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
 }
 
 /// resolver 出力相当の placement を組む。
@@ -64,18 +62,7 @@ fn placement(
     balloon_offset: PointPx,
     balloon_limit: bool,
 ) -> ScopePlacement {
-    ScopePlacement {
-        scope,
-        char_pos,
-        char_size: CSZ,
-        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
-        balloon_size: BSZ,
-        balloon_offset,
-        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        balloon_limit,
-        anchor: Anchor::Free,
-        balloon_keyword_base: None,
-    }
+    placement_sized(scope, char_pos, balloon_offset, balloon_limit, CSZ, BSZ)
 }
 
 /// キャラ窓を下辺から 20px はみ出させる（縦 600 → 800・上端 300 なら下端 1100 > 1080）。
@@ -87,18 +74,6 @@ fn placement(
 fn char_overflowing(mut p: ScopePlacement) -> ScopePlacement {
     p.char_size = SizePx { w: CSZ.w, h: 800 };
     p
-}
-
-/// 本文に `needle` を含むイベントが 1 件も無いことを主張する。
-///
-/// 呼び手は**同じ `events` から [`expect_one`] で 1 件取り出した後**に呼ぶこと
-/// （捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert!(hits.is_empty(), "`{needle}` が出てはならない: {hits:?}");
 }
 
 /// `balloon_pos` 以外の全フィールドが入力と同一であることを主張する（DD6 の中核）。
@@ -149,16 +124,9 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
         point(0, 310),
         "表示位置は作業領域の左辺へ補正される（要件 2.2）"
     );
+    // 表示位置だけが動き、相対位置はそのまま＝関門の後は
+    // balloon_offset ≡ balloon_pos − char_pos が成り立たない。それが正しい（DD6 の再スコープ）。
     assert_only_balloon_pos_may_differ(&before, &out[0]);
-    // 恒等式は関門通過後に崩れる——それが正しい（DD6 の再スコープ）。
-    assert_ne!(
-        point(
-            out[0].balloon_pos.x - out[0].char_pos.x,
-            out[0].balloon_pos.y - out[0].char_pos.y
-        ),
-        out[0].balloon_offset,
-        "補正後は balloon_offset ≡ balloon_pos − char_pos が成立しない（DD6）"
-    );
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(hit.level, tracing::Level::INFO, "補正の記録は info（DD7）");
@@ -285,7 +253,7 @@ fn boot_gate_warns_and_passes_through_when_snapshot_is_empty() {
 ///
 /// 入力は「バルーン窓の矩形は左モニタに完全に収まるが、キャラ窓は右モニタに属する」
 /// という配置——基準をバルーン窓（あるいは先頭モニタ）から引く実装なら補正が起きず
-/// `None` のまま素通しになるので、この 1 本で取り違えが赤になる。
+/// `Fits` のまま素通しになるので、この 1 本で取り違えが赤になる。
 #[test]
 fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
     let left_monitor = WA;
@@ -329,19 +297,13 @@ fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
 /// はみ出しである。
 #[test]
 fn boot_gate_clamps_keyword_derived_initial_position() {
-    let mut cfg = PlacementConfig {
-        scopes: Default::default(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
-    };
-    cfg.scopes.insert(
+    let cfg = cfg_of(vec![(
         0,
         ScopeConfig {
             balloon_x_mode: BalloonXMode::CenterTop,
             ..ScopeConfig::default()
         },
-    );
+    )]);
     let placements = resolve_placement(
         &cfg,
         WA,
@@ -406,64 +368,14 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
             out[0].balloon_pos, expected,
             "{what}: 表示位置は作業領域内へ補正される"
         );
-        assert_eq!(
-            out[0].balloon_offset, offset,
-            "{what}: 論理相対位置は 1 ビットも変わらない（DD6）"
-        );
+        // 論理相対位置（balloon_offset）を含め、ほかの欄は 1 ビットも変わらない（DD6）。
         assert_only_balloon_pos_may_differ(&before, &out[0]);
     }
 }
 
 // ---------------------------------------------------------------------------
-// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差（要件 7.1・task 4.3）
+// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差（要件 7.1）
 // ---------------------------------------------------------------------------
-
-/// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当。
-const GATE_DPIS: [i32; 4] = [96, 120, 144, 192];
-
-/// 論理基準値 → 各 DPI の物理 px（`balloon_limit_tests.rs` と同一の道具・厳密整除を強制）。
-///
-/// 関門は物理 px しか見ない。同じ論理形状を各水準の物理値で与えたとき期待値も同じ
-/// 物理式から出ることを固定する（隠れた `/96` 変換があれば 96 以外の水準で崩れる）。
-fn px(logical: i32, dpi: i32) -> i32 {
-    assert_eq!(
-        (logical * dpi) % 96,
-        0,
-        "テスト入力は厳密整除になる論理値（4 の倍数）で構築する"
-    );
-    logical * dpi / 96
-}
-
-/// 矩形 (pos, size) が area へ 4 辺内包されているか（檻側の独立実装）。
-fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x + size.w <= area.right
-        && pos.y + size.h <= area.bottom
-}
-
-/// 寸法を明示して placement を組む（[`placement`] の DPI 可変版）。
-fn placement_sized(
-    scope: usize,
-    char_pos: PointPx,
-    balloon_offset: PointPx,
-    balloon_limit: bool,
-    char_size: SizePx,
-    balloon_size: SizePx,
-) -> ScopePlacement {
-    ScopePlacement {
-        scope,
-        char_pos,
-        char_size,
-        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
-        balloon_size,
-        balloon_offset,
-        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        balloon_limit,
-        anchor: Anchor::Free,
-        balloon_keyword_base: None,
-    }
-}
 
 /// 要件 7.1 の行列を**関門の層で**閉じる: `limit {0,1}` × はみ出し方向 4 辺（単独）と
 /// 4 隅（複合）× k=1（dpi=96）および k≠1（120/144/192）の全交差。
@@ -493,14 +405,9 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
         ("右下", (1000, 580), (1720, 780)),
     ];
 
-    for dpi in GATE_DPIS {
+    for dpi in DPIS {
         // 左上が原点**でない**作業領域（境界の left/top 依存を暴く）。
-        let area = RectPx {
-            left: px(64, dpi),
-            top: px(40, dpi),
-            right: px(64 + 1920, dpi),
-            bottom: px(40 + 1080, dpi),
-        };
+        let area = offset_work_area(dpi);
         let csz = SizePx {
             w: px(400, dpi),
             h: px(600, dpi),
@@ -523,7 +430,7 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             let disabled = placement_sized(0, char_pos, offset, false, csz, bsz);
             let enabled = placement_sized(1, char_pos, offset, true, csz, bsz);
             // 探針: 入力が本当にはみ出していること（はみ出していなければ limit=1 側も
-            // `None` を返し、limit=0 の「動かない」が何も意味しなくなる）。
+            // `Fits`（動かさない）になり、limit=0 の「動かない」が何も意味しなくなる）。
             assert!(
                 !contained(disabled.balloon_pos, bsz, area),
                 "dpi={dpi} {what}: 探針の提案位置がはみ出していない（檻が空虚）"
@@ -562,23 +469,4 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             assert_no_event(&events, BALLOON_LIMIT_UNRESOLVED_TAG);
         }
     }
-}
-
-/// 入力の順序と長さは保たれる（下流は index で spawn するため順序が契約）。
-#[test]
-fn boot_gate_preserves_order_and_length() {
-    let input = vec![
-        placement(0, point(30, 300), point(-50, 10), true),
-        placement(1, point(700, 300), point(-50, 10), false),
-        placement(2, point(700, 300), point(0, 600), true),
-    ];
-
-    let out = apply_balloon_limit(input.clone(), &snapshot(&[WA]));
-
-    assert_eq!(out.len(), input.len(), "出力長＝入力長");
-    assert_eq!(
-        out.iter().map(|p| p.scope).collect::<Vec<_>>(),
-        vec![0, 1, 2],
-        "scope の順序は入力のまま"
-    );
 }

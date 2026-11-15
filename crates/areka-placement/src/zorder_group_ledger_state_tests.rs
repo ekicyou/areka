@@ -13,65 +13,35 @@
 //!
 //! 拒否分岐の檻はすべて [`assert_ledger_unchanged`] を通す。この道具は台帳**全体**
 //! （グループ列・各グループの ID・要素列・出所・次に配る ID・版）を丸ごと比較する
-//! ので、task 1.3 の完了状態「拒否が返ったケースで台帳の内容が呼び出し前と完全に
+//! ので、「拒否が返ったケースで台帳の内容が呼び出し前と完全に
 //! 一致する」を欄ごとの抜き取りではなく構造で押さえる（要件 3.2／8.1）。
 //!
 //! # 「動かない」主張は両側から挟む
 //!
 //! 版（[`ZOrderGroupLedger::version`]）は「増えない」側だけを見ると、そもそも一度も
 //! 増えない実装が素通りする。[`t_zgl15_version_moves_only_when_the_contents_move`] は
-//! 増える 3 経路と増えない 3 経路を同じ 1 本で挟む（task 1.2 の差し戻しの教訓）。
+//! 増える 3 経路と増えない 3 経路を同じ 1 本で挟む。
 
 use super::*;
+use crate::test_support::zorder_pair_deferred::code_only;
+use crate::zorder_test_support::{accept, b, expect_added, s};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
 // ---------------------------------------------------------------------------
 
-/// バルーン窓の要素（`balloonN`／`bN`）。
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-/// キャラ窓の要素（`surfaceN`／`sN`）。
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
-
-/// トークン列を解釈して要素列を得る。
+/// タグ由来のグループとして追加を試みる。
 ///
 /// 台帳の入口へ渡すのは**必ず解釈を通った要素列**である（呼び出し規約）。檻も同じ
 /// 経路を通すことで、要件 3.3「明示モードの `sN`／`bN` と数値モードの `N` を同一
 /// スコープを指すものとして扱う」が入口から出口まで通しで成立することを見る。
-fn accept(tokens: &[&str]) -> Vec<GroupElement> {
-    match parse_zorder_tokens(tokens) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {tokens:?} reject={reject:?}"),
-    }
-}
-
-/// タグ由来のグループとして追加を試みる。
 fn add_tag(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> Result<u32, ZOrderReject> {
     ledger.try_add_tag_group(accept(tokens))
 }
 
-/// 追加の受理を期待し、割り当てられたグループ ID を取り出す。
-fn expect_added(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> u32 {
-    match add_tag(ledger, tokens) {
-        Ok(id) => id,
-        Err(reject) => panic!("受理されるべきタグが拒否された: {tokens:?} reject={reject:?}"),
-    }
-}
-
 /// 再指定としての拒否を期待し、伴うスコープ列を取り出す。
 ///
-/// 台帳が呼び出し前と完全に一致することも同時に確かめる（task 1.3 の完了状態）。
+/// 台帳が呼び出し前と完全に一致することも同時に確かめる。
 fn expect_cross_reject(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> Vec<u32> {
     let before = ledger.clone();
     let reject = match add_tag(ledger, tokens) {
@@ -110,15 +80,6 @@ fn members_of(ledger: &ZOrderGroupLedger) -> Vec<Vec<GroupElement>> {
         .iter()
         .map(|group| group.members.clone())
         .collect()
-}
-
-/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +215,8 @@ fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
     expect_added(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["b2", "s2"]);
 
-    // 要素列は正規化後 [b2, s2, b1, s1, b0, s0]＝スコープの初出順は 2 → 1 → 0。
+    // 要素列は正規化後 [b2, s2, s1, b1, b0, s0]（書かれた順のまま相棒を補う）＝
+    // スコープの初出順は 2 → 1 → 0。
     let scopes = expect_cross_reject(&mut ledger, &["b2", "s1", "b1", "s0"]);
 
     assert_eq!(
@@ -445,7 +407,7 @@ fn t_zgl14_reset_frees_tag_scopes_but_not_base_scopes() {
 /// 版は台帳の内容が実際に動いたときだけ進む。
 ///
 /// 「進まない」側だけを見ると一度も進まない実装が素通りするので、進む 3 経路と
-/// 進まない 3 経路を同じ 1 本で挟む（task 1.2 の差し戻しの教訓）。
+/// 進まない 3 経路を同じ 1 本で挟む。
 #[test]
 fn t_zgl15_version_moves_only_when_the_contents_move() {
     let mut ledger = ZOrderGroupLedger::default();
@@ -592,11 +554,11 @@ fn t_zgl19_the_ledger_is_not_connected_to_persistence() {
 // 完了状態: 拒否の全経路で台帳が完全に一致する
 // ---------------------------------------------------------------------------
 
-/// task 1.3 の完了状態の総取り。台帳がどんな状態にあっても、拒否された呼び出しの
+/// 台帳がどんな状態にあっても、拒否された呼び出しの
 /// 前後で台帳**全体**が完全に一致する（要件 3.2／8.1 の部分適用禁止）。
 ///
-/// 前状態を 4 通り（空／タグ 1 本／基底のみ／基底＋タグ 2 本）用意し、それぞれで
-/// 再指定の拒否を起こす。`assert_ledger_unchanged` はグループ列だけでなく
+/// 前状態を 3 通り（タグ 1 本／基底のみ／基底＋タグ 2 本）用意し、それぞれで
+/// 再指定の拒否を起こす（空の台帳では再指定の拒否が起きないので前状態に入れない）。`assert_ledger_unchanged` はグループ列だけでなく
 /// 「次に配る ID」と版も比べるので、拒否の途中で ID を 1 つ消費する形も赤になる。
 #[test]
 fn t_zgl20_every_rejected_call_leaves_the_ledger_completely_identical() {
@@ -642,17 +604,14 @@ fn t_zgl20_every_rejected_call_leaves_the_ledger_completely_identical() {
     }
 }
 
-/// グループ列の並びは「基底が先頭・以降はタグの追加順」で決まる（決定論のため）。
-///
-/// 改訂第 2 版ではこの並びが**そのまま鎖の連結順になる**（要件 15・DD-11＝先に登記された
-/// グループほど手前・基底が最前）。初版の註「台帳の並びは前後関係へ何も含意しない」は
-/// 誤りになったので撤回した。要件 3.6 が言う非強制は、いまも**指定が一つも無い既定状態**
-/// についての規定であって、グループどうしが並んだ後の話ではない。
+/// グループ列の並びは「基底が先頭・以降はタグの追加順」で決まる。この並びがそのまま鎖の
+/// 連結順になる（先に登記されたグループほど手前・基底が最前）。
 #[test]
 fn t_zgl21_groups_are_listed_base_first_then_in_addition_order() {
     let mut ledger = ZOrderGroupLedger::default();
 
-    // 先にタグ、後から基底——それでも読み出しは基底が先頭に来る。
+    // 先にタグを載せても、基底を据えるとタグ由来は落ちる（`set_descript_base` の終状態は
+    // 解除と同じ）。その後のタグは基底の後ろへ追加順に続く。
     expect_added(&mut ledger, &["3", "2"]);
     set_base(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["5", "4"]);

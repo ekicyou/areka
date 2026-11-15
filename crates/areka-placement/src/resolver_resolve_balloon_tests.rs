@@ -29,7 +29,7 @@ fn scope_cfg_balloon(
 }
 
 /// T-R8: `balloon.alignment=left`（既定） → `balloon_x = char_x − balloon_w`・
-/// `balloon_y = char_y`（上端揃え・DD7）。恒等式も確認。
+/// `balloon_y = char_y`（上端揃え・DD7）。
 #[test]
 fn t_r8_balloon_left_places_left_of_char() {
     for dpi in DPIS {
@@ -52,11 +52,6 @@ fn t_r8_balloon_left_places_left_of_char() {
                 y: cp.y
             },
             "dpi={dpi}: left はキャラ左隣・上端揃え"
-        );
-        assert_eq!(
-            out[0].balloon_offset,
-            PointPx { x: -bw, y: 0 },
-            "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
         );
     }
 }
@@ -88,11 +83,6 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
             },
             "dpi={dpi}: right はキャラ右隣・resolver は work area 外のまま返す"
         );
-        assert_eq!(
-            out[0].balloon_offset,
-            PointPx { x: w, y: 0 },
-            "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
-        );
     }
 }
 
@@ -121,11 +111,6 @@ fn t_r8_balloon_offsetx_offsety_added() {
             },
             "dpi={dpi}: offsetx/y 加算"
         );
-        assert_eq!(
-            out[0].balloon_offset,
-            PointPx { x: -bw + ox, y: oy },
-            "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
-        );
     }
 }
 
@@ -138,7 +123,7 @@ fn t_r8_balloon_offsetx_offsety_added() {
 /// が有効なら、この出力は下流の関門が作業領域内へ補正する（起動時＝
 /// `balloon_limit::apply_balloon_limit`（`main.rs` の `restore_merged_placements`）／実行時＝
 /// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグ
-/// の解放時＝`follow_drag_end_limit_tests.rs` が所有）。補正の所有は関門であって
+/// の解放時＝`follow::drag_follow::on_balloon_drag_end`・檻は `follow_drag_end_limit_tests.rs`）。補正の所有は関門であって
 /// 配置式ではない、という分業を固定するのが本檻である。無クランプは
 /// `resolve_placement` の契約としていまも真であり、この assert は反転しない。
 #[test]
@@ -200,5 +185,39 @@ fn t_r8_balloon_none_picks_the_side_facing_the_area_center() {
                 "dpi={dpi} default_x={default_x}: none は中央を向く側に置く"
             );
         }
+    }
+}
+
+/// T-R8: `balloon.alignment=none` でキャラ窓の中心がちょうど作業領域の中央の
+/// ときは左側に付く（「中央より左なら右側」の境は左側＝`<` を `<=` に変えると赤）。
+#[test]
+fn t_r8_balloon_none_at_exact_center_goes_left() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        let w = px(400, dpi);
+        let inp = input(0, w, px(600, dpi));
+        let bw = inp.balloon_size.w;
+        // right − w − 760 + w/2 ＝ 1920 − 400 − 760 + 200 ＝ 960（作業領域の中央）
+        let cfg = cfg_of(vec![(
+            0,
+            scope_cfg_balloon(Some(px(760, dpi)), BalloonSide::Auto, None),
+        )]);
+
+        let out = resolve_placement(&cfg, wa, &[inp], MEASURE_DPI);
+
+        let cp = out[0].char_pos;
+        assert_eq!(
+            cp.x + w / 2,
+            (wa.left + wa.right) / 2,
+            "dpi={dpi}: 前提（中心がちょうど中央）が崩れている"
+        );
+        assert_eq!(
+            out[0].balloon_pos,
+            PointPx {
+                x: cp.x - bw,
+                y: cp.y
+            },
+            "dpi={dpi}: ちょうど中央は左側"
+        );
     }
 }

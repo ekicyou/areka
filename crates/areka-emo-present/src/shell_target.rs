@@ -1,7 +1,7 @@
 //! `shell_target`: シェルのフォルダから面の絵を組み立てる**読み込みの権威**。
 //!
 //! シェルのフォルダを読んで「焼いた絵（`AtlasTable`）＋面の表を必要な数だけ組める値」
-//! （[`ShellTarget`]）を作る入口である。fs を触るのは [`load_shell_target`] と [`load_shell_target_quiet`]（中身は 1 つ）だけで、
+//! （[`ShellTarget`]）を作る入口である。fs を触るのは [`load_shell_target`]（上限を渡す兄弟 [`load_shell_target_with_limits`]）と [`load_shell_target_quiet`]（中身は 1 つ）だけで、
 //! 触らない核は `build_core` に分かれている（テストは `build_shell_target` 経由でメモリ上の復号器で核を通せる）。
 //!
 //! 本モジュールはまず「シェルのフォルダ直下のファイル名から、どの番号の面の画像がどれか」を
@@ -49,8 +49,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AlphaParams, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId, SurfaceSet,
-    UseSelfAlpha, bake, bake_quiet,
+    AlphaParams, AnimationLimits, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId,
+    SurfaceSet, UseSelfAlpha, bake_quiet, bake_with_limits,
 };
 use areka_emo_compose::{
     BaseImageReport, BoxIssue, BoxLayout, BoxReport, ElementKind, EmoWorld, NestIssue, NestReport,
@@ -326,7 +326,21 @@ pub fn load_shell_target(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
 ) -> Result<ShellTarget, ShellLoadError> {
-    load_shell_target_with(shell_dir, decoder, LoadRecords::Emit)
+    load_shell_target_with_limits(shell_dir, decoder, AnimationLimits::from_env())
+}
+
+/// [`load_shell_target`] の動く絵の上限を外から渡す版（記録も失敗も同じ・上限だけが違う）。
+/// 環境変数に左右されないテストのための口（spec: audit-placement-core 要件 2.7・2.8）。
+///
+/// # Errors
+///
+/// [`load_shell_target`] と同じ 3 つ。
+pub fn load_shell_target_with_limits(
+    shell_dir: &Path,
+    decoder: &impl ElementDecoder,
+    limits: AnimationLimits,
+) -> Result<ShellTarget, ShellLoadError> {
+    load_shell_target_with(shell_dir, decoder, LoadRecords::Emit, limits)
 }
 
 /// [`load_shell_target`] と同じ中身で読み、読み込みの記録を出さない（採寸の読み・
@@ -339,7 +353,13 @@ pub fn load_shell_target_quiet(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
 ) -> Result<ShellTarget, ShellLoadError> {
-    load_shell_target_with(shell_dir, decoder, LoadRecords::Quiet)
+    // 採寸の読み手は動く絵の道に入らないので、上限は使われない（`bake_quiet` が環境から取る）。
+    load_shell_target_with(
+        shell_dir,
+        decoder,
+        LoadRecords::Quiet,
+        AnimationLimits::from_env(),
+    )
 }
 
 /// 読み込みの中身（1 本）。読み込みの記録は `records` が出すときだけ出し、3 つの失敗の
@@ -348,6 +368,7 @@ fn load_shell_target_with(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
     records: LoadRecords,
+    limits: AnimationLimits,
 ) -> Result<ShellTarget, ShellLoadError> {
     let names = list_file_names(shell_dir, records)?;
     let selection = select_surface_images(&names);
@@ -441,6 +462,7 @@ fn load_shell_target_with(
         decoder,
         use_self_alpha,
         records,
+        limits,
     );
     target.cursor_braces = cursor_braces;
 
@@ -566,10 +588,12 @@ pub(crate) fn build_shell_target_with_boxes(
         decoder,
         use_self_alpha,
         LoadRecords::Emit,
+        AnimationLimits::from_env(),
     )
 }
 
 /// 核の中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える（要件 2.1）。
+#[allow(clippy::too_many_arguments)] // 中の核 1 本の引数（上限を足して 8 つ）。束ねる型は作らない。
 fn build_core(
     shell: Shell,
     boxes: &[BoxDefinition],
@@ -578,6 +602,7 @@ fn build_core(
     decoder: &impl ElementDecoder,
     use_self_alpha: UseSelfAlpha,
     records: LoadRecords,
+    limits: AnimationLimits,
 ) -> ShellTarget {
     let images = selection.images;
 
@@ -618,8 +643,12 @@ fn build_core(
         base_dir: shell_dir,
         alpha_params: AlphaParams { use_self_alpha },
     };
-    let bake_with = if records.emits() { bake } else { bake_quiet };
-    let baked = bake_with(std::slice::from_ref(&set), decoder, PackConfig::default());
+    let sets = std::slice::from_ref(&set);
+    let baked = if records.emits() {
+        bake_with_limits(sets, decoder, PackConfig::default(), limits)
+    } else {
+        bake_quiet(sets, decoder, PackConfig::default())
+    };
 
     ShellTarget {
         shell,

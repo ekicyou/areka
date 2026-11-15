@@ -1,42 +1,36 @@
 //! 並べ直し（[`reset_window_positions`]）の檻（areka-P0-move-canon 要件 8.6・8.8・8.9・9.2・
 //! design Testing Strategy `reset_pos_tests.rs`）。
 //!
-//! 窓の一式は本番と同じ `spawn_ghost_windows` で組み、記憶は実物のアクター（`spawn_sylphya`）と
-//! 偽の保存先 `FakePersistIo` に置いて `barrier` の後に読み戻す（`persist_finalize_save_tests.rs`
-//! と同じやり方）。主モニタは偽の `Monitor` entity で置く。
+//! 窓の一式は本番と同じ `spawn_ghost_windows` で組み、記憶は `persist_finalize_save_tests.rs` の
+//! [`Store`]（実物のアクターと偽の保存先）に置いて `barrier` の後に読み戻す。主モニタは偽の
+//! `Monitor` entity で置く。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::PathBuf;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{
-    Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
-    spawn_sylphya,
-};
+use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::WindowPos;
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::{DefaultPlacementBasis, reset_window_positions};
 use crate::config::build_placement_config;
 use areka_emo_compose::ScaleRatio;
 
-use crate::follow::{
-    Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, shift_is_current,
-};
-use crate::persist::PersistWiring;
+use crate::follow::{Anchored, BalloonFollow, MonitorSnapshot, apply_char_shift, shift_is_current};
+use crate::persist::finalize_save_tests::{Store, window_pos};
 use crate::prepare_ghost_windows_with_work_area;
 use crate::reseed::BalloonPlacementInputs;
 use crate::resolver::{
     Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
 };
 use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::shared_test_support::placement_sized;
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{WA, with_com_initialized};
+use crate::test_support::{WA, give_fake_handles, with_com_initialized};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（物理 px）。
@@ -60,53 +54,28 @@ const EXPECTED: [PointPx; 2] = [
     },
 ];
 
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 struct Rig {
     world: World,
-    shared: Arc<FakePersistIo>,
-    roots: ScopeRoots,
-    parts: SylphyaParts,
+    store: Store,
 }
 
 impl Rig {
     /// 2 スコープの窓の一式（ずらした位置）・主と副のモニタ・記憶の送り口・材料を持つ World。
     fn new() -> Self {
-        let shared = Arc::new(FakePersistIo::new());
-        let roots = ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone())),
-            runtime_sink: None,
-        });
+        let store = Store::new();
         let mut world = World::new();
         let placements: Vec<ScopePlacement> = SCOPES
             .iter()
             .map(|&(scope, char_pos, char_size)| ScopePlacement {
-                scope,
-                char_pos,
-                char_size,
-                balloon_pos: PointPx {
-                    x: char_pos.x + BALLOON_OFFSET.x,
-                    y: char_pos.y + BALLOON_OFFSET.y,
-                },
-                balloon_size: SizePx { w: 223, h: 158 },
-                balloon_offset: BALLOON_OFFSET,
-                balloon_offset_base: OffsetBase::unpinned(BALLOON_OFFSET),
-                balloon_limit: false,
                 anchor: Anchor::Bottom,
-                balloon_keyword_base: None,
+                ..placement_sized(
+                    scope,
+                    char_pos,
+                    BALLOON_OFFSET,
+                    false,
+                    char_size,
+                    SizePx { w: 223, h: 158 },
+                )
             })
             .collect();
         let gw = spawn_ghost_windows(
@@ -114,21 +83,11 @@ impl Rig {
             &placements,
             &GhostTitles::from_scope_titles(SCOPES.iter().map(|&(s, _, _)| (s, format!("s{s}")))),
         );
-        let mut raw = 0x100;
-        for scope in gw.scopes() {
-            for entity in [gw.char_window(scope), gw.balloon_window(scope)] {
-                raw += 1;
-                world.entity_mut(entity.unwrap()).insert(WindowHandle {
-                    hwnd: HWND(raw as *mut _),
-                });
-            }
-        }
+        give_fake_handles(&mut world, &gw);
         // 副モニタを先に置く（先頭を選んでしまう誤りを噛ませる）。
         world.spawn(monitor(2, (-1280, 0, 0, 984), false));
         world.spawn(monitor(1, WORK, true));
-        world.insert_non_send(PersistWiring {
-            publisher: parts.publisher.clone(),
-        });
+        store.wire(&mut world);
         world.insert_resource(DefaultPlacementBasis {
             source: DescriptSource {
                 ghost_kv: Default::default(),
@@ -141,12 +100,7 @@ impl Rig {
                 windowpositions: Default::default(),
             },
         });
-        Rig {
-            world,
-            shared,
-            roots,
-            parts,
-        }
+        Rig { world, store }
     }
 
     fn gw(&self) -> &GhostWindows {
@@ -172,20 +126,12 @@ impl Rig {
     }
 
     fn load(&self) -> HashMap<PersistKey, String> {
-        self.parts.publisher.barrier().expect("barrier が返る");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.shared.clone()),
-        )
-        .into_iter()
-        .collect()
+        self.store.load()
     }
 
     fn finish(self) {
         let _residue = drain_window_pos_commands();
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.store.finish();
     }
 }
 
@@ -204,11 +150,6 @@ fn monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monit
         dpi: 96,
         is_primary,
     }
-}
-
-fn saved(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String, String)> {
-    let get = |axis| map.get(&PersistKey::WindowPos { scope, axis }).cloned();
-    Some((get(Axis::X)?, get(Axis::Y)?))
 }
 
 fn reset_events(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
@@ -288,7 +229,7 @@ fn shifted_windows_return_to_default_and_are_persisted() {
     for scope in 0..2 {
         let w = SCOPES[scope].2.w;
         assert_eq!(
-            saved(&store, scope as u32),
+            window_pos(&store, scope as u32),
             Some((
                 (EXPECTED[scope].x + w / 2).to_string(),
                 EXPECTED[scope].y.to_string()
@@ -296,6 +237,13 @@ fn shifted_windows_return_to_default_and_are_persisted() {
             "scope {scope} の位置が記憶へ届く: {store:?}"
         );
     }
+    assert_eq!(
+        store
+            .get(&PersistKey::WindowAdjacent { scope: 1 })
+            .map(String::as_str),
+        Some("left"),
+        "並べ直した位置と一緒に、鎖の規則の隣り合いの印が届く: {store:?}"
+    );
     rig.finish();
 }
 
@@ -326,7 +274,7 @@ fn reset_rebases_the_pattern_shift() {
     assert_eq!(rig.char_pos(1), EXPECTED[1]);
     let store = rig.load();
     assert_eq!(
-        saved(&store, 1).map(|(x, _)| x),
+        window_pos(&store, 1).map(|(x, _)| x),
         Some((EXPECTED[1].x + SCOPES[1].2.w / 2).to_string()),
         "記憶は並べた位置（ずれを引かない）"
     );
@@ -396,7 +344,7 @@ fn missing_material_only_warns() {
                 "{reason}: scope {scope} は動かない"
             );
         }
-        assert_eq!(saved(&rig.load(), 0), None, "{reason}: 記憶へ書かない");
+        assert_eq!(window_pos(&rig.load(), 0), None, "{reason}: 記憶へ書かない");
         rig.finish();
     }
 }
@@ -509,7 +457,7 @@ fn reset_clears_script_placed_mark_and_persists() {
     let store = rig.load();
     let w = SCOPES[0].2.w;
     assert_eq!(
-        saved(&store, 0),
+        window_pos(&store, 0),
         Some((
             (EXPECTED[0].x + w / 2).to_string(),
             EXPECTED[0].y.to_string()
@@ -527,7 +475,6 @@ fn reset_while_armed_records_each_returned_window_as_script_moved() {
     use crate::chain_realign::ChainRealignPending;
     let mut rig = Rig::new();
     rig.world.insert_resource(ChainRealignPending {
-        armed_frame: 0,
         before: Vec::new(),
         script_moved: Vec::new(),
     });

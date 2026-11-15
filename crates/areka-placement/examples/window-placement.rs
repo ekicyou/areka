@@ -2,13 +2,17 @@
 //!
 //! placement パイプライン（`prepare_ghost_windows` → `spawn_ghost_windows`）で本番ゴースト
 //! （emo2 fixture）の 2 スコープ×（キャラ窓＋バルーン窓）＝4 窓を配置・生成し、emo-present
-//! donor（`examples/emo-present.rs`）と**同型の装着経路**（`EmoPresenter::attach_target` →
+//! donor（`crates/areka/examples/emo-present.rs`）と**同型の装着経路**（`EmoPresenter::attach_target` →
 //! `apply(ShowSurface)`）で以下を装着する（要件 3.1/3.5/4.1/4.2/4.3/4.5）:
 //!
-//! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・434×687 物理 px）
-//! - **scope1 キャラ窓**: emo2 `surface10`（エモ・336×400 物理 px・ukadoc 正典の相方既定サーフェス）
-//! - **両バルーン窓**: balloon target（`balloons0.png`・400×224 物理 px・
-//!   `areka_emo_present::build_balloon_target` 経由）
+//! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・原寸 434×687）
+//! - **scope1 キャラ窓**: emo2 `surface10`（エモ・原寸 336×400・ukadoc 正典の相方既定サーフェス）
+//! - **各スコープのバルーン窓**: そのスコープのバルーンの面 0（scope0 は `balloons0.png`・原寸 400×224、
+//!   scope1 は `balloonk0.png`・原寸 288×203・`areka_emo_present::build_balloon_target` 経由。
+//!   測りがスコープごとの絵で窓の大きさを決めるので、貼る絵もスコープごとに選ぶ）
+//!
+//! 原寸は作者基準 DPI 96（emo2 は宣言なし＝正典既定）での物理 px。窓と絵はモニタ DPI ÷ 96 倍の
+//! 物理 px になる（dpi=120 なら scope0 のキャラ窓は 543×859）。
 //!
 //! # 層境界（6.3）
 //!
@@ -28,12 +32,10 @@
 //!
 //! ## 終了手段
 //!
-//! - **キャラ窓／バルーン窓の不透明域をダブルクリック**: 全ゴースト窓
-//!   （`GhostWindowMarker`）を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰
-//!   （`spawn_ghost_windows` 組込みの `on_ghost_pressed`・placement task 5.1）
-//! - **Ctrl+C**（コンソールから起動した場合）
+//! - **Ctrl+C**（コンソールから起動した場合）。窓のダブルクリックでは終わらない（ダブルクリックを
+//!   受けるのは本体の `input_events` の結線で、この example は付けない）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
-//!   env ゲート（main.rs の smoke ゲートと同名・同義。hands-off のビルド/起動確認用。
+//!   env ゲート（本体の `crates/areka/src/smoke_exit.rs` のゲートと同名。hands-off のビルド/起動確認用。
 //!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）
 //!
 //! # 手動観測プロトコル（3.1/3.5/4.1〜4.5・design「examples/window-placement.rs（実 DPI 受け入れ）」）
@@ -45,10 +47,11 @@
 //!    プロセスに設定する（`SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`）。
 //!    Windows「設定 → システム → ディスプレイ → 拡大縮小」で対象モニタのスケールを
 //!    **125%（dpi=120）** または 150%/200%（dpi=144/192）にした状態で本 example を実行する。
-//! 2. **② 初期配置が画面内**: scope0（むらさき・434×687）が **primary work area の右下**
-//!    （右端・タスクバー上端）に、scope1（エモ・336×400）が **その左隣**（scope0 の左端から
-//!    surface 幅ぶん左・下端揃え）に、いずれも**画面内**に出現する（右下へ沈む・画面外へ
-//!    はみ出す・スケール倍率で膨れる、のいずれも起きない）。
+//! 2. **② 初期配置が画面内**: scope0（むらさき）が **primary work area の右下**
+//!    （右端・タスクバー上端）に、scope1（エモ）が **その左隣**（scope0 の左端から
+//!    scope1 の窓の幅ぶん左・下端揃え）に、いずれも**画面内**に出現する（右下へ沈む・画面外へ
+//!    はみ出す、のいずれも起きない）。窓の大きさは原寸のモニタ DPI ÷ 96 倍で、窓と表示された絵の
+//!    外形が一致する（窓だけ・絵だけが大きくならない）。
 //! 3. **③ キャラ窓ドラッグでバルーン追従**: キャラ窓を（透明部を除く）全面どこでも掴んで
 //!    ドラッグでき、対応するバルーン窓が配置時の相対 offset を保って追従する。
 //! 4. **④ モニタ境界を跨ぐドラッグで消失しない**: マルチモニタ環境で（DPI の異なる）モニタ
@@ -59,15 +62,15 @@
 //!    dpi=96 では単位混在バグが自己整合して隠れるため、非 96 DPI の実走記録をもって
 //!    受け入れとする）。
 //!
-//! # 観測注記（受け入れ判定の対象外・設計討議 #1 確定）
+//! # 観測注記（受け入れ判定の対象外・areka-P0-window-placement の設計討議 議題 1 で確定）
 //!
 //! - **scope1 バルーンが scope0 キャラ窓に重なって出現するのは正常**: emo2 実測値
-//!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P5 幾何により
-//!   `balloon_x(1) = char_x(0) − w0 + w1` となり、scope1 のバルーンが scope0 キャラ窓に
-//!   重畳する。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の**正常挙動**であり
+//!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P2・P5 の幾何により
+//!   `char_x(1) = char_x(0) − w1`・`balloon_x(1) = char_x(1) + w1 = char_x(0)` となり、
+//!   scope1 のバルーンが scope0 キャラ窓に重畳する。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の**正常挙動**であり
 //!   配置破綻ではない。正式なバルーン配置規則は balloon 表示系の後続 spec が所有する。
-//! - **重畳域でバルーンが先に掴まれるのも正常**: 重畳域ではバルーン不透明部
-//!   （balloons0.png 内側 A=255）が αマスクで先にヒットするため、scope0 キャラでなく
+//! - **重畳域でバルーンが先に掴まれるのも正常**: 重畳域ではバルーン
+//!   （scope1 のバルーンの絵 balloonk0.png）の不透明部が αマスクで先にヒットするため、scope0 キャラでなく
 //!   バルーンが掴まれる。
 //! - **scope0（surface0.png）に吹き出しとセリフ文字が見えるのは正常**: emo2 fixture の
 //!   surface0 はバルーン＋サンプルセリフを**焼き込んだ**挨拶用デフォルト立ち絵であり、
@@ -75,7 +78,8 @@
 //!
 //! # DPI 表示契約（donor と同一）
 //!
-//! 窓のクライアント領域は surface 原寸（物理 px）に一致する（等倍・DPI 拡縮なし）。
+//! 窓のクライアント領域は、surface の原寸を k 倍した物理 px に一致する（k＝DPI ÷ 作者基準 DPI。
+//! 窓の大きさは採寸が primary モニタの DPI で、絵は presenter が窓の DPI で k を導く）。
 //! placement パイプラインは座標・寸法を**物理 px 単一通貨**で運び（design U1〜U5）、
 //! `BoxStyle`（論理 DIP）・`DragConstraint` を一切使わない。
 
@@ -104,7 +108,7 @@ use areka_placement::spawn::{
 // Constants / fixture paths
 // ---------------------------------------------------------------------------
 
-/// smoke 自動 close の env ゲート名（main.rs と同名・`AREKA_` 冠規約）。
+/// smoke 自動 close の env ゲート名（本体の `smoke_exit.rs` と同名・`AREKA_` 冠規約）。
 const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
 /// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
@@ -133,10 +137,12 @@ struct PendingTarget {
     window: Entity,
     /// 初回 `apply(ShowSurface)` で表示する surface id。
     surface_id: u32,
+    /// 作者基準 DPI（採寸が descript から読んだ値・キャラ窓はシェル、バルーン窓はバルーンの値）。
+    author_dpi: u16,
     /// ログ用ラベル。
     label: String,
-    /// target のアセット（`attach_target` で move 消費・装着後は `None`）。
-    assets: Option<(EmoWorld, AtlasTable)>,
+    /// target のアセット（`attach_target` で move 消費）。
+    assets: (EmoWorld, AtlasTable),
 }
 
 /// 起動時に構築した presenter・装着待ち target 群を束ね、GPU 資源が揃うまで attach/apply を
@@ -179,7 +185,7 @@ fn main() -> Result<()> {
         .borrow_mut()
         .add_systems(FrameFinalize, boot_present_system);
 
-    // env ゲート付き smoke 自動 close（hands-off のビルド/起動確認用・main.rs と同名 env）。
+    // env ゲート付き smoke 自動 close（hands-off のビルド/起動確認用・本体の `smoke_exit.rs` と同名 env）。
     install_smoke_exit(&mgr);
 
     // 操作ガイド出力。
@@ -190,7 +196,7 @@ fn main() -> Result<()> {
     println!(
         "  scope1: キャラ窓 surface10（エモ・scope0 の左）＋バルーン窓（右隣・scope0 に重畳＝正常）"
     );
-    println!("  操作  : キャラ窓の不透明域ドラッグでバルーン追従／不透明域ダブルクリックで終了");
+    println!("  操作  : キャラ窓の不透明域ドラッグでバルーン追従／終了は Ctrl+C");
     println!("  受け入れ: rustdoc の手動観測プロトコル ①〜⑤（dpi≠96 必須・96 のみは不合格）");
     println!();
 
@@ -242,13 +248,13 @@ fn build_and_spawn(world: &mut World) {
         );
     }
 
-    // MonitorSnapshot（task 8.1・DD15 基盤）: 実モニタ work area 集合を忠実転写した
-    // Resource を挿入（bottom 吸着ドラッグ（4.7・task 8.2）の消費用・セッション内固定）。
+    // MonitorSnapshot（DD15 基盤）: 実モニタ work area 集合を忠実転写した
+    // Resource を挿入（bottom 吸着ドラッグ（4.7）の消費用・セッション内固定）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
 
-    // placement 本体の窓組立（markers・WindowPos・DragConfig・BalloonFollow・double-click close）。
+    // placement 本体の窓組立（markers・WindowPos・DragConfig・BalloonFollow）。
     let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
 
     // ここから先は example 側の装着アセット構築（6.3: placement 本体は EmoPresenter 非依存）。
@@ -274,36 +280,41 @@ fn build_and_spawn(world: &mut World) {
     let shell_table = shell_target.atlas().clone();
 
     let mut pending = Vec::new();
-    for scope in windows.scopes().collect::<Vec<_>>() {
-        // 初期 surface id: 測りと同じく、候補の並びのうちシェルに在る最初の面（窓寸法と表示 surface の原寸が一致する）。
-        let probe = shell_target.build_world();
-        let surface_id = areka_placement::descript_window_keys::first_existing(
-            &prepared.default_surfaces.candidates(scope),
-            |id| probe.surface(id).is_some(),
-        )
-        .unwrap_or_else(|| prepared.default_surfaces.surface(scope));
-
+    for scope in windows.scopes() {
+        let Some(scope_u32) = target_scope(scope) else {
+            tracing::error!(
+                scope,
+                "window-placement: スコープ番号が TargetId の u32 に収まらない — このスコープの装着を飛ばす（窓は配置済み）"
+            );
+            continue;
+        };
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
             let emo_world = shell_target.build_world();
+            // 初期 surface id: 測りと同じ答え（窓寸法と表示 surface の原寸が一致する）。
+            let surface_id = prepared
+                .default_surfaces
+                .initial_surface(scope, |id| emo_world.surface(id).is_some());
             pending.push(PendingTarget {
-                target: TargetId((scope as u32) * 2),
+                target: TargetId(scope_u32 * 2),
                 window: char_e,
                 surface_id,
+                author_dpi: prepared.author_dpi.shell,
                 label: format!("scope{scope} char surface{surface_id}"),
-                assets: Some((emo_world, shell_table.clone())),
+                assets: (emo_world, shell_table.clone()),
             });
         }
 
-        // バルーン窓 target（TargetId = 2*scope+1・balloon surface0＝balloons0.png）。
+        // バルーン窓 target（TargetId = 2*scope+1・そのスコープのバルーンの面 0）。
         if let Some(balloon_e) = windows.balloon_window(scope) {
-            match build_balloon_target(&balloon_dir, &decoder, 0) {
+            match build_balloon_target(&balloon_dir, &decoder, scope_u32) {
                 Ok((b_world, b_table)) => pending.push(PendingTarget {
-                    target: TargetId((scope as u32) * 2 + 1),
+                    target: TargetId(scope_u32 * 2 + 1),
                     window: balloon_e,
                     surface_id: 0,
+                    author_dpi: prepared.author_dpi.balloon,
                     label: format!("scope{scope} balloon surface0"),
-                    assets: Some((b_world, b_table)),
+                    assets: (b_world, b_table),
                 }),
                 Err(e) => {
                     // build_balloon_target は内部で error! 済み。窓は配置済みのまま装着だけ欠く。
@@ -331,8 +342,9 @@ fn build_and_spawn(world: &mut World) {
 ///
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
-/// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番（`build_boot_assets`）・
-/// 採寸（`build_shell_assets`）と同じ入口を通るため、この example が見る絵は本番と食い違わない。
+/// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番の資産
+/// （`runtime::assets` の `build_shell_assets`）・採寸（`measure.rs` の `build_shell_assets`）と同じ入口を
+/// 通るため、この example が見る絵は本番と食い違わない。
 fn build_shell_material(
     shell_dir: &std::path::Path,
     decoder: &WicDecoderArm,
@@ -349,6 +361,14 @@ fn build_shell_material(
             None
         }
     }
+}
+
+/// 窓のスコープの u32 の値（キャラ窓 `TargetId(2*scope)`・バルーン窓 `TargetId(2*scope+1)`・
+/// `build_balloon_target` の第 3 引数）。`2*scope+1` が u32 に収まらないスコープは `None`
+/// （切り詰めて別のスコープの target や絵にしない）。
+fn target_scope(scope: usize) -> Option<u32> {
+    let scope = u32::try_from(scope).ok()?;
+    scope.checked_mul(2)?.checked_add(1).map(|_| scope)
 }
 
 // ---------------------------------------------------------------------------
@@ -379,16 +399,11 @@ fn boot_present_system(world: &mut World) {
         .remove_non_send::<PlacementBoot>()
         .expect("直上で存在確認済み");
 
-    for t in boot.pending.iter_mut() {
-        let Some((emo_world, atlas)) = t.assets.take() else {
-            continue;
-        };
-        boot.presenter.attach_target(
-            t.target, t.window, emo_world, atlas,
-            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
-            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・配置）。
-            96,
-        );
+    for t in std::mem::take(&mut boot.pending) {
+        let (emo_world, atlas) = t.assets;
+        // 作者基準 DPI は採寸と同じ値（`PreparedPlacement::author_dpi`）なので、窓の大きさと表示の大きさが合う。
+        boot.presenter
+            .attach_target(t.target, t.window, emo_world, atlas, t.author_dpi);
         boot.presenter.apply(
             world,
             PresentCommand::ShowSurface {
@@ -411,19 +426,31 @@ fn boot_present_system(world: &mut World) {
 // Smoke auto close（env ゲート・hands-off のビルド/起動確認用）
 // ---------------------------------------------------------------------------
 
-/// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（main.rs の smoke ゲートと同義:
-/// 未設定・空・非数値・負値はゲート OFF）。
+/// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（ゲートを OFF にする値は本体の
+/// `smoke_exit::smoke_exit_ms` と同じ: 未設定・空・非数値・負値。書かれているのに読めない値に
+/// `warn!` を残すのはこの example だけ）。
 fn smoke_exit_ms() -> Option<u64> {
     let value = std::env::var(SMOKE_EXIT_ENV).ok()?;
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
     }
-    trimmed.parse::<u64>().ok()
+    match trimmed.parse::<u64>() {
+        Ok(ms) => Some(ms),
+        Err(error) => {
+            tracing::warn!(
+                env = SMOKE_EXIT_ENV,
+                value = %value,
+                %error,
+                "window-placement: smoke 自動 close の値がミリ秒の数として読めない — ゲートは OFF"
+            );
+            None
+        }
+    }
 }
 
-/// env ゲート付き smoke 自動 close を結線する（main.rs `fn main` の `smoke_exit_ms` のゲートと
-/// 同作法: `wintf::executor::spawn_local`＋world `Weak`・一発の async タスク）。指定 ms 後に
+/// env ゲート付き smoke 自動 close を結線する（本体の `smoke_exit::arm` と同作法:
+/// `wintf::executor::spawn_local`＋world `Weak`・一発の async タスク）。指定 ms 後に
 /// 全 [`GhostWindowMarker`] 窓を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰。
 fn install_smoke_exit(app: &WinApp) {
     let Some(ms) = smoke_exit_ms() else {
@@ -457,4 +484,19 @@ fn install_smoke_exit(app: &WinApp) {
             "window-placement smoke 自動 close: ゴースト窓を despawn しました"
         );
     });
+}
+
+// 窓も GPU も使わない選びだけを確かめる（`[[example]] test = true` で `cargo test -p areka-placement` が走らせる）。
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scope_whose_target_id_does_not_fit_u32_is_skipped() {
+        assert_eq!(target_scope(1), Some(1));
+        // 2*scope+1 が u32 に収まる最大のスコープまでは通し、その次から切り詰めずに外す。
+        assert_eq!(target_scope(0x7FFF_FFFF), Some(0x7FFF_FFFF));
+        assert_eq!(target_scope(0x8000_0000), None);
+        assert_eq!(target_scope(1usize << 32), None);
+    }
 }

@@ -1,5 +1,10 @@
+use super::resolve_test_support::input;
+use super::test_support::work_area;
 use super::*;
-use crate::config::Alignment;
+use crate::config::{Alignment, build_placement_config};
+use crate::shared_test_support::MEASURE_DPI;
+use crate::test_support::kv;
+use log_capture_kit::capture;
 
 // ------------------------------------------------------------------
 // Anchor::from_alignment（4.2・design Testing Strategy Unit #4）
@@ -43,7 +48,7 @@ fn from_alignment_maps_all_branches() {
 }
 
 /// 4.2 補: `Seam` 値は `trim().to_ascii_lowercase()` で正規化してから解釈する
-/// （parsers 側で正規化済み前提だが防御・design Implementation Notes Risks）。
+/// （`Seam` は descript に書かれたままの値を持つので、大文字小文字はここでそろえる）。
 #[test]
 fn from_alignment_normalizes_case_and_whitespace() {
     assert_eq!(
@@ -56,4 +61,46 @@ fn from_alignment_normalizes_case_and_whitespace() {
         Anchor::Right,
         "大文字混じりも Right へ"
     );
+}
+
+/// descript の `alignmenttodesktop`（別綴 `alignmentondesktop`）は大文字小文字を区別しない。
+/// 受け付ける 5 語はどの書き方でも同じ向きになり、未知アンカーの警告を出さない。
+/// 知らない語は今までどおり bottom 相当で警告 1 行、`value` には書かれたままの値を載せる。
+#[test]
+fn descript_alignment_words_ignore_case() {
+    let wa = work_area(96);
+    let inputs = [input(0, 400, 600)];
+    let resolve = |key: &str, raw: &str| {
+        let cfg = build_placement_config(&kv(&[(key, raw)]), &kv(&[]));
+        let anchor = Anchor::from_alignment(&cfg.scopes[&0].alignment);
+        let (_, events) = capture(|| resolve_placement(&cfg, wa, &inputs, MEASURE_DPI));
+        let warns: Vec<_> = events
+            .into_iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .collect();
+        (anchor, warns)
+    };
+    let words = [
+        ("bottom", Anchor::Bottom),
+        ("free", Anchor::Free),
+        ("top", Anchor::Top),
+        ("left", Anchor::Left),
+        ("right", Anchor::Right),
+    ];
+    for key in ["seriko.alignmenttodesktop", "seriko.alignmentondesktop"] {
+        for (word, expected) in words {
+            let mut capitalized = word.to_owned();
+            capitalized[..1].make_ascii_uppercase();
+            for raw in [word.to_owned(), word.to_ascii_uppercase(), capitalized] {
+                let (anchor, warns) = resolve(key, &raw);
+                assert_eq!(anchor, expected, "{key},{raw}");
+                assert!(warns.is_empty(), "{key},{raw}: {warns:?}");
+            }
+        }
+    }
+
+    let (anchor, warns) = resolve("seriko.alignmenttodesktop", "Middle");
+    assert_eq!(anchor, Anchor::Bottom, "知らない語は bottom 相当");
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert_eq!(warns[0].field("value"), Some("Middle"), "書かれたままの値");
 }

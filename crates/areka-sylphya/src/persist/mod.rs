@@ -27,6 +27,7 @@
 //!   で原子的確定する。成功 → [`PersistOutcome::Saved`]、root 不在・錠が取れない・既存が使えない・
 //!   commit 失敗 → error!/warn! ＋ [`PersistOutcome::Degraded`]（R6.7・無音失敗なし）、読み取りだけの
 //!   走り → [`PersistOutcome::Withheld`]。
+//! - [`remove_scope_keys`]: 名指しの鍵だけを消す（[`save_scope`] と同じ道・空になった表は書かない）。
 //!
 //! 鏡像／アクターへの結線は行わない（Task 5.x の領分）。本モジュールは注入された [`PersistIo`]
 //! の上で typed モデル＋ load/save 編成のみを提供する。
@@ -305,6 +306,84 @@ pub fn save_scope(
     entries: Vec<(PersistKey, String)>,
 ) -> PersistOutcome {
     let keys: Vec<PersistKey> = entries.iter().map(|(key, _)| *key).collect();
+    update_scope(scope, roots, io, keys, |doc, base| {
+        for (key, value) in entries {
+            // 手で書いた `"00"` などの綴りを残すと、正準の綴りと並んで古い値が読み戻される。
+            remove_other_spellings(doc, base, key);
+            apply_entry(doc, key, Some(value));
+        }
+    })
+}
+
+/// 当該スコープの記憶から `keys` を消す（[`save_scope`] と同じ錠・既存の読み・控え・commit の道）。
+///
+/// 名指しの鍵だけを消し、知らない表・知らない値・ほかの鍵は残す。鍵を消して空になった表
+/// （`[balloon-offset."N"]` とその親など）は書かない。失敗と控えの扱いは [`save_scope`] と同じ。
+/// スコープ別の鍵は、読みが同じスコープとして読む綴り（手で書いた `"00"` など）もすべて消す。
+pub fn remove_scope_keys(
+    scope: PersistScope,
+    roots: &ScopeRoots,
+    io: &dyn PersistIo,
+    keys: Vec<PersistKey>,
+) -> PersistOutcome {
+    let names = keys.clone();
+    update_scope(scope, roots, io, keys, |doc, base| {
+        for key in names {
+            apply_entry(doc, key, None);
+            remove_toml_path(base, &toml_path(key));
+            remove_other_spellings(doc, base, key);
+        }
+    })
+}
+
+/// スコープ別の鍵について、読み（[`doc_to_entries`] の `parse::<u32>()`）が同じスコープになる ID
+/// （正準の綴り `scope.to_string()` も、手で書いた `"00"` なども）を doc と土台の表から消す。
+fn remove_other_spellings(doc: &mut FormatDoc, base: &mut toml::Table, key: PersistKey) {
+    let same = |scope: u32, id: &str| id.parse::<u32>() == Ok(scope);
+    let scope = match key {
+        PersistKey::WindowPos { scope, axis } => {
+            for (_, pair) in doc.window.iter_mut().filter(|(id, _)| same(scope, id)) {
+                set_axis(pair, axis, None);
+            }
+            scope
+        }
+        PersistKey::BalloonOffset { scope, axis } => {
+            for (_, pair) in doc
+                .balloon_offset
+                .iter_mut()
+                .filter(|(id, _)| same(scope, id))
+            {
+                set_axis(pair, axis, None);
+            }
+            scope
+        }
+        PersistKey::WindowAdjacent { scope } => {
+            doc.window_adjacent.retain(|id, _| !same(scope, id));
+            scope
+        }
+        _ => return,
+    };
+    let mut path = toml_path(key);
+    let ids: Vec<String> = match base.get(&path[0]) {
+        Some(toml::Value::Table(table)) => {
+            table.keys().filter(|id| same(scope, id)).cloned().collect()
+        }
+        _ => Vec::new(),
+    };
+    for id in ids {
+        path[1] = id;
+        remove_toml_path(base, &path);
+    }
+}
+
+/// 保存と消しの 1 本の道（錠 → 既存の読み → `edit` で doc と土台の表に手を入れる → 控え／commit）。
+fn update_scope(
+    scope: PersistScope,
+    roots: &ScopeRoots,
+    io: &dyn PersistIo,
+    keys: Vec<PersistKey>,
+    edit: impl FnOnce(&mut FormatDoc, &mut toml::Table),
+) -> PersistOutcome {
     let Some(path) = roots.file_of(scope) else {
         tracing::warn!(
             target: LOG_TARGET,
@@ -346,7 +425,7 @@ pub fn save_scope(
     // read-modify-write: 既存 doc を土台にマージ（無関係 key・知らない表と値を温存）。使えない既存は上書きしない。
     // 控える道（読み取りだけの走り）は何も書かない＝守る物が無いので、寛容な読みで続ける。
     let withheld = io.withholds(&path);
-    let (mut doc, base) = match read_existing(io, &path) {
+    let (mut doc, mut base) = match read_existing(io, &path) {
         Ok(existing) => existing,
         Err(reason) if withheld => {
             tracing::warn!(
@@ -377,9 +456,7 @@ pub fn save_scope(
             });
         }
     };
-    for (key, value) in entries {
-        apply_entry(&mut doc, key, value);
-    }
+    edit(&mut doc, &mut base);
 
     let content = format::to_toml_string_over(base, &doc);
     // 控える道は「書けたか」の判定に入らない（読み取りだけの走り・控えへの入れはメモリの中）。
@@ -430,8 +507,8 @@ fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<(FormatDoc, toml::Ta
     }
 }
 
-/// 1 entry を [`FormatDoc`] へ適用する（TOML 写像・design「TOML mapping」）。
-fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
+/// 1 entry を [`FormatDoc`] へ適用する（TOML 写像・design「TOML mapping」）。`None` は消す。
+fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: Option<String>) {
     match key {
         PersistKey::WindowPos { scope, axis } => {
             set_axis(
@@ -447,24 +524,66 @@ fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
                 value,
             );
         }
-        PersistKey::BootCount => doc.boot_count = Some(value),
-        PersistKey::VanishCount => doc.vanish_count = Some(value),
-        PersistKey::LastGhost => doc.last_ghost = Some(value),
-        PersistKey::LastBalloon => doc.last_balloon = Some(value),
-        PersistKey::LastShell => doc.last_shell = Some(value),
-        PersistKey::LastRunning => doc.last_running = Some(value),
-        PersistKey::BasewareRoots => doc.baseware_roots = Some(value),
-        PersistKey::WindowAdjacent { scope } => {
-            doc.window_adjacent.insert(scope.to_string(), value);
-        }
+        PersistKey::BootCount => doc.boot_count = value,
+        PersistKey::VanishCount => doc.vanish_count = value,
+        PersistKey::LastGhost => doc.last_ghost = value,
+        PersistKey::LastBalloon => doc.last_balloon = value,
+        PersistKey::LastShell => doc.last_shell = value,
+        PersistKey::LastRunning => doc.last_running = value,
+        PersistKey::BasewareRoots => doc.baseware_roots = value,
+        PersistKey::WindowAdjacent { scope } => match value {
+            Some(value) => {
+                doc.window_adjacent.insert(scope.to_string(), value);
+            }
+            None => {
+                doc.window_adjacent.remove(&scope.to_string());
+            }
+        },
     }
 }
 
-/// [`AxisPair`] の指定軸へ値を書く。
-fn set_axis(pair: &mut AxisPair, axis: Axis, value: String) {
+/// [`AxisPair`] の指定軸へ値を書く（`None` は消す）。
+fn set_axis(pair: &mut AxisPair, axis: Axis, value: Option<String>) {
     match axis {
-        Axis::X => pair.x = Some(value),
-        Axis::Y => pair.y = Some(value),
+        Axis::X => pair.x = value,
+        Axis::Y => pair.y = value,
+    }
+}
+
+/// key の TOML の置き場（表の名 → … → 欄の名・[`format::to_toml_string_over`] の写像と同じ）。
+fn toml_path(key: PersistKey) -> Vec<String> {
+    let p = |parts: &[&str]| -> Vec<String> { parts.iter().map(|s| s.to_string()).collect() };
+    match key {
+        PersistKey::WindowPos { scope, axis } => p(&["window", &scope.to_string(), axis.as_str()]),
+        PersistKey::BalloonOffset { scope, axis } => {
+            p(&["balloon-offset", &scope.to_string(), axis.as_str()])
+        }
+        PersistKey::WindowAdjacent { scope } => p(&["window-adjacent", &scope.to_string()]),
+        PersistKey::BootCount => p(&["boot", "count"]),
+        PersistKey::VanishCount => p(&["vanish", "count"]),
+        PersistKey::LastGhost => p(&["last", "ghost"]),
+        PersistKey::LastBalloon => p(&["last", "balloon"]),
+        PersistKey::LastShell => p(&["last", "shell"]),
+        PersistKey::LastRunning => p(&["last", "running"]),
+        PersistKey::BasewareRoots => p(&["baseware", "roots"]),
+    }
+}
+
+/// 表から `path` の欄を消し、それで空になった表を親から消す。消したら `true`。
+fn remove_toml_path(table: &mut toml::Table, path: &[String]) -> bool {
+    match path {
+        [] => false,
+        [leaf] => table.remove(leaf).is_some(),
+        [head, rest @ ..] => {
+            let Some(toml::Value::Table(child)) = table.get_mut(head) else {
+                return false;
+            };
+            let removed = remove_toml_path(child, rest);
+            if removed && child.is_empty() {
+                table.remove(head);
+            }
+            removed
+        }
     }
 }
 
@@ -566,3 +685,8 @@ mod unreadable_tests;
 #[cfg(test)]
 #[path = "persist_lock_tests.rs"]
 mod lock_tests;
+
+/// 記憶の鍵を消す口の檻（audit-placement-core 指摘 17）。
+#[cfg(test)]
+#[path = "persist_remove_tests.rs"]
+mod remove_tests;

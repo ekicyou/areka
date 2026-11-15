@@ -173,13 +173,86 @@ fn mark_from_adjacency() {
         AdjacencyMark::from_adjacency(Adjacency::Overlapped { gap: -3 }),
         AdjacencyMark::Separate
     );
-    // 判定から印への写しを通して、離れ・重なりの組が印 none になる。
+}
+
+/// 鎖の規則 ⑵: 左の組は `defaultx` の隙間（±2）も隣り合いで、決めはその隙間で付ける。右の組と
+/// 縦に重ならない組は `defaultx` を見ない（audit-placement-core 494）。
+#[test]
+fn chain_adjacency_accepts_the_defaultx_gap_on_the_left_only() {
+    for (cur, expected) in [
+        (
+            left_of_prev(36),
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ),
+        (
+            left_of_prev(34),
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ),
+        (left_of_prev(1), PairDecision::JoinLeft),
+        (
+            left_of_prev(20),
+            PairDecision::Keep(KeepReason::Apart { gap: 20 }),
+        ),
+        (
+            right_of_prev(36),
+            PairDecision::Keep(KeepReason::Apart { gap: 36 }),
+        ),
+        (right_of_prev(0), PairDecision::JoinRight),
+        (
+            ChainRect {
+                y: PREV.y + PREV.h,
+                ..left_of_prev(36)
+            },
+            PairDecision::Keep(KeepReason::Apart { gap: 36 }),
+        ),
+    ] {
+        let adjacency = judge_chain_adjacency(PREV, cur, 36);
+        assert_eq!(adjacency_decision(adjacency, 36), expected, "{cur:?}");
+    }
     assert_eq!(
-        AdjacencyMark::from_adjacency(judge_adjacency(PREV, left_of_prev(0))).as_str(),
-        "left"
+        judge_chain_adjacency(PREV, left_of_prev(36), 0),
+        judge_adjacency(PREV, left_of_prev(36)),
+        "defaultx 0 は今までの判定と同じ"
+    );
+}
+
+/// 鎖の規則 ⑵: `defaultx` が負で、n の中心が前の窓の中心より右へ来ても、左の隙間が `defaultx`
+/// なら左の組（起動の確定が `x(prev) − w(n) − defaultx` へ置いた形・audit-placement-core 513）。
+#[test]
+fn a_negative_defaultx_gap_past_the_centre_is_still_left() {
+    let prev = ChainRect {
+        x: 0,
+        y: 0,
+        w: 191,
+        h: 300,
+    };
+    let cur = ChainRect {
+        x: -168 + 200,
+        w: 168,
+        ..prev
+    };
+    let adjacency = judge_chain_adjacency(prev, cur, -200);
+    assert_eq!(adjacency, Adjacency::Left { gap: -200 });
+    assert_eq!(
+        adjacency_decision(adjacency, -200),
+        PairDecision::JoinLeftOffset { offset: -200 }
+    );
+}
+
+/// `defaultx` が許す幅（±2）の内でも、隙間が `defaultx` に近ければその隙間で付ける
+/// （0 に丸めない・audit-placement-core 514）。
+#[test]
+fn a_small_defaultx_gap_is_kept_not_rounded_to_zero() {
+    assert_eq!(
+        adjacency_decision(Adjacency::Left { gap: 2 }, 2),
+        PairDecision::JoinLeftOffset { offset: 2 }
     );
     assert_eq!(
-        AdjacencyMark::from_adjacency(judge_adjacency(PREV, right_of_prev(5))).as_str(),
-        "none"
+        adjacency_decision(Adjacency::Left { gap: 0 }, 2),
+        PairDecision::JoinLeft
+    );
+    assert_eq!(
+        adjacency_decision(Adjacency::Left { gap: -2 }, -2),
+        PairDecision::JoinLeftOffset { offset: -2 }
     );
 }

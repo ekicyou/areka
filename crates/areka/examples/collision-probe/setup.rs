@@ -39,7 +39,7 @@ fn build_and_spawn(world: &mut World) {
         }
     };
 
-    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs:245-247` 前例）。
+    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs:251-255` 前例）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
@@ -69,7 +69,7 @@ fn build_and_spawn(world: &mut World) {
     };
 
     // ⑤ マウス経路照合の観測シーム: probe 窓へ `OnPointerMoved` を1行装着（donor `OnPointerPressed`
-    // 前例＝`emo-present.rs:523` と同型・placement 非改変）。
+    // 前例＝`emo-present/input.rs:20` と同型・placement 非改変）。
     //
     // **本 probe に `OnPointerPressed` は付かない**（2026-08-05 実機で確認・冒頭 doc「使い方」参照）。
     // かつて終了を担っていた stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は

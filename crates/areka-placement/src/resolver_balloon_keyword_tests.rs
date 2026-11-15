@@ -4,29 +4,20 @@
 //! （`BalloonXMode::CenterTop`／`CenterBottom`・要件 4.2/4.3）と、その周辺の
 //! 回帰境界（`Side`＝数値指定・未指定の bit 同一維持・要件 4.5/5.2）である。
 //!
-//! `resolver_resolve_tests.rs` は既に 1,000 行規模ゆえ、本仕様の追加分は別ファイルへ
-//! 置く（ファイル分割規約）。既存の T-R8 群（`Side` の全表）は**無改変のまま**
-//! 緑であることが要件 5.2 の主檻であり、本ファイルはその補強として `Side` の
-//! 閉じた式を逐語で再検定する。
+//! `Side` の全表は `resolver_resolve_balloon_tests.rs` の T-R8 群が持つ（要件 5.2 の主檻）。
+//! 本ファイルが `Side` について確かめるのは、既定が `Side` であることと未収載のスコープの
+//! 位置（T-K6）、`limit` が位置を変えないこと（T-K7 補）、再導出の素材を持たないことと
+//! キーワードの式が `Side` で位置を返さないこと（T-K9）である。
 //!
 //! DPI パラメタ化（`DPIS`＝100%/125%/150%/200%）は既存 resolver 檻の流儀を踏襲する
 //! ——resolver は物理 px しか見ないので、同じ論理形状を各水準の物理値で与えたとき
 //! 期待値も同一の物理式から出る（隠れた `/96` があれば 96 以外で崩れる・要件 4.8）。
 
+use super::resolve_test_support::{cfg_of, offset_work_area};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
-use crate::config::{Alignment, BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig};
+use crate::config::{Alignment, BalloonSide, BalloonXMode, ScopeConfig};
 use crate::shared_test_support::MEASURE_DPI;
-
-/// 左上が原点でない work area（基本位置式の left/top 依存を暴く）。
-fn offset_work_area(dpi: i32) -> RectPx {
-    RectPx {
-        left: px(64, dpi),
-        top: px(40, dpi),
-        right: px(64 + 1920, dpi),
-        bottom: px(40 + 1080, dpi),
-    }
-}
 
 /// 本ファイル共通のスコープ構成（`ScopeConfig` の全欄を明示列挙する——今後欄が
 /// 増えたときここが必ずコンパイルエラーになり、既定が黙って入るのを防ぐ）。
@@ -47,17 +38,8 @@ fn keyword_cfg(
     }
 }
 
-fn cfg_of(scopes: Vec<(usize, ScopeConfig)>) -> PlacementConfig {
-    PlacementConfig {
-        scopes: scopes.into_iter().collect(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
-    }
-}
-
 /// キャラ寸とバルーン寸を独立に与える採寸入力（中央揃えの検定には
-/// `balloon_w ≠ char_w / 2` が要る＝`resolver_resolve_tests` の `input` は使えない）。
+/// `balloon_w ≠ char_w / 2` が要る＝`resolve_test_support::input` は使えない）。
 fn input(scope: usize, char_size: SizePx, balloon_size: SizePx) -> ScopeInput {
     ScopeInput {
         scope,
@@ -138,27 +120,6 @@ fn t_k1_center_top_places_above_shell_center() {
                 },
                 "dpi={dpi} [{label}]: CenterTop＝中央 x・下端がシェル上端に接する y"
             );
-            // 中央揃えの実体: バルーンの中心 x がシェル画像の中心 x と一致する
-            // （偶数差ゆえ厳密一致・奇数差の切り捨ては T-K5 が担う）。
-            assert_eq!(
-                p.balloon_pos.x + bs.w / 2,
-                cp.x + cs.w / 2,
-                "dpi={dpi} [{label}]: バルーン中心＝シェル画像中心"
-            );
-            // 接する: バルーン下端 ＝ シェル画像上端
-            assert_eq!(
-                p.balloon_pos.y + bs.h,
-                cp.y,
-                "dpi={dpi} [{label}]: バルーン下端＝シェル画像上端（接する）"
-            );
-            assert_eq!(
-                p.balloon_offset,
-                PointPx {
-                    x: (cs.w - bs.w) / 2,
-                    y: -bs.h
-                },
-                "dpi={dpi} [{label}]: balloon_offset ≡ balloon_pos − char_pos"
-            );
         }
     }
 }
@@ -188,50 +149,7 @@ fn t_k2_center_bottom_places_below_shell_center() {
                 },
                 "dpi={dpi} [{label}]: CenterBottom＝中央 x・上端がシェル下端に接する y"
             );
-            assert_eq!(
-                p.balloon_pos.x + bs.w / 2,
-                cp.x + cs.w / 2,
-                "dpi={dpi} [{label}]: バルーン中心＝シェル画像中心"
-            );
-            assert_eq!(
-                p.balloon_pos.y,
-                cp.y + cs.h,
-                "dpi={dpi} [{label}]: バルーン上端＝シェル画像下端（接する）"
-            );
-            assert_eq!(
-                p.balloon_offset,
-                PointPx {
-                    x: (cs.w - bs.w) / 2,
-                    y: cs.h
-                },
-                "dpi={dpi} [{label}]: balloon_offset ≡ balloon_pos − char_pos"
-            );
         }
-    }
-}
-
-/// T-K1/T-K2 補: 中央上と中央下は水平が同一で垂直だけが異なる
-/// （`bottom` が `center` の単なる別名へ退行していないことの判別）。
-#[test]
-fn t_k12_center_top_and_bottom_differ_only_in_y() {
-    for dpi in DPIS {
-        let wa = work_area(dpi);
-        let (top, cs, bs) = resolve_one(dpi, wa, BalloonXMode::CenterTop, BalloonSide::Left, None);
-        let (bot, _, _) = resolve_one(dpi, wa, BalloonXMode::CenterBottom, BalloonSide::Left, None);
-
-        assert_eq!(
-            top.balloon_pos.x, bot.balloon_pos.x,
-            "dpi={dpi}: 水平は同一式"
-        );
-        assert_eq!(
-            bot.balloon_pos.y - top.balloon_pos.y,
-            cs.h + bs.h,
-            "dpi={dpi}: 垂直差＝char_h + balloon_h（上に接する↔下に接する）"
-        );
-        assert_ne!(
-            top.balloon_pos.y, bot.balloon_pos.y,
-            "dpi={dpi}: bottom が center の別名へ退行してはならない"
-        );
     }
 }
 
@@ -267,14 +185,6 @@ fn t_k3_numeric_y_is_added_to_keyword_base_position() {
                 assert_eq!(
                     adj.char_pos, base.char_pos,
                     "dpi={dpi} mode={mode:?}: 調整量はキャラ窓を動かさない"
-                );
-                assert_eq!(
-                    adj.balloon_offset,
-                    PointPx {
-                        x: base.balloon_offset.x,
-                        y: base.balloon_offset.y + dy
-                    },
-                    "dpi={dpi} mode={mode:?}: offset も同じだけ動く（恒等式維持）"
                 );
             }
         }
@@ -345,7 +255,7 @@ fn t_k5_center_midpoint_is_integer_division_toward_zero() {
         right: 1920,
         bottom: 1080,
     };
-    // (差, キャラ幅, バルーン幅, 期待する中点項)
+    // (キャラ幅, バルーン幅, 期待する中点項)
     let cases = [
         // 正の奇数差 201 → 100（100.5 を 0 方向へ切り捨て）
         (401, 200, 100),
@@ -379,46 +289,7 @@ fn t_k5_center_midpoint_is_integer_division_toward_zero() {
 // T-K6: `Side`（数値指定・未指定）の回帰境界（要件 4.5・5.2）
 // ------------------------------------------------------------------
 
-/// T-K6: `BalloonXMode::Side` の出力は本仕様適用前の閉じた式と bit 同一である。
-/// 適用前の式（P5 原形）を逐語で書き下し、左右 × offset 有無 × 全 DPI 水準で照合する。
-///
-/// 既存の T-R8 群（`resolver_resolve_tests.rs`・無改変）が同じ表を別角度から
-/// 固定しており、本檻はその式そのものを明示する補強である。
-#[test]
-fn t_k6_side_mode_output_is_bit_identical_to_pre_spec_formula() {
-    for dpi in DPIS {
-        for wa in [work_area(dpi), offset_work_area(dpi)] {
-            for side in [BalloonSide::Left, BalloonSide::Right] {
-                for offset in [None, Some((px(24, dpi), -px(32, dpi)))] {
-                    let (p, cs, bs) = resolve_one(dpi, wa, BalloonXMode::Side, side, offset);
-
-                    // ---- 本仕様適用前の P5 原形（逐語） ----
-                    let cx = p.char_pos.x;
-                    let cy = p.char_pos.y;
-                    let pre_base_x = match side {
-                        BalloonSide::Left => cx - bs.w,
-                        BalloonSide::Right => cx + cs.w,
-                        BalloonSide::Auto => unreachable!("この檻は left／right だけを回す"),
-                    };
-                    let (ox, oy) = offset.unwrap_or((0, 0));
-                    let pre = PointPx {
-                        x: pre_base_x + ox,
-                        y: cy + oy,
-                    };
-                    // ---------------------------------------
-
-                    assert_eq!(
-                        p.balloon_pos, pre,
-                        "dpi={dpi} side={side:?} offset={offset:?}: \
-                         Side は本仕様適用前の式と bit 同一（要件 4.5/5.2）"
-                    );
-                }
-            }
-        }
-    }
-}
-
-/// T-K6 補: `ScopeConfig` の既定（＝バルーン定義が読めない scope・未収載 scope）は
+/// T-K6: `ScopeConfig` の既定（＝バルーン定義が読めない scope・未収載 scope）は
 /// `Side` であり、キーワード幾何は既定では一切発火しない（要件 4.5 の入口側）。
 #[test]
 fn t_k6_default_mode_is_side_and_missing_scope_uses_it() {
@@ -613,41 +484,4 @@ fn t_k9_shared_keyword_formula_returns_none_for_side() {
         None,
         "Side がキーワード式で位置を返している（4.5/5.2 の構造保証が壊れている）"
     );
-}
-
-// ------------------------------------------------------------------
-// T-K8: 事後条件はモードによらず成立（design C4）
-// ------------------------------------------------------------------
-
-/// T-K8: `balloon_offset ≡ balloon_pos − char_pos` は全モード × 調整量有無で成立する
-/// （キーワード分岐が恒等式を壊さない・design C4「計算式は不変」）。
-#[test]
-fn t_k8_offset_identity_holds_for_every_mode() {
-    for dpi in DPIS {
-        let wa = offset_work_area(dpi);
-        for mode in [
-            BalloonXMode::Side,
-            BalloonXMode::CenterTop,
-            BalloonXMode::CenterBottom,
-        ] {
-            for side in [BalloonSide::Left, BalloonSide::Right] {
-                for offset in [
-                    None,
-                    Some((0, px(48, dpi))),
-                    Some((px(24, dpi), -px(32, dpi))),
-                ] {
-                    let (p, _, _) = resolve_one(dpi, wa, mode, side, offset);
-                    assert_eq!(
-                        p.balloon_offset,
-                        PointPx {
-                            x: p.balloon_pos.x - p.char_pos.x,
-                            y: p.balloon_pos.y - p.char_pos.y
-                        },
-                        "dpi={dpi} mode={mode:?} side={side:?} offset={offset:?}: \
-                         balloon_offset ≡ balloon_pos − char_pos"
-                    );
-                }
-            }
-        }
-    }
 }

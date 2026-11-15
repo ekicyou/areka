@@ -1,8 +1,7 @@
 //! 整合ゲートの純判定と、待ち札の適用範囲の不変条件（設計 C5・Unit Tests 3）。
 
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::layout::{Arrangement, Offset};
-use wintf::ecs::{DPI, Point, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
 use super::*;
 use crate::diag::PlacementRoute;
@@ -117,7 +116,7 @@ fn the_decision_and_site_words_come_from_the_single_source() {
         transition_diag::HOLD_SITE_PATTERN_MOVE
     );
     // 2 つの「再スナップ」は**別語**である（同じ語だと、ログ上でどちらの点が見送ったのか
-    // 判らない＝task 6.5 が解いた曖昧さがそのまま観測面へ戻る）。
+    // 判らない＝語を分けて解いた曖昧さがそのまま観測面へ戻る）。
     assert_ne!(HoldSite::Resnap.as_str(), HoldSite::WorkAreaResnap.as_str());
 }
 
@@ -201,6 +200,34 @@ fn a_window_before_creation_proceeds_instead_of_overflowing() {
     let outcome = evaluate(&world, window, 3);
     assert_eq!(outcome.table_dpi, None);
     assert_eq!(outcome.decision, DpiSyncDecision::Proceed);
+}
+
+/// `DPI` を持たない窓は表を引けない＝進む（30 フレーム後も警告 0 行）。
+#[test]
+fn a_window_without_dpi_proceeds_and_never_warns() {
+    let mut world = World::new();
+    world.insert_resource(two_monitor_table());
+    let window = world
+        .spawn(WindowPos {
+            position: Some(Point { x: 1000, y: 0 }),
+            size: Some(SizeI::new(200, 200)),
+            ..Default::default()
+        })
+        .id();
+    let (proceeded, events) = log_capture_kit::capture(|| {
+        (0..=DPI_SYNC_HOLD_MAX_FRAMES).all(|now| apply_dpi_phase_gate(&mut world, window, now))
+    });
+    assert!(proceeded, "DPI を持たない窓が止まった");
+    assert_eq!(
+        evaluate(&world, window, 0).decision,
+        DpiSyncDecision::Proceed
+    );
+    assert!(world.get::<DpiSyncHold>(window).is_none());
+    let warns = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .count();
+    assert_eq!(warns, 0, "警告が出ている: {events:?}");
 }
 
 /// 表そのものが無い World（起動シームを通らない経路）も進む。
@@ -298,9 +325,7 @@ fn writable_world(hold: bool) -> (World, Entity) {
             size: Some(SizeI::new(100, 200)),
             ..Default::default()
         },
-        WindowHandle {
-            hwnd: HWND(0x200usize as *mut _),
-        },
+        crate::test_support::fake_handle(0x200),
         Arrangement {
             offset: Offset { x: 10.0, y: 20.0 },
             ..Default::default()
@@ -319,12 +344,11 @@ fn writable_world(hold: bool) -> (World, Entity) {
 /// `debug_assert!` ゆえテストビルドでは panic する——すり抜け経路が増えたときに、実機ログを
 /// 待たずに檻が落ちる（実機では `warn!` として見える）。
 ///
-/// 経路語が `ChainRealign`（システム由来・遷移後の連鎖の解き直し）なのは task 7.5 の是正に
-/// 追随したものである。本テストは当初 `move_window_to`（＝`MoveCue`）で書いていたが、
-/// スクリプトの明示操作は**見送らないことが正しい**と本番コードが裁定しており、鳴らすのは
-/// 偽の警報だった。監視が生きていることを示す役目は経路語を差し替えて保つ——分類そのものは
-/// `follow_window_move_hold_watch_tests.rs` が 12 語＋route 無しで固定する。
+/// 経路語は `ChainRealign`（システム由来・遷移後の連鎖の解き直し）を使う。台本の明示操作
+/// （`MoveCue`）は見送らない側なので鳴らない（下の対のテスト）。分類そのものは
+/// `follow_window_move_hold_watch_tests.rs` が全経路語＋route 無しで固定する。
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "debug_assert! に依る")]
 #[should_panic(expected = "DpiSyncHold")]
 fn a_write_reaching_a_waiting_window_trips_the_single_writer() {
     let (mut world, window) = writable_world(true);
@@ -343,7 +367,7 @@ fn the_same_write_passes_when_the_window_is_not_waiting() {
 }
 
 /// 明示操作（`\![move]`＝`MoveCue`）は同じ札のある窓へ届いても鳴らない——上の 2 本と
-/// **同じ土台**で、変えるのは経路語 1 点だけである（task 7.5）。
+/// **同じ土台**で、変えるのは経路語 1 点だけである。
 #[test]
 fn the_explicit_move_is_not_watched_on_a_waiting_window() {
     let (mut world, window) = writable_world(true);

@@ -298,14 +298,10 @@ pub(crate) fn settled_line(
 /// **最初から書かれていなかった**のと区別が付かない（要件 8.3 が禁じる「黙って諦める」の
 /// 一形態である）。
 ///
-/// `element` は要素の正準表記（`b0`／`s1`）である。areka 側で組んだ文字列をそのまま
-/// 受け取る（`wintf → areka` の import は禁止）ので、[`text_field`] を通して 1 行からの
-/// 切り出しが壊れないようにする。
-pub(crate) fn absent_line(group_id: u32, element: &str) -> String {
-    format!(
-        "{ABSENT_TAG} group_id={group_id} element={element}",
-        element = text_field(element),
-    )
+/// `element` の欄は要素の正準表記（種別の字＋スコープ＝`b0`／`s1`）である。
+/// 字と数で受け取るので空白も空も起きず、文字列はこの行を組むときだけ作る。
+pub(crate) fn absent_line(group_id: u32, kind: char, scope: u32) -> String {
+    format!("{ABSENT_TAG} group_id={group_id} element={kind}{scope}")
 }
 
 /// 見送りの行（純関数・debug 水準で出す・理由必須・要件 8.3）。

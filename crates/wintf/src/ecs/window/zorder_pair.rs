@@ -106,7 +106,8 @@ unsafe impl Sync for ExpectedOrder {}
 /// 受け入れの根拠となる決定論的テストは 2 本立てである。
 ///
 /// - 別クレートからこの要求を実体へ付けられること（公開到達性）:
-///   areka 側 `spawn_zorder_pair_export_tests`
+///   areka-placement 側 `spawn_zorder_pair_wiring_tests.rs` の `use wintf::ecs::{...}` と
+///   `request_was_consumed`（公開エクスポート面の import が組め、付いた要求を読めること）
 /// - 付いた要求が適用され、次巡で実測照合され、消えること（状態遷移の全段）:
 ///   `zorder_pair_maintain_tests.rs` の
 ///   `reassert_request_is_applied_verified_and_then_disappears`

@@ -1,7 +1,7 @@
-//! ECS 組立: キャラ窓／バルーン窓 entity spawn と公開データ構造（task 5.1）。
+//! ECS 組立: キャラ窓／バルーン窓 entity spawn と公開データ構造。
 //!
 //! 解決済み配置（[`ScopePlacement`]）から窓 entity を組み立て、識別子
-//! （markers・[`GhostWindows`]）を後続（emo2-boot）へ公開する
+//! （markers・[`GhostWindows`]）を後続（`ghost_session`・`runtime`）へ公開する
 //! （design「placement::spawn」・要件 1.1/1.2/1.5/4.1/4.5/5.1/6.1/6.2/6.3/7.2）。
 //!
 //! # 座標単位契約（design U1/U2）
@@ -15,7 +15,7 @@
 //! # 窓 entity 構成（design「placement::spawn」の正本 bullet）
 //!
 //! キャラ窓・バルーン窓の**両方**が `DpiSuggestedRectPolicy::ExternalAuthority` を持つ
-//! （areka-P0-dpi-window-vanish 要件 4.3・D3。[`external_position_authority`] に理由を記載）。
+//! （areka-P0-dpi-window-vanish 要件 4.3・D3。[`EXTERNAL_POSITION_AUTHORITY`] に理由を記載）。
 //!
 //! - キャラ窓: `Name`＋`CharWindowMarker{scope}`＋`GhostWindowMarker`＋`Window{title}`
 //!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_ACCEPTFILES }`
@@ -24,15 +24,14 @@
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
 //!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
 //!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
-//!   委譲。組に入った窓は直後の `sync_drag_writer` が Free でも false に付け直す・設計の決め 12）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
+//!   委譲。組に入った窓は直後の `sync_drag_writer` が Free でも false に付け直す・areka-P0-window-link-directives の設計の決め 12）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
 //!   さらに `OnDragEnd(on_char_drag_end)` を持つ（最終カーソル位置への同写像適用＋
 //!   確定位置の永続 write-through・非 Free は最終再固定・Free は保存専用アーム・
-//!   DD15 v2 (3)・1.1・task 2.2）。
+//!   DD15 v2 (3)・1.1）。
 //!   なおキャラ窓へのポインタハンドラ（`OnPointerMoved`／`OnPointerPressed`）は
 //!   **本モジュールでは付けない**——マウス移動／ダブルクリックを kanade へ配信する結線は
 //!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
-//!   input_events→placement。placement は `crate::` パスを持たず `super::`／外部 crate のみ
-//!   参照する＝example の `#[path]` include で成立させるため。areka-P0-input-events）。
+//!   input_events→placement。areka-P0-input-events）。
 //!   **終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる・R15.1）は右クリック
 //!   メニューの「終了」が送る（結線済みの Ctrl+左ダブルクリックの入口は areka-P0-popup-menu-minimal
 //!   で除去）。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
@@ -43,20 +42,22 @@
 //!   終了経路からは呼ばない）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
-//!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
-//!   確定 offset の永続 write-through（2.1・design C3・task 2.3。`on_balloon_drag` は連続
+//!   相対位置記憶（4.8・DD16）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
+//!   確定 offset の永続 write-through（2.1・design C3。`on_balloon_drag` は連続
 //!   イベントで保存トリガではなく、DragEnd 確定点でのみ 1 ドラッグ 1 書込）・`BalloonFollow`
 //!   なし。さらに `BalloonLimit(p.balloon_limit)`＝`windowposition.limit` 解決値の
 //!   runtime 焼込みを**バルーン窓側にだけ**持つ（areka-P0-windowposition-limit 2.7/2.8・
 //!   C9/DD4。キャラ窓には付けない＝「limit の補正でキャラ窓を動かさない」の構造保証）。
-//!   M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
-//!   M-dialogue／choice-render の領分。さらに同一スコープのキャラ窓を指す
-//!   `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
+//!   バルーン・面・シェルの切り替えとバルーン位置初期化は、そのとき解いた値で入れ直す
+//!   （`reseed::reinstall_balloon`・`face_windowposition::apply_face_windowposition`）。
+//!   ポインタハンドラは本モジュールでは付けない——入力の層
+//!   （`input_events::balloon::attach_balloon_pointer_handlers`）が spawn の直後に付ける。
+//!   さらに同一スコープのキャラ窓を指す `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
 //!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
 //!   キャラ窓 entity を要するため後付け＝生成順は不変。同時に scope とペア両窓を結ぶ
 //!   `declared` 記録を出す＝scope を知る層は areka だけ・6.1））
 //!
-//! # clickthrough 登録（task 5.2）
+//! # clickthrough 登録
 //!
 //! [`register_ghost_windows_click_through`] が `Added<WindowHandle>` で
 //! [`GhostWindowMarker`] 窓を αマスク clickthrough 機構
@@ -79,7 +80,7 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::DeferredWorld;
-use tracing::debug;
+use tracing::{debug, warn};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_ACCEPTFILES, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
@@ -97,6 +98,7 @@ use wintf::ecs::{
 use super::chain_finalize::AdjacencyMark;
 use super::config::BalloonXMode;
 use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
+use super::face_windowposition::mark_by_base;
 use super::follow::{
     AnchorSource, Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag,
     on_char_drag_end,
@@ -172,16 +174,19 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 // BalloonLimit（windowposition-limit C9・DD4）
 // ---------------------------------------------------------------------------
 
-/// バルーン窓の limit 有効値（scope 別解決済み・spawn 焼込み・runtime 単一真実源）。
+/// バルーン窓の limit 有効値（scope 別解決済み・spawn で付け置き直しで入れ直す・runtime 単一真実源）。
 ///
 /// `windowposition.limit` の解決値を runtime へ運ぶ唯一の表現である
 /// （areka-P0-windowposition-limit 要件 2.7/2.8・design C9/DD4）。
 /// `PlacementConfig`／`ScopeConfig` は spawn 後に破棄され Resource 化もされないため、
 /// limit 値が runtime まで生き残る道は窓 entity 上の Component だけ——
 /// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
-/// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
-/// 毎起動 `descript.txt` から解決し直す）。
-/// 例外は並べ直しだけが読む材料 `reset_pos::DefaultPlacementBasis`（descript の値とバルーンの材料を置き、limit は並べ直しのたびに解き直すので運び手ではない）。
+/// **一方向転写**で、spawn 時に付け、バルーンを置き直す所がそのとき解いた値で入れ直す
+/// （標準の部品で据え直す `reseed::reinstall_balloon`＝シェルの切り替え・面の windowposition の
+/// 置き直し・バルーン位置初期化と、利用者が動かしたバルーンの面の切り替え
+/// `face_windowposition::apply_face_windowposition`。バルーンの切り替えは面の切り替えを通る）。
+/// 永続化はしない（limit は毎起動 `descript.txt` から解決し直す）。
+/// 並べ直し・バルーン位置初期化・面の windowposition の置き直し・`balloon.syncscale` の読み直しが読む材料 `reset_pos::DefaultPlacementBasis` も limit の値は持たない（descript の値とバルーンの `windowposition` を置き、limit は解き直すたびにそこから導く）。
 ///
 /// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
 ///
@@ -190,10 +195,9 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// 持つ entity への書き込みだけを補正するため、「キャラ窓に付いていない」ことが
 /// そのまま「limit の補正でキャラ窓の位置を変更しない」（2.8）の証明になる——
 /// 檻の主張ではなく構造の帰結である。
-// 消費者（runtime 関門・`follow::enqueue_window_set_pos`）が入るのは task 3.3 だが、
-// `#[allow(dead_code)]` は付けない——spawn が構築し檻が読むため lint は鳴らず、
-// 不要な allow は本当に未結線の項目を隠すだけである（隣接 markers の allow は
-// 「構築側が未実装」だった過渡状態の名残で、本 Component は事情が異なる）。
+// spawn が構築し、`reseed::reinstall_balloon`・`face_windowposition::apply_face_windowposition` が
+// 入れ直し、runtime 関門（`follow::enqueue_window_set_pos`）・解放時の補正
+// （`follow::drag_follow::apply_release_limit_correction`）と檻が読む。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonLimit(pub bool);
 
@@ -226,7 +230,7 @@ pub struct BalloonLimit(pub bool);
 ///
 /// 起動時だけに置いていた頃は、実表示寸が採寸寸と一致する**ふつうの**ゴースト
 /// （＝再解決が同寸 skip で素材を消費しない）で、ドラッグ後の寸法変化がキーワード既定を
-/// 利用者の相対位置へ上書きしていた（2026-08-14 の feature 検証で確認・task 4.6 で是正）。
+/// 利用者の相対位置へ上書きしていた（2026-08-14 の feature 検証で確認して是正）。
 ///
 /// # 一度きりである理由と、その限界
 ///
@@ -252,7 +256,7 @@ pub struct BalloonKeywordBase {
 }
 
 // ---------------------------------------------------------------------------
-// GhostWindows（後続 emo2-boot への引き渡し正本・6.1/6.2）
+// GhostWindows（後続 `ghost_session`・`runtime` への引き渡し正本・6.1/6.2）
 // ---------------------------------------------------------------------------
 
 /// スコープ 1 体ぶんの窓 entity 対（キャラ窓＋バルーン窓）。
@@ -262,14 +266,14 @@ pub struct ScopeWindows {
     pub char_window: Entity,
     /// バルーン窓 entity。
     pub balloon_window: Entity,
-    /// **システム由来の再アンカーで追随する既定**キャラ窓位置（物理 px・scg 7.3・
-    /// atom D9／D16）。
+    /// **システム由来の再アンカーで追随する既定**キャラ窓位置（物理 px・areka-P0-scope-chain-gap 7.3・
+    /// areka-P0-dpi-transition-atomicity D9／D16）。
     ///
     /// 「まだ誰にも動かされていない」ことの判定基準。現在位置がこの値と一致する間は
     /// 既定配置のままであり、ゴースト台本の移動指令や利用者のドラッグで動いた
     /// スコープは一致しなくなる——移動側へフックを足さずに除外できる。
     ///
-    /// # 初期値は spawn 時の resolver 出力だが、そこに固定はされない（atom task 5.5）
+    /// # 初期値は spawn 時の resolver 出力だが、そこに固定はされない
     ///
     /// 拡大率が変わればキャラ窓は新しい寸で下端中央を保ったまま置き直され、**誰も触って
     /// いないスコープの位置も動く**。この基準を spawn 時の値に固定したままだと、遷移後は
@@ -291,16 +295,16 @@ pub struct ScopeWindows {
     /// システム由来の再アンカーでも `None` は `None` のままである（D9）。
     ///
     /// `None` は記憶に位置があるスコープでもある。起動の最後に並べ終えた時点の保存
-    /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
+    /// （`persist::persist_unremembered_char_positions`）は、この値が残っている
     /// スコープだけを書く。
     pub default_char_pos: Option<PointPx>,
-    /// 記憶から読んだ隣り合いの印（組 (n−1, n) を表す）。記憶から戻したスコープ
+    /// 記憶から読んだ隣り合いの印（鎖の前の窓との組を表す・`chain_rule` の鎖の規則）。記憶から戻したスコープ
     /// （`default_char_pos == None`）についてだけ意味を持ち、`None` は印の無い記憶か記憶が無いこと。
     /// 据えるのは窓を作る閉包（`ghost_session::prepare_ghost_windows`）だけ。
     pub remembered_adjacency: Option<AdjacencyMark>,
 }
 
-/// 後続（emo2-boot）への引き渡し正本（6.1/6.2）。
+/// 後続（`ghost_session`・`runtime`）への引き渡し正本（6.1/6.2）。
 ///
 /// 「スコープ×種別 → Entity」の唯一の正本（markers は補助的な逆引き）。
 /// spawn 完了時に Resource 挿入＋戻り値の両方で公開される。ゴーストの切替などで
@@ -331,10 +335,10 @@ impl GhostWindows {
     }
 
     /// スコープの既定キャラ位置を返す（初期値は spawn 時の resolver 出力・以後は
-    /// **システム由来の再アンカーで追随する**・atom D9／D16）。
+    /// **システム由来の再アンカーで追随する**・areka-P0-dpi-transition-atomicity D9／D16）。
     ///
     /// 現在位置がこの値と一致するかで「既定配置のまま＝まだ誰にも動かされていない」ことを
-    /// 判定する（scg 7.3）。拡大率の遷移で位置が動いても、動かしたのがシステム側であれば
+    /// 判定する（areka-P0-scope-chain-gap 7.3）。拡大率の遷移で位置が動いても、動かしたのがシステム側であれば
     /// この値が一緒に動くため一致は保たれる——読み手は「起動時の値」ではなく
     /// **「最後にシステムが置いた既定位置」**として読むこと。
     ///
@@ -343,25 +347,27 @@ impl GhostWindows {
     /// 「対象外」として同じに扱えばよい。
     ///
     /// 既知スコープの `None` は記憶に位置があるスコープ。起動の最後に並べ終えた時点の保存
-    /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
+    /// （`persist::persist_unremembered_char_positions`）は、この値が残っている
     /// スコープだけを書く。
     pub fn default_char_pos(&self, scope: usize) -> Option<PointPx> {
         self.windows.get(&scope).and_then(|w| w.default_char_pos)
     }
 
-    /// スコープの既定キャラ位置を更新する（実表示寸での連鎖再解決が確定させた値・scg 7.1／
-    /// システム由来の再アンカーの書込先・atom D9／D16）。
+    /// スコープの既定キャラ位置を更新する（実表示寸での連鎖再解決が確定させた値・areka-P0-scope-chain-gap 7.1／
+    /// システム由来の再アンカーの書込先・areka-P0-dpi-transition-atomicity D9／D16）。
     ///
     /// 未知スコープは **no-op**（panic せず `false` を返す）。台帳を再解決後の真値へ揃え、
     /// 以後の「既定配置のまま」判定が確定後の位置を基準に働くようにする。
     ///
-    /// # 呼び手は 2 つある（互いに重ならない）
+    /// # 呼び手は 3 つある（互いに重ならない）
     ///
-    /// - 連鎖確定（`emo2_boot::frame::drain_resnap::finalize_chain_once_with`）——反映は
+    /// - 連鎖確定（`runtime::frame::drain_resnap::finalize_chain_once_with`）——反映は
     ///   `move_window_to`＝`PlacementRoute::MoveCue` で行うため、下の追随規則には掛からない。
-    ///   ゆえに確定後の X をここで明示的に揃える必要がある（scg 7.1）。
+    ///   ゆえに確定後の X をここで明示的に揃える必要がある（areka-P0-scope-chain-gap 7.1）。
     /// - 単一の窓書込口（`follow::window_move::enqueue_window_set_pos`）——システム由来の
     ///   再アンカーで、書込前の位置が既定位置と一致していたときだけ書込先へ運ぶ（D9／D16）。
+    /// - 並べ直し（`reset_pos::reset_window_positions`）——resolver の既定の位置へ
+    ///   `move_window_to`（`MoveCue`）で戻した後、その位置を既定に記す（追随規則には掛からない）。
     pub fn set_default_char_pos(&mut self, scope: usize, pos: PointPx) -> bool {
         match self.windows.get_mut(&scope) {
             Some(w) => {
@@ -372,7 +378,7 @@ impl GhostWindows {
         }
     }
 
-    /// スコープを「既定配置ではない」と標す（保存位置が復元されたスコープ・scg 7.3）。
+    /// スコープを「既定配置ではない」と標す（保存位置が復元されたスコープ・areka-P0-scope-chain-gap 7.3）。
     ///
     /// 復元位置は**利用者の意思による配置**であって resolver 既定ではない。標されたスコープは
     /// 既定位置へ引き戻されず、並べ直しは覚えた印（起動）か変わる直前の隣り合い（拡大率の変化の後）
@@ -439,7 +445,8 @@ impl GhostWindows {
 /// 要するため）、次にそのバルーンを参照するキャラ窓を spawn する。
 ///
 /// 完了時に [`GhostWindows`] を Resource として挿入し、同じ内容を戻り値でも
-/// 返す（6.1・Resource 挿入＋戻り値の両方で公開）。
+/// 返す（6.1・Resource 挿入＋戻り値の両方で公開）。戻り値は Resource の写しで、
+/// 書いても Resource は変わらない（変えるなら World の Resource へ書く）。
 pub fn spawn_ghost_windows(
     world: &mut World,
     placements: &[ScopePlacement],
@@ -453,10 +460,10 @@ pub fn spawn_ghost_windows(
         // バルーン窓（design「窓 entity 構成（バルーン窓）」: キャラ窓と同型・
         // marker は BalloonWindowMarker・DragConfig::default() 付与＝単独ドラッグ可
         // （4.5）・OnDrag(on_balloon_drag) で単独ドラッグの相対位置記憶
-        // （4.8・DD16・task 8.3）・BalloonFollow なし。
-        // M1 はバルーンにマウス送出なし＝ポインタハンドラを付けない（DD-IE-12・
-        // task 3.2：stand-in `on_ghost_pressed` 登録を撤去。バルーン入力は
-        // M-dialogue／choice-render の領分でリゾルバは shell 窓専用）。
+        // （4.8・DD16）・BalloonFollow なし。
+        // ポインタハンドラはここでは付けない（入力の層の
+        // `input_events::balloon::attach_balloon_pointer_handlers` が spawn の直後に付ける。
+        // stand-in の `on_ghost_pressed` 登録は撤去済み）。
         let balloon_window = world
             .spawn((
                 Name::new(format!("Ghost-Balloon-Window-{}", p.scope)),
@@ -477,7 +484,7 @@ pub fn spawn_ghost_windows(
                 // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3）。バルーン窓も
                 // OS 直書きから外す——キャラ窓だけ外すと、DPI 跨ぎでバルーンだけが OS 提案
                 // 位置へ飛び、`balloon_pos − char_pos ≡ offset` の恒等式が構造的に崩れる。
-                external_position_authority(),
+                EXTERNAL_POSITION_AUTHORITY,
                 DragConfig::default(),
                 // limit 解決値の runtime 焼込み（windowposition-limit 2.7・C9/DD4）。
                 // `ScopePlacement.balloon_limit` の転写であり、キャラ窓には付けない
@@ -485,7 +492,7 @@ pub fn spawn_ghost_windows(
                 BalloonLimit(p.balloon_limit),
                 OnDrag(on_balloon_drag),
                 // バルーン単独ドラッグ確定 offset の永続 write-through（2.1・8.1・
-                // design C3・task 2.3）。on_balloon_drag は連続イベント（in-session offset
+                // design C3）。on_balloon_drag は連続イベント（in-session offset
                 // 更新）で保存トリガではない——DragEnd 確定点でのみ 1 ドラッグ 1 書込する。
                 OnDragEnd(on_balloon_drag_end),
             ))
@@ -507,7 +514,7 @@ pub fn spawn_ghost_windows(
                 window_pos(p.char_pos.x, p.char_pos.y, p.char_size.w, p.char_size.h),
                 HitTest::none(),
                 // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3・S1 是正の源断ち）。
-                external_position_authority(),
+                EXTERNAL_POSITION_AUTHORITY,
                 // 解決済みアンカーの単一真実源を全 char 窓へ**無条件付与**する（4.2/1.6）。
                 // Free 窓も付ける——resize の identity 射影（project_anchor の Free 腕）が
                 // Anchored を読むため。二値吸着フラグ（旧 BottomSnap marker）は廃し、
@@ -521,7 +528,7 @@ pub fn spawn_ghost_windows(
                 },
                 // 非 Free アンカー（Bottom/Top/Left/Right）のキャラ窓は
                 // move_window=false＝wndproc は窓を動かさず on_char_drag が単一ライター
-                // （DD15 v2・4.7・task 8.2R）。Free は従来どおり wndproc 直接移動（4.1）。
+                // （DD15 v2・4.7）。Free は従来どおり wndproc 直接移動（4.1）。
                 // 二値吸着フラグは持たず anchor 単一値から導出する（Req1.6）。
                 // threshold 等は既定を保つ。
                 DragConfig {
@@ -533,15 +540,14 @@ pub fn spawn_ghost_windows(
                 BalloonFollow::new(balloon_window, p.balloon_offset_base),
                 // マウス入力配線（areka-P0-input-events）: キャラ窓のポインタ移動／押下を
                 // kanade へ配信する `OnPointerMoved`／`OnPointerPressed` は**ここでは付けない**。
-                // 依存方向は input_events→placement（placement は `crate::` パスを持てない＝
-                // example の `#[path]` include で成立させるため）ゆえ、ハンドラ装着は spawn
+                // 依存方向は input_events→placement ゆえ、ハンドラ装着は spawn
                 // 直後に `input_events::attach_char_pointer_handlers` が行う（stand-in 即終了
                 // `on_ghost_pressed` は退役。Ctrl+左ダブルクリック暫定退避もそのハンドラ側の
                 // 責務・DD-IE-7）。
             ))
             .id();
 
-        // DragEnd 最終適用＋位置保存の結線（1.1/1.9/4.7/1.6・design C2/C3・task 2.2）:
+        // DragEnd 最終適用＋位置保存の結線（1.1/1.9/4.7/1.6・design C2/C3）:
         // Free 含む**全**キャラ窓へ OnDragEnd を無条件結線する（吸着はドラッグ中の制約で
         // あって保存条件ではない・1.1）。非 Free は on_char_drag_end が Anchored を読んで
         // project_anchor でアンカー辺へ最終再固定し（最終 DragEvent 欠落の穴埋め・DD15 v2 (3)）、
@@ -551,6 +557,8 @@ pub fn spawn_ghost_windows(
         world
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
+        // 記憶から戻したずらしなら利用者が動かした印を付ける。
+        mark_by_base(world, char_window, p.balloon_offset_base);
 
         // キーワード再導出の素材（windowposition-limit 4.7・実機サインオフ是正）:
         // `Some` の scope のキャラ窓にだけ後付けする。`Side` と保存値が効いた scope には
@@ -604,7 +612,7 @@ pub fn spawn_ghost_windows(
                 balloon_window,
                 // spawn へ渡る placements が resolver 既定である前提で `Some` を置く。
                 // 保存位置が復元された場合は起動シーム（`ghost_session::prepare_ghost_windows`）が直後に
-                // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
+                // `clear_default_char_pos` で `None` へ落とす（areka-P0-scope-chain-gap 7.3）。
                 default_char_pos: Some(p.char_pos),
                 remembered_adjacency: None,
             },
@@ -640,9 +648,8 @@ fn window_style() -> WindowStyle {
 /// （診断レポート §1.1 の連鎖①〜④＝S1。実機セッション①で `applied=true` が 84/84）。
 ///
 /// 付与の責務が窓の所有者側にあること（wintf は読むだけ）は D3 の裁定である。
-fn external_position_authority() -> DpiSuggestedRectPolicy {
-    DpiSuggestedRectPolicy::ExternalAuthority
-}
+const EXTERNAL_POSITION_AUTHORITY: DpiSuggestedRectPolicy =
+    DpiSuggestedRectPolicy::ExternalAuthority;
 
 /// `ScopePlacement` 由来の位置・寸法（物理 px）だけを転記した `WindowPos`（U1）。
 fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
@@ -707,7 +714,7 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 /// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）で、`Schedules` 資源が既在の
 /// World（`EcsWorld` 内 World）に対し、schedule 実行外で同期に呼ぶ（クリック透過登録と同じ作法）。
 pub fn wire_zorder_pair(world: &mut World) {
-    // 挿入と記録は**同じ束縛**から行う（要件 5.6・task 5.1 の観測条項）。値を 2 度書くと
+    // 挿入と記録は**同じ束縛**から行う（要件 5.6 の観測条項）。値を 2 度書くと
     // 片方だけ変えたときに記録が静かに嘘をつく——起動時ログは「どの方式で動いているか」を
     // 名乗る唯一の手段ゆえ、嘘をつける形にしてはならない。
     let strategy = ZOrderPairStrategy::OwnerLink {
@@ -730,7 +737,7 @@ pub fn wire_zorder_pair(world: &mut World) {
 }
 
 // ---------------------------------------------------------------------------
-// clickthrough 登録 system（task 5.2・6.1）
+// clickthrough 登録 system（6.1）
 // ---------------------------------------------------------------------------
 
 /// clickthrough 登録面の偽装境界（fake boundary）シーム。
@@ -761,8 +768,9 @@ impl ClickThroughRegistrar for ClickThroughRegistryHandle {
 /// `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を厳密に 1 回
 /// 登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
 /// `ClickThroughRegistryHandle` は `WinApp::run` の結線で NonSend リソース
-/// として挿入される。ごく初期の tick で未挿入の可能性へ `Option` で防御する
-/// （headless でも no-op で安全）。schedule への結線は `ghost_session::register_systems`
+/// として挿入される。未挿入（headless・ごく初期の tick）なら新しい窓ごとに
+/// `clickthrough_register_skipped` を warn し、その窓は登録されないまま残る
+/// （`Added` は 1 度きりなので後から拾い直さない）。schedule への結線は `ghost_session::register_systems`
 /// が `FrameFinalize` へ行う。
 pub fn register_ghost_windows_click_through(
     new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,
@@ -782,6 +790,14 @@ fn register_ghost_windows_via<R: ClickThroughRegistrar>(
     handle: Option<NonSend<R>>,
 ) {
     let Some(handle) = handle else {
+        // Added は 1 度きりなので、登録の口が無いと新しい窓は黙って取りこぼされる。
+        for (entity, _) in new_windows.iter() {
+            warn!(
+                event = "clickthrough_register_skipped",
+                ?entity,
+                "placement: クリック透過機構が無いので登録を見送った"
+            );
+        }
         return;
     };
     for (entity, wh) in new_windows.iter() {
@@ -812,9 +828,6 @@ mod zorder_chain_wiring_tests;
 #[cfg(test)]
 #[path = "spawn_zorder_pair_deferred_tests.rs"]
 mod zorder_pair_deferred_tests;
-#[cfg(test)]
-#[path = "spawn_zorder_pair_export_tests.rs"]
-mod zorder_pair_export_tests;
 #[cfg(test)]
 #[path = "spawn_zorder_pair_wiring_tests.rs"]
 mod zorder_pair_wiring_tests;

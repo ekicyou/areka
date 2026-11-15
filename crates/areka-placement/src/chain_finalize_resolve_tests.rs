@@ -177,27 +177,11 @@ fn empty_single_and_extremes() {
         slot(1, 0, 10, PairDecision::JoinRight),
     ]);
     assert_eq!(moves[0].new_x, i32::MAX, "飽和して上限に張り付く");
-}
-
-/// 記憶から戻したスコープの決め: 印の 3 通り＋印なし（6.3・6.4）。
-#[test]
-fn remembered_decision_covers_three_marks_and_none() {
-    assert_eq!(
-        remembered_decision(Some(AdjacencyMark::Left)),
-        PairDecision::JoinLeft
-    );
-    assert_eq!(
-        remembered_decision(Some(AdjacencyMark::Right)),
-        PairDecision::JoinRight
-    );
-    assert_eq!(
-        remembered_decision(Some(AdjacencyMark::Separate)),
-        PairDecision::Keep(KeepReason::RememberedSeparate)
-    );
-    assert_eq!(
-        remembered_decision(None),
-        PairDecision::Keep(KeepReason::NoRememberedMark)
-    );
+    let moves = resolve_chain(&[
+        slot(0, i32::MIN, 400, BODY),
+        slot(1, 0, i32::MAX, PairDecision::JoinLeft),
+    ]);
+    assert_eq!(moves[0].new_x, i32::MIN, "飽和して下限に張り付く");
 }
 
 /// 動かさない理由の固定語（ログの語・7.1 の判別に使う）。
@@ -214,20 +198,22 @@ fn keep_reason_fixed_words() {
         (KeepReason::RememberedSeparate, "remembered-separate"),
         (KeepReason::NoRememberedMark, "no-remembered-mark"),
         (KeepReason::NonPositiveWidth, "non-positive-width"),
+        (KeepReason::DesktopEdge, "desktop-edge"),
+        (KeepReason::FreePosition, "free-position"),
     ];
     for (reason, word) in cases {
         assert_eq!(reason.as_str(), word);
     }
 }
 
-/// 判断の語: 付ける向きは固定語、動かさないは理由の語（7.1）。
+/// 判断の語: 右に付ける組の固定語（7.1）。左に付ける組の語と、動かさないが理由の語になることは
+/// `mark_non_positive_widths_rewrites_only_unusable_joins` が確かめる。
 #[test]
 fn pair_decision_words() {
-    assert_eq!(PairDecision::JoinLeft.as_str(), "adjacent-left");
     assert_eq!(PairDecision::JoinRight.as_str(), "adjacent-right");
     assert_eq!(
-        PairDecision::Keep(KeepReason::StickyGroup { scope: 1 }).as_str(),
-        "sticky-group"
+        PairDecision::JoinLeftOffset { offset: 36 }.as_str(),
+        "left-offset"
     );
 }
 
@@ -325,6 +311,71 @@ fn boot_restored_scope_follows_the_remembered_mark() {
             boot_pair_decision(&state(None), false, false, mark),
             expected
         );
-        assert_eq!(remembered_decision(mark), expected);
+    }
+}
+
+/// `defaultx` だけ空けて左へ置く: new_x = 前の x − 自分の幅 − offset（resolver の P2）。
+/// 幅が非正なら動かさず、語は "non-positive-width" に改まる。
+#[test]
+fn join_left_offset_keeps_the_defaultx_gap() {
+    let slots = [
+        slot(0, 1000, 382, BODY),
+        slot(1, 500, 336, PairDecision::JoinLeftOffset { offset: 36 }),
+    ];
+    assert_eq!(
+        resolve_chain(&slots),
+        vec![ChainMove {
+            scope: 1,
+            new_x: 1000 - 336 - 36
+        }]
+    );
+    let mut slots = [
+        slot(0, 1000, 382, BODY),
+        slot(1, 500, 0, PairDecision::JoinLeftOffset { offset: 36 }),
+    ];
+    mark_non_positive_widths(&mut slots);
+    assert_eq!(slots[1].decision.as_str(), "non-positive-width");
+    assert!(resolve_chain(&slots).is_empty());
+}
+
+/// 既定のままのスコープの決めは resolver の揃え方の規則と同じ。
+#[test]
+fn boot_default_decision_follows_the_resolver_rules() {
+    let cases = [
+        (Anchor::Bottom, None, PairDecision::JoinLeft),
+        (Anchor::Bottom, Some(0), PairDecision::JoinLeft),
+        (
+            Anchor::Bottom,
+            Some(36),
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ),
+        (
+            Anchor::Top,
+            Some(-20),
+            PairDecision::JoinLeftOffset { offset: -20 },
+        ),
+        (Anchor::Free, None, PairDecision::JoinLeft),
+        (
+            Anchor::Free,
+            Some(100),
+            PairDecision::Keep(KeepReason::FreePosition),
+        ),
+        (
+            Anchor::Left,
+            Some(36),
+            PairDecision::Keep(KeepReason::DesktopEdge),
+        ),
+        (
+            Anchor::Right,
+            None,
+            PairDecision::Keep(KeepReason::DesktopEdge),
+        ),
+    ];
+    for (anchor, default_x, expected) in cases {
+        assert_eq!(
+            boot_default_decision(anchor, default_x),
+            expected,
+            "{anchor:?} {default_x:?}"
+        );
     }
 }

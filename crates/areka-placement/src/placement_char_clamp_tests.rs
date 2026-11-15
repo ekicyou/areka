@@ -6,12 +6,12 @@
 
 use std::fs;
 
-use super::shared_test_support::{TempDir, synth_balloon_dir};
+use super::shared_test_support::TempDir;
 use super::*;
-use crate::sample_test_support::emo2_root;
+use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{
     EMILY_SHAPED_GHOST_DESCRIPT, EMILY_SHAPED_SHELL_DESCRIPT, emily_shaped_scopes,
-    with_com_initialized,
+    synth_declared_dpi_ghost, with_com_initialized,
 };
 
 /// えみりの形の固定入力から、配置の設定は scope 0・1 だけを返す。
@@ -25,35 +25,20 @@ fn emily_shaped_config_has_scopes_zero_and_one_only() {
 fn emily_shaped_shell_switch_prepare_places_scopes_zero_and_one_only() {
     with_com_initialized(|| {
         let root = TempDir::new();
-        let ghost_master = root.path().join("ghost").join("master");
-        let shell_master = root.path().join("shell").join("master");
-        fs::create_dir_all(&ghost_master).expect("create ghost/master");
-        fs::create_dir_all(&shell_master).expect("create shell/master");
+        let (ghost_root, balloon_dir) =
+            synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
         fs::write(
-            ghost_master.join("descript.txt"),
+            ghost_root.join("ghost/master/descript.txt"),
             EMILY_SHAPED_GHOST_DESCRIPT,
         )
         .expect("ghost descript");
         fs::write(
-            shell_master.join("descript.txt"),
+            ghost_root.join("shell/master/descript.txt"),
             EMILY_SHAPED_SHELL_DESCRIPT,
         )
         .expect("shell descript");
-        fs::write(
-            shell_master.join("surfaces.txt"),
-            "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface10\n{\nelement0,overlay,surface10.png,0,0\n}\n",
-        )
-        .expect("surfaces.txt");
-        for png in ["surface0.png", "surface10.png"] {
-            fs::copy(
-                emo2_root().join("shell/master").join(png),
-                shell_master.join(png),
-            )
-            .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
-        }
-        let balloon_dir = synth_balloon_dir(&root, "balloon", "");
 
-        let prepared = prepare_ghost_windows_for_shell(root.path(), &balloon_dir, Some("master"))
+        let prepared = prepare_ghost_windows_for_shell(&ghost_root, &balloon_dir, Some("master"))
             .expect("えみりの形のゴーストの準備は成功する");
 
         let scopes: Vec<usize> = prepared.placements.iter().map(|p| p.scope).collect();

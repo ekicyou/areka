@@ -4,17 +4,17 @@
 //! 偽の読み手 `MemoryDecoder` を数える包みで覆い、包んだ相手の全コマ読みが 1 度も呼ばれない
 //! ことまで確かめる。ファイルにも COM にも依存しない。
 use std::cell::Cell;
-use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, BakeResult, DecodeError,
-    DecodedImage, ElementDecoder, LoopCount, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha,
-    bake, bake_quiet,
+    AlphaParams, AnimatedImage, AnimationInfo, AnimationLimits, BakeResult, DecodeError,
+    DecodedImage, ElementDecoder, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake,
+    bake_quiet, bake_with_limits,
 };
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
 
 use super::first_frame::FirstFrameDecoder;
+use crate::test_support::animated_image::{frames, image, info};
 use log_capture_kit::capture;
 
 type Px = [u8; 4];
@@ -29,45 +29,13 @@ fn path(rel: &str) -> PathBuf {
     Path::new(BASE).join(rel)
 }
 
-/// 2×2 の絵。
-fn image(px: Px) -> DecodedImage {
-    DecodedImage {
-        width: 2,
-        height: 2,
-        stride: 8,
-        bgra: [px; 4].concat(),
-        has_alpha: true,
-    }
-}
-
-fn info() -> AnimationInfo {
-    AnimationInfo {
-        width: 2,
-        height: 2,
-        frame_count: 2,
-    }
-}
-
-/// 2 コマの動く絵の全コマ（コマの絵は `px0`・`px1`）。
-fn frames(px0: Px, px1: Px) -> AnimatedImage {
-    AnimatedImage {
-        frames: [px0, px1]
-            .iter()
-            .map(|&px| AnimationFrame {
-                image: image(px),
-                delay_ms: 100,
-            })
-            .collect(),
-        loop_count: LoopCount::Finite(NonZeroU32::new(3).unwrap()),
-    }
-}
-
 fn insert(dec: &mut MemoryDecoder, rel: &str, px: Px) {
     let img = image(px);
     dec.insert(path(rel), 2, 2, 8, img.bgra, img.has_alpha);
 }
 
-/// 5 つの口の呼ばれた回数を数える包み（このファイルの中だけで使う）。
+/// 読む口のうち 3 つ（`decode`・`decode_first_frame`・`decode_frames`）の呼ばれた回数を数える包み
+/// （このファイルの中だけで使う）。
 #[derive(Default)]
 struct Counting {
     inner: MemoryDecoder,
@@ -228,7 +196,13 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
         Way::WrappedQuiet => {
             bake_quiet(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default())
         }
-        Way::RawBake => bake(&sets, &dec, PackConfig::default()),
+        // 上限は既定を焼く（環境変数に左右されない・audit-placement-core 要件 2.7）。
+        Way::RawBake => bake_with_limits(
+            &sets,
+            &dec,
+            PackConfig::default(),
+            AnimationLimits::default(),
+        ),
     });
     let warns = events
         .iter()

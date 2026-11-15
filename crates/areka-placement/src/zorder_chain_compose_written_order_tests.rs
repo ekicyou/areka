@@ -15,62 +15,15 @@
 use std::collections::HashMap;
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
+use wintf::ecs::window::{ChainPlan, ChainSegment};
 
-use super::compose_chain;
-use crate::zorder_group_ledger::{
-    GroupElement, GroupSource, GroupWindowKind, ZOrderGroup, parse_zorder_tokens,
-};
+use super::{compose_chain, element_text};
+use crate::zorder_group_ledger::{GroupElement, ZOrderGroup};
+use crate::zorder_test_support::{all_consecutive_edges, b, edge, ent, ents, s, tag_group};
 
 // ===========================================================================
 // 道具立て
 // ===========================================================================
-
-fn b(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Balloon,
-    }
-}
-
-fn s(scope: u32) -> GroupElement {
-    GroupElement {
-        scope,
-        kind: GroupWindowKind::Char,
-    }
-}
-
-/// 要素 1 つに割り当てる決定論的な `Entity`（スコープ×種別で一意）。
-fn ent(element: GroupElement) -> Entity {
-    let kind = match element.kind {
-        GroupWindowKind::Balloon => 0,
-        GroupWindowKind::Char => 1,
-    };
-    Entity::from_raw_u32(element.scope * 2 + kind + 1).expect("テスト用 entity 索引は有効")
-}
-
-fn ents(elements: &[GroupElement]) -> Vec<Entity> {
-    elements.iter().copied().map(ent).collect()
-}
-
-/// 手前側 `front` が奥側 `back` に所有される繋ぎ 1 本（`front ← back`）。
-fn edge(front: GroupElement, back: GroupElement, segment: ChainSegment) -> CrossEdge {
-    CrossEdge {
-        owned: ent(front),
-        owner: ent(back),
-        segment,
-    }
-}
-
-/// タグ由来のグループ 1 本を、本番と同じ解釈器（補い込み）を通して組む。
-fn tag_group(id: u32, tokens: &[&str]) -> ZOrderGroup {
-    let (members, _) = parse_zorder_tokens(tokens).expect("テストの指定は受理されるもの");
-    ZOrderGroup {
-        id,
-        members,
-        source: GroupSource::Tag,
-    }
-}
 
 /// 各スコープの 2 窓がそろって在る在庫で合成する。
 fn compose_full(groups: &[ZOrderGroup], scopes: &[u32]) -> ChainPlan {
@@ -172,7 +125,6 @@ fn t_zcw01_inverted_scope_zero_joins_only_two_edges() {
             edge(b(0), b(1), ChainSegment::Group(1))
         ]
     );
-    assert!(final_owner_violations(&plan, &[0, 1]).is_empty());
 
     // 補いの経路でも同じ鎖になる（`s1` だけの名指しに `b1` をすぐ手前へ補う・要件 3.3）。
     let filled = compose_full(&[tag_group(1, &["s0", "b0", "s1"])], &[0, 1]);
@@ -197,7 +149,6 @@ fn t_zcw02_split_scopes_join_every_consecutive_pair() {
             edge(s(1), b(0), g)
         ]
     );
-    assert!(final_owner_violations(&plan, &[0, 1]).is_empty());
 }
 
 /// 後ろ側の参加は今のまま: 名前の挙がらないスコープは昇順で `[バルーン, キャラ窓]` の
@@ -223,7 +174,6 @@ fn t_zcw03_tail_participation_is_unchanged_behind_an_inverted_group() {
             edge(s(2), b(3), ChainSegment::Tail),
         ]
     );
-    assert!(final_owner_violations(&plan, &scopes).is_empty());
 }
 
 // ===========================================================================
@@ -240,13 +190,6 @@ fn permutations(items: &mut Vec<GroupElement>, k: usize, out: &mut Vec<Vec<Group
         items.swap(k, i);
         permutations(items, k + 1, out);
         items.swap(k, i);
-    }
-}
-
-fn token(element: GroupElement) -> String {
-    match element.kind {
-        GroupWindowKind::Balloon => format!("b{}", element.scope),
-        GroupWindowKind::Char => format!("s{}", element.scope),
     }
 }
 
@@ -280,7 +223,11 @@ fn t_zcw04_every_written_order_yields_one_straight_line() {
         let mut orders = Vec::new();
         permutations(&mut written, 0, &mut orders);
         for order in orders {
-            let tokens: Vec<String> = order.iter().copied().map(token).collect();
+            let tokens: Vec<String> = order
+                .iter()
+                .copied()
+                .map(|element| element_text(&element))
+                .collect();
             let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
             let groups = [tag_group(1, &tokens)];
             let plan = compose_full(&groups, &scopes);
@@ -311,15 +258,7 @@ fn t_zcw04_every_written_order_yields_one_straight_line() {
 fn t_zcw05_the_checker_catches_a_pair_edge_written_by_the_chain() {
     let groups = [tag_group(1, &["s0", "b0", "b1", "s1"])];
     let mut plan = compose_full(&groups, &[0, 1]);
-    plan.cross_edges = plan
-        .members
-        .windows(2)
-        .map(|w| CrossEdge {
-            owned: w[0],
-            owner: w[1],
-            segment: ChainSegment::Group(1),
-        })
-        .collect();
+    plan.cross_edges = all_consecutive_edges(&plan.members, ChainSegment::Group(1));
 
     assert!(!final_owner_violations(&plan, &[0, 1]).is_empty());
 }

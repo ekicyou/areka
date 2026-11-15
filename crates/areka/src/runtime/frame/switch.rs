@@ -409,7 +409,9 @@ fn step_committed(
         } => finish_shell(
             wiring, world, hooks, &target, &source, &balloon, &restored, boxes, cursors,
         ),
-        SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, hooks, &target, scopes),
+        SwapFinish::Balloon { scopes, author_dpi } => {
+            finish_balloon(wiring, world, hooks, &target, scopes, author_dpi)
+        }
     }
     info!(
         event = "skin_switch_done",
@@ -472,9 +474,26 @@ fn finish_shell(
     // 配置の解決は窓寸を入力に取るので、drain が置き換えで積んだ窓寸の報告をここで先に窓へ
     // 反映し、新しいシェルの寸法で解かせる（同じフレームの後段の照合は取り出し済みで何もしない）。
     reconcile_reported_sizes(&mut wiring.presenter, world);
+    // 読み込みはバルーンの面 0 の windowposition だけを読むので、今出している面の値へ替えて解く
+    // （balloon-scroll-arrows 要件 1.7・面の書き手 `select_balloon_face` と同じ取り方）。
+    let mut balloon = balloon.clone();
+    for (&scope, &face) in &wiring.balloon_faces {
+        let Some(definitions) = wiring.balloon_definitions.get(&scope) else {
+            // 面の書き手は束の無いスコープの面を記録しないので、ふだんは起きない。
+            debug!(
+                scope,
+                face,
+                "finish_shell: 面の定義の束が無いので、読み込みの面 0 の windowposition で解く"
+            );
+            continue;
+        };
+        let model = &definitions.for_face(face).model;
+        let wp = (model.windowposition(), model.windowposition_raw().clone());
+        balloon.windowpositions.insert(scope as usize, wp);
+    }
     match world.get_resource::<GhostWindows>().cloned() {
         Some(windows) => {
-            apply_shell_descript(world, &windows, source, balloon, restored);
+            apply_shell_descript(world, &windows, source, &balloon, restored);
             // 動かせない指定は descript の段だけを新しいシェルの値へ取り替える（台本の lock は保つ・要件 4.4・5.4）。
             let scopes: Vec<usize> = windows.scopes().collect();
             replace_balloon_lock_descript(
@@ -500,7 +519,7 @@ fn finish_shell(
     replace_sticky_descript(world, placement_cfg.sticky_window_raw.as_deref());
     world.insert_resource(DefaultPlacementBasis {
         source: source.clone(),
-        balloon: balloon.clone(),
+        balloon,
     });
     if !(hooks.set_shell_dir)(world, target.dir.clone()) {
         warn!(
@@ -523,7 +542,8 @@ fn finish_shell(
     );
 }
 
-/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: scope ごとの定義の束（今の
+/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: 標準の位置の材料の作者の
+/// DPI（[`DefaultPlacementBasis`]） → scope ごとの定義の束（今の
 /// 面の定義を書き手 [`select_balloon_face`] で入れる・balloon-scroll-arrows 要件 1.7）と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
 /// `OnBalloonChange`。
 fn finish_balloon(
@@ -532,7 +552,22 @@ fn finish_balloon(
     hooks: SessionHooks,
     target: &SkinCandidate,
     scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,
+    author_dpi: u16,
 ) {
+    // 面の書き手は windowposition が前と同じだと解き直さないので、作者の DPI が替わったら材料の
+    // windowposition を空けて、下の書き手に全 scope を新しい換算で解き直させる。
+    if let Some(mut basis) = world.get_resource_mut::<DefaultPlacementBasis>()
+        && basis.balloon.author_dpi != author_dpi
+    {
+        info!(
+            event = "balloon_author_dpi_swapped",
+            from = basis.balloon.author_dpi,
+            to = author_dpi,
+            "バルーンの切り替えで、標準の位置の材料の作者の DPI を入れ替え、面の windowposition を解き直す"
+        );
+        basis.balloon.author_dpi = author_dpi;
+        basis.balloon.windowpositions.clear();
+    }
     for (scope, definitions, background) in scopes {
         // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直り、
         // 警告の名前の欄も新しいバルーンのフォルダ名になる・areka-P0-shell-balloon 要件 3.12）。
@@ -657,7 +692,10 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
                     epoch,
                     balloon_tables: actor_keyed_balloon_tables(assets.loop_tables),
                 },
-                SwapFinish::Balloon { scopes },
+                SwapFinish::Balloon {
+                    scopes,
+                    author_dpi: assets.author_dpi,
+                },
             )
         }
     }

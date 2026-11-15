@@ -2,13 +2,8 @@
 //!
 //! World も実機も使わない純関数の檻である。
 
-use std::collections::BTreeSet;
-
 use super::*;
-
-fn set(scopes: &[u32]) -> BTreeSet<u32> {
-    scopes.iter().copied().collect()
-}
+use crate::shared_test_support::scopes as set;
 
 fn script(scopes: &[u32]) -> StickyGroup {
     StickyGroup {
@@ -38,14 +33,6 @@ fn ledger_with_script(groups: &[&[u32]]) -> StickyGroupLedger {
 fn parse_accepts_two_or_more_distinct_ids() {
     assert_eq!(parse_sticky_tokens(&["0", "1"]), Ok(set(&[0, 1])));
     assert_eq!(parse_sticky_tokens(&["3", " 2 ", "7"]), Ok(set(&[2, 3, 7])));
-}
-
-#[test]
-fn parse_order_has_no_meaning() {
-    assert_eq!(
-        parse_sticky_tokens(&["1", "0"]),
-        parse_sticky_tokens(&["0", "1"])
-    );
 }
 
 #[test]

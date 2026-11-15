@@ -3,11 +3,19 @@
 //! 外のテストも使う支えは `test_support`、見本のゴーストの入口は `sample_test_support`
 //! （spec: placement-crate-split 設計 D8）。
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use areka_emo_compose::ScaleRatio;
+use log_capture_kit::CapturedEvent;
 use temp_path_kit::TempPath;
 use wintf::ecs::DPI;
+
+use crate::config::{PlacementConfig, ScopeConfig};
+use crate::follow::OffsetBase;
+use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::test_support::point;
 
 use super::sample_test_support::balloon_root;
 
@@ -23,6 +31,83 @@ pub(super) fn write_self_alpha_one_descript(dir: &Path, key: &str) {
     )
     .expect("descript.txt に透過の宣言 1 を書く");
 }
+
+/// バルーンの関門の檻が使う placement（`balloon_pos` は `char_pos + balloon_offset`・寸法は呼び手が渡す）。
+pub(super) fn placement_sized(
+    scope: usize,
+    char_pos: PointPx,
+    balloon_offset: PointPx,
+    balloon_limit: bool,
+    char_size: SizePx,
+    balloon_size: SizePx,
+) -> ScopePlacement {
+    ScopePlacement {
+        scope,
+        char_pos,
+        char_size,
+        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
+        balloon_size,
+        balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
+        balloon_limit,
+        anchor: Anchor::Free,
+        balloon_keyword_base: None,
+    }
+}
+
+/// スコープごとの構成だけを持つ `PlacementConfig`（descript 由来の生の値はどれも未指定）。
+pub(super) fn cfg_of(scopes: Vec<(usize, ScopeConfig)>) -> PlacementConfig {
+    PlacementConfig {
+        scopes: scopes.into_iter().collect(),
+        zorder_raw: None,
+        sticky_window_raw: None,
+    }
+}
+
+/// テスト用の拡大率 k（分子・分母はテストが書く非ゼロの値なので `expect`）。
+pub(super) fn k(num: u32, den: u32) -> ScaleRatio {
+    ScaleRatio::new(num, den).expect("テストの k は非ゼロ")
+}
+
+/// スコープ番号の並びを集合にする。
+pub(super) fn scopes(raw: &[u32]) -> BTreeSet<u32> {
+    raw.iter().copied().collect()
+}
+
+/// 捕捉したイベントのうち、欄 `event` が `name` のものだけを順に取り出す。
+pub(super) fn events_with<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(name))
+        .collect()
+}
+
+/// 欄 `event` が `name` のイベントがちょうど 1 件あることを主張し、それを返す。
+pub(super) fn one_event_with<'a>(events: &'a [CapturedEvent], name: &str) -> &'a CapturedEvent {
+    let hits = events_with(events, name);
+    assert_eq!(
+        hits.len(),
+        1,
+        "`{name}` がちょうど 1 件ではない: {events:?}"
+    );
+    hits[0]
+}
+
+/// 捕捉したイベントに `needle` を含むメッセージが無いことを主張する。
+///
+/// 空虚化しないための前提として、呼び手は**同じ `events` から対の観測点を 1 件取り出した後**に
+/// 呼ぶこと（捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
+pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
+    let hits: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(needle))
+        .collect();
+    assert!(hits.is_empty(), "`{needle}` が出てはならない: {hits:?}");
+}
+
+/// `windowposition` 供給層の観測点（`lib.rs` の `merge_scope_windowpositions` が scope ごとに出す
+/// info 行・観測点 4・実機サインオフの grep 対象）の本文の一部。檻がこの行を拾う目印。
+pub(super) const WINDOWPOSITION_SUPPLY_NEEDLE: &str = "windowposition を初期既定位置の調整量へ";
 
 /// 決定論テストが [`super::resolver::resolve_placement`] へ渡す**採寸 DPI**（正典既定 96）。
 ///
@@ -54,7 +139,7 @@ impl TempDir {
     }
 }
 
-/// バルーン定義だけの最小合成ディレクトリを組む（テスト補助・task 2.2）。
+/// バルーン定義だけの最小合成ディレクトリを組む（テスト補助）。
 ///
 /// 中身は既定設定 `descript.txt` ＋ 面 0 の画像 1 枚のみ。`resolve_balloon_faces` は
 /// **ファイル名の列挙**しか行わない（画像を復号しない）ため、これだけで面 0 の連鎖が
@@ -78,4 +163,20 @@ pub(super) fn synth_balloon_dir(root: &TempDir, name: &str, extra_lines: &str) -
     )
     .expect("balloons0.png 複写");
     balloon_dir
+}
+
+/// 一時フォルダの道は、ワークツリーの `target\test-roots\` の下にある（`%TEMP%` の下ではない）。
+#[test]
+fn temp_dir_lives_under_the_worktree_target_test_roots() {
+    let dir = TempDir::new();
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/test-roots")
+        .canonicalize()
+        .expect("ワークツリーの target/test-roots が在る（窓口が作る）");
+    let path = dir.path().canonicalize().expect("一時フォルダが実在する");
+    assert!(
+        path.starts_with(&base),
+        "一時フォルダが target/test-roots の外: {}",
+        path.display()
+    );
 }

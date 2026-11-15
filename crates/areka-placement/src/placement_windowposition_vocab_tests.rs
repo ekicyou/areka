@@ -1,7 +1,7 @@
 //! `windowposition` 語彙（`limit`／`x` キーワード）の**取得経路への結線**の檻
 //! （areka-P0-windowposition-limit task 2.2・design C3「取得経路の拡張」）。
 //!
-//! 分類器そのものの檻は `windowposition_vocab_tests.rs`（task 2.1・純関数）が持つ。
+//! 分類器そのものの檻は `windowposition_vocab_tests.rs`（純関数）が持つ。
 //! 本ファイルが固定するのはその 1 段上——**2 層マージ済みのバルーン定義から生値を取り出し、
 //! 分類結果を `ScopeConfig` の実値へ反映し、不正値に scope 付きの警告を出し、観測点 4 へ
 //! 解決済み実値を載せる**という結線そのもの（要件 1.3/1.4/4.6/6.2/6.3）である。
@@ -12,7 +12,7 @@
 //! - **ログ**（警告 2 種と観測点 4 の `limit`／`x_mode` フィールド）
 //!   ＝実機サインオフが grep する契約面（要件 6.2/6.3）
 //!
-//! ログ捕捉ハーネス（`test_support::capture`）は既に較正済みであり、同じ観測点 4 の
+//! ログ捕捉ハーネス（`log_capture_kit::capture`）は既に較正済みであり、同じ観測点 4 の
 //! 行を `placement_windowposition_tests.rs` が捕捉して値を検査している。本ファイルの
 //! 各テストも**必ず観測点 4 の行を 1 件捕捉すること**を先に主張してから「警告が無い」側の
 //! 主張を行う（捕捉ゼロで恒真になる空虚な主張を作らない）。
@@ -20,54 +20,30 @@
 use areka_emo_compose::ScaleRatio;
 
 use super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
-use super::shared_test_support::{TempDir, synth_balloon_dir};
+use super::shared_test_support::{
+    TempDir, WINDOWPOSITION_SUPPLY_NEEDLE, cfg_of, synth_balloon_dir,
+};
 use super::*;
+use crate::shared_test_support::assert_no_event;
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
-/// 観測点 4 の本文（実機サインオフの grep 対象・フィールド名ごと契約）。
-const OBSERVATION: &str = "windowposition を初期既定位置の調整量へ";
 /// `limit` 不正値の縮退警告の本文（要件 1.3/6.3）。
 const LIMIT_WARN: &str = "windowposition.limit が 0/1 以外";
 /// `x` 不正値の縮退警告の本文（要件 4.6/6.3）。
 const X_WARN: &str = "windowposition.x が数値でもキーワード";
 
-/// scope 0 のみを持つ最小の `PlacementConfig`（全欄は正典既定）。
-fn cfg_scope0() -> PlacementConfig {
-    let mut cfg = PlacementConfig {
-        scopes: Default::default(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
-    };
-    cfg.scopes.insert(0, ScopeConfig::default());
-    cfg
-}
-
-/// 合成バルーン定義 1 つに対し `apply_scope_windowpositions` を通し、
+/// 合成バルーン定義 1 つを読んで（`load_scope_windowpositions`）`merge_scope_windowpositions` を通し、
 /// 解決後の構成と捕捉ログを返す（k は恒等＝語彙の観測に丸めを混ぜない）。
 fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<CapturedEvent>) {
     let root = TempDir::new();
     let balloon_dir = synth_balloon_dir(&root, dir_name, extra_lines);
-    let mut cfg = cfg_scope0();
+    // scope 0 のみ（全欄は正典既定）
+    let mut cfg = cfg_of(vec![(0, ScopeConfig::default())]);
     let (_, events) = capture(|| {
-        apply_scope_windowpositions(&mut cfg, &balloon_dir, &[0], ScaleRatio::ONE);
+        let windowpositions = load_scope_windowpositions(&balloon_dir, &[0]);
+        merge_scope_windowpositions(&mut cfg, &windowpositions, &[0], ScaleRatio::ONE);
     });
     (cfg, events)
-}
-
-/// 警告本文 `needle` を含むイベントが 1 件も無いことを主張する。
-///
-/// 空虚化しないための前提として、呼び手は**同じ `events` から観測点 4 を 1 件取り出した後**に
-/// 呼ぶこと（捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
-fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` の警告が出てはならない: {hits:?}"
-    );
 }
 
 // ------------------------------------------------------------------
@@ -76,7 +52,7 @@ fn assert_no_event(events: &[CapturedEvent], needle: &str) {
 
 /// `limit` の受理値（0／1）が scope 別構成の実値へそのまま入る（要件 1.1/1.4）。
 #[test]
-fn apply_scope_windowpositions_reflects_accepted_limit_values() {
+fn merge_scope_windowpositions_reflects_accepted_limit_values() {
     for (raw, expected) in [("0", false), ("1", true)] {
         let (cfg, events) = resolve(
             &format!("balloon-limit-{raw}"),
@@ -86,7 +62,7 @@ fn apply_scope_windowpositions_reflects_accepted_limit_values() {
             cfg.scopes[&0].balloon_limit, expected,
             "limit={raw} は {expected} として保持される"
         );
-        let hit = expect_one(&events, OBSERVATION);
+        let hit = expect_one(&events, WINDOWPOSITION_SUPPLY_NEEDLE);
         assert_eq!(
             hit.expect_field("limit"),
             expected.to_string(),
@@ -101,7 +77,7 @@ fn apply_scope_windowpositions_reflects_accepted_limit_values() {
 /// あわせて**キーワード時は数値 x が供給されない**ことを固定する（design C3 (d)）:
 /// `windowposition.y` だけが調整量として残り、x 成分は 0 になる。
 #[test]
-fn apply_scope_windowpositions_reflects_keyword_x_modes() {
+fn merge_scope_windowpositions_reflects_keyword_x_modes() {
     for (raw, expected) in [
         ("center", BalloonXMode::CenterTop),
         ("top", BalloonXMode::CenterTop),
@@ -120,7 +96,7 @@ fn apply_scope_windowpositions_reflects_keyword_x_modes() {
             Some((0, -129)),
             "キーワード時の x 調整量は 0（数値 x は存在しない）・y は従来どおり（要件 4.4）"
         );
-        let hit = expect_one(&events, OBSERVATION);
+        let hit = expect_one(&events, WINDOWPOSITION_SUPPLY_NEEDLE);
         assert_eq!(hit.expect_field("x_mode"), format!("{expected:?}"));
         assert_eq!(
             hit.expect_field("windowposition_x"),
@@ -135,16 +111,15 @@ fn apply_scope_windowpositions_reflects_keyword_x_modes() {
 // 不正値の警告付き縮退（要件 1.3/4.6/6.3・design C3 (a)）
 // ------------------------------------------------------------------
 
-/// **task 2.2 の完了状態**: 不正な `limit` と不正な `x` を含む定義を通すと、
+/// 不正な `limit` と不正な `x` を含む定義を通すと、
 /// 警告が 2 種とも出て、構成にも観測点 4 にも**既定値**が現れる。
 ///
-/// `Center`（大文字混在）が不正値になることは意図的な設計である——キーワードは小文字の
-/// 完全一致のみ受理し、綴り違いは無言で数値扱いへ落とさず警告で作者に気づかせる（DD8・要件 4.6）。
+/// 綴り違いの `centre` は無言で数値扱いへ落とさず、警告で作者に気づかせる（DD8・要件 4.6）。
 #[test]
-fn apply_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
+fn merge_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
     let (cfg, events) = resolve(
         "balloon-invalid-both",
-        "windowposition.limit,2\nwindowposition.x,Center\n",
+        "windowposition.limit,2\nwindowposition.x,centre\n",
     );
 
     // (a) 構成は正典既定へ縮退している。
@@ -171,10 +146,10 @@ fn apply_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
     let x_warn = expect_one(&events, X_WARN);
     assert_eq!(x_warn.level, tracing::Level::WARN);
     assert_eq!(x_warn.expect_field("scope"), "0");
-    assert_eq!(x_warn.expect_field("x_raw"), "Some(\"Center\")");
+    assert_eq!(x_warn.expect_field("x_raw"), "Some(\"centre\")");
 
     // (c) 観測点 4 の解決値は既定値（要件 6.2）。
-    let hit = expect_one(&events, OBSERVATION);
+    let hit = expect_one(&events, WINDOWPOSITION_SUPPLY_NEEDLE);
     assert_eq!(hit.level, tracing::Level::INFO);
     assert_eq!(hit.expect_field("limit"), "true");
     assert_eq!(hit.expect_field("x_mode"), "Side");
@@ -183,7 +158,7 @@ fn apply_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
 /// 値が空（`windowposition.x,`）は**未指定ではなく不正値**である（要件 7.2）。
 /// キーはあるので生値 `Some("")` が届き、警告つきで未指定扱いへ縮退する。
 #[test]
-fn apply_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
+fn merge_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
     let (cfg, events) = resolve(
         "balloon-empty-x",
         "windowposition.x,\nwindowposition.limit,\n",
@@ -211,10 +186,10 @@ fn apply_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
 /// 「警告が無い」ことの主張が空虚にならないよう、先に観測点 4 が 1 件捕捉できていることを
 /// 確かめる（捕捉ハーネスが生きていることの較正）。
 #[test]
-fn apply_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
+fn merge_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
     let (cfg, events) = resolve("balloon-unspecified", "");
 
-    let hit = expect_one(&events, OBSERVATION);
+    let hit = expect_one(&events, WINDOWPOSITION_SUPPLY_NEEDLE);
     assert_eq!(hit.expect_field("limit"), "true");
     assert_eq!(hit.expect_field("x_mode"), "Side");
     assert_eq!(
@@ -231,10 +206,10 @@ fn apply_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
     assert_no_event(&events, X_WARN);
 }
 
-/// 数値指定の経路は本仕様の前後で 1 ビットも変わらない（要件 5.1 の回帰境界）。
+/// 数値指定の経路はキーワード語彙を足す前後で 1 ビットも変わらない（要件 5.1 の回帰境界）。
 /// 数値が読めている限り生値は参照されず、モードは `Side` のまま・調整量は生値どおり。
 #[test]
-fn apply_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {
+fn merge_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {
     let (cfg, events) = resolve(
         "balloon-numeric",
         "windowposition.x,266\nwindowposition.y,-129\nwindowposition.limit,1\n",
@@ -248,9 +223,29 @@ fn apply_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {
         "数値経路の調整量は従来どおり（生値そのまま・k=1）"
     );
 
-    let hit = expect_one(&events, OBSERVATION);
+    let hit = expect_one(&events, WINDOWPOSITION_SUPPLY_NEEDLE);
     assert_eq!(hit.expect_field("windowposition_x"), "Some(266)");
     assert_eq!(hit.expect_field("adjust_dx"), "266");
     assert_eq!(hit.expect_field("x_mode"), "Side");
     assert_no_event(&events, X_WARN);
+}
+
+// ------------------------------------------------------------------
+// 読めないバルーンのフォルダ（シェルの差し替えはバルーンを測り直さないので、scope 付きの記録は
+// この warn! だけ）
+// ------------------------------------------------------------------
+
+/// バルーンのフォルダが無いと、その scope の `windowposition` は載らず、scope 付きの
+/// `warn!` が 1 行だけ出る（黙って既定の位置へ落ちない）。
+#[test]
+fn load_scope_windowpositions_warns_and_skips_an_unreadable_balloon() {
+    let root = TempDir::new();
+    let missing = root.path().join("no_such_balloon");
+
+    let (windowpositions, events) = capture(|| load_scope_windowpositions(&missing, &[0]));
+
+    assert!(windowpositions.is_empty(), "読めない scope は載らない");
+    let warn = expect_one(&events, "バルーン系列の解決に失敗");
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(warn.expect_field("scope"), "0");
 }

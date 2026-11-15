@@ -2,23 +2,16 @@
 //!
 //! 元は `resolver_resolve_tests.rs` の冒頭に置かれていたが、同ファイルが 1,000 行規約を
 //! 超えたため主題別 4 ファイルへ分割するにあたり、共有部分をここへ集約した。
-//! 中身は移設前と逐語同一で、可視性を `pub(super)` へ広げただけである。
 //!
-//! 面別の DPI ヘルパー（`DPIS`/`px`/`work_area`）は隣の `resolver_test_support.rs` が持つ。
+//! 面別の DPI ヘルパー（`DPIS`/`px`/`work_area`/`offset_work_area`）は隣の
+//! `resolver_test_support.rs` が持つ（`offset_work_area` はバルーンの収めのテストも使う）。
+//! `cfg_of` は配置のテストが共に使う `placement_shared_test_support.rs` のものを、
+//! `offset_work_area` は隣のものを出し直す。
 
-use super::test_support::px;
+pub(super) use super::test_support::offset_work_area;
 use super::*;
-use crate::config::{Alignment, BalloonSide, PlacementConfig, ScopeConfig};
-
-/// 左上が原点でない work area（クランプ境界の left/top 依存を暴く）。
-pub(super) fn offset_work_area(dpi: i32) -> RectPx {
-    RectPx {
-        left: px(64, dpi),
-        top: px(40, dpi),
-        right: px(64 + 1920, dpi),
-        bottom: px(40 + 1080, dpi),
-    }
-}
+use crate::config::{Alignment, BalloonSide, ScopeConfig};
+pub(super) use crate::shared_test_support::cfg_of;
 
 pub(super) fn scope_cfg(
     alignment: Alignment,
@@ -32,15 +25,6 @@ pub(super) fn scope_cfg(
         balloon_alignment: BalloonSide::Left,
         balloon_offset: None,
         ..ScopeConfig::default()
-    }
-}
-
-pub(super) fn cfg_of(scopes: Vec<(usize, ScopeConfig)>) -> PlacementConfig {
-    PlacementConfig {
-        scopes: scopes.into_iter().collect(),
-        zorder_raw: None,
-        sticky_window_raw: None,
-        shell_dpi_raw: None,
     }
 }
 

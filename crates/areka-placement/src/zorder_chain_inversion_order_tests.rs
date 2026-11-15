@@ -1,14 +1,14 @@
 //! ぱすたと同じ指定 `\![reset,zorder]\![set,zorder,s0,b0,s1]` から、**台帳 → 合成（areka）→
-//! 受け口 → 確立系・維持系・鎖の適用系（wintf・確定段の並び）→ 実窓の重なり**を 1 本に
+//! 受け口 → 確立系・維持系・鎖の適用系（wintf・確定段から帯の適用系を除いた並び）→ 実窓の重なり**を 1 本に
 //! 繋いで測るテスト（`areka-P0-zorder-scope-inversion` 要件 1.2・3.3・4.5・6.1・6.2・6.4・8.4）。
 //!
 //! 兄弟の wintf 側の実窓の檻（`zorder_chain_order_inversion_tests.rs`）は計画を手で組む。
 //! 本ファイルは計画を**本番の台帳と合成**に組ませる——補い（`s0,b0,s1` → `s0,b0,b1,s1`）と
 //! 繋ぎの導出が抜ければ、実窓の並びが崩れて赤くなる。
 //!
-//! 公開は指令消化の相（`zorder_drain.rs` の `publish_chain_plan`）と同じ規則で行う——
-//! 合成の結果が受け口の内容と違うときだけ置き、印を立てる。相そのものは `frame` の
-//! 非公開のモジュールなので、窓の在庫は本ファイルの「在る窓」の表で代わりに引く。
+//! 公開は指令消化の相と同じ本番の関数 [`publish_chain_plan`] で行う——合成の結果が受け口の
+//! 内容と違うときだけ置き、印を立てる。相そのものは本体の `frame` の非公開のモジュールなので、
+//! 窓の在庫は本ファイルの「在る窓」の表で代わりに引く。
 //!
 //! 窓の添字は `[b0, s0, b1, s1]`。期待する最終形は手前から `s0, b0, b1, s1`、所有の鎖は
 //! `s0 ← b0 ← b1 ← s1`（`b0` の組の結び目は外れ、`b1` の組の結び目が残る）。
@@ -16,21 +16,19 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, IsWindow,
-    SW_SHOWNOACTIVATE, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
-};
+use windows::Win32::UI::WindowsAndMessaging::DestroyWindow;
 use windows::core::w;
-use wintf::ecs::window::{PairReleased, ZOrderChainPlan, apply_zorder_chain};
+use wintf::ecs::window::{PairReleased, apply_zorder_chain};
 use wintf::ecs::{
     KeepDirectlyAbove, WindowHandle, apply_zorder_pair_maintenance, establish_owner_links,
     flush_window_pos_commands,
 };
 
-use super::compose_chain;
+use super::{compose_chain, publish_chain_plan};
 use crate::zorder_group_ledger::{
     GroupElement, GroupWindowKind, ZOrderGroupLedger, parse_zorder_tokens,
 };
+use crate::zorder_test_support::{create_window, is_window, owner_shape, teardown, z_shape};
 
 const B0: usize = 0;
 const S0: usize = 1;
@@ -54,93 +52,7 @@ fn element_at(index: usize) -> GroupElement {
 }
 
 // ---------------------------------------------------------------------------
-// 実窓（0x0・可視・本番のゴースト窓と同じ拡張スタイル）と走査
-// ---------------------------------------------------------------------------
-
-fn create_raw_window() -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を作り、活性化せずに表示する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        let hwnd = CreateWindowExW(
-            WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-            w!("Static"),
-            w!("zorder-chain-inversion-areka"),
-            WINDOW_STYLE(WS_POPUP.0),
-            10,
-            10,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a test window");
-        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        hwnd
-    }
-}
-
-thread_local! {
-    static IME_ANCHOR_MADE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// 鎖の窓を作る。スレッド既定の不可視 IME 窓が鎖の窓に付かないよう、受け皿を先に 1 枚作る
-/// （兄弟 `zorder_chain_tail_order_tests.rs` の `ensure_ime_anchor` と同じ理由）。
-fn create_window() -> HWND {
-    IME_ANCHOR_MADE.with(|made| {
-        if !made.replace(true) {
-            let _ = create_raw_window();
-        }
-    });
-    create_raw_window()
-}
-
-fn is_window(hwnd: HWND) -> bool {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { IsWindow(Some(hwnd)) }.as_bool()
-}
-
-/// 前面から `GW_HWNDNEXT` で降り、`set` の生きている窓の添字だけを手前から並べる。
-/// 他プロセスの窓が走査の途中で消えると切れるので、全部拾えるまで有界回数やり直す。
-fn z_shape(set: &[Option<HWND>]) -> Vec<usize> {
-    let wanted = set.iter().flatten().count();
-    let mut best = Vec::new();
-    for _ in 0..8 {
-        let mut seen = Vec::new();
-        // SAFETY: Win32 境界。読み取り専用の走査。
-        let mut cursor = unsafe { GetTopWindow(None) }.ok();
-        while let Some(hwnd) = cursor {
-            if let Some(i) = set.iter().position(|w| *w == Some(hwnd)) {
-                seen.push(i);
-                if seen.len() == wanted {
-                    return seen;
-                }
-            }
-            // SAFETY: Win32 境界。読み取り専用の走査。
-            cursor = unsafe { GetWindow(hwnd, GW_HWNDNEXT) }.ok();
-        }
-        if seen.len() > best.len() {
-            best = seen;
-        }
-    }
-    best
-}
-
-/// 添字ごとの持ち主（`GetWindow(GW_OWNER)`・`set` の外の持ち主と窓の無い枠は `None`）。
-fn owner_shape(set: &[Option<HWND>]) -> Vec<Option<usize>> {
-    set.iter()
-        .map(|h| {
-            // SAFETY: Win32 境界。読み取りのみ。
-            let owner = h.and_then(|h| unsafe { GetWindow(h, GW_OWNER) }.ok())?;
-            set.iter().position(|w| *w == Some(owner))
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
-// 足場: 窓 4 枚・台帳・本番の確定段の 3 本
+// 足場: 窓 4 枚・台帳・本番の確定段のうち 3 本
 // ---------------------------------------------------------------------------
 
 struct Rig {
@@ -158,7 +70,8 @@ impl Rig {
     fn new(without_window: &[usize]) -> Self {
         let mut schedule = Schedule::default();
         schedule.set_executor(SingleThreadedExecutor::new());
-        // 確定段と同じ並び（`spawn.rs` の `wire_zorder_pair`）。
+        // 確定段（`spawn.rs` の `wire_zorder_pair`）と同じ順。本番は確立系と維持系のあいだに
+        // 帯の適用系も挟むが、このテストの窓は帯を持たないので回さない。
         schedule.add_systems(
             (
                 establish_owner_links,
@@ -197,7 +110,7 @@ impl Rig {
 
     /// 添字 `index` の実体へ窓を作って付ける（窓が後から現れる）。
     fn attach_window(&mut self, index: usize) {
-        let hwnd = create_window();
+        let hwnd = create_window(w!("zorder-chain-inversion-areka"));
         self.made.push(hwnd);
         self.hwnds[index] = Some(hwnd);
         let entity = self.entities[index].expect("実体が在る");
@@ -221,7 +134,7 @@ impl Rig {
             .expect("最初の指定は受理される");
     }
 
-    /// 合成して、内容が違うときだけ受け口へ置く（`zorder_drain.rs` の公開と同じ規則）。
+    /// 合成して、内容が違うときだけ受け口へ置く（本番の [`publish_chain_plan`]）。
     fn publish(&mut self) {
         let world = &self.world;
         let entities = self.entities;
@@ -229,17 +142,7 @@ impl Rig {
             let index = (0..4).find(|i| element_at(*i) == *element)?;
             entities[index].filter(|e| world.get_entity(*e).is_ok())
         });
-        if self.world.get_resource::<ZOrderChainPlan>().is_none() {
-            if plan.is_none() {
-                return;
-            }
-            self.world.init_resource::<ZOrderChainPlan>();
-        }
-        let mut receiver = self.world.resource_mut::<ZOrderChainPlan>();
-        if receiver.chain != plan {
-            receiver.chain = plan;
-            receiver.dirty = true;
-        }
+        publish_chain_plan(&mut self.world, plan);
     }
 
     /// 確定段の 1 巡と、そのあとの窓の指令の書き出し（本番は tick の後に流す）。
@@ -288,20 +191,15 @@ impl Rig {
 
 impl Drop for Rig {
     fn drop(&mut self) {
-        // 手前（所有される側）から壊せば道連れは起きない。壊れていればそのまま飛ばす。
+        // 手前（所有される側）から壊せば道連れは起きない。もう壊れた窓は `DestroyWindow` が
+        // 失敗するだけで、`teardown` はその失敗を捨てる。
         let order = z_shape(&self.hwnds);
-        for hwnd in order
+        let windows: Vec<HWND> = order
             .iter()
             .filter_map(|i| self.hwnds[*i])
             .chain(self.made.iter().copied())
-        {
-            if is_window(hwnd) {
-                // SAFETY: Win32 境界。このテストが作った窓を壊す。
-                unsafe {
-                    let _ = DestroyWindow(hwnd);
-                }
-            }
-        }
+            .collect();
+        teardown(&windows);
     }
 }
 
@@ -309,7 +207,7 @@ impl Drop for Rig {
 // テスト
 // ===========================================================================
 
-/// ぱすたと同じ指定から、台帳が `b1` を補い、合成と確定段の 3 本が前 3 枚を成り立たせる
+/// ぱすたと同じ指定から、台帳が `b1` を補い、合成と確定段のうち 3 本が前 3 枚を成り立たせる
 /// （要件 1.2・3.3・8.4 の前段）。続く解除で各スコープが組へ戻る（要件 4.5）。
 #[test]
 fn the_pasta_directive_lands_s0_b0_b1_s1_on_real_windows() {

@@ -11,31 +11,32 @@
 //! `non_dragend_operations_leave_persist_store_byte_invariant` と同じやり方）。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use areka_sylphya::persist::FakePersistIo;
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope,
     spawn_sylphya,
 };
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragEndEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::{Point, WindowHandle, WindowPos};
+use wintf::ecs::{Point, WindowPos};
 
 use super::{
     PersistWiring, balloon_offset_entries, char_pos_entries, persist_entries,
     persist_unremembered_char_positions,
 };
 use crate::chain_finalize::AdjacencyMark;
-use crate::follow::{Anchored, OffsetBase, on_char_drag_end};
+use crate::follow::{Anchored, on_char_drag_end};
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use crate::test_support::{SharedFakeIo, fake_handle};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 記録の target（ドラッグの確定と同じ）。
@@ -50,29 +51,19 @@ const SCOPES: [(usize, PointPx, SizePx); 3] = [
 ];
 
 /// 記憶にある体の値（「書き換えない」を噛ませるための、どの書く値とも重ならない値）。
-pub(super) const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
+const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
 
-/// 共有の偽の保存先（アクターへ渡す分と、観測する分が同じストアを指す）。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
-pub(super) struct Rig {
-    pub(super) world: World,
+/// 記憶の実物のアクター（`spawn_sylphya`）と偽の保存先 `FakePersistIo`（Ghost の根は `/g`）。
+/// 並べ直し・送り口・止めたバルーンのドラッグの檻（`reset_pos_tests.rs`・`persist_io_wiring_tests.rs`・
+/// `balloon_lock_drag_tests.rs`）も使う。
+pub(crate) struct Store {
     shared: Arc<FakePersistIo>,
     roots: ScopeRoots,
-    pub(super) parts: SylphyaParts,
+    parts: SylphyaParts,
 }
 
-impl Rig {
-    /// 3 スコープの窓の一式と、記憶の送り口（`wired` のときだけ）を持つ World を組む。
-    pub(super) fn new(wired: bool) -> Self {
+impl Store {
+    pub(crate) fn new() -> Self {
         let shared = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
@@ -80,26 +71,66 @@ impl Rig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(shared.clone())),
+            io: Box::new(SharedFakeIo::new(shared.clone())),
             runtime_sink: None,
         });
+        Store {
+            shared,
+            roots,
+            parts,
+        }
+    }
+
+    /// 記憶の送り口を World へ挿す。
+    pub(crate) fn wire(&self, world: &mut World) {
+        world.insert_non_send(PersistWiring {
+            publisher: self.parts.publisher.clone(),
+        });
+    }
+
+    /// 送ったものの書き込みが済むのを待ってから、記憶を読み戻す。
+    pub(crate) fn load(&self) -> HashMap<PersistKey, String> {
+        self.parts
+            .publisher
+            .barrier()
+            .expect("barrier はアクターが生きている間は返る");
+        load_scope(
+            PersistScope::Ghost,
+            &self.roots,
+            &SharedFakeIo::new(self.shared.clone()),
+        )
+        .into_iter()
+        .collect()
+    }
+
+    pub(crate) fn finish(self) {
+        self.parts.publisher.close();
+        let _ = self.parts.handle.join();
+    }
+}
+
+pub(super) struct Rig {
+    pub(super) world: World,
+    store: Store,
+}
+
+impl Rig {
+    /// 3 スコープの窓の一式と、記憶の送り口（`wired` のときだけ）を持つ World を組む。
+    fn new(wired: bool) -> Self {
+        let store = Store::new();
         let mut world = World::new();
         let placements: Vec<ScopePlacement> = SCOPES
             .iter()
             .map(|&(scope, char_pos, char_size)| ScopePlacement {
-                scope,
-                char_pos,
-                char_size,
-                balloon_pos: PointPx {
-                    x: char_pos.x - 200,
-                    y: char_pos.y,
-                },
-                balloon_size: SizePx { w: 223, h: 158 },
-                balloon_offset: PointPx { x: -200, y: 0 },
-                balloon_offset_base: OffsetBase::unpinned(PointPx { x: -200, y: 0 }),
-                balloon_limit: false,
                 anchor: Anchor::Bottom,
-                balloon_keyword_base: None,
+                ..placement_sized(
+                    scope,
+                    char_pos,
+                    PointPx { x: -200, y: 0 },
+                    false,
+                    char_size,
+                    SizePx { w: 223, h: 158 },
+                )
             })
             .collect();
         spawn_ghost_windows(
@@ -108,19 +139,12 @@ impl Rig {
             &GhostTitles::from_scope_titles(SCOPES.iter().map(|&(s, _, _)| (s, format!("s{s}")))),
         );
         if wired {
-            world.insert_non_send(PersistWiring {
-                publisher: parts.publisher.clone(),
-            });
+            store.wire(&mut world);
         }
-        Rig {
-            world,
-            shared,
-            roots,
-            parts,
-        }
+        Rig { world, store }
     }
 
-    pub(super) fn char_window(&self, scope: usize) -> Entity {
+    fn char_window(&self, scope: usize) -> Entity {
         self.world
             .resource::<GhostWindows>()
             .char_window(scope)
@@ -128,7 +152,7 @@ impl Rig {
     }
 
     /// 記憶に位置があるスコープとして標す（本番の起動の `clear_default_char_pos` と同じ口）。
-    pub(super) fn mark_remembered(&mut self, scope: usize) {
+    fn mark_remembered(&mut self, scope: usize) {
         assert!(
             self.world
                 .resource_mut::<GhostWindows>()
@@ -141,29 +165,17 @@ impl Rig {
         persist_entries(&self.world, entries);
     }
 
-    /// 送ったものの書き込みが済むのを待ってから、記憶を読み戻す。
     pub(super) fn load(&self) -> HashMap<PersistKey, String> {
-        self.parts
-            .publisher
-            .barrier()
-            .expect("barrier はアクターが生きている間は返る");
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo(self.shared.clone()),
-        )
-        .into_iter()
-        .collect()
+        self.store.load()
     }
 
     pub(super) fn finish(self) {
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.store.finish();
     }
 }
 
 /// 種: スコープ 0 の記憶の位置・全スコープのバルーンの相対位置・起動の記録。
-pub(super) fn seed_entries() -> Vec<(PersistKey, String)> {
+fn seed_entries() -> Vec<(PersistKey, String)> {
     let mut entries = char_pos_entries(0, SENTINEL_POS);
     for &(scope, _, _) in &SCOPES {
         entries.extend(balloon_offset_entries(
@@ -178,7 +190,11 @@ pub(super) fn seed_entries() -> Vec<(PersistKey, String)> {
     entries
 }
 
-fn window_pos(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String, String)> {
+/// 読み戻した記憶からスコープの窓の位置（x・y の両方）を取る（並べ直しの檻も使う）。
+pub(crate) fn window_pos(
+    map: &HashMap<PersistKey, String>,
+    scope: u32,
+) -> Option<(String, String)> {
     Some((
         map.get(&PersistKey::WindowPos {
             scope,
@@ -283,9 +299,7 @@ fn pattern_shift_is_subtracted_before_saving() {
     });
     let shifted = rig.char_window(1);
     // 窓へ書く口は実窓の印を要る（偽 HWND）。
-    rig.world.entity_mut(shifted).insert(WindowHandle {
-        hwnd: HWND(0x200 as *mut _),
-    });
+    rig.world.entity_mut(shifted).insert(fake_handle(0x200));
     assert!(crate::follow::apply_char_shift(
         &mut rig.world,
         shifted,
@@ -371,16 +385,14 @@ fn commit_failure_keeps_previous_store_and_later_drag_end_write_succeeds() {
     rig.seed(seed_entries());
     let before = rig.load();
 
-    rig.shared.fail_next_commit();
+    rig.store.shared.fail_next_commit();
     persist_unremembered_char_positions(&rig.world);
     let after_fail = rig.load();
     assert_eq!(after_fail, before, "失敗した書き込みは記憶を変えない");
 
     // そのあとのドラッグの確定（本番のハンドラ）で、スコープ 0 の位置を書く。
     let scope0 = rig.char_window(0);
-    rig.world.entity_mut(scope0).insert(WindowHandle {
-        hwnd: HWND(0x100 as *mut _),
-    });
+    rig.world.entity_mut(scope0).insert(fake_handle(0x100));
     rig.world.get_mut::<WindowPos>(scope0).unwrap().position = Some(Point { x: 1700, y: 356 });
     let ev = Phase::Bubble(DragEndEvent {
         target: scope0,
@@ -510,17 +522,19 @@ fn writes_in_descript_form_even_when_current_anchor_is_free() {
     rig.finish();
 }
 
-/// テスト（dpi-realign-remembered-chain 6.5・8.6 ⑸）: 印の無い古い記憶のスコープ 1 には、位置を
-/// 書かずに画面の並びから決めた印だけが書き足され、`info!` が残る。覚えた印のあるスコープ 2 と
-/// スコープ 0（前の窓が無い）には書き足さない。種は印を連れてこないよう送り口へ直接入れる。
-#[test]
-fn old_memory_gets_only_the_adjacency_mark_added() {
+/// 全スコープが記憶から戻り、スコープ 1・2 が位置だけの古い記憶（印なし）で、スコープ 2 は覚えた
+/// 印を持ち、スコープ 1 がスコープ 0 の左に隣り合う rig と、種を入れた直後の記憶。種は印を連れて
+/// こないよう送り口へ直接入れる（`persist_restore_group_tests.rs` の寄せた起動の檻も使う）。
+pub(super) fn old_memory_rig() -> (Rig, HashMap<PersistKey, String>) {
     let mut rig = Rig::new(true);
     let mut seed = seed_entries();
     for scope in [1, 2] {
         seed.extend(char_pos_entries(scope, SENTINEL_POS));
     }
-    rig.parts.publisher.persist_put(PersistScope::Ghost, seed);
+    rig.store
+        .parts
+        .publisher
+        .persist_put(PersistScope::Ghost, seed);
     let before = rig.load();
     assert!(
         !before
@@ -545,6 +559,15 @@ fn old_memory_gets_only_the_adjacency_mark_added() {
         .as_mut()
         .unwrap()
         .x = 1483 - 381;
+    (rig, before)
+}
+
+/// テスト（dpi-realign-remembered-chain 6.5・8.6 ⑸）: 印の無い古い記憶のスコープ 1 には、位置を
+/// 書かずに画面の並びから決めた印だけが書き足され、`info!` が残る。覚えた印のあるスコープ 2 と
+/// スコープ 0（前の窓が無い）には書き足さない。
+#[test]
+fn old_memory_gets_only_the_adjacency_mark_added() {
+    let (rig, before) = old_memory_rig();
 
     let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let mut after = rig.load();
@@ -565,5 +588,161 @@ fn old_memory_gets_only_the_adjacency_mark_added() {
         find(&events, "古い記憶に隣り合いの印だけを書き足した", 2).is_empty(),
         "覚えた印のあるスコープには書き足さない"
     );
+    rig.finish();
+}
+
+/// window-work-area-clamp 要件 4.6: 記憶の位置を寄せて表示した起動では、隣の窓（記憶に位置が
+/// 無いスコープ 0）の位置を書く束からも、印の無い古い記憶（スコープ 1）へ印を書き足さない。
+/// スコープ 0 の位置は書く。
+#[test]
+fn clamped_boot_adds_no_mark_to_old_memory_through_the_neighbours_position() {
+    let mut rig = Rig::new(true);
+    rig.mark_remembered(1);
+    rig.mark_remembered(2);
+    rig.world
+        .insert_resource(super::RestoredPositionsClamped(true));
+
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
+    let after = rig.load();
+
+    assert_eq!(
+        window_pos(&after, 0),
+        Some(expected_saved(0)),
+        "スコープ 0 は書く"
+    );
+    let lines = save_events(&events)
+        .into_iter()
+        .filter(|e| e.message().contains("古い記憶へ隣り合いの印を書き足さない"))
+        .count();
+    assert_eq!(lines, 1, "書き足さない決めの記録は 1 行: {events:?}");
+    assert_eq!(
+        after.get(&PersistKey::WindowAdjacent { scope: 1 }),
+        None,
+        "寄せた起動で古い記憶へ印が書き足された: {after:?}"
+    );
+    rig.finish();
+}
+
+/// window-work-area-clamp 要件 4.6: 寄せて表示した起動のあいだは、ドラッグや連れ動きの保存
+/// （[`persist_entries`]）の束からも、印の無い古い記憶（スコープ 1）へ印を書き足さず、外した印の
+/// スコープ（スコープ 2 は束に触れないので載らない）を 1 行に残す。寄せずに起動した回は、同じ束が
+/// 印を書き、行は出ない（飛ばすのは寄せた起動だけ）。
+#[test]
+fn clamped_boot_drag_save_adds_no_mark_to_old_memory() {
+    for (clamped, expected) in [(false, true), (true, false)] {
+        let mut rig = Rig::new(true);
+        rig.mark_remembered(1);
+        rig.mark_remembered(2);
+        rig.world
+            .insert_resource(super::RestoredPositionsClamped(clamped));
+
+        let ((), events) =
+            capture(|| persist_entries(&rig.world, char_pos_entries(0, SENTINEL_POS)));
+        let after = rig.load();
+
+        assert!(window_pos(&after, 0).is_some(), "スコープ 0 の位置は書く");
+        let lines: Vec<_> = save_events(&events)
+            .into_iter()
+            .filter(|e| e.message().contains("古い記憶へ隣り合いの印を書き足さない"))
+            .map(|e| e.field("scopes"))
+            .collect();
+        let expected_lines = if clamped { vec![Some("{1}")] } else { vec![] };
+        assert_eq!(
+            lines, expected_lines,
+            "寄せた起動={clamped}: 外した印の記録"
+        );
+        assert_eq!(
+            after.contains_key(&PersistKey::WindowAdjacent { scope: 1 }),
+            expected,
+            "寄せた起動={clamped}: {after:?}"
+        );
+        rig.finish();
+    }
+}
+
+/// 飛ばすのは印の無い古い記憶だけ: 寄せた起動でも、同じ束が位置を書くスコープ 1 の印は
+/// 書く（その記憶はもう古くない）。隣の古い記憶のスコープ 2 の印は書かない。
+#[test]
+fn clamped_boot_keeps_the_mark_of_the_scope_whose_position_is_written() {
+    let mut rig = Rig::new(true);
+    rig.mark_remembered(1);
+    rig.mark_remembered(2);
+    rig.world
+        .insert_resource(super::RestoredPositionsClamped(true));
+
+    persist_entries(&rig.world, char_pos_entries(1, SENTINEL_POS));
+    let after = rig.load();
+
+    assert!(
+        after.contains_key(&PersistKey::WindowAdjacent { scope: 1 }),
+        "位置を書くスコープの印は書く: {after:?}"
+    );
+    assert_eq!(
+        after.get(&PersistKey::WindowAdjacent { scope: 2 }),
+        None,
+        "隣の古い記憶へは書かない: {after:?}"
+    );
+    rig.finish();
+}
+
+/// 古い記憶へ印を書き足す道も、印は descript の `defaultx` を鎖の規則に入れて決める: スコープ 1 が
+/// スコープ 0 の左に `kero.defaultx` の 36 px だけ空けて並ぶと `left`（audit-placement-core 494・506）。
+#[test]
+fn old_memory_mark_uses_the_defaultx_gap_of_the_descript() {
+    let (mut rig, _) = old_memory_rig();
+    super::adjacency_tests::with_basis(&mut rig.world, &[("kero.defaultx", "36")]);
+    let entity = rig.char_window(1);
+    rig.world
+        .get_mut::<WindowPos>(entity)
+        .unwrap()
+        .position
+        .as_mut()
+        .unwrap()
+        .x = 1483 - 381 - 36;
+
+    persist_unremembered_char_positions(&rig.world);
+    let after = rig.load();
+
+    assert_eq!(
+        after
+            .get(&PersistKey::WindowAdjacent { scope: 1 })
+            .map(String::as_str),
+        Some("left"),
+        "{after:?}"
+    );
+    rig.finish();
+}
+
+/// 1 回の並べ終えた時点の保存で、descript の読めない値の `warn!` は 1 度だけ（位置を書くスコープ 0 と
+/// 印だけを書き足す古い記憶のスコープ 1 が同じ回にあっても、鎖の見方を組むのは 1 度・502・508）。
+#[test]
+fn one_finalize_save_warns_once_for_an_unreadable_defaultx() {
+    let mut rig = Rig::new(true);
+    rig.mark_remembered(1);
+    rig.mark_remembered(2);
+    assert!(
+        rig.world
+            .resource_mut::<GhostWindows>()
+            .set_remembered_adjacency(2, Some(AdjacencyMark::Separate))
+    );
+    super::adjacency_tests::with_basis(&mut rig.world, &[("kero.defaultx", "abc")]);
+
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
+    let after = rig.load();
+
+    assert!(window_pos(&after, 0).is_some(), "スコープ 0 は書く");
+    assert!(
+        after.contains_key(&PersistKey::WindowAdjacent { scope: 1 }),
+        "古い記憶のスコープ 1 へ印を書き足す: {after:?}"
+    );
+    let warns = events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN
+                && e.message().contains("配置キーの数値化に失敗")
+                && e.field_str("key") == Some("defaultx/defaultleft")
+        })
+        .count();
+    assert_eq!(warns, 1, "{events:?}");
     rig.finish();
 }

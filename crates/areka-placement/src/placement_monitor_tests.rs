@@ -4,6 +4,7 @@ use wintf::ecs::window::monitor::Monitor;
 use super::resolver::RectPx;
 use super::*;
 use crate::sample_test_support::balloon_root;
+use crate::shared_test_support::TempDir;
 
 /// テスト用合成 Monitor（実 HMONITOR 不要・wintf monitor.rs テストと同流儀）。
 fn make_monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monitor {
@@ -62,13 +63,21 @@ fn primary_work_area_picks_is_primary() {
 }
 
 /// primary フラグ無し（列挙異常）は先頭モニタで代替（warn・窓は生やす方針）。
+/// `Err` を返さないので、記録だけが列挙の異常を知る手がかりになる（その 1 行も確かめる）。
 #[test]
 fn primary_work_area_no_primary_substitutes_first() {
     let monitors = [
         make_monitor(1, (0, 0, 1920, 1040), false),
         make_monitor(2, (1920, 0, 3840, 1040), false),
     ];
-    let wa = work_area_of(primary_monitor(&monitors)).expect("非空なら Ok");
+    let (primary, events) = log_capture_kit::capture(|| primary_monitor(&monitors));
+    let warn = log_capture_kit::expect_one(&events, "primary フラグを持つモニタが見つからない");
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(
+        log_capture_kit::ExpectField::expect_field(warn, "monitor_count"),
+        "2"
+    );
+    let wa = work_area_of(primary).expect("非空なら Ok");
     assert_eq!(
         wa,
         RectPx {
@@ -81,11 +90,11 @@ fn primary_work_area_no_primary_substitutes_first() {
 }
 
 // ------------------------------------------------------------------
-// MonitorSnapshot::from_monitors（task 8.1・DD15・実モニタ→snapshot 忠実転写）
+// MonitorSnapshot::from_monitors（DD15・実モニタ→snapshot 忠実転写）
 // ------------------------------------------------------------------
 
 /// `MonitorSnapshot::from_monitors` は全モニタの work area（物理 px）を列挙順の
-/// まま**単位変換なしで忠実転写**する（`primary_work_area` と同じ U 契約）。
+/// まま**単位変換なしで忠実転写**する（`work_area_px` と同じ U 契約）。
 #[test]
 fn monitor_snapshot_from_monitors_transcribes_all_work_areas_in_order() {
     let monitors = [
@@ -227,16 +236,14 @@ fn monitor_records_of_zero_monitors_is_empty() {
     assert!(monitor_records(&[]).is_empty());
 }
 
-/// 呼出点タグは 2 つの列挙点で**異なる**（要件 1.1「呼出点タグで区別できる」）。
-/// 片方をもう片方へ collapse する退行はここと各呼出点の檻で赤になる。
+/// 呼出点タグは 3 つの出所（起動の構築点・準備の列挙点・作業領域の同期）で**異なる**
+/// （要件 1.1「呼出点タグで区別できる」）。綴りを 1 つずつ固定するので、どれかを別の出所の
+/// 綴りへ collapse する退行はここで赤になる。
 #[test]
 fn monitor_snapshot_call_site_tags_are_distinct() {
     assert_eq!(PREPARE_GHOST_WINDOWS_CONTEXT, "prepare_ghost_windows");
     assert_eq!(MONITOR_SNAPSHOT_CONTEXT, "monitor_snapshot");
-    assert_ne!(
-        PREPARE_GHOST_WINDOWS_CONTEXT, MONITOR_SNAPSHOT_CONTEXT,
-        "2 つの列挙点が同じタグを名乗るとログ上で出所を弁別できない"
-    );
+    assert_eq!(WORK_AREA_SYNC_CONTEXT, "work_area_sync");
 }
 
 /// ゴースト窓配置準備のモニタ列挙点が、共有ヘルパ経由で**自分の呼出点タグ**付きの
@@ -247,9 +254,9 @@ fn monitor_snapshot_call_site_tags_are_distinct() {
 /// モニタ構成を再構成できる条件である。
 #[test]
 fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {
-    let root = std::env::temp_dir()
-        .join("areka_placement_prepare_snapshot_log")
-        .join("no_such_ghost");
+    // 不在の root は共通窓口が配るディレクトリの下に取る（`no_such_ghost` は確実に不在のまま）。
+    let temp = TempDir::new();
+    let root = temp.path().join("no_such_ghost");
     let (result, events) =
         log_capture_kit::capture(|| prepare_ghost_windows(&root, &balloon_root()));
     assert!(
@@ -280,10 +287,5 @@ fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {
         lines,
         want.iter().map(String::as_str).collect::<Vec<_>>(),
         "列挙点の出力が見出し＋全モニタ 1 行ずつ・呼出点タグ prepare_ghost_windows で出ていない"
-    );
-    assert!(
-        !lines[0].contains("context=monitor_snapshot"),
-        "main.rs 構築点の呼出点タグと collapse している（弁別不能）: {}",
-        lines[0]
     );
 }

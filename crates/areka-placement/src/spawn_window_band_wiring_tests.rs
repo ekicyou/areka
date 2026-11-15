@@ -33,22 +33,6 @@ fn gone_entity(world: &mut World) -> Entity {
     entity
 }
 
-/// 結線すると帯の指令の列が World に入る（取り出しの相が積む先・要件 2.1）。
-#[test]
-fn the_wiring_inserts_the_band_queue() {
-    let mut world = World::new();
-    world.init_resource::<Schedules>();
-    assert!(!world.contains_resource::<WindowBandQueue>(), "対照の前提");
-
-    wire_zorder_pair(&mut world);
-
-    assert!(
-        world.contains_resource::<WindowBandQueue>(),
-        "結線しても帯の指令の列が World に無い"
-    );
-    assert_eq!(queue_dump(&world), empty_dump(), "入れたての列は空");
-}
-
 /// 結線の前に積まれていた指令は、列を入れ直しても消えない（init は上書きしない）。
 #[test]
 fn the_wiring_keeps_ops_already_queued() {
@@ -66,8 +50,7 @@ fn the_wiring_keeps_ops_already_queued() {
 }
 
 /// 本番の結線を回すと、帯の系がその巡のうちに列を空にする（要件 3.1・7.3）。
-///
-/// 対照: 結線しない World では列がそのまま残る（帯の系の他に列を空にするものは無い）。
+/// 結線が列を World へ入れること（要件 2.1）も、ここで列を引く所が押さえる（無ければ panic）。
 #[test]
 fn the_wired_route_drains_the_band_queue_in_the_same_pass() {
     let mut wired = World::new();
@@ -80,7 +63,7 @@ fn the_wired_route_drains_the_band_queue_in_the_same_pass() {
     assert_ne!(
         queue_dump(&wired),
         empty_dump(),
-        "対照の前提: 列に指令が在る"
+        "前提: 回す前の列に指令が在る"
     );
 
     wired.run_schedule(FrameFinalize);
@@ -89,20 +72,5 @@ fn the_wired_route_drains_the_band_queue_in_the_same_pass() {
         queue_dump(&wired),
         empty_dump(),
         "本番の結線を回しても列が空にならない（確定段に帯の系が載っていない）"
-    );
-
-    let mut unwired = World::new();
-    unwired.add_schedule(Schedule::new(FrameFinalize));
-    let target = gone_entity(&mut unwired);
-    let mut queue = WindowBandQueue::default();
-    queue.push(BandOp::Enter, vec![target]);
-    unwired.insert_resource(queue);
-
-    unwired.run_schedule(FrameFinalize);
-
-    assert_ne!(
-        queue_dump(&unwired),
-        empty_dump(),
-        "結線していない World でも列が空になった（上の檻が配線を測っていない）"
     );
 }

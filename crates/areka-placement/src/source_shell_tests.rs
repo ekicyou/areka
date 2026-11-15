@@ -10,21 +10,16 @@ use std::path::Path;
 
 use temp_path_kit::TempPath;
 
+use super::tests::{unique_temp_dir, write_minimal_ghost_descript};
 use super::*;
 use crate::error::PlacementError;
 
 /// `shell/master`（`seriko.dpi,96`）と `shell/second`（`seriko.dpi,144`）の 2 つを持つ
 /// ゴーストを一時ディレクトリへ組む。両シェルの `descript.txt` は中身で見分けられる。
 fn two_shell_ghost(tag: &str) -> TempPath {
-    let temp = TempPath::new(&format!("placement-source-shell-{tag}"));
+    let temp = unique_temp_dir(&format!("source-shell-{tag}"));
     let root = temp.path();
-    let ghost_master = root.join("ghost").join("master");
-    fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
+    write_minimal_ghost_descript(root);
     write_shell(root, "master", "charset,UTF-8\nname,既定\nseriko.dpi,96\n");
     write_shell(root, "second", "charset,UTF-8\nname,二番\nseriko.dpi,144\n");
     temp
@@ -49,7 +44,7 @@ fn named_shell_source_points_at_named_shell_dir() {
     assert_eq!(src.shell_author_dpi(), 144, "名前の先のシェルの seriko.dpi");
 }
 
-/// 名前なしは今日の規則（`master`）のまま＝既存の `load_descript_source` と同じ値。
+/// 名前なしは今日の規則（`master`）のまま。
 #[test]
 fn unnamed_shell_source_keeps_today_rule() {
     let temp = two_shell_ghost("unnamed");
@@ -58,11 +53,7 @@ fn unnamed_shell_source_keeps_today_rule() {
     let src = load_descript_source_for_shell(root, None).expect("master は在る");
 
     assert_eq!(src.shell_dir, root.join("shell").join("master"));
-    assert_eq!(
-        src,
-        load_descript_source(root).expect("既存の口も読める"),
-        "既存の口は名前なしの委譲と同じ値"
-    );
+    assert_eq!(src.shell_kv.get("name").map(String::as_str), Some("既定"));
 }
 
 /// 名前の先が無ければ既定のシェルへ黙って戻らず `Mount` の失敗を返す。

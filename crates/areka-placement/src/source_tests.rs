@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 
@@ -12,9 +12,23 @@ use log_capture_kit::{ExpectField, capture, expect_one};
 /// このテスト専用の一時ディレクトリを返す。共通窓口 `temp-path-kit` 経由で組むので、
 /// 名前にプロセス識別子と連番が入り**プロセス間でも一意**になる。
 ///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("placement-source-{tag}"))
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える（後始末は要らない）。
+/// 永続の読み戻しとシェル名つきの檻（`persist_io_wiring_tests.rs`・`source_shell_tests.rs`）も使う。
+pub(crate) fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("placement-{tag}"))
+}
+
+/// `root` に最小ゴーストの `ghost/master/descript.txt` を書く（resolve が要るゴースト側の半分）。
+/// シェルの側は呼び手が組む。永続とシェル名つきの檻（`persist_io_wiring_tests.rs`・
+/// `source_shell_tests.rs`）も使う。
+pub(crate) fn write_minimal_ghost_descript(root: &Path) {
+    let ghost_master = root.join("ghost").join("master");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+    fs::write(
+        ghost_master.join("descript.txt"),
+        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
+    )
+    .expect("write ghost descript");
 }
 
 // ------------------------------------------------------------------
@@ -147,13 +161,7 @@ fn load_missing_root_returns_mount_err() {
 fn load_missing_shell_descript_returns_descript_read_err() {
     let temp = unique_temp_dir("missing-shell-descript");
     let root = temp.path().to_path_buf();
-    let ghost_master = root.join("ghost").join("master");
-    fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
+    write_minimal_ghost_descript(&root);
     // shell/master は dir のみ実在（descript.txt なし）→ resolve は成功する
     let shell_dir = root.join("shell").join("master");
     fs::create_dir_all(&shell_dir).expect("create shell/master");
@@ -165,8 +173,6 @@ fn load_missing_shell_descript_returns_descript_read_err() {
         }
         other => panic!("DescriptRead variant 以外が返った: {other:?}"),
     }
-
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// ghost descript の寛容読取ヘルパ: 読めなければ警告＋空 KV（継続契約の檻）。
@@ -205,40 +211,6 @@ fn balloon_root_with(tag: &str, descript: &str) -> TempPath {
     dir
 }
 
-/// 無宣言（キー不在）は既定 96（ukadoc: 何も指定しなければ Windows 標準の 96 固定）。
-#[test]
-fn parse_author_dpi_absent_is_default_96() {
-    assert_eq!(parse_author_dpi(None, "test"), 96);
-}
-
-/// 宣言ありは宣言値そのまま（ukadoc 対照表 96/120/144/168/192）。
-#[test]
-fn parse_author_dpi_declared_values_pass_through() {
-    for raw in ["96", "120", "144", "168", "192"] {
-        let expected: u16 = raw.parse().expect("テスト入力は u16");
-        assert_eq!(parse_author_dpi(Some(raw), "test"), expected, "raw={raw}");
-    }
-    // 対照表外の任意値も切り捨てない（正典は「推奨 DPI 値」であり列挙ではない）
-    assert_eq!(parse_author_dpi(Some("110"), "test"), 110);
-}
-
-/// 不正（数値化不能・負・u16 溢れ・空）は既定 96 へ縮退（warn・panic しない）。
-#[test]
-fn parse_author_dpi_invalid_is_default_96() {
-    for raw in [
-        "abc", "1x2", "", " ", "-96", "999999", "96.0", "0x60", "96 120",
-    ] {
-        assert_eq!(parse_author_dpi(Some(raw), "test"), 96, "raw={raw:?}");
-    }
-}
-
-/// 0 は k の分母に使えない → 既定 96 へ縮退（warn）。
-#[test]
-fn parse_author_dpi_zero_is_default_96() {
-    assert_eq!(parse_author_dpi(Some("0"), "test"), 96);
-    assert_eq!(parse_author_dpi(Some("00"), "test"), 96);
-}
-
 /// `shell_author_dpi` は shell descript の `seriko.dpi` を読む（無宣言/宣言/不正/0）。
 #[test]
 fn shell_author_dpi_reads_seriko_dpi_all_patterns() {
@@ -267,37 +239,24 @@ fn shell_author_dpi_emo2_fixture_is_default_96() {
     assert_eq!(src.shell_author_dpi(), 96);
 }
 
-/// balloon descript 不在（ファイル不在）は既定 96（lenient・panic しない）。
-#[test]
-fn load_balloon_author_dpi_missing_file_is_default_96() {
-    let temp = unique_temp_dir("balloon-dpi-missing-file");
-    let root = temp.child("no_such_balloon");
-    assert_eq!(load_balloon_author_dpi(&root), 96);
-}
-
 /// balloon descript の `dpi` を読む（無宣言/宣言/不正/0）。
 #[test]
 fn load_balloon_author_dpi_reads_dpi_all_patterns() {
     let absent = balloon_root_with("balloon-dpi-absent", "charset,UTF-8\nname,かくかく\n");
     assert_eq!(load_balloon_author_dpi(absent.path()), 96);
-    drop(absent);
 
     let declared = balloon_root_with("balloon-dpi-declared", "charset,UTF-8\ndpi,144\n");
     assert_eq!(load_balloon_author_dpi(declared.path()), 144);
-    drop(declared);
 
     let invalid = balloon_root_with("balloon-dpi-invalid", "charset,UTF-8\ndpi,abc\n");
     assert_eq!(load_balloon_author_dpi(invalid.path()), 96);
-    drop(invalid);
 
     let zero = balloon_root_with("balloon-dpi-zero", "charset,UTF-8\ndpi,0\n");
     assert_eq!(load_balloon_author_dpi(zero.path()), 96);
-    drop(zero);
 
     // shell 側キー `seriko.dpi` は balloon 側の正本ではない（キー取り違えの檻）
     let wrong_key = balloon_root_with("balloon-dpi-wrong-key", "charset,UTF-8\nseriko.dpi,192\n");
     assert_eq!(load_balloon_author_dpi(wrong_key.path()), 96);
-    drop(wrong_key);
 }
 
 /// emo2 実フィクスチャの balloon（emo2-kakukaku）は `dpi` 無宣言 → 96（既存期待値不変）。
@@ -313,23 +272,24 @@ fn load_balloon_author_dpi_emo2_fixture_is_default_96() {
 }
 
 // ------------------------------------------------------------------
-// author_dpi 縮退ログの発火（task 6.2・steering `logging.md` の
+// author_dpi 縮退ログの発火（steering `logging.md` の
 // 「ログ無し失敗経路の禁止」）
 //
-// task 2.1 の檻は**戻り値だけ**を見ており、無宣言=debug・不正/0=warn という
-// 縮退梯子のレベル分離と `source` フィールドによる shell/balloon 帰属
-// （[`load_balloon_author_dpi`] の doc が明示的に主張している契約）は無検査だった。
+// 無宣言=debug・不正/0=warn という縮退梯子のレベル分離と、`source` フィールドによる
+// shell/balloon 帰属（[`load_balloon_author_dpi`] の doc が主張している契約）を、返り値と
+// あわせて確かめる。
 //
-// 捕捉は共有ハーネス [`crate::test_support`]（`#[cfg(test)]` 限定）を使う。
+// 捕捉は `log_capture_kit::capture` を使う。
 // **素朴な `with_default` 捕捉は非決定的に取りこぼす**——`tracing` の callsite interest
 // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
 // 他テスト（`read_kv_lenient_missing_returns_empty` 等）が同じ callsite を先に踏むと
 // `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
-// 機構と対策（probe dispatcher 常駐による `has_just_one` 恒久偽化）は共有機構
-// `log_capture_kit` の crate doc（および `test_support` のモジュール doc）を参照。
+// 機構と対策（probe dispatcher 常駐による `has_just_one` 恒久偽化）は `log_capture_kit` の
+// crate doc を参照。
 // ------------------------------------------------------------------
 
-/// 無宣言は **`debug!`**（正典の既定＝異常ではない）で、`source`／`default_dpi` を残す。
+/// 無宣言（キー不在）は既定 96（ukadoc: 何も指定しなければ Windows 標準の 96 固定）で、
+/// **`debug!`**（正典の既定＝異常ではない）に `source`／`default_dpi` を残す。
 ///
 /// 無宣言を `warn!` へ格上げする実装（emo2 を含む正典既定のゴーストが毎回警告を吐く）と、
 /// 無言で 96 を返す実装（縮退が観測できない）の双方をここで落とす。
@@ -349,7 +309,9 @@ fn parse_author_dpi_absent_logs_debug_with_source() {
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
-/// 正常宣言は**完全に無言**（無宣言/不正のレベル主張の非空虚性を担保する陰性対照）。
+/// 正常宣言は宣言値そのまま（ukadoc 対照表 96/120/144/168/192・対照表外の値も切り捨てない
+/// ＝正典は「推奨 DPI 値」であり列挙ではない）で、**完全に無言**（無宣言/不正のレベル主張の
+/// 非空虚性を担保する陰性対照）。
 #[test]
 fn parse_author_dpi_declared_is_silent() {
     for raw in ["96", "120", "144", "168", "192", "110", "65535"] {
@@ -360,12 +322,15 @@ fn parse_author_dpi_declared_is_silent() {
     }
 }
 
-/// 数値化不能は **`warn!`**＋`source`／`raw`／`error`（parse エラー）／`default_dpi`。
+/// 数値化不能（負・u16 溢れ・空・空白・小数・16 進・2 語）は既定 96 へ縮退し、
+/// **`warn!`**＋`source`／`raw`／`error`（parse エラー）／`default_dpi`。
 ///
 /// `raw` が載ることで「どの生値が捨てられたか」が実機ログから判る（無言縮退の禁止）。
 #[test]
 fn parse_author_dpi_invalid_logs_warn_with_source_and_raw() {
-    for raw in ["abc", "", " 120 ", "-96", "65536", "96.0", "0x60"] {
+    for raw in [
+        "abc", "1x2", "", " ", " 120 ", "-96", "65536", "999999", "96.0", "0x60", "96 120",
+    ] {
         let (dpi, events) = capture(|| parse_author_dpi(Some(raw), BALLOON_DPI_KEY));
         assert_eq!(dpi, DEFAULT_AUTHOR_DPI, "raw={raw:?}");
 
@@ -426,8 +391,8 @@ fn parse_author_dpi_u16_boundary_is_exact() {
     // 前後空白は trim せず数値化不能扱い＝**縮退**（返り値 96 は正常宣言の 96 と
     // 数値的に区別できないため、縮退経路であることは
     // [`parse_author_dpi_invalid_logs_warn_with_source_and_raw`] の warn 検査が弁別する）。
-    // なお本番経路ではここへ空白付きの値は届かない——`areka_parsers::kv::parse`
-    // （`kv/parse.rs:31`/`:39`）がキー・値とも trim 済みで渡す。挙動の固定のみが目的。
+    // なお本番経路ではここへ空白付きの値は届かない——`areka_parsers::kv` の `parse_kv`
+    // （中の `parse_kv_with_line`）がキー・値とも trim 済みで渡す。挙動の固定のみが目的。
     assert_eq!(parse_author_dpi(Some(" 120 "), "test"), 96);
 }
 
@@ -455,7 +420,6 @@ fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
         "dpi",
         "balloon 起因のログは dpi に帰属する"
     );
-    drop(zero);
 }
 
 /// balloon descript 不在は **2 本**のログ（読取失敗 `warn!`＋パス、無宣言 `debug!`）を残し、
@@ -497,7 +461,6 @@ fn load_balloon_author_dpi_declared_file_is_silent() {
     let (dpi, events) = capture(|| load_balloon_author_dpi(declared.path()));
     assert_eq!(dpi, 192);
     assert!(events.is_empty(), "正常経路は無言: {events:?}");
-    drop(declared);
 }
 
 /// `shell_author_dpi` は**実ファイル**（descript.txt → decode → parse_kv）経由でも
@@ -508,13 +471,7 @@ fn load_balloon_author_dpi_declared_file_is_silent() {
 fn shell_author_dpi_reads_declared_value_from_real_descript_file() {
     let temp = unique_temp_dir("shell-author-dpi-declared-file");
     let root = temp.path().to_path_buf();
-    let ghost_master = root.join("ghost").join("master");
-    fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
-    )
-    .expect("write ghost descript");
+    write_minimal_ghost_descript(&root);
     let shell_dir = root.join("shell").join("master");
     fs::create_dir_all(&shell_dir).expect("create shell/master");
     fs::write(
@@ -529,8 +486,6 @@ fn shell_author_dpi_reads_declared_value_from_real_descript_file() {
         144,
         "descript の実宣言値（既定 96 の素通しではない）"
     );
-
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// 寛容読取ヘルパは読めれば通常どおり decode→parse_kv する（Ansi 既定・宣言優先）。
@@ -542,6 +497,4 @@ fn read_kv_lenient_reads_utf8_declared_file() {
 
     let kv = read_kv_lenient(&path);
     assert_eq!(kv.get("name").map(String::as_str), Some("えも？？"));
-
-    drop(dir);
 }

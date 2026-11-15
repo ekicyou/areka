@@ -16,7 +16,6 @@ use super::test_support::{PerTargetSizes, pos_of, s2_monitors_with_work_area, si
 use super::*;
 
 use areka_ghost::sylphya_wiring::profile_areka_root;
-use areka_parsers::charset::DefaultEncoding;
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 
@@ -54,12 +53,8 @@ fn boot_remembered(
     world: &mut World,
     ghost: &MinimalGhost,
 ) -> (GhostWindows, Vec<areka_placement::resolver::ScopePlacement>) {
-    let (placements, restored, _) = crate::restore_merged_placements(
-        ghost.root(),
-        prep_placements(),
-        &work_area_snapshot(),
-        DefaultEncoding::Ansi,
-    );
+    let (placements, restored, _) =
+        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
     assert_eq!(
         restored.keys().copied().collect::<Vec<_>>(),
         vec![0, 1],
@@ -97,12 +92,8 @@ fn boot_remembered(
 fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
     let ghost = MinimalGhost::plant("nowrite");
     let store = PersistStore::real(&ghost);
-    let (placements, restored, _) = crate::restore_merged_placements(
-        ghost.root(),
-        prep_placements(),
-        &work_area_snapshot(),
-        DefaultEncoding::Ansi,
-    );
+    let (placements, restored, _) =
+        crate::restore_merged_placements(ghost.root(), prep_placements(), &work_area_snapshot());
     assert!(restored.is_empty(), "前提: 初めの起動は記憶が無い");
     let mut world = persist_world();
     store.wire(&mut world);

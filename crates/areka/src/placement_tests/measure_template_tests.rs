@@ -17,7 +17,7 @@ use areka_placement::test_support::measure_template::{
 
 /// 較正（当たり）: 本文の中の実際の呼び出しを [`code_only`] が落とさない。
 ///
-/// 当たりは合成せず、`git HEAD` の実物から採る——`frame_test_support.rs` の `empty_world` は
+/// 当たりは合成せず、本体の実物のファイルから採る——`frame_test_support.rs` の `empty_world` は
 /// `areka_parsers::shell::parse("")` を本文で呼んでおり、この綴りが説明文の中ではなく
 /// 関数の本体に在ることが対照の要点である。
 #[test]

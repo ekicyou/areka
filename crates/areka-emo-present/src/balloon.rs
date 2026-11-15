@@ -31,8 +31,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AlphaParams, AtlasTable, ElementDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-    bake_quiet,
+    AlphaParams, AnimationLimits, AtlasTable, ElementDecoder, PackConfig, SetId, SurfaceSet,
+    UseSelfAlpha, bake_quiet, bake_with_limits,
 };
 use areka_emo_compose::EmoWorld;
 use areka_parsers::balloon::BalloonModel;
@@ -747,12 +747,35 @@ pub fn build_balloon_target_from_faces(
     faces: &[ResolvedFace],
     use_self_alpha: UseSelfAlpha,
 ) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
+    build_balloon_target_from_faces_with_limits(
+        balloon_dir,
+        decoder,
+        faces,
+        use_self_alpha,
+        AnimationLimits::from_env(),
+    )
+}
+
+/// [`build_balloon_target_from_faces`] の動く絵の上限を外から渡す版（記録も失敗も同じ・上限だけが
+/// 違う）。環境変数に左右されないテストのための口（spec: audit-placement-core 要件 2.7・2.8）。
+///
+/// # Errors
+///
+/// [`build_balloon_target_from_faces`] と同じ。
+pub fn build_balloon_target_from_faces_with_limits(
+    balloon_dir: &Path,
+    decoder: &impl ElementDecoder,
+    faces: &[ResolvedFace],
+    use_self_alpha: UseSelfAlpha,
+    limits: AnimationLimits,
+) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
     build_from_faces_core(
         balloon_dir,
         decoder,
         faces,
         use_self_alpha,
         LoadRecords::Emit,
+        limits,
     )
 }
 
@@ -771,6 +794,8 @@ pub fn build_balloon_target_from_faces_quiet(
         faces,
         use_self_alpha,
         LoadRecords::Quiet,
+        // 採寸の読み手は動く絵の道に入らないので、上限は使われない（`bake_quiet` が環境から取る）。
+        AnimationLimits::from_env(),
     )
 }
 
@@ -781,6 +806,7 @@ fn build_from_faces_core(
     faces: &[ResolvedFace],
     use_self_alpha: UseSelfAlpha,
     records: LoadRecords,
+    limits: AnimationLimits,
 ) -> Result<(EmoWorld, AtlasTable), BalloonLoadError> {
     if faces.is_empty() {
         tracing::error!(
@@ -803,8 +829,11 @@ fn build_from_faces_core(
         base_dir: balloon_dir,
         alpha_params: AlphaParams { use_self_alpha },
     };
-    let bake_with = if records.emits() { bake } else { bake_quiet };
-    let baked = bake_with(&[set], decoder, PackConfig::default());
+    let baked = if records.emits() {
+        bake_with_limits(&[set], decoder, PackConfig::default(), limits)
+    } else {
+        bake_quiet(&[set], decoder, PackConfig::default())
+    };
 
     // bake の脱落（decode 失敗）は log-first で真因を出し、構築失敗として畳む。
     // 採用面は解決済みの固定小集合ゆえ全枚デコード成功が前提＝脱落は制作者ミス/配置不備の兆候。

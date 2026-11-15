@@ -23,9 +23,9 @@ use areka_placement::follow::{
     Anchored, MonitorSnapshot, follow_sticky_move, log_sticky_ignored, move_window_to,
     project_anchor, rebase_shift_axes, work_area_for_window,
 };
-use areka_placement::primary_monitor;
 use areka_placement::resolver::{PointPx, RectPx, SizePx};
 use areka_placement::spawn::GhostWindows;
+use areka_placement::{primary_monitor, work_area_px};
 
 /// 窓の今の矩形（位置と正の大きさが揃うときだけ）。
 fn window_rect(world: &World, scope: u32) -> Option<RectPx> {
@@ -84,15 +84,8 @@ fn resolve_frame(
         MoveBase::Screen => screen_frame(world, target),
         MoveBase::PrimaryScreen => {
             let monitors: Vec<Monitor> = world.query::<&Monitor>().iter(world).cloned().collect();
-            let wa = primary_monitor(&monitors)
-                .ok_or("no_primary_monitor")?
-                .work_area;
-            Ok(BaseFrame::Area(RectPx {
-                left: wa.left,
-                top: wa.top,
-                right: wa.right,
-                bottom: wa.bottom,
-            }))
+            let primary = primary_monitor(&monitors).ok_or("no_primary_monitor")?;
+            Ok(BaseFrame::Area(work_area_px(primary)))
         }
         MoveBase::Global => Ok(BaseFrame::Origin),
     }

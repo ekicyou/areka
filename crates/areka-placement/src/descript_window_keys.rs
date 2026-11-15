@@ -4,7 +4,7 @@
 //!
 //! 組み込みの既定の面（本体側 0・それ以外 10）を持つのはこのモジュールだけ。
 //! 既定の面はゴーストの descript だけから読む（シェルの KV を引数に持たない＝要件 1.6 を型で守る）。
-//! I/O を持たず、`crate::` を参照しない（手本の `#[path]` 取り込みでも組める）。
+//! I/O を持たない（`config` だけを `super::config` で引く）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -30,7 +30,7 @@ pub struct DefaultSurfaces {
 }
 
 impl DefaultSurfaces {
-    /// どのスコープも書かれていない値（`Default` と同じ・テストと手本の入口）。
+    /// どのスコープも書かれていない値（`Default` と同じ・呼び手はテスト）。
     pub fn builtin() -> Self {
         Self::default()
     }
@@ -46,6 +46,12 @@ impl DefaultSurfaces {
     /// 戻り先の候補の並び（`fallback_candidates(scope, self.surface(scope))`）。
     pub fn candidates(&self, scope: usize) -> Vec<u32> {
         fallback_candidates(scope, self.surface(scope))
+    }
+
+    /// スコープに最初に出す面: 候補の並びのうちシェルに在る最初の面、どれも無ければ組み込みの既定の面
+    /// （測りと手本が同じ答えを使うので、窓の大きさと表示する面の原寸が一致する）。
+    pub fn initial_surface(&self, scope: usize, exists: impl Fn(u32) -> bool) -> u32 {
+        first_existing(&self.candidates(scope), exists).unwrap_or(builtin_default_surface(scope))
     }
 }
 
@@ -115,32 +121,34 @@ pub fn read_balloon_dontmove(
     scopes: &[usize],
 ) -> BTreeSet<u32> {
     let mut locked = BTreeSet::new();
+    // ゴーストの段は全スコープに共通なので 1 回だけ読む（読めない記録もスコープの数だけ重ねない）。
+    let ghost = ghost_kv
+        .get(BALLOON_DONTMOVE)
+        .and_then(|raw| read_flag("all", BALLOON_DONTMOVE, raw));
     for &scope in scopes {
         // 読めない段は書かれていないものとして次の段へ進む（要件 4.5）。
         let shell = scoped_entry(shell_kv, scope, BALLOON_DONTMOVE)
             .and_then(|(key, raw)| read_flag(scope, &key, raw));
-        let ghost = || {
-            ghost_kv
-                .get(BALLOON_DONTMOVE)
-                .and_then(|raw| read_flag(scope, BALLOON_DONTMOVE, raw))
-        };
-        if shell.or_else(ghost).unwrap_or(false) {
-            // スコープ番号は u32 に収まる（窓のスコープは数個）。
-            locked.insert(scope as u32);
+        // 収まらない番号の窓は在り得ないので、集合には入れない（`read_balloon_syncscale` と同じ）。
+        if shell.or(ghost).unwrap_or(false)
+            && let Ok(scope) = u32::try_from(scope)
+        {
+            locked.insert(scope);
         }
     }
     locked
 }
 
 /// 動かせない指定の値を読む（`0`・`false` → 許す・`1`・`true` → 禁止・それ以外は記録して読めない）。
-fn read_flag(scope: usize, key: &str, raw: &str) -> Option<bool> {
-    match raw.trim() {
+/// 大文字小文字は区別しない（`TRUE` も `true`）。
+fn read_flag(scope: impl std::fmt::Display, key: &str, raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
         "0" | "false" => Some(false),
         "1" | "true" => Some(true),
         _ => {
             warn!(
                 event = "descript_value_unreadable",
-                scope,
+                %scope,
                 %key,
                 value = %raw,
                 "descript_value_unreadable: 動かせない指定が 0・1・true・false のどれでもない——次の段で決める"
@@ -184,15 +192,14 @@ pub struct BalloonSyncScale {
 
 impl BalloonSyncScale {
     /// スコープのバルーンの倍率をシェルに連動させるか（ゴーストの段かシェルの段のどちらかが `true`・要件 6.3）。
-    // 本番で読む下流は shell-balloon-scale-setting（本 spec は持つだけ・要件 6.6）。
-    #[cfg_attr(not(test), allow(dead_code))]
+    // 本番で読む下流は shell-balloon-scale-setting（shell-scale-linkage は持つだけ・要件 6.6）。
     pub fn is_synced(&self, scope: u32) -> bool {
         self.ghost || self.shell_scopes.contains(&scope)
     }
 }
 
 /// ゴーストの `balloon.syncscale` と、シェルの `sakura.`＞`char0.`・`kero.`＞`char1.`・`char<n>.`（n≥2）の
-/// `balloon.syncscale` を読む。値は前後の空白を除いて `true` と完全に一致するときだけ有効（要件 6.1〜6.4）。
+/// `balloon.syncscale` を読む。値は前後の空白を除き、大文字小文字を問わず `true` のときだけ有効（要件 6.1〜6.4）。
 pub fn read_balloon_syncscale(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,
@@ -226,8 +233,9 @@ pub fn read_balloon_syncscale(
 }
 
 /// 連動の指定の値を読み、鍵ごとに警告より下の段の記録を 1 件残す（`true` 以外は指定なし・要件 6.4・6.7）。
+/// 大文字小文字は問わない（`TRUE` も `true`・`balloon.dontmove` と同じ決まり）。
 fn read_syncscale(scope: impl std::fmt::Display, key: &str, raw: &str) -> bool {
-    let synced = raw.trim() == "true";
+    let synced = raw.trim().eq_ignore_ascii_case("true");
     debug!(
         event = "balloon_syncscale_read",
         %key,

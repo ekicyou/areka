@@ -1,5 +1,5 @@
 //! 鎖の適用系を本番の結線（[`wire_zorder_pair`](super::wire_zorder_pair)）へ載せたこと
-//! を、**本番の経路そのもの**で固定するテスト（task 3.2・要件 6.4／9.5／14.5）。
+//! を、**本番の経路そのもの**で固定するテスト（要件 6.4／9.5／14.5）。
 //!
 //! # 本ファイルが受け持つ主題——仕上げの処理列の末尾に鎖の適用系が居るか
 //!
@@ -20,7 +20,7 @@
 //! よってここは判断ではなく**結線**を測る。
 //!
 //! - 本番の `wire_zorder_pair` が組んだ確定段を実際に回すと、鎖の適用系が**その巡のうちに**
-//!   受け口を読むこと（[`the_wired_route_runs_the_chain_apply_in_the_same_pass`]・対照つき）
+//!   受け口を読むこと（[`the_wired_route_runs_the_chain_apply_in_the_same_pass`]・前提つき）
 //! - グループ指定が一つも無い走行では、既存のペア機構の記録が従来どおりの語彙で出て、
 //!   重なり系の新しい記録は 1 行も出ないこと（要件 6.4）
 //! - 4 本の並び順そのもの（[`the_wiring_chains_the_four_systems_with_a_sync_point`]）
@@ -37,62 +37,18 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::Schedules;
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
-};
-use windows::core::{PCWSTR, w};
+use windows::core::w;
 use wintf::ecs::window::{ZOrderChainPlan, drain_window_pos_commands};
-use wintf::ecs::{FrameFinalize, KeepDirectlyAbove, WindowHandle};
+use wintf::ecs::{FrameFinalize, KeepDirectlyAbove};
 
+use super::test_support::{create_test_window, spawn_window};
 use super::wire_zorder_pair;
+use crate::test_support::zorder_pair_deferred::code_only;
+use crate::zorder_test_support::teardown;
 use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
-// 実窓・World のヘルパ（`spawn_zorder_pair_wiring_tests.rs` と同一レシピ）
-// -------------------------------------------------------------------------
-
-/// 自プロセス所有の非表示トップレベル窓を作る。
-fn create_test_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
-    unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a hidden test window")
-    }
-}
-
-/// 作った窓をすべて破棄する（作った枚数と壊す枚数を必ず揃える）。
-fn destroy(windows: &[HWND]) {
-    for hwnd in windows {
-        // SAFETY: Win32 境界。自プロセスが生成した窓を破棄する。
-        unsafe {
-            let _ = DestroyWindow(*hwnd);
-        }
-    }
-}
-
-/// ハンドル付きの窓 entity を作る。
-fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
-    world.spawn(WindowHandle { hwnd }).id()
-}
-
-// -------------------------------------------------------------------------
-// 必須の檻（task 3.2）——鎖の適用系が本番の結線の上を走っている
+// 必須の檻——鎖の適用系が本番の結線の上を走っている
 // -------------------------------------------------------------------------
 
 /// 本番の結線を回すと、鎖の適用系が**その巡のうちに**受け口を読む（要件 14.5）。
@@ -111,10 +67,10 @@ fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
 /// 印が立ったまま残る。挙動としての差は「重なりが組み替わらない」だけであり、判断だけを
 /// 測っている wintf 側の決定論テストは 1 本も赤くならない。
 ///
-/// # 対照
+/// # 前提
 ///
-/// 結線しない World では印がそのまま残る。これが無いと「印は誰も立てないので常に降りて
-/// いる」形の壊れ方に気づけない（片側だけの主張は空虚である）。
+/// 結線の後、回す前に印が立ったままであることを先に確かめる。結線が受け口を入れ直して
+/// 印を降ろしてしまう形では、適用系が居なくても下の主張が緑になるからである。
 #[test]
 fn the_wired_route_runs_the_chain_apply_in_the_same_pass() {
     let mut wired = World::new();
@@ -124,28 +80,16 @@ fn the_wired_route_runs_the_chain_apply_in_the_same_pass() {
         dirty: true,
     });
     wire_zorder_pair(&mut wired);
+    assert!(
+        wired.resource::<ZOrderChainPlan>().dirty,
+        "前提: 結線の後、回す前は受け口の印が立っている（結線が受け口を入れ直していない）"
+    );
 
     wired.run_schedule(FrameFinalize);
 
     assert!(
         !wired.resource::<ZOrderChainPlan>().dirty,
         "本番の結線を回しても受け口の印が降りていない（確定段に鎖の適用系が載っていない）"
-    );
-
-    // 対照——印を降ろしているのは確かに結線された適用系である。
-    let mut unwired = World::new();
-    unwired.init_resource::<Schedules>();
-    unwired.insert_resource(ZOrderChainPlan {
-        chain: None,
-        dirty: true,
-    });
-    unwired.add_schedule(Schedule::new(FrameFinalize));
-
-    unwired.run_schedule(FrameFinalize);
-
-    assert!(
-        unwired.resource::<ZOrderChainPlan>().dirty,
-        "結線していない World でも印が降りている（上の檻が配線を 1 ビットも測っていない）"
     );
 }
 
@@ -161,7 +105,7 @@ fn the_wired_route_runs_the_chain_apply_in_the_same_pass() {
 /// である。
 ///
 /// 判定に `origin=` の件数を使わないのは、書込の観測タグが凍結済みの `pair_fix_command`
-/// 由来で `origin=zorder-pair` になるからである（task 4.1 の申し送り）。語彙の判定は診断タグ
+/// 由来で `origin=zorder-pair` になるからである。語彙の判定は診断タグ
 /// `[zorder-pair]`／`[zorder-group]`／`[zorder-chain]` で行う。
 #[test]
 fn a_run_without_group_declarations_keeps_the_pair_records_in_their_old_vocabulary() {
@@ -182,7 +126,7 @@ fn a_run_without_group_declarations_keeps_the_pair_records_in_their_old_vocabula
     let (_, events) = capture(|| world.run_schedule(FrameFinalize));
     let commands = drain_window_pos_commands();
 
-    destroy(&[char_hwnd, balloon_hwnd]);
+    teardown(&[balloon_hwnd, char_hwnd]);
     let _residue = drain_window_pos_commands();
 
     let messages: Vec<String> = events.iter().map(|e| e.message().to_string()).collect();
@@ -244,10 +188,6 @@ fn the_wiring_chains_the_four_systems_with_a_sync_point() {
         "確定段へ載る 4 本の連なり（2 本目が帯の系・末尾が鎖の適用系）が本文に見当たらない（結線の回帰）: {squeezed}"
     );
     assert!(
-        !code.contains("apply_zorder_group_maintenance"),
-        "退役する維持系がまだ確定段の結線に居る（順序指定の差し替え漏れ）"
-    );
-    assert!(
         !code.contains("ignore_deferred"),
         "同期点を挿さない連ね方（`*_ignore_deferred`）が使われている＝前段が遅延コマンドで付けた結果が同じ巡に見えない"
     );
@@ -265,15 +205,6 @@ fn the_wiring_chains_the_four_systems_with_a_sync_point() {
         raw.contains("スコープ間には一切張らない"),
         "対照の前提が崩れている（素の全文に説明文が無い）"
     );
-}
-
-/// 説明文（`//` で始まる行）を落とし、コードだけの本文を返す。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// 空白の連なりを 1 つに詰める（改行や字下げの入り方で檻が壊れないようにする）。

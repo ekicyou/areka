@@ -130,9 +130,10 @@ pub(crate) enum SwapFinish {
         boxes: ShellBoxAssets,
         cursors: ShellCursorAssets,
     },
-    /// バルーン: scope ごとの面ごとの定義の束と背景色。
+    /// バルーン: scope ごとの面ごとの定義の束と背景色・新しいバルーンの作者の DPI（`dpi`）。
     Balloon {
         scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,
+        author_dpi: u16,
     },
 }
 

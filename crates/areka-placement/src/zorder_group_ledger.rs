@@ -42,9 +42,10 @@
 //! # 片方だけ指名されたスコープには相棒窓を補う
 //!
 //! あるスコープのバルーン窓だけ（あるいはキャラ窓だけ）が書かれたときは、指名されなかった
-//! 相棒窓を——`bN` だけならすぐ奥に `sN`、`sN` だけならすぐ手前に `bN`——へ加える
-//! （完了 spec の要件 2.6・本 spec の要件 3）。結果として、明示モードで名前の挙がった
-//! スコープは必ず 2 窓とも並びに居る（補い済み）。補ったスコープは常に隣り合いになる。
+//! 相棒窓を並びへ加える。`bN` だけならすぐ奥に `sN`、`sN` だけならすぐ手前に `bN` を置く
+//! （`areka-P0-scope-zorder-pinning` の要件 2.6・`areka-P0-zorder-scope-inversion` の要件 3）。
+//! 結果として、明示モードで名前の挙がったスコープは必ず 2 窓とも並びに居る（補い済み）。
+//! 補ったスコープは常に隣り合いになる。
 //!
 //! 補ったことは [`Normalization::implied_partner`] に**どちらの窓を補ったか**まで
 //! 載せて返す（要件 3.1・3.2 の「加えたことを記録する」）。
@@ -54,16 +55,17 @@
 //! 窓 2 枚に化けさせて受理してはならない。数値モードは⑷の展開が既に `[Balloon, Char]` を
 //! 作っているので、補いも記録も起こらない。
 //!
-//! # 語彙は小文字ちょうど・trim は冗長化
+//! # 語彙は大文字小文字を問わない・前後の空白は落とす
 //!
-//! `balloonN`／`surfaceN`／`bN`／`sN` は小文字ちょうどで一致させる
-//! （`windowposition::classify_x_vocab` と同じ流儀）。大文字混じりを黙って通すと、
-//! 正典に無い受理を areka が独自に増やすことになる——受け付けない側に倒し、
-//! 拒否理由として記録できる形で返す（要件 8.1／8.3）。
-//! トークン前後の空白は上流（さくらスクリプトの引数分割・kv 層）で既に落ちており、
-//! ここでの `trim` はその冗長化である（実際に届く値に対しては恒等）。
+//! `balloonN`／`surfaceN`／`bN`／`sN` は、1 度だけ小文字にしてから一致させる（`Balloon0` も
+//! `balloon0`。`windowposition::classify_x_vocab` と同じ決まり・`audit-placement-core` の裁定
+//! 2026-11-15）。タグと descript は同じこの解釈器を通るので、どちらも同じ決まりになる。
+//! 解釈できないトークンは、作者が書いたままの綴りを拒否理由に載せて返す（要件 8.1／8.3）。
+//! トークン前後の空白はここの `trim` で落とす。shell descript の `seriko.zorder,1, 0` は、
+//! kv 層が値の両端しか削らず、起動の段（本体の `zorder_descript.rs`）がカンマで割るだけなので、
+//! `" 0"` のまま届く。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 // =============================================================================
 // 語彙
@@ -238,7 +240,8 @@ pub(crate) fn parse_scope_id(digits: &str) -> Option<u32> {
 /// `b` 接頭辞にも当たるので、順序を入れ替えると `alloon1` を数字列として読もうとして
 /// 落ちる。完全形の接頭辞に当たった時点で判定は確定させ、省略形へは落とさない。
 fn interpret_token(token: &str) -> Option<ParsedElement> {
-    let body = token.trim();
+    let lowered = token.trim().to_ascii_lowercase();
+    let body = lowered.as_str();
 
     if let Some(digits) = body.strip_prefix(BALLOON_PREFIX) {
         return window_element(digits, GroupWindowKind::Balloon);
@@ -370,8 +373,11 @@ pub fn parse_zorder_tokens(
 /// 記録は明示モードで現れたスコープごとに、書かれた初出順で 1 件ずつ出す。
 /// 呼び出し前提は⑸の重複検査を通っていること（各窓が高々 1 回しか現れない）。
 fn fill_partner_windows(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<Normalization>) {
+    // 書かれた窓は集合で、補った後の位置は表で引く（要素の数の 2 乗で回さない）。
+    // 出す順は `elements`・`filled` を前から舐める順のままで、集合と表の並びには依らない。
+    let written_set: HashSet<GroupElement> = elements.iter().copied().collect();
     let written =
-        |scope: u32, kind: GroupWindowKind| elements.contains(&GroupElement { scope, kind });
+        |scope: u32, kind: GroupWindowKind| written_set.contains(&GroupElement { scope, kind });
 
     // 補いは各スコープを高々 1 枚ぶん増やす＝上限は入力の 2 倍。
     let mut filled = Vec::with_capacity(elements.len() * 2);
@@ -396,15 +402,18 @@ fn fill_partner_windows(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<
         }
     }
 
-    let position_of = |scope: u32, kind: GroupWindowKind| {
-        filled
-            .iter()
-            .position(|other| *other == GroupElement { scope, kind })
-    };
+    let positions: HashMap<GroupElement, usize> = filled
+        .iter()
+        .enumerate()
+        .map(|(index, element)| (*element, index))
+        .collect();
+    let position_of =
+        |scope: u32, kind: GroupWindowKind| positions.get(&GroupElement { scope, kind }).copied();
+    let mut recorded: HashSet<u32> = HashSet::new();
     let mut normalizations: Vec<Normalization> = Vec::new();
     for element in &elements {
         let scope = element.scope;
-        if normalizations.iter().any(|n| n.scope == scope) {
+        if !recorded.insert(scope) {
             continue;
         }
         let implied_partner = match (
@@ -470,18 +479,16 @@ fn fill_partner_windows(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<
 ///
 /// # 読み出しの並び
 ///
-/// [`ZOrderGroupLedger::groups`] は「基底が先頭・以降はタグの追加順」で返す。これは
-/// 決定論のための**読み出し順**であって前後関係の規則ではない。異なるグループどうしの
-/// 相対的な前後関係は固定の規則で決めない（要件 3.6）。
+/// [`ZOrderGroupLedger::groups`] は「基底が先頭・以降はタグの追加順」で返す。鎖の合成
+/// （`zorder_chain_compose`）はこの順のままグループを連ねる（先に登記したほど手前・基底が
+/// 最前）。前後を固定の規則で決めない（要件 3.6）のは、指定が一つも無い既定状態だけである。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ZOrderGroupLedger {
     /// 基底（あれば先頭）＋タグ由来のグループ列。`groups()` がそのまま貸し出す。
     groups: Vec<ZOrderGroup>,
-    /// 先頭が descript 由来の基底かどうか。真なら `groups[0].source == Descript`。
-    has_base: bool,
     /// 次に配るグループ ID。解除で空いた ID も配り直さない。
     next_id: u32,
-    /// 内容が動いた回数。射影を組み直すかどうかの判定に使う。
+    /// 内容が動いた回数（読むのはテストだけ。本番の射影は合成の結果を比べる）。
     version: u64,
     /// 据え損ねた基底: シェルの切り替えで台本の組と重なり据えなかった新しい基底。
     /// `\![reset,zorder]` で据わり、起動の基底と次の切り替えで消える
@@ -555,7 +562,6 @@ impl ZOrderGroupLedger {
 
         self.pending_base = None;
         self.groups.clear();
-        self.has_base = false;
 
         if !members.is_empty() {
             self.seat_base(members);
@@ -576,8 +582,8 @@ impl ZOrderGroupLedger {
     /// シェルの切り替えで据え損ねた基底があり、基底が無ければ、台本の組を落とした後に
     /// それを先頭へ据える（`stay-on-top-directives` 要件 5.5）。
     pub fn reset_to_descript(&mut self) {
-        let keep = usize::from(self.has_base);
-        let seat = if self.has_base {
+        let keep = usize::from(self.has_base());
+        let seat = if self.has_base() {
             None
         } else {
             self.pending_base.take()
@@ -602,8 +608,7 @@ impl ZOrderGroupLedger {
     pub fn rebase_descript(&mut self, members: Vec<GroupElement>) -> RebaseOutcome {
         self.pending_base = None;
 
-        let dropped_base_id = if self.has_base {
-            self.has_base = false;
+        let dropped_base_id = if self.has_base() {
             Some(self.groups.remove(0).id)
         } else {
             None
@@ -640,8 +645,14 @@ impl ZOrderGroupLedger {
                 source: GroupSource::Descript,
             },
         );
-        self.has_base = true;
         id
+    }
+
+    /// 先頭が descript 由来の基底かどうか（基底はいつも先頭に据わる）。
+    fn has_base(&self) -> bool {
+        self.groups
+            .first()
+            .is_some_and(|group| group.source == GroupSource::Descript)
     }
 
     /// グループの読み口（射影が読む）。基底が先頭・以降はタグの追加順。
@@ -649,7 +660,7 @@ impl ZOrderGroupLedger {
         &self.groups
     }
 
-    /// 内容が動いた回数。射影を組み直すかどうかの判定に使う。
+    /// 内容が動いた回数。
     ///
     /// **内容が実際に動いたときだけ**進む。拒否された追加も、落とすものが無い解除も、
     /// 何も載らない基底の据え直しも進めない——射影を組み直す理由が無いからである。
@@ -662,10 +673,10 @@ impl ZOrderGroupLedger {
     /// 適用系が空振りする」要件 6.1 の穴も塞ぐ。ゆえにこの読み口は本番から呼ばれない。
     ///
     /// 版そのものは design が定めた台帳の一部であり、状態遷移の檻
-    /// （`zorder_group_ledger_state_tests.rs`）が「いつ進み、いつ進まないか」を全数で
+    /// （`zorder_group_ledger_state_tests.rs`）と基底の取り替えの檻
+    /// （`zorder_group_ledger_rebase_tests.rs` の t_zrb9）が「いつ進み、いつ進まないか」を
     /// 押さえている。読み口を消すとその不変条件を主張する手段が無くなるので、
-    /// **この 1 項目だけ**に許可を与える（モジュール全体の許可は結線の着地とともに撤去済み）。
-    #[allow(dead_code)]
+    /// 呼ぶのは検査（テスト）だけで、公開の項目として残す。
     pub fn version(&self) -> u64 {
         self.version
     }
@@ -680,9 +691,11 @@ impl ZOrderGroupLedger {
             .flat_map(|group| group.members.iter().map(|member| member.scope))
             .collect();
 
+        // 拾った印は集合で引き、出す順は `members` の初出順のまま。
+        let mut reported: HashSet<u32> = HashSet::new();
         let mut hit: Vec<u32> = Vec::new();
         for member in members {
-            if occupied.contains(&member.scope) && !hit.contains(&member.scope) {
+            if occupied.contains(&member.scope) && reported.insert(member.scope) {
                 hit.push(member.scope);
             }
         }
@@ -719,7 +732,8 @@ mod rebase_tests;
 mod written_order_tests;
 
 // 先送りしたプロパティ `currentghost.seriko.zorder` の不提供を固定する檻（要件 13.1／13.2／13.5）。
-// 台帳の兄弟に置くのは、要件 13.2 後段「窓の重なりの状態を変更しない」の主張に台帳が要るため。
+// 台帳の兄弟に置くのは、守るのが sylphya の中身ではなく「Z 順の機能が sylphya へ何も足していない
+// こと」だから（檻のファイルの説明）。台帳そのものは使わない。
 #[cfg(test)]
 #[path = "zorder_property_deferral_tests.rs"]
 mod property_deferral_tests;

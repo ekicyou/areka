@@ -5,25 +5,29 @@
 //! `spawn_ghost_windows` で組み、材料は準備が運んだ [`DefaultPlacementBasis`] を置く
 //! （`reset_balloon_pos_tests.rs` と同じやり方）。
 
+use std::time::Instant;
+
 use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
+use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
+use wintf::ecs::drag::DragEvent;
+use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
 use super::apply_face_windowposition;
-use crate::follow::{BalloonFollow, MonitorSnapshot, OffsetBase};
-use crate::prepare_ghost_windows_with_work_area;
-use crate::reseed::resolve_standard_scopes;
+use crate::follow::{
+    BalloonFollow, MonitorSnapshot, OffsetRescale, on_balloon_drag, rescale_follow_offset,
+};
+use crate::persist::{apply_restored_placements, balloon_offset_entries};
+use crate::reseed::{StandardScope, resolve_standard_scopes};
+use crate::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use crate::reset_pos::DefaultPlacementBasis;
-use crate::resolver::PointPx;
 use crate::sample_test_support::{balloon_root, emo2_root};
-use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{WA, with_com_initialized};
+use crate::spawn::{BalloonLimit, GhostWindows, spawn_ghost_windows};
+use crate::test_support::{WA, give_fake_handles, with_com_initialized};
+use crate::{PreparedPlacement, prepare_ghost_windows_with_work_area};
 use log_capture_kit::{CapturedEvent, capture};
-
-/// ドラッグでずらしたバルーンのずらし（標準のずらしと必ず違う値）。
-const DRAGGED: PointPx = PointPx { x: 777, y: -333 };
 
 /// 面 0 と違う面の値（emo2 の既定のバルーンの値と違う数）。
 fn other_face() -> (WindowPosition, WindowPositionRaw) {
@@ -33,25 +37,50 @@ fn other_face() -> (WindowPosition, WindowPositionRaw) {
     )
 }
 
+/// [`other_face`] と同じ位置で、画面の内に保たない（`windowposition.limit,0`）面の値。
+fn limit_off_face() -> (WindowPosition, WindowPositionRaw) {
+    (
+        WindowPosition::new(Some(41), Some(-23)),
+        WindowPositionRaw::new(Some("41".to_string()), Some("0".to_string())),
+    )
+}
+
+fn limit_of(world: &World, windows: &GhostWindows, scope: usize) -> Option<BalloonLimit> {
+    world
+        .get::<BalloonLimit>(windows.balloon_window(scope).unwrap())
+        .copied()
+}
+
+/// [`other_face`] とも emo2 の既定とも違う、3 つ目の面の値。
+fn third_face() -> (WindowPosition, WindowPositionRaw) {
+    (
+        WindowPosition::new(Some(-17), Some(9)),
+        WindowPositionRaw::new(Some("-17".to_string()), None),
+    )
+}
+
+/// emo2 の起動の準備（作業領域 `WA`・表示 DPI `dpi`）。
+fn prepared(dpi: u32) -> PreparedPlacement {
+    prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(dpi))
+        .expect("起動の配置の準備は成功する")
+}
+
 /// emo2 の起動の準備（作業領域 `WA`・DPI 96）で窓を組み、準備が運んだ材料を置いた World。
 fn booted() -> (World, GhostWindows) {
-    let prepared =
-        prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
-            .expect("起動の配置の準備は成功する");
+    booted_with(&[])
+}
+
+/// [`booted`] と同じだが、起動と同じく記憶の項目 `restored` を重ねた配置で窓を組む。
+fn booted_with(restored: &[(PersistKey, String)]) -> (World, GhostWindows) {
+    let prepared = prepared(96);
     let mut world = World::new();
-    world.insert_resource(MonitorSnapshot {
+    let snapshot = MonitorSnapshot {
         work_areas: vec![WA],
-    });
-    let windows = spawn_ghost_windows(&mut world, &prepared.placements, &prepared.titles);
-    let mut raw = 0x100;
-    for scope in windows.scopes() {
-        for e in [windows.char_window(scope), windows.balloon_window(scope)] {
-            raw += 1;
-            world.entity_mut(e.unwrap()).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-        }
-    }
+    };
+    let placements = apply_restored_placements(prepared.placements, restored, &snapshot);
+    world.insert_resource(snapshot);
+    let windows = spawn_ghost_windows(&mut world, &placements, &prepared.titles);
+    give_fake_handles(&mut world, &windows);
     // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
     world.flush();
     for scope in windows.scopes() {
@@ -81,6 +110,30 @@ fn basis(world: &World) -> DefaultPlacementBasis {
     world.resource::<DefaultPlacementBasis>().clone()
 }
 
+/// 今の材料で解いたスコープ 0 の標準の位置。
+fn standard_of_scope0(world: &World, windows: &GhostWindows) -> StandardScope {
+    let b = basis(world);
+    resolve_standard_scopes(world, windows, &b.source, &b.balloon)
+        .into_iter()
+        .find(|s| s.running.input.scope == 0)
+        .expect("スコープ 0 の標準の位置を解ける")
+}
+
+/// 本番のドラッグの口（[`on_balloon_drag`]）で、スコープのバルーンを横へ `dx` だけずらす
+/// （wndproc が窓を動かした後の位置を置いてから呼ぶ）。
+fn drag_balloon(world: &mut World, windows: &GhostWindows, scope: usize, dx: i32) {
+    let b = windows.balloon_window(scope).unwrap();
+    let p = balloon_pos(world, windows, scope);
+    world.get_mut::<WindowPos>(b).unwrap().position = Some(Point::new(p.x + dx, p.y));
+    let ev = Phase::Bubble(DragEvent {
+        target: b,
+        start_position: Point::new(0, 0),
+        position: Point::new(dx, 0),
+        timestamp: Instant::now(),
+    });
+    assert!(!on_balloon_drag(world, b, b, &ev));
+}
+
 fn face_logs(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
     events
         .iter()
@@ -104,12 +157,11 @@ fn standard_balloon_moves_to_the_new_face_position() {
         let (moved, events) = capture(|| apply_face_windowposition(&mut world, 0, other_face()));
         assert!(moved, "標準の位置のバルーンは置き直す");
 
-        let b = basis(&world);
-        assert_eq!(b.balloon.windowpositions.get(&0), Some(&other_face()));
-        let want = resolve_standard_scopes(&world, &windows, &b.source, &b.balloon)
-            .into_iter()
-            .find(|s| s.running.input.scope == 0)
-            .expect("スコープ 0 の標準の位置を解ける");
+        assert_eq!(
+            basis(&world).balloon.windowpositions.get(&0),
+            Some(&other_face())
+        );
+        let want = standard_of_scope0(&world, &windows);
         let base = want.placement.balloon_offset_base;
         assert_ne!(
             base.offset, old_offset,
@@ -143,16 +195,13 @@ fn standard_balloon_moves_to_the_new_face_position() {
     });
 }
 
-/// ドラッグで動かしたバルーンは位置とずらしを保ち、材料だけが新しい面の値になる。
+/// 1px だけドラッグしたバルーンも位置とずらしを保ち、材料だけが新しい面の値になる
+/// （動かした量でなく、動かしたことで決める）。
 #[test]
 fn dragged_balloon_keeps_its_position() {
     with_com_initialized(|| {
         let (mut world, windows) = booted();
-        let c = windows.char_window(0).unwrap();
-        let b = windows.balloon_window(0).unwrap();
-        world
-            .entity_mut(c)
-            .insert(BalloonFollow::new(b, OffsetBase::unpinned(DRAGGED)));
+        drag_balloon(&mut world, &windows, 0, 1);
         let before = (
             balloon_pos(&world, &windows, 0),
             follow(&world, &windows, 0),
@@ -215,6 +264,208 @@ fn same_value_does_nothing() {
             .collect();
         assert_eq!(after, before);
         assert!(face_logs(&events).is_empty(), "{events:?}");
+        let _ = drain_window_pos_commands();
+    });
+}
+
+/// 材料（`DefaultPlacementBasis`）・窓の一式（`GhostWindows`）が無ければ `warn!` を 1 行出して
+/// 何もしない（窓の一式が無いときは材料も前のまま）。
+#[test]
+fn missing_material_only_warns() {
+    with_com_initialized(|| {
+        for reason in ["no_default_basis", "no_ghost_windows"] {
+            let (mut world, _windows) = booted();
+            let before_basis = basis(&world);
+            if reason == "no_default_basis" {
+                world.remove_resource::<DefaultPlacementBasis>();
+            } else {
+                world.remove_resource::<GhostWindows>();
+            }
+            let (moved, events) =
+                capture(|| apply_face_windowposition(&mut world, 0, other_face()));
+            assert!(!moved, "{reason}: 何もしない");
+            let skips: Vec<_> = events
+                .iter()
+                .filter(|e| e.field_str("event") == Some("balloon_face_windowposition_skipped"))
+                .collect();
+            assert_eq!(skips.len(), 1, "{reason}: warn が 1 行: {events:?}");
+            assert_eq!(skips[0].level, tracing::Level::WARN);
+            assert_eq!(skips[0].field_str("reason"), Some(reason));
+            assert!(face_logs(&events).is_empty(), "{reason}: {events:?}");
+            if reason == "no_ghost_windows" {
+                assert_eq!(basis(&world), before_basis, "{reason}: 材料は前のまま");
+            }
+            let _ = drain_window_pos_commands();
+        }
+    });
+}
+
+/// 96 で面を変えて標準の位置へ置き、144 へ移ってずらしを追随させただけのバルーンは、また面を
+/// 変えると新しい面の標準の位置へ置き直される（追随の値と 144 で解き直した値は丸めで 1px
+/// 食い違う）。
+#[test]
+fn balloon_followed_from_96_to_144_moves_to_the_new_face_position() {
+    with_com_initialized(|| {
+        let (mut world, windows) = booted();
+        assert!(
+            apply_face_windowposition(&mut world, 0, other_face()),
+            "前提: 96 で面の標準の位置へ置く"
+        );
+        let at_144 = prepared(144);
+        // 144 の表示の窓寸と DPI を置き、本体のずらしの追随と同じ換算でずらしを引き直す。
+        for p in &at_144.placements {
+            let c = windows.char_window(p.scope).unwrap();
+            let b = windows.balloon_window(p.scope).unwrap();
+            world.get_mut::<WindowPos>(c).unwrap().size =
+                Some(SizeI::new(p.char_size.w, p.char_size.h));
+            world.get_mut::<WindowPos>(b).unwrap().size =
+                Some(SizeI::new(p.balloon_size.w, p.balloon_size.h));
+            for e in [c, b] {
+                world.entity_mut(e).insert(DPI::from_dpi(144, 144));
+            }
+            let mut f = world.get_mut::<BalloonFollow>(c).unwrap();
+            match rescale_follow_offset(f.base(), DPI::from_dpi(144, 144)) {
+                OffsetRescale::Rescaled { offset, .. } => f.apply_rescaled(offset),
+                other => panic!("96 の基準は 144 へ追随する: {other:?}"),
+            }
+        }
+        let standard_144 = standard_of_scope0(&world, &windows)
+            .placement
+            .balloon_offset_base
+            .offset;
+        assert_ne!(
+            follow(&world, &windows, 0).offset(),
+            standard_144,
+            "前提: 追随の値と 144 で解き直した標準の値は丸めで食い違う"
+        );
+
+        assert!(
+            apply_face_windowposition(&mut world, 0, third_face()),
+            "利用者が動かしていないバルーンは置き直す"
+        );
+        assert_eq!(
+            follow(&world, &windows, 0).base(),
+            standard_of_scope0(&world, &windows)
+                .placement
+                .balloon_offset_base
+        );
+        let _ = drain_window_pos_commands();
+    });
+}
+
+/// 記憶から戻したバルーンは、記憶の値が標準の値と同じでも置き直さない
+/// （値の違いでなく、記憶から戻したことで決める）。
+#[test]
+fn balloon_restored_from_memory_keeps_its_position() {
+    with_com_initialized(|| {
+        let standard = prepared(96).placements[0].balloon_offset;
+        let (mut world, windows) = booted_with(&balloon_offset_entries(0, standard));
+        assert_eq!(
+            follow(&world, &windows, 0).offset(),
+            standard,
+            "前提: 記憶の値は標準の値と同じ"
+        );
+        let before = (
+            balloon_pos(&world, &windows, 0),
+            follow(&world, &windows, 0),
+        );
+
+        assert!(
+            !apply_face_windowposition(&mut world, 0, other_face()),
+            "記憶から戻したバルーンは置き直さない"
+        );
+        assert_eq!(
+            (
+                balloon_pos(&world, &windows, 0),
+                follow(&world, &windows, 0)
+            ),
+            before
+        );
+        let _ = drain_window_pos_commands();
+    });
+}
+
+/// ドラッグしたバルーンも、記憶から戻したバルーンも、標準の位置へ据え直した（バルーン位置
+/// 初期化）後は、面を変えると再び置き直される。
+#[test]
+fn balloon_reset_to_standard_moves_again_on_face_change() {
+    with_com_initialized(|| {
+        let standard = prepared(96).placements[0].balloon_offset;
+        for (name, restored, dx) in [
+            ("ドラッグ", Vec::new(), 1),
+            ("記憶", balloon_offset_entries(0, standard), 0),
+        ] {
+            let (mut world, windows) = booted_with(&restored);
+            if dx != 0 {
+                drag_balloon(&mut world, &windows, 0, dx);
+            }
+            assert!(
+                reset_balloon_positions(&mut world, BalloonResetTrigger::Menu),
+                "{name}: 前提: 標準の位置へ据え直す"
+            );
+            assert!(
+                apply_face_windowposition(&mut world, 0, other_face()),
+                "{name}: 据え直した後のバルーンは置き直す"
+            );
+            let _ = drain_window_pos_commands();
+        }
+    });
+}
+
+/// 面の `windowposition.limit` は、画面の内に保つ指定（`BalloonLimit`）としてそのスコープの
+/// バルーン窓へ入る。標準の位置のバルーンも、利用者が動かしたバルーン（位置は保つ）も同じ。
+#[test]
+fn face_limit_reaches_the_balloon_window_moved_or_not() {
+    with_com_initialized(|| {
+        for dx in [0, 1] {
+            let (mut world, windows) = booted();
+            assert_eq!(
+                limit_of(&world, &windows, 0),
+                Some(BalloonLimit(true)),
+                "dx={dx}: 前提: 起動の値は既定の 1"
+            );
+            if dx != 0 {
+                drag_balloon(&mut world, &windows, 0, dx);
+            }
+            let before = balloon_pos(&world, &windows, 0);
+
+            let moved = apply_face_windowposition(&mut world, 0, limit_off_face());
+            assert_eq!(moved, dx == 0, "dx={dx}: 動かしたバルーンだけ置き直さない");
+            assert_eq!(
+                limit_of(&world, &windows, 0),
+                Some(BalloonLimit(false)),
+                "dx={dx}: 新しい面の limit が入る"
+            );
+            if dx != 0 {
+                assert_eq!(balloon_pos(&world, &windows, 0), before, "位置は保つ");
+            }
+            assert_eq!(
+                limit_of(&world, &windows, 1),
+                Some(BalloonLimit(true)),
+                "dx={dx}: 他のスコープは変わらない"
+            );
+            let _ = drain_window_pos_commands();
+        }
+    });
+}
+
+/// バルーン位置初期化も、材料の `windowposition.limit` を `BalloonLimit` として入れ直す。
+#[test]
+fn balloon_reset_reinstalls_the_limit_from_the_basis() {
+    with_com_initialized(|| {
+        let (mut world, windows) = booted();
+        world
+            .resource_mut::<DefaultPlacementBasis>()
+            .balloon
+            .windowpositions
+            .insert(0, limit_off_face());
+
+        assert!(reset_balloon_positions(
+            &mut world,
+            BalloonResetTrigger::Menu
+        ));
+        assert_eq!(limit_of(&world, &windows, 0), Some(BalloonLimit(false)));
+        assert_eq!(limit_of(&world, &windows, 1), Some(BalloonLimit(true)));
         let _ = drain_window_pos_commands();
     });
 }

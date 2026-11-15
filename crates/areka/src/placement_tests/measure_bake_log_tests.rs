@@ -7,19 +7,17 @@
 //! 検体はファイルの形だけを `target\` の下に置き、絵の中身は `MemoryDecoder` が返す
 //! （時間・実の画面・COM に依らない）。
 use std::collections::BTreeMap;
-use std::num::NonZeroU32;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage, LoopCount, MemoryDecoder,
-};
+use areka_emo_atlas::{AnimationLimits, DecodedImage, MemoryDecoder};
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::runtime::assets::{build_balloon_assets, build_shell_assets};
+use crate::runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::measure_with_reader;
+use areka_placement::test_support::animated_image::{frames, image, info};
 
 /// 黙らせる記録の文言（焼く段 `areka_emo_atlas`・面の表 `areka_emo_compose`）。
 const ZERO_SIZED: &str = "bake: element の元画像が 0 寸です";
@@ -45,39 +43,6 @@ const SCOPES: [usize; 2] = [0, 1];
 const OPAQUE: [u8; 4] = [10, 20, 30, 255];
 const OTHER: [u8; 4] = [40, 50, 60, 255];
 const CLEAR: [u8; 4] = [0, 0, 0, 0];
-
-/// 2×2 の α つきの絵（画素は全部 `px`）。
-fn image(px: [u8; 4]) -> DecodedImage {
-    DecodedImage {
-        width: 2,
-        height: 2,
-        stride: 8,
-        bgra: [px; 4].concat(),
-        has_alpha: true,
-    }
-}
-
-fn info() -> AnimationInfo {
-    AnimationInfo {
-        width: 2,
-        height: 2,
-        frame_count: 2,
-    }
-}
-
-/// 2 コマの動く絵の全コマ。
-fn frames(px0: [u8; 4], px1: [u8; 4]) -> AnimatedImage {
-    AnimatedImage {
-        frames: [px0, px1]
-            .iter()
-            .map(|&px| AnimationFrame {
-                image: image(px),
-                delay_ms: 100,
-            })
-            .collect(),
-        loop_count: LoopCount::Finite(NonZeroU32::new(1).unwrap()),
-    }
-}
 
 /// シェルの面の記述: 面 0・10 は見える絵、面 1 が記録を起こす絵を持ち、面 1 の bind の
 /// アニメーションだけが面 3000（`null.png`）を指す。追記は相手の無い面 5 と、面 1 の
@@ -223,11 +188,27 @@ fn boot_preparation_records_each_once() {
     let (measured, measure_events) =
         capture(|| measure_with_reader(&dec, &shell_dir, &balloon_dir, &SCOPES, &defaults));
     measured.expect("採寸は通る");
-    let (shell, shell_events) =
-        capture(|| build_shell_assets(root.path(), None, &scopes, 96, &defaults, &dec));
+    let (shell, shell_events) = capture(|| {
+        build_shell_assets_with_limits(
+            root.path(),
+            None,
+            &scopes,
+            96,
+            &defaults,
+            &dec,
+            AnimationLimits::default(),
+        )
+    });
     shell.unwrap_or_else(|e| panic!("シェルの資産は組める: {e:?}"));
-    let (balloon, balloon_events) =
-        capture(|| build_balloon_assets(&balloon_dir, &scopes, 96, &dec));
+    let (balloon, balloon_events) = capture(|| {
+        build_balloon_assets_with_limits(
+            &balloon_dir,
+            &scopes,
+            96,
+            &dec,
+            AnimationLimits::default(),
+        )
+    });
     balloon.unwrap_or_else(|e| panic!("バルーンの資産は組める: {e:?}"));
 
     assert_eq!(counts(&measure_events), want(&[]), "採寸の窓");

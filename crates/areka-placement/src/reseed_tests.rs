@@ -1,26 +1,30 @@
-//! シェルの見た目の値の入れ直し（task 9.2・要件 2.7）の決定論テスト。
+//! シェルの見た目の値の入れ直し（要件 2.7）の決定論テスト。
 //!
 //! 窓は bare `World` に spawn の本物で組み、偽 HWND の `WindowHandle` で窓書込の口を通す
 //! （`SetWindowPosCommand` は enqueue だけで flush しない＝実窓には触れない）。
 
 use std::fs;
 
-use areka_sylphya::{Axis, PersistKey};
+use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::DragConfig;
-use wintf::ecs::{DPI, Point};
+use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::test_support::{
     BALLOON, CHAR0, booted_world, char_positions, new_shell, position_of, world_from,
 };
 use super::{BalloonPlacementInputs, apply_shell_descript};
+use crate::face_windowposition::BalloonUserMoved;
 use crate::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
+use crate::persist::balloon_offset_entries;
 use crate::resolver::{Anchor, PointPx, ScopePlacement};
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::TempDir;
 use crate::source::{load_balloon_author_dpi, load_descript_source_for_shell};
-use crate::spawn::{BalloonKeywordBase, CharWindowMarker, GhostWindows};
-use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
+use crate::spawn::{BalloonKeywordBase, BalloonLimit, CharWindowMarker, GhostWindows};
+use crate::test_support::{
+    KEYWORD_BALLOON_DESCRIPT, WA, synth_declared_dpi_ghost, with_com_initialized,
+};
 use crate::{load_scope_windowpositions, prepare_ghost_windows_with_work_area};
 use log_capture_kit::{ExpectField, capture};
 
@@ -40,25 +44,6 @@ fn follow_of(world: &World, windows: &GhostWindows, scope: usize) -> BalloonFoll
 
 fn char_window_count(world: &mut World) -> usize {
     world.query::<&CharWindowMarker>().iter(world).count()
-}
-
-fn saved_balloon_offset(scope: u32, x: i32, y: i32) -> Vec<(PersistKey, String)> {
-    vec![
-        (
-            PersistKey::BalloonOffset {
-                scope,
-                axis: Axis::X,
-            },
-            x.to_string(),
-        ),
-        (
-            PersistKey::BalloonOffset {
-                scope,
-                axis: Axis::Y,
-            },
-            y.to_string(),
-        ),
-    ]
 }
 
 /// 新しいシェルのずらしと揃え方がキャラ窓の部品に入り、窓の位置とスコープの集合は保たれ、
@@ -102,7 +87,6 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
 
     // 窓の位置とスコープの集合は不変・窓は増えない。
     assert_eq!(char_positions(&world, &windows), before);
-    assert_eq!(windows.scopes().collect::<Vec<_>>(), vec![0, 1]);
     assert_eq!(
         world
             .resource::<GhostWindows>()
@@ -139,12 +123,19 @@ fn t_rs02_saved_balloon_offset_survives_the_reseed() {
         &windows,
         &new_shell(&[]),
         &no_balloon(),
-        &saved_balloon_offset(0, -123, -45),
+        &balloon_offset_entries(0, PointPx { x: -123, y: -45 }),
     );
 
     let f0 = follow_of(&world, &windows, 0);
     assert_eq!(f0.offset(), PointPx { x: -123, y: -45 });
     assert_eq!(f0.base().dpi, None, "保存値は起動と同じく未係留で運ぶ");
+    // 記憶から戻したバルーンは利用者が動かしたものとして、次の面の置き直しで動かさない。
+    let moved = |scope| {
+        let c = windows.char_window(scope).unwrap();
+        world.entity(c).contains::<BalloonUserMoved>()
+    };
+    assert!(moved(0), "記憶から戻した scope 0 に動かした印が無い");
+    assert!(!moved(1), "標準の位置の scope 1 に動かした印がある");
     // 保存の無い scope は新しいシェルの値。
     assert_eq!(
         follow_of(&world, &windows, 1).offset(),
@@ -190,6 +181,43 @@ fn t_rs03_author_offset_is_scaled_by_the_window_dpi() {
     );
 }
 
+/// 同じ作業領域でも窓の DPI が違うスコープは、それぞれの DPI で解く（同じ作業領域と DPI の窓
+/// だけを 1 度にまとめる）。拡大率の移り変わりの途中で、スコープ 0 が 96・スコープ 1 が 192 の形。
+#[test]
+fn t_rs03b_scopes_with_different_window_dpis_are_solved_with_their_own_dpi() {
+    let (mut world, windows) = booted_world(96);
+    let dpi192 = DPI::from_dpi(192, 192);
+    for window in [windows.char_window(1), windows.balloon_window(1)] {
+        world.entity_mut(window.unwrap()).insert(dpi192);
+    }
+
+    apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[]);
+
+    let f0 = follow_of(&world, &windows, 0);
+    assert_eq!(
+        (f0.offset(), f0.base().dpi),
+        (
+            PointPx {
+                x: CHAR0.w + 30,
+                y: 40
+            },
+            Some(DPI::from_dpi(96, 96))
+        )
+    );
+    let f1 = follow_of(&world, &windows, 1);
+    assert_eq!(
+        (f1.offset(), f1.base().dpi),
+        (
+            PointPx {
+                x: -BALLOON.w - 14,
+                y: 18
+            },
+            Some(dpi192)
+        ),
+        "スコープ 1 がスコープ 0 の DPI で解かれた"
+    );
+}
+
 /// 窓が無いスコープは `warn!` を 1 件残して読み飛ばし、残りのスコープは続ける。
 #[test]
 fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
@@ -215,6 +243,36 @@ fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
     );
 }
 
+/// バルーン窓が無いスコープと、バルーン窓の大きさが読めないスコープは別の理由で読み飛ばす。
+#[test]
+fn t_rs04c_balloon_window_gone_and_size_unknown_have_their_own_reasons() {
+    type Break = fn(&mut World, Entity);
+    let cases: [(&str, Break); 2] = [
+        ("balloon_window_gone", |world, balloon| {
+            world.entity_mut(balloon).remove::<WindowPos>();
+        }),
+        ("balloon_size_unknown", |world, balloon| {
+            world.get_mut::<WindowPos>(balloon).unwrap().size = None;
+        }),
+    ];
+    for (reason, strip) in cases {
+        let (mut world, windows) = booted_world(96);
+        strip(&mut world, windows.balloon_window(1).unwrap());
+
+        let ((), events) = capture(|| {
+            apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[])
+        });
+
+        let skipped: Vec<_> = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("reseed_skipped"))
+            .collect();
+        assert_eq!(skipped.len(), 1, "{reason}: {events:?}");
+        assert_eq!(skipped[0].field("scope"), Some("1"), "{reason}");
+        assert_eq!(skipped[0].field_str("reason"), Some(reason));
+    }
+}
+
 /// 起動の準備と同じ入力（同じゴースト・同じバルーン・同じ窓寸・同じ DPI）なら、入れ直した
 /// 部品は起動の配置と一致する。バルーンの `windowposition` の数値（emo2）・キーワードと y の
 /// 調整（合成バルーンの `center`／`-20`）が、シェルの差し替えをまたいで残ることの錨。
@@ -228,11 +286,8 @@ fn t_rs05_reseed_matches_boot_for_the_same_inputs() {
         let root = TempDir::new();
         let (kw_ghost, kw_balloon) =
             synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
-        fs::write(
-            kw_balloon.join("descript.txt"),
-            "charset,UTF-8\ndpi,96\nwindowposition.x,center\nwindowposition.y,-20\n",
-        )
-        .expect("キーワードのバルーンを書けるはず");
+        fs::write(kw_balloon.join("descript.txt"), KEYWORD_BALLOON_DESCRIPT)
+            .expect("キーワードのバルーンを書けるはず");
         let chain_root = TempDir::new();
         let (chain_ghost, chain_balloon) = synth_declared_dpi_ghost(
             chain_root.path(),
@@ -395,4 +450,78 @@ fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
         .map(|(anchor, _, moves)| (anchor, moves))
         .collect();
     assert_eq!(got, vec![(Anchor::Free, false), (Anchor::Free, false)]);
+}
+
+/// 知らない `alignmenttodesktop` の値の警告は、走っているスコープの数によらずスコープごとに 1 行
+/// （同じ作業領域と DPI の窓は 1 度だけ解く）。
+#[test]
+fn t_rs08_unknown_alignment_warns_once_per_scope() {
+    let (mut world, windows) = booted_world(96);
+
+    let ((), events) = capture(|| {
+        apply_shell_descript(
+            &mut world,
+            &windows,
+            &new_shell(&[("seriko.alignmenttodesktop", "sideways")]),
+            &no_balloon(),
+            &[],
+        )
+    });
+
+    let mut warned: Vec<&str> = events
+        .iter()
+        .filter(|e| {
+            e.message()
+                .contains("alignmenttodesktop の未知アンカー指定")
+        })
+        .map(|e| e.expect_field("scope"))
+        .collect();
+    warned.sort_unstable();
+    assert_eq!(warned, vec!["0", "1"], "{events:?}");
+}
+
+/// 作業領域を引けないスコープは `warn!`（`reseed_work_area_missing`）を残してから窓の矩形で代える。
+#[test]
+fn t_rs04b_missing_work_area_warns_before_substituting_the_window_rect() {
+    let (mut world, windows) = booted_world(96);
+    world.remove_resource::<MonitorSnapshot>();
+
+    let ((), events) =
+        capture(|| apply_shell_descript(&mut world, &windows, &new_shell(&[]), &no_balloon(), &[]));
+
+    let missing: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reseed_work_area_missing"))
+        .collect();
+    assert!(!missing.is_empty(), "{events:?}");
+    assert!(missing.iter().all(|e| e.level == tracing::Level::WARN));
+}
+
+/// 走っているバルーンの `windowposition.limit,0` は、シェルの切り替えでそのスコープのバルーン窓の
+/// `BalloonLimit` へ入る（起動の値 `true` のまま残さない）。
+#[test]
+fn t_rs09_balloon_limit_is_reinstalled_from_the_new_placement() {
+    let (mut world, windows) = booted_world(96);
+    let limit = |world: &World, scope| {
+        world
+            .get::<BalloonLimit>(windows.balloon_window(scope).unwrap())
+            .copied()
+    };
+    assert_eq!(limit(&world, 0), Some(BalloonLimit(true)), "前提: 起動の値");
+    let balloon = BalloonPlacementInputs {
+        author_dpi: 96,
+        windowpositions: [(
+            0,
+            (
+                WindowPosition::new(None, None),
+                WindowPositionRaw::new(None, Some("0".to_string())),
+            ),
+        )]
+        .into(),
+    };
+
+    apply_shell_descript(&mut world, &windows, &new_shell(&[]), &balloon, &[]);
+
+    assert_eq!(limit(&world, 0), Some(BalloonLimit(false)));
+    assert_eq!(limit(&world, 1), Some(BalloonLimit(true)));
 }

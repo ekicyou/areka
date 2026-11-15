@@ -85,7 +85,7 @@ fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
 /// T-R4 補: free で両成分未指定 → **幾何**（位置・寸法・バルーン）は Bottom と
 /// 完全同一（2.6 の極限）。ただし `anchor` だけは alignment 由来で相違する
 /// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着＝`Anchor::Free`・
-/// 4.2。task 8.1 で構造体全体一致から幾何一致＋anchor 相違へ更新）。
+/// 4.2。構造体全体の一致でなく、幾何の一致＋anchor の相違で確かめる）。
 #[test]
 fn t_r4_free_both_unspecified_equals_bottom() {
     for dpi in DPIS {
@@ -181,7 +181,7 @@ fn t_r4_free_position_feeds_scope_chain() {
                 x: x0 - w1,
                 y: wa.bottom - h1
             },
-            "dpi={dpi}: base_x(1)=char_x(0)−w1（free 実位置基準・scg 2.1/2.2）"
+            "dpi={dpi}: base_x(1)=char_x(0)−w1（free 実位置基準・areka-P0-scope-chain-gap 2.1/2.2）"
         );
     }
 }

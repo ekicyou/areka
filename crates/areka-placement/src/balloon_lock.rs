@@ -17,11 +17,33 @@ use wintf::ecs::drag::{DragConfig, WindowDragContextResource};
 
 use super::spawn::BalloonWindowMarker;
 
-/// 止めた理由（記録に出す）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HoldReason {
-    pub descript: bool,
-    pub script: bool,
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は記録に使う（道と名前は同じ）。
+// 本番は型の名前を書かない（`hold_reason` の戻りで読むだけ）ので、型は crate のテストにだけ開く。
+#[cfg(all(test, not(feature = "test-support")))]
+pub(crate) use test_open::HoldReason;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use test_open::hold_reason;
+#[cfg(feature = "test-support")]
+pub use test_open::{HoldReason, hold_reason};
+
+mod test_open {
+    use super::BalloonLockLedger;
+
+    /// 止めた理由（記録に出す）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct HoldReason {
+        pub descript: bool,
+        pub script: bool,
+    }
+
+    /// 動かせないなら理由、動かせるなら `None`。
+    pub fn hold_reason(ledger: &BalloonLockLedger, scope: u32) -> Option<HoldReason> {
+        let reason = HoldReason {
+            descript: ledger.descript.contains(&scope),
+            script: ledger.script.contains(&scope),
+        };
+        (reason.descript || reason.script).then_some(reason)
+    }
 }
 
 /// スコープごとの動かせない指定の帳簿。
@@ -29,17 +51,6 @@ pub struct HoldReason {
 pub struct BalloonLockLedger {
     descript: BTreeSet<u32>,
     script: BTreeSet<u32>,
-}
-
-impl BalloonLockLedger {
-    /// 動かせないなら理由、動かせるなら `None`。
-    pub fn reason(&self, scope: u32) -> Option<HoldReason> {
-        let reason = HoldReason {
-            descript: self.descript.contains(&scope),
-            script: self.script.contains(&scope),
-        };
-        (reason.descript || reason.script).then_some(reason)
-    }
 }
 
 /// 起動（窓を作る閉包・`seed_sticky_descript` の直後）: 帳簿を新しく据え、書き手を呼ぶ。
@@ -54,9 +65,14 @@ pub fn seed_balloon_lock(world: &mut World, descript: &BTreeSet<u32>) {
 
 /// シェルの切り替えの後始末: descript の段だけを取り替え、台本の lock は保ち、書き手を呼ぶ（要件 4.4・5.4）。
 pub fn replace_balloon_lock_descript(world: &mut World, descript: &BTreeSet<u32>) {
-    world
-        .get_resource_or_insert_with(BalloonLockLedger::default)
-        .descript = descript.clone();
+    if !world.contains_resource::<BalloonLockLedger>() {
+        warn!(
+            event = "balloon_lock_ledger_missing",
+            directive = "descript_replace"
+        );
+        world.init_resource::<BalloonLockLedger>();
+    }
+    world.resource_mut::<BalloonLockLedger>().descript = descript.clone();
     sync_balloon_drag_writer(world);
 }
 
@@ -122,7 +138,7 @@ pub(crate) fn end_balloon_drag(world: &World, entity: Entity) -> bool {
     let scope = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope);
     let reason = scope
         .and_then(|s| u32::try_from(s).ok())
-        .and_then(|s| world.get_resource::<BalloonLockLedger>()?.reason(s));
+        .and_then(|s| hold_reason(world.get_resource::<BalloonLockLedger>()?, s));
     info!(
         event = "balloon_drag_held",
         scope = scope.map(|s| s as u64),
