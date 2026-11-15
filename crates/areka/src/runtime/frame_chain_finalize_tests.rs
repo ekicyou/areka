@@ -10,7 +10,8 @@
 // =============================================================================
 
 use super::test_support::{
-    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of, resnap_world, settled_sizes, size_of,
+    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, placement_basis, pos_of, resnap_world,
+    settled_sizes, size_of,
 };
 use super::*;
 
@@ -436,6 +437,8 @@ fn stalled_finalize_reports_the_reason_exactly_once() {
 #[test]
 fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
     let (mut world, gw) = resnap_world();
+    // 正常な起動は並べ直しの材料を置いている（無ければ確定が警告を 1 行出す・指摘 485）。
+    world.insert_resource(placement_basis(Default::default(), 2));
     let stuck = PerTargetSizes::new([(0, Some((500, 687))), (1, Some(SPAWN_SIZE_1))]);
 
     let logs = capture_logs(|| {

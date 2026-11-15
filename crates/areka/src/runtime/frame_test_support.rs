@@ -264,6 +264,26 @@ pub(super) fn pos_of(world: &World, e: Entity) -> Option<Point> {
     world.get::<WindowPos>(e).and_then(|wp| wp.position)
 }
 
+/// 起動の準備が置く並べ直しの材料（ghost の descript は空・shell は `shell_kv`）。
+/// [`resnap_world`] は置かない（材料の無い World を前提にする檻がある）ので、要る檻が自分で置く。
+pub(super) fn placement_basis(
+    shell_kv: BTreeMap<String, String>,
+    scopes: usize,
+) -> areka_placement::reset_pos::DefaultPlacementBasis {
+    areka_placement::reset_pos::DefaultPlacementBasis {
+        source: areka_placement::source::DescriptSource {
+            ghost_kv: BTreeMap::new(),
+            shell_kv,
+            shell_dir: std::path::PathBuf::from("shell/master"),
+            titles: GhostTitles::from_scope_titles((0..scopes).map(|s| (s, format!("s{s}")))),
+        },
+        balloon: areka_placement::reseed::BalloonPlacementInputs {
+            author_dpi: 96,
+            windowpositions: BTreeMap::new(),
+        },
+    }
+}
+
 /// resnap が引く物理寸を target ごとに作り分ける fake（[`PhysicalSizeSource`] の檻用実装）。
 ///
 /// shell（偶数 id）と balloon（奇数 id）で**異なる寸**を返し、問い合わせられた `TargetId` を

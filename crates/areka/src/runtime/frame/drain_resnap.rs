@@ -12,10 +12,12 @@ use wintf::ecs::{SizeI, WindowPos};
 
 use areka_placement::balloon_lock::apply_script_balloon_lock;
 use areka_placement::chain_finalize::{
-    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
-    boot_pair_decision, mark_non_positive_widths, note_chain_deferral,
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, KeepReason, PairDecision,
+    ScopeChainState, ScriptPlaced, boot_default_decision, boot_pair_decision,
+    mark_non_positive_widths, note_chain_deferral,
 };
 use areka_placement::chain_realign;
+use areka_placement::config::{ScopeConfig, build_placement_config};
 use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use areka_placement::dpi_sync::{self, HoldSite};
 use areka_placement::follow::{
@@ -23,8 +25,8 @@ use areka_placement::follow::{
 };
 use areka_placement::persist::persist_unremembered_char_positions;
 use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
-use areka_placement::reset_pos::reset_window_positions;
-use areka_placement::resolver::{PointPx, SizePx};
+use areka_placement::reset_pos::{DefaultPlacementBasis, reset_window_positions};
+use areka_placement::resolver::{Anchor, PointPx, SizePx};
 use areka_placement::script_alignment::apply_script_alignment;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::sticky_group_ledger::{
@@ -481,27 +483,71 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     };
 
     // 組ごとの決め（dpi-realign-remembered-chain design BootRemembered）。記憶に位置の無い
-    // スコープ（既定の位置がある）は今の並べ直しのまま: 既定のままなら左へ付け、既定から動かされたか
-    // 台本の `\![move]` が置いた窓（x が既定のままでも・scg 7.3）は動かさない。記憶から戻した
-    // スコープ（既定の位置が無い）は「台本の印 → 組の窓 → 覚えた印」の順で決める（6.3〜6.5）。
-    // 基準は前の窓の解いた後の x（resolve_chain）。
+    // スコープ（既定の位置がある）は、既定のままなら resolver と同じ揃え方の規則で解き直し
+    // （`boot_default_decision`・指摘 485）、既定から動かされたか台本の `\![move]` が置いた窓
+    // （x が既定のままでも・scg 7.3）は動かさない。記憶から戻したスコープ（既定の位置が無い）は
+    // 「台本の印 → 組の窓 → 覚えた印」の順で決める（6.3〜6.5）。基準は前の窓の解いた後の x（resolve_chain）。
+    //
+    // 揃え方と `defaultx` は並べ直し（`reset_pos::reset_window_positions`）と同じく descript の値から組む。
+    let cfg = world
+        .get_resource::<DefaultPlacementBasis>()
+        .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv));
+    if cfg.is_none() {
+        warn!(
+            "chain_finalize: 配置の材料（DefaultPlacementBasis）が無いので、記憶に位置の無いスコープを下端の揃え方・defaultx 0 として解く（指摘 485）"
+        );
+    }
+    let fallback = ScopeConfig::default();
     let ledger = world.get_resource::<StickyGroupLedger>();
     let ghost_windows = world.get_resource::<GhostWindows>();
-    let mut slots: Vec<ChainSlot> = states
+    let decisions: Vec<PairDecision> = states
         .iter()
         .zip(&targets)
-        .map(|(s, &(_, entity, _))| ChainSlot {
-            scope: s.scope,
-            current_x: s.current_x,
-            width: s.width,
-            decision: boot_pair_decision(
+        .map(|(s, &(_, entity, _))| {
+            match boot_pair_decision(
                 s,
                 world.get::<ScriptPlaced>(entity).is_some(),
                 ledger.is_some_and(|l| l.group_of(s.scope as u32).is_some()),
                 ghost_windows.and_then(|gw| gw.remembered_adjacency(s.scope)),
-            ),
+            ) {
+                PairDecision::JoinLeft if s.default_x.is_some() => {
+                    let sc = cfg
+                        .as_ref()
+                        .and_then(|c| c.scopes.get(&s.scope))
+                        .unwrap_or(&fallback);
+                    boot_default_decision(Anchor::from_alignment(&sc.alignment), sc.default_x)
+                }
+                decision => decision,
+            }
         })
         .collect();
+    // 左右の辺のスコープは resolver と同じく横の連なりの外（動かさず、次のスコープの基準にもしない）。
+    // ただし次が記憶から戻したスコープなら、覚えた印はこの窓との隣り合いなので鎖に残す（Keep のまま）。
+    let scopes = states.len();
+    let (mut chain_states, mut chain_targets, mut slots) = (Vec::new(), Vec::new(), Vec::new());
+    for (i, ((s, t), decision)) in states.iter().zip(&targets).zip(decisions).enumerate() {
+        if decision == PairDecision::Keep(KeepReason::DesktopEdge)
+            && !states
+                .get(i + 1)
+                .is_some_and(|next| next.default_x.is_none())
+        {
+            debug!(
+                scope = s.scope,
+                x = s.current_x,
+                "chain_finalize: 左右の辺のスコープは動かさず、横の連なりの基準にもしない（resolver と同じ・指摘 485）"
+            );
+            continue;
+        }
+        chain_states.push(*s);
+        chain_targets.push(*t);
+        slots.push(ChainSlot {
+            scope: s.scope,
+            current_x: s.current_x,
+            width: s.width,
+            decision,
+        });
+    }
+    let (states, targets) = (chain_states, chain_targets);
 
     // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     mark_non_positive_widths(&mut slots);
@@ -601,7 +647,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     // （1.6）。動かすスコープが 0 件の回でも呼ぶ。本番の呼び手はここ 1 か所だけ（3.1・3.2）。
     persist_unremembered_char_positions(world);
     debug!(
-        scopes = states.len(),
+        scopes,
         moved = moves.len(),
         "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
     );

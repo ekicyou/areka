@@ -15,8 +15,10 @@
 //! # 何をするか
 //!
 //! 「初期配置は実表示寸が確定するまで暫定」とみなし、確定時に**連鎖だけ**を解き直す
-//! （要件 7.1）。式は組の決めで 2 つある（[`resolve_chain`]）——左に付ける組は resolver の P2 式
-//! `new_x(n) = x(n−1) − w(n)`、右に付ける組（起動では記憶の印が右）は `new_x(n) = x(n−1) + w(n−1)`。
+//! （要件 7.1）。式は組の決めで 3 つある（[`resolve_chain`]）——左に付ける組は resolver の P2 式
+//! `new_x(n) = x(n−1) − w(n)`、`defaultx` だけ空けて左に付ける組は `new_x(n) = x(n−1) − w(n) − defaultx`、
+//! 右に付ける組（起動では記憶の印が右）は `new_x(n) = x(n−1) + w(n−1)`。記憶に位置の無いスコープを
+//! どの式で解くか（または動かさないか）は、resolver と同じ揃え方の規則で決める（[`boot_default_decision`]）。
 //!
 //! - **先頭スコープは動かさない**（連鎖の起点・接地点は不変・7.2）。
 //! - **Y は扱わない**（下端吸着は各窓の再アンカーが既に保っている・7.2）。
@@ -45,6 +47,8 @@
 use std::fmt;
 
 use bevy_ecs::prelude::{Component, Resource};
+
+use super::resolver::Anchor;
 
 /// 初期配置が実表示寸で確定済みであることを表す標識（要件 7.4）。
 ///
@@ -108,7 +112,7 @@ pub struct ChainMove {
 ///
 /// | 条件 | 決め |
 /// |---|---|
-/// | 記憶に位置が無く（`default_x == Some(current_x)`）、台本の印が無い | `JoinLeft` |
+/// | 記憶に位置が無く（`default_x == Some(current_x)`）、台本の印が無い | `JoinLeft`（呼び手が揃え方で [`boot_default_decision`] に改める） |
 /// | 記憶に位置が無く、既定から動かされたか台本の印がある | `Keep(ExplicitlyPlaced)` |
 /// | 記憶から戻した（`default_x == None`）で、台本の印がある | `Keep(ExplicitlyPlaced)` |
 /// | 記憶から戻したで、n が窓の組に入っている | `Keep(StickyGroup{n})` |
@@ -130,6 +134,27 @@ pub fn boot_pair_decision(
             PairDecision::Keep(KeepReason::StickyGroup { scope: state.scope })
         }
         None => remembered_decision(mark),
+    }
+}
+
+/// 記憶に位置の無い、既定のままのスコープ（[`boot_pair_decision`] が `JoinLeft` を返したもの）の
+/// 決めを、resolver（[`resolve_placement`](super::resolver::resolve_placement)）と同じ揃え方の
+/// 規則で作る（audit-placement-core 指摘 485）。`anchor` と `default_x` は descript から組んだ
+/// 配置の設定（`ScopeConfig`）の値で、`default_x` は DPI で換算しない生の値（resolver と同じ）。
+///
+/// | 揃え方 | 決め（resolver の式） |
+/// |---|---|
+/// | 下端・上端・x の無い Free | `JoinLeft`（`defaultx` が 0 以外なら `JoinLeftOffset`）＝ P2 `x(n−1) − w(n) − defaultx` |
+/// | x を書いた Free | `Keep(FreePosition)`＝ P3 の左上からの位置のまま |
+/// | 左右の辺 | `Keep(DesktopEdge)`＝ P1' の辺のまま。resolver は横の連なりを進めないので、呼び手は次のスコープの基準にしない |
+pub fn boot_default_decision(anchor: Anchor, default_x: Option<i32>) -> PairDecision {
+    match anchor {
+        Anchor::Left | Anchor::Right => PairDecision::Keep(KeepReason::DesktopEdge),
+        Anchor::Free if default_x.is_some() => PairDecision::Keep(KeepReason::FreePosition),
+        Anchor::Bottom | Anchor::Top | Anchor::Free => match default_x.unwrap_or(0) {
+            0 => PairDecision::JoinLeft,
+            offset => PairDecision::JoinLeftOffset { offset },
+        },
     }
 }
 
@@ -241,6 +266,9 @@ impl AdjacencyMark {
 pub enum PairDecision {
     /// n を n−1 の左に付ける（new_x = base_x − width(n)）。
     JoinLeft,
+    /// n を n−1 の左に `offset`（`defaultx`）だけ空けて置く（new_x = base_x − width(n) − offset・
+    /// resolver の P2・起動の並べ直しだけが作る）。
+    JoinLeftOffset { offset: i32 },
     /// n を n−1 の右に付ける（new_x = base_x + width(n−1)）。
     JoinRight,
     /// 動かさない（理由つき）。
@@ -248,10 +276,12 @@ pub enum PairDecision {
 }
 
 impl PairDecision {
-    /// ログに載せる判断の語（JoinLeft "adjacent-left"・JoinRight "adjacent-right"・Keep は理由の語）。
+    /// ログに載せる判断の語（JoinLeft "adjacent-left"・JoinLeftOffset "left-offset"・
+    /// JoinRight "adjacent-right"・Keep は理由の語）。
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::JoinLeft => "adjacent-left",
+            Self::JoinLeftOffset { .. } => "left-offset",
             Self::JoinRight => "adjacent-right",
             Self::Keep(reason) => reason.as_str(),
         }
@@ -279,6 +309,10 @@ pub enum KeepReason {
     RememberedSeparate,
     /// 起動: 印の無い古い記憶。
     NoRememberedMark,
+    /// 起動: 記憶に位置の無い、左右の辺に揃えるスコープ（resolver の P1'・指摘 485）。
+    DesktopEdge,
+    /// 起動: 記憶に位置の無い、x を書いた Free のスコープ（resolver の P3・指摘 485）。
+    FreePosition,
     /// 幅が 0 以下（縮退入力）。
     NonPositiveWidth,
 }
@@ -296,6 +330,8 @@ impl KeepReason {
             Self::ExplicitlyPlaced => "explicitly-placed",
             Self::RememberedSeparate => "remembered-separate",
             Self::NoRememberedMark => "no-remembered-mark",
+            Self::DesktopEdge => "desktop-edge",
+            Self::FreePosition => "free-position",
             Self::NonPositiveWidth => "non-positive-width",
         }
     }
@@ -317,8 +353,10 @@ pub struct ChainSlot {
 /// 本体から昇順に解き、動かす窓と新しい x を返す（今の x と同じものは含めない）。
 ///
 /// 組の基準は前の窓の**解いた後の** x（1.5）。
-/// JoinLeft: new_x = base_x − width(n)。JoinRight: new_x = base_x + width(n−1)。
-/// Keep・幅が非正（n、JoinRight では n−1 も）: 動かさず、今の x を次の基準にする。
+/// JoinLeft: new_x = base_x − width(n)。JoinLeftOffset: new_x = base_x − width(n) − offset。
+/// JoinRight: new_x = base_x + width(n−1)。
+/// Keep・幅が非正（n、JoinRight では n−1 も）: 動かさず、今の x を次の基準にする（左右の辺の
+/// スコープを基準にしないのは呼び手が `slots` から外して決める）。
 /// y は扱わない。飽和演算ゆえ極端な入力でも panic しない。
 ///
 /// 事後条件: 返した指示を全部当てると、`JoinLeft` の組は `x(n−1) == x(n) + w(n)`、
@@ -334,6 +372,11 @@ pub fn resolve_chain(slots: &[ChainSlot]) -> Vec<ChainMove> {
                 if join_usable(s.decision, s.width, prev_w) =>
             {
                 Some(base_x.saturating_sub(s.width))
+            }
+            (Some((base_x, prev_w)), PairDecision::JoinLeftOffset { offset })
+                if join_usable(s.decision, s.width, prev_w) =>
+            {
+                Some(base_x.saturating_sub(s.width).saturating_sub(offset))
             }
             (Some((base_x, prev_w)), PairDecision::JoinRight)
                 if join_usable(s.decision, s.width, prev_w) =>
@@ -383,7 +426,7 @@ pub fn mark_non_positive_widths(slots: &mut [ChainSlot]) {
 /// Keep は式を持たないので `false`。
 fn join_usable(decision: PairDecision, width: i32, prev_width: i32) -> bool {
     match decision {
-        PairDecision::JoinLeft => width > 0,
+        PairDecision::JoinLeft | PairDecision::JoinLeftOffset { .. } => width > 0,
         PairDecision::JoinRight => width > 0 && prev_width > 0,
         PairDecision::Keep(_) => false,
     }

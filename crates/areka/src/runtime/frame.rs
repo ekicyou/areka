@@ -493,6 +493,12 @@ mod chain_finalize_persist_nowrite_tests;
 #[path = "frame_chain_finalize_clamp_tests.rs"]
 mod chain_finalize_clamp_tests;
 
+// 起動の並べ直しが記憶に位置の無いスコープを resolver と同じ揃え方で解き直す檻
+// （audit-placement-core 指摘 485）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_align_tests.rs"]
+mod chain_finalize_align_tests;
+
 // 起動・作り直しの並べ直しが記憶から戻した組を覚えた印で隣り合わせる檻
 // （dpi-realign-remembered-chain 要件 6・8.6）。ハーネスに乗るので **x64 のみ**で接続する。
 #[cfg(all(test, target_pointer_width = "64"))]

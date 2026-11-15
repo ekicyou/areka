@@ -198,6 +198,8 @@ fn keep_reason_fixed_words() {
         (KeepReason::RememberedSeparate, "remembered-separate"),
         (KeepReason::NoRememberedMark, "no-remembered-mark"),
         (KeepReason::NonPositiveWidth, "non-positive-width"),
+        (KeepReason::DesktopEdge, "desktop-edge"),
+        (KeepReason::FreePosition, "free-position"),
     ];
     for (reason, word) in cases {
         assert_eq!(reason.as_str(), word);
@@ -209,6 +211,10 @@ fn keep_reason_fixed_words() {
 #[test]
 fn pair_decision_words() {
     assert_eq!(PairDecision::JoinRight.as_str(), "adjacent-right");
+    assert_eq!(
+        PairDecision::JoinLeftOffset { offset: 36 }.as_str(),
+        "left-offset"
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -304,6 +310,72 @@ fn boot_restored_scope_follows_the_remembered_mark() {
         assert_eq!(
             boot_pair_decision(&state(None), false, false, mark),
             expected
+        );
+    }
+}
+
+/// `defaultx` だけ空けて左へ置く: new_x = 前の x − 自分の幅 − offset（resolver の P2・指摘 485）。
+/// 幅が非正なら動かさず、語は "non-positive-width" に改まる。
+#[test]
+fn join_left_offset_keeps_the_defaultx_gap() {
+    let slots = [
+        slot(0, 1000, 382, BODY),
+        slot(1, 500, 336, PairDecision::JoinLeftOffset { offset: 36 }),
+    ];
+    assert_eq!(
+        resolve_chain(&slots),
+        vec![ChainMove {
+            scope: 1,
+            new_x: 1000 - 336 - 36
+        }]
+    );
+    let mut slots = [
+        slot(0, 1000, 382, BODY),
+        slot(1, 500, 0, PairDecision::JoinLeftOffset { offset: 36 }),
+    ];
+    mark_non_positive_widths(&mut slots);
+    assert_eq!(slots[1].decision.as_str(), "non-positive-width");
+    assert!(resolve_chain(&slots).is_empty());
+}
+
+/// 既定のままのスコープの決めは resolver の揃え方の規則と同じ（指摘 485）。
+#[test]
+fn boot_default_decision_follows_the_resolver_rules() {
+    let cases = [
+        (Anchor::Bottom, None, PairDecision::JoinLeft),
+        (Anchor::Bottom, Some(0), PairDecision::JoinLeft),
+        (
+            Anchor::Bottom,
+            Some(36),
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ),
+        (
+            Anchor::Top,
+            Some(-20),
+            PairDecision::JoinLeftOffset { offset: -20 },
+        ),
+        (Anchor::Free, None, PairDecision::JoinLeft),
+        (
+            Anchor::Free,
+            Some(100),
+            PairDecision::Keep(KeepReason::FreePosition),
+        ),
+        (
+            Anchor::Left,
+            Some(36),
+            PairDecision::Keep(KeepReason::DesktopEdge),
+        ),
+        (
+            Anchor::Right,
+            None,
+            PairDecision::Keep(KeepReason::DesktopEdge),
+        ),
+    ];
+    for (anchor, default_x, expected) in cases {
+        assert_eq!(
+            boot_default_decision(anchor, default_x),
+            expected,
+            "{anchor:?} {default_x:?}"
         );
     }
 }
