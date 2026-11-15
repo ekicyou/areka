@@ -374,7 +374,8 @@ fn edge_partner_is_the_nearest_side_edge_scope_attached_with_no_gap() {
     // (辺のスコープの矩形の列（近い順）, 相手)
     let right_of_cur = at(1300, 500);
     let left_of_cur = at(800, 500);
-    let rows: [(Vec<(usize, ChainRect)>, Option<(usize, Adjacency)>); 6] = [
+    type Row = (Vec<(usize, ChainRect)>, Option<(usize, Adjacency)>);
+    let rows: [Row; 6] = [
         // cur は辺のスコープの左に付いている。
         (
             vec![(1, right_of_cur)],

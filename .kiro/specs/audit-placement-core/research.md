@@ -2488,3 +2488,24 @@ ukadoc が沈黙している所で、測れば仕様の裏付けになるもの�
 - 残す限り: 18.10「この仕様で行く」の 8 つ（最終の判断・このままにする）。
 - 申し送り（タスク 8.2 が書く）: `audit-placement-follow` へ 18.2〜18.10 の各回の申し送り（鎖では `joined_with_prev` と `opposite`）、`audit-areka-app` へ 512 ほか、`defaultx` の読みと ukadoc の食い違いの起票（`/kiro-discovery`・18.10）、SSP の測りの候補 S1〜S4（18.10）。
 - タスク 8.2 はここから: 全体テスト（`tools/test-all.ps1`）・clippy・申し送りの書き出し・80 件の突き合わせ。
+
+## 19. 全体テストと申し送り（タスク 8.2・2026-11-15）
+
+### 19.1 clippy（要件 4.4）
+
+- `cargo clippy -p areka-placement --all-targets --features test-support` を枝の頭と、着手の前（`main` との分かれ目 `2f664eb6`）で回して比べた。この spec の直しと重なる指摘は 0 件・消えた指摘も 0 件。直しの途中で足した `type_complexity` 2 件（`chain_rule_tests.rs` の表の行・`reseed_tests.rs` の壊し方の表）は、`type` の別名にして消した（振る舞いは同じ・lib 984 件が通る）。残る 20 件（本番 6・テスト 14）はどれも着手の前からある。`clippy-199-lints` の brief に書いた。
+
+### 19.2 完了の申し送り
+
+- 指摘 13 で、本体の `crates/areka/src/runtime/move_cue_place.rs` の主モニタの作業領域の写しを、配置の crate の公開の関数 `areka_placement::work_area_px` に替えた（要件 2.10）。
+- 追随の持ち物の古い文（設計の `follow/work_area_clamp.rs:L18` の「examples は `#[path]` で配置の層を取り込む」）は、`audit-placement-follow` の着地（#460）でもう消えている（今の `work_area_clamp.rs` に `examples`・`#[path]` の文は 0 件）。
+- `audit-areka-app` の brief へ: 18.1〜18.9 の本体の分（81 の残り・略称・古い名指し・見送り点の数・記憶の継ぎ目・`assets_tests.rs`・記憶の帳面の名・task 番号・呼び手の数・届かない腕・512 ほかの写し）を件 1〜10 に、行を引き直して書いた。1 回目の 159（`collision-probe.rs` の行の番号と `prepare_stages`）は 2 回目の 295 と 7 回目で直したので渡していない。
+- `audit-test-kits` の brief へ: `log-capture-kit/src/lib.rs:28` の「19 crate」（今は 20）。
+- `audit-placement-follow` は完了済み（`.kiro/specs/completed/`）なので、追随の持ち物の申し送りは受け手が無い。タスク 8.2 は brief を作らず、進行役へ一覧で返した（起票は進行役が決める）。
+- 起票の候補（進行役が `/kiro-discovery` で起票する）: 164（`DraggingState` の「位置が分からない」・C20 の後）と、`defaultx` の読みが ukadoc（2.9.13）と違う件（18.10・SSP の測りの候補 S1〜S4 はその材料）。
+
+### 19.3 突き合わせ
+
+- 80 件: 設計の「80 件と単位の対応」の表は 1〜80 を 1 回ずつ持ち、受け持つタスク（1〜8.1）は全部済み。裁定で残す指摘は 0 件、2 本目の spec は 0 本（議題 7）。かけ直しで出た分の残す 1 件（88）・回す 1 件（164）は 18 節の裁定のとおり。
+- `git diff --stat main...HEAD -- vendors/ Cargo.lock` は空。終了の道（`app_exit`・`smoke_exit` ほか）は触っていない（差分は `quit_app` を名指すコメントの言い換えだけ）。
+- `cargo test -p log-capture-kit`（crate 全体）・`cargo fmt --all -- --check`・`cargo test -p areka-placement --features test-support` は緑。

@@ -246,7 +246,8 @@ fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
 /// バルーン窓が無いスコープと、バルーン窓の大きさが読めないスコープは別の理由で読み飛ばす。
 #[test]
 fn t_rs04c_balloon_window_gone_and_size_unknown_have_their_own_reasons() {
-    let cases: [(&str, fn(&mut World, Entity)); 2] = [
+    type Break = fn(&mut World, Entity);
+    let cases: [(&str, Break); 2] = [
         ("balloon_window_gone", |world, balloon| {
             world.entity_mut(balloon).remove::<WindowPos>();
         }),

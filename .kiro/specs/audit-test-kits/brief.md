@@ -76,3 +76,7 @@
 ## 2026-11-13 棚卸㊱で拾った申し送り（placement-crate-split から）
 - **件（記録の捕まえの手助けの写し）**: `crates/log-capture-kit/src/expect.rs` の `expect_one`・`ExpectField` と同じものを、`crates/areka-emo-present/src/scale_tests.rs` と `crates/areka-emo-text/tests/attach_wiring_test.rs` が自前で持っている。どちらのクレートも `log-capture-kit` を開発用の依存に持つ＝写しを消して道具の側を使う。完了した `placement-crate-split` の設計（design.md 807 行目）が「完了の棚卸で扱う」と書いたが、その完了の棚卸で拾われなかった。区分 A（見直しの範囲の重複）。
 - **待つ相手の改め**: 本体の crate 分けの各段（`runtime-crate-split` ほか）が `crates/log-capture-kit/tests/file_length_guard_test.rs` と `workspace_scan_test.rs` の名指しを書き換える＝「いつでも取ってよい」ではなく、その段と同じウェーブに置かない（2026-11-13 棚卸㊱で見込みを C21 へ動かした）。
+
+## 2026-11-15 `audit-placement-core` の完了の申し送り
+
+- **件（数の古い文）**: `crates/log-capture-kit/src/lib.rs:28` が「消費する 19 crate」と書く。`log-capture-kit` を引く `Cargo.toml` は 20 ある（2026-11-15 の数え）。数を書かない文にするか、数え直す。
