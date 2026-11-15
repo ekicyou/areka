@@ -3,12 +3,14 @@
 //! 起動の並べ直し・隣り合いの印の保存・拡大率の後の詰め直しの 3 か所が、同じ規則で組を作る:
 //! ⑴ 鎖の前の窓は、自分より下の番号で、左右の辺に揃えない一番近いスコープ。⑵ 左の組は隙間 0 か
 //! そのスコープの `defaultx` の隙間で隣り合う（右の組は隙間 0 だけ）。⑶ 覚えた印 `left` は
-//! 鎖の前の窓の左に `defaultx` の隙間で付く。
+//! 鎖の前の窓の左に `defaultx` の隙間で付く。⑷ 詰め直しは、辺のスコープの隣に隙間 0 で付いていた窓を
+//! その辺のスコープの隣へ付け直す。規則の説明は `areka_placement::chain_rule`。
 //!
 //! 窓は本番と同じく resolver の出力で生やす（`chain_finalize_align_tests` の `spawn_resolved`）。
 //! 拡大率の変化は、窓の大きさを変えて下端の中央を保つ置き直し（拡大率の相の再射影の結果の形）で作る。
 
 use bevy_ecs::change_detection::DetectChangesMut;
+use wintf::ecs::drag::DraggingState;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
 use super::chain_finalize_align_tests::{SPAWN, WA, sizes, spawn_resolved, x_of};
@@ -16,10 +18,11 @@ use super::chain_finalize_persist_test_support::PersistStore;
 use super::test_support::PerTargetSizes;
 use super::*;
 
-use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, AdjacencyMark};
+use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, AdjacencyMark, ScriptPlaced};
 use areka_placement::chain_realign::{arm_chain_realign, snapshot_char_rects};
 use areka_placement::resolver::Anchor;
 use areka_placement::script_alignment::{AlignmentWord, apply_script_alignment};
+use areka_placement::sticky_group_ledger::seed_sticky_descript;
 use areka_sylphya::PersistKey;
 
 /// 全スコープの窓の大きさを `num / den` 倍にし、下端の中央を保って置き直す。新しい大きさの
@@ -211,5 +214,202 @@ fn realign_skips_a_boot_script_side_edge_scope_as_the_chain_base() {
     assert!(
         gap.abs() <= ADJACENT_TOLERANCE_PX,
         "scope 2 が本体の左に詰まっていない（隙間 {gap}）"
+    );
+}
+
+// ── 鎖の規則の総括（audit-placement-core research 18.10 の場合の表・本体の道） ──────────────
+
+/// スコープのキャラ窓の x を書き換える（利用者がドラッグで置いた形）。
+fn put_x(world: &mut World, scope: usize, x: i32) {
+    let gw = world.resource::<GhostWindows>().clone();
+    let mut wp = world
+        .get_mut::<WindowPos>(gw.char_window(scope).expect("char 窓がある"))
+        .expect("WindowPos がある");
+    let wp = wp.bypass_change_detection();
+    let pos = wp.position.expect("位置がある");
+    wp.position = Some(Point { x, y: pos.y });
+}
+
+fn width_of(world: &World, scope: usize) -> i32 {
+    let gw = world.resource::<GhostWindows>().clone();
+    world
+        .get::<WindowPos>(gw.char_window(scope).expect("char 窓がある"))
+        .and_then(|wp| wp.size)
+        .expect("大きさがある")
+        .width
+}
+
+/// 表 T24（指摘 515）: descript が左右の辺のスコープを、最初の確定より前に台本が下端・free へ
+/// 揃え直しても（x は辺のまま）、次の記憶の無いスコープの基準は resolver と同じ本体のまま。
+#[test]
+fn a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base() {
+    let mut gaps = Vec::new();
+    for word in [Anchor::Bottom, Anchor::Free] {
+        let shown = sizes(&SPAWN);
+        let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
+        assert!(apply_script_alignment(
+            &mut world,
+            1,
+            &AlignmentWord::Anchor(word)
+        ));
+        assert_eq!(
+            x_of(&world, 1),
+            WA.right - 278,
+            "{word:?} 前提: 揃え直しても x は辺のまま"
+        );
+
+        finalize_chain_once_with(&shown, &mut world);
+
+        assert_eq!(
+            x_of(&world, 1),
+            WA.right - 278,
+            "{word:?}: 辺にいる窓は動かさない"
+        );
+        gaps.push((word, left_gap(&world, 0, 2)));
+    }
+    assert_eq!(
+        gaps,
+        [(Anchor::Bottom, 0), (Anchor::Free, 0)],
+        "scope 2 の基準は本体のまま（辺にいる窓の隣へ動かさない）"
+    );
+}
+
+/// 辺のスコープの隣へ付ける場合の行: (descript の鍵, 値, スコープの数, 辺のスコープ, 付けた窓, 辺は右か)。
+type EdgeRow = (&'static str, &'static str, usize, usize, usize, bool);
+
+/// 3 スコープ: 右の辺の kero の左に scope 2。
+const KERO_RIGHT: EdgeRow = ("kero.seriko.alignmenttodesktop", "right", 3, 1, 2, true);
+
+/// 辺のスコープの隣（内側）へ隙間 0 で付けた x。
+fn beside_edge(world: &World, (_, _, _, edge, attached, right_edge): EdgeRow) -> i32 {
+    if right_edge {
+        x_of(world, edge) - width_of(world, attached)
+    } else {
+        x_of(world, edge) + width_of(world, edge)
+    }
+}
+
+/// 起動を確定し、付ける窓を辺のスコープの隣へ隙間 0 で置き（`placed` で並びを足せる）、100% → 200% の
+/// 詰め直しを流す（`after_arm` は武装の後・解く前）。辺のスコープは辺に付いたまま大きくなる
+/// （拡大率の相の再射影の結果の形）。解いた後の World を返す。
+fn attach_to_edge_and_rescale(
+    row: EdgeRow,
+    placed: impl FnOnce(&mut World),
+    after_arm: impl FnOnce(&mut World),
+) -> World {
+    let (key, word, scopes, edge, attached, right_edge) = row;
+    let shown = sizes(&SPAWN[..scopes]);
+    let mut world = spawn_resolved(&[(key, word)], &shown, scopes);
+    finalize_chain_once_with(&shown, &mut world);
+    let x = beside_edge(&world, row);
+    put_x(&mut world, attached, x);
+    placed(&mut world);
+
+    let before = snapshot_char_rects(&world);
+    let shown = rescale_keeping_bottom_center(&mut world, 2, 1);
+    let edge_x = if right_edge {
+        WA.right - width_of(&world, edge)
+    } else {
+        WA.left
+    };
+    put_x(&mut world, edge, edge_x);
+    arm_chain_realign(&mut world, before);
+    after_arm(&mut world);
+    realign_chain_once_with_source(&shown, &mut world);
+
+    assert_eq!(
+        x_of(&world, edge),
+        edge_x,
+        "{key},{word}: 辺のスコープは動かない"
+    );
+    world
+}
+
+/// 付けた窓の x と、辺のスコープの隣の x の差（0 なら付いたまま）。
+fn off_the_edge(world: &World, row: EdgeRow) -> i32 {
+    x_of(world, row.4) - beside_edge(world, row)
+}
+
+/// 表 T32（指摘 520）: 利用者が左右の辺のスコープの隣へ付けた窓は、拡大率が変わっても辺のスコープの
+/// 隣に付いたまま。
+#[test]
+fn a_window_attached_to_a_side_edge_scope_stays_attached_after_100_to_200() {
+    let rows = [
+        KERO_RIGHT,
+        // 3 スコープ: 左の辺の kero の右に scope 2。
+        ("kero.seriko.alignmenttodesktop", "left", 3, 1, 2, false),
+        // 2 スコープ: 右の辺の本体の左に kero（鎖の頭が辺のスコープの隣に付く）。
+        ("sakura.seriko.alignmenttodesktop", "right", 2, 0, 1, true),
+    ];
+    let off = rows.map(|row| {
+        let world = attach_to_edge_and_rescale(row, |_| {}, |_| {});
+        (row.0, row.1, off_the_edge(&world, row))
+    });
+    assert_eq!(
+        off,
+        rows.map(|(key, word, ..)| (key, word, 0)),
+        "付けた窓は辺のスコープの隣のまま（重なったまま残らない）"
+    );
+}
+
+/// 表 T33: 辺のスコープの隣に付いていても、鎖の前の窓の隣にも付いていた窓は、鎖の前の窓（本体）へ
+/// 付け直す（鎖の組が先）。
+#[test]
+fn a_window_beside_both_follows_the_previous_chain_window() {
+    // 本体の左端を kero の左端に揃える（scope 2 は両方の左に隙間 0 で付く）。
+    let world = attach_to_edge_and_rescale(
+        KERO_RIGHT,
+        |world| {
+            let x = x_of(world, 1);
+            put_x(world, 0, x);
+        },
+        |_| {},
+    );
+    assert_ne!(
+        x_of(&world, 0),
+        x_of(&world, 1),
+        "前提: 200% の後は本体と kero の左端が違う"
+    );
+    assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
+}
+
+/// 表 T34: 辺のスコープの隣に付いた窓も、詰め直しの「動かさない」の決まり（窓の組・ドラッグの最中・
+/// 武装の後の台本）に当たれば動かさない。辺のスコープがドラッグの最中のときも付け直さない。
+#[test]
+fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
+    let drag = |scope: usize| {
+        move |world: &mut World| {
+            let window = world
+                .resource::<GhostWindows>()
+                .char_window(scope)
+                .expect("char 窓がある");
+            world.entity_mut(window).insert(DraggingState {
+                drag_start_pos: Point::new(0, 0),
+                initial_window_pos: (0.0, 0.0),
+            });
+        }
+    };
+    let script_placed = |world: &mut World| {
+        let window = world
+            .resource::<GhostWindows>()
+            .char_window(2)
+            .expect("char 窓がある");
+        world.entity_mut(window).insert(ScriptPlaced);
+    };
+    let sticky = |world: &mut World| seed_sticky_descript(world, Some("0,2"));
+    let rows: [(&str, Box<dyn FnOnce(&mut World)>); 4] = [
+        ("辺のスコープがドラッグの最中", Box::new(drag(1))),
+        ("付けた窓がドラッグの最中", Box::new(drag(2))),
+        ("付けた窓を武装の後に台本が置いた", Box::new(script_placed)),
+        ("付けた窓が窓の組に入っている", Box::new(sticky)),
+    ];
+    let off = rows.map(|(what, after_arm)| {
+        let world = attach_to_edge_and_rescale(KERO_RIGHT, |_| {}, after_arm);
+        (what, off_the_edge(&world, KERO_RIGHT))
+    });
+    assert_eq!(
+        off.map(|(_, off)| off),
+        [428; 4],
+        "置き直しのままで、付け直さない: {off:?}"
     );
 }

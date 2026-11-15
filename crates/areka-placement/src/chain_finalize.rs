@@ -31,9 +31,10 @@
 //! - 解きの核は組ごとの決め（[`PairDecision`]）を受け取る [`resolve_chain`] で、起動時の確定
 //!   （`runtime::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
 //!   一致から、記憶から戻したスコープを覚えた印（[`remembered_decision`]）から決めて渡す
-//!   （dpi-realign-remembered-chain 要件 6.3）。拡大率の後の詰め直しは変わる直前の隣り合い
-//!   （[`judge_chain_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。組の作り方は
-//!   3 か所（起動・詰め直し・隣り合いの印の保存）で同じ「鎖の規則」（[`join_left`] の上の節）。
+//!   （`chain_rule::boot_chain`・dpi-realign-remembered-chain 要件 6.3）。拡大率の後の詰め直しは
+//!   変わる直前の隣り合い（[`judge_chain_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。
+//!   組の作り方は 3 か所（起動・詰め直し・隣り合いの印の保存）で同じ「鎖の規則」
+//!   （[`super::chain_rule`] の説明）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
 //!   （`runtime::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
@@ -160,27 +161,13 @@ pub fn boot_default_decision(anchor: Anchor, default_x: Option<i32>) -> PairDeci
 }
 
 // ---------------------------------------------------------------------------
-// 鎖の規則（audit-placement-core 494・495・開発者の裁定 2026-11-15）
+// 鎖の規則の部品（規則と道ごとの当て方は `chain_rule` の説明・audit-placement-core 494・495）
 // ---------------------------------------------------------------------------
 //
-// 起動の並べ直し（`runtime::frame` の `finalize_chain_once_with`）・隣り合いの印の保存
-// （`persist::push_adjacency_marks`）・拡大率の後の詰め直し（`chain_realign`）の 3 か所が、
-// 同じこの規則で組を作る。⑴ の鎖に入る揃え方（[`joins_chain`]）と ⑵ の `defaultx` の隙間
+// 起動の並べ直し（`chain_rule::boot_chain`）・隣り合いの印の保存（`persist::push_adjacency_marks`）・
+// 拡大率の後の詰め直し（`chain_realign`）の 3 か所が、同じ鎖の見方（`chain_rule::ChainRule`）で組を
+// 作り、ここの関数で隣り合いと決めを出す。鎖に入る揃え方（[`joins_chain`]）と `defaultx` の隙間
 // （[`chain_gap`]）は resolver に置き、resolver の P2 も同じ関数で連ねる。
-//
-// ⑴ 左右の辺に揃えるスコープは鎖（横の連なり）の外（resolver の P1' と同じ・[`joins_chain`]）。
-//    動かさず、次のスコープの基準にもしない。鎖の前の窓は、自分より下の番号で鎖に入る一番近い
-//    スコープ。
-// ⑵ 組が隣り合うのは、向かい合う端の隙間が 0、または左の隙間（前の窓の左端 − n の右端・
-//    中心の左右に関わらない）がそのスコープの `defaultx`（[`chain_gap`]）のとき（どちらも
-//    ±[`ADJACENT_TOLERANCE_PX`]・[`judge_chain_adjacency`]）。resolver の P2 は左へだけ空けるので、
-//    右の組は隙間 0 だけ。
-// ⑶ 覚えた印 `left` は「鎖の前の窓の左に、descript の `defaultx` の隙間で付いていた」と読む
-//    （[`join_left`]。利用者がドラッグで隙間 0 に付けた組も、次の起動では `defaultx` だけ離れる）。
-//
-// 辺かどうかを決める揃え方は呼び手が選ぶ: 窓を今動かす起動の並べ直しと詰め直しは窓の今の揃え方
-// （`follow::Anchored`・台本の吸着を含む）、次の起動に読まれる印を書く保存は次の起動でも効く
-// descript の揃え方（台本の吸着はその回かぎり）。
 
 /// 前の窓の左に `gap` だけ空けて付ける決め（0 なら `JoinLeft`）。
 pub fn join_left(gap: i32) -> PairDecision {
@@ -381,6 +368,7 @@ pub enum KeepReason {
     /// 起動: 印の無い古い記憶。
     NoRememberedMark,
     /// 起動: 記憶に位置の無い、左右の辺に揃えるスコープ（resolver の P1'）。
+    /// 詰め直し: 隣に付いた窓の基準として列に入れた辺のスコープ（鎖の規則 ⑷）。
     DesktopEdge,
     /// 起動: 記憶に位置の無い、x を書いた Free のスコープ（resolver の P3）。
     FreePosition,

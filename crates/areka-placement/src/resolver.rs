@@ -516,7 +516,7 @@ impl Anchor {
 }
 
 /// 横の連なり（P2・鎖）に入る揃え方か（左右の辺は入らない・P1'）。起動の並べ直し・隣り合いの
-/// 印の保存・拡大率の後の詰め直しも同じこの決まりで組を作る（`chain_finalize` の「鎖の規則」）。
+/// 印の保存・拡大率の後の詰め直しも同じこの決まりで組を作る（`chain_rule` の「鎖の規則」）。
 pub fn joins_chain(anchor: Anchor) -> bool {
     !matches!(anchor, Anchor::Left | Anchor::Right)
 }

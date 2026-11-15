@@ -298,7 +298,7 @@ pub struct ScopeWindows {
     /// （`persist::persist_unremembered_char_positions`）は、この値が残っている
     /// スコープだけを書く。
     pub default_char_pos: Option<PointPx>,
-    /// 記憶から読んだ隣り合いの印（鎖の前の窓との組を表す・`chain_finalize` の鎖の規則）。記憶から戻したスコープ
+    /// 記憶から読んだ隣り合いの印（鎖の前の窓との組を表す・`chain_rule` の鎖の規則）。記憶から戻したスコープ
     /// （`default_char_pos == None`）についてだけ意味を持ち、`None` は印の無い記憶か記憶が無いこと。
     /// 据えるのは窓を作る閉包（`ghost_session::prepare_ghost_windows`）だけ。
     pub remembered_adjacency: Option<AdjacencyMark>,

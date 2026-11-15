@@ -38,6 +38,8 @@ pub mod balloon_syncscale;
 pub mod chain_finalize;
 /// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
 pub mod chain_realign;
+/// 鎖の規則（起動の確定・隣り合いの印の保存・拡大率の後の詰め直しが同じ規則で組を作る）。
+pub mod chain_rule;
 pub mod config;
 /// descript の既定の面（`*.seriko.defaultsurface`）の読みと戻り先の候補の並び（descript-window-keys）。
 pub mod descript_window_keys;

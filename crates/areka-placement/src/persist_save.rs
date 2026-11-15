@@ -9,14 +9,11 @@ use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 use wintf::ecs::WindowPos;
 
-use super::super::chain_finalize::{
-    AdjacencyMark, ChainRect, ScriptPlaced, chain_gap, joins_chain, judge_chain_adjacency,
-};
+use super::super::chain_finalize::{AdjacencyMark, ChainRect, ScriptPlaced, judge_chain_adjacency};
 use super::super::chain_realign::snapshot_char_rects;
-use super::super::config::{PlacementConfig, build_placement_config};
+use super::super::chain_rule::{ChainRule, ChainView};
 use super::super::follow::origin_position;
-use super::super::reset_pos::DefaultPlacementBasis;
-use super::super::resolver::{Anchor, PointPx, SizePx};
+use super::super::resolver::{PointPx, SizePx};
 use super::super::spawn::GhostWindows;
 use super::super::sticky_group_ledger::StickyGroupLedger;
 use super::{
@@ -65,7 +62,7 @@ fn send_entries(
     world: &World,
     entries: Vec<(PersistKey, String)>,
     logged: &BTreeSet<usize>,
-    chain: Option<&SavedChain>,
+    chain: Option<&ChainRule>,
 ) {
     let Some(wiring) = world.get_non_send::<PersistWiring>() else {
         // fallback 未挿入等で PersistWiring が無い → debug!＋no-op（起動を止めない・6.2）。
@@ -148,11 +145,12 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
 /// （dpi-realign-remembered-chain 要件 6.2・6.4・design AdjacencyPersist）。束の中身（位置の値を
 /// 含む）は変えない。
 ///
-/// 印は書く時点の画面の並び（各キャラ窓の [`WindowPos`]）で、`chain_finalize` の鎖の規則で決める:
+/// 印は書く時点の画面の並び（各キャラ窓の [`WindowPos`]）で、鎖の規則（`chain_rule`）で決める:
 /// n が組（[`StickyGroupLedger`]）に入っているか左右の辺のスコープなら `none`、そうでなければ鎖の
 /// 前の窓との [`judge_chain_adjacency`] の結果（左は隙間 0 か n の `defaultx` の隙間・右は隙間 0）。
-/// 辺かどうかと `defaultx` は、次の起動でも効く descript の値で決める（台本の吸着はその回かぎりで、
-/// 次の起動の読み手の組と合わなくなる）。鎖の前の窓が無ければログなしで飛ばし、矩形の読めない窓に
+/// 辺かどうかと `defaultx` は、次の起動でも効く descript の値で決める（[`ChainView::Saved`]。台本の
+/// 吸着はその回かぎりで、次の起動の読み手の組と合わなくなる）。辺のスコープの隣に付けた窓の並びは
+/// 印に残らない（印は鎖の前の窓との組だけ）。鎖の前の窓が無ければログなしで飛ばし、矩形の読めない窓に
 /// 触れる組は印を書かず `warn!` を出す。窓の一式（[`GhostWindows`]）そのものが無いときは印を足さず
 /// `debug!` を出す。束にもう有る印の鍵は足さない（同じ画面の並びから決めるので値は同じ・1 つにまとめる）。
 ///
@@ -161,7 +159,7 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
 fn adjacency_marks_with(
     world: &World,
     mut entries: Vec<(PersistKey, String)>,
-    chain: Option<&SavedChain>,
+    chain: Option<&ChainRule>,
 ) -> Vec<(PersistKey, String)> {
     let written: BTreeSet<usize> = entries
         .iter()
@@ -177,20 +175,13 @@ fn adjacency_marks_with(
     let chain = match chain {
         Some(chain) => chain,
         None => {
-            built = SavedChain::of(world);
+            built = saved_chain(world);
             &built
         }
     };
-    let scopes: Vec<usize> = world
-        .get_resource::<GhostWindows>()
-        .map(|gw| gw.scopes().collect())
-        .unwrap_or_default();
     let touched = written
         .iter()
-        .flat_map(|&k| {
-            let next = scopes.iter().copied().find(|&s| s > k && chain.joins(s));
-            std::iter::once(k).chain(next)
-        })
+        .flat_map(|&k| std::iter::once(k).chain(chain.next(ChainView::Saved, k)))
         .collect();
     push_adjacency_marks(world, &mut entries, touched, chain);
     entries
@@ -205,43 +196,18 @@ pub(super) fn with_adjacency_marks(
     adjacency_marks_with(world, entries, None)
 }
 
-/// 印を決める鎖の見方: 次の起動でも効く descript の揃え方と `defaultx`（並べ直しの材料
-/// [`DefaultPlacementBasis`] から組む）。材料が無ければ全スコープを下端・`defaultx` 0 と見て、
+/// 印を決める鎖の見方（[`ChainRule`]。印は [`ChainView::Saved`]＝次の起動でも効く descript の
+/// 揃え方と `defaultx` で決める）。並べ直しの材料が無ければ全スコープを下端・`defaultx` 0 と見て、
 /// その決めを `debug!` 1 行に残す。
-struct SavedChain(Option<PlacementConfig>);
-
-impl SavedChain {
-    fn of(world: &World) -> Self {
-        let config = world
-            .get_resource::<DefaultPlacementBasis>()
-            .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv));
-        if config.is_none() {
-            debug!(
-                target: "areka::persist::save",
-                "隣り合いの印: 並べ直しの材料（DefaultPlacementBasis）が無いので、全スコープを下端・defaultx 0 として印を判じる"
-            );
-        }
-        Self(config)
+fn saved_chain(world: &World) -> ChainRule {
+    let chain = ChainRule::of_ghost_windows(world);
+    if !chain.has_basis() {
+        debug!(
+            target: "areka::persist::save",
+            "隣り合いの印: 並べ直しの材料（DefaultPlacementBasis）が無いので、全スコープを下端・defaultx 0 として印を判じる"
+        );
     }
-
-    /// (揃え方, `defaultx`)。
-    fn terms(&self, scope: usize) -> (Anchor, Option<i32>) {
-        self.0
-            .as_ref()
-            .and_then(|c| c.scopes.get(&scope))
-            .map_or((Anchor::Bottom, None), |sc| {
-                (Anchor::from_alignment(&sc.alignment), sc.default_x)
-            })
-    }
-
-    fn joins(&self, scope: usize) -> bool {
-        joins_chain(self.terms(scope).0)
-    }
-
-    fn gap(&self, scope: usize) -> i32 {
-        let (anchor, default_x) = self.terms(scope);
-        chain_gap(anchor, default_x)
-    }
+    chain
 }
 
 /// 組（鎖の前の窓, n）ごとに書く時点の画面の並びから印を決め、スコープ n の鍵で束の後ろへ足し、
@@ -251,7 +217,7 @@ fn push_adjacency_marks(
     world: &World,
     entries: &mut Vec<(PersistKey, String)>,
     pairs: BTreeSet<usize>,
-    chain: &SavedChain,
+    chain: &ChainRule,
 ) -> Vec<(usize, AdjacencyMark)> {
     let mut added = Vec::new();
     if pairs.is_empty() {
@@ -281,11 +247,15 @@ fn push_adjacency_marks(
         {
             continue;
         }
-        let mark = if ledger.is_some_and(|l| l.group_of(n as u32).is_some()) || !chain.joins(n) {
+        let mark = if ledger.is_some_and(|l| l.group_of(n as u32).is_some())
+            || !chain.joins(ChainView::Saved, n)
+        {
             AdjacencyMark::Separate
         } else {
-            // 鎖の前の窓: n より下の番号で鎖に入る一番近いスコープ（鎖の規則 ⑴）。
-            let Some(p) = in_set.range(..n).rev().copied().find(|&s| chain.joins(s)) else {
+            // 鎖の前の窓（鎖の規則 ⑴）。無ければ n は鎖の頭で、印を持たない。
+            // shortcut: 辺のスコープの隣に付けた窓の並びは印に残らない（印は鎖の前の窓との組だけ）。
+            // 覚えるなら、印に相手のスコープを書き足す（保存の形と sylphya の読みが変わる）。
+            let Some(p) = chain.prev(ChainView::Saved, n) else {
                 continue;
             };
             let (Some(prev), Some(cur)) = (rect(p), rect(n)) else {
@@ -452,7 +422,7 @@ pub fn persist_unremembered_char_positions(world: &World) {
         return;
     }
     // 鎖の見方は 1 回の保存で 1 度だけ組み、送り口の本体へも渡す（読めない値の warn! を重ねない・502）。
-    let chain = SavedChain::of(world);
+    let chain = saved_chain(world);
     // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
     for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked, &chain) {
         info!(
