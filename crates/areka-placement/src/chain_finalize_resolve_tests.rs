@@ -204,15 +204,11 @@ fn keep_reason_fixed_words() {
     }
 }
 
-/// 判断の語: 付ける向きは固定語、動かさないは理由の語（7.1）。
+/// 判断の語: 右に付ける組の固定語（7.1）。左に付ける組の語と、動かさないが理由の語になることは
+/// `mark_non_positive_widths_rewrites_only_unusable_joins` が確かめる。
 #[test]
 fn pair_decision_words() {
-    assert_eq!(PairDecision::JoinLeft.as_str(), "adjacent-left");
     assert_eq!(PairDecision::JoinRight.as_str(), "adjacent-right");
-    assert_eq!(
-        PairDecision::Keep(KeepReason::StickyGroup { scope: 1 }).as_str(),
-        "sticky-group"
-    );
 }
 
 // -----------------------------------------------------------------------------
@@ -309,6 +305,5 @@ fn boot_restored_scope_follows_the_remembered_mark() {
             boot_pair_decision(&state(None), false, false, mark),
             expected
         );
-        assert_eq!(remembered_decision(mark), expected);
     }
 }

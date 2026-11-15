@@ -149,6 +149,9 @@ pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
 /// （[`MoveCue`](Self::MoveCue)）である。**1 語が 2 トリガを指すと route 名での切り分けが
 /// 原理的に不能になる**（DPI 変化ゼロの起動が「DPI 由来」を名乗る偽陽性が毎回出る）ため、
 /// 語彙側を完全化して 1:1 を保つ。
+///
+/// ただし今は [`MoveCue`](Self::MoveCue)・[`Restore`](Self::Restore) の 2 語が複数の呼び手を
+/// 持ち、語だけではどの呼び手かを見分けられない（呼び手は各変種の注に挙げる）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PlacementRoute {
     /// spawn 初期配置（`spawn` の窓生成時）。
@@ -185,10 +188,17 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) と別語にする（D13）。混同すると要件 1.9 の
     /// 受理回数突合（セッション②）に偽陽性が混入する。
     ReportedSizeReconcile,
-    /// `\![move]` cue によるスクリプト明示移動（`move_window_to` の**対象窓**）。
+    /// `\![move]` cue などの明示の操作による移動（`move_window_to` の**対象窓**）。
     ///
     /// 明示操作の尊重ゆえ遷移ガード適用外＝ドラッグ・[`Restore`](Self::Restore) と同族（D13）。
     /// 随伴バルーン側の書込は [`BalloonFollow`](Self::BalloonFollow) を持つ。
+    // 名は `\![move]` から来たが、作る道は 2 つある。1 つは `follow::move_window_to` で、呼び手は
+    // 台本の `\![move]`（本体の `runtime::move_cue_place`）とその連れ動き（`follow_sticky_move`）・
+    // 起動の連鎖の確定（本体の `runtime::frame::drain_resnap` の `finalize_chain_once_with`）・
+    // 位置の初期化（`reset_pos::reset_window_positions`＝台本・メニュー「シェル位置初期化」・近道）。
+    // もう 1 つは今の大きさのまま当て直す `follow::resize_window_to` で、呼び手は台本の吸着の向きの
+    // 変更（`script_alignment::apply_script_alignment`）とドラッグの終わりの当て直し
+    // （`finish_char_drag`）。この語だけではこれらを見分けられない。
     MoveCue,
     /// バルーン窓ドラッグ解放時の `windowposition.limit` 補正
     /// （`on_balloon_drag_end` の解放時補正・areka-P0-windowposition-limit DD7）。
@@ -217,8 +227,9 @@ pub enum PlacementRoute {
     /// （areka-P0-dpi-transition-atomicity C4 `chain_realign::realign_chain_once_with`）。
     ///
     /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
-    /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
-    /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
+    /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決めて
+    /// [`MoveCue`](Self::MoveCue) で書くのに対し、こちらは遷移後の新しい幅で左端を連ね直す
+    /// ——由来が違うので語も分ける。
     // 発行者は `chain_realign::realign_chain_once_with`。
     ChainRealign,
     /// 面の `move` のずれを窓の位置へ当てる書込（seriko-pattern-calls「MoveShiftPlacement」・

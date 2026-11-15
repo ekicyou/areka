@@ -13,7 +13,7 @@ use tracing::{info, warn};
 use super::reseed::{StandardScope, reinstall_balloon, resolve_standard_scopes};
 use super::reset_pos::DefaultPlacementBasis;
 use super::resolver::OffsetBase;
-use super::spawn::GhostWindows;
+use super::spawn::{BalloonLimit, GhostWindows};
 
 /// 利用者がこのスコープのバルーンを標準の位置から動かした印（キャラ窓の entity に付ける）。
 ///
@@ -44,7 +44,7 @@ pub(crate) fn mark_by_base(world: &mut World, c: Entity, base: OffsetBase) {
 ///
 /// - 値が前と同じなら何もしない（記録も無し）。
 /// - 利用者が動かした印（[`BalloonUserMoved`]）の無いスコープだけを置き直す。ドラッグした・
-///   記憶から戻したバルーンは位置を保ち、材料だけを替える。
+///   記憶から戻したバルーンは位置を保ち、材料と画面の内に保つ指定（`BalloonLimit`）だけを替える。
 /// - 材料・窓の一式が無ければ `warn!(event = "balloon_face_windowposition_skipped")` を出して
 ///   何もしない。変化 1 回につき `info!(event = "balloon_face_windowposition")` を 1 行。
 pub fn apply_face_windowposition(
@@ -82,12 +82,12 @@ pub fn apply_face_windowposition(
                 .entity(running.char_window)
                 .contains::<BalloonUserMoved>();
             if untouched {
-                reinstall_balloon(
-                    world,
-                    &running,
-                    placement.balloon_offset_base,
-                    placement.balloon_keyword_base,
-                );
+                reinstall_balloon(world, &running, &placement);
+            } else {
+                // 動かしたバルーンは置き直さないが、画面の内に保つ指定は新しい面の値にする。
+                world
+                    .entity_mut(running.balloon_window)
+                    .insert(BalloonLimit(placement.balloon_limit));
             }
             untouched
         }

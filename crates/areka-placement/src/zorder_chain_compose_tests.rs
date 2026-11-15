@@ -336,6 +336,36 @@ fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_
         "繋ぎはスコープの継ぎ目だけ（グループの境目も継ぎ目の 1 つ）。\
          区間は手前側の枠のもの——基底（g0）の末尾からタグ由来（g1）へ渡る繋ぎは g0 が名乗る"
     );
+
+    // シェルの切り替えで基底を据え直すと、基底はタグより大きい ID のまま先頭に座る。
+    // 並びは ID の順ではなく台帳の並び（基底が先・タグは追加順）で決まる。
+    let mut rebased = ZOrderGroupLedger::default();
+    rebased
+        .try_add_tag_group(parse_zorder_tokens(&["0", "1"]).expect("受理される").0)
+        .expect("重複しないので受理される");
+    let outcome = rebased.rebase_descript(parse_zorder_tokens(&["3", "2"]).expect("受理される").0);
+    assert_eq!(
+        outcome.seated_base_id,
+        Some(1),
+        "据え直した基底はタグより新しい ID"
+    );
+
+    let plan = composed(rebased.groups(), &inventory);
+
+    assert_eq!(
+        plan.members,
+        ents(&[b(3), s(3), b(2), s(2), b(0), s(0), b(1), s(1)]),
+        "ID が大きくても基底が最前"
+    );
+    assert_eq!(
+        plan.cross_edges,
+        vec![
+            edge(s(3), b(2), g(1)),
+            edge(s(2), b(0), g(1)),
+            edge(s(0), b(1), g(0))
+        ],
+        "区間は各グループの ID をそのまま名乗る"
+    );
 }
 
 // ===========================================================================

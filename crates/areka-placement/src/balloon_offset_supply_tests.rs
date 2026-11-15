@@ -12,7 +12,6 @@
 use areka_emo_compose::ScaleRatio;
 
 use super::config::{PlacementConfig, ScopeConfig};
-use super::windowposition::{apply_windowposition, to_screen_adjust};
 use super::*;
 use crate::shared_test_support::{cfg_of, k};
 
@@ -157,58 +156,6 @@ fn out_of_range_conversion_saturates_instead_of_wrapping() {
     assert_eq!(scaled(Some((i32::MAX, 3)), k(3, 1)), Some((i32::MAX, 9)));
 }
 
-// -------------------------------------------------------------------------
-// 5. 供給軸の分離と合流値（要件 2.3・design Testing Strategy「Unit Tests」4 の前半）
-// -------------------------------------------------------------------------
-
-/// シェル軸とバルーン軸が**異なる**とき、`descript` 由来はシェル軸で・`windowposition`
-/// 由来はバルーン軸で換算され、**加算後の合流値が同一空間（物理 px）の和になる**
-/// （要件 2.3・1.2）。
-///
-/// 現行フィクスチャは `seriko.dpi`／balloon `dpi` を宣言していないため 2 軸は今日つねに
-/// 一致する。この分岐はフィクスチャでは踏めないので、供給の 2 ステップを直に並べて踏む
-/// （要件 7.9「決定論で判定できない事項のみを実機へ回す」）。
-///
-/// 手計算: descript (100, −40) × シェル 5/4 = (125, −50)。
-/// windowposition (10, 20) × バルーン 2/1 = (20, 40)。合流 = (145, −10)。
-/// 混在したまま加算していた従来は (100+20, −40+40) = (120, 0) になり、本主張は落ちる。
-#[test]
-fn shell_axis_and_balloon_axis_sum_in_the_same_space() {
-    let shell = k(120, 96);
-    let balloon = k(192, 96);
-    let mut cfg = cfg_with_offset(Some((100, -40)));
-
-    // 供給の順序は本番と同じ——換算が先・windowposition の合流が後（design D3）。
-    apply_author_balloon_offset_scale(&mut cfg, &[0], shell);
-    assert_eq!(
-        cfg.scopes[&0].balloon_offset,
-        Some((125, -50)),
-        "合流の前にシェル軸で換算済みであること"
-    );
-
-    let adjust = to_screen_adjust(Some(10), Some(20), balloon);
-    assert_eq!(
-        adjust,
-        Some((20, 40)),
-        "windowposition はバルーン軸で換算される"
-    );
-    apply_windowposition(cfg.scopes.get_mut(&0).expect("scope 0"), adjust);
-
-    assert_eq!(cfg.scopes[&0].balloon_offset, Some((145, -10)));
-}
-
-/// 拡大率 1 では、合流後の値も換算を入れる前と bit 同一である（要件 2.2／2.3）。
-#[test]
-fn merged_value_at_identity_matches_the_pre_spec_sum() {
-    let mut cfg = cfg_with_offset(Some((266, -129)));
-    apply_author_balloon_offset_scale(&mut cfg, &[0], ScaleRatio::ONE);
-    apply_windowposition(
-        cfg.scopes.get_mut(&0).expect("scope 0"),
-        to_screen_adjust(Some(-190), Some(75), ScaleRatio::ONE),
-    );
-    assert_eq!(cfg.scopes[&0].balloon_offset, Some((266 - 190, -129 + 75)));
-}
-
 // =========================================================================
 // 供給結線（`prepare_stages_for_shell` の実経路）
 //
@@ -216,8 +163,8 @@ fn merged_value_at_identity_matches_the_pre_spec_sum() {
 // 合流より**前**に走ること、⑵ 合流後の値が両供給元を同一空間で加算した結果で
 // あること、⑶ 飽和が契約の語で**記録に出る**こと（要件 2.3／2.5／7.1／7.4）。
 //
-// 上の純関数の側の檻は純関数と 2 ステップの直列合成を固定したが、本番の呼出順そのものと
-// 記録の発生は踏んでいない。本群は `prepare_stages_for_shell`（＝`scale_then_merge` で
+// 上の純関数の側の檻は換算ステップだけを見ており、合流も本番の呼出順も記録の発生も
+// 踏んでいない。本群は `prepare_stages_for_shell`（＝`scale_then_merge` で
 // `apply_author_balloon_offset_scale` と `merge_scope_windowpositions` を並べている当の関数）
 // を回して踏む。
 //

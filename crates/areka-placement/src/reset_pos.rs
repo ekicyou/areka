@@ -35,6 +35,7 @@ use super::{primary_monitor, square_dpi, work_area_px};
 ///
 /// 窓の組ごとに 1 つ。起動の準備とシェルの切り替えの後始末が同じ形で置き（要件 7.4）、バルーンの
 /// 面が変わると面の `windowposition` の置き直し（`face_windowposition`）がその面の値へ入れ替える。
+/// バルーンの切り替えは、作者の DPI が替わるとき新しいバルーンの値を入れる（本体の `finish_balloon`）。
 /// 並べ直し（[`reset_window_positions`]）は descript の値から配置の設定を組んで読む。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct DefaultPlacementBasis {

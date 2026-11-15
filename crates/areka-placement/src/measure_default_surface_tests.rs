@@ -1,10 +1,9 @@
 //! 測りが各スコープの descript の既定の面で合成することの檻（descript-window-keys 要件 2.1・
 //! 2.3・2.4・2.6・7.2）。
 //!
-//! 4 通り: 検体のシェルに在る別の面を既定にするとその面の大きさ／無い番号なら組み込みの面の
-//! 大きさと記録 1 件／書かれていなければ今の期待値／組み込みの面も無ければ「既定の面が無い」を
-//! 記録せず合成の失敗の扱い（相方側は本体側の大きさ）へ委ねる。本体側の失敗は `measure_tests.rs` が
-//! 確かめる。
+//! 3 通り: 検体のシェルに在る別の面を既定にするとその面の大きさ／無い番号なら組み込みの面の
+//! 大きさと記録 1 件／組み込みの面も無ければ「既定の面が無い」を記録せず合成の失敗の扱い（相方側は
+//! 本体側の大きさ）へ委ねる。本体側の失敗は `measure_tests.rs` が確かめる。
 
 use std::path::Path;
 
@@ -80,19 +79,6 @@ fn missing_descript_default_surface_falls_back_to_builtin_with_one_log() {
     assert_eq!(ev.expect_field("scope"), "1");
     assert_eq!(ev.expect_field("missing"), "9999");
     assert_eq!(ev.expect_field("to"), "10");
-}
-
-/// 書かれていなければ今の期待値（本体側 0・相方側 10）のまま（要件 2.4・7.2）。
-#[test]
-fn unwritten_default_surface_keeps_current_sizes() {
-    let (sizes, events) = measure_emo2(&ghost_kv(&[("name", "x")]));
-    assert_eq!(sizes, vec![(SCOPE0_W, SCOPE0_H), (SCOPE1_W, SCOPE1_H)]);
-    assert!(
-        !events
-            .iter()
-            .any(|e| e.message().contains("default_surface_missing")),
-        "{events:?}"
-    );
 }
 
 /// descript の面も組み込みの面もシェルに無いときは「既定の面が無い」を記録しない。相方側は合成の

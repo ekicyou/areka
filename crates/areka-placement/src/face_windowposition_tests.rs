@@ -23,10 +23,9 @@ use crate::persist::{apply_restored_placements, balloon_offset_entries};
 use crate::reseed::{StandardScope, resolve_standard_scopes};
 use crate::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
 use crate::reset_pos::DefaultPlacementBasis;
-use crate::reset_pos::reset_pos_tests::give_fake_hwnds;
 use crate::sample_test_support::{balloon_root, emo2_root};
-use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{WA, with_com_initialized};
+use crate::spawn::{BalloonLimit, GhostWindows, spawn_ghost_windows};
+use crate::test_support::{WA, give_fake_handles, with_com_initialized};
 use crate::{PreparedPlacement, prepare_ghost_windows_with_work_area};
 use log_capture_kit::{CapturedEvent, capture};
 
@@ -36,6 +35,20 @@ fn other_face() -> (WindowPosition, WindowPositionRaw) {
         WindowPosition::new(Some(41), Some(-23)),
         WindowPositionRaw::new(Some("41".to_string()), None),
     )
+}
+
+/// [`other_face`] と同じ位置で、画面の内に保たない（`windowposition.limit,0`）面の値。
+fn limit_off_face() -> (WindowPosition, WindowPositionRaw) {
+    (
+        WindowPosition::new(Some(41), Some(-23)),
+        WindowPositionRaw::new(Some("41".to_string()), Some("0".to_string())),
+    )
+}
+
+fn limit_of(world: &World, windows: &GhostWindows, scope: usize) -> Option<BalloonLimit> {
+    world
+        .get::<BalloonLimit>(windows.balloon_window(scope).unwrap())
+        .copied()
 }
 
 /// [`other_face`] とも emo2 の既定とも違う、3 つ目の面の値。
@@ -67,7 +80,7 @@ fn booted_with(restored: &[(PersistKey, String)]) -> (World, GhostWindows) {
     let placements = apply_restored_placements(prepared.placements, restored, &snapshot);
     world.insert_resource(snapshot);
     let windows = spawn_ghost_windows(&mut world, &placements, &prepared.titles);
-    give_fake_hwnds(&mut world, &windows);
+    give_fake_handles(&mut world, &windows);
     // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
     world.flush();
     for scope in windows.scopes() {
@@ -396,5 +409,63 @@ fn balloon_reset_to_standard_moves_again_on_face_change() {
             );
             let _ = drain_window_pos_commands();
         }
+    });
+}
+
+/// 面の `windowposition.limit` は、画面の内に保つ指定（`BalloonLimit`）としてそのスコープの
+/// バルーン窓へ入る。標準の位置のバルーンも、利用者が動かしたバルーン（位置は保つ）も同じ。
+#[test]
+fn face_limit_reaches_the_balloon_window_moved_or_not() {
+    with_com_initialized(|| {
+        for dx in [0, 1] {
+            let (mut world, windows) = booted();
+            assert_eq!(
+                limit_of(&world, &windows, 0),
+                Some(BalloonLimit(true)),
+                "dx={dx}: 前提: 起動の値は既定の 1"
+            );
+            if dx != 0 {
+                drag_balloon(&mut world, &windows, 0, dx);
+            }
+            let before = balloon_pos(&world, &windows, 0);
+
+            let moved = apply_face_windowposition(&mut world, 0, limit_off_face());
+            assert_eq!(moved, dx == 0, "dx={dx}: 動かしたバルーンだけ置き直さない");
+            assert_eq!(
+                limit_of(&world, &windows, 0),
+                Some(BalloonLimit(false)),
+                "dx={dx}: 新しい面の limit が入る"
+            );
+            if dx != 0 {
+                assert_eq!(balloon_pos(&world, &windows, 0), before, "位置は保つ");
+            }
+            assert_eq!(
+                limit_of(&world, &windows, 1),
+                Some(BalloonLimit(true)),
+                "dx={dx}: 他のスコープは変わらない"
+            );
+            let _ = drain_window_pos_commands();
+        }
+    });
+}
+
+/// バルーン位置初期化も、材料の `windowposition.limit` を `BalloonLimit` として入れ直す。
+#[test]
+fn balloon_reset_reinstalls_the_limit_from_the_basis() {
+    with_com_initialized(|| {
+        let (mut world, windows) = booted();
+        world
+            .resource_mut::<DefaultPlacementBasis>()
+            .balloon
+            .windowpositions
+            .insert(0, limit_off_face());
+
+        assert!(reset_balloon_positions(
+            &mut world,
+            BalloonResetTrigger::Menu
+        ));
+        assert_eq!(limit_of(&world, &windows, 0), Some(BalloonLimit(false)));
+        assert_eq!(limit_of(&world, &windows, 1), Some(BalloonLimit(true)));
+        let _ = drain_window_pos_commands();
     });
 }

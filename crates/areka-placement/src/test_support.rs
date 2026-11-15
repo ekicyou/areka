@@ -1,6 +1,6 @@
 //! 配置の外のテストも使う支え（`test-support` の機能か、配置自身のテストのときだけ立つ）。
 //!
-//! 頼るのは配置の型・`windows`・`wintf`・`areka_sylphya`・`areka_parsers`・`areka_emo_atlas`・std だけ。
+//! 頼るのは配置の型・`bevy_ecs`・`windows`・`wintf`・`areka_sylphya`・`areka_parsers`・`areka_emo_atlas`・std だけ。
 //! `#[cfg(test)]` だけの項目と共有のテスト用の crate
 //! （`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）には頼らない——本体のテストを組むときの
 //! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる（spec: placement-crate-split 要件 3.3・3.4）。
@@ -15,11 +15,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
+use bevy_ecs::world::World;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 use wintf::ecs::WindowHandle;
 
 use crate::resolver::{PointPx, RectPx, SizePx};
+use crate::spawn::GhostWindows;
 
 /// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求する）。
 pub fn with_com_initialized<F: FnOnce()>(f: F) {
@@ -79,6 +81,17 @@ pub fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 pub fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
         hwnd: HWND(raw as *mut _),
+    }
+}
+
+/// 窓の一式の全窓（キャラ・バルーン）へ別々の偽 HWND を付ける（窓へ書く口が実窓の印を要る）。
+pub fn give_fake_handles(world: &mut World, windows: &GhostWindows) {
+    let entities = windows
+        .scopes()
+        .flat_map(|scope| [windows.char_window(scope), windows.balloon_window(scope)]);
+    for (i, entity) in entities.enumerate() {
+        let entity = entity.expect("窓の一式のスコープはキャラとバルーンの窓を持つ");
+        world.entity_mut(entity).insert(fake_handle(0x100 + i));
     }
 }
 

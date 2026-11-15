@@ -138,6 +138,7 @@ fn balloon_finish() -> SwapFinish {
         scopes: [0, 1]
             .map(|scope| (scope, new_balloon_definitions(scope), (10, 20, 30)))
             .into(),
+        author_dpi: 96,
     }
 }
 

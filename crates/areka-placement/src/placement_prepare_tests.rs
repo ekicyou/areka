@@ -75,13 +75,25 @@ fn prepare_emo2_returns_two_scope_placements() {
             PointPx { x: 1352, y: 224 },
             "本体側は balloons0s.txt の windowposition 266,-129 を反映（要件 3.2）"
         );
-        assert_eq!(s0.balloon_size, SizePx { w: 400, h: 224 });
+        assert_eq!(
+            s0.balloon_size,
+            SizePx {
+                w: BALLOON0_W,
+                h: BALLOON0_H
+            }
+        );
         assert_eq!(s0.balloon_offset, PointPx { x: -134, y: -129 });
 
         let s1 = &p.placements[1];
         assert_eq!(s1.scope, 1);
         assert_eq!(s1.char_pos, PointPx { x: 1150, y: 640 });
-        assert_eq!(s1.char_size, SizePx { w: 336, h: 400 });
+        assert_eq!(
+            s1.char_size,
+            SizePx {
+                w: SCOPE1_W,
+                h: SCOPE1_H
+            }
+        );
         assert_eq!(
             s1.balloon_pos,
             PointPx { x: 1296, y: 565 },

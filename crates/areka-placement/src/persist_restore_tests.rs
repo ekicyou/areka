@@ -352,17 +352,20 @@ pub(super) const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
 /// 1.4: 保存 WindowPos が両軸とも parse できるとき char_pos を保存値へ差し替える
 /// （既定位置解決に優先）。空 snapshot ゆえ project_restore は identity で保存値素通し。
+/// 2.4: BalloonOffset は無いので、resolver 既定 offset を保ったまま最終 char_pos へ追従する。
 #[test]
 fn apply_saved_window_pos_takes_priority_over_default() {
     let snap = snapshot_of(vec![]); // 空＝project_restore identity（保存値素通し）
+    let default_offset = PointPx { x: -50, y: 10 };
     let placements = vec![placement(
         0,
         Anchor::Free,
         PointPx { x: 100, y: 100 }, // 既定
         CSZ,
-        PointPx { x: -50, y: 10 },
+        default_offset,
         BSZ,
     )];
+    // WindowPos のみ（BalloonOffset 無し）。
     let entries = vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "500")];
 
     let out = apply_restored_placements(placements, &entries, &snap);
@@ -377,6 +380,18 @@ fn apply_saved_window_pos_takes_priority_over_default() {
     assert_eq!(out[0].char_size, CSZ);
     assert_eq!(out[0].balloon_size, BSZ);
     assert_eq!(out[0].anchor, Anchor::Free);
+    assert_eq!(
+        out[0].balloon_offset, default_offset,
+        "offset 欠損は既定 offset 保持（2.4）"
+    );
+    assert_eq!(
+        out[0].balloon_pos,
+        PointPx {
+            x: 800 + default_offset.x,
+            y: 500 + default_offset.y
+        },
+        "既定 offset が最終 char_pos に追従する（2.4）"
+    );
 }
 
 /// 1.5/2.4: 空 entries → 出力は入力 placements に完全恒等（identity）。
@@ -510,39 +525,6 @@ fn apply_scopes_do_not_cross() {
     assert_eq!(
         out[1], placements[1],
         "scope1 は既定恒等（scope 分離・1.6/2.5）"
-    );
-}
-
-/// 2.4: BalloonOffset 欠損時は resolver 既定 offset を保持し、最終 char_pos へ追従する。
-#[test]
-fn apply_balloon_offset_absent_keeps_default_following_char() {
-    let snap = snapshot_of(vec![]); // identity
-    let default_offset = PointPx { x: -50, y: 10 };
-    let placements = vec![placement(
-        0,
-        Anchor::Free,
-        PointPx { x: 100, y: 100 },
-        CSZ,
-        default_offset,
-        BSZ,
-    )];
-    // WindowPos のみ（BalloonOffset 無し）。
-    let entries = vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "500")];
-
-    let out = apply_restored_placements(placements, &entries, &snap);
-
-    assert_eq!(out[0].char_pos, PointPx { x: 800, y: 500 });
-    assert_eq!(
-        out[0].balloon_offset, default_offset,
-        "offset 欠損は既定 offset 保持（2.4）"
-    );
-    assert_eq!(
-        out[0].balloon_pos,
-        PointPx {
-            x: 800 + default_offset.x,
-            y: 500 + default_offset.y
-        },
-        "既定 offset が最終 char_pos に追従する（2.4）"
     );
 }
 

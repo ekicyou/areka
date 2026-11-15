@@ -333,22 +333,18 @@ fn emo2_bakes_each_still_image_once_per_stage() {
             want_balloon(|n| n.1, assembled),
             "資産のバルーンの面"
         );
-        for (stage, calls) in [
-            ("採寸", measure.in_dir(&balloon_dir)),
-            ("資産", assets_balloon),
-        ] {
-            for (name, c) in calls {
-                assert_eq!(
-                    (c.decode_frames, c.decode_first_frame),
-                    (0, 0),
-                    "{stage}のバルーン {name}: 動く絵の口は呼ばれない"
-                );
-            }
+        // 採寸のバルーンは上の `face0` との一致で動く絵の口 0 回まで決まっている。
+        for (name, c) in assets_balloon {
+            assert_eq!(
+                (c.decode_frames, c.decode_first_frame),
+                (0, 0),
+                "資産のバルーン {name}: 動く絵の口は呼ばれない"
+            );
         }
     });
 }
 
-/// 要件 2.1・2.2: 採寸の読み手を通した測りは、全コマを焼く今の測り（包まない読み手で
+/// 要件 2.1・2.2: 採寸の読み手を通した測りは、包まない読み手の測り（全コマを焼く
 /// `measure_baked`）と scope ごとの寸法が等しい（動く絵の検体と emo2）。
 #[test]
 fn first_frame_measure_matches_full_frame_measure() {
@@ -400,7 +396,7 @@ fn records_of(events: &[CapturedEvent], targets: &[&str]) -> Vec<(tracing::Level
 }
 
 /// 要件 3.6・4.5: 動く絵の検体で公開の口 `measure_scope_sizes` を通すと、シェルとバルーンの
-/// 読み込みの記録は 0 行。採寸自身の記録は全コマを焼く今の測り（`measure_baked`）と同じで、
+/// 読み込みの記録は 0 行。採寸自身の記録は包まない読み手の測り（`measure_baked`）と同じで、
 /// この検体では 0 行（scope 0 と 1 の既定の面 0・10 がどちらもシェルに在り、合成も通る）。
 #[test]
 fn public_measure_emits_no_load_records_and_same_own_records() {
@@ -432,7 +428,7 @@ fn public_measure_emits_no_load_records_and_same_own_records() {
         assert_eq!(
             own,
             records_of(&full_events, &[MEASURE_TARGET]),
-            "採寸自身の記録は全コマを焼く今の測りと同じ"
+            "採寸自身の記録は包まない読み手の測りと同じ"
         );
         assert_eq!(own, vec![], "この検体での採寸自身の記録");
     });

@@ -27,7 +27,7 @@
 //!
 //! | 主張 | 置き場所 |
 //! |---|---|
-//! | 復元経路が運ぶ**基準対**の腕分け（保存値あり／欠損／片軸）＝採否の優先順位（要件 5.5） | `persist_restore_offset_base_tests.rs` |
+//! | 復元経路が運ぶ**基準対**の腕分けのうち保存値が無い腕（欠損／片軸）＝採否の優先順位（要件 5.5） | `persist_restore_offset_base_tests.rs` |
 //! | 変換規則そのもの（丸め・往復・縮退・全腕の到達） | `follow_offset_space_tests.rs` |
 //! | 遷移 × アンカーの相の結合（`FrameHarness` で本番の相順を回す） | `frame_balloon_offset_follow_tests.rs` |
 //! | **保存 → 復元 → 係留 → 追随**を 1 本に貫いた往復 | **本ファイル** |

@@ -335,6 +335,8 @@ fn reset_forgets_offsets_in_one_commit_and_next_boot_uses_the_keyword_standard()
             entries.extend(balloon_offset_entries(scope as u32, DRAGGED));
             persist_entries(&rig.world, entries);
         }
+        let adjacent = PersistKey::WindowAdjacent { scope: 1 };
+        persist_entries(&rig.world, vec![(adjacent, "left".to_owned())]);
         let seeded = rig.load();
         for &scope in &scopes {
             assert!(
@@ -342,6 +344,10 @@ fn reset_forgets_offsets_in_one_commit_and_next_boot_uses_the_keyword_standard()
                 "前提: ずらしを覚えている"
             );
         }
+        assert!(
+            seeded.contains_key(&adjacent),
+            "前提: 隣り合いの印を覚えている"
+        );
         let before = rig.commit_count();
 
         assert!(reset_balloon_positions(

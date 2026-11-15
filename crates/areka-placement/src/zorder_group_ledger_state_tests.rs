@@ -215,7 +215,8 @@ fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
     expect_added(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["b2", "s2"]);
 
-    // 要素列は正規化後 [b2, s2, b1, s1, b0, s0]＝スコープの初出順は 2 → 1 → 0。
+    // 要素列は正規化後 [b2, s2, s1, b1, b0, s0]（書かれた順のまま相棒を補う）＝
+    // スコープの初出順は 2 → 1 → 0。
     let scopes = expect_cross_reject(&mut ledger, &["b2", "s1", "b1", "s0"]);
 
     assert_eq!(

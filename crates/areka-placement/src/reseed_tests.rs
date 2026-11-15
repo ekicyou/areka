@@ -5,6 +5,7 @@
 
 use std::fs;
 
+use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::DragConfig;
 use wintf::ecs::{DPI, Point, WindowPos};
@@ -19,7 +20,7 @@ use crate::resolver::{Anchor, PointPx, ScopePlacement};
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::TempDir;
 use crate::source::{load_balloon_author_dpi, load_descript_source_for_shell};
-use crate::spawn::{BalloonKeywordBase, CharWindowMarker, GhostWindows};
+use crate::spawn::{BalloonKeywordBase, BalloonLimit, CharWindowMarker, GhostWindows};
 use crate::test_support::{
     KEYWORD_BALLOON_DESCRIPT, WA, synth_declared_dpi_ghost, with_com_initialized,
 };
@@ -485,4 +486,33 @@ fn t_rs04b_missing_work_area_warns_before_substituting_the_window_rect() {
         .collect();
     assert!(!missing.is_empty(), "{events:?}");
     assert!(missing.iter().all(|e| e.level == tracing::Level::WARN));
+}
+
+/// 走っているバルーンの `windowposition.limit,0` は、シェルの切り替えでそのスコープのバルーン窓の
+/// `BalloonLimit` へ入る（起動の値 `true` のまま残さない）。
+#[test]
+fn t_rs09_balloon_limit_is_reinstalled_from_the_new_placement() {
+    let (mut world, windows) = booted_world(96);
+    let limit = |world: &World, scope| {
+        world
+            .get::<BalloonLimit>(windows.balloon_window(scope).unwrap())
+            .copied()
+    };
+    assert_eq!(limit(&world, 0), Some(BalloonLimit(true)), "前提: 起動の値");
+    let balloon = BalloonPlacementInputs {
+        author_dpi: 96,
+        windowpositions: [(
+            0,
+            (
+                WindowPosition::new(None, None),
+                WindowPositionRaw::new(None, Some("0".to_string())),
+            ),
+        )]
+        .into(),
+    };
+
+    apply_shell_descript(&mut world, &windows, &new_shell(&[]), &balloon, &[]);
+
+    assert_eq!(limit(&world, 0), Some(BalloonLimit(false)));
+    assert_eq!(limit(&world, 1), Some(BalloonLimit(true)));
 }

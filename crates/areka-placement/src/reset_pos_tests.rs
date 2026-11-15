@@ -10,10 +10,10 @@ use std::path::PathBuf;
 
 use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::WindowPos;
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::{DefaultPlacementBasis, reset_window_positions};
 use crate::config::build_placement_config;
@@ -30,7 +30,7 @@ use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::placement_sized;
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{WA, with_com_initialized};
+use crate::test_support::{WA, give_fake_handles, with_com_initialized};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（物理 px）。
@@ -53,19 +53,6 @@ const EXPECTED: [PointPx; 2] = [
         y: 1040 - 401,
     },
 ];
-
-/// 窓の一式の全窓（キャラ・バルーン）へ偽の HWND を付ける（窓へ書く口が実窓の印を要る）。
-pub(crate) fn give_fake_hwnds(world: &mut World, windows: &GhostWindows) {
-    let mut raw = 0x100;
-    for scope in windows.scopes() {
-        for entity in [windows.char_window(scope), windows.balloon_window(scope)] {
-            raw += 1;
-            world.entity_mut(entity.unwrap()).insert(WindowHandle {
-                hwnd: HWND(raw as *mut _),
-            });
-        }
-    }
-}
 
 struct Rig {
     world: World,
@@ -96,7 +83,7 @@ impl Rig {
             &placements,
             &GhostTitles::from_scope_titles(SCOPES.iter().map(|&(s, _, _)| (s, format!("s{s}")))),
         );
-        give_fake_hwnds(&mut world, &gw);
+        give_fake_handles(&mut world, &gw);
         // 副モニタを先に置く（先頭を選んでしまう誤りを噛ませる）。
         world.spawn(monitor(2, (-1280, 0, 0, 984), false));
         world.spawn(monitor(1, WORK, true));

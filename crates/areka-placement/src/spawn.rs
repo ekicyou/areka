@@ -48,6 +48,8 @@
 //!   なし。さらに `BalloonLimit(p.balloon_limit)`＝`windowposition.limit` 解決値の
 //!   runtime 焼込みを**バルーン窓側にだけ**持つ（areka-P0-windowposition-limit 2.7/2.8・
 //!   C9/DD4。キャラ窓には付けない＝「limit の補正でキャラ窓を動かさない」の構造保証）。
+//!   バルーン・面・シェルの切り替えとバルーン位置初期化は、そのとき解いた値で入れ直す
+//!   （`reseed::reinstall_balloon`・`face_windowposition::apply_face_windowposition`）。
 //!   ポインタハンドラは本モジュールでは付けない——入力の層
 //!   （`input_events::balloon::attach_balloon_pointer_handlers`）が spawn の直後に付ける。
 //!   さらに同一スコープのキャラ窓を指す `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
@@ -172,16 +174,19 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 // BalloonLimit（windowposition-limit C9・DD4）
 // ---------------------------------------------------------------------------
 
-/// バルーン窓の limit 有効値（scope 別解決済み・spawn 焼込み・runtime 単一真実源）。
+/// バルーン窓の limit 有効値（scope 別解決済み・spawn で付け置き直しで入れ直す・runtime 単一真実源）。
 ///
 /// `windowposition.limit` の解決値を runtime へ運ぶ唯一の表現である
 /// （areka-P0-windowposition-limit 要件 2.7/2.8・design C9/DD4）。
 /// `PlacementConfig`／`ScopeConfig` は spawn 後に破棄され Resource 化もされないため、
 /// limit 値が runtime まで生き残る道は窓 entity 上の Component だけ——
 /// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
-/// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
-/// 毎起動 `descript.txt` から解決し直す）。
-/// 例外は並べ直し・バルーン位置初期化・面の windowposition の置き直し・`balloon.syncscale` の読み直しが読む材料 `reset_pos::DefaultPlacementBasis`（descript の値とバルーンの材料を置き、limit は並べ直しのたびに解き直すので運び手ではない）。
+/// **一方向転写**で、spawn 時に付け、バルーンを置き直す所がそのとき解いた値で入れ直す
+/// （標準の部品で据え直す `reseed::reinstall_balloon`＝シェルの切り替え・面の windowposition の
+/// 置き直し・バルーン位置初期化と、利用者が動かしたバルーンの面の切り替え
+/// `face_windowposition::apply_face_windowposition`。バルーンの切り替えは面の切り替えを通る）。
+/// 永続化はしない（limit は毎起動 `descript.txt` から解決し直す）。
+/// 並べ直し・バルーン位置初期化・面の windowposition の置き直し・`balloon.syncscale` の読み直しが読む材料 `reset_pos::DefaultPlacementBasis` も limit の値は持たない（descript の値とバルーンの `windowposition` を置き、limit は解き直すたびにそこから導く）。
 ///
 /// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
 ///
@@ -190,7 +195,8 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// 持つ entity への書き込みだけを補正するため、「キャラ窓に付いていない」ことが
 /// そのまま「limit の補正でキャラ窓の位置を変更しない」（2.8）の証明になる——
 /// 檻の主張ではなく構造の帰結である。
-// spawn が構築し、runtime 関門（`follow::enqueue_window_set_pos`）・解放時の補正
+// spawn が構築し、`reseed::reinstall_balloon`・`face_windowposition::apply_face_windowposition` が
+// 入れ直し、runtime 関門（`follow::enqueue_window_set_pos`）・解放時の補正
 // （`follow::drag_follow::apply_release_limit_correction`）と檻が読む。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonLimit(pub bool);

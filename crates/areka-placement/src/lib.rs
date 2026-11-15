@@ -67,7 +67,7 @@ pub mod spawn;
 pub mod sticky_group_ledger;
 pub mod transition_diag;
 mod windowposition;
-/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる純関数（Win32／ECS 非依存）。
+/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる、World も Win32 も触らない純関数。
 pub mod zorder_chain_compose;
 /// スコープ窓 Z 順グループの台帳と、タグ／descript 共通のトークン解釈・拒否判定
 /// （純関数・Win32／ECS 非依存）。
@@ -571,10 +571,11 @@ pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPo
 ///
 /// # 失敗（log-first・表示を失わない）
 ///
-/// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
-/// 成立する）。起動の準備では、同じ事象を直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err`
-/// で弾いている。シェルの差し替えはバルーンを測り直さないので、そこでは採寸の記録が無く、
-/// scope 付きで残るのはこの `warn!` だけになる。
+/// 系列が解決できない scope（フォルダが読めない・面 0 が無い）は `warn!` のうえ供給を見送る
+/// （配置自体は基本位置で成立する）。起動の準備では、同じ事象を直前の採寸（`measure_scope_sizes`）が
+/// 既に `error!`＋`Err` で弾いている。シェルの差し替えはバルーンを測り直さないので採寸の記録が無く、
+/// フォルダが読めないときに scope 付きで残るのはこの `warn!` だけになる（面 0 が無いときは系列の
+/// 解決が scope 付きの `error!` を別に出す）。
 pub fn load_scope_windowpositions(
     balloon_root: &Path,
     scope_ids: &[usize],

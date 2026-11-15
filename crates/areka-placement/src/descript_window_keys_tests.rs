@@ -185,6 +185,21 @@ fn scope_that_does_not_fit_u32_is_not_locked() {
     );
 }
 
+/// 動かせない指定の値は大文字小文字を区別しない（`TRUE`・`True` → 禁止・`FALSE` → 許す）。
+#[test]
+fn balloon_dontmove_words_ignore_case() {
+    for (raw, locked_scopes) in [
+        ("TRUE", BTreeSet::from([0])),
+        ("True", BTreeSet::from([0])),
+        ("FALSE", BTreeSet::new()),
+    ] {
+        let shell = kv(&[("sakura.balloon.dontmove", raw)]);
+        let (locked, events) = capture(|| read_balloon_dontmove(&kv(&[]), &shell, &[0]));
+        assert_eq!(locked, locked_scopes, "{raw}");
+        assert!(events.is_empty(), "{raw}: {events:?}");
+    }
+}
+
 /// どちらにも指定が無ければ禁止しない（要件 4.3）。
 #[test]
 fn nothing_written_locks_nothing() {

@@ -214,6 +214,25 @@ fn a_failed_commit_degrades_the_removal_and_leaves_the_file_intact() {
     );
 }
 
+/// 鍵の種類の番号。`_` の腕を置かないので、種類が増えるとここが組めなくなる
+/// （下のテストの並びへもその種類を足す合図）。
+fn kind(key: PersistKey) -> usize {
+    match key {
+        PersistKey::WindowPos { .. } => 0,
+        PersistKey::BalloonOffset { .. } => 1,
+        PersistKey::WindowAdjacent { .. } => 2,
+        PersistKey::BootCount => 3,
+        PersistKey::VanishCount => 4,
+        PersistKey::LastGhost => 5,
+        PersistKey::LastBalloon => 6,
+        PersistKey::LastShell => 7,
+        PersistKey::LastRunning => 8,
+        PersistKey::BasewareRoots => 9,
+    }
+}
+/// [`kind`] の腕の数。
+const KINDS: usize = 10;
+
 /// どの鍵も、保存してから消すとファイルに何も残らない（消しの置き場が保存の置き場と同じ）。
 #[test]
 fn every_key_saved_then_removed_leaves_nothing_in_the_file() {
@@ -237,6 +256,13 @@ fn every_key_saved_then_removed_leaves_nothing_in_the_file() {
         PersistKey::LastRunning,
         PersistKey::BasewareRoots,
     ];
+    let mut listed: Vec<usize> = keys.iter().map(|&key| kind(key)).collect();
+    listed.dedup();
+    assert_eq!(
+        listed,
+        (0..KINDS).collect::<Vec<_>>(),
+        "並びが鍵のどの種類も、番号の順に持つ"
+    );
     for key in keys {
         let io = FakePersistIo::new();
         let saved = save_scope(

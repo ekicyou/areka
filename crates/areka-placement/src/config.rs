@@ -10,14 +10,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use tracing::warn;
 
-/// `seriko.alignmenttodesktop` の解釈（2.8: 未使用値はシーム受理）。
+/// `seriko.alignmenttodesktop` の解釈（2.8: 未使用値はシーム受理）。語は大文字小文字を区別しない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Alignment {
     /// 既定（emo2 実使用）。Y は work area 下端固定・`defaulttop` 無視（2.2/2.4）。
     Bottom,
     /// `defaultleft`/`defaulttop` が有効な X/Y 初期座標になる（2.6）。
     Free,
-    /// `top`/`left`/`right`/未知値: 転記保持。resolver が `Anchor::from_alignment` で解釈し、
+    /// `top`/`left`/`right`/未知値: 書かれたままの値を転記保持。resolver が `Anchor::from_alignment` で解釈し、
     /// `top`/`left`/`right` はその辺で最初の位置を解き、未知値は `Bottom` と同じ＋警告（DD9）。
     Seam(String),
 }
@@ -215,10 +215,13 @@ fn resolve_scope(
         .or_else(|| global_align(shell_kv).map(String::as_str))
         .or_else(|| scoped_value(ghost_kv, scope, &ALIGN_SUFFIXES))
         .or_else(|| global_align(ghost_kv).map(String::as_str));
-    let alignment = match alignment_raw {
-        None | Some("bottom") => Alignment::Bottom,
-        Some("free") => Alignment::Free,
-        Some(other) => Alignment::Seam(other.to_owned()),
+    // 値は大文字小文字を区別しない（台本の `\![set,alignmenttodesktop]` と同じ決まり）。
+    // `Seam` には書かれたままの値を残す（未知アンカーの警告がそれを載せる）。
+    let alignment = match alignment_raw.map(|raw| (raw, raw.to_ascii_lowercase())) {
+        None => Alignment::Bottom,
+        Some((_, word)) if word == "bottom" => Alignment::Bottom,
+        Some((_, word)) if word == "free" => Alignment::Free,
+        Some((raw, _)) => Alignment::Seam(raw.to_owned()),
     };
 
     // 両表記寛容（2.7）: X は defaultx ＞ defaultleft・Y は defaulty ＞ defaulttop（DD3）
@@ -235,11 +238,14 @@ fn resolve_scope(
 
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1
-    let balloon_alignment = match cascade2(ghost_kv, shell_kv, scope, &["balloon.alignment"]) {
-        None | Some("left") => BalloonSide::Left,
-        Some("right") => BalloonSide::Right,
-        Some("none") => BalloonSide::Auto,
-        Some(other) => {
+    // 値は大文字小文字を区別しない（`alignmenttodesktop` と同じ決まり）。
+    let balloon_alignment_raw = cascade2(ghost_kv, shell_kv, scope, &["balloon.alignment"]);
+    let balloon_alignment = match balloon_alignment_raw.map(|raw| (raw, raw.to_ascii_lowercase())) {
+        None => BalloonSide::Left,
+        Some((_, word)) if word == "left" => BalloonSide::Left,
+        Some((_, word)) if word == "right" => BalloonSide::Right,
+        Some((_, word)) if word == "none" => BalloonSide::Auto,
+        Some((other, _)) => {
             warn!(
                 scope,
                 value = other,
@@ -429,6 +435,27 @@ mod tests {
         assert_eq!(cfg.scopes[&1].balloon_alignment, BalloonSide::Auto);
     }
 
+    /// T-C1: `balloon.alignment` の値は大文字小文字を区別しない（`Right`・`NONE`・`LEFT`）。
+    /// 知らない値の警告は書かれたままの値を載せる。
+    #[test]
+    fn t_c1_balloon_alignment_ignores_case() {
+        for (raw, expected) in [
+            ("Right", BalloonSide::Right),
+            ("NONE", BalloonSide::Auto),
+            ("LEFT", BalloonSide::Left),
+        ] {
+            let shell = kv(&[("sakura.balloon.alignment", raw)]);
+            let (cfg, events) =
+                log_capture_kit::capture(|| build_placement_config(&empty(), &shell));
+            assert_eq!(cfg.scopes[&0].balloon_alignment, expected, "{raw}");
+            assert!(events.is_empty(), "{raw}: {events:?}");
+        }
+        let shell = kv(&[("sakura.balloon.alignment", "Center")]);
+        let (_, events) = log_capture_kit::capture(|| build_placement_config(&empty(), &shell));
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(events[0].field("value"), Some(r#""Center""#));
+    }
+
     // ------------------------------------------------------------------
     // T-C2: 両表記寛容（defaultx⇔defaultleft／defaulty⇔defaulttop）と優先順位
     // ------------------------------------------------------------------
@@ -569,7 +596,6 @@ mod tests {
         let shell = kv(&[("char3.defaultx", "0")]);
         let cfg = build_placement_config(&ghost, &shell);
         assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
-        assert!(!cfg.scopes.contains_key(&3));
     }
 
     /// T-C3: `charset` キーは `char{n}.` 検出に誤マッチしない。

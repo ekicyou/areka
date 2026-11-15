@@ -1281,7 +1281,7 @@
 
 | 番号 | 組 | 群 | 一言 | 場所 | 扱い |
 |---|---|---|---|---|---|
-| 296 | 必ず直す | A | `alignmenttodesktop` の大文字と小文字の扱いが、同じ鍵で割れる。descript の `bottom`／`free` は小文字の完全一致だけで、`top`／`left`／`right` は大小を問わない（`Anchor::from_alignment` が小文字にする）。台本の `\![set,alignmenttodesktop,Free]` も大小を問わない。たとえばシェルの `seriko.alignmenttodesktop,Free` は `Bottom` になり、上下に動かせなくなって「未知のアンカー」の警告が出る。`Bottom` は動きは合うが、解くたびに偽の警告が出る | `config.rs` の `resolve_scope`・`resolver.rs` の `from_alignment` と `Seam` の警告・`script_alignment.rs` の doc・`resolver_from_alignment_tests.rs` の「parsers 側で正規化済み」 | 裁定待ち（下の裁定の表） |
+| 296 | 必ず直す | A | `alignmenttodesktop` の大文字と小文字の扱いが、同じ鍵で割れる。descript の `bottom`／`free` は小文字の完全一致だけで、`top`／`left`／`right` は大小を問わない（`Anchor::from_alignment` が小文字にする）。台本の `\![set,alignmenttodesktop,Free]` も大小を問わない。たとえばシェルの `seriko.alignmenttodesktop,Free` は `Bottom` になり、上下に動かせなくなって「未知のアンカー」の警告が出る。`Bottom` は動きは合うが、解くたびに偽の警告が出る | `config.rs` の `resolve_scope`・`resolver.rs` の `from_alignment` と `Seam` の警告・`script_alignment.rs` の doc・`resolver_from_alignment_tests.rs` の「parsers 側で正規化済み」 | 直した（5 回目に開発者の裁定。18.5） |
 | 297 | できれば | A | 行の番号が古い（「小文字の完全一致」の決まりは 85 行でなく `classify_x_vocab` の中） | `doc/COMPAT_ARCHITECTURE.md` の重なりの語の大小文字の行 | 直した（`windowposition.rs::classify_x_vocab` に） |
 | 298 | できれば | A | 「本仕様」が、どの spec かを言わない（`windowposition.rs` の中では 2 つの spec を指す） | `lib.rs`・`resolver.rs`・`windowposition.rs`・`placement_windowposition_tests.rs`・`placement_windowposition_vocab_tests.rs`・`windowposition_vocab_tests.rs` | 直した（行ごとに指す spec の正式の名か、指す物の名に） |
 | 299 | できれば | A | 「記憶 …」が、リポジトリに無い開発者の記憶の帳面を名指す | `lib.rs`・`placement_prepare_tests.rs` | 直した（決まりをその場の文で書く） |
@@ -1328,7 +1328,7 @@
 | 340 | できれば | C | 行の番号が古い（`measure.rs:399`） | `doc/ukadoc-coverage/briefing-assets.md` | 直した（`:384`。同じ呼び出しを指す 227 行の参照もこの回の直しで動いたので直した） |
 | 341 | できれば | C | `COMPAT_ARCHITECTURE.md` の配置の crate を指す行の番号が残る（`config.rs:255`・同じ行の `resolver.rs:1-12`） | `doc/COMPAT_ARCHITECTURE.md` | 直した（`config.rs::resolve_scope`・`resolver.rs` のモジュールの doc に） |
 | 342 | できれば | C | ゴーストとシェルの descript の読み手の一覧が足りない（既定の位置・スコープの見つけ方・`seriko.defaultsurface`・`balloon.dontmove`・`balloon.syncscale`）のに「それ以外の名前はどこからも引かれない」と書く | `doc/ukadoc-coverage/briefing-assets.md` | 直した（今の行の番号で足した） |
-| 343 | 必ず直す | D | バルーンの画面の内の指定（`BalloonLimit`）を書くのは起動の窓づくりだけで、バルーンの切り替え・面の切り替え・シェルの切り替え・バルーン位置初期化は置き直さない。たとえば `windowposition.limit` が既定の 1 のバルーンで起動し、`windowposition.limit,0` のバルーンへ切り替えても、解放と書き込みの関門がバルーンを画面の内へ引き戻し続ける（次の起動まで） | `spawn.rs` の `BalloonLimit`・`reseed.rs` の `reinstall_balloon`・`face_windowposition.rs` | 裁定待ち（下の裁定の表） |
+| 343 | 必ず直す | D | バルーンの画面の内の指定（`BalloonLimit`）を書くのは起動の窓づくりだけで、バルーンの切り替え・面の切り替え・シェルの切り替え・バルーン位置初期化は置き直さない。たとえば `windowposition.limit` が既定の 1 のバルーンで起動し、`windowposition.limit,0` のバルーンへ切り替えても、解放と書き込みの関門がバルーンを画面の内へ引き戻し続ける（次の起動まで） | `spawn.rs` の `BalloonLimit`・`reseed.rs` の `reinstall_balloon`・`face_windowposition.rs` | 直した（5 回目に開発者の裁定。18.5） |
 | 344 | できれば | D | 行の番号が古い（`spawn.rs:624-625`） | `doc/COMPAT_ARCHITECTURE.md` | 直した（`spawn.rs::window_style`） |
 | 345 | できれば | D | 「本 spec の共通規約」 | `diag.rs` | 直した（`areka-P0-dpi-window-vanish`） |
 | 346 | できれば | D | 「本フィーチャー」が、どの機能かを言わない | `spawn_zorder_pair_deferred_tests.rs` | 直した（重なり順の 2 つの機構と、その spec の名に。要件の文の引用は引用と分かる形で残した） |
@@ -1341,7 +1341,7 @@
 | 353 | できれば | D | 完全一致の後で導ける確かめ 4 つと、それだけが使う補助 | `chain_finalize_tests.rs` | 直した（消した。文は残る確かめの文へ移した） |
 | 354 | できれば | D | 「既定値を保つ」と書いて wintf の既定の数 5 を決め打ちで比べる | 本体の `spawn_assembly_tests.rs` | 直した（`DragConfig::default().threshold` と比べる） |
 | 355 | できれば | D | バルーンの窓にはマウスの手当てが無い、と書く（本体の入力の層が窓づくりの直後に付ける） | `spawn.rs` の 2 か所・本体の `spawn_assembly_tests.rs` | 直した |
-| 356 | できれば | D | `DefaultPlacementBasis` を読むのは並べ直しだけ、と書く（バルーン位置初期化・面の windowposition・`balloon.syncscale` の読み直しも読む） | `spawn.rs` | 直した（読み手を並べた。同じ文の画面の内の指定の半分は 343 の裁定まで残す） |
+| 356 | できれば | D | `DefaultPlacementBasis` を読むのは並べ直しだけ、と書く（バルーン位置初期化・面の windowposition・`balloon.syncscale` の読み直しも読む） | `spawn.rs` | 直した（読み手を並べた。同じ文の画面の内の指定の半分は 343 の裁定まで残した。5 回目に 343 で直した） |
 | 357 | できれば | D | 開発者の記憶の帳面の名を名指す | `spawn_cleanup_tests.rs`・本体の `spawn_assembly_tests.rs` | 直した |
 | 358 | できれば | D | ドラッグの知らせと窓の位置を読む補助が、追随の支えの写し | `spawn_follow_pipeline_tests.rs`・追随の `follow_test_support.rs` | 申し送り（追随の支えを `pub(crate)` に開いて使う。開く所が追随の持ち物） |
 | 359 | できれば | E | 決して落ちない確かめ 2 つ（1 つは `composed()` が既に確かめる） | `zorder_chain_compose_tests.rs` の `t_zcc16` | 直した（消した） |
@@ -1387,8 +1387,8 @@
 | 番号 | 種類 | 中身 | 推奨 | 裁定 |
 |---|---|---|---|---|
 | 210 | 要件 5 の 3 種類目（利用者に見える位置） | 2 回目の指摘。右（左）の辺のスコープと下端の連なりのスコープが、右下（左下）の角でまるごと重なる | SSP の振る舞いを MCP で測ってから決める | 開発者の裁定で今のまま（SSP も重なりを離さない）。コードは変えず、`t_r5_mixed_edges_chain_per_edge` もそのまま。測り（2026-11-15・進行役が SSP の MCP で、ゴースト「えも2DEBUG」・幅 2560 のモニタ・右の端が x=0）: 前はさくら（下端）-2224,1248,-1842,1795・けろ（下端）-2563,1395,-2227,1795。`\1\![set,alignmenttodesktop,right]` の後、けろは -336,1395,0,1795（x は右へ寄り、y は下端のまま）。さくらを右下の角へ動かした後、さくら -382,1248,0,1795・けろは変わらず -336,1395,0,1795。SSP は 2 つの窓をまるごと重ねたまま、どちらも動かさない。測った後に両方を元の矩形へ戻した。限り: 測ったのは動いている間の揃え直しの道で、本当の初めての起動ではない（ghost_dev のシェルの descript を書き換え、SSP の保存の位置を消す必要があり、していない） |
-| 296 | 要件 5 の 3 種類目（キャラの窓の出る位置）。ukadoc https://ukatech.shillest.net/ukadoc-spec/descript_ghost.html#seriko.alignmenttodesktop は「全体のサーフェスのデフォルト※表示位置情報。」と既定値 `bottom` を書くだけで、大小文字に沈黙する。SSP の扱いは測っていない | descript の `alignmenttodesktop` の大小文字を、どちらの決まりにそろえるか | **SSP の振る舞いを MCP で測ってから決める**。SSP が大小を問わないなら、`config.rs` で値を小文字にしてから `bottom`／`free` と比べ、descript と台本を 1 つの決まりにする（RED を先に: `Free` が `Alignment::Free`・`Bottom` が警告なしの `Alignment::Bottom`）。あわせて `resolver.rs`・`resolver_from_alignment_tests.rs` の「parsers 側で正規化済み」の文を直す。小文字の完全一致にそろえるなら、`top`／`left`／`right` と台本の扱いも変わる。測るまでは今のまま | 裁定待ち（利用者に見える位置が変わるので、推奨案で承認にしない） |
-| 343 | 要件 5 の 1 種類目（完了した `areka-P0-windowposition-limit` の設計 C9／DD4「spawn 焼込み・以後不変」）と 3 種類目（バルーンの見え方）。ukadoc https://ukatech.shillest.net/ukadoc-spec/descript_balloon.html#windowposition.limit 「バルーンを強制的に画面内に維持するかどうか。1で維持、0で維持しない」 | バルーン・面・シェルの切り替えとバルーン位置初期化で、`BalloonLimit` を置き直すか | **直す**: `reinstall_balloon` が `BalloonLimit(placement.balloon_limit)` も入れ直す（呼び手 3 つは `ScopePlacement` を既に持つ）。`apply_face_windowposition` は、利用者が動かしたバルーンを置き直さないときも値だけは入れ直す。`spawn.rs` の「以後不変」の文も直す。RED を先に（面の windowposition で limit を `0` にした後、バルーンが `BalloonLimit(false)` を持つ） | 裁定待ち（完了した spec の設計に反し、利用者に見える振る舞いが変わるので、推奨案で承認にしない） |
+| 296 | 要件 5 の 3 種類目（キャラの窓の出る位置）。ukadoc https://ukatech.shillest.net/ukadoc-spec/descript_ghost.html#seriko.alignmenttodesktop は「全体のサーフェスのデフォルト※表示位置情報。」と既定値 `bottom` を書くだけで、大小文字に沈黙する。SSP の扱いは測っていない | descript の `alignmenttodesktop` の大小文字を、どちらの決まりにそろえるか | **SSP の振る舞いを MCP で測ってから決める**。SSP が大小を問わないなら、`config.rs` で値を小文字にしてから `bottom`／`free` と比べ、descript と台本を 1 つの決まりにする（RED を先に: `Free` が `Alignment::Free`・`Bottom` が警告なしの `Alignment::Bottom`）。あわせて `resolver.rs`・`resolver_from_alignment_tests.rs` の「parsers 側で正規化済み」の文を直す。小文字の完全一致にそろえるなら、`top`／`left`／`right` と台本の扱いも変わる。測るまでは今のまま | 裁定待ち（利用者に見える位置が変わるので、推奨案で承認にしない）。5 回目のあいだに開発者の裁定（2026-11-15・推奨どおり）が届き、直した（18.5） |
+| 343 | 要件 5 の 1 種類目（完了した `areka-P0-windowposition-limit` の設計 C9／DD4「spawn 焼込み・以後不変」）と 3 種類目（バルーンの見え方）。ukadoc https://ukatech.shillest.net/ukadoc-spec/descript_balloon.html#windowposition.limit 「バルーンを強制的に画面内に維持するかどうか。1で維持、0で維持しない」 | バルーン・面・シェルの切り替えとバルーン位置初期化で、`BalloonLimit` を置き直すか | **直す**: `reinstall_balloon` が `BalloonLimit(placement.balloon_limit)` も入れ直す（呼び手 3 つは `ScopePlacement` を既に持つ）。`apply_face_windowposition` は、利用者が動かしたバルーンを置き直さないときも値だけは入れ直す。`spawn.rs` の「以後不変」の文も直す。RED を先に（面の windowposition で limit を `0` にした後、バルーンが `BalloonLimit(false)` を持つ） | 裁定待ち（完了した spec の設計に反し、利用者に見える振る舞いが変わるので、推奨案で承認にしない）。5 回目のあいだに開発者の裁定（2026-11-15・推奨どおり）が届き、直した（18.5） |
 | 380 | 要件 5 の 1 種類目（完了した `areka-P0-test-cage-determinism` の「`env-filter` を有効にするのは wintf のみ」と、それを守る見張り）。2 回目の 256 の裁定（推奨案で承認）はこの決まりを見落としていた | 見張りを広げて 256 を保つか、256 の機能を戻すか | **256 の機能を戻す**: 見張りと完了した spec の決まりはそのまま。256 が求めた「何も捕まえなくても緑」の穴は、`diag_tests.rs` の手の写しに番兵（窓の内側の 1 行と、それが無ければ panic）を足して塞ぐ。依存の表は 2 回目の前と同じ形に戻り、`Cargo.lock` は変わらない。小さく、利用者に見える振る舞いも変わらない | 推奨案で承認。直した。256 の行の「推奨案で承認。直した」は、この裁定で置き換わった |
 
 #### 申し送り（タスク 8.2 が書く）
@@ -1419,7 +1419,7 @@
 
 #### 判定
 
-3 回目の新しい指摘は 85 件（必ず直す 3・直したほうがよい 1・できれば 81）で、0 件ではない（210 は数に入れていない）。直した 82 件・裁定待ち 2 件（296・343）・申し送りだけのもの 1 件（358）。4 回目をかける（要件 6.2）。296 と 343 の裁定が出たら、その直し（または残す理由）を 4 回目の前に入れる。
+3 回目の新しい指摘は 85 件（必ず直す 3・直したほうがよい 1・できれば 81）で、0 件ではない（210 は数に入れていない）。直した 82 件・裁定待ち 2 件（296・343）・申し送りだけのもの 1 件（358）。4 回目をかける（要件 6.2）。296 と 343 の裁定が出たら、その直し（または残す理由）を 4 回目の前に入れる。2 つの裁定は 5 回目のあいだに届き、5 回目に直した（18.5）。
 
 ### 18.4 4 回目（2026-11-15）
 
@@ -1485,7 +1485,7 @@
 | 405 | できれば | D | `set_default_char_pos` の呼び手を 2 つと書く（`reset_pos::reset_window_positions` が抜ける） | `spawn.rs` | 直した |
 | 406 | できれば | D | 起動の戻しを `apply_restored_placements` と書く（227 の残り） | `diag.rs` の `PlacementRoute::Restore` の注記 | 直した（`persist::restore_and_judge`） |
 | 407 | できれば | D | `AnchorChange` の書き手を、どの段にも登録されない見本の `anchor_changed_system` と書き、本番でただ 1 つの書き手 `reseed::reanchor_char_windows`（シェルの切り替え）を書かない | `diag.rs` | 直した |
-| 408 | できれば | D | `BalloonLimit` の読み手の一覧に、解放の時の補正（`apply_release_limit_correction`）が抜ける | `spawn.rs` | 直した（読み手を足しただけ。343 の「以後不変」の文は裁定まで残す） |
+| 408 | できれば | D | `BalloonLimit` の読み手の一覧に、解放の時の補正（`apply_release_limit_correction`）が抜ける | `spawn.rs` | 直した（読み手を足しただけ。343 の「以後不変」の文は裁定まで残した。5 回目に 343 で直した） |
 | 409 | できれば | D | 普段の起動が待ちの上限に届かない理由を「残る待ちは GPU の装着と最初の `ShowSurface` だけ」と書くが、起動の呼び手はゴーストの待ち（窓が無い・まだ見せていない）を数えない。数えるのは areka 自身の待ちだけ | `chain_finalize.rs` の頭と `CHAIN_FINALIZE_STALL_FRAMES` の doc | 直した |
 | 410 | できれば | D | 走査から外す結線の 1 行を `main.rs` と書く（今は `ghost_session.rs` の `register_systems`） | `spawn_zorder_pair_deferred_tests.rs` | 直した |
 | 411 | できれば | D | 偽の窓の手を作る補助が、共有の `test_support::fake_handle` の写し（整数の型だけが違う） | `spawn_test_support.rs` の `fake_window_handle`・`spawn_clickthrough_tests.rs`・`spawn_follow_pipeline_tests.rs` | 直した（共有のものを使う。期待の組は変わらない） |
@@ -1524,8 +1524,8 @@
 
 | 番号 | 種類 | 中身 | 推奨 | 裁定 |
 |---|---|---|---|---|
-| 296 | 3 回目から（要件 5 の 3 種類目） | descript の `alignmenttodesktop` の大小文字（18.3 の表）。この回、`balloon.alignment` と `balloon.dontmove` の値も大小文字を区別して読むと分かった（C の組） | 18.3 と同じ（SSP の振る舞いを MCP で測ってから決める）。決めるときは `balloon.alignment`・`balloon.dontmove` も同じ決まりにそろえる | 裁定待ち（この回のあいだに裁定は届かなかった。コードは変えていない） |
-| 343 | 3 回目から（要件 5 の 1 種類目・3 種類目） | `BalloonLimit` をバルーン・面・シェルの切り替えとバルーン位置初期化で置き直さない（18.3 の表） | 18.3 と同じ（直す） | 裁定待ち（この回のあいだに裁定は届かなかった。コードは変えていない。408 は読み手を足しただけで「以後不変」の文には触れていない） |
+| 296 | 3 回目から（要件 5 の 3 種類目） | descript の `alignmenttodesktop` の大小文字（18.3 の表）。この回、`balloon.alignment` と `balloon.dontmove` の値も大小文字を区別して読むと分かった（C の組） | 18.3 と同じ（SSP の振る舞いを MCP で測ってから決める）。決めるときは `balloon.alignment`・`balloon.dontmove` も同じ決まりにそろえる | 裁定待ち（この回のあいだに裁定は届かなかった。コードは変えていない）。5 回目に開発者の裁定が届き、3 つの鍵をそろえて直した（18.5） |
+| 343 | 3 回目から（要件 5 の 1 種類目・3 種類目） | `BalloonLimit` をバルーン・面・シェルの切り替えとバルーン位置初期化で置き直さない（18.3 の表） | 18.3 と同じ（直す） | 裁定待ち（この回のあいだに裁定は届かなかった。コードは変えていない。408 は読み手を足しただけで「以後不変」の文には触れていない）。5 回目に開発者の裁定が届き、直した（18.5） |
 | 391 | 要件 5 に当たるかを確かめた（B の組は 1 種類目と見た） | 寄せて表示した起動で、古い記憶へ隣り合いの印を書き足してしまう | **直す**: 完了した `window-work-area-clamp` の要件 4.6「記憶の位置を寄せて表示した起動であるとき、隣り合いの印の無い古い記憶へ印を書き足さず、書き足さなかったことを記録に残す」に今のコードが反している。コードの doc と記録の行もそう約束している。`dpi-realign-remembered-chain` の要件 6.2（位置と一緒に印を書く）・6.5（古い記憶への書き足し）は、後から 4.6 が寄せた起動について狭めた。完了した要件に合わせる直しなので、要件 5 の 3 種類には当たらない | 進行役が要件 5 に当たらないと判断して直した（下の一覧の 391） |
 | 421 | 要件 8.6（公開の資源 `ChainRealignPending` の欄を消す。本体のテストが組み立てる） | 読み手の無い公開の欄 `armed_frame` を C20 のうちに消すか | **C20 のうちに直す**: 読み手は 0（`debug!` は手元の値を使う）。86・118・242 と同じ形。小さく、利用者に見える振る舞いは変わらない | 推奨案で承認（audit の spec は議題を推奨案で承認してよい、という開発者の決まりによる）。直した |
 
@@ -1556,4 +1556,128 @@
 
 #### 判定
 
-4 回目の新しい指摘は 46 件（必ず直す 1・直したほうがよい 1・できれば 44）で、0 件ではない（3 回目の 85 件から減った）。直した 45 件・申し送りだけのもの 1 件（426）。新しい裁定待ちは 0 件で、3 回目からの裁定待ち 296・343 は残る。5 回目をかける（要件 6.2）。5 回目で 0 件に収まらず、5 回目に「必ず直す」と本番の振る舞いに関わるものが無ければ、開発者に一言知らせ、5 回目の指摘を直したところで打ち切る（タスク 8.1）。この回は 391（本番の振る舞い・必ず直す）があったので、打ち切りの形にはまだ当たらない。
+4 回目の新しい指摘は 46 件（必ず直す 1・直したほうがよい 1・できれば 44）で、0 件ではない（3 回目の 85 件から減った）。直した 45 件・申し送りだけのもの 1 件（426）。新しい裁定待ちは 0 件で、3 回目からの裁定待ち 296・343 は残る（5 回目に裁定が届いて直した・18.5）。5 回目をかける（要件 6.2）。5 回目で 0 件に収まらず、5 回目に「必ず直す」と本番の振る舞いに関わるものが無ければ、開発者に一言知らせ、5 回目の指摘を直したところで打ち切る（タスク 8.1）。この回は 391（本番の振る舞い・必ず直す）があったので、打ち切りの形にはまだ当たらない。
+
+### 18.5 5 回目（2026-11-15）
+
+#### 取り込みと範囲の大きさ
+
+- `main` は進んでいない（`git fetch` の後の `HEAD..origin/main` が 0 件・最後の取り込みは `246b6d75f`）。
+- 範囲は 1.1 節と 18.1〜18.4 と同じ数え方で測り直した。ファイルの数は 4 回目と同じ 116。
+
+| 区分 | ファイル | 行 |
+|---|---|---|
+| コード（`crates/areka-placement/` の `.rs` でテストでないもの・`examples/` 込み） | 27 | 10,543 |
+| テスト（`crates/areka-placement/` の `_tests.rs`・`_test_support.rs`・`test_support.rs`・`test_crash_report.rs`） | 77 | 22,172 |
+| テスト（`crates/areka/src/placement_tests/` の `transition_*` でないもの・`mod.rs` 込み） | 10 | 3,055 |
+| `Cargo.toml` | 1 | 51 |
+| 足したファイル（`areka-sylphya` の `persist_remove_tests.rs`） | 1 | 347 |
+| 計 | 116 | 36,168 |
+
+- ponytail は 5.3.3（1〜4 回目と同じ版）。作法も 1.3 節と同じ（6 つの物差し・具体的な場合・消す前の grep・件数の上限なし・全部読む）。分け方も 18.1 と同じ 6 つで、6 つの組のどれからも、全ファイルを全行読んだ旨と行数の一覧を受け取った（A 24／6,431・B 20／6,677・C 20／5,924・D 17／5,404・E 15／5,864・F 20／5,868。計 36,168 行で上の表と合う）。読む段では何も変えず、指摘を集めて番号を付けてから、触るファイルが重ならないように組ごとに直させた。
+- 読み手には 4 回目と同じ線（各回の「指摘にしなかったもの」・古い文は今の事実と食い違うものだけ・決して落ちない確かめはどの直しでも赤にならない理由を言えるものだけ）を渡した。
+
+| 組 | 読んだファイル | 行 | 必ず直す | 直したほうがよい | できれば | 計 |
+|---|---|---|---|---|---|---|
+| A | 24 | 6,431 | 0 | 0 | 7 | 7 |
+| B | 20 | 6,677 | 0 | 1 | 6 | 7 |
+| C | 20 | 5,924 | 0 | 1 | 5 | 6 |
+| D | 17 | 5,404 | 0 | 0 | 4 | 4 |
+| E | 15 | 5,864 | 0 | 0 | 3 | 3 |
+| F | 20 | 5,868 | 1 | 0 | 1 | 2 |
+| 計 | 116 | 36,168 | 1 | 2 | 26 | **29** |
+
+- 433 は E の組の読み手が A の組のファイル（`lib.rs`）に見つけたもので、A に数えた。2 つの組が同じ所を出したものは無い。
+
+#### 指摘の一覧（427〜455）
+
+扱いの印は 18.1〜18.4 と同じ。
+
+| 番号 | 組 | 群 | 一言 | 場所 | 扱い |
+|---|---|---|---|---|---|
+| 427 | できれば | A | `classify_x_vocab` の doc が、`x_num` を `get_scalar::<i32>("windowposition.x")` の結果と書く（今の parsers は `parse().ok()` で読み、数でない値は `None` で記録も積まない） | `windowposition.rs` | 直した |
+| 428 | できれば | A | シェルの切り替えで scope 付きの記録は読めないバルーンの `warn!` だけ、と書くが、面 0 が無い系列では静かな解決が自分の scope 付きの `error!` も出す（221 の残り） | `lib.rs` の `load_scope_windowpositions`・`placement_windowposition_vocab_tests.rs` の節の見出し | 直した（読めないフォルダのときに限ると書いた） |
+| 429 | できれば | A | T-R5 の試験台がどのスコープにも `defaulty` を書かないので、上・左・右の辺が `defaulty` を使わないことを誰も確かめていない | `resolver_resolve_tests.rs` の `seam_cfg` | 直した（スコープ 0 に `defaulty` を書く。RED: 上と左の辺で `default_y` を使う壊し方で `t_r5_top_left_right_resolve_on_their_own_edge` が赤「left: PointPx { x: 1544, y: 80 } right: PointPx { x: 1544, y: 40 }」） |
+| 430 | できれば | A | 共有の寸法の定数を引いている同じテストが、2 つの寸法だけ数で書く（98・413 の残り） | `placement_prepare_tests.rs` | 直した（`BALLOON0_W/H`・`SCOPE1_W/H`） |
+| 431 | できれば | A | 追随の `clamp_x_into` が resolver の `clamp_axis` の写し（37 の残り） | 追随の `follow/visibility.rs` | 申し送り（`audit-placement-follow`。`clamp_axis` を呼ぶ） |
+| 432 | できれば | A | `MonitorSnapshot::from_monitors` が根の `work_area_px` の写しで、doc が消えた `mod.rs` の `primary_work_area` を名指す（13・92 の残り） | 追随の `follow/work_area.rs` | 申し送り（`audit-placement-follow`。`crate::work_area_px` を使い、doc を直す） |
+| 433 | できれば | A | `zorder_chain_compose` を「Win32／ECS 非依存」と書くが、`bevy_ecs` の `Entity` を使う（モジュールの doc は「Win32 も World も触らない」） | `lib.rs` | 直した（「World も Win32 も触らない純関数」に） |
+| 434 | 直したほうがよい | B | 記憶の位置を寄せて表示した起動のあいだに、ドラッグや連れ動きの保存（`persist_entries`）が、印の無い古い記憶へ隣り合いの印を書き足す（寄せた矩形で判じる）。391 は並べ終えた時点の保存だけを塞いだ | `persist.rs` の `persist_entries`・`send_entries` | 裁定待ち（下の裁定の表） |
+| 435 | できれば | B | `persist_entries` の呼び手を 4 か所と書くが、並べ終えた時点の保存は 391 の直しの後、内側の `send_entries` を直に呼ぶ（391 の直しが作った古さ） | `persist.rs` のモジュールの doc・`PersistWiring` の doc | 直した（doc だけ。`persist.rs` は 990 行） |
+| 436 | できれば | B | 同じ入力・同じ呼び出しのテスト 2 本が確かめを分けて持つ（115 の残り） | `persist_restore_tests.rs` | 直した（1 本にまとめ、確かめは全部残した） |
+| 437 | できれば | B | 保存値の腕のテストが、往復のテストの 5 つのアンカーの確かめに含まれる（20 の残り） | `persist_restore_offset_base_tests.rs` | 直した（消した。確かめは `a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit` にある。2 つのファイルの頭の説明を直した） |
+| 438 | できれば | B | 拡大率と順を自分で渡す純粋な足し算のテスト 2 本（各段の単体と、本番の順の準備のテストが確かめる） | `balloon_offset_supply_tests.rs` | 直した（消した。確かめは `prepare_merges_each_supply_in_its_own_axis_and_reaches_the_placement`・`prepare_at_identity_scale_matches_the_pre_spec_merge` にある） |
+| 439 | できれば | B | `test_support::fake_handle` の手書きの写し 2 か所と、「ゴーストの窓の全部に偽の手を付ける」補助の写し 2 つ（411 の残り） | `persist_finalize_save_tests.rs`・`reset_pos_tests.rs`・`spawn_follow_pipeline_tests.rs` | 直した（`test_support::give_fake_handles` の 1 つ。本体の `move_cue_apply_move_tests.rs` の写しは申し送り） |
+| 440 | できれば | B | 鍵を全部保存して消すテストの鍵の並びが手書きで、鍵の種類が増えても気付かない（85 の残り） | sylphya `persist_remove_tests.rs` | 直した（`_` の無い網羅の `match` で並びを確かめる。RED: 腕を 1 つ消すと「non-exhaustive patterns」で組めない・並びから 1 つ消すと赤） |
+| 441 | 直したほうがよい | C | 採寸でスコープ 0 の合成が失敗する枝にテストが無く、テストの頭が「`measure_tests.rs` が確かめる」と書く（245 の残り） | `measure.rs` の `compose_size(…)?`・`measure_default_surface_tests.rs` の頭 | 直した（`scope0_compose_failure_is_measure_error_with_one_error_log`。RED: `?` を `unwrap_or(1×1)` にする壊し方で新しいテストだけが赤「本体側の面が無いシェルで Ok は誤成功」） |
+| 442 | できれば | C | 鍵の並びの完全一致の直後で決して落ちない確かめ | `config.rs` の `t_c3_char_n_prefix_does_not_add_scope_n` | 直した（消した） |
+| 443 | できれば | C | 完全一致の後で決して落ちない、繰り返しの半分（採寸のバルーン） | 本体の `measure_bake_count_tests.rs` | 直した（資産の側だけを回す） |
+| 444 | できれば | C | 組み込みの既定の面で emo2 を測り直すだけのテスト（既定の面・寸法・記録の無さはほかのテストが確かめる） | `measure_default_surface_tests.rs` の `unwritten_default_surface_keeps_current_sizes` | 直した（消した。「4 通り」を「3 通り」に） |
+| 445 | できれば | C | 包まない読み手の測りを「全コマを焼く今の測り」と書く（本番は 1 枚目だけを読む包みを通す） | 本体の `measure_bake_count_tests.rs` の 3 か所 | 直した |
+| 446 | できれば | C | 同じ 2 つの入力を回すテスト 2 本が確かめを分けて持つ（253 の残り） | `measure_tests.rs` | 直した（`Err` の確かめを記録のテストへ移し、境界だけのテストを `apply_scaling_identity_keeps_i32_max` に） |
+| 447 | できれば | D | `MoveCue` の doc が台本の `\![move]` だけを書く（起動の連鎖の確定・シェル位置初期化・台本の揃え直し・連れ動きも同じ語で書く。266 の残り） | `diag.rs` | 直した（`Restore` と同じ形で呼び手を挙げ、語だけでは見分けられないと書いた。`ChainRealign` の doc の同じ誤りも） |
+| 448 | できれば | D | 連鎖の確定の規則を「resolver の P2 式そのもの」と書くが、記憶の印が右の組は `x(n−1) + w(n−1)` | `chain_finalize.rs` の頭 | 直した（2 つの式と `resolve_chain` を書いた） |
+| 449 | できれば | D | 同じ入力を直前の確かめが通す（132 の残り） | `chain_finalize_resolve_tests.rs` | 直した（消した） |
+| 450 | できれば | D | 語の確かめ 2 つが、ほかのテストの確かめの言い直し | `chain_finalize_resolve_tests.rs` の `pair_decision_words` | 直した（`JoinRight` の 1 行だけ残した） |
+| 451 | できれば | E | 説明の並びが、覆された寄せ（かたまりへの組み替え）の形のまま（276・363 の残り） | `zorder_group_ledger_state_tests.rs` の t_zgl6 | 直した |
+| 452 | できれば | E | 台帳の順と組の番号の順が食い違う入力（シェルの切り替えで基底の番号が大きくなる）を、鎖の組み立てのテストが持たない | `zorder_chain_compose_tests.rs` の t_zcc08 | 直した（基底を据え直した台帳の場合を足した。RED: 組を番号で並べ替える壊し方で t_zcc08 だけが赤。規則の doc も「台帳の順」に） |
+| 453 | できれば | E | 書けない属性の書き込みは「効果を 1 つも生まない」と頭が書くが、テストは `NotSettable` の 1 つを期待する | `zorder_property_deferral_tests.rs` の頭 | 直した |
+| 454 | 必ず直す | F | バルーンを切り替えても、標準の位置の材料のバルーンの作者の DPI が前のバルーンのまま。新しいバルーンの `windowposition` を前の拡大率で解き、値が前と同じなら解き直しもしない（バルーン位置初期化も同じ材料を使う）。たとえば `dpi,192` のバルーンから `dpi` の無いバルーンへ替えると、`windowposition.x,40` のずらしが 20 になる | 本体の `runtime/frame/switch.rs` の `finish_balloon`・`runtime/skin_switch.rs` の `SwapFinish::Balloon` | 直した（後始末へ新しいバルーンの作者の DPI を運び、材料の値と違えば入れ替えて面の `windowposition` を忘れ、面の書き手に全スコープを解き直させる。RED: 「(材料の作者の DPI, scope 0 の追随) 前の windowposition が同じ値 left: (192, … offset: PointPx { x: -223, y: 0 } …) right: (96, … offset: PointPx { x: 504, y: 40 } …)」。テストは `switch_finish_face_tests.rs` の `balloon_switch_resolves_the_face_windowposition_with_the_new_author_dpi`。`reset_pos.rs` の `DefaultPlacementBasis` の doc にも 1 行） |
+| 455 | できれば | F | テストの doc が「隣り合いの印は残す」と書くが、印を保存していない | 本体の `reset_balloon_pos_tests.rs` | 直した（印を 1 つ保存して確かめる。RED: 初期化で印も消す壊し方で「ずらしの鍵だけが消え、ほかの表は残る」が赤） |
+
+- 申し送りとの対応（要件 1.6）: 1〜426 と同じ所を指す指摘は 0 件。前の回の直しの残りは新しく数え、どの番号の残りかを一言に書いた（428・430・431・432・436・437・439・440・441・446・447・449・451）。435 は 391 の直しが作った古さ。
+- 454 は要件 5 に当たるかを確かめた: 完了した `areka-P0-balloon-offset-dpi` の要件 1.4（`windowposition` 由来の量はバルーンの軸＝そのバルーンの作者の DPI で換算する）に今のコードが反しているので、完了した要件に合わせる直しで、要件 5 の 3 種類には当たらない（391 と同じ判断）。進行役が直した。
+- 4 回目の「指摘にしなかったもの」の「`persist::apply_restored_placements` に本番の呼び手が無い」は誤り（B の組が見つけた）。`reseed::apply_shell_descript` がシェルの切り替えのたびに呼ぶ。狭めない、という結論は変わらない。
+
+#### 開発者の裁定の 296・343 の直し
+
+3 回目からの裁定待ち 296・343 に、5 回目のあいだに開発者の裁定が届いた（2026-11-15・チャットで「両方とも推奨どおりで」）。どちらも推奨案のとおりに直した。
+
+- 296: descript の `seriko.alignmenttodesktop`（別綴の `alignmentondesktop` も）・`balloon.alignment`・`balloon.dontmove` の値を、読む所で 1 度だけ小文字にしてから比べる（`config.rs` の `resolve_scope`・`descript_window_keys.rs` の `read_flag`）。未知の語の警告は、作者が書いたままの綴りを載せる。RED を先に取った: `t_c1_balloon_alignment_ignores_case`（「Right left: Left right: Right」）・`balloon_dontmove_words_ignore_case`（「TRUE left: {} right: {0}」）・`descript_alignment_words_ignore_case`（`BOTTOM` で偽の「未知アンカー」の警告）。`resolver.rs`・`resolver_from_alignment_tests.rs` の「parsers 側で正規化済み」の文と `script_alignment.rs` の doc を直し、台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 14 行（`alignmenttodesktop` の 8 行・`balloon.alignment` の 2 行（抜けていた `none` も足した）・`balloon.dontmove` の 4 行）に大文字小文字の決まりを足した。裁定の外の `balloon.syncscale`（`raw.trim() == "true"`）・`windowposition.x` の語（`Center`）・`seriko.zorder` の語は変えていない。
+- 343: `reseed::reinstall_balloon` が、置き直す `ScopePlacement` の `balloon_limit` で `BalloonLimit` を入れ直す（窓の書き込みの関門が読むので、置き直す前に）。呼び手はシェルの切り替え・面の `windowposition` の置き直し（バルーンの切り替えもここを通る）・バルーン位置初期化の 3 つ。利用者が動かしたバルーンは、面の置き直しで位置を変えずに値だけを入れ直す。`spawn.rs` の「spawn 時に焼き込んだあとは不変」の文と、`resolver.rs` の `balloon_limit` の欄の doc を直した。RED を先に取った: `t_rs09_balloon_limit_is_reinstalled_from_the_new_placement`・`face_limit_reaches_the_balloon_window_moved_or_not`・`balloon_reset_reinstalls_the_limit_from_the_basis` の 3 本が「left: Some(BalloonLimit(true)) right: Some(BalloonLimit(false))」で赤。動かしたバルーンの腕は、値を `true` にする壊し方で赤。動かしたバルーンへ limit 1 を入れ直しても、その場では画面の内へ引き戻さない（次の書き込みで関門が効く）。
+
+#### 指摘にしなかったもの
+
+- `PlacementRoute::ALL` に新しい語を足し忘れても気付かないこと（タスク 6.5 が網羅の `match` で決めた形）。
+- `spawn.rs` の `BalloonFollow` が `balloon_offset_base` を写すのに doc が `balloon_offset` と書くこと（どの作り手でも 2 つは同じ値）。
+- `runtime/frame/drain_resnap.rs` の `DpiSyncHeld` の腕に届かないこと（範囲の外・害が無い。申し送りに記録だけ）。
+- 寄せた起動のあいだの隣の窓の書き込みが、印のある記憶や新しい記憶の印を、寄せた矩形で判じて書き直すこと（完了した `window-work-area-clamp` の要件 4.6 は印の無い古い記憶だけを言い、`dpi-realign-remembered-chain` の要件 6.2 は位置の書き込みのたびに印を書くと言う）。
+- 面の `windowposition` が変わるたびに全スコープを解き直し、知らない `alignmenttodesktop` の警告がスコープの数だけ出ること（記述が変わるたびの 1 度で、毎フレームではない。291 で決めた形）。
+- `check_table` が `#[test]` より上の `#[ignore]` を見落とすこと（リポジトリは 49 か所とも `#[test]` の後に書く）。
+- 組から上がって、確かめて外したもの: 一緒に動く組の大きさに上限が無い（設計の決め 11）・`seriko.sticky-window` の末尾の読点で組ごと捨てる（わざとの形でテストがある）・DPI の関門の時間切れの後の入り直し・`capture` の番兵の無い 0 件の確かめ（`log_capture_kit::capture` は較正済みで全段を捕まえる）・`measure_tests.rs` の `parse` の比べ（54 の較正の当たり）・同じ `scaled_extent` との比べ（丸めを変えると赤になりうる）・`FirstFrameDecoder` が 1 枚目の失敗を黙って全コマの読みへ落とす（測りは静かな読みと決めた形）・`config.rs` の `cascade2` で読めないシェルの数がゴーストの値を隠す（正典が沈黙）。
+
+#### 裁定が要るもの（要件 5・8.6）
+
+| 番号 | 種類 | 中身 | 推奨 | 裁定 |
+|---|---|---|---|---|
+| 296 | 3 回目から（要件 5 の 3 種類目） | descript の `alignmenttodesktop`・`balloon.alignment`・`balloon.dontmove` の大小文字（18.3・18.4 の表） | 大小を問わない形にそろえる | 開発者の裁定（2026-11-15・推奨どおり）。直した（上の節） |
+| 343 | 3 回目から（要件 5 の 1 種類目・3 種類目） | `BalloonLimit` を切り替えとバルーン位置初期化で置き直さない（18.3 の表） | 直す | 開発者の裁定（2026-11-15・推奨どおり）。直した（上の節） |
+| 434 | 要件 5 の 1 種類目（完了した `window-work-area-clamp` の設計は、寄せた起動で印を書き足さない所を並べ終えた時点の保存（`persist_unremembered_char_positions`）と書き、ドラッグや連れ動きの保存は名指さない）と 3 種類目（次の起動の窓の並び） | 寄せて表示した起動のあいだのドラッグ・連れ動きの保存で、印の無い古い記憶へ隣り合いの印を書き足すのを止めるか。たとえばモニタ B が無くて寄せた起動で、スコープ 1 が B の x=5000 の印の無い古い記憶のとき、スコープ 0 を寄せた窓の隣へドラッグすると `WindowAdjacent{1}` が書かれ、B が戻った次の起動でスコープ 1 が B からスコープ 0 の隣へ引き寄せられる（隣でない所へドラッグしたときは、寄せずに起動した回に書く印と同じ `none` になる） | **直す**: 要件 4.6 の「寄せて表示した起動では古い記憶へ印を書き足さず、寄せずに起動した回に表示の矩形から書き足す」の趣旨は、寄せた矩形から古い記憶の印を作らないこと。送らない窓の組を、`send_entries` が World（`RestoredPositionsClamped`・既定の位置・記憶の印・同じ束の位置）から作り、`persist_entries` の全部の呼び手に効かせる。RED を先に（寄せた起動でドラッグの保存をしても印が書かれない）。`persist.rs` は 990 行なので、足すなら兄弟のファイルへ分けてから | 裁定待ち（完了した spec の設計の範囲を広げ、利用者に見える次の起動の並びが変わるので、推奨案で承認にしない。コードは変えていない） |
+
+#### 申し送り（タスク 8.2 が書く）
+
+- `audit-placement-follow` へ（持ち主の spec はもう完了しているので、8.2 が扱いを決める）:
+  - 431（`follow/visibility.rs` の `clamp_x_into` を消し、`resolver::clamp_axis(x, wa.left, wa.right.saturating_sub(w))` を呼ぶ）。
+  - 432（`follow/work_area.rs` の `MonitorSnapshot::from_monitors` で `crate::work_area_px` を使い、doc の `mod.rs` の `primary_work_area` を根の `work_area_px` に。あわせて `lib.rs` の「根を引く子」の文に 1 行）。
+- `audit-areka-app` へ:
+  - `runtime/move_cue_apply_move_tests.rs:52` の `attach_fake_handles` は、439 で足した `areka_placement::test_support::give_fake_handles` の写し。
+  - `runtime/frame/drain_resnap.rs:477` の `DpiSyncHeld` の腕は、`collect_chain_states` がその値を返さないので届かない（害は無い）。
+- 454 の直しのために本体の `runtime/skin_switch.rs`・`runtime/frame/switch.rs`・`switch_finish_tests.rs`（下ごしらえの 1 行・999 行）・`switch_finish_face_tests.rs` を直した（範囲の外。`audit-emo2-boot-switch` の受け持つ所に近いが、走っている spec は無い）。
+
+#### テスト
+
+- `cargo test -p areka-placement --features test-support`: lib 965 件が通り 1 件 ignore、手本 2 件が通る。
+- `cargo test -p areka`: 本体の bin 3181 件が通り 6 件が ignore（足した 454 のテストの 1 件の分だけ増えた）、ほかのテストの的も全部通る（知られた揺れは出なかった）。
+- `cargo test -p areka-sylphya`: 221 件が通る。
+- `cargo test -p ukadoc-survey`: 全部通る（台帳の 14 行と briefing の行の番号を直した後）。
+- `cargo test -p log-capture-kit --test file_length_guard_test --test with_default_guard_test`: 6 件と 24 件が通る（`persist.rs` 990 行・`lib.rs` 929 行・`persist_restore_tests.rs` 814 行・`measure_tests.rs` 815 行・本体の `switch_finish_tests.rs` 999 行）。
+- `cargo fmt --all -- --check`: 緑。
+- `git diff --stat Cargo.lock` と `vendors/` の差分は空。追随の持ち物（`src/follow*`・`src/transition_*`・本体の `placement_tests/transition_*`）は 1 行も触っていない。範囲の外で触ったのは、454 の本体の 4 ファイル・行の番号を直した `doc/ukadoc-coverage/briefing-assets.md`（`persist.rs:309`・`config.rs` の 7 つ）と本体の `examples/collision-probe.rs`（`lib.rs:579`）・296 の台帳 `doc/ukadoc-coverage/ledger/assets.toml`。
+- 直しは 6 つの組と、裁定の 2 つ（296・343）を受けた 2 つの組に分けて同時に進めた（触るファイルは重ならない）。壊し方は狙った編集で入れて狙った編集で戻し、`git checkout`・`restore`・`stash`・`reset` は使っていない。
+- 直しで古くなった行の番号の確かめ: この回で触った `.rs` を指す `<ファイル>.rs:<行>` の形を、ツリー全体（`.kiro/specs/`・`vendors/`・`.kiro/steering/roadmap-history.md` を除く）から拾い、`git show HEAD:` の行と今の行を見比べた。動いたのは上の `briefing-assets.md`・`collision-probe.rs` の分だけで、どれも今の行に直した。
+
+#### 判定
+
+5 回目の新しい指摘は 29 件（必ず直す 1・直したほうがよい 2・できれば 26）で、0 件ではない（4 回目の 46 件から減った）。直した 26 件・申し送りだけのもの 2 件（431・432）・裁定待ち 1 件（434）。あわせて、3 回目からの裁定待ち 296・343 は開発者の裁定を受けて直した。
+
+5 回目には「必ず直す」が 1 件（454）あり、本番の振る舞いを変える指摘も 2 件（454・434）ある。454 は直したが、434 は裁定待ちで本番の振る舞いに関わるまま残る。したがって、タスク 8.1 の「5 回目に『必ず直す』と本番の振る舞いに関わるものが無ければ打ち切る」の形には当たらない（5 回目の中に 454 があり、直した後も 434 が残る）。434 の裁定（直すか残すか）が出て、その直しを入れたところで、打ち切るか 6 回目をかけるかを開発者に仰ぐ。

@@ -503,7 +503,7 @@ pub mod test_support;
 #[path = "measure_template_tests.rs"]
 mod template_tests;
 
-// 測りが descript の既定の面で合成することの 4 通り（descript-window-keys 要件 7.2）。
+// 測りが descript の既定の面で合成することの 3 通り（descript-window-keys 要件 7.2）。
 #[cfg(test)]
 #[path = "measure_default_surface_tests.rs"]
 mod default_surface_tests;

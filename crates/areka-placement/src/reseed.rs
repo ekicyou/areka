@@ -22,7 +22,6 @@ use bevy_ecs::world::World;
 use tracing::{debug, info, warn};
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use super::config::BalloonXMode;
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
 use super::face_windowposition::mark_by_base;
@@ -31,11 +30,9 @@ use super::follow::{
     resize_window_to, sync_drag_writer, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
-use super::resolver::{
-    Anchor, OffsetBase, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
-};
+use super::resolver::{Anchor, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
 use super::source::DescriptSource;
-use super::spawn::{BalloonKeywordBase, GhostWindows};
+use super::spawn::{BalloonKeywordBase, BalloonLimit, GhostWindows};
 use super::{ScopeWindowPositions, scale_then_merge};
 
 /// 走っているバルーンの配置の値（背景の資産づくりがバルーンのフォルダから読んでおいたもの）。
@@ -79,21 +76,18 @@ pub fn apply_shell_descript(
         };
 
         replace_anchor(world, running.char_window, scope, p.anchor);
-        reinstall_balloon(
-            world,
-            &running,
-            p.balloon_offset_base,
-            p.balloon_keyword_base,
-        );
+        reinstall_balloon(world, &running, &p);
     }
     // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す
     // （areka-P0-window-link-directives 設計の決め 12）。
     sync_drag_writer(world);
 }
 
-/// バルーンを標準の部品で据え直す 4 手（`BalloonFollow` を入れる → `BalloonKeywordBase` を
+/// バルーンを標準の部品で据え直す 5 手（`BalloonFollow` を入れる → `BalloonKeywordBase` を
 /// 入れるか外す → 利用者が動かした印を外す（記憶のずらしなら付ける・[`mark_by_base`]） →
-/// [`follow_balloon`] で置き直す）。シェルの切り替えの入れ直し・面の
+/// バルーン窓の `BalloonLimit` を `placement.balloon_limit` で入れ直す →
+/// [`follow_balloon`] で置き直す）。`BalloonLimit` は置き直しの書き込みの関門が読むので、
+/// 置き直しより先に入れる。シェルの切り替えの入れ直し・面の
 /// `windowposition` の置き直し・バルーン位置初期化の 3 か所が呼ぶ（crate の中でこの手順を書く
 /// 所はここだけ）。
 ///
@@ -101,14 +95,14 @@ pub fn apply_shell_descript(
 pub(crate) fn reinstall_balloon(
     world: &mut World,
     running: &RunningScope,
-    base: OffsetBase,
-    keyword_base: Option<(BalloonXMode, PointPx)>,
+    placement: &ScopePlacement,
 ) {
     let c = running.char_window;
+    let base = placement.balloon_offset_base;
     world
         .entity_mut(c)
         .insert(BalloonFollow::new(running.balloon_window, base));
-    match keyword_base {
+    match placement.balloon_keyword_base {
         Some((mode, adjust)) => {
             world
                 .entity_mut(c)
@@ -119,6 +113,9 @@ pub(crate) fn reinstall_balloon(
         }
     }
     mark_by_base(world, c, base);
+    world
+        .entity_mut(running.balloon_window)
+        .insert(BalloonLimit(placement.balloon_limit));
     follow_balloon(
         world,
         c,

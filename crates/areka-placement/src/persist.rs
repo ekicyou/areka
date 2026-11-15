@@ -11,7 +11,8 @@
 //! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
 //! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
 //! - 起動の最後に並べ終えた時点と、既定の位置への並べ直し（`reset_pos` の `reset_window_positions`）
-//!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ）
+//!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ。
+//!   ここだけは [`persist_entries`] を通らず、送らない窓の組を添えて内側の `send_entries` を直に呼ぶ）
 //!
 //! 消す呼び手はバルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・ずらしの鍵）
 //! だけ。
@@ -664,8 +665,9 @@ fn warn_unusable_pair(
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。[`persist_entries`] の呼び手（今の 4 か所はモジュールの doc に並べる）が、
-/// この publisher の clone 送信端から保存 entries を投函する（[`forget_entries`] も同じ）。
+/// State Management・軸B）。書く呼び手 4 か所（モジュールの doc に並べる。3 か所は [`persist_entries`]、
+/// 並べ終えた時点の保存は内側の `send_entries`）が、この publisher の clone 送信端から保存 entries を
+/// 投函する（[`forget_entries`] も同じ）。
 pub struct PersistWiring {
     /// sylphya アクターへの変異投函の送信端（`persist_put` の fire-and-forget 投函に用いる）。
     pub publisher: SylphyaPublisher,

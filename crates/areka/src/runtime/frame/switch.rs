@@ -409,7 +409,9 @@ fn step_committed(
         } => finish_shell(
             wiring, world, hooks, &target, &source, &balloon, &restored, boxes, cursors,
         ),
-        SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, hooks, &target, scopes),
+        SwapFinish::Balloon { scopes, author_dpi } => {
+            finish_balloon(wiring, world, hooks, &target, scopes, author_dpi)
+        }
     }
     info!(
         event = "skin_switch_done",
@@ -523,7 +525,8 @@ fn finish_shell(
     );
 }
 
-/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: scope ごとの定義の束（今の
+/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: 標準の位置の材料の作者の
+/// DPI（[`DefaultPlacementBasis`]） → scope ごとの定義の束（今の
 /// 面の定義を書き手 [`select_balloon_face`] で入れる・balloon-scroll-arrows 要件 1.7）と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
 /// `OnBalloonChange`。
 fn finish_balloon(
@@ -532,7 +535,16 @@ fn finish_balloon(
     hooks: SessionHooks,
     target: &SkinCandidate,
     scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,
+    author_dpi: u16,
 ) {
+    // 面の書き手は windowposition が前と同じだと解き直さないので、作者の DPI が替わったら材料の
+    // windowposition を空けて、下の書き手に全 scope を新しい換算で解き直させる。
+    if let Some(mut basis) = world.get_resource_mut::<DefaultPlacementBasis>()
+        && basis.balloon.author_dpi != author_dpi
+    {
+        basis.balloon.author_dpi = author_dpi;
+        basis.balloon.windowpositions.clear();
+    }
     for (scope, definitions, background) in scopes {
         // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直り、
         // 警告の名前の欄も新しいバルーンのフォルダ名になる・areka-P0-shell-balloon 要件 3.12）。
@@ -657,7 +669,10 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
                     epoch,
                     balloon_tables: actor_keyed_balloon_tables(assets.loop_tables),
                 },
-                SwapFinish::Balloon { scopes },
+                SwapFinish::Balloon {
+                    scopes,
+                    author_dpi: assets.author_dpi,
+                },
             )
         }
     }

@@ -140,8 +140,9 @@ pub fn read_balloon_dontmove(
 }
 
 /// 動かせない指定の値を読む（`0`・`false` → 許す・`1`・`true` → 禁止・それ以外は記録して読めない）。
+/// 大文字小文字は区別しない（`TRUE` も `true`）。
 fn read_flag(scope: impl std::fmt::Display, key: &str, raw: &str) -> Option<bool> {
-    match raw.trim() {
+    match raw.trim().to_ascii_lowercase().as_str() {
         "0" | "false" => Some(false),
         "1" | "true" => Some(true),
         _ => {

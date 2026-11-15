@@ -1,13 +1,14 @@
 //! 復元経路が運ぶ**基準対**の檻（areka-P0-balloon-offset-dpi task 2.2・design D15・
 //! 要件 5.1／5.2／5.5）。
 //!
-//! 固定する主張は 2 つである。
+//! 固定する主張は、**保存値が無い腕は素通し**——配置式が出した基準対（`Some(採寸 DPI)`）を
+//! そのまま運ぶ——ことである（片軸だけの保存値も採用されないので同じ腕に入る）。
 //!
-//! 1. **保存値を採用した腕は未係留**——基準値は保存値と bit 同一で、基準 DPI は `None`。
-//!    保存値は「どの表示 DPI で書かれたか」を記録していない（要件 5.1）ため、基準 DPI を
-//!    発明して係留すると復元先の DPI 次第で保存値を二重に拡大してしまう。未係留は
-//!    「情報が無い」ことの正直な表現であり、最初の観測で値を変えずに係留される（D15）。
-//! 2. **保存値が無い腕は素通し**——配置式が出した基準対（`Some(採寸 DPI)`）をそのまま運ぶ。
+//! 対になる**保存値を採用した腕は未係留**（基準値は保存値と bit 同一・基準 DPI は `None`）は、
+//! `balloon_offset_persist_roundtrip_tests.rs` の `a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit`
+//! がアンカー 5 腕すべてで持つ。保存値は「どの表示 DPI で書かれたか」を記録していない（要件 5.1）
+//! ため、基準 DPI を発明して係留すると復元先の DPI 次第で保存値を二重に拡大してしまう。未係留は
+//! 「情報が無い」ことの正直な表現であり、最初の観測で値を変えずに係留される（D15）。
 //!
 //! あわせて、保存値の採否の優先順位（要件 5.5）が基準対を足しても動かないことを、同じ入力の
 //! `balloon_offset` で突き合わせる。「補正を焼き付けない」規約（要件 5.6）は起動時の関門を
@@ -22,28 +23,6 @@ use super::restore_tests::bo;
 
 fn empty_snapshot() -> MonitorSnapshot {
     MonitorSnapshot { work_areas: vec![] }
-}
-
-/// 5.1／5.2／D15: 保存値を採用した腕は基準 DPI を持たず（未係留）、基準値は保存値と
-/// bit 同一である（換算しない・採寸 DPI を継がない）。
-#[test]
-fn restored_persisted_arm_carries_unpinned_base_equal_to_saved_value() {
-    let placements = vec![pinned_placement(0, Anchor::Free, PointPx { x: -50, y: 10 })];
-    let entries = vec![bo(0, Axis::X, "-512"), bo(0, Axis::Y, "-48")];
-
-    let out = apply_restored_placements(placements, &entries, &empty_snapshot());
-
-    let saved = PointPx { x: -512, y: -48 };
-    assert_eq!(
-        out[0].balloon_offset_base,
-        OffsetBase::unpinned(saved),
-        "保存値採用腕の基準対は未係留（dpi: None・採寸 DPI を係留しない）かつ保存値と bit 同一である"
-    );
-    // 5.5 の非回帰: 採否の優先順位は基準対で動かない。
-    assert_eq!(
-        out[0].balloon_offset, saved,
-        "保存値があれば保存値が勝つ（優先順位は不変）・生値のまま採る"
-    );
 }
 
 /// 5.5: 保存値が無い腕は配置式が出した基準対（`Some(採寸 DPI)`）をそのまま運ぶ。

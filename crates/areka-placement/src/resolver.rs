@@ -125,7 +125,7 @@ pub struct ScopePlacement {
     /// このスコープの `windowposition.limit` 解決値（正典既定 `true`＝画面内へ維持する）。
     ///
     /// resolver は**判定も補正もしない**——`ScopeConfig.balloon_limit` を転記して
-    /// 下流（起動時関門・spawn の `BalloonLimit` Component）へ運ぶだけの欄である
+    /// 下流（起動時関門・バルーン窓の `BalloonLimit` Component＝spawn で付け、`reseed::reinstall_balloon` などの置き直しで入れ直す）へ運ぶだけの欄である
     /// （design C4 Responsibilities「resolver は判定せず運ぶだけ」）。
     pub balloon_limit: bool,
     /// このスコープの解決済みアンカー種別（5 値・単一真実源）。
@@ -475,8 +475,9 @@ impl Anchor {
     /// - `Bottom`→`Bottom`・`Free`→`Free`
     /// - `Seam(s)`: `s.trim().to_ascii_lowercase()` で正規化し `"top"`→`Top`・
     ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
-    ///   window-placement DD9「未知は bottom 相当」を継承）。正規化は防御
-    ///   （parsers 側で正規化済み前提だが大小文字・前後空白へ念のため備える）。
+    ///   window-placement DD9「未知は bottom 相当」を継承）。`Seam` は descript に書かれたままの
+    ///   値（未知アンカーの警告に載せる）なので、大文字小文字はここでそろえる（`bottom`／`free` を
+    ///   大文字小文字を区別せずに比べる config.rs と同じ決まり）。
     ///
     /// 未知値の `warn!` はここでは出さない——どのスコープの値かを知る呼び出し側
     /// （[`resolve_placement`]）がスコープ番号つきで出す。

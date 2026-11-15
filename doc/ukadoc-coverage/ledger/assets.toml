@@ -2577,7 +2577,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの項目を、利用者のドラッグでの移動の禁止と読んで使う。追従（キャラクターの窓に付いて動くこと）は止めない。0・1・true・false のどれでもない値は書かれていないものとして禁止せず、`descript_value_unreadable` の記録を 1 件残す。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を、利用者のドラッグでの移動の禁止と読んで使う。追従（キャラクターの窓に付いて動くこと）は止めない。0・1・true・false（大文字小文字は区別しない）のどれでもない値は書かれていないものとして禁止せず、`descript_value_unreadable` の記録を 1 件残す。
 areka の placement::descript_window_keys::read_balloon_dontmove が、シェルの `*.balloon.dontmove` が書かれていない（または読めない）スコープで、この値をそのスコープの動かせない指定として使う。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない（止めたドラッグ 1 回につき `balloon_drag_held` の記録が 1 件）。
 読みの根拠: ukadoc はシェルの `*.balloon.dontmove`（移動操作の禁止）の既定を「ghostのdescript設定(balloon.dontmove)」と書く。SSP 2.9 で 2026-10-23 に測ると、この値が true のぱすたのバルーンは利用者がドラッグしても動かなかった（.kiro/specs/completed/descript-window-keys/research.md の 10.3 節）。キャラクターの窓には付いて動く（完了 areka-P0-pasta-in-windows-verification の ssp-measurement.md の 3 節）。前の注記の「付いて動くのを止める」読みは誤りだった。
 担当 spec は descript-window-keys。ぱすたの実機の検証（areka-P0-pasta-in-windows-verification・2026-10-23）で、ぱすたが使うこの項目の崩れを引き取る spec として書いた。
@@ -2709,7 +2709,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は下から 2 番目の段（ゴーストのスコープ別）にあたり、シェル側の 2 つの綴りには負けるが、同じゴーストの接頭辞なしの綴りには勝つ。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -3054,7 +3054,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は下から 2 番目の段（ゴーストのスコープ別）にあたり、シェル側の 2 つの綴りには負けるが、同じゴーストの接頭辞なしの綴りには勝つ。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -3437,7 +3437,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は下から 2 番目の段（ゴーストのスコープ別）にあたり、シェル側の 2 つの綴りには負けるが、同じゴーストの接頭辞なしの綴りには勝つ。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -3467,7 +3467,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ綴りの見出しがシェルの descript にもある。areka は 4 段に重ねて 1 つに決める——シェルのスコープ別・シェル全体・ゴーストのスコープ別・ゴースト全体の順に探して先に見つかったものを採る（areka の placement::config::resolve_scope）。この項目は最も弱い段（ゴースト全体）にあたり、シェル側の 2 つの綴りにも、同じゴーストのスコープを付けた綴りにも負ける。同じ語を使う指示がさくらスクリプトの側（`set,alignmenttodesktop` の 2 項目）にもあるが、そちらは別ドメインの台帳の持ち物で、走らせる指示であって定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -4230,7 +4230,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す。大文字小文字は区別しない）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
 areka の placement::descript_window_keys::read_balloon_dontmove がシェルの descript から `char<番号>.balloon.dontmove` を読む。番号が 0 と 1 の綴りは `sakura.`・`kero.` の別名として効く（正典の綴りが書かれていればそちらを先に引く）。
 シェルの値はゴーストの `balloon.dontmove` に勝つ（シェルの 0 はゴーストの true を打ち消す）。シェルの切り替えでは新しいシェルの値へ取り替える。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない。追従は止めない。台本の `unlock,balloonmove` ではこの段は解けない。
 番号が 2 以上の綴りも同じ形で読めるが、3 人目からのバルーンの窓がまだ無いので当てる先が無い（窓を作るのは extra-character-windows）。
@@ -4537,7 +4537,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 `charN.` の番号は、キャラクタの人数に効かない。areka の placement::config::detect_scopes が立てるのは本体と相方だけで、`charN.` で始まるキーは番号が 2 以上でもキャラクタを立てない（3 人目以降の窓をまだ作らないため。2026-10-17 に areka-P0-emily-ghost-verification のタスク 3.1 で絞った。それまでは番号が 2 以上の綴りがそのキャラクタを立てていた。絞りを外すのは extra-character-windows）。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として受け取られ、2 以上ならそのキャラクタが立たないので使われない（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
@@ -4650,7 +4650,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka の placement::config::resolve_scope が引き、配置の解決（placement::resolver）がバルーンを左右どちらへ置くかに使う。`left`（既定）と `right` を導出し、それ以外は記録を残して `left` として続ける。値はゴーストの descript とシェルの descript の 2 層から探し、シェルの側が勝つ。スコープの接頭辞は `sakura.`／`kero.` が正典で `char0.`／`char1.` は別の綴りとして受ける。
+areka の placement::config::resolve_scope が引き、配置の解決（placement::resolver）がバルーンを左右どちらへ置くかに使う。`left`（既定）・`right`・`none`（自動調整）を導出し、それ以外は記録を残して `left` として続ける。語は大文字小文字を区別しない。値はゴーストの descript とシェルの descript の 2 層から探し、シェルの側が勝つ。スコープの接頭辞は `sakura.`／`kero.` が正典で `char0.`／`char1.` は別の綴りとして受ける。
 束: 窓の置き場所・正典どおりに動く（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 77——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -4662,7 +4662,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す。大文字小文字は区別しない）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
 areka の placement::descript_window_keys::read_balloon_dontmove がシェルの descript から読む（別名の `char1.` より `kero.` を先に引く）。
 シェルの値はゴーストの `balloon.dontmove` に勝つ（シェルの 0 はゴーストの true を打ち消す）。シェルの切り替えでは新しいシェルの値へ取り替える。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない。追従は止めない。台本の `unlock,balloonmove` ではこの段は解けない。
 担当 spec は descript-window-keys。
@@ -4999,7 +4999,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 1 つ補いがある——値の導出は上のとおり縮んでいるが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
@@ -5494,7 +5494,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
-areka の placement::config::resolve_scope が引き、配置の解決（placement::resolver）がバルーンを左右どちらへ置くかに使う。`left`（既定）と `right` を導出し、それ以外は記録を残して `left` として続ける。値はゴーストの descript とシェルの descript の 2 層から探し、シェルの側が勝つ。スコープの接頭辞は `sakura.`／`kero.` が正典で `char0.`／`char1.` は別の綴りとして受ける。
+areka の placement::config::resolve_scope が引き、配置の解決（placement::resolver）がバルーンを左右どちらへ置くかに使う。`left`（既定）・`right`・`none`（自動調整）を導出し、それ以外は記録を残して `left` として続ける。語は大文字小文字を区別しない。値はゴーストの descript とシェルの descript の 2 層から探し、シェルの側が勝つ。スコープの接頭辞は `sakura.`／`kero.` が正典で `char0.`／`char1.` は別の綴りとして受ける。
 束: 窓の置き場所・正典どおりに動く（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 77——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -5506,7 +5506,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
+壊れ方: 見た目の差。記録: warn!。areka はこの項目を正典どおりに、そのスコープのバルーンの利用者のドラッグでの移動の禁止として読んで使う（1・true で禁止、0・false で許す。大文字小文字は区別しない）。それ以外の値は書かれていないものとしてゴーストの `balloon.dontmove` へ進み、`descript_value_unreadable` の記録を 1 件残す。
 areka の placement::descript_window_keys::read_balloon_dontmove がシェルの descript から読む（別名の `char0.` より `sakura.` を先に引く）。
 シェルの値はゴーストの `balloon.dontmove` に勝つ（シェルの 0 はゴーストの true を打ち消す）。シェルの切り替えでは新しいシェルの値へ取り替える。禁止したスコープのバルーンをドラッグしても窓は動かず、位置の記憶も書かない。追従は止めない。台本の `unlock,balloonmove` ではこの段は解けない。
 担当 spec は descript-window-keys。
@@ -5860,7 +5860,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -5875,7 +5875,7 @@ priority = "A2"
 values = []
 links = []
 note = """
-壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
+壊れ方: 見た目の差。記録: warn!。areka はこの欄を読む（完了 areka-P0-window-placement が建てた読み）。`bottom` と `free` は正典どおりに動く。`top`／`left`／`right` は窓の吸着の向きとしては効き、ドラッグの縛り・表情の切り替えで窓の大きさが変わったとき・`\\![move]` で、窓をその辺へ沿わせる（areka の placement::resolver の `Anchor::from_alignment` が窓の吸着の向きにする。areka-P0-window-link-directives で台本の `\\![set,alignmenttodesktop,方向]` と同じ扱いになった）。起動や並べ直しで窓を最初に置く既定の位置も同じ辺で解く——`top` は上端に、`left`／`right` はその辺に下から上へ連ねて置く（areka の placement::resolver::resolve_placement。2026-11-14 に audit-placement-core で直した。それまでは `bottom` と同じに解いていた）。語は大文字小文字を区別しない（`Free` も `free`。areka の placement::config::resolve_scope と placement::resolver の `Anchor::from_alignment`）。正典に無い値は `bottom` と同じに解き、記録を 1 行残す（areka の placement::resolver::resolve_placement）。作業領域が変わったとき（タスクバーの移動など）に辺へ沿わせ直すのは下端に吸着した窓だけで、`top`／`left`／`right` の窓は沿わせ直さない（areka の runtime::frame::work_area_sync）。
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決めるので、id は別でも最後は同じ 1 つの置き方になる。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。

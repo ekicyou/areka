@@ -9,7 +9,7 @@ use super::{GhostWindows, spawn_ghost_windows};
 use crate::follow::BalloonFollow;
 use crate::resolver::{PointPx, ScopePlacement, SizePx};
 use crate::sample_test_support::{SCOPE0_H, SCOPE0_W};
-use crate::test_support::fake_handle;
+use crate::test_support::give_fake_handles;
 
 // -------------------------------------------------------------------------
 // T-I4: follow 幾何（design Testing Strategy 4・要件 4.2）
@@ -88,20 +88,6 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
     let mut world = World::new();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
     (world, gw, placements)
-}
-
-/// 全 4 窓へ偽 WindowHandle を付与する（偽装境界）。
-fn attach_fake_handles(world: &mut World, gw: &GhostWindows) {
-    let mut raw = 0x100usize;
-    for scope in gw.scopes().collect::<Vec<_>>() {
-        for e in [
-            gw.char_window(scope).unwrap(),
-            gw.balloon_window(scope).unwrap(),
-        ] {
-            world.entity_mut(e).insert(fake_handle(raw));
-            raw += 0x10;
-        }
-    }
 }
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
@@ -196,7 +182,7 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
 #[test]
 fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
     let (mut world, gw, placements) = real_pipeline_world();
-    attach_fake_handles(&mut world, &gw);
+    give_fake_handles(&mut world, &gw);
 
     let p1 = &placements[1];
     let char1 = gw.char_window(1).unwrap();
@@ -254,7 +240,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
 #[test]
 fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
     let (mut world, gw, placements) = real_pipeline_world();
-    attach_fake_handles(&mut world, &gw);
+    give_fake_handles(&mut world, &gw);
     let p = &placements[0];
     let char_e = gw.char_window(0).unwrap();
     let balloon_e = gw.balloon_window(0).unwrap();

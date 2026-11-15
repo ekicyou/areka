@@ -76,7 +76,7 @@ pub fn reset_balloon_positions(world: &mut World, trigger: BalloonResetTrigger) 
     for StandardScope { running, placement } in resolved {
         let scope = running.input.scope;
         let base = placement.balloon_offset_base;
-        reinstall_balloon(world, &running, base, placement.balloon_keyword_base);
+        reinstall_balloon(world, &running, &placement);
         let scope_u32 = scope as u32;
         forget.extend([Axis::X, Axis::Y].map(|axis| PersistKey::BalloonOffset {
             scope: scope_u32,

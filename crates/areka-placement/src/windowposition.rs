@@ -59,7 +59,8 @@ pub(crate) enum LimitVocab {
 
 /// `windowposition.x` の語彙分類（要件 1.1 の x 側／4.1／4.6）。
 ///
-/// - `x_num`: 既存の数値写像（`get_scalar::<i32>("windowposition.x")`）の結果。
+/// - `x_num`: 転記層が `windowposition.x` を数として読んだ結果（数として読めない値は `None`
+///   で、転記層は記録を残さない）。
 /// - `x_raw`: 転記層 `WindowPositionRaw::x_raw()` の生文字列。
 ///
 /// # 不変量（数値経路の回帰境界・design C1 Invariants）

@@ -166,6 +166,46 @@ fn shell_without_any_surface_is_measure_error() {
     });
 }
 
+/// シェルは読めて面もあるのに、本体側の候補（面 0）がどれも無いときは、本体側の合成の失敗として
+/// `PlacementError::Measure { scope: 0 }` を返し、`error!` を 1 件残す（代わりの大きさは無い）。
+/// 面の画像の名前を `surfaceN.png` にしないので、画像から面 0 が生えることもない。
+#[test]
+fn scope0_compose_failure_is_measure_error_with_one_error_log() {
+    with_com_initialized(|| {
+        let shell = TempDir::new();
+        std::fs::copy(
+            emo2("shell/master/surface0.png"),
+            shell.path().join("body.png"),
+        )
+        .expect("body.png の複写");
+        std::fs::write(
+            shell.path().join("surfaces.txt"),
+            b"surface10\n{\nelement0,overlay,body.png,0,0\n}\n",
+        )
+        .expect("surfaces.txt の書出し");
+        write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
+
+        let (res, events) = capture(|| {
+            measure_builtin(
+                shell.path(),
+                &balloon_root(),
+                &[0, 1],
+                &MeasureScaling::IDENTITY,
+            )
+        });
+        match res {
+            Ok(v) => panic!("本体側の面が無いシェルで Ok は誤成功: {v:?}"),
+            Err(PlacementError::Measure { scope, reason }) => {
+                assert_eq!(scope, 0, "本体側の失敗は scope0 で報告");
+                assert!(reason.contains("合成失敗"), "理由: {reason}");
+            }
+            Err(other) => panic!("Measure であるべき: {other:?}"),
+        }
+        let ev = expect_one(&events, "scope0 の採寸合成に失敗");
+        assert_eq!(ev.level, tracing::Level::ERROR, "{ev:?}");
+    });
+}
+
 /// 要件 3.7/5.4（後方互換）: 相方側系列（`balloonk*`）を持たないバルーンでは
 /// **全 scope が同一のバルーン寸**を得る——`areka-P0-kero-balloon` の適用前の採寸結果と一致する。
 ///
@@ -371,51 +411,11 @@ fn apply_scaling_maps_balloon_per_scope() {
     assert_eq!((out[1].char_size.w, out[1].char_size.h), (336, 400));
 }
 
-/// 要件 2.5: k 倍後が物理 px 通貨 i32 を超過したら `PlacementError::Measure`
-/// （silent wrap しない・design「Error Handling」の `k 倍寸の i32 超過（採寸）` 行）。
+/// 要件 2.5: 恒等 k なら i32::MAX ちょうどは物理 px 通貨に収まる。超過したときの
+/// `PlacementError::Measure` の中身と記録は [`scale_size_px_failure_emits_error_log_with_attribution`]
+/// が見る。
 #[test]
-fn apply_scaling_guards_i32_overflow() {
-    // char 側の超過（scale_len は u32::MAX へ飽和するが i32 には収まらない）。
-    match apply_scaling(
-        vec![scope_input(3, (i32::MAX, 10), (10, 10))],
-        &MeasureScaling {
-            shell: k(2, 1),
-            balloon: ScaleRatio::ONE,
-        },
-    ) {
-        Ok(v) => panic!("i32 超過で Ok は誤成功（wrap している）: {v:?}"),
-        Err(PlacementError::Measure { scope, reason }) => {
-            assert_eq!(scope, 3, "帰属スコープを報告する");
-            assert!(reason.contains("i32 を超過"), "理由: {reason}");
-            assert!(
-                !reason.starts_with("balloon:"),
-                "char 起因に balloon 接頭辞は付かない: {reason}"
-            );
-        }
-        Err(other) => panic!("Measure であるべき: {other:?}"),
-    }
-
-    // balloon 側の超過は `balloon:` 接頭辞つきで当該 scope に帰属する。
-    match apply_scaling(
-        vec![
-            scope_input(0, (10, 10), (10, 10)),
-            scope_input(1, (10, 10), (10, i32::MAX)),
-        ],
-        &MeasureScaling {
-            shell: ScaleRatio::ONE,
-            balloon: k(3, 1),
-        },
-    ) {
-        Ok(v) => panic!("i32 超過で Ok は誤成功: {v:?}"),
-        Err(PlacementError::Measure { scope, reason }) => {
-            assert_eq!(scope, 1, "balloon 起因も per-scope に帰属する");
-            assert!(reason.starts_with("balloon: "), "接頭辞: {reason}");
-            assert!(reason.contains("i32 を超過"), "理由: {reason}");
-        }
-        Err(other) => panic!("Measure であるべき: {other:?}"),
-    }
-
-    // 境界: i32::MAX ちょうどは通る（恒等 k）。
+fn apply_scaling_identity_keeps_i32_max() {
     let ok = apply_scaling(
         vec![scope_input(0, (i32::MAX, 1), (1, i32::MAX))],
         &MeasureScaling::IDENTITY,
@@ -509,7 +509,7 @@ fn apply_scaling_maps_char_per_scope() {
 
 /// 要件 2.5: i32 ガードの**厳密境界**（1px の差で Ok/Err が入れ替わる）。
 ///
-/// 既存の [`apply_scaling_guards_i32_overflow`] は「恒等 k で `i32::MAX` が通る」
+/// 既存の [`apply_scaling_identity_keeps_i32_max`] と記録のテストは「恒等 k で `i32::MAX` が通る」
 /// 「`i32::MAX` の 2〜3 倍が落ちる」しか見ておらず、**k 倍後**の値に対する閾値が
 /// `i32::MAX` ちょうどなのか 1 だけ緩い（＝`i32::MAX + 1` を wrap して受理する）のかを
 /// 弁別しない。ここは 2_147_483_646（通る）と 2_147_483_648（落ちる）の対で
@@ -569,7 +569,7 @@ fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
 // 捕捉は共有機構 `log_capture_kit::capture` を使う。
 // **素朴な `with_default` 捕捉は非決定的に取りこぼす**——`tracing` の callsite interest
 // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
-// 他テスト（同じ `error!` callsite を踏む `apply_scaling_guards_i32_overflow` 等）が
+// 他テスト（同じ `error!` callsite を踏む `apply_scaling_rejects_negative_extent` 等）が
 // 先に登録すると `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
 // 機構と対策は共有機構 `log_capture_kit` の crate doc を参照。
 
@@ -590,7 +590,19 @@ fn scale_size_px_failure_emits_error_log_with_attribution() {
             },
         )
     });
-    assert!(res.is_err(), "i32 超過は Err");
+    // scale_len は u32::MAX へ飽和するが i32 には収まらない（wrap しない）。
+    match res {
+        Ok(v) => panic!("i32 超過で Ok は誤成功（wrap している）: {v:?}"),
+        Err(PlacementError::Measure { scope, reason }) => {
+            assert_eq!(scope, 3, "帰属スコープを報告する");
+            assert!(reason.contains("i32 を超過"), "理由: {reason}");
+            assert!(
+                !reason.starts_with("balloon:"),
+                "char 起因に balloon 接頭辞は付かない: {reason}"
+            );
+        }
+        Err(other) => panic!("Measure であるべき: {other:?}"),
+    }
     let ev = expect_one(&events, "k 適用に失敗");
     assert_eq!(
         ev.level,
@@ -616,7 +628,15 @@ fn scale_size_px_failure_emits_error_log_with_attribution() {
             },
         )
     });
-    assert!(res.is_err());
+    match res {
+        Ok(v) => panic!("i32 超過で Ok は誤成功: {v:?}"),
+        Err(PlacementError::Measure { scope, reason }) => {
+            assert_eq!(scope, 1, "balloon 起因も per-scope に帰属する");
+            assert!(reason.starts_with("balloon: "), "接頭辞: {reason}");
+            assert!(reason.contains("i32 を超過"), "理由: {reason}");
+        }
+        Err(other) => panic!("Measure であるべき: {other:?}"),
+    }
     let ev = expect_one(&events, "k 適用に失敗");
     assert_eq!(ev.level, tracing::Level::ERROR, "{ev:?}");
     assert_eq!(ev.expect_field("scope"), "1", "先頭スコープ 0 ではない");
