@@ -190,6 +190,27 @@ crates/areka/src/placement_tests/
 
 1,000 行の番人（要件 9.1）: 行が増えるのは `persist.rs`（＋約 25 行＝約 953）・`lib.rs`（足す約 20・消す約 25＝増えない）・`persist_restore_tests.rs`（先に 20・49 で約 75 行消してから 16 のテストを約 20 行足す）。`measure_tests.rs` は減るだけ（11・21・54・59 で約 130 行減る）。範囲の外で 1,000 行に近いのは `crates/areka-emo-present/src/shell_target.rs`（956 行・指摘 5 で入口を足す）と `crates/areka-sylphya/src/actor.rs`（854 行・指摘 17 で腕を足す）。足して越えるなら、兄弟のファイルへ分ける。どのタスクも終わりに、触った 1,000 行の近くのファイルの行数を測り、1,000 を越えるなら兄弟のファイルへ分ける（番人の例外表へは足さない）。
 
+### 実装で足したファイルと範囲の外で触ったファイル（2026-11-15・実装の後に追記）
+
+実装のあいだに、上の File Structure Plan と Modified Files に無いファイルが増えた。どれも理由と数え方は `research.md` の節に書いてあり、この設計の決めは変わらない。
+
+新しく足したファイル:
+- `crates/areka-placement/src/chain_rule.rs` と `chain_rule_tests.rs` — 連鎖の決まりを 1 か所にまとめた総括（`research.md` 18.10・515・520）。
+- `crates/areka-placement/src/persist_save.rs` — `persist.rs` が 1,000 行に近づいたので、保存の側を兄弟のファイルへ分けた（434・`research.md` 18.6）。
+- `crates/areka-placement/src/test_support_com_tests.rs` — `with_com_initialized` が自分で初期化に成功したときだけ後始末する、という檻（指摘 57・コミット `65eb915f5`・`research.md` 1.4 と 18.1）。
+- 本体の `crates/areka/src/runtime/frame_chain_rule_tests.rs` と `frame_chain_finalize_align_tests.rs` — 起動の確定と連鎖の決まりのテスト（485・494・495・515・520・`research.md` 18.7〜18.10）。
+
+範囲の外で触ったファイル（指摘の番号・`research.md` の節）:
+- 本体の `runtime/frame/switch.rs`・`runtime/skin_switch.rs`・`runtime/frame/switch_finish_face_tests.rs`・`switch_finish_tests.rs` — 454・472（18.6〜18.7）。
+- 本体の `runtime/frame.rs`・`runtime/frame_test_support.rs`・`runtime/frame_chain_finalize_*_tests.rs`・`runtime/frame/drain_resnap.rs` — 485・494・495・515・520（18.7〜18.10）。
+- 本体の `ghost_session.rs`・`main_restore_seam_tests.rs` — 51（`research.md` 5 節の表）。
+- `crates/log-capture-kit/tests/temp_path_guard_test.rs` — 522（例外の表から 2 行を消しただけ・18.9）。
+- `crates/wintf/src/ecs/window/zorder_chain_diag.rs`・`zorder_chain_diag_tests.rs` — 73。`zorder_pair.rs` — 25（doc の 2 行）。
+- `crates/ukadoc-survey/src/evidence/extract_tests.rs` — 説明の行の番号だけ（18.1）。
+- `doc/ukadoc-coverage/briefing.md`・`briefing-assets.md`・`ledger/assets.toml` — 台帳の追随（18.1）。
+- `crates/areka/examples/collision-probe.rs` と `collision-probe/` の下 — コメントの行の番号だけ（19.2）。
+- 追随の持ち物（`audit-placement-follow` の側）: `follow/drag_follow.rs` の 1 行（Implementation Notes 2.4・`research.md` 19.2）と `follow_drag_end_persist_tests.rs`（同 4.5・形の変更で避けられなかった）。
+
 ## System Flows
 
 ### 指摘 1: 最初の位置の解き方（`resolve_placement` の P1〜P4）
