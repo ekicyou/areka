@@ -23,6 +23,20 @@ fn emo2(rel: &str) -> PathBuf {
     emo2_root().join(rel)
 }
 
+/// emo2 の `surface0.png` を 1 枚だけ写し、`surfaces_txt` と透過の宣言を置いた一時のシェル
+/// （兄弟の `measure_default_surface_tests.rs` も使う）。
+pub(super) fn surface0_only_shell(surfaces_txt: &[u8]) -> TempDir {
+    let shell = TempDir::new();
+    std::fs::copy(
+        emo2("shell/master/surface0.png"),
+        shell.path().join("surface0.png"),
+    )
+    .expect("surface0.png の複写");
+    std::fs::write(shell.path().join("surfaces.txt"), surfaces_txt).expect("surfaces.txt の書出し");
+    write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
+    shell
+}
+
 /// emo2 fixture の shell/balloon に対し
 /// `measure_scope_sizes` が scope0・scope1・balloon の原寸（非ゼロ物理 px）を
 /// 返す。emo2 は決定論 fixture ゆえ厳密寸で固定する（2.9 の幅供給源・3.2 の
@@ -739,15 +753,7 @@ fn measure_emo2_fixture_applies_k_end_to_end() {
 #[test]
 fn placement_read_honours_the_files_own_charset_declaration() {
     with_com_initialized(|| {
-        let shell = TempDir::new();
-        std::fs::copy(
-            emo2("shell/master/surface0.png"),
-            shell.path().join("surface0.png"),
-        )
-        .expect("surface0.png の複写");
-        std::fs::write(shell.path().join("surfaces.txt"), SHIFT_JIS_SURFACES_TXT)
-            .expect("surfaces.txt の書出し");
-        write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
+        let shell = surface0_only_shell(SHIFT_JIS_SURFACES_TXT);
 
         let out = measure_builtin(
             shell.path(),

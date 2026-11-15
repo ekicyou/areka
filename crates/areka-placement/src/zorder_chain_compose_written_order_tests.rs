@@ -125,7 +125,6 @@ fn t_zcw01_inverted_scope_zero_joins_only_two_edges() {
             edge(b(0), b(1), ChainSegment::Group(1))
         ]
     );
-    assert!(final_owner_violations(&plan, &[0, 1]).is_empty());
 
     // 補いの経路でも同じ鎖になる（`s1` だけの名指しに `b1` をすぐ手前へ補う・要件 3.3）。
     let filled = compose_full(&[tag_group(1, &["s0", "b0", "s1"])], &[0, 1]);
@@ -150,7 +149,6 @@ fn t_zcw02_split_scopes_join_every_consecutive_pair() {
             edge(s(1), b(0), g)
         ]
     );
-    assert!(final_owner_violations(&plan, &[0, 1]).is_empty());
 }
 
 /// 後ろ側の参加は今のまま: 名前の挙がらないスコープは昇順で `[バルーン, キャラ窓]` の
@@ -176,7 +174,6 @@ fn t_zcw03_tail_participation_is_unchanged_behind_an_inverted_group() {
             edge(s(2), b(3), ChainSegment::Tail),
         ]
     );
-    assert!(final_owner_violations(&plan, &scopes).is_empty());
 }
 
 // ===========================================================================

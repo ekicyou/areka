@@ -63,13 +63,21 @@ fn primary_work_area_picks_is_primary() {
 }
 
 /// primary フラグ無し（列挙異常）は先頭モニタで代替（warn・窓は生やす方針）。
+/// `Err` を返さないので、記録だけが列挙の異常を知る手がかりになる（その 1 行も確かめる）。
 #[test]
 fn primary_work_area_no_primary_substitutes_first() {
     let monitors = [
         make_monitor(1, (0, 0, 1920, 1040), false),
         make_monitor(2, (1920, 0, 3840, 1040), false),
     ];
-    let wa = work_area_of(primary_monitor(&monitors)).expect("非空なら Ok");
+    let (primary, events) = log_capture_kit::capture(|| primary_monitor(&monitors));
+    let warn = log_capture_kit::expect_one(&events, "primary フラグを持つモニタが見つからない");
+    assert_eq!(warn.level, tracing::Level::WARN);
+    assert_eq!(
+        log_capture_kit::ExpectField::expect_field(warn, "monitor_count"),
+        "2"
+    );
+    let wa = work_area_of(primary).expect("非空なら Ok");
     assert_eq!(
         wa,
         RectPx {

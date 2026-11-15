@@ -8,10 +8,10 @@
 
 use std::path::Path;
 
+use super::tests::surface0_only_shell;
 use super::*;
 use crate::descript_window_keys::{DefaultSurfaces, read_default_surfaces};
 use crate::sample_test_support::{SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W, balloon_root, emo2_root};
-use crate::shared_test_support::{TempDir, write_self_alpha_one_descript};
 use crate::test_support::{kv, with_com_initialized};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
@@ -100,18 +100,7 @@ fn unwritten_default_surface_keeps_current_sizes() {
 #[test]
 fn no_candidate_in_shell_leaves_it_to_the_compose_failure() {
     // 面 0 だけのシェル（相方側の候補 12・10 はどちらも無い）。
-    let shell = TempDir::new();
-    std::fs::copy(
-        emo2_root().join("shell/master/surface0.png"),
-        shell.path().join("surface0.png"),
-    )
-    .expect("surface0.png の複写");
-    std::fs::write(
-        shell.path().join("surfaces.txt"),
-        "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n",
-    )
-    .expect("surfaces.txt の書出し");
-    write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
+    let shell = surface0_only_shell(b"surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n");
 
     let defaults = ghost_kv(&[("kero.seriko.defaultsurface", "12")]);
     let (sizes, events) = measure_chars(shell.path(), &defaults);

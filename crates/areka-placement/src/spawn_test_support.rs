@@ -57,15 +57,6 @@ pub fn ghost_window_entities(world: &mut World) -> Vec<Entity> {
         .collect()
 }
 
-/// 偽 HWND を持つ `WindowHandle`（偽装境界）。配置のテストだけが使う。
-#[cfg(test)]
-pub(super) fn fake_window_handle(raw: isize) -> wintf::ecs::WindowHandle {
-    use windows::Win32::Foundation::HWND;
-    wintf::ecs::WindowHandle {
-        hwnd: HWND(raw as *mut core::ffi::c_void),
-    }
-}
-
 /// 自プロセス所有の非表示トップレベル窓を作る（wintf 側の確立系テストと同一レシピ）。
 ///
 /// owner 関係はトップレベル窓の間でのみ意味を持つため `WS_POPUP`（親なし）で作る。

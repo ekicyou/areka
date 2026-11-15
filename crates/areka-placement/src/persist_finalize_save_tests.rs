@@ -595,3 +595,30 @@ fn old_memory_gets_only_the_adjacency_mark_added() {
     );
     rig.finish();
 }
+
+/// window-work-area-clamp 要件 4.6: 記憶の位置を寄せて表示した起動では、隣の窓（記憶に位置が
+/// 無いスコープ 0）の位置を書く束からも、印の無い古い記憶（スコープ 1）へ印を書き足さない。
+/// スコープ 0 の位置は書く。
+#[test]
+fn clamped_boot_adds_no_mark_to_old_memory_through_the_neighbours_position() {
+    let mut rig = Rig::new(true);
+    rig.mark_remembered(1);
+    rig.mark_remembered(2);
+    rig.world
+        .insert_resource(super::RestoredPositionsClamped(true));
+
+    persist_unremembered_char_positions(&rig.world);
+    let after = rig.load();
+
+    assert_eq!(
+        window_pos(&after, 0),
+        Some(expected_saved(0)),
+        "スコープ 0 は書く"
+    );
+    assert_eq!(
+        after.get(&PersistKey::WindowAdjacent { scope: 1 }),
+        None,
+        "寄せた起動で古い記憶へ印が書き足された: {after:?}"
+    );
+    rig.finish();
+}

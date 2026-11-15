@@ -1,6 +1,7 @@
 //! 未指定スコープの**後方参加**を実窓で固定するテスト（要件 15.1／15.2）。
 //!
-//! # なぜ areka 側に置くのか（実窓の檻の中で本ファイルだけが例外である理由）
+//! # なぜ areka 側に置くのか（実窓の檻のうち本ファイルと兄弟の
+//! `zorder_chain_inversion_order_tests.rs` が例外である理由）
 //!
 //! 実窓の檻のうち 4 ファイル（`zorder_chain_order_tests.rs`／
 //! `zorder_chain_order_lifecycle_tests.rs`／`zorder_chain_order_outsider_tests.rs`／
@@ -13,7 +14,8 @@
 //! [`compose_chain`](super::compose_chain) が持っており、これは areka の関数である。
 //! wintf は areka を import できない（既存規律）ので、wintf 側で同じ主題を書こうとすると
 //! **檻が期待する並びを檻自身が組む**ことになり、測っているのは自分の入力だけになる
-//! （檻が自分の前提の破壊を生き延びる）。よって本ファイルだけは areka に置き、
+//! （檻が自分の前提の破壊を生き延びる）。よって本ファイルは areka に置き（兄弟の
+//! `zorder_chain_inversion_order_tests.rs` も同じ理由で、計画を本番の台帳と合成に組ませる）、
 //!
 //! **タグの語彙 → 台帳 → 合成（areka）→ 適用系（wintf）→ 実窓の重なり**
 //!

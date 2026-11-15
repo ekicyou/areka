@@ -157,14 +157,15 @@ pub enum PlacementRoute {
     // D13 帰結⑷「語彙のみ保持・将来の配線先として予約」ゆえ削らない。
     SpawnInitial,
     /// 位置永続化の復元マージ（可視化保証は position-persist の所有＝可視性ガード適用外）。
-    // 起動時の復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージするので
+    // 起動時の復元は spawn 前の `persist::restore_and_judge` が `ScopePlacement` をマージするので
     // この語を作らない。作るのはバルーン窓を標準の部品で据え直す `reseed::reinstall_balloon` の
     // `follow_balloon` の引き金（記憶の復元と同じ明示の配置として扱う）。呼び手は 3 つある:
     // シェルの差し替え（`reseed::apply_shell_descript`）・面の windowposition の置き直し
     // （`face_windowposition::apply_face_windowposition`）・バルーン位置初期化
     // （`reset_balloon_pos::reset_balloon_positions`）。この語だけでは 3 つを見分けられない。
     Restore,
-    /// アンカー変化トリガ（`anchor_changed_system`）。
+    /// アンカー変化トリガ。本番で書くのはシェルの差し替えで新しい揃え方へ今の窓寸のまま置き直す
+    /// `reseed::reanchor_char_windows` だけ（`anchor_changed_system` は schedule に登録しない見本）。
     AnchorChange,
     /// 毎フレーム再スナップ（`resnap_from_sizes`）。
     Resnap,

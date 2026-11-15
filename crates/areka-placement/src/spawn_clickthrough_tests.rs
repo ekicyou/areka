@@ -2,7 +2,8 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Window;
 
 use super::spawn_ghost_windows;
-use super::test_support::{fake_window_handle, titles, two_scope_placements};
+use super::test_support::{titles, two_scope_placements};
+use crate::test_support::fake_handle;
 
 // -------------------------------------------------------------------------
 // T-I4: clickthrough 登録 system（6.1）
@@ -61,8 +62,8 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
     // scope0 の 2 窓へ HWND 付与（wintf create_windows が付ける状況の模擬）
     let char0 = gw.char_window(0).unwrap();
     let balloon0 = gw.balloon_window(0).unwrap();
-    world.entity_mut(char0).insert(fake_window_handle(0x10));
-    world.entity_mut(balloon0).insert(fake_window_handle(0x20));
+    world.entity_mut(char0).insert(fake_handle(0x10));
+    world.entity_mut(balloon0).insert(fake_handle(0x20));
 
     schedule.run(&mut world);
     let mut calls = registrar_calls(&world);
@@ -75,7 +76,7 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
 
     // 後から HWND が付いた scope1 キャラ窓も追加で 1 回だけ登録される
     let char1 = gw.char_window(1).unwrap();
-    world.entity_mut(char1).insert(fake_window_handle(0x30));
+    world.entity_mut(char1).insert(fake_handle(0x30));
     schedule.run(&mut world);
     let calls = registrar_calls(&world);
     assert_eq!(calls.len(), 3);
@@ -90,7 +91,7 @@ fn t_i4_register_system_ignores_non_ghost_windows() {
     world.insert_non_send(FakeRegistrar::default());
     let mut schedule = register_schedule();
 
-    world.spawn((Window::default(), fake_window_handle(0x40)));
+    world.spawn((Window::default(), fake_handle(0x40)));
 
     schedule.run(&mut world);
     assert!(registrar_calls(&world).is_empty());
@@ -103,7 +104,7 @@ fn t_i4_missing_registrar_warns_once_for_a_new_window() {
     let mut world = World::new();
     let gw = spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
     let char0 = gw.char_window(0).unwrap();
-    world.entity_mut(char0).insert(fake_window_handle(0x50));
+    world.entity_mut(char0).insert(fake_handle(0x50));
 
     let mut schedule = Schedule::default();
     schedule.add_systems(register_ghost_windows_click_through);

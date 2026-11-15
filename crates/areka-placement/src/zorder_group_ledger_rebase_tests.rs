@@ -5,29 +5,14 @@
 //! 一切必要とせず、台帳は各テストが自前で作る値である。
 
 use super::*;
-use crate::zorder_test_support::{b, s};
-
-/// 解釈を通った要素列（台帳の入口の呼び出し規約どおり）。
-fn accept(tokens: &[&str]) -> Vec<GroupElement> {
-    match parse_zorder_tokens(tokens) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {tokens:?} reject={reject:?}"),
-    }
-}
-
-fn add_tag(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> u32 {
-    match ledger.try_add_tag_group(accept(tokens)) {
-        Ok(id) => id,
-        Err(reject) => panic!("受理されるべきタグが拒否された: {tokens:?} reject={reject:?}"),
-    }
-}
+use crate::zorder_test_support::{accept, b, expect_added, s};
 
 /// 基底（ID）とタグの組（ID）を据えた台帳。基底はスコープ 0・1、タグはスコープ 2・3。
 fn ledger_with_base_and_tag() -> (ZOrderGroupLedger, u32, u32) {
     let mut ledger = ZOrderGroupLedger::default();
     ledger.set_descript_base(accept(&["0", "1"]));
     let base_id = ledger.groups()[0].id;
-    let tag_id = add_tag(&mut ledger, &["2", "3"]);
+    let tag_id = expect_added(&mut ledger, &["2", "3"]);
     (ledger, base_id, tag_id)
 }
 
@@ -71,8 +56,8 @@ fn t_zrb1_rebase_keeps_tag_groups_and_seats_the_new_base_first() {
 #[test]
 fn t_zrb2_rebase_without_an_old_base_inserts_the_base_ahead_of_tags() {
     let mut ledger = ZOrderGroupLedger::default();
-    let first = add_tag(&mut ledger, &["2", "3"]);
-    let second = add_tag(&mut ledger, &["4", "5"]);
+    let first = expect_added(&mut ledger, &["2", "3"]);
+    let second = expect_added(&mut ledger, &["4", "5"]);
 
     let outcome = ledger.rebase_descript(accept(&["0", "1"]));
 
@@ -141,7 +126,7 @@ fn t_zrb5_an_empty_list_means_no_base() {
 fn t_zrb6_reset_seats_the_pending_base() {
     let (mut ledger, _, tag_id) = ledger_with_base_and_tag();
     ledger.rebase_descript(accept(&["2", "6"]));
-    let next_tag = add_tag(&mut ledger, &["7", "8"]);
+    let next_tag = expect_added(&mut ledger, &["7", "8"]);
 
     ledger.reset_to_descript();
 

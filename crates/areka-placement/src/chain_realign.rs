@@ -86,14 +86,12 @@ use super::transition_diag::{
 
 /// 遷移後の解き直しが**武装中**であることを表す資源（設計 C4 の状態機械）。
 ///
-/// 状態は `None`（平時）→ `Some{armed_frame, before, script_moved}`（武装）→ `None`（解決）の
+/// 状態は `None`（平時）→ `Some{before, script_moved}`（武装）→ `None`（解決）の
 /// 1 往復だけを取る。起動時の確定が未了（[`ChainFinalized`] 未挿入）なら武装そのものが起きない。
 /// 窓の一式を閉じるとき資源ごと外れるので、控えと記録も一緒に消える
 /// （`dpi-realign-remembered-chain` 要件 5.1）。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct ChainRealignPending {
-    /// 武装したフレーム番号（診断で「いつから待っているか」を読むための値）。
-    pub armed_frame: u32,
     /// 武装の時点で控えた、変わる直前のキャラ窓の矩形（スコープ, 矩形）。
     /// 控えられなかったスコープは入らない（要件 1.1・7.2）。
     pub before: Vec<(usize, ChainRect)>,
@@ -114,8 +112,10 @@ impl ChainRealignPending {
 
 /// 全キャラ窓の今の矩形を控える（`dpi-realign-remembered-chain` 要件 1.1・7.2）。
 ///
-/// 拡大率の相が最初のキャラ窓を書く直前に 1 度だけ呼ぶ。`WindowPos` の位置と大きさが揃わない
-/// 窓は控えに入れない（解決のとき、その窓に触れる組を動かさず理由を `warn!` で記録する）。
+/// 拡大率の相が最初のキャラ窓を書く直前に 1 度だけ呼ぶ。記憶へ隣り合いの印を書くとき
+/// （`persist::push_adjacency_marks`）も呼ぶ。`WindowPos` の位置と大きさが揃わない窓は控えに
+/// 入れない（解決のときはその窓に触れる組を動かさず、印を書くときはその組の印を書かず、どちらも
+/// 理由を `warn!` で記録する）。
 /// バルーン窓は詰め直しの組の要素ではないので見ない。台帳が無ければ空を返す。
 pub fn snapshot_char_rects(world: &World) -> Vec<(usize, ChainRect)> {
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
@@ -162,7 +162,7 @@ pub type ChainRealignScan = (Vec<ScopeChainState>, Vec<(usize, Entity, PointPx)>
 ///
 /// - [`ChainFinalized`] 未挿入: 起動時の確定がまだ済んでいない。解き直す連鎖がそもそも無く、
 ///   起動時確定が同じフレームで走る（先に走るのは確定の方である）。
-/// - 既に武装済み: 遷移 1 回につき 1 往復ゆえ、`armed_frame`・控え `before`・台本の記録は
+/// - 既に武装済み: 遷移 1 回につき 1 往復ゆえ、控え `before`・台本の記録は
 ///   **最初の**武装を保つ。同一フレームで複数のキャラ窓が寸変化を起こしても、解決の前に
 ///   2 度目の変化が来ても武装は 1 回である（`dpi-realign-remembered-chain` 要件 1.7）。
 pub fn arm_chain_realign(world: &mut World, before: Vec<(usize, ChainRect)>) {
@@ -176,7 +176,6 @@ pub fn arm_chain_realign(world: &mut World, before: Vec<(usize, ChainRect)>) {
     }
     let armed_frame = dpi_sync::current_frame(world);
     world.insert_resource(ChainRealignPending {
-        armed_frame,
         before,
         script_moved: Vec::new(),
     });

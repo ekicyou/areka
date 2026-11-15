@@ -175,7 +175,8 @@ pub fn balloon_offset_entries(scope: u32, offset_persist: PointPx) -> Vec<(Persi
 /// `wa` は「`pos` に置いた窓矩形の中心が属するモニタの work area」
 /// （[`work_area_for_window`]・最近傍規則込み——どのモニタにも属さない復元位置は
 /// 最近傍 wa を採る＝モニタ喪失シナリオ）。既存の吸着規則は [`project_anchor`] へ
-/// 委譲し二重定義しない（Req5.2・Req1.6/1.8）:
+/// 委譲し二重定義しない（Req5.2・Req1.6/1.8）。補軸の clamp は、再固定した窓が wa と少しも
+/// 交わらない（まったく見えない）ときだけ掛ける（一部でも見えれば位置のまま・Req5.3）:
 /// - `Bottom`/`Top`: アンカー辺（y）を再固定後、`x` を `[wa.left, wa.right − w]` へ clamp。
 /// - `Left`/`Right`: アンカー辺（x）を再固定後、`y` を `[wa.top, wa.bottom − h]` へ clamp。
 /// - `Free`: identity 射影（位置保持）＋両軸を wa 内へ clamp（可視性保証のみ・Req2.5）。
@@ -335,7 +336,7 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 ///
 /// 各 scope について:
 /// - `WindowPos` x/y が**両軸とも** [`parse_px`] できたときのみ char_pos を保存値へ差し替え、
-///   [`project_restore_parts`]（アンカー再解決＋域内 clamp・毎起動 live 再射影）を適用する。片軸でも
+///   [`project_restore_parts`]（アンカー再解決＋見えないときだけ域内 clamp・毎起動 live 再射影）を適用する。片軸でも
 ///   欠損/非数値なら resolver 既定 char_pos を保持する（Req1.5/6.1）。
 /// - `BalloonOffset` x/y が両軸とも parse できれば、その値を**そのまま**左上基準オフセット
 ///   として採用する（保存表現＝ランタイム表現＝char 左上基準・アンカー辺基準変換なし）。
@@ -684,6 +685,11 @@ pub struct PersistWiring {
 /// **panic しない**（6.2 系縮退・無音失敗なし）。`world` は共有参照で足りる（NonSend の読取のみ）——
 /// DragEnd フックは `&mut World` を保持するが `&World` へ暗黙 reborrow して渡せる。
 pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
+    send_entries(world, entries, &BTreeSet::new());
+}
+
+/// [`persist_entries`] の本体。`skip` のスコープの鍵には隣り合いの印を足さない（寄せた起動の古い記憶）。
+fn send_entries(world: &World, entries: Vec<(PersistKey, String)>, skip: &BTreeSet<usize>) {
     let Some(wiring) = world.get_non_send::<PersistWiring>() else {
         // fallback 未挿入等で PersistWiring が無い → debug!＋no-op（起動を止めない・6.2）。
         debug!(
@@ -693,7 +699,11 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
         return;
     };
     // 位置を書く束には触れる組の隣り合いの印を足す（書く時機は足さない・dpi-realign-remembered-chain 6.2）。
-    let entries = with_adjacency_marks(world, entries);
+    let mut entries = with_adjacency_marks(world, entries);
+    entries.retain(|(key, _)| match key {
+        PersistKey::WindowAdjacent { scope } => !skip.contains(&(*scope as usize)),
+        _ => true,
+    });
     // Ghost スコープ固定（7.1）。fire-and-forget＝UI スレッド非ブロッキング（同期 IO を持ち込まない）。
     wiring.publisher.persist_put(PersistScope::Ghost, entries);
 }
@@ -814,8 +824,8 @@ fn push_adjacency_marks(
 ///
 /// 位置は [`WindowPos`] の位置と大きさから読み、ドラッグの確定と同じ [`char_pos_to_origin_x`]
 /// で下端の中央の x へ直す。送る鍵は [`PersistKey::WindowPos`] の x・y（1.5）と、[`persist_entries`] が
-/// 足す触れる組の隣り合いの印（dpi-realign-remembered-chain 6.2）で、全スコープの
-/// 分を 1 つの束にして [`persist_entries`] を 1 回呼ぶ（待たない。書き込みの失敗は送った先が
+/// 足す触れる組の隣り合いの印（dpi-realign-remembered-chain 6.2・寄せた起動の古い記憶の鍵は除く）で、
+/// 全スコープの分を 1 つの束にして [`persist_entries`] と同じ送り口で 1 回送る（待たない。書き込みの失敗は送った先が
 /// 記録し、UI の側へは戻らない＝起動は続く・4.1）。読めない窓は `warn!` を出して飛ばし、
 /// 残りを書く（4.2）。書いた・書かなかったは target `areka::persist::save` に残す（4.3）。
 ///
@@ -921,6 +931,8 @@ pub fn persist_unremembered_char_positions(world: &World) {
         entries.extend(char_pos_entries(scope as u32, saved));
     }
     // 記憶の位置を寄せて表示した起動の並びは記憶の並びと違うので、印を決めない（window-work-area-clamp 4.6）。
+    // 隣の窓の位置を書く束が足す印からも外す（`skip`）。
+    let mut skip = BTreeSet::new();
     if !unmarked.is_empty()
         && world
             .get_resource::<RestoredPositionsClamped>()
@@ -931,7 +943,7 @@ pub fn persist_unremembered_char_positions(world: &World) {
             scopes = ?unmarked,
             "並べ終えた時点の保存: 記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない"
         );
-        unmarked.clear();
+        skip = std::mem::take(&mut unmarked);
     }
     // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
     for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked) {
@@ -943,7 +955,7 @@ pub fn persist_unremembered_char_positions(world: &World) {
         );
     }
     if !entries.is_empty() {
-        persist_entries(world, entries);
+        send_entries(world, entries, &skip);
     }
 }
 

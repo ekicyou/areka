@@ -31,35 +31,7 @@
 //! 入力は「まとめて端へ回す」実装と区別が付かない。
 
 use super::*;
-use crate::zorder_test_support::{b, s};
-
-// ---------------------------------------------------------------------------
-// 檻の道具
-// ---------------------------------------------------------------------------
-
-/// 受理を期待し、要素列と正規化の記録を取り出す。
-fn expect_accept(tokens: &[&str]) -> (Vec<GroupElement>, Vec<Normalization>) {
-    match parse_zorder_tokens(tokens) {
-        Ok(parsed) => parsed,
-        Err(reject) => {
-            panic!("受理されるべき指定が拒否された: tokens={tokens:?} reject={reject:?}")
-        }
-    }
-}
-
-/// 拒否を期待し、拒否理由だけを取り出す。
-///
-/// `Ok` が返った場合は**要素列と正規化記録を添えて**落とす。要件 8.1 の
-/// 「部分的に適用しない」は、拒否経路で要素列が 1 つも外へ出ないことで成立する。
-fn expect_reject(tokens: &[&str]) -> ZOrderReject {
-    match parse_zorder_tokens(tokens) {
-        Ok((elements, normalizations)) => panic!(
-            "拒否されるべき指定が受理された: tokens={tokens:?} elements={elements:?} \
-             normalizations={normalizations:?}"
-        ),
-        Err(reject) => reject,
-    }
-}
+use crate::zorder_test_support::{b, expect_accept, expect_reject, implied, s, written};
 
 // ---------------------------------------------------------------------------
 // 受理（3 形）
@@ -282,11 +254,10 @@ fn t_zgp12_mode_mixed_takes_precedence_over_duplicate() {
 // 入力の前処理
 // ---------------------------------------------------------------------------
 
-/// トークン前後の空白は上流（さくらスクリプトの引数分割・kv 層）で既に落ちている。
-/// 本層の trim はその冗長化であり、実際に届く値に対しては恒等である
-/// （`windowposition::classify_x_vocab` と同じ位置づけ）。
+/// トークン前後の空白は本層の trim で落とす。shell descript の `seriko.zorder,1, 0` は
+/// カンマで割っただけで届くので、`" 0"` を受け付けるのはこの trim である。
 #[test]
-fn t_zgp13_trim_is_identity_for_upstream_trimmed_tokens() {
+fn t_zgp13_spaces_around_tokens_are_ignored() {
     let (padded, _) = expect_accept(&[" b1 ", "\ts0\t"]);
     let (bare, _) = expect_accept(&["b1", "s0"]);
 
@@ -317,24 +288,6 @@ fn t_zgp14_no_upper_bound_on_element_count() {
 // ---------------------------------------------------------------------------
 // 相棒窓の補い（`areka-P0-zorder-scope-inversion` 要件 3）
 // ---------------------------------------------------------------------------
-
-/// 2 窓そろって書かれたスコープの記録——`order` は書かれた並びの形。
-fn written(scope: u32, order: WrittenOrder) -> Normalization {
-    Normalization {
-        scope,
-        order,
-        implied_partner: None,
-    }
-}
-
-/// 片方の窓だけが書かれたスコープの記録——`partner` は**こちらが補った**窓の種別。
-fn implied(scope: u32, partner: GroupWindowKind) -> Normalization {
-    Normalization {
-        scope,
-        order: WrittenOrder::Adjacent,
-        implied_partner: Some(partner),
-    }
-}
 
 /// 数値モードでは正規化が何もしない。展開（⑷）が必ず `[Balloon, Char]` の隣接
 /// ブロックを作るうえ、その並びは作者が書いた指定順ではないので、補うものも
@@ -405,8 +358,8 @@ fn t_zgp20_other_scopes_keep_their_relative_order() {
 ///
 /// [`t_zgp20_other_scopes_keep_their_relative_order`] は片方だけの指名を、離して書かれた
 /// スコープ 0 の 2 枚の**間**に置く。ここでは片方だけの指名を先頭に置き、補ったブロックを
-/// 後ろへ動かす実装を赤にする。差は「どちらの窓が手前か」そのものであり、本機能が存在する
-/// 理由に直結する。
+/// 後ろへ動かす実装を赤にする。差は「どちらの窓が手前か」そのものであり、Z 順の指定
+/// （`areka-P0-scope-zorder-pinning`）が存在する理由に直結する。
 #[test]
 fn t_zgp22_single_window_scope_written_before_a_block_stays_before_it() {
     // s3 はペアを組むスコープ 0 のどの要素よりも前に書かれている。

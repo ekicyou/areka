@@ -24,35 +24,19 @@
 
 use super::*;
 use crate::test_support::zorder_pair_deferred::code_only;
-use crate::zorder_test_support::{b, s};
+use crate::zorder_test_support::{accept, b, expect_added, s};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
 // ---------------------------------------------------------------------------
 
-/// トークン列を解釈して要素列を得る。
+/// タグ由来のグループとして追加を試みる。
 ///
 /// 台帳の入口へ渡すのは**必ず解釈を通った要素列**である（呼び出し規約）。檻も同じ
 /// 経路を通すことで、要件 3.3「明示モードの `sN`／`bN` と数値モードの `N` を同一
 /// スコープを指すものとして扱う」が入口から出口まで通しで成立することを見る。
-fn accept(tokens: &[&str]) -> Vec<GroupElement> {
-    match parse_zorder_tokens(tokens) {
-        Ok((elements, _)) => elements,
-        Err(reject) => panic!("受理されるべき指定が解釈で拒否された: {tokens:?} reject={reject:?}"),
-    }
-}
-
-/// タグ由来のグループとして追加を試みる。
 fn add_tag(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> Result<u32, ZOrderReject> {
     ledger.try_add_tag_group(accept(tokens))
-}
-
-/// 追加の受理を期待し、割り当てられたグループ ID を取り出す。
-fn expect_added(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> u32 {
-    match add_tag(ledger, tokens) {
-        Ok(id) => id,
-        Err(reject) => panic!("受理されるべきタグが拒否された: {tokens:?} reject={reject:?}"),
-    }
 }
 
 /// 再指定としての拒否を期待し、伴うスコープ列を取り出す。

@@ -2,7 +2,7 @@
 //!
 //! placement パイプライン（`prepare_ghost_windows` → `spawn_ghost_windows`）で本番ゴースト
 //! （emo2 fixture）の 2 スコープ×（キャラ窓＋バルーン窓）＝4 窓を配置・生成し、emo-present
-//! donor（`examples/emo-present.rs`）と**同型の装着経路**（`EmoPresenter::attach_target` →
+//! donor（`crates/areka/examples/emo-present.rs`）と**同型の装着経路**（`EmoPresenter::attach_target` →
 //! `apply(ShowSurface)`）で以下を装着する（要件 3.1/3.5/4.1/4.2/4.3/4.5）:
 //!
 //! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・原寸 434×687）
@@ -35,7 +35,7 @@
 //! - **Ctrl+C**（コンソールから起動した場合）。窓のダブルクリックでは終わらない（ダブルクリックを
 //!   受けるのは本体の `input_events` の結線で、この example は付けない）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
-//!   env ゲート（main.rs の smoke ゲートと同名・同義。hands-off のビルド/起動確認用。
+//!   env ゲート（本体の `crates/areka/src/smoke_exit.rs` のゲートと同名。hands-off のビルド/起動確認用。
 //!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）
 //!
 //! # 手動観測プロトコル（3.1/3.5/4.1〜4.5・design「examples/window-placement.rs（実 DPI 受け入れ）」）
@@ -62,7 +62,7 @@
 //!    dpi=96 では単位混在バグが自己整合して隠れるため、非 96 DPI の実走記録をもって
 //!    受け入れとする）。
 //!
-//! # 観測注記（受け入れ判定の対象外・設計討議 #1 確定）
+//! # 観測注記（受け入れ判定の対象外・areka-P0-window-placement の設計討議 議題 1 で確定）
 //!
 //! - **scope1 バルーンが scope0 キャラ窓に重なって出現するのは正常**: emo2 実測値
 //!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P2・P5 の幾何により
@@ -108,7 +108,7 @@ use areka_placement::spawn::{
 // Constants / fixture paths
 // ---------------------------------------------------------------------------
 
-/// smoke 自動 close の env ゲート名（main.rs と同名・`AREKA_` 冠規約）。
+/// smoke 自動 close の env ゲート名（本体の `smoke_exit.rs` と同名・`AREKA_` 冠規約）。
 const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
 /// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
@@ -185,7 +185,7 @@ fn main() -> Result<()> {
         .borrow_mut()
         .add_systems(FrameFinalize, boot_present_system);
 
-    // env ゲート付き smoke 自動 close（hands-off のビルド/起動確認用・main.rs と同名 env）。
+    // env ゲート付き smoke 自動 close（hands-off のビルド/起動確認用・本体の `smoke_exit.rs` と同名 env）。
     install_smoke_exit(&mgr);
 
     // 操作ガイド出力。
@@ -428,8 +428,9 @@ fn boot_present_system(world: &mut World) {
 // Smoke auto close（env ゲート・hands-off のビルド/起動確認用）
 // ---------------------------------------------------------------------------
 
-/// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（main.rs の smoke ゲートと同義:
-/// 未設定・空・非数値・負値はゲート OFF。書かれているのに読めない値は `warn!` を残す）。
+/// [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む（ゲートを OFF にする値は本体の
+/// `smoke_exit::smoke_exit_ms` と同じ: 未設定・空・非数値・負値。書かれているのに読めない値に
+/// `warn!` を残すのはこの example だけ）。
 fn smoke_exit_ms() -> Option<u64> {
     let value = std::env::var(SMOKE_EXIT_ENV).ok()?;
     let trimmed = value.trim();
@@ -450,8 +451,8 @@ fn smoke_exit_ms() -> Option<u64> {
     }
 }
 
-/// env ゲート付き smoke 自動 close を結線する（main.rs `fn main` の `smoke_exit_ms` のゲートと
-/// 同作法: `wintf::executor::spawn_local`＋world `Weak`・一発の async タスク）。指定 ms 後に
+/// env ゲート付き smoke 自動 close を結線する（本体の `smoke_exit::arm` と同作法:
+/// `wintf::executor::spawn_local`＋world `Weak`・一発の async タスク）。指定 ms 後に
 /// 全 [`GhostWindowMarker`] 窓を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰。
 fn install_smoke_exit(app: &WinApp) {
     let Some(ms) = smoke_exit_ms() else {

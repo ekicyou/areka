@@ -14,43 +14,7 @@
 //! 純関数の檻なので、単独で回しても一括で回しても結果は同じである（要件 8.3）。
 
 use super::*;
-use crate::zorder_test_support::{b, s};
-
-// ---------------------------------------------------------------------------
-// 檻の道具
-// ---------------------------------------------------------------------------
-
-/// 2 枚とも書かれたスコープの記録。
-fn written(scope: u32, order: WrittenOrder) -> Normalization {
-    Normalization {
-        scope,
-        order,
-        implied_partner: None,
-    }
-}
-
-/// 片方だけ書かれたスコープの記録——`partner` は補った窓の種別。並びの形は常に隣り合い。
-fn filled(scope: u32, partner: GroupWindowKind) -> Normalization {
-    Normalization {
-        scope,
-        order: WrittenOrder::Adjacent,
-        implied_partner: Some(partner),
-    }
-}
-
-/// 受理を期待し、要素列と記録を取り出す。
-fn accept(tokens: &[&str]) -> (Vec<GroupElement>, Vec<Normalization>) {
-    parse_zorder_tokens(tokens)
-        .unwrap_or_else(|reject| panic!("受理されるべき指定が拒否された: {tokens:?} {reject:?}"))
-}
-
-/// 拒否を期待し、拒否理由だけを取り出す（受理なら要素列を添えて落とす）。
-fn reject(tokens: &[&str]) -> ZOrderReject {
-    match parse_zorder_tokens(tokens) {
-        Ok(parsed) => panic!("拒否されるべき指定が受理された: {tokens:?} {parsed:?}"),
-        Err(reject) => reject,
-    }
-}
+use crate::zorder_test_support::{b, expect_accept, expect_reject, implied, s, written};
 
 // ---------------------------------------------------------------------------
 // 書かれた順のまま採る（要件 1・2）
@@ -60,7 +24,7 @@ fn reject(tokens: &[&str]) -> ZOrderReject {
 /// スコープ 0 は逆転、スコープ 1 は補った隣り合い（要件 1.2・1.4・3.1・3.3）。
 #[test]
 fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
-    let (elements, records) = accept(&["s0", "b0", "s1"]);
+    let (elements, records) = expect_accept(&["s0", "b0", "s1"]);
 
     assert_eq!(
         elements,
@@ -71,7 +35,7 @@ fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
         records,
         vec![
             written(0, WrittenOrder::Inverted),
-            filled(1, GroupWindowKind::Balloon),
+            implied(1, GroupWindowKind::Balloon),
         ]
     );
 }
@@ -80,7 +44,7 @@ fn t_zwo01_pasta_inversion_keeps_written_order_and_fills_b1_before_s1() {
 /// スコープ 0 は逆転かつ非隣接（要件 2.1・2.2・2.3）。記録はスコープの初出順。
 #[test]
 fn t_zwo02_split_order_is_kept_verbatim_and_classified() {
-    let (elements, records) = accept(&["b1", "s0", "s1", "b0"]);
+    let (elements, records) = expect_accept(&["b1", "s0", "s1", "b0"]);
 
     assert_eq!(elements, vec![b(1), s(0), s(1), b(0)], "書かれた順のまま");
     assert_eq!(
@@ -95,7 +59,7 @@ fn t_zwo02_split_order_is_kept_verbatim_and_classified() {
 /// 隣り合った逆転 `s1,b1` はそのまま採る（要件 1.1）。
 #[test]
 fn t_zwo03_adjacent_inversion_is_kept() {
-    let (elements, records) = accept(&["s1", "b1"]);
+    let (elements, records) = expect_accept(&["s1", "b1"]);
 
     assert_eq!(elements, vec![s(1), b(1)]);
     assert_eq!(records, vec![written(1, WrittenOrder::Inverted)]);
@@ -104,7 +68,7 @@ fn t_zwo03_adjacent_inversion_is_kept() {
 /// バルーンのすぐ奥にキャラクターを書いたスコープは今と同じ隣り合い（要件 1.6）。
 #[test]
 fn t_zwo04_balloon_then_char_stays_adjacent() {
-    let (elements, records) = accept(&["b0", "s0", "b1", "s1"]);
+    let (elements, records) = expect_accept(&["b0", "s0", "b1", "s1"]);
 
     assert_eq!(elements, vec![b(0), s(0), b(1), s(1)]);
     assert_eq!(
@@ -133,25 +97,25 @@ fn t_zwo05_written_order_words() {
 /// （要件 3.1・3.2）。補いは他の窓の順に触れない。
 #[test]
 fn t_zwo06_partner_is_filled_right_behind_a_balloon_and_right_before_a_char() {
-    let (elements, records) = accept(&["b1", "s0"]);
+    let (elements, records) = expect_accept(&["b1", "s0"]);
     assert_eq!(elements, vec![b(1), s(1), b(0), s(0)]);
     assert_eq!(
         records,
         vec![
-            filled(1, GroupWindowKind::Char),
-            filled(0, GroupWindowKind::Balloon),
+            implied(1, GroupWindowKind::Char),
+            implied(0, GroupWindowKind::Balloon),
         ]
     );
 
     // 補った窓の挟まりで離れたスコープは、補った後の並びで数えて非隣接になる。
-    let (elements, records) = accept(&["s3", "b0", "b2", "s0"]);
+    let (elements, records) = expect_accept(&["s3", "b0", "b2", "s0"]);
     assert_eq!(elements, vec![b(3), s(3), b(0), b(2), s(2), s(0)]);
     assert_eq!(
         records,
         vec![
-            filled(3, GroupWindowKind::Balloon),
+            implied(3, GroupWindowKind::Balloon),
             written(0, WrittenOrder::Split),
-            filled(2, GroupWindowKind::Char),
+            implied(2, GroupWindowKind::Char),
         ]
     );
 }
@@ -164,7 +128,7 @@ fn t_zwo07_both_windows_written_means_no_fill() {
         ["b0", "s0"].as_slice(),
         ["b0", "s1", "s0", "b1"].as_slice(),
     ] {
-        let (elements, records) = accept(tokens);
+        let (elements, records) = expect_accept(tokens);
         assert_eq!(elements.len(), tokens.len(), "補いすぎ: {tokens:?}");
         assert!(
             records.iter().all(|n| n.implied_partner.is_none()),
@@ -183,7 +147,7 @@ fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
         ["s0", "s1", "s2"].as_slice(),
         ["b0", "b1", "b2"].as_slice(),
     ] {
-        let (elements, records) = accept(tokens);
+        let (elements, records) = expect_accept(tokens);
         for record in &records {
             if record.implied_partner.is_some() {
                 assert_eq!(
@@ -211,7 +175,7 @@ fn t_zwo09_every_explicit_scope_is_recorded_once_and_fills_are_adjacent() {
 /// 数字だけの記法は今のまま `[バルーン, キャラ]` へ展開し、記録は空（要件 4.2）。
 #[test]
 fn t_zwo10_numeric_mode_expands_as_before_with_no_record() {
-    let (elements, records) = accept(&["1", "0"]);
+    let (elements, records) = expect_accept(&["1", "0"]);
     assert_eq!(elements, vec![b(1), s(1), b(0), s(0)]);
     assert!(records.is_empty(), "{records:?}");
 }
@@ -221,22 +185,25 @@ fn t_zwo10_numeric_mode_expands_as_before_with_no_record() {
 #[test]
 fn t_zwo11_the_five_rejections_are_unchanged() {
     assert_eq!(
-        reject(&["s0", "xyz"]),
+        expect_reject(&["s0", "xyz"]),
         ZOrderReject::UnparsableToken {
             token: "xyz".to_owned()
         }
     );
-    assert_eq!(reject(&["s0", "1"]), ZOrderReject::ModeMixed);
-    assert_eq!(reject(&["s0"]), ZOrderReject::TooFewElements { count: 1 });
+    assert_eq!(expect_reject(&["s0", "1"]), ZOrderReject::ModeMixed);
     assert_eq!(
-        reject(&["s0", "b0", "s0"]),
+        expect_reject(&["s0"]),
+        ZOrderReject::TooFewElements { count: 1 }
+    );
+    assert_eq!(
+        expect_reject(&["s0", "b0", "s0"]),
         ZOrderReject::DuplicateElement { element: s(0) }
     );
 
     let mut ledger = ZOrderGroupLedger::default();
-    let (first, _) = accept(&["s0", "b0", "s1"]);
+    let (first, _) = expect_accept(&["s0", "b0", "s1"]);
     ledger.try_add_tag_group(first).expect("1 本目は受理");
-    let (second, _) = accept(&["s1", "b2"]);
+    let (second, _) = expect_accept(&["s1", "b2"]);
     assert_eq!(
         ledger.try_add_tag_group(second),
         Err(ZOrderReject::CrossGroupRedesignation { scopes: vec![1] })

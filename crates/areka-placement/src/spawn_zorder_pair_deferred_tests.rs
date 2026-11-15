@@ -27,7 +27,7 @@
 //! 要件 8.3〜8.5（ペア機構＝`areka-P0-ghost-window-zorder`）と要件 11.4（グループ機構＝
 //! `areka-P0-scope-zorder-pinning`）は、いずれも「**本フィーチャーにおいて**足さない」ことを
 //! 言う（要件の文の引用）。よって走査は、2 つの機構が全部を書いた areka 側の本番
-//! ファイルに限る。`main.rs` の結線 1 行や、`balloon_visibility_phase.rs`・`frame.rs` の
+//! ファイルに限る。`ghost_session.rs`（`register_systems`）の結線 1 行や、`balloon_visibility_phase.rs`・`frame.rs` の
 //! ような他フィーチャーと共有の巨大ファイルは、全文走査に入れると他所の追記で赤くなって
 //! 2 つの機構への誤った告発になるため入れない（結線が呼ぶ `wire_zorder_pair` の本体は
 //! `spawn.rs` にあり、走査の対象に入っている）。

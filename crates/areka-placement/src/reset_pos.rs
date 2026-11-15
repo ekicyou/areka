@@ -1,10 +1,11 @@
 //! 既定の位置への並べ直し（areka-P0-move-canon 要件 8.6・8.8・8.9・9.2・design ResetPos）。
 //!
-//! `\![execute,resetwindowpos]` と右クリックのメニューの「シェル位置初期化」が呼ぶ。位置の記憶が
+//! `\![execute,resetwindowpos]`・右クリックのメニューの「シェル位置初期化」・位置初期化の近道
+//! （メニューと同じ `OnResetWindowPos` の往復を通る）の 3 つの入口が呼ぶ。位置の記憶が
 //! 無いときに起動で並べるのと同じ配置の規則（[`resolve_placement`]）を、**今表示している窓の
 //! 大きさ**で 1 度解き、全スコープのキャラクターの窓をその位置へ書く。拡大率の値は読まない——
 //! 今の大きさがすでに今の拡大率で描いた大きさなので、DPI でも将来の倍率でも構造的に追従する
-//! （research §13 議題 1）。
+//! （areka-P0-move-canon の research §13 議題 1）。
 //!
 //! 書込は起動の連鎖の確定と同じ 3 手——[`move_window_to`]（`MoveCue`・バルーンは今のずらしで
 //! 付いて動く）→ 既定の位置を自分で記し、台本の印 `ScriptPlaced` を外す →
@@ -32,7 +33,8 @@ use super::{primary_monitor, square_dpi, work_area_px};
 /// 標準の位置の材料——窓の組の descript の値と走っているバルーンの配置の値
 /// （design ResetPos State Management・areka-P0-window-link-directives 設計の決め 7）。
 ///
-/// 窓の組ごとに 1 つ。起動の準備とシェルの切り替えの後始末が同じ形で置く（要件 7.4）。
+/// 窓の組ごとに 1 つ。起動の準備とシェルの切り替えの後始末が同じ形で置き（要件 7.4）、バルーンの
+/// 面が変わると面の `windowposition` の置き直し（`face_windowposition`）がその面の値へ入れ替える。
 /// 並べ直し（[`reset_window_positions`]）は descript の値から配置の設定を組んで読む。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct DefaultPlacementBasis {

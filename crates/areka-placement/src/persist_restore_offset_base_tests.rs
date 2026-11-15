@@ -1,5 +1,5 @@
 //! 復元経路が運ぶ**基準対**の檻（areka-P0-balloon-offset-dpi task 2.2・design D15・
-//! 要件 5.1／5.2／5.5／5.6）。
+//! 要件 5.1／5.2／5.5）。
 //!
 //! 固定する主張は 2 つである。
 //!
@@ -9,8 +9,10 @@
 //!    「情報が無い」ことの正直な表現であり、最初の観測で値を変えずに係留される（D15）。
 //! 2. **保存値が無い腕は素通し**——配置式が出した基準対（`Some(採寸 DPI)`）をそのまま運ぶ。
 //!
-//! あわせて、保存値の採否の優先順位（要件 5.5）と「補正を焼き付けない」規約（要件 5.6）が
-//! 基準対を足しても動かないことを、同じ入力の `balloon_offset` で突き合わせる。
+//! あわせて、保存値の採否の優先順位（要件 5.5）が基準対を足しても動かないことを、同じ入力の
+//! `balloon_offset` で突き合わせる。「補正を焼き付けない」規約（要件 5.6）は起動時の関門を
+//! 通す `balloon_offset_persist_roundtrip_tests.rs` の
+//! `the_restore_never_bakes_a_correction_into_the_saved_offset` が持つ（ここは関門を通さない）。
 
 use super::*;
 use crate::follow::OffsetBase;
@@ -37,7 +39,7 @@ fn restored_persisted_arm_carries_unpinned_base_equal_to_saved_value() {
         OffsetBase::unpinned(saved),
         "保存値採用腕の基準対は未係留（dpi: None・採寸 DPI を係留しない）かつ保存値と bit 同一である"
     );
-    // 5.5／5.6 の非回帰: 採否の優先順位も「焼き付けない」規約も基準対で動かない。
+    // 5.5 の非回帰: 採否の優先順位は基準対で動かない。
     assert_eq!(
         out[0].balloon_offset, saved,
         "保存値があれば保存値が勝つ（優先順位は不変）・生値のまま採る"

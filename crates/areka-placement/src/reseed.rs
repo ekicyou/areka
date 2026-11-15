@@ -86,7 +86,8 @@ pub fn apply_shell_descript(
             p.balloon_keyword_base,
         );
     }
-    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す（設計の決め 12）。
+    // ドラッグで窓を書くのは誰かを、取り替えた向きと組から付け直す
+    // （areka-P0-window-link-directives 設計の決め 12）。
     sync_drag_writer(world);
 }
 

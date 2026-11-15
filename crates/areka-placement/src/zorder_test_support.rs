@@ -1,7 +1,7 @@
 //! Z 順のテスト（台帳・鎖の合成・鎖の実窓）が共に使う道具。
 //!
 //! 要素の `b`／`s`、要素から決定論的に組む `Entity`、繋ぎ 1 本、本番の解釈器を通したタグの
-//! グループと、鎖の実窓のテスト（`zorder_chain_tail_order_tests.rs`・
+//! グループ、解釈と台帳の檻が使う受理・拒否・記録の道具と、鎖の実窓のテスト（`zorder_chain_tail_order_tests.rs`・
 //! `zorder_chain_inversion_order_tests.rs`）が共に使う Win32 の道具（窓を作る・重なりと
 //! 所有を読む・助走）を置く。テストのときだけ組み込む。
 
@@ -16,7 +16,8 @@ use windows::core::{PCWSTR, w};
 use wintf::ecs::window::{ChainSegment, CrossEdge};
 
 use crate::zorder_group_ledger::{
-    GroupElement, GroupSource, GroupWindowKind, ZOrderGroup, parse_zorder_tokens,
+    GroupElement, GroupSource, GroupWindowKind, Normalization, WrittenOrder, ZOrderGroup,
+    ZOrderGroupLedger, ZOrderReject, parse_zorder_tokens,
 };
 
 /// バルーン窓の要素（`balloonN`／`bN`）。
@@ -81,6 +82,66 @@ pub(crate) fn tag_group(id: u32, tokens: &[&str]) -> ZOrderGroup {
         id,
         members,
         source: GroupSource::Tag,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 解釈と台帳の檻の道具
+// ---------------------------------------------------------------------------
+
+/// 受理を期待し、要素列と記録を取り出す。
+pub(crate) fn expect_accept(tokens: &[&str]) -> (Vec<GroupElement>, Vec<Normalization>) {
+    match parse_zorder_tokens(tokens) {
+        Ok(parsed) => parsed,
+        Err(reject) => {
+            panic!("受理されるべき指定が拒否された: tokens={tokens:?} reject={reject:?}")
+        }
+    }
+}
+
+/// 受理を期待し、要素列だけを取り出す（台帳の入口へ渡すのは解釈を通った要素列＝呼び出し規約）。
+pub(crate) fn accept(tokens: &[&str]) -> Vec<GroupElement> {
+    expect_accept(tokens).0
+}
+
+/// 拒否を期待し、拒否理由だけを取り出す。
+///
+/// `Ok` が返った場合は**要素列と記録を添えて**落とす。「部分的に適用しない」は、
+/// 拒否の経路で要素列が 1 つも外へ出ないことで成立する。
+pub(crate) fn expect_reject(tokens: &[&str]) -> ZOrderReject {
+    match parse_zorder_tokens(tokens) {
+        Ok((elements, normalizations)) => panic!(
+            "拒否されるべき指定が受理された: tokens={tokens:?} elements={elements:?} \
+             normalizations={normalizations:?}"
+        ),
+        Err(reject) => reject,
+    }
+}
+
+/// タグ由来のグループとして追加し、受理を期待して割り当てられたグループ ID を取り出す。
+pub(crate) fn expect_added(ledger: &mut ZOrderGroupLedger, tokens: &[&str]) -> u32 {
+    match ledger.try_add_tag_group(accept(tokens)) {
+        Ok(id) => id,
+        Err(reject) => panic!("受理されるべきタグが拒否された: {tokens:?} reject={reject:?}"),
+    }
+}
+
+/// 2 枚とも書かれたスコープの記録——`order` は書かれた並びの形。
+pub(crate) fn written(scope: u32, order: WrittenOrder) -> Normalization {
+    Normalization {
+        scope,
+        order,
+        implied_partner: None,
+    }
+}
+
+/// 片方の窓だけが書かれたスコープの記録——`partner` は**こちらが補った**窓の種別。
+/// 並びの形は常に隣り合い。
+pub(crate) fn implied(scope: u32, partner: GroupWindowKind) -> Normalization {
+    Normalization {
+        scope,
+        order: WrittenOrder::Adjacent,
+        implied_partner: Some(partner),
     }
 }
 

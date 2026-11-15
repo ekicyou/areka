@@ -304,9 +304,12 @@ impl PreparedStages {
 /// `primary_dpi` が `None`（モニタ 0 台）または 0（列挙異常）のとき、`error!` のうえ
 /// [`FALLBACK_PRIMARY_DPI`]（96 相当）から k₀ を導く。作者基準 DPI が 96 なら k₀=1/1＝
 /// 従来どおりの native 採寸であり、96 以外を宣言していればその宣言に対する 96 相当の比
-/// （例: author=192 → k₀=1/2）となる。いずれにせよ窓は生え、窓生成後に窓の実 DPI が
+/// （例: author=192 → k₀=1/2）となる。0（列挙異常）の腕では窓は生え、窓生成後に窓の実 DPI が
 /// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile で k を自己補正する
 /// ——つまりこの縮退は**回復可能**であり、表示の喪失にはならない（要件 1.4/4.1）。
+/// `None` の腕は、本番の [`prepare_ghost_windows_for_shell`] ではモニタ 0 台のときだけ起き、
+/// 採寸の直後に [`work_area_of`] が `Err(PlacementError::Monitor)` を返すので窓は生えない
+/// （窓が生えるのは作業領域を外から渡すテストの入口だけ）。
 ///
 /// # 戻り値の第 2 要素＝採寸 DPI（areka-P0-balloon-offset-dpi 要件 1.1／1.5／3.1）
 ///
@@ -324,7 +327,7 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
                 shell_author_dpi = author_dpi.shell,
                 balloon_author_dpi = author_dpi.balloon,
                 "placement: primary モニタ DPI を取得できない——96 相当で k₀ を導いて採寸を続行する\
-                 （窓生成後に窓の実 DPI が k を自己補正するため表示は失われない・要件 1.4）"
+                 （窓が生えれば窓の実 DPI が k を自己補正する。モニタ 0 台なら後で作業領域が無く失敗する・要件 1.4）"
             );
             FALLBACK_PRIMARY_DPI
         }
@@ -474,8 +477,7 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 ///
 /// `k` は**シェル軸**（`MeasureScaling::shell`）である——`balloon.offsetx`／`offsety` は
 /// ゴースト／シェルの `descript.txt` の語彙＝シェル作者の空間で書かれた値だからである。
-/// 割り当ての一覧は契約の定義元 [`follow::OffsetBase`] のモジュール doc
-/// （`follow/offset_space.rs`）が持つ。
+/// 割り当ての一覧は契約の定義元 `follow/offset_space.rs` のモジュール doc が持つ。
 ///
 /// # 受理規約は変えない（要件 2.6）
 ///
@@ -773,9 +775,9 @@ fn scope_windowposition(
 
 /// 窓配置の準備処理（design「main.rs seam」）。
 ///
-/// `load_descript_source_for_shell` → `build_placement_config` → `measure_scope_sizes` →
-/// `enumerate_monitors()` の `is_primary` モニタ work area 取得（2.12）→
-/// `resolve_placement` の順に**同期実行**し、Send な結果のみの
+/// `enumerate_monitors()` と `is_primary` のモニタの選択 → `load_descript_source_for_shell` →
+/// `build_placement_config` → `measure_scope_sizes` → そのモニタの work area の取り出し
+/// （2.12・0 台ならここで `Err`）→ `resolve_placement` の順に**同期実行**し、Send な結果のみの
 /// [`PreparedPlacement`] を返す。
 ///
 /// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と、終了するかどうかは呼び手の

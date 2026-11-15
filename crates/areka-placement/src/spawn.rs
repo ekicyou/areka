@@ -190,7 +190,8 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 /// 持つ entity への書き込みだけを補正するため、「キャラ窓に付いていない」ことが
 /// そのまま「limit の補正でキャラ窓の位置を変更しない」（2.8）の証明になる——
 /// 檻の主張ではなく構造の帰結である。
-// spawn が構築し、runtime 関門（`follow::enqueue_window_set_pos`）と檻が読む。
+// spawn が構築し、runtime 関門（`follow::enqueue_window_set_pos`）・解放時の補正
+// （`follow::drag_follow::apply_release_limit_correction`）と檻が読む。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonLimit(pub bool);
 
@@ -352,13 +353,15 @@ impl GhostWindows {
     /// 未知スコープは **no-op**（panic せず `false` を返す）。台帳を再解決後の真値へ揃え、
     /// 以後の「既定配置のまま」判定が確定後の位置を基準に働くようにする。
     ///
-    /// # 呼び手は 2 つある（互いに重ならない）
+    /// # 呼び手は 3 つある（互いに重ならない）
     ///
     /// - 連鎖確定（`runtime::frame::drain_resnap::finalize_chain_once_with`）——反映は
     ///   `move_window_to`＝`PlacementRoute::MoveCue` で行うため、下の追随規則には掛からない。
     ///   ゆえに確定後の X をここで明示的に揃える必要がある（areka-P0-scope-chain-gap 7.1）。
     /// - 単一の窓書込口（`follow::window_move::enqueue_window_set_pos`）——システム由来の
     ///   再アンカーで、書込前の位置が既定位置と一致していたときだけ書込先へ運ぶ（D9／D16）。
+    /// - 並べ直し（`reset_pos::reset_window_positions`）——resolver の既定の位置へ
+    ///   `move_window_to`（`MoveCue`）で戻した後、その位置を既定に記す（追随規則には掛からない）。
     pub fn set_default_char_pos(&mut self, scope: usize, pos: PointPx) -> bool {
         match self.windows.get_mut(&scope) {
             Some(w) => {

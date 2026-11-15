@@ -481,7 +481,6 @@ fn reset_while_armed_records_each_returned_window_as_script_moved() {
     use crate::chain_realign::ChainRealignPending;
     let mut rig = Rig::new();
     rig.world.insert_resource(ChainRealignPending {
-        armed_frame: 0,
         before: Vec::new(),
         script_moved: Vec::new(),
     });

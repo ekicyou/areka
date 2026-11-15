@@ -112,8 +112,8 @@ pub const KEYWORD_BALLOON_DESCRIPT: &str =
 
 /// 宣言 DPI 付きの最小合成ゴーストを一時ディレクトリへ組む（テスト補助）。
 ///
-/// `prepare_never_reads_or_writes_the_saved_state` の合成ゴーストと同型（emo2 の実 PNG を
-/// 複写した最小 shell）に、`seriko.dpi`／balloon `dpi` の宣言を足したもの。
+/// emo2 の実 PNG を複写した最小 shell に、`seriko.dpi`／balloon `dpi` の宣言を足したもの。
+/// 準備のテストが共に使い、descript だけを差し替えて別の形のゴーストにもする。
 /// 返り値は `(ghost_root, balloon_root)`。`root` の下に組み、絵は `emo2_root`（見本のゴースト）と
 /// `balloon_root`（そのバルーン）から写す（道は呼び手が自分の crate の `sample_test_support` から渡す）。
 ///

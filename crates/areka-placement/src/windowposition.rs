@@ -12,8 +12,8 @@
 //! （`resolver.rs` の**出力時点の**事後条件）は P5 の加算入力が変わるだけなので自動的に
 //! 保たれる。なお本モジュールも `resolver.rs` もバルーンをクランプしない——
 //! `windowposition.limit` による作業領域内への補正は下流の関門
-//! （`balloon_limit::apply_balloon_limit`／`follow::window_move::enqueue_window_set_pos`）
-//! が所有し、補正は `balloon_pos`（表示位置）だけに作用して調整量へは焼き付かない
+//! （`balloon_limit::apply_balloon_limit`／`follow::window_move::enqueue_window_set_pos`／
+//! バルーン単独ドラッグの解放時の `follow::drag_follow::on_balloon_drag_end`）が所有し、補正は `balloon_pos`（表示位置）だけに作用して調整量へは焼き付かない
 //! （windowposition-limit DD6）。
 //!
 //! 依存規約（lib.rs）: `config`（`ScopeConfig`）と

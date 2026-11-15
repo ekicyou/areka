@@ -5,20 +5,18 @@ use crate::source::tests::{unique_temp_dir, write_minimal_ghost_descript};
 // load_restored_state（唯一の IO 点・8.1 前哨・6.1/6.3 寛容縮退）
 // ------------------------------------------------------------------
 
-/// 最小ゴーストパッケージ（ghost/master/descript.txt ＋ shell/master dir）を組む。
-/// resolve が成功する最小構成。
-fn plant_minimal_ghost(root: &Path) {
-    write_minimal_ghost_descript(root);
-    std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-}
-
 /// 起動時先読み: profile_areka_root(shiori.dir) に植えた sylphya.toml が
 /// `(PersistKey, String)` エントリとして読み戻る（load_scope 契約経由・8.1 前哨）。
+///
+/// ゴーストは `ghost/master/descript.txt` だけでシェルのフォルダを持たない。永続の置き場は
+/// SHIORI の置き場だけで決まり、シェルの解決に縛られないこと（既定のシェルが無くても読める）も
+/// ここで確かめる。
 #[test]
 fn load_restored_state_reads_planted_sylphya_toml() {
     let temp = unique_temp_dir("load-reads-planted");
     let root = temp.path().to_path_buf();
-    plant_minimal_ghost(&root);
+    write_minimal_ghost_descript(&root);
+    assert!(!root.join("shell").exists(), "前提: シェルのフォルダが無い");
     // profile root = <ghost/master>/profile/areka（boot 結線と同一構築）。
     let profile = profile_areka_root(&root.join("ghost").join("master"));
     std::fs::create_dir_all(&profile).expect("create profile/areka");
@@ -62,33 +60,9 @@ fn load_restored_state_reads_planted_sylphya_toml() {
 fn load_restored_state_absent_file_is_empty() {
     let temp = unique_temp_dir("load-absent-file");
     let root = temp.path().to_path_buf();
-    plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない
+    write_minimal_ghost_descript(&root); // ゴーストは読めるが sylphya.toml は植えない
     let entries = load_restored_state(&root);
     assert!(entries.is_empty(), "永続ファイル不在は空縮退: {entries:?}");
-}
-
-/// 起動時先読み: 既定のシェル（shell/master）が無くても、ゴーストの永続値は読める
-/// （永続の置き場は SHIORI の置き場だけで決まり、シェルの解決に縛られない）。
-#[test]
-fn load_restored_state_survives_missing_default_shell() {
-    let temp = unique_temp_dir("load-no-shell");
-    let root = temp.path().to_path_buf();
-    plant_minimal_ghost(&root);
-    std::fs::remove_dir_all(root.join("shell")).expect("remove shell");
-    let profile = profile_areka_root(&root.join("ghost").join("master"));
-    std::fs::create_dir_all(&profile).expect("create profile/areka");
-    std::fs::write(
-        profile.join("sylphya.toml"),
-        "format-version = 1\n[boot]\ncount = \"7\"\n".as_bytes(),
-    )
-    .expect("plant sylphya.toml");
-
-    let entries = load_restored_state(&root);
-
-    assert!(
-        entries.contains(&(PersistKey::BootCount, "7".to_string())),
-        "シェルが無くても BootCount が読める: {entries:?}"
-    );
 }
 
 /// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし・6.1/6.3）。

@@ -7,8 +7,8 @@
 //! （＋tracing）と失敗の型（`error`）のみを import する。wintf/bevy_ecs/emo 系・ほかの兄弟
 //! モジュール（config/resolver/…）へは依存しない。
 //!
-//! エンコーディング既定は `DefaultEncoding::Ansi`（SSP 既定・記憶
-//! areka-descript-encoding。emo2 は `charset,UTF-8` 宣言を持つため prescan の
+//! エンコーディング既定は `DefaultEncoding::Ansi`（charset の無い descript は SSP の既定の
+//! Ansi で読む。emo2 は `charset,UTF-8` 宣言を持つため prescan の
 //! 宣言優先で UTF-8 デコードされる＝既定 Ansi でも実測どおり読める・DD4）。
 
 use std::collections::BTreeMap;

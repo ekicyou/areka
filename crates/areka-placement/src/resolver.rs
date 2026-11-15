@@ -78,9 +78,9 @@ pub struct SizePx {
 pub struct ScopeInput {
     /// スコープ番号（0=本体・1=相方・…）。
     pub scope: usize,
-    /// キャラ surface の原寸（物理 px・emo 採寸由来）。
+    /// キャラ surface の k₀ 倍後の物理寸（物理 px・emo 採寸由来）。
     pub char_size: SizePx,
-    /// バルーン surface の原寸（物理 px）。
+    /// バルーン surface の k₀ 倍後の物理寸（物理 px・emo 採寸由来）。
     pub balloon_size: SizePx,
 }
 
@@ -99,7 +99,8 @@ pub struct ScopePlacement {
     /// `windowposition.limit` による作業領域内への補正は下流の関門が所有する
     /// （起動時＝`main.rs` の `restore_merged_placements` が呼ぶ
     /// `balloon_limit::apply_balloon_limit`／実行時＝
-    /// `follow::window_move::enqueue_window_set_pos` の runtime 関門）。
+    /// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグの
+    /// 解放時＝`follow::drag_follow::on_balloon_drag_end`）。
     pub balloon_pos: PointPx,
     /// バルーン窓寸（入力の転記）。
     pub balloon_size: SizePx,
@@ -243,7 +244,8 @@ pub fn keyword_balloon_pos(
 ///   の語彙解決値）で分岐する。
 ///   - `Side`（数値指定・未指定＝現行挙動・windowposition-limit 4.5/5.2 で**不変**）:
 ///     `balloon.alignment=Left`（既定）→ `balloon_x = char_x − balloon_w`、
-///     `Right` → `balloon_x = char_x + char_w`。`balloon_y = char_y`（上端揃え）。
+///     `Right` → `balloon_x = char_x + char_w`、`Auto`（正典 `none`）→ キャラ窓の中心が
+///     作業領域の中央より左なら `Right` の式、それ以外は `Left` の式。`balloon_y = char_y`（上端揃え）。
 ///   - `CenterTop`（`windowposition.x=center|top`・4.2）: シェル画像の中央上。
 ///     `balloon_x = char_x + (char_w − balloon_w) / 2`（中点は整数除算＝0 方向切り捨て・
 ///     DD8。丸め権威の新設ではない）・`balloon_y = char_y − balloon_h`
@@ -341,7 +343,8 @@ pub fn resolve_placement(
 
         // P5: バルーン暫定 offset（DD7・ここではクランプしない＝limit 補正は下流の関門が
         //     所有）。left（既定）＝キャラ左隣・
-        //     right＝キャラ右隣・上端揃え・balloon.offsetx/offsety があれば加算
+        //     right＝キャラ右隣・none＝作業領域の中央を向く側・上端揃え・
+        //     balloon.offsetx/offsety があれば加算
         // `windowposition.y` の数値調整量は `balloon_offset` 欄へ合流済み——モードに
         // よらず基本位置へ加算する（4.4）。
         let (ox, oy) = sc.balloon_offset.unwrap_or((0, 0));

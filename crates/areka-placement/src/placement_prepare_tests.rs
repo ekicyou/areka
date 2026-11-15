@@ -207,7 +207,7 @@ fn prepared_placement_is_send() {
 
 /// 準備段階の失敗（ghost_root 不在→Mount）は
 /// `PlacementError` として呼び手へ返る（告知と、終了するかどうかは呼び手の分担）。
-/// 失敗は load（モニタ列挙より前）で起きるため headless でも決定論。
+/// 失敗は load（work area の検査＝モニタ 0 台の `Err` より前）で起きるため headless でも決定論。
 #[test]
 fn prepare_missing_root_returns_mount_err_to_caller() {
     // 不在の root は共通窓口が配るディレクトリの下に取る（窓口が作るのは配るディレクトリ
@@ -227,49 +227,21 @@ fn prepare_missing_root_returns_mount_err_to_caller() {
 ///     （読み込みなし）
 ///
 /// 記憶を戻すのは本体の結線が呼ぶ [`persist::load_restored_state`] と
-/// [`persist::apply_restored_placements`] で、準備はそのどちらも呼ばない。置き場は
+/// [`persist::restore_and_judge`] で、準備はそのどちらも呼ばない。置き場は
 /// `load_restored_state` と同じ `profile_areka_root(ghost/master)`。
 #[test]
 fn prepare_never_reads_or_writes_the_saved_state() {
     with_com_initialized(|| {
-        // 最小の合成ゴースト（emo2 実 PNG を 2 枚だけ複写・descript は emo2 同値キー）
+        // 最小の合成ゴースト（emo2 実 PNG を 2 枚だけ複写・作者の DPI は既定の 96）
         let root = TempDir::new();
-        let ghost_master = root.path().join("ghost").join("master");
-        let shell_master = root.path().join("shell").join("master");
-        fs::create_dir_all(&ghost_master).expect("create ghost/master");
-        fs::create_dir_all(&shell_master).expect("create shell/master");
-        fs::write(
-            ghost_master.join("descript.txt"),
-            "charset,UTF-8\nname,えも\nsakura.name,むらさき\nkero.name,エモ\n",
-        )
-        .expect("ghost descript");
-        fs::write(
-            shell_master.join("descript.txt"),
-            "charset,UTF-8\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n",
-        )
-        .expect("shell descript");
-        fs::write(
-            shell_master.join("surfaces.txt"),
-            "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface10\n{\nelement0,overlay,surface10.png,0,0\n}\n",
-        )
-        .expect("surfaces.txt");
-        fs::copy(
-            emo2_root().join("shell/master/surface0.png"),
-            shell_master.join("surface0.png"),
-        )
-        .expect("surface0.png 複写");
-        fs::copy(
-            emo2_root().join("shell/master/surface10.png"),
-            shell_master.join("surface10.png"),
-        )
-        .expect("surface10.png 複写");
+        let (ghost_root, balloon_dir) =
+            synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
 
-        let before =
-            prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA, Some(96))
-                .expect("合成ゴーストの準備は成功する");
+        let before = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
+            .expect("合成ゴーストの準備は成功する");
 
         // (a) 書き込みなし: 記憶の置き場が作られていない
-        let profile = profile_areka_root(&ghost_master);
+        let profile = profile_areka_root(&ghost_root.join("ghost").join("master"));
         assert!(
             !profile.exists(),
             "準備が記憶の置き場を作った: {}",
@@ -282,13 +254,12 @@ fn prepare_never_reads_or_writes_the_saved_state() {
         let junk = "format-version = 1\n[window.0]\nx = \"100\"\ny = \"100\"\n";
         fs::write(&saved, junk).expect("plant sylphya.toml");
         assert!(
-            !persist::load_restored_state(root.path()).is_empty(),
+            !persist::load_restored_state(&ghost_root).is_empty(),
             "前提: 置いた記憶は本番の読み手で読める"
         );
 
-        let after =
-            prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA, Some(96))
-                .expect("記憶を置いた後も準備は成功する");
+        let after = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
+            .expect("記憶を置いた後も準備は成功する");
         assert_eq!(
             before.placements, after.placements,
             "記憶の有無で配置が変わった（準備の中に復元の道がある・2.11 違反）"
@@ -384,10 +355,19 @@ fn build_measure_scaling_uses_each_axis_own_author_dpi() {
 /// primary モニタ DPI 取得不能（`None`／0）は **96 相当**へ縮退する
 /// （design「Error Handling」の boot 行・要件 1.4）。恒等を一律に返すのではなく、
 /// 96 を分子として作者基準 DPI との比を取る（作者が 96 以外を宣言していれば k₀≠1）。
+/// 縮退は値を返すだけなので、`error!` の 1 行が唯一の手がかりになる（その行も確かめる）。
 #[test]
 fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable() {
     for missing in [None, Some(0)] {
-        let (default_author, _) = build_measure_scaling(missing, AuthorDpi::DEFAULT);
+        let ((default_author, _), events) =
+            log_capture_kit::capture(|| build_measure_scaling(missing, AuthorDpi::DEFAULT));
+        let err = log_capture_kit::expect_one(&events, "primary モニタ DPI を取得できない");
+        assert_eq!(err.level, tracing::Level::ERROR, "{missing:?}");
+        assert_eq!(
+            log_capture_kit::ExpectField::expect_field(err, "fallback_dpi"),
+            "96",
+            "{missing:?}"
+        );
         assert_eq!(
             default_author.shell,
             ScaleRatio::ONE,

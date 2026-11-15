@@ -105,7 +105,8 @@ pub struct PlacementConfig {
     /// （解釈器はタグ入口と共通・`runtime::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
     /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
-    /// areka-P0-window-link-directives 要件 3.8）。
+    /// areka-P0-window-link-directives 要件 3.8）。シェルの切り替えでは `runtime/frame/switch.rs` が
+    /// `sticky_group_ledger::replace_sticky_descript` で descript の分を新しいシェルの値へ取り替える。
     pub sticky_window_raw: Option<String>,
 }
 
@@ -414,9 +415,10 @@ mod tests {
         let cfg = build_placement_config(&ghost, &shell);
         assert_eq!(cfg.scopes[&0].balloon_alignment, BalloonSide::Right);
 
-        // ghost 側のみでも拾う
-        let cfg = build_placement_config(&ghost, &empty());
-        assert_eq!(cfg.scopes[&0].balloon_alignment, BalloonSide::Left);
+        // ghost 側のみでも拾う（既定の Left と違う値で、ghost の層を読まない形を赤にする）
+        let ghost_only = kv(&[("sakura.balloon.alignment", "right")]);
+        let cfg = build_placement_config(&ghost_only, &empty());
+        assert_eq!(cfg.scopes[&0].balloon_alignment, BalloonSide::Right);
 
         // 未指定は既定 Left
         let cfg = build_placement_config(&empty(), &empty());

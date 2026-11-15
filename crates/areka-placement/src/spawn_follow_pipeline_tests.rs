@@ -4,10 +4,12 @@ use wintf::ecs::drag::OnDrag;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
-use super::test_support::{fake_window_handle, titles};
+use super::test_support::titles;
 use super::{GhostWindows, spawn_ghost_windows};
 use crate::follow::BalloonFollow;
 use crate::resolver::{PointPx, ScopePlacement, SizePx};
+use crate::sample_test_support::{SCOPE0_H, SCOPE0_W};
+use crate::test_support::fake_handle;
 
 // -------------------------------------------------------------------------
 // T-I4: follow 幾何（design Testing Strategy 4・要件 4.2）
@@ -31,7 +33,7 @@ use crate::follow::move_window_to;
 use crate::resolver::{RectPx, ScopeInput, resolve_placement};
 use crate::test_support::kv;
 
-/// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow.rs と同型）。
+/// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow_test_support.rs と同型）。
 fn drag_event(target: Entity) -> DragEvent {
     DragEvent {
         target,
@@ -69,7 +71,10 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
     let scopes = [
         ScopeInput {
             scope: 0,
-            char_size: SizePx { w: 434, h: 687 },
+            char_size: SizePx {
+                w: SCOPE0_W,
+                h: SCOPE0_H,
+            },
             balloon_size: SizePx { w: 401, h: 223 },
         },
         ScopeInput {
@@ -87,13 +92,13 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
 
 /// 全 4 窓へ偽 WindowHandle を付与する（偽装境界）。
 fn attach_fake_handles(world: &mut World, gw: &GhostWindows) {
-    let mut raw = 0x100isize;
+    let mut raw = 0x100usize;
     for scope in gw.scopes().collect::<Vec<_>>() {
         for e in [
             gw.char_window(scope).unwrap(),
             gw.balloon_window(scope).unwrap(),
         ] {
-            world.entity_mut(e).insert(fake_window_handle(raw));
+            world.entity_mut(e).insert(fake_handle(raw));
             raw += 0x10;
         }
     }

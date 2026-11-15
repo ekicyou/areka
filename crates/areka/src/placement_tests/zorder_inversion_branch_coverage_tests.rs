@@ -4,8 +4,8 @@
 //! 作りは `areka-P0-scope-zorder-pinning` の対応表（`zorder_group_branch_coverage_tests.rs`）と
 //! 同じで、表の各行を兄弟の `zorder_branch_coverage_test_support.rs`（`check_table`）で確かめる。
 //!
-//! 本機能の判断は areka（解釈・合成・公開）と wintf（組の外し・結び直し・輪の確かめ）に
-//! またがるので、wintf 側の錨もファイルを読んで（`include_str!`）同じ検査に掛ける。
+//! `areka-P0-zorder-scope-inversion` の判断は areka（解釈・合成・公開）と wintf（組の外し・
+//! 結び直し・輪の確かめ）にまたがるので、wintf 側の錨もファイルを読んで（`include_str!`）同じ検査に掛ける。
 
 use super::zorder_branch_coverage_test_support::check_table;
 use crate::crate_source_test_support::crate_source;
@@ -34,7 +34,7 @@ const BRANCHES: [&str; 16] = [
 /// 対応表が読むテストファイル（見出し・中身・そのファイルを組み込む本番ファイルの中身）。
 const TEST_FILES: [(&str, &str, &str); 11] = [
     (
-        "placement/zorder_group_ledger_written_order_tests.rs",
+        "areka-placement/zorder_group_ledger_written_order_tests.rs",
         crate_source!(
             "areka-placement",
             "src/zorder_group_ledger_written_order_tests.rs"
@@ -42,12 +42,12 @@ const TEST_FILES: [(&str, &str, &str); 11] = [
         crate_source!("areka-placement", "src/zorder_group_ledger.rs"),
     ),
     (
-        "placement/zorder_chain_compose_tests.rs",
+        "areka-placement/zorder_chain_compose_tests.rs",
         crate_source!("areka-placement", "src/zorder_chain_compose_tests.rs"),
         crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
-        "placement/zorder_chain_compose_written_order_tests.rs",
+        "areka-placement/zorder_chain_compose_written_order_tests.rs",
         crate_source!(
             "areka-placement",
             "src/zorder_chain_compose_written_order_tests.rs"
@@ -55,7 +55,7 @@ const TEST_FILES: [(&str, &str, &str); 11] = [
         crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
-        "placement/zorder_chain_inversion_order_tests.rs",
+        "areka-placement/zorder_chain_inversion_order_tests.rs",
         crate_source!(
             "areka-placement",
             "src/zorder_chain_inversion_order_tests.rs"
@@ -111,10 +111,10 @@ const TEST_FILES: [(&str, &str, &str); 11] = [
     ),
 ];
 
-const LEDGER: &str = "placement/zorder_group_ledger_written_order_tests.rs";
-const COMPOSE: &str = "placement/zorder_chain_compose_tests.rs";
-const COMPOSE_WO: &str = "placement/zorder_chain_compose_written_order_tests.rs";
-const REAL_A: &str = "placement/zorder_chain_inversion_order_tests.rs";
+const LEDGER: &str = "areka-placement/zorder_group_ledger_written_order_tests.rs";
+const COMPOSE: &str = "areka-placement/zorder_chain_compose_tests.rs";
+const COMPOSE_WO: &str = "areka-placement/zorder_chain_compose_written_order_tests.rs";
+const REAL_A: &str = "areka-placement/zorder_chain_inversion_order_tests.rs";
 const DRAIN_WO: &str = "runtime/frame/zorder_drain_written_order_tests.rs";
 const DESCRIPT: &str = "runtime/frame/zorder_descript_tests.rs";
 const RELEASE: &str = "wintf/zorder_chain_release_tests.rs";

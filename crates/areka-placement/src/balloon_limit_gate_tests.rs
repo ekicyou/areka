@@ -430,7 +430,7 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             let disabled = placement_sized(0, char_pos, offset, false, csz, bsz);
             let enabled = placement_sized(1, char_pos, offset, true, csz, bsz);
             // 探針: 入力が本当にはみ出していること（はみ出していなければ limit=1 側も
-            // `None` を返し、limit=0 の「動かない」が何も意味しなくなる）。
+            // `Fits`（動かさない）になり、limit=0 の「動かない」が何も意味しなくなる）。
             assert!(
                 !contained(disabled.balloon_pos, bsz, area),
                 "dpi={dpi} {what}: 探針の提案位置がはみ出していない（檻が空虚）"

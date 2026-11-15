@@ -219,7 +219,7 @@ pub(crate) fn place_balloon_in_work_area(
 ///
 /// 内包判定の基準はバルーン窓ではなく**キャラ窓**が属するモニタの作業領域である。
 /// 帰属規則そのもの（窓中心 half-open ＋最近傍フォールバック）は
-/// [`work_area_for_window`] の既存規則をそのまま呼ぶだけで、本仕様は変更しない。
+/// [`work_area_for_window`] の既存規則をそのまま呼ぶだけで、ここでは変えない。
 ///
 /// # 縮退（design Error Handling「起動時関門で work area 解決不能（snapshot 空）」）
 ///
