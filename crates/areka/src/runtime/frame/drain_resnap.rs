@@ -12,8 +12,8 @@ use wintf::ecs::{SizeI, WindowPos};
 
 use areka_placement::balloon_lock::apply_script_balloon_lock;
 use areka_placement::chain_finalize::{
-    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, KeepReason, PairDecision,
-    ScopeChainState, ScriptPlaced, boot_default_decision, boot_pair_decision,
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, PairDecision, ScopeChainState,
+    ScriptPlaced, boot_default_decision, boot_pair_decision, chain_gap, join_left, joins_chain,
     mark_non_positive_widths, note_chain_deferral,
 };
 use areka_placement::chain_realign;
@@ -21,7 +21,7 @@ use areka_placement::config::{ScopeConfig, build_placement_config};
 use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use areka_placement::dpi_sync::{self, HoldSite};
 use areka_placement::follow::{
-    ClampScene, move_window_to, place_chain_in_work_area, resize_window_to,
+    Anchored, ClampScene, move_window_to, place_chain_in_work_area, resize_window_to,
 };
 use areka_placement::persist::persist_unremembered_char_positions;
 use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
@@ -500,43 +500,64 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     let fallback = ScopeConfig::default();
     let ledger = world.get_resource::<StickyGroupLedger>();
     let ghost_windows = world.get_resource::<GhostWindows>();
-    let decisions: Vec<PairDecision> = states
+    // 組ごとの決めと、鎖に入るか（鎖の規則 ⑴: 窓の今の揃え方＝台本の吸着を含む。台本が最初の
+    // 確定より前に辺へ動かした窓も、覚えた辺の窓も外す）。
+    let decisions: Vec<(PairDecision, bool)> = states
         .iter()
         .zip(&targets)
         .map(|(s, &(_, entity, _))| {
-            match boot_pair_decision(
+            let sc = cfg
+                .as_ref()
+                .and_then(|c| c.scopes.get(&s.scope))
+                .unwrap_or(&fallback);
+            let anchor = Anchor::from_alignment(&sc.alignment);
+            let decision = match boot_pair_decision(
                 s,
                 world.get::<ScriptPlaced>(entity).is_some(),
                 ledger.is_some_and(|l| l.group_of(s.scope as u32).is_some()),
                 ghost_windows.and_then(|gw| gw.remembered_adjacency(s.scope)),
             ) {
                 PairDecision::JoinLeft if s.default_x.is_some() => {
-                    let sc = cfg
-                        .as_ref()
-                        .and_then(|c| c.scopes.get(&s.scope))
-                        .unwrap_or(&fallback);
-                    boot_default_decision(Anchor::from_alignment(&sc.alignment), sc.default_x)
+                    boot_default_decision(anchor, sc.default_x)
                 }
+                // 覚えた印 `left` は鎖の前の窓の左に `defaultx` の隙間で付ける（鎖の規則 ⑶）。
+                PairDecision::JoinLeft => join_left(chain_gap(anchor, sc.default_x)),
                 decision => decision,
-            }
+            };
+            let live = world.get::<Anchored>(entity).map_or(anchor, |a| a.0);
+            (decision, joins_chain(live))
         })
         .collect();
     // 左右の辺のスコープは resolver と同じく横の連なりの外（動かさず、次のスコープの基準にもしない）。
-    // ただし次が記憶から戻したスコープなら、覚えた印はこの窓との隣り合いなので鎖に残す（Keep のまま）。
     let scopes = states.len();
-    let (mut chain_states, mut chain_targets, mut slots) = (Vec::new(), Vec::new(), Vec::new());
-    for (i, ((s, t), decision)) in states.iter().zip(&targets).zip(decisions).enumerate() {
-        if decision == PairDecision::Keep(KeepReason::DesktopEdge)
-            && !states
-                .get(i + 1)
-                .is_some_and(|next| next.default_x.is_none())
-        {
+    let (mut chain_states, mut chain_targets) = (Vec::new(), Vec::new());
+    let mut slots: Vec<ChainSlot> = Vec::new();
+    for ((s, t), (decision, in_chain)) in states.iter().zip(&targets).zip(decisions) {
+        if !in_chain {
             debug!(
                 scope = s.scope,
                 x = s.current_x,
                 "chain_finalize: 左右の辺のスコープは動かさず、横の連なりの基準にもしない（resolver と同じ）"
             );
             continue;
+        }
+        // 辺のスコープを飛ばした組で覚えた印を読む（辺のスコープの次の印は、この規則の前は
+        // 辺のスコープとの組として書かれていた・まれなので受け入れて記録に残す）。
+        if let Some(prev) = slots.last()
+            && s.default_x.is_none()
+            && prev.scope + 1 != s.scope
+            && matches!(
+                decision,
+                PairDecision::JoinLeft
+                    | PairDecision::JoinLeftOffset { .. }
+                    | PairDecision::JoinRight
+            )
+        {
+            debug!(
+                prev_scope = prev.scope,
+                scope = s.scope,
+                "chain_finalize: 覚えた印を、左右の辺のスコープを飛ばした鎖の前の窓との組として読む"
+            );
         }
         chain_states.push(*s);
         chain_targets.push(*t);

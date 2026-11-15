@@ -32,7 +32,8 @@
 //!   （`runtime::frame` の `finalize_chain_once_with`）は記憶に位置の無いスコープを既定位置との
 //!   一致から、記憶から戻したスコープを覚えた印（[`remembered_decision`]）から決めて渡す
 //!   （dpi-realign-remembered-chain 要件 6.3）。拡大率の後の詰め直しは変わる直前の隣り合い
-//!   （[`judge_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。
+//!   （[`judge_chain_adjacency`]）から決めを作る（`chain_realign`・同 要件 1）。組の作り方は
+//!   3 か所（起動・詰め直し・隣り合いの印の保存）で同じ「鎖の規則」（[`joins_chain`] の上の節）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
 //!   （`runtime::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 //!
@@ -92,7 +93,8 @@ pub struct ScopeChainState {
     ///
     /// **`None` は「そもそも既定配置ではない」**（記憶から戻したスコープ・既定の位置は外してある）。
     /// 起動の並べ直しは今の位置ではなく覚えた印で決める（[`boot_pair_decision`]）: `left`／`right` は
-    /// 今の幅で隣り合わせ、`none` と印なし・組の窓・台本の印は動かさない
+    /// 今の幅で鎖の前の窓に付け（`left` は `defaultx` の隙間で・鎖の規則 ⑶）、`none` と印なし・組の窓・
+    /// 台本の印は動かさない
     /// （dpi-realign-remembered-chain 要件 6.3〜6.5）。
     pub default_x: Option<i32>,
 }
@@ -108,7 +110,7 @@ pub struct ChainMove {
     pub new_x: i32,
 }
 
-/// 起動の並べ直しで組 (n−1, n) に当てる決め（dpi-realign-remembered-chain design BootRemembered）。
+/// 起動の並べ直しで組（鎖の前の窓, n）に当てる決め（dpi-realign-remembered-chain design BootRemembered）。
 ///
 /// | 条件 | 決め |
 /// |---|---|
@@ -151,10 +153,64 @@ pub fn boot_default_decision(anchor: Anchor, default_x: Option<i32>) -> PairDeci
     match anchor {
         Anchor::Left | Anchor::Right => PairDecision::Keep(KeepReason::DesktopEdge),
         Anchor::Free if default_x.is_some() => PairDecision::Keep(KeepReason::FreePosition),
-        Anchor::Bottom | Anchor::Top | Anchor::Free => match default_x.unwrap_or(0) {
-            0 => PairDecision::JoinLeft,
-            offset => PairDecision::JoinLeftOffset { offset },
-        },
+        Anchor::Bottom | Anchor::Top | Anchor::Free => join_left(chain_gap(anchor, default_x)),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 鎖の規則（audit-placement-core 494・495・開発者の裁定 2026-11-15）
+// ---------------------------------------------------------------------------
+//
+// 起動の並べ直し（`runtime::frame` の `finalize_chain_once_with`）・隣り合いの印の保存
+// （`persist::push_adjacency_marks`）・拡大率の後の詰め直し（`chain_realign`）の 3 か所が、
+// 同じこの規則で組を作る。
+//
+// ⑴ 左右の辺に揃えるスコープは鎖（横の連なり）の外（resolver の P1' と同じ・[`joins_chain`]）。
+//    動かさず、次のスコープの基準にもしない。鎖の前の窓は、自分より下の番号で鎖に入る一番近い
+//    スコープ。
+// ⑵ 組が隣り合うのは、向かい合う端の隙間が 0、または n が左にあり隙間がそのスコープの
+//    `defaultx`（[`chain_gap`]）のとき（どちらも ±[`ADJACENT_TOLERANCE_PX`]・
+//    [`judge_chain_adjacency`]）。resolver の P2 は左へだけ空けるので、右の組は隙間 0 だけ。
+// ⑶ 覚えた印 `left` は「鎖の前の窓の左に、descript の `defaultx` の隙間で付いていた」と読む
+//    （[`join_left`]。利用者がドラッグで隙間 0 に付けた組も、次の起動では `defaultx` だけ離れる）。
+//
+// 辺かどうかを決める揃え方は呼び手が選ぶ: 窓を今動かす起動の並べ直しと詰め直しは窓の今の揃え方
+// （`follow::Anchored`・台本の吸着を含む）、次の起動に読まれる印を書く保存は次の起動でも効く
+// descript の揃え方（台本の吸着はその回かぎり）。
+
+/// 鎖に入る揃え方か（左右の辺は入らない）。
+pub fn joins_chain(anchor: Anchor) -> bool {
+    !matches!(anchor, Anchor::Left | Anchor::Right)
+}
+
+/// 組の左の隙間（resolver の P2 が空ける `defaultx`）。下端・上端だけで、Free の `defaultx` は
+/// 左上からの位置なので 0。`default_x` は DPI で換算しない生の値（resolver と同じ）。
+pub fn chain_gap(anchor: Anchor, default_x: Option<i32>) -> i32 {
+    match anchor {
+        Anchor::Bottom | Anchor::Top => default_x.unwrap_or(0),
+        Anchor::Left | Anchor::Right | Anchor::Free => 0,
+    }
+}
+
+/// 前の窓の左に `gap` だけ空けて付ける決め（0 なら `JoinLeft`）。
+pub fn join_left(gap: i32) -> PairDecision {
+    match gap {
+        0 => PairDecision::JoinLeft,
+        offset => PairDecision::JoinLeftOffset { offset },
+    }
+}
+
+/// 変わる直前の隣り合いから組の決めを作る（左の組は隙間がほぼ 0 なら `JoinLeft`、
+/// `defaultx` の隙間なら [`join_left`]`(gap)`）。
+pub fn adjacency_decision(adjacency: Adjacency, gap: i32) -> PairDecision {
+    match adjacency {
+        Adjacency::Left { gap: g } if g.saturating_abs() <= ADJACENT_TOLERANCE_PX => {
+            PairDecision::JoinLeft
+        }
+        Adjacency::Left { .. } => join_left(gap),
+        Adjacency::Right { .. } => PairDecision::JoinRight,
+        Adjacency::Apart { gap } => PairDecision::Keep(KeepReason::Apart { gap }),
+        Adjacency::Overlapped { gap } => PairDecision::Keep(KeepReason::Overlapped { gap }),
     }
 }
 
@@ -177,12 +233,13 @@ pub struct ChainRect {
 /// 2 つの窓の分を足した値（要件 1.2。実機の確かめ（要件 8.7）では、どの組も隙間 0 で足りた）。
 pub const ADJACENT_TOLERANCE_PX: i32 = 2;
 
-/// 組 (n−1, n) の並びの判定。`gap` は向かい合う端の隙間（負は重なり）。
+/// 組（前の窓, n）の並びの判定。`gap` は向かい合う端の隙間（負は重なり）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Adjacency {
-    /// n が n−1 の左に隣り合う（|gap| ≤ 許す幅）。
+    /// n が前の窓の左に隣り合う（|gap| ≤ 許す幅。[`judge_chain_adjacency`] では `defaultx` の
+    /// 隙間 ± 許す幅も）。
     Left { gap: i32 },
-    /// n が n−1 の右に隣り合う（|gap| ≤ 許す幅）。
+    /// n が前の窓の右に隣り合う（|gap| ≤ 許す幅）。
     Right { gap: i32 },
     /// 隙間が許す幅より広い、または縦の範囲が重ならない（2.1）。
     Apart { gap: i32 },
@@ -190,40 +247,52 @@ pub enum Adjacency {
     Overlapped { gap: i32 },
 }
 
-/// 前の窓 `prev`（n−1）に対する `cur`（n）の並びを決める。
+/// 前の窓 `prev` に対する `cur`（n）の並びを決める。
 ///
 /// 左右は中心の x の大小で決める（cur の中心 < prev の中心 → 左・同じなら右）。
 /// 左なら gap = prev.x − (cur.x + cur.w)、右なら gap = cur.x − (prev.x + prev.w)。
 /// 縦の範囲（[y, y+h)）が重ならなければ Apart。飽和演算ゆえ極端な座標でも panic しない。
+/// 隙間 0 だけを隣り合いとする（[`judge_chain_adjacency`] の `defaultx` 0）。
 pub fn judge_adjacency(prev: ChainRect, cur: ChainRect) -> Adjacency {
+    judge_chain_adjacency(prev, cur, 0)
+}
+
+/// 鎖の組の隣り合い（鎖の規則 ⑵）: [`judge_adjacency`] に、n が左にあって隙間が `offset`
+/// （n の `defaultx`・[`chain_gap`]）± 許す幅のときも `Left` を足す。右は隙間 0 だけ。
+pub fn judge_chain_adjacency(prev: ChainRect, cur: ChainRect, offset: i32) -> Adjacency {
     // 中心の比較は 2 倍して整数のまま行う（半 px の丸めで左右が揺れない）。
     let center2 = |r: ChainRect| r.x.saturating_mul(2).saturating_add(r.w);
-    let gap = if center2(cur) < center2(prev) {
+    let left = center2(cur) < center2(prev);
+    let gap = if left {
         prev.x.saturating_sub(cur.x.saturating_add(cur.w))
     } else {
         cur.x.saturating_sub(prev.x.saturating_add(prev.w))
     };
+    let near = |to: i32| gap.saturating_sub(to).saturating_abs() <= ADJACENT_TOLERANCE_PX;
     let vertical_overlap =
         cur.y < prev.y.saturating_add(prev.h) && prev.y < cur.y.saturating_add(cur.h);
-    if !vertical_overlap || gap > ADJACENT_TOLERANCE_PX {
+    if !vertical_overlap {
         Adjacency::Apart { gap }
-    } else if gap < -ADJACENT_TOLERANCE_PX {
-        Adjacency::Overlapped { gap }
-    } else if center2(cur) < center2(prev) {
+    } else if left && (near(0) || near(offset)) {
         Adjacency::Left { gap }
-    } else {
+    } else if near(0) {
         Adjacency::Right { gap }
+    } else if gap > 0 {
+        Adjacency::Apart { gap }
+    } else {
+        Adjacency::Overlapped { gap }
     }
 }
 
-/// 記憶に書く隣り合いの印（スコープ n に付き、組 (n−1, n) を表す）。
+/// 記憶に書く隣り合いの印（スコープ n に付き、鎖の前の窓との組を表す・鎖の規則 ⑴）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdjacencyMark {
-    /// n が n−1 の左に隣り合っていた（語 `left`）。
+    /// n が鎖の前の窓の左に、隙間 0 か n の `defaultx` の隙間で付いていた（語 `left`）。
+    /// 戻すときは `defaultx` の隙間で付ける（鎖の規則 ⑶）。
     Left,
-    /// n が n−1 の右に隣り合っていた（語 `right`）。
+    /// n が鎖の前の窓の右に隙間 0 で付いていた（語 `right`）。
     Right,
-    /// 離れていた・重なっていた・組の窓だった（語 `none`）。
+    /// 離れていた・重なっていた・組の窓だった・n が左右の辺のスコープ（語 `none`）。
     Separate,
 }
 
@@ -268,7 +337,7 @@ pub enum PairDecision {
     /// n を n−1 の左に付ける（new_x = base_x − width(n)）。
     JoinLeft,
     /// n を n−1 の左に `offset`（`defaultx`）だけ空けて置く（new_x = base_x − width(n) − offset・
-    /// resolver の P2・起動の並べ直しだけが作る）。
+    /// resolver の P2・鎖の規則 ⑵⑶）。
     JoinLeftOffset { offset: i32 },
     /// n を n−1 の右に付ける（new_x = base_x + width(n−1)）。
     JoinRight,
@@ -436,7 +505,8 @@ fn join_usable(decision: PairDecision, width: i32, prev_width: i32) -> bool {
 /// 起動の並べ直しで記憶から戻したスコープに当てる決め（6.3・6.4）。
 ///
 /// Left→JoinLeft・Right→JoinRight・Separate→Keep(RememberedSeparate)・
-/// None（印の無い古い記憶）→Keep(NoRememberedMark)。
+/// None（印の無い古い記憶）→Keep(NoRememberedMark)。`Left` の `defaultx` の隙間は呼び手が
+/// [`join_left`] で足す（鎖の規則 ⑶）。
 pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
     match mark {
         Some(AdjacencyMark::Left) => PairDecision::JoinLeft,

@@ -20,18 +20,22 @@ use areka_placement::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
 use wintf::ecs::DPI;
 
 /// 主の画面の作業領域。
-const WA: RectPx = RectPx {
+pub(super) const WA: RectPx = RectPx {
     left: 0,
     top: 0,
     right: 2880,
     bottom: 1704,
 };
 /// 準備の幅（resolver が解いた幅）。
-const SPAWN: [(u32, u32); 3] = [(434, 687), (278, 357), (300, 400)];
+pub(super) const SPAWN: [(u32, u32); 3] = [(434, 687), (278, 357), (300, 400)];
 
 /// shell の descript の値で resolver が解いた位置に窓を生やし、`shown` の絵が出たとして
 /// 置き直しを 1 回回す（並べ直しはまだ回さない）。
-fn spawn_resolved(shell: &[(&str, &str)], shown: &PerTargetSizes, scopes: usize) -> World {
+pub(super) fn spawn_resolved(
+    shell: &[(&str, &str)],
+    shown: &PerTargetSizes,
+    scopes: usize,
+) -> World {
     let shell_kv: BTreeMap<String, String> = shell
         .iter()
         .map(|&(k, v)| (k.to_owned(), v.to_owned()))
@@ -67,11 +71,11 @@ fn spawn_resolved(shell: &[(&str, &str)], shown: &PerTargetSizes, scopes: usize)
     world
 }
 
-fn sizes(shown: &[(u32, u32)]) -> PerTargetSizes {
+pub(super) fn sizes(shown: &[(u32, u32)]) -> PerTargetSizes {
     PerTargetSizes::new(shown.iter().enumerate().map(|(s, &wh)| (s, Some(wh))))
 }
 
-fn x_of(world: &World, scope: usize) -> i32 {
+pub(super) fn x_of(world: &World, scope: usize) -> i32 {
     let gw = world.resource::<GhostWindows>().clone();
     pos_of(world, gw.char_window(scope).expect("char 窓がある"))
         .expect("位置がある")
@@ -164,26 +168,31 @@ fn boot_finalize_skips_side_edge_scopes_as_the_chain_base() {
     assert_ne!(x_of(&world, 2), x2_before, "前提: 幅が変わったので動いた");
 }
 
-/// ⑷ の例外: 辺のスコープの次が記憶から戻したスコープなら、覚えた印はその辺のスコープとの
-/// 隣り合いなので、辺のスコープを鎖に残し、次のスコープは辺のスコープの隣へ付く。
+/// ⑷ は辺のスコープの次が記憶から戻したスコープでも同じ: 覚えた印は鎖の前の窓（辺のスコープを
+/// 飛ばした本体）との組として読み、今の本体の幅でその隣へ付く（audit-placement-core 494・495）。
 #[test]
-fn boot_finalize_keeps_a_side_edge_scope_as_the_base_of_a_remembered_next_scope() {
-    let shown = sizes(&SPAWN);
+fn boot_finalize_skips_a_side_edge_scope_for_a_remembered_next_scope() {
+    let shown = sizes(&[(500, 687), SPAWN[1], SPAWN[2]]);
     let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
     {
         let mut gw = world.resource_mut::<GhostWindows>();
         assert!(gw.clear_default_char_pos(2));
         gw.set_remembered_adjacency(2, Some(AdjacencyMark::Left));
     }
+    let x2_before = x_of(&world, 2);
 
     finalize_chain_once_with(&shown, &mut world);
 
-    let x1 = x_of(&world, 1);
-    assert_eq!(x1, WA.right - 278, "辺のスコープは辺のまま");
+    assert_eq!(x_of(&world, 1), WA.right - 278, "辺のスコープは辺のまま");
     assert_eq!(
         x_of(&world, 2),
-        x1 - 300,
-        "記憶の印 left は辺のスコープとの隣り合いなので、その隣へ付く"
+        x_of(&world, 0) - 300,
+        "記憶の印 left は本体との組として読み、本体の隣へ付く"
+    );
+    assert_ne!(
+        x_of(&world, 2),
+        x2_before,
+        "前提: 本体の幅が変わったので動いた"
     );
 }
 

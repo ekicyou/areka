@@ -174,3 +174,44 @@ fn mark_from_adjacency() {
         AdjacencyMark::Separate
     );
 }
+
+/// 鎖の規則 ⑵: 左の組は `defaultx` の隙間（±2）も隣り合いで、決めはその隙間で付ける。右の組と
+/// 縦に重ならない組は `defaultx` を見ない（audit-placement-core 494）。
+#[test]
+fn chain_adjacency_accepts_the_defaultx_gap_on_the_left_only() {
+    for (cur, expected) in [
+        (
+            left_of_prev(36),
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ),
+        (
+            left_of_prev(34),
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ),
+        (left_of_prev(1), PairDecision::JoinLeft),
+        (
+            left_of_prev(20),
+            PairDecision::Keep(KeepReason::Apart { gap: 20 }),
+        ),
+        (
+            right_of_prev(36),
+            PairDecision::Keep(KeepReason::Apart { gap: 36 }),
+        ),
+        (right_of_prev(0), PairDecision::JoinRight),
+        (
+            ChainRect {
+                y: PREV.y + PREV.h,
+                ..left_of_prev(36)
+            },
+            PairDecision::Keep(KeepReason::Apart { gap: 36 }),
+        ),
+    ] {
+        let adjacency = judge_chain_adjacency(PREV, cur, 36);
+        assert_eq!(adjacency_decision(adjacency, 36), expected, "{cur:?}");
+    }
+    assert_eq!(
+        judge_chain_adjacency(PREV, left_of_prev(36), 0),
+        judge_adjacency(PREV, left_of_prev(36)),
+        "defaultx 0 は今までの判定と同じ"
+    );
+}

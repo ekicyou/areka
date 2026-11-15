@@ -233,6 +233,62 @@ fn adjacency_entry_and_saved_adjacency_round_trip() {
     );
 }
 
+/// 並べ直しの材料（shell の descript の値だけ）を置く。
+fn with_basis(world: &mut World, shell_kv: &[(&str, &str)]) {
+    world.insert_resource(crate::reset_pos::DefaultPlacementBasis {
+        source: crate::source::DescriptSource {
+            ghost_kv: Default::default(),
+            shell_kv: crate::test_support::kv(shell_kv),
+            shell_dir: std::path::PathBuf::from("shell/master"),
+            titles: GhostTitles::from_scope_titles((0..3).map(|s| (s, format!("s{s}")))),
+        },
+        balloon: crate::reseed::BalloonPlacementInputs {
+            author_dpi: 96,
+            windowpositions: Default::default(),
+        },
+    });
+}
+
+/// 左の組は隙間 0 のほか、そのスコープの `defaultx` の隙間（±2 px）も `left`。右の組は隙間 0
+/// だけが `right`（resolver の P2 は左へだけ空ける・audit-placement-core 494）。
+#[test]
+fn a_defaultx_gap_on_the_left_is_marked_left() {
+    for (x1, expected) in [
+        (1000 - 300 - 36, "left"),
+        (1000 - 300 - 38, "left"),
+        (1000 - 300, "left"),
+        (1000 - 300 - 60, "none"),
+        (1400, "right"),
+        (1400 + 36, "none"),
+    ] {
+        // 0: 1000..1400、1: x1..x1+300。
+        let mut world = world_with(&[(0, 1000, 400), (1, x1, 300)]);
+        with_basis(&mut world, &[("kero.defaultx", "36")]);
+        let out = with_adjacency_marks(&world, pos_batch(0));
+        assert_eq!(marks(&out), vec![(1, expected.to_string())], "x1={x1}");
+    }
+}
+
+/// 鎖の前の窓は、左右の辺に揃えるスコープ（descript の揃え方）を飛ばした一番近いスコープ。
+/// 辺のスコープ自身の印は `none`（鎖の外・audit-placement-core 494・495）。
+#[test]
+fn a_side_edge_scope_is_skipped_as_the_previous_chain_window() {
+    // 0: 1000..1400、1: 右の辺 2000..2300、2: 700..1000（本体の左に隙間 0）。
+    let mut world = world_with(&[(0, 1000, 400), (1, 2000, 300), (2, 700, 300)]);
+    with_basis(&mut world, &[("kero.seriko.alignmenttodesktop", "right")]);
+    let out = with_adjacency_marks(&world, pos_batch(0));
+    assert_eq!(
+        marks(&out),
+        vec![(2, "left".to_string())],
+        "本体の位置を書くと、本体を前の窓とする scope 2 の印を書く"
+    );
+    let out = with_adjacency_marks(&world, pos_batch(1));
+    assert_eq!(
+        marks(&out),
+        vec![(1, "none".to_string()), (2, "left".to_string())]
+    );
+}
+
 /// 一覧は記憶に位置（x・y の両方）があるスコープだけを鍵にし、印が無ければ値は無し。
 #[test]
 fn restored_scope_marks_keys_only_scopes_with_saved_position() {

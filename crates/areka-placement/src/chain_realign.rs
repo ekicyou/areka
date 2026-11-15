@@ -27,13 +27,16 @@
 //! # 組ごとの決め方（`dpi-realign-remembered-chain` 要件 1・2・3・7）
 //!
 //! 武装のとき、変わる直前のキャラ窓の矩形を控える（[`ChainRealignPending::before`]）。解決では
-//! 組 (n−1, n) ごとに、上から最初に当たった決めを取る。
+//! 組（鎖の前の窓, n）ごとに、上から最初に当たった決めを取る。組の作り方は起動の並べ直しと
+//! 隣り合いの印の保存と同じ鎖の規則（`chain_finalize`・audit-placement-core 494・495）で、窓の今の
+//! 揃え方が左右の辺のスコープは鎖の外（詰め直さず、次の組の基準にもしない）。
 //!
-//! 1. n−1 か n が控えに無い → 動かさない（`unreadable`・理由つきの `warn!`。ほかの組は続ける）
+//! 1. 前の窓か n が控えに無い → 動かさない（`unreadable`・理由つきの `warn!`。ほかの組は続ける）
 //! 2. n が窓の組に入っている → 動かさない（`sticky-group`）
-//! 3. n−1 か n がドラッグの最中 → 動かさない（`dragging`・寄せもしない）
+//! 3. 前の窓か n がドラッグの最中 → 動かさない（`dragging`・寄せもしない）
 //! 4. n を武装の後に台本が置いた → 動かさない（`script-moved`）
-//! 5. 控えの矩形どうしが隣り合っていた → 左／右へ付ける（`adjacent-left`／`adjacent-right`）
+//! 5. 控えの矩形どうしが隣り合っていた（左は隙間 0 か n の `defaultx` の隙間・右は隙間 0）→
+//!    左／右へ付ける（`adjacent-left`／`left-offset`＝`defaultx` の隙間のまま／`adjacent-right`）
 //! 6. 離れていた・重なっていた → 動かさない（`apart`／`overlapped`）
 //!
 //! 決めは揃った後の今の x と幅で [`resolve_chain`] が解き、作業領域の中へ寄せてから書く
@@ -71,13 +74,15 @@ use wintf::ecs::drag::DraggingState;
 
 use super::chain_finalize::{
     Adjacency, ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainRect, ChainSlot,
-    KeepReason, PairDecision, ScopeChainState, judge_adjacency, mark_non_positive_widths,
-    note_chain_deferral,
+    KeepReason, PairDecision, ScopeChainState, adjacency_decision, chain_gap, joins_chain,
+    judge_chain_adjacency, mark_non_positive_widths, note_chain_deferral,
 };
+use super::config::{ScopeConfig, build_placement_config};
 use super::diag::PlacementRoute;
 use super::dpi_sync::{self, DpiSyncHold};
-use super::follow::{ClampScene, move_window_with_route, place_chain_in_work_area};
-use super::resolver::PointPx;
+use super::follow::{Anchored, ClampScene, move_window_with_route, place_chain_in_work_area};
+use super::reset_pos::DefaultPlacementBasis;
+use super::resolver::{Anchor, PointPx};
 use super::spawn::GhostWindows;
 use super::sticky_group_ledger::StickyGroupLedger;
 use super::transition_diag::{
@@ -264,13 +269,51 @@ where
     };
     let dragging =
         |scope: usize| entity_of(scope).is_some_and(|e| world.get::<DraggingState>(e).is_some());
+    // 鎖の規則（chain_finalize）: 揃え方と左の組の `defaultx` は descript から、辺かは窓の今の揃え方で。
+    let cfg = world
+        .get_resource::<DefaultPlacementBasis>()
+        .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv));
+    if cfg.is_none() {
+        debug!(
+            "chain_realign: 配置の材料（DefaultPlacementBasis）が無いので、組の隣り合いを隙間 0 だけで判じる"
+        );
+    }
+    let fallback = ScopeConfig::default();
+    let terms = |scope: usize| {
+        let sc = cfg
+            .as_ref()
+            .and_then(|c| c.scopes.get(&scope))
+            .unwrap_or(&fallback);
+        let anchor = Anchor::from_alignment(&sc.alignment);
+        let live = entity_of(scope)
+            .and_then(|e| world.get::<Anchored>(e))
+            .map_or(anchor, |a| a.0);
+        (joins_chain(live), chain_gap(anchor, sc.default_x))
+    };
+    // 左右の辺のスコープは鎖の外（動かさず、次の組の基準にもしない）。
+    let scopes = states.len();
+    let (states, targets): (Vec<_>, Vec<_>) = states
+        .iter()
+        .zip(&targets)
+        .filter(|(s, _)| {
+            let in_chain = terms(s.scope).0;
+            if !in_chain {
+                debug!(
+                    scope = s.scope,
+                    "chain_realign: 左右の辺のスコープは詰め直さず、組の基準にもしない"
+                );
+            }
+            in_chain
+        })
+        .map(|(s, t)| (*s, *t))
+        .unzip();
 
     // 組ごとの決めと、控えで判定したときの直前の隙間（1〜4 の理由で外した組は判定しない）。
     let mut slots: Vec<ChainSlot> = Vec::with_capacity(states.len());
     let mut before_gaps: Vec<Option<i32>> = Vec::with_capacity(states.len());
     for (i, s) in states.iter().enumerate() {
         let (decision, before_gap) = match i.checked_sub(1).map(|p| states[p].scope) {
-            // 先頭（本体）は組を持たない（解きは決めを読まない）。
+            // 先頭のスロットは組を持たない（解きは決めを読まない）。
             None => (PairDecision::Keep(KeepReason::ExplicitlyPlaced), None),
             Some(prev) => match (before_of(prev), before_of(s.scope)) {
                 (Some(prev_rect), Some(rect)) => {
@@ -289,17 +332,13 @@ where
                             None,
                         )
                     } else {
-                        match judge_adjacency(prev_rect, rect) {
-                            Adjacency::Left { gap } => (PairDecision::JoinLeft, Some(gap)),
-                            Adjacency::Right { gap } => (PairDecision::JoinRight, Some(gap)),
-                            Adjacency::Apart { gap } => {
-                                (PairDecision::Keep(KeepReason::Apart { gap }), Some(gap))
-                            }
-                            Adjacency::Overlapped { gap } => (
-                                PairDecision::Keep(KeepReason::Overlapped { gap }),
-                                Some(gap),
-                            ),
-                        }
+                        let offset = terms(s.scope).1;
+                        let adjacency = judge_chain_adjacency(prev_rect, rect, offset);
+                        let (Adjacency::Left { gap }
+                        | Adjacency::Right { gap }
+                        | Adjacency::Apart { gap }
+                        | Adjacency::Overlapped { gap }) = adjacency;
+                        (adjacency_decision(adjacency, offset), Some(gap))
                     }
                 }
                 (prev_rect, _) => {
@@ -362,18 +401,12 @@ where
     }
 
     debug!(
-        scopes = states.len(),
+        scopes,
         moved = moves.len(),
         "chain_realign: 遷移後の連鎖を解き直して武装を解いた（次の遷移まで駆動しない）"
     );
     if transition_diag::is_enabled() {
-        transition_diag::log_chain(
-            world,
-            CHAIN_STAGE_REALIGNED,
-            states.len(),
-            moves.len(),
-            None,
-        );
+        transition_diag::log_chain(world, CHAIN_STAGE_REALIGNED, scopes, moves.len(), None);
     }
 }
 
