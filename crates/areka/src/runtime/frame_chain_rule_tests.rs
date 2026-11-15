@@ -13,9 +13,11 @@ use bevy_ecs::change_detection::DetectChangesMut;
 use wintf::ecs::drag::DraggingState;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
-use super::chain_finalize_align_tests::{SPAWN, WA, sizes, spawn_resolved, x_of};
+use super::chain_finalize_align_tests::{
+    SPAWN, WA, sizes, spawn_resolved, spawn_resolved_scopes, x_of,
+};
 use super::chain_finalize_persist_test_support::PersistStore;
-use super::test_support::PerTargetSizes;
+use super::test_support::{PerTargetSizes, capture_logs};
 use super::*;
 
 use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, AdjacencyMark, ScriptPlaced};
@@ -239,12 +241,37 @@ fn width_of(world: &World, scope: usize) -> i32 {
         .width
 }
 
-/// 表 T24（指摘 515）: descript が左右の辺のスコープを、最初の確定より前に台本が下端・free へ
-/// 揃え直しても（x は辺のまま）、次の記憶の無いスコープの基準は resolver と同じ本体のまま。
+/// 表 T24〜T26（指摘 515）: descript が左右の辺のスコープは、台本が最初の確定より前に揃え方を
+/// 変えても起動の鎖の外。辺の窓は動かさず、次の記憶の無いスコープの基準は resolver と同じ本体の
+/// まま。行: T24 下端・free へ揃え直しただけ（x は辺のまま）／T25 free にして台本の移動で辺から
+/// 離した／T26 記憶から戻した窓を下端へ揃え直した。
 #[test]
 fn a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base() {
-    let mut gaps = Vec::new();
-    for word in [Anchor::Bottom, Anchor::Free] {
+    let kero = |world: &World| {
+        world
+            .resource::<GhostWindows>()
+            .char_window(1)
+            .expect("char 窓がある")
+    };
+    let moved_by_script = |world: &mut World| {
+        put_x(world, 1, 1000);
+        let window = kero(world);
+        world.entity_mut(window).insert(ScriptPlaced);
+    };
+    let remembered = |world: &mut World| {
+        assert!(
+            world
+                .resource_mut::<GhostWindows>()
+                .clear_default_char_pos(1)
+        );
+    };
+    let rows: [(&str, Anchor, Option<&dyn Fn(&mut World)>); 4] = [
+        ("T24 下端へ", Anchor::Bottom, None),
+        ("T24 free へ", Anchor::Free, None),
+        ("T25 台本が動かした", Anchor::Free, Some(&moved_by_script)),
+        ("T26 記憶から戻した", Anchor::Bottom, Some(&remembered)),
+    ];
+    let gaps = rows.map(|(what, word, more)| {
         let shown = sizes(&SPAWN);
         let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
         assert!(apply_script_alignment(
@@ -255,22 +282,22 @@ fn a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base
         assert_eq!(
             x_of(&world, 1),
             WA.right - 278,
-            "{word:?} 前提: 揃え直しても x は辺のまま"
+            "{what} 前提: 揃え直しても x は辺のまま"
         );
+        if let Some(more) = more {
+            more(&mut world);
+        }
+        let x1 = x_of(&world, 1);
 
         finalize_chain_once_with(&shown, &mut world);
 
-        assert_eq!(
-            x_of(&world, 1),
-            WA.right - 278,
-            "{word:?}: 辺にいる窓は動かさない"
-        );
-        gaps.push((word, left_gap(&world, 0, 2)));
-    }
+        assert_eq!(x_of(&world, 1), x1, "{what}: 鎖の外の窓は動かさない");
+        (what, left_gap(&world, 0, 2))
+    });
     assert_eq!(
-        gaps,
-        [(Anchor::Bottom, 0), (Anchor::Free, 0)],
-        "scope 2 の基準は本体のまま（辺にいる窓の隣へ動かさない）"
+        gaps.map(|(_, gap)| gap),
+        [0; 4],
+        "scope 2 の基準は本体のまま（鎖の外の窓の隣へ動かさない）: {gaps:?}"
     );
 }
 
@@ -411,5 +438,145 @@ fn a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions() {
         off.map(|(_, off)| off),
         [428; 4],
         "置き直しのままで、付け直さない: {off:?}"
+    );
+}
+
+/// 表 T27（残す限り）: descript が鎖の本体を、台本が最初の確定より前に右の辺へ揃えると、本体は
+/// 起動の鎖から外れ、次のスコープが鎖の頭になる（頭は動かさない）。辺の本体と次のスコープは、
+/// descript で辺に揃えたとき（表 T7）と同じく鎖の組にならない。
+#[test]
+fn a_main_window_aligned_to_a_side_edge_by_the_boot_script_leaves_the_chain() {
+    let shown = sizes(&[(500, 687), SPAWN[1]]);
+    let mut world = spawn_resolved(&[], &shown, 2);
+    assert!(apply_script_alignment(
+        &mut world,
+        0,
+        &AlignmentWord::Anchor(Anchor::Right)
+    ));
+    assert_eq!(x_of(&world, 0), WA.right - 500, "前提: 本体は右の辺");
+    let x1 = x_of(&world, 1);
+
+    finalize_chain_once_with(&shown, &mut world);
+
+    assert_eq!(x_of(&world, 0), WA.right - 500, "本体は辺のまま");
+    assert_eq!(x_of(&world, 1), x1, "次のスコープは鎖の頭で、動かさない");
+}
+
+/// 表 T35（残す限り）: 辺のスコープの隣へ、番号の小さい側の窓（本体）を付けたときは、拡大率が
+/// 変わってもどちらも動かさない（番号の小さい側は動かさない・辺の窓は辺のまま）。
+#[test]
+fn a_lower_scope_attached_to_a_side_edge_scope_is_not_moved() {
+    let row: EdgeRow = ("kero.seriko.alignmenttodesktop", "right", 2, 1, 0, true);
+    let shown = sizes(&SPAWN[..2]);
+    let mut world = spawn_resolved(&[(row.0, row.1)], &shown, 2);
+    finalize_chain_once_with(&shown, &mut world);
+    let x = beside_edge(&world, row);
+    put_x(&mut world, 0, x);
+
+    let before = snapshot_char_rects(&world);
+    let shown = rescale_keeping_bottom_center(&mut world, 2, 1);
+    put_x(&mut world, 1, WA.right - 556);
+    let placed = (x_of(&world, 0), x_of(&world, 1));
+    arm_chain_realign(&mut world, before);
+    realign_chain_once_with_source(&shown, &mut world);
+
+    assert_eq!(
+        (x_of(&world, 0), x_of(&world, 1)),
+        placed,
+        "詰め直しはどちらも動かさない"
+    );
+}
+
+/// 表 T1・T9〜T12 を本番の道で通す: `defaultx` ごとに、起動の確定（出ている幅が準備と違う）→
+/// 並べ終えた時点の保存 → 拡大率の後の詰め直し → 覚えた印 `left` での次の起動の確定が、どれも
+/// 鎖の前の窓の左に `defaultx` の隙間で置く。本体は右の辺から 1000 空けて置く（負の `defaultx` が
+/// 作業領域の端で切られないように）。
+#[test]
+fn every_world_path_keeps_the_defaultx_gap() {
+    let real = [(500, 687), (300, 357)];
+    let seen = [0, 2, 36, -36, -500].map(|default_x: i32| {
+        let value = default_x.to_string();
+        let shell = [
+            ("sakura.defaultx", "1000"),
+            ("kero.defaultx", value.as_str()),
+        ];
+        let shown = sizes(&real);
+
+        // 起動の確定（記憶なし）と、並べ終えた時点の保存。
+        let mut world = spawn_resolved(&shell, &shown, 2);
+        let store = PersistStore::fake();
+        store.wire(&mut world);
+        finalize_chain_once_with(&shown, &mut world);
+        let booted = left_gap(&world, 0, 1);
+        let mark = store
+            .load()
+            .get(&PersistKey::WindowAdjacent { scope: 1 })
+            .cloned();
+        // 拡大率の後の詰め直し。
+        change_scale_and_realign(&mut world, 2, 1);
+        let realigned = left_gap(&world, 0, 1);
+        store.finish();
+
+        // 次の起動: 記憶から戻した窓を、覚えた印 left で付け直す。
+        let mut world = spawn_resolved(&shell, &shown, 2);
+        {
+            let mut gw = world.resource_mut::<GhostWindows>();
+            assert!(gw.clear_default_char_pos(1));
+            gw.set_remembered_adjacency(1, Some(AdjacencyMark::Left));
+        }
+        finalize_chain_once_with(&shown, &mut world);
+        let remembered = left_gap(&world, 0, 1);
+
+        (default_x, booted, mark, realigned, remembered)
+    });
+    let want = seen.clone().map(|(default_x, ..)| {
+        (
+            default_x,
+            default_x,
+            Some("left".to_owned()),
+            default_x,
+            default_x,
+        )
+    });
+    assert_eq!(
+        seen, want,
+        "(defaultx, 起動の確定, 保存の印, 詰め直し, 覚えた印の起動) の隙間"
+    );
+}
+
+/// 表 T8・T21: 中のスコープが無い（0 と 2 だけ）とき、鎖の前の窓は下の一番近いスコープ。覚えた印を
+/// 「辺のスコープを飛ばした組として読む」記録は、本当に辺のスコープを飛ばしたときだけ出す。
+#[test]
+fn a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope() {
+    const READ_ACROSS: &str = "左右の辺のスコープを飛ばした鎖の前の窓との組として読む";
+    let remember_scope_2 = |world: &mut World| {
+        let mut gw = world.resource_mut::<GhostWindows>();
+        assert!(gw.clear_default_char_pos(2));
+        gw.set_remembered_adjacency(2, Some(AdjacencyMark::Left));
+    };
+
+    // 中のスコープが無い: 本体の隣へ付き、記録は出ない。
+    let shown = PerTargetSizes::new([(0, Some((500, 687))), (2, Some(SPAWN[2]))]);
+    let mut world = spawn_resolved_scopes(&[], &shown, &[0, 2]);
+    remember_scope_2(&mut world);
+    let logs = capture_logs(|| finalize_chain_once_with(&shown, &mut world));
+    assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
+    assert!(
+        !logs.iter().any(|line| line.contains(READ_ACROSS)),
+        "辺のスコープを飛ばしていないのに記録が出た: {logs:?}"
+    );
+
+    // 辺の kero を飛ばした: 本体の隣へ付き、記録が 1 行出る。
+    let shown = sizes(&[(500, 687), SPAWN[1], SPAWN[2]]);
+    let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
+    remember_scope_2(&mut world);
+    let logs = capture_logs(|| finalize_chain_once_with(&shown, &mut world));
+    assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
+    assert_eq!(
+        logs.iter()
+            .filter(|line| line.contains(READ_ACROSS))
+            .count(),
+        1,
+        "辺のスコープを飛ばした組の記録が 1 行: {logs:?}"
     );
 }

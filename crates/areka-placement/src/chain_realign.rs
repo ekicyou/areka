@@ -351,6 +351,7 @@ where
         };
         let free = !sticky(s.scope) && !dragging(s.scope) && !script_moved(s.scope);
         if let (PairDecision::Keep(_), true, Some(rect)) = (decision, free, before_of(s.scope)) {
+            // 見るのは n より下の番号の辺のスコープだけ（番号の小さい側は動かさない・要件 1.3）。
             let edges = rule
                 .skipped(view, prev, s.scope)
                 .filter(|&k| !dragging(k))

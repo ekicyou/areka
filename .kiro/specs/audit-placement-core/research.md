@@ -2258,9 +2258,9 @@
 515・520 の裁定（2026-11-15）: 開発者は、9 回目の裁定の表の 2 件の推奨案に「推奨通り」と答えた。
 
 - 515: 推奨案は「起動の確定で、descript か今の揃え方のどちらかが左右の辺なら鎖から外す」。そのとおりに直した（`ChainView::Boot`）。
-- 520: 推奨案の文は「詰め直しで、飛ばした辺のスコープ k に、変わる直前の次のスコープ n が隙間 0 で左に付いていたときは、n の組を k との組として判じて k の左へ付ける」。入れた形はこの文より広い: ⑴ 右に付いていた窓（左の辺のスコープの右）も同じ側へ付け直す ⑵ n が鎖の頭のとき（辺のスコープが本体の 2 スコープのゴースト）も当てる ⑶ 飛ばした辺のスコープがいくつもあれば、n に近い順に見て最初に付いていたものを相手にする ⑷ 鎖の前の窓の隣にも付いていた窓は、鎖の前の窓へ付け直す（辺のスコープは見ない） ⑸ 付けた窓が窓の組・ドラッグの最中・武装の後の台本のとき、辺のスコープがドラッグの最中のときは動かさない。この広さは、進行役が開発者に確かめを仰いでいる（裁定の文に無い分＝⑴〜⑶）。
+- 520: 推奨案の文は「詰め直しで、飛ばした辺のスコープ k に、変わる直前の次のスコープ n が隙間 0 で左に付いていたときは、n の組を k との組として判じて k の左へ付ける」。入れた形はこの文より広い: ⑴ 右に付いていた窓（左の辺のスコープの右）も同じ側へ付け直す ⑵ n が鎖の頭のとき（辺のスコープが本体の 2 スコープのゴースト）も当てる ⑶ 飛ばした辺のスコープがいくつもあれば、n に近い順に見て最初に付いていたものを相手にする ⑷ 鎖の前の窓の隣にも付いていた窓は、鎖の前の窓へ付け直す（辺のスコープは見ない） ⑸ 付けた窓が窓の組・ドラッグの最中・武装の後の台本のとき、辺のスコープがドラッグの最中のときは動かさない。この広さは、進行役が開発者に確かめを仰いでいる（裁定の文に無い分＝⑴〜⑶）。その後、下の「この仕様で行く」で、このままにすると最終の判断をした。
 
-総括で、推奨案の式が及ぶ場合と、規則が残す限りが 4 つ見つかった。どれも台本の吸着か辺のスコープがかかわるまれな場合で、コードは下の「今の振る舞い」のとおり。
+総括で、推奨案の式が及ぶ場合と、規則が残す限りが 4 つ見つかった。どれも台本の吸着か辺のスコープがかかわるまれな場合で、コードは下の「今の振る舞い」のとおり。この 4 つは、下の「この仕様で行く」の残す限り 1〜4 として最終の判断にした（どれも推奨のとおり。理由は「まれ」でなく、そこに書き直した）。
 
 | 番号 | 中身 | 今の振る舞い | 推奨 |
 |---|---|---|---|
@@ -2302,7 +2302,7 @@ T33・T34 の 2 本（`a_window_beside_both_follows_the_previous_chain_window`�
 
 - 配置の crate `chain_rule_tests.rs`（7 本・表の World を持たない行）: `chain_membership_by_view`（⑴ の見方の 11 行）・`previous_chain_window_skips_scopes_outside_the_chain`（T6・T8）・`a_scope_after_a_side_edge_head_is_the_chain_head`（T7）・`the_gap_is_the_descript_defaultx_of_bottom_and_top`（T15）・`boot_decision_table`（T16〜T20 の 16 行）・`every_path_puts_a_default_pair_where_the_resolver_does`（T1・T9〜T12: `defaultx` が 0・±1・±2・±36・−500 の 8 つで、resolver が置いた組に保存が `left` を書き、幅が変わった後の起動の確定（既定のまま・覚えた印）と詰め直しが、どれも resolver が新しい幅で解く位置へ置く）・`edge_partner_is_the_nearest_side_edge_scope_attached_with_no_gap`（⑷ の 6 行）。
 - 本体の `frame_chain_rule_tests.rs`（足した 4 本）: T24（515）・T32（520 の 3 行）・T33・T34（4 行）。
-- 今までの檻が押さえる行: T4・T5・T6・T9・T39 は本体の `frame_chain_finalize_align_tests.rs`、T6・T9・T18・T22・T23 は `frame_chain_rule_tests.rs` の前からの 7 本、T29〜T31 は本体の `frame_chain_realign_adjacency_tests.rs`・`frame_chain_realign_exclusion_tests.rs`、T2（縦が重ならない）・T11〜T14 は `chain_finalize_adjacency_tests.rs`、T6・T9・T37・T40 の保存は `persist_adjacency_tests.rs`、T19・T36 は `persist_finalize_save_tests.rs`、T5・T7 の resolver は `resolver_resolve_tests.rs`（`t_r5_top_left_right_resolve_on_their_own_edge`・`t_r5_mixed_edges_chain_per_edge`）。T27・T28・T35・T38 に、この回で足した檻は無い（T27 は裁定待ち・ほかは今までの振る舞いで、この回は触っていない）。
+- 今までの檻が押さえる行: T4・T5・T6・T9・T39 は本体の `frame_chain_finalize_align_tests.rs`、T6・T9・T18・T22・T23 は `frame_chain_rule_tests.rs` の前からの 7 本、T29〜T31 は本体の `frame_chain_realign_adjacency_tests.rs`・`frame_chain_realign_exclusion_tests.rs`、T2（縦が重ならない）・T11〜T14 は `chain_finalize_adjacency_tests.rs`、T6・T9・T37・T40 の保存は `persist_adjacency_tests.rs`、T19・T36 は `persist_finalize_save_tests.rs`、T5・T7 の resolver は `resolver_resolve_tests.rs`（`t_r5_top_left_right_resolve_on_their_own_edge`・`t_r5_mixed_edges_chain_per_edge`）。T27・T28・T35・T38 に、この回で足した檻は無い（T27 は裁定待ち・ほかは今までの振る舞いで、この回は触っていない）。その後の穴の見直しで、T27・T35・T38 の檻を足し、T28 の今までの檻を確かめた（下の「これで終わる理由」）。
 
 #### 申し送り（タスク 8.2 が書く）
 
@@ -2310,7 +2310,7 @@ T33・T34 の 2 本（`a_window_beside_both_follows_the_previous_chain_window`�
 - 同じく `audit-placement-follow` へ: `opposite`（L298-L305）は `JoinLeftOffset` を反対の側へ回さない（7 回目の記録の決めのまま）。⑷ で足した辺のスコープとの組は `JoinLeft`／`JoinRight` なので、今の `opposite` のまま反対の側へ回る。
 - この回に範囲の外で触った所: 本体の `runtime/frame/drain_resnap.rs`（起動の解きの列の組み立てを `chain_rule::boot_chain` へ移した・729 行）・`runtime/frame_chain_rule_tests.rs`（4 本を足した・415 行）・`doc/COMPAT_ARCHITECTURE.md`（表の 2 行）。走っている spec と重なる所は無い。本体の `switch_finish_tests.rs`（999 行）には何も足していない。
 
-#### 確かめ
+#### 確かめ（総括の時点）
 
 - `cargo test -p areka-placement --features test-support`: lib 984 件が通り 1 件 ignore（足した 7 件）、手本 1 件が通る。
 - `cargo test -p areka`: 本体の bin 3199 件が通り 6 件が ignore（足した 4 件）、ほかのテストの的も全部通る（知られた揺れは出なかった）。
@@ -2321,8 +2321,170 @@ T33・T34 の 2 本（`a_window_beside_both_follows_the_previous_chain_window`�
 - `git diff --stat Cargo.lock` と `vendors/` の差分は空。追随の持ち物（`src/follow*`・`src/transition_*`・本体の `placement_tests/transition_*`）は 1 行も触っていない。行末は元のまま（`git diff --numstat` は中身の行だけ）。
 - 直しで古くなった行の番号の確かめ: この回で触った `.rs` を `<ファイル>.rs:<行>` の形で指す所を、ツリー全体（`.kiro/specs/`・`vendors/`・`.kiro/steering/roadmap-history.md` を除く）から拾った。当たったのは `doc/ukadoc-coverage/briefing-assets.md` の `resolver.rs:293` だけで、この回の `resolver.rs` の直し（519 行の doc）より前の行なので動いていない。記録の文を字面で読む所（テスト・`tools/`）は、移した `warn!`・`debug!` の文について grep して 0 件。
 
-#### 判定
+#### 判定（総括の時点）
 
 - 鎖にかかわる「必ず直す」の残りは **0 件**。9 回目の裁定待ちの 2 件（515・520）は、開発者の裁定（2026-11-15「推奨通り」）で、9 回目の推奨案のとおりに 1 つの規則の中で直した（520 の入れた形の広さは、上の裁定の節のとおり確かめを仰いでいる）。
 - 表の 40 の場合のうち、今までのコードがもう表のとおりだったものが 33、この回で直したもの（直しの式や当て方が効くものを含む）が 6（T24〜T26・T32〜T34）、今のまま裁定を仰ぐものが 1（T27）。規則が残す限りは上の裁定の表の 4 つ（推奨は 1・2・4 が今のまま、3 が今の形で認める）で、どれも「必ず直す」ではない（台本の吸着か辺のスコープがかかわるまれな場合）。
 - 追随の寄せ（F の列）の 2 つの食い違いは、追随の持ち物なので申し送りにした（最後の位置は起動の確定が規則のとおりに直す）。
+
+#### 穴の見直しと足した場合（2026-11-15・開発者の指示「指摘の穴も含め確認」）
+
+総括の表（T1〜T40）と規則を、表に無い場合・通していない道・檻の無い欄・レビューの 4 点（520 の広さ・T35・純関数だけの檻・T27 の「まれ」の根拠）で見直した。コードの振る舞いは変えていない（足したのは檻と記録だけ）。
+
+表に足す場合（列の意味は上の表と同じ）:
+
+| # | 場合 | 道と答え | 出どころ | 扱い |
+|---|---|---|---|---|
+| T41 | スコープ 0（鎖の頭）の `defaultx` | R: 右の辺から `defaultx` だけ左。B・D: 頭は動かさない。S: 頭は印を持たない | `window-placement` 2.10、`scope-chain-gap` 7.2 | 合う |
+| T42 | 同じ左右の辺に 2 つ以上のスコープ（縦の連なり） | R: 辺ごとに下から上へ連ねる。B・D: 縦は扱わない（出ている絵の高さが準備と違っても、縦の連なりは解き直さない）。S: 辺のスコープの印は `none` | 指摘 1、`scope-chain-gap` 7.2（Y は扱わない）、`dpi-realign` 1.4 | 合う（縦の連なりは既定の並びだけ。残す） |
+| T43 | 作業領域に入らず反対の側へ回した組・端へ寄せて重なった組 | B・D: 追随の `place_chain_in_work_area` が置く。S: 画面の並びから印（反対の側へ回した組は `right`、重なった組は `none`） | `work-area-clamp` 1.2・2.1、`dpi-realign` 6.2 | 合う |
+| T44 | 並べ直し（`resetwindowpos`）のとき、台本が揃え方を変えた窓がある | R と S だけを通る（どちらも descript の鎖）。`Anchored` は変えない | `move-canon` 8.6、決め (a) | 合う |
+| T45 | バルーン位置初期化・面の `windowposition` の置き直し | キャラ窓を動かさず、キャラ窓の位置の鍵を書かないので、印も書かない | `dpi-realign` 6.2（位置を書くときだけ） | 合う |
+| T46 | ゴーストの読み直し・切り替え | 窓の一式を作り直し、起動と同じ道（B は窓の一式に 1 度） | `dpi-realign` 5.1・5.2 | 合う |
+| T47 | 拡大率の変化が最初の確定より前 | D は武装しない。B が新しい大きさで解く | `dpi-transition-atomicity` 設計 C4 | 合う |
+| T48 | 幅が 0 以下の窓 | B・D: 動かさず、今の x を次の基準にする（`non-positive-width`） | `scope-chain-gap` 7.1 の縮退 | 合う |
+| T49 | シェルを替えて descript の鎖が変わった後の起動で、前のシェルのときに書いた印を読む | B: 今の descript の鎖の前の窓との組として読む（決め (b) と同じ。記憶はゴーストごとで、印に相手の番号は無い） | 決め (b) | 合う（残す） |
+| T50 | 窓の組の連れ動きの保存 | S: 書いた全スコープと、その次の鎖のスコープの印。組の窓は `none` | `dpi-realign` 2.3・6.2 | 合う |
+
+道の見直し: 鎖を読む道は R・B・S・D の 4 つと、鎖を解き直さない W、追随の F。ほかに位置や印を書く口は、並べ直し（T38・T44＝R と S）、ドラッグ・連れ動きの保存（T37・T50＝`persist_entries`＝S）、バルーン位置初期化と面の置き直し（T45＝鎖を読まない）、読み直し・切り替え（T46＝B）で、どれも上の 4 つの道のどれかを通る。追随の持ち物が鎖の式を自分で持つのは `joined_with_prev` だけ（申し送り）。
+
+足した檻（どれも今の振る舞いを固定する。壊し方で赤を確かめた）:
+
+- 本体 `frame_chain_rule_tests.rs`:
+  - `a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base` を T24〜T26 の 4 行の表にした（T25 台本が動かした・T26 記憶から戻した、を足した）。起動の見方を今の揃え方だけへ戻す壊し方で「left: [-156, -156, 1446, -156] right: [0, 0, 0, 0]」。
+  - `a_main_window_aligned_to_a_side_edge_by_the_boot_script_leaves_the_chain`（T27）。起動の見方を descript だけにする壊し方で「left: 2102 right: 2168」。
+  - `a_lower_scope_attached_to_a_side_edge_scope_is_not_moved`（T35）。
+  - `every_world_path_keeps_the_defaultx_gap`（T1・T9〜T12 を本番の道で: `defaultx` が 0・2・36・−36・−500 の 5 つで、起動の確定（出ている幅が準備と違う）→ 並べ終えた時点の保存 → 詰め直し → 覚えた印 `left` の起動、の 4 つがどれも `defaultx` の隙間）。隙間を 0 にする壊し方で 2・36・−36・−500 の行の保存・詰め直し・覚えた印の起動が赤。レビューの指摘（純関数の `every_path_puts_a_default_pair_where_the_resolver_does` は道そのものを通らない）への答え。
+  - `a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope`（T8・T21）。記録の条件を番号の続きだけへ戻す壊し方で「辺のスコープを飛ばしていないのに記録が出た」。
+- 配置の crate `reset_pos_tests.rs` の `shifted_windows_return_to_default_and_are_persisted` に、並べ直しの保存が印 `left` も書く確かめを足した（T38）。
+- 本体 `frame_chain_finalize_align_tests.rs` に、スコープの番号を列で渡す `spawn_resolved_scopes` を足した（中のスコープが無い World 用。`spawn_resolved` はそれを呼ぶ）。
+
+#### 根拠（ukadoc）
+
+鎖の規則の一次の根拠は ukadoc。沈黙している所は、完了した areka の spec と開発者の裁定に従う。SSP の振る舞いは参考で、正しいとは限らない（この回は SSP を動かしていない）。
+
+| 番号 | ukadoc の所 | 引用 | 規則のどこを支えるか |
+|---|---|---|---|
+| U1 | `seriko.alignmenttodesktop` https://ukatech.shillest.net/ukadoc-spec/descript_ghost.html#seriko.alignmenttodesktop と補足 https://ukatech.shillest.net/ukadoc-spec/descript_ghost.html#note-1 | 「既定値: bottom」「free: 自由移動。」 | 揃え方の既定は下端。補足が挙げる descript の値は top・bottom・free・osuwari で、left・right は載っていない（沈黙） |
+| U2 | `\![set,alignmenttodesktop,方向]` https://ukatech.shillest.net/ukadoc-spec/list_sakura_script.html#bang-set-alignmenttodesktop | 「現スコープ側サーフェスを…吸着」「左右方向へのドラッグ移動ができなくなる」「ゴースト終了まで有効。」 | 台本の吸着は現スコープの窓だけに効き、その回かぎり（決め (a)）。左右の辺の窓は横に動かさない（⑴）。ほかのスコープの並びには沈黙 |
+| U3 | `sakura.defaultx` https://ukatech.shillest.net/ukadoc-spec/list_shiori_resource.html#sakura.defaultx | 「表示位置の記憶が無いとき…に使われる」「X座標はその設定で決まるため無効」 | 既定の並びは記憶が無いときだけ。左右の辺に沿う設定のとき `defaultx` は効かない（辺のスコープの隙間は 0） |
+| U4 | `kero.defaultx` https://ukatech.shillest.net/ukadoc-spec/list_shiori_resource.html#kero.defaultx・`char*.defaultx` https://ukatech.shillest.net/ukadoc-spec/list_shiori_resource.html#char-star-.defaultx | 「本体側の左隣に置かれる。」「1つ前のキャラクターの左隣に置かれる。」 | 指定の無いスコープは前のキャラクターの左隣＝鎖（隙間 0）。前のキャラクターが左右の辺に沿うときの扱いには沈黙 |
+| U5 | `\![set,sticky-window,…]` https://ukatech.shillest.net/ukadoc-spec/list_sakura_script.html#bang-set-sticky-window-ID-ID | 「その制限が優先され」 | 吸着の制限は、ほかの窓に合わせて動かす決まりより先（辺の窓を鎖の都合で横へ動かさない） |
+| U6 | `\![execute,resetwindowpos]` https://ukatech.shillest.net/ukadoc-spec/list_sakura_script.html#bang-execute-resetwindowpos | 「各ウインドウの位置を初期位置に戻す。」 | 並べ直しは既定の並び（R）へ戻す（T38・T44） |
+| U7 | `\![move]` https://ukatech.shillest.net/ukadoc-spec/list_sakura_script.html#bang-move | 「指定座標まで移動。」 | 台本が置いた窓は引き戻さない。ほかのスコープの既定の並びへの効きには沈黙 |
+
+ukadoc が沈黙していて、areka の決めに従う所:
+
+- 拡大率が変わったときの並び・記憶の形（隣り合いの印）・出ている絵の幅が準備と違うときの解き直し: ukadoc に記述が無い。`scope-chain-gap` 要件 7・`dpi-realign-remembered-chain` 要件 1〜3・6・`window-work-area-clamp` 要件 1・2・4 に従う。
+- descript の `alignmenttodesktop` の left・right: U1 の補足に無い（台本の指令 U2 にはある。U3 は「左端/右端に沿って表示する設定」があることを前提にしている）。この spec の指摘 1 の裁定（4 つの辺で解く）に従う。
+- 前のキャラクターが辺に沿うときの「左隣」（U4）: 字面は「1つ前のキャラクター」で、辺のスコープを飛ばすとは書かない。辺の窓の隣へ並べるとも書かない。指摘 1・485・494 の裁定（辺のスコープは鎖の外・鎖の前の窓は辺を飛ばす）に従う。
+- 台本が本体を辺へ揃えたとき、相方を動かすか（U2）: 沈黙。495 の裁定（今辺にある窓は鎖の外）に従う。
+
+ukadoc と食い違う所（鎖の規則の外・この回は変えない）: U3 は `defaultx` を「基準点(通常はサーフェスの中央下)をこの位置に置く」画面の X 座標と書き、負の値を作業領域の右端からの距離と書く。[2.9.13] の印が付くのは、SHIORI リソースの `sakura.defaultx`（U3）では負の値・`--` の重ね書き・descript にも書けることの 3 つの文で、基準点をこの位置に置く文には付いていない。descript の側（https://ukatech.shillest.net/ukadoc-spec/descript_ghost.html#sakura.defaultx）では、基準点をこの位置に置く文に [2.9.13] が付く。areka は `defaultx` を「鎖の前の窓（本体は作業領域の右端）から左へ空ける量」と読む（完了した `areka-P0-window-placement` 要件 2.10 の de-facto・`areka-P0-scope-chain-gap` 要件 2.8「意味を変えない」）。鎖の規則 ⑵ はこの読みの上に立つ。読みそのものを ukadoc に合わせるかは、鎖の規則とは別の件で、タスク 8.2 で起票する（下の申し送り）。
+
+#### 食い違う指摘と裁定の整理（2026-11-15・開発者の指示）
+
+鎖にかかわる指摘と裁定のうち、逆の向きに引き合うものを並べ、採る側と理由、採らなかった側の行き先を決めた。
+
+| 番号 | 引き合うもの | 採る側と理由 | 採らなかった側の行き先 |
+|---|---|---|---|
+| C1 | 指摘 1・210（辺のスコープは辺に置き、下端の鎖と角で重なってよい）⇔ `scope-chain-gap` 2.1（スコープは隣り合って並ぶ） | 指摘 1・210。U3 が辺に沿う設定では X が辺で決まると書き、U4 は辺の窓の隣へ並べるとは書かない | 「隣り合って並ぶ」は鎖に入るスコープどうしだけ。辺のスコープと鎖のスコープは組にならない（重なってよい） |
+| C2 | `scope-chain-gap` 7.1（出ている幅で隙間 0 に解き直す）⇔ 同 2.8（`defaultx` の意味を変えない） | 2.8（485）。解き直しは resolver の式の当て直しで、隙間は `defaultx` | 7.1 の「隙間 0」は「resolver の隙間（`defaultx`・無ければ 0）」と読む |
+| C3 | 485（起動は `defaultx` の隙間を残す）⇔ `dpi-realign` 2.1・6.2（離れていた組は動かさない・印は `none`） | 494 ⑵。既定の並びの組を「離れていた」と読むと、拡大率の変化と次の起動で並びが崩れる | 利用者がわざと `defaultx` ±2px だけ離して置いた組は、既定の並びの組と見分けない（隣り合いとして扱う） |
+| C4 | 494 ⑶（覚えた `left` は `defaultx` の隙間で付ける）⇔ `dpi-realign` 6.3（覚えたときの並びを今の幅で） | 494 ⑶（裁定「読み替える」）。印の語を足すと保存の形が変わる | `defaultx` ≠ 0 のスコープを利用者が隙間 0 に付けた組は、その回の詰め直しでは隙間 0、次の起動では `defaultx` の隙間になる（T13） |
+| C5 | 494 ⑴（辺のスコープを飛ばして鎖の前の窓と組む）⇔ `dpi-realign` 1.1（隣り合っていた組は隣り合わせたまま） | 両方。鎖の組を先に見て、付け直さない窓だけ ⑷ で辺のスコープの隣へ付け直す（520） | 辺のスコープとの組は記憶に残らない（印は鎖の前の窓との組だけ・残す限り 1） |
+| C6 | 495（起動: 今の揃え方が辺なら外す）⇔ 485 ⑷（辺のスコープの次の基準は resolver と同じ＝descript） | 両方（515）。起動の鎖は「descript の鎖から、今辺にある窓を外したもの」 | `scope-chain-gap` 7.3 の「動かされた窓の実位置が次の基準」は、descript の鎖に入る窓だけに当たる（T25・残す限り 3） |
+| C7 | 495 の文（今辺にある窓は外す）⇔ `scope-chain-gap` 7.1・7.3（鎖の頭が台本で右の辺へ寄っても、相方を今の幅で付け直す） | 495 の文を頭にもそのまま当てる。descript で右の辺に揃えた本体と相方は鎖の組にならない（210・C1）ので、台本で揃えたときだけ組にすると、辺の本体が鎖に入るかどうかが書き方で変わる。そろえるのは鎖に入るかどうかで、窓の位置ではない（descript で揃えたときは相方が右の辺の角で本体と重なる＝T7。台本で揃えたときは相方が準備の幅で解いた位置のままで、出ている幅との差だけ隙間か重なりが残り、その位置が記憶に書かれる）。U2 は現スコープの窓だけを動かすと書く | 台本が最初の確定より前に本体を辺へ揃えると、相方は鎖の頭になり今の幅で付け直されない（T27・残す限り 2） |
+| C8 | 決め (a)（保存は descript）⇔ 494・495（動かす道は今の揃え方） | 両方。U2「ゴースト終了まで有効」＝台本の吸着は次の起動に残らないので、次の起動が読む印は descript で決める | 台本が揃え方を変えた回の保存は、その回の画面の鎖と違う組の印を書きうる（T22・T23） |
+| C9 | 515（起動は descript かつ今）⇔ 521（詰め直しは今だけ） | 両方。起動は既定の並びと印（どちらも descript のもの）を当てる道、詰め直しは変わる直前の画面だけを読む道（`dpi-realign` 3.3「どうやってそこへ来たかでなく」） | descript が辺で台本が外した窓は、起動では鎖の外・詰め直しでは鎖の中（T24・T25 の D・残す限り 4） |
+| C10 | `dpi-realign` 6.2・6.5（位置を書くとき・並べ終えた時点で印を書く）⇔ `work-area-clamp` 4.6（寄せた起動では古い記憶へ印を書かない） | 4.6（391・434）。寄せた矩形から印を作ると、覚えていない並びへ詰めてしまう | 寄せた起動では、古い記憶の印は寄せずに起動した回まで書かれない（T36。`persist_save.rs` の `shortcut:`） |
+| C11 | 494 ⑵・513（負の `defaultx` の組は左の組）⇔ `dpi-realign` 2.2（重なっていた組は動かさない） | 513。既定の並びが重ねて置いた組を「重なり」と読むと、C3 と同じ崩れ方をする | 利用者が `defaultx` と同じだけ重ねて置いた組は、既定の並びの組と見分けない |
+| C12 | 514（`defaultx` が ±1・±2 の隙間を保つ）⇔ `dpi-realign` 1.1・1.2（±2px 以内は隙間なく付ける） | `defaultx` ≠ 0 のスコープは 514、`defaultx` が 0 のスコープは今までどおり 0 へ詰める | — |
+| C13 | 520・⑷（辺のスコープの隣に付けた窓を離さない）⇔ `dpi-realign` 1.3・`scope-chain-gap` 7.2（番号の小さい側・鎖の頭は動かさない） | 1.3・7.2。本体を動かすと、本体に連なる全部の窓が動く | 辺のスコープの隣へ番号の小さい側の窓を付けた組は付け直さない（T35・残す限り 5） |
+| C14 | `work-area-clamp` 1.2（入らなければ反対の側へ）⇔ 485（`defaultx` の隙間の組は resolver の式のまま） | `defaultx` の隙間の組は反対の側へ回さず端へ寄せる（resolver の P4 と同じ向き・7 回目の記録） | 追随の `opposite` は今のまま（申し送り） |
+| C15 | 454・472（切り替えで全スコープを解き直す）⇔ `scope-chain-gap` 7.4（確定の後は横へ動かさない） | 7.4。切り替えの解き直しはバルーンの値と揃え方だけを取り、キャラ窓の位置は捨てる | シェルを替えて幅が変わると、組のあいだが開きうる（次に位置を書いたときの印と、次の拡大率の変化・起動が規則どおりに扱う） |
+| C16 | 494 ⑴（印は鎖の前の窓との組）⇔ 追随の `joined_with_prev`（番号の続く対） | 494 ⑴ | 追随の持ち物の読みは申し送り（最後の位置は起動の確定が規則どおりに直す） |
+
+#### この仕様で行く
+
+開発者の指示（2026-11-15「整理したうえで『この仕様で行く』と判断されるなら、それはそれでよい」）への答え。鎖は次の仕様で確定とする。コードはこの仕様のとおりで、この回に仕様とコードの食い違いは見つかっていない。
+
+1. 既定の並び: 指定の無いスコープは前のスコープの左隣（U4）。鎖に入るのは、descript の揃え方が左右の辺でないスコープ。左右の辺のスコープは辺に置き、鎖の組にしない（U3・指摘 1・210）。
+2. 隙間: 組（鎖の前の窓, n）の隙間は n の `defaultx`（下端・上端だけ。DPI で換算しない）。この読みは areka の完了した spec の決め（上の「ukadoc と食い違う所」）。
+3. 鎖の前の窓: n より下の番号で鎖に入る一番近いスコープ。無ければ n は鎖の頭で、動かさず、印も持たない。
+4. 起動の確定（窓の一式に 1 度）: descript の鎖から、今左右の辺に揃っている窓を外す。記憶に位置の無い既定のままの窓は resolver の式を今の幅で当て直し、記憶の窓は覚えた印で付け直す（`left` は `defaultx` の隙間・`right` は隙間 0）。動かされた窓・台本が置いた窓・窓の組は動かさない。
+5. 隣り合いの印の保存: 位置を書くときだけ、descript の鎖の前の窓との組の並びを書く（左は隙間 0 か `defaultx`、右は隙間 0、どちらも ±2px）。辺のスコープと窓の組は `none`。寄せた起動では古い記憶へ書き足さない。
+6. 拡大率の後の詰め直し: 今の揃え方の鎖で、変わる直前に 5 と同じ見方で隣り合っていた組を、同じ側・同じ隙間で付け直す。離れていた・重なっていた・窓の組・ドラッグの最中・武装の後の台本の窓は動かさない。鎖の前の窓へ付け直さない窓が、下の番号の辺のスコープの隣に隙間 0 で付いていたら、その隣へ付け直す。
+7. シェルの切り替え: 鎖は解き直さない。descript の値と、台本が変えていない窓の揃え方を入れ替える。
+8. 台本の吸着（U2）はその回かぎり。記憶と印は descript で決める。
+
+520 の入れた形の広さ（右の側・鎖の頭・飛ばした辺のスコープの近い順）は、このままにする。6 の「同じ側で付け直す」は左右で同じ決まりで（`dpi-realign` 1.3「隣り合っていた左右の側を保つ」）、左の辺の窓には右隣しか無い。鎖の頭を外すと、辺のスコープが本体の 2 スコープのゴーストだけ直らない。近い順は、相手が 2 つあるときに答えを 1 つにするため。
+
+残す限り（最終の判断。どれも「このままにする」）:
+
+| 番号 | 限り | このままにする理由 | コードの印 |
+|---|---|---|---|
+| 1 | 辺のスコープの隣に付けた窓の並びは記憶に残らない（T32 の S・B） | 印は「鎖の前の窓との組」という 1 つの意味だけを持つ。相手を書き足すと保存の形と読み手が変わり、今までの印が全部読み替えになる。位置そのものは記憶に残るので、幅が同じなら並びは保たれる | `persist_save.rs` の `shortcut:`（印の決め） |
+| 2 | 台本が最初の確定より前に本体を辺へ揃えると、相方は鎖の頭になり今の幅で付け直されない（T27） | C7。辺の本体と相方を鎖の組にしないのは、descript で辺に揃えたときと同じ扱い（鎖に入るかどうかが同じ。窓の位置は同じではない: descript のときは角で重なり、台本のときは相方が準備の幅で解いた位置のまま残る）で、台本のときだけ組にする理由が無い。利用者が相方を本体の隣へ付ければ、6 の後段で付いたままになる | `chain_rule.rs` の `ChainView::joins` の `shortcut:`（起動の腕） |
+| 3 | descript が辺のスコープは、台本が辺から外して動かしても起動の鎖の外（T25・T26） | C6。起動の鎖を「descript の鎖から今辺にある窓を外したもの」の 1 文で言え、保存が書く印の相手とそろう | 同じ腕（規則そのもの） |
+| 4 | descript が辺で台本が外した窓は、詰め直しでは鎖に入り、その次のスコープの組の相手になる（3 スコープ以上） | C9。詰め直しは画面の今だけを読む。descript も見ると、台本が外した窓を利用者が本体の隣へ付けた組（2 スコープでも起きる）が付け直されなくなる | `ChainView::joins` の `shortcut:`（詰め直しの腕） |
+| 5 | 辺のスコープの隣へ番号の小さい側の窓を付けた組は付け直さない（T35） | C13。番号の小さい側（本体）を動かさないのは完了した spec の決めで、本体を動かすと連なる全部が動く | `chain_realign.rs` の辺の相手の所のコメント |
+| 6 | 494 の前に書いた印・前のシェルのときに書いた印は、今の descript の鎖の前の窓との組として読む（T21・T49） | 決め (b)。保存の形が同じなので見分けられない。次にその組の位置を書いたときに書き直る | 起動の確定の `debug!`（辺のスコープを飛ばしたとき） |
+| 7 | 同じ辺の縦の連なりは、既定の並びだけで、出ている絵の高さでは解き直さない（T42） | 起動の確定と詰め直しは縦を扱わない（`scope-chain-gap` 7.2・`dpi-realign` 1.4） | — |
+| 8 | 台本が揃え方を変えた回の保存は、descript の鎖で印を決める（T22・T23） | 決め (a)・C8 | `persist_save.rs` の印の決めの doc |
+
+#### SSP で測るなら（候補・進行役が決める）
+
+ukadoc が沈黙している所で、測れば仕様の裏付けになるもの。この回は測っていない。SSP が正しいとは限らないので、測りは参考にとどめる。
+
+| 番号 | 何を送るか | 何を読むか | 何が分かるか |
+|---|---|---|---|
+| S1 | 3 スコープのゴーストのシェルの descript に `kero.seriko.alignmenttodesktop,right` を書き、位置の記憶を消して起動する | 起動の直後の 3 つのキャラ窓の矩形 | スコープ 2 が本体の左隣か、辺の kero の左隣か（U4 の「1つ前のキャラクター」の読み・C1・規則 3） |
+| S2 | `kero.defaultx,36` を書き、位置の記憶を消して起動する | kero の矩形と本体の矩形 | `defaultx` が画面の X 座標（U3）か、本体から左へ空ける量（areka）か（規則 2 の読み） |
+| S3 | 起動の後に本体のスコープで `\![set,alignmenttodesktop,right]` を送る | 送る前後の本体と kero の矩形 | 本体を辺へ揃えたとき kero が動くか（C7・残す限り 2） |
+| S4 | 3 スコープで kero のスコープに `\![set,alignmenttodesktop,left]` を送ってから `\![execute,resetwindowpos]` | 3 つの矩形 | 並べ直しが台本の吸着の窓をどう置くか（T44） |
+
+#### これで終わる理由
+
+鎖の所を閉じる条件と、その確かめ方。
+
+1. 場合を全部並べた: 上の表 T1〜T40 と、穴の見直しで足した T41〜T50。軸は揃え方（下端・上端・Free の x の有無・左右の辺）、`defaultx`（正・0・負・中心を越える負・±1・±2）、記憶と印、descript と今の揃え方の食い違い（確定の前後）、拡大率の上げ下げ、保存の時機、寄せた起動、中のスコープの欠け、鎖の頭が辺、幅の変化、幅 0、縦の連なり、切り替え、並べ直し、読み直し。
+2. どの道も 1 つの規則から答える: `rg "ChainRule::of|joins_chain\(|chain_gap\(" crates --glob "!*_tests.rs"` で、鎖の見方を組む所は `chain_rule.rs`（起動）・`chain_realign.rs`（詰め直し）・`persist_save.rs`（保存）の 3 つ、`joins_chain`・`chain_gap` を呼ぶのは `resolver.rs`（既定の並び）・`chain_rule.rs`・`chain_finalize.rs` の `boot_default_decision` だけ。本体は `boot_chain` を呼ぶ 1 行だけで、鎖の式を持たない。追随の持ち物で鎖の式を持つのは `joined_with_prev` だけ（申し送り）。
+3. 表の行ごとの檻（無印は配置の crate・「本体」は `crates/areka/src/runtime/`）:
+   - T1・T9〜T12: 本体 `every_world_path_keeps_the_defaultx_gap`、`every_path_puts_a_default_pair_where_the_resolver_does`、`a_negative_defaultx_gap_past_the_centre_is_still_left`、`a_small_defaultx_gap_is_kept_not_rounded_to_zero`、本体 `boot_finalize_keeps_the_defaultx_gap`
+   - T2: `vertically_disjoint_pair_is_apart`、`t_r5_top_left_right_resolve_on_their_own_edge`
+   - T3・T15〜T20: `boot_decision_table`、`the_gap_is_the_descript_defaultx_of_bottom_and_top`、本体 `finalize_does_not_pull_back_an_explicitly_moved_scope`・`finalize_does_not_pull_back_a_scope_moved_onto_its_default_position`・`remembered_left_pair_stands_adjacent_at_current_widths`・`remembered_separate_pair_is_not_tightened`・`old_memory_without_mark_stands_at_its_position`
+   - T4・T5: 本体 `boot_finalize_leaves_a_free_scope_with_x_in_place`・`boot_finalize_leaves_side_edge_scopes_on_their_edge`、`t_r5_mixed_edges_chain_per_edge`
+   - T6: 本体 `boot_finalize_skips_side_edge_scopes_as_the_chain_base`・`boot_finalize_skips_a_side_edge_scope_for_a_remembered_next_scope`・`realign_skips_a_side_edge_scope_as_the_chain_base`、`a_side_edge_scope_is_skipped_as_the_previous_chain_window`
+   - T7・T8・T21: `a_scope_after_a_side_edge_head_is_the_chain_head`、`previous_chain_window_skips_scopes_outside_the_chain`、本体 `a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope`、`missing_partner_scope_is_skipped_silently`
+   - T13・T14: `chain_adjacency_accepts_the_defaultx_gap_on_the_left_only`、本体 `a_remembered_left_mark_joins_with_the_defaultx_gap`・`a_pair_adjacent_on_the_right_stays_on_the_right`
+   - T22・T23: 本体 `a_boot_script_side_edge_scope_is_not_the_base_of_the_next_scope`・`realign_skips_a_boot_script_side_edge_scope_as_the_chain_base`、`chain_membership_by_view`
+   - T24〜T26: 本体 `a_descript_side_edge_scope_realigned_by_the_boot_script_is_not_the_chain_base`
+   - T27: 本体 `a_main_window_aligned_to_a_side_edge_by_the_boot_script_leaves_the_chain`
+   - T28: `t_rs01_new_offset_and_alignment_reach_the_char_window_parts`、本体 `shell_finish_moves_char_windows_to_the_new_alignment`・`shell_finish_replaces_the_default_placement_basis`
+   - T29〜T31: 本体 `a_pair_apart_before_the_change_is_not_moved`・`a_pair_overlapped_before_the_change_is_not_moved`・`a_window_in_a_sticky_group_is_not_moved`・`a_dragging_window_and_its_neighbour_are_not_moved`・`a_window_moved_by_script_after_arming_is_not_moved`・`a_window_missing_from_the_snapshot_is_not_moved_and_others_tighten`・`a_round_trip_200_100_200_keeps_the_pair_adjacent`
+   - T32〜T35: 本体 `a_window_attached_to_a_side_edge_scope_stays_attached_after_100_to_200`・`a_window_beside_both_follows_the_previous_chain_window`・`a_window_attached_to_a_side_edge_scope_is_kept_by_the_exclusions`・`a_lower_scope_attached_to_a_side_edge_scope_is_not_moved`、`edge_partner_is_the_nearest_side_edge_scope_attached_with_no_gap`
+   - T36・T37・T40・T45・T50: `clamped_boot_adds_no_mark_to_old_memory_through_the_neighbours_position`・`clamped_boot_drag_save_adds_no_mark_to_old_memory`・`position_batch_adds_left_and_right_marks_of_touched_pairs`・`missing_basis_marks_with_the_bottom_rule_and_logs_debug`・`balloon_offset_only_batch_gets_no_marks`・`sticky_group_member_is_marked_none`
+   - T38・T44: `shifted_windows_return_to_default_and_are_persisted`（位置・印・`Anchored` が変わらないこと）
+   - T39・T41: 本体 `boot_finalize_corrects_a_real_width_change_with_the_gap`・`finalize_closes_the_gap_by_moving_the_follower_only`、`every_world_path_keeps_the_defaultx_gap`（本体の `defaultx` 1000）
+   - T42: `t_r5_mixed_edges_chain_per_edge`（既定の並び）。起動の確定と詰め直しの解きの指示は x だけ（`ChainMove`）で、縦の連なりを解く道が無い
+   - T43: 本体 `a_realigned_window_outside_the_work_area_flips_to_the_other_side`・`remembered_left_partner_outside_rejoins_inside_work_area`（置き方）と T37 の檻（印は画面の並びから）
+   - T46・T47: 本体 `restart_writes_once_more_to_the_new_store_only`・`finalize_writes_only_once_per_window_set`、本体 `frame_chain_realign_arm_tests.rs` の `boot_and_finalize`（起動のフレームでは武装しないことを確かめる）
+   - T48: `non_positive_width_is_kept_and_is_next_base`・`mark_non_positive_widths_rewrites_only_unusable_joins`
+   - T49: T21 と同じ読み（印に相手の番号が無い）。前のシェルの印を読む場合だけの檻は置いていない（T6 の `boot_finalize_skips_a_side_edge_scope_for_a_remembered_next_scope` が同じ道を通る）
+4. 残す限りは 8 つで、どれも上の表に最終の理由とコードの印がある。
+5. 追随の持ち物の食い違い（`follow/work_area_clamp.rs` の `joined_with_prev`）は申し送りで、最後の位置は起動の確定が規則どおりに直す。
+6. 鎖にかかわる「必ず直す」は 0 件。仕様とコードの食い違いは 0 件。
+
+申し送りの足し（タスク 8.2 が書く）: `defaultx` の読みが ukadoc（U3: 基準点の画面の X 座標・負の値は右端からの距離）と違う。持ち主の決めは完了した `areka-P0-window-placement` 要件 2.10 と `areka-P0-scope-chain-gap` 要件 2.8 で、この spec の範囲の外。8.2 で `/kiro-discovery` により起票する（開発者の方針: 意味論は ukadoc から・未対応は範囲外でも全部起票）。`areka-P0-scope-chain-gap` は「別途 SSP 確認済み」と書いて今の読みを決めたので、SSP 2.9.13 で意味が変わった見込みがある。そこは起票した spec で確かめる（S2 の測りはその材料）。
+
+確かめ（この見直しの後）: `cargo test -p areka-placement --features test-support` は lib 984 件が通り 1 件 ignore・手本 1 件、`cargo test -p areka` は本体の bin 3203 件が通り 6 件が ignore（足した 4 件）・ほかの的も全部通る、`cargo test -p areka-sylphya` 221 件、`cargo test -p ukadoc-survey` 全部、`cargo test -p log-capture-kit`（crate 全体）全部、`cargo fmt --all -- --check` 緑。`git diff --stat Cargo.lock` と `vendors/` の差分は空、追随の持ち物は 1 行も触っていない。1,000 行の近く: 本体の `frame_chain_rule_tests.rs` 582 行・`frame_chain_finalize_align_tests.rs` 230 行・`reset_pos_tests.rs` 497 行・`chain_rule.rs` 342 行・`chain_realign.rs` 502 行・本体の `switch_finish_tests.rs` 999 行（触っていない）。
+
+### 18.11 かけ直しの打ち切り（2026-11-15・開発者の決め）
+
+- 開発者の決め（2026-11-15）: 「audit はもう実施しなくて良い。現在判明している絡まった状況に対して回答を作る」。10 回目はかけない。タスク 8.1 のかけ直しは、9 回目（18.9）と鎖の規則の総括（18.10）で止める。
+- 9 回目の 20 件は、直した 16 件・申し送りだけの 2 件（511・512）・裁定で直した 2 件（515・520）。0 件の判定には届いていない（9 回目の指摘の後にかけ直していない）が、開発者の決めで打ち切る。
+- 「必ず直す」の残り: 0 件。本番の振る舞いを変える指摘で直していないもの: 0 件。
+- 残す限り: 18.10「この仕様で行く」の 8 つ（最終の判断・このままにする）。
+- 申し送り（タスク 8.2 が書く）: `audit-placement-follow` へ 18.2〜18.10 の各回の申し送り（鎖では `joined_with_prev` と `opposite`）、`audit-areka-app` へ 512 ほか、`defaultx` の読みと ukadoc の食い違いの起票（`/kiro-discovery`・18.10）、SSP の測りの候補 S1〜S4（18.10）。
+- タスク 8.2 はここから: 全体テスト（`tools/test-all.ps1`）・clippy・申し送りの書き出し・80 件の突き合わせ。

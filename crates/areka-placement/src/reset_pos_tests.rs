@@ -237,6 +237,13 @@ fn shifted_windows_return_to_default_and_are_persisted() {
             "scope {scope} の位置が記憶へ届く: {store:?}"
         );
     }
+    assert_eq!(
+        store
+            .get(&PersistKey::WindowAdjacent { scope: 1 })
+            .map(String::as_str),
+        Some("left"),
+        "並べ直した位置と一緒に、鎖の規則の隣り合いの印が届く: {store:?}"
+    );
     rig.finish();
 }
 

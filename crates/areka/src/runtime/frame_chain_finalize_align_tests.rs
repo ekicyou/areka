@@ -36,21 +36,33 @@ pub(super) fn spawn_resolved(
     shown: &PerTargetSizes,
     scopes: usize,
 ) -> World {
+    spawn_resolved_scopes(shell, shown, &(0..scopes).collect::<Vec<_>>())
+}
+
+/// [`spawn_resolved`] の、スコープの番号を列で渡す形（中のスコープが無い World も生やせる）。
+/// 準備の幅は番号ごとの [`SPAWN`]。
+pub(super) fn spawn_resolved_scopes(
+    shell: &[(&str, &str)],
+    shown: &PerTargetSizes,
+    scopes: &[usize],
+) -> World {
     let shell_kv: BTreeMap<String, String> = shell
         .iter()
         .map(|&(k, v)| (k.to_owned(), v.to_owned()))
         .collect();
     let cfg = build_placement_config(&BTreeMap::new(), &shell_kv);
-    let inputs: Vec<ScopeInput> = SPAWN[..scopes]
+    let inputs: Vec<ScopeInput> = scopes
         .iter()
-        .enumerate()
-        .map(|(scope, &(w, h))| ScopeInput {
-            scope,
-            char_size: SizePx {
-                w: w as i32,
-                h: h as i32,
-            },
-            balloon_size: SizePx { w: 223, h: 158 },
+        .map(|&scope| {
+            let (w, h) = SPAWN[scope];
+            ScopeInput {
+                scope,
+                char_size: SizePx {
+                    w: w as i32,
+                    h: h as i32,
+                },
+                balloon_size: SizePx { w: 223, h: 158 },
+            }
         })
         .collect();
     let placements = resolve_placement(
@@ -66,7 +78,10 @@ pub(super) fn spawn_resolved(
     world.insert_resource(MonitorSnapshot {
         work_areas: vec![WA],
     });
-    world.insert_resource(placement_basis(shell_kv, scopes));
+    world.insert_resource(placement_basis(
+        shell_kv,
+        scopes.iter().max().map_or(0, |last| last + 1),
+    ));
     spawn_shown(&mut world, &placements, shown);
     world
 }
