@@ -2509,3 +2509,4 @@ ukadoc が沈黙している所で、測れば仕様の裏付けになるもの�
 - 80 件: 設計の「80 件と単位の対応」の表は 1〜80 を 1 回ずつ持ち、受け持つタスク（1〜8.1）は全部済み。裁定で残す指摘は 0 件、2 本目の spec は 0 本（議題 7）。かけ直しで出た分の残す 1 件（88）・回す 1 件（164）は 18 節の裁定のとおり。
 - `git diff --stat main...HEAD -- vendors/ Cargo.lock` は空。終了の道（`app_exit`・`smoke_exit` ほか）は触っていない（差分は `quit_app` を名指すコメントの言い換えだけ）。
 - `cargo test -p log-capture-kit`（crate 全体）・`cargo fmt --all -- --check`・`cargo test -p areka-placement --features test-support` は緑。
+- 全体テスト（da71b351d）は 14 段とも緑・回し直しなし（`pwsh -NoProfile -File tools/test-all.ps1`・走らせ始めの未コミットの変更 0）。段: sample fetch・add i686 target・build i686 artifacts・fmt --check・x64 workspace tests（897 秒）・dola toml feature tests・i686 tests (host-32)（48 秒）・crates.io pre-publish check・encoding check・release notes check・roadmap overview check・i686 helper sync check・sample fetch check・i686 helper beside areka.exe。どれも exit code 0。
