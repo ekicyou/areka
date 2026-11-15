@@ -344,7 +344,7 @@ fn ghost_and_shell_syncscale_combine_by_or() {
     assert!(shell_only.is_synced(1));
 }
 
-/// `true` と前後の空白を除いて完全に一致するときだけ有効。ほかは「指定なし」で、警告を出さず
+/// 前後の空白を除いて大文字小文字を問わず `true` のときだけ有効。ほかは「指定なし」で、警告を出さず
 /// 警告より下の段に `synced = false` を残す（要件 6.4・6.7）。
 #[test]
 fn syncscale_values_other_than_true_mean_unspecified() {
@@ -353,7 +353,8 @@ fn syncscale_values_other_than_true_mean_unspecified() {
         (" true ", true),
         ("false", false),
         ("", false),
-        ("True", false),
+        ("True", true),
+        ("TRUE", true),
         ("1", false),
     ] {
         let (sync, events) = capture(|| {

@@ -218,7 +218,7 @@
 
 | 開く場所 | どのファイル | 読めなかったときに残るもの |
 |---|---|---|
-| `crates/areka-parsers/src/package/resolve_shell.rs:59`（`read_ghost_descript`。入口は `resolve_with_shell` と `read_ghost_names`） | ⑴ ゴーストの descript | ここでは記録せず、失敗の理由を呼ぶ側へ返す。呼ぶ側は 7 つあり、どれも記録する——`crates/areka-ghost/src/runtime.rs:608`（エラー段）・`crates/areka-placement/src/source.rs:150`（エラー段）・`crates/areka-placement/src/persist.rs:309`（警告段）・`crates/areka/src/runtime/assets.rs:331`（`crates/areka/src/runtime/mod.rs:385` のファイルが無いとき・警告段と同 `:392` のそれ以外・エラー段）・`crates/areka/src/session/reload.rs:636`（エラー段）・`crates/areka/src/offline_dump/mod.rs:130`（同 `:122` のエラー段）と同 `:169`（同 `:171` のエラー段） |
+| `crates/areka-parsers/src/package/resolve_shell.rs:59`（`read_ghost_descript`。入口は `resolve_with_shell` と `read_ghost_names`） | ⑴ ゴーストの descript | ここでは記録せず、失敗の理由を呼ぶ側へ返す。呼ぶ側は 7 つあり、どれも記録する——`crates/areka-ghost/src/runtime.rs:608`（エラー段）・`crates/areka-placement/src/source.rs:150`（エラー段）・`crates/areka-placement/src/persist.rs:308`（警告段）・`crates/areka/src/runtime/assets.rs:331`（`crates/areka/src/runtime/mod.rs:385` のファイルが無いとき・警告段と同 `:392` のそれ以外・エラー段）・`crates/areka/src/session/reload.rs:636`（エラー段）・`crates/areka/src/offline_dump/mod.rs:130`（同 `:122` のエラー段）と同 `:169`（同 `:171` のエラー段） |
 | `crates/areka-parsers/src/package/resolve.rs:157`（`read_bindgroup_defaults`） | ⑵ シェルの descript | **何も残らない。** 着せ替えの既定を拾うためだけの読みで、読めなければ「着せ替えの宣言が無い」と同じ空として続き、呼ぶ側にも伝わらない。**10 か所のうち無言なのはここだけである。** |
 | `crates/areka-ghost/src/config.rs:44`（`resolve_shell_name`） | ⑵ シェルの descript | `:47` の警告段。読めても `name` が無いときは `:61` の警告段。どちらもシェルのフォルダ名で代用して続く |
 | `crates/areka-placement/src/source.rs:156`（`read_kv_lenient` を通る） | ⑴ ゴーストの descript | `:197` の警告段。空の表として続く |

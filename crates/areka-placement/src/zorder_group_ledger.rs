@@ -55,12 +55,12 @@
 //! 窓 2 枚に化けさせて受理してはならない。数値モードは⑷の展開が既に `[Balloon, Char]` を
 //! 作っているので、補いも記録も起こらない。
 //!
-//! # 語彙は小文字ちょうど・前後の空白は落とす
+//! # 語彙は大文字小文字を問わない・前後の空白は落とす
 //!
-//! `balloonN`／`surfaceN`／`bN`／`sN` は小文字ちょうどで一致させる
-//! （`windowposition::classify_x_vocab` と同じ流儀）。大文字混じりを黙って通すと、
-//! 正典に無い受理を areka が独自に増やすことになる——受け付けない側に倒し、
-//! 拒否理由として記録できる形で返す（要件 8.1／8.3）。
+//! `balloonN`／`surfaceN`／`bN`／`sN` は、1 度だけ小文字にしてから一致させる（`Balloon0` も
+//! `balloon0`。`windowposition::classify_x_vocab` と同じ決まり・`audit-placement-core` の裁定
+//! 2026-11-15）。タグと descript は同じこの解釈器を通るので、どちらも同じ決まりになる。
+//! 解釈できないトークンは、作者が書いたままの綴りを拒否理由に載せて返す（要件 8.1／8.3）。
 //! トークン前後の空白はここの `trim` で落とす。shell descript の `seriko.zorder,1, 0` は、
 //! kv 層が値の両端しか削らず、起動の段（本体の `zorder_descript.rs`）がカンマで割るだけなので、
 //! `" 0"` のまま届く。
@@ -240,7 +240,8 @@ pub(crate) fn parse_scope_id(digits: &str) -> Option<u32> {
 /// `b` 接頭辞にも当たるので、順序を入れ替えると `alloon1` を数字列として読もうとして
 /// 落ちる。完全形の接頭辞に当たった時点で判定は確定させ、省略形へは落とさない。
 fn interpret_token(token: &str) -> Option<ParsedElement> {
-    let body = token.trim();
+    let lowered = token.trim().to_ascii_lowercase();
+    let body = lowered.as_str();
 
     if let Some(digits) = body.strip_prefix(BALLOON_PREFIX) {
         return window_element(digits, GroupWindowKind::Balloon);

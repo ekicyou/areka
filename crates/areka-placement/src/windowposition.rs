@@ -72,9 +72,10 @@ pub(crate) enum LimitVocab {
 ///
 /// # 語彙の細則（DD8・areka 裁量）
 ///
-/// キーワードは小文字 `center`／`top`／`bottom` の**完全一致**のみ受理する。
-/// 大文字混在（`Center` 等）は [`XVocab::Invalid`] へ落ち、呼び出し側の警告で作者が
-/// 綴りに気づける（要件 4.6）。`top` は `center` と同義（正典）。
+/// キーワードは、1 度だけ小文字にした値が `center`／`top`／`bottom` と**完全一致**するときだけ
+/// 受理する（`Center` も `center` と同じ語。`audit-placement-core` の裁定 2026-11-15 で
+/// `alignmenttodesktop` と同じ決まりにそろえた）。それ以外の綴りは [`XVocab::Invalid`] へ落ち、
+/// 呼び出し側の警告で作者が綴りに気づける（要件 4.6）。`top` は `center` と同義（正典）。
 ///
 /// 前後空白の除去は上流 kv 層（`kv::parse_kv`）で既に済んでおり（`parse.rs` の転記層
 /// 契約）、ここでの `trim` はその冗長化である——実際に届く trim 済みの値に対しては
@@ -91,7 +92,7 @@ pub(crate) fn classify_x_vocab(x_num: Option<i32>, x_raw: Option<&str>) -> XVoca
         // 未指定＝調整なし（現行と bit 同一・警告の対象外）。
         return XVocab::Numeric(None);
     };
-    match raw.trim() {
+    match raw.trim().to_ascii_lowercase().as_str() {
         "center" | "top" => XVocab::Keyword(BalloonXMode::CenterTop),
         "bottom" => XVocab::Keyword(BalloonXMode::CenterBottom),
         _ => XVocab::Invalid,

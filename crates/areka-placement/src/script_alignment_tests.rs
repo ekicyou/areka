@@ -6,9 +6,8 @@
 //! 4 辺は 96 の倍数を避け、隠れた再スケールがあれば一致が崩れる檻にする。
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::DragConfig;
-use wintf::ecs::{Point, WindowHandle, WindowPos};
+use wintf::ecs::{Point, WindowPos};
 
 use super::super::follow::{AnchorSource, Anchored, MonitorSnapshot, OffsetBase, begin_char_drag};
 use super::super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
@@ -56,14 +55,7 @@ fn world() -> World {
         &[placement],
         &GhostTitles::from_scope_titles([(0, "a".to_string())]),
     );
-    for (raw, e) in [
-        (0x100usize, gw.char_window(0).unwrap()),
-        (0x110, gw.balloon_window(0).unwrap()),
-    ] {
-        world.entity_mut(e).insert(WindowHandle {
-            hwnd: HWND(raw as *mut _),
-        });
-    }
+    crate::test_support::give_fake_handles(&mut world, &gw);
     world
 }
 

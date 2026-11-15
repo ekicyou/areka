@@ -58,13 +58,11 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
-use wintf::ecs::window::{
-    ChainPlan, ZOrderChainPlan, log_chain_absent, log_group_applied, log_group_rejected,
-};
+use wintf::ecs::window::{ChainPlan, log_chain_absent, log_group_applied, log_group_rejected};
 
 use crate::runtime::zorder_cue::ZOrderDirective;
 use areka_placement::spawn::GhostWindows;
-use areka_placement::zorder_chain_compose::{compose_chain, element_text};
+use areka_placement::zorder_chain_compose::{compose_chain, element_text, publish_chain_plan};
 use areka_placement::zorder_group_ledger::{
     GroupElement, GroupWindowKind, Normalization, ZOrderGroup, ZOrderGroupLedger, ZOrderReject,
     parse_zorder_tokens,
@@ -274,47 +272,6 @@ fn report_absent_elements(world: &mut World, absent: &[(u32, char, u32)]) {
     for &(group_id, kind, scope) in absent {
         log_chain_absent(group_id, kind, scope);
     }
-}
-
-// ---------------------------------------------------------------------------
-// ⑸ 受け口への公開
-// ---------------------------------------------------------------------------
-
-/// 望む鎖が前回と違っていれば受け口へ置き、印を立てる（要件 4.1／6.1／7.1／14.5／15.3）。
-///
-/// # 同じ内容の巡では触れない
-///
-/// 受け口の現在の内容と一致するなら、書きもせず印も立てない。印は適用系への
-/// 「書くべきものがある」の合図であり、何も動いていない巡に立てると適用系が毎巡
-/// 空振りして、表示に変化の無い巡を省く門を実質無効にする。
-///
-/// # 既定状態では受け口そのものを作らない
-///
-/// グループが 1 つも無い（＝合成が `None`）とき、受け口をまだ持っていなければ挿入しない。
-/// 適用系は仕事を得られず、指令を 1 本も出さない——要件 6.1／6.4 の「既定状態は従来と
-/// 同じ」は、判断ではなくこの**不在**で成り立つ。
-///
-/// # 一度出来た受け口は解除でも消さない
-///
-/// 解除（要件 4.1／4.2／15.4）で公開するのは「鎖が無い」という**内容**であって、
-/// 受け口の撤去ではない。Resource ごと消すと、適用系は自分が張った繋ぎを外す指示を
-/// 受け取れないまま鎖が残る。
-fn publish_chain_plan(world: &mut World, plan: Option<ChainPlan>) {
-    if world.get_resource::<ZOrderChainPlan>().is_none() {
-        if plan.is_none() {
-            // 望む鎖が無く受け口も無い＝既定状態（要件 6.1 の構造的な根拠）。
-            return;
-        }
-        world.init_resource::<ZOrderChainPlan>();
-    }
-
-    let mut receiver = world.resource_mut::<ZOrderChainPlan>();
-    if receiver.chain == plan {
-        // 何も動いていない＝公開も印立ても行わない（空振りの巡を作らない）。
-        return;
-    }
-    receiver.chain = plan;
-    receiver.dirty = true;
 }
 
 // ---------------------------------------------------------------------------

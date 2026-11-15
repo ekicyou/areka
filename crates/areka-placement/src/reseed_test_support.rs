@@ -5,15 +5,14 @@
 use std::path::PathBuf;
 
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
-use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, WindowPos};
 
 use crate::config::BalloonXMode;
 use crate::follow::{MonitorSnapshot, OffsetBase};
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::kv;
+use crate::test_support::{give_fake_handles, kv};
 
 pub(crate) const CHAR0: SizePx = SizePx { w: 434, h: 687 };
 const CHAR1: SizePx = SizePx { w: 278, h: 357 };
@@ -74,14 +73,7 @@ pub(crate) fn world_from(placements: &[ScopePlacement], dpi: u16) -> (World, Gho
     });
     let titles = GhostTitles::from_scope_titles([(0, "s".to_string()), (1, "k".to_string())]);
     let windows = spawn_ghost_windows(&mut world, placements, &titles);
-    for (i, scope) in windows.scopes().enumerate() {
-        let char_window = windows.char_window(scope).unwrap();
-        let balloon_window = windows.balloon_window(scope).unwrap();
-        world.entity_mut(char_window).insert(fake_handle(0x100 + i));
-        world
-            .entity_mut(balloon_window)
-            .insert(fake_handle(0x200 + i));
-    }
+    give_fake_handles(&mut world, &windows);
     // `WindowHandle` の付与の hook が偽 HWND の DPI（取れず 96）を遅延で書くので、流してから置く。
     world.flush();
     for scope in windows.scopes() {
@@ -92,12 +84,6 @@ pub(crate) fn world_from(placements: &[ScopePlacement], dpi: u16) -> (World, Gho
         }
     }
     (world, windows)
-}
-
-pub(crate) fn fake_handle(raw: usize) -> WindowHandle {
-    WindowHandle {
-        hwnd: HWND(raw as *mut _),
-    }
 }
 
 /// 新しいシェル: 揃え方は free・sakura のバルーンは右で (30,40)・kero は (-7,9)。

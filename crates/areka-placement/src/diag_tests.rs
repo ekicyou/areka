@@ -84,8 +84,7 @@ fn placement_route_answers_match_the_table() {
 
 /// 経路語は**行の値として**成立していなければならない（要件 2.7・判定側の辞書化規則）。
 ///
-/// tools/perf/ の Python の道具の `parse_fields` と同形の切り出しは `名前=値` を空白で割る
-/// ため、値に空白が混じると `origin=` の値が途中で切れて経路の名指しが壊れる。番兵（`-`）と同じ字面も
+/// 手順書の grep は `route=<語>` を 1 語として当てるので、値に空白が混じると当たらなくなる。番兵（`-`）と同じ字面も
 /// 「経路が判らなかった書込」と衝突するので禁じる。
 #[test]
 fn placement_route_words_are_single_tokens_and_never_the_sentinel() {

@@ -6,7 +6,8 @@
 //!
 //! # ここに在るのは判断だけである
 //!
-//! Win32 も World も 1 度も触らない。窓の在庫は
+//! 鎖の導出（[`compose_chain`]）は Win32 も World も 1 度も触らない（World に触るのは、結果を
+//! 受け口へ置く [`publish_chain_plan`] だけ）。窓の在庫は
 //! `resolve`（要素 1 つ → 実在する窓の `Entity`）という 1 本の関数として受け取り、
 //! スコープの一覧は値として受け取る。よって鎖の導出は実機も実ディスプレイも無しに
 //! 全分岐を固定できる（要件 10.1）。実際に `GhostWindows` を引くのは呼び出し側
@@ -76,7 +77,8 @@
 use std::collections::HashSet;
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
+use bevy_ecs::world::World;
+use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge, ZOrderChainPlan};
 
 use super::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrderGroup};
 
@@ -129,7 +131,7 @@ pub fn compose_chain(
     let mut absent: Vec<(u32, char, u32)> = Vec::new();
     let mut named: HashSet<u32> = HashSet::new();
 
-    // ⑴ グループを登記の順で連ねる（要件 3.6）。各グループの中は書かれた順のまま。
+    // ⑴⑵ グループを登記の順で連ねる（要件 3.6）。各グループの中は書かれた順のまま。
     for group in groups {
         let segment = ChainSegment::Group(group.id);
         for element in &group.members {
@@ -144,7 +146,7 @@ pub fn compose_chain(
         }
     }
 
-    // ⑵ どのグループにも属さないスコープを、スコープ ID の昇順で後ろへ連ねる
+    // ⑶ どのグループにも属さないスコープを、スコープ ID の昇順で後ろへ連ねる
     //    （要件 15.1／15.2）。重複した在庫は 1 度だけ数える（不変条件④）。
     let mut tail: Vec<u32> = all_scopes
         .iter()
@@ -164,7 +166,7 @@ pub fn compose_chain(
 
     let members: Vec<Entity> = placed.iter().map(|(_, entity, _)| *entity).collect();
 
-    // ⑶ 連続対のうち、同一スコープの（バルーン, キャラ窓）対を除いた残りが鎖の繋ぎ。
+    // 連続対のうち、同一スコープの（バルーン, キャラ窓）対を除いた残りが鎖の繋ぎ。
     //
     //    区間は**手前側**（被所有側）の枠のものを採る。繋ぎは「この窓をどこへ繋いだか」を
     //    語る記録であり、主語は手前側だからである。よってグループの末尾から次のグループ
@@ -192,6 +194,44 @@ fn is_intra_scope_pair(front: &GroupElement, back: &GroupElement) -> bool {
     front.scope == back.scope
         && front.kind == GroupWindowKind::Balloon
         && back.kind == GroupWindowKind::Char
+}
+
+/// 望む鎖が前回と違っていれば受け口へ置き、印を立てる（要件 4.1／6.1／7.1／14.5／15.3）。
+/// 呼び手は本体の指令消化の相（`runtime::frame::zorder_drain`）と、実窓の檻。
+///
+/// # 同じ内容の巡では触れない
+///
+/// 受け口の現在の内容と一致するなら、書きもせず印も立てない。印は適用系への
+/// 「書くべきものがある」の合図であり、何も動いていない巡に立てると適用系が毎巡
+/// 空振りして、表示に変化の無い巡を省く門を実質無効にする。
+///
+/// # 既定状態では受け口そのものを作らない
+///
+/// グループが 1 つも無い（＝合成が `None`）とき、受け口をまだ持っていなければ挿入しない。
+/// 適用系は仕事を得られず、指令を 1 本も出さない——要件 6.1／6.4 の「既定状態は従来と
+/// 同じ」は、判断ではなくこの**不在**で成り立つ。
+///
+/// # 一度出来た受け口は解除でも消さない
+///
+/// 解除（要件 4.1／4.2／15.4）で公開するのは「鎖が無い」という**内容**であって、
+/// 受け口の撤去ではない。Resource ごと消すと、適用系は自分が張った繋ぎを外す指示を
+/// 受け取れないまま鎖が残る。
+pub fn publish_chain_plan(world: &mut World, plan: Option<ChainPlan>) {
+    if world.get_resource::<ZOrderChainPlan>().is_none() {
+        if plan.is_none() {
+            // 望む鎖が無く受け口も無い＝既定状態（要件 6.1 の構造的な根拠）。
+            return;
+        }
+        world.init_resource::<ZOrderChainPlan>();
+    }
+
+    let mut receiver = world.resource_mut::<ZOrderChainPlan>();
+    if receiver.chain == plan {
+        // 何も動いていない＝公開も印立ても行わない（空振りの巡を作らない）。
+        return;
+    }
+    receiver.chain = plan;
+    receiver.dirty = true;
 }
 
 #[cfg(test)]

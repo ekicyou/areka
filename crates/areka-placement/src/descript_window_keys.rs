@@ -199,7 +199,7 @@ impl BalloonSyncScale {
 }
 
 /// ゴーストの `balloon.syncscale` と、シェルの `sakura.`＞`char0.`・`kero.`＞`char1.`・`char<n>.`（n≥2）の
-/// `balloon.syncscale` を読む。値は前後の空白を除いて `true` と完全に一致するときだけ有効（要件 6.1〜6.4）。
+/// `balloon.syncscale` を読む。値は前後の空白を除き、大文字小文字を問わず `true` のときだけ有効（要件 6.1〜6.4）。
 pub fn read_balloon_syncscale(
     ghost_kv: &BTreeMap<String, String>,
     shell_kv: &BTreeMap<String, String>,
@@ -233,8 +233,9 @@ pub fn read_balloon_syncscale(
 }
 
 /// 連動の指定の値を読み、鍵ごとに警告より下の段の記録を 1 件残す（`true` 以外は指定なし・要件 6.4・6.7）。
+/// 大文字小文字は問わない（`TRUE` も `true`・`balloon.dontmove` と同じ決まり）。
 fn read_syncscale(scope: impl std::fmt::Display, key: &str, raw: &str) -> bool {
-    let synced = raw.trim() == "true";
+    let synced = raw.trim().eq_ignore_ascii_case("true");
     debug!(
         event = "balloon_syncscale_read",
         %key,

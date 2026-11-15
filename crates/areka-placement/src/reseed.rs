@@ -43,7 +43,8 @@ use super::{ScopeWindowPositions, scale_then_merge};
 pub struct BalloonPlacementInputs {
     /// バルーンの作者の DPI（`dpi`）。`windowposition` の換算の分母。
     pub author_dpi: u16,
-    /// scope ごとの `windowposition`（[`super::load_scope_windowpositions`] の結果）。
+    /// scope ごとの `windowposition`。読み込みは面 0 の値（[`super::load_scope_windowpositions`]）で、
+    /// シェルの切り替えの後始末が今出している面の値へ替え、面の書き手が面ごとに替える。
     pub windowpositions: ScopeWindowPositions,
 }
 

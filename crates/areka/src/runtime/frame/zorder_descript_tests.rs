@@ -263,7 +263,7 @@ fn t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded() {
 fn t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason() {
     let mut ledger = ZOrderGroupLedger::default();
 
-    let logs = capture_logs(|| apply_descript_base(&mut ledger, Some("balloon1,Surface0")));
+    let logs = capture_logs(|| apply_descript_base(&mut ledger, Some("balloon1,Surface0x")));
 
     assert!(
         ledger.groups().is_empty(),
@@ -290,11 +290,11 @@ fn t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason() {
         "拒否の水準が warn でない（通常運転で読めなければ黙殺に等しい）: {line}"
     );
     assert!(
-        line.contains("reason=UnparsableToken(Surface0)"),
+        line.contains("reason=UnparsableToken(Surface0x)"),
         "拒否理由が読めない: {line}"
     );
     assert!(
-        line.contains("tokens=balloon1,Surface0"),
+        line.contains("tokens=balloon1,Surface0x"),
         "受け取った値そのものが記録に載っていない（何を書き間違えたか復元できない）: {line}"
     );
 }
@@ -342,7 +342,7 @@ fn t_zdb07_a_rejected_setting_does_not_disturb_a_seated_base() {
         .expect("前提の基底が据わっていない")
         .clone();
 
-    apply_descript_base(&mut ledger, Some("balloon1,Surface0"));
+    apply_descript_base(&mut ledger, Some("balloon1,Surface0x"));
 
     assert_eq!(
         base_of(&ledger),

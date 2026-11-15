@@ -114,13 +114,12 @@ fn merge_scope_windowpositions_reflects_keyword_x_modes() {
 /// 不正な `limit` と不正な `x` を含む定義を通すと、
 /// 警告が 2 種とも出て、構成にも観測点 4 にも**既定値**が現れる。
 ///
-/// `Center`（大文字混在）が不正値になることは意図的な設計である——キーワードは小文字の
-/// 完全一致のみ受理し、綴り違いは無言で数値扱いへ落とさず警告で作者に気づかせる（DD8・要件 4.6）。
+/// 綴り違いの `centre` は無言で数値扱いへ落とさず、警告で作者に気づかせる（DD8・要件 4.6）。
 #[test]
 fn merge_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
     let (cfg, events) = resolve(
         "balloon-invalid-both",
-        "windowposition.limit,2\nwindowposition.x,Center\n",
+        "windowposition.limit,2\nwindowposition.x,centre\n",
     );
 
     // (a) 構成は正典既定へ縮退している。
@@ -147,7 +146,7 @@ fn merge_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
     let x_warn = expect_one(&events, X_WARN);
     assert_eq!(x_warn.level, tracing::Level::WARN);
     assert_eq!(x_warn.expect_field("scope"), "0");
-    assert_eq!(x_warn.expect_field("x_raw"), "Some(\"Center\")");
+    assert_eq!(x_warn.expect_field("x_raw"), "Some(\"centre\")");
 
     // (c) 観測点 4 の解決値は既定値（要件 6.2）。
     let hit = expect_one(&events, WINDOWPOSITION_SUPPLY_NEEDLE);

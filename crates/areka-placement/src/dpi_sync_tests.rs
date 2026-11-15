@@ -1,8 +1,7 @@
 //! 整合ゲートの純判定と、待ち札の適用範囲の不変条件（設計 C5・Unit Tests 3）。
 
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::layout::{Arrangement, Offset};
-use wintf::ecs::{DPI, Point, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
 use super::*;
 use crate::diag::PlacementRoute;
@@ -326,9 +325,7 @@ fn writable_world(hold: bool) -> (World, Entity) {
             size: Some(SizeI::new(100, 200)),
             ..Default::default()
         },
-        WindowHandle {
-            hwnd: HWND(0x200usize as *mut _),
-        },
+        crate::test_support::fake_handle(0x200),
         Arrangement {
             offset: Offset { x: 10.0, y: 20.0 },
             ..Default::default()

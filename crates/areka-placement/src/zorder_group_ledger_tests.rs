@@ -203,21 +203,6 @@ fn t_zgp9_reject_unparsable_token_carries_the_received_token() {
     }
 }
 
-/// 語彙は小文字ちょうどで一致させる（`windowposition` の語彙分類と同じ流儀）。
-/// 大文字混じりは黙って通さず、解釈できないトークンとして記録される。
-#[test]
-fn t_zgp10_vocabulary_is_case_sensitive() {
-    for token in ["Balloon0", "SURFACE0", "B0", "S0"] {
-        assert_eq!(
-            expect_reject(&[token, "s1"]),
-            ZOrderReject::UnparsableToken {
-                token: token.to_owned()
-            },
-            "token={token:?}"
-        );
-    }
-}
-
 // ---------------------------------------------------------------------------
 // 拒否どうしの優先順
 // ---------------------------------------------------------------------------
@@ -270,6 +255,24 @@ fn t_zgp13_spaces_around_tokens_are_ignored() {
         },
         "拒否理由は trim 前の受け取ったトークンをそのまま伴う"
     );
+}
+
+/// 語彙は大文字小文字を問わない（`windowposition` の語彙分類と同じ決まり・`audit-placement-core` の
+/// 裁定 2026-11-15）。大文字混じりも小文字と同じ窓になる。
+#[test]
+fn t_zgp10_vocabulary_ignores_case() {
+    for (token, lower) in [
+        ("Balloon0", "balloon0"),
+        ("SURFACE0", "surface0"),
+        ("B0", "b0"),
+        ("S0", "s0"),
+    ] {
+        assert_eq!(
+            expect_accept(&[token, "s1"]),
+            expect_accept(&[lower, "s1"]),
+            "token={token:?}"
+        );
+    }
 }
 
 /// スコープ ID の個数に上限を設けない（要件 3.7）。

@@ -223,7 +223,7 @@ fn t_zdr05_unparsable_tag_leaves_the_ledger_untouched_and_is_recorded() {
     let mut ledger = ZOrderGroupLedger::default();
     let mut world = world_with_scopes(&[0, 1]);
 
-    tx.send(set_directive(&["Balloon0", "s1"])).unwrap();
+    tx.send(set_directive(&["Balloon0x", "s1"])).unwrap();
     let logs = capture_logs(|| run_zorder_drain_phase(&rx, &mut ledger, &mut world));
 
     assert!(
@@ -246,11 +246,11 @@ fn t_zdr05_unparsable_tag_leaves_the_ledger_untouched_and_is_recorded() {
         "拒否の水準が warn でない（既定運転で読めなければ黙殺と同じ）: {line}"
     );
     assert!(
-        line.contains("reason=UnparsableToken(Balloon0)"),
+        line.contains("reason=UnparsableToken(Balloon0x)"),
         "拒否理由が載っていない: {line}"
     );
     assert!(
-        line.contains("tokens=Balloon0,s1"),
+        line.contains("tokens=Balloon0x,s1"),
         "受け取ったトークン列が載っていない（作者が何を書いたか復元できない）: {line}"
     );
     assert!(

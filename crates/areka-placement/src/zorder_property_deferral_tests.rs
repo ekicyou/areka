@@ -239,7 +239,7 @@ fn reader_with_one_provided_property() -> SylphyaReader {
     SylphyaReader::new(SharedMirror::new(Arc::new(image)))
 }
 
-/// 先送りしたプロパティへの書込を 1 回試み、返る効果列を得る。
+/// 名前 `key` へ値を 1 回書き込み、返る効果の列を得る。
 fn set_effects(key: &str, value: &str) -> Vec<Effect> {
     SylphyaCore::new().apply(&SylphyaMsg::Set {
         asker: AskerId::new(ASKER),
@@ -428,8 +428,8 @@ fn t_zpd21_a_provided_property_still_resolves_to_its_value() {
     );
 }
 
-/// 書込は現行どおり「SET 無効な正準語彙」として落ち、書込の効果を 1 つも生まない
-/// （要件 13.1／13.2）。
+/// 書込は現行どおり「SET 無効な正準語彙」として落ち、書けないの知らせ `NotSettable` を 1 つだけ
+/// 生み、値を書く効果は生まない（要件 13.1／13.2）。
 #[test]
 fn t_zpd30_writing_the_deferred_property_is_dropped() {
     assert_eq!(

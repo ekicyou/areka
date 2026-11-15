@@ -2,7 +2,7 @@
 //!
 //! 行列:
 //! - [`classify_x_vocab`]: 数値 × キーワード 3 種（`center`／`top`／`bottom`）×
-//!   不正値 × 未指定 × 大文字混在（→ `Invalid`）。
+//!   不正値 × 未指定 × 大文字混在（→ 小文字と同じ語）。
 //! - [`classify_limit_vocab`]: `"0"` × `"1"` × 未指定 × 不正値。
 //! - 不変量「`x_num` があれば常に `Numeric`」（design C1 Invariants・要件 5.1 の同一性を
 //!   型と構造で保証する回帰境界）。
@@ -51,17 +51,21 @@ fn classify_x_vocab_accepts_lowercase_keywords() {
     );
 }
 
-/// 大文字混在は**キーワードとして受理しない**（DD8: 小文字の完全一致のみ）。
-/// `Invalid` へ落ちることで呼び出し側の warn が焚かれ、作者が綴りに気づける（要件 4.6）。
+/// 大文字小文字は問わない（descript の語は読む所で 1 度だけ小文字にする・`audit-placement-core` の
+/// 裁定 2026-11-15。`alignmenttodesktop` と同じ決まり）。
 #[test]
-fn classify_x_vocab_rejects_mixed_case_keywords() {
-    for raw in [
-        "Center", "CENTER", "cEnter", "Top", "TOP", "tOp", "Bottom", "BOTTOM", "bottoM",
+fn classify_x_vocab_ignores_case() {
+    for (raw, mode) in [
+        ("Center", BalloonXMode::CenterTop),
+        ("CENTER", BalloonXMode::CenterTop),
+        ("tOp", BalloonXMode::CenterTop),
+        ("Bottom", BalloonXMode::CenterBottom),
+        ("BOTTOM", BalloonXMode::CenterBottom),
     ] {
         assert_eq!(
             classify_x_vocab(None, Some(raw)),
-            XVocab::Invalid,
-            "raw={raw} は大文字混在ゆえ不正値へ落ちる"
+            XVocab::Keyword(mode),
+            "raw={raw}"
         );
     }
 }

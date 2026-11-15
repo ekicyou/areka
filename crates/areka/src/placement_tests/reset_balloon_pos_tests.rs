@@ -36,7 +36,7 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement};
 use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 use areka_placement::test_support::{
-    KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, fake_handle, synth_declared_dpi_ghost,
+    KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, give_fake_handles, synth_declared_dpi_ghost,
     with_com_initialized,
 };
 use log_capture_kit::{CapturedEvent, capture};
@@ -77,13 +77,7 @@ impl Rig {
             work_areas: vec![WA],
         });
         let windows = spawn_ghost_windows(&mut world, &prepared.placements, &prepared.titles);
-        let mut raw = 0x100;
-        for scope in windows.scopes() {
-            for e in [windows.char_window(scope), windows.balloon_window(scope)] {
-                raw += 1;
-                world.entity_mut(e.unwrap()).insert(fake_handle(raw));
-            }
-        }
+        give_fake_handles(&mut world, &windows);
         // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
         world.flush();
         for scope in windows.scopes() {

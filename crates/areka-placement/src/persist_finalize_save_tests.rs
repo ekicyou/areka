@@ -602,7 +602,7 @@ fn clamped_boot_adds_no_mark_to_old_memory_through_the_neighbours_position() {
     rig.world
         .insert_resource(super::RestoredPositionsClamped(true));
 
-    persist_unremembered_char_positions(&rig.world);
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let after = rig.load();
 
     assert_eq!(
@@ -610,10 +610,77 @@ fn clamped_boot_adds_no_mark_to_old_memory_through_the_neighbours_position() {
         Some(expected_saved(0)),
         "スコープ 0 は書く"
     );
+    let lines = save_events(&events)
+        .into_iter()
+        .filter(|e| e.message().contains("古い記憶へ隣り合いの印を書き足さない"))
+        .count();
+    assert_eq!(lines, 1, "書き足さない決めの記録は 1 行: {events:?}");
     assert_eq!(
         after.get(&PersistKey::WindowAdjacent { scope: 1 }),
         None,
         "寄せた起動で古い記憶へ印が書き足された: {after:?}"
+    );
+    rig.finish();
+}
+
+/// window-work-area-clamp 要件 4.6: 寄せて表示した起動のあいだは、ドラッグや連れ動きの保存
+/// （[`persist_entries`]）の束からも、印の無い古い記憶（スコープ 1）へ印を書き足さず、外した印の
+/// スコープ（スコープ 2 は束に触れないので載らない）を 1 行に残す。寄せずに起動した回は、同じ束が
+/// 印を書き、行は出ない（飛ばすのは寄せた起動だけ）。
+#[test]
+fn clamped_boot_drag_save_adds_no_mark_to_old_memory() {
+    for (clamped, expected) in [(false, true), (true, false)] {
+        let mut rig = Rig::new(true);
+        rig.mark_remembered(1);
+        rig.mark_remembered(2);
+        rig.world
+            .insert_resource(super::RestoredPositionsClamped(clamped));
+
+        let ((), events) =
+            capture(|| persist_entries(&rig.world, char_pos_entries(0, SENTINEL_POS)));
+        let after = rig.load();
+
+        assert!(window_pos(&after, 0).is_some(), "スコープ 0 の位置は書く");
+        let lines: Vec<_> = save_events(&events)
+            .into_iter()
+            .filter(|e| e.message().contains("古い記憶へ隣り合いの印を書き足さない"))
+            .map(|e| e.field("scopes"))
+            .collect();
+        let expected_lines = if clamped { vec![Some("{1}")] } else { vec![] };
+        assert_eq!(
+            lines, expected_lines,
+            "寄せた起動={clamped}: 外した印の記録"
+        );
+        assert_eq!(
+            after.contains_key(&PersistKey::WindowAdjacent { scope: 1 }),
+            expected,
+            "寄せた起動={clamped}: {after:?}"
+        );
+        rig.finish();
+    }
+}
+
+/// 飛ばすのは印の無い古い記憶だけ: 寄せた起動でも、同じ束が位置を書くスコープ 1 の印は
+/// 書く（その記憶はもう古くない）。隣の古い記憶のスコープ 2 の印は書かない。
+#[test]
+fn clamped_boot_keeps_the_mark_of_the_scope_whose_position_is_written() {
+    let mut rig = Rig::new(true);
+    rig.mark_remembered(1);
+    rig.mark_remembered(2);
+    rig.world
+        .insert_resource(super::RestoredPositionsClamped(true));
+
+    persist_entries(&rig.world, char_pos_entries(1, SENTINEL_POS));
+    let after = rig.load();
+
+    assert!(
+        after.contains_key(&PersistKey::WindowAdjacent { scope: 1 }),
+        "位置を書くスコープの印は書く: {after:?}"
+    );
+    assert_eq!(
+        after.get(&PersistKey::WindowAdjacent { scope: 2 }),
+        None,
+        "隣の古い記憶へは書かない: {after:?}"
     );
     rig.finish();
 }

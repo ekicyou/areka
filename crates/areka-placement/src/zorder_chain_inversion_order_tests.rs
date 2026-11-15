@@ -6,9 +6,9 @@
 //! 本ファイルは計画を**本番の台帳と合成**に組ませる——補い（`s0,b0,s1` → `s0,b0,b1,s1`）と
 //! 繋ぎの導出が抜ければ、実窓の並びが崩れて赤くなる。
 //!
-//! 公開は指令消化の相（`zorder_drain.rs` の `publish_chain_plan`）と同じ規則で行う——
-//! 合成の結果が受け口の内容と違うときだけ置き、印を立てる。相そのものは `frame` の
-//! 非公開のモジュールなので、窓の在庫は本ファイルの「在る窓」の表で代わりに引く。
+//! 公開は指令消化の相と同じ本番の関数 [`publish_chain_plan`] で行う——合成の結果が受け口の
+//! 内容と違うときだけ置き、印を立てる。相そのものは本体の `frame` の非公開のモジュールなので、
+//! 窓の在庫は本ファイルの「在る窓」の表で代わりに引く。
 //!
 //! 窓の添字は `[b0, s0, b1, s1]`。期待する最終形は手前から `s0, b0, b1, s1`、所有の鎖は
 //! `s0 ← b0 ← b1 ← s1`（`b0` の組の結び目は外れ、`b1` の組の結び目が残る）。
@@ -18,13 +18,13 @@ use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::DestroyWindow;
 use windows::core::w;
-use wintf::ecs::window::{PairReleased, ZOrderChainPlan, apply_zorder_chain};
+use wintf::ecs::window::{PairReleased, apply_zorder_chain};
 use wintf::ecs::{
     KeepDirectlyAbove, WindowHandle, apply_zorder_pair_maintenance, establish_owner_links,
     flush_window_pos_commands,
 };
 
-use super::compose_chain;
+use super::{compose_chain, publish_chain_plan};
 use crate::zorder_group_ledger::{
     GroupElement, GroupWindowKind, ZOrderGroupLedger, parse_zorder_tokens,
 };
@@ -134,7 +134,7 @@ impl Rig {
             .expect("最初の指定は受理される");
     }
 
-    /// 合成して、内容が違うときだけ受け口へ置く（`zorder_drain.rs` の公開と同じ規則）。
+    /// 合成して、内容が違うときだけ受け口へ置く（本番の [`publish_chain_plan`]）。
     fn publish(&mut self) {
         let world = &self.world;
         let entities = self.entities;
@@ -142,17 +142,7 @@ impl Rig {
             let index = (0..4).find(|i| element_at(*i) == *element)?;
             entities[index].filter(|e| world.get_entity(*e).is_ok())
         });
-        if self.world.get_resource::<ZOrderChainPlan>().is_none() {
-            if plan.is_none() {
-                return;
-            }
-            self.world.init_resource::<ZOrderChainPlan>();
-        }
-        let mut receiver = self.world.resource_mut::<ZOrderChainPlan>();
-        if receiver.chain != plan {
-            receiver.chain = plan;
-            receiver.dirty = true;
-        }
+        publish_chain_plan(&mut self.world, plan);
     }
 
     /// 確定段の 1 巡と、そのあとの窓の指令の書き出し（本番は tick の後に流す）。

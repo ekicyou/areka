@@ -149,6 +149,11 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "明示モード",
+        "areka-placement/zorder_group_ledger_tests.rs",
+        "t_zgp10_vocabulary_ignores_case",
+    ),
+    (
+        "明示モード",
         "areka-placement/zorder_chain_compose_tests.rs",
         "t_zcc02_explicit_mode_matches_the_numeric_shape",
     ),
@@ -322,11 +327,6 @@ const COVERAGE: [(&str, &str, &str); 50] = [
         "解釈失敗",
         "areka-placement/zorder_group_ledger_tests.rs",
         "t_zgp9_reject_unparsable_token_carries_the_received_token",
-    ),
-    (
-        "解釈失敗",
-        "areka-placement/zorder_group_ledger_tests.rs",
-        "t_zgp10_vocabulary_is_case_sensitive",
     ),
     (
         "解釈失敗",
