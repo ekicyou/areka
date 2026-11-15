@@ -4,9 +4,9 @@
 //! （`BalloonXMode::CenterTop`／`CenterBottom`・要件 4.2/4.3）と、その周辺の
 //! 回帰境界（`Side`＝数値指定・未指定の bit 同一維持・要件 4.5/5.2）である。
 //!
-//! 本仕様の追加分は `resolver_resolve_tests.rs` とは別のファイルに置く。既存の T-R8 群（`Side` の全表）は**無改変のまま**
-//! 緑であることが要件 5.2 の主檻であり、本ファイルはその補強として `Side` の
-//! 閉じた式を逐語で再検定する。
+//! `Side` の全表は `resolver_resolve_balloon_tests.rs` の T-R8 群が持つ（要件 5.2 の主檻）。
+//! 本ファイルが `Side` について確かめるのは、既定が `Side` であることと、キーワードの式が
+//! `Side` で位置を返さないことだけである。
 //!
 //! DPI パラメタ化（`DPIS`＝100%/125%/150%/200%）は既存 resolver 檻の流儀を踏襲する
 //! ——resolver は物理 px しか見ないので、同じ論理形状を各水準の物理値で与えたとき
@@ -119,27 +119,6 @@ fn t_k1_center_top_places_above_shell_center() {
                 },
                 "dpi={dpi} [{label}]: CenterTop＝中央 x・下端がシェル上端に接する y"
             );
-            // 中央揃えの実体: バルーンの中心 x がシェル画像の中心 x と一致する
-            // （偶数差ゆえ厳密一致・奇数差の切り捨ては T-K5 が担う）。
-            assert_eq!(
-                p.balloon_pos.x + bs.w / 2,
-                cp.x + cs.w / 2,
-                "dpi={dpi} [{label}]: バルーン中心＝シェル画像中心"
-            );
-            // 接する: バルーン下端 ＝ シェル画像上端
-            assert_eq!(
-                p.balloon_pos.y + bs.h,
-                cp.y,
-                "dpi={dpi} [{label}]: バルーン下端＝シェル画像上端（接する）"
-            );
-            assert_eq!(
-                p.balloon_offset,
-                PointPx {
-                    x: (cs.w - bs.w) / 2,
-                    y: -bs.h
-                },
-                "dpi={dpi} [{label}]: balloon_offset ≡ balloon_pos − char_pos"
-            );
         }
     }
 }
@@ -168,24 +147,6 @@ fn t_k2_center_bottom_places_below_shell_center() {
                     y: cp.y + cs.h
                 },
                 "dpi={dpi} [{label}]: CenterBottom＝中央 x・上端がシェル下端に接する y"
-            );
-            assert_eq!(
-                p.balloon_pos.x + bs.w / 2,
-                cp.x + cs.w / 2,
-                "dpi={dpi} [{label}]: バルーン中心＝シェル画像中心"
-            );
-            assert_eq!(
-                p.balloon_pos.y,
-                cp.y + cs.h,
-                "dpi={dpi} [{label}]: バルーン上端＝シェル画像下端（接する）"
-            );
-            assert_eq!(
-                p.balloon_offset,
-                PointPx {
-                    x: (cs.w - bs.w) / 2,
-                    y: cs.h
-                },
-                "dpi={dpi} [{label}]: balloon_offset ≡ balloon_pos − char_pos"
             );
         }
     }
@@ -223,14 +184,6 @@ fn t_k3_numeric_y_is_added_to_keyword_base_position() {
                 assert_eq!(
                     adj.char_pos, base.char_pos,
                     "dpi={dpi} mode={mode:?}: 調整量はキャラ窓を動かさない"
-                );
-                assert_eq!(
-                    adj.balloon_offset,
-                    PointPx {
-                        x: base.balloon_offset.x,
-                        y: base.balloon_offset.y + dy
-                    },
-                    "dpi={dpi} mode={mode:?}: offset も同じだけ動く（恒等式維持）"
                 );
             }
         }

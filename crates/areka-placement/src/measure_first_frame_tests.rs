@@ -4,17 +4,17 @@
 //! 偽の読み手 `MemoryDecoder` を数える包みで覆い、包んだ相手の全コマ読みが 1 度も呼ばれない
 //! ことまで確かめる。ファイルにも COM にも依存しない。
 use std::cell::Cell;
-use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
 use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, BakeResult,
-    DecodeError, DecodedImage, ElementDecoder, LoopCount, MemoryDecoder, PackConfig, SurfaceSet,
-    UseSelfAlpha, bake, bake_quiet, bake_with_limits,
+    AlphaParams, AnimatedImage, AnimationInfo, AnimationLimits, BakeResult, DecodeError,
+    DecodedImage, ElementDecoder, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake,
+    bake_quiet, bake_with_limits,
 };
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
 
 use super::first_frame::FirstFrameDecoder;
+use crate::test_support::animated_image::{frames, image, info};
 use log_capture_kit::capture;
 
 type Px = [u8; 4];
@@ -27,39 +27,6 @@ const STILL: Px = [70, 80, 90, 255];
 
 fn path(rel: &str) -> PathBuf {
     Path::new(BASE).join(rel)
-}
-
-/// 2×2 の絵。
-fn image(px: Px) -> DecodedImage {
-    DecodedImage {
-        width: 2,
-        height: 2,
-        stride: 8,
-        bgra: [px; 4].concat(),
-        has_alpha: true,
-    }
-}
-
-fn info() -> AnimationInfo {
-    AnimationInfo {
-        width: 2,
-        height: 2,
-        frame_count: 2,
-    }
-}
-
-/// 2 コマの動く絵の全コマ（コマの絵は `px0`・`px1`）。
-fn frames(px0: Px, px1: Px) -> AnimatedImage {
-    AnimatedImage {
-        frames: [px0, px1]
-            .iter()
-            .map(|&px| AnimationFrame {
-                image: image(px),
-                delay_ms: 100,
-            })
-            .collect(),
-        loop_count: LoopCount::Finite(NonZeroU32::new(3).unwrap()),
-    }
 }
 
 fn insert(dec: &mut MemoryDecoder, rel: &str, px: Px) {

@@ -9,14 +9,15 @@ use super::*;
 use crate::test_log_capture::capture;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-fn ghost_roots() -> ScopeRoots {
+/// Ghost の根を `/g` に置いた根の組（persist の兄弟の檻も使う）。
+pub(super) fn ghost_roots() -> ScopeRoots {
     ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
         ..ScopeRoots::default()
     }
 }
 
-fn ghost_file() -> PathBuf {
+pub(super) fn ghost_file() -> PathBuf {
     ghost_roots().file_of(PersistScope::Ghost).unwrap()
 }
 

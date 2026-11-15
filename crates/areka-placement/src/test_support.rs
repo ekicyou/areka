@@ -1,12 +1,13 @@
 //! 配置の外のテストも使う支え（`test-support` の機能か、配置自身のテストのときだけ立つ）。
 //!
-//! 頼るのは配置の型・`windows`・`wintf`・`areka_sylphya`・`areka_parsers`・std だけ。
+//! 頼るのは配置の型・`windows`・`wintf`・`areka_sylphya`・`areka_parsers`・`areka_emo_atlas`・std だけ。
 //! `#[cfg(test)]` だけの項目と共有のテスト用の crate
 //! （`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）には頼らない——本体のテストを組むときの
 //! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる（spec: placement-crate-split 要件 3.3・3.4）。
 //! 見本のゴーストの入口は crate ごとの `sample_test_support`、一時フォルダと合成の検体は
 //! `shared_test_support` にある。ログの判定の補助は `log_capture_kit` を直に使う（要件 3.1）。
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -66,6 +67,14 @@ impl PersistIo for SharedFakeIo {
     }
 }
 
+/// `(鍵, 値)` の並びから、descript を `areka_parsers::kv::parse_kv` で読んだのと同じ形の表を組む。
+pub fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+    pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
 /// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム）。
 pub fn fake_handle(raw: usize) -> WindowHandle {
     WindowHandle {
@@ -103,7 +112,7 @@ pub const KEYWORD_BALLOON_DESCRIPT: &str =
 
 /// 宣言 DPI 付きの最小合成ゴーストを一時ディレクトリへ組む（テスト補助）。
 ///
-/// `prepare_never_reads_or_writes_ghost_dat` の合成ゴーストと同型（emo2 の実 PNG を
+/// `prepare_never_reads_or_writes_the_saved_state` の合成ゴーストと同型（emo2 の実 PNG を
 /// 複写した最小 shell）に、`seriko.dpi`／balloon `dpi` の宣言を足したもの。
 /// 返り値は `(ghost_root, balloon_root)`。`root` の下に組み、絵は `emo2_root`（見本のゴースト）と
 /// `balloon_root`（そのバルーン）から写す（道は呼び手が自分の crate の `sample_test_support` から渡す）。
@@ -193,6 +202,48 @@ pub fn emily_shaped_scopes() -> Vec<usize> {
     .scopes
     .into_keys()
     .collect()
+}
+
+/// 採寸の読み手のテスト（配置の `measure_first_frame_tests` と本体の `measure_bake_log_tests`）が
+/// `MemoryDecoder` へ入れる 2×2 の絵と、2 コマの動く絵。
+pub mod animated_image {
+    use std::num::NonZeroU32;
+
+    use areka_emo_atlas::{AnimatedImage, AnimationFrame, AnimationInfo, DecodedImage, LoopCount};
+
+    /// 2×2 の α つきの絵（画素は全部 `px`）。
+    pub fn image(px: [u8; 4]) -> DecodedImage {
+        DecodedImage {
+            width: 2,
+            height: 2,
+            stride: 8,
+            bgra: [px; 4].concat(),
+            has_alpha: true,
+        }
+    }
+
+    /// 2×2・2 コマの動く絵の見出し。
+    pub fn info() -> AnimationInfo {
+        AnimationInfo {
+            width: 2,
+            height: 2,
+            frame_count: 2,
+        }
+    }
+
+    /// 2 コマの動く絵の全コマ（コマの絵は `px0`・`px1`）。
+    pub fn frames(px0: [u8; 4], px1: [u8; 4]) -> AnimatedImage {
+        AnimatedImage {
+            frames: [px0, px1]
+                .iter()
+                .map(|&px| AnimationFrame {
+                    image: image(px),
+                    delay_ms: 100,
+                })
+                .collect(),
+            loop_count: LoopCount::Finite(NonZeroU32::new(1).unwrap()),
+        }
+    }
 }
 
 /// 割った `measure_template_tests` の 2 つの片割れ（配置の crate と本体）が共に使う走査器
@@ -405,6 +456,13 @@ pub mod zorder_pair_deferred {
             .collect()
     }
 
+    /// `manifest`（`CARGO_MANIFEST_DIR`）からの相対で本番ファイルを読む。読めなければ panic する。
+    pub fn read_source(manifest: &std::path::Path, relative: &str) -> String {
+        let path = manifest.join(relative);
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("本番ファイルを読めなかった（{}）: {e}", path.display()))
+    }
+
     /// 名簿の各ファイルを実際に読み、コメントを落とした本文に先送りの語も帯の語も無いことを主張する。
     /// 帯の語を持つ持ち主は `band_owners`（失敗の文言にだけ使う）。
     pub fn assert_vocabulary_absent(
@@ -414,10 +472,7 @@ pub mod zorder_pair_deferred {
     ) {
         let mut scanned_code_bytes = 0usize;
         for relative in roster {
-            let path = manifest.join(relative);
-            let raw = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-                panic!("本番ファイルを読めなかった（{}）: {e}", path.display())
-            });
+            let raw = read_source(manifest, relative);
             assert!(
                 raw.len() > 1_000,
                 "{relative}: 本番ファイルにしては短すぎる（読み違えの疑い）: {} バイト",

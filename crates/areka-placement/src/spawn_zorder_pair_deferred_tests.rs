@@ -50,7 +50,7 @@
 //! 行頭が `//` の行を落としてから探す。落とし過ぎ・落とし漏れが無いことは、素の全文には
 //! 語があり、コードだけの本文には無い、という対照で示す。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -63,7 +63,7 @@ use super::spawn_ghost_windows;
 use super::test_support::{ghost_window_entities, titles, two_scope_placements};
 use crate::test_support::zorder_pair_deferred::{
     assert_needles_are_detected, assert_roster_covers, assert_vocabulary_absent, code_only,
-    deferred_hits, rust_sources_under, zorder_production_sources,
+    deferred_hits, read_source, rust_sources_under, zorder_production_sources,
 };
 
 /// 重なり順の 2 機構が全部を書いた、配置の crate の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
@@ -80,16 +80,6 @@ const PRODUCTION_FILES: [&str; 4] = [
     "src/zorder_chain_compose.rs",
     "src/zorder_group_ledger.rs",
 ];
-
-fn source_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative)
-}
-
-fn read_source(relative: &str) -> String {
-    let path = source_path(relative);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("本番ファイルを読めなかった（{}）: {e}", path.display()))
-}
 
 /// 先送り語彙は、本フィーチャーの配置の crate の本番ファイルのコードに 1 つも無い。
 #[test]
@@ -119,7 +109,7 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
     );
 
     // 対照: 素の全文には常時最前面の語（否定の説明）があり、コードだけの本文には無い。
-    let raw = read_source("src/spawn.rs");
+    let raw = read_source(Path::new(env!("CARGO_MANIFEST_DIR")), "src/spawn.rs");
     assert!(
         raw.to_lowercase().contains("topmost"),
         "前提が崩れている: 素の全文には常時最前面の語があるはず"

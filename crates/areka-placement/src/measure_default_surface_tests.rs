@@ -1,44 +1,45 @@
 //! 測りが各スコープの descript の既定の面で合成することの檻（descript-window-keys 要件 2.1・
 //! 2.3・2.4・2.6・7.2）。
 //!
-//! 3 通り: 検体のシェルに在る別の面を既定にするとその面の大きさ／無い番号なら組み込みの面の
-//! 大きさと記録 1 件／書かれていなければ今の期待値。組み込みの面も無い場合（本体側の失敗・
-//! 相方側の代わり）は `measure_tests.rs` の今の檻が確かめる。
+//! 4 通り: 検体のシェルに在る別の面を既定にするとその面の大きさ／無い番号なら組み込みの面の
+//! 大きさと記録 1 件／書かれていなければ今の期待値／組み込みの面も無ければ「既定の面が無い」を
+//! 記録せず合成の失敗の扱い（相方側は本体側の大きさ）へ委ねる。本体側の失敗は `measure_tests.rs` が
+//! 確かめる。
 
-use std::collections::BTreeMap;
+use std::path::Path;
 
 use super::*;
 use crate::descript_window_keys::{DefaultSurfaces, read_default_surfaces};
 use crate::sample_test_support::{SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W, balloon_root, emo2_root};
-use crate::test_support::with_com_initialized;
+use crate::shared_test_support::{TempDir, write_self_alpha_one_descript};
+use crate::test_support::{kv, with_com_initialized};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
-/// emo2 の面 0（surface0.png）の原寸。
-const SURFACE0: (i32, i32) = (SCOPE0_W, SCOPE0_H);
-/// emo2 の面 10（CityPop/surface0010.png）の原寸。
-const SURFACE10: (i32, i32) = (SCOPE1_W, SCOPE1_H);
-
 fn ghost_kv(pairs: &[(&str, &str)]) -> DefaultSurfaces {
-    let kv: BTreeMap<String, String> = pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
-    read_default_surfaces(&kv)
+    read_default_surfaces(&kv(pairs))
 }
 
 /// emo2 の本体側・相方側を `defaults` で測り、キャラの大きさの組と記録を返す。
 fn measure_emo2(defaults: &DefaultSurfaces) -> (Vec<(i32, i32)>, Vec<CapturedEvent>) {
+    measure_chars(&emo2_root().join("shell/master"), defaults)
+}
+
+/// `shell` の本体側・相方側を `defaults` で測り、キャラの大きさの組と記録を返す。
+fn measure_chars(
+    shell: &Path,
+    defaults: &DefaultSurfaces,
+) -> (Vec<(i32, i32)>, Vec<CapturedEvent>) {
     let mut result = None;
     with_com_initialized(|| {
         let (out, events) = capture(|| {
             measure_scope_sizes(
-                &emo2_root().join("shell/master"),
+                shell,
                 &balloon_root(),
                 &[0, 1],
                 defaults,
                 &MeasureScaling::IDENTITY,
             )
-            .expect("emo2 の測りは通る")
+            .expect("測りは通る")
         });
         let sizes = out
             .scopes
@@ -58,7 +59,7 @@ fn descript_default_surface_in_shell_is_measured() {
         ("kero.seriko.defaultsurface", "0"),
     ]);
     let (sizes, events) = measure_emo2(&defaults);
-    assert_eq!(sizes, vec![SURFACE10, SURFACE0]);
+    assert_eq!(sizes, vec![(SCOPE1_W, SCOPE1_H), (SCOPE0_W, SCOPE0_H)]);
     assert!(
         !events
             .iter()
@@ -73,7 +74,7 @@ fn descript_default_surface_in_shell_is_measured() {
 fn missing_descript_default_surface_falls_back_to_builtin_with_one_log() {
     let defaults = ghost_kv(&[("kero.seriko.defaultsurface", "9999")]);
     let (sizes, events) = measure_emo2(&defaults);
-    assert_eq!(sizes, vec![SURFACE0, SURFACE10]);
+    assert_eq!(sizes, vec![(SCOPE0_W, SCOPE0_H), (SCOPE1_W, SCOPE1_H)]);
     let ev = expect_one(&events, "default_surface_missing");
     assert_eq!(ev.level, tracing::Level::WARN);
     assert_eq!(ev.expect_field("scope"), "1");
@@ -85,11 +86,41 @@ fn missing_descript_default_surface_falls_back_to_builtin_with_one_log() {
 #[test]
 fn unwritten_default_surface_keeps_current_sizes() {
     let (sizes, events) = measure_emo2(&ghost_kv(&[("name", "x")]));
-    assert_eq!(sizes, vec![SURFACE0, SURFACE10]);
+    assert_eq!(sizes, vec![(SCOPE0_W, SCOPE0_H), (SCOPE1_W, SCOPE1_H)]);
     assert!(
         !events
             .iter()
             .any(|e| e.message().contains("default_surface_missing")),
         "{events:?}"
     );
+}
+
+/// descript の面も組み込みの面もシェルに無いときは「既定の面が無い」を記録しない。相方側は合成の
+/// 失敗の扱い（本体側の大きさで代える・記録 1 件）へ委ねる（要件 2.4）。
+#[test]
+fn no_candidate_in_shell_leaves_it_to_the_compose_failure() {
+    // 面 0 だけのシェル（相方側の候補 12・10 はどちらも無い）。
+    let shell = TempDir::new();
+    std::fs::copy(
+        emo2_root().join("shell/master/surface0.png"),
+        shell.path().join("surface0.png"),
+    )
+    .expect("surface0.png の複写");
+    std::fs::write(
+        shell.path().join("surfaces.txt"),
+        "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n",
+    )
+    .expect("surfaces.txt の書出し");
+    write_self_alpha_one_descript(shell.path(), "seriko.use_self_alpha");
+
+    let defaults = ghost_kv(&[("kero.seriko.defaultsurface", "12")]);
+    let (sizes, events) = measure_chars(shell.path(), &defaults);
+    assert_eq!(sizes, vec![(SCOPE0_W, SCOPE0_H), (SCOPE0_W, SCOPE0_H)]);
+    assert!(
+        !events
+            .iter()
+            .any(|e| e.message().contains("default_surface_missing")),
+        "候補がどれも無いなら記録しない: {events:?}"
+    );
+    expect_one(&events, "スコープの採寸合成に失敗");
 }

@@ -10,8 +10,8 @@
 //! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置）
 //! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
 //! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
-//! - 起動の最後に並べ終えた時点（[`persist_unremembered_char_positions`]・記憶に位置が無い
-//!   キャラだけ）
+//! - 起動の最後に並べ終えた時点と、既定の位置への並べ直し（`reset_pos` の `reset_window_positions`）
+//!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラだけ）
 //!
 //! 消す呼び手はバルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・ずらしの鍵）
 //! だけ。
@@ -57,7 +57,7 @@ use super::sticky_group_ledger::StickyGroupLedger;
 /// 数値文字列 → `Some(i32)`。非数値・空文字列 → `None`（＝「値なし」・復元の
 /// `merge_scope` が鍵ごとに warn を出して既定へ戻る）。前後空白は許容する（寛容）。
 /// 決定論（同一入力→同一出力）。
-pub fn parse_px(value: &str) -> Option<i32> {
+fn parse_px(value: &str) -> Option<i32> {
     // 寛容縮退（6.1）: 非数値・空・小数は「値なし」＝None（panic なし）。
     value.trim().parse::<i32>().ok()
 }
@@ -302,7 +302,7 @@ fn project_restore_parts(
 /// （[`load_scope`] の契約）。
 pub fn load_restored_state(ghost_root: &Path) -> Vec<(PersistKey, String)> {
     // ゴーストの descript が在って読めるときだけ戻す（不在の根を永続の根にしない）。
-    // charset の無い descript は SSP の既定（Ansi）で読む（どの呼び手も Ansi だった）。
+    // charset の無い descript は SSP の既定（Ansi）で読む。
     if let Err(err) = read_ghost_names(ghost_root, DefaultEncoding::Ansi) {
         warn!(
             ghost_root = %ghost_root.display(),
@@ -348,7 +348,8 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// balloon 導出（`balloon_pos`/`balloon_offset`）のみ。永続状態には触れない。
 ///
 /// `balloon_offset ≡ balloon_pos − char_pos` が成立するのは**本関数の出力時点**までである
-/// （windowposition-limit DD6）。`main.rs` の `restore_merged_placements` は本関数の直後に起動時関門
+/// （windowposition-limit DD6）。`main.rs` の `restore_merged_placements` は本関数と同じ配置を返す
+/// [`restore_and_judge`] の直後に起動時関門
 /// [`super::balloon_limit::apply_balloon_limit`] を通し、`balloon_limit` が真の scope の
 /// `balloon_pos` だけを作業領域内へ補正する（`balloon_offset` は生値のまま＝補正を
 /// 焼き付けない）。ゆえに関門通過後の `balloon_pos` は表示位置、`balloon_offset` は論理
@@ -472,7 +473,7 @@ fn saved_axis(
 ///
 /// [`merge_scope`] が記憶の値を採るスコープで、かつそのときだけ真。記憶の値が既定と
 /// 同じでも真（値の違いでなく記憶の有無で決める・2.6）。
-pub fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> bool {
+fn has_saved_char_pos(entries: &[(PersistKey, String)], scope: usize) -> bool {
     saved_char_pos(entries, scope as u32).is_some()
 }
 
@@ -486,7 +487,7 @@ pub fn adjacency_entry(scope: u32, mark: AdjacencyMark) -> (PersistKey, String) 
 
 /// 記憶の項目からスコープの隣り合いの印を読む。鍵が無ければ `None`。知らない語は `warn!` を
 /// 出して `None`（印の無い古い記憶と同じ扱い＝位置のまま立つ）。
-pub fn saved_adjacency(entries: &[(PersistKey, String)], scope: usize) -> Option<AdjacencyMark> {
+fn saved_adjacency(entries: &[(PersistKey, String)], scope: usize) -> Option<AdjacencyMark> {
     let value = entry_value(
         entries,
         PersistKey::WindowAdjacent {
@@ -798,8 +799,8 @@ fn push_adjacency_marks(
 /// 並べ終えた時点の保存（areka-P0-char-position-save-on-exit 要件 1.1・1.2・1.4・1.5・1.7・
 /// 4.1〜4.3・design FinalizeSave）。
 ///
-/// 起動の最後の並べ直しが済んだ直後に 1 度だけ呼ばれ、記憶に位置が無いキャラクター窓の位置を
-/// 記憶へ送る。[`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない・1.4）、
+/// 起動の最後の並べ直しが済んだ直後と、既定の位置への並べ直し（`reset_pos` の
+/// `reset_window_positions`）の後に呼ばれ、記憶に位置が無いキャラクター窓の位置を記憶へ送る。[`GhostWindows`] に居る全スコープを昇順に回り（数を決め打ちしない・1.4）、
 /// 書くのは次の 3 つを満たすスコープだけ:
 ///
 /// - 既定の位置 [`GhostWindows::default_char_pos`] が `Some`＝記憶に位置が無い。`None` は

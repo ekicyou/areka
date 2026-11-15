@@ -9,13 +9,7 @@ use wintf::ecs::Update;
 use super::*;
 use crate::reseed::BalloonPlacementInputs;
 use crate::source::{DescriptSource, GhostTitles};
-
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-        .collect()
-}
+use crate::test_support::kv;
 
 fn basis(ghost_kv: &[(&str, &str)], shell_kv: &[(&str, &str)]) -> DefaultPlacementBasis {
     DefaultPlacementBasis {

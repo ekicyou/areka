@@ -100,7 +100,7 @@ fn assert_both_paths_agree(template: &Template) {
         // 相方側の初期面（組み込みの既定の面＝10）。
         let measured10 = measured(builtin_default_surface(1), &mut composer);
 
-        // B: 表示経路（起動時の資産組立 `build_boot_assets` が通る 2 段と同じ形）。
+        // B: 表示経路（起動時の資産組立 `runtime::assets::build_shell_assets` が通る 2 段と同じ形）。
         let mut target = load_shell_target(&template.shell_dir, &decoder)
             .unwrap_or_else(|e| panic!("{}: 表示経路のシェル読み込みに失敗: {e}", template.name));
         let present_world = target.take_world();
@@ -234,7 +234,8 @@ fn the_blind_spot_guard_rejects_every_form_the_scanner_cannot_read() {
 
 /// 要件 3.6／7.6: 採寸側がシェルの読み込みを自前でやり直していない。
 ///
-/// `build_shell_assets` は `load_shell_target` を呼ぶだけで、一覧・`surfaces.txt` の読取と解析・
+/// `build_shell_assets` は `load_shell_target_quiet`（`load_shell_target` の記録を出さない兄弟）を
+/// 呼ぶだけで、一覧・`surfaces.txt` の読取と解析・
 /// 「番号 → 面の画像」の決定・焼きはすべて権威が持つ。ここへ自前の解析が戻ると、
 /// 列挙の規則が 2 実装へ分かれて「採寸した窓寸と実際に合成される枠がずれる」——上の外形の一致は
 /// その場では緑のまま通り抜けるので、本文の側でも見張る。

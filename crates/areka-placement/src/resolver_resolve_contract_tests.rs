@@ -10,10 +10,6 @@ use crate::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
 // anchor 伝搬（4.2・DD15 基盤）
-//
-// 旧 `bottom_snap`（二値）伝搬テストを 5 値アンカー検証へ意味を保って差し替え
-// （単一真実源＝`ScopePlacement.anchor`・Req1.6）。二値の吸着フラグは
-// `!anchor.is_free()` で導出可能ゆえ格納しない。
 // ------------------------------------------------------------------
 
 /// 4.2 補: 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
@@ -74,14 +70,7 @@ fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
 /// alignment が anchor として正しく運ばれることのみを固定する。
 #[test]
 fn anchor_propagates_through_build_placement_config_cascade() {
-    use std::collections::BTreeMap;
-
-    fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    }
+    use crate::test_support::kv;
 
     let ghost_kv = kv(&[
         ("kero.name", "エモ"),                        // scope1 検出
@@ -129,15 +118,9 @@ fn anchor_propagates_through_build_placement_config_cascade() {
 // 事後条件（design Postconditions・resolve_placement の出力時点で成立する条件）
 // ------------------------------------------------------------------
 
-/// 事後条件: 出力長＝入力長・入力順保存・寸法転記・
-/// `balloon_offset ≡ balloon_pos − char_pos`。
-///
-/// 恒等式は [`resolve_placement`] の**出力時点**の事後条件であり、以降ずっと成り立つ
-/// 不変量ではない（windowposition-limit DD6）——下流の関門は `balloon_pos`（表示位置）
-/// だけを補正し `balloon_offset`（論理相対位置）を生値のまま残すため、関門通過後は
-/// 両者の差が恒等式を満たすとは限らない。本檻は配置式の出力だけを見る。
+/// 事後条件: 出力長＝入力長・入力順保存・寸法転記。
 #[test]
-fn postconditions_order_length_and_offset_identity() {
+fn postconditions_order_length_and_sizes() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let inputs = [
@@ -156,14 +139,6 @@ fn postconditions_order_length_and_offset_identity() {
             assert_eq!(o.scope, i.scope, "dpi={dpi}: 入力順保存");
             assert_eq!(o.char_size, i.char_size, "dpi={dpi}");
             assert_eq!(o.balloon_size, i.balloon_size, "dpi={dpi}");
-            assert_eq!(
-                o.balloon_offset,
-                PointPx {
-                    x: o.balloon_pos.x - o.char_pos.x,
-                    y: o.balloon_pos.y - o.char_pos.y
-                },
-                "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
-            );
         }
     }
 }

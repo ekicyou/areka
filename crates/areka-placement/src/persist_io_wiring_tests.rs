@@ -104,87 +104,56 @@ fn load_restored_state_mount_resolve_failure_is_empty() {
 }
 
 // ------------------------------------------------------------------
-// PersistWiring / persist_entries（保存投函ヘルパ・design C1 State Management・
+// PersistWiring / persist_entries・forget_entries（送り口・design C1 State Management・
 //   Req1.1/1.9/6.2/7.1・Testing Strategy §1/§6）
 //   NonSend リソース存在 → persist_put（Ghost 固定・fire-and-forget）／不在 → debug!＋no-op。
 // ------------------------------------------------------------------
 
-use crate::test_support::SharedFakeIo;
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{SylphyaInit, spawn_sylphya};
-use std::sync::Arc;
+use super::finalize_save_tests::Store;
+use log_capture_kit::capture;
 
 /// 存在檻（7.1/1.1）: headless World に `PersistWiring` を挿入して `persist_entries` を呼ぶと、
 /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる
 /// （＝`persist_put` が実際に投函され実 IO へ確定した証明）。
 #[test]
 fn persist_entries_with_wiring_write_through_to_ghost_scope() {
-    // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す）。
-    let shared = Arc::new(FakePersistIo::new());
-    let roots = ScopeRoots {
-        ghost: Some(std::path::PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    let parts = spawn_sylphya(SylphyaInit {
-        roots: roots.clone(),
-        io: Box::new(SharedFakeIo::new(shared.clone())),
-        runtime_sink: None,
-    });
-
-    // World へ NonSend リソースとして挿入（UI スレッド常駐・MouseWiring/RuntimeWiring 先例）。
+    let store = Store::new();
     let mut world = World::new();
-    world.insert_non_send(PersistWiring {
-        publisher: parts.publisher.clone(),
-    });
+    store.wire(&mut world);
 
     // char_pos_entries を persist_entries 経由で投函（Ghost 固定はヘルパ内で強制・7.1）。
-    let entries = char_pos_entries(0, PointPx { x: 1486, y: 353 });
-    persist_entries(&world, entries);
+    persist_entries(&world, char_pos_entries(0, PointPx { x: 1486, y: 353 }));
 
-    // barrier 復帰 = 上記 put の write-through 保存（save_scope）まで完了（同一送信端 FIFO）。
-    parts
-        .publisher
-        .barrier()
-        .expect("barrier should resolve while actor is alive");
-
-    // アクターと同一ストアを別ハンドルの load_scope で観測（実 IO 通過＝persist_put 投函の証明）。
-    let loaded = load_scope(
-        PersistScope::Ghost,
-        &roots,
-        &SharedFakeIo::new(shared.clone()),
-    );
-    assert!(
-        loaded.contains(&(
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::X
-            },
-            "1486".to_string()
-        )),
-        "persist_entries が Ghost へ write-through していない（WindowPos.x）: {loaded:?}"
-    );
-    assert!(
-        loaded.contains(&(
-            PersistKey::WindowPos {
-                scope: 0,
-                axis: Axis::Y
-            },
-            "353".to_string()
-        )),
-        "persist_entries が Ghost へ write-through していない（WindowPos.y）: {loaded:?}"
-    );
-
-    // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
-    parts.publisher.close();
-    let _ = parts.handle.join();
+    let loaded = store.load();
+    for (axis, want) in [(Axis::X, "1486"), (Axis::Y, "353")] {
+        assert_eq!(
+            loaded
+                .get(&PersistKey::WindowPos { scope: 0, axis })
+                .map(String::as_str),
+            Some(want),
+            "persist_entries が Ghost へ write-through していない（{axis:?}）: {loaded:?}"
+        );
+    }
+    store.finish();
 }
 
 /// 不在縮退檻（6.2/design「PersistWiring 不在は debug!＋no-op」）: `PersistWiring` 未挿入の
-/// World で `persist_entries` を呼んでも panic せず no-op で戻る（fallback boot 経路の縮退）。
+/// World で `forget_entries` を呼ぶと、panic せず `debug!` を 1 行残して何もしない
+/// （`persist_entries` の同じ行は `follow_keyword_base_tests.rs` の
+/// `a_drag_on_a_side_scope_is_a_no_op_for_the_material` が確かめる）。
 #[test]
-fn persist_entries_without_wiring_is_noop_and_never_panics() {
-    let world = World::new(); // PersistWiring 未挿入（fallback 未挿入経路を模す）。
-    // panic しない・no-op（debug ログのみ）。ここへ到達＝縮退成功。
-    persist_entries(&world, char_pos_entries(0, PointPx { x: 1, y: 2 }));
-    persist_entries(&world, balloon_offset_entries(0, PointPx { x: -400, y: 0 }));
+fn forget_entries_without_wiring_logs_debug_and_does_nothing() {
+    let world = World::new();
+    let keys = vec![PersistKey::BalloonOffset {
+        scope: 0,
+        axis: Axis::X,
+    }];
+    let ((), events) = capture(|| forget_entries(&world, keys));
+    let hits: Vec<_> = events
+        .iter()
+        .filter(|e| e.message().contains("鍵を消す投函を no-op"))
+        .collect();
+    assert_eq!(hits.len(), 1, "不在の debug! が 1 行: {events:?}");
+    assert_eq!(hits[0].level, tracing::Level::DEBUG);
+    assert_eq!(hits[0].field("key_count"), Some("1"));
 }

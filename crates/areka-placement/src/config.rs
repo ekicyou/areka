@@ -61,7 +61,7 @@ pub struct ScopeConfig {
     pub default_x: Option<i32>,
     /// Y 初期座標指定。同層内 `defaulty` ＞ `defaulttop`・層間 shell ＞ ghost（2.6/2.7）。
     pub default_y: Option<i32>,
-    /// `balloon.alignment`（`left` 既定／`right`）。暫定 offset の向き決定にのみ使用（1.2・DD7）。
+    /// `balloon.alignment`（`left` 既定／`right`／`none`＝自動）。暫定 offset の向き決定にのみ使用（1.2・DD7）。
     pub balloon_alignment: BalloonSide,
     /// `balloon.offsetx`/`balloon.offsety`。軸ごとに決まり、書かれない軸は 0。どちらも無ければ
     /// None（emo2 は未使用＝None）。
@@ -310,14 +310,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-
-    /// テスト補助: `(key, value)` ペア列から `parse_kv` 出力相当の `BTreeMap` を組む。
-    fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    }
+    use crate::test_support::kv;
 
     /// scope0 のみ（信号なし）の空 KV ペア。
     fn empty() -> BTreeMap<String, String> {
@@ -516,26 +509,19 @@ mod tests {
         assert_eq!(cfg.scopes[&1].default_y, Some(2));
     }
 
-    /// T-C2: 数値化不能な値はパニックせず None（`parse_i32` が `warn!` を残す）。
+    /// T-C2: 読めない値（未知の `balloon.alignment`・数値でない `defaultx`／`defaulty`）は
+    /// パニックせず、1 つにつき `warn!` を 1 件ずつ出し、値は既定（Left・None）になる。
     #[test]
-    fn t_c2_unparseable_numeric_becomes_none() {
-        let shell = kv(&[("sakura.defaultx", "abc"), ("sakura.defaulty", "12.5")]);
-        let cfg = build_placement_config(&empty(), &shell);
-        assert_eq!(cfg.scopes[&0].default_x, None);
-        assert_eq!(cfg.scopes[&0].default_y, None);
-    }
-
-    /// T-C2: 読めない値 2 つ（未知の `balloon.alignment`・数値でない `defaultx`）は、
-    /// それぞれ `warn!` を 1 件ずつ出し、値は既定（Left・None）になる。
-    #[test]
-    fn t_c2_two_unreadable_values_warn_once_each_and_fall_back() {
+    fn t_c2_unreadable_values_warn_once_each_and_fall_back() {
         let shell = kv(&[
             ("sakura.balloon.alignment", "center"),
             ("sakura.defaultx", "abc"),
+            ("sakura.defaulty", "12.5"),
         ]);
         let (cfg, events) = log_capture_kit::capture(|| build_placement_config(&empty(), &shell));
         assert_eq!(cfg.scopes[&0].balloon_alignment, BalloonSide::Left);
         assert_eq!(cfg.scopes[&0].default_x, None);
+        assert_eq!(cfg.scopes[&0].default_y, None);
         let count = |needle: &str| {
             events
                 .iter()
@@ -543,7 +529,7 @@ mod tests {
                 .count()
         };
         assert_eq!(count("balloon.alignment の未知値"), 1, "{events:?}");
-        assert_eq!(count("配置キーの数値化に失敗"), 1, "{events:?}");
+        assert_eq!(count("配置キーの数値化に失敗"), 2, "{events:?}");
     }
 
     // ------------------------------------------------------------------

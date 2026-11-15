@@ -32,7 +32,7 @@
 //!
 //! 本モジュールは placement の**最下流**であり、`World`・表示基盤の型に依存しない。
 //! 扱うのは素の数値・文字列と、**下記 2 つの例外**だけである。wintf `Monitor` からの
-//! 転写は呼出側（`lib.rs`／`follow.rs`）の仕事である。
+//! 転写は呼出側（`lib.rs` の `monitor_records`）の仕事である。
 //!
 //! - [`Entity`] は **wintf 側ログ（`entity = ?e`）との結合キー**だから受ける。同じ `Debug`
 //!   表現で出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
@@ -42,7 +42,7 @@
 //!   古いまま**になりうる。列挙をそのまま受ければ網羅 match がコンパイラに守られる。
 //!   いずれも `World` を要さない `Copy` 値であり、最下流という位置は動かない。
 
-// 呼び手: 本モジュールの API はすべて本番から呼ばれる。
+// 本番の呼び手:
 // - モニタスナップショット側（`MonitorRecord`・`monitor_snapshot_header_line`／
 //   `monitor_record_line`・`log_monitor_snapshot`）: `areka` の `main.rs`（`boot_monitor_snapshot`・
 //   要件 1.1 正典出力点）・`runtime/frame/work_area_sync.rs`（作業領域の同期）と
@@ -50,9 +50,6 @@
 // - 窓移動レコード側（`WindowKind`・`WindowMoveRecord`・`window_move_record_line`・
 //   `log_window_move`・`WINDOW_MOVE_RECORD_TAG`）: `follow::window_move` の単一ライター
 //   `enqueue_window_set_pos` が書込成功時に呼ぶ。
-//
-// モジュール大の `#![allow(dead_code)]` は付けない（以後の真の dead code を隠すため）。
-// 配置は lib の crate で、`pub` の項目は dead_code の警告を受けないので、個別の許可も要らない。
 
 use std::fmt;
 
@@ -154,16 +151,18 @@ pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
 /// 語彙側を完全化して 1:1 を保つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PlacementRoute {
-    /// spawn 初期配置（`placement::spawn` の窓生成時）。
+    /// spawn 初期配置（`spawn` の窓生成時）。
     // 単一ライターを通らない経路（spawn は entity 組立時に `WindowPos` を直接持たせる）ゆえ
     // 現状どこからも構築されない。design「Service Interface」が定める語彙の一部であり、
     // D13 帰結⑷「語彙のみ保持・将来の配線先として予約」ゆえ削らない。
     SpawnInitial,
     /// 位置永続化の復元マージ（可視化保証は position-persist の所有＝可視性ガード適用外）。
     // 起動時の復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージするので
-    // この語を作らない。作るのはシェルの差し替えでバルーン窓を置き直す
-    // `placement::reseed::apply_shell_descript` の `follow_balloon` の引き金（記憶の復元と同じ
-    // 明示の配置として扱う）。
+    // この語を作らない。作るのはバルーン窓を標準の部品で据え直す `reseed::reinstall_balloon` の
+    // `follow_balloon` の引き金（記憶の復元と同じ明示の配置として扱う）。呼び手は 3 つある:
+    // シェルの差し替え（`reseed::apply_shell_descript`）・面の windowposition の置き直し
+    // （`face_windowposition::apply_face_windowposition`）・バルーン位置初期化
+    // （`reset_balloon_pos::reset_balloon_positions`）。この語だけでは 3 つを見分けられない。
     Restore,
     /// アンカー変化トリガ（`anchor_changed_system`）。
     AnchorChange,
@@ -219,7 +218,7 @@ pub enum PlacementRoute {
     /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
     /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
     /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
-    // 発行者は `placement::chain_realign::realign_chain_once_with`。
+    // 発行者は `chain_realign::realign_chain_once_with`。
     ChainRealign,
     /// 面の `move` のずれを窓の位置へ当てる書込（seriko-pattern-calls「MoveShiftPlacement」・
     /// `follow::move_shift::apply_char_shift`）。
@@ -449,9 +448,10 @@ pub fn window_move_record_line(record: &WindowMoveRecord) -> String {
     )
 }
 
-/// 検出した全モニタの観測レコードを出力する（要件 1.1・起動時 1 回きりの有界出力）。
+/// 検出した全モニタの観測レコードを出力する（要件 1.1・1 回の呼び出しで有界の行数）。
 ///
-/// `context` は呼出点タグ（`"prepare_ghost_windows"`・`"monitor_snapshot"` 等）で、
+/// 呼ぶのは起動時の列挙・窓の準備・作業領域の同期で、作業領域が変わるたびにも出る。
+/// `context` は呼出点タグ（`"monitor_snapshot"`・`"prepare_ghost_windows"`・`"work_area_sync"`）で、
 /// 同一運転内に複数の列挙点があってもログ上で出所を弁別できるようにする。
 ///
 /// 出力は見出し 1 行＋モニタ 1 台 1 行。本文は純関数の組立結果そのもの

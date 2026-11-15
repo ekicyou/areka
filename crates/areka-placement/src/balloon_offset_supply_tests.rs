@@ -2,8 +2,8 @@
 //! （areka-P0-balloon-offset-dpi・要件 1.2／2.1／2.2／2.3／2.5／2.6・task 4.1）。
 //!
 //! ここが固定するのは**換算そのもの**——作者空間の生値が合流欄へ入る前にシェル軸の
-//! 拡大率で物理 px へ置き換わること、拡大率 1 では従来と同一であること、受理規約
-//! （両軸が揃ったときのみ採用）が変わらないこと、飽和が回り込まないこと。
+//! 拡大率で物理 px へ置き換わること、拡大率 1 では従来と同一であること、未宣言は
+//! `None` のまま残ること、飽和が回り込まないこと。
 //!
 //! `prepare_stages_for_shell` の**呼出順**そのものと、飽和が実際に警告として出ること、および
 //! 合流後の値を実配置経路で観測することは、下の「供給結線」の群が持つ（design「新規テスト
@@ -14,12 +14,7 @@ use areka_emo_compose::ScaleRatio;
 use super::config::{PlacementConfig, ScopeConfig};
 use super::windowposition::{apply_windowposition, to_screen_adjust};
 use super::*;
-use crate::shared_test_support::cfg_of;
-
-/// テスト用 k（非ゼロ前提）。
-fn k(num: u32, den: u32) -> ScaleRatio {
-    ScaleRatio::new(num, den).expect("テストの k は非ゼロ")
-}
+use crate::shared_test_support::{cfg_of, k};
 
 /// scope 1 つだけを持つ最小の `PlacementConfig`。`offset` をそのまま合流欄へ置く。
 fn cfg_with_offset(offset: Option<(i32, i32)>) -> PlacementConfig {
@@ -221,7 +216,7 @@ fn merged_value_at_identity_matches_the_pre_spec_sum() {
 // 合流より**前**に走ること、⑵ 合流後の値が両供給元を同一空間で加算した結果で
 // あること、⑶ 飽和が契約の語で**記録に出る**こと（要件 2.3／2.5／7.1／7.4）。
 //
-// 上の 4.1 群は純関数と 2 ステップの直列合成を固定したが、本番の呼出順そのものと
+// 上の純関数の側の檻は純関数と 2 ステップの直列合成を固定したが、本番の呼出順そのものと
 // 記録の発生は踏んでいない。本群は `prepare_stages_for_shell`（＝`scale_then_merge` で
 // `apply_author_balloon_offset_scale` と `merge_scope_windowpositions` を並べている当の関数）
 // を回して踏む。
@@ -241,15 +236,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::resolver::PointPx;
-use super::shared_test_support::TempDir;
+use super::shared_test_support::{TempDir, WINDOWPOSITION_SUPPLY_NEEDLE};
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
-
-/// `windowposition` 供給層の観測点（`placement_windowposition_tests.rs` が
-/// 「フィールド名と値の形そのものが契約」と固定している info 行）の本文。
-/// 本群はこの行を**合流ステップが走った時刻の目印**として使う。
-const WINDOWPOSITION_SUPPLY_NEEDLE: &str = "windowposition を初期既定位置の調整量へ";
 
 /// 作者オフセット宣言つきの合成ゴーストを組む（[`synth_declared_dpi_ghost`] の薄い延長）。
 ///
@@ -386,7 +376,7 @@ fn prepare_merged_offset_reaches_the_resolved_placement() {
 ///
 /// 是正前と同じ「生値どうしの素の和」(100+266, −40−129) = (366, −169)。
 /// **本檻は是正前も通る**——要件 7.5 が求める不動点の錨であって、7.4 の対の片割れでは
-/// ない（対は上の 3 本が担う）。
+/// ない（対は上の 2 本が担う）。
 #[test]
 fn prepare_at_identity_scale_matches_the_pre_spec_merge() {
     with_com_initialized(|| {
@@ -445,11 +435,11 @@ fn prepare_records_saturation_with_the_contract_tag() {
     });
 }
 
-/// **順序**の檻の第 2 面: 値の一致ではなく**記録の並び**で順序を
-/// 直に観測する。
+/// **順序**の檻: 値の一致ではなく**記録の並び**で順序を直に観測する。
 ///
 /// 換算ステップは飽和したときだけ記録を出し、`windowposition` の合流ステップは scope
-/// ごとに必ず観測点 1 行（[`WINDOWPOSITION_SUPPLY_NEEDLE`]）を出す。両者を同じ捕捉窓で
+/// ごとに必ず観測点 1 行（`WINDOWPOSITION_SUPPLY_NEEDLE`）を出す。本群はこの行を**合流ステップが
+/// 走った時刻の目印**として使う。両者を同じ捕捉窓で
 /// 拾えば、**換算の警告が合流の観測点より前に並ぶ**ことがそのまま呼出順の証拠になる。
 ///
 /// この主張は値の算術に一切依存しないので、丸めや軸の割り当てを将来触っても順序だけを

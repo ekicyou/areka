@@ -87,10 +87,10 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
 }
 
 // ------------------------------------------------------------------
-// T-R2: スコープ連鎖（P2・scg 2.1/2.2・2.10・DD3）
+// T-R2: スコープ連鎖（P2・areka-P0-scope-chain-gap 2.1/2.2・2.10・DD3）
 // ------------------------------------------------------------------
 
-/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0・scg 2.1/2.2）。
+/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
 /// `kero.defaultx=0` は基準密着であって右端に戻らない（DD3 の檻）。
 /// 3 スコープで一般連鎖と、隣接ペアの隙間が 0 であることを固定する。
 #[test]
@@ -119,33 +119,12 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
         assert_eq!(
             out[1].char_pos.x,
             x0 - w1,
-            "dpi={dpi}: base_x(1)=char_x(0)−w1・defaultx=0＝隣接・gap 0（scg 2.1/2.2）"
-        );
-        assert_ne!(
-            out[1].char_pos.x,
-            wa.right - w1,
-            "dpi={dpi}: kero.defaultx=0 が右端に戻ってはならない（DD3）"
-        );
-        assert_ne!(
-            out[1].char_pos.x,
-            x0 - w0,
-            "dpi={dpi}: 前スコープ幅を引く旧式へ戻ってはならない（不等幅でのみ判別可・scg 2.1/2.2）"
+            "dpi={dpi}: base_x(1)=char_x(0)−w1・defaultx=0＝隣接・gap 0（areka-P0-scope-chain-gap 2.1/2.2）"
         );
         assert_eq!(
             out[2].char_pos.x,
             (x0 - w1) - w2,
-            "dpi={dpi}: base_x(2)=char_x(1)−w2（一般連鎖・scg 2.1/2.2）"
-        );
-        // 隣接ペアの隙間はいずれも 0（scope n の右端＝scope n−1 の左端・scg 2.2）
-        assert_eq!(
-            out[0].char_pos.x - (out[1].char_pos.x + w1),
-            0,
-            "dpi={dpi}: scope0/scope1 の隙間 0（scg 2.1/2.2）"
-        );
-        assert_eq!(
-            out[1].char_pos.x - (out[2].char_pos.x + w2),
-            0,
-            "dpi={dpi}: scope1/scope2 の隙間 0（scg 2.1/2.2）"
+            "dpi={dpi}: base_x(2)=char_x(1)−w2（一般連鎖・areka-P0-scope-chain-gap 2.1/2.2）"
         );
         // Y は各スコープの h で独立に bottom 基準
         assert_eq!(out[1].char_pos.y, wa.bottom - h1, "dpi={dpi}");
@@ -153,22 +132,22 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
     }
 }
 
-/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0・scg 2.1/2.2）。
+/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
 ///
 /// 確定規則（SSP 実測 H1）は `char_x(0) = right − w(0)`・
 /// `char_x(n≥1) = char_x(n−1) − w(n)`。引くのは**自スコープの幅**ゆえ、隣接ペアの
-/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない・scg 2.2）。
+/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない・areka-P0-scope-chain-gap 2.2）。
 ///
 /// 本檻の要点は、不等幅（400/320/200）と等幅（320/320）を**同一のヘルパ**
-/// （同一式・同一 assert 形）で検定することにある（scg 2.5＝等幅を特殊扱いしない）。
+/// （同一式・同一 assert 形）で検定することにある（areka-P0-scope-chain-gap 2.5＝等幅を特殊扱いしない）。
 /// 期待値は幅列からの畳み込みで生成し、等幅側に手書き定数を置かない
 /// （偶然一致する定数では「同一式で配置されている」ことを主張できない）。
-/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する（scg 2.4/3.5）。
+/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する（areka-P0-scope-chain-gap 2.4/3.5）。
 #[test]
 fn t_r2_unequal_widths_leave_no_gap() {
     /// 幅列を確定規則で検定する**唯一の検定路**（不等幅・等幅で分岐しない）。
     /// 検定するのは P2（キャラ窓 X の連鎖）のみで、P5（バルーン）は混ぜない。
-    fn assert_chain_is_adjacent(dpi: i32, label: &str, widths: &[i32]) -> Vec<ScopePlacement> {
+    fn assert_chain_is_adjacent(dpi: i32, label: &str, widths: &[i32]) {
         let wa = work_area(dpi);
         let cfg = cfg_of(
             (0..widths.len())
@@ -188,58 +167,32 @@ fn t_r2_unequal_widths_leave_no_gap() {
             "dpi={dpi} [{label}]: 出力長＝入力長（空虚一致封じ）"
         );
 
-        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式・scg 2.5）
+        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式・areka-P0-scope-chain-gap 2.5）
         let mut expected_x = wa.right;
         for (n, &w) in widths.iter().enumerate() {
             expected_x -= w;
             assert_eq!(
                 out[n].char_pos.x, expected_x,
-                "dpi={dpi} [{label}]: scope{n} は char_x(n)=char_x(n−1)−w(n)（隣接・gap 0（scg 2.1/2.2））"
+                "dpi={dpi} [{label}]: scope{n} は char_x(n)=char_x(n−1)−w(n)（隣接・gap 0（areka-P0-scope-chain-gap 2.1/2.2））"
             );
         }
-        // 全隣接ペアの隙間 0（scope n の右端＝scope n−1 の左端）
-        for n in 1..widths.len() {
-            assert_eq!(
-                out[n - 1].char_pos.x - (out[n].char_pos.x + widths[n]),
-                0,
-                "dpi={dpi} [{label}]: scope{}/scope{n} の隙間 0（隣接・gap 0（scg 2.1/2.2））",
-                n - 1
-            );
-        }
-        out
     }
 
     for dpi in DPIS {
-        let wa = work_area(dpi);
-
-        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない（scg 2.2/3.1/3.2）
+        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない（areka-P0-scope-chain-gap 2.2/3.1/3.2）。
+        //     前スコープの幅を引く欠陥式は、不等幅でだけ期待値と食い違う（areka-P0-scope-chain-gap 3.2）
         let unequal = [px(400, dpi), px(320, dpi), px(200, dpi)];
-        let out_unequal = assert_chain_is_adjacent(dpi, "不等幅 400/320/200", &unequal);
-        // 欠陥式（前スコープの幅を引く）は不等幅でのみ判別できる（scg 3.2）
-        let x0 = wa.right - unequal[0];
-        assert_ne!(
-            out_unequal[1].char_pos.x,
-            x0 - unequal[0],
-            "dpi={dpi}: 前スコープ幅を引く旧式へ戻ってはならない（隣接・gap 0（scg 2.1/2.2））"
-        );
+        assert_chain_is_adjacent(dpi, "不等幅 400/320/200", &unequal);
 
         // (2) 等幅 2 スコープ: (1) と**同一のヘルパ＝同一式・同一 assert 形**で検定する
-        //     （scg 2.5＝等幅を特殊扱いしない）
+        //     （areka-P0-scope-chain-gap 2.5＝等幅を特殊扱いしない）
         let equal = [px(320, dpi), px(320, dpi)];
-        let out_equal = assert_chain_is_adjacent(dpi, "等幅 320/320", &equal);
-        // 等幅では是正式（自幅を引く）と欠陥式（前スコープ幅を引く）が数値的に一致する。
-        // すなわち等幅入力では本欠陥を構造的に観測できない——不等幅入力を必須とする理由
-        // そのものであり、(1) の assert_ne! を等幅側へ置けない根拠（scg 3.2）。
-        assert_eq!(
-            out_equal[1].char_pos.x,
-            (wa.right - equal[0]) - equal[0],
-            "dpi={dpi}: 等幅では是正式と欠陥式が一致（判別には不等幅入力が要る・scg 3.2）"
-        );
+        assert_chain_is_adjacent(dpi, "等幅 320/320", &equal);
     }
 }
 
 /// T-R2 補: 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
-/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・scg 2.1/2.2）。
+/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・areka-P0-scope-chain-gap 2.1/2.2）。
 #[test]
 fn t_r2_chain_defaultx_offsets_leftward_from_base() {
     for dpi in DPIS {
@@ -259,7 +212,7 @@ fn t_r2_chain_defaultx_offsets_leftward_from_base() {
         assert_eq!(
             out[1].char_pos.x,
             x0 - w1 - dx1,
-            "dpi={dpi}: char_x(1)=base_x(1)−defaultx(1)（base_x(1)=char_x(0)−w1・scg 2.1/2.2）"
+            "dpi={dpi}: char_x(1)=base_x(1)−defaultx(1)（base_x(1)=char_x(0)−w1・areka-P0-scope-chain-gap 2.1/2.2）"
         );
     }
 }
@@ -594,7 +547,7 @@ fn t_r6_chain_uses_clamped_previous_position() {
         let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}");
-        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（scg 2.1/2.2）
+        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（areka-P0-scope-chain-gap 2.1/2.2）
         assert_eq!(out[1].char_pos.x, wa.left, "dpi={dpi}: 連鎖先もクランプ");
 
         // ここまでは両基準が左端へ潰れて同値になるため 2.7 を判別しない。
@@ -619,19 +572,8 @@ fn t_r6_chain_uses_clamped_previous_position() {
         assert_eq!(
             out[1].char_pos.x,
             clamped_x0 - w1,
-            "dpi={dpi}: base_x(1)=クランプ後 char_x(0)−w1（2.7・scg 2.1/2.2）"
-        );
-        // クランプ前の位置（wa.left+2000）を連鎖基準にすると scope1 は右端クランプへ
-        // 落ちる。退行すればこの否定 assert が落ちる＝2.7 を判別する檻の本体。
-        assert_ne!(
-            out[1].char_pos.x,
-            wa.right - w1,
-            "dpi={dpi}: クランプ前の位置を連鎖基準にしてはならない（2.7）"
-        );
-        assert_eq!(
-            out[0].char_pos.x - (out[1].char_pos.x + w1),
-            0,
-            "dpi={dpi}: クランプが挟まっても隣接ペアの隙間は 0（scg 2.1/2.2）"
+            "dpi={dpi}: base_x(1)=クランプ後 char_x(0)−w1（2.7・areka-P0-scope-chain-gap 2.1/2.2）。\
+             クランプ前の位置（wa.left+2000）を連鎖基準にすると右端クランプ（right−w1）へ落ちる"
         );
     }
 }

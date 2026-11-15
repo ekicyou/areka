@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::BalloonXMode;
-use crate::follow::OffsetBase;
+use crate::shared_test_support::placement_sized;
 use log_capture_kit::{ExpectField, capture};
 
 // ------------------------------------------------------------------
@@ -12,12 +12,11 @@ use log_capture_kit::{ExpectField, capture};
 //     統一されたため、保存だけ別基準にすると保存時と復元時でサーフェス寸が違うとき
 //     Δ ぶんの恒久ドリフトが出る（実機のむらさきで Δh=175px）。
 //
-// 基準変換の純関数（balloon_offset_to_persist/_from_persist/anchor_edge_basis）は
-// 恒等になったため撤去済み。以下の檻は同じ性質を「保存 entries ⇄ 復元 merge」の
-// 実経路（balloon_offset_entries → apply_restored_placements）で固定する。
+// 以下の檻はこの性質を「保存 entries ⇄ 復元 merge」の実経路
+// （balloon_offset_entries → apply_restored_placements）で固定する。
 // ------------------------------------------------------------------
 
-const ALL_ANCHORS: [Anchor; 5] = [
+pub(super) const ALL_ANCHORS: [Anchor; 5] = [
     Anchor::Top,
     Anchor::Bottom,
     Anchor::Left,
@@ -146,15 +145,7 @@ fn balloon_offset_restores_exactly_at_same_size_and_stays_window_relative_bottom
     );
     assert_eq!(
         out_diff[0].balloon_offset, offset_tl_saved,
-        "寸法が変わっても左上基準 offset は不変（窓相対）"
-    );
-
-    // 旧下端基準の反例排除: 下端基準なら復元 offset.y は offset_tl.y + (h2 − h1)
-    // ＝ 70 + 120 = 190 になっていた（Δh ぶんの恒久ドリフト）。
-    assert_ne!(
-        out_diff[0].balloon_offset.y,
-        offset_tl_saved.y + (h2 - h1),
-        "下端基準の復活検出: 高さ差ぶん offset がドリフトしている"
+        "寸法が変わっても左上基準 offset は不変（窓相対・下端基準なら y は 70 + 120 = 190 へずれる）"
     );
 }
 
@@ -331,8 +322,9 @@ fn project_restore_off_all_monitors_uses_nearest_work_area() {
 // ------------------------------------------------------------------
 
 /// テスト用 `ScopePlacement` 構築（`balloon_pos ≡ char_pos + balloon_offset` の
-/// 事後条件を満たす resolver 出力を模す）。
-fn placement(
+/// 事後条件を満たす resolver 出力を模す）。`balloon_limit` は正典既定の有効（復元 merge は
+/// limit を変換しない）。persist の兄弟の檻も使う。
+pub(super) fn placement(
     scope: usize,
     anchor: Anchor,
     char_pos: PointPx,
@@ -341,33 +333,28 @@ fn placement(
     balloon_size: SizePx,
 ) -> ScopePlacement {
     ScopePlacement {
-        scope,
-        char_pos,
-        char_size,
-        balloon_pos: PointPx {
-            x: char_pos.x + balloon_offset.x,
-            y: char_pos.y + balloon_offset.y,
-        },
-        balloon_size,
-        balloon_offset,
-        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
-        // windowposition-limit: 正典既定（有効）。復元 merge は limit を変換しない。
-        balloon_limit: true,
         anchor,
-        balloon_keyword_base: None,
+        ..placement_sized(
+            scope,
+            char_pos,
+            balloon_offset,
+            true,
+            char_size,
+            balloon_size,
+        )
     }
 }
 
 fn wp(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
     (PersistKey::WindowPos { scope, axis }, v.to_string())
 }
-fn bo(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
+pub(super) fn bo(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
     (PersistKey::BalloonOffset { scope, axis }, v.to_string())
 }
 
-/// 復元テスト共通寸法。
-const CSZ: SizePx = SizePx { w: 400, h: 600 };
-const BSZ: SizePx = SizePx { w: 200, h: 300 };
+/// 復元テスト共通寸法（persist の兄弟の檻も使う）。
+pub(super) const CSZ: SizePx = SizePx { w: 400, h: 600 };
+pub(super) const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
 /// 1.4: 保存 WindowPos が両軸とも parse できるとき char_pos を保存値へ差し替える
 /// （既定位置解決に優先）。空 snapshot ゆえ project_restore は identity で保存値素通し。
@@ -600,15 +587,10 @@ fn apply_saved_balloon_offset_is_char_top_left_basis_bottom() {
         PointPx { x: 0, y: -430 },
         "Bottom でも保存値は左上基準そのまま（char_size を足し戻さない・2.2/2.3）"
     );
-    assert_ne!(
-        out[0].balloon_offset,
-        PointPx { x: 200, y: 170 },
-        "下端中央基準の足し戻しが復活していない"
-    );
     assert_eq!(out[0].balloon_pos, PointPx { x: 600, y: 70 });
 }
 
-/// 16（要件 9.2）: 在るが読めない鍵（窓の x = "12.5"）と、片方の軸だけの鍵（ずらしの y だけ）は、
+/// spec: audit-placement-core 要件 9.2: 在るが読めない鍵（窓の x = "12.5"）と、片方の軸だけの鍵（ずらしの y だけ）は、
 /// 鍵ごとに `warn!` を 1 行ずつ出して既定へ戻る。読める相方（窓の y）と、そろった記憶は出さない。
 #[test]
 fn apply_warns_once_per_unusable_key_and_keeps_default() {

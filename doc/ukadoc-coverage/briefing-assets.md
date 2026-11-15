@@ -221,10 +221,10 @@
 | `crates/areka-parsers/src/package/resolve_shell.rs:59`（`read_ghost_descript`。入口は `resolve_with_shell` と `read_ghost_names`） | ⑴ ゴーストの descript | ここでは記録せず、失敗の理由を呼ぶ側へ返す。呼ぶ側は 7 つあり、どれも記録する——`crates/areka-ghost/src/runtime.rs:608`（エラー段）・`crates/areka-placement/src/source.rs:150`（エラー段）・`crates/areka-placement/src/persist.rs:309`（警告段）・`crates/areka/src/runtime/assets.rs:331`（`crates/areka/src/runtime/mod.rs:385` のファイルが無いとき・警告段と同 `:392` のそれ以外・エラー段）・`crates/areka/src/session/reload.rs:636`（エラー段）・`crates/areka/src/offline_dump/mod.rs:130`（同 `:122` のエラー段）と同 `:169`（同 `:171` のエラー段） |
 | `crates/areka-parsers/src/package/resolve.rs:157`（`read_bindgroup_defaults`） | ⑵ シェルの descript | **何も残らない。** 着せ替えの既定を拾うためだけの読みで、読めなければ「着せ替えの宣言が無い」と同じ空として続き、呼ぶ側にも伝わらない。**10 か所のうち無言なのはここだけである。** |
 | `crates/areka-ghost/src/config.rs:44`（`resolve_shell_name`） | ⑵ シェルの descript | `:47` の警告段。読めても `name` が無いときは `:61` の警告段。どちらもシェルのフォルダ名で代用して続く |
-| `crates/areka-placement/src/source.rs:156`（`read_kv_lenient` を通る） | ⑴ ゴーストの descript | `:191` の警告段。空の表として続く |
+| `crates/areka-placement/src/source.rs:156`（`read_kv_lenient` を通る） | ⑴ ゴーストの descript | `:197` の警告段。空の表として続く |
 | `crates/areka-placement/src/source.rs:160`（`load_descript_source_for_shell`） | ⑵ シェルの descript | `:163` のエラー段。窓の配置はここで打ち切る |
-| `crates/areka-placement/src/source.rs:210`（`load_balloon_author_dpi`。同じ `read_kv_lenient` を通る） | ⑷ バルーンの descript | `:191` の警告段。空の表として続く |
-| `crates/areka-emo-present/src/shell_target.rs:376`（`load_shell_target_quiet`。採寸の `crates/areka-placement/src/measure.rs:399`（`build_shell_assets`）が呼ぶ） | ⑶ surfaces.txt | `:380` のエラー段（無いときは失敗にせず面の画像だけで組む）。面の定義も面の画像も無いときは `:402` のエラー段 |
+| `crates/areka-placement/src/source.rs:214`（`load_balloon_author_dpi`。同じ `read_kv_lenient` を通る） | ⑷ バルーンの descript | `:197` の警告段。空の表として続く |
+| `crates/areka-emo-present/src/shell_target.rs:376`（`load_shell_target_quiet`。採寸の `crates/areka-placement/src/measure.rs:389`（`build_shell_assets`）が呼ぶ） | ⑶ surfaces.txt | `:380` のエラー段（無いときは失敗にせず面の画像だけで組む）。面の定義も面の画像も無いときは `:402` のエラー段 |
 | `crates/areka/src/runtime/assets.rs:343`（`build_shell_assets` の中の `load_shell_target`） | ⑶ surfaces.txt | その場では記録せず、`crates/areka/src/runtime/mod.rs:392` のエラー段でまとめて記録する（面を 1 つも産まないときも同じ） |
 | `crates/areka/src/runtime/assets.rs:331`（同じ関数の `resolve_with_shell`） | ⑵ シェルの descript | 同じく `runtime/mod.rs:392` のエラー段 |
 | `crates/areka-emo-present/src/balloon.rs:505`（`read_descript_layer`） | ⑷ バルーンの descript | `:429` の警告段。バルーンの既定設定を空にして続く |
@@ -236,8 +236,8 @@
 - 同 `:142`・`:168`（同じ関数）——間隔の抽選の分母が 0 のときと、コマが 1 枚も無いときの警告段の記録。どちらもそのアニメーションを採らずに続く。
 - `crates/areka-placement/src/config.rs:242`（`resolve_scope`）——バルーンを左右どちらに置くかの値が語彙の外だったときの警告段の記録。
 - `crates/areka-placement/src/config.rs:293`（`parse_i32`）——窓の既定位置（`defaultx`／`defaultleft`・`defaulty`／`defaulttop`）とバルーンのずらし量（`balloon.offsetx`・`balloon.offsety`）が数として読めなかったときの警告段の記録。
-- `crates/areka-placement/src/resolver.rs:280` と同 `:468`——画面のどの縁に寄せるかの値が areka の受け付ける 2 語（`bottom`・`free`）の外だったときの警告段の記録。前者は語彙の外の値を受け取ったことを、後者はそれが `top`・`left`・`right` のいずれでもなく下端寄せとして解釈したことを残す。
-- `crates/areka-placement/src/source.rs:237` と同 `:247`（`parse_author_dpi`）——作者が想定した画面の細かさ（`dpi`）の値が 0 だったとき・数として読めなかったときの警告段の記録。シェル側とバルーン側が同じ場所を通る。
+- `crates/areka-placement/src/resolver.rs:289`（`resolve_placement`）——画面のどの縁に寄せるかの値が `bottom`・`free`・`top`・`left`・`right` のどれでもなく、下端寄せとして解釈したときの警告段の記録。スコープの番号を付けて残す。
+- `crates/areka-placement/src/source.rs:243` と同 `:253`（`parse_author_dpi`）——作者が想定した画面の細かさ（`dpi`）の値が 0 だったとき・数として読めなかったときの警告段の記録。シェル側とバルーン側が同じ場所を通る。
 
 **下の 9 節の「記録」の欄は、未知の記述に対する答えである。** 定義ファイルそのものが読めなかったときの話ではない。⒜ のとおり、⑵ シェルの descript も ⑷ バルーンの descript も、読めなければ警告段以上の記録が残って既定の水準で見える（例外は `read_bindgroup_defaults` の 1 か所だけである）。
 
@@ -250,7 +250,7 @@
 #### ⑴ ゴーストの descript（`ghost/master/descript.txt`）
 
 - **分類**: 黙って捨てる。
-- **根拠**: 行は `crates/areka-parsers/src/kv/parse.rs:20`（`parse_kv`）で最初の読点だけを使って名前と値に割られ（`:26`）、同じ名前は後に書いたほうで上書きされる（`:39`）。ここに分類も記録も無い。できた表から名前を完全一致で引くのは `crates/areka-parsers/src/package/resolve.rs` の 6 か所（`:69` の `name`・`:71` の `sakura.name`・`:73` の `sakura.name2`・`:75` の `kero.name`・`:82` の `shiori`・`:88` の `seriko.defaultsurfacedirectoryname`）と、文字コードの前走査 `crates/areka-parsers/src/charset/prescan.rs:57`（`prescan_charset`。このクレートで唯一、大文字小文字を区別しない引き方をする）である。窓の置き場所を決める側が同じ表からさらに引く（`crates/areka-placement/src/config.rs` の `resolve_scope`。並べ方 `:228`・バルーンの左右 `:262`・ずらし量 `:273` と `:278`。これらはゴースト側とシェル側の両方の表を順に見る）。**どの引き当てにも当たらない名前は、表に載ったまま誰にも見られずに終わる。**
+- **根拠**: 行は `crates/areka-parsers/src/kv/parse.rs:20`（`parse_kv`）で最初の読点だけを使って名前と値に割られ（`:26`）、同じ名前は後に書いたほうで上書きされる（`:39`）。ここに分類も記録も無い。できた表から名前を完全一致で引くのは `crates/areka-parsers/src/package/resolve.rs` の 6 か所（`:69` の `name`・`:71` の `sakura.name`・`:73` の `sakura.name2`・`:75` の `kero.name`・`:82` の `shiori`・`:88` の `seriko.defaultsurfacedirectoryname`）と、文字コードの前走査 `crates/areka-parsers/src/charset/prescan.rs:57`（`prescan_charset`。このクレートで唯一、大文字小文字を区別しない引き方をする）である。窓の置き場所を決める側が同じ表からさらに引く（`crates/areka-placement/src/config.rs` の `resolve_scope`。並べ方 `:207`・バルーンの左右 `:237`・ずらし量 `:255` と `:260`。これらはゴースト側とシェル側の両方の表を順に見る）。**どの引き当てにも当たらない名前は、表に載ったまま誰にも見られずに終わる。**
 - **記録**: なし。壊れ方は「黙って壊れる」。例外は文字コードの宣言で、綴りを解けないときだけ `charset/decode.rs:35` の控えめな段の記録が出る。既定の水準では見えないので、壊れ方の判定はやはり「黙って壊れる」である（要件 3.5a）。
 - **その記述を読むのは誰か**: 転記層では止まらない。`areka-parsers` の `package::resolve` が SHIORI 本体とシェルの置き場所を決め、`areka` の窓の配置（`placement::config`）が同じ表から自分のぶんを引く。名前は対話の側まで届く。ただし届くのは上に挙げた引き当てに当たった名前だけで、それ以外は転記層より先へ進まない。
 - **成立に要る基盤**: 台帳が数えた内訳では、窓の配置と重なりの解決 18 件・ゴーストとシェルの descript の転記層 17 件・資産の素性を保持する場所 13 件が大きく、ほかにマウスの矢印の差し替え 6 件・SHIORI の読み込みと寿命 6 件・好感度の絵柄の画面 4 件などが続く。

@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use areka_emo_compose::ScaleRatio;
 use log_capture_kit::CapturedEvent;
 use temp_path_kit::TempPath;
 use wintf::ecs::DPI;
@@ -63,6 +64,11 @@ pub(super) fn cfg_of(scopes: Vec<(usize, ScopeConfig)>) -> PlacementConfig {
     }
 }
 
+/// テスト用の拡大率 k（分子・分母はテストが書く非ゼロの値なので `expect`）。
+pub(super) fn k(num: u32, den: u32) -> ScaleRatio {
+    ScaleRatio::new(num, den).expect("テストの k は非ゼロ")
+}
+
 /// スコープ番号の並びを集合にする。
 pub(super) fn scopes(raw: &[u32]) -> BTreeSet<u32> {
     raw.iter().copied().collect()
@@ -87,6 +93,10 @@ pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
         .collect();
     assert!(hits.is_empty(), "`{needle}` が出てはならない: {hits:?}");
 }
+
+/// `windowposition` 供給層の観測点（`lib.rs` の `merge_scope_windowpositions` が scope ごとに出す
+/// info 行・観測点 4・実機サインオフの grep 対象）の本文の一部。檻がこの行を拾う目印。
+pub(super) const WINDOWPOSITION_SUPPLY_NEEDLE: &str = "windowposition を初期既定位置の調整量へ";
 
 /// 決定論テストが [`super::resolver::resolve_placement`] へ渡す**採寸 DPI**（正典既定 96）。
 ///

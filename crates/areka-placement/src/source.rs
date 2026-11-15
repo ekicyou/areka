@@ -4,8 +4,8 @@
 //! （`charset::decode` 既定 Ansi → `kv::parse_kv`）→ (ghost_kv, shell_kv, shell_dir, titles)。
 //!
 //! 依存規約（lib.rs・design「placement::source」）: areka-parsers＋std
-//! （＋tracing）のみを import する。wintf/bevy_ecs/emo 系・兄弟モジュール
-//! （config/resolver/…）へは依存しない。
+//! （＋tracing）と失敗の型（`error`）のみを import する。wintf/bevy_ecs/emo 系・ほかの兄弟
+//! モジュール（config/resolver/…）へは依存しない。
 //!
 //! エンコーディング既定は `DefaultEncoding::Ansi`（SSP 既定・記憶
 //! areka-descript-encoding。emo2 は `charset,UTF-8` 宣言を持つため prescan の
@@ -155,7 +155,7 @@ pub fn load_descript_source_for_shell(
     let ghost_descript = model.shiori.dir.join(DESCRIPT_FILE);
     let ghost_kv = read_kv_lenient(&ghost_descript);
 
-    // shell descript: 読取失敗は致命（→呼び手の `main` が「起動窓を開けない」を告知して終える）。
+    // shell descript: 読取失敗は `Err` で呼び手へ返す（ghost 側のように空 KV で続けない）。
     let shell_descript = model.shell.dir.join(DESCRIPT_FILE);
     let shell_kv = match std::fs::read(&shell_descript) {
         Ok(bytes) => read_kv(&bytes),

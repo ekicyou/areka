@@ -1,4 +1,4 @@
-//! 実表示寸での連鎖再解決（scg 要件 7・design C6）。
+//! 実表示寸での連鎖再解決（areka-P0-scope-chain-gap 要件 7・design C6）。
 //!
 //! # なぜ要るか
 //!
@@ -39,7 +39,7 @@
 //! 永久に揃わない）を兼ねる。どちらも無音だと、隣接が崩れたままの報告を受けたときに
 //! 「確定が走らなかった」のか「走って移動 0 だった」のかをログから判別できない。そこで
 //! [`ChainFinalizeStall`] が見送りを数え、有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を
-//! 超えた時点で**一度だけ**理由つきの診断を出す（scg 6.5・steering「ログ無し失敗経路の禁止」）。
+//! 超えた時点で**一度だけ**理由つきの診断を出す（areka-P0-scope-chain-gap 6.5・steering「ログ無し失敗経路の禁止」）。
 
 use std::fmt;
 
@@ -58,8 +58,9 @@ pub struct ChainFinalized;
 
 /// 台本の `\![move]` が置いたキャラクターの窓の印（組の相手として連れ動いた窓を含む・7.3）。
 ///
-/// 読むのは起動時の確定（`runtime::frame` の `finalize_chain_once_with`）と並べ終えた時点の保存
-/// （`persist::persist_unremembered_char_positions`）で、印の付いた窓は引き戻さず、記憶にも書かない。
+/// 読むのは起動時の確定（`runtime::frame` の `finalize_chain_once_with`）・並べ終えた時点の保存
+/// （`persist::persist_unremembered_char_positions`）・面が大きくなったときの寄せ
+/// （`follow::work_area_clamp::clamp_grown_free_default`）で、印の付いた窓は引き戻さず、記憶にも書かない。
 /// 窓と一緒に消える（窓の一式ごと）ほか、並べ直し（`reset_pos::reset_window_positions`）が既定へ
 /// 戻した窓からも外す。
 ///
@@ -147,7 +148,7 @@ pub struct ChainRect {
 /// 隣り合いと見なす隙間・重なりの幅の上限（物理 px）。
 ///
 /// 各窓の下端中央を保つ置き直しで、幅の半分の整数割りが窓ごとに最大 1 px ずれるため、
-/// 2 つの窓の分を足した値（要件 1.2・実機の確かめ 8.7 で測り直す）。
+/// 2 つの窓の分を足した値（要件 1.2。実機の確かめ（要件 8.7）では、どの組も隙間 0 で足りた）。
 pub const ADJACENT_TOLERANCE_PX: i32 = 2;
 
 /// 組 (n−1, n) の並びの判定。`gap` は向かい合う端の隙間（負は重なり）。
@@ -401,10 +402,10 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 }
 
 // ---------------------------------------------------------------------------
-// 確定が見送られ続けたときの一発診断（scg 6.5・design C6「確定が見送られ続けた場合の一発診断」）
+// 確定が見送られ続けたときの一発診断（areka-P0-scope-chain-gap 6.5・design C6「確定が見送られ続けた場合の一発診断」）
 // ---------------------------------------------------------------------------
 
-/// 診断を出すまでに待つフレーム数（有界の待ち・scg 6.5）。
+/// 診断を出すまでに待つフレーム数（有界の待ち・areka-P0-scope-chain-gap 6.5）。
 ///
 /// 呼び手（`runtime::frame::frame_system`）は 60Hz の tick ループから毎フレーム確定を
 /// 試みるため、**約 10 秒**ぶんに相当する。窓は起動窓（`ghost_session::open_ghost_windows`）の時点で既に生えており、
@@ -416,10 +417,11 @@ pub fn remembered_decision(mark: Option<AdjacencyMark>) -> PairDecision {
 /// 時間で数えるのは、門を既定で開ける段で直す。
 pub const CHAIN_FINALIZE_STALL_FRAMES: u32 = 600;
 
-/// 確定の見送りを数える（診断を一度だけ出すための状態・scg 6.5）。
+/// 確定の見送りを数える（診断を一度だけ出すための状態・areka-P0-scope-chain-gap 6.5）。
 ///
-/// [`ChainFinalized`] と同じく**一発フラグ**の形。確定が起きればこの資源は二度と読まれない
-/// （呼び手が確定標識で先に打ち切るため）。
+/// [`ChainFinalized`] と同じく**一発フラグ**の形。起動時の確定は確定標識で先に打ち切るので、
+/// 確定の後に読むのは拡大率の遷移の後の解き直し（`chain_realign`）だけで、武装のたびに
+/// [`ChainFinalizeStall::reset`] で初期化する。
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChainFinalizeStall {
     /// 確定できずに見送ったフレーム数。
@@ -432,7 +434,7 @@ impl ChainFinalizeStall {
     /// 停滞の計数と一発フラグを初期化する（`areka-P0-dpi-transition-atomicity` 要件 6.3）。
     ///
     /// 起動時の確定は文字どおり一度きりなので、本資源も一度使い切れば足りた。DPI 遷移後の
-    /// 連鎖再解決（`placement::chain_realign`）は**遷移のたびに**待ちが始まるため、武装の
+    /// 連鎖再解決（`chain_realign`）は**遷移のたびに**待ちが始まるため、武装の
     /// 時点でここを初期化しないと、2 度目以降の待ちが `reported` の立ったまま無音になる
     /// ——「見送り続けている」という一番知りたい事実が、2 度目からログに出なくなる。
     pub fn reset(&mut self) {
@@ -440,7 +442,7 @@ impl ChainFinalizeStall {
     }
 }
 
-/// 確定を見送った理由（診断ログの本文・scg 6.5）。
+/// 確定を見送った理由（診断ログの本文・areka-P0-scope-chain-gap 6.5）。
 ///
 /// 「どのスコープが」「どの条件で」見送られたかを一意に表す。走査は最初に躓いた条件で
 /// 打ち切るため、報告されるのは**その時点の先頭の障害**である。
@@ -548,7 +550,7 @@ impl fmt::Display for ChainDeferReason {
     }
 }
 
-/// 見送りを 1 フレームぶん記録し、**この呼び出しで診断を出すべきか**を返す（scg 6.5）。
+/// 見送りを 1 フレームぶん記録し、**この呼び出しで診断を出すべきか**を返す（areka-P0-scope-chain-gap 6.5）。
 ///
 /// - 閾値（[`CHAIN_FINALIZE_STALL_FRAMES`]）に**到達したちょうどその 1 回**だけ `true`。
 /// - それ以前は `false`（毎フレームの見送りは無音）。

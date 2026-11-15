@@ -173,13 +173,4 @@ fn mark_from_adjacency() {
         AdjacencyMark::from_adjacency(Adjacency::Overlapped { gap: -3 }),
         AdjacencyMark::Separate
     );
-    // 判定から印への写しを通して、離れ・重なりの組が印 none になる。
-    assert_eq!(
-        AdjacencyMark::from_adjacency(judge_adjacency(PREV, left_of_prev(0))).as_str(),
-        "left"
-    );
-    assert_eq!(
-        AdjacencyMark::from_adjacency(judge_adjacency(PREV, right_of_prev(5))).as_str(),
-        "none"
-    );
 }

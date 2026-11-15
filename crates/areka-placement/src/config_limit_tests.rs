@@ -4,17 +4,8 @@
 //! `windowposition.limit` の語彙分類・警告・幾何・runtime 関門は、取得経路（`lib.rs` の
 //! `merge_scope_windowpositions`）とその先が持ち、ここでは扱わない。
 
-use std::collections::BTreeMap;
-
 use super::{BalloonSide, BalloonXMode, ScopeConfig, build_placement_config};
-
-/// テスト補助: `(key, value)` ペア列から `parse_kv` 出力相当の `BTreeMap` を組む。
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
-}
+use crate::test_support::kv;
 
 // ------------------------------------------------------------------
 // T-L1: 保持枠の既定値（1.2）

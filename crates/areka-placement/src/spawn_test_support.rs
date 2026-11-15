@@ -57,7 +57,7 @@ pub fn ghost_window_entities(world: &mut World) -> Vec<Entity> {
         .collect()
 }
 
-/// 偽 HWND を持つ `WindowHandle`（4.2 と同じ fake WindowHandle パターン）。配置のテストだけが使う。
+/// 偽 HWND を持つ `WindowHandle`（偽装境界）。配置のテストだけが使う。
 #[cfg(test)]
 pub(super) fn fake_window_handle(raw: isize) -> wintf::ecs::WindowHandle {
     use windows::Win32::Foundation::HWND;

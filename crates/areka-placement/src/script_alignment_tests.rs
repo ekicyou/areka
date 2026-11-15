@@ -15,6 +15,7 @@ use super::super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::super::source::GhostTitles;
 use super::super::spawn::{GhostWindows, spawn_ghost_windows};
 use super::*;
+use crate::shared_test_support::events_with;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 作業領域（左 53・上 37・右 1877・下 1043）。
@@ -93,15 +94,8 @@ fn move_window(world: &World) -> bool {
         .move_window
 }
 
-fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
-}
-
 fn one<'a>(events: &'a [CapturedEvent], event: &str) -> &'a CapturedEvent {
-    let hits = events_of(events, event);
+    let hits = events_with(events, event);
     assert_eq!(
         hits.len(),
         1,
@@ -183,7 +177,7 @@ fn parse_extra_args_are_logged_and_ignored() {
     assert!(e.expect_field("extra").contains("\"x\""), "{e:?}");
 
     let (_, events) = capture(|| parse_alignment_word(&["left"]));
-    assert!(events_of(&events, "alignment_extra_args").is_empty());
+    assert!(events_with(&events, "alignment_extra_args").is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +327,7 @@ fn missing_value_changes_nothing_and_logs() {
         one(&events, "alignment_skipped").field_str("reason"),
         Some("missing_value")
     );
-    assert!(events_of(&events, "alignment_changed").is_empty());
+    assert!(events_with(&events, "alignment_changed").is_empty());
 }
 
 /// 窓の無いスコープ・窓の一式が無い・部品が無いは記録して何もしない（1.8）。

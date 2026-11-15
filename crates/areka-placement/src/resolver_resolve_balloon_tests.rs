@@ -29,7 +29,7 @@ fn scope_cfg_balloon(
 }
 
 /// T-R8: `balloon.alignment=left`（既定） → `balloon_x = char_x − balloon_w`・
-/// `balloon_y = char_y`（上端揃え・DD7）。恒等式も確認。
+/// `balloon_y = char_y`（上端揃え・DD7）。
 #[test]
 fn t_r8_balloon_left_places_left_of_char() {
     for dpi in DPIS {
@@ -52,11 +52,6 @@ fn t_r8_balloon_left_places_left_of_char() {
                 y: cp.y
             },
             "dpi={dpi}: left はキャラ左隣・上端揃え"
-        );
-        assert_eq!(
-            out[0].balloon_offset,
-            PointPx { x: -bw, y: 0 },
-            "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
         );
     }
 }
@@ -88,11 +83,6 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
             },
             "dpi={dpi}: right はキャラ右隣・resolver は work area 外のまま返す"
         );
-        assert_eq!(
-            out[0].balloon_offset,
-            PointPx { x: w, y: 0 },
-            "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
-        );
     }
 }
 
@@ -120,11 +110,6 @@ fn t_r8_balloon_offsetx_offsety_added() {
                 y: cp.y + oy
             },
             "dpi={dpi}: offsetx/y 加算"
-        );
-        assert_eq!(
-            out[0].balloon_offset,
-            PointPx { x: -bw + ox, y: oy },
-            "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
         );
     }
 }

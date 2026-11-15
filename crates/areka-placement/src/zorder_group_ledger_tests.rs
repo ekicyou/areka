@@ -1,5 +1,5 @@
-//! `parse_zorder_tokens` の決定論檻——受理 3 形・拒否 4 分岐・スコープブロック正規化・
-//! 相棒窓の畳み込み（要件 1.6／2.1〜2.4／2.6／3.4／3.5／6.3／8.1・design
+//! `parse_zorder_tokens` の決定論檻——受理 3 形・拒否 4 分岐・相棒窓の畳み込み
+//! （要件 1.6／2.1〜2.3／2.6／3.4／3.5／6.3／8.1・design
 //! 「Testing Strategy / Unit」1 と 5・design「ZOrderGroupLedger（既存・畳み込みを追加）」）。
 //!
 //! 実機・実ディスプレイ・World を一切必要としない純関数の檻である（要件 10.1）。
@@ -13,7 +13,7 @@
 //!   （`areka-P0-zorder-scope-inversion` 要件 3）。補う向き・記録の欄・要素数の判定との順序・
 //!   数値モードの不関与・既存の拒否分岐の不動を押さえる。
 //!
-//! 同じスコープの 2 窓を隣り合いへ寄せる調停（完了 spec の要件 2.4）は
+//! 同じスコープの 2 窓を隣り合いへ寄せる調停（`areka-P0-scope-zorder-pinning` の要件 2.4）は
 //! `areka-P0-zorder-scope-inversion` が覆した。書かれた順のまま採る解釈と並びの形の記録は
 //! `zorder_group_ledger_written_order_tests.rs` が押さえる。
 //!
@@ -28,7 +28,7 @@
 //! 補いが**動かしてはならないもの**——スコープどうしの相対順（書かれた位置）
 //! ——を `t_zgp20`（補うブロックが後ろ）・`t_zgp22`（補うブロックが前）・
 //! `t_zgp28`（補うブロックが前後のペアに挟まれる）の 3 方向から挟む。片側だけの入力は
-//! 「まとめて端へ回す」実装と区別が付かない（初版 1.2 の教訓）。
+//! 「まとめて端へ回す」実装と区別が付かない。
 
 use super::*;
 use crate::zorder_test_support::{b, s};
@@ -78,7 +78,7 @@ fn t_zgp1_numeric_mode_expands_each_scope_into_balloon_then_char() {
     );
     assert!(
         normalizations.is_empty(),
-        "同一スコープの 2 窓が既に隣接ブロックである以上、調整の記録は出ない: {normalizations:?}"
+        "数値モードの並びはエンジンが組んだもので、並びの形も補いも記録しない: {normalizations:?}"
     );
 }
 
@@ -337,8 +337,8 @@ fn implied(scope: u32, partner: GroupWindowKind) -> Normalization {
 }
 
 /// 数値モードでは正規化が何もしない。展開（⑷）が必ず `[Balloon, Char]` の隣接
-/// ブロックを作るうえ、その並びは作者が書いた指定順ではないので、寄せるものも
-/// 補うものも記録するものも無い（要件 2.4／2.6 はいずれも明示モードを名指しする）。
+/// ブロックを作るうえ、その並びは作者が書いた指定順ではないので、補うものも
+/// 記録するものも無い（要件 2.6 は明示モードを名指しする）。
 #[test]
 fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
     for tokens in [["1", "0"].as_slice(), ["2", "0", "1"].as_slice()] {
@@ -542,8 +542,7 @@ fn t_zgp27_folding_never_adds_a_window_twice() {
 ///
 /// 1 本の入力で両側から挟む——スコープ 5 は前にペアブロック（0）を、後ろにも
 /// ペアブロック（1）を持つ。まとめて末尾へ回す実装でも先頭へ繰り上げる実装でも
-/// 赤くなる（初版 1.2 の教訓＝片側だけの入力では「動かしてはならないもの」を
-/// 守れない）。
+/// 赤くなる（片側だけの入力では「動かしてはならないもの」を守れない）。
 #[test]
 fn t_zgp28_an_implied_block_is_squeezed_from_both_sides() {
     let (elements, normalizations) = expect_accept(&["b0", "s0", "s5", "b1", "s1"]);

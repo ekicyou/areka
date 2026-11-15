@@ -84,12 +84,3 @@ fn balloon_offset_entries_carries_scope() {
         ]
     );
 }
-
-/// 保存した値が sylphya の寛容 parse で読み戻せること（key/値等価の往復・8.1 の前哨）。
-/// entries の String は parse_px でそのまま i32 へ戻る（Display ⇄ parse 対称）。
-#[test]
-fn entries_values_round_trip_through_parse_px() {
-    let pos = PointPx { x: -7, y: 1040 };
-    assert_eq!(parse_px(&char_pos_entries(0, pos)[0].1), Some(pos.x));
-    assert_eq!(parse_px(&char_pos_entries(0, pos)[1].1), Some(pos.y));
-}

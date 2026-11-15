@@ -23,13 +23,13 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
+use wintf::ecs::window::{ChainPlan, ChainSegment};
 
 use super::compose_chain;
 use crate::zorder_group_ledger::{
     GroupElement, GroupSource, ZOrderGroup, ZOrderGroupLedger, parse_zorder_tokens,
 };
-use crate::zorder_test_support::{b, edge, ent, ents, s, tag_group};
+use crate::zorder_test_support::{all_consecutive_edges, b, edge, ent, ents, s, tag_group};
 
 // ===========================================================================
 // 道具立て
@@ -148,7 +148,7 @@ fn chain_invariant_violations(plan: &ChainPlan) -> Vec<String> {
 
 /// 繋ぎの中に「同一スコープの（バルーン, キャラ窓）対」が混ざっているスコープを拾う。
 ///
-/// この対はスコープ内ペア機構の担当であり、本 spec は 1 本も張らない（境界）。
+/// この対はスコープ内ペア機構の担当であり、鎖は 1 本も張らない（境界）。
 fn pair_edges_written(plan: &ChainPlan, scopes: &[u32]) -> Vec<u32> {
     scopes
         .iter()
@@ -159,18 +159,6 @@ fn pair_edges_written(plan: &ChainPlan, scopes: &[u32]) -> Vec<u32> {
             plan.cross_edges
                 .iter()
                 .any(|e| e.owned == ent(b(scope)) && e.owner == ent(s(scope)))
-        })
-        .collect()
-}
-
-/// 連続対を 1 つも除かずに繋いだ形＝「同一スコープ対の除外」を経路から外した出力。
-fn all_consecutive_edges(members: &[Entity]) -> Vec<CrossEdge> {
-    members
-        .windows(2)
-        .map(|w| CrossEdge {
-            owned: w[0],
-            owner: w[1],
-            segment: ChainSegment::Tail,
         })
         .collect()
 }
@@ -208,11 +196,6 @@ fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
     assert_eq!(plan.members, ents(&[b(1), s(1), b(0), s(0)]));
     assert_eq!(plan.cross_edges, vec![edge(s(1), b(0), g(1))]);
     assert!(plan.absent.is_empty(), "不在要素は無い: {:?}", plan.absent);
-    assert_eq!(
-        plan.members.last().copied(),
-        Some(ent(s(0))),
-        "鎖の根は末尾の窓"
-    );
 }
 
 /// 明示モードで 4 枚を書いた指定は、数値モードの同じ並びと同一の鎖になる（要件 2.1）。
@@ -419,7 +402,6 @@ fn t_zcc11_a_scope_named_by_a_group_never_joins_the_tail_as_well() {
         ents(&[b(0), s(0), b(1), s(1), b(2), s(2)]),
         "0・1 はグループの位置に 1 度だけ現れ、後方には 2 だけが来る"
     );
-    assert_eq!(plan.members.len(), 6, "重複参加があれば長さが増える");
 }
 
 /// 在庫のスコープが重複して渡されても、鎖には 1 度しか現れない（不変条件④）。
@@ -557,7 +539,7 @@ fn t_zcc15_every_branch_satisfies_all_four_chain_invariants() {
         );
         // 繋ぎは必ず「連続対の部分集合」であり、順序は手前から奥のまま。
         // 照らすのは端点だけである——区間は記録の欄であって並びの主張ではない。
-        let consecutive = all_consecutive_edges(&plan.members);
+        let consecutive = all_consecutive_edges(&plan.members, ChainSegment::Tail);
         for e in &plan.cross_edges {
             assert!(
                 consecutive
@@ -695,7 +677,7 @@ fn t_zcc16_dropping_the_same_scope_pair_exclusion_is_caught() {
     // 除外を落とした出力（＝連続対を全部張る形）。
     let mutant = ChainPlan {
         members: plan.members.clone(),
-        cross_edges: all_consecutive_edges(&plan.members),
+        cross_edges: all_consecutive_edges(&plan.members, ChainSegment::Tail),
         absent: plan.absent.clone(),
     };
 

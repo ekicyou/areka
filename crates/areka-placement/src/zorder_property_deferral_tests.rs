@@ -52,7 +52,7 @@ use areka_sylphya::{
 // 檻の道具
 // ---------------------------------------------------------------------------
 
-/// 本リリースで提供しないプロパティの完全な名前（要件 13.1）。
+/// 先送りして提供しないプロパティの完全な名前（要件 13.1）。
 const DEFERRED_PROPERTY: &str = "currentghost.seriko.zorder";
 
 /// 先送りした名前を語彙表とソースから探すときの探し語（小文字）。
@@ -535,7 +535,7 @@ fn t_zpd40_the_property_system_sources_never_mention_the_name() {
     assert!(
         hits.is_empty(),
         "統一プロパティシステムのソースが先送りした名前に触れている\
-         （要件 13 は本リリースでの提供を行わないと定める）: {hits:?}"
+         （要件 13 はこの名前を先送りして提供しないと定める）: {hits:?}"
     );
     assert!(
         calibration >= 1,

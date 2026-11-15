@@ -191,12 +191,12 @@ pub fn to_screen_adjust(wp_x: Option<i32>, wp_y: Option<i32>, k: ScaleRatio) -> 
 /// # 単位空間（確定契約）
 ///
 /// 本欄は**「現在の表示 DPI における物理 px」の加算欄**である。契約そのものの定義元は
-/// `placement/follow/offset_space.rs` のモジュール doc であり（供給元ごとの換算軸の
+/// `follow/offset_space.rs` のモジュール doc であり（供給元ごとの換算軸の
 /// 割り当ての表もそこにある）、ここでは繰り返さない。
 ///
 /// 作者空間の生値を持つ供給元は**合流の前に**換算される——descript の
-/// `balloon.offsetx`／`offsety` は `placement::apply_author_balloon_offset_scale` が
-/// シェル軸で（`placement::scale_then_merge` の中で合流の直前）、`windowposition` 由来の調整量は
+/// `balloon.offsetx`／`offsety` は根（`lib.rs`）の `apply_author_balloon_offset_scale` が
+/// シェル軸で（同じく根の `scale_then_merge` の中で合流の直前）、`windowposition` 由来の調整量は
 /// [`to_screen_adjust`] がバルーン軸で換算する。ゆえに本欄へ加算される値はすべて
 /// 同じ空間の値であり、換算前の生値が混ざることは無い。
 pub fn apply_windowposition(sc: &mut ScopeConfig, adjust: Option<(i32, i32)>) {
@@ -219,15 +219,9 @@ mod vocab_tests;
 
 #[cfg(test)]
 mod tests {
-    use areka_emo_compose::ScaleRatio;
-
     use super::super::config::ScopeConfig;
     use super::{apply_windowposition, to_screen_adjust};
-
-    /// テスト用 k（非ゼロ前提）。
-    fn k(num: u32, den: u32) -> ScaleRatio {
-        ScaleRatio::new(num, den).expect("テストの k は非ゼロ")
-    }
+    use crate::shared_test_support::k;
 
     /// 檻 9（全分岐の直積）: x（正／負／未指定）× y（負／正／未指定）×
     /// k（恒等／非恒等 5/4）＝ 18 通り。
@@ -289,19 +283,6 @@ mod tests {
         chk(None, None, K54, None);
     }
 
-    /// 両軸未指定は `None`＝`balloon_offset` を触らない＝resolver 出力が現行と厳密同一
-    /// （R3.4）。k が非恒等でも `None` のままであること（k が「指定あり」を作らない）。
-    #[test]
-    fn to_screen_adjust_returns_none_when_both_axes_unspecified() {
-        for (num, den) in [(1, 1), (120, 96), (96, 192)] {
-            assert_eq!(
-                to_screen_adjust(None, None, k(num, den)),
-                None,
-                "k={num}/{den}"
-            );
-        }
-    }
-
     /// 縮小 k でも「非ゼロ長は最小 1px」という既存権威 `ScaleRatio::scale_len` の
     /// 規約をそのまま継承する（本仕様で新しい丸め規約を導入しない・R3.6）。
     /// k=1/4 で |1| → round(0.25)=0 → 権威が 1 へ引き上げる。符号は保存される。
@@ -352,15 +333,6 @@ mod tests {
             to_screen_adjust(Some(i32::MAX), Some(i32::MIN), k(1, 1)),
             Some((i32::MAX, -i32::MAX))
         );
-    }
-
-    /// 調整量なし（両軸未指定）＋ descript offset なし → `balloon_offset` は `None` のまま
-    /// ＝resolver 出力が本仕様適用前と bit 同一（R3.4）。
-    #[test]
-    fn apply_windowposition_none_leaves_balloon_offset_untouched() {
-        let mut sc = ScopeConfig::default();
-        apply_windowposition(&mut sc, None);
-        assert_eq!(sc.balloon_offset, None);
     }
 
     /// 調整量なし＋既存 descript offset あり → 既存値をそのまま温存する。

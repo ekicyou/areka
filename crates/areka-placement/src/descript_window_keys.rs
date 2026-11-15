@@ -30,7 +30,7 @@ pub struct DefaultSurfaces {
 }
 
 impl DefaultSurfaces {
-    /// どのスコープも書かれていない値（`Default` と同じ・テストと手本の入口）。
+    /// どのスコープも書かれていない値（`Default` と同じ・呼び手はテスト）。
     pub fn builtin() -> Self {
         Self::default()
     }

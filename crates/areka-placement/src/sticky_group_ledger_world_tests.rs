@@ -4,15 +4,13 @@
 //! 窓は偽の部品（`CharWindowMarker`＋`Anchored`＋`DragConfig`）だけで組み、記録は
 //! `log-capture-kit`（`log_capture_kit::capture`）で取る。
 
-use std::collections::BTreeSet;
-
 use wintf::ecs::drag::DragConfig;
 
 use super::super::follow::Anchored;
 use super::super::resolver::Anchor;
 use super::super::spawn::CharWindowMarker;
 use super::*;
-use crate::shared_test_support::events_with;
+use crate::shared_test_support::{events_with, scopes};
 use log_capture_kit::{CapturedEvent, capture};
 
 fn spawn_char(world: &mut World, scope: usize, anchor: Anchor) -> Entity {
@@ -47,10 +45,6 @@ fn tokens(raw: &[&str]) -> Vec<String> {
     raw.iter().map(|t| t.to_string()).collect()
 }
 
-fn members(scopes: &[u32]) -> BTreeSet<u32> {
-    scopes.iter().copied().collect()
-}
-
 fn groups(world: &World) -> Vec<StickyGroup> {
     world.resource::<StickyGroupLedger>().groups().to_vec()
 }
@@ -76,7 +70,7 @@ fn set_sticky_adds_group_logs_and_resyncs_writer() {
     assert_eq!(
         groups(&world),
         vec![StickyGroup {
-            members: members(&[0, 1]),
+            members: scopes(&[0, 1]),
             source: StickySource::Script,
         }]
     );
@@ -137,7 +131,7 @@ fn set_sticky_accepts_absent_scope_with_warning() {
 
     let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(&["2", "5"])));
     assert!(ok);
-    assert_eq!(groups(&world)[0].members, members(&[2, 5]));
+    assert_eq!(groups(&world)[0].members, scopes(&[2, 5]));
     let absent = one(&events, "sticky_member_absent");
     assert_eq!(absent.level, tracing::Level::WARN);
     assert_eq!(absent.field("scope"), Some("5"));
@@ -161,7 +155,7 @@ fn reset_sticky_removes_script_groups_only() {
     assert_eq!(
         groups(&world),
         vec![StickyGroup {
-            members: members(&[0, 1]),
+            members: scopes(&[0, 1]),
             source: StickySource::Descript,
         }]
     );
@@ -181,7 +175,7 @@ fn seed_installs_ledger_from_descript_value() {
     assert_eq!(
         groups(&world),
         vec![StickyGroup {
-            members: members(&[0, 1]),
+            members: scopes(&[0, 1]),
             source: StickySource::Descript,
         }]
     );
@@ -221,7 +215,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
 fn seed_accepts_absent_scope_with_warning() {
     let (mut world, _) = world_with_free_windows();
     let ((), events) = capture(|| seed_sticky_descript(&mut world, Some("0,7")));
-    assert_eq!(groups(&world)[0].members, members(&[0, 7]));
+    assert_eq!(groups(&world)[0].members, scopes(&[0, 7]));
     let absent = one(&events, "sticky_member_absent");
     assert_eq!(absent.field("scope"), Some("7"));
     assert_eq!(absent.field_str("when"), Some("seed"));
@@ -250,7 +244,7 @@ fn replace_keeps_script_groups_and_rejects_overlap() {
     assert_eq!(
         groups(&world),
         vec![StickyGroup {
-            members: members(&[2, 3]),
+            members: scopes(&[2, 3]),
             source: StickySource::Script,
         }]
     );

@@ -5,11 +5,14 @@
 //! donor（`examples/emo-present.rs`）と**同型の装着経路**（`EmoPresenter::attach_target` →
 //! `apply(ShowSurface)`）で以下を装着する（要件 3.1/3.5/4.1/4.2/4.3/4.5）:
 //!
-//! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・434×687 物理 px）
-//! - **scope1 キャラ窓**: emo2 `surface10`（エモ・336×400 物理 px・ukadoc 正典の相方既定サーフェス）
-//! - **各スコープのバルーン窓**: そのスコープのバルーンの面 0（scope0 は `balloons0.png`・400×224 物理 px、
-//!   scope1 は `balloonk0.png`・288×203 物理 px・`areka_emo_present::build_balloon_target` 経由。
+//! - **scope0 キャラ窓**: emo2 `surface0`（むらさき・原寸 434×687）
+//! - **scope1 キャラ窓**: emo2 `surface10`（エモ・原寸 336×400・ukadoc 正典の相方既定サーフェス）
+//! - **各スコープのバルーン窓**: そのスコープのバルーンの面 0（scope0 は `balloons0.png`・原寸 400×224、
+//!   scope1 は `balloonk0.png`・原寸 288×203・`areka_emo_present::build_balloon_target` 経由。
 //!   測りがスコープごとの絵で窓の大きさを決めるので、貼る絵もスコープごとに選ぶ）
+//!
+//! 原寸は作者基準 DPI 96（emo2 は宣言なし＝正典既定）での物理 px。窓と絵はモニタ DPI ÷ 96 倍の
+//! 物理 px になる（dpi=120 なら scope0 のキャラ窓は 543×859）。
 //!
 //! # 層境界（6.3）
 //!
@@ -46,10 +49,11 @@
 //!    プロセスに設定する（`SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`）。
 //!    Windows「設定 → システム → ディスプレイ → 拡大縮小」で対象モニタのスケールを
 //!    **125%（dpi=120）** または 150%/200%（dpi=144/192）にした状態で本 example を実行する。
-//! 2. **② 初期配置が画面内**: scope0（むらさき・434×687）が **primary work area の右下**
-//!    （右端・タスクバー上端）に、scope1（エモ・336×400）が **その左隣**（scope0 の左端から
-//!    surface 幅ぶん左・下端揃え）に、いずれも**画面内**に出現する（右下へ沈む・画面外へ
-//!    はみ出す・スケール倍率で膨れる、のいずれも起きない）。
+//! 2. **② 初期配置が画面内**: scope0（むらさき）が **primary work area の右下**
+//!    （右端・タスクバー上端）に、scope1（エモ）が **その左隣**（scope0 の左端から
+//!    scope1 の窓の幅ぶん左・下端揃え）に、いずれも**画面内**に出現する（右下へ沈む・画面外へ
+//!    はみ出す、のいずれも起きない）。窓の大きさは原寸のモニタ DPI ÷ 96 倍で、窓と表示された絵の
+//!    外形が一致する（窓だけ・絵だけが大きくならない）。
 //! 3. **③ キャラ窓ドラッグでバルーン追従**: キャラ窓を（透明部を除く）全面どこでも掴んで
 //!    ドラッグでき、対応するバルーン窓が配置時の相対 offset を保って追従する。
 //! 4. **④ モニタ境界を跨ぐドラッグで消失しない**: マルチモニタ環境で（DPI の異なる）モニタ
@@ -63,9 +67,9 @@
 //! # 観測注記（受け入れ判定の対象外・設計討議 #1 確定）
 //!
 //! - **scope1 バルーンが scope0 キャラ窓に重なって出現するのは正常**: emo2 実測値
-//!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P5 幾何により
-//!   `balloon_x(1) = char_x(0) − w0 + w1` となり、scope1 のバルーンが scope0 キャラ窓に
-//!   重畳する。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の**正常挙動**であり
+//!   （`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P2・P5 の幾何により
+//!   `char_x(1) = char_x(0) − w1`・`balloon_x(1) = char_x(1) + w1 = char_x(0)` となり、
+//!   scope1 のバルーンが scope0 キャラ窓に重畳する。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の**正常挙動**であり
 //!   配置破綻ではない。正式なバルーン配置規則は balloon 表示系の後続 spec が所有する。
 //! - **重畳域でバルーンが先に掴まれるのも正常**: 重畳域ではバルーン
 //!   （scope1 のバルーンの絵 balloonk0.png）の不透明部が αマスクで先にヒットするため、scope0 キャラでなく
@@ -76,7 +80,8 @@
 //!
 //! # DPI 表示契約（donor と同一）
 //!
-//! 窓のクライアント領域は surface 原寸（物理 px）に一致する（等倍・DPI 拡縮なし）。
+//! 窓のクライアント領域は、surface の原寸を k 倍した物理 px に一致する（k＝DPI ÷ 作者基準 DPI。
+//! 窓の大きさは採寸が primary モニタの DPI で、絵は presenter が窓の DPI で k を導く）。
 //! placement パイプラインは座標・寸法を**物理 px 単一通貨**で運び（design U1〜U5）、
 //! `BoxStyle`（論理 DIP）・`DragConstraint` を一切使わない。
 
@@ -283,15 +288,13 @@ fn build_and_spawn(world: &mut World) {
             );
             continue;
         };
-        // 初期 surface id: 測りと同じ答え（窓寸法と表示 surface の原寸が一致する）。
-        let probe = shell_target.build_world();
-        let surface_id = prepared
-            .default_surfaces
-            .initial_surface(scope, |id| probe.surface(id).is_some());
-
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
             let emo_world = shell_target.build_world();
+            // 初期 surface id: 測りと同じ答え（窓寸法と表示 surface の原寸が一致する）。
+            let surface_id = prepared
+                .default_surfaces
+                .initial_surface(scope, |id| emo_world.surface(id).is_some());
             pending.push(PendingTarget {
                 target: TargetId(scope_u32 * 2),
                 window: char_e,
@@ -337,8 +340,9 @@ fn build_and_spawn(world: &mut World) {
 ///
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
-/// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番（`build_boot_assets`）・
-/// 採寸（`build_shell_assets`）と同じ入口を通るため、この example が見る絵は本番と食い違わない。
+/// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番の資産
+/// （`runtime::assets` の `build_shell_assets`）・採寸（`measure.rs` の `build_shell_assets`）と同じ入口を
+/// 通るため、この example が見る絵は本番と食い違わない。
 fn build_shell_material(
     shell_dir: &std::path::Path,
     decoder: &WicDecoderArm,
@@ -399,8 +403,8 @@ fn boot_present_system(world: &mut World) {
         };
         boot.presenter.attach_target(
             t.target, t.window, emo_world, atlas,
-            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
-            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・配置）。
+            // 作者基準 DPI は正典既定の 96（ukadoc・D1・emo2 は宣言なし）。採寸も emo2 の descript から
+            // 同じ 96 を読むので、窓の大きさと表示の大きさが合う。本番は boot が descript の実値を供給する。
             96,
         );
         boot.presenter.apply(

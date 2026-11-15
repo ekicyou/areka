@@ -29,7 +29,7 @@
 //! 配置準備の合成ルート [`prepare_ghost_windows`]（design「main.rs seam」）
 //! を持つ。design File Structure の「mod.rs＝モジュール公開面」に従い、
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
-//! ここ（合成ルート）に実装する（シームの結線自体は main.rs 側）。
+//! ここ（合成ルート）に実装する（シームの結線自体は本体の `ghost_session::prepare_ghost_windows`）。
 
 pub mod balloon_limit;
 /// バルーンの動かせない指定の帳簿と、バルーンの窓の `DragConfig.move_window` の書き手（descript-window-keys）。
@@ -201,7 +201,7 @@ pub struct AuthorDpi {
 }
 
 impl AuthorDpi {
-    /// 正典既定（96/96）——placement の準備自体が失敗して宣言値を読めなかったときの縮退値。
+    /// 正典既定（96/96）。今の使い手はテストの組み立てだけ（準備に失敗した本番の道はこの値を使わない）。
     pub const DEFAULT: AuthorDpi = AuthorDpi {
         shell: source::DEFAULT_AUTHOR_DPI,
         balloon: source::DEFAULT_AUTHOR_DPI,
@@ -367,7 +367,7 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
 /// `load_descript_source_for_shell` → `build_placement_config` → `measure_scope_sizes`。
 ///
 /// 失敗は [`PlacementError`] のまま呼び手へ返す（告知と、終了するかどうかは呼び手の分担）。
-/// 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11・テストで固定）。
+/// 位置の記憶・復元（`profile/areka` の `sylphya.toml` の読み書き）は一切行わない（2.11・テストで固定）。
 ///
 /// `primary_dpi` は起動時 k₀ の分子（primary モニタ DPI・物理 DPI 値）。取得不能
 /// （モニタ 0 台等）は `None` を渡す——[`build_measure_scaling`] が `error!`＋96 相当へ
@@ -475,7 +475,7 @@ pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturate
 /// `k` は**シェル軸**（`MeasureScaling::shell`）である——`balloon.offsetx`／`offsety` は
 /// ゴースト／シェルの `descript.txt` の語彙＝シェル作者の空間で書かれた値だからである。
 /// 割り当ての一覧は契約の定義元 [`follow::OffsetBase`] のモジュール doc
-/// （`placement/follow/offset_space.rs`）が持つ。
+/// （`follow/offset_space.rs`）が持つ。
 ///
 /// # 受理規約は変えない（要件 2.6）
 ///
@@ -514,7 +514,7 @@ fn apply_author_balloon_offset_scale(
             );
             continue;
         };
-        // 未宣言・片軸のみ宣言は `None`（受理規約は `config.rs` の所有・要件 2.6）。
+        // どちらの軸も未宣言なら `None`（受理規約は `config.rs` の所有・要件 2.6）。
         // データ駆動の非該当であって縮退ではないので記録しない。
         let Some(raw) = sc.balloon_offset else {
             continue;
@@ -570,8 +570,9 @@ pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPo
 /// # 失敗（log-first・表示を失わない）
 ///
 /// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
-/// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
-/// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
+/// 成立する）。起動の準備では、同じ事象を直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err`
+/// で弾いている。シェルの差し替えはバルーンを測り直さないので、そこでは採寸の記録が無く、
+/// scope 付きで残るのはこの `warn!` だけになる。
 pub fn load_scope_windowpositions(
     balloon_root: &Path,
     scope_ids: &[usize],
@@ -779,7 +780,7 @@ fn scope_windowposition(
 ///
 /// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と、終了するかどうかは呼び手の
 ///   分担）
-/// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
+/// - 位置の記憶・復元（`profile/areka` の `sylphya.toml` の読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
 pub fn prepare_ghost_windows(

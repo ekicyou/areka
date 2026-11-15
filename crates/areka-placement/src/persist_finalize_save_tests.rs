@@ -51,14 +51,15 @@ const SCOPES: [(usize, PointPx, SizePx); 3] = [
 ];
 
 /// 記憶にある体の値（「書き換えない」を噛ませるための、どの書く値とも重ならない値）。
-pub(super) const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
+const SENTINEL_POS: PointPx = PointPx { x: 2222, y: 111 };
 
 /// 記憶の実物のアクター（`spawn_sylphya`）と偽の保存先 `FakePersistIo`（Ghost の根は `/g`）。
-/// 並べ直しの檻（`reset_pos_tests.rs`）も使う。
+/// 並べ直し・送り口・止めたバルーンのドラッグの檻（`reset_pos_tests.rs`・`persist_io_wiring_tests.rs`・
+/// `balloon_lock_drag_tests.rs`）も使う。
 pub(crate) struct Store {
-    pub(crate) shared: Arc<FakePersistIo>,
+    shared: Arc<FakePersistIo>,
     roots: ScopeRoots,
-    pub(crate) parts: SylphyaParts,
+    parts: SylphyaParts,
 }
 
 impl Store {
@@ -110,12 +111,12 @@ impl Store {
 
 pub(super) struct Rig {
     pub(super) world: World,
-    pub(super) store: Store,
+    store: Store,
 }
 
 impl Rig {
     /// 3 スコープの窓の一式と、記憶の送り口（`wired` のときだけ）を持つ World を組む。
-    pub(super) fn new(wired: bool) -> Self {
+    fn new(wired: bool) -> Self {
         let store = Store::new();
         let mut world = World::new();
         let placements: Vec<ScopePlacement> = SCOPES
@@ -147,7 +148,7 @@ impl Rig {
         Rig { world, store }
     }
 
-    pub(super) fn char_window(&self, scope: usize) -> Entity {
+    fn char_window(&self, scope: usize) -> Entity {
         self.world
             .resource::<GhostWindows>()
             .char_window(scope)
@@ -155,7 +156,7 @@ impl Rig {
     }
 
     /// 記憶に位置があるスコープとして標す（本番の起動の `clear_default_char_pos` と同じ口）。
-    pub(super) fn mark_remembered(&mut self, scope: usize) {
+    fn mark_remembered(&mut self, scope: usize) {
         assert!(
             self.world
                 .resource_mut::<GhostWindows>()
@@ -178,7 +179,7 @@ impl Rig {
 }
 
 /// 種: スコープ 0 の記憶の位置・全スコープのバルーンの相対位置・起動の記録。
-pub(super) fn seed_entries() -> Vec<(PersistKey, String)> {
+fn seed_entries() -> Vec<(PersistKey, String)> {
     let mut entries = char_pos_entries(0, SENTINEL_POS);
     for &(scope, _, _) in &SCOPES {
         entries.extend(balloon_offset_entries(

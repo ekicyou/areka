@@ -227,7 +227,7 @@ pub fn keyword_balloon_pos(
 ///   作業領域が変わったときに辺へ沿わせ直す所は持たない（`window-snap` の件 1）。
 /// - **P2（X・bottom・連鎖基準）**: `base_x(0) = work_area.right − w(0)`、
 ///   `base_x(n≥1) = char_x(n−1) − w(n)`（**自スコープの幅**を引く＝隣接・隣接ペアの
-///   隙間 0・scg 2.1/2.2）。
+///   隙間 0・areka-P0-scope-chain-gap 2.1/2.2）。
 ///   `char_x(n) = base_x(n) − default_x(n).unwrap_or(0)`（左方向オフセット・
 ///   0＝基準密着・2.10・DD3）。連鎖の `char_x(n−1)` は **P4 クランプ後**の実配置
 ///   （後続スコープは前スコープの実際の位置の左隣に置く）。
@@ -257,8 +257,7 @@ pub fn keyword_balloon_pos(
 ///   `measure.rs` の `char_size` が spawn の窓寸そのもの）。
 ///   **本関数はバルーンをクランプしない**（バルーンは work area 外へ素直にはみ出す）
 ///   ——`windowposition.limit` の補正は下流の関門が所有する（`ScopePlacement.balloon_pos`
-///   の doc 参照）。offset は
-///   配置時に確定し以後静的（4.4: 正式規則は balloon 表示系の後続へ委ねる）。
+///   の doc 参照）。
 /// - **Seam の warn**: `Alignment::Seam` の解釈はスコープごとに [`Anchor::from_alignment`]
 ///   を 1 度だけ引き、知らない値のときだけ本関数がスコープ番号つきの `warn!` を 1 行出す
 ///   （正典の `top`・`left`・`right` では出さない・T-R5 で固定）。知らない値の幾何は
@@ -276,7 +275,7 @@ pub fn resolve_placement(
     let default_scope_cfg = ScopeConfig::default();
     let mut out = Vec::with_capacity(scopes.len());
     // P2 連鎖の前スコープ状態: クランプ後 char_x のみ（自スコープ幅を引く是正式では
-    // 前スコープの幅が不要・scg 2.1/2.2）
+    // 前スコープの幅が不要・areka-P0-scope-chain-gap 2.1/2.2）
     let mut prev: Option<i32> = None;
     // 左右の辺の縦の連なり（辺ごと）: 前スコープのクランプ後 char_y
     let mut prev_left_y: Option<i32> = None;
@@ -300,7 +299,7 @@ pub fn resolve_placement(
         let bottom_y = work_area.bottom.saturating_sub(h);
 
         // P2: base_x(0)=right−w0・base_x(n≥1)=char_x(n−1)−w(n)（自スコープの幅＝
-        //     隣接・隙間 0・scg 2.1/2.2）・
+        //     隣接・隙間 0・areka-P0-scope-chain-gap 2.1/2.2）・
         //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3）。
         //     free の X 未指定成分のフォールバック先でもある（2.6・その場合
         //     default_x は None ゆえオフセット項は 0）

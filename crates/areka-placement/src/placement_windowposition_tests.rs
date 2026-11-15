@@ -1,5 +1,5 @@
 use super::resolver::{PointPx, SizePx};
-use super::shared_test_support::TempDir;
+use super::shared_test_support::{TempDir, WINDOWPOSITION_SUPPLY_NEEDLE};
 use super::*;
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
@@ -26,10 +26,7 @@ fn prepare_windowposition_logs_scope_raw_side_and_converted_adjust() {
 
         let hits: Vec<&CapturedEvent> = events
             .iter()
-            .filter(|e| {
-                e.message()
-                    .contains("windowposition を初期既定位置の調整量へ")
-            })
+            .filter(|e| e.message().contains(WINDOWPOSITION_SUPPLY_NEEDLE))
             .collect();
         assert_eq!(
             hits.len(),
@@ -133,19 +130,6 @@ fn prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120() {
 
         assert_within_1px(s0.balloon_offset, SSP_SCOPE0_OFFSET, 0);
         assert_within_1px(s1.balloon_offset, SSP_SCOPE1_OFFSET, 1);
-
-        // 恒等式は SSP 突合の検体でも保たれる。
-        for s in &p.placements {
-            assert_eq!(
-                s.balloon_offset,
-                PointPx {
-                    x: s.balloon_pos.x - s.char_pos.x,
-                    y: s.balloon_pos.y - s.char_pos.y
-                },
-                "scope {}: balloon_offset ≡ balloon_pos − char_pos",
-                s.scope
-            );
-        }
     });
 }
 
@@ -233,10 +217,7 @@ fn prepare_windowposition_adjust_is_identical_for_both_balloon_sides() {
         // (a) 観測点 4: 置き側は Left／Right と異なるのに調整量は同一。
         let hits: Vec<&CapturedEvent> = events
             .iter()
-            .filter(|e| {
-                e.message()
-                    .contains("windowposition を初期既定位置の調整量へ")
-            })
+            .filter(|e| e.message().contains(WINDOWPOSITION_SUPPLY_NEEDLE))
             .collect();
         assert_eq!(hits.len(), 2, "scope ごとに 1 行: {events:?}");
         assert_eq!(hits[0].expect_field("balloon_side"), "Left");

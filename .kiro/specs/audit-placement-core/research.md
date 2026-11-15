@@ -1067,3 +1067,177 @@
 #### 判定
 
 1 回目の新しい指摘は 127 件（必ず直す 1・直したほうがよい 10・できれば 116）で、0 件ではない。直した 124 件・裁定で残す 1 件（88）・裁定で回す 1 件（164）・申し送りだけのもの 1 件（83）。裁定待ちは 0 件。2 回目をかける（要件 6.2）。
+
+### 18.2 2 回目（2026-11-15）
+
+#### 取り込みと範囲の大きさ
+
+- `main` は 1 回目の後に 1 コミット進んだ（`2f664eb68`・`audit-tools-perf-run`）。触ったのは `tools/perf`・スキル・spec の文書・`roadmap.md` だけで、範囲とは重ならない。取り込みは `246b6d75f`（競合なし）。取り込んだ後の `HEAD..origin/main` は 0 件。
+- 範囲は 1.1 節と 18.1 と同じ数え方で測り直した。ファイルの数は 1 回目と同じ 116。行は 1 回目の直しで減った（sylphya の `persist_remove_tests.rs` だけは指摘 116 の直しで 225 行から増えた）。
+
+| 区分 | ファイル | 行 |
+|---|---|---|
+| コード（`crates/areka-placement/` の `.rs` でテストでないもの・`examples/` 込み） | 27 | 10,537 |
+| テスト（`crates/areka-placement/` の `_tests.rs`・`_test_support.rs`・`test_support.rs`・`test_crash_report.rs`） | 77 | 22,894 |
+| テスト（`crates/areka/src/placement_tests/` の `transition_*` でないもの・`mod.rs` 込み） | 10 | 3,191 |
+| `Cargo.toml` | 1 | 51 |
+| 足したファイル（`areka-sylphya` の `persist_remove_tests.rs`） | 1 | 357 |
+| 計 | 116 | 37,030 |
+
+- ponytail は 5.3.3（1 回目と同じ版）。作法も 1.3 節と同じ（6 つの物差し・具体的な場合・消す前の grep・件数の上限なし・全部読む）。分け方も 18.1 と同じ 6 つで、6 つの組のどれからも、全ファイルを全行読んだ旨と行数の一覧を受け取った（A 24／6,705・B 20／6,823・C 20／5,971・D 17／5,616・E 15／6,020・F 20／5,895。計 37,030 行で上の表と合う）。
+- 18.1 の「2 回目の候補」（`HEAD` の時点でもう古かった行の番号）と、1 回目のレビューが候補から漏れていたと見つけた `briefing-assets.md:253` の `config.rs` の続きの番号も、同じ一覧に入れた（293〜295）。
+
+| 組 | 読んだファイル | 行 | 必ず直す | 直したほうがよい | できれば | 計 |
+|---|---|---|---|---|---|---|
+| A | 24 | 6,705 | 0 | 3 | 11 | 14 |
+| B | 20 | 6,823 | 0 | 0 | 21 | 21 |
+| C | 20 | 5,971 | 0 | 3 | 10 | 13 |
+| D | 17 | 5,616 | 0 | 1 | 16 | 17 |
+| E | 15 | 6,020 | 0 | 0 | 9 | 9 |
+| F | 20 | 5,895 | 0 | 1 | 10 | 11 |
+| 18.1 の 2 回目の候補（文書の行の番号） | — | — | 0 | 0 | 3 | 3 |
+| 計 | 116 | 37,030 | 0 | 8 | 80 | **88** |
+
+- 2 つ以上の組が同じ所を出したものは 1 件に数えた（208 は A・B・C、217 は A・C、220 は A・C、251 は C・F、218 は A・D の組が出した）。
+
+#### 指摘の一覧（208〜295）
+
+扱いの印は 18.1 と同じ。裁定待ち＝開発者の裁定を仰いでいて、まだ直していない。
+
+| 番号 | 組 | 群 | 一言 | 場所 | 扱い |
+|---|---|---|---|---|---|
+| 208 | 直したほうがよい | A | 指摘 81 の直しの後も「片軸だけの宣言は `None`」「両軸が揃ったときのみ採用」と書く説明が 2 か所に残る | `lib.rs:517`・`balloon_offset_supply_tests.rs` の頭 | 直した |
+| 209 | 直したほうがよい | A | 「準備が保存を読み書きしない」テストが、どこも読まない `ghost.dat` を見ていて決して落ちない（本物の保存は sylphya の `profile` の下） | `placement_prepare_tests.rs`・`lib.rs` の 2 か所の doc | 直した（本物の `sylphya.toml` を置いて `load_restored_state` が読めることを確かめ、準備の後に配置・題名・ファイルの中身が変わらないことを確かめる形に。名は `prepare_never_reads_or_writes_the_saved_state`。準備の中で記憶を戻す呼び出しを入れる壊し方で赤（スコープ 0 の x が 1486 から -117）。`ghost.dat` の文と「後続タスクの merge シーム」も直した。`test_support.rs` の doc の古い名も直した） |
+| 210 | 直したほうがよい | A | 右の辺のスコープと下端の連なりのスコープが、初めて起動したとき右下の角でまるごと重なる（指摘 1 の直しの形。`t_r5_mixed_edges_chain_per_edge` がこの重なりを期待として固定している） | `resolver.rs` の `resolve_placement`（P1'・P2） | 裁定待ち（下の裁定の表） |
+| 211 | できれば | A | 真上の完全一致の後で同じことを言い直す確かめと、引き算で作る `balloon_offset ≡ balloon_pos − char_pos` の確かめ（決して落ちない） | `placement_prepare_tests.rs`・`placement_windowposition_tests.rs`・`placement_monitor_tests.rs`・`resolver_resolve_contract_tests.rs`・`resolver_balloon_keyword_tests.rs`・`resolver_resolve_balloon_tests.rs`・`resolver_resolve_tests.rs` | 直した（消した。理由は残る完全一致の確かめの文へ移した） |
+| 212 | できれば | A | 記録の出所の札のテストが 3 つのうち 2 つしか確かめない（`WORK_AREA_SYNC_CONTEXT` を `"monitor_snapshot"` にしても緑） | `placement_monitor_tests.rs` | 直した（3 つの綴りを固定。その壊し方で赤） |
+| 213 | できれば | A | 既定と同じ 96/96 の emo2 で確かめるだけのテスト（宣言のあるテストが全部を確かめる） | `placement_prepare_tests.rs` の `prepare_emo2_carries_author_dpi_read_once_for_attach` | 直した（消した。確かめは `prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value` にある） |
+| 214 | できれば | A | 同じ入力・同じ早い戻りのテスト 2 本 | `windowposition.rs` のテスト | 直した（消した。行列のテストと `none_preserves_existing` のテストが確かめる） |
+| 215 | できれば | A | `AuthorDpi::DEFAULT` の doc が、無い使い方（準備の失敗の代わり）を書く。使い手はテストだけ | `lib.rs` | 直した（doc だけ。公開の形は変えない） |
+| 216 | できれば | A | 古い説明（つなぎ目の置き場・`placement/follow/` の道・関数の置き場・「採寸の後で失敗する道は無い」・「以後静的」・「逐語同一」・消したテストを確かめると書く頭・差し替えたテストの経緯） | `lib.rs`・`windowposition.rs`・`resolver.rs`・`resolver_resolve_test_support.rs`・`resolver_balloon_keyword_tests.rs`・`resolver_resolve_contract_tests.rs` | 直した |
+| 217 | できれば | A | 名前の無い古い spec の task 番号の複数形「（tasks 6.1）」「（tasks 4.1）」が、1 回目の grep（`task ?[0-9]`）をすり抜けた | `placement_prepare_tests.rs:24`・`measure_tests.rs:26` | 直した（番号を消した） |
+| 218 | できれば | A | spec の名の略称 `scg`（`areka-P0-scope-chain-gap`）・`atom`（`areka-P0-dpi-transition-atomicity`）が、どの spec かを読み手に言わない | `chain_finalize.rs`・`chain_finalize_tests.rs`・`placement_prepare_tests.rs`・`resolver.rs`・`resolver_resolve_free_tests.rs`・`resolver_resolve_tests.rs`・`spawn.rs`・`spawn_cleanup_tests.rs` | 直した（範囲の中の 41 か所と 3 か所を正式の名に。範囲の外の分は申し送り） |
+| 219 | できれば | A | 記録を `event` で絞る補助の写しが 1 つ残っていた（指摘 150 が見落とした） | `script_alignment_tests.rs` の `events_of` | 直した（`shared_test_support::events_with`） |
+| 220 | できれば | A | 拡大率を作る小さな補助 `k(num, den)` が 4 か所に写してある | `placement_prepare_tests.rs`・`windowposition.rs`・`balloon_offset_supply_tests.rs`・`measure_tests.rs` | 直した（`placement_shared_test_support.rs` の 1 つ。追随の写しは申し送り） |
+| 221 | できれば | A | `load_scope_windowpositions` の読めない枝の `warn!` に、確かめるテストが無い（シェルの切り替えは測らずに呼ぶので届く） | `lib.rs` の `scope_windowposition` | 直した（`load_scope_windowpositions_warns_and_skips_an_unreadable_balloon`。`warn!` を消す壊し方で赤） |
+| 222 | できれば | B | 並べ終えた時点の保存が「1 度だけ」と書くが、シェル位置初期化でも毎回呼ばれる | `persist.rs` の頭と `persist_unremembered_char_positions` | 直した（2 つ目の時点を書いた。記録の文は変えない） |
+| 223 | できれば | B | 古い参照 3 つ（名前の無い「4.1 群」・「上の 3 本」・「第 2 面」） | `balloon_offset_supply_tests.rs` | 直した |
+| 224 | できれば | B | この spec の指摘番号と、spec の名の無い要件の番号が説明に残る | `persist_restore_tests.rs` | 直した（`spec: audit-placement-core 要件 9.2` の形に） |
+| 225 | できれば | B | 消えた関数を名指す説明（指摘 101 と同じ形） | `persist_restore_tests.rs` の頭 | 直した（消した） |
+| 226 | できれば | B | 消した引数の経緯の括弧書き | `persist.rs` | 直した（消した） |
+| 227 | できれば | B | `apply_restored_placements` の doc が、本体の呼び手を違う名で書く（今は `restore_and_judge`） | `persist.rs` | 直した |
+| 228 | できれば | B | シェルの descript の読み失敗が「致命（終える）」と書くが、シェルの切り替えでは切り替えが失敗するだけ | `source.rs` | 直した（呼び手へ `Err` を返す、と書く） |
+| 229 | できれば | B | 頭の依存の決まりが「兄弟のモジュールを引かない」と書くが、`error` を引く | `source.rs` | 直した |
+| 230 | できれば | B | 1 行の取り次ぎを本体と比べるだけの確かめ（決して落ちない） | `source_shell_tests.rs` | 直した（消して、本来のシェルの表を確かめる形に） |
+| 231 | できれば | B | 何も足さないテスト（doc の言う関数も違う） | `persist_entries_tests.rs` の `entries_values_round_trip_through_parse_px` | 直した（消した。確かめは `char_pos_entries_carries_scope_and_negative_values` と `parse_px_*` にある） |
+| 232 | できれば | B | 完全一致の直後で決して落ちない確かめ 3 つ | `persist_restore_tests.rs`・`persist_restore_offset_base_tests.rs` | 直した（消した） |
+| 233 | できれば | B | 共有の記憶の試験台 `Store` を手で組み直す写しが 2 か所 | `persist_io_wiring_tests.rs`・`balloon_lock_drag_tests.rs` | 直した（`finalize_save_tests::Store` を使う。追随の写しは申し送り） |
+| 234 | できれば | B | 「結線が無いとき」のテストが、doc の言う `debug!` を確かめず、`forget_entries` の同じ枝にはテストが無い | `persist_io_wiring_tests.rs` | 直した（`forget_entries_without_wiring_logs_debug_and_does_nothing`。`debug!` を消す壊し方で赤。`persist_entries` の側の `debug!` は `follow_keyword_base_tests` が確かめる） |
+| 235 | できれば | B | 窓の帳簿が無いときに標準の材料が変わらないことを確かめていない | `face_windowposition_tests.rs` の `missing_material_only_warns` | 直した（確かめを足した。材料の差し替えを帳簿の確かめより前へ動かす壊し方で赤） |
+| 236 | できれば | B | 記憶からの戻しのテストの小道具（`placement`・`bo`・`CSZ`／`BSZ`・`MEASURE_DPI`・5 つのアンカー）の写し | `persist_restore_tests.rs`・`persist_restore_offset_base_tests.rs`・`balloon_offset_persist_roundtrip_tests.rs` | 直した（1 組にまとめて引く） |
+| 237 | できれば | B | テストの小道具が要るより広く開いている | `persist_finalize_save_tests.rs` | 直した（私有に） |
+| 238 | できれば | B | sylphya のテストの `ghost_roots`／`ghost_file` が 3 つのファイルに写してある | sylphya `persist_remove_tests.rs`・`persist_lock_tests.rs`・`persist_unreadable_tests.rs` | 直した（`persist_unreadable_tests` の 1 組を引く） |
+| 239 | できれば | B | 同じ記録の探し文字列が 4 か所にある | `balloon_offset_supply_tests.rs`・`placement_windowposition_tests.rs`・`placement_windowposition_vocab_tests.rs` | 直した（`shared_test_support::WINDOWPOSITION_SUPPLY_NEEDLE`） |
+| 240 | できれば | B | 一時フォルダを 3 つ目の作り方で作る | `source_shell_tests.rs` | 直した（`unique_temp_dir`） |
+| 241 | できれば | B | spec の名の無い裁定の番号 | `reset_balloon_pos.rs` | 直した（`areka-P0-window-link-directives の裁定 8`） |
+| 242 | できれば | B | `parse_px`・`has_saved_char_pos`・`saved_adjacency` が、使い手が無いのに公開 | `persist.rs` | 直した（裁定: 推奨案で承認。私有にした。ツリー全体の grep で、コードの使い手は 0（`main.rs:795` の説明の文だけ）） |
+| 243 | 直したほうがよい | C | 焼きの数のテストが、シェルのフォルダの直下の絵しか数えず、emo2 の絵のうち下のフォルダの絵（スコープ 1 の顔を含む）を見ていない | 本体の `placement_tests/measure_bake_count_tests.rs` の `in_dir` | 直した（フォルダからの相対の道で数える。数える絵は 1 枚から 55 枚に。直下だけを数える形に戻す壊し方で赤） |
+| 244 | 直したほうがよい | C | 手本の DPI の説明が今の振る舞いと合わない（等倍・k=1.0・「膨れない」）。重なりの式も誤り | `examples/window-placement.rs` | 直した（文書だけ。窓寸は 96 での寸法×モニタの DPI÷96、式は resolver の P2 で確かめた `balloon_x(1) = char_x(0)`） |
+| 245 | 直したほうがよい | C | 1 回目の指摘 87 の直しで書き直した分岐（候補がどれも無いときは記録しない）にテストが無い | `measure.rs` の `initial_surface` の呼び手 | 直した（`no_candidate_in_shell_leaves_it_to_the_compose_failure`。`&& exists(id)` を消す壊し方で赤） |
+| 246 | できれば | C | `DefaultSurfaces::builtin()` の doc が、手本の入口と書く（呼び手はテストだけ） | `descript_window_keys.rs` | 直した（doc だけ） |
+| 247 | できれば | C | 測りの説明が違う関数を名指す（`candidates`・`build_boot_assets`・`load_shell_target`） | `measure.rs`・`measure_template_tests.rs`・`examples/window-placement.rs` | 直した |
+| 248 | できれば | C | `balloon_alignment` の doc が `none` を書かない | `config.rs` | 直した |
+| 249 | できれば | C | ファイルの頭が、中で確かめる `balloon.dontmove`・`balloon.syncscale` を書かない | `descript_window_keys_tests.rs` | 直した |
+| 250 | できれば | C | 共有の寸法を言い直すだけの定数 | `measure_default_surface_tests.rs` | 直した（消した） |
+| 251 | できれば | C | 表を組む小さな補助 `kv` が 8 か所に写してある | `config.rs`・`config_limit_tests.rs`・`descript_window_keys_tests.rs`・`measure_default_surface_tests.rs`・`balloon_syncscale_tests.rs`・`reseed_test_support.rs`・`resolver_resolve_contract_tests.rs`・`spawn_follow_pipeline_tests.rs` | 直した（`test_support::kv` の 1 つ。テストの支えへの足し算だけ） |
+| 252 | できれば | C | 動く絵の小道具（`image`・`info`・`frames`）が 2 つの crate に写してある | `measure_first_frame_tests.rs`・本体の `placement_tests/measure_bake_log_tests.rs` | 直した（`test_support::animated_image`。繰り返しの数は 1 にそろえた。どのテストもその数に頼らない） |
+| 253 | できれば | C | 同じ読めない値を確かめるテストが 2 本ある | `config.rs` の `t_c2_*` | 直した（1 本にまとめ、行を 1 つ足した） |
+| 254 | できれば | C | `include_str!` が作業の木のファイルを読むのに「`git HEAD` の実物」と書く | 本体の `placement_tests/measure_template_tests.rs` | 直した |
+| 255 | できれば | C | 手本が面の有無を聞くためだけに描画の世界をスコープごとに 1 つ余計に組む | `examples/window-placement.rs` | 直した（1 つを両方に使う） |
+| 256 | 直したほうがよい | D | 記録の水準のテストの支えが `log-capture-kit` の `capture_under_filter` の写しで、捕まえが死んでいても気付く確かめ（番兵）を落としている。「何も出ない」を確かめる 2 本が、何も捕まえなくても緑 | `diag_tests.rs` の `emit_all_under_filter` | 直した（dev-dependency の `log-capture-kit` に `env-filter` の機能を足し、`capture_under_filter` を使う。`Cargo.lock` は変わらない。`debug!` を `info!` にする壊し方で 2 本が赤。追随の写しは申し送り） |
+| 257 | できれば | D | 名前の無い古い spec の task 番号（「3.1（…）」ほか。1 回目に見出しの番号だけを消したので、下の行の番号が要件の番号に見える） | 本体の `spawn_assembly_tests.rs`・`spawn_test_support.rs`・`spawn_follow_pipeline_tests.rs` | 直した（番号を消した。要件の番号は「要件 N.M」に） |
+| 258 | できれば | D | 同じテストの中で前の確かめを言い直すだけの確かめ 6 か所 | 本体の `spawn_assembly_tests.rs` | 直した（消した） |
+| 259 | できれば | D | 差し替えた古いテストの経緯の説明 | 本体の `spawn_assembly_tests.rs` | 直した（消した） |
+| 260 | できれば | D | ほかのテストが同じことを確かめるテスト | `spawn_cleanup_tests.rs` の `t_v1_paired_followup_despawn_is_noop` | 直した（消した。確かめは `t_v1_surviving_scope_state_unchanged_by_cleanup` にある） |
+| 261 | できれば | D | 記録の札と宛先の綴りを言い直すだけのテスト 2 本 | `diag_tests.rs` | 直した（消した。札は全文のテストが、宛先は手順の絞り込みで点くテストが確かめる。宛先の後ろに文字を足す改名だけは赤にならなくなったが、絞り込みは頭からの一致で効くので手順はそのまま動く） |
+| 262 | できれば | D | 前のテストの言い直しと、`reset()` の直後の決して落ちない確かめ | `chain_finalize_tests.rs` | 直した（消した） |
+| 263 | できれば | D | それぞれ確かめてある 2 つの関数をつないで確かめるだけ | `chain_finalize_adjacency_tests.rs` | 直した（消した） |
+| 264 | できれば | D | 待ちの列を差し込むことを、列を引くテストが既に確かめる | `spawn_window_band_wiring_tests.rs` | 直した（消した。残るテストの doc に一行） |
+| 265 | できれば | D | 1 回目に書いた「モジュールの API はどれも本番から呼ばれる」が誤り（テストだけの物がある）。無い属性の説明 | `diag.rs` | 直した |
+| 266 | できれば | D | `Restore` の経路の doc が、作る所を 1 つと書く（実は 3 つの引き金が 1 つの語を使う） | `diag.rs` | 直した（裁定: 推奨案で承認。doc に 3 つの呼び手を書き、語は増やさない） |
+| 267 | できれば | D | モニタの写しの記録の doc が 3 つ誤る（呼び手・出る時・文脈の一覧） | `diag.rs` | 直した |
+| 268 | できれば | D | 起動の後は読まれないと書くが、DPI の移り変わりで毎回使い直される | `chain_finalize.rs` の `ChainFinalizeStall` | 直した |
+| 269 | できれば | D | `ScriptPlaced` の読み手の一覧が 1 つ足りない | `chain_finalize.rs` | 直した（`follow::work_area_clamp::clamp_grown_free_default` を足した） |
+| 270 | できれば | D | 済んだ実機の測りを先のこととして書く | `chain_finalize.rs` | 直した |
+| 271 | できれば | D | 分ける前のモジュールの道 `placement::` が残る | `chain_finalize.rs`・`diag.rs`・`spawn.rs` | 直した |
+| 272 | できれば | D | 語の不在を確かめる 2 つの半分が、ファイルを読む補助を写して持つ | `spawn_zorder_pair_deferred_tests.rs`・本体の同名のファイル | 直した（`test_support::zorder_pair_deferred::read_source`。較正は本物の `spawn.rs`・`window_state_cue.rs` を読んだまま） |
+| 273 | できれば | E | 台帳の読み出しの並びを「前後の決まりではない」と書くが、鎖の組み立てはその順で連ねる | `zorder_group_ledger.rs`・`zorder_group_ledger_state_tests.rs` | 直した |
+| 274 | できれば | E | 並びの完全一致の後で決して落ちない確かめと、それだけに使う定数 | `zorder_chain_tail_order_tests.rs` | 直した（消した） |
+| 275 | できれば | E | 完全一致の直後の言い直し 2 つ | `zorder_chain_compose_tests.rs` | 直した（消した） |
+| 276 | できれば | E | 覆された寄せ（スコープのかたまりへの組み替え）をまだ書く | `zorder_group_ledger_tests.rs` | 直した |
+| 277 | できれば | E | 名前の無い task 番号（「4.1 で 2 度差し戻された」「初版 1.2 の教訓」） | `zorder_chain_tail_order_tests.rs`・`zorder_group_ledger_tests.rs` | 直した（消した） |
+| 278 | できれば | E | 「本 spec」「完了 spec」「本リリース」が、どの spec かを言わない | `zorder_chain_compose.rs` ほか 7 ファイル | 直した（指す物の名か、spec の正式の名に） |
+| 279 | できれば | E | 支えの頭の使い手の数が古い | `zorder_test_support.rs` | 直した（数を書かない） |
+| 280 | できれば | E | 隣り合う組を全部辺にする補助の写し | `zorder_chain_compose_tests.rs`・`zorder_chain_compose_written_order_tests.rs` | 直した（`zorder_test_support::all_consecutive_edges`） |
+| 281 | できれば | E | 分岐の表の検査の決まりを 3 か所に別々の番号で書く | 本体の `zorder_branch_coverage_test_support.rs`・`zorder_group_branch_coverage_tests.rs`・`zorder_inversion_branch_coverage_tests.rs` | 直した（支えの 1 か所だけに） |
+| 282 | 直したほうがよい | F | 指摘 154 の直しの後、印を付け直したことが記録されることを確かめるテストが無い（`on_insert` を `on_add` にしても緑） | `chain_realign_script_moved_tests.rs` | 直した（`reinsertion_after_arming_on_a_window_marked_before_is_recorded`。その壊し方で赤。古いテストの名を中身に合わせた） |
+| 283 | できれば | F | 説明が `None` と書くが、コードは `BalloonPlace::Fits` で分ける | `balloon_limit.rs`・`balloon_limit_gate_tests.rs` | 直した |
+| 284 | できれば | F | 兄弟のファイルも小道具を使うと書くが、使わない | `balloon_limit_tests.rs` | 直した |
+| 285 | できれば | F | 名前の無い task 番号 | `balloon_limit_flip_tests.rs`・`balloon_limit_tests.rs` | 直した（消した） |
+| 286 | できれば | F | 長さと順を言い直すだけのテスト | `balloon_limit_gate_tests.rs` の `boot_gate_preserves_order_and_length` | 直した（消した。長さは `boot_gate_clamps_display_position_and_keeps_offset_raw`、順は `boot_gate_logs_only_for_scopes_it_actually_moved` が確かめる） |
+| 287 | できれば | F | 純粋な関数を 2 回呼んで集合を比べる（決して落ちない） | `sticky_group_ledger_tests.rs` の `parse_order_has_no_meaning` | 直した（消した。確かめは `parse_accepts_two_or_more_distinct_ids` にある） |
+| 288 | できれば | F | 共有の `scopes` の写し 2 つ | `sticky_group_ledger_tests.rs`・`sticky_group_ledger_world_tests.rs` | 直した |
+| 289 | できれば | F | バルーン位置初期化のテストの試験台が、窓の手の付け方を写して持つ | 本体の `placement_tests/reset_balloon_pos_tests.rs` | 直した（`test_support::fake_handle` を使う。残りは `reseed` の私有の `world_from` と入力（作業領域・題名）が違うので、そのまま） |
+| 290 | できれば | F | 同じ決まった準備を 2 回比べる（決して落ちない） | 本体の `placement_tests/reset_balloon_pos_tests.rs` | 直した（消した） |
+| 291 | できれば | F | シェルの切り替えなどで、知らない `alignmenttodesktop` の警告が同じスコープで走るスコープの数だけ繰り返す（2 スコープで 4 行） | `reseed.rs` の `resolve_standard_scopes` | 直した（作業領域と DPI の組ごとに 1 度だけ解く。各スコープは自分の要素を取る。RED を先に取った: `t_rs08_unknown_alignment_warns_once_per_scope` が直す前は `["0", "0", "1", "1"]`） |
+| 292 | できれば | F | 基準を差し直す時の一覧に、面の windowposition の置き直しが抜けている | `balloon_syncscale.rs` の頭 | 直した |
+| 293 | できれば | — | 行の番号が古い（`resolver.rs`・`zorder_chain_compose.rs`・`diag.rs`。E の組が見つけた `zorder_group_ledger.rs` の 4 か所と、E の直しで 1 行ずれた 9 か所も） | `doc/COMPAT_ARCHITECTURE.md` | 直した（159 と同じく、配置の crate を指す行の番号をやめて関数や型の名に。18 か所） |
+| 294 | できれば | — | 行の番号が古い（`source.rs`・`measure.rs`・`resolver.rs`・`config.rs` の続きの 4 つ）。2 つの警告を語る「前者」「後者」の文 | `doc/ukadoc-coverage/briefing-assets.md` | 直した（今の行の番号に。警告は `resolve_placement` の 1 つなので文を書き直した） |
+| 295 | できれば | — | 行の番号が古い・消えた `prepare_stages` を名指す | 本体の `examples/collision-probe.rs`・`collision-probe/setup.rs` | 直した（今の行の番号と `prepare_stages_for_shell` に。1 回目は `audit-areka-app` へ申し送ったが、ほかの直しの行を確かめる同じ手でここで直すほうが確かで、1 回目のレビューも一部をここで直すのを認めていた） |
+
+- 申し送りとの対応（要件 1.6）: 1〜207 と同じ所を指す指摘は 0 件。2 つの組が同じ所を出したものは 1 件に数えた（上の注）。291 は指摘 1 と近いが、1 の直しは正典の値の繰り返しだけを消したもので、知らない値の繰り返しは残っていた（A の組は 1 に含めて数えなかったが、F の組の見立てを採って新しく数えた）。
+- 直しで古くなった行の番号の確かめ: この回で触った `.rs` を指す `<ファイル>.rs:<行>` の形を、ツリー全体（`.kiro/specs/completed/` と `vendors/` を除く）から拾い、`git show HEAD:` の行と今の行を比べた。今の行を指す参照で古くなったのは、上の 293〜295 で直した所だけ。この spec の `brief.md`・この節より前の記録・`.kiro/steering/roadmap-history.md` の当時の行は、日付つきの記録なので直さない（18.1 と同じ）。
+
+#### 指摘にしなかったもの
+
+- spec の名の無い要件・設計の番号（「要件 N.M」・`design.md`・`tasks.md`・`research.md`）。1 回目は task 番号と指摘番号だけを指摘にした。要件の番号は範囲のほぼ全部のファイルにあり、多くはファイルの頭で spec の名を言っている。1 回目と同じ線を保つ。
+- `from_alignment` から警告を移したこと（1 回目の 158）で警告を失った呼び手。確かめた結果、本番の呼び手は `resolve_placement` の 1 か所だけで、失ったものは無い。
+- 数える復号器 2 つ（`measure_first_frame_tests.rs` の `Counting` と本体の `CountingDecoder`）を 1 つの型にまとめる案。数える物（呼び出しの合計 3 つと、ファイルごとの 5 つ）も土台の復号器も違い、まとめると公開のテストの支えへ 75 行ほどを足して 38 行ほどを消すことになる。
+- `AuthorDpi::DEFAULT`（215）と `DefaultSurfaces::builtin()`（246）を消す、またはテストの支えの奥へ隠す案。公開の形を狭める（要件 8.2）割に得る物が無いので、doc を直すだけにした。
+- `PlacementRoute` に面の windowposition とバルーン位置初期化の語を足す案（266）。公開の列挙を増やし、追随の持ち物の網羅の `match` に触り、見え方の門の振る舞いも変える。doc に 3 つの呼び手を書くだけにした（推奨案で承認）。
+- `reseed_test_support::world_from` を公開して本体の試験台と 1 つにする案（289）。作業領域と題名の入力が違い、公開のテストの支えを広げるので、一番小さい分だけを直した。
+- 組から上がって、確かめて外したもの: `BalloonPlace::how()` の `Fits` の腕（網羅の `match` に要る）・`ClickThroughRegistrar` の実装が 1 つ（テストの偽の境界のためのわざとの継ぎ目）・`compose_chain` の毎フレームの割り当て（窓が数個で軽い）・`allocate_id` の飽和（届かない・書かれた決め）・手で直した記憶に `"0"` と `"00"` が並ぶときの読み（sylphya の読みの前からの振る舞いで、範囲の外）・`BalloonSyncScaleState.0` の読み手（テストの無いビルドで警告が出ないことを確かめた）。
+
+#### 裁定が要るもの（要件 5・8.6）
+
+| 番号 | 種類 | 中身 | 推奨 | 裁定 |
+|---|---|---|---|---|
+| 210 | 要件 5 の 3 種類目（利用者に見える位置）。この spec の指摘 1 の直しの形で、1 回目に足した `t_r5_mixed_edges_chain_per_edge` が重なりを期待として固定している | 右（左）の辺のスコープの縦の連なりが下端の `bottom − h` から始まるので、下端の連なりの窓が持つ右下（左下）の角でまるごと重なる。たとえば `kero.seriko.alignmenttodesktop,right` で、さくらが既定の下端のとき | **SSP の振る舞いを MCP で測ってから決める**。重ならないようにするなら、辺の連なりを、同じ角を持つ下端の連なりの窓の上から始め、`t_r5_mixed_edges` の期待を裏返す（RED を先に）。測るまでは今のまま | 裁定待ち（開発者に仰いでいる） |
+| 242 | 要件 8.6（C20 のあいだ公開の形を変えない＝8.2。関数を私有に） | `parse_px`・`has_saved_char_pos`・`saved_adjacency` を C20 のうちに私有にするか | **C20 のうちに直す**: ツリー全体で、コードの使い手は `persist` のモジュールの中だけ。指摘 86・118 と同じ形 | 推奨案で承認。直した |
+| 256 | 要件 8（依存を足さない・`Cargo.lock` に触れない） | dev-dependency の `log-capture-kit` に `env-filter` の機能を足すか | **足す**: 新しい crate は無く、`log-capture-kit` から `tracing-subscriber` への辺は wintf が同じ機能で既に張っている。`Cargo.lock` の差分が 0 であることを確かめた | 推奨案で承認。直した |
+| 266 | 要件 8.6（公開の列挙 `PlacementRoute` を増やす） | `Restore` を 3 つの引き金で分けるか | **doc だけ直す**: 語を足すと追随の持ち物の網羅の `match` に触り、見え方の門の振る舞いも変わる | 推奨案で承認。doc だけ直した |
+
+#### 申し送り（タスク 8.2 が書く）
+
+- `audit-placement-follow` へ（持ち主の spec はもう完了しているので、8.2 が扱いを決める）:
+  - `follow_test_support.rs` の `point`／`contained` の写し（`contained` は飽和加算でなく、`test_support.rs` が戒める形）と、`Store` の写し（530〜572 行）。
+  - `follow_transition_diag_tests.rs:284`・`follow_window_move_diag_tests.rs:487` の記録の捕まえの手書きの写し（256 と同じ形。`capture_under_filter` を使う）。
+  - `follow_move_shift_tests.rs` の `k` の写し（220）・`follow_sticky_follow_drag_tests.rs:79` の `events_of` の写し（219）・`follow/sticky_follow.rs` の略称 `scg`（218）。
+- `audit-areka-app` へ:
+  - 本体の `src/` に残る略称 `scg`・`atom`（`ghost_session.rs`・`main_restore_seam_tests.rs`・`runtime/frame.rs`・`runtime/frame/drain_resnap.rs`・`runtime/frame_chain_finalize_*_tests.rs`・`runtime/move_cue_place.rs`・`main.rs`・`main_monitor_snapshot_seam_tests.rs` ほか）。`placement_tests/transition_*` の分は追随の側。
+  - `runtime/frame_diag_route_tests.rs:19` が、もう無い `areka_placement::test_support::capture_logs` を名指す（`audit-emo-atlas` の #451 で消えた）。
+  - 1 回目の 159 の残り（`collision-probe.rs` の行の番号と `prepare_stages`）は、295 でここで直したので申し送りから外す。81 の残り（`examples/emo-present/balloon.rs` の `read_balloon_offset`）は残る。
+
+#### テスト
+
+- `cargo test -p areka-placement --features test-support`: lib 965 件が通り 1 件 ignore、手本 2 件が通る。
+- `cargo test -p areka`: 本体の bin 3180 件が通り 6 件が ignore、ほかのテストの的も全部通る（知られた揺れは出なかった）。
+- `cargo test -p areka-sylphya`: 221 件が通る。
+- `cargo test -p ukadoc-survey`: 全部通る。
+- `cargo fmt --all -- --check`: 緑。`cargo test -p log-capture-kit --test file_length_guard_test`: 6 件が通る（`persist.rs` 977 行・`lib.rs` 926 行・`persist_restore_tests.rs` 838 行・`measure_tests.rs` 836 行）。
+- `git diff --stat Cargo.lock` と `vendors/` の差分は空。追随の持ち物（`src/follow*`・`src/transition_*`・本体の `placement_tests/transition_*`）は 1 行も触っていない。
+- 直しは 6 つの組ごとに分けて同時に進めた。1 度、壊し方を戻すのに `git checkout` で `chain_finalize.rs` を `HEAD` へ戻した事故があったが、その時点でそのファイルに入っていた直しは無く、失った物は無い（後の直しはその後に入れた）。
+
+#### 判定
+
+2 回目の新しい指摘は 88 件（必ず直す 0・直したほうがよい 8・できれば 80）で、0 件ではない。直した 87 件・裁定待ち 1 件（210）。3 回目をかける（要件 6.2）。210 の裁定が出たら、その直し（または残す理由）を 3 回目の前に入れる。

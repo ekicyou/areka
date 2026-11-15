@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
+use wintf::ecs::window::{ChainPlan, ChainSegment};
 
 use super::{compose_chain, element_text};
 use crate::zorder_group_ledger::{GroupElement, ZOrderGroup};
-use crate::zorder_test_support::{b, edge, ent, ents, s, tag_group};
+use crate::zorder_test_support::{all_consecutive_edges, b, edge, ent, ents, s, tag_group};
 
 // ===========================================================================
 // 道具立て
@@ -261,15 +261,7 @@ fn t_zcw04_every_written_order_yields_one_straight_line() {
 fn t_zcw05_the_checker_catches_a_pair_edge_written_by_the_chain() {
     let groups = [tag_group(1, &["s0", "b0", "b1", "s1"])];
     let mut plan = compose_full(&groups, &[0, 1]);
-    plan.cross_edges = plan
-        .members
-        .windows(2)
-        .map(|w| CrossEdge {
-            owned: w[0],
-            owner: w[1],
-            segment: ChainSegment::Group(1),
-        })
-        .collect();
+    plan.cross_edges = all_consecutive_edges(&plan.members, ChainSegment::Group(1));
 
     assert!(!final_owner_violations(&plan, &[0, 1]).is_empty());
 }

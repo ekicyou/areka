@@ -222,7 +222,9 @@ pub(crate) fn resolve_standard_scopes(
     // スコープの X に連なり（P2）、`balloon.alignment,none` の側はその仮の X の中心で決まる（P5）。
     let inputs: Vec<ScopeInput> = running_scopes.iter().map(|r| r.input).collect();
 
-    // 2 周目: スコープごとにその窓の作業領域と DPI で解き、自分の要素だけを取る。
+    // 2 周目: スコープごとにその窓の作業領域と DPI で解き、自分の要素だけを取る。同じ作業領域と
+    // DPI の窓は 1 度だけ解く（解き直すと、解決の中の知らない値の警告が窓の数だけ重なる）。
+    let mut solved: Vec<(RectPx, DPI, Vec<ScopePlacement>)> = Vec::new();
     let mut resolved = Vec::new();
     for running in running_scopes {
         let scope = running.input.scope;
@@ -234,11 +236,16 @@ pub(crate) fn resolve_standard_scopes(
             );
             running.char_rect
         });
+        let at = solved
+            .iter()
+            .position(|(wa, dpi, _)| *wa == work_area && *dpi == running.dpi)
+            .unwrap_or_else(|| {
+                let out = resolve_placement(&cfg, work_area, &inputs, running.dpi);
+                solved.push((work_area, running.dpi, out));
+                solved.len() - 1
+            });
         // 自分の要素はちょうど 1 件（resolver・merge の事後条件）。破れたら黙って進めない。
-        let Some(placement) = resolve_placement(&cfg, work_area, &inputs, running.dpi)
-            .into_iter()
-            .rfind(|p| p.scope == scope)
-        else {
+        let Some(placement) = solved[at].2.iter().rfind(|p| p.scope == scope).copied() else {
             warn!(
                 event = "reseed_skipped",
                 scope,

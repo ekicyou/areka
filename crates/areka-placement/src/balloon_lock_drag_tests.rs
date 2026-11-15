@@ -7,14 +7,10 @@
 //! wintf がドラッグの始まりに控える `WindowDragContextResource` もそのまま通る。
 //! 止めたドラッグでは wintf が窓を動かさないので、バルーンの `WindowPos` は書き換えない。
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::collections::HashMap;
 use std::time::Instant;
 
-use areka_sylphya::persist::FakePersistIo;
-use areka_sylphya::{
-    PersistKey, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, load_scope, spawn_sylphya,
-};
+use areka_sylphya::PersistKey;
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::{
     DragAccumulatorResource, DragConfig, DragEndEvent, DragTransition, OnDrag, OnDragEnd,
@@ -27,13 +23,13 @@ use super::super::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag, on_balloon_drag_end,
     on_char_drag,
 };
-use super::super::persist::PersistWiring;
+use super::super::persist::finalize_save_tests::Store;
 use super::super::resolver::{Anchor, PointPx, RectPx};
 use super::super::spawn::{BalloonKeywordBase, CharWindowMarker};
 use super::*;
 use crate::config::BalloonXMode;
 use crate::shared_test_support::{events_with, scopes};
-use crate::test_support::{SharedFakeIo, fake_handle};
+use crate::test_support::fake_handle;
 use log_capture_kit::capture;
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
@@ -59,25 +55,14 @@ fn window_pos(p: Point, w: i32, h: i32) -> WindowPos {
 
 struct Rig {
     world: World,
-    parts: SylphyaParts,
-    roots: ScopeRoots,
-    store: Arc<FakePersistIo>,
+    store: Store,
     char_w: Entity,
     balloon: Entity,
 }
 
 impl Rig {
     fn new() -> Self {
-        let store = Arc::new(FakePersistIo::new());
-        let roots = ScopeRoots {
-            ghost: Some(PathBuf::from("/g")),
-            ..ScopeRoots::default()
-        };
-        let parts = spawn_sylphya(SylphyaInit {
-            roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(store.clone())),
-            runtime_sink: None,
-        });
+        let store = Store::new();
         let mut world = World::new();
         world.insert_resource(DragAccumulatorResource::new());
         world.insert_resource(WindowDragContextResource::new());
@@ -89,9 +74,7 @@ impl Rig {
                 bottom: 1200,
             }],
         });
-        world.insert_non_send(PersistWiring {
-            publisher: parts.publisher.clone(),
-        });
+        store.wire(&mut world);
         // 製品（`spawn.rs`）と同じく、バルーンの窓は `DragConfig::default()` と 2 つの受け手を持つ。
         let balloon = world
             .spawn((
@@ -118,8 +101,6 @@ impl Rig {
             .id();
         Self {
             world,
-            parts,
-            roots,
             store,
             char_w,
             balloon,
@@ -202,14 +183,10 @@ impl Rig {
     }
 
     /// 記憶に書かれたこのスコープのバルーンの相対位置。
-    fn saved_offsets(&self) -> Vec<(PersistKey, String)> {
-        self.parts.publisher.barrier().unwrap();
-        load_scope(
-            PersistScope::Ghost,
-            &self.roots,
-            &SharedFakeIo::new(self.store.clone()),
-        )
-        .into_iter()
+    fn saved_offsets(&self) -> HashMap<PersistKey, String> {
+        self.store
+            .load()
+            .into_iter()
         .filter(
             |(k, _)| matches!(k, PersistKey::BalloonOffset { scope, .. } if *scope == SCOPE as u32),
         )
@@ -229,8 +206,7 @@ impl Rig {
     }
 
     fn close(self) {
-        self.parts.publisher.close();
-        let _ = self.parts.handle.join();
+        self.store.finish();
     }
 }
 

@@ -6,6 +6,7 @@
 //! 門（偽の IO の中の止め）はどのテストでも必ずテストの中で開く。テストが落ちても送り手が
 //! 捨てられて開く（止めている間、同じバイナリのほかのテストの保存も `SAVE_GATE` で待つため）。
 
+use super::unreadable_tests::ghost_roots;
 use super::*;
 use crate::test_log_capture::capture;
 use std::sync::Mutex;
@@ -15,13 +16,6 @@ use std::time::Duration;
 
 /// 止めの待ちの上限（壊れた作りでもテストが止まらずに赤で終わる）。
 const BOUND: Duration = Duration::from_secs(5);
-
-fn ghost_roots() -> ScopeRoots {
-    ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    }
-}
 
 /// 1 回目の読みで中身を読んだ後に「入った」を知らせ、門が開く（送り手が送るか捨てられる）まで止まる偽の IO。
 struct GatedFirstRead {

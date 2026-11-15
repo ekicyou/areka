@@ -2,7 +2,6 @@
 //! `char_positions`）と、それらが中で使う補助（spec: placement-crate-split 設計 TestSupportFeature）。
 //! テストだけが使う補助は `reseed_tests.rs` に残す。
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bevy_ecs::prelude::*;
@@ -14,6 +13,7 @@ use crate::follow::{MonitorSnapshot, OffsetBase};
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use crate::test_support::kv;
 
 pub(crate) const CHAR0: SizePx = SizePx { w: 434, h: 687 };
 const CHAR1: SizePx = SizePx { w: 278, h: 357 };
@@ -104,12 +104,6 @@ pub(crate) fn fake_handle(raw: usize) -> WindowHandle {
 /// `char2.` のキーを持つが、設定にスコープ 2 は現れない（spec: areka-P0-emily-ghost-verification
 /// 要件 4.7・6.7——`char{n}.`（n≥2）からは scope を足さない）。
 pub fn new_shell(extra: &[(&str, &str)]) -> DescriptSource {
-    let kv = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    };
     let mut shell_kv = kv(&[
         ("seriko.alignmenttodesktop", "free"),
         ("sakura.balloon.alignment", "right"),

@@ -256,12 +256,13 @@ fn same_value_does_nothing() {
 }
 
 /// 材料（`DefaultPlacementBasis`）・窓の一式（`GhostWindows`）が無ければ `warn!` を 1 行出して
-/// 何もしない。
+/// 何もしない（窓の一式が無いときは材料も前のまま）。
 #[test]
 fn missing_material_only_warns() {
     with_com_initialized(|| {
         for reason in ["no_default_basis", "no_ghost_windows"] {
             let (mut world, _windows) = booted();
+            let before_basis = basis(&world);
             if reason == "no_default_basis" {
                 world.remove_resource::<DefaultPlacementBasis>();
             } else {
@@ -278,6 +279,9 @@ fn missing_material_only_warns() {
             assert_eq!(skips[0].level, tracing::Level::WARN);
             assert_eq!(skips[0].field_str("reason"), Some(reason));
             assert!(face_logs(&events).is_empty(), "{reason}: {events:?}");
+            if reason == "no_ghost_windows" {
+                assert_eq!(basis(&world), before_basis, "{reason}: 材料は前のまま");
+            }
             let _ = drain_window_pos_commands();
         }
     });

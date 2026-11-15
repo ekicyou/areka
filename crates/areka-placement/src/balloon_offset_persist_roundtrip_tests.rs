@@ -63,6 +63,7 @@
 //! （`(2·len·num + den) ÷ (2·den)`＝round half away from zero）を紙の上で適用した逐語値で
 //! ある。算術は各定数の doc に残す。追随相を走らせて出た値を写していない。
 
+use super::restore_tests::{ALL_ANCHORS, BSZ, CSZ, placement};
 use super::*;
 use crate::follow::{BalloonFollow, OffsetBase, OffsetRescale, rescale_follow_offset};
 use bevy_ecs::entity::Entity;
@@ -72,14 +73,11 @@ use wintf::ecs::DPI;
 // 行列の定義
 // ---------------------------------------------------------------------------
 
-const CSZ: SizePx = SizePx { w: 400, h: 600 };
-const BSZ: SizePx = SizePx { w: 200, h: 300 };
-
 /// 配置式が刻む**採寸 DPI**（係留済みの基準対が持つ値）。
 ///
 /// 96 の倍数でない値を採る（要件 7.6）。保存値採用腕がこれを継いでいないことが
 /// 本ファイルの弁別対象ゆえ、下の [`RESTORE_DPIS`] のどの水準とも**別の意味**を持つ。
-const MEASURE_DPI: DPI = DPI {
+pub(super) const MEASURE_DPI: DPI = DPI {
     dpi_x: 120,
     dpi_y: 120,
 };
@@ -98,15 +96,6 @@ const FORMULA_DEFAULT: PointPx = PointPx { x: -50, y: 10 };
 ///
 /// 144 は 96 の倍数でない（要件 7.6）。
 const RESTORE_DPIS: [u16; 4] = [96, 120, 144, 192];
-
-/// 全アンカー（`Anchor` の 5 腕）。保存・復元の往復はアンカーに依らないことを主張する。
-const ANCHORS: [Anchor; 5] = [
-    Anchor::Top,
-    Anchor::Bottom,
-    Anchor::Left,
-    Anchor::Right,
-    Anchor::Free,
-];
 
 /// 3 段の筋で使う復元先の表示 DPI（⑵ で係留される水準）。採寸 DPI とも保存側とも違う。
 const STAGE_ANCHOR_DPI: u16 = 144;
@@ -159,36 +148,39 @@ fn snapshot() -> MonitorSnapshot {
     }
 }
 
-/// 配置式が出した（＝基準対が**係留済み**の）1 スコープ分の出力を模す。
-fn placement_from_formula(anchor: Anchor) -> ScopePlacement {
-    let char_pos = PointPx { x: 500, y: 300 };
+/// 配置式が出した（＝基準対が**係留済み**の）1 スコープ分の出力を模す（persist の兄弟の檻も使う）。
+///
+/// 画面内維持の関門は有効（`placement` の既定）——関門を通しても補正後の表示位置がオフセットへ
+/// 焼き付かないこと（要件 5.6）は、関門が効き得る形でしか主張できない（3. の檻）。
+pub(super) fn pinned_placement(
+    scope: usize,
+    anchor: Anchor,
+    balloon_offset: PointPx,
+) -> ScopePlacement {
     ScopePlacement {
-        scope: 0,
-        char_pos,
-        char_size: CSZ,
-        balloon_pos: PointPx {
-            x: char_pos.x + FORMULA_DEFAULT.x,
-            y: char_pos.y + FORMULA_DEFAULT.y,
-        },
-        balloon_size: BSZ,
-        balloon_offset: FORMULA_DEFAULT,
         balloon_offset_base: OffsetBase {
-            offset: FORMULA_DEFAULT,
+            offset: balloon_offset,
             dpi: Some(MEASURE_DPI),
         },
-        // 画面内維持の関門を有効にしておく——関門を通しても補正後の表示位置がオフセットへ
-        // 焼き付かないこと（要件 5.6）は、関門が効き得る形でしか主張できない（3. の檻）。
-        balloon_limit: true,
-        anchor,
-        balloon_keyword_base: None,
+        ..placement(
+            scope,
+            anchor,
+            PointPx { x: 500, y: 300 },
+            CSZ,
+            balloon_offset,
+            BSZ,
+        )
     }
 }
 
 /// 保存 → 復元の 1 往復。保存側は**本番の保存 entries 構築**を通す。
 fn roundtrip(anchor: Anchor, saved: PointPx) -> ScopePlacement {
     let entries = balloon_offset_entries(0, saved);
-    let out =
-        apply_restored_placements(vec![placement_from_formula(anchor)], &entries, &snapshot());
+    let out = apply_restored_placements(
+        vec![pinned_placement(0, anchor, FORMULA_DEFAULT)],
+        &entries,
+        &snapshot(),
+    );
     out.into_iter().next().expect("1 スコープ分が返る")
 }
 
@@ -235,7 +227,7 @@ fn follow_of(placement: &ScopePlacement) -> BalloonFollow {
 /// 通した後の「補正後の表示位置をオフセットへ焼き付けない」（要件 5.6）は 3. の檻が持つ。
 #[test]
 fn a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit() {
-    for anchor in ANCHORS {
+    for anchor in ALL_ANCHORS {
         let out = roundtrip(anchor, SAVED);
         assert_eq!(
             out.balloon_offset, SAVED,
@@ -260,7 +252,7 @@ fn a_saved_offset_survives_the_save_restore_roundtrip_bit_for_bit() {
 /// 3 段の**中段**を単独で観測している。
 #[test]
 fn the_first_observation_anchors_without_moving_the_value_at_any_restore_dpi() {
-    for anchor in ANCHORS {
+    for anchor in ALL_ANCHORS {
         for d in RESTORE_DPIS {
             let out = roundtrip(anchor, SAVED);
             let mut follow = follow_of(&out);
@@ -444,7 +436,7 @@ fn the_restore_never_bakes_a_correction_into_the_saved_offset() {
         x: -9_000,
         y: -7_000,
     };
-    for anchor in ANCHORS {
+    for anchor in ALL_ANCHORS {
         let restored = roundtrip(anchor, far_off);
         let out = crate::balloon_limit::apply_balloon_limit(vec![restored], &snapshot())
             .into_iter()

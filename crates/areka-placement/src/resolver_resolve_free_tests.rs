@@ -181,7 +181,7 @@ fn t_r4_free_position_feeds_scope_chain() {
                 x: x0 - w1,
                 y: wa.bottom - h1
             },
-            "dpi={dpi}: base_x(1)=char_x(0)−w1（free 実位置基準・scg 2.1/2.2）"
+            "dpi={dpi}: base_x(1)=char_x(0)−w1（free 実位置基準・areka-P0-scope-chain-gap 2.1/2.2）"
         );
     }
 }

@@ -22,7 +22,6 @@ use crate::resolver::{PointPx, ScopePlacement, SizePx};
 // あり、兄弟モジュールのテストは自ファイル内という repo 慣行に従いここに置く。
 // -------------------------------------------------------------------------
 
-use std::collections::BTreeMap;
 use std::time::Instant;
 
 use wintf::ecs::drag::DragEvent;
@@ -30,6 +29,7 @@ use wintf::ecs::drag::DragEvent;
 use crate::config::build_placement_config;
 use crate::follow::move_window_to;
 use crate::resolver::{RectPx, ScopeInput, resolve_placement};
+use crate::test_support::kv;
 
 /// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow.rs と同型）。
 fn drag_event(target: Entity) -> DragEvent {
@@ -41,14 +41,6 @@ fn drag_event(target: Entity) -> DragEvent {
     }
 }
 
-/// `(key, value)` ペア列 → `parse_kv` 出力相当の `BTreeMap`（config テストと同じ流儀）。
-fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
-}
-
 /// 実パイプライン（KV → config → resolver → spawn）で組んだ World。
 ///
 /// - work_area は原点非 (0,0)・全辺 96 の倍数を避けた合成値（隠れた `dpi/96`
@@ -57,8 +49,8 @@ fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 ///   scope1＝バルーン right — 左右両変種を 1 パイプラインで通す
 /// - scope0 のキャラ寸は emo2 実寸（434×687）・他は 96 非倍数の合成値
 fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
-    let ghost_kv = kv_map(&[("sakura.name", "むらさき"), ("kero.name", "エモ")]);
-    let shell_kv = kv_map(&[
+    let ghost_kv = kv(&[("sakura.name", "むらさき"), ("kero.name", "エモ")]);
+    let shell_kv = kv(&[
         ("seriko.alignmenttodesktop", "bottom"),
         ("sakura.defaultx", "52"),
         ("sakura.balloon.offsetx", "29"),
@@ -93,7 +85,7 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
     (world, gw, placements)
 }
 
-/// 全 4 窓へ偽 WindowHandle を付与する（4.2 の偽装境界パターン）。
+/// 全 4 窓へ偽 WindowHandle を付与する（偽装境界）。
 fn attach_fake_handles(world: &mut World, gw: &GhostWindows) {
     let mut raw = 0x100isize;
     for scope in gw.scopes().collect::<Vec<_>>() {

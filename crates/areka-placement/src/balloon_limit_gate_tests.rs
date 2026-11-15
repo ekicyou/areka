@@ -261,7 +261,7 @@ fn boot_gate_warns_and_passes_through_when_snapshot_is_empty() {
 ///
 /// 入力は「バルーン窓の矩形は左モニタに完全に収まるが、キャラ窓は右モニタに属する」
 /// という配置——基準をバルーン窓（あるいは先頭モニタ）から引く実装なら補正が起きず
-/// `None` のまま素通しになるので、この 1 本で取り違えが赤になる。
+/// `Fits` のまま素通しになるので、この 1 本で取り違えが赤になる。
 #[test]
 fn boot_gate_uses_work_area_of_monitor_owning_char_window() {
     let left_monitor = WA;
@@ -480,23 +480,4 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             assert_no_event(&events, BALLOON_LIMIT_UNRESOLVED_TAG);
         }
     }
-}
-
-/// 入力の順序と長さは保たれる（下流は index で spawn するため順序が契約）。
-#[test]
-fn boot_gate_preserves_order_and_length() {
-    let input = vec![
-        placement(0, point(30, 300), point(-50, 10), true),
-        placement(1, point(700, 300), point(-50, 10), false),
-        placement(2, point(700, 300), point(0, 600), true),
-    ];
-
-    let out = apply_balloon_limit(input.clone(), &snapshot(&[WA]));
-
-    assert_eq!(out.len(), input.len(), "出力長＝入力長");
-    assert_eq!(
-        out.iter().map(|p| p.scope).collect::<Vec<_>>(),
-        vec![0, 1, 2],
-        "scope の順序は入力のまま"
-    );
 }

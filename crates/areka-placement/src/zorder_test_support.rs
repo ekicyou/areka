@@ -1,4 +1,4 @@
-//! Z 順のテストが共に使う道具（台帳・鎖の合成のテスト 6 ファイルの写しを 1 つにまとめた）。
+//! Z 順のテスト（台帳・鎖の合成・鎖の実窓）が共に使う道具。
 //!
 //! 要素の `b`／`s`、要素から決定論的に組む `Entity`、繋ぎ 1 本、本番の解釈器を通したタグの
 //! グループと、鎖の実窓のテスト（`zorder_chain_tail_order_tests.rs`・
@@ -59,6 +59,18 @@ pub(crate) fn edge(front: GroupElement, back: GroupElement, segment: ChainSegmen
         owner: ent(back),
         segment,
     }
+}
+
+/// 連続する 2 枚を 1 つも除かずに繋いだ形＝「同一スコープ対の除外」を経路から外した出力。
+pub(crate) fn all_consecutive_edges(members: &[Entity], segment: ChainSegment) -> Vec<CrossEdge> {
+    members
+        .windows(2)
+        .map(|w| CrossEdge {
+            owned: w[0],
+            owner: w[1],
+            segment,
+        })
+        .collect()
 }
 
 /// タグ由来のグループ 1 本を、本番と同じ解釈器（補い込み）を通して組む。

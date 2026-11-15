@@ -31,7 +31,7 @@ fn resolve(world: &mut World) {
 }
 
 #[test]
-fn insertions_and_calls_while_armed_are_recorded_including_reinsert() {
+fn insertions_and_calls_while_armed_are_recorded_once_per_window() {
     let (mut world, a, b) = rig();
     arm_chain_realign(&mut world, Vec::new());
 
@@ -42,6 +42,18 @@ fn insertions_and_calls_while_armed_are_recorded_including_reinsert() {
     note_script_moved(&mut world, b);
 
     assert_eq!(recorded(&world), Some(vec![a, b]));
+}
+
+/// 武装の前から印を持つ窓へ、武装の後に台本がもう一度置いたときも記録する（付け直しで差し込みの口が走る）。
+#[test]
+fn reinsertion_after_arming_on_a_window_marked_before_is_recorded() {
+    let (mut world, a, _) = rig();
+    world.entity_mut(a).insert(ScriptPlaced);
+    arm_chain_realign(&mut world, Vec::new());
+
+    world.entity_mut(a).insert(ScriptPlaced);
+
+    assert_eq!(recorded(&world), Some(vec![a]));
 }
 
 #[test]

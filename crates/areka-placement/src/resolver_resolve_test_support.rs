@@ -2,7 +2,6 @@
 //!
 //! 元は `resolver_resolve_tests.rs` の冒頭に置かれていたが、同ファイルが 1,000 行規約を
 //! 超えたため主題別 4 ファイルへ分割するにあたり、共有部分をここへ集約した。
-//! 中身は移設前と逐語同一で、可視性を `pub(super)` へ広げただけである。
 //!
 //! 面別の DPI ヘルパー（`DPIS`/`px`/`work_area`）は隣の `resolver_test_support.rs` が持つ。
 //! `cfg_of` は配置のテストが共に使う `placement_shared_test_support.rs` のものを出し直す。

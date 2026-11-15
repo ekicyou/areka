@@ -425,6 +425,34 @@ fn t_rs07_move_window_follows_the_drag_writer_for_grouped_windows() {
     assert_eq!(got, vec![(Anchor::Free, false), (Anchor::Free, false)]);
 }
 
+/// 知らない `alignmenttodesktop` の値の警告は、走っているスコープの数によらずスコープごとに 1 行
+/// （同じ作業領域と DPI の窓は 1 度だけ解く）。
+#[test]
+fn t_rs08_unknown_alignment_warns_once_per_scope() {
+    let (mut world, windows) = booted_world(96);
+
+    let ((), events) = capture(|| {
+        apply_shell_descript(
+            &mut world,
+            &windows,
+            &new_shell(&[("seriko.alignmenttodesktop", "sideways")]),
+            &no_balloon(),
+            &[],
+        )
+    });
+
+    let mut warned: Vec<&str> = events
+        .iter()
+        .filter(|e| {
+            e.message()
+                .contains("alignmenttodesktop の未知アンカー指定")
+        })
+        .map(|e| e.expect_field("scope"))
+        .collect();
+    warned.sort_unstable();
+    assert_eq!(warned, vec!["0", "1"], "{events:?}");
+}
+
 /// 作業領域を引けないスコープは `warn!`（`reseed_work_area_missing`）を残してから窓の矩形で代える。
 #[test]
 fn t_rs04b_missing_work_area_warns_before_substituting_the_window_rect() {

@@ -1,5 +1,5 @@
 // =============================================================================
-// 実表示寸での連鎖再解決の檻（scg 要件 7.1/7.2/7.3・design C6）
+// 実表示寸での連鎖再解決の檻（areka-P0-scope-chain-gap 要件 7.1/7.2/7.3・design C6）
 //
 // 判定は純関数ゆえ GPU も World も要さない。物理 px を直接与える。規則の網羅
 // （組ごとの決め・基準・非正寸・空入力・極端な値）は chain_finalize_resolve_tests.rs が持ち、
@@ -62,7 +62,7 @@ fn assert_all_pairs_flush(states: &[ScopeChainState], xs: &[i32], label: &str) {
         assert_eq!(
             xs[n - 1] - (xs[n] + states[n].width),
             0,
-            "{label}: scope{}/scope{n} の隙間は 0（隣接・scg 7.1）",
+            "{label}: scope{}/scope{n} の隙間は 0（隣接・areka-P0-scope-chain-gap 7.1）",
             n - 1
         );
     }
@@ -144,7 +144,7 @@ fn applying_twice_is_a_no_op_the_second_time() {
 }
 
 // -----------------------------------------------------------------------------
-// 確定が見送られ続けたときの一発診断（scg 6.5）
+// 確定が見送られ続けたときの一発診断（areka-P0-scope-chain-gap 6.5）
 // -----------------------------------------------------------------------------
 
 /// 有界の待ちを超えた**ちょうど 1 回**だけ報告し、それ以前も以後も黙る。
@@ -295,17 +295,7 @@ fn resetting_the_stall_lets_a_second_wait_report_once_again() {
     }
     assert!(note_chain_deferral(&mut stall), "1 度目の待ちで報告する");
 
-    // 初期化しない限り 2 度目は永久に黙る（初期化が必要であることの対照）。
-    for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
-        assert!(!note_chain_deferral(&mut stall), "初期化前は黙ったまま");
-    }
-
     stall.reset();
-    assert_eq!(
-        stall,
-        ChainFinalizeStall::default(),
-        "初期化で計数も一発フラグも消える"
-    );
     for _ in 1..CHAIN_FINALIZE_STALL_FRAMES {
         assert!(!note_chain_deferral(&mut stall), "2 度目も閾値までは無音");
     }

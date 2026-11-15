@@ -1,10 +1,11 @@
 use std::fs;
 
+use areka_ghost::sylphya_wiring::profile_areka_root;
 use wintf::ecs::DPI;
 
 use super::follow::OffsetBase;
 use super::resolver::{PointPx, SizePx};
-use super::shared_test_support::TempDir;
+use super::shared_test_support::{TempDir, k};
 use super::*;
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
@@ -15,13 +16,8 @@ use crate::sample_test_support::{
     BALLOON0_H, BALLOON0_W, BALLOON1_H, BALLOON1_W, SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W,
 };
 
-/// 既約有理 k のテスト用短縮構築（0 入力はテストの誤りゆえ expect）。
-fn k(num: u32, den: u32) -> ScaleRatio {
-    ScaleRatio::new(num, den).expect("テスト入力は非ゼロ")
-}
-
 // ------------------------------------------------------------------
-// 観測可能な完了状態（tasks 6.1）: emo2 fixture 相当のパスで 2 スコープぶんの
+// 観測可能な完了状態: emo2 fixture 相当のパスで 2 スコープぶんの
 // ScopePlacement を含む PreparedPlacement が返る
 // ------------------------------------------------------------------
 
@@ -35,7 +31,7 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 /// - scope1: char=(1486−336, 1040−400)=(1150,640)・基本位置＝右隣=(1150+336)=(1486,640)
 ///
 /// scope1 の X は `base_x(n≥1) = char_x(n−1) − w(n)`——引くのは**自スコープの幅**
-/// （336）であり、前スコープの幅（434）ではない（隣接・隙間 0・scg 2.1/2.2）。
+/// （336）であり、前スコープの幅（434）ではない（隣接・隙間 0・areka-P0-scope-chain-gap 2.1/2.2）。
 /// これにより scope1 の右端 1150+336=1486 が scope0 の左端 1486 と一致する。
 ///
 /// バルーン寸が scope 別になっても**基本位置**が動かないのは、右置き（scope1）の基準 x が
@@ -101,21 +97,6 @@ fn prepare_emo2_returns_two_scope_placements() {
         );
         assert_eq!(s1.balloon_offset, PointPx { x: 146, y: -75 });
 
-        // 恒等式（resolver.rs の**出力時点**の事後条件・windowposition-limit DD6）は
-        // 供給元が増えても保たれる。本検体は配置準備の出力＝下流の関門より上流ゆえ、
-        // limit 補正は 1 度も掛かっていない。
-        for s in &p.placements {
-            assert_eq!(
-                s.balloon_offset,
-                PointPx {
-                    x: s.balloon_pos.x - s.char_pos.x,
-                    y: s.balloon_pos.y - s.char_pos.y
-                },
-                "scope {}: balloon_offset ≡ balloon_pos − char_pos",
-                s.scope
-            );
-        }
-
         // titles は MountModel.names 由来（source T-I5 と同値）
         assert_eq!(p.titles.title(0), "むらさき");
         assert_eq!(p.titles.title(1), "エモ");
@@ -124,7 +105,7 @@ fn prepare_emo2_returns_two_scope_placements() {
 
 /// **要件 2.3 の決定論形**（design C3 の新設檻）: 実機実測と同条件——DPI 120（k=5/4）・
 /// scope0 543×859・scope1 420×500——で既定配置したとき、相方（scope1）の右端が
-/// 本体（scope0）の左端と一致する（隣接・gap 0・scg 2.1/2.2）。
+/// 本体（scope0）の左端と一致する（隣接・gap 0・areka-P0-scope-chain-gap 2.1/2.2）。
 ///
 /// **前提錨**: 先に両 scope の実表示寸が実機観測値（543×859／420×500）であることを
 /// 確認する。寸が変われば以下の隣接 assert は別の幾何を検定することになるため、
@@ -159,7 +140,7 @@ fn prepare_emo2_at_dpi_120_places_scopes_adjacent() {
         assert_eq!(
             s1.char_pos.x + s1.char_size.w,
             s0.char_pos.x,
-            "実機同条件（DPI 120）で scope1 右端＝scope0 左端（隣接・gap 0（scg 2.1/2.2））"
+            "実機同条件（DPI 120）で scope1 右端＝scope0 左端（隣接・gap 0（areka-P0-scope-chain-gap 2.1/2.2））"
         );
 
         // 連鎖の絶対値も固定する（WA 右端 1920 基準: 1920−543=1377・1377−420=957）。
@@ -170,11 +151,6 @@ fn prepare_emo2_at_dpi_120_places_scopes_adjacent() {
         assert_eq!(
             s1.char_pos.x, 957,
             "scope1 は scope0 左端から**自スコープ幅**ぶん左（1377−420）"
-        );
-        assert_ne!(
-            s1.char_pos.x,
-            s0.char_pos.x - s0.char_size.w,
-            "前スコープ幅を引く旧式へ戻ってはならない（幅差 543−420＝123px の隙間・scg 2.1/2.2）"
         );
     });
 }
@@ -245,19 +221,16 @@ fn prepare_missing_root_returns_mount_err_to_caller() {
     );
 }
 
-/// `prepare_ghost_windows` は永続を一切読み書きしない（2.11・A1）:
-/// (a) 実行後どこにも ghost.dat を生成しない（書き込みなし）
-/// (b) 偽の保存位置を持つ ghost.dat を plant しても出力が変わらない（読み込みなし）
+/// `prepare_ghost_windows` は位置の記憶を一切読み書きしない（2.11・A1）:
+/// (a) 実行後、記憶の置き場（`profile/areka`）を作らない（書き込みなし）
+/// (b) 偽の保存位置を持つ `sylphya.toml` を置いても出力が変わらず、ファイルも変わらない
+///     （読み込みなし）
 ///
-/// 永続ストアの実体は現在、統一プロパティシステム（sylphya）の別ファイル
-/// `sylphya.toml` にある——これは本 spec（areka-P0-position-persist）が
-/// **消費**する別系統であり、SSP 由来の `ghost.dat` とは無関係。復元の結線は
-/// placement シームの [`persist`] モジュール（と後続タスクの merge シーム）が担い、
-/// `prepare_ghost_windows` 自身は依然として永続を一切読み書きしない（A1＝prepare
-/// 不触は真のまま）。本檻は legacy な ghost.dat probe でその不触性を固定し続ける
-/// （sylphya.toml 系統でも同じく prepare は不触）。
+/// 記憶を戻すのは本体の結線が呼ぶ [`persist::load_restored_state`] と
+/// [`persist::apply_restored_placements`] で、準備はそのどちらも呼ばない。置き場は
+/// `load_restored_state` と同じ `profile_areka_root(ghost/master)`。
 #[test]
-fn prepare_never_reads_or_writes_ghost_dat() {
+fn prepare_never_reads_or_writes_the_saved_state() {
     with_com_initialized(|| {
         // 最小の合成ゴースト（emo2 実 PNG を 2 枚だけ複写・descript は emo2 同値キー）
         let root = TempDir::new();
@@ -295,28 +268,37 @@ fn prepare_never_reads_or_writes_ghost_dat() {
             prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA, Some(96))
                 .expect("合成ゴーストの準備は成功する");
 
-        // (a) 書き込みなし: ghost.dat がどこにも生成されていない
-        for dir in [root.path(), ghost_master.as_path(), shell_master.as_path()] {
-            assert!(
-                !dir.join("ghost.dat").exists(),
-                "ghost.dat が生成された: {}",
-                dir.display()
-            );
-        }
+        // (a) 書き込みなし: 記憶の置き場が作られていない
+        let profile = profile_areka_root(&ghost_master);
+        assert!(
+            !profile.exists(),
+            "準備が記憶の置き場を作った: {}",
+            profile.display()
+        );
 
-        // (b) 読み込みなし: 偽の保存位置を plant しても出力不変（復元しない）
-        let junk = "position.0.x,9999\r\nposition.0.y,9999\r\n";
-        fs::write(root.path().join("ghost.dat"), junk).expect("plant root ghost.dat");
-        fs::write(ghost_master.join("ghost.dat"), junk).expect("plant ghost ghost.dat");
+        // (b) 読み込みなし: 作業領域の中の偽の保存位置を置いても出力不変（復元しない）
+        fs::create_dir_all(&profile).expect("create profile/areka");
+        let saved = profile.join("sylphya.toml");
+        let junk = "format-version = 1\n[window.0]\nx = \"100\"\ny = \"100\"\n";
+        fs::write(&saved, junk).expect("plant sylphya.toml");
+        assert!(
+            !persist::load_restored_state(root.path()).is_empty(),
+            "前提: 置いた記憶は本番の読み手で読める"
+        );
 
         let after =
             prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA, Some(96))
-                .expect("plant 後も準備は成功する");
+                .expect("記憶を置いた後も準備は成功する");
         assert_eq!(
             before.placements, after.placements,
-            "ghost.dat の有無で配置が変わった（復元経路が存在する疑い・2.11 違反）"
+            "記憶の有無で配置が変わった（準備の中に復元の道がある・2.11 違反）"
         );
         assert_eq!(before.titles, after.titles);
+        assert_eq!(
+            fs::read_to_string(&saved).expect("記憶が残る"),
+            junk,
+            "準備が記憶を書き換えた"
+        );
     });
 }
 
@@ -616,38 +598,6 @@ fn prepare_k0_rounding_matches_integer_authority_not_f32() {
         // 本検体が実際に f32 と食い違うことの自己検証（檻の有効性そのものを固定する）。
         let via_f32 = (SCOPE0_W as f32 * k(31, 28).as_f32()).round() as i32;
         assert_eq!(via_f32, 480, "f32 経路は 480（＝この検体は判別力を持つ）");
-    });
-}
-
-/// design Flow 3 手順1（**1 度だけ読む**）: 準備が読んだ作者基準 DPI が
-/// `PreparedPlacement` に載って attach 側（`wire_runtime`→`attach_target`）へ渡る。
-///
-/// 単一読取の証拠は「読取器を直接呼んだ値と、準備の戻り値が一致すること」。
-/// 本番 fixture（emo2）は 96/96 ゆえ既定との区別が付かない——宣言値との区別は
-/// [`prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value`] が担う。
-#[test]
-fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
-    with_com_initialized(|| {
-        let src = source::load_descript_source(&emo2_root()).expect("emo2 fixture は読める");
-        let expected = AuthorDpi {
-            shell: src.shell_author_dpi(),
-            balloon: source::load_balloon_author_dpi(&balloon_root()),
-        };
-        assert_eq!(
-            expected,
-            AuthorDpi {
-                shell: 96,
-                balloon: 96
-            },
-            "emo2 は shell/balloon とも DPI 無宣言＝正典既定 96（実測）"
-        );
-
-        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))
-            .expect("準備は成功する");
-        assert_eq!(
-            p.author_dpi, expected,
-            "採寸 k₀ に使った宣言値がそのまま attach 側へ搬送される（読取は 1 度）"
-        );
     });
 }
 

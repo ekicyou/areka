@@ -14,43 +14,9 @@
 
 use super::*;
 use crate::follow::OffsetBase;
-use wintf::ecs::DPI;
 
-const CSZ: SizePx = SizePx { w: 400, h: 600 };
-const BSZ: SizePx = SizePx { w: 200, h: 300 };
-/// 配置式が刻む採寸 DPI（係留済みの基準対）を模す値。96 の倍数でない値を選び、
-/// 「既定値 96 と偶然一致して檻が空虚になる」ことを避ける。
-const MEASURE_DPI: DPI = DPI {
-    dpi_x: 120,
-    dpi_y: 120,
-};
-
-/// 基準対を**係留済み**（`Some(採寸 DPI)`）で組んだ resolver 出力を模す。
-fn pinned_placement(scope: usize, balloon_offset: PointPx) -> ScopePlacement {
-    let char_pos = PointPx { x: 100, y: 200 };
-    ScopePlacement {
-        scope,
-        char_pos,
-        char_size: CSZ,
-        balloon_pos: PointPx {
-            x: char_pos.x + balloon_offset.x,
-            y: char_pos.y + balloon_offset.y,
-        },
-        balloon_size: BSZ,
-        balloon_offset,
-        balloon_offset_base: OffsetBase {
-            offset: balloon_offset,
-            dpi: Some(MEASURE_DPI),
-        },
-        balloon_limit: true,
-        anchor: Anchor::Free,
-        balloon_keyword_base: None,
-    }
-}
-
-fn bo(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
-    (PersistKey::BalloonOffset { scope, axis }, v.to_string())
-}
+use super::balloon_offset_persist_roundtrip_tests::{MEASURE_DPI, pinned_placement};
+use super::restore_tests::bo;
 
 fn empty_snapshot() -> MonitorSnapshot {
     MonitorSnapshot { work_areas: vec![] }
@@ -60,7 +26,7 @@ fn empty_snapshot() -> MonitorSnapshot {
 /// bit 同一である（換算しない・採寸 DPI を継がない）。
 #[test]
 fn restored_persisted_arm_carries_unpinned_base_equal_to_saved_value() {
-    let placements = vec![pinned_placement(0, PointPx { x: -50, y: 10 })];
+    let placements = vec![pinned_placement(0, Anchor::Free, PointPx { x: -50, y: 10 })];
     let entries = vec![bo(0, Axis::X, "-512"), bo(0, Axis::Y, "-48")];
 
     let out = apply_restored_placements(placements, &entries, &empty_snapshot());
@@ -69,11 +35,7 @@ fn restored_persisted_arm_carries_unpinned_base_equal_to_saved_value() {
     assert_eq!(
         out[0].balloon_offset_base,
         OffsetBase::unpinned(saved),
-        "保存値採用腕の基準対は未係留（dpi: None）かつ保存値と bit 同一である"
-    );
-    assert_eq!(
-        out[0].balloon_offset_base.dpi, None,
-        "保存値は保存時の表示 DPI を記録していない——採寸 DPI を係留してはならない"
+        "保存値採用腕の基準対は未係留（dpi: None・採寸 DPI を係留しない）かつ保存値と bit 同一である"
     );
     // 5.5／5.6 の非回帰: 採否の優先順位も「焼き付けない」規約も本タスクで動かない。
     assert_eq!(
@@ -86,7 +48,7 @@ fn restored_persisted_arm_carries_unpinned_base_equal_to_saved_value() {
 #[test]
 fn restored_default_arm_carries_placement_base_unchanged() {
     let default_offset = PointPx { x: -50, y: 10 };
-    let placements = vec![pinned_placement(0, default_offset)];
+    let placements = vec![pinned_placement(0, Anchor::Free, default_offset)];
 
     let out = apply_restored_placements(placements, &[], &empty_snapshot());
 
@@ -109,7 +71,7 @@ fn restored_default_arm_carries_placement_base_unchanged() {
 #[test]
 fn restored_single_axis_saved_value_keeps_placement_base() {
     let default_offset = PointPx { x: -50, y: 10 };
-    let placements = vec![pinned_placement(0, default_offset)];
+    let placements = vec![pinned_placement(0, Anchor::Free, default_offset)];
     let entries = vec![bo(0, Axis::X, "-512")];
 
     let out = apply_restored_placements(placements, &entries, &empty_snapshot());

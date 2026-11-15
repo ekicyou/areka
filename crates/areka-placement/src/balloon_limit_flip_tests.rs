@@ -26,7 +26,7 @@ use crate::spawn::spawn_ghost_windows;
 use crate::test_support::{fake_handle, point};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
-/// 開発者の机の主の画面の作業領域（4.4 の 1 回目と同じ形）。
+/// 開発者の机の主の画面の作業領域。
 const WA: RectPx = RectPx {
     left: 0,
     top: 0,

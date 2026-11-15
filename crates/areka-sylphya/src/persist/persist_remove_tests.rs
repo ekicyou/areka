@@ -4,20 +4,10 @@
 //! - 錠が取れない・commit の失敗は `save_scope` と同じ道で ERROR＋`Degraded` になり、書かない。
 
 use super::lock_tests::LockRefused;
+use super::unreadable_tests::{ghost_file, ghost_roots};
 use super::*;
 use crate::test_log_capture::capture;
 use std::sync::atomic::Ordering;
-
-fn ghost_roots() -> ScopeRoots {
-    ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    }
-}
-
-fn ghost_file() -> PathBuf {
-    PathBuf::from("/g").join(PERSIST_FILE_NAME)
-}
 
 fn offset(scope: u32, axis: Axis) -> PersistKey {
     PersistKey::BalloonOffset { scope, axis }

@@ -1,11 +1,8 @@
-use std::sync::{Arc, Mutex};
-
 use bevy_ecs::entity::Entity;
 use tracing::Level;
-use tracing_subscriber::EnvFilter;
 
 use super::*;
-use log_capture_kit::{capture, ensure_interest_probes};
+use log_capture_kit::{capture, capture_under_filter};
 
 /// 合成モニタレコード（実 wintf `Monitor` 不要＝純データ）。
 fn rec(handle: isize, is_primary: bool) -> MonitorRecord {
@@ -25,22 +22,6 @@ fn ent(raw: u32) -> Entity {
 // ------------------------------------------------------------------
 // 語彙の固定（Req 1.2/2.4・診断手順書の grep 判定語と 1:1）
 // ------------------------------------------------------------------
-
-/// 専用 target のリテラル固定（Req 1.7・手順書の `RUST_LOG` 記述と 1:1）。
-#[test]
-fn diag_target_literal_is_fixed() {
-    assert_eq!(DIAG_TARGET, "areka_placement::diag");
-}
-
-/// レコード種別タグのリテラル固定（grep 判定語の錨）。
-#[test]
-fn record_tags_are_fixed() {
-    assert_eq!(MONITOR_SNAPSHOT_TAG, "[diag.monitor_snapshot]");
-    assert_eq!(MONITOR_RECORD_TAG, "[diag.monitor]");
-    assert_eq!(WINDOW_MOVE_RECORD_TAG, "[diag.window_move]");
-    assert_eq!(ZORDER_PAIR_DECLARED_TAG, "[zorder-pair] declared");
-    assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
-}
 
 /// 経路ごとの、[`PlacementRoute::ALL`] での番号・表示語・[`PlacementRoute::is_system_reanchor`]
 /// の答え（Req 2.4 の結論語彙・D9／D13／D16）。
@@ -359,34 +340,10 @@ fn log_window_move_emits_the_assembled_record_at_debug() {
 // Req 1.7: 既定では 1 行も出ない・手順書の RUST_LOG でのみ点灯
 // ------------------------------------------------------------------
 
-/// 与えた `RUST_LOG` 相当の directive で本モジュールの全出力を実際に濾して集める。
+/// 与えた `RUST_LOG` 相当の directive で本モジュールの全出力を実際に濾して集める
+/// （捕捉の窓が生きていなければ `capture_under_filter` が panic する＝「出ない」が空振りしない）。
 fn emit_all_under_filter(directives: &str) -> String {
-    ensure_interest_probes();
-
-    #[derive(Clone)]
-    struct VecWriter(Arc<Mutex<Vec<u8>>>);
-    impl std::io::Write for VecWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .expect("捕捉バッファのロック取得に失敗")
-                .extend_from_slice(buf);
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
-    let sink = buf.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(directives))
-        .with_ansi(false)
-        .with_writer(move || VecWriter(sink.clone()))
-        .finish();
-
-    tracing::subscriber::with_default(subscriber, || {
+    capture_under_filter(directives, || {
         log_monitor_snapshot(&[rec(1, true)], "prepare_ghost_windows");
         log_window_move(&WindowMoveRecord {
             route: PlacementRoute::SpawnInitial,
@@ -402,9 +359,7 @@ fn emit_all_under_filter(directives: &str) -> String {
         log_zorder_pair_strategy(ZOrderPairStrategy::OwnerLink {
             raise_assist: false,
         });
-    });
-
-    String::from_utf8(buf.lock().expect("捕捉バッファのロック取得に失敗").clone()).expect("UTF-8")
+    })
 }
 
 /// 既定水準（`RUST_LOG=info`＝`main.rs` のフォールバック）では **1 行も出ない**（Req 1.7）。

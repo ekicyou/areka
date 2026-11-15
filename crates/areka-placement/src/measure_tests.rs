@@ -8,7 +8,7 @@ use crate::sample_test_support::{
     BALLOON0_H, BALLOON0_W, BALLOON1_H, BALLOON1_W, SCOPE0_H, SCOPE0_W, SCOPE1_H, SCOPE1_W,
     balloon_root, emo2_root,
 };
-use crate::shared_test_support::{TempDir, write_self_alpha_one_descript};
+use crate::shared_test_support::{TempDir, k, write_self_alpha_one_descript};
 use crate::test_support::with_com_initialized;
 use log_capture_kit::{ExpectField, capture, expect_one};
 
@@ -23,7 +23,7 @@ fn emo2(rel: &str) -> PathBuf {
     emo2_root().join(rel)
 }
 
-/// 観測可能な完了状態（tasks 4.1）: emo2 fixture の shell/balloon に対し
+/// emo2 fixture の shell/balloon に対し
 /// `measure_scope_sizes` が scope0・scope1・balloon の原寸（非ゼロ物理 px）を
 /// 返す。emo2 は決定論 fixture ゆえ厳密寸で固定する（2.9 の幅供給源・3.2 の
 /// 物理 px 単一通貨）。
@@ -261,11 +261,6 @@ fn scope_input(scope: usize, char_wh: (i32, i32), balloon_wh: (i32, i32)) -> Sco
             h: balloon_wh.1,
         },
     }
-}
-
-/// `k` を組む（テスト内の分母・分子は既知の非ゼロ値ゆえ `expect`）。
-fn k(num: u32, den: u32) -> ScaleRatio {
-    ScaleRatio::new(num, den).expect("テストの k は非ゼロ")
 }
 
 /// 要件 7.2: `MeasureScaling::IDENTITY` は native 採寸の出力を素通しする

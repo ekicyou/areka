@@ -94,21 +94,21 @@
 //!    ため、`0x8007007E`（DLL LOAD 失敗）の経路自体が存在しない。**読むものは少なくない**が、いずれも
 //!    データファイルの読取であって DLL のロードではない——実際の読取先は次のとおり:
 //!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:154-156`・寛容読取）・**shell の
-//!      `descript.txt`**（`source.rs:158-169`・読取失敗は致命）・**バルーンの `descript.txt`**
-//!      （`source.rs:208-212`・作者基準 DPI の取得）——起点が `descript.txt` であることは
+//!      `descript.txt`**（`source.rs:158-169`・読取失敗は `Err` で呼び手へ返す）・**バルーンの `descript.txt`**
+//!      （`source.rs:214-218`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
-//!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
+//!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:384-396` ＋ probe 自身の
 //!      [`load_shell_assets`]）
-//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:433` の `measure_balloon_surface0`）と
-//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:575` の `load_scope_windowpositions`）
+//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:423` の `measure_balloon_surface0`）と
+//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:576` の `load_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
-//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages`＝`crates/areka-placement/src/lib.rs:373-455` が読取の全体像）。
+//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages_for_shell`＝`crates/areka-placement/src/lib.rs:378-452` が読取の全体像）。
 //!
 //! # 作者基準 DPI の出所（k 論証への影響・実測済み）
 //!
-//! 採寸経路（`prepare_stages`・`crates/areka-placement/src/lib.rs:400-407`）は **descript から読んだ実 author_dpi**
+//! 採寸経路（`prepare_stages_for_shell`・`crates/areka-placement/src/lib.rs:391-402`）は **descript から読んだ実 author_dpi**
 //! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
 //! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
 //! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、

@@ -18,11 +18,11 @@
 //! areka 側で持つのは受け口（`runtime/window_state_cue.rs`）と取り出しの相
 //! （`runtime/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use areka_placement::test_support::zorder_pair_deferred::{
     BAND_NEEDLES, assert_needles_are_detected, assert_roster_covers, assert_vocabulary_absent,
-    code_only, deferred_hits, rust_sources_under, zorder_production_sources,
+    code_only, deferred_hits, read_source, rust_sources_under, zorder_production_sources,
 };
 
 /// 重なり順のグループ機構（`areka-P0-scope-zorder-pinning`）が本体に新設した本番ファイル
@@ -41,16 +41,6 @@ const BAND_FILES: [&str; 2] = [
     "src/runtime/frame/window_state.rs",
 ];
 
-fn source_path(relative: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative)
-}
-
-fn read_source(relative: &str) -> String {
-    let path = source_path(relative);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("本番ファイルを読めなかった（{}）: {e}", path.display()))
-}
-
 /// 先送り語彙は、本フィーチャーの本体の本番ファイルのコードに 1 つも無い。
 #[test]
 fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources() {
@@ -68,7 +58,10 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
 
     // 対照: 受け口の素の全文には最小化の語（読めない第 2 引数の例＝否定の説明）があり、
     // コードだけの本文には無い。
-    let raw = read_source("src/runtime/window_state_cue.rs");
+    let raw = read_source(
+        Path::new(env!("CARGO_MANIFEST_DIR")),
+        "src/runtime/window_state_cue.rs",
+    );
     assert!(
         raw.to_lowercase().contains("minimize"),
         "前提が崩れている: 素の全文には最小化の語があるはず（別の対照へ差し替えること）"
@@ -90,7 +83,10 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
 #[test]
 fn the_band_files_are_where_the_band_words_live() {
     for relative in BAND_FILES {
-        let code = code_only(&read_source(relative));
+        let code = code_only(&read_source(
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+            relative,
+        ));
         assert!(
             deferred_hits(&code)
                 .iter()

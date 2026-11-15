@@ -259,8 +259,8 @@ pub struct ScopeWindows {
     pub char_window: Entity,
     /// バルーン窓 entity。
     pub balloon_window: Entity,
-    /// **システム由来の再アンカーで追随する既定**キャラ窓位置（物理 px・scg 7.3・
-    /// atom D9／D16）。
+    /// **システム由来の再アンカーで追随する既定**キャラ窓位置（物理 px・areka-P0-scope-chain-gap 7.3・
+    /// areka-P0-dpi-transition-atomicity D9／D16）。
     ///
     /// 「まだ誰にも動かされていない」ことの判定基準。現在位置がこの値と一致する間は
     /// 既定配置のままであり、ゴースト台本の移動指令や利用者のドラッグで動いた
@@ -288,7 +288,7 @@ pub struct ScopeWindows {
     /// システム由来の再アンカーでも `None` は `None` のままである（D9）。
     ///
     /// `None` は記憶に位置があるスコープでもある。起動の最後に並べ終えた時点の保存
-    /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
+    /// （`persist::persist_unremembered_char_positions`）は、この値が残っている
     /// スコープだけを書く。
     pub default_char_pos: Option<PointPx>,
     /// 記憶から読んだ隣り合いの印（組 (n−1, n) を表す）。記憶から戻したスコープ
@@ -328,10 +328,10 @@ impl GhostWindows {
     }
 
     /// スコープの既定キャラ位置を返す（初期値は spawn 時の resolver 出力・以後は
-    /// **システム由来の再アンカーで追随する**・atom D9／D16）。
+    /// **システム由来の再アンカーで追随する**・areka-P0-dpi-transition-atomicity D9／D16）。
     ///
     /// 現在位置がこの値と一致するかで「既定配置のまま＝まだ誰にも動かされていない」ことを
-    /// 判定する（scg 7.3）。拡大率の遷移で位置が動いても、動かしたのがシステム側であれば
+    /// 判定する（areka-P0-scope-chain-gap 7.3）。拡大率の遷移で位置が動いても、動かしたのがシステム側であれば
     /// この値が一緒に動くため一致は保たれる——読み手は「起動時の値」ではなく
     /// **「最後にシステムが置いた既定位置」**として読むこと。
     ///
@@ -340,14 +340,14 @@ impl GhostWindows {
     /// 「対象外」として同じに扱えばよい。
     ///
     /// 既知スコープの `None` は記憶に位置があるスコープ。起動の最後に並べ終えた時点の保存
-    /// （`placement::persist::persist_unremembered_char_positions`）は、この値が残っている
+    /// （`persist::persist_unremembered_char_positions`）は、この値が残っている
     /// スコープだけを書く。
     pub fn default_char_pos(&self, scope: usize) -> Option<PointPx> {
         self.windows.get(&scope).and_then(|w| w.default_char_pos)
     }
 
-    /// スコープの既定キャラ位置を更新する（実表示寸での連鎖再解決が確定させた値・scg 7.1／
-    /// システム由来の再アンカーの書込先・atom D9／D16）。
+    /// スコープの既定キャラ位置を更新する（実表示寸での連鎖再解決が確定させた値・areka-P0-scope-chain-gap 7.1／
+    /// システム由来の再アンカーの書込先・areka-P0-dpi-transition-atomicity D9／D16）。
     ///
     /// 未知スコープは **no-op**（panic せず `false` を返す）。台帳を再解決後の真値へ揃え、
     /// 以後の「既定配置のまま」判定が確定後の位置を基準に働くようにする。
@@ -356,7 +356,7 @@ impl GhostWindows {
     ///
     /// - 連鎖確定（`runtime::frame::drain_resnap::finalize_chain_once_with`）——反映は
     ///   `move_window_to`＝`PlacementRoute::MoveCue` で行うため、下の追随規則には掛からない。
-    ///   ゆえに確定後の X をここで明示的に揃える必要がある（scg 7.1）。
+    ///   ゆえに確定後の X をここで明示的に揃える必要がある（areka-P0-scope-chain-gap 7.1）。
     /// - 単一の窓書込口（`follow::window_move::enqueue_window_set_pos`）——システム由来の
     ///   再アンカーで、書込前の位置が既定位置と一致していたときだけ書込先へ運ぶ（D9／D16）。
     pub fn set_default_char_pos(&mut self, scope: usize, pos: PointPx) -> bool {
@@ -369,7 +369,7 @@ impl GhostWindows {
         }
     }
 
-    /// スコープを「既定配置ではない」と標す（保存位置が復元されたスコープ・scg 7.3）。
+    /// スコープを「既定配置ではない」と標す（保存位置が復元されたスコープ・areka-P0-scope-chain-gap 7.3）。
     ///
     /// 復元位置は**利用者の意思による配置**であって resolver 既定ではない。標されたスコープは
     /// 既定位置へ引き戻されず、並べ直しは覚えた印（起動）か変わる直前の隣り合い（拡大率の変化の後）
@@ -603,7 +603,7 @@ pub fn spawn_ghost_windows(
                 balloon_window,
                 // spawn へ渡る placements が resolver 既定である前提で `Some` を置く。
                 // 保存位置が復元された場合は起動シーム（`ghost_session::prepare_ghost_windows`）が直後に
-                // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
+                // `clear_default_char_pos` で `None` へ落とす（areka-P0-scope-chain-gap 7.3）。
                 default_char_pos: Some(p.char_pos),
                 remembered_adjacency: None,
             },

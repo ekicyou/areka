@@ -228,16 +228,14 @@ fn monitor_records_of_zero_monitors_is_empty() {
     assert!(monitor_records(&[]).is_empty());
 }
 
-/// 呼出点タグは 2 つの列挙点で**異なる**（要件 1.1「呼出点タグで区別できる」）。
-/// 片方をもう片方へ collapse する退行はここと各呼出点の檻で赤になる。
+/// 呼出点タグは 3 つの出所（起動の構築点・準備の列挙点・作業領域の同期）で**異なる**
+/// （要件 1.1「呼出点タグで区別できる」）。綴りを 1 つずつ固定するので、どれかを別の出所の
+/// 綴りへ collapse する退行はここで赤になる。
 #[test]
 fn monitor_snapshot_call_site_tags_are_distinct() {
     assert_eq!(PREPARE_GHOST_WINDOWS_CONTEXT, "prepare_ghost_windows");
     assert_eq!(MONITOR_SNAPSHOT_CONTEXT, "monitor_snapshot");
-    assert_ne!(
-        PREPARE_GHOST_WINDOWS_CONTEXT, MONITOR_SNAPSHOT_CONTEXT,
-        "2 つの列挙点が同じタグを名乗るとログ上で出所を弁別できない"
-    );
+    assert_eq!(WORK_AREA_SYNC_CONTEXT, "work_area_sync");
 }
 
 /// ゴースト窓配置準備のモニタ列挙点が、共有ヘルパ経由で**自分の呼出点タグ**付きの
@@ -281,10 +279,5 @@ fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {
         lines,
         want.iter().map(String::as_str).collect::<Vec<_>>(),
         "列挙点の出力が見出し＋全モニタ 1 行ずつ・呼出点タグ prepare_ghost_windows で出ていない"
-    );
-    assert!(
-        !lines[0].contains("context=monitor_snapshot"),
-        "main.rs 構築点の呼出点タグと collapse している（弁別不能）: {}",
-        lines[0]
     );
 }

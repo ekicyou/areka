@@ -12,9 +12,8 @@
 //! スコープを、全グループの後ろへ、スコープ ID の昇順で連ねる」という要件 15 の規則は
 //! [`compose_chain`](super::compose_chain) が持っており、これは areka の関数である。
 //! wintf は areka を import できない（既存規律）ので、wintf 側で同じ主題を書こうとすると
-//! **檻が期待する並びを檻自身が組む**ことになり、測っているのは自分の入力だけになる。
-//! それは本 spec が 4.1 で 2 度差し戻された欠陥（檻が自分の前提の破壊を生き延びる）と
-//! 同じ形である。よって本ファイルだけは areka に置き、
+//! **檻が期待する並びを檻自身が組む**ことになり、測っているのは自分の入力だけになる
+//! （檻が自分の前提の破壊を生き延びる）。よって本ファイルだけは areka に置き、
 //!
 //! **タグの語彙 → 台帳 → 合成（areka）→ 適用系（wintf）→ 実窓の重なり**
 //!
@@ -81,9 +80,6 @@ use crate::zorder_test_support::{
 /// グループが名前を挙げるスコープ（**指定の順＝手前から**・ID の降順にしてある）。
 const GROUP_SCOPES: [u32; 2] = [4, 1];
 
-/// どのグループにも属さないスコープ（**期待する後方参加の順＝スコープ ID の昇順**）。
-const TAIL_SCOPES: [u32; 2] = [2, 9];
-
 /// 在庫として合成へ渡すスコープ列。**非昇順**であり、グループの分も混ざっている。
 ///
 /// 昇順に整えるのも、名前の挙がったスコープを除くのも、合成の仕事である
@@ -136,7 +132,7 @@ fn element_at(index: usize) -> GroupElement {
 /// 帯の適用系と組の維持系も挟むが、本ファイルはそれらを回さない。
 ///
 /// 同一スコープの「バルーンがキャラ窓の直上」は既存のペア機構
-/// （[`establish_owner_links`]）が張る繋ぎであり、本 spec は 1 本も触らない。
+/// （[`establish_owner_links`]）が張る繋ぎであり、鎖は 1 本も触らない。
 /// スコープをまたぐ繋ぎだけを [`apply_zorder_chain`] が張る。
 ///
 /// 実行器は**単一スレッドを明示**する（実窓の操作は UI スレッド固定の前提）。
@@ -289,44 +285,6 @@ fn unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
     let declared: Vec<usize> = (0..WINDOWS).collect();
     assert_eq!(
         landed, declared,
-        "未指定スコープが全グループの後ろへスコープ ID の昇順で並んでいない（要件 15.1／15.2）: {landed:?}"
-    );
-
-    // 群ごとの主張——全体が ID 順に並んだだけでは通らないことを名指しで固定する。
-    let position = |index: usize| {
-        landed
-            .iter()
-            .position(|v| *v == index)
-            .expect("8 枚すべてが列に居るはず")
-    };
-    let group_back = (0..4).map(position).max().expect("グループの窓が 4 枚");
-    let tail_front = (4..WINDOWS).map(position).min().expect("未指定の窓が 4 枚");
-    assert!(
-        group_back < tail_front,
-        "未指定スコープのかたまりがグループより手前へ入り込んでいる（要件 15.1）: {landed:?}"
-    );
-    assert!(
-        position(4) < position(6),
-        "未指定スコープどうしがスコープ ID の昇順になっていない（在庫は {INVENTORY_SCOPES:?} の非昇順で渡した・要件 15.2）: {landed:?}"
-    );
-    assert!(
-        position(0) < position(2),
-        "グループの並びが指定の順（{GROUP_SCOPES:?}）になっていない（要件 3.6・全体を ID 順に並べていないか）: {landed:?}"
-    );
-
-    // 同一スコープの「バルーンはキャラ窓の直上」（要件 6.3・既存ペア機構の担当）。
-    for scope_start in (0..WINDOWS).step_by(2) {
-        assert_eq!(
-            position(scope_start + 1) as isize - position(scope_start) as isize,
-            1,
-            "スコープ {} でバルーン窓がキャラ窓の直上に居ない（要件 6.3）: {landed:?}",
-            EXPECTED_SCOPE_AT[scope_start]
-        );
-    }
-    // 未指定スコープの側も同じ形で参加していること（要件 15.1 の「かたまりとして」）。
-    assert_eq!(
-        TAIL_SCOPES,
-        [EXPECTED_SCOPE_AT[4], EXPECTED_SCOPE_AT[6]],
-        "期待表と後方参加スコープの定義が食い違っている（檻の内部矛盾）"
+        "実窓の並びが手前から b4,s4,b1,s1,b2,s2,b9,s9 でない（グループは指定の順・未指定は全グループの後ろへ ID 昇順・各スコープはバルーンがキャラ窓の直上・要件 3.6／6.3／15.1／15.2）: {landed:?}"
     );
 }

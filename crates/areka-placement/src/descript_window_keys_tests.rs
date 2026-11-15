@@ -1,16 +1,11 @@
-//! descript の既定の面の読みと戻り先の候補の並びの決定論のテスト（descript-window-keys 要件 7.1）。
+//! descript の既定の面の読みと戻り先の候補の並び（descript-window-keys 要件 7.1）・バルーンの
+//! 動かせない指定（`balloon.dontmove`）・バルーンの倍率の連動（`balloon.syncscale`）の読みの決定論のテスト。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use super::*;
+use crate::test_support::kv;
 use log_capture_kit::{ExpectField, capture, expect_one};
-
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-        .collect()
-}
 
 /// 書かれていなければ組み込みの既定の面（本体側 0・相方側とスコープ 2 以降 10）で、記録も残さない（要件 1.1・1.2・1.4）。
 #[test]

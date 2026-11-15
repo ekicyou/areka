@@ -39,7 +39,7 @@ fn build_and_spawn(world: &mut World) {
         }
     };
 
-    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs:245-247` 前例）。
+    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs:251-255` 前例）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));

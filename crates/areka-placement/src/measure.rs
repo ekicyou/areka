@@ -6,8 +6,8 @@
 //! **そのスコープが解決した**バルーン面 0 を **bind なし合成**し、原寸
 //! （物理 px [`SizePx`]）を得る。
 //!
-//! - 初期 surface id: スコープごとに descript の既定の面の候補の並び
-//!   （[`DefaultSurfaces::candidates`]）からシェルに在る最初の面（descript-window-keys 要件 2.1）
+//! - 初期 surface id: スコープごとに descript の既定の面の候補の並びからシェルに在る最初の面
+//!   （[`DefaultSurfaces::initial_surface`]・descript-window-keys 要件 2.1）
 //! - バルーン面 0 のファイル選択は系列解決権威
 //!   [`areka_emo_present::balloon::resolve_balloon_faces`] の消費のみで行う。採寸側は
 //!   接頭辞連鎖もディレクトリ走査も持たない（列挙が 2 実装に分かれると採寸窓寸と実際に
@@ -373,10 +373,10 @@ fn scale_size_px(
 /// shell dir から採寸用の `(EmoWorld, AtlasTable)` を組む（シェル読み込みの権威を呼ぶだけ）。
 ///
 /// 一覧・`surfaces.txt` の読取と解析・「番号 → 面の画像」の決定・bake はすべて
-/// [`areka_emo_present::shell_target::load_shell_target`] が行う。起動時の資産組立
-/// （`runtime::assets::build_boot_assets`）も同じ入口を通るので、採寸した窓寸と実際に
-/// 合成される枠が食い違わない（要件 3.6——列挙の規則が 2 実装に分かれると実機でしか現れない
-/// 欠陥になる。`measure_balloon_surface0` の説明と同じ理由）。
+/// [`areka_emo_present::shell_target::load_shell_target`]（ここでは記録を出さない兄弟の
+/// `load_shell_target_quiet`）が行う。起動時の資産組立（`runtime::assets::build_shell_assets`）も
+/// 同じ入口を通るので、採寸した窓寸と実際に合成される枠が食い違わない（要件 3.6——列挙の規則が
+/// 2 実装に分かれると実機でしか現れない欠陥になる。`measure_balloon_surface0` の説明と同じ理由）。
 ///
 /// 失敗の 3 種（一覧・読取・surface 0 個）はいずれも代替の根拠が無いので
 /// [`PlacementError::Measure`]（`scope: 0`）へ畳む。真因のログは権威が `error!` で既に出して

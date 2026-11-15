@@ -263,9 +263,9 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
         return p;
     };
 
-    // `None` は「クランプしても位置が動かない」＝書き込み不要の意（**内包の判定では
-    // ない**——逆転区間で既に左上に居るときははみ出したままでも `None`）。要件 6.1 が
-    // 求めるのは「実際に動かしたとき」の記録ゆえ、`None` ではログも書換も起こさない。
+    // `Fits` は「クランプしても位置が動かない」＝書き込み不要の意（**内包の判定では
+    // ない**——逆転区間で既に左上に居るときははみ出したままでも `Fits`）。要件 6.1 が
+    // 求めるのは「実際に動かしたとき」の記録ゆえ、`Fits` ではログも書換も起こさない。
     let place = place_balloon_in_work_area(p.balloon_pos, p.balloon_size, char_rect, area);
     let (BalloonPlace::Flipped(corrected) | BalloonPlace::Pushed(corrected)) = place else {
         return p;

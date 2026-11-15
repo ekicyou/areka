@@ -83,32 +83,6 @@ fn t_v1_despawn_balloon_window_removes_same_scope_entry() {
     assert_eq!(reg.balloon_window(1), None);
 }
 
-/// T-V1: 対の**後追い** despawn は no-op（panic せず・他 scope を巻き込まない・6.1）。
-///
-/// 終了処理（`app_exit::quit_app`）は同一 World 変異内で対を一括 despawn する＝
-/// 2 個目の hook は必ず「既に除去済みの scope」を引く。ここが panic すると終了経路が
-/// 落ちるため、良性であることを構造で固定する。
-#[test]
-fn t_v1_paired_followup_despawn_is_noop() {
-    let mut world = World::new();
-    let placements = two_scope_placements();
-    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-    let char0 = gw.char_window(0).unwrap();
-    let balloon0 = gw.balloon_window(0).unwrap();
-
-    world.despawn(char0);
-    let after_first: Vec<usize> = world.resource::<GhostWindows>().scopes().collect();
-
-    // 後追いの片割れ——panic しない・レジストリは 1 ミリも動かない
-    world.despawn(balloon0);
-
-    let reg = world.resource::<GhostWindows>();
-    assert_eq!(after_first, vec![1]);
-    assert_eq!(reg.scopes().collect::<Vec<_>>(), after_first);
-    assert_eq!(reg.char_window(1), gw.char_window(1));
-    assert_eq!(reg.balloon_window(1), gw.balloon_window(1));
-}
-
 /// T-V1: 未登録 entity の除去は no-op（不一致・二重除去・空レジストリ・6.1）。
 ///
 /// `remove_entry_of` の全域性を直接叩いて固定する（hook はこの関数しか呼ばない）。
@@ -137,7 +111,7 @@ fn t_v1_remove_entry_of_unregistered_entity_is_noop() {
     let expected0 = ScopeWindows {
         char_window: gw.char_window(0).unwrap(),
         balloon_window: gw.balloon_window(0).unwrap(),
-        // spawn が記録した既定キャラ位置（未接触判定の基準・scg 7.3）。台帳の等価比較へ
+        // spawn が記録した既定キャラ位置（未接触判定の基準・areka-P0-scope-chain-gap 7.3）。台帳の等価比較へ
         // 含めるため、レジストリの値をそのまま引く。
         default_char_pos: gw.default_char_pos(0),
         remembered_adjacency: gw.remembered_adjacency(0),
@@ -174,7 +148,8 @@ fn t_v1_surviving_scope_state_unchanged_by_cleanup() {
     assert_ne!(before0.follow_target, before1.follow_target);
     assert!(before1.char_pos.is_some() && before1.follow_offset.is_some());
 
-    // scope 0 の対を一括 despawn（終了処理と同じ形）。
+    // scope 0 の対を一括 despawn（終了処理 `app_exit::quit_app` と同じ形。2 個目の hook は
+    // 除去済みの scope を引く＝対の後追い despawn も panic せず、他 scope を巻き込まない）。
     world.despawn(gw.char_window(0).unwrap());
     world.despawn(gw.balloon_window(0).unwrap());
 

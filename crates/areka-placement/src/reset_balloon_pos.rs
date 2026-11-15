@@ -97,7 +97,7 @@ pub fn reset_balloon_positions(world: &mut World, trigger: BalloonResetTrigger) 
     }
     let reset = !forget.is_empty();
     if reset {
-        // 記憶のずらしの鍵を 1 回で消す（次の起動もキーワードから標準の位置に出る・7.3・裁定 8）。
+        // 記憶のずらしの鍵を 1 回で消す（次の起動もキーワードから標準の位置に出る・7.3・areka-P0-window-link-directives の裁定 8）。
         forget_entries(world, forget);
     }
     reset

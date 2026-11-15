@@ -58,13 +58,15 @@ impl CountingDecoder {
             .or_default());
     }
 
-    /// `dir` の直下のファイルの回数を、ファイル名で引ける形で返す。
+    /// `dir` の下のファイル（下のフォルダの中も）の回数を、`dir` からの道で引ける形で返す。
     fn in_dir(&self, dir: &Path) -> BTreeMap<String, Calls> {
         self.calls
             .borrow()
             .iter()
-            .filter(|(p, _)| p.parent() == Some(dir))
-            .map(|(p, c)| (p.file_name().unwrap().to_string_lossy().into_owned(), *c))
+            .filter_map(|(p, c)| {
+                let rel = p.strip_prefix(dir).ok()?;
+                Some((rel.to_string_lossy().into_owned(), *c))
+            })
             .collect()
     }
 }
@@ -286,7 +288,14 @@ fn emo2_bakes_each_still_image_once_per_stage() {
         let (measure, assets) = measure_then_assets(&root, &shell_dir, &balloon_dir);
 
         let measured_shell = measure.in_dir(&shell_dir);
-        assert!(!measured_shell.is_empty(), "emo2 のシェルの絵を焼く");
+        // emo2 の面の絵の多くは `CityPop\` の下にある。下のフォルダの絵も数えに入っていること。
+        assert!(
+            measured_shell
+                .keys()
+                .any(|name| name.starts_with("CityPop")),
+            "emo2 のシェルの下のフォルダの絵を焼く: {:?}",
+            measured_shell.keys().collect::<Vec<_>>()
+        );
         let want = |stage: fn(bool) -> Calls| -> BTreeMap<String, Calls> {
             measured_shell
                 .keys()

@@ -1,9 +1,8 @@
 //! 要件 8.2（`areka-P0-zorder-scope-inversion`）が名指しする 10 分岐（並びも語も要件本文の逐語）と、
 //! 結び直しの 5 通り・外し損ねの巡の輪の確かめを覆う「実際に実行されるテスト」の対応表。
 //!
-//! 作りは完了 spec の対応表（`zorder_group_branch_coverage_tests.rs`）と同じ: 各行の錨が
-//! ⑴ そのファイルに実在し ⑵ 直前に `#[test]` が付き ⑶ そのファイルが本番ファイルの `#[path]` で
-//! 組み込まれ ⑷ どの分岐も 1 行以上を持ち、未知の分岐名が無い——を機械で確かめる。
+//! 作りは `areka-P0-scope-zorder-pinning` の対応表（`zorder_group_branch_coverage_tests.rs`）と
+//! 同じで、表の各行を兄弟の `zorder_branch_coverage_test_support.rs`（`check_table`）で確かめる。
 //!
 //! 本機能の判断は areka（解釈・合成・公開）と wintf（組の外し・結び直し・輪の確かめ）に
 //! またがるので、wintf 側の錨もファイルを読んで（`include_str!`）同じ検査に掛ける。

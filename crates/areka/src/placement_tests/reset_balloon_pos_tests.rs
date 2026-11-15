@@ -19,9 +19,8 @@ use areka_sylphya::{
     spawn_sylphya,
 };
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::HWND;
 use wintf::ecs::window::drain_window_pos_commands;
-use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, WindowPos};
 
 use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::runtime::switch_assets::{SwapBuilt, SwitchBuildRequest, build_swap};
@@ -37,7 +36,8 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement};
 use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
 use areka_placement::sticky_group_ledger::StickyGroupLedger;
 use areka_placement::test_support::{
-    KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, synth_declared_dpi_ghost, with_com_initialized,
+    KEYWORD_BALLOON_DESCRIPT, SharedFakeIo, WA, fake_handle, synth_declared_dpi_ghost,
+    with_com_initialized,
 };
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
@@ -81,9 +81,7 @@ impl Rig {
         for scope in windows.scopes() {
             for e in [windows.char_window(scope), windows.balloon_window(scope)] {
                 raw += 1;
-                world.entity_mut(e.unwrap()).insert(WindowHandle {
-                    hwnd: HWND(raw as *mut _),
-                });
+                world.entity_mut(e.unwrap()).insert(fake_handle(raw));
             }
         }
         // `WindowHandle` の付与の hook が偽 HWND の DPI を遅延で書くので、流してから置く。
@@ -400,7 +398,6 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
         };
         let switch_basis = DefaultPlacementBasis { source, balloon };
 
-        let mut positions = Vec::new();
         for basis in [None, Some(switch_basis)] {
             let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), basis);
             rig.drag_balloons();
@@ -415,10 +412,8 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
                 .map(|p| Point::new(p.balloon_pos.x, p.balloon_pos.y))
                 .collect();
             assert_eq!(got, want, "標準の位置へ戻る");
-            positions.push(got);
             rig.finish();
         }
-        assert_eq!(positions[0], positions[1], "起動と切り替えで同じ位置");
     });
 }
 
