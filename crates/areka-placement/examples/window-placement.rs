@@ -492,21 +492,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn each_scope_balloon_uses_its_own_scope_picture() {
-        // `build_balloon_target` に渡すのと同じ値で、手本と同じバルーンの絵の選びを読む（ファイルを読むだけ）。
-        let dir = balloon_root();
-        let first_prefix = |scope: usize| {
-            let scope = target_scope(scope).expect("小さいスコープは収まる");
-            areka_emo_present::balloon::resolve_balloon_faces_quiet(&dir, scope)
-                .expect("emo2 の同梱バルーンの面")[0]
-                .prefix
-                .clone()
-        };
-        assert_eq!(first_prefix(0), "balloons");
-        assert_eq!(first_prefix(1), "balloonk");
-    }
-
-    #[test]
     fn scope_whose_target_id_does_not_fit_u32_is_skipped() {
         assert_eq!(target_scope(1), Some(1));
         // 2*scope+1 が u32 に収まる最大のスコープまでは通し、その次から切り詰めずに外す。

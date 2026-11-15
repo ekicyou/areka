@@ -103,7 +103,7 @@ fn boot_finalize_keeps_the_defaultx_gap() {
     );
 }
 
-/// ⑵ 左右の辺のスコープは辺に残る（指摘 1・SSP の測り 210）。
+/// ⑵ 左右の辺のスコープは辺に残る（audit-placement-core 指摘 1・SSP の測り 210）。
 #[test]
 fn boot_finalize_leaves_side_edge_scopes_on_their_edge() {
     for (word, edge_x) in [("right", WA.right - 278), ("left", WA.left)] {

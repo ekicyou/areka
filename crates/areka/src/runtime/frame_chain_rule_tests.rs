@@ -64,7 +64,7 @@ fn change_scale_and_realign(world: &mut World, num: i32, den: i32) {
     realign_chain_once_with_source(&shown, world);
 }
 
-/// 494 の例: `kero.defaultx,36` を記憶なしで起こすと、並べ終えた時点の保存は印 `left` を書き、
+/// `kero.defaultx,36` を記憶なしで起こすと、並べ終えた時点の保存は印 `left` を書き、
 /// 100% から 200% へ移っても 2 つの窓は重ならず、36 の隙間で並ぶ。
 #[test]
 fn the_defaultx_gap_is_saved_as_left_and_survives_100_to_200() {
@@ -139,7 +139,7 @@ fn a_remembered_left_mark_joins_with_the_defaultx_gap() {
     );
 }
 
-/// 495 ⑴: 覚えた右の辺のスコープは、次の（記憶の無い）スコープの基準にならない。
+/// 覚えた右の辺のスコープは、次の（記憶の無い）スコープの基準にならない。
 #[test]
 fn a_remembered_side_edge_scope_is_not_the_base_of_the_next_scope() {
     let shown = sizes(&SPAWN);
@@ -156,7 +156,7 @@ fn a_remembered_side_edge_scope_is_not_the_base_of_the_next_scope() {
     assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 の基準は本体");
 }
 
-/// 495 ⑵: 最初の確定より前に台本が辺へ動かしたスコープも、次のスコープの基準にならない。
+/// 最初の確定より前に台本が辺へ動かしたスコープも、次のスコープの基準にならない。
 #[test]
 fn a_boot_script_side_edge_scope_is_not_the_base_of_the_next_scope() {
     let shown = sizes(&SPAWN);
@@ -179,6 +179,29 @@ fn a_boot_script_side_edge_scope_is_not_the_base_of_the_next_scope() {
 fn realign_skips_a_side_edge_scope_as_the_chain_base() {
     let shown = sizes(&SPAWN);
     let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
+    finalize_chain_once_with(&shown, &mut world);
+    assert_eq!(left_gap(&world, 0, 2), 0, "前提: scope 2 は本体の左に付く");
+
+    change_scale_and_realign(&mut world, 1, 2);
+
+    let gap = left_gap(&world, 0, 2);
+    assert!(
+        gap.abs() <= ADJACENT_TOLERANCE_PX,
+        "scope 2 が本体の左に詰まっていない（隙間 {gap}）"
+    );
+}
+
+/// 詰め直しが辺かを決めるのは窓の今の揃え方（`Anchored`）: 最初の確定より前に台本が辺へ動かした
+/// スコープも飛ばし、次のスコープを本体との組で詰める（descript は下端のまま）。
+#[test]
+fn realign_skips_a_boot_script_side_edge_scope_as_the_chain_base() {
+    let shown = sizes(&SPAWN);
+    let mut world = spawn_resolved(&[], &shown, 3);
+    assert!(apply_script_alignment(
+        &mut world,
+        1,
+        &AlignmentWord::Anchor(Anchor::Left)
+    ));
     finalize_chain_once_with(&shown, &mut world);
     assert_eq!(left_gap(&world, 0, 2), 0, "前提: scope 2 は本体の左に付く");
 

@@ -176,7 +176,7 @@ fn unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
     let mut world = World::new();
     // キャラ窓を先に立ててから、その相棒のバルーン窓へペア宣言を付ける
     // （[`KeepDirectlyAbove`] が既存ペア機構の入口である）。
-    let mut entities: Vec<Option<Entity>> = vec![None; WINDOWS];
+    let mut entities: Vec<Entity> = Vec::with_capacity(WINDOWS);
     for scope_start in (0..WINDOWS).step_by(2) {
         let character = world
             .spawn(WindowHandle {
@@ -191,10 +191,9 @@ fn unassigned_scopes_join_behind_every_group_in_ascending_scope_order() {
                 KeepDirectlyAbove { peer: character },
             ))
             .id();
-        entities[scope_start] = Some(balloon);
-        entities[scope_start + 1] = Some(character);
+        entities.push(balloon);
+        entities.push(character);
     }
-    let entities: Vec<Entity> = entities.into_iter().map(|e| e.expect("entity")).collect();
 
     // --- 指定（タグの語彙 → 台帳） -----------------------------------------
     let tokens: Vec<String> = GROUP_SCOPES.iter().map(|s| s.to_string()).collect();

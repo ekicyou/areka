@@ -304,14 +304,14 @@ pub fn resolve_placement(
 
         // P2: base_x(0)=right−w0・base_x(n≥1)=char_x(n−1)−w(n)（自スコープの幅＝
         //     隣接・隙間 0・areka-P0-scope-chain-gap 2.1/2.2）・
-        //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3）。
-        //     free の X 未指定成分のフォールバック先でもある（2.6・その場合
-        //     default_x は None ゆえオフセット項は 0）
+        //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3・
+        //     [`chain_gap`]）。free の X 未指定成分のフォールバック先でもある（2.6・free の
+        //     オフセット項は 0）
         let base_x = match prev {
             None => work_area.right.saturating_sub(w),
             Some(prev_x) => prev_x.saturating_sub(w),
         };
-        let bottom_x = base_x.saturating_sub(sc.default_x.unwrap_or(0));
+        let bottom_x = base_x.saturating_sub(chain_gap(anchor, sc.default_x));
 
         // 左右の辺: 辺ごとに下から上へ連ねる（y(0)=bottom−h・y(n)=y(n−1)−h(n)）
         let side_y = |prev_y: Option<i32>| prev_y.map_or(bottom_y, |py| py.saturating_sub(h));
@@ -337,10 +337,12 @@ pub fn resolve_placement(
         let y = clamp_axis(y, work_area.top, work_area.bottom.saturating_sub(h));
 
         // 左右の辺のスコープは横の連なり（P2）を進めない
-        match anchor {
-            Anchor::Left => prev_left_y = Some(y),
-            Anchor::Right => prev_right_y = Some(y),
-            Anchor::Top | Anchor::Bottom | Anchor::Free => prev = Some(x),
+        if joins_chain(anchor) {
+            prev = Some(x);
+        } else if anchor == Anchor::Left {
+            prev_left_y = Some(y);
+        } else {
+            prev_right_y = Some(y);
         }
 
         // P5: バルーン暫定 offset（DD7・ここではクランプしない＝limit 補正は下流の関門が
@@ -510,6 +512,21 @@ impl Anchor {
     /// bottom_snap 等の boolean が要る使用点は `!is_free()` で導出できる。
     pub fn is_free(self) -> bool {
         matches!(self, Anchor::Free)
+    }
+}
+
+/// 横の連なり（P2・鎖）に入る揃え方か（左右の辺は入らない・P1'）。起動の並べ直し・隣り合いの
+/// 印の保存・拡大率の後の詰め直しも同じこの決まりで組を作る（`chain_finalize` の「鎖の規則」）。
+pub fn joins_chain(anchor: Anchor) -> bool {
+    !matches!(anchor, Anchor::Left | Anchor::Right)
+}
+
+/// P2 が前の窓の左に空ける隙間（`defaultx`）。下端・上端だけで、Free の `defaultx` は
+/// 左上からの位置（P3）なので 0。`default_x` は DPI で換算しない生の値。
+pub fn chain_gap(anchor: Anchor, default_x: Option<i32>) -> i32 {
+    match anchor {
+        Anchor::Bottom | Anchor::Top => default_x.unwrap_or(0),
+        Anchor::Left | Anchor::Right | Anchor::Free => 0,
     }
 }
 

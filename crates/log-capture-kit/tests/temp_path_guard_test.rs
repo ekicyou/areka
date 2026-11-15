@@ -135,7 +135,7 @@ enum Why {
 /// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs:58-60`
 /// が同じ理由で行数を書かないのと同型）。
 const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
-    // ── ⒜ 既にプロセス識別子で一意化している 1 件 ───────────────────────────
+    // ── ⒜ 既にプロセス識別子で一意化している件（今は 0 件）───────────────────────────
     //
     // 設計 C8 が「例外表に載せるか窓口へ寄せるかを実装時に決め、根拠を記録する」と
     // 定めた当の項目。**載せる**を採った。根拠は 2 点。
@@ -161,15 +161,9 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     // タスク 4.1 が `.bat` を手で組み直す写しのテストを消し（組み立ては `helper_command` の
     // 中身を読むテストへ）、入口を使わなくなったので表から落とした。これで audit-shiori-host32 の
     // 範囲の 10 件はすべて表から外れた。
-    (
-        "crates/areka-placement/src/measure_tests.rs",
-        Why::ProcessUnique,
-        "プロセス識別子＋単調連番＋Drop の再帰削除を持つ**同 crate 内の自前実装**。タスク 10.2 は \
-         placement_shared_test_support.rs を窓口の薄い包みへ寄せた際に「crate 内に 2 系統を残さない」と \
-         説明文に書いたが、本ファイルが残っているのでその説明は事実として成り立っていない \
-         （レビュー所見）。**衝突の観点では既に正しい**ので移行対象（要件 12.2 の 20 ファイル）には \
-         含まれず、ここへ載せることで「2 系統目が現に在る」ことを台帳として可視にする",
-    ),
+    // `crates/areka-placement/src/measure_tests.rs`（同 crate 内の自前の一時フォルダ）もかつてここに
+    // 載っていたが、audit-placement-core のかけ直し（タスク 8.1）が自前の実装をやめたので当たりが
+    // 0 件になり、表から落とした。
     // ── ⒜ の追加 1 件（2026-09-29・areka-P0-network-update）─────────────────────
     //
     // テストの一時パスではなく**本番の落とし場所**。要件 6.6 が「OS の一時フォルダの下の areka
@@ -182,27 +176,23 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "本番の落とし場所 %TEMP%\\areka\\download\\（要件 6.6）。フォルダは 7 日の掃除のために固定、\
          中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
     ),
-    // ── ⒝ 読み出しのみの 1 件（要件 12.2・設計 C8 が名指しで対象外と定めた 2 件の残り）───
-    // もう 1 件の `crates/shiori-host32-host/tests/error_paths.rs` は audit-shiori-host32 の
-    // タスク 1.1 が `TestRoot` へ寄せたので表から落とした。
-    (
-        "crates/areka-placement/src/placement_monitor_tests.rs",
-        Why::ReadOnly,
-        "不在パスを組み立てて「読めないこと」を確かめるだけで、書込も削除も行わない。実体を作らない \
-         ので固定名でもプロセス間で奪い合いが起きない（要件 12.2 が名指しで対象外と定めた 2 件の 1 つ）",
-    ),
+    // ── ⒝ 読み出しのみ（要件 12.2・設計 C8 が名指しで対象外と定めた 2 件）は 0 件 ───
+    // `crates/shiori-host32-host/tests/error_paths.rs` は audit-shiori-host32 のタスク 1.1 が
+    // `TestRoot` へ寄せ、`crates/areka-placement/src/placement_monitor_tests.rs` は
+    // audit-placement-core のかけ直し（タスク 8.1）が不在パスを入口から組み立てなくなったので、
+    // どちらも表から落とした。
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 3;
+const ALLOWED_COUNT: usize = 1;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。種別ごとに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 2;
+const PROCESS_UNIQUE_COUNT: usize = 1;
 /// 同上（読み出しのみ）。
-const READ_ONLY_COUNT: usize = 1;
+const READ_ONLY_COUNT: usize = 0;
 
 /// 要件 12.5 の自己テストで表から外す 1 件。表の項目でなければならない。
 ///

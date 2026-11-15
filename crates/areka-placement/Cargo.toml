@@ -46,6 +46,6 @@ tracing-subscriber = { workspace = true }
 async-io = { workspace = true }
 
 [[example]]
-# 手本の中の `#[test]`（絵の選び・u32 に収まらないスコープ）を `cargo test -p areka-placement` で走らせる（`main` は走らない）。
+# 手本の中の `#[test]`（u32 に収まらないスコープ）を `cargo test -p areka-placement` で走らせる（`main` は走らない）。
 name = "window-placement"
 test = true

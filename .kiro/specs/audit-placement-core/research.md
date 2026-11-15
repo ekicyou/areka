@@ -2036,3 +2036,120 @@
 8 回目には「必ず直す」が 2 件（494・495）あり、どちらも本番の振る舞い（拡大率の変化の後と次の起動の窓の並び）を変える指摘で、直さずに裁定待ちとして残る。ほかの 7 件は本番の振る舞いを変えない（498 は記録の文から番号を消すだけ・502 は記録の行の数だけ）。したがって、開発者の決めた打ち切りの形（8 回目に「必ず直す」と本番の振る舞いを変える指摘が無ければ 8 回目で終える）には当たらず、タスク 8.1 はまだ終わらない。494・495 の裁定（直し方と、覚えた印 `left` の読み替え）と 502 の裁定を仰ぎ、その直しを入れた後に 9 回目をかけるかを開発者に仰ぐ。
 
 494・495 は開発者の裁定（2026-11-15「推奨どおりで」）で推奨案のとおりに直し（上の「494・495 の直し」）、502 は同じ裁定で今のまま。これで 8 回目の 9 件は、直した 8 件と今のままの 1 件（502）になり、裁定待ちは 0 件。494・495 の直しは本番の振る舞い（拡大率の変化の後と次の起動の窓の並び）を変えたので、打ち切りの形にはまだ当たらない。この直しを入れた後に 9 回目をかけるかを開発者に仰ぐ。
+
+### 18.9 9 回目（2026-11-15）
+
+#### 取り込みと範囲の大きさ
+
+- 494・495 の直しの後、開発者が 9 回目を認めた（2026-11-15）。打ち切りの決まりつき: 9 回目に「必ず直す」と本番の振る舞いを変える指摘が無ければ、9 回目を最後にしてタスク 8.1 を終える。
+- `main` は進んでいない（`git fetch` の後の `HEAD..origin/main` が 0 件・最後の取り込みは `246b6d75f`）。
+- 範囲は 1.1 節と 18.1〜18.8 と同じ数え方で、直す前に測り直した。今までの 117 ファイルに、この spec が範囲の外に足した本体のテストの 2 ファイル（7 回目の `runtime/frame_chain_finalize_align_tests.rs`・8 回目の `runtime/frame_chain_rule_tests.rs`）を、1 回目の `persist_remove_tests.rs` と同じ「足したファイル」として入れた（D の組）。ファイルは 119。
+
+| 区分 | ファイル | 行 |
+|---|---|---|
+| コード（`crates/areka-placement/` の `.rs` でテストでないもの・`examples/` 込み） | 28 | 10,929 |
+| テスト（`crates/areka-placement/` の `_tests.rs`・`_test_support.rs`・`test_support.rs`・`test_crash_report.rs`） | 77 | 22,468 |
+| テスト（`crates/areka/src/placement_tests/` の `transition_*` でないもの・`mod.rs` 込み） | 10 | 3,051 |
+| `Cargo.toml` | 1 | 51 |
+| 足したファイル（`areka-sylphya` の `persist_remove_tests.rs`・本体の `frame_chain_finalize_align_tests.rs`・`frame_chain_rule_tests.rs`） | 3 | 780 |
+| 計 | 119 | 37,279 |
+
+- ponytail は 5.3.3（1〜8 回目と同じ版）。作法も 1.3 節と同じ（6 つの物差し・具体的な場合・消す前の grep・件数の上限なし・全部読む）。分け方も 18.1 と同じ 6 つで、6 つの組のどれからも、全ファイルを全行読んだ旨と行数の一覧を受け取った（A 24／6,505・B 21／6,931・C 20／5,981・D 19／6,015・E 15／5,931・F 20／5,916。計 37,279 行で上の表と合う）。D の組は、本体の `drain_resnap.rs` の `finalize_chain_once_with` を読み合わせに読んだ（行は数えない）。読み手は読むだけで何も変えず、進行役が指摘を集めて番号を付けてから、触るファイルが重ならないように直した（鎖の規則の組と保存の組は順に、小さな直しは進行役が）。
+- 読み手には 8 回目と同じ線（各回の「指摘にしなかったもの」・古い文は今の事実と食い違うものだけ・決して落ちない確かめはどの直しでも赤にならない理由を言えるものだけ）と、8 回目の直しの中身（`b7b880996`・494・495 の直しの `a8427eee8`・485 の `20223ddd3`）を渡した。8 回目のレビューの任意の提案 2 つ（`chain_finalize.rs` の「n−1」の doc・材料が無いときの保存の黙った落ち方）も候補に入れた（516・507）。
+- 進行役から、別のワークツリーの全体テスト（`b7b880996` の上）の赤を 1 件受けた（522）。
+
+| 組 | 読んだファイル | 行 | 必ず直す | 直したほうがよい | できれば | 計 |
+|---|---|---|---|---|---|---|
+| A | 24 | 6,505 | 0 | 1 | 2 | 3 |
+| B | 21 | 6,931 | 0 | 1 | 3 | 4 |
+| C | 20 | 5,981 | 0 | 0 | 3 | 3 |
+| D | 19 | 6,015 | 1 | 0 | 4 | 5 |
+| E | 15 | 5,931 | 0 | 0 | 2 | 2 |
+| F | 20 | 5,916 | 0 | 2 | 0 | 2 |
+| 全体テストの赤（`log-capture-kit` の見張り） | — | — | 1 | 0 | 0 | 1 |
+| 計 | 119 | 37,279 | 2 | 4 | 14 | **20** |
+
+- 514 は D と F の 2 つの組の読み手が同じ所を出したもので、規則の置き場（`chain_finalize.rs`）の D に 1 件だけ数えた。B と D の読み手が出した本体の新しいテストの名前の無い指摘番号は、D の 517 に 1 件だけ数えた。503 は A の組の読み手が出し、直しは D の組のファイルにも及ぶ。521 は場所（`chain_realign.rs`）の F に数え、テストは本体の `frame_chain_rule_tests.rs` に足した。
+
+#### 指摘の一覧（503〜522）
+
+扱いの印は 18.1〜18.8 と同じ。
+
+| 番号 | 組 | 群 | 一言 | 場所 | 扱い |
+|---|---|---|---|---|---|
+| 503 | 直したほうがよい | A | 鎖に入る揃え方（左右の辺は入らない）と左の隙間（下端・上端の `defaultx`）の決まりが、resolver の P2（`prev` を進める腕と `bottom_x`）と、494・495 で足した `chain_finalize::joins_chain`／`chain_gap` の 2 か所に書いてある。片方だけを変えると（たとえば上端のスコープを P1' と同じ別の連なりにすると）、起動の並べ直し・隣り合いの印・詰め直しが resolver と食い違う（485 の形）が、どのテストも赤にならない（本体のテストに `top` の場合が無い） | `resolver.rs` の `resolve_placement`・`chain_finalize.rs` | 直した（`joins_chain`・`chain_gap` を `resolver.rs` の `Anchor` の隣へ移し、`resolve_placement` の P2 がそれを呼ぶ: `bottom_x = base_x − chain_gap(anchor, default_x)`・`if joins_chain(anchor) { prev = Some(x) }`。`chain_finalize.rs` は `pub use` で同じ名を出し続けるので、呼び手（本体の `drain_resnap.rs`・`persist_save.rs`・`chain_realign.rs`・テスト）の道は変わらない。依存の向き（resolver は chain_finalize を引かない）は保つ。結果が同じことを確かめた: x を書いた Free は `bottom_x` を x に使わず、x の無い Free は `default_x` が無く、左右の辺は `bottom_x` を読まない。RED は対象外（置き場を 1 つにするだけ。T-R5 ほかの resolver のテストと、`chain_finalize` と本体の起動・詰め直しのテストが両側を押さえる）。494・495 の裁定の「規則の置き場は `chain_finalize.rs`」は、規則の節と 3 か所の呼び口が `chain_finalize.rs` に残るので変わらない） |
+| 504 | できれば | A | テストの補助 `pos` が `reseed::test_support::position_of` と同じ中身（458 と同じ形） | `script_alignment_tests.rs` | 直した（`position_of` を引いて `pos` を消した） |
+| 505 | できれば | A | `primary_monitor` の `match monitors.first() { Some(first) => {…} None => None }` は `?` で短く書ける | `lib.rs` | 直した（0 台で記録しないのは同じ） |
+| 506 | 直したほうがよい | B | 並べ終えた時点の保存で印の無い古い記憶へ印を足す道で、鎖の規則（`SavedChain::of`）をどのテストも通さない。`SavedChain(None)` にしても全部緑のまま（`old_memory_rig` は材料を置かない）。壊れると `kero.defaultx,36` の古い記憶へ `none` が書かれ、拡大率が変わると重なったまま残る（494 の形） | `persist_save.rs` の `persist_unremembered_char_positions`・`persist_finalize_save_tests.rs` | 直した（`old_memory_mark_uses_the_defaultx_gap_of_the_descript`。RED: `SavedChain(None)` にする壊し方で「left: Some("none") right: Some("left")」） |
+| 507 | できれば | B | 材料（`DefaultPlacementBasis`）が無いとき、保存の印の判じ方が記録を残さずに全スコープを下端・`defaultx` 0 に落とす（詰め直しは `debug!`・起動の確定は `warn!`）。8 回目のレビューの提案 | `persist_save.rs` の `SavedChain::of` | 直した（`debug!` を 1 行。`missing_basis_marks_with_the_bottom_rule_and_logs_debug`。RED: 直す前は「left: 0 right: 1」。「記録が 0 行」を確かめる `missing_partner_scope_is_skipped_silently` の 2 つの World には空の材料を置いた（期待は変えていない）） |
+| 508 | できれば | B | 1 回の並べ終えた時点の保存で、`SavedChain::of` を 2 度組む（`persist_unremembered_char_positions` と、送り口の中の印の付け足し）。descript の読めない値の `warn!`（`kero.defaultx,abc` ほか）が 1 回の出来事に 2 行出る（502 の残り。502 の裁定は「1 回の出来事に 1 度」） | `persist_save.rs` | 直した（並べ終えた時点の保存で 1 度だけ組み、内側の `send_entries` へ渡す。公開の `persist_entries` の形は同じで、自分で組む。`one_finalize_save_warns_once_for_an_unreadable_defaultx`。RED: 直す前は「left: 2 right: 1」。シェル位置初期化（`reset_pos.rs`）で 2 度組むのは、502 の裁定（シェルの切り替えと同じ 1 回の出来事に 2 行）の線に入れて変えていない） |
+| 509 | できれば | B | 印を足す所の doc が「k を鎖の前の窓とする次のスコープの組」と書くが、コードは k が左右の辺のスコープでも、k より上の番号で鎖に入る一番近いスコープの組を書く（テスト `a_side_edge_scope_is_skipped_as_the_previous_chain_window` が今のコードを固定している） | `persist_save.rs` の `with_adjacency_marks`（今は `adjacency_marks_with`） | 直した（doc を「スコープ k の組と、k より上の番号で鎖に入る一番近いスコープの組」に） |
+| 510 | できれば | C | 指摘 4 のために足した手本のテスト `each_scope_balloon_uses_its_own_scope_picture` が、手本の呼び出し（`build_balloon_target(…, scope_u32)`）を通らない。3 つ目の引数を `0` に戻しても（指摘 4 の誤り）緑のまま。確かめているのは `target_scope(1) == Some(1)`（次のテストも確かめる）と、`areka-emo-present` のバルーンの絵の選び（その crate の `balloon_series_tests.rs` が確かめる）だけ | `examples/window-placement.rs` | 直した（消した。`Cargo.toml` の `[[example]]` の説明から「絵の選び」を外した。守りを残すには選びを関数へ移してコードを足すことになる。手本の `#[test]` は 1 件になる） |
+| 511 | できれば | C | 追随の支えが共有の `test_support::zorder_pair_deferred::code_only` の写しと、`SharedFakeIo` の小さな写しを持つ（64・76・143 の残り。2 回目の申し送りの `Store` とは別の物） | 追随の `follow_test_support.rs` の `code_only`・`SharedFakeIo` | 申し送り（`audit-placement-follow`。共有のものを使う。直しが追随の持ち物に要る） |
+| 512 | できれば | C | 本体のテストが `SharedFakeIo`（`PersistIo` の偽物）を 3 か所に手で写す（共有の `areka_placement::test_support::SharedFakeIo` がある・80・474 と同じ形） | 本体の `boot_resolve_tests.rs`・`input_events/drag_test_support.rs`・`main_persist_wiring_seam_tests.rs` | 申し送り（`audit-areka-app`。範囲の外） |
+| 513 | 必ず直す | D | `defaultx` が大きく負のとき、隙間 `defaultx` の組を隣り合いと見ない。左右を窓の中心で先に決め、`defaultx` の隙間は中心で左のときしか見ないので、`defaultx ≤ −(w(n)+w(前の窓))/2` だと右の組として重なりと判じる。たとえば 100% で w0=191・w1=168・`kero.defaultx,-200` のゴーストを記憶なしで起こすと、起動の確定は kero を本体の x+32 に置く（485）が、保存は印 `none` を書き、詰め直しは `Keep(Overlapped)` で動かさない。100% から 200% へ移ると kero は resolver の位置から 180px ほど外れて残り、次の起動からは本体の幅に付いてこない（494 の形）。494 の裁定の文は「隙間が 0 か、そのスコープの `defaultx` の ±2px」で、中心で左という絞りは無い | `chain_finalize.rs` の `judge_chain_adjacency` | 直した（`defaultx` が 0 でなければ、中心を比べる前に左の隙間 `前の窓.x − (n.x + n.w)` を見て、縦が重なり `defaultx` ±2px なら `Left`。doc と「鎖の規則 ⑵」の文も直した。`a_negative_defaultx_gap_past_the_centre_is_still_left`。RED: 直す前は「left: Overlapped { gap: -159 } right: Left { gap: -200 }」。18.8 の「左の組は `defaultx` の隙間も」の「左」は、この直しの後は中心でなく左の隙間で決まる） |
+| 514 | できれば | D | `defaultx` が ±1・±2 のとき、詰め直しが隙間を 0 にする（`Left{g}` で `|g| ≤ 2` をいつも `JoinLeft` にする）。`kero.defaultx,2` は起動と次の起動では隙間 2 だが、拡大率が変わると 0 になる | `chain_finalize.rs` の `adjacency_decision` | 直した（隙間が `defaultx` より 0 に近いか同じときだけ `JoinLeft`、ほかは `join_left(defaultx)`。`a_small_defaultx_gap_is_kept_not_rounded_to_zero`。RED: 直す前は「left: JoinLeft right: JoinLeftOffset { offset: 2 }」） |
+| 515 | できれば | D | 起動の確定で、組の決めは descript の揃え方（`boot_default_decision(anchor, …)`）、鎖に入るかは窓の今の揃え方（`joins_chain(live)`）で判じる。descript が右の辺の kero を、最初の確定より前に台本 `\![set,alignmenttodesktop,bottom]`（`free` も）が揃え直すと（x はそのまま・`ScriptPlaced` の印は付かない）、決めは `Keep(DesktopEdge)` で kero は辺に残るのに、鎖の基準になる。記憶の無い下端のスコープ 2 は、本体の隣から右の辺の kero の隣へ動く（495 ⑵ の裏返し。テストが無い） | 本体の `runtime/frame/drain_resnap.rs` の `finalize_chain_once_with` | 裁定待ち（下の裁定の表） |
+| 516 | できれば | D | 「n−1」が、前のスロットとの組になった後も doc に残る（`PairDecision::JoinLeft`／`JoinLeftOffset`／`JoinRight`・`resolve_chain` と事後条件 `x(n−1) == x(n) + w(n)`・モジュールの式）。左右の辺のスコープ 1 を飛ばすと、スコープ 2 の事後条件は `x(0) == x(2) + w(2)`（497 の残り・8 回目のレビューの提案） | `chain_finalize.rs` | 直した（「前のスロット」・`x(prev)`・`w(prev)` に。ふつうの場合を言う「ふつうは組 (n−1, n)」は正しいので残した） |
+| 517 | できれば | D | spec の名の無い指摘番号が、8 回目に足した本体のテストの doc に残る（「494 の例」「495 ⑴」「495 ⑵」「指摘 1・SSP の測り 210」。498 の残り） | 本体の `frame_chain_rule_tests.rs`・`frame_chain_finalize_align_tests.rs` | 直した（前の 3 つは番号を消した。文が中身をもう言っている。最後の 1 つは `audit-placement-core 指摘 1` に） |
+| 518 | できれば | E | 台帳の `has_base` の欄が、`groups` が持つ事実（先頭が descript 由来の組か）をもう 1 度持ち、4 か所で手で揃える。揃え忘れると `reset_to_descript` がタグの組を基底として残すか、本物の基底を落とす（今は 4 か所とも揃っている） | `zorder_group_ledger.rs` | 直した（欄を消し、先頭の組の出所を見る私有の `has_base()` に。公開の形は変わらない） |
+| 519 | できれば | E | テストが `Vec<Option<Entity>>` を番号の順に埋めてから全部を `expect` で開ける（`None` は残りえない） | `zorder_chain_tail_order_tests.rs` | 直した（`push` で同じ順に積む） |
+| 520 | 直したほうがよい | F | 494 の鎖の規則 ⑴（左右の辺のスコープを飛ばす）の後、利用者が左右の辺のスコープの隣へドラッグで付けた窓が、拡大率が変わると離れて重なる。たとえば 3 スコープのゴーストで kero が右の辺、さくらとスコープ 2 が下端のとき、スコープ 2 を kero の左に隙間 0 で付けてから 100% → 200% にすると、494 の前は組 (1, 2) を `JoinLeft` で付け直したが、今は組 (0, 2) を `Apart` と判じて動かさず、kero は右の辺から左へ広がるので、幅が 336 → 672 なら 504px 重なったまま残る。保存の印も kero との `left` でなく、さくらとの `none` になる。8 回目の決め (a) の限り（台本で辺へ動かした窓）には入らない | `chain_realign.rs` の `realign_chain_once_with`（`chain_finalize.rs` の規則 ⑴） | 裁定待ち（下の裁定の表） |
+| 521 | 直したほうがよい | F | 詰め直しが、辺かどうかを窓の今の揃え方（`Anchored`）で決める所に、壊れたら落ちるテストが無い。descript の揃え方だけで決める形にしても全部緑のまま。そうすると、最初の確定より前に台本が kero を左の辺へ動かしたゴーストで、拡大率が変わると kero が鎖に残り、組 (0, 2) を判じず、スコープ 2 と本体のあいだが開く（494 が直した形の離れ方） | `chain_realign.rs` の `realign_chain_once_with` の `terms` | 直した（本体の `frame_chain_rule_tests.rs` に `realign_skips_a_boot_script_side_edge_scope_as_the_chain_base`。RED: descript の揃え方だけで決める壊し方で「scope 2 が本体の左に詰まっていない（隙間 184）」。壊し方は写しから戻し、`chain_realign.rs` の差分は 0） |
+| 522 | 必ず直す | — | 全体テストの x64 のワークスペースのテストで、`log-capture-kit` の見張り `temp_path_guard_test` の 3 本（`each_exception_declares_whether_it_uniquifies_by_process_identifier`・`every_exception_still_has_a_real_hit`・`the_measurement_is_not_vacuous_and_matches_the_allow_table`）が赤。例外表が `crates/areka-placement/src/measure_tests.rs`（プロセス識別子で一意化すると名乗るが、もう使っていない）と `placement_monitor_tests.rs`（読み出しのみ）を載せたままで、測りではどちらにももう当たりが無い。この spec の前の回の直しが 2 つのファイルの一時パスの自前の作り方をやめたのに、表を直していなかった。前の回の確かめは `log-capture-kit` の 2 つの見張り（行数・`with_default`）しか回しておらず、この見張りを見落としていた（前の回の借り） | `crates/log-capture-kit/tests/temp_path_guard_test.rs` の `ALLOWED_ENTRY_POINT_USES` | 直した（2 行を表から消し、件数を 3 → 1・一意化 2 → 1・読み出しのみ 1 → 0 にした。表へは足していない。消した経緯は表の中のコメントに書いた。測った集合は `crates/areka/src/install/fetch_url.rs` の 1 つだけで表と合う（`the_measurement_is_not_vacuous_and_matches_the_allow_table` が緑）。RED: 直す前は進行役が全体テストで 3 本の赤を確かめ、この回の鎖の規則の組も `cargo test -p log-capture-kit` で同じ 3 本の赤を見た。この回から確かめは `cargo test -p log-capture-kit`（crate 全体）にする） |
+
+- 申し送りとの対応（要件 1.6）: 1〜502 と同じ所を指す指摘は 0 件。前の回の直しの残りは新しく数え、どの番号の残りかを一言に書いた（504＝458、508＝502、511＝64・76・143、512＝80・474、513・514＝494、515＝495、516＝497、517＝498、520・521＝494）。522 は前の回の直しが作った赤で、全体テストで見つかった。
+- 513・514 は要件 5 に当たるかを確かめた: どちらも、8 回目に開発者が裁定した鎖の規則 ⑵（「隙間が 0 か、そのスコープの `defaultx` の ±2px」）に今のコードを合わせる直しで、裁定の文を変えない（391・454・472 と同じ判断）。進行役が直した。
+- 515・520 は要件 5 の 3 種類目（利用者に見える窓の位置）に当たり、どちらも 8 回目の裁定の規則の当て方を決め直すので、進行役は直さずに裁定を仰ぐ。
+- 直しで古くなった行の番号の確かめ: この回で触った `.rs` を `<ファイル>.rs:<行>` の形で指す所を、ツリー全体（`.kiro/specs/`・`vendors/`・`.kiro/steering/roadmap-history.md` を除く）から拾い、今の行と見比べた。当たったのは `doc/ukadoc-coverage/briefing-assets.md` の `resolver.rs:293`・本体の `examples/collision-probe.rs` の `lib.rs:581`／`:382-456`／`:395-406`・`collision-probe/setup.rs` の `window-placement.rs:251-255` で、この回の直しはどれもそれより後ろの行なので動いていない。
+
+#### 指摘にしなかったもの
+
+- 本体の `boot_default_decision` の決めに窓の今の揃え方を使う案（515 の直し方の候補として）。`free` で x の分からない窓を本体の隣へ引き寄せてしまう。
+- `reset_pos.rs` のシェル位置初期化で設定を 2 度組む（502 の裁定の線。508 は並べ終えた時点の保存だけを直した）。
+- `send_entries` を作業の無いときに早く返す形（508 の直しの中。結果は直す前と同じ）。
+- `persist_save.rs` の `terms` が設定に無いスコープを下端・`defaultx` 無しに落とすこと（`detect_scopes` は 0 と 1 だけを出し、詰め直しの `ScopeConfig::default()` と同じ）。
+- 本体の `frame_chain_rule_tests.rs` の `a_remembered_defaultx_gap_pair_rejoins_after_200_to_100` が詰め直しの読まない既定の位置を消すこと（494 の仕組みで赤になる）。
+- 起動の確定が、飛ばす辺のスコープの決めも作ってから外すこと・`has_default` の線形の探し（窓の一式ごとに 1 度・スコープは数個）。
+- 詰め直しで辺のスコープと先頭のスロットに組の `info!` が無いこと（組が無い・辺のスコープは `debug!` が 1 行）。
+- 辺の kero の隣へさくらをドラッグした 2 スコープの場合に、どちらも動かないこと（494 の前は `JoinRight` で kero を辺から外していた）。
+- 上端と下端のスコープが隣り合いと判じられないこと（縦の範囲が重ならない・`dpi-realign-remembered-chain` の要件 2.1）。
+- `defaultx` が 0 のときの 1〜2px の隙間を 0 に詰めること（許す幅のわざとの形）。
+- `zorder_group_ledger.rs` の `reset_to_descript` の `if self.has_base() { None } else { … }` の守り（不変条件をその場で言う）・`set_descript_base` が空の台帳で版を進めないこと（版を読むのはテストだけ）・`RebaseOutcome` の `Default`（使い手は無いが、公開の型から外すと公開の形が狭まる・215・246 の線）・`vocab_public_consts` が `pub static` を見ないこと（t_zpd40 の全ファイルの走査が拾う）・`scan_z_once` の全部 `None` の入力（呼び手が無い）・`Rig::drop` の 2 度目の `DestroyWindow`（doc に書いた形）・`seriko.zorder` の末尾の読点（18.5 の `sticky-window` と同じ線）。
+- `config.rs` の読めない値の `warn!` に `event` の欄が無いこと（機械で読む所が無く、文が分かれている）・採寸でスコープ 1 と 2 が同じバルーンの面を焼くこと（起動に 1 度・本番はスコープ 2 を作らない）・`assert_no_blind_spot_literals` の誤検知（赤の向きで、今の走査の対象に無い）・`code_only` の行の続きの扱い（`contains` だけで読む）・`DefaultSurfaces::builtin()` の本体の呼び手（`#[allow(dead_code)]` のテストだけの関数の中）。
+- `resolver.rs` の P2 の doc の「n−1」（同じ箇条が辺のスコープを連なりから外すと言うので、鎖の前のスコープと読める）・`lib.rs` の届かない枝（面 0 の `warn!`・u32 に収まらないスコープ・配置表に無いスコープ）・`PreparedPlacement.titles` と材料の `titles` の二重持ち（1 度の読みから作る）・`windowposition.x,3000000000`（警告して落とす）・`script_alignment.rs` の戻り値の「当てたら真」（本番の呼び手が戻り値を捨てる）・`placement_monitor_tests.rs` のテストの名の `primary_work_area`（名で、主張ではない）。
+- 組から上がって、確かめて外したもの: `balloon_offset_supply_tests.rs` の節の番号の飛び（足りないだけ）・`persist_restore_group_tests.rs` ほかの「task」の番号（同じ括弧に spec の名がある）・`apply_face_windowposition` の全スコープの解き直し（5 回目の線）・`SavedChain::of` を `GhostWindows` が無くても組むこと（守りの道で軽い）・`BalloonSyncScaleState` を窓の一式を閉じても消さないこと（読み手が無い・要件 6.6）・`apply_set_sticky` の `members.clone()`（台本の命令ごとに 1 度）・`reset_balloon_pos_tests.rs:491` の文（正しい）。
+
+#### 裁定が要るもの（要件 5・8.6）
+
+| 番号 | 種類 | 中身 | 推奨 | 裁定 |
+|---|---|---|---|---|
+| 18.8 の決め (a) | 8 回目の 494・495 の直しで進行役が決めた所（要件 5 の 3 種類目） | 隣り合いの印を書く保存が、辺かどうかを descript の揃え方（`DefaultPlacementBasis` → `build_placement_config`）で決め、起動の並べ直しと詰め直しは窓の今の揃え方（`Anchored`・無ければ descript）で決める | 今のまま | 開発者の裁定で今のまま（2026-11-15「推奨どおりで」。コードは変えない）。理由: 保存した印は次の起動が読み、次の起動は descript の揃え方で組を作り直す。台本の吸着はその回かぎりで記憶に書かない。受け入れた限り: 台本が窓を辺へ動かした回の保存は、次のスコープに `none` を書きうる（まれ） |
+| 515 | 要件 5 の 3 種類目（起動のときの窓の位置）。8 回目の裁定の「鎖に入るかは窓の今の揃え方」と、485 の「記憶の無い既定のスコープの決めは descript の揃え方」が、台本が最初の確定より前に揃え直した窓で食い違う | descript が左右の辺で、台本が最初の確定より前に下端・Free へ揃え直した窓を、起動の確定で鎖の基準にするか | **直す**: 起動の確定で、descript か今の揃え方のどちらかが左右の辺なら鎖から外す（`joins_chain(live) && joins_chain(descript)`・本体の `drain_resnap.rs` の 1 行）。その窓は辺に残るので、記憶の無い次のスコープは本体の隣のまま（resolver の位置）で、保存（descript の揃え方で組む＝決め (a)）と次の起動の組とも揃う。詰め直しは今のまま（窓の今の揃え方）。RED を先に（台本が `bottom` に揃え直した辺の kero で、スコープ 2 が動かない）。規模は S | 裁定待ち（利用者に見える位置が変わるので、推奨案で承認にしない。コードは変えていない） |
+| 520 | 要件 5 の 1 種類目（8 回目に裁定した鎖の規則 ⑴「左右の辺のスコープは鎖の外」と、完了した `dpi-realign-remembered-chain` の「変わる直前に隣り合っていた組を付け直す」）と 3 種類目（拡大率の変化の後の窓の並び） | 利用者が左右の辺のスコープの隣へ付けた窓を、拡大率が変わったときに付け直すか | **詰め直しだけ直す**: 詰め直しで、飛ばした辺のスコープ k に、変わる直前の次のスコープ n が隙間 0 で左に付いていたときは、n の組を k との組として判じて k の左へ付ける（`chain_realign.rs`・規模は S〜M）。印の保存と起動は今のまま（次の起動で辺のスコープは辺へ戻り、n は覚えた位置のまま動かない）。RED を先に（上の 3 スコープの例で、200% の後も n が kero の左に隙間 0）。直さないなら、規則 ⑴ の限りとして `chain_realign.rs` に `shortcut:` で書く | 裁定待ち（完了した spec の決めと 8 回目の裁定の当て方を変え、利用者に見える並びが変わるので、推奨案で承認にしない。コードは変えていない） |
+
+この回の新しい裁定待ちは 2 件（515・520）。決め (a) は開発者の裁定で今のまま。
+
+#### 申し送り（タスク 8.2 が書く）
+
+- `audit-placement-follow` へ（持ち主の spec はもう完了しているので、8.2 が扱いを決める）: 511（`follow_test_support.rs` の `code_only`（465 行あたり）を消して `crate::test_support::zorder_pair_deferred::code_only` を使い、`SharedFakeIo`（495 行あたり）を共有の `test_support::SharedFakeIo` に）。
+- `audit-areka-app` へ: 512（本体の `boot_resolve_tests.rs`・`input_events/drag_test_support.rs`・`main_persist_wiring_seam_tests.rs` の `SharedFakeIo` の写しを、`areka_placement::test_support::SharedFakeIo` に）。
+- 範囲の外で触った所: 517・521 のために本体の `runtime/frame_chain_rule_tests.rs`・`frame_chain_finalize_align_tests.rs`、522 のために `crates/log-capture-kit/tests/temp_path_guard_test.rs`。走っている spec と重なる所は無い。本体の `switch_finish_tests.rs`（999 行）には何も足していない。
+
+#### テスト
+
+- `cargo test -p areka-placement --features test-support`: lib 977 件が通り 1 件 ignore（足した 5 件）、手本 1 件が通る（510 で 1 件消した）。
+- `cargo test -p areka`: 本体の bin 3195 件が通り 6 件が ignore（521 の 1 件の分だけ増えた）、ほかのテストの的も全部通る（鎖の規則の組の 1 回目に知られた揺れ `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が 1 度だけ赤になり、単独で緑・回し直しで全部緑。最後の通しでは出なかった）。
+- `cargo test -p areka-sylphya`: 221 件が通る。
+- `cargo test -p ukadoc-survey`: 全部通る。
+- `cargo test -p log-capture-kit`（crate 全体・この回から）: 全部通る（`temp_path_guard_test` 16 件・`with_default_guard_test` 24 件・`file_length_guard_test` 6 件ほか）。直す前は `temp_path_guard_test` の 3 件が赤（522）。
+- `cargo fmt --all -- --check`: 緑。
+- 1,000 行の近く: `lib.rs` 927 行・`persist_finalize_save_tests.rs` 748 行・`zorder_group_ledger.rs` 739 行・`chain_finalize.rs` 700 行・`resolver.rs` 559 行・`persist_save.rs` 468 行・本体の `switch_finish_tests.rs` 999 行（触っていない）。
+- `git diff --stat Cargo.lock` と `vendors/` の差分は空。追随の持ち物（`src/follow*`・`src/transition_*`・本体の `placement_tests/transition_*`）は 1 行も触っていない。
+- 壊し方は狙った編集で入れて、元のファイルの写しから戻した（506 の `persist_save.rs`・521 の `chain_realign.rs`。どちらも戻した後に差分が狙った直しだけ、または 0 であることを確かめた）。`git checkout`・`restore`・`stash`・`reset` は使っていない。読み手の下請けは読むだけ。直しは、鎖の規則の組（503・513・514・516・517・521）と保存の組（506〜509）を下請けが順に入れ、小さな直し（504・505・510・518・519・522）は進行役が入れた。触るファイルは重ならない。
+
+#### 判定
+
+9 回目の新しい指摘は 20 件（必ず直す 2・直したほうがよい 4・できれば 14）で、0 件ではない（8 回目の 9 件から増えた。D と F の組が、8 回目に足した鎖の規則の当て方を読んだ分が多い）。直した 16 件・申し送りだけのもの 2 件（511・512）・裁定待ち 2 件（515・520）。あわせて、8 回目の決め (a) は開発者の裁定で今のままと決まった。
+
+9 回目には「必ず直す」が 2 件（513・522）ある。513 は本番の振る舞い（`defaultx` が大きく負のゴーストの、拡大率の変化の後と次の起動の窓の並び）を変える指摘で、直した。522 は全体テストの赤で、本番の振る舞いには関わらない。ほかに本番の振る舞いを変える指摘が 3 件ある（514 は直した・2px までの差。515・520 は裁定待ち）。したがって、開発者の決めた打ち切りの形（9 回目に「必ず直す」と本番の振る舞いを変える指摘が無ければ 9 回目で終える）には当たらず、タスク 8.1 はまだ終わらない。515・520 の裁定を仰ぎ、その直し（または残す理由）を入れた後に 10 回目をかけるかを開発者に仰ぐ。

@@ -55,12 +55,18 @@ pub struct PersistWiring {
 /// **panic しない**（6.2 系縮退・無音失敗なし）。`world` は共有参照で足りる（NonSend の読取のみ）——
 /// DragEnd フックは `&mut World` を保持するが `&World` へ暗黙 reborrow して渡せる。
 pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
-    send_entries(world, entries, &BTreeSet::new());
+    send_entries(world, entries, &BTreeSet::new(), None);
 }
 
 /// [`persist_entries`] の本体。寄せた起動で古い記憶の印を外したら、外したスコープのうち `logged`
-/// （呼び手がもう記録した組）に無いものを 1 行に残す（同じ決めを 2 行にしない）。
-fn send_entries(world: &World, entries: Vec<(PersistKey, String)>, logged: &BTreeSet<usize>) {
+/// （呼び手がもう記録した組）に無いものを 1 行に残す（同じ決めを 2 行にしない）。`chain` は呼び手が
+/// もう組んだ鎖の見方（`None` なら印を足すときにここで組む）。
+fn send_entries(
+    world: &World,
+    entries: Vec<(PersistKey, String)>,
+    logged: &BTreeSet<usize>,
+    chain: Option<&SavedChain>,
+) {
     let Some(wiring) = world.get_non_send::<PersistWiring>() else {
         // fallback 未挿入等で PersistWiring が無い → debug!＋no-op（起動を止めない・6.2）。
         debug!(
@@ -71,7 +77,7 @@ fn send_entries(world: &World, entries: Vec<(PersistKey, String)>, logged: &BTre
     };
     // 位置を書く束には触れる組の隣り合いの印を足す（書く時機は足さない・dpi-realign-remembered-chain 6.2）。
     let skip = clamped_old_memory(world, &entries);
-    let mut entries = with_adjacency_marks(world, entries);
+    let mut entries = adjacency_marks_with(world, entries, chain);
     let mut dropped = BTreeSet::new();
     entries.retain(|(key, _)| match key {
         PersistKey::WindowAdjacent { scope } if skip.contains(&(*scope as usize)) => {
@@ -137,8 +143,8 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
     wiring.publisher.persist_remove(PersistScope::Ghost, keys);
 }
 
-/// 送る束に窓の位置の鍵（[`PersistKey::WindowPos`]）があれば、触れる組（スコープ k の組と、k を
-/// 鎖の前の窓とする次のスコープの組）の隣り合いの印をスコープ n（組の後ろ側）の鍵で束の後ろへ足す
+/// 送る束に窓の位置の鍵（[`PersistKey::WindowPos`]）があれば、触れる組（スコープ k の組と、k より
+/// 上の番号で鎖に入る一番近いスコープの組）の隣り合いの印をスコープ n（組の後ろ側）の鍵で束の後ろへ足す
 /// （dpi-realign-remembered-chain 要件 6.2・6.4・design AdjacencyPersist）。束の中身（位置の値を
 /// 含む）は変えない。
 ///
@@ -149,9 +155,13 @@ pub fn forget_entries(world: &World, keys: Vec<PersistKey>) {
 /// 次の起動の読み手の組と合わなくなる）。鎖の前の窓が無ければログなしで飛ばし、矩形の読めない窓に
 /// 触れる組は印を書かず `warn!` を出す。窓の一式（[`GhostWindows`]）そのものが無いときは印を足さず
 /// `debug!` を出す。束にもう有る印の鍵は足さない（同じ画面の並びから決めるので値は同じ・1 つにまとめる）。
-pub(super) fn with_adjacency_marks(
+///
+/// `chain` は呼び手がもう組んだ鎖の見方で、`None` なら位置の鍵があるときだけここで組む（1 回の
+/// 保存で descript の読めない値の `warn!` を重ねない・502）。
+fn adjacency_marks_with(
     world: &World,
     mut entries: Vec<(PersistKey, String)>,
+    chain: Option<&SavedChain>,
 ) -> Vec<(PersistKey, String)> {
     let written: BTreeSet<usize> = entries
         .iter()
@@ -163,7 +173,14 @@ pub(super) fn with_adjacency_marks(
     if written.is_empty() {
         return entries;
     }
-    let chain = SavedChain::of(world);
+    let built;
+    let chain = match chain {
+        Some(chain) => chain,
+        None => {
+            built = SavedChain::of(world);
+            &built
+        }
+    };
     let scopes: Vec<usize> = world
         .get_resource::<GhostWindows>()
         .map(|gw| gw.scopes().collect())
@@ -175,21 +192,36 @@ pub(super) fn with_adjacency_marks(
             std::iter::once(k).chain(next)
         })
         .collect();
-    push_adjacency_marks(world, &mut entries, touched, &chain);
+    push_adjacency_marks(world, &mut entries, touched, chain);
     entries
 }
 
+/// テストの口: 鎖の見方をここで組む [`adjacency_marks_with`]。
+#[cfg(test)]
+pub(super) fn with_adjacency_marks(
+    world: &World,
+    entries: Vec<(PersistKey, String)>,
+) -> Vec<(PersistKey, String)> {
+    adjacency_marks_with(world, entries, None)
+}
+
 /// 印を決める鎖の見方: 次の起動でも効く descript の揃え方と `defaultx`（並べ直しの材料
-/// [`DefaultPlacementBasis`] から組む）。材料が無ければ全スコープを下端・`defaultx` 0 と見る。
+/// [`DefaultPlacementBasis`] から組む）。材料が無ければ全スコープを下端・`defaultx` 0 と見て、
+/// その決めを `debug!` 1 行に残す。
 struct SavedChain(Option<PlacementConfig>);
 
 impl SavedChain {
     fn of(world: &World) -> Self {
-        Self(
-            world
-                .get_resource::<DefaultPlacementBasis>()
-                .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv)),
-        )
+        let config = world
+            .get_resource::<DefaultPlacementBasis>()
+            .map(|b| build_placement_config(&b.source.ghost_kv, &b.source.shell_kv));
+        if config.is_none() {
+            debug!(
+                target: "areka::persist::save",
+                "隣り合いの印: 並べ直しの材料（DefaultPlacementBasis）が無いので、全スコープを下端・defaultx 0 として印を判じる"
+            );
+        }
+        Self(config)
     }
 
     /// (揃え方, `defaultx`)。
@@ -213,8 +245,8 @@ impl SavedChain {
 }
 
 /// 組（鎖の前の窓, n）ごとに書く時点の画面の並びから印を決め、スコープ n の鍵で束の後ろへ足し、
-/// 足した印を返す（[`with_adjacency_marks`] と古い記憶の書き足しが共有する唯一の決め方）。
-/// 決め方と飛ばし方は [`with_adjacency_marks`] の説明のとおり。
+/// 足した印を返す（[`adjacency_marks_with`] と古い記憶の書き足しが共有する唯一の決め方）。
+/// 決め方と飛ばし方は [`adjacency_marks_with`] の説明のとおり。
 fn push_adjacency_marks(
     world: &World,
     entries: &mut Vec<(PersistKey, String)>,
@@ -416,12 +448,12 @@ pub fn persist_unremembered_char_positions(world: &World) {
         );
         logged = std::mem::take(&mut unmarked);
     }
+    if entries.is_empty() && unmarked.is_empty() {
+        return;
+    }
+    // 鎖の見方は 1 回の保存で 1 度だけ組み、送り口の本体へも渡す（読めない値の warn! を重ねない・502）。
+    let chain = SavedChain::of(world);
     // 古い記憶には位置を書かず、画面の並びから決めた印だけを同じ束へ足す（6.5）。
-    let chain = if unmarked.is_empty() {
-        SavedChain(None)
-    } else {
-        SavedChain::of(world)
-    };
     for (scope, mark) in push_adjacency_marks(world, &mut entries, unmarked, &chain) {
         info!(
             target: "areka::persist::save",
@@ -431,6 +463,6 @@ pub fn persist_unremembered_char_positions(world: &World) {
         );
     }
     if !entries.is_empty() {
-        send_entries(world, entries, &logged);
+        send_entries(world, entries, &logged, Some(&chain));
     }
 }

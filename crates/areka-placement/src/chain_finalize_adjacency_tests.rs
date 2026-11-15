@@ -215,3 +215,44 @@ fn chain_adjacency_accepts_the_defaultx_gap_on_the_left_only() {
         "defaultx 0 は今までの判定と同じ"
     );
 }
+
+/// 鎖の規則 ⑵: `defaultx` が負で、n の中心が前の窓の中心より右へ来ても、左の隙間が `defaultx`
+/// なら左の組（起動の確定が `x(prev) − w(n) − defaultx` へ置いた形・audit-placement-core 513）。
+#[test]
+fn a_negative_defaultx_gap_past_the_centre_is_still_left() {
+    let prev = ChainRect {
+        x: 0,
+        y: 0,
+        w: 191,
+        h: 300,
+    };
+    let cur = ChainRect {
+        x: -168 + 200,
+        w: 168,
+        ..prev
+    };
+    let adjacency = judge_chain_adjacency(prev, cur, -200);
+    assert_eq!(adjacency, Adjacency::Left { gap: -200 });
+    assert_eq!(
+        adjacency_decision(adjacency, -200),
+        PairDecision::JoinLeftOffset { offset: -200 }
+    );
+}
+
+/// `defaultx` が許す幅（±2）の内でも、隙間が `defaultx` に近ければその隙間で付ける
+/// （0 に丸めない・audit-placement-core 514）。
+#[test]
+fn a_small_defaultx_gap_is_kept_not_rounded_to_zero() {
+    assert_eq!(
+        adjacency_decision(Adjacency::Left { gap: 2 }, 2),
+        PairDecision::JoinLeftOffset { offset: 2 }
+    );
+    assert_eq!(
+        adjacency_decision(Adjacency::Left { gap: 0 }, 2),
+        PairDecision::JoinLeft
+    );
+    assert_eq!(
+        adjacency_decision(Adjacency::Left { gap: -2 }, -2),
+        PairDecision::JoinLeftOffset { offset: -2 }
+    );
+}

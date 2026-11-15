@@ -486,8 +486,6 @@ fn fill_partner_windows(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<
 pub struct ZOrderGroupLedger {
     /// 基底（あれば先頭）＋タグ由来のグループ列。`groups()` がそのまま貸し出す。
     groups: Vec<ZOrderGroup>,
-    /// 先頭が descript 由来の基底かどうか。真なら `groups[0].source == Descript`。
-    has_base: bool,
     /// 次に配るグループ ID。解除で空いた ID も配り直さない。
     next_id: u32,
     /// 内容が動いた回数（読むのはテストだけ。本番の射影は合成の結果を比べる）。
@@ -564,7 +562,6 @@ impl ZOrderGroupLedger {
 
         self.pending_base = None;
         self.groups.clear();
-        self.has_base = false;
 
         if !members.is_empty() {
             self.seat_base(members);
@@ -585,8 +582,8 @@ impl ZOrderGroupLedger {
     /// シェルの切り替えで据え損ねた基底があり、基底が無ければ、台本の組を落とした後に
     /// それを先頭へ据える（`stay-on-top-directives` 要件 5.5）。
     pub fn reset_to_descript(&mut self) {
-        let keep = usize::from(self.has_base);
-        let seat = if self.has_base {
+        let keep = usize::from(self.has_base());
+        let seat = if self.has_base() {
             None
         } else {
             self.pending_base.take()
@@ -611,8 +608,7 @@ impl ZOrderGroupLedger {
     pub fn rebase_descript(&mut self, members: Vec<GroupElement>) -> RebaseOutcome {
         self.pending_base = None;
 
-        let dropped_base_id = if self.has_base {
-            self.has_base = false;
+        let dropped_base_id = if self.has_base() {
             Some(self.groups.remove(0).id)
         } else {
             None
@@ -649,8 +645,14 @@ impl ZOrderGroupLedger {
                 source: GroupSource::Descript,
             },
         );
-        self.has_base = true;
         id
+    }
+
+    /// 先頭が descript 由来の基底かどうか（基底はいつも先頭に据わる）。
+    fn has_base(&self) -> bool {
+        self.groups
+            .first()
+            .is_some_and(|group| group.source == GroupSource::Descript)
     }
 
     /// グループの読み口（射影が読む）。基底が先頭・以降はタグの追加順。

@@ -860,16 +860,12 @@ pub fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
     if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
         return Some(primary);
     }
-    match monitors.first() {
-        Some(first) => {
-            warn!(
-                monitor_count = monitors.len(),
-                "primary フラグを持つモニタが見つからない（列挙異常）——先頭モニタで代替する"
-            );
-            Some(first)
-        }
-        None => None,
-    }
+    let first = monitors.first()?;
+    warn!(
+        monitor_count = monitors.len(),
+        "primary フラグを持つモニタが見つからない（列挙異常）——先頭モニタで代替する"
+    );
+    Some(first)
 }
 
 /// [`primary_monitor`] の work area（物理 px）を [`RectPx`] へ取り出す（2.12）。

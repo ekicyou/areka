@@ -176,14 +176,17 @@ fn duplicate_mark_keys_are_merged_into_one() {
 }
 
 /// 組の相手が窓の一式に無い（1 体だけのゴースト・最後のスコープの右隣）ときはログなしで飛ばす。
+/// 並べ直しの材料は置く（材料が無いときの `debug!` は別のテストが見る）。
 #[test]
 fn missing_partner_scope_is_skipped_silently() {
-    let single = world_with(&[(0, 1000, 400)]);
+    let mut single = world_with(&[(0, 1000, 400)]);
+    with_basis(&mut single, &[]);
     let (out, events) = capture(|| with_adjacency_marks(&single, pos_batch(0)));
     assert!(marks(&out).is_empty());
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
 
-    let pair = world_with(&[(0, 1000, 400), (1, 600, 400)]);
+    let mut pair = world_with(&[(0, 1000, 400), (1, 600, 400)]);
+    with_basis(&mut pair, &[]);
     let (out, events) = capture(|| with_adjacency_marks(&pair, pos_batch(1)));
     assert_eq!(marks(&out), vec![(1, "left".to_string())]);
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
@@ -201,6 +204,25 @@ fn missing_ghost_windows_adds_no_mark_and_logs_debug() {
             .any(|e| e.target == SAVE_TARGET && e.level == tracing::Level::DEBUG),
         "{events:?}"
     );
+}
+
+/// 並べ直しの材料（`DefaultPlacementBasis`）が無いときは、全スコープを下端・`defaultx` 0 として
+/// 印を決め、その決めを `debug!` 1 行に残す（黙って既定へ落とさない・audit-placement-core 507）。
+#[test]
+fn missing_basis_marks_with_the_bottom_rule_and_logs_debug() {
+    // 0: 1000..1400、1: 600..1000（0 の左に隙間 0）。
+    let world = world_with(&[(0, 1000, 400), (1, 600, 400)]);
+    let (out, events) = capture(|| with_adjacency_marks(&world, pos_batch(0)));
+    assert_eq!(marks(&out), vec![(1, "left".to_string())]);
+    let lines = events
+        .iter()
+        .filter(|e| {
+            e.target == SAVE_TARGET
+                && e.level == tracing::Level::DEBUG
+                && e.message().contains("DefaultPlacementBasis")
+        })
+        .count();
+    assert_eq!(lines, 1, "{events:?}");
 }
 
 /// 印の項目の鍵と語、読み戻し（知らない語は warn! して無し・鍵なしは無し）。
@@ -233,8 +255,8 @@ fn adjacency_entry_and_saved_adjacency_round_trip() {
     );
 }
 
-/// 並べ直しの材料（shell の descript の値だけ）を置く。
-fn with_basis(world: &mut World, shell_kv: &[(&str, &str)]) {
+/// 並べ直しの材料（shell の descript の値だけ）を置く（並べ終えた時点の保存のテストも使う）。
+pub(super) fn with_basis(world: &mut World, shell_kv: &[(&str, &str)]) {
     world.insert_resource(crate::reset_pos::DefaultPlacementBasis {
         source: crate::source::DescriptSource {
             ghost_kv: Default::default(),

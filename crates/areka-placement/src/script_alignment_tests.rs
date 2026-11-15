@@ -14,6 +14,7 @@ use super::super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::super::source::GhostTitles;
 use super::super::spawn::{GhostWindows, spawn_ghost_windows};
 use super::*;
+use crate::reseed::test_support::position_of;
 use crate::shared_test_support::{events_with, one_event_with, placement_sized};
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
@@ -63,10 +64,6 @@ fn balloon_window(world: &World) -> Entity {
     world.resource::<GhostWindows>().balloon_window(0).unwrap()
 }
 
-fn pos(world: &World, e: Entity) -> Point {
-    world.get::<WindowPos>(e).unwrap().position.unwrap()
-}
-
 fn anchor(world: &World) -> Anchor {
     world.get::<Anchored>(char_window(world)).unwrap().0
 }
@@ -88,9 +85,9 @@ fn apply(world: &mut World, scope: u32, word: AlignmentWord) -> (bool, Vec<Captu
 
 /// バルーンは窓の左上からのずらしを保って付いて動く（1.6）。
 fn assert_balloon_follows(world: &World) {
-    let c = pos(world, char_window(world));
+    let c = position_of(world, char_window(world));
     assert_eq!(
-        pos(world, balloon_window(world)),
+        position_of(world, balloon_window(world)),
         Point {
             x: c.x + OFFSET.x,
             y: c.y + OFFSET.y
@@ -179,7 +176,10 @@ fn bottom_to_top_pins_top_edge_keeps_x_and_logs() {
             by_script: true
         }
     );
-    assert_eq!(pos(&world, char_window(&world)), Point { x: 731, y: 37 });
+    assert_eq!(
+        position_of(&world, char_window(&world)),
+        Point { x: 731, y: 37 }
+    );
     assert_balloon_follows(&world);
     assert!(!move_window(&world));
     let e = one_event_with(&events, "alignment_changed");
@@ -194,13 +194,16 @@ fn bottom_to_top_pins_top_edge_keeps_x_and_logs() {
 fn bottom_to_left_and_right_pin_side_edges_keep_y() {
     let mut world = world();
     assert!(apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Left)).0);
-    assert_eq!(pos(&world, char_window(&world)), Point { x: 53, y: 356 });
+    assert_eq!(
+        position_of(&world, char_window(&world)),
+        Point { x: 53, y: 356 }
+    );
     assert_balloon_follows(&world);
 
     let mut world = self::world();
     assert!(apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Right)).0);
     assert_eq!(
-        pos(&world, char_window(&world)),
+        position_of(&world, char_window(&world)),
         Point {
             x: 1877 - 434,
             y: 356
@@ -216,7 +219,10 @@ fn free_keeps_position_and_hands_drag_to_wintf() {
     let (ok, events) = apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Free));
     assert!(ok);
     assert_eq!(anchor(&world), Anchor::Free);
-    assert_eq!(pos(&world, char_window(&world)), Point { x: 731, y: 356 });
+    assert_eq!(
+        position_of(&world, char_window(&world)),
+        Point { x: 731, y: 356 }
+    );
     assert_balloon_follows(&world);
     assert!(move_window(&world), "吸着なしで組に無い窓は wintf が動かす");
     assert_eq!(
@@ -233,7 +239,10 @@ fn unknown_word_is_logged_and_treated_as_free() {
     assert!(ok);
     assert_eq!(anchor(&world), Anchor::Free);
     assert!(source(&world).by_script);
-    assert_eq!(pos(&world, char_window(&world)), Point { x: 731, y: 356 });
+    assert_eq!(
+        position_of(&world, char_window(&world)),
+        Point { x: 731, y: 356 }
+    );
     assert_eq!(
         one_event_with(&events, "alignment_unknown_word").expect_field("word"),
         "middle"
@@ -251,7 +260,10 @@ fn default_returns_to_descript_anchor_and_clears_mark() {
     assert!(apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Left)).0);
     // 左へ沿った後、上下を動かしておく（default で下端へ戻ることを見分けるため）。
     assert!(apply(&mut world, 0, AlignmentWord::Anchor(Anchor::Top)).0);
-    assert_eq!(pos(&world, char_window(&world)), Point { x: 53, y: 37 });
+    assert_eq!(
+        position_of(&world, char_window(&world)),
+        Point { x: 53, y: 37 }
+    );
 
     let (ok, events) = apply(&mut world, 0, AlignmentWord::Default);
 
@@ -265,7 +277,7 @@ fn default_returns_to_descript_anchor_and_clears_mark() {
         }
     );
     assert_eq!(
-        pos(&world, char_window(&world)),
+        position_of(&world, char_window(&world)),
         Point {
             x: 53,
             y: 1043 - 687
@@ -290,7 +302,7 @@ fn alignment_move_does_not_carry_default_position() {
 
     assert_eq!(world.resource::<GhostWindows>().default_char_pos(0), before);
     assert_ne!(
-        pos(&world, char_window(&world)),
+        position_of(&world, char_window(&world)),
         Point {
             x: CHAR_POS.x,
             y: CHAR_POS.y
@@ -306,7 +318,10 @@ fn missing_value_changes_nothing_and_logs() {
     assert!(!ok);
     assert_eq!(anchor(&world), Anchor::Bottom);
     assert!(!source(&world).by_script);
-    assert_eq!(pos(&world, char_window(&world)), Point { x: 731, y: 356 });
+    assert_eq!(
+        position_of(&world, char_window(&world)),
+        Point { x: 731, y: 356 }
+    );
     assert_eq!(
         one_event_with(&events, "alignment_skipped").field_str("reason"),
         Some("missing_value")
@@ -356,7 +371,7 @@ fn unknown_size_changes_anchor_only_and_logs() {
 
     assert!(ok);
     assert_eq!(anchor(&world), Anchor::Top);
-    assert_eq!(pos(&world, e), Point { x: 731, y: 356 });
+    assert_eq!(position_of(&world, e), Point { x: 731, y: 356 });
     assert_eq!(
         one_event_with(&events, "alignment_reanchor_skipped").field_str("reason"),
         Some("char_size_unknown")
@@ -390,7 +405,7 @@ fn dragging_window_changes_anchor_but_defers_reanchor_and_logs() {
     );
     assert!(!move_window(&world));
     assert_eq!(
-        pos(&world, e),
+        position_of(&world, e),
         Point { x: 731, y: 356 },
         "ドラッグ中は辺へ飛ばない"
     );

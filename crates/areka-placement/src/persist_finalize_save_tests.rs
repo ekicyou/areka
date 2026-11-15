@@ -684,3 +684,65 @@ fn clamped_boot_keeps_the_mark_of_the_scope_whose_position_is_written() {
     );
     rig.finish();
 }
+
+/// 古い記憶へ印を書き足す道も、印は descript の `defaultx` を鎖の規則に入れて決める: スコープ 1 が
+/// スコープ 0 の左に `kero.defaultx` の 36 px だけ空けて並ぶと `left`（audit-placement-core 494・506）。
+#[test]
+fn old_memory_mark_uses_the_defaultx_gap_of_the_descript() {
+    let (mut rig, _) = old_memory_rig();
+    super::adjacency_tests::with_basis(&mut rig.world, &[("kero.defaultx", "36")]);
+    let entity = rig.char_window(1);
+    rig.world
+        .get_mut::<WindowPos>(entity)
+        .unwrap()
+        .position
+        .as_mut()
+        .unwrap()
+        .x = 1483 - 381 - 36;
+
+    persist_unremembered_char_positions(&rig.world);
+    let after = rig.load();
+
+    assert_eq!(
+        after
+            .get(&PersistKey::WindowAdjacent { scope: 1 })
+            .map(String::as_str),
+        Some("left"),
+        "{after:?}"
+    );
+    rig.finish();
+}
+
+/// 1 回の並べ終えた時点の保存で、descript の読めない値の `warn!` は 1 度だけ（位置を書くスコープ 0 と
+/// 印だけを書き足す古い記憶のスコープ 1 が同じ回にあっても、鎖の見方を組むのは 1 度・502・508）。
+#[test]
+fn one_finalize_save_warns_once_for_an_unreadable_defaultx() {
+    let mut rig = Rig::new(true);
+    rig.mark_remembered(1);
+    rig.mark_remembered(2);
+    assert!(
+        rig.world
+            .resource_mut::<GhostWindows>()
+            .set_remembered_adjacency(2, Some(AdjacencyMark::Separate))
+    );
+    super::adjacency_tests::with_basis(&mut rig.world, &[("kero.defaultx", "abc")]);
+
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
+    let after = rig.load();
+
+    assert!(window_pos(&after, 0).is_some(), "スコープ 0 は書く");
+    assert!(
+        after.contains_key(&PersistKey::WindowAdjacent { scope: 1 }),
+        "古い記憶のスコープ 1 へ印を書き足す: {after:?}"
+    );
+    let warns = events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN
+                && e.message().contains("配置キーの数値化に失敗")
+                && e.field_str("key") == Some("defaultx/defaultleft")
+        })
+        .count();
+    assert_eq!(warns, 1, "{events:?}");
+    rig.finish();
+}
