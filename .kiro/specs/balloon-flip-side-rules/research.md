@@ -289,3 +289,9 @@ SSP 2.9.34（20261113-4）を `C:\wintools\ssp\ssp.exe` で起こし、MCP の `
 
 - 2.6 節の表のとおり、右に固定で descript の横のずらしが 0 でない同梱の検体は 0 本。変わるのは `none` の emily4・claudia・konnoyayame が右に決まった場面だけで、emo2（descript の横のずらし無し）は 1 ピクセルも変わらない。
 - 配布版のぱすたの kero の `balloon.alignment`・`balloon.offsetx`（R4・リポジトリの外）は、実装のタスクで読んで（写すなら `target\` の下）この節に書き足す。brief と完了 spec 4.4 の記録では kero は左に置かれ、ずらしは 0 なので、変わらない見込み。
+
+## 11. 設計の話し合いの決めごとの根拠（2026-11-16）
+
+- 開発者が設計の全議題（5 件）を推奨案で一括承認した。中身は `design.md` の「決めごと」D1〜D5。
+- D1（判定し直しを 3 つの場面に広げる）の根拠は `design-validation.md` の重大な指摘 1。`reset_pos.rs` の `reset_window_positions` と `chain_realign.rs` の `realign_chain_once_with` は、起動の並べ直しと同じく `move_window_to` で窓を 1 つずつ書き、自分のバルーンだけを付いて来させる。
+- D5（`windowposition.x` の注記）: ukadoc の文言は ukatech/ukadoc の f92e4ff9（2026-09-20）で「数値指定の場合シェル側が+、シェルから離れる側が-」から「バルーンを左右どちらに出していても常に右方向が+。シェルのballoon.offsetxと違い、右に出す時も符号が反転しない」に改まった（`gh api repos/ukatech/ukadoc/commits/f92e4ff9` の `manual/descript_balloon.html` の差分で確かめた）。2026-07-31 の SSP の実測（`windowposition.rs` の表・COMPAT §8 166 行目）と一致するので、この項目に ukadoc と SSP の食い違いは残っていない。

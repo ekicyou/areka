@@ -11,7 +11,7 @@
 ### Goals
 
 - 映した先がほかのスコープのキャラ窓に 1 ピクセル以上重なる（自分の窓と重なる部分を除く）とき、並べ替えずに今の押し込みで置く（2.1〜2.9）。
-- 起動の並べ直しがキャラ窓を動かした後も、動いた後の矩形で判定し直す（2.10）。
+- 起動の並べ直し・シェル位置初期化・拡大率が変わった後の解き直しがキャラ窓を動かした後も、動いた後の矩形で判定し直す（2.10）。
 - 初めから右に出たバルーンと、左から並べ替えて右に来たバルーンを、descript の `balloon.offsetx` の分について同じ位置にする（3.1〜3.4）。
 - 今の記録の行 `[balloon-limit] Clamp` に欄を 1 つ足すだけで、押し込みの理由を見分けられる（4.1〜4.4）。
 - 重ならず横のずらしが 0 のバルーンは 1 ピクセルも動かさない（6.4）。
@@ -31,7 +31,8 @@
 
 - 並べ替えの判定に「ほかのスコープのキャラ窓との重なり」の段を足すこと（`place_balloon_in_work_area` と `BalloonPlace`）。
 - 2 つの関門が判定へ渡す「判定に入れるキャラ窓の矩形の列」を組むこと（起動の関門＝`ScopePlacement` の列から、書き込みの関門＝`GhostWindows` と `WindowPos` と表示の有無から）。
-- 起動の並べ直しが済んだ巡に 1 度だけ全スコープのバルーンを判定し直す系（`areka-placement` の中の系と、その登録の口）。
+- 起動の並べ直し・シェル位置初期化・拡大率が変わった後の解き直しの後に全スコープのバルーンを判定し直すこと（素の関数 `rejudge_all_balloons`・起動の並べ直しの系とその登録の口・`reset_pos.rs` と `chain_realign.rs` からの呼び出し各 1 行）。
+- `crates/areka-placement/src/windowposition.rs` の `windowposition.x` の古い注記の直し（設計の話し合いの議題 5）と、§8 の `windowposition.x` の符号規約の行の ⚠ の直し。
 - P5 の右の腕の横のずらしの向きと、そのための `ScopeConfig` の欄（descript の `balloon.offsetx` の分）。
 - `[balloon-limit] Clamp` の行の欄 1 つ（重なったほかのスコープ）。
 - 決定論のテスト（件 1・件 2・2.10）と、`doc/COMPAT_ARCHITECTURE.md` §8 の該当の行の書き足し。
@@ -43,7 +44,7 @@
 - 押し込みの式（`clamp_rect_to_work_area`・`limit_correction`）・ドラッグを離したときの補正（`on_balloon_drag_end`）。
 - キーワードの横の位置（`keyword_balloon_pos`・`rederive_keyword_balloon_offset`）・縦のずらし・`windowposition.y`。
 - 記憶の合流（`persist::merge_scope`）。保存の値はそのまま使う（3.6）。
-- `windowposition.rs` の換算と合流（`to_screen_adjust`・`apply_windowposition`）の式。
+- `windowposition.rs` の換算と合流（`to_screen_adjust`・`apply_windowposition`）の式（注記の文だけを直し、式は変えない）。
 - 記録の語（`[balloon-limit] Clamp`・`[balloon-limit] Unresolved`・`how` の `fits`／`flipped`／`pushed`・`PlacementRoute` の語）の追加と変更。
 
 ### Allowed Dependencies
@@ -52,7 +53,7 @@
 - `balloon_limit.rs` は今どおり `bevy_ecs`・`wintf` を import しない（`MonitorSnapshot` と `work_area_for_window` の消費は今の例外のまま）。
 - `follow/other_chars.rs`（新設）が使ってよいのは、`bevy_ecs`（`World`・`Children`・`resource_added`）・`wintf::ecs`（`WindowPos`・`Visual`・`FrameFinalize`）・同じ crate の `GhostWindows`・`ChainFinalized`・`follow_balloon`・`BalloonFollowTrigger`・`PlacementRoute::MoveCue`・`window_rect_of`・`BALLOON_LIMIT_UNRESOLVED_TAG`。
 - 新しい外部の crate は足さない。`Cargo.toml` は変えない。
-- `crates/areka/src/ghost_session.rs`（`runtime/` の外）の `register_systems` に、登録の 1 行だけを足してよい（前提 A3・未決の論点 3）。
+- `crates/areka/src/ghost_session.rs`（`runtime/` の外）の `register_systems` に、登録の 1 行だけを足してよい（決めごと D4）。実装の段の初めに `runtime-crate-split` のセッションへこの 1 行を知らせる。
 
 ### Revalidation Triggers
 
@@ -148,6 +149,10 @@ crates/areka-placement/src/
     └── window_move.rs               # 書き込みの関門に矩形の列を渡す・記録の欄・window_rect_of を pub(super) に
 crates/areka/src/
 └── ghost_session.rs                 # register_systems に登録の 1 行（runtime/ の外）
+crates/areka-placement/src/ (続き)
+├── reset_pos.rs                     # reset_window_positions の書き込みの後に rejudge_all_balloons を 1 行
+├── chain_realign.rs                 # realign_chain_once_with の書き込みの後に rejudge_all_balloons を 1 行
+└── windowposition.rs                # windowposition.x の古い注記を今の ukadoc に合わせる（式は変えない）
 doc/
 └── COMPAT_ARCHITECTURE.md           # §8「【上書き】バルーンだけが作業領域からはみ出すとき」の行
 .kiro/specs/balloon-flip-side-rules/
@@ -163,6 +168,9 @@ doc/
 - `crates/areka-placement/src/lib.rs` — `apply_author_balloon_offset_scale` が換算後の x を `balloon_offset_descript_x` にも書く（`balloon_offset` と同じ値・`windowposition` の合流の前）。
 - `crates/areka-placement/src/resolver.rs` — P5 の `None` の腕で、右に出すときだけ横のずらしを `ox − 2 × balloon_offset_descript_x` にする（右端 − descript の分 ＋ `windowposition.x` の分）。左の腕とキーワードの腕は変えない。
 - `crates/areka/src/ghost_session.rs` — `register_systems` の末尾に `areka_placement::follow::register_balloon_rejudge(world);` を 1 行。
+- `crates/areka-placement/src/reset_pos.rs` — `reset_window_positions` が全スコープを書き終えた後に `rejudge_all_balloons(world)` を 1 行。
+- `crates/areka-placement/src/chain_realign.rs` — `realign_chain_once_with` が全スコープを書き終えた後に `rejudge_all_balloons(world)` を 1 行。
+- `crates/areka-placement/src/windowposition.rs` — 冒頭の説明（22〜24 行目）と `to_screen_adjust` の「符号規約」節（153〜158 行目）の「正典は…シェル側が+…と記述する／この文言との乖離は互換対応表の記録対象」を、今の ukadoc（2026-09-20 に「バルーンを左右どちらに出していても常に右方向が+」へ改まり SSP の実測と一致）に合わせる。式と表は変えない。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の該当の行に件 1・件 2 の扱いと SSP 2.9.34 の測り（並べ替えも押し込みもしない）を足し、「測っていない」の記述を置き換える（5.4）。
 
 ## System Flows
@@ -208,7 +216,7 @@ sequenceDiagram
     end
 ```
 
-- 引き金は `ChainFinalized` の挿入（起動の並べ直しの終わりの印）だけ。台本の `\![move]`・ドラッグ・面の切り替えの随伴では走らない（2.7）。
+- 判定し直しの本体は素の関数 `rejudge_all_balloons(world)`。呼ぶのは 3 か所＝`ChainFinalized` の挿入で走る系（起動の並べ直し）・`reset_window_positions`（シェル位置初期化）・`realign_chain_once_with`（拡大率が変わった後の解き直し）の書き込みの後。台本の `\![move]`・ドラッグ・面の切り替えの随伴では走らない（2.7）。
 - 全スコープのバルーンを今のキャラ窓の位置で随伴させ直す。判定は状態を持たないので、窓が 1 つも動いていない巡でも、ほかの窓の矩形が変わっていなければ結果は今の位置と同じになる（前提 A1）。
 - 随伴の引き金は `BalloonFollowTrigger::Placement(PlacementRoute::MoveCue)`（並べ直しの書き込みと同じ・可視性の守りを当てない）。バルーンの書き込みは今どおり `PlacementRoute::BalloonFollow` を名乗る。新しい経路の語は作らない。
 
@@ -232,7 +240,7 @@ sequenceDiagram
 | 2.7 | 置く・書き込む時点と 2.10 だけ | RejudgeSystem・RuntimeGate | `resource_added::<ChainFinalized>` だけが引き金 | 判定し直し |
 | 2.8 | スコープ数を決め打ちしない | BootGate・OtherChars | 列は全スコープを回す | 並べ替えの判定 |
 | 2.9 | 窓の矩形で数える | FlipJudge・OtherChars | `WindowPos`／`ScopePlacement` の矩形 | — |
-| 2.10 | 起動の並べ直しの後に判定し直す | RejudgeSystem | `register_balloon_rejudge`・系 `rejudge_balloons_after_chain_finalize` | 判定し直し |
+| 2.10 | 起動の並べ直し・シェル位置初期化・拡大率の解き直しの後に判定し直す | RejudgeSystem | `rejudge_all_balloons`・`register_balloon_rejudge`・系 `rejudge_balloons_after_chain_finalize`・`reset_pos.rs`／`chain_realign.rs` の呼び出し | 判定し直し |
 | 3.1 | 右は「右端 − descript の分」・`windowposition.x` は右向き | P5RightArm・DescriptOffsetField | `ScopeConfig.balloon_offset_descript_x` | — |
 | 3.2 | 左は今のまま | P5RightArm | 左の腕は変えない | — |
 | 3.3 | 初めから右＝並べ替えて右（descript の分） | P5RightArm・FlipJudge | 映しの式は今のまま | — |
@@ -381,7 +389,7 @@ pub(super) fn shown_char_rects(world: &World) -> Vec<(usize, RectPx)>;
 
 | Field | Detail |
 |-------|--------|
-| Intent | 起動の並べ直しが済んだ巡に 1 度だけ、全スコープのバルーンを今のキャラ窓の位置で判定し直す |
+| Intent | 起動の並べ直し・シェル位置初期化・拡大率の解き直しが窓を書き終えた後に 1 度だけ、全スコープのバルーンを今のキャラ窓の位置で判定し直す |
 | Requirements | 2.7, 2.10, 4.4 |
 
 **Responsibilities & Constraints**
@@ -405,7 +413,11 @@ pub(super) fn shown_char_rects(world: &World) -> Vec<(usize, RectPx)>;
 /// 判定し直しの系をプロセスに 1 回だけ載せる（`ghost_session::register_systems` から）。
 pub fn register_balloon_rejudge(world: &mut World);
 
-/// 起動の並べ直しの後の判定し直し（要件 2.10）。
+/// 全スコープの `BalloonLimit(true)` のバルーンを今のキャラ窓の位置で判定し直す（要件 2.10）。
+/// 呼び手＝下の系・`reset_window_positions`・`realign_chain_once_with`（書き込みの後）。
+pub(crate) fn rejudge_all_balloons(world: &mut World);
+
+/// 起動の並べ直しの後の判定し直しの系（`ChainFinalized` の挿入で 1 度・中身は `rejudge_all_balloons`）。
 fn rejudge_balloons_after_chain_finalize(world: &mut World);
 ```
 
@@ -446,6 +458,7 @@ fn rejudge_balloons_after_chain_finalize(world: &mut World);
 
 #### CompatDoc
 
+- `doc/COMPAT_ARCHITECTURE.md` 166 行目（`windowposition.x` の符号規約）の「⚠ ukadoc は…シェル側が+…と記しており、参照実装の挙動はこの文言と食い違う」を、「ukadoc は 2026-09-20（ukatech/ukadoc の f92e4ff9）に『バルーンを左右どちらに出していても常に右方向が+』へ改まり、SSP の実測と一致した」に改める（議題 5）。
 - `doc/COMPAT_ARCHITECTURE.md` 431 行目の行に足す: ⑴ 映した先がほかのスコープのキャラ窓（自分の窓と重なる部分を除く・表示している窓だけ・窓の矩形で数える）に重なるときは並べ替えず押し込む・押し込んだ結果の重なりは許す・起動の並べ直しの後に判定し直す ⑵ 右に出すバルーンの descript の `balloon.offsetx` は ukadoc どおり左向きが＋（SSP は測っていない）・`windowposition.x` の数値は左右とも右向き ⑶ SSP 2.9.34 は、キャラ窓が収まりバルーンだけが横にはみ出す形で、`\![move]` でもドラッグでもバルーンを並べ替えも押し込みもしない（`research.md` 9 節）ので、並べ替え・押し込み・件 1 の判定・件 2 の映しはどれも areka の裁量 ⑷ 記録の欄 `overlap_scope`。「測っていない」の記述（P5 の符号）を置き換える。並べ替えを残すかの見直しは `balloon-flip-ssp-review` が持つと書く。
 
 ## Data Models
@@ -488,6 +501,7 @@ fn rejudge_balloons_after_chain_finalize(world: &mut World);
 1. 起動の関門: 2 スコープの `ScopePlacement` で本体のバルーンの映した先が相方の窓に重なる → 本体の `balloon_pos` が押し込みの位置・`[balloon-limit] Clamp` が `how="pushed"`・`overlap_scope=Some(1)`・`context="boot-gate"` で 1 行（2.3・4.1・4.2）。重ならない形は `how="flipped"`・`overlap_scope=None`。
 2. 書き込みの関門（headless の World・`spawn_ghost_windows`）: 相方のキャラ窓の子の `Visual` が可視で重なる → 押し込み＋`overlap_scope=Some(1)`（2.3）。同じ形で子の `Visual` を全部不可視にする → 並べ替え（2.6）。相方の `WindowPos` の寸が未確定 → 並べ替え（2.6）。
 3. 判定し直し（2.10）: 相方の窓を重ならない位置に置いて本体のバルーンを並べ替えた後、`move_window_to` で相方の窓を映した先に重なる位置へ動かし、`ChainFinalized` を入れて系を回す → 本体のバルーンが押し込みの位置に書かれる。直す前（系なし）は並べ替えた位置のまま（赤）。
+3a. シェル位置初期化と拡大率の解き直し（2.10）: 本体を先に動かす順で相方の窓が本体のバルーンの映した先に重なる位置へ戻る形を、`reset_window_positions` と `realign_chain_once_with` で 1 回ずつ回す → 本体のバルーンが押し込みの位置に書かれる。直す前（呼び出しなし）は並べ替えた位置のまま（赤）。
 4. 置き直さない（2.7）: `ChainFinalized` を入れずに `move_window_to` で相方の窓を動かす（台本の `\![move]` と同じ道）→ 本体のバルーンは動かない。`ChainFinalized` が入った後の 2 回目の巡では系が走らない。
 5. 判定し直しで動かない（6.4）: どの窓も重ならない形で `ChainFinalized` を入れて系を回す → 全バルーンの `WindowPos` が回す前とビット同一で、`[balloon-limit] Clamp` の行が増えない。`windowposition.limit,0` のバルーンは系の対象に入らない（書き込みが 1 つも出ない）。既存の檻は `register_systems` を通らずこの系を回さないので、この檻を別に置く。
 6. 6.4 の見張り: 既存の `balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`spawn_follow_pipeline_tests.rs`・`placement_windowposition_tests.rs` がそのまま緑（`reseed_tests.rs` の右の sakura の 4 か所だけ期待値を書き換える）。
@@ -496,11 +510,11 @@ fn rejudge_balloons_after_chain_finalize(world: &mut World);
 
 - 実機の通しは要件に無い。`[balloon-limit] Clamp` の `overlap_scope` 欄は、後の実機サインオフで grep できる形にしておく。
 
-## 前提と未決の論点（設計の話し合いへ）
+## 決めごと（2026-11-16 設計の話し合い・開発者が全議題を推奨案で一括承認）
 
-- **A1（2.10 の判定し直しの範囲）**: `ChainFinalized` が入った巡に、動いた窓のほかのスコープだけでなく**全スコープ**のバルーンを 1 度ずつ随伴させ直す（動いた窓は `place_chain_in_work_area` の戻りでしか分からず、それは `runtime/` の中にある）。判定は状態を持たないので、窓が動いていなければ結果は同じ。記憶からの隣り合わせ（`RememberedJoin`）の巡も同じく走る。
-- **A2（2.6 の「表示している」の読み方）**: キャラ窓の子の `Visual.is_visible` のどれかが真なら表示している、とする。`areka-placement` には今キャラ窓の表示の有無を表す Component が無く、`\s[-1]` は子の描画面の `Visual` を不可視にする（`areka-emo-present` の `VisualMount::set_visible`）。
-- **A3（登録の場所）**: 系の登録は `areka-placement` の `register_balloon_rejudge` に置き、呼ぶ 1 行を `crates/areka/src/ghost_session.rs`（`runtime/` の外）に足す（`balloon_syncscale::register` と同じ形）。
-- **A4（記録の欄の名前と形）**: 欄の名前は `overlap_scope`、値は `Option<usize>` を `?` で出す（押し込みの理由が重なりでないときも `None` で出る）。
-- **A5（判定し直しの場面）**: 判定し直しは起動の並べ直しの終わり（`ChainFinalized` の挿入）だけ。シェル位置初期化（`reset_pos`）・拡大率の遷移の後の解き直し（`chain_realign`・`ClampScene::DpiRealign`）では判定し直さない（2.10 は起動の並べ直しだけを名指す）。
-- **A6（`windowposition.x` の古い注記）**: `crates/areka-placement/src/windowposition.rs` 155〜157 行目の注記は、ukadoc の `windowposition.x` を「シェル側が+」と書くとして SSP との乖離を記録しているが、今の ukadoc は「バルーンを左右どちらに出していても常に右方向が+」と書く（`research.md` 7 節の付記）。§8 を書くとき（5.4）に §8 の該当の記述だけを確かめて合わせ、`windowposition.rs` の注記は直さない（この spec の境界の外）とする。
+- **D1（判定し直しの場面・議題 1）**: 起動の並べ直し（`ChainFinalized` の挿入）・シェル位置初期化（`reset_window_positions`）・拡大率が変わった後の解き直し（`realign_chain_once_with`・`ClampScene::DpiRealign`）の 3 か所で、窓を書き終えた後に `rejudge_all_balloons` を呼ぶ。要件 2.10・2.7 を 3 つの場面に広げた。どれも `areka-placement` の中で、`runtime/` に触れない。
+- **D2（判定し直しの範囲・議題 2）**: 動いた窓の相方だけでなく、全スコープの `BalloonLimit(true)` のバルーンを 1 度ずつ随伴させ直す。動いた窓は `runtime/` の中でしか分からず、判定は状態を持たないので、窓が動いていなければ結果は同じ。
+- **D3（「表示している」の読み方・議題 3）**: キャラ窓の子の描画面の `Visual.is_visible` のどれかが真なら表示している（OtherChars）。新しい Component は足さない。
+- **D4（登録の場所・議題 4）**: `crates/areka/src/ghost_session.rs`（`runtime/` の外）の `register_systems` の末尾に 1 行。`runtime/zorder_wiring_tests.rs` の字面の読みは末尾の 1 行で崩れない。実装の段の初めに `runtime-crate-split` のセッションへ知らせる。
+- **D5（`windowposition.x` の古い注記・議題 5）**: `windowposition.rs` の注記（22〜24 行目・153〜158 行目）と、`doc/COMPAT_ARCHITECTURE.md` 166 行目の ⚠ を、今の ukadoc に合わせて直す。ukadoc は 2026-09-20（ukatech/ukadoc の f92e4ff9「バルーンオフセットの方向サフィックス記法を整理し足元(bottom)を追加」）で `windowposition.x` を「バルーンを左右どちらに出していても常に右方向が+。シェルのballoon.offsetxと違い、右に出す時も符号が反転しない」に改め、2026-07-31 の SSP の実測（emo2 で左右とも素の画面の向き）と一致した。ukadoc と SSP の食い違いは、この項目では残っていない。式と表は変えない。
+- **記録の欄（前提 A4 のまま）**: 欄の名前は `overlap_scope`、値は `Option<usize>` を `?` で出す。
