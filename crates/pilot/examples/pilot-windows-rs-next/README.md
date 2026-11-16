@@ -132,7 +132,8 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 | 3 | `wintf/src/com/dwrite.rs` | 154 | 既定: +28／−15（末尾の試験の 3 行を消した分を含む） | | |
 | 3 | `wintf/src/com/d2d/mod.rs` | 158 | 既定: +3／−5 | | |
 | 3 | 既定の形で新しく足した `build.rs`・`filters.txt`・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +11・+47・+214／−1・+2 | | |
-| 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | 既定（3.1）: 写しの書き換え +31／−20（新しいファイルを入れて +305／−21） | 既定: 4 | 既定: 約 7 分 |
+| 3 | `.minimal()` で新しく足した `build.rs`・`filters.txt`・`src/bindings.rs`（束縛の取り込み＋手書きの包み）・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +12・+49・+78・+211／−1・+2 | | |
+| 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | 既定（3.1）: 写しの書き換え +31／−20（新しいファイルを入れて +305／−21）。`.minimal()`（3.2）: 写しの書き換え +31／−20（既定と同じ）（新しいファイルを入れて +383／−21） | 既定: 4・`.minimal()`: 1 | 既定: 約 7 分・`.minimal()`: 約 6 分 |
 | 4 |  |  |  |  |  |
 | 6 |  |  |  |  |  |
 
@@ -178,7 +179,7 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 ### 問い 3: 束縛の形（既定か `.minimal()`）
 
 - 見立ての候補: （3.3 で 2 形を比べてから書く）
-- 確かめた日: 2026-11-16（既定の形・x64・3.1）
+- 確かめた日: 2026-11-16（既定の形・x64・3.1）／2026-11-16（`.minimal()` の形・x64・3.2）
 - 既定の形（`q3-default`・3.1）:
   - 束縛: `q3-default/build.rs` が既定の形（`.flat()` だけ足す）で `OUT_DIR/bindings.rs` を書く。フィルター `q3-default/filters.txt` は 47 行で、名指しは 44（写しの分が 18・確かめの bin の分が 26・`//` の注が 3 行）。生成した `bindings.rs` は **8,889 行**。頼るのは `windows-core`・`windows-numerics`（`Matrix3x2`／`Vector2`／`Matrix4x4` を束縛がこの名で出す）と、写しの `tracing`。
   - 書き換え（`git diff --numstat a2288ed43 -- q3-default`。作業木と写した直後の比べで、まだ追跡していない新しいファイルも数えた）: 写しは `dwrite.rs` +28／−15・`d2d/mod.rs` +3／−5（計 +31／−20）。ほかに `Cargo.toml` +2、新しいファイルの `build.rs` +11・`filters.txt` +47、確かめの bin の `src/main.rs` +214／−1（骨組みの 1 行と差し替え）。全部で +305／−21。手間は直し 4 回（組み 3 回・clippy 1 回）・約 7 分。
@@ -205,6 +206,22 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
   - `HRESULT::from_win32` はこの rev の `windows-result` に無い。`HRESULT::from_components(1, FACILITY_WIN32, ERROR_INSUFFICIENT_BUFFER)` で組んだ。
   - 写しの `create_text_format` は 8 引数で、clippy の `too_many_arguments`（-D warnings）に止められる。写しは変えずに、bin の根に `#![allow(clippy::too_many_arguments)]` を置いた。
   - 写しの中の失敗の扱いは元を保った（`sizing_outcome` の `tracing::error!`＋`Err`）。bin の失敗は `[q3-default] error=` を出して終了コード 2 で終わる。墨が 0 ならそれも失敗にする。
+- `.minimal()` の形（`q3-minimal`・3.2）:
+  - 束縛: `q3-minimal/build.rs` が `.flat()`＋`.minimal()` で `OUT_DIR/bindings.rs` を書く（`.flat()` は 3.1 と同じ条件で比べるために付けた）。フィルター `q3-minimal/filters.txt` は 49 行で、3.1 の 47 行に `ID3D11Device` の名指しを 1 つ（と注を 1 行）足した。生成した `bindings.rs` は **8,056 行**（既定は 8,889 行）。`ID3D11Device` を名指ししないと 6,172 行だが、それでは包みが装置を型で受けられない。既定の形では `D3D11CreateDevice` の包みが `ID3D11Device` を引くので、名指ししなくても出る。
+  - `.minimal()` が出さない物（この rev の `windows-bindgen` の `lib.rs` の `Style::Minimal`・`cpp_fn.rs` 192 行）: 自由関数は生の `link!` だけになる（ポインタと `HRESULT`。`Option`・`Param`・`Result` の包みなし）。取っ手は裸の別名になる（`HMODULE = *mut HINSTANCE__` で、`Default` が無い）。継いだメソッドの転送は出ない。文字列の包み（`&str`／`String`）は WinRT の `HSTRING` の引数と戻り値にだけ効く。COM のメソッドの包みは既定と同じ形で出る（`Option<*const T>`・`Result<T>`・`Param<T>`）。
+  - 手書きの包み（`q3-minimal/src/bindings.rs`・**78 行**・束縛の取り込みの 5 行を含む）: 自由関数 4 本（`CoInitializeEx`・`D3D11CreateDevice`・`D2D1CreateFactory`・`DWriteCreateFactory`）を、既定の形と同じ呼び方で同じ名前のまま書いた。自分のモジュールに書いた名前は `pub use raw::*` の glob より強いので、写しも bin も `use bindings::*` のままで包みに届く。
+    - 継いだメソッドの転送は書かずに済んだ。`.minimal()` も `interface_hierarchy!` と `Deref` の鎖は出す（`Deref` の impl は 69 個・既定は 43 個）。基のインターフェースを名指ししてあれば（3.1 と同じフィルター）、`ctx.Clear`・`ctx.BeginDraw`・`dw.CreateTextFormat` ほかは鎖をたどって元の呼び方で届く。
+    - 文字列の包みも書かずに済んだ。Win32 の `PCWSTR`／`*const WCHAR` の引数は既定と同じ形で出る。
+    - 取っ手の便利な口は包みにせず、bin の 1 行で受けた（`HMODULE::default()` を `core::ptr::null_mut()` にした）。
+  - 書き換え（`git diff --numstat 09970d23a -- q3-minimal`。作業木と写した直後の比べで、まだ追跡していない新しいファイルも `wc -l` で数えた）: 写しは `dwrite.rs` +28／−15・`d2d/mod.rs` +3／−5（計 +31／−20。3.1 の書き換えをそのまま当てて 1 字も変わらない）。末尾の `#[cfg(test)] #[path = "dwrite_cluster_tests.rs"] mod tests;`（3 行）は 3.1 と同じく消した（−15 に入っている）。ほかに `Cargo.toml` +2、新しいファイルの `build.rs` +12・`filters.txt` +49・`src/bindings.rs` +78、確かめの bin の `src/main.rs` +211／−1。全部で +383／−21。bin が 3.1 と違うのは、`mod bindings { include! }` の 4 行を `mod bindings;` の 1 行にしたことと、`HMODULE::default()` の 1 行と、出力の名前（`[q3-minimal]`）だけ。手間は直し 1 回（組み 1 回で、自由関数 4 本の 8 つの誤り。包みを書いて次の組みで通った。clippy・fmt は一度で通った）・約 6 分。
+  - 確かめの bin（x64・debug・実の GPU・画面の外の描画なので机は取らない）: `target/pilot-windows-rs-next/debug/q3-minimal.exe` の終了コードは 0。中身は 3.1 と同じ（Segoe UI・20 DIP・ja-jp・`q3 default 墨`・256×64）。**α>0 の墨の画素は 722**（3 回走らせて 3 回とも同じ。3.1 と同じ）・クラスタは 12・`overhang_right=-142.13281`（3.1 と同じ）。
+  - `==`（`assert` は全部通った。`.minimal()` でも番地だけの比べに変わらない）:
+    - `cast` で `IUnknown` を通って戻した `ID2D1CommandList` と比べると真。`IUnknown` の `cast` と `into` の比べも真。別の `ID2D1CommandList` とは偽。
+    - 番地の違う参照: 同じ D3D11 の装置を `ID3D11Device` と `IDXGIDevice` から `IUnknown` へ `into` で移すと、番地が違うのに `==` は真だった（`raw_d3d=0x2cf5fc81770`・`raw_dxgi=0x2cf5fc80f78` ほか 3 回とも番地が違って真）。`PartialEq` は束縛でなく `windows-core` の `IUnknown::eq` の持ち物なので、束縛の形を変えても COM の同一性の比べは残る。
+- 学び（`.minimal()` の形）:
+  - この写しの範囲（COM のメソッドが主で、自由関数は 4 本）では、`.minimal()` で手書きが要ったのは自由関数の包みだけだった（78 行）。呼ぶ側は bin の 2 か所が変わっただけ。
+  - `.minimal()` は自由関数が引く型を連れてこない（`D3D11CreateDevice` の `ID3D11Device`）。包みが型で受けたいなら、フィルターで名指しする。
+  - 取っ手が裸のポインタの別名になるので、`HMODULE::default()` のような便利な口は使えない。取っ手を多く扱う写し（問い 1・5 の窓の取っ手）では、ここの書き換えが増えると見る。
 - 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
 - 判定: （開発者が下す）
 
