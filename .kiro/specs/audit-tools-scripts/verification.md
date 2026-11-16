@@ -188,3 +188,107 @@
 | `tools/release-notes.strings.json` | 11 |
 | `tools/release-notes-fixture/spec-names.txt` | 9 |
 | 計（25 ファイル） | 5,274 |
+
+## タスク 11.4: 既定のブランチとの差分での約束の確かめと記録のまとめ
+
+確認日: 2026-11-17。検査した `HEAD` は `adbb5badf3774d22d391b5602ee44db95187833b`、既定のブランチ `origin/main` は `5b3a361c95c5fb494fdf7845576cf20f1aa20c07`（`git fetch origin main` の後）。読み取りの命令だけを回した。
+
+11.3 の全体テストの結果: 全 21 段が OK・最終行 `all steps green`・検査したコミット `adbb5badf`（詳しくは下の「タスク 11.3」の節）
+
+### 記録がそろっているかの確かめ
+
+- タスク 8（比べ直しの結果・判定の追加・落ちることの確かめ）: 上の「タスク 8」の節に在る
+- タスク 11.1（`runtime-crate-split` の着地の有無と取った道）: 上の「タスク 11.1」の節に在る
+- タスク 11.2（かけ直しの回数・各回の指摘の数・最後の 0 件・消す前の grep・各ファイルの行数）: 上の「タスク 11.2」の節に在る
+- タスク 11.3（全体テストの結果）: 上の 1 行の位置に書く
+
+### 9.5 の確かめ（差分の命令と結果）
+
+7.3 のファイルなど差分が 0 件でなければならない所（命令: `git diff --stat origin/main...HEAD -- Cargo.lock ':(glob)**/Cargo.toml' crates/ doc/COMPAT_ARCHITECTURE.md vendors/ .github/workflows/crates-io.yml`）:
+
+- 結果: 出力なし（差分 0 件）。内訳として `Cargo.lock`・`Cargo.toml` の全部・`crates/` の全部（`crates/areka/src/runtime/`・`crates/areka-runtime/` を含む）・`doc/COMPAT_ARCHITECTURE.md`・`vendors/`・`.github/workflows/crates-io.yml` のどれも 0 件
+
+`tools/perf/`（命令: `git diff --name-only origin/main...HEAD -- tools/perf`）:
+
+- 結果: `tools/perf/perf-loop.common.ps1`・`tools/perf/perf-loop.ps1`・`tools/perf/perf-loop.selftest2.ps1` の 3 本だけ。ほかの `tools/perf/` のファイルは 0 件
+
+全体の差分（命令: `git diff --stat origin/main...HEAD`）は 38 ファイル（3456 行足し・658 行消し）。中身は `tools/` の道具とその見本、読み手の文書（`doc/impl-watch.md`・`doc/release-notes/README.md`・スキル 3 本）、`.github/workflows/release.yml`、`.kiro/steering/` の 2 本、この spec の文書のみ。`crates/`・`vendors/`・`Cargo.*` は 1 本も無い。
+
+`tech.md`・`structure.md` の変わった行（命令: `git diff -U0 origin/main...HEAD -- .kiro/steering`）:
+
+| ファイル | 変わった行 | 申し合わせた範囲との突き合わせ |
+|---|---|---|
+| `.kiro/steering/structure.md` | 19 行（1 行を書き替え）だけ。新しい 4 本（`tool-common.ps1`・`exe-install.ps1`・`exe-install.selftest.ps1`・`package.selftest.ps1`）を `tools/` の説明へ足した | 自分の行（19 行）。相手の行（171 行・273〜295 行・434〜452 行）に変更なし |
+| `.kiro/steering/tech.md` | 98〜104 行に新しい 7 段を 1 行ずつ足し、117 行に「Python 3.11 以上」を 1 行足した（ほかの行の変更なし） | 自分の行（Testing の段の一覧の追記・Required Tools）。相手の 90 行に変更なし。相手が「触らない」とした段の一覧の 76〜88 行にも変更なし |
+
+外への約束の変わり（設計の「外への約束の変更」の表との突き合わせ）:
+
+| 表の番号 | 差分で見えたもの |
+|---|---|
+| 1 | `tools/release-notes.ps1`・見本（`tools/release-notes-fixture/`）・`doc/release-notes/README.md` |
+| 2・3 | `tools/exe-install.ps1`・`tools/impl-watch-install.ps1`・`tools/mcp-bridge-install.ps1`・`doc/impl-watch.md` |
+| 6（表の番号。直し方の一覧の 6＝押したボタンの離しを `finally` へ移す直しは約束を変えない） | `tools/mouse-input.ps1`（`-SelfTest`）・`tools/test-all.ps1` の段 |
+| 9 | `tools/package.ps1`・`tools/package.selftest.ps1`・`tools/test-all.ps1`・`tech.md`・`kiro-complete` |
+| 10・11・12 | `tools/exe-install.selftest.ps1`・`tools/load-flake.ps1`・`tools/app-icon.ps1`・`tools/cursor-art.ps1` と同じ読み手 |
+| 14 | `.github/workflows/release.yml`（段「版の検査」の本文を `Get-ArekaVersion` の呼び出しへ・差分はこの 1 段だけ）・`tools/encoding-check.ps1` の規則 E の表 |
+| 15 | `tools/package.ps1` の `Exit-Script`（`Show-Ascii $Message 0`）と `tools/crates-io.ps1` の `Fail`（`Format-FailLine`）が、失敗の行の ASCII 以外の字を `\uXXXX` で出す。字面で読む読み手は無い・リリースに効く |
+| 18（設計の表に無い・タスクの文が名指す 18。直し方の一覧の 18） | `Show-Ascii` を `tools/tool-common.ps1` へ寄せたことで、`?` を出していた所が `\uXXXX` を出す: `tools/mouse-input.ps1`（出力の行も）・`tools/load-flake.ps1`（`Say` も）・`tools/release-notes.ps1`・`tools/sample-fetch.ps1`・`tools/app-icon.ps1`・`tools/cursor-art.ps1`。失敗の行に限らない。設計のとおり字面で読む読み手は無い |
+| 19 | `tools/package.ps1` の頭書（`-Check` の無い 3 つの引数で終了コード 3）・`tools/crates-io.ps1` |
+| 件 1 | `tools/test-all.ps1` の段 `perf loop selftest`・`tools/perf/` の 3 本・`tech.md`・`kiro-complete`・`release`・`update` |
+
+設計の表に無い約束の変わりは、タスクの文が名指す 18（上の表の行）のほかに見つからなかった。表に無いもう 1 行（進行役が申し送った分）: `tools/package.ps1` は git が `PATH` に無いときの終了コードが 1 から 3 になった。これは頭書が約束していた値へ実装を合わせた直しで、約束の字面は変わらず、読み手（`release/procedure.md` は `-Check` を付けて呼ぶ）にも影響しない。
+
+### 7.1 の申し合わせ（`runtime-crate-split` との `tech.md`・`structure.md`）
+
+- 2026-11-16 に `runtime-crate-split` のセッションと行の分け方を確かめ、同日の設計の討議の議題 1 で開発者が承認した
+- 相手が書く行: `tech.md` の 90 行・`structure.md` の 171 行・273〜295 行・新しい節「Runtime Crate（areka-runtime）」・434〜452 行（Log Capture Kit／Temp Path Kit／Sample Ghost Kit の Consumers の行）
+- この spec が書く行: `tech.md` の Testing の段の一覧への 7 段（98〜104 行）と Required Tools の 1 行（117 行）、`structure.md` の 19 行
+- 差分の確かめの結果は上の表のとおり、自分の行の外に 1 行も無い。相手が先に着地したときは、位置のずれを後から着地する側が取り込む（相手は「先に着地した側に合わせて取り込む」と答えた）
+- 相手の行に及ぶ直しは出なかったので、7.4 の申し送りの出番は無かった
+
+### 件 1 と件 2（要件 5.6）
+
+- 件 2（タスク 2.1: `encoding-check.ps1` の cp932 の子の判定を名前ごとに 1 つずつ包み、`-FailCheck` と較正 `cp932 child injected failure` を足した）も brief の件の番号で片づけた。件 1・件 2 は brief の件の番号で片づけた（件 1 は `tools/test-all.ps1` の段 `perf loop selftest` と `tools/perf/` の 3 本の直し）。ほかの番号の件に混ぜていない
+
+### 直さずに残す指摘と後の spec へ回す指摘（要件 2.5・2.7・7.10）
+
+- 直さずに残す指摘: 0 件（残す指摘なし）
+- 後の spec へ回す指摘: 0 件
+- 11.2 の最後（7 回目）の指摘は 0 件で、5 回目で打ち切ってもいない
+
+### 依存と pasta への申し送り（要件 6.6・7.9）
+
+- 依存を足していない（`Cargo.lock`・`Cargo.toml` の差分 0 件。PowerShell のモジュール・Python のパッケージ・外の道具の新規の要求も無い）。`tech.md` に書いた Python 3.11 以上は、段 `perf loop selftest` がもともと要る前提を文書に書き足したもの
+- pasta へ申し送る文は無い（`kiro-complete` の段の一覧と所要時間はリポジトリごとに違う部分で、手順の文そのものは変えていない＝議題 6）
+
+### 要件 7.4・7.6 の申し送り
+
+- `runtime-crate-split` へ（7.6・11.1 から）: 同 spec は未着地のため `tools/load-flake.ps1` に `areka-runtime-lib` の選び肢を足していない。同 spec の完了時に拾う件。渡す文は上の「タスク 11.1」の節のとおり
+- `crates/areka/cursor/README.md` の 43 行（要件 7.3 で `crates/` に触れない）: `OK selftest (2 checks)` のままで、今の道具は 3 checks。この spec では直さない。申し送り: 次に `crates/areka/cursor/` を触る spec が同じ変更の中で `OK selftest (3 checks)` に直す
+- `runtime-crate-split` の `tech.md`・`structure.md` の行の直し（7.4）: 相手の行に及ぶ直しは出ていない
+
+### 効き目を次の本当の操作で確かめるもの（要件 7.7・8.3）
+
+自分の検査（全体テストの段）は決定論で、本当の操作はこの spec の中では回さない。番号ごとの「確かめる操作」を示す。「次のリリースで確かめる」はリリースの手順を通らないと本当の効き目が見えないもの。
+
+| 番号 | 確かめる操作 | 印 |
+|---|---|---|
+| 1 | 次のリリースの `release-notes.ps1 -Notes`・`-Check` | 次のリリースで確かめる |
+| 2・3・10・13 | 次の机への設置（`impl-watch-install.ps1`・`mcp-bridge-install.ps1`・`exe-install.ps1` の本物の置き場への設置） | |
+| 5 | `package.ps1` を手で止めたとき（本物の中断の後始末） | |
+| 6 | 次の `mouse-input.ps1` の本物の操作 | |
+| 7・11 | 次の負荷の再現（`load-flake.ps1` の本物の走行） | |
+| 8 | 次の取り寄せ（`sample-fetch.ps1` の本物の通信） | |
+| 9・17 | 次の `-Check` と、リリースの `package.ps1 -Arch all`・`-Verify` | 次のリリースで確かめる |
+| 14 | 次のリリースの版の検査の段（`release.yml`・手元では回せない） | 次のリリースで確かめる |
+| 15 | 次の本物の失敗の行（`\uXXXX` で出る字） | 次のリリースで確かめる |
+| 16 | 次の crates.io の公開（`crates-io.ps1`・`crates-io.yml`） | 次のリリースで確かめる |
+
+## タスク 11.3: 全体テスト（1 回）
+
+- 命令: `pwsh -NoProfile -File tools/test-all.ps1` を 1 回だけ、2026-11-17 に排他テストの机の上で回した（約 20 分・終了コード 0）
+- 見出し: `==== results (commit adbb5badf, uncommitted changes at start: 0) ====`
+- 結果: 全 21 段が OK。最終行は `all steps green`
+- 段と所要: sample fetch 13 s／add i686 target 0 s／build i686 artifacts 41 s／fmt --check 7 s／x64 workspace tests 846 s／dola toml feature tests 67 s／i686 tests (host-32) 44 s／crates.io pre-publish check (package only) 4 s／encoding check 22 s／release notes check 1 s／roadmap overview check 3 s／i686 helper sync check 5 s／sample fetch check 2 s／package check 3 s／exe install check 1 s／load flake check 3 s／mouse input check 1 s／app icon check 2 s／cursor art check 15 s／perf loop selftest 75 s／i686 helper beside areka.exe 1 s
+- 件 1 の段 `perf loop selftest` と新しい 7 段（`package check`・`exe install check`・`load flake check`・`mouse input check`・`app icon check`・`cursor art check`・`perf loop selftest`）を含む
+- GPU を使う検査はこの範囲に無い（要件 4.6 は該当なし）
