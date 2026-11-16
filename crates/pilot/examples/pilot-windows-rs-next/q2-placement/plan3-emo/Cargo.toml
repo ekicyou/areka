@@ -6,5 +6,6 @@ publish.workspace = true
 
 [dependencies]
 windows-core = { workspace = true }
+windows-numerics = { workspace = true }
 q2-plan3-bind = { path = "../plan3-bind" }
 q2-plan3-wintf = { path = "../plan3-wintf" }

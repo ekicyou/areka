@@ -992,6 +992,7 @@ version = "0.0.0"
 dependencies = [
  "windows-bindgen",
  "windows-core 0.101.0",
+ "windows-numerics 0.101.0",
 ]
 
 [[package]]
@@ -1001,6 +1002,7 @@ dependencies = [
  "q2-plan3-bind",
  "q2-plan3-wintf",
  "windows-core 0.101.0",
+ "windows-numerics 0.101.0",
 ]
 
 [[package]]

@@ -170,10 +170,18 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 2: 束縛の置き場所（3 案）
 
-- 見立ての候補: （未記入）
+- 見立ての候補: （未記入。3 案を比べた後で 4.3 が書く）
+- 共通の描く本体（4.1）: `q2-placement/shared/draw_body.rs`（66 行）。DirectWrite の工場・書式・配置を作り、受け取った `ID2D1DeviceContext` へ文字を 1 行（`q2 placement 墨`・Segoe UI 20）描く `draw_line` と、premultiplied BGRA の α>0 の画素を数える `count_ink`。中身は案ごとに変えない。各案の emo-text 役の `src/lib.rs` が、型の出どころを `use <束縛>::*; use windows_core::*;` で決めてから `#[path = "../../shared/draw_body.rs"] mod draw_body;` で読む（本体の頭は `use super::*;`）。
+- 確かめの bin: 各案の emo-text 役の `src/main.rs`。wintf 役の `create_target(256, 64)`（ハードウェアの D3D11 → D2D の装置と文脈 → 描く先の `ID2D1Bitmap1` を `SetTarget`・CPU で読む `ID2D1Bitmap1`）→ emo-text 役の `draw_line` → wintf 役の `read_back`（`CopyFromBitmap`＋`Map` で BGRA）→ `count_ink` を出す。墨が 0 なら `E_FAIL` で終了コード 2。どの失敗も `error=` を stderr に出して 2 で終わる（黙って通る道は無い）。
+- 案 3（共有の束縛のクレート・4.1）:
+  - 組めたか: 組めた。直し 1 回（clippy の `chunks_exact` の指摘を `as_chunks::<4>()` へ。束縛と型の受け渡しの直しは 0 回）。実の GPU（画面の外・机なし）で `cargo run -p q2-plan3-emo` が `[q2-plan3] ink=858`・終了コード 0。
+  - 受け渡しの手当て: 無し。wintf 役（`q2-plan3-wintf`）と emo-text 役（`q2-plan3-emo`）が同じ `q2-plan3-bind` の `ID2D1DeviceContext` を使うので、`Target.context` をそのまま `&` で渡すだけ。`cast` の行 0・`from_raw` 0（wintf 役の中の `D2D1CreateFactory` の受け取りの `from_raw` 1 つは受け渡しでなく工場を作る口の形）。
+  - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 0（束縛は 1 つだけ）。フィルターは両役の和で、wintf 役の `filters-wintf.txt` 20 行・emo-text 役の `filters-emo.txt` 13 行、両方に名指しした物は `ID2D1DeviceContext` の 1 つ（`build.rs` が `filter_files` で 2 つを読み、重なりは bindgen が 1 つにまとめる）。生成した `bindings.rs` は 7,962 行（既定の形・`.flat()`）。
+  - 手で書いた行: `plan3-bind` 16 行（`build.rs` 13・`src/lib.rs` 3）・`plan3-wintf/src/lib.rs` 92 行・`plan3-emo` 37 行（`src/lib.rs` 7・`src/main.rs` 30）。
+  - 学び: 継いだメソッド（`BeginDraw`・`Clear`・`DrawTextLayout`・`EndDraw`・`GetSize`）は emo-text 役の側で `ID2D1RenderTarget` を名指ししないと出ない（3.1 と同じ）。案 3 ではこの名指しが共有のクレートのフィルターに入るので、wintf 役も使わない基の口まで抱える（和にした分だけ束縛が太る）。
 - 学び: （未記入）
-- 確かめた日: （未記入）
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
+- 確かめた日: 2026-11-16（案 3・x64・4.1）
+- 止まった所・理由・代わりの見立て: 案 3 は無し。
 - 判定: （開発者が下す）
 
 ### 問い 3: 束縛の形（既定か `.minimal()`）
