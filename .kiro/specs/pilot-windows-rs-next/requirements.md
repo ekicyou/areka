@@ -55,7 +55,7 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 4. The pilot shall 出荷するクレートを、写すか path の依存で借りるだけにし、出荷するどのクレートにも置き場への依存を足さない。
 5. The pilot shall 置き場の直下に `main.rs` を置かない（`crates/pilot` の例として組まれ、本線の全体テストが赤になるため）。
 6. The pilot shall 置き場の中の `.rs` をどれも 1 ファイル 1,000 行以下にし、`windows-bindgen` の出力は作業木の `target` の下へ作るか、1,000 行の下に分けて置く。
-7. When 本線の全体テストを走らせたとき, the pilot shall 置き場のコードが本線のビルドで組まれず、`crates/` の下の `.rs` を読む見張りの試験（`crates/log-capture-kit/tests/` の 4 本ほか）も赤にならない状態を保つ。
+7. When 本線の全体テストを走らせたとき, the pilot shall 置き場のコードが本線のビルドで組まれず、`crates/` の下の `.rs` と `Cargo.toml` を深さに関係なく読む見張りの試験（`crates/log-capture-kit/tests/` の 4 本・`crates/areka/src/runtime/frame_attach_tests.rs` ほか）も赤にならない状態を保つ。置き場のコードと manifest では、`std::env::temp_dir` を呼ばない・tracing の捕捉先を差す語（`with_default(`・`set_default(` ほか）を綴らない・`tracing-subscriber` の機能 `env-filter` と本番の依存の `log-capture-kit` を宣言しない・検体のパスを自分で組まない・`state.actors()` を書かない。
 8. The pilot shall 写す量を合わせて 1,500 行前後に抑え、問い 1・3・4・6 の分（要件 3・4・5・7）のほかは写さずに新しく小さく書く。
 9. While 先進坑のコードを書く間, the pilot shall 整形・命名・テストの厳しさを緩めてよいが、本要件の 1〜7 の隔離は必ず守る。
 10. The pilot shall 置き場の形の例外を自分の要件・設計・タスクにだけ書き、共通の文書（`.kiro/steering/two-tunnel.md`・`.kiro/steering/workflow.md`）を直さない。
@@ -77,7 +77,7 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 **Objective:** As a 移行の本体の起票者, I want C の関数だけを呼ぶクレートを `.sys()` の束縛へ移した実例と、その手間の実数, so that 移行の本体の 2 本目（`wintf-winmsg-executor` と `dola`）の規模と手順を見積もれる
 
 #### Acceptance Criteria
-1. When 問い 1 を確かめるとき, the pilot shall `crates/wintf-winmsg-executor/` の `src/` と例 2 本（`basic`・`threads`・合わせて約 920 行）を置き場の中へ写し、Win32 の呼び出しを `windows-bindgen` の `.sys()` の出力（`windows-link` だけに頼る束縛）へ移す。
+1. When 問い 1 を確かめるとき, the pilot shall `crates/wintf-winmsg-executor/` の `src/`（1,036 行・うち `lib.rs` の `#[cfg(test)] mod test` 約 320 行）と例 2 本（`basic`・`threads`・73 行）を置き場の中へ写し、Win32 の呼び出しを `windows-bindgen` の `.sys()` の出力（`windows-link` だけに頼る束縛）へ移す。
 2. When 写しを移し終えたとき, the pilot shall 写しの例 2 本を x64 と i686 の両方で組んで走らせ、写す前の例と同じ出力と終了コードで終わることを確かめる。
 3. The pilot shall 束縛のフィルターの行数（名指しした API の数）・写しで書き換えた行数・かかった手間（直しの回数と作業の時間）を一次記録に書く。
 4. The pilot shall 出荷する `crates/wintf-winmsg-executor/` のファイルを変えない。
@@ -90,7 +90,7 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 #### Acceptance Criteria
 1. When 問い 2 を確かめるとき, the pilot shall `wintf` の役と `areka-emo-text` の役を演じる 2 つの小さなクレートを置き場の中に建て、一方が作った `ID2D1DeviceContext` などの COM の型を他方へ渡して、DirectWrite の文字を Direct2D で描く最小の例を組む。
 2. The pilot shall 束縛の置き場の 3 案（クレートごとに束縛を持つ・`wintf` の役が束縛を公開する・共有の束縛のクレートを置く）を同じ最小の例でそれぞれ組み、組めたか・型の受け渡しに要った手当て・重なった束縛の量を比べて一次記録に書く【仮定 2】。
-3. The pilot shall `windows-bindgen` にほかのクレートの束縛の型を参照させる口が在るかを確かめ、在るならその使い方を、無いならその根拠（上流の文書かソースの箇所）を一次記録に書く。
+3. The pilot shall `windows-bindgen` にほかのクレートの束縛の型を参照させる口が在るかを確かめ、在るならその使い方を、無いならその根拠（上流の文書かソースの箇所）を一次記録に書く（2026-11-16 のギャップ分析では、0.100.0 と master に公開の口は無く、0.62 の `--reference` は消えている＝`research.md` 3.2）。
 4. When 問い 3 を確かめるとき, the pilot shall `wintf` の `com/dwrite.rs`（154 行）と Direct2D の一部を写し、束縛の形の 2 案（既定の型つき・`.minimal()`＋手書きの包み）でそれぞれ組んで、束縛の行数・包みの行数・呼ぶ側の書き換えの量を比べる。
 5. The pilot shall 置き場の案と形の案の組み合わせのうち推す 1 つと、その理由を一次記録に書く。
 6. If 案のどれかが組めないとき, the pilot shall 組めなかった所（コンパイルの誤りの要旨か、上流の制約）を一次記録に書き、その案を推さない。
@@ -106,10 +106,10 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 
 ### Requirement 6: 問い 5 — `HWND` の持ち方
 
-**Objective:** As a 移行の本体の実装係, I want 生ポインタの別名になった `HWND` を bevy の Component に持たせる包み方の実例, so that `wintf` の ECS の窓の取っ手を機械的に書き換えられる
+**Objective:** As a 移行の本体の実装係, I want 束縛の形で姿の変わる `HWND` を bevy の Component に持たせる包み方の実例, so that `wintf` の ECS の窓の取っ手を機械的に書き換えられる
 
 #### Acceptance Criteria
-1. When 問い 5 を確かめるとき, the pilot shall 新しい束縛の `HWND`（生ポインタの別名で `Send` でない）を包む型を組み、bevy の Component として世界に入れ、別のシステムから読み出せることを確かめる。
+1. When 問い 5 を確かめるとき, the pilot shall 新しい束縛の `HWND`（`.sys()`・`.minimal()` の形では生ポインタの別名、既定の形では今と同じ newtype。どちらも `Send` でない）を、問い 3 で比べる束縛の形のそれぞれで包む型を組み、bevy の Component として世界に入れ、別のシステムから読み出せることを確かめる。
 2. The pilot shall 包みが `Send`／`Sync` を名乗ってよい根拠を一次記録に書く。
 3. The pilot shall 包みと生の `HWND` の行き来の書き方を、書き換えの対応表（要件 12）に載せる。
 
@@ -171,11 +171,11 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 
 #### Acceptance Criteria
 1. The pilot shall 今の書き方 → 新しい書き方の対応表を、置き場の中の 1 つの文書として残す。
-2. The pilot shall 少なくとも次の項目を対応表に載せる: 戻り値の無い COM メソッドの `HRESULT`・スライスの引数の「ポインタ＋長さ」・`HWND`（生ポインタの別名で `Send` でない）・列挙の定数（`i32`／`u32`）・`windows-numerics` のフィールド名（小文字）・`#[implement]` の `_Impl` の戻り値・`HSTRING` の `Display` が無いこと・束縛のフィルターへの API の足し方・COM の型の `==` の意味。
+2. The pilot shall 少なくとも次の項目を対応表に載せる: 戻り値の無い COM メソッドの `HRESULT`・スライスの引数の「ポインタ＋長さ」・`HWND`（`.sys()`・`.minimal()` の形では生ポインタの別名・既定の形では newtype。どちらも `Send` でない）・列挙の定数（`i32`／`u32`）・`windows-numerics` のフィールド名（小文字）・`#[implement]` の `_Impl` の戻り値・`HSTRING` の `Display` が無いこと・束縛のフィルターへの API の足し方・COM の型の `==` の意味。
 3. The pilot shall 対応表の各行を、書き換え前と書き換え後の例の 1 組で示す。
-4. The pilot shall COM の型の `==` が COM の同一性（番地が違えば `IUnknown` へ問い合わせて比べる）を保つかを確かめ、`crates/wintf/src/ecs/graphics/composite.rs` の `SurfaceComposite::same_root` と `GraphicsCommandList` の `PartialEq` がその比べに頼っていることを対応表に書く。
+4. The pilot shall COM の型の `==` が COM の同一性（番地が違えば `IUnknown` へ問い合わせて比べる）を保つかを確かめ、`crates/wintf/src/ecs/graphics/composite.rs` の `SurfaceComposite::same_root` と `crates/wintf/src/ecs/graphics/command_list.rs` の `GraphicsCommandList` の導出の `PartialEq` がその比べに頼っていることを対応表に書く。
 5. If 新しい束縛で COM の型の `==` が番地だけの比べに変わるとき, the pilot shall 包みの側で `IUnknown` の比べを書く書き方を対応表に載せる。
-6. The pilot shall 対応表の行ごとに、置き場の写しで実際に通した行か、文書から写しただけの行かを示す。
+6. The pilot shall 対応表の行ごとに、置き場の写しで実際に通した行か、文書から写しただけの行かと、どの束縛の形（既定・`.minimal()`・`.sys()`）のときの行かを示す。
 
 ### Requirement 13: 一次記録と見立て
 
@@ -212,8 +212,8 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 ## 未決事項（要件の討議で決める）
 
 1. **【仮定 1】問いの数と spec の本数**: brief は「要件の段で問いを削るか 2 本に分けるかを決めてよい」とする。仮定＝10 の問いを全部残し、1 本（M・10〜14 タスク）のまま掘る。分けるなら、問い 7（`windows-text` の縦書き）を別の先進坑へ出す案が最も切りやすい。
-2. **【仮定 2】問い 2 の置き場の 3 案を全部組むか**: 仮定＝3 案とも同じ最小の例で組んで比べる（brief「どれも試さないと決められない」）。手間を抑えるなら、`windows-bindgen` にほかのクレートの型を参照する口が無いと分かった時点で、それを前提とする案を組まずに外す。
-3. **【仮定 3】引く上流のコミット**: brief は「master の決まったコミット」とだけ言う。仮定＝着手の時の master の先頭（2026-11-14 に確かめた `520097a3` 以降）を 1 つ選び、要件 2 の 5 に当たらない限り途中で動かさない。
+2. **【仮定 2】問い 2 の置き場の 3 案を全部組むか**: 仮定＝3 案とも同じ最小の例で組んで比べる（brief「どれも試さないと決められない」）。参照の口は無いと分かったが、3 案ともその口なしで組める（`research.md` 5.3。口が無いことで、案 1 は型が重なり `cast` でつなぐ形に、案 2 は `wintf` の役の束縛が `areka-emo-text` の役の要る API まで抱える形に決まる）。
+3. **【仮定 3】引く上流のコミット**: brief は「master の決まったコミット」とだけ言う。仮定＝着手の時の master の先頭（2026-11-14 に確かめた `520097a3` 以降。2026-11-16 のギャップ分析の時点で先頭は `f37e2f90` へ進んでいた）を 1 つ選び、要件 2 の 5 に当たらない限り途中で動かさない。
 4. **【仮定 4】問い 7 の画素の比べの合格の線**: 仮定＝要件に閾値を置かず、違う画素の数・最大の差・差の絵を出し、同じと見るかは開発者が見て決める。
 5. **【仮定 5】問い 8 の arm64**: 仮定＝arm64 の機械は手元に無いので、組めてリンクが通るまでを確かめる（i686 は x64 の Windows で走らせて確かめる）。
 6. **【仮定 6】問い 10 の進め方**: 仮定＝問い 1 の写しとは別にもう 1 つ新しく写し、対応表だけを渡した Sonnet の実装係に移させる。取りこぼしの 3 種は 1 つずつわざと入れて、コンパイルと lint で捕まるかを見る。
