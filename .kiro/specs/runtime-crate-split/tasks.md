@@ -60,8 +60,8 @@
   - _Dispatch: standard — コンパイラのエラーごとに開け方を決めて直す実のコードが残る_
   - _Requirements: 1.8, 2.1, 2.2, 2.5, 2.6, 4.1_
 
-- [ ] 3. テストの支えと機能を整え、`areka-runtime` のテストを緑にする（段 2）
-- [ ] 3.1 `test-support` 機能と optional の依存を足す
+- [x] 3. テストの支えと機能を整え、`areka-runtime` のテストを緑にする（段 2）
+- [x] 3.1 `test-support` 機能と optional の依存を足す
   - `areka-runtime` に機能 `test-support = ["dep:shiori-host32-host"]`（説明の 1 行つき）と、`shiori-host32-host` の optional の本番の依存を足す
   - 本体の `[dev-dependencies]` に `areka-runtime` の `test-support` つきの path 依存を足す
   - `areka-runtime` の `test-support` が `areka-placement` の `test-support` の項目を使うとコンパイラが言ったときだけ、連鎖に `"areka-placement/test-support"` を足す
@@ -69,7 +69,7 @@
   - 完了の状態: `cargo tree -p areka-runtime -e normal` に本体も `shiori-host32-host` も出ず、`-F test-support` を付けると `shiori-host32-host` だけが増える
   - _Dispatch: mechanical — 設計が機能と依存の行を逐語で与えている_
   - _Requirements: 1.9, 3.2, 3.4_
-- [ ] 3.2 `spine` と `frame` の支えを開け方の印で割る
+- [x] 3.2 `spine` と `frame` の支えを開け方の印で割る
   - `lib.rs` の `spine` を `#[cfg(any(test, feature = "test-support"))] pub mod spine` にし、⑴ 待ちの部品と `GpuPermit`・⑵ 台本の SHIORI と `hold_support` を外から使える形にする
   - `frame_test_support.rs` を割らずに `frame` の `#[cfg(any(test, feature = "test-support"))] pub mod test_support` にし、番人の crate を引く 3 項目（`capture_logs`・`window_move_lines`・`window_move_routes_of`）とその `use` 2 行だけに `#[cfg(test)]` を付ける
   - `frame_attach_tests.rs` の `gpu_attach_world` を `frame::test_support` へ移し、子 `frame_attach_carry_tests` の宣言を外す（子は本体の `runtime_tests/frame.rs` の子になる）
@@ -78,25 +78,25 @@
   - 完了の状態: `cargo check -p areka-runtime --features test-support --lib`（機能だけが立つビルド）が緑で、同じ働きの支えが 2 つ無い
   - _Dispatch: standard — 設計が規則を与えるが、機能だけが立つビルドで組める形をコードで詰める_
   - _Requirements: 3.1, 3.3, 3.4, 3.9_
-- [ ] 3.3 落ちの報告を `test-support` でも開ける（`areka-runtime` の側）
+- [x] 3.3 落ちの報告を `test-support` でも開ける（`areka-runtime` の側）
   - `crash_report_test_support` の宣言を `#[cfg(any(test, feature = "test-support"))] pub mod` にし、`install` と持ち手の表を `pub` で開き、`INSTALLED` を読むだけの `pub fn installed() -> bool` を足す
   - 初期化子の `static`（`#[used]`・`.CRT$XCU`）は `#[cfg(test)]` の下だけに置く（本体の bin に入れない）。頭の「写しの相手」の行は変えない
   - 完了の状態: 初期化子の `static` が `areka-runtime` の側で `#[cfg(test)]` の下だけにあることが grep で示せる
   - _Dispatch: mechanical — 設計が宣言と足す関数を逐語で与えている_
   - _Requirements: 3.8_
-- [ ] 3.4 口の倒れ先を `NO_BODY` 1 つにする
+- [x] 3.4 口の倒れ先を `NO_BODY` 1 つにする
   - `session_hooks.rs` の `FALLBACK` の 2 つの `const` を消し、`of` は口が無いとき `NO_BODY` を返す形にする。`#[cfg(not(test))]` の `error!(event = "session_hooks_missing")` はそのまま残す
   - 完了の状態: `session_hooks.rs` の中に本体を名指す道が 0 件で、口を読む相を回す `areka-runtime` のテスト（`frame_attach_tests` ほか）が組める
   - _Dispatch: mechanical — 設計が消す定数と返す値を決めている_
   - _Requirements: 3.6_
-- [ ] 3.5 `areka-runtime` の `placement_tests/` を組み込む
+- [x] 3.5 `areka-runtime` の `placement_tests/` を組み込む
   - `placement_tests/mod.rs` を新しく書き、置いた理由（本体を引かず配置と runtime だけを使うテストと判定器の置き場）と子の宣言（判定器は `pub(crate) mod`・テストは `mod`）だけを持たせる。`lib.rs` が `#[cfg(test)] mod placement_tests;` で宣言する
   - 移した 18 ファイルを置いた理由の表（設計の RuntimePlacementTests）を実装の記録に写す（本体に残した `measure_bake_count_tests`・分岐の対応表 2 本と支え・`measure_template_tests`・`spawn_assembly_tests` も理由つき）
   - 判定器を使う 2 本（`frame_transition_{atomicity,branch}_tests`）が、同じ crate の同じ道で判定器を引くことを確かめる
   - 完了の状態: 判定器の一族が本番のビルドに含まれず（`cargo check -p areka-runtime --lib` に入らない）、`cargo test -p areka-runtime --lib placement_tests` と `frame_transition` が組める
   - _Dispatch: mechanical — 設計がモジュールの中身と置き場の表を与えている_
   - _Requirements: 4.2, 4.3, 4.4, 4.5_
-- [ ] 3.6 機能だけが立つビルドを含めて段 2 を緑にする
+- [x] 3.6 機能だけが立つビルドを含めて段 2 を緑にする
   - `areka-runtime` の中の出所の名前で選ぶテスト（`balloon_background_tests` の 245 行・`shell_cursor_assets_tests` の 21 行の `TARGET`）を `areka_runtime::…` へ書き換える（上の「寄せ」）
   - `cargo check -p areka-runtime --all-targets`・`cargo check -p areka-runtime --all-targets --features test-support` を通し、`cargo test -p areka-runtime` を回す（赤が出たら赤のテストだけを回し直す）
   - 落ちの報告の 5 本（`crash_filter_is_installed_before_the_tests_start`・`initializer_keeps_a_process_lifetime_mta` ほか）と、COM・GPU を使う `frame_attach_tests`・`spine_wait_tests` がプロセスの寿命の MTA の下で緑であることを確かめる
@@ -287,3 +287,6 @@
 - 段 1: 表に無い文字で読むテスト `crates/areka/src/tick_gate_config_producers_tests.rs` を一時につなぎ直した。6.2 で読み口へ寄せる。
 - 3.2 へ: `areka-runtime/src/spine.rs` の ⑵ `ScriptedShioriBackend` が `self::conformance_support::{RecordedStatus, StatusLedger, record_status, snapshot_status_calls}` に頼るが、`spine_conformance_support.rs` は D4 どおり本体へ移した。進行状態の記録の型と関数を ⑵ の側へ下ろす（設計の中の食い違い）。⑶ だけが使っていた `use`（`crate::session::ghost_quit::KanadeNoticeRx`・`log_capture_kit`・`acquire_emo2`）と頭の `//!` も 3.2 で片付ける。
 - 本体の `placement_tests/mod.rs` の説明が判定器を持つと書いたまま（段 7 で直す）。
+- 段 2: 3.2 で進行状態の記録 4 つ（`RecordedStatus`・`StatusLedger`・`record_status`・`snapshot_status_calls`）を `areka-runtime` の `spine.rs` の ⑵ の隣へ下ろした（定義は 1 つ・本体は出し直し）。⑶ の `//!` と頭の `use` 49 行は本体の `runtime_tests/spine.rs` へ文のまま移してあり、道は 4.1 で直す。
+- 段 2: `shiori-host32-host` は機能が無くても `areka-ghost`・`areka-kanade` を経て推移で木に出る。直の依存（`--depth 1`）で機能が足すのはこの 1 行だけ（9.1 の確かめも `--depth 1` で読む）。
+- 段 3 へ: `NO_BODY` は `pub(crate)` のまま（本体が使うなら開ける）。`frame.rs` の `#[cfg(test)] run_move_drain_with`・`RuntimeWiring::drain_received`・`balloon_model_scopes` は本体の ⑶ が使う見込み（4.2）。

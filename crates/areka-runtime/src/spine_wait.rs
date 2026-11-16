@@ -60,7 +60,7 @@ use crate::crash_report_test_support as crash_report;
 ///
 /// 猶予は通常経路（マイクロ秒〜ミリ秒）に対して桁違いに大きく取る。期限切れは呼び手の assert が
 /// 落として原因を名指しするので hang しない。
-pub(super) const SPIN_WAIT: Duration = Duration::from_secs(30);
+pub const SPIN_WAIT: Duration = Duration::from_secs(30);
 
 /// 進みの目印がある待ちの、待ち始めからの総時間の上限。
 ///
@@ -100,10 +100,10 @@ pub(super) const WAIT_CAP: Duration = Duration::from_secs(300);
 pub(super) const DENSE_SPIN: Duration = Duration::from_millis(60);
 
 /// 空回しの窓を過ぎた後の 1 回あたり待機。CPU を明け渡し、相手スレッドに実行機会を与える。
-pub(super) const BACKOFF_SLEEP: Duration = Duration::from_millis(1);
+pub const BACKOFF_SLEEP: Duration = Duration::from_millis(1);
 
 /// 相手が状態を進めたかの数え方。
-pub(crate) enum Progress<'a> {
+pub enum Progress<'a> {
     /// 目印を持てない待ち。総時間 [`SPIN_WAIT`] で打ち切り、失敗の文言は「進みは不明」と書く。
     Unknown,
     /// 単調に増える数。前回の読みより増えていれば「進んだ」。減らないことは呼び手が守る。
@@ -112,7 +112,7 @@ pub(crate) enum Progress<'a> {
 
 /// 待ちが届かずに終わった理由。`Display` の先頭の `［…］` で 4 つを見分ける（要件 3.1・3.2）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum WaitFailure {
+pub enum WaitFailure {
     /// 相手が `idle` のあいだ 1 度も進まなかった＝止まった。
     Stalled {
         what: String,
@@ -198,7 +198,7 @@ impl fmt::Display for WaitFailure {
 /// - 目印なしは待ち始めから [`SPIN_WAIT`] に届けば `TimedOut`。
 /// - 反復の間は、待ち始めから [`DENSE_SPIN`] までは `yield_now`、その後は毎回 `pause(BACKOFF_SLEEP)`
 ///   で CPU を返す（要件 2.5）。この休みは時刻を進めるためのものではなく、観測の内容を変えない。
-pub(crate) fn wait_until_with(
+pub fn wait_until_with(
     now: impl FnMut() -> Instant,
     pause: impl FnMut(Duration),
     what: &str,
@@ -282,7 +282,7 @@ pub(super) fn wait_until_idle_with(
 }
 
 /// 本物の時計で待つ [`wait_until_with`]。休みは本物の `sleep`。
-pub(crate) fn wait_until(
+pub fn wait_until(
     what: &str,
     progress: Progress<'_>,
     cond: impl FnMut() -> bool,
@@ -295,7 +295,7 @@ pub(crate) fn wait_until(
 /// 空回しはしない。1 回ごとに `recv_timeout` で [`BACKOFF_SLEEP`] だけ眠り、届けばすぐ起きる。
 /// 区切って起きるのは進みの目印を読んで打ち切りを判じるため（要件 2.5）。送り手が何も送らずに
 /// 居なくなれば、待たずに [`WaitFailure::Disconnected`]。
-pub(crate) fn wait_recv<T>(
+pub fn wait_recv<T>(
     what: &str,
     progress: Progress<'_>,
     rx: &mpsc::Receiver<T>,
@@ -328,7 +328,7 @@ pub(crate) fn wait_recv<T>(
 
 /// クロージャ `f` を別スレッドで走らせ、進みを見ながら終わるのを [`wait_recv`] で待つ。
 /// 届かなければ [`WaitFailure`] の文言で panic する（`f` が panic して居なくなれば `［相手が居ない］`）。
-pub(crate) fn run_bounded_watching<F: FnOnce() + Send + 'static>(
+pub fn run_bounded_watching<F: FnOnce() + Send + 'static>(
     what: &str,
     progress: Progress<'_>,
     f: F,
@@ -356,7 +356,7 @@ fn bounded_failure(what: &str, started: Instant, e: mpsc::RecvTimeoutError) -> W
 ///
 /// 打ち切りは今どおり渡された総時間。panic の文は今の文を先頭に保ち、後ろに [`WaitFailure`] の文言
 /// （届かない＝`［進みは不明］`・`f` が panic して居なくなった＝`［相手が居ない］`）を足す。
-pub(crate) fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
+pub fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
     let (done_tx, done_rx) = mpsc::sync_channel::<()>(0);
     std::thread::spawn(move || {
         f();
@@ -377,7 +377,7 @@ pub(crate) fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Dur
 /// 見張りのスレッドは生まない（生まれるスレッドもローダーの錠を待ち、負荷の下で `［進みは不明］` の赤になった・
 /// `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
 /// 常に 0 回で、出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・要件 2.7 の読み）だけ。
-pub(crate) fn wait_thread_end(
+pub fn wait_thread_end(
     what: &str,
     inner: Option<&dyn Fn() -> u64>,
     is_finished: impl Fn() -> bool,
@@ -401,7 +401,7 @@ pub(super) fn wait_thread_end_with(
 
 /// std のスレッドの終わりを [`wait_thread_end`] で待ってから同じスレッドで `join` する。立った後の `join` は
 /// OS のスレッドの後始末だけを待つので打ち切らない（待つ相手の処理はもう終わっている）。
-pub(crate) fn join_thread_bounded<T>(
+pub fn join_thread_bounded<T>(
     what: &str,
     inner: Option<&dyn Fn() -> u64>,
     handle: JoinHandle<T>,
@@ -412,7 +412,7 @@ pub(crate) fn join_thread_bounded<T>(
 
 /// `ActorHandle::join` の [`join_thread_bounded`] と同じ形。アクターは中の進みを外から読む口が無いので
 /// `inner = None`（目印は body が終わったかの 0→1 だけ）。
-pub(super) fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
+pub fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
     wait_thread_end(what, None, || handle.is_finished());
     handle.join()
 }
@@ -576,6 +576,7 @@ impl GpuSlots {
     }
 
     /// 待たずに取る（空きが無ければ `None`）。檻 16 が実時間を待たずに数えを確かめるための口。
+    #[cfg(test)]
     pub(super) fn try_take(&'static self) -> Option<GpuPermit> {
         let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
         if *held >= self.cap {
@@ -594,7 +595,7 @@ impl GpuSlots {
 /// 組で返すときは**先頭**に置く（構造体の欄は宣言の順に、`let` の組の束縛は後のものから捨てられる）。
 /// 1 つのテストで 2 つ取ると、同じことをするテストが並んだとき互いに待ち合って止まりうる。2 つ取る
 /// テストは `new_ghost_holdings_start_with_a_fresh_ledger_after_a_switch` の 1 本だけにしておくこと。
-pub(crate) struct GpuPermit {
+pub struct GpuPermit {
     slots: &'static GpuSlots,
     /// 落ちの報告の許可の持ち手の表の行（`crash_report_test_support::hold`）。
     row: usize,
@@ -610,7 +611,7 @@ impl GpuPermit {
     }
 
     /// プロセスに 1 つの数えから許可を取る（空きが出るまで待つ）。
-    pub(crate) fn take() -> Self {
+    pub fn take() -> Self {
         GPU_SLOTS.take()
     }
 }

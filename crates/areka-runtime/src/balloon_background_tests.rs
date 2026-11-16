@@ -242,7 +242,7 @@ fn missing_face_falls_back_to_white_with_one_record() {
     assert_eq!(
         lines
             .iter()
-            .filter(|l| l.contains("target=areka::runtime::balloon_background "))
+            .filter(|l| l.contains("target=areka_runtime::balloon_background "))
             .count(),
         1,
         "記録の宛先は本モジュール（番兵の `::tests` と混ざっていない）: {lines:?}"

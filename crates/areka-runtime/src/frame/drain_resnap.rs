@@ -313,7 +313,8 @@ pub(super) fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) 
 ///
 /// 本トレイトは兄弟の [`ScaleReportSource`] と同型の意図を持つ: **frame 側の結線**を GPU 無しの
 /// 決定論檻へ入れるためのシーム（D9 の振り分け基準 (a)＝判断分岐は in-crate 純テスト）。
-pub(super) trait PhysicalSizeSource {
+// 要件 2.5: 公開の `FrameHarness::run_resnap`・`run_chain_finalize`・`run_chain_realign` が名指すので開ける
+pub trait PhysicalSizeSource {
     /// 表示中なら適用済み k を掛けた物理寸を返す。未装着・未表示は `None`。
     fn physical_size(&self, target: TargetId) -> Option<(u32, u32)>;
 }

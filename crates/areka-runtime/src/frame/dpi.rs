@@ -273,7 +273,8 @@ pub(super) fn size_changed(before: Option<SizeI>, new_size: (u32, u32)) -> bool 
 /// この最小トレイトは、**frame 側の結線**（毎フレーム両経路を呼ぶ・`Some` のみ reconcile する・
 /// 種別で反映口を振り分ける）を GPU 無しで決定論の檻へ入れるためのシームである（D9 の
 /// 振り分け基準 (a)＝判断分岐は in-crate 純テスト、GPU readback は emo-present 別プロセス）。
-pub(super) trait ScaleReportSource {
+// 要件 2.5: 公開の `FrameHarness::run_dpi_phase`・`run_placement_phases`・`run_reconcile` が名指すので開ける
+pub trait ScaleReportSource {
     /// 窓 DPI から k を再導出し、再表示が成立して物理寸が変わったならその新物理寸を返す。
     fn refresh_scale_report(&mut self, world: &mut World, target: TargetId) -> Option<(u32, u32)>;
     /// 表示成立点の状態照合が積んだ未消費の窓寸 reconcile 要求を取り出す（取り出しで消える）。

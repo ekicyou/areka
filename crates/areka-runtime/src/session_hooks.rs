@@ -52,7 +52,7 @@ impl SessionHooks {
             event = "session_hooks_missing",
             "本体の口が据わっていない（結線の誤り）——本体の状態が無いものとして続ける"
         );
-        FALLBACK
+        NO_BODY
     }
 }
 
@@ -69,10 +69,3 @@ pub(crate) const NO_BODY: SessionHooks = SessionHooks {
     reload_skin_applied: |_, _, _| false,
     skin_phase_ended: |_, _, _| {},
 };
-
-/// 口の無い World の倒れ先。本番は `NO_BODY`（記録つき）。
-#[cfg(not(test))]
-const FALLBACK: SessionHooks = NO_BODY;
-/// テストの World は本体の口そのもの（今日と同じく本体の状態をそのまま読む・記録は出さない）。
-#[cfg(test)]
-const FALLBACK: SessionHooks = crate::session::hooks::HOOKS;

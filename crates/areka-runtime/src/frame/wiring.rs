@@ -269,10 +269,7 @@ impl RuntimeWiring {
     }
 
     /// 常に手前の指令の受信端を渡す（起動の結線の口・`RuntimeWiring::new` の引数は変えない）。
-    pub(crate) fn attach_window_state_rx(
-        &mut self,
-        rx: Receiver<WindowStateDirective>,
-    ) {
+    pub(crate) fn attach_window_state_rx(&mut self, rx: Receiver<WindowStateDirective>) {
         self.window_state.rx = Some(rx);
     }
 
@@ -370,8 +367,8 @@ impl RuntimeWiring {
     // getter/passthrough のみ（本番ロジックは一切変えない）で `#[cfg(test)]` ゲートし本番表面を増やさない。
 
     /// target の表示中画素（BGRA・`stride=width*4`）を読み戻す（`EmoPresenter::read_back` passthrough・S1/S3/S4）。
-    #[cfg(test)]
-    pub(crate) fn read_back_target(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn read_back_target(
         &self,
         target: TargetId,
     ) -> Result<Vec<u8>, areka_emo_present::PresentError> {
@@ -392,8 +389,8 @@ impl RuntimeWiring {
     ///
     /// `drain_received` で取り出した指令を、形状記録後に実 presenter へ流して実描画→readback まで
     /// 通す（R8.2）ための最小口。本番は同じ `apply` を `run_drain_phase` が呼ぶ。
-    #[cfg(test)]
-    pub(crate) fn apply_present(&mut self, world: &mut World, cmd: PresentCommand) {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn apply_present(&mut self, world: &mut World, cmd: PresentCommand) {
         self.presenter.apply(world, cmd);
     }
 
@@ -403,8 +400,8 @@ impl RuntimeWiring {
     /// attach 相はバルーンを**不可視のまま確立**するため、spine が「可視バルーン」を前提とする
     /// ケースはその前提を自分で組む必要がある。本番で可視化を発行するのはバルーン可視性制御
     /// の相であり、本口はそれを spine から代行するだけの passthrough である。
-    #[cfg(test)]
-    pub(crate) fn show_balloon_target(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn show_balloon_target(
         &mut self,
         world: &mut World,
         target: TargetId,

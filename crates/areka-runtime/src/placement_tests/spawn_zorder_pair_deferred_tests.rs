@@ -37,10 +37,7 @@ const PRODUCTION_FILES: [&str; 3] = [
 ];
 
 /// 帯の語を持つ本体の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
-const BAND_FILES: [&str; 2] = [
-    "src/window_state_cue.rs",
-    "src/frame/window_state.rs",
-];
+const BAND_FILES: [&str; 2] = ["src/window_state_cue.rs", "src/frame/window_state.rs"];
 
 /// 先送り語彙は、重なり順の 2 機構が書いた本体の本番ファイルのコードに 1 つも無い。
 #[test]

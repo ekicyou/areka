@@ -135,8 +135,8 @@ pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
 pub(crate) use self::drain_resnap::run_move_drain_with;
 pub use self::scale_text::{run_text_phase, run_text_scale_phase};
 // 窓がどれも表示した前提の読み口（spine の檻も同じものを使う）。
-#[cfg(test)]
-pub(crate) use self::test_support::all_shown;
+#[cfg(any(test, feature = "test-support"))]
+pub use self::test_support::all_shown;
 pub use self::wiring::RuntimeWiring;
 pub use self::zorder_drain::run_zorder_drain_phase;
 
@@ -334,13 +334,13 @@ pub fn frame_system(world: &mut World) {
     world.insert_non_send(wiring);
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[path = "frame_test_support.rs"]
-pub(crate) mod test_support;
+pub mod test_support;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[path = "frame_balloon_runtime_test_support.rs"]
-pub(crate) mod balloon_runtime_test_support;
+pub mod balloon_runtime_test_support;
 
 // 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
 // x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。

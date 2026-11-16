@@ -108,6 +108,7 @@ unsafe extern "system" {
         first: u32,
         handler: Option<ExceptionFilter>,
     ) -> *mut core::ffi::c_void;
+    #[cfg(test)]
     fn RaiseException(code: u32, flags: u32, count: u32, arguments: *const usize);
     fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> HANDLE;
     fn Thread32First(snapshot: HANDLE, entry: *mut THREADENTRY32) -> i32;
@@ -124,6 +125,7 @@ unsafe extern "system" {
 // ---------------------------------------------------------------------------
 
 /// テストの実行ファイルの根のクレートの中に置くので、リンクで落ちない（較正で確かめる・`main.rs` は触らない）。
+#[cfg(test)]
 #[used]
 #[unsafe(link_section = ".CRT$XCU")]
 static INSTALL: extern "C" fn() = install;
@@ -134,11 +136,16 @@ static PREVIOUS: OnceLock<Option<ExceptionFilter>> = OnceLock::new();
 /// 据え付けが走り、最初の受け手まで据わった印（ふだんの走行で受け手が据わっていることを、落とさずに確かめるため）。
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 
+/// 据え付けが最初の受け手まで据わったか（`INSTALLED` を読むだけ・本体のテストの実行ファイルの確かめが使う）。
+pub fn installed() -> bool {
+    INSTALLED.load(Ordering::Acquire)
+}
+
 /// 最初の受け手が書いている印（書く途中の AV で書き直さない）。
 static WRITING: AtomicBool = AtomicBool::new(false);
 
 /// プロセスの読み込みの初め（libtest の main より前）に 1 度だけ走る。
-extern "C" fn install() {
+pub extern "C" fn install() {
     // 一時的な MTA の解体の後に放された DLL を呼ぶ落ち（件 3）を防ぐ: プロセスの寿命の MTA を立てる
     // （クッキーは返さない・プロセスの終わりまで持つ）。
     // SAFETY: 引数の無い COM の呼び出し。
@@ -164,7 +171,7 @@ fn raw_stderr() -> ManuallyDrop<File> {
 // ---------------------------------------------------------------------------
 
 /// 表の行の数。プロセスの数えの許可 4 つの他に、檻が別の数えで 2 つまで取るので、余らせて置く。
-pub(crate) const HOLDER_ROWS: usize = 16;
+pub const HOLDER_ROWS: usize = 16;
 const NAME_BYTES: usize = 160;
 
 #[derive(Clone, Copy)]
@@ -188,10 +195,10 @@ static HOLDERS: Mutex<[Holder; HOLDER_ROWS]> = Mutex::new([Holder::EMPTY; HOLDER
 static MISSED: AtomicUsize = AtomicUsize::new(0);
 
 /// 表に入らなかった許可の行の番号。
-pub(crate) const NO_ROW: usize = usize::MAX;
+pub const NO_ROW: usize = usize::MAX;
 
 /// 今のスレッドを許可の持ち手として載せ、行の番号を返す（入りきらなければ [`NO_ROW`]）。
-pub(crate) fn hold() -> usize {
+pub fn hold() -> usize {
     let thread = std::thread::current();
     let name = thread.name().unwrap_or("");
     let mut len = name.len().min(NAME_BYTES);
@@ -211,7 +218,7 @@ pub(crate) fn hold() -> usize {
 }
 
 /// 許可を返す所: 表から降ろす。
-pub(crate) fn release(row: usize) {
+pub fn release(row: usize) {
     if let Some(slot) = HOLDERS
         .lock()
         .unwrap_or_else(|e| e.into_inner())

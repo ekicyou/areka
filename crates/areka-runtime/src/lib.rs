@@ -64,17 +64,16 @@ pub mod user_break_cue;
 pub mod window_state_cue;
 pub mod zorder_cue;
 
-// 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
-// tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]
-// モジュールとして置く（設計 File Structure の tests/emo2_boot_spine_test.rs との差分は spine.rs
-// 冒頭 doc 参照）。frame フェーズ直接駆動・Tick 注入・GPU readback を in-process で行う。
-#[cfg(test)]
-pub(crate) mod spine;
+// 決定論 spine テストハーネス（R8・task 6.1）のうち本体を引かない待ちの部品と台本の SHIORI。
+// 自分のテストと、本体のテスト（`test-support` で付く）が使う。背骨の足場は本体の
+// `runtime_tests/spine.rs` にある（spec: runtime-crate-split 設計 D4・spine.rs 冒頭 doc 参照）。
+#[cfg(any(test, feature = "test-support"))]
+pub mod spine;
 
 // テストのプロセスの落ちの報告（areka-test-binary-stability）。捕まえられなかった例外で落ちたスレッドと
 // GPU の装置の許可の持ち手を標準エラーへ書く。
-#[cfg(test)]
-mod crash_report_test_support;
+#[cfg(any(test, feature = "test-support"))]
+pub mod crash_report_test_support;
 
 // emo2 検体の共有の受け口（spec: areka-P0-nar-install 要件 1.6）。`runtime` 配下のテストが
 // 検体をここから引くので、保持（＝段 ③ の複製）はテストバイナリあたり 1 回で済む。
@@ -84,6 +83,10 @@ pub(crate) mod sample_test_support;
 #[cfg(test)]
 #[path = "seriko_clock_tests.rs"]
 mod seriko_clock_tests;
+
+// 本体を引かず、配置と runtime だけを使うテストと判定器の置き場（spec: runtime-crate-split 要件 4.2）。
+#[cfg(test)]
+mod placement_tests;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;

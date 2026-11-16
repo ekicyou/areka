@@ -563,8 +563,8 @@ pub(crate) fn build_balloon_assets_with_limits(
 }
 
 /// 空の定義の面 0 だけの束（ファイルを読まないテストの支えが組む資産用）。
-#[cfg(test)]
-pub(crate) fn empty_definitions(scope: u32) -> ScopeBalloonDefinitions {
+#[cfg(any(test, feature = "test-support"))]
+pub fn empty_definitions(scope: u32) -> ScopeBalloonDefinitions {
     ScopeBalloonDefinitions::single(
         scope,
         areka_emo_present::balloon_definitions::FaceDefinition {

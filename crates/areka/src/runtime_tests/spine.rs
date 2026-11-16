@@ -1,3 +1,98 @@
+//! 決定論 spine テストハーネス（R8・tasks.md task 6.1）の背骨の足場（⑶）。
+//!
+//! 待ちの部品と `GpuPermit`（⑴）・台本の SHIORI と `hold_support`（⑵）は `areka-runtime` の `spine` にあり、
+//! ここは本体の部品も使う足場（`SpineHarness`・`settle_bounded`・`make_world_with_gpu` ほか）とそれを使う
+//! spine のテストを持つ（spec: runtime-crate-split 設計 D4・段 2 で `areka-runtime` の `spine.rs` の頭から移した説明）。
+//!
+//! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
+//! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す
+//!
+//! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: 本ファイルで言う sleep 不使用とは
+//! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
+//! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
+//! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計
+//! [`SPIN_WAIT`] で有界化してある。待機の形は**3 種**（いずれも期限は [`SPIN_WAIT`]）:
+//!
+//! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`wait_until`]。
+//!   密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
+//!   [`BACKOFF_SLEEP`] へ落としてコア占有をやめる（PR #96 で導入）。
+//! - **ハイブリッド**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→ 各呼出点の
+//!   自前ループ＋`sleep(200µs)` の poll-backoff。[`wait_until`] は純粋ポーリング専用ゆえ
+//!   流用しない。送出ごとに `yield_now` で回すと unbounded channel を洪水させつつ worker を
+//!   CPU 飢餓させる二重の害があり、短い sleep でペーシングするのが根治（areka-kanade 先例）。
+//!   加えて注入時刻が観測を追い越さないこと（R7.8 の頭打ち）が別途必要。
+//! - **回収（settle）**（「尽きるのが正常」の残余回収＝負検証）→ [`settle_bounded`]。時刻前進は
+//!   呼出側が前段で注入し終えており、本体は観測しかしない。打ち切りは反復回数ではなく
+//!   **[`SETTLE_MIN`] の最小持続 かつ 連続 [`SETTLE_QUIET_ROUNDS`] 回 0 件**の両立で、反復間は
+//!   [`BACKOFF_SLEEP`] の短い sleep のみ（要件 4.2・4.4）。負荷で回収機会が縮まないことが要点。
+//!
+//! 詳細な根拠は [`drive_shell_shown`] の doc を参照。
+//! 決定論 spine の**土台**。本 task（6.1）はハーネス（scripted `ShioriBackend`＋実 sink 結線＋
+//! GPU World＋frame フェーズ直接駆動）と、boot→Tick→attach 到達をスモークレベルで固定する
+//! `#[test]` を所有する。豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b` 配送・
+//! S5 close 握手）は後続 task（6.2/6.3）が本ハーネスの上に構築する。
+//!
+//! # 構造上の逸脱（設計 File Structure との差分・CONCERNS 相当）
+//!
+//! design.md の File Structure は spine を外部結合テスト `tests/emo2_boot_spine_test.rs` に置くが、
+//! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
+//! （`crate::{PresentBridge, RuntimeWiring, run_attach_phase, ...}`）へ到達できない。
+//! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
+//! （bin を起動する外部テストでは不能）、既存 repo 慣行（`runtime::wire_tests`・
+//! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
+
+// 旧 `spine.rs` の頭の `use` の行（⑶ と子のテストが `super::` で引いていた・段 2 で `areka-runtime` の
+// `spine.rs` から移した。`super::`・`crate::` の道と要らない名前は段 3 の代わりの親で直す）。
+use areka_placement::follow::OffsetBase;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::rc::Rc;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use areka_actor::ActorHandle;
+use areka_emo_compose::{BindSet, PatternState};
+use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
+use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
+use areka_emo_text::state::TextLayerConfig;
+use areka_ghost::dispatcher::DispatcherMsg;
+use areka_ghost::{GhostRuntime, ShioriWiring, TickerMode, boot_with_kanade_stop};
+use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock};
+use areka_sakura::ActorKey;
+use areka_seriko::{
+    AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink, SurfaceResolver,
+    spawn_seriko,
+};
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::World;
+use log_capture_kit::{LineFormat, capture_lines};
+
+use super::sample_test_support::acquire_emo2;
+use sample_ghost_kit::SampleRoot;
+use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
+use wintf::ecs::{DPI, GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
+use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
+
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+
+use super::adapter::PresentBridge;
+use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
+use super::frame::{
+    RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
+    run_text_scale_phase,
+};
+use super::move_cue::{MoveCueSink, PositionCue};
+use super::talk_clock::{ClockedTextSink, TalkClock};
+use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use super::target_map::{balloon_target, shell_target};
+use crate::session::ghost_quit::KanadeNoticeRx;
+
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
 ///
 /// 回収機会を反復回数で与えると、CPU 競合下（並列 `cargo test`・ウイルス対策の再スキャン）では

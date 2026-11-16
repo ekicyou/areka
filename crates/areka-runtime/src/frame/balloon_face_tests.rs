@@ -20,9 +20,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use super::{FaceCause, after_drain, changed_faces, select_balloon_face};
-use crate::frame::balloon_runtime_test_support::{
-    balloon_is_manual, manual_balloon_runtime,
-};
+use crate::frame::balloon_runtime_test_support::{balloon_is_manual, manual_balloon_runtime};
 use crate::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::frame::{RuntimeWiring, balloon_target, shell_target};
 

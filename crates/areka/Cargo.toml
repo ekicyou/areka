@@ -97,6 +97,8 @@ sample-ghost-kit = { path = "../sample-ghost-kit" }
 real-run-kit = { path = "../real-run-kit" }
 # 配置のテストの支えを本体のテストにだけ開ける（spec: placement-crate-split 要件 3.5）。本番の表の同じ依存に機能を足すだけ。
 areka-placement = { path = "../areka-placement", features = ["test-support"] }
+# runtime のテストの支えを本体のテストにだけ開ける（spec: runtime-crate-split 要件 3.1／3.2）。本番の表の同じ依存に機能を足すだけ。
+areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
 # オフラインの書き出しの検体の 1 色塗りの α 付き PNG を書き、書き出した PNG を RGBA で読む
 # （spec: areka-P0-offline-surface-dump）。areka-emo-atlas と同じ版で、Cargo.lock に新しいクレートは増えない。
 image = { version = "0.25.10", default-features = false, features = ["png"] }

@@ -9,6 +9,10 @@ license.workspace = true
 publish = false # areka 本体の部品・areka の中でしか意味を持たない
 repository.workspace = true
 
+[features]
+# 本体のテストだけが使う支えを開ける・本体は dev-dependency でだけ付ける（spec: runtime-crate-split 要件 3.1／3.2）。
+test-support = ["dep:shiori-host32-host", "areka-placement/test-support"]
+
 [dependencies]
 wintf = { path = "../wintf" }
 dola = { path = "../dola" }
@@ -25,6 +29,8 @@ areka-parsers = { path = "../areka-parsers" }
 areka-sakura = { path = "../areka-sakura" }
 areka-seriko = { path = "../areka-seriko" }
 areka-sylphya = { path = "../areka-sylphya" }
+# 台本の SHIORI（spine の ⑵）が実装の戻りの型を名指すため、test-support のときだけ付く（本番のビルドには付かない）。
+shiori-host32-host = { path = "../shiori-host32-host", optional = true }
 bevy_ecs = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

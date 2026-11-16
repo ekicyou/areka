@@ -62,11 +62,7 @@ pub(crate) struct LastInstalledShell {
 pub(crate) struct LastInstalledBalloon(pub String);
 
 /// シェルのインストールの完了で控えを置き換える（最後の 1 件だけ残る・要件 1.10・裁定 3）。
-pub fn record_installed_shell(
-    world: &mut World,
-    ghost_folder: Option<String>,
-    folder: String,
-) {
+pub fn record_installed_shell(world: &mut World, ghost_folder: Option<String>, folder: String) {
     tracing::info!(
         event = "last_installed_shell_recorded",
         ghost = ?ghost_folder,

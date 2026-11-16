@@ -23,7 +23,7 @@
 //! - `ScriptedShioriHandle::non_status_calls()`（`spine.rs:302-311`）は死活の問い合わせ
 //!   （`RecordedCall::Status`）だけを除く。除かれるのは受け口が自発的に打つ死活監視であって、
 //!   一周が送る照会・通知は 1 件も落ちない。
-//! - `snapshot_status_calls()`（`spine_conformance_support.rs:60-62`）は台帳をそのまま複製する。
+//! - `snapshot_status_calls()`（`areka-runtime` の `spine.rs`）は台帳をそのまま複製する。
 //! - 表示指令は `RuntimeWiring::drain_received()` を素通しで積む（同 `:449-451`）。投影
 //!   [`project_display`] も、知らない指令を捨てずに [`DisplayProjection::Unknown`] として 1 件残す。
 //!

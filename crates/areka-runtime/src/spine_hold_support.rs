@@ -28,7 +28,7 @@ use super::{SPIN_WAIT, ScriptedShioriBackendBuilder, ScriptedShioriHandle};
 
 /// どの呼び出しで固まるか。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum HoldAt {
+pub enum HoldAt {
     /// この id の GET（応答を要するイベント）。
     Get(&'static str),
     /// この id の NOTIFY（片道イベント）。
@@ -48,7 +48,7 @@ struct GateState {
 }
 
 /// 固まる往復（shiori のアクタースレッド）と解く手（別スレッド）の置き場。
-pub(crate) struct HoldGate {
+pub struct HoldGate {
     state: Mutex<GateState>,
     wake: Condvar,
     unblock_calls: AtomicUsize,
@@ -134,7 +134,7 @@ impl HoldGate {
 
 impl ScriptedShioriBackendBuilder {
     /// 指定した呼び出しで解かれるまで固まる台本を足す（1 台本につき 1 か所・最初の 1 回だけ）。
-    pub(crate) fn hold_at(mut self, at: HoldAt) -> Self {
+    pub fn hold_at(mut self, at: HoldAt) -> Self {
         self.hold = Some(at);
         self
     }
@@ -142,17 +142,17 @@ impl ScriptedShioriBackendBuilder {
 
 impl ScriptedShioriHandle {
     /// いま固まっているか（解く手を呼ぶ前に固まりを待つ口）。
-    pub(crate) fn holding(&self) -> bool {
+    pub fn holding(&self) -> bool {
         self.gate.state.lock().expect("hold gate poisoned").holding
     }
 
     /// 解く手が呼ばれた回数。
-    pub(crate) fn unblock_calls(&self) -> usize {
+    pub fn unblock_calls(&self) -> usize {
         self.gate.unblock_calls.load(Ordering::SeqCst)
     }
 
     /// 見張りを通さずにテストから直に解く（`unblock_handle` と同じ手・回数に数える）。
-    pub(crate) fn release(&self) {
+    pub fn release(&self) {
         (self.gate.unblock())().expect("偽の SHIORI の解く手は失敗しない");
     }
 }

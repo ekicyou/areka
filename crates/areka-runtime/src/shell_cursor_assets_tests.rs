@@ -18,7 +18,7 @@ use super::{CursorFile, ShellCursorAssets, build_shell_cursors};
 use crate::shell_cursor_table::{CursorScene, Shape, SystemCursor};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-const TARGET: &str = "areka::runtime::shell_cursor_assets";
+const TARGET: &str = "areka_runtime::shell_cursor_assets";
 
 /// 1 寸法ぶんの DIB（BITMAPINFOHEADER・32bpp の色・1bpp の抜き）。高さは色と抜きの 2 倍で書く。
 fn dib(side: u32) -> Vec<u8> {

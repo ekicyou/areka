@@ -234,7 +234,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
 /// # 交錯順を決定論にする仕掛け
 ///
 /// 台本受け口は照会・片道のどちらでも**最初に進行状態の記録へ書く**（`spine.rs:233`／`:255` が
-/// 呼ぶ `record_status`・本体は `spine_conformance_support.rs:50-59`）。ゆえにその台帳の錠を
+/// 呼ぶ `record_status`・本体は `areka-runtime` の `spine.rs` の `record_status`）。ゆえにその台帳の錠を
 /// テスト側が握っていれば受け口は次の呼出の入口で止まり、**応答が kanade へ帰らない**。起動の前に
 /// 錠を握り、握ったまま終了指示を投函すれば、kanade は必ず boot 系列に居るあいだにそれを受け取る
 /// （保留記録＝`crates/areka-kanade/src/schedule/boot.rs:31`・実体は `:285-288`）。錠を放すと起動が

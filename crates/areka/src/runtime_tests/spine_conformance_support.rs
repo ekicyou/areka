@@ -1,8 +1,8 @@
 //! 適合一周走行の支援層（areka-P0-emo2-conformance-e2e・design D3／D6）。
 //!
 //! 本ファイルは**期待値を持たない**。段の駆動（注入と有界待ちの組）と、記録の突合に使う
-//! 投影関数、そして進行状態の記録（第 2 系統）の型と取り出し口の本体を置く。台本と期待列は
-//! `spine_conformance_script.rs`、判定は `spine_conformance_lap_tests.rs` が持つ。
+//! 投影関数を置く（進行状態の記録〔第 2 系統〕の型と取り出し口の本体は `areka-runtime` の `spine` に
+//! ある）。台本と期待列は `spine_conformance_script.rs`、判定は `spine_conformance_lap_tests.rs` が持つ。
 //!
 //! # 進行状態の記録が要る理由（R3.8・design D3「進行状態の台帳が要る理由」）
 //!
@@ -13,7 +13,6 @@
 //! （`crates/areka-kanade/src/schedule/events.rs:171-180`）ゆえ両者で同一値になる。
 //! よって進行状態そのもの（組み立て済みのヘッダ値）を記録しなければ選択待ちは観測できない。
 
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::conformance_script::{LapStage, TICK_STEP_MS};
@@ -27,40 +26,9 @@ use areka_kanade::{
     ChoiceInput, CloseReason, ExecutionSnapshot, KanadeMsg, MonotonicMs, MouseInput, ShioriCall,
 };
 
-/// 進行状態の記録 1 件（呼出 id と、その呼出に載った**組み立て済み**の進行状態の対）。
-///
-/// `status` は kanade が `ExecutionStatus::render()` 済みの wire 値をそのまま持つ
-/// （`crates/areka-kanade/src/shiori/real.rs:136`／`:151`）。`None` は「`Status` ヘッダ行を
-/// 出さない」ことを表す値であって、記録の欠落ではない。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct RecordedStatus {
-    /// 呼出のイベント id（wire 形の逐語）。
-    pub(super) id: String,
-    /// 組み立て済みの進行状態。`None`＝ヘッダ行を出さない。
-    pub(super) status: Option<String>,
-}
-
-/// 進行状態の記録の台帳（受け口本体と観測ハンドルが `Arc` で共有する）。
-pub(super) type StatusLedger = Arc<Mutex<Vec<RecordedStatus>>>;
-
-/// 台本受け口の書き込み点の本体（`spine.rs` の照会・片道の 2 か所から呼ばれる）。
-///
-/// **書き込み専用**である。既存の呼出記録とは別の台帳へ積むだけで、既存の読み手を 1 つも
-/// 増やさない（design D3「追補の形（挙動を変えない）」）。
-pub(super) fn record_status(ledger: &StatusLedger, id: &str, status: Option<&str>) {
-    ledger
-        .lock()
-        .expect("status ledger mutex poisoned")
-        .push(RecordedStatus {
-            id: id.to_string(),
-            status: status.map(str::to_string),
-        });
-}
-
-/// 観測ハンドルの取り出し口の本体（進行状態の記録のスナップショットを呼出順で返す）。
-pub(super) fn snapshot_status_calls(ledger: &StatusLedger) -> Vec<RecordedStatus> {
-    ledger.lock().expect("status ledger mutex poisoned").clone()
-}
+// 進行状態の記録（第 2 系統）の型と本体は、書き込む台本の SHIORI と同じ所（`areka-runtime` の `spine`）に
+// 1 つだけ置き、ここから出し直す（spec: runtime-crate-split 段 2 の記録「設計からの外れ」）。
+pub(super) use areka_runtime::spine::RecordedStatus;
 
 // ===========================================================================
 // 進行状態の記録（第 2 系統）の受け入れ確認（task 2.1・R3.8）

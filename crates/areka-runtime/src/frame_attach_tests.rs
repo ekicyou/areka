@@ -4,10 +4,9 @@ use crate::talk_lifecycle::TalkLifecycleSignal;
 use areka_emo_text::state::TextLayerConfig;
 use dola::cue::{CueCommand, TalkCue};
 use std::sync::{Arc, mpsc};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::test_support::{
-    capture_logs, resnap_world, synth_assets, synth_assets_with_balloons, zero_clock,
+    capture_logs, gpu_attach_world, synth_assets, synth_assets_with_balloons, zero_clock,
 };
 use super::*;
 
@@ -250,29 +249,6 @@ fn run_attach_phase_with_an_invalid_core_does_not_attach() {
 // が互いに異なる。ゆえに「先頭 scope の定義を全 scope へ配る」実装はこの檻で必ず落ちる。
 // attach は GPU 資源ゲート越しにしか走らないため、檻も 実 GPU（MTA）で
 // 本番 [`run_attach_phase`] をそのまま駆動する（シームを噛ませない）。
-
-/// [`resnap_world`]（2 スコープ窓＋偽 `WindowHandle`）へ実 GPU 資源を載せた attach 檻の World。
-///
-/// attach ゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の連言ゆえ、
-/// 本番 attach を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を初期化する
-/// （記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
-///
-/// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
-fn gpu_attach_world() -> (crate::spine::GpuPermit, World, GhostWindows) {
-    // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
-    // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let (mut world, gw) = resnap_world();
-    let gpu = crate::spine::GpuPermit::take();
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    (gpu, world, gw)
-}
 
 /// 装着の相は起動の資産のシェルのカーソルを NonSend へ入れる（shell-mouse-cursor 要件 6.8・
 /// tasks.md 4.3）。入れ替えの順そのものは `shell_cursor_assets` の檻が持つ。
@@ -969,7 +945,3 @@ fn attach_hands_the_box_bundle_and_the_balloon_folder_name_to_the_text_layer() {
         "警告の名前の欄はバルーンのフォルダ名 {balloon_name}: {warned:?}"
     );
 }
-
-// ghost の読み直しで控えた面を装着の相が出し直す檻（areka-P0-mcp-reload 要件 3.8）。
-#[path = "frame_attach_carry_tests.rs"]
-mod carry_tests;

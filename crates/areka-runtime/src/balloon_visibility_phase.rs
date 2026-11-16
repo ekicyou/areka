@@ -70,10 +70,7 @@ use super::{
 /// `RuntimeWiring` を world から取り出した状態（`frame_system` の内側）で呼ぶ。装着が未了で
 /// `wiring.balloon_models` が空なら対象 scope がゼロ件となり、信号の取り出しだけを行って
 /// 何も発行しない。panic しない。
-pub(crate) fn run_balloon_visibility_phase(
-    wiring: &mut RuntimeWiring,
-    world: &mut World,
-) {
+pub(crate) fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // 文字層ランタイムは `Rc` を複製して受け取り、wiring の分解より前に借用を解く。
     let runtime = Rc::clone(wiring.runtime());
     let RuntimeWiring {
@@ -168,10 +165,7 @@ pub(crate) enum VisibilityWake {
 /// 引き算が数にならない期限（非有限）も預けない。そういう期限は満了の比較そのものが成立せず
 /// （表示を保持したまま動かない）、起こしても判断が変わらないからである。素通ししても心拍が
 /// 定期的に見に来る。
-pub(crate) fn visibility_wake(
-    now_talk_time: Option<f64>,
-    deadline: Option<f64>,
-) -> VisibilityWake {
+pub(crate) fn visibility_wake(now_talk_time: Option<f64>, deadline: Option<f64>) -> VisibilityWake {
     let (Some(now), Some(deadline)) = (now_talk_time, deadline) else {
         return VisibilityWake::None;
     };

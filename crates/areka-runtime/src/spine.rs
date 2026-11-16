@@ -1,104 +1,82 @@
-//! 決定論 spine テストハーネス（R8・tasks.md task 6.1）。
+//! 決定論 spine テストハーネス（R8・tasks.md task 6.1）のうち、本体を引かない支えの 2 層。
 //!
-//! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
-//! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す
+//! - ⑴ 待ちの部品と GPU の装置の許可 `GpuPermit`（子のファイル `spine_wait.rs`）。
+//! - ⑵ 台本の SHIORI（`ScriptedShioriBackend` 一式・[`HOMEURL_RESOURCE`]・進行状態の記録の型と本体）と
+//!   「解かれるまで固まる」台本の置き場 [`hold_support`]（`spine_hold_support.rs`）。
 //!
-//! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: 本ファイルで言う sleep 不使用とは
+//! 背骨の足場（`SpineHarness`・`settle_bounded`・`make_world_with_gpu` ほか＝⑶）とそれを使う spine の
+//! テストは本体の部品も使うので、本体の `runtime_tests/spine.rs` に置く（spec: runtime-crate-split 設計 D4）。
+//! このモジュールは `#[cfg(any(test, feature = "test-support"))]` で立ち、本体のテストは `test-support` で使う。
+//!
+//! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: spine で言う sleep 不使用とは
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
 //! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
 //! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計
-//! [`SPIN_WAIT`] で有界化してある。待機の形は**3 種**（いずれも期限は [`SPIN_WAIT`]）:
-//!
-//! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`wait_until`]。
-//!   密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
-//!   [`BACKOFF_SLEEP`] へ落としてコア占有をやめる（PR #96 で導入）。
-//! - **ハイブリッド**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→ 各呼出点の
-//!   自前ループ＋`sleep(200µs)` の poll-backoff。[`wait_until`] は純粋ポーリング専用ゆえ
-//!   流用しない。送出ごとに `yield_now` で回すと unbounded channel を洪水させつつ worker を
-//!   CPU 飢餓させる二重の害があり、短い sleep でペーシングするのが根治（areka-kanade 先例）。
-//!   加えて注入時刻が観測を追い越さないこと（R7.8 の頭打ち）が別途必要。
-//! - **回収（settle）**（「尽きるのが正常」の残余回収＝負検証）→ [`settle_bounded`]。時刻前進は
-//!   呼出側が前段で注入し終えており、本体は観測しかしない。打ち切りは反復回数ではなく
-//!   **[`SETTLE_MIN`] の最小持続 かつ 連続 [`SETTLE_QUIET_ROUNDS`] 回 0 件**の両立で、反復間は
-//!   [`BACKOFF_SLEEP`] の短い sleep のみ（要件 4.2・4.4）。負荷で回収機会が縮まないことが要点。
-//!
-//! 詳細な根拠は [`drive_shell_shown`] の doc を参照。
-//! 決定論 spine の**土台**。本 task（6.1）はハーネス（scripted `ShioriBackend`＋実 sink 結線＋
-//! GPU World＋frame フェーズ直接駆動）と、boot→Tick→attach 到達をスモークレベルで固定する
-//! `#[test]` を所有する。豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b` 配送・
-//! S5 close 握手）は後続 task（6.2/6.3）が本ハーネスの上に構築する。
-//!
-//! # 構造上の逸脱（設計 File Structure との差分・CONCERNS 相当）
-//!
-//! design.md の File Structure は spine を外部結合テスト `tests/emo2_boot_spine_test.rs` に置くが、
-//! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
-//! （`crate::{PresentBridge, RuntimeWiring, run_attach_phase, ...}`）へ到達できない。
-//! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
-//! （bin を起動する外部テストでは不能）、既存 repo 慣行（`runtime::wire_tests`・
-//! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
+//! [`SPIN_WAIT`] で有界化してある。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
+//! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で
+//! 速い経路の検出遅延を犠牲にせず、窓を過ぎたら [`BACKOFF_SLEEP`] へ落としてコア占有をやめる
+//! （PR #96 で導入）。ハイブリッドと回収（settle）の形は ⑶ の側（本体の `runtime_tests/spine.rs`）の説明にある。
 //!
 //! # 依存の申し送り（CONCERNS 相当）
 //!
 //! scripted `ShioriBackend` は `RequestError`/`ExitKind`/`ShutdownError`/`HelperStatus`
 //! （`shiori_host32_host` 由来）をトレイト戻り値型として**名前で**参照する。`areka_kanade` は
-//! これら host32 型を re-export しないため、`areka/Cargo.toml` の `[dev-dependencies]` へ
-//! `shiori-host32-host`（既に areka-ghost/areka-kanade 経由で推移ビルド済み・x64・新規外部依存
-//! ではない）を追加した。
+//! これら host32 型を re-export しないため、`areka-runtime/Cargo.toml` に `shiori-host32-host`
+//! （既に areka-ghost/areka-kanade 経由で推移ビルド済み・x64・新規外部依存ではない）を、
+//! `test-support` のときだけ付く optional の依存と、自分のテストのための `[dev-dependencies]` の 2 行で置く。
 
-use areka_placement::follow::OffsetBase;
-use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::rc::Rc;
-use std::sync::mpsc;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+
+use areka_kanade::{ShioriBackend, ShioriUnblock};
+use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+
+use self::hold_support::{HoldAt, HoldGate};
+// 子の `wait_tests` が `super::{Duration, Instant}` で引く（旧 ⑶ の足場と一緒に持っていた行）。
+#[cfg(test)]
 use std::time::{Duration, Instant};
 
-use areka_actor::ActorHandle;
-use areka_emo_compose::{BindSet, PatternState};
-use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
-use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
-use areka_emo_text::state::TextLayerConfig;
-use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{GhostRuntime, ShioriWiring, TickerMode, boot_with_kanade_stop};
-use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock};
-use areka_sakura::ActorKey;
-use areka_seriko::{
-    AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink, SurfaceResolver,
-    spawn_seriko,
-};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::world::World;
-use log_capture_kit::{LineFormat, capture_lines};
+// ===========================================================================
+// 進行状態の記録（第 2 系統・R3.8）の型と本体
+//
+// 台本の SHIORI（下）が書き込み、本体の適合一周走行（`runtime_tests/spine_conformance_support.rs`）が
+// 読む。定義は 1 つで、⑵ と同じ所に置く（spec: runtime-crate-split 段 2 の記録「設計からの外れ」）。
+// ===========================================================================
 
-use super::sample_test_support::acquire_emo2;
-use sample_ghost_kit::SampleRoot;
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
-use windows::Win32::Foundation::HWND;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{DPI, GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
-use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
+/// 進行状態の記録 1 件（呼出 id と、その呼出に載った**組み立て済み**の進行状態の対）。
+///
+/// `status` は kanade が `ExecutionStatus::render()` 済みの wire 値をそのまま持つ
+/// （`crates/areka-kanade/src/shiori/real.rs:136`／`:151`）。`None` は「`Status` ヘッダ行を
+/// 出さない」ことを表す値であって、記録の欠落ではない。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordedStatus {
+    /// 呼出のイベント id（wire 形の逐語）。
+    pub id: String,
+    /// 組み立て済みの進行状態。`None`＝ヘッダ行を出さない。
+    pub status: Option<String>,
+}
 
-use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use areka_placement::source::GhostTitles;
-use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+/// 進行状態の記録の台帳（受け口本体と観測ハンドルが `Arc` で共有する）。
+pub type StatusLedger = Arc<Mutex<Vec<RecordedStatus>>>;
 
-use super::adapter::PresentBridge;
-use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
-use super::frame::{
-    RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
-    run_text_scale_phase,
-};
-use super::move_cue::{MoveCueSink, PositionCue};
-use super::talk_clock::{ClockedTextSink, TalkClock};
-use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use super::target_map::{balloon_target, shell_target};
-use crate::session::ghost_quit::KanadeNoticeRx;
-// 進行状態の記録（第 2 系統・R3.8）の型と本体は兄弟ファイル側に置く（design D3）。
-use self::conformance_support::{
-    RecordedStatus, StatusLedger, record_status, snapshot_status_calls,
-};
-use self::hold_support::{HoldAt, HoldGate};
+/// 台本受け口の書き込み点の本体（照会・片道の 2 か所から呼ばれる）。
+///
+/// **書き込み専用**である。既存の呼出記録とは別の台帳へ積むだけで、既存の読み手を 1 つも
+/// 増やさない（design D3「追補の形（挙動を変えない）」）。
+pub fn record_status(ledger: &StatusLedger, id: &str, status: Option<&str>) {
+    ledger
+        .lock()
+        .expect("status ledger mutex poisoned")
+        .push(RecordedStatus {
+            id: id.to_string(),
+            status: status.map(str::to_string),
+        });
+}
+
+/// 観測ハンドルの取り出し口の本体（進行状態の記録のスナップショットを呼出順で返す）。
+pub fn snapshot_status_calls(ledger: &StatusLedger) -> Vec<RecordedStatus> {
+    ledger.lock().expect("status ledger mutex poisoned").clone()
+}
 
 // ===========================================================================
 // ScriptedShioriBackend（DD-11・areka 側 spine ローカルの最小 fake）
@@ -111,7 +89,7 @@ use self::hold_support::{HoldAt, HoldGate};
 
 /// backend が受領した 1 呼出の記録（照合用）。`Get`/`Notify` は id・references を保持する。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RecordedCall {
+pub enum RecordedCall {
     /// GET 呼出（応答を要するイベント）。
     Get { id: String, references: Vec<String> },
     /// NOTIFY 呼出（片道イベント）。
@@ -126,7 +104,7 @@ pub(crate) enum RecordedCall {
 ///
 /// GET/NOTIFY は id ごとに応答列（`VecDeque`）を積み、呼出のたびに先頭から 1 件消費する
 /// （`RequestError`/`ShutdownError` は `Clone` 非実装ゆえ値を使い切り消費する設計）。
-pub(crate) struct ScriptedShioriBackendBuilder {
+pub struct ScriptedShioriBackendBuilder {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
@@ -145,7 +123,7 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `id` に対する GET 応答を 1 件、応答列の末尾へ積む（複数回で FIFO 消費）。
-    pub(crate) fn get(
+    pub fn get(
         mut self,
         id: impl Into<String>,
         response: Result<Option<String>, RequestError>,
@@ -158,11 +136,7 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `id` に対する NOTIFY 応答を 1 件、応答列の末尾へ積む。
-    pub(crate) fn notify(
-        mut self,
-        id: impl Into<String>,
-        response: Result<(), RequestError>,
-    ) -> Self {
+    pub fn notify(mut self, id: impl Into<String>, response: Result<(), RequestError>) -> Self {
         self.notify_scripts
             .entry(id.into())
             .or_default()
@@ -171,7 +145,7 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `unload()` の結果を台本化する（一度きり消費・`Option::take` で払い出す）。
-    pub(crate) fn unload(mut self, response: Result<ExitKind, ShutdownError>) -> Self {
+    pub fn unload(mut self, response: Result<ExitKind, ShutdownError>) -> Self {
         self.unload_script = Some(response);
         self
     }
@@ -189,7 +163,7 @@ impl ScriptedShioriBackendBuilder {
     /// backend が panic しない（`boot_with` に手組み backend を渡す経路も同じ既定で保護される）。
     /// テストが独自 username 応答を要すれば `.get("username", …)` で明示上書きでき、その場合は
     /// 既に登録済みゆえ既定は補われない。
-    pub(crate) fn build(mut self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+    pub fn build(mut self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
         self.get_scripts
             .entry("username".to_string())
             .or_insert_with(|| VecDeque::from([Ok(None)]));
@@ -216,10 +190,10 @@ impl ScriptedShioriBackendBuilder {
 }
 
 /// 更新の窓口が定常到達のたびに照会する Resource の名前（台本に無ければ NoContent で答える）。
-pub(crate) const HOMEURL_RESOURCE: &str = "homeurl";
+pub const HOMEURL_RESOURCE: &str = "homeurl";
 
 /// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装・R8.1/R8.6）。
-pub(crate) struct ScriptedShioriBackend {
+pub struct ScriptedShioriBackend {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
@@ -233,7 +207,7 @@ pub(crate) struct ScriptedShioriBackend {
 
 impl ScriptedShioriBackend {
     /// ビルダー起点。
-    pub(crate) fn builder() -> ScriptedShioriBackendBuilder {
+    pub fn builder() -> ScriptedShioriBackendBuilder {
         ScriptedShioriBackendBuilder::new()
     }
 }
@@ -322,7 +296,7 @@ impl ShioriBackend for ScriptedShioriBackend {
 ///
 /// backend 本体を別スレッド（shiori actor）へ move した後も、このハンドルから発火列を照合できる。
 #[derive(Clone)]
-pub(crate) struct ScriptedShioriHandle {
+pub struct ScriptedShioriHandle {
     calls: Arc<Mutex<Vec<RecordedCall>>>,
     /// 進行状態の記録（第 2 系統・R3.8）の共有台帳。取り出し口は [`Self::status_calls`]。
     status_calls: StatusLedger,
@@ -331,7 +305,7 @@ pub(crate) struct ScriptedShioriHandle {
 
 impl ScriptedShioriHandle {
     /// 受領記録（非 Status のみ）のスナップショットを返す（死活監視ノイズを除外）。
-    pub(crate) fn non_status_calls(&self) -> Vec<RecordedCall> {
+    pub fn non_status_calls(&self) -> Vec<RecordedCall> {
         self.calls
             .lock()
             .expect("calls mutex poisoned")
@@ -343,7 +317,7 @@ impl ScriptedShioriHandle {
 
     /// 受けた呼び出し（`Get`・`Notify`・`Unload`）の数。状態の問い合わせ `Status` は数えず、記録の写しも
     /// 作らない（待ちの進みの目印に毎回読む口・areka-P0-ghost-session-test-load-flake 3.1）。
-    pub(crate) fn call_count(&self) -> u64 {
+    pub fn call_count(&self) -> u64 {
         let calls = self.calls.lock().expect("calls mutex poisoned");
         calls
             .iter()
@@ -352,7 +326,7 @@ impl ScriptedShioriHandle {
     }
 
     /// 進行状態の記録（呼出 id と組み立て済み進行状態の対）のスナップショットを返す（R3.8）。
-    fn status_calls(&self) -> Vec<RecordedStatus> {
+    pub fn status_calls(&self) -> Vec<RecordedStatus> {
         snapshot_status_calls(&self.status_calls)
     }
 }
@@ -365,14 +339,14 @@ impl ScriptedShioriHandle {
 mod wait;
 
 // 待ちの部品は子のファイル `spine_wait.rs` に置き、同じ名前で出し直す（兄弟のテストは `super::SPIN_WAIT` などで引く）。
-use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
-pub(crate) use self::wait::{
+pub use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
+pub use self::wait::{
     GpuPermit, Progress, WaitFailure, join_thread_bounded, run_bounded, run_bounded_watching,
     wait_recv, wait_until, wait_until_with,
 };
 
 #[path = "spine_hold_support.rs"]
-pub(crate) mod hold_support;
+pub mod hold_support;
 #[cfg(test)]
 #[path = "spine_wait_tests.rs"]
 mod wait_tests;
