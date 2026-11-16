@@ -13,7 +13,7 @@
   - _Dispatch: standard — 新しい規則の分岐を設計の表から組む_
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 1.7, 2.4, 2.5, 8.1, 8.7_
 
-- [ ] 1.2 置き場の部品と WUC へ写す純粋な補助を作る
+- [x] 1.2 置き場の部品と WUC へ写す純粋な補助を作る
   - 置き場の部品（節の下の手動の持ち主＝親の節の世界の行列・不透明度の積・可視・切り抜き、自動で上げた持ち主＝整数の物理ピクセルの原点と大きさ）を作る
   - 持ち主の WUC の親からの変形（平行移動だけなら位置、それ以外は行列に全部・DPI の拡大込み）を出す補助を作る
   - 自分の切り抜きと置き場の切り抜きを 1 つの WUC の切り抜きへ合わせる補助（今のまま・軸に沿う矩形・逆行列で局所へ・合わせられない）を作る
@@ -174,3 +174,4 @@
 
 ## Implementation Notes
 - 1.1: `promotion.rs`・`promotion_shape.rs` は配線までの間 `#![cfg_attr(not(test), allow(dead_code))]`（`shortcut:` 注記つき）。3.x で配線したら外す。`promotion.rs` の時刻の繰り上げ `!(now >= prev)` は clippy `neg_cmp_op_on_partial_ord` が出て、最初の回の NaN で固まるので、3.x の配線のときに `self.last_now.map_or(now, |p| now.max(p))` へ替える（レビューの提案）
+- 1.2: `merged_clip` の `Rect{local}` は交わりが空だと `Aabb::EMPTY`（無限の値）になる。4.3 の ClipSync は「何も出さない」として扱う。`Transformed.inverse` は DIP の値で、物理への換算は ClipSync の受け持ち
