@@ -40,7 +40,7 @@ Windows の標準の形には「手を開いた形」「手を握った形」が
 pwsh -NoProfile -File <リポジトリの絶対パス>\tools\cursor-art.ps1 -SelfTest
 ```
 
-このフォルダの SVG を写したもの（ワークツリーの `target\cursor-art-selftest\` の下）で、2 回作って同じバイトになること・読めない命令（相対座標の `h`）で止まることを確かめ、通れば `OK selftest (2 checks)`、通らなければ判定ごとに `FAIL selftest ...` を 1 行出します。このフォルダは書きません。
+このフォルダの SVG を写したもの（ワークツリーの `target\cursor-art-selftest\` の下）で、2 回作って同じバイトになること・読めない命令（相対座標の `h`）で止まること・コミット済みの出力が今の SVG から作った物と同じことを確かめ、通れば `OK selftest (3 checks)`、通らなければ判定ごとに `FAIL selftest ...` を 1 行出します。このフォルダは書きません。
 
 ## 焼き方と当たりの点の決め方
 

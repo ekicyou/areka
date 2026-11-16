@@ -236,3 +236,4 @@
 - 7.2: `sample-fetch.ps1` の本番の配線 `-HttpsOnly:(-not $AnyScheme)`（`Invoke-FetchRows`）を縛る検査は無い（設計は 2 つの検査だけを求める）。11.2 のかけ直しで要否を判断する。
 - 8: `crates/areka/cursor/README.md` の 43 行が `OK selftest (2 checks)` のまま（今は 3 checks）。`crates/` は触らない約束なので直さず、11.4 の申し送りに書く。
 - 11.2: `package.ps1` で git が PATH に無いときの終了コードは 1→3（頭書の約束どおりになった所）。11.4 の「外への約束の変わり」の確かめに 1 行書く。11.2 の audit の最後の 0 件は全部読んだ 7 回目。
+- 完了時にその場で解決: `crates/areka/cursor/README.md` の 43 行の `OK selftest (2 checks)` を今の道具に合わせて `(3 checks)` と 3 つ目の判定の説明に直した（実装の段では `crates/` に触れない約束で残した件）。完了時の棚卸＝解決 1 件・申し送り 1 件（`runtime-crate-split` の brief.md へ `-Binary areka-runtime-lib` の件）・起票 0 件。
