@@ -6,7 +6,7 @@ use tracing::{error, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 
 use super::draw::builder::{NodeData, build};
-use super::world_visual::{FillData, ReportedIssues, fill_world_visuals};
+use super::world_visual::{FillData, ReportedIssues, TreeScan, fill_world_visuals};
 use super::{
     DrawTree, OwnSurface, Visual, VisualDrawContent, VisualTransform, WorldVisual,
     has_window_ancestor, insert_graphics_parts, wants_own_surface,
@@ -172,6 +172,7 @@ pub fn update_draw_trees(
     node_kinds: Query<(), (With<WorldVisual>, Without<VisualGraphics>)>,
     mut set: ParamSet<(Query<FillData>, Query<NodeData>)>,
     mut edits: TreeEdits,
+    mut scan: Local<TreeScan>,
     mut visited: Local<Vec<(Entity, usize)>>,
     mut reported: Local<ReportedIssues>,
 ) {
@@ -207,9 +208,11 @@ pub fn update_draw_trees(
             arrangement.is_changed(),
             top,
             kids.as_ref().is_some_and(|k| k.is_changed()),
-            &mut visited,
+            &mut scan,
             &mut reported,
         ) || own_changed;
+        visited.clear();
+        visited.extend(scan.visible_nodes());
         let Some(factory) = factory else { continue };
         if !needs_rebuild(changed, removed_any, core_changed, tree.is_some()) {
             continue;

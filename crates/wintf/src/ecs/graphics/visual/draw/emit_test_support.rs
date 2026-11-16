@@ -317,7 +317,7 @@ fn build_commands(
         .get::<Children>(root)
         .map(|c| c.to_vec())
         .unwrap_or_default();
-    let mut visited = Vec::new();
+    let mut scan = TreeScan::default();
     let mut fill_nodes = fill_state.get_mut(world).unwrap();
     fill_world_visuals(
         root,
@@ -326,9 +326,10 @@ fn build_commands(
         false,
         &top,
         false,
-        &mut visited,
+        &mut scan,
         &mut Default::default(),
     );
+    let visited: Vec<_> = scan.visible_nodes().collect();
 
     let viewport = viewport.unwrap_or_else(|| {
         let size = world

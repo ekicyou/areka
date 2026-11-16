@@ -23,7 +23,7 @@
   - _Requirements: 4.3, 4.4, 4.6, 4.8, 5.1, 8.4, 8.7_
 
 - [ ] 2. 走査の列・形の見分け・部分の列
-- [ ] 2.1 描画面の持ち主の木を埋める係を走査の列へ広げ、節の下の持ち主を切らなくする
+- [x] 2.1 描画面の持ち主の木を埋める係を走査の列へ広げ、節の下の持ち主を切らなくする
   - 節（`WorldVisual`）が生まれたときから状態の部品を持つようにする
   - 埋める係が、手動の持ち主ごとに前順の走査の列（深さ・親の添字・部分木の終わり・種類・可視・世界の行列・この回の更新・自分の切り抜きの種類・混ぜ方・祖先の不透明度の積と層と矩形の切り抜きの交わりと混ぜ方）を 1 度の歩きで記す
   - 子が手動の持ち主なら、その部分木は歩かず、置き場の材料（親の節の世界の行列）を持つ項を 1 つ入れて止まり、`error!` を残さない。自動で上げた持ち主の部分木は通り抜ける
@@ -175,3 +175,4 @@
 ## Implementation Notes
 - 1.1: `promotion.rs`・`promotion_shape.rs` は配線までの間 `#![cfg_attr(not(test), allow(dead_code))]`（`shortcut:` 注記つき）。3.x で配線したら外す。`promotion.rs` の時刻の繰り上げ `!(now >= prev)` は clippy `neg_cmp_op_on_partial_ord` が出て、最初の回の NaN で固まるので、3.x の配線のときに `self.last_now.map_or(now, |p| now.max(p))` へ替える（レビューの提案）
 - 1.2: `merged_clip` の `Rect{local}` は交わりが空だと `Aabb::EMPTY`（無限の値）になる。4.3 の ClipSync は「何も出さない」として扱う。`Transformed.inverse` は DIP の値で、物理への換算は ClipSync の受け持ち
+- 2.1: `update_draw_trees` は今も全部の `VisualGraphics` を根に取る（3.4 で手動の持ち主だけに絞る）。`FillData` の `Has<VisualGraphics>` は読まれなくなった（3.4 で消してよい）。`visited.extend(scan.visible_nodes())` は組み直しの無い回の早期 continue の後へ移せる

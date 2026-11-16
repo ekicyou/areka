@@ -105,7 +105,7 @@ fn fill(world: &mut World, root: Entity) -> Vec<(Entity, usize)> {
         .unwrap_or_default();
     let mut state: SystemState<Query<FillData>> = SystemState::new(world);
     let mut nodes = state.get_mut(world).unwrap();
-    let mut visited = Vec::new();
+    let mut scan = TreeScan::default();
     fill_world_visuals(
         root,
         None,
@@ -113,10 +113,10 @@ fn fill(world: &mut World, root: Entity) -> Vec<(Entity, usize)> {
         false,
         &top,
         false,
-        &mut visited,
+        &mut scan,
         &mut Default::default(),
     );
-    visited
+    scan.visible_nodes().collect()
 }
 
 fn build_only(
