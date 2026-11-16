@@ -1105,7 +1105,7 @@ fn apply_balloon_limit_gate(
 /// 素通しすると `saturating_add` で逆転矩形になり、モニタ帰属が意味を失う
 /// （`resize_window_to` 手順 3／`guard_balloon_position` と同一の判定式）。
 /// 負座標そのものは正当（左隣モニタは負の X を持つ）ゆえ、符号や閾値では判定しない。
-fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
+pub(super) fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
     let wp = world.get::<WindowPos>(window)?;
     let pos = wp
         .position

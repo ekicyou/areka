@@ -39,7 +39,7 @@
   - _Requirements: 3.1, 3.2, 3.5, 3.6, 5.1, 5.2, 6.1, 6.4_
 
 - [ ] 3. 書き込みの関門に表示しているキャラ窓の矩形を渡す
-- [ ] 3.1 World から「判定に入れるキャラ窓の矩形の列」を組む
+- [x] 3.1 World から「判定に入れるキャラ窓の矩形の列」を組む
   - `follow/` の下に新しいファイルを置き、全スコープを昇順に回して、キャラ窓があり・窓の矩形が決まり・表示している、の 3 つが揃ったスコープだけを列に入れる。自分のスコープも外さない。
   - 表示しているかは、キャラ窓の子の描画面の `Visual.is_visible` のどれかが真かで読む。子が無い・全部不可視なら入れない。窓の一式が無ければ空の列で、記録はしない。
   - 窓の矩形を読む既存の私有関数を `follow/` の中から使えるようにし、ファサードに新しいモジュールとテストの接続を足す。
@@ -122,3 +122,4 @@
 - 2.1: descript の `balloon.offsetx` は `sakura.`/`char0.`（scope 0）と `kero.`/`char1.`（scope 1）の鍵だけが読まれ、無印の `balloon.offsetx` は surfaces.txt の surface ブレスの鍵（要件 3.4 で範囲外）。requirements.md 3.4・design.md の Unit Tests・research.md・このタスクの 2.1 にある「無印」の語は不正確（完了の棚卸で文を直す）。
 - 2.2: 右の腕の直しで `reseed_tests.rs` は 4 か所でなく 5 か所（192 DPI の `+60`→`-60` を含む）、さらに設計が見落とした `crates/areka/src/runtime/frame/switch_finish_face_tests.rs` の対照の期待値 1 行（`434 + 30 + 40`→`434 - 30 + 40`）が変わった。要件 3.1 の直接の帰結なので、テストの期待値だけ直した（ロジックは触らない）。`runtime-crate-split` に知らせ済みで、向こうはこのファイルを `crates/areka/src/runtime_tests/frame/switch_finish_face_tests.rs` へ `git mv` する（期待値の行は触らない）。後から着地した側が rebase で合わせる。6.2 の「`runtime/` に差分が無い」は、このテストの 1 行を除いて読む。
 - 4.3: `runtime-crate-split` は `ghost_session.rs` を動かさないが、段 4 で `crate::runtime::` の道を `areka_runtime::` へ機械で置き換える。足す 1 行は `runtime::` の道を含めない形にする。
+- 3.1: `follow.rs` の `mod other_chars;` の `#[allow(dead_code)]` と `shown_char_rects` の use の `#[allow(unused_imports)]` は仮置き。3.2 で呼び出しを足したら外す。「表示している」は子の `Visual.is_visible` で読むが、`emo-text-box-surface`（`Visual::default()`＝可視）が窓を隠したときに箱の同期で外れる、という設計の前提はまだ確かめていない（6.2 か完了の棚卸で確かめる）。
