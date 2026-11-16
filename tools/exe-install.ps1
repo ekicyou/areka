@@ -60,6 +60,8 @@ function Install-ToolExe {
     $done = { param([int]$Code) [pscustomobject]@{ Code = $Code; Lines = [string[]]$lines } }
     $exe = Join-Path $HomeDir "$Name.exe"
     $new = Join-Path $HomeDir "$Name.new.exe"
+    # .NET messages can carry the install folder (= the environment variable's value): print <home> instead ([char]92 = backslash, 47 = slash).
+    $reason = { param($e) Show-Ascii ($e.Exception.Message -ireplace [regex]::Escape($HomeDir.TrimEnd([char]92, [char]47)), '<home>') 0 }
 
     # 3 copy
     try {
@@ -79,12 +81,12 @@ function Install-ToolExe {
     }
     catch {
         $ok = $false
-        $checkLine = "FAIL check: cannot start: $(Show-Ascii $_.Exception.Message 0)"
+        $checkLine = "FAIL check: cannot start: $(& $reason $_)"
     }
     $lines.Add($checkLine)
     if (-not $ok) {
         try { if ([System.IO.File]::Exists($new)) { [System.IO.File]::Delete($new) } }
-        catch { $lines.Add("FAIL cleanup: cannot remove $Name.new.exe: $(Show-Ascii $_.Exception.Message 0)") }
+        catch { $lines.Add("FAIL cleanup: cannot remove $Name.new.exe: $(& $reason $_)") }
         return & $done 1
     }
 

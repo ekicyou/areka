@@ -62,7 +62,7 @@
   - _Dispatch: mechanical — 期待の値と文を設計が与える見本と検査と文書_
   - _Requirements: 3.2, 4.1, 4.3, 4.7, 7.8_
 
-- [ ] 4. 机へ置く道具の手順（束 4・2・3・10・13）
+- [x] 4. 机へ置く道具の手順（束 4・2・3・10・13）
 - [x] 4.1 机へ置く手順の共通の読み込み用のファイルを作り、置き換える前に新しい exe を確かめる
   - 共通の下回りだけを読み込み、`param` を持たない。環境変数の値を出さず設定しない。触るのは置き場の `<名前>.exe`・`<名前>.new.exe`・`<名前>.old*.exe` だけ
   - 置き場の環境変数の確かめ（設定なし・絶対パスでない＝値を出さない `FAIL home` の行）・release のビルド（`FAIL build` の 2 つの文）・写す → 確かめる → 置き換える → 掃除（設計の行と順の表どおり）・状態の確かめの判断の純関数（`none`／`clear`／`fail`）を置く
@@ -79,7 +79,7 @@
   - 終わった姿: 2 本の中に手 1〜6 の写しが 0 件で、2 本を構文木で読むと共通の手順だけを読み込んでおり、`encoding-check.ps1` が緑、`doc/impl-watch.md` の行の例が共通の手順の出す行と一字ずつ同じ
   - _Dispatch: standard — 2 本の載せ替えと状態の確かめの新しい枝_
   - _Requirements: 3.1, 3.2, 3.3, 6.2, 7.8_
-- [ ] 4.3 机へ置く手順の自分の検査の台本を作る
+- [x] 4.3 机へ置く手順の自分の検査の台本を作る
   - 共通の手順を読み込み、`target\exe-install-selftest\<pid>\` の下に偽の置き場を作る。偽の作った exe は中身を決めた小さなファイル、偽の確かめは中身を読んで合否を決める（本物の exe も cargo も起こさない）。握った取っ手と置き場は `finally` で必ず放して消す
   - 検査: `home checks`・`first place`・`good check places and sweeps`・`bad check keeps the current exe`・`check throws`・`rename fails and restores`・`keep in use`・`copy fails`・`status action`（何を見るかは設計の T3 の表）
   - 判定ごとに `ok selftest <名前>` か `FAIL selftest <名前>: <ASCII>` を出し、全部通れば 0・1 つでも落ちれば 1
@@ -230,3 +230,4 @@
 - 2.2: `tools/encoding-check.ps1` の頭書の規則 E の説明が `tools/package.ps1 (metadata and nar-sample-path)` のまま（表は `nar-sample-path` だけ）。11.2 のかけ直しで拾うか、近くを触るタスクで直す。
 - 3.1: `release-notes.ps1 -SelfTest` の見本の一覧は `subjects.txt` の題名から作るつなぎ（`shortcut:`）。3.2 で設計の `Read-SpecNamesFixture`（`spec-names.txt`）へ必ず替える。
 - 4.1: `exe-install.ps1` の `FAIL cleanup: …`・`FAIL check: cannot start: …` の理由は .NET の例外の文で、置き場の絶対パス（環境変数の値）を含みうる。設計は `<理由>` とだけ言う。11.2 のかけ直しで要否を判断する。
+- 4.3: 4.1 の件は 4.3 で直した（`Install-ToolExe` の理由の文で置き場のパスを `<home>` に替え、`check throws` で縛る）。
