@@ -104,7 +104,7 @@
   - _Dispatch: standard — 2 役の口を設計の形で新しく組む_
   - _Requirements: 4.1, 4.2, 15.1_
 
-- [ ] 4.2 案 1（クレートごとに束縛）と案 2（wintf 役が束縛を公開）を組む
+- [x] 4.2 案 1（クレートごとに束縛）と案 2（wintf 役が束縛を公開）を組む
   - 案 1: 両役がそれぞれ自分の束縛を持ち、emo-text 役の入口で wintf 役の型から自分の型へ `cast` する
   - 案 2: wintf 役の束縛が emo-text 役の要る API（`IDWriteFactory`・`IDWriteTextFormat`・`IDWriteTextLayout` ほか）まで抱えて公開し、emo-text 役はそれを使う
   - 4.1 の描く本体をそのまま読み込み、組めない案があれば組めなかった所（コンパイルの誤りの要旨か上流の制約）を書く

@@ -6,7 +6,7 @@ publish.workspace = true
 
 [dependencies]
 windows-core = { workspace = true }
-
+windows-numerics = { workspace = true }
 
 [build-dependencies]
 windows-bindgen = { workspace = true }

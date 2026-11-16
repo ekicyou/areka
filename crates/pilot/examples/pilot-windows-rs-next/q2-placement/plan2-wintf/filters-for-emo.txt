@@ -1,0 +1,15 @@
+// 案 2: wintf 役の束縛が emo-text 役の要る物まで抱えて公開する（emo-text 役が名指しする物）
+DWriteCreateFactory
+DWRITE_FACTORY_TYPE_SHARED
+IDWriteFactory
+IDWriteTextFormat
+IDWriteTextLayout
+DWRITE_FONT_WEIGHT_NORMAL
+DWRITE_FONT_STYLE_NORMAL
+DWRITE_FONT_STRETCH_NORMAL
+ID2D1DeviceContext
+// 継いだメソッド（BeginDraw・Clear・DrawTextLayout・EndDraw ほか）は基を名指ししないと出ない
+ID2D1RenderTarget
+ID2D1SolidColorBrush
+D2D1_DRAW_TEXT_OPTIONS_NONE
+E_FAIL

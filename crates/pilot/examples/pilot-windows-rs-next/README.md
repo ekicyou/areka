@@ -179,9 +179,21 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
   - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 0（束縛は 1 つだけ）。フィルターは両役の和で、wintf 役の `filters-wintf.txt` 20 行・emo-text 役の `filters-emo.txt` 13 行、両方に名指しした物は `ID2D1DeviceContext` の 1 つ（`build.rs` が `filter_files` で 2 つを読み、重なりは bindgen が 1 つにまとめる）。生成した `bindings.rs` は 7,962 行（既定の形・`.flat()`）。
   - 手で書いた行: `plan3-bind` 16 行（`build.rs` 13・`src/lib.rs` 3）・`plan3-wintf/src/lib.rs` 92 行・`plan3-emo` 37 行（`src/lib.rs` 7・`src/main.rs` 30）。
   - 学び: 継いだメソッド（`BeginDraw`・`Clear`・`DrawTextLayout`・`EndDraw`・`GetSize`）は emo-text 役の側で `ID2D1RenderTarget` を名指ししないと出ない（3.1 と同じ）。案 3 ではこの名指しが共有のクレートのフィルターに入るので、wintf 役も使わない基の口まで抱える（和にした分だけ束縛が太る）。
+- 案 1（クレートごとに束縛・4.2）:
+  - 組めたか: 組めた。直し 2 回（bin の `E_FAIL` が wintf 役の束縛に無く `q2_plan1_emo` から出すよう直した・clippy の 1 要素の `for` を `println!` 2 行へ。型の受け渡しの直しは 0 回）。実の GPU（画面の外・机なし）で `q2-plan1-emo` が `[q2-plan1] ink=858`・終了コード 0（案 3 と同じ数）。
+  - 受け渡しの手当て: `cast` の行 1（`plan1-emo/src/lib.rs` の入口 `draw_line(context: &q2_plan1_wintf::ID2D1DeviceContext, …)` の中の `context.cast::<ID2D1DeviceContext>()?`。両方の型が同じ IID の `windows_core::Interface` なので、クレートをまたいでも `QueryInterface` で自分の型の参照が取れた）。受け渡しの `from_raw` 0。wintf 役の中の `D2D1CreateFactory` の受け取りの `from_raw` 1 つは、案 3 と同じく工場を作る口の形で受け渡しではない。emo-text 役の `DWriteCreateFactory` は描く本体の `.cast()` のままで `from_raw` は要らない。
+  - 型を名指す口: emo-text 役の入口の引数が wintf 役の型なので、wintf 役は自分の束縛を `pub use bindings::*;` で公開し、emo-text 役は wintf 役のクレートに頼る（束縛は別でも依存は切れない）。emo-text 役の束縛は外へ出さない（bin が使う `E_FAIL` だけ `pub use`）。
+  - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 71（インターフェース 29〔`ID2D1DeviceContext`・`ID2D1RenderTarget`・`ID2D1Bitmap1`・`ID2D1Device`・`IDXGISurface`・`IWICBitmapSource` ほか〕・構造体 16〔`D2D1_PIXEL_FORMAT`・`D2D_SIZE_U`・`D2D1_BITMAP_PROPERTIES1` ほか〕・型の別名と列挙 26〔`DXGI_FORMAT`・`D2D1_ALPHA_MODE`・`IID` ほか〕。定数と関数の重なりは 0）。名指しは同じ 2 つのフィルター（wintf 役 20 件・emo-text 役 13 件、両方に名指しは `ID2D1DeviceContext` の 1 つ）でも、依存の型を自動で引くので重なりは名指しの 70 倍に出る。
+  - 生成した行数: wintf 役だけ 2,717 行・emo-text 役だけ 6,793 行・合わせて 9,510 行（案 3 の和の 7,962 行より 1,548 行多い＝重なりの分）。
+  - 手で書いた行: `plan1-wintf` 108 行（`build.rs` 11・`src/lib.rs` 97〔案 3 の wintf 役の本体と同じ＋自分の束縛の `include!` と公開の 6 行〕）・`plan1-emo` 59 行（`build.rs` 11・`src/lib.rs` 18・`src/main.rs` 30）。フィルターは案 3 の 2 つを写した物（`filters-wintf.txt` 21 行・`filters-emo.txt` 15 行）。
+- 案 2（wintf 役が束縛を公開・4.2）:
+  - 組めたか: 組めた。直し 1 回（案 1 と同じ clippy の 1 要素の `for`。型の受け渡しの直しは 0 回）。実の GPU（画面の外・机なし）で `q2-plan2-emo` が `[q2-plan2] ink=858`・終了コード 0（案 3 と同じ数）。
+  - 受け渡しの手当て: 無し。emo-text 役は自分の束縛を持たず（`build.rs` 無し）、`use q2_plan2_wintf::*; use windows_core::*;` で wintf 役が公開した型（`ID2D1DeviceContext`・`IDWriteFactory`・`IDWriteTextFormat`・`IDWriteTextLayout`・`DWriteCreateFactory` ほか）をそのまま使う。`cast` の行 0・受け渡しの `from_raw` 0（wintf 役の中の `D2D1CreateFactory` の `from_raw` 1 つは工場を作る口の形）。
+  - 重なった束縛の量: 同じ型が 2 つの束縛に出た数 0（束縛は wintf 役の 1 つだけ）。wintf 役のフィルターは自分の `filters-wintf.txt`（20 件）に emo-text 役のための `filters-for-emo.txt`（13 件）を足した和で、wintf 役は自分で使わない DirectWrite の口まで抱えて公開する。生成した `bindings.rs` は 7,962 行で、案 3 の物とバイトまで同じ（フィルターの中身が同じ和のため）。
+  - 手で書いた行: `plan2-wintf` 109 行（`build.rs` 12・`src/lib.rs` 97）・`plan2-emo` 37 行（`src/lib.rs` 7・`src/main.rs` 30）。案 3 との違いは、束縛の置き場が wintf 役のクレートの中か別のクレートかだけ。
 - 学び: （未記入）
-- 確かめた日: 2026-11-16（案 3・x64・4.1）
-- 止まった所・理由・代わりの見立て: 案 3 は無し。
+- 確かめた日: 2026-11-16（案 3・x64・4.1／案 1・案 2・x64・4.2）
+- 止まった所・理由・代わりの見立て: 3 案とも無し。
 - 判定: （開発者が下す）
 
 ### 問い 3: 束縛の形（既定か `.minimal()`）
