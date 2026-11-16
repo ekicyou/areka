@@ -29,6 +29,8 @@ mod draw_content_tests;
 #[cfg(test)]
 mod placement_tests;
 #[cfg(test)]
+mod promotion_shape_tests;
+#[cfg(test)]
 mod promotion_tests;
 #[cfg(test)]
 mod systems_tests;
