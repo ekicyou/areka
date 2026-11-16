@@ -1,5 +1,9 @@
-#![doc = include_str!("../README.md")]
-
+mod bindings {
+    #![allow(non_camel_case_types, non_snake_case, dead_code, clippy::all)]
+    // この rev の束縛は `IDC_ARROW: PCSTR` を出すが `PCSTR` を出さない（名指しもできない）。
+    pub type PCSTR = *const u8;
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
 pub mod util;
 
 use std::{
@@ -9,33 +13,30 @@ use std::{
     mem::{ManuallyDrop, MaybeUninit},
     panic::{self, AssertUnwindSafe},
     pin::{pin, Pin},
-    ptr::NonNull,
+    ptr::{self, NonNull},
     task::{Context, Poll, Waker},
 };
 
+use crate::bindings::*;
 use async_task::Runnable;
 use util::{Window, WindowType};
-use windows::Win32::{
-    Foundation::{LPARAM, LRESULT, WPARAM},
-    UI::WindowsAndMessaging::*,
-};
 
 use crate::util::MsgFilterHook;
 
-const MSG_ID_WAKE: u32 = WM_USER;
+const MSG_ID_WAKE: u32 = WM_USER as u32;
 
 thread_local! {
     static PANIC_PAYLOAD: Cell<Option<Box<dyn Any + Send + 'static>>> = const { Cell::new(None) };
     static EXECUTOR_WINDOW: Window<()> = Window::new(WindowType::MessageOnly, (), |_, msg| {
         if msg.msg == MSG_ID_WAKE {
             let runnable = unsafe {
-                let runnable_ptr = NonNull::new_unchecked(msg.lparam.0 as *mut _);
+                let runnable_ptr = NonNull::new_unchecked(msg.lparam as *mut _);
                 Runnable::<()>::from_raw(runnable_ptr)
             };
             if let Err(panic_payload) = panic::catch_unwind(|| runnable.run()) {
                 PANIC_PAYLOAD.set(Some(panic_payload));
             }
-            Some(LRESULT(0))
+            Some(0)
         } else {
             None
         }
@@ -75,12 +76,7 @@ unsafe fn spawn_unchecked_lifetime<T>(future: impl Future<Output = T>) -> JoinHa
     // on the original thread.
     let (runnable, task) = unsafe {
         async_task::spawn_unchecked(future, move |runnable: Runnable| {
-            let _ = PostMessageW(
-                Some(hwnd),
-                MSG_ID_WAKE,
-                WPARAM(0),
-                LPARAM(runnable.into_raw().as_ptr() as _),
-            );
+            let _ = PostMessageW(hwnd, MSG_ID_WAKE, 0, runnable.into_raw().as_ptr() as _);
         })
     };
 
@@ -185,7 +181,7 @@ impl MessageLoop {
         while !self.quit.get() {
             unsafe {
                 let mut msg = MaybeUninit::uninit();
-                if GetMessageW(msg.as_mut_ptr(), None, 0, 0).0 == 0 {
+                if GetMessageW(msg.as_mut_ptr(), ptr::null_mut(), 0, 0) == 0 {
                     return;
                 }
                 let msg = msg.assume_init();
@@ -241,7 +237,7 @@ impl MessageLoop {
                     // are running in a modal loop. Post a quit message to exit
                     // the modal message loop to store the panic payload.
                     if msg_loop.quit.get() {
-                        let _ = PostMessageW(Some(msg.hwnd), WM_QUIT, WPARAM(0), LPARAM(0));
+                        let _ = PostMessageW(msg.hwnd, WM_QUIT as u32, 0, 0);
                     }
                     filter_result == FilterResult::Drop
                 }))
@@ -250,7 +246,7 @@ impl MessageLoop {
                         panic_payload.set(Some(payload));
                     });
                     // Also exit the modal loop ASAP when a panic occurs.
-                    let _ = PostMessageW(Some(msg.hwnd), WM_QUIT, WPARAM(0), LPARAM(0));
+                    let _ = PostMessageW(msg.hwnd, WM_QUIT as u32, 0, 0);
                     false
                 })
             })

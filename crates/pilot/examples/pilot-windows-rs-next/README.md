@@ -121,12 +121,14 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 | 問い | 元のファイル | 写した行数 | 書き換えの行数 | 直しの回数 | 時間 |
 |---|---|---|---|---|---|
-| 1 | `src/lib.rs`（本番の部分のみ） | 270 | | | |
-| 1 | `src/util/mod.rs` | 7 | | | |
-| 1 | `src/util/msg_filter_hook.rs` | 64 | | | |
-| 1 | `src/util/window.rs` | 373 | | | |
-| 1 | `examples/basic.rs` | 36 | | | |
-| 1 | `examples/threads.rs` | 37 | | | |
+| 1 | `src/lib.rs`（本番の部分のみ） | 270 | +15／−19 | | |
+| 1 | `src/util/mod.rs` | 7 | 0 | | |
+| 1 | `src/util/msg_filter_hook.rs` | 64 | +7／−9 | | |
+| 1 | `src/util/window.rs` | 373 | +43／−32 | | |
+| 1 | `examples/basic.rs` | 36 | 0（変えない） | | |
+| 1 | `examples/threads.rs` | 37 | 0（変えない） | | |
+| 1 | 新しく足した `build.rs`・`filters.txt` | — | +12・+32 | | |
+| 1 | 計（2.2 の x64 まで） | 787 | 写しの書き換え +65／−60（新しいファイルを入れて +109／−60） | 4 | 約 12 分 |
 | 3 |  |  |  |  |  |
 | 4 |  |  |  |  |  |
 | 6 |  |  |  |  |  |
@@ -139,9 +141,22 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 1: C の関数だけのクレート（`.sys()`）
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
+- 見立ての候補: x64 までは go（i686・arm64 は 2.3 で書き足す）。
+- 確かめた日: 2026-11-16（x64・2.2）
+- 束縛: `q1-winmsg/build.rs` が `.sys().flat()` で `OUT_DIR/bindings.rs` を書く。フィルター `q1-winmsg/filters.txt` は **32 行**（関数 17・定数と型 15。`WM_CREATE`・`WM_DESTROY` は写した `window.rs` の試験のためだけ）。生成した `bindings.rs` は **151 行**。頼るのは `windows-link` だけ（`.sys()`＋`.flat()` は核の型を束縛の中に書く）。
+- 書き換え（`git diff --numstat f75365db0 -- q1-winmsg`・作業木と写した直後の比べ）: `lib.rs` +15／−19・`util/msg_filter_hook.rs` +7／−9・`util/window.rs` +43／−32・`util/mod.rs` と例 2 本は 0。新しいファイルは `build.rs` +12・`filters.txt` +32。手間は直し 4 回・約 12 分。
+- 比べ（x64・debug）: 写しは `target/pilot-windows-rs-next/debug/examples/{basic,threads}.exe`、元は本線の根で `cargo run -p wintf-winmsg-executor --example basic|threads`。
+  - `basic`: 全文一致（14 行）・終了コード 0 と 0。
+  - `threads`: `main` の行の並び（`main hello`→`main async hello`→`main async bye`→`main bye`）一致・終了コード 0 と 0。`thread` の側の行の集まり（2 本のスレッドが同じ文を出す `n_poll=` を含む）は両方とも `thread hello`・`thread async hello`・`thread async bye`・`thread bye` が各 1、`n_poll=0`〜`3` が各 2 で同じ。
+- 学び:
+  - この rev の `.sys()` は C のヘッダーの形で出る: `HWND = *mut HWND__`・`DWORD`／`UINT`・`LPVOID`。`windows` の新しい型の `WINDOW_EX_STYLE`／`WINDOW_STYLE` は無く `DWORD`（公開の `Window::new_ex` の引数の型も `DWORD` に変わった）。
+  - `WM_*`・`CS_DBLCLKS`・`WH_MSGFILTER`・`GWLP_*` の定数は `i32` で出て、`UINT` を取る所（`PostMessageW` の `msg`・`WNDCLASSW::style`・wndproc の `msg` との比べ）に `as u32` が要る（7 か所）。書き換えの大半はこれと `Option`→ヌルのポインタ、`LRESULT(0)`→`0`、`.0` の剥がし。
+  - 上流の穴: `IDC_ARROW` が `PCSTR` 型で出るのに `PCSTR` 自体は束縛に出ず、フィルターで名指しすると「type or namespace not found: `PCSTR`」で断られる。写しの束縛のモジュールに `pub type PCSTR = *const u8;` を 1 行足し、`LoadCursorW` へは `IDC_ARROW as _` で渡した（上流へ返す候補）。
+  - `w!` は `.sys()` に無い（`windows-link` だけなので）。クラス名は NUL で終わる `[u16; 22]` の `static` を const の式で組んだ。
+  - 失敗の扱いは元を保った: `CreateWindowExW` のヌル→`WindowCreationError`、`SetWindowsHookExW` のヌル→`assert!` で止める（元は `.unwrap()`）。
+  - 写しの `lib.rs` の `#![doc = include_str!("../README.md")]` は消した（元の README は写さない。文書の中身は振る舞いに関わらず、置き場に余計なファイルを増やさないため）。
+  - 束縛のモジュールには `#![allow(non_camel_case_types, non_snake_case, dead_code, clippy::all)]` が要った（無いと clippy の `upper_case_acronyms` が 26 件）。
+  - i686 の `GetWindowLongPtrW`／`SetWindowLongPtrW` は、束縛が `#[cfg(target_arch = "x86")]` で `GetWindowLongW`／`SetWindowLongW` への別名を出していた（x64 の生成物で確かめた。走らせるのは 2.3）。
 - 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
 - 判定: （開発者が下す）
 

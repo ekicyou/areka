@@ -1,7 +1,5 @@
+use crate::bindings::*;
 use std::{cell::Cell, marker::PhantomData, ptr};
-use windows::Win32::{
-    Foundation::*, System::Threading::GetCurrentThreadId, UI::WindowsAndMessaging::*,
-};
 
 thread_local! {
     static MSG_FILTER_HOOK: Cell<*mut ()> = const { Cell::new(ptr::null_mut()) };
@@ -28,10 +26,10 @@ where
         let handle = SetWindowsHookExW(
             WH_MSGFILTER,
             Some(hook_proc::<F>),
-            None,
+            ptr::null_mut(),
             GetCurrentThreadId(),
-        )
-        .unwrap();
+        );
+        assert!(!handle.is_null(), "SetWindowsHookExW failed");
         Self {
             handle,
             _lifetime_and_type: PhantomData,
@@ -55,10 +53,10 @@ where
     F: Fn(&MSG) -> bool,
 {
     let f = &*(MSG_FILTER_HOOK.get() as *mut F);
-    let msg = &*(lparam.0 as *const MSG);
+    let msg = &*(lparam as *const MSG);
     if f(msg) {
-        LRESULT(1)
+        1
     } else {
-        CallNextHookEx(None, code, wparam, lparam)
+        CallNextHookEx(ptr::null_mut(), code, wparam, lparam)
     }
 }
