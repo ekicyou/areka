@@ -281,6 +281,8 @@ sample fetch → add i686 target → build i686 artifacts → [cargo fmt (format
 | `tools/tool-common.ps1` | `metadata` | 新 |
 | `.github/workflows/release.yml` | （行を消す） | `metadata`（素の `cargo metadata` は規則 D が今までどおり落とす） |
 
+規則 E から `release.yml` の行が消えると、`release.yml` の版の読みを縛るのは規則 D（素の `cargo metadata` を落とす）だけになり、守りは 1 段弱くなる。`release.yml` が `Get-ArekaVersion` を呼ばなくなっても版の検査の段そのものが消えるだけで字化けの道は生まれないので、受け入れる（設計の検証の重大でないもの 2）。
+
 ## Components and Interfaces
 
 ### 一覧
@@ -368,6 +370,8 @@ function Build-InstallExe { param([Parameter(Mandatory)][string]$Name, [Paramete
 
 # 手 3〜6: 写す → 確かめる → 置き換える → 掃除。戻り: [pscustomobject]@{ Code = [int]（0 か 1）; Lines = [string[]] }
 # $Check: param([string]$ExePath) → [pscustomobject]@{ Ok = [bool]; Line = [string] }（Line は 'OK check: …' か 'FAIL check: …'）
+#   $Check が時間切れで子を Kill したときは、終わるのを待ってから（WaitForExit 5 秒）返す。確かめが落ちて .new.exe を消せなかったら
+#   'FAIL cleanup: cannot remove <名前>.new.exe: <理由>' を足して 1（前のものには触っていない）＝設計の検証の重大でないもの 1
 function Install-ToolExe {
     param([Parameter(Mandatory)][string]$HomeDir, [Parameter(Mandatory)][string]$Name,
           [Parameter(Mandatory)][string]$Built, [Parameter(Mandatory)][scriptblock]$Check)
@@ -482,12 +486,12 @@ function Format-ReleaseNotes { param([string[]]$Subjects, [string]$Version, [str
 
 - 製品の変更の見分け: スコープから頭の `$SPEC_MARK` を外した名前が `$SpecNames` に在る（大文字と小文字を区別する）。題名の文から `$SPEC_MARK` を外す今の決まりはそのまま。
 - `spec-name` の検査: 行に `$SPEC_MARK` が現れるか、`$SpecNames` のどれかが前後を `[0-9A-Za-z_-]` でない字に挟まれて現れる。説明の文は `the line contains a spec name`（名前は印字しない＝「見どころの行の中身を印字しない」約束のまま）。
-- `-Check`・`-Notes`・`-Body` は `Get-SpecNames $root` を使い（`-SelfTest` は見本の `spec-names.txt`）、0 件なら `FAIL specs: no spec folders under .kiro/specs` で 1（黙って全部を内部の作業にしない＝要件 6.2）。
+- `-Check`・`-Notes`・`-Body` と、`-SelfTest` の本物の見どころの判定（`real highlights <名> passes`）は `Get-SpecNames $root`（本物の一覧）を使う。見本の `spec-names.txt` は、`-SelfTest` の整形の見本（`subjects.txt`・`expected-*.md`）と壊した見本の判定にだけ使う（全体テストと `-Check`・CI が同じ見どころを同じ一覧で見る＝`release/procedure.md:134` の前提を保つ・設計の検証の指摘 3）。本物の一覧が 0 件なら、どの口でも `FAIL specs: no spec folders under .kiro/specs` で 1（黙って全部を内部の作業にしない＝要件 6.2）。
 - 較正値の説明: `SPEC_MARK` は「旧い spec 名の頭（2026-10-23 の改名の前の名前と、改名しない completed の名前に付く）」、新しい `SPECS_DIRS = '.kiro/specs', '.kiro/specs/completed'`。
 
 **Implementation Notes**
 - Integration: `release.yml` は `actions/checkout` で履歴ごと木全体を取る（`fetch-depth: 0`）ので、タグの木に `.kiro/specs/` が在る（研究の 11 節の 4）。`completed/` は改名しない決まりなので、古い範囲の `-Notes` でも旧名の題名を落とさない。2026-10-23 の改名の前に `areka-P0-<名>` で書かれ、後で `<名>` のフォルダになった spec も、頭を外して比べるので拾える。
-- Validation: 見本を改める（下の Testing Strategy の T1）。`doc/release-notes/v*.md` の実物が全部通ることは今の自分の検査が確かめる（実物の一覧で `spec-name` が誤って当たらないこと）。
+- Validation: 見本を改める（下の Testing Strategy の T1）。`doc/release-notes/v*.md` の実物が全部通ることは今の自分の検査が本物の一覧で確かめる（本物の一覧で `spec-name` が誤って当たらないこと。2026-11-16 の設計の検証の測り＝本物の 495 の名前と今ある見どころの当たりは 0 件）。
 
 #### load-flake（`tools/load-flake.ps1`）
 
@@ -519,7 +523,7 @@ function Start-Burner { param([Parameter(Mandatory)][string]$PwshExe, [Parameter
 
 - `sample-fetch.ps1`: `Invoke-Curl` に `-HttpsOnly` を足し、`Sync-FetchedSample` を通して `Invoke-FetchRows` が `-AnyScheme` でないときに渡す。`ConvertTo-AsciiText` を消して `Show-Ascii … 0`。
 - `crates-io.ps1`: `Format-FailLine([string]$Message)` → `"FAIL $(Show-Ascii $Message 0)"` を `Fail` が使う。`Invoke-WebRequest … -TimeoutSec 60`。`Verify` の `PATH` の手当ては `Get-MsvcLinkPath`。較正に `fail line is ascii`・`index read has a timeout` を足す。
-- `app-icon.ps1`・`cursor-art.ps1`: `same bytes twice` で組んだ結果をコミット済みの `IconDir`／`CursorDir` の出力（`app.ico`・`tray.ico`・`icons.res`／`hand.cur`・`grip.cur`）とバイトで比べる判定 `committed outputs are current` を足す。落ちたら `FAIL selftest committed outputs are current: <違うファイル> (run tools/<道具>.ps1 and commit)` の 1 行。`ConvertTo-Ascii` を消して `Show-Ascii … 0`。
+- `app-icon.ps1`・`cursor-art.ps1`: `same bytes twice` で組んだ結果をコミット済みの `IconDir`／`CursorDir` の出力（`app.ico`・`tray.ico`・`icons.res`／`hand.cur`・`grip.cur`）とバイトで比べる判定 `committed outputs are current` を足す。落ちたら `FAIL selftest committed outputs are current: <違うファイル> (source changed or rendering changed; run tools/<道具>.ps1 and commit)` の 1 行（`cursor-art` は GDI+ のなめらかな塗りに頼るので、絵の直しの回し忘れのほかに OS の更新で塗りが変わった場合もありうる＝`tech.md` の段の説明にも添える）。2026-11-16 の設計の討議で、この机で `-SelfTest` が `target\` の下に組んだ `hand.cur`・`grip.cur`・`app.ico`・`tray.ico`・`icons.res` がコミット済みのものとバイトで同じことを確かめた（`cmp`）。束 8 の頭でもう一度比べて記録し、違っていたら段を足さずに議題にする（作り直しは要件 8.1 の操作）。`ConvertTo-Ascii` を消して `Show-Ascii … 0`。
 
 #### test-all（`tools/test-all.ps1`）
 
