@@ -92,19 +92,24 @@ pub fn is_test_tool(krate: &str) -> bool {
 }
 
 /// `crates/<名前>/…` の文書の参照を、クレートと本番／試験ごとに記号で集める（`crates/pilot` は除く）。
-pub fn tally(index: &Index) -> Tally {
+/// 当てはまる文書が 1 つも無ければ、全部 0 の表で通さずエラーにする。
+pub fn tally(index: &Index) -> Result<Tally, String> {
     let mut t = Tally::new();
+    let mut matched = 0usize;
     for doc in &index.documents {
-        let mut parts = doc.relative_path.split('/');
+        // Windows で作った索引は `crates\wintf\src\…` と綴る（9.2）
+        let path = doc.relative_path.replace('\\', "/");
+        let mut parts = path.split('/');
         let (Some("crates"), Some(krate)) = (parts.next(), parts.next()) else {
             continue;
         };
         if krate == "pilot" {
             continue;
         }
+        matched += 1;
         let part = Part {
             krate: krate.to_string(),
-            test_code: is_test_path(&doc.relative_path),
+            test_code: is_test_path(&path),
         };
         for occ in &doc.occurrences {
             if occ.symbol_roles & SymbolRole::Definition as i32 != 0 {
@@ -116,7 +121,13 @@ pub fn tally(index: &Index) -> Tally {
             }
         }
     }
-    t
+    if matched == 0 {
+        return Err(format!(
+            "no documents under crates/ matched (of {} documents) - path spelling or project root?",
+            index.documents.len()
+        ));
+    }
+    Ok(t)
 }
 
 /// 選んだ部分の和。同じ記号は 1 つと数え、出現は足す。

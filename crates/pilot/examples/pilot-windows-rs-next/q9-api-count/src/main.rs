@@ -11,6 +11,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("usage: q9-api-count <index.scip>")?;
     let bytes = std::fs::read(&path).map_err(|e| format!("read {path}: {e}"))?;
     let index = scip::types::Index::parse_from_bytes(&bytes)?;
-    print!("{}", count::render(&count::tally(&index)));
+    print!("{}", count::render(&count::tally(&index)?));
     Ok(())
 }

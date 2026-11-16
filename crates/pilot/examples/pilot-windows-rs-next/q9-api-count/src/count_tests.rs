@@ -104,7 +104,7 @@ fn tally_counts_distinct_and_occurrences_and_skips_pilot() {
         .push(doc("crates/wintf/src/a.rs", &[&hwnd, &hwnd, &cw]));
     index
         .documents
-        .push(doc("crates/wintf/src/a_tests.rs", &[&hwnd]));
+        .push(doc("crates\\wintf\\src\\a_tests.rs", &[&hwnd]));
     index
         .documents
         .push(doc("crates/real-run-kit/src/lib.rs", &[&hwnd]));
@@ -112,7 +112,7 @@ fn tally_counts_distinct_and_occurrences_and_skips_pilot() {
         .documents
         .push(doc("crates/pilot/src/lib.rs", &[&hwnd, &cw]));
     index.documents.push(doc("vendors/x/src/lib.rs", &[&hwnd]));
-    let t = tally(&index);
+    let t = tally(&index).unwrap();
 
     let names: Vec<_> = t.keys().map(|k| k.krate.as_str()).collect();
     assert!(!names.contains(&"pilot"));
@@ -137,4 +137,18 @@ fn tally_counts_distinct_and_occurrences_and_skips_pilot() {
         "\n| **合計** | 出荷する | 本番＋試験 | 1 (3) | 0 (0) | 1 (1) | 0 (0) | 2 (4) | 0 (0) | 0 (0) |\n"
     ));
     assert!(md.contains("| real-run-kit | 試験の道具 | 本番 |"));
+}
+
+#[test]
+fn tally_fails_when_no_document_is_under_crates() {
+    // 綴りが合わずに 1 つも拾えない索引を、全部 0 の表で通さない
+    let hwnd = format!("{W}Win32/Foundation/HWND#");
+    let mut index = Index::new();
+    index.documents.push(doc("src/a.rs", &[&hwnd]));
+    index.documents.push(doc("vendors/x/src/lib.rs", &[&hwnd]));
+    index
+        .documents
+        .push(doc("crates/pilot/src/lib.rs", &[&hwnd]));
+    let err = tally(&index).unwrap_err();
+    assert!(err.contains("no documents under crates/ matched"), "{err}");
 }
