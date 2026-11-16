@@ -90,3 +90,158 @@ fn owner_nan_opacity_syncs_as_one_and_warns_once_per_change() {
     assert_eq!(log.matches("不透明度が NaN").count(), 1, "{log}");
     assert!(log.contains("nan-owner"), "実体名が要る: {log}");
 }
+
+// --- WUC の木の同期: 祖先の持ち主・節の通り抜け・並べ直し（要件 3.1, 4.3, 4.6, 4.10, 4.11） ---
+
+/// 親の WUC の子の並び（下→上）。
+fn wuc_children(parent: &WucVisual) -> Vec<*mut core::ffi::c_void> {
+    use windows::UI::Composition::ContainerVisual;
+    let it = parent
+        .cast::<ContainerVisual>()
+        .unwrap()
+        .Children()
+        .unwrap()
+        .First()
+        .unwrap();
+    let mut out = Vec::new();
+    while it.HasCurrent().unwrap() {
+        out.push(it.Current().unwrap().as_raw());
+        it.MoveNext().unwrap();
+    }
+    out
+}
+
+fn hierarchy_world() -> (World, impl Fn() -> WucVisual) {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let core = GraphicsCore::new().expect("GraphicsCore");
+    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d")).expect("WUC");
+    let compositor = wuc.compositor().expect("compositor").clone();
+    let create = move || -> WucVisual { compositor.CreateSpriteVisual().unwrap().cast().unwrap() };
+    (World::new(), create)
+}
+
+fn run_hierarchy(world: &mut World) {
+    let mut schedule = Schedule::default();
+    schedule.add_systems(visual_hierarchy_sync_system);
+    schedule.run(world);
+}
+
+/// 節の下の持ち主は節を通り抜けて祖先の持ち主の WUC の子に入り、並びは節を通り抜けた前順
+/// （最初が最上）。節の `Children` の並びだけを変えた回にも並べ直す。
+#[test]
+fn owner_under_a_node_joins_the_nearest_owner_and_follows_node_child_order() {
+    use crate::ecs::graphics::WorldVisual;
+    let (mut world, create) = hierarchy_world();
+    let (vr, vh, va, vb, vc) = (create(), create(), create(), create(), create());
+    let root = world.spawn(VisualGraphics::new(vr)).id();
+    let host = world
+        .spawn((VisualGraphics::new(vh.clone()), ChildOf(root)))
+        .id();
+    let node = world.spawn((WorldVisual::PENDING, ChildOf(host))).id();
+    world.spawn((VisualGraphics::new(va.clone()), ChildOf(node)));
+    world.spawn((VisualGraphics::new(vb.clone()), ChildOf(node)));
+    world.spawn((VisualGraphics::new(vc.clone()), ChildOf(host)));
+
+    run_hierarchy(&mut world);
+    // 前順 [A, B, C] を InsertAtBottom → 下から C, B, A
+    assert_eq!(
+        wuc_children(&vh),
+        vec![vc.as_raw(), vb.as_raw(), va.as_raw()]
+    );
+
+    // 節の子の並びだけを入れ替える（親は変わらない）
+    world.get_mut::<Children>(node).unwrap().swap(0, 1);
+    run_hierarchy(&mut world);
+    assert_eq!(
+        wuc_children(&vh),
+        vec![vc.as_raw(), va.as_raw(), vb.as_raw()],
+        "並びだけの変化を同じ回に写す"
+    );
+}
+
+/// 用意中・戻した直後の自動の持ち主（3 部品を持つ節で目印が無い）は親に繋がず古い親から外し、
+/// その下の持ち主は通り抜けて祖先の持ち主に入る。
+#[test]
+fn detached_auto_owner_leaves_its_old_parent_and_is_passed_through() {
+    use crate::ecs::graphics::{OwnSurface, WorldVisual};
+    let (mut world, create) = hierarchy_world();
+    let (vh, vn, vd) = (create(), create(), create());
+    let window = world.spawn(VisualGraphics::new(create())).id();
+    let host = world
+        .spawn((VisualGraphics::new(vh.clone()), ChildOf(window)))
+        .id();
+    let node = world
+        .spawn((
+            WorldVisual::PENDING,
+            OwnSurface,
+            VisualGraphics::new(vn.clone()),
+            ChildOf(host),
+        ))
+        .id();
+    world.spawn((VisualGraphics::new(vd.clone()), ChildOf(node)));
+
+    run_hierarchy(&mut world);
+    assert_eq!(wuc_children(&vh), vec![vn.as_raw()], "目印の在る節は持ち主");
+    assert_eq!(wuc_children(&vn), vec![vd.as_raw()]);
+
+    world.entity_mut(node).remove::<OwnSurface>();
+    run_hierarchy(&mut world);
+    assert_eq!(
+        wuc_children(&vh),
+        vec![vd.as_raw()],
+        "目印の外れた節は外し、その下の持ち主は祖先の持ち主へ"
+    );
+    let vg = world.get::<VisualGraphics>(node).unwrap();
+    assert_eq!(
+        vg.parent_visual().map(|v| v.as_raw()),
+        Some(vn.as_raw()),
+        "根の印"
+    );
+}
+
+/// 上げた（Active の）自動の持ち主は、用意中の間は親に繋がず、上げた回に親の持ち主へ繋ぎ、
+/// 並びは手動の持ち主より下（WUC の子の一番下）。
+#[test]
+fn active_auto_owner_attaches_to_its_parent_owner_below_manual_owners() {
+    use crate::ecs::graphics::{SurfaceReadiness, WorldVisual};
+    let (mut world, create) = hierarchy_world();
+    let (vh, vx, vm) = (create(), create(), create());
+    let window = world.spawn(VisualGraphics::new(create())).id();
+    let host = world
+        .spawn((VisualGraphics::new(vh.clone()), ChildOf(window)))
+        .id();
+    // X を先に生む: 前順は [X, M] なので、そのまま下へ積むと下から [M, X] になる
+    let x = world
+        .spawn((
+            WorldVisual::PENDING,
+            VisualGraphics::new(vx.clone()),
+            ChildOf(host),
+        ))
+        .id();
+    world.spawn((VisualGraphics::new(vm.clone()), ChildOf(host)));
+    {
+        let mut a = world.get_mut::<AutoPromotion>(x).unwrap();
+        for i in 0..8 {
+            a.rule
+                .step(i as f64 * 0.1, true, || Ok(()), SurfaceReadiness::Pending);
+        }
+        assert_eq!(a.rule.phase(), Phase::Preparing);
+    }
+
+    run_hierarchy(&mut world);
+    assert_eq!(wuc_children(&vh), vec![vm.as_raw()], "用意中は親に繋がない");
+
+    {
+        let mut a = world.get_mut::<AutoPromotion>(x).unwrap();
+        a.rule.step(0.8, false, || Ok(()), SurfaceReadiness::Ready);
+        assert_eq!(a.rule.phase(), Phase::Active);
+    }
+    run_hierarchy(&mut world);
+    assert_eq!(
+        wuc_children(&vh),
+        vec![vx.as_raw(), vm.as_raw()],
+        "上げた回に親の持ち主へ繋ぎ、手動の持ち主より下"
+    );
+}

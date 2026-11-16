@@ -59,7 +59,11 @@ pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
 pub use placement::SurfacePlacement;
+pub(crate) use placement::{ChildClass, HostAnswer, child_class, wuc_children_order, wuc_host_of};
 pub use promotion::AutoPromotion;
+pub(crate) use promotion::Phase;
+#[cfg(test)]
+pub(crate) use promotion::SurfaceReadiness;
 pub use systems::*;
 pub use transform::*;
 pub use version::*;

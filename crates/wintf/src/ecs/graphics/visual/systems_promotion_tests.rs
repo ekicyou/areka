@@ -285,3 +285,34 @@ fn auto_owner_surface_takes_placement_size_and_regrows() {
         "作り直しの道に乗る"
     );
 }
+
+/// 戻した回は置き場が先に外れ 3 部品は次の回に外れる。その回に配置が変わっても、もう描画面を
+/// 欲しがらない節の描画面を外接矩形の大きさで作り直さない。
+#[test]
+fn demotion_frame_does_not_recreate_the_discarded_surface() {
+    let mut ecs = device_world();
+    let world = ecs.world_mut();
+    let (_, a) = owner_with_nodes(world);
+    let mut t = 0.0;
+    while phase(world, a) != Phase::Active {
+        assert!(t < 3.0, "上がらない");
+        frame(world, t, Some(a));
+        t += DT;
+    }
+    let stats = |w: &World| {
+        let s = w.resource::<SurfaceCreationStats>();
+        (s.created_count, s.resize_count)
+    };
+    let before = stats(world);
+    for _ in 0..80 {
+        // 配置の変化の印を毎回立てる（戻した回にも作る係の対象に入る）
+        world.get_mut::<GlobalArrangement>(a).unwrap().set_changed();
+        frame(world, t, None);
+        t += DT;
+        if phase(world, a) == Phase::Node {
+            break;
+        }
+    }
+    assert_eq!(phase(world, a), Phase::Node, "落ち着けば戻る");
+    assert_eq!(stats(world), before, "捨てる描画面を作り直さない");
+}

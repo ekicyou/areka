@@ -145,6 +145,28 @@ fn outside_the_window_is_detached() {
     assert_eq!(t.host_of(2), HostAnswer::Detached);
 }
 
+// --- 子の種類（child_class） ---
+
+#[test]
+fn child_class_follows_the_parts_and_the_phase() {
+    use super::promotion::Phase::{Active, Node as NodePhase, Preparing};
+    // (描画面の 3 部品, 節, 手動の目印, 相) → 種類
+    let cases = [
+        ((true, false, false, NodePhase), Owner), // 新しい描き方の部品を持たない持ち主
+        ((true, true, true, NodePhase), Owner),   // 目印か命令の列を持つ節
+        ((true, true, true, Active), Owner),      // 手動の目印が相より勝つ
+        ((true, true, false, Active), AttachedAuto), // 上げた
+        ((true, true, false, Preparing), DetachedAuto), // 用意中
+        ((true, true, false, NodePhase), DetachedAuto), // 戻した直後（3 部品は次の回に外れる）
+        ((false, true, false, Active), Node),     // 3 部品がまだ無い節
+        ((false, true, false, NodePhase), Node),
+        ((false, false, false, NodePhase), Other), // 見た目の部品を持たない（窓の外の根など）
+    ];
+    for ((g, n, m, p), want) in cases {
+        assert_eq!(child_class(g, n, m, p), want, "{g} {n} {m} {p:?}");
+    }
+}
+
 // --- 子の並び（wuc_children_order） ---
 
 #[test]

@@ -1,13 +1,11 @@
 //! 節の下の持ち主・自動で上げた持ち主の置き場の部品 [`SurfacePlacement`] と、
 //! それを WUC へ写す純粋な補助（設計の PlacementMath）。ECS の係に依らない。
 
-// shortcut: WUC へ写す補助を係から呼ぶのは 4.x（置き場の部品は 3.4 で配線済み）。4.x で繋いだらこの許しを外す。
-#![cfg_attr(not(test), allow(dead_code))]
-
 use bevy_ecs::prelude::*;
 use tracing::warn;
 use windows_numerics::{Matrix3x2, Matrix4x4, Vector3};
 
+use super::promotion::Phase;
 use crate::ecs::graphics::ClipShape;
 use crate::numerics::{Aabb, Matrix3x2Ext};
 
@@ -59,12 +57,15 @@ pub(crate) enum PlacementClip {
 
 /// 持ち主の WUC の親からの変形。平行移動だけなら Offset、ほかは行列（Offset 0）。
 #[derive(Clone, Copy, Debug, PartialEq)]
+// shortcut: 変形の写しを係から呼ぶのは 4.2。繋いだら WucTransform・wuc_transform の許しを外す。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum WucTransform {
     Offset(Vector3),
     Matrix(Matrix4x4),
 }
 
 /// 持ち主の WUC の親からの変形（DIP の行列 `to_parent_dip` と拡大 `scale` から、物理ピクセルで）。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn wuc_transform(to_parent_dip: Matrix3x2, scale: f32) -> WucTransform {
     const EPS: f32 = 1e-6;
     let m = to_parent_dip;
@@ -103,6 +104,8 @@ pub(crate) fn wuc_transform(to_parent_dip: Matrix3x2, scale: f32) -> WucTransfor
 
 /// 自分の切り抜きと置き場の切り抜きを合わせた 1 つの WUC の切り抜き。
 #[derive(Clone, Copy, Debug, PartialEq)]
+// shortcut: 切り抜きの合わせを係から呼ぶのは 4.3。繋いだら ClipPlan・merged_clip・invert の許しを外す。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum ClipPlan {
     /// 今の写し方（置き場の切り抜きが無いか、置き場の切り抜きが自分の矩形・角丸の矩形の切り抜きを全部含む）。
     Own,
@@ -116,6 +119,7 @@ pub(crate) enum ClipPlan {
 
 /// 自分の切り抜き（局所）と置き場の切り抜き（親の持ち主の DIP）を 1 つの WUC の切り抜きへ合わせる。
 /// `to_host_dip` は局所の DIP → 親の持ち主の DIP、`size` は持ち主の局所の大きさ（DIP）。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn merged_clip(
     own: Option<&ClipShape>,
     placement: &PlacementClip,
@@ -169,6 +173,7 @@ pub(crate) fn merged_clip(
 }
 
 /// 行が点の 3x2 行列の逆。潰れた行列は無し。
+#[cfg_attr(not(test), allow(dead_code))]
 fn invert(m: Matrix3x2) -> Option<Matrix3x2> {
     let det = m.M11 * m.M22 - m.M12 * m.M21;
     if !det.is_finite() || det.abs() < 1e-12 {
@@ -205,6 +210,24 @@ pub(crate) enum ChildClass {
     Node,
     /// `Visual` を持たないか窓の外。
     Other,
+}
+
+/// 子の種類を部品の有無と相から決める。`manual_mark` は目印か命令の列を持つか。
+/// 手動の持ち主は規則 `wants_own_surface` の相に依らない側（節でないか、目印か命令の列を持つ）。
+pub(crate) fn child_class(
+    has_graphics: bool,
+    is_node: bool,
+    manual_mark: bool,
+    phase: Phase,
+) -> ChildClass {
+    match (has_graphics, is_node) {
+        (true, false) => ChildClass::Owner,
+        (true, true) if manual_mark => ChildClass::Owner,
+        (true, true) if phase == Phase::Active => ChildClass::AttachedAuto,
+        (true, true) => ChildClass::DetachedAuto,
+        (false, true) => ChildClass::Node,
+        (false, false) => ChildClass::Other,
+    }
 }
 
 /// 子の WUC の親になる持ち主（節と用意中の自動の持ち主を通り抜けて祖先をたどる）。

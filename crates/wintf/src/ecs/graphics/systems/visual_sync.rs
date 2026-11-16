@@ -1,6 +1,9 @@
 use super::init::format_entity_name;
 use crate::ecs::common::ancestors;
-use crate::ecs::graphics::{Visual, VisualGraphics};
+use crate::ecs::graphics::{
+    AutoPromotion, ChildClass, GraphicsCommandList, HostAnswer, OwnSurface, Phase, Visual,
+    VisualGraphics, WorldVisual, child_class, wuc_children_order, wuc_host_of,
+};
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use crate::ecs::window::Window;
 use bevy_ecs::hierarchy::{ChildOf, Children};
@@ -51,18 +54,31 @@ fn same_visual(a: Option<&WucVisual>, b: &WucVisual) -> bool {
     a.is_some_and(|a| a.as_raw() == b.as_raw())
 }
 
+/// 子の種類の決めに読む部品（3 部品・節・手動の目印・上げ下げの相）。
+type ClassData = (
+    Has<VisualGraphics>,
+    Has<WorldVisual>,
+    Has<OwnSurface>,
+    Has<GraphicsCommandList>,
+    Option<&'static AutoPromotion>,
+);
+
 /// ECS の ChildOf/Children の木を WUC の見た目の木へ写すシステム (R3, R6, R7)
 ///
-/// 未同期の見分けは「控えの親（`parent_visual`）が、いま居るべき親と違う」。居るべき親は、
-/// - 親が `VisualGraphics` を持ち見た目がある: その見た目
-/// - 親が `VisualGraphics` を持つが見た目がまだ無い: 保留（何もしない）
-/// - 親が `VisualGraphics` を持たない（LayoutRoot など）: 根（自分自身の見た目を控えに置く）
+/// 未同期の見分けは「控えの親（`parent_visual`）が、いま居るべき親と違う」。居るべき親は
+/// [`wuc_host_of`]（節と用意中の自動の持ち主を通り抜けた、いちばん近い祖先の持ち主）で決め、
+/// - 祖先の持ち主が見た目を持つ: その見た目
+/// - 祖先の持ち主の見た目がまだ無い: 保留（何もしない）
+/// - 繋ぐ親が無い（LayoutRoot など・用意中か戻した自動の持ち主）: 根（自分自身の見た目を控えに置く）
 ///
-/// 付け替え（ChildOf の変更）では、古い親の子から外してから新しい親を同期し直す。
+/// 付け替え（居るべき親の変化）では、古い親の子から外してから新しい親を同期し直す。
 /// 親が後から見た目を持てば、根の印と違うので同期し直される。
 ///
+/// 親の持ち主の子は、居るべき親と控えが違う子が出た・親の持ち主かその下で通り抜ける節の
+/// `Children` が変わった（並びだけの変化も）・その下の節の相が変わった、のどれかで並べ直す。
+/// 並びは [`wuc_children_order`]（節を通り抜けた前順・自動で上げた持ち主は一番下）。
+///
 /// 重要: 親→子の順序で挿入する必要がある。深さでソートして親が先に処理されるようにする。
-/// 兄弟間のZ-orderはChildrenコンポーネントの順序を権威的ソースとする。
 ///
 /// 係には `Err` を返す先が無いので、失敗は記録だけにする（外す失敗は親が先に消えた場合が
 /// あるので `debug!`、子の全部を外す失敗は `error!`）。
@@ -71,27 +87,54 @@ pub fn visual_hierarchy_sync_system(
     child_of_query: Query<&ChildOf>,
     // Children コンポーネント（兄弟順序の権威的ソース）
     children_query: Query<&Children>,
+    classes: Query<ClassData>,
+    reordered: Query<Entity, Changed<Children>>,
+    rephased: Query<Entity, Changed<AutoPromotion>>,
 ) {
-    // Phase 1: 未同期の子を持つ親と、古い親から外す見た目を集める
+    let parent_of = |e: Entity| child_of_query.get(e).ok().map(|c| c.parent());
+    let class_of = |e: Entity| {
+        classes
+            .get(e)
+            .map_or(ChildClass::Other, |(g, node, own, list, auto)| {
+                let phase = auto.map_or(Phase::Node, |a| a.rule.phase());
+                child_class(g, node, own || list, phase)
+            })
+    };
+    // 節 `e` の子を並びに含める親の持ち主（`e` 自身は通り抜ける側として見る）。
+    let passing_host = |e: Entity| {
+        let class = |x: Entity| {
+            if x == e {
+                ChildClass::Node
+            } else {
+                class_of(x)
+            }
+        };
+        match wuc_host_of(e, parent_of, class) {
+            HostAnswer::Host(h) => Some(h),
+            HostAnswer::Detached => None,
+        }
+    };
+
+    // Phase 1: 未同期の子を持つ親と、古い親から外す見た目と、根の印を付ける子を集める
     let mut affected_parents = std::collections::HashSet::new();
-    // 深さ付き親情報: (parent_entity, depth) — depth は親の深さ（浅い順に処理するため）
-    let mut parent_depths: std::collections::HashMap<Entity, usize> =
-        std::collections::HashMap::new();
     // (古い親の見た目, 子の見た目)
     let mut detach: Vec<(WucVisual, WucVisual)> = Vec::new();
+    let mut roots: Vec<Entity> = Vec::new();
     {
         let query = vg_queries.p1();
-        for (_entity, child_vg, child_of, _name) in query.iter() {
-            let (Some(child_of), Some(own)) = (child_of, child_vg.visual()) else {
+        for (entity, child_vg, child_of, _name) in query.iter() {
+            let (Some(_), Some(own)) = (child_of, child_vg.visual()) else {
                 continue;
             };
-            let parent_entity = child_of.parent();
-            let expected = match query.get(parent_entity) {
-                Ok((_, parent_vg, _, _)) => match parent_vg.visual() {
-                    Some(v) => v,
-                    None => continue, // 親の見た目がまだ無い: 保留
-                },
-                Err(_) => own, // 親が見た目の部品を持たない: 根
+            let host = wuc_host_of(entity, parent_of, class_of);
+            let expected = match host {
+                HostAnswer::Host(h) => {
+                    match query.get(h).ok().and_then(|(_, v, _, _)| v.visual()) {
+                        Some(v) => v,
+                        None => continue, // 親の見た目がまだ無い: 保留
+                    }
+                }
+                HostAnswer::Detached => own,
             };
             let cached = child_vg.parent_visual();
             if same_visual(cached, expected) {
@@ -100,19 +143,31 @@ pub fn visual_hierarchy_sync_system(
             if let Some(old) = cached.filter(|old| !same_visual(Some(own), old)) {
                 detach.push((old.clone(), own.clone()));
             }
-            affected_parents.insert(parent_entity);
-            parent_depths.entry(parent_entity).or_insert_with(|| {
-                ancestors(parent_entity, |e| {
-                    child_of_query.get(e).ok().map(|c| c.parent())
-                })
-                .count()
-            });
+            match host {
+                HostAnswer::Host(h) => {
+                    affected_parents.insert(h);
+                }
+                HostAnswer::Detached => roots.push(entity),
+            }
         }
     }
+    for e in reordered.iter() {
+        match class_of(e) {
+            ChildClass::Owner | ChildClass::AttachedAuto => {
+                affected_parents.insert(e);
+            }
+            ChildClass::Node | ChildClass::DetachedAuto => {
+                affected_parents.extend(passing_host(e));
+            }
+            ChildClass::Other => {}
+        }
+    }
+    affected_parents.extend(rephased.iter().filter_map(passing_host));
 
-    if affected_parents.is_empty() {
+    if affected_parents.is_empty() && detach.is_empty() && roots.is_empty() {
         return;
     }
+    let depth_of = |e: Entity| ancestors(e, parent_of).count();
 
     // Phase 2: 付け替えた子を古い親の子から外す（親が先に消えた場合があるので debug!）
     for (old_parent, child) in &detach {
@@ -125,135 +180,131 @@ pub fn visual_hierarchy_sync_system(
         }
     }
 
+    // 繋ぐ親が無い子: 自分自身の Visual を控えに置いて「根」と印す
+    for entity in roots {
+        let depth = depth_of(entity);
+        let mut child_query = vg_queries.p0();
+        let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(entity) else {
+            continue;
+        };
+        let Some(child_visual) = child_vg.visual().cloned() else {
+            continue;
+        };
+        let child_name_str = child_name.map(|n| n.to_string());
+        let child_fallback = format!("Entity({:?})", entity);
+        let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
+        debug!(
+            name = %child_display,
+            depth = depth,
+            "[visual_hierarchy_sync] Visual hierarchy root"
+        );
+        child_vg.set_parent_visual(Some(child_visual));
+    }
+
     // Phase 3: affected_parents を深さでソート（浅い親が先 → 親→子の順序で処理）
-    let mut sorted_parents: Vec<Entity> = affected_parents.into_iter().collect();
-    sorted_parents.sort_by_key(|e| parent_depths.get(e).copied().unwrap_or(0));
+    let mut sorted_parents: Vec<(Entity, usize)> = affected_parents
+        .into_iter()
+        .map(|e| (e, depth_of(e)))
+        .collect();
+    sorted_parents.sort_by_key(|&(_, depth)| depth);
 
     debug!(
         count = sorted_parents.len(),
         "[visual_hierarchy_sync] Processing affected parents (sorted by depth)"
     );
 
-    // Phase 4: 各 affected_parent について Children 順で子 Visual を再配置
-    for parent_entity in sorted_parents {
-        let parent_depth = parent_depths.get(&parent_entity).copied().unwrap_or(0);
+    let children_of = |e: Entity| {
+        children_query
+            .get(e)
+            .map(|c| c.iter().collect())
+            .unwrap_or_default()
+    };
 
-        // 親の Visual と名前（ログ用）を取得。None = 親が見た目の部品を持たない（根）
+    // Phase 4: 各 affected_parent について節を通り抜けた前順で子 Visual を再配置
+    for (parent_entity, parent_depth) in sorted_parents {
+        // 親の Visual と名前（ログ用）を取得。見た目がまだ無ければ保留
         let (parent_visual, parent_name) = {
             let parent_query = vg_queries.p1();
             match parent_query.get(parent_entity) {
                 Ok((_, pv, _, name)) => match pv.visual() {
-                    Some(v) => (Some(v.clone()), name.map(|n| n.to_string())),
+                    Some(v) => (v.clone(), name.map(|n| n.to_string())),
                     None => continue,
                 },
-                Err(_) => (None, None),
+                Err(_) => continue,
             }
         };
         let parent_fallback = format!("Entity({:?})", parent_entity);
         let parent_display = parent_name.as_deref().unwrap_or(&parent_fallback);
 
-        if let Some(ref parent_visual) = parent_visual {
-            // 親の VisualCollection を取得（基底 Visual は Children を持たないため
-            // ContainerVisual へ cast する）。
-            let parent_children = match parent_visual
-                .cast::<ContainerVisual>()
-                .and_then(|cv| cv.Children())
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    error!(
-                        parent = %parent_display,
-                        error = ?e,
-                        "[visual_hierarchy_sync] Children() failed"
-                    );
-                    continue;
-                }
-            };
-
-            // 親の既存 Visual 子をすべて削除して Z-order をリセット
-            if let Err(e) = parent_children.RemoveAll() {
+        // 親の VisualCollection を取得（基底 Visual は Children を持たないため
+        // ContainerVisual へ cast する）。
+        let parent_children = match parent_visual
+            .cast::<ContainerVisual>()
+            .and_then(|cv| cv.Children())
+        {
+            Ok(c) => c,
+            Err(e) => {
                 error!(
                     parent = %parent_display,
                     error = ?e,
-                    "[visual_hierarchy_sync] RemoveAll failed"
+                    "[visual_hierarchy_sync] Children() failed"
                 );
                 continue;
             }
+        };
 
-            // Children コンポーネントの順序で子 Visual を再追加。
-            //
-            // Z順序等価性（要件 5.2）: DComp の `add_visual(insertabove=false, ref=None)` は
-            // 「子リストの先頭（＝全兄弟の下・最初に描画）へ挿入」。Children を [A,B,C] の順に
-            // 反復して毎回この呼び出しを行うと、最終スタック（下→上）は C,B,A（最後に反復した
-            // 子が最下・最初の子が最上）になる。WUC で同一スタックを再現するには、同じ反復順で
-            // `InsertAtBottom` を呼ぶ（InsertAtBottom(A)→[A], InsertAtBottom(B)→[B,A],
-            // InsertAtBottom(C)→[C,B,A]）。ゆえに InsertAtTop ではなく InsertAtBottom を選ぶ。
-            if let Ok(children) = children_query.get(parent_entity) {
-                for child_entity in children.iter() {
-                    let mut child_query = vg_queries.p0();
-                    if let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(child_entity)
-                    {
-                        let child_visual = match child_vg.visual() {
-                            Some(v) => v.clone(),
-                            None => continue,
-                        };
+        // 親の既存 Visual 子をすべて削除して Z-order をリセット
+        if let Err(e) = parent_children.RemoveAll() {
+            error!(
+                parent = %parent_display,
+                error = ?e,
+                "[visual_hierarchy_sync] RemoveAll failed"
+            );
+            continue;
+        }
 
-                        let child_name_str = child_name.map(|n| n.to_string());
-                        let child_fallback = format!("Entity({:?})", child_entity);
-                        let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
+        // 子の並びの順で子 Visual を再追加。
+        //
+        // Z順序等価性（要件 5.2）: DComp の `add_visual(insertabove=false, ref=None)` は
+        // 「子リストの先頭（＝全兄弟の下・最初に描画）へ挿入」。Children を [A,B,C] の順に
+        // 反復して毎回この呼び出しを行うと、最終スタック（下→上）は C,B,A（最後に反復した
+        // 子が最下・最初の子が最上）になる。WUC で同一スタックを再現するには、同じ反復順で
+        // `InsertAtBottom` を呼ぶ（InsertAtBottom(A)→[A], InsertAtBottom(B)→[B,A],
+        // InsertAtBottom(C)→[C,B,A]）。ゆえに InsertAtTop ではなく InsertAtBottom を選ぶ。
+        let order = wuc_children_order(parent_entity, children_of, class_of);
+        let mut child_query = vg_queries.p0();
+        for child_entity in order {
+            let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(child_entity) else {
+                continue;
+            };
+            let child_visual = match child_vg.visual() {
+                Some(v) => v.clone(),
+                None => continue,
+            };
+            let child_name_str = child_name.map(|n| n.to_string());
+            let child_fallback = format!("Entity({:?})", child_entity);
+            let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
 
-                        if let Err(e) = parent_children.InsertAtBottom(&child_visual) {
-                            error!(
-                                child = %child_display,
-                                depth = parent_depth + 1,
-                                parent = %parent_display,
-                                error = ?e,
-                                "[visual_hierarchy_sync] InsertAtBottom failed"
-                            );
-                        } else {
-                            debug!(
-                                child = %child_display,
-                                depth = parent_depth + 1,
-                                parent = %parent_display,
-                                "[visual_hierarchy_sync] InsertAtBottom success"
-                            );
-                        }
-
-                        // 控えが同じなら書かない（変化の印を立てない）
-                        if !same_visual(child_vg.parent_visual(), parent_visual) {
-                            child_vg.set_parent_visual(Some(parent_visual.clone()));
-                        }
-                    }
-                }
+            if let Err(e) = parent_children.InsertAtBottom(&child_visual) {
+                error!(
+                    child = %child_display,
+                    depth = parent_depth + 1,
+                    parent = %parent_display,
+                    error = ?e,
+                    "[visual_hierarchy_sync] InsertAtBottom failed"
+                );
+            } else {
+                debug!(
+                    child = %child_display,
+                    depth = parent_depth + 1,
+                    parent = %parent_display,
+                    "[visual_hierarchy_sync] InsertAtBottom success"
+                );
             }
-        } else {
-            // 親が VisualGraphics を持たない場合: 各子を Visual 階層のルートとしてマーク
-            if let Ok(children) = children_query.get(parent_entity) {
-                for child_entity in children.iter() {
-                    let mut child_query = vg_queries.p0();
-                    if let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(child_entity)
-                    {
-                        let child_visual = match child_vg.visual() {
-                            Some(v) => v.clone(),
-                            None => continue,
-                        };
-                        if same_visual(child_vg.parent_visual(), &child_visual) {
-                            continue; // 既に根の印
-                        }
 
-                        let child_name_str = child_name.map(|n| n.to_string());
-                        let child_fallback = format!("Entity({:?})", child_entity);
-                        let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
-
-                        debug!(
-                            name = %child_display,
-                            depth = parent_depth + 1,
-                            "[visual_hierarchy_sync] Visual hierarchy root"
-                        );
-                        // 自分自身の Visual を設定して「根」と印す
-                        child_vg.set_parent_visual(Some(child_visual));
-                    }
-                }
+            // 控えが同じなら書かない（変化の印を立てない）
+            if !same_visual(child_vg.parent_visual(), &parent_visual) {
+                child_vg.set_parent_visual(Some(parent_visual.clone()));
             }
         }
     }

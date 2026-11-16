@@ -1,8 +1,9 @@
 use super::init::{calculate_surface_size_from_global_arrangement, format_entity_name};
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::{
-    DrawTree, GraphicsCommandList, GraphicsCore, SurfaceCreationStats, SurfaceGraphics,
-    SurfaceGraphicsDirty, SurfacePlacement, VisualGraphics,
+    AutoPromotion, DrawTree, GraphicsCommandList, GraphicsCore, OwnSurface, Phase,
+    SurfaceCreationStats, SurfaceGraphics, SurfaceGraphicsDirty, SurfacePlacement, VisualGraphics,
+    WorldVisual, visual::wants_own_surface,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
@@ -41,6 +42,13 @@ type SurfaceCreationData = (
     &'static mut SurfaceGraphicsDirty,
     Option<&'static Name>,
     Option<&'static SurfacePlacement>,
+    // 規則 `wants_own_surface` の材料（命令の列・目印・節・相）
+    (
+        Has<GraphicsCommandList>,
+        Has<OwnSurface>,
+        Has<WorldVisual>,
+        Option<&'static AutoPromotion>,
+    ),
 );
 
 /// 描画面を作る係が見る変化（配置・中身・見た目の作り直し）。命令の列か木の列を持つ部品が対象
@@ -145,8 +153,14 @@ pub fn deferred_surface_creation_system(
         mut dirty,
         name,
         placement,
+        (has_list, has_own, is_node, auto),
     ) in query.iter_mut()
     {
+        // 戻した回は置き場が先に外れ 3 部品は次の回に外れる。捨てる描画面を作り直さない。
+        let auto_owner = auto.is_some_and(|a| a.rule.phase() != Phase::Node);
+        if placement.is_none() && !wants_own_surface(has_list, has_own, is_node, auto_owner) {
+            continue;
+        }
         // 自動の持ち主は置き場の大きさ、ほかはGlobalArrangementからサイズを計算
         let Some((width, height)) = placement
             .and_then(SurfacePlacement::auto_size_px)
