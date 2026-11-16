@@ -515,3 +515,66 @@ fn flip_is_the_same_for_every_scope() {
     );
     assert!(out.iter().all(|p| p.balloon_pos == point(1108, 904)));
 }
+
+// ---------------------------------------------------------------------------
+// 初めから右に出した位置と、左から映して右に来た位置（balloon-flip-side-rules 要件 3.3・3.8・5.1）
+// ---------------------------------------------------------------------------
+
+/// 左端のキャラ窓（`default_x` を大きくして左端へクランプ）に `side` で出したバルーンの
+/// （キャラ窓の矩形, バルーンの位置）。合流後のずらしの総量 `total_x` のうち descript の分が `descript_x`。
+fn resolved_at_left_edge(
+    side: crate::config::BalloonSide,
+    total_x: i32,
+    descript_x: i32,
+) -> (RectPx, PointPx) {
+    let cfg = crate::config::ScopeConfig {
+        alignment: crate::config::Alignment::Bottom,
+        default_x: Some(40000),
+        balloon_alignment: side,
+        balloon_offset: Some((total_x, 0)),
+        balloon_offset_descript_x: descript_x,
+        ..Default::default()
+    };
+    let out = crate::resolver::resolve_placement(
+        &crate::shared_test_support::cfg_of(vec![(0, cfg)]),
+        WA,
+        &[crate::resolver::ScopeInput {
+            scope: 0,
+            char_size: CSZ,
+            balloon_size: BSZ,
+        }],
+        crate::shared_test_support::MEASURE_DPI,
+    );
+    (rect_of(out[0].char_pos, CSZ), out[0].balloon_pos)
+}
+
+/// descript の分 d: 初めから右に出した x ＝ 左に出して左から右へ映した x（要件 3.3・5.1）。
+#[test]
+fn right_from_start_equals_left_mirrored_for_descript_part() {
+    use crate::config::BalloonSide::{Left, Right};
+    for d in [30, 100] {
+        let (_, right) = resolved_at_left_edge(Right, d, d);
+        let (char_rect, left) = resolved_at_left_edge(Left, d, d);
+        let BalloonPlace::Flipped(mirrored) =
+            place_balloon_in_work_area(left, BSZ, char_rect, WA, &[])
+        else {
+            panic!("探針: 左端の窓の左に出したバルーンは映される (d={d})");
+        };
+        assert_eq!(mirrored.x, right.x, "d={d}");
+        assert_eq!(right.x, char_rect.right - d, "d={d}: 設計の式");
+    }
+}
+
+/// `windowposition.x` の分 −237（descript 0）: 映しの結果は今の式（キャラ窓の右端 ＋ 237）のまま（要件 3.8）。
+#[test]
+fn mirror_of_windowposition_part_keeps_current_formula() {
+    use crate::config::BalloonSide::Left;
+    let (char_rect, left) = resolved_at_left_edge(Left, -237, 0);
+    assert_eq!(left.x, char_rect.left - BSZ.w - 237, "探針");
+    let got = place_balloon_in_work_area(left, BSZ, char_rect, WA, &[]);
+    // 設計の式: 映した x ＝ 窓の左 ＋ 窓の右 − (元の x ＋ バルーンの幅)。
+    assert_eq!(
+        got,
+        BalloonPlace::Flipped(point(char_rect.right + 237, left.y))
+    );
+}
