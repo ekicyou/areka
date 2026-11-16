@@ -14,5 +14,11 @@ fn main() {
     windows_bindgen::builder()
         .output(&out)
         .filter_files(&files)
+        // 問い 6 の下線の描き手（6.2）。名前空間は `Windows.Win32` の 1 段（DirectWrite の段は無い）。合わない名前は黙って無視される。
+        .implements([
+            "Windows.Win32.IDWriteTextRenderer1",
+            "Windows.Win32.IDWriteTextRenderer",
+            "Windows.Win32.IDWritePixelSnapping",
+        ])
         .write();
 }

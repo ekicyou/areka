@@ -144,7 +144,7 @@
   - _Dispatch: standard — マクロの振る舞いを実物で確かめながら組む_
   - _Requirements: 1.8, 7.1, 7.4_
 
-- [ ] 6.2 下線の位置を集める `IDWriteTextRenderer1` を新しく書いて実装する
+- [x] 6.2 下線の位置を集める `IDWriteTextRenderer1` を新しく書いて実装する
   - `bind-next` の問い 6 のフィルターに要る DirectWrite の物（下線の描き手の 3 つを含む）を足し、`bind-next` の build に 3 つの `.implements` の指定を足す（1.3 で後回しにした分）。`Cargo.toml` の兄弟の依存は足すだけで消さない
   - 元の `viewbox_draw_underline.rs` を写さずに、`IDWriteTextRenderer1`・`IDWriteTextRenderer`・`IDWritePixelSnapping` の `_Impl` を小さく新しく書き、`DrawUnderline` で下線の位置（x・y・幅・太さ・向き）を集める
   - 下線を付けた範囲を持つ文字の配置の描画にこの描き手を渡し、位置が 1 つ以上集まることを見る。`_Impl` のメソッドが `HRESULT` を返す形の書き方を対応表の材料として問い 6 の節に控える
@@ -338,3 +338,4 @@
 - 一次記録の見立ての理由は「測った数」と「構造上の見立て」を分けて書き、1 つの写しの数を一般化しない（4.3 のレビュー）。`windows-bindgen`（この rev）にほかのクレートの型を参照させる公開の口は無い。
 - この rev の `HWND` は既定・`.minimal()`・`.sys()` のどれも `*mut HWND__` の別名（0.62 の newtype と違う）。`Default`／`is_invalid` は無く `Hash` は在る。包みを Component にするには `unsafe impl Send/Sync` が要る（5）。REWRITE_TABLE の HWND の行はこれに合わせる。
 - 0.101 の `HSTRING` は `Display` を持たない（`display()`・`to_string_lossy()` を使う）。`#[interface]` に `IUnknown_Vtbl` の取り込みは要らない（6.1）。
+- `.implements` の名前はこの rev のメタデータでは `Windows.Win32.IDWriteTextRenderer1` の形（`Graphics.DirectWrite` の段が無い）。合わない名前は黙って無視され `_Impl` が出ないのに build は通る。生成した `_Impl` のメソッドは `HRESULT` を返すので中で `?` は使えない（6.2）。

@@ -88,9 +88,10 @@ windows-link v0.100.1 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9
 | フィルター | 名指しの行数 |
 |---|---|
 | `common.txt` | 11（COM の初期化 2・D3D11 3・D2D 4・DXGI 2） |
-| `q4-wuc.txt`・`q6-renderer.txt`・`q7-text.txt` | 0（各問いのタスクが足す） |
+| `q6-renderer.txt` | 11（DirectWrite の関数 1・インターフェース 6・定数 4。6.2） |
+| `q4-wuc.txt`・`q7-text.txt` | 0（各問いのタスクが足す） |
 
-生成した `bindings.rs`: 7742 行（common の 11 件だけで。依存の型を自動で引くため名指しの約 700 倍）。束縛が名指しした兄弟は `windows-numerics`（`windows_numerics::Vector2`／`Matrix4x4`）だけで、`Cargo.toml` に足した。`windows-future` などは名指しされず足していない。`.implements`（下線の描き手の 3 つ）は 6.2 で足す。
+生成した `bindings.rs`: 7742 行（common の 11 件だけで。依存の型を自動で引くため名指しの約 700 倍）。束縛が名指しした兄弟は `windows-numerics`（`windows_numerics::Vector2`／`Matrix4x4`）だけで、`Cargo.toml` に足した。`windows-future` などは名指しされず足していない。`.implements`（下線の描き手の 3 つ）は 6.2 で足した（問い 6 の節）。6.2 の後の `bindings.rs` は 9402 行。
 
 ### RunCommands（走らせ方）
 
@@ -341,8 +342,17 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 - 学び（6.1）:
   - 0.101 の `#[interface]` は `IUnknown_Vtbl` を呼ぶ側の `use` に要らない（0.62 の写しの `use` に在ると「使っていない」の警告）。
   - 0.101 の `HSTRING` は `Display` を持たない（`hstring.rs` に `display()`・`to_string_lossy()`・`to_os_string()` と `Debug` は在る）。`{}` で出す所や `.to_string()` を呼ぶ所（`shiori-abi` の試験の `MockHost` の `key.to_string()` など）は書き換えが要る。これは構造上の見立てで、本線の呼び出しの数は数えていない。
-- 確かめた日: 2026-11-16（6.1）
-- 止まった所・理由・代わりの見立て: 無し（6.1）
+- 見立ての候補（6.2・下線の描き手）: go。`IDWriteTextRenderer1`・`IDWriteTextRenderer`・`IDWritePixelSnapping` の `_Impl` を `q6-com/src/renderer.rs` に新しく書き（元の `viewbox_draw_underline.rs` は写していない）、`#[implement(IDWriteTextRenderer1)]` の 1 つの型で 3 つとも組めた。
+  - 走らせた結果: 「下線 underline」の全体に下線を付けた `IDWriteTextLayout::Draw` にこの描き手を渡すと、`q6 DrawUnderline x=0 y=28 width=154.52344 thickness=1.3399279 orientation=0 renderer1=true` が 1 本集まる（Segoe UI 24・ja-jp・400×100。`y` は基線の y に `DWRITE_UNDERLINE::offset` を足した値）。DirectWrite は `IDWriteTextRenderer1` を問い合わせて見つけ、角つきの版の `DrawUnderline` を呼んだ（基の版は呼ばれない）。crate の試験 `renderer::tests::collects_at_least_one_underline` が 1 本以上・幅と太さが正を確かめる。
+  - `bind-next` の変え方: `filters/q6-renderer.txt` に 11 の名指し（`DWriteCreateFactory`・`IDWriteFactory`・`IDWriteTextFormat`・`IDWriteTextLayout`・描き手の 3 つ・定数 4 つ）と、`build.rs` に `.implements([...])` の 1 呼び出し（3 つの名前）。兄弟の依存は増えなかった。
+- 学び（6.2・対応表の材料）:
+  - `.implements` の名前は `Windows.Win32.IDWriteTextRenderer1` の形（この rev のメタデータは名前空間が `Windows.Win32` の 1 段で、`Windows.Win32.Graphics.DirectWrite.…` の段が無い）。短い名前（`IDWriteTextRenderer1`）も段の在る長い名前も、合わなければ **何も言わずに** 無視され、`_Impl` のトレイトが出ないだけで build は通る（フィルターの長い名前が断られるのと逆）。最初の 1 回はこれで `_Impl` が 0 だった。
+  - 既定の形の `_Impl` は、戻り値の無い COM メソッドも全部 `-> windows_core::HRESULT` を返す形で出る（0.62 の `windows` の `Result<()>` と違う）。書き方は `HRESULT(0)` を返し、失敗は `HRESULT(0x8000_4003u32 as i32)` のように値で返す（この rev に `S_OK`・`E_POINTER` の定数は名指ししないと無い）。`?` は使えないので、中で `Result` を使うなら最後に `.into()`／`match` で `HRESULT` へ落とす。
+  - 引数の形: 出の引数は生のポインタ（`*mut BOOL`・`*mut DWRITE_MATRIX`・`*mut f32`）、入の構造体も `*const DWRITE_UNDERLINE`、COM の引数は `windows_core::Ref<IUnknown>`、文脈は `*const c_void`。`FLOAT` は `f32`、`DWRITE_GLYPH_ORIENTATION_ANGLE` ほかの列挙は `i32` の別名。
+  - 継いだ版（`IDWriteTextRenderer1`）を実装すると、基の `IDWriteTextRenderer_Impl`（角の無い 4 つ）と `IDWritePixelSnapping_Impl` も実装が要る（同じ名前の `DrawUnderline` が 2 つのトレイトに並ぶので別々の `impl` に書く）。`#[implement]` に並べるのは一番下の 1 つでよい。
+  - 呼ぶ側: `IDWriteTextLayout::Draw` は `Param<IDWriteTextRenderer>` を取り、`&IDWriteTextRenderer1` をそのまま渡せる。`SetUnderline`・`Draw` は `HRESULT` を返すので `.ok()?`。集めた物は `AsImpl::as_impl()` で実装の型へ戻して読む。
+- 確かめた日: 2026-11-16（6.1・6.2）
+- 止まった所・理由・代わりの見立て: 無し（6.1）。6.2 は上の `.implements` の名前の形で 1 回止まり、名前空間を直して通った。
 - 判定: （開発者が下す）
 
 ### 問い 7: `windows-text` の縦書き
