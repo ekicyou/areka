@@ -27,6 +27,8 @@ mod draw_tree_systems_test;
 mod init_window_graphics_test;
 #[path = "graphics/readback_test.rs"]
 mod readback_test;
+#[path = "graphics/surface_embedding_test.rs"]
+mod surface_embedding_test;
 #[path = "graphics/surface_optimization_test.rs"]
 mod surface_optimization_test;
 #[path = "graphics/surface_systems_test.rs"]

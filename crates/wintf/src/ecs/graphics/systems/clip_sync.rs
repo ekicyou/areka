@@ -5,15 +5,41 @@
 //! WUC `Visual` に適用する。DComp 版（IDCompositionRectangleClip）の意味論を等価に写す。
 
 use super::init::format_entity_name;
-use crate::ecs::graphics::Visual;
 use crate::ecs::graphics::clip::ClipShape;
-use crate::ecs::graphics::components::{ClipKey, VisualGraphics};
+use crate::ecs::graphics::components::{ClipKey, PlacedClip, VisualGraphics};
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
+use crate::ecs::graphics::{
+    AutoPromotion, ClipPlan, Phase, PlacementKind, SurfacePlacement, Visual, VisualTransform,
+    merged_clip,
+};
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, trace, warn};
 use windows::UI::Composition::{CompositionClip, Compositor};
 use windows::core::Interface;
+use windows_numerics::{Matrix3x2, Vector2};
+
+/// 切り抜きの同期の係が読む部品
+type ClipSyncData = (
+    &'static Arrangement,
+    &'static GlobalArrangement,
+    &'static Visual,
+    &'static mut VisualGraphics,
+    Option<&'static VisualTransform>,
+    Option<&'static SurfacePlacement>,
+    Option<&'static AutoPromotion>,
+);
+
+/// 切り抜きの同期の係が見る変化（配置・見た目の部品・見た目の作り直し・変形・置き場・上げ下げの相）
+type ClipSyncFilter = Or<(
+    Changed<Arrangement>,
+    Changed<GlobalArrangement>,
+    Changed<Visual>,
+    Changed<VisualGraphics>,
+    Changed<VisualTransform>,
+    Changed<SurfacePlacement>,
+    Changed<AutoPromotion>,
+)>;
 
 /// WUC モードのクリップ同期システム
 ///
@@ -25,6 +51,9 @@ use windows::core::Interface;
 /// 見た目が作り直された部品は鍵が空なので、新しい見た目へ当て直す。
 /// 任意の図形（`ClipShape::Geometry`）は [`clip_key_for`] が「切り抜きなし」へ読み替える。
 ///
+/// 節の下の手動の持ち主は置き場の切り抜きを [`placed_key`]（`merged_clip` の答え）で合わせ、
+/// 自動で上げた持ち主は切り抜きを外す。変形・置き場・相の変化と置き場・変形の外れでも当て直す。
+///
 /// # DPI スケーリング
 /// - クリップ矩形のサイズに GlobalArrangement の累積スケール値を適用して物理ピクセル座標に変換
 /// - 角丸の半径にも同一のスケール値を適用（DComp 版 clip_sync_system と同一計算）
@@ -35,21 +64,10 @@ use windows::core::Interface;
 /// WucGraphicsResource が未初期化の場合はスキップする。
 pub fn clip_sync_system(
     wuc_resource: Option<Res<WucGraphicsResource>>,
-    mut query: Query<
-        (
-            Entity,
-            &Arrangement,
-            &GlobalArrangement,
-            &Visual,
-            &mut VisualGraphics,
-        ),
-        Or<(
-            Changed<Arrangement>,
-            Changed<GlobalArrangement>,
-            Changed<Visual>,
-            Changed<VisualGraphics>,
-        )>,
-    >,
+    // 変化の見分けは VisualGraphics を読むので、書く問い合わせと分ける
+    mut queries: ParamSet<(Query<Entity, ClipSyncFilter>, Query<ClipSyncData>)>,
+    mut removed_placement: RemovedComponents<SurfacePlacement>,
+    mut removed_transform: RemovedComponents<VisualTransform>,
     names: Query<&Name>,
 ) {
     let Some(wuc_resource) = wuc_resource else {
@@ -59,23 +77,76 @@ pub fn clip_sync_system(
         return;
     };
 
-    for (entity, arrangement, ga, visual, mut vg) in query.iter_mut() {
+    let mut targets: Vec<Entity> = queries.p0().iter().collect();
+    targets.extend(removed_placement.read());
+    targets.extend(removed_transform.read());
+    targets.sort_unstable();
+    targets.dedup();
+
+    let mut query = queries.p1();
+    for entity in targets {
+        let Ok((arrangement, ga, visual, mut vg, transform, placement, promotion)) =
+            query.get_mut(entity)
+        else {
+            continue;
+        };
         let Some(visual_com) = vg.visual().cloned() else {
             continue;
         };
 
         let scale_x = ga.scale_x();
-        let key = clip_key_for(
-            entity,
-            names.get(entity).ok(),
-            visual.clip.as_ref(),
-            arrangement.size.width,
-            arrangement.size.height,
-            scale_x,
-            ga.scale_y(),
-            vg.clip_key(),
-        );
+        let auto = promotion.is_some_and(|p| p.rule.phase() != Phase::Node)
+            || matches!(
+                placement,
+                Some(SurfacePlacement(PlacementKind::Auto { .. }))
+            );
+        let key = if auto {
+            // 自分の切り抜きは部分の列が D2D で描く
+            AUTO_OWNER_KEY
+        } else {
+            let own_key = clip_key_for(
+                entity,
+                names.get(entity).ok(),
+                visual.clip.as_ref(),
+                arrangement.size.width,
+                arrangement.size.height,
+                scale_x,
+                ga.scale_y(),
+                vg.clip_key(),
+            );
+            // 局所の行列は性質の同期と同じ（VisualTransform × 平行移動(Arrangement.offset)）
+            let local = transform.map_or(Matrix3x2::identity(), |t| t.to_affine())
+                * Matrix3x2::from(arrangement.offset);
+            placed_key(
+                own_key,
+                visual.clip.as_ref(),
+                placement.map(|p| &p.0),
+                local,
+                (arrangement.size.width, arrangement.size.height),
+            )
+        };
         if vg.clip_key() == Some(&key) {
+            continue;
+        }
+
+        if let Some(placed) = &key.4 {
+            let applied = build_placed_clip(compositor, placed, scale_x)
+                .and_then(|clip| visual_com.SetClip(&clip));
+            match applied {
+                Ok(()) => {
+                    vg.bypass_change_detection().set_clip_key(key.clone());
+                    debug!(
+                        entity = ?entity,
+                        placed = ?placed,
+                        "[clip_sync] Placement clip applied"
+                    );
+                }
+                Err(e) => error!(
+                    entity = ?entity,
+                    error = ?e,
+                    "[clip_sync] Failed to apply WUC placement clip"
+                ),
+            }
             continue;
         }
 
@@ -144,7 +215,10 @@ pub fn clip_sync_system(
 /// 任意の図形を「切り抜きなし」と読み替えたときの鍵。負の幅は実の鍵に現れないので、
 /// 図形なしの解除 `(0, 0, 0, None)` と区別でき、図形へ変わった回だけ鍵が変わる。
 /// 控えに図形（`ID2D1Geometry`）は持たない。
-const GEOMETRY_AS_NONE_KEY: ClipKey = (-1.0, -1.0, 0.0, None);
+const GEOMETRY_AS_NONE_KEY: ClipKey = (-1.0, -1.0, 0.0, None, None, false);
+
+/// 自動で上げた持ち主の鍵（切り抜きを外す）。自分の切り抜きは部分の列が D2D で描く。
+pub(crate) const AUTO_OWNER_KEY: ClipKey = (0.0, 0.0, 0.0, None, None, true);
 
 /// 切り抜きの鍵（物理の幅・高さ・拡大率・形）を作る。大きさ 0 か形なしは解除の鍵。
 ///
@@ -176,9 +250,94 @@ pub(crate) fn clip_key_for(
             height * scale_y,
             scale_x,
             Some(shape.clone()),
+            None,
+            false,
         ),
-        _ => (0.0, 0.0, 0.0, None),
+        _ => (0.0, 0.0, 0.0, None, None, false),
     }
+}
+
+/// 節の下の手動の持ち主の置き場の切り抜きを鍵へ足す（[`merged_clip`] の答え）。
+/// `own_key` は [`clip_key_for`] の鍵、`local` は局所の行列（DIP）、`size` は局所の大きさ（DIP）。
+/// - `Own`・`Unsupported`: 自分の切り抜きだけ（`Unsupported` の warn! は 1 回の判断が残す）
+/// - `Rect`: 局所の矩形（交わりが空なら空の矩形＝何も出さない）
+/// - `Transformed`: 親の持ち主の矩形と逆行列
+pub(crate) fn placed_key(
+    own_key: ClipKey,
+    own: Option<&ClipShape>,
+    placement: Option<&PlacementKind>,
+    local: Matrix3x2,
+    size: (f32, f32),
+) -> ClipKey {
+    let Some(PlacementKind::Embedded {
+        parent_world, clip, ..
+    }) = placement
+    else {
+        return own_key;
+    };
+    let placed = match merged_clip(own, clip, local * *parent_world, size) {
+        ClipPlan::Own | ClipPlan::Unsupported => return own_key,
+        ClipPlan::Rect { local } => (local, None),
+        ClipPlan::Transformed { host_rect, inverse } => (host_rect, Some(inverse)),
+    };
+    (
+        own_key.0,
+        own_key.1,
+        own_key.2,
+        own_key.3,
+        Some(placed),
+        false,
+    )
+}
+
+/// 置き場の切り抜きの物理ピクセルの値: (図形の位置, 図形の大きさ, 切り抜きの変形)。
+/// 局所も親の Visual も物理ピクセルなので、逆行列は線形の部分をそのまま・平行移動だけ拡大する。
+/// 空の矩形は大きさ 0（何も出さない）。
+pub(crate) fn placed_clip_px(
+    placed: &PlacedClip,
+    scale: f32,
+) -> (Vector2, Vector2, Option<Matrix3x2>) {
+    let (rect, inverse) = placed;
+    let zero = Vector2 { X: 0.0, Y: 0.0 };
+    let (offset, size) = if rect.is_empty() {
+        (zero, zero)
+    } else {
+        (
+            Vector2 {
+                X: rect.left() * scale,
+                Y: rect.top() * scale,
+            },
+            Vector2 {
+                X: rect.width() * scale,
+                Y: rect.height() * scale,
+            },
+        )
+    };
+    let matrix = inverse.map(|m| Matrix3x2 {
+        M31: m.M31 * scale,
+        M32: m.M32 * scale,
+        ..m
+    });
+    (offset, size, matrix)
+}
+
+/// 置き場の切り抜きを角丸 0 の図形の切り抜き（逆行列は `CompositionClip.TransformMatrix`）へ組む。
+fn build_placed_clip(
+    compositor: &Compositor,
+    placed: &PlacedClip,
+    scale: f32,
+) -> windows::core::Result<CompositionClip> {
+    let (offset, size, matrix) = placed_clip_px(placed, scale);
+    let geometry = compositor.CreateRoundedRectangleGeometry()?;
+    geometry.SetOffset(offset)?;
+    geometry.SetSize(size)?;
+    let clip = compositor
+        .CreateGeometricClipWithGeometry(&geometry)?
+        .cast::<CompositionClip>()?;
+    if let Some(m) = matrix {
+        clip.SetTransformMatrix(m)?;
+    }
+    Ok(clip)
 }
 
 /// `ClipShape` の 3 変種を WUC `CompositionClip` へ等価写像する。

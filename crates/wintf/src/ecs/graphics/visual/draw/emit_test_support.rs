@@ -81,6 +81,32 @@ pub(crate) const CLEAR: [u8; 4] = [0, 0, 0, 0];
 
 /// 単色の矩形を 1 つ塗った描く中身（WARP の装置で記録）。`bgra` は不透明の色。
 pub(crate) fn solid(rect: D2D_RECT_F, bgra: [u8; 4]) -> VisualDrawContent {
+    fill(rect, bgra, |dc, brush| unsafe {
+        dc.FillRectangle(&rect, brush)
+    })
+}
+
+/// (0, 0)-(w, h) に内接する楕円を 1 つ塗った描く中身（縁は被覆でにじむ）。
+pub(crate) fn solid_ellipse(w: f32, h: f32, bgra: [u8; 4]) -> VisualDrawContent {
+    let e = D2D1_ELLIPSE {
+        point: windows_numerics::Vector2 {
+            X: w / 2.0,
+            Y: h / 2.0,
+        },
+        radiusX: w / 2.0,
+        radiusY: h / 2.0,
+    };
+    fill(rect(0.0, 0.0, w, h), bgra, |dc, brush| unsafe {
+        dc.FillEllipse(&e, brush)
+    })
+}
+
+/// 不透明の色 `bgra` の筆で `paint` を記録した、範囲 `bounds` の描く中身。
+fn fill(
+    bounds: D2D_RECT_F,
+    bgra: [u8; 4],
+    paint: impl FnOnce(&ID2D1DeviceContext, &ID2D1SolidColorBrush),
+) -> VisualDrawContent {
     let dc = warp_dc();
     let color = D2D1_COLOR_F {
         r: bgra[2] as f32 / 255.0,
@@ -93,11 +119,11 @@ pub(crate) fn solid(rect: D2D_RECT_F, bgra: [u8; 4]) -> VisualDrawContent {
         dc.SetTarget(&list);
         dc.BeginDraw();
         let brush = dc.CreateSolidColorBrush(&color, None).unwrap();
-        dc.FillRectangle(&rect, &brush);
+        paint(&dc, &brush);
         dc.EndDraw(None, None).unwrap();
         dc.SetTarget(None);
         list.Close().unwrap();
-        VisualDrawContent::new(rect.into(), list)
+        VisualDrawContent::new(bounds.into(), list)
     }
 }
 
@@ -239,6 +265,7 @@ fn make_bitmap(
     w: u32,
     h: u32,
     options: D2D1_BITMAP_OPTIONS,
+    data: Option<&Pixels>,
 ) -> ID2D1Bitmap1 {
     let props = D2D1_BITMAP_PROPERTIES1 {
         pixelFormat: D2D1_PIXEL_FORMAT {
@@ -256,8 +283,8 @@ fn make_bitmap(
                 width: w,
                 height: h,
             },
-            None,
-            0,
+            data.map(|p| p.bytes.as_ptr() as *const _),
+            data.map_or(0, |p| p.width * 4),
             &props,
         )
     }
@@ -313,22 +340,8 @@ fn build_commands(
     viewport: Option<Aabb>,
     fill_state: &mut SystemState<Query<FillData>>,
 ) -> Vec<DrawCommand> {
-    let top = world
-        .get::<Children>(root)
-        .map(|c| c.to_vec())
-        .unwrap_or_default();
-    let mut visited = Vec::new();
-    let mut fill_nodes = fill_state.get_mut(world).unwrap();
-    fill_world_visuals(
-        root,
-        None,
-        &mut fill_nodes,
-        false,
-        &top,
-        false,
-        &mut visited,
-        &mut Default::default(),
-    );
+    let scan = scan_with(world, root, fill_state);
+    let visited: Vec<_> = scan.visible_nodes().collect();
 
     let viewport = viewport.unwrap_or_else(|| {
         let size = world
@@ -337,6 +350,50 @@ fn build_commands(
             .unwrap_or_default();
         Aabb::new(0.0, 0.0, size.width, size.height)
     });
+    let frame = TreeFrame::Root {
+        root,
+        root_name: None,
+    };
+    frame_commands(world, &frame, viewport, &visited)
+}
+
+/// 根 `root` の下を埋める係の 1 度の歩きで記した走査の列（変化の覚えは新しい）。
+pub(crate) fn tree_scan(world: &mut World, root: Entity) -> TreeScan {
+    let mut state = SystemState::new(world);
+    scan_with(world, root, &mut state)
+}
+
+fn scan_with(
+    world: &mut World,
+    root: Entity,
+    fill_state: &mut SystemState<Query<FillData>>,
+) -> TreeScan {
+    let top = world
+        .get::<Children>(root)
+        .map(|c| c.to_vec())
+        .unwrap_or_default();
+    let mut scan = TreeScan::default();
+    let mut fill_nodes = fill_state.get_mut(world).unwrap();
+    fill_world_visuals(
+        root,
+        None,
+        &mut fill_nodes,
+        false,
+        &top,
+        false,
+        &mut scan,
+        &mut Default::default(),
+    );
+    scan
+}
+
+/// 枠 `frame` と見える節の列 `visited` から組んだ描く列（`viewport` は DIP・`Segment` なら自分の描画面の物理ピクセル）。
+pub(crate) fn frame_commands(
+    world: &mut World,
+    frame: &TreeFrame,
+    viewport: Aabb,
+    visited: &[(Entity, usize)],
+) -> Vec<DrawCommand> {
     let factory = warp_factory();
     let unit: ID2D1Geometry = unsafe {
         factory.CreateRectangleGeometry(&D2D_RECT_F {
@@ -358,11 +415,84 @@ fn build_commands(
         &unit,
         viewport,
         &nodes,
-        root,
-        None,
-        &visited,
+        frame,
+        visited,
     );
     commands
+}
+
+/// WUC の重ねの写し: 描画面ごとの絵 `layers`（絵・整数の物理ピクセルの位置・不透明度）を前から順に、
+/// `w×h` の透明な絵へ `SOURCE_OVER` で重ねる（最近傍・整数の位置なので画素はずれずに写る）。
+pub(crate) fn composite(w: u32, h: u32, layers: &[(&Pixels, (i32, i32), f32)]) -> Pixels {
+    let layers: Vec<_> = layers
+        .iter()
+        .map(|&(pixels, (x, y), opacity)| Layer {
+            pixels,
+            transform: Matrix3x2::translation(x as f32, y as f32),
+            opacity,
+            clip: None,
+        })
+        .collect();
+    composite_layers(w, h, &layers)
+}
+
+/// WUC の Visual 1 つの写し（物理ピクセル）。`transform` は描画面の局所 → 親の Visual
+/// （`Offset` か `TransformMatrix`）、`clip` は局所の矩形の切り抜きと、それに掛ける
+/// `CompositionClip.TransformMatrix`。
+pub(crate) struct Layer<'a> {
+    pub pixels: &'a Pixels,
+    pub transform: Matrix3x2,
+    pub opacity: f32,
+    pub clip: Option<(D2D_RECT_F, Matrix3x2)>,
+}
+
+/// [`composite`] の、行列と切り抜きを持つ形。整数の平行移動は最近傍、ほかは線形で絵を写す。
+pub(crate) fn composite_layers(w: u32, h: u32, layers: &[Layer]) -> Pixels {
+    let factory = warp_factory();
+    draw_to_pixels(w, h, Matrix3x2::identity(), |dc| {
+        for l in layers {
+            let p = l.pixels;
+            let ph = (p.bytes.len() / (p.width as usize * 4)) as u32;
+            let bitmap = make_bitmap(dc, p.width, ph, D2D1_BITMAP_OPTIONS_NONE, Some(p));
+            let t = l.transform;
+            let integer = t.M11 == 1.0
+                && t.M22 == 1.0
+                && t.M12 == 0.0
+                && t.M21 == 0.0
+                && t.M31.fract() == 0.0
+                && t.M32.fract() == 0.0;
+            let mode = if integer {
+                D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR
+            } else {
+                D2D1_INTERPOLATION_MODE_LINEAR
+            };
+            let dest = rect(0.0, 0.0, p.width as f32, ph as f32);
+            // SAFETY: Windows API 境界。
+            unsafe {
+                dc.SetTransform(&t);
+                if let Some((r, m)) = l.clip {
+                    let mask: ID2D1Geometry =
+                        factory.CreateRectangleGeometry(&r).unwrap().cast().unwrap();
+                    let params = D2D1_LAYER_PARAMETERS1 {
+                        contentBounds: rect(f32::MIN, f32::MIN, f32::MAX, f32::MAX),
+                        geometricMask: ManuallyDrop::new(Some(mask)),
+                        maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                        maskTransform: m,
+                        opacity: 1.0,
+                        opacityBrush: ManuallyDrop::new(None),
+                        layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+                    };
+                    dc.PushLayer(&params, None);
+                    let _ = ManuallyDrop::into_inner(params.geometricMask);
+                }
+                dc.DrawBitmap(&bitmap, Some(&dest), l.opacity, mode, None, None);
+                if l.clip.is_some() {
+                    dc.PopLayer();
+                }
+                dc.SetTransform(&Matrix3x2::identity());
+            }
+        }
+    })
 }
 
 /// 列 `commands` を `emit` で `w×h` の透明な的へ再生し、読み戻す。本番と同じく DC6 を cast して渡す。
@@ -429,12 +559,13 @@ pub(crate) fn draw_to_pixels(
     draw: impl FnOnce(&ID2D1DeviceContext),
 ) -> Pixels {
     let dc = warp_dc();
-    let target = make_bitmap(&dc, w, h, D2D1_BITMAP_OPTIONS_TARGET);
+    let target = make_bitmap(&dc, w, h, D2D1_BITMAP_OPTIONS_TARGET, None);
     let staging = make_bitmap(
         &dc,
         w,
         h,
         D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        None,
     );
     let row = (w as usize) * 4;
     let mut bytes = vec![0u8; row * h as usize];
