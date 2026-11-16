@@ -3,7 +3,8 @@
 //!
 //! 本物の登録（`EcsWorld` の `PreRenderSurface`・`RenderSurface`・`Composition`）を実の装置と WUC の資源で
 //! 回す。窓は HWND の無い `Window` の部品だけで、画面の画素は読まない。WUC の Visual の親・位置・
-//! 変形の行列・不透明度・子の並び・切り抜きを読み戻し、描画面の画素は読み戻しの口（入れ物の写し）で読む。
+//! 変形の行列・不透明度・子の並び・切り抜きを読み戻し、描画面の画素は読み戻しの口（入れ物の写し）と
+//! WUC の描画面そのもの（`CopySurface`）の両方で読む。
 //! 配置の伝播は回さないので、持ち主の `GlobalArrangement`（DPI の拡大と描画面の大きさ）は手で置く。
 
 use bevy_ecs::prelude::*;
@@ -18,9 +19,9 @@ use windows_numerics::{Matrix3x2, Matrix4x4, Vector2};
 use wintf::ecs::layout::{Arrangement, GlobalArrangement, Offset, Size as LayoutSize};
 use wintf::ecs::world::{Composition, EcsWorld, PreRenderSurface, RenderSurface};
 use wintf::ecs::{
-    ClipShape, DrawCommand, DrawTree, FrameTime, GraphicsCore, OwnSurface, Rect, SurfaceImage,
-    SurfaceReadback, Visual, VisualDrawContent, VisualGraphics, VisualTransform, VisualVersion,
-    Window, WucGraphicsResource,
+    ClipShape, DrawCommand, DrawTree, FrameTime, GraphicsCore, OwnSurface, Rect, SurfaceGraphics,
+    SurfaceImage, SurfaceReadback, Visual, VisualDrawContent, VisualGraphics, VisualTransform,
+    VisualVersion, Window, WucGraphicsResource,
 };
 use wintf::numerics::{Aabb, Transform2D};
 
@@ -504,6 +505,13 @@ fn image(world: &mut World, e: Entity) -> (u32, u32, Vec<u8>) {
     }
 }
 
+/// `e` の WUC の描画面そのものを `CopySurface` で読む（要件 8.5）。
+fn wuc_image(world: &World, e: Entity) -> (u32, u32, Vec<u8>) {
+    let (w, h) = world.get::<SurfaceGraphics>(e).unwrap().size;
+    let bytes = crate::composite_systems_test::read_wuc_surface(world, e);
+    (w, h, bytes)
+}
+
 fn pixel(img: &(u32, u32, Vec<u8>), x: u32, y: u32) -> [u8; 4] {
     let i = ((y * img.0 + x) * 4) as usize;
     img.2[i..i + 4].try_into().unwrap()
@@ -660,6 +668,24 @@ fn auto_promoted_node_moves_between_surfaces_and_wuc_children() {
                 "s={s}: 親の描画面に A が残った"
             );
             assert_eq!(pixel(&parent, bx, by), OPAQUE_BLUE, "s={s}: 親の描画面の B");
+            // 入れ物の写しでなく WUC の描画面そのものでも同じ（CopySurface）
+            let own_wuc = wuc_image(world, a);
+            assert_eq!(
+                pixel(&own_wuc, lx, ly),
+                OPAQUE_RED,
+                "s={s}: A の WUC 描画面"
+            );
+            let parent_wuc = wuc_image(world, root);
+            assert_eq!(
+                pixel(&parent_wuc, ax, ay),
+                CLEAR,
+                "s={s}: 親の WUC 描画面に A が残った"
+            );
+            assert_eq!(
+                pixel(&parent_wuc, bx, by),
+                OPAQUE_BLUE,
+                "s={s}: 親の WUC 描画面の B"
+            );
 
             // 落ち着くと戻る: 戻した回に親の子から外れ、親の描画面へ戻る
             let mut demoted = false;
@@ -683,6 +709,11 @@ fn auto_promoted_node_moves_between_surfaces_and_wuc_children() {
                 pixel(&parent, ax, ay),
                 OPAQUE_RED,
                 "s={s}: 親の描画面に戻らない"
+            );
+            assert_eq!(
+                pixel(&wuc_image(world, root), ax, ay),
+                OPAQUE_RED,
+                "s={s}: 親の WUC 描画面に戻らない"
             );
             frame(world);
             assert_eq!(wuc_children(&rv), ids(world, &[p]), "s={s}: 次の回");
