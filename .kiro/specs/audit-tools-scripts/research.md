@@ -335,3 +335,51 @@
 - `tools/perf`（完了した `audit-tools-perf-run`・`audit-tools-perf-judge` の範囲）: `invoke-cpu-sample.ps1` の偽の xperf の試しは、偽物が見つからないと既定の位置の本物の xperf へ落ちる（`Get-XperfPath`）。今は子の `PATH` の先頭に偽物を置くので起きない。`perf-loop.ps1 selftest` は Python の版を確かめない（12 節の 2）。
 - `tools/perf/invoke-followup-checks.ps1`: `mouse-input.ps1` の `INPUT`／`MOUSEINPUT` の型はそこからの写し（コメントで明示）。範囲をまたぐ写しなので、この spec では寄せない。
 - `.github/workflows/crates-io.yml`: 段にも仕事にも `timeout-minutes` が無い（16 は道具の側の 1 語で直せる。workflow の側に足すかはこの spec の外の判断）。
+
+## 14. 設計の段の調べと決め（2026-11-16 `kiro-spec-design`）
+
+> 設計の段のサブエージェント。発見の種類は **light**（今の道具の直しで、新しい境目は共通の部品 2 本だけ・外の依存の調べは要らない）。範囲の 14 本のうち直す所を全部読み直し、読み手（`release.yml`・`doc/impl-watch.md`・`kiro-complete` ほか）の行を確かめた。使ったスキルの導き: `kiro-spec-design` の規則（境界を先に・File Structure Plan・レビューの門）と ponytail（いちばん小さな完全な変更・写しは寄せる・新しい依存を足さない）。
+
+### 14.1 測り（依頼で許された 3 本・各 1 回）
+
+回す前に台本を読み、書くのがワークツリーの `target\` の下だけで、コミット済みの資源を書き替えないことを確かめた（`app-icon.ps1` は `target\app-icon-selftest\`・`cursor-art.ps1` は `target\cursor-art-selftest\` へ写して組む。`perf-loop.ps1 selftest` は `target\perf-loop-tmp\` の下だけで、`%LOCALAPPDATA%` の走行の出力先を作らない）。回した後の `git status --porcelain` は空。
+
+| 回したもの | 終了コード | 所要時間 | 中身 |
+|---|---:|---:|---|
+| `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` | 0 | 71.5 秒 | `SELFTEST RESULT ok=12 ng=0`（昇格していない机・Python 3.13.17） |
+| `pwsh -NoProfile -File tools/app-icon.ps1 -SelfTest` | 0 | 2.0 秒 | 5 判定 ok |
+| `pwsh -NoProfile -File tools/cursor-art.ps1 -SelfTest` | 0 | 11.5 秒 | `OK selftest (2 checks)` |
+
+- 12 の「コミット済みと同じか」は、今の `same bytes twice` で組んだ結果と比べるので、組む回数は増えない（`cursor-art` の 11.5 秒のまま）。
+- 足す 7 段の合計の見立ては約 100 秒。全体テストの目安を「約 19 分」から「約 21 分」へ改める。
+
+### 14.2 11 節（設計へ持ち越した調べもの）の答え
+
+1. 件 1 の所要時間と順: 71.5 秒（上）。新しい自分の検査の段の最後（`sample fetch check` の後・`-License` の段の前）に置く。
+2. 4（件 2）: 子は失敗の理由を `Show-Ascii` にして標準出力の `FAIL` の行へ書けば、子の端末が 932 のままでも親（UTF-8 で読む）に字のとおり届く＝端末を替えずに済む。わざと落ちる子は内部の引数 `-FailCheck <確かめの名前>`（`-Cp932Child` と同じ形の内部の口）で作る。落とす確かめは、今 `try` に包まれていない `tools/perf` の読み込み（`perf load`）。
+3. 12: 上のとおり時間は増えない。寸法を絞らない。
+4. 1: `release.yml` の取り出しは `fetch-depth: 0` で木全体を取る＝タグの木に `.kiro/specs/` が在る。`completed/` は改名しない決まりなので古い範囲でも落とさない。2026-10-23 の改名の前に `areka-P0-<名>` で書かれ後で `<名>` のフォルダになった spec も、両方から頭の `areka-P0-` を外して比べれば拾える。今の spec のフォルダは 495（接頭辞の無い名前に、`-` も `_` も含まない 1 語の名前は無い・`_` を含むのは `transform_system_test` の 1 つ）。
+5. 2・10: ビルドを飛ばす口は台本の新しい引数にせず、共通の部品 `exe-install.ps1` の関数の引数（`-Built`・`-Check` の scriptblock）にする。偽の exe は中身を決めた小さなファイルで、偽の確かめがその中身を読んで合否を決める（本物の exe を起こさない＝完了した `areka-P0-impl-watch-skills` の設計 `:24` の「走っている exe の入れ替えは偽の exe で再現できない」に触れず、分かれ道の筋だけを縛る）。2 つ目の改名の失敗は、確かめの中で `.new.exe` の取っ手を共有の削除なしで握って起こす（Windows は削除の共有の無い取っ手のあるファイルを改名できない）。
+6. 7: 負荷の子は親が居なければ直ちに 0 で終わる形（`Get-Process` を `try` で包む）。`finally` の番号での止め方と二重になっても、止め済みの子を止めるだけで害は無い。自分の検査は、偽の親を 1 秒だけ置いてから止め、子が 10 秒の内に 0 で終わることを見る（子の起動が遅い机でも誤って赤にならない）。
+
+### 14.3 12 節（設計の判断の項目）の答え
+
+- 6（テストの置き場・段の数）: T1（既にある自分の検査へ足す）＝`release-notes`・`sample-fetch`・`app-icon`・`cursor-art`・`encoding-check`・`crates-io`。T2（新しい `-SelfTest`）＝`package.ps1`（中身は `package.selftest.ps1`・1,000 行の番人のため）・`load-flake.ps1`・`mouse-input.ps1`。T3（新しい台本）＝`exe-install.selftest.ps1`（机へ置く 2 本が 1 つの手順を分け合うので検査も 1 本）。全体テストに足す段は 7（`package check`・`exe install check`・`load flake check`・`mouse input check`・`app icon check`・`cursor art check`・`perf loop selftest`）。全部を 1 段にまとめる包みの台本は作らない（段の名前で赤の道具が読めなくなる・包みが 1 枚増えるだけ）。
+- 7（写しの寄せ先）: 案 B。共通の部品を仕事ごとに 2 本（`tool-common.ps1`＝ASCII・版・`PATH`、`exe-install.ps1`＝机へ置く手順）。案 C（`utf8-child.ps1` へ足す）は `release.yml` の読み込みの行を変えずに済むが、14 で `release.yml` の本文はどのみち変わり、名前と仕事がずれる。読み込み用のファイルに `param` を置かない（`.` で読むと、読み込んだ側の同じ名前の引数〔`package.ps1` の `-SelfTest` ほか〕を消してしまうため）。
+- 3（件 2 の検査）・9（8.1 の操作でしか確かめられない直し）・10（pasta への申し送り）・11（残す指摘）・12（分け方）は要件の討議の確定のまま。
+
+### 14.4 設計の段で新しく分かったこと
+
+- **`runtime-crate-split` と `tech.md`・`structure.md` が重なりうる**: 同 spec の brief は触るファイルに「文書のパス」と「`structure.md` の新しい crate の節」を挙げる（`tech.md:90` に `crates/areka/src/runtime/spine_wait.rs` のパスが在る）。この spec の書き替え（`tech.md` の Testing と Required Tools・`structure.md:19`）は行が重ならないが、ファイルは重なりうる。実装の頭で相手の設計の File Structure Plan を確かめ、重なれば申し送り（要件 7.4）とし、議題に挙げた（設計の Open Questions の 1）。
+- **`release.yml` の版の読みは版の形を確かめていない**: 写しは `package.ps1`・`encoding-check.ps1` の 2 か所だけが正規表現を持つ。寄せた後は `release.yml` の段「版の検査」でも形を確かめる（`+` の付記の版は、今は後の配布物の段で止まり、直した後はこの段で止まる）。
+- **規則 E の表が変わる**: 版の読みの `cargo metadata` が `tool-common.ps1` へ移るので、`tools/package.ps1` の要素は `nar-sample-path` だけ、`tools/tool-common.ps1` に `metadata` を足し、`release.yml` の行は消す（素の呼び出しは規則 D が今までどおり落とす）。
+- **`Show-Ascii` の既定は 80 字で切る**: 今の `encoding check` の出す行を変えないため既定のまま移し、ほかの呼び手は `0`（切らない）を渡す。
+- **`package.ps1` の関数の定義が段の間に散っている**: `Read-PeInfo` は前提の確認の段の後、`Test-ZipContent` はビルドの段の後に定義されるので、`-SelfTest` から呼ぶには定義を最初の段の前へ集める（中身は変えない純粋な移し）。
+- **範囲の外の写し**: `.claude/skills/kiro-next/overview/roadmap-overview.ps1:755` にも `ConvertTo-Ascii`（`?` の形）が在る。スキルの持ち物で範囲の外なので寄せない（範囲の外で気付いたこととして残す）。
+- **7.7 の 10 件の外の小さな変わり**: 6（`mouse-input.ps1 -SelfTest` と段）と 18（失敗の行の中の `?` が `\` の付いた 4 桁の 16 進に変わる）は、研究の旗では「なし」だが外から見える形が少し変わる。仮置きは「変える」で、議題に挙げた（設計の Open Questions の 2）。
+
+### 14.5 合成（`design-synthesis.md` の 3 つの見方）
+
+- **一般化**: 机へ置く 2 本の違いは「確かめの中身」と「置いた後の状態の確かめ（impl-watch だけ）」だけ＝手順は 1 つの関数に確かめの scriptblock を渡す形にした。版の読みは 3 か所とも「areka の包みがちょうど 1 つ・版の形」の同じ問い＝1 関数で、投げる文を呼び手がそのまま理由に使う。字を ASCII へ直す仕事は 1 つ（`\` の付いた 4 桁の 16 進・長さで切る）。
+- **作るか取り入れるか**: 転送の先の縛りは `curl.exe` の `--proto`／`--proto-redir`（自前で転送を追わない）。形の縛り（5・6・16）は PowerShell の構文木（`tools/perf` と `encoding-check` が既に使う）。負荷の子が親と一緒に止まる形は、Windows のジョブ（閉じたら子を殺す）も考えたが、`Add-Type` の P/Invoke が要り行数が増えるので、子が親を見て自分で終わる形を採った。新しい依存は 0。
+- **簡単にする**: 自分の検査をまとめて回す包みの台本は作らない。spec 名の見本はフォルダの木でなく 1 行 1 名のテキスト（git は空のフォルダを持てない）。`package.ps1` の自分の検査の中身だけを別のファイルへ出し、判定の関数は `package.ps1` に残す（較正値の置き場を 1 か所に保つ）。`load-flake.ps1`・`mouse-input.ps1` の自分の検査は本体の中に置く（それぞれ 100 行前後で番人に余裕がある）。
