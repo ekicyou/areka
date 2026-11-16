@@ -1106,6 +1106,7 @@ dependencies = [
 name = "q9-api-count"
 version = "0.0.0"
 dependencies = [
+ "protobuf",
  "scip",
 ]
 
