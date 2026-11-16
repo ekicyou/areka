@@ -174,6 +174,21 @@ cargo <run|build|test|clippy> --manifest-path C:\home\maz\git\areka\crates\pilot
 
 上限時間は環境変数 `AREKA_APP_SMOKE_EXIT_MS`（既定 30000 ms）。
 
+### 置き場の決まりの確かめ（12.4）
+
+置き場の `*.rs`・`Cargo.toml`・`.cargo/config.toml`（git 管理の 80 ファイル）だけを grep した（README などの文書は決まりの語を説明に含むので外す）。
+
+- [x] 0 件: `std::env::temp_dir`・捕捉先の 4 語（`with_default(`・`set_default(`・`set_global_default(`・`install_global_capture_all(`）・`env-filter`・manifest の `log-capture-kit`／`sample-ghost-kit`／`real-run-kit`・`state.actors()`・検体のパスの組み立て・`D3D_DRIVER_TYPE_WARP`・`C:\tmp`・新しい側の `windows` クレートの名指し（`windows =`・`use windows::`）
+- [x] 直下に `main.rs` 無し（bin の `main.rs` は各クレートの `src/` の中だけ）。根の `Cargo.toml` は `[package]` の無い仮想の manifest
+- [x] `publish = false`: 根の `[workspace.package]` に `publish = false`、17 のメンバーが全部 `publish.workspace = true` で受ける（根 1 ＋ 17 = 18 manifest）
+- [x] `.rs` の最長は 501 行（`q7-vertical/src/bin/vt-balloon.rs`）で 1,000 行以下
+- [x] 生成した束縛のコミットは 0 件（`q3-minimal/src/bindings.rs` の名前は同じだが 78 行の手書きの包みで、生成物は `OUT_DIR` へ出す）
+- [x] `evidence/` の絵: `q4-wuc.png` 64x64（200 B）・`q7-balloon.png` 92x272（6,507 B）・`q7-old.png` 310x250（3,826 B）・`q7-new-none.png` 310x250（3,821 B）・`q7-diff-none-origin.png` 310x250（1,755 B）
+- [x] `git diff --stat main -- Cargo.toml Cargo.lock crates/pilot/Cargo.toml deny.toml tools` は空。出荷するクレート（`crates` から `crates/pilot` を除く）の差分も空。本線の `cargo metadata --no-deps` の members 37 件に置き場のクレートは 0 件
+- [x] 本線の見張りの試験が緑: `log-capture-kit` の 6 本 = `doc_tree_guard_test` 8・`file_length_guard_test` 6・`sample_path_guard_test` 21・`temp_path_guard_test` 16・`with_default_guard_test` 24・`workspace_scan_test` 20（すべて passed・0 failed）、`areka` の `runtime::frame::attach_tests`（`frame_attach_tests.rs`）21 passed。1,000 行の見張りは `file_length_guard_test`
+
+注: `q9-api-count/src/count_tests.rs` に `real-run-kit` の文字列が 3 か所あるが、数えの道具の試験の入力で manifest の依存ではなく、見張りは緑のまま。
+
 ### CopyLedger（写した量と手間）
 
 写した量は元のファイルの本番の行（試験の行と問い 10 の写しを除く）を元のファイルごとに 1 回数える。書き換えの行数は `git diff --numstat <写した直後> <移した後> -- <クレートのフォルダ>`。

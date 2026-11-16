@@ -316,7 +316,7 @@
   - _Dispatch: standard — 問い 7 の結果から英語の文を起こす_
   - _Requirements: 8.9, 14.1, 14.2, 14.3_
 
-- [ ] 12.4 置き場の決まりと本線を汚していないことを確かめる
+- [x] 12.4 置き場の決まりと本線を汚していないことを確かめる
   - 見張りが読む物だけ（置き場の `*.rs`・`Cargo.toml`・`.cargo/config.toml`）を grep で見る（README などの文書は決まりの語を説明に含むので外す）: `std::env::temp_dir`・捕捉先の 4 語・`env-filter`・`log-capture-kit`／`sample-ghost-kit`／`real-run-kit`・`state.actors()`・検体のパスの組み立て・新しい側の `windows` クレートの名指し・WARP の装置・直下の `main.rs`・各 manifest の `publish = false`・`.rs` の 1,000 行・コミットされた生成の束縛・`evidence/` の絵の大きさ
   - `git diff --stat main -- Cargo.toml Cargo.lock crates/pilot/Cargo.toml deny.toml tools` と出荷するクレートの差分が空で、本線の `cargo metadata --no-deps` の members に置き場のクレートが出ないことを確かめる
   - 本線の見張りの試験（`crates/log-capture-kit/tests/` の 4 本・`frame_attach_tests`・1,000 行の見張り）だけを走らせて緑を見る（全体テストは完了の段で回す）
