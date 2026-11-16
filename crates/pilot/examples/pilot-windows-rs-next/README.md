@@ -491,6 +491,32 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 - 本体での扱いの見立て: 入る前に値を確かめる（`ranges::checked_layout` の候補: 字の大きさは正の有限・箱の幅と高さは NaN でなく負でない・文の UTF-16 の長さが u32 に収まる。だめなら `Err` を返し、本体は `error!` を書いて描かない）。`TextLayout::new` を呼ぶ所は境の 1 か所にまとめ、そこより外に panic を出さない。値を確かめても残る失敗（工場の失敗・メモリ不足）は確かめられないので、上流へ `try_new`（`Result` を返す口）を求める文案に載せる。`catch_unwind` で境で止める案は、本線の組みが `panic = 'unwind'`（根の `Cargo.toml`）なので効きはするが、`unwrap` の panic を通常の失敗の経路にする形になり、panic の時点の記録も `human-panic` 側へ流れるので、確かめの後ろの最後の網に留める見立て。
 - 位置の換算の扱い: areka の文字の位置（拡張書記素クラスタの序数）を正本にし、DirectWrite／`windows-text` へ渡す所でだけ換算する。`windows-text` の範囲の口（`set_underline`・`range_bounds` ほか）は UTF-8 のバイト位置で、`choices::cluster_to_byte` で直す（クラスタの境目は必ず `char` の境目なので、`windows-text` の「`char` の境目でないと panic」には当たらない）。借りた DirectWrite の口（`SetDrawingEffect`）は UTF-16 で、`choices::cluster_to_utf16` で直す。戻り（`hit_test_point` の UTF-8 のバイト位置）は `choices::byte_to_cluster` で戻す。試験は絵文字（クラスタ 10＝UTF-8 30..34＝UTF-16 10..12）で 3 つの単位が別れることを固定した。
 
+#### 旧と新の比べ（8.5・`vt-compare`）
+
+- 走らせ方: `cargo run --manifest-path <置き場>/Cargo.toml --target-dir <作業木>/target/pilot-windows-rs-next -p q7-vertical --bin vt-compare`（画面の外の GPU だけ・窓は出さない・机は取らない）。終了コードは ExitContract のとおり（0＝出し終えた・2＝描く／書く段の失敗で段の名前を stderr に出す）。2026-11-17 の走りは 0。
+- 流れ: 同じ過程・同じスレッドで MTA を始め、`old_side::draw(TEXT)` で 1 枚、`new_side::draw(TEXT, Features::None)`・`Features::Areka` で 2 枚を、呼ぶたびに作る別々の装置で描く。各新しい側を今の側と `diff::compare` で比べる。比べは 2 通り: ⑴ 同じ原点のまま（違う画素・最大の差）⑵ ±8 px の平行移動で違う画素が最も少ない所（2 枚の矩形の和で数える）。新旧の COM の型はつながない（渡したのは読み戻した BGRA だけ）。
+- 出す物: `target\pilot-windows-rs-next\out\q7\`（`current_exe` から作業木の `target` の下に組む）に `q7-old.png`・`q7-new-none.png`・`q7-new-areka.png`（premultiplied を白の上に重ねた RGB）・差の絵 `q7-diff-<none|areka>-<origin|best>.png`（違う画素＝赤・同じ墨＝灰・それ以外＝白）・数の表 `q7-compare.md`。
+
+| 新しい側の字形の指定 | 同じ原点: 違う画素 | 同じ原点: 最大の差 | 最良のずれ (dx, dy) | 最良のずれ: 違う画素 |
+|---|---|---|---|---|
+| 無し | 651 | 255 | (0, 0) | 651 |
+| areka の 10 個 | 0 | 0 | (0, 0) | 0 |
+
+面はどれも 310×250（大きさの違いは無し）。同じ原点で違う画素を字の枠（縦に 20 px）ごとに数えると（上から 13 枠・文は「「ちょっと、待って。🍣」」の 12 字）:
+
+- 無し: `[92, 90, 89, 103, 78, 0, 0, 103, 96, 0, 0, 0, 0]`＝開き括弧・ち・ょ・っ・と・っ・て の 7 字が違い、、・待・。・🍣・」は同じ。
+- areka の 10 個: 全部 0。`q7-old.png` と `q7-new-areka.png` はバイトまで同じファイルになった。
+
+証拠の絵（`evidence/`・小さな物だけ写した。areka の 10 個の新しい側は今の側とバイトまで同じなので写していない。areka の差の絵は全部が灰と白）:
+
+| 今の側 | 新しい側・無し | 差（無し・同じ原点＝最良のずれ） |
+|---|---|---|
+| ![今の側](evidence/q7-old.png) | ![新しい側・無し](evidence/q7-new-none.png) | ![差・無し](evidence/q7-diff-none-origin.png) |
+
+- 開き括弧の位置（要件 8.3）: areka の 10 個を当てると、開き括弧の枠（いちばん上の枠）の違う画素は 0 で、平行移動を探しても最良のずれは (0, 0)・違い 0。開き括弧は今の側と画素で同じ所に出る。字形の指定が無いと、開き括弧の墨は y=12..19 から y=2..9 へ 10 px 上がる（墨の文字の絵で読んだ）。これは ±8 px の探す幅の外で、しかも 1 字だけの動きなので、絵の全体の平行移動では吸えず最良のずれは (0, 0) のまま 651 が残る。ほかに小書きの ょ・っ が約 2〜4 px 上がり、ち・と・て は墨の形が少し違う。どの字形の指定の有無でこうなるか（既定で当たる指定の中身）は確かめていない。
+- 読み方の注意: 新しい側の原点 (面の幅 − 20, 0)＝(290, 0) は第 1 列の自然な置き場として置いた値で、今の側の絵を見て合わせた値ではないが、今の側の列の住人の平行移動を読み解いて写した値でもない。だから「同じ原点で x のずれ 0」は列の置き場が揃う独立の証拠ではない（1 列・k=1・この面の大きさで、両側の自然な置き場が同じ値になった、と読む）。何列もの配置や k≠1 では列の置き場を別に確かめる要がある。y の原点 0 も同じく供給面の上端という自然な値。
+- 同じと見るかは開発者が決める（合格の閾値は置かない・確定 4）。
+
 ### 問い 8: 32bit と arm64 のリンク
 
 - 見立ての候補: go（問い 1 の `.sys()`・問い 3 の既定と `.minimal()` の 3 つの束縛とも、i686 は x64 と同じに走り、aarch64 はリンクまで通った。写しの側の直しは 0）。
@@ -533,7 +559,49 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 段階の移行の可否の材料
 
-（未記入）
+本線で `windows-core` 0.62 と 0.101 を同じ依存の木に並べ、クレートごとに移す段階の移行ができるかの材料（要件 13.5）。可否は開発者が決める。
+
+- 同じ過程で並んで動いた（8.5・2026-11-17）: `vt-compare` は 1 つの過程・1 つのスレッドで、借りた `areka-emo-text`＋`wintf`（`windows` 0.62・`windows-core` 0.62.2）で 1 枚、`windows-text`＋`bind-next`（`windows-core` 0.101.0）で 2 枚を描いて終了コード 0 で終わった。COM は MTA を 1 回始め（`bind-next` の束縛で呼んだ・アパートメントはスレッドの物）、両側はそれぞれ自分の D3D11・D2D の装置を作った。新旧の COM の型は 1 度もつながず（橋は無し）、渡したのは読み戻した BGRA の `Vec<u8>` だけ。
+- 組めた（1.2・8.5）: 2 版は同じ木に入って cargo が断らず、同じ名前の型（`IUnknown` ほか）は版ごとに別の型として共存した。`wintf-winmsg-executor` と同じライブラリ名の `q1-winmsg` も同じ木に入った。
+- `cargo tree -d -e normal -p q7-vertical --depth 1`（8.5 の時点・置き場の中で打った・抜粋・パスは作業木の根からの相対に縮めた）:
+
+```
+windows-collections v0.3.2
+└── windows v0.62.2
+
+windows-collections v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+└── bind-next v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/bind-next)
+
+windows-core v0.62.2
+├── areka-emo-text v0.1.0 (crates/areka-emo-text)
+├── windows v0.62.2 (*)
+├── windows-collections v0.3.2 (*)
+├── windows-future v0.3.2
+├── windows-numerics v0.3.1
+└── wintf v0.1.0 (crates/wintf)
+
+windows-core v0.101.0 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f90)
+├── bind-next v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/bind-next) (*)
+├── q4-wuc v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q4-wuc)
+├── q7-vertical v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q7-vertical)
+├── windows-collections v0.101.0 (...) (*)
+├── windows-numerics v0.101.0 (...)
+└── windows-text v0.101.0 (...)
+
+windows-link v0.2.1
+├── windows-core v0.62.2 (*)
+├── ...（windows-future・windows-numerics・windows-result・windows-strings・windows-sys・windows-threading）
+
+windows-link v0.100.1 (...)
+├── q1-winmsg v0.0.0 (crates/pilot/examples/pilot-windows-rs-next/q1-winmsg)
+├── windows-core v0.101.0 (...) (*)
+├── windows-result v0.100.1 (...)
+└── windows-strings v0.100.1 (...)
+```
+
+  ほかに 2 版が並ぶ物: `windows-implement` 0.60.2／0.101.0・`windows-interface` 0.59.3／0.101.0・`windows-numerics` 0.3.1／0.101.0・`windows-result` 0.4.1／0.100.1・`windows-strings` 0.5.1／0.100.1。1.2 の時点から増えたのは `windows-collections` 0.101.0（`bind-next` が引く）。
+- 並べる代わりに払う物（構造上の見立て・測っていない）: 2 版の `windows-core` 系の 7 つのクレートを 2 度組む時間と exe の大きさ。境では COM の型を渡せないので、移す途中のクレートどうしは画素・数・生ポインタのような版に依らない物で受け渡すことになる（`as_interface` は同じ版の中だけ）。
+- 確かめていない事: 本線のワークスペース（根の `Cargo.lock`）での解決。ここは独立の置き場の `Cargo.lock` での結果で、本線の `cargo deny`（`deny.toml` の重複の版の扱い）にも通していない。
 
 ### レビューが見る点の一覧（問い 10）
 
