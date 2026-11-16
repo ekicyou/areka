@@ -122,7 +122,7 @@
   - _Dispatch: standard — 結果の読みと上流のソースの確かめが要る_
   - _Requirements: 4.2, 4.3, 4.5, 4.6_
 
-- [ ] 5. (P) 問い 5: 既定と `.minimal()` の `HWND` を包んで bevy の Component に持たせる
+- [x] 5. (P) 問い 5: 既定と `.minimal()` の `HWND` を包んで bevy の Component に持たせる
   - build で既定の形と `.minimal()` の 2 つの束縛（`HWND`・`GetDesktopWindow`・`IsWindow`）を別の出力に書き、それぞれの `HWND` を包む型を bevy の Component にする
   - デスクトップの窓の取っ手を両方の包みで世界に入れ、別のシステムが読み出して `IsWindow` が真になることを確かめる
   - 2 つの包みが `Send + Sync` であることを型の検査の試験で固定し、名乗ってよい根拠（値を読むだけなら安全・窓に触る呼び出しは作ったスレッドへ送る決まりを包みの外で守る）を問い 5 の節に書く
@@ -336,3 +336,4 @@
 - `.minimal()`（この rev）は自由関数を生の `link!` だけで出す（包みが要る）。継いだメソッドの `Deref` の鎖は出る。`HMODULE` ほかの取っ手は裸のポインタの別名で `Default` が無い。`==` は `windows-core` の持ち物なので形を変えても COM の同一性のまま（3.2）。
 - q2 の描く本体 `shared/draw_body.rs` は `use super::*;` で始まり、読み込む側の lib が `use <束縛>::*; use windows_core::*;` と `#[path]` で型の出どころを選ぶ。読む側は `windows-numerics` を直に依存に持つ。継いだメソッドは `ID2D1RenderTarget` の名指しが要る（4.1）。
 - 一次記録の見立ての理由は「測った数」と「構造上の見立て」を分けて書き、1 つの写しの数を一般化しない（4.3 のレビュー）。`windows-bindgen`（この rev）にほかのクレートの型を参照させる公開の口は無い。
+- この rev の `HWND` は既定・`.minimal()`・`.sys()` のどれも `*mut HWND__` の別名（0.62 の newtype と違う）。`Default`／`is_invalid` は無く `Hash` は在る。包みを Component にするには `unsafe impl Send/Sync` が要る（5）。REWRITE_TABLE の HWND の行はこれに合わせる。

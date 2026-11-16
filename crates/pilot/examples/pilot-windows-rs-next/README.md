@@ -311,10 +311,26 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 5: `HWND` の持ち方
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
+- 見立ての候補: go（`HWND` は包めば bevy の Component に持たせられる。ただし包みの `Send`／`Sync` は自分で名乗る必要がある）
+- 学び:
+  - この rev では、既定・`.minimal()`・`.sys()` の 3 形とも `HWND` は `pub type HWND = *mut HWND__;`（`HWND__ { unused: i32 }`）という裸のポインタの別名で、newtype ではない（設計の「既定の形は newtype」という見込みは外れた）。3 形で違うのは周りの口だけ（既定の `IsWindow` は `Option<HWND>` を取り `windows_core::BOOL` を返す。`.minimal()` は自由関数を生の `link!` だけで出し、`IsWindow(HWND) -> BOOL`。`.sys()` の `HWND` は q1 の実物で同じ別名）。
+  - 裸のポインタは `Send`／`Sync` でないので、`#[derive(Component)]` は包みを黙って受け取らず `*mut HWND__ cannot be sent between threads safely` で断る（RED に使った）。`unsafe impl Send/Sync` を包みに足すと通る。
+  - 通した所: `q5-hwnd/src/lib.rs`（2 つの包み `WindowHandleDefault`・`WindowHandleMinimal`）。`cargo test -p q5-hwnd`（3 本: `wrappers_are_send_sync`＝`Send + Sync` の型の検査・`hwnd_is_raw_pointer_alias`＝両形の `HWND` が `*mut HWND__` そのものである型の一致を組んで確かめ、実物の取っ手が `!is_null()`・`desktop_handle_via_world`＝世界に入れて別のシステムが読み `IsWindow` が真）と `q5-verify`（世界を別スレッドへ渡して読み、`[q5] default IsWindow=true minimal IsWindow=true`・終了コード 0）が通る。机は不要（デスクトップの窓の取っ手を読むだけ）。
+- `Send`／`Sync` を名乗ってよい根拠: `HWND` は OS の中でプロセスをまたいで通じる番号で、値（ポインタの数値）を別のスレッドから読んで持ち回るだけなら何も参照しないので安全。危ないのは「窓に触る呼び出し」（`SetWindowPos`・`DestroyWindow` など）で、窓を作ったスレッドへ送る決まりが要る。この決まりは型では守れないので包みの外（呼ぶ側の設計）で守る。今の `wintf` の `WindowHandle` が同じ根拠で名乗っているのと同じ。名乗るのは包みだけで、束縛の `HWND` 自体には足さない（孤児規則で足せない）。
+- 形ごとの口（`HWND` に当たる物。包みの `Hash` の導出は通った（両方の包みに `Hash` を導出している）・`Default` と `is_invalid` は無い）:
+
+| 口 | 既定 | `.minimal()` | `.sys()`（q1 の実物） |
+|----|------|--------------|----------------------|
+| `HWND` の型 | `*mut HWND__` の別名 | `*mut HWND__` の別名 | `*mut HWND__` の別名 |
+| `Hash` | 在る（ポインタの `Hash`＝番地の値） | 在る（同） | 在る（同） |
+| `Default` | 無い（`*mut T` に無い。`HWND__` の導出は在るが取っ手の側は無い） | 無い | 無い |
+| 無効の判定（`is_invalid`） | 束縛は出さない。`.is_null()`（`std` のポインタの口）で代用 | 同 | 同 |
+| `PartialEq`／`Eq`／`Debug`（包みの導出に要る） | 在る | 在る | 在る（ポインタの口。`HWND__` の `Debug`／`Eq` は出ない） |
+
+  - 0.62 との違い: `windows` 0.62.2 の `HWND` は `pub struct HWND(pub *mut c_void)` の newtype で、導出は `Clone`・`Copy`・`Debug`・`PartialEq`・`Eq` だけ（`Hash` は無い）、`is_invalid` と `Default` は在った（`windows-0.62.2/src/Windows/Win32/Foundation/mod.rs` 5668〜5680 行）。この rev では逆に `Hash` が新しく在り（ポインタの `Hash`）、`Default`・`is_invalid` が無くなった。
+  - 見立て: 「無い」口は `windows` 0.62 の newtype の `HWND`（`Default`・`is_invalid` が在った）と違う点なので、移行の本体で `HWND::default()`・`.is_invalid()` を使う所は `null_mut()`・`.is_null()` へ書き換える（対応表の `HWND` の 3 行の材料）。
+- 確かめた日: 2026-11-16
+- 止まった所・理由・代わりの見立て: 無し
 - 判定: （開発者が下す）
 
 ### 問い 6: COM の実装（`#[interface]`・`#[implement]`）
