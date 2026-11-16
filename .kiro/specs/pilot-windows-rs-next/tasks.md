@@ -254,7 +254,7 @@
   - _Dispatch: standard — 重い索引づくりと代わりの数え方の判断が要る_
   - _Requirements: 10.1, 10.2_
 
-- [ ] 10. 書き換えの対応表を書く
+- [x] 10. 書き換えの対応表を書く
   - 1 行を「項目・書き換え前（0.62）・書き換え後（0.101）・形（既定／`.minimal()`／`.sys()`）・通した所（置き場のファイル）か『文書から』・注」の形にし、前後の例をどちらも 1〜3 行のコードで示す
   - 少なくとも次の行を載せる: 戻り値の無い COM メソッドの `HRESULT`・スライスの引数の「ポインタ＋長さ」・`HWND`（形ごとに 3 行）と包みとの行き来・列挙の定数（`i32`／`u32`）・`windows-numerics` のフィールド名（小文字）・`#[implement]` の `_Impl` の戻り値（束縛の出力とマクロの 2 行）・`HSTRING` の `Display` が無いこと・束縛のフィルターへの API の足し方・COM の型の `==`
   - `==` の行に、COM の同一性を保つか（問い 3 の結果）と、`SurfaceComposite::same_root` と `GraphicsCommandList` の導出の `PartialEq` がその比べに頼っていることを注に書く。番地だけの比べに変わる形の行には、包みの側で `IUnknown` へ `cast` して比べる書き方を載せる
@@ -333,10 +333,10 @@
 - CopyLedger の問い 1 の写した行数（787）は例 2 本（73 行）を含む（設計の「約 790」と合う）。12.1 の合計もこの数え方で（2.1）。
 - `.sys()` の束縛は `IDC_ARROW: PCSTR` を出すのに `PCSTR` を出さず、フィルターに名指しもできない。束縛のモジュールに `pub type PCSTR = *const u8;` を 1 行足す。定数は `i32` で出る（2.2）。
 - 既定の形（この rev）: 戻り値の無い COM メソッドは `HRESULT`・`DWriteCreateFactory`／`D2D1CreateFactory` は IID を渡す形・継いだメソッドは基のインターフェースを名指ししないと出ない・`HRESULT::from_win32` が無い。`==` は番地が違っても COM の同一性で真（3.1）。3.2 は番地の違う参照の `==` の assert を残して比べる。
-- `.minimal()`（この rev）は自由関数を生の `link!` だけで出す（包みが要る）。継いだメソッドの `Deref` の鎖は出る。`HMODULE` ほかの取っ手は裸のポインタの別名で `Default` が無い。`==` は `windows-core` の持ち物なので形を変えても COM の同一性のまま（3.2）。
+- `.minimal()`（この rev）は自由関数を生の `link!` だけで出す（包みが要る）。継いだメソッドの `Deref` の鎖は出る。`HMODULE` ほかの取っ手は裸のポインタの別名（`Default` は生のポインタ自身のものが在る・10 のレビューで訂正）。`==` は `windows-core` の持ち物なので形を変えても COM の同一性のまま（3.2）。
 - q2 の描く本体 `shared/draw_body.rs` は `use super::*;` で始まり、読み込む側の lib が `use <束縛>::*; use windows_core::*;` と `#[path]` で型の出どころを選ぶ。読む側は `windows-numerics` を直に依存に持つ。継いだメソッドは `ID2D1RenderTarget` の名指しが要る（4.1）。
 - 一次記録の見立ての理由は「測った数」と「構造上の見立て」を分けて書き、1 つの写しの数を一般化しない（4.3 のレビュー）。`windows-bindgen`（この rev）にほかのクレートの型を参照させる公開の口は無い。
-- この rev の `HWND` は既定・`.minimal()`・`.sys()` のどれも `*mut HWND__` の別名（0.62 の newtype と違う）。`Default`／`is_invalid` は無く `Hash` は在る。包みを Component にするには `unsafe impl Send/Sync` が要る（5）。REWRITE_TABLE の HWND の行はこれに合わせる。
+- この rev の `HWND` は既定・`.minimal()`・`.sys()` のどれも `*mut HWND__` の別名（0.62 の newtype と違う）。`is_invalid` は無い（`Default` は生のポインタ自身のもの〔Rust 1.88 から〕が在り `HWND::default()` はヌル・10 のレビューで訂正）。`Hash` は在る。包みを Component にするには `unsafe impl Send/Sync` が要る（5）。REWRITE_TABLE の HWND の行はこれに合わせる。
 - 0.101 の `HSTRING` は `Display` を持たない（`display()`・`to_string_lossy()` を使う）。`#[interface]` に `IUnknown_Vtbl` の取り込みは要らない（6.1）。
 - `.implements` の名前はこの rev のメタデータでは `Windows.Win32.IDWriteTextRenderer1` の形（`Graphics.DirectWrite` の段が無い）。合わない名前は黙って無視され `_Impl` が出ないのに build は通る。生成した `_Impl` のメソッドは `HRESULT` を返すので中で `?` は使えない（6.2）。
 - WinRT のクラスを名指ししても型と `new()` だけでメソッドは出ない。既定のインターフェース（`ICompositor` ほか）を名指しする。足りなくても build は通り、呼ぶ所で初めて分かる。相互運用の口はクラスでなくインターフェースを返す（`cast` が要る）（7.1）。
@@ -349,3 +349,7 @@
 - SendInput を使う bin は、カーソルを読んだ後のどの出口も 1 か所の戻しを通す（8.6 のレビュー）。q4 と q7 が共に使う窓・合成・DPI の名前は `common.txt` へ移した（8.6）。
 - q9 の数えでは本線のファイル内の `#[cfg(test)] mod … {`（131 塊・約 2.19 万行・主に wintf／areka／areka-emo-text／shiori-abi）が本番に数わる。`#[implement]` 55 か所・`#[interface]` 6 か所は 5 つの包みの外で数わらない。9.2 の問い 9 の節にこの 2 つを書く（9.1 のレビュー）。
 - 問い 9 の数え（9.2）: 出荷するクレートの本番 944 記号・5,496 出現、うち wintf が 603・3,084。Windows の SCIP の索引は文書のパスを逆斜線で書く。数えが 0 件なら道具は誤りで止まる（9.2）。
+- README の問い 5（370〜381 行あたり）と 284 行の「`Default` が無い」は誤り（生のポインタは Rust 1.88 から `Default` を持つ・10 のレビュー）。12.2 で直す。
+- 一次記録や対応表の言い切り（「無い」「だけ」「全部」）は、置き場の行・生成した束縛の行・使い捨ての rustc の確かめのどれかで裏を取ってから書く。Implementation Notes の文から起こすと誤りが伝わる（10 の調べ）。11.1 の砂場では本線の `lib.rs` 1 行目の `#![doc = include_str!("../README.md")]` が README 無しでは組めない — 砂場に README を置くか、消すのを人の手の直しに数えない取り決めが要る（10 の調べ）。
+- 10 の確かめで分かった訂正（README に同じ文が在れば 12.2 で直す）: 既定の形は `.implements` を呼ばなくてもフィルターに名指したインターフェースの `_Impl` を出す。`.implements` を呼ぶと並べた名前の分だけになり、名前が合わなければ 0（6.2 の「`.implements` が要る」は読み違い）。`WIN32_ERROR::to_hresult` は上流に在り、無いのは `HRESULT::from_win32`。q4 の `BI_RGB`・`DIB_RGB_COLORS` は `q4-wuc/src/capture.rs:91,105`。
+- 対応表の確かめの道具（使い捨て・コミットしない）: `target\pilot-windows-rs-next\tmp\probe-rt`（3 形の束縛と後の書き方を組む crate・`cite-dump.sh`）と scratchpad の `v1_map.py`／`tokdiff.py`／`before_check.py`／`after_check.py`。11.1 の砂場では本線 `lib.rs` の `#[cfg(test)] mod test`（325 行）を Sonnet に移させない（消すか触らないと指示する）・依存の行（`{ workspace = true }` か git の rev）は進行役が先に置く（10 のレビュー）。
