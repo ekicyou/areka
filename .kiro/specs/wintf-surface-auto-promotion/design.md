@@ -38,7 +38,7 @@
 
 ### Out of Boundary
 - 差分の描き直し（項・比べ・計画・写し・記録の行 `[render_surface] damage`）。`render.rs`・`damage.rs`・`diff.rs`・`composite.rs` は触らない。
-- 係の登録と順（`ecs/world/mod.rs`）・WUC の Visual を作る係（`visual_manager.rs`）・部品の定義（`components.rs` の `VisualGraphics`・`ClipKey`）・配置の伝播（`layout/`）。
+- 係の登録と順（`ecs/world/mod.rs`）・WUC の Visual を作る係（`visual_manager.rs`）・部品の定義（`components.rs` の `VisualGraphics`。`ClipKey` は欄を足すだけ受け持つ）・配置の伝播（`layout/`）。
 - 当たり判定（`hit_test`）・描画面 1 枚ごとの読み戻し（`readback.rs`）の答えの形。
 - 層・不透明度・重ね方・ブレンドの規則。
 - areka の側の使い方（`crates/areka*`・`crates/pilot`・`tools/`）。
@@ -158,6 +158,8 @@ crates/wintf/src/ecs/graphics/visual/
     ├── emit_promotion_tests.rs  # 新規: WARP の画素の一致（要件 8.3・研究 R-e）
     ├── emit_test_support.rs     # 変更: WUC の重ねを写す口（描画面ごとの絵を整数の位置と不透明度で重ねる）
     └── README.md                # 変更: 自動の上げ下げ・節の下の持ち主・持ち主の VisualTransform・既定の寄せ方
+crates/wintf/src/ecs/graphics/
+└── components.rs                # 変更: ClipKey に置き場の切り抜きと自動の持ち主かの欄を足すだけ
 crates/wintf/src/ecs/graphics/systems/
 ├── visual_sync.rs               # 変更: 親の決め・節を通り抜けた並び・並びだけの変化・変形と置き場の写し
 ├── visual_sync_tests.rs         # 変更: 写しの値の純粋な部分
@@ -182,7 +184,7 @@ crates/wintf/tests/
 - `systems/visual_sync.rs`・`systems/clip_sync.rs`・`systems/surface.rs` — 下の Components のとおり。
 - `tests/graphics.rs`・`visual/draw/emit.rs` — 兄弟のテストの接続宣言 1 行ずつ（本体は書かない）。
 
-> 触らないファイル（ウェーブの約束）: `Cargo.toml`・`ecs/world/**`・`ecs/graphics/{components,visual_manager,composite,damage,readback}.rs`・`ecs/graphics/systems/{render,init,brushes,window_pos}.rs`・`visual/draw/{diff,emit(本体),command,clip_geometry}.rs`・`ecs/layout/**`・`crates/areka*`・`crates/pilot`・`tools/`。
+> 触らないファイル（ウェーブの約束）: `Cargo.toml`・`ecs/world/**`・`ecs/graphics/{visual_manager,composite,damage,readback}.rs`（`components.rs` は `ClipKey` の欄だけ。同じウェーブでほかに wintf を触る spec は無い）・`ecs/graphics/systems/{render,init,brushes,window_pos}.rs`・`visual/draw/{diff,emit(本体),command,clip_geometry}.rs`・`ecs/layout/**`・`crates/areka*`・`crates/pilot`・`tools/`。
 
 ## System Flows
 
@@ -523,7 +525,7 @@ pub(crate) struct AncestorAcc {
 - 判断の対象（要件 1.9）: この回に更新のあった帰属先と、この走査の列に居る自動の持ち主だけ。ほかの節の `step` は呼ばない。
 - 祖先の優先（要件 1.10）: 同じ回に上げると答えた候補のうち、祖先も上げると答えた候補は上げない（状態は Node のまま・記録しない）。上がった候補の部分木の中の自動の持ち主は `absorb` で同じ回に戻す（記録の理由は `absorbed`）。
 - 描画面の様子（要件 2.5）: Preparing の持ち主が 3 部品を持たないか、まだ部分の列を描いていなければ `Pending`。描いた次の回に `SurfaceGraphics` が有効なら `Ready`、無効なら `Failed`。装置か WUC の資源が無い回の上げは `NoDevice` で見送る。
-- 見えない自動の持ち主と、どの走査の列にも現れなかった自動の持ち主（窓の外へ移った・持ち主の下から外れた）は `Hidden` で即時に戻す（`update_draw_trees` が全部の根を回した後に、相が Node でない実体を照らし合わせる）。
+- 見えない自動の持ち主と、どの走査の列にも現れなかった自動の持ち主（窓の外へ移った・持ち主の下から外れた）は `Hidden` で即時に戻す（`update_draw_trees` が全部の根を回した後に、係の `Local` に控えた自動の持ち主の集まりだけを照らし合わせる。全部の節を問い合わせで歩かない＝要件 1.9）。
 - 置き場: 走査の列の手動の持ち主の項と、Active・Preparing の自動の持ち主に `SurfacePlacement` を書く（値が変わったときだけ）。この回に書かなかった実体の `SurfacePlacement` は外す（命令）。
 - 効かせられない形の `warn!`（要件 4.9）: 節の下の手動の持ち主について、祖先の図形の切り抜き（角丸・任意の図形）か軸に沿わない矩形の切り抜き・祖先の `SOURCE_OVER` でない混ぜ方・後に描く中身との重なり・自分の切り抜きと祖先の矩形の切り抜きを 1 つに合わせられない形を、実体名つきで `ReportedIssues` の新しい種類で続く間 1 度残す。
 - 記録（要件 7）: 相の移りの回だけ `debug!` を 1 行（`[surface_promotion] promoted`／`activated`／`demoted`）。見送りは理由が前の見送りと違うときだけ `debug!`（`skip_memo`）。描画面を作れなかった回は、作成の係の既存の `error!` に加えて見送りの `debug!` を 1 度。理由の語は `frequent`・`quiet`・`shape`（`Ineligible::as_str` を添える）・`surface_failed`・`absorbed`。
@@ -674,7 +676,7 @@ pub(crate) enum ChildClass { Owner, AttachedAuto, DetachedAuto, Node, Other }
 #### ClipSync（`clip_sync_system`）
 
 - `merged_clip` の答えで切り抜きを作る。`Own` は今のまま。`Rect` は矩形（角丸 0）の図形の切り抜き。`Transformed` は親の DIP の矩形の図形の切り抜きに `CompositionClip.TransformMatrix` へ逆行列（物理）を入れる。`Auto` の持ち主は切り抜きを外す（`SetClip(None)`）。
-- 切り抜きの鍵（`components.rs` の `ClipKey`）は形を変えない。置き場の切り抜きを合わせた回と自動の持ち主の回は、幅に NaN を入れた鍵を控える（NaN は等しくならないので、見る変化が来るたびに当て直す・置き場が外れた回に今の鍵へ戻る）。
+- 切り抜きの鍵（`components.rs` の `ClipKey`・`pub(crate)`）に、置き場の切り抜き（`PlacementClip` から出した親の DIP の矩形か無し）と「自動で上げた持ち主か」を足す。鍵は今どおり「同じなら当て直さない」の約束を保ち、置き場の切り抜きか自動の相が変わった回だけ当て直す（設計の検証の重大な問題 3・回避の形を取らない）。
 - 見る変化に `Changed<SurfacePlacement>`・`Changed<AutoPromotion>` と `SurfacePlacement` の外れを足す。
 
 #### AutoSurfacePad（`deferred_surface_creation_system`）
@@ -691,7 +693,7 @@ pub(crate) enum ChildClass { Owner, AttachedAuto, DetachedAuto, Node, Other }
 #### UpdateDrawTrees（`update_draw_trees`）
 - 根として回すのは手動の持ち主だけ（節の種類の実体は、`VisualGraphics` を持っていても飛ばす）。直下に節が無い判定も節の種類で見る。
 - 根ごとに: `fill_world_visuals` で走査の列を埋める → `run_round` → `host_visited` で根の木を組む（今の `needs_rebuild` の判定）→ `segments` ごとに `TreeFrame::Segment` で組む。部分を組むのは、根の木を組み直す回と、その自動の持ち主がまだ `DrawTree` を持たない回。組んだ部分の列は全部の根を回した後にまとめて自動の持ち主の `DrawTree` へ書く・入れる（根の問い合わせを回している間は別の実体を可変で借りられないため）。用意中の部分を書いた回に `AutoPromotion::built` を立てる。
-- 全部の根を回した後、相が Node でないのにこの回どの走査の列にも現れなかった実体を `Hidden` で戻し、書かなかった `SurfacePlacement` を外す。
+- 全部の根を回した後、`Local` に控えた自動の持ち主（相が Node でない実体）のうちこの回どの走査の列にも現れなかった実体を `Hidden` で戻し、書かなかった `SurfacePlacement` を外す。
 - 持ち主の `VisualTransform` の `warn!` を消す（要件 5.1）。`FrameTime` を `Option<Res<FrameTime>>` で読む。
 
 **Implementation Notes**
