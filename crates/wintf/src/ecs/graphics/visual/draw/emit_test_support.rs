@@ -424,27 +424,73 @@ pub(crate) fn frame_commands(
 /// WUC の重ねの写し: 描画面ごとの絵 `layers`（絵・整数の物理ピクセルの位置・不透明度）を前から順に、
 /// `w×h` の透明な絵へ `SOURCE_OVER` で重ねる（最近傍・整数の位置なので画素はずれずに写る）。
 pub(crate) fn composite(w: u32, h: u32, layers: &[(&Pixels, (i32, i32), f32)]) -> Pixels {
+    let layers: Vec<_> = layers
+        .iter()
+        .map(|&(pixels, (x, y), opacity)| Layer {
+            pixels,
+            transform: Matrix3x2::translation(x as f32, y as f32),
+            opacity,
+            clip: None,
+        })
+        .collect();
+    composite_layers(w, h, &layers)
+}
+
+/// WUC の Visual 1 つの写し（物理ピクセル）。`transform` は描画面の局所 → 親の Visual
+/// （`Offset` か `TransformMatrix`）、`clip` は局所の矩形の切り抜きと、それに掛ける
+/// `CompositionClip.TransformMatrix`。
+pub(crate) struct Layer<'a> {
+    pub pixels: &'a Pixels,
+    pub transform: Matrix3x2,
+    pub opacity: f32,
+    pub clip: Option<(D2D_RECT_F, Matrix3x2)>,
+}
+
+/// [`composite`] の、行列と切り抜きを持つ形。整数の平行移動は最近傍、ほかは線形で絵を写す。
+pub(crate) fn composite_layers(w: u32, h: u32, layers: &[Layer]) -> Pixels {
+    let factory = warp_factory();
     draw_to_pixels(w, h, Matrix3x2::identity(), |dc| {
-        for &(p, (x, y), opacity) in layers {
+        for l in layers {
+            let p = l.pixels;
             let ph = (p.bytes.len() / (p.width as usize * 4)) as u32;
             let bitmap = make_bitmap(dc, p.width, ph, D2D1_BITMAP_OPTIONS_NONE, Some(p));
-            let dest = rect(
-                x as f32,
-                y as f32,
-                (x + p.width as i32) as f32,
-                (y + ph as i32) as f32,
-            );
+            let t = l.transform;
+            let integer = t.M11 == 1.0
+                && t.M22 == 1.0
+                && t.M12 == 0.0
+                && t.M21 == 0.0
+                && t.M31.fract() == 0.0
+                && t.M32.fract() == 0.0;
+            let mode = if integer {
+                D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR
+            } else {
+                D2D1_INTERPOLATION_MODE_LINEAR
+            };
+            let dest = rect(0.0, 0.0, p.width as f32, ph as f32);
             // SAFETY: Windows API 境界。
             unsafe {
-                dc.DrawBitmap(
-                    &bitmap,
-                    Some(&dest),
-                    opacity,
-                    D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
-                    None,
-                    None,
-                )
-            };
+                dc.SetTransform(&t);
+                if let Some((r, m)) = l.clip {
+                    let mask: ID2D1Geometry =
+                        factory.CreateRectangleGeometry(&r).unwrap().cast().unwrap();
+                    let params = D2D1_LAYER_PARAMETERS1 {
+                        contentBounds: rect(f32::MIN, f32::MIN, f32::MAX, f32::MAX),
+                        geometricMask: ManuallyDrop::new(Some(mask)),
+                        maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                        maskTransform: m,
+                        opacity: 1.0,
+                        opacityBrush: ManuallyDrop::new(None),
+                        layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+                    };
+                    dc.PushLayer(&params, None);
+                    let _ = ManuallyDrop::into_inner(params.geometricMask);
+                }
+                dc.DrawBitmap(&bitmap, Some(&dest), l.opacity, mode, None, None);
+                if l.clip.is_some() {
+                    dc.PopLayer();
+                }
+                dc.SetTransform(&Matrix3x2::identity());
+            }
         }
     })
 }

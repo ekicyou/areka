@@ -143,6 +143,28 @@ fn owner_entry_carries_placement_material() {
 }
 
 #[test]
+fn ancestor_opacity_is_the_product_over_every_node_above_the_owner() {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let faded = |opacity| Visual {
+        opacity,
+        ..Default::default()
+    };
+    let a = world
+        .spawn((faded(0.5), WorldVisual::default(), ChildOf(root)))
+        .id();
+    let b = world
+        .spawn((faded(0.8), WorldVisual::default(), ChildOf(a)))
+        .id();
+    let owner = world
+        .spawn((Visual::default(), OwnSurface, ChildOf(b)))
+        .id();
+    let scan = Filler::new(&mut world).scan(&mut world, root);
+    let got = entry(&scan, owner).ancestors.opacity;
+    assert!((got - 0.4).abs() < 1e-6, "0.5 × 0.8 の積: {got}");
+}
+
+#[test]
 fn owner_under_hidden_node_is_recorded_invisible() {
     let mut world = World::new();
     let root = world.spawn(Visual::default()).id();
