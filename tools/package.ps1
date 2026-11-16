@@ -19,9 +19,10 @@
     → CPU 種別ごとに「組み立て → 圧縮 → 中身の判定 → SHA256」
     → （-Check のとき）短いパスへ展開 → 起動 → 番犬 → 記録の判定 → 後片付け
     → git status 不変の確認 → 完成
-  どれかの段が失敗したらその段の名前と外部コマンドの出力の末尾を印字し、後始末をしてから即終了する
-  （tools/test-all.ps1 の「最後まで回す」とは逆）。後始末は、仮の名前の物を必ず消し、終了コードが 0 で
-  ないときは今回改名した完成品も消し、自分が起こした子だけを止め、差し替えた環境変数と PATH を戻す。
+  どれかの段が失敗したらその段の名前と外部コマンドの出力の末尾を印字し、即終了する
+  （tools/test-all.ps1 の「最後まで回す」とは逆）。後始末は段の並びを包む finally の 1 か所で（Ctrl+C でも）
+  回り、仮の名前の物を必ず消し、終了コードが 0 でないときは今回改名した完成品も消し、自分が起こした子だけを止め、
+  差し替えた環境変数と PATH を戻す。
   -Check の展開した木は失敗の経路では消さない（調べる手がかりとして残す）。
   段「git status 不変の確認」で、始めと終わりの git status --porcelain が同じことを確かめる
   （追跡しているファイルを 1 つも書き換えない。zip と途中物は追跡外の target/package/ に置く）。
@@ -153,10 +154,9 @@ $EXIT_OK = 0; $EXIT_STAGE_FAILED = 1; $EXIT_CHECK_FAILED = 2; $EXIT_BAD_ARGS = 3
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # Git Bash から呼ばれると GNU coreutils の link.exe が MSVC の link.exe を遮蔽し i686 のリンクが落ちる。
-# link.exe の手当て（Get-MsvcLinkPath）。& で呼ばれても親に残さないよう、後始末で元へ戻す。
+# link.exe の手当て（Get-MsvcLinkPath・段の並びの try の中）。& で呼ばれても親に残さないよう、後始末で元へ戻す。
 $script:OrigPath = $env:PATH
 $script:Child = $null
-$env:PATH = Get-MsvcLinkPath $env:PATH
 
 # =============================================================================
 # 後始末
@@ -188,21 +188,26 @@ function Restore-Env {
 
 $script:Finalized = [Collections.Generic.List[string]]::new()  # 段「完成」が改名の済んだ zip・.sha256 から順に入れる
 
-# 仮の名前の物は常に、今回の完成品は終了コードが 0 でないときだけ消す（完成品が在る ⇔ 終了コード 0）
+# 仮の名前の物は常に、今回の完成品は終了コードが 0 でないときだけ消す（完成品が在る ⇔ 終了コード 0）。
+# 2 度呼んでも害が無い（消した物は並びから外し、子は握りから外す）
 function Invoke-Cleanup([int]$Code) {
     $remove = @($script:TmpFiles) + ($Code ? @($script:Finalized) : @())
     foreach ($p in $remove) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
+    $script:TmpFiles.Clear()
+    if ($Code) { $script:Finalized.Clear() }
     # 起動から番犬までの段で落ちたときに、自分が起こした子だけを止める（名前では探さない）
     if ($script:Child -and -not $script:Child.HasExited) { $script:Child.Kill() }
+    $script:Child = $null
     Restore-Env
     $env:PATH = $script:OrigPath
 }
 
+# 終了コードを控え、理由を ASCII にして出して終わるだけ（後始末は段の並びを包む finally が回す）
 function Exit-Script([int]$Code, [string]$Message) {
-    Invoke-Cleanup $Code
-    if ($Message) { Write-Host $Message -ForegroundColor Red }
+    $script:ExitCode = $Code
+    if ($Message) { Write-Host (Show-Ascii $Message 0) -ForegroundColor Red }
     exit $Code
 }
 
@@ -216,7 +221,7 @@ function Get-ArtifactNames([string]$Arch) {
 # 段の直列
 # =============================================================================
 # 段は外部コマンドの終了コードが非 0 か、throw（理由の文）で失敗する。失敗したら段の名前と
-# 出力の末尾を印字し、後始末をして終了コード 1。前提の不正は段の中で Exit-Script 3 を呼ぶ。
+# 出力の末尾を印字し、終了コード 1（後始末は finally）。前提の不正は段の中で Exit-Script 3 を呼ぶ。
 function Step([string]$Name, [scriptblock]$Command) {
     Write-Host "`n==> $Name" -ForegroundColor Cyan
     $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -435,6 +440,11 @@ function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
 # =============================================================================
 # 段
 # =============================================================================
+# 段の並びは 1 つの try の中（終わりの finally まで。字下げはしない）。後始末の口は finally の 1 か所だけ
+$script:ExitCode = $EXIT_STAGE_FAILED
+try {
+$env:PATH = Get-MsvcLinkPath $env:PATH
+
 Step 'preflight' {
     # 引数
     if ($SmokeExitMsGiven) {
@@ -524,7 +534,7 @@ if ($script:BuildArchs -ccontains 'arm64') {
 }
 
 # RUSTFLAGS を置き換え、CARGO_ENCODED_RUSTFLAGS・CARGO_BUILD_RUSTFLAGS を外す（在ると cargo が RUSTFLAGS を無視する）。
-# 差し替えはビルドの段の間だけ。失敗時は Exit-Script の後始末が戻す。
+# 差し替えはビルドの段の間だけ。失敗時は finally の後始末が戻す。
 Set-EnvTemp 'RUSTFLAGS' $script:RustFlags
 Set-EnvTemp 'CARGO_ENCODED_RUSTFLAGS' $null
 Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
@@ -729,6 +739,7 @@ Step 'finalize' {
     Write-Host "commit $script:Commit, uncommitted changes $script:Dirty"
 }
 
-Invoke-Cleanup $EXIT_OK
+$script:ExitCode = $EXIT_OK
+} finally { Invoke-Cleanup $script:ExitCode }
 Write-Host "`nall steps green" -ForegroundColor Green
 exit $EXIT_OK
