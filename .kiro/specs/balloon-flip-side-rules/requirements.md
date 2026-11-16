@@ -86,7 +86,7 @@
 1. When バルーンをキャラクター窓の右に出すとき（`balloon.alignment,right`、または `none` で右に決まったとき）, the areka shall バルーンの左端を「キャラクター窓の右端 − 横のずらし」に置く（横のずらしの＋をシェルに近づく向き＝画面の左向きに当てる）。ここでの「横のずらし」は、シェル・ゴーストの descript.txt の `balloon.offsetx` の分だけを指す。バルーンの `windowposition.x` の数値の分は、ukadoc の「バルーンを左右どちらに出していても常に右方向が+。シェルのballoon.offsetxと違い、右に出す時も符号が反転しない」（https://ukatech.shillest.net/ukadoc-spec/descript_balloon.html#windowposition.x）のとおり、どちらの側でも画面の右向きに当てる。
 2. When バルーンをキャラクター窓の左に出すとき, the areka shall 今の位置（バルーンの右端＝キャラクター窓の左端＋横のずらし）を変えない。
 3. When 横のずらしのあるバルーンを左から反対の側へ並べ替えて右に置いたとき, the areka shall 同じキャラクター窓・同じ横のずらしで初めから右に出したときと同じ横の位置に置く（右から左へ並べ替えたときも同じ）。この一致は descript の `balloon.offsetx` の分について求め、`windowposition.x` の数値の分には求めない（要件 3.8）。
-4. The areka shall 要件 3.1 の向きを、ゴーストとシェルの descript.txt の `balloon.offsetx`・`sakura.balloon.offsetx`・`kero.balloon.offsetx` のどれから来た横のずらしにも同じに当てる（surfaces.txt の surfaceブレスの `balloon.offsetx` は areka がまだ読まないので、この spec の外）。
+4. The areka shall 要件 3.1 の向きを、ゴーストとシェルの descript.txt の `sakura.balloon.offsetx`・`kero.balloon.offsetx`（同じ意味の `char0.`・`char1.` の鍵を含む）のどれから来た横のずらしにも同じに当てる（surfaces.txt の surfaceブレスの `balloon.offsetx` は areka がまだ読まないので、この spec の外）。
 5. The areka shall 要件 3.1 の変更で、縦のずらし（`balloon.offsety`）・`windowposition.x` の数値の調整（左右で反転しない）・`windowposition.y` の数値の調整・`windowposition.x` のキーワードで決まる横の位置を変えない。
 6. While 記憶にそのスコープのバルーンの相対の位置が保存されているとき, the areka shall その保存の値をそのまま使い、要件 3.1 の向きで書き換えない（記憶の無い起動と、シェル位置初期化の後に要件 3.1 が効く）。
 7. The areka shall 要件 3.1 の変更で見た目が変わる場面（右に出すバルーンで横のずらしが 0 でない形・記憶の有無）を、同梱の検体と配布版のぱすたについて数え、この spec の `research.md` に残す。

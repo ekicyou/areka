@@ -36,7 +36,7 @@
 
 - `crates/areka-placement/src/resolver.rs` 362〜392 行目。`keyword_balloon_pos` が `None`（数値指定・未指定＝`Side`）の腕で、`on_right` なら `x.saturating_add(w)`（383 行目）、左なら `x − balloon_w`（385 行目）。どちらも 388 行目で `.saturating_add(ox)`。`ox` は `sc.balloon_offset.unwrap_or((0,0)).0`（354 行目）。
 - `balloon_offset` の中身は 2 つの供給の和（`crates/areka-placement/src/lib.rs` 556 行目 `scale_then_merge`）:
-  1. descript の `balloon.offsetx`（`config.rs` 262 行目の `cascade2`＝ゴーストとシェルの descript・`sakura.`／`kero.`／無印）を `apply_author_balloon_offset_scale`（`lib.rs` 507 行目）がシェル軸で換算した値
+  1. descript の `balloon.offsetx`（`config.rs` 262 行目の `cascade2`＝ゴーストとシェルの descript・`sakura.`／`kero.`／`char0.`／`char1.`）を `apply_author_balloon_offset_scale`（`lib.rs` 507 行目）がシェル軸で換算した値
   2. バルーンの `windowposition.x` の数値を `windowposition::to_screen_adjust` がバルーン軸で換算し `apply_windowposition`（`windowposition.rs` 204 行目）で加えた値。**SSP の実測で「左右で反転しない素の画面の向き」と確定済み**（`windowposition.rs` 18〜24 行目・140〜175 行目の表: emo2 の相方 Right で wp.x=−190 → 画面の左へ 237）
 - 合流した後は区別がつかない。P5 で `ox` の符号を側で変えると、2 の分まで反転する。
 - 右に決まるのは `BalloonSide::Right` と、`BalloonSide::Auto`（`none`）でキャラ窓の中心が作業領域の中央より左のとき（380 行目）。`none` の側は resolver の中でしか決まらないので、descript の分の符号は**resolver の中で**決めるしかない（config の段で反転する案は `none` に効かない）。

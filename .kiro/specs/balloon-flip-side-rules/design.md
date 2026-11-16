@@ -494,7 +494,7 @@ fn rejudge_balloons_after_chain_finalize(world: &mut World);
 3. 3 スコープの列で 2 番目は重ならず 3 番目が重なる → `PushedOverlap { scope: 2 }`（2.8）。押し込んだ位置がなお相方の窓に重なる形でも `to` は押し込みの位置のまま（2.5）。
 4. P5: `Right`・descript の分 d＝30（`windowposition.x` の分 0）→ バルーンの左端＝キャラ窓の右端 − 30（3.1・直す前は +30 で赤）。`Left`・同じ d → 今と同じ（3.2）。`Auto` で右に決まった形 → 右端 − d。`Right`・d＝0・`windowposition.x` の分 −237 → 右端 − 237（3.5・反転しない）。
 5. 一致: `Right`・d で初めから出した位置と、`Left`・同じ d で出して `place_balloon_in_work_area` で左から右へ映した位置の x が同じ（3.3）。`windowposition.x` の分 p≠0 の形では映しの結果が今の式（L + R − (pos.x + w)）のまま（3.8）。
-6. 供給: `scale_then_merge` の後、`balloon_offset_descript_x` は descript の分の換算値で、`windowposition.x` の分を含まない。`sakura.`／`kero.`／無印のどの鍵から来ても同じ欄に入る（3.4）。
+6. 供給: `scale_then_merge` の後、`balloon_offset_descript_x` は descript の分の換算値で、`windowposition.x` の分を含まない。`sakura.`／`kero.`／`char0.`／`char1.` のどの鍵から来ても同じ欄に入る（3.4）。
 
 ### Integration Tests（`balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`follow_other_chars_tests.rs`）
 

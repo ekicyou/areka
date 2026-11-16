@@ -26,7 +26,7 @@
 - [x] 2.1 合流の前の descript の `balloon.offsetx` の分を、配置の設定に別の欄で運ぶ
   - 配置の設定に「descript の `balloon.offsetx` の分」の欄を足す（既定 0）。設定を解くところで生の値を入れ、作者の拡大率の換算の後は換算後の値を入れる。`windowposition` の合流はこの欄に触らない。
   - 全欄を並べて設定を組む 2 か所（設定を解く関数と、キーワードのバルーンのテスト）に欄を足す。
-  - 済んだ姿: 供給の檻（`balloon_offset_supply_tests.rs`）で、換算と合流の後の欄が descript の分の換算値に等しく `windowposition.x` の分を含まないこと、`sakura.`・`kero.`・無印のどの鍵から来ても同じ欄に入ることが緑。
+  - 済んだ姿: 供給の檻（`balloon_offset_supply_tests.rs`）で、換算と合流の後の欄が descript の分の換算値に等しく `windowposition.x` の分を含まないこと、`sakura.`・`kero.`・`char0.`・`char1.` のどの鍵から来ても同じ欄に入ることが緑。
   - _Dispatch: mechanical — 既存の型に欄を 1 つ足して既存の流れで値を写す_
   - _Requirements: 3.1, 3.4, 6.1_
 
@@ -127,3 +127,4 @@
 - 4.1: 判定し直しの系と関数は `follow/other_chars.rs` に置いた。`follow.rs` の `pub(crate) use ... rejudge_all_balloons` の `#[allow(unused_imports)]` は仮置きで、4.2 で呼び出しを足したら外す。判定は状態を持たないので、並べ替えたままのバルーンは判定し直しのたびに `how="flipped"` の行をもう 1 度残す。
 - 6.2: `runtime/` の鎖の仕上げ・解き直しの檻の実際の名は `chain_finalize_*`・`chain_realign_*`（`frame_` は付かない）。`cargo test -p areka --bins chain_` の 101 本（うち finalize・realign 81 本）が緑。
 - 最終の検証（2026-11-16・`tools/test-all.ps1` 全段緑・commit 94c6ca587）で GO。完了の棚卸へ申し送る 2 件: ⑴ 箱の文字の面 `emo-text-box-surface` はキャラ窓の子で `Visual::default()`（可視）のまま付き、`\s[-1]` の後は次の箱の同期（`sync_box_bindings`→`unregister_box`→`despawn_window_child`）まで残るので、その最大 1 フレームのあいだ隠れた窓が「表示している」と数えられうる（`follow/other_chars.rs` の `is_shown`・要件 2.6/2.9 の狭い場面）。根から直すなら `is_shown` を装着の面（`emo-surface`／`emo-text-layer-slot`）だけで読む。⑵ 起動の関門は表示の有無を見ずに置くスコープ全部を列に入れる（設計どおり・最初の面が `-1` のスコープも入る）。並べ直しの後の判定し直しが表示している窓だけで直すので実害は小さい見込み。
+- 完了時にその場で解決（2026-11-17）: ⑴ `is_shown` が箱の文字の面（`Name("emo-text-box-surface")`）を数えないようにし、隠した直後の 1 フレームの穴を閉じた（`follow_other_chars_tests.rs` の `text_box_surface_alone_does_not_count_as_shown`）。「無印」の語は requirements.md 3.4・design.md・research.md・このファイルの 2.1 で `char0.`／`char1.` の鍵の書き方へ直した。⑵ 起動の関門が表示の有無を見ない件は設計どおりで、直さない（並べ直しの後の判定し直しが表示している窓だけで直す）。棚卸の件数＝その場で解決 2 件・申し送り 0 件・起票 0 件。
