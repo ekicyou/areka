@@ -29,7 +29,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 4.7, 6.4, 6.5_
 
 - [ ] 2. 文字コードの判定とリリースの版の検査（束 2・4・14・件 2）
-- [ ] 2.1 `encoding check` の子の確かめを 1 つずつ名前つきで包み、思わぬ失敗を名指しで出す
+- [x] 2.1 `encoding check` の子の確かめを 1 つずつ名前つきで包み、思わぬ失敗を名指しで出す
   - 932 の子の中の確かめ（`own console`・`calibration`・`production`・`real`・`perf load`・`perf calibration`・`perf real`・`perf console`）を名前つきの包みで回し、投げたら `FAIL cp932 child: <名前>: uncaught: <ASCII の理由>` を溜めて残りを続ける。`perf load` が落ちたら後の 3 つの `perf` の確かめは回さず 1 行だけ残す。読み込みと 3 つの確かめは今と同じ 1 つの scope の中に置き、`StrictMode 3.0` を外へ漏らさない（4）
   - 孫が 0 でなく終わった確かめには孫の標準エラーの最後の行を、子が 0 でなく `FAIL` の行が無いときは子の標準エラーの最後の行を添える。端末の文字コードは親でも子でも新しく替えない
   - 内部の引数 `-FailCheck <名前>` を足す（`-Cp932Child` と一緒のときだけ意味を持ち、手で回したときの断り方は今の内部の引数と同じ 1 行と終了コード 1）。親は 3 節の子の確かめの後に `-FailCheck 'perf load'` の子をもう 1 本起こし、較正 `cp932 child injected failure` で 4 つ（0 でない終了コード・名前と `\u7248` を含む `FAIL` の行・`PASS cp932 child: production` の行・`version=` の行）がそろうかを判定する（件 2）
