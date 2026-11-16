@@ -21,6 +21,33 @@ pub(crate) type NodeData = (
     Option<&'static Name>,
 );
 
+/// 組む木の枠。今の呼び出しは `Root`。
+pub(crate) enum TreeFrame<'a> {
+    /// 描画面の持ち主の木（根の自分の中身を先頭の 1 件にする）。
+    Root {
+        root: Entity,
+        root_name: Option<&'a Name>,
+    },
+    /// 自動で上げた持ち主の部分の列。根の中身は出さず、全部の世界の行列と外接矩形から `origin` を引く。
+    #[cfg_attr(not(test), allow(dead_code))] // shortcut: 配線は群 3 で足す、繋いだら外す
+    Segment {
+        owner: Entity,
+        owner_name: Option<&'a Name>,
+        origin: Vector2,
+    },
+}
+
+/// 世界の値から原点を引く（平行移動なので軸に沿うかは変わらない）。
+fn shift_world(w: &WorldVisual, origin: Vector2) -> WorldVisual {
+    let m = Matrix3x2::translation(-origin.X, -origin.Y);
+    WorldVisual {
+        world_mat: w.world_mat * m,
+        axis_aligned: w.axis_aligned,
+        content_world_aabb: w.content_world_aabb.transform(m),
+        subtree_world_aabb: w.subtree_world_aabb.transform(m),
+    }
+}
+
 /// 切り抜きの計画。
 enum ClipKind {
     /// 切り抜いた後の有効な矩形が空＝部分木ごと出さない（push も pop も出さない）。
@@ -41,8 +68,10 @@ enum ClipKind {
 /// - `unit_rect`: (0,0)-(1,1) の矩形の図形。回転・せん断した矩形の切り抜きを図形へ上げるとき共有する。
 /// - `viewport`: 根の `Arrangement.size` の矩形（根からの DIP）。これと切り抜きの外の節は間引く。
 ///   無限の矩形も渡せる（交わりにだけ使い、変形しない）。
-/// - `root`・`root_name`: 記録に載せる根（描画面の持ち主）。根が自分の `VisualDrawContent` を持てば
+/// - `frame`: 組む木の枠（`TreeFrame`）。`Root` の根が自分の `VisualDrawContent` を持てば
 ///   （節から昇格した持ち主）、それを先頭の 1 件として恒等の行列（根の局所の DIP）で出す（子より前・間引かない）。
+///   `Segment` は根の中身を出さず、`visited` の先頭の自動の持ち主自身から節と同じ命令を出し、
+///   全部の世界の行列と外接矩形から原点を引く（2.7, 3.2）。`viewport` は自分の描画面の矩形（原点から）。
 ///
 /// 不透明度が 1.0 未満の節は、部分木の世界の外接矩形と外側の有効な矩形の交わりを範囲として
 /// `PushOpacity` を切り抜きより外側に積み、同じ深さで閉じる。範囲が空なら部分木を間引く（2.1, 2.3〜2.5）。
@@ -56,12 +85,21 @@ pub(crate) fn build(
     unit_rect: &ID2D1Geometry,
     viewport: Aabb,
     nodes: &Query<NodeData>,
-    root: Entity,
-    root_name: Option<&Name>,
+    frame: &TreeFrame,
     visited: &[(Entity, usize)],
 ) {
     out.clear();
-    if let Ok((_, _, _, Some(c), version, _)) = nodes.get(root) {
+    let (root, root_name, shift) = match *frame {
+        TreeFrame::Root { root, root_name } => (root, root_name, None),
+        TreeFrame::Segment {
+            owner,
+            owner_name,
+            origin,
+        } => (owner, owner_name, Some(origin)),
+    };
+    if shift.is_none()
+        && let Ok((_, _, _, Some(c), version, _)) = nodes.get(root)
+    {
         out.push(draw_item(
             root,
             version.map_or(0, |v| v.0),
@@ -98,6 +136,10 @@ pub(crate) fn build(
             culled_at = Some(depth);
             continue;
         }
+        let world = &match shift {
+            Some(o) => shift_world(world, o),
+            None => *world,
+        };
         let size = &arrangement.size;
         let version = version.map_or(0, |v| v.0);
         let plan = plan_clip(

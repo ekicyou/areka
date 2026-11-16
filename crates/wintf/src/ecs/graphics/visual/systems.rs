@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 use tracing::{error, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 
-use super::draw::builder::{NodeData, build};
+use super::draw::builder::{NodeData, TreeFrame, build};
 use super::world_visual::{FillData, ReportedIssues, TreeScan, fill_world_visuals};
 use super::{
     DrawTree, OwnSurface, Visual, VisualDrawContent, VisualTransform, WorldVisual,
@@ -247,8 +247,10 @@ pub fn update_draw_trees(
             &unit_rect,
             viewport,
             &set.p1(),
-            root,
-            name,
+            &TreeFrame::Root {
+                root,
+                root_name: name,
+            },
             &visited,
         );
         trace!(

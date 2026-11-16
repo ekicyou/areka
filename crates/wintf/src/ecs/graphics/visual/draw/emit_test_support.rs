@@ -359,8 +359,10 @@ fn build_commands(
         &unit,
         viewport,
         &nodes,
-        root,
-        None,
+        &TreeFrame::Root {
+            root,
+            root_name: None,
+        },
         &visited,
     );
     commands

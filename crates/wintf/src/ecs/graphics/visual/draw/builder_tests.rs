@@ -31,11 +31,11 @@ fn rect4() -> D2D_RECT_F {
     }
 }
 
-fn factory() -> ID2D1Factory {
+pub(super) fn factory() -> ID2D1Factory {
     unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, None) }.unwrap()
 }
 
-fn unit_rect() -> ID2D1Geometry {
+pub(super) fn unit_rect() -> ID2D1Geometry {
     let factory = factory();
     let r = D2D_RECT_F {
         left: 0.0,
@@ -98,7 +98,7 @@ pub(super) fn group(world: &mut World, parent: Entity, visual: Visual, arr: Arra
         .id()
 }
 
-fn fill(world: &mut World, root: Entity) -> Vec<(Entity, usize)> {
+pub(super) fn fill(world: &mut World, root: Entity) -> Vec<(Entity, usize)> {
     let top = world
         .get::<Children>(root)
         .map(|c| c.to_vec())
@@ -135,8 +135,10 @@ fn build_only(
         unit,
         viewport,
         &nodes,
-        root,
-        None,
+        &TreeFrame::Root {
+            root,
+            root_name: None,
+        },
         visited,
     );
     out

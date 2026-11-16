@@ -2,6 +2,8 @@ pub(super) mod builder;
 #[cfg(test)]
 mod builder_opacity_tests;
 #[cfg(test)]
+mod builder_segment_tests;
+#[cfg(test)]
 mod builder_tests;
 mod clip_geometry;
 pub mod command;
