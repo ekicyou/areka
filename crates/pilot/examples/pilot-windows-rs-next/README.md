@@ -129,7 +129,9 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 | 1 | `examples/threads.rs` | 37 | 0（変えない） | | |
 | 1 | 新しく足した `build.rs`・`filters.txt` | — | +12・+32 | | |
 | 1 | 計（2.2 の x64 まで） | 787 | 写しの書き換え +65／−60（新しいファイルを入れて +109／−60） | 4 | 約 12 分 |
-| 3 |  |  |  |  |  |
+| 3 | `wintf/src/com/dwrite.rs` | 154 | | | |
+| 3 | `wintf/src/com/d2d/mod.rs` | 158 | | | |
+| 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | | | |
 | 4 |  |  |  |  |  |
 | 6 |  |  |  |  |  |
 
