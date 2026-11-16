@@ -15,7 +15,7 @@ use areka_seriko::{
 
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::shell_carry::{ShellCarry, snapshot};
+use areka_runtime::shell_carry::{ShellCarry, snapshot};
 
 /// 面の番号がシェルに無いと分かっている値。
 const GONE: u32 = 987_654;
@@ -46,7 +46,7 @@ fn shows_after_attach(carry: impl FnOnce(&BootAssets) -> Option<ShellCarry>) -> 
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

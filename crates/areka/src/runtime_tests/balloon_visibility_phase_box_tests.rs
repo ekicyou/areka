@@ -12,7 +12,7 @@
 // 作った写しを渡して確かめ、相の観測の収集は写しが空の形で通す（通しの確かめは 12.3）。
 // =============================================================================
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -353,7 +353,7 @@ fn clear_hides_only_the_window() {
 /// （時間切れ）でも届かない契機（文字が 0 に落ちた）でも同じ。
 #[test]
 fn hiding_forgets_the_manual_position() {
-    use crate::runtime::frame::balloon_runtime_test_support::{
+    use areka_runtime::frame::balloon_runtime_test_support::{
         balloon_is_manual, manual_balloon_runtime,
     };
     for trigger in [VisibilityTrigger::Timeout, VisibilityTrigger::Clear] {

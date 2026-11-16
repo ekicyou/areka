@@ -68,7 +68,7 @@ pub(super) fn resolve_timeout_secs(value: Option<&str>) -> (f64, TimeoutSource) 
 ///
 /// 記録もこの初回の解決 1 回きりで、毎フレームの呼び出しでは何も起きない
 /// （Requirement 8.6——常時出力でログを埋めない）。
-pub(crate) fn configured_timeout_secs() -> f64 {
+pub fn configured_timeout_secs() -> f64 {
     static RESOLVED: OnceLock<f64> = OnceLock::new();
     *RESOLVED.get_or_init(|| resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
 }

@@ -27,7 +27,7 @@ use crate::readme::ReadmeWiring;
 use crate::runtime::RuntimeInputs;
 use crate::runtime::adapter::PresentBridge;
 use crate::runtime::reload_cue::ReloadRx;
-use crate::runtime::sample_test_support::acquire_emo2;
+use crate::sample_test_support::acquire_emo2;
 use crate::runtime::spine::{Progress, ScriptedShioriBackend, run_bounded_watching};
 use crate::runtime::talk_clock::TalkClock;
 use crate::session::ghost_switch::ChangeRx;

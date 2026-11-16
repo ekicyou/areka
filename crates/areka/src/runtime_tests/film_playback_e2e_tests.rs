@@ -32,8 +32,8 @@ use dola::cue::{CueCommand, CueSink, TalkCue};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{DPI, GraphicsCore, WucGraphicsResource};
 
-use crate::runtime::adapter::PresentBridge;
-use crate::runtime::target_map::balloon_target;
+use areka_runtime::adapter::PresentBridge;
+use areka_runtime::target_map::balloon_target;
 
 /// 合図を処理する時計の始まり（ミリ秒）。
 const START: u64 = 1_000;
@@ -386,9 +386,9 @@ impl Race {
 }
 
 /// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
-fn gpu_world() -> (crate::runtime::spine::GpuPermit, World) {
+fn gpu_world() -> (areka_runtime::spine::GpuPermit, World) {
     com_init();
-    let gpu = crate::runtime::spine::GpuPermit::take();
+    let gpu = areka_runtime::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");

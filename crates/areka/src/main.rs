@@ -47,6 +47,13 @@ mod crate_source_test_support;
 /// （spec: placement-crate-split 要件 3.7・3.9）。
 #[cfg(test)]
 mod placement_tests;
+/// `areka-runtime` は本体を使えないので、本体の部品も使う runtime のテストはここに置く
+/// （spec: runtime-crate-split 要件 3.5）。
+#[cfg(test)]
+mod runtime_tests;
+/// 本体のテストへ emo2 検体を配る入口（crate ごとに 1 つ・spec: runtime-crate-split 要件 3.3）。
+#[cfg(test)]
+mod sample_test_support;
 
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;

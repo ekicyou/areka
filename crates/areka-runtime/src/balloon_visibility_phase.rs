@@ -70,7 +70,7 @@ use super::{
 /// `RuntimeWiring` を world から取り出した状態（`frame_system` の内側）で呼ぶ。装着が未了で
 /// `wiring.balloon_models` が空なら対象 scope がゼロ件となり、信号の取り出しだけを行って
 /// 何も発行しない。panic しない。
-pub(crate) fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut World) {
+pub fn run_balloon_visibility_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     // 文字層ランタイムは `Rc` を複製して受け取り、wiring の分解より前に借用を解く。
     let runtime = Rc::clone(wiring.runtime());
     let RuntimeWiring {
@@ -801,9 +801,9 @@ fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
 }
 
 // 配線の段のテストで共有する道具（headless 装着）。親の `test_support` とは別のモジュール。
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[path = "balloon_visibility_phase_test_support.rs"]
-mod test_support;
+pub mod test_support;
 
 // 待ち時間の預け方（純判断）だけを見る決定論テスト。配線の檻とは相手が違うので分けてある。
 #[cfg(test)]

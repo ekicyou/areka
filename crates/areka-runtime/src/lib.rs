@@ -38,7 +38,7 @@ pub mod session_hooks;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
 pub mod shell_balloon_resolve;
 /// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
-pub(crate) mod shell_box_assets;
+pub mod shell_box_assets;
 /// 箱の上の滞在と毎フレームの整え（可視性の相が読み、入力の側が書く・runtime-module-untangle 3.3）。
 pub mod shell_box_hover;
 /// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。

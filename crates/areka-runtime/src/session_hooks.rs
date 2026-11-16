@@ -57,7 +57,7 @@ impl SessionHooks {
 }
 
 /// 本体の状態が無いときの答え: `None`・偽・空の文字・何もしない（今の「状態が無い」ときの答えと同じ）。
-pub(crate) const NO_BODY: SessionHooks = SessionHooks {
+pub const NO_BODY: SessionHooks = SessionHooks {
     kanade: |_| None,
     seriko_sink: |_| None,
     ghost_ref_name: |_| String::new(),

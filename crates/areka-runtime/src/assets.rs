@@ -340,7 +340,7 @@ pub fn build_shell_assets(
 
 /// [`build_shell_assets`] の動く絵の上限を外から渡す版（環境変数に左右されないテストのため・
 /// spec: audit-placement-core 要件 2.7・2.8）。
-pub(crate) fn build_shell_assets_with_limits(
+pub fn build_shell_assets_with_limits(
     ghost_root: &Path,
     shell: Option<&str>,
     scopes: &[u32],
@@ -478,7 +478,7 @@ pub fn build_balloon_assets(
 
 /// [`build_balloon_assets`] の動く絵の上限を外から渡す版（環境変数に左右されないテストのため・
 /// spec: audit-placement-core 要件 2.7・2.8）。
-pub(crate) fn build_balloon_assets_with_limits(
+pub fn build_balloon_assets_with_limits(
     balloon_root: &Path,
     scopes: &[u32],
     author_dpi: u16,

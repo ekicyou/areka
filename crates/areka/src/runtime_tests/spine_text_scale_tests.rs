@@ -227,7 +227,7 @@ element1,balloon,talk,10,10
         &std::collections::BTreeMap::new(),
         &text_world,
     );
-    let bundle = crate::runtime::shell_box_assets::ShellBoxAssets {
+    let bundle = areka_runtime::shell_box_assets::ShellBoxAssets {
         layout,
         aliases: text_world.alias_snapshot(),
         surface_ids: text_world.surface_ids().collect(),

@@ -14,7 +14,7 @@ use super::*;
 use std::collections::HashMap;
 
 use crate::app_exit::close_windows_for_restart;
-use crate::runtime::move_cue::{apply_move_directive, parse_move_directive};
+use areka_runtime::move_cue::{apply_move_directive, parse_move_directive};
 use areka_emo_compose::ScaleRatio;
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::{Anchored, move_window_to};

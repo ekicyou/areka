@@ -201,7 +201,7 @@ impl ShellCursorAssets {
 
     /// NonSend の資源を入れ替える: 新しい資源を入れ、全部のキャラクターの窓へ出し直し、最後に出した形の
     /// 控えを消してから前の資源を捨てる（捨てるカーソルを出さない・design.md「シェル・ゴーストの入れ替えの順」）。
-    pub(crate) fn hand_to(self, world: &mut World) {
+    pub fn hand_to(self, world: &mut World) {
         let old = world.remove_non_send::<ShellCursorAssets>();
         world.insert_non_send(self);
         let windows: Vec<Entity> = world

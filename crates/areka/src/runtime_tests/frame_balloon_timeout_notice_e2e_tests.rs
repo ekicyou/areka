@@ -22,9 +22,9 @@ use areka_sakura::TalkId;
 use areka_sakura::sysvar::SystemVarSnapshot;
 use dola::cue::{CuePlayer, CueSink};
 
-use crate::runtime::balloon_visibility::configured_timeout_secs;
-use crate::runtime::talk_clock::TalkClock;
-use crate::runtime::talk_lifecycle::BalloonLifecycleSink;
+use areka_runtime::balloon_visibility::configured_timeout_secs;
+use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::talk_lifecycle::BalloonLifecycleSink;
 
 use super::*;
 
@@ -52,7 +52,7 @@ struct Cage {
     _present_tx: mpsc::Sender<PresentCommand>,
     _gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。欄は宣言の順に落ちるので、最後に置いて装置の世界より後に返す。
-    _gpu: crate::runtime::spine::GpuPermit,
+    _gpu: areka_runtime::spine::GpuPermit,
 }
 
 impl Cage {

@@ -18,7 +18,7 @@
 // 実 GPU の檻 `frame_balloon_timeout_notice_e2e_tests.rs` が持つ（areka-P0-balloon-lifecycle-events task 5.2）。
 // =============================================================================
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -37,12 +37,12 @@ use dola::cue::{CueCommand, CuePlayer, TalkCue};
 use wintf::ecs::FrameTime;
 
 use crate::input_events::balloon::BalloonWiring;
-use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::move_cue::PositionCue;
-use crate::runtime::talk_clock::TalkClock;
-use crate::runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use crate::runtime::target_map::balloon_target;
+use areka_runtime::assets::{BootAssets, LoopTables};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::move_cue::PositionCue;
+use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use areka_runtime::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::{configured_timeout_secs, run_balloon_visibility_phase};
@@ -61,8 +61,8 @@ fn empty_assets() -> BootAssets {
         },
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
-        boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
-        cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
+        boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
+        cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
     }
 }
 
@@ -98,7 +98,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         mpsc::channel().1,
         mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
-        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),
         clock,
         empty_assets(),

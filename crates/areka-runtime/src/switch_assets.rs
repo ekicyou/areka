@@ -111,7 +111,7 @@ pub enum SwitchBuildError {
 }
 
 /// 差し替えの荷物（UI が置き場へ置き、表示の橋渡しが合図の世代と突き合わせて取り出す）。
-pub(crate) struct SwapPayload {
+pub struct SwapPayload {
     /// 差し替えの世代（合図 `Rebased` の `epoch` と結ぶ）。
     pub epoch: u64,
     /// scope ごとの新しい `EmoWorld`・アトラス・作者の DPI。
@@ -121,7 +121,7 @@ pub(crate) struct SwapPayload {
 }
 
 /// 荷物を 1 つ置く共有の置き場（鍵を持つのは置くときと取り出すときの一瞬だけ）。
-pub(crate) type SwapSlot = Arc<Mutex<Option<SwapPayload>>>;
+pub type SwapSlot = Arc<Mutex<Option<SwapPayload>>>;
 
 /// 受理ごとに背景のスレッドを 1 本起こして資産を作り、結果を 1 件だけ送る線の受け手を返す。
 ///

@@ -162,7 +162,7 @@ pub fn run_move_drain_phase(wiring: &RuntimeWiring, world: &mut World) {
 }
 
 /// [`run_move_drain_phase`] の本体（表示の拡大率を読み口で受ける形・GPU 無しの檻へ入れるためのシーム）。
-pub(crate) fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
+pub fn run_move_drain_with<S: ShownRatioSource + ?Sized>(
     wiring: &RuntimeWiring,
     shown: &S,
     world: &mut World,

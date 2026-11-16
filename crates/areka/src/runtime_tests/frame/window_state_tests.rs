@@ -437,7 +437,7 @@ fn player_for(script: &str, tx: Sender<WindowStateDirective>) -> (dola::cue::Cue
     );
     let mut player = dola::cue::CuePlayer::from_sheet(&compiled.sheet);
     player.register_sink(Box::new(
-        crate::runtime::window_state_cue::WindowStateCueSink::new(tx),
+        areka_runtime::window_state_cue::WindowStateCueSink::new(tx),
     ));
     (player, compiled.sheet.absolute_end_time())
 }

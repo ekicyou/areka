@@ -37,7 +37,7 @@ pub struct ShellBoxAssets {
 impl ShellBoxAssets {
     /// 文字の層へ渡す（装着の相とシェルの切替が呼ぶ）。箱の配置の直後に戻り先の引き直しを呼ぶ。`\s` の解決の閉包は、別名の写しから
     /// seriko と同じ解決器を組み、面の表に在る番号だけを通す（[`resolve_for_text`]）。
-    pub(crate) fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
+    pub fn hand_to(self, runtime: &mut TextLayerRuntime, world: &mut World) {
         let ShellBoxAssets {
             layout,
             aliases,

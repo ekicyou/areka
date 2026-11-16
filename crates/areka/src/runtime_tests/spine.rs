@@ -41,8 +41,8 @@
 //! （bin を起動する外部テストでは不能）、既存 repo 慣行（`runtime::wire_tests`・
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
 
-// 旧 `spine.rs` の頭の `use` の行（⑶ と子のテストが `super::` で引いていた・段 2 で `areka-runtime` の
-// `spine.rs` から移した。`super::`・`crate::` の道と要らない名前は段 3 の代わりの親で直す）。
+// `spine` の代わりの親を兼ねる（⑴ ⑵ を子へ渡す）。下の `use` は旧 `spine.rs` の頭の行で、⑶ と子のテストが使う。
+use areka_runtime::spine::*;
 use areka_placement::follow::OffsetBase;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -68,7 +68,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
 
-use super::sample_test_support::acquire_emo2;
+use crate::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use windows::Win32::Foundation::HWND;
@@ -81,16 +81,16 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
-use super::adapter::PresentBridge;
-use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
-use super::frame::{
+use areka_runtime::adapter::PresentBridge;
+use areka_runtime::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
+use areka_runtime::frame::{
     RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
     run_text_scale_phase,
 };
-use super::move_cue::{MoveCueSink, PositionCue};
-use super::talk_clock::{ClockedTextSink, TalkClock};
-use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use super::target_map::{balloon_target, shell_target};
+use areka_runtime::move_cue::{MoveCueSink, PositionCue};
+use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
+use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use areka_runtime::target_map::{balloon_target, shell_target};
 use crate::session::ghost_quit::KanadeNoticeRx;
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
@@ -518,7 +518,7 @@ impl SpineHarness {
             rx,
             move_rx,
             lifecycle_rx,
-            mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+            mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
             Rc::clone(&runtime),
             clock,
             wiring_assets,
@@ -614,3 +614,42 @@ impl SpineHarness {
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.1・要件 1.7 / 3.1 / 3.2）。
 // 本ファイルはハーネス本体（scripted backend・fixture・有界待機・ログ捕捉・SpineHarness）を保持し、
 // 観測ケースはテーマごとの兄弟ファイル `spine_<テーマ>_tests.rs` に置く。
+#[cfg(test)]
+#[path = "spine_boot_smoke_tests.rs"]
+mod boot_smoke_tests;
+#[cfg(test)]
+#[path = "spine_close_wiring_tests.rs"]
+mod close_wiring_tests;
+#[cfg(test)]
+#[path = "spine_conformance_lap_tests.rs"]
+mod conformance_lap_tests;
+#[cfg(test)]
+#[path = "spine_conformance_script.rs"]
+mod conformance_script;
+#[cfg(test)]
+#[path = "spine_conformance_support.rs"]
+mod conformance_support;
+#[cfg(test)]
+#[path = "spine_display_tests.rs"]
+mod display_tests;
+#[cfg(test)]
+#[path = "spine_move_cue_tests.rs"]
+mod move_cue_tests;
+#[cfg(test)]
+#[path = "spine_seriko_loop_tests.rs"]
+mod seriko_loop_tests;
+#[cfg(test)]
+#[path = "spine_settle_tests.rs"]
+mod settle_tests;
+#[cfg(test)]
+#[path = "spine_talk_close_tests.rs"]
+mod talk_close_tests;
+#[cfg(test)]
+#[path = "spine_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "spine_text_scale_tests.rs"]
+mod text_scale_tests;
+#[cfg(test)]
+#[path = "spine_third_scope_talk_tests.rs"]
+mod third_scope_talk_tests;

@@ -11,12 +11,12 @@ use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
-use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::scope_bind_fixture_test_support::{
     BLUE, CHAR2_CATEGORY, GREEN, KERO_CATEGORY, RED, SAKURA_CATEGORY, scope_bind_ghost,
 };
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
-use crate::runtime::target_map::scope_of;
+use areka_runtime::target_map::scope_of;
 // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
 use areka_placement::source::{load_balloon_author_dpi, load_descript_source};
 

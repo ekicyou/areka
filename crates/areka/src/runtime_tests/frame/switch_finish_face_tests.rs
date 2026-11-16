@@ -25,7 +25,7 @@ fn balloon_switch_installs_the_new_bundle_through_the_face_writer() {
     for scope in [0, 1] {
         rig.wiring
             .balloon_definitions
-            .insert(scope, crate::runtime::assets::empty_definitions(scope));
+            .insert(scope, areka_runtime::assets::empty_definitions(scope));
         rig.wiring
             .balloon_models
             .insert(scope, areka_parsers::balloon::parse_str("", None));

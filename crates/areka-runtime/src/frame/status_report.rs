@@ -33,7 +33,7 @@ use crate::target_map::balloon_target;
 /// 最後に kanade へ送った組と、番号が取れない scope の警告済み集合と、最後に取れた番号
 /// （ゴーストごと・`RuntimeWiring` が持つ）。
 #[derive(Default)]
-pub(crate) struct BalloonStatusLedger {
+pub struct BalloonStatusLedger {
     last_sent: Vec<BalloonBinding>,
     surface_unknown_warned: BTreeSet<u32>,
     /// スコープ → 普通のバルーンの面の番号で、最後に取れたもの（表示層の値の写し）。
@@ -49,7 +49,7 @@ type StageTuple = (bool, u32, u64);
 
 /// 1 scope の窓の観測（表示層の照会 3 本・表示層に装着済みの scope だけ）。
 #[derive(Clone)]
-pub(crate) struct StageObservation {
+pub struct StageObservation {
     scope: u32,
     open: bool,
     surface_id: Option<u32>,
@@ -57,7 +57,7 @@ pub(crate) struct StageObservation {
 }
 
 /// 1 scope の観測（表示層の照会 2 本と、箱に文字が出ているか）。
-pub(crate) struct BalloonObservation {
+pub struct BalloonObservation {
     scope: u32,
     visible: Option<bool>,
     surface_id: Option<u32>,
@@ -69,7 +69,7 @@ pub(crate) struct BalloonObservation {
 ///
 /// 番号は今の `surface_id`。取れないとき、窓が見えていれば 0 で警告の対象、箱だけなら覚えた番号（無ければ 0）で
 /// 警告の対象にしない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
-pub(crate) fn collect_bindings(
+pub fn collect_bindings(
     observed: &[BalloonObservation],
     last_surface: &BTreeMap<u32, u32>,
 ) -> (Vec<BalloonBinding>, Vec<u32>) {
@@ -100,7 +100,7 @@ pub(crate) fn collect_bindings(
 /// 文字の層を借りる手前で、窓の知らせ（[`report_stages`]）を seriko へ送る。
 /// スコープの一覧は相の中で自分で作る（可視性の相の手元の一覧は使わない）。文字の層を借りられない
 /// フレームは誤りの段で 1 度だけ記録して届けを次のフレームへ回し、借りられたら記録の印を戻す。
-pub(crate) fn run_status_report_phase(wiring: &mut RuntimeWiring, world: &World) {
+pub fn run_status_report_phase(wiring: &mut RuntimeWiring, world: &World) {
     // `HashMap` の列挙順は不定なので、組の並びを決定論にするため昇順へ固定する。
     let mut scopes: Vec<u32> = wiring.balloon_models.keys().copied().collect();
     scopes.sort_unstable();
@@ -126,7 +126,7 @@ pub(crate) fn run_status_report_phase(wiring: &mut RuntimeWiring, world: &World)
 /// `stage_generation`）を読み、前に知らせた組と違うときだけ置き場のゴーストの seriko へ送る。
 ///
 /// 表示層に未装着の scope は知らせない（装着されたフレームで知らせる）。
-pub(crate) fn report_stages(
+pub fn report_stages(
     presenter: &EmoPresenter,
     world: &World,
     ledger: &mut BalloonStatusLedger,
@@ -194,7 +194,7 @@ fn report_stage_observed(
 /// 置き場のゴーストの kanade（本体の口）へ送出 → 記録。
 ///
 /// `scopes` は装着済みバルーンの scope 昇順（[`run_status_report_phase`] が作る）。
-pub(crate) fn report_balloons(
+pub fn report_balloons(
     presenter: &EmoPresenter,
     runtime: &TextLayerRuntime,
     world: &World,

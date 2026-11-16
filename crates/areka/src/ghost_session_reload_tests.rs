@@ -9,7 +9,7 @@ use wintf::AppExit;
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::runtime::sample_test_support::acquire_emo2;
+use crate::sample_test_support::acquire_emo2;
 use crate::runtime::spine::{Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching};
 use crate::session::runtime_boot;
 

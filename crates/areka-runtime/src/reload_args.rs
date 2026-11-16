@@ -23,7 +23,7 @@ pub struct DescriptParts {
 
 impl DescriptParts {
     /// すべての descript.txt（`\![reload,descript]`・MCP の `descript`・要件 7.1）。
-    pub(crate) const ALL: DescriptParts = DescriptParts {
+    pub const ALL: DescriptParts = DescriptParts {
         ghost: true,
         shell: true,
         balloon: true,

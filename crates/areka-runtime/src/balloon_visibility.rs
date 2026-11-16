@@ -96,9 +96,9 @@ mod decision;
 #[path = "balloon_visibility_wait.rs"]
 mod wait;
 
-pub(crate) use decision::decide;
+pub use decision::decide;
 use decision::hide_reaches_boxes;
-pub(crate) use wait::configured_timeout_secs;
+pub use wait::configured_timeout_secs;
 #[cfg(test)]
 use wait::{parse_timeout_ms, resolve_timeout_secs};
 
@@ -141,7 +141,7 @@ impl TimeoutSource {
 /// [`VisibilityTrigger::Explicit`] 以外は判断中核が導き、`Explicit` だけは配線層が前フレームとの
 /// 差分から導く（判断中核は自分が発行していない遷移を知らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum VisibilityTrigger {
+pub enum VisibilityTrigger {
     /// 可視コンテンツの配置（可視グリフ数の増加・Requirement 2.1 / 4.7）。
     Content,
     /// 内容の全消去（可視グリフ数のゼロへの下降・Requirement 3.1）。
@@ -179,8 +179,9 @@ impl VisibilityTrigger {
 /// 完了 spec areka-P0-balloon-visibility の要件 5.4 は「選択肢の表示中」も抑止に数えたが、
 /// areka-P0-balloon-text-bugs が外した（要件 1.5）。選択を待つ間はトークの終わりが届かないので
 /// 計測の手前で止まり、待ちが解けた後に残る選択肢の行は時間切れを止める理由にならない。
+// 要件 2.5: 公開の `VisibilityLogEvent::TimeoutSuppressed` が名指すので開ける
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SuppressionKinds {
+pub struct SuppressionKinds {
     /// いずれかのバルーン窓がドラッグ中（Requirement 5.1）。
     pub(crate) dragging: bool,
     /// いずれかの**可視**バルーンの上にポインタが滞在中（Requirement 5.2）。
@@ -195,8 +196,9 @@ impl SuppressionKinds {
 }
 
 /// タイムアウト計測を破棄した理由（Requirement 8.2 のログ用）。
+// 要件 2.5: 公開の `VisibilityLogEvent::MeasurementDiscarded` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MeasurementDiscardReason {
+pub enum MeasurementDiscardReason {
     /// 次の会話が始まった（Requirement 4.5）。
     TalkStarted,
     /// 占有終端が現在時刻より未来へ更新された（選択肢バリア解除後の cue 到着）。
@@ -226,7 +228,7 @@ impl MeasurementDiscardReason {
 /// である配線層（Requirement 8.4 の `error!`）へ割り当てているためで、判断中核は
 /// 「観測が無い」を入力の一形態として受け取るだけである。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum VisibilityLogEvent {
+pub enum VisibilityLogEvent {
     /// 可視状態が遷移した（Requirement 8.1: 契機・対象 scope・遷移後の可視状態）。
     Transition {
         scope: u32,
@@ -264,7 +266,7 @@ pub(crate) enum VisibilityLogEvent {
 ///
 /// 記録の語に「中断」は使わない——最後まで流れたトークでも止まった時刻が終端より早く読まれうる。
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum MeasurementOrigin {
+pub enum MeasurementOrigin {
     /// 止まった時刻が占有区間の終端より早かったので、止まった時刻（talk 相対秒）を採った。
     StoppedAt(f64),
     /// 占有区間の終端を採った（止まった時刻が終端以後）。
@@ -306,7 +308,7 @@ pub(crate) enum TalkEnd {
 
 /// 判断中核が配線層へ依頼する行動。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum VisibilityAction {
+pub enum VisibilityAction {
     /// 当該 scope のバルーンを可視化する。
     Show { scope: u32 },
     /// 列挙した scope のバルーンをまとめて不可視にする（`scopes` は scope 昇順）。
@@ -317,8 +319,9 @@ pub(crate) enum VisibilityAction {
 }
 
 /// [`decide`] の返り値。行動とログを分けて返し、発行もログ出力も配線層に委ねる。
+// 要件 2.5: 公開の `decide` が名指すので開ける
 #[derive(Debug, Default, Clone, PartialEq)]
-pub(crate) struct VisibilityDecision {
+pub struct VisibilityDecision {
     /// 発行する行動。並びは「中断の非表示 → 全消去の非表示 → 表示 → 満了の非表示」で、
     /// 各行動の中の scope は昇順で固定する。
     pub(crate) actions: Vec<VisibilityAction>,
@@ -344,8 +347,9 @@ pub(crate) struct GlyphObservation {
 }
 
 /// ある scope について本フレームに観測した値。
+// 要件 2.5: 公開の `test_support::seen` ほか が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ScopeObservation {
+pub struct ScopeObservation {
     /// 本フレームのリビール済み可視グリフ数と消去の回数の組。
     ///
     /// `None` は**観測が取れなかった**ことを表す（本番では文字層ランタイムの借用失敗・注入時刻なし）。
@@ -373,7 +377,7 @@ pub(crate) struct ScopeObservation {
 /// `scopes` の母集合は装着済みのバルーン scope（本番では装着済みバルーン資産のキー）。
 /// 空（装着前）のときは [`decide`] が自然に何もしない。
 #[derive(Debug, Default, Clone, PartialEq)]
-pub(crate) struct VisibilityObservations {
+pub struct VisibilityObservations {
     /// scope 番号 → 観測値。
     pub(crate) scopes: BTreeMap<u32, ScopeObservation>,
     /// 本フレームに受け取った表示ライフサイクル信号（到着順＝FIFO）。
@@ -440,7 +444,7 @@ struct ObservationFailureLogged {
 ///
 /// scope ごとの状態と会話単位の状態を 1 つに束ねる。
 #[derive(Debug, Default)]
-pub(crate) struct BalloonVisibilityState {
+pub struct BalloonVisibilityState {
     /// scope ごとのエッジ検出状態。観測された scope の分だけ生える。
     per_scope: BTreeMap<u32, ScopeVisibility>,
     /// 現在の会話の占有終端（talk 相対秒・表示終了信号の最大値）。`None` は信号未着。
@@ -519,14 +523,19 @@ struct ContentDecisions {
 // （design の File Structure Plan が「テーマ超過時はさらに分割」と既に想定している形）。
 // 子モジュールは親の非公開項目（[`BalloonVisibilityState::per_scope`] 等）へ到達できるため、
 // 「相関数は判断中核と同一の可視性の内側に置く」という設計上の前提は保たれる。
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+#[path = "balloon_visibility_phase.rs"]
+pub mod phase;
+#[cfg(not(feature = "test-support"))]
 #[path = "balloon_visibility_phase.rs"]
 mod phase;
 
 pub(super) use phase::run_balloon_visibility_phase;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[path = "balloon_visibility_test_support.rs"]
-mod test_support;
+pub mod test_support;
 
 #[cfg(test)]
 #[path = "balloon_visibility_tests.rs"]

@@ -45,22 +45,50 @@ mod balloon_offset_follow;
 // 今の定義の唯一の書き手（balloon-scroll-arrows design「BalloonFaceSelector」）。
 mod balloon_face;
 mod dpi;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod drain_resnap;
+#[cfg(not(feature = "test-support"))]
 mod drain_resnap;
 // 位置の指令の預かり（window-work-area-clamp design「MoveHold」）。
 mod move_hold;
 // 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」）。
 mod move_shift;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod scale_text;
+#[cfg(not(feature = "test-support"))]
 mod scale_text;
 // 倍率の変わりの相（shell-scale-linkage design「ScaleNoticePhase」）。
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod scale_notice;
+#[cfg(not(feature = "test-support"))]
 mod scale_notice;
-pub(crate) mod status_report;
+pub mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod switch;
+#[cfg(not(feature = "test-support"))]
 mod switch;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod wiring;
+#[cfg(not(feature = "test-support"))]
 mod wiring;
 // 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod window_state;
+#[cfg(not(feature = "test-support"))]
 mod window_state;
 use self::window_state::run_window_state_phase;
 pub use self::window_state::{DiscardReason, log_stay_on_top_discard};
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
+#[cfg(feature = "test-support")]
+pub mod work_area_sync;
+#[cfg(not(feature = "test-support"))]
 mod work_area_sync;
 mod zorder_descript;
 mod zorder_drain;
@@ -131,8 +159,8 @@ pub use self::attach::{AttachPlan, PlannedAttach, plan_attachments, run_attach_p
 pub use self::dpi::run_dpi_phase;
 pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
 // 表示の拡大率を読み口で受ける move drain（GPU 無しの檻が窓を「表示した」前提で流すためのシーム）。
-#[cfg(test)]
-pub(crate) use self::drain_resnap::run_move_drain_with;
+#[cfg(any(test, feature = "test-support"))]
+pub use self::drain_resnap::run_move_drain_with;
 pub use self::scale_text::{run_text_phase, run_text_scale_phase};
 // 窓がどれも表示した前提の読み口（spine の檻も同じものを使う）。
 #[cfg(any(test, feature = "test-support"))]

@@ -32,7 +32,7 @@ use areka_placement::spawn::GhostWindows;
 /// `RuntimeWiring` と一緒に作り直される（ゴーストの切り替え・読み直し・終了）ので、新しい
 /// ゴーストはオフから始まる（要件 3.4）。
 #[derive(Default)]
-pub(crate) struct StayOnTopState {
+pub struct StayOnTopState {
     /// 受け口と対の受信端（起動の結線が後から渡す・無ければ相は何もしない）。
     pub(super) rx: Option<Receiver<WindowStateDirective>>,
     /// 常に手前の状態（正本）。
@@ -41,7 +41,7 @@ pub(crate) struct StayOnTopState {
 
 /// 遷移の判断の結果。
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Transition {
+pub enum Transition {
     /// オフ→オン
     TurnOn,
     /// オン→オフ
@@ -53,7 +53,7 @@ pub(crate) enum Transition {
 }
 
 /// 純関数：今の状態と指令から遷移を決める。
-pub(crate) fn decide_transition(on: bool, directive: WindowStateDirective) -> Transition {
+pub fn decide_transition(on: bool, directive: WindowStateDirective) -> Transition {
     match directive {
         WindowStateDirective::Raise => Transition::Raise { on },
         WindowStateDirective::StayOnTop { on: want } if want == on => Transition::Unchanged { on },
@@ -65,7 +65,7 @@ pub(crate) fn decide_transition(on: bool, directive: WindowStateDirective) -> Tr
 /// Update の相：受信端を到着順に取り出して状態へ当てる。
 ///
 /// 呼び手は `frame.rs` の重なりの取り出しの相の直後。
-pub(crate) fn run_window_state_phase(state: &mut StayOnTopState, world: &mut World) {
+pub fn run_window_state_phase(state: &mut StayOnTopState, world: &mut World) {
     let Some(rx) = state.rx.as_ref() else {
         return;
     };

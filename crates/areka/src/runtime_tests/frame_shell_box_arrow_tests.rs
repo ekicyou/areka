@@ -22,8 +22,8 @@ use wintf::ecs::{PhysicalPoint, Point};
 use crate::input_events::char_watch::char_watch_with;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use crate::input_events::{MouseWiring, RegionSource, on_char_pointer_pressed};
-use crate::runtime::hit_region::HitRegion;
-use crate::runtime::user_break_cue::NoUserBreakSignal;
+use areka_runtime::hit_region::HitRegion;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
 use areka_placement::spawn::CharWindowMarker;
 
 use super::*;

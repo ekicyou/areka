@@ -12,7 +12,7 @@ use areka_sakura::strict::{DetectionPoint, StrictJudges};
 use super::consumer_ledger::ConsumerLedger;
 
 /// `\!` の台帳と `\f` の分類を引く判定。台帳は起動の時に 1 度だけ組む。
-pub(crate) struct ArekaStrictJudges {
+pub struct ArekaStrictJudges {
     ledger: ConsumerLedger,
 }
 

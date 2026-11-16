@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use areka_kanade::TalkGap;
 
 use super::*;
-use crate::runtime::reload_args::ReloadTarget;
+use areka_runtime::reload_args::ReloadTarget;
 use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadStage};
 
 /// 窓口の印を置く（`reserved` は窓口自身が `accept_skin` で立てた予約の鍵）。

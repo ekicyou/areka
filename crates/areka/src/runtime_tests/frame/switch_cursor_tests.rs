@@ -6,8 +6,8 @@
 use super::*;
 
 /// スコープ 0 の当たり判定 `Head` に乗る形だけを `shape` にしたシェルのカーソル。
-fn head_cursor(shape: crate::runtime::shell_cursor_table::SystemCursor) -> ShellCursorAssets {
-    use crate::runtime::shell_cursor_table::{CursorScene, Shape};
+fn head_cursor(shape: areka_runtime::shell_cursor_table::SystemCursor) -> ShellCursorAssets {
+    use areka_runtime::shell_cursor_table::{CursorScene, Shape};
     let mut assets = ShellCursorAssets::default();
     assets
         .rows
@@ -17,8 +17,8 @@ fn head_cursor(shape: crate::runtime::shell_cursor_table::SystemCursor) -> Shell
 }
 
 /// どこでも当たり判定 `Head`（スコープはそのまま）。
-fn all_head(scope: u32, x: i64, y: i64) -> crate::runtime::hit_region::HitRegion {
-    crate::runtime::hit_region::HitRegion {
+fn all_head(scope: u32, x: i64, y: i64) -> areka_runtime::hit_region::HitRegion {
+    areka_runtime::hit_region::HitRegion {
         scope,
         region: Some("Head".to_owned()),
         surface_point: (x, y),
@@ -32,7 +32,7 @@ fn all_head(scope: u32, x: i64, y: i64) -> crate::runtime::hit_region::HitRegion
 /// 後始末がカーソルを `hand_to` しないと、前の表の help が返って赤。
 #[test]
 fn shell_switch_hands_the_new_cursor_table_to_the_char_window_answer() {
-    use crate::runtime::shell_cursor_table::SystemCursor;
+    use areka_runtime::shell_cursor_table::SystemCursor;
     use windows::Win32::UI::WindowsAndMessaging::{IDC_CROSS, IDC_HELP};
     use wintf::ecs::cursor::{CursorAsk, CursorQuery, CursorReply, CursorTrigger, stock_cursor};
 

@@ -19,7 +19,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use crate::runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
-use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::{measure_baked, measure_with_reader};

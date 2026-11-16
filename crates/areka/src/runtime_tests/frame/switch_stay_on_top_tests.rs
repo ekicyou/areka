@@ -10,8 +10,8 @@ use bevy_ecs::entity::Entity;
 use wintf::ecs::window::StayOnTop;
 
 use super::super::*;
-use crate::runtime::frame::window_state::run_window_state_phase;
-use crate::runtime::window_state_cue::WindowStateDirective;
+use areka_runtime::frame::window_state::run_window_state_phase;
+use areka_runtime::window_state_cue::WindowStateDirective;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::zorder_group_ledger::parse_zorder_tokens;
 

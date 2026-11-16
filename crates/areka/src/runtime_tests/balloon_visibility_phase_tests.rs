@@ -14,7 +14,7 @@
 // そのまま通る。
 // =============================================================================
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -36,10 +36,10 @@ use super::super::{
 use super::test_support::attach_headless;
 use super::*;
 use crate::input_events::balloon::{BalloonWiring, ChoiceSelection};
-use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::talk_clock::TalkClock;
-use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
-use crate::runtime::target_map::balloon_target;
+use areka_runtime::assets::{BootAssets, LoopTables};
+use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_runtime::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use wintf::ecs::FrameTime;
 
@@ -61,8 +61,8 @@ fn empty_assets() -> BootAssets {
         },
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
-        boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
-        cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
+        boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
+        cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
     }
 }
 
@@ -90,7 +90,7 @@ impl Harness {
             mpsc::channel().1,
             mpsc::channel().1,
             lifecycle_rx,
-            mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+            mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
             Rc::new(RefCell::new(TextLayerRuntime::new(
                 TextLayerConfig::default(),
             ))),
@@ -633,7 +633,7 @@ fn hide_touches_only_the_balloon_target() {
     // キャラクター窓の target は balloon target でないので共有の道具を通さず直に装着する。
     let shell_window = world.spawn_empty().id();
     presenter.attach_target(
-        crate::runtime::target_map::shell_target(0),
+        areka_runtime::target_map::shell_target(0),
         shell_window,
         EmoWorld::build(&areka_parsers::shell::parse("")),
         AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
@@ -686,7 +686,7 @@ fn hide_touches_only_the_balloon_target() {
         "適用先はバルーンの target"
     );
 
-    let shell = format!("{:?}", crate::runtime::target_map::shell_target(0));
+    let shell = format!("{:?}", areka_runtime::target_map::shell_target(0));
     assert!(
         events
             .iter()

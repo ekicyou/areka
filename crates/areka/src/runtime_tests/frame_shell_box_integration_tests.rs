@@ -25,9 +25,9 @@ use areka_emo_compose::{BindSet, EmoWorld, PatternState, fold_boxes};
 use areka_parsers::shell::{parse, parse_boxes};
 
 use crate::input_events::shell_box::ShellBoxHover;
-use crate::runtime::balloon_visibility::configured_timeout_secs;
-use crate::runtime::shell_box_assets::ShellBoxAssets;
-use crate::runtime::target_map::shell_target;
+use areka_runtime::balloon_visibility::configured_timeout_secs;
+use areka_runtime::shell_box_assets::ShellBoxAssets;
+use areka_runtime::target_map::shell_target;
 
 use super::*;
 
@@ -67,7 +67,7 @@ struct Cage {
     reports: mpsc::Receiver<areka_kanade::KanadeMsg>,
     _gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。`world` の装置より後に返すので欄の最後。
-    _gpu: crate::runtime::spine::GpuPermit,
+    _gpu: areka_runtime::spine::GpuPermit,
 }
 
 impl Cage {

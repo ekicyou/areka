@@ -42,7 +42,7 @@ use crate::ghost_session::{
     register_systems,
 };
 use crate::runtime::RuntimeInputs;
-use crate::runtime::sample_test_support::acquire_emo2;
+use crate::sample_test_support::acquire_emo2;
 use crate::runtime::spine::{
     HOMEURL_RESOURCE, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
     ScriptedShioriHandle, WaitFailure, run_bounded_watching, wait_recv, wait_until,

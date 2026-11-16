@@ -14,7 +14,7 @@
 // 反復回数のみによる有界化は 1 つも用いない（Requirements 9.2 / 9.3）。
 // =============================================================================
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::sync::mpsc;
 
 use areka_emo_text::state::TextLayerConfig;
@@ -24,9 +24,9 @@ use wintf::ecs::Visual;
 use wintf::ecs::layout::Arrangement;
 
 use crate::input_events::balloon::BalloonWiring;
-use crate::runtime::assets::build_boot_assets;
-use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
-use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_runtime::assets::build_boot_assets;
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::test_support::{dpi_world, size_of, zero_clock};
@@ -47,7 +47,7 @@ use super::*;
 ///
 /// 先頭は GPU の装置の許可（`GpuPermit`）。組の束縛は後のものから捨てられるので、先頭に置くと装置より後に返る。
 fn gpu_frame_world() -> (
-    crate::runtime::spine::GpuPermit,
+    areka_runtime::spine::GpuPermit,
     World,
     areka_placement::spawn::GhostWindows,
 ) {
@@ -57,7 +57,7 @@ fn gpu_frame_world() -> (
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
     let (mut world, gw) = dpi_world();
-    let gpu = crate::runtime::spine::GpuPermit::take();
+    let gpu = areka_runtime::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
@@ -80,7 +80,7 @@ fn boot_wiring(
         rx,
         mpsc::channel::<PositionCue>().1,
         lifecycle_rx,
-        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

@@ -52,14 +52,14 @@ pub enum NotFoundReason {
 ///
 /// プロセスの中だけ（`LastInstalledGhost` と同じ形）。入口は読むだけで、切替に使っても消さない。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
-pub(crate) struct LastInstalledShell {
+pub struct LastInstalledShell {
     pub ghost_folder: Option<String>,
     pub folder: String,
 }
 
 /// このプロセスで最後に入れたバルーンのフォルダ名（目録の綴り・プロセスの中だけ）。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
-pub(crate) struct LastInstalledBalloon(pub String);
+pub struct LastInstalledBalloon(pub String);
 
 /// シェルのインストールの完了で控えを置き換える（最後の 1 件だけ残る・要件 1.10・裁定 3）。
 pub fn record_installed_shell(world: &mut World, ghost_folder: Option<String>, folder: String) {

@@ -27,9 +27,9 @@ use areka_emo_text::state::TextLayerConfig;
 use wintf::ecs::Point;
 
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::move_cue::{MoveDirective, PositionCue, parse_move_directive};
-use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
-use crate::runtime::zorder_cue::ZOrderDirective;
+use areka_runtime::move_cue::{MoveDirective, PositionCue, parse_move_directive};
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_runtime::zorder_cue::ZOrderDirective;
 use areka_placement::chain_finalize::ChainFinalized;
 
 use super::test_support::{

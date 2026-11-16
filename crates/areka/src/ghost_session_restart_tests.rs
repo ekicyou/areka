@@ -16,7 +16,7 @@ use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::readme::ReadmeWiring;
-use crate::runtime::sample_test_support::acquire_emo2;
+use crate::sample_test_support::acquire_emo2;
 use crate::runtime::spine::{
     Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
 };

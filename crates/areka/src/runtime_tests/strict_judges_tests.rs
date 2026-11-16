@@ -83,9 +83,9 @@ mod doc_tables {
 
     use crate::log_history::{FieldText, Kind, TARGET_ERROR, draft};
     use crate::mcp::check_script_judge::diagnose;
-    use crate::runtime::consumer_ledger::ConsumerLedger;
-    use crate::runtime::shell_box_assets::ShellBoxAssets;
-    use crate::runtime::strict_judges::ArekaStrictJudges;
+    use areka_runtime::consumer_ledger::ConsumerLedger;
+    use areka_runtime::shell_box_assets::ShellBoxAssets;
+    use areka_runtime::strict_judges::ArekaStrictJudges;
 
     const DOC: &str = include_str!("../../../../doc/ssp-mcp/areka-tools.md");
     const GHOST: &str = "窓際のぱすたさん";
@@ -440,7 +440,7 @@ mod long_script {
     use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
     use wintf::executor::{FilterResult, MessageLoop};
 
-    use crate::runtime::strict_judges::ArekaStrictJudges;
+    use areka_runtime::strict_judges::ArekaStrictJudges;
 
     /// 1 回分: 字・誰も拾わない `\!`・知らない `\f` の鍵・名前の形の `\b`・数の `\b`・改行。
     const UNIT: &str = r"あいうえお\![nosuch]\f[colour,red]\b[a]\b[0]かきく\n";

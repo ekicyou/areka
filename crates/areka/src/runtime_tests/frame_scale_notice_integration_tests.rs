@@ -21,7 +21,7 @@ use areka_emo_compose::{BindSet, PatternState};
 use areka_kanade::{KanadeConfig, KanadeMsg};
 
 use crate::ghost_session::ghost_session_scope_scale::scaling_text;
-use crate::runtime::target_map::{TargetWindow, shell_target};
+use areka_runtime::target_map::{TargetWindow, shell_target};
 
 use super::super::scale_notice::ScaleEventSeam;
 use super::*;
@@ -34,7 +34,7 @@ struct Cage {
     _lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。欄は宣言の順に落ちるので、最後に置いて装置の世界より後に返す。
-    _gpu: crate::runtime::spine::GpuPermit,
+    _gpu: areka_runtime::spine::GpuPermit,
 }
 
 impl Cage {

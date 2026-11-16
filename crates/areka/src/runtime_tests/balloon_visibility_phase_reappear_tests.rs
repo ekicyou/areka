@@ -18,7 +18,7 @@
 // =============================================================================
 
 use crate::input_events::balloon::BalloonWiring;
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::sync::mpsc;
 
 use areka_emo_text::state::TextLayerConfig;

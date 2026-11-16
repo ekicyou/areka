@@ -13,7 +13,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::RuntimeWiring;
-use crate::runtime::reload_args::{DescriptNotes, ReloadTarget};
+use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
 use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };

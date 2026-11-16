@@ -18,7 +18,7 @@ impl BalloonHover {
     /// scope のバルーン窓上にポインタが居るかを照会する（5.2）。未観測の scope は偽。
     ///
     /// バルーン可視性の相が毎フレームの観測収集で読む（`balloon_visibility_phase` の `collect_observations`）。
-    pub(crate) fn is_balloon_hovered(&self, scope: usize) -> bool {
+    pub fn is_balloon_hovered(&self, scope: usize) -> bool {
         self.0.contains(&scope)
     }
 

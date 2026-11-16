@@ -16,11 +16,11 @@ use super::{
 };
 
 /// [`Frame::talk_started`] が運ぶトークの番号。
-pub(crate) const TALK_ID: TalkId = TalkId(1);
+pub const TALK_ID: TalkId = TalkId(1);
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
 /// 消去の回数は 0 で一定（回数の変わらない観測の列は今と同じ答えを返す）。
-pub(crate) fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
+pub fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
     ScopeObservation {
         visible_glyphs: Some(GlyphObservation {
             count: visible_glyphs,
@@ -33,7 +33,7 @@ pub(crate) fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
 }
 
 /// グリフ数の観測が取れなかった scope（本番では文字層ランタイムの借用失敗）。
-pub(crate) fn unobserved(visible: bool) -> ScopeObservation {
+pub fn unobserved(visible: bool) -> ScopeObservation {
     ScopeObservation {
         visible_glyphs: None,
         visible,
@@ -43,7 +43,7 @@ pub(crate) fn unobserved(visible: bool) -> ScopeObservation {
 }
 
 /// ポインタが滞在している scope にする（Requirement 5.2）。
-pub(crate) fn hovered(observation: ScopeObservation) -> ScopeObservation {
+pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: Some(true),
         ..observation
@@ -51,7 +51,7 @@ pub(crate) fn hovered(observation: ScopeObservation) -> ScopeObservation {
 }
 
 /// 抑止条件の観測が 1 つも取れなかった scope にする（Requirement 5.5）。
-pub(crate) fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
+pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
     ScopeObservation {
         hover: None,
         ..observation
@@ -59,7 +59,7 @@ pub(crate) fn suppression_unobserved(observation: ScopeObservation) -> ScopeObse
 }
 
 /// 観測スナップショットを組む。引数の並び順は結果に影響しない（走査は scope 昇順）。
-pub(crate) fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
+pub fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
     VisibilityObservations {
         scopes: entries.iter().copied().collect::<BTreeMap<_, _>>(),
         ..VisibilityObservations::default()
@@ -71,7 +71,7 @@ pub(crate) fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObs
 /// 時刻 `None` は本番の「talk の起点が未確立」に対応する。コンテンツ駆動の判定だけを見たい
 /// テストはこの入口を使う——タイムアウト側の判断が時刻無しで動き出せば、この呼び方をしている
 /// テストのどれかが必ず落ちる。
-pub(crate) fn step(
+pub fn step(
     state: &mut BalloonVisibilityState,
     entries: &[(u32, ScopeObservation)],
 ) -> VisibilityDecision {
@@ -82,7 +82,7 @@ pub(crate) fn step(
 ///
 /// 実時間の待機は一切用いず、時刻は [`Frame::at`] で注入する。注入する時刻は観測したい時点
 /// （満了境界の直前・直後など）そのものに限り、そこで頭打ちにする。
-pub(crate) struct Frame {
+pub struct Frame {
     obs: VisibilityObservations,
     now: Option<f64>,
     timeout_secs: f64,
@@ -93,7 +93,7 @@ impl Frame {
     ///
     /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（Requirement 4.2——
     /// 同じ数値を複数箇所へ散らさない）。
-    pub(crate) fn new(entries: &[(u32, ScopeObservation)]) -> Self {
+    pub fn new(entries: &[(u32, ScopeObservation)]) -> Self {
         Self {
             obs: observations(entries),
             now: None,
@@ -102,19 +102,19 @@ impl Frame {
     }
 
     /// 現在時刻（talk 相対秒）を注入する。
-    pub(crate) fn at(mut self, now: f64) -> Self {
+    pub fn at(mut self, now: f64) -> Self {
         self.now = Some(now);
         self
     }
 
     /// タイムアウト時間（秒）を指定する。
-    pub(crate) fn timeout(mut self, timeout_secs: f64) -> Self {
+    pub fn timeout(mut self, timeout_secs: f64) -> Self {
         self.timeout_secs = timeout_secs;
         self
     }
 
     /// 会話開始の信号を本フレームに届ける。番号は本番と同じく配送が付けた [`TALK_ID`]。
-    pub(crate) fn talk_started(mut self) -> Self {
+    pub fn talk_started(mut self) -> Self {
         self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted {
             talk_id: Some(TALK_ID),
         });
@@ -122,7 +122,7 @@ impl Frame {
     }
 
     /// 占有終端の信号を本フレームに届ける。
-    pub(crate) fn display_end(mut self, end: f64) -> Self {
+    pub fn display_end(mut self, end: f64) -> Self {
         self.obs
             .lifecycle
             .push(TalkLifecycleSignal::DisplayEndAt(end));
@@ -134,7 +134,7 @@ impl Frame {
     /// 時間切れの計測はトークの終わりが届いてから始まる（areka-P0-balloon-lifecycle-events
     /// 決定 D6）。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
     /// するので、起点は終端のままで満了の時刻は変わらない。
-    pub(crate) fn ended_at(self, end: f64) -> Self {
+    pub fn ended_at(self, end: f64) -> Self {
         let mut frame = self.display_end(end);
         frame.obs.lifecycle.push(TalkLifecycleSignal::TalkEnded {
             at: Some(end.max(0.0)),
@@ -143,19 +143,19 @@ impl Frame {
     }
 
     /// 任意の合図を本フレームに届ける（到着順に積む）。
-    pub(crate) fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
+    pub fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
         self.obs.lifecycle.push(signal);
         self
     }
 
     /// いずれかのバルーン窓がドラッグ中である状態にする（Requirement 5.1）。
-    pub(crate) fn dragging(mut self) -> Self {
+    pub fn dragging(mut self) -> Self {
         self.obs.dragging = true;
         self
     }
 
     /// 判断を 1 フレーム進める。
-    pub(crate) fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
+    pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
         decide(state, &self.obs, self.now, self.timeout_secs)
     }
 }

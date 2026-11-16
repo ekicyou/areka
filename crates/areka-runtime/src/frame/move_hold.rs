@@ -27,7 +27,8 @@ use super::PositionCue;
 /// スコープのシェルが最初の面を表示した後の拡大率を答える読み口（本番は表示層・檻は閉包）。
 ///
 /// `None` は「まだ最初の面を表示していない」（または表示層に登録の無いスコープ）。
-pub(crate) trait ShownRatioSource {
+// 要件 2.5: 公開の `run_move_drain_with` が名指すので開ける
+pub trait ShownRatioSource {
     fn shown_ratio(&self, scope: u32) -> Option<ScaleRatio>;
 }
 

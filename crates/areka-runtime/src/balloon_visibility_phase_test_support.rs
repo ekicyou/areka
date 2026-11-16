@@ -18,7 +18,7 @@ use crate::target_map::balloon_target;
 /// （可視状態は `Some(false)` から始まる）。
 ///
 /// `attach_target` は GPU 資源を要さないため、実 `EmoPresenter` のまま装着できる。
-pub(super) fn attach_headless(
+pub fn attach_headless(
     presenter: &mut EmoPresenter,
     world: &mut World,
     scope: u32,

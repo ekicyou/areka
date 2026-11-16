@@ -65,7 +65,7 @@ impl ShellCarry {
 
 /// 控えた面を読み直したシェルで出し直すときの決め方。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CarriedShow {
+pub enum CarriedShow {
     /// 控えた面が読み直したシェルにも在る。
     Carried(u32),
     /// 控えた面が無くなっていたので候補の並びの最初に在る面へ戻した。`passed_over` は、descript の
@@ -92,7 +92,7 @@ impl CarriedShow {
 
 /// 出し直す着せ替え 1 件（`\![bind,category,part,1|0]` と同じ合図になる）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BindReplay {
+pub struct BindReplay {
     pub(crate) category: String,
     pub(crate) part: String,
     pub(crate) on: bool,
@@ -100,7 +100,7 @@ pub(crate) struct BindReplay {
 
 /// 控えた着せ替えを読み直したシェルで出し直すときの決め方。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct CarriedBinds {
+pub struct CarriedBinds {
     /// 出し直す着せ替え（着る方が先・脱ぐ方が後）。
     pub(crate) replays: Vec<BindReplay>,
     /// 読み直したシェルに名前が無く、出し直せない着せ替えの ID（`warn!` で残す）。
@@ -110,7 +110,7 @@ pub(crate) struct CarriedBinds {
 /// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ戻り先の
 /// 候補の並び `candidates`（`areka_placement::descript_window_keys::fallback_candidates`）の最初に在る面、
 /// どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4）。
-pub(crate) fn decide(
+pub fn decide(
     carried: u32,
     candidates: &[u32],
     exists: impl Fn(u32) -> bool,
@@ -144,7 +144,7 @@ pub(crate) fn decide(
 ///   送らない（着る方の排他の置き換えが外す・mustselect の脱衣の警告を出さない）。
 /// - 名前は scope の名前空間（0＝`sakura.*`・1＝`kero.*`・2 以上＝`char{N}.*`）の表で引く。名前空間が
 ///   無ければ違いは全部落とす（数の scope は必ず名前空間を持つので、今は起きない）。
-pub(crate) fn decide_binds(
+pub fn decide_binds(
     scope: u32,
     carried: &BindSet,
     old_static: &BindSet,
@@ -199,7 +199,7 @@ pub(crate) fn decide_binds(
 
 /// スコープの並びと「スコープ → 表示中の面」「スコープ → 最後に表示した着せ替え」の読み手と、
 /// 読み直しの前のシェルの既定 `old_static` から控えを組む（純粋）。
-pub(crate) fn snapshot(
+pub fn snapshot(
     scopes: impl IntoIterator<Item = u32>,
     current: impl Fn(u32) -> Option<u32>,
     binds: impl Fn(u32) -> Option<BindSet>,
@@ -272,7 +272,7 @@ pub fn hand_over(world: &mut World, carry: Option<ShellCarry>) {
 /// `\s[面]` と同じ合図で送る（着せ替えが先: 面の出ていないスコープの着せ替えは状態だけが変わり、
 /// 続く面の最初の `Show` が着せ替えた集合を載せる＝既定の姿が 1 度も出ない）。決め方ごとに記録を 1 件残す（戻した・出さない・落とした
 /// は `warn!`）。
-pub(crate) fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, CarriedBinds)]) {
+pub fn replay(world: &World, shows: &[(u32, CarriedShow)], binds: &[(u32, CarriedBinds)]) {
     if shows.is_empty() && binds.is_empty() {
         return;
     }

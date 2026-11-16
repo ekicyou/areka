@@ -34,12 +34,12 @@ use super::run_switch_phase;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
-use crate::runtime::shell_balloon_resolve::SkinCandidate;
-use crate::runtime::shell_box_assets::ShellBoxAssets;
-use crate::runtime::shell_cursor_assets::ShellCursorAssets;
-use crate::runtime::switch_assets::{SwapPayload, SwapSlot};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
+use areka_runtime::shell_balloon_resolve::SkinCandidate;
+use areka_runtime::shell_box_assets::ShellBoxAssets;
+use areka_runtime::shell_cursor_assets::ShellCursorAssets;
+use areka_runtime::switch_assets::{SwapPayload, SwapSlot};
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
 };

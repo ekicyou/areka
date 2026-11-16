@@ -27,12 +27,12 @@ use tracing::Level;
 
 use super::run_switch_phase;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
-use crate::runtime::session_hooks::NO_BODY;
-use crate::runtime::shell_balloon_resolve::SkinCandidate;
-use crate::runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
+use areka_runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
+use areka_runtime::session_hooks::NO_BODY;
+use areka_runtime::shell_balloon_resolve::SkinCandidate;
+use areka_runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 use areka_placement::reseed::BalloonPlacementInputs;
@@ -144,8 +144,8 @@ fn shell_built() -> SwapBuilt {
             loop_table: AnimationTable::empty(),
             author_dpi: 120,
             bake_failures: Vec::new(),
-            boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
-            cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
+            boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
+            cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
         },
         source: DescriptSource {
             ghost_kv: BTreeMap::new(),
@@ -170,7 +170,7 @@ fn balloon_built() -> SwapBuilt {
                     scope,
                     emo_world: empty_world(),
                     atlas: empty_atlas(),
-                    definitions: crate::runtime::assets::empty_definitions(scope),
+                    definitions: areka_runtime::assets::empty_definitions(scope),
                     background_color: (255, 255, 255),
                     name: String::new(),
                 })

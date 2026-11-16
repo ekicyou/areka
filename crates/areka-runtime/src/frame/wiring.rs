@@ -58,7 +58,7 @@ use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 /// runtime の内側どまりで、公開面は 1 つも増えない。
 pub struct RuntimeWiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
-    pub(crate) presenter: EmoPresenter,
+    pub presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
     pub(super) rx: Receiver<PresentCommand>,
     /// talk スレッド（`MoveCueSink`）からの窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`）
@@ -83,7 +83,7 @@ pub struct RuntimeWiring {
     ///
     /// 取り出しは可視性相の `try_iter` による**全件 drain**。受信前の信号はチャネル
     /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。
-    pub(crate) lifecycle_rx: Receiver<TalkLifecycleSignal>,
+    pub lifecycle_rx: Receiver<TalkLifecycleSignal>,
     /// talk スレッド（`ZOrderCueSink`）からの重なりの指令受信端（frame 相の取り出し
     /// ＝[`run_zorder_drain_phase`](super::zorder_drain::run_zorder_drain_phase) が消費）。
     ///
@@ -117,11 +117,11 @@ pub struct RuntimeWiring {
     /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
     /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
     /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
-    pub(crate) balloon_visibility: BalloonVisibilityState,
+    pub balloon_visibility: BalloonVisibilityState,
     /// 最後に kanade へ届けた「見えているバルーンの組」の台帳（フレームの終わりの届けの相が使う・
     /// areka-P0-status-execution-states 要件 4.1／4.8）。結線状態はゴーストごとに新しく作られる
     /// ので、台帳も新品から始まり前のゴーストの組を持ち越さない。
-    pub(crate) balloon_status: BalloonStatusLedger,
+    pub balloon_status: BalloonStatusLedger,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
@@ -136,12 +136,12 @@ pub struct RuntimeWiring {
     /// の共有 1 本は撤去済み）。ゆえにキーは **scope**——再追従は「どの scope の balloon 窓か」から
     /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
     /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す（Req 4.1/4.2）。
-    pub(crate) balloon_models: HashMap<u32, BalloonModel>,
+    pub balloon_models: HashMap<u32, BalloonModel>,
     /// scope → 面ごとの定義の束（装着・バルーンの切り替えが入れる・balloon-scroll-arrows 要件 1.7）。
     /// 今の定義（`balloon_models`）はここから書き手 [`super::balloon_face::select_balloon_face`] が引く。
-    pub(crate) balloon_definitions: HashMap<u32, ScopeBalloonDefinitions>,
+    pub balloon_definitions: HashMap<u32, ScopeBalloonDefinitions>,
     /// scope → 今の定義の面の番号（書き手 [`super::balloon_face::select_balloon_face`] だけが書く）。
-    pub(crate) balloon_faces: HashMap<u32, u32>,
+    pub balloon_faces: HashMap<u32, u32>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
     ///
     /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
@@ -150,7 +150,7 @@ pub struct RuntimeWiring {
     /// R8.6 が求めるのは縮退が**観測できる**ことであって毎回鳴ることではない。
     pub(super) text_scale_warned: BTreeSet<u32>,
     /// talk 起点相対秒の時刻源（text フェーズと可視性相が同一の `talk_time` を引く）。
-    pub(crate) clock: TalkClock,
+    pub clock: TalkClock,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
     pub(super) assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
@@ -173,16 +173,16 @@ pub struct RuntimeWiring {
     /// 送り手が生き続け、印が残って以後の切替がずっと断られる。seriko の送り手もここに持たせない
     /// （降ろした後も World に残るので、持たせると seriko の join が戻らない＝持ち主は
     /// `GhostSession` だけ）。
-    pub(crate) swap_slot: Weak<Mutex<Option<SwapPayload>>>,
+    pub swap_slot: Weak<Mutex<Option<SwapPayload>>>,
     /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `frame_system` が
     /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
     /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
     pub(super) last_drain: Duration,
     /// ghost の読み直しの前に控えた表示中の面（装着の相が 1 度だけ使う・areka-P0-mcp-reload 要件 3.8）。
-    pub(crate) shell_carry: Option<ShellCarry>,
+    pub shell_carry: Option<ShellCarry>,
     /// 今のシェルの静的な着せ替えの既定（起動の資産から・シェルの差し替えで置き直す）。ghost の読み直しで
     /// 控える着せ替えを「この既定との差」にするのに使う（areka-P0-mcp-reload 要件 3.8）。
-    pub(crate) static_binds: areka_seriko::DefaultBinds,
+    pub static_binds: areka_seriko::DefaultBinds,
     /// スコープの倍率と DPI の表（spec shell-scale-linkage D7・ゴーストの起動ごとに新しい）。
     /// 書き手は毎フレームの相、読み手は実行系の読み口（`rewire_runtime_consumers` が登録する）。
     pub(super) scope_scale: SharedScopeScaleTable,
@@ -269,7 +269,7 @@ impl RuntimeWiring {
     }
 
     /// 常に手前の指令の受信端を渡す（起動の結線の口・`RuntimeWiring::new` の引数は変えない）。
-    pub(crate) fn attach_window_state_rx(&mut self, rx: Receiver<WindowStateDirective>) {
+    pub fn attach_window_state_rx(&mut self, rx: Receiver<WindowStateDirective>) {
         self.window_state.rx = Some(rx);
     }
 
@@ -341,7 +341,7 @@ impl RuntimeWiring {
     /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`RuntimeWiring` の受信端が届く）を
     /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
     #[cfg(test)]
-    pub(crate) fn drain_move_directives(&self) -> Vec<PositionCue> {
+    pub fn drain_move_directives(&self) -> Vec<PositionCue> {
         self.move_rx.try_iter().collect()
     }
 
@@ -353,7 +353,7 @@ impl RuntimeWiring {
     /// ための最小 read 口として `#[cfg(test)]` で開ける（`drain_move_directives` と同型・本番
     /// 表面は増やさない）。
     #[cfg(test)]
-    pub(crate) fn drain_lifecycle_signals(&self) -> Vec<TalkLifecycleSignal> {
+    pub fn drain_lifecycle_signals(&self) -> Vec<TalkLifecycleSignal> {
         self.lifecycle_rx.try_iter().collect()
     }
 
@@ -380,8 +380,8 @@ impl RuntimeWiring {
     /// `run_drain_phase`（上限まで先に集め、同じ target へ続く reply の無い ShowSurface を最後の 1 件に
     /// 畳む）と違い、本補助は上限も畳みも持たず届いた分を全部そのまま返す。spine は形状記録のため apply 前に
     /// **値**として取り出す（`PresentCommand` は `reply: Option<ReplySender>` ゆえ非 Clone・move で受ける）。
-    #[cfg(test)]
-    pub(crate) fn drain_received(&mut self) -> Vec<PresentCommand> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn drain_received(&mut self) -> Vec<PresentCommand> {
         self.rx.try_iter().collect()
     }
 
@@ -413,8 +413,8 @@ impl RuntimeWiring {
     ///
     /// 「attach 相が per-scope の model を実際に保持したか」は本番 attach（GPU 資源＋実資産）を
     /// 通さないと観測できないため、spine（in-crate GPU ハーネス）から見えるだけの read を開ける。
-    #[cfg(test)]
-    pub(crate) fn balloon_model_scopes(&self) -> Vec<u32> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn balloon_model_scopes(&self) -> Vec<u32> {
         let mut scopes: Vec<u32> = self.balloon_models.keys().copied().collect();
         scopes.sort_unstable();
         scopes

@@ -6,7 +6,7 @@
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
-use crate::runtime::sample_test_support::emo2_balloon_root;
+use crate::sample_test_support::emo2_balloon_root;
 
 /// 2 つ目のシェルにだけ置く面の番号（元のシェル `master` には無い）。
 const ONLY_IN_SECOND: u32 = 777;

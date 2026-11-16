@@ -27,7 +27,7 @@ pub struct ScopeScaleTable(BTreeMap<u32, ScopeScales>);
 
 impl ScopeScaleTable {
     /// スコープ `scope` の窓 `window` の倍率を書く。
-    pub(crate) fn set(&mut self, scope: u32, window: TargetWindow, value: AppliedScale) {
+    pub fn set(&mut self, scope: u32, window: TargetWindow, value: AppliedScale) {
         let row = self.0.entry(scope).or_default();
         match window {
             TargetWindow::Shell => row.character = Some(value),
@@ -49,7 +49,7 @@ impl ScopeScaleTable {
 ///
 /// 割り切れれば整数、割り切れなければ小数第 2 位まで（第 3 位で四捨五入）で、
 /// 末尾の `0` は落とすが小数点の後に 1 桁は残す。符号・空白・前ゼロは付けない（要件 3.6・3.7）。
-pub(crate) fn percent_text(ratio: ScaleRatio) -> String {
+pub fn percent_text(ratio: ScaleRatio) -> String {
     let (num, den) = ratio.parts();
     let (num, den) = (u128::from(num), u128::from(den));
     if (100 * num).is_multiple_of(den) {

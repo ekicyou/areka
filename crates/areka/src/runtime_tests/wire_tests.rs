@@ -1,4 +1,4 @@
-use super::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use super::*;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
