@@ -177,7 +177,7 @@
   - _Dispatch: mechanical — 設計が純関数の形と 5 通りの期待を与える_
   - _Requirements: 5.2, 5.3, 5.4, 6.1, 7.2_
 
-- [ ] 10. 全体テストの段と読み手の文書（束 10・件 1・6・9〜12）
+- [x] 10. 全体テストの段と読み手の文書（束 10・件 1・6・9〜12）
 - [x] 10.1 全体テストに新しい 7 段を足す
   - `sample fetch check` の後・`-License` の段の前に、`package check`・`exe install check`・`load flake check`・`mouse input check`・`app icon check`・`cursor art check`・`perf loop selftest`（最後＝いちばん長い）の 7 段を、どれも取り寄せが赤でも回す段として足す。`perf loop selftest` の中身は `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest`
   - 頭書の段の一覧を同じ並びに改める。結果の一覧の行（`OK  `／`FAIL`／`SKIP  `・`==== results (commit …)`・`all steps green`・`red: N step(s)`）と終了コードは変えない
@@ -186,7 +186,7 @@
   - _Depends: 4.3, 5.3, 6.2, 7.1, 8, 9_
   - _Dispatch: mechanical — 既にある段の並びの形に設計の 7 段を足す_
   - _Requirements: 4.2, 5.1_
-- [ ] 10.2 新しい段と共通の下回りを前提にする読み手の文書を、申し合わせた行だけ直す
+- [x] 10.2 新しい段と共通の下回りを前提にする読み手の文書を、申し合わせた行だけ直す
   - `.claude/skills/kiro-complete/SKILL.md` の 5-2 の段の一覧（今も抜けている `sample fetch`・`sample fetch check` と新しい 7 段を足す）と所要時間の「約 19 分」→「約 21 分」（48・82・436 行）。手順の文そのものは変えない＝pasta への申し送りは要らない（要件 7.9・議題 6）
   - `.claude/skills/release/procedure.md`・`.claude/skills/update/SKILL.md` の所要時間を「約 21 分」へ
   - `.kiro/steering/tech.md` の Testing に新しい 7 段を 1 行ずつ（件 1 の段は「Python 3.11 以上・昇格した机でも本物の採取をしない」、`cursor art check` は OS の更新で塗りが変わりうること）、Required Tools に「Python 3.11 以上（全体テストの段 `perf loop selftest`）」。`.kiro/steering/structure.md` の 19 行の `tools/` の説明に新しい 4 本を足す。どちらも `runtime-crate-split` と申し合わせた行の外（`tech.md` 90 行・`structure.md` 171 行・273〜295 行・434〜452 行ほか）には触らない。相手の行に及ぶ直しが出たら触らずに申し送りとして控える（11.4）

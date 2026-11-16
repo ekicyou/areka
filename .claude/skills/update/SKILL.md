@@ -132,7 +132,7 @@ C で版を上げたら、`.kiro/steering/tech.md` の依存の一覧の版の�
 
 ### 全体テスト（全部のコミットの後に 1 回）
 
-`pwsh -NoProfile -File tools/test-all.ps1 -License` をバックグラウンドで回す（約 19 分。x64 と i686 のテスト・整形の確かめ・`cargo deny`・`cargo about` を含む）。ほかのセッションの全体テストと重ならないよう、走行の間だけ `areka-impl-watch.exe` の排他テストの机を持つ。机の決まりと正本は `doc/impl-watch.md`、呼び方は `.claude/skills/release/procedure.md` の「机の段」と同じ形で、次だけを読み替える: `--name update-<YYYY-MM-DD>`、`--purpose "update"`、「段 7 に書く」は段 6 の報告に書く。机が使えないときは机なしで回し、訳を報告に書く。
+`pwsh -NoProfile -File tools/test-all.ps1 -License` をバックグラウンドで回す（約 21 分。x64 と i686 のテスト・整形の確かめ・`cargo deny`・`cargo about` を含む）。ほかのセッションの全体テストと重ならないよう、走行の間だけ `areka-impl-watch.exe` の排他テストの机を持つ。机の決まりと正本は `doc/impl-watch.md`、呼び方は `.claude/skills/release/procedure.md` の「机の段」と同じ形で、次だけを読み替える: `--name update-<YYYY-MM-DD>`、`--purpose "update"`、「段 7 に書く」は段 6 の報告に書く。机が使えないときは机なしで回し、訳を報告に書く。
 
 走り終えたら、成否によらず `return` と `leave` を回してから判定する。作業木に差分が残っていたら（`THIRD-PARTY-NOTICES.md` など）、どのコミットの検証が抜けていたかを調べ、そのコミットに入れ直してから先へ進む。
 
