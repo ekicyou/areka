@@ -147,7 +147,7 @@
   - _Dispatch: standard — 足場の上に設計が列挙する場合のテストを組む_
   - _Requirements: 3.1, 3.2, 4.8, 5.1, 5.4, 8.3, 8.7_
 
-- [ ] 5.2 節の下の持ち主と持ち主の変形が WUC に写ることを実 GPU で確かめる
+- [x] 5.2 節の下の持ち主と持ち主の変形が WUC に写ることを実 GPU で確かめる
   - 窓の画面の画素を読まず、WUC の Visual の親・位置・変形の行列・不透明度・子の並び（DPI の拡大を含む）を読み戻す
   - 付け替え・外し・祖先の節が見えない回・`Children` の並びだけを変えた回・`VisualTransform` を持つ持ち主の行列を確かめる
   - フレームの時刻を注入して自動で上げ、上げた回の自動の持ち主の描画面の画素を `CopySurface` で読み、親の描画面からその部分木が消えていることを確かめる
@@ -187,3 +187,4 @@
 - 4.2: WUC の Offset は前から物理ピクセル（DIP×拡大）なので、自動の持ち主の `origin_px` は拡大を掛けずに写す。持ち主の `VisualTransform` が版を上げないことは構造（version.rs に触らない）だけで、テストは無い。5.x で 1 行足すとよい
 - 4.3: 切り抜きの鍵は当てた置き場の切り抜き（`PlacedClip`）を持つ（設計を追随）。`Transformed` の切り抜きが画面に正しく出るかは 5.1／5.2 で確かめる。係のテストは「置き場が Embedded のまま相だけ変わる回」と「`VisualTransform` の外れでの当て直し」を通していない（鍵の純粋なテストが同じ分岐を覆う）
 - 5.1: WARP の写しは WUC の振る舞いを仮定する（切り抜きは Visual の局所の空間・`CompositionClip.TransformMatrix` は図形に掛かる・回した Visual は線形で標本化）。本物の `render_surface` の係は回していない（`replay_transform` と `compose_planned` の道だけ）。5.2 の実 GPU で WUC の値を読み戻して仮定を確かめる。端数の位置の手動の持ち主は縁がにじむ（前からの振る舞い・この spec の外）
+- 5.2: 実 GPU のテスト（`tests/graphics/surface_embedding_test.rs`）は HWND も画面も使わない普通のテストで、机は要らない。描画面の画素は `CopySurface` でなく既存の `SurfaceReadback::read_all`（WUC の描画面へ写す元の描画面ごとの絵）で読む。WUC が `CompositionClip.TransformMatrix` を図形に掛けることは値の読み戻しと逆行列の往復までで、画面の画素では確かめていない（討議の確定 6 で画面を読まないため）
