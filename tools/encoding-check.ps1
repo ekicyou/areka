@@ -29,9 +29,8 @@
           (case-insensitive, any scope) are followed through string constants, arrays, +,
           parentheses and other variables (each once); pipelines, command results, members and
           method values are not followed
-       E  tools/package.ps1 (metadata and nar-sample-path), tools/crates-io.ps1 (metadata) and the
-          run bodies of .github/workflows/release.yml (metadata) each have an Invoke-Utf8Child
-          call with that element
+       E  tools/package.ps1 (metadata and nar-sample-path), tools/tool-common.ps1 (metadata) and
+          tools/crates-io.ps1 (metadata) each have an Invoke-Utf8Child call with that element
   3. cp932 child: this script starts itself with -Cp932Child as a windowless child that has its
      own console (Invoke-Utf8Child -OwnConsole). Only that child sets its own console to code
      page 932 (Set-OwnConsoleCp932), then checks with the fixed sample {"description":"<U+7248>",
@@ -86,7 +85,6 @@ $RequiredCalls = [ordered]@{
     'tools/package.ps1'             = @('nar-sample-path')
     'tools/tool-common.ps1'         = @('metadata')
     'tools/crates-io.ps1'           = @('metadata')
-    '.github/workflows/release.yml' = @('metadata')
 }
 
 # Leaf name of a command (cargo, & 'cargo.exe', C:\x\chcp.com), or $null.
@@ -299,7 +297,6 @@ function Get-TargetResult([string]$Text, [string]$Where, [bool]$IsYaml) {
 # ---- 3. cp932 child: shared parts ----
 $root = Split-Path -Parent $PSScriptRoot
 $pwsh = [Environment]::ProcessPath
-$VersionPattern = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 
 # The console code pages read from the OS now: @(<output>, <input>). [Console]::OutputEncoding
 # is cached by .NET and misses a rewrite by a child. The type is built in memory, once.
@@ -319,19 +316,6 @@ function Set-OwnConsoleCp932 {
     $cp932 = [System.Text.Encoding]::GetEncoding(932)
     [Console]::OutputEncoding = $cp932
     [Console]::InputEncoding = $cp932
-}
-
-# Version of the areka package read with Invoke-Utf8Child cargo metadata. Throws (ASCII message).
-function Read-ArekaVersion {
-    $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1',
-        '--manifest-path', (Join-Path $root 'Cargo.toml'))
-    if ($r.Code) { throw "cargo metadata exited with code $($r.Code): $(Show-Ascii ([string]($r.ErrLines | Select-Object -Last 1)))" }
-    try { $meta = $r.Out | ConvertFrom-Json } catch { throw 'cargo metadata output is not JSON' }
-    $pkgs = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
-    if ($pkgs.Count -ne 1) { throw "expected exactly one areka package, got $($pkgs.Count)" }
-    $v = [string]$pkgs[0].version
-    if ($v -cnotmatch $VersionPattern) { throw "areka version is not a version: $(Show-Ascii $v)" }
-    $v
 }
 
 # ': <last non-empty line>' of a child's stderr lines (ASCII), or '' when there is none.
@@ -430,7 +414,7 @@ if ($Cp932Child) {
 
     # real: the version of the current workspace
     Invoke-ChildCheck 'real' {
-        try { "version=$(Read-ArekaVersion)" }
+        try { "version=$(Get-ArekaVersion)" }
         catch { $bad.Add("FAIL cp932 child: real: $(Show-Ascii $_.Exception.Message)") }
     }
 
@@ -570,7 +554,7 @@ if ($null -ne $child) {
     $childVersion = @($childLines | Where-Object { $_.StartsWith('version=') })
     if ($childVersion.Count -eq 1) {
         try {
-            $mine = 'version=' + (Read-ArekaVersion)
+            $mine = 'version=' + (Get-ArekaVersion)
             if ([string]::Equals($childVersion[0], $mine, [StringComparison]::Ordinal)) { "PASS cp932 child: $mine is the version this process read" }
             else { $fails.Add("FAIL cp932 child: child printed $($childVersion[0]) but this process read $mine") }
         }

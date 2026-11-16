@@ -28,7 +28,7 @@
   - _Dispatch: mechanical — 写しを消して共通の同じ名前へ置き替える_
   - _Requirements: 3.1, 3.2, 3.3, 4.7, 6.4, 6.5_
 
-- [ ] 2. 文字コードの判定とリリースの版の検査（束 2・4・14・件 2）
+- [x] 2. 文字コードの判定とリリースの版の検査（束 2・4・14・件 2）
 - [x] 2.1 `encoding check` の子の確かめを 1 つずつ名前つきで包み、思わぬ失敗を名指しで出す
   - 932 の子の中の確かめ（`own console`・`calibration`・`production`・`real`・`perf load`・`perf calibration`・`perf real`・`perf console`）を名前つきの包みで回し、投げたら `FAIL cp932 child: <名前>: uncaught: <ASCII の理由>` を溜めて残りを続ける。`perf load` が落ちたら後の 3 つの `perf` の確かめは回さず 1 行だけ残す。読み込みと 3 つの確かめは今と同じ 1 つの scope の中に置き、`StrictMode 3.0` を外へ漏らさない（4）
   - 孫が 0 でなく終わった確かめには孫の標準エラーの最後の行を、子が 0 でなく `FAIL` の行が無いときは子の標準エラーの最後の行を添える。端末の文字コードは親でも子でも新しく替えない
@@ -37,7 +37,7 @@
   - 終わった姿: `pwsh -NoProfile -File tools/encoding-check.ps1` が緑で `PASS cp932 child injected failure` を出し、包みを外した写しでは同じ較正が `FAIL cp932 child injected failure: <欠けた物>` で赤になる
   - _Dispatch: standard — 子の確かめの包みとわざと落とす較正の筋を書き起こす_
   - _Requirements: 3.1, 3.4, 4.1, 4.3, 4.7, 5.5, 6.2, 6.4_
-- [ ] 2.2 版の読みを共通の関数へ寄せ、規則 E の表とリリースの workflow の版の検査を直す
+- [x] 2.2 版の読みを共通の関数へ寄せ、規則 E の表とリリースの workflow の版の検査を直す
   - 消す前に `rg -n "Read-ArekaVersion|VersionPattern" --glob '!vendors/**' --glob '!.kiro/specs/completed/**'` で使う所を数え、消した後の数と並べて残す（3.3）
   - `encoding-check.ps1` の自分の版の読みと版の形を消して共通の関数を使い、932 の子の確かめ `real` と親の `version=` の突き合わせがその関数を通るようにする（失敗は `FAIL cp932 child: real: <文>`）（14）
   - 規則 E の表から `release.yml` の行を消す（ほかの行は 1.2 で設計の「規則 E の表」に改め済み）
