@@ -26,8 +26,8 @@
 
     -SelfTest（道具を直したとき・本物のフォルダは書かない）
         SVG をワークツリーの target\cursor-art-selftest\ へ写し（毎回作り直す）、そこで判定を回す。
-        判定: same bytes twice（2 回作って同じバイト）・unsupported command fails（相対の命令で止まる）
-          OK selftest (2 checks)  /  FAIL selftest <name>
+        判定: same bytes twice（2 回作って同じバイト）・committed outputs are current（組んだ結果がコミット済みの .cur と同じ）・unsupported command fails（相対の命令で止まる）
+          OK selftest (3 checks)  /  FAIL selftest <name>
 
   終了コード: 0 全部書けた（-SelfTest は全部通った）／1 FAIL の行を出した
 #>
@@ -316,7 +316,15 @@ function Invoke-SelfTest {
             $d = & $newCase
             $r1 = Invoke-Pack $d; $a = & $readOut $d
             $r2 = Invoke-Pack $d; $b = & $readOut $d
+            $script:built = $b
             -not ($r1 -like 'FAIL *') -and -not ($r2 -like 'FAIL *') -and $a -eq $b
+        }
+        'committed outputs are current' = {
+            $want = (& $readOut $CursorDir) -split '\|'
+            $got = $script:built -split '\|'
+            $bad = @(for ($i = 0; $i -lt $NAMES.Count; $i++) { if ($got[$i] -ne $want[$i]) { "$($NAMES[$i]).cur" } })
+            if ($bad.Count) { throw "$($bad -join ', ') (source changed or rendering changed; run tools/cursor-art.ps1 and commit)" }
+            $true
         }
         'unsupported command fails' = {
             $d = & $newCase

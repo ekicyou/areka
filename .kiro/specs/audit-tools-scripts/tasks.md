@@ -156,7 +156,7 @@
   - _Dispatch: mechanical — 設計が 1 か所の関数と旗と判定を与える_
   - _Requirements: 3.1, 4.1, 6.5_
 
-- [ ] 8. (P) 絵の道具 2 本に「コミット済みの出力が今の入力から組んだものと同じ」の判定を足す（束 8・12）
+- [x] 8. (P) 絵の道具 2 本に「コミット済みの出力が今の入力から組んだものと同じ」の判定を足す（束 8・12）
   - 最初に、`app-icon.ps1 -SelfTest` と `cursor-art.ps1 -SelfTest` が `target\` の下に組んだ `app.ico`・`tray.ico`・`icons.res`・`hand.cur`・`grip.cur` を、コミット済みのものとバイトで比べ直し、結果を検証の記録 `.kiro/specs/audit-tools-scripts/verification.md` に書く（11.4 が集める）。1 つでも違えば判定を足さずに止め、設計の議題として進行役へ返す（作り直しは要件 8.1 の操作なので回さない）
   - 同じなら、両方の `-SelfTest` に、`same bytes twice` で組んだ結果とコミット済みの出力をバイトで比べる判定 `committed outputs are current` を足す（組む回数は増やさない）。落ちたら設計の 1 行（違うファイルと「回して commit」）を出す
   - コミット済みの `crates/areka/icon/`・`crates/areka/cursor/` は書き替えない
@@ -234,3 +234,4 @@
 - 5.2: `package.ps1` の preflight で `$a` を `Test-PackageArgs` の結果と `foreach ($a in $script:BuildArchs)` の両方に使っている（害は無い・読み違えやすい）。5.3 か 11.2 で名前を分ける。`package.selftest.ps1` は最後に自分で `exit` すること（呼ぶ側の後ろに `exit $EXIT_STAGE_FAILED` の番人がある）。
 - 5.3: dot-source した台本の中の `exit` は呼ぶ側の台本を終わらせず `$LASTEXITCODE` を置いて戻る。`package.ps1 -SelfTest` は `$global:LASTEXITCODE = 1; . selftest; exit $LASTEXITCODE` の形にした（5.2 の番人の形のままだと全部通っても 1 だった）。
 - 7.2: `sample-fetch.ps1` の本番の配線 `-HttpsOnly:(-not $AnyScheme)`（`Invoke-FetchRows`）を縛る検査は無い（設計は 2 つの検査だけを求める）。11.2 のかけ直しで要否を判断する。
+- 8: `crates/areka/cursor/README.md` の 43 行が `OK selftest (2 checks)` のまま（今は 3 checks）。`crates/` は触らない約束なので直さず、11.4 の申し送りに書く。

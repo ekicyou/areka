@@ -35,7 +35,7 @@
         本物のフォルダの入力と出力をワークツリーの target\app-icon-selftest\ へ写し（毎回作り直す）、
         判定ごとに 1 行出す。
           ok selftest <name>  /  FAIL selftest <name>
-        判定: same bytes twice・missing tuned fails・wrong size fails・not rgba fails・seed keeps existing
+        判定: same bytes twice・committed outputs are current・missing tuned fails・wrong size fails・not rgba fails・seed keeps existing
 
   -Seed と -SelfTest は一緒に使えない（FAIL args の行・終了コード 1）。知らない引数は止まる。
 
@@ -257,7 +257,7 @@ function Invoke-Pack([string]$Dir) {
     Write-IconOutputs $Dir (New-IconOutputs $in.Png)
 }
 
-# 自分の検査: 本物のフォルダの写しで 5 つの判定を回す。戻り値: 端末へ出す行
+# 自分の検査: 本物のフォルダの写しで 6 つの判定を回す。戻り値: 端末へ出す行
 function Invoke-SelfTest {
     $root = Join-Path (Split-Path $PSScriptRoot -Parent) 'target/app-icon-selftest'
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
@@ -284,7 +284,15 @@ function Invoke-SelfTest {
             $d = & $newCase
             $r1 = Invoke-Pack $d; $a = & $readOut $d
             $r2 = Invoke-Pack $d; $b = & $readOut $d
+            $script:built = $b
             -not ($r1 -like 'FAIL *') -and -not ($r2 -like 'FAIL *') -and $a -eq $b
+        }
+        'committed outputs are current' = {
+            $want = (& $readOut $IconDir) -split '\|'
+            $got = $script:built -split '\|'
+            $bad = @(for ($i = 0; $i -lt $outNames.Count; $i++) { if ($got[$i] -ne $want[$i]) { $outNames[$i] } })
+            if ($bad.Count) { throw "$($bad -join ', ') (source changed or rendering changed; run tools/app-icon.ps1 and commit)" }
+            $true
         }
         'missing tuned fails' = {
             $d = & $newCase
