@@ -62,7 +62,7 @@
 6. The 分割作業 shall ワークスペースの根の `Cargo.toml` を変えない。
 7. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのは、ワークスペースの中の path 依存と、`Cargo.lock` に既にある crate だけ）。
 8. The `areka-runtime` クレート shall 本番の依存を、今の runtime が本番で使う crate（tracing・bevy_ecs・wintf・dola・areka-emo-present・areka-ghost・areka-sakura・areka-parsers・areka-emo-text・areka-emo-compose・areka-seriko・areka-kanade・areka-actor・areka-emo-atlas・areka-sylphya・thiserror・windows・areka-placement。正確な一覧は設計の段で測る）に収め、ワークスペースのほかの crate と同じ形で受ける（外の crate は `workspace = true`、ワークスペースの中の crate は `{ path = "../…" }`）。
-9. The `areka-runtime` クレート shall テストでだけ使う crate（log-capture-kit・temp-path-kit・sample-ghost-kit・areka-update・shiori-host32-host ほか）を本番の依存に入れない（3.4 の決まりに従う）。
+9. The `areka-runtime` クレート shall テストでだけ使う crate（log-capture-kit・temp-path-kit・sample-ghost-kit・shiori-host32-host・image ほか。2026-11-16 の測りで areka-update は 0）を本番の依存に入れない（3.4 の決まりに従う）。
 10. The `areka-runtime` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。例外表の項目は増やさず（パスの書き換えだけ）、書き換えや整形で上限を超えるファイルは分けて収める。
 
 ### Requirement 2: 公開面の付け替えと本体の参照
@@ -71,7 +71,7 @@
 
 #### Acceptance Criteria
 
-1. The 分割作業 shall runtime の外（本体の本番・テスト・examples）から使われている `pub(crate)` の項目（モジュール・型・関数・定数・再公開・メソッド。主な面は `RuntimeWiring` とその関数・`frame` の `ZOrderAbsentReports`・`run_ghost_quit_phase`・`TalkLifecycleSignal`・`NoUserBreakSignal`・`HitRegion`・`resolve_hit_region`・`ConsumerLedger`・`target_map`）だけを `pub` にする。正確な一覧は設計の段で測る。
+1. The 分割作業 shall runtime の外（本体の本番・テスト・examples）から使われている `pub(crate)` の項目（モジュール・型・関数・定数・再公開・メソッド。主な面は `RuntimeWiring` とその関数・`frame` の `ZOrderAbsentReports`・`TalkLifecycleSignal`・`NoUserBreakSignal`・`HitRegion`・`resolve_hit_region`・`ConsumerLedger`・`target_map`・`CueSinkSources`・`RuntimeBootError`・`RuntimeInputs`・`skin_switch`・`shell_balloon_resolve` ほかの名前。brief の挙げた `run_ghost_quit_phase` は今は本体の `session/ghost_quit.rs` の持ち物で、runtime の公開面ではない）だけを `pub` にする。正確な一覧は設計の段で測る。
 2. The 分割作業 shall runtime の外から一度も使われていない `pub(crate)` の項目を、`pub(crate)` のまま残し、削除しない。
 3. The 分割作業 shall runtime の中で自分を指すパス（`crate::runtime::…`）を、新しい crate の根を指すパスへ書き換える。
 4. The 分割作業 shall 本体の中で runtime を指すパス（`crate::runtime::…`・`runtime::…`）を、全部新しい crate を指すパス（`areka_runtime::…`）へ書き換える。
@@ -93,7 +93,7 @@
 6. The 分割作業 shall runtime の口のテストの倒れ先（`session_hooks.rs` の `#[cfg(test)]` の `FALLBACK` が本体の口 `session::hooks::HOOKS` を読む所）を、`areka-runtime` のテストから本体が見えなくなっても、口を読むテストが前と同じ合否を示す形に決め直す。（仮定: 本体の口を要るテストは本体に置き、`areka-runtime` の中のテストの倒れ先は本番と同じ `NO_BODY` にする。未決の議題 3。）
 7. The 分割作業 shall 本体の `session/runtime_boot_tests.rs` が `#[path = "../runtime/…"]` で取り込む e2e の 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）の置き場を、本体のファイルとして本体の側へ寄せ、本体が下の crate のファイルを `#[path]` で取り込まない形にする。
 8. The 本体のテストの実行ファイルと `areka-runtime` のテストの実行ファイル shall どちらも、テストを走らせる前にプロセスの寿命の MTA を立て、テストの途中で落ちたときに同じ形の落ちの報告を標準エラーへ出す（今は runtime の中の `crash_report_test_support.rs` だけが据えているので、分けた後も本体の側から落ちの報告が消えないようにする。前例は `crates/areka-placement/src/test_crash_report.rs` で、その 1 行目と `crates/wintf/src/test_crash_report.rs` の 1 行目の「写しの相手」の行を置いた先のパスへ合わせる）。
-9. The 分割作業 shall 逆向きに runtime のテストが使っていた本体の支え（`placement::test_support`〔今は `areka-placement`〕・`shared_test_support`・`scope_bind_fixture_test_support`・`install::fetch_url_test_support`・`crate_source_test_support` ほか）を、それを使うテストの置き場に合わせて、写しを作らずに引ける形にする。
+9. The 分割作業 shall 逆向きに runtime のテストが使っていた本体の支え（`areka-placement` の `test_support`・`scope_bind_fixture_test_support`・`crate_source_test_support` ほか。2026-11-16 の測りで `shared_test_support`・`install::fetch_url_test_support` の使い手は 0）を、それを使うテストの置き場に合わせて、写しを作らずに引ける形にする。
 10. The `areka-runtime` クレートのテストの実行ファイル shall 本体と同じく、テストの数え方（`cargo test --workspace -- --list`）で拾われ、全体テストの道具 `tools/test-all.ps1` を直さずに走る。
 
 ### Requirement 4: target_map・判定器・境をまたぐテスト・examples
@@ -117,11 +117,11 @@
 
 #### Acceptance Criteria
 
-1. The 分割作業 shall `crates/log-capture-kit/tests/` の表（`file_length_guard_test.rs` の 1,000 行の例外表と較正の項目・`workspace_scan_test.rs`・`temp_path_guard_test.rs`・`with_default_guard_test.rs` ほか）にある runtime と移すテストのパスを、移した先のパスへ書き換え、理由の文の主語が変わるものは新しい crate に合わせる。
+1. The 分割作業 shall `crates/log-capture-kit/tests/` の表（`file_length_guard_test.rs` の 1,000 行の例外表と較正の項目・`workspace_scan_test.rs`。2026-11-16 の測りでほかの表〔`temp_path_guard_test.rs`・`with_default_guard_test.rs`・`sample_path_guard_test.rs`〕には runtime のパスが 0 で、移すテストのパスが載っていれば同じく書き換える）にある runtime と移すテストのパスを、移した先のパスへ書き換え、理由の文の主語が変わるものは新しい crate に合わせる。
 2. The 分割作業 shall ソースを文字で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR`・`crate_source_test_support` を使うもの。`frame_schedule_tests.rs` の `../session/ghost_quit.rs`・`zorder_wiring_tests.rs` の `../session/runtime_boot.rs`・`../ghost_session.rs`・`../main.rs`・`strict_judges_tests.rs` の `doc/ssp-mcp/areka-tools.md`・`film_playback_e2e_tests.rs`・`balloon_visibility_phase_zorder_chain_tests.rs` ほか）を、`placement-crate-split` の原則で置き、移した先のファイルを読むようにする: 自分の crate のファイルは自分の crate のテストが読む。別の crate のファイルを読むのは、コードの依存と同じ向き（上の crate が自分の依存する下の crate を読む）に限り、下の crate（`areka-runtime`）が上の crate（本体）のファイルを読むことはしない。
 3. The 本体の crate `areka` shall 下の crate のファイルを文字で読むとき、`placement-crate-split` が置いた 1 つの読み口（crate の名前と crate の中のパスを並べて書く形）を通して読み、相対の道を散らさない。
 4. If ソースを文字で読むテストが読む先のファイルを見つけられない場合, then the そのテスト shall 黙って通らず赤になる。crate ごとに割ったソースの木を歩くテストは、合わせて移す前と同じ範囲を歩き、範囲が黙って狭まらない。
-5. The 分割作業 shall 文書の中の runtime のパスを、移した先のパスへ書き換える: `doc/COMPAT_ARCHITECTURE.md`（パスの書き換えだけ・約 38 か所）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（約 48 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`briefing-shiori.md`・`doc/ssp-mcp/areka-tools.md`・`doc/emo2-conformance-scope.md` ほか。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
+5. The 分割作業 shall 文書の中の runtime のパスを、移した先のパスへ書き換える: `doc/COMPAT_ARCHITECTURE.md`（パスの書き換えだけ・約 60 か所）・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所（約 48 か所）・`doc/ukadoc-coverage/briefing-assets.md`・`briefing-shiori.md`・`doc/ssp-mcp/areka-tools.md`・`doc/emo2-conformance-scope.md`・`doc/click-through.md` ほか。網羅台帳は別々の行だけを書き換え、`doc/ukadoc-coverage/report/` は手で直さず作り直す。
 6. The 分割作業 shall `.kiro/steering/structure.md` に新しい crate `areka-runtime` の節を足し、本体の節の `runtime/` の記述を移した先へ合わせ、`.kiro/steering/tech.md` の runtime のパスを書き換える。
 7. The 分割作業 shall `audit-emo2-boot-frame`・`audit-emo2-boot-spine`・`audit-emo2-boot-switch` の brief の「受け持つファイル」を、移した先のパスへ書き換える。
 8. The 分割作業 shall 本体の外の crate の説明（とテストの見本の値のうち説明だけのもの）に残る古い名前 `emo2_boot`・`Emo2Wiring`（`areka-parsers`・`areka-emo-text`・`areka-ghost`・`areka-kanade`・`areka-seriko`・`log-capture-kit`・`ukadoc-survey`・`wintf` の 14 ファイル・21 行）を、今の名前と移した先の場所へ書き換え、動きを変えない。
@@ -166,7 +166,7 @@
 
 1. **数の取り直し**（議題ではなく申し送り）: 公開にする `pub(crate)` の一覧・runtime の外のテストが使う支えの一覧（brief の `spine` 28 ファイル 46 回・`spine::hold_support` 2・`sample_test_support` 2 ファイル 8 回は 11-13 より前の数）・本体を引く runtime のテスト（2026-11-16 の作業の木で約 40 ファイル。`runtime-module-untangle` の research の §24 は 77 行）・`target_map` の使い手・文書の中のパス（`doc/` 95 か所・`crates/` 13 か所・steering 3 か所）を、設計の段で数え直す。
 2. **brief の古くなった記述**: `mcp/dump_surface.rs:415` の `spin_wait_until` は、今は `crate::runtime::spine::wait_until`（426 行目）。
-3. **brief の触るファイルの一覧に無かった所**（申し送り・同じウェーブの兄弟の触るファイルと重ならないことは設計の段で確かめる）: `crates/areka/tests/stay_on_top_real_run.rs`（`RUST_LOG` に `areka::runtime::…`）・`crates/areka/tests/emo2_real_run/common_tests.rs`（ログの行の見本）・`crates/log-capture-kit/tests/workspace_scan_test.rs`（`runtime/spine_display_tests.rs` のパス）・`crates/areka/src/log_history_tests.rs`・`doc/emo2-conformance-scope.md`・`doc/ukadoc-coverage/briefing-shiori.md`・`doc/ssp-mcp/areka-tools.md`・`crates/areka-placement/src/test_crash_report.rs` と `crates/wintf/src/test_crash_report.rs` の 1 行目。
+3. **brief の触るファイルの一覧に無かった所**（申し送り・同じウェーブの兄弟の触るファイルと重ならないことは設計の段で確かめる）: `crates/areka/tests/stay_on_top_real_run.rs`（`RUST_LOG` に `areka::runtime::…`）・`crates/areka/tests/emo2_real_run/common_tests.rs`（ログの行の見本）・`crates/log-capture-kit/tests/workspace_scan_test.rs`（`runtime/spine_display_tests.rs` のパス）・`crates/areka/src/log_history_tests.rs`・`doc/emo2-conformance-scope.md`・`doc/ukadoc-coverage/briefing-shiori.md`・`doc/ssp-mcp/areka-tools.md`・`doc/click-through.md`・`crates/areka-placement/src/test_crash_report.rs` と `crates/wintf/src/test_crash_report.rs` の 1 行目。
 4. **本体の中の runtime の説明に残る `emo2_boot` の 2 行**（`runtime/mod.rs:69`・`spine.rs:33`）は、完了した spec の設計のファイル名 `tests/emo2_boot_spine_test.rs` を引いた説明で、歴史の引用として残す（仮定。5.10 の grep は本体の外だけを数える）。
 
 ## 未決の議題（要件の討議で決める）
