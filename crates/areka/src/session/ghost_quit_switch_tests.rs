@@ -25,12 +25,12 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::*;
 use crate::app_exit::FirstExit;
 use crate::ghost_session::GhostSlot;
-use crate::runtime::spine::{Progress, ScriptedShioriBackend, wait_recv};
 use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig};
+use areka_runtime::spine::{Progress, ScriptedShioriBackend, wait_recv};
 
 fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
     events

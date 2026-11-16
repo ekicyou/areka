@@ -148,7 +148,7 @@
   - _Dispatch: mechanical — 確かめのコマンドと直す定数を設計が決めている_
   - _Requirements: 3.5, 3.6, 3.8, 6.4, 7.4_
 
-- [ ] 5. 本体の道を書き換え、一時の別名を外す（段 4）
+- [x] 5. 本体の道を書き換え、一時の別名を外す（段 4）
   - 本体の約 101 ファイルの `crate::runtime::`・`runtime::`（`use crate::runtime;` 経由を含む）を `areka_runtime::` へ機械で置き換える（`mcp/{check_script,dump_balloon,dump_surface}.rs`・`input_events/user_break.rs`・`main.rs`・`log_history.rs` の説明ほか・`mcp/dump_surface.rs` の `spine::wait_until` は `areka_runtime::spine::wait_until`）
   - 本体の使い手（`input_events/user_break.rs`・`mcp/` の 3 本とそのテスト）が `areka_runtime::target_map` を通して前と同じ値を得る形になる
   - 一時の別名を外し、`cargo fmt --all` をかける。置き換えの範囲を `git diff --stat` と grep で確かめる（正規表現を書き込んだ所はバイトで確かめる）

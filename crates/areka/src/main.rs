@@ -58,12 +58,6 @@ mod sample_test_support;
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
 
-/// runtime 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
-/// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
-/// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
-/// `wire_runtime`）。
-// 一時の別名（runtime-crate-split 段 1・段 4 で外す）。
-use areka_runtime as runtime;
 /// 本体に頼る切替・読み直し・起動・終わる相の層（runtime-module-untangle）。
 mod session;
 
@@ -911,7 +905,7 @@ pub(crate) fn record_last_used(
 /// # 2 源を同じ構築関数で作る（atom task 5.1・要件 5.1）
 ///
 /// 返すのは作業領域源と**モニタ別拡大率表**の組である。実行時の同期段
-/// （`runtime::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
+/// （`areka_runtime::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
 /// を通る——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 fn boot_monitor_snapshot(
     monitors: &[wintf::ecs::window::monitor::Monitor],

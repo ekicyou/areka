@@ -214,7 +214,7 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 /// k≠1.0 が実供給されても本経路は正しいままである。
 ///
 /// シェル窓の当たり判定は逆向きで、「矩形は作者定義サーフェス px のまま・**点を ÷k**」する
-/// （正準記述＝`crate::runtime::hit_region` の座標契約）。バルーンは「点はそのまま・**矩形を ×k**」
+/// （正準記述＝`areka_runtime::hit_region` の座標契約）。バルーンは「点はそのまま・**矩形を ×k**」
 /// ——**逆向きだが等価に正しい**整合方式である。
 ///
 /// **警告**: 本経路へ ÷k を追加すると **二重縮約**（矩形 ×k と点 ÷k の両掛け）になり、正常動作を
@@ -416,7 +416,7 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
     // バルーンの上の滞在の集合は runtime の型（可視性の相が読む）。`BalloonWiring` と同じ時に入れ直す。
-    world.insert_non_send(crate::runtime::balloon_hover::BalloonHover::default());
+    world.insert_non_send(areka_runtime::balloon_hover::BalloonHover::default());
     world.insert_non_send(ChoiceSelectionInbox(rx));
     // 箱の上の滞在（areka-P0-shell-balloon）もゴーストごとに入れ直す。
     world.insert_non_send(super::shell_box::ShellBoxHover::default());

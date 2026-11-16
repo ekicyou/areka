@@ -19,12 +19,12 @@ use log_capture_kit::{LineFormat, capture_lines};
 use wintf::ecs::Window;
 use wintf::ecs::pointer::PointerLeave;
 
-use crate::runtime::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::move_cue::PositionCue;
-use crate::runtime::talk_clock::TalkClock;
-use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::move_cue::PositionCue;
+use areka_runtime::talk_clock::TalkClock;
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
 /// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。
@@ -81,7 +81,7 @@ fn synth_boot_assets() -> BootAssets {
             scope: 0,
             emo_world: empty_world(),
             atlas: empty_atlas(),
-            definitions: crate::runtime::assets::empty_definitions(0),
+            definitions: areka_runtime::assets::empty_definitions(0),
             // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白（要件 4.6）。
             background_color: (255, 255, 255),
             name: String::new(),
@@ -91,8 +91,8 @@ fn synth_boot_assets() -> BootAssets {
         bind_resolver: BindResolver::empty(),
         shell_author_dpi: 96,
         balloon_author_dpi: 96,
-        boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
-        cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
+        boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
+        cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),
             balloon: BTreeMap::new(),
@@ -110,7 +110,7 @@ pub(crate) fn headless_runtime_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) ->
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<PositionCue>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        mpsc::channel::<crate::runtime::zorder_cue::ZOrderDirective>().1,
+        mpsc::channel::<areka_runtime::zorder_cue::ZOrderDirective>().1,
         runtime,
         TalkClock::new(Arc::new(|| 0.0)),
         synth_boot_assets(),

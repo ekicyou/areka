@@ -14,7 +14,7 @@ use log_capture_kit::capture;
 fn unwirable_inputs() -> GhostBootInputs {
     let (kanade_stop, _rx) = mpsc::channel::<KanadeNotice>();
     GhostBootInputs {
-        wiring: runtime::RuntimeInputs {
+        wiring: areka_runtime::RuntimeInputs {
             ghost_root: PathBuf::from("ghost_session_strict_tests/無い/ghost"),
             balloon_root: PathBuf::from("ghost_session_strict_tests/無い/balloon"),
             shiori: areka_ghost::ShioriWiring::Helper {
@@ -216,7 +216,7 @@ fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
     };
     let (kanade_stop, _stop_rx) = mpsc::channel::<KanadeNotice>();
     let inputs = GhostBootInputs {
-        wiring: runtime::RuntimeInputs {
+        wiring: areka_runtime::RuntimeInputs {
             ghost_root: ghost_a.dir.clone(),
             balloon_root: balloon_missing.dir.clone(),
             shiori: areka_ghost::ShioriWiring::Helper {

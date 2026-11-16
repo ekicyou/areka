@@ -36,11 +36,11 @@ use super::*;
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::talk_clock::TalkClock;
 use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
+use areka_runtime::assets::{BootAssets, LoopTables};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::talk_clock::TalkClock;
 
 // ---------------------------------------------------------------- 土台
 
@@ -98,8 +98,8 @@ fn headless_wiring() -> RuntimeWiring {
             },
             shell_author_dpi: 96,
             balloon_author_dpi: 96,
-            boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
-            cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
+            boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
+            cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
         },
     )
 }

@@ -33,13 +33,13 @@ use crate::boot_config::BootContext;
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
-use crate::runtime::spine::{Progress, RecordedCall, run_bounded_watching};
 use crate::session::ghost_switch::{
     GhostSpec, LastInstalledGhost, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage,
     SwitchTarget, SwitchVerdict, request_ghost_switch,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_placement::persist::PersistWiring;
+use areka_runtime::spine::{Progress, RecordedCall, run_bounded_watching};
 
 /// 書庫が置くファイル（宛先のゴーストのフォルダからの相対）と中身。
 const MARKER: &str = "ghost/master/overwritten.txt";

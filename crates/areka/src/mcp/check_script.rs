@@ -18,10 +18,10 @@ use tracing::debug;
 use super::check_script_judge::diagnose;
 use super::dump_surface::{Job, Step, start};
 use super::resolve::ActiveGhost;
-use crate::runtime::consumer_ledger::ConsumerLedger;
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::skin_facts_copy;
 use areka_placement::spawn::GhostWindows;
+use areka_runtime::consumer_ledger::ConsumerLedger;
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::skin_facts_copy;
 
 const TOOL: &str = "check_script";
 

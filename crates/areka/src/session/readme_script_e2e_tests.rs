@@ -12,11 +12,11 @@ use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::readme::os_port::{OsCall, Verb};
 use crate::readme::{FakeOs, Opener, drain_readme_requests, serve};
-use crate::runtime::spine::wait_until;
-use crate::runtime::user_break_cue::NoUserBreakSignal;
 use crate::session::ghost_switch_test_support::standard_script;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::MonotonicMs;
+use areka_runtime::spine::wait_until;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
 use log_capture_kit::{LineFormat, capture_lines};
 
 /// 注入する Tick 1 回で台詞の時計を進める幅（合成の ms）。

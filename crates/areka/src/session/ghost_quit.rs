@@ -10,7 +10,7 @@ use wintf::ecs::Update;
 
 // 終了相（R15.4）の出口＝終了の統合操作（全窓を閉じてから終了を指示する）。
 use crate::app_exit::{ExitOrigin, quit_app};
-use crate::runtime::frame::frame_system;
+use areka_runtime::frame::frame_system;
 // 終了相が運行の通知を切替の段で振り分ける先（areka-P0-ghost-shell-balloon-switch 要件 8.4）。
 use crate::session::ghost_switch::{self, SwitchInFlight};
 
@@ -111,7 +111,7 @@ pub(crate) fn ghost_quit_system(world: &mut World) {
 /// 運行の通知（停止ほか）の受け口を World に据え、終了相を `Update` に登録する（受け口はプロセスに 1 つ・
 /// 要件 6.4）。
 ///
-/// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_frame_system`](crate::runtime::register_frame_system) の
+/// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_frame_system`](areka_runtime::register_frame_system) の
 /// 直後に呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
 /// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
 pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {

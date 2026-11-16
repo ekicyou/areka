@@ -19,10 +19,10 @@ use super::super::super::{MouseWiring, RegionSource};
 use super::super::char_watch;
 use super::{BUNDLED, CharCursors, register_char_cursor};
 use crate::input_events::hover_region::cursor_pick::Spot;
-use crate::runtime::hit_region::HitRegion;
-use crate::runtime::shell_cursor_assets::ShellCursorAssets;
-use crate::runtime::shell_cursor_table::{CursorScene, Shape, SystemCursor};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+use areka_runtime::hit_region::HitRegion;
+use areka_runtime::shell_cursor_assets::ShellCursorAssets;
+use areka_runtime::shell_cursor_table::{CursorScene, Shape, SystemCursor};
 
 const TARGET: &str = "areka::input_events::char_watch::cursor_answer";
 
@@ -244,7 +244,7 @@ fn bundled_cur_files_have_ten_sizes_with_hotspots_inside() {
 
 #[test]
 fn shell_file_that_cannot_be_made_falls_back_to_the_scene_default() {
-    use crate::runtime::shell_cursor_assets::CursorFile;
+    use areka_runtime::shell_cursor_assets::CursorFile;
     let mut assets = ShellCursorAssets::default();
     assets.files.push(CursorFile::Cur(b"broken".to_vec()));
     assets

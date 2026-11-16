@@ -41,15 +41,15 @@ use crate::ghost_session::{
     GhostBootInputs, GhostBootInputsSource, GhostSlot, StartupDescriptValues, boot_ghost,
     register_systems,
 };
-use crate::runtime::RuntimeInputs;
-use crate::runtime::spine::{
+use crate::sample_test_support::acquire_emo2;
+use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
+use areka_placement::AuthorDpi;
+use areka_runtime::RuntimeInputs;
+use areka_runtime::spine::{
     HOMEURL_RESOURCE, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
     ScriptedShioriHandle, WaitFailure, run_bounded_watching, wait_recv, wait_until,
     wait_until_with,
 };
-use crate::sample_test_support::acquire_emo2;
-use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
-use areka_placement::AuthorDpi;
 
 /// 既定のバルーン（emo2 の同梱）。
 pub(crate) const BALLOON: &str = "emo2-kakukaku";

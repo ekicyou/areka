@@ -38,8 +38,8 @@ use super::shell_box::{
     next_box_hover,
 };
 use super::user_break::on_box_press;
-use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::CharWindowMarker;
+use areka_runtime::frame::RuntimeWiring;
 
 /// 届いた座標の写し（文字の層の借用を解いた後に判断と送り出しへ渡す）。
 #[derive(Debug, Clone, Default)]

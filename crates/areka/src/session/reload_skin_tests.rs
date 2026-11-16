@@ -35,11 +35,11 @@ use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::GhostSession;
 use crate::readme::ReadmeWiring;
-use crate::runtime::assets::{BootAssets, LoopTables};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::reload_args::DescriptParts;
-use crate::runtime::talk_clock::TalkClock;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use areka_runtime::assets::{BootAssets, LoopTables};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::reload_args::DescriptParts;
+use areka_runtime::talk_clock::TalkClock;
 
 struct Rig {
     world: World,
@@ -73,8 +73,8 @@ fn headless_wiring() -> RuntimeWiring {
             },
             shell_author_dpi: 96,
             balloon_author_dpi: 96,
-            boxes: crate::runtime::shell_box_assets::ShellBoxAssets::default(),
-            cursors: crate::runtime::shell_cursor_assets::ShellCursorAssets::default(),
+            boxes: areka_runtime::shell_box_assets::ShellBoxAssets::default(),
+            cursors: areka_runtime::shell_cursor_assets::ShellCursorAssets::default(),
         },
     )
 }

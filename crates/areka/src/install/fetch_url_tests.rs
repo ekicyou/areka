@@ -20,7 +20,7 @@ use super::{
 };
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::install::{InstallOrigin, RawInstallRequest};
-use crate::runtime::spine::join_thread_bounded;
+use areka_runtime::spine::join_thread_bounded;
 
 const URL: &str = "https://example.com/files/my ghost.nar";
 const BODY: &[u8] = b"PK\x03\x04 nar body";

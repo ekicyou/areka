@@ -22,13 +22,13 @@ use super::UpdateDesk;
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use crate::exit_wait::begin_close;
-use crate::runtime::spine::RecordedCall;
 use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::update::worker::DeskAsk;
+use areka_runtime::spine::RecordedCall;
 
 /// 列を受ける回数の上限（偽の SHIORI の台本に積む数）。
 const TAIL_ROUNDS: usize = 4;

@@ -17,10 +17,10 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::{DoubleClick, dispatch_pointer_events};
 
 use super::shell_box::{BoxPressVerdict, fold_talking, judge_box_press};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
-use crate::runtime::target_map::balloon_target;
-use crate::runtime::user_break_cue::NoUserBreakSignal;
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_runtime::target_map::balloon_target;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 /// 中断の配線の持ち物（NonSend・UI スレッド所有）。
 pub(crate) struct UserBreakWiring {

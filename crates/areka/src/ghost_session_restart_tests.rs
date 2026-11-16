@@ -16,11 +16,11 @@ use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::readme::ReadmeWiring;
-use crate::runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching, wait_until};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
 use crate::session::ghost_quit::KanadeNoticeRx;
 use areka_placement::spawn::GhostWindowMarker;
+use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching, wait_until};
 use log_capture_kit::capture;
 
 /// 作業プール（`WintfTaskPool`）の無い素の World では、窓を作る関数は配置の準備に入らず
@@ -356,7 +356,7 @@ fn scripted_inputs(
 ) -> (GhostBootInputs, ScriptedShioriHandle) {
     let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
     let inputs = GhostBootInputs {
-        wiring: runtime::RuntimeInputs {
+        wiring: areka_runtime::RuntimeInputs {
             ghost_root: sample.folder().to_path_buf(),
             balloon_root: emo2_balloon(sample),
             shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {
@@ -456,7 +456,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     register_systems(&mut world, kanade_stop_rx);
     // 本体の口は最初の巡より前に据わる（据え忘れは本番で `session_hooks_missing` の縮退になる）。
     assert!(
-        world.contains_resource::<crate::runtime::session_hooks::SessionHooks>(),
+        world.contains_resource::<areka_runtime::session_hooks::SessionHooks>(),
         "register_systems が本体の口を据えていない"
     );
     let lens_before = systems_lens(&world);

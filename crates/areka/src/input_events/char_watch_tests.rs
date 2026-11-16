@@ -4,9 +4,9 @@
 
 use super::super::{MouseWiring, RegionSource, on_char_pointer_moved};
 use super::char_watch;
-use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{ClickButton, HoverEdge, KanadeMsg, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
+use areka_runtime::hit_region::HitRegion;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::Cell;

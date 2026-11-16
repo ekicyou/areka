@@ -31,10 +31,10 @@ use crate::boot_config::BootContext;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
 use crate::log_history::TARGET_ERROR;
-use crate::runtime::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
-use crate::runtime::reload_cue::ReloadRx;
-use crate::runtime::shell_balloon_resolve::SkinCandidate;
-use crate::runtime::skin_switch::{SkinKind, SkinSwitchInFlight, SkinVerdict};
+use areka_runtime::reload_args::{DescriptNotes, ReloadTarget, ScriptReload};
+use areka_runtime::reload_cue::ReloadRx;
+use areka_runtime::shell_balloon_resolve::SkinCandidate;
+use areka_runtime::skin_switch::{SkinKind, SkinSwitchInFlight, SkinVerdict};
 
 /// 読み直しの出どころ（記録の欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

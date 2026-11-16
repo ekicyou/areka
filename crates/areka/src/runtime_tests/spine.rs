@@ -38,7 +38,7 @@
 //! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
 //! （`crate::{PresentBridge, RuntimeWiring, run_attach_phase, ...}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
-//! （bin を起動する外部テストでは不能）、既存 repo 慣行（`runtime::wire_tests`・
+//! （bin を起動する外部テストでは不能）、既存 repo 慣行（`areka_runtime::wire_tests`・
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
 
 // `spine` の代わりの親を兼ねる（⑴ ⑵ を子へ渡す）。下の `use` は旧 `spine.rs` の頭の行で、⑶ と子のテストが使う。

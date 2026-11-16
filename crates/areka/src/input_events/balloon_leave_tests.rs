@@ -9,7 +9,7 @@
 // の除去は本システムの責務外（FrameFinalize の機構不変）ゆえ検証しない。
 // -------------------------------------------------------------------------
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use bevy_ecs::hierarchy::ChildOf;
 use std::cell::RefCell;
 use std::rc::Rc;

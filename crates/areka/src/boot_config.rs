@@ -580,7 +580,7 @@ pub(crate) fn ghost_boot_options(
     modules: crate::cli::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
-        strict_judges: crate::runtime::strict_judges::production(),
+        strict_judges: areka_runtime::strict_judges::production(),
         ghost_root,
         default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
         shiori: shiori_wiring_for(modules, helper_exe),
@@ -618,7 +618,7 @@ pub(crate) fn shiori_wiring_for(
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///
-/// `pub(crate)`: `runtime::wire_runtime`（task 5.1）が boot 失敗（`GhostBootError`）を
+/// `pub(crate)`: `areka_runtime::wire_runtime`（task 5.1）が boot 失敗（`GhostBootError`）を
 /// 同一方針（起点不在＝良性 `warn!`・他＝`error!`・R7.4）で分類するため再利用する。
 pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
     match err {

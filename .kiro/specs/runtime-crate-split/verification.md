@@ -434,3 +434,16 @@
 - 口の据え付けは 1 ファイル 1 回にならなかった（4.3）。
 - `frame/switch_finish_tests.rs` を D9 の形で割った（4.5）。
 - タスク 6.2 の文は `assets_tests.rs` を本体の `../runtime_tests/assets_tests.rs` で読むとしているが、較正の当たりの説明文は `areka-runtime/src/assets_tests.rs` へ戻った（4.5）。
+
+## 5. 段 4（本体の道を書き換え、一時の別名を外す）
+
+非挙動・機械的な道の書き換え。対象は `crates/areka/src/**` だけ。
+
+- 赤（書き換え前の数え）: `crate::runtime::` 209 行・`use areka_runtime as runtime;` 1 行（`main.rs`）・`use crate::runtime;` 1 行（`ghost_session.rs`）・別名経由の裸の `runtime::` 105 行（コードと doc コメント）。
+- 書き換え: `crate::runtime::` と別名経由の `runtime::` を `areka_runtime::` へ。`use crate::runtime;`（`ghost_session.rs`）と `main.rs` の一時の別名（宣言と注釈）を削除。`main.rs` で別名の宣言に付いていた古い `runtime 統合結線` の doc 段落（旧 `mod runtime` の説明）が `mod session;` に連なって残ったので、これも削除。変えたファイル数: 105（`git diff --stat`・235+/245-）。
+- 触っていない形: `crate::runtime_tests::…`・`session::runtime_boot`・`ghost_session_runtime*` など、本体の中の名前に `runtime` が入るだけの道。
+- `target_map` を使う本体（`input_events/user_break.rs`・`mcp/{check_script,dump_balloon,dump_surface}.rs` とそのテスト）は `areka_runtime::target_map::…` で同じ値に届く。
+- 緑（後の数え、`crates/areka/src`）: `crate::runtime::` 0・`areka_runtime as runtime` 0・`use crate::runtime;` 0・別名経由の裸の `runtime::` 0。
+- `cargo fmt --all -- --check`: 差分 0。`cargo check --workspace --all-targets`: 緑・新しい警告 0（`shiori-abi` の `windows` 未使用は前からの警告）。
+- `cargo test -p areka --bin areka -- mcp:: input_events::user_break`: 276 本緑。`cargo test -p log-capture-kit --test file_length_guard_test --test workspace_scan_test`: 6 本・20 本緑。
+- 触っていない: `tick_gate_config_producers_tests.rs`（6.2）・`placement_tests/mod.rs` の doc（段 7）。

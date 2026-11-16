@@ -5,9 +5,9 @@ use super::{
     LeftDrag, NotClickReason, PressNote, ReleaseVerdict, judge_release, note_press,
     on_char_pointer_released,
 };
-use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{ClickButton, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
+use areka_runtime::hit_region::HitRegion;
 use bevy_ecs::prelude::*;
 use std::sync::mpsc;
 use windows::Win32::Foundation::HWND;

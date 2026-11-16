@@ -38,8 +38,8 @@ use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
-use crate::runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 use crate::session::ghost_switch::{SwitchInFlight, record_last_installed};
+use areka_runtime::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 
 /// 手元に置いたイベントの頼み（送る条件がそろうまで待つ）。
 struct HeldRaise {

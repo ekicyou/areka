@@ -9,10 +9,10 @@ use wintf::AppExit;
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
 use crate::runtime_tests::spine::SpineHarness;
 use crate::sample_test_support::acquire_emo2;
 use crate::session::runtime_boot;
+use areka_runtime::spine::{Progress, ScriptedShioriHandle, run_bounded_watching};
 
 fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
     sample
@@ -22,9 +22,9 @@ fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
 }
 
 /// 偽の SHIORI（標準の台本）・時計なし・記憶の置き場なしの起動の結線の入力。
-fn scripted_wiring(sample: &SampleRoot) -> (runtime::RuntimeInputs, ScriptedShioriHandle) {
+fn scripted_wiring(sample: &SampleRoot) -> (areka_runtime::RuntimeInputs, ScriptedShioriHandle) {
     let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
-    let wiring = runtime::RuntimeInputs {
+    let wiring = areka_runtime::RuntimeInputs {
         ghost_root: sample.folder().to_path_buf(),
         balloon_root: emo2_balloon(sample),
         shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {

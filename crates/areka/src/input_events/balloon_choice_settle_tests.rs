@@ -7,7 +7,7 @@
 // （`spawn_emo_text` の UI ドレイン）へ選択待ちの始まりを積んで、このスレッドの待ち行列を汲んでから押す。
 // =============================================================================
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -167,7 +167,7 @@ fn a_pressed_choice_row_settles_and_pressing_it_again_selects_nothing_without_wa
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let _gpu = crate::runtime::spine::GpuPermit::take();
+    let _gpu = areka_runtime::spine::GpuPermit::take();
     let (rt, _sink, _join) = runtime_in_choice_wait();
     let actor = ActorKey::from(ACTOR);
 

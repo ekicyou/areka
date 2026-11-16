@@ -2,8 +2,8 @@ use super::test_support::{
     headless_runtime_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
-use crate::runtime::balloon_hover::BalloonHover;
 use areka_placement::follow::OffsetBase;
+use areka_runtime::balloon_hover::BalloonHover;
 use bevy_ecs::world::World;
 use std::sync::mpsc;
 

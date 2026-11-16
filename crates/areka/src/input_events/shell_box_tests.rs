@@ -13,7 +13,7 @@ use wintf::ecs::pointer::DoubleClick;
 
 use super::*;
 use crate::input_events::balloon::{ChoiceSelection, click_selection};
-use crate::runtime::user_break_cue::NoUserBreakSignal;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 /// サーフェス 0 に箱 a（element1）と箱 b（element2・手前）。
 const SHELL: &str = "\
