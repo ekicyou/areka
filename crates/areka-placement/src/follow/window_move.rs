@@ -15,7 +15,8 @@ use super::{
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
     apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
-    rect_at, rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
+    rect_at, rederive_keyword_balloon_offset, shown_char_rects, transition_diag,
+    work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -1074,8 +1075,12 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area);
-    let (BalloonPlace::Flipped(corrected) | BalloonPlace::Pushed(corrected)) = place else {
+    let others = shown_char_rects(world);
+    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area, &others);
+    let (BalloonPlace::Flipped(corrected)
+    | BalloonPlace::Pushed(corrected)
+    | BalloonPlace::PushedOverlap { to: corrected, .. }) = place
+    else {
         return proposed;
     };
 
@@ -1083,6 +1088,7 @@ fn apply_balloon_limit_gate(
         scope,
         context = BALLOON_LIMIT_RUNTIME_CONTEXT,
         how = place.how(),
+        overlap_scope = ?place.overlap_scope(),
         entity = ?window,
         route = ?route,
         from = ?proposed,
@@ -1101,7 +1107,7 @@ fn apply_balloon_limit_gate(
 /// 素通しすると `saturating_add` で逆転矩形になり、モニタ帰属が意味を失う
 /// （`resize_window_to` 手順 3／`guard_balloon_position` と同一の判定式）。
 /// 負座標そのものは正当（左隣モニタは負の X を持つ）ゆえ、符号や閾値では判定しない。
-fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
+pub(super) fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
     let wp = world.get::<WindowPos>(window)?;
     let pos = wp
         .position

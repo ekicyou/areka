@@ -104,3 +104,105 @@ fn nothing_is_recorded_while_unarmed() {
     note_script_moved(&mut world, b);
     assert_eq!(recorded(&world), None);
 }
+
+/// balloon-flip-side-rules 要件 2.10: 詰め直しは本体（scope 1）を先に書くので、本体のバルーンは
+/// 相方（scope 2）がまだ遠くにいるうちに右の外から左（1200〜1500 × 500〜700）へ並べ替わる。
+/// 相方がその映した先に重なる位置（1300）へ付け直された後、全スコープを書き終えたところで
+/// 判定し直し、本体のバルーンを押し込みの位置（作業領域の右端の内側）に書く。
+#[test]
+fn realign_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target() {
+    use wintf::ecs::{Visual, WindowPos};
+
+    use crate::chain_finalize::{ChainRect, ScopeChainState};
+    use crate::follow::MonitorSnapshot;
+    use crate::resolver::{PointPx, RectPx, SizePx};
+    use crate::shared_test_support::placement_sized;
+    use crate::source::GhostTitles;
+    use crate::spawn::spawn_ghost_windows;
+    use crate::test_support::give_fake_handles;
+
+    let (mut world, _, _) = rig();
+    world.insert_resource(MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1040,
+        }],
+    });
+    // 今の位置（拡大率の後・鎖から離れた）と幅。鎖の頭（scope 0）は動かない。
+    let now = [(0, 1700, 220), (1, 1000, 200), (2, 100, 200)];
+    let placements: Vec<_> = now
+        .iter()
+        .map(|&(scope, x, w)| {
+            placement_sized(
+                scope,
+                PointPx { x, y: 500 },
+                PointPx { x: w, y: 0 },
+                true,
+                SizePx { w, h: 400 },
+                SizePx { w: 300, h: 200 },
+            )
+        })
+        .collect();
+    let gw = spawn_ghost_windows(
+        &mut world,
+        &placements,
+        &GhostTitles::from_scope_titles(now.iter().map(|&(s, _, _)| (s, format!("s{s}")))),
+    );
+    give_fake_handles(&mut world, &gw);
+    let chars: Vec<Entity> = (0..3).map(|s| gw.char_window(s).unwrap()).collect();
+    for &c in &chars {
+        world.spawn((Visual::default(), ChildOf(c)));
+    }
+    // 変わる直前は隙間 0 で右から隣り合っていた（付け直す組）。
+    let before = [(0, 1700), (1, 1480), (2, 1260)]
+        .map(|(s, x)| {
+            (
+                s,
+                ChainRect {
+                    x,
+                    y: 500,
+                    w: 220,
+                    h: 400,
+                },
+            )
+        })
+        .to_vec();
+    arm_chain_realign(&mut world, before);
+    assert!(world.get_resource::<ChainRealignPending>().is_some());
+
+    realign_chain_once_with(&mut world, |_| {
+        Ok(now
+            .iter()
+            .zip(&chars)
+            .map(|(&(scope, x, width), &c)| {
+                (
+                    ScopeChainState {
+                        scope,
+                        current_x: x,
+                        width,
+                        default_x: None,
+                    },
+                    (scope, c, PointPx { x, y: 500 }),
+                )
+            })
+            .unzip())
+    });
+
+    let pos = |e: Entity| {
+        let p = world.get::<WindowPos>(e).unwrap().position.unwrap();
+        (p.x, p.y)
+    };
+    assert_eq!(pos(chars[1]), (1500, 500), "本体は鎖の頭の左へ付け直す");
+    assert_eq!(
+        pos(chars[2]),
+        (1300, 500),
+        "相方は本体の映した先に重なる位置へ"
+    );
+    assert_eq!(
+        pos(gw.balloon_window(1).unwrap()),
+        (1920 - 300, 500),
+        "本体のバルーンは押し込みの位置（並べ替えた位置 1200 のままにしない）"
+    );
+}

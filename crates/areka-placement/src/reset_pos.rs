@@ -22,7 +22,7 @@ use wintf::ecs::window::monitor::Monitor;
 use super::chain_finalize::ScriptPlaced;
 use super::chain_realign::note_script_moved;
 use super::config::build_placement_config;
-use super::follow::{move_window_to, rebase_shift};
+use super::follow::{move_window_to, rebase_shift, rejudge_all_balloons};
 use super::persist::persist_unremembered_char_positions;
 use super::reseed::BalloonPlacementInputs;
 use super::resolver::{ScopeInput, SizePx, resolve_placement};
@@ -130,6 +130,8 @@ pub fn reset_window_positions(world: &mut World) -> bool {
         );
         moved = true;
     }
+    // 先に書いたスコープのバルーンは後から書いた窓を知らずに判定したので、全窓を書き終えた今の位置で判定し直す（要件 2.10）。
+    rejudge_all_balloons(world);
     persist_unremembered_char_positions(world);
     moved
 }
