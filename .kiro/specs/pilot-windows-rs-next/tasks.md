@@ -12,7 +12,7 @@
 
 - [ ] 1. Foundation: 独立のワークスペース・上流の固定・共有の束縛の土台
 
-- [ ] 1.1 独立のワークスペースの骨組みと一次記録の節を建てる
+- [x] 1.1 独立のワークスペースの骨組みと一次記録の節を建てる
   - 置き場の根に、`[package]` を持たない仮想の manifest（resolver 3・`[workspace.package]` の edition 2024 と `publish = false`・`[workspace.dependencies]`）を置く。上流のクレート（`windows-core`・`windows-result`・`windows-strings`・`windows-link`・`windows-numerics`・`windows-text`・`windows-bindgen`、名指しされたときだけ使う兄弟の `windows-future`・`windows-collections`・`windows-reference`・`windows-time`）は全部同じ git の rev に固定し、借りる本線のクレート（`wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`）は置き場の根からの相対の path、crates.io の物（`bevy_ecs` 0.19.1・`png` 0.18.1・`tracing`・`tracing-subscriber`〔`env-filter` なし〕・`scip`）は本線と同じ版で書く。`[patch]` は置かない
   - ビルドの出力の行き先を作業木の `target\pilot-windows-rs-next` へ向ける設定を置き場に置く
   - 本線の `Cargo.lock` を写して置き場の `Cargo.lock` の種にし、写した本線のコミットを一次記録に書く
