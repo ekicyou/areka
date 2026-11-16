@@ -54,7 +54,7 @@
   - _Dispatch: mechanical — 呼び出しへ引数を渡し記録の欄を足すだけで形は設計が与えている_
   - _Requirements: 2.3, 2.6, 4.1, 4.2, 4.3, 4.4, 5.1_
 
-- [ ] 4. 窓を並べ直した後に全スコープのバルーンを判定し直す（要件 2.10）
+- [x] 4. 窓を並べ直した後に全スコープのバルーンを判定し直す（要件 2.10）
 - [x] 4.1 全スコープのバルーンを今のキャラ窓の位置で判定し直す関数と、起動の並べ直しの後に 1 度走る系を作る
   - 判定し直しの本体は、`BalloonLimit(true)` のバルーンを持つスコープだけを先に集めてから、各キャラ窓の今の位置で随伴をし直す素の関数にする。随伴の引き金は並べ直しの書き込みと同じ既存の経路の語を使い、新しい語を作らない。
   - キャラ窓の位置が決まらないスコープは `[balloon-limit] Unresolved` の警告を残して飛ばす。
@@ -71,7 +71,7 @@
   - _Dispatch: standard — 2 つの場面の重なる形を組む檻に考えが要る_
   - _Requirements: 2.10, 5.1, 5.2_
 
-- [ ] 4.3 アプリの登録に判定し直しの系を 1 行で載せる
+- [x] 4.3 アプリの登録に判定し直しの系を 1 行で載せる
   - 足す前に、同じウェーブの `runtime-crate-split` のセッションへ `crates/areka/src/ghost_session.rs` の `register_systems` の末尾に 1 行足すことを知らせる。
   - `register_systems` の末尾に 4.1 の登録の口を呼ぶ 1 行を足す。`runtime/` の下は触らない。
   - 済んだ姿: `cargo build -p areka` と `cargo test -p areka` の `zorder_wiring_tests` が緑で、`git diff --stat` に `crates/areka/src/runtime/` が出ない。
