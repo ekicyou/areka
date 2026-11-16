@@ -266,7 +266,7 @@
 
 - [ ] 11. 問い 10: 対応表だけで機械的に回せるかを確かめる
 
-- [ ] 11.1 砂場で Sonnet の実装係に問い 1 の元をもう一度移させる
+- [x] 11.1 砂場で Sonnet の実装係に問い 1 の元をもう一度移させる
   - このタスクは進行役が手動の形（`/kiro-impl pilot-windows-rs-next 11.1`）で回す。実装係がするのは砂場の用意と結果の写しだけで、Sonnet の下請けを起こすのと道具の呼び出しの記録を読むのは進行役
   - 実装係: 作業木の `target\pilot-windows-rs-next\q10-sandbox\` に、問い 1 の元の本番の `src/` だけ・対応表・例 2 本の写しを置く（移し終えた問い 1 の写しは置かない）
   - 進行役: `model: "sonnet"` の下請けを起こし、対応表と砂場の場所と「組めて例が走るまで」の指示だけを渡して移させる。下請けの道具の呼び出しの記録を読み、`q1-winmsg/` の下のファイルを読んでいないことを確かめる。読んでいたらその回を捨ててやり直す
@@ -353,3 +353,4 @@
 - 一次記録や対応表の言い切り（「無い」「だけ」「全部」）は、置き場の行・生成した束縛の行・使い捨ての rustc の確かめのどれかで裏を取ってから書く。Implementation Notes の文から起こすと誤りが伝わる（10 の調べ）。11.1 の砂場では本線の `lib.rs` 1 行目の `#![doc = include_str!("../README.md")]` が README 無しでは組めない — 砂場に README を置くか、消すのを人の手の直しに数えない取り決めが要る（10 の調べ）。
 - 10 の確かめで分かった訂正（README に同じ文が在れば 12.2 で直す）: 既定の形は `.implements` を呼ばなくてもフィルターに名指したインターフェースの `_Impl` を出す。`.implements` を呼ぶと並べた名前の分だけになり、名前が合わなければ 0（6.2 の「`.implements` が要る」は読み違い）。`WIN32_ERROR::to_hresult` は上流に在り、無いのは `HRESULT::from_win32`。q4 の `BI_RGB`・`DIB_RGB_COLORS` は `q4-wuc/src/capture.rs:91,105`。
 - 対応表の確かめの道具（使い捨て・コミットしない）: `target\pilot-windows-rs-next\tmp\probe-rt`（3 形の束縛と後の書き方を組む crate・`cite-dump.sh`）と scratchpad の `v1_map.py`／`tokdiff.py`／`before_check.py`／`after_check.py`。11.1 の砂場では本線 `lib.rs` の `#[cfg(test)] mod test`（325 行）を Sonnet に移させない（消すか触らないと指示する）・依存の行（`{ workspace = true }` か git の rev）は進行役が先に置く（10 のレビュー）。
+- 下請けの道具の呼び出しの記録（subagents の jsonl）は同じ `tool_use` を繰り返し書くので、数えるときは id で重複を除く。Bash の道具は送るコマンドの `\` を `\` に縮める — 逃がしを含む文字列をコマンドで書いたらバイトで確かめる（11.1）。

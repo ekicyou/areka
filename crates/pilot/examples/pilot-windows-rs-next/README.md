@@ -25,7 +25,7 @@
 | `q6-com` | 6 | `bind-next`・`windows-core` |
 | `q7-vertical` | 7・要件 13.5 | `bind-next`・`q4-wuc`・`q1`・`windows-core`・`windows-text`・借りる `wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`・`png` |
 | `q9-api-count` | 9 | `scip` |
-| `q10-winmsg` | 10 | `q1-winmsg` と同じ形（`[[example]]` は 11.1 で足す） |
+| `q10-winmsg` | 10 | `q1-winmsg` と同じ形・例 `q10-basic`／`q10-threads` は `../q1-winmsg/examples/` を path で指す（11.1） |
 
 `q2-placement` の 7 つのパッケージ名は `q2-<フォルダ名>`（例 `q2-plan1-wintf`）。フォルダ名は本線のクレートと同じ名前を使わない。
 
@@ -681,10 +681,40 @@ cargo run --manifest-path C:/home/maz/git/areka/crates/pilot/examples/pilot-wind
 
 ### 問い 10: 機械的に回せるか（Sonnet）
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
+- 見立ての候補: go（対応表だけを渡した Sonnet の移しが、人の手の直し 4 か所〔どれも振る舞いに関わらない〕で置き場に組めて、例 2 本が問い 1 と同じ比べ方で元と一致した。取りこぼしが機械で捕まるかは 11.2 で見る）。
+- 確かめた日: 2026-11-17（11.1）
+- 砂場と下請けの回（11.1）:
+  - 砂場 `target\pilot-windows-rs-next\q10-sandbox\` に、本線 `crates/wintf-winmsg-executor`（main `5b3a361c`）の `src/`（試験のモジュールと `lib.rs` 1 行目の `#![doc = include_str!("../README.md")]` を含めて写したまま）・`README.md`・例 2 本・`REWRITE_TABLE.md`・0.62 のままの manifest・0.101 の依存の行（`DEPS-0.101.txt`）を置いた。移し終えた問い 1 の写しは置かない。
+  - 進行役が `model: "sonnet"` の下請けに、対応表と砂場の場所と「組めて例が走るまで」の指示だけを渡した。下請けの報告: 警告 0 で組めて、`basic`・`threads` とも終了コード 0（元との比べは下請けはしていない）。試験のモジュールは触っていない（`windows::` のままで `cargo test` では組めない）。i686 は見ていない。
+- `q1-winmsg/` を読まなかった確かめ: 下請けの道具の呼び出しの記録（会話の記録の jsonl）を、呼び出しの id で重なりを除いて読んだ（記録は同じ `tool_use` を何度も載せるので、id で除かないと数が膨らむ）。読んだ道具はレビュー係の `rv_dump.py`（`tool_use` を id ごとに 1 回だけ出す）。呼び出しは 17 回（Read／Glob 12・Bash 4・SubagentHandback 1）で、全部が砂場の中。全部の呼び出しの入力で `q1-winmsg`・`q1_winmsg`・`crates/`・`crates\` は 0 回。砂場の外を指す文字列は、下請け自身の Bash の本文（`Cargo.toml` の依存の書き換え）にある github の URL だけで、`DEPS-0.101.txt` から写した物。下請けが目にした `q1-winmsg`・`crates/` の字は道具の結果の中だけ（`REWRITE_TABLE.md`・`SANDBOX.md` の出典の欄）。やり直しは無し。
+- 下請けが対応表だけでは決まらず自分で決めた所（下請けの報告から）:
+  1. 改行（CRLF）の扱い。
+  2. `pub type PCSTR = *const u8;` の置き場（束縛のモジュールの中・`include!` の前）と、そのモジュールの `#![allow(non_camel_case_types, non_snake_case, dead_code, clippy::all)]`。問い 1 の写しと同じ形になった。
+  3. `SetWindowsHookExW` の失敗（元は `.unwrap()`）→ `assert!(!handle.is_null(), "SetWindowsHookExW failed")`。問い 1 と同じ扱い。
+  4. `CreateWindowExW` の窓の名前の `None` → `ptr::null()`（組んだときの誤りで分かった）。
+  5. フィルターの名前 30 個の選び。問い 1 の `filters.txt`（32）との違いは `WM_CREATE`・`WM_DESTROY` が無いことだけ（問い 1 では `window.rs` の試験のためだけに入れた 2 つ）。生成した `bindings.rs` は 149 行（問い 1 は 151 行）。
+  6. `pub(crate) mod bindings` を doc の属性の後に置いた。
+  7. 束縛のモジュールの見える範囲を `pub(crate)`（対応表と問い 1 の写しは `mod`）。
+  8. 公開の型が生の型になった（`WindowMessage` の欄・`new_ex(ex_style: DWORD)`）。doc のコメントは古いまま。問い 1 でも `new_ex` の引数は `DWORD` になった。
+  9. `Some(LRESULT(0))` → `Some(0)`。
+- 下請けの書き換えの量（生の差・`cargo fmt` の前。元＝本線の `src/`、後＝砂場。`git diff --no-index --numstat`、`window.rs` は生の NUL の字で二進と見なされるので `diff --text --strip-trailing-cr` で数えた）: `lib.rs` +17／−14・`util/msg_filter_hook.rs` +7／−9・`util/window.rs` +37／−25・`util/mod.rs` 0。新しいファイルは `build.rs` 4 行・`filters.txt` 30 行。manifest の差は進行役が外したワークスペースの継承と混ざるので数えない。問い 1 の写し（`lib.rs` +15／−19・`msg_filter_hook.rs` +7／−9・`window.rs` +43／−32〔試験も移した〕）と同じ桁。
+- 置き場への写し: 砂場の `src/`・`build.rs`・`filters.txt` を `q10-winmsg/` へ写した（例は写さない）。manifest は 1.2 の骨組み（`windows-link`・`async-task`・`windows-bindgen` を `[workspace.dependencies]` から）のまま、`[[example]]` の `q10-basic`・`q10-threads`（`path = "../q1-winmsg/examples/basic.rs"`・`threads.rs`）を足した。
+- 人の手で直した所（4 か所。どれも振る舞いを変えない）:
+  1. `lib.rs` 1 行目の `#![doc = include_str!("../README.md")]` を消した — `q10-winmsg` に README を置かないので組めない（`couldn't read q10-winmsg\src\../README.md`）。問い 1 の写しと同じ扱い。
+  2. `lib.rs` の `#[cfg(test)] mod test`（321 行）を消した — 下請けは触っておらず `windows::` のまま。設計の「写すのは本番の `src/` だけ」に合わせた。
+  3. `util/window.rs` の `#[cfg(test)] mod test`（68 行）を消した — 同じく `Option<HWND>`・`WPARAM(0)` と、フィルターに無い `WM_CREATE`・`WM_DESTROY` を使うままで、`cargo test` では組めない。2 と同じ理由。
+  4. `util/window.rs` のクラス名の `b"wintf-winmsg-executor\0"` が、逃がし `\0` でなく生の NUL の字（0x00）で書かれていたのを `\0` に直した — rustc は通すが、git と grep がファイルを二進と見なし差分が数えられない。値は同じ。原因は道具の層: 下請けのコマンドの Python は正しく逃がしていた（逃がしを解く `'''` の文字列の中の `b"wintf-winmsg-executor\\0"`）が、Bash の道具はコマンドを渡す途中でシェルが走る前に `\\` を `\` に半分にするので、Python が受け取ったのは `\0` で、NUL を書いた。同じ Bash の道具で確かめた（2026-11-17）: `<<'EOF'` のヒアドキュメントに `A\\0B` と書いて `target\q10-probe\heredoc.txt` へ出すと、中身は `A\0B`（`od -c` で `A \ 0 B \n`、逆斜線は 1 つ）。対応表の `w!` の行（2 字の `\0`）は正しく、表の誤りでも下請けのモデルの誤りでもない。
+  - 人の手の直しに数えない物: `cargo fmt` をかけた（`build.rs` +6／−1・`lib.rs` +2／−7・`msg_filter_hook.rs` +1／−1。`use` の並びと 1 行への詰めだけ）。
+- 組めたか・走ったか（x64・debug）: `cargo build -p q10-winmsg --examples` 警告 0・`cargo clippy -p q10-winmsg --examples -- -D warnings` 通る・`cargo fmt --all -- --check` 通る。写しは `target/pilot-windows-rs-next/debug/examples/{q10-basic,q10-threads}.exe`、元は問い 1 の 2.2 と同じ本線の例の出力。
+  - `q10-basic`: 全文一致（14 行）・終了コード 0 と 0。
+  - `q10-threads`: `main` の行の並び（`main hello`→`main async hello`→`main async bye`→`main bye`）一致・終了コード 0 と 0。`thread` の側の行の集まり（`thread` の 4 行各 1、`n_poll=0`〜`3` 各 2）も同じ。
+  - i686・aarch64 は見ていない（11.1 の範囲外）。
+- 学び:
+  - 対応表だけで、下請けは問い 1 とほぼ同じ書き換え（`as u32` の付け足し・`Option`→ヌルのポインタ・`LRESULT(0)`→`0`・`.0` の剥がし・`PCSTR` の 1 行・`w!` の代わりの `[u16; 22]` の `static`）にたどり着いた。対応表に無かった所は、組んだときの誤りで分かる物（窓の名前のヌル）と、見える範囲・置き場の好みの物だった。
+  - 試験のモジュールは「組めて例が走るまで」の指示では手が付かない（`cargo build` は `#[cfg(test)]` を組まないので）。移行の本体で試験も移させるなら、指示に `cargo test` が組めることを入れる。
+  - 逃がしを書いた後はバイトで確かめる（生の NUL の字が 1 つ入っていた。rustc も clippy も黙って通す）。Bash の道具がコマンドの `\\` を `\` に変えるので、コマンドの本文に逃がしを書いて写させると化ける。
+  - 公開の型が生の型に変わる所（`DWORD`・`WindowMessage` の欄）は、組めても doc のコメントが古いまま残る。レビューが見る点。
+- 止まった所・理由・代わりの見立て: 無し（止まらなかった。直しは上の 4 か所）。
 - 判定: （開発者が下す）
 
 ### 刻み方の案と規模の見立て

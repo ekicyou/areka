@@ -13,3 +13,12 @@ windows-link = { workspace = true }
 
 [build-dependencies]
 windows-bindgen = { workspace = true }
+
+# 例は問い 1 の写しを path で共用する（同じ名前の例が target でぶつからないように名前を変える）。
+[[example]]
+name = "q10-basic"
+path = "../q1-winmsg/examples/basic.rs"
+
+[[example]]
+name = "q10-threads"
+path = "../q1-winmsg/examples/threads.rs"
