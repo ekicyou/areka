@@ -141,8 +141,8 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 1: C の関数だけのクレート（`.sys()`）
 
-- 見立ての候補: x64 までは go（i686・arm64 は 2.3 で書き足す）。
-- 確かめた日: 2026-11-16（x64・2.2）
+- 見立ての候補: go（x64・i686 の走行が元と一致し、aarch64 はリンクまで通った。写しの側の直しは 2.3 で 0）。
+- 確かめた日: 2026-11-16（x64・2.2、i686・aarch64・2.3）
 - 束縛: `q1-winmsg/build.rs` が `.sys().flat()` で `OUT_DIR/bindings.rs` を書く。フィルター `q1-winmsg/filters.txt` は **32 行**（関数 17・定数と型 15。`WM_CREATE`・`WM_DESTROY` は写した `window.rs` の試験のためだけ）。生成した `bindings.rs` は **151 行**。頼るのは `windows-link` だけ（`.sys()`＋`.flat()` は核の型を束縛の中に書く）。
 - 書き換え（`git diff --numstat f75365db0 -- q1-winmsg`・作業木と写した直後の比べ）: `lib.rs` +15／−19・`util/msg_filter_hook.rs` +7／−9・`util/window.rs` +43／−32・`util/mod.rs` と例 2 本は 0。新しいファイルは `build.rs` +12・`filters.txt` +32。手間は直し 4 回・約 12 分。
 - 比べ（x64・debug）: 写しは `target/pilot-windows-rs-next/debug/examples/{basic,threads}.exe`、元は本線の根で `cargo run -p wintf-winmsg-executor --example basic|threads`。
@@ -156,8 +156,12 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
   - 失敗の扱いは元を保った: `CreateWindowExW` のヌル→`WindowCreationError`、`SetWindowsHookExW` のヌル→`assert!` で止める（元は `.unwrap()`）。
   - 写しの `lib.rs` の `#![doc = include_str!("../README.md")]` は消した（元の README は写さない。文書の中身は振る舞いに関わらず、置き場に余計なファイルを増やさないため）。
   - 束縛のモジュールには `#![allow(non_camel_case_types, non_snake_case, dead_code, clippy::all)]` が要った（無いと clippy の `upper_case_acronyms` が 26 件）。
-  - i686 の `GetWindowLongPtrW`／`SetWindowLongPtrW` は、束縛が `#[cfg(target_arch = "x86")]` で `GetWindowLongW`／`SetWindowLongW` への別名を出していた（x64 の生成物で確かめた。走らせるのは 2.3）。
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
+  - i686 の `GetWindowLongPtrW`／`SetWindowLongPtrW` は、束縛が `#[cfg(target_arch = "x86")]` で `GetWindowLongW`／`SetWindowLongW` への別名を出す（`link!("user32.dll" "system" "GetWindowLongW" fn GetWindowLongPtrW(..) -> LONG)`。x64・aarch64・arm64ec は `LONG_PTR` の本来の口）。i686 の生成物（`target/pilot-windows-rs-next/i686-pc-windows-msvc/debug/build/q1-winmsg/<ハッシュ>/out/bindings.rs`）でも同じ 2 組を確かめた。写しの `window.rs` は 4 か所とも `as _`／`as *const _` で渡しているので、32bit の型（`LONG`＝`i32`）と 64bit の型（`LONG_PTR`＝`isize`）の差をそのまま吸い、**写しの側で的ごとに分ける `cfg` は 0 か所**で済んだ。
+- 比べ（i686・debug・2.3）: PowerShell から `cargo build ... -p q1-winmsg --examples --target i686-pc-windows-msvc`（16.8 秒・直し 0 回）。出来た `target/pilot-windows-rs-next/i686-pc-windows-msvc/debug/examples/{basic,threads}.exe`（PE の machine＝`0x014C`）を x64 の Windows で走らせ、2.2 と同じ元（x64 の本線の例の出力）と比べた。
+  - `basic`: 全文一致（14 行）・終了コード 0 と 0。
+  - `threads`: `main` の行の並び（`main hello`→`main async hello`→`main async bye`→`main bye`）一致・終了コード 0 と 0。`main` 以外の行の集まり（`thread` の 4 行各 1、`n_poll=0`〜`3` 各 2）も同じ。
+- aarch64（2.3・組んでリンクまで）: `cargo build ... -p q1-winmsg --examples --target aarch64-pc-windows-msvc`（7.9 秒・直し 0 回）。例 2 本ともリンクが通り、`target/pilot-windows-rs-next/aarch64-pc-windows-msvc/debug/examples/{basic,threads}.exe` の PE の machine は `0xAA64`。走らせる機械が無いので走行は見ていない（確定 5）。
+- 止まった所・理由・代わりの見立て: 無し（i686・aarch64 とも止まらず、写しのコードもフィルターも変えていない）。
 - 判定: （開発者が下す）
 
 ### 問い 2: 束縛の置き場所（3 案）
@@ -210,10 +214,12 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 8: 32bit と arm64 のリンク
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
+- 見立ての候補: 問い 1（`q1-winmsg`・`.sys()`）の分は go。問い 3 の写し（3.3）の分は未記入。
+- 学び:
+  - 問い 1（2.3）: i686 は組めて x64 の Windows で走り、例 2 本の出力と終了コードが元と同じ。aarch64 は例 2 本ともリンクまで通った（走らせていない）。`.sys()` の束縛は `*LongPtrW` の 32bit の別名を `cfg(target_arch = "x86")` で自分で出すので、呼ぶ側に的ごとの分けは要らなかった。取り込みは `windows-link` の `link!` だけで、的ごとの import ライブラリの指定も要らなかった。
+  - 問い 3（3.3）: （未記入）
+- 確かめた日: 2026-11-16（問い 1・2.3）
+- 止まった所・理由・代わりの見立て: 問い 1 は無し。
 - 判定: （開発者が下す）
 
 ### 問い 9: 規模（API の全数）
