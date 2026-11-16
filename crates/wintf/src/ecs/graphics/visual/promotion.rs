@@ -81,10 +81,7 @@ impl RuleState {
 
     /// 時刻を単調にする（前の回より戻ったら前の回の値）。
     fn monotonic(&mut self, now: f64) -> f64 {
-        let t = match self.last_now {
-            Some(prev) if !(now >= prev) => prev,
-            _ => now,
-        };
+        let t = self.last_now.map_or(now, |p| now.max(p));
         self.last_now = Some(t);
         t
     }

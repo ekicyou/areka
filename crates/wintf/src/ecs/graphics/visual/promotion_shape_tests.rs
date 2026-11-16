@@ -13,7 +13,7 @@ fn ent(n: u32) -> Entity {
 }
 
 /// 深さ `depth`・世界の位置 `(l, t)` で中身 `[l, r) × [t, b)`（DIP）の見える節。
-fn node(depth: usize, l: f32, t: f32, r: f32, b: f32) -> ScanEntry {
+pub(super) fn node(depth: usize, l: f32, t: f32, r: f32, b: f32) -> ScanEntry {
     let mut w = WorldVisual::from_world_mat(Matrix3x2::translation(l, t));
     w.content_world_aabb = Aabb::new(l, t, r, b);
     w.subtree_world_aabb = w.content_world_aabb;
@@ -32,7 +32,7 @@ fn node(depth: usize, l: f32, t: f32, r: f32, b: f32) -> ScanEntry {
     }
 }
 
-fn owner(depth: usize, l: f32, t: f32, r: f32, b: f32) -> ScanEntry {
+pub(super) fn owner(depth: usize, l: f32, t: f32, r: f32, b: f32) -> ScanEntry {
     ScanEntry {
         kind: ScanKind::Owner {
             parent_world: Matrix3x2::identity(),
@@ -41,13 +41,13 @@ fn owner(depth: usize, l: f32, t: f32, r: f32, b: f32) -> ScanEntry {
     }
 }
 
-fn phased(mut e: ScanEntry, phase: Phase) -> ScanEntry {
+pub(super) fn phased(mut e: ScanEntry, phase: Phase) -> ScanEntry {
     e.kind = ScanKind::Node { phase };
     e
 }
 
 /// 深さの並びから親と部分木の終わりを埋め、実体の番号を振る。
-fn scan(mut entries: Vec<ScanEntry>) -> TreeScan {
+pub(super) fn scan(mut entries: Vec<ScanEntry>) -> TreeScan {
     let n = entries.len();
     for i in 0..n {
         entries[i].entity = ent(i as u32 + 1);

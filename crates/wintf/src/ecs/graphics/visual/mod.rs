@@ -16,6 +16,7 @@ mod draw_content;
 mod draw_tree;
 mod placement;
 mod promotion;
+mod promotion_round;
 mod promotion_shape;
 mod systems;
 mod transform;
@@ -28,6 +29,8 @@ pub(crate) mod draw_content_test_support;
 mod draw_content_tests;
 #[cfg(test)]
 mod placement_tests;
+#[cfg(test)]
+mod promotion_round_tests;
 #[cfg(test)]
 mod promotion_shape_tests;
 #[cfg(test)]

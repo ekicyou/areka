@@ -162,7 +162,7 @@ pub(crate) struct ScanEntry {
 }
 
 impl ScanEntry {
-    fn is_visible_node(&self) -> bool {
+    pub(crate) fn is_visible_node(&self) -> bool {
         self.visible && matches!(self.kind, ScanKind::Node { .. })
     }
 }
