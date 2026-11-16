@@ -100,7 +100,7 @@ $BURNER_COMMAND = 'try { $p = Get-Process -Id __PARENT__ -ErrorAction Stop } cat
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
-# 端末へは ASCII だけ（例外の文言など ASCII 以外は ? に置き換える。全文は summary.txt に残る）
+# 端末へは ASCII だけ（例外の文言など ASCII 以外は \uXXXX にする。全文は summary.txt に残る）
 function Say([string]$msg) { Write-Host ("[load-flake] " + (Show-Ascii $msg 0)) }
 
 function Add-Text([string]$file, [string[]]$lines) {

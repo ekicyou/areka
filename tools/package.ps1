@@ -483,6 +483,10 @@ function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
     $paths
 }
 
+# HEAD のコミット（7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）。git が動かなければ空。
+# git が PATH に無いと Stop の下では投げるので捕まえる（呼ぶ側が 3 と「git does not run」を出せるように）
+function Get-HeadCommit { try { git rev-parse --short=7 HEAD 2>$null } catch { } }
+
 # =============================================================================
 # 段
 # =============================================================================
@@ -516,8 +520,8 @@ Step 'preflight' {
         Exit-Script $EXIT_BAD_ARGS ("expand path too long ({0} chars, limit {1}): {2} - pass a shorter -CheckDir (outside the repository or under ${repoRoot}target\) or move the worktree to a shorter path" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
     }
 
-    # git（コミットは 7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）
-    $script:Commit = git rev-parse --short=7 HEAD 2>$null
+    # git
+    $script:Commit = Get-HeadCommit
     if ($LASTEXITCODE -or -not $script:Commit) { Exit-Script $EXIT_BAD_ARGS 'git does not run (install git and add it to PATH)' }
     $script:StatusBefore = @(git status --porcelain)
     $script:Dirty = $script:StatusBefore.Count

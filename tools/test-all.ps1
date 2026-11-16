@@ -12,7 +12,7 @@
   6. 機能 toml を有効にした dola のテスト（cargo test -p dola --features toml・検体を使わないので取り寄せが赤でも回す）
   7. i686 でしか走らないテスト（host-32 系）
   8. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
-  9. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
+  9. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない・規則 F でこの台本の Step が見つからない命令の段を赤に記録することも見る）
   10. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   11. 俯瞰の HTML の道具の自分の検査（.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   12. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
@@ -50,6 +50,8 @@ $dirty = @(git status --porcelain).Count
 function Step([string]$Name, [scriptblock]$Command) {
     Write-Host "`n==> $Name" -ForegroundColor Cyan
     $sw = [Diagnostics.Stopwatch]::StartNew()
+    # 見つからない命令は $LASTEXITCODE を書かないので、前の段の値を持ち越さない（0 だと緑・$null だと SKIP になる）
+    $global:LASTEXITCODE = -1
     & $Command
     $results[$Name] = [pscustomobject]@{ Code = $LASTEXITCODE; Seconds = [int]$sw.Elapsed.TotalSeconds }
 }

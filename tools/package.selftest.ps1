@@ -187,6 +187,23 @@ $checks = [ordered]@{
         Assert ($env:PATH -ceq $path) 'PATH not restored'
         Assert (-not (Test-Path -LiteralPath $f)) 'tmp file left'
     }
+    'msvc link path'           = {
+        # a folder with link.exe but no cl.exe goes; the rest stay, also a folder on a drive that does not exist
+        $gnu = Join-Path $base 'gnu'; $msvc = Join-Path $base 'msvc'; $plain = Join-Path $base 'plain'
+        foreach ($d in $gnu, $msvc, $plain) { [void][IO.Directory]::CreateDirectory($d) }
+        foreach ($f in "$gnu\link.exe", "$msvc\link.exe", "$msvc\cl.exe") { [IO.File]::WriteAllText($f, 'x') }
+        $letter = [char[]]'ZYXWVUTSRQPONMLKJIHGFED' | Where-Object { -not [IO.Directory]::Exists("${_}:\") } | Select-Object -First 1
+        Assert ($null -ne $letter) 'every drive letter D-Z exists'
+        $keep = "$msvc;$plain;;${letter}:\no-such-folder"
+        $got = Get-MsvcLinkPath "$gnu;$keep"
+        Assert ($got -ceq $keep) "got $got"
+    }
+    'head commit without git'  = {
+        # git not on PATH: no throw, so preflight reaches its exit code 3 line (git does not run)
+        $path = $env:PATH
+        try { $env:PATH = ''; $c = Get-HeadCommit } finally { $env:PATH = $path }
+        Assert (-not $c) "got $c"
+    }
     'steps inside try finally' = {
         $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'package.ps1'), [ref]$null, [ref]$null)
         $isCall = { param($n, $name) $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -ceq $name }

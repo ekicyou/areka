@@ -29,8 +29,11 @@
           (case-insensitive, any scope) are followed through string constants, arrays, +,
           parentheses and other variables (each once); pipelines, command results, members and
           method values are not followed
-       E  tools/package.ps1 (metadata and nar-sample-path), tools/tool-common.ps1 (metadata) and
+       E  tools/package.ps1 (nar-sample-path), tools/tool-common.ps1 (metadata) and
           tools/crates-io.ps1 (metadata) each have an Invoke-Utf8Child call with that element
+       F  the function Step of tools/test-all.ps1, run here with a green step and then a step whose
+          command is not found, records 0 and then a non-zero exit code (a stale $LASTEXITCODE
+          would turn a missing cargo or a mistyped command green)
   3. cp932 child: this script starts itself with -Cp932Child as a windowless child that has its
      own console (Invoke-Utf8Child -OwnConsole). Only that child sets its own console to code
      page 932 (Set-OwnConsoleCp932), then checks with the fixed sample {"description":"<U+7248>",
@@ -294,6 +297,27 @@ function Get-TargetResult([string]$Text, [string]$Where, [bool]$IsYaml) {
     [pscustomobject]@{ Findings = $f.ToArray(); CallWords = $w.ToArray() }
 }
 
+# Rule F: runs the function Step of $Text (tools/test-all.ps1) as test-all does (no StrictMode,
+# errors continue) with a green step, then a step whose command is not found. $null = the codes
+# are 0 and then non-zero; else the reason.
+function Get-StepRecordFinding([string]$Text) {
+    $fn = [Parser]::ParseInput($Text, [ref]$null, [ref]$null).Find({ param($n) $n -is [FunctionDefinitionAst] -and $n.Name -ceq 'Step' }, $true)
+    if ($null -eq $fn) { return 'no function Step' }
+    $codes = @(& {
+            Set-StrictMode -Off
+            $ErrorActionPreference = 'Continue'
+            $results = [ordered]@{}
+            . ([scriptblock]::Create($fn.Extent.Text))
+            Step 'green' { $global:LASTEXITCODE = 0 }
+            Step 'missing' { encoding-check-no-such-command }
+            $results['green'].Code, $results['missing'].Code
+        } 2>$null 6>$null)
+    if ($codes.Count -ne 2 -or $codes[0] -ne 0 -or $null -eq $codes[1] -or $codes[1] -eq 0) {
+        return "after a green step, a step whose command is not found was recorded as exit code $(if ($codes.Count -eq 2 -and $null -ne $codes[1]) { $codes[1] } else { 'none' })"
+    }
+    $null
+}
+
 # ---- 3. cp932 child: shared parts ----
 $root = Split-Path -Parent $PSScriptRoot
 $pwsh = [Environment]::ProcessPath
@@ -517,7 +541,16 @@ foreach ($s in $calib) {
         $fails.Add("FAIL calibration ${exp}: $($s.Name) (got: $(if ($rules.Count) { $rules -join ',' } else { 'none' }))")
     }
 }
-if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count) samples)" }
+$stepCalib = @(
+    @{ Name = 'Step without the reset'; Text = 'function Step([string]$Name, [scriptblock]$Command) { & $Command; $results[$Name] = [pscustomobject]@{ Code = $LASTEXITCODE } }'; Bad = $true }
+    @{ Name = 'no function Step'; Text = 'function Other { }'; Bad = $true }
+    @{ Name = 'Step with the reset'; Text = 'function Step([string]$Name, [scriptblock]$Command) { $global:LASTEXITCODE = -1; & $Command; $results[$Name] = [pscustomobject]@{ Code = $LASTEXITCODE } }'; Bad = $false }
+)
+foreach ($s in $stepCalib) {
+    $got = Get-StepRecordFinding $s.Text
+    if ($s.Bad -ne ($null -ne $got)) { $fails.Add("FAIL calibration $(if ($s.Bad) { 'F' } else { 'pass' }): $($s.Name) (got: $(if ($null -ne $got) { 'F' } else { 'none' }))") }
+}
+if ($fails.Count -eq 0) { "PASS calibration ($($calib.Count + $stepCalib.Count) samples)" }
 
 # ---- 2. static rules over the real files ----
 $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools') -Filter '*.ps1' -File) +
@@ -539,6 +572,9 @@ foreach ($where in $RequiredCalls.Keys) {
         else { $fails.Add("FAIL ${where}: E no Invoke-Utf8Child call with $w") }
     }
 }
+$stepWhy = Get-StepRecordFinding (Get-Content -LiteralPath (Join-Path $root 'tools/test-all.ps1') -Raw -Encoding utf8)
+if ($null -eq $stepWhy) { 'PASS tools/test-all.ps1: F Step records a step whose command is not found as red' }
+else { $fails.Add("FAIL tools/test-all.ps1: F $stepWhy") }
 
 # ---- 3. cp932 child ----
 $child = $null

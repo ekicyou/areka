@@ -333,7 +333,8 @@ function Show-Ascii { param([string]$s, [int]$Max = 80) }   # [string]
 #   'expected exactly one areka package, got <n>' / 'areka version is not a version: <版> (accepted: <形>; no + suffix)'
 function Get-ArekaVersion { }   # [string]
 
-# PATH の文字列から「link.exe を持つが cl.exe を持たない」フォルダ（Git Bash の coreutils ほか）を外した文字列
+# PATH の文字列から「link.exe を持つが cl.exe を持たない」フォルダ（Git Bash の coreutils ほか）を外した文字列。
+# ドライブが無いフォルダ（PATH に残った古い項目）でも投げずに残す（11.2 のかけ直しで直した: Join-Path は無いドライブで投げる）
 function Get-MsvcLinkPath { param([string]$Path) }   # [string]
 ```
 
@@ -447,6 +448,7 @@ function Exit-Script { param([int]$Code, [string]$Message) }   # $script:ExitCod
 **Implementation Notes**
 - Integration: 展開先の長さの確かめ（`EXPAND_DIR_MAX_CHARS`）は時刻を使うので preflight に残し、条件を `$Check` だけにする（19 の後は `-CheckDir` が `-Check` を伴う）。`Ctrl+C` では PowerShell は `catch` と後始末の関数を回さず `finally` だけを回すので、後始末の口を `finally` の 1 か所に置く（5）。`exit` でも `finally` は回る。
 - Validation: T2（下の Testing Strategy）。
+- preflight の HEAD の読みは関数 `Get-HeadCommit`（`git rev-parse --short=7 HEAD`・`git` が PATH に無くても投げずに空）に置く（11.2 のかけ直しで足した）。空なら今の 3 と今の文で止まる。終了コードの意味と文は変えない。
 - Risks: 段の間に散っていた関数の定義を前へ集めるとき、定義の中身と `$script:` の値の読み方は変えない（`Test-ZipContent` は呼ばれたときに `$script:Version`・`$script:Commit`・`$script:Dirty`・`$script:Notices` を読む）。
 
 #### encoding-check（`tools/encoding-check.ps1`）
@@ -465,6 +467,7 @@ function Invoke-ChildCheck { param([Parameter(Mandatory)][string]$Name, [Paramet
 - 子の出力の形: `PASS …`／`FAIL cp932 child: <名前>: …`／`version=<版>`。今の行の形は変えない（`FAIL cp932 child: production: …` などは名前の後の文が今と同じ）。
 - 較正 `cp932 child injected failure`（親・3 節の子の確かめの後）: 親は `-Cp932Child -FailCheck 'perf load'` の子をもう 1 本起こし、⑴ 0 でない終了コード ⑵ `FAIL cp932 child: perf load: uncaught: ` で始まり `\u7248` を含む行 ⑶ `PASS cp932 child: production` で始まる行 ⑷ `version=` の行、の 4 つがそろえば `PASS cp932 child injected failure (…)`、欠ければ `FAIL cp932 child injected failure: <欠けた物>` を `$fails` に足す。
 - 規則 E の表は上の「規則 E の表」。`Read-ArekaVersion`・`Show-Ascii`・`$VersionPattern` は消し、`tool-common.ps1` の物を使う。
+- 規則 F（11.2 のかけ直しで足した）: `test-all.ps1` の関数 `Step` を構文木から取り出し、`test-all.ps1` と同じ形（StrictMode なし・失敗は続く）で、緑の段の後に見つからない命令の段を回して、0 と 0 でない値が記録されることを見る（`Get-StepRecordFinding`）。較正の見本は 3 つ（戻さない `Step`＝赤・`Step` が無い＝赤・戻す `Step`＝緑）。行は `PASS tools/test-all.ps1: F …`／`FAIL tools/test-all.ps1: F …`。
 
 **Implementation Notes**
 - Integration: 子は自分の端末を 932 にしたまま、失敗の理由を `Show-Ascii` にして標準出力の `FAIL` の行で出す＝親の読み方（UTF-8）に依らず読める（研究の 11 節の 2）。
@@ -530,6 +533,7 @@ function Start-Burner { param([Parameter(Mandatory)][string]$PwshExe, [Parameter
 - `tool-common.ps1` を読み込み、`PATH` の手当てを `Get-MsvcLinkPath` にする。
 - 段を 7 つ足す（上の System Flows の並び）。頭書の段の一覧（5〜21 行）を同じ並びに改める。
 - 結果の一覧の行（`OK  `／`FAIL`／`SKIP  `・`==== results (commit …)`・`all steps green`・`red: N step(s)`）と終了コードは変えない。
+- `Step` は命令を回す直前に `$global:LASTEXITCODE = -1` を置く（11.2 のかけ直しで足した）: 見つからない命令は `$LASTEXITCODE` を書かないので、前の段の 0 を持ち越すと緑に記録される。見つからない命令の段は `FAIL … exit code -1` になり、ふつうの段の行と終了コードは変わらない。縛るのは `encoding check` の規則 F。
 
 #### perf の Python の版（範囲の外・`tools/perf/`）
 
@@ -680,6 +684,8 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 | `ascii exit message` | 子の `pwsh -File tools/package.ps1 -Arch <U+65E5>` を `Invoke-Utf8Child` で読む: 終了コード 3・全部の行が ASCII・`\u65E5` を含む（ビルドの前で止まる） | 15 |
 | `cleanup idempotent` | `Set-EnvTemp` で変数を 1 つ差し替え、仮の名前のファイルを 1 つ登録し、`Invoke-Cleanup 1` を 2 回呼ぶ: 投げない・変数と `PATH` が元のまま・ファイルが消えている | 5 |
 | `steps inside try finally` | 自分（`package.ps1`）を構文木で読む: 関数の定義の外の `Step` の呼び出しが全部、`finally` で `Invoke-Cleanup` を呼ぶ 1 つの `try` の中に在り、`Exit-Script` の中に `Invoke-Cleanup` が無い | 5 |
+| `msvc link path` | `target` の下に偽のフォルダ 3 つ（`link.exe` だけ・`link.exe` と `cl.exe`・空）を作り、空の項目と、無いドライブのフォルダを足した PATH の文字列を `Get-MsvcLinkPath` に渡す: `link.exe` だけのフォルダが外れ、ほかは順のまま残り、投げない（11.2 のかけ直しで足した） | 17 |
+| `head commit without git` | `PATH` を空にして（終わったら戻す）`Get-HeadCommit` を呼ぶ: 投げずに空を返す＝preflight が今の終了コード 3 と `git does not run (install git and add it to PATH)` の行へ届く（11.2 のかけ直しで足した: `git` が PATH に無いと、`Stop` の下では例外が先に出て段の失敗の 1 になっていた） | 11.2 のかけ直し |
 
 ### T2 `load-flake.ps1 -SelfTest` の検査
 
@@ -698,7 +704,7 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 | mouse-input | `release-in-finally` | 上の mouse-input の節の構文木の判定 | 6 |
 | release-notes | `notes of the fixture subjects equal the expected notes`（見本を改める） | 見本の spec 名の一覧（`spec-names.txt`）に在る接頭辞なしの名前の `feat`・`fix` が製品の見出しに入る／一覧に無いスコープは内部の作業／旧名 `areka-P0-<名>` で書かれ、一覧に `<名>` だけが在る題名も製品に入る | 1 |
 | release-notes | `highlights broken fixture fails with spec-name`（2 通り） | 見本に一覧の名前を足した文と、`areka-P0-` を足した文がどちらも `spec-name` だけで落ちる／名前の一部だけの語（前後に英数字が続く）は落ちない | 1 |
-| release-notes | `spec names cover active and completed` | `Get-SpecNames` を本物の根で呼び、`audit-tools-scripts` と、completed の旧名の 1 つ（頭を外した形）を含む | 1 |
+| release-notes | `spec names cover active and completed` | `Get-SpecNames` を本物の根で呼び、`.kiro/specs/` の直下にだけ在る名前（completed に同じフォルダが無いもの・頭を外した形）の全部と、completed の旧名の 1 つ（頭を外した形）を含む（11.2 のかけ直しで、決め打ちの `audit-tools-scripts` から改めた: この spec が completed へ移ると前半が空振りする） | 1 |
 | encoding-check | `cp932 child injected failure` | 上の encoding-check の節 | 4 |
 | sample-fetch | `https only refuses a non-https url at curl` | `-HttpsOnly` の `Sync-FetchedSample` に `file:///` の行を渡すと、本物の `curl.exe` が取り寄せずに落ち、`FAILED could not fetch the checksum file` の行と `failed` を返す | 8 |
 | sample-fetch | `https only passes both proto flags` | `-HttpsOnly` のときの curl の引数に `--proto =https` と `--proto-redir =https` が在り、無いときは無い（引数の組み立てを純関数 `Get-CurlArguments` にする） | 8 |

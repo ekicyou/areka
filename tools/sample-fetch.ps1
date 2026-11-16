@@ -22,7 +22,7 @@
   Production rows pass -HttpsOnly: curl gets --proto =https --proto-redir =https, so a redirect
   never leaves https.
 
-  -SelfTest: the 10 checks of the fetch step without network (fake file:/// rows through the real
+  -SelfTest: the 11 checks of the fetch step without network (fake file:/// rows through the real
   curl.exe, in target\sample-fetch-selftest\<pid>\, removed at the end). Prints PASS/FAIL <name>
   per check; exit 0 only when all pass.
 #>
@@ -205,7 +205,7 @@ function Invoke-FetchRows {
     $ExitCode.Value = [int]($count.failed -gt 0)
 }
 
-# --- -SelfTest: the 10 checks, through the real curl.exe on file:/// rows, no network ------
+# --- -SelfTest: the 11 checks, through the real curl.exe on file:/// rows, no network ------
 if ($SelfTest) {
     $script:fails = 0
     $script:all = [System.Collections.Generic.List[string]]::new()
@@ -334,6 +334,18 @@ if ($SelfTest) {
         $off = (Get-CurlArguments 'https://x/a' 'o') -join ' '
         Judge '10 https only passes both proto flags' (
             $on.Contains('--proto =https') -and $on.Contains('--proto-redir =https') -and -not $off.Contains('--proto'))
+
+        # 11. production rows reach Sync-FetchedSample with -HttpsOnly, -AnyScheme rows without it
+        #     (a stand-in Sync-FetchedSample in this child scope records the switch; no curl, no network)
+        $seen = [System.Collections.Generic.List[bool]]::new()
+        & {
+            function Sync-FetchedSample { param($Name, $Url, $ChecksumUrl, $NarPath, $ChecksumPath, [switch]$HttpsOnly)
+                $seen.Add($HttpsOnly.IsPresent); [pscustomobject]@{ Result = 'present'; Lines = [string[]]@() } }
+            $code = -1
+            $null = Invoke-FetchRows -Rows (, @('x', 'https://x/a.nar', 'https://x/a.nar.sha256', 'a', 'b')) -ExitCode ([ref]$code)
+            $null = Invoke-FetchRows -Rows (, @('x', 'file:///a.nar', 'file:///a.nar.sha256', 'a', 'b')) -ExitCode ([ref]$code) -AnyScheme
+        }
+        Judge '11 production rows fetch with https only' (($seen -join ',') -ceq 'True,False')
 
         # 8. every line above is ASCII only
         Judge '8 all output is ASCII only' (

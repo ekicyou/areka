@@ -42,7 +42,8 @@
           見本から fix と perf の製品の変更を除き、一つ前のタグを空にして作った文が expected-notes-from-start.md と同じ
           見本の見どころ（highlights-ok.md）から作った本文が expected-body.md と 1 字違わず同じ（末尾に空行を足しても同じ）
           見本（tools/release-notes-fixture/highlights-ok.md）が通る
-          見本から 1 か所ずつ外した文が、それぞれ決まった欠けの名前だけで落ちる
+          見本から 1 か所ずつ外した文が、それぞれ決まった欠けの名前だけで落ちる（spec-name は一覧の名前と印の 2 通り）
+          spec 名を語の一部にだけ含む文は通る／本物の spec 名の一覧が .kiro/specs/ の直下にだけ在る名前の全部と completed の名前を含む
           見出しの番号の後ろに字を続けた文が落ちる／大文字と小文字の違う spec 名の印は通る／欠けを重ねた文が全部を返す
           書き方の決まりの文書が、較正値の出典の URL を含む
           doc/release-notes/v*.md の実物が全部通る
@@ -292,8 +293,14 @@ if ($SelfTest) {
     }
     # 名前の一部だけの語（前後に英数字・- が続く）は spec 名として落とさない
     Judge 'highlights word containing a spec name passes' ((& $keys ($ok + "`nx$($fxNames[0])y $($fxNames[0])-z`n")) -ceq '')
+    # .kiro/specs/ の直下にだけ在る名前（completed に同じフォルダが無いもの）の全部と completed の旧名の 1 つ。
+    # 名前を決め打ちしない: 決め打ちの spec が completed へ移ると、直下を読まなくなっても通ってしまう
+    $activeOnly = @([System.IO.Directory]::GetDirectories((Join-Path $root '.kiro/specs')) | ForEach-Object { [System.IO.Path]::GetFileName($_) } |
+        Where-Object { $_ -cne 'completed' -and -not [System.IO.Directory]::Exists((Join-Path $root ".kiro/specs/completed/$_")) } |
+        ForEach-Object { $_ -creplace "^$([regex]::Escape($SPEC_MARK))", '' })
     Judge 'spec names cover active and completed' (
-        ($specNames -ccontains 'audit-tools-scripts') -and ($specNames -ccontains 'actor-foundation'))
+        $activeOnly.Count -gt 0 -and @($activeOnly | Where-Object { $specNames -cnotcontains $_ }).Count -eq 0 -and
+        ($specNames -ccontains 'actor-foundation'))
     # 見出しの番号の括弧は行の最後に在ること
     Judge 'highlights heading with text after the pr number fails' (
         (& $keys ([regex]'(\(#[0-9]+\))\n').Replace($ok, "`$1 x`n", 1)) -ceq 'heading-no-pr')

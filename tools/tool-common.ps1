@@ -45,8 +45,9 @@ function Get-ArekaVersion {
 
 # Under Git Bash, GNU coreutils link.exe shadows the MSVC link.exe and i686 links fail.
 # Returns the PATH string without folders that hold link.exe but not cl.exe.
+# No Join-Path: it throws on a folder whose drive does not exist (a stale PATH entry).
 function Get-MsvcLinkPath([string]$Path) {
     ($Path -split ';' | Where-Object {
-            -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
+            -not $_ -or -not (Test-Path -LiteralPath "$_\link.exe") -or (Test-Path -LiteralPath "$_\cl.exe")
         }) -join ';'
 }
