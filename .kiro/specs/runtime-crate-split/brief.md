@@ -128,3 +128,7 @@
 - **優先度の区分**: A（開発者の「本体の crate 分け」）。
 - **要件定義のモデル**: Opus（`placement-crate-split` の前例どおりの移しで、振る舞いは変えない）。
 - **分割の案**: 無し。
+
+## 申し送り（audit-tools-scripts より）
+
+- `audit-tools-scripts` は `runtime-crate-split` の着地より先に完了したため、`tools/load-flake.ps1` に新しいクレートの選び肢を足していない。着地の後に `tools/load-flake.ps1` へ `-Binary areka-runtime-lib`（`-p areka-runtime --lib`）の選び肢を足し、使い方の例の `-Filter runtime::frame` を新しいクレートの形に直し、`-SelfTest` の `cargo args` の期待を 3 対象から 4 対象へ直すこと。参照先: `.kiro/specs/completed/audit-tools-scripts/verification.md` の「タスク 11.1」の節。
