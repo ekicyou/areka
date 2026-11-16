@@ -263,3 +263,124 @@ master の `crates/libs/core/src/unknown.rs` の `impl PartialEq for IUnknown` �
 5. i686 の `…LongPtrW`: `.sys()` の出力が別名を出さないとき、写しの側で `cfg(target_pointer_width)` で分ける直し方（3.5 の 2・要件 3.5 の「直す」の見立てに入る）。
 6. 問い 6 の SHIORI の確かめの深さ: マクロの `_Impl` が `HRESULT` を返す形に変わったかで、「今のまま通る」の確かめで済むかが決まる（3.5 の 1）。
 7. 7.2 の Research Needed の 1〜6。
+---
+
+# 設計の段の調べと決め（2026-11-16・`/kiro-spec-design`）
+
+## Summary
+
+- **Feature**: `pilot-windows-rs-next`
+- **Discovery Scope**: Complex Integration（本線の外に独立のワークスペースを建て、未公開の上流を git で引き、本線のクレートを写すか path で借りる）。full の discovery を、上流のソースの読みと本線のコードの読みに絞って行った（ウェブの一般の調べは要らなかった）。
+- **Key Findings**:
+  - 上流の master の先頭は 2026-11-16 も `f37e2f9046cf9710fe00285436c4d22ad6053d72`（2026-11-14T20:13:16Z「Add submitted-frame input support (#5384)」）のまま。これを引くコミットに決めた（要件 2.1・確定 3）。
+  - 7.2 の Research Needed のうち 4 つ（マクロの `_Impl`・i686 の `…LongPtrW`・`.implement` の継ぎ・`==` の導出）は、上流のソースを読んで答えの見込みが出た（下の Research Log）。実物で確かめるのは実装の段。
+  - `.sys()` の関数は `BOOL`（`i32` の別名）などの生の型を返し `#[must_use]` が付かない。既定の形の包みと `HRESULT` には `#[must_use]` が付く。問い 10 の「戻り値を見ない」は形によって捕まり方が違う見込み。
+
+## Research Log
+
+### 引く上流のコミット（要件 2.1）
+- **Context**: 確定 3「設計の段で master の先頭を 1 つに決める」。
+- **Sources Consulted**: `gh api repos/microsoft/windows-rs/commits?per_page=5`（2026-11-16）。
+- **Findings**: 先頭は `f37e2f90`（#5384）。その下は `70bebd79`（#5383）・`520097a3`（#5379 縦書き）。11-14 から動いていない。
+- **Implications**: `rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72"` を置き場の `[workspace.dependencies]` に書き、`Cargo.lock` に固定する。
+
+### `#[interface]` マクロの `_Impl` の戻り値（3.5 の 1・要件 7.1・7.3）
+- **Sources Consulted**: `crates/libs/interface/src/generation.rs`（`gen_com_trait`・`is_result`）@`f37e2f90`。
+- **Findings**: マクロが作る `IFoo_Impl` のメソッドは、作者が宣言に書いた戻り値（`HRESULT` か `Result<T>`）をそのまま使う。`Result<T>` のときだけ vtable の側が `HRESULT` へ写す。PR 5299 の「`_Impl` が `HRESULT` を返す」は `windows-bindgen` の出力の話で、マクロには及ばない。マクロの型の `PartialEq` は中の `IUnknown` の `==`（COM の同一性）。
+- **Implications**: 問い 6 の SHIORI の半分は「今の宣言のまま 0.101 で組めて、呼び出しが実装まで届くか」の確かめになる（7.3 の 6 の深さの判断）。`HRESULT` を返す形の書き換えは `IDWriteTextRenderer1`（bindgen の出力）の側で見る。
+
+### i686 の `SetWindowLongPtrW`（3.5 の 2・要件 3.2・9.1・7.3 の 5）
+- **Sources Consulted**: `crates/libs/bindgen/src/types/cpp_fn.rs`（`window_long_dependency`・`write_window_long`）@`f37e2f90`。
+- **Findings**: `Get/SetWindowLongPtr{A,W}` を選ぶと、メタデータに x86 の宣言が無いときに `#[cfg(target_pointer_width = "32")] pub use SetWindowLongW as SetWindowLongPtrW;` の別名を出す。`.sys()`・`.minimal()`・既定のどの形でも出す（`write` の両方の枝が別名を含む）。依存の `SetWindowLongW` も自動で束縛に入る。
+- **Implications**: 写しの側で `cfg(target_pointer_width)` で分ける直しは要らない見込み。i686 で止まったときだけ「直す」の見立てに入れる。
+
+### `.implement` の継ぎ（3.5 の 3・要件 7.2）
+- **Sources Consulted**: `crates/libs/bindgen/readme.md`・`src/config.rs`（`should_implement`）・`src/implements.rs`。
+- **Findings**: readme は「継ぎのある階層を実装するときは土台のインターフェースも選ぶ」と書く。既定の形で `.implement` を 1 つも書かないと全部のインターフェースに `_Impl` が出る。`.minimal()` では名指ししたものだけ。名前は完全名か名前空間の頭。
+- **Implications**: `IDWriteTextRenderer1`・`IDWriteTextRenderer`・`IDWritePixelSnapping` の 3 つを名指しする。
+
+### COM の型の `==`（7.2 の 3・要件 12.4・12.5）
+- **Sources Consulted**: `crates/libs/core/src/imp/mod.rs`（`define_interface!`）・`src/unknown.rs`・`bindgen/src/types/cpp_interface.rs`。
+- **Findings**: 既定と `.minimal()` の COM の型は `define_interface!` で `#[derive(PartialEq, Eq, Clone)] struct I…(IUnknown)` になり、`==` は `IUnknown` の比べ（番地が同じか、でなければ両方を `IUnknown` へ `cast` して比べる）。`.sys()` は COM の型を作らず、vtable の構造体と `IID_…` の定数だけを出すので `==` は無い。
+- **Implications**: `same_root` と `GraphicsCommandList` の導出の `PartialEq` は、既定と `.minimal()` ではそのまま COM の同一性を保つ見込み。要件 12.5 の包みの書き方は「`.sys()` のときだけ要る」と見立て、実物で確かめる。
+
+### `windows-text` の生の COM との出入り（7.2 の 4・要件 8.2・8.5）
+- **Sources Consulted**: `crates/libs/text/src/layout.rs`（`as_interface`・`to_interface`・`new`）・`Cargo.toml`。
+- **Findings**: `as_interface::<T>()` は `QueryInterface` を呼ばず、`T` の IID が `IDWriteTextLayout` と一致することだけを確かめて借りる。`to_interface::<T>()` は `cast`（QueryInterface）。文書に「Direct2D で描くにはこれを使う」とあり、DirectWrite の位置は UTF-16 の単位と書いてある。`TextLayout::new` は `CreateTextLayout` の失敗で `unwrap` の panic。依存は `windows-core` と `windows-numerics` だけ。
+- **Implications**: 自前の束縛の `IDWriteTextLayout` で借り、自前の `ID2D1DeviceContext::DrawTextLayout` へ渡す。範囲ごとの色は `IDWriteTextLayout` の上で `SetDrawingEffect` を UTF-16 の範囲で呼ぶ（UTF-8 のバイト位置からの換算が要る）。
+
+### 束縛を作る口と既定の入力（要件 1.6・4.3）
+- **Sources Consulted**: `bindgen/src/cli.rs`（旗の一覧）・`src/lib.rs`（`Bindgen` の公開の方法・`prepend_default_refs`）・`Cargo.toml`。
+- **Findings**: 旗は `--in`・`--out`・`--filter`・`--filter-file`・`--rustfmt`・`--derive`・`--flat`・`--package`・`--sys`・`--minimal`・`--dead-code`・`--extern`・`--implement`・`--compose`（ほかに引数ファイルの `--etc`）で、`--reference` は無い。参照の表は内部の `prepend_default_refs` だけが作る。入力を書かなければ同梱のメタデータ（`windows-default`）を使う。`.dead_code()` は束縛を `pub(crate)` にして、使わない API を dead-code の警告で見せる。
+- **Implications**: 要件 4.3 の答えはこの箇所を一次記録に引けば足りる。`.dead_code()` はフィルターの選びすぎを測るのに使える（問い 1）。
+
+### 戻り値を見ない取りこぼし（要件 11.2）
+- **Sources Consulted**: `crates/libs/result/src/hresult.rs`・`bindgen/src/types/cpp_fn.rs`（`write_must_use`）。
+- **Findings**: `HRESULT` は `#[must_use]`。既定の形の関数の包みにも `#[must_use]` が付く。`.sys()` の関数は `link!` の素の宣言で、`BOOL`（`i32` の別名）を返すので `#[must_use]` が無い。
+- **Implications**: 既定の形の COM では「文として捨てる」は rustc の `unused_must_use` で捕まり、`let _ =` で捨てると clippy の `let_underscore_must_use`（restriction の群）でしか捕まらない見込み。`.sys()` の `BOOL` は捕まらない見込み。問い 10 で実物を確かめる。
+
+### 本線の側（設計に効いたもの）
+- `wintf-winmsg-executor` の `util` は `pub mod util` で、`Window::new_ex`（拡張スタイルつき）を公開している。問い 4・7 の窓とメッセージループに写しを借りられる。
+- 例 `threads.rs` は 2 本のスレッドが同時に書くので、行の交互は走らせるたびに変わる（要件 3.2 の比べ方に効く）。
+- 今の areka の縦書きの画素は、公開の API（`areka_emo_text::actor::{TextLayerRuntime, present_frame}`・`surface(..).read_back()`・`wintf::ecs::{GraphicsCore, WucGraphicsResource}`・`areka_parsers::balloon::parse_str`）だけで撮れる（`tests/support/mod.rs` と `decoration_readback/mod.rs` の組み方）。縦書きの試験はぱすたの書体の候補列（`游ゴシック Medium,…`）と 20 px で撮り、列の先頭の字の枠の上端は面の y=0。
+- 見張り `sample_path_guard_test.rs` は、`crates/` の下の全部の `Cargo.toml` の本番の依存に `sample-ghost-kit` と `real-run-kit` が無いことを見る。置き場の manifest もこれに当たる（借りないので当たらない）。`with_default_guard_test.rs` の ⑷ はフォルダ名で `wintf` だけに `env-filter` を許すので、置き場のフォルダ名に本線のクレートと同じ名前を使わない。
+- 本線の `Cargo.lock` に `png` 0.18.1・`bevy_ecs` 0.19.1 が在る。
+- cargo の `.cargo/config.toml` は打った場所（cwd）から探される。`--manifest-path` で外から打つと置き場の `config.toml` は読まれない。
+
+## Architecture Pattern Evaluation
+
+| 案 | 中身 | 強み | 弱み | 扱い |
+|---|---|---|---|---|
+| 問いごとに独立のクレート（共有なし） | 問いごとに自分の束縛を持つ | 問いの間がつながらない | 問い 7 のバルーンが問い 4 の WUC と D2D を使うとき、同じ型が別の束縛に出てつながらない | 問い 1・2・3・5・9・10 はこの形 |
+| 共有の束縛のクレート `bind-next`（既定の形）を土台に置く | 問い 4・6・7 が同じ束縛を使い、フィルターは問いごとのファイルに分ける | 型がつながる・フィルターの行数を問いごとに数えられる | 問い 2 の案 3 と同じ形なので、推しの材料と取り違えやすい | 採る（問い 2 の比べとは別の物と一次記録に書く） |
+| 束縛を生成してコミット | 小さな道具が生成し 1,000 行で分けて置く | 本坑の 1 本目に近い | 分け方の手間・見張りの 1,000 行に当たる危険 | 採らない（本坑の 1 本目の仕事） |
+
+## Design Decisions
+
+### Decision: 束縛は全部 `build.rs` で `OUT_DIR` へ作る（7.3 の 1）
+- **Context**: 要件 1.6（1,000 行の見張り）・上流の readme（アプリは `build.rs`・公開のライブラリは生成してコミット）。
+- **Alternatives Considered**: 1) `build.rs`→`OUT_DIR` 2) 生成してコミット（1,000 行で分ける） 3) 両方。
+- **Selected Approach**: 1)。生成した束縛の行数は問いごとに一次記録へ書き、本坑の 1 本目（束縛を作る道具）の材料にする。
+- **Rationale**: 見張りに当たらず、フィルターを直せばすぐ組み直る。先進坑の問いの答えは束縛の置き方に依らない。
+- **Trade-offs**: コミットの形と `--package` の分け方は測らない（本坑の 1 本目へ渡す）。
+- **Follow-up**: 設計の討議の議題（コミットの形を 1 度通すか）。
+
+### Decision: 問い 9 は rust-analyzer の SCIP の索引を読む道具で数える（7.3 の 2）
+- **Context**: glob の取り込み 110 か所で grep では種類に分けられない（2.3・5.4）。要件 10.2「だれが走らせても同じ数」。
+- **Alternatives Considered**: grep・SCIP・失敗を起点のコンパイル・nightly の展開。
+- **Selected Approach**: `rust-analyzer scip` で本線の索引を作り、置き場の道具 `q9-api-count` が `windows`・`windows_core`・`windows_numerics`・`windows_strings`・`windows_result` の記号への参照を、記号の綴りの末尾（`#`＝型・`().`＝関数か型の下のメソッド・`.`＝定数ほか）で分けてクレートごとに数える。rust-analyzer の版と本線のコミットを一緒に書く。
+- **Rationale**: 名前の解決がコンパイラと同じで、本線を変えずに読むだけで済む。
+- **Trade-offs**: 索引づくりは重い（1 回だけ）。マクロの展開の中の参照は数えない。型の下のメソッドが COM のメソッドか型の便利な口かは綴りでは分けない（大半は COM のメソッド）。
+- **Follow-up**: 重すぎるか落ちるときの代わりは設計の討議の議題。
+
+### Decision: 置き場の `Cargo.lock` は本線の `Cargo.lock` を写して始める（7.3 の 3）
+- **Rationale**: 借りる `wintf`・`areka-emo-text` の推移の依存（`bevy_ecs` ほか）を本線と同じ版に揃え、問い 7 の「今の areka」の画素を本線と同じにする。写した本線のコミットを一次記録に書く。
+
+### Decision: `.cargo/config.toml` で `target-dir` を作業木の `target\pilot-windows-rs-next` へ向け、一次記録のコマンドは `--manifest-path` と `--target-dir` を絶対パスで書く（7.3 の 4・要件 13.6・15.2）
+- **Rationale**: `config.toml` は cwd から探されるので、置き場の中で打ったときの保険にしかならない。どこから打っても作業木の `target` の下へ出るように、コマンドの側で両方を明示する。
+
+### Decision: 問い 4・7 の窓とメッセージループは問い 1 の写しを借りる
+- **Rationale**: 新しく窓の組み立てを書かずに済み、`.sys()` の `HWND`（生ポインタの別名）と既定の形の `HWND`（newtype）の行き来が実地に出る（問い 5・要件 12 の材料）。
+
+### Decision: 問い 7 の比べは 1 つのプログラムの中で旧と新を別々に描き、画素だけを比べる
+- **Rationale**: 要件 8.2（型をつながない）を守りつつ、`windows-core` 0.62 と 0.101 が 1 つのバイナリに並んで動くことが、そのまま要件 13.5（段階の移行）の実物になる。COM の初期化は新しい束縛で呼ぶので、置き場のコードは `windows` クレートを名指ししない（要件 2.3）。
+
+## Synthesis（一般化・作るか採るか・削り）
+
+- **一般化**: 問い 2・3・7 はどれも「DirectWrite の文字を Direct2D で画面の外の絵へ描き、読み戻して墨を数える」の変種。描く口は問いごとに書くが、差の絵と平行移動の探しは問い 7 の `diff` だけに置き、問い 2・3 は墨の数だけを出す。
+- **作るか採るか**: 画素の比べは本線の `decoration_readback` の組み方を写さず、公開の API で新しく書く（試験の補助は外から使えない）。PNG の書き出しは本線の `Cargo.lock` に在る `png` を採る。SCIP の読みは crates.io の `scip` クレートを採る（置き場の `Cargo.lock` だけに入る）。画面の撮りは画面の DC からの `BitBlt`（新しく 40 行ほど）にし、Desktop Duplication は写さない。
+- **削り**: 束縛のコミットの形・`--package` の測り・WinRT の `.minimal()`・問い 9 の本番と試験の行の分け・問い 2 の案ごとの別の描き手は作らない。問い 2 の 3 案は同じ描く本体を `#[path]` で読み込み、違いを束縛の置き場だけに絞る。
+
+## Risks & Mitigations
+- git の依存で上流のワークスペース（約 1.4 GB）の解決が止まる — 要件 2.5 の手順で理由を書き、別のコミットへ動かす前に一次記録に残す。
+- rust-analyzer の SCIP の索引づくりがメモリで落ちる — 1 回だけ・ほかの重いビルドと並べない。落ちたら設計の討議で決めた代わりへ。
+- 問い 7 の旧と新で原点がずれ、字形の差と位置の差が混ざる — 原点そのままの比べと、±8 px の平行移動で最も合う所の比べを両方出す。
+- `SendInput` はロック中・スクリーンセーバー中に効かない — 在席の時に排他テストの机を取って回す。
+- 上流が公開までに動く — コミット番号と確かめた日を一次記録に書く（要件 13.3）。
+
+## References
+- https://github.com/microsoft/windows-rs/tree/f37e2f9046cf9710fe00285436c4d22ad6053d72/crates/libs/bindgen — 旗・builder・`window_long_dependency`
+- https://github.com/microsoft/windows-rs/blob/f37e2f9046cf9710fe00285436c4d22ad6053d72/crates/libs/interface/src/generation.rs — マクロの `_Impl`
+- https://github.com/microsoft/windows-rs/blob/f37e2f9046cf9710fe00285436c4d22ad6053d72/crates/libs/core/src/imp/mod.rs — `define_interface!` の導出
+- https://github.com/microsoft/windows-rs/blob/f37e2f9046cf9710fe00285436c4d22ad6053d72/crates/libs/text/src/layout.rs — `as_interface`・`to_interface`・`new`
+- 使ったスキルと手引き: `kiro-spec-design`（`rules/design-principles.md`・`design-discovery-full.md`・`design-synthesis.md`・`design-review-gate.md`）。`.kiro/steering/two-tunnel.md`（置き場の規律・README 3 幕）。
