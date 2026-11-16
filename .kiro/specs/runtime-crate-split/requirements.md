@@ -62,7 +62,7 @@
 6. The 分割作業 shall ワークスペースの根の `Cargo.toml` を変えない。
 7. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのは、ワークスペースの中の path 依存と、`Cargo.lock` に既にある crate だけ）。
 8. The `areka-runtime` クレート shall 本番の依存を、今の runtime が本番で使う crate（tracing・bevy_ecs・wintf・dola・areka-emo-present・areka-ghost・areka-sakura・areka-parsers・areka-emo-text・areka-emo-compose・areka-seriko・areka-kanade・areka-actor・areka-emo-atlas・areka-sylphya・thiserror・windows・areka-placement。正確な一覧は設計の段で測る）に収め、ワークスペースのほかの crate と同じ形で受ける（外の crate は `workspace = true`、ワークスペースの中の crate は `{ path = "../…" }`）。
-9. The `areka-runtime` クレート shall テストでだけ使う crate（log-capture-kit・temp-path-kit・sample-ghost-kit・shiori-host32-host・image ほか。2026-11-16 の測りで areka-update は 0）を本番の依存に入れない（3.4 の決まりに従う）。
+9. The `areka-runtime` クレート shall テストでだけ使う crate（log-capture-kit・temp-path-kit・sample-ghost-kit・shiori-host32-host・image ほか。2026-11-16 の測りで areka-update は 0）を、機能を付けないビルドで付く依存に入れない。番人の 3 つの crate（log-capture-kit・sample-ghost-kit・temp-path-kit）は optional も含めて本番の依存表に書かない（3.4 の決まりに従う）。`test-support` 機能だけが付ける optional の依存（台本の SHIORI のための shiori-host32-host）はこれに反しない（設計の討議 2026-11-16 議題 5・前例が要件 1.7 の字面を直したのと同じ形）。
 10. The `areka-runtime` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。例外表の項目は増やさず（パスの書き換えだけ）、書き換えや整形で上限を超えるファイルは分けて収める。
 
 ### Requirement 2: 公開面の付け替えと本体の参照

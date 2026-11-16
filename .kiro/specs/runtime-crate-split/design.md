@@ -143,7 +143,7 @@ graph TB
 | D3 | 本体へ移したテストが使う私有の項目の開け方（3.5） | 本番の可視性は変えない。⑴ `pub(crate)` で外から使われるもの → `pub`（2.1）⑵ 私有か `pub(super)` の関数・型・定数 → 家の型 `test_open`（その項目を同じファイルの `mod test_open { use super::*; … }` の中で `pub` にし、`#[cfg(feature = "test-support")] pub use test_open::X;` と `#[cfg(not(feature = "test-support"))] <今の可視性> use test_open::X;` で同じ道と名前に出し直す。`areka-placement` の `dpi_sync.rs`・`balloon_limit.rs`・`balloon_lock.rs`・`lib.rs` と同じ形・説明の 1 行も同じ文型）。**⑵ の対象は、tracing の呼び出し（`trace!`〜`error!`・`#[instrument]`）を中に持たない項目（型・定数・ログを出さない関数）に限る**。`test_open` は定義そのものを子のモジュールへ移すので、中のログの出所が `…::test_open` 付きに変わる（要件 6.1・6.8 に反する）。ログを出す関数（例: `frame/switch.rs` の `run_switch_phase`）は ⑷ の渡し口で開く ⑶ 道の途中の私有のモジュール（`frame` の `wiring`・`dpi`・`attach`・`switch`・`window_state`・`scale_notice` ほか）→ 宣言の印を機能で切り替える（`#[cfg(feature = "test-support")] pub mod x;` と `#[cfg(not(feature = "test-support"))] mod x;`）⑷ 私有の欄とメソッド → 前例 D9 の渡し口（その型のモジュールの `#[cfg(feature = "test-support")] pub mod test_support` に、欄やメソッドへそのまま渡す `pub fn`）。⑷ を使うテストだけ、その 1 か所の呼び方を渡し口へ書き換える | 全部 `pub` にする（本番の公開面が広がる）／前例 D9 の渡し口だけ（型は渡せない） |
 | D4 | テストの支えの割り方（3.1・3.3・3.4） | `spine` は 3 層: ⑴ 待ちの部品と `GpuPermit`（`spine_wait.rs`）と ⑵ 台本の SHIORI（`ScriptedShioriBackend` 一式・`HOMEURL_RESOURCE`・`hold_support`）を `areka-runtime` の `spine`（`#[cfg(any(test, feature = "test-support"))] pub mod spine`）に残す。⑶ 背骨の足場（`spine.rs` の 386〜894 行＝`settle_bounded`・`make_world_with_gpu`・`SpineHarness` ほか）と `spine_test_support.rs`・`spine_conformance_{judge,script,support}.rs` とそれを使うテストは、本体の `runtime_tests/spine.rs`（`spine` の代わりの親を兼ねる）とその子へ移す。`frame` の支え（`frame_test_support.rs`）は割らずに `#[cfg(any(test, feature = "test-support"))] pub mod test_support` にし、番人の crate を引く 3 項目（`capture_logs`・`window_move_lines`・`window_move_routes_of`）とその `use` 2 行だけに `#[cfg(test)]` を付ける。本体へ移すテストの `capture_logs(…)` は `log_capture_kit::capture_lines(LineFormat::LevelTargetFields, …).1` を直に使う（新しい包みを作らない・前例 3.1 の形）。runtime の中のテストの補助を本体へ移すテストが使うとき、番人の crate を引かなければ `test-support` の支えへ移し（例: `frame_attach_tests` の `gpu_attach_world` → `frame::test_support`）、引くなら本体へ移すテストと一緒に本体へ移す | `spine` を丸ごと本体へ（⑴ を使う runtime のテスト 13 本が写しを要する）／番人の決まりを狭く広げる（3.4 に反する） |
 | D5 | 口の倒れ先（3.6） | `session_hooks.rs` の `FALLBACK` の 2 つの `const` を消し、`of` は口が無いとき `NO_BODY` を返す。`#[cfg(not(test))]` の `error!` はそのまま（本番は記録つき・`areka-runtime` のテストは記録なし）。本体へ移したテストのうち口を読む相を回す World は、World を組んだ直後に `crate::session::hooks::install(&mut world)` を呼ぶ（本番の `ghost_session::register_systems` と同じ口）。据える所は、倒れ先に頼る 15 本のテストの World の組み立てと、本体の `SpineHarness` の組み立ての中の 1 回 | 倒れ先を差し替える口を `test-support` に足す（仕組みが 1 つ増える）／`areka-runtime` のテストでも `error!` を出す（今の記録の合否が変わりうる） |
-| D6 | 落ちの報告の 2 つ目の据え方（3.8） | 写しを足さない。`crash_report_test_support.rs` の宣言を `#[cfg(any(test, feature = "test-support"))] pub mod crash_report_test_support;` にし、本体のテストの実行ファイルには機能つきの `areka-runtime` の rlib から初期化子（`#[used]`・`.CRT$XCU`）と持ち手の表が入る。本体の側に、据わったことを確かめるテスト 1 本（`runtime_tests/mod.rs` の `crash_filter_is_installed_before_the_tests_start`・`test-support` の `pub fn installed() -> bool` を読む）を置く。`areka-runtime` の自分のテストの実行ファイルは今と同じ 5 本で確かめる | 本体に 4 つ目の写しを置く（GPU の許可の持ち手の表は `areka-runtime` の側にあり、本体の写しの報告とつながらない＝「同じ形の報告」にならない） |
+| D6 | 落ちの報告の 2 つ目の据え方（3.8） | 写しを足さない。`crash_report_test_support.rs` の宣言を `#[cfg(any(test, feature = "test-support"))] pub mod crash_report_test_support;` にし、中身（`install`・持ち手の表・`installed()`）を `pub` で開く。**初期化子の `static`（`#[used]`・`.CRT$XCU`）は `areka-runtime` の側では `#[cfg(test)]` だけにする**。本体の `#[cfg(test)] mod runtime_tests` の `mod.rs` に同じ形の `static` を 3 行置き、`areka_runtime::crash_report_test_support::install` を指す（中身の写しではない・置く所はテストの実行ファイルの根の crate＝今の注が挙げる「結びで落ちない」理由と同じ）。こうすると `cargo test` の中で機能つきで組まれる本体の bin（実機テストが起こす `CARGO_BIN_EXE_areka`）には初期化子が入らない（設計の検証の重大な問題 1）。本体の側に、据わったことを確かめるテスト 1 本（`runtime_tests/mod.rs` の `crash_filter_is_installed_before_the_tests_start`・`installed()` を読む）を置く。`areka-runtime` の自分のテストの実行ファイルは今と同じ 5 本で確かめる（設計の討議 2026-11-16 議題 1） | 初期化子を `test-support` でも立てる（本体の bin にも入りうる＝実機テストの exe が本番と違う形になる）／本体に 4 つ目の写しを置く（GPU の許可の持ち手の表は `areka-runtime` の側にあり、本体の写しの報告とつながらない） |
 | D7 | `areka-runtime` の読み口（5.2・5.3） | 作らない。下の crate のファイルを読むテスト（`film_playback_e2e_tests`・`measure_bake_count_tests`・分岐の対応表 2 本）は本体の読み口（本体の項目）を引くので、D8 の定義で本体に置く。本体の読み口は `areka-runtime` を下の crate として読む | 読み口を `areka-runtime` の `test-support` へ移して本体も使う（5.3 の「placement-crate-split が置いた 1 つの読み口」の置き場が動く）／共有の kit へ下ろす |
 | D8 | 「本体を引く」の定義と `placement_tests/` の残り（3.5・4.5） | 本体の crate の項目（本番・テストの支え・読み口を含む）を 1 つでも使うテストを「本体を引く」とする（3.5 の 40 の数え方と同じ）。この定義を `placement_tests/` の残りに 1 本ずつ当てる（下の表） | 読み口をテストの道具として数えない（`areka-runtime` に読み口が要る＝D7 の代案） |
 | D9 | 1,000 行の上限（1.10） | 例外表に項目を足さない。D1 の代わりの親で、移したテストのファイルは `crate::runtime::` → `areka_runtime::`／`crate::`（短くなる向き）と D5 の口の据え付け 1 行のほかは変わらない（`switch_finish_tests.rs` は 1,000 行ちょうど・FileLength）。`lib.rs` は `wire_tests` の宣言の中身（約 95 行）が本体へ出るので約 760 行に減る。`spine.rs` は ⑶ の約 510 行が本体へ出る。`main.rs`（987 行）は宣言の差し替えで 987 行以下。書き換えと rustfmt の後に 1,000 行を超えたファイルだけ、前例 D4 の形で兄弟のファイルへ出す（`transition_judge.rs` は観測行の読み〔`optional_fields`・`parse_transition_line`・`parse_transition_log`〕を `transition_judge_parse.rs` へ） | 例外表に足す（roadmap の決め「どの spec も例外表に触れない」に反する） |
@@ -165,7 +165,7 @@ crates/areka-runtime/
 │   └── collision-probe/            # 付随の 7 ファイルを git mv
 └── src/
     ├── lib.rs                      # 旧 runtime/mod.rs を git mv。wire_tests を本体へ出し、テストの宣言を整える
-    ├── crash_report_test_support.rs # git mv。宣言を cfg(any(test, feature = "test-support")) へ・installed() を足す（D6）
+    ├── crash_report_test_support.rs # git mv。宣言を cfg(any(test, feature = "test-support")) へ・installed() を足す・初期化子の static は #[cfg(test)] だけ（D6）
     ├── session_hooks.rs            # git mv。FALLBACK を NO_BODY 1 つへ（D5）
     ├── spine.rs                    # git mv。⑴ ⑵ だけを残す（⑶ は本体の runtime_tests/spine.rs へ）
     ├── spine_wait.rs ・ spine_wait_tests.rs ・ spine_hold_support.rs ・ spine_hold_tests.rs  # git mv（⑴ ⑵）
@@ -198,7 +198,7 @@ crates/areka-runtime/
 ```
 crates/areka/src/
 ├── runtime_tests/                  # 新しいテスト専用のフォルダ（main.rs が #[cfg(test)] で宣言）。runtime の木を写した形
-│   ├── mod.rs                      # 新: 置いた理由・根の代わりの親（use areka_runtime::*）・子の宣言・落ちの報告の確かめ 1 本（D6）
+│   ├── mod.rs                      # 新: 置いた理由・根の代わりの親（use areka_runtime::*）・子の宣言・初期化子の static 3 行と落ちの報告の確かめ 1 本（D6）
 │   ├── wire_tests.rs               # 新: 旧 runtime/mod.rs の wire_tests を中身を変えずに出す
 │   ├── zorder_wiring_tests.rs ・ frame_schedule_tests.rs ・ film_playback_e2e_tests.rs   # git mv（根の子）
 │   ├── assets.rs                   # 新: 代わりの親（assets_tests・assets_shell_tests を宣言）
@@ -469,7 +469,7 @@ async-io = { workspace = true }
 **実装の注**
 
 - 確かめ: `cargo tree -p areka-runtime -e normal` に areka が出ず、`shiori-host32-host` も出ない（1.5・1.9）。`cargo tree -p areka-runtime -e normal -F test-support` で `shiori-host32-host` だけが増える。`Cargo.lock` の差分が `areka-runtime` の 1 項目と本体の依存の 1 行だけ（1.7）。
-- 危うさ: resolver 2 では、`cargo test`・`cargo check --all-targets` のときに限り、本体の dev-dependency が付けた `test-support` が同じビルドの `areka-runtime` にも効く。リリースのビルドには入らない。振る舞いは変わらない。
+- 危うさ: resolver 2 では、`cargo test`・`cargo check --all-targets` のときに限り、本体の dev-dependency が付けた `test-support` が同じビルドの `areka-runtime` にも効き、その走行で組まれる本体の bin（実機テストが起こす exe）も機能つきの rlib を結ぶ。リリースのビルドには入らない。機能の下の項目は呼ばれなければ動かない。動くものを持つ唯一の項目（落ちの報告の初期化子）は `#[cfg(test)]` の下だけに置く（D6）ので、実機テストの exe の振る舞いも変わらない。
 
 #### PublicSurface
 
@@ -581,9 +581,10 @@ pub const NO_BODY: SessionHooks;
 
 **責務と約束**
 
-- `crash_report_test_support.rs` を `#[cfg(any(test, feature = "test-support"))] pub mod` にする（D6）。中のテスト 5 本は `#[test]` なので `areka-runtime` の自分のテストの実行ファイルにだけ入る。初期化子（`#[used]`・`.CRT$XCU`）と持ち手の表（`hold`・`release`）は、機能つきの rlib を結ぶ本体のテストの実行ファイルにも入る。
+- `crash_report_test_support.rs` を `#[cfg(any(test, feature = "test-support"))] pub mod` にする（D6）。中のテスト 5 本は `#[test]` なので `areka-runtime` の自分のテストの実行ファイルにだけ入る。`install` と持ち手の表（`hold`・`release`）は `pub` で開く。初期化子の `static`（`#[used]`・`.CRT$XCU`）は `#[cfg(test)]` だけで立ち、`areka-runtime` の自分のテストの実行ファイルにだけ入る。
 - 足す口は 1 つ: `pub fn installed() -> bool`（`INSTALLED` を読むだけ）。
-- 本体の `runtime_tests/mod.rs` に `#[test] fn crash_filter_is_installed_before_the_tests_start()`（`areka_runtime::crash_report_test_support::installed()` が真）を 1 本置く。同じ初期化子が MTA も立てるので、据わったことの確かめで両方を示す。
+- 本体の `runtime_tests/mod.rs`（`#[cfg(test)]` の下）に初期化子の `static` を 3 行置き、`areka_runtime::crash_report_test_support::install` を指す。テストの実行ファイルの根の crate に置くので結びで落ちず、本体の bin（`cargo test` の中で機能つきで組まれ、実機テストが起こす `CARGO_BIN_EXE_areka`）には入らない。
+- 同じ `mod.rs` に `#[test] fn crash_filter_is_installed_before_the_tests_start()`（`areka_runtime::crash_report_test_support::installed()` が真）を 1 本置く。同じ初期化子が MTA も立てるので、据わったことの確かめで両方を示す。
 - 頭の「写しの相手」の行: `areka-runtime` の 1 行目は今のまま（相手は wintf と配置の 2 つ）。`crates/areka-placement/src/test_crash_report.rs`・`crates/wintf/src/test_crash_report.rs` の 1 行目の相手のパスを `crates/areka-runtime/src/crash_report_test_support.rs` へ。
 - 3.10: `areka-runtime` の lib のテストの実行ファイルは `cargo test --workspace -- --list` で拾われ、`tools/test-all.ps1`（crate の名前を持たない）は直さずに走る。
 
@@ -591,13 +592,22 @@ pub const NO_BODY: SessionHooks;
 
 ```rust
 // crates/areka-runtime/src/crash_report_test_support.rs（test-support のときも立つ）
+pub extern "C" fn install();
 pub fn installed() -> bool;
+#[cfg(test)] #[used] #[unsafe(link_section = ".CRT$XCU")]
+static INSTALL: extern "C" fn() = install; // 自分のテストの実行ファイルだけ
+
+// crates/areka/src/runtime_tests/mod.rs（#[cfg(test)] の下）
+#[used] #[unsafe(link_section = ".CRT$XCU")]
+static INSTALL: extern "C" fn() = areka_runtime::crash_report_test_support::install;
 ```
+
+- 確かめ（bin に入らないこと）: 初期化子の `static` が `#[cfg(test)]` の下にしか無いことを grep で示す（`crates/areka-runtime/src/crash_report_test_support.rs` と `crates/areka/src/runtime_tests/mod.rs` の 2 か所だけ）。
 
 **実装の注**
 
 - 確かめ: 段 3 で `cargo test -p areka --bin areka -- crash_filter_is_installed_before_the_tests_start` と `cargo test -p areka-runtime --lib -- crash_filter_is_installed_before_the_tests_start initializer_keeps_a_process_lifetime_mta` が緑。
-- 危うさ: 本体のテストの実行ファイルに初期化子が残らない（結びで落ちる）と、上の本体のテストが赤になる（黙っては失わない）。そのときは代案（本体に前例の型の写しを置き、GPU の許可の持ち手の表の扱いを決める）を設計の討議へ戻す。
+- 危うさ: 本体のテストの実行ファイルに初期化子が残らないと、上の本体のテストが赤になる（黙っては失わない）。初期化子は根の crate に置くので、今と同じ理由で残る見込み。
 
 ### 本体の側
 
@@ -872,22 +882,20 @@ pub fn installed() -> bool;
 - **危うさ: 中〜高**。技術は既知で、振る舞いを変えない。注意する所は次の 5 つ。
   1. 機能だけが立つビルド（本体のテストを組むときの `areka-runtime`）で、`test-support` の項目が `#[cfg(test)]` の項目に頼って組めなくなる → 段 2 の `cargo check --workspace --all-targets` で必ず組む。
   2. 開ける私有の項目の数が見積りより多い（欄とメソッドは名前で数えられない）→ 段 3 でコンパイラに数えさせ、D3 ⑷ の渡し口が 20 を超えるときは、そのテストを関数で割る案と比べて設計の討議に戻す。
-  3. rlib の初期化子が本体のテストの実行ファイルに残らない → D6 の本体のテスト 1 本で気づき、代案へ。
+  3. 初期化子が本体のテストの実行ファイルに据わらない → D6 の本体のテスト 1 本で気づく（初期化子は根の crate に置くので、今と同じ理由で残る見込み）。
   4. テストが 2 つの実行ファイルに分かれ、落ちの報告と GPU の許可の数え（プロセスに 1 つ）が実行ファイルごとになる。`cargo test` は実行ファイルを順に回すので同時に持つ数は変わらない見込み。揺れが出たら `tools/load-flake.ps1` に `-Binary` が足された後に測る（5.13）。
   5. 999 行のファイル → D1 で中身を変えない・D9 の手当て。
 - 範囲の外で気づいたこと（直さない）:
   - 本体の `Cargo.toml` の、移した後に本体が直に使わなくなる依存の行と、その理由の説明（「runtime 統合結線…で通常依存へ昇格」ほか）。`audit-areka-app` へ申し送る。
   - `hit_region.rs` の頭の説明の「`crate::` フリー規律（examples の `#[path]` が理由）」は、examples が crate の依存で読むようになって理由が古くなる。説明のリンクだけを 2.6 で直し、規律の文は 3 本の audit（spine）へ申し送る。
 
-## 設計の討議へ回すこと（仮定つきで書いた所）
+## 設計の討議の結果（2026-11-16・開発者「推奨どおり承認」＝全議題を推奨案で確定）
 
-入力（要件・ギャップ分析・前例）だけでは決め切れず、仮定を置いて書いた所。設計の討議で答えを決める。
-
-1. **私有の項目の開け方（D3）**: 仮定＝本番の可視性は変えず、家の型 `test_open`（型・関数・定数）・モジュールの宣言の印の切り替え・欄とメソッドだけ前例 D9 の渡し口、の 3 つを使う。代案＝本体のテストが使う私有の項目を全部 `pub` にする（仕組みは 1 つになるが本番の公開面が広がる）。
-2. **「本体を引く」に本体の読み口と支えを入れるか（D7・D8）**: 仮定＝入れる（要件 3.5 の 40 の数え方どおり）。その結果、`measure_bake_count_tests`・分岐の対応表 2 本と支えは本体の `placement_tests/` に残り、`areka-runtime` に読み口は要らない。ギャップ分析 6 章は「この 3 本＋支えも `areka-runtime` へ行く見込み」と書いていた（読み口を道具として数えない読み）。代案＝`areka-runtime` へ移し、下の crate を読む 27 か所のために読み口を `areka-runtime` にも置く（写しを作らない要件 3.3 と、要件 5.3 の「1 つの読み口」の置き場の読みが要る）。
-3. **`spawn_zorder_pair_deferred_tests` を割らずに `areka-runtime` へ移すこと（5.4）**: 仮定＝移す。歩く木は本体の `src` から `areka-runtime` の `src` に替わるが、覆う本番ファイル（名簿の 5 つ）は同じで、本体の `src` に runtime の外の `zorder` の名の本番ファイルが 0 件であることを記録する。代案＝前例のように片割れを本体にも残し、本体の `src` の木も歩き続ける（テストの名前が 1 つずつ増え、本体の片割れの名簿は空になる）。
-4. **落ちの報告の 2 つ目（D6）**: 仮定＝写しを足さず、`areka-runtime` の 1 つを `test-support` でも立てて本体のテストの実行ファイルへ入れ、本体のテスト 1 本で据わったことを示す（多重集合 +1）。rlib の `#[used]` の初期化子が本体の実行ファイルに残ることは未実測。代案＝本体に前例の型の 4 つ目の写しを置く（GPU の許可の持ち手の表の扱いを決め直す要がある）。
-5. **`shiori-host32-host` を optional の依存にすること（D11・要件 1.9）**: 仮定＝要件 1.9 の「本番の依存に入れない」を「本番のビルドで付く依存にしない」と読み、`test-support` だけが付ける optional の依存は 1.9 に反しない（1.9 の「3.4 の決まりに従う」は 3.4 が名指す番人の 3 つの crate に掛かる）。要件の討議 議題 3（台本の SHIORI を `test-support` で開く）はこの形でしか書けない。前例が要件 1.7 の字面を設計の討議で直したのと同じく、1.9 の字面を「optional を含めない」と直すかを決める。
-6. **口の倒れ先の記録（D5）**: 仮定＝`#[cfg(not(test))]` の `error!` は残し、`areka-runtime` のテストでは記録なしの `NO_BODY`（今と同じく記録を出さない）。代案＝テストでも記録を出す（要件 3.6 の「本番と同じ `NO_BODY`」を記録まで同じと読む・口を読む相を回す runtime のテストの記録の合否が変わりうる）。
-7. **本体のテストだけが使う `pub(crate)` の扱い（2.1 と 4.8 の釣り合い）**: 仮定＝要件 2.1 の字面どおり `pub` にする（前例と同じ）。代案＝要件 4.8 で配置について決めた形と同じく、テストだけが使う項目は `test-support` の下でだけ `pub` にする（D3 ⑵ の型が使える・本番の公開面が狭いまま）。
-8. **audit の受け持ち（D14）**: 仮定＝名前の型を `crates/areka-runtime/` と本体の `runtime_tests/` の両方に当て、`crates/areka-runtime/src/placement_tests/` は `transition_*` を外して spine の「残り」に入れ、`transition_*` は `audit-placement-follow-residue` の持ち物とする。代案＝`placement_tests/` を丸ごと 3 本の audit の外に置く（完了した `audit-placement-core` の持ち物だった所が、どの audit の範囲にも入らなくなる）。
+1. **落ちの報告の 2 つ目（D6）**: 写しを作らない。初期化子の `static` は `areka-runtime` の側では `#[cfg(test)]` だけにし、本体の `runtime_tests/mod.rs`（`#[cfg(test)]`）に `areka_runtime::crash_report_test_support::install` を指す同じ形の `static` を 3 行置く。これで実機テストが起こす本体の bin には初期化子が入らない（設計の検証の重大な問題 1 を閉じる）。据わったことは本体のテスト 1 本で確かめる。
+2. **私有の項目の開け方（D3）**: 家の型 `test_open`（型・定数・ログを出さない関数）・モジュールの宣言の印の切り替え・欄とメソッドとログを出す関数は前例 D9 の渡し口。本番の可視性は変えない（ログを出す関数を `test_open` へ移さないのは設計の検証の重大な問題 2 を閉じる形）。
+3. **「本体を引く」の定義（D7・D8）**: 本体の読み口と支えも本体の項目として数える。`measure_bake_count_tests`・分岐の対応表 2 本と支えは本体の `placement_tests/` に残り、`areka-runtime` に読み口は作らない。
+4. **`spawn_zorder_pair_deferred_tests`**: 割らずに `areka-runtime` へ移す。本体の `src` に runtime の外の `zorder` の名の本番ファイルが 0 件であることを段 5 で記録する。
+5. **`shiori-host32-host` の optional の依存（D11）**: `test-support` だけが付ける optional の依存にする。要件 1.9 の文を「機能を付けないビルドで付く依存に入れない・番人の 3 つの crate は optional も含めて書かない」に直した。
+6. **口の倒れ先の記録（D5）**: `#[cfg(not(test))]` の `error!` を残し、`areka-runtime` のテストでは記録なしの `NO_BODY`。
+7. **本体のテストだけが使う `pub(crate)`**: 要件 2.1 の字面どおり `pub` にする（前例と同じ）。開けた項目の一覧は 3 本の audit の brief へ申し送る。
+8. **audit の受け持ち（D14）**: 名前の型を `crates/areka-runtime/` と本体の `runtime_tests/` の両方に当てる。`crates/areka-runtime/src/placement_tests/` のうち `transition_*` は `audit-placement-follow-residue`、ほかは spine の「残り」。
