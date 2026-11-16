@@ -5,21 +5,21 @@
 //! IID＋void** out-param を伴う `unsafe` メソッドを露出する。本モジュールは
 //! それらを安全な Rust wrapper（`#[inline(always)]`・`Result` 返却・`unsafe` の局所化）へ包む。
 
-use windows::System::DispatcherQueueController;
-use windows::UI::Composition::CompositionGraphicsDevice;
-use windows::UI::Composition::Desktop::DesktopWindowTarget;
-use windows::UI::Composition::ICompositionSurface;
-use windows::Win32::Foundation::{HWND, POINT, RECT};
-use windows::Win32::Graphics::Direct2D::{ID2D1Device, ID2D1DeviceContext, ID2D1DeviceContext3};
-use windows::Win32::Graphics::Dxgi::IDXGISwapChain1;
-use windows::Win32::System::WinRT::Composition::{
-    ICompositionDrawingSurfaceInterop, ICompositorDesktopInterop, ICompositorInterop,
-};
-use windows::Win32::System::WinRT::{
+use bind_next::Windows::System::DispatcherQueueController;
+use bind_next::Windows::UI::Composition::CompositionGraphicsDevice;
+use bind_next::Windows::UI::Composition::Desktop::DesktopWindowTarget;
+use bind_next::Windows::UI::Composition::ICompositionSurface;
+use bind_next::Windows::Win32::IDXGISwapChain1;
+use bind_next::Windows::Win32::{
     CreateDispatcherQueueController, DISPATCHERQUEUE_THREAD_APARTMENTTYPE, DQTYPE_THREAD_CURRENT,
     DispatcherQueueOptions,
 };
-use windows::core::{Interface, Result};
+use bind_next::Windows::Win32::{HWND, POINT, RECT};
+use bind_next::Windows::Win32::{
+    ICompositionDrawingSurfaceInterop, ICompositorDesktopInterop, ICompositorInterop,
+};
+use bind_next::Windows::Win32::{ID2D1Device, ID2D1DeviceContext, ID2D1DeviceContext3};
+use windows_core::{Interface, Result};
 
 /// `ICompositorInterop` の interop メソッドを安全 wrapper 化する Ext trait。
 ///
@@ -47,7 +47,8 @@ impl CompositorInteropExt for ICompositorInterop {
         &self,
         d2d_device: &ID2D1Device,
     ) -> Result<CompositionGraphicsDevice> {
-        unsafe { self.CreateGraphicsDevice(d2d_device) }
+        // 相互運用はインターフェース（ICompositionGraphicsDevice）を返すので、クラスへ cast する。
+        unsafe { self.CreateGraphicsDevice(d2d_device)?.cast() }
     }
 
     #[inline(always)]
@@ -73,13 +74,16 @@ pub trait CompositorDesktopInteropExt {
 }
 
 impl CompositorDesktopInteropExt for ICompositorDesktopInterop {
+    // この rev の HWND は裸のポインタの別名なので clippy が咎める。取っ手は OS へ渡すだけで参照しない。
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     #[inline(always)]
     fn create_desktop_window_target(
         &self,
         hwnd: HWND,
         topmost: bool,
     ) -> Result<DesktopWindowTarget> {
-        unsafe { self.CreateDesktopWindowTarget(hwnd, topmost) }
+        // 相互運用はインターフェース（IDesktopWindowTarget）を返すので、クラスへ cast する。
+        unsafe { self.CreateDesktopWindowTarget(hwnd, topmost)?.cast() }
     }
 }
 
@@ -105,7 +109,8 @@ impl DrawingSurfaceInteropExt for ICompositionDrawingSurfaceInterop {
 
     #[inline(always)]
     fn end_draw(&self) -> Result<()> {
-        unsafe { self.EndDraw() }
+        // 戻り値の無い COM メソッドは HRESULT を返す。
+        unsafe { self.EndDraw().ok() }
     }
 }
 
@@ -123,5 +128,6 @@ pub fn create_dispatcher_queue_controller(
         threadType: DQTYPE_THREAD_CURRENT,
         apartmentType: apartment,
     };
-    unsafe { CreateDispatcherQueueController(options) }
+    // 戻りは IDispatcherQueueController（PDISPATCHERQUEUECONTROLLER）なので、クラスへ cast する。
+    unsafe { CreateDispatcherQueueController(options)?.cast() }
 }

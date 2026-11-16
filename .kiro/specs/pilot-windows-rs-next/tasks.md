@@ -155,7 +155,7 @@
 
 - [ ] 7. 問い 4: WinRT の合成を `windows-bindgen` の束縛で通す
 
-- [ ] 7.1 `wuc.rs` を写して `bind-next` の WinRT の束縛へ移し、画面の撮りを書く
+- [x] 7.1 `wuc.rs` を写して `bind-next` の WinRT の束縛へ移し、画面の撮りを書く
   - `wintf` の `com/wuc.rs` を `q4-wuc` へ写し、写した直後を 1 コミットにする
   - `bind-next` の問い 4 のフィルターに Composition・DispatcherQueue・相互運用のインターフェース・画面の撮りの GDI を足し、写しを既定の形の束縛へ移す（束縛の形は既定だけで確かめる）。`bind-next` の `Cargo.toml` の兄弟の依存は足すだけで消さない
   - `bind-next` を組み直すので 6.2 と並べない
@@ -339,3 +339,4 @@
 - この rev の `HWND` は既定・`.minimal()`・`.sys()` のどれも `*mut HWND__` の別名（0.62 の newtype と違う）。`Default`／`is_invalid` は無く `Hash` は在る。包みを Component にするには `unsafe impl Send/Sync` が要る（5）。REWRITE_TABLE の HWND の行はこれに合わせる。
 - 0.101 の `HSTRING` は `Display` を持たない（`display()`・`to_string_lossy()` を使う）。`#[interface]` に `IUnknown_Vtbl` の取り込みは要らない（6.1）。
 - `.implements` の名前はこの rev のメタデータでは `Windows.Win32.IDWriteTextRenderer1` の形（`Graphics.DirectWrite` の段が無い）。合わない名前は黙って無視され `_Impl` が出ないのに build は通る。生成した `_Impl` のメソッドは `HRESULT` を返すので中で `?` は使えない（6.2）。
+- WinRT のクラスを名指ししても型と `new()` だけでメソッドは出ない。既定のインターフェース（`ICompositor` ほか）を名指しする。足りなくても build は通り、呼ぶ所で初めて分かる。相互運用の口はクラスでなくインターフェースを返す（`cast` が要る）（7.1）。

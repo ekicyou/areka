@@ -338,6 +338,7 @@ name = "bind-next"
 version = "0.0.0"
 dependencies = [
  "windows-bindgen",
+ "windows-collections 0.101.0",
  "windows-core 0.101.0",
  "windows-numerics 0.101.0",
 ]
@@ -1578,7 +1579,7 @@ version = "0.62.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
 dependencies = [
- "windows-collections",
+ "windows-collections 0.3.2",
  "windows-core 0.62.2",
  "windows-future",
  "windows-numerics 0.3.1",
@@ -1602,6 +1603,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b2d95af1a8a14a3c7367e1ed4fc9c20e0a26e79551b1454d72583c97cc6610"
 dependencies = [
  "windows-core 0.62.2",
+]
+
+[[package]]
+name = "windows-collections"
+version = "0.101.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9710fe00285436c4d22ad6053d72#f37e2f9046cf9710fe00285436c4d22ad6053d72"
+dependencies = [
+ "windows-core 0.101.0",
 ]
 
 [[package]]

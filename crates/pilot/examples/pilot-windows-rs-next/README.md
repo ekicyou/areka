@@ -135,7 +135,7 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 | 3 | 既定の形で新しく足した `build.rs`・`filters.txt`・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +11・+47・+214／−1・+2 | | |
 | 3 | `.minimal()` で新しく足した `build.rs`・`filters.txt`・`src/bindings.rs`（束縛の取り込み＋手書きの包み）・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +12・+49・+78・+211／−1・+2 | | |
 | 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | 既定（3.1）: 写しの書き換え +31／−20（新しいファイルを入れて +305／−21）。`.minimal()`（3.2）: 写しの書き換え +31／−20（既定と同じ）（新しいファイルを入れて +383／−21） | 既定: 4・`.minimal()`: 1 | 既定: 約 7 分・`.minimal()`: 約 6 分 |
-| 4 | `wintf/src/com/wuc.rs`（`7e0373f47`。本番の部分のみ。末尾の試験 126 行は写さない） | 127 |  |  |  |
+| 4 | `wintf/src/com/wuc.rs`（`7e0373f47`。本番の部分のみ。末尾の試験 126 行は写さない） | 127 | 写しの書き換え +22／−16（`wuc.rs`）。新しく書いた `capture.rs` +121・`tests/capture.rs` +19・`bind-next` の `filters/q4-wuc.txt` +43／−1・`Cargo.toml` +2 | 3 | 約 8 分（写し 約 2 分・移し 約 6 分） |
 | 6 | `crates/shiori-abi/src/interface.rs`（`020fa1248`。先頭の属性と `use` 5・`IShiori` の定義 39・試験の中の定数 4 と実装 `MockBrain` 34・試験の中の呼び出し 15。間の空行 4 は数えない） | 97 | +69／−50（`shiori.rs` +66／−49・`main.rs` +3／−1。大半は試験の中から外へ出した字下げで、`IShiori` の定義は 0） | 1 | 約 6 分 |
 
 1 行あたり・1 API あたりの手間 ＝ 手間 ÷ 書き換えの行数／フィルターの行数。問い 9 の全数に掛けて移行の本体の規模を見立てる。
@@ -304,9 +304,19 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 4: WinRT（`windows-bindgen` で合成）
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
+- 見立ての候補: （未記入。7.2 の実の窓の走行の後に書く）
+- 学び（7.1・束縛と写しの移し）:
+  - WinRT の合成も Win32 の相互運用も、`bind-next` の 1 つのフィルターで既定の形の束縛に出た。名前空間のモジュールは WinRT が `bind_next::Windows::UI::Composition::Compositor`・`bind_next::Windows::System::DispatcherQueueController`、Win32 は全部 `bind_next::Windows::Win32::*` の 1 段（相互運用の `ICompositorInterop` ほか・`CreateDispatcherQueueController`・GDI も同じ段）。
+  - WinRT のクラスの名指しだけでは、クラスの型・`new()`・`RuntimeName` は出るがメソッドは 1 つも出ない（既定のインターフェースの `ICompositor_Vtbl` が空）。メソッドはクラスの既定のインターフェース（`ICompositor`・`ICompositionTarget`・`ICompositionGraphicsDevice`・`IVisual`・`ISpriteVisual`）を名指ししたときに、クラスの `impl` に出る。Win32 の「継いだメソッドは基のインターフェースを名指ししないと出ない」と同じ型の決まり。名指しが欠けても build は通るので、呼ぶ側で初めて気付く。
+  - 生成した束縛が実際に名指しした兄弟のクレート: `windows-collections` だけ（`ICompositor` から `Compositor` に出る `CreateEffectFactoryWithProperties` の `IIterable<HSTRING>` の 1 か所）。`windows-future`・`windows-reference`・`windows-time` は名指しされなかった。`ICompositor` を名指しする前（クラスだけ）は兄弟のクレートを 1 つも要らなかった。`bind-next/Cargo.toml` へ `windows-collections` を足した（消した物は無し）。ほかは `windows-core` と、`Vector2` ほかで既に在る `windows-numerics`。
+  - 問い 4 のフィルターの行数: 43 行（名指し 37・注 6）。束縛の全体（4 つのフィルターの和）は 13,881 行。
+  - 相互運用の戻りは、`windows` 0.62 の手書きの型と違い、インターフェースで出る: `CreateGraphicsDevice` は `ICompositionGraphicsDevice`、`CreateDesktopWindowTarget` は `IDesktopWindowTarget`、`CreateDispatcherQueueController` は `PDISPATCHERQUEUECONTROLLER`（＝`IDispatcherQueueController` の別名）。写しはクラスを返す口のまま、中で `?.cast()` してクラスへ移した（3 か所）。`BeginDraw` は `T: Interface` の総称で出るので、`let dc: ID2D1DeviceContext = …` の注釈のままで書き換えは要らなかった。`EndDraw` は `HRESULT` を返すので `.ok()` を足した（問い 3 と同じ）。`CreateCompositionSurfaceForSwapChain`／`CreateGraphicsDevice` の引数は `Param<IUnknown>` で、`&IDXGISwapChain1`・`&ID2D1Device` をそのまま渡せた。
+  - `HWND` が裸のポインタの別名（問い 5）なので、`HWND` を取る安全な公開の関数（`create_desktop_window_target`・`capture_window_png`）に clippy の `not_unsafe_ptr_arg_deref` が立つ。取っ手は OS へ渡すだけなので関数ごとに `allow` した。移行の本体では 1 か所の決め（`allow` か newtype の包みか）が要る。
+  - 定数の型: `DQTYPE_THREAD_CURRENT`・`DQTAT_COM_*` は `i32` の別名の型で出て、`DispatcherQueueOptions` の欄と合う。GDI の `BI_RGB`・`DIB_RGB_COLORS` は `i32` で出て、`DWORD`／`UINT`（`u32`）の欄へは `as u32` が要る。`SRCCOPY` は `DWORD`。
+  - 画面の撮り（`src/capture.rs`・新しく書いた）: `GetWindowRect` → `GetDC(None)` → `CreateCompatibleDC`／`CreateCompatibleBitmap` → `BitBlt(SRCCOPY)` → `GetDIBits`（32 bpp・上から下）→ BGRA を RGBA に並べ替えて `png` 0.18.1 で書く。`cargo test -p q4-wuc`（`tests/capture.rs`＝窓を作らずデスクトップの窓の矩形を撮り、PNG の幅と高さが矩形と合うことを確かめる。一時の PNG は `CARGO_TARGET_TMPDIR` に書いてすぐ消す）が通る。WUC の中身が写るかは 7.2 の実の窓で確かめる。
+  - 書き換えの行数（`git diff --numstat cd2fb49c7 <移した後> -- q4-wuc bind-next`、まだ積んでいない新しいファイルを含む）: `wuc.rs` +22／−16（`use` の入れ替えと、`?.cast()` 3 か所・`.ok()` 1 か所・`allow` 1 か所とそれぞれの注）・`capture.rs` +121（新しい）・`tests/capture.rs` +19（新しい）・`filters/q4-wuc.txt` +43／−1・`bind-next/Cargo.toml` +2。
+  - 直しの回数: 3（`windows-collections` が無いビルドの失敗・新しい撮りの `BOOL` の must_use の警告・clippy の 3 件〔`not_unsafe_ptr_arg_deref` 2・`as_chunks_mut`〕）。写しの `wuc.rs` は `use` を入れ替えた最初のビルドで通った（clippy の `allow` を除く）。時間は約 8 分（写し 約 2 分・移し 約 6 分）。
+  - 束縛の形は既定だけで確かめた。WinRT の `.minimal()`（class の口を出さない）は移行の本体の起票で確かめる点として残す。
 - 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
 - 判定: （開発者が下す）
 

@@ -7,6 +7,8 @@ publish.workspace = true
 [dependencies]
 windows-core = { workspace = true }
 windows-numerics = { workspace = true }
+# 問い 4（7.1）: ICompositor の CreateEffectFactoryWithProperties が IIterable を名指しする
+windows-collections = { workspace = true }
 
 [build-dependencies]
 windows-bindgen = { workspace = true }
