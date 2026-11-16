@@ -20,7 +20,7 @@
   - _Dispatch: mechanical — 列の組み立てと記録の欄は設計が形を与えている_
   - _Requirements: 2.3, 2.6, 2.8, 4.1, 4.2, 4.3, 4.4, 5.1_
 
-- [ ] 2. (P) 右に出すバルーンの descript の横のずらしの向きを直す（件 2）
+- [x] 2. (P) 右に出すバルーンの descript の横のずらしの向きを直す（件 2）
   - 1・3・4 と触るファイルが重ならないので、並べて進めてよい。
   - _Boundary: DescriptOffsetField, P5RightArm_
 - [x] 2.1 合流の前の descript の `balloon.offsetx` の分を、配置の設定に別の欄で運ぶ
@@ -30,7 +30,7 @@
   - _Dispatch: mechanical — 既存の型に欄を 1 つ足して既存の流れで値を写す_
   - _Requirements: 3.1, 3.4, 6.1_
 
-- [ ] 2.2 右に出す腕で descript の分だけをシェルに近づく向きに当てる
+- [x] 2.2 右に出す腕で descript の分だけをシェルに近づく向きに当てる
   - 右に決まったとき（`Right`・`Auto` で右）だけ、横の位置を「キャラ窓の右端 ＋（`windowposition.x` の分）− descript の分」にする。左の腕・縦・キーワードの腕は変えない。descript の分が 0 なら今の式と同一。
   - 先に檻を書いて赤を確かめる（`resolver_resolve_balloon_tests.rs`）: `Right`・descript の分 30 → 右端 − 30（直す前は +30）／`Left`・同じ値 → 今と同じ／`Auto` で右に決まる形 → 右端 − 30／`Right`・descript の分 0・`windowposition.x` の分 −237 → 右端 − 237。
   - 右に出す sakura（`offsetx,30`）の追従のずらしを期待する `reseed_tests.rs` の 4 か所を、`CHAR0.w + 30` から `CHAR0.w − 30` へ書き換える。記憶の値の道は P5 を通らないので変えない。
@@ -120,3 +120,5 @@
 ## Implementation Notes
 - `cargo clippy -p areka-placement --all-targets -- -D warnings` は着手前から赤（`wintf` と、この spec が触らないファイルの指摘）。各タスクでは「差分の行に新しい指摘を足さない」を `--no-deps` の出力で確かめる。
 - 2.1: descript の `balloon.offsetx` は `sakura.`/`char0.`（scope 0）と `kero.`/`char1.`（scope 1）の鍵だけが読まれ、無印の `balloon.offsetx` は surfaces.txt の surface ブレスの鍵（要件 3.4 で範囲外）。requirements.md 3.4・design.md の Unit Tests・research.md・このタスクの 2.1 にある「無印」の語は不正確（完了の棚卸で文を直す）。
+- 2.2: 右の腕の直しで `reseed_tests.rs` は 4 か所でなく 5 か所（192 DPI の `+60`→`-60` を含む）、さらに設計が見落とした `crates/areka/src/runtime/frame/switch_finish_face_tests.rs` の対照の期待値 1 行（`434 + 30 + 40`→`434 - 30 + 40`）が変わった。要件 3.1 の直接の帰結なので、テストの期待値だけ直した（ロジックは触らない）。`runtime-crate-split` に知らせ済みで、向こうはこのファイルを `crates/areka/src/runtime_tests/frame/switch_finish_face_tests.rs` へ `git mv` する（期待値の行は触らない）。後から着地した側が rebase で合わせる。6.2 の「`runtime/` に差分が無い」は、このテストの 1 行を除いて読む。
+- 4.3: `runtime-crate-split` は `ghost_session.rs` を動かさないが、段 4 で `crate::runtime::` の道を `areka_runtime::` へ機械で置き換える。足す 1 行は `runtime::` の道を含めない形にする。
