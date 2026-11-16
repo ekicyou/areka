@@ -10,7 +10,7 @@
 > コミットの作法: 各タスクは自分のクレートのフォルダと README（と自分が持つ文書・自分のフィルターのファイル）だけを `git add <path>` で積む。`git add -A` は使わない。
 > `bind-next` の `Cargo.toml` の兄弟の依存（`windows-future` ほか）は足すだけで消さない（ほかの問いのタスクが足した物を残す）。
 
-- [ ] 1. Foundation: 独立のワークスペース・上流の固定・共有の束縛の土台
+- [x] 1. Foundation: 独立のワークスペース・上流の固定・共有の束縛の土台
 
 - [x] 1.1 独立のワークスペースの骨組みと一次記録の節を建てる
   - 置き場の根に、`[package]` を持たない仮想の manifest（resolver 3・`[workspace.package]` の edition 2024 と `publish = false`・`[workspace.dependencies]`）を置く。上流のクレート（`windows-core`・`windows-result`・`windows-strings`・`windows-link`・`windows-numerics`・`windows-text`・`windows-bindgen`、名指しされたときだけ使う兄弟の `windows-future`・`windows-collections`・`windows-reference`・`windows-time`）は全部同じ git の rev に固定し、借りる本線のクレート（`wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`）は置き場の根からの相対の path、crates.io の物（`bevy_ecs` 0.19.1・`png` 0.18.1・`tracing`・`tracing-subscriber`〔`env-filter` なし〕・`scip`）は本線と同じ版で書く。`[patch]` は置かない
@@ -38,7 +38,7 @@
   - _Dispatch: mechanical — 設計の BindingBuild の形をそのまま書く_
   - _Requirements: 1.6, 2.3, 2.4_
 
-- [ ] 2. 問い 1: C の関数だけのクレートを `.sys()` へ移す
+- [x] 2. 問い 1: C の関数だけのクレートを `.sys()` へ移す
 
 - [x] 2.1 `wintf-winmsg-executor` を置き場へ写す
   - 本番の `src/`（`lib.rs` の `#[cfg(test)] mod test` を除く）と `util/` の 3 ファイル、例の `basic`・`threads` を、中身を変えずに `q1-winmsg` へ写す（例は以後も書き換えない）
@@ -64,7 +64,7 @@
   - _Dispatch: standard — クロスのビルドの詰まりを実地で解く_
   - _Requirements: 3.2, 3.5, 9.1, 9.2, 9.3_
 
-- [ ] 3. 問い 3: 束縛の形の 2 案（既定・`.minimal()`）を同じ写しで比べる
+- [x] 3. 問い 3: 束縛の形の 2 案（既定・`.minimal()`）を同じ写しで比べる
 
 - [x] 3.1 (P) `dwrite.rs`＋`d2d/mod.rs` の写しを既定の形で組み、確かめの bin と `==` の確かめを通す
   - `wintf` の `com/dwrite.rs` と `com/d2d/mod.rs` を `q3-default` へ写し、写した直後を 1 コミットにする（写した量は元の行で 1 回＝312 行と数える）
@@ -94,7 +94,7 @@
   - _Dispatch: standard — クロスのビルドの詰まりと比べの読みが要る_
   - _Requirements: 4.4, 9.1, 9.2, 9.3_
 
-- [ ] 4. 問い 2: COM の束縛の置き場の 3 案を同じ最小の例で比べる
+- [x] 4. 問い 2: COM の束縛の置き場の 3 案を同じ最小の例で比べる
 
 - [x] 4.1 (P) 共通の描く本体と案 3（共有の束縛のクレート）を組む
   - 3 案が読む同じ描く本体（DirectWrite の文字を 1 行 Direct2D で描き、墨を数える）を置く。各案は型の出どころだけを替えて読み込む
@@ -133,7 +133,7 @@
   - _Dispatch: mechanical — 設計が包みの型と確かめの形を与えている_
   - _Requirements: 6.1, 6.2_
 
-- [ ] 6. 問い 6: `#[interface]`・`#[implement]` で COM を実装する
+- [x] 6. 問い 6: `#[interface]`・`#[implement]` で COM を実装する
 
 - [x] 6.1 (P) SHIORI のインターフェースの 1 組を写して組む
   - `shiori-abi` の `interface.rs` から `IShiori`（`Get` は `HRESULT` を直に返す・`Notify` は `Result<()>`）の定義・試験の中の実装 1 つ・呼び出しを `q6-com` へ写し、写した直後を 1 コミットにする
@@ -153,7 +153,7 @@
   - _Dispatch: standard — 描き手の実装を新しく書く_
   - _Requirements: 7.2, 7.4, 15.1_
 
-- [ ] 7. 問い 4: WinRT の合成を `windows-bindgen` の束縛で通す
+- [x] 7. 問い 4: WinRT の合成を `windows-bindgen` の束縛で通す
 
 - [x] 7.1 `wuc.rs` を写して `bind-next` の WinRT の束縛へ移し、画面の撮りを書く
   - `wintf` の `com/wuc.rs` を `q4-wuc` へ写し、写した直後を 1 コミットにする
@@ -176,7 +176,7 @@
   - _Dispatch: standard — 合成の段のつなぎを実地で通す_
   - _Requirements: 5.2, 5.3, 15.1, 15.3, 15.4_
 
-- [ ] 8. 問い 7: `windows-text` の縦書きを今の areka と比べ、バルーンで当たりを確かめる
+- [x] 8. 問い 7: `windows-text` の縦書きを今の areka と比べ、バルーンで当たりを確かめる
 
 - [x] 8.1 画素の比べと位置の換算を組み、小さな試験で固定する
   - 2 つの絵（premultiplied BGRA）の違う画素の数・成分の差の最大・±8 px の平行移動で違う画素が最少になる所とその数を出す比べと、違う画素を赤・同じ墨を灰にした差の絵を書く口を組む。大きさが違えば小さい方に合わせて数え、その旨を出す
@@ -236,7 +236,7 @@
   - _Dispatch: standard — 窓・合成・入力を実地でつなぐ_
   - _Requirements: 8.7, 8.8, 15.1, 15.3, 15.4_
 
-- [ ] 9. 問い 9: 本線が使う Windows の API の全数を数える
+- [x] 9. 問い 9: 本線が使う Windows の API の全数を数える
 
 - [x] 9.1 (P) SCIP の索引を読んで種類ごと・クレートごとに数える道具を組む
   - 索引の各文書の参照のうち、記号の包みが `windows`・`windows_core`・`windows_numerics`・`windows_strings`・`windows_result` の物を集め、記号の綴りの末尾で型・インターフェースのメソッド・関数・定数ほか（型の下の欄は別）・マクロ（別）に分け、同じ記号を 1 つと数えて出現の回数も添える
@@ -264,7 +264,7 @@
   - _Dispatch: standard — 問いの結果から行を起こす_
   - _Requirements: 6.3, 7.3, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 11. 問い 10: 対応表だけで機械的に回せるかを確かめる
+- [x] 11. 問い 10: 対応表だけで機械的に回せるかを確かめる
 
 - [x] 11.1 砂場で Sonnet の実装係に問い 1 の元をもう一度移させる
   - このタスクは進行役が手動の形（`/kiro-impl pilot-windows-rs-next 11.1`）で回す。実装係がするのは砂場の用意と結果の写しだけで、Sonnet の下請けを起こすのと道具の呼び出しの記録を読むのは進行役
@@ -285,7 +285,7 @@
   - _Dispatch: mechanical — 入れる先と道具を設計が名指ししている_
   - _Requirements: 11.2, 11.3_
 
-- [ ] 12. 一次記録・上流へ返す文案・置き場の決まりの締め
+- [x] 12. 一次記録・上流へ返す文案・置き場の決まりの締め
 
 - [x] 12.1 写した量と手間を締め、移行の本体の刻み方と規模の見立てを書く
   - CopyLedger に問い 1・3・4・6 の写した本番の行（試験の行と問い 10 の写しを除く）を元のファイルごとに 1 回数えて合計し、1,500 行前後に収まったかを書く
