@@ -281,3 +281,5 @@ WUC の子の Visual は親の描画面の中身より必ず上に重なり、`S
 ## 参照した skill
 - `kiro-spec-design`（本手順）と、その規則（design-principles・design-discovery-light・design-synthesis・design-review-gate）。描画・UI の別の skill は当てはまらない（wintf の中の描画の作り）。
 
+
+> 2026-11-16 設計の討議: 開発者が全 6 議題を推奨案で承認した（描画面の矩形は部分木の描く範囲から・2 段の切り替えと要件 3.1 の書き直し・自動で上げた持ち主は WUC の子の一番下・平行移動だけと整数の矩形の切り抜きの条件を外す・定数はそのまま・B-1／心拍／案 b／記録の語）。決めの全文は design.md の「設計の討議の確定」。
