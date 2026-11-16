@@ -189,3 +189,4 @@
 - 5.1: WARP の写しは WUC の振る舞いを仮定する（切り抜きは Visual の局所の空間・`CompositionClip.TransformMatrix` は図形に掛かる・回した Visual は線形で標本化）。本物の `render_surface` の係は回していない（`replay_transform` と `compose_planned` の道だけ）。5.2 の実 GPU で WUC の値を読み戻して仮定を確かめる。端数の位置の手動の持ち主は縁がにじむ（前からの振る舞い・この spec の外）
 - 5.2: 実 GPU のテスト（`tests/graphics/surface_embedding_test.rs`）は HWND も画面も使わない普通のテストで、机は要らない。描画面の画素は `CopySurface` でなく既存の `SurfaceReadback::read_all`（WUC の描画面へ写す元の描画面ごとの絵）で読む。WUC が `CompositionClip.TransformMatrix` を図形に掛けることは値の読み戻しと逆行列の往復までで、画面の画素では確かめていない（討議の確定 6 で画面を読まないため）
 - 6.2: `cargo test -p wintf -- --ignored` は lib が赤になるが、この spec と関わらない（`test_crash_report` はわざと 0xC0000005 を投げて工程を落とす・残る 7 本は環境変数で狙って回すときだけ走る門つきのテストで、変数が無いとわざと赤を返す。受け持ちは `zorder-chain-residue` の brief A-1・A-2）。この spec の実 GPU のテストは `--ignored` を付けない普通のテストで緑
+- 完了時の棚卸（2026-11-17）: その場で解決 0 件・申し送り 0 件・起票 0 件（4.1 の相だけの変化は 5.2・4.2 の版は 5.2 で固まった。6.2 の `--ignored` の赤は `zorder-chain-residue` の受け持ち）
