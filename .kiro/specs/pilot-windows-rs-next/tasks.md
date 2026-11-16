@@ -354,3 +354,6 @@
 - 10 の確かめで分かった訂正（README に同じ文が在れば 12.2 で直す）: 既定の形は `.implements` を呼ばなくてもフィルターに名指したインターフェースの `_Impl` を出す。`.implements` を呼ぶと並べた名前の分だけになり、名前が合わなければ 0（6.2 の「`.implements` が要る」は読み違い）。`WIN32_ERROR::to_hresult` は上流に在り、無いのは `HRESULT::from_win32`。q4 の `BI_RGB`・`DIB_RGB_COLORS` は `q4-wuc/src/capture.rs:91,105`。
 - 対応表の確かめの道具（使い捨て・コミットしない）: `target\pilot-windows-rs-next\tmp\probe-rt`（3 形の束縛と後の書き方を組む crate・`cite-dump.sh`）と scratchpad の `v1_map.py`／`tokdiff.py`／`before_check.py`／`after_check.py`。11.1 の砂場では本線 `lib.rs` の `#[cfg(test)] mod test`（325 行）を Sonnet に移させない（消すか触らないと指示する）・依存の行（`{ workspace = true }` か git の rev）は進行役が先に置く（10 のレビュー）。
 - 下請けの道具の呼び出しの記録（subagents の jsonl）は同じ `tool_use` を繰り返し書くので、数えるときは id で重複を除く。Bash の道具は送るコマンドの `\\` を `\` に縮める — 逃がしを含む文字列をコマンドで書いたらバイトで確かめる（11.1）。
+- 完了時にその場で解決: 一次記録 `README.md` の問い 7 の節に残っていた予告「第 2 幕のフィルターの行数の表は 12.2 で直す」を「直した」に改めた（表は 12.2 で直してあった）。
+- 完了時にその場で解決: 対応表のエラーの番号の行に `WIN32_ERROR(<番号の定数> as u32).to_hresult()` の道を 1 文足した（使い捨ての確かめ `probe ok` で裏を取った）。
+- 完了時にその場で解決: 置き場の根の `[workspace.dependencies]` から、どのクレートも使っていない 5 つ（`windows-result`・`windows-strings`・`windows-future`・`windows-reference`・`windows-time`）を外した（`Cargo.lock` は変わらず `cargo metadata --locked` が通り、clippy `-D warnings` も緑）。設計の Allowed Dependencies に、実装の時点で足した `async-task` を書き足した。

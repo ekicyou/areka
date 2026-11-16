@@ -37,7 +37,7 @@
 ### Allowed Dependencies
 - 上流（git・上の 1 コミットだけ・フォークも `[patch]` もしない）: `windows-core`・`windows-result`・`windows-strings`・`windows-link`・`windows-numerics`・`windows-text`・`windows-bindgen`（build の依存）。既定の形の束縛が `Windows.Foundation` の型を暗に回す兄弟のクレート `windows-future`・`windows-collections`・`windows-reference`・`windows-time`（同じ rev・上流 `crates/libs/bindgen/src/lib.rs` の `prepend_default_refs`）も、生成した束縛が名指ししたときに限って許す。実際に要った物を一次記録に書く。
 - 本線のクレートを path で借りる（読むだけ・0.62 のまま）: `wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`。借りてよいのは問い 7 の比べ役（`q7-vertical`）だけ。
-- crates.io: 本線の `Cargo.lock` に在る `bevy_ecs`・`png`・`tracing`・`tracing-subscriber`（`env-filter` は宣言しない）と、問い 9 の `scip` とその依存。
+- crates.io: 本線の `Cargo.lock` に在る `bevy_ecs`・`png`・`tracing`・`tracing-subscriber`（`env-filter` は宣言しない）と、問い 9 の `scip` とその依存。問い 1・8 の写し（`q1-winmsg`・`q10-winmsg`）が写し元の `wintf-winmsg-executor` と同じく使う `async-task`（本線の `Cargo.lock` と同じ版・実装の時点で足した）。
 - 置き場の中のクレートどうし: 下の「依存の向き」の図のとおりだけ。
 - 使わない: `windows` クレート（新しい側のコードからは名指ししない。借りた `wintf` などの推移の依存として木に入るのは許す）・`log-capture-kit`・`sample-ghost-kit`・`real-run-kit`・`temp-path-kit`。
 

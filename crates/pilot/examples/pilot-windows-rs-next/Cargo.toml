@@ -29,17 +29,12 @@ publish = false
 [workspace.dependencies]
 # 上流 windows-rs master を 1 つの rev に固定（動かすのは要件 2.5 の手順の後だけ）。[patch] は置かない。
 windows-core = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
-windows-result = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
-windows-strings = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 windows-link = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 windows-numerics = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 windows-text = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 windows-bindgen = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 # 名指しされたときだけ使う兄弟
-windows-future = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 windows-collections = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
-windows-reference = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
-windows-time = { git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72" }
 
 # 借りる本線のクレート（置き場の根からの相対 path）
 wintf = { path = "../../../wintf" }
