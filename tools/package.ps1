@@ -40,6 +40,7 @@
     1 … 段の失敗（段の名前を印字する。展開した木を消せなかった「後片付け」と、git status が変わったときもここ）
     2 … 起動確認（-Check）の記録の判定の否（展開した木と記録を残し、置き場を印字する）
     3 … 引数・前提の不正（版を読めない・道具が無いときも。何を入れるか／どう直すかを 1 行で印字する）
+        （-KeepExpanded・-SmokeExitMs・-CheckDir を -Check なしで付けたときも、組み立ての前にここで止まる）
 
   較正値・調整値の一覧（変更するときはスクリプト冒頭の「較正値」の 1 か所だけを書き換える）:
     SCRIPT_VERSION                  本スクリプトの版（BUILD-INFO.txt の script= に書く）
@@ -69,13 +70,17 @@
 .PARAMETER CheckDir
   -Check の展開先 check-<HHmmss> と記録 check-<HHmmss>-logs を作る親フォルダ（絶対パス）。
   省略時は <リポジトリ>\target\package。リポジトリの中なら <リポジトリ>\target\ の下だけ受け付ける。
-  展開先のフルパスが EXPAND_DIR_MAX_CHARS を超えると終了コード 3。
+  展開先のフルパスが EXPAND_DIR_MAX_CHARS を超えるか、-Check が無ければ終了コード 3。
 
 .PARAMETER KeepExpanded
-  判定の合否にかかわらず、展開した木を消さずに置き場を印字する（-Check のとき）。
+  判定の合否にかかわらず、展開した木を消さずに置き場を印字する。-Check が要る（無ければ終了コード 3）。
 
 .PARAMETER SmokeExitMs
-  -Check の有界の自動終了（ミリ秒・正の整数）。省略時は SMOKE_EXIT_MS。正の整数でなければ終了コード 3。
+  -Check の有界の自動終了（ミリ秒・正の整数）。省略時は SMOKE_EXIT_MS。正の整数でないか、-Check が無ければ終了コード 3。
+
+.PARAMETER SelfTest
+  判定の関数の自分の検査（tools/package.selftest.ps1）を回す。ビルド・cargo・git・起動確認は回さない。
+  ほかの引数を添えると終了コード 3（-SelfTest takes no other parameter）。
 
 .EXAMPLE
   pwsh -NoProfile -File tools/package.ps1 -Arch all
@@ -103,7 +108,8 @@ param(
     [string]$CheckDir,
     [switch]$KeepExpanded,
     # 数でない値も終了コード 3 で断るため、文字列で受けて自分で読む
-    [string]$SmokeExitMs
+    [string]$SmokeExitMs,
+    [switch]$SelfTest
 )
 
 Set-StrictMode -Version 3.0
@@ -244,6 +250,46 @@ function Step([string]$Name, [scriptblock]$Command) {
         $out | Select-Object -Last $OUTPUT_TAIL_LINES | ForEach-Object { Write-Host $_ }
     }
     Exit-Script $EXIT_STAGE_FAILED "FAIL $Name ($sec s, $reason)"
+}
+
+# 引数の確かめ（純関数・preflight の最初に呼ぶ）。戻り: Error（通れば $null）・BuildArchs・SmokeMs。
+# 順: -SmokeExitMs の数 → -Arch の値 → -Check と arm64 → -CheckDir の絶対パス → リポジトリの中なら target\ の下
+#     → -Check の無い -KeepExpanded・-SmokeExitMs・-CheckDir
+function Test-PackageArgs {
+    param([string]$Arch, [bool]$Check, [string]$CheckDir, [bool]$KeepExpanded, [bool]$SmokeExitMsGiven,
+          [string]$SmokeExitMs, [Parameter(Mandatory)][string]$RepoRoot)
+    $r = [pscustomobject]@{ Error = $null; BuildArchs = @(); SmokeMs = $SMOKE_EXIT_MS }
+    if ($SmokeExitMsGiven) {
+        $ms = 0
+        if (-not [int]::TryParse($SmokeExitMs, [ref]$ms) -or $ms -le 0) {
+            $r.Error = "-SmokeExitMs must be a positive integer (got: '$SmokeExitMs')"; return $r
+        }
+        $r.SmokeMs = $ms
+    }
+    $accepted = @($ARCHS.Keys) + 'all'
+    if ($accepted -cnotcontains $Arch) {
+        $r.Error = "-Arch must be one of {0} (got: '{1}')" -f ($accepted -join ', '), $Arch; return $r
+    }
+    $r.BuildArchs = ($Arch -eq 'all') ? @($ARCHS.Keys) : @($Arch)
+    if ($Check -and $r.BuildArchs -cnotcontains 'x64') {
+        $r.Error = "-Check needs the x64 zip (combine with -Arch x64 or all; got: '$Arch')"; return $r
+    }
+    if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
+        $r.Error = "-CheckDir must be an absolute path (got: '$CheckDir')"; return $r
+    }
+    # リポジトリの中なら target\ の下だけ（一時フォルダは target\ の下に限る）。外は受け付ける
+    $root = $RepoRoot.TrimEnd('\') + '\'
+    if ($CheckDir) {
+        $full = [IO.Path]::GetFullPath($CheckDir).TrimEnd('\') + '\'
+        if ($full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -and
+            -not $full.StartsWith("${root}target\", [StringComparison]::OrdinalIgnoreCase)) {
+            $r.Error = "-CheckDir inside the repository must be under ${root}target\ (got: '$CheckDir')"; return $r
+        }
+    }
+    $orphans = @(@('-KeepExpanded', $KeepExpanded), @('-SmokeExitMs', $SmokeExitMsGiven), @('-CheckDir', [bool]$CheckDir) |
+        Where-Object { -not $Check -and $_[1] } | ForEach-Object { $_[0] })
+    if ($orphans) { $r.Error = "-KeepExpanded, -SmokeExitMs and -CheckDir need -Check (got: $($orphans -join ', '))" }
+    $r
 }
 
 # PE のバイト列から機種・窓の作り（subsystem）・取り込み表の DLL 名を読む（PE32 と PE32+ の両方）。
@@ -440,6 +486,13 @@ function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
 # =============================================================================
 # 段
 # =============================================================================
+# 自分の検査は関数の定義の後・PATH の手当てと段の前で分かれる（ビルド・cargo・git・起動確認を回さない）
+if ($SelfTest) {
+    if (@($PSBoundParameters.Keys | Where-Object { $_ -ne 'SelfTest' })) { Exit-Script $EXIT_BAD_ARGS '-SelfTest takes no other parameter' }
+    . (Join-Path $PSScriptRoot 'package.selftest.ps1')   # 終了コードは自分の検査が exit で決める
+    exit $EXIT_STAGE_FAILED
+}
+
 # 段の並びは 1 つの try の中（終わりの finally まで。字下げはしない）。後始末の口は finally の 1 か所だけ
 $script:ExitCode = $EXIT_STAGE_FAILED
 try {
@@ -447,40 +500,17 @@ $env:PATH = Get-MsvcLinkPath $env:PATH
 
 Step 'preflight' {
     # 引数
-    if ($SmokeExitMsGiven) {
-        $ms = 0
-        if (-not [int]::TryParse($SmokeExitMs, [ref]$ms) -or $ms -le 0) {
-            Exit-Script $EXIT_BAD_ARGS "-SmokeExitMs must be a positive integer (got: '$SmokeExitMs')"
-        }
-        $script:SmokeMs = $ms
-    } else {
-        $script:SmokeMs = $SMOKE_EXIT_MS
-    }
-    $accepted = @($ARCHS.Keys) + 'all'
-    if ($accepted -cnotcontains $Arch) {
-        Exit-Script $EXIT_BAD_ARGS ("-Arch must be one of {0} (got: '{1}')" -f ($accepted -join ', '), $Arch)
-    }
-    $script:BuildArchs = ($Arch -eq 'all') ? @($ARCHS.Keys) : @($Arch)
-    if ($Check -and $script:BuildArchs -cnotcontains 'x64') {
-        Exit-Script $EXIT_BAD_ARGS "-Check needs the x64 zip (combine with -Arch x64 or all; got: '$Arch')"
-    }
-    if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
-        Exit-Script $EXIT_BAD_ARGS "-CheckDir must be an absolute path (got: '$CheckDir')"
-    }
-    # リポジトリの中なら target\ の下だけ（一時フォルダは target\ の下に限る）。外は受け付ける
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
-    if ($CheckDir) {
-        $full = [IO.Path]::GetFullPath($CheckDir).TrimEnd('\') + '\'
-        if ($full.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase) -and
-            -not $full.StartsWith("${repoRoot}target\", [StringComparison]::OrdinalIgnoreCase)) {
-            Exit-Script $EXIT_BAD_ARGS "-CheckDir inside the repository must be under ${repoRoot}target\ (got: '$CheckDir')"
-        }
-    }
+    $a = Test-PackageArgs -Arch $Arch -Check $Check -CheckDir $CheckDir -KeepExpanded $KeepExpanded `
+        -SmokeExitMsGiven $SmokeExitMsGiven -SmokeExitMs $SmokeExitMs -RepoRoot $repoRoot
+    if ($a.Error) { Exit-Script $EXIT_BAD_ARGS $a.Error }
+    $script:BuildArchs = $a.BuildArchs
+    $script:SmokeMs = $a.SmokeMs
     # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
     $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR")) }
     $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))
     $script:LogDir = "$script:ExpandDir-logs"
-    if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
+    if ($Check -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
         Exit-Script $EXIT_BAD_ARGS ("expand path too long ({0} chars, limit {1}): {2} - pass a shorter -CheckDir (outside the repository or under ${repoRoot}target\) or move the worktree to a shorter path" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
     }
 

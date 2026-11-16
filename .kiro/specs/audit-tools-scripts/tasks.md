@@ -96,7 +96,7 @@
   - 終わった姿: 移しのコミットと直しのコミットが分かれており、`package.ps1` を構文木で読むと関数の外の `Step` の呼び出しが全部 1 つの `try` の中に在り、`encoding-check.ps1` が緑
   - _Dispatch: standard — 本体の組み替えと二度呼べる後始末_
   - _Requirements: 3.1, 6.2, 6.3, 6.5_
-- [ ] 5.2 引数の確かめを純関数にし、`-Check` の無い 3 つの引数で止め、`-SelfTest` の口を足す
+- [x] 5.2 引数の確かめを純関数にし、`-Check` の無い 3 つの引数で止め、`-SelfTest` の口を足す
   - 引数の確かめを純関数 `Test-PackageArgs` にし、preflight の最初に呼ぶ。順と文は設計どおり（今の 5 つの文はそのまま・`-KeepExpanded`・`-SmokeExitMs`・`-CheckDir` のどれかが `-Check` なしなら組み立ての前に終了コード 3 で `-KeepExpanded, -SmokeExitMs and -CheckDir need -Check (got: <名前>)`）（19）
   - 展開先の長さの確かめは preflight に残し、条件を `-Check` だけにする
   - `-SelfTest` を足す: 関数の定義の後・`PATH` の手当てと段の前で分かれ、ほかの引数を添えたら終了コード 3（`-SelfTest takes no other parameter`）、そうでなければ自分の検査の台本を読み込んで回す（9）。頭書に `-SelfTest` と 19 の止まり方を書く
@@ -231,3 +231,4 @@
 - 3.1: `release-notes.ps1 -SelfTest` の見本の一覧は `subjects.txt` の題名から作るつなぎ（`shortcut:`）。3.2 で設計の `Read-SpecNamesFixture`（`spec-names.txt`）へ必ず替える。
 - 4.1: `exe-install.ps1` の `FAIL cleanup: …`・`FAIL check: cannot start: …` の理由は .NET の例外の文で、置き場の絶対パス（環境変数の値）を含みうる。設計は `<理由>` とだけ言う。11.2 のかけ直しで要否を判断する。
 - 4.3: 4.1 の件は 4.3 で直した（`Install-ToolExe` の理由の文で置き場のパスを `<home>` に替え、`check throws` で縛る）。
+- 5.2: `package.ps1` の preflight で `$a` を `Test-PackageArgs` の結果と `foreach ($a in $script:BuildArchs)` の両方に使っている（害は無い・読み違えやすい）。5.3 か 11.2 で名前を分ける。`package.selftest.ps1` は最後に自分で `exit` すること（呼ぶ側の後ろに `exit $EXIT_STAGE_FAILED` の番人がある）。
