@@ -2,16 +2,23 @@
 //!
 //! World は本番の `spawn_ghost_windows` で組み、描画面の子（`Visual` を持つ `ChildOf` の子）は
 //! テストが手で付ける（本番では `areka-emo-present` の装着が付ける）。
+//!
+//! 後半は起動の並べ直しの後の判定し直しの系（task 4.1・要件 2.7／2.10／4.4／5.1／5.2／6.4）。
 
 use bevy_ecs::prelude::*;
 use wintf::ecs::{Visual, WindowPos};
 
-use super::shown_char_rects;
 use super::test_support::{base_placement, odd_edge_snapshot, rect};
+use super::{BALLOON_LIMIT_CLAMP_TAG, move_window_to, shown_char_rects};
+use crate::chain_finalize::ChainFinalized;
 use crate::resolver::{PointPx, ScopePlacement};
+use crate::shared_test_support::placement_sized;
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use crate::test_support::fake_handle;
+use log_capture_kit::ExpectField;
 use log_capture_kit::capture;
+use wintf::ecs::FrameFinalize;
 
 /// scope ごとにキャラ窓の位置だけをずらした配置（寸は 434×600）。
 fn placement_at(scope: usize, x: i32) -> ScopePlacement {
@@ -117,4 +124,171 @@ fn no_ghost_windows_gives_empty_list_without_logging() {
     let (rects, events) = capture(|| shown_char_rects(&world));
     assert!(rects.is_empty());
     assert!(events.is_empty(), "記録は出さない: {events:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 起動の並べ直しの後の判定し直し（task 4.1・設計 RejudgeSystem）
+// ---------------------------------------------------------------------------
+
+/// 作業領域（開発者の机の主の画面）・キャラ窓の寸・バルーンの寸（`balloon_limit_flip_tests.rs` と同じ形）。
+const WA: crate::resolver::RectPx = crate::resolver::RectPx {
+    left: 0,
+    top: 0,
+    right: 2880,
+    bottom: 1704,
+};
+const CSZ: crate::resolver::SizePx = crate::resolver::SizePx { w: 1108, h: 800 };
+const BSZ: crate::resolver::SizePx = crate::resolver::SizePx { w: 872, h: 400 };
+
+fn pt(x: i32, y: i32) -> PointPx {
+    PointPx { x, y }
+}
+
+fn pos_of(world: &World, entity: Entity) -> PointPx {
+    let p = world
+        .get::<WindowPos>(entity)
+        .and_then(|wp| wp.position)
+        .expect("位置がある");
+    pt(p.x, p.y)
+}
+
+/// 本体（scope 0・左隣のバルーン・`limit` 指定）と相方（scope 1・`limit=0`・子は可視）の 2 スコープの
+/// 実 spawn の World。判定し直しの系を `FrameFinalize` に載せてある。戻りは (World, 本体の窓, 本体のバルーン, 相方の窓)。
+fn rejudge_world(
+    own: PointPx,
+    partner: PointPx,
+    own_limit: bool,
+) -> (World, Entity, Entity, Entity) {
+    let mut world = World::new();
+    world.insert_resource(super::MonitorSnapshot {
+        work_areas: vec![WA],
+    });
+    world.init_resource::<Schedules>();
+    super::register_balloon_rejudge(&mut world);
+    let titles = GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]);
+    let ps = [
+        placement_sized(0, own, pt(-872, 0), own_limit, CSZ, BSZ),
+        placement_sized(1, partner, pt(-872, 0), false, CSZ, BSZ),
+    ];
+    let gw = spawn_ghost_windows(&mut world, &ps, &titles);
+    let (c0, b0, c1, b1) = (
+        gw.char_window(0).expect("キャラ窓"),
+        gw.balloon_window(0).expect("バルーン窓"),
+        gw.char_window(1).expect("相方のキャラ窓"),
+        gw.balloon_window(1).expect("相方のバルーン窓"),
+    );
+    for (i, e) in [c0, b0, c1, b1].into_iter().enumerate() {
+        world.entity_mut(e).insert(fake_handle(0x1000 * (i + 1)));
+    }
+    attach_surface(&mut world, c0, true);
+    attach_surface(&mut world, c1, true);
+    (world, c0, b0, c1)
+}
+
+/// 1 巡ぶんの `FrameFinalize` を回す。
+fn run_frame_finalize(world: &mut World) {
+    world.run_schedule(FrameFinalize);
+}
+
+fn clamp_lines(events: &[log_capture_kit::CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| e.message().contains(BALLOON_LIMIT_CLAMP_TAG))
+        .count()
+}
+
+/// (a)(b) 本体を左端へ動かしてバルーンを右隣（1108〜1980 × 904〜1304）へ並べ替えた後、相方の窓を
+/// その映した先に重なる位置へ動かす。印を入れるまでは本体のバルーンは動かず（要件 2.7）、印を入れた巡で
+/// 押し込みの位置に書かれ（要件 2.10）、印の後の 2 回目の巡では系が走らない。
+#[test]
+fn rejudge_after_chain_finalize_pushes_the_balloon_onto_the_moved_partner_once() {
+    let (mut world, c0, b0, c1) = rejudge_world(pt(1200, 904), pt(1108, 0), true);
+    move_window_to(&mut world, c0, 0, 904);
+    assert_eq!(
+        pos_of(&world, b0),
+        pt(1108, 904),
+        "探針: 相方が下に無いので並べ替える"
+    );
+
+    // (b) 印を入れずに相方を動かす（台本の `\![move]` と同じ道）→ 本体のバルーンは動かない。
+    move_window_to(&mut world, c1, 1108, 904);
+    run_frame_finalize(&mut world);
+    assert_eq!(
+        pos_of(&world, b0),
+        pt(1108, 904),
+        "印の無い巡では判定し直さない"
+    );
+
+    // (a) 印の入った巡で判定し直す → 押し込みの位置（x=0）。
+    world.insert_resource(ChainFinalized);
+    let (_, events) = capture(|| run_frame_finalize(&mut world));
+    assert_eq!(pos_of(&world, b0), pt(0, 904), "押し込みの位置に書かれる");
+    let clamp = log_capture_kit::expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+    assert_eq!(clamp.expect_field("how"), "\"pushed\"");
+    assert_eq!(clamp.expect_field("overlap_scope"), "Some(1)");
+    assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
+
+    // (b) 印の後の 2 回目の巡: 相方を上へ戻しても系は走らない（走れば右隣へ並べ替わる）。
+    move_window_to(&mut world, c1, 1108, 0);
+    run_frame_finalize(&mut world);
+    assert_eq!(pos_of(&world, b0), pt(0, 904), "2 回目の巡では走らない");
+}
+
+/// (c) どの窓も重ならず収まる形 → 系を回しても全バルーンの位置がビット同一で、`Clamp` の行が増えない（要件 6.4）。
+#[test]
+fn rejudge_without_overlap_keeps_every_balloon_bit_identical() {
+    let (mut world, c0, b0, c1) = rejudge_world(pt(1200, 904), pt(1800, 0), true);
+    let b1 = world
+        .resource::<GhostWindows>()
+        .balloon_window(1)
+        .expect("相方のバルーン窓");
+    let before: Vec<_> = [c0, b0, c1, b1]
+        .iter()
+        .map(|&e| world.get::<WindowPos>(e).cloned())
+        .collect();
+    world.insert_resource(ChainFinalized);
+    let (_, events) = capture(|| run_frame_finalize(&mut world));
+    let after: Vec<_> = [c0, b0, c1, b1]
+        .iter()
+        .map(|&e| world.get::<WindowPos>(e).cloned())
+        .collect();
+    assert_eq!(after, before);
+    // 捕捉が生きていることを確かめてから「無い」を言う（判定し直しの書き込みは窓の移動として記録される）。
+    assert!(
+        events
+            .iter()
+            .any(|e| e.message().contains("[diag.window_move]")),
+        "系が走った: {events:?}"
+    );
+    assert_eq!(clamp_lines(&events), 0);
+}
+
+/// (d) `windowposition.limit,0` のバルーンは系の対象に入らない（書き込みが 1 つも出ない・設計 RejudgeSystem）。
+#[test]
+fn rejudge_skips_balloons_with_limit_disabled() {
+    let (mut world, _, b0, _) = rejudge_world(pt(0, 904), pt(1800, 0), false);
+    let before = pos_of(&world, b0);
+    world.insert_resource(ChainFinalized);
+    let (_, events) = capture(|| run_frame_finalize(&mut world));
+    assert_eq!(pos_of(&world, b0), before);
+    assert!(
+        !events
+            .iter()
+            .any(|e| e.message().contains("[diag.window_move]")),
+        "書き込みが出ない: {events:?}"
+    );
+}
+
+/// キャラ窓の位置が決まらないスコープは `[balloon-limit] Unresolved` を残して飛ばし、ほかのスコープは続ける（要件 4.4）。
+#[test]
+fn rejudge_skips_a_scope_whose_char_position_is_undetermined() {
+    let (mut world, c0, b0, _) = rejudge_world(pt(1200, 904), pt(1800, 0), true);
+    let before = pos_of(&world, b0);
+    world.entity_mut(c0).insert(WindowPos::default());
+    world.insert_resource(ChainFinalized);
+    let (_, events) = capture(|| run_frame_finalize(&mut world));
+    assert_eq!(pos_of(&world, b0), before);
+    let warn = log_capture_kit::expect_one(&events, super::BALLOON_LIMIT_UNRESOLVED_TAG);
+    assert_eq!(warn.expect_field("scope"), "0");
+    assert_eq!(warn.expect_field("context"), "\"runtime-gate\"");
 }

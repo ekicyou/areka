@@ -55,7 +55,7 @@
   - _Requirements: 2.3, 2.6, 4.1, 4.2, 4.3, 4.4, 5.1_
 
 - [ ] 4. 窓を並べ直した後に全スコープのバルーンを判定し直す（要件 2.10）
-- [ ] 4.1 全スコープのバルーンを今のキャラ窓の位置で判定し直す関数と、起動の並べ直しの後に 1 度走る系を作る
+- [x] 4.1 全スコープのバルーンを今のキャラ窓の位置で判定し直す関数と、起動の並べ直しの後に 1 度走る系を作る
   - 判定し直しの本体は、`BalloonLimit(true)` のバルーンを持つスコープだけを先に集めてから、各キャラ窓の今の位置で随伴をし直す素の関数にする。随伴の引き金は並べ直しの書き込みと同じ既存の経路の語を使い、新しい語を作らない。
   - キャラ窓の位置が決まらないスコープは `[balloon-limit] Unresolved` の警告を残して飛ばす。
   - 起動の並べ直しの終わりの印が入った巡に 1 度だけ走る系を `FrameFinalize` に置き、プロセスに 1 回だけ載せる公開の登録の口を作る。
@@ -124,3 +124,4 @@
 - 4.3: `runtime-crate-split` は `ghost_session.rs` を動かさないが、段 4 で `crate::runtime::` の道を `areka_runtime::` へ機械で置き換える。足す 1 行は `runtime::` の道を含めない形にする。
 - 3.1: `follow.rs` の `mod other_chars;` の `#[allow(dead_code)]` と `shown_char_rects` の use の `#[allow(unused_imports)]` は仮置き。3.2 で呼び出しを足したら外す。「表示している」は子の `Visual.is_visible` で読むが、`emo-text-box-surface`（`Visual::default()`＝可視）が窓を隠したときに箱の同期で外れる、という設計の前提はまだ確かめていない（6.2 か完了の棚卸で確かめる）。
 - 3.2: 書き込みの関門の檻は `balloon_limit_gate_tests.rs`（起動の関門の檻）でなく、既存の `write_gate_*` と道具がある `balloon_limit_flip_tests.rs` に置いた。
+- 4.1: 判定し直しの系と関数は `follow/other_chars.rs` に置いた。`follow.rs` の `pub(crate) use ... rejudge_all_balloons` の `#[allow(unused_imports)]` は仮置きで、4.2 で呼び出しを足したら外す。判定は状態を持たないので、並べ替えたままのバルーンは判定し直しのたびに `how="flipped"` の行をもう 1 度残す。
