@@ -15,3 +15,5 @@ areka-emo-text = { workspace = true }
 areka-parsers = { workspace = true }
 areka-sakura = { workspace = true }
 png = { workspace = true }
+# 今の側（old_side）の予約スロット（World・Name・ChildOf）を組む。
+bevy_ecs = { workspace = true }

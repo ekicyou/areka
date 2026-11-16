@@ -412,6 +412,36 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 - 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
 - 判定: （開発者が下す）
 
+#### 今の側で描く（8.2）
+
+- 描き方: `q7-vertical/src/old_side.rs` の `draw(text) -> Result<Shot, String>`（`vt-compare` が呼ぶ口）。借りた `areka-emo-text` の公開の API だけで描く——文字列のバルーン定義を `areka_parsers::balloon::parse_str` に通し、`TextLayerRuntime::register_actor`（`TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE)`・`ResolvedBalloonText::resolve`）→ `apply_cue`（`CueCommand::Text`）→ `present_frame(.., 100.0)` → `surface(..).read_back()`。装置は `wintf::ecs::{GraphicsCore, WucGraphicsResource}`、予約スロットは `bevy_ecs` の `Visual`＋`ChildOf` の 2 つの実体（本線の試験の `spawn_reserved_slot` と同じ形）。窓は出さない（画面の外のハードウェアの GPU だけ）。非公開の所へ手を入れた所は無い（止まった所は無し）。
+- 借りた本線の中身: 作業木の `bb069a602`（`crates/areka-emo-text`・`crates/wintf` の最後の変更は `715f58198`）。
+- 設定の出どころ: `crates/areka-emo-text/tests/decoration_readback/vertical.rs` の `shoot_column`（と `decoration_readback/mod.rs` の `model_with`・`shoot`）と同じ値——`font.name` はぱすたの候補列・`font.height,20`・`font.color` は 0,0,0・validrect は 4 辺とも 5 px 内側・`writing_mode,vertical_rl`・k=1。供給面は validrect の内側だけを持つので、列の先頭の字の枠の上端が面の y=0。
+- 本線の試験と違えた所: 絵の高さだけ。本線の 320×200 だと面が 310×190 で、比べの文の 12 字（240 px）が 2 列に折り返した（墨の x が 268..287 と 290..309）。1 列にするため 320×260（面 310×250）にした。幅・原点・validrect は同じ。
+- 測った値（`cargo test -p q7-vertical --lib old_side -- --nocapture`・2026-11-17）: 墨（α≠0）1020 画素・x=290..309（1 列）・y=12..225（開き括弧の墨は字の枠の下半分から）。色の付いた画素（B・G・R が揃わない）は絵文字ありで 289・絵文字なしで 0（字はグレースケールの塗り・絵文字は色つき）。
+- COM: 借りた側は `windows` 0.62 を q7-vertical の直の依存に持たないので、OS の同じ `CoInitializeEx(None, COINIT_MULTITHREADED)` を `bind_next::Windows::Win32::CoInitializeEx(None, 0)` で呼んだ（アパートメントはスレッドの物なので、どの束縛から呼んでも同じ）。
+
+描く条件の表（今の側が `present_frame` の経路で使う値。所は作業木 `bb069a602` の行）:
+
+| 条件 | 値 | 所 |
+|------|----|----|
+| COM のアパートメント | MTA（`COINIT_MULTITHREADED`）。本番の UI スレッドも試験の World も同じ | `crates/wintf/src/runtime/mod.rs:123`・`crates/areka-emo-text/tests/support/fixture.rs:233` |
+| D3D11 の装置 | `D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`（debug 組みは `D3D11_CREATE_DEVICE_DEBUG` も・SDK の部品が無ければ外して作り直す） | `crates/wintf/src/ecs/graphics/core.rs:273`・`:276`・`:281` |
+| D2D の工場・DWrite の工場 | `D2D1_FACTORY_TYPE_MULTI_THREADED`・`DWRITE_FACTORY_TYPE_SHARED` | `crates/wintf/src/ecs/graphics/core.rs:268`・`:162` |
+| D2D の描く文脈 | 文字の層が自前で 1 つ作る（`D2D1_DEVICE_CONTEXT_OPTIONS_NONE`） | `crates/areka-emo-text/src/viewbox_draw.rs:199` |
+| 文字のアンチエイリアスの形 | 指定しない（`SetTextAntialiasMode` の呼び出しが経路に 0）＝ 文脈の既定 `D2D1_TEXT_ANTIALIAS_MODE_DEFAULT`。測ると黒い字の墨は B=G=R（グレースケール・ClearType ではない） | 呼び出し無し（`crates/areka-emo-text/src`・`crates/wintf/src` を grep）・測りは上 |
+| 描画の設定（`IDWriteRenderingParams`） | 指定しない（`SetTextRenderingParams` の呼び出しが 0）＝ 文脈の既定 | 呼び出し無し |
+| 図形のアンチエイリアス | 文脈の既定（per-primitive）。ダーティ矩形のクリップだけ `D2D1_ANTIALIAS_MODE_ALIASED` | `crates/areka-emo-text/src/viewbox_draw_render.rs:394`（`PushAxisAlignedClip`） |
+| DPI | 描き先の bitmap が 96×96。文脈に `SetDpi` は呼ばない（既定 96） | `crates/areka-emo-text/src/draw.rs:774`（`create_d2d_target_bitmap`・`viewbox_draw_render.rs:636` から） |
+| 単位 | `SetUnitMode` は呼ばない＝既定の DIP。96 DPI なので 1 DIP＝1 画素。拡大は `SetTransform(scale(k))` の 1 か所（ここでは k=1） | `crates/areka-emo-text/src/viewbox_draw_render.rs:184`・`:400` |
+| 面の画素の形式 | 描き先の bitmap は `DXGI_FORMAT_B8G8R8A8_UNORM`＋`D2D1_ALPHA_MODE_PREMULTIPLIED`（`TARGET｜CANNOT_DRAW`）。描画面のテクスチャは B8G8R8A8・全 0 で初期化。供給面は合成の swap chain（B8G8R8A8・`DXGI_ALPHA_MODE_PREMULTIPLIED`・`FLIP_SEQUENTIAL`） | `crates/areka-emo-text/src/draw.rs:771`・`:772`・`crates/areka-emo-text/src/surface.rs:91`・`:364`・`crates/wintf/src/com/dxgi.rs:49`・`:58`・`:59` |
+| 描く前の消し | ダーティ矩形ごとに `Clear(None)`（透明・premultiplied の全 0） | `crates/areka-emo-text/src/viewbox_draw_render.rs:397` |
+| 筆の色 | 単色の筆。`font.color` を r/g/b ÷255・a=1.0（ここでは黒 0,0,0,1） | `crates/areka-emo-text/src/viewbox_draw.rs:347`〜`:353`・`crates/areka-emo-text/src/viewbox_draw_render.rs:367` |
+| `DrawTextLayout` の指定 | `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`（本番は定数そのもの） | `crates/areka-emo-text/src/draw.rs:179`・`:180`・呼び出しは `crates/areka-emo-text/src/viewbox_draw_render.rs:424`〜`:429` |
+| 読み戻し | front を staging へ `CopyResource` → `Map(READ)` → 密の BGRA（stride＝幅×4） | `crates/areka-emo-text/src/surface.rs:467` |
+
+- 設計が名指した `crates/wintf/src/ecs/graphics/systems/surface.rs`（`CompositionDrawingSurface`）と `crates/wintf/src/com/wuc.rs` は、文字の層の経路では描き先にならない。文字の層の面は `wintf::com::dxgi::create_composition_swap_chain` の swap chain と自前の描画面のテクスチャ（上の表）で、wintf から借りるのは装置と工場と swap chain を作る関数だけ。
+
 ### 問い 8: 32bit と arm64 のリンク
 
 - 見立ての候補: go（問い 1 の `.sys()`・問い 3 の既定と `.minimal()` の 3 つの束縛とも、i686 は x64 と同じに走り、aarch64 はリンクまで通った。写しの側の直しは 0）。

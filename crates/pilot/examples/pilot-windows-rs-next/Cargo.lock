@@ -1090,6 +1090,7 @@ dependencies = [
  "areka-emo-text",
  "areka-parsers",
  "areka-sakura",
+ "bevy_ecs",
  "bind-next",
  "png",
  "q1-winmsg",
