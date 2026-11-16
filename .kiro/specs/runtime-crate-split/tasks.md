@@ -17,8 +17,8 @@
   - _Dispatch: mechanical — 設計が取り方と置き場を決めている_
   - _Requirements: 7.2, 6.6_
 
-- [ ] 2. 新しい crate へ移し、公開面を開ける（段 1）
-- [ ] 2.1 新しい crate の骨組みと本体の本番の依存を書く
+- [x] 2. 新しい crate へ移し、公開面を開ける（段 1）
+- [x] 2.1 新しい crate の骨組みと本体の本番の依存を書く
   - `crates/areka-runtime/Cargo.toml` を設計の「口の種類」の形で書く: lib・`publish = false` とその理由を同じ行・`version`／`edition`／`authors`／`license`／`repository` は `.workspace = true`・`description`
   - 本番の依存は設計の「使ってよい依存」の 18 個（外は `workspace = true`・中は `{ path = "../…" }`）、開発用の依存は設計の一覧（番人の 3 つ・`shiori-host32-host`・`image`・`areka-placement` の `test-support`・`tracing-subscriber`・`async-io`）。各行の上にほかの crate と同じ型の理由の注を写す。機能と optional の依存は 3.1 で足す
   - 本体の `Cargo.toml` の `[dependencies]` に `areka-runtime` の path 依存を足す（本体が直に使わなくなる依存の行は消さない＝`audit-areka-app` へ申し送り）
@@ -26,7 +26,7 @@
   - 完了の状態: 2 つの `Cargo.toml` が設計の形どおりで、根の `Cargo.toml` に差分が無い
   - _Dispatch: mechanical — 設計が依存の表と受け方を逐語で与えている_
   - _Requirements: 1.1, 1.4, 1.5, 1.6, 1.7, 1.8_
-- [ ] 2.2 runtime と移すテストを履歴を残して移す
+- [x] 2.2 runtime と移すテストを履歴を残して移す
   - 旧 `runtime/mod.rs` を `crates/areka-runtime/src/lib.rs` へ、本番と本体を引かないテストと支えを `crates/areka-runtime/src/` の同じ名前へ `git mv` する
   - 本体を引くテスト 36 本と ⑶ の足場の支え（`spine_test_support.rs`・`spine_conformance_{judge,script,support}.rs` と子）を、設計の「本体の新しい置き場」の表どおり `crates/areka/src/runtime_tests/`（`frame/` の下も同じ形）へ `git mv` する
   - e2e の 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）を本体の `session/` へ `git mv` し、`session/runtime_boot_tests.rs` の `#[path = "../runtime/…"]` を兄弟のファイルへ書き換える
@@ -36,21 +36,21 @@
   - 完了の状態: 本体に `src/runtime/` が無く、`git status` が移動（rename）として示し、`crates/areka-runtime` の中の `crate::runtime::` の grep が 0 件で、`crates/areka-runtime/src` の `#[path = "…"]` がどれも実在するファイルを指す（宛先の無い宣言が 0 件・3.2 の持つ `frame_attach_carry_tests` を除く）
   - _Dispatch: mechanical — 設計の置き場の表と対応の表が移す先を全部決めている_
   - _Requirements: 1.2, 1.3, 1.4, 2.3, 3.5, 3.7, 4.1, 4.2, 4.4, 4.5, 6.1_
-- [ ] 2.3 ファイルの一部を本体へ出す（`spine` の ⑶ と `wire_tests`）
+- [x] 2.3 ファイルの一部を本体へ出す（`spine` の ⑶ と `wire_tests`）
   - 旧 `spine.rs` の 386〜894 行（`settle_bounded`・`make_world_with_gpu`・`SpineHarness` ほか＝⑶）を、本体の `runtime_tests/spine.rs` へ中身を 1 文字も変えずに出す。`areka-runtime` の `spine.rs` には ⑴ 待ちの部品の再公開と ⑵ 台本の SHIORI だけが残る
   - 旧 `lib.rs` の `wire_tests`（755 行から末尾）を、本体の `runtime_tests/wire_tests.rs` へ中身を変えずに出す
   - 出した側と受けた側の差分が同じ行であることを `git diff --color-moved` で示し、記録に書く
   - 完了の状態: `areka-runtime` の `spine.rs` に `SpineHarness` が無く、`lib.rs` に `wire_tests` の中身が無く、移した行の一致が記録にある
   - _Dispatch: mechanical — 設計が切り出す行の範囲と行き先を決めている_
   - _Requirements: 1.2, 3.1, 3.5_
-- [ ] 2.4 移動で切れた番人の表と読み先をつなぎ直す
+- [x] 2.4 移動で切れた番人の表と読み先をつなぎ直す
   - `log-capture-kit/tests/file_length_guard_test.rs` の例外表 2 項目（`frame_transition_branch_tests.rs`・`transition_judge_verdict_tests.rs`）と較正の項目、`workspace_scan_test.rs` 320 行の `runtime/spine_display_tests.rs` を、移した先の最終のパスへ書き換える（項目の数は変えない・理由の文の主語を新しい crate に合わせる）
   - 文字で読むテストの `include_str!`・`#[path]`・`CARGO_MANIFEST_DIR` の読み先を、移した先へ相対の道のまま一時につなぎ直す（最終形は段 5 の 6.2）。`measure_template_tests` が読む本体の `examples/collision-probe/setup.rs` は段 5 まで本体に在るので、そのまま
   - 本体の examples `collision-probe.rs` の `#[path = "../src/runtime/{target_map,hit_region}.rs"]` を、一時に `../../areka-runtime/src/{target_map,hit_region}.rs` へつなぎ直す（2 つのファイルの本番のコードは `crate::` を使わないので `#[path]` のまま取り込める・最終形は 6.1）
   - 完了の状態: 移動で実在しなくなった読み先・表の項目・examples の `#[path]` が 0 件で、`cargo test -p log-capture-kit` が緑
   - _Dispatch: mechanical — 書き換える項目と新しいパスを設計が挙げている_
   - _Requirements: 5.1, 5.4_
-- [ ] 2.5 コンパイラに数えさせて公開面を開け、段 1 を閉じる
+- [x] 2.5 コンパイラに数えさせて公開面を開け、段 1 を閉じる
   - 本体の `main.rs` の `mod runtime;` を外し、一時の別名 `use areka_runtime as runtime;` を置く（段 4 で外す）
   - 本体の本番の組み立てのエラー（E0603・E0616・E0624・E0364・`private_interfaces`）を 1 件ずつ見て、外から使われる `pub(crate)` の項目だけを `pub` にする。使われない項目は `pub(crate)` のまま残し、死んだコードの警告が出たら消さずに使い手を確かめる
   - 公開の項目が名指すために開けた型には、項目の上に「要件 2.5: 公開の `<名前>` が名指すので開ける」の 1 行を書く
@@ -281,3 +281,9 @@
   - 完了の状態: 3 本が緑で、診断の行の抜き書きが記録にある・段 8 のコミット
   - _Dispatch: mechanical — 決まった 3 本を手順どおりに 1 回ずつ回す_
   - _Requirements: 6.5, 7.6, 7.7_
+
+## Implementation Notes
+- 段 1: 判定器の一族は実物 16 本（移したのは 19 本）。設計の表に無い子 3 本（`frame_shell_box_align_tests`・`frame_balloon_timeout_notice_e2e_tests`・`frame/switch_stay_on_top_tests`）は親と一緒に本体へ。`frame_chain_finalize_{align,clamp}_tests`・`frame_chain_rule_tests` は支えが `crate::insert_persist_wiring` を呼ぶので D8 で本体へ（4.1 の `runtime_tests/frame.rs` が宣言する）。
+- 段 1: 表に無い文字で読むテスト `crates/areka/src/tick_gate_config_producers_tests.rs` を一時につなぎ直した。6.2 で読み口へ寄せる。
+- 3.2 へ: `areka-runtime/src/spine.rs` の ⑵ `ScriptedShioriBackend` が `self::conformance_support::{RecordedStatus, StatusLedger, record_status, snapshot_status_calls}` に頼るが、`spine_conformance_support.rs` は D4 どおり本体へ移した。進行状態の記録の型と関数を ⑵ の側へ下ろす（設計の中の食い違い）。⑶ だけが使っていた `use`（`crate::session::ghost_quit::KanadeNoticeRx`・`log_capture_kit`・`acquire_emo2`）と頭の `//!` も 3.2 で片付ける。
+- 本体の `placement_tests/mod.rs` の説明が判定器を持つと書いたまま（段 7 で直す）。

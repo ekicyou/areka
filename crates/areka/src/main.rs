@@ -55,7 +55,8 @@ mod tick_gate_config;
 /// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
 /// `wire_runtime`）。
-mod runtime;
+// 一時の別名（runtime-crate-split 段 1・段 4 で外す）。
+use areka_runtime as runtime;
 /// 本体に頼る切替・読み直し・起動・終わる相の層（runtime-module-untangle）。
 mod session;
 

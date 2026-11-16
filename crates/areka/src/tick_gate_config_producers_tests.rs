@@ -22,42 +22,42 @@
 const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
         "runtime/adapter.rs",
-        include_str!("runtime/adapter.rs"),
+        include_str!("../../areka-runtime/src/adapter.rs"),
         "PRESENT",
     ),
     (
         "runtime/balloon_visibility_phase.rs",
-        include_str!("runtime/balloon_visibility_phase.rs"),
+        include_str!("../../areka-runtime/src/balloon_visibility_phase.rs"),
         "REARM",
     ),
     (
         "runtime/frame/scale_text.rs",
-        include_str!("runtime/frame/scale_text.rs"),
+        include_str!("../../areka-runtime/src/frame/scale_text.rs"),
         "REARM",
     ),
     (
         "runtime/hover_inject.rs",
-        include_str!("runtime/hover_inject.rs"),
+        include_str!("../../areka-runtime/src/hover_inject.rs"),
         "REARM",
     ),
     (
         "runtime/move_cue.rs",
-        include_str!("runtime/move_cue.rs"),
+        include_str!("../../areka-runtime/src/move_cue.rs"),
         "PRESENT",
     ),
     (
         "runtime/talk_lifecycle.rs",
-        include_str!("runtime/talk_lifecycle.rs"),
+        include_str!("../../areka-runtime/src/talk_lifecycle.rs"),
         "PRESENT",
     ),
     (
         "runtime/window_state_cue.rs",
-        include_str!("runtime/window_state_cue.rs"),
+        include_str!("../../areka-runtime/src/window_state_cue.rs"),
         "ZORDER",
     ),
     (
         "runtime/zorder_cue.rs",
-        include_str!("runtime/zorder_cue.rs"),
+        include_str!("../../areka-runtime/src/zorder_cue.rs"),
         "ZORDER",
     ),
 ];
@@ -92,7 +92,9 @@ fn every_areka_producer_marks_the_tick_wake() {
 /// 相の側の決定論テストが `visibility_wake` の答えとして固定する）。
 #[test]
 fn balloon_visibility_phase_arms_the_deadline() {
-    let code = code_only(include_str!("runtime/balloon_visibility_phase.rs"));
+    let code = code_only(include_str!(
+        "../../areka-runtime/src/balloon_visibility_phase.rs"
+    ));
     assert!(
         code.contains("tick_wake::arm_deadline("),
         "runtime/balloon_visibility_phase.rs: 待ち時間を預ける呼出（tick_wake::arm_deadline(）が無い"

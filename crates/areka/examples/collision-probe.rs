@@ -215,13 +215,13 @@ use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, ScaleRatio, TargetId, load_shell_target};
 
 /// scope→`TargetId` 写像の正本を私有 include する（`super::target_map` 解決の要ゆえクレートルート宣言）。
-#[path = "../src/runtime/target_map.rs"]
+#[path = "../../areka-runtime/src/target_map.rs"]
 #[allow(dead_code)]
 mod target_map;
 
 /// [`resolve_hit_region`]／`HitRegion` 契約を私有 include する。内部の `super::target_map` は上の
 /// `target_map` へ解決される（クレートルート宣言・入れ子にしない）。
-#[path = "../src/runtime/hit_region.rs"]
+#[path = "../../areka-runtime/src/hit_region.rs"]
 #[allow(dead_code)]
 mod hit_region;
 

@@ -64,13 +64,13 @@ const TEST_FILES: [(&str, &str, &str); 11] = [
     ),
     (
         "runtime/frame/zorder_drain_written_order_tests.rs",
-        include_str!("../runtime/frame/zorder_drain_written_order_tests.rs"),
-        include_str!("../runtime/frame/zorder_drain.rs"),
+        include_str!("../../../areka-runtime/src/frame/zorder_drain_written_order_tests.rs"),
+        include_str!("../../../areka-runtime/src/frame/zorder_drain.rs"),
     ),
     (
         "runtime/frame/zorder_descript_tests.rs",
-        include_str!("../runtime/frame/zorder_descript_tests.rs"),
-        include_str!("../runtime/frame/zorder_descript.rs"),
+        include_str!("../../../areka-runtime/src/frame/zorder_descript_tests.rs"),
+        include_str!("../../../areka-runtime/src/frame/zorder_descript.rs"),
     ),
     (
         "wintf/zorder_chain_release_tests.rs",

@@ -39,6 +39,8 @@ areka-mcp = { path = "../areka-mcp" }
 areka-user-data = { path = "../areka-user-data" }
 # 窓配置（spec: placement-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
 areka-placement = { path = "../areka-placement" }
+# 実行系（spec: runtime-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+areka-runtime = { path = "../areka-runtime" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }

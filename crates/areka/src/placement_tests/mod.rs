@@ -5,15 +5,9 @@
 //! （`runtime`・`input_events` ほか）も使うテストは上の crate であるここに置く。
 //! `main.rs` が `#[cfg(test)]` の下で宣言するので、本番のビルドには入らない。
 
-pub(crate) mod transition_judge;
-pub(crate) mod transition_judge_offset;
-
 mod measure_bake_count_tests;
-mod measure_bake_log_tests;
 mod measure_template_tests;
-mod reset_balloon_pos_tests;
 mod spawn_assembly_tests;
-mod spawn_zorder_pair_deferred_tests;
 mod zorder_branch_coverage_test_support;
 mod zorder_group_branch_coverage_tests;
 mod zorder_inversion_branch_coverage_tests;
