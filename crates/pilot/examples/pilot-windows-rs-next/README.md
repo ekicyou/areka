@@ -517,6 +517,74 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 - 読み方の注意: 新しい側の原点 (面の幅 − 20, 0)＝(290, 0) は第 1 列の自然な置き場として置いた値で、今の側の絵を見て合わせた値ではないが、今の側の列の住人の平行移動を読み解いて写した値でもない。だから「同じ原点で x のずれ 0」は列の置き場が揃う独立の証拠ではない（1 列・k=1・この面の大きさで、両側の自然な置き場が同じ値になった、と読む）。何列もの配置や k≠1 では列の置き場を別に確かめる要がある。y の原点 0 も同じく供給面の上端という自然な値。
 - 同じと見るかは開発者が決める（合格の閾値は置かない・確定 4）。
 
+#### 透過の窓のバルーンとクリックの当たり（8.6・`vt-balloon`）
+
+- 走らせ方（排他テストの机を持ってから・どのディレクトリからでも動く）:
+  - 組む: `cargo build --manifest-path C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c\crates\pilot\examples\pilot-windows-rs-next\Cargo.toml --target-dir C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c\target\pilot-windows-rs-next -p q7-vertical --bin vt-balloon`
+  - 走らせる: `C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c\target\pilot-windows-rs-next\debug\vt-balloon.exe`（上限時間は `AREKA_APP_SMOKE_EXIT_MS`・既定 30000 ms。当たりを確かめ終えたらすぐ自分で終わる）
+- 置き場: `q7-vertical/src/bin/vt-balloon.rs`。
+- 流れ:
+  1. Per Monitor v2 の DPI の認識を最初に宣言する。
+  2. 問い 1 の写しの窓（`WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST`・後から `WS_POPUP` と `HWND_TOPMOST`・92×272 px）に、問い 4 の合成（DispatcherQueue → Compositor → DesktopWindowTarget → D2D の装置 → 合成のグラフィックスの装置 → 描画面 → SpriteVisual）を通す。
+  3. 描画面の `BeginDraw` の文脈へ自前の Direct2D で描く。白の角丸の背景・`DrawTextLayout`（`D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT`）。文は比べの文の 1 列と選択肢 2 列（`🍣を食べる`・`やめておく`）。配置は `new_side::layout(.., Features::Areka)` を `set_max_size` で 3 列の幅にした物。選択肢は借りた `IDWriteTextLayout::SetDrawingEffect` で青。文脈の DPI は `SetDpi(96, 96)` に固定し、配置の座標＝窓の画素にした。
+  4. 窓を画面の DC から撮り（`q4_wuc::capture`）、絵を確かめる。
+  5. 選択肢ごとに、`range_bounds` の最初の矩形の中心へ `SendInput`（仮想画面の絶対の位置で動かし、左ボタンを押して離す）。`WM_LBUTTONDOWN` の lParam の位置から余白を引いて `windows-text` の `hit_test_point` に渡す。`is_inside` なら UTF-8 のバイト位置を `choices::byte_to_utf16` → `choices::choice_at` で選択肢の番号へ直し、`[q7] hit choice=<番号> target=<番号>` を出す。
+  6. カーソルを `SetCursorPos` で元の位置へ戻す。カーソルの位置を取った後は、両方押し終えたときだけでなく、外から閉じられたとき・`range_bounds` が空のとき・`SendInput` が失敗したときも、同じ 1 か所を通って戻してから終わる。
+- 終了コード（ExitContract）: 0＝両方の選択肢で当たりが一致・2＝初期化の失敗（段の名前と HRESULT を `tracing::error!` に出す。絵の確かめの失敗もここ）・3＝窓が外から閉じられた・4＝当たりが食い違った（2 秒の内にクリックが届かなかったときも含む）。
+- 狙いは 1 つでなく選択肢 2 つとも押す。当たりの写しが定数でなく、押した所で選択肢を見分けていることまで 1 回の走りで見るため。
+- 走った結果（2026-11-17・排他テストの机を持って 1 回）: 終了コード 0。出た行は下（全部）。
+
+```
+[q7] step=dpi_awareness ok
+[q7] step=out_dir ok
+[q7] step=layout ok
+[q7] step=window ok
+[q7] step=popup ok
+[q7] step=dispatcher_queue ok
+[q7] step=compositor ok
+[q7] step=desktop_window_target ok
+[q7] step=d2d_device ok
+[q7] step=graphics_device ok
+[q7] step=drawing_surface ok
+[q7] step=sprite_visual ok
+[q7] step=paint ok
+[q7] step=capture ok
+[q7] capture=C:\home\maz\git\areka\.claude\worktrees\kiro-start-pilot-windows-rs-next-86646c\target\pilot-windows-rs-next\out\q7\vt-balloon.png
+[q7] pixel x=8 y=8 rgb=255,255,255 ok
+[q7] pixel x=83 y=8 rgb=255,255,255 ok
+[q7] pixel x=8 y=263 rgb=255,255,255 ok
+[q7] pixel x=83 y=263 rgb=255,255,255 ok
+[q7] pixels blue=461 warm=354
+[q7] step=check_pixels ok
+[q7] step=window_rect ok
+[q7] step=cursor_pos ok
+[q7] step=send_input ok
+[q7] click x=46 y=65 aim x=46 y=65 range=45..48 inside=true
+[q7] hit choice=1 target=1
+[q7] step=send_input ok
+[q7] click x=26 y=66 aim x=26 y=66 range=61..64 inside=true
+[q7] hit choice=2 target=2
+[q7] cursor restored x=1123 y=1009
+```
+
+- 当たりの結果: 選択肢 1 は狙い (46, 65) にクリックが届き、当たった字は UTF-8 の 45..48（`🍣を食べる` の「食」）で `hit choice=1 target=1`。選択肢 2 は (26, 66) に届き、61..64（`やめておく` の「て」）で `hit choice=2 target=2`。どちらも狙いの画素と `WM_LBUTTONDOWN` の位置が 1 px も違わなかった（Per Monitor v2 と `SetDpi(96, 96)` で、窓・描画面・配置・`SendInput` の座標が同じ物理の画素に揃った）。カーソルは元の位置へ戻った。
+- 絵の確かめが示すこと: ⑴ 4 隅（角丸の 8 px 内側）が白＝描画面の中身が窓の矩形いっぱいに、ずれずに画面へ出た（DPI がずれると隅が白でなくなる・7.2 の学び）。真ん中の点は文字の列に当たって色が決まらないので、5 点目には使わず、代わりに次の 2 つを数えた。⑵ 青の画素 461＝`SetDrawingEffect` の範囲の色が合成を通っても選択肢に付いた。⑶ 暖色の画素（R が B より 48 超高い）354＝寿司の絵文字がカラーフォントのまま出た（黒の字と青のふちには出ない色）。
+- 撮った絵は進行役（主の会話）も開いて目で確かめた: 白のバルーン・黒の縦書きの文（色つきの 🍣）・その左に青の選択肢 2 列で、描いた物と合う。
+- 証拠の絵（`evidence/q7-balloon.png`・撮った絵そのまま 92×272）:
+
+![vt-balloon の撮った絵](evidence/q7-balloon.png)
+
+- COM: ここは DispatcherQueue に初期化させた ASTA（`DQTAT_COM_ASTA`・`q4-demo` と同じ）で、`vt-compare` の MTA と違う。`vt-compare` は今の側の GPU の World（MTA）と描く条件を揃えて画素を比べるために MTA にしたが、`vt-balloon` は画素を比べず、窓・DispatcherQueue・Compositor が同じ UI スレッドに要る（WUC は呼ぶスレッドの DispatcherQueue を求める）ので、本体の窓のスレッドと同じ形を取った。`windows-text` の配置と当たりの判定は ASTA でもそのまま動いた。
+- `bind-next` のフィルター: `q7-text.txt` に 17 件足した（`WS_EX_TOPMOST`・`SendInput`・`INPUT`・`INPUT_MOUSE`・`MOUSEINPUT`・`MOUSEEVENTF_` の 5 つ・`GetSystemMetrics`・`SM_` の仮想画面の 4 つ・`GetCursorPos`・`SetCursorPos`）。問い 7 も直に名指す名前 31 件を、設計の決まりどおり `q4-wuc.txt` から `common.txt` へ移した（合成のクラスと既定のインターフェース・相互運用の 3 つ・`DQTAT_COM_ASTA`・`GetWindowRect`・窓の形と見せ方・メッセージの回し・DPI）。束縛はフィルターの和なので中身は変わらず、`q4-demo` も組めた。`D2D1_ROUNDED_RECT`・`D2D_RECT_F`・`INPUT_0` は名指さずに出た。第 2 幕のフィルターの行数の表は 12.2 で直す。
+- 見立ての候補: go。`windows-text` の配置を借りた DirectWrite の型として WUC の描画面へ自前の D2D で描き、カラー絵文字・範囲の色・当たりの判定（UTF-8 のバイト位置 → UTF-16 → 選択肢）まで、本体のバルーンと同じ形の実の窓で通った。判定は開発者が下す。
+- 学び:
+  - `windows-text` の `hit_test_point` は UTF-8 のバイト範囲を返す（DirectWrite の UTF-16 でない）。`choices::choice_at` は UTF-16 を受けるので、バイト → UTF-16 の換算を 1 つ挟んだ。本体へ入れるなら、選択肢の範囲をバイトで持つか UTF-16 で持つかを 1 つに決めると換算が要らない。
+  - `windows-text` の `Rect` は `left`・`top`・`right`・`bottom` の 4 辺（幅と高さの欄は無い）。
+  - この rev の束縛の `SendInput` は入力の配列を `*mut INPUT` で受け、`INPUT_MOUSE` は `i32` で出る（`INPUT::type` は `u32`）。
+  - 描画面の `BeginDraw` の文脈の DPI に頼らず `SetDpi(96, 96)` を置くと、配置の座標・窓の画素・クリックの位置が 1 つの座標に揃い、当たりの換算に倍率が要らない。
+- 確かめた日: 2026-11-17。
+- 止まった所・理由・代わりの見立て: 無し。
+
 ### 問い 8: 32bit と arm64 のリンク
 
 - 見立ての候補: go（問い 1 の `.sys()`・問い 3 の既定と `.minimal()` の 3 つの束縛とも、i686 は x64 と同じに走り、aarch64 はリンクまで通った。写しの側の直しは 0）。

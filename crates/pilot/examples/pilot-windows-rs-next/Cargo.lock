@@ -1095,6 +1095,8 @@ dependencies = [
  "png",
  "q1-winmsg",
  "q4-wuc",
+ "tracing",
+ "tracing-subscriber",
  "windows-core 0.101.0",
  "windows-text",
  "wintf",

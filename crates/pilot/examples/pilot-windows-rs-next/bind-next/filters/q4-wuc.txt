@@ -1,33 +1,16 @@
 // q4-wuc: wuc.rs の写しと合成の各段・画面の撮り（7.1）。1 行 1 つの名指し（// の注は数えない）。
 // 合成（WinRT）
-Compositor
-CompositionGraphicsDevice
-CompositionDrawingSurface
 ICompositionSurface
-DesktopWindowTarget
-SpriteVisual
-CompositionSurfaceBrush
-// クラスのメソッドは既定のインターフェースを名指ししないと出ない（7.1）
-ICompositor
-ICompositionTarget
-ICompositionGraphicsDevice
-IVisual
-ISpriteVisual
 // DispatcherQueue
 DispatcherQueueController
 CreateDispatcherQueueController
 DispatcherQueueOptions
 DQTYPE_THREAD_CURRENT
-DQTAT_COM_ASTA
 DQTAT_COM_NONE
 // 相互運用
-ICompositorInterop
-ICompositorDesktopInterop
-ICompositionDrawingSurfaceInterop
 ID2D1DeviceContext3
 IDXGISwapChain1
 // 画面の撮り（GDI）
-GetWindowRect
 GetDC
 ReleaseDC
 CreateCompatibleDC
@@ -41,21 +24,5 @@ SRCCOPY
 BI_RGB
 DIB_RGB_COLORS
 GetDesktopWindow
-// q4-demo（7.2）: 窓の形と見せ方・メッセージの回し（装置の作り方の定数と ID2D1RenderTarget は問い 7 も使うので 8.3 で common へ移した）
+// q4-demo（7.2）: D2D の工場（窓の形・メッセージの回し・DPI は問い 7 も使うので 8.6 で、装置の作り方の定数と ID2D1RenderTarget は 8.3 で common へ移した）
 D2D1_FACTORY_TYPE_SINGLE_THREADED
-SetWindowLongPtrW
-SetWindowPos
-GWL_STYLE
-WS_POPUP
-WS_EX_NOREDIRECTIONBITMAP
-HWND_TOPMOST
-SWP_FRAMECHANGED
-SWP_SHOWWINDOW
-SWP_NOACTIVATE
-PeekMessageW
-TranslateMessage
-DispatchMessageW
-PM_REMOVE
-// DPI（7.2 の走りで分かった）: 認識しない exe は 200% で窓が論理の座標、画面の DC が物理の座標になり撮りがずれる
-SetProcessDpiAwarenessContext
-DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2

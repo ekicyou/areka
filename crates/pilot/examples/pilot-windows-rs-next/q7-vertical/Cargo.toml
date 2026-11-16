@@ -17,3 +17,5 @@ areka-sakura = { workspace = true }
 png = { workspace = true }
 # 今の側（old_side）の予約スロット（World・Name・ChildOf）を組む。
 bevy_ecs = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
