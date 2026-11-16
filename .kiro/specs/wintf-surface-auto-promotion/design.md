@@ -146,18 +146,23 @@ crates/wintf/src/ecs/graphics/visual/
 ├── promotion_shape_tests.rs     # 新規: 見分けの各場合（要件 8.2）
 ├── promotion_round.rs           # 新規: 1 回の判断（帰属・祖先の優先・相の移り・記録・置き場・描く列の分け方）
 ├── promotion_round_tests.rs     # 新規: GPU を使わない ECS のテスト（帰属・吸い込み・記録の 1 度・置き場）
+├── promotion_round_log_tests.rs # 新規（実装で足した兄弟）: 記録の行の捕まえ（要件 1.8・4.9・7.x）
 ├── placement.rs                 # 新規: SurfacePlacement と WUC へ写す純粋な補助（変形・切り抜き・子の並び・親）
 ├── placement_tests.rs           # 新規: 補助の純粋なテスト（要件 8.4 の並びと親の決め）
 ├── mod.rs                       # 変更: 規則の 4 つ目の入力・新しいモジュールの宣言と公開・文書
 ├── world_visual.rs              # 変更: 走査の列 TreeScan・節の下の持ち主を切らない・自動の持ち主を通り抜ける
 ├── world_visual_tests.rs        # 変更: 切って error! を確かめる 2 本を、置き場を記す形へ
+├── world_visual_scan_tests.rs   # 新規（実装で足した兄弟）: 走査の列の材料と更新の印
 ├── systems.rs                   # 変更: 3 部品の係の規則の入力・update_draw_trees の配線
 ├── systems_tests.rs             # 変更: 持ち主の VisualTransform の warn! の 1 本を、warn! が出ない形へ・自動の部品の出し入れ
+├── systems_promotion_tests.rs   # 新規（実装で足した兄弟）: 時刻を注入した上げ下げの通しと描画面の大きさ
+├── draw_tree.rs                 # 変更（境界の例外）: DrawTree::device_px の欄
 └── draw/
     ├── builder.rs               # 変更: 部分の列の形（根の中身を出さない・原点をずらす）
     ├── builder_segment_tests.rs # 新規: 部分の列の組み立て
-    ├── emit.rs                  # 変更: テストの接続宣言 1 行だけ
+    ├── mod.rs                   # 変更: テストの接続宣言だけ（emit.rs は触らない）
     ├── emit_promotion_tests.rs  # 新規: WARP の画素の一致（要件 8.3・研究 R-e）
+    ├── emit_placement_tests.rs  # 新規（実装で足した兄弟）: 節の下の持ち主と持ち主の変形の WARP の一致
     ├── emit_test_support.rs     # 変更: WUC の重ねを写す口（描画面ごとの絵を整数の位置と不透明度で重ねる）
     └── README.md                # 変更: 自動の上げ下げ・節の下の持ち主・持ち主の VisualTransform・既定の寄せ方
 crates/wintf/src/ecs/graphics/
@@ -167,12 +172,15 @@ crates/wintf/src/ecs/graphics/systems/
 ├── visual_sync_tests.rs         # 変更: 写しの値の純粋な部分
 ├── clip_sync.rs                 # 変更: 置き場の切り抜きとの合わせ・自動で上げた持ち主は切り抜きなし
 ├── clip_sync_tests.rs           # 変更: 合わせの鍵
+├── render.rs                    # 変更（境界の例外）: replay_transform（device_px の木は恒等）
+├── render_tests.rs              # 変更: replay_transform の選び
+├── window_pos_tests.rs          # 変更: DrawTree の欄が増えたための 1 行
 └── surface.rs                   # 変更: 自動で上げた持ち主の描画面の矩形を部分木の描く範囲から決める・はみ出したら作り直す
 crates/wintf/tests/
 ├── graphics.rs                  # 変更: 新しいテストの接続宣言 1 行だけ
 └── graphics/
     ├── surface_embedding_test.rs # 新規: 実 GPU の WUC の性質の読み戻しと描画面ごとの画素（要件 8.5）
-    └── draw_tree_systems_test.rs # 変更: 昇格まわりの期待の見直し（答えは変わらない見込み）
+    └── draw_tree_systems_test.rs # 見直しのみ: 昇格まわりの期待は走査の列の形でも変わらず、差分なし
 .kiro/steering/
 ├── structure.md                 # 変更: graphics/visual の描画の道の記述
 └── tech.md                      # 変更: テストの記述（画素の一致の WARP の場合に自動の上げ下げを足す）
@@ -184,7 +192,7 @@ crates/wintf/tests/
 - `visual/systems.rs` — `sync_surface_owner_parts` が `Changed<AutoPromotion>` を見る・手動の目印か命令の列が入った節の状態を初期化する。`update_draw_trees` の根の回し方・1 回の判断の呼び出し・部分の列の組み立て・持ち主の `VisualTransform` の `warn!` の削除。
 - `visual/draw/builder.rs` — `build` に「部分の列」の口を足す（今の呼び出しの答えは変えない）。
 - `systems/visual_sync.rs`・`systems/clip_sync.rs`・`systems/surface.rs` — 下の Components のとおり。
-- `tests/graphics.rs`・`visual/draw/emit.rs` — 兄弟のテストの接続宣言 1 行ずつ（本体は書かない）。
+- `tests/graphics.rs`・`visual/draw/mod.rs` — 兄弟のテストの接続宣言だけ（本体は書かない）。
 
 > 触らないファイル（ウェーブの約束）: `Cargo.toml`・`ecs/world/**`・`ecs/graphics/{visual_manager,composite,damage,readback}.rs`（`components.rs` は `ClipKey` の欄だけ。同じウェーブでほかに wintf を触る spec は無い）・`ecs/graphics/systems/{render,init,brushes,window_pos}.rs`・`visual/draw/{diff,emit(本体),command,clip_geometry}.rs`・`ecs/layout/**`・`crates/areka*`・`crates/pilot`・`tools/`。
 
@@ -289,7 +297,7 @@ sequenceDiagram
 | 8.2 | 形の見分けの純粋なテスト | promotion_shape_tests | — | — |
 | 8.3 | WARP の画素の一致 | emit_promotion_tests・emit_test_support | WUC の重ねの口 | — |
 | 8.4 | WUC の木のつながりと位置・並び | placement_tests・surface_embedding_test | — | — |
-| 8.5 | 実 GPU の確かめ | surface_embedding_test | 性質の読み戻し・`CopySurface` | — |
+| 8.5 | 実 GPU の確かめ | surface_embedding_test | 性質の読み戻し・`CopySurface`（WUC の描画面そのもの） | — |
 | 8.6 | 既存のテストの更新 | world_visual_tests・systems_tests・draw_tree_systems_test | — | — |
 | 8.7 | 兄弟ファイル | File Structure Plan | — | — |
 | 9.1 | README の記述 | Docs | — | — |
