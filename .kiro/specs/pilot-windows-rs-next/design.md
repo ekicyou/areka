@@ -35,7 +35,7 @@
 - 移行の本体の各本の brief（go の後に `/kiro-discovery`）。
 
 ### Allowed Dependencies
-- 上流（git・上の 1 コミットだけ・フォークも `[patch]` もしない）: `windows-core`・`windows-result`・`windows-strings`・`windows-link`・`windows-numerics`・`windows-text`・`windows-bindgen`（build の依存）。
+- 上流（git・上の 1 コミットだけ・フォークも `[patch]` もしない）: `windows-core`・`windows-result`・`windows-strings`・`windows-link`・`windows-numerics`・`windows-text`・`windows-bindgen`（build の依存）。既定の形の束縛が `Windows.Foundation` の型を暗に回す兄弟のクレート `windows-future`・`windows-collections`・`windows-reference`・`windows-time`（同じ rev・上流 `crates/libs/bindgen/src/lib.rs` の `prepend_default_refs`）も、生成した束縛が名指ししたときに限って許す。実際に要った物を一次記録に書く。
 - 本線のクレートを path で借りる（読むだけ・0.62 のまま）: `wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`。借りてよいのは問い 7 の比べ役（`q7-vertical`）だけ。
 - crates.io: 本線の `Cargo.lock` に在る `bevy_ecs`・`png`・`tracing`・`tracing-subscriber`（`env-filter` は宣言しない）と、問い 9 の `scip` とその依存。
 - 置き場の中のクレートどうし: 下の「依存の向き」の図のとおりだけ。
@@ -65,6 +65,7 @@ graph TB
         Link[windows-link]
         Text[windows-text]
         Bindgen[windows-bindgen]
+        Siblings[windows-future collections reference time]
     end
     subgraph Borrowed
         OldEmo[areka-emo-text 0.62]
@@ -90,6 +91,7 @@ graph TB
     Q3M --> Core
     Q5 --> Core
     BindNext --> Core
+    BindNext -.->|referenced only| Siblings
     Q4 --> BindNext
     Q4 --> Q1
     Q6 --> BindNext
@@ -113,7 +115,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | 言語・道具 | Rust 1.100.0・cargo 1.100.0・edition 2024（`q1-winmsg`・`q10-winmsg` だけは元と同じ 2021） | 置き場の全部 | 元の edition を保つのは、書き換えの行数を束縛の差だけにするため |
-| 上流 | windows-rs master `f37e2f9046cf9710fe00285436c4d22ad6053d72`（`windows-core`・`windows-numerics`・`windows-text`・`windows-bindgen` 0.101.0／`windows-link`・`windows-result`・`windows-strings` 0.100.1） | 新しい側の全部 | git の依存。`CARGO_HOME` へ丸ごと取り寄せる（確定 10） |
+| 上流 | windows-rs master `f37e2f9046cf9710fe00285436c4d22ad6053d72`（`windows-core`・`windows-numerics`・`windows-text`・`windows-bindgen` 0.101.0／`windows-link`・`windows-result`・`windows-strings` 0.100.1／既定の形の束縛が名指ししたときだけ `windows-future`・`windows-collections`・`windows-reference`・`windows-time`） | 新しい側の全部 | git の依存。`CARGO_HOME` へ丸ごと取り寄せる（確定 10） |
 | 束縛 | `windows-bindgen` の builder を各クレートの `build.rs` から呼び、`OUT_DIR` へ書く | 問い 1〜7・10 | 形: `.sys()`（問い 1・10）・既定（問い 2・3・4・6・7）・`.minimal()`（問い 3・5） |
 | 借りる本線 | `wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`（path・`windows` 0.62.2） | 問い 7 の今の側 | 読むだけ |
 | ECS | `bevy_ecs` 0.19.1 | 問い 5・問い 7 の今の側 | 本線と同じ版（`Cargo.lock` の種） |
@@ -341,7 +343,7 @@ sequenceDiagram
 **Responsibilities & Constraints**
 - 根の `Cargo.toml` は仮想の manifest: `[workspace] resolver = "3"`・`members`（上の各クレート）・`[workspace.package] edition = "2024"`・`publish = false`・`[workspace.dependencies]`。
 - `[workspace.dependencies]` の上流は全部 `git = "https://github.com/microsoft/windows-rs", rev = "f37e2f9046cf9710fe00285436c4d22ad6053d72"`。借りるクレートは `path = "../../../<名前>"`（置き場の根からの相対）。
-- `Cargo.lock` は着手の初めに本線の `Cargo.lock` を写して種にする（写した本線のコミットを一次記録に書く）。その後は置き場の中の cargo だけが更新する。
+- `Cargo.lock` は着手の初めに本線の `Cargo.lock` を写して種にする（写した本線のコミットを一次記録に書く）。その後は置き場の中の cargo だけが更新する。本線の根の `[patch.crates-io] image-webp`（git）は置き場のワークスペースに効かないので、借りる `areka-emo-text` → `areka-emo-compose` → `areka-emo-atlas` → `image` の木の `image-webp` だけは crates.io の版に解き直される（縦書きの画素には効かない。置き場は `[patch]` を持たない＝要件 2.2）。解き直された版を一次記録に書く。
 - `.cargo/config.toml` は `[build] target-dir = "../../../../target/pilot-windows-rs-next"` だけ（置き場の根の親の親の親の親＝作業木の根）。
 
 **Contracts**: State [x]
@@ -531,7 +533,7 @@ pub struct WindowHandleMinimal(pub b_minimal::HWND);
 - `diff.rs`: 下の契約。差の絵は違う画素を赤・同じ墨を灰にした PNG。
 - `choices.rs`: 選択肢の範囲（UTF-8 のバイト位置）と areka の文字の位置の換算・`hit_test_point` の結果から選択肢の番号への写し。
 - `TextLayout::new` の panic: 起こす入力を 1 つ探して確かめ（例: 大きさに NaN）、本体での扱いの見立て（入る前に値を確かめる・境で `catch_unwind` する）を一次記録に書く。
-- `vt-compare` は 1 つの過程に `windows-core` 0.62（借りた側）と 0.101（新しい側）が並んで動く実物で、要件 13.5 の材料になる（`cargo tree -d` の出力も一緒に書く）。
+- 描く条件を今の側に揃える（違いを `windows-text` の差だけにするため）: ⑴ COM は今の側と同じ MTA で始める（今の側の GPU の World は MTA＝`crates/areka-emo-text/tests/support/fixture.rs`）⑵ 新しい側の D2D の文脈の文字のアンチエイリアスの形・描画の設定（`IDWriteRenderingParams`）・DPI・単位・面の画素の形式（premultiplied BGRA）・筆の色・`DrawTextLayout` の指定を、今の側が `present_frame` の経路で使う値（`crates/areka-emo-text/src/draw.rs` の `DrawTextLayout` の呼び出しと、`wintf` の描画面を作る所＝`crates/wintf/src/ecs/graphics/systems/surface.rs`・`crates/wintf/src/com/wuc.rs`）から読んで写す。読んだ値と所（ファイルと行）を一次記録の問い 7 の節に表で書く。揃えられなかった条件はその旨を書き、差の読みに添える。 `windows-core` 0.62（借りた側）と 0.101（新しい側）が並んで動く実物で、要件 13.5 の材料になる（`cargo tree -d` の出力も一緒に書く）。
 - `vt-balloon`: `q1` の窓（`WS_POPUP`・`WS_EX_NOREDIRECTIONBITMAP`・`WS_EX_TOPMOST`・DPI は Per Monitor v2）＋`q4-wuc` の合成で、縦書きの文（カラー絵文字を含む）と選択肢 2 つを描く。窓の撮りの後、狙いの選択肢の中心へ `SendInput` で動かしてクリックし、`WM_LBUTTONDOWN` の位置を `hit_test_point` に渡して当たった選択肢を `[q7] hit choice=<番号> target=<番号>` で出す。カーソルは元の位置へ戻す。
 
 **Contracts**: Batch [x]
@@ -565,7 +567,7 @@ pub fn write_diff_png(old: &Shot, new: &Shot, shift: (i32, i32), path: &std::pat
   1. 本線の作業木で `rust-analyzer scip <作業木の根> --output <作業木>\target\pilot-windows-rs-next\out\q9\index.scip`（rust-analyzer の版を記録する）。
   2. `cargo run -p q9-api-count -- <index.scip>`。
 - 数え方: SCIP の各文書（`crates/<名前>/…`）の参照の出現のうち、記号の包みの名前が `windows`・`windows_core`・`windows_numerics`・`windows_strings`・`windows_result` の物を集め、記号の綴りの末尾で分ける: `#` で終わる＝型（構造体・インターフェース・列挙・別名）／`#…().` ＝型の下のメソッド（インターフェースのメソッドとして数える）／`().` で `#` を含まない＝関数／`.` で終わる＝定数ほか（型の下の欄は別に数える）／`!`＝マクロ（別に数える）。同じ記号は 1 つと数える（全数）。出現の回数も添える。
-- `crates/pilot` は数えない。試験のコードは数えに入る（移行の本体で書き換えるので）。
+- `crates/pilot` は数えない。表はクレートごとに「出荷する（crates.io へ出すか、areka の配布に入る）」か「試験の道具（`*-kit` などの配布に入らない物）」かの印を付け、合計を両方で出す。どちらも本番と試験のコードを分けて数える（どれも移行の本体で書き換えるので数えるが、要件 10.1 の「出荷するクレート」の数は出荷する印の合計とする）。
 - Output: クレートごと・種類ごとの表（Markdown）を標準出力へ。一次記録に、表・数えた本線のコミット・rust-analyzer の版。
 - 種類の判定は小さな試験（綴りの見本 5 つ）で固定する。
 
