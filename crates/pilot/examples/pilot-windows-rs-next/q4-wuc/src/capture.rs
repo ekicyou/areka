@@ -58,9 +58,10 @@ pub fn capture_window_png(hwnd: HWND, path: &std::path::Path) -> Result<()> {
         ReleaseDC(None, screen);
     }
     let mut bgra = pixels?;
-    // GDI の 32 bpp は BGRA の並び。PNG は RGBA。
+    // GDI の 32 bpp は BGRA の並び。PNG は RGBA。画面からの BitBlt は α を決めないので不透明にする。
     for px in bgra.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
+        px[3] = 255;
     }
     write_png(path, w as u32, h as u32, &bgra)
 }

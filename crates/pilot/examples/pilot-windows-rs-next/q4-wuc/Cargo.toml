@@ -9,3 +9,6 @@ bind-next = { path = "../bind-next" }
 q1 = { package = "q1-winmsg", path = "../q1-winmsg" }
 windows-core = { workspace = true }
 png = { workspace = true }
+windows-numerics = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

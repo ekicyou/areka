@@ -20,7 +20,7 @@
 | `q2-placement/plan3-bind`・`plan3-wintf`・`plan3-emo` | 2（案 3） | `windows-core`。束縛は bind だけ（build に `windows-bindgen`）。wintf → bind・emo → bind と wintf |
 | `q3-default`・`q3-minimal` | 3・8 | `windows-core`・build に `windows-bindgen` |
 | `bind-next` | 4・6・7 の土台 | `windows-core`・build に `windows-bindgen`（兄弟は束縛が名指ししたときだけ 1.3 で足す） |
-| `q4-wuc` | 4 | `bind-next`・`q1`（`q1-winmsg` を名前を変えて）・`windows-core`・`png` |
+| `q4-wuc` | 4 | `bind-next`・`q1`（`q1-winmsg` を名前を変えて）・`windows-core`・`windows-numerics`・`png`・`tracing`・`tracing-subscriber`（`env-filter` なし。この 3 つは 7.2 の `q4-demo` で足した） |
 | `q5-hwnd` | 5 | `windows-core`・`bevy_ecs`・build に `windows-bindgen` |
 | `q6-com` | 6 | `bind-next`・`windows-core` |
 | `q7-vertical` | 7・要件 13.5 | `bind-next`・`q4-wuc`・`q1`・`windows-core`・`windows-text`・借りる `wintf`・`areka-emo-text`・`areka-parsers`・`areka-sakura`・`png` |
@@ -304,7 +304,47 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 4: WinRT（`windows-bindgen` で合成）
 
-- 見立ての候補: （未記入。7.2 の実の窓の走行の後に書く）
+- 見立ての候補: go（`wintf` の合成の組み方〔DispatcherQueue → Compositor → DesktopWindowTarget → D2D の装置からの描画の装置 → 描画面 → SpriteVisual〕は、`windows-composition` に乗り換えずに `windows-bindgen` の既定の形の束縛のまま実の窓で全段通った。直しは型の決まり〔既定のインターフェースの名指し・相互運用の戻りの `cast`〕だけで、組み方は変わらない）
+- 確かめた日: 2026-11-16（7.1・束縛と写しの移し）／2026-11-17（7.2・`q4-demo` の実の窓・x64・実の GPU・排他テストの机を持って 2 回走らせた）
+- 段ごとの結果（7.2・`q4-demo`）:
+  - 1 回目の走り（DPI の認識なし）: 全段が `ok` で終了コード 0。ところが進行役（主の会話）が撮った絵を目で見ると、256x256 の絵の左と上にデスクトップのアイコンが写り、マゼンタは (100,100) から右下の角までしか無かった。当時の確かめ（真ん中の 1 点だけ）は偶然に通っていた。
+  - 原因: exe が DPI を認識しておらず、画面が 192 DPI（200%）だった。窓は論理の座標（(100,100)・256x256 → 物理では (200,200)・512x512）で置かれ、撮りの `GetWindowRect` と画面の DC からの `BitBlt` は物理の画素 (100,100)〜(356,356) を読んだので、窓の左上が絵の (100,100) にずれた。撮りの書き方と visual・描画面の大きさは原因ではない。
+  - 直し: `q4-demo` の最初の段に `dpi_awareness`（`SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)`）を足した。確かめも、真ん中の 1 点から 5 点（4 隅を 4 px 内側に・真ん中）へ強めた（1 回目の絵なら (4,4) がデスクトップで落ちる）。
+  - 2 回目の走り（直した後）: 終了コード 0（上限時間 30000 ms に着いて自分で終わった）。出た行:
+
+    ```
+    [q4] step=dpi_awareness ok
+    [q4] step=out_dir ok
+    [q4] step=window ok
+    [q4] step=popup ok
+    [q4] step=dispatcher_queue ok
+    [q4] step=compositor ok
+    [q4] step=desktop_window_target ok
+    [q4] step=d2d_device ok
+    [q4] step=graphics_device ok
+    [q4] step=drawing_surface ok
+    [q4] step=sprite_visual ok
+    [q4] step=paint ok
+    [q4] step=capture ok
+    [q4] pixel x=4 y=4 rgb=255,0,255 ok
+    [q4] pixel x=251 y=4 rgb=255,0,255 ok
+    [q4] pixel x=4 y=251 rgb=255,0,255 ok
+    [q4] pixel x=251 y=251 rgb=255,0,255 ok
+    [q4] pixel x=128 y=128 rgb=255,0,255 ok
+    [q4] step=check_color ok
+    [q4] done exit_ms=30000
+    ```
+
+  - 撮った絵は作業木の `target\pilot-windows-rs-next\out\q4\q4-demo.png`（256x256・コミットしない）。真ん中の 64x64 を切って `evidence/q4-wuc.png` に置いた。進行役も撮った絵を目で見て、256x256 の全面がマゼンタだと確かめた。画面の DC からの撮りに WUC の中身は写る（DWM が合成した後の画素）。
+- 学び（7.2・実の窓）:
+  - DPI を認識しない exe は、拡大率が 100% より大きい画面で、窓の座標（論理）と画面の DC の撮り（物理）が食い違い、撮りがずれる。段は全部 `ok` で終わるので、行だけ見ても気付けない。撮った絵の確かめは 1 点でなく 4 隅と真ん中で見る。
+  - `vt-balloon`（8.6）も、設計どおり Per Monitor v2 の DPI の認識が要る（無いと同じずれで当たりの位置も狂う）。
+  - `q1` の束縛（`.sys()`）の `HWND` と `bind-next`（既定の形）の `HWND` は、どちらも `*mut HWND__` の別名だが `HWND__` が別の型なので、そのままでは渡せない。`window.hwnd().cast()`（ポインタの型だけ移す）が 1 か所要った。束縛を 2 つ持つと取っ手の受け渡しにこの手当てが要る（問い 2 の案 1 の重なりと同じ形）。
+  - `q1` の窓は `new_ex` で拡張のスタイルしか取らない（スタイルは 0）ので、`WS_POPUP` は作った後に `SetWindowLongPtrW(GWL_STYLE)` と `SetWindowPos(SWP_FRAMECHANGED)` で付けた。`q1` の束縛は非公開なので、この名指しは `bind-next` に置いた。
+  - 問い 4 のフィルターに 7.2 で 20 件を足した（足すだけ・消した物なし）: 装置の作り方の定数 4（`D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`・`D3D11_SDK_VERSION`・`D2D1_FACTORY_TYPE_SINGLE_THREADED`）・塗りの基のインターフェース 1（`ID2D1RenderTarget`。`Clear` はこれを名指ししないと出ない）・窓の形と見せ方 9（`SetWindowLongPtrW`・`SetWindowPos`・`GWL_STYLE`・`WS_POPUP`・`WS_EX_NOREDIRECTIONBITMAP`・`HWND_TOPMOST`・`SWP_FRAMECHANGED`・`SWP_SHOWWINDOW`・`SWP_NOACTIVATE`）・メッセージの回し 4（`PeekMessageW`・`TranslateMessage`・`DispatchMessageW`・`PM_REMOVE`）・DPI 2（`SetProcessDpiAwarenessContext`・`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`）。フィルターは 65 行（名指し 57・注 8）になった。`windows-numerics` の `Vector2` の欄はこの rev では小文字（`x`・`y`）。
+  - 塗りは `BeginDraw` の文脈に `Clear` だけで、`BeginDraw` の返す位置の平行移動（atlas offset）は使っていない（描画面 1 枚では全面が塗られた）。図形を置く移行の本体では、その平行移動を足して描く。
+  - 直しの回数（7.2）: 3（`Vector2` の欄の名前のビルドの失敗・clippy の「宣言した所で閉包を呼ぶ」・1 回目の走りの DPI のずれ）。
+- 止まった所・理由・代わりの見立て: 無し（今の形のまま全段が通った。1 回目の撮りのずれは exe の DPI の認識の不足で、合成の段の問題ではない）
 - 学び（7.1・束縛と写しの移し）:
   - WinRT の合成も Win32 の相互運用も、`bind-next` の 1 つのフィルターで既定の形の束縛に出た。名前空間のモジュールは WinRT が `bind_next::Windows::UI::Composition::Compositor`・`bind_next::Windows::System::DispatcherQueueController`、Win32 は全部 `bind_next::Windows::Win32::*` の 1 段（相互運用の `ICompositorInterop` ほか・`CreateDispatcherQueueController`・GDI も同じ段）。
   - WinRT のクラスの名指しだけでは、クラスの型・`new()`・`RuntimeName` は出るがメソッドは 1 つも出ない（既定のインターフェースの `ICompositor_Vtbl` が空）。メソッドはクラスの既定のインターフェース（`ICompositor`・`ICompositionTarget`・`ICompositionGraphicsDevice`・`IVisual`・`ISpriteVisual`）を名指ししたときに、クラスの `impl` に出る。Win32 の「継いだメソッドは基のインターフェースを名指ししないと出ない」と同じ型の決まり。名指しが欠けても build は通るので、呼ぶ側で初めて気付く。
@@ -317,7 +357,6 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
   - 書き換えの行数（`git diff --numstat cd2fb49c7 <移した後> -- q4-wuc bind-next`、まだ積んでいない新しいファイルを含む）: `wuc.rs` +22／−16（`use` の入れ替えと、`?.cast()` 3 か所・`.ok()` 1 か所・`allow` 1 か所とそれぞれの注）・`capture.rs` +121（新しい）・`tests/capture.rs` +19（新しい）・`filters/q4-wuc.txt` +43／−1・`bind-next/Cargo.toml` +2。
   - 直しの回数: 3（`windows-collections` が無いビルドの失敗・新しい撮りの `BOOL` の must_use の警告・clippy の 3 件〔`not_unsafe_ptr_arg_deref` 2・`as_chunks_mut`〕）。写しの `wuc.rs` は `use` を入れ替えた最初のビルドで通った（clippy の `allow` を除く）。時間は約 8 分（写し 約 2 分・移し 約 6 分）。
   - 束縛の形は既定だけで確かめた。WinRT の `.minimal()`（class の口を出さない）は移行の本体の起票で確かめる点として残す。
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
 - 判定: （開発者が下す）
 
 ### 問い 5: `HWND` の持ち方

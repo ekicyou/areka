@@ -166,7 +166,7 @@
   - _Dispatch: standard — WinRT の束縛への書き換えを実地で詰める_
   - _Requirements: 1.8, 2.4, 5.1_
 
-- [ ] 7.2 `q4-demo` で合成の各段を実の窓で通す
+- [x] 7.2 `q4-demo` で合成の各段を実の窓で通す
   - 問い 1 の写しの窓（`WS_POPUP`・`WS_EX_NOREDIRECTIONBITMAP`）→ DispatcherQueue の作成 → Compositor の生成 → DesktopWindowTarget → D2D の装置からの描画の装置 → 描画面 → SpriteVisual へのつなぎ → 塗る → 撮る、の順に組み、段ごとに `[q4] step=<名前> ok|err=<HRESULT>` を 1 行出す
   - 上限時間（`AREKA_APP_SMOKE_EXIT_MS`・既定 30000 ms）の内で自分で終わり、ExitContract の終了コードで終わる。失敗は `tracing::error!` で段の名前と `HRESULT` を出す
   - 進行役（主の会話）が実装係を起こす前に排他テストの机を取り、実装係が終えたらすぐ返す。机を持つ間に実の GPU で走らせ、主の会話も画面を目で確かめる。撮った絵は `out\q4\` に書き、小さく切って `evidence/` に置く。撮った絵に WUC の中身が写らなければその旨を書く
@@ -340,3 +340,4 @@
 - 0.101 の `HSTRING` は `Display` を持たない（`display()`・`to_string_lossy()` を使う）。`#[interface]` に `IUnknown_Vtbl` の取り込みは要らない（6.1）。
 - `.implements` の名前はこの rev のメタデータでは `Windows.Win32.IDWriteTextRenderer1` の形（`Graphics.DirectWrite` の段が無い）。合わない名前は黙って無視され `_Impl` が出ないのに build は通る。生成した `_Impl` のメソッドは `HRESULT` を返すので中で `?` は使えない（6.2）。
 - WinRT のクラスを名指ししても型と `new()` だけでメソッドは出ない。既定のインターフェース（`ICompositor` ほか）を名指しする。足りなくても build は通り、呼ぶ所で初めて分かる。相互運用の口はクラスでなくインターフェースを返す（`cast` が要る）（7.1）。
+- 窓を出す bin は最初に Per Monitor v2 の DPI 対応を宣言する。しないと 200% の画面で窓は論理座標・画面の撮りは物理画素になり、撮った絵がずれる（段の行は全部 ok のまま）。色の確かめは中心だけでなく四隅も見る。q1 の `HWND` と bind-next の `HWND` は別の `HWND__` で `cast` が要る。q4 のフィルターに足した装置・DPI・`SetWindowPos` の名前を問い 7 も使うなら `common.txt` へ移す（設計の決まり）（7.2）。
