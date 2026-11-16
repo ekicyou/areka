@@ -178,3 +178,106 @@ WUC の子の Visual は親の描画面の中身より必ず上に重なり、`S
 - **D12 並びの変化**: `Children` の並びだけが変わった回に WUC の並べ直しをする作りを本 spec で足すか（手動の持ち主の今の振る舞いにも効く既存の欠け）。
 
 参考（R-a）: [IDCompositionVisual2::SetOpacityMode](https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nf-dcomp-idcompositionvisual2-setopacitymode)・[LayerVisual Class](https://learn.microsoft.com/en-us/uwp/api/windows.ui.composition.layervisual)・[Composition visual](https://technet.microsoft.com/en-us/windows/uwp/graphics/composition-visual-tree)
+
+---
+
+# 設計の段（2026-11-16 `/kiro-spec-design -y`）
+
+## Summary
+- **Feature**: `wintf-surface-auto-promotion`
+- **Discovery Scope**: Extension（wintf の描画の木の拡張・発見の手順は light。外の依存は足さない）
+- **Key Findings**:
+  - 自動で上げた持ち主は自分の埋める係を回さず、親の持ち主の走査の列（前順で連続）の部分を、原点を整数の物理ピクセルへずらして描けばよい。世界の行列は手動の持ち主からの DIP の 1 つに保て、判断の材料・形の見分け・部分の列が 1 度の歩きでそろう。
+  - 判断は `update_draw_trees` の中（埋めた直後）で行い、切り替えは「用意してから切り替える 2 段」にすれば、係の登録（`ecs/world/mod.rs`）を変えずに、どの回の画面でも部分木が欠けず 2 度描かれない。
+  - 今の WUC の兄弟の並びは「`Children` の順に `InsertAtBottom`＝最初の子が最上」（`systems/visual_sync.rs` の注記・`tests/visual/common/mod.rs` の期待）で、節の描く列（画家の順・最初の子が最下）と向きが逆。要件 2.3 の例「前順で前の手動の持ち主と重なる」はこの向きを画家の順と見た書き方で、画素を変えるのは前順で後の持ち主・ほかの自動の持ち主との重なり。
+
+## Research Log
+
+### D1 同じフレームの切り替え
+- **Context**: WUC の Visual を作る係が `update_draw_trees` より前に回る（ギャップ分析 §1）。
+- **Findings**:
+  - `sync_surface_owner_parts`（先頭）→ `visual_resource_management_system` → `update_draw_trees` → `deferred_surface_creation_system` の間は命令が反映される（今も「入れた部品は同じ回に作られる」）。
+  - 判断の材料のうち頻度は変化の印から先頭でも取れるが、形の見分け（要件 2.4 の「その形になったフレーム」）はこの回の世界の行列が要り、埋めた後にしか分からない。
+  - 描画面の作成の失敗は `update_draw_trees` の後にしか分からない。判断の回に親の列から外すと、失敗の回に部分木が 1 回欠ける。
+- **Implications**: 2 段（Node→Preparing→Active）。用意中は親の列に残し、自分の描画面を描くが WUC の木に繋がない。描画面ができた次の回に親の列から外すことと WUC へ繋ぐことを同じ回に行う。戻しは判断の回に効く（親の列に戻し、Composition で外す）。判断から切り替えまでの回の遅れは画素に出ない（「1 フレーム遅らせて合わせる」解ではない）。係の順の組み替えは `ecs/world/mod.rs` に触るので取らない。
+
+### D2 自動の状態の置き場
+- **Findings**: 節は必ず `WorldVisual` を持つ（`VisualDrawContent`／`VisualTransform` の `require`）。`WorldVisual` に `#[require(AutoPromotion)]` を付ければ、命令で部品を足す揺れ（アーキタイプの移り）が無く、実体が消えれば状態も消える（`Local<HashMap>` の掃除が要らない）。
+- **Implications**: 相は規則 `wants_own_surface` の 4 つ目の入力。履歴の書き込みは変化の印を立てず、相の移りだけ印を立てて `sync_surface_owner_parts` に拾わせる（`clip_sync` の `bypass_change_detection` の前例）。
+
+### D8 静かな間の戻し
+- **Findings**: 心拍は `TICK_HEARTBEAT_FRAMES = 30`（`ecs/world/tick_gate.rs`）。心拍の回にも `update_draw_trees` は回り、埋める係は全部の見える節を歩く。
+- **Implications**: 心拍で拾う。戻しの遅れ（最大で心拍 1 周期）は画素に出ず、GPU のメモリを返すのが遅れるだけ。`tick_wake::arm_deadline` の預けは足さない。
+
+### WUC の写し方（B-1／B-2）
+- **Findings**: B-1 は WUC の Visual を増やさず、装置の失いの立ち直りに新しい物を足さない。祖先の矩形の切り抜きは、自分の切り抜きが無ければ `CompositionGeometricClip` の矩形＋`CompositionClip.TransformMatrix`（逆行列）で 1 つにでき、自分の切り抜きが矩形で行列が軸に沿えば交わりの矩形にできる。それ以外は 1 つの切り抜きに合わせられない。B-2 は道の上の節ごとに `ContainerVisual` を作れば全部の形を素直に効かせられるが、節が WUC の部品を持つ新しい形になり、作成・失いの立ち直り（`visual_manager.rs`・`components.rs` は触らない約束）まで要る。
+- **Implications**: B-1。合わせられない形は `warn!` を 1 度（設計の前提 C）。
+
+### R-a WUC の不透明度
+- **Sources**: [LayerVisual Class](https://learn.microsoft.com/en-us/uwp/api/windows.ui.composition.layervisual)・[Composition visuals](https://learn.microsoft.com/en-us/windows/apps/develop/composition/composition-visual-tree)
+- **Findings**: 子を 1 枚の層に平らにするのは `LayerVisual`（「子を 1 つの層へ平らにする」）で、ふつうの `ContainerVisual`／`SpriteVisual` の `Opacity` は層にしない（子へ掛け算で降りる）。
+- **Implications**: 節の下の手動の持ち主の不透明度は「自分 × 祖先の節の積」を写す（討議の確定 3 の「積」と同じ。重なる子孫どうしでは層と答えが違う）。自動で上げた持ち主は不透明度を D2D の層で自分の描画面に描くので WUC には 1 を写し、層の意味のまま。
+
+### R-b 丸めの差
+- **Findings**: 自動で上げた形の違いは、親の描画面の中の D2D の `SOURCE_OVER`（8 ビットの α 掛け済み）と、WUC の重ね（GPU の浮動小数）の差だけ。不透明度の層も部分の列の中の D2D の層なので、層の答えは同じ。
+- **Implications**: 許しは ±1（討議の確定 2）。WARP の写しは WUC の重ねを D2D で写した近似で、実 GPU の重ねた画面は読まない（討議の確定 6）。
+
+### R-c 同じ回の確定
+- **Findings**: 13 本の予定は `try_tick_world` の 1 回の中で UI スレッドの上で続けて回る。WUC の暗黙の確定はスレッドが呼び出しから戻った後にまとめて出るので、同じ回の描画面の描き込みと Visual の木の付け外しは同じ画面の更新に出る。wintf は今も、持ち主を動かして親を描き直す回をこの前提で回している。
+- **Implications**: 2 段の切り替えの「外す・繋ぐ・親を描き直す」を同じ回に行えば足りる。文書で確かめきれない点として危うさに残す（実 GPU の重ねた画面は読まない）。
+
+### R-d 実 GPU の確かめ
+- 討議の確定 6 で決まり（WUC の性質の読み戻しと `CopySurface`）。
+
+### R-e 端数を自分の描画面の中でずらす形
+- **Findings**:
+  - D2D のラスタ（にじみの被覆・ビットマップの補間の標本の位置・文字の位置）は、装置の座標の画素の格子に対する端数で決まる。部分の列は世界の行列から原点 `floor(拡大 × 位置) / 拡大` を引くので、装置の座標が親の描画面の中のちょうど整数ずれた値になり、同じ画素の答えを整数ずらしたものになる見込み。
+  - 浮動小数の誤差（原点の DIP は 2 進で割り切れない値になりうる）で装置の座標が 1e-6 ピクセルほどずれうる。被覆の量子化の境にちょうど乗った所だけが変わりうるが、許し ±1 の内。
+  - 描画面の大きさは配置の大きさの切り上げなので、端数で右と下へ最大 1 ピクセル出る。自動で上げた持ち主の描画面に 1 ピクセルの余白を足す（`systems/surface.rs`）。
+- **Implications**: 案 b を取る。最初の WARP のテスト（拡大 1.0・1.25・1.5・小数の位置・矩形・にじみのある楕円・ビットマップの補間）で ±1 に揃うことを確かめ、揃わなければ整数の位置だけを上げる形（案 a）へ見分けの 1 か所で落とす。
+
+### WUC の変形の順
+- **Sources**: [Visual.TransformMatrix](https://learn.microsoft.com/en-us/uwp/api/windows.ui.composition.visual.transformmatrix)・[Visual Class](https://learn.microsoft.com/en-us/uwp/api/windows.ui.composition.visual)
+- **Findings**: `TransformMatrix` と `Offset` を掛ける順は文書に書かれていない。
+- **Implications**: 平行移動だけなら `Offset`（今のまま）、それ以外は `TransformMatrix` に全部を入れて `Offset` を 0 にする。どちらの順でも答えが同じになる。
+
+### 重なりの順
+- **Findings**: `visual_hierarchy_sync_system` は `Children` の順に `InsertAtBottom` するので最初の子が最上（`tests/visual/common/mod.rs` の「Children の逆順になる」）。節は画家の順。全部を節にした形では、候補の節は親の描画面の中に在り、同じ親の持ち主の下の WUC の子（手動の持ち主）全部より下。
+- **Implications**: 要件 4.6 どおり自動で上げた持ち主を前順の位置に並べると、前順で後の手動の持ち主とほかの自動の持ち主との上下が全部を節にした形と逆になる。要件 2.3 の統べる文でこれらと重なる候補も上げない形にした（設計の前提 B）。一番下に並べる形なら条件が要らないが、討議の確定 2（D4）を変える。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|---|---|---|---|---|
+| 部分の列（採用） | 自動の持ち主の描画面は親の走査の列の部分を原点をずらして描く | 世界の行列が 1 つ・歩きが 1 度・持ち主自身の切り抜きと層と変形も節と同じ命令 | 根の木を組み直す回に部分も組み直す | 案 C の「埋める係が記す」を広げた形 |
+| 自動の持ち主も自分で埋める | 今の手動の持ち主と同じく根として歩く | 今の作りに近い | 世界の行列が根ごとに別になり、形の見分けとの行き来が要る。持ち主の切り抜きと不透明度を WUC が受け持ち、角丸の縁と層の意味が D2D と違う | 取らない |
+| 係の順の組み替え（D1 の b） | 判断の回に WUC の Visual と描画面を作る | 判断の回に切り替わる | `ecs/world/mod.rs` に触る。作成の失敗の回に 1 回欠ける | 取らない |
+| B-2 | 道の上の節ごとに WUC の入れ物 | 切り抜きと不透明度の全部の形 | 節が WUC の部品を持つ・立ち直り | 討議で必要なら |
+
+## Design Decisions（総合）
+
+### 一般化
+- 「節の下の手動の持ち主」と「自動で上げた持ち主」は、どちらも「親の持ち主の WUC の Visual の子として、走査の列の位置と祖先の積み重ねから写す持ち主」で、置き場の部品 `SurfacePlacement` 1 つ（`Embedded`／`Auto`）にまとめた。直の子の持ち主は置き場を持たず今の写し方＋自分の `VisualTransform`。
+- 親の決め（`wuc_host_of`）と子の並び（`wuc_children_order`）は、節と用意中の自動の持ち主を通り抜ける 1 つの規則で、手動・自動・直の子の全部に効く（要件 4.11 の並びだけの変化も同じ道）。
+
+### 作るか取り入れるか
+- `LayerVisual` は使わない（自動の持ち主の層は D2D が描く・手動の持ち主は積の意味で討議済み）。
+- `Windows.Graphics.Capture` は使わない（`Cargo.toml` に触る・討議の確定 6）。
+- 判断の規則は自前（履歴つきの小さな状態機械・外の部品で足りるものが無い）。
+
+### 削ったもの
+- 新しい係は足さない（今の 6 つの係の中で呼ぶ）。
+- WUC の入れ物（B-2）を作らない。
+- 閾値の設定の口・止める口・上限は作らない（討議の確定 7）。
+- `tick_wake::arm_deadline` の預けは作らない（D8）。
+
+## Risks & Mitigations
+- 効きの薄さ（R1）: 手動の持ち主との重なり（前・後）と、平行移動・整数の矩形の切り抜きの条件で、上げられる場合が狭い — 記録の見送りの理由で数え、討議で前提 B・D を緩めるかを決める。
+- 2 段の切り替えの重さ: 用意中の回に自分の描画面を余分に描く（2 回ぶん）— 上げるのは頻繁に変わる節だけなので、描き直しはどのみち起きている。
+- 同じ回の確定（R-c）を実 GPU で直に確かめられない — 今の手動の持ち主の動きと同じ前提。WARP で全部の回の画素を固める。
+- 組み直しの手間（R5）: 上げ下げのたびに全部の根を組み直す — 描き直しは差分で済む。上げ下げの数は履歴（3 秒）で抑える。
+- 当たり判定のずれ（R6）: 文書に書く（要件 9.1）。
+
+## 参照した skill
+- `kiro-spec-design`（本手順）と、その規則（design-principles・design-discovery-light・design-synthesis・design-review-gate）。描画・UI の別の skill は当てはまらない（wintf の中の描画の作り）。
+
