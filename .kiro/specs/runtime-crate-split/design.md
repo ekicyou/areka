@@ -899,3 +899,12 @@ static INSTALL: extern "C" fn() = areka_runtime::crash_report_test_support::inst
 6. **口の倒れ先の記録（D5）**: `#[cfg(not(test))]` の `error!` を残し、`areka-runtime` のテストでは記録なしの `NO_BODY`。
 7. **本体のテストだけが使う `pub(crate)`**: 要件 2.1 の字面どおり `pub` にする（前例と同じ）。開けた項目の一覧は 3 本の audit の brief へ申し送る。
 8. **audit の受け持ち（D14）**: 名前の型を `crates/areka-runtime/` と本体の `runtime_tests/` の両方に当てる。`crates/areka-runtime/src/placement_tests/` のうち `transition_*` は `audit-placement-follow-residue`、ほかは spine の「残り」。
+
+## 実装の中の討議の結果（2026-11-17・段 3・開発者「案 C で進めて」）
+
+段 3 で、本体へ移したテストが読む私有の項目が D3 ⑷ の渡し口で少なくとも 28 個（私有の欄 19・tracing を呼ぶ私有の関数 9）と数えられ、危うさ 2 の止まり目に当たった。
+
+1. **開け方（案 C）**: 本体へ移したテストのファイルを `#[test]` 関数の単位で割る。本体の項目を引かない関数は `areka-runtime` の元のテストのファイル（または同じモジュールの兄弟のテストのファイル）に残し、本体の項目を引く関数だけを本体の `runtime_tests/` に置く（D8 の「本体を引く」は関数の単位で読む）。本体の項目と私有の項目を両方使う関数にだけ D3 ⑷ の渡し口を作る。テストの関数の名前は変えない（9.1 の前後の比べはテストの名前の集合で見るので通る）。割った後の渡し口の数は実装の記録に残す。
+2. **隣のテストの補助 5 つ**: 本体の `frame_chain_finalize_remembered_tests` が使う `frame_chain_realign_adjacency_tests` の `pub(super)` の補助 5 つ（`GAP_WITHOUT_REALIGN`・`low_sizes`・`boot_remembered_at_high`・`lower_the_scale`・`gap`）は、`frame_test_support.rs`（1,000 行の上限に近い）へ入れず、兄弟の支えのファイルを新しく足して `test-support` の下に置く（D9 の「例外表の項目を増やさず、兄弟のファイルへ出す」）。
+3. **事実の訂正**: D3 ⑷ の例に挙げた `frame/switch.rs` の `run_switch_phase` は中で tracing を呼ばないので、⑵ の `test_open` で開ける。
+

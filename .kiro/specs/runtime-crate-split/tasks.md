@@ -119,6 +119,7 @@
   - コンパイラのエラーで数えた項目を、設計の D3 の規則で開ける。本番の可視性は変えない
   - ⑴ 外から使われる `pub(crate)` は `pub`（2.5 の注つきの規則も同じ）。⑵ 私有か `pub(super)` の型・定数・ログを出さない関数は家の型 `test_open`（`areka-placement` の `dpi_sync.rs` ほかと同じ形と説明の文型）。⑶ 道の途中の私有のモジュールは宣言の印を機能で切り替える。⑷ 私有の欄とメソッドと、tracing の呼び出し（`trace!`〜`error!`・`#[instrument]`）を中に持つ関数（`frame/switch.rs` の `run_switch_phase` ほか）は、その型のモジュールの `test_support` の渡し口で開き、使うテストのその 1 か所だけを渡し口の呼び方へ書き換える
   - 渡し口が 20 を超えるときは止めて、テストを関数で割る案と比べて設計の討議に戻す
+  - （2026-11-17 の討議で決定・設計の「実装の中の討議の結果」）案 C: 本体へ移したテストのファイルを `#[test]` 関数の単位で割り、本体の項目を引かない関数は `areka-runtime` に残す。本体と私有の両方を使う関数にだけ ⑷ の渡し口を作る。`frame_chain_realign_adjacency_tests` の補助 5 つは兄弟の支えのファイルを足して `test-support` の下に置く。`run_switch_phase` は ⑵
   - 開けた項目（⑴〜⑷ の別）を実装の記録に残す（8.6 の申し送りに使う）
   - 完了の状態: 開けた `test_open` の中に tracing のマクロと `#[instrument]` が 0 件（grep）で、`cargo check -p areka --bin areka --tests` の可視性のエラーが 0 件
   - _Dispatch: standard — 規則は設計にあるが、項目ごとに開け方を選んで書く実のコードが残る_
