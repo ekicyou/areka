@@ -6,9 +6,10 @@ use tracing::{error, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 
 use super::draw::builder::{NodeData, TreeFrame, build};
+use super::promotion::Phase;
 use super::world_visual::{FillData, ReportedIssues, TreeScan, fill_world_visuals};
 use super::{
-    DrawTree, OwnSurface, Visual, VisualDrawContent, VisualTransform, WorldVisual,
+    AutoPromotion, DrawTree, OwnSurface, Visual, VisualDrawContent, VisualTransform, WorldVisual,
     has_window_ancestor, insert_graphics_parts, wants_own_surface,
 };
 use crate::ecs::graphics::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
@@ -27,7 +28,10 @@ type RuleData = (
 
 /// 窓の下の `Visual` に、規則 [`wants_own_surface`] の答えどおり描画面の 3 部品を入れる・外す
 /// （外すときは根の部品 `DrawTree` も一緒に外す・`DrawTree` は根にだけ在る）。
-/// 見る変化は親の変化（子孫も・上限つき）・節の部品（`WorldVisual`）の追加・目印と命令の列の出入り。
+/// 見る変化は親の変化（子孫も・上限つき）・節の部品（`WorldVisual`）の追加・目印と命令の列の出入り・
+/// 上げ下げの相の変化（`AutoPromotion` は相が変わった回だけ変化の印が立つ）。
+/// 目印か命令の列が入った節は上げ下げの状態を初期化し、用意中か上げた形で持っていた `DrawTree` を
+/// 外す（手動の持ち主の根として組み直させる・要件 2.2）。
 /// `WorldVisual` は装置の失いでも外れないので、失いの回に節が持ち主へ化けることはない。
 /// `PreRenderSurface` の先頭で回し、入れた `VisualGraphics` は同じ回に作られる。
 pub fn sync_surface_owner_parts(
@@ -43,6 +47,18 @@ pub fn sync_surface_owner_parts(
             )>,
         ),
     >,
+    manual: Query<
+        Entity,
+        (
+            With<Visual>,
+            Or<(Added<OwnSurface>, Added<GraphicsCommandList>)>,
+        ),
+    >,
+    // 相の変化の拾い（0）と状態の初期化・相の読み（1）は同じ部品を読み書きするので分ける。
+    mut promotions: ParamSet<(
+        Query<Entity, (With<Visual>, Changed<AutoPromotion>)>,
+        Query<&mut AutoPromotion>,
+    )>,
     mut removed_own: RemovedComponents<OwnSurface>,
     mut removed_list: RemovedComponents<GraphicsCommandList>,
     reparented: Query<Entity, Changed<ChildOf>>,
@@ -64,6 +80,23 @@ pub fn sync_surface_owner_parts(
     >,
 ) {
     let mut targets: Vec<Entity> = added.iter().collect();
+    targets.extend(promotions.p0().iter());
+    let mut states = promotions.p1();
+    for e in manual.iter() {
+        let Ok(mut a) = states.get_mut(e) else {
+            continue;
+        };
+        if a.rule.phase() == Phase::Node {
+            // 相は変わらない: 履歴だけ消し、変化の印を立てない。
+            a.bypass_change_detection().rule.reset();
+        } else {
+            a.rule.reset();
+            commands.entity(e).remove::<DrawTree>();
+        }
+        let a = a.bypass_change_detection();
+        a.skip_memo = None;
+        a.built = false;
+    }
     targets.extend(removed_own.read());
     targets.extend(removed_list.read());
     // 親の変化で要るのは入れることだけ。ふだんは待つものが無いので子孫を歩かない。
@@ -89,7 +122,11 @@ pub fn sync_surface_owner_parts(
         let Ok((has_list, has_own, is_node, has_parts)) = visuals.get(e) else {
             continue; // 消えた実体・Visual でない実体
         };
-        if wants_own_surface(has_list, has_own, is_node) {
+        let auto_owner = promotions
+            .p1()
+            .get(e)
+            .is_ok_and(|a| a.rule.phase() != Phase::Node);
+        if wants_own_surface(has_list, has_own, is_node, auto_owner) {
             let joined = has_window_ancestor(
                 e,
                 |w| windows.contains(w),

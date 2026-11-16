@@ -2,10 +2,13 @@
 //! 本物の登録を通すため `EcsWorld` の `PreRenderSurface` だけを回す（装置も実の窓も要らない）。
 
 use super::draw_content_test_support::solid_rect_content;
+use super::promotion::{Phase, SurfaceReadiness};
+use super::promotion_shape::Ineligible;
 use super::*;
 use crate::ecs::world::{EcsWorld, PreRenderSurface};
 use crate::ecs::{GraphicsCommandList, Window};
 use bevy_ecs::hierarchy::ChildOf;
+use bevy_ecs::system::RunSystemOnce;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 
 fn rect() -> D2D_RECT_F {
@@ -404,4 +407,84 @@ fn node_opacity_change_rebuilds_and_marks_dirty() {
     world.get_mut::<Visual>(node).unwrap().opacity = 0.25;
     assert_rebuilt_and_marked(world, owner, "不透明度の再変化");
     assert_eq!(layers(world), vec![0.25]);
+}
+
+/// 節の上げ下げの相を規則の答えのとおりに進める（8 回の更新で用意中、描画面がそろえば上げた）。
+fn drive_to(world: &mut World, e: Entity, phase: Phase) {
+    let mut a = world.get_mut::<AutoPromotion>(e).unwrap();
+    for i in 0..8 {
+        a.rule
+            .step(i as f64 * 0.1, true, || Ok(()), SurfaceReadiness::Pending);
+    }
+    if phase == Phase::Active {
+        a.rule.step(0.8, false, || Ok(()), SurfaceReadiness::Ready);
+    }
+    assert_eq!(a.rule.phase(), phase);
+}
+
+/// 相が節でなくなった節（自動の持ち主）に 3 部品が入り、戻した次の回に `DrawTree` ごと外れる（要件 2.1・2.6）。
+#[test]
+fn phase_change_moves_surface_parts_in_and_out() {
+    for phase in [Phase::Preparing, Phase::Active] {
+        let mut ecs = EcsWorld::new();
+        let (_, node) = owner_and_node(&mut ecs);
+        let world = ecs.world_mut();
+        drive_to(world, node, phase);
+        world.run_schedule(PreRenderSurface);
+        assert!(has_parts(world, node), "{phase:?} の節は自動の持ち主");
+
+        world.entity_mut(node).insert(DrawTree::default());
+        world
+            .get_mut::<AutoPromotion>(node)
+            .unwrap()
+            .rule
+            .absorb(1.0);
+        world.run_schedule(PreRenderSurface);
+        assert!(
+            has_none(world, node),
+            "{phase:?} から戻した節は 3 部品を持たない"
+        );
+        assert!(world.get::<DrawTree>(node).is_none());
+    }
+}
+
+/// 自動の持ち主に目印か命令の列が入ると、状態が初期化され、自動の形で持っていた `DrawTree` が
+/// 外れる。外した後は規則の答え（節）に戻る（要件 2.2）。
+#[test]
+fn manual_mark_resets_auto_promotion() {
+    for with_list in [false, true] {
+        let mut ecs = EcsWorld::new();
+        let (_, node) = owner_and_node(&mut ecs);
+        let world = ecs.world_mut();
+        drive_to(world, node, Phase::Active);
+        world.run_schedule(PreRenderSurface);
+        assert!(has_parts(world, node));
+        {
+            let mut a = world.get_mut::<AutoPromotion>(node).unwrap();
+            a.built = true;
+            a.skip_memo = Some(Ineligible::LaterContentOverlap);
+        }
+        world.entity_mut(node).insert(DrawTree::default());
+        if with_list {
+            world.entity_mut(node).insert(GraphicsCommandList::empty());
+        } else {
+            world.entity_mut(node).insert(OwnSurface);
+        }
+        // 3 部品の係だけを回す（描画の木の係が同じ回に組み直す木と見分けるため）。
+        world.run_system_once(sync_surface_owner_parts).unwrap();
+        world.flush();
+        let a = world.get::<AutoPromotion>(node).unwrap();
+        assert_eq!(a.rule, Default::default(), "相も履歴も初期化");
+        assert!(!a.built && a.skip_memo.is_none());
+        assert!(has_parts(world, node), "手動の持ち主として 3 部品は残る");
+        assert!(world.get::<DrawTree>(node).is_none(), "自動の形の木は外す");
+
+        if with_list {
+            world.entity_mut(node).remove::<GraphicsCommandList>();
+        } else {
+            world.entity_mut(node).remove::<OwnSurface>();
+        }
+        world.run_schedule(PreRenderSurface);
+        assert!(has_none(world, node), "外した後は規則の答え（節）に戻る");
+    }
 }

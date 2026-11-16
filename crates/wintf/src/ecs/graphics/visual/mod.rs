@@ -80,7 +80,8 @@ pub use world_visual::*;
 /// 新しい描き方の部品（`VisualDrawContent`・`VisualTransform`）を持つ `Visual` は既定で
 /// 描画面を持たない節になる（一度節になれば、装置の失いで中身が外れても節のまま）。
 /// `GraphicsCommandList` を持つ `Visual` と何も持たない `Visual` は描画面の持ち主。
-/// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける。昇格した持ち主の
+/// 頻繁に更新される窓の下の節は自動で描画面の持ち主へ上がり、落ち着くと節へ戻る（[`AutoPromotion`]）。
+/// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける（自動の上げ下げより優先する）。昇格した持ち主の
 /// `VisualDrawContent` は自分の描画面の木の先頭の 1 件として子より先に描かれる。持ち主の
 /// `VisualTransform` は WUC では効かない（入った・変わった回に `warn!` を 1 度残して無視する）。
 ///
@@ -109,13 +110,15 @@ pub struct OwnSurface;
 
 /// 描画面を持つか（持ち主）、持たないか（節）の規則。1 か所だけに置く。
 /// `is_node` は `WorldVisual` を持つか（新しい描き方の部品が `require` で必ず連れてくる・
-/// 装置の失いでも外れない）。
+/// 装置の失いでも外れない）。`auto_owner` は自動で上げた持ち主か（`AutoPromotion` の相が
+/// 節でない）。
 pub(crate) fn wants_own_surface(
     has_command_list: bool,
     has_own_surface: bool,
     is_node: bool,
+    auto_owner: bool,
 ) -> bool {
-    has_command_list || has_own_surface || !is_node
+    has_command_list || has_own_surface || !is_node || auto_owner
 }
 
 /// ChildOf チェーンを辿ってオーナー Window が存在するかを判定するヘルパー
@@ -175,6 +178,8 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         world.get::<super::GraphicsCommandList>(entity).is_some(),
         world.get::<OwnSurface>(entity).is_some(),
         world.get::<WorldVisual>(entity).is_some(),
+        // 入ったばかりの節は相が節（自動の持ち主になるのは後の回の判断から）。
+        false,
     );
 
     // コマンドを発行（チェック完了後に一度だけ commands を借用する）
