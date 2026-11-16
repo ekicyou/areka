@@ -298,6 +298,12 @@ runtime の中で文字で読むのは 15 ファイル。
 10. **古い名前のうちテストの関数の名前**（要件 5.10 と 7.2・7.3）: `actor_lookahead_tests.rs` の `emo2_boot_talk_reveals_without_moving_glyphs` を改めて対応表に載せるか、5.10 の grep の除外に入れるか。`log-capture-kit/src/event_tests.rs` の出所の値 5 行（説明でなくテストの値）を書き換えてよいか。
 11. **`src/` の無い `runtime/x.rs` の書き方**（要件 5.9）: `doc/COMPAT_ARCHITECTURE.md` では `runtime/x.rs` の形 73 のうち約 10 が `src/` を付けない書き方。本体の runtime を指すものを全部直すか、`src/runtime/` を含むもの（40 行）だけ直すか。
 
+### 要件の討議で設計の段へ回したもの（2026-11-16）
+
+- 上の 7（`placement_tests/` の残り）は、要件 4.5 の決まり（本体を引かず runtime と配置だけを使うものは `areka-runtime`・本体を引くものは本体）を 1 本ずつ当てて設計で決める。今の事実では `measure_bake_count_tests`・`spawn_zorder_pair_deferred_tests`・分岐の対応表 2 本＋支えも本体を引かない＝`areka-runtime` へ行く見込みで、要件の段の仮定（対応表 2 本は本体に残す）より決まりを優先する。
+- 上の 8（`areka-runtime` の読み口）と 9（落ちの報告の 2 つ目）は、作り方の選択として設計で決める。要件側の縛りは「写しを作らない（3.3）」「本体のテストの実行ファイルも落ちの報告を持つ（3.8）」だけ。
+- 本体へ移すテストが使う私有の項目の開け方（前例 D9 の `test_support` の入口か、関数を割るか）と、999 行の 3 ファイルの収め方も設計で決める。
+
 ### 調べること（設計の段）
 
 1. 上流の rlib の `#[used]`＋`#[unsafe(link_section = ".CRT$XCU")]` の静的が、機能つきで組まれたときに本体のテストの exe へ残るか（MSVC のリンカ・rustc の扱い）。残るなら、`areka-runtime` 自身のテストの実行ファイルと本体のテストの実行ファイルで 2 重に据わらないか。
