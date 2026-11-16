@@ -19,7 +19,10 @@
   Never reads or writes the console code page. Temporary files are <file>.part-<pid> next to the
   shelf files and are removed on every path except a successful move.
 
-  -SelfTest: the 8 checks of the fetch step without network (fake file:/// rows through the real
+  Production rows pass -HttpsOnly: curl gets --proto =https --proto-redir =https, so a redirect
+  never leaves https.
+
+  -SelfTest: the 10 checks of the fetch step without network (fake file:/// rows through the real
   curl.exe, in target\sample-fetch-selftest\<pid>\, removed at the end). Prints PASS/FAIL <name>
   per check; exit 0 only when all pass.
 #>
@@ -64,11 +67,17 @@ function Remove-StalePart([string]$Path) {
     }
 }
 
+# curl arguments; -HttpsOnly keeps the URL and every redirect on https (curl refuses the rest).
+function Get-CurlArguments([string]$Url, [string]$OutFile, [switch]$HttpsOnly) {
+    $a = @('--fail', '--location', '--silent', '--show-error',
+        '--connect-timeout', '30', '--speed-limit', '1', '--speed-time', '60')
+    if ($HttpsOnly) { $a += @('--proto', '=https', '--proto-redir', '=https') }
+    $a + @('--output', $OutFile, $Url)
+}
+
 # curl exit code + stderr in one ASCII string, or $null on success.
-function Invoke-Curl([string]$Url, [string]$OutFile) {
-    $r = Invoke-Utf8Child $Curl @('--fail', '--location', '--silent', '--show-error',
-        '--connect-timeout', '30', '--speed-limit', '1', '--speed-time', '60',
-        '--output', $OutFile, $Url)
+function Invoke-Curl([string]$Url, [string]$OutFile, [switch]$HttpsOnly) {
+    $r = Invoke-Utf8Child $Curl (Get-CurlArguments $Url $OutFile -HttpsOnly:$HttpsOnly)
     if ($r.Code -eq 0) { return $null }
     Show-Ascii ("curl exit $($r.Code): " + ($r.ErrLines -join ' | ')) 0
 }
@@ -80,14 +89,16 @@ function Get-Remedy([string]$NarPath, [string]$ChecksumPath) {
 }
 
 # One row of --fetch-list (5 columns). Returns Result = present | fetched | failed and the Lines to print.
-# Takes any URL (the https:// rule is the caller's), so -SelfTest can pass file:/// rows.
+# Takes any URL (the https:// rule is the caller's), so -SelfTest can pass file:/// rows;
+# -HttpsOnly makes curl itself refuse non-https URLs and redirects.
 function Sync-FetchedSample {
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$Url,
         [Parameter(Mandatory)][string]$ChecksumUrl,
         [Parameter(Mandatory)][string]$NarPath,
-        [Parameter(Mandatory)][string]$ChecksumPath
+        [Parameter(Mandatory)][string]$ChecksumPath,
+        [switch]$HttpsOnly
     )
     $lines = [System.Collections.Generic.List[string]]::new()
     $n = Show-Ascii $Name 0
@@ -106,7 +117,7 @@ function Sync-FetchedSample {
         }
 
         # 2. the latest checksum, every run
-        $reason = Invoke-Curl $ChecksumUrl $sumTemp
+        $reason = Invoke-Curl $ChecksumUrl $sumTemp -HttpsOnly:$HttpsOnly
         if ($null -ne $reason) {
             # 6. checksum unreachable: a consistent shelf pair is still present
             if ((Test-File $NarPath) -and (Test-File $ChecksumPath)) {
@@ -140,7 +151,7 @@ function Sync-FetchedSample {
         }
 
         # 4. fetch the archive
-        $reason = Invoke-Curl $Url $narTemp
+        $reason = Invoke-Curl $Url $narTemp -HttpsOnly:$HttpsOnly
         if ($null -ne $reason) {
             $lines.Add("sample-fetch: ${n}: FAILED could not fetch $u ($reason); $(Get-Remedy $NarPath $ChecksumPath)")
             return Done 'failed'
@@ -165,7 +176,7 @@ function Sync-FetchedSample {
 }
 
 # All rows: per-row lines, then the count line; $ExitCode gets 0 (no failed row) or 1.
-# -AnyScheme skips the https:// rule (only -SelfTest passes it, for its file:/// rows).
+# -AnyScheme skips the https:// rule and curl's https-only flags (only -SelfTest passes it, for its file:/// rows).
 function Invoke-FetchRows {
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Rows,
@@ -181,7 +192,7 @@ function Invoke-FetchRows {
             continue
         }
         try {
-            $res = Sync-FetchedSample -Name $c[0] -Url $c[1] -ChecksumUrl $c[2] -NarPath $c[3] -ChecksumPath $c[4]
+            $res = Sync-FetchedSample -Name $c[0] -Url $c[1] -ChecksumUrl $c[2] -NarPath $c[3] -ChecksumPath $c[4] -HttpsOnly:(-not $AnyScheme)
             $res.Lines
             $count[$res.Result]++
         }
@@ -194,7 +205,7 @@ function Invoke-FetchRows {
     $ExitCode.Value = [int]($count.failed -gt 0)
 }
 
-# --- -SelfTest: the 8 checks, through the real curl.exe on file:/// rows, no network ------
+# --- -SelfTest: the 10 checks, through the real curl.exe on file:/// rows, no network ------
 if ($SelfTest) {
     $script:fails = 0
     $script:all = [System.Collections.Generic.List[string]]::new()
@@ -307,6 +318,22 @@ if ($SelfTest) {
         foreach ($l in $out) { $script:all.Add($l) }
         Judge '7 three rows count 1, 1, 1 with exit 1 and all success exits 0' (
             $mixed -and ($out[-1] -ceq 'sample-fetch: fetched 0, present 2, failed 0') -and $code -eq 0)
+
+        # 9. -HttpsOnly: the real curl.exe refuses a file:/// row without reading it
+        $shelf9 = Join-Path $place 'shelf9'
+        Set-Source $src 'nine' 'abc' $ABC_SHA
+        $row9 = New-Row 'nine' $src $shelf9
+        $r = Sync-FetchedSample -Name $row9[0] -Url $row9[1] -ChecksumUrl $row9[2] -NarPath $row9[3] -ChecksumPath $row9[4] -HttpsOnly
+        foreach ($l in $r.Lines) { $script:all.Add($l) }
+        Judge '9 https only refuses a non-https url at curl' (
+            $r.Result -eq 'failed' -and @(Get-Files $shelf9).Count -eq 0 -and
+            @($r.Lines | Where-Object { $_.Contains('FAILED could not fetch the checksum file') }).Count -eq 1)
+
+        # 10. both proto flags with -HttpsOnly, neither without
+        $on = (Get-CurlArguments 'https://x/a' 'o' -HttpsOnly) -join ' '
+        $off = (Get-CurlArguments 'https://x/a' 'o') -join ' '
+        Judge '10 https only passes both proto flags' (
+            $on.Contains('--proto =https') -and $on.Contains('--proto-redir =https') -and -not $off.Contains('--proto'))
 
         # 8. every line above is ASCII only
         Judge '8 all output is ASCII only' (

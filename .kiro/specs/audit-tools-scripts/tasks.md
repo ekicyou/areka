@@ -137,7 +137,7 @@
   - _Depends: 1.2_
   - _Dispatch: mechanical — 設計が移す先と構文木の判定を与える_
   - _Requirements: 3.1, 4.1, 6.3, 8.3_
-- [ ] 7.2 (P) 検体の取り寄せの本番の行で、転送の先まで https だけにする
+- [x] 7.2 (P) 検体の取り寄せの本番の行で、転送の先まで https だけにする
   - curl の引数の組み立てを純関数にし、https だけのときに `--proto =https --proto-redir =https` を渡す。本番の行の取り寄せではそれを使い、`-AnyScheme` の自分の検査の行では使わない（8）
   - 自分の検査に `https only refuses a non-https url at curl`（`file:///` の行を本物の `curl.exe` が取り寄せずに落とし、`FAILED could not fetch the checksum file` と `failed` を返す＝ネットを使わない）と `https only passes both proto flags` を足す
   - 終わった姿: `pwsh -NoProfile -File tools/sample-fetch.ps1 -SelfTest` が緑で、旗を渡さない写しでは 2 つの新しい検査が落ちる
@@ -233,3 +233,4 @@
 - 4.3: 4.1 の件は 4.3 で直した（`Install-ToolExe` の理由の文で置き場のパスを `<home>` に替え、`check throws` で縛る）。
 - 5.2: `package.ps1` の preflight で `$a` を `Test-PackageArgs` の結果と `foreach ($a in $script:BuildArchs)` の両方に使っている（害は無い・読み違えやすい）。5.3 か 11.2 で名前を分ける。`package.selftest.ps1` は最後に自分で `exit` すること（呼ぶ側の後ろに `exit $EXIT_STAGE_FAILED` の番人がある）。
 - 5.3: dot-source した台本の中の `exit` は呼ぶ側の台本を終わらせず `$LASTEXITCODE` を置いて戻る。`package.ps1 -SelfTest` は `$global:LASTEXITCODE = 1; . selftest; exit $LASTEXITCODE` の形にした（5.2 の番人の形のままだと全部通っても 1 だった）。
+- 7.2: `sample-fetch.ps1` の本番の配線 `-HttpsOnly:(-not $AnyScheme)`（`Invoke-FetchRows`）を縛る検査は無い（設計は 2 つの検査だけを求める）。11.2 のかけ直しで要否を判断する。
