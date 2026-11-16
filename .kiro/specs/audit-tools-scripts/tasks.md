@@ -195,7 +195,7 @@
   - _Requirements: 3.2, 5.4, 7.1, 7.3, 7.4, 7.8, 7.9_
 
 - [ ] 11. 仕上げの確かめと記録（束 11・要件 9）
-- [ ] 11.1 `runtime-crate-split` の着地を確かめ、負荷の再現の道具の選び肢を決める
+- [x] 11.1 `runtime-crate-split` の着地を確かめ、負荷の再現の道具の選び肢を決める
   - `git fetch` の後に `origin/main` に `.kiro/specs/completed/runtime-crate-split` が在るかを確かめる
   - 在れば、`-Binary` に `areka-runtime-lib`（`-p areka-runtime --lib`）を足し、使い方の例 `-Filter runtime::frame` を新しいクレートの形へ直し、`cargo args` の期待を 4 つに改める（自分の検査は文字列の組み立てだけを見るので決定論のまま）（要件 7.5）
   - 無ければ選び肢を足さず、`runtime-crate-split` の完了で拾う件として記録に書き、そのセッションへの申し送りの文を控える（同 spec の brief には書き足さない）（要件 7.6）

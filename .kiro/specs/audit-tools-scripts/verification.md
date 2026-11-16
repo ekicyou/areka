@@ -26,3 +26,20 @@
 - `FAIL selftest committed outputs are current: grip.cur (source changed or rendering changed; run tools/cursor-art.ps1 and commit)`
 
 `crates/areka/icon/` と `crates/areka/cursor/` は書き替えていない（`git status` は `tools/` の 2 本と本記録だけ）。
+
+## タスク 11.1: `runtime-crate-split` の着地の確認と負荷の再現の道具の選び肢
+
+確認日: 2026-11-17
+
+確認のコマンドと結果（読み取りだけ）:
+
+- `git fetch` のあと `git rev-parse origin/main` は `5b3a361c95c5fb494fdf7845576cf20f1aa20c07`
+- `git ls-tree -d origin/main .kiro/specs/completed/runtime-crate-split` は何も返さない（終了コード 0・出力なし）
+
+結論: `runtime-crate-split` はまだ `main` に着地していない。
+
+採った道: 「着地していない」の道。`tools/load-flake.ps1` に `areka-runtime-lib` の選び肢は足さない（コードの変更なし）。`runtime-crate-split` の brief には何も書かない。`-SelfTest` は変更なしで緑のまま。
+
+引き継ぎ: `runtime-crate-split` の完了時に、そのセッションが拾う。渡す文は次のとおり。
+
+> `runtime-crate-split` の着地後、`tools/load-flake.ps1` に `-Binary areka-runtime-lib`（`-p areka-runtime --lib`）の選び肢を足してください。あわせて使い方の例の `-Filter runtime::frame` を新しいクレートの形に直し、`-SelfTest` の `cargo args` の期待を 3 対象から 4 対象へ直してください（`audit-tools-scripts` 11.1 の申し送り）。
