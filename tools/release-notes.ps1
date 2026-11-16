@@ -161,6 +161,14 @@ function Get-SpecNames([Parameter(Mandatory)][string]$Root) {
     , $names.ToArray()
 }
 
+# 自分の検査の見本の spec 名の一覧（release-notes-fixture/spec-names.txt の 1 行 1 名）。無いか空なら throw
+function Read-SpecNamesFixture {
+    $t = Read-Lf (Join-Path $PSScriptRoot 'release-notes-fixture/spec-names.txt')
+    $n = @([string]$t -split "`n" | Where-Object { $_.Trim() })
+    if (-not $n.Count) { throw 'spec-names fixture: missing or empty' }
+    , $n
+}
+
 # 見どころの文（改行は LF）の欠けを全部返す（空なら通った）。$Text が $null ならファイルが無い扱い。
 # 引数に [string] を付けない: 付けると PowerShell が $null を空の文字列に変え、無いファイルと空のファイルを分けられない
 function Test-Highlights([AllowNull()]$Text, [string[]]$SpecNames) {
@@ -259,10 +267,8 @@ if ($SelfTest) {
     function Judge([string]$Name, [bool]$Ok) {
         if ($Ok) { "ok selftest $Name" } else { $script:selfFails++; "FAIL selftest $Name" }
     }
-    # 見本の題名のスコープから旧い頭を外した名前（見本の一覧）。整形の見本と壊した見本の判定にだけ使う
-    # shortcut: 見本の一覧を題名から作る、3.2 で見本の spec-names.txt を足したらそれを読む形へ替える
-    $fxNames = @([string](Read-Lf (Join-Path $PSScriptRoot 'release-notes-fixture/subjects.txt')) -split "`n" |
-        ForEach-Object { if ($_ -cmatch "^[a-z]+\($([regex]::Escape($SPEC_MARK))(?<n>[^)]+)\)") { $Matches.n } } | Select-Object -Unique)
+    # 見本の一覧（release-notes-fixture/spec-names.txt）。整形の見本と壊した見本の判定にだけ使う
+    $fxNames = Read-SpecNamesFixture
     # 欠けの名前をコンマでつないだ並び（通れば空）。$n は使う spec 名の一覧（既定は見本の一覧）
     $keys = { param($t, $n = $fxNames) @(Test-Highlights $t $n | ForEach-Object Key) -join ',' }
 
@@ -274,14 +280,20 @@ if ($SelfTest) {
         'missing-file'          = $null
         'no-highlight'          = (($ok -split "`n") -cnotmatch '^### ') -join "`n"
         'heading-no-pr'         = ([regex]'\(#[0-9]+\)\n').Replace($ok, "`n", 1)
-        'spec-name'             = $ok + "`n${SPEC_MARK}x`n"
+        'spec-name'             = @(($ok + "`n${SPEC_MARK}x`n"), ($ok + "`n$($fxNames[0]) here`n"))
         'no-source-link'        = $ok.Replace($SOURCE_LINK, '')
         'first-name-not-linked' = $ok.Replace($SOURCE_LINK, "Claudia $SOURCE_LINK")
     }
     foreach ($k in $broken.Keys) {
         # 外したつもりの文が見本と同じなら、判定は空振りなので落とす
-        Judge "highlights broken fixture fails with $k" (($broken[$k] -cne $ok) -and ((& $keys $broken[$k]) -ceq $k))
+        $good = $true
+        foreach ($t in @($broken[$k])) { if (($t -ceq $ok) -or ((& $keys $t) -cne $k)) { $good = $false } }
+        Judge "highlights broken fixture fails with $k" $good
     }
+    # 名前の一部だけの語（前後に英数字・- が続く）は spec 名として落とさない
+    Judge 'highlights word containing a spec name passes' ((& $keys ($ok + "`nx$($fxNames[0])y $($fxNames[0])-z`n")) -ceq '')
+    Judge 'spec names cover active and completed' (
+        ($specNames -ccontains 'audit-tools-scripts') -and ($specNames -ccontains 'actor-foundation'))
     # 見出しの番号の括弧は行の最後に在ること
     Judge 'highlights heading with text after the pr number fails' (
         (& $keys ([regex]'(\(#[0-9]+\))\n').Replace($ok, "`$1 x`n", 1)) -ceq 'heading-no-pr')
@@ -308,7 +320,7 @@ if ($SelfTest) {
         Judge 'notes of the fixture subjects equal the expected notes' (
             (Format-ReleaseNotes $subjects '1.2.3' 'v1.2.2' 'owner/name' $strings $fxNames) -ceq (& $fx 'expected-notes.md'))
         # 一つ前のタグが空のときの範囲の文と、0 件の見出し（不具合の修正・性能の改善）を出さないこと
-        $noFixPerf = @($subjects -cnotmatch "^(fix|perf)\($([regex]::Escape($SPEC_MARK))")
+        $noFixPerf = @($subjects | Where-Object { -not ($_ -cmatch "^(fix|perf)\((?:$([regex]::Escape($SPEC_MARK)))?(?<s>[^)]*)\)" -and ($fxNames -ccontains $Matches.s)) })
         Judge 'notes from the start without fix and perf equal the expected notes' (
             ($noFixPerf.Count -lt $subjects.Count) -and
             ((Format-ReleaseNotes $noFixPerf '1.2.3' '' 'owner/name' $strings $fxNames) -ceq (& $fx 'expected-notes-from-start.md')))

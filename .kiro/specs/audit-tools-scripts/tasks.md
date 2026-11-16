@@ -46,7 +46,7 @@
   - _Dispatch: mechanical — 設計が呼び出しの形と表を与える_
   - _Requirements: 3.1, 3.2, 3.3, 7.8_
 
-- [ ] 3. リリースノートの spec 名の見分け（束 3・1）
+- [x] 3. リリースノートの spec 名の見分け（束 3・1）
 - [x] 3.1 製品の変更と見どころの `spec-name` を、spec のフォルダの名前の一覧で見分ける
   - `.kiro/specs/` の直下（`completed` を除く）と `.kiro/specs/completed/` の直下のフォルダの名前から旧い頭 `areka-P0-` を外した名前を、重ねずに順序つきで返す一覧の関数を足し、較正値の説明（旧い頭の意味・spec のフォルダの置き場 2 つ）を改める
   - 題名のスコープから旧い頭を外した名前が一覧に在れば製品の変更とする（大文字と小文字を区別する）。見どころの `spec-name` は、旧い頭が現れるか、一覧の名前が前後を英数字・`-`・`_` でない字に挟まれて現れる行を落とし、説明の文は名前を印字しない `the line contains a spec name`
@@ -54,7 +54,7 @@
   - 終わった姿: `pwsh -NoProfile -File tools/release-notes.ps1 -Check` が `doc/release-notes/` の実物を通し、spec のフォルダの無い写しの根では `FAIL specs: …` の行と終了コード 1 で終わる
   - _Dispatch: standard — 一覧の作り方と名前の境の見分けを書き起こす_
   - _Requirements: 3.1, 6.2_
-- [ ] 3.2 見本と自分の検査と手順書を、新しい見分けに合わせて改める
+- [x] 3.2 見本と自分の検査と手順書を、新しい見分けに合わせて改める
   - 見本に spec 名の一覧のファイルを足し、題名の見本に接頭辞なしの spec 名の `feat`・`fix` と、旧名 `areka-P0-<名>` で書かれて後に `<名>` のフォルダになった題名を足し、期待のリリースノート 2 本をそれに合わせる。見本の一覧は整形の見本と壊した見本の判定にだけ使う
   - 自分の検査: `notes of the fixture subjects equal the expected notes`（改めた見本）・`highlights broken fixture fails with spec-name`（一覧の名前を足した文と `areka-P0-` を足した文の 2 通りが `spec-name` だけで落ち、名前の一部だけの語は落ちない）・`spec names cover active and completed`（本物の根で `audit-tools-scripts` と completed の旧名の 1 つを含む）
   - `doc/release-notes/README.md` の 104 行・144 行の spec 名の説明を「`.kiro/specs/` と `.kiro/specs/completed/` のフォルダの名前（旧名の `areka-P0-` で始まるものを含む）」へ直す
