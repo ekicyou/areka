@@ -127,7 +127,7 @@
   - _Dispatch: standard — 子のプロセスを起こして終わりを待つ検査を含む_
   - _Requirements: 4.1, 4.3, 4.4, 4.5, 8.3_
 
-- [ ] 7. 小さな直し（束 7・6・8・15 の半分・16）
+- [x] 7. 小さな直し（束 7・6・8・15 の半分・16）
 - [x] 7.1 (P) 入力の道具で押したボタンの離しを `finally` へ移し、自分の検査で縛る
   - `switch ($Action)` を包む `try` の `finally` で、押したボタンが在れば離しを送る。`catch` は理由の行を出して `exit 1` するだけにする（6）
   - `-SelfTest` を足し、引数の確かめと Win32 の型の読み込みの前に分かれる（画面にも入力にも触らない）。検査 `release-in-finally` は自分を構文木で読み、`try` に `finally` が在り、その中に `SendInput` と押したボタンの変数の参照が在り、`catch` に `SendInput` が無いことを確かめる
@@ -145,7 +145,7 @@
   - _Depends: 1.2_
   - _Dispatch: standard — 本番と自分の検査で分かれる引数の筋_
   - _Requirements: 3.1, 4.1, 4.3, 4.4_
-- [ ] 7.3 (P) crates.io の確認の道具の失敗の行を ASCII にし、索引の読みに時間の上限を付ける
+- [x] 7.3 (P) crates.io の確認の道具の失敗の行を ASCII にし、索引の読みに時間の上限を付ける
   - 失敗の行の組み立てを `Format-FailLine` の 1 か所にして `Show-Ascii … 0` を通す。子の出力をそのまま写す所は書き替えない（15）
   - 全部の `Invoke-WebRequest` に `-TimeoutSec 60` を付ける（16）
   - 較正に `fail line is ascii`（`<U+65E5>` が ASCII だけで `\u65E5` を含む）と `index read has a timeout`（構文木で全部の呼び出しが `-TimeoutSec` を持つ）を足す
