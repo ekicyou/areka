@@ -472,6 +472,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs")); // 名前空間のモジュ�
 
 **Responsibilities & Constraints**
 - lib: `src/wuc.rs`（写し・254 行）＝`CompositorInteropExt`・`CompositorDesktopInteropExt`・`DrawingSurfaceInteropExt`・`create_dispatcher_queue_controller` を `bind-next` の型で。`src/capture.rs`（新しく書く）＝窓の矩形を画面の DC から `BitBlt` で撮り PNG に書く。
+- 束縛の形は既定だけで確かめる（設計の討議で確定）。問い 3 で `.minimal()` を推すことになったら、WinRT の `.minimal()`（class の口を出さない）は移行の本体の起票で確かめる点として一次記録に書く。
 - bin `q4-demo`（新しく書く）: `q1` の窓（`WS_POPUP`・`WS_EX_NOREDIRECTIONBITMAP`）→ DispatcherQueue の作成 → `Compositor::new` → `DesktopWindowTarget` → `CompositionGraphicsDevice`（D2D の装置から）→ 描画面 → `SpriteVisual` へつなぐ → `BeginDraw` で塗る → 撮る → 上限時間で終わる。段ごとに `[q4] step=<名前> ok|err=<HRESULT>` を 1 行出す。
 
 **Contracts**: Service [x] / Batch [x]
@@ -570,6 +571,7 @@ pub fn write_diff_png(old: &Shot, new: &Shot, shift: (i32, i32), path: &std::pat
 - `crates/pilot` は数えない。表はクレートごとに「出荷する（crates.io へ出すか、areka の配布に入る）」か「試験の道具（`*-kit` などの配布に入らない物）」かの印を付け、合計を両方で出す。どちらも本番と試験のコードを分けて数える（どれも移行の本体で書き換えるので数えるが、要件 10.1 の「出荷するクレート」の数は出荷する印の合計とする）。
 - Output: クレートごと・種類ごとの表（Markdown）を標準出力へ。一次記録に、表・数えた本線のコミット・rust-analyzer の版。
 - 種類の判定は小さな試験（綴りの見本 5 つ）で固定する。
+- 代わりの数え方（設計の討議で確定）: 索引づくりが落ちるか重すぎるときは、`windows` を外したつもりで組んで出た「見つからない」を集める形に倒してよい。倒したときは理由と数え方の違いを一次記録に書く。
 
 #### q10-winmsg（問い 10）
 
@@ -580,7 +582,8 @@ pub fn write_diff_png(old: &Shot, new: &Shot, shift: (i32, i32), path: &std::pat
 
 **Responsibilities & Constraints**
 - 写すのは本番の `src/` だけ（試験も例も写さない）。例は `[[example]] name = "q10-basic"`・`"q10-threads"`、`path = "../q1-winmsg/examples/…"` で問い 1 の写しを共用する（同じ名前の例が target でぶつからないように名前を変える）。`[lib] name` は `wintf_winmsg_executor`。問い 1 の写しと同じ呼び出しで組まない（`-p q10-winmsg` で別に組む）。
-- 実装係は `model: "sonnet"` の下請けで、渡すのは `REWRITE_TABLE.md` と `q10-winmsg/` の場所と「組めて例が走るまで」の指示だけ（問い 1 の移した後の写しは見せない）。人の手で直した所を一次記録に書く。
+- 実装係は `model: "sonnet"` の下請けで、渡すのは `REWRITE_TABLE.md` と砂場の場所と「組めて例が走るまで」の指示だけ（問い 1 の移した後の写しは見せない）。人の手で直した所を一次記録に書く。
+- 答えを見せない手当て（設計の討議で確定・両方行う）: ⑴ 作業木の `target\pilot-windows-rs-next\q10-sandbox\` に、元の `src/`・`REWRITE_TABLE.md`・例 2 本だけを置き、そこで移させる（移し終えたら結果を `q10-winmsg/` へ写す）。⑵ 下請けの道具の呼び出しの記録を読み、`q1-winmsg/` の下のファイルを読んでいないことを確かめて一次記録に書く（読んでいたら、その回を捨ててやり直す）。
 - 取りこぼしの 3 種（11.2）を 1 つずつ入れては戻す: ⑴ 戻り値を見ない＝`q10-winmsg` の `.sys()` の `BOOL` を返す呼び出しと、`q3-default` の `HRESULT` を返す COM のメソッドの両方で、文として捨てる形と `let _ =` で捨てる形 ⑵「ポインタ＋長さ」の長さの誤り＝`q3-default` の `CreateTextLayout` の長さを 1 つずらす ⑶ 失敗を記録しない経路＝`q10-winmsg` の窓の作成の失敗を黙って捨てる。
 - 見る道具: `cargo build` と `cargo clippy -- -D warnings -W clippy::let_underscore_must_use`（既定の群＋restriction の 1 つ）。どれで捕まったかを表にする。
 
@@ -682,8 +685,8 @@ pub fn write_diff_png(old: &Shot, new: &Shot, shift: (i32, i32), path: &std::pat
 - 写す量の見込みは約 1,450〜1,500 行（CopyLedger）。置き場のクレートは 17 個（うち `q2-placement` が 7 個）と文書 3 つ。
 - 問いが 10 あり、実の GPU が要る問いが 5 つ（問い 2・3・4・6・7）、実の窓と画面が要る問いが 2 つ（問い 4・7）、別の実装係の走りが要る問いが 1 つ（問い 10）。ギャップ分析の見立ては L（`research.md` 6）。タスクの見込みは 16〜20。
 
-## Open Questions / Risks（設計の討議へ）
-- 下の各項は、設計の段で仮に決めて本書に書いた所である（`research.md` の設計の段の節に理由）。設計の討議で確かめる。
+## 設計の討議で確定したこと / Risks
+- 下の各項は設計の段で仮に決めた所である（`research.md` の設計の段の節に理由）。2026-11-16 の設計の討議で、開発者が全部を推奨どおり承認して確定した（「討議で確かめること」の列は、どの案も採らず本書の形のまま確定。2・5 の代わりの扱いと 15 は本文に追記した）。
 
 | # | 仮に決めた所（本書の形） | 討議で確かめること |
 |---|---|---|
@@ -701,6 +704,7 @@ pub fn write_diff_png(old: &Shot, new: &Shot, shift: (i32, i32), path: &std::pat
 | 12 | 問い 1 の `threads` の例は、`main` の行の並びと終了コードの一致を見て、`thread` の行は出た行の集まりとして書く（元も走らせるたびに交互が変わる） | この比べ方でよいか |
 | 13 | 画面を使わない GPU の走行（`q2`・`q3`・`q6`・`vt-compare`）は排他テストの机を取らない。窓を出す `q4-demo`・`vt-balloon` だけ取る | 画面の外の GPU の走行も机を取るか |
 | 14 | 問い 6 の SHIORI の 1 組は `IShiori`（`Get` は `HRESULT` を直に返し、`Notify` は `Result<()>`）を選ぶ。マクロの `_Impl` は宣言の戻り値のまま（上流のソースで確かめた見込み）なので、今の宣言を変えずに組めるかの確かめになる | この 1 組の選びでよいか |
+| 15 | 問い 10 の実装係は、作業木の中の移し終えた問い 1 の写しを読めてしまう（設計の検証の指摘 2） | 確定: 砂場（`target\pilot-windows-rs-next\q10-sandbox\`）で移させ、道具の呼び出しの記録で `q1-winmsg/` を読んでいないことを確かめる（q10-winmsg の節） |
 
 ### Risks
 - `q7-vertical` は `q1-winmsg`（ライブラリ名 `wintf_winmsg_executor`）と、借りた `wintf` の推移の依存の本物の `wintf-winmsg-executor`（同じライブラリ名）を同じ木に持つ。直の依存は `q1` の 1 つだけなので組める見込みだが、cargo が断ったら `q1-winmsg` のライブラリ名だけを変え、例の `use` の 1 行ずつを書き換えた数を一次記録に書く。
