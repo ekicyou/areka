@@ -15,7 +15,8 @@ use super::{
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
     apply_visibility_guard, diag, follow_balloon, place_balloon_in_work_area, project_anchor,
-    rect_at, rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
+    rect_at, rederive_keyword_balloon_offset, shown_char_rects, transition_diag,
+    work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -1074,8 +1075,8 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    // 判定に入れるキャラ窓の列は task 3.2 で組む（今は空＝重なりの段は効かない）。
-    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area, &[]);
+    let others = shown_char_rects(world);
+    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area, &others);
     let (BalloonPlace::Flipped(corrected)
     | BalloonPlace::Pushed(corrected)
     | BalloonPlace::PushedOverlap { to: corrected, .. }) = place
@@ -1087,6 +1088,7 @@ fn apply_balloon_limit_gate(
         scope,
         context = BALLOON_LIMIT_RUNTIME_CONTEXT,
         how = place.how(),
+        overlap_scope = ?place.overlap_scope(),
         entity = ?window,
         route = ?route,
         from = ?proposed,

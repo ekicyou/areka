@@ -395,6 +395,66 @@ fn write_gate_flips_and_returns_to_the_original_side() {
     );
 }
 
+/// 2 スコープの実 spawn の World（スコープ 1 の相方のキャラ窓は x=1108・本体の映した先の右隣）。
+/// 相方のキャラ窓には、子の描画面を `visible` の列どおりに付ける。
+fn world_with_partner(partner_children: &[bool]) -> (World, Entity, Entity, Entity) {
+    let mut world = World::new();
+    world.insert_resource(snapshot(&[WA]));
+    let titles = GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]);
+    let ps = [
+        placement(0, point(1200, 904), left_side_offset(), true),
+        placement(1, point(1108, 904), left_side_offset(), false),
+    ];
+    let gw = spawn_ghost_windows(&mut world, &ps, &titles);
+    let (c0, b0, c1) = (
+        gw.char_window(0).expect("キャラ窓"),
+        gw.balloon_window(0).expect("バルーン窓"),
+        gw.char_window(1).expect("相方のキャラ窓"),
+    );
+    world.entity_mut(c0).insert(fake_handle(0x1000));
+    world.entity_mut(b0).insert(fake_handle(0x2000));
+    for &is_visible in partner_children {
+        world.spawn((
+            wintf::ecs::Visual {
+                is_visible,
+                ..Default::default()
+            },
+            ChildOf(c1),
+        ));
+    }
+    (world, c0, b0, c1)
+}
+
+/// 相方の子の描画面が可視で映した先に重なる → 押し込み＋`overlap_scope=Some(1)`（要件 2.3・4.1・4.2）。
+#[test]
+fn write_gate_pushes_on_overlap_with_a_shown_partner() {
+    let (mut world, c0, b0, _) = world_with_partner(&[false, true]);
+    let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
+    assert_eq!(point_of(&world, b0), point(0, 904), "押し込みの位置");
+    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+    assert_eq!(clamp.expect_field("how"), "\"pushed\"");
+    assert_eq!(clamp.expect_field("overlap_scope"), "Some(1)");
+    assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
+}
+
+/// 同じ形で相方の子が全部不可視、または相方の寸が未確定 → 並べ替え（要件 2.6）。
+#[test]
+fn write_gate_flips_when_the_partner_is_hidden_or_undetermined() {
+    let (mut world, c0, b0, _) = world_with_partner(&[false, false]);
+    let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
+    assert_eq!(point_of(&world, b0), point(1108, 904));
+    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+    assert_eq!(clamp.expect_field("how"), "\"flipped\"");
+    assert_eq!(clamp.expect_field("overlap_scope"), "None");
+
+    let (mut world, c0, b0, c1) = world_with_partner(&[true]);
+    world.entity_mut(c1).insert(WindowPos::default());
+    let (_, events) = capture(|| move_window_to(&mut world, c0, 0, 904));
+    assert_eq!(point_of(&world, b0), point(1108, 904));
+    let clamp = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+    assert_eq!(clamp.expect_field("how"), "\"flipped\"");
+}
+
 /// `limit=0` のバルーンは書き込みの関門でも並べ替えない。
 #[test]
 fn write_gate_does_not_flip_when_limit_is_disabled() {
