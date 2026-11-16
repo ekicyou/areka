@@ -226,9 +226,109 @@ function Start-Burner([Parameter(Mandatory)][string]$PwshExe, [Parameter(Mandato
 }
 
 if ($PSCmdlet.ParameterSetName -eq 'SelfTest') {
-    # 自分の検査（tasks 6.2 で中身を足す）。出力のフォルダも cargo も負荷の子も起こさない
-    Write-Host '[load-flake] selftest: 0 checks'
-    exit 0
+    # 自分の検査（design の T2 の 5 本）。出力のフォルダも cargo も起こさない。子は stop tree の 1 木と
+    # burner ends with its parent の偽の親と負荷の子 1 本だけ（約 1 秒・要件 8.3 の裁定で負荷の走行に数えない）。
+    # 書くのは target\load-flake-selftest\<pid>\ だけで、終わったら消す。1 本 1 行: ok selftest <名前> / FAIL selftest <名前>: <ASCII>
+    function Assert([bool]$Cond, [string]$Why) { if (-not $Cond) { throw $Why } }
+    $top = Join-Path $repoRoot 'target\load-flake-selftest'
+    $base = Join-Path $top "$PID"
+    $checks = [ordered]@{
+        'read round'                  = {
+            $log = Join-Path $base 'round-1.log'
+            [IO.File]::WriteAllLines($log, [string[]]@(
+                    'running 4 tests'
+                    'test a::b ... FAILED'
+                    'test e::f ... ok'
+                    "$WaitCutPrefix (wait cut)"
+                    'noise AREKA-CRASH in the middle'
+                    'x sample-ghost-kit: cleanup failed (os error 5)'
+                    'sample-ghost-kit: cleanup failed (os error 32)'
+                    ''
+                    'failures:'
+                    ''
+                    '---- a::b stdout ----'
+                    'panic'
+                    ''
+                    'failures:'
+                    '    a::b'
+                    '    c::d'
+                    ''
+                    'test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out'
+                    'test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out'
+                ), $UTF8)
+            $r = Read-Round $log
+            Assert ($r.ResultLines.Count -eq 2) "result lines $($r.ResultLines.Count)"
+            Assert ($r.Passed -eq 7 -and $r.Failed -eq 2) "passed $($r.Passed) failed $($r.Failed)"
+            Assert (($r.FailedNames -join ',') -ceq 'a::b,c::d') "failed names $($r.FailedNames -join ',')"
+            Assert ($r.WaitLines.Count -eq 1) "wait lines $($r.WaitLines.Count)"
+            Assert ($r.CrashLines.Count -eq 1) "crash lines $($r.CrashLines.Count)"
+            Assert ($r.CleanupLines.Count -eq 2 -and $r.OsError5 -eq 1) "cleanup lines $($r.CleanupLines.Count) os error 5 $($r.OsError5)"
+        }
+        'median'                      = {
+            Assert ((Get-Median @()) -eq 0) 'empty'
+            Assert ((Get-Median @(3, 1, 2)) -eq 2) "odd $(Get-Median @(3, 1, 2))"
+            Assert ((Get-Median @(4, 1, 3, 2)) -eq 2.5) "even $(Get-Median @(4, 1, 3, 2))"
+        }
+        'cargo args'                  = {
+            $want = [ordered]@{ 'areka-bin' = '-p areka --bin areka'; 'wintf-lib' = '-p wintf --lib'; 'areka-placement-lib' = '-p areka-placement --lib' }
+            foreach ($k in $want.Keys) { Assert ((Get-CargoTestTarget $k) -ceq $want[$k]) "target $k = $(Get-CargoTestTarget $k)" }
+            $a = Get-CargoTestArgs -Target '-p wintf --lib' -Filter @('x::y', 'z') -Ignored $true -TestThreads 2 -NoCapture $true
+            Assert ($a -ceq '-p wintf --lib -- "x::y" "z" --ignored --exact --test-threads 2 --nocapture') "all: $a"
+            $a = Get-CargoTestArgs -Target '-p areka --bin areka' -Filter @() -Ignored $false -TestThreads 0 -NoCapture $false
+            Assert ($a -ceq '-p areka --bin areka --') "none: $a"
+        }
+        'stop tree'                   = {
+            $psi = [System.Diagnostics.ProcessStartInfo]::new('cmd.exe', '/d /c "ping -n 30 127.0.0.1 >nul"')
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+            $cmd = [System.Diagnostics.Process]::Start($psi); $ping = $null
+            try {
+                $deadline = (Get-Date).AddSeconds(10)
+                while ($null -eq $ping -and (Get-Date) -lt $deadline) {
+                    $c = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($cmd.Id) AND Name='PING.EXE'")
+                    if ($c.Count) { $ping = Get-Process -Id $c[0].ProcessId -ErrorAction SilentlyContinue } else { Start-Sleep -Milliseconds 100 }
+                }
+                Assert ($null -ne $ping) 'ping did not start under cmd'
+                # Stop-Tree は止めた木を 30 秒まで待つ。ping が自分で終わる（約 29 秒）より前に止まったことを見る
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                Stop-Tree $cmd
+                Assert ($cmd.HasExited -and $ping.HasExited) 'cmd or ping still running'
+                Assert ($sw.Elapsed.TotalSeconds -lt 10) "tree ended only after $([int]$sw.Elapsed.TotalSeconds) s"
+            } finally {
+                foreach ($p in @($ping, $cmd)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; $null = $p.WaitForExit(10000) } }
+            }
+        }
+        'burner ends with its parent' = {
+            $pwshExe = (Get-Process -Id $PID).Path
+            $parent = $null; $burner = $null
+            try {
+                # 偽の親は空回ししない
+                $parent = Start-Process -FilePath $pwshExe -ArgumentList '-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep 30' -WindowStyle Hidden -PassThru
+                $burner = Start-Burner -PwshExe $pwshExe -ParentId $parent.Id
+                $null = $burner.Handle   # 取っ手を握っておく（終わった後に ExitCode を読むため）
+                Start-Sleep -Seconds 1
+                Assert (-not $burner.HasExited) 'burner ended while its parent was alive'
+                Stop-Process -Id $parent.Id -Force
+                Assert $burner.WaitForExit(10000) 'burner still running 10 s after its parent ended'
+                Assert ($burner.ExitCode -eq 0) "burner exit $($burner.ExitCode)"
+            } finally {
+                foreach ($p in @($burner, $parent)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; $null = $p.WaitForExit(10000) } }
+            }
+        }
+    }
+    $failed = 0
+    try {
+        [void][IO.Directory]::CreateDirectory($base)
+        foreach ($name in $checks.Keys) {
+            try { $null = & $checks[$name]; Write-Host "ok selftest $name" }
+            catch { $failed++; Write-Host "FAIL selftest ${name}: $(Show-Ascii $_.Exception.Message 0)" }
+        }
+    } finally {
+        try {
+            if ([IO.Directory]::Exists($base)) { [IO.Directory]::Delete($base, $true) }
+            if ([IO.Directory]::Exists($top) -and -not [IO.Directory]::EnumerateFileSystemEntries($top).GetEnumerator().MoveNext()) { [IO.Directory]::Delete($top) }
+        } catch { $failed++; Write-Host "FAIL selftest cleanup: $(Show-Ascii $_.Exception.Message 0)" }
+    }
+    exit ([int]($failed -gt 0))
 }
 
 # pwsh -File では a,b が 1 つの文字列で来るので , でも分ける（値に , を含む環境変数は渡せない）

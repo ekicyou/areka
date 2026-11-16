@@ -111,7 +111,7 @@
   - _Dispatch: standard — PE と zip の小さな検体をバイトで組む検査_
   - _Requirements: 4.1, 4.3, 4.4, 4.5, 6.1_
 
-- [ ] 6. 負荷の再現の道具（束 6・7・11）
+- [x] 6. 負荷の再現の道具（束 6・7・11）
 - [x] 6.1 負荷の子を親の終わりに付いていかせ、引数の組み立てを純関数へ出す
   - 引数の組を `Run`（既定・今の引数のまま・`-Label` は必須）と `SelfTest`（`-SelfTest` だけ・出力のフォルダを作らない）の 2 つにする
   - cargo の的の選び（今の選び肢のまま）と引数の組み立てを純関数にし、本番の走りはそれを使う
@@ -120,7 +120,7 @@
   - 終わった姿: `load-flake.ps1` を構文木で読むと引数の組が 2 つで、本番の道が純関数と負荷の子の関数を通っており、`encoding-check.ps1` が緑
   - _Dispatch: standard — 親の終わりを見る負荷の子と引数の組の分け_
   - _Requirements: 3.1, 6.3_
-- [ ] 6.2 負荷の再現の道具に自分の検査を持たせる
+- [x] 6.2 負荷の再現の道具に自分の検査を持たせる
   - 検査: `read round`（`target\load-flake-selftest\<pid>\round-1.log` に作った記録）・`median`・`cargo args`（今の 3 つの的）・`stop tree`（`cmd.exe` と `ping` の 1 木）・`burner ends with its parent`（すぐ終わる偽の親と負荷の子 1 本を約 1 秒だけ起こす＝要件 8.3 の裁定で負荷の再現の走行に数えない・`finally` で両方を止める）（何を見るかは設計の表）
   - cargo も、検査の 1 本のほかの負荷の子も起こさない。作ったフォルダは終わったら消す
   - 終わった姿: `pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest` が 5 本とも `ok` で 0 を返し、親を見ない負荷の子に戻した写しでは `burner ends with its parent` が落ち、走った後に負荷の子が 1 本も残っていない
