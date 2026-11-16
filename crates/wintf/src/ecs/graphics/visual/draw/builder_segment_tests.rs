@@ -1,5 +1,6 @@
 //! `build` の部分の列の形（`TreeFrame::Segment`）の純粋なテスト（要件 2.7, 3.2）。
-//! 根の中身を出さないこと・原点を引いた行列と外接矩形・整数だけ動いた原点で件の鍵が変わらないこと。
+//! 根の中身を出さないこと・自分の描画面の物理ピクセルへ写した（拡大を掛けて原点を引いた）行列と外接矩形・
+//! 整数だけ動いた原点で件の鍵が変わらないこと。
 
 use super::super::draw_content_test_support::solid_rect_content;
 use super::super::*;
@@ -8,7 +9,6 @@ use super::builder_tests::*;
 use crate::numerics::*;
 use bevy_ecs::system::SystemState;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
-use windows_numerics::Vector2;
 
 /// 中身つきの根の下に、位置 (x, y) の持ち主 `p`（中身つき・`visual`）とその子 `c`（(1, 1)）を置く。
 /// 返すのは (p, c, p から始まる部分の列)。
@@ -48,7 +48,8 @@ fn segment_tree(
 fn build_segment(
     world: &mut World,
     owner: Entity,
-    origin: Vector2,
+    origin_px: (i32, i32),
+    scale: f32,
     viewport: Aabb,
     seg: &[(Entity, usize)],
 ) -> Vec<DrawCommand> {
@@ -64,22 +65,19 @@ fn build_segment(
         &TreeFrame::Segment {
             owner,
             owner_name: None,
-            origin,
+            origin_px,
+            scale,
         },
         seg,
     );
     out
 }
 
-fn v(x: f32, y: f32) -> Vector2 {
-    Vector2 { X: x, Y: y }
-}
-
 #[test]
 fn segment_emits_no_root_content_and_subtracts_origin() {
     let mut world = World::new();
     let (p, c, seg) = segment_tree(&mut world, 10.5, 3.25, Visual::default());
-    let out = build_segment(&mut world, p, v(10.0, 3.0), INFINITE, &seg);
+    let out = build_segment(&mut world, p, (10, 3), 1.0, INFINITE, &seg);
     // 持ち主自身は恒等の先頭の 1 件ではなく、原点を引いた世界の位置で 1 度だけ出る。
     assert_eq!(
         shape(&out),
@@ -99,7 +97,7 @@ fn segment_head_emits_opacity_and_clip_with_origin_subtracted() {
         ..clipped()
     };
     let (p, c, seg) = segment_tree(&mut world, 10.5, 3.25, visual);
-    let out = build_segment(&mut world, p, v(10.0, 3.0), INFINITE, &seg);
+    let out = build_segment(&mut world, p, (10, 3), 1.0, INFINITE, &seg);
     assert_eq!(
         shape(&out),
         vec![
@@ -121,7 +119,8 @@ fn segment_viewport_is_in_owner_surface_space() {
     let out = build_segment(
         &mut world,
         p,
-        v(10.0, 3.0),
+        (10, 3),
+        1.0,
         Aabb::new(0.0, 0.0, 1.0, 1.0),
         &seg,
     );
@@ -130,10 +129,10 @@ fn segment_viewport_is_in_owner_surface_space() {
 
 #[test]
 fn integer_origin_move_keeps_item_keys() {
-    let keys = |x: f32, y: f32, origin: Vector2| {
+    let keys = |x: f32, y: f32, origin: (i32, i32)| {
         let mut world = World::new();
         let (p, _, seg) = segment_tree(&mut world, x, y, Visual::default());
-        build_segment(&mut world, p, origin, INFINITE, &seg)
+        build_segment(&mut world, p, origin, 1.0, INFINITE, &seg)
             .iter()
             .filter_map(|c| match c {
                 DrawCommand::Draw(d) => Some((d.hash, d.world_mat)),
@@ -142,10 +141,35 @@ fn integer_origin_move_keeps_item_keys() {
             .collect::<Vec<_>>()
     };
     // 実体は各ワールドで同じ番号になる（同じ順に作るので）。
-    let a = keys(10.5, 3.25, v(10.0, 3.0));
-    let b = keys(12.5, 5.25, v(12.0, 5.0));
+    let a = keys(10.5, 3.25, (10, 3));
+    let b = keys(12.5, 5.25, (12, 5));
     assert_eq!(a, b);
     // 端数が変われば鍵は変わる。
-    let f = keys(10.75, 3.25, v(10.0, 3.0));
+    let f = keys(10.75, 3.25, (10, 3));
     assert_ne!(a[0].0, f[0].0);
+}
+
+#[test]
+fn segment_maps_to_surface_pixels_subtracting_integer_origin_exactly() {
+    let mut world = World::new();
+    let (p, c, seg) = segment_tree(&mut world, 10.3, 7.6, Visual::default());
+    let out = build_segment(&mut world, p, (9, 6), 1.25, INFINITE, &seg);
+    let mats: Vec<_> = out
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Draw(d) => Some((d.entity, d.world_mat)),
+            _ => None,
+        })
+        .collect();
+    // 拡大を掛けた位置（親の描画面の中で描くときの装置の座標）から整数をそのまま引いた値。
+    let (px, py) = (10.3f32 * 1.25 - 9.0, 7.6f32 * 1.25 - 6.0);
+    assert_eq!((px, py), (3.875, 3.5));
+    assert_eq!(mats[0].0, p);
+    let m = mats[0].1;
+    assert_eq!((m.M11, m.M22, m.M31, m.M32), (1.25, 1.25, px, py));
+    assert_eq!(mats[1].0, c);
+    assert_eq!(
+        (mats[1].1.M31, mats[1].1.M32),
+        ((10.3f32 + 1.0) * 1.25 - 9.0, (7.6f32 + 1.0) * 1.25 - 6.0)
+    );
 }

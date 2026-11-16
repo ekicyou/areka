@@ -49,7 +49,9 @@ impl Ineligible {
     }
 }
 
-/// 整数の位置だけを上げる形へ落とすか（研究 R-e が揃わなかったときだけ真にする 1 か所・2.4 が決める）。
+/// 整数の位置だけを上げる形へ落とすか（研究 R-e が揃わなかったときだけ真にする 1 か所）。
+/// 2.4 の WARP の確かめ（`draw/emit_promotion_tests.rs`）で、原点を物理ピクセルで引く部分の列
+/// （`TreeFrame::Segment`）なら小数の位置でも ±1 に揃ったので偽（設計の案 b）。
 const INTEGER_POSITION_ONLY: bool = false;
 
 /// 形の見分けの入力。

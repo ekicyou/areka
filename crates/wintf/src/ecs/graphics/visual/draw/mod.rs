@@ -15,6 +15,8 @@ mod emit;
 mod emit_blend_tests;
 #[cfg(test)]
 mod emit_layer_tests;
+#[cfg(test)]
+mod emit_promotion_tests;
 pub(crate) use emit::{emit, emit_within};
 #[cfg(test)]
 pub(crate) mod emit_test_support;
