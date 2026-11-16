@@ -37,6 +37,9 @@ param([switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Show-Ascii (shared tool helpers)
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+
 # 較正値（Windows の拡大率 100-300% の 25% 刻みの寸法と 128）
 $SIZES = @(32, 40, 48, 56, 64, 72, 80, 88, 96, 128)
 $NAMES = @('hand', 'grip')
@@ -44,8 +47,6 @@ $ARITY = @{ M = 2; L = 2; C = 6; Q = 4; Z = 0 }
 
 $CursorDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'crates/areka/cursor'
 Add-Type -AssemblyName System.Drawing
-
-function ConvertTo-Ascii([string]$s) { $s -replace '[^\x20-\x7E]', '?' }
 
 # 輝度 50% 未満か（整数で: 0.299R + 0.587G + 0.114B < 127.5）
 function Test-Dark([int]$r, [int]$g, [int]$b) { (299 * $r + 587 * $g + 114 * $b) -lt 127500 }
@@ -61,7 +62,7 @@ function Read-Svg([string]$Dir, [string]$File) {
     try {
         $reader = [System.Xml.XmlReader]::Create($path, $settings)
         try { $doc.Load($reader) } finally { $reader.Dispose() }
-    } catch { return "FAIL input ${File}: not XML ($(ConvertTo-Ascii $_.Exception.GetBaseException().Message))" }
+    } catch { return "FAIL input ${File}: not XML ($(Show-Ascii $_.Exception.GetBaseException().Message 0))" }
     $root = $doc.DocumentElement
     if ($root.LocalName -ne 'svg') { return "FAIL input ${File}: root is not svg" }
     $paths = [System.Collections.Generic.List[object]]::new()
@@ -72,7 +73,7 @@ function Read-Svg([string]$Dir, [string]$File) {
             if ($a.Name -notin @('fill', 'd')) { return "FAIL input ${File}: unsupported attribute $($a.Name)" }
         }
         $fill = $node.GetAttribute('fill')
-        if ($fill -notmatch '^#[0-9a-fA-F]{6}$') { return "FAIL input ${File}: fill '$(ConvertTo-Ascii $fill)' is not #rrggbb" }
+        if ($fill -notmatch '^#[0-9a-fA-F]{6}$') { return "FAIL input ${File}: fill '$(Show-Ascii $fill 0)' is not #rrggbb" }
         $d = $node.GetAttribute('d')
         $tokens = [regex]::Matches($d, '[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?|[A-Za-z]')
         if (($d -replace '[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?|[A-Za-z]', '') -notmatch '^[\s,]*$') {
@@ -292,7 +293,7 @@ function Invoke-Pack([string]$Dir) {
                 "OK wrote $file ($($SIZES.Count) images)"
             } catch {
                 Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
-                "FAIL write ${file}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)"
+                "FAIL write ${file}: $(Show-Ascii $_.Exception.GetBaseException().Message 0)"
             }
         })
 }
@@ -328,7 +329,7 @@ function Invoke-SelfTest {
     }
     $fails = @(foreach ($name in $checks.Keys) {
             try { if (-not (& $checks[$name])) { "FAIL selftest $name" } }
-            catch { "FAIL selftest ${name}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+            catch { "FAIL selftest ${name}: $(Show-Ascii $_.Exception.GetBaseException().Message 0)" }
         })
     if ($fails.Count) { , $fails } else { , @("OK selftest ($($checks.Count) checks)") }
 }

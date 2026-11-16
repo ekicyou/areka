@@ -47,9 +47,12 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
+# Show-Ascii (shared tool helpers)
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+
 function Exit-With([int]$Code, [string]$Line) {
     # Exception messages can be localized; the terminal gets ASCII only.
-    Write-Output ($Line -replace '[^\x20-\x7E]', '?')
+    Write-Output (Show-Ascii $Line 0)
     exit $Code
 }
 

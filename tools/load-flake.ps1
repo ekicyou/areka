@@ -95,12 +95,15 @@ foreach ($kv in $SetEnv) { if ($kv -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw
 $logicalCpus = [Environment]::ProcessorCount
 if ($Burners -lt 0) { $Burners = $logicalCpus * 2 }
 
+# Show-Ascii (shared tool helpers)
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $outDir = Join-Path $repoRoot ("target\load-flake\{0}-{1}" -f $Label, (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 # 端末へは ASCII だけ（例外の文言など ASCII 以外は ? に置き換える。全文は summary.txt に残る）
-function Say([string]$msg) { Write-Host ("[load-flake] " + ($msg -replace '[^\x20-\x7E]', '?')) }
+function Say([string]$msg) { Write-Host ("[load-flake] " + (Show-Ascii $msg 0)) }
 
 function Add-Text([string]$file, [string[]]$lines) {
     [IO.File]::AppendAllLines((Join-Path $outDir $file), $lines, $UTF8)

@@ -67,26 +67,18 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
-# Invoke-Utf8Child: read a child's output as UTF-8 regardless of the console code page
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# Invoke-Utf8Child (UTF-8 child output) and Show-Ascii
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 
 $NonAscii = '[^\t\r\n\x20-\x7E]'
 $SelfWhere = 'tools/encoding-check.ps1'
 $CallWordSet = @('metadata', 'nar-sample-path')
 # Rule E: where an Invoke-Utf8Child call must carry each element
 $RequiredCalls = [ordered]@{
-    'tools/package.ps1'             = @('metadata', 'nar-sample-path')
+    'tools/package.ps1'             = @('nar-sample-path')
+    'tools/tool-common.ps1'         = @('metadata')
     'tools/crates-io.ps1'           = @('metadata')
     '.github/workflows/release.yml' = @('metadata')
-}
-
-# Printable form: non-ASCII and control chars become \uXXXX, text longer than $Max is cut
-# ($Max 0 = never cut).
-function Show-Ascii([string]$s, [int]$Max = 80) {
-    $t = -join ($s.ToCharArray() | ForEach-Object {
-            if ([int]$_ -ge 0x20 -and [int]$_ -le 0x7E) { $_ } else { '\u{0:X4}' -f [int]$_ }
-        })
-    if ($Max -gt 0 -and $t.Length -gt $Max) { $t.Substring(0, $Max - 3) + '...' } else { $t }
 }
 
 # Leaf name of a command (cargo, & 'cargo.exe', C:\x\chcp.com), or $null.

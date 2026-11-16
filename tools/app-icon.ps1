@@ -47,6 +47,9 @@ param([switch]$Seed, [switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Show-Ascii (shared tool helpers)
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+
 # 較正値（資源の番号の表・完了の後は変えない）
 $SIZES = @(16, 20, 24, 32, 40, 48, 64, 256)
 $MASTER_SIZE = 1024
@@ -61,8 +64,6 @@ $FLAGS_GROUP = 0x1030
 $RES_FILE = 'icons.res'
 
 $IconDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'crates/areka/icon'
-
-function ConvertTo-Ascii([string]$s) { $s -replace '[^\x20-\x7E]', '?' }
 
 function Get-BE32([byte[]]$b, [int]$at) {
     ([uint32]$b[$at] -shl 24) -bor ([uint32]$b[$at + 1] -shl 16) -bor ([uint32]$b[$at + 2] -shl 8) -bor [uint32]$b[$at + 3]
@@ -134,7 +135,7 @@ function Invoke-Seed([string]$Dir) {
                     $lines.Add("OK seeded $file")
                 } catch {
                     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
-                    $lines.Add("FAIL write ${file}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)")
+                    $lines.Add("FAIL write ${file}: $(Show-Ascii $_.Exception.GetBaseException().Message 0)")
                 } finally {
                     $attr.Dispose(); $gr.Dispose(); $dst.Dispose()
                 }
@@ -225,19 +226,19 @@ function Write-IconOutputs([string]$Dir, $Outputs) {
             $swapped.Add($name)
         }
     } catch {
-        $msg = ConvertTo-Ascii $_.Exception.GetBaseException().Message
+        $msg = Show-Ascii $_.Exception.GetBaseException().Message 0
         # Replace が今のファイルを .bak へ退かした後で新しいファイルを置けなかったとき、.bak を戻す
         $cur = Join-Path $Dir $current
         if (-not $swapped.Contains($current) -and -not (Test-Path -LiteralPath $cur) -and (Test-Path -LiteralPath "$cur.bak" -PathType Leaf)) {
             try { [System.IO.File]::Move("$cur.bak", $cur) }
-            catch { $msg += "; restore $current failed: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+            catch { $msg += "; restore $current failed: $(Show-Ascii $_.Exception.GetBaseException().Message 0)" }
         }
         foreach ($name in $swapped) {
             $dest = Join-Path $Dir $name
             try {
                 if (Test-Path -LiteralPath "$dest.bak" -PathType Leaf) { [System.IO.File]::Move("$dest.bak", $dest, $true) }
                 else { [System.IO.File]::Delete($dest) }
-            } catch { $msg += "; restore $name failed: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+            } catch { $msg += "; restore $name failed: $(Show-Ascii $_.Exception.GetBaseException().Message 0)" }
         }
         foreach ($t in $leftovers) { Remove-Item -LiteralPath $t -Force -ErrorAction SilentlyContinue }
         return , @("FAIL write ${current}: $msg")
@@ -314,7 +315,7 @@ function Invoke-SelfTest {
     }
     , @(foreach ($name in $checks.Keys) {
             try { if (& $checks[$name]) { "ok selftest $name" } else { "FAIL selftest $name" } }
-            catch { "FAIL selftest ${name}: $(ConvertTo-Ascii $_.Exception.GetBaseException().Message)" }
+            catch { "FAIL selftest ${name}: $(Show-Ascii $_.Exception.GetBaseException().Message 0)" }
         })
 }
 

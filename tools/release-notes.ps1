@@ -126,8 +126,8 @@ $NOTES_KEYS     = 'notesTitle', 'notesRange', 'notesRangeFromStart', 'headFeat',
 
 $root = Split-Path $PSScriptRoot -Parent
 
-# 子の出力を端末の文字コードに依らず UTF-8 で読む関数 Invoke-Utf8Child
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# 子の出力を UTF-8 で読む Invoke-Utf8Child と Show-Ascii（共通の下回り）
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 
 # ファイルを UTF-8 で読み、改行を LF にそろえて返す。無ければ $null
 function Read-Lf([string]$Path) {
@@ -252,7 +252,7 @@ if ($SelfTest) {
     $real = @(Get-ChildItem -LiteralPath (Join-Path $root $HIGHLIGHTS_DIR) -Filter 'v*.md' -File)
     "selftest real highlights: $($real.Count) file(s)"
     foreach ($f in $real) {
-        Judge "real highlights $($f.Name -replace '[^\x20-\x7E]', '?') passes" ((& $keys (Read-Lf $f.FullName)) -ceq '')
+        Judge "real highlights $(Show-Ascii $f.Name 0) passes" ((& $keys (Read-Lf $f.FullName)) -ceq '')
     }
 
     # ---- 詳しいリリースノートの整形 ----
@@ -290,7 +290,7 @@ if ($Notes) {
     $range = $PrevTag ? "$PrevTag..$To" : $To
     $r = Invoke-Utf8Child git @('-C', $root, 'log', '--first-parent', '--format=%s', '--end-of-options', $range, '--')
     if ($r.Code) {
-        "FAIL git log (exit $($r.Code)): $([string]($r.ErrLines | Select-Object -Last 1) -replace '[^\x20-\x7E]', '?')"
+        "FAIL git log (exit $($r.Code)): $(Show-Ascii ([string]($r.ErrLines | Select-Object -Last 1)) 0)"
         exit 1
     }
     # 1 行 1 題名。最後の改行だけを外す（空の題名の行を落とさない）

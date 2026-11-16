@@ -31,10 +31,9 @@ param([switch]$Format, [switch]$License)
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # Git Bash から呼ばれると GNU coreutils の link.exe が MSVC の link.exe を遮蔽し i686 のリンクが落ちる。
-# link.exe を持つが cl.exe を持たないフォルダ（＝MSVC 以外の link.exe）を、このプロセスの PATH から外す。
-$env:PATH = ($env:PATH -split ';' | Where-Object {
-        -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
-    }) -join ';'
+# link.exe を持つが cl.exe を持たないフォルダ（＝MSVC 以外の link.exe）を、このプロセスの PATH から外す（共通の下回り）。
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+$env:PATH = Get-MsvcLinkPath $env:PATH
 
 $i686 = 'i686-pc-windows-msvc'
 $results = [ordered]@{}

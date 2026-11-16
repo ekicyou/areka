@@ -46,7 +46,6 @@
     ARCHS                           CPU 種別ごとのビルドのターゲットと機械種別（x64・arm64）
     HELPER_TARGET／HELPER_MACHINE   補助 exe と pasta.dll のターゲットと機械種別（i686・0x014c）
     REMOVE_RETRY = 5／REMOVE_RETRY_WAIT_SEC = 1  後片付けで展開した木を消す再試行の回数と間隔（秒）
-    VERSION_PATTERN                 受け付ける版の形（+ の付記は受けない）
     SMOKE_EXIT_MS        = 10000    -Check の有界の自動終了（ミリ秒・-SmokeExitMs で上書き）
     WATCHDOG_MARGIN_SEC  = 60       自動終了の予定から番犬が子を止めるまでの猶予（秒）
     EXPAND_DIR_MAX_CHARS = 160      -Check の展開先のフルパスの長さの上限（文字）
@@ -113,8 +112,8 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 # Copy-Item -Recurse などの進捗バーを出さない（簡易表示の消し残り「]」が段の出力に紛れる）
 $ProgressPreference = 'SilentlyContinue'
-# 判定に使う子の出力（版・検体のパス）は端末の文字コードを通さず UTF-8 で読む
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# 判定に使う子の出力（検体のパス）は端末の文字コードを通さず UTF-8 で読む。版の読み・版の形・link.exe の手当ては共通の下回りから
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 
 # =============================================================================
 # 較正値（説明の一覧と対応。変更はここだけ）
@@ -131,8 +130,6 @@ $HELPER_TARGET        = 'i686-pc-windows-msvc'
 $HELPER_MACHINE       = 0x014c
 $REMOVE_RETRY         = 5
 $REMOVE_RETRY_WAIT_SEC = 1
-# 版の形（+ のビルドの付記はファイル名と URL で困るので受けない）
-$VERSION_PATTERN      = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 $SMOKE_EXIT_MS        = 10000   # 2026-09-26 実測: 挨拶はゲートから約 2.1 秒（release・展開直後の初回起動）。余裕 5 倍
 $WATCHDOG_MARGIN_SEC  = 60
 $EXPAND_DIR_MAX_CHARS = 160
@@ -156,13 +153,10 @@ $EXIT_OK = 0; $EXIT_STAGE_FAILED = 1; $EXIT_CHECK_FAILED = 2; $EXIT_BAD_ARGS = 3
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # Git Bash から呼ばれると GNU coreutils の link.exe が MSVC の link.exe を遮蔽し i686 のリンクが落ちる。
-# link.exe を持つが cl.exe を持たないフォルダ（＝MSVC 以外の link.exe）を、このプロセスの PATH から外す。
-# （tools/test-all.ps1 と同じ）。& で呼ばれても親に残さないよう、後始末で元へ戻す。
+# link.exe の手当て（Get-MsvcLinkPath）。& で呼ばれても親に残さないよう、後始末で元へ戻す。
 $script:OrigPath = $env:PATH
 $script:Child = $null
-$env:PATH =($env:PATH -split ';' | Where-Object {
-        -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
-    }) -join ';'
+$env:PATH = Get-MsvcLinkPath $env:PATH
 
 # =============================================================================
 # 後始末
@@ -312,22 +306,8 @@ Step 'preflight' {
     }
 
     # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
-    $r = Invoke-Utf8Child cargo @('metadata', '--no-deps', '--locked', '--format-version', '1')
-    if ($r.Code) {
-        Exit-Script $EXIT_BAD_ARGS ('cannot read the version (cargo metadata exited with code {0}: {1})' -f $r.Code, ($r.ErrLines | Select-Object -Last 1))
-    }
-    try {
-        $meta = $r.Out | ConvertFrom-Json
-    } catch {
-        Exit-Script $EXIT_BAD_ARGS "cannot read the version (cargo metadata output is not valid JSON: $_)"
-    }
-    $pkg = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
-    if ($pkg.Count -ne 1) { Exit-Script $EXIT_BAD_ARGS "cannot read the version (cargo metadata has $($pkg.Count) areka package(s))" }
-    $script:Version = "$($pkg[0].version)"
-    if (-not $script:Version) { Exit-Script $EXIT_BAD_ARGS 'cannot read the version (areka version is empty; set [workspace.package] version in Cargo.toml)' }
-    if ($script:Version -cnotmatch $VERSION_PATTERN) {
-        Exit-Script $EXIT_BAD_ARGS "unexpected version format ('$script:Version'; accepted: $VERSION_PATTERN; no + suffix)"
-    }
+    try { $script:Version = Get-ArekaVersion }
+    catch { Exit-Script $EXIT_BAD_ARGS "cannot read the version ($($_.Exception.Message))" }
 
     # 前回の同名の組をビルドの前に消す（今回が失敗しても前回の物が完成品に見えて残らない）
     foreach ($a in $script:BuildArchs) {

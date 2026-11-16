@@ -29,19 +29,12 @@ param([switch]$SelfTest)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
-# Invoke-Utf8Child: read a child's output as UTF-8 regardless of the console code page
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# Invoke-Utf8Child (UTF-8 child output) and Show-Ascii
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Curl = Join-Path $env:SystemRoot 'System32\curl.exe'
 $FetchCommand = "pwsh -NoProfile -File `"$(Join-Path $Root 'tools\sample-fetch.ps1')`""
-
-# Non-ASCII and control chars become \uXXXX (the idea of Show-Ascii in tools/encoding-check.ps1).
-function ConvertTo-AsciiText([string]$s) {
-    -join ($s.ToCharArray() | ForEach-Object {
-            if ([int]$_ -ge 0x20 -and [int]$_ -le 0x7E) { $_ } else { '\u{0:X4}' -f [int]$_ }
-        })
-}
 
 function Get-Sha256Hex([string]$Path) {
     (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -77,13 +70,13 @@ function Invoke-Curl([string]$Url, [string]$OutFile) {
         '--connect-timeout', '30', '--speed-limit', '1', '--speed-time', '60',
         '--output', $OutFile, $Url)
     if ($r.Code -eq 0) { return $null }
-    ConvertTo-AsciiText ("curl exit $($r.Code): " + ($r.ErrLines -join ' | '))
+    Show-Ascii ("curl exit $($r.Code): " + ($r.ErrLines -join ' | ')) 0
 }
 
 function Get-Remedy([string]$NarPath, [string]$ChecksumPath) {
-    'remedy: run again: ' + (ConvertTo-AsciiText $FetchCommand) +
-    ' ; or place both files by hand: ' + (ConvertTo-AsciiText $NarPath) + ' and ' +
-    (ConvertTo-AsciiText $ChecksumPath) + ' (see vendors/sample_ghost/README.md)'
+    'remedy: run again: ' + (Show-Ascii $FetchCommand 0) +
+    ' ; or place both files by hand: ' + (Show-Ascii $NarPath 0) + ' and ' +
+    (Show-Ascii $ChecksumPath 0) + ' (see vendors/sample_ghost/README.md)'
 }
 
 # One row of --fetch-list (5 columns). Returns Result = present | fetched | failed and the Lines to print.
@@ -97,9 +90,9 @@ function Sync-FetchedSample {
         [Parameter(Mandatory)][string]$ChecksumPath
     )
     $lines = [System.Collections.Generic.List[string]]::new()
-    $n = ConvertTo-AsciiText $Name
-    $u = ConvertTo-AsciiText $Url
-    $cu = ConvertTo-AsciiText $ChecksumUrl
+    $n = Show-Ascii $Name 0
+    $u = Show-Ascii $Url 0
+    $cu = Show-Ascii $ChecksumUrl 0
     $narTemp = "$NarPath.part-$PID"
     $sumTemp = "$ChecksumPath.part-$PID"
     function Done([string]$Result) { [pscustomobject]@{ Result = $Result; Lines = [string[]]$lines } }
@@ -181,9 +174,9 @@ function Invoke-FetchRows {
     )
     $count = @{ fetched = 0; present = 0; failed = 0 }
     foreach ($c in $Rows) {
-        $n = ConvertTo-AsciiText $c[0]
+        $n = Show-Ascii $c[0] 0
         if (-not $AnyScheme -and -not ($c[1].StartsWith('https://', [System.StringComparison]::Ordinal) -and $c[2].StartsWith('https://', [System.StringComparison]::Ordinal))) {
-            "sample-fetch: ${n}: FAILED only https:// URLs are fetched: $(ConvertTo-AsciiText $c[1]) $(ConvertTo-AsciiText $c[2])"
+            "sample-fetch: ${n}: FAILED only https:// URLs are fetched: $(Show-Ascii $c[1] 0) $(Show-Ascii $c[2] 0)"
             $count.failed++
             continue
         }
@@ -193,7 +186,7 @@ function Invoke-FetchRows {
             $count[$res.Result]++
         }
         catch {
-            "sample-fetch: ${n}: FAILED unexpected error for $(ConvertTo-AsciiText $c[1]): $(ConvertTo-AsciiText $_.Exception.Message); $(Get-Remedy $c[3] $c[4])"
+            "sample-fetch: ${n}: FAILED unexpected error for $(Show-Ascii $c[1] 0): $(Show-Ascii $_.Exception.Message 0); $(Get-Remedy $c[3] $c[4])"
             $count.failed++
         }
     }
@@ -321,7 +314,7 @@ if ($SelfTest) {
     }
     catch {
         $script:fails++
-        "FAIL selftest stopped: $(ConvertTo-AsciiText $_.Exception.Message)"
+        "FAIL selftest stopped: $(Show-Ascii $_.Exception.Message 0)"
     }
     finally {
         if (Test-Path -LiteralPath $place) { Remove-Item -LiteralPath $place -Recurse -Force }
@@ -340,21 +333,21 @@ try {
     $list = Invoke-Utf8Child cargo @('run', '--quiet', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', '--fetch-list')
 }
 catch {
-    "sample-fetch: could not run nar-sample-path --fetch-list: $(ConvertTo-AsciiText $_.Exception.Message)"
+    "sample-fetch: could not run nar-sample-path --fetch-list: $(Show-Ascii $_.Exception.Message 0)"
     exit 1
 }
 finally {
     Pop-Location
 }
 if ($list.Code -ne 0) {
-    "sample-fetch: nar-sample-path --fetch-list exited with code $($list.Code): $(ConvertTo-AsciiText ($list.ErrLines -join ' | '))"
+    "sample-fetch: nar-sample-path --fetch-list exited with code $($list.Code): $(Show-Ascii ($list.ErrLines -join ' | ') 0)"
     exit 1
 }
 $rows = @()
 foreach ($line in @($list.Out -split '\r?\n' | Where-Object { $_ -ne '' })) {
     $cols = $line -split "`t"
     if ($cols.Count -ne 5) {
-        "sample-fetch: nar-sample-path --fetch-list gave a line without 5 tab-separated columns: $(ConvertTo-AsciiText $line)"
+        "sample-fetch: nar-sample-path --fetch-list gave a line without 5 tab-separated columns: $(Show-Ascii $line 0)"
         exit 1
     }
     $rows += , $cols

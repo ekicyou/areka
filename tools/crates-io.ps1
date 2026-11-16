@@ -58,8 +58,8 @@ param([switch]$Verify, [string]$Version, [switch]$Pending)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
-# 子の出力を端末の文字コードに依らず UTF-8 で読む関数 Invoke-Utf8Child
-. (Join-Path $PSScriptRoot 'utf8-child.ps1')
+# 子の出力を UTF-8 で読む Invoke-Utf8Child と link.exe の手当て Get-MsvcLinkPath（共通の下回り）
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # =============================================================================
@@ -301,10 +301,8 @@ $crateDir = "$WORK_DIR/package/tmp-crate"
 Remove-Item -Path "$crateDir/*.crate", "$WORK_DIR/package/*.crate" -Force -ErrorAction Ignore
 $pArgs = $PUBLISH | ForEach-Object { '-p', $_ }
 if ($Verify) {
-    # test-all.ps1 と同じ手当て: MSVC 以外の link.exe（Git Bash の coreutils）を PATH から外す
-    $env:PATH = ($env:PATH -split ';' | Where-Object {
-            -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
-        }) -join ';'
+    # MSVC 以外の link.exe（Git Bash の coreutils）を PATH から外す
+    $env:PATH = Get-MsvcLinkPath $env:PATH
     $step = 'cargo publish --dry-run'
     cargo publish --dry-run --allow-dirty --locked --target-dir $WORK_DIR @pArgs
 } else {
