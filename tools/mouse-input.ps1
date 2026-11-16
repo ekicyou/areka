@@ -31,6 +31,10 @@
 
   Run: pwsh -NoProfile -File tools/mouse-input.ps1 -Action <action> -X <int> -Y <int>
          [-X2 <int> -Y2 <int>] [-Steps <int>] [-Out <absolute PNG path>] [-Press]
+
+  -SelfTest: reads this script (syntax tree) and checks that the button release is sent from
+  `finally`, never from `catch`. No screen or input is touched. Prints 'ok selftest <name>' or
+  'FAIL selftest <name>: <reason>'; exit 0 = passed, 1 = failed.
 #>
 #Requires -Version 7
 param(
@@ -41,15 +45,43 @@ param(
     [string]$Y2,
     [string]$Steps = '20',
     [string]$Out,
-    [switch]$Press
+    [switch]$Press,
+    [switch]$SelfTest
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
+# Show-Ascii (shared tool helpers)
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+
+# ---- -SelfTest (before argument checks and the Win32 type; touches no screen or input) -------
+if ($SelfTest) {
+    $reason = $null
+    $tokens = $null; $errs = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$tokens, [ref]$errs)
+    $isSend = { param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and "$($n.Member)" -eq 'SendInput' }
+    $isPressed = { param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.UserPath -eq 'pressed' }
+    $try = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.TryStatementAst] -and
+            $n.Body.Find({ param($m) $m -is [System.Management.Automation.Language.SwitchStatementAst] }, $true) }, $true)
+    if ($errs.Count -gt 0) { $reason = 'script has parse errors' }
+    elseif (-not $try) { $reason = 'no try around the action switch' }
+    elseif (-not $try.Finally) { $reason = 'try has no finally' }
+    elseif (-not $try.Finally.Find($isSend, $true)) { $reason = 'finally does not send the release (SendInput)' }
+    elseif (-not $try.Finally.Find($isPressed, $true)) { $reason = 'finally does not read the pressed-button variable' }
+    else {
+        foreach ($c in $try.CatchClauses) {
+            if ($c.Body.Find($isSend, $true)) { $reason = 'catch sends input (the release must be in finally)' }
+        }
+    }
+    if ($reason) { Write-Output "FAIL selftest release-in-finally: $(Show-Ascii $reason 0)"; exit 1 }
+    Write-Output 'ok selftest release-in-finally'
+    exit 0
+}
+
 function Exit-With([int]$Code, [string]$Line) {
     # Exception messages can be localized; the terminal gets ASCII only.
-    Write-Output ($Line -replace '[^\x20-\x7E]', '?')
+    Write-Output (Show-Ascii $Line 0)
     exit $Code
 }
 
@@ -216,7 +248,7 @@ try {
             Send-Mouse $px $py 0
             Assert-CursorAt $px $py
             if ($Press) {
-                $pressed = $LEFTUP  # the catch below releases if the read throws
+                $pressed = $LEFTUP  # the finally below releases if the read throws
                 Send-Mouse $px $py $LEFTDOWN
                 Start-Sleep -Milliseconds 80
                 Write-Output ((Read-CursorLine) + ' pressed=1')
@@ -228,9 +260,10 @@ try {
         }
     }
 } catch {
-    $reason = $_.Exception.Message
+    Exit-With 1 "error $($_.Exception.Message)"
+} finally {
     if ($pressed -ne 0) {
-        # never leave a button held down
+        # never leave a button held down (runs on success, failure and exit)
         $release = New-Object AkMouseInputW32+INPUT
         $release.type = 0
         $releaseMouse = New-Object AkMouseInputW32+MOUSEINPUT
@@ -238,6 +271,5 @@ try {
         $release.mi = $releaseMouse
         $null = [AkMouseInputW32]::SendInput(1, @($release), [AkMouseInputW32]::InputSize())
     }
-    Exit-With 1 "error $reason"
 }
 Exit-With 0 "ok $Action x=$px y=$py"

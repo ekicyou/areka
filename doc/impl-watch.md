@@ -109,14 +109,14 @@
 
    `<メインの作業コピー>` は、リポジトリの本体の作業コピー（共通の git フォルダ `.git` の親。`git rev-parse --path-format=absolute --git-common-dir` の親）の `C:\…` の形の絶対パスである。既定の枝の最新を取り込んだ作業コピーで走らせる。どのフォルダから呼んでも同じに動き、今のフォルダを変えない。
 
-   道具は、スクリプトの在る作業コピーのソースから実行ファイルを release でビルドし、置き場所のフォルダが無ければ作って `areka-impl-watch.exe` を置き、置いたものの `--help` を呼んで確かめる。うまくいけば次の行が出て、終了コード 0 で終わる。
+   道具は、スクリプトの在る作業コピーのソースから実行ファイルを release でビルドし、置き場所のフォルダが無ければ作って新しいものを `areka-impl-watch.new.exe` として写し、その `--help` を呼んで確かめてから `areka-impl-watch.exe` として置く。続けて置いたもので `status` を呼ぶ。うまくいけば次の行が出て、終了コード 0 で終わる。
 
    ```
-   OK placed areka-impl-watch.exe
    OK check: --help exit 0
+   OK placed areka-impl-watch.exe
    ```
 
-   最後の `OK check: --help exit 0` が確かめである。別に `status` を呼ばなくてよい。
+   `OK check: --help exit 0` が確かめである。別に `status` を呼ばなくてよい。
 
    うまくいかなければ、`FAIL` で始まる行を出して終了コード 1 で終わる。
 
@@ -125,8 +125,10 @@
    | `FAIL home: AREKA_IMPL_WATCH_HOME is not set` | 環境変数が無い・空。手順 1 をして、新しい端末で走らせ直す |
    | `FAIL home: AREKA_IMPL_WATCH_HOME is not an absolute path` | 値が `C:\…` の形でない。下の「環境変数について」のとおり直す |
    | `FAIL build: cargo exit <n>`・`FAIL build: no executable in cargo output` | ビルドに失敗した（cargo のエラーの行がその前に出る）。置き場所には触っていない |
-   | `FAIL place: copy`・`FAIL place: rename` | 置き場所に書けなかった。前の実行ファイルは元のまま残っている |
-   | `FAIL check: --help exit <n>` | 置いたものが動かなかった |
+   | `FAIL place: copy`・`FAIL place: rename` | 置き場所に書けなかった。前の実行ファイルは元のまま残っている（`FAIL place: rename; restore failed` のときだけは、前のものが `areka-impl-watch.old-<UTC>.exe` の名前で残っている） |
+   | `FAIL check: --help exit <n>` | 置いたものでなく、置く前の新しいもの（`areka-impl-watch.new.exe`）が動かなかった。置き場所は前のまま（新しいものは消す。消せなければ `FAIL cleanup: cannot remove areka-impl-watch.new.exe: <理由>` も出る） |
+   | `FAIL check: cannot start: <理由>` | 置く前の新しいものを起こせなかった。置き場所は前のまま |
+   | `FAIL status: exit <n>` | 置いた後の `status` が失敗した（状態ファイルが読めない・握られている・書けない）。`status` の標準エラーの最後の行がその前に出る |
 
    道具は環境変数の値を画面へ出さず、設定も変更もしない。
 
@@ -148,13 +150,13 @@
 
 2 節の手順 2 と同じコマンドをもう一度走らせる。誰かが待ち・見張りで走らせている間でもよい（Windows は、動いている実行ファイルの上書きはできないが、改名はできる）。手順はいつもこの 1 通りである。
 
-道具は、今の `areka-impl-watch.exe` を `areka-impl-watch.old-<UTC>.exe` へ改名してから新しいものを置き、続けて古い実行ファイル（前の形の `areka-impl-watch.old.exe` も）を 1 つずつ消してみる。走っていた待ち・見張りは古いもののまま続き、その後の呼び出しから新しいものが使われる。出る行は次の形である。
+道具は、新しいものを `areka-impl-watch.new.exe` として写して確かめ、今の `areka-impl-watch.exe` を `areka-impl-watch.old-<UTC>.exe` へ改名してから新しいものを置き、続けて古い実行ファイル（前の形の `areka-impl-watch.old.exe` も）を 1 つずつ消してみる。確かめが通ってから置き換え、通らなければ前のものに触らない。走っていた待ち・見張りは古いもののまま続き、その後の呼び出しから新しいものが使われる。出る行は次の形である。
 
 ```
+OK check: --help exit 0
 OK renamed previous to areka-impl-watch.old-20261016T020500Z.exe
 OK placed areka-impl-watch.exe
 OK removed areka-impl-watch.old-20261016T020500Z.exe
-OK check: --help exit 0
 ```
 
 誰かが古いものを走らせていると、`OK removed …` の代わりに `KEEP areka-impl-watch.old-<UTC>.exe (in use; run again later)` と出る。そのままでよい。残った古いものは、次に道具を走らせたときに消える。

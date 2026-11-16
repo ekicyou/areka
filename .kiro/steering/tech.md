@@ -95,6 +95,13 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **段 `release notes check`**（`tools/release-notes.ps1 -SelfTest`・段 `encoding check` の後、`-License` の段の前・ネットを使わない）: リリースノートの道具の自分の検査。見本の題名と見本の見どころ（`tools/release-notes-fixture/`）から作った詳しいリリースノートと Release の本文が期待の文と 1 字違わず同じこと、見本から 1 か所ずつ外した見どころが決まった欠けの名前で落ちること、`doc/release-notes/v*.md` の実物が全部通ることを確かめる（2026-10-11 `areka-P0-release-notes-highlights`）
 - **段 `roadmap overview check`**（`.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest`・段 `release notes check` の後、`-License` の段の前・ネットを使わない）: 俯瞰の HTML の道具の自分の検査。文言のファイル（`.claude/skills/kiro-next/overview/roadmap-overview.strings.json`）とひな形（同じフォルダの `roadmap-overview.template.html`）の形、見本の roadmap（同じフォルダの `roadmap-overview-fixture/`）から読んだデータと組み立てた HTML が期待のとおりなこと、見本から 1 か所ずつ崩した入力が決まった名前で落ちることを確かめる。実物の `roadmap.md` は通さない（書き方が変わるたびに赤にしないため・2026-10-16 `areka-P0-roadmap-overview-html`。道具と文言・ひな形・見本は同じ日に `tools/` からスキルのフォルダへ移した）
 - **段 `i686 helper sync check`**（`tools/sync-i686-helper.ps1 -SelfTest`・段 `roadmap overview check` の後・ネットを使わない）と**最後の段 `i686 helper beside areka.exe`**（`tools/sync-i686-helper.ps1`・`-License` の段の後）: 途中の段が x64 版で上書きしても、終わった後の `target\debug\areka.exe` の隣の `shiori-host32-helper.exe` を i686 版に揃え、揃ったかだけで合否を返す。i686 版の判定は `shiori-host32-host` の `classify_helper_image` と同じ規則（2026-10-16 `areka-P0-dev-helper-x64-clobber`）。自分の検査の段 `sample fetch check` はこの後に回る
+- **段 `package check`**（`tools/package.ps1 -SelfTest`・段 `sample fetch check` の後・ネットを使わない）: 梱包の道具の自分の検査。判定の関数（`Test-RunLog`・`Test-ZipContent`・`Read-PeInfo`・`Get-DeniedImports`・`Test-PackageArgs`）を、コミット済みの検体だけで回す（中身は `tools/package.selftest.ps1`）
+- **段 `exe install check`**（`tools/exe-install.selftest.ps1`・段 `package check` の後・ネットを使わない）: exe を机へ置く手順（`tools/exe-install.ps1`）の分かれ道を、`target\exe-install-selftest\` の下の偽の置き場と偽の確かめで回す。本物の置き場には触れない
+- **段 `load flake check`**（`tools/load-flake.ps1 -SelfTest`・段 `exe install check` の後・ネットを使わない）: 揺れるテストの道具の自分の検査
+- **段 `mouse input check`**（`tools/mouse-input.ps1 -SelfTest`・段 `load flake check` の後・ネットを使わない）: マウス入力の道具の自分の検査
+- **段 `app icon check`**（`tools/app-icon.ps1 -SelfTest`・段 `mouse input check` の後・ネットを使わない）: アプリアイコンの道具の自分の検査
+- **段 `cursor art check`**（`tools/cursor-art.ps1 -SelfTest`・段 `app icon check` の後・ネットを使わない）: カーソルの絵の道具の自分の検査。コミット済みの出力が今の入力から組んだものと同じかを見るので、OS の更新で塗りが変わると赤になりうる
+- **段 `perf loop selftest`**（`tools/perf/perf-loop.ps1 selftest`・段 `cursor art check` の後、`-License` の段の前・いちばん長い）: 性能改善ループの道具の自分の検査。Python 3.11 以上が要る。昇格した机でも本物の採取をしない
 
 **道具が端末へ出す文は ASCII だけ・端末の文字コードを書き替えない**（`tools/` と `tools/perf/` のスクリプト、スキルの中のスクリプト、workflow の `run:` の本文・子の中でも書き替えない）: 進みの表示・失敗の文・判定の結果の行・投げる例外の文は英語（ASCII）で書く。`[Console]::OutputEncoding` などの代入や `chcp` で端末を書き替えて逃げない。子のプロセスの出力を値として読む所（JSON・パス・版）は `tools/utf8-child.ps1` の `Invoke-Utf8Child` で UTF-8 のバイトとして読む。子の出力をそのまま写すだけの所は中身を書き替えない。写す所でも、子の出力を `2>&1 |` などパイプで受けて写すと端末の文字コードで解かれて化ける（932 の端末で `cargo deny` の罫線が `笏娯楳` のように崩れた）ので、`Invoke-Utf8Child` で読んでから行として写すか、パイプに通さず端末へ直接書かせる。注記・段の名前（workflow）・手順書の地の文は日本語のままでよい
 
@@ -107,6 +114,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - Windows 10 1903 以降／Windows 11（Windows.UI.Composition 対応・ブレンドの口 `ID2D1DeviceContext6::BlendImage` が要る。1903 より前ではブレンドだけが `SOURCE_OVER` で描かれる）
 - Visual Studio Build Tools（Windows SDKが必要）
 - `cargo-deny`・`cargo-about`（全体テストの `-License` の段）
+- Python 3.11 以上（全体テストの段 `perf loop selftest`）
 
 ### マルチアーキテクチャ・ターゲット（host-32 トラック）
 - 最終成果物は **x64＋arm64 ネイティブ両対応**、**i686 は 32bit SHIORI 駆動の helper のみ**（ターゲットは crate 境界で分離・`cfg` 分岐回避）

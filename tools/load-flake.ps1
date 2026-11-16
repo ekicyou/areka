@@ -9,7 +9,8 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
      （失敗したら負荷を起こさずに summary.txt へ書いて終わる）
   ⑵ マシン全体の CPU（`\Processor(_Total)\% Processor Time`）を 5 秒採って記録する
   ⑶ CPU を回すだけの子（pwsh の空の繰り返し）を -Burners 本起こし、番号を控え、
-     負荷の最中の CPU をもう一度 5 秒採る
+     負荷の最中の CPU をもう一度 5 秒採る。子には親（このスクリプト）の番号を渡し、
+     親が消えたら子は自分で終わる（親を強く止めても負荷の子が残らない）
   ⑷ 回ごとに `cargo test -p areka --bin areka -- <Filter> [--test-threads N] [--nocapture]` を回し、
      標準出力と標準エラーを 1 つのファイル round-N.log へバイトのまま保存する
      （cmd の `> file 2>&1`。コンソールの文字コードを通さない）。
@@ -45,6 +46,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
   pwsh -NoProfile -File tools/load-flake.ps1 -Label smoke -Rounds 1 -Burners 2 -Filter some::test
   pwsh -NoProfile -File tools/load-flake.ps1 -Label quiet -Burners 0 -Rounds 3
   pwsh -NoProfile -File tools/load-flake.ps1 -Label case1 -Filter runtime::frame -SetEnv RUST_LOG=trace
+  pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest   # 自分の検査だけ（ほかの引数は取らない）
   pwsh -NoProfile -File tools/load-flake.ps1 -Label case3 -Binary wintf-lib -Filter begin_draw_roundtrip,alpha_mask_resource,bitmap_source -Burners 0
 
 spec areka-test-binary-stability（design「LoadFlake」）で足した口:
@@ -56,26 +58,28 @@ spec areka-test-binary-stability（design「LoadFlake」）で足した口:
 ================================================================================
 #>
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
     # 出力のフォルダの名前（before／after／任意）。ファイル名に使える文字だけ
-    [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9._-]+$')][string]$Label,
-    [ValidateRange(1, 1000)][int]$Rounds = 5,
+    [Parameter(Mandatory, ParameterSetName = 'Run')][ValidatePattern('^[A-Za-z0-9._-]+$')][string]$Label,
+    [Parameter(ParameterSetName = 'Run')][ValidateRange(1, 1000)][int]$Rounds = 5,
     # 既定は論理 CPU の数 × 2。0 なら負荷なし
-    [ValidateRange(0, 4096)][int]$Burners = -1,
+    [Parameter(ParameterSetName = 'Run')][ValidateRange(0, 4096)][int]$Burners = -1,
     # テストの名前の絞り込み（空なら実行ファイルの全部）
-    [string[]]$Filter = @(),
+    [Parameter(ParameterSetName = 'Run')][string[]]$Filter = @(),
     # 回す実行ファイル（areka-bin＝-p areka --bin areka・wintf-lib＝-p wintf --lib・areka-placement-lib＝-p areka-placement --lib）
-    [ValidateSet('areka-bin', 'wintf-lib', 'areka-placement-lib')][string]$Binary = 'areka-bin',
+    [Parameter(ParameterSetName = 'Run')][ValidateSet('areka-bin', 'wintf-lib', 'areka-placement-lib')][string]$Binary = 'areka-bin',
     # 子の cargo にだけ渡す環境変数（NAME=VALUE の並び）
-    [string[]]$SetEnv = @(),
+    [Parameter(ParameterSetName = 'Run')][string[]]$SetEnv = @(),
     # --ignored --exact を渡す（較正のため）
-    [switch]$Ignored,
+    [Parameter(ParameterSetName = 'Run')][switch]$Ignored,
     # --test-threads にそのまま渡す（0 なら渡さない）
-    [ValidateRange(0, 4096)][int]$TestThreads = 0,
-    [ValidateRange(1, 1440)][int]$RoundTimeoutMin = 30,
+    [Parameter(ParameterSetName = 'Run')][ValidateRange(0, 4096)][int]$TestThreads = 0,
+    [Parameter(ParameterSetName = 'Run')][ValidateRange(1, 1440)][int]$RoundTimeoutMin = 30,
     # --nocapture を渡す（緑のテストの標準エラー＝`sample-ghost-kit:` の後片付けの失敗も round-N.log に残す）
-    [switch]$NoCapture
+    [Parameter(ParameterSetName = 'Run')][switch]$NoCapture,
+    # 自分の検査だけを回す（出力のフォルダを作らない・cargo を起こさない）
+    [Parameter(Mandatory, ParameterSetName = 'SelfTest')][switch]$SelfTest
 )
 
 Set-StrictMode -Version Latest
@@ -86,21 +90,18 @@ $WaitCutPrefix = "`u{5F85}`u{3061}`u{306E}`u{6253}`u{3061}`u{5207}`u{308A}"
 $COUNTER_PATH_MACHINE_CPU = '\Processor(_Total)\% Processor Time'
 $CPU_SAMPLE_SEC = 5
 $UTF8 = [System.Text.UTF8Encoding]::new($false)
+# 負荷の子の命令（較正値）。__PARENT__ を親の番号に替える。親が居なければ直ちに 0、
+# 親が消えたのを内側の空回し 10 万回ごとに見て自分で終わる。空回しは PowerShell の解釈の繰り返しのまま
+# （tech.md の「許す赤」の負荷の性質を変えない）
+$BURNER_COMMAND = 'try { $p = Get-Process -Id __PARENT__ -ErrorAction Stop } catch { exit 0 }; while (-not $p.HasExited) { for ($i = 0; $i -lt 100000; $i++) { } }; exit 0'
 
-# pwsh -File では a,b が 1 つの文字列で来るので , でも分ける（値に , を含む環境変数は渡せない）
-$Filter = @($Filter | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
-$SetEnv = @($SetEnv | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
-foreach ($kv in $SetEnv) { if ($kv -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw "-SetEnv expects NAME=VALUE: $kv" } }
-
-$logicalCpus = [Environment]::ProcessorCount
-if ($Burners -lt 0) { $Burners = $logicalCpus * 2 }
+# Show-Ascii (shared tool helpers)
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$outDir = Join-Path $repoRoot ("target\load-flake\{0}-{1}" -f $Label, (Get-Date -Format 'yyyyMMdd-HHmmss'))
-New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-# 端末へは ASCII だけ（例外の文言など ASCII 以外は ? に置き換える。全文は summary.txt に残る）
-function Say([string]$msg) { Write-Host ("[load-flake] " + ($msg -replace '[^\x20-\x7E]', '?')) }
+# 端末へは ASCII だけ（例外の文言など ASCII 以外は \uXXXX にする。全文は summary.txt に残る）
+function Say([string]$msg) { Write-Host ("[load-flake] " + (Show-Ascii $msg 0)) }
 
 function Add-Text([string]$file, [string[]]$lines) {
     [IO.File]::AppendAllLines((Join-Path $outDir $file), $lines, $UTF8)
@@ -199,6 +200,148 @@ function Read-Round([string]$logPath) {
     return $r
 }
 
+# 回す実行ファイルの cargo の的（今の選び肢のまま）
+function Get-CargoTestTarget([Parameter(Mandatory)][string]$Binary) {
+    switch ($Binary) {
+        'wintf-lib' { return '-p wintf --lib' }
+        'areka-placement-lib' { return '-p areka-placement --lib' }
+        default { return '-p areka --bin areka' }
+    }
+}
+
+# cargo test の的の後ろの引数（libtest へ渡す分）を組み立てる
+function Get-CargoTestArgs([string]$Target, [string[]]$Filter, [bool]$Ignored, [int]$TestThreads, [bool]$NoCapture) {
+    $a = "$Target --"
+    foreach ($f in $Filter) { if ($f) { $a += " `"$f`"" } }
+    if ($Ignored) { $a += ' --ignored --exact' }
+    if ($TestThreads -gt 0) { $a += " --test-threads $TestThreads" }
+    if ($NoCapture) { $a += ' --nocapture' }
+    return $a
+}
+
+# 負荷の子を 1 本起こす。子は親（$ParentId）が消えたら自分で終わる（親が既に居なければ直ちに 0 で終わる）
+function Start-Burner([Parameter(Mandatory)][string]$PwshExe, [Parameter(Mandatory)][int]$ParentId) {
+    $cmd = $BURNER_COMMAND.Replace('__PARENT__', [string]$ParentId)
+    return Start-Process -FilePath $PwshExe -ArgumentList '-NoProfile', '-NonInteractive', '-Command', $cmd -WindowStyle Hidden -PassThru
+}
+
+if ($PSCmdlet.ParameterSetName -eq 'SelfTest') {
+    # 自分の検査（design の T2 の 5 本）。出力のフォルダも cargo も起こさない。子は stop tree の 1 木と
+    # burner ends with its parent の偽の親と負荷の子 1 本だけ（約 1 秒・要件 8.3 の裁定で負荷の走行に数えない）。
+    # 書くのは target\load-flake-selftest\<pid>\ だけで、終わったら消す。1 本 1 行: ok selftest <名前> / FAIL selftest <名前>: <ASCII>
+    function Assert([bool]$Cond, [string]$Why) { if (-not $Cond) { throw $Why } }
+    $top = Join-Path $repoRoot 'target\load-flake-selftest'
+    $base = Join-Path $top "$PID"
+    $checks = [ordered]@{
+        'read round'                  = {
+            $log = Join-Path $base 'round-1.log'
+            [IO.File]::WriteAllLines($log, [string[]]@(
+                    'running 4 tests'
+                    'test a::b ... FAILED'
+                    'test e::f ... ok'
+                    "$WaitCutPrefix (wait cut)"
+                    'noise AREKA-CRASH in the middle'
+                    'x sample-ghost-kit: cleanup failed (os error 5)'
+                    'sample-ghost-kit: cleanup failed (os error 32)'
+                    ''
+                    'failures:'
+                    ''
+                    '---- a::b stdout ----'
+                    'panic'
+                    ''
+                    'failures:'
+                    '    a::b'
+                    '    c::d'
+                    ''
+                    'test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out'
+                    'test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out'
+                ), $UTF8)
+            $r = Read-Round $log
+            Assert ($r.ResultLines.Count -eq 2) "result lines $($r.ResultLines.Count)"
+            Assert ($r.Passed -eq 7 -and $r.Failed -eq 2) "passed $($r.Passed) failed $($r.Failed)"
+            Assert (($r.FailedNames -join ',') -ceq 'a::b,c::d') "failed names $($r.FailedNames -join ',')"
+            Assert ($r.WaitLines.Count -eq 1) "wait lines $($r.WaitLines.Count)"
+            Assert ($r.CrashLines.Count -eq 1) "crash lines $($r.CrashLines.Count)"
+            Assert ($r.CleanupLines.Count -eq 2 -and $r.OsError5 -eq 1) "cleanup lines $($r.CleanupLines.Count) os error 5 $($r.OsError5)"
+        }
+        'median'                      = {
+            Assert ((Get-Median @()) -eq 0) 'empty'
+            Assert ((Get-Median @(3, 1, 2)) -eq 2) "odd $(Get-Median @(3, 1, 2))"
+            Assert ((Get-Median @(4, 1, 3, 2)) -eq 2.5) "even $(Get-Median @(4, 1, 3, 2))"
+        }
+        'cargo args'                  = {
+            $want = [ordered]@{ 'areka-bin' = '-p areka --bin areka'; 'wintf-lib' = '-p wintf --lib'; 'areka-placement-lib' = '-p areka-placement --lib' }
+            foreach ($k in $want.Keys) { Assert ((Get-CargoTestTarget $k) -ceq $want[$k]) "target $k = $(Get-CargoTestTarget $k)" }
+            $a = Get-CargoTestArgs -Target '-p wintf --lib' -Filter @('x::y', 'z') -Ignored $true -TestThreads 2 -NoCapture $true
+            Assert ($a -ceq '-p wintf --lib -- "x::y" "z" --ignored --exact --test-threads 2 --nocapture') "all: $a"
+            $a = Get-CargoTestArgs -Target '-p areka --bin areka' -Filter @() -Ignored $false -TestThreads 0 -NoCapture $false
+            Assert ($a -ceq '-p areka --bin areka --') "none: $a"
+        }
+        'stop tree'                   = {
+            $psi = [System.Diagnostics.ProcessStartInfo]::new('cmd.exe', '/d /c "ping -n 30 127.0.0.1 >nul"')
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+            $cmd = [System.Diagnostics.Process]::Start($psi); $ping = $null
+            try {
+                $deadline = (Get-Date).AddSeconds(10)
+                while ($null -eq $ping -and (Get-Date) -lt $deadline) {
+                    $c = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($cmd.Id) AND Name='PING.EXE'")
+                    if ($c.Count) { $ping = Get-Process -Id $c[0].ProcessId -ErrorAction SilentlyContinue } else { Start-Sleep -Milliseconds 100 }
+                }
+                Assert ($null -ne $ping) 'ping did not start under cmd'
+                # Stop-Tree は止めた木を 30 秒まで待つ。ping が自分で終わる（約 29 秒）より前に止まったことを見る
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                Stop-Tree $cmd
+                Assert ($cmd.HasExited -and $ping.HasExited) 'cmd or ping still running'
+                Assert ($sw.Elapsed.TotalSeconds -lt 10) "tree ended only after $([int]$sw.Elapsed.TotalSeconds) s"
+            } finally {
+                foreach ($p in @($ping, $cmd)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; $null = $p.WaitForExit(10000) } }
+            }
+        }
+        'burner ends with its parent' = {
+            $pwshExe = (Get-Process -Id $PID).Path
+            $parent = $null; $burner = $null
+            try {
+                # 偽の親は空回ししない
+                $parent = Start-Process -FilePath $pwshExe -ArgumentList '-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep 30' -WindowStyle Hidden -PassThru
+                $burner = Start-Burner -PwshExe $pwshExe -ParentId $parent.Id
+                $null = $burner.Handle   # 取っ手を握っておく（終わった後に ExitCode を読むため）
+                Start-Sleep -Seconds 1
+                Assert (-not $burner.HasExited) 'burner ended while its parent was alive'
+                Stop-Process -Id $parent.Id -Force
+                Assert $burner.WaitForExit(10000) 'burner still running 10 s after its parent ended'
+                Assert ($burner.ExitCode -eq 0) "burner exit $($burner.ExitCode)"
+            } finally {
+                foreach ($p in @($burner, $parent)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; $null = $p.WaitForExit(10000) } }
+            }
+        }
+    }
+    $failed = 0
+    try {
+        [void][IO.Directory]::CreateDirectory($base)
+        foreach ($name in $checks.Keys) {
+            try { $null = & $checks[$name]; Write-Host "ok selftest $name" }
+            catch { $failed++; Write-Host "FAIL selftest ${name}: $(Show-Ascii $_.Exception.Message 0)" }
+        }
+    } finally {
+        try {
+            if ([IO.Directory]::Exists($base)) { [IO.Directory]::Delete($base, $true) }
+            if ([IO.Directory]::Exists($top) -and -not [IO.Directory]::EnumerateFileSystemEntries($top).GetEnumerator().MoveNext()) { [IO.Directory]::Delete($top) }
+        } catch { $failed++; Write-Host "FAIL selftest cleanup: $(Show-Ascii $_.Exception.Message 0)" }
+    }
+    exit ([int]($failed -gt 0))
+}
+
+# pwsh -File では a,b が 1 つの文字列で来るので , でも分ける（値に , を含む環境変数は渡せない）
+$Filter = @($Filter | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$SetEnv = @($SetEnv | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+foreach ($kv in $SetEnv) { if ($kv -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw "-SetEnv expects NAME=VALUE: $kv" } }
+
+$logicalCpus = [Environment]::ProcessorCount
+if ($Burners -lt 0) { $Burners = $logicalCpus * 2 }
+
+$outDir = Join-Path $repoRoot ("target\load-flake\{0}-{1}" -f $Label, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
 $exitCode = 0
 $status = 'ok'
 $burnerProcs = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
@@ -206,16 +349,8 @@ $roundResults = [System.Collections.Generic.List[object]]::new()
 $current = $null
 $startedAt = Get-Date
 
-$target = switch ($Binary) {
-    'wintf-lib' { '-p wintf --lib' }
-    'areka-placement-lib' { '-p areka-placement --lib' }
-    default { '-p areka --bin areka' }
-}
-$testArgs = "$target --"
-foreach ($f in $Filter) { if ($f) { $testArgs += " `"$f`"" } }
-if ($Ignored) { $testArgs += ' --ignored --exact' }
-if ($TestThreads -gt 0) { $testArgs += " --test-threads $TestThreads" }
-if ($NoCapture) { $testArgs += ' --nocapture' }
+$target = Get-CargoTestTarget $Binary
+$testArgs = Get-CargoTestArgs -Target $target -Filter $Filter -Ignored $Ignored.IsPresent -TestThreads $TestThreads -NoCapture $NoCapture.IsPresent
 
 $commit = (& git -C $repoRoot rev-parse HEAD 2>$null) -join ''
 $dirty = if ((& git -C $repoRoot status --porcelain 2>$null)) { 'yes' } else { 'no' }
@@ -259,7 +394,7 @@ try {
         $pwshExe = (Get-Process -Id $PID).Path
         try {
             for ($i = 0; $i -lt $Burners; $i++) {
-                $burnerProcs.Add((Start-Process -FilePath $pwshExe -ArgumentList '-NoProfile', '-NonInteractive', '-Command', 'while($true){}' -WindowStyle Hidden -PassThru))
+                $burnerProcs.Add((Start-Burner -PwshExe $pwshExe -ParentId $PID))
             }
         } catch {
             $status = "burner start failed after $($burnerProcs.Count) of ${Burners}: $($_.Exception.Message)"

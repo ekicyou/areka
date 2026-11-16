@@ -1,11 +1,12 @@
 # areka v1.2.3 の詳しいリリースノート
 
-最初から v1.2.3 までに入ったすべての変更です（15 件）。
+最初から v1.2.3 までに入ったすべての変更です（17 件）。
 
 ## 新しい機能
 
 - さくらスクリプトのアンカー \_a[ID]…\_a を働かせる ([#286](https://github.com/owner/name/pull/286))
 - PR を通していない古い変更
+- 検査の道具の下回りをひとつにまとめる ([#400](https://github.com/owner/name/pull/400))
 
 ## そのほかの変更
 
@@ -25,3 +26,4 @@
 - Feat(big-type): 種類が大文字で始まる題名 ([#301](https://github.com/owner/name/pull/301))
 - スコープの途中に印が在る題名 ([#302](https://github.com/owner/name/pull/302))
 - nested の印を外した跡に印がまた現れる題名
+- 一覧に無いスコープの題名 ([#402](https://github.com/owner/name/pull/402))
