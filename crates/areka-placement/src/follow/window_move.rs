@@ -1074,8 +1074,12 @@ fn apply_balloon_limit_gate(
         return proposed;
     };
 
-    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area);
-    let (BalloonPlace::Flipped(corrected) | BalloonPlace::Pushed(corrected)) = place else {
+    // 判定に入れるキャラ窓の列は task 3.2 で組む（今は空＝重なりの段は効かない）。
+    let place = place_balloon_in_work_area(proposed, target_size, char_rect, area, &[]);
+    let (BalloonPlace::Flipped(corrected)
+    | BalloonPlace::Pushed(corrected)
+    | BalloonPlace::PushedOverlap { to: corrected, .. }) = place
+    else {
         return proposed;
     };
 

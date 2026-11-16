@@ -67,7 +67,7 @@ fn placement(scope: usize, char_pos: PointPx, offset: PointPx, limit: bool) -> S
 #[test]
 fn left_side_balloon_of_left_edge_window_flips_to_the_right_keeping_y() {
     let pos = point(-872, 904);
-    let got = place_balloon_in_work_area(pos, BSZ, rect_of(left_edge_char(), CSZ), WA);
+    let got = place_balloon_in_work_area(pos, BSZ, rect_of(left_edge_char(), CSZ), WA, &[]);
     assert_eq!(got, BalloonPlace::Flipped(point(1108, 904)));
     assert_eq!(got.how(), "flipped");
 }
@@ -78,7 +78,7 @@ fn right_side_balloon_of_right_edge_window_flips_to_the_left() {
     let char_pos = point(2880 - 1108, 300);
     // 右隣から 20px 離れたバルーン（間合い 20）→ 左隣でも間合い 20。
     let pos = point(2880 + 20, 300);
-    let got = place_balloon_in_work_area(pos, BSZ, rect_of(char_pos, CSZ), WA);
+    let got = place_balloon_in_work_area(pos, BSZ, rect_of(char_pos, CSZ), WA, &[]);
     assert_eq!(got, BalloonPlace::Flipped(point(1772 - 20 - 872, 300)));
 }
 
@@ -86,7 +86,7 @@ fn right_side_balloon_of_right_edge_window_flips_to_the_left() {
 #[test]
 fn flipped_position_overflowing_only_vertically_is_clamped_vertically() {
     let pos = point(-872, 1504); // 下端 1904 > 1704
-    let got = place_balloon_in_work_area(pos, BSZ, rect_of(left_edge_char(), CSZ), WA);
+    let got = place_balloon_in_work_area(pos, BSZ, rect_of(left_edge_char(), CSZ), WA, &[]);
     assert_eq!(got, BalloonPlace::Flipped(point(1108, 1704 - 400)));
 }
 
@@ -126,7 +126,7 @@ fn fallback_cases_return_the_current_push_in() {
     ];
     for (label, pos, char_rect, area) in cases {
         let pushed = limit_correction(pos, BSZ, area).expect("探針: はみ出している");
-        let got = place_balloon_in_work_area(pos, BSZ, char_rect, area);
+        let got = place_balloon_in_work_area(pos, BSZ, char_rect, area, &[]);
         assert_eq!(got, BalloonPlace::Pushed(pushed), "{label}");
         assert_eq!(got.how(), "pushed", "{label}");
     }
@@ -135,8 +135,118 @@ fn fallback_cases_return_the_current_push_in() {
 /// 収まっていれば動かさない（`limit_correction` の `None` と同じ）。
 #[test]
 fn fitting_balloon_is_left_alone() {
-    let got = place_balloon_in_work_area(point(1108, 904), BSZ, rect_of(left_edge_char(), CSZ), WA);
+    let got = place_balloon_in_work_area(
+        point(1108, 904),
+        BSZ,
+        rect_of(left_edge_char(), CSZ),
+        WA,
+        &[],
+    );
     assert_eq!(got, BalloonPlace::Fits);
+}
+
+// ---------------------------------------------------------------------------
+// 映した先がほかのキャラ窓に重なるときの押し込み（balloon-flip-side-rules 要件 2.1〜2.9・5.3）
+// ---------------------------------------------------------------------------
+
+/// 左端の窓の左隣のバルーン（映した先は 1108〜1980 × 904〜1304）。
+fn left_side_pos() -> PointPx {
+    point(-872, 904)
+}
+
+/// 映した先が相方の窓と縦にも横にも重なる（相方の上端 904 がバルーンの下端 1304 より上）→
+/// 並べ替えず今の押し込み（要件 2.1・5.3 の赤の 1 件）。
+#[test]
+fn flip_target_overlapping_partner_window_is_pushed_instead() {
+    let own = rect_of(left_edge_char(), CSZ);
+    let partner = rect_of(point(1108, 904), CSZ);
+    let pushed = limit_correction(left_side_pos(), BSZ, WA).expect("探針: はみ出している");
+    let got = place_balloon_in_work_area(left_side_pos(), BSZ, own, WA, &[(0, own), (1, partner)]);
+    assert_eq!(
+        got,
+        BalloonPlace::PushedOverlap {
+            to: pushed,
+            scope: 1
+        }
+    );
+    assert_eq!(got.how(), "pushed");
+    assert_eq!(got.overlap_scope(), Some(1));
+}
+
+/// `window-work-area-clamp` 4.3 ⑴ の形: 映した先 232〜1032 × 352〜800 は相方の窓
+/// （764〜1436 × 904〜1704）と縦に重ならないので並べ替える（要件 2.2・5.3）。
+#[test]
+fn shape_4_3_1_flips_because_partner_is_below() {
+    let own = rect_of(point(0, 610), SizePx { w: 764, h: 1094 });
+    let partner = rect_of(point(764, 904), SizePx { w: 672, h: 800 });
+    let got = place_balloon_in_work_area(
+        point(-268, 352),
+        SizePx { w: 800, h: 448 },
+        own,
+        WA,
+        &[(0, own), (1, partner)],
+    );
+    assert_eq!(got, BalloonPlace::Flipped(point(232, 352)));
+    assert_eq!(got.overlap_scope(), None);
+}
+
+/// 本体と相方が同じ位置に重なる形（配布版のぱすた・バルーンがシェルに 476 食い込む）:
+/// 映した先と相方の交わりは自分の窓に収まるので数えない（要件 2.4）。
+#[test]
+fn partner_at_same_position_as_own_window_is_not_counted() {
+    let own = rect_of(left_edge_char(), CSZ);
+    let got =
+        place_balloon_in_work_area(point(-872 + 476, 904), BSZ, own, WA, &[(0, own), (1, own)]);
+    assert_eq!(got, BalloonPlace::Flipped(point(1108 - 476, 904)));
+}
+
+/// 映した先の右端 1980 に相方の左端が接するだけなら重ならない（半開）。
+#[test]
+fn partner_only_touching_the_flip_target_is_not_counted() {
+    let own = rect_of(left_edge_char(), CSZ);
+    let partner = rect_of(point(1980, 904), SizePx { w: 900, h: 800 });
+    let got = place_balloon_in_work_area(left_side_pos(), BSZ, own, WA, &[(0, own), (1, partner)]);
+    assert_eq!(got, BalloonPlace::Flipped(point(1108, 904)));
+}
+
+/// 3 スコープの列で 2 番目は重ならず 3 番目が重なる → 重なったスコープは 2（要件 2.8）。
+#[test]
+fn first_overlapping_scope_is_reported_across_three_scopes() {
+    let own = rect_of(left_edge_char(), CSZ);
+    let above = rect_of(point(1108, 0), SizePx { w: 1108, h: 500 });
+    let beside = rect_of(point(1108, 904), CSZ);
+    let got = place_balloon_in_work_area(
+        left_side_pos(),
+        BSZ,
+        own,
+        WA,
+        &[(0, own), (1, above), (2, beside)],
+    );
+    assert_eq!(got.overlap_scope(), Some(2));
+}
+
+/// 押し込んだ位置（0〜872）もなお相方の窓（500〜1600）に重なるが、位置は押し込みのまま（要件 2.5）。
+#[test]
+fn pushed_position_is_kept_even_if_it_still_overlaps() {
+    let own = rect_of(left_edge_char(), CSZ);
+    let partner = rect_of(point(500, 904), SizePx { w: 1100, h: 800 });
+    let pushed = limit_correction(left_side_pos(), BSZ, WA).expect("探針: はみ出している");
+    let got = place_balloon_in_work_area(left_side_pos(), BSZ, own, WA, &[(0, own), (1, partner)]);
+    assert_eq!(
+        got,
+        BalloonPlace::PushedOverlap {
+            to: pushed,
+            scope: 1
+        }
+    );
+}
+
+/// 空の列なら今の並べ替えと同一（要件 6.4）。
+#[test]
+fn empty_char_list_keeps_the_current_flip() {
+    let own = rect_of(left_edge_char(), CSZ);
+    let got = place_balloon_in_work_area(left_side_pos(), BSZ, own, WA, &[]);
+    assert_eq!(got, BalloonPlace::Flipped(point(1108, 904)));
 }
 
 // ---------------------------------------------------------------------------
