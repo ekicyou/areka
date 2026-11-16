@@ -389,6 +389,14 @@ function Get-PythonVersionText {
     return $null
 }
 
+# python の版の判断（純関数）。preflight と selftest の両方が使う。Note は見つからない／読めない／「python <版> (need <Min> or later)」。
+function Get-PythonVerdict {
+    param([bool]$Found, [string]$VersionText, [Parameter(Mandatory = $true)][Version]$Min)
+    if (-not $Found) { return [pscustomobject]@{ Ok = $false; Note = 'python not found' } }
+    if (-not $VersionText) { return [pscustomobject]@{ Ok = $false; Note = 'cannot read the python version' } }
+    return [pscustomobject]@{ Ok = ([Version]$VersionText -ge $Min); Note = "python $VersionText (need $Min or later)" }
+}
+
 # preflight の合否（純関数）。順に見て最初に落ちたものを理由にする:
 # 判定スクリプトの版 → python の版 → 自分の検査 → goal-check。どれか落ちれば 4（計測失敗）。
 # goal-check の 'skipped'（台帳がまだ無い）は落ちたことにしない。

@@ -167,7 +167,7 @@
   - _Dispatch: mechanical — 既にある組んだ結果とコミット済みのものをバイトで比べる判定_
   - _Requirements: 4.1, 4.4, 4.7, 8.1_
 
-- [ ] 9. (P) 性能改善ループの道具の `selftest` で Python の版を名指しする（束 9・件 1 の 5.4・範囲の外）
+- [x] 9. (P) 性能改善ループの道具の `selftest` で Python の版を名指しする（束 9・件 1 の 5.4・範囲の外）
   - `tools/perf/perf-loop.common.ps1` に Python の版の判断の純関数を足し、`preflight` の版の判断をそれに替える（出す文は今と同じ）
   - `tools/perf/perf-loop.ps1` の `selftest` は Python を見つけた後に版を読み、足りなければ `selftest python NG code=-1 | python <版> (need 3.11 or later)` の 1 行で赤にする（今の「見つからない」の道と同じ返し方）
   - `tools/perf/perf-loop.selftest2.ps1` に検査 `python-verdict`（見つからない・読めない・3.10.4・3.11.0・3.13.17 の 5 通り）を足す

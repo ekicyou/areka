@@ -350,6 +350,13 @@ function Invoke-SelfTestAll {
         return [pscustomobject]@{ Ok = $false; OkCount = 0; NgCount = 1; Lines = @($line) }
     }
 
+    $pythonVerdict = Get-PythonVerdict -Found $true -VersionText (Get-PythonVersionText -Python $python) -Min $PYTHON_MIN_VERSION
+    if (-not $pythonVerdict.Ok) {
+        $line = "selftest python NG code=-1 | $($pythonVerdict.Note)"
+        Write-Info $line
+        return [pscustomobject]@{ Ok = $false; OkCount = 0; NgCount = 1; Lines = @($line) }
+    }
+
     foreach ($tool in $SELFTEST_TOOLS) {
         $path = Join-Path $PSScriptRoot $tool.File
         if ($tool.Kind -eq 'py') {
@@ -430,10 +437,9 @@ function Invoke-SubPreflight {
     # python が無いか $PYTHON_MIN_VERSION 未満なら 4（25）。PowerShell は #Requires で 7 以上と決まっているので版を書くだけ。
     $python = Get-PythonCommand
     $pythonVersion = Get-PythonVersionText -Python $python
-    $pythonOk = [bool]($pythonVersion -and ([Version]$pythonVersion -ge $PYTHON_MIN_VERSION))
-    $pythonNote = if (-not $python) { 'python not found' }
-                  elseif (-not $pythonVersion) { 'cannot read the python version' }
-                  else { "python $pythonVersion (need $PYTHON_MIN_VERSION or later)" }
+    $pythonVerdict = Get-PythonVerdict -Found ([bool]$python) -VersionText $pythonVersion -Min $PYTHON_MIN_VERSION
+    $pythonOk = $pythonVerdict.Ok
+    $pythonNote = $pythonVerdict.Note
     $pwshVersion = $PSVersionTable.PSVersion.ToString()
 
     # --- check-in 間隔の実効値 -----------------------------------------------
