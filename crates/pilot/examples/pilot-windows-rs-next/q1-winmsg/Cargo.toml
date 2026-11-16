@@ -1,0 +1,15 @@
+[package]
+name = "q1-winmsg"
+version = "0.0.0"
+edition = "2021"
+publish.workspace = true
+
+[lib]
+name = "wintf_winmsg_executor"
+
+[dependencies]
+async-task = { workspace = true }
+windows-link = { workspace = true }
+
+[build-dependencies]
+windows-bindgen = { workspace = true }

@@ -1,0 +1,15 @@
+// emo-text 役が名指しする物（受け取った ID2D1DeviceContext で DirectWrite の文字を 1 行描く）
+DWriteCreateFactory
+DWRITE_FACTORY_TYPE_SHARED
+IDWriteFactory
+IDWriteTextFormat
+IDWriteTextLayout
+DWRITE_FONT_WEIGHT_NORMAL
+DWRITE_FONT_STYLE_NORMAL
+DWRITE_FONT_STRETCH_NORMAL
+ID2D1DeviceContext
+// 継いだメソッド（BeginDraw・Clear・DrawTextLayout・EndDraw ほか）は基を名指ししないと出ない
+ID2D1RenderTarget
+ID2D1SolidColorBrush
+D2D1_DRAW_TEXT_OPTIONS_NONE
+E_FAIL
