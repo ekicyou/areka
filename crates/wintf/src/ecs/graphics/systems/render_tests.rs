@@ -261,3 +261,34 @@ fn record_is_silent_unless_damage_debug_is_open() {
         "info では出ない: {log}"
     );
 }
+
+/// 根の変換の選び: 部分の列（`device_px`）は恒等、ほかは配置の拡大（自動で上げた持ち主の描画面に
+/// DPI の拡大を二重に掛けない・研究 R-e）。
+#[test]
+fn segment_tree_replays_with_identity_root_transform() {
+    use super::render::replay_transform;
+    use crate::ecs::graphics::DrawTree;
+    use crate::ecs::layout::GlobalArrangement;
+    use windows_numerics::Matrix3x2;
+    let global = GlobalArrangement {
+        transform: Matrix3x2::scale(1.25, 1.25) * Matrix3x2::translation(7.0, 3.0),
+        ..Default::default()
+    };
+    let scale = Matrix3x2::scale(1.25, 1.25);
+    let root_tree = DrawTree::default();
+    let segment = DrawTree {
+        device_px: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        replay_transform(&global, None),
+        scale,
+        "命令の列だけの持ち主"
+    );
+    assert_eq!(replay_transform(&global, Some(&root_tree)), scale, "根の木");
+    assert_eq!(
+        replay_transform(&global, Some(&segment)),
+        Matrix3x2::identity(),
+        "部分の列は恒等"
+    );
+}

@@ -14,6 +14,10 @@ use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 mod draw;
 mod draw_content;
 mod draw_tree;
+mod placement;
+mod promotion;
+mod promotion_round;
+mod promotion_shape;
 mod systems;
 mod transform;
 mod version;
@@ -24,11 +28,25 @@ pub(crate) mod draw_content_test_support;
 #[cfg(test)]
 mod draw_content_tests;
 #[cfg(test)]
+mod placement_tests;
+#[cfg(test)]
+mod promotion_round_log_tests;
+#[cfg(test)]
+mod promotion_round_tests;
+#[cfg(test)]
+mod promotion_shape_tests;
+#[cfg(test)]
+mod promotion_tests;
+#[cfg(test)]
+mod systems_promotion_tests;
+#[cfg(test)]
 mod systems_tests;
 #[cfg(test)]
 mod visual_tests;
 #[cfg(test)]
 mod world_visual_opacity_tests;
+#[cfg(test)]
+mod world_visual_scan_tests;
 #[cfg(test)]
 mod world_visual_tests;
 
@@ -40,6 +58,17 @@ pub(crate) use draw::{emit, emit_within};
 pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
+#[cfg(test)]
+pub(crate) use placement::PlacementClip;
+pub use placement::SurfacePlacement;
+pub(crate) use placement::{
+    ChildClass, ClipPlan, HostAnswer, OwnerProps, PlacementKind, WucTransform, child_class,
+    merged_clip, owner_props, wuc_children_order, wuc_host_of,
+};
+pub use promotion::AutoPromotion;
+pub(crate) use promotion::Phase;
+#[cfg(test)]
+pub(crate) use promotion::SurfaceReadiness;
 pub use systems::*;
 pub use transform::*;
 pub use version::*;
@@ -62,9 +91,10 @@ pub use world_visual::*;
 /// 新しい描き方の部品（`VisualDrawContent`・`VisualTransform`）を持つ `Visual` は既定で
 /// 描画面を持たない節になる（一度節になれば、装置の失いで中身が外れても節のまま）。
 /// `GraphicsCommandList` を持つ `Visual` と何も持たない `Visual` は描画面の持ち主。
-/// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける。昇格した持ち主の
+/// 頻繁に更新される窓の下の節は自動で描画面の持ち主へ上がり、落ち着くと節へ戻る（[`AutoPromotion`]）。
+/// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける（自動の上げ下げより優先する）。昇格した持ち主の
 /// `VisualDrawContent` は自分の描画面の木の先頭の 1 件として子より先に描かれる。持ち主の
-/// `VisualTransform` は WUC では効かない（入った・変わった回に `warn!` を 1 度残して無視する）。
+/// `VisualTransform` は WUC の Visual の変形として写す（`warn!` は残さない・自動で上げた持ち主は描画面の中で描く）。
 ///
 /// # ライフタイムイベント
 /// - `on_add`: `Arrangement::default()`を自動挿入
@@ -85,19 +115,21 @@ pub struct Visual {
 /// 描画面を持つ目印（手動の昇格の口）。在れば新しい描き方の部品の有無に依らず、
 /// その `Visual` は描画面の持ち主（WUC の Visual と描画面を持ち、その下の木の根）になる。
 /// 一度節になった `Visual` を持ち主へ戻すのもこの目印で行う。自分の `VisualDrawContent` は
-/// 描画面に描かれ続ける（子の節が無くても）。`VisualTransform` は無視される（`warn!` が 1 度）。
+/// 描画面に描かれ続ける（子の節が無くても）。`VisualTransform` は WUC の Visual の変形として写す。
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct OwnSurface;
 
 /// 描画面を持つか（持ち主）、持たないか（節）の規則。1 か所だけに置く。
 /// `is_node` は `WorldVisual` を持つか（新しい描き方の部品が `require` で必ず連れてくる・
-/// 装置の失いでも外れない）。
+/// 装置の失いでも外れない）。`auto_owner` は自動で上げた持ち主か（`AutoPromotion` の相が
+/// 節でない）。
 pub(crate) fn wants_own_surface(
     has_command_list: bool,
     has_own_surface: bool,
     is_node: bool,
+    auto_owner: bool,
 ) -> bool {
-    has_command_list || has_own_surface || !is_node
+    has_command_list || has_own_surface || !is_node || auto_owner
 }
 
 /// ChildOf チェーンを辿ってオーナー Window が存在するかを判定するヘルパー
@@ -157,6 +189,8 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         world.get::<super::GraphicsCommandList>(entity).is_some(),
         world.get::<OwnSurface>(entity).is_some(),
         world.get::<WorldVisual>(entity).is_some(),
+        // 入ったばかりの節は相が節（自動の持ち主になるのは後の回の判断から）。
+        false,
     );
 
     // コマンドを発行（チェック完了後に一度だけ commands を借用する）

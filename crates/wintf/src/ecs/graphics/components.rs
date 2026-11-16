@@ -67,8 +67,20 @@ pub struct VisualGraphics {
     clip_key: Option<ClipKey>,
 }
 
-/// 切り抜きの鍵: (物理の幅, 物理の高さ, 拡大率, 形)。解除は形 `None`
-pub(crate) type ClipKey = (f32, f32, f32, Option<crate::ecs::graphics::clip::ClipShape>);
+/// 切り抜きの鍵: (物理の幅, 物理の高さ, 拡大率, 形, 置き場の切り抜き, 自動で上げた持ち主か)。
+/// 解除は形 `None` かつ置き場の切り抜き `None`。自動で上げた持ち主は常に解除。
+pub(crate) type ClipKey = (
+    f32,
+    f32,
+    f32,
+    Option<crate::ecs::graphics::clip::ClipShape>,
+    Option<PlacedClip>,
+    bool,
+);
+
+/// 置き場の切り抜き（DIP）: 逆行列が無ければ局所の矩形、有れば親の持ち主の矩形と、
+/// それを局所へ移す逆行列（親の DIP → 局所の DIP）。自分の切り抜きの代わりに当てる。
+pub(crate) type PlacedClip = (crate::numerics::Aabb, Option<windows_numerics::Matrix3x2>);
 
 // on_remove フック: 親Visualから自分を削除
 fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {

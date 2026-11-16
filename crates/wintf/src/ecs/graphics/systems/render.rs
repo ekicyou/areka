@@ -29,6 +29,25 @@ type RenderSurfaceData = (
     Option<&'static Name>,
 );
 
+/// 入れ物へ合成するときの根の変換（拡大だけ・atlas の offset は写しで足す）。部分の列
+/// （`DrawTree::device_px`）は既に物理ピクセルなので恒等（拡大を二重に掛けない）。
+pub(crate) fn replay_transform(
+    global_arrangement: &GlobalArrangement,
+    tree: Option<&DrawTree>,
+) -> windows_numerics::Matrix3x2 {
+    if tree.is_some_and(|t| t.device_px) {
+        return windows_numerics::Matrix3x2::identity();
+    }
+    windows_numerics::Matrix3x2 {
+        M11: global_arrangement.scale_x(),
+        M12: 0.0,
+        M21: 0.0,
+        M22: global_arrangement.scale_y(),
+        M31: 0.0,
+        M32: 0.0,
+    }
+}
+
 /// 入れ物の作成・合成・写しの段の名（記録の欄）
 const STAGE_CREATE: &str = "composite create";
 const STAGE_COMPOSE: &str = "composite";
@@ -267,14 +286,7 @@ pub fn render_surface(
                 }
             }
         }
-        let scale = windows_numerics::Matrix3x2 {
-            M11: global_arrangement.scale_x(),
-            M12: 0.0,
-            M21: 0.0,
-            M22: global_arrangement.scale_y(),
-            M31: 0.0,
-            M32: 0.0,
-        };
+        let scale = replay_transform(global_arrangement, tree);
         let root_list = cmd_list_opt.and_then(|c| c.command_list());
         let tree_commands = tree.map_or(&[][..], |t| &t.commands[..]);
         let slot = surface.composite_slot();

@@ -119,8 +119,8 @@ fn balloon_switch_resolves_the_face_windowposition_with_the_new_author_dpi() {
     let control = run(96, &BTreeMap::new());
     assert_eq!(
         control.1.offset().x,
-        434 + 30 + 40,
-        "対照: キャラ窓の幅＋offsetx＋windowposition.x"
+        434 - 30 + 40,
+        "対照: キャラ窓の幅－offsetx（右に出すので descript の分はシェルへ近づく向き）＋windowposition.x"
     );
     for (label, old_wps) in [("同じ値", &face_wps), ("空", &BTreeMap::new())] {
         assert_eq!(

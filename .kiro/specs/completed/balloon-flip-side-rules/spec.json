@@ -1,0 +1,29 @@
+{
+  "feature_name": "balloon-flip-side-rules",
+  "created_at": "2026-11-16T10:48:19Z",
+  "updated_at": "2026-11-17T01:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-11-16T11:05:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-11-16T13:00:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-11-16T15:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-17T01:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

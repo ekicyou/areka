@@ -162,7 +162,7 @@ fn bitmap(
 }
 
 /// WUC の描画面を D2D のビットマップへ写し、行を幅×4 に詰めた BGRA で返す。
-fn read_wuc_surface(world: &World, owner: Entity) -> Vec<u8> {
+pub(crate) fn read_wuc_surface(world: &World, owner: Entity) -> Vec<u8> {
     let surface = world
         .get::<SurfaceGraphics>(owner)
         .unwrap()

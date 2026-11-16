@@ -61,7 +61,7 @@ fn t_rs01_new_offset_and_alignment_reach_the_char_window_parts() {
     let pinned96 = Some(DPI::from_dpi(96, 96));
     // sakura: 右（キャラ窓の幅）＋ (30,40)。
     let want0 = PointPx {
-        x: CHAR0.w + 30,
+        x: CHAR0.w - 30,
         y: 40,
     };
     assert_eq!(follow_of(&world, &windows, 0).offset(), want0);
@@ -157,7 +157,7 @@ fn t_rs03_author_offset_is_scaled_by_the_window_dpi() {
     assert_eq!(
         f0.offset(),
         PointPx {
-            x: CHAR0.w + 60,
+            x: CHAR0.w - 60,
             y: 80
         }
     );
@@ -175,7 +175,7 @@ fn t_rs03_author_offset_is_scaled_by_the_window_dpi() {
     assert_eq!(
         follow_of(&world, &windows, 0).offset(),
         PointPx {
-            x: CHAR0.w + 30,
+            x: CHAR0.w - 30,
             y: 40
         }
     );
@@ -198,7 +198,7 @@ fn t_rs03b_scopes_with_different_window_dpis_are_solved_with_their_own_dpi() {
         (f0.offset(), f0.base().dpi),
         (
             PointPx {
-                x: CHAR0.w + 30,
+                x: CHAR0.w - 30,
                 y: 40
             },
             Some(DPI::from_dpi(96, 96))
@@ -237,7 +237,7 @@ fn t_rs04_a_missing_window_is_skipped_with_a_warning_and_the_rest_continue() {
     assert_eq!(
         follow_of(&world, &windows, 0).offset(),
         PointPx {
-            x: CHAR0.w + 30,
+            x: CHAR0.w - 30,
             y: 40
         }
     );

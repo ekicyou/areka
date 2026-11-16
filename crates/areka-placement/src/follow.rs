@@ -37,6 +37,8 @@ mod keyword_base;
 mod move_shift;
 // バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
 mod offset_space;
+// 判定に入れるキャラ窓の矩形の列と、並べ直しの後の判定し直し（balloon-flip-side-rules・設計 OtherChars・RejudgeSystem）。
+mod other_chars;
 // 窓の組の連れ動き（areka-P0-window-link-directives・設計「sticky_follow」）。
 mod sticky_follow;
 mod visibility;
@@ -142,6 +144,13 @@ use self::visibility::{
     route_applies_visibility_guard,
 };
 use self::window_move::enqueue_window_set_pos;
+// 書き込みの関門が判定へ渡す、表示しているキャラ窓の矩形の列。
+use self::other_chars::shown_char_rects;
+// 起動の並べ直しの後の判定し直し（設計 RejudgeSystem）。登録の口の呼び手は `ghost_session::register_systems`、
+// 判定し直しの関数の呼び手は `reset_pos`・`chain_realign`（書き込みの後）。
+pub use self::other_chars::register_balloon_rejudge;
+pub(crate) use self::other_chars::rejudge_all_balloons;
+use self::window_move::window_rect_of;
 // 遷移観測（`kind=ground` の発行口・書込指令の要求語彙タグ）のファサード再束縛。
 // `window_move` は `super::transition_diag` としてここを辿る（兄弟モジュールへの
 // 直接参照はファサード分割では届かない・structure.md「ファサード形式」の注意点）。
@@ -195,6 +204,9 @@ mod offset_residual_tests;
 #[cfg(test)]
 #[path = "follow_offset_space_tests.rs"]
 mod offset_space_tests;
+#[cfg(test)]
+#[path = "follow_other_chars_tests.rs"]
+mod other_chars_tests;
 #[cfg(test)]
 #[path = "follow_resize_tests.rs"]
 mod resize_tests;
