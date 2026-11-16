@@ -151,8 +151,6 @@ pub(crate) fn owner_props(
 
 /// 自分の切り抜きと置き場の切り抜きを合わせた 1 つの WUC の切り抜き。
 #[derive(Clone, Copy, Debug, PartialEq)]
-// shortcut: 切り抜きの合わせを係から呼ぶのは 4.3。繋いだら ClipPlan・merged_clip・invert の許しを外す。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum ClipPlan {
     /// 今の写し方（置き場の切り抜きが無いか、置き場の切り抜きが自分の矩形・角丸の矩形の切り抜きを全部含む）。
     Own,
@@ -166,7 +164,6 @@ pub(crate) enum ClipPlan {
 
 /// 自分の切り抜き（局所）と置き場の切り抜き（親の持ち主の DIP）を 1 つの WUC の切り抜きへ合わせる。
 /// `to_host_dip` は局所の DIP → 親の持ち主の DIP、`size` は持ち主の局所の大きさ（DIP）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn merged_clip(
     own: Option<&ClipShape>,
     placement: &PlacementClip,
@@ -220,7 +217,6 @@ pub(crate) fn merged_clip(
 }
 
 /// 行が点の 3x2 行列の逆。潰れた行列は無し。
-#[cfg_attr(not(test), allow(dead_code))]
 fn invert(m: Matrix3x2) -> Option<Matrix3x2> {
     let det = m.M11 * m.M22 - m.M12 * m.M21;
     if !det.is_finite() || det.abs() < 1e-12 {

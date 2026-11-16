@@ -577,3 +577,44 @@ fn split_keeps_active_out_of_the_host_list_and_preparing_in_both() {
     );
     assert_eq!(written, HashSet::from([ent(&s, 0), ent(&s, 2)]));
 }
+
+// ---- 切り抜きの合わせの見分けが係の答えと合う ----
+
+/// `clip_combo`（warn! の見分け）は `merged_clip` が `Unsupported` を返す条件の写し。
+/// 置き場の矩形の切り抜きがある場合（自分の切り抜き・変形・包むか）で両者の答えが合う。
+#[test]
+fn clip_combo_matches_merged_clip_unsupported() {
+    use super::placement::{ClipPlan, merged_clip};
+    use crate::ecs::graphics::ClipShape;
+    const SIZE: (f32, f32) = (100.0, 50.0);
+    let mats = [
+        Matrix3x2::translation(10.0, 10.0),
+        Matrix3x2::rotation(30.0) * Matrix3x2::translation(10.0, 20.0),
+        Matrix3x2::rotation(90.0) * Matrix3x2::translation(60.0, 0.0),
+    ];
+    let hosts = [
+        Aabb::new(0.0, 0.0, 300.0, 300.0), // 包む
+        Aabb::new(0.0, 0.0, 40.0, 30.0),   // 切る
+    ];
+    let owns = [
+        (None, ClipClass::None),
+        (Some(ClipShape::Rectangle), ClipClass::Rect),
+        (Some(ClipShape::rounded_rectangle(4.0)), ClipClass::Rounded),
+    ];
+    for m in mats {
+        for host in hosts {
+            for (own, class) in &owns {
+                let mut e = owner(0, 0.0, 0.0, SIZE.0, SIZE.1);
+                e.world = super::world_visual::WorldVisual::from_world_mat(m);
+                e.world.content_world_aabb = Aabb::new(0.0, 0.0, SIZE.0, SIZE.1).transform(m);
+                e.own_clip = *class;
+                let clip = PlacementClip::Rect(host);
+                assert_eq!(
+                    clip_combo(&e, &clip),
+                    merged_clip(own.as_ref(), &clip, m, SIZE) == ClipPlan::Unsupported,
+                    "{m:?} {host:?} {class:?}"
+                );
+            }
+        }
+    }
+}

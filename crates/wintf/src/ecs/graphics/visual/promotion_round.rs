@@ -360,7 +360,7 @@ fn report_unhonored(
 
 /// 自分の切り抜きと置き場の矩形の切り抜きを 1 つに合わせられないか（`placement::merged_clip` が
 /// `Unsupported` を返す条件と同じ。`content_world_aabb` は局所の矩形を親の持ち主の DIP へ移したもの）。
-fn clip_combo(e: &ScanEntry, clip: &PlacementClip) -> bool {
+pub(super) fn clip_combo(e: &ScanEntry, clip: &PlacementClip) -> bool {
     let PlacementClip::Rect(host) = clip else {
         return false;
     };

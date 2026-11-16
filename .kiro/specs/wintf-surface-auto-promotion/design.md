@@ -38,7 +38,7 @@
 
 ### Out of Boundary
 - 差分の描き直し（項・比べ・計画・写し・記録の行 `[render_surface] damage`）。`render.rs`・`damage.rs`・`diff.rs`・`composite.rs` は触らない。ただし `render.rs` の根の変換の選び 1 か所だけは例外（3.4 の実装で確定）: 部分の列は自分の描画面の物理ピクセルで出すので、`DrawTree::device_px`（`draw_tree.rs` に足す欄・部分の列の木だけ真）が立つ木は恒等の根の変換で描き直す（`replay_transform`）。`composite.rs` は同じ行列から拡大を取るので、`diff::entries` の拡大も (1,1) になり、触らない。でないと DPI の拡大が二重にかかる。
-- 係の登録と順（`ecs/world/mod.rs`）・WUC の Visual を作る係（`visual_manager.rs`）・部品の定義（`components.rs` の `VisualGraphics`。`ClipKey` は欄を足すだけ受け持つ）・配置の伝播（`layout/`）。
+- 係の登録と順（`ecs/world/mod.rs`）・WUC の Visual を作る係（`visual_manager.rs`）・部品の定義（`components.rs` の `VisualGraphics`。`ClipKey` は欄と、その欄の型の別名 `PlacedClip` を足すだけ受け持つ）・配置の伝播（`layout/`）。
 - 当たり判定（`hit_test`）・描画面 1 枚ごとの読み戻し（`readback.rs`）の答えの形。
 - 層・不透明度・重ね方・ブレンドの規則。
 - areka の側の使い方（`crates/areka*`・`crates/pilot`・`tools/`）。
@@ -161,7 +161,7 @@ crates/wintf/src/ecs/graphics/visual/
     ├── emit_test_support.rs     # 変更: WUC の重ねを写す口（描画面ごとの絵を整数の位置と不透明度で重ねる）
     └── README.md                # 変更: 自動の上げ下げ・節の下の持ち主・持ち主の VisualTransform・既定の寄せ方
 crates/wintf/src/ecs/graphics/
-└── components.rs                # 変更: ClipKey に置き場の切り抜きと自動の持ち主かの欄を足すだけ
+└── components.rs                # 変更: ClipKey に当てた置き場の切り抜き（型の別名 PlacedClip）と自動の持ち主かの欄を足すだけ
 crates/wintf/src/ecs/graphics/systems/
 ├── visual_sync.rs               # 変更: 親の決め・節を通り抜けた並び・並びだけの変化・変形と置き場の写し
 ├── visual_sync_tests.rs         # 変更: 写しの値の純粋な部分
@@ -678,8 +678,8 @@ pub(crate) enum ChildClass { Owner, AttachedAuto, DetachedAuto, Node, Other }
 #### ClipSync（`clip_sync_system`）
 
 - `merged_clip` の答えで切り抜きを作る。`Own` は今のまま。`Rect` は矩形（角丸 0）の図形の切り抜き。`Transformed` は親の DIP の矩形の図形の切り抜きに `CompositionClip.TransformMatrix` へ逆行列（物理）を入れる。`Auto` の持ち主は切り抜きを外す（`SetClip(None)`）。
-- 切り抜きの鍵（`components.rs` の `ClipKey`・`pub(crate)`）に、置き場の切り抜き（`PlacementClip` から出した親の DIP の矩形か無し）と「自動で上げた持ち主か」を足す。鍵は今どおり「同じなら当て直さない」の約束を保ち、置き場の切り抜きか自動の相が変わった回だけ当て直す（設計の検証の重大な問題 3・回避の形を取らない）。
-- 見る変化に `Changed<SurfacePlacement>`・`Changed<AutoPromotion>` と `SurfacePlacement` の外れを足す。
+- 切り抜きの鍵（`components.rs` の `ClipKey`・`pub(crate)`）に、当てた置き場の切り抜き（`PlacedClip`＝`Rect` なら局所の矩形、`Transformed` なら親の DIP の矩形と DIP の逆行列、無ければ無し）と「自動で上げた持ち主か」を足す。局所の切り抜きは持ち主の局所の行列で変わるので、親の矩形だけを鍵にすると持ち主が動いたり回ったりした回を見逃す（4.3 の実装で確定）。鍵は今どおり「同じなら当て直さない」の約束を保ち、置き場の切り抜き・自動の相・持ち主の局所の行列（`VisualTransform`・配置）が変わった回だけ当て直す（設計の検証の重大な問題 3・回避の形を取らない）。
+- 見る変化に `Changed<SurfacePlacement>`・`Changed<AutoPromotion>`・`Changed<VisualTransform>` と、`SurfacePlacement`・`VisualTransform` の外れを足す。
 
 #### AutoSurfacePad（`deferred_surface_creation_system`）
 

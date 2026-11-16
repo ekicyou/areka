@@ -58,13 +58,13 @@ pub(crate) use draw::{emit, emit_within};
 pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
+#[cfg(test)]
+pub(crate) use placement::PlacementClip;
 pub use placement::SurfacePlacement;
 pub(crate) use placement::{
-    ChildClass, HostAnswer, OwnerProps, WucTransform, child_class, owner_props, wuc_children_order,
-    wuc_host_of,
+    ChildClass, ClipPlan, HostAnswer, OwnerProps, PlacementKind, WucTransform, child_class,
+    merged_clip, owner_props, wuc_children_order, wuc_host_of,
 };
-#[cfg(test)]
-pub(crate) use placement::{PlacementClip, PlacementKind};
 pub use promotion::AutoPromotion;
 pub(crate) use promotion::Phase;
 #[cfg(test)]
