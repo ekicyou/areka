@@ -71,7 +71,7 @@
   - 終わった姿: 新しいファイルを `Set-StrictMode -Version Latest` の pwsh で読み込むと何も出さずに 4 つの関数が使え、`target\` の下の手の置き場で 1 回呼ぶと設計の表の「通った」の行がその順で出る
   - _Dispatch: standard — 置き換えの順と戻しの道を設計の表から書き起こす_
   - _Requirements: 3.1, 6.2, 6.3, 6.5_
-- [ ] 4.2 机へ置く道具 2 本を共通の手順に載せ替え、状態の確かめの失敗を出し、手順書を同じ変更で直す
+- [x] 4.2 机へ置く道具 2 本を共通の手順に載せ替え、状態の確かめの失敗を出し、手順書を同じ変更で直す
   - `impl-watch-install.ps1` は共通の手順だけを読み込み、名前・環境変数の名前・確かめ（`--help` が 0 なら `OK check: --help exit 0`、でなければ `FAIL check: --help exit <n>`）を渡すだけにする。置いた exe で `status` を呼び、判断が `clear` なら今の `clear` の道、`fail` なら標準エラーの最後の行（ASCII）と `FAIL status: exit <n>` で 1（3・13）
   - `mcp-bridge-install.ps1` は今の「標準入力を閉じて 15 秒」の確かめをそのまま渡す（13）
   - `doc/impl-watch.md` の 2 節（成功の行の例の順・`FAIL check` の意味・`FAIL check: cannot start: …` と `FAIL status: exit <n>` の行）と 3 節（出る行の例の順と「確かめが通ってから置き換え、通らなければ前のものに触らない」の 1 文）を直す。呼ぶ形だけを書くスキル（`kiro-impl`・`kiro-watch-clear`・`release`）は確かめるだけで触らない
