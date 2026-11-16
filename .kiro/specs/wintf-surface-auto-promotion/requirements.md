@@ -38,7 +38,7 @@ wintf の描画面（WUC の `CompositionDrawingSurface`）は、描画面の持
 - **Adjacent expectations**:
   - `wintf-visual-tree` の規則 `wants_own_surface`・目印 `OwnSurface`・描画の木（`DrawTree`・`WorldVisual`・`VisualVersion`）と、`wintf-visual-damage-redraw` の差分の描き直しと記録の行（target `wintf::damage`・`[render_surface] damage`）をそのまま使う。変形では見た目の版を上げない約束（`version.rs`）を保つ。記録の行の欄と文言を変えない。
   - `draw-methods-canon`・`shell-multi-compose` など、emo の部品を節として載せる後の spec は、本 spec の自動の上げ下げの恩恵を受ける（頻繁に変わる部品だけが描画面を持つ）。
-  - 同じウェーブ（C21）の約束: 本 spec は `Cargo.toml` に触らない（依存を足さない）。触るのは wintf の `ecs/graphics/visual/` の下（`mod.rs`・`systems.rs`・`world_visual.rs`・`draw/emit_test_support.rs`・`draw/README.md` とその兄弟のテスト）と、おそらく `ecs/graphics/systems/{visual_sync,render}.rs` と wintf の `tests/graphics/` の下だけで、`crates/areka*`・`crates/pilot`・`tools/` に触らない。
+  - 同じウェーブ（C21）の約束: 本 spec は `Cargo.toml` に触らない（依存を足さない）。触るのは wintf の `ecs/graphics/visual/` の下（`mod.rs`・`systems.rs`・`world_visual.rs`・`draw/emit_test_support.rs`・`draw/README.md` とその兄弟のテスト）と、おそらく `ecs/graphics/systems/{visual_sync,clip_sync,surface}.rs`（`render.rs` は触らない見込み・ギャップ分析 §7）と wintf の `tests/graphics/` の下だけで、`crates/areka*`・`crates/pilot`・`tools/` に触らない。
 
 ## Requirements
 
@@ -150,7 +150,7 @@ wintf の描画面（WUC の `CompositionDrawingSurface`）は、描画面の持
 
 #### Acceptance Criteria
 
-1. The wintf shall `draw/README.md` に、自動の上げ下げ（材料・履歴・見送りの形）・節の下の持ち主（重なりの順と祖先の節の性質の扱い）・持ち主の `VisualTransform` を書き、「写し」の節の前提（節の下の持ち主は切られる・持ち主の `VisualTransform` は効かない）を今の作りに合わせて書き直す。
+1. The wintf shall `draw/README.md` に、自動の上げ下げ（材料・履歴・見送りの形）・節の下の持ち主（重なりの順と祖先の節の性質の扱い）・持ち主の `VisualTransform` を書き、「写し」の節の前提（節の下の持ち主は切られる・持ち主の `VisualTransform` は効かない）を今の作りに合わせて書き直す。当たり判定は今の作り（`GlobalArrangement`）のままで、回転・拡大を含む `VisualTransform` を持つ持ち主は見た目と当たりがずれうることも書く（範囲外の明記・ギャップ分析 R6）。
 2. The wintf shall steering（`structure.md`・`tech.md`）の描画の道の記述に、描画面の自動の上げ下げと節の下の持ち主を足す。
 3. The wintf shall areka に依存せず、公開の名前に areka の語を使わない。
 4. The wintf shall 依存を足さない（`Cargo.toml` に触らない）。
