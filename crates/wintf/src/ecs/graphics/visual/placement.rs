@@ -57,15 +57,12 @@ pub(crate) enum PlacementClip {
 
 /// 持ち主の WUC の親からの変形。平行移動だけなら Offset、ほかは行列（Offset 0）。
 #[derive(Clone, Copy, Debug, PartialEq)]
-// shortcut: 変形の写しを係から呼ぶのは 4.2。繋いだら WucTransform・wuc_transform の許しを外す。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum WucTransform {
     Offset(Vector3),
     Matrix(Matrix4x4),
 }
 
 /// 持ち主の WUC の親からの変形（DIP の行列 `to_parent_dip` と拡大 `scale` から、物理ピクセルで）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn wuc_transform(to_parent_dip: Matrix3x2, scale: f32) -> WucTransform {
     const EPS: f32 = 1e-6;
     let m = to_parent_dip;
@@ -100,6 +97,56 @@ pub(crate) fn wuc_transform(to_parent_dip: Matrix3x2, scale: f32) -> WucTransfor
         M43: 0.0,
         M44: 1.0,
     })
+}
+
+/// 持ち主の WUC の Visual へ写す値（PropertySync の分岐）。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct OwnerProps {
+    /// 位置と変形（`Offset` なら行列は恒等、`Matrix` なら位置は 0 で写す）。
+    pub transform: WucTransform,
+    pub opacity: f32,
+    /// 自動で上げた持ち主の描画面の物理の大きさ（ほかの持ち主は大きさを写さない）。
+    pub size_px: Option<(u32, u32)>,
+}
+
+/// 持ち主の WUC の Visual へ写す値。`local` は局所の行列（`VisualTransform × 平行移動(Arrangement.offset)`・DIP）、
+/// `own_opacity` は自分の不透明度（見えなければ 0）、`scale` は DPI の拡大。
+/// - 置き場が無い: 局所の行列をそのまま写す。
+/// - 節の下の手動の持ち主: 局所 × 親の節の世界の行列、不透明度は自分 × 祖先の積（祖先が見えなければ 0）。
+/// - 自動で上げた持ち主: 整数の原点（物理ピクセル）と大きさだけ。行列は恒等・不透明度は 1
+///   （自分の不透明度と変形は部分の列が描画面の中で描く）。
+pub(crate) fn owner_props(
+    local: Matrix3x2,
+    own_opacity: f32,
+    scale: f32,
+    placement: Option<&PlacementKind>,
+) -> OwnerProps {
+    match placement {
+        None => OwnerProps {
+            transform: wuc_transform(local, scale),
+            opacity: own_opacity,
+            size_px: None,
+        },
+        Some(PlacementKind::Embedded {
+            parent_world,
+            opacity,
+            visible,
+            ..
+        }) => OwnerProps {
+            transform: wuc_transform(local * *parent_world, scale),
+            opacity: if *visible { own_opacity * opacity } else { 0.0 },
+            size_px: None,
+        },
+        Some(PlacementKind::Auto { origin_px, size_px }) => OwnerProps {
+            transform: WucTransform::Offset(Vector3 {
+                X: origin_px.0 as f32,
+                Y: origin_px.1 as f32,
+                Z: 0.0,
+            }),
+            opacity: 1.0,
+            size_px: Some(*size_px),
+        },
+    }
 }
 
 /// 自分の切り抜きと置き場の切り抜きを合わせた 1 つの WUC の切り抜き。

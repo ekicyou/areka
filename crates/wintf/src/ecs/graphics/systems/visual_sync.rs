@@ -1,8 +1,9 @@
 use super::init::format_entity_name;
 use crate::ecs::common::ancestors;
 use crate::ecs::graphics::{
-    AutoPromotion, ChildClass, GraphicsCommandList, HostAnswer, OwnSurface, Phase, Visual,
-    VisualGraphics, WorldVisual, child_class, wuc_children_order, wuc_host_of,
+    AutoPromotion, ChildClass, GraphicsCommandList, HostAnswer, OwnSurface, OwnerProps, Phase,
+    SurfacePlacement, Visual, VisualGraphics, VisualTransform, WorldVisual, WucTransform,
+    child_class, owner_props, wuc_children_order, wuc_host_of,
 };
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use crate::ecs::window::Window;
@@ -12,6 +13,7 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, error, warn};
 use windows::UI::Composition::{ContainerVisual, Visual as WucVisual};
 use windows::core::Interface;
+use windows_numerics::{Matrix3x2, Matrix4x4, Vector2, Vector3};
 
 /// 木の同期の係が子として書き換える部品（ChildOf + VisualGraphics を持つ全 Entity）
 type SyncChildData = (
@@ -38,15 +40,20 @@ type PropertySyncData = (
     &'static VisualGraphics,
     Option<&'static Name>,
     Has<Window>,
+    Option<&'static VisualTransform>,
+    Option<&'static SurfacePlacement>,
 );
 
-/// 性質の同期の係が見る変化（配置・見た目の部品・見た目の作り直し）
+/// 性質の同期の係が見る変化（配置・見た目の部品・見た目の作り直し・変形・置き場・上げ下げの相）
 type PropertySyncFilter = Or<(
     Changed<Arrangement>,
     Changed<GlobalArrangement>,
     Changed<Visual>,
     // 見た目が作り直された部品にも写す
     Changed<VisualGraphics>,
+    Changed<VisualTransform>,
+    Changed<SurfacePlacement>,
+    Changed<AutoPromotion>,
 )>;
 
 /// 同じ WUC の見た目か（控えは `VisualGraphics::visual()` の複製なので同じポインタになる）。
@@ -312,17 +319,40 @@ pub fn visual_hierarchy_sync_system(
 
 /// Visual プロパティ同期システム (R8)
 ///
-/// ArrangementまたはOpacity変更、または見た目の作り直しを検知してVisualのプロパティを同期する。
-/// - Arrangement.offset → Visual.SetOffsetX/SetOffsetY
-/// - Opacity → Visual.SetOpacity
+/// 配置・不透明度・変形・置き場・上げ下げの相の変化、置き場か変形の外れ、または見た目の作り直しを
+/// 検知して Visual のプロパティを同期する。写す値は [`owner_props`] が決める。
+/// - 置き場が無い持ち主: 局所の行列 `VisualTransform × 平行移動(Arrangement.offset)`。
+///   平行移動だけなら `SetOffset`（`TransformMatrix` は恒等）、ほかは `TransformMatrix`（`Offset` は 0）
+/// - 節の下の手動の持ち主: 局所 × 親の節の世界の行列と、自分の不透明度 × 祖先の積（見えなければ 0）
+/// - 自動で上げた持ち主: 整数の原点と大きさだけ（行列は恒等・不透明度は 1）
 ///
 /// WUC の Visual の Offset は物理ピクセル単位で指定する必要がある。
-/// Arrangement.offset（論理座標）にGlobalArrangement.transform（累積DPIスケール）を適用して物理座標に変換。
+/// DIP の行列の平行移動に GlobalArrangement.transform の拡大（累積DPIスケール）を掛けて物理座標に変換。
+/// 版（`VisualVersion`）には触らない（持ち主の変形の変化で版を上げない）。
 ///
 /// Compositionスケジュールで実行。
-pub fn visual_property_sync_system(changed_entities: Query<PropertySyncData, PropertySyncFilter>) {
-    for (entity, arrangement, global_arrangement, visual_component, vg, name, is_window) in
-        changed_entities.iter()
+pub fn visual_property_sync_system(
+    changed: Query<Entity, PropertySyncFilter>,
+    mut removed_placement: RemovedComponents<SurfacePlacement>,
+    mut removed_transform: RemovedComponents<VisualTransform>,
+    owners: Query<PropertySyncData>,
+) {
+    let mut targets: Vec<Entity> = changed.iter().collect();
+    targets.extend(removed_placement.read());
+    targets.extend(removed_transform.read());
+    targets.sort_unstable();
+    targets.dedup();
+    for (
+        entity,
+        arrangement,
+        global_arrangement,
+        visual_component,
+        vg,
+        name,
+        is_window,
+        transform,
+        placement,
+    ) in owners.iter_many(targets)
     {
         let Some(visual_com) = vg.visual() else {
             continue;
@@ -331,34 +361,6 @@ pub fn visual_property_sync_system(changed_entities: Query<PropertySyncData, Pro
         // 名前は失敗の記録のときだけ作る（位置が動くたびに全部の見た目が通る道）
         let entity_name = || format_entity_name(entity, name);
 
-        // Offset同期: Arrangementのoffset（論理座標）にGlobalArrangementのscale（累積DPIスケール）を適用
-        // ただし、WindowエンティティはWin32がCompositionTargetを通じて位置を管理するため、
-        // offsetを設定すると二重にオフセットが適用されてしまう。Windowはスキップする。
-        if !is_window {
-            // GlobalArrangementから累積スケールを取得（親からのDPIスケールを含む）
-            let scale_x = global_arrangement.scale_x();
-            let scale_y = global_arrangement.scale_y();
-            // 論理座標 × 累積スケール = 物理ピクセル座標
-            let offset_x = arrangement.offset.x * scale_x;
-            let offset_y = arrangement.offset.y * scale_y;
-
-            // WUC は SetOffset(Vector3) 1 回で x,y を設定（DComp は SetOffsetX2/Y2 の 2 回）。
-            // z は DComp 非設定に合わせ 0.0。
-            let offset = windows_numerics::Vector3 {
-                X: offset_x,
-                Y: offset_y,
-                Z: 0.0,
-            };
-            if let Err(e) = visual_com.SetOffset(offset) {
-                error!(
-                    entity = %entity_name(),
-                    error = ?e,
-                    "[visual_property_sync] SetOffset failed"
-                );
-            }
-        }
-
-        // Opacity同期: Visual.opacityを読み取り、is_visible=falseなら0.0を設定
         // 欄へ直に書かれた NaN の記録。持ち主は fill_world_visuals が訪れないのでここで残す（2.8）。
         // Visual が変わったときだけ出し、位置が動くたびには繰り返さない。
         if visual_component.is_changed() && visual_component.opacity.is_nan() {
@@ -367,12 +369,61 @@ pub fn visual_property_sync_system(changed_entities: Query<PropertySyncData, Pro
                 "[visual_property_sync] 描画面の持ち主の不透明度が NaN なので、1.0 として写す"
             );
         }
-        let opacity_value = if !visual_component.is_visible {
+        let own_opacity = if !visual_component.is_visible {
             0.0
         } else {
             visual_component.clamped_opacity()
         };
-        if let Err(e) = visual_com.SetOpacity(opacity_value) {
+        let local = transform.map_or(Matrix3x2::identity(), |t| t.to_affine())
+            * Matrix3x2::from(arrangement.offset);
+        let OwnerProps {
+            transform: wuc,
+            opacity,
+            size_px,
+        } = owner_props(
+            local,
+            own_opacity,
+            global_arrangement.scale_x(),
+            placement.map(|p| &p.0),
+        );
+
+        // WindowエンティティはWin32がCompositionTargetを通じて位置を管理するため、
+        // 位置を設定すると二重にオフセットが適用されてしまう。Windowはスキップする。
+        if !is_window {
+            // TransformMatrix と Offset を掛ける順は文書に無いので、片方だけを使う
+            let (offset, matrix) = match wuc {
+                WucTransform::Offset(o) => (o, Matrix4x4::translation(0.0, 0.0, 0.0)),
+                WucTransform::Matrix(m) => (Vector3::zero(), m),
+            };
+            if let Err(e) = visual_com.SetOffset(offset) {
+                error!(
+                    entity = %entity_name(),
+                    error = ?e,
+                    "[visual_property_sync] SetOffset failed"
+                );
+            }
+            if let Err(e) = visual_com.SetTransformMatrix(matrix) {
+                error!(
+                    entity = %entity_name(),
+                    error = ?e,
+                    "[visual_property_sync] SetTransformMatrix failed"
+                );
+            }
+            if let Some((w, h)) = size_px
+                && let Err(e) = visual_com.SetSize(Vector2 {
+                    X: w as f32,
+                    Y: h as f32,
+                })
+            {
+                error!(
+                    entity = %entity_name(),
+                    error = ?e,
+                    "[visual_property_sync] SetSize failed"
+                );
+            }
+        }
+
+        if let Err(e) = visual_com.SetOpacity(opacity) {
             error!(
                 entity = %entity_name(),
                 error = ?e,

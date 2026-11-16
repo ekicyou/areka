@@ -245,3 +245,85 @@ fn active_auto_owner_attaches_to_its_parent_owner_below_manual_owners() {
         "上げた回に親の持ち主へ繋ぎ、手動の持ち主より下"
     );
 }
+
+/// 持ち主の変形・節の下の持ち主・自動の持ち主の写しと、置き場・変形の外れを同じ回に写す（4.4・4.5・4.7・4.8・5.1・5.2）。
+#[test]
+fn owner_transform_and_placement_map_and_revert_on_removal() {
+    use crate::ecs::graphics::{PlacementClip, PlacementKind, SurfacePlacement, VisualTransform};
+    use crate::numerics::Transform2D;
+    use windows_numerics::{Matrix3x2, Vector2};
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let core = GraphicsCore::new().expect("GraphicsCore");
+    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d")).expect("WUC");
+    let compositor = wuc.compositor().expect("compositor");
+    let visual: WucVisual = compositor.CreateSpriteVisual().unwrap().cast().unwrap();
+
+    let mut world = World::new();
+    let e = world
+        .spawn((
+            Visual {
+                opacity: 0.5,
+                ..Default::default()
+            },
+            VisualGraphics::new(visual.clone()),
+        ))
+        .id();
+    world.get_mut::<Arrangement>(e).unwrap().offset = Offset { x: 10.0, y: 20.0 };
+    let mut schedule = Schedule::default();
+    schedule.add_systems(visual_property_sync_system);
+    schedule.run(&mut world);
+    let offset = visual.Offset().unwrap();
+    assert_eq!((offset.X, offset.Y), (10.0, 20.0));
+
+    // 置き場が無い持ち主の VisualTransform（拡大）は行列で写り、位置は 0
+    let mut t = Transform2D::identity();
+    t.scale = Vector2 { X: 2.0, Y: 2.0 };
+    world.entity_mut(e).insert(VisualTransform(t));
+    schedule.run(&mut world);
+    let m = visual.TransformMatrix().unwrap();
+    assert_eq!((m.M11, m.M22, m.M41, m.M42), (2.0, 2.0, 10.0, 20.0));
+    assert_eq!(visual.Offset().unwrap().X, 0.0);
+
+    // 変形の外れは同じ回に位置だけの写しへ戻る
+    world.entity_mut(e).remove::<VisualTransform>();
+    schedule.run(&mut world);
+    let m = visual.TransformMatrix().unwrap();
+    assert_eq!((m.M11, m.M22, m.M41, m.M42), (1.0, 1.0, 0.0, 0.0));
+    assert_eq!(visual.Offset().unwrap().X, 10.0);
+
+    // 節の下の手動の持ち主: 親の節の世界の行列を掛け、不透明度は祖先の積
+    world
+        .entity_mut(e)
+        .insert(SurfacePlacement(PlacementKind::Embedded {
+            parent_world: Matrix3x2::translation(100.0, 0.0),
+            opacity: 0.5,
+            visible: true,
+            clip: PlacementClip::None,
+        }));
+    schedule.run(&mut world);
+    let offset = visual.Offset().unwrap();
+    assert_eq!((offset.X, offset.Y), (110.0, 20.0));
+    assert_eq!(visual.Opacity().unwrap(), 0.25);
+
+    // 自動で上げた持ち主: 整数の原点と大きさだけ・不透明度 1
+    *world.get_mut::<SurfacePlacement>(e).unwrap() = SurfacePlacement(PlacementKind::Auto {
+        origin_px: (7, 9),
+        size_px: (40, 30),
+    });
+    schedule.run(&mut world);
+    let offset = visual.Offset().unwrap();
+    assert_eq!((offset.X, offset.Y), (7.0, 9.0));
+    let size = visual.Size().unwrap();
+    assert_eq!((size.X, size.Y), (40.0, 30.0));
+    assert_eq!(visual.Opacity().unwrap(), 1.0);
+
+    // 置き場の外れも同じ回に今の写しへ戻る
+    world.entity_mut(e).remove::<SurfacePlacement>();
+    schedule.run(&mut world);
+    let offset = visual.Offset().unwrap();
+    assert_eq!((offset.X, offset.Y), (10.0, 20.0));
+    assert_eq!(visual.Opacity().unwrap(), 0.5);
+}

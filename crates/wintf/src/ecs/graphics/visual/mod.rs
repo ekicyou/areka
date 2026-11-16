@@ -59,7 +59,12 @@ pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
 pub use placement::SurfacePlacement;
-pub(crate) use placement::{ChildClass, HostAnswer, child_class, wuc_children_order, wuc_host_of};
+pub(crate) use placement::{
+    ChildClass, HostAnswer, OwnerProps, WucTransform, child_class, owner_props, wuc_children_order,
+    wuc_host_of,
+};
+#[cfg(test)]
+pub(crate) use placement::{PlacementClip, PlacementKind};
 pub use promotion::AutoPromotion;
 pub(crate) use promotion::Phase;
 #[cfg(test)]
@@ -89,7 +94,7 @@ pub use world_visual::*;
 /// 頻繁に更新される窓の下の節は自動で描画面の持ち主へ上がり、落ち着くと節へ戻る（[`AutoPromotion`]）。
 /// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける（自動の上げ下げより優先する）。昇格した持ち主の
 /// `VisualDrawContent` は自分の描画面の木の先頭の 1 件として子より先に描かれる。持ち主の
-/// `VisualTransform` は WUC の Visual の変形として写す（`warn!` は残さない）。
+/// `VisualTransform` は WUC の Visual の変形として写す（`warn!` は残さない・自動で上げた持ち主は描画面の中で描く）。
 ///
 /// # ライフタイムイベント
 /// - `on_add`: `Arrangement::default()`を自動挿入

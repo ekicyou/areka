@@ -264,6 +264,92 @@ fn scale_becomes_a_matrix_and_dpi_scales_only_the_translation() {
     assert_eq!((got.M41, got.M42), (5.0, 6.25));
 }
 
+// --- 持ち主へ写す値（owner_props） ---
+
+fn embedded(parent_world: Matrix3x2, opacity: f32, visible: bool) -> PlacementKind {
+    PlacementKind::Embedded {
+        parent_world,
+        opacity,
+        visible,
+        clip: PlacementClip::None,
+    }
+}
+
+#[test]
+fn an_owner_without_placement_keeps_the_offset_when_only_translated() {
+    let got = owner_props(Matrix3x2::translation(10.0, 20.0), 0.5, 1.5, None);
+    assert_eq!(
+        got,
+        OwnerProps {
+            transform: WucTransform::Offset(Vector3 {
+                X: 15.0,
+                Y: 30.0,
+                Z: 0.0
+            }),
+            opacity: 0.5,
+            size_px: None,
+        }
+    );
+}
+
+#[test]
+fn an_owner_without_placement_maps_its_visual_transform_as_a_matrix() {
+    let local = Matrix3x2::rotation(30.0) * Matrix3x2::translation(10.0, 20.0);
+    let got = owner_props(local, 1.0, 2.0, None);
+    assert_eq!(got.transform, wuc_transform(local, 2.0));
+    assert!(matches!(got.transform, WucTransform::Matrix(_)));
+}
+
+#[test]
+fn an_owner_under_a_node_multiplies_the_parent_world_and_the_ancestor_opacity() {
+    let place = embedded(Matrix3x2::translation(10.0, 20.0), 0.4, true);
+    let got = owner_props(Matrix3x2::translation(5.0, 5.0), 0.5, 1.5, Some(&place));
+    assert_eq!(
+        got.transform,
+        WucTransform::Offset(Vector3 {
+            X: 22.5,
+            Y: 37.5,
+            Z: 0.0
+        })
+    );
+    assert!((got.opacity - 0.2).abs() < 1e-6, "{}", got.opacity);
+    assert_eq!(got.size_px, None);
+
+    let world = Matrix3x2::rotation(30.0) * Matrix3x2::translation(100.0, 0.0);
+    let local = Matrix3x2::translation(5.0, 0.0);
+    let rotated = owner_props(local, 1.0, 1.25, Some(&embedded(world, 1.0, true)));
+    assert_eq!(rotated.transform, wuc_transform(local * world, 1.25));
+}
+
+#[test]
+fn an_owner_under_a_hidden_node_maps_opacity_zero() {
+    let place = embedded(Matrix3x2::identity(), 1.0, false);
+    let got = owner_props(Matrix3x2::identity(), 1.0, 1.0, Some(&place));
+    assert_eq!(got.opacity, 0.0);
+}
+
+#[test]
+fn an_auto_owner_maps_only_its_integer_origin_and_size() {
+    let place = PlacementKind::Auto {
+        origin_px: (13, -4),
+        size_px: (40, 30),
+    };
+    let local = Matrix3x2::rotation(30.0) * Matrix3x2::translation(7.3, 2.1);
+    let got = owner_props(local, 0.5, 1.25, Some(&place));
+    assert_eq!(
+        got,
+        OwnerProps {
+            transform: WucTransform::Offset(Vector3 {
+                X: 13.0,
+                Y: -4.0,
+                Z: 0.0
+            }),
+            opacity: 1.0,
+            size_px: Some((40, 30)),
+        }
+    );
+}
+
 // --- 切り抜きの合わせ（merged_clip） ---
 
 const SIZE: (f32, f32) = (100.0, 50.0);
