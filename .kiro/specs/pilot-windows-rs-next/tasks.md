@@ -21,7 +21,7 @@
   - _Dispatch: mechanical — 設計が manifest・設定・文書の節の形を与えている_
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.10, 2.1, 2.2, 13.1, 15.2_
 
-- [ ] 1.2 全クレートの manifest を建て、上流を取り寄せて依存の解決を確かめる
+- [x] 1.2 全クレートの manifest を建て、上流を取り寄せて依存の解決を確かめる
   - 設計の File Structure Plan の全クレート（`q1-winmsg`・`q2-placement` の 7 つ・`q3-default`・`q3-minimal`・`bind-next`・`q4-wuc`・`q5-hwnd`・`q6-com`・`q7-vertical`・`q9-api-count`・`q10-winmsg`）の manifest を、依存の向きの図どおりの依存だけで置き、各ソースは空の骨組み（モジュールの宣言と空のファイル）にする。`q1-winmsg`・`q10-winmsg` は edition 2021 でライブラリ名を元と同じにする。`q10-winmsg` の `[[example]]`（`q1-winmsg` の例を path で指す 2 つ）は、指す先が 2.1 まで無いのでここでは書かず、11.1 で足す。フォルダ名に本線のクレートと同じ名前を使わない
   - 上流の git を既定の `CARGO_HOME` へ取り寄せ（確定 10）、置き場の `Cargo.lock` の windows-rs の source が固定の rev の 1 つだけになっていることを確かめる。取り寄せた上流に兄弟のクレート（`windows-future`・`windows-collections`・`windows-reference`・`windows-time`）が在ることを確かめる
   - 借りる本線のクレートを含む `q7-vertical` の骨組みを組み、`windows-core` 0.62 と 0.101 が同じ木に並ぶこと（`cargo tree -d` の出力）と、`q1-winmsg` と本物の `wintf-winmsg-executor` が同じライブラリ名で同じ木に入っても組めることを確かめる。cargo が断ったら設計の Risks のとおり `q1-winmsg` のライブラリ名だけを変え、その旨を記録する。`image-webp` が crates.io の版に解き直された版を記録する
@@ -324,3 +324,8 @@
   - _Depends: 12.2, 12.3_
   - _Dispatch: mechanical — 確かめる項目を設計の表が与えている_
   - _Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 1.9, 2.3, 15.1, 15.2_
+
+## Implementation Notes
+
+- 置き場の `cargo` は必ず絶対の `--target-dir`（作業木の `target/pilot-windows-rs-next`）を付ける。置き場の中から `.cargo/config.toml` の相対の target-dir で組むと、パスが長すぎて proc-macro のリンクが LNK1104 で落ちる（1.2）。
+- q2 のパッケージ名は `q2-<フォルダ名>`。emo 役の `src/main.rs`（bin）は骨組みに無いので q2 のタスクで足す（1.2 のレビュー）。

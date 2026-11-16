@@ -1,0 +1,17 @@
+[package]
+name = "q7-vertical"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bind-next = { path = "../bind-next" }
+q4-wuc = { path = "../q4-wuc" }
+q1 = { package = "q1-winmsg", path = "../q1-winmsg" }
+windows-core = { workspace = true }
+windows-text = { workspace = true }
+wintf = { workspace = true }
+areka-emo-text = { workspace = true }
+areka-parsers = { workspace = true }
+areka-sakura = { workspace = true }
+png = { workspace = true }

@@ -1,8 +1,26 @@
 # 先進坑 pilot-windows-rs-next: 本線から独立したワークスペース（二坑モデルの例外・要件 1.2）。
-# [package] を持たない仮想の manifest。1.2 で各クレートを members に足す。
+# [package] を持たない仮想の manifest。
 [workspace]
 resolver = "3"
-members = []
+members = [
+    "q1-winmsg",
+    "q2-placement/plan1-wintf",
+    "q2-placement/plan1-emo",
+    "q2-placement/plan2-wintf",
+    "q2-placement/plan2-emo",
+    "q2-placement/plan3-bind",
+    "q2-placement/plan3-wintf",
+    "q2-placement/plan3-emo",
+    "q3-default",
+    "q3-minimal",
+    "bind-next",
+    "q4-wuc",
+    "q5-hwnd",
+    "q6-com",
+    "q7-vertical",
+    "q9-api-count",
+    "q10-winmsg",
+]
 
 [workspace.package]
 edition = "2024"
@@ -30,6 +48,7 @@ areka-parsers = { path = "../../../areka-parsers" }
 areka-sakura = { path = "../../../areka-sakura" }
 
 # crates.io（本線の Cargo.lock と同じ版）
+async-task = { version = "4.7.1", default-features = false }
 bevy_ecs = "0.19.1"
 png = "0.18.1"
 tracing = "0.1"

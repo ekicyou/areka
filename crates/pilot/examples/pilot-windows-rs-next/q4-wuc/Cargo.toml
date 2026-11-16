@@ -1,0 +1,11 @@
+[package]
+name = "q4-wuc"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bind-next = { path = "../bind-next" }
+q1 = { package = "q1-winmsg", path = "../q1-winmsg" }
+windows-core = { workspace = true }
+png = { workspace = true }
