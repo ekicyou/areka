@@ -9,7 +9,7 @@
   - 出所の名前で選ぶテストの出所の定数は、そのテストを緑に戻す段で書き換える（`areka-runtime` に残る `balloon_background_tests`・`shell_cursor_assets_tests` は段 2 の 3.6、本体へ移る `assets_tests` は段 3 の 4.5）。段 1 の移動で出所が `areka_runtime::…` に変わり、書き換えないと段 2・3 の緑の条件が満たせないため（設計の要件 6.4 の段 7 から寄せる）。段 7 の 8.1 は残りの読み手を持つ（`emo2_real_run/common_tests.rs` の見本の行は、出所でなく本文の印〔`wrap=BudouxWordWrap` ほか〕で行を選ぶので段 7 まで緑のまま）。
   - 本体の examples `collision-probe.rs` の `#[path]` は、段 1（2.4）で移した先へ一時につなぎ直す（段 3・4 の `cargo check --workspace --all-targets` を通すため・最終形は段 5 の 6.1）。
 
-- [ ] 1. 着手の基準を取る（段 0）
+- [x] 1. 着手の基準を取る（段 0）
   - コードに手を入れる前の枝の先頭で、`cargo test --workspace --no-fail-fast -- --list` を取り、ワークツリーの `target/runtime-crate-split/tests-before.txt` に残す
   - `: test$` の行の数と、取ったときのコミットを実装の記録に書く
   - 移す前の `log_history` の分け方で、runtime の出所（`areka::runtime`）の行がどの種別にも当たらないこと（今の `log_history_tests.rs` の確かめ）を記録に書く（6.6 の前の側）
