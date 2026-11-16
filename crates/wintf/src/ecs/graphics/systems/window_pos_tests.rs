@@ -24,6 +24,7 @@ fn invalidate_clears_draw_tree_unit_rect() {
         .spawn(DrawTree {
             commands: Vec::new(),
             unit_rect: Some(unit_rect.into()),
+            ..Default::default()
         })
         .id();
 

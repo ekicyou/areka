@@ -13,6 +13,8 @@ pub struct DrawTree {
     /// (0,0)-(1,1) の矩形の図形。回転した矩形の切り抜きを図形へ上げるとき共有する。
     /// 装置の失いで空に戻り、次の組み直しで工場から作り直す。
     pub(crate) unit_rect: Option<ID2D1Geometry>,
+    /// 列が既に自分の描画面の物理ピクセルにある（自動で上げた持ち主の部分の列）ので、恒等の根の変換で再生する。
+    pub(crate) device_px: bool,
 }
 
 // SAFETY 条件: windows-rs の COM スマートポインタは自動では Send/Sync にならない。
