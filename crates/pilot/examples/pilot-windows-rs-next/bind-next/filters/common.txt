@@ -1,0 +1,12 @@
+// 2 つ以上の問い（4・6・7）が使う物。1 行 1 つの名指し（// の注は数えない）。
+CoInitializeEx
+CoUninitialize
+D3D11CreateDevice
+ID3D11Device
+ID3D11DeviceContext
+D2D1CreateFactory
+ID2D1Factory1
+ID2D1Device
+ID2D1DeviceContext
+IDXGIDevice
+IDXGISurface

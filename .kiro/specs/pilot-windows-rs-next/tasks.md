@@ -30,7 +30,7 @@
   - _Dispatch: standard — 上流の git と借りるクレートの解決の詰まりを実地で解く_
   - _Requirements: 1.2, 1.4, 2.1, 2.2, 2.5, 13.5, 15.2_
 
-- [ ] 1.3 共有の既定の形の束縛 `bind-next` の作り方を通す
+- [x] 1.3 共有の既定の形の束縛 `bind-next` の作り方を通す
   - `bind-next` の build で、問いごとのフィルターの文書（`q4-wuc`・`q6-renderer`・`q7-text`・`common`）を全部読み、既定の形の束縛を `OUT_DIR` へ書く。下線の描き手の 3 つ（`IDWriteTextRenderer1`・`IDWriteTextRenderer`・`IDWritePixelSnapping`）を実装できる形にする `.implements` の指定は、ここでは書かず 6.2 で足す（1.3 は最小に保ち、名指しの無い型への指定で build が止まるのを避ける）
   - 共通のフィルターには 2 つ以上の問いが使う物（COM の初期化・D3D11 と D2D の装置の作り方・DXGI ほか）を入れ、問いごとのフィルターは空で始める（中身は各問いのタスクが足す）
   - 生成した束縛が名指しした兄弟のクレートだけを依存に残す
@@ -329,3 +329,4 @@
 
 - 置き場の `cargo` は必ず絶対の `--target-dir`（作業木の `target/pilot-windows-rs-next`）を付ける。置き場の中から `.cargo/config.toml` の相対の target-dir で組むと、パスが長すぎて proc-macro のリンクが LNK1104 で落ちる（1.2）。
 - q2 のパッケージ名は `q2-<フォルダ名>`。emo 役の `src/main.rs`（bin）は骨組みに無いので q2 のタスクで足す（1.2 のレビュー）。
+- `windows-bindgen`（この rev）のフィルターは短い名前（`CoInitializeEx`）で書く。`Windows.Win32...` の長い名前は `could not resolve filter entry` で断られる。フィルターが全部空だと止まる（1.3）。

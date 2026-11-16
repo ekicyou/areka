@@ -81,7 +81,16 @@ windows-link v0.100.1 (https://github.com/microsoft/windows-rs?rev=f37e2f9046cf9
 
 同じく 2 版が並ぶ物: `windows-implement` 0.60.2／0.101.0・`windows-interface` 0.59.3／0.101.0・`windows-numerics` 0.3.1／0.101.0・`windows-result` 0.4.1／0.100.1・`windows-strings` 0.5.1／0.100.1。パスは作業木の根からの相対に縮めた。
 
-（フィルターの行数と生成した行数は 1.3 で記入）
+#### bind-next（1.3）
+
+`build.rs` が `filters/*.txt`（`common`・`q4-wuc`・`q6-renderer`・`q7-text`）を全部読み、既定の形の束縛を `OUT_DIR/bindings.rs` へ書き、`lib.rs` が `include!` する（束縛はコミットしない）。名指しは関数・型の短い名前（`CoInitializeEx` のように）で、`Windows.Win32.…` の長い名前は「could not resolve filter entry」で断られた。
+
+| フィルター | 名指しの行数 |
+|---|---|
+| `common.txt` | 11（COM の初期化 2・D3D11 3・D2D 4・DXGI 2） |
+| `q4-wuc.txt`・`q6-renderer.txt`・`q7-text.txt` | 0（各問いのタスクが足す） |
+
+生成した `bindings.rs`: 7742 行（common の 11 件だけで。依存の型を自動で引くため名指しの約 700 倍）。束縛が名指しした兄弟は `windows-numerics`（`windows_numerics::Vector2`／`Matrix4x4`）だけで、`Cargo.toml` に足した。`windows-future` などは名指しされず足していない。`.implements`（下線の描き手の 3 つ）は 6.2 で足す。
 
 ### RunCommands（走らせ方）
 
