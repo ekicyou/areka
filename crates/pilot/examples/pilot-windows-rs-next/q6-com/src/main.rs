@@ -1,4 +1,6 @@
 mod renderer;
 mod shiori;
 
-fn main() {}
+fn main() {
+    shiori::run();
+}

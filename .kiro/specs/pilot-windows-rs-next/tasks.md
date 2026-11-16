@@ -135,7 +135,7 @@
 
 - [ ] 6. 問い 6: `#[interface]`・`#[implement]` で COM を実装する
 
-- [ ] 6.1 (P) SHIORI のインターフェースの 1 組を写して組む
+- [x] 6.1 (P) SHIORI のインターフェースの 1 組を写して組む
   - `shiori-abi` の `interface.rs` から `IShiori`（`Get` は `HRESULT` を直に返す・`Notify` は `Result<()>`）の定義・試験の中の実装 1 つ・呼び出しを `q6-com` へ写し、写した直後を 1 コミットにする
   - `windows-core` 0.101 の `#[interface]`・`#[implement]` で、今の宣言を変えずに組めるかを確かめ、`Get` が実装まで届いて `S_OK` と応答の `HSTRING` が返ることを見る
   - 組めないときは組めなかった所と代わりの組み方の見立てを問い 6 の節に書く
@@ -337,3 +337,4 @@
 - q2 の描く本体 `shared/draw_body.rs` は `use super::*;` で始まり、読み込む側の lib が `use <束縛>::*; use windows_core::*;` と `#[path]` で型の出どころを選ぶ。読む側は `windows-numerics` を直に依存に持つ。継いだメソッドは `ID2D1RenderTarget` の名指しが要る（4.1）。
 - 一次記録の見立ての理由は「測った数」と「構造上の見立て」を分けて書き、1 つの写しの数を一般化しない（4.3 のレビュー）。`windows-bindgen`（この rev）にほかのクレートの型を参照させる公開の口は無い。
 - この rev の `HWND` は既定・`.minimal()`・`.sys()` のどれも `*mut HWND__` の別名（0.62 の newtype と違う）。`Default`／`is_invalid` は無く `Hash` は在る。包みを Component にするには `unsafe impl Send/Sync` が要る（5）。REWRITE_TABLE の HWND の行はこれに合わせる。
+- 0.101 の `HSTRING` は `Display` を持たない（`display()`・`to_string_lossy()` を使う）。`#[interface]` に `IUnknown_Vtbl` の取り込みは要らない（6.1）。

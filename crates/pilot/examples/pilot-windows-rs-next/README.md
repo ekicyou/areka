@@ -135,7 +135,7 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 | 3 | `.minimal()` で新しく足した `build.rs`・`filters.txt`・`src/bindings.rs`（束縛の取り込み＋手書きの包み）・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +12・+49・+78・+211／−1・+2 | | |
 | 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | 既定（3.1）: 写しの書き換え +31／−20（新しいファイルを入れて +305／−21）。`.minimal()`（3.2）: 写しの書き換え +31／−20（既定と同じ）（新しいファイルを入れて +383／−21） | 既定: 4・`.minimal()`: 1 | 既定: 約 7 分・`.minimal()`: 約 6 分 |
 | 4 |  |  |  |  |  |
-| 6 | `crates/shiori-abi/src/interface.rs`（`020fa1248`。先頭の属性と `use` 5・`IShiori` の定義 39・試験の中の定数 4 と実装 `MockBrain` 34・試験の中の呼び出し 15。間の空行 4 は数えない） | 97 |  |  |  |
+| 6 | `crates/shiori-abi/src/interface.rs`（`020fa1248`。先頭の属性と `use` 5・`IShiori` の定義 39・試験の中の定数 4 と実装 `MockBrain` 34・試験の中の呼び出し 15。間の空行 4 は数えない） | 97 | +69／−50（`shiori.rs` +66／−49・`main.rs` +3／−1。大半は試験の中から外へ出した字下げで、`IShiori` の定義は 0） | 1 | 約 6 分 |
 
 1 行あたり・1 API あたりの手間 ＝ 手間 ÷ 書き換えの行数／フィルターの行数。問い 9 の全数に掛けて移行の本体の規模を見立てる。
 
@@ -335,10 +335,14 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 6: COM の実装（`#[interface]`・`#[implement]`）
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
-- 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
+- 見立ての候補（6.1・SHIORI の 1 組）: go。`IShiori` の宣言（`Get` が `HRESULT` を直に返す・`Notify` が `Result<()>`）は 1 字も変えずに `windows-core` 0.101 の `#[interface]` で組め、`#[implement(IShiori)]` の `IShiori_Impl` も宣言の戻り値のまま書けた。
+  - 走らせた結果: `q6-com` の bin が `q6 IShiori::Get hr=0x00000000 response=pong` を出す（`Get` が実装の `MockBrain` まで届き、`S_OK` と move-out した応答の `HSTRING` が返る。続く `Notify` も `Ok`）。
+  - 写しの書き換え（`429ddf9c5` からの numstat）: `shiori.rs` +66／−49・`main.rs` +3／−1。中身の書き換えは `use` の 1 行・`crate::error::SHIORI_S_PENDING` を写しの中の定数へ向けた 2 行・bin から呼ぶ `run()` の包みだけで、残りは試験の中から外へ出した字下げ。
+- 学び（6.1）:
+  - 0.101 の `#[interface]` は `IUnknown_Vtbl` を呼ぶ側の `use` に要らない（0.62 の写しの `use` に在ると「使っていない」の警告）。
+  - 0.101 の `HSTRING` は `Display` を持たない（`hstring.rs` に `display()`・`to_string_lossy()`・`to_os_string()` と `Debug` は在る）。`{}` で出す所や `.to_string()` を呼ぶ所（`shiori-abi` の試験の `MockHost` の `key.to_string()` など）は書き換えが要る。これは構造上の見立てで、本線の呼び出しの数は数えていない。
+- 確かめた日: 2026-11-16（6.1）
+- 止まった所・理由・代わりの見立て: 無し（6.1）
 - 判定: （開発者が下す）
 
 ### 問い 7: `windows-text` の縦書き
