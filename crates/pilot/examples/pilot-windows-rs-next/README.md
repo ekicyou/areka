@@ -714,7 +714,7 @@ cargo <run|build|test|clippy> --manifest-path C:\home\maz\git\areka\crates\pilot
 ![vt-balloon の撮った絵](evidence/q7-balloon.png)
 
 - COM: ここは DispatcherQueue に初期化させた ASTA（`DQTAT_COM_ASTA`・`q4-demo` と同じ）で、`vt-compare` の MTA と違う。`vt-compare` は今の側の GPU の World（MTA）と描く条件を揃えて画素を比べるために MTA にしたが、`vt-balloon` は画素を比べず、窓・DispatcherQueue・Compositor が同じ UI スレッドに要る（WUC は呼ぶスレッドの DispatcherQueue を求める）ので、本体の窓のスレッドと同じ形を取った。`windows-text` の配置と当たりの判定は ASTA でもそのまま動いた。
-- `bind-next` のフィルター: `q7-text.txt` に 17 件足した（`WS_EX_TOPMOST`・`SendInput`・`INPUT`・`INPUT_MOUSE`・`MOUSEINPUT`・`MOUSEEVENTF_` の 5 つ・`GetSystemMetrics`・`SM_` の仮想画面の 4 つ・`GetCursorPos`・`SetCursorPos`）。問い 7 も直に名指す名前 31 件を、設計の決まりどおり `q4-wuc.txt` から `common.txt` へ移した（合成のクラスと既定のインターフェース・相互運用の 3 つ・`DQTAT_COM_ASTA`・`GetWindowRect`・窓の形と見せ方・メッセージの回し・DPI）。束縛はフィルターの和なので中身は変わらず、`q4-demo` も組めた。`D2D1_ROUNDED_RECT`・`D2D_RECT_F`・`INPUT_0` は名指さずに出た。第 2 幕のフィルターの行数の表は 12.2 で直す。
+- `bind-next` のフィルター: `q7-text.txt` に 17 件足した（`WS_EX_TOPMOST`・`SendInput`・`INPUT`・`INPUT_MOUSE`・`MOUSEINPUT`・`MOUSEEVENTF_` の 5 つ・`GetSystemMetrics`・`SM_` の仮想画面の 4 つ・`GetCursorPos`・`SetCursorPos`）。問い 7 も直に名指す名前 31 件を、設計の決まりどおり `q4-wuc.txt` から `common.txt` へ移した（合成のクラスと既定のインターフェース・相互運用の 3 つ・`DQTAT_COM_ASTA`・`GetWindowRect`・窓の形と見せ方・メッセージの回し・DPI）。束縛はフィルターの和なので中身は変わらず、`q4-demo` も組めた。`D2D1_ROUNDED_RECT`・`D2D_RECT_F`・`INPUT_0` は名指さずに出た。第 2 幕のフィルターの行数の表は 12.2 で直した。
 - 見立ての候補: go。`windows-text` の配置を借りた DirectWrite の型として WUC の描画面へ自前の D2D で描き、カラー絵文字・範囲の色・当たりの判定（UTF-8 のバイト位置 → UTF-16 → 選択肢）まで、本体のバルーンと同じ形の実の窓で通った。判定は開発者が下す。
 - 学び:
   - `windows-text` の `hit_test_point` は UTF-8 のバイト範囲を返す（DirectWrite の UTF-16 でない）。`choices::choice_at` は UTF-16 を受けるので、バイト → UTF-16 の換算を 1 つ挟んだ。本体へ入れるなら、選択肢の範囲をバイトで持つか UTF-16 で持つかを 1 つに決めると換算が要らない。
