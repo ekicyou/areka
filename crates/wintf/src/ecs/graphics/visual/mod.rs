@@ -30,6 +30,8 @@ mod draw_content_tests;
 #[cfg(test)]
 mod placement_tests;
 #[cfg(test)]
+mod promotion_round_log_tests;
+#[cfg(test)]
 mod promotion_round_tests;
 #[cfg(test)]
 mod promotion_shape_tests;

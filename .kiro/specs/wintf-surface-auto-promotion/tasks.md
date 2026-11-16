@@ -72,7 +72,7 @@
   - _Dispatch: standard, effort high — 設計が形を与えるが帰属と祖先の優先の組み合わせが細かい_
   - _Requirements: 1.9, 1.10, 1.11, 2.1, 2.5, 2.6, 3.1, 4.5, 8.7_
 
-- [ ] 3.2 上げ下げと見送りの記録と、節の下の手動の持ち主の効かせられない形の warn! を足す
+- [x] 3.2 上げ下げと見送りの記録と、節の下の手動の持ち主の効かせられない形の warn! を足す
   - 相の移りの回だけ `[surface_promotion]` の `debug!` を 1 行（上げた・切り替えた・戻した、実体名と理由の語 `frequent`・`quiet`・`shape`＋見分けの語・`surface_failed`・`absorbed`・`hidden`）残す
   - 見送りは理由が前の見送りと違うときだけ `debug!` を残し、描画面を作れなかった回は既存の作成の `error!` に加えて見送りの `debug!` を 1 度残す
   - 節の下の手動の持ち主の効かせられない形（祖先の図形・角丸の切り抜き・軸に沿わない矩形の切り抜き・混ぜ方・後に描く中身との重なり・切り抜きを 1 つに合わせられない形）を、実体名つきで続く間 1 度の `warn!` に残す
@@ -180,3 +180,4 @@
 - 2.3: `TreeFrame::Segment` の `origin` は `Origin.dip`、`viewport` は原点から測った持ち主の描画面の矩形を渡す（3.4 の配線）。2 の冪でない端数の位置では原点を引いた f32 の下位の桁が揃わず、整数の移動でも件の鍵が変わりうる（自分の描画面の描き直しが増えるだけ）
 - 2.4: R-e は案 b（端数の位置のまま上げる）で揃った（拡大 1.0・1.25・1.5、矩形・にじむ楕円・線形と縮める HQC のビットマップ、画像全体で ±1）。ただし原点を DIP（px÷拡大）で引くと f32 の丸めで崩れる（楕円・拡大 1.25 で 16）ので、`TreeFrame::Segment` は `origin_px` と `scale` を取り、列を自分の描画面の物理ピクセルで出す。**3.4 の配線では、自動の持ち主の描画面の再生の根の変換を恒等に、`diff::entries` の拡大を (1,1) にする（さもないと DPI の拡大が二重に掛かる）**。`INTEGER_POSITION_ONLY = false`。`Origin.dip` は部分の列では使わない
 - 3.1: `RoundPlan.segments` は Active と 3 部品（`SurfaceGraphics`）つきの Preparing だけ。3.4 は (a) `segments` に入った Preparing の部分を書いた回にだけ、全部の根を回した後で `built = true` を `bypass_change_detection` で立てる (b) `segments` に無い持ち主には立てない (c) 係の順 `sync_surface_owner_parts` → `update_draw_trees` → `deferred_surface_creation_system` を保つ (d) どの根の回でも `written` に入らなかった実体の置き場を外し、どの走査の列にも現れなかった控えの自動の持ち主を見えないとして戻す (e) `promotion_round.rs` の dead_code の許しを外す。装置が無ければ用意中は Failed で戻す
+- 3.2: `run_round` は `reported: &mut ReportedIssues` を取る。3.4 は `update_draw_trees` の `Local<ReportedIssues>` を `fill_world_visuals` と `run_round` で共有し、`end_round` は全部の根を回した後に 1 度だけ呼び、`run_round` は `needs_rebuild` に関係なく毎フレーム回す（さもないと warn! の「続く間 1 度」が崩れる）。どの走査の列にも現れなかった自動の持ち主の `hidden` の戻しは `promotion_round::record` を `pub(crate)` にして記録を残す。`clip_combo` は `merged_clip` の `Unsupported` の条件の写しなので、4.3 で `merged_clip` を本番で呼ぶときに両者の答えが合うテストを 1 本足す

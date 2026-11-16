@@ -18,7 +18,7 @@ use super::promotion::*;
 use super::promotion_round::*;
 use super::promotion_shape::Ineligible;
 use super::promotion_shape_tests::{node, owner, phased, scan};
-use super::world_visual::{ClipClass, ScanEntry, ScanKind, TreeScan};
+use super::world_visual::{ClipClass, ReportedIssues, ScanEntry, ScanKind, TreeScan};
 use super::{OwnSurface, VisualTransform};
 use crate::ecs::graphics::GraphicsCommandList;
 use crate::ecs::graphics::components::SurfaceGraphics;
@@ -45,7 +45,7 @@ fn rule(phase: Phase) -> RuleState {
 }
 
 /// 手で組んだ項ごとに実体を生む（節は項の相の状態の部品を持ち、手動の持ち主は持たない）。
-fn world_scan(world: &mut World, entries: Vec<ScanEntry>) -> TreeScan {
+pub(super) fn world_scan(world: &mut World, entries: Vec<ScanEntry>) -> TreeScan {
     let mut s = scan(entries);
     for e in &mut s.entries {
         e.entity = match e.kind {
@@ -61,7 +61,7 @@ fn world_scan(world: &mut World, entries: Vec<ScanEntry>) -> TreeScan {
     s
 }
 
-fn ctx(now: f64) -> RoundContext {
+pub(super) fn ctx(now: f64) -> RoundContext {
     RoundContext {
         now: Some(now),
         device_ready: true,
@@ -71,7 +71,21 @@ fn ctx(now: f64) -> RoundContext {
 }
 
 /// 走査の列の相を部品から読み直し、1 回の判断を回して命令を反映する。
-fn round(world: &mut World, s: &mut TreeScan, c: &RoundContext) -> (RoundPlan, HashSet<Entity>) {
+pub(super) fn round(
+    world: &mut World,
+    s: &mut TreeScan,
+    c: &RoundContext,
+) -> (RoundPlan, HashSet<Entity>) {
+    round_with(world, s, c, &mut ReportedIssues::default())
+}
+
+/// [`round`] の、記録の覚えを回をまたいで持つ形（回の終わりに `end_round` を呼ぶ）。
+pub(super) fn round_with(
+    world: &mut World,
+    s: &mut TreeScan,
+    c: &RoundContext,
+    reported: &mut ReportedIssues,
+) -> (RoundPlan, HashSet<Entity>) {
     for e in &mut s.entries {
         if let ScanKind::Node { phase } = &mut e.kind {
             *phase = world.get::<AutoPromotion>(e.entity).unwrap().rule.phase();
@@ -80,20 +94,27 @@ fn round(world: &mut World, s: &mut TreeScan, c: &RoundContext) -> (RoundPlan, H
     let mut state: SystemState<(Commands, Query<PromotionData>)> = SystemState::new(world);
     let (mut commands, mut states) = state.get_mut(world).unwrap();
     let mut written = HashSet::new();
-    let plan = run_round(c, s, &mut states, &mut commands, &mut written);
+    let plan = run_round(c, s, &mut states, &mut commands, &mut written, reported);
+    reported.end_round();
     state.apply(world);
     (plan, written)
 }
 
 /// 項 `idx` だけを「この回の更新」ありにする。
-fn only_updated(s: &mut TreeScan, idx: &[usize]) {
+pub(super) fn only_updated(s: &mut TreeScan, idx: &[usize]) {
     for (i, e) in s.entries.iter_mut().enumerate() {
         e.updated = idx.contains(&i);
     }
 }
 
 /// 項 `idx` を更新した回を、`start` 秒から 8 Hz で `n` 回まわし、最後の回の分け方を返す。
-fn feed(world: &mut World, s: &mut TreeScan, idx: &[usize], start: f64, n: usize) -> RoundPlan {
+pub(super) fn feed(
+    world: &mut World,
+    s: &mut TreeScan,
+    idx: &[usize],
+    start: f64,
+    n: usize,
+) -> RoundPlan {
     only_updated(s, idx);
     let mut last = None;
     for k in 0..n {
@@ -102,7 +123,7 @@ fn feed(world: &mut World, s: &mut TreeScan, idx: &[usize], start: f64, n: usize
     last.unwrap()
 }
 
-fn ent(s: &TreeScan, i: usize) -> Entity {
+pub(super) fn ent(s: &TreeScan, i: usize) -> Entity {
     s.entries[i].entity
 }
 
@@ -112,7 +133,7 @@ fn ents(s: &TreeScan, idx: &[usize]) -> Vec<(Entity, usize)> {
         .collect()
 }
 
-fn ph(world: &World, e: Entity) -> Phase {
+pub(super) fn ph(world: &World, e: Entity) -> Phase {
     world.get::<AutoPromotion>(e).unwrap().rule.phase()
 }
 
@@ -133,7 +154,7 @@ fn segs(plan: &RoundPlan) -> Vec<(Entity, Vec<(Entity, usize)>)> {
 }
 
 /// WARP の D2D の装置の上の、できた（有効な）描画面。資源は描画面より長く持つ。
-fn ready_surface() -> (WucGraphicsResource, SurfaceGraphics) {
+pub(super) fn ready_surface() -> (WucGraphicsResource, SurfaceGraphics) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }

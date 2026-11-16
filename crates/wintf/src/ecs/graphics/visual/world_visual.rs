@@ -93,6 +93,8 @@ pub(crate) enum TreeIssue {
     TooDeep,
     /// 欄へ直に書かれた不透明度の NaN（鍵はその節・`warn!`・1.0 として描く）。
     NanOpacity,
+    /// 節の下の手動の持ち主に効かせられない形（鍵はその持ち主・`warn!`・1 回の判断が残す）。中身は種類の語。
+    Unhonored(&'static str),
 }
 
 /// 毎回の検査で同じ誤りの記録を毎フレーム出さないための覚え。続く間は 1 回だけ記録し、
@@ -106,7 +108,7 @@ pub struct ReportedIssues {
 
 impl ReportedIssues {
     /// この回に見た誤りを覚え、前の回に無かった初めてのものなら `true`（記録する）。
-    fn first_seen(&mut self, e: Entity, issue: TreeIssue) -> bool {
+    pub(crate) fn first_seen(&mut self, e: Entity, issue: TreeIssue) -> bool {
         self.seen.insert((e, issue)) && !self.prev.contains(&(e, issue))
     }
 

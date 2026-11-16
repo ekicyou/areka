@@ -126,6 +126,15 @@ pub(crate) fn surface_rect(input: &ShapeInput) -> Option<Origin> {
     Some(cut(subtree_extent(input)?, input, cand))
 }
 
+/// 節の下の手動の持ち主 `input.idx` の矩形が、同じ描画面の中で後に描く中身と重なるか
+/// （重なりの順が全部を節にした形と違う）。値が決められなければ重なるとみなす。
+pub(crate) fn owner_later_overlap(input: &ShapeInput) -> bool {
+    let Some(e) = input.scan.entries.get(input.idx) else {
+        return false;
+    };
+    content_px(e, input).is_none_or(|r| !r.is_empty() && later_overlap(input, input.idx + 1, r))
+}
+
 /// 候補の世界の位置（物理）に端数が在るか（整数の位置だけを上げる形へ落とす条件）。
 pub(crate) fn fractional_origin(entry: &ScanEntry, scale: f32) -> bool {
     let m = entry.world.world_mat;

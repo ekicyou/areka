@@ -11,16 +11,21 @@ use std::iter::successors;
 use bevy_ecs::prelude::*;
 
 use super::placement::{PlacementClip, PlacementKind, SurfacePlacement};
-use super::promotion::{AutoPromotion, Phase, SurfaceReadiness, Verdict};
-use super::promotion_shape::{Ineligible, Origin, ShapeInput, check_shape, regrow, surface_rect};
-use super::world_visual::{ClipClass, ScanEntry, ScanKind, TreeScan};
+use super::promotion::{AutoPromotion, DemoteReason, Phase, SurfaceReadiness, Verdict};
+use super::promotion_shape::{
+    Ineligible, Origin, ShapeInput, check_shape, owner_later_overlap, regrow, surface_rect,
+};
+use super::world_visual::{ClipClass, ReportedIssues, ScanEntry, ScanKind, TreeIssue, TreeScan};
 use crate::ecs::graphics::components::SurfaceGraphics;
+use crate::ecs::graphics::systems::format_entity_name;
+use tracing::{debug, warn};
 
 /// 1 回の判断が読み書きする部品（節は `AutoPromotion` を必ず持つ・手動の持ち主は持たない）。
 pub(crate) type PromotionData = (
     Option<&'static mut AutoPromotion>,
     Option<&'static mut SurfacePlacement>,
     Option<&'static SurfaceGraphics>,
+    Option<&'static Name>,
 );
 
 /// 1 回の判断の入力（1 つの手動の持ち主の回ぶん）。
@@ -60,6 +65,8 @@ pub(crate) struct RoundPlan {
 /// - 判断するのは、この回に更新のあった帰属先とこの走査の列に居る自動の持ち主だけ（時刻が無い回はしない）。
 /// - 前順に判断し、上げると答えた候補の部分木の中の節は上げず、自動の持ち主は同じ回に吸い込みで戻す。
 /// - 置き場は節の下の手動の持ち主（`Embedded`）と自動の持ち主（`Auto`）に書く。
+/// - 記録: 相の移りの回だけ `debug!` を 1 行、見送りは理由が前の見送りと違うときだけ。節の下の手動の
+///   持ち主の効かせられない形は `reported` で種類ごとに続く間 1 度 `warn!`。答えはログの水準で変えない。
 /// - 部分の列を描くのは Preparing の 3 部品つき・Active の自動の持ち主（判断の回は親の列にだけ残す）。
 /// - 事後: 上げた持ち主の部分は親の列に無く部分の列に在る。3 部品つきの用意中の部分は両方に在る。
 pub(crate) fn run_round(
@@ -68,6 +75,7 @@ pub(crate) fn run_round(
     states: &mut Query<PromotionData>,
     commands: &mut Commands,
     written: &mut HashSet<Entity>,
+    reported: &mut ReportedIssues,
 ) -> RoundPlan {
     let entries = &scan.entries;
     let input = |idx| ShapeInput {
@@ -83,17 +91,23 @@ pub(crate) fn run_round(
     let mut origins: Vec<Option<Origin>> = vec![None; entries.len()];
     for (i, e) in entries.iter().enumerate() {
         let kind = match e.kind {
-            ScanKind::Owner { parent_world } if e.parent.is_some() => PlacementKind::Embedded {
-                parent_world,
-                opacity: e.ancestors.opacity,
-                visible: e.visible,
-                clip: placement_clip(entries, i),
-            },
+            ScanKind::Owner { parent_world } if e.parent.is_some() => {
+                let clip = placement_clip(entries, i);
+                let name = states.get(e.entity).ok().and_then(|d| d.3);
+                report_unhonored(&input(i), &clip, name, reported);
+                PlacementKind::Embedded {
+                    parent_world,
+                    opacity: e.ancestors.opacity,
+                    visible: e.visible,
+                    clip,
+                }
+            }
             ScanKind::Node { .. } if phases[i] != Phase::Node => {
                 let stored = match states.get(e.entity) {
                     Ok((
                         _,
                         Some(SurfacePlacement(PlacementKind::Auto { origin_px, size_px })),
+                        _,
                         _,
                     )) => Some(Origin {
                         px: *origin_px,
@@ -124,10 +138,10 @@ pub(crate) fn run_round(
         };
         written.insert(e.entity);
         match states.get_mut(e.entity) {
-            Ok((_, Some(mut p), _)) => {
+            Ok((_, Some(mut p), _, _)) => {
                 p.set_if_neq(SurfacePlacement(kind));
             }
-            Ok((_, None, _)) => {
+            Ok((_, None, _, _)) => {
                 commands.entity(e.entity).insert(SurfacePlacement(kind));
             }
             Err(_) => {} // 消えた実体
@@ -136,7 +150,8 @@ pub(crate) fn run_round(
     let cut = |j: usize| phases[j] == Phase::Active && origins[j].is_some();
     // 3 部品の無い用意中の部分を書けば、built が描画面の作成より先に立ち、作る前の無効な描画面で戻してしまう。
     let draws = |i: usize| {
-        phases[i] == Phase::Active || matches!(states.get(entries[i].entity), Ok((_, _, Some(_))))
+        phases[i] == Phase::Active
+            || matches!(states.get(entries[i].entity), Ok((_, _, Some(_), _)))
     };
     RoundPlan {
         host_visited: drawn(entries, 0, entries.len(), cut),
@@ -180,7 +195,7 @@ fn decide(
         if !updated[i] && phase == Phase::Node {
             continue;
         }
-        let Ok((Some(mut auto), _, surface)) = states.get_mut(e.entity) else {
+        let Ok((Some(mut auto), _, surface, name)) = states.get_mut(e.entity) else {
             continue; // 消えた実体
         };
         // 履歴だけの書き込みは変化の印を立てない。相が変わった回だけ立てる。
@@ -214,6 +229,7 @@ fn decide(
         if verdict == Verdict::Prepare {
             promoted_end = e.end;
         }
+        record(e.entity, name, verdict, &mut state.skip_memo);
         let after = state.rule.phase();
         if after != before {
             state.built = false;
@@ -243,6 +259,89 @@ fn readiness(
     }
 }
 
+/// 相の移りの回だけ 1 行、見送りは理由が前の見送りと違うときだけ残す（要件 7.1〜7.3）。
+/// `skip_memo` は水準によらず進める（答えをログの水準で変えない・要件 1.8）。
+fn record(e: Entity, name: Option<&Name>, verdict: Verdict, skip_memo: &mut Option<Ineligible>) {
+    let entity = || format_entity_name(e, name);
+    match verdict {
+        Verdict::Prepare => {
+            *skip_memo = None;
+            debug!(entity = %entity(), reason = "frequent", "[surface_promotion] promoted");
+        }
+        Verdict::Activate => debug!(entity = %entity(), "[surface_promotion] activated"),
+        Verdict::Demote(DemoteReason::Shape(s)) if s != Ineligible::Hidden => debug!(
+            entity = %entity(),
+            reason = "shape",
+            shape = s.as_str(),
+            "[surface_promotion] demoted"
+        ),
+        Verdict::Demote(r) => {
+            let reason = match r {
+                DemoteReason::Quiet => "quiet",
+                DemoteReason::SurfaceFailed => "surface_failed",
+                DemoteReason::Absorbed => "absorbed",
+                DemoteReason::Shape(_) => "hidden",
+            };
+            debug!(entity = %entity(), reason, "[surface_promotion] demoted");
+        }
+        Verdict::Skip(s) if *skip_memo != Some(s) => {
+            *skip_memo = Some(s);
+            debug!(entity = %entity(), shape = s.as_str(), "[surface_promotion] skipped");
+        }
+        Verdict::Skip(_) | Verdict::Stay => {}
+    }
+}
+
+/// 節の下の手動の持ち主 `input.idx` の効かせられない形を、種類ごとに続く間 1 度 `warn!` に残す（要件 4.9）。
+fn report_unhonored(
+    input: &ShapeInput,
+    clip: &PlacementClip,
+    name: Option<&Name>,
+    reported: &mut ReportedIssues,
+) {
+    let entries = &input.scan.entries;
+    let e = &entries[input.idx];
+    if !e.visible {
+        return;
+    }
+    let kinds = [
+        ("geometry_clip", ancestor_shaped(entries, input.idx)),
+        ("rotated_clip", e.ancestors.rect_clip_rotated),
+        ("blend", e.ancestors.blend),
+        ("later_overlap", owner_later_overlap(input)),
+        ("clip_combo", clip_combo(e, clip)),
+    ];
+    for (kind, _) in kinds.into_iter().filter(|k| k.1) {
+        if reported.first_seen(e.entity, TreeIssue::Unhonored(kind)) {
+            warn!(
+                entity = %format_entity_name(e.entity, name),
+                kind,
+                "[surface_promotion] 節の下の持ち主に効かせられない形"
+            );
+        }
+    }
+}
+
+/// 自分の切り抜きと置き場の矩形の切り抜きを 1 つに合わせられないか（`placement::merged_clip` が
+/// `Unsupported` を返す条件と同じ。`content_world_aabb` は局所の矩形を親の持ち主の DIP へ移したもの）。
+fn clip_combo(e: &ScanEntry, clip: &PlacementClip) -> bool {
+    let PlacementClip::Rect(host) = clip else {
+        return false;
+    };
+    let m = e.world.world_mat;
+    let det = m.M11 * m.M22 - m.M12 * m.M21;
+    if e.own_clip == ClipClass::None || !det.is_finite() || det.abs() < 1e-12 {
+        return false;
+    }
+    let b = e.world.content_world_aabb;
+    let kept = matches!(e.own_clip, ClipClass::Rect | ClipClass::Rounded)
+        && host.left() <= b.left()
+        && host.top() <= b.top()
+        && host.right() >= b.right()
+        && host.bottom() >= b.bottom();
+    !kept && (!e.world.axis_aligned || e.own_clip != ClipClass::Rect)
+}
+
 fn phase_of(e: &ScanEntry) -> Phase {
     match e.kind {
         ScanKind::Node { phase } => phase,
@@ -253,18 +352,22 @@ fn phase_of(e: &ScanEntry) -> Phase {
 /// 節の下の手動の持ち主の祖先の切り抜き（祖先の角丸・図形・軸に沿わない矩形は合わせられない）。
 fn placement_clip(entries: &[ScanEntry], i: usize) -> PlacementClip {
     let acc = entries[i].ancestors;
-    let shaped = successors(entries[i].parent, |&p| entries[p].parent).any(|p| {
-        matches!(
-            entries[p].own_clip,
-            ClipClass::Rounded | ClipClass::Geometry
-        )
-    });
-    if shaped || acc.rect_clip_rotated {
+    if ancestor_shaped(entries, i) || acc.rect_clip_rotated {
         PlacementClip::Unsupported
     } else {
         acc.rect_clip
             .map_or(PlacementClip::None, PlacementClip::Rect)
     }
+}
+
+/// 祖先の節に角丸か任意の図形の切り抜きが在るか。
+fn ancestor_shaped(entries: &[ScanEntry], i: usize) -> bool {
+    successors(entries[i].parent, |&p| entries[p].parent).any(|p| {
+        matches!(
+            entries[p].own_clip,
+            ClipClass::Rounded | ClipClass::Geometry
+        )
+    })
 }
 
 /// `[from, to)` の見える節（前順・深さつき）。`cut` が真の項の部分木は飛ばす。
