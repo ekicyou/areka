@@ -21,7 +21,8 @@
           FAIL strings: ...                        定型文が読めない
         1 つの題名の扱い（上から順に）:
           行末の「 (#番号)」を外し、PR へのリンクにする（無ければ番号なしで載せる）
-          「種類(スコープ): 文」の形で、スコープが spec 名の印で始まれば製品の変更。
+          「種類(スコープ): 文」の形で、スコープから頭の spec 名の印を外した名前が spec 名の一覧に在れば製品の変更
+            （大文字と小文字を区別する）。
             種類が feat＝新しい機能／fix＝不具合の修正／perf＝性能の改善／ほか＝そのほかの変更。載せるのは「文」
           形は合うがスコープが spec 名でない（スコープが無いものを含む）＝内部の作業。載せるのは「文」
           形が合わない＝内部の作業。載せるのは題名の全体
@@ -50,17 +51,23 @@
     missing-file           その版の見どころのファイルが無い
     no-highlight           「### 」で始まる行が 0
     heading-no-pr          「### 」の行の末尾が (#番号) か (#番号, #番号) でない
-    spec-name              spec 名の印が現れる
+    spec-name              spec 名の印が現れるか、spec 名の一覧の名前が前後を英数字・-・_ でない字に挟まれて現れる
     no-source-link         出典のリンクが無い
     first-name-not-linked  出典のリンクより前に「Claudia」が在る
 
-  終了コード: 0 通った／1 欠けが在る（-Notes は git の失敗か定型文が読めない・-Body は欠けか定型文が読めない・-SelfTest は落ちた判定が在る）
+  spec 名の一覧: SPECS_DIRS の直下のフォルダの名前（.kiro/specs/ の直下では completed を除く）から、頭の SPEC_MARK を外した名前。
+  一覧が 0 件なら、どの口でも次の 1 行を印字して 1 で終わる（黙って全部を内部の作業にしない）:
+          FAIL specs: no spec folders under .kiro/specs
+
+  終了コード: 0 通った／1 欠けが在る（-Notes は git の失敗か定型文が読めない・-Body は欠けか定型文が読めない・-SelfTest は落ちた判定が在る・
+              どの口も spec 名の一覧が 0 件）
 
   較正値（変更はスクリプト冒頭の「較正値」の 1 か所だけ）:
     HIGHLIGHTS_DIR  見どころのフォルダ
     SOURCE_URL      出典の URL（doc/release-notes/README.md と同じ値）
     SOURCE_LINK     出典のリンク（最初の「Claudia」の書き方）
-    SPEC_MARK       spec 名の印
+    SPEC_MARK       旧い spec 名の頭（2026-10-23 の改名の前の名前と、改名しない completed の名前に付く）
+    SPECS_DIRS      spec のフォルダの置き場（リポジトリの根から）
     ASSET_NAME      詳しいリリースノートの添付の名前の形（{version}＝版）
     STRINGS_FILE    日本語の定型文のファイル（このスクリプトと同じフォルダ）
     NOTES_KEYS      定型文の鍵。{version}＝版・{prev}＝一つ前のタグ・{count}＝件数 に置き換わるのは題と範囲の文だけ。
@@ -120,6 +127,7 @@ $HIGHLIGHTS_DIR = 'doc/release-notes'
 $SOURCE_URL     = 'https://github.com/ponapalt/claudia'
 $SOURCE_LINK    = "[Claudia]($SOURCE_URL)"
 $SPEC_MARK      = 'areka-P0-'
+$SPECS_DIRS     = '.kiro/specs', '.kiro/specs/completed'
 $ASSET_NAME     = 'release-notes-v{version}.md'
 $STRINGS_FILE   = 'release-notes.strings.json'
 $NOTES_KEYS     = 'notesTitle', 'notesRange', 'notesRangeFromStart', 'headFeat', 'headFix', 'headPerf', 'headOther', 'headInternal', 'bodyLink'
@@ -135,14 +143,35 @@ function Read-Lf([string]$Path) {
     [System.IO.File]::ReadAllText($Path, [System.Text.UTF8Encoding]::new($false)).Replace("`r`n", "`n")
 }
 
+# spec 名の一覧: SPECS_DIRS の直下のフォルダの名前から頭の SPEC_MARK を外したものを、重ねずに見つけた順で返す。
+# 置き場の中の別の置き場（.kiro/specs/completed）は spec ではないので数えない
+function Get-SpecNames([Parameter(Mandatory)][string]$Root) {
+    $dirs = @($SPECS_DIRS | ForEach-Object { [System.IO.Path]::GetFullPath((Join-Path $Root $_)) })
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($d in $dirs) {
+        if (-not [System.IO.Directory]::Exists($d)) { continue }
+        foreach ($c in [System.IO.Directory]::GetDirectories($d) | Sort-Object) {
+            if ($dirs -contains [System.IO.Path]::GetFullPath($c)) { continue }
+            $n = [System.IO.Path]::GetFileName($c)
+            if ($n.StartsWith($SPEC_MARK, [StringComparison]::Ordinal)) { $n = $n.Substring($SPEC_MARK.Length) }
+            if ($n -and $seen.Add($n)) { $names.Add($n) }
+        }
+    }
+    , $names.ToArray()
+}
+
 # 見どころの文（改行は LF）の欠けを全部返す（空なら通った）。$Text が $null ならファイルが無い扱い。
 # 引数に [string] を付けない: 付けると PowerShell が $null を空の文字列に変え、無いファイルと空のファイルを分けられない
-function Test-Highlights([AllowNull()]$Text) {
+function Test-Highlights([AllowNull()]$Text, [string[]]$SpecNames) {
     $bad = { param($key, $line, $detail) [pscustomobject]@{ Key = $key; Line = $line; Detail = $detail } }
     if ($null -eq $Text) { return & $bad 'missing-file' 0 'the highlights file of this version does not exist' }
 
     $lines = $Text -split "`n"
     $heads = 0
+    # 一覧の名前が語の一部（前後に英数字・-・_ が続く）でなく現れる。大文字と小文字を区別する
+    $names = @($SpecNames | Where-Object { $_ })
+    $nameRe = $names.Count ? [regex]::new('(?<![0-9A-Za-z_-])(?:' + (($names | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')(?![0-9A-Za-z_-])') : $null
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -cmatch '^### ') {
             $heads++
@@ -150,7 +179,9 @@ function Test-Highlights([AllowNull()]$Text) {
                 & $bad 'heading-no-pr' ($i + 1) 'the heading does not end with (#N) or (#N, #N)'
             }
         }
-        if ($lines[$i].Contains($SPEC_MARK)) { & $bad 'spec-name' ($i + 1) "the line contains $SPEC_MARK" }
+        if ($lines[$i].Contains($SPEC_MARK) -or ($nameRe -and $nameRe.IsMatch($lines[$i]))) {
+            & $bad 'spec-name' ($i + 1) 'the line contains a spec name'
+        }
     }
     if ($heads -eq 0) { & $bad 'no-highlight' 0 'no line starts with "### "' }
 
@@ -171,7 +202,8 @@ function Read-Strings {
 }
 
 # 題名の並び（新しい順）から詳しいリリースノートの全文（改行は LF）を返す。ファイルにも git にも触らない
-function Format-ReleaseNotes([string[]]$Subjects, [string]$Version, [string]$PrevTag, [string]$Repository, [pscustomobject]$Strings) {
+function Format-ReleaseNotes([string[]]$Subjects, [string]$Version, [string]$PrevTag, [string]$Repository, [pscustomobject]$Strings,
+                             [string[]]$SpecNames) {
     $kind = @{ feat = 'headFeat'; fix = 'headFix'; perf = 'headPerf' }
     $sections = [ordered]@{ headFeat = @(); headFix = @(); headPerf = @(); headOther = @(); headInternal = @() }
     foreach ($subject in $Subjects) {
@@ -179,8 +211,10 @@ function Format-ReleaseNotes([string[]]$Subjects, [string]$Version, [string]$Pre
         if ($text -cmatch '^(?<text>.*) \(#(?<pr>[0-9]+)\)$') { $text = $Matches.text; $pr = $Matches.pr }
         if ($text -cmatch '^(?<type>[a-z]+)(\((?<scope>[^)]*)\))?!?: (?<rest>.+)$') {
             $text = $Matches.rest
-            # スコープの無い題名では、$Matches に scope が無い
-            if (([string]$Matches['scope']).StartsWith($SPEC_MARK, [StringComparison]::Ordinal)) {
+            # スコープの無い題名では、$Matches に scope が無い。旧い頭を外して一覧と比べる（大文字と小文字を区別する）
+            $scope = [string]$Matches['scope']
+            if ($scope.StartsWith($SPEC_MARK, [StringComparison]::Ordinal)) { $scope = $scope.Substring($SPEC_MARK.Length) }
+            if ($SpecNames -ccontains $scope) {
                 $head = $kind[$Matches.type] ?? 'headOther'
             }
         }
@@ -216,13 +250,21 @@ function Write-Out([string]$Text) {
     [System.IO.File]::WriteAllText($path, $Text, [System.Text.UTF8Encoding]::new($false))
 }
 
+# 本物の spec 名の一覧。0 件なら、どの口でも製品の変更と spec-name を見分けられないので止める
+$specNames = Get-SpecNames $root
+if (-not $specNames.Count) { 'FAIL specs: no spec folders under .kiro/specs'; exit 1 }
+
 if ($SelfTest) {
     $script:selfFails = 0
     function Judge([string]$Name, [bool]$Ok) {
         if ($Ok) { "ok selftest $Name" } else { $script:selfFails++; "FAIL selftest $Name" }
     }
-    # 欠けの名前をコンマでつないだ並び（通れば空）
-    $keys = { param($t) @(Test-Highlights $t | ForEach-Object Key) -join ',' }
+    # 見本の題名のスコープから旧い頭を外した名前（見本の一覧）。整形の見本と壊した見本の判定にだけ使う
+    # shortcut: 見本の一覧を題名から作る、3.2 で見本の spec-names.txt を足したらそれを読む形へ替える
+    $fxNames = @([string](Read-Lf (Join-Path $PSScriptRoot 'release-notes-fixture/subjects.txt')) -split "`n" |
+        ForEach-Object { if ($_ -cmatch "^[a-z]+\($([regex]::Escape($SPEC_MARK))(?<n>[^)]+)\)") { $Matches.n } } | Select-Object -Unique)
+    # 欠けの名前をコンマでつないだ並び（通れば空）。$n は使う spec 名の一覧（既定は見本の一覧）
+    $keys = { param($t, $n = $fxNames) @(Test-Highlights $t $n | ForEach-Object Key) -join ',' }
 
     # ---- 見どころの検査 ----
     $ok = [string](Read-Lf (Join-Path $PSScriptRoot 'release-notes-fixture/highlights-ok.md'))
@@ -252,7 +294,7 @@ if ($SelfTest) {
     $real = @(Get-ChildItem -LiteralPath (Join-Path $root $HIGHLIGHTS_DIR) -Filter 'v*.md' -File)
     "selftest real highlights: $($real.Count) file(s)"
     foreach ($f in $real) {
-        Judge "real highlights $(Show-Ascii $f.Name 0) passes" ((& $keys (Read-Lf $f.FullName)) -ceq '')
+        Judge "real highlights $(Show-Ascii $f.Name 0) passes" ((& $keys (Read-Lf $f.FullName) $specNames) -ceq '')
     }
 
     # ---- 詳しいリリースノートの整形 ----
@@ -264,12 +306,12 @@ if ($SelfTest) {
     Judge 'notes fixture has subjects' ($subjects.Count -gt 0)
     if ($null -ne $strings) {
         Judge 'notes of the fixture subjects equal the expected notes' (
-            (Format-ReleaseNotes $subjects '1.2.3' 'v1.2.2' 'owner/name' $strings) -ceq (& $fx 'expected-notes.md'))
+            (Format-ReleaseNotes $subjects '1.2.3' 'v1.2.2' 'owner/name' $strings $fxNames) -ceq (& $fx 'expected-notes.md'))
         # 一つ前のタグが空のときの範囲の文と、0 件の見出し（不具合の修正・性能の改善）を出さないこと
         $noFixPerf = @($subjects -cnotmatch "^(fix|perf)\($([regex]::Escape($SPEC_MARK))")
         Judge 'notes from the start without fix and perf equal the expected notes' (
             ($noFixPerf.Count -lt $subjects.Count) -and
-            ((Format-ReleaseNotes $noFixPerf '1.2.3' '' 'owner/name' $strings) -ceq (& $fx 'expected-notes-from-start.md')))
+            ((Format-ReleaseNotes $noFixPerf '1.2.3' '' 'owner/name' $strings $fxNames) -ceq (& $fx 'expected-notes-from-start.md')))
 
         # ---- 本文の組み立て ----
         Judge 'body of the fixture highlights equals the expected body' (
@@ -296,14 +338,14 @@ if ($Notes) {
     # 1 行 1 題名。最後の改行だけを外す（空の題名の行を落とさない）
     $log = $r.Out.Replace("`r`n", "`n") -replace '\n\z', ''
     $subjects = $log -ne '' ? @($log -split "`n") : @()
-    Write-Out (Format-ReleaseNotes $subjects $Version $PrevTag $Repository $strings)
+    Write-Out (Format-ReleaseNotes $subjects $Version $PrevTag $Repository $strings $specNames)
     "OK release notes v$Version ($($subjects.Count) change(s))"
     exit 0
 }
 
 # ---- -Check と -Body（どちらも先に見どころの検査を回す） ----
 $text = Read-Lf (Join-Path $root "$HIGHLIGHTS_DIR/v$Version.md")
-$found = @(Test-Highlights $text)
+$found = @(Test-Highlights $text $specNames)
 foreach ($f in $found) { "FAIL $($f.Key) line $($f.Line): $($f.Detail)" }
 if ($found.Count) { exit 1 }
 if ($Body) {

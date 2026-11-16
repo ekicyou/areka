@@ -47,7 +47,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 7.8_
 
 - [ ] 3. リリースノートの spec 名の見分け（束 3・1）
-- [ ] 3.1 製品の変更と見どころの `spec-name` を、spec のフォルダの名前の一覧で見分ける
+- [x] 3.1 製品の変更と見どころの `spec-name` を、spec のフォルダの名前の一覧で見分ける
   - `.kiro/specs/` の直下（`completed` を除く）と `.kiro/specs/completed/` の直下のフォルダの名前から旧い頭 `areka-P0-` を外した名前を、重ねずに順序つきで返す一覧の関数を足し、較正値の説明（旧い頭の意味・spec のフォルダの置き場 2 つ）を改める
   - 題名のスコープから旧い頭を外した名前が一覧に在れば製品の変更とする（大文字と小文字を区別する）。見どころの `spec-name` は、旧い頭が現れるか、一覧の名前が前後を英数字・`-`・`_` でない字に挟まれて現れる行を落とし、説明の文は名前を印字しない `the line contains a spec name`
   - `-Check`・`-Notes`・`-Body` と、自分の検査の本物の見どころの判定は本物の一覧を使う。本物の一覧が 0 件なら、どの口でも `FAIL specs: no spec folders under .kiro/specs` で 1
@@ -224,3 +224,8 @@
   - 終わった姿: 検証の記録に上の確かめと記録が全部在り、差分の確かめの命令とその結果（7.3 のファイルの差分 0 件）が写してある
   - _Dispatch: mechanical — 決まった差分の確かめを回して記録に書く_
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 5.6, 6.6, 6.7, 7.1, 7.3, 7.7, 7.9, 7.10, 7.11, 8.1, 8.3, 9.5_
+
+## Implementation Notes
+
+- 2.2: `tools/encoding-check.ps1` の頭書の規則 E の説明が `tools/package.ps1 (metadata and nar-sample-path)` のまま（表は `nar-sample-path` だけ）。11.2 のかけ直しで拾うか、近くを触るタスクで直す。
+- 3.1: `release-notes.ps1 -SelfTest` の見本の一覧は `subjects.txt` の題名から作るつなぎ（`shortcut:`）。3.2 で設計の `Read-SpecNamesFixture`（`spec-names.txt`）へ必ず替える。
