@@ -473,6 +473,24 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 - `bind-next` のフィルター: `q7-text.txt` に 21 件（D2D の工場・文脈・色つきの字形の指定 3・描き先の bitmap 4・テクスチャと読み戻し 6・GDI の名前の枝 8。ほかに注の行）。問い 7 も使う名前は設計の決まりどおり `common.txt` へ移した: `q4-wuc.txt` から `D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`・`D3D11_SDK_VERSION`・`ID2D1RenderTarget`、`q6-renderer.txt` から `IDWriteTextLayout`・`DWriteCreateFactory`・`IDWriteFactory`・`DWRITE_FACTORY_TYPE_SHARED`・`DWRITE_FONT_STRETCH_NORMAL`（束縛はフィルターの和なので中身は変わらず、q4・q6 も組めた）。`Cargo.toml` の兄弟の依存は足していない（要らなかった）。
 
+#### 範囲の色・下線の位置・`TextLayout::new` の panic（8.4）
+
+- 置き場: `q7-vertical/src/ranges.rs`（と試験 `ranges_tests.rs`）。新しい側の `new_side::render` に、描く直前の手を挟む `render_with(layout, |dc, raw| ..)` を足した（筆は描く文脈と同じ装置で作る要があるため）。`bind-next` のフィルターに足した名前は無い（`IDWriteTextLayout::SetDrawingEffect`・`ID2D1SolidColorBrush`・`DWRITE_TEXT_RANGE` は既に名指した物から出ていた）。
+- 試験（実 GPU・画面の外・机なし・`cargo test -p q7-vertical --lib ranges -- --nocapture`・2026-11-17）。文は比べの文、範囲は「待って」（areka の文字の位置 6..9＝UTF-8 18..27＝UTF-16 6..9）、字形の指定は areka の 10 個。
+
+範囲の色（要件 8.5）:
+- `windows-text` に範囲の色の口は無い。借りた `IDWriteTextLayout`（`as_interface`）の `SetDrawingEffect(赤の単色の筆, DWRITE_TEXT_RANGE)` で付けられた。D2D の `DrawTextLayout` が描く効果として筆を拾う。
+- 測った値: 赤の画素（premultiplied で B=G=0・R>0）は **299**（色なしの絵では 0）。黒の墨（B=G=R=0・α>0）は 731 → 432 で、減った 299 がちょうど赤の 299。範囲の y（`range_bounds` の 120..180）の中に黒は 0・外に赤は 0。範囲の外の字・絵文字はそのまま。
+
+下線の位置（要件 8.4）:
+- `set_underline(バイト範囲, true)` → `decorations()` で取れた。配置の座標で **x=-0.62..0.40・y=120..180**（太さ約 1.02）。列の箱（`range_bounds`）は x=0..20 なので、下線は **列の左** に出て、箱の左端をまたぐ。描いた絵でも同じ矩形（面の座標＝x に 290 を足す）の中に墨が 61 画素あり、`decorations()` の位置と描かれる所は合う。
+- 手当て（`ranges::to_column_right`）: areka の決まり（選択肢の下線は列の右）には、DirectWrite の下線は描かせず（`set_underline` は位置を取るためだけ）、`decorations()` の矩形を列の箱の左右の中で鏡に映して自前で塗る（左端からの距離を右端からの距離にする）。鏡に映すと右端を約 0.6 越えるので、越えた分は内へ寄せる（列が面の右端に接すると越えた分が切れて細る。今の側の端の列の下線の寄せと同じ考え）。寄せた位置は x=18.98..20.00・y と太さはそのまま。列の箱の左右は `TextLayout::metrics()` の `left`・`left + width`（1 列の配置）で取った。何列もの配置では列ごとの箱が要り、`line_metrics` か `range_bounds` の列ごとの矩形から取る見立て（測っていない）。
+
+`TextLayout::new` の panic（要件 8.6）:
+- `windows-text` は DirectWrite の失敗を中で `unwrap` する。測った入力（`catch_unwind` で確かめた）: 箱の幅 NaN・幅 -1・高さ NaN は `CreateTextLayout` が `E_INVALIDARG`（0x80070057）で **panic**（`layout.rs:159`）。字の大きさ NaN の書式は、書式を初めて使う `TextLayout::new` の中の `CreateTextFormat` で panic（`format.rs:304`）。幅 +∞ は panic しない。上流の注は「負の大きさで panic」だけを書き、NaN は書いていない。
+- 本体での扱いの見立て: 入る前に値を確かめる（`ranges::checked_layout` の候補: 字の大きさは正の有限・箱の幅と高さは NaN でなく負でない・文の UTF-16 の長さが u32 に収まる。だめなら `Err` を返し、本体は `error!` を書いて描かない）。`TextLayout::new` を呼ぶ所は境の 1 か所にまとめ、そこより外に panic を出さない。値を確かめても残る失敗（工場の失敗・メモリ不足）は確かめられないので、上流へ `try_new`（`Result` を返す口）を求める文案に載せる。`catch_unwind` で境で止める案は、本線の組みが `panic = 'unwind'`（根の `Cargo.toml`）なので効きはするが、`unwrap` の panic を通常の失敗の経路にする形になり、panic の時点の記録も `human-panic` 側へ流れるので、確かめの後ろの最後の網に留める見立て。
+- 位置の換算の扱い: areka の文字の位置（拡張書記素クラスタの序数）を正本にし、DirectWrite／`windows-text` へ渡す所でだけ換算する。`windows-text` の範囲の口（`set_underline`・`range_bounds` ほか）は UTF-8 のバイト位置で、`choices::cluster_to_byte` で直す（クラスタの境目は必ず `char` の境目なので、`windows-text` の「`char` の境目でないと panic」には当たらない）。借りた DirectWrite の口（`SetDrawingEffect`）は UTF-16 で、`choices::cluster_to_utf16` で直す。戻り（`hit_test_point` の UTF-8 のバイト位置）は `choices::byte_to_cluster` で戻す。試験は絵文字（クラスタ 10＝UTF-8 30..34＝UTF-16 10..12）で 3 つの単位が別れることを固定した。
+
 ### 問い 8: 32bit と arm64 のリンク
 
 - 見立ての候補: go（問い 1 の `.sys()`・問い 3 の既定と `.minimal()` の 3 つの束縛とも、i686 は x64 と同じに走り、aarch64 はリンクまで通った。写しの側の直しは 0）。

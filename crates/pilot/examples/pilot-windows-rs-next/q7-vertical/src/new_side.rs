@@ -48,6 +48,9 @@ pub enum Features {
 /// 面の大きさ（今の側の供給面＝validrect の内側と同じ）。
 pub const SURFACE: (u32, u32) = (IMAGE.0 - 2 * VALIDRECT_INSET, IMAGE.1 - 2 * VALIDRECT_INSET);
 
+/// 配置の原点の x（面の右端から 1 列分の左）。配置の座標に足すと面の座標になる。
+pub const ORIGIN_X: u32 = SURFACE.0 - FONT_HEIGHT;
+
 /// 解いた顔（家族名・太さ・斜体）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Face {
@@ -156,13 +159,25 @@ pub fn draw(text: &str, features: Features) -> std::result::Result<Shot, String>
 /// 配置を画面の外の絵へ 1 回描き、読み戻す。列は面の右端に接し、先頭の字の枠の上端が y=0
 /// （今の側の行の原点＝validrect の内側の右端から 1 列分の左・上端）。
 pub fn render(layout: &TextLayout) -> std::result::Result<Shot, String> {
+    render_with(layout, |_, _| Ok(()))
+}
+
+/// [`render`] に、描く直前の手を 1 つ挟む（8.4 の範囲の色: 筆は描く文脈と同じ装置で作る要がある）。
+/// 手は描く文脈と借りた配置を受け取る。
+pub fn render_with(
+    layout: &TextLayout,
+    before_draw: impl FnOnce(&ID2D1DeviceContext, &IDWriteTextLayout) -> Result<()>,
+) -> std::result::Result<Shot, String> {
     // 今の側と同じ MTA。既に初期化済み（S_FALSE）などの戻り値は今の側と同じく見ない。
     // SAFETY: 予約の引数は None・COINIT_MULTITHREADED（0）。
     let _ = unsafe { CoInitializeEx(None, 0) };
-    unsafe { render_mta(layout) }.map_err(|e| format!("新しい側の描画: {e:?}"))
+    unsafe { render_mta(layout, before_draw) }.map_err(|e| format!("新しい側の描画: {e:?}"))
 }
 
-unsafe fn render_mta(layout: &TextLayout) -> Result<Shot> {
+unsafe fn render_mta(
+    layout: &TextLayout,
+    before_draw: impl FnOnce(&ID2D1DeviceContext, &IDWriteTextLayout) -> Result<()>,
+) -> Result<Shot> {
     let (width, height) = SURFACE;
     let (d3d, context) = unsafe { create_d3d() }?;
     let dc = unsafe { create_dc(&d3d) }?;
@@ -214,7 +229,8 @@ unsafe fn render_mta(layout: &TextLayout) -> Result<Shot> {
     let brush = unsafe { dc.CreateSolidColorBrush(&black, None) }?;
     // 借りる: windows-text の IDWriteTextLayout2 を bind-next の IDWriteTextLayout として（QI なし）。
     let raw: &IDWriteTextLayout = layout.as_interface();
-    let origin = Vector2::new((width - FONT_HEIGHT) as f32, 0.0);
+    before_draw(&dc, raw)?;
+    let origin = Vector2::new(ORIGIN_X as f32, 0.0);
     unsafe {
         dc.SetTarget(&target);
         dc.BeginDraw();
