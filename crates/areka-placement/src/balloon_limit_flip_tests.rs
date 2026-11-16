@@ -281,6 +281,40 @@ fn boot_gate_flips_keeps_offset_and_logs_how() {
     assert_eq!(clamps[1].expect_field("how"), "\"pushed\"");
 }
 
+/// 捕捉した中の `[balloon-limit] Clamp` の行（ちょうど 1 行）。
+fn the_clamp(events: &[CapturedEvent]) -> &CapturedEvent {
+    let v: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(BALLOON_LIMIT_CLAMP_TAG))
+        .collect();
+    assert_eq!(v.len(), 1, "{events:?}");
+    v[0]
+}
+
+/// 2 スコープで本体（0）の映した先が相方（1）の窓に重なる → 押し込みの位置・
+/// `how="pushed"`・`overlap_scope=Some(1)`・`context="boot-gate"` の 1 行（要件 2.3・4.1・4.2）。
+/// 重ならない形（相方が遠い）は `how="flipped"`・`overlap_scope=None`。
+#[test]
+fn boot_gate_pushes_on_overlap_and_logs_the_scope() {
+    let main = placement(0, left_edge_char(), left_side_offset(), true);
+    let partner = placement(1, point(1108, 904), left_side_offset(), true);
+    let pushed = limit_correction(left_side_pos(), BSZ, WA).expect("探針: はみ出している");
+    let (out, events) = capture(|| apply_balloon_limit(vec![main, partner], &snapshot(&[WA])));
+    assert_eq!(out[0].balloon_pos, pushed);
+    assert_eq!(out[0].balloon_offset, left_side_offset());
+    let ev = the_clamp(&events);
+    assert_eq!(ev.expect_field("how"), "\"pushed\"");
+    assert_eq!(ev.expect_field("overlap_scope"), "Some(1)");
+    assert_eq!(ev.expect_field("context"), "\"boot-gate\"");
+
+    let far = placement(1, point(2000, 0), left_side_offset(), true);
+    let (out, events) = capture(|| apply_balloon_limit(vec![main, far], &snapshot(&[WA])));
+    assert_eq!(out[0].balloon_pos, point(1108, 904));
+    let ev = the_clamp(&events);
+    assert_eq!(ev.expect_field("how"), "\"flipped\"");
+    assert_eq!(ev.expect_field("overlap_scope"), "None");
+}
+
 /// `limit=0` のスコープは並べ替えも押し込みもしない（要件 5.6）。
 #[test]
 fn boot_gate_does_not_flip_when_limit_is_disabled() {

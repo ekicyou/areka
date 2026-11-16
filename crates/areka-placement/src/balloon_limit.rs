@@ -153,10 +153,6 @@ impl BalloonPlace {
     }
 
     /// `overlap_scope` 欄の値。`PushedOverlap` だけ `Some(scope)`、ほかは `None`（要件 4.1）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "記録の欄 overlap_scope（task 1.2・3.2）で使う")
-    )]
     pub(crate) fn overlap_scope(self) -> Option<usize> {
         match self {
             BalloonPlace::PushedOverlap { scope, .. } => Some(scope),
@@ -280,14 +276,33 @@ pub fn apply_balloon_limit(
     placements: Vec<ScopePlacement>,
     snapshot: &MonitorSnapshot,
 ) -> Vec<ScopePlacement> {
+    // 判定に入れるキャラ窓は置くスコープ全部（要件 2.3）。判定の前に 1 度だけ組む。
+    let chars: Vec<(usize, RectPx)> = placements
+        .iter()
+        .map(|p| (p.scope, char_rect_of(p)))
+        .collect();
     placements
         .into_iter()
-        .map(|p| apply_balloon_limit_one(p, snapshot))
+        .map(|p| apply_balloon_limit_one(p, snapshot, &chars))
         .collect()
 }
 
+/// 配置のキャラ窓の矩形（列を組む側と判定の側で共有する式）。
+fn char_rect_of(p: &ScopePlacement) -> RectPx {
+    RectPx {
+        left: p.char_pos.x,
+        top: p.char_pos.y,
+        right: p.char_pos.x.saturating_add(p.char_size.w),
+        bottom: p.char_pos.y.saturating_add(p.char_size.h),
+    }
+}
+
 /// [`apply_balloon_limit`] の要素写像（1 scope 分）。
-fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) -> ScopePlacement {
+fn apply_balloon_limit_one(
+    mut p: ScopePlacement,
+    snapshot: &MonitorSnapshot,
+    chars: &[(usize, RectPx)],
+) -> ScopePlacement {
     // 要件 2.7: limit=0 の scope は補正しない（式は常にクランプする式であり、
     // 有効判定は関門の責務＝design C5）。縮退ではないので警告も出さない。
     if !p.balloon_limit {
@@ -295,12 +310,7 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
     }
 
     // 要件 5.5: 基準は**キャラ窓**の帰属モニタ（バルーン窓ではない）。
-    let char_rect = RectPx {
-        left: p.char_pos.x,
-        top: p.char_pos.y,
-        right: p.char_pos.x.saturating_add(p.char_size.w),
-        bottom: p.char_pos.y.saturating_add(p.char_size.h),
-    };
+    let char_rect = char_rect_of(&p);
     let Some(area) = work_area_for_window(snapshot, char_rect) else {
         warn!(
             scope = p.scope,
@@ -315,8 +325,7 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
     // `Fits` は「クランプしても位置が動かない」＝書き込み不要の意（**内包の判定では
     // ない**——逆転区間で既に左上に居るときははみ出したままでも `Fits`）。要件 6.1 が
     // 求めるのは「実際に動かしたとき」の記録ゆえ、`Fits` ではログも書換も起こさない。
-    // 判定に入れるキャラ窓の列は task 1.2 で組む（今は空＝重なりの段は効かない）。
-    let place = place_balloon_in_work_area(p.balloon_pos, p.balloon_size, char_rect, area, &[]);
+    let place = place_balloon_in_work_area(p.balloon_pos, p.balloon_size, char_rect, area, chars);
     let (BalloonPlace::Flipped(corrected)
     | BalloonPlace::Pushed(corrected)
     | BalloonPlace::PushedOverlap { to: corrected, .. }) = place
@@ -328,6 +337,7 @@ fn apply_balloon_limit_one(mut p: ScopePlacement, snapshot: &MonitorSnapshot) ->
         scope = p.scope,
         context = BALLOON_LIMIT_BOOT_CONTEXT,
         how = place.how(),
+        overlap_scope = ?place.overlap_scope(),
         from = ?p.balloon_pos,
         to = ?corrected,
         balloon_size = ?p.balloon_size,
