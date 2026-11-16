@@ -247,3 +247,45 @@ SSP 2.9.34（20261113-4）を `C:\wintools\ssp\ssp.exe` で起こし、MCP の `
 
 - 測り ⑴（並べ替えた先が相方の窓に重なるときの SSP の扱い）と測り R2（`windowposition.x` のあるバルーンを並べ替えたときの位置）は、**`\![move]` でもドラッグでも SSP が並べ替えをしないので測れなかった**。
 - SSP 2.9.34 は、キャラ窓が作業領域に収まりバルーンだけが横にはみ出す形（はみ出しは 63px と 103px）で、バルーンを並べ替えも押し込みもしなかった。はみ出しの大きい形（バルーンの大半が外へ出る形）と、起動の直後・面の切り替えの場面は測っていない。9.1 のとおり、10-30 の「SSP は並べ替える」という読みは、既定の側と見分けられていない疑いがある。
+
+## 10. 設計の段の調べ（2026-11-16・`/kiro-spec-design -y`）
+
+> 発見の型は **light**（既存の配置の拡張）。新しい外部の crate・API は無いので外の調べはしていない（ukadoc の 2 項目は要件と 1 節で引用済み）。読んだ規則は kiro-spec-design の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`・`design-principles.md` と、steering の `structure.md`（兄弟のテスト・1,000 行・ファサード）・`logging.md`。下請けは出さず、コードは本文の中で読んだ。
+
+### 10.1 調べて分かったこと
+
+- **起動の並べ直しの書き込みの経路**: `drain_resnap.rs` の `finalize_chain_once_with` は鎖の寄せの結果を `move_window_to` で書く。`move_window_to` は `move_window_with_route(.., PlacementRoute::MoveCue)` で、台本の `\![move]` と同じ経路の語を名乗る。経路では並べ直しと台本を見分けられない。`place_chain_in_work_area` は `&World` を受けるだけで、動いた窓を World に残さない。
+- **並べ直しの終わりの印**: `ChainFinalized`（`crates/areka-placement/src/chain_finalize.rs` 66 行目・資源）は、並べ直しの書き込みの**後**に `drain_resnap.rs` 593 行目で入り、終了のときに `crates/areka/src/app_exit.rs` 203 行目で外れる。`resource_added::<ChainFinalized>` を引き金にすれば、`runtime/` に触れずに「並べ直しの後に 1 度」を取れる。
+- **同じ巡で流れるか**: `frame_system` は `Update`、`EcsWorld::try_tick_world` は `Update` → … → `FrameFinalize` の順に回し、積んだ窓の書き込みは巡の後に `tick_bridge` の `flush_window_pos_commands` がまとめて流す。`enqueue_window_set_pos` は `WindowPos` を即座に写す。`FrameFinalize` に置いた系は並べ直しと同じ巡で、動いた後の矩形を読んで書ける（1 フレーム遅らせない）。
+- **系の登録の先例**: `areka_placement::balloon_syncscale::register(world)` を `crates/areka/src/ghost_session.rs` の `register_systems`（`runtime/` の外）が呼ぶ形がある。同じ形で 1 行足せる。
+- **キャラ窓の「表示している」**: `areka-placement` にはキャラ窓の表示の有無の Component が無い。`\s[-1]` は `areka-emo-present` の `VisualMount::set_visible(false)` が、窓の子（surface entity と文字の層の枠）の `wintf` の `Visual.is_visible` を倒す。窓の `WS_VISIBLE` は変えない。キャラ窓の子の `Visual` を読めば、`areka-placement` から表示の有無が分かる。
+- **`ScopeConfig` を全欄で組む所**: `config.rs` の `resolve_scope`（欄が増えたらコンパイルで赤になるように `..` を使わない・意図された形）と `resolver_balloon_keyword_tests.rs` の 2 か所。ほかは `..ScopeConfig::default()`。
+- **行数の番人**: `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表は「超えている」事実だけを持ち、行数の上限を持たない。`window_move.rs` に数行足しても番人は赤にならない。`follow/drag_follow.rs` はちょうど 1,000 行なので触らない。
+- **`follow/` の兄弟の相互参照**: ファサード `follow.rs` を経由する（`use self::window_move::…` の私有の再束縛）。`window_rect_of` は `window_move.rs` の私有なので、`pub(super)` に開いてファサードで再束縛する。
+
+### 10.2 合成（design-synthesis）
+
+- **一般化**: 2.4 の規則（重なりの矩形が自分のキャラ窓に収まり切るなら数えない）は自分の窓との重なりを必ず外すので、判定に渡す列から自分のスコープを外す必要が無い。両関門とも「全スコープのキャラ窓の矩形」を渡すだけになり、2.8（スコープ数を決め打ちしない）もそのまま満たす。
+- **作るか採るか**: 交わりの判定は `follow/visibility.rs` の `rects_intersect`（真偽だけ）では足りず、交わりの矩形そのものが要る。`balloon_limit.rs` に `max`／`min` の数行で置く（`visibility.rs` は開かない）。系の引き金は bevy の `resource_added` を採る（自前の印を作らない）。
+- **削ったもの**: 新しい経路の語（`PlacementRoute` の変種）・新しい記録の行・動いた窓を覚える資源・`rects_intersect` の公開・`place_chain_in_work_area` の署名の変更は、どれも作らない。判定し直しは「全スコープのバルーンを今の位置で随伴させ直す」1 本にし、動いた窓だけに絞る仕組みを持たない（判定は状態を持たないので結果は同じ）。
+
+### 10.3 決めたこと（design.md の正本）
+
+| 件 | 決め | 理由 |
+|---|---|---|
+| 件 1 の核 | `place_balloon_in_work_area` に `chars: &[(usize, RectPx)]`・`BalloonPlace::PushedOverlap { to, scope }`（語は `pushed`） | 既存の分岐を 1 ビットも変えず段を 1 つ足す（案 A）。既存の檻の `Pushed(..)` の主張が変わらない |
+| 書き込みの関門の列 | 新設の `follow/other_chars.rs` の `shown_char_rects` | `window_move.rs`（例外表）の増分を数行に抑える（案 B） |
+| 2.10 | `FrameFinalize` の系・`run_if(resource_added::<ChainFinalized>)`・全スコープを `follow_balloon(.., Placement(MoveCue))` | `runtime/` に触れない・経路の語を増やさない・同じ巡で流れる |
+| 件 2 | `ScopeConfig.balloon_offset_descript_x`・P5 の右の腕だけ `ox − 2d` | 合流済みの値から descript の分だけを分ける（案 D）。`windowposition.x` の檻が緑のまま |
+| 記録 | `[balloon-limit] Clamp` に欄 `overlap_scope`（`Option<usize>`） | 語を増やさない（4.2） |
+
+### 10.4 危うさ
+
+- 判定し直しの系は、窓が動いていない巡でも全スコープのバルーンを書き直す（同じ位置の `SetWindowPos` が 1 巡に数本増える）。目に見える動きは無い見込み。
+- 「表示している」を子の `Visual` で読むのは、`areka-emo-present` の装着の形（描画面を窓の子に置く）に寄りかかる。装着の形が変われば読み方も直す必要がある（`extra-character-windows` も同じ装着を使う見込み）。
+- `crates/areka/src/ghost_session.rs` に 1 行足すので、`runtime-crate-split` が同じファイルを動かすなら衝突しうる（1 行なので解くのは易しい）。
+
+### 10.5 要件 3.7 の数えの残り
+
+- 2.6 節の表のとおり、右に固定で descript の横のずらしが 0 でない同梱の検体は 0 本。変わるのは `none` の emily4・claudia・konnoyayame が右に決まった場面だけで、emo2（descript の横のずらし無し）は 1 ピクセルも変わらない。
+- 配布版のぱすたの kero の `balloon.alignment`・`balloon.offsetx`（R4・リポジトリの外）は、実装のタスクで読んで（写すなら `target\` の下）この節に書き足す。brief と完了 spec 4.4 の記録では kero は左に置かれ、ずらしは 0 なので、変わらない見込み。
