@@ -60,6 +60,8 @@
 - `ScopeConfig` に欄が増える → 全欄を列挙して組む 2 か所（`config.rs` の `resolve_scope`・`resolver_balloon_keyword_tests.rs`）がコンパイルで赤になる（意図どおり）。`balloon-canon-residue`・`defaultx-canon`・`window-snap`（`resolver.rs` を触る）は同じウェーブに置かない。
 - 起動の並べ直しの終わりの印（`ChainFinalized` を入れる時点）が変わる → 判定し直しの系の引き金を確かめ直す。`runtime-crate-split` が `drain_resnap.rs` を動かしても、印を入れる順（並べ直しの書き込みの後）が保たれていれば影響しない。
 - 3 体目の窓（`extra-character-windows`）が加わる → 判定に入れる矩形の列はスコープを全部回すので、規則の変更は要らない。3 体目での確かめはその spec が持つ。
+- キャラ窓に `Visual` を持つ新しい子が付く → OtherChars の「表示している」の読み方（前提 A2）を確かめ直す。
+- `runtime-crate-split` が `doc/COMPAT_ARCHITECTURE.md` の中のパスを書き換える → §8 の同じ表の行どうしなので、rebase のときに行ごとに合わせる。
 
 ## Architecture
 
@@ -363,7 +365,7 @@ fn counted_overlap(placed: RectPx, own: RectPx, other: RectPx) -> bool;
 
 **Responsibilities & Constraints**
 - `GhostWindows::scopes()`（昇順）を全部回し、`char_window(s)` → `window_rect_of(world, e)`（位置か寸が未確定なら `None`）→ 表示しているか、の 3 つが揃ったスコープだけを入れる。自分のスコープも外さない（FlipJudge が数えない）。
-- 表示しているか: キャラ窓の子（`Children`）のうち `Visual` を持つものが 1 つでも `is_visible` なら表示している。子が無い（描画面の装着の前）・全部不可視（`\s[-1]`）なら入れない（前提 A2）。
+- 表示しているか: キャラ窓の子（`Children`）のうち `Visual` を持つものが 1 つでも `is_visible` なら表示している。子が無い（描画面の装着の前）・全部不可視（`\s[-1]`）なら入れない（前提 A2）。今見ている子は `areka-emo-present` の装着の面（`emo-surface`）と文字の層の枠（`emo-text-layer-slot`）で、箱の文字の面（`Visual::default()`）は非表示のときに箱の同期が外す。ほかの子が窓に付くようになると黙って「表示している」に倒れるので、そのときはこの読み方を確かめ直す（Revalidation Triggers）。
 - `GhostWindows` が無ければ空の列（判定は今の並べ替えの規則になる・2.6）。記録はしない（関門が自分のキャラ窓で `Unresolved` を出す道は今のまま）。
 
 **Contracts**: Service [x]
@@ -384,6 +386,7 @@ pub(super) fn shown_char_rects(world: &World) -> Vec<(usize, RectPx)>;
 
 **Responsibilities & Constraints**
 - 系は `FrameFinalize` に置き、`run_if(resource_added::<ChainFinalized>)` で走らせる。`ChainFinalized` は `drain_resnap.rs` が並べ直しの書き込みの後に入れ、終了のときに `app_exit.rs` が外すので、ゴーストの窓の一式ごとに 1 度だけ走る。
+- 判定し直すのは `BalloonLimit(true)` のバルーンだけ（`windowposition.limit,0` のバルーンは並べ替えの判定に入らない＝`window-work-area-clamp` 要件 5.6。可視性の守りを当てない `MoveCue` の随伴で、守りが寄せた位置を書き戻さないため）。
 - スコープを先に集めてから（`GhostWindows` の借用を切ってから）、各スコープのキャラ窓の `WindowPos.position` を読み、`follow_balloon(world, char, pos, BalloonFollowTrigger::Placement(PlacementRoute::MoveCue))` を呼ぶ。判定と記録は書き込みの関門がする（`[balloon-limit] Clamp` に `context="runtime-gate"`・`route=BalloonFollow`）。
 - キャラ窓の位置が決まらないスコープは `[balloon-limit] Unresolved` の `warn!` を残して飛ばす（4.4）。`BalloonFollow` が無ければ `follow_balloon` が何もしない（今どおり）。
 - 新しい記録の語・経路の語を作らない（4.2）。
@@ -486,7 +489,8 @@ fn rejudge_balloons_after_chain_finalize(world: &mut World);
 2. 書き込みの関門（headless の World・`spawn_ghost_windows`）: 相方のキャラ窓の子の `Visual` が可視で重なる → 押し込み＋`overlap_scope=Some(1)`（2.3）。同じ形で子の `Visual` を全部不可視にする → 並べ替え（2.6）。相方の `WindowPos` の寸が未確定 → 並べ替え（2.6）。
 3. 判定し直し（2.10）: 相方の窓を重ならない位置に置いて本体のバルーンを並べ替えた後、`move_window_to` で相方の窓を映した先に重なる位置へ動かし、`ChainFinalized` を入れて系を回す → 本体のバルーンが押し込みの位置に書かれる。直す前（系なし）は並べ替えた位置のまま（赤）。
 4. 置き直さない（2.7）: `ChainFinalized` を入れずに `move_window_to` で相方の窓を動かす（台本の `\![move]` と同じ道）→ 本体のバルーンは動かない。`ChainFinalized` が入った後の 2 回目の巡では系が走らない。
-5. 6.4 の見張り: 既存の `balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`spawn_follow_pipeline_tests.rs`・`placement_windowposition_tests.rs` がそのまま緑（`reseed_tests.rs` の右の sakura の 4 か所だけ期待値を書き換える）。
+5. 判定し直しで動かない（6.4）: どの窓も重ならない形で `ChainFinalized` を入れて系を回す → 全バルーンの `WindowPos` が回す前とビット同一で、`[balloon-limit] Clamp` の行が増えない。`windowposition.limit,0` のバルーンは系の対象に入らない（書き込みが 1 つも出ない）。既存の檻は `register_systems` を通らずこの系を回さないので、この檻を別に置く。
+6. 6.4 の見張り: 既存の `balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`spawn_follow_pipeline_tests.rs`・`placement_windowposition_tests.rs` がそのまま緑（`reseed_tests.rs` の右の sakura の 4 か所だけ期待値を書き換える）。
 
 ### 実機
 
