@@ -714,6 +714,22 @@ cargo run --manifest-path C:/home/maz/git/areka/crates/pilot/examples/pilot-wind
   - 試験のモジュールは「組めて例が走るまで」の指示では手が付かない（`cargo build` は `#[cfg(test)]` を組まないので）。移行の本体で試験も移させるなら、指示に `cargo test` が組めることを入れる。
   - 逃がしを書いた後はバイトで確かめる（生の NUL の字が 1 つ入っていた。rustc も clippy も黙って通す）。Bash の道具がコマンドの `\\` を `\` に変えるので、コマンドの本文に逃がしを書いて写させると化ける。
   - 公開の型が生の型に変わる所（`DWORD`・`WindowMessage` の欄）は、組めても doc のコメントが古いまま残る。レビューが見る点。
+- 取りこぼしの 3 種をわざと入れた結果（11.2・2026-11-17・x64・1 つ入れては戻し、毎回 `git diff` が空なのを確かめた）。道具は `cargo build -p <crate>` と `cargo clippy -p <crate> -- -D warnings -W clippy::let_underscore_must_use`（置き場の manifest・絶対の `--target-dir`）。入れる前の `q10-winmsg`・`q3-default` は両方の道具で警告 0（置き場の根の manifest の `unused workspace dependency` 5 件は除く）。
+
+  | 種類 | 入れた先 | 入れ方 | build | clippy | 捕まえた名前 |
+  |---|---|---|---|---|---|
+  | ⑴ 戻り値を見ない | `q10-winmsg` `util/window.rs:79` `Drop` の `DestroyWindow`（`.sys()`・`BOOL`＝`i32`） | 文として捨てる（元の `let _ =` を消して `unsafe { DestroyWindow(self.hwnd) };` にした。入れたのはこの形） | 捕まらない | 捕まらない | なし |
+  | ⑴ 同上 | 同上 | `let _ =` で捨てる（`window.rs:79` の元のコードのまま。入れていない） | 捕まらない | 捕まらない | なし（元から `let _ =` で `BOOL` を捨てる所は 6 か所＝`PostMessageW`（`lib.rs:79`・`lib.rs:240`・`lib.rs:249`）・`TranslateMessage`（`lib.rs:192`）・`DestroyWindow`（`util/window.rs:79`）・`UnhookWindowsHookEx`（`util/msg_filter_hook.rs:43`）。どれも警告 0） |
+  | ⑴ 戻り値を見ない | `q3-default` `main.rs` の `readback.Unmap()`（既定の形・`HRESULT`） | 文として捨てる（`unsafe { readback.Unmap() };`） | 捕まる | 捕まる | rustc `unused_must_use`（`unused windows_core::HRESULT that must be used`） |
+  | ⑴ 同上 | 同上 | `let _ =` で捨てる | 捕まらない | 捕まる | clippy `let_underscore_must_use`（`non-binding let on an expression with #[must_use] type`）。`-W` で足した lint で、既定では無い |
+  | ⑵ 「ポインタ＋長さ」の長さの誤り | `q3-default` `dwrite.rs` `create_text_layout` の `CreateTextLayout` の長さ | `text_slice.len() as u32 + 1`（1 つ多い） | 捕まらない | 捕まらない | なし（`*const u16` と `u32` の組は型が合う。実行時にだけ表れる） |
+  | ⑶ 失敗を記録しない経路 | `q10-winmsg` `util/window.rs:183` の `CreateWindowExW` の失敗（`hwnd.is_null()`） | 中身の無い分岐（`if hwnd.is_null() {}`） | 捕まらない | 捕まる | clippy `needless_ifs`（`` this `if` branch is empty ``）。既定の lint で、`-D warnings` で止まる |
+  | ⑶ 同上 | 同上 | 中身がコメントだけの分岐（`if hwnd.is_null() {` `// failure ignored` `}`） | 捕まらない | 捕まらない | なし |
+  | ⑶ 同上 | 同上 | `if` ごと消す（`return Err(..)` を含む 3 行を消して先へ進む。組める） | 捕まらない | 捕まらない | なし |
+
+  - 読み取り: 戻り値の取りこぼしは、`HRESULT`（`#[must_use]`）なら文として捨てる形は rustc、`let _ =` の形は clippy の `let_underscore_must_use` が捕まえる。`.sys()` の `BOOL`（生の `i32`）は `#[must_use]` が付かず、どちらの形も機械では捕まらない。`let_underscore_must_use` は型の `#[must_use]` を見るので、生の型の戻り値には効かない。
+  - ⑵は機械では捕まらない（型は合う）。⑶は形しだいで、本当に空の分岐だけ clippy の `needless_ifs` が捕まえ、中身がコメントだけの分岐と `if` ごと消した形は通る（記録の有無は文法の問題でない）。実行時には、⑵の `+1` は NUL まで読んで次のメモリを触りうる。
+  - 範囲: 設計が名指しした組だけを見た（⑴は `BOOL` の `.sys()` と `HRESULT` の COM の両方、⑵は `q3-default`、⑶は `q10-winmsg`）。`HRESULT` 側の `BOOL` 同等の確かめ（`q10-winmsg` に `HRESULT` を返す呼び出し）は見ていない。
 - 止まった所・理由・代わりの見立て: 無し（止まらなかった。直しは上の 4 か所）。
 - 判定: （開発者が下す）
 
@@ -769,7 +785,12 @@ windows-link v0.100.1 (...)
 
 ### レビューが見る点の一覧（問い 10）
 
-（未記入）
+移行の本体で、機械（`cargo build`・`cargo clippy -- -D warnings -W clippy::let_underscore_must_use`）が捕まえなかった種類を、人のレビューが見る（11.2 の入れた結果から）。
+
+1. `.sys()` の `BOOL`（生の `i32`）を返す呼び出しの戻り値を捨てていないか。文として捨てる形も `let _ =` も機械は通す。`PostMessageW`・`DestroyWindow`・`UnhookWindowsHookEx` のように捨ててよい物は元のとおりか、捨ててはいけない物（失敗が後に響く物）は検査しているかを見る。
+2. 「ポインタ＋長さ」の組の長さが元と同じか（`CreateTextLayout` の長さの `+1` ずれなど）。型が合うので機械は通す。長さを作る式（`len()` に足し引きが無いか・NUL を含めるか）を元と見比べる。
+3. 失敗の経路が元と同じ形で残り、記録（`error!`）か `Err` で伝えているか（窓の作成の失敗を黙って先へ進める形など）。本当に空の分岐（`{}`）は clippy の `needless_ifs` が捕まえるが、中身がコメントだけの分岐と、検査の `if` ごと消えた形は機械が通す。元にあった検査が残っているか・分岐の中に `return Err` か記録があるかを元と見比べる。
+4. 機械が捕まえた物も、道具の設定が前提になる: `HRESULT` を文として捨てる形は rustc の既定の `unused_must_use` が捕まえるが、`let _ =` の形は `clippy::let_underscore_must_use` を有効にしたときだけ。移行の本体の CI でこの lint を有効にするか決める（有効にしても `BOOL` は捕まらない）。
 
 ### 公開の後の注意
 
