@@ -156,15 +156,15 @@
   - _Dispatch: mechanical — 道の機械の置き換えで、対応を設計が決めている_
   - _Requirements: 1.4, 2.4, 4.1_
 
-- [ ] 6. 文字で読むテスト・examples・配置のテストだけの公開を置き直す（段 5）
-- [ ] 6.1 examples を `areka-runtime` へ移し、crate の公開面で読む
+- [x] 6. 文字で読むテスト・examples・配置のテストだけの公開を置き直す（段 5）
+- [x] 6.1 examples を `areka-runtime` へ移し、crate の公開面で読む
   - `crates/areka/examples/collision-probe.rs` と `collision-probe/`（7 ファイル）を `crates/areka-runtime/examples/` へ `git mv` する
   - `#[path = "../src/runtime/{target_map,hit_region}.rs"]` を外し、`areka_runtime::{target_map, hit_region}` と `areka-placement` の公開面で読む。頭の説明の「bin crate ゆえ `#[path]` で取り込む」段落を crate の依存で読む形に書き直す（振る舞いは変えない）
   - 足りない公開面は 2.1 の「外」として `pub` にし、記録に足す
   - 完了の状態: `cargo check -p areka-runtime --examples` と `cargo check -p areka --examples` が警告なしに通る
   - _Dispatch: mechanical — 設計が移す先と `#[path]` の外し方を決めている_
   - _Requirements: 4.6, 4.7_
-- [ ] 6.2 本体の文字で読むテストを読み口へ寄せる
+- [x] 6.2 本体の文字で読むテストを読み口へ寄せる
   - 設計の SourceReadTests の表どおり、本体の `frame_move_order_tests`・`frame_schedule_tests`・`zorder_wiring_tests` の runtime のファイルの読みを `crate_source!("areka-runtime", …)` へ、本体のファイルの読みは相対の道のままにする
   - `measure_template_tests` を `crate_source!("areka-runtime", "src/frame_test_support.rs")`・`"src/assets.rs"`・`"examples/collision-probe/setup.rs"`、`assets_tests.rs` を相対の `../runtime_tests/assets_tests.rs` で読む形へ。分岐の対応表 2 本の runtime の行を相対の `../runtime/…` から読み口へ
   - `crate_source_test_support.rs` の説明の名前を付けた例外のパス（`runtime/frame_attach_tests.rs`）を書き換える
@@ -173,7 +173,7 @@
   - _Depends: 6.1_
   - _Dispatch: mechanical — 設計の表がテストごとの読み先と読み方を決めている_
   - _Requirements: 5.2, 5.3, 5.4_
-- [ ] 6.3 `spawn_zorder_pair_deferred_tests` を `areka-runtime` の木で歩く
+- [x] 6.3 `spawn_zorder_pair_deferred_tests` を `areka-runtime` の木で歩く
   - 名簿を crate の根からの道（`src/zorder_cue.rs`・`src/frame/zorder_drain.rs`・`src/frame/zorder_descript.rs`・`src/window_state_cue.rs`・`src/frame/window_state.rs`）へ、較正の外れを `src/frame/zorder_drain_test_support.rs` へ書き換える
   - 本体の `src` に runtime の外の `zorder` の名の本番ファイルが 0 件であることを grep して記録に書く（歩く木が替わっても覆うファイルは同じ）
   - `crates/areka-runtime/src` で `"\.\./areka|"\.\./\.\./crates|crate_source` が名前を付けた例外（`frame_attach_tests.rs` のワークスペースの走査）の外で 0 件であることを grep する
@@ -182,7 +182,7 @@
   - _Boundary: RuntimePlacementTests（`spawn_zorder_pair_deferred_tests.rs` だけ）_
   - _Dispatch: mechanical — 設計が名簿の 5 ファイルと較正の外れを挙げている_
   - _Requirements: 4.5, 5.2, 5.4_
-- [ ] 6.4 配置のテストだけの公開を `test-support` の下へ移す
+- [x] 6.4 配置のテストだけの公開を `test-support` の下へ移す
   - `areka-placement` の `follow.rs` の再公開の行（`on_balloon_drag`・`sync_drag_writer`・`WORK_AREA_CLAMP_TAG`・`AnchorSource`・`WorkAreaResolution`・`work_area_for_window_with_origin`・`move_window_with_route`）を束から外し、`test-support` のとき `pub use`・ほかは `pub(crate) use` に切り替える（crate の中で使われない名前は `#[cfg(feature = "test-support")]` の行だけ）。定義元のファイル（`follow/window_move.rs` ほか）は書かない
   - `MonitorSources::is_empty` の本番の使い手を確かめ、0 なら `follow/work_area.rs` の定義に `#[cfg(any(test, feature = "test-support"))]` を付ける
   - `transition_diag.rs` の、判定器とテストだけが使う定数・関数を D3 ⑵ の形で機能の下へ。本番が使う語・公開の型の欄・`MonitorDpiEntry` は公開のまま（理由を記録）
@@ -193,7 +193,7 @@
   - _Depends: 6.3_
   - _Dispatch: mechanical — 設計の D10 の表が項目ごとの扱いと切り替えの形を決めている_
   - _Requirements: 4.8_
-- [ ] 6.5 段 5 を閉じる
+- [x] 6.5 段 5 を閉じる
   - `cargo check --workspace --all-targets` を回し、警告 0 を確かめる。触ったテストだけを回す
   - 完了の状態: 警告 0 で触ったテストが緑・段 5 のコミット
   - _Depends: 6.2, 6.3, 6.4_
@@ -295,3 +295,4 @@
 - 段 3（案 C）: 74 関数を `areka-runtime` へ戻し、本体に 241 本。⑷ は 19 項目・22 本の渡し口。番人の crate を引く補助を使う 17 本は D4 で本体に残した（verification 4.6）。
 - 6.2 へ: `tick_gate_config::producers_tests` の 2 本（`the_areka_table_lists_every_file_that_marks_the_wake`・`the_wintf_module_roster_names_every_areka_zorder_producer`）は段 1 から赤のまま引き継ぐ（生産者が本体の `src` から出たため）。校正の説明は案 C で `crates/areka-runtime/src/assets_tests.rs` へ移ったので、6.2 の読む先（`../runtime_tests/assets_tests.rs`）は今の置き場に合わせて読む。
 - 後で（audit へ）: 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at` は `areka-runtime` の支えと同じ中身の前からの写し。
+- 段 7（5.9）へ: 古い説明が残る — `areka-runtime/src/hit_region.rs:48-54`（probe が `#[path]` で取り込む前提）・`areka/examples/emo-present/reconcile.rs:15,25`・`areka/src/input_events/mod.rs:379`（`collision-probe.rs` を本体の example として指す）。

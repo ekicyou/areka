@@ -447,3 +447,65 @@
 - `cargo fmt --all -- --check`: 差分 0。`cargo check --workspace --all-targets`: 緑・新しい警告 0（`shiori-abi` の `windows` 未使用は前からの警告）。
 - `cargo test -p areka --bin areka -- mcp:: input_events::user_break`: 276 本緑。`cargo test -p log-capture-kit --test file_length_guard_test --test workspace_scan_test`: 6 本・20 本緑。
 - 触っていない: `tick_gate_config_producers_tests.rs`（6.2）・`placement_tests/mod.rs` の doc（段 7）。
+
+## 6. 段 5（文字で読むテスト・examples・配置のテストだけの公開）
+
+非挙動。タスク 6.1〜6.5。
+
+### 6.1 examples（6.1）
+
+- 赤（移す前）: `crates/areka/examples/collision-probe.rs` と `collision-probe/` 7 ファイルが本体にあり、`collision-probe.rs` が `#[path = "../../areka-runtime/src/{target_map,hit_region}.rs"]` で 2 モジュールを私有に取り込んでいた（段 1 の一時の道）。
+- 移し: `git mv` で `crates/areka-runtime/examples/collision-probe.rs` と `collision-probe/` へ。`#[path]` の 2 つの私有 include を外し、`use areka_runtime::hit_region::resolve_hit_region;` と `use areka_runtime::target_map;` に替えた（子の `super::target_map`・`super::resolve_hit_region` はルートへ持ち込んだ名前へ解決される）。頭の説明の「bin crate ゆえ `#[path]` で取り込む」段落は「crate の公開面で読む」に書き直し、起動コマンドを `cargo run -p areka-runtime --example collision-probe` へ直した。子ファイルの接続 7 本の `#[path]` は example のルートの規則（素の `mod` は新しい example の対象を生む）のため残した。
+- `pub` にした項目: 0 件（`target_map`・`hit_region` は既に `pub mod`・`areka-placement` は公開面を使っていた）。
+- 緑: `cargo check -p areka-runtime --examples`・`cargo check -p areka --examples`: 警告 0。
+
+### 6.2 本体の文字で読むテスト（6.2）
+
+- 赤: `tick_gate_config::producers_tests::{the_areka_table_lists_every_file_that_marks_the_wake, the_wintf_module_roster_names_every_areka_zorder_producer}` が段 1 から赤（本体の `src` を走査して生産者を探すが、生産者は `areka-runtime` へ移った）。
+- 読みの変更:
+  - `tick_gate_config_producers_tests.rs`: 表の `include_str!("../../areka-runtime/src/…")` 9 か所を `crate_source!("areka-runtime", "src/…")` へ。走査の根を `CARGO_MANIFEST_DIR/src` から `crate_path("areka-runtime", "src")` へ。表の見出しを `runtime/…` から runtime の `src` からの相対（`adapter.rs`・`frame/scale_text.rs` ほか）へ直し、照合を `ends_with` から等号へ（照合は弱めていない）。本体の `src` に `tick_wake::mark` を呼ぶファイルは 0 件（`input_events/char_watch.rs` は `arm_deadline` だけ）なので、走査は runtime の木だけで足りる。
+  - `measure_template_tests.rs`: `frame_test_support.rs`・`assets.rs`・`examples/collision-probe/setup.rs` を `crate_source!("areka-runtime", …)` へ。`emo-present/setup.rs` は本体のまま相対。
+  - 設計と違った所: タスク 6.2 の文は `assets_tests.rs` を相対の `../runtime_tests/assets_tests.rs` で読むとするが、段 3 の案 C で較正の当たりの説明文は `areka-runtime/src/assets_tests.rs` へ戻ったので、`crate_source!("areka-runtime", "src/assets_tests.rs")` で読む（段 3 の一時の `include_str!("../../../areka-runtime/…")` の置き換え）。
+  - 分岐の対応表 2 本（`zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests`）の runtime の行 12 か所: 段 3 の一時の相対（`../../../areka-runtime/src/…`）から `crate_source!("areka-runtime", …)` へ。
+  - `zorder_wiring_tests.rs`: runtime の `lib.rs` の読みを `crate_source!` へ（本体の `session/runtime_boot.rs`・`ghost_session.rs`・`main.rs` は相対のまま）。`frame_schedule_tests.rs`（本体の `session/ghost_quit.rs` だけ）・`frame_move_order_tests.rs`（文字で読む所なし）は変更なし。
+  - `crate_source_test_support.rs` の説明の名前を付けた例外を `areka-runtime` の `src/frame_attach_tests.rs` へ。
+- grep（`crates/areka/src`、読み口と名前を付けた例外の外）: `"(\.\./)+(wintf|areka-|dola|shiori|sylphya|sample|log-capture)` と `areka-runtime` の字面の相対の読みは 0 件。
+- 緑: `cargo test -p areka --bin areka -- tick_gate_config measure_template frame_move_order frame_schedule zorder_wiring zorder_group_branch zorder_inversion crate_source`: 21 本緑（赤だった 2 本を含む）。
+
+### 6.3 `spawn_zorder_pair_deferred_tests`（6.3）
+
+- 名簿（`src/zorder_cue.rs`・`src/frame/zorder_drain.rs`・`src/frame/zorder_descript.rs`・`src/window_state_cue.rs`・`src/frame/window_state.rs`）と較正の外れ（`src/frame/zorder_drain_test_support.rs`）は、段 3 でテストが `areka-runtime` へ移った時点で crate の根からの道（`CARGO_MANIFEST_DIR` = `areka-runtime`）になっており、書き換え不要だった。頭の説明の `runtime/…` の綴りと「本体」の語だけ直した。較正は自分の crate の正例で緑。
+- grep 1: 本体 `crates/areka/src` に runtime の外の `zorder` の名の本番ファイル（`*zorder*` の名で `_tests.rs`・`test_support` を除く）は 0 件（名に `zorder` を持つ本体のファイルは分岐の対応表のテスト 2 本・その支え・`zorder_wiring_tests.rs` だけ）。
+- grep 2: `crates/areka-runtime/src` で `"\.\./areka|"\.\./\.\./crates|crate_source` は 0 件（名前を付けた例外 `frame_attach_tests.rs` のワークスペースの走査もこの字面を含まない）。
+- 緑: `cargo test -p areka-runtime -- spawn_zorder_pair_deferred frame_move_order frame_schedule zorder_wiring`: 14 本緑。
+
+### 6.4 配置のテストだけの公開（6.4）
+
+書いたのは `areka-placement` の 3 ファイル（`follow.rs`・`follow/work_area.rs`・`transition_diag.rs`）だけ。
+
+| 項目 | 本番の使い手（crate の中） | 扱い |
+|---|---|---|
+| `on_balloon_drag` | `spawn.rs`（`super::follow`） | `test-support` なら `pub use`・なければ `pub(crate) use` |
+| `sync_drag_writer` | `reseed`・`script_alignment`・`sticky_group_ledger` | 同上 |
+| `AnchorSource` | `persist`・`reseed`・`script_alignment` | 同上 |
+| `WorkAreaResolution`・`work_area_for_window_with_origin` | `follow/visibility.rs` | 同上 |
+| `move_window_with_route` | `chain_realign`・`follow/move_shift.rs`・`window_move` | 同上 |
+| `WORK_AREA_CLAMP_TAG` | 定義元 `work_area_clamp.rs` だけ（`follow` 経由の使い手は crate のテストだけ） | `#[cfg(any(test, feature = "test-support"))] pub use` の 1 行だけ（`pub(crate)` の行は未使用になるので置かない）。crate の自分のテスト（`follow_work_area_clamp_restore_tests.rs`）が引くので `test` も含めた |
+| `MonitorSources::is_empty` | 0 件（`cfg` を付けて本番のビルドが通ることで確認） | 定義に `#[cfg(any(test, feature = "test-support"))]`。`len` に `clippy::len_without_is_empty` の許可を、同じ条件の否定で付けた |
+| `MonitorDpiEntry` | 本体のテスト（公開の欄の要素の型） | 公開のまま（要件の討議 議題 4） |
+| `transition_diag.rs` の `PLACEMENT_KIND_ALL`・`HOLD_DECISION_ALL`・`HOLD_SITE_ALL`・`CHAIN_STAGE_ALL`・`SNAPSHOT_FIELDS`・`HOLD_FIELDS`・`GROUND_FIELDS`・`CHAIN_FIELDS`・`OFFSET_FIELDS` | 0 件（判定器とテストだけ） | 定義に `#[cfg(any(test, feature = "test-support"))]`（定義が本番に使い手を持たないので、再公開の切り替えでなく定義に付ける） |
+| `OFFSET_VERDICT_ALL` | `log_offset_rescale` の `debug_assert!`（本番のビルドが落ちて分かった） | 公開のまま |
+| `KIND_*`・`FIELD_*`・`HOLD_DECISION_*`・`HOLD_SITE_*`・`CHAIN_STAGE_*`・`OFFSET_VERDICT_*`（`_ALL` 以外）・`*_line`・`stamp_of`・`write_tag`・`log_*`・公開の型の欄 | 本番が使う（行の組み立て・各発行点） | 公開のまま（本番が使う語・公開の型の欄は切り替えられない） |
+| `live_work_area_bottom` | `log_char_ground`（crate の中の本番） | 公開のまま（外の使い手はテストだけだが、本番が使う関数で、同じ道・名前の切り替えには定義を私有のモジュールへ入れる必要がある。判定器の語彙ではない） |
+
+- 緑: `cargo check -p areka-placement --lib`（機能なし）警告 0・`--lib --features test-support` 警告 0・`--tests` 警告 0・`cargo clippy -p areka-placement --lib` に `len_without_is_empty` なし。
+
+### 6.5 走行（6.5）
+
+- `cargo check -p areka-runtime --examples`・`cargo check -p areka --examples`: 警告 0。
+- `cargo check --workspace --all-targets`: 緑（警告は前からの `shiori-abi` の 1 件だけ）。
+- `cargo test -p areka --bin areka -- tick_gate_config measure_template frame_move_order frame_schedule zorder_wiring zorder_group_branch zorder_inversion crate_source`: 21 本緑。
+- `cargo test -p areka-runtime -- spawn_zorder_pair_deferred frame_move_order frame_schedule zorder_wiring`: 14 本緑。`-- transition` を足した走行: 223 本緑・`#[ignore]` 2。
+- `cargo test -p areka-placement`: 984 本緑・`#[ignore]` 1。
+- `cargo test -p log-capture-kit --test file_length_guard_test --test workspace_scan_test`: 6 本・20 本緑。
+- `cargo fmt --all -- --check`: 差分 0。

@@ -32,19 +32,17 @@
 //! 別の観測（steering `tech.md:61-63`「examples は手動検証とグラフィックス挙動確認の補助であり、
 //! テストの代替ではない」）であり、両者は併存する（観測の2段構え）。
 //!
-//! # `#[path]` 私有 include（read-only 再利用・production 不改変）
+//! # crate の公開面で読む
 //!
-//! `areka` は bin crate（lib target なし）ゆえ `use areka::...` は不可能。本 probe は次の2モジュールを
-//! `#[path]` で私有 include する。配置（`spawn_ghost_windows`／`resize_window_to`）は crate の公開面
-//! `areka_placement::…` で使う（spec: placement-crate-split 要件 4.2）:
+//! 本 probe は `areka-runtime` の example であり、次の 2 モジュールを `areka_runtime::` の公開面から
+//! 使う（`#[path]` の私有 include はしない）。配置（`spawn_ghost_windows`／`resize_window_to`）は crate の
+//! 公開面 `areka_placement::…` で使う（spec: placement-crate-split 要件 4.2）:
 //!
-//! - `../src/runtime/target_map.rs`（scope→`TargetId` 写像の正本・既に `crate::` フリー）
-//! - `../src/runtime/hit_region.rs`（[`resolve_hit_region`]／`HitRegion` 契約・非テストコードは
-//!   `super::target_map` と外部 crate のみ参照＝`crate::` フリー）
+//! - `areka_runtime::target_map`（scope→`TargetId` 写像の正本）
+//! - `areka_runtime::hit_region`（[`resolve_hit_region`]／`HitRegion` 契約）
 //!
-//! **`target_map` と `hit_region` は example クレートルートに宣言する**（入れ子にしない）。これにより
-//! `hit_region.rs` 内部の `super::target_map` が本 probe の `target_map` へ解決される（design「配置の
-//! 決定的制約」）。`#[allow(dead_code)]` は include 側指定（main.rs 専用の公開面を未使用警告にしない）。
+//! `pointer.rs`・`probe.rs` の `super::target_map`・`super::resolve_hit_region` は、上の `use` が
+//! example クレートルートへ持ち込んだ名前へ解決される。
 //!
 //! # donor からの必須逸脱（3点・これを欠く probe は構造的に無効・design Open Risk 6）
 //!
@@ -65,7 +63,7 @@
 //!
 //! # 使い方
 //! ```text
-//! cargo run -p areka --example collision-probe
+//! cargo run -p areka-runtime --example collision-probe
 //! ```
 //! **終了は `AREKA_APP_SMOKE_EXIT_MS`（有界 auto-exit）のみ**。目視プロトコル ⑤ の所要時間を見込んで
 //! 寛大な値（例 `180000`＝3 分）を必ず与えること。
@@ -75,10 +73,10 @@
 //! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
 //! `areka-P0-input-events` task 2.7 で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
 //! 正典の脱出口（**Ctrl+左ダブルクリック**・DD-IE-7）は `input_events::attach_char_pointer_handlers`
-//! （`pub(crate)`・内部が `crate::` パスを使うため example から `#[path]` include できない）が
+//! （本体の `pub(crate)`・内部が `crate::` パスを使うため runtime の example からは使えない）が
 //! 担うようになったためである。素のダブルクリックは本来 `KanadeMsg::Mouse(DoubleClick)` の送出契機で
-//! あって終了契機ではない。probe への脱出口結線は本 spec の射程外（`input_events` の
-//! `#[path]` include 可能化が要る）。
+//! あって終了契機ではない。probe への脱出口結線は本 spec の射程外（本体の `input_events` を
+//! runtime の example から使えるようにする仕事が要る）。
 //!
 //! # 起動時のパス（絶対パスの要否・要件 4.6）
 //!
@@ -214,31 +212,17 @@ use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, ScaleRatio, TargetId, load_shell_target};
 
-/// scope→`TargetId` 写像の正本を私有 include する（`super::target_map` 解決の要ゆえクレートルート宣言）。
-#[path = "../../areka-runtime/src/target_map.rs"]
-#[allow(dead_code)]
-mod target_map;
-
-/// [`resolve_hit_region`]／`HitRegion` 契約を私有 include する。内部の `super::target_map` は上の
-/// `target_map` へ解決される（クレートルート宣言・入れ子にしない）。
-#[path = "../../areka-runtime/src/hit_region.rs"]
-#[allow(dead_code)]
-mod hit_region;
-
 use areka_placement::spawn::{
     GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
 };
-use hit_region::resolve_hit_region;
+use areka_runtime::hit_region::resolve_hit_region;
+use areka_runtime::target_map;
 
 // ---------------------------------------------------------------------------
 // 本体分割の接続（`areka-P0-file-slimming` task 8.12・純移動）
 //
-// **上の 2 つの `#[path = "../src/..."]` 私有 include はこのファイルに残す。** 相対パスは宣言元
-// ファイルのディレクトリ（`crates/areka/examples/`）から解決されるため、サブディレクトリの子へ
-// 移すと `../src/...` が届かなくなる（本タスクの最重要制約）。
-//
 // サンプルのルートファイルは**自分のバイナリターゲットのクレートルート**であり、素の `mod foo;`
-// は `examples/foo.rs` を探して**新しい example ターゲットを生む**。ゆえに子の接続も `#[path]`
+// は `examples/foo.rs` を探して**新しい example ターゲットを生む**。ゆえに子の接続は `#[path]`
 // が必須である。子ディレクトリに `main.rs` は置かない（置くと Cargo が重複ターゲット名で落ちる）。
 // ---------------------------------------------------------------------------
 

@@ -30,6 +30,7 @@
 // =============================================================================
 
 use super::source_text_test_support::{code_only, squeeze};
+use crate::crate_source_test_support::crate_source;
 
 // ---------------------------------------------------------------------------
 // ⑶ 結線の字面——削っても挙動に現れない 4 点を名指しで塞ぐ
@@ -41,7 +42,7 @@ use super::source_text_test_support::{code_only, squeeze};
 /// 移ったので、そこは `runtime_boot.rs` の字面で押さえる（窓の側の送出端は束で渡る）。
 #[test]
 fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
-    let raw = include_str!("../../../areka-runtime/src/lib.rs");
+    let raw = crate_source!("areka-runtime", "src/lib.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
     let runtime_squeezed = squeeze(&code_only(include_str!("../session/runtime_boot.rs")));

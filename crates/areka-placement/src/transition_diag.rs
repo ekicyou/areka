@@ -88,6 +88,7 @@ pub const KIND_OFFSET: &str = "offset";
 ///
 /// wintf の [`base::KIND_ALL`] とも emo-present の `KIND_SURFACE` とも交わらない
 /// （交わると判定側のレコード振り分けと遷移の起点判定が壊れる）。
+#[cfg(any(test, feature = "test-support"))]
 pub const PLACEMENT_KIND_ALL: &[&str] = &[
     KIND_SNAPSHOT,
     KIND_HOLD,
@@ -108,6 +109,7 @@ pub const HOLD_DECISION_HOLD: &str = "hold";
 pub const HOLD_DECISION_PROCEED_AFTER_TIMEOUT: &str = "proceed-after-timeout";
 
 /// 整合待ちの判定語の全体。
+#[cfg(any(test, feature = "test-support"))]
 pub const HOLD_DECISION_ALL: &[&str] = &[
     HOLD_DECISION_PROCEED,
     HOLD_DECISION_HOLD,
@@ -131,6 +133,7 @@ pub const HOLD_SITE_WORK_AREA_RESNAP: &str = "work-area-resnap";
 pub const HOLD_SITE_PATTERN_MOVE: &str = "pattern-move";
 
 /// 観測点語の全体（design C5 の「4 点すべて」と面の `move` のずれの相＝待ち札の守備範囲そのもの）。
+#[cfg(any(test, feature = "test-support"))]
 pub const HOLD_SITE_ALL: &[&str] = &[
     HOLD_SITE_DPI,
     HOLD_SITE_RECONCILE,
@@ -151,6 +154,7 @@ pub const CHAIN_STAGE_REALIGNED: &str = "realigned";
 pub const CHAIN_STAGE_DEFERRED: &str = "deferred";
 
 /// 連鎖レコードの段階語の全体。
+#[cfg(any(test, feature = "test-support"))]
 pub const CHAIN_STAGE_ALL: &[&str] = &[
     CHAIN_STAGE_ARMED,
     CHAIN_STAGE_REALIGNED,
@@ -233,9 +237,11 @@ pub const FIELD_NEW_OFFSET: &str = "new_offset";
 pub const FIELD_VERDICT: &str = "verdict";
 
 /// `kind=snapshot` 行の必須フィールド（接頭語と可変長の `m<i>` を除く）。
+#[cfg(any(test, feature = "test-support"))]
 pub const SNAPSHOT_FIELDS: &[&str] = &[FIELD_MONITORS];
 
 /// `kind=hold` 行の必須フィールド（接頭語を除く）。
+#[cfg(any(test, feature = "test-support"))]
 pub const HOLD_FIELDS: &[&str] = &[
     FIELD_ENTITY,
     FIELD_SCOPE,
@@ -248,6 +254,7 @@ pub const HOLD_FIELDS: &[&str] = &[
 ];
 
 /// `kind=ground` 行の必須フィールド（接頭語を除く）。
+#[cfg(any(test, feature = "test-support"))]
 pub const GROUND_FIELDS: &[&str] = &[
     FIELD_SCOPE,
     FIELD_GROUND_Y,
@@ -257,9 +264,11 @@ pub const GROUND_FIELDS: &[&str] = &[
 ];
 
 /// `kind=chain` 行の必須フィールド（接頭語を除く）。
+#[cfg(any(test, feature = "test-support"))]
 pub const CHAIN_FIELDS: &[&str] = &[FIELD_STAGE, FIELD_SCOPES, FIELD_MOVED, FIELD_REASON];
 
 /// `kind=offset` 行の必須フィールド（接頭語を除く）。
+#[cfg(any(test, feature = "test-support"))]
 pub const OFFSET_FIELDS: &[&str] = &[
     FIELD_SCOPE,
     FIELD_BASE_DPI,

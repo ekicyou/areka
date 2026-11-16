@@ -5,8 +5,8 @@
 //! # 片割れの分担
 //!
 //! 配置の crate の片割れ（`crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs`）が、
-//! 配置の本番ファイル 4 本・窓の印・配置の `src` の木を見る。ここは本体の 3 本（グループ機構が
-//! `runtime` に新設したもの）・帯の語の持ち主のファイル・本体の `src` の木を見る。wintf 側の
+//! 配置の本番ファイル 4 本・窓の印・配置の `src` の木を見る。ここは`areka-runtime` の 3 本（グループ機構が
+//! 新設したもの）・帯の語の持ち主のファイル・`areka-runtime` の `src` の木を見る。wintf 側の
 //! 本番ファイル 8 本は `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
 //! 語の表と走査器は 2 つの片割れが共に使う `areka_placement::test_support::zorder_pair_deferred` に
 //! 1 つだけあり、ここでは本体の実物で較正する。
@@ -16,8 +16,8 @@
 //! 配置の片割れの頭の説明のとおり。重なり順の 2 機構（ペア機構＝`areka-P0-ghost-window-zorder`・
 //! グループ機構＝`areka-P0-scope-zorder-pinning`）の要件は「**本フィーチャーにおいて**足さない」
 //! ことを言う（要件の文の引用）ので、走査は 2 つの機構が全部を書いた本番ファイルに限る。常に手前の帯の語（`BAND_NEEDLES`）を
-//! areka 側で持つのは受け口（`runtime/window_state_cue.rs`）と取り出しの相
-//! （`runtime/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
+//! areka 側で持つのは受け口（`src/window_state_cue.rs`）と取り出しの相
+//! （`src/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
 
 use std::path::Path;
 

@@ -79,18 +79,18 @@ const TEST_FILES: [(&str, &str, &str); 8] = [
     ),
     (
         "runtime/zorder_cue_tests.rs",
-        include_str!("../../../areka-runtime/src/zorder_cue_tests.rs"),
-        include_str!("../../../areka-runtime/src/zorder_cue.rs"),
+        crate_source!("areka-runtime", "src/zorder_cue_tests.rs"),
+        crate_source!("areka-runtime", "src/zorder_cue.rs"),
     ),
     (
         "runtime/frame/zorder_drain_tests.rs",
-        include_str!("../../../areka-runtime/src/frame/zorder_drain_tests.rs"),
-        include_str!("../../../areka-runtime/src/frame/zorder_drain.rs"),
+        crate_source!("areka-runtime", "src/frame/zorder_drain_tests.rs"),
+        crate_source!("areka-runtime", "src/frame/zorder_drain.rs"),
     ),
     (
         "runtime/frame/zorder_descript_tests.rs",
-        include_str!("../../../areka-runtime/src/frame/zorder_descript_tests.rs"),
-        include_str!("../../../areka-runtime/src/frame/zorder_descript.rs"),
+        crate_source!("areka-runtime", "src/frame/zorder_descript_tests.rs"),
+        crate_source!("areka-runtime", "src/frame/zorder_descript.rs"),
     ),
     (
         "areka-placement/zorder_chain_compose_tests.rs",
@@ -99,8 +99,11 @@ const TEST_FILES: [(&str, &str, &str); 8] = [
     ),
     (
         "runtime/frame/zorder_drain_projection_tests.rs",
-        include_str!("../../../areka-runtime/src/frame/zorder_drain_projection_tests.rs"),
-        include_str!("../../../areka-runtime/src/frame/zorder_drain.rs"),
+        crate_source!(
+            "areka-runtime",
+            "src/frame/zorder_drain_projection_tests.rs"
+        ),
+        crate_source!("areka-runtime", "src/frame/zorder_drain.rs"),
     ),
 ];
 
