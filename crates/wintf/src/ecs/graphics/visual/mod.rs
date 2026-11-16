@@ -14,6 +14,8 @@ use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 mod draw;
 mod draw_content;
 mod draw_tree;
+mod promotion;
+mod promotion_shape;
 mod systems;
 mod transform;
 mod version;
@@ -23,6 +25,8 @@ mod world_visual;
 pub(crate) mod draw_content_test_support;
 #[cfg(test)]
 mod draw_content_tests;
+#[cfg(test)]
+mod promotion_tests;
 #[cfg(test)]
 mod systems_tests;
 #[cfg(test)]
@@ -40,6 +44,7 @@ pub(crate) use draw::{emit, emit_within};
 pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
+pub use promotion::AutoPromotion;
 pub use systems::*;
 pub use transform::*;
 pub use version::*;
