@@ -187,7 +187,7 @@ tools/
 - `.kiro/steering/tech.md` — Testing の節（新しい 7 段の 1 行ずつ・件 1 の段の前提）と Required Tools（Python 3.11 以上）。
 - `.kiro/steering/structure.md` — 19 行の `tools/` の説明に新しい 4 本を足す。
 
-`tech.md` と `structure.md` は、C21 の `runtime-crate-split` も「文書のパス」「新しい crate の節」として書き替えうる（下の「C21 の約束の確かめ」）。
+`tech.md` と `structure.md` は、C21 の `runtime-crate-split` も書き替える。行は重ならず、相手と申し合わせ済みで、この spec が自分の行を書く（2026-11-16 の設計の討議の議題 1・下の「C21 の約束の確かめ」）。
 
 ### 範囲の外で確かめるだけのファイル（触らない）
 
@@ -581,7 +581,7 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 ### C21 の約束の確かめ
 
 - 7.3 のファイル（`Cargo.lock`・`Cargo.toml` の全部・`crates/areka/src/runtime/`・`crates/areka-runtime/`・`doc/COMPAT_ARCHITECTURE.md`）とほかの 3 本の触るファイル（`crates/areka-placement/src/{balloon_limit,resolver}.rs` ほか・wintf の `ecs/graphics/visual/` ほか・`crates/pilot/examples/pilot-windows-rs-next/`）には、この設計は 1 行も書かない。
-- `runtime-crate-split` の brief は「文書のパス」と「`structure.md` の新しい crate の節」を触るファイルに挙げる。この設計の `structure.md`（19 行）と `tech.md`（Testing・Required Tools）の書き替えは行が重ならないが、ファイルは重なりうる。実装の頭で `runtime-crate-split` のセッションの設計の File Structure Plan を確かめ、`tech.md`・`structure.md` が相手の触るファイルに入っていれば、その 2 本は書かずに、書く文と行を相手へ申し送り、申し送った件と相手を記録に残す（要件 7.4）。入っていなければこの spec が書く（仮置き・下の Open Questions の 1）。
+- `tech.md`・`structure.md` は `runtime-crate-split` も書き替える（約束 ⑸ の字面ではファイルが重なる）。2026-11-16 に相手のセッションへ確かめた行: 相手は `tech.md` の 90 行（`spine_wait.rs` のパス）だけと、`structure.md` の 171 行・「Application Binary Crate」節（273〜295 行）・新しい節 `### Runtime Crate（areka-runtime）`・Log Capture Kit／Temp Path Kit／Sample Ghost Kit の Consumers の行（434〜452 行）を書き、全体テストの段の一覧（76〜88 行）・机の道具の行（120 行あたり）・19 行と `tools/` の節には触らない。こちらはその外の行だけ（`tech.md` の Testing の段の一覧・Python の前提・Required Tools・`structure.md` の 19 行と `tools/` の節）を書く。相手は「先に着地した側に合わせて取り込む」と答えた。設計の討議の議題 1 で開発者が承認＝この 2 本はこの spec が自分の行を書き、申し合わせを要件 7.1 の記録に残す。後から着地する側が行の位置のずれを取り込む。相手の書く行に及ぶ直しが出たら、触らずに申し送る（要件 7.4）。
 - `tools/load-flake.ps1` の選び肢は上の load-flake の 7.5・7.6 のとおり。
 
 ## Requirements Traceability
@@ -614,7 +614,7 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 | 6.5 | ASCII・数行 | `Show-Ascii` の寄せ・15 | — |
 | 6.6, 6.7 | 依存を足さない | Allowed Dependencies（新しい依存 0） | 議題なし |
 | 7.1, 7.2 | 範囲の外の触り方 | 範囲の外で直すファイル（直しに要る行だけ） | `tools/perf` は今走っている spec が無い（両方とも completed） |
-| 7.3, 7.4 | C21 のほかの 4 本 | C21 の約束の確かめ | `tech.md`・`structure.md` の重なりの確かめ |
+| 7.3, 7.4 | C21 のほかの 4 本 | C21 の約束の確かめ | `tech.md`・`structure.md` は行の申し合わせの範囲だけ（設計の討議の議題 1） |
 | 7.5, 7.6 | `-Binary` の選び肢 | load-flake | 着地の順で分かれる |
 | 7.7, 7.8 | 約束を変える 10 件 | 外への約束の変更の表 | 読み手を同じ変更で |
 | 7.9 | pasta と同じ文のスキル | 文書とスキルの読み手（申し送らない） | 議題 6 |
@@ -624,7 +624,7 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 | 8.3 | 次の操作で確かめる記録 | 「直し方の一覧」の次の操作の欄 | 検証の記録に番号ごと |
 | 9.1, 9.2, 9.3, 9.6 | audit のかけ直し | 検証の段 | 5 回目で打ち切る道 |
 | 9.4 | 全体テストが緑 | test-all | 件 1 の段を含めて |
-| 9.5 | 既定のブランチとの差分 | 検証の段 | 7.3 のファイルの差分 0・約束の変わりは表の分だけ |
+| 9.5 | 既定のブランチとの差分 | 検証の段 | 7.3 のファイルの差分 0（`tech.md`・`structure.md` は申し合わせた行だけ）・約束の変わりは表の分（7.7 の 10 件＋6・18）だけ |
 
 ## Error Handling
 
@@ -727,7 +727,7 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 7. 小さな直し: `mouse-input.ps1`（6）・`sample-fetch.ps1`（8）・`crates-io.ps1`（15 の半分・16）。
 8. `app-icon.ps1`・`cursor-art.ps1`（12）。
 9. `tools/perf` の Python の版（件 1 の 5.4）。
-10. `test-all.ps1` の 7 段と読み手の文書（件 1・`kiro-complete`・`release`・`update`・`tech.md`・`structure.md`・C21 の重なりの確かめの結果に従う）。
+10. `test-all.ps1` の 7 段と読み手の文書（件 1・`kiro-complete`・`release`・`update`・`tech.md`・`structure.md`・`tech.md`・`structure.md` は申し合わせた行だけ）。
 11. 検証（下）。
 
 - 束 2〜9 は 1 の後なら互いに触るファイルが重ならない（`test-all.ps1` に書くのは 1 の `PATH` の行と 10 の段だけ）。束 10 は 4〜9 の自分の検査が在ってから。
@@ -747,7 +747,9 @@ function Get-PythonVerdict { param([bool]$Found, [string]$VersionText, [Paramete
 - 件 1 の段は Python 3.11 以上の無い机で全体テストを赤にする（要件 5.4 の決め）。今の机は 3.13.17。
 - 負荷の子の形を変えるので、`tech.md` の「許す赤」の条件（`-Burners 44` の空回し）の負荷の性質が変わらないよう、空回しの中身は PowerShell の解釈の繰り返しに保つ。
 
-## Open Questions
+## 設計の討議の確定（2026-11-16・開発者「推奨どおり承認」）
 
-1. **`tech.md`・`structure.md` が `runtime-crate-split` の触るファイルに入るか（要件 7.3・7.4）**: 仮置きは「実装の頭で相手のセッションの設計を確かめ、入っていれば書かずに申し送り、入っていなければこの spec が書く」。開発者に、行の重ならない書き替えならファイルが重なっても書いてよいか（7.3 の読み方）を確かめたい。
-2. **7.7 の 10 件の外で、外から見える形が少し変わる直し（要件 7.7・9.5）**: 6 は自分の検査の口 `-SelfTest` と全体テストの段 `mouse input check` が増え、18 は `app-icon`・`cursor-art`・`mouse-input`・`load-flake`・`release-notes` の失敗の行の中の `?` が `\uXXXX` になる（どちらも読み手は件 1 と同じか、無い）。仮置きは「変える」（6 は議題 5 の「構文木で縛る」を全体テストから回すため、18 は写しを 1 つにするため）で、9.5 の確かめの記録に 10 件と並べて書く。7.7 の裁定の外として開発者の承認を確かめたい（認めないなら、6 の検査は段を足さずに置ける所が無いので議題に戻り、18 は `?` の写しを `tool-common.ps1` の 2 つ目の関数として残す）。
+1. **`tech.md`・`structure.md` を `runtime-crate-split` と一緒に書き替える（要件 7.1・7.3・7.4）**: 行が重ならないことを相手のセッションに確かめ、相手も「先に着地した側に合わせて取り込む」と答えたので、この spec が自分の行を書く（「C21 の約束の確かめ」）。約束 ⑸ の字面（ファイルが重ならない）からは外れるが、道具の直しと文書の直しを同じ変更で着地させ、文書が古いままの時間を作らないことを取った。申し合わせは要件 7.1 の記録に、確かめは要件 9.5 の記録に残す。
+2. **7.7 の 10 件の外で外から見える形が少し変わる 6・18（要件 7.7・9.5）**: 変える。6 は `mouse-input.ps1 -SelfTest` と全体テストの段 `mouse input check` が増え、18 は失敗の行の中の `?` が `\uXXXX` になる。読み手は件 1 と同じか、無い。要件 9.5 の確かめの記録に、7.7 の 10 件と並べて書く。
+
+Open Questions は無い（上の 2 件で閉じた）。

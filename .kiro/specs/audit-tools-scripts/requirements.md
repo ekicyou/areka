@@ -132,7 +132,7 @@
 
 1. While 範囲の外のファイルを受け持つ spec のセッションが走っているあいだ, when 直しがそのファイルへ及ぶとき, the 本 spec shall そのセッションと申し合わせてから触る
 2. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない
-3. While C21 のあいだ, the 本 spec の直し shall C21 のほかの 4 本が触るファイル（ロードマップの C21 の行の「触るファイル」の ①〜④。`Cargo.lock`・根の `Cargo.toml`・`crates/areka/Cargo.toml`・`crates/areka/src/runtime/` の全部・`crates/areka-runtime/`・`doc/COMPAT_ARCHITECTURE.md` を含む）に手を入れない（`tools/load-flake.ps1` の選び肢は 7.5・7.6）
+3. While C21 のあいだ, the 本 spec の直し shall C21 のほかの 4 本が触るファイル（ロードマップの C21 の行の「触るファイル」の ①〜④。`Cargo.lock`・根の `Cargo.toml`・`crates/areka/Cargo.toml`・`crates/areka/src/runtime/` の全部・`crates/areka-runtime/`・`doc/COMPAT_ARCHITECTURE.md` を含む）に手を入れない（`tools/load-flake.ps1` の選び肢は 7.5・7.6。例外: `.kiro/steering/tech.md`・`structure.md` は `runtime-crate-split` と行を申し合わせ、重ならない自分の行だけを書く＝2026-11-16 の設計の討議で開発者が承認・7.1 の申し合わせとして記録に残す）
 4. If 直しが C21 のほかの 4 本の触るファイルに及ぶ（その中の説明の文が道具の名前や引数を書いている場合を含む）とき, then the 本 spec shall そのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す
 5. When `runtime-crate-split` が本 spec の実装の終わりより先に着地したとき, the 本 spec の直し shall `tools/load-flake.ps1` の `-Binary` に新しいクレートのテストを回す選び肢を足し、古くなった使い方の例（`-Filter runtime::frame`）を直す（C21 の約束 ⑴・⑸）
 6. If 本 spec が `runtime-crate-split` より先に着地するとき, then the 本 spec shall 選び肢を足さずに、`runtime-crate-split` の完了で拾う件として記録に残す（C21 の約束 ⑴・⑸）
