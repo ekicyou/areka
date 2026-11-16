@@ -63,7 +63,7 @@
   - _Requirements: 3.2, 4.1, 4.3, 4.7, 7.8_
 
 - [ ] 4. 机へ置く道具の手順（束 4・2・3・10・13）
-- [ ] 4.1 机へ置く手順の共通の読み込み用のファイルを作り、置き換える前に新しい exe を確かめる
+- [x] 4.1 机へ置く手順の共通の読み込み用のファイルを作り、置き換える前に新しい exe を確かめる
   - 共通の下回りだけを読み込み、`param` を持たない。環境変数の値を出さず設定しない。触るのは置き場の `<名前>.exe`・`<名前>.new.exe`・`<名前>.old*.exe` だけ
   - 置き場の環境変数の確かめ（設定なし・絶対パスでない＝値を出さない `FAIL home` の行）・release のビルド（`FAIL build` の 2 つの文）・写す → 確かめる → 置き換える → 掃除（設計の行と順の表どおり）・状態の確かめの判断の純関数（`none`／`clear`／`fail`）を置く
   - 確かめは置き換える前に `.new.exe` で行い、落ちたら `.new.exe` を消して今の exe と古い写しに触らない。確かめが投げたら `FAIL check: cannot start: <ASCII の理由>`。2 つ目の改名で落ちたら古いものを元へ戻して `.new.exe` を消してみる（戻せなければ `; restore failed`）。確かめが時間切れで子を止めたときは終わるのを待ってから返し、`.new.exe` を消せなければ `FAIL cleanup: …` を足して 1（2）
@@ -229,3 +229,4 @@
 
 - 2.2: `tools/encoding-check.ps1` の頭書の規則 E の説明が `tools/package.ps1 (metadata and nar-sample-path)` のまま（表は `nar-sample-path` だけ）。11.2 のかけ直しで拾うか、近くを触るタスクで直す。
 - 3.1: `release-notes.ps1 -SelfTest` の見本の一覧は `subjects.txt` の題名から作るつなぎ（`shortcut:`）。3.2 で設計の `Read-SpecNamesFixture`（`spec-names.txt`）へ必ず替える。
+- 4.1: `exe-install.ps1` の `FAIL cleanup: …`・`FAIL check: cannot start: …` の理由は .NET の例外の文で、置き場の絶対パス（環境変数の値）を含みうる。設計は `<理由>` とだけ言う。11.2 のかけ直しで要否を判断する。
