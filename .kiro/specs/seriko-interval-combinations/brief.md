@@ -111,14 +111,13 @@
 
 - `bind+random` の着せ替えは、再生していないあいだ pattern0 を静的に描かない（件 26・閉じた目が残った件）。この決まりは今 `crates/areka-emo-compose/src/bind_steps.rs` の `push_bind_contribution` が `Interval::BindRandom` だけを見て当てている（main に入った `seriko-pattern-calls` が同じ決めを取り込んだ）。議題 1 で `bind+runonce`・`bind+periodic` などを新しい `Interval` の値として採るなら、その値にも「再生していないあいだ pattern0 を描くか」を決めて同じ所へ足す（SSP で測って決める）。黙って純 `bind` と同じ扱いにすると、2 コマ目以降の絵が静的に残る形の取りこぼしになりうる。
 
-## 2026-10-31 棚卸㉛の再測定（main 4068422f）
-- **前提の変化**: ✅ `seriko-pattern-calls`（10-31）が引き金の型 `LoopTrigger`（`crates/areka-seriko/src/table.rs`）に 7 つ目の腕 `CallOnly`（純 `bind` と `never`＝呼ばれるだけ）を足し、seriko に `calls.rs`・`looper_calls.rs`・`parts_calls.rs`・`table_calls.rs`・`settle.rs` を足した。✅ `animated-surface-log-flood`（10-31）が合成に `crates/areka-emo-compose/src/bind_steps.rs`（189 行）を作り、その `push_bind_contribution` が `Interval::BindRandom` のときだけ pattern0 を静的に描かない（上の申し送り）。読み手の `normalize_interval`（`crates/areka-parsers/src/shell/decode.rs` 423 行目）は今も `bind+always` を `Interval::Other("bind+always")` に写し、`bind+periodic,5` は数値を落として `bind+periodic` にする（`decode_interval_trigger_tests.rs` 88 行目が固定）。`is_always_interval`（`nesting.rs` 50 行目）・`is_bind_interval`（`plan.rs` 648 行目）を引く所は `plan.rs` 392・550 行目・`nesting.rs` 132・164 行目・`plan_extent.rs` 139・151 行目・seriko の `table.rs` 216 行目。
-- **触るファイル**: 合成の `plan.rs`（706）・`nesting.rs`（436）・`plan_always.rs`（95）・`plan_extent.rs`（202）・新しく加わった `bind_steps.rs`（189）と兄弟のテスト、seriko の `table.rs`（929）・`parts.rs`（973）・`looper.rs`（993）と兄弟のテスト。数値つきの組み合わせを採るなら `shell/decode.rs`（623）とそのテスト。台帳 `assets.toml` の `always:1` の行・`doc/COMPAT_ARCHITECTURE.md` §8。
-- **行数の余裕が無い**: `looper.rs` 993・`parts.rs` 973 はファイルの中のテストがもう無い（兄弟の `mod` の宣言だけ）＝腕を足すには本番のコードを兄弟のファイルへ出すのが先。`table.rs` は 569 行目からの約 360 行がファイルの中のテストで、兄弟へ出せば余裕ができる。
-- **規模**: 5〜8 タスク（置き場作りの +1〜2 を足した。議題 1 で `always` を含まない組み合わせまで入れるなら、さらに +1〜2）。上限 20 の内。
-- **先に要るもの**: 働きの上では無し。roadmap のシェルの element の列では `extent-element-offset`・`animated-image-import`・`collisionex-regions` の後（`plan_extent.rs`・`plan.rs`・seriko の `table.rs`・`parts.rs`）。同じウェーブに置かない相手: `seriko-script-triggers`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`（seriko の 3 ファイル）・`draw-methods-canon`・`element-clipping-option`（`plan.rs`）。v0.1.0 の `script-small-tags` が触る seriko の `actor.rs`（908）には、この spec の書き並べでは触らない。
-- **人や外の待ち**: 申し送りのとおり、新しい組み合わせで「再生していないあいだ pattern0 を描くか」は SSP で測って決める（開発者の機械の SSP）。実機の確かめも Scope に在る。
-- **優先度の区分**: A のまま（開発者 10-05「口パクの `talk` が動かない」→ 優先度を高へ・切り出し元の区分を引き継ぐ）。
-- **要件定義のモデル**: Opus に改める（棚卸㉓・㉔は Fable）。組み合わせの型の先例（読み手の `BindRandom` と引き金の `LoopTrigger::BindRandom`・`bind_steps.rs` の静的な描き分け）があり、新しいクレートの境目も並行の決めごとも無い。正典が黙る語の読み方は議題で決めて §8 に書く仕事で、骨組みの分かれ道ではない。
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 棚卸㉛の後に `audit-seriko`（PR#427）・`audit-parsers-sakura`（#428）・`audit-emo-compose`（#430）・`audit-emo-atlas`（#451）が触るファイルを直した。`looper.rs` 993→896・`parts.rs` 973→850 で行の余裕は戻り、`table.rs` は 929→969。棚卸㊲の後（C20）には触るファイルの変化は無い。
+- **古くなった位置**: `bind+random` の着せ替えが再生していないあいだ pattern0 を静的に描かない決まりは、今は `bind_steps.rs` でなく `nesting.rs` 162 行目（`Interval::BindRandom { .. }`・欄を持つ形になった）。`bind_steps.rs` は純 `bind` だけを見る。読み手の `normalize_interval` は `crates/areka-parsers/src/shell/decode.rs` 453 行目、`is_always_interval` は `nesting.rs` 57 行目、`is_bind_interval` は `plan.rs` 788 行目。
+- **触るファイル**: 合成の `plan.rs`（844）・`nesting.rs`（530）・`plan_always.rs`（92）・`plan_extent.rs`（240）・`bind_steps.rs`（180）と兄弟のテスト、seriko の `table.rs`（969）・`parts.rs`（850）・`looper.rs`（896）と兄弟のテスト。数値つきの組み合わせを採るなら `shell/decode.rs`（680）とそのテスト。台帳 `assets.toml` の `always:1` の行・`doc/COMPAT_ARCHITECTURE.md` §8。
+- **規模**: 5〜8 タスク（議題 1 で `always` を含まない組み合わせまで入れるなら +1〜2）。
+- **先に要るもの**: 働きの依存は無い。シェルの element の列で `extent-element-offset`・`animated-image-import`・`collisionex-regions`（v0.2.0）の後。同じウェーブに置かない相手は `seriko-script-triggers`・`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`（seriko の 3 ファイル）・`draw-methods-canon`・`element-clipping-option`（`plan.rs`）。合成の `plan.rs`・`nesting.rs`・`plan_always.rs` は v0.2.0 の描画メソッドの作り直し（`draw-methods-canon`）が触る＝v0.2.0 の間は版に縛らない列から挟まない。新しい組み合わせで「再生していないあいだ pattern0 を描くか」を SSP で測って決めることと、実機の確かめが残る。
+- **優先度の区分**: A のまま（開発者 10-05「口パクの `talk` が動かない」）。
+- **要件定義のモデル**: Opus のまま（棚卸㉛の理由のとおり）。
 - **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 台帳 `doc/ukadoc-coverage/ledger/assets.toml` 6095 行目（`always:1` の備考）の末尾「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）。」は今も付け替えの前のまま（担当の欄は本 spec）。`endtalk`・`starttalk`・`yen-e` の 3 行の備考（7078・7701・7938 行目あたり）の「駆動する 3 つの語」「`random` と `bind+random` の 2 語だけ」も古いまま（`never` の行は `seriko-pattern-calls` が直した）。
+- **見つけた穴・古くなった記述**: 台帳 `assets.toml` 6092 行目（`always:1` の備考）の末尾「組み合わせは areka-P0-seriko-trigger-intervals が引き受ける（担当欄）。」は今も付け替えの前のまま。`endtalk`・`starttalk`・`yen-e` の行の備考の「駆動する 3 つの語」「2 語だけ」も残る（台帳で 9 か所）。

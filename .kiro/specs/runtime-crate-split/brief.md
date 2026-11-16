@@ -116,3 +116,15 @@
 ## 2026-11-15 `audit-placement-core` の申し送り（要件 2.9）
 
 - **旧い名前は直した**: 上の 43 ファイル・76 行のうち、`areka-placement` の追従・移り変わりの記録の外の 13 ファイル・27 行を `audit-placement-core` が直した。26 行は説明の `emo2_boot`・`wire_emo2_boot`・`emo2_frame_system` を今の `runtime::…`・`wire_runtime`・`frame_system` へ書き直し、`lib.rs` の 1 行は古い理由の属性ごと消した（説明だけで、動きは変わらない）。追随の持ち物の 9 ファイルは上の `audit-placement-follow` が直したので、`areka-placement` 全体で `rg -n 'emo2_boot|Emo2Wiring' crates/areka-placement` は 0 件。本体の外の残りは 2026-11-15 の作業の木で 14 ファイル・21 行（同じ数え方。例 `areka-kanade/src/schedule/events.rs`・`log-capture-kit/src/event_tests.rs`・`areka-ghost/src/prop_sink.rs`）で、この spec が直す。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 前の spec `runtime-module-untangle` は 11-13 に着地し、待つ相手は無い。その後に `audit-placement-core`・`audit-placement-follow`・`audit-wintf-window`・`audit-wintf-input` が `crates/areka/src/runtime/` のテストを足し・直した（範囲の中身の形は変わらない）。今の `runtime/` は 211 ファイル・74,693 行（本番 21,007・テストと支え 53,686＝Current State の「本番 約 12,000・テスト 約 45,000」は見込みで、今は多い）。本体の外に残る古い名前は 14 ファイル・21 行のまま（上の節）。
+- **古くなった記述**: Current State の `mcp/dump_surface.rs:415` の `spin_wait_until` は、今は `crate::runtime::spine::wait_until`（426 行目）。`frame_work_area_resnap_hold_tests.rs` の `should_panic`（429 行目）には今も `cfg_attr(not(debug_assertions), ignore …)` が無い。
+- **触るファイル**: 新しい `crates/areka-runtime/`・`crates/areka/src/runtime/` 全部（`git mv`）・`mcp/{check_script,dump_balloon,dump_surface}.rs`・`input_events/user_break.rs`・`placement_tests/` の `transition_judge*` と `reset_balloon_pos_tests.rs`・`examples/collision-probe.rs`・`log_history.rs`・`main.rs`・根の `Cargo.toml` は触らない（`members` が `crates/*`）が `Cargo.lock` と `crates/areka/Cargo.toml` を書く・文書のパス（`doc/COMPAT_ARCHITECTURE.md` はパスの書き換えだけ・`doc/ssp-mcp/log-convention.md`・網羅台帳の根拠の場所）・本体の外の古い名前の 14 ファイル（`wintf/src/ecs/world/tick_wake.rs`・`log-capture-kit/src/event*.rs`・`ukadoc-survey/src/evidence/candidates.rs` ほか・説明だけ）。`tools/` に触らない。
+- **規模**: 10〜12 タスクのまま。
+- **席**: `Cargo.lock` の 1 本だけの席（ワークスペースにクレートを足す）。
+- **同じウェーブに置けない相手**: `balloon-text-visual-tree`（`runtime/frame/{attach,wiring,scale_text,drain_resnap}.rs`・`mcp/dump_balloon.rs`）・`audit-placement-follow-residue`（`runtime/frame_*_tests.rs` の `DraggingState` を組む 4 ファイル・`runtime/frame/dpi.rs`・`placement_tests/transition_*` の名前の無い番号）。後の見込みでは `window-resetwindowpos-hold`・`dola-interrupt-ticks`・`session-module-gather` とも重なる。`audit-tools-scripts` とは `tools/load-flake.ps1` の `-Binary` の申し合わせだけ。
+- **ぶら下がる spec**: `input-crate-split`・`audit-test-kits`・`audit-emo2-boot-*` の 3 本・`session-crate-split` ほか（一番長い道の先頭）。
+- **優先度の区分**: A（開発者の「本体の crate 分け」）。
+- **要件定義のモデル**: Opus（`placement-crate-split` の前例どおりの移しで、振る舞いは変えない）。
+- **分割の案**: 無し。

@@ -72,3 +72,14 @@
   - 欄の名と意味の変更は `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Revalidation Triggers と DamageRecord に載る。履歴の層（info 以上）には入らないので、判断の係が使うならこの行の外で同じ量を持つ形も考える（未決）。
 - **持ち主へ上げた後の動きの量**（`crates/wintf/src/ecs/graphics/visual/draw/README.md` の「写し」の後半）: `OwnSurface` の子を `Arrangement` の位置で動かすだけなら親の描画面に触らず、写し終えた後の自分の描画面の計画は `skip`（描き直しも写しも 0）。命令の列だけを持つ持ち主は拡大の変わらない位置の変化で印も立たない。描画の木を持つ持ち主は木を組み直して項の列を比べる手間は掛かる。節の下に持ち主を置けないこと・持ち主の `VisualTransform` が WUC で効かないことは、この brief の Problem のとおり（変わっていない）。
 - **範囲だけの描き直しの粒は件を丸ごと**: 描く矩形を交わる件の範囲で閉じる（`.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Risks の R1）ので、大きな件に触れる変化は `covers_surface` で全部になる。昇格の判断で「描き直した面積」を見るなら、この粒を前提にする。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 待っていた `wintf-visual-damage-redraw` は 11-14 に着地した（申し送りは上の節）。同 spec は `visual/systems.rs`・`visual/world_visual.rs` に触っていない＝Current State の 4 行は今も正しい（規則 `wants_own_surface` は `visual/mod.rs` 95 行目・`sync_surface_owner_parts` は `visual/systems.rs` 33 行目・`update_draw_trees` は 159 行目・節の下の持ち主を切る `error!` は `world_visual.rs` 160 行目・持ち主の `VisualTransform` の `warn!` は `systems.rs` 152 行目の説明のとおり）。
+- **触るファイル**: `crates/wintf/src/ecs/graphics/visual/{mod.rs(236), systems.rs(271), world_visual.rs(233)}` と兄弟のテスト（`systems_tests.rs` 407・`world_visual_tests.rs` 510）・WARP の足場 `visual/draw/emit_test_support.rs`（462）・WUC の木の同期で `ecs/graphics/systems/visual_sync.rs`（336）と `systems/render.rs`（406）の見込み・`visual/draw/README.md`。どれも 1,000 行から遠い。`Cargo.toml` に触らない。
+- **規模**: M（10〜15 タスク）。
+- **先に要るもの**: 無し（すぐ着手できる）。
+- **ほかの spec との重なり**: 見込みの C21〜C23 の spec と、ほかの v0.2.0 の先頭（`window-resetwindowpos-hold`・`collisionex-regions`・`dola-interrupt-ticks`）とは、触るファイルが重ならない。`balloon-text-visual-tree` は wintf の描画の木を使う側だけで、この spec の受け持ちのファイルに触らない（下の「見つけた穴」）。
+- **優先度の区分**: A（開発者の到達点・2026-11-06）。版は v0.2.0。
+- **要件定義のモデル**: Opus（wintf の中の直しで、木の作りの前例は `wintf-visual-tree`。昇格の判断は履歴つきの純粋な関数で、並行やスレッドの保証は新しく作らない）。
+- **分割の案**: 無し。
+- **見つけた穴**: `balloon-text-visual-tree` はこの spec を待たなくてよい。文字の差し込み口 `emo-text-layer-slot`（`areka-emo-present/src/mount.rs` 183 行目）は窓の直下の描画面の持ち主で、`fill_world_visuals` が切るのは節の下の持ち主だけ（根の直下の持ち主は支えている）。
