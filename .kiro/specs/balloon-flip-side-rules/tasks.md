@@ -102,7 +102,7 @@
   - _Dispatch: mechanical — 値を読んで表に書き足すだけ_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 3.7_
 
-- [ ] 6. 件 1 と件 2 がそろうことの確かめと、変えないものの見張り
+- [x] 6. 件 1 と件 2 がそろうことの確かめと、変えないものの見張り
 - [x] 6.1 初めから右に出したバルーンと、左から並べ替えて右に来たバルーンの位置が descript の分についてそろうことを固定する
   - `Right`・descript の分 d で初めから出した位置と、`Left`・同じ d で出して判定の核で左から右へ映した位置の x が同じになる檻を足す。`windowposition.x` の分が 0 でない形では、映しの結果が今の式のままであることも固定する。
   - 済んだ姿: `balloon_limit_flip_tests.rs` のこの 2 つの檻が緑で、2.2 の右の腕を戻すと 1 つ目が赤になる。
@@ -110,7 +110,7 @@
   - _Dispatch: mechanical — 期待値は設計の式の確かめが与えている_
   - _Requirements: 3.3, 3.8, 5.1_
 
-- [ ] 6.2 全体を回して、変えないものが変わっていないことを確かめる
+- [x] 6.2 全体を回して、変えないものが変わっていないことを確かめる
   - `cargo test -p areka-placement` と `cargo test -p areka` を回し、既存の並べ替え・関門・随伴・`windowposition` の檻と、`runtime/` の下の鎖の仕上げ・解き直しの檻（`frame_chain_finalize_*`・`frame_chain_realign_*`）が緑のままであることを確かめる（書き換えたのは `reseed_tests.rs` の 4 か所だけ・`runtime/` は読むだけで触らない）。
   - `git diff` で、鎖の寄せ（`follow/work_area_clamp.rs`）・押し込みの式・ドラッグを離したときの補正・キーワードの横の位置・記憶の合流・`crates/areka/src/runtime/` に差分が無いこと、新しく足したファイルが 1,000 行以下であること、ゴーストの名前や初回の起動を見る分岐が無いことを確かめる。
   - 済んだ姿: 2 つのコマンドが緑で、差分の見張りの 3 点が満たされている。
@@ -125,3 +125,4 @@
 - 3.1: `follow.rs` の `mod other_chars;` の `#[allow(dead_code)]` と `shown_char_rects` の use の `#[allow(unused_imports)]` は仮置き。3.2 で呼び出しを足したら外す。「表示している」は子の `Visual.is_visible` で読むが、`emo-text-box-surface`（`Visual::default()`＝可視）が窓を隠したときに箱の同期で外れる、という設計の前提はまだ確かめていない（6.2 か完了の棚卸で確かめる）。
 - 3.2: 書き込みの関門の檻は `balloon_limit_gate_tests.rs`（起動の関門の檻）でなく、既存の `write_gate_*` と道具がある `balloon_limit_flip_tests.rs` に置いた。
 - 4.1: 判定し直しの系と関数は `follow/other_chars.rs` に置いた。`follow.rs` の `pub(crate) use ... rejudge_all_balloons` の `#[allow(unused_imports)]` は仮置きで、4.2 で呼び出しを足したら外す。判定は状態を持たないので、並べ替えたままのバルーンは判定し直しのたびに `how="flipped"` の行をもう 1 度残す。
+- 6.2: `runtime/` の鎖の仕上げ・解き直しの檻の実際の名は `chain_finalize_*`・`chain_realign_*`（`frame_` は付かない）。`cargo test -p areka --bins chain_` の 101 本（うち finalize・realign 81 本）が緑。
