@@ -6,8 +6,9 @@
 //! 寄せた後の位置（下端中央の x）が書かれ、相方のバルーンはずらしどおりに立つ。
 
 use super::chain_finalize_persist_test_support::{PersistStore, spawn_shown};
-use super::test_support::{PerTargetSizes, capture_logs, pos_of};
+use super::test_support::{PerTargetSizes, pos_of};
 use super::*;
+use log_capture_kit::{LineFormat, capture_lines};
 
 use areka_placement::chain_finalize::ChainFinalized;
 use areka_placement::follow::{MonitorSnapshot, OffsetBase};
@@ -89,7 +90,10 @@ fn partner_flips_to_right_of_body_on_left_edge() {
     let body_before = pos_of(&world, gw.char_window(0).unwrap()).unwrap();
     assert_eq!(body_before.x, PRIMARY.left, "前提: 本体は主の画面の左端");
 
-    let logs = capture_logs(|| finalize_chain_once_with(&shown(), &mut world));
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&shown(), &mut world)
+    })
+    .1;
     assert!(
         world.contains_resource::<ChainFinalized>(),
         "前提: 並べ終えた"

@@ -11,10 +11,11 @@
 // =============================================================================
 
 use super::test_support::{
-    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, capture_logs, count_level, pos_of, resnap_world,
-    settled_sizes, spawn_resnap_windows,
+    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, count_level, pos_of, resnap_world, settled_sizes,
+    spawn_resnap_windows,
 };
 use super::*;
+use log_capture_kit::{LineFormat, capture_lines};
 
 use crate::app_exit::{WindowsEpoch, close_windows_for_restart};
 use areka_placement::chain_finalize::{
@@ -79,18 +80,22 @@ fn close_windows_for_restart_forgets_window_set_resources() {
 #[test]
 fn next_window_set_finalizes_once_like_first_boot() {
     let (mut world, gw) = resnap_world();
-    let first = capture_logs(|| finalize_chain_once_with(&settled_sizes(), &mut world));
+    let first = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&settled_sizes(), &mut world)
+    })
+    .1;
     let first_x = pos_of(&world, gw.char_window(1).unwrap()).map(|p| p.x);
 
     let _ = close_windows_for_restart(&mut world);
     let gw2 = spawn_resnap_windows(&mut world);
     let char1 = gw2.char_window(1).unwrap();
     let spawned_x = pos_of(&world, char1).map(|p| p.x);
-    let second = capture_logs(|| {
+    let second = capture_lines(LineFormat::LevelTargetFields, || {
         // 2 回呼ぶ: 1 回目で確定し、2 回目は一度きり（scg 7.4）で駆動しない。
         finalize_chain_once_with(&settled_sizes(), &mut world);
         finalize_chain_once_with(&settled_sizes(), &mut world);
-    });
+    })
+    .1;
 
     assert_eq!(
         (
@@ -134,11 +139,12 @@ fn no_window_frames_after_close_are_not_counted() {
     let (mut world, _gw) = resnap_world();
     let _ = close_windows_for_restart(&mut world);
 
-    let logs = capture_logs(|| {
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
         for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
             finalize_chain_once_with(&settled_sizes(), &mut world);
         }
-    });
+    })
+    .1;
 
     assert_eq!(
         (
@@ -164,38 +170,45 @@ fn next_window_set_counts_only_areka_deferrals_after_all_shown() {
     let _ = close_windows_for_restart(&mut world);
 
     // 窓なしの巡（起こし直しで窓を外した直後）。
-    let no_window = capture_logs(|| {
+    let no_window = capture_lines(LineFormat::LevelTargetFields, || {
         for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
             finalize_chain_once_with(&settled_sizes(), &mut world);
         }
-    });
+    })
+    .1;
 
     // 新しい一式。scope 0 は窓の寸どおりに表示済み・相方の scope 1 だけがまだ一度も表示されて
     // いない（ゴーストが scope 1 へ最初の `\s` を出していない）。scope 0 の寸を食い違わせると
     // 走査が scope 0 で先に止まり、この区間が areka 自身の待ちとして数えられてしまう。
     let _gw2 = spawn_resnap_windows(&mut world);
     let unshown = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
-    let partner_unshown = capture_logs(|| {
+    let partner_unshown = capture_lines(LineFormat::LevelTargetFields, || {
         for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
             finalize_chain_once_with(&unshown, &mut world);
         }
-    });
+    })
+    .1;
 
     // 全スコープが表示された後、scope 0 の実表示寸（500x687）が窓の寸（434x687）と食い違った
     // まま＝再アンカーが未 landing（areka 自身の待ち）。確定の処理は再スナップを呼ばないので、
     // この食い違いは何巡回しても解けない。
     let not_landed = PerTargetSizes::new([(0, Some((500, 687))), (1, Some(SPAWN_SIZE_1))]);
-    let before_threshold = capture_logs(|| {
+    let before_threshold = capture_lines(LineFormat::LevelTargetFields, || {
         for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES - 1) {
             finalize_chain_once_with(&not_landed, &mut world);
         }
-    });
-    let at_threshold = capture_logs(|| finalize_chain_once_with(&not_landed, &mut world));
-    let after_threshold = capture_logs(|| {
+    })
+    .1;
+    let at_threshold = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&not_landed, &mut world)
+    })
+    .1;
+    let after_threshold = capture_lines(LineFormat::LevelTargetFields, || {
         for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
             finalize_chain_once_with(&not_landed, &mut world);
         }
-    });
+    })
+    .1;
 
     assert_eq!(
         (

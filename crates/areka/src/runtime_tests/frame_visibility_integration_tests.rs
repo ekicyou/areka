@@ -24,8 +24,8 @@ use wintf::ecs::Visual;
 use wintf::ecs::layout::Arrangement;
 
 use crate::input_events::balloon::BalloonWiring;
-use areka_runtime::assets::build_boot_assets;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
+use areka_runtime::assets::build_boot_assets;
 use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
@@ -57,6 +57,7 @@ fn gpu_frame_world() -> (
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
     let (mut world, gw) = dpi_world();
+    crate::session::hooks::install(&mut world);
     let gpu = areka_runtime::spine::GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
@@ -119,7 +120,7 @@ fn explicit_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 
 /// 当該 scope へ可視グリフを流し込む（`at=0.0` 起点・注入時刻が進むほど文字がリビールされる）。
 fn reveal_text(wiring: &RuntimeWiring, scope: u32, text: &str) {
-    wiring.runtime.borrow_mut().apply_cue(&TalkCue {
+    wiring.runtime().borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
         actor: ActorKey::from(scope.to_string()),
         command: CueCommand::Text(text.into()),
@@ -421,7 +422,7 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
     );
 
     // 可視グリフを生まない cue（改行）だけを置く。
-    wiring.runtime.borrow_mut().apply_cue(&TalkCue {
+    wiring.runtime().borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
         actor: ActorKey::from("1"),
         command: CueCommand::NewLine { ratio: 1.0 },

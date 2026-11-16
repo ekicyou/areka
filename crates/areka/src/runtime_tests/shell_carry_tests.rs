@@ -11,23 +11,17 @@
 //! ⑸ 送り方: 置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図が着せ替えから先に届き、
 //!    seriko の最初の `Show` がもう着せ替えた集合を載せる
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-
-use areka_emo_compose::BindSet;
 use areka_seriko::{
     BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
     spawn_seriko,
 };
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
+use super::test_support::set;
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::session::reload::carries_shell_state;
-
-/// 在る面の集合（読み直したシェルの代わり）。
-fn shell_with(ids: &'static [u32]) -> impl Fn(u32) -> bool {
-    move |id| ids.contains(&id)
-}
 
 /// 本体側の名前表: 服（A=100・B=101）・帽子（C=200）。`multiple` の宣言は `multiple` に挙げたカテゴリ。
 fn names(multiple: &[&str]) -> BindResolver {
@@ -45,106 +39,12 @@ fn names(multiple: &[&str]) -> BindResolver {
     names_of(&shell)
 }
 
-fn set(ids: &[u32]) -> BindSet {
-    BindSet::from_ids(ids.iter().copied())
-}
-
 fn wear(category: &str, part: &str, on: bool) -> BindReplay {
     BindReplay {
         category: category.to_owned(),
         part: part.to_owned(),
         on,
     }
-}
-
-/// ⑴ 控えた面が読み直したシェルに在ればその面、無ければ候補の並び（descript の既定の面 → 組み込みの
-/// 既定の面）の最初に在る面、どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4・7.2）。
-#[test]
-fn decide_keeps_the_carried_surface_or_falls_back_to_the_default() {
-    // 持ち越し: 控えた面が在れば、descript の既定の面が在っても替えない（要件 3.4）。
-    assert_eq!(
-        decide(1000, &[5, 0], shell_with(&[0, 5, 1000])),
-        CarriedShow::Carried(1000)
-    );
-    // descript の面へ戻る（要件 3.1）。
-    assert_eq!(
-        decide(1000, &[5, 0], shell_with(&[0, 5])),
-        CarriedShow::FellBack {
-            missing: 1000,
-            to: 5,
-            passed_over: None,
-        }
-    );
-    // descript の既定の面が組み込みと同じなら候補は 1 つ（飛ばした面は無い）。
-    assert_eq!(
-        decide(1000, &[0], shell_with(&[0])),
-        CarriedShow::FellBack {
-            missing: 1000,
-            to: 0,
-            passed_over: None,
-        }
-    );
-    // 組み込みの面へ落ちる: 飛ばした descript の面が載る（要件 3.3）。
-    assert_eq!(
-        decide(2011, &[11, 10], shell_with(&[0, 10])),
-        CarriedShow::FellBack {
-            missing: 2011,
-            to: 10,
-            passed_over: Some(11),
-        }
-    );
-    // どれも無い: 出さず、候補の先頭（descript の既定の面）を載せる（要件 3.3）。
-    assert_eq!(
-        decide(1000, &[11, 10], shell_with(&[0])),
-        CarriedShow::Skipped {
-            missing: 1000,
-            descript: 11,
-        }
-    );
-    assert_eq!(CarriedShow::Carried(7).surface(), Some(7));
-    assert_eq!(
-        CarriedShow::FellBack {
-            missing: 7,
-            to: 10,
-            passed_over: Some(11),
-        }
-        .surface(),
-        Some(10)
-    );
-    assert_eq!(
-        CarriedShow::Skipped {
-            missing: 7,
-            descript: 10,
-        }
-        .surface(),
-        None
-    );
-}
-
-/// ⑵ 面は表示中のスコープだけ（scope 1 は非表示＝`None`）、着せ替えは表示したことのあるスコープだけ載る。
-#[test]
-fn snapshot_keeps_only_the_shown_scopes() {
-    let carry = snapshot(
-        [0, 1, 2],
-        |scope| match scope {
-            0 => Some(1000),
-            2 => Some(2010),
-            _ => None,
-        },
-        |scope| (scope != 2).then(|| set(&[scope + 100])),
-        areka_seriko::DefaultBinds::uniform(set(&[100])),
-    );
-    assert_eq!(carry.surface(0), Some(1000));
-    assert_eq!(carry.surface(1), None);
-    assert_eq!(carry.surface(2), Some(2010));
-    assert_eq!(carry.surface(3), None);
-    assert_eq!(carry.binds(0), Some(&set(&[100])));
-    assert_eq!(carry.binds(1), Some(&set(&[101])));
-    assert_eq!(carry.binds(2), None);
-    assert_eq!(
-        carry.old_static(),
-        &areka_seriko::DefaultBinds::uniform(set(&[100]))
-    );
 }
 
 /// ⑶ 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
@@ -154,21 +54,6 @@ fn nothing_is_carried_without_a_ghost_reload() {
     let carry = capture_for_reload(&world, carries_shell_state(&world));
     assert_eq!(carry, None);
     hand_over(&mut world, carry);
-    assert!(!world.contains_non_send::<RuntimeWiring>());
-}
-
-/// 控えを渡す先の結線が無ければ `warn!` を 1 件残して捨てる（panic しない）。
-#[test]
-fn hand_over_without_wiring_warns_and_drops_the_carry() {
-    let mut world = World::new();
-    let ((), events) = log_capture_kit::capture(|| {
-        hand_over(&mut world, Some(ShellCarry::default()));
-    });
-    let warned = events
-        .iter()
-        .filter(|e| e.field_str("event") == Some("reload_shell_carry_unavailable"))
-        .count();
-    assert_eq!(warned, 1, "{events:?}");
     assert!(!world.contains_non_send::<RuntimeWiring>());
 }
 
@@ -315,6 +200,7 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
         out,
     );
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(None, PathBuf::from("ghost/A")).with_seriko_sink(sink),
     )));
@@ -373,12 +259,4 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
         ],
         "{shown:?}"
     );
-}
-
-/// 置き場にゴーストが居なくても panic せず、何も送らない（`warn!` で残す）。
-#[test]
-fn replay_without_a_ghost_does_not_panic() {
-    let world = World::new();
-    replay(&world, &[(0, CarriedShow::Carried(0))], &[]);
-    replay(&world, &[], &[]);
 }

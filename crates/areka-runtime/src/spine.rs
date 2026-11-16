@@ -350,3 +350,15 @@ pub mod hold_support;
 #[cfg(test)]
 #[path = "spine_wait_tests.rs"]
 mod wait_tests;
+
+// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
+// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+#[cfg(feature = "test-support")]
+pub mod test_support {
+    use super::{ScriptedShioriHandle, StatusLedger};
+
+    /// [`ScriptedShioriHandle`] の進行状態の記録の共有台帳（`status_calls`）。
+    pub fn status_calls(handle: &ScriptedShioriHandle) -> &StatusLedger {
+        &handle.status_calls
+    }
+}

@@ -80,6 +80,28 @@ pub mod crash_report_test_support;
 #[cfg(test)]
 pub(crate) mod sample_test_support;
 
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "source_text_test_support.rs"]
+pub mod source_text_test_support;
+
+// タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
+// 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
+// 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
+#[cfg(test)]
+#[path = "zorder_wiring_tests.rs"]
+mod zorder_wiring_tests;
+
+// 毎フレームの相の登録先の檻（areka-P0-present-gpu-transform-scale task 4.2・T-N10）。
+#[cfg(test)]
+#[path = "frame_schedule_tests.rs"]
+mod frame_schedule_tests;
+
+// 実行系の結線の決定論テスト（本体の起動を引かないもの）。
+#[cfg(test)]
+#[path = "wire_tests.rs"]
+mod wire_tests;
+
 #[cfg(test)]
 #[path = "seriko_clock_tests.rs"]
 mod seriko_clock_tests;

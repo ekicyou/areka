@@ -26,6 +26,7 @@ type Shown = Vec<(String, u32, Vec<u32>)>;
 /// 控え `carry` を持たせて装着の相を 1 回回し、seriko（本物の名前表と既定の着せ替え）が出した `Show` を返す。
 fn shows_after_attach(carry: impl FnOnce(&BootAssets) -> Option<ShellCarry>) -> Shown {
     let (_gpu, mut world, _gw) = gpu_attach_world();
+    crate::session::hooks::install(&mut world);
     let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let carry = carry(&assets);
@@ -56,7 +57,7 @@ fn shows_after_attach(carry: impl FnOnce(&BootAssets) -> Option<ShellCarry>) -> 
     wiring.shell_carry = carry;
 
     run_attach_phase(&mut wiring, &mut world);
-    assert!(wiring.attached, "前提: ゲート成立で attach が走る");
+    assert!(wiring.attached(), "前提: ゲート成立で attach が走る");
     assert!(wiring.shell_carry.is_none(), "控えは 1 度で使い切る");
     // 置き場のゴーストが持つ送り手を落とすとアクターの受信端が切れて終わる。
     drop(world);

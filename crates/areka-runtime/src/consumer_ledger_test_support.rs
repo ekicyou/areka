@@ -1,0 +1,118 @@
+//! `consumer_ledger_agreement_tests.rs` の檻が `areka-runtime` と本体の両方で使う見本の表と台帳の鍵（写しを作らない・spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+
+use super::{ConsumerLedger, LedgerKey};
+use areka_ghost::prop_sink::PROP_SET_CUE_NAME;
+use areka_parsers::sakura::{JUMP_TAG_CARRIER, MARKER_COMMAND, RAISE_TAG_CARRIER};
+use areka_sakura::contract::FONT_TAG_CARRIER;
+use std::collections::BTreeSet;
+
+// ---------------------------------------------------------------- 見本
+
+/// 絶対パスの書庫（`install_cue_tests.rs` の見本と同じ形。fs は読まない）。
+pub const ABSOLUTE: &str = r"C:\areka-install-cue-test\in\hana.nar";
+
+/// 表の各行の見本＝（名前, 選別子, 引数の列）。引数の列は第 1 引数から書く。
+///
+/// どれも担当の受け口（またはクレート）の既存のテストが受理を確かめている形から取った。
+pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)> {
+    vec![
+        // move_cue_move_sink_tests.rs の move_carrier_sends_directive
+        ("move", None, vec!["-353", "", "", "0", "base", "base"]),
+        // areka-seriko の actor_bind_loop_tests.rs
+        ("bind", None, vec!["腕", "伸び", "1"]),
+        // zorder_cue_tests.rs の t_zcs1／t_zcs2
+        ("set", Some("zorder"), vec!["zorder", "1", "0"]),
+        ("reset", Some("zorder"), vec!["zorder"]),
+        // readme_cue_tests.rs の bare_open_readme_sends_exactly_one_request
+        ("open", Some("readme"), vec!["readme"]),
+        // readme_cue_tests.rs の open_forms_and_jump_send_classified_destination
+        // （areka-P0-open-external-tags の 5 組と `\j`）
+        ("open", Some("file"), vec!["file", "notepad.exe"]),
+        (
+            "open",
+            Some("browser"),
+            vec!["browser", "https://example.com/"],
+        ),
+        ("open", Some("explorer"), vec!["explorer", r"C:\x"]),
+        ("open", Some("editor"), vec!["editor", "a.txt", "3"]),
+        ("open", Some("mailer"), vec!["mailer", "a@b.c"]),
+        (JUMP_TAG_CARRIER, None, vec!["http://example.com/"]),
+        // user_break_cue_tests.rs の enter／leave
+        ("enter", Some("nouserbreakmode"), vec!["nouserbreakmode"]),
+        ("leave", Some("nouserbreakmode"), vec!["nouserbreakmode"]),
+        // areka-emo-text の actor_choice_contract_tests.rs
+        (FONT_TAG_CARRIER, None, vec!["height", "40"]),
+        // change_cue_tests.rs／switch_cue_tests.rs
+        ("change", Some("ghost"), vec!["ghost", "B"]),
+        ("change", Some("shell"), vec!["shell", "S"]),
+        ("change", Some("balloon"), vec!["balloon", "Y"]),
+        // install_cue_tests.rs の script_string_becomes_one_script_request_with_the_path
+        (
+            "execute",
+            Some("install"),
+            vec!["install", "path", ABSOLUTE],
+        ),
+        // move_cue_move_sink_tests.rs の execute_resetwindowpos_sends_reset（areka-P0-move-canon）
+        ("execute", Some("resetwindowpos"), vec!["resetwindowpos"]),
+        // update_cue_tests.rs の four_entry_forms_become_the_expected_request
+        ("updatebymyself", None, vec![]),
+        ("update", None, vec!["all"]),
+        ("updateother", None, vec!["--balloon=B", "--shell=S"]),
+        // areka-sakura の compile_choice_timeout_tests.rs
+        ("set", Some("choicetimeout"), vec!["choicetimeout", "5000"]),
+        // areka-ghost の prop_sink.rs の boot_count_carrier_is_persisted
+        (PROP_SET_CUE_NAME, None, vec!["areka.boot.count", "1"]),
+        // talk_lifecycle_signals_tests.rs の待ち時間の指定（areka-P0-balloon-lifecycle-events）
+        (
+            "set",
+            Some("balloontimeout"),
+            vec!["balloontimeout", "3000"],
+        ),
+        // reload_cue_tests.rs の picked_spellings_send_one_request_each（areka-P0-mcp-reload）
+        ("reload", Some("ghost"), vec!["ghost"]),
+        ("reload", Some("shiori"), vec!["shiori"]),
+        ("reload", Some("shell"), vec!["shell"]),
+        ("reload", Some("balloon"), vec!["balloon"]),
+        ("reload", Some("descript"), vec!["descript", "ghost shell"]),
+        ("reloadsurface", None, vec![]),
+        // move_cue_move_sink_tests.rs の窓の組・吸着・バルーン位置初期化（areka-P0-window-link-directives）
+        (
+            "set",
+            Some("alignmenttodesktop"),
+            vec!["alignmenttodesktop", "top"],
+        ),
+        (
+            "set",
+            Some("alignmentondesktop"),
+            vec!["alignmentondesktop", "free"],
+        ),
+        (
+            "set",
+            Some("sticky-window"),
+            vec!["sticky-window", "0", "1"],
+        ),
+        ("reset", Some("sticky-window"), vec!["sticky-window"]),
+        ("execute", Some("resetballoonpos"), vec!["resetballoonpos"]),
+        // move_cue_balloon_lock_tests.rs（descript-window-keys 要件 5.1・5.7）
+        ("lock", Some("balloonmove"), vec!["balloonmove"]),
+        ("unlock", Some("balloonmove"), vec!["balloonmove"]),
+        // window_state_cue_tests.rs の常に手前の指令と `\v`（stay-on-top-directives 要件 1.8）
+        ("set", Some("windowstate"), vec!["windowstate", "stayontop"]),
+        (RAISE_TAG_CARRIER, None, vec![]),
+        // areka-seriko の着せ替えの別名（script-small-tags 要件 3.1・3.7）
+        ("bind-noevent", None, vec!["腕", "伸び", "1"]),
+        // 文字の層の印の合図（script-small-tags 要件 4.1・4.2）
+        (MARKER_COMMAND, None, vec![]),
+        // areka-ghost の prop_get_sink.rs のプロパティの読み（shell-scale-linkage 要件 1.8）
+        (
+            "get",
+            Some("property"),
+            vec!["property", "OnX", "currentghost.scope(0).scaling"],
+        ),
+    ]
+}
+
+/// 表の行の組（名前, 選別子）の全部。
+pub fn ledger_keys(ledger: &ConsumerLedger) -> BTreeSet<LedgerKey> {
+    ledger.table.keys().cloned().collect()
+}

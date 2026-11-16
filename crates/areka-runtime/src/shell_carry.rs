@@ -93,28 +93,24 @@ impl CarriedShow {
 /// 出し直す着せ替え 1 件（`\![bind,category,part,1|0]` と同じ合図になる）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindReplay {
-    pub(crate) category: String,
-    pub(crate) part: String,
-    pub(crate) on: bool,
+    pub category: String,
+    pub part: String,
+    pub on: bool,
 }
 
 /// 控えた着せ替えを読み直したシェルで出し直すときの決め方。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CarriedBinds {
     /// 出し直す着せ替え（着る方が先・脱ぐ方が後）。
-    pub(crate) replays: Vec<BindReplay>,
+    pub replays: Vec<BindReplay>,
     /// 読み直したシェルに名前が無く、出し直せない着せ替えの ID（`warn!` で残す）。
-    pub(crate) dropped: Vec<u32>,
+    pub dropped: Vec<u32>,
 }
 
 /// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ戻り先の
 /// 候補の並び `candidates`（`areka_placement::descript_window_keys::fallback_candidates`）の最初に在る面、
 /// どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4）。
-pub fn decide(
-    carried: u32,
-    candidates: &[u32],
-    exists: impl Fn(u32) -> bool,
-) -> CarriedShow {
+pub fn decide(carried: u32, candidates: &[u32], exists: impl Fn(u32) -> bool) -> CarriedShow {
     if exists(carried) {
         return CarriedShow::Carried(carried);
     }
@@ -380,3 +376,12 @@ fn cue(scope: u32, command: CueCommand) -> TalkCue {
         duration: 0.0,
     }
 }
+
+#[cfg(test)]
+#[path = "shell_carry_tests.rs"]
+mod tests;
+
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "shell_carry_test_support.rs"]
+pub mod test_support;

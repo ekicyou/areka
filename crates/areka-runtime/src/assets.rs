@@ -575,5 +575,13 @@ pub fn empty_definitions(scope: u32) -> ScopeBalloonDefinitions {
 }
 
 #[cfg(test)]
+#[path = "assets_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "assets_shell_tests.rs"]
+mod shell_tests;
+
+#[cfg(test)]
 #[path = "assets_markers_tests.rs"]
 mod markers_tests;

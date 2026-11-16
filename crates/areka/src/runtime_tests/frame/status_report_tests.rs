@@ -17,33 +17,12 @@ use tracing::Level;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 
+use super::test_support::{binding, obs, obs_box};
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use log_capture_kit::{CapturedEvent, capture};
-
-fn obs(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObservation {
-    BalloonObservation {
-        scope,
-        visible,
-        surface_id,
-        box_showing: false,
-    }
-}
-
-/// 箱に文字が出ている観測（areka-P0-shell-balloon 要件 5.5・5.6）。
-fn obs_box(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObservation {
-    BalloonObservation {
-        box_showing: true,
-        ..obs(scope, visible, surface_id)
-    }
-}
-
-fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-    BalloonBinding {
-        character_id,
-        balloon_id,
-    }
-}
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::frame::status_report::test_support::{last_sent, runtime_busy_logged};
 
 fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
     events
@@ -56,6 +35,7 @@ fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> 
 fn world_with_ghost() -> (World, Receiver<KanadeMsg>) {
     let (tx, rx) = mpsc::channel();
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
         PathBuf::from("ghost/test"),
@@ -71,91 +51,6 @@ fn sent(rx: &Receiver<KanadeMsg>) -> Vec<Vec<BalloonBinding>> {
             _ => panic!("バルーンの組の知らせ以外が届いた"),
         })
         .collect()
-}
-
-// ---------------------------------------------------------------------------
-// ⑴ 組を作る純関数
-// ---------------------------------------------------------------------------
-
-#[test]
-fn collect_keeps_only_visible_scopes_in_input_order_with_their_number() {
-    let (bindings, unknown) = collect_bindings(
-        &[
-            obs(0, Some(true), Some(2)),
-            obs(1, Some(false), Some(5)), // 不可視
-            obs(2, None, None),           // 未装着
-            obs(3, Some(true), Some(0)),
-        ],
-        &BTreeMap::new(),
-    );
-    assert_eq!(bindings, vec![binding(0, 2), binding(3, 0)]);
-    assert!(unknown.is_empty());
-}
-
-#[test]
-fn collect_includes_visible_scope_without_number_as_zero_and_returns_it_as_warning_target() {
-    let (bindings, unknown) = collect_bindings(
-        &[
-            obs(0, Some(true), None),
-            obs(1, Some(true), Some(4)),
-            obs(2, Some(false), None), // 見えていなければ警告の対象にもしない
-        ],
-        &BTreeMap::new(),
-    );
-    assert_eq!(bindings, vec![binding(0, 0), binding(1, 4)]);
-    assert_eq!(unknown, vec![0]);
-}
-
-/// 箱だけに文字が出ているスコープも、普通のバルーンが見えているときと同じ形で載る
-/// （番号は普通のバルーンの今の面）。どちらにも出ていなければ載らない（areka-P0-shell-balloon 要件 5.5・5.6）。
-/// 箱だけ・番号なし・覚えた番号なしは 0 で載り、警告の対象にしない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
-#[test]
-fn collect_lists_box_only_scopes_in_the_same_shape_as_visible_balloons() {
-    let (bindings, unknown) = collect_bindings(
-        &[
-            obs(0, Some(true), Some(2)),      // 窓が見えている
-            obs_box(1, Some(false), Some(5)), // 箱だけ
-            obs(2, Some(false), Some(7)),     // どちらにも出ていない
-            obs_box(3, Some(false), None),    // 箱だけ・番号なし
-            obs_box(4, Some(true), Some(1)),  // 両方
-        ],
-        &BTreeMap::new(),
-    );
-    assert_eq!(
-        bindings,
-        vec![binding(0, 2), binding(1, 5), binding(3, 0), binding(4, 1)]
-    );
-    assert!(
-        unknown.is_empty(),
-        "箱だけは警告の対象にしない: {unknown:?}"
-    );
-}
-
-/// 箱だけ・番号なしは覚えた番号で載り、警告の対象にしない。窓が見えていて番号なしは、覚えた番号が
-/// あっても今までどおり 0 で警告の対象（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
-#[test]
-fn collect_uses_the_remembered_number_for_box_only_scopes_without_a_number() {
-    let remembered = BTreeMap::from([(0, 3), (1, 9), (2, 4)]);
-    let (bindings, unknown) = collect_bindings(
-        &[
-            obs_box(0, Some(false), Some(6)), // 箱だけ・今の番号あり → 今の番号
-            obs_box(1, Some(false), None),    // 箱だけ・今の番号なし → 覚えた番号
-            obs(2, Some(true), None),         // 窓が見えて番号なし → 0 で警告
-        ],
-        &remembered,
-    );
-    assert_eq!(bindings, vec![binding(0, 6), binding(1, 9), binding(2, 0)]);
-    assert_eq!(unknown, vec![2]);
-}
-
-#[test]
-fn collect_of_nothing_visible_is_empty() {
-    let (bindings, unknown) = collect_bindings(
-        &[obs(0, Some(false), Some(1)), obs(1, None, None)],
-        &BTreeMap::new(),
-    );
-    assert!(bindings.is_empty());
-    assert!(unknown.is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +92,7 @@ fn nothing_visible_from_the_start_sends_nothing() {
 #[test]
 fn empty_slot_skips_with_debug_and_keeps_the_ledger() {
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(None));
     let mut ledger = BalloonStatusLedger::default();
 
@@ -206,7 +102,10 @@ fn empty_slot_skips_with_debug_and_keeps_the_ledger() {
     let skipped = named(&events, "balloon_status_no_ghost");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].level, Level::DEBUG);
-    assert!(ledger.last_sent.is_empty(), "見送った組は送った組にしない");
+    assert!(
+        last_sent(&mut ledger).is_empty(),
+        "見送った組は送った組にしない"
+    );
 
     let (tx, rx) = mpsc::channel();
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
@@ -215,15 +114,6 @@ fn empty_slot_skips_with_debug_and_keeps_the_ledger() {
     ))));
     report_observed(&world, &mut ledger, &[obs(1, Some(true), Some(0))]);
     assert_eq!(sent(&rx), vec![vec![binding(1, 0)]]);
-}
-
-/// 置き場そのものが World に無くても送らない（結線なしの起動）。
-#[test]
-fn missing_slot_resource_sends_nothing() {
-    let world = World::new();
-    let mut ledger = BalloonStatusLedger::default();
-    report_observed(&world, &mut ledger, &[obs(0, Some(true), Some(0))]);
-    assert!(ledger.last_sent.is_empty());
 }
 
 /// 受け手が落ちていれば error が 1 件。台帳は更新するので次のフレームで鳴り直さない（要件 7.1）。
@@ -240,7 +130,7 @@ fn dropped_receiver_records_exactly_one_error() {
     let failed = named(&events, "balloon_status_send_failed");
     assert_eq!(failed.len(), 1, "渡せない旨が 1 行: {events:?}");
     assert_eq!(failed[0].level, Level::ERROR);
-    assert_eq!(ledger.last_sent, vec![binding(0, 2)]);
+    assert_eq!(*last_sent(&mut ledger), vec![binding(0, 2)]);
 }
 
 /// 番号が取れない旨は scope ごとに 1 回。番号が取れたら再武装する。
@@ -293,14 +183,12 @@ fn box_only_without_number_reports_the_number_remembered_from_an_earlier_frame()
 fn report_balloons_reads_the_presenter_and_drops_unattached_scopes() {
     let (world, rx) = world_with_ghost();
     let presenter = EmoPresenter::new();
-    let mut ledger = BalloonStatusLedger {
-        last_sent: vec![binding(0, 2)],
-        ..Default::default()
-    };
+    let mut ledger = BalloonStatusLedger::default();
+    *last_sent(&mut ledger) = vec![binding(0, 2)];
     let runtime = TextLayerRuntime::new(TextLayerConfig::default());
     report_balloons(&presenter, &runtime, &world, &mut ledger, &[0, 1]);
     assert_eq!(sent(&rx), vec![Vec::new()]);
-    assert!(ledger.last_sent.is_empty());
+    assert!(last_sent(&mut ledger).is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -320,7 +208,7 @@ fn status_report_phase_defers_while_the_runtime_is_busy_and_logs_once_per_outage
     wiring
         .balloon_models
         .insert(0, areka_parsers::balloon::parse_str("", None));
-    wiring.balloon_status.last_sent = vec![binding(0, 2)];
+    *last_sent(&mut wiring.balloon_status) = vec![binding(0, 2)];
     let runtime = std::rc::Rc::clone(wiring.runtime());
 
     let (_, events) = capture(|| {
@@ -333,11 +221,11 @@ fn status_report_phase_defers_while_the_runtime_is_busy_and_logs_once_per_outage
     assert_eq!(busy.len(), 1, "借りられない旨は 1 行: {events:?}");
     assert_eq!(busy[0].level, Level::ERROR);
     assert!(sent(&rx).is_empty(), "借りられないフレームは届けない");
-    assert_eq!(wiring.balloon_status.last_sent, vec![binding(0, 2)]);
+    assert_eq!(*last_sent(&mut wiring.balloon_status), vec![binding(0, 2)]);
 
     run_status_report_phase(&mut wiring, &world);
     assert_eq!(sent(&rx), vec![Vec::new()], "借りられたフレームで届く");
-    assert!(!wiring.balloon_status.runtime_busy_logged);
+    assert!(!runtime_busy_logged(&wiring.balloon_status));
 
     let (_, events) = capture(|| {
         let held = runtime.borrow_mut();

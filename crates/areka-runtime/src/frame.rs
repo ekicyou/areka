@@ -54,10 +54,6 @@ mod drain_resnap;
 mod move_hold;
 // 面の `move` のずれの相（seriko-pattern-calls design「MoveShiftPlacement」）。
 mod move_shift;
-// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
-#[cfg(feature = "test-support")]
-pub mod scale_text;
-#[cfg(not(feature = "test-support"))]
 mod scale_text;
 // 倍率の変わりの相（shell-scale-linkage design「ScaleNoticePhase」）。
 // 外へはテストのビルド（`test-support`）でだけ開く。crate の中は今の道のまま（spec: runtime-crate-split 設計 D3 ⑶）。
@@ -369,6 +365,17 @@ pub mod test_support;
 #[cfg(any(test, feature = "test-support"))]
 #[path = "frame_balloon_runtime_test_support.rs"]
 pub mod balloon_runtime_test_support;
+
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "frame_shared_test_support.rs"]
+pub mod shared_test_support;
+
+// move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_order_tests.rs"]
+mod move_order_tests;
 
 // 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
 // x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。

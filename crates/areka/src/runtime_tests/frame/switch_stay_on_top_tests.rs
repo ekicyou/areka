@@ -10,10 +10,15 @@ use bevy_ecs::entity::Entity;
 use wintf::ecs::window::StayOnTop;
 
 use super::super::*;
-use areka_runtime::frame::window_state::run_window_state_phase;
-use areka_runtime::window_state_cue::WindowStateDirective;
 use areka_placement::spawn::GhostWindows;
 use areka_placement::zorder_group_ledger::parse_zorder_tokens;
+use areka_runtime::frame::window_state::run_window_state_phase;
+use areka_runtime::window_state_cue::WindowStateDirective;
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::frame::window_state::test_support::on;
+use areka_runtime::frame::wiring::test_support::{
+    window_state, window_state_mut, zorder_ledger, zorder_ledger_mut,
+};
 
 /// ゴーストの全部の窓（キャラクターとバルーン）。
 fn all_windows(windows: &GhostWindows) -> Vec<Entity> {
@@ -30,14 +35,12 @@ fn observe(rig: &Rig, windows: &[Entity]) -> (bool, usize, usize) {
         .iter()
         .filter(|window| rig.world.get::<StayOnTop>(**window).is_some())
         .count();
-    let tags = rig
-        .wiring
-        .zorder_ledger
+    let tags = zorder_ledger(&rig.wiring)
         .groups()
         .iter()
         .filter(|group| group.source == GroupSource::Tag)
         .count();
-    (rig.wiring.window_state.on, marked, tags)
+    (on(window_state(&rig.wiring)), marked, tags)
 }
 
 /// 窓を組んだ World で `kind` の差し替えを頼んだ段まで組み、常に手前をオンにして台本の組を載せる。
@@ -49,10 +52,9 @@ fn rig_on_top(kind: SkinKind, finish: SwapFinish) -> (Rig, Vec<Entity>) {
     rig.wiring.attach_window_state_rx(rx);
     tx.send(WindowStateDirective::StayOnTop { on: true })
         .expect("受信端は結線状態が持つ");
-    run_window_state_phase(&mut rig.wiring.window_state, &mut rig.world);
+    run_window_state_phase(window_state_mut(&mut rig.wiring), &mut rig.world);
     let (members, _) = parse_zorder_tokens(&["0", "1"]).expect("0,1 は読める");
-    rig.wiring
-        .zorder_ledger
+    zorder_ledger_mut(&mut rig.wiring)
         .try_add_tag_group(members)
         .expect("台本の組を載せる");
     assert_eq!(

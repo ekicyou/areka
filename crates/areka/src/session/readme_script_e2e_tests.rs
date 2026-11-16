@@ -49,6 +49,7 @@ fn run(remove_readme: bool) -> Run {
     }
     let (backend, handle) = standard_script(ON_BOOT).build();
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     let inputs = RuntimeInputs {
         ghost_root: root.clone(),
         balloon_root: sample

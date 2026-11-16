@@ -28,6 +28,7 @@ const END: f64 = 1.0;
 /// 置き場にゴースト（kanade への送出端を持つか持たないか）を据えた World。
 fn world_with_ghost(kanade: Option<Sender<KanadeMsg>>) -> World {
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         kanade,
         PathBuf::from("balloon_visibility_phase_notice_tests"),
@@ -120,8 +121,10 @@ fn timeout_frame_sends_one_notice_to_the_ghost_in_the_slot() {
 /// 送れなかった理由を番号つきで警告 1 行に残す（要件 7.2）。
 #[test]
 fn notice_without_a_ghost_in_the_slot_is_not_sent_and_logged() {
-    let no_slot = World::new();
+    let mut no_slot = World::new();
+    crate::session::hooks::install(&mut no_slot);
     let mut empty_slot = World::new();
+    crate::session::hooks::install(&mut empty_slot);
     empty_slot.insert_non_send(GhostSlot(None));
     let no_kanade = world_with_ghost(None);
 

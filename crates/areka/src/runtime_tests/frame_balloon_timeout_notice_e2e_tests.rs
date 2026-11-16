@@ -122,7 +122,7 @@ impl Cage {
         for at in ticks {
             player.tick(at);
         }
-        let mut runtime = self.wiring().runtime.borrow_mut();
+        let mut runtime = self.wiring().runtime().borrow_mut();
         for cue in recorded.0.lock().expect("写しの錠").drain(..) {
             runtime.apply_cue(&cue);
         }

@@ -26,107 +26,21 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
-use super::shell_target;
-use super::test_support::{
-    FakeReports, FrameHarness, PerTargetSizes, capture_logs, pos_of, size_of,
+use super::shared_test_support::{
+    GAP_WITHOUT_REALIGN, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1, LOW_DPI, LOW_SIZE_0, LOW_SIZE_1,
+    boot_remembered_at, boot_remembered_at_high, change_scale, char_pos, char_width, gap,
+    low_sizes, lower_the_scale, sizes,
 };
-
-/// 変わる前の拡大率（実機の 200%）。
-const HIGH_DPI: u16 = 192;
-/// 変わった後の拡大率（実機の 100%＝幅がちょうど半分）。
-const LOW_DPI: u16 = 96;
+use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, capture_logs, pos_of};
 /// 中間の拡大率（150%）。解決の前に 2 度目の変化を起こすために使う。
 const MID_DPI: u16 = 144;
-
-/// scope0 の実表示寸（200%・実機の幅 764）。
-const HIGH_SIZE_0: (u32, u32) = (764, 1094);
-/// scope0 の実表示寸（100%）。
-const LOW_SIZE_0: (u32, u32) = (382, 547);
 /// scope0 の実表示寸（150%）。
 const MID_SIZE_0: (u32, u32) = (573, 820);
-/// scope1 の実表示寸（200%・実機の幅 672）。
-const HIGH_SIZE_1: (u32, u32) = (672, 596);
-/// scope1 の実表示寸（100%）。
-const LOW_SIZE_1: (u32, u32) = (336, 298);
 /// scope1 の実表示寸（150%）。
 const MID_SIZE_1: (u32, u32) = (504, 447);
 
-/// 詰め直しを入れないときに 100% で残る隙間（実機 359px の決定論版）。
-pub(super) const GAP_WITHOUT_REALIGN: i32 = 359;
-
-fn sizes(s0: (u32, u32), s1: (u32, u32)) -> PerTargetSizes {
-    PerTargetSizes::new([(0, Some(s0)), (1, Some(s1))])
-}
-
 fn high_sizes() -> PerTargetSizes {
     sizes(HIGH_SIZE_0, HIGH_SIZE_1)
-}
-
-pub(super) fn low_sizes() -> PerTargetSizes {
-    sizes(LOW_SIZE_0, LOW_SIZE_1)
-}
-
-/// `dpi` で起動して scope1 を scope0 の左に隣り合わせ、全スコープの既定の位置を外す
-/// （記憶から戻した形）。
-fn boot_remembered_at(
-    harness: &mut FrameHarness,
-    source: &mut FakeReports,
-    dpi: u16,
-    s0: (u32, u32),
-    s1: (u32, u32),
-) {
-    harness.set_monitor_sources_for_dpi(dpi);
-    harness.set_monitor_table_for_dpi(dpi);
-    harness.set_window_dpi(dpi);
-    source.refresh.insert(shell_target(0).0, s0);
-    source.refresh.insert(shell_target(1).0, s1);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-    harness.run_chain_finalize(&sizes(s0, s1));
-    assert!(
-        harness.world.get_resource::<ChainFinalized>().is_some(),
-        "前提が崩れている: 起動の並べ直しが駆動していない"
-    );
-    assert_eq!(
-        gap(harness),
-        0,
-        "前提が崩れている: 起動の拡大率で隣り合っていない"
-    );
-
-    // 本番の起動が記憶から戻したスコープに行うのと同じ口で、既定の位置を外す。
-    let scopes = harness.scopes().to_vec();
-    let mut ghost_windows = harness.world.resource_mut::<GhostWindows>();
-    for scope in scopes {
-        assert!(ghost_windows.clear_default_char_pos(scope));
-    }
-    let _priming = harness.drain_writes();
-    harness.reset_write_witness();
-}
-
-/// 200% で起動して隣り合わせ、全スコープの既定の位置を外す（記憶から戻した形）。
-pub(super) fn boot_remembered_at_high(harness: &mut FrameHarness, source: &mut FakeReports) {
-    boot_remembered_at(harness, source, HIGH_DPI, HIGH_SIZE_0, HIGH_SIZE_1);
-}
-
-/// 拡大率の変化を 1 フレームで流し込む。
-fn change_scale(
-    harness: &mut FrameHarness,
-    source: &mut FakeReports,
-    dpi: u16,
-    s0: (u32, u32),
-    s1: (u32, u32),
-) {
-    harness.set_monitor_table_for_dpi(dpi);
-    harness.set_window_dpi(dpi);
-    source.refresh.insert(shell_target(0).0, s0);
-    source.refresh.insert(shell_target(1).0, s1);
-    harness.advance_frame();
-    harness.run_placement_phases(source);
-}
-
-/// 200% → 100% を 1 フレームで流し込む。
-pub(super) fn lower_the_scale(harness: &mut FrameHarness, source: &mut FakeReports) {
-    change_scale(harness, source, LOW_DPI, LOW_SIZE_0, LOW_SIZE_1);
 }
 
 /// 100% → 200% を 1 フレームで流し込む。
@@ -144,24 +58,6 @@ pub(super) fn place_char_window_x(harness: &mut FrameHarness, scope: usize, x: i
     let wp = wp.bypass_change_detection();
     let y = wp.position.expect("position がある").y;
     wp.position = Some(Point { x, y });
-}
-
-/// キャラ窓の今の左上。
-pub(super) fn char_pos(harness: &FrameHarness, scope: usize) -> (i32, i32) {
-    let p = pos_of(&harness.world, harness.char_window(scope)).expect("position がある");
-    (p.x, p.y)
-}
-
-/// キャラ窓の今の幅。
-fn char_width(harness: &FrameHarness, scope: usize) -> i32 {
-    size_of(&harness.world, harness.char_window(scope))
-        .expect("size がある")
-        .width
-}
-
-/// scope0 の左端 − scope1 の右端（scope1 が scope0 の左に隣り合う並び）。
-pub(super) fn gap(harness: &FrameHarness) -> i32 {
-    char_pos(harness, 0).0 - (char_pos(harness, 1).0 + char_width(harness, 1))
 }
 
 /// scope1 の左端 − scope0 の右端（scope1 が scope0 の右に隣り合う並び）。

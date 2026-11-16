@@ -145,103 +145,131 @@ pub(super) fn sync_monitor_snapshot_with(
 // 作業領域変化を契機とする再スナップ（task 5.2・設計 C6・要件 5.1／5.2／5.3／5.4／4.7）
 // ---------------------------------------------------------------------------
 
-/// 作業領域が動いた窓を、**現在の寸のまま**新しい下端へ射影し直す（設計 C6）。
-///
-/// 呼ぶのは [`sync_monitor_snapshot`] が差し替えを報告したフレームだけである——変化が
-/// 無ければ呼び手が [`SnapshotChange`] を持たないので、本関数は**そもそも走らない**
-/// （要件 5.2・4.7 の「変化の無いフレームで窓書込 0」はこの構造が担う）。
-///
-/// # なぜ拡大率の相の**後**なのか
-///
-/// 拡大率も一緒に動いたフレームでは、拡大率の相（`Changed<DPI>` 駆動）が同じ窓を既に
-/// 新しい下端へ書き終えている。相の**前**に置くと、まだ旧寸のままの窓を先に動かして
-/// から相が書き直す 2 段書込になる。後に置けば、相が書き終えた窓は導出値が現在値と
-/// 一致して [`resize_window_to`](areka_placement::follow::resize_window_to) の
-/// べき等 skip が書込ゼロで抜ける（＝合流）。
-///
-/// # 対象の選び方——**射影 T の値が動くか**で決める
-///
-/// 窓ごとに、差し替え**前**の源と**後**の源で [`project_anchor`] を 1 度ずつ通し、結果が
-/// 変わる窓だけを再射影する。帰属の規則（どのモニタに属するか）をここで発明しないための
-/// 形である——判定は本番の射影がそのまま使う 1 つの関数に委ねてあり、二重権威にならない
-/// （帰属規則そのものの共有は task 5.4 の持ち分）。
-///
-/// この選び方は「作業領域が変わった窓」より狭い側へ倒れている: 作業領域の左端だけが動いた
-/// ような、下端吸着の位置に影響しない変化では射影値が変わらず、再射影を行わない。書込が
-/// 出ないことは変わらないが、**呼び出しごと省ける**ぶん要件 5.2 に忠実である。
-///
-/// 対象は**下端吸着（`Anchor::Bottom`）のキャラ窓**に限る（設計 C6）。バルーン窓は位置が
-/// 従属量ゆえ触らない——キャラ窓が動けば同一の [`resize_window_to`] 呼出の内側で随伴が
-/// 追従する（窓左上相対・追従 offset は補正しない・要件 10.1）。
-///
-/// # 整合待ちの窓は書かない（設計 C5 の 4 点目・task 6.5）
-///
-/// 対象に選ばれても [`DpiSyncHold`](areka_placement::dpi_sync::DpiSyncHold) の付いた窓へは
-/// 書かない。設計 D15 の原則は「待ち札のある窓への**すべての**窓書込を見送る」であり、例外は
-/// 随伴バルーンの追従 1 つだけである。本関数は設計 C5 が当初列挙した 3 点に入っていなかったが、
-/// それは列挙の抜けであった——C5 の言う「再スナップ」は
-/// [`resnap_shell_targets`](super::drain_resnap::resnap_shell_targets) を指しており、日本語の
-/// 同じ語が別々の 2 関数を指していたためである。
-///
-/// # 見送った窓は取り残されない（次の機会は**別の点**が持つ）
-///
-/// ほかの 3 点は毎フレーム走るが、本関数は作業領域源が差し替わったフレームだけ走る。ゆえに
-/// 見送ったフレームの [`SnapshotChange`] は二度と来ない。それでも取り残されないのは、
-/// **札を外すのが拡大率の相だけ**であり、その相が `Changed<DPI>` と札を持つ窓の**和集合**を
-/// 対象に取るからである。解除フレームには当該窓が必ず対象へ入り、
-/// [`reproject_char_window_at_current_size`] が**差し替え済みの作業領域源**（同期段は札に
-/// 関係なく源を差し替える）で接地点を引き直す。つまり見送りは作業領域の変化を捨てるのでは
-/// なく、反映を解除フレームの 1 本へ合流させる（要件 5.8 の一度書きそのもの）。
-///
-/// # 確保（要件 10.4）
-///
-/// 対象の収集で `Vec` を 1 つ使うが、走るのは作業領域が動いたフレームだけであり、定常
-/// フレームでは本関数に到達しない（＝定常状態の確保は増えない）。
-pub(super) fn resnap_for_work_area_change(world: &mut World, change: &SnapshotChange) {
-    // World の不変借用（query）を `&mut World` のループへ跨がせないため、先に対象を
-    // collect して借用を解放する（`dpi_phase_with` と同じ collect→release→&mut ループ）。
-    let mut targets: Vec<Entity> = Vec::new();
-    let mut query =
-        world.query_filtered::<(Entity, &Anchored, &WindowPos), With<CharWindowMarker>>();
-    for (window, &Anchored(anchor), window_pos) in query.iter(world) {
-        // 下端吸着だけが対象（設計 C6）。Free は「位置を一切動かさない」契約であり、
-        // Top／Left／Right は下端以外の辺が原点なので本タスクの守備範囲外である。
-        if !matches!(anchor, Anchor::Bottom) {
-            continue;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は毎フレームの相が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::resnap_for_work_area_change;
+#[cfg(not(feature = "test-support"))]
+pub(super) use test_open::resnap_for_work_area_change;
+
+mod test_open {
+    use super::*;
+
+    /// 作業領域が動いた窓を、**現在の寸のまま**新しい下端へ射影し直す（設計 C6）。
+    ///
+    /// 呼ぶのは [`sync_monitor_snapshot`] が差し替えを報告したフレームだけである——変化が
+    /// 無ければ呼び手が [`SnapshotChange`] を持たないので、本関数は**そもそも走らない**
+    /// （要件 5.2・4.7 の「変化の無いフレームで窓書込 0」はこの構造が担う）。
+    ///
+    /// # なぜ拡大率の相の**後**なのか
+    ///
+    /// 拡大率も一緒に動いたフレームでは、拡大率の相（`Changed<DPI>` 駆動）が同じ窓を既に
+    /// 新しい下端へ書き終えている。相の**前**に置くと、まだ旧寸のままの窓を先に動かして
+    /// から相が書き直す 2 段書込になる。後に置けば、相が書き終えた窓は導出値が現在値と
+    /// 一致して [`resize_window_to`](areka_placement::follow::resize_window_to) の
+    /// べき等 skip が書込ゼロで抜ける（＝合流）。
+    ///
+    /// # 対象の選び方——**射影 T の値が動くか**で決める
+    ///
+    /// 窓ごとに、差し替え**前**の源と**後**の源で [`project_anchor`] を 1 度ずつ通し、結果が
+    /// 変わる窓だけを再射影する。帰属の規則（どのモニタに属するか）をここで発明しないための
+    /// 形である——判定は本番の射影がそのまま使う 1 つの関数に委ねてあり、二重権威にならない
+    /// （帰属規則そのものの共有は task 5.4 の持ち分）。
+    ///
+    /// この選び方は「作業領域が変わった窓」より狭い側へ倒れている: 作業領域の左端だけが動いた
+    /// ような、下端吸着の位置に影響しない変化では射影値が変わらず、再射影を行わない。書込が
+    /// 出ないことは変わらないが、**呼び出しごと省ける**ぶん要件 5.2 に忠実である。
+    ///
+    /// 対象は**下端吸着（`Anchor::Bottom`）のキャラ窓**に限る（設計 C6）。バルーン窓は位置が
+    /// 従属量ゆえ触らない——キャラ窓が動けば同一の [`resize_window_to`] 呼出の内側で随伴が
+    /// 追従する（窓左上相対・追従 offset は補正しない・要件 10.1）。
+    ///
+    /// # 整合待ちの窓は書かない（設計 C5 の 4 点目・task 6.5）
+    ///
+    /// 対象に選ばれても [`DpiSyncHold`](areka_placement::dpi_sync::DpiSyncHold) の付いた窓へは
+    /// 書かない。設計 D15 の原則は「待ち札のある窓への**すべての**窓書込を見送る」であり、例外は
+    /// 随伴バルーンの追従 1 つだけである。本関数は設計 C5 が当初列挙した 3 点に入っていなかったが、
+    /// それは列挙の抜けであった——C5 の言う「再スナップ」は
+    /// [`resnap_shell_targets`](super::drain_resnap::resnap_shell_targets) を指しており、日本語の
+    /// 同じ語が別々の 2 関数を指していたためである。
+    ///
+    /// # 見送った窓は取り残されない（次の機会は**別の点**が持つ）
+    ///
+    /// ほかの 3 点は毎フレーム走るが、本関数は作業領域源が差し替わったフレームだけ走る。ゆえに
+    /// 見送ったフレームの [`SnapshotChange`] は二度と来ない。それでも取り残されないのは、
+    /// **札を外すのが拡大率の相だけ**であり、その相が `Changed<DPI>` と札を持つ窓の**和集合**を
+    /// 対象に取るからである。解除フレームには当該窓が必ず対象へ入り、
+    /// [`reproject_char_window_at_current_size`] が**差し替え済みの作業領域源**（同期段は札に
+    /// 関係なく源を差し替える）で接地点を引き直す。つまり見送りは作業領域の変化を捨てるのでは
+    /// なく、反映を解除フレームの 1 本へ合流させる（要件 5.8 の一度書きそのもの）。
+    ///
+    /// # 確保（要件 10.4）
+    ///
+    /// 対象の収集で `Vec` を 1 つ使うが、走るのは作業領域が動いたフレームだけであり、定常
+    /// フレームでは本関数に到達しない（＝定常状態の確保は増えない）。
+    pub fn resnap_for_work_area_change(world: &mut World, change: &SnapshotChange) {
+        // World の不変借用（query）を `&mut World` のループへ跨がせないため、先に対象を
+        // collect して借用を解放する（`dpi_phase_with` と同じ collect→release→&mut ループ）。
+        let mut targets: Vec<Entity> = Vec::new();
+        let mut query =
+            world.query_filtered::<(Entity, &Anchored, &WindowPos), With<CharWindowMarker>>();
+        for (window, &Anchored(anchor), window_pos) in query.iter(world) {
+            // 下端吸着だけが対象（設計 C6）。Free は「位置を一切動かさない」契約であり、
+            // Top／Left／Right は下端以外の辺が原点なので本タスクの守備範囲外である。
+            if !matches!(anchor, Anchor::Bottom) {
+                continue;
+            }
+            // 位置か寸が未確定（窓生成前）の窓は接地点そのものが存在しない。射影値を比べる
+            // 材料が無いので対象に入れない——ここで無理に射影を通すと、窓が出来ていないだけの
+            // 正常な起動途中に警告が並ぶ。窓が生えた後の変化は次の差し替えで拾える。
+            let (Some(position), Some(size)) = (window_pos.position, window_pos.size) else {
+                continue;
+            };
+            let raw = PointPx {
+                x: position.x,
+                y: position.y,
+            };
+            let size = SizePx {
+                w: size.width,
+                h: size.height,
+            };
+            // 射影 T を 2 つの源で 1 度ずつ通す（本番の射影と同一関数＝規則を二重に持たない）。
+            let before = project_anchor(anchor, raw, size, Some(&change.previous));
+            let after = project_anchor(anchor, raw, size, Some(&change.current));
+            if before != after {
+                targets.push(window);
+            }
         }
-        // 位置か寸が未確定（窓生成前）の窓は接地点そのものが存在しない。射影値を比べる
-        // 材料が無いので対象に入れない——ここで無理に射影を通すと、窓が出来ていないだけの
-        // 正常な起動途中に警告が並ぶ。窓が生えた後の変化は次の差し替えで拾える。
-        let (Some(position), Some(size)) = (window_pos.position, window_pos.size) else {
-            continue;
-        };
-        let raw = PointPx {
-            x: position.x,
-            y: position.y,
-        };
-        let size = SizePx {
-            w: size.width,
-            h: size.height,
-        };
-        // 射影 T を 2 つの源で 1 度ずつ通す（本番の射影と同一関数＝規則を二重に持たない）。
-        let before = project_anchor(anchor, raw, size, Some(&change.previous));
-        let after = project_anchor(anchor, raw, size, Some(&change.current));
-        if before != after {
-            targets.push(window);
+
+        for window in targets {
+            // 整合ゲート（設計 C5・要件 5.8・task 6.5 の 4 点目）: 待ち札のある窓へはこの経路
+            // からも書かない。ここに置くのは対象の選定を終えた**後**である——選定は純粋な射影の
+            // 突き合わせで何も消費しないので、見送りの記録が「本当に書くはずだった窓」だけに
+            // 対応する（選定の前に置くと、自分の作業領域が動いていない窓にも見送り行が並ぶ）。
+            if dpi_sync::defers_window_write(world, window, HoldSite::WorkAreaResnap) {
+                continue;
+            }
+            // 現寸のまま射影 T を一度通す。同値ならべき等 skip で書込ゼロ（＝拡大率の相が
+            // 既に書き終えた窓）、動くべき窓だけが 1 回書かれる。縮退（破棄済み・寸未確定）は
+            // 当該関数が log-first で吸収する。
+            reproject_char_window_at_current_size(world, window, PlacementRoute::WorkAreaResnap);
         }
     }
+}
 
-    for window in targets {
-        // 整合ゲート（設計 C5・要件 5.8・task 6.5 の 4 点目）: 待ち札のある窓へはこの経路
-        // からも書かない。ここに置くのは対象の選定を終えた**後**である——選定は純粋な射影の
-        // 突き合わせで何も消費しないので、見送りの記録が「本当に書くはずだった窓」だけに
-        // 対応する（選定の前に置くと、自分の作業領域が動いていない窓にも見送り行が並ぶ）。
-        if dpi_sync::defers_window_write(world, window, HoldSite::WorkAreaResnap) {
-            continue;
-        }
-        // 現寸のまま射影 T を一度通す。同値ならべき等 skip で書込ゼロ（＝拡大率の相が
-        // 既に書き終えた窓）、動くべき窓だけが 1 回書かれる。縮退（破棄済み・寸未確定）は
-        // 当該関数が log-first で吸収する。
-        reproject_char_window_at_current_size(world, window, PlacementRoute::WorkAreaResnap);
+// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の関数（中で記録を出す相の部品）へそのまま渡す口（`test-support` のときだけ・
+// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+#[cfg(feature = "test-support")]
+pub mod test_support {
+    use bevy_ecs::world::World;
+    use wintf::ecs::window::monitor::Monitor;
+
+    use super::SnapshotChange;
+
+    /// [`super::sync_monitor_snapshot_with`] へそのまま渡す。
+    pub fn sync_monitor_snapshot_with(
+        world: &mut World,
+        monitors: &[Monitor],
+    ) -> Option<SnapshotChange> {
+        super::sync_monitor_snapshot_with(world, monitors)
     }
 }

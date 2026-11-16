@@ -41,7 +41,7 @@ pub struct StayOnTopState {
 
 /// 遷移の判断の結果。
 #[derive(Debug, PartialEq, Eq)]
-pub enum Transition {
+pub(crate) enum Transition {
     /// オフ→オン
     TurnOn,
     /// オン→オフ
@@ -53,7 +53,7 @@ pub enum Transition {
 }
 
 /// 純関数：今の状態と指令から遷移を決める。
-pub fn decide_transition(on: bool, directive: WindowStateDirective) -> Transition {
+pub(crate) fn decide_transition(on: bool, directive: WindowStateDirective) -> Transition {
     match directive {
         WindowStateDirective::Raise => Transition::Raise { on },
         WindowStateDirective::StayOnTop { on: want } if want == on => Transition::Unchanged { on },
@@ -206,3 +206,12 @@ fn directive_text(on: bool) -> &'static str {
 fn state_text(on: bool) -> &'static str {
     if on { "on" } else { "off" }
 }
+
+#[cfg(test)]
+#[path = "window_state_tests.rs"]
+mod tests;
+
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "window_state_test_support.rs"]
+pub mod test_support;

@@ -10,8 +10,8 @@ use std::collections::VecDeque;
 use areka_kanade::TalkGap;
 
 use super::*;
-use areka_runtime::reload_args::ReloadTarget;
 use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadStage};
+use areka_runtime::reload_args::ReloadTarget;
 
 /// 窓口の印を置く（`reserved` は窓口自身が `accept_skin` で立てた予約の鍵）。
 fn plant_reload(world: &mut World, kind: SkinKind, reserved: PathBuf) {

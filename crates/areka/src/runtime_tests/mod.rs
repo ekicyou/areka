@@ -4,36 +4,14 @@
 //! 各ファイルは本物の親の代わりの親で、`use areka_runtime::<道>::*;`・本物の親が持っていて子が使う `use` の行・
 //! 子のテストの宣言（本物の親と同じ印・同じ名前）だけを持つ。本番のコードは置かない。
 
-use areka_runtime::*;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use areka_emo_present::EmoPresenter;
-use areka_emo_present::PresentCommand;
-use areka_emo_text::actor::spawn_emo_text;
 use areka_ghost::ShioriWiring;
 use areka_ghost::TickerMode;
 use areka_kanade::BootOrigin;
-use areka_kanade::KanadeNotice;
-use areka_seriko::AnimationTable;
-use areka_seriko::SerikoClock;
-use areka_seriko::SerikoLoopConfig;
-use areka_seriko::SerikoSink;
-use areka_seriko::SurfaceResolver;
-use areka_seriko::seeded_rng;
-use areka_seriko::spawn_seriko_clocked;
-use bevy_ecs::schedule::IntoScheduleConfigs;
-use bevy_ecs::schedule::Schedules;
-use bevy_ecs::world::World;
-use wintf::ecs::Update;
-use wintf::ecs::update_typewriters;
 use areka_placement::AuthorDpi;
 use areka_placement::DefaultSurfaces;
-use areka_runtime::adapter::PresentBridge;
-use areka_runtime::assets::BootAssets;
-use areka_runtime::frame::RuntimeWiring;
-use areka_runtime::frame::frame_system;
-use areka_runtime::zorder_cue::ZOrderDirective;
+use areka_runtime::*;
+use bevy_ecs::world::World;
+use std::path::PathBuf;
 
 // 落ちの報告をこのテストの実行ファイルに据える（設計 D6）。中身は `areka-runtime` の 1 つだけを指す。
 #[used]
@@ -52,7 +30,8 @@ mod consumer_ledger;
 mod frame;
 mod shell_balloon_resolve;
 mod shell_carry;
-mod spine;
+// 本体の `ghost_session_{reload,restart}_tests` も背骨の足場（`SpineHarness`）を使う（設計 BodyRuntimeTests）。
+pub(crate) mod spine;
 mod strict_judges;
 mod switch_cue;
 

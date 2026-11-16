@@ -42,6 +42,10 @@ use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
 use areka_runtime::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use wintf::ecs::FrameTime;
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::balloon_visibility::test_support::{
+    display_end, observation_failure_logged_runtime, per_scope,
+};
 
 // ---------------------------------------------------------------------------
 // 檻の組み立て
@@ -213,7 +217,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
     // scope 1 だけを表示層へ装着する（scope 0 は可視状態を引けない）。
     attach_headless(&mut harness.wiring.presenter, &mut world, 1);
     for scope in [0, 1] {
-        harness.wiring.balloon_visibility.per_scope.insert(
+        per_scope(&mut harness.wiring.balloon_visibility).insert(
             scope,
             ScopeVisibility {
                 last_glyphs: 0,
@@ -258,7 +262,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
         "処理されたのは装着済みの scope のみ"
     );
     assert!(
-        harness.wiring.balloon_visibility.per_scope[&0].prev_visible,
+        per_scope(&mut harness.wiring.balloon_visibility)[&0].prev_visible,
         "見送った scope の記憶は触られない（観測が無いのだから更新の根拠も無い）"
     );
 }
@@ -303,7 +307,8 @@ fn failed_show_is_logged_and_rolled_back() {
 
     // 巻き戻しの直接観測（発行前の値＝不可視）。
     assert_eq!(
-        harness.wiring.balloon_visibility.per_scope[&0].prev_visible, false,
+        per_scope(&mut harness.wiring.balloon_visibility)[&0].prev_visible,
+        false,
         "失敗した表示の scope は発行前の可視状態へ巻き戻る"
     );
 
@@ -338,7 +343,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
         .set_balloon_hover(0);
 
     // 前フレームは可視だった、という記憶を置く（表示層の実可視は不可視のまま＝外因の非表示）。
-    harness.wiring.balloon_visibility.per_scope.insert(
+    per_scope(&mut harness.wiring.balloon_visibility).insert(
         0,
         ScopeVisibility {
             last_glyphs: 2,
@@ -396,7 +401,7 @@ fn lifecycle_signals_are_drained_in_full() {
     harness.frame(&mut world);
 
     assert_eq!(
-        harness.wiring.balloon_visibility.display_end,
+        display_end(&harness.wiring.balloon_visibility),
         Some(5.0),
         "1 フレームで全件を取り出し、占有終端の最大値まで畳み込む"
     );
@@ -482,7 +487,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
         "観測が成立したフレームは無音: {events:?}"
     );
     assert!(
-        !state.observation_failure_logged.runtime,
+        !observation_failure_logged_runtime(&state),
         "記録の武装が戻っている"
     );
 }
@@ -589,32 +594,6 @@ fn pointer_residency_is_observed_per_scope() {
 
     assert_eq!(observations.scopes[&0].hover, Some(false));
     assert_eq!(observations.scopes[&1].hover, Some(true));
-}
-
-/// ドラッグ中の観測はバルーン窓の標識とドラッグ標識の**連言**で成立する（design 決定 D8）。
-#[test]
-fn dragging_requires_both_balloon_window_and_drag_marker() {
-    let mut world = World::new();
-    assert!(!observe_dragging(&mut world), "標識が無ければ成立しない");
-
-    let balloon = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    assert!(
-        !observe_dragging(&mut world),
-        "バルーン窓だけではドラッグ中ではない"
-    );
-
-    let other = world.spawn(WindowDragging).id();
-    assert!(
-        !observe_dragging(&mut world),
-        "バルーン窓でない窓のドラッグは対象外"
-    );
-
-    world.entity_mut(balloon).insert(WindowDragging);
-    assert!(observe_dragging(&mut world), "両方揃えば成立する");
-
-    world.entity_mut(balloon).remove::<WindowDragging>();
-    world.despawn(other);
-    assert!(!observe_dragging(&mut world), "ドラッグ終了で戻る");
 }
 
 // ---------------------------------------------------------------------------

@@ -13,13 +13,18 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::RuntimeWiring;
-use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
 use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 use areka_placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
+use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::frame::window_state::test_support::{on, on_mut};
+use areka_runtime::frame::wiring::test_support::{
+    window_state, window_state_mut, zorder_ledger, zorder_ledger_mut,
+};
 
 /// 切替の握手と SHIORI だけの読み直しに応える台本。
 fn script(name: &'static str) -> FakeShiori {
@@ -45,10 +50,9 @@ fn running_a_on() -> SwitchRig {
             .world
             .get_non_send_mut::<RuntimeWiring>()
             .expect("A の結線状態が据わっている");
-        wiring.window_state.on = true;
+        *on_mut(window_state_mut(&mut wiring)) = true;
         let (members, _) = parse_zorder_tokens(&["0", "1"]).expect("0,1 は読める");
-        wiring
-            .zorder_ledger
+        zorder_ledger_mut(&mut wiring)
             .try_add_tag_group(members)
             .expect("台本の組を載せる");
     }
@@ -59,13 +63,12 @@ fn running_a_on() -> SwitchRig {
 /// 今の結線状態の（常に手前か, 台本の組の数）。結線状態が無ければ `None`。
 fn state(rig: &SwitchRig) -> Option<(bool, usize)> {
     rig.world.get_non_send::<RuntimeWiring>().map(|wiring| {
-        let tags = wiring
-            .zorder_ledger
+        let tags = zorder_ledger(wiring)
             .groups()
             .iter()
             .filter(|group| group.source == GroupSource::Tag)
             .count();
-        (wiring.window_state.on, tags)
+        (on(window_state(wiring)), tags)
     })
 }
 

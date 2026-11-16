@@ -31,8 +31,10 @@ use areka_placement::chain_realign::{
 use areka_placement::sticky_group_ledger::seed_sticky_descript;
 
 use super::chain_realign_adjacency_tests::{
-    GAP_WITHOUT_REALIGN, boot_remembered_at_high, chain3_pos, chain3_scan, chain3_world, char_pos,
-    gap, halve_keeping_bottom_center, low_sizes, lower_the_scale, place_char_window_x,
+    chain3_pos, chain3_scan, chain3_world, halve_keeping_bottom_center, place_char_window_x,
+};
+use super::shared_test_support::{
+    GAP_WITHOUT_REALIGN, boot_remembered_at_high, char_pos, gap, low_sizes, lower_the_scale,
 };
 use super::test_support::{FakeReports, FrameHarness, capture_logs, pos_of, size_of};
 

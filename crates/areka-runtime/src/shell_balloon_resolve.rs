@@ -230,3 +230,12 @@ fn pick_random(
     );
     Ok(chosen.clone())
 }
+
+#[cfg(test)]
+#[path = "shell_balloon_resolve_tests.rs"]
+mod tests;
+
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "shell_balloon_resolve_test_support.rs"]
+pub mod test_support;

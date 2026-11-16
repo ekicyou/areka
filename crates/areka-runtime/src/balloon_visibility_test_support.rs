@@ -159,3 +159,26 @@ impl Frame {
         decide(state, &self.obs, self.now, self.timeout_secs)
     }
 }
+
+// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
+// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+#[cfg(feature = "test-support")]
+use super::ScopeVisibility;
+
+/// [`BalloonVisibilityState`] の scope ごとの前フレームの状態（`per_scope`）。
+#[cfg(feature = "test-support")]
+pub fn per_scope(state: &mut BalloonVisibilityState) -> &mut BTreeMap<u32, ScopeVisibility> {
+    &mut state.per_scope
+}
+
+/// [`BalloonVisibilityState`] の表示の占有の終わり（`display_end`）。
+#[cfg(feature = "test-support")]
+pub fn display_end(state: &BalloonVisibilityState) -> Option<f64> {
+    state.display_end
+}
+
+/// [`BalloonVisibilityState`] が実行系の借用の失敗を記録したか（`observation_failure_logged.runtime`）。
+#[cfg(feature = "test-support")]
+pub fn observation_failure_logged_runtime(state: &BalloonVisibilityState) -> bool {
+    state.observation_failure_logged.runtime
+}

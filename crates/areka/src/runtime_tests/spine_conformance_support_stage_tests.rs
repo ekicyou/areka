@@ -10,6 +10,8 @@ use super::{ExitKind, LoopDriver, ScriptedShioriBackend, SpineHarness};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
 use super::{Progress, wait_until};
 use areka_kanade::CloseReason;
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::spine::test_support::status_calls;
 
 /// 受信端の開閉の探りは交信の列を **1 件も**増やさず、終了段の自己終了はその探りだけで観測できる
 /// （design D1 の終了段・`Error Handling`「解放の後も kanade の送信端が閉じない」）。
@@ -262,8 +264,7 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
         .build();
 
     // 起動系列の応答を凍結してから起動する。
-    let frozen = handle
-        .status_calls
+    let frozen = status_calls(&handle)
         .lock()
         .expect("status ledger mutex poisoned");
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);

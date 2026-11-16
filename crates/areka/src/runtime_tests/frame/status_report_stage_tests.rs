@@ -13,39 +13,13 @@ use std::path::PathBuf;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_seriko::{
-    BindResolver, MockSurfaceOutput, SerikoLoopConfig, StageNote, SurfaceResolver, spawn_seriko,
+    BindResolver, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver, spawn_seriko,
 };
 
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
-
-fn stage(scope: u32, open: bool, surface_id: Option<u32>, generation: u64) -> StageObservation {
-    StageObservation {
-        scope,
-        open,
-        surface_id,
-        generation,
-    }
-}
-
-fn note(scope: u32, open: bool, face: u32, generation: u64) -> StageNote {
-    StageNote::Balloon {
-        scope: ActorKey::from(scope.to_string()),
-        open,
-        face,
-        generation,
-    }
-}
-
-/// 観測の列をフレームごとに流し、送った知らせを全部集める（送り手は毎フレーム在る）。
-fn notes_of(frames: &[Vec<StageObservation>]) -> (Vec<StageNote>, BalloonStatusLedger) {
-    let mut ledger = BalloonStatusLedger::default();
-    let mut notes = Vec::new();
-    for observed in frames {
-        report_stage_observed(&mut ledger, observed, Some(|n| notes.push(n)));
-    }
-    (notes, ledger)
-}
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::frame::status_report::test_support::last_stage;
 
 /// seriko の送り手だけを持つ置き場のゴースト（出力は捕まえるだけ）。
 fn world_with_seriko() -> World {
@@ -57,6 +31,7 @@ fn world_with_seriko() -> World {
         MockSurfaceOutput::new(),
     );
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(None, PathBuf::from("ghost/test")).with_seriko_sink(sink),
     )));
@@ -76,79 +51,16 @@ fn attach_balloon(presenter: &mut EmoPresenter, scope: u32) {
     );
 }
 
-// ---------------------------------------------------------------------------
-// ⑴ 観測の列から送る知らせの列
-// ---------------------------------------------------------------------------
-
-#[test]
-fn unchanged_observation_is_not_sent_again() {
-    let frame = vec![stage(0, true, Some(3), 1), stage(1, false, None, 0)];
-    let (notes, _) = notes_of(&[frame.clone(), frame.clone(), frame]);
-    assert_eq!(notes, vec![note(0, true, 3, 1), note(1, false, 0, 0)]);
-}
-
-/// 同じフレームの中で隠して出し直すと、開いたまま・同じ面でも世代だけが進む（要件 2.3）。
-#[test]
-fn advanced_generation_is_sent_even_while_staying_open() {
-    let (notes, _) = notes_of(&[
-        vec![stage(0, true, Some(3), 1)],
-        vec![stage(0, true, Some(3), 2)],
-    ]);
-    assert_eq!(notes, vec![note(0, true, 3, 1), note(0, true, 3, 2)]);
-}
-
-/// 隠すと表示層は面の番号を消す（`Hide`）。閉じた知らせは前に知らせた面の番号を運ぶ。
-#[test]
-fn closing_keeps_the_face_sent_before() {
-    let (notes, ledger) = notes_of(&[
-        vec![stage(0, true, Some(3), 1)],
-        vec![stage(0, false, None, 1)],
-        vec![stage(0, false, None, 1)],
-        vec![stage(0, true, Some(4), 2)],
-    ]);
-    assert_eq!(
-        notes,
-        vec![
-            note(0, true, 3, 1),
-            note(0, false, 3, 1),
-            note(0, true, 4, 2)
-        ]
-    );
-    assert_eq!(ledger.last_stage.get(&0), Some(&(true, 4, 2)));
-}
-
-// ---------------------------------------------------------------------------
-// ⑵ 置き場のゴーストが居ないフレーム
-// ---------------------------------------------------------------------------
-
-#[test]
-fn frame_without_ghost_keeps_the_ledger_and_sends_on_the_next_frame() {
-    let mut ledger = BalloonStatusLedger::default();
-    let frame = vec![stage(0, true, Some(3), 1)];
-    report_stage_observed(&mut ledger, &frame, None::<fn(StageNote)>);
-    assert!(
-        ledger.last_stage.is_empty(),
-        "見送ったフレームは台帳を変えない"
-    );
-
-    let mut notes = Vec::new();
-    report_stage_observed(&mut ledger, &frame, Some(|n| notes.push(n)));
-    assert_eq!(
-        notes,
-        vec![note(0, true, 3, 1)],
-        "ゴーストが据わったフレームで送る"
-    );
-}
-
 #[test]
 fn empty_slot_in_the_phase_keeps_the_ledger() {
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(None));
     let mut presenter = EmoPresenter::new();
     attach_balloon(&mut presenter, 0);
     let mut ledger = BalloonStatusLedger::default();
     report_stages(&presenter, &world, &mut ledger, &[0]);
-    assert!(ledger.last_stage.is_empty());
+    assert!(last_stage(&ledger).is_empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +84,7 @@ fn phase_sends_the_stage_even_while_the_runtime_is_busy() {
     run_status_report_phase(&mut wiring, &world);
     drop(held);
     assert_eq!(
-        wiring.balloon_status.last_stage,
+        *last_stage(&wiring.balloon_status),
         BTreeMap::from([(0, (false, 0, 0))])
     );
 }
@@ -184,5 +96,5 @@ fn unattached_scope_is_not_noted() {
     let presenter = EmoPresenter::new();
     let mut ledger = BalloonStatusLedger::default();
     report_stages(&presenter, &world, &mut ledger, &[0, 1]);
-    assert!(ledger.last_stage.is_empty());
+    assert!(last_stage(&ledger).is_empty());
 }

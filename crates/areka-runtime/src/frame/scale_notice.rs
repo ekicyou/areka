@@ -21,7 +21,7 @@ use crate::target_map::{TargetWindow, target_scope};
 
 /// テストだけが入れる送り先（本番は入れない＝置き場のゴーストの kanade へ送る）。
 #[derive(Resource, Clone)]
-pub struct ScaleEventSeam(pub(crate) Sender<KanadeMsg>);
+pub struct ScaleEventSeam(pub Sender<KanadeMsg>);
 
 /// 倍率の変わりの相（毎フレームの並びの最後）。記録が無いフレームはすぐ戻る。
 ///

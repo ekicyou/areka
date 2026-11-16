@@ -27,16 +27,16 @@ use tracing::Level;
 
 use super::run_switch_phase;
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::source::{DescriptSource, GhostTitles};
 use areka_runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
 use areka_runtime::frame::RuntimeWiring;
 use areka_runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use areka_runtime::session_hooks::NO_BODY;
 use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
-use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
-use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
-use areka_placement::reseed::BalloonPlacementInputs;
-use areka_placement::source::{DescriptSource, GhostTitles};
 
 // ---------------------------------------------------------------- 土台
 
@@ -70,6 +70,7 @@ fn rig(kind: SkinKind) -> Rig {
     );
     let (kanade_tx, kanade) = mpsc::channel();
     let mut world = World::new();
+    crate::session::hooks::install(&mut world);
     world.insert_non_send(GhostSlot(Some(
         GhostSession::for_test(Some(kanade_tx), PathBuf::from("ghost/A")).with_seriko_sink(sink),
     )));

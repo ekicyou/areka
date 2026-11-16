@@ -615,20 +615,30 @@ pub(super) fn realign_chain_once(presenter: &EmoPresenter, world: &mut World) {
     realign_chain_once_with_source(presenter, world)
 }
 
-/// [`realign_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
-///
-/// 判断そのもの（武装しているか・待ち札が残っていないか・解き直して武装を解く）は
-/// [`areka_placement::chain_realign`] が持つ。ここが供給するのは走査だけである——
-/// 「全スコープの窓寸が実表示寸へ揃ったか」の判定を起動時確定と**同一の実装**
-/// （[`collect_chain_states`]）で行うために、走査を関数として渡す。
-///
-/// 走査を配置層へ移さないのは、表示側の寸の引き口（[`PhysicalSizeSource`]）と target 採番
-/// （`shell_target`）が表示層の語彙だからである（配置層はどちらも知らない）。
-pub(super) fn realign_chain_once_with_source<S: PhysicalSizeSource + ?Sized>(
-    source: &S,
-    world: &mut World,
-) {
-    chain_realign::realign_chain_once_with(world, |world| collect_chain_states(source, world));
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は毎フレームの相が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::realign_chain_once_with_source;
+#[cfg(not(feature = "test-support"))]
+pub(super) use test_open::realign_chain_once_with_source;
+
+mod test_open {
+    use super::*;
+
+    /// [`realign_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
+    ///
+    /// 判断そのもの（武装しているか・待ち札が残っていないか・解き直して武装を解く）は
+    /// [`areka_placement::chain_realign`] が持つ。ここが供給するのは走査だけである——
+    /// 「全スコープの窓寸が実表示寸へ揃ったか」の判定を起動時確定と**同一の実装**
+    /// （[`collect_chain_states`]）で行うために、走査を関数として渡す。
+    ///
+    /// 走査を配置層へ移さないのは、表示側の寸の引き口（[`PhysicalSizeSource`]）と target 採番
+    /// （`shell_target`）が表示層の語彙だからである（配置層はどちらも知らない）。
+    pub fn realign_chain_once_with_source<S: PhysicalSizeSource + ?Sized>(
+        source: &S,
+        world: &mut World,
+    ) {
+        chain_realign::realign_chain_once_with(world, |world| collect_chain_states(source, world));
+    }
 }
 
 /// 確定の走査結果——判定へ渡す状態列と、反映へ渡す `(scope, char 窓 entity, 現在位置)` の列。
@@ -728,3 +738,22 @@ fn defer_chain_finalize(world: &mut World, reason: ChainDeferReason) {
 #[cfg(test)]
 #[path = "drain_resnap_tests.rs"]
 mod tests;
+
+// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の関数（中で記録を出す相の部品）へそのまま渡す口（`test-support` のときだけ・
+// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+#[cfg(feature = "test-support")]
+pub mod test_support {
+    use bevy_ecs::world::World;
+
+    use super::PhysicalSizeSource;
+
+    /// [`super::finalize_chain_once_with`] へそのまま渡す。
+    pub fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
+        super::finalize_chain_once_with(source, world)
+    }
+
+    /// [`super::resnap_with`] へそのまま渡す。
+    pub fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
+        super::resnap_with(source, world)
+    }
+}

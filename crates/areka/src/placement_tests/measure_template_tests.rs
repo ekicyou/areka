@@ -37,7 +37,7 @@ fn the_source_scan_still_sees_a_real_call() {
 /// の doc コメントだけがこの綴りを持ち、本文には 1 件も無い。
 #[test]
 fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
-    let raw = include_str!("../runtime_tests/assets_tests.rs");
+    let raw = include_str!("../../../areka-runtime/src/assets_tests.rs");
     assert!(
         raw.contains(SHELL_PARSE),
         "較正の当たりが失われた: 説明文の中の綴りが実物から消えている（別の対照へ差し替えること）"

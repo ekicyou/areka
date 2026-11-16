@@ -18,7 +18,7 @@ pub struct ArekaStrictJudges {
 
 impl ArekaStrictJudges {
     /// 正準の台帳（`check_script` と同じ表）で判定を作る。
-    pub(crate) fn canonical() -> Self {
+    pub fn canonical() -> Self {
         Self {
             ledger: ConsumerLedger::canonical(),
         }
@@ -42,3 +42,7 @@ impl StrictJudges for ArekaStrictJudges {
 pub fn production() -> Option<Arc<dyn StrictJudges>> {
     Some(Arc::new(ArekaStrictJudges::canonical()))
 }
+
+#[cfg(test)]
+#[path = "strict_judges_tests.rs"]
+mod strict_judges_tests;

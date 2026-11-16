@@ -20,10 +20,10 @@ use wintf::ecs::window::drain_window_pos_commands;
 use super::chain_finalize_persist_test_support::{
     PersistStore, WORK_AREA, persist_world, spawn_shown,
 };
-use super::chain_realign_adjacency_tests::{
+use super::shared_test_support::{
     GAP_WITHOUT_REALIGN, boot_remembered_at_high, gap, low_sizes, lower_the_scale,
 };
-use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, capture_logs, pos_of};
+use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, pos_of};
 use super::{finalize_chain_once_with, resnap_with};
 use crate::app_exit::close_windows_for_restart;
 use areka_placement::chain_finalize::{AdjacencyMark, ChainFinalized};
@@ -31,6 +31,7 @@ use areka_placement::follow::OffsetBase;
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::spawn::GhostWindows;
+use log_capture_kit::{LineFormat, capture_lines};
 
 /// 覚えたとき（200%）の絵の大きさ（本体・相方）。
 const HIGH: [(u32, u32); 2] = [(764, 1094), (672, 596)];
@@ -111,7 +112,10 @@ fn boot_from(
     }
     resnap_with(&sizes(shown), world);
     let _resnap = drain_window_pos_commands();
-    let logs = capture_logs(|| finalize_chain_once_with(&sizes(shown), world));
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&sizes(shown), world)
+    })
+    .1;
     assert!(
         world.contains_resource::<ChainFinalized>(),
         "前提が崩れている: 並べ直しが駆動していない"

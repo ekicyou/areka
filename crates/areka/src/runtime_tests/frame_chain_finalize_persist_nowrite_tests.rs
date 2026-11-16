@@ -140,7 +140,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
         bottom: WORK_AREA.bottom - 100,
         ..WORK_AREA
     };
-    let change = work_area_sync::sync_monitor_snapshot_with(
+    let change = work_area_sync::test_support::sync_monitor_snapshot_with(
         &mut world,
         &s2_monitors_with_work_area(96, raised),
     )
@@ -168,7 +168,7 @@ fn memory_is_unchanged_by_resize_move_work_area_close_and_quit() {
 
     // 本番の切り替えと同じく、記憶から窓を作り直して並べ終える（作業領域は元に戻す。同期段が
     // 作業領域の表と拡大率の表の両方を差し替える）。
-    let _ = work_area_sync::sync_monitor_snapshot_with(
+    let _ = work_area_sync::test_support::sync_monitor_snapshot_with(
         &mut world,
         &s2_monitors_with_work_area(96, WORK_AREA),
     )

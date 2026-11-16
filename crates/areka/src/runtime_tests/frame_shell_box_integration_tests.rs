@@ -100,7 +100,7 @@ impl Cage {
             fallback_candidates: BTreeMap::new(),
             markers: Default::default(),
         }
-        .hand_to(&mut wiring.runtime.borrow_mut(), &mut world);
+        .hand_to(&mut wiring.runtime().borrow_mut(), &mut world);
 
         let mut cage = Self {
             world,
@@ -141,7 +141,7 @@ impl Cage {
 
     /// 本番の adapter が流すのと同じ形で、scope の文字の層へ cue を当てる（時刻 0 起点）。
     fn cue(&self, scope: u32, command: CueCommand) {
-        self.wiring.runtime.borrow_mut().apply_cue(&TalkCue {
+        self.wiring.runtime().borrow_mut().apply_cue(&TalkCue {
             at: 0.0,
             actor: ActorKey::from(scope.to_string()),
             command,
@@ -194,7 +194,7 @@ impl Cage {
 
     fn shown_boxes(&self, scope: u32) -> Vec<String> {
         self.wiring
-            .runtime
+            .runtime()
             .borrow()
             .shown_boxes(&ActorKey::from(scope.to_string()))
             .iter()
@@ -302,7 +302,7 @@ fn box_surface_withholds_the_balloon_window_and_a_plain_surface_shows_it() {
     );
     assert_eq!(cage.window_visible(0), Some(true));
     assert_eq!(
-        cage.wiring.runtime.borrow().balloon_shown_glyphs(
+        cage.wiring.runtime().borrow().balloon_shown_glyphs(
             &ActorKey::from("0"),
             cage.wiring.presenter().current_surface_id(shell_target(0)),
             5.0,

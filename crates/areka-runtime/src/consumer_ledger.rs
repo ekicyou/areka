@@ -554,3 +554,12 @@ impl ConsumerLedger {
 #[cfg(test)]
 #[path = "consumer_ledger_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "consumer_ledger_agreement_tests.rs"]
+mod agreement_tests;
+
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "consumer_ledger_test_support.rs"]
+pub mod test_support;

@@ -1,36 +1,26 @@
 //! `areka_runtime::balloon_visibility::phase` の代わりの親（子のテストの宣言だけ）。
 
-use areka_runtime::balloon_visibility::phase::*;
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::rc::Rc;
-use std::sync::mpsc::Receiver;
 use areka_emo_present::EmoPresenter;
-use areka_emo_text::actor::ShownBox;
 use areka_emo_text::actor::TextLayerRuntime;
-use areka_kanade::KanadeMsg;
-use areka_sakura::ActorKey;
-use areka_sakura::TalkId;
-use bevy_ecs::world::World;
-use tracing::info;
-use wintf::ecs::FrameTime;
-use wintf::ecs::WindowDragging;
-use areka_runtime::balloon_hover::BalloonHover;
-use areka_runtime::shell_box_hover::ShellBoxHover;
-use areka_placement::spawn::BalloonWindowMarker;
-use areka_placement::spawn::CharWindowMarker;
-use areka_runtime::frame::RuntimeWiring;
-use areka_runtime::target_map::balloon_target;
-use areka_runtime::target_map::shell_target;
 use areka_runtime::balloon_visibility::BalloonVisibilityState;
 use areka_runtime::balloon_visibility::MeasurementOrigin;
-use areka_runtime::balloon_visibility::TalkLifecycleSignal;
 use areka_runtime::balloon_visibility::VisibilityAction;
 use areka_runtime::balloon_visibility::VisibilityLogEvent;
 use areka_runtime::balloon_visibility::VisibilityObservations;
 use areka_runtime::balloon_visibility::VisibilityTrigger;
-use areka_runtime::balloon_visibility::configured_timeout_secs;
 use areka_runtime::balloon_visibility::decide;
+use areka_runtime::balloon_visibility::phase::*;
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_sakura::ActorKey;
+use bevy_ecs::world::World;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::rc::Rc;
+// 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
+use areka_runtime::balloon_visibility::phase::test_support::{
+    collect_observations, emit_visibility_logs, notify_timeout, observe_scope_boxes,
+};
 
 #[cfg(test)]
 #[path = "balloon_visibility_phase_tests.rs"]

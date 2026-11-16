@@ -55,24 +55,92 @@ use areka_placement::sticky_group_ledger::replace_sticky_descript;
 /// 差し替えの世代（プロセスで単調に進む＝ゴーストをまたいでも置き場の荷物と合図を取り違えない）。
 static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
 
-/// 差し替えの相（`frame_system` の drain の直後に毎フレーム 1 回）。印が無ければ無操作。
-pub(super) fn run_switch_phase(wiring: &mut RuntimeWiring, world: &mut World) {
-    let Some(mut flight) = world.remove_non_send::<SkinSwitchInFlight>() else {
-        return;
-    };
-    let hooks = SessionHooks::of(world);
-    // 読み直しの窓口へ相の終わりを告げる鍵（相は印を外して進むので、外した印から控える）。
-    let key = (flight.kind, flight.target.dir.clone());
-    let keep = match flight.stage {
-        SkinSwitchStage::Waiting { .. } => {
-            step_waiting(&mut flight, wiring, world, hooks).then_some(flight)
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は毎フレームの相が使う（道と名前は同じ）。
+#[cfg(not(feature = "test-support"))]
+pub(super) use test_open::run_switch_phase;
+#[cfg(not(feature = "test-support"))]
+use test_open::split;
+#[cfg(feature = "test-support")]
+pub use test_open::{run_switch_phase, split};
+
+mod test_open {
+    use super::*;
+
+    /// 差し替えの相（`frame_system` の drain の直後に毎フレーム 1 回）。印が無ければ無操作。
+    pub fn run_switch_phase(wiring: &mut RuntimeWiring, world: &mut World) {
+        let Some(mut flight) = world.remove_non_send::<SkinSwitchInFlight>() else {
+            return;
+        };
+        let hooks = SessionHooks::of(world);
+        // 読み直しの窓口へ相の終わりを告げる鍵（相は印を外して進むので、外した印から控える）。
+        let key = (flight.kind, flight.target.dir.clone());
+        let keep = match flight.stage {
+            SkinSwitchStage::Waiting { .. } => {
+                step_waiting(&mut flight, wiring, world, hooks).then_some(flight)
+            }
+            SkinSwitchStage::Committed { .. } => step_committed(flight, wiring, world, hooks),
+        };
+        match keep {
+            Some(flight) => world.insert_non_send(flight),
+            // 完了・中止・取りやめ・失敗のどれでも、相が終わったら 1 度だけ告げる。
+            None => (hooks.skin_phase_ended)(world, key.0, &key.1),
         }
-        SkinSwitchStage::Committed { .. } => step_committed(flight, wiring, world, hooks),
-    };
-    match keep {
-        Some(flight) => world.insert_non_send(flight),
-        // 完了・中止・取りやめ・失敗のどれでも、相が終わったら 1 度だけ告げる。
-        None => (hooks.skin_phase_ended)(world, key.0, &key.1),
+    }
+
+    /// 資産を荷物の中身・seriko の定義・後始末の残りへ分ける。
+    pub fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
+        match built {
+            SwapBuilt::Shell {
+                assets,
+                source,
+                balloon,
+                restored,
+            } => (
+                assets
+                    .shells
+                    .into_iter()
+                    .map(|s| (s.scope, s.emo_world, s.atlas, assets.author_dpi))
+                    .collect(),
+                SerikoReplace::Shell {
+                    epoch,
+                    resolver: assets.resolver,
+                    static_binds: assets.static_binds,
+                    bind_resolver: assets.bind_resolver,
+                    shell_table: assets.loop_table,
+                    // 箱の束を後始末へ動かす前に写す（文字の層は同じ束を `hand_to` で受ける）。
+                    fallback: areka_seriko::ShellSurfaceFallback {
+                        surface_ids: assets.boxes.surface_ids.clone(),
+                        candidates: assets.boxes.fallback_candidates.clone(),
+                    },
+                },
+                SwapFinish::Shell {
+                    source,
+                    balloon,
+                    restored,
+                    boxes: assets.boxes,
+                    cursors: assets.cursors,
+                },
+            ),
+            SwapBuilt::Balloon { assets } => {
+                let mut targets = Vec::new();
+                let mut scopes = Vec::new();
+                for b in assets.balloons {
+                    targets.push((b.scope, b.emo_world, b.atlas, assets.author_dpi));
+                    scopes.push((b.scope, b.definitions, b.background_color));
+                }
+                (
+                    targets,
+                    SerikoReplace::Balloon {
+                        epoch,
+                        balloon_tables: actor_keyed_balloon_tables(assets.loop_tables),
+                    },
+                    SwapFinish::Balloon {
+                        scopes,
+                        author_dpi: assets.author_dpi,
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -644,59 +712,3 @@ type Targets = Vec<(
     areka_emo_atlas::AtlasTable,
     u16,
 )>;
-
-/// 資産を荷物の中身・seriko の定義・後始末の残りへ分ける。
-fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
-    match built {
-        SwapBuilt::Shell {
-            assets,
-            source,
-            balloon,
-            restored,
-        } => (
-            assets
-                .shells
-                .into_iter()
-                .map(|s| (s.scope, s.emo_world, s.atlas, assets.author_dpi))
-                .collect(),
-            SerikoReplace::Shell {
-                epoch,
-                resolver: assets.resolver,
-                static_binds: assets.static_binds,
-                bind_resolver: assets.bind_resolver,
-                shell_table: assets.loop_table,
-                // 箱の束を後始末へ動かす前に写す（文字の層は同じ束を `hand_to` で受ける）。
-                fallback: areka_seriko::ShellSurfaceFallback {
-                    surface_ids: assets.boxes.surface_ids.clone(),
-                    candidates: assets.boxes.fallback_candidates.clone(),
-                },
-            },
-            SwapFinish::Shell {
-                source,
-                balloon,
-                restored,
-                boxes: assets.boxes,
-                cursors: assets.cursors,
-            },
-        ),
-        SwapBuilt::Balloon { assets } => {
-            let mut targets = Vec::new();
-            let mut scopes = Vec::new();
-            for b in assets.balloons {
-                targets.push((b.scope, b.emo_world, b.atlas, assets.author_dpi));
-                scopes.push((b.scope, b.definitions, b.background_color));
-            }
-            (
-                targets,
-                SerikoReplace::Balloon {
-                    epoch,
-                    balloon_tables: actor_keyed_balloon_tables(assets.loop_tables),
-                },
-                SwapFinish::Balloon {
-                    scopes,
-                    author_dpi: assets.author_dpi,
-                },
-            )
-        }
-    }
-}

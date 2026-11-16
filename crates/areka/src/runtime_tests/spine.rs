@@ -42,13 +42,13 @@
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
 
 // `spine` の代わりの親を兼ねる（⑴ ⑵ を子へ渡す）。下の `use` は旧 `spine.rs` の頭の行で、⑶ と子のテストが使う。
-use areka_runtime::spine::*;
 use areka_placement::follow::OffsetBase;
+use areka_runtime::spine::*;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::BTreeMap;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_actor::ActorHandle;
@@ -58,7 +58,7 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostRuntime, ShioriWiring, TickerMode, boot_with_kanade_stop};
-use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock};
+use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend};
 use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink, SurfaceResolver,
@@ -70,7 +70,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 
 use crate::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
-use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use shiori_host32_host::ExitKind;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
@@ -81,8 +81,11 @@ use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
+use crate::session::ghost_quit::KanadeNoticeRx;
 use areka_runtime::adapter::PresentBridge;
-use areka_runtime::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
+use areka_runtime::assets::{
+    BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets,
+};
 use areka_runtime::frame::{
     RuntimeWiring, all_shown, run_attach_phase, run_dpi_phase, run_move_drain_with, run_text_phase,
     run_text_scale_phase,
@@ -91,7 +94,6 @@ use areka_runtime::move_cue::{MoveCueSink, PositionCue};
 use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
 use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use areka_runtime::target_map::{balloon_target, shell_target};
-use crate::session::ghost_quit::KanadeNoticeRx;
 
 /// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
 ///
@@ -367,6 +369,8 @@ impl SpineHarness {
         // ── headless GPU World（MTA COM＋実 GPU・R8.4）＋合成 GhostWindows（scope [0,1]） ──
         let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
+        // 本体の口を据える（本番の `ghost_session::register_systems` と同じ口・設計 D5）。
+        crate::session::hooks::install(&mut world);
 
         // ── 構築入力（実 emo2 検体・COM は make_world_with_gpu で初期化済み） ──
         // 検体はこの起動専用に取得する。起動記録の無い新品が配られるので（要件 7.4）、同じ

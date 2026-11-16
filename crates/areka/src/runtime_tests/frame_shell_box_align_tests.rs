@@ -118,7 +118,7 @@ impl Cage {
             picture: self.picture_id(scope),
             boxes: self
                 .wiring
-                .runtime
+                .runtime()
                 .borrow()
                 .shown_boxes(&ActorKey::from(scope.to_string()))
                 .iter()

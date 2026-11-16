@@ -1,41 +1,34 @@
 //! `areka_runtime::frame` の代わりの親（子のテストの宣言だけ）。
 
-use areka_runtime::frame::*;
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::mpsc::Receiver;
-use bevy_ecs::entity::Entity;
-use bevy_ecs::world::World;
-use tracing::error;
-use tracing::info;
 use areka_emo_present::EmoPresenter;
 use areka_emo_present::PresentCommand;
 use areka_emo_text::actor::TextLayerRuntime;
+use areka_placement::spawn::GhostWindows;
+use areka_runtime::assets::BootAssets;
+use areka_runtime::frame::drain_resnap::realign_chain_once_with_source;
+use areka_runtime::frame::*;
+use areka_runtime::move_cue::PositionCue;
+use areka_runtime::target_map::balloon_target;
 use areka_sakura::ActorKey;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::World;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::mpsc::Receiver;
 use wintf::ecs::DPI;
 use wintf::ecs::FrameTime;
 use wintf::ecs::GraphicsCore;
 use wintf::ecs::SizeI;
-use wintf::ecs::WindowPos;
 use wintf::ecs::WucGraphicsResource;
-use areka_placement::resolver::SizePx;
-use areka_placement::spawn::CharWindowMarker;
-use areka_placement::spawn::GhostWindows;
-use areka_runtime::assets::BootAssets;
-use areka_runtime::move_cue::PositionCue;
-use areka_runtime::move_cue::apply_move_directive;
-use areka_runtime::talk_clock::TalkClock;
-use areka_runtime::target_map::balloon_target;
-use areka_runtime::target_map::shell_target;
-use areka_runtime::frame::drain_resnap::run_move_drain_with;
-use areka_runtime::frame::drain_resnap::finalize_chain_once;
-use areka_runtime::frame::drain_resnap::finalize_chain_once_with;
-use areka_runtime::frame::drain_resnap::realign_chain_once_with_source;
-use areka_runtime::frame::drain_resnap::resnap_shell_targets;
-use areka_runtime::frame::drain_resnap::resnap_with;
-use areka_runtime::frame::scale_text::reconcile_reported_sizes;
+// 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
+use areka_runtime::frame::drain_resnap::test_support::{finalize_chain_once_with, resnap_with};
+// 子の `carry_tests` の本物の親（`areka-runtime` の `frame_attach_tests`）が持っていて子が使う `use` の行。
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
+use areka_emo_text::state::TextLayerConfig;
+use areka_runtime::assets::build_boot_assets;
+use areka_runtime::frame::test_support::{gpu_attach_world, zero_clock};
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use std::sync::mpsc;
 
 mod status_report;
 // シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
@@ -63,17 +56,17 @@ mod chain_finalize_restart_tests;
 // 並べ直しから記憶まで（areka-P0-char-position-save-on-exit タスク 3.2〜4.2）。共有の部品と、
 // それを使う 3 つのテストファイル（1,000 行の上限に合わせて分けた）。
 #[cfg(test)]
+#[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
+mod chain_finalize_persist_nowrite_tests;
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_restart_tests.rs"]
+mod chain_finalize_persist_restart_tests;
+#[cfg(test)]
 #[path = "frame_chain_finalize_persist_test_support.rs"]
 mod chain_finalize_persist_test_support;
 #[cfg(test)]
 #[path = "frame_chain_finalize_persist_tests.rs"]
 mod chain_finalize_persist_tests;
-#[cfg(test)]
-#[path = "frame_chain_finalize_persist_restart_tests.rs"]
-mod chain_finalize_persist_restart_tests;
-#[cfg(test)]
-#[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
-mod chain_finalize_persist_nowrite_tests;
 // 起動の並べ直しが作業領域へ寄せてから書く檻（window-work-area-clamp タスク 2.1）。
 #[cfg(test)]
 #[path = "frame_chain_finalize_clamp_tests.rs"]

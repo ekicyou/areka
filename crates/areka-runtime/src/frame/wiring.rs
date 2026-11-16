@@ -341,7 +341,7 @@ impl RuntimeWiring {
     /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`RuntimeWiring` の受信端が届く）を
     /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
     #[cfg(test)]
-    pub fn drain_move_directives(&self) -> Vec<PositionCue> {
+    pub(crate) fn drain_move_directives(&self) -> Vec<PositionCue> {
         self.move_rx.try_iter().collect()
     }
 
@@ -352,7 +352,7 @@ impl RuntimeWiring {
     /// （会話の再生が `BalloonLifecycleSink`→`RuntimeWiring` の受信端へ届く）を決定論に固定する
     /// ための最小 read 口として `#[cfg(test)]` で開ける（`drain_move_directives` と同型・本番
     /// 表面は増やさない）。
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn drain_lifecycle_signals(&self) -> Vec<TalkLifecycleSignal> {
         self.lifecycle_rx.try_iter().collect()
     }
@@ -418,5 +418,42 @@ impl RuntimeWiring {
         let mut scopes: Vec<u32> = self.balloon_models.keys().copied().collect();
         scopes.sort_unstable();
         scopes
+    }
+}
+
+// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
+// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+#[cfg(feature = "test-support")]
+pub mod test_support {
+    use std::time::Duration;
+
+    use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
+
+    use super::super::window_state::StayOnTopState;
+    use super::RuntimeWiring;
+
+    /// [`RuntimeWiring`] の重なりの組の帳簿（`zorder_ledger`）を読む。
+    pub fn zorder_ledger(wiring: &RuntimeWiring) -> &ZOrderGroupLedger {
+        &wiring.zorder_ledger
+    }
+
+    /// [`RuntimeWiring`] の重なりの組の帳簿（`zorder_ledger`）を書く。
+    pub fn zorder_ledger_mut(wiring: &mut RuntimeWiring) -> &mut ZOrderGroupLedger {
+        &mut wiring.zorder_ledger
+    }
+
+    /// [`RuntimeWiring`] の常に手前の状態（`window_state`）を読む。
+    pub fn window_state(wiring: &RuntimeWiring) -> &StayOnTopState {
+        &wiring.window_state
+    }
+
+    /// [`RuntimeWiring`] の常に手前の状態（`window_state`）を書く。
+    pub fn window_state_mut(wiring: &mut RuntimeWiring) -> &mut StayOnTopState {
+        &mut wiring.window_state
+    }
+
+    /// [`RuntimeWiring`] の直近の drain の所要（`last_drain`）を書く。
+    pub fn last_drain_mut(wiring: &mut RuntimeWiring) -> &mut Duration {
+        &mut wiring.last_drain
     }
 }

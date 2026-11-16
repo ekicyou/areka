@@ -183,9 +183,9 @@ impl VisibilityTrigger {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SuppressionKinds {
     /// いずれかのバルーン窓がドラッグ中（Requirement 5.1）。
-    pub(crate) dragging: bool,
+    pub dragging: bool,
     /// いずれかの**可視**バルーンの上にポインタが滞在中（Requirement 5.2）。
-    pub(crate) hover: bool,
+    pub hover: bool,
 }
 
 impl SuppressionKinds {
@@ -324,26 +324,27 @@ pub enum VisibilityAction {
 pub struct VisibilityDecision {
     /// 発行する行動。並びは「中断の非表示 → 全消去の非表示 → 表示 → 満了の非表示」で、
     /// 各行動の中の scope は昇順で固定する。
-    pub(crate) actions: Vec<VisibilityAction>,
+    pub actions: Vec<VisibilityAction>,
     /// ログ用の事象。並びは「信号の畳み込み → 中断の非表示（scope 昇順）→ 可視コンテンツ駆動の
     /// 遷移（scope 昇順）→ 計測と満了」で固定する。
-    pub(crate) logs: Vec<VisibilityLogEvent>,
+    pub logs: Vec<VisibilityLogEvent>,
     /// 時間切れで隠したフレームにだけ立つ、いま出ている台詞のトークの番号
     /// （areka-P0-balloon-lifecycle-events 要件 2.1・2.4・2.5）。利用者の中断・内容の消去・
     /// 外からの非表示・抑止の間は立たない。
-    pub(crate) timeout_notice: Option<TalkId>,
+    pub timeout_notice: Option<TalkId>,
 }
 
 /// 1 scope・1 フレームの「可視の文字」の観測（同じ借用・同じ注入時刻で読んだ組）。
 ///
 /// 数と回数を組として型で縛るのは、片方だけが更新される記憶（回数だけ進み数が古いまま）を
 /// 作れなくするため。
+// 要件 2.5: 公開の `ScopeObservation::visible_glyphs` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct GlyphObservation {
+pub struct GlyphObservation {
     /// リビール済みの可視グリフ数（`TextLayerState::visible_glyphs`）。
-    pub(crate) count: usize,
+    pub count: usize,
     /// その scope の内容が消された回数（`TextLayerState::clear_count`）。
-    pub(crate) clear_count: u64,
+    pub clear_count: u64,
 }
 
 /// ある scope について本フレームに観測した値。
@@ -355,21 +356,21 @@ pub struct ScopeObservation {
     /// `None` は**観測が取れなかった**ことを表す（本番では文字層ランタイムの借用失敗・注入時刻なし）。
     /// その場合は増加も下降も判定せず、直前に観測できた値を次フレームの比較相手として
     /// 保持する——観測できないフレームを「ゼロへ下降した」と読んで消してしまわないため。
-    pub(crate) visible_glyphs: Option<GlyphObservation>,
+    pub visible_glyphs: Option<GlyphObservation>,
     /// 現に可視か（本番では `EmoPresenter::target_visible`）。判断の真実源。
-    pub(crate) visible: bool,
+    pub visible: bool,
     /// この scope のバルーンの上にポインタが滞在しているか（本番では
     /// `BalloonHover::is_balloon_hovered`・Requirement 5.2）。
     ///
     /// `None` は**観測が取れなかった**ことを表す（本番ではポインタ配線そのものの不在）。
     /// その場合は抑止しない側として扱う（Requirement 5.5——消えないまま固着する側へ倒さない）。
-    pub(crate) hover: Option<bool>,
+    pub hover: Option<bool>,
     /// この scope の箱（シェル内バルーン）のどれかに文字が出ているか（areka-P0-shell-balloon
     /// 要件 6.10・6.11）。既定は偽で、偽なら判断は箱を足す前と同じになる。
     ///
     /// 中断と時間切れの対象は「窓が見えている、または箱に文字が出ている」scope である。
     /// 窓を出す判断（`decide_content`）はこの欄を読まない。
-    pub(crate) box_showing: bool,
+    pub box_showing: bool,
 }
 
 /// 本フレームの観測スナップショット。
@@ -379,28 +380,28 @@ pub struct ScopeObservation {
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct VisibilityObservations {
     /// scope 番号 → 観測値。
-    pub(crate) scopes: BTreeMap<u32, ScopeObservation>,
+    pub scopes: BTreeMap<u32, ScopeObservation>,
     /// 本フレームに受け取った表示ライフサイクル信号（到着順＝FIFO）。
     ///
     /// 本番では `RuntimeWiring` の受信端を配線層が全件取り出して渡す。受け取りは配線層の仕事だが、
     /// 受け取った信号が計測へ及ぼす作用（会話開始での破棄・占有終端の更新）は判断であり、
     /// ここで扱う。
-    pub(crate) lifecycle: Vec<TalkLifecycleSignal>,
+    pub lifecycle: Vec<TalkLifecycleSignal>,
     /// いずれかのバルーン窓がドラッグ中か（Requirement 5.1）。
     ///
     /// 本番の観測は world の問い合わせ（ドラッグ標識つきバルーン窓の有無）であり、失敗しうる
     /// 借用や不在の資源を経由しないため、`hover` と違って「観測できない」
     /// 状態を持たない。
-    pub(crate) dragging: bool,
+    pub dragging: bool,
 }
 
 /// scope ごとの前フレーム状態（エッジ検出のための記憶）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ScopeVisibility {
+pub struct ScopeVisibility {
     /// 直近に**観測できた**可視グリフ数。観測が取れなかったフレームでは更新しない。
-    pub(crate) last_glyphs: usize,
+    pub last_glyphs: usize,
     /// 直近に観測できた消去の回数（`last_glyphs` と同じフレームでだけ更新する）。
-    pub(crate) last_clear_count: u64,
+    pub last_clear_count: u64,
     /// 前フレーム終了時点の可視状態（本判断が同フレームで発行した遷移を反映した値）。
     ///
     /// 用途は**自分が発行していない可視性遷移の検出**（`trigger=explicit` のログと、非表示へ
@@ -416,7 +417,7 @@ pub(crate) struct ScopeVisibility {
     /// 不要なポインタ滞在の掃除まで走る。配線層はこれを避けるため、表示が可視に至らなかった
     /// scope についてこの値を発行前の観測値へ戻す（`roll_back_show`）。相関数は本モジュールの
     /// 子モジュールにあるため、この非公開フィールドへ直接書き戻せる。
-    pub(crate) prev_visible: bool,
+    pub prev_visible: bool,
 }
 
 /// 観測が取れなかったことを既に 1 回記録したか（配線層専用・Requirement 8.4 のログ抑制）。
@@ -492,7 +493,7 @@ impl BalloonVisibilityState {
     /// （消えた古いバルーンを「外から隠された」と読まない）。見えるバルーンが無くなるので計測も
     /// 止める。文字の数の記憶は保つ——消すと、表示の済んだ文字が次のフレームで増加の縁に化け、
     /// 新しいバルーンが台詞の外で出てしまう（次の台詞で今日どおり現れる＝要件 3.3）。
-    pub(crate) fn forget_scope(&mut self, scope: u32) {
+    pub fn forget_scope(&mut self, scope: u32) {
         if let Some(previous) = self.per_scope.get_mut(&scope) {
             previous.prev_visible = false;
         }

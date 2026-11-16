@@ -17,8 +17,9 @@ use super::chain_finalize_align_tests::{
     SPAWN, WA, sizes, spawn_resolved, spawn_resolved_scopes, x_of,
 };
 use super::chain_finalize_persist_test_support::PersistStore;
-use super::test_support::{PerTargetSizes, capture_logs};
+use super::test_support::PerTargetSizes;
 use super::*;
+use log_capture_kit::{LineFormat, capture_lines};
 
 use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, AdjacencyMark, ScriptPlaced};
 use areka_placement::chain_realign::{arm_chain_realign, snapshot_char_rects};
@@ -559,7 +560,10 @@ fn a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope() {
     let shown = PerTargetSizes::new([(0, Some((500, 687))), (2, Some(SPAWN[2]))]);
     let mut world = spawn_resolved_scopes(&[], &shown, &[0, 2]);
     remember_scope_2(&mut world);
-    let logs = capture_logs(|| finalize_chain_once_with(&shown, &mut world));
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&shown, &mut world)
+    })
+    .1;
     assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
     assert!(
         !logs.iter().any(|line| line.contains(READ_ACROSS)),
@@ -570,7 +574,10 @@ fn a_missing_middle_scope_is_not_logged_as_a_skipped_side_edge_scope() {
     let shown = sizes(&[(500, 687), SPAWN[1], SPAWN[2]]);
     let mut world = spawn_resolved(&[("kero.seriko.alignmenttodesktop", "right")], &shown, 3);
     remember_scope_2(&mut world);
-    let logs = capture_logs(|| finalize_chain_once_with(&shown, &mut world));
+    let logs = capture_lines(LineFormat::LevelTargetFields, || {
+        finalize_chain_once_with(&shown, &mut world)
+    })
+    .1;
     assert_eq!(left_gap(&world, 0, 2), 0, "scope 2 は本体の左に付く");
     assert_eq!(
         logs.iter()

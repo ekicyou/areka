@@ -504,59 +504,90 @@ fn log_external_transitions(
 // ⑸ 行動の発行
 // ---------------------------------------------------------------------------
 
-/// 発行の結果（後段のログと掃除が要る分だけ）。
-struct IssueOutcome {
-    /// 実際に不可視化した scope（ポインタ滞在の掃除対象）。
-    hidden: Vec<u32>,
-    /// 表示を発行したのに可視にならなかった scope（遷移として名乗らない・巻き戻し済み）。
-    not_shown: Vec<u32>,
-}
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は相関数が使う（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use test_open::{IssueOutcome, clear_hover_residency, issue_actions};
+#[cfg(not(feature = "test-support"))]
+use test_open::{clear_hover_residency, issue_actions};
 
-/// 判断が返した行動を表示層へ発行する。
-///
-/// 表示は分離された可視化の専用入口 `show_target`、非表示は既存の漏斗
-/// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない・design の指定）。
-/// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
-/// キャラクター窓には触れない（Requirements 4.4／6.7）。
-///
-/// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
-/// 同じ scope の箱を隠す印も立てる（areka-P0-shell-balloon 要件 6.10）。窓の非表示は今までどおり
-/// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
-fn issue_actions(
-    presenter: &mut EmoPresenter,
-    world: &mut World,
-    runtime: &Rc<RefCell<TextLayerRuntime>>,
-    state: &mut BalloonVisibilityState,
-    observations: &VisibilityObservations,
-    actions: &[VisibilityAction],
-) -> IssueOutcome {
-    let mut hidden = Vec::new();
-    let mut not_shown = Vec::new();
-    for action in actions {
-        match action {
-            VisibilityAction::Show { scope } => {
-                if !issue_show(presenter, world, *scope) {
-                    roll_back_show(state, observations, *scope);
-                    not_shown.push(*scope);
+mod test_open {
+    use super::*;
+
+    /// 発行の結果（後段のログと掃除が要る分だけ）。
+    pub struct IssueOutcome {
+        /// 実際に不可視化した scope（ポインタ滞在の掃除対象）。
+        pub hidden: Vec<u32>,
+        /// 表示を発行したのに可視にならなかった scope（遷移として名乗らない・巻き戻し済み）。
+        pub not_shown: Vec<u32>,
+    }
+
+    /// 判断が返した行動を表示層へ発行する。
+    ///
+    /// 表示は分離された可視化の専用入口 `show_target`、非表示は既存の漏斗
+    /// `apply(PresentCommand::Hide)` を通す（非表示側の新しい入口は作らない・design の指定）。
+    /// 非表示が触るのはバルーン窓の可視性と現サーフェスだけで、内容の合成キャッシュ・会話状態・
+    /// キャラクター窓には触れない（Requirements 4.4／6.7）。
+    ///
+    /// 隠す契機が箱に届くとき（[`hide_reaches_boxes`]・中断の掛け金は判断が畳んだ後の値）は、
+    /// 同じ scope の箱を隠す印も立てる（areka-P0-shell-balloon 要件 6.10）。窓の非表示は今までどおり
+    /// 列挙した scope すべてへ発行する——箱だけが出ていた scope の窓は既に不可視で、非表示は冪等である。
+    pub fn issue_actions(
+        presenter: &mut EmoPresenter,
+        world: &mut World,
+        runtime: &Rc<RefCell<TextLayerRuntime>>,
+        state: &mut BalloonVisibilityState,
+        observations: &VisibilityObservations,
+        actions: &[VisibilityAction],
+    ) -> IssueOutcome {
+        let mut hidden = Vec::new();
+        let mut not_shown = Vec::new();
+        for action in actions {
+            match action {
+                VisibilityAction::Show { scope } => {
+                    if !issue_show(presenter, world, *scope) {
+                        roll_back_show(state, observations, *scope);
+                        not_shown.push(*scope);
+                    }
                 }
-            }
-            VisibilityAction::HideScopes { scopes, trigger } => {
-                for &scope in scopes {
-                    presenter.apply(
-                        world,
-                        PresentCommand::Hide {
-                            target: balloon_target(scope),
-                            reply: None,
-                        },
-                    );
-                    hidden.push(scope);
+                VisibilityAction::HideScopes { scopes, trigger } => {
+                    for &scope in scopes {
+                        presenter.apply(
+                            world,
+                            PresentCommand::Hide {
+                                target: balloon_target(scope),
+                                reply: None,
+                            },
+                        );
+                        hidden.push(scope);
+                    }
+                    let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
+                    hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
                 }
-                let reaches_boxes = hide_reaches_boxes(*trigger, state.break_latch);
-                hide_scope_boxes(runtime, scopes, *trigger, reaches_boxes);
             }
         }
+        IssueOutcome { hidden, not_shown }
     }
-    IssueOutcome { hidden, not_shown }
+
+    // ---------------------------------------------------------------------------
+    // ⑺ ポインタ滞在記録の掃除
+    // ---------------------------------------------------------------------------
+
+    /// 不可視へ落ちた scope のポインタ滞在の記録を落とす（Requirement 5.2／5.5）。
+    ///
+    /// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
+    /// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
+    /// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
+    pub fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
+        if scopes.is_empty() {
+            return;
+        }
+        let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
+            return;
+        };
+        for &scope in scopes {
+            wiring.clear_balloon_hover(scope as usize);
+        }
+    }
 }
 
 /// 隠した scope の普通のバルーンの手動の位置を捨て（balloon-scroll-arrows 要件 8.3）、隠す契機が
@@ -779,31 +810,14 @@ fn notify_timeout(world: &World, notice: Option<TalkId>) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ⑺ ポインタ滞在記録の掃除
-// ---------------------------------------------------------------------------
-
-/// 不可視へ落ちた scope のポインタ滞在の記録を落とす（Requirement 5.2／5.5）。
-///
-/// 不可視の間はポインタの離脱通知が届かないため、滞在の記録を残したままにすると抑止が真のまま
-/// 固着して二度と消えないバルーンが生まれる。`BalloonHover` の不在は掃除する相手が無いだけで
-/// あり、観測できなかったことは既に収集時に記録済みなのでここでは黙って戻る。
-fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
-    if scopes.is_empty() {
-        return;
-    }
-    let Some(mut wiring) = world.get_non_send_mut::<BalloonHover>() else {
-        return;
-    };
-    for &scope in scopes {
-        wiring.clear_balloon_hover(scope as usize);
-    }
-}
-
 // 配線の段のテストで共有する道具（headless 装着）。親の `test_support` とは別のモジュール。
 #[cfg(any(test, feature = "test-support"))]
 #[path = "balloon_visibility_phase_test_support.rs"]
 pub mod test_support;
+
+#[cfg(test)]
+#[path = "balloon_visibility_phase_tests.rs"]
+mod tests;
 
 // 待ち時間の預け方（純判断）だけを見る決定論テスト。配線の檻とは相手が違うので分けてある。
 #[cfg(test)]
@@ -815,6 +829,11 @@ mod wake_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_phase_zorder_chain_tests.rs"]
 mod zorder_chain_tests;
+
+// 観測と発行に箱をつなぐ配線（areka-P0-shell-balloon task 10.3）。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_box_tests.rs"]
+mod box_tests;
 
 // トークの終わりから計る時間切れの記録（起点の採り方・番号の無い知らせ）の水準と欄。
 #[cfg(test)]

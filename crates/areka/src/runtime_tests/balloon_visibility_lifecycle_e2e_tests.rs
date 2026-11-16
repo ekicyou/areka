@@ -46,6 +46,8 @@ use areka_runtime::target_map::balloon_target;
 use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::{configured_timeout_secs, run_balloon_visibility_phase};
+// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+use areka_runtime::balloon_visibility::test_support::display_end;
 
 /// 表示資産を 1 つも持たない `BootAssets`（相は資産を読まない——読むのは `balloon_models` だけ）。
 fn empty_assets() -> BootAssets {
@@ -174,7 +176,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
 
     // ⑴ 判断中核が持つ占有終端が台本の占有区間の終端と一致する。
     assert_eq!(
-        wiring.balloon_visibility.display_end,
+        display_end(&wiring.balloon_visibility),
         Some(horizon),
         "台本の占有区間の終端が sink→受信端→判断中核まで無傷で届く（待機込み・Requirement 4.1）"
     );

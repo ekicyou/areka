@@ -22,9 +22,9 @@ use wintf::ecs::{PhysicalPoint, Point};
 use crate::input_events::char_watch::char_watch_with;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
 use crate::input_events::{MouseWiring, RegionSource, on_char_pointer_pressed};
+use areka_placement::spawn::CharWindowMarker;
 use areka_runtime::hit_region::HitRegion;
 use areka_runtime::user_break_cue::NoUserBreakSignal;
-use areka_placement::spawn::CharWindowMarker;
 
 use super::*;
 
@@ -47,7 +47,7 @@ fn mock(scope: u32, x: i64, y: i64) -> HitRegion {
 
 fn talk_place(cage: &Cage) -> PlaceKey {
     let actor = ActorKey::from("0");
-    let shown = cage.wiring.runtime.borrow().shown_boxes(&actor).to_vec();
+    let shown = cage.wiring.runtime().borrow().shown_boxes(&actor).to_vec();
     PlaceKey {
         actor,
         place: TextPlace::Box(shown[0].name.clone()),
@@ -59,7 +59,7 @@ fn talk_place(cage: &Cage) -> PlaceKey {
 fn talk_lines(lines: usize) -> Cage {
     let mut cage = Cage::boot(SHELL, &[0]);
     cage.wiring
-        .runtime
+        .runtime()
         .borrow_mut()
         .set_box_markers(BTreeMap::from([(
             ActorKey::from("0"),
@@ -98,7 +98,7 @@ fn talk_lines(lines: usize) -> Cage {
         let place = talk_place(&cage);
         assert_eq!(
             cage.wiring
-                .runtime
+                .runtime()
                 .borrow_mut()
                 .scroll_manual_at(&place, ScrollDir::Older, 1),
             ScrollChange::Started,
@@ -113,7 +113,7 @@ impl Cage {
     /// 箱の四角の中で `kind` の矢印に当たる点（シェルの窓のクライアント物理 px）。
     fn arrow_point(&self, kind: MarkerKind) -> (i32, i32) {
         let place = talk_place(self);
-        let rt = self.wiring.runtime.borrow();
+        let rt = self.wiring.runtime().borrow();
         let rect = rt.shown_boxes(&place.actor)[0].rect;
         (rect.top as i32..rect.bottom as i32)
             .flat_map(|y| (rect.left as i32..rect.right as i32).map(move |x| (x, y)))
@@ -124,7 +124,7 @@ impl Cage {
     /// 箱の四角の中で、矢印に当たらない点。
     fn body_point(&self) -> (i32, i32) {
         let place = talk_place(self);
-        let rt = self.wiring.runtime.borrow();
+        let rt = self.wiring.runtime().borrow();
         let rect = rt.shown_boxes(&place.actor)[0].rect;
         let at = (rect.left as i32 + 1, rect.top as i32 + 1);
         assert_eq!(rt.marker_at_point(&place, (at.0 as f32, at.1 as f32)), None);
@@ -136,7 +136,7 @@ impl Cage {
         let place = talk_place(self);
         matches!(
             self.wiring
-                .runtime
+                .runtime()
                 .borrow_mut()
                 .scroll_manual_at(&place, ScrollDir::Newer, 1),
             ScrollChange::Stopped(_)
@@ -283,10 +283,10 @@ fn wheel_over_a_box_without_hidden_lines_is_on_mouse_wheel_as_before() {
     let mut cage = talk_lines(1);
     let place = talk_place(&cage);
     assert!(
-        !cage.wiring.runtime.borrow().has_hidden_lines_at(&place),
+        !cage.wiring.runtime().borrow().has_hidden_lines_at(&place),
         "前提: 隠れた行が無い"
     );
-    let rect = cage.wiring.runtime.borrow().shown_boxes(&place.actor)[0].rect;
+    let rect = cage.wiring.runtime().borrow().shown_boxes(&place.actor)[0].rect;
     let (sent, reads) = cage.wheel((rect.left as i32 + 1, rect.top as i32 + 1), 120);
     assert_eq!(sent, vec![120], "今までどおり OnMouseWheel");
     assert_eq!(reads, 0, "OS の行数は読まない");

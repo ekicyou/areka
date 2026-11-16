@@ -69,7 +69,7 @@ pub struct BalloonObservation {
 ///
 /// 番号は今の `surface_id`。取れないとき、窓が見えていれば 0 で警告の対象、箱だけなら覚えた番号（無ければ 0）で
 /// 警告の対象にしない（areka-P0-shell-balloon-frame-align 要件 3.1・3.2）。
-pub fn collect_bindings(
+pub(crate) fn collect_bindings(
     observed: &[BalloonObservation],
     last_surface: &BTreeMap<u32, u32>,
 ) -> (Vec<BalloonBinding>, Vec<u32>) {
@@ -271,3 +271,16 @@ fn report_observed(
     }
     ledger.last_sent = bindings;
 }
+
+#[cfg(test)]
+#[path = "status_report_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "status_report_stage_tests.rs"]
+mod stage_tests;
+
+// areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "status_report_test_support.rs"]
+pub mod test_support;
