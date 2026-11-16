@@ -317,3 +317,66 @@ runtime の中で文字で読むのは 15 ファイル。
 ---
 
 （次の手: 要件の討議で 6 章の「決めること」1〜11 の答えを決め、要件 3.1〜3.6・4.5・4.8・5.9・5.10・7.6 を必要なら書き換えてから `/kiro-design runtime-crate-split` へ。）
+
+---
+
+## 7. 設計の段の調べ（2026-11-16・`kiro-spec-design`）
+
+- 調べの種類: 既にある系の延長（前例 `placement-crate-split` と同じ型の移し）＝軽い調べ（`design-discovery-light`）。外から新しい crate を入れないので、外の文書の調べ（WebSearch）は要らない。
+- 使ったもの: スキル `kiro-spec-design` の決まり（`design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`）・設計の雛形・前例の `design.md`（D1〜D11）と `research.md`・steering（`product.md`・`tech.md`・`structure.md`・`roadmap.md` の C21 の行と「本体の crate 分け」）。
+- 測った木: ワークツリーの枝 `claude/kiro-start-runtime-crate-split-5fadf0`（`dc026ccb`・runtime のコードは main と同じ）。測り方は Grep・Glob と使い捨ての python（親の本番のファイルで私有か `pub(super)` で宣言された名前が子のテストに現れる数を、説明の行を除いて数えた見積り）。
+
+### 7.1 測り直したこと
+
+1. **本体を引くテスト 40 の宣言の親**（2.5 節の 40 と同じ顔ぶれ）:
+   - 本番のモジュールの子: `assets`（`assets_tests`・`assets_shell_tests`）・`balloon_visibility_phase`（4 本）・`balloon_visibility`（`balloon_visibility_lifecycle_e2e_tests`）・`consumer_ledger`・`frame`（`frame_move_order`・`frame_stay_on_top_lifecycle`・`frame_chain_finalize_{restart,persist,persist_restart,persist_nowrite,remembered}`・`frame_visibility_integration` と支え `frame_chain_finalize_persist_test_support`・判定器を使う 2 本）・`frame/status_report`（2）・`frame/switch`（`switch_tests`・`switch_finish_tests`）・`frame/window_state`・根の `mod.rs`（`zorder_wiring`・`frame_schedule`・`film_playback_e2e`）・`spine`（`spine_close_wiring`・`spine_third_scope_talk`）・`shell_carry`・`shell_balloon_resolve`・`strict_judges`・`switch_cue`。
+   - テストの子（入れ子）: `switch_finish_tests` の子 3（`switch_cursor_tests`・`switch_finish_face_tests`・`switch_reload_tests`）、`frame_visibility_integration_tests` の子 2（`frame_shell_box_integration_tests` とその子 `frame_shell_box_arrow_tests`、`frame_scale_notice_integration_tests`）、`frame_attach_tests`（本体を引かない）の子 `frame_attach_carry_tests`。
+   - `session/runtime_boot_tests.rs` が `#[path]` で取り込む e2e の 2 本。
+2. **親の私有の項目**（見積り・確定はコンパイラ）: 本体へ移すテストのうち、親の私有か `pub(super)` の名前を使うのは 24 本ほど。多いのは `spine_third_scope_talk_tests`（12・`LoopDriver` ほか）・`spine_close_wiring_tests`（8）・`balloon_visibility_phase_tests`（7）・`frame/status_report_tests`（6）・`balloon_visibility_phase_box_tests`（6）。中身は関数（`run_status_report_phase`・`run_switch_phase`・`collect_observations` ほか）・型（`BalloonStatusLedger`・`StayOnTopState`・`LedgerKey` ほか）・`frame` の私有のモジュール（`wiring`・`dpi`・`attach`・`switch`・`window_state`・`scale_notice`）。私有の欄とメソッドは名前の数え方では拾えない（コンパイラの E0616・E0624 で数える）。
+3. **家の型（今のワークスペースにある開け方）**: `areka-placement` に、私有の項目を `mod test_open { … }` の中で `pub` にし、`test-support` のときだけ `pub use`・ほかは今の可視性の `use` で出し直す型が 4 か所ある（`dpi_sync.rs` 45〜48 行・`balloon_limit.rs` 50〜53 行・`balloon_lock.rs` 20〜26 行・`lib.rs` 139〜142 行。説明は「外へはテストのビルド（`test-support`）でだけ開く。crate の中は…が使う（道と名前は同じ）」）。型・関数・定数のどれにも使え、道と名前が変わらない。前例 D9 の「私有の関数へそのまま渡す `pub fn`」（`measure::test_support`）も家の型で、欄とメソッドにはこちらしか効かない。
+4. **`frame` の支え（`frame_test_support.rs`・931 行）**: 番人の crate（`log_capture_kit`）を引くのは `capture_logs`（116 行）・`window_move_lines`（912 行）・`window_move_routes_of`（921 行）の 3 つと、その `use` 2 行だけ。本体へ移すテストのうちこの 3 つを使うのは `capture_logs` を使う 4 本（`frame_move_order_tests` 2 か所・`frame_chain_finalize_restart_tests` 8・`frame_chain_finalize_remembered_tests` 1・`spine_third_scope_talk_tests` 1）だけ。`frame_attach_carry_tests` は親の `frame_attach_tests` の `gpu_attach_world`（`GpuPermit` と `resnap_world` だけを使う・番人の crate を引かない）を使う。`frame_balloon_runtime_test_support.rs` は `GpuPermit` だけ・`frame/zorder_drain_test_support.rs` は `capture_lines` を引くが使い手は runtime の中だけ。
+5. **`spine` の層**: `spine.rs`（938 行）の中で、⑵ 台本の SHIORI は 110〜360 行、⑴ 待ちの部品は `spine_wait.rs` の再公開（364〜385 行）、⑶ 足場は 386〜894 行（`settle_bounded`・`make_world_with_gpu`・`capture_logs`・`SpineHarness` ほか）。⑶ を使うテストは `spine_{boot_smoke,close_wiring,conformance_lap,display,move_cue,seriko_loop,settle,talk_close,text_scale,third_scope_talk}_tests` の 10 本と `spine_conformance_support`（子 2）・`spine_test_support`。⑶ を使わないのは `spine_wait_tests`・`spine_hold_tests`（と `spine_conformance_{judge,script}`＝使い手が ⑶ のテストだけ）。本体の外で `spine::` を書く所の名前は `RecordedCall`・`ScriptedShioriBackendBuilder`・`GpuPermit`・`wait_until`・`Progress`・`join_thread_bounded`・`wait_recv`・`WaitFailure`・`hold_support::HoldAt` だけ（⑴ ⑵）。`SpineHarness` を本体で使うのは `ghost_session_{reload,restart}_tests` の 2 本。
+6. **`shiori-host32-host` の型**: `ScriptedShioriBackend` が実装する `areka_kanade::ShioriBackend` の戻りの型（`ExitKind`・`HelperStatus`・`RequestError`・`ShutdownError`）は、`areka-kanade` も `areka-ghost` も出し直していない（`areka-kanade` が出し直すのは `ABSENT_REFERENCE` だけ）。⑵ を `test-support` で開くには、`areka-runtime` が `shiori-host32-host` を optional の依存で持ち、機能で付ける形が要る（番人の 3 つの crate ではない・出荷の閉包には `areka-kanade` 経由で既に在る）。
+7. **落ちの報告**: `crash_report_test_support.rs` は全体が `#[cfg(test)]`（宣言の側）で、テストは同じファイルの末尾の 5 本（512〜573 行）。持ち手の表 `hold`・`release` は `spine_wait.rs` の `GpuPermit` だけが呼ぶ。
+8. **口の倒れ先**: `session_hooks.rs` の `FALLBACK` は 2 つの `const`（74〜78 行）と、`of` の中の `#[cfg(not(test))]` の `error!`（50〜54 行）。本体の `session::hooks::install`（37 行）が `HOOKS` を据える 1 行の関数。
+9. **`placement_tests/` の残り**: 本体の `crate_source_test_support`（読み口）を使うのは `measure_bake_count_tests`（1 か所）と分岐の対応表 2 本（26 か所）。`spawn_zorder_pair_deferred_tests` は `CARGO_MANIFEST_DIR` からの `src/runtime/…` の名簿と `src` の木の走査だけで、本体の項目を使わない（配置の `test_support::zorder_pair_deferred` を使う）。名簿の 5 つはどれも runtime のファイル。
+10. **テストだけが使う配置の公開（要件 4.8）**: 名指された項目はどれも `follow.rs` の再公開の行で外へ出ている（`move_window_with_route` も `follow.rs` 113 行の再公開）。`MonitorSources::is_empty` だけがメソッド（`follow/work_area.rs` 277 行）。⇒ 同じウェーブの `balloon-flip-side-rules` が触る `follow/window_move.rs`・`balloon_limit.rs`・`resolver.rs` を書かずに済む。
+11. **行数**: `runtime/mod.rs` 850（`wire_tests` は 755 行から末尾まで）・`frame.rs` 566・`spine.rs` 938・`main.rs` 987・`frame/switch_finish_tests.rs` 999・`placement_tests/transition_judge.rs` 999・`transition_judge_tests.rs` 999。
+
+### 7.2 合成（`design-synthesis` の 3 つの見方）
+
+- **一般化**:
+  - 「本体を引く」を 1 つの定義にする＝本体の crate の項目（本番・テストの支え・読み口 `crate_source_test_support` を含む）を 1 つでも使う。要件 3.5 の 40 の数え方（`film_playback_e2e_tests` は読み口だけで 40 に入る）と同じで、要件 4.5 の `placement_tests/` の残りにも同じ定義を当てる。
+  - 本体へ移すテストの開け方を「道と名前を変えない」の 1 つの規則にまとめる: 本体の側に runtime の木を写した「代わりの親」を置き、子のテストの `use super::*`・`super::…` をそのまま通す。親の私有の項目は家の型 `test_open`（7.1 の 3）で、`test-support` のときだけ同じ道で開く。
+- **作るか使うか**: 新しい道具・新しい外の crate は作らない・使わない（要件 1.7）。可視性を機能で切り替える外の crate は 1.7 で使えない。使うのは家の型だけ（`test_open`・`cfg(any(test, feature = "test-support"))`・crate ごとの `sample_test_support`・本体の読み口・前例 D9 の渡し口）。
+- **簡素化**:
+  - `areka-runtime` に読み口を作らない（下の crate を読むテストは本体を引くので本体に残る＝読む所が `areka-runtime` に残らない）。
+  - 落ちの報告の 4 つ目の写しを作らず、`areka-runtime` の 1 つを `test-support` でも立てる（持ち手の表も 1 つのまま）。
+  - `frame` の支えはファイルを割らず、番人の crate を引く 3 つの項目だけに `#[cfg(test)]` を付ける。本体へ移すテストの `capture_logs` は `log_capture_kit::capture_lines` を直に使う（前例 3.1 の形・新しい包みを作らない）。
+  - `spawn_zorder_pair_deferred_tests` は割らずに `areka-runtime` へ移す（名簿が全部 runtime のファイル）。
+
+### 7.3 設計の段で決めたこと（design.md の D1〜D14 の要旨）
+
+| # | 決め | 主な代案と退けた理由 |
+|---|---|---|
+| D1 | 本体の側の置き場は `crates/areka/src/runtime_tests/`（`main.rs` が `#[cfg(test)] mod runtime_tests;`）。runtime の木を写し、親の代わりの小さな「代わりの親」のファイルを置く | テストを 1 本ずつ書き換えて `use areka_runtime::…::*` にする＝999 行のファイルが伸び、差分が大きい／本体の部品の隣へばらす＝audit の受け持ちが混ざる |
+| D2 | 段に分けて移す（前例 D2 と同じ・段 1 だけ一時の別名） | 一度に全部＝数千のエラー |
+| D3 | 私有の項目は家の型 `test_open`＋機能で切り替える再公開。私有のモジュールは宣言の印を機能で切り替える。欄とメソッドだけは前例 D9 の渡し口 | 全部 `pub` にする＝本番の公開面が広がる |
+| D4 | `spine` は 3 層（⑴ ⑵ は `areka-runtime` の `spine`・⑶ は本体の `runtime_tests/spine.rs`）。`frame` の支えは 3 項目だけ `#[cfg(test)]` | `spine` を丸ごと本体へ＝⑴ を使う runtime のテストが行き場を失う |
+| D5 | 口の倒れ先は `NO_BODY` 1 つ（`#[cfg(not(test))]` の `error!` はそのまま）。本体へ移したテストで口を読む相を回す World は `session::hooks::install` で据える | 倒れ先を差し替える口を足す＝仕組みが増える |
+| D6 | 落ちの報告は `areka-runtime` の 1 つを `cfg(any(test, feature = "test-support"))` で立て、本体のテストの実行ファイルにも入れる。入ったことを本体のテスト 1 本で示す | 本体に 4 つ目の写し＝持ち手の表がつながらない |
+| D7 | `areka-runtime` に読み口を作らない | 読み口を `areka-runtime` へ下ろす＝要件 5.3 の「placement-crate-split が置いた 1 つの読み口」が動く |
+| D8 | `placement_tests/` は 7.2 の定義で 1 本ずつ分ける（表は design.md） | 要件の段の仮定のまま |
+| D9 | 1,000 行は代わりの親で行が伸びない形にし、超えたときだけ前例 D4 の割り方 | 例外表に足す＝roadmap の決めに反する |
+| D10 | 配置のテストだけの公開は `follow.rs` の再公開の印の切り替えで機能の下へ | 定義元のファイルを書く＝`follow/window_move.rs` が兄弟と重なる |
+| D11 | 依存の表（`shiori-host32-host` は optional で `test-support` が付ける） | `areka-kanade` に再公開を足す＝ほかの crate の公開面が動く |
+| D12 | examples は `areka-runtime/examples/` へ・`#[path]` をやめる | ― |
+| D13 | テストの関数の改名は `runtime_talk_reveals_without_moving_glyphs` | ― |
+| D14 | audit の受け持ちは名前の型をそのまま両方の置き場に当てる | ― |
+
+### 7.4 危うさと確かめ方
+
+- **rlib の `#[used]` の初期化子**（D6）: rustc は rlib の `#[used]` の記号を結びに入れる（合成の object ファイルで参照を作る）と理解しているが、MSVC の `.CRT$XCU` を本体のテストの実行ファイルで確かめた実測は無い。段 2 で本体のテストの実行ファイルに据わったことを本体のテスト 1 本（`crash_filter_is_installed_before_the_tests_start`）で示し、赤なら前例の型の写しを本体に足す（代案 ⒜・設計の討議の議題）。
+- **機能だけが立つビルド**: `test-support` の項目が `#[cfg(test)]` の項目や番人の crate に頼ると、本体のテストを組むときの `areka-runtime` が組めない。段 2 の確かめに `cargo check --workspace --all-targets` を必ず入れる。
+- **口を読む相の記録**: `areka-runtime` に残るテストは今と同じく記録なしで `NO_BODY`（値は今の倒れ先〔本体の状態が無い World での本体の口〕と同じ答え）。本体へ移したテストで口を据え忘れると `error!`＋`NO_BODY` になり、本体の状態を読む確かめが赤になる（気づける）。
+- **私有の項目の数**: 見積り（7.1 の 2）は名前の数え方の下限。欄とメソッドはコンパイラで数え、渡し口が増えすぎるときは設計の討議に戻す。
