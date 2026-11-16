@@ -383,3 +383,69 @@ fn prepare_records_saturation_with_the_contract_tag_before_the_supply_point() {
         );
     });
 }
+
+// -------------------------------------------------------------------------
+// 9. descript の分の欄（balloon-flip-side-rules 3.1／3.4／6.1）
+// -------------------------------------------------------------------------
+
+/// どの鍵（`sakura.`・`kero.`・別名 `char0.`/`char1.`。`config.rs` は無印を読まない）もどれも同じ欄 `balloon_offset_descript_x` に入り、
+/// 換算の後は換算値になる（要件 3.4）。y だけの宣言・未宣言は 0。
+#[test]
+fn descript_field_takes_the_scaled_value_from_every_key_form() {
+    let build = |pairs: &[(&str, &str)]| {
+        let shell = areka_parsers::kv::parse_kv(
+            &pairs
+                .iter()
+                .map(|(k, v)| format!("{k},{v}\n"))
+                .collect::<String>(),
+        );
+        let mut cfg = super::config::build_placement_config(&Default::default(), &shell);
+        let ids: Vec<usize> = cfg.scopes.keys().copied().collect();
+        let raw: Vec<i32> = ids
+            .iter()
+            .map(|i| cfg.scopes[i].balloon_offset_descript_x)
+            .collect();
+        apply_author_balloon_offset_scale(&mut cfg, &ids, k(2, 1));
+        let scaled: Vec<i32> = ids
+            .iter()
+            .map(|i| cfg.scopes[i].balloon_offset_descript_x)
+            .collect();
+        (raw, scaled)
+    };
+    // 生値は解く時点で入り、換算後は換算値（k=2/1）。
+    assert_eq!(
+        build(&[
+            ("sakura.balloon.offsetx", "30"),
+            ("kero.balloon.offsetx", "-7")
+        ]),
+        (vec![30, -7], vec![60, -14])
+    );
+    assert_eq!(
+        build(&[
+            ("char0.balloon.offsetx", "30"),
+            ("kero.name", "k"),
+            ("char1.balloon.offsetx", "30")
+        ]),
+        (vec![30, 30], vec![60, 60])
+    );
+    assert_eq!(
+        build(&[("sakura.balloon.offsety", "5")]),
+        (vec![0], vec![0])
+    );
+}
+
+/// 合流の後も欄は descript の分の換算値のままで、`windowposition.x` の分を含まない（要件 3.1／6.1）。
+/// 検体は上の合流の檻と同じ: descript 100×2=200・windowposition 443 ⇒ 合流 643 だが欄は 200。
+#[test]
+fn descript_field_excludes_the_windowposition_part_after_merge() {
+    with_com_initialized(|| {
+        let root = TempDir::new();
+        let (ghost_root, balloon_dir) =
+            synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (100, -40));
+        let stages = prepare_stages_for_shell(&ghost_root, &balloon_dir, Some(240), None)
+            .expect("合成ゴーストの準備");
+        assert_eq!(stages.cfg.scopes[&0].balloon_offset, Some((643, -295)));
+        assert_eq!(stages.cfg.scopes[&0].balloon_offset_descript_x, 200);
+        assert_eq!(stages.cfg.scopes[&1].balloon_offset_descript_x, 0);
+    });
+}

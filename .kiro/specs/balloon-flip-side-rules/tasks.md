@@ -23,7 +23,7 @@
 - [ ] 2. (P) 右に出すバルーンの descript の横のずらしの向きを直す（件 2）
   - 1・3・4 と触るファイルが重ならないので、並べて進めてよい。
   - _Boundary: DescriptOffsetField, P5RightArm_
-- [ ] 2.1 合流の前の descript の `balloon.offsetx` の分を、配置の設定に別の欄で運ぶ
+- [x] 2.1 合流の前の descript の `balloon.offsetx` の分を、配置の設定に別の欄で運ぶ
   - 配置の設定に「descript の `balloon.offsetx` の分」の欄を足す（既定 0）。設定を解くところで生の値を入れ、作者の拡大率の換算の後は換算後の値を入れる。`windowposition` の合流はこの欄に触らない。
   - 全欄を並べて設定を組む 2 か所（設定を解く関数と、キーワードのバルーンのテスト）に欄を足す。
   - 済んだ姿: 供給の檻（`balloon_offset_supply_tests.rs`）で、換算と合流の後の欄が descript の分の換算値に等しく `windowposition.x` の分を含まないこと、`sakura.`・`kero.`・無印のどの鍵から来ても同じ欄に入ることが緑。
@@ -119,4 +119,4 @@
 
 ## Implementation Notes
 - `cargo clippy -p areka-placement --all-targets -- -D warnings` は着手前から赤（`wintf` と、この spec が触らないファイルの指摘）。各タスクでは「差分の行に新しい指摘を足さない」を `--no-deps` の出力で確かめる。
-- 1.1 で `overlap_scope()` に付けた `#[cfg_attr(not(test), expect(dead_code, ...))]` は、1.2 か 3.2 で記録の欄から使い始めたら外す（外し忘れは `expect` の警告で分かる）。
+- 2.1: descript の `balloon.offsetx` は `sakura.`/`char0.`（scope 0）と `kero.`/`char1.`（scope 1）の鍵だけが読まれ、無印の `balloon.offsetx` は surfaces.txt の surface ブレスの鍵（要件 3.4 で範囲外）。requirements.md 3.4・design.md の Unit Tests・research.md・このタスクの 2.1 にある「無印」の語は不正確（完了の棚卸で文を直す）。
