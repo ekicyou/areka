@@ -1,6 +1,6 @@
 # Brief: balloon-flip-ssp-review
 
-> 2026-11-16 `balloon-flip-side-rules` の要件の段で、SSP の測り（`.kiro/specs/balloon-flip-side-rules/research.md` 9 節）の結果を受けて `/kiro-discovery` で起票した。開発者の裁定は「そのまま＋起票」。`balloon-flip-side-rules` の決めごとは今のまま進め、並べ替えと押し込みを残すかどうかの見直しはこの spec が引き取る。区分 **A**（開発者が起票を頼んだ）。
+> 2026-11-16 `balloon-flip-side-rules` の要件の段で、SSP の測り（`.kiro/specs/completed/balloon-flip-side-rules/research.md` 9 節）の結果を受けて `/kiro-discovery` で起票した。開発者の裁定は「そのまま＋起票」。`balloon-flip-side-rules` の決めごとは今のまま進め、並べ替えと押し込みを残すかどうかの見直しはこの spec が引き取る。区分 **A**（開発者が起票を頼んだ）。
 
 ## Problem
 
