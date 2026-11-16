@@ -17,8 +17,15 @@
   11. 俯瞰の HTML の道具の自分の検査（.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   12. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   13. sample fetch check: 取り寄せの段の自分の検査（tools/sample-fetch.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  14. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
-  15. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
+  14. package check: 梱包の道具の自分の検査（tools/package.ps1 -SelfTest を別のプロセスで・コミット済みの検体を読むだけ・ネットを使わない）
+  15. exe install check: exe を机へ置く道具の自分の検査（tools/exe-install.selftest.ps1 を別のプロセスで・偽の置き場で回す）
+  16. load flake check: 揺れるテストの道具の自分の検査（tools/load-flake.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  17. mouse input check: マウス入力の道具の自分の検査（tools/mouse-input.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  18. app icon check: アプリアイコンの道具の自分の検査（tools/app-icon.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  19. cursor art check: カーソルの絵の道具の自分の検査（tools/cursor-art.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  20. perf loop selftest: 性能改善ループの道具の自分の検査（tools/perf/perf-loop.ps1 selftest を別のプロセスで・いちばん長いので最後）
+  21. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  22. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
   段が赤でも止めずに最後まで回し、段ごとの合否を一覧にして、1 つでも赤なら終了コード 1 で終わる。
   一覧には検査したコミットと、始めた時点の未コミットの変更の件数も出す（「直近の緑」で再実行を省けるかの証拠）。
 
@@ -72,6 +79,13 @@ Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -Self
 Step 'roadmap overview check' { pwsh -NoProfile -File .claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest }
 Step 'i686 helper sync check' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 -SelfTest }
 Step 'sample fetch check' { pwsh -NoProfile -File tools/sample-fetch.ps1 -SelfTest }
+Step 'package check' { pwsh -NoProfile -File tools/package.ps1 -SelfTest }
+Step 'exe install check' { pwsh -NoProfile -File tools/exe-install.selftest.ps1 }
+Step 'load flake check' { pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest }
+Step 'mouse input check' { pwsh -NoProfile -File tools/mouse-input.ps1 -SelfTest }
+Step 'app icon check' { pwsh -NoProfile -File tools/app-icon.ps1 -SelfTest }
+Step 'cursor art check' { pwsh -NoProfile -File tools/cursor-art.ps1 -SelfTest }
+Step 'perf loop selftest' { pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest }
 if ($License) {
     Step 'cargo deny check' { cargo deny check }
     Step 'cargo about generate' { cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md }

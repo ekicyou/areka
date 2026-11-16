@@ -178,7 +178,7 @@
   - _Requirements: 5.2, 5.3, 5.4, 6.1, 7.2_
 
 - [ ] 10. 全体テストの段と読み手の文書（束 10・件 1・6・9〜12）
-- [ ] 10.1 全体テストに新しい 7 段を足す
+- [x] 10.1 全体テストに新しい 7 段を足す
   - `sample fetch check` の後・`-License` の段の前に、`package check`・`exe install check`・`load flake check`・`mouse input check`・`app icon check`・`cursor art check`・`perf loop selftest`（最後＝いちばん長い）の 7 段を、どれも取り寄せが赤でも回す段として足す。`perf loop selftest` の中身は `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest`
   - 頭書の段の一覧を同じ並びに改める。結果の一覧の行（`OK  `／`FAIL`／`SKIP  `・`==== results (commit …)`・`all steps green`・`red: N step(s)`）と終了コードは変えない
   - 全体テストそのものはここでは回さない（11.3 で 1 回）。足した 7 段の中身の命令を 1 つずつ回して緑を確かめる
