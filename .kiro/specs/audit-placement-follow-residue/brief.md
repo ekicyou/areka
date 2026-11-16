@@ -100,3 +100,14 @@
 - **規模の見立て**: M（12〜18 タスク）。164 と `drag_follow.rs` の分け方が半分を占める。
 - **要件定義のモデル**: Opus（今ある crate の中の直しで、鎖の決まりはもう決まっている）。
 - **優先度の区分**: A（見直しの方針の続き）。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 待っていた `audit-placement-core` は 11-15 に着地した（main `715f5819`）。起票の行の番号を main で引き直した: `work_area_clamp.rs` の `opposite` 299・`keep_restored_groups` 412・`joined_with_prev` 489・wintf の `ecs/drag/dispatch.rs` 103 と 129・`follow/drag_follow.rs` 276（1,000 行ちょうど）・`follow_test_support.rs` 614 行の `assert_no_event` 418 は合っている。ずれは wintf の `ecs/drag/mod.rs` の `initial_window_pos` が 77 行目（起票は 73）だけ。491 の 3 か所（`balloon_limit.rs` 253・`reseed.rs` 347・`persist.rs` 215／245 の手組みの `RectPx`）も残っている。
+- **164 の触る所の抜け**: 起票の 11 か所は `DraggingState` を組む所だけ。型を変えるなら読む・書き換える所も要る＝本番の `crates/areka/src/runtime/frame/dpi.rs`（188〜240 行・掴んだ点の置き直しで `initial_window_pos` を読み書き）・wintf の `ecs/window_proc/mouse_move.rs`（404・405 行）・本体のテストの支え `input_events/drag_test_support.rs`（249 行）と `frame_dpi_drag_grab_tests.rs` の読み（34・78・137 行）。
+- **触るファイル**: `crates/areka-placement/src/` の `follow*`・`transition_*`・`balloon_limit.rs`・`reseed.rs`・`persist.rs`・`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs`・`spawn_follow_pipeline_tests.rs`・`lib.rs`・wintf の `ecs/drag/`・`ecs/window_proc/mouse_move*.rs`・`tests/drag/dispatch_test.rs`・本体の `runtime/frame/dpi.rs`・`runtime/frame_*_tests.rs` の 4 ファイル・`input_events/drag_test_support.rs`・`placement_tests/transition_*`。
+- **規模**: M（12〜18 タスク）のまま。164 の抜けを足すと上の端に寄る。越えたら 164 を同じ範囲の 2 本目に切る（Constraints のとおり）。
+- **先に要るもの**: 無し（すぐ着手できる）。
+- **同じウェーブに置けない相手**: `balloon-flip-side-rules`（`balloon_limit.rs`・`balloon_limit_flip_tests.rs`・`follow/window_move.rs`）・`runtime-crate-split`（本体の `runtime/` と `placement_tests/` を移す）・`defaultx-canon`（この spec の後）。後の見込みでは `input-crate-split`・`audit-areka-input-menu`（`input_events/drag_test_support.rs`）・`audit-emo2-boot-frame`（`runtime/frame/`）とも重なる。
+- **優先度の区分**: A（見直しの方針の続き・開発者「推奨どおりで」）。
+- **要件定義のモデル**: Opus（今ある crate の中の直しで、鎖の決まりはもう決まっている。wintf の公開の型の形の決めは前例 `WindowDragContext.initial_window_pos: Option<Point>` がある）。
+- **分割の案**: 無し（越えたときだけ 164 を切る）。

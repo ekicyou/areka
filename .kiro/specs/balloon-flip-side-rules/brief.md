@@ -71,14 +71,13 @@
   1. 件 1 の扱い（相方の窓も避ける／押し込みへ倒す／重なってよい）。SSP の測り ⑴ を見て決める。
   2. 件 2 の右の式の符号を変えるか。SSP の測り ⑵ を見て決める。変えるなら今の利用者の見た目が変わる範囲。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- **前提の変化**: 前の棚卸の後の着地は、配置のファイル（`crates/areka/src/placement/`）を 1 つも動かしていない。
-- **触るファイル**: 並べ替えの判定 `crates/areka/src/placement/balloon_limit.rs`（301 行）・初期配置の右の式 `placement/resolver.rs`（491 行）・書き込みの関門の呼び出し `placement/follow/window_move.rs`（1,231 行＝上限を超えたまま・足す分は `balloon_limit.rs` へ）・兄弟のテスト（`balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`resolver_*_tests.rs`）・`doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾（許す重なり）。
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 待っていた `placement-crate-split`（11-06）・`audit-placement-follow`（11-14）・`audit-placement-core`（11-15）は全部着地した。配置は `crates/areka-placement/src/` へ移ったので、上の節の `crates/areka/src/placement/…` は全部この crate の下で読む。件 1・件 2 の中身はどの見直しも直していない（並べ替えは今も相方の窓を見ず、右の式も画面の右向きに `ox` を足す）。
+- **触るファイル**: `crates/areka-placement/src/balloon_limit.rs`（301 行・`place_balloon_in_work_area` は 157 行目・起動の関門 `apply_balloon_limit_one` は 245 行目で呼び出しは 273 行目）・`resolver.rs`（559 行・P5 の右の式は 383 行目の `x.saturating_add(w)` と 388 行目の `+ ox`＝`keyword_balloon_pos` が `None` を返す腕の中）・`follow/window_move.rs`（1,228 行・上限の例外表に載ったまま・`apply_balloon_limit_gate` は 983 行目で呼び出しは 705 行目）・兄弟のテスト `balloon_limit_flip_tests.rs`・`balloon_limit_gate_tests.rs`・`resolver_resolve_balloon_tests.rs` ほか・`doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾（許す重なり）。
 - **規模**: S（4〜7 タスク）のまま。
-- **先に要るもの（見直しと crate 分け）**: 起票が 10-22 の突き合わせより後なので、今回はじめて突き合わせた。`balloon_limit.rs`・`resolver.rs` は見直し `audit-placement-core`、`follow/window_move.rs` は見直し `audit-placement-follow` の持ち物で、どちらの見直しも `placement-crate-split`（配置を `crates/areka-placement/` へ移す）の後。よってこの spec は `placement-crate-split` と見直し 2 本の着地を待つ。roadmap の行の「`placement-crate-split` と同じウェーブに置かない」は「着地を待つ」へ強め、見直し 2 本を足す。`audit-placement-follow` の行の「v0.2.0 と触るファイルが重ならない」は古い（この spec と `balloon-script-offset-align` に重なる）。
-- **ほかの未完了の spec と分け合うファイル**: `balloon-script-offset-align`（3 ファイルとも・この spec が先）・`balloon-canon-residue`（`resolver.rs`）・`window-snap`（`resolver.rs`・`window_move.rs`）・`clippy-199-lints`（`window_move.rs`）・`real-run-input-guard-observations`（`balloon_limit.rs`）。
-- **優先度の区分**: B（バルーンが相方の窓に重なる見た目の崩れと、確かめていない向きの疑い）。
+- **先に要るもの**: 働きの依存は無い（すぐ着手できる）。
+- **同じウェーブに置けない相手**: `audit-placement-follow-residue`（`balloon_limit.rs` の 491 の式の差し替え・`balloon_limit_flip_tests.rs` の `point_of` の写しの削除・`follow/window_move.rs` の説明の直し＝3 ファイルが重なる）。ほかに分け合うのは `balloon-script-offset-align`・`balloon-canon-residue`・`defaultx-canon`（`resolver.rs`）・`window-snap`・`clippy-199-lints`・`real-run-input-guard-observations`（どれも見込みの C21〜C23 の外）。
+- **優先度の区分**: B（バルーンが相方の窓に重なる見た目の崩れと、確かめていない向きの疑い）。版は v0.2.0。
 - **要件定義のモデル**: Opus（今ある判定に段を 1 つ足すのと、式の符号の決め）。
 - **分割の案**: なし。
-- **古くなった記述**: 書き込みの関門 `apply_balloon_limit_gate` は `window_move.rs` の 993 行目（起票は 989）、その呼び出しは 715 行目（起票の 1083 ではない）。`window_move.rs` の行数は 1,231（起票は 1,227）。
+- **古くなった記述**: Current State と Boundary Candidates の `placement/…` の道と行の番号（上のとおり読み替える）。roadmap の台帳の行の「`placement-crate-split` と同じウェーブに置かない」は、着地したので要らない。

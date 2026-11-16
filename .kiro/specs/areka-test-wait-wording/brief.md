@@ -72,3 +72,14 @@
 - 規模の見立て: S〜M（6〜10 タスク・ファイルの族ごとに 1〜2）。
 - 要件定義のモデル: Opus（前例どおりの移し替え・新しい決まりを作らない）。
 - **優先度の区分**: B（テストの偽の赤を読み分ける・負荷の下で赤になったときに、許す赤か欠陥かが文言で分かるようにする）。版に縛らない。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: `runtime-module-untangle`（11-13）で `crates/areka/src/emo2_boot/` は `crates/areka/src/runtime/` になった＝本文のパスは古い。`frame_ghost_quit_logsink_tests.rs` は `session/ghost_quit_logsink_tests.rs`、`install_cue_tests.rs` は `install/install_cue_tests.rs` へ移った。`drain_resnap_tests.rs` の 111 は移し済みで数えから外れた。
+- **数え直し**（`git grep`・715f5819）: 自前の `recv_timeout` 12（全 16 から待ちの芯 2・本番の `perf_thread_report.rs` 2 を除く）・`Instant::now() +` 14（全 18 から本番 2・値を作るだけ 2 を除く）・`run_bounded(` の呼び手 1（`session_end_sync_send_tests.rs` 205）・`Progress::Unknown` 3（`install/desk_overwrite_tests.rs` 244・`runtime/readme_script_e2e_tests.rs` 71・`runtime/script_security_e2e_tests.rs` 110）＝あわせて 30 か所。うち 15 か所が `runtime/` の中。
+- **触るファイル**: 24 本のテスト。`runtime/` の 11 本（`film_playback_e2e_tests.rs`・`frame_scale_notice_integration_tests.rs`・`frame/switch_tests.rs`・`spine_{close_wiring,display,move_cue,seriko_loop,talk_close,third_scope_talk}_tests.rs`・`readme_script_e2e_tests.rs`・`script_security_e2e_tests.rs`）と外の 13 本（`ghost_session_{reload,runtime}_tests.rs`・`install/{desk_pick,fetch_url,install_cue,desk_overwrite}_tests.rs`・`mcp/{check_script,get_expression_table}_tests.rs`・`roots/desk_tests.rs`・`readme/opener_submit_tests.rs`・`session/ghost_quit_logsink_tests.rs`・`thread_roles_tests.rs`・`session_end_sync_send_tests.rs`）。
+- **規模**: 6〜10 のまま。
+- **先に要るもの**: `runtime-crate-split`（見込み C21）の後。`runtime/` の 11 本は向こうが新しい crate へ動かし、外の 7 本（`ghost_session_{reload,runtime}_tests.rs`・`install/{desk_pick,fetch_url,desk_overwrite}_tests.rs`・`mcp/check_script_tests.rs`・`session_end_sync_send_tests.rs`）も `crate::runtime::` を引く＝同じウェーブに置けない。働きの依存ではなく、同じファイルを二度動かさない順。確かめに静かな机の全体テスト 1 回が要る（Approach の 5）。
+- **優先度の区分**: B のまま。
+- **要件定義のモデル**: Opus のまま。
+- **分割の案**: なし。
+- **見つけた穴・古くなった記述**: Problem・Current State・Boundary Candidates・Out of Boundary の `emo2_boot/` は `runtime/` へ読み替える（`spine_wait.rs` は `runtime-crate-split` の後はさらに新しい crate の中）。

@@ -132,18 +132,6 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 - **`windows-core` は 1 系列にそろえる決まり**（`windows` と同じ版で使う）は、今の本線の話である。先進坑の例の中では新旧が並ぶ。本線で新旧を並べてよいか（段階の移行）は、この先進坑の結果として開発者に示す。
 - **規模**: M（10〜14）。問いが多いので、要件の段で問いを削るか 2 本に分けるかを決めてよい。
 
-## 2026-11-14 棚卸㊲の再測定（main `df6f4e03`）
-
-- **前提の変化**: 起票の後に main へ入った変更で、この brief の事実を動かすものは無い（`Cargo.lock` の `windows` まわりは今も 0.62.2 の 1 系列・`deny.toml` の `unknown-git = "deny"` と許しの 1 件も同じ）。待つ相手の `wintf-winmsg-executor-import` はまだ着手していない。
-- **触るファイル**: 新しいファイルだけ（`crates/pilot/examples/pilot-windows-rs-next/` の下）。根の `Cargo.toml` の `members` は `crates/*` の 1 段だけなので、自分の `[workspace]` を持つ下の階のパッケージは外す書き方（`exclude`）が要らない。`crates/pilot/Cargo.toml` にも触らない。
-- **Approach の「全体テストにも乗らない」は 2 点で言い過ぎ**: ⑴ `crates/pilot` は `examples/<フォルダ>/main.rs` を自動で例として拾う。フォルダの直下に `main.rs` を置くと、本線の `cargo test --workspace` が `pilot` の例としてそれを組もうとして赤になる。直下には `Cargo.toml` だけを置き、ソースは `src/` か下のパッケージへ置く。⑵ `crates/log-capture-kit/tests/` の見張り 4 本（1 ファイル 1,000 行・一時フォルダの道・検体の道・`with_default`）は `crates/` の下の `.rs` を全部読む（除くのは `target`・`vendors`・`.git` のフォルダだけ）。`windows-bindgen` の出力をコミットすると、まず 1,000 行の上限で赤になる。出力はビルドのときに `target` の下へ作るか、1 ファイル 1,000 行の下に分ける（例外の表 `file_length_guard_test.rs` は既にあるファイルで、`audit-test-kits` の持ち物）。
-- **規模**: M（10〜14）のまま。
-- **先に要るもの**: `wintf-winmsg-executor-import`（C20 の見込み）。早くても C21。
-- **ほかの spec と重なるファイル**: 無し。ただし `audit-pilot`（C21 の見込み）の受け持ちは「`crates/pilot/` 全部」で、新しいフォルダもその中に入る。同じウェーブに置くなら、`audit-pilot` の受け持ちからこのフォルダを外す（別のワークスペースで、捨てる前提のため）。`runtime-crate-split`・`balloon-flip-side-rules`・`wintf-surface-auto-promotion` とは重ならない（`wintf`・`areka-emo-text` は借りて読むだけ）。
-- **人の待ち**: go／違う／直す の判定は開発者が一次記録を見て下す（二坑モデル）。判定は着地の後の移行の本体の門で、作業の途中には入らない。上流への投稿は文案までなので待ちにならない。問い 7 は実の GPU と画面の操作（透過の窓・クリック）が要る＝画面の操作の順を取る。
-- **優先度の区分**: A（開発者が 2026-11-14 に windows-rs の移行を決め、方向を先進坑で確かめると決めた）。
-- **要件定義のモデル**: Opus（問いは brief に並んでいて、要件はそれを写す。束縛の置き場を決める分かれ道は移行の本体の側の話で、先進坑はその材料を出すだけ）。
-- **分割の案**: 無し（要件の段で問いを削るか 2 本に分けるかを決めてよい、のまま）。
 ## 申し送り（wintf-winmsg-executor-import より・2026-11-14）
 
 - 写しは `crates/wintf-winmsg-executor/` に入った（版はワークスペースの版・根の依存は `dola` と同じ「版＋path」・`windows` 0.62 の 4 つの機能を写しの manifest に直書き・edition 2021）。問い 1 の的はこの置き場。
@@ -154,3 +142,16 @@ areka は Windows の API を `windows` クレート 0.62 で呼んでいる。�
 
 - **COM の同一性に頼る比べが 1 か所増えた**: `crates/wintf/src/ecs/graphics/composite.rs` の `SurfaceComposite::same_root` は、前の合成の根の命令の列と今の列を `Option<&ID2D1CommandList>` の `==` で比べる。これは windows-core 0.62 の `IUnknown` の `PartialEq`（番地が同じか、でなければ両方を `IUnknown` へ `QueryInterface` して比べる＝COM の同一性）に頼っている。同じ比べが `GraphicsCommandList` の `PartialEq` にも在る（`.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の SurfaceComposite）。
 - **書き換えの対応表で見ること**: `windows-bindgen` の束縛の型へ移すとき、`==` が同じ COM の同一性の意味を保つか（番地だけの比べに変わると、同じ物を別の参照で持つ回を「違う」と答え、全部の描き直し＝理由 `root_list` が増える。逆向きの誤りは無い見込み）。保たないなら、包みの側で `IUnknown` の比べを書く必要がある。移行の本体はまだ brief が無いので、この先進坑の対応表に載せる形で渡す。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 待っていた `wintf-winmsg-executor-import` は 11-14 に着地した（写しは `crates/wintf-winmsg-executor/`・申し送りは上の節）。`Cargo.lock` の `windows` まわりは今も 0.62 の 1 系列・`deny.toml` も同じ。`crates/pilot/` は前の棚卸の後に動いていない（取り込みが `crates/pilot/Cargo.toml` の依存を書き換えただけ）。
+- **触るファイル**: 新しいファイルだけ（`crates/pilot/examples/pilot-windows-rs-next/` の下）。根の `Cargo.toml` の `members` は `crates/*` の 1 段だけなので `exclude` は要らない。`crates/pilot/Cargo.toml` にも触らない。
+- **全体テストに乗せないための 2 点**（前の棚卸のまま）: ⑴ フォルダの直下に `main.rs` を置かない（`crates/pilot` の例として組まれて赤になる）。⑵ `crates/log-capture-kit/tests/` の見張り 4 本は `crates/` の下の `.rs` を全部読む＝`windows-bindgen` の出力は `target` の下へ作るか、1 ファイル 1,000 行の下に分ける。
+- **申し送りの読み方**: 上の節の `session_end_sync_send_tests.rs` の表の話は、出荷する `crates/wintf-winmsg-executor/src/` を書き換えたときだけ当たる。この試験が読むのは `crates/*/src/**/*.rs` だけで、先進坑の置き場（`crates/pilot/examples/…`）は読まない。先進坑は出荷するクレートを書き換えないので、表を直す仕事は移行の本体の 2 本目（`wintf-winmsg-executor` と `dola`）へ渡す。
+- **規模**: M（10〜14 タスク）のまま。
+- **先に要るもの**: 無し（すぐ着手できる）。
+- **ほかの spec と重なるファイル**: 無し。`audit-pilot`（見込みの C22）の受け持ち「`crates/pilot/` 全部」にこのフォルダが入るので、`audit-pilot` はこの spec の後。
+- **人の待ち**: go／違う／直す の判定は開発者が一次記録を見て下す（着地の後の門）。問い 7 は実の GPU と画面の操作が要る＝画面の操作の順を取る。
+- **優先度の区分**: A（開発者が 2026-11-14 に windows-rs の移行を決め、方向を先進坑で確かめると決めた）。
+- **要件定義のモデル**: Opus（問いは brief に並んでいて、要件はそれを写す。束縛の置き場を決める分かれ道は移行の本体の側の話）。
+- **分割の案**: 無し（要件の段で問いを削るか 2 本に分けるかを決めてよい、のまま）。

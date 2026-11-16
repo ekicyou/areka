@@ -85,3 +85,15 @@
 - 席: 文字とバルーンの列（emo-text の席を使う）。`emo-text-windows-text`・`draw-methods-canon`・`wintf-surface-auto-promotion` とは同時に走らせない見込み（触るファイルは設計で確かめる）。
 - 要件定義のモデル: Opus。
 - 分割の案: 上限を超えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 待っていた `wintf-visual-damage-redraw` は 11-14 に着地した。起票の後に main へ入った変更で、受け持ちのファイルを動かしたのは `runtime/frame/drain_resnap.rs`（`audit-placement-core` の直し・729 行）だけで、文字の層（`areka-emo-text`）と `mount.rs` は動いていない。
+- **`wintf-surface-auto-promotion` は待たなくてよい**: 文字の差し込み口 `emo-text-layer-slot`（`areka-emo-present/src/mount.rs` 183 行目）は窓の直下に置いた中身の無い `Visual`＝描画面の持ち主。wintf が切るのは「節の下の持ち主」だけ（`visual/world_visual.rs` 160 行目）で、根の直下の持ち主は支えている。文字の区画を描画面の持ち主の直下に置く推す形は、今の wintf のままで組める。
+- **触るファイル**: 起票時の見立てのまま。行数は `surface.rs` 960・`actor_present.rs` 872・`viewbox_draw_render.rs` 835（1,000 行の近く＝足す分は新しいファイルへ）・`mount.rs` 321・`runtime/frame/` の `attach.rs` 502・`wiring.rs` 425・`scale_text.rs` 330・`drain_resnap.rs` 729・`mcp/dump_balloon.rs` 216。wintf は使う側だけ（`visual/`・`systems/render.rs` に触らない）。使い手が 0 になれば `com/dxgi.rs`。
+- **規模**: L（16〜20 タスク）のまま。
+- **先に要るもの**: 無し（働きの依存は全部着地した）。
+- **同じウェーブに置けない相手**: `runtime-crate-split`（`crates/areka/src/runtime/frame/` の 4 ファイルと `mcp/dump_balloon.rs` を `areka-runtime` へ移す）。後の見込みでは `audit-emo2-boot-frame`（`runtime/frame/`）・`window-resetwindowpos-hold`（`drain_resnap.rs`）とも重なる。`runtime-crate-split` の後に取るなら、`runtime/frame/` の 4 ファイルは `crates/areka-runtime/src/frame/` で読む。
+- **席**: 新しいファイルを足すなら emo-text の席（`lib.rs` の一覧）。
+- **優先度の区分**: A（開発者 2026-11-14「本来、バルーンが使うはず。使ってないなら使うべきですね」）。版は v0.2.0。
+- **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`。新しい境目や並行の保証は作らない）。
+- **分割の案**: 上限を越えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る（起票時のまま）。

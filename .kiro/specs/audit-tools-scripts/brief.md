@@ -73,22 +73,25 @@
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
 
-## 2026-11-14 棚卸㊲の再測定（main `df6f4e03`）
-
-- **前提の変化**: roadmap の見込みでは、この spec は `runtime-module-untangle` が書き換える `tools/load-flake.ps1` を待っていた。同 spec は 11-13 に着地した（例の `-Filter emo2_boot::frame` を `runtime::frame` に直した 1 行だけ）ので、待つ相手は無くなった。ほかに、着地した spec が受け持ちの 2 つに触った: `dola-yaml-backend` が `test-all.ps1` に「機能 toml を有効にした dola のテスト」の段を足して段の番号を 1 つずつずらし、`audit-impl-watch` が `impl-watch-install.ps1` の説明の 2 行を直した。ここの指摘を先に直したものは無い。
-- **触るファイル**: 20 ファイル・4,332 行（台本 15 と `release-notes-fixture/` の 5）。起票のとき（17 ファイル・3,409 行）の後に `cursor-art.ps1` 339・`mouse-input.ps1` 243・`mcp-bridge-install.ps1` 156 が増えた。大きいもの: `package.ps1` 754・`encoding-check.ps1` 539・`sample-fetch.ps1` 366・`load-flake.ps1` 357。1,000 行の近くは無い。
-- **ほかの spec と重なるファイル**: C20 の見込みに入った `wintf-winmsg-executor-import`（v0.2.0）が `tools/crates-io.ps1` を書き換える（68 行目の公開の一覧 `$PUBLISH` と、184〜219 行目の `dola`・`wintf` の名前を決め打ちした較正）。同じウェーブには置けないので、この spec は C21 へ下がる。C21 の見込みの 4 本は `tools/` を書き換えない（`runtime-crate-split` は触らない約束・ほかの 3 本は `test-all.ps1` を回すだけ）。
-- **C21 で気をつけること**: `runtime-crate-split` が `runtime` を `areka-runtime` へ移すと、`load-flake.ps1` の選び肢（52・68・211〜212 行目の `areka-bin`・`wintf-lib`・`areka-placement-lib`）では `runtime` のテストを回せなくなり、47 行目の例の `-Filter runtime::frame` も古くなる。`runtime-crate-split` は `tools/` に触らない約束なので、同 spec が先に着地したらこの spec が選び肢を足す。この spec が先に着地したら、同 spec の完了のときに申し送りとして拾う。
-- **規模**: 指摘の数で決まる（コード 4,332 行・テスト 0 行）。20 を越える見込みは低い。
-- **先に要るもの**: なし。
-- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
-- **要件定義のモデル**: Opus（台本の中の直しで、新しい境目は作らない）。
-- **分割の案**: 無し。
-- **見つけた古い記述**: `package.ps1` の 144・148・668 行目は、`SMOKE_EXIT_ENV` と smoke の自動 close の行の在りかを `crates/areka/src/main.rs` と書くが、今は `crates/areka/src/smoke_exit.rs`（22・37・44 行目）にある。
-
 ## 件 1（2026-11-14・`audit-tools-perf-run` の要件の討議から預かった）
 
 - **何を**: 全体テスト `tools/test-all.ps1` に、性能改善ループの道具の自分の検査 `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` の段を足す。今の全体テストは `tools/perf` の自分の検査を回していない（触るのは `encoding check` の段だけ）。
 - **なぜここで**: `audit-tools-perf-run` は、直したバグの回帰のテストを `perf-loop.ps1 selftest` から回す形にした（2026-11-14 開発者が推奨案で承認）。`test-all.ps1` はこの spec の持ち物で、C20 のあいだ `audit-tools-perf-run` は触らない。
 - **先に要るもの**: `audit-tools-perf-run` の着地（足される自分の検査が入る）と、`audit-tools-perf-judge` 側の Python の自分の検査 4 本（`judge_followup_selftest.py`・`perf-rank.py`・`perf_compare_selftest.py`・`perf_ledger_selftest.py`）が OS の一時フォルダでなくワークツリーの `target` の下を使うようになっていること（決まり「一時フォルダはワークツリーの `target` の下」）。まだなら、その直しを待つか、ここで申し合わせる。
 - **確かめること**: `selftest` は昇格・xperf・画面の操作を要らない（`audit-tools-perf-run` の research.md 7 節）。昇格した机では、`invoke-cpu-sample.ps1 -SelfTest` の中の試しが本物の採取を 5 秒する点を、全体テストの段として受け入れるか。
+
+## 件 2（2026-11-16 棚卸㊳・`audit-tools-perf-run` の完了の研究メモ §13 から拾った）
+
+- `encoding check`（`tools/perf` の `Invoke-PwshChild` の 3 行が文字化けせず届くかの検査）は、子が思わぬ形で失敗したときに何が表示されるかまでは見ていない。`audit-tools-perf-run` は「相手の持ち物」として残したが、どの brief にも書かれていなかった（`completed/audit-tools-perf-run/research.md` の §13）。検査を足すかはこの spec が決める。
+
+## 2026-11-16 棚卸㊳の再測定（main 715f5819）
+- **前提の変化**: 同じウェーブに置けなかった `wintf-winmsg-executor-import` は 11-14 に着地し、`tools/crates-io.ps1` を 3 行書き換えた（公開の一覧に `wintf-winmsg-executor` を足した）。待つ相手は無い。前の棚卸の「見つけた古い記述」（`package.ps1` の 144・148・668 行目の `main.rs`）は棚卸㊲の PR で `smoke_exit.rs` へ直してあり、もう古くない。
+- **件 1 の先に要るもの**は両方そろった: `audit-tools-perf-run` は 11-15 に着地し、`perf-loop.ps1 selftest` がある。`audit-tools-perf-judge` も 11-15 に着地し、Python の自分の検査の一時フォルダは `tools/perf/perf_selftest_common.py` の `WORK_ROOT`＝`target/perf-loop-tmp` の下になった。
+- **触るファイル**: `tools/` のうち `tools/perf/` の外の 15 の台本（4,213 行）と `release-notes-fixture/` の 5。大きいもの: `package.ps1` 754・`encoding-check.ps1` 539・`sample-fetch.ps1` 366・`load-flake.ps1` 357。1,000 行の近くは無い。
+- **規模**: 指摘の数で決まる（20 を越える見込みは低い）。
+- **先に要るもの**: 無し（すぐ着手できる）。
+- **ほかの spec と重なるファイル**: 無し。見込みの C21〜C23 とほかの v0.2.0 の先頭は `tools/` を書き換えない。
+- **同じウェーブで気をつけること**（前の棚卸のまま）: `runtime-crate-split` が `runtime` を `areka-runtime` へ移すと、`load-flake.ps1` の選び肢（52・69・209〜211 行目の `areka-bin`・`wintf-lib`・`areka-placement-lib`）では `runtime` のテストを回せず、47 行目の例の `-Filter runtime::frame` も古くなる。同 spec は `tools/` に触らない約束なので、同 spec が先に着地したらこの spec が選び肢を足し、この spec が先なら同 spec の完了のときに申し送りとして拾う。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（台本の中の直しで、新しい境目は作らない）。
+- **分割の案**: 無し。
