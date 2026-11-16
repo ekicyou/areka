@@ -10,3 +10,13 @@ ID2D1Device
 ID2D1DeviceContext
 IDXGIDevice
 IDXGISurface
+// 8.3 で移した: 装置の作り方の定数・描く文脈の基（q4 と q7）・DirectWrite の工場と文字の配置（q6 と q7）
+D3D_DRIVER_TYPE_HARDWARE
+D3D11_CREATE_DEVICE_BGRA_SUPPORT
+D3D11_SDK_VERSION
+ID2D1RenderTarget
+IDWriteTextLayout
+DWriteCreateFactory
+IDWriteFactory
+DWRITE_FACTORY_TYPE_SHARED
+DWRITE_FONT_STRETCH_NORMAL

@@ -1,12 +1,7 @@
 // q6-renderer: 下線の位置を集める描き手（6.2）。1 行 1 つの名指し（// の注は数えない）。
-DWriteCreateFactory
-IDWriteFactory
 IDWriteTextFormat
-IDWriteTextLayout
 IDWriteTextRenderer1
 IDWriteTextRenderer
 IDWritePixelSnapping
-DWRITE_FACTORY_TYPE_SHARED
 DWRITE_FONT_WEIGHT_NORMAL
 DWRITE_FONT_STYLE_NORMAL
-DWRITE_FONT_STRETCH_NORMAL

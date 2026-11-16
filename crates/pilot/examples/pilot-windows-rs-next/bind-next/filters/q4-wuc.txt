@@ -41,12 +41,8 @@ SRCCOPY
 BI_RGB
 DIB_RGB_COLORS
 GetDesktopWindow
-// q4-demo（7.2）: 装置の作り方の定数・塗り（Clear は基の ID2D1RenderTarget）・窓の形と見せ方・メッセージの回し
-D3D_DRIVER_TYPE_HARDWARE
-D3D11_CREATE_DEVICE_BGRA_SUPPORT
-D3D11_SDK_VERSION
+// q4-demo（7.2）: 窓の形と見せ方・メッセージの回し（装置の作り方の定数と ID2D1RenderTarget は問い 7 も使うので 8.3 で common へ移した）
 D2D1_FACTORY_TYPE_SINGLE_THREADED
-ID2D1RenderTarget
 SetWindowLongPtrW
 SetWindowPos
 GWL_STYLE
