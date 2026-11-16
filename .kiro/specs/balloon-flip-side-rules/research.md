@@ -247,6 +247,7 @@ SSP 2.9.34（20261113-4）を `C:\wintools\ssp\ssp.exe` で起こし、MCP の `
 
 - 測り ⑴（並べ替えた先が相方の窓に重なるときの SSP の扱い）と測り R2（`windowposition.x` のあるバルーンを並べ替えたときの位置）は、**`\![move]` でもドラッグでも SSP が並べ替えをしないので測れなかった**。
 - SSP 2.9.34 は、キャラ窓が作業領域に収まりバルーンだけが横にはみ出す形（はみ出しは 63px と 103px）で、バルーンを並べ替えも押し込みもしなかった。はみ出しの大きい形（バルーンの大半が外へ出る形）と、起動の直後・面の切り替えの場面は測っていない。9.1 のとおり、10-30 の「SSP は並べ替える」という読みは、既定の側と見分けられていない疑いがある。
+- この測りは要件 2・3.8 の決めごとを覆していない（SSP が並べ替えも押し込みもしないので、比べる SSP の扱いが無い）。
 
 ## 10. 設計の段の調べ（2026-11-16・`/kiro-spec-design -y`）
 
@@ -288,7 +289,11 @@ SSP 2.9.34（20261113-4）を `C:\wintools\ssp\ssp.exe` で起こし、MCP の `
 ### 10.5 要件 3.7 の数えの残り
 
 - 2.6 節の表のとおり、右に固定で descript の横のずらしが 0 でない同梱の検体は 0 本。変わるのは `none` の emily4・claudia・konnoyayame が右に決まった場面だけで、emo2（descript の横のずらし無し）は 1 ピクセルも変わらない。
-- 配布版のぱすたの kero の `balloon.alignment`・`balloon.offsetx`（R4・リポジトリの外）は、実装のタスクで読んで（写すなら `target\` の下）この節に書き足す。brief と完了 spec 4.4 の記録では kero は左に置かれ、ずらしは 0 なので、変わらない見込み。
+- 配布版のぱすたを読んだ（読むだけ・写しは作っていない）。読んだ先は `C:\home\maz\git\ghost_dev\release\pasta-in-windows\pasta-in-windows\shell\master\descript.txt`（ghost_dev の `4edf406`・2026-11-16 時点・ファイルの更新日は 2026-11-03）。`project\pasta-in-windows\dist` 側の ghost の descript にも `balloon.alignment`・`balloon.offsetx` の行は無い。
+  - `sakura.balloon.alignment,left`（14 行目）・`sakura.balloon.offsetx,476`（22 行目）・`sakura.balloon.offsety,58`（23 行目）。
+  - kero は `kero.` で始まる行も `char1.` で始まる行も 1 本も無い（`balloon.alignment`・`balloon.offsetx` とも書いていない）。kero は areka の既定（左・ずらし 0）になる。
+  - 配布版の `ghost\master\descript.txt`（`C:\home\maz\git\ghost_dev\release\pasta-in-windows\pasta-in-windows\ghost\master\descript.txt`）にも kero の `balloon.*` の行は無い（kero の行は `kero.name,窓` だけ）。最新の `pasta-in-windows.nar`（2026-11-15）の中の shell の descript.txt も同じ（md5 が一致）。
+  - 結論（要件 3.7 の数え）: 右に出すバルーンで横のずらしが 0 でないものは **0 本**。sakura は左（`offsetx,476`）で件 2 に当たらず、kero は書かれていないので右でもなく、ずらしも無い。brief と完了 spec 4.4 の記録のとおりで、配布版のぱすたの位置は変わらない。
 
 ## 11. 設計の話し合いの決めごとの根拠（2026-11-16）
 
