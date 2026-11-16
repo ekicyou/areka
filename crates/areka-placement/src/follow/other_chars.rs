@@ -32,12 +32,21 @@ pub(super) fn shown_char_rects(world: &World) -> Vec<(usize, RectPx)> {
         .collect()
 }
 
+/// 箱の文字の面の名前（`areka-emo-text` の `surface_window_child.rs` が付ける）。
+const TEXT_BOX_SURFACE_NAME: &str = "emo-text-box-surface";
+
 /// キャラ窓の子の描画面のどれかが可視か（子が無い・全部不可視なら偽）。
+///
+/// 箱の文字の面は数えない。`Visual::default()`（可視）のまま付き、`\s[-1]` の後も次の箱の同期まで
+/// 残るので、数えると隠した直後の 1 フレームのあいだ隠れた窓が「表示している」に倒れる。
 fn is_shown(world: &World, window: Entity) -> bool {
     world.get::<Children>(window).is_some_and(|children| {
-        children
-            .iter()
-            .any(|c| world.get::<Visual>(c).is_some_and(|v| v.is_visible))
+        children.iter().any(|c| {
+            world
+                .get::<Name>(c)
+                .is_none_or(|n| n.as_str() != TEXT_BOX_SURFACE_NAME)
+                && world.get::<Visual>(c).is_some_and(|v| v.is_visible)
+        })
     })
 }
 

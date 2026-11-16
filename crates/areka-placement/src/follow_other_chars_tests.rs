@@ -90,6 +90,20 @@ fn window_without_surface_children_is_excluded() {
 }
 
 #[test]
+fn text_box_surface_alone_does_not_count_as_shown() {
+    // `\s[-1]` で装着の面を隠した直後、箱の文字の面（可視のまま）だけが残っている窓は数えない。
+    let (mut world, chars) = spawn_scopes(&[(0, 1301), (1, 500)]);
+    attach_surface(&mut world, chars[0], true);
+    attach_surface(&mut world, chars[1], false);
+    world.spawn((
+        Name::new("emo-text-box-surface"),
+        Visual::default(),
+        ChildOf(chars[1]),
+    ));
+    assert_eq!(shown_char_rects(&world), vec![(0, char_rect_at(1301))]);
+}
+
+#[test]
 fn window_with_undetermined_size_is_excluded() {
     let (mut world, chars) = spawn_scopes(&[(0, 1301), (1, 500)]);
     attach_surface(&mut world, chars[0], true);
