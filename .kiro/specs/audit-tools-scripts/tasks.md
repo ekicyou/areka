@@ -1,0 +1,226 @@
+# 実装計画
+
+指摘の番号（1〜19）と件 1・件 2 は `research.md` の 5 節と `design.md` の「直し方の一覧」の番号。検査の名前（T1＝既にある `-SelfTest`・較正へ足す・T2＝新しく持たせる `-SelfTest`・T3＝`exe-install.selftest.ps1`）は `design.md` の Testing Strategy の名前。タスクの並びは `design.md` の「実装の順とタスクの束ね方」の束 1〜11 に従う（束 2〜9 は束 1 の後なら触るファイルが重ならない）。
+
+どのタスクにも効く決まり:
+- 足した検査は、同じタスクの中でその道具の自分の検査（`-SelfTest`・較正）から回して緑にしてから終える。決定論で、ネット・昇格・画面の操作・静かな机・本物の置き場・コミット済みの資源の書き替えに頼らず、書くのはワークツリーの `target\` の下だけ（終わったら消す）。
+- 回さない操作（要件 8.1）: リリースの workflow の起動とタグの push・crates.io への公開・GitHub Release の作成・`impl-watch-install.ps1`／`mcp-bridge-install.ps1` の本番の走り（`AREKA_IMPL_WATCH_HOME`・`AREKA_MCP_HOME` への設置）・`load-flake.ps1` の本番の走り・`package.ps1` の本番の走り（`-Check` の有無を問わない。回すのは `-SelfTest` と、その中の T2 `ascii exit message` が子で起こすビルドの前で止まる走りだけ）・`mouse-input.ps1` の画面の操作・`crates/areka/icon/`・`crates/areka/cursor/` を書き替える本番の走り。効き目がこれらでしか確かめられない直しは、決定論の検査で筋まで縛り、11.4 の記録に番号ごとに書く（要件 8.3）。
+- 触らない: `Cargo.lock`・`Cargo.toml` の全部・`crates/` の全部・`crates/areka/src/runtime/`・`crates/areka-runtime/`・`doc/COMPAT_ARCHITECTURE.md`・`vendors/`（読むだけ）・C21 のほかの 4 本の触るファイル・`tools/perf/` の 3 本（`perf-loop.ps1`・`perf-loop.common.ps1`・`perf-loop.selftest2.ps1`）のほかと、その中の直しに要らない行・`tools/perf/invoke-cpu-sample.ps1`。`tech.md`・`structure.md` は `runtime-crate-split` と申し合わせた行だけ（`design.md` の「C21 の約束の確かめ」）。
+- 依存を足さない（モジュール・パッケージ・外の道具を含む）。どのファイルも 1,000 行の番人の下（見立ては `design.md` の File Structure Plan）。道具が端末へ出す文は ASCII だけ。
+- コミットは進行役の作法どおりにブランチへ。push・PR・マージはしない。
+
+- [ ] 1. 土台: 共通の下回りと写しの寄せ（束 1・14・17・18）
+- [ ] 1.1 道具の下回りを 1 本の読み込み用のファイルにまとめる
+  - 字を ASCII へ直す関数（`\uXXXX`・長さで切る・既定 80）・areka の版の読み（`cargo metadata` を子の出力の読み方で読み、包みがちょうど 1 つで版の形に合えば返し、合わなければ設計の 4 つの ASCII の文で投げる）・`link.exe` を持つが `cl.exe` を持たないフォルダを `PATH` から外す関数・受け付ける版の形の定数 1 つを置く
+  - 子の出力の読み方の台本だけを読み込み、`param` を持たず、関数と定数のほかに副作用を持たない（端末へ出さない・場所も環境も変えない・端末の文字コードを読みも書きもしない）。`Set-StrictMode -Version Latest` の下で読み込んでも落ちない
+  - 版の読みの関数はリポジトリの根を読み込んだファイルの場所から決め、呼ぶ側の今の場所に頼らない
+  - 終わった姿: 新しいファイルが在り、`Set-StrictMode -Version Latest` の pwsh で読み込むと何も出さずに 3 つの関数と定数が使え、この机で版の読みが今の areka の版を返す
+  - _Dispatch: mechanical — 設計が関数の形と投げる文を与え、今ある写しを 1 か所へ移す_
+  - _Requirements: 3.1, 6.2, 6.4, 6.5, 6.6_
+- [ ] 1.2 各道具の写しを消して共通の下回りへ寄せる
+  - 消す前に、消す名前（ASCII へ直す 4 つの関数・行の中の `?` への置き替え 4 つ・`package.ps1` の版の形の定数・`link.exe` の手当ての写し 3 つ）をツリー全体（`vendors/` と `.kiro/specs/completed/` を除く）で grep し、範囲の外の参照が `roadmap-overview.ps1` の自分の関数（別物・残す）だけであることと件数を控える
+  - 子の出力の読み方を直に読み込んでいた道具（`package.ps1`・`crates-io.ps1`・`encoding-check.ps1`・`release-notes.ps1`・`sample-fetch.ps1` ほか）は共通の下回りを読み込む形にする。今は読み込んでいない 5 本（`mouse-input.ps1`＝後で足す `-SelfTest` の分かれ道と Win32 の型の読み込みより前に読み込む・`load-flake.ps1`・`app-icon.ps1`・`cursor-art.ps1`・`test-all.ps1`）は共通の下回りを新しく読み込む。机へ置く道具 2 本（`impl-watch-install.ps1`・`mcp-bridge-install.ps1`）はここでは触らない（4.2 で共通の手順へ載せ替える）
+  - ASCII へ直す所は全部 `Show-Ascii … 0` に替える。`encoding-check.ps1` でここで行うのは自分の `Show-Ascii` を消して共通の下回りを読み込むことだけで、既にある呼び出しは既定 80 のまま（出す行を変えない）。`encoding-check.ps1` の自分の版の読みと版の形は 2.2 で寄せる（18）
+  - 全体テスト・配布物・crates.io の道具の `PATH` の手当てを共通の関数 1 つの呼び出しにし、配布物の道具の版の読みと版の形を共通のものへ替える（失敗は今の終了コード 3 で `cannot read the version (<文>)`）（14・17）
+  - 規則 E の表（`encoding-check.ps1` の `$RequiredCalls`）を同じ変更で改める: `tools/package.ps1` は `nar-sample-path` だけにし、`tools/tool-common.ps1` の `metadata` を足す（`release.yml` の行は 2.2 で消す）
+  - 消した後に同じ grep で、ASCII へ直す関数の定義が共通の下回りの 1 件だけになったことを確かめる
+  - 終わった姿: `rg -n "function (Show-Ascii|ConvertTo-AsciiText|ConvertTo-Ascii)" tools/*.ps1` が共通の下回りの 1 件だけで、`pwsh -NoProfile -File tools/encoding-check.ps1` が緑、`release-notes`・`sample-fetch`・`sync-i686-helper`・`app-icon`・`cursor-art` の `-SelfTest` と `crates-io.ps1`（包むだけ＝全体テストの段の形）が今と同じく緑、`mouse-input.ps1`・`load-flake.ps1`・`test-all.ps1`・`package.ps1` は構文木の読み（`Parser.ParseFile` の誤り 0 件）だけで確かめ、本番の走りは回さない
+  - _Dispatch: mechanical — 写しを消して共通の同じ名前へ置き替える_
+  - _Requirements: 3.1, 3.2, 3.3, 4.7, 6.4, 6.5_
+
+- [ ] 2. 文字コードの判定とリリースの版の検査（束 2・4・14・件 2）
+- [ ] 2.1 `encoding check` の子の確かめを 1 つずつ名前つきで包み、思わぬ失敗を名指しで出す
+  - 932 の子の中の確かめ（`own console`・`calibration`・`production`・`real`・`perf load`・`perf calibration`・`perf real`・`perf console`）を名前つきの包みで回し、投げたら `FAIL cp932 child: <名前>: uncaught: <ASCII の理由>` を溜めて残りを続ける。`perf load` が落ちたら後の 3 つの `perf` の確かめは回さず 1 行だけ残す。読み込みと 3 つの確かめは今と同じ 1 つの scope の中に置き、`StrictMode 3.0` を外へ漏らさない（4）
+  - 孫が 0 でなく終わった確かめには孫の標準エラーの最後の行を、子が 0 でなく `FAIL` の行が無いときは子の標準エラーの最後の行を添える。端末の文字コードは親でも子でも新しく替えない
+  - 内部の引数 `-FailCheck <名前>` を足す（`-Cp932Child` と一緒のときだけ意味を持ち、手で回したときの断り方は今の内部の引数と同じ 1 行と終了コード 1）。親は 3 節の子の確かめの後に `-FailCheck 'perf load'` の子をもう 1 本起こし、較正 `cp932 child injected failure` で 4 つ（0 でない終了コード・名前と `\u7248` を含む `FAIL` の行・`PASS cp932 child: production` の行・`version=` の行）がそろうかを判定する（件 2）
+  - 段の名前・`PASS`／`FAIL` の行の形・端末を替えない約束は変えない
+  - 終わった姿: `pwsh -NoProfile -File tools/encoding-check.ps1` が緑で `PASS cp932 child injected failure` を出し、包みを外した写しでは同じ較正が `FAIL cp932 child injected failure: <欠けた物>` で赤になる
+  - _Dispatch: standard — 子の確かめの包みとわざと落とす較正の筋を書き起こす_
+  - _Requirements: 3.1, 3.4, 4.1, 4.3, 4.7, 5.5, 6.2, 6.4_
+- [ ] 2.2 版の読みを共通の関数へ寄せ、規則 E の表とリリースの workflow の版の検査を直す
+  - 消す前に `rg -n "Read-ArekaVersion|VersionPattern" --glob '!vendors/**' --glob '!.kiro/specs/completed/**'` で使う所を数え、消した後の数と並べて残す（3.3）
+  - `encoding-check.ps1` の自分の版の読みと版の形を消して共通の関数を使い、932 の子の確かめ `real` と親の `version=` の突き合わせがその関数を通るようにする（失敗は `FAIL cp932 child: real: <文>`）（14）
+  - 規則 E の表から `release.yml` の行を消す（ほかの行は 1.2 で設計の「規則 E の表」に改め済み）
+  - `release.yml` の段「版の検査」の版の読み（54〜73 行）を、共通の下回りの読み込みと版の読みの 1 呼び出し（失敗は `cannot read the version (<文>)` で 1）に替え、タグとの突き合わせと `version=` の書き出しは今のまま残す。workflow は起動しない（次のリリースで確かめる＝11.4 の記録）
+  - 終わった姿: `encoding-check.ps1` が緑（規則 A〜E が `release.yml` と新しいファイルを含めて通る）で、`rg -n "Read-ArekaVersion|VersionPattern|VERSION_PATTERN" tools .github` が共通の定数のほかに定義を返さない
+  - _Dispatch: mechanical — 設計が呼び出しの形と表を与える_
+  - _Requirements: 3.1, 3.2, 3.3, 7.8_
+
+- [ ] 3. リリースノートの spec 名の見分け（束 3・1）
+- [ ] 3.1 製品の変更と見どころの `spec-name` を、spec のフォルダの名前の一覧で見分ける
+  - `.kiro/specs/` の直下（`completed` を除く）と `.kiro/specs/completed/` の直下のフォルダの名前から旧い頭 `areka-P0-` を外した名前を、重ねずに順序つきで返す一覧の関数を足し、較正値の説明（旧い頭の意味・spec のフォルダの置き場 2 つ）を改める
+  - 題名のスコープから旧い頭を外した名前が一覧に在れば製品の変更とする（大文字と小文字を区別する）。見どころの `spec-name` は、旧い頭が現れるか、一覧の名前が前後を英数字・`-`・`_` でない字に挟まれて現れる行を落とし、説明の文は名前を印字しない `the line contains a spec name`
+  - `-Check`・`-Notes`・`-Body` と、自分の検査の本物の見どころの判定は本物の一覧を使う。本物の一覧が 0 件なら、どの口でも `FAIL specs: no spec folders under .kiro/specs` で 1
+  - 終わった姿: `pwsh -NoProfile -File tools/release-notes.ps1 -Check` が `doc/release-notes/` の実物を通し、spec のフォルダの無い写しの根では `FAIL specs: …` の行と終了コード 1 で終わる
+  - _Dispatch: standard — 一覧の作り方と名前の境の見分けを書き起こす_
+  - _Requirements: 3.1, 6.2_
+- [ ] 3.2 見本と自分の検査と手順書を、新しい見分けに合わせて改める
+  - 見本に spec 名の一覧のファイルを足し、題名の見本に接頭辞なしの spec 名の `feat`・`fix` と、旧名 `areka-P0-<名>` で書かれて後に `<名>` のフォルダになった題名を足し、期待のリリースノート 2 本をそれに合わせる。見本の一覧は整形の見本と壊した見本の判定にだけ使う
+  - 自分の検査: `notes of the fixture subjects equal the expected notes`（改めた見本）・`highlights broken fixture fails with spec-name`（一覧の名前を足した文と `areka-P0-` を足した文の 2 通りが `spec-name` だけで落ち、名前の一部だけの語は落ちない）・`spec names cover active and completed`（本物の根で `audit-tools-scripts` と completed の旧名の 1 つを含む）
+  - `doc/release-notes/README.md` の 104 行・144 行の spec 名の説明を「`.kiro/specs/` と `.kiro/specs/completed/` のフォルダの名前（旧名の `areka-P0-` で始まるものを含む）」へ直す
+  - 終わった姿: `pwsh -NoProfile -File tools/release-notes.ps1 -SelfTest` が緑で、旧い見分け（頭が `areka-P0-` のときだけ製品）に戻した写しでは改めた見本の判定が落ちる
+  - _Dispatch: mechanical — 期待の値と文を設計が与える見本と検査と文書_
+  - _Requirements: 3.2, 4.1, 4.3, 4.7, 7.8_
+
+- [ ] 4. 机へ置く道具の手順（束 4・2・3・10・13）
+- [ ] 4.1 机へ置く手順の共通の読み込み用のファイルを作り、置き換える前に新しい exe を確かめる
+  - 共通の下回りだけを読み込み、`param` を持たない。環境変数の値を出さず設定しない。触るのは置き場の `<名前>.exe`・`<名前>.new.exe`・`<名前>.old*.exe` だけ
+  - 置き場の環境変数の確かめ（設定なし・絶対パスでない＝値を出さない `FAIL home` の行）・release のビルド（`FAIL build` の 2 つの文）・写す → 確かめる → 置き換える → 掃除（設計の行と順の表どおり）・状態の確かめの判断の純関数（`none`／`clear`／`fail`）を置く
+  - 確かめは置き換える前に `.new.exe` で行い、落ちたら `.new.exe` を消して今の exe と古い写しに触らない。確かめが投げたら `FAIL check: cannot start: <ASCII の理由>`。2 つ目の改名で落ちたら古いものを元へ戻して `.new.exe` を消してみる（戻せなければ `; restore failed`）。確かめが時間切れで子を止めたときは終わるのを待ってから返し、`.new.exe` を消せなければ `FAIL cleanup: …` を足して 1（2）
+  - 古い写しの掃除は置き換えた後だけ（握られていれば `KEEP … (in use; run again later)`）
+  - 終わった姿: 新しいファイルを `Set-StrictMode -Version Latest` の pwsh で読み込むと何も出さずに 4 つの関数が使え、`target\` の下の手の置き場で 1 回呼ぶと設計の表の「通った」の行がその順で出る
+  - _Dispatch: standard — 置き換えの順と戻しの道を設計の表から書き起こす_
+  - _Requirements: 3.1, 6.2, 6.3, 6.5_
+- [ ] 4.2 机へ置く道具 2 本を共通の手順に載せ替え、状態の確かめの失敗を出し、手順書を同じ変更で直す
+  - `impl-watch-install.ps1` は共通の手順だけを読み込み、名前・環境変数の名前・確かめ（`--help` が 0 なら `OK check: --help exit 0`、でなければ `FAIL check: --help exit <n>`）を渡すだけにする。置いた exe で `status` を呼び、判断が `clear` なら今の `clear` の道、`fail` なら標準エラーの最後の行（ASCII）と `FAIL status: exit <n>` で 1（3・13）
+  - `mcp-bridge-install.ps1` は今の「標準入力を閉じて 15 秒」の確かめをそのまま渡す（13）
+  - `doc/impl-watch.md` の 2 節（成功の行の例の順・`FAIL check` の意味・`FAIL check: cannot start: …` と `FAIL status: exit <n>` の行）と 3 節（出る行の例の順と「確かめが通ってから置き換え、通らなければ前のものに触らない」の 1 文）を直す。呼ぶ形だけを書くスキル（`kiro-impl`・`kiro-watch-clear`・`release`）は確かめるだけで触らない
+  - 本番の走り（本物の置き場への設置）は回さない。筋は 4.3 の T3 で縛り、効き目は次の設置で確かめる（11.4 の記録）
+  - 終わった姿: 2 本の中に手 1〜6 の写しが 0 件で、2 本を構文木で読むと共通の手順だけを読み込んでおり、`encoding-check.ps1` が緑、`doc/impl-watch.md` の行の例が共通の手順の出す行と一字ずつ同じ
+  - _Dispatch: standard — 2 本の載せ替えと状態の確かめの新しい枝_
+  - _Requirements: 3.1, 3.2, 3.3, 6.2, 7.8_
+- [ ] 4.3 机へ置く手順の自分の検査の台本を作る
+  - 共通の手順を読み込み、`target\exe-install-selftest\<pid>\` の下に偽の置き場を作る。偽の作った exe は中身を決めた小さなファイル、偽の確かめは中身を読んで合否を決める（本物の exe も cargo も起こさない）。握った取っ手と置き場は `finally` で必ず放して消す
+  - 検査: `home checks`・`first place`・`good check places and sweeps`・`bad check keeps the current exe`・`check throws`・`rename fails and restores`・`keep in use`・`copy fails`・`status action`（何を見るかは設計の T3 の表）
+  - 判定ごとに `ok selftest <名前>` か `FAIL selftest <名前>: <ASCII>` を出し、全部通れば 0・1 つでも落ちれば 1
+  - 終わった姿: `pwsh -NoProfile -File tools/exe-install.selftest.ps1` が 9 本とも `ok` で 0 を返し、確かめを置き換えの後へ戻した写しでは `bad check keeps the current exe` が落ち、走った後に `target\exe-install-selftest\` の下に残り物が無い
+  - _Dispatch: standard — 取っ手を握って改名と掃除の失敗の道を作る偽の置き場_
+  - _Requirements: 4.1, 4.3, 4.4, 4.5, 6.3_
+
+- [ ] 5. 配布物の道具（束 5・5・9・15 の半分・19）
+- [ ] 5.1 判定の関数の定義を前へ集め、段の並びを `try`/`finally` で包んで後始末の口を 1 か所にする
+  - 先に、段の間に散っている判定の関数と子の読みの定義を最初の段の前へ移す（中身と `$script:` の値の読み方は変えない）。この純粋な移しを 1 つのコミットにし、後の直しと分けてレビューで見分けられるようにする
+  - 段を並べる本体を `try { … } finally { Invoke-Cleanup $script:ExitCode }` で包み、`PATH` の手当てを `try` の中へ置く。`Exit-Script` は終了コードを控え、理由を `Show-Ascii $Message 0` にして出し、`exit` するだけにする（後始末を呼ばない）（5・15）
+  - 後始末は 2 度呼んでも害が無い形にする（消したものを並びから外す・子を握りから外す）
+  - 本番の走りは回さない。筋は 5.3 の T2 で縛り、効き目は手で止めたときに確かめる（11.4 の記録）
+  - 終わった姿: 移しのコミットと直しのコミットが分かれており、`package.ps1` を構文木で読むと関数の外の `Step` の呼び出しが全部 1 つの `try` の中に在り、`encoding-check.ps1` が緑
+  - _Dispatch: standard — 本体の組み替えと二度呼べる後始末_
+  - _Requirements: 3.1, 6.2, 6.3, 6.5_
+- [ ] 5.2 引数の確かめを純関数にし、`-Check` の無い 3 つの引数で止め、`-SelfTest` の口を足す
+  - 引数の確かめを純関数 `Test-PackageArgs` にし、preflight の最初に呼ぶ。順と文は設計どおり（今の 5 つの文はそのまま・`-KeepExpanded`・`-SmokeExitMs`・`-CheckDir` のどれかが `-Check` なしなら組み立ての前に終了コード 3 で `-KeepExpanded, -SmokeExitMs and -CheckDir need -Check (got: <名前>)`）（19）
+  - 展開先の長さの確かめは preflight に残し、条件を `-Check` だけにする
+  - `-SelfTest` を足す: 関数の定義の後・`PATH` の手当てと段の前で分かれ、ほかの引数を添えたら終了コード 3（`-SelfTest takes no other parameter`）、そうでなければ自分の検査の台本を読み込んで回す（9）。頭書に `-SelfTest` と 19 の止まり方を書く
+  - 終わった姿: `pwsh -NoProfile -File tools/package.ps1 -SelfTest -Arch x64` が `-SelfTest takes no other parameter` と終了コード 3 で、ビルドも子も起こさずに終わる
+  - _Dispatch: standard — 引数の道を純関数へ出し新しい入口を足す_
+  - _Requirements: 3.1, 3.4, 6.2_
+- [ ] 5.3 配布物の判定の自分の検査の台本を作る
+  - `package.ps1 -SelfTest` から読み込まれ、ビルド・`cargo`・`git`・起動確認を回さない。書くのは `target\package-selftest\<pid>\` の下だけで、終わったら消す
+  - 検査: `run log`・`pe read`（小さな PE32 と PE32+ のバイト列を組む）・`deny list`・`zip content`（小さな zip を組み、説明書 2 本は `vendors/sample_ghost/emo2.nar` を読むだけ）・`args`・`ascii exit message`（子の `package.ps1 -Arch <U+65E5>` が終了コード 3 で ASCII だけの行と `\u65E5` を出し、ビルドの前で止まる）・`cleanup idempotent`・`steps inside try finally`（何を見るかは設計の T2 の表）
+  - 出し方は T3 と同じ（`ok selftest <名前>`／`FAIL selftest <名前>`・0／1）
+  - 終わった姿: `pwsh -NoProfile -File tools/package.ps1 -SelfTest` が 8 本とも `ok` で 0 を返し、`target\package-selftest\` に残り物が無く、`package.ps1` と自分の検査の台本がどちらも 1,000 行の下（見立て約 800・約 260）
+  - _Dispatch: standard — PE と zip の小さな検体をバイトで組む検査_
+  - _Requirements: 4.1, 4.3, 4.4, 4.5, 6.1_
+
+- [ ] 6. 負荷の再現の道具（束 6・7・11）
+- [ ] 6.1 負荷の子を親の終わりに付いていかせ、引数の組み立てを純関数へ出す
+  - 引数の組を `Run`（既定・今の引数のまま・`-Label` は必須）と `SelfTest`（`-SelfTest` だけ・出力のフォルダを作らない）の 2 つにする
+  - cargo の的の選び（今の選び肢のまま）と引数の組み立てを純関数にし、本番の走りはそれを使う
+  - 負荷の子を起こす関数を足す: 子に親の番号を渡し、親が居なければ直ちに 0 で、親が消えたのを見たら自分で終わる。空回しは PowerShell の解釈の繰り返しのまま保ち（`tech.md` の「許す赤」の負荷の性質を変えない）、命令の文字列は較正値の 1 か所に置く。`finally` の番号での止め方と残りの数え方は今のまま（7）
+  - 本番の走りは回さない。効き目は次の負荷の再現で確かめる（11.4 の記録）
+  - 終わった姿: `load-flake.ps1` を構文木で読むと引数の組が 2 つで、本番の道が純関数と負荷の子の関数を通っており、`encoding-check.ps1` が緑
+  - _Dispatch: standard — 親の終わりを見る負荷の子と引数の組の分け_
+  - _Requirements: 3.1, 6.3_
+- [ ] 6.2 負荷の再現の道具に自分の検査を持たせる
+  - 検査: `read round`（`target\load-flake-selftest\<pid>\round-1.log` に作った記録）・`median`・`cargo args`（今の 3 つの的）・`stop tree`（`cmd.exe` と `ping` の 1 木）・`burner ends with its parent`（すぐ終わる偽の親と負荷の子 1 本を約 1 秒だけ起こす＝要件 8.3 の裁定で負荷の再現の走行に数えない・`finally` で両方を止める）（何を見るかは設計の表）
+  - cargo も、検査の 1 本のほかの負荷の子も起こさない。作ったフォルダは終わったら消す
+  - 終わった姿: `pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest` が 5 本とも `ok` で 0 を返し、親を見ない負荷の子に戻した写しでは `burner ends with its parent` が落ち、走った後に負荷の子が 1 本も残っていない
+  - _Dispatch: standard — 子のプロセスを起こして終わりを待つ検査を含む_
+  - _Requirements: 4.1, 4.3, 4.4, 4.5, 8.3_
+
+- [ ] 7. 小さな直し（束 7・6・8・15 の半分・16）
+- [ ] 7.1 (P) 入力の道具で押したボタンの離しを `finally` へ移し、自分の検査で縛る
+  - `switch ($Action)` を包む `try` の `finally` で、押したボタンが在れば離しを送る。`catch` は理由の行を出して `exit 1` するだけにする（6）
+  - `-SelfTest` を足し、引数の確かめと Win32 の型の読み込みの前に分かれる（画面にも入力にも触らない）。検査 `release-in-finally` は自分を構文木で読み、`try` に `finally` が在り、その中に `SendInput` と押したボタンの変数の参照が在り、`catch` に `SendInput` が無いことを確かめる
+  - 本番の画面の操作は回さない。効き目は次の操作で確かめる（11.4 の記録）
+  - 終わった姿: `pwsh -NoProfile -File tools/mouse-input.ps1 -SelfTest` が緑で 0 を返し、離しを `catch` へ戻した写しでは `release-in-finally` が落ちる
+  - _Boundary: mouse-input_
+  - _Depends: 1.2_
+  - _Dispatch: mechanical — 設計が移す先と構文木の判定を与える_
+  - _Requirements: 3.1, 4.1, 6.3, 8.3_
+- [ ] 7.2 (P) 検体の取り寄せの本番の行で、転送の先まで https だけにする
+  - curl の引数の組み立てを純関数にし、https だけのときに `--proto =https --proto-redir =https` を渡す。本番の行の取り寄せではそれを使い、`-AnyScheme` の自分の検査の行では使わない（8）
+  - 自分の検査に `https only refuses a non-https url at curl`（`file:///` の行を本物の `curl.exe` が取り寄せずに落とし、`FAILED could not fetch the checksum file` と `failed` を返す＝ネットを使わない）と `https only passes both proto flags` を足す
+  - 終わった姿: `pwsh -NoProfile -File tools/sample-fetch.ps1 -SelfTest` が緑で、旗を渡さない写しでは 2 つの新しい検査が落ちる
+  - _Boundary: sample-fetch_
+  - _Depends: 1.2_
+  - _Dispatch: standard — 本番と自分の検査で分かれる引数の筋_
+  - _Requirements: 3.1, 4.1, 4.3, 4.4_
+- [ ] 7.3 (P) crates.io の確認の道具の失敗の行を ASCII にし、索引の読みに時間の上限を付ける
+  - 失敗の行の組み立てを `Format-FailLine` の 1 か所にして `Show-Ascii … 0` を通す。子の出力をそのまま写す所は書き替えない（15）
+  - 全部の `Invoke-WebRequest` に `-TimeoutSec 60` を付ける（16）
+  - 較正に `fail line is ascii`（`<U+65E5>` が ASCII だけで `\u65E5` を含む）と `index read has a timeout`（構文木で全部の呼び出しが `-TimeoutSec` を持つ）を足す
+  - 公開と `-Verify`・`-Pending` は回さない（引数なしの包むだけの形は全体テストの段として回してよい）
+  - 終わった姿: `pwsh -NoProfile -File tools/crates-io.ps1` の較正が 2 つの新しい判定を含めて緑で、`-TimeoutSec` を外した写しでは `index read has a timeout` が落ちる
+  - _Boundary: crates-io_
+  - _Depends: 1.2_
+  - _Dispatch: mechanical — 設計が 1 か所の関数と旗と判定を与える_
+  - _Requirements: 3.1, 4.1, 6.5_
+
+- [ ] 8. (P) 絵の道具 2 本に「コミット済みの出力が今の入力から組んだものと同じ」の判定を足す（束 8・12）
+  - 最初に、`app-icon.ps1 -SelfTest` と `cursor-art.ps1 -SelfTest` が `target\` の下に組んだ `app.ico`・`tray.ico`・`icons.res`・`hand.cur`・`grip.cur` を、コミット済みのものとバイトで比べ直し、結果を検証の記録 `.kiro/specs/audit-tools-scripts/verification.md` に書く（11.4 が集める）。1 つでも違えば判定を足さずに止め、設計の議題として進行役へ返す（作り直しは要件 8.1 の操作なので回さない）
+  - 同じなら、両方の `-SelfTest` に、`same bytes twice` で組んだ結果とコミット済みの出力をバイトで比べる判定 `committed outputs are current` を足す（組む回数は増やさない）。落ちたら設計の 1 行（違うファイルと「回して commit」）を出す
+  - コミット済みの `crates/areka/icon/`・`crates/areka/cursor/` は書き替えない
+  - 判定が落ちることの確かめは、新しい引数を足さず、道具の台本を `target\` の下へ写して比べる先の 1 ファイルを 1 バイト違えた写しに向けた一時の写しで回す（写しは確かめた後に消す）
+  - 終わった姿: 比べ直しの結果が `verification.md` に在り、`pwsh -NoProfile -File tools/app-icon.ps1 -SelfTest` と `tools/cursor-art.ps1 -SelfTest` が `committed outputs are current` を含めて緑、上の一時の写しでは落ちる
+  - _Boundary: app-icon, cursor-art_
+  - _Depends: 1.2_
+  - _Dispatch: mechanical — 既にある組んだ結果とコミット済みのものをバイトで比べる判定_
+  - _Requirements: 4.1, 4.4, 4.7, 8.1_
+
+- [ ] 9. (P) 性能改善ループの道具の `selftest` で Python の版を名指しする（束 9・件 1 の 5.4・範囲の外）
+  - `tools/perf/perf-loop.common.ps1` に Python の版の判断の純関数を足し、`preflight` の版の判断をそれに替える（出す文は今と同じ）
+  - `tools/perf/perf-loop.ps1` の `selftest` は Python を見つけた後に版を読み、足りなければ `selftest python NG code=-1 | python <版> (need 3.11 or later)` の 1 行で赤にする（今の「見つからない」の道と同じ返し方）
+  - `tools/perf/perf-loop.selftest2.ps1` に検査 `python-verdict`（見つからない・読めない・3.10.4・3.11.0・3.13.17 の 5 通り）を足す
+  - 3 本の中の直しに要らない行と、`invoke-cpu-sample.ps1`（`-SkipCapture` の形と `probe-skip-capture`）には触らない＝昇格した机でも本物の採取をしない形を崩さない
+  - 終わった姿: `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest` がこの机（昇格していない・Python 3.13.17）で xperf も画面もネットも使わずに緑で、`python-verdict` を含み、`pwsh -NoProfile -File tools/encoding-check.ps1` も緑（`perf-loop.common.ps1` は規則の対象で、932 の子が読み込む）、`perf-loop.selftest2.ps1` が 1,000 行の下（見立て約 865）
+  - _Boundary: perf-loop common, perf-loop selftest_
+  - _Dispatch: mechanical — 設計が純関数の形と 5 通りの期待を与える_
+  - _Requirements: 5.2, 5.3, 5.4, 6.1, 7.2_
+
+- [ ] 10. 全体テストの段と読み手の文書（束 10・件 1・6・9〜12）
+- [ ] 10.1 全体テストに新しい 7 段を足す
+  - `sample fetch check` の後・`-License` の段の前に、`package check`・`exe install check`・`load flake check`・`mouse input check`・`app icon check`・`cursor art check`・`perf loop selftest`（最後＝いちばん長い）の 7 段を、どれも取り寄せが赤でも回す段として足す。`perf loop selftest` の中身は `pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest`
+  - 頭書の段の一覧を同じ並びに改める。結果の一覧の行（`OK  `／`FAIL`／`SKIP  `・`==== results (commit …)`・`all steps green`・`red: N step(s)`）と終了コードは変えない
+  - 全体テストそのものはここでは回さない（11.3 で 1 回）。足した 7 段の中身の命令を 1 つずつ回して緑を確かめる
+  - 終わった姿: `test-all.ps1` を構文木で読むと設計の並びどおりに 7 段が在り、7 段の命令がそれぞれ単独で 0 を返す
+  - _Depends: 4.3, 5.3, 6.2, 7.1, 8, 9_
+  - _Dispatch: mechanical — 既にある段の並びの形に設計の 7 段を足す_
+  - _Requirements: 4.2, 5.1_
+- [ ] 10.2 新しい段と共通の下回りを前提にする読み手の文書を、申し合わせた行だけ直す
+  - `.claude/skills/kiro-complete/SKILL.md` の 5-2 の段の一覧（今も抜けている `sample fetch`・`sample fetch check` と新しい 7 段を足す）と所要時間の「約 19 分」→「約 21 分」（48・82・436 行）。手順の文そのものは変えない＝pasta への申し送りは要らない（要件 7.9・議題 6）
+  - `.claude/skills/release/procedure.md`・`.claude/skills/update/SKILL.md` の所要時間を「約 21 分」へ
+  - `.kiro/steering/tech.md` の Testing に新しい 7 段を 1 行ずつ（件 1 の段は「Python 3.11 以上・昇格した机でも本物の採取をしない」、`cursor art check` は OS の更新で塗りが変わりうること）、Required Tools に「Python 3.11 以上（全体テストの段 `perf loop selftest`）」。`.kiro/steering/structure.md` の 19 行の `tools/` の説明に新しい 4 本を足す。どちらも `runtime-crate-split` と申し合わせた行の外（`tech.md` 90 行・`structure.md` 171 行・273〜295 行・434〜452 行ほか）には触らない。相手の行に及ぶ直しが出たら触らずに申し送りとして控える（11.4）
+  - 終わった姿: 4 つの文書の段の一覧と所要時間が `test-all.ps1` の段と一致し、`git diff` で `tech.md`・`structure.md` の変わった行が申し合わせた行の外に 1 行も無い
+  - _Dispatch: mechanical — 設計が直す行と文を与える文書の追随_
+  - _Requirements: 3.2, 5.4, 7.1, 7.3, 7.4, 7.8, 7.9_
+
+- [ ] 11. 仕上げの確かめと記録（束 11・要件 9）
+- [ ] 11.1 `runtime-crate-split` の着地を確かめ、負荷の再現の道具の選び肢を決める
+  - `git fetch` の後に `origin/main` に `.kiro/specs/completed/runtime-crate-split` が在るかを確かめる
+  - 在れば、`-Binary` に `areka-runtime-lib`（`-p areka-runtime --lib`）を足し、使い方の例 `-Filter runtime::frame` を新しいクレートの形へ直し、`cargo args` の期待を 4 つに改める（自分の検査は文字列の組み立てだけを見るので決定論のまま）（要件 7.5）
+  - 無ければ選び肢を足さず、`runtime-crate-split` の完了で拾う件として記録に書き、そのセッションへの申し送りの文を控える（同 spec の brief には書き足さない）（要件 7.6）
+  - 終わった姿: 着地の有無と取った道（申し送りの文を含む）が `.kiro/specs/audit-tools-scripts/verification.md` に在り（11.4 が集める）、`pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest` が緑
+  - _Dispatch: mechanical — 着地の有無で設計の 2 つの道のどちらかを取る_
+  - _Requirements: 7.4, 7.5, 7.6_
+- [ ] 11.2 同じ範囲へ audit をかけ直し、新しい指摘を 0 件まで直す
+  - 受け持つ範囲（`tools/` のうち `tools/perf/` の外のもの全部・足した 4 本を含む）へ `/ponytail:ponytail-audit` を、要件 1 と同じ作法でかける: その時点のファイルの数と行数と物差しの版を測り直し、「最大 20 件」を外して全件を出し、全部を読んで「読まなかった所」を残さず、通し番号・組・場所と、外への約束を変えるか・8.1 の操作でしか確かめられないかの旗を付ける
+  - 出た指摘を、直しが生んだ指摘も含めて直し、直したバグと危ない所には壊れたら落ちる決定論の検査を足して全体テストの段から回る形にする。消すものは消す前にツリー全体で使われていないことを確かめる。外への約束を変える指摘や 8.1 の操作でしか確かめられない指摘が出たら、黙って直さず進行役へ返す（要件 7.7・8.3）
+  - 0 件まで繰り返す。5 回目でも 0 件に収まらず、5 回目に「必ず直す」と道具の振る舞いに関わる指摘が 1 件も無ければ、開発者に一言知らせたうえで 5 回目の指摘を直して打ち切る（要件 9.6）
+  - どのファイルも 1,000 行の下であることを確かめる
+  - 終わった姿: 検証の記録（`verification.md`）に、かけ直しの回数・各回の指摘の数と最後の 0 件（または 5 回目で打ち切った旨）・消す前の grep の件数・各ファイルの行数が書かれている
+  - _Dispatch: standard — かけ直しで出る指摘の直しは前もって形が決まらない_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 3.1, 3.3, 4.1, 6.1, 9.1, 9.2, 9.3, 9.6_
+- [ ] 11.3 全体テストを 1 回、裏で回して緑を確かめる
+  - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回だけ裏で回す（約 21 分）。待つあいだに 11.4 の記録を書く。全体テストの机の作法は `/kiro-impl` の進行役の決まりに従う
+  - 赤なら、赤の段の命令だけを短く回し直して直す（全体を何度も回さない）。触っていないクレートだけが赤のときは止めて進行役へ返す
+  - `sample fetch` の取り寄せと `crates.io pre-publish check (package only)` は全体テストの段として回る（要件 8.2）。GPU を使う検査はこの範囲に無い（要件 4.6 は該当なし）
+  - 終わった姿: 結果の一覧が件 1 の段と新しい 7 段を含めて `all steps green` で、検査したコミットと一緒に記録に書かれている
+  - _Dispatch: mechanical — 決まった全体テストを 1 回回して結果を写す_
+  - _Requirements: 4.2, 4.6, 5.1, 5.2, 8.2, 9.4_
+- [ ] 11.4 既定のブランチとの差分で約束を確かめ、記録を書き切る
+  - 既定のブランチとの差分で、要件 7.3 のファイル（`Cargo.lock`・`Cargo.toml` の全部・`crates/` の全部・`crates/areka/src/runtime/`・`crates/areka-runtime/`・`doc/COMPAT_ARCHITECTURE.md`）・`vendors/`・`tools/perf/` の 3 本のほか・`.github/workflows/crates-io.yml` に差分が無いこと、`tech.md`・`structure.md` は申し合わせた行だけであること、外への約束の変わりが設計の「外への約束の変更」の表の分（7.7 の 10 件・件 1・6・18）だけであることを確かめる（要件 9.5）
+  - 検証の記録 `.kiro/specs/audit-tools-scripts/verification.md` に書く（8 の比べ直しの結果・11.1 の着地の道・11.2 のかけ直し・11.3 の全体テストの結果がそろっているかも確かめる）: 9.5 の確かめ・7.1 の申し合わせ（`runtime-crate-split` との `tech.md`・`structure.md` の行の分け方・2026-11-16 の設計の討議で承認）・件 1 と件 2 を brief の件の番号で片づけたこと（要件 5.6）・直さずに残す指摘 0 件と後の spec へ回す指摘 0 件（要件 2.5・2.7・7.10）・依存を足していないこと（要件 6.6）・pasta へ申し送る文が無いこと（要件 7.9）・7.4／7.6 の申し送り（あれば相手と件）
+  - 効き目を次の本当の操作で確かめるものを番号ごとに書く: 1（次のリリースの `-Notes`・`-Check`）・2・3・10・13（次の机への設置）・5（`package.ps1` を手で止めたとき）・6（次の `mouse-input.ps1` の操作）・7・11（次の負荷の再現）・8（次の取り寄せ）・9・17（次の `-Check` とリリースの `-Arch all`・`-Verify`）・14（次のリリースの版の検査の段）・15（次の本物の失敗の行）・16（次の crates.io の公開）。このうち 1・9・14・15・16・17 には「次のリリースで確かめる」と書く（要件 7.7・8.3）
+  - 終わった姿: 検証の記録に上の確かめと記録が全部在り、差分の確かめの命令とその結果（7.3 のファイルの差分 0 件）が写してある
+  - _Dispatch: mechanical — 決まった差分の確かめを回して記録に書く_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 5.6, 6.6, 6.7, 7.1, 7.3, 7.7, 7.9, 7.10, 7.11, 8.1, 8.3, 9.5_
