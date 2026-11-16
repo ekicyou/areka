@@ -241,91 +241,6 @@ function Step([string]$Name, [scriptblock]$Command) {
     Exit-Script $EXIT_STAGE_FAILED "FAIL $Name ($sec s, $reason)"
 }
 
-# =============================================================================
-# 段
-# =============================================================================
-Step 'preflight' {
-    # 引数
-    if ($SmokeExitMsGiven) {
-        $ms = 0
-        if (-not [int]::TryParse($SmokeExitMs, [ref]$ms) -or $ms -le 0) {
-            Exit-Script $EXIT_BAD_ARGS "-SmokeExitMs must be a positive integer (got: '$SmokeExitMs')"
-        }
-        $script:SmokeMs = $ms
-    } else {
-        $script:SmokeMs = $SMOKE_EXIT_MS
-    }
-    $accepted = @($ARCHS.Keys) + 'all'
-    if ($accepted -cnotcontains $Arch) {
-        Exit-Script $EXIT_BAD_ARGS ("-Arch must be one of {0} (got: '{1}')" -f ($accepted -join ', '), $Arch)
-    }
-    $script:BuildArchs = ($Arch -eq 'all') ? @($ARCHS.Keys) : @($Arch)
-    if ($Check -and $script:BuildArchs -cnotcontains 'x64') {
-        Exit-Script $EXIT_BAD_ARGS "-Check needs the x64 zip (combine with -Arch x64 or all; got: '$Arch')"
-    }
-    if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
-        Exit-Script $EXIT_BAD_ARGS "-CheckDir must be an absolute path (got: '$CheckDir')"
-    }
-    # リポジトリの中なら target\ の下だけ（一時フォルダは target\ の下に限る）。外は受け付ける
-    $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
-    if ($CheckDir) {
-        $full = [IO.Path]::GetFullPath($CheckDir).TrimEnd('\') + '\'
-        if ($full.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase) -and
-            -not $full.StartsWith("${repoRoot}target\", [StringComparison]::OrdinalIgnoreCase)) {
-            Exit-Script $EXIT_BAD_ARGS "-CheckDir inside the repository must be under ${repoRoot}target\ (got: '$CheckDir')"
-        }
-    }
-    # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
-    $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR")) }
-    $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))
-    $script:LogDir = "$script:ExpandDir-logs"
-    if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
-        Exit-Script $EXIT_BAD_ARGS ("expand path too long ({0} chars, limit {1}): {2} - pass a shorter -CheckDir (outside the repository or under ${repoRoot}target\) or move the worktree to a shorter path" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
-    }
-
-    # git（コミットは 7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）
-    $script:Commit = git rev-parse --short=7 HEAD 2>$null
-    if ($LASTEXITCODE -or -not $script:Commit) { Exit-Script $EXIT_BAD_ARGS 'git does not run (install git and add it to PATH)' }
-    $script:StatusBefore = @(git status --porcelain)
-    $script:Dirty = $script:StatusBefore.Count
-
-    # 道具
-    $null = cargo about --version 2>&1
-    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo about not found (install with: cargo install cargo-about --version 0.9.2 --locked)' }
-    $null = cargo deny --version 2>&1
-    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo deny not found (install with: cargo install cargo-deny --version 0.20.2 --locked)' }
-    if (-not (Test-Path -LiteralPath 'Cargo.lock')) { Exit-Script $EXIT_BAD_ARGS 'Cargo.lock not found (restore the tracked Cargo.lock from git)' }
-    # arm64 のリンクに要る VS の部品（rustup のターゲットは欠けても後の段で足すので、ここでは見ない）
-    if ($script:BuildArchs -ccontains 'arm64') {
-        # vswhere.exe は PATH に載らないので固定の置き場を先に見る
-        $vswhere = if (Test-Path -LiteralPath $VSWHERE_PATH -PathType Leaf) { $VSWHERE_PATH }
-                   else { Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source }
-        if (-not $vswhere) { Exit-Script $EXIT_BAD_ARGS "vswhere.exe not found (searched: $VSWHERE_PATH and PATH; install Visual Studio or Build Tools)" }
-        $vs = & $vswhere -latest -products '*' -requires $ARM64_VS_COMPONENT -property installationPath 2>$null
-        if ($LASTEXITCODE -or -not $vs) { Exit-Script $EXIT_BAD_ARGS "VS component for arm64 linking not found (add $ARM64_VS_COMPONENT in VS Installer; vswhere: $vswhere)" }
-    }
-
-    # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
-    try { $script:Version = Get-ArekaVersion }
-    catch { Exit-Script $EXIT_BAD_ARGS "cannot read the version ($($_.Exception.Message))" }
-
-    # 前回の同名の組をビルドの前に消す（今回が失敗しても前回の物が完成品に見えて残らない）
-    foreach ($a in $script:BuildArchs) {
-        $n = Get-ArtifactNames $a
-        foreach ($p in @($n.Zip, $n.Sha, $n.ZipTmp, $n.ShaTmp)) {
-            if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; Write-Host "removed previous artifact: $p" }
-        }
-    }
-
-    Write-Host "commit $script:Commit, uncommitted changes $script:Dirty, version $script:Version, arch $($script:BuildArchs -join ', ')"
-}
-
-$I686 = $HELPER_TARGET
-$script:HelperExe = "$OUT_DIR/$I686/release/shiori-host32-helper.exe"
-$script:Notices = "$OUT_DIR/THIRD-PARTY-NOTICES.md"
-# 開発者のシェルの値に継ぎ足さない（-C target-cpu=native 等が混ざると開発機でしか動かない exe になる）
-$script:RustFlags = '-C target-feature=+crt-static'
-
 # PE のバイト列から機種・窓の作り（subsystem）・取り込み表の DLL 名を読む（PE32 と PE32+ の両方）。
 # 読めない形なら throw。遅延読み込みの表は読まない（拒否表の DLL を遅延で読むことは無い前提）。
 function Read-PeInfo([byte[]]$Bytes) {
@@ -363,89 +278,6 @@ function Read-PeInfo([byte[]]$Bytes) {
 # 取り込み表の名前のうち拒否表（前方一致・大文字小文字を区別しない）に当たるもの（呼ぶ側は @() で包む）
 function Get-DeniedImports([string[]]$Imports) {
     $Imports | Where-Object { $n = $_; $DLL_DENY_PREFIXES | Where-Object { $n.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) } }
-}
-
-Step 'add i686 target' { rustup target add $I686 }
-# arm64 のターゲットは作るときだけ足す（-Arch x64 では道具の無い機械でも止まらない）
-if ($script:BuildArchs -ccontains 'arm64') {
-    Step 'add arm64 target' { rustup target add $ARCHS['arm64'].Target }
-}
-
-# RUSTFLAGS を置き換え、CARGO_ENCODED_RUSTFLAGS・CARGO_BUILD_RUSTFLAGS を外す（在ると cargo が RUSTFLAGS を無視する）。
-# 差し替えはビルドの段の間だけ。失敗時は Exit-Script の後始末が戻す。
-Set-EnvTemp 'RUSTFLAGS' $script:RustFlags
-Set-EnvTemp 'CARGO_ENCODED_RUSTFLAGS' $null
-Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
-Step 'build i686 helper' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
-foreach ($a in $script:BuildArchs) {
-    $t = $ARCHS[$a].Target
-    Step "build $a areka" { cargo build --locked --release -p areka -p areka-mcp-bridge --target $t --target-dir $OUT_DIR }
-}
-Restore-Env
-
-Step 'check static linking' {
-    # 作った exe 全部（helper＋作る CPU 種別の本体と中継）と、期待する機械種別
-    $exes = [ordered]@{ $script:HelperExe = $HELPER_MACHINE }
-    foreach ($a in $script:BuildArchs) {
-        foreach ($n in @('areka.exe', 'areka-mcp-bridge.exe')) { $exes["$OUT_DIR/$($ARCHS[$a].Target)/release/$n"] = $ARCHS[$a].Machine }
-    }
-    $bad = $false
-    foreach ($exe in $exes.Keys) {
-        if (-not (Test-Path -LiteralPath $exe)) { throw "build output missing: $exe" }
-        $info = Read-PeInfo ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exe)))
-        $denied = @(Get-DeniedImports $info.Imports)
-        Write-Host ('{0}: machine 0x{1:x4} (expected 0x{2:x4}), imports {3}' -f $exe, $info.Machine, $exes[$exe], ($info.Imports -join ', '))
-        if ($info.Machine -ne $exes[$exe]) { Write-Host '  wrong machine'; $bad = $true }
-        if ($denied.Count) { Write-Host "  matches the deny list: $($denied -join ', ')"; $bad = $true }
-    }
-    if ($bad) { throw 'wrong machine or loads a VC++ runtime DLL (+crt-static not effective)' }
-}
-
-# 子の出力を UTF-8 で読んで段へ行として流す。段の 2>&1 | を素の呼び出しが通ると、子がパイプへ書いた UTF-8 が
-# 端末の文字コードで解かれ、cargo deny・cargo about の罫線などが化ける。標準エラーの行を先に、標準出力の行を後に流す
-# （子が終わってからまとめて出る）。終了コードは $LASTEXITCODE に置く（段の判定はそれを見る）
-function Invoke-Utf8Step([string]$FilePath, [string[]]$ArgumentList) {
-    $r = Invoke-Utf8Child $FilePath $ArgumentList
-    $r.ErrLines
-    @($r.Out -split '\r?\n' | Where-Object { $_ -ne '' })
-    $global:LASTEXITCODE = $r.Code
-}
-
-Step 'license check' { Invoke-Utf8Step cargo @('deny', '--locked', 'check', 'licenses') }
-
-# -Arch に依らず全ターゲット（ARCHS の行＋helper）で 1 回。どの CPU 種別の zip にも同じ物を入れる
-Step 'generate third-party notices' {
-    if (Test-Path -LiteralPath $script:Notices) { Remove-Item -LiteralPath $script:Notices -Force }
-    $targets = @($ARCHS.Values | ForEach-Object Target) + $HELPER_TARGET | ForEach-Object { '--target', $_ }
-    Invoke-Utf8Step cargo (@('about', 'generate', '--locked', '--workspace') + $targets + @('about.hbs', '-o', $script:Notices))
-    if ($LASTEXITCODE) { return }
-    if (-not (Test-Path -LiteralPath $script:Notices)) { throw "third-party notices output missing: $script:Notices" }
-}
-
-# nar-sample-path の出力（1 行 1 組の key=value）から $Keys の値を読む。鍵が無い・パスが実在しなければ throw。
-function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
-    $r = Invoke-Utf8Child cargo @('run', '-q', '--locked', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', $Sample)
-    # 子の標準エラーは書き替えずにそのまま写す（Step の出力の末尾には入らないので、失敗の文に最後の行を添える）
-    foreach ($e in $r.ErrLines) { Write-Host $e }
-    if ($r.Code) { throw "nar-sample-path $Sample exited with code $($r.Code): $($r.ErrLines | Select-Object -Last 1)" }
-    $lines = @($r.Out -split '\r?\n')
-    $paths = @{}
-    foreach ($key in $Keys) {
-        $line = $lines | Where-Object { $_.StartsWith("$key=") } | Select-Object -First 1
-        if (-not $line) { throw "nar-sample-path $Sample output has no $key=" }
-        $path = $line.Substring($key.Length + 1)
-        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample ${key}= does not exist: $path" }
-        $paths[$key] = $path
-    }
-    $paths
-}
-
-Step 'extract samples' {
-    $emo2 = Read-SamplePaths 'emo2' @('folder', 'balloon.emo2-kakukaku')
-    $script:GhostDir = $emo2['folder']
-    $script:KakukakuDir = $emo2['balloon.emo2-kakukaku']
-    $script:StayseeDir = (Read-SamplePaths 'StayseeBalloon' @('folder'))['folder']
-    $script:ArekaBalloonDir = (Read-SamplePaths 'areka-balloon' @('folder'))['folder']
 }
 
 # zip の項目名（区切りを / に揃える・大文字小文字を区別する）→ 項目。呼ぶ側が .Zip を Dispose する。
@@ -537,6 +369,209 @@ function Test-ZipContent([string]$ZipPath, [string]$Arch) {
     , $bad.ToArray()
 }
 
+# 記録の判定（完了 alpha-package の要件 3.3・3.5）。2 つの記録を連結した文字列・子の終了コード・番犬で止めたかを受け、
+# 条件ごとに { Name; Ok; Detail } を返す。全部見てから呼び手が 1 回主張する（1 つ目で止めない）。
+function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$WatchdogKilled) {
+    $lines = $Text -split "`r?`n"
+    $count = { param($m) @($lines | Where-Object { $_.Contains($m) }).Count }
+    $row = { param($name, $ok, $detail) [pscustomobject]@{ Name = $name; Ok = [bool]$ok; Detail = $detail } }
+    $gate = & $count $LOG_MARKER_SMOKE_GATE
+    # 目印の文言は印字しない（端末へは ASCII だけ）。詳細の文では目印を変数名で示す
+    & $row 'not killed by watchdog' (-not $WatchdogKilled) ($WatchdogKilled ? 'killed by watchdog' : 'exited by itself')
+    & $row 'ran bounded' ($gate -gt 0) "LOG_MARKER_SMOKE_GATE: $gate line(s)"
+    & $row 'exit code 0' ($ExitCode -eq 0) "exit code $ExitCode"
+    $win = & $count $LOG_MARKER_WINDOWS
+    & $row 'ghost window opened' ($win -gt 0) "LOG_MARKER_WINDOWS: $win line(s)"
+    $faults = @(for ($i = 0; $i -lt $LOG_MARKER_FAULTS.Count; $i++) { $n = & $count $LOG_MARKER_FAULTS[$i]; if ($n) { "LOG_MARKER_FAULTS[$i]: $n line(s)" } })
+    & $row 'no SHIORI connection failure' (-not $faults.Count) ($faults.Count ? ($faults -join '; ') : 'fault markers: 0 lines')
+    # 204 側の「epilogue-only 起動記録トーク…」は同じ event="boot_talk" だが文言が違うので数えない
+    # 自動終了より後の挨拶は数えない（完了 alpha-package の要件 3.3 の空振り）。両方とも run.log に出るので行の位置で比べる。
+    # 自動終了の目印が無ければ全行を見る（そのときは「有界で走った」側か終了コードで落ちる）
+    $exitAt = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($l) $l.Contains($LOG_MARKER_SMOKE_EXIT) })
+    $before = ($exitAt -ge 0) ? @($lines | Select-Object -First $exitAt) : $lines
+    $greet = @($before | Where-Object { $_.Contains($LOG_MARKER_GREETING) }).Count
+    $all = & $count $LOG_MARKER_GREETING
+    & $row 'talk started' ($greet -gt 0) "LOG_MARKER_GREETING: $greet line(s) before auto exit, $all in total"
+    # 初回のバルーン: 最初の「バルーンを決めました」の行。dir= は行末までの値（パスに空白が入り得る）
+    $b = @($lines | Where-Object { $_.Contains($LOG_MARKER_BALLOON) }) | Select-Object -First 1
+    if (-not $b) {
+        & $row 'first balloon is bundled' $false 'no LOG_MARKER_BALLOON line'
+    } else {
+        $dir = ($b -match 'dir=(.*)$') ? $Matches[1].Trim() : ''
+        $companion = $b.Contains($LOG_MARKER_BALLOON_ROUTE)
+        $ok = $companion -and $dir.EndsWith($LOG_MARKER_BALLOON_DIR, [StringComparison]::OrdinalIgnoreCase)
+        & $row 'first balloon is bundled' $ok ($companion ? "route=Companion dir=$dir" : "route=other dir=$dir")
+    }
+}
+
+# 子の出力を UTF-8 で読んで段へ行として流す。段の 2>&1 | を素の呼び出しが通ると、子がパイプへ書いた UTF-8 が
+# 端末の文字コードで解かれ、cargo deny・cargo about の罫線などが化ける。標準エラーの行を先に、標準出力の行を後に流す
+# （子が終わってからまとめて出る）。終了コードは $LASTEXITCODE に置く（段の判定はそれを見る）
+function Invoke-Utf8Step([string]$FilePath, [string[]]$ArgumentList) {
+    $r = Invoke-Utf8Child $FilePath $ArgumentList
+    $r.ErrLines
+    @($r.Out -split '\r?\n' | Where-Object { $_ -ne '' })
+    $global:LASTEXITCODE = $r.Code
+}
+
+# nar-sample-path の出力（1 行 1 組の key=value）から $Keys の値を読む。鍵が無い・パスが実在しなければ throw。
+function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
+    $r = Invoke-Utf8Child cargo @('run', '-q', '--locked', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--', $Sample)
+    # 子の標準エラーは書き替えずにそのまま写す（Step の出力の末尾には入らないので、失敗の文に最後の行を添える）
+    foreach ($e in $r.ErrLines) { Write-Host $e }
+    if ($r.Code) { throw "nar-sample-path $Sample exited with code $($r.Code): $($r.ErrLines | Select-Object -Last 1)" }
+    $lines = @($r.Out -split '\r?\n')
+    $paths = @{}
+    foreach ($key in $Keys) {
+        $line = $lines | Where-Object { $_.StartsWith("$key=") } | Select-Object -First 1
+        if (-not $line) { throw "nar-sample-path $Sample output has no $key=" }
+        $path = $line.Substring($key.Length + 1)
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample ${key}= does not exist: $path" }
+        $paths[$key] = $path
+    }
+    $paths
+}
+
+# =============================================================================
+# 段
+# =============================================================================
+Step 'preflight' {
+    # 引数
+    if ($SmokeExitMsGiven) {
+        $ms = 0
+        if (-not [int]::TryParse($SmokeExitMs, [ref]$ms) -or $ms -le 0) {
+            Exit-Script $EXIT_BAD_ARGS "-SmokeExitMs must be a positive integer (got: '$SmokeExitMs')"
+        }
+        $script:SmokeMs = $ms
+    } else {
+        $script:SmokeMs = $SMOKE_EXIT_MS
+    }
+    $accepted = @($ARCHS.Keys) + 'all'
+    if ($accepted -cnotcontains $Arch) {
+        Exit-Script $EXIT_BAD_ARGS ("-Arch must be one of {0} (got: '{1}')" -f ($accepted -join ', '), $Arch)
+    }
+    $script:BuildArchs = ($Arch -eq 'all') ? @($ARCHS.Keys) : @($Arch)
+    if ($Check -and $script:BuildArchs -cnotcontains 'x64') {
+        Exit-Script $EXIT_BAD_ARGS "-Check needs the x64 zip (combine with -Arch x64 or all; got: '$Arch')"
+    }
+    if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
+        Exit-Script $EXIT_BAD_ARGS "-CheckDir must be an absolute path (got: '$CheckDir')"
+    }
+    # リポジトリの中なら target\ の下だけ（一時フォルダは target\ の下に限る）。外は受け付ける
+    $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
+    if ($CheckDir) {
+        $full = [IO.Path]::GetFullPath($CheckDir).TrimEnd('\') + '\'
+        if ($full.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase) -and
+            -not $full.StartsWith("${repoRoot}target\", [StringComparison]::OrdinalIgnoreCase)) {
+            Exit-Script $EXIT_BAD_ARGS "-CheckDir inside the repository must be under ${repoRoot}target\ (got: '$CheckDir')"
+        }
+    }
+    # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
+    $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR")) }
+    $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))
+    $script:LogDir = "$script:ExpandDir-logs"
+    if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
+        Exit-Script $EXIT_BAD_ARGS ("expand path too long ({0} chars, limit {1}): {2} - pass a shorter -CheckDir (outside the repository or under ${repoRoot}target\) or move the worktree to a shorter path" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
+    }
+
+    # git（コミットは 7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）
+    $script:Commit = git rev-parse --short=7 HEAD 2>$null
+    if ($LASTEXITCODE -or -not $script:Commit) { Exit-Script $EXIT_BAD_ARGS 'git does not run (install git and add it to PATH)' }
+    $script:StatusBefore = @(git status --porcelain)
+    $script:Dirty = $script:StatusBefore.Count
+
+    # 道具
+    $null = cargo about --version 2>&1
+    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo about not found (install with: cargo install cargo-about --version 0.9.2 --locked)' }
+    $null = cargo deny --version 2>&1
+    if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo deny not found (install with: cargo install cargo-deny --version 0.20.2 --locked)' }
+    if (-not (Test-Path -LiteralPath 'Cargo.lock')) { Exit-Script $EXIT_BAD_ARGS 'Cargo.lock not found (restore the tracked Cargo.lock from git)' }
+    # arm64 のリンクに要る VS の部品（rustup のターゲットは欠けても後の段で足すので、ここでは見ない）
+    if ($script:BuildArchs -ccontains 'arm64') {
+        # vswhere.exe は PATH に載らないので固定の置き場を先に見る
+        $vswhere = if (Test-Path -LiteralPath $VSWHERE_PATH -PathType Leaf) { $VSWHERE_PATH }
+                   else { Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source }
+        if (-not $vswhere) { Exit-Script $EXIT_BAD_ARGS "vswhere.exe not found (searched: $VSWHERE_PATH and PATH; install Visual Studio or Build Tools)" }
+        $vs = & $vswhere -latest -products '*' -requires $ARM64_VS_COMPONENT -property installationPath 2>$null
+        if ($LASTEXITCODE -or -not $vs) { Exit-Script $EXIT_BAD_ARGS "VS component for arm64 linking not found (add $ARM64_VS_COMPONENT in VS Installer; vswhere: $vswhere)" }
+    }
+
+    # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
+    try { $script:Version = Get-ArekaVersion }
+    catch { Exit-Script $EXIT_BAD_ARGS "cannot read the version ($($_.Exception.Message))" }
+
+    # 前回の同名の組をビルドの前に消す（今回が失敗しても前回の物が完成品に見えて残らない）
+    foreach ($a in $script:BuildArchs) {
+        $n = Get-ArtifactNames $a
+        foreach ($p in @($n.Zip, $n.Sha, $n.ZipTmp, $n.ShaTmp)) {
+            if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; Write-Host "removed previous artifact: $p" }
+        }
+    }
+
+    Write-Host "commit $script:Commit, uncommitted changes $script:Dirty, version $script:Version, arch $($script:BuildArchs -join ', ')"
+}
+
+$I686 = $HELPER_TARGET
+$script:HelperExe = "$OUT_DIR/$I686/release/shiori-host32-helper.exe"
+$script:Notices = "$OUT_DIR/THIRD-PARTY-NOTICES.md"
+# 開発者のシェルの値に継ぎ足さない（-C target-cpu=native 等が混ざると開発機でしか動かない exe になる）
+$script:RustFlags = '-C target-feature=+crt-static'
+
+Step 'add i686 target' { rustup target add $I686 }
+# arm64 のターゲットは作るときだけ足す（-Arch x64 では道具の無い機械でも止まらない）
+if ($script:BuildArchs -ccontains 'arm64') {
+    Step 'add arm64 target' { rustup target add $ARCHS['arm64'].Target }
+}
+
+# RUSTFLAGS を置き換え、CARGO_ENCODED_RUSTFLAGS・CARGO_BUILD_RUSTFLAGS を外す（在ると cargo が RUSTFLAGS を無視する）。
+# 差し替えはビルドの段の間だけ。失敗時は Exit-Script の後始末が戻す。
+Set-EnvTemp 'RUSTFLAGS' $script:RustFlags
+Set-EnvTemp 'CARGO_ENCODED_RUSTFLAGS' $null
+Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
+Step 'build i686 helper' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
+foreach ($a in $script:BuildArchs) {
+    $t = $ARCHS[$a].Target
+    Step "build $a areka" { cargo build --locked --release -p areka -p areka-mcp-bridge --target $t --target-dir $OUT_DIR }
+}
+Restore-Env
+
+Step 'check static linking' {
+    # 作った exe 全部（helper＋作る CPU 種別の本体と中継）と、期待する機械種別
+    $exes = [ordered]@{ $script:HelperExe = $HELPER_MACHINE }
+    foreach ($a in $script:BuildArchs) {
+        foreach ($n in @('areka.exe', 'areka-mcp-bridge.exe')) { $exes["$OUT_DIR/$($ARCHS[$a].Target)/release/$n"] = $ARCHS[$a].Machine }
+    }
+    $bad = $false
+    foreach ($exe in $exes.Keys) {
+        if (-not (Test-Path -LiteralPath $exe)) { throw "build output missing: $exe" }
+        $info = Read-PeInfo ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exe)))
+        $denied = @(Get-DeniedImports $info.Imports)
+        Write-Host ('{0}: machine 0x{1:x4} (expected 0x{2:x4}), imports {3}' -f $exe, $info.Machine, $exes[$exe], ($info.Imports -join ', '))
+        if ($info.Machine -ne $exes[$exe]) { Write-Host '  wrong machine'; $bad = $true }
+        if ($denied.Count) { Write-Host "  matches the deny list: $($denied -join ', ')"; $bad = $true }
+    }
+    if ($bad) { throw 'wrong machine or loads a VC++ runtime DLL (+crt-static not effective)' }
+}
+
+Step 'license check' { Invoke-Utf8Step cargo @('deny', '--locked', 'check', 'licenses') }
+
+# -Arch に依らず全ターゲット（ARCHS の行＋helper）で 1 回。どの CPU 種別の zip にも同じ物を入れる
+Step 'generate third-party notices' {
+    if (Test-Path -LiteralPath $script:Notices) { Remove-Item -LiteralPath $script:Notices -Force }
+    $targets = @($ARCHS.Values | ForEach-Object Target) + $HELPER_TARGET | ForEach-Object { '--target', $_ }
+    Invoke-Utf8Step cargo (@('about', 'generate', '--locked', '--workspace') + $targets + @('about.hbs', '-o', $script:Notices))
+    if ($LASTEXITCODE) { return }
+    if (-not (Test-Path -LiteralPath $script:Notices)) { throw "third-party notices output missing: $script:Notices" }
+}
+
+Step 'extract samples' {
+    $emo2 = Read-SamplePaths 'emo2' @('folder', 'balloon.emo2-kakukaku')
+    $script:GhostDir = $emo2['folder']
+    $script:KakukakuDir = $emo2['balloon.emo2-kakukaku']
+    $script:StayseeDir = (Read-SamplePaths 'StayseeBalloon' @('folder'))['folder']
+    $script:ArekaBalloonDir = (Read-SamplePaths 'areka-balloon' @('folder'))['folder']
+}
+
 foreach ($a in $script:BuildArchs) {
     $stage = "$OUT_DIR/stage-$a"
     Step "$a assemble" {
@@ -588,41 +623,6 @@ foreach ($a in $script:BuildArchs) {
         $hash = (Get-FileHash -LiteralPath $n.ZipTmp -Algorithm SHA256).Hash.ToLowerInvariant()
         [IO.File]::WriteAllText($n.ShaTmp, ("{0}  {1}`n" -f $hash, (Split-Path $n.Zip -Leaf)))   # UTF-8（BOM 無し）・LF
         Write-Host $n.ShaTmp
-    }
-}
-
-# 記録の判定（完了 alpha-package の要件 3.3・3.5）。2 つの記録を連結した文字列・子の終了コード・番犬で止めたかを受け、
-# 条件ごとに { Name; Ok; Detail } を返す。全部見てから呼び手が 1 回主張する（1 つ目で止めない）。
-function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$WatchdogKilled) {
-    $lines = $Text -split "`r?`n"
-    $count = { param($m) @($lines | Where-Object { $_.Contains($m) }).Count }
-    $row = { param($name, $ok, $detail) [pscustomobject]@{ Name = $name; Ok = [bool]$ok; Detail = $detail } }
-    $gate = & $count $LOG_MARKER_SMOKE_GATE
-    # 目印の文言は印字しない（端末へは ASCII だけ）。詳細の文では目印を変数名で示す
-    & $row 'not killed by watchdog' (-not $WatchdogKilled) ($WatchdogKilled ? 'killed by watchdog' : 'exited by itself')
-    & $row 'ran bounded' ($gate -gt 0) "LOG_MARKER_SMOKE_GATE: $gate line(s)"
-    & $row 'exit code 0' ($ExitCode -eq 0) "exit code $ExitCode"
-    $win = & $count $LOG_MARKER_WINDOWS
-    & $row 'ghost window opened' ($win -gt 0) "LOG_MARKER_WINDOWS: $win line(s)"
-    $faults = @(for ($i = 0; $i -lt $LOG_MARKER_FAULTS.Count; $i++) { $n = & $count $LOG_MARKER_FAULTS[$i]; if ($n) { "LOG_MARKER_FAULTS[$i]: $n line(s)" } })
-    & $row 'no SHIORI connection failure' (-not $faults.Count) ($faults.Count ? ($faults -join '; ') : 'fault markers: 0 lines')
-    # 204 側の「epilogue-only 起動記録トーク…」は同じ event="boot_talk" だが文言が違うので数えない
-    # 自動終了より後の挨拶は数えない（完了 alpha-package の要件 3.3 の空振り）。両方とも run.log に出るので行の位置で比べる。
-    # 自動終了の目印が無ければ全行を見る（そのときは「有界で走った」側か終了コードで落ちる）
-    $exitAt = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($l) $l.Contains($LOG_MARKER_SMOKE_EXIT) })
-    $before = ($exitAt -ge 0) ? @($lines | Select-Object -First $exitAt) : $lines
-    $greet = @($before | Where-Object { $_.Contains($LOG_MARKER_GREETING) }).Count
-    $all = & $count $LOG_MARKER_GREETING
-    & $row 'talk started' ($greet -gt 0) "LOG_MARKER_GREETING: $greet line(s) before auto exit, $all in total"
-    # 初回のバルーン: 最初の「バルーンを決めました」の行。dir= は行末までの値（パスに空白が入り得る）
-    $b = @($lines | Where-Object { $_.Contains($LOG_MARKER_BALLOON) }) | Select-Object -First 1
-    if (-not $b) {
-        & $row 'first balloon is bundled' $false 'no LOG_MARKER_BALLOON line'
-    } else {
-        $dir = ($b -match 'dir=(.*)$') ? $Matches[1].Trim() : ''
-        $companion = $b.Contains($LOG_MARKER_BALLOON_ROUTE)
-        $ok = $companion -and $dir.EndsWith($LOG_MARKER_BALLOON_DIR, [StringComparison]::OrdinalIgnoreCase)
-        & $row 'first balloon is bundled' $ok ($companion ? "route=Companion dir=$dir" : "route=other dir=$dir")
     }
 }
 
