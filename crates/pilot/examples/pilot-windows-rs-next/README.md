@@ -121,7 +121,12 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 | 問い | 元のファイル | 写した行数 | 書き換えの行数 | 直しの回数 | 時間 |
 |---|---|---|---|---|---|
-| 1 |  |  |  |  |  |
+| 1 | `src/lib.rs`（本番の部分のみ） | 270 | | | |
+| 1 | `src/util/mod.rs` | 7 | | | |
+| 1 | `src/util/msg_filter_hook.rs` | 64 | | | |
+| 1 | `src/util/window.rs` | 373 | | | |
+| 1 | `examples/basic.rs` | 36 | | | |
+| 1 | `examples/threads.rs` | 37 | | | |
 | 3 |  |  |  |  |  |
 | 4 |  |  |  |  |  |
 | 6 |  |  |  |  |  |

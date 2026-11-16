@@ -40,7 +40,7 @@
 
 - [ ] 2. 問い 1: C の関数だけのクレートを `.sys()` へ移す
 
-- [ ] 2.1 `wintf-winmsg-executor` を置き場へ写す
+- [x] 2.1 `wintf-winmsg-executor` を置き場へ写す
   - 本番の `src/`（`lib.rs` の `#[cfg(test)] mod test` を除く）と `util/` の 3 ファイル、例の `basic`・`threads` を、中身を変えずに `q1-winmsg` へ写す（例は以後も書き換えない）
   - 写した直後の状態を 1 コミットにし、元のファイルごとの本番の行数を CopyLedger に書く
   - 観測: 写したファイルが元と同じ中身（試験のモジュールだけ除く）で、本線の `crates/wintf-winmsg-executor/` の差分が 0 で、写した行数が CopyLedger に在る
@@ -330,3 +330,4 @@
 - 置き場の `cargo` は必ず絶対の `--target-dir`（作業木の `target/pilot-windows-rs-next`）を付ける。置き場の中から `.cargo/config.toml` の相対の target-dir で組むと、パスが長すぎて proc-macro のリンクが LNK1104 で落ちる（1.2）。
 - q2 のパッケージ名は `q2-<フォルダ名>`。emo 役の `src/main.rs`（bin）は骨組みに無いので q2 のタスクで足す（1.2 のレビュー）。
 - `windows-bindgen`（この rev）のフィルターは短い名前（`CoInitializeEx`）で書く。`Windows.Win32...` の長い名前は `could not resolve filter entry` で断られる。フィルターが全部空だと止まる（1.3）。
+- CopyLedger の問い 1 の写した行数（787）は例 2 本（73 行）を含む（設計の「約 790」と合う）。12.1 の合計もこの数え方で（2.1）。
