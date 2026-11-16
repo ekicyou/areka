@@ -1,16 +1,18 @@
 # areka v1.2.3 の詳しいリリースノート
 
-v1.2.2 から v1.2.3 までに入ったすべての変更です（18 件）。
+v1.2.2 から v1.2.3 までに入ったすべての変更です（21 件）。
 
 ## 新しい機能
 
 - さくらスクリプトのアンカー \_a[ID]…\_a を働かせる ([#286](https://github.com/owner/name/pull/286))
 - PR を通していない古い変更
+- 検査の道具の下回りをひとつにまとめる ([#400](https://github.com/owner/name/pull/400))
 
 ## 不具合の修正
 
 - kanade の終了の台詞の再生中に talking を載せる ([#282](https://github.com/owner/name/pull/282))
 - 番号の括弧の形が違う題名 (PR#195)
+- 起動の画像の読み込みの待ちを減らす ([#401](https://github.com/owner/name/pull/401))
 
 ## 性能の改善
 
@@ -34,3 +36,4 @@ v1.2.2 から v1.2.3 までに入ったすべての変更です（18 件）。
 - Feat(big-type): 種類が大文字で始まる題名 ([#301](https://github.com/owner/name/pull/301))
 - スコープの途中に印が在る題名 ([#302](https://github.com/owner/name/pull/302))
 - nested の印を外した跡に印がまた現れる題名
+- 一覧に無いスコープの題名 ([#402](https://github.com/owner/name/pull/402))

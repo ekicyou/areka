@@ -12,13 +12,20 @@
   6. 機能 toml を有効にした dola のテスト（cargo test -p dola --features toml・検体を使わないので取り寄せが赤でも回す）
   7. i686 でしか走らないテスト（host-32 系）
   8. crates.io 公開前の確認（tools/crates-io.ps1 の包むだけの形・ネットを使わない）
-  9. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない）
+  9. 道具の文字コードの判定（tools/encoding-check.ps1 を別のプロセスで・ネットを使わない・規則 F でこの台本の Step が見つからない命令の段を赤に記録することも見る）
   10. リリースノートの道具の自分の検査（tools/release-notes.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   11. 俯瞰の HTML の道具の自分の検査（.claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   12. 隣の helper を揃える道具の自分の検査（tools/sync-i686-helper.ps1 -SelfTest を別のプロセスで・ネットを使わない）
   13. sample fetch check: 取り寄せの段の自分の検査（tools/sample-fetch.ps1 -SelfTest を別のプロセスで・ネットを使わない）
-  14. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
-  15. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
+  14. package check: 梱包の道具の自分の検査（tools/package.ps1 -SelfTest を別のプロセスで・コミット済みの検体を読むだけ・ネットを使わない）
+  15. exe install check: exe を机へ置く道具の自分の検査（tools/exe-install.selftest.ps1 を別のプロセスで・偽の置き場で回す）
+  16. load flake check: 揺れるテストの道具の自分の検査（tools/load-flake.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  17. mouse input check: マウス入力の道具の自分の検査（tools/mouse-input.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  18. app icon check: アプリアイコンの道具の自分の検査（tools/app-icon.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  19. cursor art check: カーソルの絵の道具の自分の検査（tools/cursor-art.ps1 -SelfTest を別のプロセスで・ネットを使わない）
+  20. perf loop selftest: 性能改善ループの道具の自分の検査（tools/perf/perf-loop.ps1 selftest を別のプロセスで・いちばん長いので最後）
+  21. -License のときだけ cargo deny check と cargo about generate（テストと同時に回すと rustc がメモリ不足で落ちるので最後に直列で）
+  22. 最後の段: target\debug の隣の helper を i686 版に揃える（tools/sync-i686-helper.ps1・途中の段が x64 版で上書きしても、終わった後は areka.exe の隣が i686 版）
   段が赤でも止めずに最後まで回し、段ごとの合否を一覧にして、1 つでも赤なら終了コード 1 で終わる。
   一覧には検査したコミットと、始めた時点の未コミットの変更の件数も出す（「直近の緑」で再実行を省けるかの証拠）。
 
@@ -31,10 +38,9 @@ param([switch]$Format, [switch]$License)
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # Git Bash から呼ばれると GNU coreutils の link.exe が MSVC の link.exe を遮蔽し i686 のリンクが落ちる。
-# link.exe を持つが cl.exe を持たないフォルダ（＝MSVC 以外の link.exe）を、このプロセスの PATH から外す。
-$env:PATH = ($env:PATH -split ';' | Where-Object {
-        -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
-    }) -join ';'
+# link.exe を持つが cl.exe を持たないフォルダ（＝MSVC 以外の link.exe）を、このプロセスの PATH から外す（共通の下回り）。
+. (Join-Path $PSScriptRoot 'tool-common.ps1')
+$env:PATH = Get-MsvcLinkPath $env:PATH
 
 $i686 = 'i686-pc-windows-msvc'
 $results = [ordered]@{}
@@ -44,6 +50,8 @@ $dirty = @(git status --porcelain).Count
 function Step([string]$Name, [scriptblock]$Command) {
     Write-Host "`n==> $Name" -ForegroundColor Cyan
     $sw = [Diagnostics.Stopwatch]::StartNew()
+    # 見つからない命令は $LASTEXITCODE を書かないので、前の段の値を持ち越さない（0 だと緑・$null だと SKIP になる）
+    $global:LASTEXITCODE = -1
     & $Command
     $results[$Name] = [pscustomobject]@{ Code = $LASTEXITCODE; Seconds = [int]$sw.Elapsed.TotalSeconds }
 }
@@ -73,6 +81,13 @@ Step 'release notes check' { pwsh -NoProfile -File tools/release-notes.ps1 -Self
 Step 'roadmap overview check' { pwsh -NoProfile -File .claude/skills/kiro-next/overview/roadmap-overview.ps1 -SelfTest }
 Step 'i686 helper sync check' { pwsh -NoProfile -File tools/sync-i686-helper.ps1 -SelfTest }
 Step 'sample fetch check' { pwsh -NoProfile -File tools/sample-fetch.ps1 -SelfTest }
+Step 'package check' { pwsh -NoProfile -File tools/package.ps1 -SelfTest }
+Step 'exe install check' { pwsh -NoProfile -File tools/exe-install.selftest.ps1 }
+Step 'load flake check' { pwsh -NoProfile -File tools/load-flake.ps1 -SelfTest }
+Step 'mouse input check' { pwsh -NoProfile -File tools/mouse-input.ps1 -SelfTest }
+Step 'app icon check' { pwsh -NoProfile -File tools/app-icon.ps1 -SelfTest }
+Step 'cursor art check' { pwsh -NoProfile -File tools/cursor-art.ps1 -SelfTest }
+Step 'perf loop selftest' { pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest }
 if ($License) {
     Step 'cargo deny check' { cargo deny check }
     Step 'cargo about generate' { cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md }

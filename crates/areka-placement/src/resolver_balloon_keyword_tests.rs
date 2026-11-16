@@ -33,6 +33,7 @@ fn keyword_cfg(
         default_y: None,
         balloon_alignment,
         balloon_offset,
+        balloon_offset_descript_x: 0,
         balloon_limit,
         balloon_x_mode,
     }

@@ -379,10 +379,15 @@ pub fn resolve_placement(
                     BalloonSide::Right => true,
                     BalloonSide::Auto => char_center_x < area_center_x,
                 };
-                let balloon_base_x = if on_right {
-                    x.saturating_add(w)
+                // 右に出すときだけ descript の `balloon.offsetx` の分は左向きが＋（シェルへ
+                // 近づく向き）。`windowposition.x` の分は左右とも右向きが＋のまま。
+                let (balloon_base_x, ox) = if on_right {
+                    (
+                        x.saturating_add(w),
+                        ox.saturating_sub(sc.balloon_offset_descript_x.saturating_mul(2)),
+                    )
                 } else {
-                    x.saturating_sub(input.balloon_size.w)
+                    (x.saturating_sub(input.balloon_size.w), ox)
                 };
                 PointPx {
                     x: balloon_base_x.saturating_add(ox),

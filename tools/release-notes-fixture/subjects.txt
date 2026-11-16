@@ -16,3 +16,6 @@ Feat(areka-P0-big-type): 種類が大文字で始まる題名 (#301)
 feat(pre-areka-P0-scope): スコープの途中に印が在る題名 (#302)
 docs(areka-P0-tight): 括弧の前に空白の無い題名(#9)
 chore: areka-Pareka-P0-0-nested の印を外した跡に印がまた現れる題名
+feat(audit-tools-scripts): 検査の道具の下回りをひとつにまとめる (#400)
+fix(startup-speed): 起動の画像の読み込みの待ちを減らす (#401)
+feat(unlisted-scope): 一覧に無いスコープの題名 (#402)

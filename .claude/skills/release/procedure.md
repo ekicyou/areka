@@ -251,7 +251,7 @@ else echo "desk: id=$ID repo=$R"; fi
 
 - `cargo metadata --locked --no-deps --format-version 1` が終了コード 0 であること。出力の `packages` の数を `N` として覚える。
 - 机の段の「流れ」の 1・2: `watch` を立て、`request --desk test --purpose "release {版} 3.1" --wait` の番が来てから次を回す。
-- `pwsh -NoProfile -File tools/test-all.ps1 -License` を裏で回し、終わりの知らせを待つ（約 19 分）。`-Format` は付けない。付けなくても `cargo fmt --all -- --check` は回る。`-License` は `THIRD-PARTY-NOTICES.md` を作り直す。
+- `pwsh -NoProfile -File tools/test-all.ps1 -License` を裏で回し、終わりの知らせを待つ（約 21 分）。`-Format` は付けない。付けなくても `cargo fmt --all -- --check` は回る。`-License` は `THIRD-PARTY-NOTICES.md` を作り直す。
 - 終わりの知らせを受けたら（成否によらず）、判定より先に `return`。
 - 判定: 2 つとも終了コード 0。
 

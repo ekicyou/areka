@@ -1,6 +1,7 @@
 //! `fill_world_visuals` の純粋なテスト（装置なし・`World` だけ・要件 1.2〜1.11, 2.2, 3.9, 4.1〜4.4, 5.3, 5.4, 6.7）。
 
 use super::draw_content_test_support::solid_rect_content;
+use super::promotion::Phase;
 use super::*;
 use crate::ecs::common::MAX_ANCESTOR_DEPTH;
 use crate::ecs::graphics::ClipShape;
@@ -14,7 +15,6 @@ use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows_numerics::{Matrix3x2, Vector2};
 
 const DEPTH_TEXT: &str = "木の深さが上限を越えた";
-const OWNER_TEXT: &str = "節の下の描画面の持ち主は支えない";
 
 pub(super) fn rect4() -> D2D_RECT_F {
     D2D_RECT_F {
@@ -67,8 +67,27 @@ impl Filler {
         children_of_root: &[Entity],
         root_children_changed: bool,
     ) -> (bool, Vec<(Entity, usize)>) {
+        let (changed, scan) = self.scan_with(
+            world,
+            root,
+            root_arrangement_changed,
+            children_of_root,
+            root_children_changed,
+        );
+        (changed, scan.visible_nodes().collect())
+    }
+
+    /// [`Self::run_with`] と同じ 1 回で、走査の列をそのまま返す。
+    pub(super) fn scan_with(
+        &mut self,
+        world: &mut World,
+        root: Entity,
+        root_arrangement_changed: bool,
+        children_of_root: &[Entity],
+        root_children_changed: bool,
+    ) -> (bool, TreeScan) {
         let mut nodes = self.0.get_mut(world).unwrap();
-        let mut visited = Vec::new();
+        let mut scan = TreeScan::default();
         let changed = fill_world_visuals(
             root,
             Some(&Name::new("root")),
@@ -76,11 +95,17 @@ impl Filler {
             root_arrangement_changed,
             children_of_root,
             root_children_changed,
-            &mut visited,
+            &mut scan,
             &mut self.1,
         );
         self.1.end_round();
-        (changed, visited)
+        (changed, scan)
+    }
+
+    /// 根の子を `Children` から取って 1 回埋め、走査の列を返す。
+    pub(super) fn scan(&mut self, world: &mut World, root: Entity) -> TreeScan {
+        let top = kids(world, root);
+        self.scan_with(world, root, false, &top, false).1
     }
 
     pub(super) fn run(&mut self, world: &mut World, root: Entity) -> bool {
@@ -291,35 +316,73 @@ fn parent_cycle_does_not_hang() {
 }
 
 #[test]
-fn owner_under_node_is_cut_with_error_but_not_under_root() {
+fn owner_under_node_is_kept_as_placement_entry_without_error() {
     let mut world = World::new();
     let root = world.spawn(Visual::default()).id();
     let node = world
-        .spawn((Visual::default(), WorldVisual::default(), ChildOf(root)))
+        .spawn((
+            Visual::default(),
+            WorldVisual::default(),
+            arranged(5.0, 6.0),
+            ChildOf(root),
+        ))
         .id();
-    // 根の直下の持ち主は今の WUC の木の子なので記録しない。
-    world.spawn((Visual::default(), Name::new("root-owner"), ChildOf(root)));
     let owner = world
         .spawn((
             Visual::default(),
             WorldVisual::default(),
+            OwnSurface,
             VisualGraphics::default(),
             Name::new("deep-owner"),
             ChildOf(node),
         ))
         .id();
+    // 持ち主の下の節は持ち主自身の歩きが受け持つ（この根の列には入らない）。
     world.spawn((Visual::default(), WorldVisual::default(), ChildOf(owner)));
-    let top = kids(&world, root);
-    let mut visited = Vec::new();
-    let log = capture_under_filter("error", || visited = fill(&mut world, root, &top).1);
-    assert_eq!(visited, vec![(node, 1)]);
-    assert_eq!(log.matches(OWNER_TEXT).count(), 1, "{log}");
-    assert!(log.contains("deep-owner"), "実体名が要る: {log}");
-    assert!(!log.contains("root-owner"), "{log}");
+    let root_owner = world
+        .spawn((Visual::default(), Name::new("root-owner"), ChildOf(root)))
+        .id();
+    let mut filler = Filler::new(&mut world);
+    let mut scan = TreeScan::default();
+    let log = capture_under_filter("error", || scan = filler.scan(&mut world, root));
+    assert!(
+        !log.contains("fill_world_visuals"),
+        "error! を残さない: {log}"
+    );
+    assert_eq!(scan.visible_nodes().collect::<Vec<_>>(), vec![(node, 1)]);
+    let got: Vec<_> = scan
+        .entries
+        .iter()
+        .map(|e| (e.entity, e.depth, e.parent, e.end, e.kind))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (node, 1, None, 2, ScanKind::Node { phase: Phase::Node }),
+            (
+                owner,
+                2,
+                Some(0),
+                2,
+                ScanKind::Owner {
+                    parent_world: Matrix3x2::translation(5.0, 6.0)
+                }
+            ),
+            (
+                root_owner,
+                1,
+                None,
+                3,
+                ScanKind::Owner {
+                    parent_world: Matrix3x2::identity()
+                }
+            ),
+        ]
+    );
 }
 
 #[test]
-fn owner_under_node_errors_once_while_it_persists() {
+fn owner_under_node_is_recorded_every_round_without_error() {
     let mut world = World::new();
     let root = world.spawn(Visual::default()).id();
     let node = world
@@ -329,30 +392,35 @@ fn owner_under_node_errors_once_while_it_persists() {
         .spawn((
             Visual::default(),
             WorldVisual::default(),
+            OwnSurface,
             VisualGraphics::default(),
             ChildOf(node),
         ))
         .id();
+    let under = world
+        .spawn((Visual::default(), WorldVisual::default(), ChildOf(owner)))
+        .id();
     let mut filler = Filler::new(&mut world);
     let log = capture_under_filter("error", || {
-        filler.run(&mut world, root);
-        filler.run(&mut world, root);
+        for _ in 0..2 {
+            let scan = filler.scan(&mut world, root);
+            let kinds: Vec<_> = scan.entries.iter().map(|e| e.entity).collect();
+            assert_eq!(kinds, vec![node, owner], "続く間は毎回 1 項");
+            assert!(matches!(scan.entries[1].kind, ScanKind::Owner { .. }));
+        }
+        // 目印が外れれば節の種類＝通り抜けて下の節も歩く。
+        world.entity_mut(owner).remove::<OwnSurface>();
+        let scan = filler.scan(&mut world, root);
+        assert_eq!(
+            scan.visible_nodes().collect::<Vec<_>>(),
+            vec![(node, 1), (owner, 2), (under, 3)]
+        );
+        world.entity_mut(owner).insert(OwnSurface);
+        let scan = filler.scan(&mut world, root);
+        assert_eq!(scan.visible_nodes().collect::<Vec<_>>(), vec![(node, 1)]);
+        assert!(matches!(scan.entries[1].kind, ScanKind::Owner { .. }));
     });
-    assert_eq!(log.matches(OWNER_TEXT).count(), 1, "続く間は 1 回: {log}");
-    world.entity_mut(owner).remove::<VisualGraphics>();
-    let log = capture_under_filter("error", || {
-        filler.run(&mut world, root);
-    });
-    assert!(!log.contains(OWNER_TEXT), "{log}");
-    world.entity_mut(owner).insert(VisualGraphics::default());
-    let log = capture_under_filter("error", || {
-        filler.run(&mut world, root);
-    });
-    assert_eq!(
-        log.matches(OWNER_TEXT).count(),
-        1,
-        "戻ったらまた記録: {log}"
-    );
+    assert!(!log.contains("fill_world_visuals"), "{log}");
 }
 
 #[test]

@@ -62,6 +62,11 @@ struct Rig {
 impl Rig {
     /// 2 スコープの窓の一式（ずらした位置）・主と副のモニタ・記憶の送り口・材料を持つ World。
     fn new() -> Self {
+        Self::with_balloon(BALLOON_OFFSET, false)
+    }
+
+    /// バルーンのずらしと `windowposition.limit` の有無だけを変えた [`Rig::new`]。
+    fn with_balloon(balloon_offset: PointPx, balloon_limit: bool) -> Self {
         let store = Store::new();
         let mut world = World::new();
         let placements: Vec<ScopePlacement> = SCOPES
@@ -71,8 +76,8 @@ impl Rig {
                 ..placement_sized(
                     scope,
                     char_pos,
-                    BALLOON_OFFSET,
-                    false,
+                    balloon_offset,
+                    balloon_limit,
                     char_size,
                     SizePx { w: 223, h: 158 },
                 )
@@ -492,6 +497,45 @@ fn reset_while_armed_records_each_returned_window_as_script_moved() {
         chars
             .iter()
             .all(|&c| rig.world.get::<ScriptPlaced>(c).is_none())
+    );
+    rig.finish();
+}
+
+/// balloon-flip-side-rules 要件 2.10: 並べ直しは本体（scope 0）を先に書くので、本体のバルーンは
+/// 相方（scope 1）がまだ元の位置にいるうちに右の外から左へ並べ替わる。相方がその映した先
+/// （1396〜1619 × 569〜727）に重なる位置へ戻った後、全スコープを書き終えたところで判定し直し、
+/// 本体のバルーンを押し込みの位置（作業領域の右端の内側）に書く。
+#[test]
+fn reset_rejudges_the_balloon_after_the_partner_returns_onto_its_flip_target() {
+    use wintf::ecs::Visual;
+    let mut rig = Rig::with_balloon(PointPx { x: 301, y: 30 }, true);
+    rig.world.insert_resource(MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: WORK.0,
+            top: WORK.1,
+            right: WORK.2,
+            bottom: WORK.3,
+        }],
+    });
+    for scope in 0..2 {
+        let char_window = rig.gw().char_window(scope).unwrap();
+        rig.world.spawn((Visual::default(), ChildOf(char_window)));
+    }
+
+    assert!(reset_window_positions(&mut rig.world));
+
+    assert_eq!(
+        rig.char_pos(1),
+        EXPECTED[1],
+        "相方は映した先に重なる位置へ戻る"
+    );
+    assert_eq!(
+        rig.balloon_pos(0),
+        PointPx {
+            x: 1920 - 223,
+            y: EXPECTED[0].y + 30
+        },
+        "本体のバルーンは押し込みの位置（並べ替えた位置 1396 のままにしない）"
     );
     rig.finish();
 }
