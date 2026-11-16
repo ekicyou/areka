@@ -129,9 +129,10 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 | 1 | `examples/threads.rs` | 37 | 0（変えない） | | |
 | 1 | 新しく足した `build.rs`・`filters.txt` | — | +12・+32 | | |
 | 1 | 計（2.2 の x64 まで） | 787 | 写しの書き換え +65／−60（新しいファイルを入れて +109／−60） | 4 | 約 12 分 |
-| 3 | `wintf/src/com/dwrite.rs` | 154 | | | |
-| 3 | `wintf/src/com/d2d/mod.rs` | 158 | | | |
-| 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | | | |
+| 3 | `wintf/src/com/dwrite.rs` | 154 | 既定: +28／−15（末尾の試験の 3 行を消した分を含む） | | |
+| 3 | `wintf/src/com/d2d/mod.rs` | 158 | 既定: +3／−5 | | |
+| 3 | 既定の形で新しく足した `build.rs`・`filters.txt`・`src/main.rs`（確かめの bin）・`Cargo.toml` | — | +11・+47・+214／−1・+2 | | |
+| 3 | 計（`q3-default` と `q3-minimal` は同じ元を写すので 1 回と数える） | 312 | 既定（3.1）: 写しの書き換え +31／−20（新しいファイルを入れて +305／−21） | 既定: 4 | 既定: 約 7 分 |
 | 4 |  |  |  |  |  |
 | 6 |  |  |  |  |  |
 
@@ -176,9 +177,34 @@ cargo <run|build|test|clippy> --manifest-path C:/home/maz/git/areka/crates/pilot
 
 ### 問い 3: 束縛の形（既定か `.minimal()`）
 
-- 見立ての候補: （未記入）
-- 学び: （未記入）
-- 確かめた日: （未記入）
+- 見立ての候補: （3.3 で 2 形を比べてから書く）
+- 確かめた日: 2026-11-16（既定の形・x64・3.1）
+- 既定の形（`q3-default`・3.1）:
+  - 束縛: `q3-default/build.rs` が既定の形（`.flat()` だけ足す）で `OUT_DIR/bindings.rs` を書く。フィルター `q3-default/filters.txt` は 47 行で、名指しは 44（写しの分が 18・確かめの bin の分が 26・`//` の注が 3 行）。生成した `bindings.rs` は **8,889 行**。頼るのは `windows-core`・`windows-numerics`（`Matrix3x2`／`Vector2`／`Matrix4x4` を束縛がこの名で出す）と、写しの `tracing`。
+  - 書き換え（`git diff --numstat a2288ed43 -- q3-default`。作業木と写した直後の比べで、まだ追跡していない新しいファイルも数えた）: 写しは `dwrite.rs` +28／−15・`d2d/mod.rs` +3／−5（計 +31／−20）。ほかに `Cargo.toml` +2、新しいファイルの `build.rs` +11・`filters.txt` +47、確かめの bin の `src/main.rs` +214／−1（骨組みの 1 行と差し替え）。全部で +305／−21。手間は直し 4 回（組み 3 回・clippy 1 回）・約 7 分。
+  - 写しの末尾の `#[cfg(test)] #[path = "dwrite_cluster_tests.rs"] mod tests;`（3 行）は消した（試験は写さない）。上の −15 に入っている。
+  - 確かめの bin（x64・debug・実の GPU・画面の外の描画なので机は取らない）: `target/pilot-windows-rs-next/debug/q3-default.exe` の終了コードは 0。ハードウェアの D3D11（`D3D_DRIVER_TYPE_HARDWARE`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`）→ `IDXGIDevice` → `ID2D1Factory1::CreateDevice` → 写しの `create_device_context` と進む。256×64 の `ID2D1Bitmap1`（TARGET）へ写しの `create_text_format`（Segoe UI・20 DIP・ja-jp）・`create_text_layout`（`q3 default 墨`）・`draw_text_layout` で黒く描き、CPU_READ の絵へ `CopyFromBitmap` して `Map` で読む。**α>0 の墨の画素は 722**（3 回走らせて 3 回とも同じ）・クラスタは 12。写しの残りの口（`set_transform`・`get_overhang_metrics`・`fill_rectangle`・`fill_ellipse`・`draw_bitmap`・`close`）も通した（後の 4 つは `ID2D1CommandList` へ記録した）。
+  - `==`（`assert` は全部通った）:
+    - `ID2D1CommandList` を `cast` で `IUnknown` へ移し、また `ID2D1CommandList` へ戻した参照と比べると真。
+    - `IUnknown` へ `cast` した物と、QueryInterface を通らずに `into` で移した物を比べると真（この 2 つは番地も同じ）。
+    - 別に作った `ID2D1CommandList` と比べると偽。
+    - 番地の違う参照: 同じ D3D11 の装置を `ID3D11Device` と `IDXGIDevice` から `IUnknown` へ `into` で移すと番地が違うのに、`==` は真。番地でなく COM の同一性で比べている。
+    - 中身: `define_interface!` が `PartialEq` を derive して、中の `IUnknown` の `eq` に任せる。その `eq` は番地が同じならすぐ真で、違えば両方を `IUnknown` へ `cast` してから番地を比べる（`windows-core` の `unknown.rs` 49〜55 行・`imp/mod.rs` 110 行）。既定の形では、`SurfaceComposite::same_root` と `GraphicsCommandList` の導出の `PartialEq` が頼っている COM の同一性の比べがそのまま残る。
+- 学び（既定の形）:
+  - この rev の既定の形は、0.62 の `windows` クレートより C のヘッダーに近い形で出る。
+    - 戻り値の無い COM メソッドは `Result<()>` でなく `HRESULT` を返す（`Close`・`EndDraw`・`CopyFromBitmap`・`Unmap`・`GetClusterMetrics`）。`.ok()` が要る。
+    - 戻り値を out の引数で返すメソッドは、値を返す形にならない（`GetOverhangMetrics(&mut)`・`Map(options, &mut)`）。
+    - スライスの引数は「ポインタ＋長さ」に戻る（`CreateTextLayout(ptr, len, ..)`・`GetClusterMetrics(Option<*mut>, max, *mut)`）。
+    - 文字列は `PCWSTR` でなく `*const WCHAR` で出る。写しは `Param<PCWSTR>` のまま受けて `.param().abi().0` で渡した。
+    - 型の名前は `UINT32`・`FLOAT`・`DWORD`・`LPVOID` のまま出る。
+    - ファクトリの関数は総称の形（`DWriteCreateFactory::<T>(type)`・`D2D1CreateFactory::<T>(type, opts)`）にならない。`DWriteCreateFactory(type, &IID) -> Result<IUnknown>` と `D2D1CreateFactory(type, &IID, opts, *mut *mut c_void) -> HRESULT` で出るので、前者は `cast`、後者は `from_raw` で受けた。
+    - `#define` の定数（`COINIT_MULTITHREADED`・`D3D11_CREATE_DEVICE_BGRA_SUPPORT`・`D3D11_SDK_VERSION`・`ERROR_INSUFFICIENT_BUFFER`・`FACILITY_WIN32`）は `i32` で出て、`UINT` を取る所で `as u32` が要る。
+    - `D3D11CreateDevice` には `featurelevels: UINT` の引数がある（0 を渡す）。
+    - `windows_numerics` のフィールドは小文字（`Vector2 { x, y }`）。
+  - 継いだメソッドは、基のインターフェースをフィルターで名指ししないと出ない。`ID2D1DeviceContext` の `Clear`／`DrawTextLayout` ほかは `ID2D1RenderTarget` の、`IDWriteFactory2` の `CreateTextFormat`／`CreateTextLayout` は `IDWriteFactory` の名指しが要った（`IDWriteFactory1` も足した）。足すと、`Deref` の鎖をたどって元と同じ呼び方で届く。
+  - `HRESULT::from_win32` はこの rev の `windows-result` に無い。`HRESULT::from_components(1, FACILITY_WIN32, ERROR_INSUFFICIENT_BUFFER)` で組んだ。
+  - 写しの `create_text_format` は 8 引数で、clippy の `too_many_arguments`（-D warnings）に止められる。写しは変えずに、bin の根に `#![allow(clippy::too_many_arguments)]` を置いた。
+  - 写しの中の失敗の扱いは元を保った（`sizing_outcome` の `tracing::error!`＋`Err`）。bin の失敗は `[q3-default] error=` を出して終了コード 2 で終わる。墨が 0 ならそれも失敗にする。
 - 止まった所・理由・代わりの見立て: （未記入。無ければ「無し」）
 - 判定: （開発者が下す）
 

@@ -66,7 +66,7 @@
 
 - [ ] 3. 問い 3: 束縛の形の 2 案（既定・`.minimal()`）を同じ写しで比べる
 
-- [ ] 3.1 (P) `dwrite.rs`＋`d2d/mod.rs` の写しを既定の形で組み、確かめの bin と `==` の確かめを通す
+- [x] 3.1 (P) `dwrite.rs`＋`d2d/mod.rs` の写しを既定の形で組み、確かめの bin と `==` の確かめを通す
   - `wintf` の `com/dwrite.rs` と `com/d2d/mod.rs` を `q3-default` へ写し、写した直後を 1 コミットにする（写した量は元の行で 1 回＝312 行と数える）
   - 既定の形の束縛へ移し、確かめの bin で DirectWrite の工場・書式・配置を作り、ハードウェアの D3D11＋D2D の画面の外の絵へ描いて読み戻し、墨の画素を数える
   - 同じ物を `IUnknown` を通って戻した別の参照で持ったときの `==` が真、別の物で偽になることを `assert` する（作れるなら `ID2D1CommandList` で見る）
@@ -332,3 +332,4 @@
 - `windows-bindgen`（この rev）のフィルターは短い名前（`CoInitializeEx`）で書く。`Windows.Win32...` の長い名前は `could not resolve filter entry` で断られる。フィルターが全部空だと止まる（1.3）。
 - CopyLedger の問い 1 の写した行数（787）は例 2 本（73 行）を含む（設計の「約 790」と合う）。12.1 の合計もこの数え方で（2.1）。
 - `.sys()` の束縛は `IDC_ARROW: PCSTR` を出すのに `PCSTR` を出さず、フィルターに名指しもできない。束縛のモジュールに `pub type PCSTR = *const u8;` を 1 行足す。定数は `i32` で出る（2.2）。
+- 既定の形（この rev）: 戻り値の無い COM メソッドは `HRESULT`・`DWriteCreateFactory`／`D2D1CreateFactory` は IID を渡す形・継いだメソッドは基のインターフェースを名指ししないと出ない・`HRESULT::from_win32` が無い。`==` は番地が違っても COM の同一性で真（3.1）。3.2 は番地の違う参照の `==` の assert を残して比べる。

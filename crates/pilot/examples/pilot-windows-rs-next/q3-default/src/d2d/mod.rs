@@ -1,7 +1,5 @@
-use windows::Win32::Graphics::Direct2D::Common::*;
-use windows::Win32::Graphics::Direct2D::*;
-use windows::Win32::Graphics::DirectWrite::*;
-use windows::core::*;
+use crate::bindings::*;
+use windows_core::*;
 use windows_numerics::*;
 
 pub trait D2D1DeviceExt {
@@ -30,7 +28,7 @@ pub trait D2D1CommandListExt {
 impl D2D1CommandListExt for ID2D1CommandList {
     #[inline(always)]
     fn close(&self) -> Result<()> {
-        unsafe { self.Close() }
+        unsafe { self.Close().ok() }
     }
 }
 

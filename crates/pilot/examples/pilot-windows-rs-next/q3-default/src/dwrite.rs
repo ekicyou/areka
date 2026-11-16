@@ -1,10 +1,9 @@
-use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
-use windows::Win32::Graphics::DirectWrite::*;
-use windows::core::*;
+use crate::bindings::*;
+use windows_core::*;
 
 /// DWriteCreateFactory
 pub fn dwrite_create_factory(factorytype: DWRITE_FACTORY_TYPE) -> Result<IDWriteFactory2> {
-    unsafe { DWriteCreateFactory(factorytype) }
+    unsafe { DWriteCreateFactory(factorytype, &IDWriteFactory2::IID)?.cast() }
 }
 
 pub trait DWriteFactoryExt {
@@ -53,13 +52,13 @@ impl DWriteFactoryExt for IDWriteFactory2 {
     {
         unsafe {
             self.CreateTextFormat(
-                fontfamilyname,
+                fontfamilyname.param().abi().0,
                 fontcollection,
                 fontweight,
                 fontstyle,
                 fontstretch,
                 fontsize,
-                localename,
+                localename.param().abi().0,
             )
         }
     }
@@ -85,7 +84,13 @@ impl DWriteFactoryExt for IDWriteFactory2 {
                 text_pcwstr.as_wide()
             };
 
-            self.CreateTextLayout(text_slice, text_format, max_width, max_height)
+            self.CreateTextLayout(
+                text_slice.as_ptr(),
+                text_slice.len() as u32,
+                text_format,
+                max_width,
+                max_height,
+            )
         }
     }
 }
@@ -114,7 +119,7 @@ impl DWriteTextLayoutExt for IDWriteTextLayout {
         unsafe {
             // まず大きさだけを問い合わせる（塊があれば「入れ物が足りない」が返る）
             let mut actual_count = 0u32;
-            if !sizing_outcome(self.GetClusterMetrics(None, &mut actual_count))?
+            if !sizing_outcome(self.GetClusterMetrics(None, 0, &mut actual_count).ok())?
                 || actual_count == 0
             {
                 return Ok(Vec::new());
@@ -122,7 +127,8 @@ impl DWriteTextLayoutExt for IDWriteTextLayout {
 
             // バッファを確保して再取得
             let mut metrics = vec![DWRITE_CLUSTER_METRICS::default(); actual_count as usize];
-            self.GetClusterMetrics(Some(&mut metrics), &mut actual_count)?;
+            self.GetClusterMetrics(Some(metrics.as_mut_ptr()), actual_count, &mut actual_count)
+                .ok()?;
             metrics.truncate(actual_count as usize);
 
             Ok(metrics)
@@ -131,7 +137,9 @@ impl DWriteTextLayoutExt for IDWriteTextLayout {
 
     fn get_overhang_metrics(&self) -> Result<DWRITE_OVERHANG_METRICS> {
         // SAFETY: GetOverhangMetrics は out 構造体を書き込むだけ（レイアウトは内部で確定される）。
-        unsafe { self.GetOverhangMetrics() }
+        let mut overhangs = DWRITE_OVERHANG_METRICS::default();
+        unsafe { self.GetOverhangMetrics(&mut overhangs).ok()? };
+        Ok(overhangs)
     }
 }
 
@@ -141,14 +149,19 @@ impl DWriteTextLayoutExt for IDWriteTextLayout {
 fn sizing_outcome(r: Result<()>) -> Result<bool> {
     match r {
         Ok(()) => Ok(false),
-        Err(e) if e.code() == ERROR_INSUFFICIENT_BUFFER.to_hresult() => Ok(true),
+        Err(e)
+            if e.code()
+                == HRESULT::from_components(
+                    1,
+                    FACILITY_WIN32 as u32,
+                    ERROR_INSUFFICIENT_BUFFER as u32,
+                ) =>
+        {
+            Ok(true)
+        }
         Err(e) => {
             tracing::error!(error = %e, "GetClusterMetrics の大きさの問い合わせが失敗した");
             Err(e)
         }
     }
 }
-
-#[cfg(test)]
-#[path = "dwrite_cluster_tests.rs"]
-mod tests;
