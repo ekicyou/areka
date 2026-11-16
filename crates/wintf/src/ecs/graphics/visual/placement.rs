@@ -19,6 +19,16 @@ const MAX_HOST_DEPTH: usize = 256;
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct SurfacePlacement(pub(crate) PlacementKind);
 
+impl SurfacePlacement {
+    /// 自動で上げた持ち主（相が用意中か上げた）の描画面の物理の大きさ。手動の持ち主は `None`。
+    pub(crate) fn auto_size_px(&self) -> Option<(u32, u32)> {
+        match self.0 {
+            PlacementKind::Auto { size_px, .. } => Some(size_px),
+            PlacementKind::Embedded { .. } => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum PlacementKind {
     /// 手動の持ち主。行列は親の節の世界の行列（親の持ち主の DIP）。不透明度は祖先の節の積。

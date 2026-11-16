@@ -2,7 +2,7 @@ use super::init::{calculate_surface_size_from_global_arrangement, format_entity_
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::{
     DrawTree, GraphicsCommandList, GraphicsCore, SurfaceCreationStats, SurfaceGraphics,
-    SurfaceGraphicsDirty, VisualGraphics,
+    SurfaceGraphicsDirty, SurfacePlacement, VisualGraphics,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
@@ -40,6 +40,7 @@ type SurfaceCreationData = (
     &'static mut SurfaceGraphics,
     &'static mut SurfaceGraphicsDirty,
     Option<&'static Name>,
+    Option<&'static SurfacePlacement>,
 );
 
 /// 描画面を作る係が見る変化（配置・中身・見た目の作り直し）。命令の列か木の列を持つ部品が対象
@@ -51,6 +52,7 @@ type SurfaceCreationFilter = (
         Changed<GraphicsCommandList>,
         Changed<VisualGraphics>,
         Changed<DrawTree>,
+        Changed<SurfacePlacement>,
     )>,
 );
 
@@ -91,7 +93,8 @@ pub fn mark_dirty_surfaces(
 ///
 /// GraphicsCommandList か DrawTree が存在するEntityに対してSurfaceを条件付きで作成する。
 /// - 対象: VisualGraphics + (GraphicsCommandList か DrawTree) を持つEntity
-/// - サイズ: GlobalArrangement.boundsから物理ピクセルサイズを計算
+/// - サイズ: GlobalArrangement.boundsから物理ピクセルサイズを計算。自動で上げた持ち主（相が用意中か上げた）は
+///   置き場（`SurfacePlacement::Auto`）の大きさ＝部分木の描く範囲（要件 2.7）。置き場は 0×0 を書かない
 /// - 条件: サイズが有効（幅・高さが1以上）な場合のみ作成
 /// - サイズ変更: 既存Surfaceとサイズ不一致の場合は再作成
 ///
@@ -134,12 +137,20 @@ pub fn deferred_surface_creation_system(
         None => return,
     };
 
-    for (entity, visual_graphics, global_arrangement, mut surface_graphics, mut dirty, name) in
-        query.iter_mut()
+    for (
+        entity,
+        visual_graphics,
+        global_arrangement,
+        mut surface_graphics,
+        mut dirty,
+        name,
+        placement,
+    ) in query.iter_mut()
     {
-        // GlobalArrangementからサイズを計算
-        let Some((width, height)) =
-            calculate_surface_size_from_global_arrangement(global_arrangement)
+        // 自動の持ち主は置き場の大きさ、ほかはGlobalArrangementからサイズを計算
+        let Some((width, height)) = placement
+            .and_then(SurfacePlacement::auto_size_px)
+            .or_else(|| calculate_surface_size_from_global_arrangement(global_arrangement))
         else {
             // Req 5.1: スキップ理由ログ
             trace!(

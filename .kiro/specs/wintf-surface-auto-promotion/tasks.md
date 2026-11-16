@@ -101,7 +101,7 @@
   - _Dispatch: standard, effort high — 係をまたぐ配線と借用の順を組む_
   - _Requirements: 1.9, 3.1, 3.3, 5.1, 8.6_
 
-- [ ] 3.5 自動で上げた持ち主の描画面の大きさを部分木の描く範囲から決める
+- [x] 3.5 自動で上げた持ち主の描画面の大きさを部分木の描く範囲から決める
   - 相が用意中か上げたの節の描画面を、配置の外接矩形でなく置き場の大きさで作る
   - 上げた後に大きさが変わった回は今の作り直しの道に乗り、自分の描画面だけを全部描き直す。ほかの持ち主の大きさの決め方は変えない
   - 自動の持ち主の描画面の大きさが置き場の大きさと同じになり、はみ出しで作り直されることのテストが緑になる
@@ -182,3 +182,4 @@
 - 3.1: `RoundPlan.segments` は Active と 3 部品（`SurfaceGraphics`）つきの Preparing だけ。3.4 は (a) `segments` に入った Preparing の部分を書いた回にだけ、全部の根を回した後で `built = true` を `bypass_change_detection` で立てる (b) `segments` に無い持ち主には立てない (c) 係の順 `sync_surface_owner_parts` → `update_draw_trees` → `deferred_surface_creation_system` を保つ (d) どの根の回でも `written` に入らなかった実体の置き場を外し、どの走査の列にも現れなかった控えの自動の持ち主を見えないとして戻す (e) `promotion_round.rs` の dead_code の許しを外す。装置が無ければ用意中は Failed で戻す
 - 3.2: `run_round` は `reported: &mut ReportedIssues` を取る。3.4 は `update_draw_trees` の `Local<ReportedIssues>` を `fill_world_visuals` と `run_round` で共有し、`end_round` は全部の根を回した後に 1 度だけ呼び、`run_round` は `needs_rebuild` に関係なく毎フレーム回す（さもないと warn! の「続く間 1 度」が崩れる）。どの走査の列にも現れなかった自動の持ち主の `hidden` の戻しは `promotion_round::record` を `pub(crate)` にして記録を残す。`clip_combo` は `merged_clip` の `Unsupported` の条件の写しなので、4.3 で `merged_clip` を本番で呼ぶときに両者の答えが合うテストを 1 本足す
 - 3.4: 境界を広げた（進行役の裁定・並走なし）: `render.rs` の `replay_transform` は `DrawTree::device_px` の木だけ恒等。visual/mod.rs の `Visual`・`OwnSurface` の文書は「持ち主の `VisualTransform` を WUC の Visual の変形として写す」と書いたが、本当になるのは 4.2。4.2 で確かめる。拡大 1.25 の画素は根の変換の選びまでしか確かめていないので、5.1 の WARP で通しで確かめる
+- 3.5: 戻した回は置き場が先に外れ 3 部品は次の回に外れるので、その回に配置などが変わると、捨てる描画面を外接矩形の大きさで 1 度作り直しうる（画素には出ない・GPU の手間だけ）。直すなら作る係で「置き場が無く、もう描画面を欲しがらない（目印も命令の列も無く相が Node）」実体を飛ばす。4.1 で入れる

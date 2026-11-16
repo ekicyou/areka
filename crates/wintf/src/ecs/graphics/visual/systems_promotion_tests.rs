@@ -6,7 +6,7 @@ use super::draw_content_test_support::solid_rect_content;
 use super::promotion::Phase;
 use super::*;
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
-use crate::ecs::graphics::{FrameTime, GraphicsCore};
+use crate::ecs::graphics::{FrameTime, GraphicsCore, SurfaceCreationStats, SurfaceGraphics};
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use crate::ecs::world::{EcsWorld, PreRenderSurface};
 use crate::ecs::{Offset, Size, Window};
@@ -229,4 +229,59 @@ fn nested_owner_placement_does_not_flap_with_two_roots() {
         assert_eq!(tick(world), first, "置き場を毎回外して付け直さない");
     }
     assert!(world.get::<DrawTree>(inner).is_some(), "内の根も組む");
+}
+
+/// 置き場の大きさ（自動の持ち主のとき）。
+fn auto_size(world: &World, e: Entity) -> Option<(u32, u32)> {
+    world.get::<SurfacePlacement>(e)?.auto_size_px()
+}
+
+/// 自動の持ち主の描画面は配置の外接矩形でなく置き場の大きさで作り、範囲がはみ出した回は
+/// 作り直す（要件 2.7）。
+#[test]
+fn auto_owner_surface_takes_placement_size_and_regrows() {
+    let mut ecs = device_world();
+    let world = ecs.world_mut();
+    let (_, a) = owner_with_nodes(world);
+    let mut t = 0.0;
+    let mut saw_preparing = false;
+    while phase(world, a) != Phase::Active {
+        assert!(t < 3.0, "上がらない");
+        frame(world, t, Some(a));
+        // 用意中の最初の回は 3 部品がまだ無い（次の回に付く）。
+        if phase(world, a) == Phase::Preparing
+            && let Some(size) = auto_size(world, a)
+            && let Some(s) = world.get::<SurfaceGraphics>(a).filter(|s| s.is_valid())
+        {
+            saw_preparing = true;
+            assert_eq!(s.size, size, "用意中も置き場の大きさ");
+        }
+        t += DT;
+    }
+    assert!(saw_preparing);
+    let before = auto_size(world, a).expect("置き場");
+    assert_ne!(
+        before,
+        (4, 4),
+        "配置の外接矩形（4×4）とは違う大きさ（余白を含む）"
+    );
+    assert_eq!(world.get::<SurfaceGraphics>(a).unwrap().size, before);
+
+    // 描く範囲が今の描画面からはみ出すと、置き場の大きさを決め直して作り直す。
+    let resized = world.resource::<SurfaceCreationStats>().resize_count;
+    world
+        .entity_mut(a)
+        .insert(solid_rect_content(rect(0.0, 0.0, 30.0, 30.0)));
+    frame(world, t, None);
+    let after = auto_size(world, a).expect("上げたまま");
+    assert!(
+        after.0 > before.0 && after.1 > before.1,
+        "{before:?} → {after:?}"
+    );
+    assert_eq!(world.get::<SurfaceGraphics>(a).unwrap().size, after);
+    assert_eq!(
+        world.resource::<SurfaceCreationStats>().resize_count,
+        resized + 1,
+        "作り直しの道に乗る"
+    );
 }
