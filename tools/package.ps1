@@ -489,8 +489,10 @@ function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
 # 自分の検査は関数の定義の後・PATH の手当てと段の前で分かれる（ビルド・cargo・git・起動確認を回さない）
 if ($SelfTest) {
     if (@($PSBoundParameters.Keys | Where-Object { $_ -ne 'SelfTest' })) { Exit-Script $EXIT_BAD_ARGS '-SelfTest takes no other parameter' }
-    . (Join-Path $PSScriptRoot 'package.selftest.ps1')   # 終了コードは自分の検査が exit で決める
-    exit $EXIT_STAGE_FAILED
+    # 読み込んだ台本の exit はここへ戻り、その終了コードを LASTEXITCODE に置く（exit せずに戻れば 1 のまま）
+    $global:LASTEXITCODE = $EXIT_STAGE_FAILED
+    . (Join-Path $PSScriptRoot 'package.selftest.ps1')
+    exit $LASTEXITCODE
 }
 
 # 段の並びは 1 つの try の中（終わりの finally まで。字下げはしない）。後始末の口は finally の 1 か所だけ
@@ -501,11 +503,11 @@ $env:PATH = Get-MsvcLinkPath $env:PATH
 Step 'preflight' {
     # 引数
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
-    $a = Test-PackageArgs -Arch $Arch -Check $Check -CheckDir $CheckDir -KeepExpanded $KeepExpanded `
+    $parsed = Test-PackageArgs -Arch $Arch -Check $Check -CheckDir $CheckDir -KeepExpanded $KeepExpanded `
         -SmokeExitMsGiven $SmokeExitMsGiven -SmokeExitMs $SmokeExitMs -RepoRoot $repoRoot
-    if ($a.Error) { Exit-Script $EXIT_BAD_ARGS $a.Error }
-    $script:BuildArchs = $a.BuildArchs
-    $script:SmokeMs = $a.SmokeMs
+    if ($parsed.Error) { Exit-Script $EXIT_BAD_ARGS $parsed.Error }
+    $script:BuildArchs = $parsed.BuildArchs
+    $script:SmokeMs = $parsed.SmokeMs
     # 既定の親はワークツリーの target\package（%TEMP% には何も作らない）
     $parent = if ($CheckDir) { [IO.Path]::GetFullPath($CheckDir) } else { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR")) }
     $script:ExpandDir = Join-Path $parent ('check-' + (Get-Date -Format 'HHmmss'))

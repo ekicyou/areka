@@ -87,7 +87,7 @@
   - _Dispatch: standard — 取っ手を握って改名と掃除の失敗の道を作る偽の置き場_
   - _Requirements: 4.1, 4.3, 4.4, 4.5, 6.3_
 
-- [ ] 5. 配布物の道具（束 5・5・9・15 の半分・19）
+- [x] 5. 配布物の道具（束 5・5・9・15 の半分・19）
 - [x] 5.1 判定の関数の定義を前へ集め、段の並びを `try`/`finally` で包んで後始末の口を 1 か所にする
   - 先に、段の間に散っている判定の関数と子の読みの定義を最初の段の前へ移す（中身と `$script:` の値の読み方は変えない）。この純粋な移しを 1 つのコミットにし、後の直しと分けてレビューで見分けられるようにする
   - 段を並べる本体を `try { … } finally { Invoke-Cleanup $script:ExitCode }` で包み、`PATH` の手当てを `try` の中へ置く。`Exit-Script` は終了コードを控え、理由を `Show-Ascii $Message 0` にして出し、`exit` するだけにする（後始末を呼ばない）（5・15）
@@ -103,7 +103,7 @@
   - 終わった姿: `pwsh -NoProfile -File tools/package.ps1 -SelfTest -Arch x64` が `-SelfTest takes no other parameter` と終了コード 3 で、ビルドも子も起こさずに終わる
   - _Dispatch: standard — 引数の道を純関数へ出し新しい入口を足す_
   - _Requirements: 3.1, 3.4, 6.2_
-- [ ] 5.3 配布物の判定の自分の検査の台本を作る
+- [x] 5.3 配布物の判定の自分の検査の台本を作る
   - `package.ps1 -SelfTest` から読み込まれ、ビルド・`cargo`・`git`・起動確認を回さない。書くのは `target\package-selftest\<pid>\` の下だけで、終わったら消す
   - 検査: `run log`・`pe read`（小さな PE32 と PE32+ のバイト列を組む）・`deny list`・`zip content`（小さな zip を組み、説明書 2 本は `vendors/sample_ghost/emo2.nar` を読むだけ）・`args`・`ascii exit message`（子の `package.ps1 -Arch <U+65E5>` が終了コード 3 で ASCII だけの行と `\u65E5` を出し、ビルドの前で止まる）・`cleanup idempotent`・`steps inside try finally`（何を見るかは設計の T2 の表）
   - 出し方は T3 と同じ（`ok selftest <名前>`／`FAIL selftest <名前>`・0／1）
@@ -232,3 +232,4 @@
 - 4.1: `exe-install.ps1` の `FAIL cleanup: …`・`FAIL check: cannot start: …` の理由は .NET の例外の文で、置き場の絶対パス（環境変数の値）を含みうる。設計は `<理由>` とだけ言う。11.2 のかけ直しで要否を判断する。
 - 4.3: 4.1 の件は 4.3 で直した（`Install-ToolExe` の理由の文で置き場のパスを `<home>` に替え、`check throws` で縛る）。
 - 5.2: `package.ps1` の preflight で `$a` を `Test-PackageArgs` の結果と `foreach ($a in $script:BuildArchs)` の両方に使っている（害は無い・読み違えやすい）。5.3 か 11.2 で名前を分ける。`package.selftest.ps1` は最後に自分で `exit` すること（呼ぶ側の後ろに `exit $EXIT_STAGE_FAILED` の番人がある）。
+- 5.3: dot-source した台本の中の `exit` は呼ぶ側の台本を終わらせず `$LASTEXITCODE` を置いて戻る。`package.ps1 -SelfTest` は `$global:LASTEXITCODE = 1; . selftest; exit $LASTEXITCODE` の形にした（5.2 の番人の形のままだと全部通っても 1 だった）。
