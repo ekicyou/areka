@@ -1,7 +1,7 @@
 //! 節の下の持ち主・自動で上げた持ち主の置き場の部品 [`SurfacePlacement`] と、
 //! それを WUC へ写す純粋な補助（設計の PlacementMath）。ECS の係に依らない。
 
-// shortcut: 係から呼ぶのは後のタスク（3.x）。配線が入ったらこの許しを外す。
+// shortcut: WUC へ写す補助を係から呼ぶのは 4.x（置き場の部品は 3.4 で配線済み）。4.x で繋いだらこの許しを外す。
 #![cfg_attr(not(test), allow(dead_code))]
 
 use bevy_ecs::prelude::*;

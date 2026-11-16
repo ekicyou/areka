@@ -30,7 +30,6 @@ pub(crate) enum TreeFrame<'a> {
     },
     /// 自動で上げた持ち主の部分の列。根の中身は出さず、全部の世界の行列と外接矩形を、親の持ち主の
     /// 拡大 `scale` を掛けてから原点 `origin_px`（整数の物理ピクセル）を引いた、自分の描画面の物理ピクセルへ写す。
-    #[cfg_attr(not(test), allow(dead_code))] // shortcut: 配線は群 3 で足す、繋いだら外す
     Segment {
         owner: Entity,
         owner_name: Option<&'a Name>,

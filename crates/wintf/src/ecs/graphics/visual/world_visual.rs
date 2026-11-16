@@ -4,7 +4,6 @@ use super::{
 };
 use crate::ecs::Size;
 use crate::ecs::common::MAX_ANCESTOR_DEPTH;
-use crate::ecs::graphics::components::VisualGraphics;
 use crate::ecs::graphics::systems::format_entity_name;
 use crate::ecs::graphics::{ClipShape, GraphicsCommandList};
 use crate::ecs::layout::Arrangement;
@@ -82,7 +81,6 @@ pub(crate) type FillData = (
     Option<&'static mut WorldVisual>,
     Option<&'static mut VisualVersion>,
     Option<Ref<'static, Children>>,
-    Has<VisualGraphics>,
     Option<&'static Name>,
 );
 
@@ -126,7 +124,8 @@ pub struct TreeScan {
 }
 
 impl TreeScan {
-    /// 描く列の組み立てに渡す、見える節の `(実体, 深さ)`（前順）。手動の持ち主の項と見えない節は除く。
+    /// 見える節の `(実体, 深さ)`（前順）。手動の持ち主の項と見えない節は除く（本番は 1 回の判断の分け方を使う）。
+    #[cfg(test)]
     pub(crate) fn visible_nodes(&self) -> impl Iterator<Item = (Entity, usize)> + '_ {
         self.entries
             .iter()
@@ -136,8 +135,6 @@ impl TreeScan {
 }
 
 /// 走査の列の 1 項。
-// shortcut: 判断の材料の欄を読むのは後のタスク（2.2・3.x）。配線が入ったらこの許しを外す。
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ScanEntry {
     pub entity: Entity,
@@ -169,7 +166,6 @@ impl ScanEntry {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ScanKind {
     Node {
@@ -202,7 +198,6 @@ impl ClipClass {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct AncestorAcc {
     /// 祖先の節の `clamped_opacity` の積。
@@ -258,7 +253,7 @@ impl AncestorAcc {
 ///
 /// - 局所の変形は `VisualTransform × 平行移動(Arrangement.offset)`（無ければ恒等）・
 ///   `world = local * parent`（行ベクトル）。根は恒等。
-/// - 前順（`Children` の並び順）に訪れる。描く列の組み立ては [`TreeScan::visible_nodes`] をそのまま使う。
+/// - 前順（`Children` の並び順）に訪れる。描く列は 1 回の判断（`run_round`）がこの列から分ける。
 /// - 見えない節と不透明度（`clamped_opacity`）が 0 の節は、自分も子孫も `visible = false` の項になり
 ///   （`WorldVisual` は前の値のまま）、版を上げる・不透明度の NaN の検査・深さの検査だけを行う。
 /// - 欄へ直に書かれた不透明度の NaN は 1.0 として訪れ、`warn!` を `reported` で続く間 1 回だけ残す。
@@ -307,7 +302,6 @@ pub(crate) fn fill_world_visuals(
             wv,
             _,
             kids,
-            _,
             name,
         )) = nodes.get(e)
         else {
@@ -418,7 +412,7 @@ pub(crate) fn fill_world_visuals(
         }
     }
     for entry in entries.iter().filter(|e| e.is_visible_node()) {
-        if let Ok((.., Some(mut wv), _, _, _, _)) = nodes.get_mut(entry.entity) {
+        if let Ok((.., Some(mut wv), _, _, _)) = nodes.get_mut(entry.entity) {
             changed |= wv.is_added();
             if *wv != entry.world {
                 *wv = entry.world;
@@ -428,7 +422,7 @@ pub(crate) fn fill_world_visuals(
     }
     changed |= !bumped.is_empty();
     for e in bumped {
-        if let Ok((.., Some(mut version), _, _, _)) = nodes.get_mut(e) {
+        if let Ok((.., Some(mut version), _, _)) = nodes.get_mut(e) {
             version.bump();
         }
     }

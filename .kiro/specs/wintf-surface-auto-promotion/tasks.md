@@ -90,7 +90,7 @@
   - _Dispatch: standard — 既存の係に新しい入力と初期化の分岐を足す_
   - _Requirements: 2.1, 2.2, 2.6, 6.1, 6.2_
 
-- [ ] 3.4 描画の木を組む係に 1 回の判断と部分の列を配線する
+- [x] 3.4 描画の木を組む係に 1 回の判断と部分の列を配線する
   - 根として回すのは手動の持ち主だけにし、根ごとに走査の列を埋める → 1 回の判断 → 親の列で根の木を組む → 部分の列を組む、の順に回す
   - 組んだ部分の列は全部の根を回した後にまとめて自動の持ち主の描画の木へ書き、用意中の部分を書いた回に描いた印を立てる
   - 全部の根を回した後、係に控えた自動の持ち主のうちこの回どの走査の列にも現れなかった実体を見えないとして戻す（全部の節を問い合わせで歩かない）
@@ -181,3 +181,4 @@
 - 2.4: R-e は案 b（端数の位置のまま上げる）で揃った（拡大 1.0・1.25・1.5、矩形・にじむ楕円・線形と縮める HQC のビットマップ、画像全体で ±1）。ただし原点を DIP（px÷拡大）で引くと f32 の丸めで崩れる（楕円・拡大 1.25 で 16）ので、`TreeFrame::Segment` は `origin_px` と `scale` を取り、列を自分の描画面の物理ピクセルで出す。**3.4 の配線では、自動の持ち主の描画面の再生の根の変換を恒等に、`diff::entries` の拡大を (1,1) にする（さもないと DPI の拡大が二重に掛かる）**。`INTEGER_POSITION_ONLY = false`。`Origin.dip` は部分の列では使わない
 - 3.1: `RoundPlan.segments` は Active と 3 部品（`SurfaceGraphics`）つきの Preparing だけ。3.4 は (a) `segments` に入った Preparing の部分を書いた回にだけ、全部の根を回した後で `built = true` を `bypass_change_detection` で立てる (b) `segments` に無い持ち主には立てない (c) 係の順 `sync_surface_owner_parts` → `update_draw_trees` → `deferred_surface_creation_system` を保つ (d) どの根の回でも `written` に入らなかった実体の置き場を外し、どの走査の列にも現れなかった控えの自動の持ち主を見えないとして戻す (e) `promotion_round.rs` の dead_code の許しを外す。装置が無ければ用意中は Failed で戻す
 - 3.2: `run_round` は `reported: &mut ReportedIssues` を取る。3.4 は `update_draw_trees` の `Local<ReportedIssues>` を `fill_world_visuals` と `run_round` で共有し、`end_round` は全部の根を回した後に 1 度だけ呼び、`run_round` は `needs_rebuild` に関係なく毎フレーム回す（さもないと warn! の「続く間 1 度」が崩れる）。どの走査の列にも現れなかった自動の持ち主の `hidden` の戻しは `promotion_round::record` を `pub(crate)` にして記録を残す。`clip_combo` は `merged_clip` の `Unsupported` の条件の写しなので、4.3 で `merged_clip` を本番で呼ぶときに両者の答えが合うテストを 1 本足す
+- 3.4: 境界を広げた（進行役の裁定・並走なし）: `render.rs` の `replay_transform` は `DrawTree::device_px` の木だけ恒等。visual/mod.rs の `Visual`・`OwnSurface` の文書は「持ち主の `VisualTransform` を WUC の Visual の変形として写す」と書いたが、本当になるのは 4.2。4.2 で確かめる。拡大 1.25 の画素は根の変換の選びまでしか確かめていないので、5.1 の WARP で通しで確かめる

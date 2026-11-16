@@ -37,7 +37,7 @@
 - `draw/README.md` と steering（`structure.md`・`tech.md`）の描画の道の記述。
 
 ### Out of Boundary
-- 差分の描き直し（項・比べ・計画・写し・記録の行 `[render_surface] damage`）。`render.rs`・`damage.rs`・`diff.rs`・`composite.rs` は触らない。
+- 差分の描き直し（項・比べ・計画・写し・記録の行 `[render_surface] damage`）。`render.rs`・`damage.rs`・`diff.rs`・`composite.rs` は触らない。ただし `render.rs` の根の変換の選び 1 か所だけは例外（3.4 の実装で確定）: 部分の列は自分の描画面の物理ピクセルで出すので、`DrawTree::device_px`（`draw_tree.rs` に足す欄・部分の列の木だけ真）が立つ木は恒等の根の変換で描き直す（`replay_transform`）。`composite.rs` は同じ行列から拡大を取るので、`diff::entries` の拡大も (1,1) になり、触らない。でないと DPI の拡大が二重にかかる。
 - 係の登録と順（`ecs/world/mod.rs`）・WUC の Visual を作る係（`visual_manager.rs`）・部品の定義（`components.rs` の `VisualGraphics`。`ClipKey` は欄を足すだけ受け持つ）・配置の伝播（`layout/`）。
 - 当たり判定（`hit_test`）・描画面 1 枚ごとの読み戻し（`readback.rs`）の答えの形。
 - 層・不透明度・重ね方・ブレンドの規則。

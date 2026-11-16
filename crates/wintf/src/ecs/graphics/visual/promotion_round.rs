@@ -2,9 +2,6 @@
 //! 置き場の書き込み・描く列の分け方を決める。使い手の部品（`OwnSurface`・`GraphicsCommandList`・
 //! `VisualDrawContent`・`VisualTransform`）には触らず、`AutoPromotion` と `SurfacePlacement` だけを書く。
 
-// shortcut: 係から呼ぶのは 3.4。配線が入ったらこの許しを外す。
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::collections::HashSet;
 use std::iter::successors;
 
@@ -54,6 +51,10 @@ pub(crate) struct RoundPlan {
     pub host_visited: Vec<(Entity, usize)>,
     /// 部分の列を描く自動の持ち主（Preparing の 3 部品つき・Active）。
     pub segments: Vec<Segment>,
+    /// 判断の後に相が Node でない自動の持ち主（この走査の列に現れた分・見えない節も含む）。
+    pub autos: Vec<Entity>,
+    /// この回に相が移った節が在るか（親の列の分け方が変わるので根を組み直す）。
+    pub moved: bool,
 }
 
 /// 1 つの手動の持ち主の走査の列 `scan`（同じ回に `fill_world_visuals` が埋めたもの）から、相を進め、
@@ -85,9 +86,9 @@ pub(crate) fn run_round(
         host_px: ctx.host_px,
     };
     let mut phases: Vec<Phase> = entries.iter().map(phase_of).collect();
-    if let Some(now) = ctx.now {
-        decide(ctx, now, scan, &mut phases, states);
-    }
+    let moved = ctx
+        .now
+        .is_some_and(|now| decide(ctx, now, scan, &mut phases, states));
     let mut origins: Vec<Option<Origin>> = vec![None; entries.len()];
     for (i, e) in entries.iter().enumerate() {
         let kind = match e.kind {
@@ -167,17 +168,50 @@ pub(crate) fn run_round(
                 })
             })
             .collect(),
+        autos: entries
+            .iter()
+            .zip(&phases)
+            .filter(|(_, p)| **p != Phase::Node)
+            .map(|(e, _)| e.entity)
+            .collect(),
+        moved,
     }
 }
 
-/// 帰属・判断・祖先の優先と吸い込み。`phases` を判断の後の相へ書き換える。
+/// 全部の根を回した後、前の回に控えた自動の持ち主のうち、この回どの走査の列にも現れなかった実体
+/// （窓の外へ移った・持ち主の下から外れた）を見えないとして即時に戻す（記録の理由は `hidden`）。
+pub(crate) fn demote_unseen(
+    now: f64,
+    unseen: impl Iterator<Item = Entity>,
+    states: &mut Query<PromotionData>,
+) {
+    for e in unseen {
+        let Ok((Some(mut auto), _, _, name)) = states.get_mut(e) else {
+            continue; // 消えた実体・手動の持ち主になった実体
+        };
+        if auto.rule.phase() == Phase::Node {
+            continue; // 手動の目印で初期化された
+        }
+        let state = auto.bypass_change_detection();
+        let hidden = || Err(Ineligible::Hidden);
+        let verdict = state
+            .rule
+            .step(now, false, hidden, SurfaceReadiness::Pending);
+        record(e, name, verdict, &mut state.skip_memo);
+        state.built = false;
+        auto.set_changed();
+    }
+}
+
+/// 帰属・判断・祖先の優先と吸い込み。`phases` を判断の後の相へ書き換え、相が移った節が在れば真。
 fn decide(
     ctx: &RoundContext,
     now: f64,
     scan: &TreeScan,
     phases: &mut [Phase],
     states: &mut Query<PromotionData>,
-) {
+) -> bool {
+    let mut moved = false;
     let entries = &scan.entries;
     let mut updated = vec![false; entries.len()];
     for i in (0..entries.len()).filter(|&i| entries[i].updated) {
@@ -234,9 +268,11 @@ fn decide(
         if after != before {
             state.built = false;
             auto.set_changed();
+            moved = true;
         }
         phases[i] = after;
     }
+    moved
 }
 
 /// 用意中の描画面の様子: 装置が無ければ作れない。3 部品がまだ無いか部分の列をまだ描いていなければ待つ。

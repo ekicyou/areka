@@ -33,8 +33,11 @@ fn has_none(world: &World, e: Entity) -> bool {
 }
 
 /// 窓の下に何も持たない Visual（持ち主）と描く中身だけの Visual（節）を作る。
+/// 相は [`drive_to`] が手で進めるので、描画の木の係が実の時計で判断しないようフレームの時刻を外す
+/// （時刻の無い回は判断しない）。
 fn owner_and_node(ecs: &mut EcsWorld) -> (Entity, Entity) {
     let world = ecs.world_mut();
+    world.remove_resource::<crate::ecs::graphics::FrameTime>();
     let window = world.spawn(Window::default()).id();
     let owner = world.spawn((Visual::default(), ChildOf(window))).id();
     let node = world
@@ -97,10 +100,7 @@ fn demoted_owner_loses_draw_tree() {
     world.entity_mut(node).insert(OwnSurface);
     world.run_schedule(PreRenderSurface);
     assert!(has_parts(world, node));
-    world.entity_mut(node).insert(DrawTree {
-        commands: vec![],
-        unit_rect: None,
-    });
+    world.entity_mut(node).insert(DrawTree::default());
 
     world.entity_mut(node).remove::<OwnSurface>();
     world.run_schedule(PreRenderSurface);
@@ -265,9 +265,9 @@ fn unit_rect_recreated_after_device_loss_recovery() {
     assert_ne!(before.as_raw(), after.as_raw());
 }
 
-/// 持ち主の `VisualTransform` は WUC では効かない: 変わった回に 1 度だけ `warn!` を残す（1.2c）。
+/// 持ち主の `VisualTransform` は WUC の写しで効かせるので、入った回も変わった回も `warn!` を残さない（要件 5.1）。
 #[test]
-fn owner_transform_warns_once_per_change() {
+fn owner_transform_does_not_warn() {
     use log_capture_kit::{LineFormat, capture_lines};
     let mut ecs = EcsWorld::new();
     let world = ecs.world_mut();
@@ -286,13 +286,12 @@ fn owner_transform_warns_once_per_change() {
         });
         lines
             .iter()
-            .filter(|l| l.starts_with("level=WARN") && l.contains("持ち主の VisualTransform"))
+            .filter(|l| l.starts_with("level=WARN") && l.contains("VisualTransform"))
             .count()
     };
-    assert_eq!(warns(world), 1, "入った回に 1 度");
-    assert_eq!(warns(world), 0, "変わらなければ残さない");
+    assert_eq!(warns(world), 0, "入った回に残さない");
     world.get_mut::<VisualTransform>(owner).unwrap().0.rotation = 0.5;
-    assert_eq!(warns(world), 1, "変わった回にまた 1 度");
+    assert_eq!(warns(world), 0, "変わった回にも残さない");
 }
 
 /// 装置を入れ、窓の下の持ち主と描く中身つきの節を作って 1 回組む（根の部品が入るまで）。

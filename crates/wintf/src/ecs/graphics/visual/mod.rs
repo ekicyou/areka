@@ -38,6 +38,8 @@ mod promotion_shape_tests;
 #[cfg(test)]
 mod promotion_tests;
 #[cfg(test)]
+mod systems_promotion_tests;
+#[cfg(test)]
 mod systems_tests;
 #[cfg(test)]
 mod visual_tests;
@@ -83,7 +85,7 @@ pub use world_visual::*;
 /// 頻繁に更新される窓の下の節は自動で描画面の持ち主へ上がり、落ち着くと節へ戻る（[`AutoPromotion`]）。
 /// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける（自動の上げ下げより優先する）。昇格した持ち主の
 /// `VisualDrawContent` は自分の描画面の木の先頭の 1 件として子より先に描かれる。持ち主の
-/// `VisualTransform` は WUC では効かない（入った・変わった回に `warn!` を 1 度残して無視する）。
+/// `VisualTransform` は WUC の Visual の変形として写す（`warn!` は残さない）。
 ///
 /// # ライフタイムイベント
 /// - `on_add`: `Arrangement::default()`を自動挿入
@@ -104,7 +106,7 @@ pub struct Visual {
 /// 描画面を持つ目印（手動の昇格の口）。在れば新しい描き方の部品の有無に依らず、
 /// その `Visual` は描画面の持ち主（WUC の Visual と描画面を持ち、その下の木の根）になる。
 /// 一度節になった `Visual` を持ち主へ戻すのもこの目印で行う。自分の `VisualDrawContent` は
-/// 描画面に描かれ続ける（子の節が無くても）。`VisualTransform` は無視される（`warn!` が 1 度）。
+/// 描画面に描かれ続ける（子の節が無くても）。`VisualTransform` は WUC の Visual の変形として写す。
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct OwnSurface;
 

@@ -2,9 +2,6 @@
 //!
 //! 入力は走査の列と候補の添字と拡大と親の描画面の大きさだけ（ECS に触らない）。
 
-// shortcut: 係から呼ぶのは後のタスク（3.x）。配線が入ったらこの許しを外す。
-#![cfg_attr(not(test), allow(dead_code))]
-
 use super::MixMode;
 use super::draw::diff::{Parent, PxRect, item_bounds};
 use super::promotion::Phase;

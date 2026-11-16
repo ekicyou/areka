@@ -3,9 +3,6 @@
 //! 時刻は f64 秒のまま丸めずに比べる。前の回より戻った時刻は前の回の値として扱い（経過 0）、
 //! 同じ時刻の複数の更新は 1 回に数える。ログの水準は読まない（同じ入力から同じ答え）。
 
-// shortcut: 係から呼ぶのは後のタスク（3.x）。配線が入ったらこの許しを外す。
-#![cfg_attr(not(test), allow(dead_code))]
-
 use std::collections::VecDeque;
 
 use bevy_ecs::prelude::*;
