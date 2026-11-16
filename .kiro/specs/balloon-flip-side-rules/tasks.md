@@ -79,7 +79,7 @@
   - _Requirements: 2.10_
 
 - [ ] 5. 記録の表と調べの記録を直す
-- [ ] 5.1 (P) `windowposition.x` の古い注記と互換対応表の ⚠ を今の ukadoc に合わせる
+- [x] 5.1 (P) `windowposition.x` の古い注記と互換対応表の ⚠ を今の ukadoc に合わせる
   - `windowposition.rs` の冒頭の説明と符号規約の節の「正典はシェル側が+と記述する／乖離は記録対象」を、2026-09-20 の ukadoc の改め（ukatech/ukadoc の f92e4ff9・「左右どちらに出していても常に右方向が+」）と SSP の実測が一致した、という文に改める。式と表は変えない。
   - `doc/COMPAT_ARCHITECTURE.md` の `windowposition.x` の符号規約の行の ⚠ を同じ事実に改める。
   - 済んだ姿: 2 か所の文が改まり、`windowposition.rs` の差分がコメントだけで、`cargo test -p areka-placement` の `placement_windowposition_tests` が緑。
