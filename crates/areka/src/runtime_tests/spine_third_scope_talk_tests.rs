@@ -28,9 +28,9 @@ use areka_sakura::TalkId;
 use shiori_host32_host::ExitKind;
 
 use super::{
-    CloseReason, Duration, GhostWindows, Instant, LoopDriver, PresentCommand, Progress,
-    RecordedCall, SPIN_WAIT, ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal,
-    capture_logs, run_attach_phase, shell_target, show_gate, wait_until,
+    CloseReason, Duration, GhostWindows, LoopDriver, PresentCommand, Progress, RecordedCall,
+    ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal, capture_logs,
+    run_attach_phase, shell_target, show_gate, wait_until,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
 use crate::session::ghost_quit::run_ghost_quit_phase;
@@ -270,19 +270,18 @@ fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
     );
 
     // ── 停止の知らせを終了相が読み、終わり方が「終了」になる ──
-    let deadline = Instant::now() + SPIN_WAIT;
-    let mut quit_consumed = false;
-    while Instant::now() < deadline {
+    // 汲む物が無いので、目印は SHIORI の呼び出しの数だけ（解放の後は増えない＝30 秒で［止まった］）。
+    let what = "kanade の停止の知らせの UI への到着";
+    let shiori = harness.shiori_handle.clone();
+    let calls = || shiori.call_count();
+    wait_until(what, Progress::Count(&calls), || {
         if run_ghost_quit_phase(&mut harness.world) {
-            quit_consumed = true;
-            break;
+            return true;
         }
         std::thread::sleep(BACKOFF);
-    }
-    assert!(
-        quit_consumed,
-        "kanade の停止の知らせが有界内に UI へ届かない"
-    );
+        false
+    })
+    .unwrap_or_else(|failure| panic!("{failure}／{what}"));
     let origin = harness.world.resource::<FirstExit>().0.clone();
     assert_eq!(
         origin,

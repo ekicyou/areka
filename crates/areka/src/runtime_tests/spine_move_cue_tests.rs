@@ -1,6 +1,6 @@
 use super::{
-    Duration, Entity, GhostWindows, Instant, Point, SPIN_WAIT, SpineHarness, WindowPos, World,
-    all_shown, give_fake_handles, run_move_drain_with,
+    Duration, Entity, GhostWindows, Point, Progress, SpineHarness, WindowPos, World, all_shown,
+    give_fake_handles, run_move_drain_with, wait_until,
 };
 
 // ===========================================================================
@@ -85,32 +85,32 @@ fn spine_move_cue_drives_window_move_end_to_end() {
 
     // OnBoot talk を Tick 注入で駆動し、各反復で実 frame 相 move drain を回す。move cue は at=0.0 ゆえ talk
     // 起動後の最初の有効 Tick で発火するが、boot→compile→dispatch→broadcast はスレッド群を跨いで非同期に
-    // 流れるため、窓が動く（channel→drain→apply 完了）まで有界待機する。有界性は壁時計 deadline（[`SPIN_WAIT`]）
-    // ＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。観測「初期位置からの変位」は
+    // 流れるため、窓が動く（channel→drain→apply 完了）まで有界待機する。打ち切りは [`wait_until`] の進みの
+    // 目印（SHIORI の呼び出しの数。move の汲みは数を返さないので足さない）で、反復の末尾に 200µs の
+    // poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。観測「初期位置からの変位」は
     // move cue が 1 発のみ＝以降動かない＝ラッチであり、台本は `\w`／`\c` なし（全 cue `at=0.0`）ゆえ
     // 注入時刻の前進が観測を壊すクラス（R7.8）ではない。
-    let mut moved = false;
-    let deadline = Instant::now() + SPIN_WAIT;
+    let what = "move cue による対象窓の移動";
+    let shiori = harness.shiori_handle.clone();
+    let probe = || shiori.call_count();
     let mut now = 0u64;
-    loop {
+    wait_until(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
         // 実 frame 相 drain（task 9.2）: move channel を try_iter し apply_move_directive で即時反映。
         // 前提: 本 e2e は表示の線を GPU 無しで回すので、窓はどれも最初の面を表示済みとする読み口で流す。
         run_move_drain_with(&harness.wiring, &all_shown, &mut harness.world);
         if window_position(&harness.world, target) != baseline {
-            moved = true;
-            break;
-        }
-        if Instant::now() >= deadline {
-            break;
+            return true;
         }
         std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        moved,
-        "move cue が有界内に channel→frame drain→apply を通って対象窓を動かさない（実 MoveCueSink 配線が死んでいる？）"
-    );
+        false
+    })
+    .unwrap_or_else(|failure| {
+        panic!(
+            "{failure}／{what}: channel→frame drain→apply を通って窓が動かない（実 MoveCueSink 配線が死んでいる？）"
+        )
+    });
 
     // 検算位置（scope0 基準・CanonDefaultBasepos）へ即時移動＝MoveDirective が channel へ届き drain→apply された
     // 非空虚な証跡（R5.1・9.2 の frame 相配線が spine で生きている）。

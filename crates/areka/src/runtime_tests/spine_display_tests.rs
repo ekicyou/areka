@@ -1,7 +1,9 @@
 use super::test_support::{opaque_count, variant_name};
+use std::cell::Cell;
+
 use super::{
-    BindSet, Duration, Instant, PresentCommand, SPIN_WAIT, SpineHarness, TargetId, balloon_target,
-    capture_logs, count_level, run_attach_phase, settle_bounded, shell_target,
+    BindSet, Duration, PresentCommand, Progress, SpineHarness, TargetId, balloon_target,
+    capture_logs, count_level, run_attach_phase, settle_bounded, shell_target, wait_until,
 };
 
 /// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
@@ -21,26 +23,33 @@ fn present_command_target(cmd: &PresentCommand) -> Option<TargetId> {
 ///
 /// scripted OnBoot talk（`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）は別スレッド群を跨いで
 /// 非同期に流れるため、Tick 注入（`DispatcherMsg::Tick`）と `try_iter` drain を有界ループで交互に
-/// 回し、必要件数が揃うか有界時間が尽きるまで進める（R8.3）。全 cue が `at=0.0`（`\w` なし）ゆえ最初の
-/// 有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界待機で吸収する。揃わなければ短い Vec を
-/// 返す（呼び手が件数を assert＝hang しない）。
+/// 回し、必要件数が揃うまで進める（R8.3）。全 cue が `at=0.0`（`\w` なし）ゆえ最初の
+/// 有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界待機で吸収する。揃わないまま進みが
+/// 止まれば、待ちの芯の理由を載せて panic する（hang しない）。
 ///
-/// 有界性は壁時計 deadline（[`SPIN_WAIT`]）＋200µs poll-backoff sleep（R7.9・根拠は [`drive_shell_shown`] の doc）。
+/// 打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）。反復の末尾の
+/// 200µs の sleep は poll-backoff（R7.9・根拠は `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc）。
 /// 観測 `received` は累積＝ラッチであり、呼出点の台本はいずれも `\w`／`\c` を含まない（全 cue `at=0.0`）
 /// ため、注入時刻の前進が観測を壊すクラス（R7.8）ではない。
 fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentCommand> {
+    let what = "OnBoot talk の表示指令";
     let mut received: Vec<PresentCommand> = Vec::new();
-    let deadline = Instant::now() + SPIN_WAIT;
+    let drained = Cell::new(0u64);
+    let shiori = harness.shiori_handle.clone();
+    let probe = || shiori.call_count() + drained.get();
     let mut now = 0u64;
-    loop {
+    wait_until(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
         received.extend(harness.wiring.drain_received());
-        if received.len() >= want || Instant::now() >= deadline {
-            break;
+        drained.set(received.len() as u64);
+        if received.len() >= want {
+            return true;
         }
         std::thread::sleep(Duration::from_micros(200));
-    }
+        false
+    })
+    .unwrap_or_else(|failure| panic!("{failure}／{what}: {want} 件が揃わない"));
     received
 }
 
@@ -411,12 +420,9 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
         "balloon scope0 の readback が全透明（attach が確立した面 0 が実描画されていない）"
     );
 
-    // OnBoot talk（\s[0]）を駆動し、少なくとも 1 件（シェル面指令）を受信＝talk が実際に流れたことを担保。
+    // OnBoot talk（\s[0]）を駆動し、少なくとも 1 件（シェル面指令）を受信＝talk が実際に流れたことを担保
+    // （揃わなければ `tick_and_collect` が panic する）。
     let mut received = tick_and_collect(&mut harness, 1);
-    assert!(
-        !received.is_empty(),
-        "\\b なし OnBoot 台本の talk が有界内に発火しない（boot→talk 経路が通っていない）"
-    );
     // settle 前段（Tick 注入だけ・打ち切り条件を持たない）: 旧ループと同じ注入列
     // `1_000_000..1_000_000 + 5_000` を**毎回すべて**注入し、各注入の直後に回収する。範囲は
     // リテラルの固定列ゆえ環境の速さに依らず常に同一で、時刻が観測を追い越さない（要件 4.3）。

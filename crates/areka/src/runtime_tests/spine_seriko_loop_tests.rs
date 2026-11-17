@@ -1,7 +1,9 @@
 use super::test_support::{bump_char_window_dpi, opaque_count, variant_name};
+use std::cell::Cell;
+
 use super::{
-    Duration, Instant, LoopRng, PresentCommand, Progress, SPIN_WAIT, SpineHarness, capture_logs,
-    run_attach_phase, run_dpi_phase, settle_bounded, shell_target, wait_until,
+    Duration, LoopRng, PresentCommand, Progress, SpineHarness, capture_logs, run_attach_phase,
+    run_dpi_phase, settle_bounded, shell_target, wait_until,
 };
 
 /// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・actor.rs／looper.rs `always_fire` と同旨）。
@@ -66,13 +68,17 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 /// （`apply_bind`→`BindApplyOutcome::Changed`）を生むため、「shell surface が該当 bind id を含んで表示された」
 /// = current_binds へ当該 id が書き込まれた（＝bind ゲートが ON になった）ことの end-to-end 証跡になる。
 ///
-/// # 有界性は壁時計 deadline ＋ poll-backoff sleep（R7.9）
+/// # 有界性は進みの目印つきの [`wait_until`] ＋ poll-backoff sleep（R7.9）
 ///
-/// 本関数は**実 async（SHIORI/pasta アクタ→seriko→[`PresentBridge`]）の到着をラッチで待つ純粋な待機
+/// 本関数は**実 async（SHIORI/pasta アクタ→seriko→[`PresentBridge`]）の到着をラッチで待つ待機
 /// ループ**である。1 反復は「tick 注入＋drain」だけで極めて安価ゆえ、反復回数の上限は CPU 競合下
 /// （大規模再ビルド直後の再スキャン圧など）で**数 ms で尽き**、製品コードが正常でも早合点で赤になる
-/// （偽陽性）。ゆえに有界性は [`std::time::Instant`] deadline で与える（長さは [`SPIN_WAIT`] に統一
-/// ——PR #96 が純粋ポーリング用に導入した猶予と同じ物差しを、本ハイブリッド群でも用いる）。
+/// （偽陽性）。ゆえに打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）で
+/// 決める（30 秒進まなければ［止まった］）。
+///
+/// **目印を絞らない理由**: `LoopDriver::Live` でも loop ticker は起こさず、この輪は seriko の tick を
+/// 注入しない。ゆえにまばたきの指令は出ず、汲む指令は OnBoot talk の有限の列（条件の面へ向かう歩み）
+/// だけになる。受けた数がそのまま条件に向かう進みなので、面の数などへ絞る必要が無い。
 ///
 /// **R7.8（注入模擬時刻が観測窓を追い越して観測条件を壊すクラス）とは別クラス**であり、時刻の頭打ちでは
 /// 直らない。判別根拠は 2 点——(a) 観測 `satisfied` は**ラッチ**で、一度成立したら後続 cue に壊されない。
@@ -85,37 +91,41 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 /// `drive_ticks_until_disconnect` で開発者裁定により根治として採用されているものと同じ。決定論檻の
 /// 「no sleep」原則に対する**明示例外**（競合飢餓の根治には必須）。
 fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: Option<u32>) {
-    let deadline = Instant::now() + SPIN_WAIT;
+    let what = "OnBoot talk の scope0 shell の面の表示";
     let mut satisfied = false;
+    let received = Cell::new(0u64);
+    let shiori = harness.shiori_handle.clone();
+    let probe = || shiori.call_count() + received.get();
     let mut now = 0u64;
-    loop {
+    wait_until(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
         for cmd in harness.wiring.drain_received() {
+            received.set(received.get() + 1);
             if let PresentCommand::ShowSurface {
                 target,
                 surface_id: sid,
                 binds,
                 ..
             } = &cmd
+                && *target == shell_target(0)
+                && *sid == surface_id
+                && require_bind.is_none_or(|id| binds.contains(id))
             {
-                if *target == shell_target(0)
-                    && *sid == surface_id
-                    && require_bind.is_none_or(|id| binds.contains(id))
-                {
-                    satisfied = true;
-                }
+                satisfied = true;
             }
         }
-        if satisfied || Instant::now() >= deadline {
-            break;
+        if satisfied {
+            return true;
         }
         std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        satisfied,
-        "OnBoot talk が scope0 shell surface {surface_id}（require_bind={require_bind:?}）を有界内に表示しない（boot→talk→sink 経路不通 or bind 未貫通）"
-    );
+        false
+    })
+    .unwrap_or_else(|failure| {
+        panic!(
+            "{failure}／{what}: surface {surface_id}（require_bind={require_bind:?}）が出ない（boot→talk→sink 経路不通 or bind 未貫通）"
+        )
+    });
 }
 
 /// `now_ms` の seriko tick を 1 発直接注入し、最初の `PresentCommand` が rx へ届くまで有界
@@ -129,7 +139,7 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
     harness.inject_seriko_tick(now_ms);
     let mut buf: Vec<PresentCommand> = Vec::new();
     // 目印は受けた指令の数（届けば即座に満たされるので、打ち切りは 30 秒届かなかったときの［止まった］）。
-    let received = std::cell::Cell::new(0u64);
+    let received = Cell::new(0u64);
     let _ = wait_until(
         "seriko の 1 tick の指令",
         Progress::Count(&|| received.get()),
@@ -355,19 +365,24 @@ fn shell_physical_size(harness: &SpineHarness, scope: u32) -> (u32, u32) {
 /// [`drive_shell_shown`] は観測のみで指令を捨てるため presenter 側に表示が成立しない。ループ継続の
 /// 檻は「表示が生きていること」を readback で見るため、適用まで行うこの版が要る。
 ///
-/// 有界性は [`drive_shell_shown`] と同じく**壁時計 deadline（[`SPIN_WAIT`]）＋ 200µs poll-backoff sleep**（R7.9）。
+/// 有界性は [`drive_shell_shown`] と同じく**進みの目印つきの [`wait_until`] ＋ 200µs poll-backoff sleep**（R7.9）。
+/// 目印も同じ（SHIORI の呼び出しの数と汲んだ指令の数の和・seriko の tick を注入しないので絞らない）。
 /// 反復回数上限が CPU 競合下で数 ms で尽きる偽陽性、R7.8 との判別根拠（観測 `shown` はラッチ・呼出点の
 /// 台本は全 cue `at=0.0` ＝観測を壊す後続 cue が無い）、`yield_now`（Windows では `SwitchToThread` ＝同一
 /// プロセッサにしか譲らない）を避ける理由、および「no sleep」原則への明示例外である旨は
 /// [`drive_shell_shown`] の doc を参照。
 fn drive_shell_shown_and_presented(harness: &mut SpineHarness, surface_id: u32) {
-    let deadline = Instant::now() + SPIN_WAIT;
+    let what = "OnBoot talk の scope0 shell の面の表示と適用";
     let mut shown = false;
+    let received = Cell::new(0u64);
+    let shiori = harness.shiori_handle.clone();
+    let probe = || shiori.call_count() + received.get();
     let mut now = 0u64;
-    loop {
+    wait_until(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
         for cmd in harness.wiring.drain_received() {
+            received.set(received.get() + 1);
             if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id: sid, .. }
                 if *target == shell_target(0) && *sid == surface_id)
             {
@@ -375,15 +390,15 @@ fn drive_shell_shown_and_presented(harness: &mut SpineHarness, surface_id: u32) 
             }
             harness.wiring.apply_present(&mut harness.world, cmd);
         }
-        if shown || Instant::now() >= deadline {
-            break;
+        if shown {
+            return true;
         }
         std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        shown,
-        "OnBoot talk が scope0 shell surface {surface_id} を有界内に表示しない（boot→talk→sink 経路不通）"
-    );
+        false
+    })
+    .unwrap_or_else(|failure| {
+        panic!("{failure}／{what}: surface {surface_id} が出ない（boot→talk→sink 経路不通）")
+    });
 }
 
 /// seriko tick を 1 発注入して 1 件の指令を回収し、**実 presenter へ適用**したうえで、その指令が

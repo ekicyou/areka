@@ -2,8 +2,8 @@ use std::cell::Cell;
 
 use super::test_support::{boot_finished, opaque_count, variant_name};
 use super::{
-    ActorKey, CloseReason, Duration, Instant, PresentCommand, Progress, RecordedCall, SPIN_WAIT,
-    SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded_watching,
+    ActorKey, CloseReason, Duration, Instant, PresentCommand, Progress, RecordedCall, SpineHarness,
+    capture_logs, count_level, join_bounded, run_attach_phase, run_bounded_watching,
     run_text_phase, shell_target, wait_until, wait_until_with,
 };
 
@@ -253,26 +253,23 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    配送する。Clear は配送即時にバッファを全消去する（state.rs apply_cue）ため、Clear 配送後は
     //    どの注入 talk_time でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
     //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
-    //    有界性は壁時計 deadline（[`SPIN_WAIT`]）＋200µs poll-backoff sleep（R7.9・根拠は [`drive_shell_shown`]
-    //    の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
-    let mut clear_reached = false;
-    // 打ち切りは壁時計の期限（[`SPIN_WAIT`]）。確かめはループの条件の 1 か所だけ。
-    let deadline = Instant::now() + SPIN_WAIT;
-    while Instant::now() < deadline {
+    //    打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数。Clear は文字の層へ届き、表示の
+    //    指令として汲む物が無いので足さない）で、反復の末尾に 200µs の poll-backoff sleep（R7.9・根拠は
+    //    `drive_shell_shown` の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
+    let what = "S2: Clear cue の runtime への到達";
+    let calls = || shiori.call_count();
+    wait_until(what, Progress::Count(&calls), || {
         now += 50; // 大きめに進め Clear（at=1.40s・上のタイムライン導出）を配送させる
         harness.inject_dispatcher_tick(now);
         harness.pump_text();
         run_text_phase(&mut harness.wiring, &mut harness.world, Some(2.0));
         if text_surface_opaque(&harness, &actor) == 0 {
-            clear_reached = true;
-            break;
+            return true;
         }
         std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        clear_reached,
-        "S2: Clear cue が有界内に runtime へ到達しない（\\_w[1000]\\c の配送が完了しない）"
-    );
+        false
+    })
+    .unwrap_or_else(|failure| panic!("{failure}／{what}: \\_w[1000]\\c の配送が完了しない"));
     // Clear 配送後は「リビール済みだった」区間の talk_time（t=0.30）でも全域透明（Clear の全消去・R8.5）。
     run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
     assert_eq!(
