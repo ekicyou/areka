@@ -36,7 +36,6 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{HWND, LRESULT};
-use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -92,30 +91,6 @@ impl HelperShared {
     }
 }
 
-/// 受領した `WM_COPYDATA` の生バイト payload を安全に取り出す（`cbData` で境界画定・要件 2.1）。
-///
-/// # Safety
-/// `lparam` は WM_COPYDATA の LPARAM で、`*const COPYDATASTRUCT` を指していること
-/// （OS が WM_COPYDATA 配送時に保証）。`lpData` は `cbData` バイト有効。
-unsafe fn copydata_payload(lparam: windows::Win32::Foundation::LPARAM) -> Option<(u32, Vec<u8>)> {
-    let cds = lparam.0 as *const COPYDATASTRUCT;
-    if cds.is_null() {
-        return None;
-    }
-    // SAFETY: WM_COPYDATA 契約により lparam は有効な COPYDATASTRUCT を指す。
-    let cds = unsafe { &*cds };
-    // dwData は低 32bit のみ有意（ipc.rs §1 の跨ビットネス規約）。
-    let tag_raw = (cds.dwData & 0xFFFF_FFFF) as u32;
-    let len = cds.cbData as usize;
-    let payload = if len == 0 || cds.lpData.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: lpData は cbData バイト有効（OS が marshal 済みの受信側コピー）。
-        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
-    };
-    Some((tag_raw, payload))
-}
-
 /// WndProc: WM_COPYDATA を tag で分岐する（design.md §425）。非ブロッキング（応答は 1 通のみ）。
 ///
 /// `sender_hwnd` は WM_COPYDATA の WPARAM（送信元窓 HWND・`send_copydata` が self_hwnd を載せる）。
@@ -126,7 +101,7 @@ fn handle_message(s: &HelperShared, msg: &WindowMessage) -> Option<LRESULT> {
     }
 
     // SAFETY: WM_COPYDATA の lparam は COPYDATASTRUCT を指す（OS 契約）。
-    let (tag_raw, payload) = match unsafe { copydata_payload(msg.lparam) } {
+    let (tag_raw, payload) = match unsafe { ipc::copydata_payload(msg.lparam) } {
         Some(v) => v,
         None => return Some(LRESULT(0)),
     };
@@ -172,10 +147,6 @@ fn handle_message(s: &HelperShared, msg: &WindowMessage) -> Option<LRESULT> {
             s.want_quit.set(true);
             Some(LRESULT(0))
         }
-        Ok(MsgTag::Load) => {
-            // 本先進坑では pasta を eager ロード済みゆえ LOAD は no-op（観測のみ）。
-            Some(LRESULT(0))
-        }
         Ok(other) => {
             // HELLO/RESPONSE は helper が受ける想定外（親 → helper では来ない）。記録のみ。
             eprintln!("[helper] 想定外タグ受領（無視）: {other:?}");
@@ -216,7 +187,7 @@ impl HelperMessageWindow {
         // 起動時 HELLO（1st WM_COPYDATA・自 HWND を u32 LE・design.md §424）。
         // SendMessageTimeout は同スレッド宛なら同期配送（親が別スレ/別プロセスでもタイムアウト保護）。
         let self_hwnd: HWND = window.hwnd();
-        let hello_payload = ipc::encode_hwnd_le(self_hwnd);
+        let hello_payload = ipc::hwnd_to_u32(self_hwnd).to_le_bytes();
         let target = ipc::hwnd_from_u32(parent_hwnd);
         if let Err(e) = ipc::send_copydata(
             target,
@@ -252,12 +223,12 @@ impl HelperMessageWindow {
 
         // ループが GetMessage でブロックし続けないよう、定期的に自窓へメッセージを撃つ
         // ハートビート（`want_quit`／deadline を必ず再評価させる）。别スレッドから PostMessage。
-        let hb_hwnd_u32 = ipc::encode_hwnd_le(self.window.hwnd());
+        let hb_hwnd_u32 = ipc::hwnd_to_u32(self.window.hwnd());
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let heartbeat = {
             let stop = stop.clone();
             std::thread::spawn(move || {
-                let hwnd = ipc::hwnd_from_u32(u32::from_le_bytes(hb_hwnd_u32));
+                let hwnd = ipc::hwnd_from_u32(hb_hwnd_u32);
                 while !stop.load(std::sync::atomic::Ordering::Relaxed) {
                     // WM_NULL(0) は無害な起こし用メッセージ。PostMessage で loop を起こすだけ。
                     unsafe {
@@ -350,11 +321,11 @@ pub fn selftest_loop(secs: u64) -> Result<(), String> {
             move |_state: Pin<&()>, msg: WindowMessage| -> Option<LRESULT> {
                 if msg.msg == WM_COPYDATA {
                     // SAFETY: WM_COPYDATA 契約。
-                    if let Some((tag_raw, payload)) = unsafe { copydata_payload(msg.lparam) } {
+                    if let Some((tag_raw, payload)) = unsafe { ipc::copydata_payload(msg.lparam) } {
                         if MsgTag::try_from_u32(tag_raw) == Ok(MsgTag::Hello) && payload.len() == 4
                         {
                             let bytes = [payload[0], payload[1], payload[2], payload[3]];
-                            let helper_hwnd_u32 = ipc::decode_hwnd_le(bytes);
+                            let helper_hwnd_u32 = u32::from_le_bytes(bytes);
                             received.set(Some(helper_hwnd_u32));
                         }
                     }
@@ -365,15 +336,14 @@ pub fn selftest_loop(secs: u64) -> Result<(), String> {
         )
         .map_err(|e| format!("stand-in parent 窓生成に失敗: {e:?}"))?
     };
-    let parent_hwnd_u32 = ipc::encode_hwnd_le(parent.hwnd());
-    let parent_hwnd_u32 = u32::from_le_bytes(parent_hwnd_u32);
+    let parent_hwnd_u32 = ipc::hwnd_to_u32(parent.hwnd());
     println!("[selftest] stand-in parent 窓 生成: hwnd(u32)={parent_hwnd_u32:#010x}");
 
     // --- 2. HelperMessageWindow を生成（HELLO は create 内で送出）---
     // pasta は selftest では不要（HELLO＋ループ生存の実証が目的）ゆえ entries=None。
     let helper = HelperMessageWindow::create(parent_hwnd_u32, None)
         .map_err(|e| format!("HelperMessageWindow 生成に失敗: {e}"))?;
-    let helper_hwnd_u32 = u32::from_le_bytes(ipc::encode_hwnd_le(helper.hwnd()));
+    let helper_hwnd_u32 = ipc::hwnd_to_u32(helper.hwnd());
     println!("[selftest] HelperMessageWindow 生成: hwnd(u32)={helper_hwnd_u32:#010x}");
 
     // --- 3. HELLO 受領＋helper HWND 復号一致を確認（要件 5.1）---

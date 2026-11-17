@@ -20,7 +20,6 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -67,28 +66,6 @@ impl ParentShared {
     }
 }
 
-/// 受領した `WM_COPYDATA` の生バイト payload を安全に取り出す（`cbData` で境界画定・要件 2.1）。
-///
-/// # Safety
-/// `lparam` は WM_COPYDATA の LPARAM で `*const COPYDATASTRUCT` を指すこと（OS が配送時に保証）。
-unsafe fn copydata_payload(lparam: LPARAM) -> Option<(u32, Vec<u8>)> {
-    let cds = lparam.0 as *const COPYDATASTRUCT;
-    if cds.is_null() {
-        return None;
-    }
-    // SAFETY: WM_COPYDATA 契約により lparam は有効な COPYDATASTRUCT を指す。
-    let cds = unsafe { &*cds };
-    let tag_raw = (cds.dwData & 0xFFFF_FFFF) as u32; // dwData は低 32bit のみ有意（ipc.rs §1）。
-    let len = cds.cbData as usize;
-    let payload = if len == 0 || cds.lpData.is_null() {
-        Vec::new()
-    } else {
-        // SAFETY: lpData は cbData バイト有効（OS が marshal 済みの受信側コピー）。
-        unsafe { std::slice::from_raw_parts(cds.lpData as *const u8, len).to_vec() }
-    };
-    Some((tag_raw, payload))
-}
-
 /// 親 WndProc: helper からの inbound WM_COPYDATA を `MsgTag` で捌く（design.md §183/§196）。
 /// **非ブロッキング**（HELLO/RESPONSE いずれも記録して即 return・跨プロセス SendMessage なし・§210）。
 fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
@@ -96,7 +73,7 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
         return None; // 非対象は DefWindowProc へ（closure が None を返すと lib が委譲）。
     }
     // SAFETY: WM_COPYDATA の lparam は COPYDATASTRUCT を指す（OS 契約）。
-    let (tag_raw, payload) = match unsafe { copydata_payload(msg.lparam) } {
+    let (tag_raw, payload) = match unsafe { ipc::copydata_payload(msg.lparam) } {
         Some(v) => v,
         None => return Some(LRESULT(0)),
     };
@@ -106,7 +83,7 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
             // HWND ハンドシェイク: payload = helper 窓 HWND の u32 LE（design.md §208）。
             if payload.len() == 4 {
                 let bytes = [payload[0], payload[1], payload[2], payload[3]];
-                let helper_hwnd_u32 = ipc::decode_hwnd_le(bytes);
+                let helper_hwnd_u32 = u32::from_le_bytes(bytes);
                 s.helper_hwnd.set(Some(helper_hwnd_u32));
                 s.hellos.set(s.hellos.get() + 1);
             } else {
@@ -126,7 +103,7 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
             Some(LRESULT(0))
         }
         Ok(other) => {
-            // LOAD/REQUEST/UNLOAD は親 → helper 方向であり helper → 親では来ない。記録のみ。
+            // REQUEST/UNLOAD は親 → helper 方向であり helper → 親では来ない。記録のみ。
             s.unexpected.set(s.unexpected.get() + 1);
             eprintln!("[parent] 想定外タグ受領（無視）: {other:?}");
             Some(LRESULT(0))
@@ -165,7 +142,7 @@ impl ParentMessageWindow {
 
     /// 親窓 HWND を u32 ワイヤ値で（ProcessHost::spawn / HELLO seed 用）。
     pub fn hwnd_u32(&self) -> u32 {
-        u32::from_le_bytes(ipc::encode_hwnd_le(self.window.hwnd()))
+        ipc::hwnd_to_u32(self.window.hwnd())
     }
 
     pub fn shared(&self) -> Pin<&ParentShared> {
@@ -186,12 +163,12 @@ impl ParentMessageWindow {
         let deadline = Instant::now() + timeout;
         let state_ptr = self.window.state();
 
-        let hb_hwnd_u32 = ipc::encode_hwnd_le(self.window.hwnd());
+        let hb_hwnd_u32 = ipc::hwnd_to_u32(self.window.hwnd());
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let heartbeat = {
             let stop = stop.clone();
             std::thread::spawn(move || {
-                let hwnd = ipc::hwnd_from_u32(u32::from_le_bytes(hb_hwnd_u32));
+                let hwnd = ipc::hwnd_from_u32(hb_hwnd_u32);
                 while !stop.load(std::sync::atomic::Ordering::Relaxed) {
                     // WM_NULL(0) は無害な起こし用。GetMessage をブロックさせ続けない。
                     unsafe {

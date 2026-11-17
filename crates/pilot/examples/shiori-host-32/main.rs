@@ -491,7 +491,7 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
             }
         };
         // HWND を main へ渡す。
-        let hwnd_u32 = u32::from_le_bytes(ipc::encode_hwnd_le(window.hwnd()));
+        let hwnd_u32 = ipc::hwnd_to_u32(window.hwnd());
         let _ = hwnd_tx.send(hwnd_u32);
 
         // stop まで軽くメッセージループを回す（WndProc が呼ばれるよう窓スレッドで pump）。
