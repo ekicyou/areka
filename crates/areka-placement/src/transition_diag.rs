@@ -27,24 +27,24 @@
 //!
 //! # 発行点
 //!
-//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、発行点は 5 つ——
+//! 本ファイルは観測の増設で建てた語彙であり、発行点は 5 つ——
 //! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
-//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 5 点＝task 5.4 の 3 点＋task 6.5 の 4 点目＋面の `move` のずれの相）・[`log_chain`]
-//! （遷移後の連鎖再解決＝task 5.6 から）・[`log_offset_rescale`]（拡大率遷移でのバルーン追従
+//! 同期から）・[`log_hold`]（整合ゲートの 5 点＝areka-P0-dpi-transition-atomicity タスク 5.4 の 3 点＋タスク 6.5 の 4 点目＋面の `move` のずれの相）・[`log_chain`]
+//! （遷移後の連鎖再解決から）・[`log_offset_rescale`]（拡大率遷移でのバルーン追従
 //! オフセットの追随＝`areka-P0-balloon-offset-dpi` の要件 3.7・design D10。呼び手は
 //! `runtime::frame::balloon_offset_follow`）である。
 //!
 //! # 語彙は先に建てる
 //!
 //! 判定語の一覧（`*_ALL`）と per-kind の必須フィールド列（`*_FIELDS`）は、**判定器
-//! （task 3.1／3.2）と発行側が同じ字面を見る**ための単一の定義元である。判定器は本体の
+//! （areka-P0-dpi-transition-atomicity のタスク 3.1／3.2）と発行側が同じ字面を見る**ための単一の定義元である。判定器は本体の
 //! crate の `#[cfg(test)]` の配置にあるが、配置は lib の crate なので `pub` の語彙は未使用の
 //! 警告にならない（許可の属性は要らない）。
 //!
 //! # 既定 OFF・前置ガードは呼出側が持つ
 //!
 //! レコードを**組む**（＝`String` を確保する）前に [`is_enabled`] で分岐するのは発行点の責務で
-//! ある。`recompose-budget` が成立させた定常状態のアロケーション 0（要件 10.4）は「既定運転で
+//! ある。`recompose-budget` が成立させた定常状態のアロケーション 0（areka-P0-dpi-transition-atomicity 要件 10.4）は「既定運転で
 //! 新たな確保が 1 バイトも起きない」ことを含むため、ガードが組立より外側になければならない。
 //! 発行が `debug!` である以上、濾過テストではこの退行を検出できない——固定するのは
 //! `follow_transition_diag_tests.rs` の**本文走査**である。
@@ -127,7 +127,7 @@ pub const HOLD_SITE_RESNAP: &str = "resnap";
 /// ＝作業領域源が差し替わったフレームに現寸のまま接地点を引き直す点）。
 ///
 /// [`HOLD_SITE_RESNAP`] と別語なのは、日本語の「再スナップ」が別々の 2 関数を指すからである
-/// ——同じ語にすると、ログ上でどちらの点が見送ったのかが判らない（task 6.5）。
+/// ——同じ語にすると、ログ上でどちらの点が見送ったのかが判らない。
 pub const HOLD_SITE_WORK_AREA_RESNAP: &str = "work-area-resnap";
 /// 判定を下した観測点: 面の `move` のずれの相（提示のずれを窓へ当てる点・seriko-pattern-calls）。
 pub const HOLD_SITE_PATTERN_MOVE: &str = "pattern-move";
@@ -165,26 +165,26 @@ pub const CHAIN_STAGE_ALL: &[&str] = &[
 // 追随の判定語（verdict）
 // ---------------------------------------------------------------------------
 
-/// 追随した——基準対から引き直した値を反映した（要件 3.1）。
+/// 追随した——基準対から引き直した値を反映した（areka-P0-balloon-offset-dpi 要件 3.1）。
 pub const OFFSET_VERDICT_RESCALED: &str = "rescaled";
-/// 未係留の基準を現在の表示 DPI へ係留した——**値は変えていない**（要件 5.2）。
+/// 未係留の基準を現在の表示 DPI へ係留した——**値は変えていない**（areka-P0-balloon-offset-dpi 要件 5.2）。
 pub const OFFSET_VERDICT_ANCHORED: &str = "anchored";
-/// 基準 DPI と現在 DPI が同一——値も基準も変えていない（要件 3.3 の bit 同一）。
+/// 基準 DPI と現在 DPI が同一——値も基準も変えていない（areka-P0-balloon-offset-dpi 要件 3.3 の bit 同一）。
 pub const OFFSET_VERDICT_UNCHANGED: &str = "unchanged";
-/// キーワード由来の基本位置の素材が未消費のため追随を見送った（要件 4.3・design D7）。
+/// キーワード由来の基本位置の素材が未消費のため追随を見送った（areka-P0-balloon-offset-dpi 要件 4.3・design D7）。
 ///
 /// **縮退ではない**ので警告を伴わない。それでも語を持つのは、開発者裁定（2026-08-27）が
 /// 受容した残余——素材が未消費のまま寸据え置きの遷移を迎えると、揃えの更新が次の寸法変化まで
 /// 取り残される——が**記録に残って沈黙しない**ことを、この語 1 つが担っているからである。
 pub const OFFSET_VERDICT_KEYWORD_PENDING: &str = "keyword-pending";
-/// 拡大率を解決できない——値も基準も変えていない（要件 3.6・警告を伴う）。
+/// 拡大率を解決できない——値も基準も変えていない（areka-P0-balloon-offset-dpi 要件 3.6・警告を伴う）。
 pub const OFFSET_VERDICT_UNRESOLVED: &str = "unresolved";
-/// 追随したが `i32` 域を超えて飽和した（回り込ませていない・要件 2.5 と同型・警告を伴う）。
+/// 追随したが `i32` 域を超えて飽和した（回り込ませていない・areka-P0-balloon-offset-dpi 要件 2.5 と同型・警告を伴う）。
 pub const OFFSET_VERDICT_SATURATED: &str = "saturated";
 
 /// 追随の判定語の全体（6 値・判定側の語彙照合が参照する単一の定義元）。
 ///
-/// 実機サインオフの機械判定（要件 8.3）は**この定数群を参照するだけ**で、字面のリテラルを
+/// 実機サインオフの機械判定（areka-P0-balloon-offset-dpi 要件 8.3）は**この定数群を参照するだけ**で、字面のリテラルを
 /// 自前で書かない——語を変えたときに片方だけが動く食い違いを構造で潰す。
 pub const OFFSET_VERDICT_ALL: &[&str] = &[
     OFFSET_VERDICT_RESCALED,
@@ -324,7 +324,7 @@ pub struct HoldRecord {
     pub site: &'static str,
 }
 
-/// 下端吸着キャラ窓の接地点の記録（要件 5.3）。
+/// 下端吸着キャラ窓の接地点の記録（areka-P0-dpi-transition-atomicity 要件 5.3）。
 ///
 /// # 差は本レコードが計算する
 ///
@@ -363,7 +363,7 @@ pub struct ChainRecord {
     pub reason: Option<&'static str>,
 }
 
-/// 拡大率遷移でのバルーン追従オフセットの追随 1 件の記録（要件 3.7）。
+/// 拡大率遷移でのバルーン追従オフセットの追随 1 件の記録（areka-P0-balloon-offset-dpi 要件 3.7）。
 ///
 /// # 基準・前・後の 3 つを載せる
 ///
@@ -535,7 +535,7 @@ pub fn stamp_of(world: &World) -> Stamp {
     }
 }
 
-/// 窓書込指令に載せる要求語彙タグを World から組む（要件 2.1）。
+/// 窓書込指令に載せる要求語彙タグを World から組む（areka-P0-dpi-transition-atomicity 要件 2.1）。
 ///
 /// - `origin`: 書込を要求した経路（[`PlacementRoute::as_str`]）。経路語彙を持たない書込
 ///   （ドラッグ）は [`MISSING`]——実在する要求元を持たない書込と「タグを付け忘れた経路」を
@@ -545,7 +545,7 @@ pub fn stamp_of(world: &World) -> Stamp {
 ///   種別を発明せず番兵にする（[`super::follow`] の窓移動レコードと同じ流儀）。
 ///
 /// 前置ガードを掛けないのは、本関数が確保を 1 バイトも行わない（`&'static str` 2 つと
-/// `Option<u32>`）ためである。窓書込そのものが遷移でしか起きない（要件 10.6＝定常フレームの
+/// `Option<u32>`）ためである。窓書込そのものが遷移でしか起きない（areka-P0-dpi-transition-atomicity 要件 10.6＝定常フレームの
 /// 窓書込ゼロ）ので、既定運転での費用は 0 に留まる。
 pub fn write_tag(world: &World, window: Entity, route: Option<PlacementRoute>) -> WriteTag {
     let (scope, kind) = window_identity(world, window);
@@ -664,7 +664,7 @@ pub fn log_chain(
 ///
 /// # なぜ作業領域源（[`MonitorSnapshot`] 資源）ではなく実行時の表を読むのか
 ///
-/// 要件 5.3 が求めるのは「遷移後の接地点と**作業領域下端**の差」である。接地点は
+/// areka-P0-dpi-transition-atomicity 要件 5.3 が求めるのは「遷移後の接地点と**作業領域下端**の差」である。接地点は
 /// [`MonitorSnapshot`] から導出されるので、同じ源から下端を引いたら差は定義上つねに 0 に
 /// なり、**この観測は何も観測しない**。是正前の欠陥はまさに「作業領域源が起動時のまま更新
 /// されない」ことであり（確定台帳 L3）、差を意味あるものにするには 2 つ目の源＝実行時の
@@ -675,7 +675,7 @@ pub fn log_chain(
 /// 本関数は**観測専用**である。接地点そのものは従来どおり [`MonitorSnapshot`] を読む
 /// `project_anchor` が決める（design Allowed Dependencies の禁止項「`MonitorSnapshot` の
 /// 消費者を wintf `Monitor` 直読へ変えること」は位置権威の話であり、ここには掛からない）。
-/// task 5.1（作業領域源の実行時同期）が着地したので 2 つの源は通常一致し、本レコードの差は
+/// 作業領域源の実行時同期が着地したので 2 つの源は通常一致し、本レコードの差は
 /// 0 になる——**この読み取りは撤去しない**。同期段が止まる・取りこぼす・順序が入れ替わる、
 /// のいずれでも差が再び 0 でなくなる形で見える、源の陳腐化を常時見張る口だからである
 /// （同じ源から引いたら差は定義上つねに 0 で、何も見張らなくなる）。
@@ -697,7 +697,7 @@ pub fn live_work_area_bottom(world: &mut World, window: RectPx) -> Option<i32> {
 /// の関門）より前**の値だが、当該関門は `BalloonLimit(true)` の窓にしか作用せず、キャラ窓は
 /// それを持たない（檻 `enqueue_passes_through_for_windows_without_the_balloon_limit_component` が固定）ので、キャラ窓については
 /// 書き込んだ値と一致する。接地点は `pos.y + size.h`
-/// ＝窓矩形の下端であり、キャラ窓の原点（下端中央）の Y 成分そのものである（要件 10.1 の
+/// ＝窓矩形の下端であり、キャラ窓の原点（下端中央）の Y 成分そのものである（areka-P0-dpi-transition-atomicity 要件 10.1 の
 /// 原点規約は読むだけで変えない）。
 ///
 /// 呼出側は [`is_enabled`] で前置ガードすること（本関数は行を組む＝確保する）。
@@ -732,7 +732,7 @@ pub fn log_char_ground(
 // 追随レコードの発行
 // ---------------------------------------------------------------------------
 
-/// 拡大率遷移でのバルーン追従オフセットの追随を 1 行出す（要件 3.7・design D10）。
+/// 拡大率遷移でのバルーン追従オフセットの追随を 1 行出す（areka-P0-balloon-offset-dpi 要件 3.7・design D10）。
 ///
 /// # 1 遷移・1 スコープにつき高々 1 行
 ///

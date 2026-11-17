@@ -124,7 +124,7 @@
   - _Requirements: 4.3, 7.1, 7.3, 9.3_
 
 - [ ] 11. 受け持つ範囲の名前の無い番号を消すか spec の名前を足す
-- [ ] 11.1 配置の crate の本番のファイルの番号を直す
+- [x] 11.1 配置の crate の本番のファイルの番号を直す
   - `crates/areka-placement/src/follow*`・`transition_*` のうち `_tests.rs`・`*test_support*` でないファイル（今の数で約 275 行）を、設計の NumberCleanup の規則 1〜6 で直す（`follow/move_shift.rs` の「監査の指摘 1」「監査の指摘 5」・`follow.rs` の「task 1.4」「task 2.4」・`follow/drag_follow.rs` の「2.4」「4.5」を含む）。`follow.rs:52`・`:64` の「task 3.4」は 1 が同じ行の名指しを直した後なので、行をその場で測り直してから直す
   - 完了の状態: 設計の G2 の 4 つの grep を本番のファイルに絞った unnamed が 0
   - _Depends: 5, 6.3, 7, 8, 9, 10_
@@ -167,3 +167,4 @@
 - 4.2: G4 の 1 つ目の grep の残り 1 行（`follow/visibility.rs` の `clamp_x_into`）は本番の写しで、8 の持ち分。8 の完了で 0 行になる
 - 5: 隣り合いの印を確かめる檻は `GhostWindows` が要る（無いと `push_adjacency_marks` が早帰りして印 0 個どうしの比べになる）。本番の `spawn_ghost_windows` で窓の一式を組むこと
 - 6.1: 設計の Testing の「どれも (n−1, n) に戻すと落ちる」は ⑷ ⑸ に当たらない言い過ぎ（⑷ は鎖の相手の取り違え・⑸ は矩形の線の辺のスコープを守る檻）。辺のスコープ n の印の線を止める `chain.joins` は `edge_scope_mark_does_not_group_with_chain_prev` が守る
+- 11.1: G2 の grep は規則 5（task 番号を消した説明に残る素の要件番号）を測らない。11.2〜11.4 は、差分で足したコメント行のうち `\d+\.\d+` を含み spec のフォルダ名を含まない行を数える検査（違反 0）も完了の確かめに入れる。出どころは `git log --reverse -S` を crates の全体にかけて元のコミットの題と spec の本文で決める（移しただけのコミットで題が隠れる）

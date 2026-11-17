@@ -4,18 +4,18 @@
 //!   物理 px・4.4。offset は `ScopePlacement.balloon_offset` の転写）
 //! - [`on_char_drag`]: `OnDrag` ハンドラ（mock-shell donor `on_shell_drag` の一般化。
 //!   マーカー全走査ではなく `BalloonFollow.balloon` の `WindowHandle` を直接引く）
-//! - [`on_balloon_drag`]: バルーン窓の `OnDrag` ハンドラ（4.8・DD16・task 8.3）——
+//! - [`on_balloon_drag`]: バルーン窓の `OnDrag` ハンドラ（areka-P0-window-placement 要件 4.8・DD16）——
 //!   バルーン単独ドラッグの相対位置記憶。`BalloonFollow.offset` を
 //!   `balloon_pos − char_pos` へ更新する（キャラ窓は不動）
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
-//! - [`project_anchor`]: bottom 吸着ドラッグ（4.7・DD15 v2・task 8.2R）の核——
+//! - [`project_anchor`]: bottom 吸着ドラッグ（areka-P0-window-placement 要件 4.7・DD15 v2）の核——
 //!   「生ドラッグ座標→実窓位置」の純粋写像（`Bottom` の腕は下端吸着）。吸着した窓と組に
 //!   入った窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
 //!   [`on_char_drag`]／[`on_char_drag_end`] がドラッグの始めに控えた向きで
 //!   [`project_anchor`] 適用済み座標を**単一ライター**として書く（組に入った Free は恒等・
 //!   設計の決め 12。v1 の事後再釘付けは wndproc と競合し振動→撤去）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: 全モニタ work area 集合の
-//!   Resource と窓中心→モニタ解決の純粋ヘルパ（task 8.1・ポリシーの入力）
+//!   Resource と窓中心→モニタ解決の純粋ヘルパ（ポリシーの入力）
 //!
 //! # 座標単位契約（design U1/U4）
 //!
@@ -49,8 +49,8 @@ mod work_area;
 mod work_area_clamp;
 
 // limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
-// （`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
-// （`balloon_drag::on_balloon_drag_end`・task 3.4）が消費する。
+// （`window_move::enqueue_window_set_pos`）と解放時補正
+// （`balloon_drag::on_balloon_drag_end`）が消費する。
 use super::balloon_limit::{
     BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonPlace, limit_correction, place_balloon_in_work_area,
@@ -61,8 +61,8 @@ use super::persist::{
 };
 use super::resolver::{Anchor, PointPx, RectPx, SizePx, keyword_balloon_pos};
 use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, GhostWindows};
-// runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
-// （`balloon_drag::on_balloon_drag_end`・task 3.4）が読む limit 値の
+// runtime 関門（`window_move::enqueue_window_set_pos`）と解放時補正
+// （`balloon_drag::on_balloon_drag_end`）が読む limit 値の
 // ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
 // `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
@@ -107,7 +107,7 @@ pub(crate) use self::work_area::{WorkAreaResolution, work_area_for_window_with_o
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
 /// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
 pub use super::resolver::OffsetBase;
-// 2 源の型と比較（task 5.1 で新設）。呼び手は `runtime::…` の作業領域の同期。
+// 2 源の型と比較。呼び手は `runtime::…` の作業領域の同期。
 pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 // モニタ別拡大率表の要素型。表の外から要素を組めないと `entries` が事実上読めない型になるので公開する。
 pub use self::work_area::MonitorDpiEntry;
@@ -119,7 +119,7 @@ pub use self::work_area_clamp::{
 // 記録の語。crate の中の使い手は定義元（`work_area_clamp`）が自分で引くので、ここは crate のテストと `test-support` のビルドでだけ開く。
 #[cfg(any(test, feature = "test-support"))]
 pub use self::work_area_clamp::WORK_AREA_CLAMP_TAG;
-// 面の拡大の寄せ（task 1.3）。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
+// 面の拡大の寄せ。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
 // 記憶から戻した組の寄せ（`window-work-area-clamp`）。呼び手は記憶の戻し（`persist::restore_and_judge`）。
 pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
@@ -145,7 +145,7 @@ pub(crate) use self::window_move::move_window_with_route;
 pub use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 // キーワード由来のバルーン基本位置の一度きりの再導出（`resize_window_to` が使う）。
 use self::keyword_base::rederive_keyword_balloon_offset;
-// 面の `move` のずれ（task 6.1〜6.3）。当てる口の呼び手は毎フレームのずれの相
+// 面の `move` のずれ。当てる口の呼び手は毎フレームのずれの相
 // （`runtime::…` の `move_shift`）。ドラッグの終わりと保存の側は当てた分を 0 にする・引く口、
 // 位置の初期化は記録を外す口、絶対の位置への `\![move]` は軸ごとに当て直す口だけを使う。
 pub use self::move_shift::{
@@ -185,7 +185,7 @@ use super::transition_diag;
 // 整合待ちの札（atom 設計 C5）のファサード再束縛。単一の窓書込口（`window_move` の
 // `enqueue_window_set_pos`）が待ち札の適用範囲の不変条件を見張るために読む。
 //
-// 見張る相手は**見送りが覆うべき経路**に限る（task 7.5）——利用者のドラッグ（route 無し）や
+// 見張る相手は**見送りが覆うべき経路**に限る——利用者のドラッグ（route 無し）や
 // `\![move]`・ドラッグ解放時の補正といった**明示操作**は設計上そもそも見送らないので、鳴らせば
 // 偽の警報になる（debug ビルドではドラッグ 1 回で落ちていた）。どの経路語で鳴るかの分類は
 // `window_move::deferral_covers_route` が 13 語＋route 無しの網羅 match で 1 本に持つ。
@@ -270,11 +270,11 @@ mod window_move_tests;
 #[cfg(test)]
 #[path = "follow_work_area_tests.rs"]
 mod work_area_tests;
-// 既定位置の追跡規則（task 5.5・design D9／D16・要件 6.2）。
+// 既定位置の追跡規則（design D9／D16・areka-P0-dpi-transition-atomicity 要件 6.2）。
 #[cfg(test)]
 #[path = "follow_default_pos_track_tests.rs"]
 mod default_pos_track_tests;
-// 整合待ちの札の監視が鳴る対象の分類（task 7.5・design C5・要件 5.8）。
+// 整合待ちの札の監視が鳴る対象の分類（design C5・areka-P0-dpi-transition-atomicity 要件 5.8）。
 #[cfg(test)]
 #[path = "follow_window_move_hold_watch_tests.rs"]
 mod window_move_hold_watch_tests;

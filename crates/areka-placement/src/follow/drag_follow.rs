@@ -30,7 +30,7 @@ pub(super) const CHAR_DRAG_ORIGIN_UNKNOWN_TAG: &str = "[char-drag] OriginUnknown
 ///
 /// # areka が書く窓（吸着した窓・組に入った窓・4.7/1.6・DD15 v2・単一ライター）
 ///
-/// 縛りの向きは [`drag_anchor`]（ドラッグの始めに控えた向き・2.4）、書き手は
+/// 縛りの向きは [`drag_anchor`]（ドラッグの始めに控えた向き・areka-P0-window-link-directives 要件 2.4）、書き手は
 /// [`drag_wintf_moves`]（始めに控えた `DragConfig.move_window`）で決める。吸着した窓と
 /// 組に入った窓（吸着なしでも・設計の決め 12）は `move_window: false` で、wndproc は窓を
 /// 動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
@@ -38,7 +38,7 @@ pub(super) const CHAR_DRAG_ORIGIN_UNKNOWN_TAG: &str = "[char-drag] OriginUnknown
 /// [`project_anchor`] 適用済み（`Bottom` は下端吸着）の座標を
 /// **一度だけ**書く——反映段階で既に正しい座標が確定しているため、v1 の
 /// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。ドラッグと
-/// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（Req1.6）。
+/// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（areka-P0-surface-resize-resnap Req1.6）。
 /// モニタ跨ぎ再吸着は射影の live 算出が担う。組に入った Free の窓は射影が恒等。
 ///
 /// # wintf が書く窓（組に無い Free・向き不在）
@@ -88,7 +88,7 @@ pub(crate) fn on_char_drag(
                 }
             };
 
-            // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
+            // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（areka-P0-dpi-window-vanish Req 3.1）。
             follow_balloon(world, entity, pos, BalloonFollowTrigger::Drag);
             follow_partners_on_drag(world, entity, PointPx { x: pos.x, y: pos.y });
             false
@@ -118,9 +118,9 @@ pub(crate) fn on_char_drag(
 /// 再固定し、Free は射影が identity ゆえ `mapped` = wndproc が動かし切った確定位置と
 /// なり（`enqueue_window_set_pos`／`follow_balloon` は identity 再釘付けで無害通過）、
 /// 本ハンドラがそのまま**保存専用アーム**として働く。[`Anchored`] 不在（防御）は生
-/// ドラッグ座標を復元する基準アンカーが無いため skip する（Req1.6）。
+/// ドラッグ座標を復元する基準アンカーが無いため skip する（areka-P0-surface-resize-resnap Req1.6）。
 ///
-/// # 組の相手（4.5・2.4）
+/// # 組の相手（areka-P0-window-link-directives 要件 4.5・2.4）
 ///
 /// 窓を書いた後に [`finish_char_drag`] が最終の量で相手を書いて相手の記憶の束を返し、控えを外し、
 /// ドラッグ中に向きが変わっていれば今の向きで当て直す。本ハンドラがその束と動かした窓の束を
@@ -152,7 +152,7 @@ pub fn on_char_drag_end(
             // 制約であって保存条件ではない）。非 Free は project_anchor でアンカー辺へ
             // 再固定し、Free は identity 射影ゆえ mapped＝wndproc 確定位置を素通しする
             // （保存専用アーム・射影段は無害通過）。Anchored 不在（防御）は生座標を
-            // 復元する基準アンカーが無いため skip する（Req1.6）。
+            // 復元する基準アンカーが無いため skip する（areka-P0-surface-resize-resnap Req1.6）。
             let Some(anchor) = drag_anchor(world, entity) else {
                 return false;
             };
@@ -162,7 +162,7 @@ pub fn on_char_drag_end(
             // on_char_drag が既に最終位置へ動かした char の位置保存が丸ごと落ちる——一方 balloon 側は
             // char の WindowPos.position を読んで offset を保存するため、balloon-offset だけが残り
             // window が欠落する（実機 sylphya.toml の [window.0] 欠落／[balloon-offset.0] 残存）。
-            // Req1.6（位置の単一真実源はキャラ窓）を守るには「ドラッグした char は必ず保存する」が
+            // areka-P0-position-persist Req1.6（位置の単一真実源はキャラ窓）を守るには「ドラッグした char は必ず保存する」が
             // 要る。よって DraggingState 不在時は再導出済みの最終位置＝現 WindowPos.position（非 Free は
             // on_char_drag が project_anchor 適用済み・Free は wndproc 確定位置）へ縮退して保存する。
             let mapped = match policy_mapped_position(world, entity, anchor, ev.position) {
@@ -184,9 +184,9 @@ pub fn on_char_drag_end(
                 world.remove_resource::<CharDragSession>();
                 return false;
             }
-            // 面の move のずれは、利用者が置いた所を元の位置として 0 から（task 6.2）。
+            // 面の move のずれは、利用者が置いた所を元の位置として 0 から。
             reset_applied(world, entity);
-            // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
+            // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（areka-P0-dpi-window-vanish Req 3.1）。
             follow_balloon(world, entity, mapped, BalloonFollowTrigger::Drag);
             // 相手の束は動かした窓の束と合わせて記憶へ 1 回で書く（audit-placement-follow-residue 5.1）。
             let mut entries = finish_char_drag(
@@ -258,12 +258,12 @@ pub fn on_char_drag_end(
 }
 
 /// 非 Free アンカーのキャラ窓の「カーソル座標→アンカー射影 T 適用済み窓位置」
-/// （DD15 v2・Req1.6）。`anchor` は呼び出し側が [`Anchored`] から読んだ現在アンカー。
+/// （DD15 v2・areka-P0-surface-resize-resnap Req1.6）。`anchor` は呼び出し側が [`Anchored`] から読んだ現在アンカー。
 ///
 /// 生ドラッグ座標（＝move_window=true なら wndproc が書いたであろう位置）を
 /// wndproc と同じ式で復元する: `initial_window_pos + (cursor − drag_start)`。
 /// 復元した生座標へ [`project_anchor`] を適用する——リサイズ（[`resize_window_to`]）と同一の
-/// 射影 T を通し、座標系変換を二重化しない（Req1.6）。
+/// 射影 T を通し、座標系変換を二重化しない（areka-P0-surface-resize-resnap Req1.6）。
 ///
 /// `None` は生座標を復元できない 2 つの場合: ⑴ [`DraggingState`] 不在（実 flow では
 /// dispatch が DragEvent より先に挿入するため起きない）⑵ 始めの窓位置が分からない
@@ -306,7 +306,7 @@ fn policy_mapped_position(
         // 不在は非正寸法（＝寸法不明）として project_anchor の identity 縮退へ委ねる
         .unwrap_or(SizePx { w: 0, h: 0 });
     // drag と resize（resize_window_to）が同一 project_anchor を通ることで座標系変換を
-    // 二重化しない（Req1.6）。bottom は project_anchor 内で下端吸着へ委譲。
+    // 二重化しない（areka-P0-surface-resize-resnap Req1.6）。bottom は project_anchor 内で下端吸着へ委譲。
     let mapped = project_anchor(anchor, raw, size, world.get_resource::<MonitorSnapshot>());
     Some(Point {
         x: mapped.x,
@@ -314,14 +314,14 @@ fn policy_mapped_position(
     })
 }
 
-/// 随伴バルーンの**引き金**（task 6.2・S3′ 是正・Req 3.4）。
+/// 随伴バルーンの**引き金**（S3′ 是正・areka-P0-dpi-window-vanish Req 3.4）。
 ///
 /// # なぜ「書込自身の route」では決められないのか
 ///
 /// [`follow_balloon`] の書込は定義上つねに [`PlacementRoute::BalloonFollow`] であり、
 /// その語からは「なぜバルーンが動いたのか」——ユーザーがキャラをドラッグしたのか、
 /// 配置系（DPI 再射影・再スナップ等）が勝手に動かしたのか——を復元できない。しかし
-/// 遷移ガードの発火可否はまさにそこで反転する（Req 3.1 の「ユーザーの明示的なドラッグ
+/// 遷移ガードの発火可否はまさにそこで反転する（areka-P0-dpi-window-vanish Req 3.1 の「ユーザーの明示的なドラッグ
 /// 以外の要因」）。ゆえに引き金は**呼出元しか知らない情報**であり、引数で配管するほか
 /// ない（[`route_applies_visibility_guard`] を `BalloonFollow` に当てると常に偽＝
 /// バルーンのガードが恒久的に無効になり、逆に無条件適用するとドラッグ随伴でバルーンが
@@ -356,16 +356,16 @@ impl BalloonFollowTrigger {
 /// [`BalloonFollow`] が無ければ no-op。[`on_char_drag`]／[`on_char_drag_end`]／
 /// [`resize_window_to`] の共通後段。
 ///
-/// 経路タグ（Req 1.2・task 1.4）は定義上つねに [`PlacementRoute::BalloonFollow`]
+/// 経路タグ（areka-P0-dpi-window-vanish Req 1.2）は定義上つねに [`PlacementRoute::BalloonFollow`]
 /// （経路語彙が関数名そのもの）ゆえ引数で受けない。呼出元がドラッグ経路
 /// （route 語彙なし）であっても**随伴バルーンの書込は BalloonFollow として記録される**
-/// ——これは Req 2.5（バルーン消失がキャラ追従の随伴か）の判別材料そのものである。
+/// ——これは areka-P0-dpi-window-vanish Req 2.5（バルーン消失がキャラ追従の随伴か）の判別材料そのものである。
 ///
-/// # 可視性の遷移ガード（S3′ 是正・task 6.2・Req 3.4）
+/// # 可視性の遷移ガード（S3′ 是正・areka-P0-dpi-window-vanish Req 3.4）
 ///
 /// offset 恒等式（`pos + offset`）が出した提案位置は、キャラ窓が可視のままでも
 /// offset ぶん外側のバルーンだけを全 work area 非交差へ落とし得る——「キャラは見えて
-/// いるのに会話が読めない」状態であり、Req 3.4 が名指しで防ぐものである。よって恒等式の
+/// いるのに会話が読めない」状態であり、areka-P0-dpi-window-vanish Req 3.4 が名指しで防ぐものである。よって恒等式の
 /// **後**に、キャラ窓とまったく同一の純関数（`guard_visibility`）・同一の遷移規則を
 /// バルーン矩形へ適用する（[`guard_balloon_position`]）。発火可否は書込自身の route では
 /// なく `trigger`（随伴の引き金）が決める。
@@ -414,7 +414,7 @@ pub fn follow_balloon(
     );
 }
 
-/// バルーン矩形へ可視性の遷移ガードを適用する（task 6.2・S3′ 是正・Req 3.4）。
+/// バルーン矩形へ可視性の遷移ガードを適用する（S3′ 是正・areka-P0-dpi-window-vanish Req 3.4）。
 ///
 /// キャラ窓側（[`resize_window_to`] 手順 3a／3c）と**完全に同一の規則・同一の純関数**で
 /// あり、違うのは矩形の組み方だけである——バルーンには射影 T が無く、位置は offset 恒等式
@@ -426,18 +426,18 @@ pub fn follow_balloon(
 ///   矩形」を貫通させる必要があるが、バルーンには射影段が無く、提案位置以外に clamp 先を
 ///   決める基準が存在しない（別の矩形から引き直すと `guard_visibility` の事後条件が崩れる）。
 ///
-/// # 縮退（log-first・Req 3.3／6.2/6.3）
+/// # 縮退（log-first・areka-P0-dpi-window-vanish Req 3.3／6.2/6.3）
 ///
 /// - **バルーン entity 破棄済み**: 終了処理でゴースト窓が破棄された後のフレームでも随伴は
 ///   走り得る＝**正常終了系**ゆえ [`DESPAWNED_SKIP_TAG`] の `debug!` で打ち切り、提案位置を
-///   そのまま返す（task 3.2 と同じ区別。ここを `warn!` にすると良性ノイズが本物の異常を埋める）。
+///   そのまま返す（areka-P0-dpi-window-vanish タスク 3.2 と同じ区別。ここを `warn!` にすると良性ノイズが本物の異常を埋める）。
 /// - **寸が未確定**: 矩形を組めず交差判定が成立しないため、位置には**一切手を入れず**
 ///   `warn!` を残す。未確定は `Option::None` **だけではない**——`WindowPos::default()` は
 ///   寸を `Some(SizeI { CW_USEDEFAULT, .. })`（`i32::MIN` センチネル）で持ち、素の矩形として
 ///   交差判定へ入れると `saturating_add` で逆転矩形になって判定が丸ごと意味を失う
-///   （[[4.6 の教訓]]・キャラ窓側の手順 3a と同型のガード）。
+///   （areka-P0-dpi-window-vanish タスク 4.6 の教訓・キャラ窓側の手順 3a と同型のガード）。
 ///
-/// # 縮退シーム（美観配置政策の先送り・Req 3.4 の範囲）
+/// # 縮退シーム（美観配置政策の先送り・areka-P0-dpi-window-vanish Req 3.4 の範囲）
 ///
 /// 本ガードが持つのは「完全不可視への遷移を防ぐ安全網」までである。clamp によりバルーンが
 /// キャラと部分的に重なり得ることは**許容する**（*見えない会話*より*重なった会話*を優先する

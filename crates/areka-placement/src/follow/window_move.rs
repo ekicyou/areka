@@ -26,7 +26,7 @@ use super::{
 /// - 対象が [`BalloonFollow`](super::BalloonFollow) を持つ場合はバルーン窓も [`follow_balloon`] で随伴移動する
 /// - `WindowHandle` 未付与（窓生成前）は `warn!` して `false` を返す（silent no-op に
 ///   しない）。対象が既に破棄済み（entity 不在）なら**正常終了系**ゆえ `debug!` で
-///   打ち切って `false`（task 7.3・Req 6.2）。いずれも随伴バルーンは動かさない
+///   打ち切って `false`（areka-P0-dpi-window-vanish Req 6.2）。いずれも随伴バルーンは動かさない
 /// - 随伴バルーン側の `WindowHandle` 未付与は `warn!` のみ（対象自身の移動は成立
 ///   しているため戻り値は `true`）
 ///
@@ -34,7 +34,7 @@ use super::{
 /// `runtime::frame::drain_resnap`）・連れ動き（`sticky_follow`）・位置の初期化（`reset_pos`）。
 /// 位置を書く道はほかにもある（[`resize_window_to`]・[`move_window_with_route`] ほか）。
 ///
-/// # 経路タグ（Req 1.2／2.4・D13・task 1.4）
+/// # 経路タグ（areka-P0-dpi-window-vanish Req 1.2／2.4・D13）
 ///
 /// 対象窓の書込は [`PlacementRoute::MoveCue`]・随伴バルーンは
 /// [`PlacementRoute::BalloonFollow`] として記録する。本関数の呼び手はどれも `MoveCue` を名乗る
@@ -42,7 +42,7 @@ use super::{
 /// 遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）。
 /// 整合待ちの札（[`DpiSyncHold`]）のある窓へ届いても [`enqueue_window_set_pos`] の監視は
 /// 鳴らない——見送らないことが正しい書込だからである（分類は [`deferral_covers_route`] が
-/// 1 本で持つ・task 7.5）。
+/// 1 本で持つ）。
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
     move_window_with_route(world, window, x, y, PlacementRoute::MoveCue)
 }
@@ -86,37 +86,37 @@ pub fn move_window_with_route(
 }
 
 /// 単一ライター反映口: 新しい表示サーフェス寸法に対しアンカー射影 T を再適用し、
-/// 確定した position＋size を単一ライター経路で**一度だけ**書く（task 2.4・
-/// Req1.1/1.3/1.7/3.1/3.4＋2.6/3.3）。
+/// 確定した position＋size を単一ライター経路で**一度だけ**書く（
+/// areka-P0-surface-resize-resnap Req1.1/1.3/1.7/3.1/3.4＋2.6/3.3）。
 ///
 /// `char_window` の現在アンカー（[`Anchored`]＝単一真実源）を読み、[`project_anchor`]
 /// で新 position を導出する——ドラッグ（[`policy_mapped_position`]）と**同一の T** を
-/// 呼び、座標系変換を二重化しない（Req1.6）。`bottom` は `wa.bottom − h'` の再計算、
+/// 呼び、座標系変換を二重化しない（areka-P0-surface-resize-resnap Req1.6）。`bottom` は `wa.bottom − h'` の再計算、
 /// `snapshot` 不在は `project_anchor` が identity 縮退する。
 ///
 /// # 縮退・失敗経路（log-first・silent failure を作らない）
 ///
 /// - **対象 entity 不在（despawn 済み）**: 終了処理でゴースト窓が破棄された後のフレーム
-///   ＝**正常終了系**ゆえ `debug!`（[`diag::DESPAWNED_SKIP_TAG`]）＋`false`（要件 6.2/6.3）。
+///   ＝**正常終了系**ゆえ `debug!`（[`diag::DESPAWNED_SKIP_TAG`]）＋`false`（areka-P0-dpi-window-vanish 要件 6.2/6.3）。
 ///   直下の [`Anchored`] 欠落 `warn!` と**必ず区別する**——混ぜると終了時ログが良性ノイズで
 ///   埋まり、本物の結線バグ（実在窓の `Anchored` 欠落）が読めなくなる。
 /// - [`Anchored`] 欠落: char 窓は spawn で必ず付与される＝異常系ゆえ `warn!`＋`false`。
-/// - 非正寸（w≤0 or h≤0）: T を再適用せず現状保持＋`warn!`＋`false`（Req3.4・
+/// - 非正寸（w≤0 or h≤0）: T を再適用せず現状保持＋`warn!`＋`false`（areka-P0-surface-resize-resnap Req3.4・
 ///   下端吸着の非正寸縮退と整合）。
 /// - `WindowPos`／`WindowPos.position` 不在、または `CW_USEDEFAULT` の印（窓生成前・位置未確定）:
 ///   生位置 `raw` を導出できないため `warn!`＋`false`（panic しない）。
-/// - べき等（Req3.1）: 導出 `(position, size)` が現 `WindowPos` と同一なら書込を行わず
+/// - べき等（areka-P0-surface-resize-resnap Req3.1）: 導出 `(position, size)` が現 `WindowPos` と同一なら書込を行わず
 ///   `false`（冗長な再配置を避ける・正常系ゆえ `debug!`）。
 /// - `WindowHandle` 未付与: [`enqueue_window_set_pos`] が `warn!`＋`false`
-///   （Req3.3）。このとき随伴バルーンも動かさない（[`move_window_to`] と同じ流儀）。
+///   （areka-P0-surface-resize-resnap Req3.3）。このとき随伴バルーンも動かさない（[`move_window_to`] と同じ流儀）。
 ///
-/// # 不変条件（Req1.5/1.7）
+/// # 不変条件（areka-P0-surface-resize-resnap Req1.5/1.7）
 ///
 /// 位置・サイズは [`enqueue_window_set_pos`]（`Some(new_size)`）で 1 コマンドだけ
 /// 発行する——`enqueue_window_move` を迂回する新たな bypass 書込を新設せず、単一
 /// ライター規律（bypass ミラー＋Arrangement 同期）を継承する。反映段階で既に確定
 /// 座標のみを書くため、切替・アンカー変更で窓が振動しない。書込成功後は
-/// [`follow_balloon`] が [`BalloonFollow.offset`] を保って随伴させる（Req2.6・
+/// [`follow_balloon`] が [`BalloonFollow.offset`] を保って随伴させる（areka-P0-surface-resize-resnap Req2.6・
 /// 恒等式 `balloon_pos − char_pos ≡ offset` 維持）——ただしこの恒等式が保たれるのは
 /// [`BalloonFollow.offset`] と**追従計算が出す提案位置**についてである。対象が
 /// `BalloonLimit(true)` なら [`enqueue_window_set_pos`] の runtime 関門が表示位置だけを
@@ -124,8 +124,8 @@ pub fn move_window_with_route(
 /// 一致しないことがある（windowposition-limit DD6・`offset` は補正を焼き付けず生値の
 /// まま）。
 ///
-/// # `route` 引数（Req 1.2／2.4・design「PlacementRoute 配管＋guard_visibility >
-/// Integration」・task 1.4）
+/// # `route` 引数（areka-P0-dpi-window-vanish Req 1.2／2.4・design「PlacementRoute 配管＋guard_visibility >
+/// Integration」）
 ///
 /// 本関数は複数の上流（シェルの切り替えの `reseed::reanchor_char_windows` と見本の [`anchor_changed_system`]＝[`PlacementRoute::AnchorChange`]・
 /// frame の毎フレーム再スナップ＝[`PlacementRoute::Resnap`]・frame の DPI 相＝
@@ -134,15 +134,15 @@ pub fn move_window_with_route(
 /// 書いたかは呼出側しか知らない。ゆえに経路は引数で受け、[`enqueue_window_set_pos`] の
 /// 窓移動レコードへ透過させる（D11: ラッパ関数を乱立させない）。
 ///
-/// **task 6.1 以後、route は観測語彙であると同時に挙動の入力でもある**——可視性の遷移
+/// **areka-P0-dpi-window-vanish のタスク 6.1 以後、route は観測語彙であると同時に挙動の入力でもある**——可視性の遷移
 /// ガード（手順 3c・[`apply_visibility_guard`]）は非ドラッグのシステム由来の 7 経路
 /// （内訳は `PlacementRoute::is_system_reanchor` が正本）でのみ発火する
-/// （D13 帰結⑴。同じ幾何でも由来が明示操作なら引き戻さない＝Req 3.1 の「ユーザーの
+/// （D13 帰結⑴。同じ幾何でも由来が明示操作なら引き戻さない＝areka-P0-dpi-window-vanish Req 3.1 の「ユーザーの
 /// 明示的なドラッグ以外の要因」）。
 ///
-/// **task 6.2 以後、route は随伴バルーンの発火条件でもある**——手順 7 の
+/// **areka-P0-dpi-window-vanish のタスク 6.2 以後、route は随伴バルーンの発火条件でもある**——手順 7 の
 /// [`follow_balloon`] へ [`BalloonFollowTrigger::Placement`]`(route)` として渡され、
-/// バルーン矩形への遷移ガード（S3′・Req 3.4）が同じ 7 経路でのみ発火する。
+/// バルーン矩形への遷移ガード（S3′・areka-P0-dpi-window-vanish Req 3.4）が同じ 7 経路でのみ発火する。
 ///
 /// # バルーン追従はリサイズで補正しない（**全アンカー共通**・2026-07-31 実機裁定）
 ///
@@ -165,14 +165,14 @@ pub fn move_window_with_route(
 /// 連続的な中央追従ではない——初期既定位置を**実際に表示される寸**から導くための一度きりの
 /// 確定である（詳細は [`BalloonKeywordBase`] の doc）。素材はリサイズを待たずに消えることも
 /// ある——利用者がバルーンをドラッグして相対位置を保存した瞬間に退役するからである
-/// （要件 4.7・`balloon_drag::retire_keyword_base_on_save`）。
+/// （areka-P0-windowposition-limit 要件 4.7・`balloon_drag::retire_keyword_base_on_save`）。
 pub fn resize_window_to(
     world: &mut World,
     char_window: Entity,
     new_size: SizePx,
     route: PlacementRoute,
 ) -> bool {
-    // 0. 存在確認（要件 6.2/6.3・design D8 消費側）: 対象が既に despawn 済みなら
+    // 0. 存在確認（areka-P0-dpi-window-vanish 要件 6.2/6.3・design D8 消費側）: 対象が既に despawn 済みなら
     //    **正常終了系**として debug で打ち切る。終了処理でゴースト窓が破棄された後の
     //    フレームでも寸法の再導出は走り得るため、ここを素通りさせると下の
     //    「Anchored 未付与」warn が破棄済み窓ぶんだけ鳴り、良性ノイズが本物の異常を
@@ -197,7 +197,7 @@ pub fn resize_window_to(
         return false;
     };
 
-    // 2. 非正寸ガード（Req3.4）: T を再適用せず現状保持。wa.right−w／wa.bottom−h の
+    // 2. 非正寸ガード（areka-P0-surface-resize-resnap Req3.4）: T を再適用せず現状保持。wa.right−w／wa.bottom−h の
     //    暴走を先に弾く（下端吸着の CW_USEDEFAULT センチネル縮退と整合）。
     if new_size.w <= 0 || new_size.h <= 0 {
         warn!(
@@ -225,7 +225,7 @@ pub fn resize_window_to(
             );
             return false;
         };
-        // wintf の未確定表現は `Option::None` **だけではない**（D15・task 6.3）:
+        // wintf の未確定表現は `Option::None` **だけではない**（D15）:
         // `WindowPos::default()` は position を `CW_USEDEFAULT`（`i32::MIN` センチネル）で
         // 持ち、`on_window_add` フックがそれを実際に挿す。素通しすると
         //   ① 手順 3a の `old_rect` が `i32::MIN` 近傍の全 work area 非交差矩形になり、
@@ -234,7 +234,7 @@ pub fn resize_window_to(
         //   ② 手順 3b の中央付替えと射影 T の入力（raw）も同時に汚染され、位置権威の
         //      無い窓へ clamp 由来の任意 X を書く＝位置権威の僭称
         // 位置未確定は「保存すべき接地点が存在しない」状態ゆえ、上の `Option::None` と
-        // 同じ腕へ合流させて打ち切る（Req 3.3「必要な入力が取得できない場合は現状維持＋
+        // 同じ腕へ合流させて打ち切る（areka-P0-dpi-window-vanish Req 3.3「必要な入力が取得できない場合は現状維持＋
         // 警告」）。**寸センチネルとの非対称は意図的**（D15 帰結⑴）——寸未確定は接地点が
         // 実在するので resize に意味があり、手順 3a の `old_rect` 不明＝安全側 clamp で扱う。
         //
@@ -254,7 +254,7 @@ pub fn resize_window_to(
     };
 
     // 3a. 旧矩形（書込**前**の窓矩形）＝遷移ガードが「もともと見えていたか」を判定する入力
-    //     （task 6.1・S3 是正）。手順 3b の付替えより**前**の生位置で組むこと——3b 後の
+    //     （S3 是正）。手順 3b の付替えより**前**の生位置で組むこと——3b 後の
     //     値は「これから書こうとしている位置」であって旧矩形ではない。
     //
     //     寸が未確定のときは `None`＝**旧矩形不明**として扱い、ガードを安全側 clamp へ
@@ -294,12 +294,12 @@ pub fn resize_window_to(
     };
 
     // 新位置 = アンカー射影 T（bottom は wa.bottom−h' 再計算・snapshot 不在は
-    // project_anchor が identity 縮退）。drag と同一 T を呼び二重化しない（Req1.6）。
+    // project_anchor が identity 縮退）。drag と同一 T を呼び二重化しない（areka-P0-surface-resize-resnap Req1.6）。
     // 下端は T が再導出し、中央 x は上の付け替えで維持される＝原点（下端中央）が不動。
     let snapshot = world.get_resource::<MonitorSnapshot>();
     let new_pos = project_anchor(anchor, raw, new_size, snapshot);
 
-    // 3c. 可視性の遷移ガード（S3 是正・task 6.1・D5/D6・Req 3.1/3.2/3.3）: 射影 T の
+    // 3c. 可視性の遷移ガード（S3 是正・D5/D6・areka-P0-dpi-window-vanish Req 3.1/3.2/3.3）: 射影 T の
     //     **下流・外側**で、非ドラッグの配置系 route のときだけ「可視 → 全 work area
     //     非交差」の遷移を X の clamp で阻止する（Y は射影の所有ゆえ不変）。射影関数
     //     自体の契約は変えない——`project_anchor` は幾何しか知らず、発火条件である
@@ -319,7 +319,7 @@ pub fn resize_window_to(
     let new_pos =
         super::clamp_grown_free_default(world, char_window, anchor, route, new_pos, new_size);
 
-    // 4. べき等 skip（Req3.1）: 導出 (position, size) が現 WindowPos と同一なら書かない
+    // 4. べき等 skip（areka-P0-surface-resize-resnap Req3.1）: 導出 (position, size) が現 WindowPos と同一なら書かない
     //    （冗長な再配置を避ける・こちらは正常系ゆえ debug!）。
     if new_pos == raw && current_size == Some(SizeI::new(new_size.w, new_size.h)) {
         debug!(
@@ -331,8 +331,8 @@ pub fn resize_window_to(
         return false;
     }
 
-    // 5. 一度書き（Req1.5/1.7）: 位置＋サイズを単一ライター経路で 1 コマンド発行。
-    //    WindowHandle 未付与は enqueue が warn!＋false（Req3.3）——false なら
+    // 5. 一度書き（areka-P0-surface-resize-resnap Req1.5/1.7）: 位置＋サイズを単一ライター経路で 1 コマンド発行。
+    //    WindowHandle 未付与は enqueue が warn!＋false（areka-P0-surface-resize-resnap Req3.3）——false なら
     //    随伴バルーンも動かさず false を返す（move_window_to と同じ流儀）。
     if !enqueue_window_set_pos(
         world,
@@ -345,11 +345,11 @@ pub fn resize_window_to(
         return false;
     }
 
-    // 5b. 接地点の観測（要件 5.3・design Data Models `ground`）: **下端吸着のキャラ窓に限り**、
+    // 5b. 接地点の観測（areka-P0-dpi-transition-atomicity 要件 5.3・design Data Models `ground`）: **下端吸着のキャラ窓に限り**、
     //     いま書いた接地点（窓矩形の下端）と実行時のモニタ表が持つ作業領域下端の差を 1 行残す。
     //     接地点そのものは上の射影 T が決めた値を読むだけで、位置の決め方には触れない
-    //     （要件 10.1 の原点規約は不変）。ガードを組立の外側に置くのは、既定運転で
-    //     モニタ表の走査も `String` の確保も一切行わないためである（要件 10.4/10.6）。
+    //     （areka-P0-dpi-transition-atomicity 要件 10.1 の原点規約は不変）。ガードを組立の外側に置くのは、既定運転で
+    //     モニタ表の走査も `String` の確保も一切行わないためである（areka-P0-dpi-transition-atomicity 要件 10.4/10.6）。
     //     手順 5a より前に置くのは、5a が offset を書き換える前の**書いた通りの**接地点を
     //     残すため（5a はバルーン側の量であって接地点を動かさないが、順序の意図を明示する）。
     if matches!(anchor, Anchor::Bottom) && transition_diag::is_enabled() {
@@ -357,7 +357,7 @@ pub fn resize_window_to(
     }
 
     // 5a. キーワード由来のバルーン基本位置の**一度きり**の再導出
-    //     （windowposition-limit 要件 4.2/4.3/4.7・2026-08-14 実機サインオフ是正）。
+    //     （areka-P0-windowposition-limit 要件 4.2/4.3/4.7・2026-08-14 実機サインオフ是正）。
     //     手順 6 の追従より**前**に置く——offset を直してから追従させないと、
     //     このフレームのバルーンは古い offset で書かれ、次に何かが動くまで直らない。
     //     `BalloonKeywordBase` を持つキャラ窓（＝キーワード指定かつ保存値が効いていない
@@ -374,7 +374,7 @@ pub fn resize_window_to(
         new_size,
     );
 
-    // 6. 随伴バルーン維持（Req2.6）: **リサイズで `BalloonFollow.offset` を補正しない**。
+    // 6. 随伴バルーン維持（areka-P0-surface-resize-resnap Req2.6）: **リサイズで `BalloonFollow.offset` を補正しない**。
     //    受理オラクルは参照実装 SSP の実測——SSP のバルーンは観測時つねに現在表示中の
     //    キャラ窓に対して窓相対にある（2026-07-31 実機裁定）。これは
     //    `areka-P0-surface-resize-resnap` Req2.6 の「追従 offset を維持」という窓相対契約
@@ -386,7 +386,7 @@ pub fn resize_window_to(
     // 確定後キャラ窓座標＋（不変の）offset で追従（提案位置は offset 恒等式維持・
     //    表示位置は上記の関門で補正され得る）。
     //    引き金はキャラ窓を動かした route そのもの——バルーン矩形への遷移ガード
-    //    （task 6.2・S3′）はこれで発火可否が決まる（書込自身の `BalloonFollow` では
+    //    （S3′）はこれで発火可否が決まる（書込自身の `BalloonFollow` では
     //    決められない・[`BalloonFollowTrigger`] の doc 参照）。
     follow_balloon(
         world,
@@ -401,7 +401,7 @@ pub fn resize_window_to(
     true
 }
 
-/// アンカー変化トリガ（Req1.4・consumer 契約のみ・producer=seriko は非所有）。
+/// アンカー変化トリガ（areka-P0-surface-resize-resnap Req1.4・consumer 契約のみ・producer=seriko は非所有）。
 ///
 /// `Changed<Anchored>` の char 窓それぞれについて、**現在の表示寸法**
 /// （`WindowPos.size`＝新寸ではなく今まさに表示している寸法）を読み、
@@ -410,12 +410,12 @@ pub fn resize_window_to(
 /// アンカー値の解決（`seriko.alignmenttodesktop` 優先度チェーン）と
 /// `\![set,alignmenttodesktop]` の cue routing は上流（parsers／seriko）の領分＝
 /// 本 spec は非所有。本 system は `Anchored` の変化に反応する **consumer** に徹する
-/// （design「System Flows > アンカー変化トリガ」・Req4.2）。
+/// （design「System Flows > アンカー変化トリガ」・areka-P0-surface-resize-resnap Req4.2）。
 ///
 /// 本番のアンカーの変化は `reseed` から [`resize_window_to`] で書く。この system は schedule に
 /// 登録しない。永続の [`SystemState`] で変化を拾う system の書き方の見本として、テストと共に残す。
 ///
-/// # 変更検知の永続性（毎フレーム全マッチしない・Req1.4 の要）
+/// # 変更検知の永続性（毎フレーム全マッチしない・areka-P0-surface-resize-resnap Req1.4 の要）
 ///
 /// [`SystemState`] を [`Local`] に保持して `last_run` tick を run を跨いで引き継ぐ。
 /// 毎 run で新規 `QueryState` を作ると `last_run` が過去 0 のまま `Changed` が全窓へ
@@ -429,7 +429,7 @@ pub fn resize_window_to(
 ///
 /// `WindowPos.size` 不在／未生成（窓生成前）の窓は skip する（現寸を導出できない）。
 /// アンカー欠落・非正寸・`WindowHandle` 未付与など残りの縮退は [`resize_window_to`]
-/// 側が warn＋no-op で吸収する（Req3.3/3.4・二重に弾かない）。
+/// 側が warn＋no-op で吸収する（areka-P0-surface-resize-resnap Req3.3/3.4・二重に弾かない）。
 ///
 /// # Concurrency
 ///
@@ -453,7 +453,7 @@ pub fn anchor_changed_system(
             continue;
         };
         // 現寸で resize_window_to → 現在アンカー（変化後）で project_anchor を再適用。
-        // 経路タグは AnchorChange（Req 1.2 の「変化を引き起こした経路」・task 1.4）。
+        // 経路タグは AnchorChange（areka-P0-dpi-window-vanish Req 1.2 の「変化を引き起こした経路」）。
         resize_window_to(
             world,
             entity,
@@ -467,7 +467,7 @@ pub fn anchor_changed_system(
 }
 
 /// この経路の書込は、整合待ちの札（[`DpiSyncHold`]）のある窓へは**届かないはず**か
-/// （＝見送りが覆うべき経路か・task 7.5・設計 C5・要件 5.8）。
+/// （＝見送りが覆うべき経路か・設計 C5・areka-P0-dpi-transition-atomicity 要件 5.8）。
 ///
 /// [`enqueue_window_set_pos`] 入口の不変条件の監視が鳴る相手を、この 1 本が決める。
 ///
@@ -494,7 +494,7 @@ pub fn anchor_changed_system(
 /// # 網羅 match である理由
 ///
 /// 経路語が増えたときに「鳴る／鳴らない」を**必ず**書かせるためである。既定の腕を置くと
-/// 新設経路が黙ってどちらかへ倒れ、列挙で守る規約が静かに穴を持つ（task 6.5 の学び——
+/// 新設経路が黙ってどちらかへ倒れ、列挙で守る規約が静かに穴を持つ（areka-P0-dpi-transition-atomicity タスク 6.5 の学び——
 /// あのときは日本語の「再スナップ」が別々の 2 関数を指していて見送りが 1 点落ちた）。
 pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool {
     let Some(route) = route else {
@@ -541,7 +541,7 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
         // バルーン窓ドラッグ**解放時**の `windowposition.limit` 補正。ドラッグの一部＝
         // 明示操作であり、見送ると画面外のバルーンが引き戻されないまま残る。
         | PlacementRoute::BalloonLimitRelease
-        // 随伴バルーンの追従（task 5.4 で確定・task 7.5 まで唯一の例外だった・設計 C5）。位置は
+        // 随伴バルーンの追従（これまで唯一の例外だった・設計 C5）。位置は
         // キャラ窓の従属量であり、キャラ窓が動いた同一書込の一部として動く。そもそも
         // 見送りの点を通らないので止まりはせず、鳴らせば偽の警報になる。
         | PlacementRoute::BalloonFollow
@@ -552,7 +552,7 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 }
 
 /// 1 窓ぶんの位置（と任意で寸法）を enqueue する共通経路（物理 px 素通し・
-/// 単一ライター・task 2.3 で move 専用から size 対応へ一般化）。
+/// 単一ライター・move 専用から size 対応へ一般化）。
 ///
 /// `WindowHandle` を直接引いて `SetWindowPosCommand` を enqueue し、ECS 側の
 /// `WindowPos.position` を `bypass_change_detection()` で先行反映する。
@@ -567,7 +567,7 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 ///   を `SizeI::new(s.w, s.h)` で bypass ミラーする（`resize_window_to` の反映口）。
 ///
 /// `size.is_some()` で明示分岐して flags/寸法を合成し、`SWP_NOSIZE` の付け外しミスを
-/// 防ぐ（Req1.5：本経路を迂回する第二の bypass 書込経路を新設しない）。
+/// 防ぐ（areka-P0-surface-resize-resnap Req1.5：本経路を迂回する第二の bypass 書込経路を新設しない）。
 ///
 /// bypass の理由: 実アプリでは flush 後の `SetWindowPos` が同期発火させる
 /// `WM_WINDOWPOSCHANGED` echo が同値を（同じく bypass で）再書込するため、
@@ -576,7 +576,7 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 /// 1 コマンドに閉じ、headless World（echo が来ない）でも `WindowPos` が
 /// 期待座標・寸法を示す決定論シームになる。
 ///
-/// # Arrangement.offset の直接同期（task 8.3-fix・4.8 実機ブロッカ）
+/// # Arrangement.offset の直接同期（areka-P0-window-placement 要件 4.8 実機ブロッカ）
 ///
 /// bypass 書込は `Changed<WindowPos>` を発火させないため、wintf の
 /// `sync_window_arrangement_from_window_pos` は本経路の移動を拾えない。放置すると
@@ -590,9 +590,9 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 /// `width <= 0` ガードが skip し、`SetWindowPos` echo ループにはならない
 /// （donor の DragEnd 同期と同じ性質）。
 ///
-/// # `route` 引数（Req 1.2／2.4・design D11「enum 引数配管」・task 1.4）
+/// # `route` 引数（areka-P0-dpi-window-vanish Req 1.2／2.4・design D11「enum 引数配管」）
 ///
-/// 位置を書いた**経路**（＝要件 2.4 の「最終位置を書き込んだ主体」の名指し語彙）を
+/// 位置を書いた**経路**（＝areka-P0-dpi-window-vanish 要件 2.4 の「最終位置を書き込んだ主体」の名指し語彙）を
 /// 呼出側から受け取り、**書込成功時に**窓移動レコード 1 行を専用 target
 /// （[`diag::DIAG_TARGET`]）へ出す。ラッパ関数を増やさず引数で配管するのは D11 の裁定で、
 /// route は後続タスクで遷移ガードの発火条件・warn 水準分岐の第一級入力にもなる。
@@ -601,9 +601,9 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 /// **ドラッグ経路のキャラ窓書込のみ**である（[`on_char_drag`]／[`on_char_drag_end`]と、
 /// ドラッグ中の組の相手を動かす `sticky_follow::move_partners`）——
 /// design「placement::diag > Risks」の裁定どおり、ドラッグ中の観測は wintf の `[drag]`
-/// target が所有し本 target を通らない（Req 2.4 の結論語彙も「[`PlacementRoute`] 名
+/// target が所有し本 target を通らない（areka-P0-dpi-window-vanish Req 2.4 の結論語彙も「[`PlacementRoute`] 名
 /// ＋ wintf `[drag]`／提案位置書込の 2 語」と規定されている）。ドラッグに随伴する
-/// バルーン側の書込は [`PlacementRoute::BalloonFollow`] を持つ（Req 2.5 の判別材料）。
+/// バルーン側の書込は [`PlacementRoute::BalloonFollow`] を持つ（areka-P0-dpi-window-vanish Req 2.5 の判別材料）。
 ///
 /// `\![move]` cue（[`move_window_to`] の対象窓）は **`None` ではない**——D13 で
 /// [`PlacementRoute::MoveCue`] を新設し、スクリプト明示移動を名指しできるようにした
@@ -621,7 +621,7 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
 /// 従来と **bit 同一**である——分岐は route ではなく**対象窓の Component**＝
 /// データ駆動で、route 語彙は観測のままに保たれる（DD1）。
 ///
-/// 本関数が ECS 経路の位置書込の**単一ライター**であることが、要件 2.1「経路に
+/// 本関数が ECS 経路の位置書込の**単一ライター**であることが、areka-P0-windowposition-limit 要件 2.1「経路に
 /// よらず常時」を経路個別の規律ではなく**構造**で成立させる要点である（経路③④⑤⑦
 /// および将来の書込口が自動被覆される）。補正は `x`／`y` を再束縛して以降の全処理
 /// （`SetWindowPosCommand`・`WindowPos` ミラー・`Arrangement.offset` 同期・
@@ -637,7 +637,7 @@ pub(super) fn enqueue_window_set_pos(
     route: Option<PlacementRoute>,
 ) -> bool {
     // 「entity 不在＝破棄済み」と「実在するが `WindowHandle` 未付与＝窓生成前」を混ぜない
-    // （task 7.3・Req 6.2/6.3・task 3.2 が消費側 4 入口へ敷いたのと同じ区別）。前者は終了
+    // （areka-P0-dpi-window-vanish Req 6.2/6.3 が消費側 4 入口へ敷いたのと同じ区別）。前者は終了
     // 処理の**正常終了系**——終了処理でゴースト窓が破棄された後も随伴書込（`follow_balloon`）
     // は走り得るため、`warn!` のままにすると終了時ログが良性ノイズで埋まって本物の異常が
     // 読めなくなる（6.2 → 7.3 の申し送り）。後者は結線の異常ゆえ `warn!` を保つ。
@@ -649,10 +649,10 @@ pub(super) fn enqueue_window_set_pos(
         );
         return false;
     }
-    // 待ち札の適用範囲の不変条件（atom 設計 C5・要件 5.8）: 「[`DpiSyncHold`] を持つ窓への
+    // 待ち札の適用範囲の不変条件（atom 設計 C5・areka-P0-dpi-transition-atomicity 要件 5.8）: 「[`DpiSyncHold`] を持つ窓への
     // 窓書込は 0」。ただし**その 0 を作るのは見送りの側**であって本監視ではない。ゆえに鳴らす
     // 相手は「見送りが覆うべき経路」に限る——判定は [`deferral_covers_route`] が 1 本で持ち、
-    // 13 の経路語と route 無しを網羅 match で分類している（task 7.5）。**書込口は本関数 1 つ**
+    // 13 の経路語と route 無しを網羅 match で分類している。**書込口は本関数 1 つ**
     // なので、覆うべき経路がすり抜けたかどうかはここでしか構造的に見張れない。実機では
     // `warn!` として見え、テストビルドでは `debug_assert!` がその場で落とす。
     //
@@ -662,7 +662,7 @@ pub(super) fn enqueue_window_set_pos(
     // （[`PlacementRoute::BalloonLimitRelease`]）は、いずれも**明示操作ゆえ見送らないことが
     // 正しい**（[`move_window_to`] の doc の裁定・D13 帰結⑵）。偽の警報であり、debug ビルドでは
     // 利用者が窓を 1 回ドラッグしただけで落ちていた。是正したのは**監視の側**であって、
-    // 見送りの 4 点は 1 bit も変えていない（task 7.5）。
+    // 見送りの 4 点は 1 bit も変えていない。
     //
     // 随伴バルーンの追従が外れる理由は従来どおりである——2 窓の中心が別々のモニタに乗る配置
     // （キャラ窓は表と揃い、バルーンだけまだ食い違う）では、待ち札の付いたバルーンへ随伴が
@@ -671,7 +671,7 @@ pub(super) fn enqueue_window_set_pos(
     // 見て作業領域を見ないので、表が古くても随伴の位置は壊れない。バルーン**自身**の書込
     // （拡大率の相・報告寸の突合・2 つの再スナップ・面の move のずれの相）は見送りの点が引き続き覆う。
     //
-    // 覆うべき経路が増えたときに黙って通さないための錨が網羅 match である（task 6.5 の学び）。
+    // 覆うべき経路が増えたときに黙って通さないための錨が網羅 match である（areka-P0-dpi-transition-atomicity タスク 6.5 の学び）。
     if deferral_covers_route(route)
         && let Some(hold) = world.get::<DpiSyncHold>(window)
     {
@@ -713,7 +713,7 @@ pub(super) fn enqueue_window_set_pos(
         None => (SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE, 0, 0),
     };
 
-    // 要求語彙タグ（要件 2.1・design D3）: 「どの経路が・どの窓へ」を書込指令へ載せる。
+    // 要求語彙タグ（areka-P0-dpi-transition-atomicity 要件 2.1・design D3）: 「どの経路が・どの窓へ」を書込指令へ載せる。
     // 単一ライターがここ 1 箇所で付けるので、経路が増えても札の付け忘れが構造的に起きない
     // （生成の 7 引数は不変＝`with_tag` はビルダで足すだけ）。
     SetWindowPosCommand::enqueue(
@@ -721,7 +721,7 @@ pub(super) fn enqueue_window_set_pos(
             .with_tag(transition_diag::write_tag(world, window, route)),
     );
 
-    // 既定位置の追跡（design D9／D16・要件 6.2）: **ミラーを書き換える前**に呼ぶ——本関数が
+    // 既定位置の追跡（design D9／D16・areka-P0-dpi-transition-atomicity 要件 6.2）: **ミラーを書き換える前**に呼ぶ——本関数が
     // 見るのは「書込**前**の現在位置」であり、下の bypass ミラーが `WindowPos.position` を
     // 新位置へ書いた後では一致判定が常に成立してしまう（明示操作で動かした窓まで追随する）。
     track_default_char_pos(world, window, route, PointPx { x, y });
@@ -763,7 +763,7 @@ pub(super) fn enqueue_window_set_pos(
         }
     }
 
-    // 窓移動レコード（Req 1.2）: **書込成功時のみ** 1 レコードを専用 target へ出す。
+    // 窓移動レコード（areka-P0-dpi-window-vanish Req 1.2）: **書込成功時のみ** 1 レコードを専用 target へ出す。
     // 経路語彙を持たない書込（ドラッグ）は route=None ＝無記録（doc 参照）。
     // `\![move]` は D13 で `MoveCue` を得たので記録される（[`move_window_to`] が `Some(MoveCue)` を渡す）。
     if let Some(route) = route {
@@ -774,14 +774,14 @@ pub(super) fn enqueue_window_set_pos(
 }
 
 /// 「まだ誰にも動かされていない」の基準（`ScopeWindows.default_char_pos`）を、**システム由来の
-/// 再アンカー**が動かした先へ追随させる（design D9／D16・要件 6.2）。
+/// 再アンカー**が動かした先へ追随させる（design D9／D16・areka-P0-dpi-transition-atomicity 要件 6.2）。
 ///
 /// # なぜ要るか
 ///
 /// 連鎖の再解決は「明示的に再配置されたスコープを対象から外す」ために、現在位置が既定位置と
 /// 一致するかを見る（`scope-chain-gap` 7.3・`drain_resnap::collect_chain_states`）。ところが
 /// 拡大率が変われば**全スコープ**の位置がシステム側の都合で動く——既定位置を据え置いたままだと
-/// 全件が「明示的に動かされた」へ倒れ、遷移後の解き直しが丸ごと空振りする（要件 6.2 が
+/// 全件が「明示的に動かされた」へ倒れ、遷移後の解き直しが丸ごと空振りする（areka-P0-dpi-transition-atomicity 要件 6.2 が
 /// 名指しで禁じる状態）。ゆえに、システム由来の書込に限って基準そのものを一緒に運ぶ。
 ///
 /// # 追随させる条件（3 つすべて）
@@ -864,17 +864,17 @@ fn track_default_char_pos(
         from_y = default_pos.y,
         to_x = written.x,
         to_y = written.y,
-        "既定位置をシステム由来の再アンカー先へ追随させた（D9／D16・要件 6.2）"
+        "既定位置をシステム由来の再アンカー先へ追随させた（D9／D16・areka-P0-dpi-transition-atomicity 要件 6.2）"
     );
 }
 
-/// 窓移動レコード（Req 1.2）を World から転写して組み、専用 target へ出す
+/// 窓移動レコード（areka-P0-dpi-window-vanish Req 1.2）を World から転写して組み、専用 target へ出す
 /// （[`enqueue_window_set_pos`] の書込成功時専用・design「placement::diag > Invariants」）。
 ///
 /// `diag` は placement の最下流で `World`・wintf 型に依存しない契約ゆえ、
 /// **窓種別（[`CharWindowMarker`]／[`BalloonWindowMarker`]）・scope・DPI（`DPI` component）の
 /// 読み出しは呼出側である本モジュールの仕事**である。`entity` は wintf 側ログ
-/// （`entity = ?e`・scope を持たない）との**結合キー**として必ず入れる——Req 1.9 の
+/// （`entity = ?e`・scope を持たない）との**結合キー**として必ず入れる——areka-P0-dpi-window-vanish Req 1.9 の
 /// scope 別 DPI 受理計数は、この結合による 2 段 grep で機械化される。
 ///
 /// 種別 marker が無い窓（placement が生成したゴースト窓ではない）は、種別・scope を
@@ -925,7 +925,7 @@ fn log_window_move(
 // =============================================================================
 
 /// 書込直前の位置を `windowposition.limit=1` のバルーン窓に限って作業領域内へ補正する
-/// （design「C7: runtime 関門」・要件 2.1／2.2／2.6／2.7／2.8／2.9／5.5／6.1／6.3）。
+/// （design「C7: runtime 関門」・areka-P0-windowposition-limit 要件 2.1／2.2／2.6／2.7／2.8／2.9／5.5／6.1／6.3）。
 ///
 /// # 発動条件はデータ駆動であって route ではない（DD1）
 ///
@@ -951,7 +951,7 @@ fn log_window_move(
 /// はみ出したバルーンが隣モニタへ帰属して基準が振動するのを避けるためで、正典
 /// 「シェルが居る画面の中に維持する」の素直な読みでもある。
 ///
-/// # 可視性状態を**入力に持たない**（要件 2.6）
+/// # 可視性状態を**入力に持たない**（areka-P0-windowposition-limit 要件 2.6）
 ///
 /// 本関門が読むのは上記の 6 つ（`BalloonLimit`／`BalloonWindowMarker`／
 /// `GhostWindows`／キャラ窓 `WindowPos`／`MonitorSnapshot`／対象 `WindowPos.size`）
@@ -1132,7 +1132,7 @@ pub(super) fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 /// ラッパ**——DPI 変化フェーズ（design D8・Flow 2）が balloon 窓の寸を k 追従させる
 /// ための唯一の正規手段であり、単一ライター規律（`SetWindowPosCommand` 発行＋
 /// `WindowPos` bypass ミラー＋`Arrangement.offset` 同期）を迂回する第二の書込経路を
-/// 新設しない（Req1.5 の継承）。
+/// 新設しない（areka-P0-surface-resize-resnap Req1.5 の継承）。
 ///
 /// [`resize_window_to`] との違いは**位置の決め方**だけである。あちらは
 /// [`Anchored`] を読んで [`project_anchor`] で位置を再導出する（キャラ窓＝接地点が
@@ -1144,7 +1144,7 @@ pub(super) fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 /// # 縮退・失敗経路（log-first・silent failure を作らない）
 ///
 /// - **対象 entity 不在（despawn 済み）**: 正常終了系ゆえ `debug!`
-///   （[`diag::DESPAWNED_SKIP_TAG`]）＋`false`（要件 6.2/6.3・[`resize_window_to`] と同一流儀）。
+///   （[`diag::DESPAWNED_SKIP_TAG`]）＋`false`（areka-P0-dpi-window-vanish 要件 6.2/6.3・[`resize_window_to`] と同一流儀）。
 /// - 非正寸（w≤0 or h≤0）: 何も書かず `warn!`＋`false`（[`resize_window_to`] の
 ///   非正寸縮退と同一流儀）。
 /// - `WindowPos` 不在（窓生成前の異常系）: 現在位置を読めないため `warn!`＋`false`。
@@ -1157,13 +1157,13 @@ pub(super) fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
 ///
 /// 消費者: `runtime::frame` の DPI 追従フェーズ（`dpi::run_dpi_phase`／`scale_text::reconcile_reported_sizes`・結線済み）。
 ///
-/// # 経路タグ（Req 1.2・task 1.4）
+/// # 経路タグ（areka-P0-dpi-window-vanish Req 1.2）
 ///
 /// 本関数の書込は定義上つねに [`PlacementRoute::KeepPositionResize`]（経路語彙が関数名
 /// そのもの）ゆえ、[`resize_window_to`] と違い route を引数で受けない——受けても
 /// 呼出側が渡せる値は 1 つしか無く、取り違えの余地だけを増やすため。
 pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: SizePx) -> bool {
-    // 0. 存在確認（要件 6.2/6.3・design D8 消費側）: 破棄済みバルーン窓は正常終了系として
+    // 0. 存在確認（areka-P0-dpi-window-vanish 要件 6.2/6.3・design D8 消費側）: 破棄済みバルーン窓は正常終了系として
     //    debug で打ち切る（下の `WindowPos` 未付与 warn は**実在する**窓の異常に取っておく）。
     if world.get_entity(window).is_err() {
         debug!(

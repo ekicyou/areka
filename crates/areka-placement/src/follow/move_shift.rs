@@ -1,5 +1,5 @@
 //! 面の `move` のずれを窓の位置へ当てる口（seriko-pattern-calls「MoveShiftPlacement」・
-//! 要件 7.1・7.3・7.5・7.8）。
+//! seriko-pattern-calls 要件 7.1・7.3・7.5・7.8）。
 //!
 //! 提示が覚えたずれ（作者基準）に倍率をかけ、元の位置（今の位置 − 当てた分）へ足してから、
 //! 今の置き方の決まり（吸い付き・作業領域の中への寄せ・見える範囲の守り）を後から当てる。
@@ -56,7 +56,7 @@ pub(super) fn balloon_shift(world: &World, balloon: Entity) -> PointPx {
 
 /// 保存の側が引くための元の位置（`pos` − 当てた分・記録が無ければ `pos` のまま）。
 ///
-/// 記憶にずれを焼き付けない（起動のたびに積もらない・要件 7.8）。
+/// 記憶にずれを焼き付けない（起動のたびに積もらない・seriko-pattern-calls 要件 7.8）。
 pub(crate) fn origin_position(world: &World, window: Entity, pos: PointPx) -> PointPx {
     let applied = world
         .get::<MoveShiftApplied>(window)
@@ -93,7 +93,7 @@ pub(crate) fn rebase_shift(world: &mut World, window: Entity) {
 ///
 /// 残りの軸は今の位置からの相対なので当てた分を残す（外すとずれを二度数える）。記録が無ければ何もしない。
 /// 整合待ちの札がある窓へは書かず、当て直し待ちの印だけを立てて戻る（札が外れたフレームで
-/// 毎フレームの相が当て直す・監査の指摘 1）。
+/// 毎フレームの相が当て直す）。
 pub fn rebase_shift_axes(world: &mut World, window: Entity, x: bool, y: bool) {
     let Some(mut r) = world.get::<MoveShiftApplied>(window).copied() else {
         return;
@@ -213,8 +213,8 @@ pub fn apply_char_shift(
     // 置き方の決まりを後から当てる（7.8）: 吸い付き → 作業領域の中への寄せ → 見える範囲の守り。
     let anchor = world.get::<Anchored>(window).map_or(Anchor::Free, |a| a.0);
     let anchored = project_anchor(anchor, raw, size, snapshot);
-    // 寄せる先は作業領域と元の矩形を両方含む範囲（端に置いた窓をずれのたびに中へ引き寄せない・
-    // 監査の指摘 5）。元の矩形が作業領域の中なら作業領域そのもの。
+    // 寄せる先は作業領域と元の矩形を両方含む範囲（端に置いた窓をずれのたびに中へ引き寄せない）。
+    // 元の矩形が作業領域の中なら作業領域そのもの。
     let origin = rect_at(base, size);
     let bounds = RectPx {
         left: area.left.min(origin.left),

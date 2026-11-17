@@ -2,18 +2,18 @@
 //! 「配置の層: placement/follow/work_area_clamp.rs」）。
 //!
 //! - 場面の語 [`ClampScene`] と記録の語（`[work-area-clamp] Clamp`／`Keep`／`Unresolved`）を
-//!   1 か所に置く（要件 9.1・9.2・7.4）
+//!   1 か所に置く（window-work-area-clamp 要件 9.1・9.2・7.4）
 //! - `resolve_chain_in_work_area` は組ごとの決めで解いた鎖を、前の窓の置いた後の矩形が属する
 //!   モニタの作業領域の中に置く純関数の核（要件 1・2・7）
 //! - [`place_chain_in_work_area`] はその World の口。窓の高さと作業領域を World から読んで核を呼び、
-//!   寄せた・寄せなかった・取れなかったを記録する（要件 7.4・9.1・9.2）
+//!   寄せた・寄せなかった・取れなかったを記録する（window-work-area-clamp 要件 7.4・9.1・9.2）
 //! - [`clamp_grown_free_default`] は既定の位置にいる `free` のキャラ窓が大きくなってはみ出したら、
 //!   はみ出した向きにだけ収める判定（要件 3・7）
 //! - [`keep_restored_groups`] は記憶から戻した組の窓を同じ量だけ動かす判定（要件 4・7）
 //!
 //! 寄せの式は `balloon_limit::clamp_rect_to_work_area`（左辺・上辺を優先）だけを使い、
 //! 隣の位置は `chain_finalize::resolve_chain` に 2 スロットを渡して得る（式を写さない）。
-//! 判定の入力は窓の幾何と組の決めだけで、ゴーストや初回起動を名指ししない（要件 7.8）。
+//! 判定の入力は窓の幾何と組の決めだけで、ゴーストや初回起動を名指ししない（window-work-area-clamp 要件 7.8）。
 //!
 //! 公開の口の呼び手は `runtime::…`（起動の並べ直し・詰め直し）。核の
 //! `resolve_chain_in_work_area` は World の口の中身と同じ道を檻が直に歩くためだけの口なので
@@ -71,7 +71,7 @@ impl ClampScene {
 }
 
 /// 鎖の 1 スロットをどう置いたか。
-// 要件 2.5: 公開の `ChainPlacement::outcome` が名指すので開ける。
+// placement-crate-split 要件 2.5: 公開の `ChainPlacement::outcome` が名指すので開ける。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChainClampOutcome {
     /// 並べた位置のまま（y だけ収めた場合を含む）。
@@ -87,7 +87,7 @@ pub enum ChainClampOutcome {
 }
 
 /// 鎖の 1 スロットの置き場（呼び手が書く値と記録の値）。
-// 要件 2.5: 公開の `place_chain_in_work_area` が名指すので開ける。
+// placement-crate-split 要件 2.5: 公開の `place_chain_in_work_area` が名指すので開ける。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainPlacement {
     pub scope: usize,
@@ -104,9 +104,9 @@ pub struct ChainPlacement {
 /// `slots[i]` の今の矩形（`x == current_x`・`w == width`）。先頭を除く各スロットの置き場を返す。
 ///
 /// 2 番目から昇順に置き、基準は前の窓の**置いた後**の矩形とそのモニタの作業領域
-/// （要件 1.1・1.5・2.1）。並べた位置が横に入らなければ反対の側へ並べ替え、それも入らなければ
-/// 並べた位置を作業領域の端へ寄せる（要件 1.2）。Keep は今の位置のまま（要件 1.4・2.3）、
-/// 作業領域が取れなければ並べた位置のまま `Unresolved`（要件 7.4）。
+/// （window-work-area-clamp 要件 1.1・1.5・2.1）。並べた位置が横に入らなければ反対の側へ並べ替え、それも入らなければ
+/// 並べた位置を作業領域の端へ寄せる（window-work-area-clamp 要件 1.2）。Keep は今の位置のまま（要件 1.4・2.3）、
+/// 作業領域が取れなければ並べた位置のまま `Unresolved`（window-work-area-clamp 要件 7.4）。
 ///
 /// 事前条件: `mark_non_positive_widths` を通した後の `slots`。長さが違えば短い方に揃える。
 #[cfg(test)]
@@ -128,7 +128,7 @@ fn resolve_chain_with(
 ) -> Vec<ChainPlacement> {
     let n = slots.len().min(rects.len());
     let mut out = Vec::with_capacity(n.saturating_sub(1));
-    // 前の窓の置いた後の矩形（先頭は今の矩形のまま・要件 1.3）。
+    // 前の窓の置いた後の矩形（先頭は今の矩形のまま・window-work-area-clamp 要件 1.3）。
     let mut base = match rects.first() {
         Some(r) => *r,
         None => return out,
@@ -192,7 +192,7 @@ fn resolve_chain_with(
 /// `slots` と同じ順。窓の高さを `WindowPos` から、作業領域を `MonitorSnapshot` 資源から読んで
 /// 核を呼び、スロットごとに記録を 1 行出す: 置いた位置が並べた位置と違えば `Clamp`（info!）、
 /// 収まっていた・動かさない窓は `Keep`（debug!）、モニタの写しが無い・窓の高さが読めない・
-/// 作業領域が引けないときは `Unresolved`（warn!・ほかのスロットは続ける・要件 7.4）。
+/// 作業領域が引けないときは `Unresolved`（warn!・ほかのスロットは続ける・window-work-area-clamp 要件 7.4）。
 pub fn place_chain_in_work_area(
     world: &World,
     slots: &[ChainSlot],
@@ -318,12 +318,12 @@ fn opposite(decision: PairDecision) -> PairDecision {
 ///
 /// 当てるのは全部を満たす窓だけ: 吸着が `Free`・経路が `Resnap` か `ReportedSizeReconcile`・
 /// キャラ窓・既定の位置が有り今の位置と同じ・`ScriptPlaced` が無い・`DraggingState` が無い
-/// （要件 3.1・3.5・7.6）。収め方は今ある「はみ出した分だけの補正」（`limit_correction`）で、
-/// はみ出していない向きの座標は変えない（要件 3.2）。作業領域は提案の位置に置いた窓のモニタ
-/// （要件 7.1）、大きすぎる軸は左辺・上辺に合う（要件 7.2）。
+/// （window-work-area-clamp 要件 3.1・3.5・7.6）。収め方は今ある「はみ出した分だけの補正」（`limit_correction`）で、
+/// はみ出していない向きの座標は変えない（window-work-area-clamp 要件 3.2）。作業領域は提案の位置に置いた窓のモニタ
+/// （window-work-area-clamp 要件 7.1）、大きすぎる軸は左辺・上辺に合う（要件 7.2）。
 ///
 /// 記録: 吸着が `Free` でない・経路が違う・キャラ窓でない窓は記録しない。`Free` のキャラ窓で
-/// 動かさなかったものは `Keep`（debug!）、作業領域が取れなければ `Unresolved`（warn!・要件 7.4）、
+/// 動かさなかったものは `Keep`（debug!）、作業領域が取れなければ `Unresolved`（warn!・window-work-area-clamp 要件 7.4）、
 /// 収めたら `Clamp`（info!・how=grown）。
 pub(crate) fn clamp_grown_free_default(
     world: &World,

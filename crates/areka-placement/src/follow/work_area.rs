@@ -8,13 +8,13 @@ use wintf::ecs::window::monitor::Monitor;
 use super::RectPx;
 
 // =============================================================================
-// MonitorSnapshot（task 8.1・DD15 基盤・4.7）
+// MonitorSnapshot（DD15 基盤・areka-P0-window-placement 要件 4.7）
 // =============================================================================
 
 /// 全モニタの work area 集合（物理 px・**実行時に同期される**）。
 ///
 /// 起動時に seam（main.rs）／example が [`MonitorSources::from_monitors`] で実モニタ
-/// から忠実転写して Resource 挿入し、bottom 吸着ドラッグ（task 8.2）が
+/// から忠実転写して Resource 挿入し、bottom 吸着ドラッグが
 /// [`work_area_for_window`] で「窓が現在属するモニタの work area」を引くのに使う。
 /// 中身は `RectPx` のみの純粋データで、headless テストは合成値を直接構築して
 /// 注入する（偽装境界・wintf に触れるのは挿入サイトだけ）。
@@ -29,7 +29,7 @@ use super::RectPx;
 /// から本 Resource を作り直す。**変化したフレームだけ**差し替わり、同じ表なら無操作である
 /// （順序の揺れは [`same_monitors`] が吸収する）。
 ///
-/// ただし**保存位置の復元判定は起動時に 1 度だけ読む契約**を維持する（要件 5.7・
+/// ただし**保存位置の復元判定は起動時に 1 度だけ読む契約**を維持する（areka-P0-dpi-transition-atomicity 要件 5.7・
 /// `main.rs` の復元マージ）——拡大率をまたいで保存位置を追従させる裁定は採っていない。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct MonitorSnapshot {
@@ -61,7 +61,7 @@ impl MonitorSnapshot {
 /// 距離は i128 で自乗和を取り、極端な仮想スクリーン座標でも溢れない
 /// （panic しない契約・resolver の saturating 演算と同じ防波堤）。
 ///
-/// # 判別付き版への委譲（task 2.2・D6）
+/// # 判別付き版への委譲（D6）
 ///
 /// 本関数は [`work_area_for_window_with_origin`] の**戻り値から判別を落とすだけ**の
 /// 薄いラッパである（契約不変＝既存呼出元の挙動は 1 bit も変わらない）。
@@ -70,10 +70,10 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
 }
 
 // =============================================================================
-// 可視性の遷移ガード＋work area 解決の判別（task 2.2・D6/S3′・Req 3.1/3.2/5.3）
+// 可視性の遷移ガード＋work area 解決の判別（D6/S3′・areka-P0-dpi-window-vanish Req 3.1/3.2/5.3）
 // =============================================================================
 
-/// [`work_area_for_window_with_origin`] が work area を決めた**規則**（D6・Req 3.2）。
+/// [`work_area_for_window_with_origin`] が work area を決めた**規則**（D6・areka-P0-dpi-window-vanish Req 3.2）。
 ///
 /// 最近傍フォールバックは「どのモニタにも属さない」＝モニタ構成情報と実画面の
 /// 食い違い／窓が可視領域外という**異常の兆候**でありながら、[`work_area_for_window`]
@@ -83,11 +83,11 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
 pub enum WorkAreaResolution {
     /// 窓中心がその work area に帰属した（half-open 判定・正常）。
     Contains,
-    /// どのモニタにも属さず、最近傍フォールバックで選ばれた（Req 3.2 の観測点）。
+    /// どのモニタにも属さず、最近傍フォールバックで選ばれた（areka-P0-dpi-window-vanish Req 3.2 の観測点）。
     NearestFallback,
 }
 
-/// [`work_area_for_window`] の判別付き版（D6・Req 3.2）。
+/// [`work_area_for_window`] の判別付き版（D6・areka-P0-dpi-window-vanish Req 3.2）。
 ///
 /// 解決規則そのものは [`work_area_for_window`] の doc が定める決定論規則と**完全に
 /// 同一**（中心の半開帰属・昇順 index 先勝ち・最近傍は clamp 点自乗距離最小・空
@@ -101,8 +101,8 @@ pub enum WorkAreaResolution {
 /// そもそも本関数を通らないので、毎イベント発火の spam にならない）。昇格は**2 つの矩形**に
 /// 対して別々に行う——射影が**決めた位置**（`[visibility-guard] NearestFallback`・
 /// areka-P0-dpi-window-vanish が配線）と、射影の**入力**＝Y を決めるのに使った矩形
-/// （`[visibility-guard] OffscreenPull`・areka-P0-dpi-transition-atomicity
-/// task 5.1 が追加）である。後者が要るのは、入力が帰属しない窓でも決めた位置がモニタ内へ
+/// （`[visibility-guard] OffscreenPull`・
+/// areka-P0-dpi-transition-atomicity のタスク 5.1 が追加）である。後者が要るのは、入力が帰属しない窓でも決めた位置がモニタ内へ
 /// 収まれば前者の腕に入らず、**画面外から最近傍モニタへ引き寄せられた事実が無観測で
 /// 消える**ためである（実測で 0 行だった）。
 ///
@@ -117,7 +117,7 @@ pub enum WorkAreaResolution {
 ///
 /// ゆえに `NearestFallback` は「解決できなかった」ではなく「**最近傍で解決した**」であり、
 /// areka-P0-dpi-transition-atomicity 要件 5.5 の「位置を変更せずに現状を維持」が効くのは
-/// **モニタ表が空のときに限る**。同 要件 5.6 が守る位置権威との衝突は本裁定で解消した。
+/// **モニタ表が空のときに限る**。areka-P0-dpi-transition-atomicity 要件 5.6 が守る位置権威との衝突は本裁定で解消した。
 /// 記録だけは残す（上の警告）——勝手に飛んだことを後から追えるようにするためで、位置は
 /// 変えない。全文は同 spec の `requirements.md` 要件 5 の項目 5 直下の裁定の注記にある。
 pub fn work_area_for_window_with_origin(
@@ -155,7 +155,7 @@ pub fn work_area_for_window_with_origin(
 }
 
 // =============================================================================
-// モニタ別拡大率表と 2 源の同時構築（task 5.1・C6・要件 5.1/5.5/5.6）
+// モニタ別拡大率表と 2 源の同時構築（C6・areka-P0-dpi-transition-atomicity 要件 5.1/5.5/5.6）
 // =============================================================================
 
 /// モニタ 1 台ぶんの拡大率と画面矩形（物理 px・列挙順のまま忠実転写）。
@@ -173,7 +173,7 @@ pub struct MonitorDpiEntry {
 /// 2 つは**同一の `Monitor` 列から同時に**作られる（[`MonitorSources::from_monitors`]）——
 /// 別々に作ると、片方だけが古い運転が生まれる。
 ///
-/// # 引き当ての規則は表示基盤側と**同一の関数**である（task 5.4 の裁定）
+/// # 引き当ての規則は表示基盤側と**同一の関数**である（areka-P0-dpi-transition-atomicity タスク 5.4 の裁定）
 ///
 /// 窓中心からモニタを引き当てる規則は表示基盤側の [`monitor_containing`] をそのまま呼ぶ
 /// （[`MonitorDpiTable::dpi_for_point`]）。areka 側に同規則の述語を置く案は採らなかった
@@ -203,7 +203,7 @@ impl MonitorBounds for MonitorDpiEntry {
 }
 
 impl MonitorDpiTable {
-    /// 点（窓矩形の中心）が属するモニタの拡大率（要件 5.8・設計 C5）。
+    /// 点（窓矩形の中心）が属するモニタの拡大率（areka-P0-dpi-transition-atomicity 要件 5.8・設計 C5）。
     ///
     /// 帰属規則は表示基盤側の [`monitor_containing`] **そのもの**（半開区間・昇順先勝ち）で
     /// あり、ここには規則が 1 行も無い。どのモニタにも属さない点と、表そのものが空の場合は
@@ -237,7 +237,7 @@ impl MonitorDpiTable {
 /// モニタ表から作られる 2 つの源（作業領域源＋モニタ別拡大率表）の組。
 ///
 /// **起動時（`main.rs` のシーム）も実行時の同期（`runtime::frame::work_area_sync`）も
-/// この 1 つの構築関数を通る**（要件 5.1・設計 C6「構築関数は同一＝二重権威にならない」）。
+/// この 1 つの構築関数を通る**（areka-P0-dpi-transition-atomicity 要件 5.1・設計 C6「構築関数は同一＝二重権威にならない」）。
 /// 起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MonitorSources {
@@ -304,7 +304,7 @@ impl MonitorSources {
     }
 }
 
-/// 2 つのモニタ源が**順序に依らず**同じ内容か（要件 5.4・設計 C6「順序非依存の比較」）。
+/// 2 つのモニタ源が**順序に依らず**同じ内容か（areka-P0-dpi-transition-atomicity 要件 5.4・設計 C6「順序非依存の比較」）。
 ///
 /// 実行時のモニタ表（`Monitor` entity 群）の走査順は列挙順と一致する保証が無く、
 /// 素の `==` で比べると**中身が同じなのに毎フレーム作り直す**運転が生まれ得る
