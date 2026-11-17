@@ -4,7 +4,8 @@
 //! 切り出したものであり、テスト本文は分割前と同一である。
 
 use super::{
-    Animation, AppendTarget, Collision, CollisionName, DrawMethod, Interval, Pattern, decode, lex,
+    Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod,
+    Interval, Pattern, decode, lex,
 };
 
 // --- タスク 4.4: surface.append ターゲット指定の捕捉（展開しない転記） ---
@@ -49,10 +50,12 @@ collision0,52,38,156,80,Head
         shell.appends[0].collisions,
         vec![Collision {
             index: 0,
-            left: 52,
-            top: 38,
-            right: 156,
-            bottom: 80,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 52,
+                top: 38,
+                right: 156,
+                bottom: 80
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );

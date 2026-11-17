@@ -3,7 +3,7 @@
 //! 持ち込み済みの列を [`EmoWorld::hit_regions`] で引き、`hit_region_in`（画家則＝後ろが手前）で
 //! 当てて確かめる。並びは［子から持ち込む分（element定義の番号の昇順）］→［親に直接書いた領域］。
 
-use areka_parsers::shell::parse;
+use areka_parsers::shell::{CollisionBounds, CollisionShape, parse};
 
 use super::HitRegions;
 use crate::hit::{RegionPriority, hit_region_in};
@@ -346,4 +346,170 @@ fn memo_stops_at_its_budget_and_answers_stay_the_same() {
         !memo.map.contains_key(&(100 + N - 1)),
         "上限の後の面は覚えない"
     );
+}
+
+/// 形ごとの持ち込みのずらし: 全形が飽和の足し算で、腕は変わらない（要件 3.4）。
+#[test]
+fn shifted_moves_every_shape_saturating() {
+    use super::shifted;
+    use areka_parsers::shell::{CollisionBounds, CollisionRegion, CollisionShape};
+    let b = CollisionBounds {
+        left: 1,
+        top: 2,
+        right: i64::MAX,
+        bottom: 4,
+    };
+    let moved = CollisionBounds {
+        left: 11,
+        top: 22,
+        right: i64::MAX,
+        bottom: 24,
+    };
+    assert_eq!(
+        shifted(CollisionShape::Rect(b), 10, 20),
+        CollisionShape::Rect(moved)
+    );
+    assert_eq!(
+        shifted(CollisionShape::Ellipse(b), 10, 20),
+        CollisionShape::Ellipse(moved)
+    );
+    assert_eq!(
+        shifted(
+            CollisionShape::Circle {
+                x: 1,
+                y: i64::MIN,
+                radius: 7
+            },
+            10,
+            -20
+        ),
+        CollisionShape::Circle {
+            x: 11,
+            y: i64::MIN,
+            radius: 7
+        }
+    );
+    assert_eq!(
+        shifted(CollisionShape::Polygon(vec![(0, 0), (5, 6)]), 1, 2),
+        CollisionShape::Polygon(vec![(1, 2), (6, 8)])
+    );
+    let r = CollisionRegion {
+        file: "a.png".into(),
+        red: 1,
+        green: 2,
+        blue: 3,
+        invert: true,
+        x: 0,
+        y: 0,
+    };
+    assert_eq!(
+        shifted(CollisionShape::Region(r.clone()), 3, 4),
+        CollisionShape::Region(CollisionRegion { x: 3, y: 4, ..r })
+    );
+}
+
+/// 子の列の形だけを順に取り出す。
+fn shapes(w: &EmoWorld, id: u32) -> Vec<CollisionShape> {
+    let list = w.hit_regions(id).expect("面の表に在る番号");
+    list.iter().map(|c| c.shape.clone()).collect()
+}
+
+const FIVE_SHAPES: &str = "surface1\n{\ncollisionex0,R,rect,1,2,3,4\ncollisionex1,E,ellipse,1,2,3,4\n\
+     collisionex2,C,circle,5,6,7\ncollisionex3,P,polygon,0,0,5,6,9,1\n\
+     collisionex4,G,region,m.png,255,0,0\n}\n";
+
+/// 取り込み経由（要件 3.4・8.2）: 5 つの形が element定義の X,Y だけずれて親に並ぶ。円の半径はそのまま・
+/// 多角形は全頂点が順を保ってずれ・`region` は置く位置がずれる。まだ働かない形も並びから除かれない。
+#[test]
+fn import_shifts_all_five_shapes_by_element_offset() {
+    use areka_parsers::shell::CollisionRegion;
+    let w = world_of(&format!(
+        "surface0\n{{\nelement1,overlay,1,10,20\n}}\n{FIVE_SHAPES}"
+    ));
+    let b = |l, t, r, bo| CollisionBounds {
+        left: l,
+        top: t,
+        right: r,
+        bottom: bo,
+    };
+    let region = match &shapes(&w, 1)[4] {
+        CollisionShape::Region(r) => r.clone(),
+        other => panic!("region のはず: {other:?}"),
+    };
+    assert_eq!(
+        shapes(&w, 0),
+        [
+            CollisionShape::Rect(b(11, 22, 13, 24)),
+            CollisionShape::Ellipse(b(11, 22, 13, 24)),
+            CollisionShape::Circle {
+                x: 15,
+                y: 26,
+                radius: 7
+            },
+            CollisionShape::Polygon(vec![(10, 20), (15, 26), (19, 21)]),
+            CollisionShape::Region(CollisionRegion {
+                x: region.x + 10,
+                y: region.y + 20,
+                ..region
+            }),
+        ]
+    );
+    // 子そのものの列はずれない。
+    assert_eq!(shapes(&w, 1).len(), 5);
+    // ずらした子の矩形の中の点では子の名前が返り、元の位置では当たらない（要件 8.2）。
+    assert_eq!(hit(&w, 0, 12, 23).as_deref(), Some("R"));
+    assert_eq!(hit(&w, 0, 2, 3), None);
+}
+
+/// `i64` の端の近くでは飽和し、パニックしない（要件 3.4）。
+#[test]
+fn import_saturates_near_i64_limits() {
+    let max = i64::MAX;
+    let w = world_of(&format!(
+        "surface0\n{{\nelement1,overlay,1,{max},{}\n}}\n\
+         surface1\n{{\ncollisionex0,R,rect,1,2,{max},4\ncollisionex1,C,circle,5,6,7\n\
+         collisionex2,P,polygon,0,0,5,6,9,1\n}}\n",
+        i64::MIN
+    ));
+    assert_eq!(
+        shapes(&w, 0),
+        [
+            CollisionShape::Rect(CollisionBounds {
+                left: max,
+                top: i64::MIN + 2,
+                right: max,
+                bottom: i64::MIN + 4
+            }),
+            CollisionShape::Circle {
+                x: max,
+                y: i64::MIN + 6,
+                radius: 7
+            },
+            CollisionShape::Polygon(vec![
+                (max, i64::MIN),
+                (max, i64::MIN + 6),
+                (max, i64::MIN + 1)
+            ]),
+        ]
+    );
+}
+
+/// 親に直接書いた同じ名前は `region` でも子の同じ名前を落とし、落とされなかった形は並びに残る（要件 3.5・5.3）。
+#[test]
+fn parent_direct_region_drops_child_same_name() {
+    let w = world_of(&format!(
+        "surface0\n{{\nelement1,overlay,1,10,20\ncollisionex0,G,region,p.png,0,255,0\n}}\n{FIVE_SHAPES}"
+    ));
+    let names: Vec<&str> = w
+        .hit_regions(0)
+        .unwrap()
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    // 子の G（region）は落ち、残り 4 つ（働かない形を含む）の後ろに親の G が手前で続く。
+    assert_eq!(names, ["R", "E", "C", "P", "G"]);
+    assert!(matches!(
+        w.hit_regions(0).unwrap()[4].shape,
+        CollisionShape::Region(ref r) if r.file == "p.png"
+    ));
 }

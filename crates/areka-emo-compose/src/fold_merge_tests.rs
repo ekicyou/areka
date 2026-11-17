@@ -4,11 +4,13 @@
 //! 面ごとのブレスに絵（element定義）を書き、複数の番号を並べた共有のブレスに当たり判定と
 //! 着せ替えを書くシェル（えみりの形）で、後のブレスが前の絵を消さないことを確かめる。
 //! 同じ番号の行が重なったときは SSP 2.9.29 と同じ（設計の議題 7 案 A・追記と同じ 1 つの足し方）:
-//! element は両方を足す・animation は前の行が勝つ（後の行は捨てる）・collision は今のまま（後の行が勝つ）。
+//! element は両方を足す・animation は前の行が勝つ（後の行は捨てる）・collision は両方を足す（後の行が手前・
+//! spec: collisionex-regions 要件 3.3・3.7・SSP 2.9 の測りは同 research.md 9 節）。
 //! ファイル名と座標は本テストのための作り物（えみりの資産は写さない）。
 
-use areka_parsers::shell::{Interval, parse};
+use areka_parsers::shell::{CollisionShape, Interval, parse};
 
+use crate::hit::{RegionPriority, hit_region_in};
 use crate::log_capture::capture_logs;
 use crate::world::EmoWorld;
 
@@ -108,7 +110,8 @@ fn shared_brace_adds_to_the_per_face_brace_instead_of_replacing_it() {
 }
 
 /// 同じ element番号は両方を足し（前の行が先）、同じ animation番号の後の行（interval も pattern も）
-/// は捨てる。collision は今のまま＝同じ collision番号の前の行を除いて後の行を末尾へ。
+/// は捨てる。collision も両方を書いた順に足す（後の行が手前）。collision の警告 1 行は、2 つのブレスで
+/// collision0 が重なったことの期待値。
 #[test]
 fn later_brace_adds_same_element_number_and_drops_same_animation_number() {
     let text = "\
@@ -132,7 +135,9 @@ animation9.interval,bind
 animation9.pattern1,overlay,201,60,0,0
 }
 ";
-    let mut world = EmoWorld::build(&parse(text));
+    let mut built = None;
+    let logs = capture_logs(|| built = Some(EmoWorld::build(&parse(text))));
+    let mut world = built.expect("面の表");
     // 足し合わせても面の entity は 1 件のみ（表も entity も 7 だけ）。
     let mut q = world.world_mut().query::<&crate::world::SurfaceId>();
     let live: Vec<u32> = q.iter(world.world()).map(|s| s.0).collect();
@@ -156,12 +161,27 @@ animation9.pattern1,overlay,201,60,0,0
         "element1 は両方（前の行が先）・element2 は足される"
     );
 
-    // collision は SSP で測れなかった＝今のまま: 書き直した collision0 は後の行として末尾へ。
+    // collision: 前の collision0 も残し、書き直した collision0 は後の行として末尾へ（手前）。
     assert_eq!(
         collisions(&world, 7),
-        vec![(1, "Keep".into()), (0, "New".into())]
+        vec![(0, "Old".into()), (1, "Keep".into()), (0, "New".into())]
     );
-    assert_eq!(face.collisions[1].right, 30, "collision0 は後の行の矩形");
+    assert!(
+        matches!(&face.collisions[0].shape, CollisionShape::Rect(b) if b.right == 10)
+            && matches!(&face.collisions[2].shape, CollisionShape::Rect(b) if b.right == 30),
+        "collision0 は前の行と後の行の矩形の両方"
+    );
+    let warned: Vec<&str> = logs
+        .lines()
+        .filter(|l| l.contains("level=WARN") && l.contains(COLLISION_TWICE))
+        .collect();
+    assert_eq!(warned.len(), 1, "{logs}");
+    assert!(
+        warned[0].contains("surface_id=7")
+            && warned[0].contains("collision=0")
+            && warned[0].contains("count=1"),
+        "{logs}"
+    );
 
     // animation9: 前の行が勝つ（interval も pattern も前のまま・後の pattern1 は捨てる）。
     assert_eq!(face.animations.len(), 1);
@@ -186,6 +206,9 @@ fn pattern_surfaces(world: &EmoWorld, id: u32, anim: u32) -> Vec<i64> {
 }
 
 /// SSP 2.9.29 の測りの形（research.md 12 節の 0・1・2・3・5・6・8・9）を写したシェル。
+/// 形 4 は SSP 2.9 の当たり判定の測り（spec: collisionex-regions research.md 9 節・座標と名前も同じ）:
+/// 前のブレスの `collision4`・`collision5` と後のブレスの `collisionex4`・`collision5`。形 7 は areka の裁量
+/// （同じブレスの中の重なりと追記の重なり・SSP では測っていない）。
 /// 絵の名前は測りと同じ（灰・赤・緑・青）。pattern の面は 100＝赤・101＝緑・102＝青。
 /// 形 3 は、追記の interval が捨てられたと分かるよう、測りの `bind` でなく `runonce` にした。
 const SSP_SHAPES: &str = "\
@@ -264,13 +287,35 @@ surface.append9
 animation1.interval,bind
 animation1.pattern0,overlay,102,0,0,0
 }
+surface4
+{
+collision4,10,200,90,280,OldRect
+collision5,200,190,230,230,Old5
+}
+surface4
+{
+collisionex4,NewRect,rect,110,200,190,280
+collision5,200,240,230,280,New5
+}
+surface7
+{
+collision0,0,0,10,10,A
+collision0,20,0,30,10,B
+}
+surface.append7
+{
+collision0,40,0,50,10,C
+}
 ";
 
 const ELEMENT_TWICE: &str = "element番号の二重定義";
 const ANIMATION_TWICE: &str = "animation番号の二重定義";
+const COLLISION_TWICE: &str = "collision番号の二重定義";
 
 /// 追記と 2 つ目の波括弧は同じ 1 つの足し方で、SSP 2.9.29 の画素の読みと同じ面になる。
-/// 重なったときだけ `warn!`（element は形 0・2、animation は形 1・3・5・6）、新しい番号（形 8・9）は黙る。
+/// 重なったときだけ `warn!`（element は形 0・2、animation は形 1・3・5・6、collision は形 4 の後のブレス）、
+/// 新しい番号（形 8・9）と、同じブレスの中・追記の collision の重なり（形 7）は黙る。collision の警告 1 行は、
+/// 形 4 の 2 つのブレスの重なりの期待値。
 #[test]
 fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
     let mut built = None;
@@ -304,6 +349,36 @@ fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
         assert_eq!(layers(&world, id), vec![(0, "gray.png".into())]);
     }
 
+    // 形 4: 同じ番号の両方が残り、どちらの名前も当たる（SSP の Reference4 と同じ点・同じ名前）。
+    let hit = |x, y| {
+        let list = world.hit_regions(4).expect("面 4 の当たり判定");
+        hit_region_in(list, x, y, RegionPriority::Painter).map(str::to_string)
+    };
+    assert_eq!(
+        collisions(&world, 4),
+        vec![
+            (4, "OldRect".into()),
+            (5, "Old5".into()),
+            (4, "NewRect".into()),
+            (5, "New5".into())
+        ],
+        "形 4: 書いた順に両方が残る"
+    );
+    for ((x, y), name) in [
+        ((50, 240), "OldRect"),
+        ((150, 240), "NewRect"),
+        ((215, 210), "Old5"),
+        ((215, 260), "New5"),
+    ] {
+        assert_eq!(hit(x, y).as_deref(), Some(name), "形 4 の ({x},{y})");
+    }
+    // 形 7: 同じブレスの中・追記の重なりも両方残す（書いた順）。
+    assert_eq!(
+        collisions(&world, 7),
+        vec![(0, "A".into()), (0, "B".into()), (0, "C".into())],
+        "形 7"
+    );
+
     let warns = |text: &str| -> Vec<String> {
         logs.lines()
             .filter(|l| l.contains("level=WARN") && l.contains(text))
@@ -326,4 +401,17 @@ fn append_and_second_brace_match_the_ssp_2_9_29_measurements() {
             "{line}"
         );
     }
+    let collision = warns(COLLISION_TWICE);
+    assert_eq!(
+        collision.len(),
+        1,
+        "collision の二重定義は形 4 だけ: {logs}"
+    );
+    assert!(
+        collision[0].contains("surface_id=4")
+            && collision[0].contains("collision=4")
+            && collision[0].contains("count=2"),
+        "{}",
+        collision[0]
+    );
 }

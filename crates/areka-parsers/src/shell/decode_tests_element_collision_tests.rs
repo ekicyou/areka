@@ -4,8 +4,8 @@
 //! 切り出したものであり、テスト本文は分割前と同一である。
 
 use super::{
-    Animation, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval, Pattern,
-    decode, lex,
+    Animation, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod, Element,
+    ElementPath, Interval, Pattern, decode, lex,
 };
 
 // --- タスク 4.2: element overlay ＋ collision 矩形の正規化 ---
@@ -16,7 +16,8 @@ use super::{
 // - element はレイヤインデックス昇順で保持する（安定・要件 4.4）。
 // - collision 矩形を 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom ＋不透明領域名として
 //   正規化する（要件 6.1/6.2）。collision は出現順で保持する。
-// animation 行・非 overlay メソッド・collisionex はここでは扱わない（タスク 4.3 / 4.6）。
+// animation 行・非 overlay メソッドはここでは扱わない（タスク 4.3 / 4.6）。collisionex の読みの檻は
+// `decode_collisionex_tests.rs` にある（collisionex-regions）。
 
 /// 単一 element overlay → レイヤ/パス/座標に正規化（要件 4.2）。
 #[test]
@@ -106,10 +107,12 @@ fn collision_rect_with_opaque_name_is_normalized() {
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 0,
-            left: 93,
-            top: 62,
-            right: 271,
-            bottom: 130,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 93,
+                top: 62,
+                right: 271,
+                bottom: 130
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );
@@ -168,10 +171,12 @@ animation0.pattern0,overlay,100,0,0,0
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 0,
-            left: 10,
-            top: 20,
-            right: 30,
-            bottom: 40,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 10,
+                top: 20,
+                right: 30,
+                bottom: 40
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );

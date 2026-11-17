@@ -63,7 +63,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `collisionex-regions`（`collisionex` の行を読む読み手と 4 つの図形）・`wintf-d2d-composite-rules`（自前の合成の入れ物と 1 ピクセルの読み戻しの口）・完了 `event-hit-test-named-regions`（wintf の `ColorMapData`）・完了 `surface-element-nesting`（子の当たり判定の持ち込み `hit_import.rs`）。
+- **Upstream**: `collisionex-regions`（`collisionex` の行を読む読み手と 5 つの形の型・`rect` だけが当たる＝2026-11-17 の申し送りの節）・`wintf-d2d-composite-rules`（自前の合成の入れ物と 1 ピクセルの読み戻しの口）・完了 `event-hit-test-named-regions`（wintf の `ColorMapData`）・完了 `surface-element-nesting`（子の当たり判定の持ち込み `hit_import.rs`）。
 - **Downstream**: 撫で・クリック系のイベント全般（Reference4 を使うゴースト）・将来の `animation*.collisionex*`。
 
 ## Existing Spec Touchpoints
@@ -107,3 +107,10 @@
 
 - **16 番: 透明な画素が「黒」の領域として当たる**。読み込みは画像を乗算済みの `32bppPBGRA` へ変換してから、α を見ずに RGB だけで色を引く。乗算済みでは透明な画素の RGB が (0,0,0) になるので、黒 (0,0,0) を領域に対応させると透明な背景が全部その領域として当たる。半透明の画素も色が α 倍にずれ、対応から外れる。
 - 直し方の案は、乗算しない `32bppBGRA` へ変換し、α = 0 の画素を対応外にすること（2〜3 行）。ただし、SSP の `collisionex` の `region` で透明な画素が指定色に当たるかは ukadoc に書いていない（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#collisionex-star は「指定した画像ファイルの指定色の領域を当たり判定として扱う」とだけ書く）。この読み込みを `region` に使い回すなら、決める前に SSP の MCP で測る（測る前に開発者の許可を取る）。
+
+## `collisionex-regions` からの申し送り（2026-11-17・設計の討議）
+
+- **議題 2 は決まった＝形も ID の描き先へ寄せる**（開発者 2026-11-17「形は ID で塗る」）。`collisionex-regions` は楕円・円・多角形の内外を CPU の式で判定するコードを書かない。`collisionex` の 5 つの形を読んで型へ運び、`rect` だけを今の矩形の判定で当て、楕円・円・多角形・`region` は「当たらずに下を続ける」と読み込みごとに 1 件の記録（まだ働かない形の数）を残す。クローディアの楕円（`Foot`）と多角形（`Fan`・`Skirt`）の名前は、この spec の着地で初めて Reference4 に載る。`collision*`／`collisionex*` の `rect` も ID の描き先へ寄せて一本化するかは、この spec の要件の段で決める。
+- **型の契約**（`collisionex-regions` の設計が正本）: 当たり判定は 1 本の並び（書いた順・後ろほど手前）に、番号・形・名前で並ぶ。形は `rect`・`ellipse`（囲みの長方形）・`circle`（中心と半径）・`polygon`（書いた順の頂点）・`region`（ファイル名・R・G・B・領域反転と、画像を置く位置）。子のサーフェスから持ち込んだ当たり判定は、形ごとに element定義の X,Y だけずれた座標で親の並びに入る。同じ collision番号は両方が残る（SSP と同じ）。
+- **SSP の測り**（`collisionex-regions` の `research.md` 9 節・SSP 2.9）: 辺が交差する多角形は**巻き数の規則**（五芒星の中心の巻き数 2 の所が当たる・凸包の中で星の外は当たらない）。D2D の `D2D1_FILL_MODE_WINDING` で塗れば同じ規則になる見込み。形の名前は大小文字を区別しない（読み手の側で済み）。
+- **この spec で決めること（`collisionex-regions` は決めずに渡した）**: 楕円・円・多角形の境界（周や辺の上の画素が当たるか・ID は縁のぼかしなしで描くので画素の中心の規則になる）・大きさ 0 の形（幅 0 の楕円・半径 0 の円・頂点の重なった多角形）・反転した囲みの楕円と負の半径の円。正典はどれも沈黙する。
