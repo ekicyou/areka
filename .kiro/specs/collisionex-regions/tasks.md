@@ -104,7 +104,7 @@
   - _Dispatch: standard — 実機の手順と点の求め方を組み立てて動かす_
   - _Requirements: 6.1, 6.3, 8.5, 8.6, 8.7_
 
-- [ ] 6.2 境界を確かめ、触った crate のテストを通す
+- [x] 6.2 境界を確かめ、触った crate のテストを通す
   - `main` との差分で、areka 本体（`crates/areka/`）・emo-present の当たり判定の口・字句の段・予算の数え・ファイルの長さの上限の表・`Cargo.lock`・emo-text に変更が無く、新しい本番のファイルが無いことを確かめる
   - 触ったファイルがどれも 1,000 行以下であることを確かめ、`areka-parsers`・`areka-emo-compose`・`areka-emo-present`・`ukadoc-survey` のテストを排他テストの机で 1 回通す（`crates/areka` を含む全体のテストは `/kiro-complete` の 1 回が持つ）
   - 完了の姿: 差分の確かめと 4 crate のテストが緑で、`collision*` だけのシェルの当たり方と記録が同じ番号の場合を除いて変わっていない
