@@ -37,6 +37,7 @@
 - 範囲の外のファイルの見直し。範囲の外で変えるのは、この spec の直しで壊れる呼び手だけ（要件 3.2・7.2）:
   - 4 番（件 1）: `crates/areka-actor/src/{ui,lib}.rs`・`crates/areka-actor/tests/{toy_ui_pump_test,ui_span_test}.rs`・`crates/areka-emo-text/` の 13 ファイル（`research.md` の 3 節の表）・本体の `crates/areka/src/input_events/balloon_choice_settle_tests.rs`（持ち主 `audit-areka-input-menu` は走っていない・要件 5.1 で申し合わせなしと確定）。
   - 102 番（未決 1 の仮置き）: `crates/areka/src/crate_source_test_support.rs` の `crate_path` を `areka-runtime` の読み口の出し直しにする 1 行と、その説明（持ち主 `audit-areka-app` は走っていない）。
+  - 条件つき（実装で要ると分かったときだけ・条件が立ったことを検証の記録に書く）: 62 番の読み手 `crates/areka/src/session/ghost_switch_reload_tests.rs`（持ち主 `audit-emo2-boot-switch` は C22 で走っていない）。
 - 触らない（C22 の約束・要件 7.3〜7.5）: `crates/areka-runtime/src/frame/`・`frame*.rs`（`frame_test_support::count_level` は使うだけ）・`crates/areka-placement/`（`test_support` は使うだけ）・`crates/log-capture-kit/tests/file_length_guard_test.rs`・`placement_tests/transition_*` の中身・`vendors/`。
 - emo-text に新しいソースファイルを足さない（4 番は既にあるファイルを直すだけ）。
 - 範囲の外で見つけたこと（`research.md` の 6 節）の直し。申し送りは要件の討議の 5 で済んだ（ア・イ・オ・ウ・キ・ク は各 brief へ書き足し、ケは `audit-ukadoc-survey` のセッションへ伝えた）。エ・カは `/kiro-complete` の未解決の棚卸で扱う件として検証の記録に残す。
@@ -45,7 +46,7 @@
 
 ### 使ってよい依存
 
-- 今の依存だけ。`areka-runtime` の `[dependencies]`（`areka-actor`・`areka-seriko`・`areka-parsers`・`areka-emo-*`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`dola`・`wintf`・`bevy_ecs`・`thiserror`・`tracing`・`windows`）と `[dev-dependencies]`（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`・`shiori-host32-host`・`areka-placement`〔test-support〕・`image`・`tracing-subscriber`・`async-io`）。
+- 今の依存だけ。`areka-runtime` の `[dependencies]`（`areka-actor`・`areka-seriko`・`areka-parsers`・`areka-emo-*`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-placement`・`areka-sylphya`・`shiori-host`・`dola`・`wintf`・`bevy_ecs`・`thiserror`・`tracing`・`windows`）と `[dev-dependencies]`（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`・`shiori-host32-host`・`areka-placement`〔test-support〕・`image`・`tracing-subscriber`・`async-io`）。
 - テストの支え（`feature = "test-support"` の下）は dev-dependencies を使えない（本体のテストのビルドでは `areka-runtime` は普通のライブラリとしてビルドされ、dev-dependencies がリンクされない）。だから番人の crate（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）を引く補助は、テストの支えに置かない（runtime-crate-split の設計 D4 と同じ理由）。
 - `Cargo.toml` で変えるのは 47 番の注釈の 1 行だけ。`Cargo.lock` は変えない。
 - 依存の向き（変えない）: 本体（`crates/areka`）→ `areka-runtime` → 下の crate（`areka-actor`・`areka-emo-text`・`areka-ghost` ほか）。`areka-runtime` から本体を引く道は作らない（`BootRuntimeFn`・`SessionHooks` の関数のポインタだけ）。
@@ -53,9 +54,9 @@
 ### 見直しが要る変化（Revalidation Triggers）
 
 - `areka_actor::spawn_ui` と `areka_emo_text::actor::spawn_emo_text` の戻りが `Result` でなくなり、`areka_actor::UiSpawnError` が消える（4 番）。呼び手は同じ変更で全部直す（23 ファイル）。後から `spawn_ui` を呼ぶ spec は `Ok`／`expect` を書かない。
-- `areka_runtime::BootRuntimeFn` の戻りが `Result<GhostRuntime, GhostBootError>` になり、`RuntimeBootError` が消える（48 番）。`BootRuntimeFn` は `pub type` になる（49 番）。読み手は本体の `session/runtime_boot.rs`・`runtime_boot_tests.rs` だけ。
+- `areka_runtime::BootRuntimeFn` の戻りが `Result<GhostRuntime, GhostBootError>` になり、`RuntimeBootError` が消える（48 番）。`BootRuntimeFn` は `pub type` になる（49 番）。名前で読む所は本体の `session/runtime_boot.rs`・`runtime_boot_tests.rs` だけ。本番で `boot_runtime` を `wire_runtime` へ渡す `crates/areka/src/ghost_session.rs`（`wire_runtime(` の呼び出し）は型が合えば直しは要らない（変えずにコンパイルが通ることを確かめる）。
 - `areka_runtime::reload_args::DescriptNotes` の欄 `empty` が消える（71 番）。読み手は本体の `session/reload.rs`・`reload_tests.rs`。
-- 本体の spine の足場の `shutdown_bounded` が、ゴーストの降ろしの失敗（アクターのスレッドの panic）で赤になる（3 番）。使い手は spine 系のテスト 12 ファイルと `ghost_session_restart_tests.rs`（呼び出し 13 か所）。後から足場を使う spec（`audit-emo2-boot-frame`・`audit-emo2-boot-switch` ほか）は、降ろしの失敗を隠せない。
+- 本体の spine の足場の `shutdown_bounded` が、ゴーストの降ろしの失敗（アクターのスレッドの panic）で赤になる（3 番）。使い手は本体の spine 系のテスト 11 ファイル（呼び出し 22 か所・`grep -rn "\.shutdown_bounded()" crates/areka/src` の数）。`ghost_session_restart_tests.rs` は自前の `shutdown_bounded` を持ち、既に `.expect("降ろすのは成功する")` にしている（使い手ではなく、同じ直しの前例）。後から足場を使う spec（`audit-emo2-boot-frame`・`audit-emo2-boot-switch` ほか）は、降ろしの失敗を隠せない。
 - 偽の SHIORI（`areka_runtime::spine::ScriptedShioriBackend`）が `Status` を記録しなくなる（54 番）。`non_status_calls`・`call_count` の結果は変わらない（今も `Status` を除いて返す）。
 - ログの行: `reload_shell_replay_unavailable` が増え、出し直しで seriko が無いときの `reload_shell_carry_unavailable` がそれへ替わる（62 番）。表示の指令の写像不能の `warn!` の文が「数でない・大きすぎる scope」を言う形へ替わる（1 番）。`\v` の荷物の開けない枝が `warn!` になる（15 番）。どれも字面で読む実機の確かめ・`tools/perf/`・手順書は 0 件（`research.md` の 2 節と、この設計の時点の grep）。読み手のテストは同じ変更で直す。
 - テストの置き場: `switch_cue`・`shell_balloon_resolve`・`shell_carry` の純粋な 6 本・`wire`・`settle`・film の E2E が本体から `areka-runtime` へ移る（件 6・34・95・102 番）。本体の `runtime_tests/mod.rs` の宣言が減る。
@@ -247,7 +248,8 @@ impl SpineHarness {
 
 - `shutdown_bounded` のクロージャの中を `ghost.shutdown(CloseReason::User { scope: 0 }).expect("spine ghost shutdown");` にする。クロージャは `run_bounded_watching` の別のスレッドで動くので、panic は待つ側に `［相手が居ない］` の赤として届く。
 - 縛るテスト（`spine_boot_smoke_tests.rs` に 1 本・実 GPU）`shutdown_bounded_fails_when_the_shiori_thread_panics`: `OnClose` を台本に入れない台本（`notify("OnClose")` を抜いた標準の台本）で起こし、`shutdown_bounded()` を呼ぶ → 偽の SHIORI が `OnClose` で panic し `shutdown` が `Err` → `#[should_panic(expected = "相手が居ない")]`（文言は `spine_wait.rs` の `run_bounded_watching` の失敗の文に合わせる）。**直しの前は panic せず緑で通る＝`should_panic` が赤**。
-- 13 か所の呼び出しが全部緑のままであることを確かめてから入れる（降ろしは何度呼んでも同じ結果になる作り）。
+- 22 か所（11 ファイル）の呼び出しが全部緑のままであることを確かめてから入れる（降ろしは何度呼んでも同じ結果になる作り）。
+- 前提: `notify("OnClose")` を台本に持たない 5 つの台本（`spine_close_wiring_tests`・`spine_conformance_script`・`spine_conformance_support_stage_tests` の 2 本・`spine_third_scope_talk_tests`）は、kanade が自分で止まるのを待ってから降ろすので緑で済んでいる。直しの後にこのどれかが赤になったら、降ろしの退行として根を調べる（台本へ `OnClose` を足して黙らせない）。
 
 ### 4 番 `spawn_ui` の戻りから `Result` を外す（件 1・4 つの crate）
 
@@ -336,12 +338,13 @@ wait_until(what, Progress::Count(&probe), || {
 - 10 か所は `research.md` の 35 番の表のとおり（本体の `runtime_tests/` の display・move_cue・seriko_loop 4・close_wiring 2・third_scope 1・talk_close 1）。汲む物が無い輪（third_scope の終了相の輪）は `received` を持たず `shiori.call_count()` だけを目印にする（進みが無ければ今と同じく 30 秒で赤）。
 - 足場に 1 本の部品（`drive_until`）は置かない。10 か所の輪の中身（dispatcher の Tick・seriko の Tick・終了相）がそれぞれ違い、共通にできるのは目印の 2 行だけだから。
 - 本体の `runtime_tests/spine.rs` の L19-L22（R7.9「ハイブリッドの輪は `wait_until` を流用しない」）を「待ちはどれも `wait_until`（進みの目印つき）を使う・2026-11-17 の要件の討議で R7.9 を改めた」に直す（9 番の本体側）。
+- seriko のループを動かす（`LoopDriver::Live`）輪では、まばたきの指令が出続けるので、受けた数を目印にすると進みが止まらない（退行しても 30 秒でなく総時間 300 秒で落ちる）。各所で、目印を「条件に向かう進み」（待っている呼び出し・面の数など）に絞れるかを確かめ、絞れるなら絞る。
 - 縛るテスト: 消す枝なので新しいテストは無い。10 か所のテストが緑のままであること。
 
 ### 62 番 出し直しの記録（`areka-runtime/src/shell_carry.rs`）
 
 - `replay` の頭（`shows.is_empty() && binds.is_empty()` の後）で seriko の送り手を確かめ、無ければ `warn!(event = "reload_shell_replay_unavailable", "置き場のゴーストの seriko が無いので、読み直しの前の面を出し直せない")` を 1 件出して戻る。`reload_shell_bind_restored`・`reload_shell_restored`・`fell_back`・`skipped`・`bind_dropped` の記録は、送り手が在るときだけ出す（「出し直す」と書いて出し直さない、を無くす）。
-- 控え（`capture_for_reload`）と渡し（`hand_over`）の 2 つは `reload_shell_carry_unavailable` のまま。読み手の `crates/areka/src/session/ghost_switch_reload_tests.rs:L525` は控えの側の数を見るので、期待の数は変わらない（直しは要らない見込み・実装で確かめる）。
+- 控え（`capture_for_reload`）と渡し（`hand_over`）の 2 つは `reload_shell_carry_unavailable` のまま。読み手の `crates/areka/src/session/ghost_switch_reload_tests.rs:L525` は控えの側の数を見るので、期待の数は変わらない（直しは要らない見込み・実装で確かめる）。手が要ると分かったら、持ち主 `audit-emo2-boot-switch` が C22 で走っていないことを記録して、範囲の外で触るファイルの一覧（「範囲の外（持たないもの）」）に足す。
 - 縛るテスト（12 番と同じ 1 本に寄せる・`areka-runtime/src/shell_carry_tests.rs`）`replay_without_a_ghost_warns_once_and_restores_nothing`: 置き場の無い World で `replay(&world, &[(0, CarriedShow::Carried(0))], &[])` を `log_capture_kit::capture` で囲み、`reload_shell_replay_unavailable` の warn が 1 件・`reload_shell_restored` が 0 件。空の `replay(&world, &[], &[])` は記録 0 件。**直しの前は赤**（event 名が違う・restored の info が 1 件出る）。
 
 ### 78 番 kanade が落ちた後の読み直しの受け付け（本体の `session/reload.rs`）
@@ -570,7 +573,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 6.6・6.7 | 依存を足さない | 「使ってよい依存」。33 番の分け方は依存を足さない形を選んだ |
 | 6.8 | フォーク・`[patch]` | しない |
 | 7.1 | 走っている相手と申し合わせ | 範囲の外で触る持ち主（`audit-sylphya-actor` の後の `areka-actor`・`areka-emo-text`・`audit-areka-input-menu`・`audit-areka-app`）はどれも C22 で走っていない。走っている 5 本の触るファイルとの重なりは 0 |
-| 7.2 | 要る変更だけ | 「範囲の外」の 2 項だけ |
+| 7.2 | 要る変更だけ | 「範囲の外（持たないもの）」の、範囲の外で触るファイルの一覧（条件つきの項を含む）だけ |
 | 7.3・7.4・7.5 | C22 の約束 | 「範囲の外（持たないもの）」・69 番は宣言の印だけ・T20 で差分を確かめる |
 | 7.6 | 外への約束 | 「見直しが要る変化」。議題 4 の裁定の分（4・36・48・62・71 番）と、ログの語を変える 1・15・79 番（字面の読み手 0 件・同じ変更で直す） |
 | 7.7・7.8 | 申し送り | 済み（要件の討議の 5）。T18 で記録を確かめる |
@@ -613,7 +616,7 @@ wait_until(what, Progress::Count(&probe), || {
    - `git diff --stat origin/main...HEAD -- crates/areka-runtime/src/frame/ 'crates/areka-runtime/src/frame*' crates/areka-placement/ crates/log-capture-kit/tests/file_length_guard_test.rs vendors/ Cargo.lock` が空。
    - `git diff --name-only --diff-filter=A origin/main...HEAD -- crates/areka-emo-text/` が空（emo-text に新しいファイルが無い）。
    - `git diff origin/main...HEAD -- 'crates/areka-runtime/src/placement_tests/transition_*'` が空。`placement_tests/mod.rs` の差分は 69 番の 1 行だけ。
-   - 範囲の外のファイルの差分が「範囲の外」の 2 項（4 番の呼び手・102 番の 1 ファイル）だけ。
+   - 範囲の外のファイルの差分が、「範囲の外（持たないもの）」の範囲の外で触るファイルの一覧（条件つきの項は、条件が立ったことを検証の記録に書いた分）だけ。
    - 外への約束の変わった所が、「見直しが要る変化」に挙げた分だけ（公開の名前の削除・狭めを grep で示し、ログの event 名と文の変化を字面の読み手 0 件と一緒に示す）。
 
 ## 安全の考え
