@@ -117,7 +117,7 @@
   - _Dispatch: mechanical — 写す見本（`diag_tests.rs`）が形を決めている_
   - _Requirements: 4.2_
 
-- [ ] 10. 古い文を今の事実に直す
+- [x] 10. 古い文を今の事実に直す
   - 設計の StaleText のとおり: `follow_drag_tests.rs:144` の帳面の名を消して言いたいことを平らな文で残す・`crates/areka-runtime/src/placement_tests/transition_judge.rs:45-50` の置き場と宣言の文を今の事実へ（同じ行の数で）・`follow/sticky_follow.rs:379` の `scg` を spec の名前へ
   - 完了の状態: 設計の G3 が 0 行・G4 の 3 つ目の grep の `scg` が 0 行・`transition_judge.rs` の行の数が 999 のまま
   - _Dispatch: mechanical — 設計が直す文の中身を与えている_

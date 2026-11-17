@@ -145,7 +145,7 @@ fn on_char_drag_writes_only_policy_applied_positions() {
 }
 
 /// (b') 非 Bottom アンカーの drag 配線存在チェック（Req1.6・design Integration
-/// Tests #8 末尾・[[test-only-decision-branches-not-proven-wiring]] の「一度」）:
+/// Tests #8 末尾・判定の枝の檻は配線を証明しないので配線の存在を一度だけ確かめる）:
 /// `Anchored(Left)` 窓のドラッグで X=`wa.left` 固定・Y 保持（縦自由）になる。
 ///
 /// これは `on_char_drag` の drag 配線が**実 `Anchored.0`（Left）を `project_anchor`
