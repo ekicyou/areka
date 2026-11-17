@@ -1,9 +1,11 @@
 //! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち）。
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
-//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。古い呼び名
-//! `run_bounded` は形を保ったまま芯の上に載せ、打ち切りの文言を出すようにした。スレッドの終わりの
-//! 待ちは見張りのスレッドをやめ、芯 [`wait_thread_end`] 1 本で std 版とアクター版を待つ（総時間の引数は無い）。
+//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。打ち切り方は 3 通りで、芯
+//! [`wait_until_with`] を通る待ち（進みの目印がある待ち・スレッドの終わりの待ち [`wait_thread_end`]）、
+//! GPU の許可の待ち、総時間の `recv_timeout` で切る `run_bounded` である。`run_bounded` は芯を通らず、
+//! 芯から借りるのは失敗の文言だけ。スレッドの終わりの待ちは見張りのスレッドをやめ、芯 1 本で
+//! std 版とアクター版を待つ（総時間の引数は無い）。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
 //! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
@@ -377,11 +379,7 @@ pub fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, 
 /// 見張りのスレッドは生まない（生まれるスレッドもローダーの錠を待ち、負荷の下で `［進みは不明］` の赤になった・
 /// `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
 /// 常に 0 回で、出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・要件 2.7 の読み）だけ。
-pub fn wait_thread_end(
-    what: &str,
-    inner: Option<&dyn Fn() -> u64>,
-    is_finished: impl Fn() -> bool,
-) {
+fn wait_thread_end(what: &str, inner: Option<&dyn Fn() -> u64>, is_finished: impl Fn() -> bool) {
     wait_thread_end_with(Instant::now, std::thread::sleep, what, inner, is_finished);
 }
 

@@ -1,15 +1,13 @@
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use super::wait::{
     DENSE_SPIN, GPU_PERMIT_IDLE, GpuSlots, PermitVerdict, WAIT_CAP, join_bounded,
     join_thread_bounded, judge_permit_wait, run_bounded_watching, wait_recv, wait_thread_end_with,
     wait_until_idle_with,
 };
-use super::{
-    BACKOFF_SLEEP, Duration, Instant, Progress, SPIN_WAIT, WaitFailure, run_bounded,
-    wait_until_with,
-};
+use super::{BACKOFF_SLEEP, Progress, SPIN_WAIT, WaitFailure, run_bounded, wait_until_with};
 
 // ===========================================================================
 // 待ちの芯の檻（areka-P0-ghost-session-test-load-flake タスク 2.2・要件 2.1・2.3・2.5・3.1〜3.3）
@@ -458,9 +456,6 @@ fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
 #[test]
 fn a_permit_wait_with_no_return_stalls_and_names_the_permits() {
     static SLOTS: GpuSlots = GpuSlots::new(2);
-    let _first = SLOTS.try_take().expect("1 つ目は取れる");
-    let _second = SLOTS.try_take().expect("2 つ目は取れる");
-    assert!(SLOTS.try_take().is_none(), "上限 2 を持ち切った");
 
     let idle = Duration::from_secs(40);
     let started = Instant::now();

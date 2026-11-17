@@ -11,8 +11,10 @@
 //! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: spine で言う sleep 不使用とは
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
 //! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
-//! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計
-//! [`SPIN_WAIT`] で有界化してある。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
+//! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計で有界化してある。
+//! 打ち切り方は 3 通りある。目印のある待ち（[`Progress::Count`]）は「目印が [`SPIN_WAIT`]（30 秒）進まなければ
+//! 打ち切り・総時間は 300 秒まで」、GPU の許可の待ちは「許可が 500 秒返らなければ打ち切り」、
+//! [`run_bounded`] は総時間の `recv_timeout` である。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
 //! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で
 //! 速い経路の検出遅延を犠牲にせず、窓を過ぎたら [`BACKOFF_SLEEP`] へ落としてコア占有をやめる
 //! （PR #96 で導入）。ハイブリッドと回収（settle）の形は ⑶ の側（本体の `runtime_tests/spine.rs`）の説明にある。
@@ -32,9 +34,6 @@ use areka_kanade::{ShioriBackend, ShioriUnblock};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 use self::hold_support::{HoldAt, HoldGate};
-// 子の `wait_tests` が `super::{Duration, Instant}` で引く（旧 ⑶ の足場と一緒に持っていた行）。
-#[cfg(test)]
-use std::time::{Duration, Instant};
 
 // ===========================================================================
 // 進行状態の記録（第 2 系統・R3.8）の型と本体
@@ -63,7 +62,7 @@ pub type StatusLedger = Arc<Mutex<Vec<RecordedStatus>>>;
 ///
 /// **書き込み専用**である。既存の呼出記録とは別の台帳へ積むだけで、既存の読み手を 1 つも
 /// 増やさない（design D3「追補の形（挙動を変えない）」）。
-pub fn record_status(ledger: &StatusLedger, id: &str, status: Option<&str>) {
+pub(crate) fn record_status(ledger: &StatusLedger, id: &str, status: Option<&str>) {
     ledger
         .lock()
         .expect("status ledger mutex poisoned")
@@ -74,7 +73,7 @@ pub fn record_status(ledger: &StatusLedger, id: &str, status: Option<&str>) {
 }
 
 /// 観測ハンドルの取り出し口の本体（進行状態の記録のスナップショットを呼出順で返す）。
-pub fn snapshot_status_calls(ledger: &StatusLedger) -> Vec<RecordedStatus> {
+pub(crate) fn snapshot_status_calls(ledger: &StatusLedger) -> Vec<RecordedStatus> {
     ledger.lock().expect("status ledger mutex poisoned").clone()
 }
 
@@ -96,8 +95,6 @@ pub enum RecordedCall {
     Notify { id: String, references: Vec<String> },
     /// unload（正規 clean shutdown）呼出。
     Unload,
-    /// status（非ブロッキング死活問い合わせ）呼出。
-    Status,
 }
 
 /// [`ScriptedShioriBackend`] を組み立てるビルダー（台本の事前登録）。
@@ -175,7 +172,6 @@ impl ScriptedShioriBackendBuilder {
             get_scripts: self.get_scripts,
             notify_scripts: self.notify_scripts,
             unload_script: self.unload_script,
-            status: HelperStatus::Running,
             calls: Arc::clone(&calls),
             status_calls: Arc::clone(&status_calls),
             gate: Arc::clone(&gate),
@@ -197,7 +193,6 @@ pub struct ScriptedShioriBackend {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
-    status: HelperStatus,
     calls: Arc<Mutex<Vec<RecordedCall>>>,
     /// 進行状態の記録（第 2 系統・R3.8）。既存 `calls` とは別の台帳で、書き込みのみ。
     status_calls: StatusLedger,
@@ -280,11 +275,7 @@ impl ShioriBackend for ScriptedShioriBackend {
     }
 
     fn status(&mut self) -> HelperStatus {
-        self.calls
-            .lock()
-            .expect("calls mutex poisoned")
-            .push(RecordedCall::Status);
-        self.status
+        HelperStatus::Running
     }
 
     fn unblock_handle(&self) -> Option<ShioriUnblock> {
@@ -304,25 +295,15 @@ pub struct ScriptedShioriHandle {
 }
 
 impl ScriptedShioriHandle {
-    /// 受領記録（非 Status のみ）のスナップショットを返す（死活監視ノイズを除外）。
+    /// 受領記録（`Get`・`Notify`・`Unload`）のスナップショットを返す。状態の問い合わせは記録しない。
     pub fn non_status_calls(&self) -> Vec<RecordedCall> {
-        self.calls
-            .lock()
-            .expect("calls mutex poisoned")
-            .iter()
-            .filter(|c| !matches!(c, RecordedCall::Status))
-            .cloned()
-            .collect()
+        self.calls.lock().expect("calls mutex poisoned").clone()
     }
 
-    /// 受けた呼び出し（`Get`・`Notify`・`Unload`）の数。状態の問い合わせ `Status` は数えず、記録の写しも
-    /// 作らない（待ちの進みの目印に毎回読む口・areka-P0-ghost-session-test-load-flake 3.1）。
+    /// 受けた呼び出し（`Get`・`Notify`・`Unload`）の数。記録の写しは作らない
+    /// （待ちの進みの目印に毎回読む口・areka-P0-ghost-session-test-load-flake 3.1）。
     pub fn call_count(&self) -> u64 {
-        let calls = self.calls.lock().expect("calls mutex poisoned");
-        calls
-            .iter()
-            .filter(|c| !matches!(c, RecordedCall::Status))
-            .count() as u64
+        self.calls.lock().expect("calls mutex poisoned").len() as u64
     }
 
     /// 進行状態の記録（呼出 id と組み立て済み進行状態の対）のスナップショットを返す（R3.8）。

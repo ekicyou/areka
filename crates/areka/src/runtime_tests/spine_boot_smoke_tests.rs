@@ -47,7 +47,6 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
             RecordedCall::Notify { id, .. } => ("notify", id.as_str()),
             RecordedCall::Get { id, .. } => ("get", id.as_str()),
             RecordedCall::Unload => ("unload", ""),
-            RecordedCall::Status => ("status", ""),
         })
         .collect();
     assert!(

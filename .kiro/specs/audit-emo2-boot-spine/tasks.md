@@ -86,7 +86,7 @@
   - 完了: 資産と当たり判定のテストが緑で、資産のテストのファイルが 800 行を下回る
   - _Dispatch: mechanical — 消す範囲を設計が名指す_
   - _Requirements: 3.1, 3.3, 4.7_
-- [ ] 3.6 (P) spine の足場（`areka-runtime`）の説明と公開を直し、偽の SHIORI の状態の記録を消す［T8・9（runtime 側）・10・36・50〜56 番］
+- [x] 3.6 (P) spine の足場（`areka-runtime`）の説明と公開を直し、偽の SHIORI の状態の記録を消す［T8・9（runtime 側）・10・36・50〜56 番］
   - 9・10・50〜52・55・56 番: 打ち切り方の説明を今の 3 通りに直し、古い行・行番号の注記を消し、保持の行の説明を事実に合わせ、子のファイルが自分で use する
   - 36・53 番: 外に使い手の無い 5 項目（状態の記録の 2 つ・スレッドの終わりの待ち・保持の門・シェルの決めの関数）と保持の行の定数の `pub` を狭める
   - 54 番: 偽の SHIORI の状態の問い合わせは「走っている」を返すだけにし、記録の push・除く filter・欄・`RecordedCall::Status` の枝を消す。読み手の match の腕（範囲の中の起動のスモーク・範囲の外の 4 ファイル）を 1 行ずつ消し、判定の説明の文を直す（`areka-ghost/tests` の同じ名前の型には触らない）
@@ -225,3 +225,4 @@
 - 3.4・72 番: 前提が崩れた。`cargo check -p areka-runtime --lib` に「never read」は出ない（derive の `PartialEq` が全部の欄を読む）。`cfg_attr(expect(dead_code))` は付けずに閉じた（8.1 の記録に載せる）。
 - 3.4・65 番: `spawn_zorder_pair_deferred_tests.rs` の言い換えで、和文と `` `areka-runtime` `` のあいだの空白が揃っていない所がある。8.2 のかけ直しで揃える。
 - 3.4・66 番: 寄せた `index_of` の置き場は `crate::source_text_test_support`（設計は名指ししていない）。
+- 3.6: 残りの行番号の注記（`areka-runtime/src/spine.rs` の `real.rs:136`／`:151`、本体の `spine_conformance_judge.rs` の `同 :449-451`）と、公開の `hold()`・`join_thread_bounded` の doc から私有になった `NO_ROW`・`wait_thread_end` へのリンク（`private_intra_doc_links`）は 8.2 のかけ直しで直す。

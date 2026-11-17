@@ -214,7 +214,7 @@ fn horizon_matches_dola_occupancy_definition() {
 }
 
 /// ⑷ 会話境界の自己検出: dispatcher は talk 起動ごとに登録 sink を clone する
-/// （`areka-ghost/src/dispatcher.rs:290-294`）。clone は会話境界の状態を持ち越さないため、
+/// （`areka-ghost` の dispatcher）。clone は会話境界の状態を持ち越さないため、
 /// 2 本目の talk でも `TalkStarted` が改めて出る（Requirement 4.5 の破棄契機）。
 #[test]
 fn clone_resets_talk_boundary_so_next_talk_re_emits_talk_started() {
@@ -401,7 +401,7 @@ fn construction_and_clone_emit_nothing() {
 
 /// `\wN` の 1 ウェイト単位（ミリ秒）。
 ///
-/// 定義は parser 側の非公開定数（`crates/areka-parsers/src/sakura/decode.rs:38` の
+/// 定義は parser 側の非公開定数（`areka-parsers` の sakura decode の
 /// `WAIT_UNIT_MS`・ukadoc 確定の 50ms）。公開されていないため本檻が同値を持つ——
 /// 期待値を実行結果から読まずに導出するための写しであり、値が食い違えば下の
 /// 「台本の占有終端との一致」assert が落ちる。
@@ -528,7 +528,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
 /// 会話境界のリセットを**本番の複製経路**で確かめる（Requirement 4.5 の破棄契機の前提）。
 ///
 /// dispatcher は登録 sink を talk 起動ごとに `clone_box` で複製する
-/// （`crates/areka-ghost/src/dispatcher.rs:293`）。本檻はその `BootCueSink::clone_box`
+/// （`areka-ghost` の dispatcher）。本檻はその `BootCueSink::clone_box`
 /// をそのまま踏み、2 本の実台本を続けて再生する。
 ///
 /// 2 本目の占有終端（0.05）は 1 本目（0.7）より**小さい**——会話境界が持ち越されると

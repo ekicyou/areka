@@ -170,8 +170,9 @@ fn raw_stderr() -> ManuallyDrop<File> {
 // GPU の装置の許可の持ち手の表（`GpuPermit` の取る・返す所から載せ降ろしする・割り当て無し）
 // ---------------------------------------------------------------------------
 
-/// 表の行の数。プロセスの数えの許可 4 つの他に、檻が別の数えで 2 つまで取るので、余らせて置く。
-pub const HOLDER_ROWS: usize = 16;
+/// 表の行の数。プロセスの数えの許可 4 つの他に、檻が別の数えで 2 つずつ取る檻が 2 本あり、同時に 4 つまで
+/// 載るので、16 行あれば収まる。
+const HOLDER_ROWS: usize = 16;
 const NAME_BYTES: usize = 160;
 
 #[derive(Clone, Copy)]
@@ -195,7 +196,7 @@ static HOLDERS: Mutex<[Holder; HOLDER_ROWS]> = Mutex::new([Holder::EMPTY; HOLDER
 static MISSED: AtomicUsize = AtomicUsize::new(0);
 
 /// 表に入らなかった許可の行の番号。
-pub const NO_ROW: usize = usize::MAX;
+const NO_ROW: usize = usize::MAX;
 
 /// 今のスレッドを許可の持ち手として載せ、行の番号を返す（入りきらなければ [`NO_ROW`]）。
 pub fn hold() -> usize {

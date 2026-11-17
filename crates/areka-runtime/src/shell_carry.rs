@@ -110,7 +110,11 @@ pub struct CarriedBinds {
 /// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ戻り先の
 /// 候補の並び `candidates`（`areka_placement::descript_window_keys::fallback_candidates`）の最初に在る面、
 /// どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4）。
-pub fn decide(carried: u32, candidates: &[u32], exists: impl Fn(u32) -> bool) -> CarriedShow {
+pub(crate) fn decide(
+    carried: u32,
+    candidates: &[u32],
+    exists: impl Fn(u32) -> bool,
+) -> CarriedShow {
     if exists(carried) {
         return CarriedShow::Carried(carried);
     }

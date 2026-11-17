@@ -20,9 +20,8 @@
 //! 現れれば列は必ず不一致になる——「0 件であること」を別に数える必要はない。ただしこれが成り立つのは
 //! **採取が途中で濾されていない**ときに限る。3 つの取り出し口はいずれも濾さない:
 //!
-//! - `ScriptedShioriHandle::non_status_calls()`（`spine.rs:302-311`）は死活の問い合わせ
-//!   （`RecordedCall::Status`）だけを除く。除かれるのは受け口が自発的に打つ死活監視であって、
-//!   一周が送る照会・通知は 1 件も落ちない。
+//! - `ScriptedShioriHandle::non_status_calls()` は受けた呼出（`Get`・`Notify`・`Unload`）をそのまま返す。
+//!   死活の問い合わせは受け口が記録しないので、一周が送る照会・通知は 1 件も落ちない。
 //! - `snapshot_status_calls()`（`areka-runtime` の `spine.rs`）は台帳をそのまま複製する。
 //! - 表示指令は `RuntimeWiring::drain_received()` を素通しで積む（同 `:449-451`）。投影
 //!   [`project_display`] も、知らない指令を捨てずに [`DisplayProjection::Unknown`] として 1 件残す。
