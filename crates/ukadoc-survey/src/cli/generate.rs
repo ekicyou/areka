@@ -281,7 +281,7 @@ pub(crate) fn priority_apply_with(
     // 4 本ぶんの本文を決める。ここも書き出しではない。
     let mut plans: Vec<(&Path, String, usize)> = Vec::new();
     for ((target, text), ledger) in sources.iter().zip(&ledgers) {
-        let body = patch::replace_priority(text, &wanted)?;
+        let body = patch::replace_priority(text, ledger.domain, &wanted)?;
         plans.push((target.as_path(), body, changed_count(ledger, &wanted)));
     }
 

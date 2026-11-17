@@ -1,7 +1,7 @@
 //! `read.rs` の在中テスト。
 //!
 //! 見本の本文はここに直に書く（実装側の定数を参照しない）。参照すると表を表自身と
-//! 比べるだけになり、綴りの取り違えを 1 件も捕まえられない（タスク 1.5 の教訓）。
+//! 比べるだけになり、綴りの取り違えを 1 件も捕まえられない。
 //!
 //! ここは純粋層のテストなので、ファイルも一時ディレクトリも 1 つも作らない
 //! （要件 6.2・設計 File Structure Plan）。
@@ -148,7 +148,7 @@ fn id(raw: &str) -> EntryId {
 
 /// 付録 A.2 の欄がすべて、それぞれの型の値として読まれる。
 ///
-/// 件数ではなく逐語で釘付けする（タスク 1.5 の教訓）。
+/// 件数ではなく逐語で釘付けする（件数だけでは綴り違いを捕まえない）。
 #[test]
 fn reads_every_column_of_the_appendix_sample() {
     let ledger = sample();
@@ -248,7 +248,7 @@ fn an_empty_ledger_reads_to_no_entries() {
     assert!(ledger.file_order.is_empty());
 }
 
-/// 読み取りは塊への切り分けを必ず通る（タスク 1.7 の教訓＝入口の配線は別に守る）。
+/// 読み取りは塊への切り分けを必ず通る（入口の配線は別に守る）。
 ///
 /// 備考の中の行頭見出しは `toml` の鍵集合と食い違うので、切り分けの較正が落とす。
 /// `toml` だけで読んで本文の順を鍵から作る実装は、ここで緑になってしまう。
@@ -270,7 +270,7 @@ fn read_goes_through_the_block_split() {
 // ---- 語彙（要件 2.2・4.3・4.4・6.10） ----
 
 /// 状態の綴りを 1 文字変えると読み取りが失敗し、**どの id のどの欄か**が本文に載る
-/// （タスク 2.4 の完了条件・要件 2.2・6.10）。
+/// （要件 2.2・6.10）。
 #[test]
 fn a_one_character_status_typo_names_the_id_and_the_field() {
     let text = tweak(r#"status = "implemented""#, r#"status = "implementad""#);
@@ -612,4 +612,17 @@ fn a_theme_written_twice_in_one_entry_is_rejected() {
         other => panic!("形の崩れとして落ちること: {other}"),
     }
     assert_mentions(&err, &[YEAR, "values", "気配"]);
+}
+
+/// 根に `[ledger]` と `[entry]` のほかの鍵があれば落ちる（黙って読み飛ばさない）。
+#[test]
+fn an_unknown_root_key_is_rejected() {
+    let text = tweak("[ledger]\n", "unclassified_count = 42\n\n[ledger]\n");
+
+    let err = err_of(&text);
+    match &err {
+        SurveyError::TomlParse { path, .. } => assert_eq!(path, FILE),
+        other => panic!("形の崩れとして落ちること: {other}"),
+    }
+    assert_mentions(&err, &["根", "unclassified_count"]);
 }

@@ -19,6 +19,7 @@
 //! - 項目 id が 2 形のどちらでもない（要件 1.9）
 //! - 1 つの項目の `values` に同じテーマが 2 度ある（黙って受けるとテーマ別の表で 2 件に数えられる）
 //! - 前置きのドメイン名が読んでいるファイルのドメインと食い違う
+//! - 根に `[ledger]`・`[entry]` のほかの鍵がある
 //!
 //! 「知らない欄」を落とすのは要件 2.3 と 6.9 がここに載っているからである。台帳に
 //! 証拠の欄は無く、未分類件数を宣言する欄も無い。黙って読み飛ばすと、手で書いた
@@ -36,14 +37,14 @@
 //! # 失敗に添える場所
 //!
 //! ドメインが分かるので、置き場は `<ドメイン>` を伏せずに綴れる（[`ledger_file`]）。
-//! 切り分けの失敗も、伏せた置き場をここで差し替えてから上げる。
+//! 切り分けの失敗も、伏せた置き場を差し替えてから上げる（[`at_ledger_file`]）。
 //! `io::paths::ledger_path` は呼ばない——あれはワークスペース根から組み立てた絶対
 //! パスを返すので、失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。
 
 use std::collections::BTreeMap;
 
 use super::blocks;
-use super::{ENTRY_TABLE, Ledger, LedgerEntry, ledger_file};
+use super::{ENTRY_TABLE, Ledger, LedgerEntry, at_ledger_file, ledger_file};
 use crate::documents::fields::{
     as_table, field, malformed, reject_unknown_keys, required_table, string_array_field,
     string_field,
@@ -93,16 +94,13 @@ pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
         .parse()
         .map_err(|err| malformed(&file, format!("TOML として読めない: {err}")))?;
 
+    // 根の知らない鍵を黙って読み飛ばすと、手で書いた欄が書いたつもりのまま素通りする。
+    reject_unknown_keys(&root, &[LEDGER_TABLE, ENTRY_TABLE], "根", &file)?;
+
     // 本文に現れた順は `toml` の表からは取れない（鍵で並び替えられている）。それを
-    // 知っているのは切り分けだけなので、必ずここを通す（設計 D-12）。切り分けは
-    // ドメインを知らないので、失敗の置き場をここで台帳のファイルに差し替える。
-    let (_, blocks) = blocks::split_parsed(text, &root).map_err(|err| match err {
-        SurveyError::TomlParse { reason, .. } => malformed(&file, reason),
-        SurveyError::LedgerSplitMismatch { detail } => SurveyError::LedgerSplitMismatch {
-            detail: format!("{file}: {detail}"),
-        },
-        other => other,
-    })?;
+    // 知っているのは切り分けだけなので、必ずここを通す（設計 D-12）。
+    let (_, blocks) =
+        blocks::split_parsed(text, &root).map_err(|err| at_ledger_file(err, &file))?;
     let file_order: Vec<EntryId> = blocks.into_iter().map(|block| block.id).collect();
 
     let (declared, pages) = read_prologue(&root, &file)?;

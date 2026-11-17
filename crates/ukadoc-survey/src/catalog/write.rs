@@ -112,10 +112,7 @@ fn entry_line(id: &EntryId, entry: &CatalogEntry) -> String {
         basic_string(&entry.hash),
         basic_string(&entry.url),
     ];
-    let pairs: Vec<(&str, String)> = ENTRY_COLUMNS
-        .into_iter()
-        .zip(values)
-        .collect::<Vec<(&str, String)>>();
+    let pairs: Vec<(&str, String)> = ENTRY_COLUMNS.into_iter().zip(values).collect();
     format!("{} = {}", basic_string(id.as_str()), inline_table(&pairs))
 }
 

@@ -9,12 +9,9 @@
 //! - 囲みを**連結して 1 度だけ**読むこと（配列表を複数の囲みに分けて書ける）
 //! - 同じ鍵が 2 度現れたら落ちること（囲みをまたいでも）
 //! - 欄が欠けたら**鍵を名指す**こと（行番号は添えない）
-//! - 3 種の id の口（引用符・逆引用符・裸）の振り分け
+//! - 3 つの id の口（引用符・逆引用符・裸）の振り分け
 
 use super::*;
-// 共通の道具を `fields.rs` へ割ったとき、親が引かなくなった型はここで名指す
-// （`use super::*` は親の私有の輸入までは連れてこない）。
-use crate::model::EntryId;
 
 // ---------------------------------------------------------------------------
 // 見本の本文
@@ -650,6 +647,44 @@ const SPEC_BLOCK: &str = "```toml\n[[spec]]\nname = \"areka-P0-present-gpu-trans
      [[spec]]\nname = \"tick-gate-adoption\"\nwave = \"保留\"\n\
      none = true\nreason = \"どの束にも写らない\"\nowner_count = 0\n```\n";
 
+/// 配列表の 1 行ずつの見本（2 度並べて重複を作る元）。
+const AFTER_ROW: &str = "```toml\n\
+     [[after]]\n\
+     domain = \"shiori\"\n\
+     A = 1\n\
+     B = 0\n\
+     C = 0\n\
+     D = 0\n\
+     E = 0\n\
+     empty = 2\n\
+     ```\n";
+const BARRIER_ROW: &str = "```toml\n\
+     [[barrier]]\n\
+     page = \"list_shiori_event\"\n\
+     implemented = 1\n\
+     vocabulary_only = 0\n\
+     degraded = 0\n\
+     absent = 0\n\
+     alias = 0\n\
+     not_applicable = 0\n\
+     ```\n";
+const OWNER_ROW: &str = "```toml\n\
+     [[owner_completed]]\n\
+     spec = \"areka-P0-done\"\n\
+     items = 1\n\
+     ```\n";
+const TEMPLATE_ROW: &str = "```toml\n\
+     [[template]]\n\
+     name = \"yaya\"\n\
+     shiori = \"YAYA\"\n\
+     url = \"https://example.test/\"\n\
+     fetched_on = \"2026-09-11\"\n\
+     files = []\n\
+     mapping = \"写像\"\n\
+     fallback = false\n\
+     ids = []\n\
+     ```\n";
+
 /// 見本を 1 か所ずつ書き換えた写しが、どれも落ち、本文に壊した欄の名前が載る。
 ///
 /// 見本そのものは読める（較正）。`override` の 2 つの綴りが型へ写ることもここで見る
@@ -669,6 +704,10 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
 
     linkage(BUNDLE_BLOCK, SINGLE_BLOCK).expect("見本の帰属は読めるはず");
     roadmap(SPEC_BLOCK).expect("見本の spec 表は読めるはず");
+    for row in [AFTER_ROW, BARRIER_ROW, OWNER_ROW, TEMPLATE_ROW] {
+        briefing(row).expect("見本の配列表の 1 行は読めるはず");
+    }
+    let twice = |row: &str| briefing(&format!("{row}\n{row}"));
     for (kind, want) in [
         ("second-stage", OverrideKind::SecondStage),
         ("stage-rule", OverrideKind::StageRule),
@@ -796,6 +835,28 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
             spec("bundle = \"時刻の刻み\"", "bundle = \"\""),
             "bundle",
         ),
+        (
+            "themes の重複",
+            bundle("themes = [\"気配\"]", "themes = [\"気配\", \"気配\"]"),
+            "themes",
+        ),
+        (
+            "domains の重複",
+            bundle(
+                "domains = [\"assets\", \"shiori\"]",
+                "domains = [\"shiori\", \"shiori\"]",
+            ),
+            "domains",
+        ),
+        ("同じ domain の [[after]]", twice(AFTER_ROW), "domain"),
+        ("同じ page の [[barrier]]", twice(BARRIER_ROW), "page"),
+        ("同じ spec の [[owner_completed]]", twice(OWNER_ROW), "spec"),
+        ("同じ name の [[template]]", twice(TEMPLATE_ROW), "name"),
+        (
+            "同じ name の [[spec]]",
+            roadmap(&format!("{SPEC_BLOCK}\n{SPEC_BLOCK}")),
+            "name",
+        ),
     ];
     for (label, result, field) in cases {
         let body = match result {
@@ -810,7 +871,7 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
 }
 
 // ---------------------------------------------------------------------------
-// 3 種の id の口
+// 3 つの id の口
 // ---------------------------------------------------------------------------
 
 /// 引用符・逆引用符・裸の 3 つの口に、それぞれの綴りだけが振り分けられる。

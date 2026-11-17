@@ -14,8 +14,9 @@
 //! - 根・`[snapshot]`・項目に知らない鍵がある（形の版が違うカタログを黙って読み飛ばさないため）
 //! - 項目 id が 2 形のどちらでもない（要件 1.9）
 //! - `page` の欄が id のページと食い違う
+//! - 同じ URL の 2 項目がある／別のページが同じページ URL に畳まれる
 //!
-//! 最後の 1 つは「書かれた値を捨てて id から作り直す」ことも考えられるが、採らない。
+//! `page` の食い違いは「書かれた値を捨てて id から作り直す」ことも考えられるが、採らない。
 //! 作り直すと壊れたカタログが黙って通り、しかも読んで書き戻した本文が元と変わって
 //! しまう（設計 catalog の事後条件 `write(read(t)) == t` が破れる）。カタログは
 //! 機械生成の文書なので、食い違いは再生成すれば消える。
@@ -71,7 +72,7 @@ impl Catalog {
     /// [`Self::page_urls`] が 2 段目を受け持つ。実データの URL はすべて相異なり、
     /// ある URL が別の URL の先頭部分になっている例も無いので、完全一致で曖昧さなく
     /// 1 件に定まる（設計 D-4）。同じ URL の 2 項目はカタログの組み立て
-    /// （[`crate::catalog::build::build`]）が拒む。
+    /// （[`crate::catalog::build::build`]）と読み取り（[`read`]）が拒む。
     pub fn by_url(&self) -> BTreeMap<&str, &EntryId> {
         self.entries
             .iter()
@@ -83,17 +84,12 @@ impl Catalog {
     ///
     /// 最初の `#` より前を採る。同じページの項目は同じ綴りに畳まれるので、返る件数は
     /// 項目数ではなくページ数になる。アンカーを持たない項目は `#` を含まないので
-    /// URL がそのまま鍵になる。
+    /// URL がそのまま鍵になる。別のページが同じページ URL に畳まれるカタログは組み立てと
+    /// 読み取りが拒むので、1 つのページ URL は 1 つのページに決まる。
     pub fn page_urls(&self) -> BTreeMap<String, PageName> {
         self.entries
             .values()
-            .map(|entry| {
-                let url = match entry.url.split_once(FRAGMENT_MARK) {
-                    Some((head, _)) => head.to_owned(),
-                    None => entry.url.clone(),
-                };
-                (url, entry.page.clone())
-            })
+            .map(|entry| (page_url(&entry.url).to_owned(), entry.page.clone()))
             .collect()
     }
 
@@ -108,6 +104,11 @@ impl Catalog {
             .map(|(id, entry)| (id, entry.title.as_str()))
             .collect()
     }
+}
+
+/// URL からフラグメントを外したページ URL（最初の `#` より前・無ければ URL そのもの）。
+pub(super) fn page_url(url: &str) -> &str {
+    url.split_once(FRAGMENT_MARK).map_or(url, |(head, _)| head)
 }
 
 /// 冒頭の情報を読む（要件 1.6）。
@@ -131,6 +132,9 @@ fn read_snapshot(root: &toml::Table) -> Result<SnapshotMeta, SurveyError> {
 fn read_entries(root: &toml::Table) -> Result<BTreeMap<EntryId, CatalogEntry>, SurveyError> {
     let table = required_table(root, ENTRY_TABLE, "[entry]", CATALOG_FILE)?;
     let mut entries: BTreeMap<EntryId, CatalogEntry> = BTreeMap::new();
+    // 2 つの逆引き（`Catalog::by_url`・`Catalog::page_urls`）は 1 対 1 が前提。
+    let mut id_of_url: BTreeMap<String, &str> = BTreeMap::new();
+    let mut page_of_url: BTreeMap<String, PageName> = BTreeMap::new();
     for (raw_id, value) in table {
         // 綴りが 2 形のどちらでもなければ、ここで `BadEntryId` になる（要件 1.9）。
         let id = EntryId::parse(raw_id)?;
@@ -164,6 +168,28 @@ fn read_entries(root: &toml::Table) -> Result<BTreeMap<EntryId, CatalogEntry>, S
             hash: string_field(item, &place, "hash", CATALOG_FILE)?,
             url: string_field(item, &place, "url", CATALOG_FILE)?,
         };
+        if let Some(previous) = id_of_url.insert(entry.url.clone(), raw_id) {
+            return Err(malformed(
+                CATALOG_FILE,
+                format!(
+                    "同じ URL が 2 つの項目 id に現れる: {}（{previous}・{raw_id}）",
+                    entry.url
+                ),
+            ));
+        }
+        let page_url = page_url(&entry.url).to_owned();
+        if let Some(previous) = page_of_url.insert(page_url.clone(), entry.page.clone())
+            && previous != entry.page
+        {
+            return Err(malformed(
+                CATALOG_FILE,
+                format!(
+                    "別のページが同じページ URL に畳まれる: {page_url}（{}・{}）",
+                    previous.as_str(),
+                    entry.page.as_str()
+                ),
+            ));
+        }
         entries.insert(id, entry);
     }
     Ok(entries)

@@ -41,9 +41,10 @@
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use crate::documents::fields::malformed;
 use crate::error::SurveyError;
-use crate::ledger::{ENTRY_TABLE, any_ledger_file, blocks, write};
-use crate::model::EntryId;
+use crate::ledger::{ENTRY_TABLE, at_ledger_file, blocks, ledger_file, write};
+use crate::model::{Domain, EntryId};
 use crate::tomlout::basic_string;
 
 /// 置き換えの相手になる行の始まり。**行頭**でのみ当たる。
@@ -53,23 +54,28 @@ const PRIORITY_HEAD: &str = "priority = ";
 
 /// 各塊の `priority = "…"` 行だけを `wanted` の値へ置き換えた本文を返す（要件 7.1）。
 ///
+/// `domain` は本文がどのドメインの台帳か。失敗に添える置き場になる。
+///
 /// `wanted` に無い id の塊は 1 バイトも変えない。置換の必要が 0 件なら、返る本文は
 /// 入力と 1 バイトも違わない（冪等）。
 ///
 /// # 落ちる場合
 ///
-/// - 本文を塊へ切り分けられない（[`crate::ledger::blocks::split`] の失敗をそのまま返す）
+/// - 本文を塊へ切り分けられない（[`crate::ledger::blocks::split`] の失敗に置き場を添えて返す）
 /// - 塊が id の厳密な昇順に並んでいない（[`SurveyError::LedgerOutOfOrder`]）
 /// - 塊の中に行頭の `priority = ` が無い・2 本以上ある・今の値の綴りと違う、または
 ///   書き直した本文を読み直した値が求めた値と違う
 ///   （[`SurveyError::DeriveMismatch`]。本文に id を挙げる）
 pub fn replace_priority(
     text: &str,
+    domain: Domain,
     wanted: &BTreeMap<EntryId, String>,
 ) -> Result<String, SurveyError> {
-    let root = parse(text)?;
-    let (prologue, blocks) = blocks::split_parsed(text, &root)?;
-    write::check_strictly_ascending(&blocks, &any_ledger_file())?;
+    let file = ledger_file(domain);
+    let root = parse(text, &file)?;
+    let (prologue, blocks) =
+        blocks::split_parsed(text, &root).map_err(|err| at_ledger_file(err, &file))?;
+    write::check_strictly_ascending(&blocks, &file)?;
 
     let mut out = String::with_capacity(text.len());
     out.push_str(&text[..prologue]);
@@ -77,12 +83,13 @@ pub fn replace_priority(
         let body = &text[block.start..block.end];
         // `wanted` に無い塊も行を数える。欄が欠けている（または備考の行頭に紛れている）
         // 台帳は次の書き戻しで黙って壊れるので、写す前に告げる。
-        let line = priority_line(body, &block.id)?;
+        let line = priority_line(body, &block.id, &file)?;
         let current = priority_of(&root, &block.id)
-            .ok_or_else(|| undecidable(&block.id, "priority の欄が文字列でない"))?;
+            .ok_or_else(|| undecidable(&block.id, &file, "priority の欄が文字列でない"))?;
         if body[line.clone()] != format!("{PRIORITY_HEAD}{}", basic_string(current)) {
             return Err(undecidable(
                 &block.id,
+                &file,
                 "行頭の priority の行が欄の値の綴りと違う（行末のコメントか、備考の中の行）",
             ));
         }
@@ -97,13 +104,14 @@ pub fn replace_priority(
         }
     }
 
-    let reread = parse(&out)?;
+    let reread = parse(&out, &file)?;
     for block in &blocks {
         if let Some(value) = wanted.get(&block.id)
             && priority_of(&reread, &block.id) != Some(value.as_str())
         {
             return Err(undecidable(
                 &block.id,
+                &file,
                 "書き直した本文の priority が求めた値にならない（備考の中の行に当たった）",
             ));
         }
@@ -112,11 +120,9 @@ pub fn replace_priority(
 }
 
 /// 本文を `toml` で読む。
-fn parse(text: &str) -> Result<toml::Table, SurveyError> {
-    text.parse().map_err(|err| SurveyError::TomlParse {
-        path: any_ledger_file(),
-        reason: format!("TOML として読めない: {err}"),
-    })
+fn parse(text: &str, file: &str) -> Result<toml::Table, SurveyError> {
+    text.parse()
+        .map_err(|err| malformed(file, format!("TOML として読めない: {err}")))
 }
 
 /// `toml` が読んだ項目の `priority` の値。
@@ -131,27 +137,26 @@ fn priority_of<'a>(root: &'a toml::Table, id: &EntryId) -> Option<&'a str> {
 ///
 /// 塊の先頭は見出し行（`[entry.` で始まる）なので、見出しがここに当たることはない。
 /// 当たる行がちょうど 1 本でなければ、どちらを直すべきかを決められないので落ちる。
-fn priority_line(body: &str, id: &EntryId) -> Result<Range<usize>, SurveyError> {
+fn priority_line(body: &str, id: &EntryId, file: &str) -> Result<Range<usize>, SurveyError> {
     let mut found: Option<Range<usize>> = None;
     let mut offset = 0usize;
     for line in body.split('\n') {
         if line.starts_with(PRIORITY_HEAD) {
             if found.is_some() {
-                return Err(undecidable(id, "priority の行が 2 本以上ある"));
+                return Err(undecidable(id, file, "priority の行が 2 本以上ある"));
             }
             found = Some(offset..offset + line.len());
         }
         // 割った改行 1 バイトを足し戻す（`blocks::scan_heads` と同じ数え方）。
         offset += line.len() + 1;
     }
-    found.ok_or_else(|| undecidable(id, "priority の行が無い"))
+    found.ok_or_else(|| undecidable(id, file, "priority の行が無い"))
 }
 
-/// 置き換える行を決められないことを告げる失敗。id を必ず添える（要件 12.6・6.12）。
-fn undecidable(id: &EntryId, reason: &str) -> SurveyError {
+/// 置き換える行を決められないことを告げる失敗。置き場と id を必ず添える（要件 6.12）。
+fn undecidable(id: &EntryId, file: &str, reason: &str) -> SurveyError {
     SurveyError::DeriveMismatch {
-        // 本文だけを受け取り、どのドメインの台帳かを知らないので伏せて添える。
-        file: any_ledger_file(),
+        file: file.to_owned(),
         reason: format!("項目 {} の {reason}", id.as_str()),
     }
 }

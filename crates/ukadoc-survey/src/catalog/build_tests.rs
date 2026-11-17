@@ -330,6 +330,25 @@ fn the_same_url_on_two_ids_fails_and_names_both() {
     }
 }
 
+#[test]
+fn two_pages_folding_onto_one_page_url_fail_and_name_both() {
+    // ページ URL からページを引く 2 段目は 1 対 1 が前提。2 つ目を通すと、そのページの
+    // 証拠が別のページに黙って付く。
+    let first = ukadoc("ukadoc:dev_bind", "本文");
+    let mut second = ukadoc("ukadoc:dev_nar", "本文");
+    second.url = format!("{}#anchor", first.url);
+    let err = build_error(vec![first, second]);
+
+    match &err {
+        SurveyError::SnapshotShape { detail } => {
+            for name in ["dev_bind", "dev_nar", "ukadoc:dev_bind.html"] {
+                assert!(detail.contains(name), "{name} が載るはず: {detail}");
+            }
+        }
+        other => panic!("形の違いとして返るはず: {other:?}"),
+    }
+}
+
 // ---- 割り当ての無いページ（要件 3.5）----
 
 #[test]

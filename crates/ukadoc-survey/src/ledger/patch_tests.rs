@@ -74,7 +74,7 @@ fn wanted(pairs: &[(&str, &str)]) -> BTreeMap<EntryId, String> {
 
 /// 置き換えが通ることを前提に本文を取り出す。
 fn patched(text: &str, pairs: &[(&str, &str)]) -> String {
-    replace_priority(text, &wanted(pairs)).expect("見本は置き換えられるはず")
+    replace_priority(text, Domain::Property, &wanted(pairs)).expect("見本は置き換えられるはず")
 }
 
 // ---- 置き換わる行と、動かない行 ----
@@ -178,10 +178,11 @@ note = ""
 /// `priority` の行が無い塊は、id を挙げて落ちる。
 #[test]
 fn a_block_without_a_priority_line_fails_naming_the_id() {
-    match replace_priority(NO_PRIORITY, &wanted(&[(YEAR_ID, "A1")]))
+    match replace_priority(NO_PRIORITY, Domain::Property, &wanted(&[(YEAR_ID, "A1")]))
         .expect_err("priority の行が無ければ落ちるはず")
     {
-        SurveyError::DeriveMismatch { reason, .. } => {
+        SurveyError::DeriveMismatch { file, reason } => {
+            assert_eq!(file, "doc/ukadoc-coverage/ledger/property.toml");
             assert!(reason.contains(YEAR_ID), "{reason}");
             assert!(reason.contains("priority"), "{reason}");
         }
@@ -218,8 +219,12 @@ fn two_priority_lines_in_one_block_fail_naming_the_id() {
         "toml は備考の中の行を欄として読まない（見本が狙いどおりであること）"
     );
 
-    match replace_priority(TWO_PRIORITY_LINES, &wanted(&[(YEAR_ID, "A1")]))
-        .expect_err("priority の行が 2 本あれば落ちるはず")
+    match replace_priority(
+        TWO_PRIORITY_LINES,
+        Domain::Property,
+        &wanted(&[(YEAR_ID, "A1")]),
+    )
+    .expect_err("priority の行が 2 本あれば落ちるはず")
     {
         SurveyError::DeriveMismatch { reason, .. } => {
             assert!(reason.contains(YEAR_ID), "{reason}");
@@ -230,7 +235,7 @@ fn two_priority_lines_in_one_block_fail_naming_the_id() {
 
     // 較正。同じ本文の備考の行を 1 文字字下げしただけで通る＝落ちた理由は行頭にある。
     let indented = TWO_PRIORITY_LINES.replace("\npriority = \"Z9\"", "\n priority = \"Z9\"");
-    let out = replace_priority(&indented, &wanted(&[(YEAR_ID, "A1")]))
+    let out = replace_priority(&indented, Domain::Property, &wanted(&[(YEAR_ID, "A1")]))
         .expect("字下げすれば置き換えられるはず");
     assert!(out.contains(" priority = \"Z9\""), "{out}");
     assert!(out.contains("\npriority = \"A1\"\n"), "{out}");
@@ -282,7 +287,7 @@ fn a_value_needing_escapes_is_written_so_it_reads_back() {
     assert!(out.contains(r#"priority = "A\"1\\""#), "{out}");
 }
 
-// ---- 当たった行が本物の欄か（指摘 7） ----
+// ---- 当たった行が本物の欄か ----
 
 /// 本物の欄を空白なしの `priority="C1"`（TOML として正しい）で書き、備考の行頭に今の値と
 /// 同じ綴りの `priority = "C1"` を置いた本文。
@@ -314,8 +319,12 @@ fn a_priority_line_found_only_inside_a_note_is_refused() {
         "toml は空白なしの欄を priority として読む（見本が狙いどおりであること）"
     );
 
-    match replace_priority(PRIORITY_ONLY_IN_NOTE, &wanted(&[(YEAR_ID, "A1")]))
-        .expect_err("備考の行を書き換えずに落ちるはず")
+    match replace_priority(
+        PRIORITY_ONLY_IN_NOTE,
+        Domain::Property,
+        &wanted(&[(YEAR_ID, "A1")]),
+    )
+    .expect_err("備考の行を書き換えずに落ちるはず")
     {
         SurveyError::DeriveMismatch { reason, .. } => {
             assert!(reason.contains(YEAR_ID), "{reason}");
@@ -343,8 +352,12 @@ note = ""
 fn a_priority_line_with_a_trailing_comment_is_refused() {
     assert_eq!(toml_priority(PRIORITY_WITH_COMMENT), "C1");
 
-    match replace_priority(PRIORITY_WITH_COMMENT, &wanted(&[(YEAR_ID, "A1")]))
-        .expect_err("コメントを消して書き換えずに落ちるはず")
+    match replace_priority(
+        PRIORITY_WITH_COMMENT,
+        Domain::Property,
+        &wanted(&[(YEAR_ID, "A1")]),
+    )
+    .expect_err("コメントを消して書き換えずに落ちるはず")
     {
         SurveyError::DeriveMismatch { reason, .. } => {
             assert!(reason.contains(YEAR_ID), "{reason}");
@@ -354,12 +367,12 @@ fn a_priority_line_with_a_trailing_comment_is_refused() {
 
     // 較正。コメントを外しただけで通る＝落ちた理由は行末のコメントにある。
     let plain = PRIORITY_WITH_COMMENT.replace("  # 仮置き", "");
-    let out = replace_priority(&plain, &wanted(&[(YEAR_ID, "A1")]))
+    let out = replace_priority(&plain, Domain::Property, &wanted(&[(YEAR_ID, "A1")]))
         .expect("コメントが無ければ置き換えられるはず");
     assert!(out.contains("\npriority = \"A1\"\n"), "{out}");
 }
 
-// ---- 並びの確かめ（指摘 24） ----
+// ---- 備考に隠れた見出しは並びの崩れとして落ちる ----
 
 /// 1 つ目の項目の備考の行頭に、後ろに実在する項目の見出しと同じ綴りの行がある本文。
 ///
@@ -392,11 +405,15 @@ note = ""
 /// 備考に隠れた見出しは、`priority` の行の有無より先に並びの崩れとして名指される。
 #[test]
 fn a_heading_hidden_in_a_note_fails_as_out_of_order() {
-    match replace_priority(HEADING_HIDDEN_IN_NOTE, &wanted(&[(YEAR_ID, "A1")]))
-        .expect_err("同じ id が 2 度並べば落ちるはず")
+    match replace_priority(
+        HEADING_HIDDEN_IN_NOTE,
+        Domain::Property,
+        &wanted(&[(YEAR_ID, "A1")]),
+    )
+    .expect_err("同じ id が 2 度並べば落ちるはず")
     {
         SurveyError::LedgerOutOfOrder { file, id: named } => {
-            assert_eq!(file, "doc/ukadoc-coverage/ledger/<ドメイン>.toml");
+            assert_eq!(file, "doc/ukadoc-coverage/ledger/property.toml");
             assert_eq!(named, YEAR_ID);
         }
         other => panic!("並び順の失敗として落ちること: {other}"),

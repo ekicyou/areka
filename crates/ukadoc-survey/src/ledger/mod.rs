@@ -24,6 +24,8 @@
 
 use std::collections::BTreeMap;
 
+use crate::documents::fields::malformed;
+use crate::error::SurveyError;
 use crate::io::paths::COVERAGE_DIR;
 use crate::model::{Domain, EntryId, Link, PageName, Status};
 
@@ -43,13 +45,27 @@ pub fn ledger_file(domain: Domain) -> String {
     ledger_file_named(domain.as_key())
 }
 
-/// ドメインの分からない口（塊への切り分け・`priority` の 1 行置換）が失敗に添える場所。
+/// ドメインの分からない口（塊への切り分け）が失敗に添える場所。
 pub(crate) fn any_ledger_file() -> String {
     ledger_file_named("<ドメイン>")
 }
 
 fn ledger_file_named(name: &str) -> String {
     format!("{COVERAGE_DIR}/ledger/{name}.toml")
+}
+
+/// 切り分けが伏せて添えた置き場（[`any_ledger_file`]）を、読んでいる台帳の置き場に差し替える。
+///
+/// 切り分けはドメインを知らない。ドメインの分かる口（読み取り・差し込み・`priority` の
+/// 置換）は、切り分けの失敗をここに通してから上げる。
+pub(crate) fn at_ledger_file(err: SurveyError, file: &str) -> SurveyError {
+    match err {
+        SurveyError::TomlParse { reason, .. } => malformed(file, reason),
+        SurveyError::LedgerSplitMismatch { detail } => SurveyError::LedgerSplitMismatch {
+            detail: format!("{file}: {detail}"),
+        },
+        other => other,
+    }
 }
 
 /// 台帳の 1 項目（要件付録 A.2 の欄）。

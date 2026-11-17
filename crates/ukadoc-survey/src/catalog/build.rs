@@ -13,7 +13,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{CATALOG_FORMAT, Catalog, CatalogEntry, SnapshotMeta};
+use super::{CATALOG_FORMAT, Catalog, CatalogEntry, SnapshotMeta, read};
 use crate::assignment::PageAssignment;
 use crate::error::SurveyError;
 use crate::hash;
@@ -56,13 +56,16 @@ pub(crate) fn page_not_assigned(pages: &[PageName]) -> SurveyError {
 /// - 正典由来の id が 2 形のどちらでもない → [`SurveyError::BadEntryId`]（要件 1.9）
 /// - 同じ id が 2 度現れる → [`SurveyError::SnapshotShape`]
 /// - 同じ URL が 2 つの id に現れる → [`SurveyError::SnapshotShape`]
+/// - 別のページが同じページ URL に畳まれる → [`SurveyError::SnapshotShape`]
 /// - どの台帳にも割り当ての無いページがある → [`SurveyError::PageNotAssigned`]（要件 3.5）
 pub fn build(doc: &SnapshotDoc, assignment: &PageAssignment) -> Result<Catalog, SurveyError> {
     let mut entries: BTreeMap<EntryId, CatalogEntry> = BTreeMap::new();
     let mut id_of_url: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut page_of_url: BTreeMap<&str, PageName> = BTreeMap::new();
     for raw in doc.entries.iter().filter(|raw| raw.source == UKADOC_SOURCE) {
         let entry = catalog_entry(raw)?;
         let id = entry.id.clone();
+        let page = entry.page.clone();
         // 表に入れるだけだと、同じ id の 2 件目が 1 件目を黙って上書きする。件数
         // だけが 1 つ減って形は整って見えるので、ここで止める（要件 1.8）。
         if let Some(previous) = entries.insert(id, entry) {
@@ -77,6 +80,20 @@ pub fn build(doc: &SnapshotDoc, assignment: &PageAssignment) -> Result<Catalog, 
                 detail: format!(
                     "同じ URL が 2 つの項目 id に現れる: {}（{previous}・{}）",
                     raw.url, raw.id
+                ),
+            });
+        }
+        // ページ URL からの逆引き（`Catalog::page_urls`）も 1 対 1 が前提。畳まれると、
+        // ページ単位の証拠が別のページに付く。
+        let page_url = read::page_url(&raw.url);
+        if let Some(previous) = page_of_url.insert(page_url, page.clone())
+            && previous != page
+        {
+            return Err(SurveyError::SnapshotShape {
+                detail: format!(
+                    "別のページが同じページ URL に畳まれる: {page_url}（{}・{}）",
+                    previous.as_str(),
+                    page.as_str()
                 ),
             });
         }

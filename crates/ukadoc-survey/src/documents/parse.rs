@@ -18,10 +18,10 @@
 //! 添えない**（設計 Error Handling）——囲みを連結した本文の行番号は、書き手が見て
 //! いる Markdown の行と一致しない。
 //!
-//! # 4 つの口
+//! # 3 つの口
 //!
-//! 判定 ⑴ が拾う id の口はここに 4 つ置く——囲みの中の引用符付き（[`toml_blocks`]
-//! ＋ [`quoted_ids`]）・地の文の逆引用符付き（[`backticked_ids`]）・どちらにも
+//! 判定 ⑴ が拾う id の口はここに 3 つ置く——囲みの中の引用符付き（[`toml_blocks`]
+//! ＋ [`quoted_ids`] の 2 関数）・地の文の逆引用符付き（[`backticked_ids`]）・どちらにも
 //! 囲まれていない裸の語（[`bare_id_tokens`]・0 件であるべき）。
 //! `tests/consistency/examples.rs` も囲みの中の口はここを呼ぶ。
 //!
@@ -53,7 +53,7 @@ const TOML_INFO: &str = "toml";
 const ROOT_PLACE: &str = "囲みの根";
 
 // ---------------------------------------------------------------------------
-// 4 つの口
+// 3 つの口
 // ---------------------------------------------------------------------------
 
 /// 本文の 1 かたまり——囲みの外の 1 行か、囲み 1 つの中身。
@@ -334,15 +334,20 @@ fn read_bundle(
     let breakage = Breakage::parse(&raw_breakage)
         .ok_or_else(|| bad_vocabulary(file, place, "breakage", &raw_breakage))?;
 
+    let domains = domain_array_field(item, place, "domains", file)?;
+    reject_repeated(domains.iter().map(Domain::as_key), place, "domains", file)?;
+    let themes = theme_array_field(item, place, "themes", file)?;
+    reject_repeated(themes.iter().map(String::as_str), place, "themes", file)?;
+
     Ok(NamedBundle {
         single,
         machine,
         members,
         hand,
-        domains: domain_array_field(item, place, "domains", file)?,
+        domains,
         foundation,
         breakage,
-        themes: theme_array_field(item, place, "themes", file)?,
+        themes,
         reason,
     })
 }
@@ -354,12 +359,24 @@ fn reject_duplicate_ids(
     key: &str,
     file: &str,
 ) -> Result<(), SurveyError> {
+    reject_repeated(ids.iter().map(EntryId::as_str), place, key, file)
+}
+
+/// 同じ綴りを 2 度書いていないことを確かめる（欄の値の重複・配列表の行の重複）。
+///
+/// 黙って通すと、数える側では 2 件に、引く側では 1 件に扱われて食い違う。
+fn reject_repeated<'a>(
+    spellings: impl IntoIterator<Item = &'a str>,
+    place: &str,
+    key: &str,
+    file: &str,
+) -> Result<(), SurveyError> {
     let mut seen = BTreeSet::new();
-    for id in ids {
-        if !seen.insert(id) {
+    for one in spellings {
+        if !seen.insert(one) {
             return Err(malformed(
                 file,
-                format!("{place}: 欄 {key} に {} が 2 度ある", id.as_str()),
+                format!("{place}: 欄 {key} に {one} が 2 度ある"),
             ));
         }
     }
@@ -598,6 +615,12 @@ fn read_barriers(root: &toml::Table, file: &str) -> Result<Vec<Barrier>, SurveyE
             not_applicable: usize_field(item, place, "not_applicable", file)?,
         });
     }
+    reject_repeated(
+        rows.iter().map(|row| row.page.as_str()),
+        "[[barrier]]",
+        "page",
+        file,
+    )?;
     Ok(rows)
 }
 
@@ -624,6 +647,12 @@ fn read_afters(root: &toml::Table, file: &str) -> Result<Vec<After>, SurveyError
             empty: usize_field(item, place, "empty", file)?,
         });
     }
+    reject_repeated(
+        rows.iter().map(|row| row.domain.as_key()),
+        "[[after]]",
+        "domain",
+        file,
+    )?;
     Ok(rows)
 }
 
@@ -642,6 +671,12 @@ fn read_owner_completed(
             spec,
         });
     }
+    reject_repeated(
+        rows.iter().map(|row| row.spec.as_str()),
+        "[[owner_completed]]",
+        "spec",
+        file,
+    )?;
     Ok(rows)
 }
 
@@ -664,6 +699,12 @@ fn read_templates(root: &toml::Table, file: &str) -> Result<Vec<super::Template>
             name,
         });
     }
+    reject_repeated(
+        rows.iter().map(|row| row.name.as_str()),
+        "[[template]]",
+        "name",
+        file,
+    )?;
     Ok(rows)
 }
 
@@ -716,6 +757,12 @@ pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
             name,
         });
     }
+    reject_repeated(
+        specs.iter().map(|row| row.name.as_str()),
+        "[[spec]]",
+        "name",
+        &file,
+    )?;
 
     let mut reserved = Vec::new();
     for item in array_of_tables(&root, "reserved", &file)? {

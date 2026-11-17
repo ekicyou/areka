@@ -30,9 +30,10 @@
 //!
 //! # 差し込む位置とコメント
 //!
-//! 塊の終わりは次の見出しの直前なので、項目の真上に書いたコメントは 1 つ前の塊の尻尾に
-//! 入る。差し込む塊は、その尻尾に続く行頭 `#` の連続した行の**前**に置く——後ろに置くと、
-//! 次の項目に付いていたコメントが差し込んだ項目に付いたように読める。
+//! 塊の終わりは次の見出しの直前なので、項目の真上に書いたコメントは 1 つ前の塊（最初の
+//! 項目なら前置き）の尻尾に入る。差し込む塊は、その尻尾に続く行頭 `#` の連続した行の
+//! **前**に置く——後ろに置くと、次の項目に付いていたコメントが差し込んだ項目に付いたように
+//! 読める。
 //!
 //! # 1 バイトの安定
 //!
@@ -44,7 +45,7 @@
 use std::collections::BTreeSet;
 
 use super::blocks::{self, Block};
-use super::{ENTRY_TABLE, ledger_file};
+use super::{ENTRY_TABLE, at_ledger_file, ledger_file};
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, PageName, Status};
 use crate::tomlout::{basic_string, keyed_table_header, string_array};
@@ -85,7 +86,7 @@ const INITIAL_COLUMNS: [&str; 7] = [
 ///
 /// # 落ちる場合
 ///
-/// - 既存本文を塊に切り分けられない（[`blocks::split`] の失敗をそのまま上げる）
+/// - 既存本文を塊に切り分けられない（[`blocks::split`] の失敗に台帳の置き場を添えて上げる）
 /// - 既存の塊が id の**厳密な**昇順に並んでいない（[`SurveyError::LedgerOutOfOrder`]。
 ///   同じ id が 2 度現れる場合もここで落ちる・設計 D-12）
 pub fn merge_initial(
@@ -153,10 +154,7 @@ fn render_prologue(domain: Domain, pages: &[PageName]) -> String {
 
     push_line(&mut out, LEDGER_HEADER);
     push_field(&mut out, "domain", &basic_string(domain.as_key()));
-    let names: Vec<String> = pages
-        .iter()
-        .map(|page| page.as_str().to_owned())
-        .collect::<Vec<String>>();
+    let names: Vec<String> = pages.iter().map(|page| page.as_str().to_owned()).collect();
     push_field(&mut out, "pages", &string_array(&names));
     push_line(&mut out, "");
     out
@@ -166,22 +164,26 @@ fn render_prologue(domain: Domain, pages: &[PageName]) -> String {
 ///
 /// 前置きも既存の塊もバイト列のまま写す。触るのは「塊と塊の間」だけである。
 fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<String, SurveyError> {
-    let (prologue_end, blocks) = blocks::split(text)?;
-    check_strictly_ascending(&blocks, &ledger_file(domain))?;
+    let file = ledger_file(domain);
+    let (prologue_end, blocks) = blocks::split(text).map_err(|err| at_ledger_file(err, &file))?;
+    check_strictly_ascending(&blocks, &file)?;
 
     let present: BTreeSet<&EntryId> = blocks.iter().map(|block| &block.id).collect();
     let missing: Vec<&EntryId> = wanted
         .iter()
         .copied()
         .filter(|id| !present.contains(id))
-        .collect::<Vec<&EntryId>>();
+        .collect();
 
     let mut out = String::with_capacity(text.len());
-    out.push_str(&text[..prologue_end]);
+    // 最初の塊の真上のコメントは前置きの尻尾にあるので、前置きも同じく切る。
+    let prologue = &text[..prologue_end];
+    let cut = trailing_comments_start(prologue);
+    out.push_str(&prologue[..cut]);
 
     let mut next = 0usize;
-    // 前の塊の尻尾のコメント。次の塊の前に差し込む項目より後ろに写す。
-    let mut held = "";
+    // 前の塊（または前置き）の尻尾のコメント。次の塊の前に差し込む項目より後ろに写す。
+    let mut held = &prologue[cut..];
     for block in &blocks {
         // 欠けている id のうち、この塊より前に来るものを先に置く。
         while next < missing.len() && *missing[next] < block.id {
@@ -206,17 +208,19 @@ fn splice(text: &str, domain: Domain, wanted: &BTreeSet<&EntryId>) -> Result<Str
 /// 塊の尻尾に続く行頭 `#` の連続した行の始まり（無ければ塊の終わり）。
 ///
 /// 備考の複数行文字列の最後の行が `#` で始まることもある。そこで切ると文字列が割れるので、
-/// 切った前半が TOML として読めないときは切らない。
+/// 末尾から 1 行ずつ切る位置を見て、切った前半が TOML として読める最も前の位置を採る。
+/// どこで切っても読めなければ切らない。
 fn trailing_comments_start(body: &str) -> usize {
+    let mut at = body.len();
     let mut cut = body.len();
     for line in body.split_inclusive('\n').rev() {
         if !line.starts_with('#') {
             break;
         }
-        cut -= line.len();
-    }
-    if cut < body.len() && body[..cut].parse::<toml::Table>().is_err() {
-        return body.len();
+        at -= line.len();
+        if body[..at].parse::<toml::Table>().is_ok() {
+            cut = at;
+        }
     }
     cut
 }

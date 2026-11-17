@@ -296,6 +296,36 @@ fn non_string_version_is_rejected() {
     assert!(message.contains("versions"), "{message}");
 }
 
+/// 同じ URL の 2 項目は落ちる。通すと逆引きが片方を黙って捨てる。
+#[test]
+fn the_same_url_on_two_entries_is_rejected() {
+    let body = mutated(
+        "url = \"https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_5f_71:1\"",
+        "url = \"https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2cID_5d:1\"",
+    );
+    let message = read_error(&body).to_string();
+    for name in [
+        "同じ URL",
+        "ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2cID_5d:1",
+        "ukadoc:list_sakura_script:_5c_5f_71:1",
+    ] {
+        assert!(message.contains(name), "{name} が載るはず: {message}");
+    }
+}
+
+/// 別のページが同じページ URL に畳まれると落ちる。通すとページ単位の証拠が別のページに付く。
+#[test]
+fn two_pages_on_one_page_url_are_rejected() {
+    let body = mutated(
+        "url = \"https://ssp.shillest.net/ukadoc/manual/dev_bind.html\"",
+        "url = \"https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#dev_bind\"",
+    );
+    let message = read_error(&body).to_string();
+    for name in ["dev_bind", "list_propertysystem"] {
+        assert!(message.contains(name), "{name} が載るはず: {message}");
+    }
+}
+
 // ---- 3 つの読み出し ----
 
 /// URL から項目 id を引く逆引き（設計 D-4 の 1 段目）。
