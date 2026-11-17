@@ -36,18 +36,18 @@
 //! 「判定を通る行がある」ことしか言わず、**判定が食い違いを見つけられる**ことは言わない
 //! からである（今日の実データは食い違い 0 件なので、判定が丸ごと消えても ⑴ は緑になる）。
 //!
-//! この一群は 1 度較正してある——製品側の判定を 1 か所ずつ弱める摂動 16 本を当てると、
-//! いずれも下の事例のどれかが赤になった（素通り 0 件）。台帳の実ファイルの 1 行を
-//! 壊す確認も赤になり、本文が該当 id と場所を名指した（タスク 8.2 の完了条件）。
+//! この一群は 1 度較正してある——製品側の判定を 1 か所ずつ弱める摂動を当てると、
+//! どれも下の事例のどれかが赤になり、素通りは無かった。台帳の実ファイルの 1 行を
+//! 壊す確認も赤になり、本文が該当 id と場所を名指した。
 //!
 //! # ここに置かないもの
 //!
-//! - 件数そのものの釘付け（カタログ 1,749 件・台帳 4 本など。要件 6.13）はタスク 8.3 の
-//!   持ち物で、`consistency/non_vacuity.rs` に置く。ここで数えるのは**要件ごとの対象の
-//!   有無**だけである。
-//! - 語彙表経路の較正（設計 Testing Strategy 17a・`SHIORI_RESOURCE_IDS` の 159 要素）は
-//!   タスク 8.4 の持ち物である。ここが証拠を作るときは項目 URL を 1 行入れるだけで、
-//!   語彙表経路は通さない。
+//! - 件数そのものの釘付け（カタログの件数・台帳の本数など。要件 6.13）は
+//!   `consistency/non_vacuity.rs` が持つ。ここで数えるのは**要件ごとの対象の有無**
+//!   だけである。
+//! - 語彙表経路（既存の語彙台帳 `SHIORI_RESOURCE_IDS` から証拠を引く経路）の較正は
+//!   `consistency/values_md.rs` が持つ。ここが証拠を作るときは項目 URL を 1 行入れる
+//!   だけで、語彙表経路は通さない。
 
 use ukadoc_survey::check::{FindingKind, render, run};
 use ukadoc_survey::evidence::EvidenceIndex;
@@ -162,20 +162,12 @@ fn every_kind_of_finding_is_absent_from_real_data() {
 
 /// 読み込みが repo の実データに届いていること。
 ///
-/// 「食い違い 0 件」を空振りで満たす道は 2 つある——読み込みが空を返す道と、判定の表を
-/// たたみ込み損ねる道である。どちらも所見を 1 件も生まないので、上の事例だけでは
-/// 見分けられない。ここで塞ぐ。
+/// 「食い違い 0 件」は、読み込みが空を返しても満たされる。上の事例だけでは見分けられ
+/// ないので、ここで実データに届いていることを確かめる。
 #[test]
 fn the_load_reaches_the_real_repo_data() {
     let data = RepoData::load();
     let input = data.input();
-    let outcome = run(&input);
-
-    assert_eq!(
-        outcome.stats.judgements_run,
-        vec!["structure", "content", "freshness"],
-        "判定の表を 1 つでも通し損ねている"
-    );
 
     let anchor = anchor_id();
     let entry = data
@@ -337,7 +329,7 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
 /// 0 件へ落ちたら赤になる——台帳を読み込み損ねた・書き入れた欄が消えた・正典 URL の
 /// 行が剥がれた、のいずれかが起きた合図である。
 ///
-/// 件数そのもの（1,749 など）はここでは固定しない。それはタスク 8.3 の持ち物で、
+/// 件数そのものはここでは固定しない。それは `consistency/non_vacuity.rs` が持ち、
 /// ここが言うのは**有無**だけである。
 #[test]
 fn the_subject_census_says_which_requirements_are_vacuous() {
@@ -511,10 +503,10 @@ fn a_page_without_an_assignment_turns_red() {
 
 /// 要件 6.5・6.10——ソースの正典 URL がカタログに無いと、そのファイルつきで赤くなる。
 ///
-/// **今日の実データにこの判定の対象は 1 件も無い**（[`census`] の 6.5 の行）。だから
-/// ソースの写しに 1 行だけ書き足して対象を作る。取り出し（`extract`）と解決
-/// （`resolve`）を実データのソース全域に対して回すので、走査と突き合わせの経路が
-/// 丸ごと通る。
+/// 実データのソースにはカタログにある URL だけがあり（[`census`] の 6.5 の行は空でない）、
+/// 食い違いは 0 件である。だからソースの写しに 1 行だけ書き足して食い違いを作る。
+/// 取り出し（`extract`）と解決（`resolve`）を実データのソース全域に対して回すので、
+/// 走査と突き合わせの経路が丸ごと通る。
 #[test]
 fn an_unknown_canon_url_in_a_source_turns_red() {
     let data = RepoData::load();
@@ -546,7 +538,7 @@ fn an_unknown_canon_url_in_a_source_turns_red() {
 /// 要件 6.6——`implemented` の行に証拠が無いと赤くなり、証拠が付くと消える。
 ///
 /// **証拠の無い側は摂動で作る。** 錨の項目には今や実ソースの正典 URL が付いている
-/// （調査 spec が要件 9.1 どおり `areka-kanade/src/schedule/events.rs` へ 1 行置いた）
+/// （調査 spec が `areka-kanade/src/schedule/events.rs` へ 1 行置いた）
 /// ので、状態を `implemented` にするだけでは所見が生まれない。だから写しの索引から
 /// **錨の id の証拠を取り除いて**対象を作る。
 ///

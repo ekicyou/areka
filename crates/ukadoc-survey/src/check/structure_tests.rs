@@ -4,14 +4,13 @@
 //!
 //! どのテストも [`crate::check::run`] を呼び、`structure::check` を直に呼ばない。
 //! 部品を釘付けしても、入口がその部品を呼んでいるかは別に守る必要がある
-//! （タスク 1.7 の教訓・タスク 4.1 からの申し送り）。判定を 1 つも呼ばない入口は、
-//! 直に呼ぶテストでは永久に見つからない。
+//! （判定を 1 つも呼ばない入口は、直に呼ぶテストでは永久に見つからない）。
 //!
 //! # 壊した対と壊さない対で置く
 //!
-//! 「所見が 0 件」だけの主張は、判定が何も返さない実装で無条件に真になる
-//! （タスク 1.6 の教訓）。そこで正常な見本で 0 件になることと、ちょうど 1 か所を
-//! 壊すと該当する種類が出ることを対で置く。出た所見は種類ごとの**件数の等式**で
+//! 「所見が 0 件」だけの主張は、判定が何も返さない実装で無条件に真になる。そこで
+//! 正常な見本で 0 件になることと、ちょうど 1 か所を壊すと該当する種類が出ることを
+//! 対で置く。出た所見は種類ごとの**件数の等式**で
 //! 主張するので、意図しない種類が 1 件でも混ざれば赤になる。
 //!
 //! # 道連れになる所見が 2 つある
@@ -27,62 +26,20 @@
 //! `domain` を 1 つしか持たず、その値はファイル名から来るので、宣言された綴りが残る
 //! のは読み取りの中だけである。[`CheckInput`] は台帳ごとのファイル名を受け取らない
 //! から、検査層はこの判定を作り直せない——**書けないのが正しい**（設計 check 節の
-//! 注記・タスク 2.4 からの申し送り）。下の各テストが「その種類は 0 件」を等式で
+//! 注記）。下の各テストが「その種類は 0 件」を等式で
 //! 主張しているので、うっかり作り物の判定を足せば赤になる。
 
-use super::super::{CheckInput, Finding, FindingKind, run};
+use super::super::test_support::{details, id, kinds, ledger_place, of_kind, only_one};
+use super::super::{CheckInput, FindingKind, run};
 use crate::catalog::CatalogEntry;
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::lib_test_support::World;
 use crate::model::{Domain, EntryId, PageName, Status};
 use std::collections::BTreeMap;
 
-/// 見本の id を作る。
-fn id(raw: &str) -> EntryId {
-    EntryId::parse(raw).expect("見本の id は要件 1.9 の 2 形のいずれかのはず")
-}
-
-/// 台帳のファイルパス（所見の「場所」に載る綴り）。実装の定数は参照しない。
-fn ledger_place(domain: &str) -> String {
-    format!("doc/ukadoc-coverage/ledger/{domain}.toml")
-}
-
 /// カタログのファイルパス。
 fn catalog_place() -> String {
     "doc/ukadoc-coverage/catalog.toml".to_owned()
-}
-
-/// 出た所見を種類ごとに数える（0 件の種類は落とす）。
-///
-/// これを**等式**で主張すると、意図しない種類が 1 件でも出れば赤になる。件数だけの
-/// 主張は中身が全部誤っていても緑になるので、この等式と id・場所・詳細の逐語の主張を
-/// 必ず対で置く（タスク 1.5 の教訓）。
-fn kinds(findings: &[Finding]) -> Vec<(FindingKind, usize)> {
-    FindingKind::ALL
-        .into_iter()
-        .filter_map(|kind| {
-            let count = findings.iter().filter(|f| f.kind == kind).count();
-            (count > 0).then_some((kind, count))
-        })
-        .collect()
-}
-
-/// その種類の所見だけを取り出す。
-fn of_kind(findings: &[Finding], kind: FindingKind) -> Vec<&Finding> {
-    findings.iter().filter(|f| f.kind == kind).collect()
-}
-
-/// その種類の所見がちょうど 1 件あることを確かめ、その 1 件を返す。
-fn only_one(findings: &[Finding], kind: FindingKind) -> &Finding {
-    let found = of_kind(findings, kind);
-    assert_eq!(
-        found.len(),
-        1,
-        "{} が 1 件でない: {:?}",
-        kind.as_key(),
-        found
-    );
-    found[0]
 }
 
 /// 台帳へ項目を差し込む。本文の順は id 順に組み直す（並び順を壊す意図が無いとき）。
@@ -229,8 +186,7 @@ fn a_catalog_id_missing_from_every_ledger_is_a_finding() {
 ///
 /// **`LedgerIdPageMismatch` が必ず道連れになる**。1 ページは 1 ドメインにしか
 /// 属さない（要件 3.2 の不変条件）ので、2 本目の台帳はその id のページを担当して
-/// いない。どんな見本を選んでも避けられないから、2 種類を明示して主張する
-/// （タスク 4.1 からの申し送り）。
+/// いない。どんな見本を選んでも避けられないから、2 種類を明示して主張する。
 #[test]
 fn a_catalog_id_in_two_ledgers_is_a_finding_together_with_the_page_mismatch() {
     let mut world = World::normal();
@@ -427,7 +383,7 @@ fn an_extra_page_in_the_preamble_is_a_finding() {
 /// 前置きの比較は**集合**である（設計の判定表）。
 ///
 /// 並べ替えただけでは所見にならない。並びの正しさは初期台帳の生成が受け持ち、
-/// 要件 3.3a により前置きは以後バイト列のまま写される（タスク 2.5 の申し送り）。
+/// 要件 3.3a により前置きは以後バイト列のまま写される。
 #[test]
 fn reordering_the_preamble_pages_is_not_a_finding() {
     let mut world = World::normal();
@@ -529,7 +485,7 @@ fn an_equal_pair_in_the_file_order_is_a_finding_too() {
 /// 割り当ての無いページの項目をカタログへ足すと `PageNotAssigned` が出る。
 ///
 /// **`CatalogIdMissingFromLedgers` が必ず道連れになる**——足した id はどの台帳にも
-/// 無いからである（タスク 4.1 からの申し送り）。台帳へ入れると今度は担当違いが
+/// 無いからである。台帳へ入れると今度は担当違いが
 /// 道連れになる（次のテスト）。どちらの形でも 1 種類だけにはできない。
 #[test]
 fn a_catalog_page_outside_the_assignment_is_a_finding() {
@@ -661,14 +617,6 @@ fn with_no_ledgers_every_catalog_id_is_missing() {
 // ---------------------------------------------------------------------------
 // 「全 id」を見る・台帳の並びに左右されない（要件 6.3・7.3）
 // ---------------------------------------------------------------------------
-
-/// その種類の所見の詳細を出た順に並べる。
-fn details(findings: &[Finding], kind: FindingKind) -> Vec<&str> {
-    of_kind(findings, kind)
-        .into_iter()
-        .map(|finding| finding.detail.as_str())
-        .collect()
-}
 
 /// 1 本の台帳にカタログに無い id が 2 つあれば、**2 件とも**所見になる。
 ///

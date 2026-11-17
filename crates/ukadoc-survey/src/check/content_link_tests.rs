@@ -1,23 +1,23 @@
 //! `content.rs` の在中テスト——**関連・別名・登場版・テーマ**（要件 6.7・6.8・6.13）。
 //!
 //! ソースの正典 URL と証拠の側は姉妹モジュール `content_tests` が持つ
-//! （要件 6.5・6.6）。共用の道具は `content_test_support` にある。主張の作法
+//! （要件 6.5・6.6）。共用の道具は `check::test_support` にある。主張の作法
 //! （入口を通す・壊した対と壊さない対・種類ごとの件数の等式）は `content_tests` の
 //! 冒頭に書いたとおりで、このファイルも同じに従う。
 //!
 //! # ここが背負う 2 つの守り
 //!
-//! - **「全部を挙げる」**（タスク 4.2 からの申し送り）——`LinkEndpointMissing`・
+//! - **「全部を挙げる」**——`LinkEndpointMissing`・
 //!   `IntroducedNotInCatalogVersions`・`UnknownTheme` は違反 2 件の**間に正しい項目を
 //!   挟んだ**見本で件数まで主張する。
-//! - **台帳を渡す並びに左右されない**（タスク 4.2 からの申し送り・要件 7.3）——
+//! - **台帳を渡す並びに左右されない**（要件 7.3）——
 //!   `AliasChain` だけが相手の状態を別の台帳から引くので、並びが結果に漏れうる唯一の
 //!   判定である。逆順で 1 度通すテストがそこを釘付けする。
 
-use super::super::{CheckInput, FindingKind, run};
-use super::test_support::{
+use super::super::test_support::{
     details, entry_mut, id, ids, kinds, ledger_place, of_kind, only_one, places,
 };
+use super::super::{CheckInput, FindingKind, run};
 use crate::ledger::Ledger;
 use crate::lib_test_support::World;
 use crate::model::{Domain, EntryId, Link, LinkKind, Status};
@@ -323,7 +323,7 @@ fn an_alias_chain_across_two_ledgers_is_a_finding() {
 ///
 /// `World::normal()` は台帳を [`Domain::ALL`] の順で作り、`Domain` の導出 `Ord` は
 /// 宣言順なので**同じ並び**になる。だから「渡された順に左右されない」という防御は、
-/// 同じ入力を 2 回流すテストでは原理的に見えない（タスク 4.2 からの申し送り）。
+/// 同じ入力を 2 回流すテストでは原理的に見えない。
 /// 別名の相手を別の台帳へ置いた見本を**逆順**で 1 度通すことだけが釘付けする。
 #[test]
 fn the_order_of_the_ledgers_does_not_change_the_content_findings() {
