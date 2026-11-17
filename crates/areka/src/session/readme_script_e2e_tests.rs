@@ -50,19 +50,7 @@ fn run(remove_readme: bool) -> Run {
     let (backend, handle) = standard_script(ON_BOOT).build();
     let mut world = World::new();
     crate::session::hooks::install(&mut world);
-    let inputs = RuntimeInputs {
-        ghost_root: root.clone(),
-        balloon_root: sample
-            .balloon("emo2-kakukaku")
-            .expect("emo2 の同梱バルーン")
-            .to_path_buf(),
-        shiori: ShioriWiring::Custom(Box::new(move || {
-            Ok(Box::new(backend) as Box<dyn ShioriBackend>)
-        })),
-        ticker: TickerMode::Disabled,
-        app_profile_dir: None,
-        boot_origin: BootOrigin::Plain,
-    };
+    let inputs = emo2_inputs(&sample, backend);
     let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
         .expect("偽の SHIORI と emo2 検体で実行系が起きる");
 
@@ -96,14 +84,7 @@ fn run(remove_readme: bool) -> Run {
     let mut fake = FakeOs::default();
     serve(rx, &mut fake);
 
-    let calls = move || handle.call_count();
-    run_bounded_watching(
-        "readme_script ghost shutdown",
-        Progress::Count(&calls),
-        move || {
-            let _ = runtime.shutdown(CloseReason::User { scope: 0 });
-        },
-    );
+    shut_down("readme_script ghost shutdown", runtime, handle);
     drop(sample);
     Run {
         calls: fake.calls,

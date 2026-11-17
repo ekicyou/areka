@@ -1,7 +1,7 @@
 //! 偽の SHIORI で起動の道を通す、台本の出どころの通しのテスト（areka-P0-script-security-level
 //! 要件 1.4・3.1・4.2・4.3・design「E2E（x64 の偽の SHIORI）」）。
 //!
-//! 親（`runtime_boot_tests.rs`）と同じ組み方（`ShioriWiring::Custom` に偽の受け手・12 本の受け口）で
+//! 親（`runtime_boot_tests.rs`）と同じ組み方（`ShioriWiring::Custom` に偽の受け手・13 本の受け口）で
 //! 起こし、`OnBoot` の台本 `\![enter,nouserbreakmode]…` の応答に `SecurityLevel` を添える。
 //! kanade → 台本の起動 → 配送 → 中断を禁じる受け口の運ぶ道が既定の値に落ちていなければ、
 //! `external` では線に `Enter` が出ず、`local`／無しでは今どおり出る。
@@ -85,19 +85,7 @@ fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
         on_boot_level,
     };
     let mut world = World::new();
-    let inputs = RuntimeInputs {
-        ghost_root: sample.folder().to_path_buf(),
-        balloon_root: sample
-            .balloon("emo2-kakukaku")
-            .expect("emo2 の同梱バルーン")
-            .to_path_buf(),
-        shiori: ShioriWiring::Custom(Box::new(move || {
-            Ok(Box::new(backend) as Box<dyn ShioriBackend>)
-        })),
-        ticker: TickerMode::Disabled,
-        app_profile_dir: None,
-        boot_origin: BootOrigin::Plain,
-    };
+    let inputs = emo2_inputs(&sample, backend);
     let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
         .expect("偽の SHIORI と emo2 検体で実行系が起きる");
 
@@ -120,14 +108,7 @@ fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
         "Leave まで届かない（届いた分 {signals:?}）: {reached:?}"
     );
 
-    let calls = move || handle.call_count();
-    run_bounded_watching(
-        "script_security ghost shutdown",
-        Progress::Count(&calls),
-        move || {
-            let _ = runtime.shutdown(CloseReason::User { scope: 0 });
-        },
-    );
+    shut_down("script_security ghost shutdown", runtime, handle);
     drop(sample);
     // 同じ読みで後ろの `TalkEnded` まで取れることがある（届く時刻しだい）ので `Leave` までで切る。
     signals.truncate(

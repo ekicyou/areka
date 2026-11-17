@@ -14,7 +14,7 @@ use std::sync::mpsc::{self, Receiver};
 use areka_emo_present::PresentCommand;
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
-use areka_ghost::{GhostBootError, ShioriWiring, TickerMode};
+use areka_ghost::{GhostBootError, GhostRuntime, ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, CloseReason, ShioriBackend};
 use areka_seriko::{BindResolver, SerikoLoopConfig, SurfaceResolver, spawn_seriko};
 use bevy_ecs::world::World;
@@ -30,8 +30,11 @@ use crate::session::shell_balloon_switch::SwitchRx;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::adapter::PresentBridge;
 use areka_runtime::reload_cue::ReloadRx;
-use areka_runtime::spine::{Progress, ScriptedShioriBackend, run_bounded_watching};
+use areka_runtime::spine::{
+    Progress, ScriptedShioriBackend, ScriptedShioriHandle, run_bounded_watching,
+};
 use areka_runtime::talk_clock::TalkClock;
+use sample_ghost_kit::SampleRoot;
 
 /// 窓の側の束の持ち物（seriko と文字の線を生かしておく）。
 struct Rig {
@@ -230,7 +233,21 @@ fn successful_boot_installs_receivers() {
     let sample = acquire_emo2();
     let (backend, handle) = ScriptedShioriBackend::builder().build();
     let mut world = World::new();
-    let inputs = RuntimeInputs {
+    let inputs = emo2_inputs(&sample, backend);
+    assert_eq!(installed(&world), 0);
+
+    let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
+        .expect("偽の SHIORI と emo2 検体で実行系が起きる");
+    assert_eq!(installed(&world), 5, "成功で受信端 5 つが据わる");
+
+    shut_down("runtime_boot ghost shutdown", runtime, handle);
+    drop(sample);
+}
+
+/// 偽の SHIORI `backend` で emo2 検体（同梱バルーン `emo2-kakukaku`）を起こす入力（時計は止めたまま）。
+/// 子の通しのテスト 2 本も使う。
+fn emo2_inputs(sample: &SampleRoot, backend: impl ShioriBackend + Send + 'static) -> RuntimeInputs {
+    RuntimeInputs {
         ghost_root: sample.folder().to_path_buf(),
         balloon_root: sample
             .balloon("emo2-kakukaku")
@@ -242,22 +259,15 @@ fn successful_boot_installs_receivers() {
         ticker: TickerMode::Disabled,
         app_profile_dir: None,
         boot_origin: BootOrigin::Plain,
-    };
-    assert_eq!(installed(&world), 0);
+    }
+}
 
-    let runtime = boot_runtime(&mut world, inputs, &rig.sources, mpsc::channel().0, None)
-        .expect("偽の SHIORI と emo2 検体で実行系が起きる");
-    assert_eq!(installed(&world), 5, "成功で受信端 5 つが据わる");
-
+/// 実行系を降ろし、偽の SHIORI の呼び出しの数を進みの目印に終わるまで待つ。子の通しのテスト 2 本も使う。
+fn shut_down(what: &str, runtime: GhostRuntime, handle: ScriptedShioriHandle) {
     let calls = move || handle.call_count();
-    run_bounded_watching(
-        "runtime_boot ghost shutdown",
-        Progress::Count(&calls),
-        move || {
-            let _ = runtime.shutdown(CloseReason::User { scope: 0 });
-        },
-    );
-    drop(sample);
+    run_bounded_watching(what, Progress::Count(&calls), move || {
+        let _ = runtime.shutdown(CloseReason::User { scope: 0 });
+    });
 }
 
 // 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。

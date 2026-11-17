@@ -4,7 +4,7 @@
 //! 置き場のゴーストは kanade の送出端だけを持つテスト用の組み立て（名前が無いので、記録のゴースト名は
 //! ルートフォルダの絶対パス）。判定は集めてから 1 回。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 
 use areka_actor::ReplySender;
@@ -45,7 +45,28 @@ fn rig(label: &str) -> Rig {
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(BootContext {
+    world.insert_resource(boot_context(&temp, &root));
+    let (tx, kanade) = mpsc::channel();
+    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
+        Some(tx),
+        root.ghost_dir("A"),
+    ))));
+    register(&mut world);
+    let ghost = std::path::absolute(root.ghost_dir("A"))
+        .unwrap()
+        .display()
+        .to_string();
+    Rig {
+        world,
+        _kanade: kanade,
+        ghost,
+        _temp: temp,
+    }
+}
+
+/// 起動の文脈（今のゴースト `A`・今のバルーン `kaku`・根は `temp`）。`skin_tests` も使う。
+pub(super) fn boot_context(temp: &TempPath, root: &BasewareRoot) -> BootContext {
+    BootContext {
         roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
         roots_origin: crate::roots::RootsOrigin::EnvVar,
         app_profile_dir: temp.path().join("profile"),
@@ -67,22 +88,6 @@ fn rig(label: &str) -> Rig {
                 folder: Some("kaku".to_owned()),
             },
         },
-    });
-    let (tx, kanade) = mpsc::channel();
-    world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
-        Some(tx),
-        root.ghost_dir("A"),
-    ))));
-    register(&mut world);
-    let ghost = std::path::absolute(root.ghost_dir("A"))
-        .unwrap()
-        .display()
-        .to_string();
-    Rig {
-        world,
-        _kanade: kanade,
-        ghost,
-        _temp: temp,
     }
 }
 
@@ -124,11 +129,12 @@ fn plant_ghost_switch(world: &mut World) {
     });
 }
 
-fn plant_skin_switch(world: &mut World) {
+/// 他人のシェル／バルーンの切替の予約を直に置く（利用者の `\![change,shell,…]` の代わり）。`skin_tests` も使う。
+pub(super) fn plant_skin_switch(world: &mut World, kind: SkinKind, dir: &Path) {
     world.insert_non_send(SkinSwitchInFlight {
-        kind: SkinKind::Shell,
+        kind,
         target: SkinCandidate {
-            dir: PathBuf::from("planted"),
+            dir: dir.to_path_buf(),
             folder: "planted".to_owned(),
             name: None,
             hidden: false,
@@ -177,7 +183,7 @@ fn refusals_in_order_leave_one_record_each() {
     let mut rig = rig("areka-reload-refusals");
     plant_reload(&mut rig.world);
     plant_ghost_switch(&mut rig.world);
-    plant_skin_switch(&mut rig.world);
+    plant_skin_switch(&mut rig.world, SkinKind::Shell, Path::new("planted"));
     insert_running_desk_for_test(&mut rig.world);
     insert_busy_desk_for_test(&mut rig.world);
     rig.world.remove_resource::<BootContext>();
@@ -760,7 +766,7 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
     );
 }
 
-/// 切れ目の返事が `Reached` でない: 利用者の取りやめ・ほかの切替（`Left`）は `warn!`、許可表の漏れ
+/// 切れ目の返事が `Reached` でない: 利用者の取りやめと台詞の切れ目に達しなかった（`Left`）は `warn!`、許可表の漏れ
 /// （`NotSent`）と kanade の脱落（返信端の drop）は `error!` で、どれも `reload_failed(gap_*)` を
 /// `TARGET_ERROR`＋ゴースト名で 1 件残して印を下ろし、切替は送らない（要件 4.1・9.1・9.3）。
 #[test]

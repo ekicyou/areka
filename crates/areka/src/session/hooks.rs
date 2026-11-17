@@ -20,7 +20,7 @@ use areka_runtime::shell_balloon_resolve::SkinCandidate;
 use areka_runtime::skin_switch::SkinKind;
 
 /// 口の中身。
-pub(crate) const HOOKS: SessionHooks = SessionHooks {
+const HOOKS: SessionHooks = SessionHooks {
     kanade: kanade_of,
     seriko_sink: seriko_sink_of,
     ghost_ref_name,

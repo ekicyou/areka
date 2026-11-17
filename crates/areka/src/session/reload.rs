@@ -142,7 +142,7 @@ pub(crate) fn register(world: &mut World) {
 /// shiori の切れ目の返事を覗く（[`poll_destroy`]・Input の系）。
 ///
 /// 受信端が無ければ取り出しは無操作（LogSink の起動・結線の前）。受信端の借用を切ってから窓口を呼ぶ。
-pub(crate) fn drain(world: &mut World) {
+fn drain(world: &mut World) {
     let pending: Vec<ScriptReload> = match world.get_non_send::<ReloadRx>() {
         Some(rx) => rx.try_iter().collect(),
         None => {
@@ -168,8 +168,8 @@ pub(crate) fn drain(world: &mut World) {
 
 /// 印が `AwaitingDestroy` なら切れ目の返事を覗く（要件 2.4・4.1）。まだなら何もしない。`Reached` なら
 /// 印を下ろして [`start_switch`] へ（予約が立てば `Switching` の印に替わる）。それ以外は始めずに
-/// 印を下ろし、`reload_failed(gap_*)` を 1 件残す（利用者の取りやめ・ほかの切替は `warn!`、許可表の
-/// 漏れと kanade の脱落は `error!`・要件 9.1・9.3）。
+/// 印を下ろし、`reload_failed(gap_*)` を 1 件残す（台詞の切れ目に達しなかった＝利用者の取りやめと
+/// `TalkGap::Left`（理由は left 欄）は `warn!`、許可表の漏れと kanade の脱落は `error!`・要件 9.1・9.3）。
 fn poll_destroy(world: &mut World) {
     let Some(reply) = world
         .get_non_send::<ReloadInFlight>()
@@ -212,7 +212,7 @@ fn poll_destroy(world: &mut World) {
         left = ?left,
         target = ?target,
         origin = ?origin,
-        "台詞の切れ目に達しなかった（利用者の取りやめ・ほかの切替）ので shiori を読み直さない"
+        "台詞の切れ目に達しなかった（理由は left 欄）ので shiori を読み直さない"
     );
 }
 
@@ -722,7 +722,7 @@ pub(crate) fn skin_phase_ended(world: &mut World, kind: SkinKind, dir: &Path) {
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 印があれば `info!(reload_dropped, reason=exit)` を
 /// 残して下ろす。
-pub(crate) fn discard_for_exit(world: &mut World) {
+fn discard_for_exit(world: &mut World) {
     if let Some(dropped) = world.remove_non_send::<ReloadInFlight>() {
         tracing::info!(
             event = "reload_dropped",
@@ -744,22 +744,10 @@ fn ghost_name(world: &World) -> String {
     else {
         return String::new();
     };
-    match session
-        .names()
-        .and_then(|n| n.name.clone())
-        .filter(|n| !n.is_empty())
-    {
-        Some(name) => name,
-        None => {
-            let dir = session.ghost_dir();
-            std::path::absolute(dir)
-                .unwrap_or_else(|_| dir.to_path_buf())
-                .display()
-                .to_string()
-                .trim_end_matches(['\\', '/'])
-                .to_owned()
-        }
-    }
+    areka_ghost::config::listed_name(
+        session.names().and_then(|n| n.name.as_deref()),
+        session.ghost_dir(),
+    )
 }
 
 /// 読むゴーストのフォルダ（同梱の根から起こすと 2 回目からは写しを読むので、どこを読んだかを記録に残す）。

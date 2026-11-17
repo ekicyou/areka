@@ -40,14 +40,14 @@ use areka_runtime::zorder_cue::ZOrderCueSink;
 pub(crate) use areka_runtime::CueSinkSources;
 
 /// 受信端が窓の側に無い線の手元の端（実行系の成立後にだけ World へ据える）。
-pub(super) struct RuntimeLines {
+struct RuntimeLines {
     readme_rx: Receiver<crate::readme::ReadmeRequest>,
     no_user_break_rx: Receiver<NoUserBreakSignal>,
     /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製（areka-P0-balloon-break task 3.3）。
     user_break_lifecycle_tx: Sender<TalkLifecycleSignal>,
     change_rx: Receiver<ChangeRequestRaw>,
     switch_rx: Receiver<SkinRequestRaw>,
-    pub(super) reload_rx: Receiver<ScriptReload>,
+    reload_rx: Receiver<ScriptReload>,
 }
 
 /// 束の複製から 13 本の sink を組む（並びは旗の順序の保証を担うので変えない）。
@@ -58,7 +58,7 @@ pub(super) struct RuntimeLines {
 /// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。5 本目から後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
 /// インストールと更新の送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
-pub(super) fn runtime_sinks(
+fn runtime_sinks(
     world: &World,
     sources: &CueSinkSources,
 ) -> (Vec<Box<dyn BootCueSink>>, RuntimeLines) {

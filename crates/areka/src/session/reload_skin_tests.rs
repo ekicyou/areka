@@ -31,8 +31,8 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
+use crate::boot_config::BootContext;
+use crate::boot_resolve::{BalloonDecision, BalloonRoute};
 use crate::ghost_session::GhostSession;
 use crate::readme::ReadmeWiring;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
@@ -85,29 +85,7 @@ fn rig(label: &str) -> Rig {
     let root = BasewareRoot::new(temp.path().to_path_buf());
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(BootContext {
-        roots: areka_ghost::BasewareRoots::single(root.dir().to_path_buf()),
-        roots_origin: crate::roots::RootsOrigin::EnvVar,
-        app_profile_dir: temp.path().join("profile"),
-        helper_exe: temp.path().join("helper.exe"),
-        argv_session: false,
-        current: CurrentGhost {
-            cfg: ConfigInputs {
-                ghost_root: root.ghost_dir("A"),
-                balloon_root: root.balloon_dir("kaku"),
-            },
-            ghost: GhostDecision {
-                route: GhostRoute::Default,
-                dir: root.ghost_dir("A"),
-                folder: Some("A".to_owned()),
-            },
-            balloon: BalloonDecision {
-                route: BalloonRoute::Default,
-                dir: root.balloon_dir("kaku"),
-                folder: Some("kaku".to_owned()),
-            },
-        },
-    });
+    world.insert_resource(super::tests::boot_context(&temp, &root));
     let (tx, kanade) = mpsc::channel();
     let seriko = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
@@ -421,7 +399,7 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
         true,
         (SkinKind::Shell, kaku.clone()),
     );
-    request_skin_switch_planted(&mut rig.world, &other);
+    super::tests::plant_skin_switch(&mut rig.world, SkinKind::Balloon, &other);
     let (_, between) = capture(|| skin_phase_ended(&mut rig.world, SkinKind::Shell, &kaku));
 
     assert_eq!(
@@ -444,25 +422,6 @@ fn foreign_reservation_is_false_and_ends_as_overtaken() {
             vec![],
         )
     );
-}
-
-/// 他人の切替の予約を直に置く（利用者の `\![change,balloon,…]` の代わり）。
-fn request_skin_switch_planted(world: &mut World, dir: &Path) {
-    world.insert_non_send(SkinSwitchInFlight {
-        kind: SkinKind::Balloon,
-        target: SkinCandidate {
-            dir: dir.to_path_buf(),
-            folder: "other".to_owned(),
-            name: None,
-            hidden: false,
-        },
-        stage: crate::session::shell_balloon_switch::SkinSwitchStage::Waiting {
-            gap: Some(areka_actor::reply_channel().1),
-            gap_result: None,
-            build: mpsc::channel().1,
-            built: None,
-        },
-    });
 }
 
 /// descript の `ghost`: descript.txt が読めなければ値を保って `reload_descript_read_failed` を
@@ -627,5 +586,46 @@ fn balloon_reload_keeps_the_ghost_inner_balloon_in_place() {
             true,
             false,
         )
+    );
+}
+
+/// kanade が落ちた後（受信端の drop）: shiori・ghost・balloon を 1 回ずつ要求すると、どれも
+/// `reload_failed` を 1 件だけ残して印 `ReloadInFlight` を残さず、4 回目の要求は断られない
+/// （印が残ると以後の読み直しが全部 `reload_in_flight` で断られる・要件 4.1・4.2）。
+/// `accept_skin` の送り損ねの道を通すため、実行系の要らないバルーンで回す。
+#[test]
+fn reload_requests_after_kanade_died_fail_once_and_leave_no_mark() {
+    let mut rig = rig("areka-reload-kanade-died");
+    drop(std::mem::replace(&mut rig.kanade, mpsc::channel().1));
+    let mut got = Vec::new();
+    for target in [
+        ReloadTarget::Shiori,
+        ReloadTarget::Ghost,
+        ReloadTarget::Balloon,
+    ] {
+        let (_, events) = capture(|| request_reload(&mut rig.world, req(target)));
+        let failed: Vec<_> = ends(&events)
+            .into_iter()
+            .filter(|e| e.0 == "reload_failed")
+            .map(|e| e.3.unwrap_or_default())
+            .collect();
+        got.push((failed, rig.world.get_non_send::<ReloadInFlight>().is_some()));
+    }
+    let (_, events) = capture(|| request_reload(&mut rig.world, req(ReloadTarget::Shiori)));
+    let fourth_refused = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("reload_refused"))
+        .count();
+    assert_eq!(
+        (got, fourth_refused),
+        (
+            vec![
+                (vec!["kanade_gone".to_owned()], false),
+                (vec!["not_accepted".to_owned()], false),
+                (vec!["kanade_gone".to_owned()], false),
+            ],
+            0,
+        ),
+        "(要求ごとの (reload_failed の理由, 印が残る), 4 回目の reload_refused の数)"
     );
 }

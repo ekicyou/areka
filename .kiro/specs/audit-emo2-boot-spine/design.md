@@ -351,7 +351,7 @@ wait_until(what, Progress::Count(&probe), || {
 
 ### 78 番 kanade が落ちた後の読み直しの受け付け（本体の `session/reload.rs`）
 
-- コードの直しは要らない見込み（`research.md` の 78 番は「固定するテストが無い」の指摘）。縛るテストを 1 本足す（`session/reload_tests.rs`）`reload_requests_after_kanade_died_fail_once_and_leave_no_mark`: 送る相手（kanade）の受信端を落としてから shiori・ghost・shell を 1 回ずつ要求し、`reload_failed` の記録が各 1 件で、印 `ReloadInFlight` が World に残らない（4 回目の要求が `reload_in_flight` で断られない）。
+- コードの直しは要らない見込み（`research.md` の 78 番は「固定するテストが無い」の指摘）。縛るテストを 1 本足す（`session/reload_skin_tests.rs`・結線と seriko の送り手のある組み立て）`reload_requests_after_kanade_died_fail_once_and_leave_no_mark`: 送る相手（kanade）の受信端を落としてから shiori・ghost・balloon を 1 回ずつ要求し（3 回目は `accept_skin` の送り損ねの道を通すため、実行系の要らないバルーンで回す・実装の段の差し戻しで改めた）、`reload_failed` の記録が各 1 件で、印 `ReloadInFlight` が World に残らない（4 回目の要求が `reload_in_flight` で断られない）。
 - テストが赤になったら、印が残る道（`reload.rs` の L383-L386・L405-L407・L572-L573）を直す（要件 4.2）。
 
 ### 102 番 film の E2E を `areka-runtime` へ（設計の討議の議題 1 で確定）
@@ -531,7 +531,7 @@ wait_until(what, Progress::Count(&probe), || {
 |---|---|---|---|
 | `crates/areka/src/runtime_tests/spine_conformance_lap_tests.rs` | 913 | 約 890（21 番 −20・84・87） | 足さない |
 | `crates/areka/src/runtime_tests/spine_conformance_script.rs` | 894 | 約 880（23 番 −14・22 番は置き換え・17・80 は同じ行数） | 足さない |
-| `crates/areka/src/session/reload_tests.rs` | 857 | 約 870（76 番 −35・78 番 +45） | 950 を越えそうなら 78 番のテストを兄弟の新しいテストのファイルへ（本体の `session/` は emo-text でない） |
+| `crates/areka/src/session/reload_tests.rs` | 857 | 861（76 番 −35・78 番のテストは `reload_skin_tests.rs` へ置いた） | 950 を越えそうなら 78 番のテストを兄弟の新しいテストのファイルへ（本体の `session/` は emo-text でない） |
 | `crates/areka-runtime/src/assets_tests.rs` | 810 | 約 745（38・39 番） | — |
 | `crates/areka/src/session/reload.rs` | 774 | 約 760（16 番 −15） | — |
 | `crates/areka-runtime/src/lib.rs` | 758 | 約 745（4 番 −15・8 番 +5・48 番 −8・102 番 +3） | — |

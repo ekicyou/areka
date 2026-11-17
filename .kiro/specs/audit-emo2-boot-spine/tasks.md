@@ -105,7 +105,7 @@
   - _Dispatch: standard — 62 番の新しい分岐と記録の捕捉のテストを組む_
   - _Requirements: 3.1, 3.2, 4.1, 4.2, 4.3, 4.7, 5.5, 7.2, 7.6_
 
-- [ ] 4. 本体の起動・読み直しの道を直す［T12・16・74〜79 番］
+- [x] 4. 本体の起動・読み直しの道を直す［T12・16・74〜79 番］
   - 先に 78 番の縛るテスト（kanade の受信端を落としてから shiori・ghost・shell を 1 回ずつ読み直す→`reload_failed` が各 1 件・読み直し中の印が残らず 4 回目が断られない）を書く。赤なら印が残る道を直す
   - 16 番: ゴーストの名前を既にある名前の読みの関数で出す（出力は 1 文字も変わらない）。79 番: 記録の文と説明を「台詞の切れ目に達しなかった」にする（event と欄は変えない）
   - 74〜77 番: 本数の説明を「13 本」に直し、子のテストの写しの補助を親に寄せ、読み直しの写しを片方に置き、ファイルの中でしか使わない物の可視性を外す
@@ -226,3 +226,4 @@
 - 3.4・65 番: `spawn_zorder_pair_deferred_tests.rs` の言い換えで、和文と `` `areka-runtime` `` のあいだの空白が揃っていない所がある。8.2 のかけ直しで揃える。
 - 3.4・66 番: 寄せた `index_of` の置き場は `crate::source_text_test_support`（設計は名指ししていない）。
 - 3.6: 残りの行番号の注記（`areka-runtime/src/spine.rs` の `real.rs:136`／`:151`、本体の `spine_conformance_judge.rs` の `同 :449-451`）と、公開の `hold()`・`join_thread_bounded` の doc から私有になった `NO_ROW`・`wait_thread_end` へのリンク（`private_intra_doc_links`）は 8.2 のかけ直しで直す。
+- 4・78 番: 縛るテストは `reload_tests.rs` の組み立てでは shell の回が kanade と無関係に `no_context` で止まり、`accept_skin` の送り損ねの道（`reload.rs` の `end_skins(world, "kanade_gone")`）を縛れなかった。`reload_skin_tests.rs` の結線つきの組み立てへ移し、3 回目をバルーンにした（design.md の 78 番の節と行数の表を合わせた）。77 番の `SkinStep` は `pub(crate)` の `ReloadStage::Skins` の欄に出るので公開のまま（外すと `private_interfaces`）。
