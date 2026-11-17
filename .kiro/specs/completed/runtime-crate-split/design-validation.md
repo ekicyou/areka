@@ -1,6 +1,6 @@
 # 設計の検証: runtime-crate-split
 
-- 対象: `.kiro/specs/runtime-crate-split/design.md`（2026-11-16 生成・未承認）
+- 対象: `.kiro/specs/completed/runtime-crate-split/design.md`（2026-11-16 生成・未承認）
 - 入力: `spec.json`（language = ja）・`requirements.md`・`design.md`・`research.md`・steering（`product.md`・`tech.md`・`structure.md`）
 - 進め方: `kiro-validate-design`（`rules/design-review.md`: Analysis → Critical Issues → Strengths → GO/NO-GO）。対話なしで判定まで出す。
 

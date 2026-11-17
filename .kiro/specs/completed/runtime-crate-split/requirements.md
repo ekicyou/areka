@@ -6,7 +6,7 @@
 - **今の状態**: 前の spec `runtime-module-untangle`（2026-11-13 着地）で、本体の中のモジュール `runtime`（旧名 `emo2_boot`）の本番は本体のほかの部分を参照しなくなった。それでもまだ本体の中にあるので、runtime の 1 行を変えても本体ごと組み直され、テストも本体の 1 つの実行ファイルに入ったままになる。今の `crates/areka/src/runtime/` は 211 ファイル・74,693 行（本番 21,007・テストと支え 53,686。2026-11-16 main `715f5819` の測り）。
 - **変えたいこと**: runtime を新しい crate `crates/areka-runtime/`（lib・`publish = false`・`areka-placement` に依存）へ移し、本体はそれを path 依存で使う。`target_map` とテスト専用の判定器 `transition_judge*` も `areka-runtime` に置く。本体の中で runtime を名指す道は全部 `areka_runtime::` にする。振る舞いは何も変えない。
 
-（出どころ: `.kiro/specs/runtime-crate-split/brief.md`。分け方・順番・共通の約束・新旧のパスの対応表の正本は `.kiro/steering/roadmap.md`「テーマ別の決めごと」の「本体の crate 分け」。同じウェーブの約束の正本は同じ roadmap の「ウェーブ編成」の C21 の行。）
+（出どころ: `.kiro/specs/completed/runtime-crate-split/brief.md`。分け方・順番・共通の約束・新旧のパスの対応表の正本は `.kiro/steering/roadmap.md`「テーマ別の決めごと」の「本体の crate 分け」。同じウェーブの約束の正本は同じ roadmap の「ウェーブ編成」の C21 の行。）
 
 ## Introduction
 

@@ -102,7 +102,7 @@
   - 次の 3 本（`frame.rs` の 171・178・188 行）の文は bin を理由にしていないが、「非 test ビルドで未使用」の名の一覧が lib の作りでも同じか、`cargo rustc -p areka-runtime --lib -- --force-warn unused_imports` で確かめていない。
   - 直し方は決めない。本体の `structure.md` の「ファサード形式も可」の注にある確かめ方（`--force-warn unused_imports`）で、まだ要る許可だけを残す。
 
-- **⑶ `runtime-crate-split` で私有から開けた項目**（この spec の持ち物の分。全体の一覧は `.kiro/specs/runtime-crate-split/verification.md` の 2.5・4.2・6.1）:
+- **⑶ `runtime-crate-split` で私有から開けた項目**（この spec の持ち物の分。全体の一覧は `.kiro/specs/completed/runtime-crate-split/verification.md` の 2.5・4.2・6.1）:
   - 2.5（`pub(crate)` → `pub`・全体 112 件）のうち: `frame.rs` 2・`frame/window_state.rs` 2・`frame/wiring.rs` 5・`frame/zorder_drain.rs` 1 の 10 件。コンパイラが外から使うと言った項目だけを開け、公開の項目が名指す型には「要件 2.5: 公開の `<名前>` が名指すので開ける」の 1 行を付けた。使われない `pub(crate)` は消していない（`audit` で見直す）。
   - 4.2 ⑴（本体のテストが使うので `pub(crate)` → `pub`）: `frame::status_report`（モジュール）・`BalloonStatusLedger`・`StageObservation`・`BalloonObservation`・`run_status_report_phase`・`report_stages`・`report_balloons`・`StayOnTopState`・`run_window_state_phase`・`run_move_drain_with`（`any(test, feature)`）・`ScaleEventSeam`・`RuntimeWiring` の欄 11 とメソッド 4（`drain_lifecycle_signals` ほか）。
   - 4.2 ⑵ 家の型 `test_open`（中で tracing を呼ばない項目）: `frame/switch.rs` の `run_switch_phase`・`split`、`frame/drain_resnap.rs` の `realign_chain_once_with_source`、`frame/work_area_sync.rs` の `resnap_for_work_area_change`。
@@ -133,4 +133,4 @@
 | `KIND_*`・`FIELD_*` ほか行の組み立て・各発行点が使うもの | 本番が使う | 公開のまま |
 | `live_work_area_bottom` | `log_char_ground` | 公開のまま（本番が使う関数） |
 
-  `audit` で見直すとき、「公開のまま」の行は本番が使う語なので切り替えない。表の全体と緑の証跡は `.kiro/specs/runtime-crate-split/verification.md` の 6.4。
+  `audit` で見直すとき、「公開のまま」の行は本番が使う語なので切り替えない。表の全体と緑の証跡は `.kiro/specs/completed/runtime-crate-split/verification.md` の 6.4。
