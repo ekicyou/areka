@@ -334,6 +334,44 @@ fn a_priority_line_found_only_inside_a_note_is_refused() {
     }
 }
 
+/// 欄の `priority` が無く、備考の行頭にだけ `priority = "C1"` がある本文。
+///
+/// 行を数えると備考の 1 本に当たるが、`toml` は欄を読まないので、欄が**無い**ことを告げる。
+const PRIORITY_FIELD_ABSENT_LINE_IN_NOTE: &str = r#"[ledger]
+domain = "property"
+pages = ["list_propertysystem"]
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "implemented"
+values = []
+links = []
+note = """
+次の行は備考の一部であって、この項目の欄ではない。
+priority = "C1"
+"""
+"#;
+
+/// 欄が無く備考の行頭にだけ当たる塊は、欄が無いか文字列でないことを id つきで告げて落ちる。
+#[test]
+fn a_block_whose_priority_field_is_absent_but_a_note_line_matches_says_so() {
+    match replace_priority(
+        PRIORITY_FIELD_ABSENT_LINE_IN_NOTE,
+        Domain::Property,
+        &wanted(&[(YEAR_ID, "A1")]),
+    )
+    .expect_err("欄が無ければ落ちるはず")
+    {
+        SurveyError::DeriveMismatch { reason, .. } => {
+            assert!(reason.contains(YEAR_ID), "{reason}");
+            assert!(
+                reason.contains("priority の欄が無いか文字列でない"),
+                "{reason}"
+            );
+        }
+        other => panic!("置き換える行を決められない失敗として落ちること: {other}"),
+    }
+}
+
 /// 行末にコメントを付けた `priority` の行を持つ本文。
 const PRIORITY_WITH_COMMENT: &str = r#"[ledger]
 domain = "property"

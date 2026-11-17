@@ -127,7 +127,9 @@ pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) ->
         push_status_row(&mut out, ledger.domain.as_key(), &counted.overall);
     }
 
-    // ⑶ ドメインを跨いで繋がった束。
+    // ⑶ ドメインを跨いで繋がった束。下の 1 文の「閉じている束」は、他の台帳から関連が
+    // 入らないものに限って正しい。入ってくる束はドメイン別報告にも載り、ここでも
+    // より大きな束の一部として載る（ドメイン別報告は自分の台帳の `links` しか見ない）。
     out.push_str("\n## ドメインを跨いで繋がった束\n\n");
     out.push_str(
         "ドメインの中で閉じている束は、それぞれのドメインの報告に載ります。ここに並ぶのは跨いだものだけです。\n\n",

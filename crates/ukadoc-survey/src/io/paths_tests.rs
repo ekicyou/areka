@@ -23,7 +23,7 @@ fn rel(path: &Path) -> String {
 
 // ---- ワークスペース根 ----
 
-/// 2 段上りが本当に repo の根を指していること。根の直下に自分自身の manifest がある。
+/// 2 段上りが本当に repo の根を指していること。根の下の `crates/ukadoc-survey/` に自分自身の manifest がある。
 #[test]
 fn workspace_root_holds_this_crate_manifest() {
     let manifest = workspace_root()

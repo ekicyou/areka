@@ -200,7 +200,6 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
     let alias_rows = rows().filter(|entry| entry.status == Status::Alias).count();
     let introduced_rows = rows().filter(|entry| !entry.introduced.is_empty()).count();
     let theme_values: usize = rows().map(|entry| entry.values.len()).sum();
-    let reports = data.domain_reports.len();
     let versioned = data
         .catalog
         .entries
@@ -225,7 +224,8 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
         row("6.8", "台帳に書かれたテーマ名", theme_values),
         row("6.10", "状態の語彙を通る行", ledger_rows),
         row("6.11", "証拠の付いた項目", data.evidence.by_id.len()),
-        row("7.4/7.5", "ドメイン別報告", reports),
+        // ドメイン別報告の本数は読み込みが `Domain::ALL` で作るので常に 4 で、数えても落ちない。
+        // 空振りは non_vacuity.rs の `the_four_domain_reports_exist_on_disk_and_are_not_empty` が見る。
     ]
 }
 

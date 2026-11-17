@@ -180,7 +180,7 @@ sequenceDiagram
 | 3.4 | 新しい機能を足さない | Non-Goals・足すのは断りとテストだけ |
 | 4.1 | 直したバグと危ない所に 1 本ずつテスト | 表の「縛るテスト」の欄（1〜30・35） |
 | 4.2 | 決定論 | 65 を消す（更新時刻の比べ）・5 の 1 回読み・2 のテストはテストごとに別のフォルダ |
-| 4.3 | 一時フォルダは `target` の下 | 2 のテストだけがファイルを書き、`target\ukadoc-survey-tests\<テスト名>\` に置く |
+| 4.3 | 一時フォルダは `target` の下 | ファイルを書くのは 2 のテストと `io/snapshot_tests.rs` の 1 本（`load_with_passes_the_package_name_and_version_through`）だけで、どれも `target\ukadoc-survey-tests\<テスト名>\` に置く |
 | 4.4 | GPU は実 GPU | GPU を使うテストは無い（変えない） |
 | 4.5 | 古びたテストは直しに合わせて改める | 4（行番号の主張を外し所見の種類で見る）・45・50・51・52 の該当テストの改め方を表に書く |
 | 5.1 | 1,000 行 | W1 で `generate_tests.rs` を分ける・足す先の表（Testing Strategy） |
@@ -391,7 +391,7 @@ impl Documents { pub(super) fn load() -> &'static Documents; fn read() -> Result
 ### 足すテスト（直したバグと危ない所・4.1）
 - 単体（在中）: 2・3・6〜9・12〜20・22〜30・32・33 の各「＋」（上の表）。どれも決まった文字列か値を入れて、決まった `Err`・所見・出力を見る。
 - 整合テスト: 35（カタログの読み直しの 1 バイトの安定）・4（`summary.md` を壊した写しで `DomainReportStale` が 1 件）・12（`[[after]]` の欠け）・10（選ぶ条件の前提）。
-- ファイルを書くのは 2 のテストだけで、置き場は `target\ukadoc-survey-tests\<テスト名>\`（テストごとに別のフォルダ・始めに消して作る）。
+- ファイルを書くのは 2 のテストと `io/snapshot_tests.rs` の 1 本（`load_with_passes_the_package_name_and_version_through`。かけ直し 4 回目の G1-5 で足した）だけで、置き場はどれも `target\ukadoc-survey-tests\<テスト名>\`（テストごとに別のフォルダ・始めに消して作る）。
 
 ### 1,000 行の番人（5.1）
 - W1 の後の `generate_tests.rs` は約 680 行、`generate_priority_tests.rs` は約 290 行（W8 の 6 のテストを足しても 400 行に届かない）。

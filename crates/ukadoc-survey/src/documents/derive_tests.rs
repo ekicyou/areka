@@ -349,7 +349,7 @@ fn a_rank_row_naming_a_bundle_absent_from_the_linkage_fails() {
 }
 
 /// 単独項目を `bundle` で指すことも、名前付き束を `singles` に混ぜることも落とす
-/// （設計 `documents::parse`「読み取り時の形の検査」のうち、`linkage.md` を要る
+/// （設計 `documents::parse`「読み取り時の形の検査」のうち、`linkage.md` を要する
 /// 跨ぎの 1 項目。読み手は単独で判定できないのでここが引き受ける）。
 #[test]
 fn the_rank_row_must_name_a_named_bundle_in_bundle_and_singles_in_singles() {

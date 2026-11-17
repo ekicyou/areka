@@ -320,7 +320,7 @@ fn elements_split_only_on_commas_at_the_slices_own_depth() {
 }
 
 #[test]
-fn commas_and_brackets_inside_a_string_do_not_split() {
+fn brackets_inside_a_string_do_not_end_the_table() {
     // 見出し `\![get]` は角括弧を含む。文字列の中を構造として読むと表がそこで
     // 終わったことになり、以降の要素が消える。
     let text = vocab_source(

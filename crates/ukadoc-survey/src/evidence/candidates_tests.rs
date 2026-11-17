@@ -204,6 +204,33 @@ pub const PLAIN: &[&str] = &["log_path"];
     );
 }
 
+/// 目印と表の間に空行と属性を挟んでも目印は効き、`#[cfg(test)]` と `mod` の間に空行・
+/// 属性・コメントを挟んでもテストの本文として飛ばす。飛ばす分岐のどれを消しても、
+/// `MARKED` か `FIXTURE_IDS` の要素が候補に出て赤になる（肯定の側に目印の無い表を置く）。
+#[test]
+fn 空行と属性とコメントを挟んでも目印とテストの範囲は効く() {
+    let text = r##"/// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html
+
+#[rustfmt::skip]
+pub const MARKED: &[&str] = &["version"];
+
+pub const PLAIN: &[&str] = &["log_path"];
+
+#[cfg(test)]
+
+#[allow(dead_code)]
+// テストだけの表。
+mod tests {
+    const FIXTURE_IDS: &[&str] = &["OnTestOnly"];
+}
+"##;
+    assert_eq!(
+        kinds_and_texts(&candidates(&sources(&[(EVENTS_PATH, text)]))),
+        vec![(CandidateKind::AllowListElement, "log_path")],
+        "目印の付いた表とテストの本文は候補にならない"
+    );
+}
+
 /// 並びはパス → 種類 → 文字列の昇順。入力の並びにも本文に現れる順にも依らない
 /// （要件 7.3）。**本文の中の自然な順と出力の順が違う**見本で確かめる。
 #[test]

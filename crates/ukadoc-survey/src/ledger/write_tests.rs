@@ -564,8 +564,8 @@ note = """
 
 /// 同じ id が 2 度現れたら、重複として落ちる（設計 D-12）。
 ///
-/// 判定が「非減少」だとここは通ってしまい、盲点は永久に開いたままになる。
-/// `ledger-init` は整合検査より先に走るので、塞ぐ場所はここしかない。
+/// 判定が「非減少」だとここは通ってしまう。`ledger-init` は整合検査より先に走るので、
+/// ここが緩いと重複した塊のまま差し込みが通る。
 #[test]
 fn a_duplicate_id_hidden_in_a_note_fails_as_out_of_order() {
     let (_, blocks) = blocks::split(DUPLICATE_IN_NOTE).expect("較正は素通りするはず");

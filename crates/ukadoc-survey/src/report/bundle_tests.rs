@@ -138,7 +138,7 @@ fn two_links_converging_on_the_same_id_merge() {
     // 書かれた向きにしか繋がりを認めない実装はここで 2 束に割れ、`linkage.md` が
     // 引用している束 id が黙って付け替わる（要件 7.9 の安定した束 id が防ごうと
     // しているのはまさにこれ）。`bundle.rs` の「関連の向きも見ない」という主張は
-    // この 1 本が背負う。
+    // この 1 本と `two_links_leaving_the_same_id_merge` の 2 本が背負う。
     let got = bundles(&[edge(ALPHA, BRAVO), edge(CHARLIE, BRAVO)]);
     assert_eq!(
         got,

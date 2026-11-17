@@ -85,7 +85,7 @@ pub fn replace_priority(
         // 台帳は次の書き戻しで黙って壊れるので、写す前に告げる。
         let line = priority_line(body, &block.id, &file)?;
         let current = priority_of(&root, &block.id)
-            .ok_or_else(|| undecidable(&block.id, &file, "priority の欄が文字列でない"))?;
+            .ok_or_else(|| undecidable(&block.id, &file, "priority の欄が無いか文字列でない"))?;
         if body[line.clone()] != format!("{PRIORITY_HEAD}{}", basic_string(current)) {
             return Err(undecidable(
                 &block.id,
