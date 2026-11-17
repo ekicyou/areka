@@ -328,3 +328,25 @@
 
 - 設計のツリー（`c66f7ee54`）から `crates/` の差分は 0。brief の行は 1 節の表のとおりで、ずれた行は無かった（`drag_follow.rs` 1,000 行・`known_position` 550・`on_balloon_drag` 以降 503〜1000・`BALLOON_DRAG_BASE_UNPINNED_TAG` 26〜33・164 の読み 291／293・`on_char_drag_end` の書き手の文 135 はいずれも同じ）。
 - 設計の一覧に漏れていた名指しを 2 つ足して直した: `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:117`（`drag_follow.rs` に在ると書く文）・`crates/areka-placement/src/balloon_offset_supply_tests.rs:233`（`drag_follow.rs` の `*_TAG`）。
+
+## 実装の記録（タスク 12）
+
+確かめ G1〜G6（設計「確かめ」の手順どおり・`$paths` は設計の 3 つの pathspec・2026-11-17）
+
+- **G1**: `git grep -n "joined_with_prev" -- crates` は 0 行。`git grep -lE "ChainRule::(of|from_terms)|joins_chain\(|chain_gap\(" -- crates ':!*_tests.rs'` の当たりのファイルは `chain_finalize.rs`・`chain_realign.rs`・`chain_rule.rs`・`persist.rs`・`persist_save.rs`・`resolver.rs` の 6 つだけで、`follow/` の下は 0。
+- **G2**（全部／名前の無い行）: `(task|タスク) ?[0-9]+` total=120 unnamed=0・`指摘 ?[0-9]+` total=33 unnamed=0・`\[\[[0-9]+\.[0-9]+` total=0 unnamed=0・`(要件|Req) ?[0-9]+\.[0-9]+` total=616 unnamed=0（直す前は 218／190・39／36・16／16・577／541）。
+- **G3**: `git grep -nE "\[\[[a-z]" -- $paths` は 0 行。
+- **G4**: 写しの 3 本の grep（`fn (clamp_x_into|…)|struct SharedFakeIo`・`fn (drag_event|point_of|window_pos)`・`windowposition::scale_signed|\bscg\b`）はどれも 0 行。
+- **G5**: `follow/drag_follow.rs` 510 行・`follow/balloon_drag.rs` 520 行（どちらも 1,000 の下）。`cargo test -p log-capture-kit --test file_length_guard_test` は 6 件緑。例外表に足していない。`placement_tests/transition_judge.rs`・`transition_judge_tests.rs` は 999 行のまま。
+- **G6**: `git diff --stat main -- Cargo.toml '**/Cargo.toml' Cargo.lock` は空（`vendors/` も差分なし）。`placement_tests/` の下はファイルの追加・削除なし（16 ファイルの書き換えのみ）。
+- `cargo fmt --all -- --check` は緑。
+
+残す件は 0（要件 8 の 3 つに当たる件なし・裁定を覆す直しなし・SSP と ukadoc に関わる振る舞いの変更なし）。設計の段で件を足していないので、要件の「確定した件」はそのまま（要件の文書は設計の討議の後に変えていない）。
+
+### wintf 0.2.0 の壊れる変更の知らせ（PR の本文にも書く・設計「公開の段への影響」）
+
+wintf 0.2.0 で `wintf::ecs::drag::DraggingState.initial_window_pos` が `(f32, f32)` から `Option<(f32, f32)>` になる（位置が取れないドラッグは `None`）。組む側も読む側も壊れる変更だが、0.x で 2 つ目の数を上げる版なので版の決め方は変わらない。公開の段（`.github/workflows/crates-io.yml`・`tools/crates-io.ps1`）は型の変更に関係せず、`doc/crates-io-publish.md` は直さない。`/release` が `doc/release-notes/v{版}.md` を書くときに拾う。
+
+### 全体テスト
+
+- `pwsh -NoProfile -File tools/test-all.ps1`: 緑（all steps green・exit 0・1389 秒・排他テストの机で 1 回）。
