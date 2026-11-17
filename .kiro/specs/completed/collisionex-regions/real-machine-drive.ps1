@@ -13,7 +13,7 @@
   プロセスは Per-Monitor v2 にして、座標はすべて物理の点で扱う。
 
 .EXAMPLE
-  pwsh -NoProfile -File .kiro/specs/collisionex-regions/real-machine-drive.ps1 -AppPid 12345
+  pwsh -NoProfile -File .kiro/specs/completed/collisionex-regions/real-machine-drive.ps1 -AppPid 12345
 #>
 param([Parameter(Mandatory)][int]$AppPid)
 $ErrorActionPreference = 'Stop'

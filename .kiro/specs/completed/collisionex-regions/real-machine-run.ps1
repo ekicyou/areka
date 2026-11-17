@@ -11,8 +11,8 @@
              自動終了は既定 5 分（途中でやめるときはメニューの「終了」でよい）。
 
 .EXAMPLE
-  pwsh -NoProfile -File .kiro/specs/collisionex-regions/real-machine-run.ps1 -Prepare
-  pwsh -NoProfile -File .kiro/specs/collisionex-regions/real-machine-run.ps1 -Run R1
+  pwsh -NoProfile -File .kiro/specs/completed/collisionex-regions/real-machine-run.ps1 -Prepare
+  pwsh -NoProfile -File .kiro/specs/completed/collisionex-regions/real-machine-run.ps1 -Run R1
 #>
 param(
     [switch]$Prepare,

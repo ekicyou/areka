@@ -10,8 +10,8 @@
 | 記憶 | 起動の前に `profile` とゴーストの `profile\areka` を消した |
 | `RUST_LOG` | `info,areka=debug,kanade=trace,wintf::ecs::drag=debug,areka_emo_present::presenter::hit=debug`（`hit_region_client` の `debug!` は `areka=debug` の前方一致でも開くが、的を明示した） |
 | 安全弁 | `AREKA_APP_SMOKE_EXIT_MS`（走行の値は 3 章） |
-| 起動 | `.kiro/specs/collisionex-regions/real-machine-run.ps1 -Run R1`（完了 `areka-P0-mouse-drag-events` の同名の道具の写し）。記録は `target\cxr-signoff\run-R1.log` |
-| 操作 | `.kiro/specs/collisionex-regions/real-machine-drive.ps1 -AppPid <起こした pid>`（`SendInput`・絶対座標・仮想デスクトップ） |
+| 起動 | `.kiro/specs/completed/collisionex-regions/real-machine-run.ps1 -Run R1`（完了 `areka-P0-mouse-drag-events` の同名の道具の写し）。記録は `target\cxr-signoff\run-R1.log` |
+| 操作 | `.kiro/specs/completed/collisionex-regions/real-machine-drive.ps1 -AppPid <起こした pid>`（`SendInput`・絶対座標・仮想デスクトップ） |
 | 机 | 排他テストの机を進行役が取ってから起動し、走行の後すぐ返した（要件 8.7） |
 
 ## 2. 点の求め方

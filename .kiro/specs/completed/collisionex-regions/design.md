@@ -113,7 +113,7 @@ crates/areka-emo-compose/src/
 ├── hit_order_tests.rs             # 新: parse からの通しで、混ぜた並びの重なり・追記・まだ働かない形の素通り・拡大率（2.x・3.1・3.2・5.3・8.1・8.2）
 ├── hit_import.rs                  # import のずらしを形ごとの shifted へ
 └── fold.rs                        # Numbers.cuts を除く・collision番号の二重定義の warn!
-.kiro/specs/collisionex-regions/verification/
+.kiro/specs/completed/collisionex-regions/verification/
 └── real-machine.md                # 新: 実機の確かめの手順と記録（8.5〜8.7）
 ```
 
@@ -242,7 +242,7 @@ flowchart TD
 | HitImport | emo-compose / hit_import.rs | 子の形を形ごとにずらして持ち込む | 3.4・3.5・5.3 | ShellModel (P0) | Service |
 | FoldCollisions | emo-compose / fold.rs | 同じ番号を両方残して警告 | 3.2・3.3・3.7・6.4 | tracing (P1) | Service |
 | LedgerAndDocs | `doc/ukadoc-coverage/`・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/specs/hit-id-pass/brief.md` | 台帳・報告・§8・申し送り | 7.1〜7.6 | ukadoc-survey (P1) | — |
-| RealMachineCheck | `.kiro/specs/collisionex-regions/verification/real-machine.md` | クローディアの実機の確かめ | 8.5〜8.7 | impl-watch の机 (P0)・real-run-kit (P1) | — |
+| RealMachineCheck | `.kiro/specs/completed/collisionex-regions/verification/real-machine.md` | クローディアの実機の確かめ | 8.5〜8.7 | impl-watch の机 (P0)・real-run-kit (P1) | — |
 
 ### parsers / model
 
@@ -460,7 +460,7 @@ fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape;
 - areka 本体は書き換えない（7.5）。
 
 #### RealMachineCheck（summary-only）
-- 手順は完了 `areka-P0-mouse-drag-events` の `verification/real-machine.md` の雛形（ワークツリーの `target\` の下の根・`real-machine-run.ps1 -Prepare`・`RUST_LOG=info,areka=debug,…`）に倣い、`.kiro/specs/collisionex-regions/verification/real-machine.md` に手順と結果を書く。
+- 手順は完了 `areka-P0-mouse-drag-events` の `verification/real-machine.md` の雛形（ワークツリーの `target\` の下の根・`real-machine-run.ps1 -Prepare`・`RUST_LOG=info,areka=debug,…`）に倣い、`.kiro/specs/completed/collisionex-regions/verification/real-machine.md` に手順と結果を書く。
 - クローディア（`sample-ghost-kit` の `claudia`）の `surface0` で、矩形（`Head`・`Bust` など）の中の点と、楕円（`Foot`）または多角形（`Fan`・`Skirt`）だけがある所の点を、表示の拡大率込みで先に求める。`SendInput` で撫で（`OnMouseMove`）とドラッグ（`OnMouseDragStart`／`OnMouseDragEnd`）を起こし、areka の記録（`hit_region_client` の `debug!` の region と、イベントの Reference4）で、矩形の名前が載り、楕円・多角形だけの所では空になることを確かめる（8.5・8.6）。
 - 読み込みの記録に `ShapesInactive` が 1 行（楕円 32・多角形 28・円 0・region 0）出ることも記録で確かめる（8.6）。`circle`・`region` はクローディアに無いので決定論の檻だけ。
 - 画面を使う間は排他テストの机で順を取り、終わったらすぐ返す（8.7）。

@@ -6,7 +6,7 @@
 - **今の状態**: 読み手 `crates/areka-parsers/src/shell/decode.rs` の `decode_collisions` は、番号が数字だけの `collisionN`（矩形）だけを値にし、`collisionex` の行は記録なしに読み飛ばす。当たり判定の解決 `crates/areka-emo-compose/src/hit.rs` は矩形と名前だけを見る。網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `collisionex` の行は `absent`・担当なし。
 - **変えたいこと**: `collisionex*,名前,形,座標…` を読み、5 つの形を全部型へ運ぶ。`rect` は今の矩形の判定でそのまま当たる。楕円・円・多角形・`region` を当たり判定にするのは、形を ID の描き先に塗る `hit-id-pass` が持つ（開発者 2026-11-17「形は ID で塗る」）ので、この仕様では型へ運んで記録だけを残す。`collision` と `collisionex` の重なりは今の画家の順（後に書いたものが手前）にそろえる。読めない行は記録を 1 件残す。決定論のテストで読みと重なりを固定し、実機でクローディアの撫でとドラッグの Reference4 に矩形の名前が載ることを確かめる。
 
-（出どころ: `.kiro/specs/collisionex-regions/brief.md`。最新の測りは同 brief の「2026-11-17 棚卸㊴の再測定」の節。同じウェーブの約束の正本は `.kiro/steering/roadmap.md`「ウェーブ編成」の C22 の行。）
+（出どころ: `.kiro/specs/completed/collisionex-regions/brief.md`。最新の測りは同 brief の「2026-11-17 棚卸㊴の再測定」の節。同じウェーブの約束の正本は `.kiro/steering/roadmap.md`「ウェーブ編成」の C22 の行。）
 
 ## Introduction
 

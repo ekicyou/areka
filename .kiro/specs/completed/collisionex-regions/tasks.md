@@ -99,7 +99,7 @@
   - 完了 `areka-P0-mouse-drag-events` の実機の手順の雛形に倣い、ワークツリーの `target\` の下の根で、当たり判定の名前を判定する分岐まで記録の段を開けて areka を動かす
   - 排他テストの机で順を取ってから画面を使い、クローディアの `surface0` の矩形（`Head`・`Bust` など）の中の点と、楕円（`Foot`）または多角形（`Fan`・`Skirt`）だけがある所の点を表示の拡大率込みで先に求め、`SendInput` で撫でとドラッグを起こす。終わったらすぐ机を返す
   - 記録で、矩形の所ではイベントの Reference4 に名前が載り、楕円・多角形だけの所では空になること、読み込みの記録にまだ働かない形の数（楕円 32・多角形 28・円 0・`region` 0）が 1 行出ることを確かめる
-  - 完了の姿: `.kiro/specs/collisionex-regions/verification/real-machine.md` に手順・点・記録の抜き書き・判定が書かれ、どの確かめも合っている
+  - 完了の姿: `.kiro/specs/completed/collisionex-regions/verification/real-machine.md` に手順・点・記録の抜き書き・判定が書かれ、どの確かめも合っている
   - _Depends: 3, 4.4_
   - _Dispatch: standard — 実機の手順と点の求め方を組み立てて動かす_
   - _Requirements: 6.1, 6.3, 8.5, 8.6, 8.7_
