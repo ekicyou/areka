@@ -761,3 +761,54 @@
 3. 48 番の `BootRuntimeFn` の戻り値の形（`Option<GhostRuntime>` か `Result<_, GhostBootError>`）。
 4. 33 番・件 6 の補助 `names` の分け方（`areka-runtime` の test-support に置いて本体から引くか、本体に残る 1 本の書き方を直すか・設計 D4 の「写しを作らない」を守る形）。
 5. 9 節の「設計へ持ち越す調べ」の 6 件（2・30・72・83・22・1 番）。
+
+## 12. 設計の段の調べと決め（2026-11-17・`/kiro-spec-design`）
+
+### 12.1 調べの範囲と作法
+
+- 種類: 既にある仕組みの直し（Extension）なので、軽い調べ（`design-discovery-light.md`）で行った。外の crate・新しい技術は 0 件で、WebSearch は使っていない。
+- 使ったスキルと手引き: `kiro-spec-design`（`design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。設計の書き方は完了した `audit-sylphya-actor` の design.md の型に合わせた。
+- 読んだ所: `target_map.rs`・`adapter.rs`（1 番）、本体の `runtime_tests/spine.rs` の `boot_with`・`shutdown_bounded` と `spine_third_scope_talk_tests.rs`（2・3・31 番）、`lib.rs` の `BootRuntimeFn`・`wire_runtime` の手順 5 と本体の `session/runtime_boot{,_tests}.rs`（48 番）、本体と `areka-runtime` の `shell_carry_tests.rs`・`shell_carry_test_support.rs`・`areka-parsers` の `BindGroupDefaults`（33 番）、起動の系列を待つ 5 か所と一周の台帳（30 番）、`script_restriction.rs`（72 番）、`areka-runtime/src/spine.rs` の偽の SHIORI（54 番）、`film_playback_e2e_tests.rs`・本体の `crate_source_test_support.rs`・`crash_report_test_support.rs` の据え付け（96・102 番）、`shell_carry.rs` の 3 つの `reload_shell_carry_unavailable`（62 番）、`areka-actor/src/ui.rs`・`areka-emo-text/src/actor.rs`（4 番）。
+- cargo のビルドとテストは回していない（このワークツリーの `target\` は空で、冷えたビルドは重い・要件 8）。コンパイルで確かめる 72・83 番は実装のタスクの初めに確かめる。
+
+### 12.2 持ち越した調べ（11 節の 5）の結果
+
+| 番号 | 結果 |
+|---|---|
+| 2 | 門は組み立てられる見込み。`SpineHarness::boot_with` が `spawn_seriko(.., PresentBridge)` を呼ぶので、`PresentBridge` を包む `SurfaceOutput` を渡す口（`boot_with_gate`）を 1 つ足せばよい（呼び手 8 か所は変えない）。**ただし 2 番の「`drive_talk` が戻ってから門を開ける」形は、直しの後は `drive_talk` が目印を待ち続けて門が開かず、30 秒の `［止まった］` で赤になる＝直しの後に緑にならない。** 設計では開ける時点を「テストが `TalkEnded` を見た時」にした（直しの前はその反復で輪を抜けて赤・直しの後は次の反復以降で目印が届いて緑）。前提は「`TalkEnded` は seriko を待たずに届く」（2 番の読み）。作って確かめるのは実装のタスク |
+| 30 | 食い違いは無い。一周の台帳（`spine_conformance_script.rs` の `expected_calls`）は「起動 5」を basewareversion と番号付けしているが、`OnTranslate` を「起動 4」の後ろに `translated(..)` で挟んでいて、呼び出しの列は 6 で `spine_boot_smoke_tests.rs` の逐語の 6 と同じ。**ただし 30 番の直し方「`>= 6` にする」は使えない**: `spine_conformance_support_stage_tests.rs` の 2 本は `OnBoot` が台詞を返さず（`Ok(None)`）、`OnTranslate` が出ないので 5 呼び出しで終わる＝`>= 6` は永久に来ない。設計では「最後の basewareversion が記録された」を見る `boot_finished` に寄せた |
+| 72 | 構造体は `pub(crate)`・欄は `pub` で、`note`・`source`・`enforced` を読むのは `script_restriction_tests.rs` だけ（本番のコードの読みは 0）。`Debug`・`Clone` の derive は dead_code の数えに入らないので、lib のビルドで「never read」が出る見込み。`tools/test-all.ps1` に clippy の `-D warnings` は無いので、警告が出ていても今の全体テストは緑のまま。実装で `cargo check -p areka-runtime --lib` の警告を見て決める（出なければ前提が崩れたとして記録して閉じる） |
+| 83 | `runtime` の欄は `spine_conformance_lap_tests.rs` と `spine_talk_close_tests.rs` が読む（同じ crate の `#[cfg(test)]` の木の中）。許可を消しても警告は出ない見込み。コンパイルで確かめる |
+| 22 | 6 ファイルの `\.rs:\d+` の当たりは 88 か所（script 55・stage 15・support 9・lap 6・judge 2・support_tests 1）。ギャップ分析の 165 か所とは数え方が違う（行の頭の「出所:」の数などを数えた可能性）。どちらでも直し方は同じで、完了の条件は「6 ファイルで `\.rs:\d+` が 0 件」とした |
+| 1 | `scope_of` の呼び手は `adapter.rs` の 7 か所と `send_rebased`（L221）だけで、入口の 1 か所で上限を見れば足りる。`shell_target`・`balloon_target` を直に呼ぶ所（`frame/`・`skin_facts_copy.rs`・`shell_carry.rs`・本体の `mcp/`）は窓の一覧や表から来る小さな数。台本の `\p[2147483648]` が seriko まで届くかは、決定論のテストを `target_map`・`adapter` の純関数で立てる（`map_display_command` が `None`・直しの前はデバッグのビルドで panic）ので、偽の SHIORI の台本までは要らない。写像不能の `warn!` の文「非数値 scope の…」を字面で読む所は 0 件 |
+
+### 12.3 設計の決め
+
+- **D1 切り方**: 案 C（必ず直す 3 件と 4 番を先に独立のタスクに・残りをファイルのまとまりで）。20 タスク。本体の `runtime_tests/spine.rs` を触る束（T2・T3・T4・T14〜T17）は直列。
+- **D2 1 番の上限**: `i32::MAX`（`balloon_target` の `2*scope+1` が `u32` に収まる最大）。入口の `scope_of` 1 か所で見る。
+- **D3 48 番の形**: `Result<GhostRuntime, GhostBootError>`（`RuntimeBootError` を消す）。`Option` にしないのは、失敗を記録と `Err` の両方で表す決まり（要件 6.2）と、テストが失敗の種類（`Mount`）まで確かめられるため。
+- **D4 33 番の分け方**: 6 本と補助 `names`・`names_of`・`char2_names`・`wear` を、そのまま `areka-runtime` のテストへ移す（`names_of` は本番と同じシェルの読みのまま・`sample-ghost-kit` は dev-dependencies にある）。本体に残る 1 本は、名前表を 1 式の `BindResolver::from_groups(&BindGroupDefaults::from([..]))` で組む（確かめたいのは送る順で、名前の読みではない）。補助をテストの支えへ置く形は取らない（`names_of` が番人の crate を使い、`test-support` の下では dev-dependencies がリンクされない＝依存を足さないと置けない）。
+- **D5 30 番の待ち**: 数でなく「basewareversion が記録された」で見る（12.2 の 30）。
+- **D6 2 番の門**: 足場だけに置く。開ける時点は `TalkEnded` を見た時（12.2 の 2）。鍵を捨てても開く。
+- **D7 35 番の形**: 10 か所を `drive_talk` と同じ「進みの目印つきの `wait_until`」にそろえる。足場に 1 本の部品は置かない（輪の中身が 10 か所で違い、共通は目印の 2 行だけ）。
+- **D8 62 番**: 出し直しの送り手の確かめを記録の前へ移し、送れないときだけ `reload_shell_replay_unavailable`。控えと渡しの 2 つは今の名前のまま（読み手の `ghost_switch_reload_tests.rs:L525` は控えの側の数を見る）。
+- **D9 54 番**: 偽の SHIORI は `Status` を記録しない。`RecordedCall::Status` の枝は残す仮置き（枝を消すと範囲の外の 4 ファイルの match に及び、議題 4 の約束の変化の一覧に無い）。設計の討議の未決 2。
+- **D10 102 番**: 読み口 `crate_path` を `areka-runtime` の `source_text_test_support.rs` へ下ろし、本体はその出し直しにして、film の E2E を移す仮置き（読み口は 1 つのまま・`CARGO_MANIFEST_DIR` の `..` の先は同じ `crates/`）。`areka-runtime` のテストの実行ファイルにもプロセスの寿命の MTA の据え付けがあるので、96 番の `CoInitializeEx` の削除と両立する。設計の討議の未決 1（移さずに ⑴ として残す案と並べる）。
+
+### 12.4 総括の 3 つの目（`design-synthesis.md`）
+
+- **まとめ（Generalization）**: 「2 つの crate で使う補助は `areka-runtime` の `*_test_support.rs` に 1 つ」の型を、97 番（`carrier_cue`）・95 番（`settle_bounded`）・102 番（`crate_path`）に同じ形で当てた。待ちは全部「進みの目印つきの `wait_until`」に寄せた（35 番・30 番の `boot_finished` も同じ芯の上）。
+- **作るか使うか（Build vs. Adopt）**: 新しく作る部品は 2 番の門だけ（std の `Mutex`・`Condvar`）。ほかは既にある支え（`listed_name`・`give_fake_handles`・`count_level`・`code_only`・`two_scope_placements`・`settle_bounded`・`wait_until`）を使う。外の crate は使わない。
+- **削る（Simplification）**: 足場の部品 `drive_until`（35 番）・名前表のテストの支え（33 番）・`RuntimeBootError` の包み（48 番）は置かない／消す。約 −700 行の見込みは変わらない。
+
+### 12.5 危うさ
+
+- 2 番の門の前提（`TalkEnded` が seriko を待たない）が崩れると、直しの前の赤か直しの後の緑のどちらかが立たない。そのときは設計の討議へ戻す（要件 5.2）。
+- 3 番の縛るテストは spine の起動を 1 回増やす（実 GPU）。赤が出たら赤のテストだけに絞る（要件 8.4）。
+- 4 番は 4 つの crate・23 ファイルを 1 つのタスクで直す。コンパイルが通れば呼び手の漏れは無い（戻りの型が変わるので、直し忘れはビルドで止まる）。
+- 移し替え（T15）は、本体から消えたテストの数と `areka-runtime` に増えた数が合うことを確かめる。
+
+### 12.6 設計の review gate
+
+- 1 回目: 機械の確かめ（要件の 62 の番号が全部設計に在る・境界の 4 節が埋まっている・ファイルの構成に具体の道・境界とファイルの構成が合う・部品は全部ファイルの道を持つ）は通った。判断の確かめで、2 番の赤の確かめの順（門を先に入れて赤を見てから終わりの条件を直す）を書き直した（その場の直し）。
+- 2 回目: 指摘 0。要件の穴・食い違いは見つからなかった（examples の 44・45 番の縛るテストの扱いは要件 4.1 の読みの問題として未決 3 にした）。
