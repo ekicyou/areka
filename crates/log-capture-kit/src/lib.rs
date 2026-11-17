@@ -25,7 +25,7 @@
 //! ```
 //!
 //! 併せて、テストから `tracing::info!` などを発火するので **`tracing` が消費 crate 側から
-//! 引けること**が要る（本 crate の依存は伝播しない）。消費する 21 crate はいずれも既に
+//! 引けること**が要る（本 crate の依存は伝播しない）。消費する crate はいずれも既に
 //! `[dependencies]` に `tracing` を持っているので追加の作業は無いが、新しい crate から
 //! 引くときは 2 行になる。
 //!
@@ -155,12 +155,6 @@
 //!   ちょうどで固定する判定に使う（いずれも Debug 表現・名前の昇順）。
 //! - [`ensure_interest_probes`] — 常駐の仕掛けを窓を開かずに確立する（冪等）。[`capture`] が
 //!   内部で呼ぶので、通常は消費側が直接呼ぶ必要は無い。
-//! - [`interest_probes_enabled`] — 常駐の仕掛けが実際に確立されているかを返す。**測定専用の
-//!   切替**（環境変数 `AREKA_LOG_CAPTURE_PROBES=off` で常駐を止める・要件 13.1）が、測定対象の
-//!   プロセスまで本当に届いていたかを、切替と同じ経路で確かめるための窓口である。
-//!   **捕捉テストがこれを読んで分岐してはならない**——硬化の有無で主張が変わるテストは、
-//!   硬化が効いていないときに黙って別のことを確かめて緑になる。それは本 crate が
-//!   根絶するために作られた当の形である。
 //! - `capture_under_filter`（feature `env-filter`）— `RUST_LOG` 相当の directive を実際に
 //!   適用し、濾過を通過した整形済み出力だけを 1 本の文字列で返す。
 //!
@@ -229,4 +223,4 @@ pub use expect::{ExpectField, expect_one};
 #[cfg(feature = "env-filter")]
 pub use filter::capture_under_filter;
 pub use global::install_global_capture_all;
-pub use probe::{ensure_interest_probes, interest_probes_enabled};
+pub use probe::ensure_interest_probes;

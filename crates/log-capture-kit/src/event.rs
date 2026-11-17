@@ -37,7 +37,7 @@ pub struct CapturedEvent {
 /// `record_debug` へ転送するため、`record_debug` と `record_str` の 2 本で型を問わず全
 /// フィールドを捕捉できる。`record_str` を別に持つのは生値（引用符なし）を残すためで、
 /// `debug` 側は `record_debug` が同じ値に対して作る表現と一致させる。
-pub(crate) struct FieldCollector<'a>(pub(crate) &'a mut Vec<(String, FieldValue)>);
+struct FieldCollector<'a>(&'a mut Vec<(String, FieldValue)>);
 
 impl tracing::field::Visit for FieldCollector<'_> {
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
@@ -86,7 +86,7 @@ impl CapturedEvent {
 
     /// フィールドの **Debug 表現**（文字列値なら引用符つき）。無ければ `None`。
     ///
-    /// 行整形に載るのと同じ文字列で、`placement::LogEvent::field` と同じ値を返す
+    /// 行整形に載るのと同じ文字列で、移行前の `placement::LogEvent::field` と同じ値を返す
     /// （欠落時に panic するかどうかだけが違い、判定はアダプタ側に委ねる）。
     pub fn field(&self, name: &str) -> Option<&str> {
         self.last(name).map(|v| v.debug.as_str())
@@ -133,7 +133,7 @@ impl CapturedEvent {
     }
 }
 
-/// 行整形の 2 形。移行対象 crate が今日出している文字列を 1 バイトも違わずに再現する。
+/// 行整形の 2 形。移行の前に対象 crate が出していた文字列を 1 バイトも違わずに再現する。
 ///
 /// どちらも「先頭の固定部 ＋ フィールドを訪問順で ` {name}={value:?}` として連結」であり、
 /// フィールドが 1 個も無ければ固定部だけ（末尾に空白は付かない）。レベルは `Display`

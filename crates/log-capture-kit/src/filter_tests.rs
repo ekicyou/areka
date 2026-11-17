@@ -1,8 +1,8 @@
 //! `capture_under_filter` の自己テスト（feature `env-filter` のときだけコンパイルされる）。
 //!
-//! 本 API の契約は `wintf` の 96 呼出がそのまま回帰スイートになる形で決まっている
+//! 本 API の契約は `wintf` の呼出がそのまま回帰スイートになる形で決まっている
 //! （設計 `## Components and Interfaces` → `#### C1 log-capture-kit`）。よってここで固定
-//! するのは、その 96 呼出が依存している 3 点である。
+//! するのは、その呼出が依存している 3 点である。
 //!
 //! ⒜ **directive が実際に効く**（部分一致の模倣ではなく [`tracing_subscriber::EnvFilter`]
 //!   による実濾過）。⒝ **番兵行が戻り値に現れない**（呼出側の主張が番兵の分だけ変わらない）。
@@ -184,11 +184,11 @@ fn stripping_panics_when_no_sentinel_line_is_present() {
     let _ = strip_sentinel_lines("先頭の行\n末尾の行\n");
 }
 
-// ---- ⒞ 行の形（96 呼出が読んでいる文字列そのもの） -----------------------
+// ---- ⒞ 行の形（`wintf` の呼出が読んでいる文字列そのもの） -----------------------
 
 /// 要件 1.2: 1 イベント 1 行・ANSI 無し・レベル／宛先／本文／フィールドが載る。
 ///
-/// `wintf` の 96 呼出は `contains("stage=begin")` のようにこの形の内側を読む。
+/// `wintf` の呼出は `contains("stage=begin")` のようにこの形の内側を読む。
 /// 整形器の設定を変えるとここが赤になる。
 #[test]
 fn one_event_becomes_one_plain_line_carrying_level_target_message_and_fields() {

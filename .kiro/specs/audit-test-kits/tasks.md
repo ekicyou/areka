@@ -22,7 +22,7 @@
   - _Dispatch: standard — 一意の作り直しの輪と書き先を引数で受ける消し手を新しく書く_
   - _Requirements: 3.1, 4.1, 4.3, 4.5, 6.2, 6.5, 6.6_
 
-- [ ] 2. log-capture-kit の記録の捕まえ（src）
+- [x] 2. log-capture-kit の記録の捕まえ（src）
 - [x] 2.1 ちょうど 1 件の確かめのテストを足し、範囲の外の写しを消す（L1: 21・38・件 1）
   - 21: 兄弟の新しいテストのファイル `expect_tests.rs` を作り、手で組んだ捕まえた記録（`event_tests.rs` の手組みと同じ形）で 0 件・2 件・欠けた項目の `#[should_panic]` 3 本と、通る 1 本を置く
   - 38: `expect_one` と `expect_field` に `#[track_caller]` を付ける
@@ -31,7 +31,7 @@
   - _Depends: 1.1, 4.1_
   - _Dispatch: mechanical — 期待値を設計が書くテストと写しの削除_
   - _Requirements: 3.1, 3.2, 4.1, 5.1, 5.2, 7.1, 7.2, 7.11_
-- [ ] 2.2 log-capture-kit の src の言い直しと削り（L2: 39〜44・件 2）
+- [x] 2.2 log-capture-kit の src の言い直しと削り（L2: 39〜44・件 2）
   - 39: 別のテストをなぞるだけの 3 本と、それに含まれる重なりの 1 本を消す（`event_tests.rs:18-19`・121 は触らない）
   - 40: テストの購読者を `CapturedEvent::from_event` を積む形にし、`FieldCollector` を私用にする
   - 41: 赤になりえない自己テスト 3 つを消す
@@ -212,3 +212,5 @@
 - `doc/testing.md` の 75・163 行（32 の新しい英語の行の読み手）は 5.3 で直す
   - 2.1: `expect_one` を `hits.len().min(1)` にして 2 件を通す → `該当が_2_件なら失敗する` が赤。消す前の grep（HEAD）: 私用の `fn expect_one` は `scale_tests.rs` 1・`attach_wiring_test.rs` 1、`trait ExpectField` は `attach_wiring_test.rs` 1（消した後は `log-capture-kit/src/expect.rs` の 2 だけ）。範囲の外の 6 ファイル（design.md の表）を触るほかの作業木の枝は 0（2.1 の前に `git diff main...<枝>` で確かめた）
 - 範囲の外: `cargo clippy -p areka-emo-present`／`areka-emo-text` は依存の `wintf` の 51 件の誤りで通らない（本 spec は wintf を 1 行の言い直しのほか触らない）。`/kiro-complete` の棚卸で扱う
+  - 2.2: 足したテスト無し（較正なし）。消す前の grep（コードの宣言のほかは本 spec の文書と `completed/areka-P0-test-cage-determinism/verification/` だけ）: `format_line_is_byte_identical_to_current_formatting_code` 1・`level_is_rendered_with_display_not_debug` 1・`capture_lines_does_not_leak_the_sentinel` 1・`establishing_the_probes_is_idempotent` 1・`the_switch_variable_lives_in_the_workspace_namespace` 1（completed にも 0）・`FieldCollector` は道具の外 0・`interest_probes_enabled` は道具の外 0。41 の `capture_tests.rs` は `DONE` の数の 3 行だけを消し、テストは残した。`interest_probes_enabled` は `#[cfg(test)] pub(crate)`（使い手がテストだけで、`pub(crate)` だけだと clippy の dead_code）
+  - 2.2: 39 の「それに含まれる重なりの 1 本」は research.md の引く `capture_tests.rs:385-388`・389-392 が在らず（253 行）、名指しの 3 本で Lean -49 に合うので、見つからないものとして消さなかった（6.1 のかけ直しで拾う）

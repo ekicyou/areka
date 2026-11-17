@@ -181,17 +181,16 @@ fn probes() -> &'static Option<(tracing::Dispatch, tracing::Dispatch)> {
 /// 何度呼んでも、また複数スレッドから同時に呼んでも安全（[`OnceLock`] が 1 回に畳む）。
 ///
 /// 環境変数 `AREKA_LOG_CAPTURE_PROBES=off` が立っているときだけ、登録せずに戻る
-/// （測定専用の切替・要件 13.1）。立っているかどうかは [`interest_probes_enabled`] で読める。
+/// （測定専用の切替・要件 13.1）。
 pub fn ensure_interest_probes() {
     let _ = probes();
 }
 
 /// 常駐 probe が**実際に確立されているか**を返す（確立がまだなら、その場で判定して確立する）。
 ///
-/// 測定（要件 13.1 の A/B）で「環境変数を立てたつもりで立っていなかった」を炙り出すための
-/// 窓口である。値そのものではなく**この判定の結果**を返すので、変数が測定対象のプロセスまで
-/// 届いていたかどうかを、切替と同じ経路で確かめられる。
-pub fn interest_probes_enabled() -> bool {
+/// 切替の判定の結果をテストから読むための口（テスト専用）。
+#[cfg(test)]
+pub(crate) fn interest_probes_enabled() -> bool {
     probes().is_some()
 }
 

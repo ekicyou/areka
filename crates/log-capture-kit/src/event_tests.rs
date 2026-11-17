@@ -1,17 +1,17 @@
 //! `event.rs` の自己テスト（設計 C1 Implementation Notes → Validation ⒠⒡⒢）。
 //!
-//! 中心にあるのは **byte 一致**である。移行対象 crate は今日、自前の Layer／Subscriber で
+//! 中心にあるのは **byte 一致**である。移行の前、対象 crate は自前の Layer／Subscriber で
 //! 1 イベントを 1 行へ整形しており、その行の文字列を `contains` や `starts_with` で判定する
-//! テストが多数ぶら下がっている。整形が 1 バイトでも違えば、それらは移行と同時に静かに
+//! テストが多数ぶら下がっていた。整形が 1 バイトでも違えば、それらは移行と同時に静かに
 //! 意味を変える。そこで本ファイルは 2 段で固定する。
 //!
-//! 1. **逐語の見本**（[`LEVEL_TARGET_FIELDS_FIXTURE`]／[`LEVEL_FIELDS_FIXTURE`]）— 移行対象の
-//!    現行整形コードを 1 文字も変えずに走らせて得た**実出力**をそのまま置いたもの。
-//! 2. **差分検査**（[`LegacyLineFormatting`]）— その現行整形コードの逐語写しを本ファイル内に
-//!    持ち、**同一のイベント列**に対して [`format_line`] と 1 バイト単位で突き合わせる。
-//!    見本が古びても差分検査は毎回走るので、両者が同時に嘘をつくことはない。
+//! 1. **逐語の見本**（[`LEVEL_TARGET_FIELDS_FIXTURE`]／[`LEVEL_FIELDS_FIXTURE`]）— 移行前の
+//!    整形コードを 1 文字も変えずに走らせて得た**実出力**をそのまま置いたもの。
+//! 2. **逐語写し**（[`LegacyLineFormatting`]）— その整形コードの写しを本ファイル内に持ち、
+//!    見本と [`format_line`] の両方に 1 バイト単位で突き合わせる。写しと見本のどちらかだけを
+//!    直すと赤になるので、両者が同時に嘘をつくことはない。
 //!
-//! 逐語写しの出所（`format!`／`write!` の並びは 1 文字も変えていない）:
+//! 逐語写しを移した時点の出所（今はどれも `capture_lines` を呼ぶ。下の並びは出自の記録）:
 //! - 宛先を含む形: `crates/areka-seriko/src/lib_test_support.rs` の `capture_logs` と
 //!   `crates/areka-emo-atlas/src/log_capture.rs`・`crates/areka-emo-compose/src/log_capture.rs`
 //!   の同型。
@@ -99,7 +99,7 @@ impl tracing::Subscriber for LegacyLineFormatting {
             return;
         }
 
-        // ↓ `areka-seriko/src/lib_test_support.rs`（＝`areka-emo-atlas`／`areka-emo-compose` も同一）逐語
+        // ↓ 移した時点の出所: `areka-seriko/src/lib_test_support.rs`（＝`areka-emo-atlas`／`areka-emo-compose` も同一）逐語
         {
             use tracing::field::{Field, Visit};
             let meta = ev.metadata();
@@ -199,45 +199,6 @@ fn level_fields_matches_verbatim_fixture() {
     );
 }
 
-/// 見本が古びても効く側の検査。**同一のイベント列**に対して、現行整形コードの逐語写しと
-/// [`format_line`] を毎回突き合わせる。
-#[test]
-fn format_line_is_byte_identical_to_current_formatting_code() {
-    let (events, legacy_with, legacy_without) = run_fixture();
-
-    assert!(
-        !events.is_empty(),
-        "イベントが 1 件も捕れていない（この検査は空列に対して恒真になる）"
-    );
-    assert_eq!(events.len(), legacy_with.len());
-    assert_eq!(events.len(), legacy_without.len());
-
-    for (i, ev) in events.iter().enumerate() {
-        assert_eq!(
-            format_line(ev, LineFormat::LevelTargetFields),
-            legacy_with[i],
-            "{i} 件目（宛先を含む形）が現行整形コードと違う"
-        );
-        assert_eq!(
-            format_line(ev, LineFormat::LevelFields),
-            legacy_without[i],
-            "{i} 件目（宛先を含まない形）が現行整形コードと違う"
-        );
-    }
-}
-
-/// レベルは `Display`（`INFO`）で載る。`Debug`（`Level(Info)`）ではない。
-#[test]
-fn level_is_rendered_with_display_not_debug() {
-    let (events, _, _) = run_fixture();
-    let line = format_line(&events[0], LineFormat::LevelFields);
-    assert!(line.starts_with("level=INFO"), "実際: {line}");
-    assert!(
-        !line.contains("Level("),
-        "レベルが Debug 表現で載っている: {line}"
-    );
-}
-
 /// フィールドが 1 個も無いイベントは、末尾に空白を残さない。
 #[test]
 fn event_without_fields_has_no_trailing_space() {
@@ -268,19 +229,6 @@ fn capture_lines_returns_formatted_lines_and_the_closure_result() {
             "level=WARN target=areka_emo_atlas message=surface missing set=0 rel_path=\"clear.png\""
                 .to_string()
         ]
-    );
-}
-
-#[test]
-fn capture_lines_does_not_leak_the_sentinel() {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, || {
-        tracing::info!(target: "areka_runtime", "only mine");
-    });
-    // 陽性対照（自分のイベントは 1 件捕れている）と対で見る。
-    assert_eq!(lines.len(), 1, "実際: {lines:?}");
-    assert!(
-        !lines.iter().any(|l| l.contains(SENTINEL_TARGET)),
-        "番兵が漏れている: {lines:?}"
     );
 }
 

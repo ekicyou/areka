@@ -2,7 +2,7 @@
 //!
 //! 本モジュールは `#[cfg(test)]` でのみコンパイルされ、本番バイナリには一切含まれない。
 //! 実体はワークスペースで唯一の定義元である `log-capture-kit` にあり、ここはその
-//! [`capture_under_filter`] を wintf の既存呼出（96 箇所）へ届けるだけの薄い再輸出である。
+//! [`capture_under_filter`] を wintf の既存呼出へ届けるだけの薄い再輸出である。
 //!
 //! 診断手順書が指定する `RUST_LOG` 相当の directive を [`tracing_subscriber::EnvFilter`] で
 //! 実際に適用し、その濾過を通過した出力だけを文字列として返す、という契約は変わらない。

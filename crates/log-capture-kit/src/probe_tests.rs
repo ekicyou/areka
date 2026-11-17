@@ -13,15 +13,6 @@ use super::{
     probes_env_read_count,
 };
 
-/// 変数名はワークスペースの規約（`AREKA_` 名前空間）に従う。
-#[test]
-fn the_switch_variable_lives_in_the_workspace_namespace() {
-    assert!(
-        PROBES_ENV.starts_with("AREKA_"),
-        "実行時の環境変数は AREKA_ 名前空間（既存の較正用変数と同じ流儀）: {PROBES_ENV}"
-    );
-}
-
 /// 指定と判定が食い違わない。**「立てたつもりで立っていない」を炙り出すための対照**で、
 /// 未設定なら既定（常駐する）でなければならない。
 #[test]
@@ -43,25 +34,6 @@ fn the_decision_agrees_with_what_the_environment_actually_says() {
         ),
         Some(other) => panic!("{PROBES_ENV} の値が不正: {other:?}"),
     }
-}
-
-/// 確立は冪等で、何度呼んでも判定は動かない。
-///
-/// **この檻が縛るのは「判定が動かない」ことだけ**である。読み取り回数は縛れない——毎回読む形へ
-/// 変えても同一プロセス内では答えが同じなので、判定の一致は恒真になる（タスク 11.1 のレビューが
-/// 変異で実測した）。回数のほうは次の
-/// [`the_environment_is_read_exactly_once_for_the_whole_process`] が縛る。
-#[test]
-fn establishing_the_probes_is_idempotent() {
-    ensure_interest_probes();
-    let first = interest_probes_enabled();
-    ensure_interest_probes();
-    ensure_interest_probes();
-    assert_eq!(
-        first,
-        interest_probes_enabled(),
-        "常駐の確立を繰り返すと判定が動いた（`OnceLock` に畳まれていない）"
-    );
 }
 
 /// 環境変数を読むのは**プロセス寿命で 1 度きり**である（要件 13.1・測定対象への上乗せが無いこと）。

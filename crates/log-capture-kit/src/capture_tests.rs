@@ -5,11 +5,10 @@
 //! 各テストは**自分専用の発行点**（専用の宛先を持つ module 直下の関数）を使う。発行点の
 //! interest はプロセス大域に焼き付くため、発行点を共有すると他テストの実行順で条件が変わる。
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use crate::event::{CapturedEvent, FieldCollector, FieldValue};
+use crate::event::CapturedEvent;
 
 // ---- テスト専用の発行点（1 テスト 1 宛先） --------------------------------
 
@@ -111,16 +110,10 @@ impl tracing::Subscriber for SentinelDroppingSubscriber {
     fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
     fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
     fn event(&self, event: &tracing::Event<'_>) {
-        let mut fields: Vec<(String, FieldValue)> = Vec::new();
-        event.record(&mut FieldCollector(&mut fields));
         self.0
             .lock()
             .expect("捕捉バッファは毒化していない")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                target: event.metadata().target().to_string(),
-                fields,
-            });
+            .push(CapturedEvent::from_event(event));
     }
     fn enter(&self, _span: &tracing::span::Id) {}
     fn exit(&self, _span: &tracing::span::Id) {}
@@ -229,24 +222,15 @@ fn extracts_events_even_while_the_shared_sink_is_still_held() {
 /// 同時に呼んでも安全（冪等）。
 #[test]
 fn ensure_interest_probes_is_idempotent_across_threads() {
-    static DONE: AtomicUsize = AtomicUsize::new(0);
-
     ensure_interest_probes();
     ensure_interest_probes();
 
     let hands: Vec<_> = (0..8)
-        .map(|_| {
-            std::thread::spawn(|| {
-                ensure_interest_probes();
-                DONE.fetch_add(1, Ordering::SeqCst);
-            })
-        })
+        .map(|_| std::thread::spawn(ensure_interest_probes))
         .collect();
     for h in hands {
         h.join().expect("probe 確立スレッドは panic しない");
     }
-
-    assert_eq!(DONE.load(Ordering::SeqCst), 8);
 
     // 冪等呼出のあとでも窓は生きている（番兵検査が通る）。
     let ((), _events) = capture(|| {});
