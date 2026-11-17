@@ -88,7 +88,7 @@
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::os::windows::fs::OpenOptionsExt;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use areka_nar::{InstallRequest, NarArchive, SingleRoot};
@@ -128,14 +128,21 @@ static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 /// 環境変数の値と実行ファイルの場所を**引数で受ける**ので、環境を書き換えずに
 /// （＝並走するテストに影響を与えずに）両方の経路と失敗を判定できる。
 ///
-/// 相対の値は、実行ファイルの祖先のうちその値で終わる最も近いものを使う（決め D4）。
+/// 相対の値は、実行ファイルの祖先のうちその値で終わる最も近いものを使う（audit-test-kits 決め D4）。
 /// cargo は起こした場所の上で解くが、テストの実行体はパッケージの場所で走るので、作業
 /// フォルダの上で解くと別の場所を指す。どちらで起こしても実行体は `<target>\debug\…` の
-/// 下にあるので祖先に現れる。祖先に無ければ作業フォルダの上で絶対にする。
+/// 下にあるので祖先に現れる。照らすのは頭の `.`・`..` を外した名前の段だけ（`..\tgt` の
+/// `..` は起こした場所の上の印で、祖先の名前には現れない）。名前の段が無いか、祖先に
+/// 無ければ作業フォルダの上で絶対にする。
 fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, SampleError> {
     if let Some(dir) = configured.map(str::trim).filter(|dir| !dir.is_empty()) {
+        let named: PathBuf = Path::new(dir)
+            .components()
+            .skip_while(|part| matches!(part, Component::CurDir | Component::ParentDir))
+            .collect();
         if Path::new(dir).is_relative()
-            && let Some(found) = exe.ancestors().find(|ancestor| ancestor.ends_with(dir))
+            && !named.as_os_str().is_empty()
+            && let Some(found) = exe.ancestors().find(|ancestor| ancestor.ends_with(&named))
         {
             return Ok(found.to_path_buf());
         }
@@ -192,7 +199,7 @@ impl WorkDir {
 
     /// 名前空間を指定して 1 つ取る。
     ///
-    /// 原本の組み上げは `rename` で `cache/` へ入れるので、作業フォルダは**原本と同じ
+    /// 原本の組み上げは `rename` で [`CACHE`] へ入れるので、作業フォルダは**原本と同じ
     /// 名前空間**（＝同じボリューム）に居なければならない。テストも私有の名前空間を
     /// 渡して、走っている他のテストと混ざらずに全体を作り直せる。
     fn in_namespace(namespace: &Path) -> Result<WorkDir, SampleError> {
@@ -275,7 +282,7 @@ impl WorkDir {
     /// （spec: `areka-P0-ghost-session-test-load-flake` 要件 5.2・檻
     /// `a_work_dir_keeps_its_lease_while_its_tree_is_being_removed`）。
     fn release_with(&mut self, remove_tree: impl FnOnce(&Path) -> std::io::Result<()>) {
-        // 原本として `cache/` へ移した後は木が既に無い（`NotFound`）。それは後始末の
+        // 原本として `CACHE` へ移した後は木が既に無い（`NotFound`）。それは後始末の
         // 目的が達成された状態なので、札だけを閉じて消す。
         report_cleanup(
             "remove the work folder",
@@ -327,7 +334,7 @@ pub(crate) fn nar_dir() -> PathBuf {
 /// 窓口の 3 つの入口は取得のたびにここを通るので、照合も取得のたびに行われ、落ちた書庫は
 /// 原本の作り（[`cached_root_in`]）へ渡らない。
 ///
-/// 返すのは書庫のパスと**読んだバイト**（決め D13）。原本の刻印と据え付けはこのバイトから
+/// 返すのは書庫のパスと**読んだバイト**（audit-test-kits 決め D13）。原本の刻印と据え付けはこのバイトから
 /// 作り、パスのファイルを読み直さない（読み直すと、確かめていないバイトで原本を作りうる）。
 ///
 /// # Errors
@@ -375,7 +382,7 @@ fn stamp(bytes: &[u8]) -> String {
     format!("{}-{:08x}", bytes.len(), areka_nar::crc32(bytes))
 }
 
-/// `cache/` の 1 件の名前を `(検体名, 刻印)` に割る。割れなければ `None`。
+/// [`CACHE`] の 1 件の名前を `(検体名, 刻印)` に割る。割れなければ `None`。
 ///
 /// 検体名自身が `-` を含む（`emo2-kakukaku-wplimit`）ので、**前から**数えると
 /// `emo2` の原本を探しているつもりで `emo2-kakukaku-wplimit` の原本に当たってしまう。
@@ -392,7 +399,7 @@ fn split_stamp(entry: &str) -> Option<(&str, &str)> {
     shaped.then(|| (name, &entry[name.len() + 1..]))
 }
 
-/// 検体 1 つの原本（`cache/<検体>-<刻印>/`）を用意して、その絶対パスを返す
+/// 検体 1 つの原本（[`CACHE`]`/<検体>-<刻印>/`）を用意して、その絶対パスを返す
 /// （要件 7.2・7.3・7.6・7.7・7.8）。
 ///
 /// 原本は**誰にも配らない**。配るのは [`fresh_root`] がここから取る複製である。
@@ -430,13 +437,13 @@ fn cached_root_in(namespace: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf,
     Ok(master)
 }
 
-/// 空の根へ展開してから、`rename` 1 回で `cache/` へ据え付ける。
+/// 空の根へ展開してから、`rename` 1 回で [`CACHE`] へ据え付ける。
 ///
 /// 展開の間ずっと作業フォルダの札が開いているので、並走する別プロセスの掃除には
 /// 消されない。`rename` が成功した後の作業フォルダの [`Drop`] は木が無いことを許容する。
 ///
 /// `areka-nar` は書庫をパスからしか開けないので、確かめたバイトを別の札付きの作業フォルダの
-/// 中の `<名>.nar` へ書いてから開く（決め D13。展開先に混ぜないために分ける）。
+/// 中の `<名>.nar` へ書いてから開く（audit-test-kits 決め D13。展開先に混ぜないために分ける）。
 fn stage_into_cache(
     namespace: &Path,
     cache: &Path,
@@ -479,7 +486,7 @@ fn stage_into_cache(
 }
 
 /// [`CACHE`] の数を上げる前の世代の棚（名前が `cache` で始まり [`CACHE`] でないフォルダ）を
-/// 退ける（指摘 54）。数を上げるたびに古い棚が `cargo clean` まで残るのを防ぐ。失敗は
+/// 退ける（audit-test-kits 指摘 54）。数を上げるたびに古い棚が `cargo clean` まで残るのを防ぐ。失敗は
 /// [`discard_tree`] と同じく人の読める形に出して続ける。
 fn discard_older_cache_shelves(namespace: &Path) {
     let entries = match std::fs::read_dir(namespace) {
@@ -500,7 +507,7 @@ fn discard_older_cache_shelves(namespace: &Path) {
 
 /// 同じ検体の刻印違いの原本を回収する（要件 7.3・7.9）。
 ///
-/// 先に `work/gc-…/` へ `rename` してから消すので、途中で落ちても `cache/` の下に
+/// 先に `work/gc-…/` へ `rename` してから消すので、途中で落ちても [`CACHE`] の下に
 /// 半端な木は残らない（残るのは `work/` の下の消し残しで、次の取得の掃除が拾う）。
 ///
 /// 失敗しても**取得は続ける**。別のプロセスが複写中・ウイルス対策が掴んでいる、は
@@ -508,7 +515,7 @@ fn discard_older_cache_shelves(namespace: &Path) {
 ///
 /// 実測: Windows は**子孫のファイルが開かれているフォルダの `rename` を拒む**
 /// （共有モードに書き込みと削除を足しても同じ）。掴まれている古い原本は最初の一歩で
-/// 失敗するので、`cache/` に無傷のまま残り、次の取得で改めて回収される（兄弟テスト
+/// 失敗するので、[`CACHE`] に無傷のまま残り、次の取得で改めて回収される（兄弟テスト
 /// `a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next_acquire`）。
 fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
     let entries = match std::fs::read_dir(cache) {
@@ -526,7 +533,7 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
         };
         let raw = entry.file_name();
         // 名前を読めない・刻印の形をしていないものは、この仕様が置いた原本ではない。
-        // 黙って消さずに残す（`cache/` の下は掃除の対象でもない）。
+        // 黙って消さずに残す（`CACHE` の下は掃除の対象でもない）。
         let Some((sample, stamp)) = raw.to_str().and_then(split_stamp) else {
             continue;
         };
@@ -538,7 +545,7 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
             report_cleanup("create the shelf for reclaiming", Err(err), &shelf);
             continue;
         }
-        // `cache/` の外へ出すのが先。「名前が合う原本は完全」を一瞬も破らない。
+        // `CACHE` の外へ出すのが先。「名前が合う原本は完全」を一瞬も破らない。
         discard_tree(&shelf, &stale, "old master copy");
     }
 }
@@ -730,7 +737,7 @@ pub(crate) fn fresh_root_in(
 }
 
 /// 原本を複写する。複写が落ち、原本がもう無いときだけ、`again` で原本を用意し直して
-/// 1 度だけ写し直す（決め D5）。
+/// 1 度だけ写し直す（audit-test-kits 決め D5）。
 ///
 /// 原本が消えるのは、違うバイトを読んだ別のプロセスが刻印違いとして退けたとき。
 /// `again` は今の書庫のバイトを読み直すので、勝った側の原本に合流して終わる。
@@ -827,7 +834,7 @@ fn report_cleanup(what: &str, result: std::io::Result<()>, path: &Path) {
 #[path = "devroot_tests.rs"]
 mod tests;
 
-/// 原本（`cache/`）の兄弟テスト。1 ファイル 1,000 行の上限に収めるために分けただけで、
+/// 原本（[`CACHE`]）の兄弟テスト。1 ファイル 1,000 行の上限に収めるために分けただけで、
 /// 見ている物は同じ [`WorkDir`] と同じ名前空間。
 #[cfg(test)]
 #[path = "devroot_cache_tests.rs"]

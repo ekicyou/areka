@@ -7,7 +7,7 @@
 //!
 //! # なぜ要るか
 //!
-//! 検体の在処を各テストが自前で綴ると、保管の形を変えるときに 38 か所を追いかけ回すことに
+//! 検体の在処を各テストが自前で綴ると、保管の形を変えるときに使う所を全部追いかけ回すことに
 //! なる。窓口を 1 つ通しておけば、直すのは本 crate の中だけで済む。
 //!
 //! # 引き方
@@ -618,7 +618,11 @@ fn known_sample_names() -> Vec<&'static str> {
 #[non_exhaustive]
 pub enum SampleError {
     /// 登記されていない検体名。
-    #[error("unknown sample {requested:?}; known samples: {known:?}")]
+    #[error(
+        "unknown sample {}; known samples: {}",
+        ascii(&format!("{requested:?}")),
+        ascii(&format!("{known:?}"))
+    )]
     UnknownSample {
         /// 渡された名前。
         requested: String,
@@ -626,7 +630,12 @@ pub enum SampleError {
         known: Vec<&'static str>,
     },
     /// その検体が同時にインストールしないバルーン名。
-    #[error("sample {sample:?} does not install balloon {requested:?}; known balloons: {known:?}")]
+    #[error(
+        "sample {} does not install balloon {}; known balloons: {}",
+        ascii(&format!("{sample:?}")),
+        ascii(&format!("{requested:?}")),
+        ascii(&format!("{known:?}"))
+    )]
     UnknownBalloon {
         /// 検体名。
         sample: &'static str,
@@ -636,7 +645,12 @@ pub enum SampleError {
         known: &'static [&'static str],
     },
     /// 展開結果の要素が登記（種別・フォルダ名・同梱バルーン）と食い違う。
-    #[error("sample {sample:?} installed {installed:?} but the registry declares {expected}")]
+    #[error(
+        "sample {} installed {} but the registry declares {}",
+        ascii(&format!("{sample:?}")),
+        ascii(&format!("{installed:?}")),
+        ascii(expected)
+    )]
     RegistryMismatch {
         /// 検体名。
         sample: &'static str,
@@ -646,13 +660,16 @@ pub enum SampleError {
         installed: Vec<String>,
     },
     /// ビルド成果物の置き場が決まらない（`CARGO_TARGET_DIR` も祖先の `target` も無い）。
-    #[error("build output directory not found from {started_from:?}; set CARGO_TARGET_DIR")]
+    #[error(
+        "build output directory not found from {}; set CARGO_TARGET_DIR",
+        ascii(&format!("{started_from:?}"))
+    )]
     TargetDirNotFound {
         /// 祖先を辿り始めた場所（実行ファイル）。
         started_from: PathBuf,
     },
     /// 検体の `.nar` が受理されなかった（原本を作れない）。
-    #[error("sample archive refused: {0}")]
+    #[error("sample archive refused: {}", ascii(&.0.to_string()))]
     Nar(#[from] areka_nar::NarError),
     /// 開発用の根のファイル操作の失敗。何をしようとしたのかを添える。
     #[error(

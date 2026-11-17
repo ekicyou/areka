@@ -16,7 +16,7 @@
 //! 行く並走のいずれでも、生きている複製が消えないことを見る。
 
 use super::cache_tests::{
-    RACE_SAMPLE, bytes_of, contents, private_namespace, shelf, tiny_ghost_nar, whole_ghost_tree,
+    RACE_SAMPLE, contents, private_namespace, shelf, tiny_ghost_bytes, whole_ghost_tree,
 };
 use super::*;
 
@@ -107,17 +107,20 @@ fn usage(root: &Path) -> (usize, u64) {
     (entries, bytes)
 }
 
-// ---- 複写と 1 度のやり直し（決め D5） ----
+// ---- 複写と 1 度のやり直し（audit-test-kits 決め D5） ----
 
 /// 複写が落ちて原本がもう無いとき（刻印違いとして別のプロセスが退けた）だけ、原本を
-/// 用意し直して 1 度だけ写し直す（指摘 53）。原本が在るまま落ちた複写はやり直さない。
+/// 用意し直して 1 度だけ写し直す（audit-test-kits 指摘 53）。原本が在るまま落ちた複写はやり直さない。
 #[test]
 fn a_master_reclaimed_during_the_copy_is_fetched_again_once() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-again", b"one");
-    let master = cached_root_in(namespace.path(), "probe-again", &bytes_of(&nar)).expect("原本");
+    let nar = tiny_ghost_bytes("probe-again", b"one");
+    let master = cached_root_in(namespace.path(), "probe-again", &nar).expect("原本");
     let gone = namespace.path().join(CACHE).join("probe-again-0-00000000");
     let to = namespace.path().join("copy");
+    // 消えた原本の写しかけ（宛先に残った物）を、写し直しの前に消すことの檻。
+    std::fs::create_dir_all(&to).expect("宛先を置ける");
+    std::fs::write(to.join("stale.txt"), b"stale").expect("写しかけを置ける");
 
     let calls = std::cell::Cell::new(0);
     copy_master(&gone, &to, || {
@@ -144,7 +147,7 @@ fn a_master_reclaimed_during_the_copy_is_fetched_again_once() {
 #[test]
 fn an_acquire_sweeps_away_a_dead_pair_and_a_lockless_leftover() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-sweep", b"one");
+    let nar = tiny_ghost_bytes("probe-sweep", b"one");
     let dead = leftover(namespace.path(), "999999-0", true);
     let dead_lock = namespace
         .path()
@@ -163,8 +166,8 @@ fn an_acquire_sweeps_away_a_dead_pair_and_a_lockless_leftover() {
     }
     assert!(dead_lock.is_file(), "持ち主の居ない札も置けていること");
 
-    let copy = fresh_root_in(namespace.path(), "probe-sweep", || Ok(bytes_of(&nar)))
-        .expect("取得できること");
+    let copy =
+        fresh_root_in(namespace.path(), "probe-sweep", || Ok(nar.clone())).expect("取得できること");
 
     assert!(
         !dead_lock.exists(),
@@ -202,12 +205,12 @@ fn an_acquire_sweeps_away_a_dead_pair_and_a_lockless_leftover() {
 #[test]
 fn a_leftover_that_cannot_be_moved_aside_is_left_whole() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-stuck", b"one");
+    let nar = tiny_ghost_bytes("probe-stuck", b"one");
     let stuck = leftover(namespace.path(), "666666-3", false);
     let held = std::fs::File::open(stuck.join("a.txt")).expect("残骸の中のファイルは開けるはず");
 
     drop(
-        fresh_root_in(namespace.path(), "probe-stuck", || Ok(bytes_of(&nar)))
+        fresh_root_in(namespace.path(), "probe-stuck", || Ok(nar.clone()))
             .expect("片付かなくても取得は成功"),
     );
 
@@ -222,7 +225,7 @@ fn a_leftover_that_cannot_be_moved_aside_is_left_whole() {
 
     // 較正兼、次の取得での片付け。手を離せば同じ呼びが残骸を消す。
     drop(held);
-    drop(fresh_root_in(namespace.path(), "probe-stuck", || Ok(bytes_of(&nar))).expect("次の取得"));
+    drop(fresh_root_in(namespace.path(), "probe-stuck", || Ok(nar.clone())).expect("次の取得"));
     assert!(
         !stuck.exists(),
         "手が離れれば次の取得で片付くこと: {}",
@@ -237,9 +240,8 @@ fn a_leftover_that_cannot_be_moved_aside_is_left_whole() {
 #[test]
 fn a_live_copy_survives_another_acquires_sweep_and_the_two_copies_stay_separate() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-live", b"one");
-    let first =
-        fresh_root_in(namespace.path(), "probe-live", || Ok(bytes_of(&nar))).expect("1 つ目");
+    let nar = tiny_ghost_bytes("probe-live", b"one");
+    let first = fresh_root_in(namespace.path(), "probe-live", || Ok(nar.clone())).expect("1 つ目");
     std::fs::write(first.path().join("boot.log"), b"first").expect("走行の記録を書けるはず");
     let tree = first.path().to_path_buf();
     let lock = first.lock_path().to_path_buf();
@@ -251,8 +253,7 @@ fn a_live_copy_survives_another_acquires_sweep_and_the_two_copies_stay_separate(
     );
 
     // 2 つ目の**取得**が掃除を走らせる＝「他者の掃除」を本物の経路で通す。
-    let second =
-        fresh_root_in(namespace.path(), "probe-live", || Ok(bytes_of(&nar))).expect("2 つ目");
+    let second = fresh_root_in(namespace.path(), "probe-live", || Ok(nar.clone())).expect("2 つ目");
 
     assert!(
         tree.is_dir(),
@@ -300,20 +301,20 @@ fn a_live_copy_survives_another_acquires_sweep_and_the_two_copies_stay_separate(
 #[test]
 fn a_copy_is_taken_from_the_master_copy_and_never_re_installed_from_the_nar() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-copy", b"one");
-    drop(fresh_root_in(namespace.path(), "probe-copy", || Ok(bytes_of(&nar))).expect("原本を作る"));
+    let nar = tiny_ghost_bytes("probe-copy", b"one");
+    drop(fresh_root_in(namespace.path(), "probe-copy", || Ok(nar.clone())).expect("原本を作る"));
 
-    let bytes = std::fs::read(&nar).expect("組んだ .nar は読める");
+    let bytes = &nar;
     let master = namespace.path().join(CACHE).join(format!(
         "probe-copy-{}-{:08x}",
         bytes.len(),
-        areka_nar::crc32(&bytes)
+        areka_nar::crc32(bytes)
     ));
     assert!(master.is_dir(), "原本が在ること: {}", master.display());
     std::fs::write(master.join("only-in-the-master.txt"), b"m").expect("原本へ印を置けるはず");
 
     let copy =
-        fresh_root_in(namespace.path(), "probe-copy", || Ok(bytes_of(&nar))).expect("2 度目の取得");
+        fresh_root_in(namespace.path(), "probe-copy", || Ok(nar.clone())).expect("2 度目の取得");
 
     let mut expected = whole_ghost_tree("probe-copy", b"one");
     expected.insert("only-in-the-master.txt".to_owned(), b"m".to_vec());
@@ -330,12 +331,12 @@ fn a_copy_is_taken_from_the_master_copy_and_never_re_installed_from_the_nar() {
 #[test]
 fn the_namespace_usage_does_not_grow_across_many_acquire_and_drop_cycles() {
     let namespace = private_namespace();
-    let nar = tiny_ghost_nar(namespace.path(), "probe-growth", b"one");
+    let nar = tiny_ghost_bytes("probe-growth", b"one");
     let mut settled = (0usize, 0u64);
     let mut while_held = (0usize, 0u64);
 
     for round in 0..CYCLES {
-        let copy = fresh_root_in(namespace.path(), "probe-growth", || Ok(bytes_of(&nar)))
+        let copy = fresh_root_in(namespace.path(), "probe-growth", || Ok(nar.clone()))
             .unwrap_or_else(|err| panic!("{round} 周目の取得: {err}"));
         assert_eq!(
             contents(copy.path()),
@@ -390,8 +391,8 @@ fn a_sweeper_running_alongside_never_disturbs_a_staging_tree_or_a_live_copy() {
 
     for round in 0..RACED_ROUNDS {
         let mark = format!("{round:04}");
-        let nar = tiny_ghost_nar(&home, "probe-raced", mark.as_bytes());
-        let copy = fresh_root_in(&home, "probe-raced", || Ok(bytes_of(&nar)))
+        let nar = tiny_ghost_bytes("probe-raced", mark.as_bytes());
+        let copy = fresh_root_in(&home, "probe-raced", || Ok(nar.clone()))
             .unwrap_or_else(|err| panic!("{round} 周目の取得（掃除が並走）: {err}"));
         let expected = whole_ghost_tree("probe-raced", mark.as_bytes());
         assert_eq!(
@@ -427,10 +428,10 @@ fn a_sweeper_running_alongside_never_disturbs_a_staging_tree_or_a_live_copy() {
 fn the_manual_root_is_rebuilt_from_scratch_on_every_call() {
     let home = private_namespace();
     let home = home.path();
-    let nar = tiny_ghost_nar(home, "probe-manual", b"0001");
+    let nar = tiny_ghost_bytes("probe-manual", b"0001");
 
     let first =
-        manual_root_in(home, "probe-manual", || Ok(bytes_of(&nar))).expect("1 回目の手動用の根");
+        manual_root_in(home, "probe-manual", || Ok(nar.clone())).expect("1 回目の手動用の根");
     assert_eq!(
         contents(&first),
         whole_ghost_tree("probe-manual", b"0001"),
@@ -452,7 +453,7 @@ fn the_manual_root_is_rebuilt_from_scratch_on_every_call() {
     );
 
     let second =
-        manual_root_in(home, "probe-manual", || Ok(bytes_of(&nar))).expect("2 回目の手動用の根");
+        manual_root_in(home, "probe-manual", || Ok(nar.clone())).expect("2 回目の手動用の根");
     assert_eq!(second, first, "手動用の根の場所は呼ぶたびに変わらないこと");
     assert!(
         !record.exists(),
@@ -475,9 +476,9 @@ fn the_manual_root_is_rebuilt_from_scratch_on_every_call() {
 fn the_sweeper_never_touches_the_manual_root() {
     let home = private_namespace();
     let home = home.path();
-    let nar = tiny_ghost_nar(home, "probe-manual-sweep", b"0002");
+    let nar = tiny_ghost_bytes("probe-manual-sweep", b"0002");
     let manual =
-        manual_root_in(home, "probe-manual-sweep", || Ok(bytes_of(&nar))).expect("手動用の根");
+        manual_root_in(home, "probe-manual-sweep", || Ok(nar.clone())).expect("手動用の根");
     let orphan = leftover(home, "999999-0", true);
 
     sweep(home);
@@ -626,7 +627,7 @@ struct Racer {
 
 // ---- 破棄と並走する掃除（spec: areka-P0-ghost-session-test-load-flake 要件 5.2） ----
 
-/// 木を消している最中も札は握られたままで、並走する掃除は札を消せない（檻 11）。
+/// 木を消している最中も札は握られたままで、並走する掃除は札を消せない（areka-P0-ghost-session-test-load-flake 檻 11）。
 ///
 /// 札を閉じてから木を消すと、消している間の木は「持ち主の居ない組」に見え、同じ
 /// プロセスの別のテストの掃除が札を消して、消しかけの木を退けようとする（負荷の
@@ -656,7 +657,7 @@ fn a_work_dir_keeps_its_lease_while_its_tree_is_being_removed() {
 }
 
 /// `gc-…` へ退けた木も、消している間は札が握られ、並走する掃除はその木を退けない。
-/// 消し終えたら `gc-…` の木も札も棚に残らない（檻 12）。
+/// 消し終えたら `gc-…` の木も札も棚に残らない（areka-P0-ghost-session-test-load-flake 檻 12）。
 #[test]
 fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
     let namespace = private_namespace();

@@ -71,7 +71,7 @@ fn pairs(out: &str) -> Vec<(String, String)> {
 /// 登記した検体のうち並びの要所を覆う 3 つ（同梱バルーン 2・0・バルーンの種類）で、1 行 1 組・`key=value`・絶対パス・末尾の区切り記号なしの形で
 /// 根・検体フォルダ・同梱バルーンが出る（要件 1.9）。
 ///
-/// この出力は `tools/perf/` の 2 本が `folder=` の 1 行として読む。鍵の綴りと並び、値の形
+/// この出力は `tools/perf/` の道具が `folder=` の 1 行として読む。鍵の綴りと並び、値の形
 /// （`..` を畳んだ絶対パス）をここで固定する——受け手は `=` の左右に割った値をそのまま別の
 /// 道具へ渡すので、綴りが揺れたら読めない。
 #[test]
@@ -160,7 +160,7 @@ fn the_command_prints_one_absolute_path_per_line_for_the_chosen_samples() {
 #[test]
 fn two_runs_in_a_row_each_hand_out_a_root_with_no_boot_record() {
     let private = WorkDir::new().expect("私有の場所");
-    let (first_code, first_out, first_err) = run_in(private.path(), "emo2");
+    let (first_code, first_out, first_err) = run_in(private.path(), "R_POST_and_KOMAINU");
     assert_eq!(first_code, Some(0), "1 回目: {first_err}");
     let first = pairs(&first_out);
     assert!(
@@ -185,7 +185,7 @@ fn two_runs_in_a_row_each_hand_out_a_root_with_no_boot_record() {
         record.display()
     );
 
-    let (second_code, second_out, second_err) = run_in(private.path(), "emo2");
+    let (second_code, second_out, second_err) = run_in(private.path(), "R_POST_and_KOMAINU");
     assert_eq!(second_code, Some(0), "2 回目: {second_err}");
     assert_eq!(pairs(&second_out), first, "2 回とも同じ場所を印字すること");
     assert!(
@@ -221,7 +221,7 @@ fn an_unregistered_name_prints_the_reason_to_standard_error_and_exits_with_two()
     }
 }
 
-/// 引数なしは名前の空の未登録として、標準エラーに理由を出して終了コード 2（指摘 69）。
+/// 引数なしは名前の空の未登録として、標準エラーに理由を出して終了コード 2（audit-test-kits 指摘 69）。
 #[test]
 fn no_argument_exits_with_2() {
     let (code, out, err) = finish(&mut std::process::Command::new(COMMAND));

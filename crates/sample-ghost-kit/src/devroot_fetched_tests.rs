@@ -3,8 +3,9 @@
 //!
 //! 登記表の URL の行（ぱすた）は取り寄せた書庫が要るので、ここでは固定入力の行
 //! [`URL_ROW`] で作り、名前空間は私有のもの（[`private_namespace`]）を [`sample_nar_for`] へ
-//! 渡す。窓口の 3 つの入口は `*_in(名前空間, 名前, &sample_nar(名前)?)` の形なので、ここでも
-//! 同じ形で組む（照合に落ちれば `?` で止まり、原本の作りへは渡らない）。
+//! 渡す。窓口の入口は書庫のバイトを解決から受ける（原本の作りはバイトを、複製と手で使う根は
+//! バイトを返す閉包を受ける）ので、ここでも解決の答えを同じ形で渡す（照合に落ちれば `?` で
+//! 止まり、原本の作りへは渡らない）。
 
 use super::cache_tests::{contents, private_namespace, shelf, tiny_ghost_bytes, whole_ghost_tree};
 use super::*;
@@ -91,7 +92,7 @@ fn a_vendored_row_resolves_to_the_repository_nar_without_asking_for_the_namespac
 }
 
 #[test]
-fn a_url_row_with_a_matching_checksum_reaches_the_same_tree_as_a_current_row() {
+fn a_url_row_with_a_matching_checksum_hands_out_the_whole_tree() {
     let ns = private_namespace();
     let mark = b"fetched";
     place_on_shelf(ns.path(), mark, true);
@@ -142,7 +143,7 @@ fn resolving_a_mismatching_archive_leaves_the_master_copy_shelf_empty() {
 }
 
 /// 掃除は作業の棚だけを走査し、取り寄せの棚の書庫とハッシュのファイルには触らない
-/// （指摘 64）。複製を配る入口 `fresh_root_in` は取得のたびに掃除を走らせる。
+/// （audit-test-kits 指摘 64）。複製を配る入口 `fresh_root_in` は取得のたびに掃除を走らせる。
 #[test]
 fn a_sweep_leaves_the_fetched_shelf_alone() {
     let ns = private_namespace();
@@ -188,7 +189,7 @@ const CHILD_VAR: &str = "SAMPLE_GHOST_KIT_TAMPER_CHILD";
 /// 子に走らせるテストの完全な名前。
 const CHILD_TEST: &str = "devroot::fetched_tests::the_tampered_shelf_child_acquires_and_is_refused";
 
-/// 窓口の入口 [`SampleRoot::acquire`] が、食い違う置き場の書庫を配らない（指摘 22）。
+/// 窓口の入口 [`SampleRoot::acquire`] が、食い違う置き場の書庫を配らない（audit-test-kits 指摘 22）。
 ///
 /// 上の 2 本は `sample_nar_for` までしか通らない。ここは自分の実行体を子として起こし、
 /// 私有の `CARGO_TARGET_DIR` に食い違う棚を置いて、本物の入口 `acquire` を通す。

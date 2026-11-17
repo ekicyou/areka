@@ -240,7 +240,7 @@ fn install_txt_joins_with_crlf() {
     );
 }
 
-/// 局所ヘッダの時刻と日付（オフセット 10..14）は時計を読まない固定値（指摘 25）。
+/// 局所ヘッダの時刻と日付（オフセット 10..14）は時計を読まない固定値（audit-test-kits 指摘 25）。
 #[test]
 fn every_local_header_carries_the_fixed_dos_time() {
     let nar = NarBuilder::new()
@@ -253,7 +253,7 @@ fn every_local_header_carries_the_fixed_dos_time() {
         .bytes();
     let mut at = 0;
     let mut seen = 0;
-    while let Some(found) = nar[at..].windows(4).position(|w| w == b"PK") {
+    while let Some(found) = nar[at..].windows(4).position(|w| w == b"PK\x03\x04") {
         let local = at + found;
         assert_eq!(u16_at(&nar, local + 10), 0x0000, "DOS 時刻");
         assert_eq!(u16_at(&nar, local + 12), 0x0021, "DOS 日付");
@@ -324,7 +324,7 @@ fn write_to_puts_the_same_bytes_on_disk() {
 }
 
 /// 畳む順は名前のバイト順（大文字が小文字より先）で、NTFS の `read_dir` の順（大小無視）
-/// とは食い違う（指摘 25）。
+/// とは食い違う（audit-test-kits 指摘 25）。
 #[test]
 fn folding_orders_entries_by_byte_order() {
     let work = WorkDir::new().expect("私有の場所");

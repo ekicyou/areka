@@ -26,8 +26,8 @@
 //! # 何を入れるか——`git ls-files` が唯一の出どころ（要件 8.3）
 //!
 //! フォルダを走査して入れると、追跡外の永続化フォルダ（`ghost/master/profile/`）まで
-//! 入る。emo2 の木は今日、ディスク上 157 ファイル・追跡 110 ファイルで、走査と追跡が
-//! 47 件ずれている。そこで**追跡ファイルだけを作業フォルダへ写してから畳む**。写しは
+//! 入る（emo2 の木では走査と追跡がずれていた）。そこで**追跡ファイルだけを作業フォルダへ
+//! 写してから畳む**。写しは
 //! バイトの複製なので、改行も文字コードも変わらない（要件 8.7）。
 //!
 //! # 何と突き合わせるか（要件 8.4）
@@ -47,20 +47,31 @@
 //! 落ちても、それまでの正しい `.nar` は消えない。
 
 use areka_nar::{InstallKind, InstallManifest, InstallRequest, NarArchive, SingleRoot};
-use sample_ghost_kit::fold_tree;
+use sample_ghost_kit::{ascii, fold_tree};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitCode};
 use std::{fs, io};
 
-fn main() -> Result<(), Box<dyn Error>> {
+/// 端末へ出す文は英語の ASCII だけ（OS の日本語の文も `ascii` に写す）。
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("fold-samples: {}", ascii(&error.to_string()));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let check_only = args.iter().any(|arg| arg == "--check");
     let from = match args.iter().position(|arg| arg == "--from") {
         Some(at) => Some(
             args.get(at + 1)
-                .ok_or("--from の後にフォルダを書くこと")?
+                .ok_or("--from must be followed by a folder")?
                 .clone(),
         ),
         None => None,
@@ -73,7 +84,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(spelled) => resolve(&root, spelled)?,
         None => {
             return Err(
-                "--from <展開形のフォルダ> を書くこと（登記表は展開形の在処を持たない）".into(),
+                "--from <unfolded folder> is required (the registry does not hold where unfolded trees are)"
+                    .into(),
             );
         }
     };
@@ -86,13 +98,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let tracked = tracked_files(&source)?;
     let mismatches = fold_one(&root, &scratch, &source, &tracked, check_only)?;
     if mismatches != 0 {
-        return Err(format!("不一致が {mismatches} 件ある").into());
+        return Err(format!("{mismatches} mismatches").into());
     }
     if !check_only {
         let name = folder_name(&source)?;
         fs::copy(folded_nar(&scratch, &name), vendored_nar(&root, &name))?;
     }
-    println!("全ての検体で一致");
+    println!("round trip matched");
     Ok(())
 }
 
@@ -169,24 +181,28 @@ fn fold_one(
     let mut mismatches = Vec::new();
     for path in &actual {
         if !expected.contains_key(path) {
-            mismatches.push(format!("元に無いものが置かれた: {}", path.display()));
+            mismatches.push(format!(
+                "placed but not in the source: {}",
+                ascii(&path.to_string_lossy())
+            ));
         }
     }
     for (path, origin) in &expected {
         if !actual.contains(path) {
-            mismatches.push(format!("置かれなかった: {}", path.display()));
+            mismatches.push(format!("not placed: {}", ascii(&path.to_string_lossy())));
             continue;
         }
         if fs::read(path)? != fs::read(origin)? {
-            mismatches.push(format!("バイトが違う: {}", path.display()));
+            mismatches.push(format!("bytes differ: {}", ascii(&path.to_string_lossy())));
         }
     }
 
     println!(
-        "{name}: 追跡 {tracked} ファイル / 展開 {actual} ファイル / {folders} / .nar {size} バイト / 不一致 {bad} 件",
+        "{name}: tracked {tracked} files / installed {actual} files / {folders} / .nar {size} bytes / mismatches {bad}",
+        name = ascii(&name),
         tracked = tracked.len(),
         actual = actual.len(),
-        folders = folder_counts(&dest_root, &actual),
+        folders = ascii(&folder_counts(&dest_root, &actual)),
         size = fs::metadata(&nar)?.len(),
         bad = mismatches.len(),
     );
@@ -201,7 +217,7 @@ fn folder_name(source: &Path) -> Result<String, Box<dyn Error>> {
     Ok(source
         .file_name()
         .and_then(|raw| raw.to_str())
-        .ok_or_else(|| format!("{} からフォルダ名が採れない", source.display()))?
+        .ok_or_else(|| format!("cannot take a folder name from {}", source.display()))?
         .to_owned())
 }
 
@@ -227,7 +243,7 @@ fn resolve(root: &Path, spelled: &str) -> Result<PathBuf, Box<dyn Error>> {
     if from_root.is_dir() {
         return Ok(from_root);
     }
-    Err(format!("--from に書かれた {spelled} がフォルダとして見つからない").into())
+    Err(format!("--from {spelled} is not a folder").into())
 }
 
 /// 元のツリーの相対パスが、インストール済み形でどこへ置かれるか（要件 8.4 の写像）。
@@ -270,7 +286,7 @@ fn tracked_files(dir: &Path) -> Result<Vec<String>, Box<dyn Error>> {
         .output()?;
     if !output.status.success() {
         return Err(format!(
-            "git ls-files が失敗した（{}）: {}",
+            "git ls-files failed ({}): {}",
             output.status,
             String::from_utf8_lossy(&output.stderr)
         )

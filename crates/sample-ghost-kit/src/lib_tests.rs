@@ -3,9 +3,10 @@
 //! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3。`dot_sakura` の 1 本は spec:
 //! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。
 //!
-//! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
+//! 窓口は検体の書庫（`vendors/sample_ghost/<名>.nar` か、URL の行なら取り寄せの置き場）を
+//! 展開した原本から**使い捨ての複製**を作って配る。
 //! だから主張は次のとおり——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
-//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の名前を
+//! `<根>/balloon/<名>`・同梱バルーンはゴーストの中の `<根>/ghost/<名>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の名前を
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／登記した各 `.nar` を空の根へ展開すると要素が
 //! 登記の 1 行とちょうど一致する（登記の往復。取り出し元の無い同梱を名乗る `emily4` は
@@ -53,18 +54,11 @@ fn private_dir() -> WorkDir {
     WorkDir::new().expect("ビルド成果物の置き場の下は取れるはず")
 }
 
-/// 登記と突き合わせる最小の `.nar` を組んで置く。
+/// 登記と突き合わせる最小の `.nar` のバイト列を組む（ファイルを介さない）。
 ///
 /// `directory`・種別・同梱バルーンを引数で決められるので、展開結果が登記と食い違う形を
 /// 作れる（フォルダ名違い・種別違い・同梱の欠け・同梱の余り）。
-fn probe_nar(
-    dir: &Path,
-    tag: &str,
-    kind: &str,
-    directory: &str,
-    companion: Option<&str>,
-) -> PathBuf {
-    let nar = dir.join(format!("{tag}.nar"));
+fn probe_nar(kind: &str, directory: &str, companion: Option<&str>) -> Vec<u8> {
     let mut lines = vec![
         "charset,UTF-8".to_owned(),
         format!("type,{kind}"),
@@ -86,25 +80,21 @@ fn probe_nar(
             .file(format!("{balloon}/descript.txt"), b"charset,UTF-8\r\n")
             .done();
     }
-    builder
-        .write_to(&nar)
-        .expect("固定入力の .nar を置けるはず");
-    nar
+    builder.bytes()
 }
 
 /// 固定入力を組み、複製まで作ってから窓口の照合へ渡す。返すのは `(表示, 期待, 実際)`。
 fn refused(
     home: &Path,
-    fixtures: &Path,
     tag: &str,
     kind: &str,
     directory: &str,
     companion: Option<&str>,
     registry: &'static Sample,
 ) -> (String, String, Vec<String>) {
-    let nar = probe_nar(fixtures, tag, kind, directory, companion);
-    let copy = devroot::fresh_root_in(home, tag, || Ok(std::fs::read(&nar).expect("読める")))
-        .expect("固定入力の複製は取れるはず");
+    let nar = probe_nar(kind, directory, companion);
+    let copy =
+        devroot::fresh_root_in(home, tag, || Ok(nar.clone())).expect("固定入力の複製は取れるはず");
     let err = SampleRoot::from_copy(registry, copy)
         .err()
         .unwrap_or_else(|| panic!("登記と食い違う展開結果（{tag}）は失敗になるはず"));
@@ -132,7 +122,7 @@ fn fetched_rows() -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-/// 書庫をリポジトリに置く今の 10 行は `Vendored`、ほかは URL の行
+/// 書庫をリポジトリに置く行は `Vendored`、ほかは URL の行
 /// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。
 #[test]
 fn current_rows_are_registered_as_vendored() {
@@ -155,7 +145,7 @@ fn current_rows_are_registered_as_vendored() {
             "dot_sakura",
             "areka-balloon",
         ],
-        "今の 10 行は Vendored のまま"
+        "書庫をリポジトリに置く行は Vendored のまま"
     );
     assert_eq!(
         fetched_rows(),
@@ -163,7 +153,7 @@ fn current_rows_are_registered_as_vendored() {
             "pasta-in-windows",
             "https://ekicyou.github.io/ghost_dev/pasta-in-windows/pasta-in-windows.nar"
         )],
-        "URL の行はぱすた 1 行"
+        "URL の行はぱすただけ"
     );
 }
 
@@ -325,20 +315,11 @@ fn unknown_balloon_fails_with_the_known_balloon_list() {
 #[test]
 fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     let home = private_dir();
-    let fixtures = private_dir();
 
     // 対照——登記どおりに展開されるなら通り、位置も登記の行から導かれる。
-    let good = probe_nar(
-        fixtures.path(),
-        "probe-agrees",
-        "ghost",
-        GHOST_WITH_BALLOON.name,
-        Some(PROBE_BALLOON),
-    );
-    let copy = devroot::fresh_root_in(home.path(), "probe-agrees", || {
-        Ok(std::fs::read(&good).expect("読める"))
-    })
-    .expect("複製");
+    let good = probe_nar("ghost", GHOST_WITH_BALLOON.name, Some(PROBE_BALLOON));
+    let copy =
+        devroot::fresh_root_in(home.path(), "probe-agrees", || Ok(good.clone())).expect("複製");
     let acquired =
         SampleRoot::from_copy(&GHOST_WITH_BALLOON, copy).expect("登記どおりなら通るはず");
     assert!(acquired.folder().is_dir(), "本体のフォルダが実在する");
@@ -351,7 +332,6 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     // ⑴ 本体のフォルダ名が違う。
     let (shown, expected, installed) = refused(
         home.path(),
-        fixtures.path(),
         "probe-other-folder",
         "ghost",
         "probe-other",
@@ -377,7 +357,6 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     // ⑵ 種別が違う（バルーンとして置かれた）。
     let (_, expected, installed) = refused(
         home.path(),
-        fixtures.path(),
         "probe-other-kind",
         "balloon",
         GHOST_ALONE.name,
@@ -390,7 +369,6 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     // ⑶ 同梱バルーンが置かれていない。
     let (_, expected, installed) = refused(
         home.path(),
-        fixtures.path(),
         "probe-missing-companion",
         "ghost",
         GHOST_WITH_BALLOON.name,
@@ -406,7 +384,6 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
     // ⑷ 登記していない同梱バルーンが置かれた。
     let (_, expected, installed) = refused(
         home.path(),
-        fixtures.path(),
         "probe-extra-companion",
         "ghost",
         GHOST_ALONE.name,
@@ -718,7 +695,7 @@ fn a_descript_without_a_name_line_gets_one_appended() {
     );
 }
 
-/// 元のシェルが無ければ、写す先のフォルダを作らずに `Io`（`NotFound`）を返す（指摘 16）。
+/// 元のシェルが無ければ、写す先のフォルダを作らずに `Io`（`NotFound`）を返す（audit-test-kits 指摘 16）。
 #[test]
 fn copying_a_missing_shell_leaves_no_empty_folder() {
     let sakura = SampleRoot::acquire("dot_sakura").expect("登記済みの検体");
@@ -736,7 +713,7 @@ fn copying_a_missing_shell_leaves_no_empty_folder() {
 }
 
 /// `Io` の表示は、パスと元の失敗（日本語の OS の文）を ASCII に写す。`os error N` は残る
-/// （`tools/load-flake.ps1` が字面で読む・指摘 32）。
+/// （`tools/load-flake.ps1` が字面で読む・audit-test-kits 指摘 32）。
 #[test]
 fn the_io_error_is_shown_in_ascii_only() {
     let source = std::io::Error::new(
@@ -757,4 +734,40 @@ fn the_io_error_is_shown_in_ascii_only() {
     assert!(text.is_ascii(), "{text}");
     assert!(text.contains("os error 5"), "{text}");
     assert!(text.contains("create the work folder"), "{text}");
+}
+
+/// `Io` 以外の表示も、名前・パス・展開器の日本語の文を ASCII に写す（`nar-sample-path` が
+/// 標準エラーへ出す文・audit-test-kits のかけ直し 1 回目 S1）。
+#[test]
+fn the_other_errors_are_shown_in_ascii_only() {
+    let shown = [
+        SampleError::Nar(areka_nar::NarError::Refused {
+            archive: Path::new("C:").join("検体.nar"),
+            reason: areka_nar::RefuseReason::CorruptArchive {
+                detail: "壊れた".to_owned(),
+            },
+        }),
+        SampleError::UnknownSample {
+            requested: "知らない".to_owned(),
+            known: vec!["emo2"],
+        },
+        SampleError::UnknownBalloon {
+            sample: "emo2",
+            requested: "知らない".to_owned(),
+            known: &["既知"],
+        },
+        SampleError::RegistryMismatch {
+            sample: "emo2",
+            expected: "ghost/名前".to_owned(),
+            installed: vec!["ghost/別".to_owned()],
+        },
+        SampleError::TargetDirNotFound {
+            started_from: Path::new("C:").join("作業").join("x.exe"),
+        },
+    ]
+    .map(|refused| refused.to_string());
+
+    for text in shown {
+        assert!(text.is_ascii(), "{text}");
+    }
 }

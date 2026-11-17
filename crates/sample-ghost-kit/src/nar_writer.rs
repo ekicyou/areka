@@ -332,7 +332,11 @@ fn fold_into(builder: &mut NarBuilder, dir: &Path, prefix: &str) -> std::io::Res
         let name = child.file_name().into_string().map_err(|raw| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("名前が UTF-8 で表せない: {raw:?}（{}）", dir.display()),
+                format!(
+                    "name is not valid UTF-8: {} (in {})",
+                    crate::ascii(&format!("{raw:?}")),
+                    crate::ascii(&dir.to_string_lossy())
+                ),
             )
         })?;
         let path = child.path();

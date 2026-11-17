@@ -167,7 +167,7 @@ fn the_configured_target_dir_wins_over_the_ancestor_search() {
     assert_eq!(found, Path::new(r"C:\x\target"));
 }
 
-/// 相対の設定値は、実行体の祖先のうちその値で終わる最も近いものに解く（決め D4）。
+/// 相対の設定値は、実行体の祖先のうちその値で終わる最も近いものに解く（audit-test-kits 決め D4）。
 ///
 /// cargo は起こした場所の上で解き、テストの実行体はパッケージの場所で走るので、
 /// 作業フォルダの上で解くと別の場所（ソースの木の中）を指してしまう。
@@ -185,6 +185,13 @@ fn a_relative_target_dir_is_resolved_against_the_exe_ancestors() {
         Path::new(r"C:\repo\out\tgt"),
         "複数の段の値も段ごとに照らす"
     );
+    for spelled in [r"..\tgt", r".\tgt"] {
+        assert_eq!(
+            find_target_dir(Some(spelled), exe).expect("頭の . と .. を外して祖先に在る"),
+            Path::new(r"C:\tgt\repo\tgt"),
+            "頭の . と .. を外した名前の段で照らす: {spelled}"
+        );
+    }
 
     // 祖先に無ければ今までどおり作業フォルダの上で絶対にする。
     let fallback = find_target_dir(Some("not-an-ancestor"), exe).expect("絶対にできる");
@@ -195,7 +202,7 @@ fn a_relative_target_dir_is_resolved_against_the_exe_ancestors() {
     );
 }
 
-/// 死んだプロセスが残した同じ名前の札やフォルダに当たっても、次の連番で取り直す（指摘 7）。
+/// 死んだプロセスが残した同じ名前の札やフォルダに当たっても、次の連番で取り直す（audit-test-kits 指摘 7）。
 ///
 /// 残りの札は他人の物かもしれないので消さない（片付けるのは掃除の仕事）。
 #[test]
@@ -285,7 +292,7 @@ fn a_rename_onto_a_non_empty_folder_fails_and_onto_an_empty_folder_replaces() {
     assert!(!source.exists(), "移した元は残らないこと");
 }
 
-/// 設定値が空・空白だけなら無いものとして祖先の探しへ戻る（指摘 69）。
+/// 設定値が空・空白だけなら無いものとして祖先の探しへ戻る（audit-test-kits 指摘 69）。
 #[test]
 fn a_blank_target_dir_falls_back_to_the_ancestor_search() {
     let exe = Path::new(r"C:\x\target\debug\deps\t.exe");
@@ -298,7 +305,7 @@ fn a_blank_target_dir_falls_back_to_the_ancestor_search() {
     }
 }
 
-/// 手動用の根の中を削除を拒む形で掴まれていると、黙って重ねず `Io` で断る（指摘 23）。
+/// 手動用の根の中を削除を拒む形で掴まれていると、黙って重ねず `Io` で断る（audit-test-kits 指摘 23）。
 #[test]
 fn manual_root_refuses_a_tree_it_cannot_remove() {
     let namespace = WorkDir::new().expect("私有の名前空間");
@@ -336,5 +343,4 @@ fn manual_root_refuses_a_tree_it_cannot_remove() {
     }
     assert!(held_file.is_file(), "掴まれたファイルは消えていない");
     drop(held);
-    std::fs::remove_dir_all(&manual).expect("閉じたあとは消せる");
 }
