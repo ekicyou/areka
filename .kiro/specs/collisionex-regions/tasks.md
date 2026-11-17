@@ -117,3 +117,5 @@
 - 3: `doc/COMPAT_ARCHITECTURE.md` §8 の【上書き】の行と `assets.toml` の collision の注記はまだ「前の行を除く」のまま。5.1・5.2 で直す。`fold_merge_tests.rs` の 2 本の檻の名前は文書が参照しているので変えていない。
 - 4.4: クローディアの警告以上は 4 行（まだ働かない形の記録 1 行と `draw-methods-canon` が持つ surface28 の `base` の pattern 3 行）。設計の「ちょうど 1 行」は数え違いで、design.md と 4.4 の文を直した。`draw-methods-canon` が `base` の pattern を描けるようにしたら、この檻の期待を直す（完了の棚卸で brief へ申し送る）。
 - 6.1: クローディアは `OnMouseDragStart` に `\0\s[29]\e` を返し、surface29 には当たり判定が無いので、`OnMouseDragEnd` の Reference4 は 4 回とも空（正しい振る舞い・要件 8.5 は DragStart で満たす）。実機の SendInput はスクリーンセーバー中は届かない（道具に確かめを足した）。
+- 完了時にその場で解決: `hit_order_tests.rs` の重なりの檻に、4 つの形が並びに入ったことの検査を足した（読み落としで檻が空振りしないように）。
+- 完了時に申し送り: 4.4 の件を `draw-methods-canon` の brief.md へ（クローディアの檻の surface28 の `base` の pattern 3 行）。起票 0 件。

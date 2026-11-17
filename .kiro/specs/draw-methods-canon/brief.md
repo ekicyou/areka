@@ -156,3 +156,7 @@
 - **写しも同じ根で捨てられる**: 余白（にじみの余白）込みで隣り合う件の範囲が重なる形（行の並ぶ一覧）では、露出した帯が件から件へ広がって写しの先まで描き直し、写しは捨てられる（答えは一致）。上の「画素どおり」の申告が入れば変わりうる。正本: `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の ScrollCheck の「受け入れたら」、README の「写し」。
 - **描く列の欄が増えた**（`crates/wintf/src/ecs/graphics/visual/draw/command.rs`）: `DrawItem.version`（節の `VisualVersion`・無ければ 0）と、層の命令 `ClipRect`・`ClipGeometry`・`OpacityLayer` の `entity`（層を積んだ節）・`version`。`DrawCommand` を自分で組む側はこれを埋める（比べの同一性の鍵と平行移動を除いた鍵に使う）。欄の変更は `.kiro/specs/completed/wintf-visual-damage-redraw/design.md` の Revalidation Triggers に載る。
 - **`VisualDrawContent` の `interpolation_mode`**（`crates/wintf/src/ecs/graphics/visual/draw_content.rs` の `new_ex` の文書）: D2D は命令の列を描くときこの値を使わず、中の命令の補間が効く。wintf はこの値を、にじみの余白と「縮める `HIGH_QUALITY_CUBIC` の件」の規則にだけ使う。語ごとの補間をこの欄で指すつもりなら、効かないことを前提に組み直す。
+
+## 申し送り（collisionex-regions より・2026-11-17）
+
+- **クローディアの読み込みの記録の檻が surface28 の `base` の pattern の警告 3 行を期待値に含む**: `crates/areka-emo-present/src/shell_target_element_base_tests.rs` の `claudia_base_surfaces_are_full_size_and_records_are_fixed` は、実のクローディアを読んだときの warn 以上を全部固定している。その中に「areka が描けない描画メソッドの pattern を描かない」（surface28・animation100・`method="base"`・pattern 0〜2）の 3 行がある。この spec で pattern の `base` を描けるようにしたら、この 3 行が消えて檻が赤になるので、期待値から外す（まだ働かない形の記録 1 行は collisionex-regions の持ち分なので残す）。
