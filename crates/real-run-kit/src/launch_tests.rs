@@ -64,12 +64,10 @@ fn logical_settings_then_caller_env_wins_last() {
     let run = RealRun::new("areka.exe")
         .rust_log("warn")
         .safety_exit(Duration::from_millis(1500))
-        .deadline(Duration::from_secs(7))
         .env("NO_COLOR", "0")
         .env("AREKA_USER_ROOT", "u")
         .env("AREKA_MCP_PORT", "9")
         .env("EXTRA", "x");
-    assert_eq!(run.limits.deadline, Duration::from_secs(7));
     let cmd = run.child_command(&[], Path::new("r"), Path::new("p"), 4321);
     let e = envs(&cmd);
     assert_eq!(set(&e, "AREKA_APP_SMOKE_EXIT_MS"), "1500");

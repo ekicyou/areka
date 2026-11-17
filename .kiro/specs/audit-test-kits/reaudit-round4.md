@@ -39,3 +39,7 @@
 - G6 sample_path_guard_test.rs で語の一覧を 3 回組む → `all_tokens()` を 1 つ
 - G7 sample_path_guard_test.rs ~840-847 `each_gateway_user_is_actually_pulled_in_as_a_dev_dependency` の後半の手書きの名指し → 消す
 - G8 doc_tree_guard_test.rs ~194 の手書きの `doc/README.md` → `{GUIDE}`
+
+## 束 B の直しの控え（承認済み）
+- 文と代入をなぞる確かめの削除だけ（較正なし・名前の付いたものの削除なし）
+- 5 回目で見る: R4 で `.deadline()` の値を直に見る確かめが消えたので、締切の設定が黙って無視されても `hang_hits_deadline_and_child_is_stopped` は既定の 60 秒で終わるだけで赤にならない（経過時間を見ていない）

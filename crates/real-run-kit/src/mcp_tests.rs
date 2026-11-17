@@ -1,5 +1,5 @@
 //! `mcp` の兄弟のテスト。答えの写し（文の片の繋ぎ方・失敗の印）・引数の文の読み方・手で書いた出力の
-//! ファイルでの待受の観測・名乗りの訳の文と、同じプロセスに立てた本物の受け口（`serve`）での 4 本
+//! ファイルでの待受の観測・名乗りの訳の文と、同じプロセスに立てた本物の受け口（`serve`）での試験
 //! （受け口が落ちた後の `Unreachable`・誤りの答えの `Refused`・つなぎの使い回し・`call_until` の締切）を
 //! 確かめる。偽の子との試験は `tests/fake_mcp_test.rs`。
 
@@ -203,7 +203,7 @@ fn call_until_returns_listen_failed_as_is() {
     );
 }
 
-/// 同じ過程に本物の受け口を立てる。ツール `echo` はいつも `text` を答える。入力の `text` は文字の型
+/// 同じプロセスに本物の受け口を立てる。ツール `echo` はいつも `text` を答える。入力の `text` は文字の型
 /// なので、型の違う引数には受け口が JSON-RPC の誤り（`-32602`）を答える。
 fn serve(text: &'static str) -> areka_mcp::McpServer {
     let spec = areka_mcp::ToolSpec {
