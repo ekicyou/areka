@@ -60,3 +60,7 @@
 - 較正: S6 は知らない引数を黙って飛ばす形に・U1 は食い違いを数えない形に → `unknown_arguments_are_refused_not_ignored`・`check_only_counts_a_one_byte_difference_from_the_vendored_archive` が赤
 - 改名: `a_descript_without_a_name_line_gets_one_appended` → `named_descript_replaces_the_name_line_or_appends_one`、定数 `GOOD_SHA` → `ANY_SHA`（どちらも当たりは定義とこの記録だけ）
 - S6 の副作用: `--from` を 2 度書くと後の値が勝つ（前は先の値・保守の道具なので受け入れた）
+
+## 束 C の直しの控え（承認済み）
+- 較正: L5 は手組みを古い形（引用符つき・`str_raw: Some`）に戻す → `ちょうど_1_件なら返し_項目も引ける` が赤。消したもの: temp-path-kit の重なる `assert_ne!` 1 つ（名前の付いたものは無し）
+- 残り（3 回目で見る）: temp-path-kit の `要件 12.1` に spec の名の注記が無い（L8 は log-capture-kit だけを挙げた）

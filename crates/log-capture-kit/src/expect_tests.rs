@@ -1,6 +1,7 @@
 //! `expect.rs` の自己テスト（`expect_one`・`expect_field` の「ちょうど 1 件」「欠落は失敗」の確かめ）。
 //!
-//! 捕捉した記録は手で組む（捕捉窓を通さない・`event_tests.rs` の手組みと同じ形）。
+//! 捕捉した記録は手で組む（捕捉窓を通さない）。形は捕捉窓が組むものに合わせる——本文は
+//! `record_debug` 経路で載るので `debug` は引用符の無い本文そのもの・`str_raw` は `None`。
 
 use super::{ExpectField, expect_one};
 use crate::{CapturedEvent, FieldValue};
@@ -9,8 +10,8 @@ fn event(message: &str, extra: &[(&str, &str)]) -> CapturedEvent {
     let mut fields = vec![(
         "message".to_string(),
         FieldValue {
-            debug: format!("{message:?}"),
-            str_raw: Some(message.to_string()),
+            debug: message.to_string(),
+            str_raw: None,
         },
     )];
     for (name, debug) in extra {
@@ -33,6 +34,7 @@ fn event(message: &str, extra: &[(&str, &str)]) -> CapturedEvent {
 fn ちょうど_1_件なら返し_項目も引ける() {
     let events = vec![event("alpha", &[("n", "3")]), event("beta", &[])];
     let hit = expect_one(&events, "alpha");
+    assert_eq!(hit.message(), "alpha");
     assert_eq!(hit.expect_field("n"), "3");
 }
 

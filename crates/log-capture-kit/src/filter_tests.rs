@@ -1,5 +1,7 @@
 //! `capture_under_filter` の自己テスト（feature `env-filter` のときだけコンパイルされる）。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! 本 API の契約は `wintf` の呼出がそのまま回帰スイートになる形で決まっている
 //! （設計 `## Components and Interfaces` → `#### C1 log-capture-kit`）。よってここで固定
 //! するのは、その呼出が依存している 3 点である。
@@ -21,6 +23,7 @@ const TARGET_DROP: &str = "log_capture_kit::selftest::filter_drop";
 const TARGET_EMPTY: &str = "log_capture_kit::selftest::filter_empty_directives";
 const TARGET_COMMA: &str = "log_capture_kit::selftest::filter_trailing_comma";
 const TARGET_SHAPE: &str = "log_capture_kit::selftest::filter_line_shape";
+const TARGET_NO_SENTINEL: &str = "log_capture_kit::selftest::filter_no_sentinel";
 const TARGET_OFF: &str = "log_capture_kit::selftest::filter_everything_off";
 const TARGET_BARE: &str = "log_capture_kit::selftest::filter_bare_level";
 
@@ -142,7 +145,7 @@ fn a_directive_that_passes_nothing_yields_an_empty_string_not_a_sentinel_line() 
 #[test]
 fn the_returned_string_never_mentions_the_sentinel_target() {
     let out = capture_under_filter("info", || {
-        tracing::info!(target: TARGET_SHAPE, "番兵検査の対照本文");
+        tracing::info!(target: TARGET_NO_SENTINEL, "番兵検査の対照本文");
     });
 
     assert!(

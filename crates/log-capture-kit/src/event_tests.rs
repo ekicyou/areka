@@ -1,5 +1,7 @@
 //! `event.rs` の自己テスト（設計 C1 Implementation Notes → Validation ⒠⒡⒢）。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! 中心にあるのは **byte 一致**である。移行の前、対象 crate は自前の Layer／Subscriber で
 //! 1 イベントを 1 行へ整形しており、その行の文字列を `contains` や `starts_with` で判定する
 //! テストが多数ぶら下がっていた。整形が 1 バイトでも違えば、それらは移行と同時に静かに
@@ -44,7 +46,7 @@ fn emit_fixture_events() {
     tracing::warn!(target: "areka_kanade::resource", event = "shiori_load", outcome = "ok", "raw probe");
 }
 
-/// [`emit_fixture_events`] を現行の「宛先を含む形」で整形した**実出力**（逐語）。
+/// [`emit_fixture_events`] を移行前の「宛先を含む形」の整形コードで整形した**実出力**（逐語）。
 const LEVEL_TARGET_FIELDS_FIXTURE: &[&str] = &[
     "level=INFO target=areka_seriko::table message=table built",
     "level=WARN target=areka_emo_atlas message=surface missing set=0 rel_path=\"clear.png\"",
@@ -55,7 +57,7 @@ const LEVEL_TARGET_FIELDS_FIXTURE: &[&str] = &[
     "level=WARN target=areka_kanade::resource message=raw probe event=\"shiori_load\" outcome=\"ok\"",
 ];
 
-/// [`emit_fixture_events`] を現行の「宛先を含まない形」で整形した**実出力**（逐語）。
+/// [`emit_fixture_events`] を移行前の「宛先を含まない形」の整形コードで整形した**実出力**（逐語）。
 const LEVEL_FIELDS_FIXTURE: &[&str] = &[
     "level=INFO message=table built",
     "level=WARN message=surface missing set=0 rel_path=\"clear.png\"",
@@ -66,13 +68,13 @@ const LEVEL_FIELDS_FIXTURE: &[&str] = &[
     "level=WARN message=raw probe event=\"shiori_load\" outcome=\"ok\"",
 ];
 
-// ── 現行整形コードの逐語写し ────────────────────────────────────────────────────────
+// ── 移行前の整形コードの逐語写し ──────────────────────────────────────────────────────
 
-/// 正準型と**同じイベント列**から、現行整形コードの逐語写しで行を組む subscriber。
+/// 正準型と**同じイベント列**から、移行前の整形コードの逐語写しで行を組む subscriber。
 ///
 /// 逐語写しから唯一外したのは「番兵イベントを行に積まない」ことだけで、整形そのもの
 /// （`format!`／`write!` の並び）は 1 文字も変えていない。番兵は [`crate::capture`] が窓の
-/// 生存を示すために内側で 1 件発火するもので、移行対象 crate には存在しない。
+/// 生存を示すために内側で 1 件発火するもので、移行前の整形コードには無かった。
 #[derive(Clone, Default)]
 struct LegacyLineFormatting {
     events: Arc<Mutex<Vec<CapturedEvent>>>,
@@ -141,7 +143,7 @@ impl tracing::Subscriber for LegacyLineFormatting {
     fn exit(&self, _span: &tracing::span::Id) {}
 }
 
-/// 見本イベント列を 1 度だけ発火し、正準型・現行整形（2 形）を同時に取る。
+/// 見本イベント列を 1 度だけ発火し、正準型・移行前の整形（2 形）を同時に取る。
 fn run_fixture() -> (Vec<CapturedEvent>, Vec<String>, Vec<String>) {
     let sub = LegacyLineFormatting::default();
     let sink = Arc::clone(&sub.events);
@@ -164,7 +166,7 @@ fn level_target_fields_matches_verbatim_fixture() {
     assert_eq!(
         legacy,
         LEVEL_TARGET_FIELDS_FIXTURE.to_vec(),
-        "現行整形コードの逐語写しが見本と違う（見本が古い）"
+        "移行前の整形コードの逐語写しが見本と違う（見本か写しのどちらかが変わった）"
     );
 
     let formatted: Vec<String> = events
@@ -174,7 +176,7 @@ fn level_target_fields_matches_verbatim_fixture() {
     assert_eq!(
         formatted,
         LEVEL_TARGET_FIELDS_FIXTURE.to_vec(),
-        "整形結果が現行出力の逐語見本と 1 バイト違う"
+        "整形結果が移行前の出力の逐語見本と 1 バイト違う"
     );
 }
 
@@ -185,7 +187,7 @@ fn level_fields_matches_verbatim_fixture() {
     assert_eq!(
         legacy,
         LEVEL_FIELDS_FIXTURE.to_vec(),
-        "現行整形コードの逐語写しが見本と違う（見本が古い）"
+        "移行前の整形コードの逐語写しが見本と違う（見本か写しのどちらかが変わった）"
     );
 
     let formatted: Vec<String> = events
@@ -195,7 +197,7 @@ fn level_fields_matches_verbatim_fixture() {
     assert_eq!(
         formatted,
         LEVEL_FIELDS_FIXTURE.to_vec(),
-        "整形結果が現行出力の逐語見本と 1 バイト違う"
+        "整形結果が移行前の出力の逐語見本と 1 バイト違う"
     );
 }
 
@@ -336,7 +338,7 @@ fn field_names_sorted_is_ascending_and_includes_message() {
         .find(|e| e.target == "areka_runtime")
         .expect("見本の order probe イベント");
 
-    // 訪問順は message → b → a。整列列は昇順（`emo-present` の `field_names()` 互換）。
+    // 訪問順は message → b → a。整列列は昇順（移行前の `emo-present` の `field_names()` 互換）。
     assert_eq!(
         ev.fields
             .iter()

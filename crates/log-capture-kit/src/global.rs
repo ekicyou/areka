@@ -1,5 +1,7 @@
 //! 全スレッド横断の一回限りの捕捉。`set_global_default` の唯一の呼出点。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! # 既定の捕捉窓との違い
 //!
 //! 既定の [`crate::capture`] は**呼出スレッドの**既定 dispatcher を窓の間だけ差し替える。

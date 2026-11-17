@@ -1,6 +1,7 @@
 //! 呼出側の判定を短く書くための補助（[`expect_one`]・[`ExpectField`]）。
 //!
 //! 旧 `placement/test_support.rs` から中身を変えずに移した（spec: placement-crate-split 要件 3.1）。
+//! 移した後で、spec `audit-test-kits` が失敗の位置を呼出側に出すための `#[track_caller]` を足した。
 
 use crate::CapturedEvent;
 

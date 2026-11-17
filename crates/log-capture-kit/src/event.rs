@@ -20,7 +20,7 @@ pub struct FieldValue {
 /// 捕捉した 1 イベント。
 ///
 /// `fields` は [`tracing::Event::record`] の**訪問順**（＝マクロでの記述順）を保持する。
-/// 行整形が現行の文字列形を 1 バイトも違わずに再現するために順序が要る。
+/// 行整形が移行前の文字列形を 1 バイトも違わずに再現するために順序が要る。
 #[derive(Debug, Clone)]
 pub struct CapturedEvent {
     /// イベントのレベル（`error!`／`warn!`／`info!`／`debug!`／`trace!` の別）。
@@ -167,8 +167,8 @@ pub fn format_line(ev: &CapturedEvent, fmt: LineFormat) -> String {
 
 /// [`crate::capture`] の結果をその場で行へ整形して返す。
 ///
-/// 移行対象の `capture_logs` は「行の `Vec`」か「改行連結した 1 本の `String`」を返して
-/// いる。前者はこれをそのまま、後者は `.join("\n")` を被せて置き換える。
+/// 移行前の `capture_logs` は「行の `Vec`」か「改行連結した 1 本の `String`」を返して
+/// いた。前者はこれをそのまま、後者は `.join("\n")` を被せて置き換えた。
 pub fn capture_lines<R>(fmt: LineFormat, f: impl FnOnce() -> R) -> (R, Vec<String>) {
     let (out, events) = crate::capture::capture(f);
     let lines = events.iter().map(|e| format_line(e, fmt)).collect();

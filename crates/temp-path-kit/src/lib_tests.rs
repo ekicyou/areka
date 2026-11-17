@@ -169,12 +169,6 @@ fn production_path_goes_through_compose_name() {
         compose_name("link-check", std::process::id(), serial),
         "実配置の名前を内部関数で再現できない（本番経路が別の式で組んでいる）"
     );
-    // 較正: 識別子を 1 つずらせば再現しないこと＝上の一致が恒真でないこと。
-    assert_ne!(
-        actual,
-        compose_name("link-check", std::process::id().wrapping_add(1), serial),
-        "識別子を変えても同じ名前になる（名前が識別子を含んでいない）"
-    );
 }
 
 /// 同じ名前のフォルダが先に残っていても、それを配らず次の連番で空のフォルダを作る。

@@ -1,6 +1,8 @@
 //! 常駐 probe。発行点の interest を `sometimes` に合成し、他スレッドの先着で `never` が
 //! 焼き付く経路を閉じる（プロセス寿命で冪等に確立する）。
 //!
+//! 文中の要件・設計・タスクの番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! # なぜ「素朴な `with_default` 捕捉」では非決定的に取りこぼすのか
 //!
 //! `tracing::subscriber::with_default` が差し替えるのは**スレッドローカルの既定 dispatcher**

@@ -25,5 +25,6 @@ env-filter = ["dep:tracing-subscriber"]
 [dev-dependencies]
 # 検体パスの見張り（sample_path_guard_test）が走査語を作るのに登記表 SAMPLES を読む。
 # 名前の一覧を見張り側へ手書きで写すと、検体を 1 つ足した瞬間に見張りが黙って穴を開ける。
-# テスト専用の leaf 同士なので依存の向きは崩れない（本番側には出ない）。
+# 依存は輪になる: 本 crate →(dev) sample-ghost-kit →(本番の依存) areka-nar →(dev) 本 crate。
+# cargo は輪が [dev-dependencies] を通る限り許す。本 crate の本体は sample-ghost-kit を引かないので本番側には出ない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
