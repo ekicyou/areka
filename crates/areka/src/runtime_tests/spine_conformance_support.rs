@@ -9,8 +9,8 @@
 //! 会話中であることは毎秒の変化通知の別（照会か片道か）と Ref3 で既に読める。**しかし選択待ちは
 //! Ref3 では会話中と区別できない**——選択待ちの間も会話の枠は占有されたままで、`talk_active` と
 //! `choice_active` が同時に真になり複合値 `talking,choosing` を成す
-//! （`crates/areka-kanade/src/status.rs:211-216`）。Ref3 の源は `talk_active` だけ
-//! （`crates/areka-kanade/src/schedule/events.rs:171-180`）ゆえ両者で同一値になる。
+//! （`crates/areka-kanade/src/status.rs`）。Ref3 の源は `talk_active` だけ
+//! （`crates/areka-kanade/src/schedule/events.rs`）ゆえ両者で同一値になる。
 //! よって進行状態そのもの（組み立て済みのヘッダ値）を記録しなければ選択待ちは観測できない。
 
 use std::time::{Duration, Instant};
@@ -123,7 +123,7 @@ fn call_references(call: &ShioriCall) -> &[String] {
 }
 
 /// 本番の構築関数が組んだ [`ShioriCall`] を、別と id と参照列と**組み立て済み進行状態**の
-/// まま台本受け口へ通す（`crates/areka-kanade/src/shiori/real.rs:136-151` と同じ渡し方）。
+/// まま台本受け口へ通す（`crates/areka-kanade/src/shiori/real.rs` と同じ渡し方）。
 fn drive_call(backend: &mut ScriptedShioriBackend, call: &ShioriCall) {
     match call {
         ShioriCall::Get {
@@ -165,8 +165,8 @@ pub(super) enum Inbox {
 pub(super) enum Injection {
     /// 毎秒の変化通知。kanade の送信端へ `KanadeMsg::Tick` を**直接**投函する（R3.2）。既存の駆動が
     /// 投げているのは dispatcher 側で、そちらは毎秒の変化通知を起こさない
-    /// （`crates/areka-ghost/src/dispatcher.rs:126`）。そして **1 本につき `OnSecondChange` が
-    /// ちょうど 1 件**発行される（`crates/areka-kanade/src/schedule/steady.rs:669-718`）。判定は
+    /// （`crates/areka-ghost/src/dispatcher.rs`）。そして **1 本につき `OnSecondChange` が
+    /// ちょうど 1 件**発行される（`crates/areka-kanade/src/schedule/steady.rs`）。判定は
     /// 等値照合ゆえ（R2.3）投函本数がそのまま期待列の本数になる——だからこの注入は
     /// [`StagePlan::once`] にしか置けない（[`WaitInjection`] が型として受け付けない）。
     KanadeTick,
@@ -182,7 +182,7 @@ pub(super) enum Injection {
     /// kanade の受信端が**まだ開いているか**を見るためだけの探り。
     ///
     /// 投函するのは `KanadeMsg::Boot` で、Idle 以外の運行フェーズでは `warn!` を出して
-    /// **副作用指示を 1 件も返さずに捨てられる**（`crates/areka-kanade/src/schedule/mod.rs:425-431`
+    /// **副作用指示を 1 件も返さずに捨てられる**（`crates/areka-kanade/src/schedule/mod.rs`
     /// の防御アームが `(state, Vec::new())` を返す＝SHIORI 呼出は 0 件）。ゆえに交信の列を 1 件も
     /// 増やさない。終了段の完了条件は「kanade の送信端への送信が Err になる」ことを含むが
     /// （design D1 の段表）、`std::sync::mpsc::Sender` には開閉を問う口が無く**送ってみるほかに
@@ -206,7 +206,7 @@ pub(super) enum WaitInjection {
     /// 再生の時刻を進めつつ、毎反復 [`Injection::KanadeProbe`] で kanade の受信端の開閉を見る。
     ///
     /// 終了段が使う（design D1）。close 握手は OnClose の応答スクリプトを**再生し切ってから**
-    /// 終了系列へ進む（`crates/areka-kanade/src/schedule/close.rs:15-17` の `CloseTalkWait` が
+    /// 終了系列へ進む（`crates/areka-kanade/src/schedule/close.rs` の `CloseTalkWait` が
     /// 再生完了通知を待つ）ため、再生の時刻を進めない探りだけでは kanade は永久に終了しない。
     /// ゆえに 2 つを組にする。
     DispatcherTickAndKanadeProbe,
@@ -416,7 +416,7 @@ impl StageSink for SpineHarness {
             Injection::Mouse(input) => kanade(KanadeMsg::Mouse(input.clone())),
             Injection::Choice(input) => kanade(KanadeMsg::Choice(input.clone())),
             Injection::CloseRequest(reason) => kanade(KanadeMsg::CloseRequest { reason: *reason }),
-            // 防御アームが warn! だけを出して副作用指示を返さない（schedule/mod.rs:425-431）。
+            // 防御アームが warn! だけを出して副作用指示を返さない（schedule/mod.rs）。
             Injection::KanadeProbe => kanade(KanadeMsg::Boot),
             Injection::DispatcherTick => self
                 .ghost
@@ -699,7 +699,7 @@ fn injection_kind(injection: &Injection) -> &'static str {
 /// # なぜ投影が要るのか
 ///
 /// [`PresentCommand`] は `Debug` も `PartialEq` も実装しない（`reply` に返信端を同梱する所有形で
-/// あり、比較も印字も定義できない＝`crates/areka-emo-present/src/command.rs:39-73`）。等値照合と
+/// あり、比較も印字も定義できない＝`crates/areka-emo-present/src/command.rs`）。等値照合と
 /// 失敗時の差分表示にはどちらも要るので、**判定に使う要素だけ**を持つ値へ写す。
 ///
 /// # 何を落としているか（判定の射程を過大に見せないための明記）

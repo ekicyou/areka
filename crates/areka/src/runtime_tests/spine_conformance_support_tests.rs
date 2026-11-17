@@ -1,9 +1,9 @@
 //! 段の駆動器（design D6）の受け入れ確認（areka-P0-emo2-conformance-e2e・task 2.3・R2.10・R3.2）。
 //!
 //! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律（R2.11・
-//! `.kiro/steering/structure.md:176`）に収まらないため、**主題単位に分けて接続する**——駆動器と
+//! `.kiro/steering/structure.md`）に収まらないため、**主題単位に分けて接続する**——駆動器と
 //! 進行状態の記録の本体は支援層に残し、駆動器を縛る檻だけを本ファイルへ分けた。接続宣言は支援層の
-//! 末尾に置く（`spine.rs` は design が接続宣言 3 本に固定しており余白も 44 行しかないため、
+//! 末尾に置く（`spine.rs` は design が接続宣言 3 本に固定しているため、
 //! 経路をそちらへ増やさない）。
 //!
 //! 本ファイルは**期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
@@ -14,6 +14,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use super::super::settle_bounded;
 use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
     StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
@@ -466,7 +467,7 @@ fn stage_driver_reports_a_closed_inbox_without_swallowing_or_panicking() {
 ///
 /// 檻に入れる判断分岐:
 /// - **投函先が kanade であり本数が 1 対 1 であること**: kanade Tick を 1 本投函すると
-///   `OnSecondChange` がちょうど 1 件現れる（`schedule/steady.rs:669-718`）。dispatcher 側へ投げて
+///   `OnSecondChange` がちょうど 1 件現れる（`schedule/steady.rs`）。dispatcher 側へ投げて
 ///   いたら 0 件のままである（`spine.rs` の標準台本が `OnSecondChange` を持たないのはこのため）。
 /// - **待ちが増やさないこと**: 完了条件が成立しない段を有界待ち切れまで回しても件数が 1 のまま
 ///   ＝繰り返す注入（再生側）が SHIORI 呼出を 1 件も起こしていない。交信の列は等値照合ゆえ
@@ -553,6 +554,14 @@ fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none(
         ),
         "待ちの繰り返しだけの段が段名つきの待ち切れで返っていない: {timed_out:?}"
     );
+    // 負の検証は回収（settle）で届くのを待ってから読む（待ちが打ち切られた直後の 1 回読みでは、非同期の記録が間に合わない）。
+    let mut seen = handle.non_status_calls().len();
+    settle_bounded(|| {
+        let now = handle.non_status_calls().len();
+        let fresh = now.saturating_sub(seen);
+        seen = now;
+        fresh
+    });
     assert_eq!(
         second_change_calls(&handle),
         1,

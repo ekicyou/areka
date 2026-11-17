@@ -15,7 +15,7 @@
 //! 打ち切り方は 3 通りある。目印のある待ち（[`Progress::Count`]）は「目印が [`SPIN_WAIT`]（30 秒）進まなければ
 //! 打ち切り・総時間は 300 秒まで」、GPU の許可の待ちは「許可が 500 秒返らなければ打ち切り」、
 //! [`run_bounded`] は総時間の `recv_timeout` である。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
-//! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（[`DENSE_SPIN`](wait::DENSE_SPIN) の窓）で
+//! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（`DENSE_SPIN`（`spine_wait.rs`・60 ms）の窓）で
 //! 速い経路の検出遅延を犠牲にせず、窓を過ぎたら [`BACKOFF_SLEEP`] へ落としてコア占有をやめる
 //! （PR #96 で導入）。ハイブリッドと回収（settle）の形は ⑶ の側（本体の `runtime_tests/spine.rs`）の説明にある。
 //!
@@ -45,7 +45,7 @@ use self::hold_support::{HoldAt, HoldGate};
 /// 進行状態の記録 1 件（呼出 id と、その呼出に載った**組み立て済み**の進行状態の対）。
 ///
 /// `status` は kanade が `ExecutionStatus::render()` 済みの wire 値をそのまま持つ
-/// （`crates/areka-kanade/src/shiori/real.rs:136`／`:151`）。`None` は「`Status` ヘッダ行を
+/// （`crates/areka-kanade/src/shiori/real.rs`）。`None` は「`Status` ヘッダ行を
 /// 出さない」ことを表す値であって、記録の欠落ではない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordedStatus {
@@ -189,6 +189,8 @@ impl ScriptedShioriBackendBuilder {
 pub const HOMEURL_RESOURCE: &str = "homeurl";
 
 /// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装・R8.1/R8.6）。
+///
+/// `OnBalloonTimeout` だけは列の照合の外（実時間で決まるので、台本に無ければ記録せず 204 で答える）。
 pub struct ScriptedShioriBackend {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,

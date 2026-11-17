@@ -23,22 +23,24 @@
 //! - `ScriptedShioriHandle::non_status_calls()` は受けた呼出（`Get`・`Notify`・`Unload`）をそのまま返す。
 //!   死活の問い合わせは受け口が記録しないので、一周が送る照会・通知は 1 件も落ちない。
 //! - `snapshot_status_calls()`（`areka-runtime` の `spine.rs`）は台帳をそのまま複製する。
-//! - 表示指令は `RuntimeWiring::drain_received()` を素通しで積む（同 `:449-451`）。投影
+//! - 表示指令は `RuntimeWiring::drain_received()` を素通しで積む。投影
 //!   [`project_display`] も、知らない指令を捨てずに [`DisplayProjection::Unknown`] として 1 件残す。
+//!
+//! 例外は `OnBalloonTimeout` だけで、列の照合の外にある（実時間で決まるので、台本に無ければ偽の SHIORI は記録せず 204 で答える）。
 //!
 //! # 判定の本体が 2 行しかないこと（R12.5 の記録・完成判定へ申し送る）
 //!
 //! design D3 は〈段名・表示指令〉の列の完全一致を「判定の本体」と書く。ところが一周で表示指令を
 //! 生む段は**装着と撫での 2 つだけ**であり、この列は **2 行**にしかならない（理由は
 //! [`expected_display`] の doc）。**R2.4 の判定は設計が想定するより実質的に弱い**。本走行が機械で
-//! 証明していると言えるのは、3 列を合わせた 33 行の等値であって、表示指令の列だけではない。
+//! 証明していると言えるのは、3 列を合わせた 53 行の等値であって、表示指令の列だけではない。
 //! 架空の表示指令で列を水増しすることも、台本の応答を実物から離して指令を作り出すこともしない。
 //!
 //! # 自己検査と製品の判定を混ぜない（design D3 の裁定）
 //!
 //! 「採取した時点の注入時刻が当該段の宣言区間に入る」ことは**駆動器が契約どおり動いたことの
 //! 自己検査**であって製品の判定ではない。駆動器は採取のたびにこれを見て
-//! `StageFailure::CollectedOutsideInterval` を返す（`spine_conformance_support.rs:529-536`）。
+//! `StageFailure::CollectedOutsideInterval` を返す（`spine_conformance_support.rs`）。
 //! 本ファイルは採り終えた列の側からも同じ性質を確かめるが、失敗の文面を製品の判定と**別の語**に
 //! して、テスト自身の駆動が壊れたことを製品の退行と読み違えないようにする
 //! （[`assert_display_collected_within_declared_stage`]）。
@@ -116,7 +118,7 @@ fn unload_calls(calls: &[RecordedCall]) -> usize {
 ///
 /// # なぜ素の `assert_eq!` を使わないのか（R12.5）
 ///
-/// 列は 15〜16 要素あり、素の `assert_eq!` は 2 つの列を丸ごと 1 行に印字するだけで、**どこが**
+/// 列は 25〜26 要素あり、素の `assert_eq!` は 2 つの列を丸ごと 1 行に印字するだけで、**どこが**
 /// 違うのかを読み手に探させる。1 件の挿入と 1 件の値の違いも同じ見た目になるため、退行の形が
 /// 判別できない。ここでは⑴長さ⑵最初に食い違う位置⑶食い違う各位置の期待と実測、を出す。
 fn assert_sequence_eq<T: PartialEq + std::fmt::Debug>(label: &str, actual: &[T], expected: &[T]) {

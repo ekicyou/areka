@@ -5,6 +5,7 @@
 //! 後ろ半分の 2 本を分けた（areka-test-binary-stability・task 1.2・R10.4）。檻の趣旨は前半の
 //! ファイルの冒頭の説明と同じで、期待値は持たない。
 
+use super::super::settle_bounded;
 use super::driver_tests::{second_change_calls, stage};
 use super::{ExitKind, LoopDriver, ScriptedShioriBackend, SpineHarness};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
@@ -28,38 +29,38 @@ use areka_runtime::spine::test_support::status_calls;
 ///
 /// ERROR の件数は檻に入れない。kanade は別スレッドで走り、本ハーネスのログ捕捉はスレッドを跨がない
 /// ——「0 件」を主張しても恒真になりうる（steering: ログ檻の盲点）。探りが副作用を持たないことの
-/// 根拠は `crates/areka-kanade/src/schedule/mod.rs:425-431` の防御アームが `warn!` を出して
+/// 根拠は `crates/areka-kanade/src/schedule/mod.rs` の防御アームが `warn!` を出して
 /// `(state, Vec::new())`（副作用指示 0 件）を返すことであり、上の (i) がその帰結を観測している。
 ///
 /// # 終了段の待ちが「据え置き時刻の再生側 Tick」でなければならない理由（task 5.5・R2.10）
 ///
 /// **前提（構造で決まっている）**——本ハーネスの起動は**必ず**起動記録トークを起こす。fixture の
-/// 永続状態は起動のたびに消され（`SpineHarness::new` が検体の複製 `SampleRoot` を毎回作る・`crates/areka/src/runtime_tests/spine.rs`）、初回起動と判定
+/// 永続状態は起動のたびに消され（`SpineHarness::boot_with` が検体の複製 `SampleRoot` を毎回作る・`crates/areka/src/runtime_tests/spine.rs`）、初回起動と判定
 /// された boot は起動記録の書込 cue を `first_boot_epilogue` へ据える
-/// （`crates/areka-ghost/src/runtime.rs:459-464`）。ゆえに `OnBoot` が 204 でも kanade は「空
-/// script＋末尾 SET 1 件」の記録トークを起こし（`crates/areka-kanade/src/schedule/boot.rs:253-273`）、
-/// `BootVersion{talk: Some}` を経て `Steady{talk: Some}` へ入る（同 `:276-280`・`:105-113`）。
+/// （`crates/areka-ghost/src/runtime.rs`）。ゆえに `OnBoot` が 204 でも kanade は「空
+/// script＋末尾 SET 1 件」の記録トークを起こし（`crates/areka-kanade/src/schedule/boot.rs`）、
+/// `BootVersion{talk: Some}` を経て `Steady{talk: Some}` へ入る（同ファイル）。
 /// この前提は下の (ii-a) で**進行状態の記録から逐語に固定する**（`basewareversion` の
 /// 組み立て済み進行状態が `talking`＝送出時点の phase が `BootVersion{talk: Some}`
-/// ＝`crates/areka-kanade/src/schedule/mod.rs:449-460`）。
+/// ＝`crates/areka-kanade/src/schedule/mod.rs`）。
 ///
 /// **どの交錯順でも握手が 1 度だけ始まる**——終了指示の到着時点で kanade が居られる場所は 3 つ
 /// しかない。
 ///
 /// - **⑴ `Steady{talk: None}`（記録トークが終わっている）**: その場で `OnClose` の照会を発行する
-///   （`crates/areka-kanade/src/schedule/steady.rs:866-869`）。再生側 Tick は 1 本も要らない。
-/// - **⑵ `Steady{talk: Some}`（記録トーク再生中）**: 保留に入るだけ（同 `:870-874`）。保留を消化
-///   するのは**そのトークの再生完了通知**であり（同 `:840-855`・消化は `:847-849`）、再生を進める
+///   （`crates/areka-kanade/src/schedule/steady.rs`）。再生側 Tick は 1 本も要らない。
+/// - **⑵ `Steady{talk: Some}`（記録トーク再生中）**: 保留に入るだけ。保留を消化
+///   するのは**そのトークの再生完了通知**であり（同ファイル）、再生を進める
 ///   のは再生側 Tick だけである。ゆえに何も注入しない待ちでは握手が永久に始まらない。
-/// - **⑶ boot 系列のいずれか**: 保留記録のみで boot は継続する（`schedule/boot.rs:31`・実体は
-///   `:285-288`）。boot が完了すると `Steady{talk}` へ入る（同 `:105-113`）ので、以後は ⑵ に合流
+/// - **⑶ boot 系列のいずれか**: 保留記録のみで boot は継続する（`schedule/boot.rs`・実体は同ファイル）。
+///   boot が完了すると `Steady{talk}` へ入るので、以後は ⑵ に合流
 ///   する（本ハーネスでは `talk` は必ず `Some` である＝上の前提）。
 ///
 /// いずれの場合も `OnSecondChange` は 1 件も出ない。再生側 Tick は dispatcher の受信端へ入り
 /// SHIORI 呼出を 1 件も起こさず（[`Injection::DispatcherTick`]）、kanade Tick は 1 本も投函しない
 /// ——`Steady{talk: Some}` へ kanade Tick を投げれば毎秒の変化通知が 1 件ずつ増える
-/// （`schedule/steady.rs:705-714`）。台本に `OnSecondChange` の応答を 1 件も積んでいないので、
-/// 万一発行されればその場で受け口が落ちる（`spine.rs:245`／`:267`）＝0 件の主張は恒真ではない。
+/// （`schedule/steady.rs`）。台本に `OnSecondChange` の応答を 1 件も積んでいないので、
+/// 万一発行されればその場で受け口が落ちる（`spine.rs`）＝0 件の主張は恒真ではない。
 /// 握手が始まった後に遅れて届く再生側 Tick も無害である（dispatcher 側であり kanade へ渡らない）。
 ///
 /// **なぜ注入時刻を据え置くのか**——駆動器を通すと 1 反復ごとに注入時刻が進み、この段の区間
@@ -125,6 +126,14 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
         !observed.closed.kanade,
         "kanade は生きているのに閉じたと観測している"
     );
+    // 負の検証は回収（settle）で届くのを待ってから読む（待ちが打ち切られた直後の 1 回読みでは、非同期の記録が間に合わない）。
+    let mut seen = handle.non_status_calls().len();
+    settle_bounded(|| {
+        let now = handle.non_status_calls().len();
+        let fresh = now.saturating_sub(seen);
+        seen = now;
+        fresh
+    });
     assert_eq!(
         handle.non_status_calls(),
         before,
@@ -135,7 +144,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     // ── (ii-a) 終了指示 → 握手の開始。**駆動器を通さず**、注入時刻を据え置いた再生側 Tick を
     //     `OnClose` の照会が記録されるまで有界に繰り返す（理由の全体は本檻の doc コメント）。
     //
-    //     駆動器の [`WaitInjection`] には足さない——`spine_conformance_support.rs:231-232` が
+    //     駆動器の [`WaitInjection`] には足さない——`spine_conformance_support.rs` が
     //     「封じているのは駆動器が持つ経路であって、[`StageSink`] を直に呼ぶ経路までは縛らない」
     //     と明記している。据え置きゆえ注入の予算を 1 本も食わず、注入時刻が観測を追い越さない。
     const CLOSE_HOLD_MS: u64 = 11_000;
@@ -143,7 +152,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     // 待ちの形が寄りかかっている前提を、進行状態の記録から逐語に固定する。5 呼出目
     // （`basewareversion`）の組み立て済み進行状態が `talking` であることは、送出時点の phase が
     // `BootVersion{talk: Some}`＝**起動記録トークが走っている**ことを意味する
-    // （`crates/areka-kanade/src/schedule/boot.rs:276-280`＋`schedule/mod.rs:449-460`）。
+    // （`crates/areka-kanade/src/schedule/boot.rs`＋`schedule/mod.rs`）。
     let boot_status = handle.status_calls();
     assert_eq!(
         boot_status
@@ -235,22 +244,22 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
 ///
 /// # 交錯順を決定論にする仕掛け
 ///
-/// 台本受け口は照会・片道のどちらでも**最初に進行状態の記録へ書く**（`spine.rs:233`／`:255` が
+/// 台本受け口は照会・片道のどちらでも**最初に進行状態の記録へ書く**（`spine.rs` が
 /// 呼ぶ `record_status`・本体は `areka-runtime` の `spine.rs` の `record_status`）。ゆえにその台帳の錠を
 /// テスト側が握っていれば受け口は次の呼出の入口で止まり、**応答が kanade へ帰らない**。起動の前に
 /// 錠を握り、握ったまま終了指示を投函すれば、kanade は必ず boot 系列に居るあいだにそれを受け取る
-/// （保留記録＝`crates/areka-kanade/src/schedule/boot.rs:31`・実体は `:285-288`）。錠を放すと起動が
+/// （保留記録＝`crates/areka-kanade/src/schedule/boot.rs`・実体は同ファイル）。錠を放すと起動が
 /// 進み、`Steady{talk: Some}`（起動記録トーク）へ保留を抱えたまま入る——上の檻が稀に踏んでいた形と
 /// 同じ状態である。台本の応答は 1 件も差し替えていない（遅らせているのは**返る時点**だけ）。
 ///
 /// **`calls` の側の錠を握ってはならない。** 死活問い合わせの記録も同じ錠を取るため
-/// （`spine.rs:281-285`）、受け口は起動系列へ入る前に止まり、起動そのものが進まなくなる（実測: 錠を
+/// （`spine.rs`）、受け口は起動系列へ入る前に止まり、起動そのものが進まなくなる（実測: 錠を
 /// 握ったまま 30 秒経っても `basewareversion` が記録されない）。
 ///
 /// 檻に入れる判断分岐:
 /// - **boot 中の終了指示が失われないこと**: `OnClose` の照会がちょうど 1 件・解放がちょうど 1 度。
 /// - **消化に kanade Tick が要らないこと**: `OnSecondChange` は 0 件。台本に応答を 1 件も積んで
-///   いないため、発行されればその場で受け口が落ちる（`spine.rs:245`／`:267`）＝0 件の主張は恒真
+///   いないため、発行されればその場で受け口が落ちる（`spine.rs`）＝0 件の主張は恒真
 ///   ではない。
 #[test]
 fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {

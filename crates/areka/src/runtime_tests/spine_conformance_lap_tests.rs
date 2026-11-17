@@ -30,7 +30,7 @@
 //!    さらに [`SETTLE_ROUNDS`] 回、**注入せず観測だけ**を続けて連鎖の着地を待つ（[`settled`]）。
 //!    終端の逐語はテストが持たない——台本を書き換えれば自動で追随する。
 //! 4. **「サブメニューと戻り」段は注入の窓を 2 つ使う**。選択肢 ID は**直前に再生中の台本の `\q` 帳簿**に
-//!    含まれていなければ弾かれる（`crates/areka-kanade/src/schedule/steady.rs:262`）ため、
+//!    含まれていなければ弾かれる（`crates/areka-kanade/src/schedule/steady.rs`）ため、
 //!    「もどる」と「エモの位置調整」を連続反復で投函すると 2 つ目が必ず棄却される。段名は同じまま、
 //!    区間だけを 2 つに割って各々を再生し切らせる。
 //!
@@ -411,7 +411,7 @@ fn expect_stage_with(
 /// 選択を投函した段の内訳（選択が受理されたか・移動が着地したか）を 1 行に組む。
 ///
 /// 照会が 0 件なら kanade が選択確定を**棄却**している——直前の段が残したはずの選択待ちが、
-/// 投函の時点で失われていたという意味である（`crates/areka-kanade/src/schedule/steady.rs:219-263`
+/// 投函の時点で失われていたという意味である（`crates/areka-kanade/src/schedule/steady.rs`
 /// の 4 つの棄却アーム）。1 件以上あるのに段が待ち切れたなら、棄却ではなく後続の観測
 /// （移動指令の受信端 → frame 相 drain → 対象窓）が届いていない。
 fn choice_breakdown(
@@ -631,7 +631,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
 
     // ── 段 3: 自発会話（kanade へ毎秒の変化通知を 1 本だけ投函する） ──
     //
-    //     1 本につき `OnSecondChange` がちょうど 1 件発行される（`schedule/steady.rs:669-718`）ため、
+    //     1 本につき `OnSecondChange` がちょうど 1 件発行される（`schedule/steady.rs`）ため、
     //     等値照合（R2.3）が成り立つのは 1 本のときだけである。**待ちには何も注入しない**
     //     （`WaitInjection::Idle`）——次段が読む「会話中」を守るためである（モジュール doc の 2）。
     let probe = handle.clone();
@@ -752,12 +752,12 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     // ── 段 6 の自己検査: 選択肢が**相方側（scope1）**のバルーンへ載ったこと（task 5.7） ──
     //
     //     3 つの列は scope を 1 ビットも運ばない——表示指令はキャラ窓の面切替だけ、選択の帳簿は
-    //     ID の集合だけ（`crates/areka-kanade/src/schedule/steady.rs:262`）である。実物
-    //     `menu.pasta:15` は選択肢を `エモ：`（scope1）へ置くので、台本がそれを scope0 へ写し
+    //     ID の集合だけ（`crates/areka-kanade/src/schedule/steady.rs`）である。実物
+    //     `menu.pasta` は選択肢を `エモ：`（scope1）へ置くので、台本がそれを scope0 へ写し
     //     違えても 3 列は緑のままになる。scope を持つ観測点は文字層の選択状態
-    //     （`crates/areka-emo-text/src/actor.rs:539` の `choice_active`）だけなので、ここで 1 度
+    //     （`crates/areka-emo-text/src/actor.rs` の `choice_active`）だけなので、ここで 1 度
     //     読んで写しの正しさを固定する。`pump_text` は文字層 UI アクターの drain だけを行い、
-    //     交信も表示指令も 1 件も増やさない（`spine.rs:862`）。
+    //     交信も表示指令も 1 件も増やさない（`spine.rs`）。
     sink.harness.pump_text();
     {
         let rt = sink.harness.runtime.borrow();
@@ -767,7 +767,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
         );
         assert!(
             !on_sakura && on_kero,
-            "メニューの選択肢が相方側へ載っていない（本体側 {on_sakura}・相方側 {on_kero}）——台本の `\\1` が実物 `menu.pasta:15` と食い違っている"
+            "メニューの選択肢が相方側へ載っていない（本体側 {on_sakura}・相方側 {on_kero}）——台本の `\\1` が実物 `menu.pasta` と食い違っている"
         );
     }
 
