@@ -77,3 +77,10 @@
 5. **確認できた実行時挙動は `request` の block-on-reply（3–6ms 同期往復）のみ**。design §495 が仮説化した `load`→`spawn_actor` 内部スレッドは**利用可能ソースで未確認**（`vendors/pasta` に該当シンボル皆無・`pasta_shiori/src/shiori.rs` は single-threaded と明記／かつ実ロードは prebuilt emo2 `pasta.dll` でその内部は vendored source から検証不能）。actor スレッドは**挙動証拠**（go(1)＋go(2)生存後の 2 応答 → clean unload ＝リクエスト処理ループが生存窓を跨いで稼働）に格下げ。本坑では実バイナリの内部前提を置かず、観測可能な契約（block-on-reply・clean unload）だけに依存すること。
 6. **跨ぐのは生バイト列のみ**。HGLOBAL は 32bit ローカル・HSTRING は x64 ローカル（どちらも IPC を跨がない）。HWND は USER ハンドルゆえ 32bit 有意（u32 LE で受け渡し）。`COPYDATASTRUCT` は windows 0.62.2 では `Win32_System_DataExchange` feature 配下。
 7. **命綱（葉ノード隔離）維持**: 探索コードは `examples/shiori-host-32/` のみ・production クレートへの inbound 依存ゼロ・helper は明示 `[[example]]` で独立 i686 ターゲット化。本坑は go 判定後に、この知見を見て一から綺麗に掘り直す（コピペ donor 流用禁止）。
+
+## 測った後のコードの変更（追記・測った結果は書き換えていない）
+
+- 2026-11-17 `audit-pilot` 指摘 2: helper は UNLOAD を受けずに上限で抜けたら 4、pasta を読めないまま UNLOAD で抜けたら 5 を返すようにした（go 基準(2) の「終了コード 0」は UNLOAD で抜けたときだけになった）。上の記録はこの変更の前のコードで測った。
+- 2026-11-17 `audit-pilot` 指摘 3: 送りの失敗を Win32 のエラーで見分け、`ERROR_TIMEOUT` だけを時間切れと呼ぶようにした。異常系 err(1) は経った時間の下限も見る。上の記録はこの変更の前のコードで測った。
+- 2026-11-17 `audit-pilot` 指摘 7: 1 往復の送りは `ParentMessageWindow::request` になり、受け皿セル `ResponseSlot` と一緒に `parent_window.rs` へ移った（`ipc.rs` には親と helper が両方使う決まりだけが残る）。上の記録はこの変更の前のコードで測った。
+- 2026-11-17 `audit-pilot` 指摘 11: `MsgTag::Load`（判別子 2）ほか使われていない物を `ipc.rs` から消した。上の記録はこの変更の前のコードで測った。
