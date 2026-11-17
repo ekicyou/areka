@@ -4,7 +4,7 @@
 
 開発者は、areka のコードに残っているバグ・危ない所・負荷に弱い所・テストの抜け・遅い所・要らないコードを、一度まとめて直したい。今までは、各 spec が自分の触る所だけを見てきた。全体を同じ物差しで見直したことはない。物差しは ponytail のプラグイン（brief の起票のときは 5.3.2・利用者全体に入れてある）の `/ponytail:ponytail-audit`。この spec は **areka 本体の emo2_boot の残り（背骨・消費者の台帳・適合の台本・資産・トークの時計ほか）** を受け持つ。受け持つファイルは、2026-11-17 `runtime-crate-split` の後の置き場で、`crates/areka-runtime/` と `crates/areka/src/runtime_tests/` のうち `audit-emo2-boot-frame`・`audit-emo2-boot-switch` の持ち物でないもの全部（`crates/areka-runtime/` の `Cargo.toml`・`examples/collision-probe*`・`src/placement_tests/` のうち `transition_*` でないものを含む）と、`crates/areka/src/session/` の `hooks.rs`・`reload*`・`runtime_boot*`・`switch_copy*`・`same_folder_pin*`・e2e の 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）である。まだ audit をかけていない。
 
-着手のときの測り直し（2026-11-17・`main` `5749a4c7`・brief と同じく `_tests.rs`・`tests/`・`_test_support.rs`・本体の `runtime_tests/` をテストに数え、`.rs` と `Cargo.toml` を数えた）: 124 ファイル・計 32,049 行・うち本番 約 10,000 行。brief の棚卸㊴の実測（124 本・32,140 行）とファイルの数は合う（行の差は数え方の端の差と読む＝ギャップ分析で数え直す）。1,000 行に近いのは `spine_conformance_lap_tests.rs`・`spine_conformance_script.rs`・`session/reload_tests.rs`・`assets_tests.rs`・`session/reload.rs`・`lib.rs`（brief の実測）。
+着手のときの測り直し（2026-11-17・`main` `5749a4c7`・brief と同じく `_tests.rs`・`tests/`・`_test_support.rs`・本体の `runtime_tests/` をテストに数え、`.rs` と `Cargo.toml` を数えた）: 125 ファイル・計 32,204 行（`.rs` 124 本・32,140 行と `Cargo.toml` 64 行・`wc -l`）・うち本番の名前のファイル 42 本・9,966 行（examples 8 本・1,092 行を含む）・テスト 82 本・22,174 行。brief の棚卸㊴の実測（124 本・32,140 行）と合う（ギャップ分析 `research.md` の 1.1 で数え直した）。1,000 行に近いのは `spine_conformance_lap_tests.rs`・`spine_conformance_script.rs`・`session/reload_tests.rs`・`assets_tests.rs`・`session/reload.rs`・`lib.rs`（brief の実測）。
 
 直した後の姿: 受け持つ範囲に audit をかけて出た指摘が、3 つの組（必ず直す・直したほうがよい・できれば）とも全部直っている（開発者「とにかく指摘事項は全部直す方針」）。直した後に同じ範囲へもう一度 audit をかけて、新しい指摘が 0 件（直しが生んだ指摘も直す）。全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`）が緑で、直したバグ・危ない所には、それが壊れたら落ちるテストが 1 本ずつある。あわせて、brief に預かった件（`audit-sylphya-actor` から回された audit #16・`runtime-module-untangle` と `runtime-crate-split` の申し送り）を片づける。
 
@@ -20,7 +20,7 @@
 
 この spec はウェーブ C22 で、ほかの 5 本（`collisionex-regions`・`audit-placement-follow-residue`・`audit-test-kits`・`audit-ukadoc-survey`・`audit-pilot`）と並んで走る。並走の約束（ロードマップの「ウェーブ編成」の C22 の行の約束 ⑴〜⑸）を守る（要件 7）。
 
-要件の討議で開発者に決めてもらうことは、要件の本文の中で「仮置き」と書いたものである（どれも答えで作業が変わる）。一覧は末尾の「要件の討議へ渡す問い」。
+要件の討議で開発者に決めてもらうことは、要件の本文の中で「仮置き」と書いたものである（どれも答えで作業が変わる）。一覧は末尾の「要件の討議へ渡す問い」（番号は議題の番号）。
 
 ## Boundary Context
 
@@ -71,7 +71,7 @@
 3. If 指摘が ⑶ に当たるかもしれないとき, then the 要件の討議 shall ukadoc で正典を確かめた結果（出どころの URL と引用）を添えて議題にし、ukadoc で読めない点は SSP の MCP で測った結果を添える（測りは要件 8.2 に従う）
 4. If 指摘の直しが開発者の裁定を覆すとき, then the 本 spec shall その指摘を直さず、議題にする
 5. The 本 spec shall 直さずに残すと裁定された指摘ごとに、当たる種類と開発者の裁定を記録に残す
-6. If 直す対象のタスクが 20 を越えそうなとき, then the 要件の討議 shall 指摘の組ごとに、同じ範囲の 2 本目の spec へ切り分けるかを議題にする（仮置き: 1 本のまま。問い 1）
+6. The 本 spec shall 規模の見立て（ギャップ分析の見込み 20〜24 タスク・手間 L）が大きくても 1 本のまま進め、分けず・削らず、見立ては事実として記録だけする（2026-11-16 開発者「一旦specを切り出した後にあと出して分割を提案されるのは困る」。brief の「20 を越えたら 2 本目へ切ってよい」より後の決め）
 
 ### Requirement 3: 確定した指摘を全部直し切る
 
@@ -104,14 +104,14 @@
 
 #### Acceptance Criteria
 
-1. The 本 spec の直し shall `areka_actor::spawn_ui` の戻り値から使われないエラー型（`UiSpawnError`）を外し、呼び手（`areka-runtime` の `lib.rs` の `BootWiringError::SpawnUi` とそれを説明する文・`areka-emo-text` の `actor.rs`・`actor_test_support.rs`・`areka-actor` のテスト）を全部直す（件 1＝`audit-sylphya-actor` の audit #16・2026-11-06 開発者の承認）
-2. The 本 spec の直し shall 揺れるテスト `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`（今は `crates/areka/src/runtime_tests/spine_third_scope_talk_tests.rs`）の赤の原因（待ちの形の前提）を突き止めて記録に残し、テストの本質（第三のスコープのトークが最後まで流れ、別れの挨拶で終わること）を外さずに直す（件 2・仮置き: 原因の形を決定論のテストで赤として立ててから直す。問い 3）
+1. The 本 spec の直し shall `areka_actor::spawn_ui` の戻り値から使われないエラー型（`UiSpawnError`）を外し、呼び手を全部直す。呼び手は `spawn_ui(`・`spawn_emo_text(`・`UiSpawnError` の grep で 4 つの crate・23 ファイル（`areka-actor` 4・`areka-emo-text` 13〔examples の 1 本を含む〕・`areka-runtime` 2〔`lib.rs` の `BootWiringError::SpawnUi` とそれを説明する文を含む〕・本体 4。一覧は `research.md` の 3 節）と、`spawn_ui` の `Err` に触れる説明の文である。本体の 1 本（`crates/areka/src/input_events/balloon_choice_settle_tests.rs`）は範囲の外（`audit-areka-input-menu` の持ち物）だが、持ち主のセッションは走っていないので、要件 3.2・7.1 のとおり申し合わせなしで直す（件 1＝`audit-sylphya-actor` の audit #16・2026-11-06 開発者の承認・ギャップ分析の 4 番）
+2. The 本 spec の直し shall 揺れるテスト `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits`（今は `crates/areka/src/runtime_tests/spine_third_scope_talk_tests.rs`）の赤の原因（待ちの形の前提）を突き止めて記録に残し、テストの本質（第三のスコープのトークが最後まで流れ、別れの挨拶で終わること）を外さずに直す（件 2・ギャップ分析の 2 番で根の形が分かった＝終わりの条件が `TalkEnded` だけを待ち、別のスレッドの seriko から届く目印の面 2100 を待っていない。直す前に、テスト専用の門つきの出力で目印の面を止めて毎回赤になる決定論のテストを立て、直した後に緑を確かめる＝要件 4.2。その赤が組み立てで立たないと分かったときは、設計の段で議題に戻す）
 3. The 本 spec の直し shall `crates/areka-runtime/src/assets.rs` の `build_boot_assets` の `#[allow(dead_code)]` がまだ要るかを確かめ、要らなければ外し、要るなら理由の文を今の事実に合わせる（件 3）
 4. The 本 spec の直し shall `crates/areka-runtime/src/hit_region.rs` の頭の説明の「`crate::` フリー規律」を、今の事実（examples の `#[path]` の取り込みが残っているか・`is_benign_boot_error` への本体の呼び出しが残っているか）を確かめたうえで、事実に合う文に直す（件 4）
-5. The 本 spec の直し shall `runtime-crate-split` が私有から開けた項目（brief の申し送り ⑶ の 2.5・3.2・4.2 の分）ごとに、`areka-runtime` の外に実在の使い手があるかを確かめ、使い手の無いものは元の私有に戻すか消し、使われない `pub(crate)` の項目は消す（件 5・仮置き: 使い手の無いものは戻す・消す。問い 4）
-6. The 本 spec の直し shall 番人の crate を引く補助を使うために本体に残した 17 本のテスト関数ごとに、`areka-runtime` の側へ戻せるかを判定し、依存を足さずに戻せるものは戻し、戻せないものは理由を記録に残す（件 6・仮置き: 依存を足さない。問い 5）
-7. The 本 spec shall `crates/areka-runtime/src/placement_tests/transition_judge.rs` の古い説明（47〜50 行ほか）を自分では直さず、持ち主の `audit-placement-follow-residue` の brief にその件が書かれていることを確かめ、書かれていなければ持ち主のセッションへ申し送る（件 7・`audit-placement-follow-residue` の brief には既に書かれている）
-8. The 本 spec shall 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at` の写しを自分では直さず、持ち主の `audit-emo2-boot-switch` の brief にその件が書かれていることを確かめる（件 8・両方のファイルが `audit-emo2-boot-switch` の持ち物・同 brief には既に書かれている。問い 6）
+5. The 本 spec の直し shall `runtime-crate-split` が私有から開けた項目（brief の申し送り ⑶ の 2.5・3.2・4.2 の分）ごとに、`areka-runtime` の外に実在の使い手があるかを確かめ、使い手の無いものは元の私有に戻すか消し、使われない `pub(crate)` の項目は消す（件 5・仮置き: 使い手の無いものは戻す・消す。議題 4）
+6. The 本 spec の直し shall 番人の crate を引く補助を使うために本体に残した 17 本のテスト関数のうち、この spec の持ち物のファイルにある 14 本（`switch_cue_tests.rs` 5・`shell_balloon_resolve_tests.rs` 3・`shell_carry_tests.rs` 6）を `areka-runtime` の側へ戻す。番人の 3 つの crate は `areka-runtime` の dev-dependencies に前から入っているので、依存は足さない（`research.md` の 3 節）。ほかの spec の持ち物のファイルにある 3 本（`balloon_visibility_phase_tests.rs` の 2 本＝`audit-emo2-boot-switch`・`runtime_tests/frame/window_state_tests.rs` の 1 本＝`audit-emo2-boot-frame`）は触らず、要件 7.8 のとおり持ち主の brief へ申し送る（件 6）
+7. The 本 spec shall `crates/areka-runtime/src/placement_tests/transition_judge.rs` の古い説明（47〜50 行）を自分では直さない。持ち主の `audit-placement-follow-residue` の brief（`brief.md` 109 行）に既に書かれていることを、ギャップ分析で確かめ済みとして記録に残す（件 7）
+8. The 本 spec shall 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at` の写しを自分では直さない。両方のファイルが `audit-emo2-boot-switch` の持ち物で、同 brief（98 行）に既に書かれていることを、ギャップ分析で確かめ済みとして記録に残す（件 8）
 9. The 本 spec shall 件 1〜8 を片づけたことを、預かった brief の件の出どころ（`audit-sylphya-actor` の議題 3・`runtime-module-untangle` の申し送り・`runtime-crate-split` の申し送り ⑵ ⑶）と一緒に記録に残す
 
 ### Requirement 6: 直しの中でも守る決まり
@@ -140,7 +140,7 @@
 3. While C22 のあいだ, the 本 spec の直し shall `crates/areka-runtime/src/frame/`・`frame*.rs` と `crates/areka-placement/` に手を入れず、emo-text に新しいソースファイルを足さない（C22 の約束 ⑷ ⑸）
 4. While C22 のあいだ, the 本 spec の直し shall `crates/log-capture-kit/tests/file_length_guard_test.rs` に手を入れず、その上限越えの表に載るファイルを割らない（C22 の約束 ⑵）
 5. While C22 のあいだ, the 本 spec の直し shall `crates/areka-runtime/src/placement_tests/mod.rs` を持ち物として扱い、`placement_tests/transition_*` の中身に手を入れない（C22 の約束 ⑶）
-6. If 確定した指摘が外への約束を変えずには直せないとき, then the 本 spec shall 約束を黙って破って直さず、要件の討議でその指摘を議題にし、扱い（約束を変えない直し方・読み手を同じ変更で全部直す・後の spec へ回す）を開発者の裁定で決める（仮置き: `areka-runtime` の公開の面とログの行の語は、読み手を同じ変更で全部直す。ゴーストと SSP 互換の振る舞いは要件 2.2 の ⑶ として議題にする。問い 7）
+6. If 確定した指摘が外への約束を変えずには直せないとき, then the 本 spec shall 約束を黙って破って直さず、要件の討議でその指摘を議題にし、扱い（約束を変えない直し方・読み手を同じ変更で全部直す・後の spec へ回す）を開発者の裁定で決める（仮置き: `areka-runtime` の公開の面とログの行の語は、読み手を同じ変更で全部直す。ゴーストと SSP 互換の振る舞いは要件 2.2 の ⑶ として議題にする。議題 4）
 7. If 直しが C22 のほかの 5 本の触るファイル（ロードマップの C22 の行の「触るファイル」の ①②④⑤⑥）に及ぶとき, then the 本 spec shall そのファイルを触らずに、相手のセッションへ申し送り、申し送った件と相手を記録に残す
 8. If 指摘の直しを後の spec へ回すと裁定されたとき, then the 本 spec shall 受け持つ spec が実在する（`completed/` でない）ことを確かめ、その spec の brief に件として書き足し、回した指摘と回し先を記録に残す
 9. The 本 spec の直し shall `vendors/` の下に手を入れない
@@ -155,7 +155,7 @@
 2. When 要件 2.3 のために SSP の MCP で測るとき, the 本 spec の作業 shall 測る前に開発者の許しを得て、読み直し（reload）を打つときは毎回許しを取り、排他テストの机で順を取り、測り終えたらすぐ机を返す
 3. Where 実機の確かめ（emo2・pasta の実走のテスト）が全体テストの段として既に回っているところでは, the 本 spec の作業 shall それを全体テストの中で回し、8.1 の禁止に数えない
 4. When 重い走行のテストが赤になったとき, the 本 spec の作業 shall 2 回目からは赤が出たテストだけに絞って短く回し、全体の走行を何度も回さない
-5. If 直しが 8.1 の操作でしか確かめられないとき, then the 本 spec shall その直しを決定論のテスト（偽の SHIORI・偽の時計・`target` の下の写し）で筋の正しさまで確かめる形を先に探し、それでも足りない分は要件の討議で議題にする（仮置き: 決定論のテストで筋まで縛り、効き目は次の実機の確かめで見るものとして、検証の記録に指摘の番号ごとに書き残す。問い 8）
+5. If 直しが 8.1 の操作でしか確かめられないとき, then the 本 spec shall その直しを決定論のテスト（偽の SHIORI・偽の時計・`target` の下の写し）で筋の正しさまで確かめる形を先に探し、それでも足りない分は要件の討議で議題にする（決定論のテストで筋まで縛り、効き目は次の実機の確かめで見るものとして、検証の記録に指摘の番号ごとに書き残す。ギャップ分析の時点では、8.1 の操作でしか確かめられない指摘は 0 件＝`research.md` の 9 節）
 
 ### Requirement 9: 仕上げの確かめ
 
@@ -173,12 +173,10 @@
 
 ## 要件の討議へ渡す問い（仮置きの一覧）
 
-1. **分け方（要件 2.6）**: brief と棚卸㊴は「20 を越えたら指摘の組ごとに同じ範囲の 2 本目へ切る」と書く。一方、記憶の決めごと（2026-11-16）は「一度 spec に切り出した後は、規模を理由にした分割を後出しで提案しない・20 タスクは spec の上限ではない」。仮置き＝1 本のまま（越えても切らない）。ギャップ分析の指摘の数を見てから決める。
-2. **直さずに残す指摘（要件 2.2）**: 候補はギャップ分析の後に決まる。仮置き＝0 件。
-3. **揺れるテストの確かめ方（要件 5.2）**: 仮置き＝原因の形（待ちの順序の前提）を決定論のテストで赤として立ててから直し、直した後は全体テスト 1 回の緑で受け取る（負荷をかけた形で何度も回さない）。原因を決定論で再現できなかったときの受け取り方（そのテストだけを絞って何回回すか）を決める。
-4. **開けた `pub` の戻し方（要件 5.5）**: 仮置き＝外に使い手の無い項目は私有へ戻すか消す（使い手が本体のテストだけでも使い手に数える）。本体の呼び手のファイルが範囲の外（ほかの見直しの持ち物）のときも、項目の可視性を戻すだけなら申し合わせ無しでよいかを決める。
-5. **本体に残した 17 本のテスト関数（要件 5.6）**: `areka-runtime` へ戻すには番人の crate を `areka-runtime` の dev-dependency に足す道があるが、C22 の約束 ⑸（依存を足さない）に当たる。仮置き＝依存を足さず、足さずに戻せるものだけ戻し、残りは理由を記録する（dev-dependency を足す道は次のウェーブ以降の件として残すか、残さないかを決める）。
-6. **`world_at` の写し（要件 5.8）**: 本体のテストとテストの支えの両方が `audit-emo2-boot-switch` の持ち物なので、この spec では直さない。仮置き＝持ち主の brief に既にあるので、確かめるだけ。
-7. **外への約束を変える直しの扱い（要件 7.6）**: 仮置き＝`areka-runtime` の公開の面とログの行の語は、同じ変更の中で読み手を全部直す（ログの行の語を変えるときは、字面で読む実機の確かめ・`tools/perf/`・手順書を grep で全部探す）。ゴーストと SSP 互換の振る舞いを変える直しは、ukadoc と SSP の測りを添えて 1 件ずつ議題にする。
-8. **実機でしか確かめられない直し（要件 8.5）**: 仮置き＝決定論のテストで筋まで縛り、効き目は次の実機の確かめで見るものとして番号ごとに記録する。
-9. **audit #16 の範囲の外への直し（要件 5.1）**: `areka-actor` と `areka-emo-text` を受け持つ見直しの spec（`audit-sylphya-actor`・`audit-emo-text-state-actor`）はどちらも完了しており、C22 に `areka-emo-text` の `actor.rs` に触る spec は無い。仮置き＝申し合わせの相手は無く、そのまま直す。
+ギャップ分析（`research.md`）の後に、答えで作業が変わるものだけを残した（番号はギャップ分析の指摘の番号）。起票のときの問いのうち、分け方（要件 2.6）・件 1 の申し合わせ（要件 5.1）・件 6 の依存（要件 5.6）・件 7 と件 8（要件 5.7・5.8）・揺れるテストの確かめ方（要件 5.2）・実機でしか確かめられない直し（要件 8.5）は、ギャップ分析で分かった事実と開発者の既にある決めで閉じ、本文へ書き込んだ。
+
+1. **35 番（自前の 30 秒の輪 10 か所）**: 仮置き＝`wait_until` の形（進みの数で締め切りを延ばす形）へそろえて直す。完了した spec の決め R7.9（「ハイブリッドは各呼び出し点の自前の輪」）に触れる。
+2. **25 番（余韻の 300 反復）**: 仮置き＝直さずに残す（要件 2.2 の ⑴・完了した spec の決め R2.9「製品のコードへ観測の口を作らない」）。今の形と根拠の文を残す。
+3. **81・82 番（一周の台本の決め）**: 仮置き＝81 番（毎秒の変化通知の応答本数）は直さずに残す（⑴・task 2.2 の「段の上限だけから導き、駆動器から借りない」規則・余った応答は記録に残らず害が無い）。82 番（採取時刻の自己検査）は検査を残したまま（design D3）、中の `Vec` をやめて `any` 1 回にする形で直す。
+4. **外への約束を変える直し（4・36・48・62・71 番・要件 7.6）**: 仮置き＝`areka-runtime` の公開の面とログの行の語は、同じ変更の中で読み手を全部直す（ログの語は、実機の確かめ・`tools/perf/`・手順書を grep で探す）。62 番は送りの失敗だけ新しい event 名へ分ける。runtime-crate-split が開けた項目のうち、本体のテストだけが使う 62 項目は使い手に数えて戻さず、外に使い手の無い 5 項目（36 番）だけ戻す。ゴーストと SSP 互換の振る舞い（(a)）が変わる指摘は 0 件。
+5. **範囲の外への申し送り（`research.md` の 6 節のア〜ケ・要件 7.7・7.8）**: 仮置き＝走っている `audit-ukadoc-survey` へのケは、そのセッションへ伝えて記録に残す。走っていない持ち主（ア・イ＝`audit-emo2-boot-frame`、ウ＝`audit-emo2-boot-switch`、オ・キ・クの持ち主）は、実在する（`completed/` でない）ことを確かめてから brief へ書き足す。持ち主の見直しが完了済みのエ（落ちの報告の写し 3 本・まとめるには新しい依存が要る）は、`/kiro-complete` の未解決の棚卸で扱う件として検証の記録に残す。
