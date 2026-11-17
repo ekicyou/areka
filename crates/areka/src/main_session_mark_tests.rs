@@ -33,9 +33,9 @@ use crate::boot_resolve::{
     read_last_ghost, read_session_mark, write_session_mark,
 };
 use crate::ghost_session::{GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues};
-use crate::runtime::spine::RecordedCall;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_placement::AuthorDpi;
+use areka_runtime::spine::RecordedCall;
 
 fn fault(kind: ShioriFaultKind) -> ShioriFault {
     ShioriFault {

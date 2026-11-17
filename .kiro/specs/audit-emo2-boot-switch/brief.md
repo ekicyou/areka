@@ -8,9 +8,9 @@
 
 ## Current State
 
-- 受け持つファイル（2026-11-13 `runtime-module-untangle` で書き換えた＝前は `crates/areka/src/emo2_boot/` の `ghost_switch*`・`switch_assets*`・`shell_balloon_switch*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
+- 受け持つファイル（2026-11-17 `runtime-crate-split` で書き換えた＝前は 2026-11-13 `runtime-module-untangle` の `crates/areka/src/runtime/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`・`change_cue*`・`skin_switch.rs`・`balloon_hover.rs`・`shell_box_hover.rs`。名前の型を `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方に当てる。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）:
   - `crates/areka/src/session/` の `ghost_switch*`・`shell_balloon_switch*`。
-  - `crates/areka/src/runtime/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`、切替から runtime に残した `change_cue*`（`ChangeRequestRaw`）・`skin_switch.rs`（切替の型と `skin_ref_*`）、ホバーの `balloon_hover.rs`・`shell_box_hover.rs`（`input_events/` から移した）。runtime の分は `runtime-crate-split` で `crates/areka-runtime/src/` へもう一度移る。
+  - `crates/areka-runtime/src/` の `switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`・`change_cue*`・`skin_switch.rs`・`balloon_hover.rs`・`shell_box_hover.rs`、および `crates/areka/src/runtime_tests/` の `balloon_visibility*`（代わりの親 2 と、本体の項目を引くテストの 5 本）。
 - 大きさ: 50 ファイル・コード 5,672 行・テスト 12,687 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
@@ -80,3 +80,20 @@
 `runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
 
 - **要らない項目: `crates/areka/src/session/shell_balloon_switch.rs` 37〜40 行目の出し直しが設計より広い**。設計の 5 型（`SkinKind`・`SkinOrigin`・`SkinRequest`・`SkinSpec`・`SkinVerdict`）に加えて `SkinRequestRaw`・`SkinSwitchInFlight`・`SkinSwitchStage`・`skin_ref_name`・`skin_ref_path` を出し直している（テストが入口のパスで引くため）。引く所を `crate::runtime::skin_switch` へ直して、出し直しを 5 型へ絞る。
+
+## runtime-crate-split からの申し送り（2026-11-17）
+
+`runtime-crate-split`（`runtime` を crate `areka-runtime` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-17 時点のもので、着手のときに確かめ直す。受け持つファイルの置き場は、上の「Current State」のとおり `crates/areka-runtime/` と `crates/areka/src/runtime_tests/` の両方。
+
+- **⑴ 直さなかった不具合**: 0 件（`runtime-crate-split` は作業中に不具合を見つけていない）。
+
+- **⑵ 理由の文が古くなった `#[allow(...)]`**: この spec の持ち物（`switch_assets*`・`balloon_visibility*`・`hover_inject*`・`move_cue*`・`change_cue*`・`skin_switch.rs`・`balloon_hover.rs`・`shell_box_hover.rs`）に、理由が「`areka` は lib target を持たない bin クレート」ほかで移した後に事実でなくなった `#[allow(...)]` は 0 件（`rg -n "#!?\[allow\(" crates/areka-runtime crates/areka/src/runtime_tests` の全部を読んだ。当たるのは `frame.rs`・`frame/wiring.rs` の分が `audit-emo2-boot-frame`、`assets.rs` の 1 本と `transition_judge.rs` の説明が `audit-emo2-boot-spine`・`audit-placement-follow-residue`）。
+
+- **⑶ `runtime-crate-split` で私有から開けた項目**（この spec の持ち物の分。全体の一覧は `.kiro/specs/completed/runtime-crate-split/verification.md` の 2.5・4.2・6.1）:
+  - 2.5（`pub(crate)` → `pub`・全体 112 件）のうち 26 件: `balloon_hover.rs` 3・`change_cue.rs` 3・`shell_box_hover.rs` 5・`skin_switch.rs` 11・`switch_assets.rs` 4。`pub` の項目が名指す型には「要件 2.5: 公開の `<名前>` が名指すので開ける」の 1 行が付いている（`SwapFinish`・`SwapBuilt`・`SwitchBuildError` ほか）。使われない `pub(crate)` は消していない。
+  - 4.2 ⑴（本体のテストが使うので `pub(crate)` → `pub`）: `BalloonHover::is_balloon_hovered`・`balloon_visibility` の `decide`／`configured_timeout_secs` の再公開と定義・`VisibilityTrigger`・`SuppressionKinds`（`dragging`・`hover`）・`MeasurementDiscardReason`・`VisibilityLogEvent`・`MeasurementOrigin`・`VisibilityAction`・`VisibilityDecision`（`actions`・`logs`・`timeout_notice`）・`ScopeObservation`（`visible_glyphs`・`visible`・`hover`・`box_showing`）・`ScopeVisibility`・`GlyphObservation`・`VisibilityObservations`（`scopes`・`lifecycle`・`dragging`）・`BalloonVisibilityState`（`forget_scope`）・`balloon_visibility::test_support`（`any(test, feature)`）と中の関数と `Frame`・`run_balloon_visibility_phase`・`balloon_visibility_phase::test_support` と `attach_headless`・`settle_box_hover`。
+  - 4.2 ⑵ 家の型 `test_open`（中で tracing を呼ばない項目）: `balloon_visibility_phase.rs` の `IssueOutcome`（欄も `pub`）・`issue_actions`・`clear_hover_residency`。
+  - 4.2 ⑶ 宣言の印の切り替え: `balloon_visibility::phase`。
+  - 4.2 ⑷ 渡し口（`#[cfg(feature = "test-support")]` の `pub fn`・開けた私有の項目 7 に渡し口 7）: `balloon_visibility_phase` の `collect_observations`・`observe_scope_boxes`・`notify_timeout`・`emit_visibility_logs`（同名 4・`balloon_visibility_phase_test_support.rs`）・`BalloonVisibilityState` の欄 `per_scope`（`&mut`）・`display_end`・`observation_failure_logged.runtime`（`per_scope`・`display_end`・`observation_failure_logged_runtime`）。
+  - 4.2 の案 C（テストを `#[test]` 関数の単位で割った）のうちこの spec の分: `balloon_visibility_phase_tests.rs`（1 戻し〔`dragging_requires_both_balloon_window_and_drag_marker`〕・14 残り）・`balloon_visibility_phase_box_tests.rs`（6 戻し・4 残り）。両方が使う補助 `runtime`・`world_at` は `balloon_visibility_phase_test_support.rs`（既存）にある。**本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at`（146 行）は、この支えの `world_at` と同じ中身の前からの写し**なので、支えの側の 1 つにまとめられる。
+  - 6.1 examples: 持ち物の分に関わる変更は 0 件。

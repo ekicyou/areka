@@ -11,9 +11,13 @@
 //! 「立っていないはず」は**主張しない**。旗はプロセスで 1 組しか無く、本番経路が同じ
 //! 旗を立てるため、そちらの主張は他の検査の巻き添えで揺れる（tasks.md「(3.4)」）。
 
-/// 旗を立てる側（areka 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
+use crate::crate_source_test_support::crate_source;
+
+/// 旗を立てる側（areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
 ///
-/// パスは本ファイル（`crates/areka/src/`）からの相対である。
+/// 見出しは `crates/` からの相対（crate の名前＋その `src/` の中のパス）である（読み先は読み口
+/// `crate_source!` で引く）。木の走査は本体と `areka-runtime` の 2 つの `src` を歩くので、見出しに
+/// crate の名前を付けて 2 つの木の間で取り違えないようにする。
 ///
 /// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
@@ -21,43 +25,43 @@
 /// 2 行を持っていたのは、退役したバルーン再表示の追随トリガのぶんである。）
 const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
-        "runtime/adapter.rs",
-        include_str!("runtime/adapter.rs"),
+        "areka-runtime/adapter.rs",
+        crate_source!("areka-runtime", "src/adapter.rs"),
         "PRESENT",
     ),
     (
-        "runtime/balloon_visibility_phase.rs",
-        include_str!("runtime/balloon_visibility_phase.rs"),
+        "areka-runtime/balloon_visibility_phase.rs",
+        crate_source!("areka-runtime", "src/balloon_visibility_phase.rs"),
         "REARM",
     ),
     (
-        "runtime/frame/scale_text.rs",
-        include_str!("runtime/frame/scale_text.rs"),
+        "areka-runtime/frame/scale_text.rs",
+        crate_source!("areka-runtime", "src/frame/scale_text.rs"),
         "REARM",
     ),
     (
-        "runtime/hover_inject.rs",
-        include_str!("runtime/hover_inject.rs"),
+        "areka-runtime/hover_inject.rs",
+        crate_source!("areka-runtime", "src/hover_inject.rs"),
         "REARM",
     ),
     (
-        "runtime/move_cue.rs",
-        include_str!("runtime/move_cue.rs"),
+        "areka-runtime/move_cue.rs",
+        crate_source!("areka-runtime", "src/move_cue.rs"),
         "PRESENT",
     ),
     (
-        "runtime/talk_lifecycle.rs",
-        include_str!("runtime/talk_lifecycle.rs"),
+        "areka-runtime/talk_lifecycle.rs",
+        crate_source!("areka-runtime", "src/talk_lifecycle.rs"),
         "PRESENT",
     ),
     (
-        "runtime/window_state_cue.rs",
-        include_str!("runtime/window_state_cue.rs"),
+        "areka-runtime/window_state_cue.rs",
+        crate_source!("areka-runtime", "src/window_state_cue.rs"),
         "ZORDER",
     ),
     (
-        "runtime/zorder_cue.rs",
-        include_str!("runtime/zorder_cue.rs"),
+        "areka-runtime/zorder_cue.rs",
+        crate_source!("areka-runtime", "src/zorder_cue.rs"),
         "ZORDER",
     ),
 ];
@@ -92,10 +96,13 @@ fn every_areka_producer_marks_the_tick_wake() {
 /// 相の側の決定論テストが `visibility_wake` の答えとして固定する）。
 #[test]
 fn balloon_visibility_phase_arms_the_deadline() {
-    let code = code_only(include_str!("runtime/balloon_visibility_phase.rs"));
+    let code = code_only(crate_source!(
+        "areka-runtime",
+        "src/balloon_visibility_phase.rs"
+    ));
     assert!(
         code.contains("tick_wake::arm_deadline("),
-        "runtime/balloon_visibility_phase.rs: 待ち時間を預ける呼出（tick_wake::arm_deadline(）が無い"
+        "balloon_visibility_phase.rs: 待ち時間を預ける呼出（tick_wake::arm_deadline(）が無い"
     );
 }
 
@@ -115,7 +122,7 @@ fn balloon_visibility_phase_arms_the_deadline() {
 
 use std::path::{Path, PathBuf};
 
-/// `crates/areka/src/` 配下の本番 `.rs` を集める（テストのファイルは除く）。
+/// `dir` 配下の本番 `.rs` を集める（テストのファイルは除く）。
 fn production_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = std::fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("木を歩けない（検査が空振りする）: {} — {e}", dir.display()));
@@ -176,35 +183,57 @@ mark(ZORDER);",
     );
 }
 
-/// `src/` からの相対パス（区切りは `/`）で、旗を立てている本番ファイルを列挙する。
+/// 本体と `areka-runtime` の 2 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲。
+/// runtime-crate-split 要件 5.4）。
+fn walk_roots() -> [(&'static str, PathBuf); 2] {
+    [
+        ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
+        (
+            "areka-runtime",
+            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+    ]
+}
+
+/// `crates/` からの相対パス（`<crate>/<src の中のパス>`・区切りは `/`）で、旗を立てている
+/// 本番ファイルを列挙する。
 ///
 /// `flag` が空文字なら「どれかの旗を立てている」、それ以外なら「その旗を立てている」。
 fn files_marking(flag: &str) -> Vec<String> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    production_rs_files(&root, &mut files);
-
-    let mut found: Vec<String> = files
-        .iter()
-        .filter(|path| {
-            let src = std::fs::read_to_string(path).expect("本番ファイルが読めない");
-            let code = code_only(&src);
-            uses_tick_wake_name(&code, "mark")
-                && (flag.is_empty() || uses_tick_wake_name(&code, flag))
-        })
-        .map(|path| {
-            path.strip_prefix(&root)
-                .expect("走査の根の下に無い")
-                .to_string_lossy()
-                .replace('\\', "/")
-        })
-        .collect();
+    let mut found = Vec::new();
+    for (krate, root) in walk_roots() {
+        let mut files = Vec::new();
+        production_rs_files(&root, &mut files);
+        assert!(
+            !files.is_empty(),
+            "{krate} の src に本番ファイルが 1 つも無い（走査の根が空振りしている）"
+        );
+        found.extend(
+            files
+                .iter()
+                .filter(|path| {
+                    let src = std::fs::read_to_string(path).expect("本番ファイルが読めない");
+                    let code = code_only(&src);
+                    uses_tick_wake_name(&code, "mark")
+                        && (flag.is_empty() || uses_tick_wake_name(&code, flag))
+                })
+                .map(|path| {
+                    let rel = path
+                        .strip_prefix(&root)
+                        .expect("走査の根の下に無い")
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    format!("{krate}/{rel}")
+                }),
+        );
+    }
     found.sort();
     found.dedup();
     found
 }
 
-/// 木の中で旗を立てている areka の本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に載っている。
+/// 本体と `areka-runtime` の木の中で旗を立てている本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に
+/// 載っている。
 ///
 /// 逆向きも同時に見る——表の行が現物のどのファイルにも当たらなければ、走査が壊れて
 /// 0 件を返している（そのときは何を消しても緑になる）。両側から挟んでおく。
@@ -218,15 +247,13 @@ fn the_areka_table_lists_every_file_that_marks_the_wake() {
 
     for rel in &found {
         assert!(
-            AREKA_PRODUCERS
-                .iter()
-                .any(|(label, _, _)| rel.ends_with(label)),
+            AREKA_PRODUCERS.iter().any(|(label, _, _)| rel == label),
             "旗を立てているのに AREKA_PRODUCERS に載っていない: {rel}"
         );
     }
     for (label, _, _) in AREKA_PRODUCERS {
         assert!(
-            found.iter().any(|rel| rel.ends_with(label)),
+            found.iter().any(|rel| rel == label),
             "AREKA_PRODUCERS の行が現物のどのファイルにも当たらない: {label}"
         );
     }

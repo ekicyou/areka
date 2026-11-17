@@ -26,8 +26,8 @@ use super::shell_box::box_under_point;
 use super::shell_box_handler::box_place;
 use super::wheel::{WheelAccum, WheelPlan, WheelRotation, plan_wheel};
 use super::{MouseWiring, char_scope, resolve_hit_owned};
-use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::CharWindowMarker;
+use areka_runtime::frame::RuntimeWiring;
 
 /// 窓の外へ出たときに捨てる押下の控え（左は捕捉で持ち主が残るので含めない・要件 3.3）。
 const UNCAPTURED_BUTTONS: [ClickButton; 4] = [

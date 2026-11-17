@@ -5,7 +5,7 @@
 
 use wintf::ecs::cursor::CursorTrigger;
 
-use crate::runtime::shell_cursor_table::{
+use areka_runtime::shell_cursor_table::{
     CursorRows, CursorScene, GhostCursorKeys, Shape, SystemCursor,
 };
 

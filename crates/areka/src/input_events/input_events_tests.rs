@@ -1,7 +1,7 @@
 use super::*;
-use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
+use areka_runtime::hit_region::HitRegion;
 use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};

@@ -1,0 +1,184 @@
+// =============================================================================
+// 判断中核テストの共有ヘルパ（観測スナップショットの組立て）
+//
+// design.md「File Structure Plan」の `balloon_visibility_test_support.rs`。
+// 観測は「scope → (可視グリフ数, 現に可視か)」の表でしかないため、ここに置くのは
+// その表を組む最小の道具だけにする。実時間の待機・スリープは一切用いない。
+// =============================================================================
+
+use std::collections::BTreeMap;
+
+use areka_sakura::TalkId;
+
+use super::{
+    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
+    TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
+};
+
+/// [`Frame::talk_started`] が運ぶトークの番号。
+pub const TALK_ID: TalkId = TalkId(1);
+
+/// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
+/// 消去の回数は 0 で一定（回数の変わらない観測の列は今と同じ答えを返す）。
+pub fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
+    ScopeObservation {
+        visible_glyphs: Some(GlyphObservation {
+            count: visible_glyphs,
+            clear_count: 0,
+        }),
+        visible,
+        hover: Some(false),
+        box_showing: false,
+    }
+}
+
+/// グリフ数の観測が取れなかった scope（本番では文字層ランタイムの借用失敗）。
+pub fn unobserved(visible: bool) -> ScopeObservation {
+    ScopeObservation {
+        visible_glyphs: None,
+        visible,
+        hover: Some(false),
+        box_showing: false,
+    }
+}
+
+/// ポインタが滞在している scope にする（Requirement 5.2）。
+pub fn hovered(observation: ScopeObservation) -> ScopeObservation {
+    ScopeObservation {
+        hover: Some(true),
+        ..observation
+    }
+}
+
+/// 抑止条件の観測が 1 つも取れなかった scope にする（Requirement 5.5）。
+pub fn suppression_unobserved(observation: ScopeObservation) -> ScopeObservation {
+    ScopeObservation {
+        hover: None,
+        ..observation
+    }
+}
+
+/// 観測スナップショットを組む。引数の並び順は結果に影響しない（走査は scope 昇順）。
+pub fn observations(entries: &[(u32, ScopeObservation)]) -> VisibilityObservations {
+    VisibilityObservations {
+        scopes: entries.iter().copied().collect::<BTreeMap<_, _>>(),
+        ..VisibilityObservations::default()
+    }
+}
+
+/// 1 フレーム分の判断を進める（時刻を与えないため、タイムアウトの評価は行われない）。
+///
+/// 時刻 `None` は本番の「talk の起点が未確立」に対応する。コンテンツ駆動の判定だけを見たい
+/// テストはこの入口を使う——タイムアウト側の判断が時刻無しで動き出せば、この呼び方をしている
+/// テストのどれかが必ず落ちる。
+pub fn step(
+    state: &mut BalloonVisibilityState,
+    entries: &[(u32, ScopeObservation)],
+) -> VisibilityDecision {
+    Frame::new(entries).run(state)
+}
+
+/// タイムアウト計測まで含めた 1 フレームの入力を組み立てる。
+///
+/// 実時間の待機は一切用いず、時刻は [`Frame::at`] で注入する。注入する時刻は観測したい時点
+/// （満了境界の直前・直後など）そのものに限り、そこで頭打ちにする。
+pub struct Frame {
+    obs: VisibilityObservations,
+    now: Option<f64>,
+    timeout_secs: f64,
+}
+
+impl Frame {
+    /// 観測から 1 フレームを組む（既定は時刻なし・タイムアウトは既定時間・抑止なし・信号なし）。
+    ///
+    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（Requirement 4.2——
+    /// 同じ数値を複数箇所へ散らさない）。
+    pub fn new(entries: &[(u32, ScopeObservation)]) -> Self {
+        Self {
+            obs: observations(entries),
+            now: None,
+            timeout_secs: DEFAULT_BALLOON_TIMEOUT_SECS,
+        }
+    }
+
+    /// 現在時刻（talk 相対秒）を注入する。
+    pub fn at(mut self, now: f64) -> Self {
+        self.now = Some(now);
+        self
+    }
+
+    /// タイムアウト時間（秒）を指定する。
+    pub fn timeout(mut self, timeout_secs: f64) -> Self {
+        self.timeout_secs = timeout_secs;
+        self
+    }
+
+    /// 会話開始の信号を本フレームに届ける。番号は本番と同じく配送が付けた [`TALK_ID`]。
+    pub fn talk_started(mut self) -> Self {
+        self.obs.lifecycle.push(TalkLifecycleSignal::TalkStarted {
+            talk_id: Some(TALK_ID),
+        });
+        self
+    }
+
+    /// 占有終端の信号を本フレームに届ける。
+    pub fn display_end(mut self, end: f64) -> Self {
+        self.obs
+            .lifecycle
+            .push(TalkLifecycleSignal::DisplayEndAt(end));
+        self
+    }
+
+    /// 占有終端とトークの終わり（止まった時刻＝占有終端）を本フレームに一緒に届ける。
+    ///
+    /// 時間切れの計測はトークの終わりが届いてから始まる（areka-P0-balloon-lifecycle-events
+    /// 決定 D6）。止まった時刻は判断中核が丸めた後の終端（下限 0.0・数でなければ 0.0）と同じに
+    /// するので、起点は終端のままで満了の時刻は変わらない。
+    pub fn ended_at(self, end: f64) -> Self {
+        let mut frame = self.display_end(end);
+        frame.obs.lifecycle.push(TalkLifecycleSignal::TalkEnded {
+            at: Some(end.max(0.0)),
+        });
+        frame
+    }
+
+    /// 任意の合図を本フレームに届ける（到着順に積む）。
+    pub fn signal(mut self, signal: TalkLifecycleSignal) -> Self {
+        self.obs.lifecycle.push(signal);
+        self
+    }
+
+    /// いずれかのバルーン窓がドラッグ中である状態にする（Requirement 5.1）。
+    pub fn dragging(mut self) -> Self {
+        self.obs.dragging = true;
+        self
+    }
+
+    /// 判断を 1 フレーム進める。
+    pub fn run(self, state: &mut BalloonVisibilityState) -> VisibilityDecision {
+        decide(state, &self.obs, self.now, self.timeout_secs)
+    }
+}
+
+// 本体のテスト（`crates/areka/src/runtime_tests/`）が使う私有の欄へそのまま渡す口（`test-support` のときだけ・
+// 本番の可視性は変えない・spec: runtime-crate-split 設計 D3 ⑷）。
+#[cfg(feature = "test-support")]
+use super::ScopeVisibility;
+
+/// [`BalloonVisibilityState`] の scope ごとの前フレームの状態（`per_scope`）。
+#[cfg(feature = "test-support")]
+pub fn per_scope(state: &mut BalloonVisibilityState) -> &mut BTreeMap<u32, ScopeVisibility> {
+    &mut state.per_scope
+}
+
+/// [`BalloonVisibilityState`] の表示の占有の終わり（`display_end`）。
+#[cfg(feature = "test-support")]
+pub fn display_end(state: &BalloonVisibilityState) -> Option<f64> {
+    state.display_end
+}
+
+/// [`BalloonVisibilityState`] が実行系の借用の失敗を記録したか（`observation_failure_logged.runtime`）。
+#[cfg(feature = "test-support")]
+pub fn observation_failure_logged_runtime(state: &BalloonVisibilityState) -> bool {
+    state.observation_failure_logged.runtime
+}

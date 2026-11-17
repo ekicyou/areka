@@ -1,0 +1,64 @@
+[package]
+name = "areka-runtime"
+workspace = "../.."
+description = "areka runtime: wires a ghost's SHIORI, surfaces, balloons and windows into one running frame loop"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false # areka 本体の部品・areka の中でしか意味を持たない
+repository.workspace = true
+
+[features]
+# 本体のテストだけが使う支えを開ける・本体は dev-dependency でだけ付ける（spec: runtime-crate-split 要件 3.1／3.2）。
+test-support = ["dep:shiori-host32-host", "areka-placement/test-support"]
+
+[dependencies]
+wintf = { path = "../wintf" }
+dola = { path = "../dola" }
+# 窓配置（spec: runtime-crate-split 要件 1.5）。runtime は配置の上に乗り、本体（areka）には依存しない。
+areka-placement = { path = "../areka-placement" }
+areka-actor = { path = "../areka-actor" }
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-emo-present = { path = "../areka-emo-present" }
+areka-emo-text = { path = "../areka-emo-text" }
+areka-ghost = { path = "../areka-ghost" }
+areka-kanade = { path = "../areka-kanade" }
+areka-parsers = { path = "../areka-parsers" }
+areka-sakura = { path = "../areka-sakura" }
+areka-seriko = { path = "../areka-seriko" }
+areka-sylphya = { path = "../areka-sylphya" }
+# 台本の SHIORI（spine の ⑵）が実装の戻りの型を名指すため、test-support のときだけ付く（本番のビルドには付かない）。
+shiori-host32-host = { path = "../shiori-host32-host", optional = true }
+bevy_ecs = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+windows = { workspace = true }
+
+[dev-dependencies]
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }
+# 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
+# テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
+# log-capture-kit と同じく [dependencies] へは決して置かない。
+sample-ghost-kit = { path = "../sample-ghost-kit" }
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# 依存 0（std のみ）の leaf・publish = false・テスト専用。log-capture-kit と同じく
+# [dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }
+# 決定論 spine テスト（spine）の台本の SHIORI が実装する ShioriBackend トレイトの戻り値型
+# （RequestError/ExitKind/ShutdownError/HelperStatus）を名前で参照する。areka-kanade はこれら host32 型を
+# re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で推移ビルド済み・新規外部依存ではない）。
+shiori-host32-host = { path = "../shiori-host32-host" }
+# 配置のテストの支えを runtime のテストにだけ開ける（spec: runtime-crate-split 要件 4.2／4.5）。本番の表の同じ依存に機能を足すだけ。
+areka-placement = { path = "../areka-placement", features = ["test-support"] }
+# 書き出した PNG を RGBA で読む（本体の表と同じ版・同じ機能で、Cargo.lock に新しいクレートは増えない）。
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+# 実濾過（EnvFilter）の観測と examples の購読者（本体の表と同じ版・ワークスペースの表から受ける）。
+tracing-subscriber = { workspace = true }
+# examples の smoke 自動 close の計時（本体・wintf と同じく workspace の表から引く・Cargo.lock に新しいクレートは増えない）。
+async-io = { workspace = true }

@@ -16,8 +16,8 @@ use wintf::ecs::Input;
 use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::{PointerState, dispatch_pointer_events};
 
-use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::frame::RuntimeWiring;
 
 /// `SPI_GETWHEELSCROLLLINES` が「1 画面ずつ」を表す値（`WHEEL_PAGESCROLL`・windows クレートに無い）。
 const WHEEL_PAGESCROLL: u32 = u32::MAX;

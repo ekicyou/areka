@@ -143,7 +143,7 @@ pub enum HoldSite {
     /// [`Resnap`](HoldSite::Resnap) と別の語を持つ——「再スナップ」という日本語が別々の
     /// 2 関数を指しており、同じ語にするとログ上でどちらが見送ったのか判らないからである。
     WorkAreaResnap,
-    /// 面の `move` のずれの相（`runtime/frame/move_shift.rs`・seriko-pattern-calls）。
+    /// 面の `move` のずれの相（`crates/areka-runtime/src/frame/move_shift.rs`・seriko-pattern-calls）。
     ///
     /// 台本の `\![move]` が絶対の位置へ書いた軸のずれを当て直す所
     /// （`follow::move_shift::rebase_shift_axes`）も同じ語で見送る。

@@ -39,6 +39,8 @@ areka-mcp = { path = "../areka-mcp" }
 areka-user-data = { path = "../areka-user-data" }
 # 窓配置（spec: placement-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
 areka-placement = { path = "../areka-placement" }
+# 実行系（spec: runtime-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+areka-runtime = { path = "../areka-runtime" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
@@ -71,11 +73,13 @@ dola = { path = "../dola" }
 areka-emo-present = { path = "../areka-emo-present" }
 
 [dev-dependencies]
-# 決定論 spine テスト（runtime::spine・areka-P0-emo2-boot task 6.1）専用。scripted
-# ShioriBackend が実装する ShioriBackend トレイトの戻り値型（RequestError/ExitKind/
-# ShutdownError/HelperStatus）を名前で参照するために追加する。areka-kanade はこれら host32 型を
-# re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で推移ビルド済み・
-# x64・新規外部（crates.io）依存ではない）。
+# 本体のテストが ShioriBackend トレイトの戻り値型（RequestError/ExitKind/ShutdownError/
+# HelperStatus）を名前で参照するために置く。使い手は背骨の足場（runtime_tests/spine.rs とその子・
+# spec: runtime-crate-split 設計 D4）と、台本の SHIORI で起動を組む本体のテスト
+# （session/ghost_switch_test_support.rs・session/script_security_e2e_tests.rs ほか）。台本の SHIORI
+# そのもの（ScriptedShioriBackend）は areka-runtime の spine（test-support）にある。areka-kanade は
+# これら host32 型を re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で
+# 推移ビルド済み・x64・新規外部（crates.io）依存ではない）。
 shiori-host32-host = { path = "../shiori-host32-host" }
 # ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
 # ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
@@ -95,6 +99,8 @@ sample-ghost-kit = { path = "../sample-ghost-kit" }
 real-run-kit = { path = "../real-run-kit" }
 # 配置のテストの支えを本体のテストにだけ開ける（spec: placement-crate-split 要件 3.5）。本番の表の同じ依存に機能を足すだけ。
 areka-placement = { path = "../areka-placement", features = ["test-support"] }
+# runtime のテストの支えを本体のテストにだけ開ける（spec: runtime-crate-split 要件 3.1／3.2）。本番の表の同じ依存に機能を足すだけ。
+areka-runtime = { path = "../areka-runtime", features = ["test-support"] }
 # オフラインの書き出しの検体の 1 色塗りの α 付き PNG を書き、書き出した PNG を RGBA で読む
 # （spec: areka-P0-offline-surface-dump）。areka-emo-atlas と同じ版で、Cargo.lock に新しいクレートは増えない。
 image = { version = "0.25.10", default-features = false, features = ["png"] }

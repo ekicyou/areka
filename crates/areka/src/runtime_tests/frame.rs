@@ -1,0 +1,93 @@
+//! `areka_runtime::frame` の代わりの親（子のテストの宣言だけ）。
+
+use areka_emo_present::EmoPresenter;
+use areka_emo_present::PresentCommand;
+use areka_emo_text::actor::TextLayerRuntime;
+use areka_placement::spawn::GhostWindows;
+use areka_runtime::assets::BootAssets;
+use areka_runtime::frame::drain_resnap::realign_chain_once_with_source;
+use areka_runtime::frame::*;
+use areka_runtime::move_cue::PositionCue;
+use areka_runtime::target_map::balloon_target;
+use areka_sakura::ActorKey;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::World;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::mpsc::Receiver;
+use wintf::ecs::DPI;
+use wintf::ecs::FrameTime;
+use wintf::ecs::GraphicsCore;
+use wintf::ecs::SizeI;
+use wintf::ecs::WucGraphicsResource;
+// 中で記録を出す私有の関数は渡し口から同じ名前で引く（設計 D3 ⑷）。
+use areka_runtime::frame::drain_resnap::test_support::{finalize_chain_once_with, resnap_with};
+// 子の `carry_tests` の本物の親（`areka-runtime` の `frame_attach_tests`）が持っていて子が使う `use` の行。
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
+use areka_emo_text::state::TextLayerConfig;
+use areka_runtime::assets::build_boot_assets;
+use areka_runtime::frame::test_support::{gpu_attach_world, zero_clock};
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use std::sync::mpsc;
+
+mod status_report;
+// シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
+mod switch;
+// 常に手前の状態と取り出しの相（stay-on-top-directives design「WindowStatePhase」）。
+mod window_state;
+
+// move drain の置き場（areka-P0-move-canon task 3.3・design D4）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_move_order_tests.rs"]
+mod move_order_tests;
+// 常に手前の状態と台本の組の寿命（ゴーストの読み直し・切り替え・SHIORI だけの読み直し）
+// （stay-on-top-directives タスク 5.3）。
+#[cfg(test)]
+#[path = "frame_stay_on_top_lifecycle_tests.rs"]
+mod stay_on_top_lifecycle_tests;
+// ghost の読み直しで控えた面を装着の相が出し直す檻（areka-P0-mcp-reload 要件 3.8）。
+#[path = "frame_attach_carry_tests.rs"]
+mod carry_tests;
+// 窓を全部閉じたあとの次の窓の一式の確定（areka-P0-ghost-shell-balloon-switch タスク 11.9）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_restart_tests.rs"]
+mod chain_finalize_restart_tests;
+// 並べ直しから記憶まで（areka-P0-char-position-save-on-exit タスク 3.2〜4.2）。共有の部品と、
+// それを使う 3 つのテストファイル（1,000 行の上限に合わせて分けた）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_nowrite_tests.rs"]
+mod chain_finalize_persist_nowrite_tests;
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_restart_tests.rs"]
+mod chain_finalize_persist_restart_tests;
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_test_support.rs"]
+mod chain_finalize_persist_test_support;
+#[cfg(test)]
+#[path = "frame_chain_finalize_persist_tests.rs"]
+mod chain_finalize_persist_tests;
+// 起動の並べ直しが作業領域へ寄せてから書く檻（window-work-area-clamp タスク 2.1）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_clamp_tests.rs"]
+mod chain_finalize_clamp_tests;
+// 起動の並べ直しが記憶に位置の無いスコープを resolver と同じ揃え方で解き直す檻
+// （audit-placement-core 指摘 485）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_align_tests.rs"]
+mod chain_finalize_align_tests;
+// 起動の並べ直し・隣り合いの印の保存・詰め直しが同じ鎖の規則で組を作る檻
+// （audit-placement-core 494・495）。
+#[cfg(test)]
+#[path = "frame_chain_rule_tests.rs"]
+mod chain_rule_tests;
+// 起動・作り直しの並べ直しが記憶から戻した組を覚えた印で隣り合わせる檻
+// （dpi-realign-remembered-chain 要件 6・8.6）。ハーネスに乗るので **x64 のみ**で接続する。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_finalize_remembered_tests.rs"]
+mod chain_finalize_remembered_tests;
+// 相順そのものの検査（areka-P0-balloon-visibility task 6.6）。実 emo2 資産＋実 GPU で
+// `frame_system` をそのまま駆動し、相を並べ替えたときにだけ壊れる性質を主張する。
+#[cfg(test)]
+#[path = "frame_visibility_integration_tests.rs"]
+mod visibility_integration_tests;

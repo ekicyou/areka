@@ -17,8 +17,8 @@ use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, GhostDecision, write_switch_drop};
 use crate::input_events;
 use crate::menu;
-use crate::runtime::frame::RuntimeWiring;
 use crate::session::runtime_boot;
+use areka_runtime::frame::RuntimeWiring;
 
 /// 実行系に結びつく窓側の結線をやり直す（`boot_wired` の boot 後の塊の純移動＋`ChoiceForwarder`）。
 /// 移した塊の中の呼び順は移動前と同じ。`wire_balloon_choice`（窓の側）は含めない。

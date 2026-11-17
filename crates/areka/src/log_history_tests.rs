@@ -121,7 +121,7 @@ fn status_rows_and_areka_is_exact_only() {
         Some(Kind::Status)
     );
     // `areka` は完全一致だけ。下のモジュールの info は外れる。
-    assert_eq!(classify(Level::INFO, "areka::runtime"), None);
+    assert_eq!(classify(Level::INFO, "areka_runtime"), None);
     assert_eq!(classify(Level::INFO, "areka::alert"), None);
     assert_eq!(classify(Level::INFO, "areka::menu"), None);
     assert_eq!(classify(Level::INFO, "ghost-boots"), None);

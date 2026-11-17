@@ -67,8 +67,17 @@ use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, Gh
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
 use super::spawn::BalloonLimit;
 
-pub use self::anchor::{AnchorSource, Anchored, project_anchor};
+pub use self::anchor::{Anchored, project_anchor};
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use self::anchor::AnchorSource;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use self::anchor::AnchorSource;
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
+#[cfg(feature = "test-support")]
 pub use self::drag_follow::on_balloon_drag;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use self::drag_follow::on_balloon_drag;
 pub use self::drag_follow::on_char_drag_end;
 pub(crate) use self::drag_follow::{on_balloon_drag_end, on_char_drag};
 // 追従 Component の定義元は単位空間契約のモジュール（`offset_space`）へ移した
@@ -85,9 +94,12 @@ pub use self::offset_space::{OffsetRescale, rescale_follow_offset};
 ///
 /// 供給層（`placement::apply_author_balloon_offset_scale`）だけが呼ぶため crate 内に留める。
 pub(crate) use self::offset_space::{ScaledAxis, scale_author_offset};
-pub use self::work_area::{
-    MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
-};
+pub use self::work_area::{MonitorSnapshot, work_area_for_window};
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use self::work_area::{WorkAreaResolution, work_area_for_window_with_origin};
+#[cfg(not(feature = "test-support"))]
+pub(crate) use self::work_area::{WorkAreaResolution, work_area_for_window_with_origin};
 /// 追従オフセットの基準対（型の定義は `resolver`・依存の向きの規約①・spec: placement-crate-split 要件 7.6。areka-P0-balloon-offset-dpi・要件 1.1／3.1）。
 ///
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
@@ -100,8 +112,11 @@ pub use self::work_area::MonitorDpiEntry;
 // 作業領域へ寄せる鎖の World の口と記録の語（window-work-area-clamp・task 1.2）。呼び手は `runtime::…` の
 // 起動の並べ直しと詰め直し。記録の語の残り 2 つと純関数の核は、檻が定義元の道で引く。
 pub use self::work_area_clamp::{
-    ChainClampOutcome, ChainPlacement, ClampScene, WORK_AREA_CLAMP_TAG, place_chain_in_work_area,
+    ChainClampOutcome, ChainPlacement, ClampScene, place_chain_in_work_area,
 };
+// 記録の語。crate の中の使い手は定義元（`work_area_clamp`）が自分で引くので、ここは crate のテストと `test-support` のビルドでだけ開く。
+#[cfg(any(test, feature = "test-support"))]
+pub use self::work_area_clamp::WORK_AREA_CLAMP_TAG;
 // 面の拡大の寄せ（task 1.3）。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
 // 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（`persist::apply_restored_placements`・task 2.4）。
@@ -112,9 +127,13 @@ pub(crate) use self::work_area_clamp::GroupShift;
 
 // 窓の移動・寸の口。呼び手は `runtime::…`（`anchor_changed_system` は schedule に登録しない見本）。
 pub use self::window_move::{
-    anchor_changed_system, move_window_to, move_window_with_route, resize_window_keep_position,
-    resize_window_to,
+    anchor_changed_system, move_window_to, resize_window_keep_position, resize_window_to,
 };
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
+#[cfg(feature = "test-support")]
+pub use self::window_move::move_window_with_route;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use self::window_move::move_window_with_route;
 
 // 私有・crate 内の再束縛と、`runtime::…` などが呼ぶ公開の口（呼び手は下の各行の注）。
 // サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれも
@@ -133,7 +152,11 @@ pub use self::move_shift::{
 use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::move_shift::{origin_position, rebase_shift};
 // 組の指令・descript の組の適用の後に `DragConfig.move_window` を付け直す（設計の決め 12）。
+// 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
+#[cfg(feature = "test-support")]
 pub use self::sticky_follow::sync_drag_writer;
+#[cfg(not(feature = "test-support"))]
+pub(crate) use self::sticky_follow::sync_drag_writer;
 pub(crate) use self::sticky_follow::{is_char_drag_partner, is_char_dragging};
 // ドラッグの始めの控え。呼び手は areka の `input_events::drag`。
 pub use self::sticky_follow::{CharDragSession, begin_char_drag};

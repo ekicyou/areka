@@ -48,7 +48,7 @@ mod undrawn;
 mod undrawn_tests;
 
 // cursorブレスの転記（shell-mouse-cursor）: 画像の読み手とは別に、同じ文面から cursorブレスだけを
-// 原文のまま並べる。検証と記録は下流（areka の emo2_boot）。
+// 原文のまま並べる。検証と記録は下流（`areka-runtime` の `shell_cursor_table`）。
 mod cursor;
 
 #[cfg(test)]

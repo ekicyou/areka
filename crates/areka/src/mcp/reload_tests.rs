@@ -182,7 +182,7 @@ fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {
                 "reload requested. It runs asynchronously; errors while loading (dictionary errors etc.) will be recorded to the error log. Wait until get_status answers again, then check get_log tool (log_type=error, since_id=42)"
             )),
             Some(ReloadTarget::Descript(
-                crate::runtime::reload_args::DescriptParts::ALL
+                areka_runtime::reload_args::DescriptParts::ALL
             )),
         )
     );

@@ -23,8 +23,8 @@ use super::dump_surface::{
     Job, PresenterFacts, Reader, Step, check_size, fail, image, judge, refuse, start,
 };
 use super::resolve::ActiveGhost;
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::target_map::balloon_target;
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::target_map::balloon_target;
 
 #[path = "dump_balloon_overlay.rs"]
 mod overlay;

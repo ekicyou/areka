@@ -11,12 +11,12 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
-use crate::runtime::reload_args::{DescriptNotes, ReloadTarget};
-use crate::runtime::spine::RecordedCall;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::reload::{
     ReloadInFlight, ReloadOrigin, ReloadRequest, ReloadStage, ReloadVerdict, request_reload,
 };
+use areka_runtime::reload_args::{DescriptNotes, ReloadTarget};
+use areka_runtime::spine::RecordedCall;
 
 /// 呼び出しを「GET 名」「NOTIFY 名」の列にする。
 fn ids(calls: &[RecordedCall]) -> Vec<String> {
@@ -516,7 +516,7 @@ fn a_shiori_rebuild_that_cannot_write_the_drop_memory_is_fatal() {
 /// 新しい結線が読み直しの前の面の控えを持つか（`RuntimeWiring` が無ければ `None`）。
 fn carry_handed_over(rig: &SwitchRig) -> Option<bool> {
     rig.world
-        .get_non_send::<crate::runtime::frame::RuntimeWiring>()
+        .get_non_send::<areka_runtime::frame::RuntimeWiring>()
         .map(|w| w.shell_carry.is_some())
 }
 

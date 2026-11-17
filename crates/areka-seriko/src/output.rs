@@ -3,7 +3,7 @@
 //! per-scope surface 状態の確定結果を emo（⑥）への **表示指令** [`DisplayCommand`] へ写し、
 //! 発行先抽象 [`SurfaceOutput`] へ送る層。指令は `Send` 所有データ（要件 5.4）で、他スレッド
 //! ／emo-present へ安全に受け渡せる。本番の発行先は `areka` クレートの `PresentBridge`
-//! （`emo2_boot::adapter`）で、観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる（要件 5.5）。
+//! （`areka_runtime::adapter`）で、観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる（要件 5.5）。
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
@@ -93,7 +93,7 @@ pub struct RebasedShow {
 
 /// emo への表示指令の発行先抽象（要件 5.5）。
 ///
-/// 本番の発行先は `areka` クレートの `PresentBridge`（`emo2_boot::adapter`・emo-present へ非ブロック
+/// 本番の発行先は `areka` クレートの `PresentBridge`（`areka_runtime::adapter`・emo-present へ非ブロック
 /// 送出）。seriko の中では単体観測用に [`MockSurfaceOutput`] を実装として用いる。`send` は
 /// infallible（送出失敗のログ観測は本番アダプタの責務）。
 pub trait SurfaceOutput {

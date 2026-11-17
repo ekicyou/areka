@@ -18,10 +18,10 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::super::*;
 use super::applied;
 use crate::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
-use crate::runtime::frame::RuntimeWiring;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shiori_host::ShioriHostSink;
+use areka_runtime::frame::RuntimeWiring;
 
 /// A の `OnBoot`: 台詞の途中で B への切替を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";

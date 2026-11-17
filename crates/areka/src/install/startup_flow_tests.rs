@@ -292,9 +292,9 @@ fn carried(
 #[test]
 fn carried_installs_reach_the_desk_receivers_and_the_desk_replaces_them() {
     use crate::install::names::LastInstallNames;
-    use crate::runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
     use crate::session::ghost_switch::LastInstalledGhost;
     use areka_nar::InstallKind;
+    use areka_runtime::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 
     let mut world = World::new();
     let startup = StartupInstall {

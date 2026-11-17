@@ -19,11 +19,11 @@ use super::shell_balloon_switch_session_lap_tests::{
     LapRig, SECOND, UNBOUNDED, copy_tree, got, idle, kinds, lap_rig,
 };
 use crate::boot_config::BootContext;
-use crate::runtime::spine::ScriptedShioriBackendBuilder;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
 use crate::update::desk::{ask_reload_for_test, resolve_targets};
 use crate::update::{RawUpdateRequest, TargetKind};
+use areka_runtime::spine::ScriptedShioriBackendBuilder;
 
 /// 2 つ目のバルーン（検体 `StayseeBalloon` の複製・フォルダ名）。
 const STAYSEE: &str = "StayseeBalloon";

@@ -28,7 +28,6 @@ use crate::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::input_events;
 use crate::menu;
 use crate::readme;
-use crate::runtime;
 use crate::session::runtime_boot::CueSinkSources;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
@@ -66,7 +65,7 @@ pub(crate) use ghost_session_runtime::{RuntimeRebuild, rebuild_runtime_in_place}
 /// 起動でだけ装着する）なので `PointerLeave` が立たず届かない。
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeNotice>) {
     crate::session::hooks::install(world);
-    runtime::register_frame_system(world);
+    areka_runtime::register_frame_system(world);
     crate::session::ghost_quit::wire_kanade_stop(world, kanade_stop_rx);
     // 記憶を書けない失敗の受け口と汲み出し（プロセスに 1 回・areka-P0-write-failure-notice）。
     crate::write_failure::install(world);
@@ -229,7 +228,7 @@ pub(crate) fn prepare_ghost_windows(
     // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
     // （4.7・task 8.2）と拡大率の相が消費する。
     // **セッション内固定ではない**（DD15 撤回・atom 要件 5.1）——毎フレーム先頭の
-    // 同期段（`runtime::frame::work_area_sync`）が実行時のモニタ表から作り直す。
+    // 同期段（`areka_runtime::frame::work_area_sync`）が実行時のモニタ表から作り直す。
     // ここが作るのは起動時の初期値であり、構築関数は同期段と同一である。
     // 構築と同時に全モニタの観測を 1 回出す（areka-P0-dpi-window-vanish 要件 1.1 の
     // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
@@ -388,7 +387,7 @@ pub(crate) fn reopen_ghost_windows(
 /// ゴーストごとの結線の入力の束（design「boot_ghost」）。
 pub(crate) struct GhostBootInputs {
     /// 起動の結線の入力（ゴーストの根・バルーンの根・SHIORI の結線・時計の種類・記憶の置き場）。
-    pub wiring: runtime::RuntimeInputs,
+    pub wiring: areka_runtime::RuntimeInputs,
     /// fallback（`LogSink`）の起動が使う 32bit SHIORI helper のパス。
     pub helper_exe: PathBuf,
     /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・`shiori-fault-notice`）。
@@ -410,7 +409,7 @@ impl GhostBootInputs {
         modules: crate::cli::ModulePolicy,
     ) -> Self {
         Self {
-            wiring: runtime::RuntimeInputs {
+            wiring: areka_runtime::RuntimeInputs {
                 ghost_root: cfg.ghost_root.clone(),
                 balloon_root: cfg.balloon_root.clone(),
                 shiori: crate::boot_config::shiori_wiring_for(modules, helper_exe.clone()),
@@ -847,7 +846,7 @@ pub(crate) fn boot_ghost_strict(
 /// 取り出した起動のシェル（[`take_boot_shell`]）で、結線へそのまま渡す（要件 6.4）。
 fn boot_wired(
     world: &mut World,
-    wiring: runtime::RuntimeInputs,
+    wiring: areka_runtime::RuntimeInputs,
     kanade_stop: &Sender<KanadeNotice>,
     descript: &StartupDescriptValues,
     ghost: &GhostDecision,
@@ -860,7 +859,7 @@ fn boot_wired(
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。
-    let outcome = runtime::wire_runtime(
+    let outcome = areka_runtime::wire_runtime(
         world,
         wiring,
         descript.author_dpi,

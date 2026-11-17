@@ -95,7 +95,7 @@ pub use self::read::TextSlotView;
 pub use self::scale_change::{AppliedScale, ScaleChange};
 use self::target::PresentTarget;
 pub use self::target::VisibilityOwnership;
-// 遷移観測のサーフェス記録の**語彙**（design C3・Requirement 2.7）。判定側（areka の
+// 遷移観測のサーフェス記録の**語彙**（design C3・Requirement 2.7）。判定側（`areka-runtime` の
 // `transition_judge`）は文字列リテラルを二重定義せずここを参照する。レコード型と純関数は
 // 発行点の内部事情ゆえ再輸出しない（語だけを公開面へ出す）。
 pub use self::transition_record::{

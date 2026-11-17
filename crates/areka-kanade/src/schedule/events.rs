@@ -23,7 +23,7 @@
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
-//! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka` の `emo2_boot::reload` が渡す列のまま） |
+//! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka` の `session::reload` が渡す列のまま） |
 //! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし・Req3.1/3.5） |
 //! | `OnChoiceSelect` | GET | Ref0=選択肢 ID（Req3.2） |
 //! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし・Req3.3/3.5） |
@@ -545,7 +545,7 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 /// 識別子が解決された空間と**同一**である。窓 client 物理 px ではない——÷k（実適用の表示スケール）は
 /// `areka-emo-present` の `EmoPresenter::hit_region_client` ただ 1 箇所が吸収し、本関数は呼び手
 /// （[`crate::msg::MouseInput`] の `x`/`y`）から受けた値を**無変換で** Reference へ載せるだけである。座標契約の
-/// 正本は `areka` bin の `emo2_boot::hit_region` モジュール冒頭 doc。正典（ukadoc）の `OnMouseMove`
+/// 正本は `areka_runtime::hit_region` モジュール冒頭 doc。正典（ukadoc）の `OnMouseMove`
 /// Reference0/1 は「ローカル座標」としか規定せず空間を定義していないため、サーフェス px を採ることは
 /// areka 側の裁定である（R1.8）。k=1.0 では縮約が恒等ゆえ従前の配信値と完全に一致する。
 pub fn on_mouse_move(
@@ -582,7 +582,7 @@ pub fn on_mouse_move(
 ///
 /// 座標は Ref4 の当たり判定識別子と同一空間（作者定義のサーフェス px）に揃う。÷k は
 /// `areka-emo-present` の `EmoPresenter::hit_region_client` が吸収済みで、本関数は無変換で転写する
-/// （正本＝`areka` bin の `emo2_boot::hit_region` モジュール冒頭 doc・areka 側の裁定＝R1.8）。
+/// （正本＝`areka_runtime::hit_region` モジュール冒頭 doc・areka 側の裁定＝R1.8）。
 pub fn on_mouse_double_click(
     x: i64,
     y: i64,

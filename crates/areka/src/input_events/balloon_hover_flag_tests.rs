@@ -12,7 +12,7 @@
 // （抑止を解く側は積極的）。この非対称は下 2 本のテスト（moved 側／leave 側）が明示的に固定する。
 // -------------------------------------------------------------------------
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;

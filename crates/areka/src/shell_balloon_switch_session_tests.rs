@@ -6,12 +6,12 @@
 use std::path::PathBuf;
 
 use super::{GhostSession, GhostSlot};
-use crate::runtime::spine::RecordedCall;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinVerdict,
     request_skin_switch,
 };
+use areka_runtime::spine::RecordedCall;
 
 /// seriko の送り手の複製は結線ありのセッションだけが持ち（テスト用の組み立ては持たない）、
 /// 持ったセッションを降ろしても seriko の join が止まらずに戻る（要件 8.5）。複製を降ろす最初の

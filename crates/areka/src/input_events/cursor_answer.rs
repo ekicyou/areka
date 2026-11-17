@@ -19,9 +19,9 @@ use super::super::hover_region::cursor_pick::{
     Origin, Shown, Spot, WindowCursor, pick_shape, plan_cursor,
 };
 use super::super::{MouseWiring, char_scope, resolve_hit_owned};
-use crate::runtime::shell_cursor_assets::ShellCursorAssets;
-use crate::runtime::shell_cursor_table::{CursorRows, GhostCursorKeys, Shape, SystemCursor};
 use areka_placement::spawn::CharWindowMarker;
+use areka_runtime::shell_cursor_assets::ShellCursorAssets;
+use areka_runtime::shell_cursor_table::{CursorRows, GhostCursorKeys, Shape, SystemCursor};
 
 /// 同梱の手の形（要件 6.2）。番号は控えの鍵。
 const BUNDLED: [(SystemCursor, &[u8]); 2] = [

@@ -13,7 +13,7 @@ use areka_seriko::{SkinFacts, SkinLookup, SurfaceResolver, SurfaceTarget};
 
 use super::*;
 use crate::mcp::check_script_judge::diagnose;
-use crate::runtime::consumer_ledger::ConsumerLedger;
+use areka_runtime::consumer_ledger::ConsumerLedger;
 
 /// 手で組んだ事実。スコープ 0 の絵は 0・3・10、スコープ 1 は 10・11、別名 `笑顔` は 3。
 /// バルーンはスコープ 0 が 0・2、スコープ 1 が 1。スコープ 2 には何も無い。
@@ -99,7 +99,7 @@ use areka_mcp::tools::{ToolCall, ToolRequest, outcome};
 
 use crate::mcp::dump_surface::WaitAnswer;
 use crate::mcp::resolve::{CANNOT_FIND, NOT_ACTIVE};
-use crate::runtime::spine::Progress;
+use areka_runtime::spine::Progress;
 
 /// 窓の無いゴーストの答え（surface とバルーンを診ないと添える）。
 fn no_window_answer(count: usize) -> areka_mcp::ToolOutcome {

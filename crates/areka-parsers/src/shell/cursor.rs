@@ -1,8 +1,8 @@
 //! cursorブレスの転記（parse_cursor_braces）— surfaces.txt の cursorブレスを原文のまま並べる。
 //!
 //! 画像の読み手（`parse`）・箱の転記（`parse_boxes`）とは別に、同じ文面を読む転記を担う。
-//! 転記だけを行い、検証も記録もしない（失敗しない）。厳しく読むのは下流（areka の
-//! `emo2_boot` の cursorブレスの表）。
+//! 転記だけを行い、検証も記録もしない（失敗しない）。厳しく読むのは下流（`areka-runtime` の
+//! `shell_cursor_table` の cursorブレスの表）。
 
 use super::parse::parse_all;
 

@@ -8,7 +8,7 @@
 //!    表示経路（`load_shell_target` → `ShellTarget::take_world` → `Composer::compose`）の
 //!    外形が、面 0・面 10 のどちらでも同じ値になること。期待値は要件 3.1 が挙げる実測
 //!    （`R_POST_and_KOMAINU` は 236×462／140×160・`konnoyayame` は 260×390／200×200）。
-//! 2. **複製が戻っていないこと**: `measure.rs` と `runtime/assets.rs` の本文が、シェルの
+//! 2. **複製が戻っていないこと**: `measure.rs` と `crates/areka-runtime/src/assets.rs` の本文が、シェルの
 //!    読み込みを自前でやり直していないこと。両者が `load_shell_target` へ寄っており、
 //!    どちらか一方だけが自前の読み込みへ戻ると (1) の一致はその場では緑のまま、
 //!    実機でだけ「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる（要件 3.6）。
@@ -17,7 +17,7 @@
 //!
 //! 本ファイルは配置の crate の片割れで、(1) と、配置のファイル（`measure.rs`・
 //! `measure_first_frame.rs`・`examples/window-placement.rs`）の走査を持つ。本体のファイル
-//! （`runtime/assets.rs`・本体の examples）の走査は本体の
+//! （`crates/areka-runtime/src/assets.rs`・本体の examples）の走査は本体の
 //! `crates/areka/src/placement_tests/measure_template_tests.rs` が持つ。走査器は 2 つの片割れが
 //! 共に使う [`crate::test_support::measure_template`] に 1 つだけあり、どちらの片割れも自分の
 //! crate の実物で走査器を較正する。

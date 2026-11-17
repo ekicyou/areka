@@ -4,7 +4,7 @@ mod dpi;
 pub mod monitor;
 /// DPI／拡大率遷移の観測チャネル（専用 target・既定 OFF・レコード語彙の純関数）。
 ///
-/// 判定側（areka の `transition_judge`）とサインオフ手順書が語彙を直接参照するため、
+/// 判定側（`areka-runtime` の `transition_judge`）とサインオフ手順書が語彙を直接参照するため、
 /// `pub` で crate 外へ開いてある。
 pub mod transition_diag;
 /// 帯の働き（窓の印・帯の指令の列・常に手前の帯を書く唯一の所）。

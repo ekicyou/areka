@@ -8,9 +8,9 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use crate::runtime::balloon_hover::BalloonHover;
-use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::balloon_hover::BalloonHover;
+use areka_runtime::frame::RuntimeWiring;
 
 use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
 

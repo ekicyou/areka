@@ -14,9 +14,9 @@ use areka_sylphya::{PropPath, PullShape, PullSource, SylphyaReader};
 
 use crate::ghost_session::ghost_session_scope_rect::{ScopeSelector, scope_selector};
 #[cfg(test)]
-pub(crate) use crate::runtime::scope_scale::{ScopeScaleTable, percent_text};
-pub(crate) use crate::runtime::scope_scale::{SharedScopeScaleTable, scaling_text};
-use crate::runtime::target_map::TargetWindow;
+pub(crate) use areka_runtime::scope_scale::{ScopeScaleTable, percent_text};
+pub(crate) use areka_runtime::scope_scale::{SharedScopeScaleTable, scaling_text};
+use areka_runtime::target_map::TargetWindow;
 
 /// 読み手が答える量。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

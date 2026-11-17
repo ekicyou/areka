@@ -19,8 +19,8 @@ use wintf::ecs::pointer::{ButtonReleased, OnPointerReleased};
 use super::*;
 use crate::input_events::RegionSource;
 use crate::menu::plan::PlanEntry;
-use crate::runtime::hit_region::HitRegion;
 use areka_placement::spawn::CharWindowMarker;
+use areka_runtime::hit_region::HitRegion;
 
 /// 当たり判定の代役（このテストでは当たり判定を引かないので中身は使われない）。
 fn no_region(scope: u32, x: i64, y: i64) -> HitRegion {

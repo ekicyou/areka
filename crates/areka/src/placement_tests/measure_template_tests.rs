@@ -3,7 +3,7 @@
 //!
 //! 配置の crate の片割れ（`crates/areka-placement/src/measure_template_tests.rs`）が、採寸と表示の
 //! 外形の一致と、配置のファイル（`measure.rs`・`measure_first_frame.rs`・
-//! `examples/window-placement.rs`）の走査を持つ。ここは本体のファイル（`runtime/assets.rs`・
+//! `examples/window-placement.rs`）の走査を持つ。ここは本体のファイル（`crates/areka-runtime/src/assets.rs`・
 //! 本体の examples）がシェルの読み込みを自前でやり直していないことを見張る。採寸側と起動側の
 //! どちらか一方だけが自前の読み込みへ戻ると、外形の一致はその場では緑のまま、実機でだけ
 //! 「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる（要件 3.6）。
@@ -11,6 +11,7 @@
 //! 走査器は 2 つの片割れが共に使う `areka_placement::test_support::measure_template` に 1 つだけ
 //! あり、ここでは本体の実物で較正する。
 
+use crate::crate_source_test_support::crate_source;
 use areka_placement::test_support::measure_template::{
     SHELL_PARSE, assert_no_blind_spot_literals, code_only,
 };
@@ -22,7 +23,7 @@ use areka_placement::test_support::measure_template::{
 /// 関数の本体に在ることが対照の要点である。
 #[test]
 fn the_source_scan_still_sees_a_real_call() {
-    let code = code_only(include_str!("../runtime/frame_test_support.rs"));
+    let code = code_only(crate_source!("areka-runtime", "src/frame_test_support.rs"));
     assert!(
         code.contains(SHELL_PARSE),
         "較正が死んでいる: 本文の中の実際の呼び出しを走査が拾えない"
@@ -35,7 +36,7 @@ fn the_source_scan_still_sees_a_real_call() {
 /// の doc コメントだけがこの綴りを持ち、本文には 1 件も無い。
 #[test]
 fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
-    let raw = include_str!("../runtime/assets_tests.rs");
+    let raw = crate_source!("areka-runtime", "src/assets_tests.rs");
     assert!(
         raw.contains(SHELL_PARSE),
         "較正の当たりが失われた: 説明文の中の綴りが実物から消えている（別の対照へ差し替えること）"
@@ -46,13 +47,13 @@ fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
     );
 }
 
-/// 要件 3.6: 起動側（`runtime::assets`）がシェルの読み込みを自前でやり直していない。
+/// 要件 3.6: 起動側（`areka_runtime::assets`）がシェルの読み込みを自前でやり直していない。
 ///
 /// 採寸側と起動側は「同じ絵を見る」ことが要件であり、片側だけが自前の読み込みへ戻る形が
 /// いちばん危うい（実機でしか現れない）。採寸側（配置の片割れ）と同じ 1 本の綴りで見張る。
 #[test]
 fn the_boot_side_does_not_parse_the_shell_itself() {
-    let raw = include_str!("../runtime/assets.rs");
+    let raw = crate_source!("areka-runtime", "src/assets.rs");
     assert_no_blind_spot_literals(raw, "assets.rs");
     let code = code_only(raw);
     assert!(
@@ -76,7 +77,7 @@ fn the_examples_do_not_parse_the_shell_themselves() {
         ),
         (
             "examples/collision-probe/setup.rs",
-            include_str!("../../examples/collision-probe/setup.rs"),
+            crate_source!("areka-runtime", "examples/collision-probe/setup.rs"),
         ),
     ];
     for (file, raw) in files {

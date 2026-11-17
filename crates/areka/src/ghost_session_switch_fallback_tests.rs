@@ -27,9 +27,9 @@ use crate::alert::AlertScene;
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use crate::ghost_session::{GhostSlot, open_ghost_windows};
-use crate::runtime::spine::{Progress, ScriptedShioriBackend, wait_until};
 use crate::session::ghost_switch::{GhostSpec, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use areka_placement::spawn::{GhostWindowMarker, GhostWindows};
+use areka_runtime::spine::{Progress, ScriptedShioriBackend, wait_until};
 
 /// B の `descript.txt` の `name`（フォルダ名と違う綴り＝Ref7 がフォルダ名でなく名前を運ぶことを見る）。
 pub(super) const B_NAME: &str = "ビー";

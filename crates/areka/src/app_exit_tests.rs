@@ -189,9 +189,9 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 #[test]
 fn ghost_os_close_sends_close_request_with_the_window_scope() {
     use crate::input_events::{MouseWiring, RegionSource};
-    use crate::runtime::hit_region::HitRegion;
     use areka_kanade::{CloseReason, KanadeMsg};
     use areka_placement::spawn::CharWindowMarker;
+    use areka_runtime::hit_region::HitRegion;
     use std::sync::mpsc;
 
     fn no_hit(scope: u32, _x: i64, _y: i64) -> HitRegion {

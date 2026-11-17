@@ -12,8 +12,8 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::frame::RuntimeWiring;
 
 use super::user_break::UserBreakWiring;
 use super::{BalloonWiring, click_selection, selection_events, settle_after_selection};

@@ -6,7 +6,7 @@
 //! 通したうえで `SylphyaPublisher::persist_put`（fire-and-forget・talk スレッドをブロックしない）へ
 //! 落とす（design C7 Event Contract）。
 //!
-//! 消費先例は `MoveCueSink`（emo2_boot/move_cue.rs・名前自己選別・非担当は記録付き良性スキップ）と
+//! 消費先例は `MoveCueSink`（`areka-runtime` の `move_cue.rs`・名前自己選別・非担当は記録付き良性スキップ）と
 //! `make_username_resource_sink`（sylphya_wiring.rs・publisher 捕獲 sink）——本 sink は両者の合成同型。
 
 use areka_sakura::contract::{CueCommand, CueSink, TalkCue};

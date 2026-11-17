@@ -858,7 +858,7 @@ pub fn prepare_ghost_windows_with_work_area(
 ///   [`work_area_of`]・DPI 側の縮退は [`build_measure_scaling`] がそれぞれ担う）
 ///
 /// 使い手は crate の中の並べ直し [`reset_pos`] と、本体の `\![move]` の `primaryscreen`
-/// （`crates/areka/src/runtime/move_cue_place.rs`）。
+/// （`crates/areka-runtime/src/move_cue_place.rs`）。
 pub fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
     if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
         return Some(primary);

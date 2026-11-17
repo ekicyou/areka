@@ -105,11 +105,11 @@ pub struct PlacementConfig {
     ///
     /// 起動では `ghost_session.rs` が読み出して `runtime::wire_runtime` へ渡し、
     /// `runtime::frame::wiring::seed_zorder_descript_base` を通って基底グループになる。
-    /// シェルの切り替えでは `runtime/frame/switch.rs` が据え直す
+    /// シェルの切り替えでは `crates/areka-runtime/src/frame/switch.rs` が据え直す
     /// （解釈器はタグ入口と共通・`runtime::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
     /// shell `seriko.sticky-window` の生転記（起動で窓の組の帳簿へ据える・
-    /// areka-P0-window-link-directives 要件 3.8）。シェルの切り替えでは `runtime/frame/switch.rs` が
+    /// areka-P0-window-link-directives 要件 3.8）。シェルの切り替えでは `crates/areka-runtime/src/frame/switch.rs` が
     /// `sticky_group_ledger::replace_sticky_descript` で descript の分を新しいシェルの値へ取り替える。
     pub sticky_window_raw: Option<String>,
 }

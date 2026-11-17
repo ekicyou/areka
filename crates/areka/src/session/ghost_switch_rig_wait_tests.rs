@@ -12,7 +12,7 @@ use areka_kanade::BootOrigin;
 
 use super::{FakeShiori, SwitchRig, standard_script};
 use crate::ghost_session::GhostBootInputsSource;
-use crate::runtime::spine::WaitFailure;
+use areka_runtime::spine::WaitFailure;
 
 /// 足場の作り口を `folder` について直に 1 回呼び、SHIORI の結線を返す（ゴーストは起こさない）。
 fn call_factory(rig: &SwitchRig, folder: &str) -> ShioriWiring {

@@ -21,11 +21,11 @@ use super::super::balloon::test_support::headless_runtime_wiring;
 use super::super::char_watch::char_watch;
 use super::super::{MouseWiring, RegionSource};
 use super::balloon_wheel_with;
-use crate::runtime::frame::balloon_runtime_test_support::{
+use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::frame::balloon_runtime_test_support::{
     balloon_is_manual, manual_balloon_runtime,
 };
-use crate::runtime::hit_region::HitRegion;
-use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::hit_region::HitRegion;
 
 /// バルーン窓（scope 0）の子を持ち主にし、回転を載せる。
 fn spawn_rotation(world: &mut World, vertical: i16, horizontal: i16) {
@@ -60,7 +60,7 @@ fn rig(
     vertical: i16,
     horizontal: i16,
 ) -> (
-    crate::runtime::spine::GpuPermit,
+    areka_runtime::spine::GpuPermit,
     World,
     Rc<RefCell<TextLayerRuntime>>,
 ) {

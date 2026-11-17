@@ -22,9 +22,6 @@ use super::shell_balloon_switch_session_lap_tests::{
 use crate::app_exit::{ExitOrigin, FirstExit, on_ghost_os_close};
 use crate::boot_resolve::read_last_shell;
 use crate::input_events::user_break::on_left_press;
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::spine::ScriptedShioriBackendBuilder;
-use crate::runtime::target_map::balloon_target;
 use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, request_ghost_switch,
 };
@@ -32,6 +29,9 @@ use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_
 use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinVerdict, request_skin_switch,
 };
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::spine::ScriptedShioriBackendBuilder;
+use areka_runtime::target_map::balloon_target;
 
 /// A だけの土台（2 つ目のシェルつき）。
 fn rig_a(script: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRig {

@@ -12,8 +12,9 @@ use super::{
 ///
 /// 本番は char 窓＝`resize_window_to`（`Anchored` 射影で接地点＝下端中央を保つ）／balloon 窓＝
 /// `resize_window_keep_position`（位置は `follow_balloon` が決める従属量ゆえ据え置き）に振り分ける。
-/// 本 example の窓は placement 層を通さず生成されるため `Anchored` を持たず（`collision-probe.rs:34`
-/// の既知記述）、`resize_window_to` は不発である——ゆえに位置の扱いだけ本 example の構図へ合わせる。
+/// 本 example の窓は placement 層を通さず生成されるため `Anchored` を持たず（`areka-runtime` の
+/// `examples/collision-probe.rs` 冒頭の注の「`Anchored` 欠落」の既知記述）、`resize_window_to` は
+/// 不発である——ゆえに位置の扱いだけ本 example の構図へ合わせる。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReconcileKind {
     /// シェル窓: 現在位置（[`SHELL_INITIAL_X`]/[`SHELL_INITIAL_Y`] の左上）を据え置く。
@@ -22,7 +23,9 @@ enum ReconcileKind {
     /// あの規約は placement 層の `Anchored`＋`project_anchor` が担う不変条件であり、本 example の窓は
     /// アンカーを持たず初期位置も定数リテラルゆえ「保つべき接地点」が存在しない。ここで手作りの
     /// 下端中央射影を書けば**アンカー規約の第 2 の流儀**を観測エイドの中に生やすことになる（本番と
-    /// 別流儀を発明しない）。窓配置の観測は `window-placement.rs`／`collision-probe.rs` の領分である。
+    /// 別流儀を発明しない）。窓配置の観測は
+    /// `areka-placement` の `examples/window-placement.rs`／`areka-runtime` の `examples/collision-probe.rs`
+    /// の領分である。
     Shell,
     /// バルーン窓: 位置はシェル＋自幅から決まる従属量ゆえ [`compute_balloon_pos`] で再算出する。
     ///

@@ -24,24 +24,24 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use super::*;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::readme::ReadmeWiring;
-use crate::runtime::RuntimeInputs;
-use crate::runtime::adapter::PresentBridge;
-use crate::runtime::reload_cue::ReloadRx;
-use crate::runtime::sample_test_support::acquire_emo2;
-use crate::runtime::spine::{Progress, ScriptedShioriBackend, run_bounded_watching};
-use crate::runtime::talk_clock::TalkClock;
+use crate::sample_test_support::acquire_emo2;
 use crate::session::ghost_switch::ChangeRx;
 use crate::session::shell_balloon_switch::SwitchRx;
+use areka_runtime::RuntimeInputs;
+use areka_runtime::adapter::PresentBridge;
+use areka_runtime::reload_cue::ReloadRx;
+use areka_runtime::spine::{Progress, ScriptedShioriBackend, run_bounded_watching};
+use areka_runtime::talk_clock::TalkClock;
 
 /// 窓の側の束の持ち物（seriko と文字の線を生かしておく）。
 struct Rig {
     sources: CueSinkSources,
     _present_rx: Receiver<PresentCommand>,
-    _move_rx: Receiver<crate::runtime::move_cue::PositionCue>,
-    _lifecycle_rx: Receiver<crate::runtime::talk_lifecycle::TalkLifecycleSignal>,
-    _zorder_rx: Receiver<crate::runtime::zorder_cue::ZOrderDirective>,
+    _move_rx: Receiver<areka_runtime::move_cue::PositionCue>,
+    _lifecycle_rx: Receiver<areka_runtime::talk_lifecycle::TalkLifecycleSignal>,
+    _zorder_rx: Receiver<areka_runtime::zorder_cue::ZOrderDirective>,
     /// 常に手前の線の受信端（窓の側が 1 度だけ作る・読み直しで組み直した受け口も同じ線へ送る）。
-    window_state_rx: Receiver<crate::runtime::window_state_cue::WindowStateDirective>,
+    window_state_rx: Receiver<areka_runtime::window_state_cue::WindowStateDirective>,
     _text: Box<dyn std::any::Any>,
     _runtime: Rc<RefCell<TextLayerRuntime>>,
 }
@@ -261,9 +261,9 @@ fn successful_boot_installs_receivers() {
 }
 
 // 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。
-#[path = "../runtime/script_security_e2e_tests.rs"]
+#[path = "script_security_e2e_tests.rs"]
 mod script_security_e2e;
 
 // 台本の `\![open,readme]` を起動の道で偽の OS まで通すテスト（popup-menu-residue 件 3）。
-#[path = "../runtime/readme_script_e2e_tests.rs"]
+#[path = "readme_script_e2e_tests.rs"]
 mod readme_script_e2e;

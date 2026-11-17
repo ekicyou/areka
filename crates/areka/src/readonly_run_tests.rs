@@ -35,7 +35,6 @@ use crate::ghost_session::GhostSlot;
 use crate::install::{InstallOrder, InstallOrigin};
 use crate::readonly::ReadOnlyRun;
 use crate::roots::user_root::copy_unless_readonly;
-use crate::runtime::spine::RecordedCall;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::update::{RawUpdateRequest, TargetKind, UpdateReason};
@@ -43,6 +42,7 @@ use crate::write_failure::check_boot;
 use crate::{MarkVerdict, Teardown, after_run, insert_persist_wiring, settle_session_mark};
 use areka_placement::persist::{char_pos_entries, persist_entries};
 use areka_placement::resolver::PointPx;
+use areka_runtime::spine::RecordedCall;
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";

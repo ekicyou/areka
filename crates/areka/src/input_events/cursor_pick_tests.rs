@@ -5,7 +5,7 @@ use std::cell::Cell;
 use wintf::ecs::cursor::CursorTrigger;
 
 use super::{Hold, Origin, Shown, Spot, WindowCursor, pick_shape, plan_cursor};
-use crate::runtime::shell_cursor_table::{
+use areka_runtime::shell_cursor_table::{
     CursorRows, CursorScene, GhostCursorKeys, Shape, SystemCursor,
 };
 

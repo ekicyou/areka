@@ -33,11 +33,6 @@ use wintf::ecs::{
 use super::GhostSlot;
 use crate::boot_resolve::read_last_shell;
 use crate::input_events::user_break::UserBreakWiring;
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::spine::{
-    GpuPermit, Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until,
-};
-use crate::runtime::target_map::shell_target;
 use crate::session::ghost_switch::SwitchInFlight;
 use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::session::shell_balloon_switch::{
@@ -47,6 +42,11 @@ use crate::session::shell_balloon_switch::{
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::spine::{
+    GpuPermit, Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until,
+};
+use areka_runtime::target_map::shell_target;
 
 /// 2 つ目のシェルのフォルダ名（`descript.txt` の `name` も同じ）。
 pub(super) const SECOND: &str = "second";

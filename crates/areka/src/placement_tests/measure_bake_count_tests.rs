@@ -18,13 +18,13 @@ use areka_emo_present::balloon::resolve_balloon_faces;
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
-use crate::runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
-use crate::runtime::sample_test_support::{emo2_balloon_root, emo2_root};
+use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 use areka_placement::PlacementError;
 use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::{measure_baked, measure_with_reader};
 use areka_placement::measure::{MeasureScaling, measure_scope_sizes};
 use areka_placement::test_support::with_com_initialized;
+use areka_runtime::assets::{build_balloon_assets_with_limits, build_shell_assets_with_limits};
 
 /// 1 つのファイルについて、5 つの口が呼ばれた回数。
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

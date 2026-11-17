@@ -27,9 +27,9 @@ use wintf::ecs::FrameTime;
 use crate::mcp::dump_surface::dump_surface_tests::is_picture;
 use crate::mcp::dump_surface::gpu_test_support::{FLUSH_EVENT, GpuRig, decode_png, unpremultiply};
 use crate::mcp::dump_surface::{Job, Step, finish};
-use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::spine::RecordedCall;
-use crate::runtime::target_map::balloon_target;
+use areka_runtime::frame::RuntimeWiring;
+use areka_runtime::spine::RecordedCall;
+use areka_runtime::target_map::balloon_target;
 
 /// スコープ 0 が話す字（[`LINE`]・[`LINE_THEN_HIDE`] の本文・[`LINE_THEN_ANOTHER`] の最初の本文）。
 const WORDS: &str = "表示の確かめ";

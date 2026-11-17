@@ -14,7 +14,7 @@ use super::{DPI, EmoPresenter, PresentCommand, TargetId, World, derive_scale};
 
 /// presenter が最後に見た `GraphicsCore` の変化の印（[`EmoPresenter::refresh_after_device_change`] の控え）。
 ///
-/// World ごとに 1 つなので、1 つの World に presenter は 1 つの前提（本番は `crates/areka/src/runtime/mod.rs` の 1 つだけ）。
+/// World ごとに 1 つなので、1 つの World に presenter は 1 つの前提（本番は `crates/areka-runtime/src/lib.rs` の 1 つだけ）。
 #[derive(Resource)]
 struct SeenGraphicsCore(Tick);
 

@@ -24,13 +24,13 @@ use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::GhostSession;
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
-use crate::runtime::reload_args::DescriptParts;
-use crate::runtime::shell_balloon_resolve::SkinCandidate;
 use crate::session::ghost_switch::{
     PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
 };
 use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchStage};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
+use areka_runtime::reload_args::DescriptParts;
+use areka_runtime::shell_balloon_resolve::SkinCandidate;
 
 struct Rig {
     world: World,
@@ -418,7 +418,7 @@ fn drain_hands_script_requests_to_the_desk() {
     let mut rig = rig("areka-reload-drain");
     drain(&mut rig.world);
     let (tx, rx) = mpsc::channel();
-    crate::runtime::reload_cue::wire_reload_rx(&mut rig.world, rx);
+    areka_runtime::reload_cue::wire_reload_rx(&mut rig.world, rx);
     for target in [ReloadTarget::Shell, ReloadTarget::Balloon] {
         tx.send(ScriptReload {
             target,

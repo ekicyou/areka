@@ -15,7 +15,7 @@
 // 実 runtime へ実際に呼び、BalloonWiring.hover の更新と debug marker を固定する）。
 // -------------------------------------------------------------------------
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;

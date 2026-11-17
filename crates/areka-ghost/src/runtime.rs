@@ -781,7 +781,7 @@ pub fn boot_with_origin(
     //    要件 4.6/8.5/7.1）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点＝無改変）。
     // 起動記録 SET sink 登録（design「C5 GhostRuntime 増分」boot() step 4・要件 3.4/6.2/7.1）。
     //     `spawn_dispatcher` 直前の単一登録点——wired／fallback 両ブート経路が本 1 点を通るため
-    //     自動被覆する（per-path 登録にしない・emo2_boot 不触）。以後 dispatcher が talk ごとに
+    //     自動被覆する（per-path 登録にしない・`areka-runtime` 不触）。以後 dispatcher が talk ごとに
     //     clone して broadcast し、`areka.prop.set`／カウンタ key を名前自己選別して write-through する。
     options
         .sinks

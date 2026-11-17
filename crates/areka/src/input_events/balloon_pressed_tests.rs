@@ -4,7 +4,7 @@
 //! 入れて提示し直して上下の矢印を出す。押下は印の面の entity を送り手にして `dispatch_pointer_events`
 //! で配る（印の面の上の押下が窓の受け口へ届くこと）。
 
-use crate::runtime::balloon_hover::BalloonHover;
+use areka_runtime::balloon_hover::BalloonHover;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -26,10 +26,10 @@ use super::super::test_support::{capture_logs, headless_runtime_wiring};
 use super::super::{BalloonWiring, ChoiceSelection};
 use super::on_balloon_pointer_pressed;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
-use crate::runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
-use crate::runtime::talk_lifecycle::TalkLifecycleSignal;
-use crate::runtime::user_break_cue::NoUserBreakSignal;
 use areka_placement::spawn::BalloonWindowMarker;
+use areka_runtime::frame::balloon_runtime_test_support::manual_balloon_runtime;
+use areka_runtime::talk_lifecycle::TalkLifecycleSignal;
+use areka_runtime::user_break_cue::NoUserBreakSignal;
 
 /// 既定の置き場（120×40 の絵: 上 (100, 15)・下 (100, 25)）の矢印の不透明な点。
 const UP: (i32, i32) = (105, 17);
@@ -63,7 +63,7 @@ struct Rig {
     lifecycle: Receiver<TalkLifecycleSignal>,
     kanade: Receiver<KanadeMsg>,
     /// GPU の装置の許可。World の装置より後に返すので欄の最後。
-    _permit: crate::runtime::spine::GpuPermit,
+    _permit: areka_runtime::spine::GpuPermit,
 }
 
 /// 上下の矢印が出ている普通のバルーン（scope 0）の窓と、その受け口・結線。
