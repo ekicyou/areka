@@ -120,6 +120,20 @@ fn real_repo_data_produces_no_findings() {
     assert!(outcome.findings.is_empty(), "{}", render(&outcome.findings));
 }
 
+/// 今の `catalog.toml` を読んで書き直すと、元の本文と 1 バイトも変わらないこと（指摘 35）。
+///
+/// カタログの書き手と読み手が割れると、再生成のたびに差分が出る。
+#[test]
+fn the_catalog_round_trips_byte_for_byte() {
+    let text = files::read_normalized(&paths::catalog_path()).unwrap_or_else(|err| panic!("{err}"));
+    let catalog = ukadoc_survey::catalog::read::read(&text).expect("catalog.toml を読める");
+
+    assert!(
+        ukadoc_survey::catalog::write::write(&catalog) == text,
+        "catalog.toml が読み直しで変わる（read → write の本文が元と違う）"
+    );
+}
+
 /// 15 種の食い違いが**種類ごとに** 0 件であること（要件 6.10）。
 ///
 /// 上の一括の主張と重なるが、重なり方が違う——こちらは種類の一覧
