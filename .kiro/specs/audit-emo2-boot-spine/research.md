@@ -871,7 +871,7 @@
 | キ・ク | `audit-areka-app` の `brief.md` | 書き足し済み | 6 節・要件の討議の 5 |
 | ケ | 並走中の `audit-ukadoc-survey` のセッション | 伝え済み | 6 節・要件の討議の 5 |
 | **エ**（落ちの報告の写し 3 本） | **`/kiro-complete` の未解決の棚卸の件** | 持ち主の spec が無い（wintf と placement の見直しは完了済み）。完了のときに起票か扱いを決める | 6 節 |
-| **カ**（`carrier_cue` の写し 15 個） | **`/kiro-complete` の未解決の棚卸の件** | 97 番で `areka-runtime` の test-support に 1 本置いた（タスク 3.3）。各持ち主が寄せる先は、完了のときに扱いを決める | 6 節 |
+| **カ**（`carrier_cue` の写し） | **`/kiro-complete` の未解決の棚卸の件** | 97 番で `areka-runtime` の test-support に 1 本置いた（タスク 3.3）。かけ直しの 3 回目で `areka-runtime` の中の写しは寄せ終えた。残りは本体の `install`・`readme`・`update` の cue のテスト 3 本と、依存の向きで共有できない `areka-ghost/src/prop_sink.rs`・`areka-seriko/src/actor_test_support.rs`（14.3） | 6 節 |
 
 - 要件 7.7（C22 のほかの 5 本の触るファイル）に及ぶ直しは 0 件で、相手への申し送りが要るものはア・イ・ウ・オ・ケの記録のみ（出どころ: 6 節・`requirements.md`「要件の討議で確定したこと」の 5）。
 
@@ -937,8 +937,13 @@
 - 依存: 足した依存・フォーク・`[patch]` は 0 件。`crates/areka-runtime/Cargo.toml` の差分は説明の 2 行だけ（依存の行は変わらない）。
 - 端末へ出す文: 足した `println!`／`print!`／`eprintln!`／`eprint!` は 0 件（消したのは 1 件）。
 - 範囲の外のファイルの差分と、それを入れたタスク:
-  - `crates/areka-actor/`（4 ファイル）・`crates/areka-emo-text/`（13 ファイル・足したファイルは無い）・`crates/areka/src/input_events/balloon_choice_settle_tests.rs`: タスク 2（`RecordedCall::Status` の枝を消した時の読み手と、COM の写し）。持ち主は C22 で走っていない（設計の「並走の約束」7.1）。
+  - `crates/areka-actor/`（4 ファイル）・`crates/areka-emo-text/`（13 ファイル・足したファイルは無い）・`crates/areka/src/input_events/balloon_choice_settle_tests.rs`: タスク 2（`spawn_ui` の戻りから使われない失敗を外した・`bf97c9f76`）。持ち主は C22 で走っていない（設計の「並走の約束」7.1）。
   - `crates/areka/src/crate_source_test_support.rs`・`doc/COMPAT_ARCHITECTURE.md`（パスの 2 行）: タスク 6.5（102 番・設計の討議の議題 1）。`doc/` の 2 行は `collisionex-regions` のセッションへ知らせ済み。
-  - `crates/areka/src/ghost_session_switch_tests.rs`・`shell_balloon_switch_session_lap_tests.rs`・`update/worker_path_tests.rs`: タスク 3.6。
-  - `crates/areka/src/boot_config.rs`: タスク 8.2 のかけ直しの 3 回目で、`ghost_boot_options` を `session/runtime_boot.rs` の `runtime_boot_options` を 1 回呼ぶ形にした（`GhostBootOptions` の組み立ての写しを 1 か所へ・返す値は同じ）。同じ時に、説明の task 番号と持ち主の無い要件の番号を外した。条件つきで範囲の外へ触った件として、ここに記す。持ち主の `audit-areka-app` は C22 で走っていない。
+  - `crates/areka/src/ghost_session_switch_tests.rs`・`shell_balloon_switch_session_lap_tests.rs`・`update/worker_path_tests.rs`・`session/ghost_switch_talk_clock_tests.rs`: タスク 3.6（54 番の `RecordedCall::Status` の読み手・`c31ccb9f0`）。
+  - `crates/areka/src/boot_config.rs`: タスク 8.2 のかけ直しの 3 回目で、`ghost_boot_options` を `session/runtime_boot.rs` の `runtime_boot_options` を 1 回呼ぶ形にした（`GhostBootOptions` の組み立ての写しを 1 か所へ・返す値は同じ）。同じ時に、説明の task 番号と持ち主の無い要件の番号も外した。設計の範囲の外の一覧に無かった追加の範囲外で、写しを 1 か所へ寄せるのに両方のファイルへ触る必要があった（返す値は `main_ghost_wiring_tests.rs`・`main_module_policy_tests.rs` が守る）。持ち主の `audit-areka-app` は C22 で走っていない。
+  - かけ直しの 3〜5 回目で触った、設計の一覧に無かった追加の範囲外（持ち主は `audit-emo2-boot-switch` などで、どれも C22 で走っていない）:
+    - `crates/areka-runtime/src/balloon_hover.rs`・`shell_box_hover.rs`: 説明からタスクの番号を外しただけ（5 回目・`6367daf42`）。直しに要る変更ではない。
+    - `crates/areka-runtime/src/balloon_visibility_phase_zorder_chain_tests.rs`: `code_only` の写しを `source_text_test_support` へ寄せた（3 回目・`cabc3c874`）。
+    - `crates/areka-runtime/src/change_cue_tests.rs`・`move_cue_balloon_lock_tests.rs`・`move_cue_move_severity_log_tests.rs`・`move_cue_move_sink_tests.rs`: cue を組む補助の写しを `consumer_ledger_test_support.rs` へ寄せた（3・4 回目）。
+    - `crates/areka/src/session/ghost_switch_test_support.rs`: `TICK_STEP_MS`・`TICK_EVERY` を `pub(crate)` にした。範囲の中の `runtime_boot_tests.rs` が写しをやめて借りるため（3 回目）。
 - 外への約束の変化: かけ直しで足した公開の名前は `areka_runtime::spine::{wait_until_paced, INJECT_PACE}`（テストの足場・test-support の中）。狭めた名前は `settle_bounded_with`（`pub` から `pub(super)` へ・`spine.rs` の出し直しも外した）で、読み手は `spine_wait.rs` の子のテストだけ。ログの文の変化は、`warn!`／`error!` の本文から要件の番号を外したもの（`runtime_boot.rs` の「・R7.4」、`lib.rs` の「・R7.3」、`consumer_ledger.rs` の `LedgerError` の Display の「・要件 11.3」、`zorder_cue.rs` の debug の「・要件 11.2」）と、`reload.rs` の `reload_failed` の文（`gap_cancelled` のときにも合う言い方へ）だけで、event 名は変えていない。どれも、その字面を読む物（テスト・道具）が 0 件であることを `git grep` で確かめた。
