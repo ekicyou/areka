@@ -188,7 +188,7 @@
   - _Requirements: 2.7, 3.1, 4.1, 7.6, 7.7_
 
 - [ ] 6. 検証
-- [ ] 6.1 同じ範囲へ audit をかけ直し、0 件まで直す（V1）
+- [x] 6.1 同じ範囲へ audit をかけ直し、0 件まで直す（V1）
   - 4 crate の全部（この spec で足した 4 ファイルを含む）へ `/ponytail:ponytail-audit` を上限なし・全部読む作法でかけ直す。直しが生んだ指摘も直し、新しい指摘が 0 件になるまで繰り返す（指摘 75 は数えない）
   - 5 回目になっても収まらないときは要件 9.6 の打ち切りの決まりに従う（開発者に一言知らせる）
   - 完了の姿: かけ直しの回数と各回の件数、最後の回が 0 件（または 5 回目の打ち切り）であることを検証の記録に書く
@@ -233,3 +233,15 @@
   - 5.3: 較正: 破棄の panic を外す（いつも panic の途中の扱い）→ `dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence` が赤。送り直しを外す → `a_close_sent_before_the_window_exists_is_resent` が赤（締切切れ）。受け取りの後も送り直す → `no_close_is_resent_after_the_acknowledgement` が赤（受け取りの行 2）。29 は直す前の `dropped_listener_is_unreachable` が 61.9 秒で締切切れ（赤）。消す前の grep: 消したテスト `non_empty_handed_folder_is_neither_used_nor_deleted`・`non_empty_folders_up_to_the_limit_fail` は定義 1 だけ、`CREATE_TRIES` は evidence 4・本 spec の文書 5、`create_with` は evidence 4・本 spec 4・completed 1（ほかの 2 は同じ名の別の関数）、`stop_quietly` は close・run 3・本 spec 8・completed 4。範囲の外の、`close()`／`wait_exit()` を呼ばずに生きた子の取っ手を捨てる呼び手は 0（`crates/areka/tests` の 7 ファイル）。新しい端末の行を字面で読む `.ps1`・`.py` は 0。`doc/testing.md` は 71・75・163 と、写しの失敗の行を引く 166 を直した
   - 5.4: 較正: 「隣が 32bit なら写さない」の早い戻りを戻す → `a_newer_source_replaces_a_stale_i686_neighbour`・`an_env_var_pointing_at_a_non_i686_file_panics_even_when_the_neighbour_is_i686` が赤。元が無いときの隣の戻りを外す → `without_any_source_the_i686_neighbour_is_used` が赤。写す条件を常に真に → 足した `a_neighbour_matching_the_source_is_not_copied_again` が赤（同じ長さと更新時刻なら写さない枝の檻）。消したテスト `dest_already_32bit_is_returned_as_is_without_looking_at_sources`（指摘 11 と逆の振る舞い）: 定義 1・completed の `runtime-module-untangle/test-name-tails-{before,after}.txt` 各 1。`smoke_boot_loop_exit.rs` は書き換えなしで組める
   - 5.4 の残り（6.1 のかけ直しで見る）: `place` の古い逃げ道（走っている areka が古い写しを握って改名が落ち、それが 32bit なら受け入れる）では古い隣が黙って残る。6.2 で「完了した areka-P0-real-run-mcp-kit の要件 2.1・2.5 を裁定で改めた」旨を記録に書く（設計の表の行）
+  - 6.1: かけ直しを 6 回行った。各回の件数は 38 → 42 → 34 → 30 → 34 → 28 で、どの回も全部直した（当てなかったのは 2 回目 S7 と 6 回目 E5 だけ）。
+    - 5 回目は道具の振る舞いの指摘が残ったので、1 回足した。
+    - 6 回目は「必ず直す」0・道具の振る舞い 0 だったので、要件 9.6 で区切った。開発者には区切ることをチャットで伝えた。
+    - 各回の指摘・仕分け・直しの控えは reaudit-round1〜6.md にある。
+    - 5 回目からは、4 回目までどの切れ端にも入っていなかった `examples/` を切れ端に足した。
+    - 回をまたぐ連鎖は開発者の指示（11-17）で Fable にまとめて直させた。
+      - 後片付けの行: 3 回目 S1 → 4 回目 S2・U2
+      - 締切の檻: 4 回目 R4 → C2 → 5 回目 R1
+      - env-filter の見張り: 4 回目 G2 → 5 回目 G1
+      - mcp_tests の説明の往復: 3 回目 R3 → 6 回目 R5
+      - 走査器の写し: 5 回目 G6・G5 → 6 回目 G1・G2
+    - 2 回目の決めを打ち消す往復の組（6 回目 E5）は当てなかった。
