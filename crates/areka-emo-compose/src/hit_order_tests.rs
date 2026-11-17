@@ -50,6 +50,8 @@ fn shapes_not_yet_working_never_hit_and_never_cover_a_rect_below() {
          collisionex4,G,region,m.png,255,0,0\n\
          }\n",
     );
+    // 4 つの形が並びに入っていること（読み落としで檻が空振りしないように）。
+    assert_eq!(w.hit_regions(0).expect("面の当たり判定").len(), 5);
     for (x, y) in [(50, 50), (10, 5), (99, 99)] {
         assert_eq!(name(&w, 0, x, y).as_deref(), Some("Under"), "({x},{y})");
     }
