@@ -2,7 +2,7 @@
 //!
 //! 対応 spec: `.kiro/specs/completed/pilot-clickthrough-alpha-toggle/`
 //! 一次記録（動機・概要・検証結果）は隣の README.md を正本とする。
-//! T1〜T8 の詳細台帳と REPORT.md はタスク 6.1 で作成する（本ファイルは骨組みのみ）。
+//! T1〜T8 の詳細台帳は隣の REPORT.md。
 //!
 //! 実行法: `cargo run -p pilot --example pilot-clickthrough-alpha-toggle`
 //!
@@ -43,8 +43,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
     IDC_CROSS, LoadCursorW, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SetCursor, SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
-    WM_CLOSE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SETCURSOR,
-    WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    WM_CAPTURECHANGED, WM_CLOSE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
+    WM_SETCURSOR, WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    WS_POPUP,
 };
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{block_on, spawn_local};
@@ -61,10 +62,12 @@ use windows::core::{Interface, Result};
 /// 本定数経由で同一にすること。値や中心算出をここ以外で重複定義しない。
 const RADIUS: i32 = 200;
 
-/// α マスク純関数（窓中心・半径 `RADIUS` の円・物理座標）。
+/// α マスク純関数（矩形中心・半径 `RADIUS` の円・物理座標）。
 ///
 /// `cursor` が不透明円の**内側**なら `true`（=クリック透過 OFF）、外側なら `false`
-/// （=クリック透過 ON）を返す。円中心は `win_rect` の中心
+/// （=クリック透過 ON）を返す。`win_rect` に渡すのはクライアントの矩形で、`cursor` と
+/// 同じ座標系にそろえる（見張り役はスクリーン座標・クリックの受け取りは左上 0 のクライアント
+/// 座標）。円中心は `win_rect` の中心
 /// `cx=(left+right)/2, cy=(top+bottom)/2`、半径は `RADIUS`。内外判定は
 /// `dx*dx + dy*dy <= r*r`（境界は内側扱い）を **i64** で計算し、マルチモニタ仮想
 /// スクリーン上の大／負座標での i32 オーバーフローを避ける（R7.3）。
@@ -74,10 +77,9 @@ const RADIUS: i32 = 200;
 /// 実レンダリング α バッファのサンプリングは行わない（プレースホルダ円の継ぎ目, R4.3。
 /// 実装は本坑の責務）。差し替え可能な独立シーム（R4.2）。
 ///
-/// 非テストコードからはカーソル監視ワーカ（タスク 4.1・`spawn_cursor_worker`）が
-/// 16ms ごとに呼ぶ（円内外 → desired click-through 判定）。
+/// カーソル監視ワーカ（`spawn_cursor_worker`・16ms ごと）と `WM_LBUTTONDOWN` の受領ログが呼ぶ。
 fn alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool {
-    // 円中心 = 窓矩形の中心（タスク 3.2 の描画円と同一算出, R2.2/R4.1）。
+    // 円中心 = 渡された矩形の中心（描画円と同一算出, R2.2/R4.1）。
     let cx = (win_rect.left + win_rect.right) / 2;
     let cy = (win_rect.top + win_rect.bottom) / 2;
 
@@ -141,20 +143,19 @@ const COLORS: [D2D1_COLOR_F; 2] = [
 /// `swapchain` ではなく `IDCompositionSurface` を visual content に用いる（設計「視覚的
 /// 透過方式」節が明示的に許可する同等最小の代替。surface.BeginDraw が D2D デバイス
 /// コンテキストを直接返すため、swapchain＋D2D-over-DXGI-surface より配線が単純）。
-#[allow(dead_code)] // d3d/d2d_device/target/visual は保持専用（ドロップ抑止）。surface/device は描画で使用。
 struct DCompPipeline {
     /// D3D11 デバイス（BGRA 対応・DComp/D2D の土台）。保持専用。
-    d3d: ID3D11Device,
+    _d3d: ID3D11Device,
     /// D2D デバイス（DComp の rendering device 兼 surface 描画系列）。保持専用。
-    d2d_device: ID2D1Device,
+    _d2d_device: ID2D1Device,
     /// DComp デスクトップデバイス（CreateTargetForHwnd を持つ）。保持専用。
-    desktop: IDCompositionDesktopDevice,
+    _desktop: IDCompositionDesktopDevice,
     /// CreateVisual/CreateSurface/Commit を持つデバイス（描画・Commit で使用）。
     device: IDCompositionDevice2,
     /// 窓に紐づく composition target（SetRoot 済み）。保持専用（ドロップで合成破棄）。
-    target: IDCompositionTarget,
+    _target: IDCompositionTarget,
     /// ルートビジュアル（SetContent(surface) 済み）。保持専用。
-    visual: IDCompositionVisual2,
+    _visual: IDCompositionVisual2,
     /// 視覚内容を供給する surface（BeginDraw/EndDraw で D2D 描画）。再描画で使用。
     surface: IDCompositionSurface,
     /// surface のピクセルサイズ（= 窓矩形の物理サイズ）。円中心算出に使用。
@@ -165,11 +166,9 @@ struct DCompPipeline {
 /// 透過トップモスト窓に紐づく共有状態（`!Send` で良い＝`Rc`／`HWND`／COM を内包する, R2.5）。
 /// 窓を閉じる契機を `block_on` の future へ伝える shutdown `Event` を保持する。
 ///
-/// 本タスク（3.2）で DComp パイプライン（`pipeline`）と円の現在色インデックス
-/// （`color_index`）を追加した。色トグルon-click（3.3）・カーソルワーカ／スタイルトグル
-/// （4.x/5.x）は後続で配線される。`pipeline` は `RefCell` 等で包まず、wndproc が `Fn`
-/// ゆえ後続 3.3 の再描画は `&DCompPipeline`＋`Cell<usize>` の現在色読みで行える（COM 呼出は
-/// `&self` メソッド）。
+/// DComp パイプライン（`pipeline`）・円の現在色（`color_index`）・ドラッグの状態も持つ。
+/// wndproc が `Fn` ゆえ状態は `Cell`/`RefCell`/atomic で持ち、クリック時の再描画は
+/// `&DCompPipeline`＋現在色の読みで行う（COM 呼出は `&self` メソッド）。
 struct AppState {
     /// 窓クローズ（`WM_CLOSE`）で notify され、`block_on` の await を完了させる。
     shutdown: Event,
@@ -256,9 +255,9 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
             let s: &AppState = state.get_ref();
             match msg.msg {
                 WM_SETCURSOR => {
-                    // 診断用（開発者要望）: 手カーソルにする。この窓は透過 OFF（＝カーソルが
+                    // 診断用（開発者要望）: 十字カーソルにする。この窓は透過 OFF（＝カーソルが
                     // 判定円内でクリックを受ける状態）のときだけ WM_SETCURSOR を受け取るため、
-                    // 「手が出ている範囲」＝反応（乗っかっている）領域が一目で分かる。
+                    // 「十字が出ている範囲」＝反応（乗っかっている）領域が一目で分かる。
                     // 返り値 TRUE(=1) で DefWindowProc に既定カーソルへ戻させない。
                     if let Ok(cross) = unsafe { LoadCursorW(None, IDC_CROSS) } {
                         unsafe {
@@ -285,12 +284,9 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
                     let mut cr = RECT::default();
                     // SAFETY: Win32 境界。read-only。msg.hwnd は有効窓。
                     let _ = unsafe { GetClientRect(msg.hwnd, &mut cr) };
-                    let ccx = cr.right / 2;
-                    let ccy = cr.bottom / 2;
-                    let ddx = (click_x - ccx) as i64;
-                    let ddy = (click_y - ccy) as i64;
-                    let r = RADIUS as i64;
-                    let inside = ddx * ddx + ddy * ddy <= r * r;
+                    // cr は左上 0 のクライアント矩形ゆえ中心は (right/2, bottom/2)＝判定と同じ。
+                    let (ccx, ccy) = (cr.right / 2, cr.bottom / 2);
+                    let inside = alpha_is_opaque(POINT { x: click_x, y: click_y }, cr);
                     println!(
                         "[click] WM_LBUTTONDOWN 受領 client=({click_x},{click_y}) 円中心=({ccx},{ccy}) → {} → 色トグル＋DComp 再描画",
                         if inside {
@@ -365,17 +361,25 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
                         None
                     }
                 }
-                WM_LBUTTONUP => {
-                    // ドラッグ終了: dragging=false・ReleaseCapture。その後 state_changed を notify して
-                    // StateApplier を起こし、現在のカーソル位置に応じた透過状態へ再収束させる
-                    // （ドラッグ中は抑止していたため、ここで一度リコンサイルが要る）。
+                WM_LBUTTONUP | WM_CAPTURECHANGED => {
+                    // ドラッグ終了: ボタンを離した／捕まえを失った（Alt+Tab 等で離す合図が他窓へ行く）。
+                    // dragging=false・ReleaseCapture の後 state_changed を notify して StateApplier を
+                    // 起こし、透過状態を再収束させる。片付けは印を下ろせたときだけ 1 回（ReleaseCapture
+                    // が同期で送る WM_CAPTURECHANGED は印が既に下りているので素通り）。
                     if s.dragging.swap(false, Ordering::AcqRel) {
                         // SAFETY: Win32 境界。キャプチャ解除。
                         unsafe {
                             let _ = ReleaseCapture();
                         }
                         s.state_changed.notify(usize::MAX);
-                        println!("[drag] 終了（ReleaseCapture・dragging=false・透過状態を再収束）");
+                        let why = if msg.msg == WM_LBUTTONUP {
+                            "ボタンを離した"
+                        } else {
+                            "捕まえを失った"
+                        };
+                        println!(
+                            "[drag] 終了（{why}・ReleaseCapture・dragging=false・透過状態を再収束）"
+                        );
                         Some(LRESULT(0))
                     } else {
                         None
@@ -384,7 +388,7 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
                 WM_LBUTTONDBLCLK => {
                     // ダブルクリックで終了（開発者要望）。枠なし窓＝閉じる UI が無いため。
                     // WM_CLOSE と同じ経路: shutdown を notify → block_on の future 完了 →
-                    // 後始末（applier/worker 停止 → join）→ `_window` drop で DestroyWindow → 正常終了。
+                    // 後始末（worker 停止 → join）→ `_window` drop で DestroyWindow → 正常終了。
                     // ＝T8（正常終了）の実機トリガも兼ねる。円（不透明部）上でのみ届く。
                     println!("[window] ダブルクリック → shutdown（正常終了）");
                     s.shutdown.notify(usize::MAX);
@@ -408,14 +412,15 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
 /// `CreateTargetForHwnd(hwnd, topmost=true)` → `SetRoot(visual)`。Commit は初回描画後に行う。
 ///
 /// surface サイズは窓の物理矩形（PMv2 ゆえ `GetWindowRect` は物理ピクセル, R7.2）。
-/// `WS_EX_LAYERED` は使わない（視覚透過は DComp visual の per-pixel α が担う）。GDI/`WM_PAINT`/
+/// 視覚透過は DComp visual の per-pixel α が担う（`WS_EX_LAYERED` はマウス透過のための同伴フラグ
+/// として立てるだけで、レイヤード描画には使わない）。GDI/`WM_PAINT`/
 /// `DwmExtendFrameIntoClientArea` は一切使わない（NOREDIRECTIONBITMAP 窓では画面に出ない）。
 fn build_pipeline(hwnd: HWND) -> Result<DCompPipeline> {
     // 窓の物理矩形（PMv2 ＝物理ピクセル）。surface サイズ＝矩形サイズ。
     let mut rect = RECT::default();
     // SAFETY: Win32 境界。`hwnd` は直前に生成した有効窓。out 引数 `rect` は書き込み専用。
-    // DComp の CreateTargetForHwnd は**クライアント領域**に合成するため、surface は client サイズに
-    // 合わせる（窓全体だと枠ぶんズレて見える円と判定円が一致しない・R4.1/R7.2）。
+    // DComp の CreateTargetForHwnd は**ウィンドウ原点**から合成する。窓は WS_POPUP で client==window
+    // にしてあるので、surface を client サイズにすれば見える円と判定円が一致する（R4.1/R7.2）。
     // GetClientRect は (0,0,client_w,client_h) を返す（PMv2 ＝物理ピクセル）。
     unsafe { GetClientRect(hwnd, &mut rect)? };
     let width = (rect.right - rect.left).max(1) as u32;
@@ -477,12 +482,12 @@ fn build_pipeline(hwnd: HWND) -> Result<DCompPipeline> {
     unsafe { target.SetRoot(&visual)? };
 
     Ok(DCompPipeline {
-        d3d,
-        d2d_device,
-        desktop,
+        _d3d: d3d,
+        _d2d_device: d2d_device,
+        _desktop: desktop,
         device,
-        target,
-        visual,
+        _target: target,
+        _visual: visual,
         surface,
         width,
         height,
@@ -497,8 +502,8 @@ fn build_pipeline(hwnd: HWND) -> Result<DCompPipeline> {
 /// `device.Commit()`。
 ///
 /// 円中心はクライアント中心 `(width/2, height/2)`（物理ピクセル）。これは判定円
-/// （`alpha_is_opaque` の `((left+right)/2,(top+bottom)/2)` ＝窓矩形中心）を窓ローカル座標へ
-/// 平行移動したものと一致し、描画円と判定円が同一窓の同一中心・同一半径 `RADIUS` を指す
+/// （`alpha_is_opaque` の `((left+right)/2,(top+bottom)/2)` ＝クライアント矩形の中心）を
+/// クライアント座標へ平行移動したものと一致し、描画円と判定円が同一窓の同一中心・同一半径 `RADIUS` を指す
 /// （R2.2/R4.1）。atlas オフセットは surface 割当原点の補正で、中心に加算する（SetTransform/
 /// Matrix を介さず加算で吸収＝windows-numerics 非依存）。GDI/`WM_PAINT` は使わない。
 fn draw_circle(pipeline: &DCompPipeline, color: D2D1_COLOR_F) -> Result<()> {
@@ -552,8 +557,8 @@ fn draw_circle(pipeline: &DCompPipeline, color: D2D1_COLOR_F) -> Result<()> {
 /// カーソル監視ワーカを別 `std::thread` で起動する（タスク 4.1・R3.1/R3.2/R3.3/R10.2）。
 ///
 /// UI スレッドでも tokio でもない独立 OS スレッド上で 16ms ごとに以下を回す:
-/// 1. `GetCursorPos` + `GetWindowRect`（ともに read-only な Win32 API）で物理座標を読む（R3.4）。
-/// 2. `alpha_is_opaque(pt, wr)` で不透明円の内外を判定する。
+/// 1. `GetCursorPos` + `GetClientRect`＋`ClientToScreen`（read-only な Win32 API）で物理座標を読む（R3.4）。
+/// 2. `alpha_is_opaque(pt, client_screen)`（スクリーン座標のクライアント矩形）で不透明円の内外を判定する。
 /// 3. desired click-through を `desired_passthrough` に公開する
 ///    — 円の**外**（`alpha_is_opaque==false`）= クリック透過 ON（`true`, R5.2）／
 ///    円の**内**（`alpha_is_opaque==true`）= クリック透過 OFF（`false`, R5.1）。
@@ -659,15 +664,12 @@ fn spawn_cursor_worker(
 ///
 /// ループ（**取りこぼし防止＋起動時初期状態収束**・listener-first poll-then-await・タスク 5.1）:
 /// 1. `let listener = state_changed.listen();`（await **前**に張る → notify を逃さない）。
-/// 2. `applied_done`（＝block_on 復帰後に立つ shutdown フラグ）が立っていれば break。
-/// 3. **無条件の初期 poll**: `desired_passthrough` を `Acquire` で読み、ローカル `applied` と
+/// 2. **無条件の初期 poll**: `desired_passthrough` を `Acquire` で読み、ローカル `applied` と
 ///    比較して差分時のみ適用する（下記）。これにより、await の前に一度必ず希望状態へ収束し、
 ///    起動時にカーソルが円**内**で始まった場合の初回 OFF を確実に一度だけ適用する
 ///    （notify が pending でなくても収束する・設計「起動時初期状態確定」）。
-/// 4. `listener.await`（ワーカの notify か終了 notify で起床）。poll と await の間に届いた
-///    notify は手順 1 で張った listener が確実に捕捉する（lost wakeup なし）。
-/// 5. 起床後はループ先頭へ戻り、再び listener を張り直してから `applied_done` を確認し
-///    （終了 notify への即応）、次の poll を行う。
+/// 3. `listener.await`（ワーカかドラッグ終了の notify で起床）。poll と await の間に届いた
+///    notify は手順 1 で張った listener が確実に捕捉する（lost wakeup なし）。起床後は先頭へ戻る。
 ///
 /// **差分時（`desired != applied`）のみ**:
 ///   - 現在の `GetWindowLongPtrW(hwnd, GWL_EXSTYLE)` を読み、`WS_EX_TRANSPARENT` ビット
@@ -687,14 +689,11 @@ fn spawn_cursor_worker(
 /// で渡し、UI スレッド内で `HWND(raw as *mut _)` に再構成する（このタスクは UI スレッド上で
 /// 動くため所有スレッドからの呼出になり、スタイル変更 API を正当に呼べる）。
 ///
-/// 終了: `applied_done`（block_on 復帰後の shutdown 後始末で立てて notify される）で
-/// ループを抜ける。最終的なライフサイクル配線（初期状態収束・done 立て＋join 順序）は
-/// タスク 5.1（本関数のループ順序＋main の配線）で確定する。
+/// 終了: 抜ける道は持たない。`block_on` が戻ると `spawn_local` のタスクは進まない（`wintf-winmsg-executor` の約束）。
 fn spawn_state_applier(
     hwnd: HWND,
     desired_passthrough: Arc<AtomicBool>,
     state_changed: Arc<Event>,
-    applied_done: Arc<AtomicBool>,
     dragging: Arc<AtomicBool>,
 ) {
     // HWND を生の isize にしてから move（ポインタ幅 32/64bit 保持）。
@@ -708,9 +707,6 @@ fn spawn_state_applier(
             // await 前に listener を張る（notify 取りこぼし防止）。次の poll と await の間に
             // 届く notify を確実に捕捉する。
             let listener = state_changed.listen();
-            if applied_done.load(Ordering::Acquire) {
-                break;
-            }
 
             // 無条件の初期 poll（listener-first poll-then-await・タスク 5.1）。
             // listener を張った後・await の前に希望状態を読んで差分収束する。これにより
@@ -721,7 +717,7 @@ fn spawn_state_applier(
             // 差分時のみスタイル適用＋ログ。非差分時は style API を一切呼ばない（R5.4）。
             // ドラッグ中は透過トグルを抑止＝表示位置に関わらず WS_EX_TRANSPARENT を外したまま
             // 維持する（ドラッグ開始は円内＝OFF ゆえ applied は OFF。ここで ON へ戻すと SetCapture が
-            // 切れドラッグが崩壊するため、dragging 中は一切適用しない）。終了時に WM_LBUTTONUP が
+            // 切れドラッグが崩壊するため、dragging 中は一切適用しない）。終了時に WM_LBUTTONUP／WM_CAPTURECHANGED が
             // state_changed を notify して本ループを起こし、ここで改めて再収束させる。
             if desired != applied && !dragging.load(Ordering::Acquire) {
                 // UI スレッド内で HWND を再構成（所有スレッドゆえスタイル変更 API を呼べる）。
@@ -770,9 +766,7 @@ fn spawn_state_applier(
             }
             // desired == applied のときは何もしない（style API 非呼出・ログ非出力・R5.4）。
 
-            // poll で収束させた後に await（手順 1 で張った listener で起床）。次の起床は
-            // ワーカの変化 notify か終了 notify。起床後はループ先頭へ戻り、listener を張り直して
-            // applied_done を確認してから次の poll を行う（終了 notify への即応）。
+            // poll で収束させた後に await（手順 1 で張った listener で起床）。
             listener.await;
         }
     });
@@ -846,7 +840,7 @@ fn main() {
 
     // カーソル監視ワーカ（タスク 4.1）を別 std::thread で起動。
     // desired_passthrough = ワーカが公開する希望クリック透過状態（初期 true = 起動時 ON と整合）。
-    // state_changed = 変化時に UI を起こす wake イベント（消費側 StateApplier は 4.2 で配線）。
+    // state_changed = 変化時に UI を起こす wake イベント（消費側は下の StateApplier）。
     // done = ワーカ停止フラグ（block_on 復帰後に立てて join → 清掃終了）。
     let desired_passthrough = Arc::new(AtomicBool::new(true));
     let worker_done = Arc::new(AtomicBool::new(false));
@@ -872,13 +866,11 @@ fn main() {
     // カーソルが円**内**なら初回 OFF を一度だけ適用、円**外**なら applied(ON) と一致して
     // style API を一切呼ばない。worker は初回判定を無条件に publish+notify する（4.1）ため、
     // applier の初回 poll 時点で desired_passthrough は有効値を保持する。spawn 順
-    // （worker → applier）はこの idiom により頑健（順序非依存）。applier_done は終了用フラグ。
-    let applier_done = Arc::new(AtomicBool::new(false));
+    // （worker → applier）はこの idiom により頑健（順序非依存）。
     spawn_state_applier(
         _window.hwnd(),
         desired_passthrough.clone(),
         state_changed.clone(),
-        applier_done.clone(),
         dragging.clone(),
     );
     println!(
@@ -894,16 +886,9 @@ fn main() {
 
     // ── ライフサイクル終了（唯一の確定 shutdown 経路・タスク 5.1・R8.1/R8.2）──
     // WM_CLOSE → shutdown.notify → 上の block_on(shutdown.await) 復帰 → ここでテアダウン。
+    // StateApplier は止めない: `block_on` が戻ると `spawn_local` のタスクは進まない（`wintf-winmsg-executor` の約束）。
     //
-    // (1) StateApplier（spawn_local タスク）終了: applied_done を立て（Release）、
-    //     state_changed を notify して applier の pending な listener.await を即起床させる。
-    //     起床後 applier はループ先頭で applied_done を見て break しタスク終了する
-    //     （これで spawn_local タスクがプロセスを生かし続けない）。block_on 復帰後は executor
-    //     が回らないが、明示フラグ＋notify で確実にループを畳む（drop 任せにしない）。
-    applier_done.store(true, Ordering::Release);
-    state_changed.notify(usize::MAX);
-
-    // (2) カーソルワーカ（別 std::thread）終了: done を立て（Release）→ join で確実に合流する
+    // カーソルワーカ（別 std::thread）終了: done を立て（Release）→ join で確実に合流する
     //     （R8.2）。ワーカは 16ms スリープ間隔で done(Acquire) を観測しループを抜けるため、
     //     join は最大 ~16ms 待つだけ（許容）。二重 join はせず、panic 終了時も join の Err を
     //     ログに残してプロセスは正常終了させる（hang/panic なし）。
@@ -1004,3 +989,7 @@ mod tests {
         assert!(!alpha_is_opaque(pt(2_000_000 + RADIUS + 1, 2_000_000), win));
     }
 }
+
+#[cfg(test)]
+#[path = "main_drag_tests.rs"]
+mod drag_tests;
