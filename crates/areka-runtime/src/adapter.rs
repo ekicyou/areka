@@ -160,7 +160,7 @@ impl SurfaceOutput for PresentBridge {
             // 写像不能（非数値 scope）: 握り潰さず warn! で観測して drop（R3.6/R3.7・DD-5）。
             None => {
                 tracing::warn!(
-                    "PresentBridge: 非数値 scope の DisplayCommand を写像できず drop しました"
+                    "PresentBridge: 数でない、または大きすぎる scope の DisplayCommand を写像できず drop しました"
                 );
             }
         }
@@ -395,6 +395,20 @@ mod tests {
             }
             _ => panic!("HideBalloon は Hide へ写像されるべき"),
         }
+    }
+
+    /// 大きすぎる scope（`2*scope+1` があふれる番号）の Show は写像せず `None`（panic しない）。
+    #[test]
+    fn a_show_for_a_too_large_scope_is_not_mapped() {
+        assert!(
+            map_display_command(DisplayCommand::Show {
+                scope: ActorKey::from("2147483648"),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100]),
+                pattern: PatternState::default(),
+            })
+            .is_none()
+        );
     }
 
     /// 非数値 scope（例 "側"）は 4 写像すべてで `None`（呼び手が `warn!`＋drop）。
