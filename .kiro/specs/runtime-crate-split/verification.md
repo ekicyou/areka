@@ -770,3 +770,11 @@
 - 見込みと一致: −1・+1・+1 の 3 つだけで、ほかの名前の増減は 0。
 - `areka-runtime` の lib のテストの実行ファイル: 取得時の標準エラーに `Running unittests src\lib.rs (... areka_runtime-....exe)` が現れる（`--list` に拾われる・3.10）。
 - 文書のテスト: `Doc-tests areka_runtime` は走るが、`(line N): test` の行は前 66・後 66 で同数（上の多重集合の比べにも差として出ない）。新しく回る文書のテストは無い。囲みを `text` にする直しは要らず、コードも触っていない。
+
+## 12. 段 8（9.2）全体テスト
+
+- 取り方: 排他テストの机を取り（`granted test`）、`9d32594ed`（`origin/main` `fc0035eda` を取り込んだ後）＋ 9.1 の記録のコミット `763f4ddf9` の木で `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回した。出力は `target/runtime-crate-split/test-all.txt`。走り終えてすぐ机を返した。`tools/test-all.ps1` は直していない
+- 結果: 終わりの行は `all steps green`（終了コード 0）。段はすべて `OK`（`fmt --check`・`x64 workspace tests` 558 秒・`dola toml feature tests`・`i686 tests (host-32)`・`crates.io pre-publish check`・`encoding check`・`load flake check` ほか）
+- `areka-runtime` のテストの実行ファイルが走ったこと: 出力の 8528 行に `Running unittests src\lib.rs (…areka_runtime-….exe)` がある（要件 3.10）。その結果は 9524 行の `989 passed; 0 failed; 3 ignored`
+- 回し直しは無い（赤が無かった）
+
