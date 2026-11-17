@@ -532,8 +532,7 @@ fn scan_tokens_anchors_only_tokens_that_start_with_an_identifier_char() {
     let sep_token = "/name\"";
     assert_eq!(
         scan_tokens(
-            "    let p = root.join(\"ghost/emo2/name\");
-",
+            "    let p = root.join(\"ghost/emo2/name\");\n",
             &[sep_token]
         ),
         vec![(1usize, sep_token.to_string())],
@@ -544,20 +543,12 @@ fn scan_tokens_anchors_only_tokens_that_start_with_an_identifier_char() {
     // 識別子から始まる語: 従来どおりアンカーが効く。
     let ident_token = "name(";
     assert_eq!(
-        scan_tokens(
-            "    let p = filename(1);
-",
-            &[ident_token]
-        ),
+        scan_tokens("    let p = filename(1);\n", &[ident_token]),
         Vec::new(),
         "識別子で始まる語のアンカーが外れている（末尾がたまたま同じ助走関数を拾う）"
     );
     assert_eq!(
-        scan_tokens(
-            "    let p = name(1);
-",
-            &[ident_token]
-        ),
+        scan_tokens("    let p = name(1);\n", &[ident_token]),
         vec![(1usize, ident_token.to_string())],
         "対の陽性が当たらない＝上の 0 件は何も意味しない"
     );

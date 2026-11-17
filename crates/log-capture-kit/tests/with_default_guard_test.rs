@@ -19,12 +19,10 @@
 //! 開き括弧まで含めた形で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 着手前インベントリの
 //! `rg -l` による捕捉サイト計数の母数が動く。そこで走査語は `concat!` で 2 片から組み立て、
 //! ファイルの字面には 1 度も現れないようにする（`workspace_scan/mod.rs:21-23` と同じ約束）。
-//! 自分自身を違反として拾っていないことは
-//! [`the_guard_file_itself_is_not_a_hit_because_the_tokens_are_never_spelled_out`] が、
 //! **約束そのもの**（コメントの中にも逐語で置かないこと）は
-//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が縛る。
-//! 前者だけでは足りない——[`scan_tokens`] はコメントを除去するので、コメントへ逐語で
-//! 植えても 1 件も拾わないまま `rg -l` の母数だけが動く（レビューの実測で確認済み）。
+//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が生テキストで縛る。
+//! [`scan_tokens`] はコメントを除去するので、コメントへ逐語で植えても見張りは 1 件も
+//! 拾わないまま `rg -l` の母数だけが動く（レビューの実測で確認済み）。
 //!
 //! # 例外表が暗黙に増えない形（要件 8.2）
 //!
@@ -50,7 +48,7 @@ mod workspace_scan;
 use std::collections::{BTreeMap, BTreeSet};
 
 use workspace_scan::{
-    Hit, has_dev_dependency_on, manifest_fixture, manifest_lines, mentions_crate,
+    Hit, allowed_paths, has_dev_dependency_on, manifest_fixture, manifest_lines, mentions_crate,
     production_dependencies_on, raw_occurrences, read_source, render, scan_sources, scan_tokens,
     unlisted, walk_workspace_sources, workspace_manifests,
 };
@@ -192,8 +190,8 @@ fn stale_entries(hits: &[Hit], allow: &[(&str, &str)]) -> Vec<String> {
 /// 共有 crate のパッケージ名。
 const KIT_PACKAGE: &str = "log-capture-kit";
 
-/// フィーチャ名（`Cargo.toml` に現れる引用符つきの形）。
-const FEATURE_ENV_FILTER: &str = "\"env-filter\"";
+/// フィーチャ名。TOML は `"…"` も `'…'` も許すので、引用符を含めずに照らす。
+const FEATURE_ENV_FILTER: &str = "env-filter";
 
 /// `env-filter` を宣言してよい唯一の crate。
 const ENV_FILTER_OWNER: &str = "wintf";
@@ -204,6 +202,23 @@ fn declares_env_filter_feature(src: &str) -> bool {
         !l.is_header
             && (mentions_crate(&l.text, KIT_PACKAGE) || mentions_crate(&l.section, KIT_PACKAGE))
             && l.text.contains(FEATURE_ENV_FILTER)
+    })
+}
+
+/// 共有 crate の自分の `[features]` の `default` が `env-filter` を含むか（純関数）。
+///
+/// 複数行の配列も読むため、`default` の鍵の行から次の鍵の行までを `default` の値とみる。
+fn kit_default_enables_env_filter(src: &str) -> bool {
+    let mut in_default = false;
+    manifest_lines(src).iter().any(|l| {
+        if l.is_header || l.section != "features" {
+            in_default = false;
+            return false;
+        }
+        if let Some((key, _)) = l.text.split_once('=') {
+            in_default = key.trim() == "default";
+        }
+        in_default && l.text.contains(FEATURE_ENV_FILTER)
     })
 }
 
@@ -243,7 +258,6 @@ fn the_direct_call_allow_table_declares_its_own_size_and_reasons() {
         ALLOWED_DIRECT_CALLS_COUNT,
         "例外表の件数が宣言と食い違う。項目の追加は表と件数の 2 箇所を明示的に編集すること（要件 8.2）"
     );
-    let sources = walk_workspace_sources();
     for (path, reason) in ALLOWED_DIRECT_CALLS {
         assert!(
             !reason.trim().is_empty(),
@@ -252,10 +266,6 @@ fn the_direct_call_allow_table_declares_its_own_size_and_reasons() {
         assert!(
             !path.contains('*') && path.ends_with(".rs"),
             "例外はファイル 1 件を逐語で指すこと（総括的な指定は暗黙の増加を許す）: {path}"
-        );
-        assert!(
-            sources.contains(&(*path).to_string()),
-            "例外表が実在しないファイルを指している: {path}"
         );
     }
 }
@@ -274,19 +284,6 @@ fn the_shared_crate_definition_is_the_only_excluded_region_and_it_really_holds_t
             "crates/log-capture-kit/src/global.rs".to_string(),
         ]),
         "共有機構の定義箇所が動いている。要件 1.1 は定義を 1 箇所に保つことを求めている"
-    );
-}
-
-#[test]
-fn the_guard_file_itself_is_not_a_hit_because_the_tokens_are_never_spelled_out() {
-    // 本ファイルが走査語を逐語で持つと、見張りが自分自身を拾って例外表が膨らむ。
-    let me = "crates/log-capture-kit/tests/with_default_guard_test.rs";
-    let mut tokens = direct_call_tokens();
-    tokens.extend(global_capture_tokens());
-    assert_eq!(
-        scan_sources(&[me.to_string()], &tokens),
-        Vec::new(),
-        "見張り自身が走査語を逐語で持ってしまっている（concat! で割ること）"
     );
 }
 
@@ -322,10 +319,11 @@ fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     }
     assert!(
         violations.is_empty(),
-        "走査語はコメントの中も含めて逐語で書いてはいけない。         ⒜ 見張りが自分自身を違反として拾い ⒝ 着手前インベントリの `rg -l` による         捕捉サイト計数の母数が黙って動く（コメントは見張りが除去するが `rg` は除去しない）。         concat! で 2 片に割ること:
-{}",
-        violations.join("
-")
+        "走査語はコメントの中も含めて逐語で書いてはいけない。\
+         ⒜ 見張りが自分自身を違反として拾い ⒝ 着手前インベントリの `rg -l` による\
+         捕捉サイト計数の母数が黙って動く（コメントは見張りが除去するが `rg` は除去しない）。\
+         concat! で 2 片に割ること:\n{}",
+        violations.join("\n")
     );
 }
 
@@ -362,16 +360,11 @@ fn the_all_thread_capture_table_declares_its_own_size_and_reasons() {
         ALLOWED_GLOBAL_CAPTURE_COUNT,
         "別表の件数が宣言と食い違う。項目の追加は表と件数の 2 箇所を明示的に編集すること（要件 8.2）"
     );
-    let sources = walk_workspace_sources();
     for (path, reason) in ALLOWED_GLOBAL_CAPTURE {
         assert!(!reason.trim().is_empty(), "別表には理由が要る: {path}");
         assert!(
             !path.contains('*') && path.ends_with(".rs"),
             "別表はファイル 1 件を逐語で指すこと: {path}"
-        );
-        assert!(
-            sources.contains(&(*path).to_string()),
-            "別表が実在しないファイルを指している: {path}"
         );
     }
 }
@@ -450,6 +443,39 @@ fn only_one_crate_declares_the_env_filter_feature() {
         BTreeSet::from([ENV_FILTER_OWNER.to_string()]),
         "フィーチャはワークスペースで統合されるので、1 crate が env-filter を宣言すると \
          全 crate から capture_under_filter が届く。宣言してよいのは wintf だけ"
+    );
+    // 各 crate の宣言のほかに 2 つの道がある（どちらも全 crate へ届く）。
+    assert!(
+        !kit_default_enables_env_filter(&read_source("crates/log-capture-kit/Cargo.toml")),
+        "共有 crate の [features] の default に env-filter を入れると全 crate へ届く"
+    );
+    assert!(
+        !declares_env_filter_feature(&read_source("Cargo.toml")),
+        "根の [workspace.dependencies] の共有 crate の項で env-filter を付けると \
+         workspace = true で引く全 crate へ届く"
+    );
+}
+
+#[test]
+fn the_direct_call_allow_table_has_no_duplicate_entries() {
+    // 同じパスが 2 度載ると、件数の宣言を通ったまま実質の例外が 1 件減る。
+    let unique: BTreeSet<&str> = allowed_paths(ALLOWED_DIRECT_CALLS).into_iter().collect();
+    assert_eq!(
+        unique.len(),
+        ALLOWED_DIRECT_CALLS_COUNT,
+        "例外表に重複した項目がある: {:?}",
+        allowed_paths(ALLOWED_DIRECT_CALLS)
+    );
+}
+
+#[test]
+fn the_all_thread_capture_table_has_no_duplicate_entries() {
+    let unique: BTreeSet<&str> = allowed_paths(ALLOWED_GLOBAL_CAPTURE).into_iter().collect();
+    assert_eq!(
+        unique.len(),
+        ALLOWED_GLOBAL_CAPTURE_COUNT,
+        "別表に重複した項目がある: {:?}",
+        allowed_paths(ALLOWED_GLOBAL_CAPTURE)
     );
 }
 
@@ -667,6 +693,72 @@ fn the_env_filter_feature_is_detected_only_when_it_is_actually_declared() {
     assert!(
         !declares_env_filter_feature(&other_crate),
         "共有 crate 以外の依存のフィーチャを拾ってはいけない"
+    );
+}
+
+/// TOML の 2 つの引用符（基本の文字列と、そのままの文字列）。
+const TOML_QUOTES: [char; 2] = ['"', '\''];
+
+#[test]
+fn single_quoted_env_filter_is_detected() {
+    let on = manifest_fixture(
+        "dev-dependencies",
+        "log-capture-kit = { path = '../log-capture-kit', features = ['env-filter'] }",
+    );
+    assert!(
+        declares_env_filter_feature(&on),
+        "単引用符の宣言を見落としている"
+    );
+}
+
+#[test]
+fn env_filter_in_the_kit_default_features_is_detected() {
+    for q in TOML_QUOTES {
+        let one_line = format!(
+            "[features]\ndefault = [{q}env-filter{q}]\nenv-filter = [{q}dep:tracing-subscriber{q}]\n"
+        );
+        assert!(
+            kit_default_enables_env_filter(&one_line),
+            "default の 1 行の配列を見落としている: {one_line:?}"
+        );
+        let multi_line =
+            format!("[features]\ndefault = [\n    {q}env-filter{q},\n]\nenv-filter = []\n");
+        assert!(
+            kit_default_enables_env_filter(&multi_line),
+            "default の複数行の配列を見落としている: {multi_line:?}"
+        );
+    }
+    // 今の形: フィーチャを定義するだけで default には入れない。
+    let off = "[features]\ndefault = []\nenv-filter = [\"dep:tracing-subscriber\"]\n";
+    assert!(
+        !kit_default_enables_env_filter(off),
+        "フィーチャの定義を default と誤読している"
+    );
+}
+
+#[test]
+fn env_filter_in_workspace_dependencies_is_detected() {
+    for q in TOML_QUOTES {
+        let inline = format!(
+            "[workspace.dependencies]\nlog-capture-kit = {{ path = {q}crates/log-capture-kit{q}, features = [{q}env-filter{q}] }}\n"
+        );
+        assert!(
+            declares_env_filter_feature(&inline),
+            "根の 1 行の項を見落としている: {inline:?}"
+        );
+        let sub_table = format!(
+            "[workspace.dependencies.log-capture-kit]\npath = {q}crates/log-capture-kit{q}\nfeatures = [{q}env-filter{q}]\n"
+        );
+        assert!(
+            declares_env_filter_feature(&sub_table),
+            "根の下位表の項を見落としている: {sub_table:?}"
+        );
+    }
+    // 根の今の形: 共有 crate ではない依存が env-filter を付けている。
+    let other = "[workspace.dependencies]\ntracing-subscriber = { version = \"0.3\", features = [\"env-filter\"] }\n";
+    assert!(
+        !declares_env_filter_feature(other),
+        "共有 crate ではない根の項を拾ってはいけない"
     );
 }
 
