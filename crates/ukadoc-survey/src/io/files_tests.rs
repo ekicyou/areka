@@ -5,9 +5,10 @@
 //! `Cargo.toml`。`core.autocrlf` が効く環境では作業ツリーに復帰文字が入る）を読んで
 //! 1 個も残っていないことを確かめる。⑶ 失敗が黙って通らないこと——読めないファイルの
 //! 相手には探したパスを載せた失敗が返る（要件 6.12）。⑷ 置き換え書きが、一時ファイルを
-//! 書けないときに元の本文を 1 バイトも変えないこと。
+//! 書けないときに元の本文を 1 バイトも変えず、置き換えだけが落ちたときは書きかけの
+//! 一時ファイルを残さないこと（要件 4.1）。
 //!
-//! ファイルを書くのは ⑷ の 2 本だけで、置き場はワークツリーの
+//! ファイルを書くのは ⑷ の 3 本だけで、置き場はワークツリーの
 //! `target\ukadoc-survey-tests\<テスト名>\`（テストごとに別・始めに消して作る）。
 
 use std::path::PathBuf;
@@ -243,5 +244,37 @@ fn write_lf_replaces_the_body_and_leaves_no_temp_file() {
     assert!(
         !dir.join("shiori.toml.tmp").exists(),
         "一時ファイルが残っている"
+    );
+}
+
+/// 一時ファイルは書けて置き換えだけが落ちたときは、失敗を返し、書きかけの一時ファイルを
+/// 消す。置き場を中身のあるディレクトリにすると、ファイルをその上へ置き換えられない。
+#[test]
+fn write_lf_removes_the_temp_file_when_the_rename_fails() {
+    let dir = scratch_dir("write_lf_removes_the_temp_file_when_the_rename_fails");
+    let target = dir.join("shiori.toml");
+    std::fs::create_dir(&target).expect("置き場のディレクトリを作れない");
+    std::fs::write(target.join("keep.txt"), ORIGINAL).expect("ディレクトリの中身を置けない");
+
+    let err =
+        write_lf(&target, "新しい本文\n").expect_err("ディレクトリへ置き換えられたはずがない");
+    match &err {
+        SurveyError::Io { path, reason } => {
+            assert!(
+                path.ends_with("shiori.toml"),
+                "置き場が載っていない: {path}"
+            );
+            assert!(!reason.is_empty(), "理由が空");
+        }
+        other => panic!("読み書きの失敗として返るはず: {other:?}"),
+    }
+    assert!(
+        !dir.join("shiori.toml.tmp").exists(),
+        "書きかけの一時ファイルが残っている"
+    );
+    assert_eq!(
+        std::fs::read_to_string(target.join("keep.txt")).expect("ディレクトリの中身が読めない"),
+        ORIGINAL,
+        "置き場の中身が変わった"
     );
 }

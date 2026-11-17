@@ -147,15 +147,7 @@ fn walk_excludes_build_output_and_vendored_and_git_dirs() {
             "クレートの直下の除外するディレクトリを拾っている: {path}"
         );
     }
-    // 肯定側——除外しないもの（本番・テスト・実行例）は拾えている。
-    assert!(
-        files.iter().any(|(path, _)| path.contains("/src/")),
-        "本番のソースが 1 本も無い"
-    );
-    assert!(
-        files.iter().any(|(path, _)| path.contains("/tests/")),
-        "テストのソースが 1 本も無い"
-    );
+    // 肯定側（本番とテストを拾えていること）は `walk_excludes_the_survey_crate_itself` が持つ。
 }
 
 // ---- 返す本文 ----

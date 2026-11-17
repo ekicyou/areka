@@ -298,9 +298,9 @@ fn kind_key(kind: CandidateKind) -> &'static str {
 ///
 /// [`CatalogDiff`] は 4 つの一覧しか持たない形に凍結してあり、[`diff_catalogs`] は
 /// 失敗もしない。だから「算法が違うので比べられない」を告げるのは**呼び出し側の
-/// 役目**である（`diff.rs` の冒頭の注記）。告げずに一覧を出すと、本文が 1 文字も
-/// 変わっていない項目までほぼ全件が「本文が変わった項目」に並び、読み手はそれを
-/// 本物の改訂だと受け取る。
+/// 役目**である（`diff.rs` の冒頭の注記）。算法が違うのに告げずに一覧を出すと、本文が
+/// 1 文字も変わっていない項目までほぼ全件が「本文が変わった項目」に並び、読み手はそれを
+/// 本物の改訂だと受け取る。その一文は算法が違うときだけ足す。
 ///
 /// 見るのは 2 欄。本文ハッシュの算法（[`SnapshotMeta::hash_algorithm`]）と、
 /// カタログの形の版（[`SnapshotMeta::catalog_format`]）である。どちらも揃っていれば
@@ -322,11 +322,17 @@ pub(crate) fn comparability_notice(current: &SnapshotMeta, next: &SnapshotMeta) 
     if lines.is_empty() {
         return None;
     }
-    Some(format!(
-        "注意: 2 つのカタログは同じ形で作られていない。\n{}\n\
-         「本文が変わった項目」はほぼ全件に挙がるので、そのまま改訂とは読まないこと。\n",
+    let mut out = format!(
+        "注意: 2 つのカタログは同じ形で作られていない。\n{}\n",
         lines.join("\n")
-    ))
+    );
+    // 形の版だけの違いではハッシュは同じ値なので、全件が挙がるとは言えない。
+    if current.hash_algorithm != next.hash_algorithm {
+        out.push_str(
+            "「本文が変わった項目」はほぼ全件に挙がるので、そのまま改訂とは読まないこと。\n",
+        );
+    }
+    Some(out)
 }
 
 /// 差分の標準出力（要件 8.1・8.3）。

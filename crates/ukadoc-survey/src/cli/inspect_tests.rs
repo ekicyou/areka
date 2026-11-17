@@ -26,7 +26,7 @@ use super::{
     comparability_notice, compare, examine, render_candidates, render_check, render_diff,
     render_evidence, render_evidence_by_id, verdict,
 };
-use crate::catalog::{CATALOG_FORMAT, Catalog, SnapshotMeta};
+use crate::catalog::{Catalog, SnapshotMeta};
 use crate::check::{Finding, FindingKind};
 use crate::diff::CatalogDiff;
 use crate::error::SurveyError;
@@ -548,6 +548,11 @@ fn a_catalog_built_with_another_hash_algorithm_gets_its_warning_before_the_lists
             "算法 {needle} が差分の本文に無い:\n{body}"
         );
     }
+    // 算法が違えば変わっていない本文もハッシュが変わるので、ほぼ全件が挙がると告げる。
+    assert!(
+        body.contains("ほぼ全件に挙がる"),
+        "算法の違いなのに一覧の読み方の注意が無い:\n{body}"
+    );
     let notice_at = body.find("注意").unwrap_or_else(|| {
         panic!("注意が本文に無い:\n{body}");
     });
@@ -559,41 +564,27 @@ fn a_catalog_built_with_another_hash_algorithm_gets_its_warning_before_the_lists
 }
 
 #[test]
-fn two_catalogs_of_the_same_shape_get_no_warning_in_the_diff_body() {
-    // 注意が出る側だけを確かめると、何にでも注意を出す形に壊れても緑になる。
+fn a_catalog_of_another_shape_version_only_gets_no_claim_that_almost_every_body_changed() {
+    // 算法が同じならハッシュは同じ値になるので、形の版だけが違うときに「ほぼ全件に
+    // 挙がる」と告げると、読み手は本物の改訂まで捨ててしまう。
     let current = lib_test_support::catalog();
-    let body = compare(&current, &current.clone(), &lib_test_support::ledgers());
-    assert!(
-        !body.contains("注意"),
-        "同じ形なのに注意が出ている:\n{body}"
+    let mut next = current.clone();
+    next.snapshot.catalog_format = current.snapshot.catalog_format + 1;
+
+    let expected = format!(
+        "注意: 2 つのカタログは同じ形で作られていない。\n  カタログの形の版: 現行 {} / 新しい方 {}\n\n増えた項目 0 件\n消えた項目 0 件\n本文が変わった項目 0 件\n台帳の見直しが要る項目 0 件\n",
+        current.snapshot.catalog_format, next.snapshot.catalog_format
+    );
+    assert_eq!(
+        compare(&current, &next, &lib_test_support::ledgers()),
+        expected,
+        "形の版だけが違うときの差分の版面が違う"
     );
 }
 
 // --------------------------------------------------------------------------
 // 差分（要件 8.1）と、比べられる形かどうかの見立て
 // --------------------------------------------------------------------------
-
-#[test]
-fn two_catalogs_of_the_same_shape_draw_no_warning() {
-    // 警告が出る側だけを確かめると、何にでも警告を出す形に壊れても緑になる。
-    let same = comparability_notice(
-        &meta("fnv1a64", CATALOG_FORMAT),
-        &meta("fnv1a64", CATALOG_FORMAT),
-    );
-    assert_eq!(same, None, "同じ形なのに注意が出た: {same:?}");
-}
-
-#[test]
-fn a_different_hash_algorithm_draws_a_warning_that_names_both_spellings() {
-    let notice = comparability_notice(&meta("fnv1a64", 1), &meta("xxh3", 1))
-        .expect("算法が違うのに注意が出ない");
-    for needle in ["fnv1a64", "xxh3"] {
-        assert!(
-            notice.contains(needle),
-            "注意の本文に算法 {needle} が無い: {notice}"
-        );
-    }
-}
 
 #[test]
 fn a_different_catalog_format_draws_a_warning_that_names_both_numbers() {
@@ -659,18 +650,5 @@ fn an_empty_diff_still_names_all_four_lists() {
         render_diff(&CatalogDiff::default(), None),
         expected,
         "差分が空のときの版面が変わっている"
-    );
-}
-
-#[test]
-fn the_warning_comes_before_the_four_lists() {
-    // 注意を後ろに置くと、読み手は「本文が変わった項目」を全部読んでから、それが
-    // 読む価値の無い一覧だったと知ることになる。
-    let body = render_diff(&CatalogDiff::default(), Some("注意: 比べられない"));
-    let notice_at = body.find("注意: 比べられない").expect("注意が本文に無い");
-    let first_list_at = body.find("増えた項目").expect("増えた項目の見出しが無い");
-    assert!(
-        notice_at < first_list_at,
-        "注意が一覧より後ろに出ている: {body}"
     );
 }

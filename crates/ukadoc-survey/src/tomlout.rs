@@ -57,7 +57,7 @@ use std::fmt::Write;
 /// assert_eq!(basic_string("改行\nあり"), r#""改行\u000Aあり""#);
 /// ```
 pub fn basic_string(value: &str) -> String {
-    // 逃がしで伸びる分の余地を少しだけ見ておく。
+    // 前後の引用符の分だけ見ておく。
     let mut out = String::with_capacity(value.len() + 2);
     out.push('"');
     for ch in value.chars() {

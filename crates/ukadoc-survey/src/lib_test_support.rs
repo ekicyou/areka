@@ -57,7 +57,7 @@ struct CatalogRow {
 /// 6 ページ・6 カテゴリにまたがり、**アンカー無しの 2 形**（`ukadoc:spec_shiori3`・
 /// `ukadoc:manual_shell`）も含む（要件 1.9）。版番号は 0 個・1 個・2 個の 3 通りを
 /// 揃えてある——1 通りしか無いと「版番号を 1 つに絞る」取り違えが素通りする。
-/// 見出しには逆斜線を含むものを 1 件入れてある（設計 D-10）。
+/// 見出しには逆斜線を含むものを 2 件入れてある（設計 D-10）。
 const CATALOG_ROWS: [CatalogRow; 12] = [
     CatalogRow {
         id: "ukadoc:descript_ghost:charset:1",

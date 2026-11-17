@@ -88,8 +88,8 @@ pub fn domain_report_path(domain: Domain) -> PathBuf {
 ///
 /// 常時検査の対象である。`check::freshness` が `DomainReportStale` として、このファイルの
 /// 本文を `report::summary::render_summary` の出力と**全文一致**で見張る（証拠の表は
-/// `evidence` の副手続きが出すので、突き合わせの両側はカタログと台帳 4 本だけから
-/// 決まる）。作り直さずに台帳を変えれば赤になる。
+/// `evidence` の副手続きが出すので、突き合わせの両側はカタログと台帳 4 本とテーマ名
+/// だけから決まる）。作り直さずに台帳を変えれば赤になる。
 pub fn summary_report_path() -> PathBuf {
     coverage_dir().join("report").join("summary.md")
 }
