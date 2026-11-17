@@ -66,7 +66,7 @@
   - _Dispatch: standard — 判定の分岐と文の書き直しが残る_
   - _Requirements: 3.1, 3.2, 3.3, 4.3, 6.2, 6.3_
 
-- [ ] 7. helper の終わり方を終了コードで返す（指摘 2・13 の helper の分・21⑴・10）
+- [x] 7. helper の終わり方を終了コードで返す（指摘 2・13 の helper の分・21⑴・10）
   - UNLOAD 待ちが「UNLOAD で抜けたか」を返し、helper の入口がそれと pasta を読めたかから終了コードを決める（UNLOAD で抜け読めていた＝0・UNLOAD が来ず上限で抜けた＝4・UNLOAD で抜けたが読めていなかった＝5）。4 と 5 は抜けるときに記録を出す
   - helper の数え・応答の上限の欄・状態とその型・検体の場所の写しを消し、selftest の最後の確かめを待ちの戻り値で行う（期限で偽・終わりの印を立てた後に真）
   - 「sender が有効ならそれを優先」の説明を「RESPONSE は起動時に受けた親の HWND へ返す」に直す。送りの上限は helper の定数（5 秒）にし、helper の窓から `ipc::DEFAULT_TIMEOUT` を読まない。`helper_window.rs` の `#![allow(dead_code)]` と古い注記を消す
