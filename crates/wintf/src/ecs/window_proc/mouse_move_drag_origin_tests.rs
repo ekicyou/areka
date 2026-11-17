@@ -11,7 +11,7 @@ use crate::ecs::pointer::PhysicalPoint;
 fn live(start: (i32, i32), inset: (f32, f32)) -> DraggingState {
     DraggingState {
         drag_start_pos: PhysicalPoint::new(start.0, start.1),
-        initial_window_pos: inset,
+        initial_window_pos: Some(inset),
     }
 }
 
@@ -39,6 +39,21 @@ fn live_inset_is_rounded_to_the_nearest_integer() {
     let (origin, _) =
         dragging_window_origin(Point { x: 0, y: 0 }, PhysicalPoint::new(0, 0), Some(&state));
     assert_eq!(origin, Point { x: 101, y: -21 });
+}
+
+#[test]
+fn live_state_without_initial_pos_falls_back_to_the_snapshot_origin() {
+    // 始めの位置が分からない live は (0,0) でなく控えの左上を読む（始めのカーソルは live の値）。
+    let state = DraggingState {
+        drag_start_pos: PhysicalPoint::new(55, 66),
+        initial_window_pos: None,
+    };
+    let got = dragging_window_origin(
+        Point { x: 300, y: 400 },
+        PhysicalPoint::new(10, 20),
+        Some(&state),
+    );
+    assert_eq!(got, (Point { x: 300, y: 400 }, PhysicalPoint::new(55, 66)));
 }
 
 #[test]

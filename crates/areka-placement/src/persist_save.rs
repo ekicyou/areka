@@ -30,7 +30,7 @@ use super::{
 ///
 /// [`SylphyaPublisher`] は `Clone + Send`（内部 `std::sync::mpsc::Sender`）だが `Sync` を仮定せず、
 /// UI スレッド専有の規律とも一致するため **NonSend** リソースとして World に持たせる（design C1
-/// State Management・軸B）。書く呼び手 4 か所（`persist` のモジュールの doc に並べる。3 か所は [`persist_entries`]、
+/// State Management・軸B）。書く呼び手 3 か所（`persist` のモジュールの doc に並べる。2 か所は [`persist_entries`]、
 /// 並べ終えた時点の保存はその本体 `send_entries`）が、この publisher の clone 送信端から保存 entries を
 /// 投函する（[`forget_entries`] も同じ）。
 pub struct PersistWiring {

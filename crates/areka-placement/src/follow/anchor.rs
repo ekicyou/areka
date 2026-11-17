@@ -46,7 +46,7 @@ fn bottom_snap(raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -
 }
 
 /// 変換 T: 解決済みアンカー＋生位置＋新寸から、アンカー辺を work area 対応辺へ
-/// 固定した窓左上位置を返す純粋射影（5 アンカー・task 2.1・Req1.1/1.2/2.1-2.5/3.4/5.4）。
+/// 固定した窓左上位置を返す純粋射影（5 アンカー・areka-P0-surface-resize-resnap Req1.1/1.2/2.1-2.5/3.4/5.4）。
 ///
 /// シェル座標系（アンカー辺基準）→ ウィンドウ座標系（サーフェス寸法基準）の変換 T の
 /// 恒常維持を担う純粋関数（World 不可視・物理 px 単一通貨・`saturating_*` 演算で
@@ -59,17 +59,17 @@ fn bottom_snap(raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -
 /// `wa` は「生位置 `raw` に置いた窓矩形の中心が属するモニタの work area」
 /// （[`work_area_for_window`]）。モニタ跨ぎは live 算出＝跨いだ先の対応辺へ再吸着する。
 /// - `Bottom`: 下端吸着の私有の関数へ**委譲**（X 保持・`y = wa.bottom − h`）。
-///   再定義しない（Req1.2・bottom は T の一事例）。
+///   再定義しない（areka-P0-surface-resize-resnap Req1.2・bottom は T の一事例）。
 /// - `Top`: `x = raw.x`（保持）・`y = wa.top`。
 /// - `Left`: `x = wa.left`・`y = raw.y`（保持）。
 /// - `Right`: `x = wa.right − w`・`y = raw.y`（保持）。
-/// - `Free`: `raw` 素通し（identity・position 再計算なし・Req2.5）。
+/// - `Free`: `raw` 素通し（identity・position 再計算なし・areka-P0-surface-resize-resnap Req2.5）。
 ///
 /// # graceful degradation（identity＝`raw` 素通し・panic しない・下端吸着と同じ流儀）
 ///
 /// - `Free` は常に identity（`wa` 不要・寸法・snapshot を問わない）。
 /// - 非正寸（w≤0 or h≤0）は identity＋`debug!`。`wa.right − w`／`wa.bottom − h` が
-///   `i32::MAX` 方向へ暴走する前に弾く（Req3.4・下端吸着の CW_USEDEFAULT
+///   `i32::MAX` 方向へ暴走する前に弾く（areka-P0-surface-resize-resnap Req3.4・下端吸着の CW_USEDEFAULT
 ///   センチネル縮退と整合）。
 /// - `snapshot` 不在（`None`）／空 snapshot（[`work_area_for_window`] が `None`）は
 ///   identity＋`debug!`。ドラッグ経路 spam 回避で `warn!` でなく `debug!`（既存流儀）。
@@ -84,12 +84,12 @@ pub fn project_anchor(
     size: SizePx,
     snapshot: Option<&MonitorSnapshot>,
 ) -> PointPx {
-    // Free: アンカー辺なし＝常に identity（wa 不要・寸法・snapshot を問わない・Req2.5）
+    // Free: アンカー辺なし＝常に identity（wa 不要・寸法・snapshot を問わない・areka-P0-surface-resize-resnap Req2.5）
     if let Anchor::Free = anchor {
         return raw;
     }
 
-    // Bottom: 下端吸着の関数へ全面委譲（再定義しない・Req1.2）。縮退規約
+    // Bottom: 下端吸着の関数へ全面委譲（再定義しない・areka-P0-surface-resize-resnap Req1.2）。縮退規約
     // （snapshot 不在/空・非正寸）も同じ関数が所有し、T の bottom 事例＝同値になる
     if let Anchor::Bottom = anchor {
         return bottom_snap(raw, size, snapshot);
@@ -120,17 +120,17 @@ pub fn project_anchor(
     };
 
     match anchor {
-        // 上端固定・X 保持（Req2.2）
+        // 上端固定・X 保持（areka-P0-surface-resize-resnap Req2.2）
         Anchor::Top => PointPx {
             x: raw.x,
             y: wa.top,
         },
-        // 左端固定・Y 保持（Req2.3）
+        // 左端固定・Y 保持（areka-P0-surface-resize-resnap Req2.3）
         Anchor::Left => PointPx {
             x: wa.left,
             y: raw.y,
         },
-        // 右端固定（left_X = wa.right − w）・Y 保持（Req2.4）。極端入力でも panic
+        // 右端固定（left_X = wa.right − w）・Y 保持（areka-P0-surface-resize-resnap Req2.4）。極端入力でも panic
         // しない契約で saturating_sub（下端吸着の bottom−h と同型の防波堤）
         Anchor::Right => PointPx {
             x: wa.right.saturating_sub(size.w),
@@ -145,8 +145,8 @@ pub fn project_anchor(
 ///
 /// 全 char 窓へ 1 つだけ付与される 5 値アンカー表現（`Anchor` は 5 値ゆえ、二値
 /// `BottomSnap` marker を generalize した後継。単一真実源＝二つ目の格納表現を作らない・
-/// Req1.6）。値は spawn 時に `config.alignment` 由来（`ScopePlacement.anchor`＝
-/// `Anchor::from_alignment` の解決結果）で焼き込まれ（付与は spawn の領分・task 3.1）、
+/// areka-P0-surface-resize-resnap Req1.6）。値は spawn 時に `config.alignment` 由来（`ScopePlacement.anchor`＝
+/// `Anchor::from_alignment` の解決結果）で焼き込まれ（付与は spawn の領分）、
 /// runtime は seriko（本 spec 非所有＝`\![set,alignmenttodesktop]` の routing）が
 /// 書き換える。本番のアンカーの変化は `reseed` が書き換えた後に `resize_window_to` で書く
 /// （`Changed<Anchored>` に反応する `anchor_changed_system` は schedule に登録しない書き方の見本）。

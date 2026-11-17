@@ -31,8 +31,10 @@ const DROP: Point = Point { x: -1500, y: 1000 };
 /// 窓の位置の式（wndproc・`drag_follow` と同じ形）: 始めの左上を整数で読み、カーソルの差を足す。
 fn top_left_at(drag: &DraggingState, cursor: Point) -> Point {
     Point {
-        x: drag.initial_window_pos.0 as i32 + (cursor.x - drag.drag_start_pos.x),
-        y: drag.initial_window_pos.1 as i32 + (cursor.y - drag.drag_start_pos.y),
+        x: drag.initial_window_pos.expect("前提: 始めの窓位置がある").0 as i32
+            + (cursor.x - drag.drag_start_pos.x),
+        y: drag.initial_window_pos.expect("前提: 始めの窓位置がある").1 as i32
+            + (cursor.y - drag.drag_start_pos.y),
     }
 }
 
@@ -59,7 +61,7 @@ fn dragging_char0() -> (FrameHarness, bevy_ecs::entity::Entity, DraggingState) {
     let top_left = pos_of(&harness.world, window).expect("前提: キャラ窓に位置がある");
     let drag = DraggingState {
         drag_start_pos: Point::new(top_left.x + GRAB.0, top_left.y + GRAB.1),
-        initial_window_pos: (top_left.x as f32, top_left.y as f32),
+        initial_window_pos: Some((top_left.x as f32, top_left.y as f32)),
     };
     harness.world.entity_mut(window).insert(drag);
     (harness, window, drag)
@@ -74,7 +76,7 @@ fn drag_of(harness: &FrameHarness, window: bevy_ecs::entity::Entity) -> Dragging
 }
 
 /// DraggingState は比べる形を持たないので、2 つの欄を組で比べる。
-fn fields(drag: DraggingState) -> (Point, (f32, f32)) {
+fn fields(drag: DraggingState) -> (Point, Option<(f32, f32)>) {
     (drag.drag_start_pos, drag.initial_window_pos)
 }
 
@@ -134,8 +136,8 @@ fn a_dragging_char_window_rescales_its_grab_point_with_the_measured_shape() {
         "始めのカーソルが変わった"
     );
     let grab_after = (
-        drag.drag_start_pos.x - drag.initial_window_pos.0 as i32,
-        drag.drag_start_pos.y - drag.initial_window_pos.1 as i32,
+        drag.drag_start_pos.x - drag.initial_window_pos.unwrap().0 as i32,
+        drag.drag_start_pos.y - drag.initial_window_pos.unwrap().1 as i32,
     );
     assert_eq!(grab_after, (169, 605), "掴んだ点が比で置き直っていない");
 
@@ -176,6 +178,23 @@ fn resizing_a_window_that_is_not_dragged_keeps_the_grab_point() {
     assert_eq!(fields(drag_of(&harness, window)), fields(before_drag));
 }
 
+/// 始めの位置が分からない（`None`）ドラッグ中に大きさが変わっても、`None` のまま置き直さない
+/// （要件 2.1・2.3・2.8・9.6）。
+#[test]
+fn an_unknown_start_position_stays_none_when_the_size_changes() {
+    let (mut harness, window, _) = dragging_char0();
+    let unknown = DraggingState {
+        drag_start_pos: Point::new(10, 20),
+        initial_window_pos: None,
+    };
+    harness.world.entity_mut(window).insert(unknown);
+    assert!(
+        write_size(&mut harness, window, AFTER),
+        "前提: 大きさの書き込みが起きる"
+    );
+    assert_eq!(fields(drag_of(&harness, window)), fields(unknown));
+}
+
 /// バルーン窓の大きさの書き込みでは置き直さない。
 #[test]
 fn a_balloon_window_size_write_keeps_the_grab_point() {
@@ -184,7 +203,7 @@ fn a_balloon_window_size_write_keeps_the_grab_point() {
     let top_left = pos_of(&harness.world, balloon).expect("前提: バルーン窓に位置がある");
     let drag = DraggingState {
         drag_start_pos: Point::new(top_left.x + 40, top_left.y + 30),
-        initial_window_pos: (top_left.x as f32, top_left.y as f32),
+        initial_window_pos: Some((top_left.x as f32, top_left.y as f32)),
     };
     harness.world.entity_mut(balloon).insert(drag);
     assert!(

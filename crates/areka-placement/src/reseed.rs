@@ -25,13 +25,16 @@ use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::config::build_placement_config;
 use super::diag::PlacementRoute;
+use super::dpi_sync::DpiSyncHold;
 use super::face_windowposition::mark_by_base;
 use super::follow::{
     AnchorSource, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
-    resize_window_to, sync_drag_writer, work_area_for_window,
+    rect_at, resize_window_to, sync_drag_writer, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
-use super::resolver::{Anchor, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
+use super::resolver::{
+    Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
+};
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, BalloonLimit, GhostWindows};
 use super::{ScopeWindowPositions, scale_then_merge};
@@ -275,8 +278,22 @@ fn monitor_snapshot(world: &World) -> MonitorSnapshot {
 /// 後段の再スナップは窓寸が変わらないと置き直さないので、揃え方だけが変わった差し替え
 /// （bottom → top など）はここで直す。揃え方も窓寸も同じなら [`resize_window_to`] がべき等に
 /// 読み飛ばす。窓寸の読めない窓は `warn!`（`event = "reseed_skipped"`）を残して読み飛ばす。
+///
+/// 整合待ちの札（[`DpiSyncHold`]）のある窓は置き直さず `debug!`（`event = "reseed_held"`・scope）を
+/// 残す——札は古い作業領域で射影した位置を書かないためにあり、札が外れるフレームの拡大率の相が
+/// 入れ直した揃え方で置く（`PlacementRoute::AnchorChange` は見送りが覆う経路のまま）。
 pub fn reanchor_char_windows(world: &mut World, windows: &GhostWindows) {
     for scope in windows.scopes() {
+        if let Some(char_window) = windows.char_window(scope)
+            && world.get::<DpiSyncHold>(char_window).is_some()
+        {
+            debug!(
+                event = "reseed_held",
+                scope,
+                "reseed: 整合待ちの札のある窓は置き直さない（札が外れるフレームに新しい揃え方で置く）"
+            );
+            continue;
+        }
         let size = windows
             .char_window(scope)
             .and_then(|c| Some((c, world.get::<WindowPos>(c)?.size?)));
@@ -344,12 +361,13 @@ fn running_scope(
         char_window,
         balloon_window,
         char_pos,
-        char_rect: RectPx {
-            left: char_pos.x,
-            top: char_pos.y,
-            right: char_pos.x.saturating_add(char_size.w),
-            bottom: char_pos.y.saturating_add(char_size.h),
-        },
+        char_rect: rect_at(
+            PointPx {
+                x: char_pos.x,
+                y: char_pos.y,
+            },
+            char_size,
+        ),
         input: ScopeInput {
             scope,
             char_size,

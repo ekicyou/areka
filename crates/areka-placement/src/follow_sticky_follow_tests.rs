@@ -1,4 +1,4 @@
-//! 窓の組の連れ動きの純関数とドラッグの書き手（task 1.3・要件 2.4／4.2／5.2・設計の決め 12）。
+//! 窓の組の連れ動きの純関数とドラッグの書き手（areka-P0-window-link-directives 要件 2.4／4.2／5.2・設計の決め 12）。
 
 use std::collections::BTreeSet;
 

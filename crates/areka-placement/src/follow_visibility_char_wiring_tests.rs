@@ -17,28 +17,28 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// 遷移ガードの**配線**（task 6.1・S3 是正・Req 3.1/3.2/3.3・D5/D6/D13）
+// 遷移ガードの**配線**（`areka-P0-dpi-window-vanish` 要件 3.1/3.2/3.3・S3 是正・D5/D6/D13）
 //
-// task 2.2 は `guard_visibility`／`work_area_for_window_with_origin` を純関数として
+// `areka-P0-dpi-window-vanish` のタスク 2.2 は `guard_visibility`／`work_area_for_window_with_origin` を純関数として
 // 用意したが**本番呼出はゼロ**だった（diagnosis-report.md §1.3「純関数が在ることは
 // S3 の充足ではない」）。本節が檻に入れるのは純関数の判定規則ではなく、
 // **`resize_window_to` の中でそれが実際に走るか・どの route で走るか**である。
 //
 // 檻の要点（空虚化を避けるための自己検査を各檻が持つ）:
 //   (1) 探針の自己検査——ガード**無し**の提案が本当に全 work area 非交差であること
-//       （交差する探針では ClampX 腕へ一度も入らず「緑」が何も意味しない・[[2.2 の教訓]]）
-//   (2) 位置の不変条件——clamp 後の矩形がいずれかの work area と交差する（Req 3.1）
+//       （交差する探針では ClampX 腕へ一度も入らず「緑」が何も意味しない・`areka-P0-dpi-window-vanish` タスク 2.2 の教訓）
+//   (2) 位置の不変条件——clamp 後の矩形がいずれかの work area と交差する（`areka-P0-dpi-window-vanish` 要件 3.1）
 //   (3) route による発火条件——適用外 route（`MoveCue`／`Restore` 等）とドラッグ経路
 //       では**位置が素の射影と 1 bit も違わない**こと。ログ側の否定 assert だけに
-//       依存しない（[[5.2 の教訓＝空虚性 6 例目]]: 不変量がログ側にしか無いと
+//       依存しない（`areka-P0-dpi-window-vanish` タスク 5.2 の教訓＝空虚性 6 例目: 不変量がログ側にしか無いと
 //       別ファイルの水準変更で守りが消える）
 //   (4) 判定語のリテラル——手順書 §3.3 の grep 語を檻側にも literal で持つ
-//       （[[5.1 → 7.2 の申し送り]]「判定語に使っているのに檻が無い」型の再発防止）
+//       （`areka-P0-dpi-window-vanish` タスク 5.1 → 7.2 の申し送り「判定語に使っているのに檻が無い」型の再発防止）
 //
-// 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（Req 5.6）。
+// 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（`areka-P0-dpi-window-vanish` 要件 5.6）。
 // -------------------------------------------------------------------------
 
-/// **Req 3.1 の本体**: 非ドラッグの配置系（D13 帰結⑴。守りが効くのは `is_system_reanchor` の 7 経路で、ここで回すのはそのうち 4 つ）では、全 work area
+/// **`areka-P0-dpi-window-vanish` 要件 3.1 の本体**: 非ドラッグの配置系（D13 帰結⑴。守りが効くのは `is_system_reanchor` の 7 経路で、ここで回すのはそのうち 4 つ）では、全 work area
 /// 非交差への遷移が X の clamp で阻止され、`warn!` が 1 行残る。
 ///
 /// Y は射影 T の所有ゆえ 1 bit も動かない（[`guard_visibility`] の事後条件）。
@@ -70,11 +70,11 @@ fn visibility_guard_clamps_x_on_non_drag_placement_routes() {
             let (ok, events) = capture(|| resize_window_to(&mut world, e, new, route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
-            // (2) 位置の不変条件（Req 3.1）: 書かれた矩形はどこかの work area と交差する。
+            // (2) 位置の不変条件（`areka-P0-dpi-window-vanish` 要件 3.1）: 書かれた矩形はどこかの work area と交差する。
             let pos = point_of(&world, e);
             assert!(
                 visible_in(&layout, pos, new),
-                "dpi={dpi} route={route}: Req 3.1 違反——{pos:?} は全 work area と非交差"
+                "dpi={dpi} route={route}: areka-P0-dpi-window-vanish 要件 3.1 違反——{pos:?} は全 work area と非交差"
             );
             assert_eq!(
                 pos.y, bare.y,
@@ -91,7 +91,7 @@ fn visibility_guard_clamps_x_on_non_drag_placement_routes() {
                 "dpi={dpi} route={route}: clamp 先が射影の work area {wa:?} の外: {pos:?}"
             );
 
-            // (4) 判定語: ClampX の warn が 1 行・水準は WARN（Req 3.1/3.2 の観測）。
+            // (4) 判定語: ClampX の warn が 1 行・水準は WARN（`areka-P0-dpi-window-vanish` 要件 3.1/3.2 の観測）。
             let clamped = expect_one(&events, CLAMP_TAG);
             assert_eq!(
                 clamped.level,
@@ -102,7 +102,7 @@ fn visibility_guard_clamps_x_on_non_drag_placement_routes() {
     }
 }
 
-/// **Req 3.1 の裏面（D13 帰結⑵）**: 明示操作系・非配置系の route では、位置が素の
+/// **`areka-P0-dpi-window-vanish` 要件 3.1 の裏面（D13 帰結⑵）**: 明示操作系・非配置系の route では、位置が素の
 /// 射影と 1 bit も違わず、ガードのログも 1 行も出ない。
 ///
 /// `MoveCue`（`\![move]`）と `Restore`（位置復元）を引き戻すのは、スクリプト／
@@ -145,7 +145,7 @@ fn visibility_guard_does_not_fire_on_explicit_or_non_placement_routes() {
     }
 }
 
-/// **ドラッグ経路は従来の水準のまま**（Req 3.3 の水準分岐・D5）: ユーザーが自分で
+/// **ドラッグ経路は従来の水準のまま**（`areka-P0-dpi-window-vanish` 要件 3.3 の水準分岐・D5）: ユーザーが自分で
 /// 帯へ運んだ窓は引き戻されず、毎イベント発火する経路に `warn!` を増やさない。
 #[test]
 fn drag_path_neither_clamps_nor_warns_when_leaving_every_work_area() {
@@ -199,7 +199,7 @@ fn drag_path_neither_clamps_nor_warns_when_leaving_every_work_area() {
     }
 }
 
-/// **Req 3.2**: 最近傍フォールバック（窓中心がどのモニタにも属さない＝モニタ構成
+/// **`areka-P0-dpi-window-vanish` 要件 3.2**: 最近傍フォールバック（窓中心がどのモニタにも属さない＝モニタ構成
 /// 情報と実画面の食い違いの兆候）は、非ドラッグ経路で `warn!` へ昇格する。
 ///
 /// この探針は **clamp を伴わない**（提案矩形は work area と交差したまま）——
@@ -321,7 +321,7 @@ fn run_offscreen_reprojection(
     events
 }
 
-/// **要件 5.5（記録の側）**: どの work area とも交差しない位置に居た窓が最近傍モニタへ
+/// **`areka-P0-dpi-transition-atomicity` 要件 5.5（記録の側）**: どの work area とも交差しない位置に居た窓が最近傍モニタへ
 /// 引き寄せられたことを、非ドラッグ経路で `warn!` として残す（位置は変えない）。
 #[test]
 fn an_offscreen_projection_input_warns_on_a_non_drag_route() {
@@ -454,7 +454,7 @@ fn a_bottom_snapped_resize_whose_input_center_sits_on_the_work_area_bottom_stays
     }
 }
 
-/// **Req 3.3**: 位置決定に必要な入力（モニタ work area）が取得できない場合は、
+/// **`areka-P0-dpi-window-vanish` 要件 3.3**: 位置決定に必要な入力（モニタ work area）が取得できない場合は、
 /// 位置を変更せず現状のまま `warn!` を残す（架空の可視領域を発明しない）。
 ///
 /// `MonitorSnapshot` 不在／空 snapshot のいずれでも、射影 T は identity へ縮退
@@ -492,7 +492,7 @@ fn missing_work_area_holds_position_and_warns_on_non_drag_route() {
             assert_eq!(
                 warned.level,
                 tracing::Level::WARN,
-                "dpi={dpi} {label}: 入力欠落が warn として残っていない（Req 3.3）"
+                "dpi={dpi} {label}: 入力欠落が warn として残っていない（areka-P0-dpi-window-vanish 要件 3.3）"
             );
             assert!(
                 guard_events(&events, CLAMP_TAG).is_empty(),
@@ -525,7 +525,7 @@ fn missing_work_area_stays_silent_on_guard_exempt_routes() {
     }
 }
 
-/// **旧矩形『不明』は `Option::None` だけではない**（[[4.6 の教訓]]）: wintf の
+/// **旧矩形『不明』は `Option::None` だけではない**（`areka-P0-dpi-window-vanish` タスク 4.6 の教訓）: wintf の
 /// [`WindowPos::default`] は寸を `Some(CW_USEDEFAULT)`（＝`i32::MIN` センチネル）で
 /// 持つ。これを素の矩形として交差判定へ入れると退化矩形が「もともと画面外に
 /// 留置されていた」と誤判定され、**安全側 clamp の腕が丸ごと死ぬ**。
@@ -572,14 +572,14 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
 
 // -------------------------------------------------------------------------
 // 位置の未確定表現（`CW_USEDEFAULT`）をキャラ窓経路でも打ち切る
-// （task 6.3・S3 補・D15・Req 3.1/3.3）
+// （`areka-P0-dpi-window-vanish` 要件 3.1/3.3・S3 補・D15）
 //
 // `resize_window_to` 手順 3 は `WindowPos.position` の `Option::None` しか縮退させて
 // おらず、wintf 正典の**もう一つの未確定表現**（`CW_USEDEFAULT` ＝ `i32::MIN`・
 // `WindowPos::default()` が position に持つ）を素通ししていた。素通しすると
 //   ① 手順 3a の `old_rect` が `i32::MIN` 近傍の全 work area 非交差矩形になり、
 //      `guard_visibility` が「もともと留置されていた」と誤読して `Keep` へ落ちる
-//      ＝**6.1 が敷いた安全側 clamp の腕が黙って死ぬ**
+//      ＝**`areka-P0-dpi-window-vanish` タスク 6.1 が敷いた安全側 clamp の腕が黙って死ぬ**
 //   ② 手順 3b の中央付替えと射影 T の入力（raw）も同時に汚染される
 // D15 は (b) **resize 打ち切り**を採る——位置未確定は「保存すべき接地点が存在しない」
 // ゆえ、`Option::None` と同じ腕（`warn!`＋`false`）へ合流させて①②を一括で断つ。
@@ -589,7 +589,7 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
 //       確実に書込まで進むこと（進まないなら「打ち切れた」は何も意味しない）
 //   (2) 書込ゼロの直接観測——`WindowPos` が呼出前後で**完全一致**（`PartialEq`）
 //   (3) `warn!` ちょうど 1 件——ログ側の守りを位置 assert と二段構えにする
-//       （[[5.2 の教訓＝空虚性 6 例目]]／[[6.2 の教訓＝檻の空虚性]]）
+//       （`areka-P0-dpi-window-vanish` タスク 5.2 の教訓＝空虚性 6 例目／タスク 6.2 の教訓＝檻の空虚性）
 //   (4) **符号判定への変異の検出**——左モニタは `-1920..0` ＝負座標そのものは正当。
 //       実在する負座標の窓が打ち切られないことを独立の檻で固定する
 //
@@ -663,7 +663,7 @@ fn assert_control_position_writes(dpi: i32, new: SizePx) {
 /// **位置がセンチネルの窓は log-first で打ち切る**（D15 採用案 (b)）: 戻り値 `false`・
 /// `WindowPos` 書込ゼロ・`warn!` ちょうど 1 件。
 ///
-/// 是正前はここで安全側 `ClampX` が走り、`clamp_x_into(i32::MIN, .., wa)` が返す
+/// 是正前はここで安全側 `ClampX` が走り、`clamp_axis(i32::MIN, wa.left, ..)` が返す
 /// `wa.left` が**位置権威の無い窓へ書き込まれて**いた（＝位置権威の僭称）。
 #[test]
 fn undetermined_position_aborts_resize_without_writing() {
@@ -706,7 +706,7 @@ fn undetermined_position_aborts_resize_without_writing() {
             assert_eq!(
                 *world.get::<WindowPos>(e).expect("WindowPos があるはず"),
                 before,
-                "dpi={dpi} {label}: 打ち切りのはずが WindowPos へ書き込まれている（Req 3.3 の現状維持違反）"
+                "dpi={dpi} {label}: 打ち切りのはずが WindowPos へ書き込まれている（areka-P0-dpi-window-vanish 要件 3.3 の現状維持違反）"
             );
             let warned = expect_one(&events, POSITION_SENTINEL_TAG);
             assert_eq!(

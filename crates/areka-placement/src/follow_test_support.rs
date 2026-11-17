@@ -9,6 +9,11 @@ use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 use super::{MonitorSnapshot, project_anchor};
 use crate::resolver::RectPx;
+use crate::test_support::SharedFakeIo;
+// 写しを消して共有の部品を使う（使い手は従来どおりこの経路から引ける）。
+pub(super) use crate::shared_test_support::assert_no_event;
+pub(crate) use crate::test_support::zorder_pair_deferred::code_only;
+pub(super) use crate::test_support::{contained, point};
 use log_capture_kit::CapturedEvent;
 
 // -------------------------------------------------------------------------
@@ -34,7 +39,7 @@ pub(super) fn window_pos_at(x: i32, y: i32) -> WindowPos {
 }
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
-pub(super) fn position_of(world: &World, entity: Entity) -> Point {
+pub(crate) fn position_of(world: &World, entity: Entity) -> Point {
     world
         .get::<WindowPos>(entity)
         .expect("WindowPos があるはず")
@@ -42,7 +47,7 @@ pub(super) fn position_of(world: &World, entity: Entity) -> Point {
         .expect("position があるはず")
 }
 
-pub(super) fn drag_event(target: Entity) -> DragEvent {
+pub(crate) fn drag_event(target: Entity) -> DragEvent {
     DragEvent {
         target,
         start_position: Point::new(0, 0),
@@ -76,7 +81,7 @@ pub(super) fn odd_edge_snapshot() -> MonitorSnapshot {
 }
 
 // -------------------------------------------------------------------------
-// bottom 吸着ドラッグ（task 8.2R・4.7・DD15 v2: 単一ライター）
+// bottom 吸着ドラッグ（areka-P0-window-placement 要件 4.7・DD15 v2: 単一ライター）
 //
 // BottomSnap キャラ窓は DragConfig{move_window:false}＝wndproc は窓を動かさず、
 // on_char_drag が DraggingState（dispatch_drag_events が挿入）＋DragEvent の
@@ -90,8 +95,24 @@ pub(super) fn odd_edge_snapshot() -> MonitorSnapshot {
 pub(super) fn dragging_state(initial_window: (i32, i32), drag_start: (i32, i32)) -> DraggingState {
     DraggingState {
         drag_start_pos: Point::new(drag_start.0, drag_start.1),
-        initial_window_pos: (initial_window.0 as f32, initial_window.1 as f32),
+        initial_window_pos: Some((initial_window.0 as f32, initial_window.1 as f32)),
     }
+}
+
+/// 偽の HWND では wintf の開始の腕が始めの窓位置を取れず `None` で入る。製品と同じく
+/// 始めの位置を窓の位置（枠の無い偽の窓では `WindowPos.position`）にする観測者を足す。
+/// 挿入の場で書くので、開始と終了を同じ配りで流す速いドラッグにも効く。
+pub(crate) fn drag_origin_at_window(world: &mut World) {
+    world.add_observer(
+        |on: On<Insert, DraggingState>, mut q: Query<(&mut DraggingState, &WindowPos)>| {
+            if let Ok((mut ds, wp)) = q.get_mut(on.entity)
+                && let Some(p) = wp.position
+            {
+                ds.initial_window_pos
+                    .get_or_insert((p.x as f32, p.y as f32));
+            }
+        },
+    );
 }
 
 /// カーソル座標付き DragEvent（start_position は DraggingState と同値・実 flow 準拠）。
@@ -105,7 +126,7 @@ pub(super) fn drag_event_at(target: Entity, start: (i32, i32), cursor: (i32, i32
 }
 
 /// 最終カーソル座標付き DragEndEvent。
-pub(super) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEvent {
+pub(crate) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEvent {
     DragEndEvent {
         target,
         position: Point::new(cursor.0, cursor.1),
@@ -115,7 +136,7 @@ pub(super) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEv
 }
 
 /// position＋size 付きの WindowPos（spawn の `window_pos` と同型）。
-pub(super) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
+pub(crate) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
     WindowPos {
         position: Some(Point { x, y }),
         size: Some(SizeI::new(w, h)),
@@ -125,20 +146,20 @@ pub(super) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 
 // -------------------------------------------------------------------------
 // work_area_for_window_with_origin ／ guard_visibility
-// （task 2.2・D6/S3・S3′・Req 3.1/3.2/5.1/5.3/5.6）
+// （areka-P0-dpi-window-vanish 要件 3.1/3.2/5.1/5.3/5.6・D6/S3・S3′）
 //
-// 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く（Req 5.6）。
+// 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く（areka-P0-dpi-window-vanish 要件 5.6）。
 // 座標は 96/120/192 の各水準へスケールした合成レイアウト上で構築し、96 の
-// 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質・Req 5.1）に依存しない。
+// 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質・areka-P0-dpi-window-vanish 要件 5.1）に依存しない。
 // -------------------------------------------------------------------------
 
 use crate::resolver::{Anchor, PointPx, SizePx};
 
-/// DPI 水準（Req 5.1: 96 のほかに 120・192 を必ず含む）。
+/// DPI 水準（areka-P0-dpi-window-vanish 要件 5.1: 96 のほかに 120・192 を必ず含む）。
 pub(super) const DPIS: [i32; 3] = [96, 120, 192];
 
 /// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制。
-/// `resolver_test_support.rs` の `px()` が donor・Req 5.6）。
+/// `resolver_test_support.rs` の `px()` が donor・areka-P0-dpi-window-vanish 要件 5.6）。
 pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     assert_eq!(
         (logical * dpi) % 96,
@@ -148,7 +169,7 @@ pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     logical * dpi / 96
 }
 
-/// 混在 DPI マルチモニタの合成レイアウト（Req 5.1/5.3）。
+/// 混在 DPI マルチモニタの合成レイアウト（areka-P0-dpi-window-vanish 要件 5.1/5.3）。
 ///
 /// - index 0: 96 水準の左モニタ。**負座標**（`-1920..0`）・上端 40px の
 ///   非対称 work area（`top = -40`）
@@ -187,10 +208,6 @@ pub(super) fn balloon_size(dpi: i32) -> SizePx {
         w: px(500, dpi),
         h: px(300, dpi),
     }
-}
-
-pub(super) fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
 }
 
 /// 位置＋寸 → 窓矩形（テスト側の独立実装＝実装の `rect_at` を再利用しない）。
@@ -235,9 +252,9 @@ pub(super) fn size_of(world: &World, entity: Entity) -> SizeI {
 
 /// 手順書 §3.3 の grep 判定語（**本体の定数とは独立にここへ literal で置く**）。
 pub(super) const CLAMP_TAG: &str = "[visibility-guard] ClampX";
-/// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格・Req 3.2）。
+/// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格・areka-P0-dpi-window-vanish 要件 3.2）。
 pub(super) const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
-/// 同上（work area を解決できず判定不能・Req 3.3）。
+/// 同上（work area を解決できず判定不能・areka-P0-dpi-window-vanish 要件 3.3）。
 pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 /// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
 /// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
@@ -295,7 +312,7 @@ pub(super) fn visible_in(layout: &MonitorSnapshot, pos: PointPx, size: SizePx) -
 }
 
 /// 現在位置を [`PointPx`] で読む（檻の比較単位を射影の単位へ揃える）。
-pub(super) fn point_of(world: &World, entity: Entity) -> PointPx {
+pub(crate) fn point_of(world: &World, entity: Entity) -> PointPx {
     let p = position_of(world, entity);
     PointPx { x: p.x, y: p.y }
 }
@@ -315,7 +332,7 @@ pub(super) fn guard_events<'a>(
 // 範囲の中のテストに写してあった組み立て（audit-placement-follow・指摘 16）
 // -------------------------------------------------------------------------
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
@@ -359,14 +376,6 @@ pub(super) fn max_pos(area: RectPx, size: SizePx) -> PointPx {
         x: area.right - size.w,
         y: area.bottom - size.h,
     }
-}
-
-/// 4 辺内包しているか（檻側の独立実装）。
-pub(super) fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x + size.w <= area.right
-        && pos.y + size.h <= area.bottom
 }
 
 /// limit の檻の基準となる 1 scope ぶんの配置（恒等式 `balloon_offset ≡ balloon_pos − char_pos` 成立）。
@@ -414,19 +423,6 @@ pub(super) fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
     world_with(base_placement(balloon_limit), odd_edge_snapshot())
 }
 
-/// `needle` を含むログが 1 件も無いこと。
-pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&str> = events
-        .iter()
-        .map(CapturedEvent::message)
-        .filter(|m| m.contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
-    );
-}
-
 /// 縦横同じ値の DPI。
 pub(super) fn dpi(v: u16) -> DPI {
     DPI::from_dpi(v, v)
@@ -461,15 +457,6 @@ pub(super) fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
     (world, e, old_pos)
 }
 
-/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
-pub(crate) fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// 実行時のモニタ表 1 台（3200×1800・96・主モニタ。作業領域の下端だけが関心）。
 pub(crate) fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
     Monitor {
@@ -491,22 +478,13 @@ pub(crate) fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
     }
 }
 
-/// アクターへ渡す口と観測する口が同じストアを指す偽の IO。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 実 publisher（`spawn_sylphya`）と、同じ所を読み戻す口の組。
 pub(super) struct SylphyaRig {
     pub(super) parts: SylphyaParts,
     roots: ScopeRoots,
     reader: Box<dyn PersistIo>,
+    /// 偽の記憶のときだけ: アクターへ渡した口の clone（commit の回数を数える）。
+    fake_io: Option<SharedFakeIo>,
 }
 
 impl SylphyaRig {
@@ -517,15 +495,17 @@ impl SylphyaRig {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
+        let io = SharedFakeIo::new(store.clone());
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
+            io: Box::new(io.clone()),
             runtime_sink: None,
         });
         Self {
             parts,
             roots,
-            reader: Box::new(SharedFakeIo(store)),
+            reader: Box::new(SharedFakeIo::new(store)),
+            fake_io: Some(io),
         }
     }
 
@@ -544,6 +524,7 @@ impl SylphyaRig {
             parts,
             roots,
             reader: Box::new(FsPersistIo),
+            fake_io: None,
         }
     }
 
@@ -561,6 +542,18 @@ impl SylphyaRig {
             .barrier()
             .expect("barrier should resolve while actor is alive");
         load_scope(PersistScope::Ghost, &self.roots, self.reader.as_ref())
+    }
+
+    /// 投函済みの保存が書き終わってから、記憶へ commit した回数（偽の記憶のときだけ）。
+    pub(super) fn commit_count(&self) -> usize {
+        self.parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+        self.fake_io
+            .as_ref()
+            .expect("commit の回数は偽の記憶（fake）でだけ数える")
+            .commit_count()
     }
 
     /// 正典終了（アクター join）。
