@@ -3,8 +3,7 @@ use std::cell::Cell;
 use super::test_support::{boot_finished, opaque_count, variant_name};
 use super::{
     ActorKey, CloseReason, Duration, Instant, PresentCommand, Progress, RecordedCall, SpineHarness,
-    capture_logs, count_level, join_bounded, run_attach_phase, run_bounded_watching,
-    run_text_phase, shell_target, wait_until, wait_until_with,
+    join_bounded, run_bounded_watching, run_text_phase, shell_target, wait_until, wait_until_with,
 };
 
 // ===========================================================================
@@ -72,17 +71,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     let actor = ActorKey::from("0");
 
     // ── attach（shell/balloon 装着・text actor 登録）: S1 と同じ planned==attached==2 前提 ──
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
-        "S2 前提: attach 完了（planned=2 attached=2）が観測できない: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach で ERROR なし: {logs:?}"
-    );
+    harness.attach_all();
 
     // ── シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: `\s[2100]` 適用前の shell
     //    scope0 は未表示＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。 ──

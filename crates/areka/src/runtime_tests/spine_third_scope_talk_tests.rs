@@ -2,9 +2,10 @@
 //! 終了の台本の後に「終了」で終わる（spec: areka-P0-emily-ghost-verification 要件 4.1・4.2・4.5・
 //! 6.7・タスク 3.2・設計「会話が止まらないテスト」）。
 //!
-//! えみりの形の固定入力（`char2.name`・`char2.*`〜`char4.*` を持つ）から配置の設定が返す scope は
-//! 0・1 だけになった（タスク 3.1）。窓と資産はその scope だけで組まれ、台本の `\p[2]` は「窓も
-//! バルーンも無い scope」を指す。本檻はその形の結線（scripted SHIORI・実 sink・実 presenter）に、
+//! 足場（`SpineHarness`）はえみりの形を使わず、emo2 の 2 scope（0・1）で窓と資産を組む。えみりの形の
+//! 固定入力（`char2.name`・`char2.*`〜`char4.*` を持つ）から配置の設定が返す scope も 0・1 だけに
+//! なった（タスク 3.1）ので、足場の窓の scope はえみりの形と同じになり、台本の `\p[2]` は「窓も
+//! バルーンも無い scope」を指す。本檻はその結線（scripted SHIORI・実 sink・実 presenter）に、
 //! scope 2 を挟む起動の台本と終了の台本を流し、次を確かめる:
 //!
 //! 1. scope 2 の合図は areka の側まで届き（shell 表示対象 `shell_target(2)` への面の指令）、
@@ -29,8 +30,8 @@ use shiori_host32_host::ExitKind;
 
 use super::{
     CloseReason, Duration, GhostWindows, LoopDriver, PresentCommand, Progress, RecordedCall,
-    ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal, capture_logs,
-    run_attach_phase, shell_target, show_gate, wait_until,
+    ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal, shell_target, show_gate,
+    wait_until,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
 use crate::session::ghost_quit::run_ghost_quit_phase;
@@ -190,8 +191,8 @@ fn assert_ran_past_scope_two(seen: &TalkSeen, third_surface: u32, what: &str) {
     unreachable!("{what}: 上の 3 つの表明は ran_past_scope_two と同じ式");
 }
 
-/// えみりの形の配置（scope 0・1 の窓だけ）で、`\p[2]` を挟む起動の会話が最後まで進み、`\p[2]` を
-/// 挟んで `\-` で終わる終了の会話の後に「終了」で終わる。
+/// 足場の窓の scope（emo2 の 0・1）がえみりの形の配置と同じであるうえで、`\p[2]` を挟む起動の
+/// 会話が最後まで進み、`\p[2]` を挟んで `\-` で終わる終了の会話の後に「終了」で終わる。
 ///
 /// # 非空虚性
 ///
@@ -206,7 +207,8 @@ fn assert_ran_past_scope_two(seen: &TalkSeen, third_surface: u32, what: &str) {
 fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
     let (mut harness, key) = third_scope_backend();
 
-    // ── 配置はえみりの形の固定入力が返す scope と同じ（0・1 だけ・窓もバルーンも scope 2 には無い） ──
+    // ── 足場の窓は emo2 の 2 scope。その scope がえみりの形の固定入力が返す scope と同じ
+    //    （0・1 だけ・窓もバルーンも scope 2 には無い）ことを確かめる ──
     let fixture_scopes = emily_shaped_scopes();
     assert_eq!(
         fixture_scopes,
@@ -216,14 +218,9 @@ fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
     let window_scopes: Vec<usize> = harness.world.resource::<GhostWindows>().scopes().collect();
     assert_eq!(
         window_scopes, fixture_scopes,
-        "結線の窓はえみりの形の配置と同じ scope で立っている"
+        "足場の窓（emo2 の 2 scope）の scope がえみりの形の配置と同じ"
     );
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
-        "装着は scope 0・1 の 2 つだけ（planned=2 attached=2）: {logs:?}"
-    );
+    harness.attach_all();
     assert_eq!(
         harness.wiring.balloon_model_scopes(),
         vec![0, 1],

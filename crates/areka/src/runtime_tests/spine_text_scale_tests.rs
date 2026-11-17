@@ -1,7 +1,7 @@
 use super::test_support::bump_balloon_window_dpi;
 use super::{
-    BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, capture_logs,
-    run_attach_phase, run_dpi_phase, run_text_phase, run_text_scale_phase, shell_target,
+    BindSet, PatternState, PresentCommand, SpineHarness, balloon_target, run_attach_phase,
+    run_dpi_phase, run_text_phase, run_text_scale_phase, shell_target,
 };
 
 /// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝表示状態が未確立は前提違反ゆえ panic）。
@@ -24,11 +24,7 @@ fn balloon_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
 fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     let mut harness = SpineHarness::boot(r"\s[0]\e");
 
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter().any(|l| l.contains("attached=2")),
-        "前提: attach 完了（balloon の不可視のままの確立＝文字層 actor 登録済み）が観測できない: {logs:?}"
-    );
+    harness.attach_all();
 
     // attach 相はバルーンを不可視のまま確立する（`areka-P0-balloon-visibility` Requirement 1.1）。
     // 本ケースの主題は**可視**バルーンの DPI 変化ゆえ、その前提をここで明示的に組む——不可視のままだと
@@ -104,11 +100,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
 fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
     let mut harness = SpineHarness::boot(r"\s[0]\e");
 
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter().any(|l| l.contains("attached=2")),
-        "前提: attach 完了が観測できない: {logs:?}"
-    );
+    harness.attach_all();
     let k_attached = balloon_applied_scale(&harness, 0);
     assert!(
         run_text_scale_phase(&mut harness.wiring, &mut harness.world).is_empty(),

@@ -11,7 +11,8 @@
 //
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
 // 相手ファイルの doc の語も入るので、当てる先を間違えると検査が恒真になる
-// （task 3.1 の教訓。各檻の末尾に両方向の対照を置いてある）。
+// （task 3.1 の教訓。zwi08 の末尾に両方向の対照を置いてある。zwi05 が読む `areka-runtime` の
+// `src/lib.rs` の対照は、同じ字面を `areka-runtime` の `frame_schedule_tests.rs` が持つ）。
 //
 // 到達性（zwi01／02）・相順（zwi06／07）・基底を据える順（zwi09）は、`areka-runtime` の
 // 同じ名前のファイルにある。
@@ -54,20 +55,6 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     assert!(
         squeezed.contains("lifecycle_rx, zorder_rx,"),
         "受信端が受け渡し構造（RuntimeWiring::new）へ渡されていない＝取り出しの相が読む先が無い"
-    );
-
-    // 対照——落とし過ぎ／落とし漏れが無いこと。
-    assert!(
-        code.contains("pub fn wire_runtime("),
-        "説明文を落とす処理が本文まで落としている"
-    );
-    assert!(
-        !code.contains("完成済み 5 トラックのエンジン"),
-        "説明文が落ちていない（走査が恒真になっている）"
-    );
-    assert!(
-        raw.contains("完成済み 5 トラックのエンジン"),
-        "対照の前提が崩れている（素の全文に説明文が無い）"
     );
 }
 

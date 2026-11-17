@@ -2,7 +2,7 @@ use shiori_host32_host::ExitKind;
 
 use super::{
     LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness, capture_logs,
-    count_level, run_attach_phase, run_text_phase, wait_until,
+    run_text_phase, wait_until,
 };
 
 // ===========================================================================
@@ -75,17 +75,7 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、DD-12 の
     //    「計画件数＝実装着件数」を装着サマリで観測する（縮退がバグを隠さない檻・R8.1）。 ──
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
-        "attach 到達（planned=2 attached=2＝全 scope のシェル装着成功）が観測できない: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach フェーズで ERROR が発火した（装着失敗・log-first）: {logs:?}"
-    );
+    harness.attach_all();
 
     // ── (4) ハンドル生存: seriko worker 稼働中・dispatcher は再度 Tick を受理する ──
     assert!(
@@ -119,12 +109,7 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     let mut harness = SpineHarness::boot(r"\s[0]こんにちは\e");
 
     // 字の提示（文節の折り返しなら warn の分岐）を踏めるよう、先に装着しておく。
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach で ERROR なし: {logs:?}"
-    );
+    harness.attach_all();
 
     // 受け取りの行の後に本番の字の適用が届き、その後の回で提示まで回したら止める（空回しの字の適用は
     // 受け取りの行より前に出る）。warn 0 件の判定が、字を提示した後の回まで覆うようにするため。

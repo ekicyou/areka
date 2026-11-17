@@ -3,7 +3,7 @@ use std::cell::Cell;
 
 use super::{
     BindSet, Duration, PresentCommand, Progress, SpineHarness, TargetId, balloon_target,
-    capture_logs, count_level, run_attach_phase, settle_bounded, shell_target, wait_until,
+    settle_bounded, shell_target, wait_until,
 };
 
 /// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
@@ -79,17 +79,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
 
     // attach フェーズ: DD-12 の planned==attached==2 を装着サマリで観測（縮退がバグを隠さない檻）。
     // attach は Tick 非依存（GPU 資源＋GhostWindows ゲートのみ）ゆえ boot 直後に直接駆動する。
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
-        "DD-12: 計画件数＝実装着件数（planned=2 attached=2・期待 scope 数の全 target 完了）が観測できない: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach で ERROR が発火（装着失敗・log-first）: {logs:?}"
-    );
+    harness.attach_all();
 
     // (a-2) 文字層 k 再追従の再利用源（emo-dpi-scaling D11-3・R8.1）: attach 相は装着した各 scope の
     //       `BalloonModel` を `RuntimeWiring` へ記憶する。文字層スケール相（`run_text_scale_phase`）はこれを再利用して
@@ -197,12 +187,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
 fn spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface() {
     let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free（可視化の契機を台本側から与えない）
 
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach で ERROR が発火（装着失敗・log-first）: {logs:?}"
-    );
+    harness.attach_all();
     let scopes = harness.wiring.balloon_model_scopes();
     assert_eq!(
         scopes,
@@ -267,11 +252,7 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     let mut harness = SpineHarness::boot(r"\b[-1]\b[0]\e");
 
     // 先に attach（balloon target を生成・面 surface0 を不可視のまま確立）。
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter().any(|l| l.contains("attached=2")),
-        "S3 前提: attach 完了（balloon target 生成）が観測できない: {logs:?}"
-    );
+    harness.attach_all();
 
     // attach 初期面（surface0）の balloon readback を基準として捕捉（非全透明）。
     let baseline = harness
@@ -392,17 +373,7 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
     let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free（シェル面 cue のみ）
 
     // S1 経路: attach 完走（planned==attached==2）＋ shell/balloon readback 非全透明。
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter()
-            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
-        "S4: boot→表示（attach 完走・planned=2 attached=2）が観測できない: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "attach で ERROR なし: {logs:?}"
-    );
+    harness.attach_all();
     // シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: attach 直後は未表示
     // ＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。
     assert!(

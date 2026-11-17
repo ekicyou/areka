@@ -72,7 +72,6 @@ use log_capture_kit::{LineFormat, capture_lines};
 use crate::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::ExitKind;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{DPI, GraphicsCore, Point, WindowPos, WucGraphicsResource};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
@@ -98,12 +97,8 @@ use areka_runtime::target_map::{balloon_target, shell_target};
 
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU・R8.4）。
 ///
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
+/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。テストのスレッドは `runtime_tests/mod.rs` が据えるプロセスの寿命の MTA に居るので、ここでは COM を初期化しない。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 fn make_world_with_gpu() -> (GpuPermit, World) {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
     let gpu = GpuPermit::take();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
@@ -123,7 +118,7 @@ fn make_world_with_gpu() -> (GpuPermit, World) {
 ///
 /// 実 `ClockedTextSink<EmoTextSink>` の UI ドレイン（`spawn_emo_text` の pump アクター）を
 /// headless に駆動できることを裏付ける定石。sink 生存中は複数セッション実行できる。
-fn pump_until_idle() {
+pub(super) fn pump_until_idle() {
     // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
     unsafe { PostQuitMessage(0) };
     MessageLoop::run(|_, _| FilterResult::Forward);
@@ -506,6 +501,25 @@ impl SpineHarness {
             sample,
             gpu,
         }
+    }
+
+    /// 装着の相（`run_attach_phase`）を 1 回回し、装着の前提を確かめる（DD-12 の縮退がバグを隠さない檻・R8.1）。
+    ///
+    /// 確かめるのは 3 つ: 装着の相のログを捕まえる・`planned=2 attached=2`（足場が立てる emo2 の
+    /// 2 scope の全部が装着された）・ERROR 0 件（装着失敗・log-first）。
+    #[track_caller]
+    fn attach_all(&mut self) {
+        let logs = capture_logs(|| run_attach_phase(&mut self.wiring, &mut self.world));
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("planned=2") && l.contains("attached=2")),
+            "装着の前提（planned=2 attached=2＝足場の 2 scope の全部の装着）が観測できない: {logs:?}"
+        );
+        assert_eq!(
+            count_level(&logs, "ERROR"),
+            0,
+            "装着の相で ERROR が出た（装着失敗・log-first）: {logs:?}"
+        );
     }
 
     /// 文字層 UI アクターの pending メッセージを headless に drain する（実 ClockedTextSink 経路）。

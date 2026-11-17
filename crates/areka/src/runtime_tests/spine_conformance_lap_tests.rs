@@ -71,7 +71,7 @@ use super::test_support::boot_finished;
 use super::{
     ActorKey, CloseReason, Entity, GhostWindows, LoopDriver, Point, PresentCommand, RecordedCall,
     RecordedStatus, ScriptedShioriHandle, SpineHarness, TalkLifecycleSignal, WindowPos, World,
-    all_shown, capture_logs, count_level, give_fake_handles, run_attach_phase, run_move_drain_with,
+    all_shown, give_fake_handles, run_move_drain_with,
 };
 use areka_kanade::{ChoiceInput, MouseButton, MouseEventKind, MouseInput};
 
@@ -568,17 +568,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     collect_display(&mut display, boot);
 
     // ── 段 2: 装着（装着相を直接駆動し、起動挨拶を再生し切る） ──
-    let logs = capture_logs(|| run_attach_phase(&mut sink.harness.wiring, &mut sink.harness.world));
-    assert!(
-        logs.iter()
-            .any(|line| line.contains("planned=2") && line.contains("attached=2")),
-        "段「装着」の完了条件が成立しない（計画件数と実装着件数が一致しない）: {logs:?}"
-    );
-    assert_eq!(
-        count_level(&logs, "ERROR"),
-        0,
-        "段「装着」で ERROR が出ている: {logs:?}"
-    );
+    sink.harness.attach_all();
     let watch = Rc::clone(&observed);
     // この段が再生側へ届かせる会話は 1 本——起動挨拶（`OnBoot` の応答）である。
     let talks_target = observed.borrow().talks_started + 1;

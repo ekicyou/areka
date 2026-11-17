@@ -2,8 +2,8 @@ use super::test_support::{bump_char_window_dpi, opaque_count, variant_name};
 use std::cell::Cell;
 
 use super::{
-    Duration, LoopRng, PresentCommand, Progress, SpineHarness, capture_logs, run_attach_phase,
-    run_dpi_phase, settle_bounded, shell_target, wait_until,
+    Duration, LoopRng, PresentCommand, Progress, SpineHarness, run_dpi_phase, settle_bounded,
+    shell_target, wait_until,
 };
 
 /// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・actor.rs／looper.rs `always_fire` と同旨）。
@@ -473,11 +473,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     );
 
     // 実 attach（視覚資源を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
-    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
-    assert!(
-        logs.iter().any(|l| l.contains("attached=2")),
-        "前提: attach 完了が観測できない: {logs:?}"
-    );
+    harness.attach_all();
     drive_shell_shown_and_presented(&mut harness, 2100);
 
     let base_k0 = harness

@@ -29,11 +29,11 @@ mod doc_tables {
     };
     use bevy_ecs::world::World;
     use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-    use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-    use wintf::executor::{FilterResult, MessageLoop};
 
     use crate::log_history::{FieldText, Kind, TARGET_ERROR, draft};
     use crate::mcp::check_script_judge::diagnose;
+    // この中の汲み尽くしは背骨の足場（`spine.rs`）のものを使う。
+    use crate::runtime_tests::spine::pump_until_idle;
     use areka_runtime::consumer_ledger::ConsumerLedger;
     use areka_runtime::shell_box_assets::ShellBoxAssets;
     use areka_runtime::strict_judges::ArekaStrictJudges;
@@ -144,13 +144,6 @@ element1,balloon,a,0,0
         fn from(_: ChoiceWaiting) -> Self {
             Notice
         }
-    }
-
-    /// このスレッドの待ち行列に積まれた伝言を全部汲んでから抜ける（`spine.rs` の `pump_until_idle` と同じ定石）。
-    fn pump_until_idle() {
-        // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-        unsafe { PostQuitMessage(0) };
-        MessageLoop::run(|_, _| FilterResult::Forward);
     }
 
     /// 台本を strict で最後まで（選択肢で終わるなら選択待ちまで）再生し、残った strict の記録を順に返す。
