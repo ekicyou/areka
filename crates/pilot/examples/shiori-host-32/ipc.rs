@@ -9,10 +9,10 @@
 //! - HWND は下 32 ビット（`hwnd_to_u32`）の `to_le_bytes` で運ぶ。
 //! - 送りは `SendMessageTimeoutW`（`SMTO_ABORTIFHUNG` ＋上限）で、ハングしない。
 
-// 親だけが使う受け皿・1 往復の送りと、helper だけが使う DEFAULT_TIMEOUT が残る間は外せない。
+// helper だけが使う DEFAULT_TIMEOUT が残る間は外せない。
 #![allow(dead_code)]
 
-use core::cell::{Cell, RefCell};
+use core::cell::Cell;
 use core::time::Duration;
 use std::time::Instant;
 
@@ -167,89 +167,7 @@ pub unsafe fn copydata_payload(lparam: LPARAM) -> Option<(u32, Vec<u8>)> {
 }
 
 // ============================================================================
-// 4. 受け皿セル（ResponseSlot）＋ 1 往復の送り（send_request）
-// ============================================================================
-
-/// 親の応答の窓の手続きと `send_request` が共有する、同時に 1 つだけの応答の置き場。
-///
-/// 窓の手続きは応答をここへ入れて**すぐ戻る**だけで、跨プロセスの `SendMessage` を出さない
-/// （REQUEST 待ち ⊃ RESPONSE 受け、の入れ子だけなので循環待ちが無い）。UI スレッド固定ゆえ
-/// 内部可変は `RefCell` で足りる。
-#[derive(Default)]
-pub struct ResponseSlot {
-    inner: RefCell<Option<Vec<u8>>>,
-}
-
-impl ResponseSlot {
-    pub fn new() -> Self {
-        Self {
-            inner: RefCell::new(None),
-        }
-    }
-
-    /// 送る直前に空にする（前の往復の残りを消す）。
-    pub fn clear(&self) {
-        *self.inner.borrow_mut() = None;
-    }
-
-    /// 応答の窓の手続きが RESPONSE の中身を入れる。
-    pub fn store(&self, bytes: Vec<u8>) {
-        *self.inner.borrow_mut() = Some(bytes);
-    }
-
-    /// 送りが戻った後に取り出す（1 回で消える）。
-    pub fn take(&self) -> Option<Vec<u8>> {
-        self.inner.borrow_mut().take()
-    }
-}
-
-/// 1 往復の送り。`slot` を空にして REQUEST を送り、送りが戻った後に `slot` を取る。
-///
-/// 送りで待つ間に、helper の RESPONSE（2 通目の WM_COPYDATA）が親の窓の手続きへ入れ子で届き、
-/// 手続きが `slot.store()` する。`slot` は親の応答の窓の手続きが入れる受け皿と同じでなければ
-/// ならない。送りが 0 を返したときと、受け皿が空のときは `Err(Timeout)`。
-pub fn send_request(
-    target: HWND,
-    self_hwnd: HWND,
-    tag: MsgTag,
-    payload: &[u8],
-    timeout: Duration,
-    slot: &ResponseSlot,
-) -> Result<Vec<u8>, IpcError> {
-    slot.clear();
-
-    let cds = COPYDATASTRUCT {
-        dwData: tag.as_u32() as usize,
-        cbData: payload.len() as u32,
-        lpData: payload.as_ptr() as *mut core::ffi::c_void,
-    };
-    let timeout_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
-    let mut result: usize = 0;
-    // SAFETY: &cds と payload は本呼び出しの間生きている。SMTO_ABORTIFHUNG＋timeout でハングしない。
-    let ret: LRESULT = unsafe {
-        SendMessageTimeoutW(
-            target,
-            WM_COPYDATA,
-            WPARAM(self_hwnd.0 as usize),
-            LPARAM(&cds as *const COPYDATASTRUCT as isize),
-            SMTO_ABORTIFHUNG,
-            timeout_ms,
-            Some(&mut result as *mut usize),
-        )
-    };
-
-    if ret.0 == 0 {
-        return Err(IpcError::Timeout);
-    }
-
-    match slot.take() {
-        Some(bytes) => Ok(bytes),
-        None => Err(IpcError::Timeout),
-    }
-}
-
-// ============================================================================
-// 5. 待ち（pump_until）
+// 4. 待ち（pump_until）
 // ============================================================================
 
 /// 待ちのタイマーの ID（窓ごとの ID なので、窓の持ち主のほかのタイマーと重ならない値）。
@@ -490,22 +408,5 @@ mod tests {
             elapsed < Duration::from_secs(1),
             "期限を待たずに抜ける: {elapsed:?}"
         );
-    }
-
-    /// 受け皿セル: clear→take=None、store→take=Some（1 回で消える）、clear が残りを消す。
-    #[test]
-    fn response_slot_clear_store_take_semantics() {
-        let slot = ResponseSlot::new();
-        assert_eq!(slot.take(), None);
-        slot.clear();
-        assert_eq!(slot.take(), None);
-
-        slot.store(b"Value: hello".to_vec());
-        assert_eq!(slot.take().as_deref(), Some(&b"Value: hello"[..]));
-        assert_eq!(slot.take(), None);
-
-        slot.store(b"stale".to_vec());
-        slot.clear();
-        assert_eq!(slot.take(), None);
     }
 }

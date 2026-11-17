@@ -39,7 +39,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ipc::MsgTag;
-use parent_window::{ParentMessageWindow, ParentShared};
+use parent_window::ParentMessageWindow;
 use process_host::{ExitKind, HelperHandle, ProcessHost};
 use std::pin::Pin;
 
@@ -80,7 +80,7 @@ fn main() {
 
     // --- 異常系セルフテストモード（task 5.2・design.md §521 IPC / §528 helper 異常終了）---
     // `--selftest-errors` で 2 つの異常系を観測する:
-    //   (1) IPC タイムアウト（要件 2.3）: 無応答 target へ send_request が bounded に Timeout を返す。
+    //   (1) IPC タイムアウト（要件 2.3）: 無応答 target へ send_copydata が bounded に Timeout を返す。
     //   (2) helper 強制終了検出（要件 1.4/2.4）: 実 i686 helper を kill し親が異常終了を検出。
     // いずれも **ハングしない**（bounded）ことが本質。両方 PASS で exit 0。
     if std::env::args().any(|a| a == "--selftest-errors") {
@@ -227,7 +227,7 @@ struct HelperSession<'p> {
 /// b. ProcessHost::spawn（real parent HWND を u32 で渡す）→ helper が HELLO を送る。
 /// c. 親ループを HELLO 受領まで pump（HWND ハンドシェイク・bounded・ハングしない）。
 /// d. Shiori3Codec::build_onboot → OnBoot SHIORI/3.0 bytes。
-/// e. send_request（REQUEST 送出 → RESPONSE 再入受領・受け皿セル方式・design.md §209）。
+/// e. parent.request（REQUEST 送出 → RESPONSE 再入受領・受け皿セル方式・design.md §209）。
 /// f. parse_value → Value を取り出す（go 基準(1) 観測）。
 fn drive_go_criterion_1<'p>(
     parent: &'p ParentMessageWindow,
@@ -272,27 +272,19 @@ fn drive_go_criterion_1<'p>(
     //    親はここで SendMessageTimeout にブロックし、待機中に helper の RESPONSE を
     //    親 WndProc が再入受領して受け皿セルへ格納する（デッドロック回避・§210）。
     //    ★ 観測記録（task 6.1・design.md §492/§495・research.md §6）:
-    //      `send_request` 直前〜直後の実時間を計測する。ここは SendMessageTimeout で
+    //      `parent.request` 直前〜直後の実時間を計測する。ここは SendMessageTimeout で
     //      helper の RESPONSE 再入受領まで**親が同期ブロック**する区間そのもの。非自明な
     //      往復時間の後に**同一同期呼び出し内で**有効な Value が返る＝親は pasta の応答を
     //      待った（GET=block-on-reply）ことの実証（fire-and-forget ではない）。
-    let shared = parent.shared();
-    let slot = shared.response_slot();
     let req_started = Instant::now();
-    let response = ipc::send_request(
-        helper_hwnd,
-        parent_hwnd,
-        MsgTag::Request,
-        &onboot,
-        REQUEST_TIMEOUT,
-        slot,
-    )
-    .map_err(|e| {
-        format!(
-            "OnBoot 1 往復に失敗: {e:?}（再入受領が i686↔x64 で不成立の可能性・design.md §210 \
-             Revalidation Trigger＝named pipe 後退を人間判断）"
-        )
-    })?;
+    let response = parent
+        .request(helper_hwnd, &onboot, REQUEST_TIMEOUT)
+        .map_err(|e| format!("OnBoot 1 往復の送りに失敗: {e:?}"))?
+        .ok_or_else(|| {
+            "OnBoot は送れたが RESPONSE が受け皿に届かなかった（再入受領が i686↔x64 で不成立の可能性・\
+             design.md §210 Revalidation Trigger＝named pipe 後退を人間判断）"
+                .to_string()
+        })?;
     let request_roundtrip = req_started.elapsed();
     println!("[go(1)] RESPONSE 再入受領 OK（{} バイト）", response.len());
     println!(
@@ -449,7 +441,7 @@ fn drive_selftest_errors(ghostdir: &Path) -> Result<(), String> {
 ///
 /// 別スレッド上に **無応答（wedged）** message-only 窓を立て、その WndProc が REQUEST 受領時に
 /// `ERR_WEDGE_SLEEP`(3s) スリープしてブロックする（＝無応答 helper の模擬）。main スレッドから
-/// 短い `ERR_IPC_TIMEOUT`(500ms) で `ipc::send_request` を撃ち、`Err(IpcError::Timeout)` が
+/// 短い `ERR_IPC_TIMEOUT`(500ms) で `ipc::send_copydata` を撃ち、`Err(IpcError::Timeout)` が
 /// **タイムアウト時間で**返ること（wedge の 3s を待たずに abort＝ハングしない）を観測する。
 ///
 /// SendMessageTimeout は**別スレッド**宛なら caller を実際にブロックし `timeout_ms` を honor する
@@ -518,22 +510,19 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
     // ここは短い固定待ち（bounded）で十分。
     std::thread::sleep(Duration::from_millis(100));
 
-    // send_request に渡す受け皿（応答は来ない＝single-in-flight・take は None になる）。
-    let slot = ipc::ResponseSlot::new();
     // self_hwnd は形式上の送信元（wedged 窓は使わない）。適当な非 0 でよいが、正当性のため
     // wedge_hwnd を流用（WPARAM に載るだけ・応答は来ないので無関係）。
     let self_hwnd = wedge_hwnd;
 
-    // ★ 観測: 短い timeout で send_request。wedge(3s) を待たず timeout(500ms) 付近で
+    // ★ 観測: 短い timeout で send_copydata。wedge(3s) を待たず timeout(500ms) 付近で
     //   Err(Timeout) が返ること＝ハングしない（要件 2.3・design.md §340）。
     let started = Instant::now();
-    let result = ipc::send_request(
+    let result = ipc::send_copydata(
         wedge_hwnd,
         self_hwnd,
         MsgTag::Request,
         b"GET SHIORI/3.0\r\nID: OnBoot\r\n\r\n",
         ERR_IPC_TIMEOUT,
-        &slot,
     );
     let elapsed = started.elapsed();
 
@@ -574,9 +563,8 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
         Err(other) => Err(format!(
             "err(1) 不成立: 期待は IpcError::Timeout だが {other:?} が返った（elapsed={elapsed:?}）"
         )),
-        Ok(bytes) => Err(format!(
-            "err(1) 不成立: 無応答 wedge に対し応答が返った（{} バイト・Timeout であるべき）",
-            bytes.len()
+        Ok(()) => Err(format!(
+            "err(1) 不成立: 無応答 wedge への送りが通った（elapsed={elapsed:?}・Timeout であるべき）"
         )),
     }
 }
@@ -660,21 +648,20 @@ fn drive_err_helper_abnormal_exit(ghostdir: &Path) -> Result<(), String> {
 /// 失敗しても go(2) は致命扱いしない（生存＋clean unload が本質・これは「まだ動く」補足観測）。
 fn mid_window_probe(session: &HelperSession) -> Result<usize, ()> {
     let onboot = shiori3::build_onboot(std::path::Path::new(""));
-    let shared: Pin<&ParentShared> = session.parent.shared();
-    match ipc::send_request(
-        session.helper_hwnd,
-        session.parent_hwnd,
-        MsgTag::Request,
-        &onboot,
-        REQUEST_TIMEOUT,
-        shared.response_slot(),
-    ) {
-        Ok(resp) => {
+    match session
+        .parent
+        .request(session.helper_hwnd, &onboot, REQUEST_TIMEOUT)
+    {
+        Ok(Some(resp)) => {
             println!(
                 "[go(2)] 生存後の追加 REQUEST に helper が応答（{} バイト）＝ループは生存後も稼働中",
                 resp.len()
             );
             Ok(resp.len())
+        }
+        Ok(None) => {
+            eprintln!("[go(2)] 追加 REQUEST は送れたが応答なし（補足観測のみ・致命ではない）");
+            Err(())
         }
         Err(e) => {
             eprintln!("[go(2)] 追加 REQUEST は失敗（補足観測のみ・致命ではない）: {e:?}");
