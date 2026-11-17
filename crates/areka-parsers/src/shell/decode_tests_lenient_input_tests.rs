@@ -11,8 +11,9 @@ use super::{
 // --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
 //
 // 検証範囲（要件 2.3/4.5/4.6/6.3/8.2/9.2/10.4）:
-// - element の overlay・base 以外のメソッド・collisionex は値化せず passthrough で吸収する
-//   （モデルに materialize しない・要件 4.5/6.3/10.4）。この 2 経路のフィルタは task 1.2 でも不変。
+// - element の overlay・base 以外のメソッドは値化せず passthrough で吸収する
+//   （モデルに materialize しない・要件 4.5/10.4）。正しい書式の collisionex は値になる
+//   （collisionex-regions 要件 1・8.8。読みの檻の本体は `decode_collisionex_tests.rs`）。
 // - pattern メソッド（overlay/replace 等）・未認識 interval キーワード（sometimes 等）は
 //   task 1.2 で overlay フィルタ／fallback-Bind を撤去し、吸収でなく忠実転記へ転じた
 //   （method＝field[1] verbatim・未認識 interval＝`Interval::Other(原文)`・要件 4.6/8.2）。
@@ -73,32 +74,43 @@ fn unknown_interval_only_line_is_transcribed_as_other() {
     assert!(shell.surfaces[0].animations[0].patterns.is_empty());
 }
 
-/// `collisionex` 行（円/楕円/多角形）は materialize されない一方、同一ブロック内の
-/// 純 `collisionN` 矩形は保持される（要件 6.3・passthrough 吸収）。
+/// 正しい書式（名前が 2 番目の欄）の `collisionex` 行は値になり、同一ブロック内の
+/// 純 `collisionN` 矩形と書いた順に並ぶ（collisionex-regions 要件 1.1・1.8・8.8）。
 #[test]
-fn collisionex_is_absorbed_but_plain_collision_survives() {
+fn collisionex_becomes_value_beside_plain_collision_in_written_order() {
     let input = "\
 surface1000
 {
-collisionex0,ellipse,10,20,30,40,Face
+collisionex0,Face,ellipse,10,20,30,40
 collision1,80,140,260,300,Bust
 }
 ";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // collisionex は値化されず、純 collision1 矩形だけが残る。
     assert_eq!(
         shell.surfaces[0].collisions,
-        vec![Collision {
-            index: 1,
-            shape: CollisionShape::Rect(CollisionBounds {
-                left: 80,
-                top: 140,
-                right: 260,
-                bottom: 300
-            }),
-            name: CollisionName::new("Bust".to_string()),
-        }]
+        vec![
+            Collision {
+                index: 0,
+                shape: CollisionShape::Ellipse(CollisionBounds {
+                    left: 10,
+                    top: 20,
+                    right: 30,
+                    bottom: 40
+                }),
+                name: CollisionName::new("Face".to_string()),
+            },
+            Collision {
+                index: 1,
+                shape: CollisionShape::Rect(CollisionBounds {
+                    left: 80,
+                    top: 140,
+                    right: 260,
+                    bottom: 300
+                }),
+                name: CollisionName::new("Bust".to_string()),
+            }
+        ]
     );
 }
 
@@ -218,11 +230,12 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 }
 
-/// 単一 surface 内で吸収対象（element replace・collisionex）と忠実転記対象（pattern method・
-/// interval）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する
-/// （要件 4.5/4.6/6.3/8.2/9.2）。overlay element・純 collision は残り、replace element・
-/// collisionex は吸収される一方、replace/overlay 両 pattern と `always` interval は忠実転記される
-/// （areka-P0-element-base-method 要件 2.4: 描けない語の行だけが吸収され隣の行は残る）。
+/// 単一 surface 内で吸収対象（element replace）と忠実転記対象（pattern method・interval・
+/// collisionex）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する
+/// （要件 4.5/4.6/8.2/9.2）。overlay element・collisionex の円・純 collision は書いた順に残り、
+/// replace element は吸収される一方、replace/overlay 両 pattern と `always` interval は忠実転記される
+/// （areka-P0-element-base-method 要件 2.4: 描けない語の行だけが吸収され隣の行は残る・
+/// collisionex-regions 要件 1.3・1.8・8.8）。
 #[test]
 fn mixed_valid_and_subset_out_lines_in_one_surface() {
     let input = "\
@@ -231,7 +244,7 @@ surface3000
 element0,replace,skip.png,1,1
 element1,overlay,keep.png,2,3
 element2,base,also.png,4,5
-collisionex0,circle,5,5,10
+collisionex0,Eye,circle,5,5,10
 collision0,10,20,30,40,Head
 animation0.interval,always,9
 animation0.pattern0,replace,900,0,0,0
@@ -259,19 +272,30 @@ animation0.pattern1,overlay,901,4,0,0
             },
         ]
     );
-    // 純 collision のみ残る（collisionex 吸収）。
+    // collisionex の円と純 collision が書いた順に残る。
     assert_eq!(
         s.collisions,
-        vec![Collision {
-            index: 0,
-            shape: CollisionShape::Rect(CollisionBounds {
-                left: 10,
-                top: 20,
-                right: 30,
-                bottom: 40
-            }),
-            name: CollisionName::new("Head".to_string()),
-        }]
+        vec![
+            Collision {
+                index: 0,
+                shape: CollisionShape::Circle {
+                    x: 5,
+                    y: 5,
+                    radius: 10
+                },
+                name: CollisionName::new("Eye".to_string()),
+            },
+            Collision {
+                index: 0,
+                shape: CollisionShape::Rect(CollisionBounds {
+                    left: 10,
+                    top: 20,
+                    right: 30,
+                    bottom: 40
+                }),
+                name: CollisionName::new("Head".to_string()),
+            },
+        ]
     );
     // always interval は Interval::Other へ転記、replace/overlay 双方の pattern が method を
     // 忠実転記して出現順で残る（overlay フィルタ・fallback-Bind ともに撤去済み）。

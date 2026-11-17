@@ -536,7 +536,8 @@ kero.surface.alias
 /// - element定義の `base`（`element0,base,...`）→ overlay と同じ値（element-base-method 要件 1.1）。
 /// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 忠実転記（method を落とさない・要件 4.6/8.4）。
 /// - 3 種以外の interval（`sometimes`）→ `Interval::Other(原文)` へ忠実転記（要件 8.2・討議 #1）。
-/// - `collisionex`（円/楕円/多角形）→ 吸収（純 collision は残る・要件 6.3）。
+/// - 正しい書式の `collisionex`（多角形）→ 値になり、純 collision と書いた順に並ぶ
+///   （collisionex-regions 要件 1.4・1.8・8.8）。
 #[test]
 fn subset_out_features_absorbed_via_public_parse_without_breaking_neighbors() {
     let input = "\
@@ -558,8 +559,8 @@ surface200
 element0,base,bg.png,0,0
 element1,overlay,face.png,0,0
 
-// collisionex（多角形）は吸収され、純 collision は残る（要件 6.3）。
-collisionex0,polygon,1,2,3,4,5,6,Face
+// collisionex（多角形・名前は 2 番目の欄）は値になり、純 collision と書いた順に並ぶ。
+collisionex0,Face,polygon,1,2,3,4,5,6
 collision0,30,40,130,240,Bust
 
 // 3 種以外の interval（sometimes）は Interval::Other へ忠実転記される（要件 8.2）。
@@ -615,11 +616,16 @@ element0,overlay,tail.png,7,8
     assert_eq!(s200.elements[1].layer, 1);
     assert_eq!(s200.elements[1].path.as_str(), "face.png");
 
-    // collision: collisionex 吸収・純 collision のみ残る。
-    assert_eq!(s200.collisions.len(), 1, "collisionex が吸収されていない");
-    assert_eq!(s200.collisions[0].name.as_str(), "Bust");
+    // collision: collisionex の多角形と純 collision が書いた順に残る。
+    assert_eq!(s200.collisions.len(), 2, "collisionex が値になっていない");
+    assert_eq!(s200.collisions[0].name.as_str(), "Face");
+    assert_eq!(
+        s200.collisions[0].shape,
+        CollisionShape::Polygon(vec![(1, 2), (3, 4), (5, 6)])
+    );
+    assert_eq!(s200.collisions[1].name.as_str(), "Bust");
     assert!(matches!(
-        &s200.collisions[0].shape,
+        &s200.collisions[1].shape,
         CollisionShape::Rect(b) if b.left == 30
     ));
 

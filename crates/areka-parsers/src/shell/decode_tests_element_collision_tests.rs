@@ -16,7 +16,8 @@ use super::{
 // - element はレイヤインデックス昇順で保持する（安定・要件 4.4）。
 // - collision 矩形を 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom ＋不透明領域名として
 //   正規化する（要件 6.1/6.2）。collision は出現順で保持する。
-// animation 行・非 overlay メソッド・collisionex はここでは扱わない（タスク 4.3 / 4.6）。
+// animation 行・非 overlay メソッドはここでは扱わない（タスク 4.3 / 4.6）。collisionex の読みの檻は
+// `decode_collisionex_tests.rs` にある（collisionex-regions）。
 
 /// 単一 element overlay → レイヤ/パス/座標に正規化（要件 4.2）。
 #[test]

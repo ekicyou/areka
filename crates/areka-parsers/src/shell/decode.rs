@@ -19,24 +19,31 @@
 //! - 読めない番号は 0 にせず飛ばして崩れ（`ShellIssue`）を積む（指摘 36）。範囲の幅は
 //!   シェル全体の合計に上限 `RANGE_WIDTH_CAP` をかける（指摘 6）。崩れの知らせ
 //!   （`Token::Unclosed`／`Token::Reopened`）は `parse_all` が写すので、ここでは読まない。
-//! - それ以外のメソッド・interval の語・collisionex・未知のブレスや行は、値にしないか原文のまま
-//!   運び、走査を中断しない（要件 2.3/4.5/5.7/6.3/9.2/10.4）。
+//! - `collisionex*` は `collision*` と同じ並びへ書いた順に積み、読めない行は理由つきの崩れを積む。
+//!   楕円・円・多角形・region は値にしたうえで数え、`finish` が読み込みごとに 1 件の崩れにまとめる
+//!   （collisionex-regions 要件 1・4・5）。
+//! - それ以外のメソッド・interval の語・未知のブレスや行は、値にしないか原文のまま
+//!   運び、走査を中断しない（要件 2.3/4.5/5.7/9.2/10.4）。
 
 use std::collections::HashMap;
 
 use super::lexer::{Token, heading_text};
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape,
-    DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, RANGE_WIDTH_CAP, Shell,
-    ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionExFault, CollisionName,
+    CollisionRegion, CollisionShape, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern,
+    RANGE_WIDTH_CAP, ShapeCounts, Shell, ShellIssue, SortOrder, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
 
-/// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計（指摘 6）・今のブレスの見出し・積んだ崩れ。
+/// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計（指摘 6）・今のブレスの見出し・積んだ崩れ・
+/// まだ働かない形の数と最初の行（見出し・行）。
 #[derive(Default)]
 pub(crate) struct Reading {
     range_width: u64,
     heading: String,
     pub(crate) issues: Vec<ShellIssue>,
+    inactive: ShapeCounts,
+    first_inactive: Option<(String, String)>,
 }
 
 impl Reading {
@@ -62,6 +69,44 @@ impl Reading {
         let heading = self.heading.clone();
         let text = text.to_string();
         self.issues.push(ShellIssue::WaitRange { heading, text });
+    }
+
+    fn collision_ex(&mut self, fields: &[String], fault: CollisionExFault) {
+        let heading = self.heading.clone();
+        let text = fields.join(",");
+        self.issues.push(ShellIssue::CollisionEx {
+            heading,
+            text,
+            fault,
+        });
+    }
+
+    /// 並びへ入れた rect 以外の形を数え、最初の行を控える（collisionex-regions 要件 4.7）。
+    fn inactive(&mut self, shape: &CollisionShape, fields: &[String]) {
+        let n = &mut self.inactive;
+        let count = match shape {
+            CollisionShape::Rect(_) => return,
+            CollisionShape::Ellipse(_) => &mut n.ellipse,
+            CollisionShape::Circle { .. } => &mut n.circle,
+            CollisionShape::Polygon(_) => &mut n.polygon,
+            CollisionShape::Region(_) => &mut n.region,
+        };
+        *count = count.saturating_add(1);
+        if self.first_inactive.is_none() {
+            self.first_inactive = Some((self.heading.clone(), fields.join(",")));
+        }
+    }
+
+    /// まだ働かない形を 1 件でも数えたら、その記録を 1 件積む（`parse_all` が最後に呼ぶ）。
+    pub(crate) fn finish(&mut self) {
+        if let Some((heading, text)) = self.first_inactive.take() {
+            let counts = self.inactive;
+            self.issues.push(ShellIssue::ShapesInactive {
+                heading,
+                text,
+                counts,
+            });
+        }
     }
 }
 
@@ -161,7 +206,7 @@ fn dispatch_block(
             .definitions
             .push(DefRef::Surface(shell.surfaces.len()));
         // element・collision・animation は surface・append で同じ表現ゆえ共有ヘルパで読む（要件 12.5(c)/7.3）。
-        // overlay・base 以外の element メソッド・collisionex 等は値にしない（要件 4.5/9.2）。
+        // overlay・base 以外の element メソッド等は値にしない（要件 4.5/9.2）。
         shell.surfaces.push(Surface {
             targets,
             elements: decode_elements(body, reading),
@@ -233,22 +278,42 @@ pub(super) fn is_box_element_method(word: &str) -> bool {
     word == "balloon"
 }
 
-/// 本体行群の `collisionN,始点X,始点Y,終点X,終点Y,ID` を `Collision` へ decode する（要件 6.1/6.2）。
+/// 本体行群の `collisionN,始点X,始点Y,終点X,終点Y,ID` と `collisionexN,ID,タイプ,座標…` を
+/// 書いた順に 1 つの `Collision` の並びへ decode する（要件 6.1/6.2・collisionex-regions 要件 1.8）。
 ///
 /// surface 本体・`surface.append` 本体（タスク 4.4）双方から呼べる **再利用可能ヘルパ**。
 /// append の collision も通常 surface と同一のモデル表現で保持する（同一 `Collision` 型・要件 7.3）。
 ///
-/// - ukadoc 順序 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom。
-/// - `collisionex`（円/楕円/多角形・要件 6.3）は値化せず passthrough 吸収する（タスク 4.6
-///   が確認）。純 `collisionN`（N が数字のみ）だけを materialize する。
-/// - collision は出現順で保持する（要件 6.1）。欠落・非数値は既定 0（要件 3.3・パニックしない）。
+/// - `collision*` は ukadoc 順序 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom の矩形。
+///   欠落・非数値は既定 0（要件 3.3・パニックしない）。
+/// - `collisionex*` は `collision` より先に見分け、`decode_collisionex_row` で読む。使えない行は
+///   理由つきの崩れを積んで飛ばし、欄が多い行だけは前から使って崩れを積む（collisionex-regions 要件 4）。
+/// - どちらも番号は数字だけの N。番号の無い・桁あふれは飛ばして崩れを積み、数字でない残りは黙って飛ばす。
 fn decode_collisions(body: &[Vec<String>], reading: &mut Reading) -> Vec<Collision> {
     let mut collisions: Vec<Collision> = Vec::new();
 
     for fields in body {
         let key = fields.first().map(String::as_str).unwrap_or("");
-        if let Some(rest) = key.strip_prefix("collision") {
-            // `collisionex` 等は扱わない。N が数字のみの純 collisionN だけ。
+        if let Some(rest) = key.strip_prefix("collisionex") {
+            if !rest.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            let Ok(index) = rest.parse::<u32>() else {
+                reading.unreadable(&fields.join(","));
+                continue;
+            };
+            match decode_collisionex_row(index, fields) {
+                Ok((collision, fault)) => {
+                    if let Some(fault) = fault {
+                        reading.collision_ex(fields, fault);
+                    }
+                    reading.inactive(&collision.shape, fields);
+                    collisions.push(collision);
+                }
+                Err(fault) => reading.collision_ex(fields, fault),
+            }
+        } else if let Some(rest) = key.strip_prefix("collision") {
+            // N が数字のみの純 collisionN だけ。
             if rest.chars().all(|c| c.is_ascii_digit()) {
                 // 番号の無い・桁あふれの番号は飛ばす（指摘 36）。
                 let Ok(index) = rest.parse::<u32>() else {
@@ -271,6 +336,96 @@ fn decode_collisions(body: &[Vec<String>], reading: &mut Reading) -> Vec<Collisi
     }
 
     collisions
+}
+
+/// collisionex の 1 行（番号は読めた後）を値にする。`Err` の行は並びに入れない。
+/// `Ok((c, Some(ExtraFields)))` は「前から求める数だけを使ったうえで記録する」行。
+///
+/// 欄は 0＝`collisionexN`・1＝名前（書いたまま）・2＝形（大小文字を区別しない）・3 以降＝座標か region の欄。
+/// 行末の空の欄 1 つは数える前に除く（要件 1.10）。判定の順は設計の System Flows の図のとおりで、
+/// 1 行に複数の理由が当てはまっても理由は 1 つ。ファイルは開かない（要件 5.2）。
+fn decode_collisionex_row(
+    index: u32,
+    fields: &[String],
+) -> Result<(Collision, Option<CollisionExFault>), CollisionExFault> {
+    let fields = match fields.split_last() {
+        Some((last, head)) if last.is_empty() && !head.is_empty() => head,
+        _ => fields,
+    };
+    let args = fields.get(3..).unwrap_or(&[]);
+    let shape_name = field_string(fields, 2).to_ascii_lowercase();
+    let (shape, used) = match shape_name.as_str() {
+        "rect" | "ellipse" | "circle" | "polygon" => {
+            let need = match shape_name.as_str() {
+                "circle" => 3,
+                "polygon" => 6,
+                _ => 4,
+            };
+            if args.len() < need {
+                return Err(CollisionExFault::MissingCoordinates);
+            }
+            // 多角形は全部の欄を使うので「欄が多い」は出ない。
+            let used = if shape_name == "polygon" {
+                if args.len() % 2 == 1 {
+                    return Err(CollisionExFault::OddCoordinates);
+                }
+                args.len()
+            } else {
+                need
+            };
+            let v = args[..used]
+                .iter()
+                .map(|f| f.parse::<i64>())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| CollisionExFault::NotInteger)?;
+            let bounds = || CollisionBounds {
+                left: v[0],
+                top: v[1],
+                right: v[2],
+                bottom: v[3],
+            };
+            let shape = match shape_name.as_str() {
+                "rect" => CollisionShape::Rect(bounds()),
+                "ellipse" => CollisionShape::Ellipse(bounds()),
+                "circle" => CollisionShape::Circle {
+                    x: v[0],
+                    y: v[1],
+                    radius: v[2],
+                },
+                _ => CollisionShape::Polygon(v.chunks(2).map(|p| (p[0], p[1])).collect()),
+            };
+            (shape, used)
+        }
+        "region" => {
+            let color = |i: usize| args.get(i).and_then(|f| f.parse::<u8>().ok());
+            let invert = match args.get(4) {
+                None => Some(false),
+                Some(f) if f.eq_ignore_ascii_case("true") => Some(true),
+                Some(f) if f.eq_ignore_ascii_case("false") => Some(false),
+                Some(_) => None,
+            };
+            let file = field_string(args, 0);
+            let (false, Some(red), Some(green), Some(blue), Some(invert)) =
+                (file.is_empty(), color(1), color(2), color(3), invert)
+            else {
+                return Err(CollisionExFault::BadRegion);
+            };
+            let region = CollisionRegion {
+                file,
+                red,
+                green,
+                blue,
+                invert,
+                x: 0,
+                y: 0,
+            };
+            (CollisionShape::Region(region), 5)
+        }
+        _ => return Err(CollisionExFault::UnknownShape),
+    };
+    let extra = (args.len() > used).then_some(CollisionExFault::ExtraFields);
+    let name = CollisionName::new(field_string(fields, 1));
+    Ok((Collision { index, shape, name }, extra))
 }
 
 /// 本体行の `idx` フィールドを無加工の `String` として取り出す（欠落は空文字列）。
