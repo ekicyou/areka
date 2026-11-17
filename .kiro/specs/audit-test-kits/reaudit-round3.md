@@ -56,3 +56,8 @@
 - 改名: `current_rows_are_registered_as_vendored` → `the_rows_with_a_nar_in_the_repository_are_vendored_and_the_rest_are_url_rows`（completed の 6 文書が旧名を挙げる・直さない）
 - S4 は `fold_into` の 3 か所と fold-samples の写しの 2 か所にパスを添えた（ほかの `?` は「少なくとも」の外として残す）
 - 範囲の外（`/kiro-complete` の棚卸で扱う）: `tools/load-flake.ps1` の 32-33 行の説明（「-NoCapture が無いと赤のテストの分しか残らない」）が S1 の後は古い
+
+## 束 D の直しの控え（承認済み）
+- 較正: G6 は窓口の 2 つ目のファイルを語の無いファイルに差し替える → `the_gateway_is_scanned_and_holds_no_entry_point` が赤（直す前の確かめは緑のまま＝穴だった）。G4 は `GATEWAY_DEFINITION_PREFIX` を壊して HEAD の版と新しい版の当たりを比べる → どちらも同じ 1 件（当たりは変わらない）
+- 改名・分け: `the_shared_crate_definition_is_the_only_excluded_region_and_it_really_holds_the_calls` → `the_shared_crate_definition_really_holds_the_direct_calls`（completed の 4 文書が旧名を挙げる）、`a_docs_dir_turns_the_guard_red` から `an_empty_reading_is_named_and_turns_the_guard_red`・`an_unlisted_entry_and_a_row_naming_nothing_are_findings` を分けた（主張は同じ）
+- file_length_guard_test.rs は module doc に 2 行（spec の名の 1 行と空行）を足しただけ・上限越えの表と件数と 4 ファイルは変わらない

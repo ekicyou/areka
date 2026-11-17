@@ -1,5 +1,7 @@
 //! 共有機構を迂回する捕捉の新設を検知する見張り（要件 1.3・1.6・2.6・8.1・8.2・8.3・11.5）。
 //!
+//! 要件・タスクの番号は、spec の名を添えていないものは spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! # 何を見張るか（4 つ）
 //!
 //! 1. **捕捉先を直接差す呼出**（3 つの関数の、`(` つきの裸の綴り・`subscriber::` つきの綴り・`as` で別名にする綴り）が、共有 crate の定義（`crates/log-capture-kit/src/`）と
@@ -16,9 +18,9 @@
 //! # 走査語を逐語で書かない約束
 //!
 //! 本ファイルは `crates/` の下にあるので、上の ⑴⑵ の走査対象そのものでもある。走査語を
-//! 開き括弧まで含めた形で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 着手前インベントリの
+//! 開き括弧の有無を問わず逐語で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 着手前インベントリの
 //! `rg -l` による捕捉サイト計数の母数が動く。そこで走査語は `concat!` で 2 片から組み立て、
-//! ファイルの字面には 1 度も現れないようにする（`workspace_scan/mod.rs` の冒頭の「走査語を開き括弧まで含めた形で 1 度も書かない」約束と同じ）。
+//! ファイルの字面には 1 度も現れないようにする（`workspace_scan/mod.rs` の冒頭の「走査語を、開き括弧の有無を問わず 1 度も逐語で書かない」約束と同じ）。
 //! **約束そのもの**（コメントの中にも逐語で置かないこと）は
 //! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が生テキストで縛る。
 //! [`scan_tokens`] はコメントを除去するので、コメントへ逐語で植えても見張りは 1 件も
@@ -82,6 +84,9 @@ const TOKEN_SET_GLOBAL_DEFAULT_ALIAS: &str = concat!("set_global_", "default as"
 const TOKEN_INSTALL_GLOBAL_CAPTURE: &str = concat!("install_global_capture_", "all(");
 
 /// ⑴ の走査語。
+// shortcut: 波括弧の中で別名を付けずに取り込み（`use …::{…}`）、呼ばずに渡す形は当たらない
+// （どの行にも修飾も `(` も `as` も現れない）。関数名だけの語を足すと説明や別の識別子に当たって
+// 偽陽性が膨らむので足さない。走査器が `use` の木を読むようになったら塞ぐ。
 fn direct_call_tokens() -> Vec<&'static str> {
     vec![
         TOKEN_WITH_DEFAULT,
@@ -288,7 +293,7 @@ fn the_direct_call_allow_table_declares_its_own_size_and_reasons() {
 }
 
 #[test]
-fn the_shared_crate_definition_is_the_only_excluded_region_and_it_really_holds_the_calls() {
+fn the_shared_crate_definition_really_holds_the_direct_calls() {
     // 除外が「効いている」ことの陽性側。除外領域には確かに直接呼出があり、
     // 除外を外せば上の見張りは赤になる（＝除外が飾りでない）。
     let hits = scan_sources(&kit_definition_sources(), &direct_call_tokens());

@@ -1,5 +1,7 @@
 //! 1 ファイル 1,000 行の目安の機械的な番人（要件 10.1・10.2・10.3・10.4）。
 //!
+//! 要件の番号は spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! `.kiro/steering/structure.md` の Test Naming Conventions の項は「1 ファイル 1,000 行以下」を
 //! 目安に掲げているが、これまで誰も測っていなかった。本ファイルはその目安を実行テストにする。
 //!

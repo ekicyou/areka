@@ -1,5 +1,7 @@
 //! 検体ゴースト／バルーンの在処を窓口の外で綴っていないか見張る常設検査（要件 1.7・1.8・10.3）。
 //!
+//! 要件・設計・タスクの番号は、spec の名を添えていないものは spec `areka-P0-nar-install` のもの。
+//!
 //! # 何を見張るか
 //!
 //! 検体の置き場を指す綴りが、窓口 crate の定義（`crates/sample-ghost-kit/src/`）の外の
@@ -64,8 +66,8 @@ use std::collections::BTreeSet;
 use sample_ghost_kit::SAMPLES;
 
 use workspace_scan::{
-    has_dev_dependency_on, manifest_fixture, production_dependencies_on, raw_occurrences,
-    read_source, scan_tokens, walk_workspace_sources, workspace_manifests,
+    Hit, has_dev_dependency_on, manifest_fixture, production_dependencies_on, raw_occurrences,
+    read_source, render, scan_sources, scan_tokens, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -90,7 +92,7 @@ const GATEWAY_DEFINITION_PREFIX: &str = "crates/sample-ghost-kit/src/";
 /// 窓口 crate のパッケージ名（本番依存の見張りが使う）。
 const KIT_PACKAGE: &str = "sample-ghost-kit";
 
-/// 本番の表に窓口 crate を持ってよいクレートの例外表（設計 D-2）。
+/// 本番の表に窓口 crate を持ってよいクレートの例外表（areka-P0-real-run-mcp-kit 設計 D-2）。
 ///
 /// 表のクレート自身はどこの本番の表にも載れない（[`a_gateway_user_never_appears_in_a_production_dependency_table`]）。
 /// 本番の道で窓口 crate に届くには「本番の表に窓口 crate を持つクレート」を通るしかないので、
@@ -253,19 +255,6 @@ const EXCLUSION_FORMS: &[(Form, Presence)] = &[
 // 走査の取り回し
 // ---------------------------------------------------------------------------
 
-/// 走査で当たった 1 件。
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Hit {
-    /// ワークスペース根からの相対パス（区切りは `/`）。
-    path: String,
-    /// 1 始まりの行番号。
-    line: usize,
-    /// 当たった語。
-    token: String,
-    /// 語が属する形。
-    form: Form,
-}
-
 /// 見張りの対象（窓口の定義を除いた全ソース）。
 fn watched_sources() -> Vec<String> {
     walk_workspace_sources()
@@ -282,27 +271,11 @@ fn gateway_sources() -> Vec<String> {
         .collect()
 }
 
-/// 与えられたファイル群を全 4 形で走査する。
-fn scan_sources(paths: &[String]) -> Vec<Hit> {
+/// 与えられたファイル群を全 4 形の語で走査する（[`workspace_scan::scan_sources`] に語の一覧を渡すだけ）。
+fn scan_forms(paths: &[String]) -> Vec<Hit> {
     let table = token_table();
     let tokens: Vec<&str> = table.iter().map(|(t, _)| t.as_str()).collect();
-    let mut hits = Vec::new();
-    for path in paths {
-        for (line, token) in scan_tokens(&read_source(path), &tokens) {
-            let form = table
-                .iter()
-                .find(|(t, _)| *t == token)
-                .map(|(_, f)| *f)
-                .expect("当たった語は必ず一覧の中にある");
-            hits.push(Hit {
-                path: path.clone(),
-                line,
-                token,
-                form,
-            });
-        }
-    }
-    hits
+    scan_sources(paths, &tokens)
 }
 
 /// 合成入力を 1 本走査する（較正で使う。ファイル名は持たない）。
@@ -312,20 +285,22 @@ fn scan_text(src: &str) -> Vec<(usize, String)> {
     scan_tokens(src, &tokens)
 }
 
-/// 違反の一覧を人が読める形にする。
-fn render(hits: &[Hit]) -> String {
-    hits.iter()
-        .map(|h| {
-            format!(
-                "  {}:{} （{}・語: {}）",
-                h.path,
-                h.line,
-                h.form.label(),
-                h.token
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+/// 当たった語が属する形。
+fn form_of(token: &str) -> Form {
+    token_table()
+        .into_iter()
+        .find(|(t, _)| t == token)
+        .map(|(_, form)| form)
+        .expect("当たった語は必ず一覧の中にある")
+}
+
+/// 違反の一覧を人が読める形にする（[`workspace_scan::render`] の各行に形の名前を添える）。
+fn render_with_forms(hits: &[Hit]) -> String {
+    let lines: Vec<String> = hits
+        .iter()
+        .map(|h| format!("{h}・{}", form_of(&h.token).label()))
+        .collect();
+    render(&lines)
 }
 
 /// 較正に使う `(ゴースト名, 同梱バルーン名)` の組を登記表から 1 つ選ぶ。
@@ -344,14 +319,14 @@ fn a_bundled_balloon() -> (&'static str, &'static str) {
 
 #[test]
 fn no_sample_path_spelling_lives_outside_the_gateway() {
-    let violations = scan_sources(&watched_sources());
+    let violations = scan_forms(&watched_sources());
     assert!(
         violations.is_empty(),
         "検体の在処を自分で綴っている箇所がある。検体は窓口 `sample_ghost_kit::SampleRoot` \
          から名前で引くこと（`acquire` でゴースト／バルーンを、同梱バルーンは `balloon` を \
          呼ぶ）。窓口を通しておけば、段 ③ で保管が `.nar` へ変わっても呼び手は 1 行も \
          書き換えずに済む（要件 1.7・1.8）:\n{}",
-        render(&violations)
+        render_with_forms(&violations)
     );
 }
 
@@ -396,8 +371,8 @@ fn the_exclusion_declares_which_forms_it_holds() {
         "宣言は 4 形すべてを設計の順に 1 度ずつ並べること（漏れた形は判定されない）"
     );
 
-    let hits = scan_sources(&gateway_sources());
-    let found: BTreeSet<Form> = hits.iter().map(|h| h.form).collect();
+    let hits = scan_forms(&gateway_sources());
+    let found: BTreeSet<Form> = hits.iter().map(|h| form_of(&h.token)).collect();
 
     let mut present = 0usize;
     for (form, presence) in EXCLUSION_FORMS {
@@ -805,7 +780,7 @@ fn a_dev_dependency_on_the_sample_gateway_is_not_a_violation() {
 }
 
 // ---------------------------------------------------------------------------
-// 例外表のクレート（設計 D-2）
+// 例外表のクレート（areka-P0-real-run-mcp-kit 設計 D-2）
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -843,7 +818,7 @@ fn a_gateway_user_never_appears_in_a_production_dependency_table() {
     assert!(
         violations.is_empty(),
         "例外表のクレートは窓口 crate を本番の表に持つので、どこの本番の表にも載れない\
-         （載ると窓口 crate が配布物の依存へ入る＝要件 10.3）:\n{}",
+         （載ると窓口 crate が配布物の依存へ入る＝areka-P0-real-run-mcp-kit 要件 10.3）:\n{}",
         violations.join("\n")
     );
 }

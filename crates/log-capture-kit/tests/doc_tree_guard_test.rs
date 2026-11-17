@@ -519,9 +519,9 @@ fn an_exception_row_with_nothing_to_cover_turns_red() {
     );
 }
 
-#[test]
-fn a_docs_dir_turns_the_guard_red() {
-    let tree = DocTree {
+/// 見本の案内と食い違いの無い `doc/` の木。
+fn sample_tree() -> DocTree {
+    DocTree {
         direct: BTreeSet::from(["README.md", "archive/"].map(String::from)),
         all: BTreeSet::from(
             [
@@ -533,7 +533,12 @@ fn a_docs_dir_turns_the_guard_red() {
             ]
             .map(String::from),
         ),
-    };
+    }
+}
+
+#[test]
+fn a_docs_dir_turns_the_guard_red() {
+    let tree = sample_tree();
 
     assert_eq!(check_all(&tree, SAMPLE_GUIDE, false), BTreeSet::new());
     assert_eq!(
@@ -547,17 +552,23 @@ fn a_docs_dir_turns_the_guard_red() {
         line.contains("根の docs フォルダ") && !line.contains(concat!("docs", "/")), // 語を分けて、この行も検索に当てない
         "{line}"
     );
+}
 
+#[test]
+fn an_empty_reading_is_named_and_turns_the_guard_red() {
     // 3 つの読み取りのどれかが 0 件なら、どれかを名指して赤にする。
     let empty = DocTree {
         direct: BTreeSet::new(),
-        all: tree.all.clone(),
+        all: sample_tree().all,
     };
     assert_eq!(
         check_all(&empty, "", false),
         BTreeSet::from([DIRECT_ENTRIES, DIRECT_TABLE, EXCEPTION_TABLE].map(Finding::EmptyReading))
     );
+}
 
+#[test]
+fn an_unlisted_entry_and_a_row_naming_nothing_are_findings() {
     // 表に無い直下の実物と、名指すものの無い行（置き字の行を除く）。
     let direct = BTreeSet::from(
         ["README.md", "extra.md", "roadmap-overview-2026-10-16.html"].map(String::from),

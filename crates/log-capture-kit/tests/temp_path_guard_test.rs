@@ -1,5 +1,7 @@
 //! 一時パスの共通窓口を迂回する新設を検知する見張り（要件 12.4・12.5・12.7）。
 //!
+//! 要件・設計・タスクの番号は、spec の名を添えていないものは spec `areka-P0-test-cage-determinism` のもの。
+//!
 //! # 何を見張るか
 //!
 //! 一時ディレクトリの**入口**（標準ライブラリの `env` モジュールの一時フォルダを返す関数）への言及が、例外表
@@ -51,8 +53,8 @@
 //!
 //! # 走査語を逐語で書かない約束
 //!
-//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。走査語を開き括弧まで
-//! 含めた形で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 要件 12.2 の実測に使った
+//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。走査語を開き括弧の
+//! 有無を問わず逐語で書くと ⒜ 見張りが自分自身を違反として拾い ⒝ 要件 12.2 の実測に使った
 //! `rg`／`grep` の母数が黙って動く。そこで走査語は `concat!` で 2 片から組み立て、
 //! ファイルの字面には 1 度も現れないようにする（`with_default_guard_test.rs` の「走査語を逐語で書かない約束」と
 //! 同じ約束）。守れていることは
@@ -90,6 +92,9 @@ const TOKEN_BRACED_ALIAS: &str = concat!("temp_", "dir as");
 const TOKEN_PROCESS_ID: &str = concat!("process::", "id(");
 
 /// 主検査の走査語。
+// shortcut: 波括弧の中で別名を付けずに取り込み（`use std::env::{…}`）、呼ばずに渡す形は当たらない
+// （どの行にも修飾も `(` も `as` も現れない）。関数名だけの語を足すと説明や助走関数の名前に当たって
+// 偽陽性が膨らむので足さない。走査器が `use` の木を読むようになったら塞ぐ。
 fn entry_point_tokens() -> Vec<&'static str> {
     vec![TOKEN_QUALIFIED, TOKEN_BARE, TOKEN_BRACED_ALIAS]
 }
@@ -136,14 +141,14 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     // ⑵ 表に載せても**素通りにはならない**——[`each_exception_declares_whether_it_uniquifies_by_process_identifier`]
     //    が「一意化している」という主張をソースと突き合わせるので、後から一意化を外せば赤になる。
     //
-    // テストの一時パスではなく**本番の落とし場所**。要件 6.6 が「OS の一時フォルダの下の areka
+    // テストの一時パスではなく**本番の落とし場所**。areka-P0-network-update 要件 6.6 が「OS の一時フォルダの下の areka
     // 専用の場所」と定め、7 日の掃除が前回までの走行の残りを見つけるにはフォルダが固定である
     // 必要がある（窓口の一意なフォルダでは掃除が成立しない・本番へ dev-dependency は持ち込めない）。
     // フォルダの中のファイル名はプロセス識別子＋単調連番で一意化している。
     (
         "crates/areka/src/install/fetch_url.rs",
         Why::ProcessUnique,
-        "本番の落とし場所 %TEMP%\\areka\\download\\（要件 6.6）。フォルダは 7 日の掃除のために固定、\
+        "本番の落とし場所 %TEMP%\\areka\\download\\（areka-P0-network-update 要件 6.6）。フォルダは 7 日の掃除のために固定、\
          中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
     ),
 ];
@@ -357,7 +362,7 @@ fn the_measurement_is_not_vacuous() {
 #[test]
 fn the_gateway_is_scanned_and_holds_no_entry_point() {
     // 窓口も主検査の走査に入る（案 B）。⑴ 2 ファイルが走査の一覧に在る
-    // ⑵ 同じ 2 ファイルが確かに読めている（プロセス識別子の語で lib.rs に当たる）
+    // ⑵ 同じ 2 ファイルが確かに読めている（プロセス識別子の語が 2 ファイルとも当たる）
     // ⑶ そのうえで入口の語の当たりが 0 件。⑴⑵ が「0 件」を空振りから区別する陽性の対。
     let watched = watched_sources();
     for file in GATEWAY_FILES {
@@ -369,10 +374,12 @@ fn the_gateway_is_scanned_and_holds_no_entry_point() {
 
     let gateway: Vec<String> = GATEWAY_FILES.iter().map(|p| p.to_string()).collect();
     let pid_hits = scan_sources(&gateway, &[TOKEN_PROCESS_ID]);
-    assert!(
-        pid_hits.iter().any(|h| h.path == GATEWAY_FILES[0]),
-        "窓口の lib.rs にプロセス識別子の語が 1 件も無い＝走査が空振りしている疑い"
-    );
+    for file in GATEWAY_FILES {
+        assert!(
+            pid_hits.iter().any(|h| h.path == file),
+            "窓口のファイルにプロセス識別子の語が 1 件も無い＝走査が空振りしている疑い: {file}"
+        );
+    }
 
     let hits = scan_sources(&gateway, &entry_point_tokens());
     assert!(
