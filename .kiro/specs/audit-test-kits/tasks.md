@@ -92,7 +92,7 @@
   - _Dispatch: mechanical — 純関数 1 つと消す・改名する・文の直しで、形は設計が書く_
   - _Requirements: 3.1, 3.2, 4.7, 4.8, 7.3, 7.5_
 
-- [ ] 4. sample-ghost-kit の窓口と作業フォルダと見本
+- [x] 4. sample-ghost-kit の窓口と作業フォルダと見本
 - [x] 4.1 (P) 窓口の誤りの文を英語の ASCII にし、本体の置き場と取り寄せの棚の口を 1 つにする（S2: 16・32 の sample 側・36・55）
   - 32: `lib.rs`・`devroot.rs`・`fetched.rs` の `Io` の `what` を英語の ASCII に、`Io` の表示はパスと元の失敗を `ascii` に通す。`report_cleanup` の行を `sample-ghost-kit: cleanup failed (<what>): <path> (<err>)` に、`nar-sample-path` の書けない行も英語に。`ascii` を `pub` にする。頭 `sample-ghost-kit:` と `os error N` を保つ（`tools/load-flake.ps1` が字面で読む）。panic の文は家の形のまま
   - 16: シェルの写しは先に元のフォルダが在るかを確かめ、無ければフォルダを作らずに `Io`（`NotFound`）を返す
@@ -133,7 +133,7 @@
   - 完了の姿: 足した 10 本が緑で、ネットと本物の検体の取り寄せに頼らない。`cargo test -p sample-ghost-kit` が 2 回続けて同じ結果
   - _Dispatch: mechanical — 期待値を設計が書くテストの足し_
   - _Requirements: 4.1, 4.3, 4.4, 4.5_
-- [ ] 4.5 sample-ghost-kit のテストを削り、置き場を寄せる（S5: 14・31・37・60〜68・70）
+- [x] 4.5 sample-ghost-kit のテストを削り、置き場を寄せる（S5: 14・31・37・60〜68・70）
   - 14: `nar_sample_path_test` の 2 本を私用の置き場で回し、全検体の輪を 3 検体に絞り、「印字した根が私用の `CARGO_TARGET_DIR` の下」を主張に足す
   - 31: `passes > 0` にし、掃除のスレッドの止めを破棄の守りで立てる
   - 37: `scratch()` を消して `WorkDir::new()?` に、手の `remove_dir_all` を消す
@@ -224,3 +224,5 @@
   - 4.2 の残り（6.1 のかけ直しで見る）: `devroot.rs` の中の 9 か所ほどの説明と `fetched.rs` の module doc がまだ `cache/` と書く（設計の行 54 は module doc だけを求める）
   - 4.3: 同梱バルーンの写し先を古い式 `root/balloon/<dir>/…` に戻す → `a_ghost_with_a_companion_balloon_round_trips_without_mismatches` が赤（不一致 4）。`fold_one` の書き先を `vendors/` の側に戻す → `fold_one_never_writes_the_vendored_archive` が赤（見張りのバイトが上書き）。消した名前の付いたものは無し（grep 不要）。`vendors/`・`Cargo.lock`・根の `Cargo.toml` の差分 0。本物の木への `fold-samples` の `main` は回していない（8.1）。数の行の例が「ghost/emo2=110」に変わる（同梱バルーンをゴーストのフォルダの中に数える）が、字面で読む道具は無い
   - 4.4: 較正（本番のファイルを 1 度壊して戻す）: `verified_bytes` が照らさずに読む → `acquire_refuses_a_tampered_fetched_archive` が赤。`manual_root_in` の消しの誤りを捨てる → `manual_root_refuses_a_tree_it_cannot_remove` が赤。既知の答えの最後の 1 字を変える → 55・64 バイトの 2 本が赤。局所の見出しの DOS 時刻を 1 に → `every_local_header_carries_the_fixed_dos_time` が赤、`sort_by_key` を外す → `folding_orders_entries_by_byte_order` が赤。`find_target_dir` の空の篩を外す → `a_blank_target_dir_falls_back_to_the_ancestor_search` が赤、読めない誤りを全部 `FetchedNarMissing` に → `a_checksum_path_that_is_a_folder_is_an_io_error` が赤、NUL と非 ASCII を落とす読み → `a_utf16_checksum_file_is_invalid` が赤、空の名前で 0 を返す → `no_argument_exits_with_2` が赤。改名（completed の `runtime-module-untangle/test-name-tails-{before,after}.txt` が旧名を挙げる・直さない）: `a_mismatching_archive_never_reaches_the_master_copy_shelf` → `resolving_a_mismatching_archive_leaves_the_master_copy_shelf_empty`、`the_check_runs_on_every_acquire_even_when_the_master_copy_exists` → `resolving_again_after_the_master_copy_exists_still_checks_the_archive`。足さなかった 2 つ: `target` の無い `--fetch-list`（`target\` の外で回さないと作れない）・標準出力の書き込みの失敗（取り込む枠の下では閉じた標準出力を作れない）＝`bin/nar-sample-path.rs` の 2 か所は檻なし
+  - 4.5: 較正: `sweep` の頭で取り寄せの棚を消す → `a_sweep_leaves_the_fetched_shelf_alone` が赤。`run_in` の `CARGO_TARGET_DIR` を渡さない（引き継いだ置き場で回す）→ 14 の「印字した根が私用の置き場の下」で 2 本とも赤。消したテスト: `every_fixture_the_testing_strategy_lists_can_be_built`・`registry_records_kind_and_bundled_balloons`・`fetched_shelf_is_outside_work_and_cache`（どれも定義 1・本 spec の文書だけ）、`the_public_entry_hands_out_a_disposable_copy_of_a_registered_sample`・`an_unregistered_name_fails_as_an_unknown_sample`・`shelf_positions_are_namespace_fetched_name`（63・定義 1 だけ）、`emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion`・`dot_sakura_nar_installs_the_ghost_and_its_balloon_without_warnings`（68 で往復へ寄せた）。改名: `unknown_sample_fails_with_all_eleven_known_names` → `unknown_sample_fails_with_every_known_name`、`the_work_dir_lives_under_the_spec_namespace_and_never_in_the_os_temp_dir` → `the_work_dir_is_absolute_and_named_after_the_process_with_its_lease_beside_it`、`the_command_prints_one_absolute_path_per_line_for_every_registered_sample` → `the_command_prints_one_absolute_path_per_line_for_the_chosen_samples`（completed の 7 ファイルが旧名を挙げる・直さない）
+  - 4.5 の裁定（要件 6.7 の議題・audit 系の議題は推奨案で承認してよいという取り決め（11-04）で進行役が推奨案を採った）: 消した `emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion` の名前が、範囲の外の表に無い `doc/COMPAT_ARCHITECTURE.md` の §8 沈黙ルール対応表（同時インストールのバルーンの取り出し元フォルダが書庫に無いときの行）に判定の引き先として残っていた。その 1 語だけを寄せた先の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` に差し替えた（ほかは触らない）。完了の報告で開発者に伝える

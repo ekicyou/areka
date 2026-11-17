@@ -24,7 +24,7 @@
 
 use super::*;
 
-/// 多重プロセスの検査に使う検体。登記の中で `.nar` が一番小さいもの。
+/// 多重プロセスの検査に使う検体。`.nar` が小さい方の検体（最小ではない。`areka-balloon` の方が小さい）。
 pub(super) const RACE_SAMPLE: &str = "emo2-kakukaku-wplimit";
 
 /// 子として起こされたことを伝える環境変数（値は子の番号）。
@@ -43,6 +43,12 @@ pub(super) fn private_namespace() -> WorkDir {
 /// `mark` は中身の目印で、長さを変えずに中身だけ変えられる。
 pub(super) fn tiny_ghost_nar(dir: &Path, name: &str, mark: &[u8]) -> PathBuf {
     let nar = dir.join(format!("{name}.nar"));
+    std::fs::write(&nar, tiny_ghost_bytes(name, mark)).expect("固定入力の .nar を置けるはず");
+    nar
+}
+
+/// [`tiny_ghost_nar`] と同じ `.nar` のバイト列（ファイルを介さない）。
+pub(super) fn tiny_ghost_bytes(name: &str, mark: &[u8]) -> Vec<u8> {
     crate::NarBuilder::new()
         .file("install.txt", &manifest_of(name))
         .done()
@@ -50,9 +56,7 @@ pub(super) fn tiny_ghost_nar(dir: &Path, name: &str, mark: &[u8]) -> PathBuf {
         .done()
         .file("mark.txt", mark)
         .done()
-        .write_to(&nar)
-        .expect("固定入力の .nar を置けるはず");
-    nar
+        .bytes()
 }
 
 /// 置いた `.nar` のバイト列（原本の作りは確かめたバイトを受ける＝決め D13）。
@@ -178,12 +182,6 @@ fn an_acquire_with_no_master_copy_installs_exactly_one_complete_master_copy() {
     let namespace = private_namespace();
     let nar = tiny_ghost_nar(namespace.path(), "probe-fresh", b"one");
     let bytes = std::fs::read(&nar).expect("組んだ .nar は読める");
-
-    // 陽性側を先に。これが無いと後の「1 つ」は何も作らなくても緑になる。
-    assert!(
-        shelf(namespace.path(), CACHE).is_empty(),
-        "始めは原本が 1 つも無いこと"
-    );
 
     let master =
         cached_root_in(namespace.path(), "probe-fresh", &bytes_of(&nar)).expect("原本を作れること");

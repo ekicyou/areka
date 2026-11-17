@@ -1,8 +1,9 @@
 //! 取り寄せたぱすたの書庫の中身の形を見張る（spec: `areka-P0-pasta-in-windows-verification`
 //! 要件 2.1〜2.7）。
 //!
-//! 見るのは 2 点だけ: 縦書きのバルーンがゴーストのフォルダの中の `balloon/` に在り名前を名乗ること、
-//! 根の `balloon/` に何も入っていないこと。書庫の大きさ・数・ハッシュは書かない（2.3）。
+//! 見るのは縦書きのバルーンがゴーストのフォルダの中の `balloon/` に在り名前を名乗ること。
+//! 根の `balloon/` が空なことは窓口の登記の照合（`check_registry`）が断る。書庫の大きさ・
+//! 数・ハッシュは書かない（2.3）。
 //! 窓口は置き場の書庫しか読まないので通信しない（2.5）。取り寄せの段が回っていない机では
 //! 窓口の失敗の文（取り寄せのコマンドを含む）で落ちる（2.4）。
 
@@ -14,9 +15,9 @@ use sample_ghost_kit::{NarBuilder, SampleRoot, WorkDir, install_txt};
 const INNER_BALLOON_DIR: &str = "pasta_tategaki";
 const INNER_BALLOON_NAME_LINE: &str = "name,窓際のぱすたさん縦書き";
 
-/// ゴーストのフォルダの中の `balloon/` の縦書きのバルーンと、根の balloon/ が空であることを確かめる。
+/// ゴーストのフォルダの中の `balloon/` の縦書きのバルーンを確かめる。
 /// Err の文は、何が無かったか（どのパス・どの行）を書く。
-fn check_pasta_layout(root: &Path, ghost_folder: &Path) -> Result<(), String> {
+fn check_pasta_layout(ghost_folder: &Path) -> Result<(), String> {
     let descript = ghost_folder
         .join("balloon")
         .join(INNER_BALLOON_DIR)
@@ -33,38 +34,13 @@ fn check_pasta_layout(root: &Path, ghost_folder: &Path) -> Result<(), String> {
             descript.display()
         ));
     }
-
-    // 根の直下で名前が balloon の子を探す（パスを継ぎ足さない）。
-    let entries =
-        std::fs::read_dir(root).map_err(|err| format!("{} を読めない: {err}", root.display()))?;
-    for entry in entries {
-        let entry = entry.map_err(|err| format!("{} を読めない: {err}", root.display()))?;
-        if entry.file_name() != "balloon" {
-            continue;
-        }
-        let path = entry.path();
-        let inside: Vec<String> = std::fs::read_dir(&path)
-            .map_err(|err| format!("{} を読めない: {err}", path.display()))?
-            .map(|child| {
-                child
-                    .map(|c| c.file_name().to_string_lossy().into_owned())
-                    .map_err(|err| format!("{} を読めない: {err}", path.display()))
-            })
-            .collect::<Result<_, _>>()?;
-        if !inside.is_empty() {
-            return Err(format!(
-                "{} は 0 件のはずが {inside:?} を持つ",
-                path.display()
-            ));
-        }
-    }
     Ok(())
 }
 
 #[test]
 fn fetched_pasta_puts_the_vertical_balloon_inside_its_ghost_folder() {
     let pasta = SampleRoot::acquire("pasta-in-windows").unwrap_or_else(|err| panic!("{err}"));
-    check_pasta_layout(pasta.root(), pasta.folder()).unwrap_or_else(|err| panic!("{err}"));
+    check_pasta_layout(pasta.folder()).unwrap_or_else(|err| panic!("{err}"));
 }
 
 /// 較正（2.7）: 縦書きのバルーンをゴーストのフォルダの外（`ghost/master/` の下）へ置いた
@@ -114,7 +90,7 @@ fn a_vertical_balloon_outside_the_ghost_folder_is_rejected() {
         "固定入力のゴーストのフォルダが在ること（判定が空振りしない前提）: {}",
         folder.display()
     );
-    let result = check_pasta_layout(root.path(), &folder);
+    let result = check_pasta_layout(&folder);
     assert!(
         result.is_err(),
         "ゴーストのフォルダの外の縦書きのバルーンは赤のはず: {result:?}"

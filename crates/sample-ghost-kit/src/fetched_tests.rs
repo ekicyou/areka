@@ -10,8 +10,6 @@ use crate::{NarBuilder, SampleError, WorkDir, install_txt};
 
 /// 最小のゴースト 1 体の `.nar` のバイト列。`mark` は長さを変えずに中身を変える目印。
 fn tiny_nar(name: &str, mark: &[u8]) -> Vec<u8> {
-    let dir = WorkDir::new().expect("組む場所は取れるはず");
-    let nar = dir.path().join(format!("{name}.nar"));
     NarBuilder::new()
         .file(
             "install.txt",
@@ -25,9 +23,7 @@ fn tiny_nar(name: &str, mark: &[u8]) -> Vec<u8> {
         .done()
         .file("mark.txt", mark)
         .done()
-        .write_to(&nar)
-        .expect("固定入力の .nar を置けるはず");
-    std::fs::read(&nar).expect("組んだ .nar は読めるはず")
+        .bytes()
 }
 
 /// 私有の名前空間の置き場へ書庫を置く。
@@ -58,18 +54,7 @@ fn is_ascii_only(text: &str) -> bool {
 // ---- 置き場の位置と綴り ----
 
 #[test]
-fn shelf_positions_are_namespace_fetched_name() {
-    let ns = Path::new(r"C:\x\nar");
-    assert_eq!(fetched_path_in(ns, "x"), ns.join("fetched").join("x.nar"));
-    assert_eq!(
-        fetched_checksum_path_in(ns, "x"),
-        ns.join("fetched").join("x.nar.sha256")
-    );
-}
-
-#[test]
 fn checksum_url_appends_suffix() {
-    assert_eq!(CHECKSUM_SUFFIX, ".sha256");
     assert_eq!(checksum_url("https://x/a.nar"), "https://x/a.nar.sha256");
 }
 
@@ -290,17 +275,6 @@ fn row_form_rejects_each_bad_input() {
             fetched_row_form(name, url).is_err(),
             "落ちるはず: {name} {url:?}"
         );
-    }
-}
-
-// ---- 掃除は置き場を走査しない ----
-
-#[test]
-fn fetched_shelf_is_outside_work_and_cache() {
-    let ns = Path::new(r"C:\x\nar");
-    let path = fetched_path_in(ns, "x");
-    for shelf in ["work", crate::devroot::CACHE, "manual"] {
-        assert!(!path.starts_with(ns.join(shelf)), "{}", path.display());
     }
 }
 

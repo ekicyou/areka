@@ -9,7 +9,7 @@
 //! （読み手は書き手とは別に書き起こされたもので、写しではない）。
 
 use super::*;
-use std::path::PathBuf;
+use crate::WorkDir;
 
 // ---- テスト内に別途書き起こした最小の読み手（書き手の写しではない） ----
 
@@ -66,23 +66,6 @@ fn parse(bytes: &[u8]) -> Vec<Parsed> {
         at += 46 + name_len + u16_at(bytes, at + 30) as usize + u16_at(bytes, at + 32) as usize;
     }
     out
-}
-
-/// `target/` の下に本テスト専用の空フォルダを 1 つ作る（OS の一時フォルダは使わない）。
-///
-/// 段 ③ の展開先の名前空間フォルダは使わない——あの名前は展開先を指す約束で、
-/// 見張りが「まだ現れていない」ことを検査している。本テストが要るのは書いたバイト列を
-/// 置く場所だけなので、無関係な自前のフォルダを使う。タスク 2.5 で `WorkDir` が
-/// 入ったらそちらへ寄せてよい。
-fn scratch(tag: &str) -> PathBuf {
-    let path = PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../target/nar-writer-work"
-    ))
-    .join(format!("{}-{tag}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&path);
-    std::fs::create_dir_all(&path).expect("scratch フォルダを作れる");
-    path
 }
 
 // ---- 往復 ----
@@ -284,14 +267,15 @@ fn every_local_header_carries_the_fixed_dos_time() {
 
 #[test]
 fn folding_a_tree_converts_nothing() {
-    let root = scratch("fold");
+    let work = WorkDir::new().expect("私有の場所");
+    let root = work.path();
     std::fs::create_dir_all(root.join("ghost/master")).expect("下位フォルダを作れる");
     // CRLF と Shift_JIS の高位バイトを両方含む——どちらも変換されてはならない。
     let body = b"charset,Shift_JIS\r\nname,\x82\xa0\x82\xa2\n\xff\x00 end";
     std::fs::write(root.join("ghost/master/descript.txt"), body).expect("書ける");
     std::fs::write(root.join("install.txt"), b"type,ghost\r\n").expect("書ける");
 
-    let nar = fold_tree(&root).expect("木を畳める");
+    let nar = fold_tree(root).expect("木を畳める");
     let parsed = parse(&nar.bytes());
     let names: Vec<Vec<u8>> = parsed.iter().map(|p| p.name.clone()).collect();
     assert_eq!(
@@ -315,229 +299,42 @@ fn folding_a_tree_converts_nothing() {
     );
 
     assert_eq!(
-        fold_tree(&root).expect("2 度目").bytes(),
+        fold_tree(root).expect("2 度目").bytes(),
         nar.bytes(),
         "畳み込みも決定論的"
     );
-    std::fs::remove_dir_all(&root).expect("片付けられる");
 }
 
 #[test]
 fn folding_a_missing_tree_fails_loudly() {
-    let root = scratch("missing");
-    std::fs::remove_dir_all(&root).expect("消せる");
+    let work = WorkDir::new().expect("私有の場所");
+    let root = work.path().join("missing");
     let err = fold_tree(&root).expect_err("無いフォルダは黙って空を返さない");
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 }
 
 #[test]
 fn write_to_puts_the_same_bytes_on_disk() {
-    let root = scratch("write");
+    let work = WorkDir::new().expect("私有の場所");
+    let root = work.path();
     let nar = NarBuilder::new().file("a.txt", b"x").done();
     let path = root.join("a.nar");
     nar.write_to(&path).expect("書ける");
     assert_eq!(std::fs::read(&path).expect("読める"), nar.bytes());
-    std::fs::remove_dir_all(&root).expect("片付けられる");
-}
-
-/// 設計「Testing Strategy」が並べる固定入力を、本 API だけで**全て組めること**を示す。
-///
-/// 判定は「組めて、中央ディレクトリの件数が期待どおり」までに留める（何が拒否されるかは
-/// 読取層＝タスク 3.1 以降の仕事）。ここが赤くなるのは、後続のタスクが必要とする形を
-/// 書き手が表せなくなったときだけ。
-#[test]
-fn every_fixture_the_testing_strategy_lists_can_be_built() {
-    // container_tests
-    let cases: Vec<(&str, NarBuilder)> = vec![
-        ("無圧縮", NarBuilder::new().file("a.txt", b"x").done()),
-        (
-            "deflate",
-            NarBuilder::new().file("a.txt", b"x").deflate().done(),
-        ),
-        (
-            "CRC 不一致",
-            NarBuilder::new()
-                .file("a.txt", b"x")
-                .corrupt(Corrupt::Crc)
-                .done(),
-        ),
-        (
-            "長さ不一致",
-            NarBuilder::new()
-                .file("a.txt", b"x")
-                .corrupt(Corrupt::Size)
-                .done(),
-        ),
-        (
-            "中身の破損",
-            NarBuilder::new()
-                .file("a.txt", b"x")
-                .corrupt(Corrupt::Data)
-                .done(),
-        ),
-        (
-            "暗号化ビット",
-            NarBuilder::new()
-                .file("a.txt", b"x")
-                .encrypted_flag()
-                .done(),
-        ),
-        (
-            "方式 99",
-            NarBuilder::new().file("a.txt", b"x").method(99).done(),
-        ),
-        (
-            "方式 12",
-            NarBuilder::new().file("a.txt", b"x").method(12).done(),
-        ),
-        // names_tests: 名前の生バイトは何であれそのまま通る。
-        (
-            "印つき UTF-8",
-            NarBuilder::new().file("ゴースト/本体.txt", b"x").done(),
-        ),
-        (
-            "印なし Shift_JIS",
-            NarBuilder::new()
-                .file(b"\x83S\x81[\x83X\x83g/\x96{\x91\xcc.txt".to_vec(), b"x")
-                .utf8_flag(false)
-                .done(),
-        ),
-        (
-            "復号できない列",
-            NarBuilder::new()
-                .file(b"\xff\xfe\x80.txt".to_vec(), b"x")
-                .utf8_flag(false)
-                .done(),
-        ),
-        (
-            "親へ昇る",
-            NarBuilder::new().file("../escape.txt", b"x").done(),
-        ),
-        (
-            "絶対パス",
-            NarBuilder::new().file("/etc/passwd", b"x").done(),
-        ),
-        (
-            "ドライブ文字",
-            NarBuilder::new().file("C:/windows/x.txt", b"x").done(),
-        ),
-        (
-            "UNC",
-            NarBuilder::new().file(r"\host\share\x.txt", b"x").done(),
-        ),
-        (
-            "円記号の区切り",
-            NarBuilder::new().file(r"ghost\master\x.txt", b"x").done(),
-        ),
-        (
-            "NUL",
-            NarBuilder::new()
-                .file(b"bad\x00name.txt".to_vec(), b"x")
-                .done(),
-        ),
-        ("予約名", NarBuilder::new().file("CON.txt", b"x").done()),
-        (
-            "末尾ドット",
-            NarBuilder::new().file("trailing.", b"x").done(),
-        ),
-        (
-            "使えない記号",
-            NarBuilder::new().file("a<>b.txt", b"x").done(),
-        ),
-        (
-            "シンボリックリンク",
-            NarBuilder::new().file("link", b"../x").symlink().done(),
-        ),
-        // manifest_tests: 中身は生バイトで渡せるので任意の文字コードを置ける。
-        (
-            "大文字キーと値の前の空白",
-            NarBuilder::new()
-                .file(
-                    "install.txt",
-                    &install_txt(&["Charset,UTF-8", "type, ghost"]),
-                )
-                .done(),
-        ),
-        (
-            "charset 無しの Shift_JIS な name",
-            NarBuilder::new()
-                .file("install.txt", b"type,ghost\r\nname,\x82\xa0\x82\xa2\r\n")
-                .done(),
-        ),
-        // plan_tests: フォルダのエントリの有無。
-        (
-            "フォルダのエントリ無し",
-            NarBuilder::new().file("ghost/master/x.txt", b"x").done(),
-        ),
-    ];
-    for (label, nar) in cases {
-        assert_eq!(
-            parse(&nar.bytes()).len(),
-            1,
-            "{label}: 1 件の書庫として組める"
-        );
-    }
-
-    // 大小衝突は 2 件・空フォルダはフォルダのエントリ 1 件。
-    let collision = NarBuilder::new()
-        .file("A.txt", b"x")
-        .done()
-        .file("a.txt", b"y")
-        .done();
-    assert_eq!(parse(&collision.bytes()).len(), 2, "大小衝突の対");
-    assert_eq!(
-        parse(&NarBuilder::new().dir("empty").bytes()).len(),
-        1,
-        "空フォルダ"
-    );
-
-    // 宣言サイズの総和が 1 GiB の上限を超える（実データは 2 バイトのまま）。
-    let over_cap = NarBuilder::new()
-        .file("a.bin", b"x")
-        .declared_size(768 << 20)
-        .done()
-        .file("b.bin", b"y")
-        .declared_size(768 << 20)
-        .done();
-    let parsed = parse(&over_cap.bytes());
-    assert!(
-        parsed.iter().map(|p| p.uncomp_size as u64).sum::<u64>() > 1 << 30,
-        "宣言サイズの総和が上限を超える"
-    );
-    assert_eq!(
-        parsed.iter().map(|p| p.comp_size).sum::<u32>(),
-        2,
-        "実データは 2 バイト"
-    );
-
-    // 書庫まるごとの 4 形は、中央ディレクトリの中身を変えずに組める。
-    for how in [
-        Damage::NoEocd,
-        Damage::Zip64Marker,
-        Damage::MultiDisk,
-        Damage::CentralOffsetOutOfRange,
-    ] {
-        let bytes = NarBuilder::new()
-            .file("a.txt", b"x")
-            .done()
-            .damage(how)
-            .bytes();
-        assert!(!bytes.is_empty(), "{how:?} を立てても書庫は組める");
-    }
 }
 
 /// 畳む順は名前のバイト順（大文字が小文字より先）で、NTFS の `read_dir` の順（大小無視）
 /// とは食い違う（指摘 25）。
 #[test]
 fn folding_orders_entries_by_byte_order() {
-    let root = scratch("fold-order");
+    let work = WorkDir::new().expect("私有の場所");
+    let root = work.path();
     std::fs::write(root.join("a.txt"), b"a").expect("書ける");
     std::fs::write(root.join("B.txt"), b"b").expect("書ける");
 
-    let names: Vec<Vec<u8>> = parse(&fold_tree(&root).expect("木を畳める").bytes())
+    let names: Vec<Vec<u8>> = parse(&fold_tree(root).expect("木を畳める").bytes())
         .into_iter()
         .map(|p| p.name)
         .collect();
     assert_eq!(names, vec![b"B.txt".to_vec(), b"a.txt".to_vec()]);
-    std::fs::remove_dir_all(&root).expect("片付けられる");
 }

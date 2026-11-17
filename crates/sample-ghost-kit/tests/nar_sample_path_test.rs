@@ -15,30 +15,21 @@
 //!
 //! `cargo run` は使わない。検査の途中で組み直しが走ると、測っているものが変わる。
 //!
-//! # 手動用の根は検体ごとに 1 つ
+//! # 手動用の根は私有の場所の下だけを触る
 //!
-//! `manual/<名>/` は呼ぶたびに消して作り直す。同じ検体を触る検査が同時に走ると、片方の
-//! 複写の途中でもう片方が消す。同じテストバイナリの中で直列化する。
+//! `manual/<名>/` は呼ぶたびに消して作り直す。引き継いだ `CARGO_TARGET_DIR` のまま回すと
+//! 開発者が使っている本物の手動用の根を消すので、根を触る検査は 1 本ごとの私有の場所
+//! （[`WorkDir`]）へ振って回す。検査どうしの根も別々なので、直列化の錠は要らない。
 
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
 
 use sample_ghost_kit::{SAMPLES, SampleKind, SampleSource, WorkDir};
 
 /// 組み上がった実行体。cargo が結合テストにだけ教える。
 const COMMAND: &str = env!("CARGO_BIN_EXE_nar-sample-path");
 
-/// 手動用の根を触る検査を直列化する錠。
-static MANUAL: Mutex<()> = Mutex::new(());
-
-/// 錠を取る。前の検査が落ちて毒されていても、木の状態は次の呼び出しが作り直すので続ける。
-fn manual_lock() -> MutexGuard<'static, ()> {
-    MANUAL
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-/// 実行体を起こして (終了コード, 標準出力, 標準エラー) を取る。
+/// 実行体を起こして (終了コード, 標準出力, 標準エラー) を取る。根は作らない検査だけが使う
+/// （根を触る検査は [`run_in`]）。
 fn run(name: &str) -> (Option<i32>, String, String) {
     finish(std::process::Command::new(COMMAND).arg(name))
 }
@@ -77,17 +68,24 @@ fn pairs(out: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// 登記した検体すべてで、1 行 1 組・`key=value`・絶対パス・末尾の区切り記号なしの形で
+/// 登記した検体のうち並びの要所を覆う 3 つ（同梱バルーン 2・0・バルーンの種類）で、1 行 1 組・`key=value`・絶対パス・末尾の区切り記号なしの形で
 /// 根・検体フォルダ・同梱バルーンが出る（要件 1.9）。
 ///
 /// この出力は `tools/perf/` の 2 本が `folder=` の 1 行として読む。鍵の綴りと並び、値の形
 /// （`..` を畳んだ絶対パス）をここで固定する——受け手は `=` の左右に割った値をそのまま別の
 /// 道具へ渡すので、綴りが揺れたら読めない。
 #[test]
-fn the_command_prints_one_absolute_path_per_line_for_every_registered_sample() {
-    let _serialized = manual_lock();
-    for sample in SAMPLES {
-        let (code, out, err) = run(sample.name);
+fn the_command_prints_one_absolute_path_per_line_for_the_chosen_samples() {
+    let private = WorkDir::new().expect("私有の場所");
+    let chosen: Vec<_> = SAMPLES
+        .iter()
+        .filter(|sample| {
+            ["claudia", "R_POST_and_KOMAINU", "emo2-kakukaku-wplimit"].contains(&sample.name)
+        })
+        .collect();
+    assert_eq!(chosen.len(), 3, "較正: 絞った 3 検体が登記に在ること");
+    for sample in chosen {
+        let (code, out, err) = run_in(private.path(), sample.name);
         assert_eq!(
             code,
             Some(0),
@@ -125,6 +123,11 @@ fn the_command_prints_one_absolute_path_per_line_for_every_registered_sample() {
         }
 
         let root = Path::new(&printed[0].1);
+        assert!(
+            root.starts_with(private.path()),
+            "印字した根が私有の `CARGO_TARGET_DIR` の下にあること: {}",
+            root.display()
+        );
         let store = match sample.kind {
             SampleKind::Ghost => "ghost",
             SampleKind::Balloon => "balloon",
@@ -156,10 +159,15 @@ fn the_command_prints_one_absolute_path_per_line_for_every_registered_sample() {
 /// （実機はこの後で `areka.exe` にこのパスを渡す）も同時に判定する。
 #[test]
 fn two_runs_in_a_row_each_hand_out_a_root_with_no_boot_record() {
-    let _serialized = manual_lock();
-    let (first_code, first_out, first_err) = run("emo2");
+    let private = WorkDir::new().expect("私有の場所");
+    let (first_code, first_out, first_err) = run_in(private.path(), "emo2");
     assert_eq!(first_code, Some(0), "1 回目: {first_err}");
     let first = pairs(&first_out);
+    assert!(
+        Path::new(&first[0].1).starts_with(private.path()),
+        "印字した根が私有の `CARGO_TARGET_DIR` の下にあること: {}",
+        first[0].1
+    );
     let folder = PathBuf::from(&first[1].1);
     assert!(
         folder.join("ghost").join("master").is_dir(),
@@ -177,7 +185,7 @@ fn two_runs_in_a_row_each_hand_out_a_root_with_no_boot_record() {
         record.display()
     );
 
-    let (second_code, second_out, second_err) = run("emo2");
+    let (second_code, second_out, second_err) = run_in(private.path(), "emo2");
     assert_eq!(second_code, Some(0), "2 回目: {second_err}");
     assert_eq!(pairs(&second_out), first, "2 回とも同じ場所を印字すること");
     assert!(

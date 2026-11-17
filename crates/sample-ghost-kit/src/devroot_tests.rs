@@ -31,7 +31,7 @@ fn exists(work: &WorkDir) -> (bool, bool) {
 }
 
 #[test]
-fn the_work_dir_lives_under_the_spec_namespace_and_never_in_the_os_temp_dir() {
+fn the_work_dir_is_absolute_and_named_after_the_process_with_its_lease_beside_it() {
     let work = WorkDir::new().expect("ビルド成果物の置き場は見つかるはず");
     let path = work.path();
 
@@ -39,19 +39,6 @@ fn the_work_dir_lives_under_the_spec_namespace_and_never_in_the_os_temp_dir() {
         path.is_absolute(),
         "借り手に渡すのは絶対パス: {}",
         path.display()
-    );
-    let namespace = namespace_dir().expect("名前空間は組めるはず");
-    assert_eq!(
-        namespace.file_name().and_then(|name| name.to_str()),
-        Some(NAMESPACE),
-        "名前空間はビルド成果物の置き場の直下の専用フォルダ（要件 7.1）: {}",
-        namespace.display()
-    );
-    assert!(
-        path.starts_with(&namespace),
-        "作業フォルダは本仕様専用の名前空間の下に作ること（要件 7.1）: {} / {}",
-        path.display(),
-        namespace.display()
     );
     // 名前は `<プロセス識別子>-<連番>`、札はその隣に `.lock` を付けた名前。
     let stem = path
