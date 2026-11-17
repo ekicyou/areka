@@ -54,18 +54,15 @@ const UNLOAD_TIMEOUT: Duration = Duration::from_secs(3);
 /// helper の message loop がこの N 秒を破綻なく生存し続けることを親が観測する。
 /// helper 側 backstop（`run_helper` の 30s・helper.rs §88）より十分短く、ハーネス安全な短尺。
 const SURVIVAL_WINDOW: Duration = Duration::from_secs(4);
-/// 生存窓の間、親が helper 生死を `poll_exit` する間隔（この刻みで N 秒を消化する）。
+/// 生存窓の間、親が helper 生死を `poll_exit_kind` で見る間隔（この刻みで N 秒を消化する）。
 const SURVIVAL_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
-/// helper exe パスを解決する（design.md §324 確定）:
-/// 環境変数 `HELPER_EXE`（無ければ第 1 CLI 引数）。どちらも無ければ `None`。
-fn resolve_helper_exe() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var(process_host::HELPER_EXE_ENV) {
-        if !p.is_empty() {
-            return Some(PathBuf::from(p));
-        }
-    }
-    std::env::args().nth(1).map(PathBuf::from)
+/// helper の exe（環境変数 `HELPER_EXE`、無ければ `--` で始まらない最初の引数）。
+fn helper_exe_from_process() -> Option<PathBuf> {
+    process_host::resolve_helper_exe(
+        std::env::var(process_host::HELPER_EXE_ENV).ok(),
+        std::env::args().skip(1),
+    )
 }
 
 fn main() {
@@ -98,11 +95,11 @@ fn main() {
         }
     }
 
-    let helper_exe = match resolve_helper_exe() {
+    let helper_exe = match helper_exe_from_process() {
         Some(p) => p,
         None => {
             eprintln!(
-                "[go(1)] HELPER_EXE 未設定かつ argv[1] なし。\
+                "[go(1)] HELPER_EXE 未設定かつ `--` で始まらない引数なし。\
                  $env:HELPER_EXE に i686 helper exe を設定して再実行してください。"
             );
             std::process::exit(2);
@@ -113,7 +110,7 @@ fn main() {
     //
     // 構成（design.md §172–232）:
     //   [go 基準(1)] setup（helper 起動＋HELLO＋OnBoot 1 往復）→ Value 受領・確認。
-    //   [go 基準(2)] 同一 helper を N 秒生存させ（poll_exit で生存監視）→ UNLOAD → clean unload
+    //   [go 基準(2)] 同一 helper を N 秒生存させ（poll_exit_kind で生存監視）→ UNLOAD → clean unload
     //               → 終了コード 0 を親が観測（design.md §230: 終了コード 0 ＋親側観測ログを一次記録）。
     // UNLOAD は go(1) では送らず、go(2) の生存窓の**後**に送る（設計変更点・§221「N 秒後」）。
     match drive(&helper_exe, ghostdir) {
@@ -183,7 +180,7 @@ fn drive(helper_exe: &Path, ghostdir: &Path) -> Result<(), String> {
 struct Go2Record {
     /// N 秒生存窓で実際に生存した実時間。
     survived: Duration,
-    /// 生存窓中の poll_exit 回数（すべて alive=None）。
+    /// 生存窓中の poll_exit_kind 回数（すべて alive=None）。
     polls: u64,
     /// 生存後の追加 REQUEST に helper が返した応答バイト数（None=応答なし）。
     /// Some ＝ pasta の actor ループが生存後も稼働継続していることの親可視な証拠。
@@ -201,7 +198,7 @@ struct HelperSession<'p> {
     /// 親 message-only 窓（RESPONSE 受け皿・go(2) 中も生存）。
     parent: &'p ParentMessageWindow,
     /// helper 子プロセスハンドル（生存監視・clean unload 待ちの単一ソース）。
-    /// clean unload 待ち（`wait_clean`）で所有権を消費するため `Option`（`take` して wait へ渡す）。
+    /// clean unload 待ち（`wait_kind`）で所有権を消費するため `Option`（`take` して wait へ渡す）。
     handle: Option<HelperHandle>,
     /// 親窓 HWND（UNLOAD の from）。
     parent_hwnd: windows::Win32::Foundation::HWND,
@@ -318,19 +315,19 @@ fn drive_go_criterion_1<'p>(
 ///
 /// 前提: `session` は go(1) で確立した稼働中の helper（UNLOAD 未送出）。
 /// 手順:
-///   1. **生存窓**: helper を N 秒（`SURVIVAL_WINDOW`）生かし、`ProcessHost::poll_exit` で
+///   1. **生存窓**: helper を N 秒（`SURVIVAL_WINDOW`）生かし、`ProcessHost::poll_exit_kind` で
 ///      刻みごとに生存（`None`）を確認する。途中で終了していれば go(2) 失敗（loop が破綻＝要件 5.2 不成立）。
 ///   2. 生存窓の後に UNLOAD を送出（design.md §221「N 秒後」）。
-///   3. `ProcessHost::wait_clean` で終了コードを取得し、**0 / `ExitKind::Clean`** を親が観測する
-///      （design.md §230: 終了コード 0 ＋親側観測ログを一次記録・要件 1.3/5.4）。非ゼロなら失敗。
+///   3. `ProcessHost::wait_kind` で終わり方を取り、**`ExitKind::Clean`**（終了コード 0）を親が観測する
+///      （design.md §230: 終了コード 0 ＋親側観測ログを一次記録・要件 1.3/5.4）。それ以外は失敗。
 ///
 /// 全ステップは bounded: 生存窓は N（`SURVIVAL_WINDOW`）＋刻み、UNLOAD は `UNLOAD_TIMEOUT`。
-/// clean unload 待ち（`wait_clean`）は helper が UNLOAD で即 clean 終了するため実質即返り、
+/// clean unload 待ち（`wait_kind`）は helper が UNLOAD で即 clean 終了するため実質即返り、
 /// 最悪でも helper 側 backstop（`run_helper` 30s・helper.rs §88）が上限を保証する（ハングしない）。
 fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String> {
     println!("=== go 基準(2): メッセージループ {SURVIVAL_WINDOW:?} 生存 → clean unload を観測 ===");
 
-    // --- 1. 生存窓: N 秒間 helper が生きていることを poll_exit で刻みごとに観測（要件 5.2）---
+    // --- 1. 生存窓: N 秒間 helper が生きていることを poll_exit_kind で刻みごとに観測（要件 5.2）---
     let started = Instant::now();
     let mut polls = 0u64;
     let handle = session
@@ -352,7 +349,7 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
     }
     let survived = started.elapsed();
     println!(
-        "[go(2)] helper survived {:.2}s（poll_exit={} 回 すべて alive=None・メッセージループ生存・要件 5.2）",
+        "[go(2)] helper survived {:.2}s（poll_exit_kind={} 回 すべて alive=None・メッセージループ生存・要件 5.2）",
         survived.as_secs_f64(),
         polls
     );
@@ -386,10 +383,9 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
         .handle
         .take()
         .ok_or_else(|| "go 基準(2) 内部エラー: helper handle が既に消費済み".to_string())?;
-    match ProcessHost::wait_clean(handle) {
-        Ok(code) => {
-            let kind = ExitKind::classify(Some(code));
-            println!("[go(2)] helper exited code={code} kind={kind:?}（親が終了コードを観測）");
+    match ProcessHost::wait_kind(handle) {
+        Ok(kind) => {
+            println!("[go(2)] helper exited kind={kind:?}（親が終わり方を観測）");
             if kind.is_clean() {
                 println!(
                     "=== go 基準(2) PASS: helper survived {:.2}s → clean unload → exit code=0 kind=Clean を親が観測（要件 1.3/5.2/5.4・design.md §230） ===",
@@ -399,12 +395,12 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
                     survived,
                     polls,
                     post_survival_response_bytes,
-                    exit_code: code,
+                    exit_code: 0, // Clean ＝終了コード 0
                     exit_kind: kind,
                 })
             } else {
                 Err(format!(
-                    "go 基準(2) 不成立: helper が clean(0) で終了しなかった（code={code} {kind:?}）"
+                    "go 基準(2) 不成立: helper が clean(0) で終了しなかった（{kind:?}）"
                 ))
             }
         }
@@ -578,7 +574,7 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
 fn drive_err_helper_abnormal_exit(ghostdir: &Path) -> Result<(), String> {
     println!("--- err(2) helper 強制終了検出（要件 1.4/2.4・design.md §528）---");
 
-    let helper_exe = match resolve_helper_exe() {
+    let helper_exe = match helper_exe_from_process() {
         Some(p) => p,
         None => {
             return Err(
