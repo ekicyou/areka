@@ -584,6 +584,18 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 `list_shiori_resource` の状態の数を数え直した値に直した。行数は **67 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
 **43 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 67 に合わせ、`snapshot_on` は **2026-11-01** にした。
 
+**2026-11-17 の追加（`collisionex-regions`）**: `collisionex-regions` の行を 1 行足した。この spec がシェルの
+`collisionex*` の行を `collision*` と同じ番号の並びへ読んで型へ運び、`rect` を当たり判定として働かせた（楕円・円・
+多角形・`region` は型へ運んで記録を出すだけで、ID の描き先に塗るのは `hit-id-pass`）ので、台帳 `ledger/assets.toml` の
+1 項目（`collisionex*`）を未対応から縮退へ移し、宛先をこの spec にした（それまで宛先が空だった）。同じ台帳の `collision*` の
+項目は宛先を `areka-P0-shell-parse` のまま残し、説明だけを書き直した。`collisionex*` は `linkage.md` の束「撫で」に属するので、
+束の欄には「撫で」を書き（`none = true` の行にはしない）、段階 A の表の「撫で」の行にこの spec（1 件）を足した。「撫で」の束の
+構成は **33 件**（`linkage.md` の `members` を数えた）で、1 件は ⑴（全数）にも ⑵（過半）にも当たらないので、候補 spec 名の案の
+欄は変えていない。足した行の中身は `stage = "A"`・`bundle = "撫で"`・`owner_count = 1`・`wave = "C22-①"` で、段階は「撫で」が
+順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。あわせて `briefing.md` の
+`descript_shell_surfaces` の状態の数を数え直した値に直した。行数は **68 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
+**44 行**・`none = true` の行が **24 行**である。`[briefs].count` はこの 68 に合わせ、`snapshot_on` は **2026-11-17** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -618,8 +630,8 @@ interval の `never` を呼ばれる相手として表に載せたので、台�
 
 ```toml
 [briefs]
-count = 67
-snapshot_on = "2026-11-01"
+count = 68
+snapshot_on = "2026-11-17"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -1130,6 +1142,13 @@ stage = "A"
 bundle = "メニュー"
 owner_count = 1
 wave = "C15-⑥"
+
+[[spec]]
+name = "collisionex-regions"
+stage = "A"
+bundle = "撫で"
+owner_count = 1
+wave = "C22-①"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -1156,7 +1175,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | バルーンのリンク | `anchor-style-canon`（既存 spec がそのまま引受先・構成 60 件のうち未対応の 59 件の全数を `owner` に持つ。残る 1 件は `areka-P0-anchor-tag-canon` が実装済みにした） | `anchor-style-canon`（文字とバルーンの列・59 件）／`areka-P0-anchor-tag-canon`（C5-①・1 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `currentghost-property-tree`（W15・15 件）／`shell-mouse-cursor`（v0.1.0・2 件） | 第 2 波 |
 | 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・8 件）／`property-catalog-lists`（W16・4 件）／`areka-P0-shell-balloon-switch`（B8・2 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件）／`areka-P0-network-update`（B7・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・1 件）／`areka-P0-move-canon`（v0.0.3・1 件）／`areka-P0-window-link-directives`（C10-②・1 件）／`popup-menu-shell-look`（v0.1.0・22 件）／`popup-menu-extra-resources`（C15-⑥・1 件） | 第 2 波 |
-| 12 | 撫で | `areka-P0-touch-events-canon` | `currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件）／`mouse-click-wheel-events`（v0.1.0・3 件） | 第 2 波 |
+| 12 | 撫で | `areka-P0-touch-events-canon` | `currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件）／`areka-P0-mouse-drag-events`（C3-④・2 件）／`mouse-click-wheel-events`（v0.1.0・3 件）／`collisionex-regions`（C22-①・1 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `balloon-canon-residue`（W14・4 件）／`balloon-scroll-arrows`（v0.1.0・5 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `choice-marker-styling`（W16・39 件）／`script-small-tags`（v0.1.0・1 件） | 第 2 波 |

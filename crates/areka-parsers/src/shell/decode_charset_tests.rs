@@ -31,8 +31,8 @@
 
 use crate::charset::{DefaultEncoding, decode};
 use crate::shell::{
-    AliasKey, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath, Shell, Surface,
-    SurfaceAlias, parse,
+    AliasKey, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
+    Element, ElementPath, Shell, Surface, SurfaceAlias, parse,
 };
 
 // ---- 固定物 4 種（符号化器から導かない逐語のバイト列）-------------------------
@@ -137,10 +137,12 @@ fn expected_shell() -> Shell {
             }],
             collisions: vec![Collision {
                 index: 0,
-                left: 1,
-                top: 2,
-                right: 3,
-                bottom: 4,
+                shape: CollisionShape::Rect(CollisionBounds {
+                    left: 1,
+                    top: 2,
+                    right: 3,
+                    bottom: 4,
+                }),
                 name: CollisionName::new("あたま".to_string()),
             }],
             animations: Vec::new(),
