@@ -4,7 +4,7 @@
 //! - ⑵ 台本の SHIORI（`ScriptedShioriBackend` 一式・[`HOMEURL_RESOURCE`]・進行状態の記録の型と本体）と
 //!   「解かれるまで固まる」台本の置き場 [`hold_support`]（`spine_hold_support.rs`）。
 //!
-//! 背骨の足場（`SpineHarness`・`settle_bounded`・`make_world_with_gpu` ほか＝⑶）とそれを使う spine の
+//! 背骨の足場（`SpineHarness`・`make_world_with_gpu` ほか＝⑶）とそれを使う spine の
 //! テストは本体の部品も使うので、本体の `runtime_tests/spine.rs` に置く（spec: runtime-crate-split 設計 D4）。
 //! このモジュールは `#[cfg(any(test, feature = "test-support"))]` で立ち、本体のテストは `test-support` で使う。
 //!
@@ -17,7 +17,7 @@
 //! [`run_bounded`] は総時間の `recv_timeout` である。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
 //! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（`DENSE_SPIN`（`spine_wait.rs`・60 ms）の窓）で
 //! 速い経路の検出遅延を犠牲にせず、窓を過ぎたら [`BACKOFF_SLEEP`] へ落としてコア占有をやめる
-//! （PR #96 で導入）。ハイブリッドと回収（settle）の形は ⑶ の側（本体の `runtime_tests/spine.rs`）の説明にある。
+//! （PR #96 で導入）。回収（settle）の形も ⑴ にあり（[`settle_bounded`]）、ハイブリッドの形は ⑶ の側（本体の `runtime_tests/spine.rs`）の説明にある。
 //!
 //! # 依存の申し送り（CONCERNS 相当）
 //!
@@ -325,7 +325,7 @@ mod wait;
 pub use self::wait::{BACKOFF_SLEEP, SPIN_WAIT, join_bounded};
 pub use self::wait::{
     GpuPermit, Progress, WaitFailure, join_thread_bounded, run_bounded, run_bounded_watching,
-    wait_recv, wait_until, wait_until_with,
+    settle_bounded, settle_bounded_with, wait_recv, wait_until, wait_until_with,
 };
 
 #[path = "spine_hold_support.rs"]

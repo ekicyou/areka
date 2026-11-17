@@ -154,7 +154,7 @@
   - 完了: 移したテストが `areka-runtime` で緑で、一時の道の番人のテストも緑（根はワークツリーの `target` の下）
   - _Dispatch: mechanical — 渡す関数と道の作り方を設計が与える_
   - _Requirements: 3.1, 3.3, 4.4, 4.5_
-- [ ] 6.4 静まりを待つ部品を `areka-runtime` へ下ろす［T15・95 番］
+- [x] 6.4 静まりを待つ部品を `areka-runtime` へ下ろす［T15・95 番］
   - 静まりを待つ 2 つの関数に間合い（`pause`）の引数を足して `areka-runtime` の待ちの芯へ移し（テストの支え・`pub`）、本体の足場は出し直しで引く
   - 檻 4 本をテストのファイルごと `git mv` で移し、時計を差した檻は眠らない間合いを渡す
   - 完了: 檻 4 本が `areka-runtime` で緑で、本体の spine 系のテストも緑。待ちの芯のファイルが 1,000 行を越えない
@@ -229,3 +229,4 @@
 - 4・78 番: 縛るテストは `reload_tests.rs` の組み立てでは shell の回が kanade と無関係に `no_context` で止まり、`accept_skin` の送り損ねの道（`reload.rs` の `end_skins(world, "kanade_gone")`）を縛れなかった。`reload_skin_tests.rs` の結線つきの組み立てへ移し、3 回目をバルーンにした（design.md の 78 番の節と行数の表を合わせた）。77 番の `SkinStep` は `pub(crate)` の `ReloadStage::Skins` の欄に出るので公開のまま（外すと `private_interfaces`）。
 - 5.2: `spine_conformance_lap_tests.rs` 末尾の「接続宣言は 3 本で確定済み」が今の数と合わない（どの指摘の対象でもない）。8.2 のかけ直しで扱う。
 - 6.1: zorder_wiring の 2 ファイルに分ける前の番号の節見出しが残る（本体の ⑶・⑷、areka-runtime の ⑴）。8.2 のかけ直しで振り直す。
+- 6.4: `pause` を足したのは設計の 95 番どおり `settle_bounded_with` だけ（tasks.md の「2 つの関数に」は字面の違い）。本体の足場は既にある `use areka_runtime::spine::*;` で引く。

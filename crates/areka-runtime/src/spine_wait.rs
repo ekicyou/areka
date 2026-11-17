@@ -1,4 +1,4 @@
-//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち）。
+//! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち・回収の `settle_bounded`）。
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
 //! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。打ち切り方は 3 通りで、芯
@@ -87,7 +87,7 @@ pub(super) const WAIT_CAP: Duration = Duration::from_secs(300);
 /// ならない（[`SPIN_WAIT`] の doc と同じ理由）ので、窓も時間で持つ。
 ///
 /// # 60 ms の根拠
-/// `spine.rs` の `SETTLE_MIN` の doc の実測（本機 22 論理 CPU）で、`yield_now` 5,000 回は無負荷
+/// 同じファイルの [`SETTLE_MIN`] の doc の実測（本機 22 論理 CPU）で、`yield_now` 5,000 回は無負荷
 /// 0.31 ms。旧予算 1_000_000 回を同じ割合で時間に直すと約 62 ms になる。60 ms なら、速い待ちの
 /// 空回しは旧形とほぼ同じ長さのまま（**成功する待機を旧形より遅くしない**）、重い待ちだけが 60 ms で
 /// CPU を返すようになる。予算を小さく取ると、正常でも数百 ms 待つ呼出点が [`BACKOFF_SLEEP`] の粒度に
@@ -415,6 +415,75 @@ pub fn join_bounded(what: &str, handle: ActorHandle) -> Result<(), ActorError> {
     handle.join()
 }
 
+/// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
+///
+/// 回収機会を反復回数で与えると、CPU 競合下（並列 `cargo test`・ウイルス対策の再スキャン）では
+/// 数 ms で反復が尽き、**残余を出す欠陥があっても空のまま緑になる**（空虚な緑）。負検証は
+/// 「出ないこと」を主張するので、機会が縮む方向の変動は誰にも赤にされない。よって最低限の
+/// 観測時間は壁時計で与える。
+///
+/// 初期値 200ms（design C3）を実測のうえ据え置いた。置き換え対象の旧ループ（`yield_now` 5,000 回）が
+/// 実際に占める時間を本機（22 論理 CPU）で測ると **無負荷 0.31ms**（7/7・振れ幅 0.306〜0.314）／
+/// **4 スレッド占有 0.93・8.4・22.6ms**／**22 スレッド占有 3.7・5.5・390ms**——負荷次第で 3 桁動き、
+/// 平常時は 1ms 未満しか待たない。200ms の床は平常値の 600 倍以上を常に与え、上振れ（390ms）とも
+/// 同じ桁なので**どの負荷でも旧形より回収機会が縮まない**（要件 4.5）。この床の内側には
+/// [`BACKOFF_SLEEP`] 粒度の反復が実測 約 130 回入る（1ms 指定の sleep は実測 1.5ms 粒度）。
+/// 代償は 1 呼出点あたり 0.2 秒。
+pub(super) const SETTLE_MIN: Duration = Duration::from_millis(200);
+
+/// 回収が尽きたと見なすのに要する**連続して 0 件だった反復数**（要件 4.2）。
+///
+/// 壁時計だけでは「たまたま静かな 200ms」を通してしまうので、観測量の側からも条件を置く。
+/// 1 反復ごとに [`BACKOFF_SLEEP`] を挟むので、50 回は「50ms 以上どのスレッドからも 1 件も
+/// 来なかった」ことを意味する。初期値（design C3）を据え置いた。無負荷では [`SETTLE_MIN`] の
+/// 内側に約 130 反復入るので本条件は先に満たされるが、sleep 粒度が伸びる負荷下（Windows の
+/// タイマ分解能が落ちると 1 反復 15ms 級＝200ms で 13 反復）では**こちらが効いて反復を伸ばす**。
+/// 2 条件は入れ替わりで律速する関係にあり、片方だけでは負荷下の回収機会を保証できない。
+pub(super) const SETTLE_QUIET_ROUNDS: u32 = 50;
+
+/// 「尽きるのが正常」の回収ループ。`step` は 1 反復分の回収（drain）を行い**回収件数**を返す。
+///
+/// 終了条件は **[`SETTLE_MIN`] を満たし かつ 連続 [`SETTLE_QUIET_ROUNDS`] 回 0 件**の両立で、
+/// どちらか一方では返らない。両立しないまま [`SPIN_WAIT`] を超えたら必ず返る（hang しない）。
+/// 反復の間は [`BACKOFF_SLEEP`] の短い sleep だけを挟む（有界 poll-backoff＝要件 4.4。
+/// **時刻を進めるための sleep ではない**——時刻前進は呼出側が前段で決定論的に注入し終えており、
+/// 本ヘルパは観測しかしない）。
+///
+/// 本ヘルパは **panic しない**。合否の宣告は呼出側の既存 assert のまま（要件 4.5・4.6）。
+pub fn settle_bounded(step: impl FnMut() -> usize) {
+    settle_bounded_with(Instant::now, std::thread::sleep, step);
+}
+
+/// 時計 `now` と休み `pause` を差し替えられる [`settle_bounded`] の内側（檻の継ぎ目・`spine_settle_tests.rs`）。
+///
+/// 「最小持続に達するまで返らない」を実時間の計測で確かめると並列負荷で合否が動く——本仕様が
+/// 直そうとしている当の病になる。時計を差し替えられるようにして、檻の期待値を**反復回数という
+/// 整数**へ落とし、休みも眠らないものを渡せるようにするための継ぎ目（[`wait_until_with`] と同じ型）。
+/// 本番の呼出点は常に [`settle_bounded`]（実時計・本物の `sleep`）を使う。
+pub fn settle_bounded_with(
+    mut now: impl FnMut() -> Instant,
+    mut pause: impl FnMut(Duration),
+    mut step: impl FnMut() -> usize,
+) {
+    let started = now();
+    let mut quiet = 0u32;
+    loop {
+        if step() == 0 {
+            quiet += 1;
+        } else {
+            quiet = 0;
+        }
+        let elapsed = now().saturating_duration_since(started);
+        if elapsed >= SETTLE_MIN && quiet >= SETTLE_QUIET_ROUNDS {
+            return;
+        }
+        if elapsed > SPIN_WAIT {
+            return;
+        }
+        pause(BACKOFF_SLEEP);
+    }
+}
+
 /// GPU の装置を同時に持てる数の数え（areka-P0-ghost-session-test-load-flake 要件 2.7・設計「足場のスレッドの絞り」）。
 ///
 /// D3D11 の装置は装置ごとにドライバのスレッドを生み、Windows ではスレッドの始まりと終わりがプロセスに
@@ -628,3 +697,7 @@ impl Drop for GpuPermit {
         self.slots.freed.notify_one();
     }
 }
+
+#[cfg(test)]
+#[path = "spine_settle_tests.rs"]
+mod settle_tests;

@@ -1,9 +1,7 @@
 use std::cell::Cell;
+use std::time::{Duration, Instant};
 
-use super::{
-    Duration, Instant, SETTLE_MIN, SETTLE_QUIET_ROUNDS, SPIN_WAIT, settle_bounded,
-    settle_bounded_with,
-};
+use super::{SETTLE_MIN, SETTLE_QUIET_ROUNDS, SPIN_WAIT, settle_bounded, settle_bounded_with};
 
 // ===========================================================================
 // task 4.1 — 「尽きるのが正常」の回収待ちの有界化（要件 4.2・4.4／design Flow 4・C3）
@@ -18,7 +16,7 @@ use super::{
 // 「時間が経つまで返らない」を実時間の計測で確かめると、並列負荷で合否が動く（本仕様が
 // まさに直そうとしている病）。そこで内側の継ぎ目 [`settle_bounded_with`] へ**注入時計**を渡し、
 // 時刻を `step` の呼出回数だけの関数にする。期待値は整数の呼出回数になり、実時間は一切
-// 判定に入らない（実行に要する実時間＝反復数 × [`BACKOFF_SLEEP`] は変わるが、合否は変わらない）。
+// 判定に入らない。休み `pause` も眠らないものを渡すので、反復ごとの本物の sleep も無い。
 // ===========================================================================
 
 /// 注入時計で [`settle_bounded_with`] を駆動し、`step` の呼出回数を返す。
@@ -31,6 +29,7 @@ fn drive(per_step: Duration, mut outcome: impl FnMut(u32) -> usize) -> u32 {
     let steps = Cell::new(0u32);
     settle_bounded_with(
         || base + per_step * steps.get(),
+        |_| {},
         || {
             let n = steps.get() + 1;
             steps.set(n);
