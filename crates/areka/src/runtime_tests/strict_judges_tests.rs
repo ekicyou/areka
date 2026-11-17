@@ -175,8 +175,7 @@ element1,balloon,a,0,0
                 command: CueCommand::Emote { key: "0".into() },
                 duration: 0.0,
             });
-            let (text, _drain) =
-                spawn_emo_text(Rc::clone(&runtime)).expect("このスレッドで文字の線を起こせる");
+            let (text, _drain) = spawn_emo_text(Rc::clone(&runtime));
             // 表情の受け口: 今のシェルとバルーンの事実を入れる。
             let (surface, _seriko) = spawn_seriko(
                 SurfaceResolver::new(aliases()),

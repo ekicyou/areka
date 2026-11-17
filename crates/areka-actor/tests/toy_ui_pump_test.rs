@@ -74,8 +74,7 @@ fn handle(msg: UiMsg) -> Result<ControlFlow<()>, &'static str> {
 fn echo_round_trip_after(before: Vec<UiMsg>) -> bool {
     let done = Arc::new(AtomicBool::new(false));
 
-    let (ui_tx, _drain) =
-        spawn_ui("toy-ui-echo", handle).expect("spawn_ui on the pump (test) thread must succeed");
+    let (ui_tx, _drain) = spawn_ui("toy-ui-echo", handle);
 
     let worker_done = Arc::clone(&done);
     let worker = std::thread::Builder::new()
@@ -141,8 +140,7 @@ fn dropping_every_sender_ends_the_ui_actor() {
     let _pump = std::thread::Builder::new()
         .name("toy-ui-drop-pump".to_owned())
         .spawn(move || {
-            let (ui_tx, drain) = spawn_ui("toy-ui-drop", handle)
-                .expect("spawn_ui on the pump (child) thread must succeed");
+            let (ui_tx, drain) = spawn_ui("toy-ui-drop", handle);
             let ended = Arc::new(AtomicBool::new(false));
             let watch_ended = Arc::clone(&ended);
             let _watch = wintf_winmsg_executor::spawn_local(async move {

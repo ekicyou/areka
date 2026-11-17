@@ -125,8 +125,7 @@ fn preview_rehearses_once_and_applied_cues_count_clears() {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let (mut sink, _handle) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
+    let (mut sink, _handle) = spawn_emo_text(Rc::clone(&runtime));
     // 頭の全消去 → 「あい」 → `\c` → 「う」: 区間は「あい」（番号 1）と「う」（番号 2）の 2 つ。
     let cues = vec![
         cue("0", 0.0, CueCommand::ClearAll),

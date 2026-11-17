@@ -157,8 +157,7 @@ mod long_script {
                     *m.entry(kind).or_default() += 1;
                     Ok(ControlFlow::Continue(()))
                 },
-            )
-            .expect("テストのスレッドで文字の線を起こせる");
+            );
             let hooks = StrictHooks {
                 ghost: "窓際のぱすたさん".into(),
                 judges: Arc::clone(&judges) as Arc<dyn StrictJudges>,

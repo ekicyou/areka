@@ -468,8 +468,7 @@ impl SpineHarness {
         let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         )));
-        let (emo_text_sink, text_pump) =
-            spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump (test) thread");
+        let (emo_text_sink, text_pump) = spawn_emo_text(Rc::clone(&runtime));
 
         // ── talk 時刻源（本番同様 dola clock 注入）＋実 ClockedTextSink<EmoTextSink> ──
         let clock_fn: Arc<dyn Fn() -> f64 + Send + Sync> = Arc::new(dola::runtime::clock::now);

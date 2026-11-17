@@ -187,15 +187,14 @@ pub(crate) type BootRuntimeFn = fn(
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
-/// 各段（mount／shell 読み込み＝一覧＋読取＋parse＋bake／balloon 組立／UI アクター spawn）の失敗を
+/// 各段（mount／shell 読み込み＝一覧＋読取＋parse＋bake／balloon 組立）の失敗を
 /// `#[from]` 変換で集約し、呼び手（`wire_runtime`）が `MountError::StartPointMissing` 系は
 /// `warn!`・他は `error!` に分類して `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は
 /// `LogSink`×2 フォールバック boot へ倒し、`ghost_session::boot_ghost_strict` は `Err` を返す・
 /// design.md「Error Categories and Responses」）。
 ///
 /// load-time バリアント: 構築入力の組立（`build_boot_assets`・task 2.6）が返す
-/// `Mount`／`Decoder`／`ShellRead`／`ShellEmpty`／`Balloon` に加え、UI アクター spawn 失敗
-/// （`SpawnUi`・`wire_runtime`＝task 5.1 が充填）を集約する。分類
+/// `Mount`／`Decoder`／`ShellRead`／`ShellEmpty`／`Balloon` を集約する。分類
 /// （`MountError::StartPointMissing` 系＝想定内 `warn!`・他＝`error!`）は呼び手
 /// （`wire_runtime`／`classify_wiring_error`・task 5.1）が担い、本型はバリアントを観測可能に
 /// するのみ（panic せず `Err` を返す・log-first R7.3）。
@@ -242,16 +241,6 @@ pub enum BootWiringError {
     /// `BalloonLoadError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[from]` で畳む。
     #[error("バルーン表示対象の構築に失敗")]
     Balloon(#[from] areka_emo_present::BalloonLoadError),
-
-    /// バルーン文字層 UI アクター（`areka_emo_text::actor::spawn_emo_text`）の spawn 失敗。
-    ///
-    /// `spawn_emo_text` は UI（pump）スレッド外呼び出しを検出すると
-    /// [`areka_actor::UiSpawnError::NotUiThread`] を返す。本番は `WinApp::new()` 済みの
-    /// UI スレッドで `wire_runtime` を呼ぶため通常発生しないが、万一失敗した場合は
-    /// 握り潰さず `error!`＋`wired=false` を呼び手へ返す（log-first・R7.3）。
-    /// `UiSpawnError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[source]` で連鎖する。
-    #[error("バルーン文字層 UI アクターの spawn に失敗")]
-    SpawnUi(#[source] areka_actor::UiSpawnError),
 }
 
 /// シェル読み込みの権威の失敗を、起動結線の既存の枝へ写す（枝の追加 **0 件**）。
@@ -380,7 +369,7 @@ fn build_boot_assets_for(
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// 結線するので、`MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ
 /// `warn!` どまり。他（読取不能／bake／
-/// balloon／`spawn_ui` 失敗等）は真に予期しない失敗として `error!` で区別する（main の
+/// balloon 失敗等）は真に予期しない失敗として `error!` で区別する（main の
 /// `is_benign_boot_error` と同じ分類方針）。boot 自体の
 /// `GhostBootError` は別途 本体の `is_benign_boot_error`（R7.4）が分類する。
 fn classify_wiring_error(err: &BootWiringError) {
@@ -392,7 +381,7 @@ fn classify_wiring_error(err: &BootWiringError) {
                 "runtime: 構築入力の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
             );
         }
-        // 他は真に予期しない失敗として error（読取不能／bake／balloon／spawn_ui 等）。
+        // 他は真に予期しない失敗として error（読取不能／bake／balloon 等）。
         _ => {
             error!(
                 error = %err,
@@ -432,7 +421,7 @@ const _: fn() = || {
 ///    `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 フォールバック boot へ
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
-///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false`）。
+///    （UI スレッド前提）。
 /// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
 ///    `RuntimeWiring` と共有）／[`spawn_seriko_clocked`]（時計 `seriko_clock` は刻みと共有）。
@@ -505,18 +494,11 @@ pub fn wire_runtime(
     };
 
     // 手順2: presenter／文字層ランタイム（Rc<RefCell<>>）／文字層 UI アクター（UI スレッド前提）。
-    // spawn_emo_text の Err（UI スレッド外呼び出し検出等）は SpawnUi 分類＋wired=false（R7.3）。
     let presenter = EmoPresenter::new();
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let (emo_text_sink, _emo_text_join) = match spawn_emo_text(Rc::clone(&runtime)) {
-        Ok(pair) => pair,
-        Err(err) => {
-            classify_wiring_error(&BootWiringError::SpawnUi(err));
-            return fallback();
-        }
-    };
+    let (emo_text_sink, _emo_text_join) = spawn_emo_text(Rc::clone(&runtime));
 
     // 手順3: talk 時刻源（dola clock 注入）。時刻付与テキスト sink は実行系の側が束から組む。
     let clock_fn: Arc<dyn Fn() -> f64 + Send + Sync> = Arc::new(dola::runtime::clock::now);

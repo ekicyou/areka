@@ -51,8 +51,7 @@ fn rig() -> Rig {
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
     )));
-    let (text, text_pump) =
-        spawn_emo_text(Rc::clone(&runtime)).expect("このスレッドで文字の線を起こせる");
+    let (text, text_pump) = spawn_emo_text(Rc::clone(&runtime));
     let (present_tx, present_rx) = mpsc::channel::<PresentCommand>();
     let (surface, _seriko) = spawn_seriko(
         SurfaceResolver::new(BTreeMap::new()),
