@@ -1,11 +1,10 @@
-//! 3 文書の骨組みを読むときに使う共通の道具——欄の取り出し・語彙の検査・失敗の作り方。
+//! 3 文書・カタログ・台帳の骨組みを読むときに使う共通の道具——欄の取り出し・語彙の
+//! 検査・失敗の作り方。
 //!
-//! `parse.rs` から割った（タスク 1.2 の申し送り・設計「Testing Strategy → 1,000 行の
-//! 番人」）。文書ごとの読み手 3 組だけで 740 行あり、そこへ共通の道具 270 行を
-//! 同居させると 1 ファイルが 1,000 行を越える。
-//! **中身は移しただけで、1 行も変えていない**——見える範囲を `documents` 木の中へ
-//! 広げただけである。公開名 `document_file` は `parse.rs` が再輸出して保つ
-//! （`derive.rs` が `super::parse::document_file` で引いている）。
+//! 欄の道具（[`malformed`]・[`reject_unknown_keys`]・[`field`]・[`string_field`]・
+//! [`string_array_field`]・[`required_table`]・[`as_table`]）はクレートの中へ開き、
+//! `catalog::read` と `ledger::read` もここを呼ぶ。失敗の文面を直す場所はここ 1 か所
+//! きりである。3 文書の置き場の綴りもここに置く。
 //!
 //! # 繕わない・行番号は添えない
 //!
@@ -16,7 +15,20 @@
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, parse_theme};
 
-use super::parse::{DOCUMENT_DIR, toml_blocks};
+use super::parse::toml_blocks;
+
+/// 3 文書の置き場（`io::paths` と同じ場所・ワークスペース根から）。
+///
+/// `io::paths` を呼ばないのは、あれがワークスペース根から組み立てた絶対パスを返し、
+/// 失敗の本文が計算機ごとに変わってしまうからである（`ledger::read` と同じ判断）。
+pub(super) const DOCUMENT_DIR: &str = "doc/ukadoc-coverage";
+
+/// 帰属の正本。
+pub(super) const LINKAGE_FILE: &str = "linkage.md";
+/// 段階と順位。
+pub(super) const BRIEFING_FILE: &str = "briefing.md";
+/// ロードマップ草案。
+pub(super) const ROADMAP_FILE: &str = "roadmap-draft.md";
 
 /// 失敗の本文に添える文書の置き場。
 pub(super) fn document_file(name: &str) -> String {
@@ -24,7 +36,7 @@ pub(super) fn document_file(name: &str) -> String {
 }
 
 /// 文書の形が違うことを告げる失敗。置き場を必ず添える。
-pub(super) fn malformed(file: &str, reason: impl Into<String>) -> SurveyError {
+pub(crate) fn malformed(file: &str, reason: impl Into<String>) -> SurveyError {
     SurveyError::TomlParse {
         path: file.to_owned(),
         reason: reason.into(),
@@ -75,7 +87,7 @@ pub(super) fn read_blocks(markdown: &str, file: &str) -> Result<toml::Table, Sur
 }
 
 /// 表として取り出す。
-pub(super) fn as_table<'a>(
+pub(crate) fn as_table<'a>(
     value: &'a toml::Value,
     place: &str,
     file: &str,
@@ -86,7 +98,7 @@ pub(super) fn as_table<'a>(
 }
 
 /// 必ず在る表を取り出す。無ければ表の鍵を名指して落ちる。
-pub(super) fn required_table<'a>(
+pub(crate) fn required_table<'a>(
     parent: &'a toml::Table,
     key: &str,
     place: &str,
@@ -122,7 +134,7 @@ pub(super) fn array_of_tables<'a>(
 }
 
 /// 知らない欄が混じっていないことを確かめる。
-pub(super) fn reject_unknown_keys(
+pub(crate) fn reject_unknown_keys(
     table: &toml::Table,
     allowed: &[&str],
     place: &str,
@@ -155,7 +167,7 @@ pub(super) fn reject_present(
 }
 
 /// 欄を 1 つ取り出す。無ければ落ちる。
-pub(super) fn field<'a>(
+pub(crate) fn field<'a>(
     table: &'a toml::Table,
     place: &str,
     key: &str,
@@ -167,7 +179,7 @@ pub(super) fn field<'a>(
 }
 
 /// 文字列の欄。
-pub(super) fn string_field(
+pub(crate) fn string_field(
     table: &toml::Table,
     place: &str,
     key: &str,
@@ -222,7 +234,7 @@ pub(super) fn optional_usize_field(
 }
 
 /// 文字列の配列の欄。要素の 1 つでも文字列でなければ落ちる。
-pub(super) fn string_array_field(
+pub(crate) fn string_array_field(
     table: &toml::Table,
     place: &str,
     key: &str,

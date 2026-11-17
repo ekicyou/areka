@@ -25,7 +25,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::parse::{BRIEFING_FILE, LINKAGE_FILE, document_file};
+use super::fields::{BRIEFING_FILE, LINKAGE_FILE, document_file};
 use super::{Breakage, Briefing, Linkage, NamedBundle, RankTarget};
 use crate::error::SurveyError;
 use crate::ledger::Ledger;

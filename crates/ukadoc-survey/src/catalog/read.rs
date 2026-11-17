@@ -29,7 +29,10 @@
 
 use std::collections::BTreeMap;
 
-use super::{Catalog, CatalogEntry, SnapshotMeta};
+use super::{Catalog, CatalogEntry, ENTRY_COLUMNS, SNAPSHOT_FIELDS, SnapshotMeta};
+use crate::documents::fields::{
+    field, malformed, reject_unknown_keys, required_table, string_array_field, string_field,
+};
 use crate::error::SurveyError;
 use crate::model::{EntryId, PageName};
 
@@ -41,21 +44,6 @@ const SNAPSHOT_TABLE: &str = "snapshot";
 
 /// 項目を置く表の名前。
 const ENTRY_TABLE: &str = "entry";
-
-/// 冒頭の情報に置いてよい欄のすべて（要件 1.6・設計 D-9）。
-const SNAPSHOT_FIELDS: [&str; 8] = [
-    "package",
-    "package_version",
-    "snapshot_version",
-    "generated_at",
-    "total_entries",
-    "ukadoc_entries",
-    "catalog_format",
-    "hash_algorithm",
-];
-
-/// 項目に置いてよい欄のすべて（設計「Data Models」の列表）。
-const ENTRY_COLUMNS: [&str; 6] = ["page", "title", "category", "versions", "hash", "url"];
 
 /// URL のフラグメントの始まりの印。
 const FRAGMENT_MARK: char = '#';
@@ -70,7 +58,7 @@ const FRAGMENT_MARK: char = '#';
 pub fn read(text: &str) -> Result<Catalog, SurveyError> {
     let root: toml::Table = text
         .parse()
-        .map_err(|err| malformed(format!("TOML として読めない: {err}")))?;
+        .map_err(|err| malformed(CATALOG_FILE, format!("TOML として読めない: {err}")))?;
     Ok(Catalog {
         snapshot: read_snapshot(&root)?,
         entries: read_entries(&root)?,
@@ -124,146 +112,92 @@ impl Catalog {
     }
 }
 
-/// カタログの形が違うことを告げる失敗。
-fn malformed(reason: impl Into<String>) -> SurveyError {
-    SurveyError::TomlParse {
-        path: CATALOG_FILE.to_owned(),
-        reason: reason.into(),
-    }
-}
-
 /// 冒頭の情報を読む（要件 1.6）。
 fn read_snapshot(root: &toml::Table) -> Result<SnapshotMeta, SurveyError> {
-    let table = sub_table(root, SNAPSHOT_TABLE)?;
     let place = "[snapshot]";
-    reject_unknown_keys(table, &SNAPSHOT_FIELDS, place)?;
+    let table = required_table(root, SNAPSHOT_TABLE, place, CATALOG_FILE)?;
+    reject_unknown_keys(table, &SNAPSHOT_FIELDS, place, CATALOG_FILE)?;
     Ok(SnapshotMeta {
-        package: string_field(table, place, "package")?,
-        package_version: string_field(table, place, "package_version")?,
+        package: string_field(table, place, "package", CATALOG_FILE)?,
+        package_version: string_field(table, place, "package_version", CATALOG_FILE)?,
         snapshot_version: integer_field(table, place, "snapshot_version")?,
-        generated_at: string_field(table, place, "generated_at")?,
+        generated_at: string_field(table, place, "generated_at", CATALOG_FILE)?,
         total_entries: count_field(table, place, "total_entries")?,
         ukadoc_entries: count_field(table, place, "ukadoc_entries")?,
         catalog_format: format_field(table, place, "catalog_format")?,
-        hash_algorithm: string_field(table, place, "hash_algorithm")?,
+        hash_algorithm: string_field(table, place, "hash_algorithm", CATALOG_FILE)?,
     })
 }
 
 /// 項目を読む（要件 1.1・1.9）。
 fn read_entries(root: &toml::Table) -> Result<BTreeMap<EntryId, CatalogEntry>, SurveyError> {
-    let table = sub_table(root, ENTRY_TABLE)?;
+    let table = required_table(root, ENTRY_TABLE, "[entry]", CATALOG_FILE)?;
     let mut entries: BTreeMap<EntryId, CatalogEntry> = BTreeMap::new();
     for (raw_id, value) in table {
         // 綴りが 2 形のどちらでもなければ、ここで `BadEntryId` になる（要件 1.9）。
         let id = EntryId::parse(raw_id)?;
         let place = format!("[entry] の {raw_id}");
-        let item = value
-            .as_table()
-            .ok_or_else(|| malformed(format!("{place}: 1 行のインラインテーブルでない")))?;
-        reject_unknown_keys(item, &ENTRY_COLUMNS, &place)?;
+        let item = value.as_table().ok_or_else(|| {
+            malformed(
+                CATALOG_FILE,
+                format!("{place}: 1 行のインラインテーブルでない"),
+            )
+        })?;
+        reject_unknown_keys(item, &ENTRY_COLUMNS, &place, CATALOG_FILE)?;
 
-        let written_page = string_field(item, &place, "page")?;
+        let written_page = string_field(item, &place, "page", CATALOG_FILE)?;
         let page = id.page();
         if written_page != page.as_str() {
-            return Err(malformed(format!(
-                "{place}: page の値 {written_page} が id のページ {} と食い違う",
-                page.as_str()
-            )));
+            return Err(malformed(
+                CATALOG_FILE,
+                format!(
+                    "{place}: page の値 {written_page} が id のページ {} と食い違う",
+                    page.as_str()
+                ),
+            ));
         }
 
         let entry = CatalogEntry {
             id: id.clone(),
             page,
-            title: string_field(item, &place, "title")?,
-            category: string_field(item, &place, "category")?,
-            versions: string_array_field(item, &place, "versions")?,
-            hash: string_field(item, &place, "hash")?,
-            url: string_field(item, &place, "url")?,
+            title: string_field(item, &place, "title", CATALOG_FILE)?,
+            category: string_field(item, &place, "category", CATALOG_FILE)?,
+            versions: string_array_field(item, &place, "versions", CATALOG_FILE)?,
+            hash: string_field(item, &place, "hash", CATALOG_FILE)?,
+            url: string_field(item, &place, "url", CATALOG_FILE)?,
         };
         entries.insert(id, entry);
     }
     Ok(entries)
 }
 
-/// 最上位の表の 1 つを取り出す。
-fn sub_table<'a>(root: &'a toml::Table, name: &str) -> Result<&'a toml::Table, SurveyError> {
-    root.get(name)
-        .ok_or_else(|| malformed(format!("[{name}] が無い")))?
-        .as_table()
-        .ok_or_else(|| malformed(format!("[{name}] が表でない")))
-}
-
-/// 知らない欄が混じっていないことを確かめる。
-fn reject_unknown_keys(
-    table: &toml::Table,
-    allowed: &[&str],
-    place: &str,
-) -> Result<(), SurveyError> {
-    for key in table.keys() {
-        if !allowed.contains(&key.as_str()) {
-            return Err(malformed(format!("{place}: 知らない欄 {key}")));
-        }
-    }
-    Ok(())
-}
-
-/// 欄を 1 つ取り出す。無ければ落ちる。
-fn field<'a>(
-    table: &'a toml::Table,
-    place: &str,
-    key: &str,
-) -> Result<&'a toml::Value, SurveyError> {
-    table
-        .get(key)
-        .ok_or_else(|| malformed(format!("{place}: 欄 {key} が無い")))
-}
-
-/// 文字列の欄。
-fn string_field(table: &toml::Table, place: &str, key: &str) -> Result<String, SurveyError> {
-    field(table, place, key)?
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| malformed(format!("{place}: 欄 {key} が文字列でない")))
-}
-
 /// 整数の欄。
 fn integer_field(table: &toml::Table, place: &str, key: &str) -> Result<i64, SurveyError> {
-    field(table, place, key)?
+    field(table, place, key, CATALOG_FILE)?
         .as_integer()
-        .ok_or_else(|| malformed(format!("{place}: 欄 {key} が整数でない")))
+        .ok_or_else(|| malformed(CATALOG_FILE, format!("{place}: 欄 {key} が整数でない")))
 }
 
 /// 件数の欄。負の数は入らない。
 fn count_field(table: &toml::Table, place: &str, key: &str) -> Result<usize, SurveyError> {
     let value = integer_field(table, place, key)?;
-    usize::try_from(value)
-        .map_err(|_| malformed(format!("{place}: 欄 {key} の値 {value} は件数にならない")))
+    usize::try_from(value).map_err(|_| {
+        malformed(
+            CATALOG_FILE,
+            format!("{place}: 欄 {key} の値 {value} は件数にならない"),
+        )
+    })
 }
 
 /// 形の版の欄。負の数も大きすぎる数も入らない。
 fn format_field(table: &toml::Table, place: &str, key: &str) -> Result<u32, SurveyError> {
     let value = integer_field(table, place, key)?;
-    u32::try_from(value)
-        .map_err(|_| malformed(format!("{place}: 欄 {key} の値 {value} は形の版にならない")))
-}
-
-/// 文字列の配列の欄。要素の 1 つでも文字列でなければ落ちる。
-fn string_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-) -> Result<Vec<String>, SurveyError> {
-    let array = field(table, place, key)?
-        .as_array()
-        .ok_or_else(|| malformed(format!("{place}: 欄 {key} が配列でない")))?;
-    let mut values = Vec::with_capacity(array.len());
-    for element in array {
-        let value = element
-            .as_str()
-            .ok_or_else(|| malformed(format!("{place}: 欄 {key} に文字列でない要素がある")))?;
-        values.push(value.to_owned());
-    }
-    Ok(values)
+    u32::try_from(value).map_err(|_| {
+        malformed(
+            CATALOG_FILE,
+            format!("{place}: 欄 {key} の値 {value} は形の版にならない"),
+        )
+    })
 }
 
 #[cfg(test)]

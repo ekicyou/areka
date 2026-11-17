@@ -24,7 +24,7 @@
 //! 「境界の要点」1 つ目。実測で `toml` 1.1.4 は逆斜線を含む文字列を単引用符の素の
 //! 文字列で書き、要件付録 A.3 が凍結した書き方と一致しない）。
 
-use super::{Catalog, CatalogEntry, SnapshotMeta};
+use super::{Catalog, CatalogEntry, ENTRY_COLUMNS, SNAPSHOT_FIELDS, SnapshotMeta};
 use crate::model::EntryId;
 use crate::tomlout::{basic_string, inline_table, string_array};
 
@@ -39,12 +39,6 @@ const SNAPSHOT_HEADER: &str = "[snapshot]";
 
 /// 項目を置く表の見出し。
 const ENTRY_HEADER: &str = "[entry]";
-
-/// 項目 1 行の列の並び（設計「Data Models」の列表・D-9）。
-///
-/// 並べ替えても TOML としては同じ表に読み戻るので、要件 1.5 が守る対象そのものが
-/// 変わってしまう。ここを触ったら `write_tests.rs` の逐語テストが赤になる。
-const ENTRY_COLUMNS: [&str; 6] = ["page", "title", "category", "versions", "hash", "url"];
 
 /// カタログを `catalog.toml` の本文にする（要件 1.1・1.5・1.6）。
 ///
@@ -78,18 +72,23 @@ fn push_line(out: &mut String, line: &str) {
 
 /// 冒頭の情報 8 欄を書く（要件 1.6・設計 D-9）。
 ///
-/// 並びは設計「Data Models」の見本の逐語。[`SnapshotMeta::total_entries`]（出典を
-/// 問わない全件数）と [`SnapshotMeta::ukadoc_entries`]（うち正典の件数）は別の欄で、
+/// 欄の名前と並びは [`SNAPSHOT_FIELDS`] の 1 か所だけが決める。[`SnapshotMeta::total_entries`]
+/// （出典を問わない全件数）と [`SnapshotMeta::ukadoc_entries`]（うち正典の件数）は別の欄で、
 /// 入れ替えても TOML としては読めてしまうので、逐語テストがこの並びを守る。
 fn push_snapshot(out: &mut String, meta: &SnapshotMeta) {
-    push_field(out, "package", &basic_string(&meta.package));
-    push_field(out, "package_version", &basic_string(&meta.package_version));
-    push_field(out, "snapshot_version", &meta.snapshot_version.to_string());
-    push_field(out, "generated_at", &basic_string(&meta.generated_at));
-    push_field(out, "total_entries", &meta.total_entries.to_string());
-    push_field(out, "ukadoc_entries", &meta.ukadoc_entries.to_string());
-    push_field(out, "catalog_format", &meta.catalog_format.to_string());
-    push_field(out, "hash_algorithm", &basic_string(&meta.hash_algorithm));
+    let values = [
+        basic_string(&meta.package),
+        basic_string(&meta.package_version),
+        meta.snapshot_version.to_string(),
+        basic_string(&meta.generated_at),
+        meta.total_entries.to_string(),
+        meta.ukadoc_entries.to_string(),
+        meta.catalog_format.to_string(),
+        basic_string(&meta.hash_algorithm),
+    ];
+    for (key, value) in SNAPSHOT_FIELDS.into_iter().zip(values) {
+        push_field(out, key, &value);
+    }
 }
 
 /// `名前 = 値` の 1 行。値は組み上がった TOML の値の断片を受け取る。

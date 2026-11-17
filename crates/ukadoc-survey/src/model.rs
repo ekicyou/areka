@@ -134,8 +134,13 @@ pub fn parse_theme(raw: &str) -> Result<&'static str, UnknownVocabulary> {
 /// 項目 id の区切り。ページ名自身が下線を含むので、下線では割らない（要件付録 B 手順 2）。
 const ID_SEPARATOR: char = ':';
 
-/// 項目 id の先頭に必ず置かれる印。
+/// 項目 id の先頭の欄（コロンで割った 1 欄目。`parse` の形の照合に使う）。
 const ID_PREFIX: &str = "ukadoc";
+
+/// 項目 id の先頭に必ず置かれる印（2 形の共通の頭。本文から id を拾う側が使う）。
+///
+/// [`ID_PREFIX`] に区切りを足した綴りで、2 つは並べて置いて食い違わないようにする。
+pub(crate) const ID_MARK: &str = "ukadoc:";
 
 impl EntryId {
     /// 2 形のいずれかであることを確かめて作る（要件 1.9）。

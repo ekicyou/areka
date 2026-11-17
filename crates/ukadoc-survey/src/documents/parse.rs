@@ -28,9 +28,10 @@
 use std::collections::BTreeMap;
 
 use super::fields::{
-    array_of_tables, as_table, bad_vocabulary, bool_field, domain_array_field, id_array_field,
-    malformed, optional_usize_field, read_blocks, reject_present, reject_unknown_keys,
-    required_table, string_array_field, string_field, theme_array_field, usize_field,
+    BRIEFING_FILE, LINKAGE_FILE, ROADMAP_FILE, array_of_tables, as_table, bad_vocabulary,
+    bool_field, document_file, domain_array_field, id_array_field, malformed, optional_usize_field,
+    read_blocks, reject_present, reject_unknown_keys, required_table, string_array_field,
+    string_field, theme_array_field, usize_field,
 };
 use super::{
     After, Barrier, Breakage, Briefing, Briefs, BundleRef, Linkage, NamedBundle, OverrideKind,
@@ -38,29 +39,7 @@ use super::{
     SpecRow, Stage, StageCount, Tally,
 };
 use crate::error::SurveyError;
-use crate::model::{Domain, PageName};
-
-/// 失敗の本文に添える文書の置き場を組む道具（`derive.rs` が引く公開名）。
-///
-/// 実体は共通の道具の側（`documents::fields`）にある。`parse.rs` から割ったときに
-/// 名前の引き方を変えないよう、ここで再輸出して綴りを保つ。
-pub(super) use super::fields::document_file;
-
-/// 3 文書の置き場（`io::paths` と同じ場所・ワークスペース根から）。
-///
-/// `io::paths` を呼ばないのは、あれがワークスペース根から組み立てた絶対パスを返し、
-/// 失敗の本文が計算機ごとに変わってしまうからである（`ledger::read` と同じ判断）。
-pub(super) const DOCUMENT_DIR: &str = "doc/ukadoc-coverage";
-
-/// 帰属の正本。
-pub(super) const LINKAGE_FILE: &str = "linkage.md";
-/// 段階と順位。
-pub(super) const BRIEFING_FILE: &str = "briefing.md";
-/// ロードマップ草案。
-const ROADMAP_FILE: &str = "roadmap-draft.md";
-
-/// 項目 id の先頭に必ず置かれる印（`model::EntryId` が受け付ける 2 形の共通の頭）。
-const ID_MARK: &str = "ukadoc:";
+use crate::model::{Domain, ID_MARK, PageName};
 
 /// 囲みの始まりの行。
 const FENCE_OPEN: &str = "```toml";
@@ -111,8 +90,9 @@ pub fn toml_blocks(markdown: &str) -> Vec<String> {
 /// id は必ず引用符の中に書かれるので、これで表の鍵も配列の要素も同じ規則で拾える。
 pub fn quoted_ids(text: &str) -> Vec<String> {
     let mut ids = Vec::new();
+    let needle = format!("\"{ID_MARK}");
     let mut rest = text;
-    while let Some(start) = rest.find("\"ukadoc:") {
+    while let Some(start) = rest.find(&needle) {
         let after_quote = &rest[start + 1..];
         match after_quote.find('"') {
             Some(end) => {

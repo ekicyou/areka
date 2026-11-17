@@ -43,6 +43,10 @@ use std::collections::BTreeMap;
 
 use super::blocks;
 use super::{Ledger, LedgerEntry};
+use crate::documents::fields::{
+    as_table, field, malformed, reject_unknown_keys, required_table, string_array_field,
+    string_field,
+};
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status, parse_theme};
 
@@ -126,21 +130,9 @@ fn ledger_file(domain: Domain) -> String {
     format!("{LEDGER_DIR}/{}.toml", domain.as_key())
 }
 
-/// 台帳の形が違うことを告げる失敗。置き場を必ず添える（要件 6.12）。
-fn malformed(file: &str, reason: impl Into<String>) -> SurveyError {
-    SurveyError::TomlParse {
-        path: file.to_owned(),
-        reason: reason.into(),
-    }
-}
-
 /// 前置きを読む（要件付録 A.1）。
 fn read_prologue(root: &toml::Table, file: &str) -> Result<(Domain, Vec<PageName>), SurveyError> {
-    let table = root
-        .get(LEDGER_TABLE)
-        .ok_or_else(|| malformed(file, format!("{PROLOGUE_PLACE} が無い")))?
-        .as_table()
-        .ok_or_else(|| malformed(file, format!("{PROLOGUE_PLACE} が表でない")))?;
+    let table = required_table(root, LEDGER_TABLE, PROLOGUE_PLACE, file)?;
     reject_unknown_keys(table, &LEDGER_FIELDS, PROLOGUE_PLACE, file)?;
 
     let raw = string_field(table, PROLOGUE_PLACE, "domain", file)?;
@@ -163,9 +155,7 @@ fn read_entries(
 ) -> Result<BTreeMap<EntryId, LedgerEntry>, SurveyError> {
     let table = match root.get(ENTRY_TABLE) {
         None => return Ok(BTreeMap::new()),
-        Some(value) => value
-            .as_table()
-            .ok_or_else(|| malformed(file, format!("[{ENTRY_TABLE}] が表でない")))?,
+        Some(value) => as_table(value, &format!("[{ENTRY_TABLE}]"), file)?,
     };
 
     let mut entries: BTreeMap<EntryId, LedgerEntry> = BTreeMap::new();
@@ -332,66 +322,6 @@ fn reference_id(raw: &str, place: &str, key: &str, file: &str) -> Result<EntryId
 /// 項目の失敗に添える場所。項目 id を必ず含む（要件 6.10）。
 fn place_of(raw_id: &str) -> String {
     format!("[{ENTRY_TABLE}.\"{raw_id}\"]")
-}
-
-/// 知らない欄が混じっていないことを確かめる（要件 2.3・6.9 はここに載っている）。
-fn reject_unknown_keys(
-    table: &toml::Table,
-    allowed: &[&str],
-    place: &str,
-    file: &str,
-) -> Result<(), SurveyError> {
-    for key in table.keys() {
-        if !allowed.contains(&key.as_str()) {
-            return Err(malformed(file, format!("{place}: 知らない欄 {key}")));
-        }
-    }
-    Ok(())
-}
-
-/// 欄を 1 つ取り出す。無ければ落ちる。
-fn field<'a>(
-    table: &'a toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<&'a toml::Value, SurveyError> {
-    table
-        .get(key)
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が無い")))
-}
-
-/// 文字列の欄。
-fn string_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<String, SurveyError> {
-    field(table, place, key, file)?
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が文字列でない")))
-}
-
-/// 文字列の配列の欄。要素の 1 つでも文字列でなければ落ちる。
-fn string_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<Vec<String>, SurveyError> {
-    let array = field(table, place, key, file)?
-        .as_array()
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が配列でない")))?;
-    let mut values = Vec::with_capacity(array.len());
-    for element in array {
-        let value = element.as_str().ok_or_else(|| {
-            malformed(file, format!("{place}: 欄 {key} に文字列でない要素がある"))
-        })?;
-        values.push(value.to_owned());
-    }
-    Ok(values)
 }
 
 #[cfg(test)]
