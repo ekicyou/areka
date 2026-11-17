@@ -121,7 +121,7 @@ pub use self::work_area_clamp::{
 pub use self::work_area_clamp::WORK_AREA_CLAMP_TAG;
 // 面の拡大の寄せ（task 1.3）。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
-// 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（`persist::apply_restored_placements`・task 2.4）。
+// 記憶から戻した組の寄せ（`window-work-area-clamp`）。呼び手は記憶の戻し（`persist::restore_and_judge`）。
 pub(crate) use self::work_area_clamp::{RestoredWindow, keep_restored_groups};
 // 戻りの型を名前で呼ぶのは檻だけなので、テストの外では未使用に見える。
 #[allow(unused_imports)]

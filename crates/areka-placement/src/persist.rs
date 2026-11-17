@@ -48,6 +48,7 @@ use bevy_ecs::world::World;
 use tracing::warn;
 
 use super::chain_finalize::{AdjacencyMark, ChainRect};
+use super::chain_rule::{ChainRule, ChainTerms};
 use super::follow::{
     AnchorSource, Anchored, MonitorSnapshot, OffsetBase, RestoredWindow, keep_restored_groups,
     project_anchor, work_area_for_window,
@@ -359,7 +360,8 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// 相対位置であり、両者の差が恒等式を満たすとは限らない。
 ///
 /// 寄せは 2 段: 窓ごとの寄せは [`project_restore_parts`]（`merge_scope` の中）、組の寄せは
-/// [`super::follow::keep_restored_groups`]（その後・window-work-area-clamp 要件 4.1〜4.4）。
+/// [`super::follow::keep_restored_groups`]（その後・鎖の前の窓との組と記憶の矩形の組をつないだ束ごと・
+/// window-work-area-clamp 要件 4.1〜4.4・audit-placement-follow-residue 要件 1）。
 /// 組の寄せは窓とバルーンの位置を同じ量だけ動かし、`balloon_offset` は変えない（要件 7.7）。
 /// 寄せた位置は記憶へ書き戻さない（要件 4.5・本関数は純関数のまま）。
 ///
@@ -387,8 +389,22 @@ pub fn restore_and_judge(
     entries: &[(PersistKey, String)],
     snapshot: &MonitorSnapshot,
 ) -> (Vec<ScopePlacement>, bool) {
+    // 鎖の見方は記憶の無いスコープも含む全スコープの descript の揃え方（起動の前で台本の吸着は無い）。
+    let chain = ChainRule::from_terms(
+        placements
+            .iter()
+            .map(|p| {
+                let terms = ChainTerms {
+                    descript: p.anchor,
+                    default_x: None,
+                    live: p.anchor,
+                };
+                (p.scope, terms)
+            })
+            .collect(),
+    );
     let (mut merged, windows) = restored_windows(placements, entries, snapshot);
-    for shift in keep_restored_groups(&windows, snapshot) {
+    for shift in keep_restored_groups(&windows, &chain, snapshot) {
         let Some(p) = merged.iter_mut().find(|p| p.scope == shift.scope) else {
             continue; // 組の窓は merged から組んだので必ずある。
         };

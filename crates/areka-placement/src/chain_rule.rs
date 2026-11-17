@@ -40,7 +40,8 @@
 //! 決める。台本が揃え方を変えた窓の扱いの限りは [`ChainView::joins`] に書く。辺のスコープの隣へ
 //! 番号の小さい側の窓を付けた組は、詰め直しで付け直さない（番号の小さい側は動かさない）。
 //!
-//! 本体が使うのは [`boot_chain`] だけで、ほかは配置の crate の中の 3 つの道が使う。
+//! 本体が使うのは [`boot_chain`] だけで、ほかは配置の crate の中の 4 つの道が使う（記憶から戻した
+//! 窓の組の寄せ `persist::restore_and_judge` は [`ChainRule::from_terms`] で `ChainView::Saved` の鎖を組む）。
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -150,8 +151,7 @@ impl ChainRule {
         )
     }
 
-    /// 見方の列から組む（テストの口）。
-    #[cfg(test)]
+    /// 見方の列から組む（World を持たない記憶の戻し `persist::restore_and_judge` と檻の口）。
     pub(crate) fn from_terms(scopes: Vec<(usize, ChainTerms)>) -> Self {
         Self::sorted(scopes, true)
     }

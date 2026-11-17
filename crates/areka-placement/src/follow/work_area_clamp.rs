@@ -29,6 +29,7 @@ use super::super::chain_finalize::{
     Adjacency, AdjacencyMark, ChainRect, ChainSlot, KeepReason, PairDecision, ScriptPlaced,
     judge_adjacency, resolve_chain,
 };
+use super::super::chain_rule::{ChainRule, ChainView};
 use super::{
     Anchor, CharWindowMarker, GhostWindows, MonitorSnapshot, PlacementRoute, PointPx, RectPx,
     SizePx, limit_correction, rect_at, work_area_for_window,
@@ -389,7 +390,7 @@ pub(crate) struct RestoredWindow {
     pub projected: PointPx,
     /// 今の窓ごとの判定の結果（merge の `char_pos`）。
     pub shown: PointPx,
-    /// 組 (scope−1, scope) の覚えた印。
+    /// 覚えた印（鎖の前の窓との組・`ChainView::Saved`）。
     pub mark: Option<AdjacencyMark>,
 }
 
@@ -401,30 +402,61 @@ pub(crate) struct GroupShift {
     pub to: PointPx,
 }
 
-/// 組の寄せ（設計 GroupClamp）。`windows` は記憶から位置を戻したスコープだけ（スコープ昇順）。
+/// 組の寄せ（設計 GroupClamp）。`windows` は記憶から位置を戻したスコープだけ（スコープ昇順）、
+/// `chain` は記憶の無いものを含む全スコープの descript の揃え方の鎖。
 ///
-/// 組は隣り合う番号の対 (n−1, n) が、印が `left`／`right` か、記憶の矩形どうしの
-/// `judge_adjacency` が左・右・重なりのとき繋がる（要件 4.1・4.2）。離れていれば窓ごと（要件 4.4）。
-/// 組の全員が今の判定で寄せられている（`shown != projected`）ときだけ、`projected` の和の矩形を
-/// 和の矩形のモニタの作業領域へ収めの式で収め、その差を全員に足す（要件 4.1・7.1・7.2）。
-/// 見えている窓のある組は動かさない（要件 4.1 の改め・4.3）。作業領域が取れない組は返さず
-/// `Unresolved`（warn!・要件 7.4）。
+/// 組は 2 つの線をつないだ束（audit-placement-follow-residue 要件 1）: 印の線は n が鎖に入り
+/// 印が `left`／`right` のときの、鎖の前の窓（`ChainView::Saved`・記憶の窓のときだけ）との組。
+/// 矩形の線は番号の続く窓どうしの記憶の矩形の `judge_adjacency` が左・右・重なりのとき（左右の辺の
+/// スコープにも当たる）。どちらの線も無い窓は窓ごと（window-work-area-clamp 要件 4.4）。束の全員が
+/// 今の判定で寄せられている（`shown != projected`）ときだけ、`projected` の和の矩形を和の矩形の
+/// モニタの作業領域へ収めの式で収め、その差を全員に足す（同 4.1・7.1・7.2）。見えている窓のある束は
+/// 動かさない（同 4.1 の改め・4.3）。作業領域が取れない束は返さず `Unresolved`（warn!・同 7.4）。
+/// 束は一番小さいスコープの順、束の中はスコープ昇順で処理する。
 pub(crate) fn keep_restored_groups(
     windows: &[RestoredWindow],
+    chain: &ChainRule,
     snapshot: &MonitorSnapshot,
 ) -> Vec<GroupShift> {
     let scene = ClampScene::RestoreGroup.as_str();
-    let mut out = Vec::new();
-    let mut start = 0;
-    while start < windows.len() {
-        let mut end = start + 1;
-        while end < windows.len() && joined_with_prev(windows[end - 1], windows[end]) {
-            end += 1;
+    // 窓ごとの束の番号（束の一番小さい添字）。線ごとに大きい番号の束を小さい番号の束へ付け替える。
+    let mut bundle: Vec<usize> = (0..windows.len()).collect();
+    let link = |a: usize, b: usize, bundle: &mut Vec<usize>| {
+        let (lo, hi) = (bundle[a].min(bundle[b]), bundle[a].max(bundle[b]));
+        bundle
+            .iter_mut()
+            .filter(|id| **id == hi)
+            .for_each(|id| *id = lo);
+    };
+    for (i, cur) in windows.iter().enumerate() {
+        let marked = matches!(cur.mark, Some(AdjacencyMark::Left | AdjacencyMark::Right));
+        if marked
+            && chain.joins(ChainView::Saved, cur.scope)
+            && let Some(p) = chain.prev(ChainView::Saved, cur.scope)
+            && let Some(j) = windows.iter().position(|w| w.scope == p)
+        {
+            link(j, i, &mut bundle);
         }
-        let group = &windows[start..end];
-        start = end;
+        if let Some(prev) = i.checked_sub(1).map(|j| windows[j])
+            && prev.scope.checked_add(1) == Some(cur.scope)
+            && !matches!(
+                judge_adjacency(prev.remembered, cur.remembered),
+                Adjacency::Apart { .. }
+            )
+        {
+            link(i - 1, i, &mut bundle);
+        }
+    }
+    let mut out = Vec::new();
+    for id in 0..windows.len() {
+        let group: Vec<RestoredWindow> = windows
+            .iter()
+            .zip(&bundle)
+            .filter(|&(_, b)| *b == id)
+            .map(|(w, _)| *w)
+            .collect();
         if group.len() < 2 {
-            continue; // 1 窓の組は窓ごとの結果のまま（要件 4.4）。
+            continue; // 1 窓の束は窓ごとの結果のまま（window-work-area-clamp 要件 4.4）。
         }
         let scopes: Vec<usize> = group.iter().map(|w| w.scope).collect();
         let clamped = |w: &RestoredWindow| w.shown != w.projected;
@@ -483,14 +515,4 @@ pub(crate) fn keep_restored_groups(
         }
     }
     out
-}
-
-/// 組 (prev, cur) が繋がるか: 隣り合う番号で、印が左右か、記憶の矩形が左・右・重なり。
-fn joined_with_prev(prev: RestoredWindow, cur: RestoredWindow) -> bool {
-    prev.scope.checked_add(1) == Some(cur.scope)
-        && (matches!(cur.mark, Some(AdjacencyMark::Left | AdjacencyMark::Right))
-            || !matches!(
-                judge_adjacency(prev.remembered, cur.remembered),
-                Adjacency::Apart { .. }
-            ))
 }

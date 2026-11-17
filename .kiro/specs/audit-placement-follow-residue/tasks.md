@@ -74,7 +74,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 9.5_
 
 - [ ] 6. 記憶から戻した窓の寄せの組を鎖の決まりに合わせる
-- [ ] 6.1 `keep_restored_groups` を鎖の前の窓との組のつながりの束にする
+- [x] 6.1 `keep_restored_groups` を鎖の前の窓との組のつながりの束にする
   - `chain_rule.rs` の `from_terms` の `#[cfg(test)]` を外して doc を直す（規則は変えない・C22 の触るファイルの列の外）。`restore_and_judge` が全スコープの揃え方から `ChainRule` を組んで渡す
   - `keep_restored_groups` を設計の RestoreGroup の形にする: 印の線は `chain.prev(ChainView::Saved, n)`（n が鎖に入り印が `left`／`right` で相手が記憶の窓のときだけ）、矩形の線は今の (n−1, n)。2 つをつないだ束ごとに今の判定と記録の語で寄せる。束と束の中の並びはスコープの昇順。`joined_with_prev` を消す
   - `RestoredWindow::mark`・`keep_restored_groups`・`persist.rs:362` の doc と `follow.rs:122-123` の古い名（`restore_and_judge`）と名前の無い番号を直す。組を「番号が続く対 (n−1, n)」と書かない
@@ -166,3 +166,4 @@
 - 3.2: 2.2 の借りは返した（`zero_unknown_drag_origin` を消し、テストの支えの `drag_origin_at_window`＝`DraggingState` の挿入の観測者で始めの位置を窓の位置にする、へ替えた・分からないの檻は手伝い無しの `Rig::unknown_origin()`）
 - 4.2: G4 の 1 つ目の grep の残り 1 行（`follow/visibility.rs` の `clamp_x_into`）は本番の写しで、8 の持ち分。8 の完了で 0 行になる
 - 5: 隣り合いの印を確かめる檻は `GhostWindows` が要る（無いと `push_adjacency_marks` が早帰りして印 0 個どうしの比べになる）。本番の `spawn_ghost_windows` で窓の一式を組むこと
+- 6.1: 設計の Testing の「どれも (n−1, n) に戻すと落ちる」は ⑷ ⑸ に当たらない言い過ぎ（⑷ は鎖の相手の取り違え・⑸ は矩形の線の辺のスコープを守る檻）。辺のスコープ n の印の線を止める `chain.joins` は `edge_scope_mark_does_not_group_with_chain_prev` が守る
