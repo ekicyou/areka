@@ -83,6 +83,17 @@ fn logical_settings_then_caller_env_wins_last() {
     assert_eq!(set(&e, "EXTRA"), "x");
 }
 
+/// 10: 最後に積まれた `AREKA_MCP_PORT` が番号として読めなければ、`.mcp_port(n)` を案内して落ちる。
+#[test]
+#[should_panic(expected = "`.mcp_port(n)`")]
+fn an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint() {
+    RealRun::new("areka.exe")
+        .mcp_port(4321)
+        .env("AREKA_MCP_PORT", "9900")
+        .env("areka_mcp_port", "x")
+        .port();
+}
+
 #[test]
 fn positional_args_come_first_then_caller_args() {
     let run = RealRun::new("areka.exe").arg("--x").arg("y");

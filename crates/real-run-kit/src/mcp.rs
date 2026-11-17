@@ -11,11 +11,13 @@ use std::time::{Duration, Instant};
 
 use areka_mcp_bridge::config::Timeouts;
 use areka_mcp_bridge::scan::{Link, Scan, scan};
-use rmcp::model::{CallToolRequestParams, CallToolResult, JsonObject};
+use rmcp::ServiceError;
+use rmcp::model::{CallToolRequestParams, CallToolResult, ErrorData, JsonObject};
 
 use crate::output::{self, ChildExited, WaitEnd};
+use crate::run::Limits;
 
-/// 待受を始めた行（先の候補が使用中で移った版も同じ頭で始まるので前方一致で拾う）。
+/// 待受を始めた行（窓口は子へ番号を 1 つだけ渡すので候補は移らない・行は後ろに `url=` が続くので前方一致で拾う）。
 const LISTEN_STARTED: &str = "MCP: 待受を始めた";
 /// どの候補も束ねられなかった行（選んだ番号が先に取られていた＝9.2）。
 const LISTEN_FAILED: &str = "MCP: どの候補のポートも束ねられなかった（待ち受けない）";
@@ -31,7 +33,7 @@ pub struct ToolReply {
     pub is_error: bool,
 }
 
-/// MCP の呼び出しの失敗（4.5・4.7・4.8・9.2）。
+/// MCP の呼び出しの失敗（4.5・4.7・4.8・9.2）。`call_until` はどれもその場で返す。
 #[derive(Debug)]
 pub enum McpError {
     /// 子の記録が待受を始められなかったことを示した（4.5・9.2）。`line` はその行の全文。
@@ -40,6 +42,8 @@ pub enum McpError {
     Unreachable { target: String, reason: String },
     /// 呼び出しの前か途中で子が終わった（4.8）。
     ChildExited(ChildExited),
+    /// 相手が JSON-RPC の誤りを答えた（引数が道具の形に合わない・知らない道具など）。つなぎは使い回す。
+    Refused { code: i32, message: String },
 }
 
 impl fmt::Display for McpError {
@@ -56,24 +60,14 @@ impl fmt::Display for McpError {
                 "MCP の呼び出しの前か途中で子が終わった（終了コード {:?}）",
                 e.status.code()
             ),
+            McpError::Refused { code, message } => {
+                write!(f, "MCP の相手が誤りを答えた（コード {code}）: {message}")
+            }
         }
     }
 }
 
 impl std::error::Error for McpError {}
-
-/// 呼び出しの時間（既定の時間の型には頼らない・呼び手の run が既定の値を渡す）。
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Waits {
-    /// 呼び出し 1 回（`call_until` は呼び直し全体）の締切。
-    pub(crate) deadline: Duration,
-    /// 出力と子の終わりの見回りの間隔。
-    pub(crate) poll: Duration,
-    /// `call_until` の呼び直しの間隔（`poll` とは別＝`get_log` の答えは大きい）。
-    pub(crate) call_retry: Duration,
-    /// 輸送の失敗の後に子の終わりを観測する猶予。
-    pub(crate) exit_grace: Duration,
-}
 
 /// 走り 1 つ分の MCP の呼び口。`Link` は器より先に捨てる（欄の順）。
 pub(crate) struct McpChannel {
@@ -105,11 +99,11 @@ impl McpChannel {
         files: [&Path; 2],
         name: &str,
         args: &str,
-        waits: Waits,
+        limits: &Limits,
     ) -> Result<ToolReply, McpError> {
         let args = parse_args(args);
-        let end = Instant::now() + waits.deadline;
-        self.call_by(child, files, name, &args, end, waits)
+        let end = Instant::now() + limits.deadline;
+        self.call_by(child, files, name, &args, end, limits)
             .map_err(|stop| match stop {
                 Stop::Err(e) => e,
                 Stop::Deadline(reason) => McpError::Unreachable {
@@ -129,15 +123,15 @@ impl McpChannel {
         name: &str,
         args: &str,
         needle: &str,
-        waits: Waits,
+        limits: &Limits,
     ) -> Result<ToolReply, McpError> {
         let args = parse_args(args);
         let started = Instant::now();
-        let end = started + waits.deadline;
+        let end = started + limits.deadline;
         let mut last: Option<ToolReply> = None;
         loop {
             if Instant::now() < end {
-                match self.call_by(child, files, name, &args, end, waits) {
+                match self.call_by(child, files, name, &args, end, limits) {
                     Ok(reply) if !reply.is_error && reply.text.contains(needle) => {
                         return Ok(reply);
                     }
@@ -154,7 +148,7 @@ impl McpChannel {
                     output::failure_text(&[needle], now - started, files)
                 );
             }
-            std::thread::sleep(waits.call_retry.min(end - now));
+            std::thread::sleep(limits.call_retry.min(end - now));
         }
     }
 
@@ -169,9 +163,9 @@ impl McpChannel {
         name: &str,
         args: &JsonObject,
         end: Instant,
-        waits: Waits,
+        limits: &Limits,
     ) -> Result<ToolReply, Stop> {
-        self.ensure_listening(child, files, end, waits.poll)?;
+        self.ensure_listening(child, files, end, limits.poll)?;
         let link = match self.link.take() {
             Some(link) => link,
             None => self.connect(child, end)?,
@@ -181,24 +175,33 @@ impl McpChannel {
             tokio::select! {
                 r = tokio::time::timeout_at(end.into(), link.call_tool(params)) => match r {
                     Ok(Ok(result)) => Outcome::Reply(result),
+                    Ok(Err(ServiceError::McpError(e))) => Outcome::Refused(e),
                     Ok(Err(e)) => Outcome::Transport(e.to_string()),
                     Err(_) => Outcome::Deadline,
                 },
-                status = watch_exit(child, waits.poll) => Outcome::Exited(status),
+                status = watch_exit(child, limits.poll) => Outcome::Exited(status),
             }
         });
-        // 答えが来たときだけつなぎを使い回す（ほかは捨て、次の呼び出しがつなぎ直す）。
+        // 答え（誤りの答えも）が来たときだけつなぎを使い回す（ほかは捨て、次の呼び出しがつなぎ直す）。
         match outcome {
             Outcome::Reply(result) => {
                 self.link = Some(link);
                 Ok(reply_of(result))
+            }
+            Outcome::Refused(e) => {
+                self.link = Some(link);
+                Err(McpError::Refused {
+                    code: e.code.0,
+                    message: e.message.into_owned(),
+                }
+                .into())
             }
             Outcome::Exited(e) => Err(McpError::ChildExited(e).into()),
             Outcome::Deadline => Err(Stop::Deadline(format!("`{name}` の答えを締切まで待った"))),
             Outcome::Transport(reason) => {
                 // 子が受け口を閉じてから終わるまでの間の失敗を、子の終わりと見分ける（4.8）。
                 // 猶予は締切を越えない。
-                let grace = (Instant::now() + waits.exit_grace).min(end);
+                let grace = (Instant::now() + limits.exit_grace).min(end);
                 loop {
                     if let Ok(Some(status)) = child.try_wait() {
                         return Err(McpError::ChildExited(ChildExited { status }).into());
@@ -210,7 +213,7 @@ impl McpChannel {
                         }
                         .into());
                     }
-                    std::thread::sleep(waits.poll);
+                    std::thread::sleep(limits.poll);
                 }
             }
         }
@@ -259,10 +262,7 @@ impl McpChannel {
         };
         let stop = match found {
             Ok(Scan::Found { link, .. }) => return Ok(link),
-            Ok(Scan::NotFound { others }) if others.is_empty() => {
-                unreachable("areka と名乗る相手が居ない".to_string())
-            }
-            Ok(Scan::NotFound { others }) => unreachable(format!("別の相手が名乗った: {others:?}")),
+            Ok(Scan::NotFound { others }) => unreachable(not_found_reason(&others)),
             Err(_) => Stop::Deadline("名乗りの確かめが締切まで終わらなかった".to_string()),
         };
         // 確かめの間に子が終わっていれば、そちらが本当の訳（4.8）。
@@ -287,9 +287,19 @@ impl From<McpError> for Stop {
 
 enum Outcome {
     Reply(CallToolResult),
+    Refused(ErrorData),
     Exited(ChildExited),
     Deadline,
     Transport(String),
+}
+
+/// 名乗りの確かめで areka が見つからなかった訳（`others` は別の名乗りが答えた番号と名乗り）。
+fn not_found_reason(others: &[(u16, String)]) -> String {
+    if others.is_empty() {
+        "areka と名乗る相手が居ない".to_string()
+    } else {
+        format!("別の相手が名乗った: {others:?}")
+    }
 }
 
 /// 子が終わるまで `poll` ごとに見回る（呼び出しの未来と並べる）。

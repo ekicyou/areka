@@ -11,12 +11,13 @@ use temp_path_kit::TempPath;
 const POLL: Duration = Duration::from_millis(10);
 
 /// 締切だけを変え、見回り・呼び直し・猶予は短くした時間。
-fn waits(deadline: Duration) -> Waits {
-    Waits {
+fn waits(deadline: Duration) -> Limits {
+    Limits {
         deadline,
         poll: POLL,
         call_retry: POLL,
         exit_grace: POLL,
+        ..Limits::default()
     }
 }
 
@@ -87,7 +88,7 @@ fn failed_listen_line_is_returned_whole_with_port() {
         [&out, &err],
         "echo",
         "{}",
-        waits(Duration::from_secs(30)),
+        &waits(Duration::from_secs(30)),
     );
     drop(child);
     match got {
@@ -110,7 +111,7 @@ fn listen_off_line_is_listen_failed() {
         [&out, &err],
         "echo",
         "{}",
-        waits(Duration::from_secs(30)),
+        &waits(Duration::from_secs(30)),
     );
     drop(child);
     assert!(
@@ -129,7 +130,7 @@ fn no_listen_line_until_deadline_is_unreachable() {
         [&out, &err],
         "echo",
         "{}",
-        waits(Duration::from_millis(100)),
+        &waits(Duration::from_millis(100)),
     );
     drop(child);
     match got {
@@ -148,7 +149,7 @@ fn exited_child_before_listen_is_child_exited() {
         [&out, &err],
         "echo",
         "{}",
-        waits(Duration::from_secs(30)),
+        &waits(Duration::from_secs(30)),
     );
     match got {
         Err(McpError::ChildExited(e)) => assert_eq!(e.status.code(), Some(3)),
@@ -170,6 +171,12 @@ fn display_names_the_contents() {
     };
     assert!(unreachable.to_string().contains("127.0.0.1:9821"));
     assert!(unreachable.to_string().contains("相手が居ない"));
+    let refused = McpError::Refused {
+        code: -32602,
+        message: "引数が合わない".into(),
+    };
+    assert!(refused.to_string().contains("-32602"));
+    assert!(refused.to_string().contains("引数が合わない"));
 }
 
 #[test]
@@ -185,7 +192,7 @@ fn call_until_returns_listen_failed_as_is() {
         "get_log",
         "{}",
         "never",
-        waits(Duration::from_secs(30)),
+        &waits(Duration::from_secs(30)),
     );
     drop(child);
     assert!(
@@ -220,6 +227,54 @@ fn serve(text: &'static str) -> areka_mcp::McpServer {
     areka_mcp::start(&[0], registry, None)
 }
 
+/// 28: つないだ後に受け口が落ち、子は生きている＝輸送の失敗の猶予の後に `Unreachable`。
+/// 猶予は締切を越えない（猶予を締切より長くして確かめる）。
+#[test]
+fn a_dropped_server_with_a_living_child_is_unreachable_within_the_grace() {
+    let server = serve("先の答え");
+    let port = server.local_addr().unwrap().port();
+    let dir = TempPath::under_target("mcp-dropped-server");
+    let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
+    std::fs::write(
+        &out,
+        format!("INFO MCP: 待受を始めた url=http://127.0.0.1:{port}/api/mcp/v1\n"),
+    )
+    .unwrap();
+    let mut child = living_child();
+    let mut mcp = McpChannel::new(port);
+    let mut l = waits(Duration::from_secs(3));
+    let first = mcp.call(&mut child.0, [&out, &err], "echo", "{}", &l);
+    assert_eq!(first.expect("答える").text, "先の答え");
+    drop(server);
+    l.exit_grace = Duration::from_secs(30);
+    let started = Instant::now();
+    let got = mcp.call(&mut child.0, [&out, &err], "echo", "{}", &l);
+    let took = started.elapsed();
+    drop(child);
+    match got {
+        Err(McpError::Unreachable { target, .. }) => {
+            assert_eq!(target, format!("127.0.0.1:{port}"))
+        }
+        other => panic!("Unreachable でない: {other:?}"),
+    }
+    assert!(
+        took < Duration::from_secs(10),
+        "猶予が締切を越えた: {took:?}"
+    );
+}
+
+/// 28: 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。
+#[test]
+fn another_server_answering_is_named_in_the_reason() {
+    let reason = not_found_reason(&[(9801, "ssp-mcp".to_string())]);
+    assert!(reason.contains("別の相手が名乗った"), "{reason}");
+    assert!(
+        reason.contains("9801") && reason.contains("ssp-mcp"),
+        "{reason}"
+    );
+    assert_eq!(not_found_reason(&[]), "areka と名乗る相手が居ない");
+}
+
 #[test]
 #[should_panic(expected = "最後の答えの印")]
 fn call_until_deadline_panics_with_the_last_reply() {
@@ -229,7 +284,7 @@ fn call_until_deadline_panics_with_the_last_reply() {
     let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
     std::fs::write(
         &out,
-        format!("INFO MCP: 待受を始めた addr=127.0.0.1:{port}\n"),
+        format!("INFO MCP: 待受を始めた url=http://127.0.0.1:{port}/api/mcp/v1\n"),
     )
     .unwrap();
     let mut child = living_child();
@@ -237,7 +292,7 @@ fn call_until_deadline_panics_with_the_last_reply() {
     let mut w = waits(Duration::from_secs(3));
     w.call_retry = Duration::from_secs(30);
     let got =
-        McpChannel::new(port).call_until(&mut child.0, [&out, &err], "echo", "{}", "never", w);
+        McpChannel::new(port).call_until(&mut child.0, [&out, &err], "echo", "{}", "never", &w);
     drop(server);
     eprintln!("panic せずに返った: {got:?}");
 }
@@ -254,7 +309,7 @@ fn call_until_deadline_before_any_reply_panics() {
         "echo",
         "{}",
         "never",
-        waits(Duration::from_millis(100)),
+        &waits(Duration::from_millis(100)),
     );
     eprintln!("panic せずに返った: {got:?}");
 }

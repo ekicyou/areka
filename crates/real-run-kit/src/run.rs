@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::close::{self, Ended};
 use crate::evidence::RunDirs;
-use crate::mcp::{McpChannel, McpError, ToolReply, Waits};
+use crate::mcp::{McpChannel, McpError, ToolReply};
 use crate::output::{self, ChildExited, WaitEnd};
 
 /// 既定の時間（D-13）。`safety_exit < deadline` を兄弟のテストが固定する（1.8）。
@@ -149,9 +149,8 @@ impl Run {
     /// ツールを 1 回呼ぶ（4.2〜4.8）。`args_json` は JSON の object の文（`"{}"` 可・読めなければ panic）。
     pub fn call(&mut self, tool: &str, args_json: &str) -> Result<ToolReply, McpError> {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
-        let waits = waits(&self.limits);
         self.mcp
-            .call(&mut self.child, files, tool, args_json, waits)
+            .call(&mut self.child, files, tool, args_json, &self.limits)
     }
 
     /// 答えの文に `needle` が現れるまで呼び直す（4.9）。
@@ -166,9 +165,14 @@ impl Run {
         needle: &str,
     ) -> Result<ToolReply, McpError> {
         let files = [self.stdout.as_path(), self.stderr.as_path()];
-        let waits = waits(&self.limits);
-        self.mcp
-            .call_until(&mut self.child, files, tool, args_json, needle, waits)
+        self.mcp.call_until(
+            &mut self.child,
+            files,
+            tool,
+            args_json,
+            needle,
+            &self.limits,
+        )
     }
 
     /// 利用者と同じ閉じ方で閉じる（5.1・5.3）。2 度目からは同じ終わりを返す。
@@ -213,15 +217,6 @@ impl Drop for Run {
         let l = self.limits;
         // 既に終わっていれば、stop_quietly は送らずに回収して戻る。
         close::stop_quietly(&mut self.child, files, l.deadline, l.poll, l.close_retry);
-    }
-}
-
-fn waits(l: &Limits) -> Waits {
-    Waits {
-        deadline: l.deadline,
-        poll: l.poll,
-        call_retry: l.call_retry,
-        exit_grace: l.exit_grace,
     }
 }
 

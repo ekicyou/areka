@@ -85,7 +85,7 @@ impl RealRun {
         self
     }
 
-    /// MCP の番号（既定は空いた番号＝4.1）。
+    /// MCP の番号（既定は空いた番号＝4.1）。`env` で `AREKA_MCP_PORT` を積むとそちらが勝つ。
     pub fn mcp_port(mut self, port: u16) -> RealRun {
         self.mcp_port = Some(port);
         self
@@ -110,6 +110,8 @@ impl RealRun {
     }
 
     /// 任意の環境変数。窓口の既定と論理の指定より後に置く＝何でも上書きできる（1.6）。
+    /// `AREKA_MCP_PORT` を積んだときは、最後の値が子の待ち受ける番号で窓口が話す番号
+    /// （番号として読めなければ `spawn` が落ちる）。
     pub fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> RealRun {
         self.env
             .push((key.as_ref().to_owned(), value.as_ref().to_owned()));
@@ -162,7 +164,7 @@ impl RealRun {
                 i686_target: &i686_target,
             });
         }
-        let port = self.mcp_port.unwrap_or_else(free_port);
+        let port = self.port();
         let positional: Vec<&Path> = r
             .ghost
             .iter()
@@ -179,6 +181,31 @@ impl RealRun {
             .spawn()
             .unwrap_or_else(|err| panic!("子を起こせませんでした: {} ({err})", exe.display()));
         Run::new(child, dirs, mcp, port, self.limits)
+    }
+
+    /// 子が待ち受ける番号＝窓口が話す番号。呼び手の `env` の最後の `AREKA_MCP_PORT` が勝つ
+    /// （子と同じく前後の空白を除いて u16 として読む。Windows の環境変数の名前は大文字小文字を見ない）。
+    ///
+    /// # Panics
+    ///
+    /// その値を番号として読めないとき（子は既定の候補へ移り、窓口はどの番号か分からない）。
+    fn port(&self) -> u16 {
+        let set = self
+            .env
+            .iter()
+            .rev()
+            .find(|(k, _)| k.eq_ignore_ascii_case("AREKA_MCP_PORT"));
+        match set {
+            Some((_, v)) => v
+                .to_str()
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "env の AREKA_MCP_PORT={v:?} を番号（0〜65535）として読めない。番号は `.mcp_port(n)` で渡す"
+                    )
+                }),
+            None => self.mcp_port.unwrap_or_else(free_port),
+        }
     }
 
     /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3）。順は

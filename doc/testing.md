@@ -41,7 +41,7 @@ assert_eq!(ended.by, EndedBy::UserClose, "{}", run.output());
 どの立て方でも、子には回の置き場の根・記憶の置き場（`<回>\profile`）・空いた MCP の番号・`RUST_LOG=info`・保険の自動終了（45 秒）を渡す。開発者の本物の根や記憶の置き場は受け継がない。既定は次で上書きできる。
 
 - `.profile_dir(path)`（記憶の置き場）・`.mcp_port(n)`（MCP の番号）・`.rust_log(filter)`（記録の段）・`.safety_exit(d)`（保険の自動終了）・`.deadline(d)`（どの待ちにも使う締切・既定 60 秒）
-- `.env(名, 値)`（任意の環境変数。窓口の既定より後に置くので何でも上書きできる）・`.arg(引数)`（位置の引数の後ろに足す）
+- `.env(名, 値)`（任意の環境変数。窓口の既定より後に置くので何でも上書きできる。`AREKA_MCP_PORT` を積んだときは最後の値が子の待ち受ける番号で、窓口もその番号へ話しかけ `run.mcp_port()` もそれを返す。番号として読めなければ `spawn` が panic する＝番号は `.mcp_port(n)` で渡すのが本筋）・`.arg(引数)`（位置の引数の後ろに足す）
 - `.before_spawn(|staged| ..)`（起こす直前に 1 度だけ呼ぶ。写しの書き換えや、`staged.ensure_i686(..)` で試験用の 32bit の DLL を揃える）
 
 `.rust_log(..)` で窓口が頼る行の出所（`areka_mcp::server`・`areka::app_exit`）が info より絞られるときは、窓口が `,<出所>=info` を足す。名指しの判定は `EnvFilter` と同じ素の前方一致なので、`areka=debug` はそのまま、`areka_mcp=debug` には `,areka::app_exit=info` が足される。
@@ -52,13 +52,14 @@ assert_eq!(ended.by, EndedBy::UserClose, "{}", run.output());
 - `run.call_until(ツール, 引数の JSON, 文字列)` は、答えの文にその文字列が現れるまで呼び直す。締切までに現れなければ、最後の答えを添えて panic する。
 - `run.wait_for(文字列)` は、子の出力（標準出力と標準エラー）にその文字列が現れるまで待つ。
 
-答えは `Ok(ToolReply)` で、`text` が答えの文、`is_error` が真ならツールが失敗を答えた（成功の答えと見分ける）。呼べなかったときは `Err(McpError)` で、訳は 3 つに分かれる。
+答えは `Ok(ToolReply)` で、`text` が答えの文、`is_error` が真ならツールが失敗を答えた（成功の答えと見分ける）。呼べなかったときは `Err(McpError)` で、訳は 4 つに分かれる。
 
 | 訳 | 意味 |
 |---|---|
 | `McpError::ListenFailed { port, line }` | 子の記録が待受を始められなかったことを示した（`line` はその行） |
 | `McpError::Unreachable { target, reason }` | つながらない・答えが読めない・締切を過ぎた |
 | `McpError::ChildExited(exited)` | 呼び出しの前か途中で子が終わった（`exited.status` が終わり方） |
+| `McpError::Refused { code, message }` | 相手が JSON-RPC の誤りを答えた（引数が道具の形に合わない・知らない道具など。つなぎはそのまま使える） |
 
 赤の文には `run.output()`（標準出力と標準エラーの全文）を添えると、読むときに置き場を開かずに済む。
 

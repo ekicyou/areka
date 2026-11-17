@@ -155,7 +155,7 @@
   - _Depends: 1.1, 4.1_
   - _Dispatch: standard — 読み手の 2 つの失敗の形と、範囲の外のソースを読む静的なテストを書く_
   - _Requirements: 2.7, 3.1, 3.2, 3.3, 4.1, 6.2, 7.3, 7.6, 7.7_
-- [ ] 5.2 MCP の呼び口の誤りの答えと番号の上書きを直す（R1: 3・10・28・46）
+- [x] 5.2 MCP の呼び口の誤りの答えと番号の上書きを直す（R1: 3・10・28・46）
   - 3: 決め D1（`ServiceError::McpError` は新しい変種 `McpError::Refused { code, message }` の `Err`・つなぎを使い回す・猶予を待たない）
   - 10: 最後に積まれた `AREKA_MCP_PORT` を u16 で読んで窓口が話す番号（`Run::mcp_port()` も）にし、読めなければ `.mcp_port(n)` を案内して panic。説明を直す
   - 28: 受け口を落として生きた子でもう 1 度呼ぶと `Unreachable` のテストと、名乗りの判定の文を純関数 `not_found_reason` に割る
@@ -228,3 +228,5 @@
   - 4.5 の裁定（要件 6.7 の議題・audit 系の議題は推奨案で承認してよいという取り決め（11-04）で進行役が推奨案を採った）: 消した `emily4_nar_installs_the_ghost_alone_and_skips_its_missing_companion` の名前が、範囲の外の表に無い `doc/COMPAT_ARCHITECTURE.md` の §8 沈黙ルール対応表（同時インストールのバルーンの取り出し元フォルダが書庫に無いときの行）に判定の引き先として残っていた。その 1 語だけを寄せた先の `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` に差し替えた（ほかは触らない）。完了の報告で開発者に伝える
   - 5.1: 較正: `RELIED_TARGETS[0]` を在らない段 `areka_mcp::no_such_stage` に → `relied_targets_name_the_modules_that_emit_the_relied_lines` が赤（直す先に `launch.rs の RELIED_TARGETS` を名指し）。`read_text` の panic の腕を空の文字列に → `read_text_panics_with_the_path_when_the_file_cannot_be_read` が赤。`failure_text` を元の `unwrap_or_default` に → `failure_text_names_an_unreadable_file` が赤。消す前の grep: `Launch::Ghost` 17（直したファイル 3・本 spec の文書 13・completed/areka-P0-real-run-mcp-kit/design.md 1）、`Staged::run_dir` の呼び手 0、`Run::stderr()` は run.rs の 1、crate の外の `Limits` 0、偽の子の `err:` は bin の 2 だけ。消したテスト（50）: `profile_dir_and_port_override_defaults`・`free_port_is_nonzero`・`helper_spec_names_the_real_helper`（どれも定義 1 だけ）と `two_runs_at_once_are_separate` の番号の違いの 1 行。改名: `five_launch_variants_resolve_positional_args_and_root` → `four_launch_variants_…`（使い手は定義だけ）。`areka::app_exit` の字面の差分 0
   - 5.1 の残り（6.1 のかけ直しで見る）: D2 のテストは `RELIED_TARGETS.iter().zip(WORDS)` で、出所が増えると黙って飛ばす（数の一致の確かめが無い）
+  - 5.2: 較正: `ServiceError::McpError` の腕を外す → `an_mcp_error_reply_is_refused_on_the_same_link` が赤（`Unreachable` になる）。`spawn` を `self.mcp_port.unwrap_or_else(free_port)` に戻す → `an_env_override_of_the_mcp_port_is_the_port_the_kit_talks_to` が赤。読めない上書きを黙って `.mcp_port` に落とす → `an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint` が赤。猶予の `.min(end)` を外す・生きた子の枝で `ChildExited` を返す → `a_dropped_server_with_a_living_child_is_unreachable_within_the_grace` が赤。`not_found_reason` が相手の名を落とす → `another_server_answering_is_named_in_the_reason` が赤。消す前の grep: `Waits` の使い手は real-run-kit の 9 だけ（`areka-impl-watch` と `doc/impl-watch.md` の当たりは別の語）。範囲の外の `McpError` を受ける 2 か所は書き換えなしで組める
+  - 5.2 の残り（6.1 のかけ直しで見る）: `real-run-kit/src/output_tests.rs` の偽の待受行が本物の形（`url=…/api/mcp/v1`）でない

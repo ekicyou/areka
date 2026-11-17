@@ -5,7 +5,7 @@
 //! 窓口の間でずれたらここが赤になる。生かす子は最後に `window` を置いて利用者と同じ閉じ方で閉じる
 //! （`hang` だと破棄が締切まで待ってから止める）。試験の側の環境変数は変えない。
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod common;
 
@@ -115,5 +115,43 @@ fn call_until_finds_on_third_call() {
     assert_eq!(run.call("echo", args).expect("答える").text, "");
     let reply = run.call_until("echo", args, "出た").expect("答える");
     assert_eq!(reply.text, "出た");
+    close_ok(run);
+}
+
+/// 3（D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。輸送の失敗の猶予（既定 2 秒）を待たず、
+/// つなぎを捨てないので続く正しい呼び出しも通る。
+#[test]
+fn an_mcp_error_reply_is_refused_on_the_same_link() {
+    let mut run = fake("listen;window").spawn();
+    // 先につないでおき、測る時間を誤りの答えの道だけにする。
+    run.call("echo", r#"{"text":"先"}"#).expect("答える");
+    let started = Instant::now();
+    match run.call("echo", r#"{"text":5}"#) {
+        Err(McpError::Refused { code, message }) => assert_eq!(code, -32602, "{message}"),
+        other => panic!("Refused のはず: {other:?}"),
+    }
+    let took = started.elapsed();
+    // 既定の exit_grace（2 秒）。Limits は crate の外へ出さないので値で書く。
+    assert!(took < Duration::from_secs(2), "猶予を待った: {took:?}");
+    let again = run.call("echo", r#"{"text":"後"}"#).expect("続けて答える");
+    assert_eq!(again.text, "後");
+    close_ok(run);
+}
+
+/// 10: 呼び手の `env` で積んだ `AREKA_MCP_PORT` が、子の待ち受ける番号であり窓口が話す番号。
+#[test]
+fn an_env_override_of_the_mcp_port_is_the_port_the_kit_talks_to() {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .expect("空きの番号")
+        .port();
+    let mut run = fake("listen;window")
+        .env("AREKA_MCP_PORT", port.to_string())
+        .spawn();
+    assert_eq!(run.mcp_port(), port);
+    let reply = run
+        .call("echo", r#"{"text":"上書き"}"#)
+        .expect("上書きの番号で答える");
+    assert_eq!(reply.text, "上書き");
     close_ok(run);
 }
