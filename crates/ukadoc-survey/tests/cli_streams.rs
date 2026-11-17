@@ -17,18 +17,13 @@
 //!
 //! 2 つ目が禁じるのは「中身がこうである」と言うことであって、木を**見る**ことでは
 //! ない。走行の前と後を見比べて「同じである」とだけ言う事例は、木がどんな状態でも
-//! 成り立つので、この線を踏まない（末尾の要件 1.8 の節を見よ）。
+//! 成り立つので、この線を踏まない（失敗の事例の木の見比べを見よ）。
 //!
-//! この線を引く限り、事例はタスク 6.2・6.3 が中身を入れた後も書き換えずに生き残る。
-//! 失敗の腕（[`catalog_with_a_missing_snapshot_writes_nothing_to_stdout_and_exits_one`]）が
-//! その例で、今は「まだ中身が繋がっていない」で、6.2 の後は「スナップショットが
-//! 読めない」で、同じ主張を満たす。だから**失敗の本文の言い回しは主張しない**。
-//!
-//! タスク 6.1 の時代はここに「副手続きが**成功する**こと」も禁じられていた。8 つが
-//! すべて `Err` を返す間は成功の腕へ到達する術が無く、書けば必ずスナップショットか
-//! repo の木に寄りかかったからである。4 つが繋がった今は `candidates` が
-//! `crates/**/*.rs` だけを読んで成功するので、上の 3 つを 1 つも踏まずに成功の腕を
-//! 閉じられる（[`candidates_writes_its_result_to_stdout_and_exits_zero`]）。
+//! 失敗の腕（[`catalog_with_a_missing_snapshot_fails_quietly_and_leaves_the_tree_untouched`]）は
+//! 指す先が実在しない固定の綴りなので本物のスナップショットに寄りかからず、**失敗の
+//! 本文の言い回しは主張しない**（読めない理由の書き方が変わっても書き換えない）。
+//! 成功の腕（[`candidates_writes_its_result_to_stdout_and_exits_zero`]）は `candidates`
+//! が `crates/**/*.rs` だけを読んで成功するので、上の 3 つの線を 1 つも踏まずに閉じられる。
 //!
 //! 事例はファイルを 1 つも作らず、一時ディレクトリも使わない（設計 File Structure Plan）。
 
@@ -87,9 +82,9 @@ fn an_unknown_subcommand_echoes_the_typed_name_to_stderr_and_exits_two() {
 
 #[test]
 fn priority_apply_takes_no_arguments_and_exits_two_when_given_one() {
-    // 9 つ目の副手続きも引数を取らない（設計「入口 / cli::generate::priority_apply」の
+    // `priority-apply` も引数を取らない（設計「入口 / cli::generate::priority_apply」の
     // Batch / Job Contract）。ここは**振り分けの手前で断る**経路だけを見るので、
-    // 書き戻しそのものは走らない——走れば repo の台帳 4 本を書き換える。
+    // 書き戻しそのものは走らない——走れば repo の台帳を書き換える。
     assert_usage_error(
         &["priority-apply", "shiori"],
         &["priority-apply", "shiori", USAGE_FIRST_LINE],
@@ -98,11 +93,9 @@ fn priority_apply_takes_no_arguments_and_exits_two_when_given_one() {
 
 #[test]
 fn candidates_writes_its_result_to_stdout_and_exits_zero() {
-    // 成功の腕（`Outcome::Done` → 終了コード 0）を守る唯一の事例。タスク 6.1 の時代は
-    // 8 つの副手続きがすべて `Err` を返したので、この腕へはどんな入力からも到達でき
-    // なかった（先送りではなく不可能）。4 つが繋がった今なら閉じられる。
+    // 成功の腕（`Outcome::Done` → 終了コード 0）を守る唯一の事例。
     //
-    // 選んだのは `candidates` である。上の 3 つの線を 1 つも踏まないのはこれだけで、
+    // 選んだのは `candidates` である。冒頭の 3 つの線を 1 つも踏まないのはこれだけで、
     // 理由は「読むのが `crates/**/*.rs` だけ」だから——スナップショットも
     // `doc/ukadoc-coverage/`（カタログ・台帳・報告）も 1 バイトも読まない。走査の先は
     // この実行ファイル自身が組み上がっている以上どの作業ツリーにも在る。
@@ -130,58 +123,9 @@ fn candidates_writes_its_result_to_stdout_and_exits_zero() {
     assert_eq!(stderr, "", "成功したのに標準エラーへ何か出ている: {stderr}");
 }
 
-#[test]
-fn catalog_with_a_missing_snapshot_writes_nothing_to_stdout_and_exits_one() {
-    // 失敗の腕（終了コード 1）を守る唯一の事例。ここを空けておくと、失敗の本文を
-    // 標準出力へ出す壊し方が誰にも気づかれずに通る。
-    //
-    // 環境変数は子プロセスにだけ渡す（`Command::env`）。同一プロセスの環境を書き換える
-    // わけではないので、設計 Testing Strategy 19 の禁止（`set_var`）には当たらない。
-    // 指す先は実在しない固定の綴りで、一時ディレクトリは使わない。
-    //
-    // 今は環境変数まで読まずに「まだ中身が繋がっていない」で失敗する（飾りの指定）。
-    // タスク 6.2 が中身を入れると、この指定が効いて「スナップショットが読めない」で
-    // 失敗する。どちらの時代でも下の 3 つは同じなので、この事例は書き換わらない。
-    let output = Command::new(env!("CARGO_BIN_EXE_ukadoc-survey"))
-        .arg("catalog")
-        .env(SNAPSHOT_ENV, MISSING_SNAPSHOT)
-        .output()
-        .expect("実行ファイルを起こせなかった");
-    let stdout = String::from_utf8(output.stdout).expect("標準出力が UTF-8 でない");
-    let stderr = String::from_utf8(output.stderr).expect("標準エラーが UTF-8 でない");
-
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "失敗なのに終了コードが 1 でない
-標準出力: {stdout}
-標準エラー: {stderr}"
-    );
-    assert_eq!(stdout, "", "失敗の本文が標準出力へ出ている: {stdout}");
-    assert!(
-        !stderr.is_empty(),
-        "黙って失敗している（標準エラーに本文が無い）"
-    );
-}
-
 // ---------------------------------------------------------------------------
-// 失敗した走行は既存のカタログを書き換えない（要件 1.8 の後半）
+// 失敗の腕: 標準出力は空・標準エラーに本文・終了コード 1・木は走行の前後で同じ
 // ---------------------------------------------------------------------------
-//
-// 今の実装がこれを満たすのは**順番**による。`catalog` はスナップショットを読み終える
-// まで置き場も作らず 1 バイトも書かない（`cli/generate.rs`）。だが順番は書き換えられる
-// ——「先に書いてから読む」形に直しても、上の失敗の事例（終了コード 1・標準出力が空・
-// 標準エラーに本文）は 3 つとも満たしたまま緑になる。だから木そのものを見る。
-//
-// # 冒頭の決まりに触れないのはなぜか
-//
-// このファイルは「repo の中身が特定の状態であること」に寄りかからないと決めている。
-// ここで主張するのは**走行の前と後が同じ**という関係だけで、中身がどうであるかは
-// 1 つも言わない。木が無い作業ツリーでも成り立つ（前も後も空。失敗の途中で空の
-// 置き場を掘れば後だけが増えるので、その壊し方はどちらの作業ツリーでも赤くなる）。
-//
-// ファイルは 1 つも作らず、一時ディレクトリも使わない——**読むだけ**である
-// （設計 File Structure Plan の「読むだけ」）。
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -243,7 +187,20 @@ fn collect_tree(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
 }
 
 #[test]
-fn a_failed_run_leaves_the_generated_tree_untouched() {
+fn catalog_with_a_missing_snapshot_fails_quietly_and_leaves_the_tree_untouched() {
+    // 失敗の腕（終了コード 1）を守る唯一の事例。失敗の本文を標準出力へ出す壊し方と、
+    // 読み終える前に書き始める壊し方（終了コード・標準出力・標準エラーだけでは素通りする）を、1 回の走行で
+    // 両方捕まえる。
+    //
+    // 環境変数は子プロセスにだけ渡す（`Command::env`）。同一プロセスの環境を書き換える
+    // わけではないので、設計 Testing Strategy 19 の禁止（`set_var`）には当たらない。
+    // `catalog` はこの指定を読んで、指す先が無いことで失敗する。指定を外すと本物の
+    // スナップショットを読みに行くので、外してはならない。
+    //
+    // 木の見比べが冒頭の決まりに触れないのは、主張が「前と後が同じ」だけで、中身が
+    // どうであるかを 1 つも言わないからである。木が無い作業ツリーでも成り立つ（前も後も
+    // 空。失敗の途中で空の置き場を掘れば後だけが増えるので、どちらの作業ツリーでも赤く
+    // なる）。ファイルは作らず**読むだけ**である。
     let before = coverage_tree();
 
     let output = Command::new(env!("CARGO_BIN_EXE_ukadoc-survey"))
@@ -251,15 +208,24 @@ fn a_failed_run_leaves_the_generated_tree_untouched() {
         .env(SNAPSHOT_ENV, MISSING_SNAPSHOT)
         .output()
         .expect("実行ファイルを起こせなかった");
+    let stdout = String::from_utf8(output.stdout).expect("標準出力が UTF-8 でない");
+    let stderr = String::from_utf8(output.stderr).expect("標準エラーが UTF-8 でない");
+
     assert_eq!(
         output.status.code(),
         Some(1),
-        "失敗させるつもりの走行が失敗していない（この事例の前提が崩れている）"
+        "失敗なのに終了コードが 1 でない
+標準出力: {stdout}
+標準エラー: {stderr}"
     );
-
-    let after = coverage_tree();
+    assert_eq!(stdout, "", "失敗の本文が標準出力へ出ている: {stdout}");
+    assert!(
+        !stderr.is_empty(),
+        "黙って失敗している（標準エラーに本文が無い）"
+    );
     assert_eq!(
-        after, before,
+        coverage_tree(),
+        before,
         "失敗した走行が {COVERAGE_DIR} を書き換えた（要件 1.8）"
     );
 }
