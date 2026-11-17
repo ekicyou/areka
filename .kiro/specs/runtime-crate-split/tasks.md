@@ -260,7 +260,7 @@
   - _Dispatch: mechanical — 設計が grep の式と範囲を逐語で与えている_
   - _Requirements: 5.1, 5.9, 5.10, 5.11, 5.12, 6.7_
 
-- [ ] 9. 移しただけであることを示す（段 8）
+- [x] 9. 移しただけであることを示す（段 8）
 - [x] 9.1 前後の比べと静的な確かめをそろえる
   - 完了の時の `cargo test --workspace --no-fail-fast -- --list` を `target/runtime-crate-split/tests-after.txt` に取り、`: test$` の行の名前の末尾の多重集合を着手の一覧と比べる。差が `emo2_boot_talk_reveals_without_moving_glyphs` −1・`runtime_talk_reveals_without_moving_glyphs` +1・`crash_filter_is_installed_before_the_tests_start` +1 だけであることを対応表で示す（文書のテストが新しく回ったら囲みを `text` にして 0 に戻す）
   - `cargo check --workspace --all-targets` の警告 0。`areka-runtime` の本番が本体を引かないこと（設計の 2.7 の `rg` が 0 件）。`cargo tree -p areka-runtime -e normal` に本体と番人の crate が出ないこと。`Cargo.lock` の差が `areka-runtime` の 1 項目と本体の依存の 1 行だけ。根の `Cargo.toml` の差が無いこと
@@ -276,7 +276,7 @@
   - 完了の状態: 全体テストが緑で、`areka-runtime` のテストの実行ファイルも走ったことが出力に残る
   - _Dispatch: mechanical — 決まった手順の 1 回の走行_
   - _Requirements: 3.10, 7.5_
-- [ ] 9.3 実機テスト 3 本を新しい出所の名前で回す
+- [x] 9.3 実機テスト 3 本を新しい出所の名前で回す
   - 画面の操作の順を排他テストの机で取り、`crates/areka/tests/stay_on_top_real_run.rs`・`crates/areka/tests/smoke_boot_loop_exit.rs`・`crates/areka/tests/emo2_real_run` を、各ファイルの頭の手順で 1 回ずつ走らせる。ほかの実機テストは回さない
   - `stay_on_top_real_run.rs` が拾ったログに、新しい `RUST_LOG` の `areka_runtime::…=debug` で出た runtime の診断の `debug!` の行（`[window_state] ゴーストの窓を今いる帯の最上へ出す` ほか）があり、旧い `areka::runtime` の行が 0 であることを示し、抜き書きを記録に残す
   - 完了の状態: 3 本が緑で、診断の行の抜き書きが記録にある・段 8 のコミット

@@ -778,3 +778,38 @@
 - `areka-runtime` のテストの実行ファイルが走ったこと: 出力の 8528 行に `Running unittests src\lib.rs (…areka_runtime-….exe)` がある（要件 3.10）。その結果は 9524 行の `989 passed; 0 failed; 3 ignored`
 - 回し直しは無い（赤が無かった）
 
+
+## 13. 段 8（9.3）実機テスト
+
+- 取り方: 排他テストの机を持った状態で、`db8cee12a` の木から 3 本を 1 回ずつ回した（赤は無く、回し直しは無い）。事前に `netstat -ano | findstr 9276` は空（ポートは空き）。実機の根・記憶の置き場は `target\` の下（`target\sot-signoff\` ほか）。コードと `tools/` は触っていない。i686 の `shiori-host32-helper.exe` は建ててある（`target/i686-pc-windows-msvc/debug/`）。
+
+| 試験 | 回したコマンド（作業ツリーの根から） | 結果 |
+|---|---|---|
+| `stay_on_top_real_run.rs`（要件 6.5・7.6） | `$env:AREKA_STAY_ON_TOP_REAL_RUN="1"; cargo test -p areka --test stay_on_top_real_run -- --nocapture` | `1 passed; 0 failed`（64.18 秒）。判定はすべて `JUDGE PASS`。子の終わりは `status: 0`・`by: UserClose` |
+| `smoke_boot_loop_exit.rs`（要件 7.7） | `cargo test -p areka --test smoke_boot_loop_exit -- --nocapture`（この試験に環境変数のゲートは無い） | `5 passed; 0 failed`（2.23 秒）。本物・根・0 体・失敗・書けないの 5 方向 |
+| `emo2_real_run.rs` と `emo2_real_run/`（要件 7.6） | `$env:AREKA_EMO2_REAL_RUN="1"; cargo test -p areka --test emo2_real_run -- --nocapture` | `14 passed; 0 failed`（23.49 秒）。実走 `emo2_real_run_boots_talks_and_exits_zero` を含む |
+
+- emo2 の時間の 1 行: `emo2_real_run: wire_ms=791 attach_ms=974 wrap_ms=1629 close_ms=21675 talk_to_wrap_ms=41 attach_to_talk_ms=601 primary_dpi=192`
+- 出力: `target/runtime-crate-split-9.3-sot.txt`・`target/runtime-crate-split-9.3-smoke.txt`・`target/runtime-crate-split-9.3-emo2.txt`。stay-on-top の子のログは `target/sot-signoff/run.log`（611 行が `areka_runtime::` の出所）。
+
+### 13.1 診断の `debug!` の行（新しい出所）
+
+`stay_on_top_real_run.rs` は `RUST_LOG` に `areka_runtime::window_state_cue=debug`・`areka_runtime::zorder_cue=debug`・`areka_runtime::frame::{window_state,zorder_drain,zorder_descript,switch}=debug` を渡す（試験の本文 51〜54 行）。`target/sot-signoff/run.log` の中の `DEBUG areka_runtime::` の行は 3 本（抜き書きは `target/sot-signoff/debug-excerpt.txt`）:
+
+```
+2026-11-17T01:03:49.731841Z DEBUG areka_runtime::frame::window_state: [window_state] ゴーストの窓を今いる帯の最上へ出す ghost="emo2" band="normal" windows=4
+2026-11-17T01:03:54.863889Z DEBUG areka_runtime::frame::switch: 切れ目の返事が資産より先に届いた——資産がそろったので待ちを送り直す event="skin_switch_gap_recheck" kind=Shell to="copy"
+2026-11-17T01:04:00.680495Z DEBUG areka_runtime::frame::window_state: [window_state] ゴーストの窓を今いる帯の最上へ出す ghost="emo2" band="topmost" windows=4
+```
+
+判定の行にも新しい出所の `INFO` が載る（`JUDGE PASS 8.1h`）: `INFO areka_runtime::frame::window_state: [window_state] 常に手前の状態が変わった ghost="emo2" directive="stayontop" before="off" after="on" windows=4`・`INFO areka_runtime::frame::window_state: [window_state] 常に手前のまま降ろした（状態は捨てる） ghost="emo2" reason="switch"`。`JUDGE PASS R2c`（帯の働きの warn が 0 行）も緑。
+
+### 13.2 旧い出所の行が 0 であること
+
+- `grep -c "areka::runtime" target/sot-signoff/run.log` → 0。
+- `grep -c "areka::runtime" target/runtime-crate-split-9.3-sot.txt`（試験の標準出力・標準エラー全体）→ 0。
+- 旧い出所の行が 0・新しい出所（`areka_runtime::`）の行が 611 行、という形で、`RUST_LOG` の `areka_runtime::…=debug` が効いて診断の `debug!` が出ていることと、旧い道の行が残っていないことの両方を示した。
+
+### 13.3 完了の状態
+
+3 本とも緑・診断の行の抜き書きは上のとおり。タスク 9.3 の完了の状態を満たす（段 8 のコミットは進行役が行う）。
