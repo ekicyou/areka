@@ -72,7 +72,7 @@
   - 完了の姿: `cargo test -p areka-emo-present` が緑で、クローディアの記録の数え方が変わると赤になる
   - _Boundary: IssueRecords（`shell_target_element_base_tests.rs`）_
   - _Depends: 2, 3_
-  - _Dispatch: mechanical — 期待値（警告 1 行・32/0/28/0）を設計が与える_
+  - _Dispatch: mechanical — 期待値（記録 1 行・32/0/28/0。ほかの警告 3 行は draw-methods-canon の持ち分）を設計が与える_
   - _Requirements: 4.7, 8.6_
 
 - [x] 5. 網羅台帳と §8

@@ -507,7 +507,7 @@ fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape;
 ### Unit Tests
 - `decode_collisionex_tests.rs`: 5 つの形の欄の読み（1.2〜1.5・5.1・8.4）、`Ellipse`・`RECT` が読める（1.7）、名前の空と大小文字が書いたまま（1.6）、`collision*` と `collisionex*` を交互に書いた並びが書いた順（1.8）、`surface.append*` の中の `collisionex`（1.1）、`region` の領域反転の省略が `false`（1.5）。
 - 同じファイルで Requirement 4 の各行について「並びに入るか」と「記録が 1 件か・理由・見出し・行の綴り」を固定（4.1〜4.6・4.8〜4.10・8.3）。楕円・円・多角形・`region` を混ぜて読んだシェルで `ShapesInactive` が記録の列の最後に 1 件・形ごとの数・最初の行（4.7）、`rect` と `collision*` だけのシェルでは出ない（6.4）。4.7 の檻は `parse_all` を通す（`decode(lex(..))` の道は `Reading::finish` を呼ばないので `ShapesInactive` が出ない）。
-- `shell_target_element_base_tests.rs`: 実のクローディアのシェルで warn 以上がちょうど 1 行・`ShapesInactive` に楕円 32・円 0・多角形 28・`region` 0（8.6 の決定論の側・実の検体での数え方の退行を赤にする）。
+- `shell_target_element_base_tests.rs`: 実のクローディアのシェルで warn 以上が `ShapesInactive` 1 行と `draw-methods-canon` が持つ surface28 の `base` の pattern 3 行だけ・`ShapesInactive` に楕円 32・円 0・多角形 28・`region` 0（8.6 の決定論の側・実の検体での数え方の退行を赤にする）。
 - `decode_tests_lenient_input_tests.rs`・`validation_tests.rs`: 名前を最後の欄に書いた誤った書式の檻を、正しい書式（名前が 2 番目の欄）で「値になる」ことを固定する檻へ書き直す（8.8）。`collision*` の欠けた座標が 0 になる今の振る舞いはそのまま固定（1.9）。
 - `hit_import_tests.rs`: 子のサーフェスの 5 つの形を element定義の X,Y だけずらして持ち込み、それぞれの欄がずれている（`Circle` の半径はそのまま・`Polygon` は全部の頂点・`Region` は `x`・`y`）・`i64::MAX` の近くで飽和する・親の同じ名前（`region` を含む）が子を落とす（3.4・3.5・8.2）。ずらした子の `rect` の中の点で子の名前が返る。
 
