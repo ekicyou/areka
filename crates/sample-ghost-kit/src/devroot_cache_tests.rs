@@ -1,4 +1,4 @@
-//! 原本（`cache/<検体>-<刻印>/`）の兄弟テスト——刻印・初回の展開・古い原本の回収・
+//! 原本（[`CACHE`] の `<検体>-<刻印>/`）の兄弟テスト——刻印・初回の展開・古い原本の回収・
 //! 多重プロセスの競合（要件 7.2・7.3・7.6・7.7・7.8）。
 //!
 //! # 私有の名前空間で測る
@@ -17,7 +17,7 @@
 //!
 //! # 「半端な原本の自己修復」を測らない理由
 //!
-//! `cache/<検体>-<刻印>/` は「名前が合えば完全」という約束で運用する（作業フォルダで
+//! [`CACHE`] の `<検体>-<刻印>/` は「名前が合えば完全」という約束で運用する（作業フォルダで
 //! 組んでから `rename` で入れ、消すときは先に `rename` で出す）。だから手で半分消した
 //! 原本が完全とみなされるのは**設計どおり**であり、そこを検査にすると設計と逆の要求を
 //! 固定してしまう。代わりに「据え付け前の木は答えにならない」ことを測る。
@@ -66,7 +66,7 @@ fn manifest_of(name: &str) -> Vec<u8> {
 /// [`tiny_ghost_bytes`] の検体が完全に展開されたときの木の**全内容**。
 ///
 /// 「完全な原本」を 1 ファイルずつ確かめる形は、隣のファイルが落ちていても緑になる。
-/// 完了状態の 2 本はこの写像との等値で judge する。
+/// 原本・複製・手で使う根の完了状態を見るテストは、この写像との等値で判定する。
 pub(super) fn whole_ghost_tree(
     name: &str,
     mark: &[u8],
@@ -99,7 +99,7 @@ pub(super) fn shelf(namespace: &Path, name: &str) -> Vec<String> {
     out
 }
 
-/// 原本の名前（`cache/` の中の 1 件の綴り）。
+/// 原本の名前（[`CACHE`] の中の 1 件の綴り）。
 fn leaf(path: &Path) -> String {
     path.file_name()
         .expect("原本には名前がある")
@@ -270,12 +270,12 @@ fn reclaiming_one_sample_leaves_another_samples_master_copy_alone() {
     );
 }
 
-/// 退避（`cache/` から出す `rename`）に失敗しても取得は成功し、次の取得で回収し直す
+/// 退避（[`CACHE`] から出す `rename`）に失敗しても取得は成功し、次の取得で回収し直す
 /// （要件 7.3・7.7）。
 ///
 /// 古い原本の中のファイルを開いたまま取得する。**Windows は子孫が開かれている
 /// フォルダの `rename` を拒む**（下の較正で実測する。共有モードに削除を足しても同じ）
-/// ので、回収は最初の一歩で失敗する。それでも取得は止まらず、古い原本は `cache/` に
+/// ので、回収は最初の一歩で失敗する。それでも取得は止まらず、古い原本は [`CACHE`] に
 /// **無傷のまま**残る（半端に消しかけた木にはならない）。
 #[test]
 fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next_acquire() {
@@ -300,7 +300,7 @@ fn a_reclaim_that_cannot_move_the_stale_copy_keeps_going_and_retries_on_the_next
     assert_eq!(
         contents(&old),
         before,
-        "退避に失敗した古い原本は 1 バイトも欠けないこと（`cache/` に半端な木を作らない）"
+        "退避に失敗した古い原本は 1 バイトも欠けないこと（原本の棚に半端な木を作らない）"
     );
     assert_eq!(
         shelf(namespace.path(), CACHE),
@@ -449,14 +449,13 @@ fn deleting_the_whole_namespace_rebuilds_the_master_copy_on_the_next_acquire() {
 
 /// 作業フォルダに半端な木が在っても cache-hit にならない（要件 7.7）。
 ///
-/// 「名前が合う原本は完全」は `cache/` の中でだけ成り立つ約束なので、据え付け前の木を
+/// 「名前が合う原本は完全」は [`CACHE`] の中でだけ成り立つ約束なので、据え付け前の木を
 /// 原本と同じ名前で `work/` に置いても答えにしてはならない。
 #[test]
 fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
     let namespace = private_namespace();
     let nar = tiny_ghost_bytes("probe-half", b"one");
-    let bytes = &nar;
-    let stamped = format!("probe-half-{}-{:08x}", bytes.len(), areka_nar::crc32(bytes));
+    let stamped = format!("probe-half-{}", stamp(&nar));
 
     // 据え付け前の半端な木を、原本と同じ名前で作業の棚に置く。
     let decoy = namespace.path().join(WORK).join(&stamped);
@@ -468,7 +467,7 @@ fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
     assert_eq!(
         master,
         namespace.path().join(CACHE).join(&stamped),
-        "答えは `cache/` の下"
+        "答えは原本の棚の下"
     );
     assert_eq!(mark_of(&master, "probe-half"), b"one", "答えは完全な木");
     assert!(
@@ -516,7 +515,7 @@ fn a_lost_race_discards_its_own_stage_and_keeps_the_winner() {
 }
 
 /// 空の名前空間へ 4 つのプロセスが同時に取得を始めても、全員が完全な木を受け取り、
-/// `cache/` に半端な木が残らない（要件 7.6・9.5）。
+/// [`CACHE`] に半端な木が残らない（要件 7.6・9.5）。
 ///
 /// 子は**自分自身のテストバイナリ**で、`--exact` で下の子側のテストだけを走らせる。
 /// 子の名前空間は `CARGO_TARGET_DIR` で私有の場所へ振るので、この検査の外で走っている
@@ -568,7 +567,7 @@ fn four_processes_racing_the_first_install_all_get_a_complete_tree() {
         .join("descript.txt");
     assert!(
         descript.is_file(),
-        "`cache/` に残るのは完全な木であること: {}",
+        "原本の棚に残るのは完全な木であること: {}",
         descript.display()
     );
     let leftovers = shelf(&namespace, WORK);

@@ -45,25 +45,28 @@ fn checksum_url_appends_suffix() {
 
 // ---- ハッシュのファイルの読み ----
 
+/// 形だけが正しい 64 桁の 16 進（どのバイト列のハッシュでもない・読みの 2 本が使う）。
+const ANY_SHA: &str = "816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020";
+
 #[test]
 fn parse_checksum_reads_sha256sum_line() {
-    let upper = GOOD_SHA.to_ascii_uppercase();
+    let upper = ANY_SHA.to_ascii_uppercase();
     for text in [
-        format!("{GOOD_SHA}  x.nar\n"),
+        format!("{ANY_SHA}  x.nar\n"),
         format!("{upper}  x.nar\n"),
-        format!("\u{FEFF}{GOOD_SHA}  x.nar\r\n"),
-        format!("{GOOD_SHA}\n"),
-        format!("  {GOOD_SHA} *other-name.nar"),
+        format!("\u{FEFF}{ANY_SHA}  x.nar\r\n"),
+        format!("{ANY_SHA}\n"),
+        format!("  {ANY_SHA} *other-name.nar"),
     ] {
-        assert_eq!(parse_checksum(&text).as_deref(), Some(GOOD_SHA), "{text:?}");
+        assert_eq!(parse_checksum(&text).as_deref(), Some(ANY_SHA), "{text:?}");
     }
 }
 
 #[test]
 fn parse_checksum_rejects_bad_forms() {
-    let short = &GOOD_SHA[..63];
+    let short = &ANY_SHA[..63];
     let non_hex = format!("{short}g");
-    let long = format!("{GOOD_SHA}0");
+    let long = format!("{ANY_SHA}0");
     for text in [
         format!("{short}  x.nar\n"),
         format!("{non_hex}  x.nar\n"),
@@ -238,8 +241,6 @@ fn fetch_command_is_absolute_pwsh_call() {
 }
 
 // ---- 行の欄の形 ----
-
-const GOOD_SHA: &str = "816d7183ab7c92fe1d601e386d5d60f9ca9f4238d265143a1b96915aa5bfb020";
 
 #[test]
 fn row_form_accepts_a_good_row() {

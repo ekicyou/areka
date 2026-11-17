@@ -245,8 +245,8 @@ impl SampleRoot {
     /// `.nar` の `install.txt` が別の `directory` や別の種別を名乗っていると、組んだ位置は
     /// 実在しないパスになる。黙って配らずに [`SampleError::RegistryMismatch`] を返す。
     ///
-    /// 兄弟テストは私有の名前空間と自前の `.nar` から取った複製をここへ渡して、4 通りの
-    /// 食い違い（フォルダ名・種別・同梱の欠け・同梱の余り）を通す。
+    /// 兄弟テストは私有の名前空間と自前の `.nar` から取った複製をここへ渡して、
+    /// 食い違い（フォルダ名・種別・同梱の欠け・同梱の余り など）を通す。
     fn from_copy(sample: &'static Sample, copy: WorkDir) -> Result<SampleRoot, SampleError> {
         check_registry(sample, copy.path())?;
         let root = copy.path().to_path_buf();

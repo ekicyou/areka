@@ -304,12 +304,10 @@ fn a_copy_is_taken_from_the_master_copy_and_never_re_installed_from_the_nar() {
     let nar = tiny_ghost_bytes("probe-copy", b"one");
     drop(fresh_root_in(namespace.path(), "probe-copy", || Ok(nar.clone())).expect("原本を作る"));
 
-    let bytes = &nar;
-    let master = namespace.path().join(CACHE).join(format!(
-        "probe-copy-{}-{:08x}",
-        bytes.len(),
-        areka_nar::crc32(bytes)
-    ));
+    let master = namespace
+        .path()
+        .join(CACHE)
+        .join(format!("probe-copy-{}", stamp(&nar)));
     assert!(master.is_dir(), "原本が在ること: {}", master.display());
     std::fs::write(master.join("only-in-the-master.txt"), b"m").expect("原本へ印を置けるはず");
 

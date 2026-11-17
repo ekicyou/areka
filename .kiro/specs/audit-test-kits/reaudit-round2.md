@@ -55,3 +55,8 @@
 ## 束 D の直しの控え（承認済み）
 - 較正: G1 は足した `… as` の 3 語を外す → `an_aliased_import_or_an_uncalled_direct_capture_is_detected` が赤。今の木での当たり 0
 - 改名・消し: `every_shape_of_a_bundled_balloon_path_is_detected` → `the_non_backslash_shapes_of_a_bundled_balloon_path_are_detected`、`the_whole_doc_tree_reading_finds_something` を消した（どちらも名前の当たりはかけ直しの記録だけ）
+
+## 束 A の直しの控え（承認済み）
+- 較正: S6 は知らない引数を黙って飛ばす形に・U1 は食い違いを数えない形に → `unknown_arguments_are_refused_not_ignored`・`check_only_counts_a_one_byte_difference_from_the_vendored_archive` が赤
+- 改名: `a_descript_without_a_name_line_gets_one_appended` → `named_descript_replaces_the_name_line_or_appends_one`、定数 `GOOD_SHA` → `ANY_SHA`（どちらも当たりは定義とこの記録だけ）
+- S6 の副作用: `--from` を 2 度書くと後の値が勝つ（前は先の値・保守の道具なので受け入れた）

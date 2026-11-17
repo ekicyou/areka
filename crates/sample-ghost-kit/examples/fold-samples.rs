@@ -67,15 +67,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let check_only = args.iter().any(|arg| arg == "--check");
-    let from = match args.iter().position(|arg| arg == "--from") {
-        Some(at) => Some(
-            args.get(at + 1)
-                .ok_or("--from must be followed by a folder")?
-                .clone(),
-        ),
-        None => None,
-    };
+    let (from, check_only) = parse_args(&args)?;
 
     // 畳む対象。`--from` は登記表を見ない＝まだ登記していない検体でも畳める。
     // 確かめは作業の置き場を消す前に（書き損じの呼び出しで置き場を消さない）。
@@ -106,6 +98,28 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     println!("round trip matched");
     Ok(())
+}
+
+/// 引数を `--from <フォルダ>` と `--check` に読む。ほかの語は黙って捨てずに断る
+/// （打ち間違えた `--check` を無視して `vendors/` を書き直さないため）。
+fn parse_args(args: &[String]) -> Result<(Option<String>, bool), Box<dyn Error>> {
+    let mut from = None;
+    let mut check_only = false;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--check" => check_only = true,
+            "--from" => {
+                from = Some(
+                    rest.next()
+                        .ok_or("--from must be followed by a folder")?
+                        .clone(),
+                );
+            }
+            other => return Err(format!("unknown argument {other}").into()),
+        }
+    }
+    Ok((from, check_only))
 }
 
 /// 展開形のフォルダ 1 本を畳み、空の根へ戻して突き合わせる。返すのは不一致の件数。

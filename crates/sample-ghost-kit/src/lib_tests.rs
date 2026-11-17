@@ -678,9 +678,9 @@ fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
     );
 }
 
-/// `name` の行が無い `descript.txt` には行を足す（改行の形は元に合わせる・要件 9.1）。
+/// `descript.txt` の `name` の行は置き換え、無ければ足す（改行の形は元に合わせる・要件 9.1）。
 #[test]
-fn a_descript_without_a_name_line_gets_one_appended() {
+fn named_descript_replaces_the_name_line_or_appends_one() {
     assert_eq!(
         named_descript(b"charset,UTF-8\r\ntype,shell\r\n", "x"),
         b"charset,UTF-8\r\ntype,shell\r\nname,x\r\n"
@@ -713,7 +713,7 @@ fn copying_a_missing_shell_leaves_no_empty_folder() {
 }
 
 /// `Io` の表示は、パスと元の失敗（日本語の OS の文）を ASCII に写す。`os error N` は残る
-/// （`tools/load-flake.ps1` が字面で読む・audit-test-kits 指摘 32）。
+/// （audit-test-kits 指摘 32）。
 #[test]
 fn the_io_error_is_shown_in_ascii_only() {
     let source = std::io::Error::new(

@@ -6,7 +6,7 @@
 use super::*;
 use sample_ghost_kit::{WorkDir, install_txt};
 
-/// 偽の根の中の、同梱バルーンつきの小さな展開形（検体 emo2 と同じ形）。返すのは
+/// 偽の根の中の、同梱バルーンつきの小さな展開形（`install.txt`・本体・同梱バルーンの取り出し元の 3 つを持つ形）。返すのは
 /// 展開形のフォルダと、その追跡ファイルの一覧。
 fn ghost_with_companion(fake_root: &Path) -> (PathBuf, Vec<String>) {
     let source = fake_root.join("unfolded").join("tiny");
@@ -73,4 +73,46 @@ fn fold_one_never_writes_the_vendored_archive() {
         folded_nar(&scratch, "tiny").is_file(),
         "畳んだ .nar が作業の置き場に無い"
     );
+}
+
+#[test]
+fn check_only_counts_a_one_byte_difference_from_the_vendored_archive() {
+    let work = WorkDir::new().unwrap();
+    let fake_root = work.path().join("repo");
+    let (source, tracked) = ghost_with_companion(&fake_root);
+    let folded = fake_root.join("target").join("fold-first");
+    fold_one(&fake_root, &folded, &source, &tracked, false).unwrap();
+    let vendored = vendored_nar(&fake_root, "tiny");
+    fs::create_dir_all(vendored.parent().unwrap()).unwrap();
+    fs::copy(folded_nar(&folded, "tiny"), &vendored).unwrap();
+    // 元のツリーの 1 ファイルを 1 バイトだけ変え、`vendors/` の書庫と食い違わせる。
+    fs::write(
+        source
+            .join("tiny-balloon-src")
+            .join("balloon")
+            .join("s0.png"),
+        b"s1",
+    )
+    .unwrap();
+
+    let scratch = fake_root.join("target").join("fold-samples");
+    let mismatches = fold_one(&fake_root, &scratch, &source, &tracked, true).unwrap();
+
+    assert!(mismatches >= 1, "1 バイト違う書庫を --check が一致と数えた");
+}
+
+#[test]
+fn unknown_arguments_are_refused_not_ignored() {
+    let args = |words: &[&str]| {
+        words
+            .iter()
+            .map(|word| (*word).to_owned())
+            .collect::<Vec<_>>()
+    };
+
+    let refused = parse_args(&args(&["--from", "x", "--chek"])).unwrap_err();
+    assert_eq!(refused.to_string(), "unknown argument --chek");
+
+    let (from, check_only) = parse_args(&args(&["--from", "x", "--check"])).unwrap();
+    assert_eq!((from.as_deref(), check_only), (Some("x"), true));
 }

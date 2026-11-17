@@ -191,7 +191,8 @@ const CHILD_TEST: &str = "devroot::fetched_tests::the_tampered_shelf_child_acqui
 
 /// 窓口の入口 [`SampleRoot::acquire`] が、食い違う置き場の書庫を配らない（audit-test-kits 指摘 22）。
 ///
-/// 上の 2 本は `sample_nar_for` までしか通らない。ここは自分の実行体を子として起こし、
+/// `resolving_a_mismatching_archive_leaves_the_master_copy_shelf_empty` と
+/// `resolving_again_after_the_master_copy_exists_still_checks_the_archive` は `sample_nar_for` までしか通らない。ここは自分の実行体を子として起こし、
 /// 私有の `CARGO_TARGET_DIR` に食い違う棚を置いて、本物の入口 `acquire` を通す。
 #[test]
 fn acquire_refuses_a_tampered_fetched_archive() {
