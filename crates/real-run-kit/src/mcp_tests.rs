@@ -1,5 +1,7 @@
-//! `mcp` の兄弟のテスト。答えの写し（文の片の繋ぎ方・失敗の印）・引数の文の読み方・
-//! 手で書いた出力のファイルでの待受の観測を確かめる。偽の子と本物の受け口との試験は 5.2。
+//! `mcp` の兄弟のテスト。答えの写し（文の片の繋ぎ方・失敗の印）・引数の文の読み方・手で書いた出力の
+//! ファイルでの待受の観測・名乗りの訳の文と、同じプロセスに立てた本物の受け口（`serve`）での 4 本
+//! （受け口が落ちた後の `Unreachable`・誤りの答えの `Refused`・つなぎの使い回し・`call_until` の締切）を
+//! 確かめる。偽の子との試験は `tests/fake_mcp_test.rs`。
 
 use super::*;
 use crate::test_support::living_child;
@@ -231,7 +233,7 @@ fn serve(text: &'static str) -> areka_mcp::McpServer {
     areka_mcp::start(&[0], registry, None)
 }
 
-/// 28: つないだ後に受け口が落ち、子は生きている＝輸送の失敗の猶予の後に `Unreachable`。
+/// audit-test-kits 指摘 28: つないだ後に受け口が落ち、子は生きている＝輸送の失敗の猶予の後に `Unreachable`。
 /// 猶予は締切を越えない（猶予を締切より長くして確かめる）。
 #[test]
 fn a_dropped_server_with_a_living_child_is_unreachable_within_the_grace() {
@@ -267,7 +269,7 @@ fn a_dropped_server_with_a_living_child_is_unreachable_within_the_grace() {
     );
 }
 
-/// 3（D1）: JSON-RPC の誤りの答えは `Refused` で、輸送の失敗の猶予を待たずに返る（猶予 30 秒・
+/// audit-test-kits 指摘 3（audit-test-kits 決め D1）: JSON-RPC の誤りの答えは `Refused` で、輸送の失敗の猶予を待たずに返る（猶予 30 秒・
 /// 締切 10 秒にして、猶予の道へ落ちれば締切まで待って `Unreachable` になる形で確かめる）。
 #[test]
 fn an_mcp_error_reply_is_refused_without_waiting_for_the_grace() {
@@ -327,7 +329,7 @@ fn the_link_is_kept_after_a_reply_and_after_a_refusal() {
     drop(server);
 }
 
-/// 28: 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。
+/// audit-test-kits 指摘 28: 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。
 #[test]
 fn another_server_answering_is_named_in_the_reason() {
     let reason = not_found_reason(&[(9801, "ssp-mcp".to_string())]);

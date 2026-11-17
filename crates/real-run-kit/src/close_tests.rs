@@ -42,3 +42,16 @@ fn ended_by_takes_the_first_exit_line() {
     let fake = "a event=\"os_close_request\"\nb event=\"app_exit\" origin=KanadeStopped(Quit)\r\n";
     assert_eq!(ended_by(fake), EndedBy::UserClose);
 }
+
+/// 閉じる知らせの記録は終了コードだけで、taskkill の文（OEM の
+/// コードページ）を UTF-8 として読んだ化けた文を入れない（居ない PID へ送って文を出させる）。
+#[test]
+fn send_close_records_only_the_exit_code() {
+    let pid = u32::MAX;
+    let got = send_close(pid);
+    let code = got
+        .strip_prefix(&format!("taskkill /PID {pid} の終了コード Some("))
+        .and_then(|rest| rest.strip_suffix(')'))
+        .unwrap_or_else(|| panic!("終了コードのほかが入った: {got}"));
+    assert!(code.parse::<i32>().is_ok(), "{got}");
+}

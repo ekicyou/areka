@@ -98,7 +98,7 @@ pub(crate) fn close(
     }
 }
 
-/// 破棄から呼ぶ形（5.5・9）: `close` と同じ手順で閉じる知らせを送り直しつつ締切まで待つ。締切で子を止めて
+/// 破棄から呼ぶ形（5.5・audit-test-kits 指摘 9）: `close` と同じ手順で閉じる知らせを送り直しつつ締切まで待つ。締切で子を止めて
 /// 回収したら、panic の途中なら ASCII の 1 行を標準エラーへ書くだけ（二重の panic にしない）、違えば理由を
 /// 書いて panic する（閉じ忘れて子を止めた回を緑にしない）。
 pub(crate) fn stop_on_drop(child: &mut Child, files: [&Path; 2], limits: &Limits) {
@@ -144,7 +144,7 @@ pub(crate) fn wait_exit(
 /// 締切で止めた子の記録。
 struct Stopped {
     pid: u32,
-    /// 最後の `taskkill` の結果（終了コードと文）。
+    /// 最後の `taskkill` の結果（終了コード）。
     last_send: String,
     /// 回収の結果。
     reaped: Result<ExitStatus, String>,
@@ -207,18 +207,14 @@ fn close_or_kill(
     }
 }
 
-/// 強制なしの閉じる知らせを 1 度送り、終了コードと文を返す（判定は終了コードだけ・文は診断に添える）。
+/// 強制なしの閉じる知らせを 1 度送り、終了コードを返す。taskkill の出力は OEM のコードページ（日本語の
+/// 環境では cp932）で、UTF-8 として読むと化けるので捨てる。
 fn send_close(pid: u32) -> String {
     match Command::new("taskkill")
         .args(["/PID", &pid.to_string()])
         .output()
     {
-        Ok(out) => format!(
-            "taskkill /PID {pid} の終了コード {:?}（{} {}）",
-            out.status.code(),
-            String::from_utf8_lossy(&out.stdout).trim(),
-            String::from_utf8_lossy(&out.stderr).trim(),
-        ),
+        Ok(out) => format!("taskkill /PID {pid} の終了コード {:?}", out.status.code()),
         Err(e) => format!("taskkill /PID {pid} を起こせなかった: {e}"),
     }
 }

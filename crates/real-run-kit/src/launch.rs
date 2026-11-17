@@ -375,7 +375,7 @@ const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
 /// その span の中の行だけを開けるので名指しに数えない。
 ///
 /// 「名指し」は `EnvFilter` と同じ規則で決める。`EnvFilter` は出所を `::` の切れ目なしの素の
-/// 前方一致で照らす（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`
+/// 前方一致で照らす（tracing-subscriber 0.3.23 `filter/env/directive.rs`
 /// `meta.target().starts_with(&target[..])`）。`areka=debug` は `areka_mcp::server` も覆うので、
 /// そこへ `=info` を足すと debug を info へ下げてしまう。
 fn compose_rust_log(base: &str) -> String {

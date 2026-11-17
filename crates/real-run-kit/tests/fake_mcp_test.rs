@@ -117,10 +117,10 @@ fn call_until_finds_on_third_call() {
     close_ok(run);
 }
 
-/// 3（D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。続く正しい呼び出しも通る（つなぎの
+/// audit-test-kits 指摘 3（audit-test-kits 決め D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。続く正しい呼び出しも通る（つなぎの
 /// 使い回しと、輸送の失敗の猶予を待たないことは `mcp_tests.rs` が確かめる）。
 #[test]
-fn an_mcp_error_reply_is_refused_on_the_same_link() {
+fn an_mcp_error_reply_is_refused_and_the_next_call_still_answers() {
     let mut run = fake("listen;window").spawn();
     run.call("echo", r#"{"text":"先"}"#).expect("答える");
     match run.call("echo", r#"{"text":5}"#) {
@@ -132,7 +132,7 @@ fn an_mcp_error_reply_is_refused_on_the_same_link() {
     close_ok(run);
 }
 
-/// 10: 呼び手の `env` で積んだ `AREKA_MCP_PORT` が、子の待ち受ける番号であり窓口が話す番号。
+/// audit-test-kits 指摘 10: 呼び手の `env` で積んだ `AREKA_MCP_PORT` が、子の待ち受ける番号であり窓口が話す番号。
 #[test]
 fn an_env_override_of_the_mcp_port_is_the_port_the_kit_talks_to() {
     let port = std::net::TcpListener::bind("127.0.0.1:0")

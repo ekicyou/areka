@@ -42,7 +42,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 /// `env` の手順で書き出す環境変数（窓口が子へ渡す名前）。
-const ENV_NAMES: [&str; 8] = [
+const ENV_NAMES: [&str; 9] = [
     "AREKA_ROOT",
     "AREKA_USER_ROOT",
     "AREKA_PROFILE_DIR",
@@ -51,6 +51,7 @@ const ENV_NAMES: [&str; 8] = [
     "NO_COLOR",
     "AREKA_APP_SMOKE_EXIT_MS",
     "RUST_LOG",
+    "PASTA_DEBUG",
 ];
 
 /// 終わり方の行の出所（本物の `quit_app`・`on_ghost_os_close` と同じ）。

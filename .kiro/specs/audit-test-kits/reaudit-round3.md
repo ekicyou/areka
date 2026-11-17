@@ -46,3 +46,7 @@
 
 ## 束 C の直しの控え（承認済み）
 - 較正: L1 は親で `AREKA_LOG_CAPTURE_PROBES=off` を立てて較正を回す → 直す前は `bare_capture_drops_what_hardened_capture_keeps` が赤、直した後は緑。無効側では `captures_event_whose_callsite_another_thread_registers_inside_the_window` だけが赤（`--test-threads=1` で測った）
+
+## 束 B の直しの控え（承認済み）
+- 較正: R1 は `send_close` を元の形（taskkill の文を添える）に戻す → `send_close_records_only_the_exit_code` が赤（cp932 の文が化けて入る）。R5 は `PASTA_DEBUG` の名を変える → `child_receives_env_and_args` が赤
+- 改名: `an_mcp_error_reply_is_refused_on_the_same_link` → `an_mcp_error_reply_is_refused_and_the_next_call_still_answers`（本 spec の design.md・tasks.md が旧名を挙げる・記録として残す）

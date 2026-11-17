@@ -83,7 +83,7 @@ fn logical_settings_then_caller_env_wins_last() {
     assert_eq!(set(&e, "EXTRA"), "x");
 }
 
-/// 10: 最後に積まれた `AREKA_MCP_PORT` が番号として読めなければ、`.mcp_port(n)` を案内して落ちる。
+/// audit-test-kits 指摘 10: 最後に積まれた `AREKA_MCP_PORT` が番号として読めなければ、`.mcp_port(n)` を案内して落ちる。
 #[test]
 #[should_panic(expected = "`.mcp_port(n)`")]
 fn an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint() {
@@ -234,7 +234,7 @@ fn compose_rust_log_table() {
             "warn,areka=debug,areka_mcp=trace",
             "warn,areka=debug,areka_mcp=trace".into(),
         ),
-        // 出所そのものを名指していれば足さない（段が info より細かくても）。
+        // 出所そのものを名指していれば足さない（段が何であっても）。
         (
             "warn,areka::app_exit=trace",
             format!("warn,areka::app_exit=trace{S}"),
@@ -267,7 +267,7 @@ fn compose_rust_log_table() {
     }
 }
 
-/// 26・D2: `RELIED_TARGETS` の各項が、窓口の頼る行を本物に出しているモジュールのファイルを名指す。
+/// audit-test-kits 指摘 26・audit-test-kits 決め D2: `RELIED_TARGETS` の各項が、窓口の頼る行を本物に出しているモジュールのファイルを名指す。
 /// `<crate>::<段…>` を `crates/<crate の _ を - に>/src/<段>.rs`（無ければ `<段>/mod.rs`）へ写し、
 /// ファイルが在る・頼る行の語が在る・`target:` の上書きが無い、を読むだけで確かめる（本物は起こさない）。
 /// 順は `RELIED_TARGETS` と同じ（項を書き換えても照らす語は付いてくる）。

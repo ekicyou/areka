@@ -18,7 +18,7 @@ path = "src/bin/real-run-fake-areka.rs"
 # 新しい外部のクレートは 0 個（要件 10.4）。根の [workspace.dependencies] は変えない。
 # [[bin]] は [dependencies] しか使えないので、偽の子が使うものもここに置く。
 [dependencies]
-# 検体を名前で引く（見張り sample_path_guard_test の例外 1 件＝D-2）。
+# 検体を名前で引く（見張り sample_path_guard_test の例外＝D-2）。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
 # 回の置き場（target の下）。
 temp-path-kit = { path = "../temp-path-kit" }

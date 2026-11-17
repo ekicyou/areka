@@ -108,6 +108,7 @@ fn child_receives_env_and_args() {
     assert_eq!(value("NO_COLOR"), "1");
     assert_eq!(value("AREKA_APP_SMOKE_EXIT_MS"), "1234");
     assert_eq!(value("RUST_LOG"), "info");
+    assert_eq!(value("PASTA_DEBUG"), "0");
     assert!(out.lines().any(|l| l == "arg 1=--一つめ"), "{out}");
     assert!(out.lines().any(|l| l == "arg 2=二つめ"), "{out}");
     assert!(!out.contains("arg 3="), "{out}");
@@ -179,7 +180,7 @@ fn drop_closes_running_window() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
-/// 9: `close()` も `wait_exit()` も呼ばずに捨てた取っ手の子が閉じる知らせに答えなければ、破棄が子を止めて
+/// audit-test-kits 指摘 9: `close()` も `wait_exit()` も呼ばずに捨てた取っ手の子が閉じる知らせに答えなければ、破棄が子を止めて
 /// panic し、その unwind の中で回の置き場（証拠）が残る。
 #[test]
 fn dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence() {
@@ -199,7 +200,7 @@ fn dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
-/// 27: 窓ができる前に届いた閉じる知らせは送り直す（最初の送りは窓の無い子に届かない）。
+/// audit-test-kits 指摘 27: 窓ができる前に届いた閉じる知らせは送り直す（最初の送りは窓の無い子に届かない）。
 #[test]
 fn a_close_sent_before_the_window_exists_is_resent() {
     let mut run = fake("sleep:1500;window")
@@ -208,7 +209,7 @@ fn a_close_sent_before_the_window_exists_is_resent() {
     assert_eq!(run.close().by, EndedBy::UserClose, "{}", run.output());
 }
 
-/// 27: 受け取りの行が出た後は送り直さない（子は受け取ってから 2.5 秒残り、その間の知らせにも行を出す）。
+/// audit-test-kits 指摘 27: 受け取りの行が出た後は送り直さない（子は受け取ってから 2.5 秒残り、その間の知らせにも行を出す）。
 #[test]
 fn no_close_is_resent_after_the_acknowledgement() {
     let mut run = fake("window-linger:2500").spawn();

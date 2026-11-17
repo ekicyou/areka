@@ -172,7 +172,7 @@ fn deadline_ends_wait_and_text_has_paths_and_tail() {
     assert!(!text.contains("HEAD_MARK"), "末尾 64 KiB の外が入った");
 }
 
-/// 12: 読めないファイル（ここではフォルダ）は空の文字にせず、パスと理由で落ちる。
+/// audit-test-kits 指摘 12: 読めないファイル（ここではフォルダ）は空の文字にせず、パスと理由で落ちる。
 #[test]
 fn read_text_panics_with_the_path_when_the_file_cannot_be_read() {
     let dir = TempPath::under_target("output-unreadable");
@@ -183,7 +183,7 @@ fn read_text_panics_with_the_path_when_the_file_cannot_be_read() {
     assert!(text.contains("読めない"), "{text}");
 }
 
-/// 12: 締切切れの文は破棄の道からも組むので落ちず、読めない旨とパスを文に埋め込む。
+/// audit-test-kits 指摘 12: 締切切れの文は破棄の道からも組むので落ちず、読めない旨とパスを文に埋め込む。
 #[test]
 fn failure_text_names_an_unreadable_file() {
     let dir = TempPath::under_target("output-unreadable-tail");
