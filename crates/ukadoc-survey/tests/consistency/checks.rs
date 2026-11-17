@@ -10,15 +10,14 @@
 //!
 //! # 「食い違い 0 件」は、それだけでは何も言わない
 //!
-//! 実データに対する「所見 0 件」は 10 の要件を**一括で**満たす。判定が 1 つ黙って
+//! 実データに対する「所見 0 件」は、判定が受け持つ要件を**一括で**満たす。判定が 1 つ黙って
 //! 消えても、対象が 0 件の判定が空回りしていても、同じ緑になる。だからこのファイルは
 //! 3 段の主張を重ねる。
 //!
 //! ⑴ **一括の主張**（[`real_repo_data_produces_no_findings`]）——所見が 1 件も無い。
 //! ⑵ **対象の数え上げ**（[`the_subject_census_says_which_requirements_are_vacuous`]）
-//!    ——要件ごとに今日の対象を数え、対象 0 件（＝空振り）である要件を**名指しで**
-//!    固定する。今日は空振りの行が 1 つも無く、10 の要件すべてが非空を主張する。
-//!    どれかが 0 件へ落ちたら赤になる。
+//!    ——要件ごとに対象を数え、どれかが 0 件（＝空振り）へ落ちたら、その要件と対象を
+//!    **名指しして**赤にする。
 //! ⑶ **1 要件 1 摂動**（このファイルの後半）——実データの写しを 1 か所だけ壊し、
 //!    該当の判定が該当の id と場所つきで赤くなることを要件ごとに確かめる。壊すのは
 //!    メモリ上の写しだけで、repo のファイルには 1 バイトも触れない。壊す道具そのもの
@@ -171,42 +170,21 @@ fn the_load_reaches_the_real_repo_data() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 対象の数え上げ——どの要件が今日空振りかを名指しで固定する
+// ⑵ 対象の数え上げ——どの要件も空振りしていないことを名指しで確かめる
 // ---------------------------------------------------------------------------
 
-/// その判定に今日の実データで対象があるか。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Subjects {
-    /// 対象がある。判定は実データの上で実際に働いている。
-    NonEmpty,
-    /// 対象が 1 件も無い。**判定が壊れていても緑になる**（要件 6.13 の言う状態）。
-    ///
-    /// **今日この値を使う行は 1 つも無い**（調査 spec が 7 行すべてを非空へ移した）。
-    /// それでも残すのは、空振りを名指しで固定するというこの数え上げの役目そのものが
-    /// この値だからである——新しい判定を足して当面その対象が実データに無いとき、
-    /// 緑を空振りのまま置かずにここへ書き留めるための欄である。
-    #[expect(
-        dead_code,
-        reason = "空振りの行が今日 0 本なので構築されない。新しい判定を足す人のために残す"
-    )]
-    Zero,
-}
-
-/// 数え上げの 1 行（要件・何を数えたか・件数・期待）。
+/// 数え上げの 1 行（要件・何を数えたか・件数）。
 struct CensusRow {
     requirement: &'static str,
     subject: &'static str,
     count: usize,
-    expected: Subjects,
 }
 
-/// 10 の要件それぞれについて、今日の実データにある対象を数える。
+/// 要件ごとに、実データにある対象を数える。
 ///
 /// **ここは判定を呼ばない。** 判定が見る母数を、判定とは別の道筋で数え直す——同じ
 /// 関数を呼ぶと、判定が壊れたときに数え上げも一緒に壊れて気づけない。
 fn census(data: &RepoData) -> Vec<CensusRow> {
-    use Subjects::NonEmpty;
-
     let ledger_rows: usize = data.ledgers.iter().map(|led| led.entries.len()).sum();
     let rows = || data.ledgers.iter().flat_map(|led| led.entries.values());
 
@@ -234,42 +212,33 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
         .filter(|entry| !entry.versions.is_empty())
         .count();
 
-    let row = |requirement, subject, count, expected| CensusRow {
+    let row = |requirement, subject, count| CensusRow {
         requirement,
         subject,
         count,
-        expected,
     };
     vec![
-        row("6.3", "台帳に現れる id", ledger_rows, NonEmpty),
-        row("6.4", "カタログの id", data.catalog.entries.len(), NonEmpty),
-        row("6.5", "ソースの正典 URL", url_hits, NonEmpty),
-        row("6.6", "状態が implemented の行", implemented, NonEmpty),
-        row("6.7", "関連・別名・後継の相手", endpoints, NonEmpty),
-        row("6.7", "状態が alias の行", alias_rows, NonEmpty),
-        row("6.7", "登場版の記入がある行", introduced_rows, NonEmpty),
-        row("6.7", "カタログに版番号のある項目", versioned, NonEmpty),
-        row("6.8", "台帳に書かれたテーマ名", theme_values, NonEmpty),
-        row("6.10", "状態の語彙を通る行", ledger_rows, NonEmpty),
-        row(
-            "6.11",
-            "証拠の付いた項目",
-            data.evidence.by_id.len(),
-            NonEmpty,
-        ),
-        row("7.4/7.5", "ドメイン別報告", reports, NonEmpty),
+        row("6.3", "台帳に現れる id", ledger_rows),
+        row("6.4", "カタログの id", data.catalog.entries.len()),
+        row("6.5", "ソースの正典 URL", url_hits),
+        row("6.6", "状態が implemented の行", implemented),
+        row("6.7", "関連・別名・後継の相手", endpoints),
+        row("6.7", "状態が alias の行", alias_rows),
+        row("6.7", "登場版の記入がある行", introduced_rows),
+        row("6.7", "カタログに版番号のある項目", versioned),
+        row("6.8", "台帳に書かれたテーマ名", theme_values),
+        row("6.10", "状態の語彙を通る行", ledger_rows),
+        row("6.11", "証拠の付いた項目", data.evidence.by_id.len()),
+        row("7.4/7.5", "ドメイン別報告", reports),
     ]
 }
 
-/// 10 の要件それぞれについて、今日の実データに対象があることを名指しで固定する
-/// （要件 6.13）。
+/// 要件ごとに、実データに対象があることを名指しで確かめる（要件 6.13）。
 ///
 /// **このテストは「緑だから守られている」を否定するために置く。** 対象が 0 件の判定は、
 /// 判定が丸ごと消えても実データは緑のままである。だから対象が 0 件になったら赤にする。
-/// 今日は [`Subjects::Zero`] の行が 1 つも無く、10 の要件すべてが実データの上に対象を
-/// 持つ。
 ///
-/// したがって今このテストが言うのは「どの要件も空振りしていない」ことである。どれかが
+/// このテストが言うのは「どの要件も空振りしていない」ことである。どれかが
 /// 0 件へ落ちたら赤になる——台帳を読み込み損ねた・書き入れた欄が消えた・正典 URL の
 /// 行が剥がれた、のいずれかが起きた合図である。
 ///
@@ -280,20 +249,12 @@ fn the_subject_census_says_which_requirements_are_vacuous() {
     let data = RepoData::load();
 
     for row in census(data) {
-        match row.expected {
-            Subjects::NonEmpty => assert!(
-                row.count > 0,
-                "要件 {} の対象「{}」が 0 件になった。読み込みが空振りしていないか確かめること",
-                row.requirement,
-                row.subject
-            ),
-            Subjects::Zero => assert_eq!(
-                row.count, 0,
-                "要件 {} の対象「{}」が {} 件生まれた。\
-                 この行を Subjects::NonEmpty へ移し、実データで空振りしない主張に書き換えること",
-                row.requirement, row.subject, row.count
-            ),
-        }
+        assert!(
+            row.count > 0,
+            "要件 {} の対象「{}」が 0 件になった。読み込みが空振りしていないか確かめること",
+            row.requirement,
+            row.subject
+        );
     }
 }
 

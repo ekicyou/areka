@@ -64,11 +64,13 @@ fn the_floor_container_refuses_a_floor_of_zero() {
     );
 }
 
-/// 満たしている器は止まらないこと（較正の反対側）。
+/// 満たしている器は止まらないこと（較正の反対側）。実数が下限ちょうどでも緑である。
 #[test]
 fn the_floor_container_stays_quiet_when_every_row_is_met() {
     let mut floors = Floors::new();
-    floors.at_least("足りている数", 2, 1);
+    floors
+        .at_least("足りている数", 2, 1)
+        .at_least("ちょうど", 1, 1);
     assert!(
         floors.short().is_empty(),
         "満たしているのに違反を挙げている"

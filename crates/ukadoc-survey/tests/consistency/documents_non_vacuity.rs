@@ -1,4 +1,4 @@
-//! 3 文書まわりの判定の母数が 0 件でないことの主張と、そこで使う道具の較正
+//! 3 文書まわりの判定の母数が 0 件でないことの主張
 //! （要件 11.3・11.4・設計「入口 / `tests/consistency`」）。
 //!
 //! # ここに置くもの
@@ -7,17 +7,16 @@
 //!   届いていること。
 //!
 //! - 判定 ⑴ ⑵ の母数の下限（`linkage.md` の引用 id 数・報告 5 本から読めた機械の
-//!   束 id の数・3 文書が引用した機械の束 id の数）と、その下限が**下回ると赤になる**
-//!   ことの較正。
-//! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）と、同じ較正。
-//! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・`[[barrier]]` の行数・段階 A の `items`）と、
-//!   同じ較正。
+//!   束 id の数・3 文書が引用した機械の束 id の数）。
+//! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）。
+//! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・`[[barrier]]` の行数・段階 A の `items`）。
 //! - 判定 ⑸ の母数の下限（`[[spec]]` の行数・`[[owner_completed]]` の行数・
-//!   `completed/` の直下の数）と、同じ較正。
-//! - 判定 ⑹ の母数の下限（作り直した全体報告の本文の長さ・その束の表の行数）と、同じ較正。
+//!   `completed/` の直下の数）。
+//! - 判定 ⑹ の母数の下限（作り直した全体報告の本文の長さ・その束の表の行数）。
 //!
-//! 母数の器（[`Floors`]）と壊す道具 4 つの**較正**は兄弟の `documents_tools.rs` にある
-//! （1 ファイル 1,000 行の目安・`structure.md`）。
+//! 下限を下回れば赤になること（下限 0 は主張として受け付けない・実数と等しければ緑）は
+//! 母数の器（[`Floors`]）の側が持つ。器と壊す道具 4 つの**較正**は兄弟の
+//! `documents_tools.rs` にある（1 ファイル 1,000 行の目安・`structure.md`）。
 //!
 //! # 判定 ⑴ の下限は `linkage.md` と `briefing.md` の 2 本ぶん
 //!
@@ -30,10 +29,7 @@
 //! なり、この一群が全 spec の共有ファイルになる（設計「⑸ の数え方」）。だから下限
 //! だけを置く。
 
-use std::collections::BTreeSet;
-
 use ukadoc_survey::documents::Stage;
-use ukadoc_survey::documents::parse::{read_briefing, read_linkage, read_roadmap_draft};
 use ukadoc_survey::io::paths;
 use ukadoc_survey::model::{Domain, THEMES};
 use ukadoc_survey::report::summary::render_summary;
@@ -151,42 +147,6 @@ const MIN_BARRIER_ROWS: usize = 1;
 /// かぎり判定 ⑹ は緑になる。
 const MIN_SUMMARY_BUNDLE_ROWS: usize = 1;
 
-/// 順位表が 1 行も無い `briefing.md`（母数が空に落ちた壊れ方の写し）。
-///
-/// 読み手が受け付ける最小の形で、`[stage.A]`〜`[stage.E]` の 3 つの鍵と
-/// `[priority_blank]` の 2 つの鍵をすべて 0 にしてある。
-const EMPTY_BRIEFING: &str = "```toml
-[stage.A]
-bundles = 0
-singles = 0
-items = 0
-
-[stage.B]
-bundles = 0
-singles = 0
-items = 0
-
-[stage.C]
-bundles = 0
-singles = 0
-items = 0
-
-[stage.D]
-bundles = 0
-singles = 0
-items = 0
-
-[stage.E]
-bundles = 0
-singles = 0
-items = 0
-
-[priority_blank]
-alias = 0
-not_applicable = 0
-```
-";
-
 /// 3 文書と全体報告の本文の長さの下限（文字数）。
 ///
 /// 数え方は復帰文字を落とした後の `chars().count()`（`io::files::read_normalized` が
@@ -195,23 +155,6 @@ not_applicable = 0
 /// 残らない**壊れ方だけで、実数に寄せると本文が育つたびに書き換える羽目になるからで
 /// ある。
 const MIN_DOCUMENT_CHARS: usize = 500;
-
-/// 束が 1 つも無い `linkage.md`（母数が空に落ちた壊れ方の写し）。
-///
-/// 読み手が受け付ける最小の形で、`[tally]` の 6 つの鍵とドメイン別の 4 欄をすべて 0
-/// にしてある。これを判定へ渡すと、数えるものが無いまま緑になる腕がどれなのかが
-/// 分かる。
-const EMPTY_LINKAGE: &str = "```toml\n[tally]\ntarget = 0\nfrom_machine = 0\nby_hand = 0\nsingles = 0\nalias_excluded = 0\nnot_applicable_excluded = 0\n\n[tally.singles_by_domain]\nassets = 0\nproperty = 0\nsakura-script = 0\nshiori = 0\n```\n";
-
-/// spec 表も予約群も 1 行も無い `roadmap-draft.md`（母数が空に落ちた壊れ方の写し）。
-///
-/// `count = 0` と 0 行なら腕 a は緑になる。
-const EMPTY_ROADMAP: &str = "```toml
-[briefs]
-count = 0
-snapshot_on = \"2026-09-11\"
-```
-";
 
 /// 読み込みが 3 文書と全体報告に届いていること。
 #[test]
@@ -310,68 +253,6 @@ fn the_spec_directory_listing_excludes_this_spec_and_completed() {
     );
 }
 
-/// spec ディレクトリの一覧が空に落ちたとき、上の下限が**実際に**赤になること。
-///
-/// 兄弟の 5 本（引用と束・帰属・順位・spec 表・全体報告）と同じ流儀で、下限を置いた
-/// だけで終わっていないことを見る。ここが無いと [`MIN_SPEC_DIRS`] だけが
-/// 「置いたという記録」のまま残る——一覧の走査が別のディレクトリを見ていて空を返す
-/// 壊れ方は、除外の主張（本 spec と `completed` が混じっていない）を**無条件に**
-/// 通してしまう。
-///
-/// 空に落とすのは**写し**の上である（repo のディレクトリには触れない）。
-#[test]
-fn the_floors_of_the_spec_directory_listing_turn_red_when_the_directories_go_empty() {
-    let empty = BTreeSet::<String>::new();
-
-    let mut floors = Floors::new();
-    floors
-        .at_least(".kiro/specs 直下の brief 持ち", empty.len(), MIN_SPEC_DIRS)
-        .at_least(
-            ".kiro/specs/completed 直下",
-            empty.len(),
-            MIN_COMPLETED_SPECS,
-        );
-
-    let short = floors.short();
-    assert_eq!(
-        short.len(),
-        2,
-        "一覧が空に落ちたのに違反が 2 行そろわない: {short:?}"
-    );
-    assert!(
-        short.iter().all(|line| line.contains("0 件しかない")),
-        "空に落ちたことを本文が言っていない: {short:?}"
-    );
-    assert!(
-        short[0].contains(".kiro/specs 直下") && short[1].contains("completed"),
-        "どの母数が空なのかを名指していない: {short:?}"
-    );
-
-    // 空だけを見ると「0 のときだけ赤い」の証明にしかならない。下限の側を実数より
-    // 1 だけ上へ動かしても赤くなることを、生きた一覧で見る——`at_least` が
-    // `<` で比べていることの較正である（`<=` で書いてあれば上の空の検査は通る）。
-    let documents = Documents::load();
-    let live = documents.spec_dirs.len();
-    let mut just_above = Floors::new();
-    just_above.at_least(".kiro/specs 直下の brief 持ち", live, live + 1);
-    let short = just_above.short();
-    assert_eq!(
-        short.len(),
-        1,
-        "実数 {live} に対して下限 {} を置いたのに赤くならない: {short:?}",
-        live + 1
-    );
-
-    // 逆に下限が実数ちょうどなら緑であること（赤の原因が下限の側だと言い切るために要る）。
-    let mut exactly = Floors::new();
-    exactly.at_least(".kiro/specs 直下の brief 持ち", live, live);
-    assert!(
-        exactly.short().is_empty(),
-        "下限が実数ちょうどなのに赤い: {:?}",
-        exactly.short()
-    );
-}
-
 /// 判定 ⑴ ⑵ が数えている相手が 0 件でないこと（要件 11.4）。
 #[test]
 fn the_citation_and_bundle_checks_have_something_to_judge() {
@@ -407,57 +288,6 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
         .assert_met();
 }
 
-/// 母数が空に落ちたとき、上の下限が**実際に**赤になること。
-///
-/// 下限を置いただけでは「置いた」という記録が残るだけである。取り出しが空を返す
-/// 壊れ方（読み込みが別のファイルを見ている・表の見出しが変わって拾えなくなった）を
-/// 同じ取り出しの上で作り、3 行とも名指しで違反に挙がることを見る。
-#[test]
-fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_empty() {
-    let empty_linkage = read_linkage(EMPTY_LINKAGE).expect("空の linkage.md を組み立てられない");
-
-    let mut floors = Floors::new();
-    floors
-        .at_least(
-            "判定 ⑴: linkage.md の引用 id",
-            cited_ids("").len(),
-            MIN_LINKAGE_CITED_IDS,
-        )
-        .at_least(
-            "判定 ⑴: briefing.md の引用 id",
-            cited_ids("").len(),
-            MIN_BRIEFING_CITED_IDS,
-        )
-        .at_least(
-            "判定 ⑵: 報告 5 本から読めた機械の束 id",
-            bundle_ids_in_report("").len(),
-            MIN_REPORT_BUNDLE_IDS,
-        )
-        .at_least(
-            "判定 ⑵: 3 文書が引用した機械の束 id",
-            linkage_bundle_ids(&empty_linkage, "").len(),
-            MIN_CITED_BUNDLE_IDS,
-        );
-
-    let short = floors.short();
-    assert_eq!(
-        short.len(),
-        4,
-        "母数が空に落ちたのに違反が 4 行そろわない: {short:?}"
-    );
-    assert!(
-        short.iter().all(|line| line.contains("0 件しかない")),
-        "空に落ちたことを本文が言っていない: {short:?}"
-    );
-    assert!(
-        short[0].contains("linkage.md の引用 id")
-            && short[1].contains("briefing.md の引用 id")
-            && short[2].contains("報告 5 本")
-            && short[3].contains("3 文書が引用した"),
-        "どの母数が空なのかを名指していない: {short:?}"
-    );
-}
-
 /// 判定 ⑶ が数えている相手が 0 件でないこと（要件 11.4）。
 ///
 /// 見るのは 2 つ——名前付き束の数と、人手で足した構成 id の数である。帰属が空の
@@ -481,40 +311,6 @@ fn the_attribution_check_has_something_to_judge() {
             MIN_BY_HAND,
         )
         .assert_met();
-}
-
-/// 帰属が空に落ちたとき、上の下限が**実際に**赤になること。
-#[test]
-fn the_floors_of_the_attribution_check_turn_red_when_the_bundles_go_empty() {
-    let empty = read_linkage(EMPTY_LINKAGE).expect("空の linkage.md を組み立てられない");
-
-    let mut floors = Floors::new();
-    floors
-        .at_least(
-            "判定 ⑶: linkage.md の名前付き束",
-            empty.bundles.values().filter(|b| !b.single).count(),
-            MIN_NAMED_BUNDLES,
-        )
-        .at_least(
-            "判定 ⑶: 人手で足した構成 id（[tally].by_hand）",
-            empty.tally.by_hand,
-            MIN_BY_HAND,
-        );
-
-    let short = floors.short();
-    assert_eq!(
-        short.len(),
-        2,
-        "帰属が空に落ちたのに違反が 2 行そろわない: {short:?}"
-    );
-    assert!(
-        short.iter().all(|line| line.contains("0 件しかない")),
-        "空に落ちたことを本文が言っていない: {short:?}"
-    );
-    assert!(
-        short[0].contains("名前付き束") && short[1].contains("by_hand"),
-        "どの母数が空なのかを名指していない: {short:?}"
-    );
 }
 
 /// 判定 ⑷ が数えている相手が 0 件でないこと（要件 11.4）。
@@ -550,51 +346,6 @@ fn the_stage_and_rank_check_has_something_to_judge() {
         .assert_met();
 }
 
-/// 順位表が空に落ちたとき、上の下限が**実際に**赤になること。
-#[test]
-fn the_floors_of_the_stage_and_rank_check_turn_red_when_the_ranks_go_empty() {
-    let empty = read_briefing(EMPTY_BRIEFING).expect("空の briefing.md を組み立てられない");
-
-    let mut floors = Floors::new();
-    floors
-        .at_least(
-            "判定 ⑷: briefing.md の [[rank]] の行",
-            empty.ranks.len(),
-            MIN_RANK_ROWS,
-        )
-        .at_least(
-            "判定 ⑷: briefing.md の [[barrier]] の行",
-            empty.barriers.len(),
-            MIN_BARRIER_ROWS,
-        )
-        .at_least(
-            "判定 ⑷: 段階 A の items（[stage.A]）",
-            empty
-                .stages
-                .get(&Stage::A)
-                .map(|counts| counts.items)
-                .unwrap_or_default(),
-            MIN_STAGE_A_ITEMS,
-        );
-
-    let short = floors.short();
-    assert_eq!(
-        short.len(),
-        3,
-        "順位表が空に落ちたのに違反が 3 行そろわない: {short:?}"
-    );
-    assert!(
-        short.iter().all(|line| line.contains("0 件しかない")),
-        "空に落ちたことを本文が言っていない: {short:?}"
-    );
-    assert!(
-        short[0].contains("[[rank]]")
-            && short[1].contains("[[barrier]]")
-            && short[2].contains("[stage.A]"),
-        "どの母数が空なのかを名指していない: {short:?}"
-    );
-}
-
 /// 判定 ⑸ が数えている相手が 0 件でないこと（要件 11.4）。
 ///
 /// 見るのは 3 つ——`[[spec]]` の行数・`[[owner_completed]]` の行数・`completed/` の
@@ -624,50 +375,6 @@ fn the_spec_table_check_has_something_to_judge() {
         .assert_met();
 }
 
-/// spec 表と完了済みの列挙が空に落ちたとき、上の下限が**実際に**赤になること。
-#[test]
-fn the_floors_of_the_spec_table_check_turn_red_when_the_tables_go_empty() {
-    let empty_roadmap =
-        read_roadmap_draft(EMPTY_ROADMAP).expect("空の roadmap-draft.md を組み立てられない");
-    let empty_briefing =
-        read_briefing(EMPTY_BRIEFING).expect("空の briefing.md を組み立てられない");
-
-    let mut floors = Floors::new();
-    floors
-        .at_least(
-            "判定 ⑸: roadmap-draft.md の [[spec]] の行",
-            empty_roadmap.specs.len(),
-            MIN_SPEC_ROWS,
-        )
-        .at_least(
-            "判定 ⑸: briefing.md の [[owner_completed]] の行",
-            empty_briefing.owner_completed.len(),
-            MIN_OWNER_COMPLETED_ROWS,
-        )
-        .at_least(
-            "判定 ⑸: .kiro/specs/completed 直下",
-            BTreeSet::<String>::new().len(),
-            MIN_COMPLETED_SPECS,
-        );
-
-    let short = floors.short();
-    assert_eq!(
-        short.len(),
-        3,
-        "表が空に落ちたのに違反が 3 行そろわない: {short:?}"
-    );
-    assert!(
-        short.iter().all(|line| line.contains("0 件しかない")),
-        "空に落ちたことを本文が言っていない: {short:?}"
-    );
-    assert!(
-        short[0].contains("[[spec]]")
-            && short[1].contains("[[owner_completed]]")
-            && short[2].contains("completed"),
-        "どの母数が空なのかを名指していない: {short:?}"
-    );
-}
-
 /// 判定 ⑹ が数えている相手が 0 件でないこと（要件 11.4）。
 ///
 /// 見るのは 2 つ——作り直した本文の長さと、その中の束の表の行数である。突き合わせ相手が
@@ -690,36 +397,4 @@ fn the_freshness_check_has_something_to_judge() {
             MIN_SUMMARY_BUNDLE_ROWS,
         )
         .assert_met();
-}
-
-/// 突き合わせ相手が空に落ちたとき、上の下限が**実際に**赤になること。
-#[test]
-fn the_floors_of_the_freshness_check_turn_red_when_the_summary_goes_empty() {
-    let mut floors = Floors::new();
-    floors
-        .at_least(
-            "判定 ⑹: 作り直した全体報告の本文",
-            "".chars().count(),
-            MIN_DOCUMENT_CHARS,
-        )
-        .at_least(
-            "判定 ⑹: 作り直した全体報告の束の表の行",
-            bundle_ids_in_report("").len(),
-            MIN_SUMMARY_BUNDLE_ROWS,
-        );
-
-    let short = floors.short();
-    assert_eq!(
-        short.len(),
-        2,
-        "突き合わせ相手が空に落ちたのに違反が 2 行そろわない: {short:?}"
-    );
-    assert!(
-        short.iter().all(|line| line.contains("0 件しかない")),
-        "空に落ちたことを本文が言っていない: {short:?}"
-    );
-    assert!(
-        short[0].contains("本文") && short[1].contains("束の表の行"),
-        "どの母数が空なのかを名指していない: {short:?}"
-    );
 }

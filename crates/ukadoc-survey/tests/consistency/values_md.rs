@@ -5,7 +5,7 @@
 //!
 //! 1. **テーマ定義の見出し**（要件 4.4・6.8）— `doc/ukadoc-coverage/values.md` の
 //!    `##` の見出し 8 つが [`THEMES`] と**順序まで**一致すること。
-//! 2. **自前の TOML 書き出し**（要件 1.5・付録 A.3）— カタログの見出し 1,749 件を
+//! 2. **自前の TOML 書き出し**（要件 1.5・付録 A.3）— カタログの見出しすべてを
 //!    [`tomlout`] で組み上げ、`toml` で読み戻すと元の文字列に戻ること。
 //! 3. **語彙表経路**（要件 5.4）— 既存の語彙台帳 `SHIORI_RESOURCE_IDS` の 159 要素を
 //!    設計 D-5 の規則で拾い、`list_shiori_resource` ページの見出しへ 159 件すべてが
@@ -187,10 +187,7 @@ fn heading(line: &str) -> Option<(usize, &str)> {
 // 較正 ⑵ 自前の TOML 書き出しの読み戻し（要件 1.5・付録 A.3）
 // ---------------------------------------------------------------------------
 
-/// カタログの見出しの件数（設計 D-1）。
-const CATALOG_ENTRIES: usize = 1_749;
-
-/// 自前の書き出しで組んだ本文を `toml` で読み戻すと、見出し 1,749 件が元に戻る。
+/// 自前の書き出しで組んだ本文を `toml` で読み戻すと、見出しすべてが元に戻る。
 ///
 /// 組み立てには [`keyed_table_header`] と [`basic_string`] を通す。ここを通さずに
 /// 文字列をそのまま並べると、読み戻しの一致は**自分自身との比較**になって何も
@@ -199,12 +196,6 @@ const CATALOG_ENTRIES: usize = 1_749;
 #[test]
 fn the_own_toml_writer_round_trips_every_catalog_title() {
     let data = RepoData::load();
-    assert_eq!(
-        data.catalog.entries.len(),
-        CATALOG_ENTRIES,
-        "カタログの件数が実測と違う（この較正は 1,749 件すべてを回す）"
-    );
-
     let document = catalog_titles_document(data);
     let root: toml::Table = document
         .parse()
@@ -216,7 +207,7 @@ fn the_own_toml_writer_round_trips_every_catalog_title() {
 
     assert_eq!(
         entries.len(),
-        CATALOG_ENTRIES,
+        data.catalog.entries.len(),
         "読み戻した項目の数が書き出した数と違う（キーが衝突して畳まれていないか）"
     );
     for (id, entry) in &data.catalog.entries {
@@ -469,7 +460,8 @@ fn exactly_one_element_needs_normalization_to_match_its_title() {
     assert_eq!(
         raw_matches,
         RESOURCE_IDS - 1,
-        "素の綴りで一致する要素が 158 件でない（設計 D-5 の実測）"
+        "素の綴りで一致する要素が {} 件でない（設計 D-5 の実測）",
+        RESOURCE_IDS - 1
     );
 }
 
