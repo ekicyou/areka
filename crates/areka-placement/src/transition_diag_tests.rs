@@ -229,7 +229,7 @@ fn snapshot_line_lists_the_count_and_every_monitor() {
 }
 
 /// モニタ 0 台は**レコードの不在**ではなく `monitors=0` として観測できる
-/// （不在は「観測が無効だった」と区別が付かない・要件 5.5）。
+/// （不在は「観測が無効だった」と区別が付かない・`areka-P0-dpi-transition-atomicity` 要件 5.5）。
 #[test]
 fn snapshot_line_reports_zero_monitors_as_a_count_not_as_a_missing_record() {
     assert_eq!(
@@ -442,7 +442,7 @@ fn the_stamp_comes_from_the_world_resources_and_degrades_to_zero_without_them() 
     );
 }
 
-/// 書込タグは経路語・scope・窓種別を運ぶ（要件 2.1）。
+/// 書込タグは経路語・scope・窓種別を運ぶ（`areka-P0-dpi-transition-atomicity` 要件 2.1）。
 #[test]
 fn the_write_tag_carries_the_route_scope_and_window_kind() {
     let mut world = World::new();
@@ -536,7 +536,7 @@ fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
     );
 }
 
-/// 連鎖再解決の記録が 1 段階につき 1 行だけ出る（発行の口・task 5.6）。
+/// 連鎖再解決の記録が 1 段階につき 1 行だけ出る（発行の口・`areka-P0-dpi-transition-atomicity` task 5.6）。
 ///
 /// 見送りの行は理由語を載せ、見送り以外は番兵で埋める——落とすと「記録が出ていない」と
 /// 「その段階にはその値が無い」の区別が事後に付かない。
@@ -574,7 +574,7 @@ fn log_chain_emits_exactly_one_record_per_stage() {
 }
 
 // ---------------------------------------------------------------------------
-// 追随レコード（`kind=offset`・要件 3.7／8.3・design D10）
+// 追随レコード（`kind=offset`・`areka-P0-balloon-offset-dpi` 要件 3.7／8.3・design D10）
 // ---------------------------------------------------------------------------
 
 /// 判定語 6 値が字面で固定されている（種別が全数表に載ることは
@@ -619,7 +619,7 @@ fn offset_line_carries_the_base_pair_the_two_offsets_and_the_verdict() {
     );
 }
 
-/// 未係留の基準（永続値の腕・要件 5.2）と marker を持たない窓は番兵で埋める
+/// 未係留の基準（永続値の腕・`areka-P0-balloon-offset-dpi` 要件 5.2）と marker を持たない窓は番兵で埋める
 /// ——欄を落とすと「記録が出ていない」と「その腕にはその値が無い」の区別が事後に付かない。
 #[test]
 fn offset_line_uses_a_sentinel_for_an_unpinned_base_and_an_unmarked_scope() {
@@ -673,7 +673,7 @@ fn log_offset_rescale_emits_exactly_one_record_per_call() {
     );
 }
 
-/// 要件 3.7／8.3・design D10: 発行口は前置ガードを**自分で**持ち、ガードは行の組立より
+/// `areka-P0-balloon-offset-dpi` 要件 3.7／8.3・design D10: 発行口は前置ガードを**自分で**持ち、ガードは行の組立より
 /// 前にある。`debug!` は既定運転で濾過されるので、ガードを失っても**出力は変わらない**
 /// ——濾過テストでは検出できない退行であり、固定できるのは本文走査だけである。
 #[test]

@@ -144,7 +144,7 @@ fn on_char_drag_writes_only_policy_applied_positions() {
     }
 }
 
-/// (b') 非 Bottom アンカーの drag 配線存在チェック（Req1.6・design Integration
+/// (b') 非 Bottom アンカーの drag 配線存在チェック（`areka-P0-surface-resize-resnap` Req1.6・design Integration
 /// Tests #8 末尾・判定の枝の檻は配線を証明しないので配線の存在を一度だけ確かめる）:
 /// `Anchored(Left)` 窓のドラッグで X=`wa.left` 固定・Y 保持（縦自由）になる。
 ///
@@ -231,7 +231,7 @@ fn on_char_drag_resnaps_to_crossed_monitor_bottom() {
 
 /// (d) Free 窓（`Anchored(Free)`＝move_window=true）は wndproc 委譲のまま:
 /// ハンドラはキャラ窓を書かず、DraggingState があってもポリシー写像を使わない
-/// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・4.7/Req1.6）。
+/// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・`areka-P0-window-placement` 要件 4.7・`areka-P0-surface-resize-resnap` 要件 1.6）。
 #[test]
 fn on_char_drag_free_window_stays_wndproc_delegated() {
     let mut world = World::new();
@@ -268,9 +268,9 @@ fn on_char_drag_free_window_stays_wndproc_delegated() {
     );
 }
 
-/// (d') `Anchored` 不在（安全側フォールバック・task 2.7 の新規判断分岐）: marker が
+/// (d') `Anchored` 不在（安全側フォールバック・`areka-P0-surface-resize-resnap` task 2.7 の新規判断分岐）: marker が
 /// 一切無い窓は Free と同じく wndproc 委譲へ倒す——DraggingState が居ても単一ライター
-/// 写像を走らせず、キャラ窓を書かない（旧「marker 無し＝Free」意味論の保存・Req1.6）。
+/// 写像を走らせず、キャラ窓を書かない（旧「marker 無し＝Free」意味論の保存・`areka-P0-surface-resize-resnap` Req1.6）。
 #[test]
 fn on_char_drag_without_anchored_stays_wndproc_delegated() {
     let mut world = World::new();
@@ -445,7 +445,7 @@ fn on_char_drag_end_tunnel_phase_is_ignored() {
     assert_eq!(position_of(&world, window), Point { x: 1250, y: 356 });
 }
 
-/// Task 2.2 保存フック（Req1.1/1.9・design C2）: 非 Free アンカーのキャラ窓の
+/// `areka-P0-position-persist` Task 2.2 保存フック（Req1.1/1.9・design C2）: 非 Free アンカーのキャラ窓の
 /// DragEnd で、確定位置 `mapped` が当該スコープの `WindowPos` entries として Ghost
 /// 永続スコープへ write-through される。`barrier` 後に別ハンドルの `load_scope` で
 /// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist_io_wiring_tests.rs の
@@ -510,14 +510,14 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
     rig.close();
 }
 
-/// Task 8.1 偽 Free アンカー DragEnd→保存値等価の檻（Req1.1・design C2/C3・
+/// `areka-P0-position-persist` Task 8.1 偽 Free アンカー DragEnd→保存値等価の檻（Req1.1・design C2/C3・
 /// Testing Strategy Unit §7）: `Anchored(Anchor::Free)` のキャラ窓を headless World に
 /// 合成し、DragEnd 駆動→`project_anchor` の Free identity 腕を素通しした確定位置が、
 /// **アンカー種別を問わず**そのまま `WindowPos` entries 化されて Ghost 永続スコープへ
 /// write-through されることを決定論固定する。
 ///
 /// なぜこの檻が正本か: 保存はドラッグ中の吸着制約（Bottom 等）ではなく DragEnd の
-/// 確定位置を書く（Req1.1）。Free は wndproc（move_window=true）が動かし切った位置を
+/// 確定位置を書く（`areka-P0-position-persist` Req1.1）。Free は wndproc（move_window=true）が動かし切った位置を
 /// `project_anchor` が identity で無害通過させ、本ハンドラが**保存専用アーム**として
 /// 働く——実 emo2 は全スコープ Bottom（実機で Free の保存経路を一度も踏まない）ゆえ、
 /// この偽 Free 檻だけがその等価性の source of truth となる。
@@ -567,7 +567,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     );
 
     // 別ハンドルの load_scope で scope2 の WindowPos を読み戻す（実 IO 通過＝投函の証明）。
-    // Free アンカーでも保存値は確定 raw と value-equal（アンカー種別を問わない・Req1.1）。
+    // Free アンカーでも保存値は確定 raw と value-equal（アンカー種別を問わない・`areka-P0-position-persist` Req1.1）。
     let loaded = rig.saved();
     assert!(
         loaded.contains(&(
@@ -595,7 +595,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     rig.close();
 }
 
-/// Task 8.3 発火規律の統合檻（Req1.9・8.4・design C2/C3・Testing Strategy Integration §2）:
+/// `areka-P0-position-persist` Task 8.3 発火規律の統合檻（Req1.9・8.4・design C2/C3・Testing Strategy Integration §2）:
 /// 永続の窓位置を書くのは **ドラッグの確定と、起動の最後に並べ終えた時点の 2 つ**（バルーン相対
 /// オフセットはドラッグの確定だけ）で、自動再射影（`resize_window_to`）・`\![move]` 消費経路（`move_window_to`）・復元時再射影（`apply_restored_placements`・純関数）・**連続ドラッグ**（`on_char_drag`）は
 /// 永続ストアを一切書き換えないことを、ストア内容のバイト等価で決定論固定する。
@@ -699,7 +699,7 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     assert_eq!(
         before, after,
         "非 DragEnd 操作（move_window_to / resize_window_to / apply_restored_placements / \
-         連続 on_char_drag）が永続ストアを書き換えた（Req1.9/8.4 発火規律違反）: \
+         連続 on_char_drag）が永続ストアを書き換えた（`areka-P0-position-persist` Req1.9/8.4 発火規律違反）: \
          before={before:?} after={after:?}"
     );
 
@@ -709,7 +709,7 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
 
 /// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
 /// on_char_drag／on_char_drag_end／on_balloon_drag／on_balloon_drag_end はすべて no-op。
-/// on_balloon_drag_end は `Tunnel` も無視する（指摘 11 ⑶）。
+/// on_balloon_drag_end は `Tunnel` も無視する（`audit-placement-follow` 指摘 11 ⑶）。
 #[test]
 fn drag_handlers_ignore_events_targeting_other_entities() {
     use super::on_balloon_drag_end;

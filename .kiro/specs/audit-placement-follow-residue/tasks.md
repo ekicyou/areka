@@ -130,7 +130,7 @@
   - _Depends: 5, 6.3, 7, 8, 9, 10_
   - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
   - _Requirements: 7.2, 9.1, 9.2_
-- [ ] 11.2 (P) 配置の crate のテストの番号を直す（前半）
+- [x] 11.2 (P) 配置の crate のテストの番号を直す（前半）
   - `crates/areka-placement/src/transition_diag_tests.rs` と、`crates/areka-placement/src/follow*` の `_tests.rs` と `*test_support*` のうち `git grep -l` の名前の順で `follow_s` より前のファイルを、同じ規則で直す（二重角括弧の 16 行のうち当たる分を含む）。11.1〜11.4 の受け持ちを合わせると G2 のパスの全部になる
   - 完了の状態: G2 の 4 つの grep を受け持つファイルに絞った unnamed が 0
   - _Boundary: placement transition_diag_tests and follow tests before follow_s_
