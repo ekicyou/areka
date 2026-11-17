@@ -25,7 +25,7 @@ pub(super) fn on_probe_pointer_moved(
     _entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
-    // Bubble 相のみ処理（Tunnel は伝播続行）。伝播は止めない（false）＝ダブルクリック終了ハンドラと共存。
+    // Bubble 相のみ処理（Tunnel は伝播続行）。伝播は止めない（false）（本 probe に終了ハンドラは無い・本番の終わり方はメニューの「終了」）。
     let Phase::Bubble(state) = ev else {
         return false;
     };

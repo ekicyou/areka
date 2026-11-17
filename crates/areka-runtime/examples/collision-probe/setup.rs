@@ -12,9 +12,16 @@ use super::{
 
 /// 起動セットアップコマンドを UI スレッドへ送る（donor `run_setup` と同型）。
 pub(super) async fn run_setup(tx: CommandSender) {
-    let _ = tx.send(Box::new(|world: &mut World| {
-        build_and_spawn(world);
-    }));
+    if tx
+        .send(Box::new(|world: &mut World| {
+            build_and_spawn(world);
+        }))
+        .is_err()
+    {
+        tracing::error!(
+            "collision-probe: 起動セットアップの送出に失敗（UI 側の受け口が閉じている）— 中止"
+        );
+    }
 }
 
 /// 配置準備（placement 本体）→ placeholder 誤寸 spawn（placement 本体）→ `OnPointerMoved` 装着 →
@@ -61,7 +68,7 @@ fn build_and_spawn(world: &mut World) {
         h: PLACEHOLDER_SIZE,
     };
 
-    // placement 本体の窓組立（markers・WindowPos・Anchored 無条件付与・DragConfig・double-click close）。
+    // placement 本体の窓組立（markers・WindowPos・Anchored 無条件付与・DragConfig・OnDrag／OnDragEnd）。
     let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
     let Some(char_window) = windows.char_window(0) else {
         tracing::error!("collision-probe: scope0 char 窓 entity が無い — 中止");
@@ -73,10 +80,12 @@ fn build_and_spawn(world: &mut World) {
     //
     // **本 probe に `OnPointerPressed` は付かない**（2026-08-05 実機で確認・冒頭 doc「使い方」参照）。
     // かつて終了を担っていた stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は
-    // `areka-P0-input-events` task 2.7 で退役し（`crates/areka-placement/src/spawn.rs` の当該コメント）、正典の脱出口
-    // （Ctrl+左ダブルクリック・DD-IE-7）は `input_events::attach_char_pointer_handlers` へ移った。
-    // 同関数は `pub(crate)` かつ内部が `crate::` パスを使うため example から `#[path]` include できず、
-    // 本 probe の終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみである。
+    // `areka-P0-input-events` task 2.7 で退役し（`crates/areka-placement/src/spawn.rs` の当該コメント）、
+    // キャラ窓のポインタハンドラ（強制退避＝結線前の Ctrl+左ダブルクリックと Ctrl+Shift+左ダブルクリックを含む）は
+    // 本体の `input_events::attach_char_pointer_handlers` が装着するようになった。本番で利用者が終了を
+    // 指示する道はメニューの「終了」（本体の `menu::request_close`）だけである。
+    // `attach_char_pointer_handlers` は `pub(crate)` かつ内部が `crate::` パスを使うため example から
+    // `#[path]` include できず、本 probe の終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみである。
     world
         .entity_mut(char_window)
         .insert(OnPointerMoved(on_probe_pointer_moved));
@@ -114,7 +123,7 @@ fn build_and_spawn(world: &mut World) {
 ///
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
-/// 落ちた絵の `warn!` も権威側が持つので、この probe は呼ぶだけである——本番（`build_boot_assets`）・
+/// 落ちた絵の `warn!` も権威側が持つので、この probe は呼ぶだけである——本番（`build_boot_assets_with_shell`）・
 /// 採寸（`build_shell_assets`）と同じ入口を通るため、この probe が見る絵は本番と食い違わない。
 fn load_shell_assets(shell_dir: &Path, decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable)> {
     let target = match load_shell_target(shell_dir, decoder) {

@@ -12,7 +12,16 @@ fn smoke_exit_ms() -> Option<u64> {
     if trimmed.is_empty() {
         return None;
     }
-    trimmed.parse::<u64>().ok()
+    let parsed = trimmed.parse::<u64>().ok();
+    if parsed.is_none() {
+        // この probe の終わり方は自動終了だけ（読めない値で黙って切れると止まらなくなる）。
+        tracing::warn!(
+            env = SMOKE_EXIT_ENV,
+            value = trimmed,
+            "collision-probe: 自動終了の値が読めない（u64 のミリ秒のみ）— 自動終了は無効"
+        );
+    }
+    parsed
 }
 
 /// env ゲート付き smoke 自動 close を結線する（window-placement donor `install_smoke_exit` と同作法）。
