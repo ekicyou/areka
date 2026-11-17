@@ -30,6 +30,7 @@
 use std::sync::{Arc, Mutex};
 
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::LevelFilter;
 
 use crate::capture::SENTINEL_TARGET;
 use crate::probe::ensure_interest_probes;
@@ -78,7 +79,8 @@ impl std::io::Write for VecWriter {
 ///
 /// # Panics
 ///
-/// 窓の内側で対照イベント（番兵）を捕捉できなかった場合。
+/// 窓の内側で対照イベント（番兵）を捕捉できなかった場合。`directives` に解釈できない
+/// 指令が 1 つでも含まれる場合（黙って捨てると濾過が手順書の指定と別物になるため）。
 pub fn capture_under_filter(directives: &str, f: impl FnOnce()) -> String {
     ensure_interest_probes();
 
@@ -91,7 +93,13 @@ pub fn capture_under_filter(directives: &str, f: impl FnOnce()) -> String {
     let sentinel_directive = format!("{SENTINEL_TARGET}=trace")
         .parse()
         .expect("番兵の指令は定数から組むので常に解釈できる");
-    let filter = EnvFilter::new(directives).add_directive(sentinel_directive);
+    // `EnvFilter::new` は解釈できない指令を黙って捨てる（綴りの誤りで濾過が別物になる）ので、
+    // 同じ既定（ERROR）のまま厳密に解釈する。`EnvFilter::try_new` は既定 ERROR を持たない。
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::ERROR.into())
+        .parse(directives)
+        .unwrap_or_else(|e| panic!("directive を解釈できない: {directives:?}: {e}"))
+        .add_directive(sentinel_directive);
 
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(filter)

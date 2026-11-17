@@ -26,6 +26,7 @@ const TARGET_SHAPE: &str = "log_capture_kit::selftest::filter_line_shape";
 const TARGET_NO_SENTINEL: &str = "log_capture_kit::selftest::filter_no_sentinel";
 const TARGET_OFF: &str = "log_capture_kit::selftest::filter_everything_off";
 const TARGET_BARE: &str = "log_capture_kit::selftest::filter_bare_level";
+const TARGET_TYPO: &str = "log_capture_kit::selftest::filter_misspelled_level";
 
 // ---- ⒜ directive が実際に効く --------------------------------------------
 
@@ -120,6 +121,15 @@ fn a_trailing_comma_in_the_directives_changes_nothing() {
             "{label}の側で trace が素通りしている: {out}"
         );
     }
+}
+
+/// 綴りの誤った指令（ここでは水準 `debgu`）は黙って捨てず panic する。
+///
+/// 捨てると残りの指令だけで濾過が組まれ、手順書の指定と別物の濾過のまま緑になりうる。
+#[test]
+#[should_panic(expected = "directive を解釈できない")]
+fn a_misspelled_directive_panics_instead_of_being_dropped() {
+    let _ = capture_under_filter(&format!("info,{TARGET_TYPO}=debgu"), || {});
 }
 
 // ---- ⒝ 番兵は内部で通し、戻り値からは消える ------------------------------

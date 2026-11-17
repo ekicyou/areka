@@ -49,3 +49,9 @@
 - G4 workspace_scan_test.rs:114「下の 2 本」→ 名前を書く
 - G5 with_default_guard_test.rs ~313-319 の手書きの `FILES_THAT_MUST_NOT_SPELL_THE_TOKENS` が、見張りの一部しか見ない → `crates/log-capture-kit/tests/` の下から、例外表に載るものを除いて引く
 - G6 workspace_scan/mod.rs ~150-156・625-633 で、コメントの除去を何度もやり直す → 除去済みの本文を `OnceLock` に持たせる（当たりは同じ。前後の時間を控える）
+
+## 束 C の直しの控え（承認済み）
+- L1: `EnvFilter::new` を、既定の ERROR を保つ `EnvFilter::builder().with_default_directive(LevelFilter::ERROR.into()).parse(..)` に替え、解釈できない指令で panic するようにした。`try_new` は既定の ERROR を持たず、空の指令の振る舞いが変わるので使わない（レビューが tracing-subscriber 0.3.23 の原文で、正しい入力では `new` と同じ振る舞いだと確かめた）
+- 較正: `parse_lossy` に戻す → `a_misspelled_directive_panics_instead_of_being_dropped` が赤
+- 呼び手は wintf の 39 ファイル（`ecs/test_support.rs` の再輸出を通す）。使う指令はどれも解釈できる。窓と GPU を立てない呼び手のテスト 252 本は緑。実窓・実 GPU の呼び手は 6.2 の全体テストで確かめる
+- L2: 「値の取り出しは 3 本」の数を外した

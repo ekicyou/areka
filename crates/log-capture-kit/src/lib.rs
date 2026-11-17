@@ -38,7 +38,7 @@
 //! 発火したイベント列が返る。戻り値は一切加工されずそのまま返るので、被検査コードの結果と
 //! ログの両方を 1 回の実行で見られる。
 //!
-//! 値の取り出しは 3 本。[`CapturedEvent::message`] が本文、[`CapturedEvent::field`] が
+//! 値は次のように取り出す。[`CapturedEvent::message`] が本文、[`CapturedEvent::field`] が
 //! フィールドの **Debug 表現**（文字列なら引用符つき）、[`CapturedEvent::field_str`] が
 //! **生値**（引用符なし）である。
 //!
