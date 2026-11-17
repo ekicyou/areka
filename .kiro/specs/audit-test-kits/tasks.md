@@ -1,0 +1,204 @@
+# 実装計画: audit-test-kits
+
+- 各タスクの直しの中身は design.md「直し方の一覧（指摘ごと）」の表と research.md 3 節の番号が正本。ここでは番号で引く。76 件と件 1・件 2 は、どれも下のちょうど 1 つの小タスクに置いた（6 と 32 と 34 と 73 と 74 は crate ごと・見張りごとに分けて置き、置き場を各タスクに書いた。74 の検体の見張りの分は設計の G3 から G2 の 3.2 へ移した＝同じファイルを触る束に寄せるため。75 は直さずに残し、記録は 6.2）。
+- 大タスクは crate のまとまり、小タスクは design.md「実装の順とタスクの束ね方」の 19 束（K1・L1・L2・G1〜G5・S1〜S5・R1〜R4・V1・V2）。束の矢印: L1→L2・G1→G2／G3／G4→G5・S2→S1→S3／S4→S5・K1／S2→R4→R1→R2・R4→R3・全部→V1→V2。
+- 頭の小タスク 1.1 と 4.1 は、互いに触るファイルが重ならず、組む側にも回らない（`sample-ghost-kit` は `temp-path-kit` を引かない）ので `(P)`。2.1 と 3.1 は `(P)` にしない: 2.1 の確かめは `areka-emo-present`・`areka-emo-text` を組み、それが `sample-ghost-kit` と `temp-path-kit` を引く。3.1 の見張りは木全体を読み、`log-capture-kit` のテストは `sample-ghost-kit` を開発用に組む。どちらも 1.1・4.1 の途中の書き換えで揺れるので、`_Depends:_` で 1.1・4.1 の後に回す。同じ crate の中の束は同じファイルや同じテストの実行体を触るので順に回す。5 の real-run-kit は 1.1（`TempPath` の一意の作り直し）と 4.1（`ascii` の公開）を前提にするので `(P)` にしない。
+- 消す前には、ツリー全体（`target`・`vendors` を除く `*.rs`・`*.toml`・`*.md`・`*.ps1`・`*.py`・`*.json`・`.claude/`）の `git grep` で使い手が無いことを確かめ、名前と件数を控えて 6.2 で検証の記録に残す（要件 3.3・決め D10）。`completed/` の文書は直さない。
+- 足したテストと見張りの較正は、直しを 1 度外して赤を見てから戻し、壊し方と赤になったテストの名を控える（較正の前に 0 件を書かない・要件 4.7）。
+- テストは本番のファイルの兄弟（`#[path]`）に置く。確かめは束の crate に絞り（`cargo test -p <crate>`）、2 回目からは赤のテストだけ回す。どの小タスクも終わりに `cargo test -p log-capture-kit --test file_length_guard_test` を回し、1,000 行を越えない（要件 6.1）。ファイルを足す・一時の置き場や検体のパスを書く小タスク（4.1〜4.5・5.1〜5.4）は、終わりに見張りの全部 `cargo test -p log-capture-kit --tests` を回す（厳しくした綴りの決まりを V2 より先に当てる。3.5 より前に回る 4.1 では早めの確かめになる）。
+- C22 の約束: ほかの 5 本の触るファイル（design.md「Out of Boundary」）に触らない。`log-capture-kit/src/event.rs:150`・`event_tests.rs:18-19`・121 と `real-run-kit` の `areka::app_exit` の名指しの字面を 1 字も変えない。`file_length_guard_test.rs` の上限越えの表に載る 4 ファイルを割らない。依存を足さず `Cargo.lock` と根の `Cargo.toml` を変えない。`vendors/`・`tools/*.ps1`・`.claude/` を触らない。これらを変えずには直せないと分かったら、その指摘だけを当てずに止めて議題にする（要件 6.7・6.8・7.3〜7.5・7.10）。
+- 範囲の外のファイル（design.md「範囲の外で直すファイル」の表）は、触る前に持ち主の spec のセッションが走っていないことを確かめる（要件 7.1）。表の行のほかには手を入れない（要件 7.2）。
+- `\` を含む走査語・`\u{XXXX}` の式・化けた行の継ぎ（74）は、書いた後に python でバイトを確かめる。
+
+- [ ] 1. temp-path-kit の一意の作り直しと消せなかった知らせ
+- [ ] 1.1 (P) 一時フォルダを一意に作り直し、消せなかったことを 1 行で知らせる（K1: 6 の temp 側・13・76）
+  - 6: 置き場は `create_dir_all`、葉は `create_dir` で作り、`AlreadyExists` なら次の連番で取り直す私用の作り手（連番の出どころを引数で受ける）に `new` と `under_target` の両方を通す。2 つの入口の形と呼び手は変えない（75）
+  - 13: 破棄は私用の消し手を標準エラー（`std::io::stderr()` へ直に）へ向けて呼ぶ。消せたとき・既に無いときは何も書かず、ほかの失敗は `temp-path-kit: could not remove <path> (<理由>)` の ASCII の 1 行だけ。書けなくても panic しない
+  - 私用の ASCII の写し（`sample-ghost-kit` の `ascii` と同じ規則の 6 行）を置き、leaf のために写す理由を 1 行のコメントに書く（決め D9）
+  - 76: テストの説明の「主張は 3 本」の数を外す
+  - テスト: `a_leftover_folder_with_the_same_name_is_never_handed_out`（連番 0・1 の名前を先に置き、2 の名前が空で配られる）・`a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line`（中のファイルを削除を拒む共有モードで開いたまま消し手を `Vec<u8>` へ向けて呼び、閉じてから消す）
+  - 完了の姿: 2 本が緑で、`AlreadyExists` の取り直しを外す・知らせの行を書かない、の壊し方でそれぞれ赤（較正）。`cargo test -p temp-path-kit` が緑で、`Cargo.toml` の `[dependencies]` が空のまま
+  - _Boundary: temp-path-kit_
+  - _Dispatch: standard — 一意の作り直しの輪と書き先を引数で受ける消し手を新しく書く_
+  - _Requirements: 3.1, 4.1, 4.3, 4.5, 6.2, 6.5, 6.6_
+
+- [ ] 2. log-capture-kit の記録の捕まえ（src）
+- [ ] 2.1 ちょうど 1 件の確かめのテストを足し、範囲の外の写しを消す（L1: 21・38・件 1）
+  - 21: 兄弟の新しいテストのファイル `expect_tests.rs` を作り、手で組んだ捕まえた記録（`event_tests.rs` の手組みと同じ形）で 0 件・2 件・欠けた項目の `#[should_panic]` 3 本と、通る 1 本を置く
+  - 38: `expect_one` と `expect_field` に `#[track_caller]` を付ける
+  - 件 1: `areka-emo-present` の `scale_tests.rs` の自前の `expect_one`（251-263 行あたり）を消して道具の側を取り込み、`areka-emo-text` の `attach_wiring_test.rs` の自前の `expect_one`・`ExpectField`（133-166 行あたり）を消して `use log_capture_kit::{ExpectField, capture, expect_one};` にする。新しいソースファイルは足さない（要件 7.11）。主張の強さは変えない（要件 5.2）
+  - 完了の姿: 4 本が緑。2 つの範囲の外のファイルに自前の `expect_one`・`ExpectField` の定義が 0 で、`cargo test -p areka-emo-present scale` と `cargo test -p areka-emo-text --test attach_wiring_test` が今と同じ数だけ緑
+  - _Depends: 1.1, 4.1_
+  - _Dispatch: mechanical — 期待値を設計が書くテストと写しの削除_
+  - _Requirements: 3.1, 3.2, 4.1, 5.1, 5.2, 7.1, 7.2, 7.11_
+- [ ] 2.2 log-capture-kit の src の言い直しと削り（L2: 39〜44・件 2）
+  - 39: 別のテストをなぞるだけの 3 本と、それに含まれる重なりの 1 本を消す（`event_tests.rs:18-19`・121 は触らない）
+  - 40: テストの購読者を `CapturedEvent::from_event` を積む形にし、`FieldCollector` を私用にする
+  - 41: 赤になりえない自己テスト 3 つを消す
+  - 42: `interest_probes_enabled` を `pub(crate)` にし、再輸出と説明の行を消す
+  - 43: 決め D3 の行だけを言い直す（`event_tests.rs:3-12`・14 の見出し・102、`event.rs:89-90`・136）。`event.rs:150` は触らない
+  - 44・件 2: `lib.rs` の「消費する 21 crate」・`filter_tests.rs` の「96」の数（3・5・191 行あたり）と、範囲の外の `crates/wintf/src/ecs/test_support.rs:5` の「96 箇所」を、数を書かない文にする
+  - 完了の姿: `cargo test -p log-capture-kit --lib` が緑。`git diff main` で `event.rs:150`・`event_tests.rs:18-19`・121 の字面が変わっておらず、`interest_probes_enabled` の範囲の外の使い手が 0（grep の件数を控える）
+  - _Dispatch: mechanical — 消す・私用にする・数を外す言い直しで、形は設計が書く_
+  - _Requirements: 3.1, 3.3, 5.3, 7.1, 7.2, 7.3_
+
+- [ ] 3. log-capture-kit の見張り（tests）
+- [ ] 3.1 見張りの走査部品を直し、手助けを寄せる（G1: 17・19・20・30・33・72・73 の mod.rs と workspace_scan_test の分）
+  - 17: 飛ばす決めを純関数 `skip_dir(name, parent_has_manifest)` に（`target` は親に `Cargo.toml` があるときだけ・`vendors` と `.git` を外す）。`workspace_scan_test.rs` の飛ばしのテスト（352-367 行あたり）を改める
+  - 19: 列挙の証人を `crates/areka/examples/emo-present/balloon.rs` にする
+  - 20: 剥がしの枝ごとの「走る行／隠れる行」の表の形のテスト 1 本（6 行）
+  - 72: TOML のコメントの剥がしが開いた引用符の種類を覚え、`\"` を飛ばす
+  - 30: 決め D7 の 2 つ（語の頭の文字で先に篩う・`OnceLock` の木の読みの置き場から 3 つの読み手が読む）。前後の `cargo test -p log-capture-kit --tests` の時間を 1 度ずつ控える（判定にしない）
+  - 33: 3 か所の写しの手助け（`raw_occurrences`・開発用に引くかの判定・`manifest_fixture`・`Hit`／`scan_sources`／`unlisted`／`allowed_paths(_without)`／`render`）を `mod.rs` へ移し、各見張りは判定の語と例外表だけを持つ
+  - 73 の分: `mod.rs` と `workspace_scan_test.rs` の説明の古い数・行番号・消えた例を直す
+  - テスト: `only_a_target_next_to_a_manifest_is_skipped`（3 通り）・`strip_comments_keeps_code_after_every_literal_kind`・`a_hash_inside_a_quoted_value_with_the_other_quote_is_not_a_comment`
+  - 完了の姿: 3 本が緑で各直しを外すと赤（較正）。`cargo test -p log-capture-kit --tests` が緑で、各見張りの既存の較正の数が移しの前と同じ
+  - _Depends: 1.1, 2.1, 4.1_
+  - _Dispatch: standard — 純関数への割り出し・置き場の共有・3 つの見張りからの手助けの移し_
+  - _Requirements: 3.1, 4.1, 4.7, 4.8_
+- [ ] 3.2 検体の見張りが `\` の綴りも赤にし、範囲の外の 2 か所を直す（G2: 1・34 と 74 の検体の分）
+  - 1: ⑷ に `\` を前と後ろに置いたバルーン名の語を、⑵ に `vendors`・`sample_ghost`・検体名を `\` で繋いだ語（終わりが `\` と `"` の 2 つ・区切りが `\` と `\\` の 2 つ）を足す
+  - 範囲の外の追従: `crates/areka/tests/window_link_real_run.rs:448-449` を窓口 `sample.balloon("pasta_tategaki")` から元を引く形に（写し先は `root.join("balloon").join(<元の file_name>)`）・`crates/areka-nar/src/error_tests.rs:205` を登記に無い名前の偽のパスに
+  - 34 の分: 数の比べ（369-373 行あたり）・`the_guard_file_itself_is_not_a_hit`・ファイルが在るかの輪を消し、テストの名前を挙げる説明を直す
+  - 74 の分: 化けた行の継ぎと `\n`（528-529 行あたり）を戻し、バイトで確かめる
+  - テスト: `a_backslash_spelled_bundled_balloon_path_is_detected`・`a_backslash_spelled_checked_in_tree_is_detected`
+  - 完了の姿: 2 本が緑で語を外すと赤。本物の木の走査が緑（範囲の外の 2 か所を直した後）。ファイルが 926 行から 1,000 行を越えない
+  - _Dispatch: standard — 走査語を足し、範囲の外の呼び手を窓口へ寄せる_
+  - _Requirements: 3.1, 3.2, 3.3, 4.1, 4.7, 6.1, 7.1, 7.2_
+- [ ] 3.3 `env-filter` の見張りが 3 つの道も赤にする（G3: 4・71・34 と 74 の with_default の分）
+  - 4: 照らしを引用符なしの `env-filter`（`["…"]`・`['…']` の両方）にし、道具の自分の `Cargo.toml` の `[features]` の `default` と、根の `Cargo.toml` の `[workspace.dependencies]` の道具の項も読む（根の `Cargo.toml` は読むだけ）
+  - 71: 2 つの例外表に重複の確かめを足す
+  - 34 の分: `removing_the_exclusion_turns_the_guard_red`・`the_guard_file_itself_is_not_a_hit_because_the_tokens_are_never_spelled_out` を消す
+  - 74 の分: 化けた行の継ぎと `\n`（413-419 行あたり）と、同じ形の `workspace_scan_test.rs` の 3 か所を戻し、バイトで確かめる
+  - テスト: `single_quoted_env_filter_is_detected`・`env_filter_in_the_kit_default_features_is_detected`・`env_filter_in_workspace_dependencies_is_detected`・`only_one_crate_declares_the_env_filter_feature`・`the_direct_call_allow_table_has_no_duplicate_entries`・`the_all_thread_capture_table_has_no_duplicate_entries`
+  - 完了の姿: 6 本が緑で、4 の照らしを引用符つきに戻すと較正の 3 本が赤。今の木での違反が 0
+  - _Dispatch: standard — 判定の関数を 3 つの読み先へ広げる_
+  - _Requirements: 3.1, 4.1, 4.7, 4.8_
+- [ ] 3.4 一時パスの見張りが `(` 無しと別名も赤にする（G4: 5・34 の temp の分）
+  - 5: 修飾つきの語から `(` を外し（`use … as` の行と `(` 無しの渡し方に当たる）、この見張り自身の説明 5・539 行あたりの綴りを言い換える。環境変数の読みと `target\` の手組みには広げない（裁定・決め D12）
+  - 34 の分: `the_guard_file_itself_is_not_a_hit` と `assert_eq!(found, listed)`・ファイルが在るかの輪を消す
+  - テスト: `the_entry_point_passed_without_a_call_is_detected`・`an_aliased_import_of_the_entry_point_is_detected`
+  - 完了の姿: 2 本と既存の `a_fixed_name_built_from_the_entry_point_is_detected` が緑で、`(` を戻すと新しい 2 本が赤。今の木での違反が 0
+  - _Dispatch: mechanical — 走査語の字面を変え、期待値を設計が書く較正を足す_
+  - _Requirements: 2.7, 3.1, 4.1, 4.7_
+- [ ] 3.5 1,000 行の番人の空回りの確かめを直し、steering の自分の行を直す（G5: 18・34 と 73 の残り）
+  - 18: 「上限越えが 1 件以上」を純関数 `measurement_is_plausible`（いちばん長いファイルが上限の半分を越える）に替え、較正で外す項を `OVER_LIMIT_ALLOWED.first()` にし、`CALIBRATION_DROPPED_ENTRY` を消す。例外表の 4 件と件数の定数は変えない（要件 7.5）
+  - 34 の分: `assert_eq!(found, listed)` と、ファイルが在るかの輪を消す。`the_measurement_is_not_vacuous_and_matches_the_allow_table` を `the_measurement_is_not_vacuous` へ改名する
+  - 73 の残り: `with_default_guard_test.rs`・`temp_path_guard_test.rs`・`sample_path_guard_test.rs`・`file_length_guard_test.rs` の説明と失敗の文の古い数・行番号・消えた例（`test_offset_default`）を直す（数と行番号は書かない・`structure.md` は節の名前で指す）。3.2〜3.4 はこの 4 ファイルの 73 の分に手を付けない
+  - steering: `.kiro/steering/structure.md` の log-capture-kit 節の Tests の段（見張りの本数を数で書かない・4 形の綴りに `\` を含む）と Temp Path Kit 節の Consumers（12 crate の並び）を直す。`roadmap.md:60` は触らない（完了のときに直す）
+  - テスト: `the_vacuity_check_needs_no_over_limit_file`・`dropping_a_known_exception_turns_the_guard_red`
+  - 完了の姿: 2 本が緑で、`first()` の項を表に戻すと後者が赤。`cargo test -p log-capture-kit --tests` が緑。各見張りに較正の対が 1 本以上残っていることを一覧で控える（要件 4.7）。表に載る 4 ファイルに差分が無い
+  - _Depends: 3.2, 3.3, 3.4_
+  - _Dispatch: mechanical — 純関数 1 つと消す・改名する・文の直しで、形は設計が書く_
+  - _Requirements: 3.1, 3.2, 4.7, 4.8, 7.3, 7.5_
+
+- [ ] 4. sample-ghost-kit の窓口と作業フォルダと見本
+- [ ] 4.1 (P) 窓口の誤りの文を英語の ASCII にし、本体の置き場と取り寄せの棚の口を 1 つにする（S2: 16・32 の sample 側・36・55）
+  - 32: `lib.rs`・`devroot.rs`・`fetched.rs` の `Io` の `what` を英語の ASCII に、`Io` の表示はパスと元の失敗を `ascii` に通す。`report_cleanup` の行を `sample-ghost-kit: cleanup failed (<what>): <path> (<err>)` に、`nar-sample-path` の書けない行も英語に。`ascii` を `pub` にする。頭 `sample-ghost-kit:` と `os error N` を保つ（`tools/load-flake.ps1` が字面で読む）。panic の文は家の形のまま
+  - 16: シェルの写しは先に元のフォルダが在るかを確かめ、無ければフォルダを作らずに `Io`（`NotFound`）を返す
+  - 36: 本体の置き場を出す私用の関数を 1 つにし、4 つの呼び手で使う
+  - 55: 取り寄せの棚の 2 つのパスを返す `fetched_shelf` に寄せ、古い 3 つの関数と実行体の `unreachable!` の腕を消す。`nar-sample-path` の名前・引数・終了コード・`--fetch-list` の 5 列は変えない
+  - テスト: `the_io_error_is_shown_in_ascii_only`（日本語の OS の文を入れた `Io` の表示が ASCII だけ）・`copying_a_missing_shell_leaves_no_empty_folder`
+  - 完了の姿: 2 本が緑。既存の往復のテストと `nar_sample_path_test` の `--fetch-list` が緑。消した 3 つの関数の使い手が木全体で 0
+  - _Boundary: sample-ghost-kit lib、devroot、fetched、bin nar-sample-path_
+  - _Dispatch: standard — 誤りの文の作り直しと公開の口の寄せ_
+  - _Requirements: 3.1, 3.3, 4.1, 6.4, 6.5, 7.6, 7.7_
+- [ ] 4.2 作業フォルダと原本の作り直しを直す（S1: 7・15・52・53・54・57・58・59）
+  - 7: 札とフォルダを作る所を、`AlreadyExists` なら次の連番へ進む輪に（連番の出どころを引数で受ける・他人の札は消さない）
+  - 15: 決め D4（相対の設定値は実行体の祖先のうち `ends_with` が真の最も近いもの・無ければ今の `absolute`）を純関数にし、`devroot_tests.rs` の該当のテスト（166-181 行あたり）を改める
+  - 52: 決め D13（`sample_nar` が `(パス, バイト)` を返し、刻印と据え付けは同じバイトから）
+  - 53: 決め D5（複写が落ち、原本がもう無いときだけ 1 度やり直す。やり直しの出どころを引数で受ける私用の関数）
+  - 54: 原本の棚を作る道で `CACHE` でない兄弟の `cache*` を退け、モジュールの説明を今の棚の名に
+  - 57: `&'static Sample` を渡し、名前を 2 度引かない
+  - 58・59: `WorkDir::lock_path` を `#[cfg(test)] pub(crate)` に・`owner_is_gone` を外して説明をコメントに残す（裁定）
+  - テスト: `a_leftover_lease_or_folder_with_the_same_name_is_skipped`・`a_relative_target_dir_is_resolved_against_the_exe_ancestors`・`staging_uses_the_verified_bytes_not_a_second_read`・`a_master_reclaimed_during_the_copy_is_fetched_again_once`・`an_older_generation_cache_shelf_is_discarded`
+  - 完了の姿: 5 本が緑で、各直しを外すと赤（較正）。`cargo test -p sample-ghost-kit` が緑で、`vendors/sample_ghost/README.md` の 154・169 行の書き方が D4 の後も正しいことを確かめて控える
+  - _Dispatch: standard, effort high — 複数プロセスの取り合いでの連番の輪と 1 度のやり直しの道_
+  - _Requirements: 2.7, 3.1, 4.1, 4.3, 4.4, 4.5_
+- [ ] 4.3 `fold-samples` の写し先と書き先の順を直し、見本のテストを常時回す（S3: 2・8・56）
+  - `sample-ghost-kit` の `Cargo.toml` を `autoexamples = false` と `[[example]] name = "fold-samples" path = "examples/fold-samples.rs" test = true` にする（依存は足さない）
+  - 2: 同梱バルーンの写し先を `root/<store>/<manifest.directory>/balloon/<companion.directory>/<残り>` に（`areka-nar` の置き方と同じ）。説明を直す
+  - 8: `fold_one` は追跡の一覧を引数で受け、畳んだ `.nar` を `target\fold-samples\out\<名>.nar` に書いて往復を照らす。`vendors/` へは `main` が不一致 0 のときだけ写す
+  - 56: `--from` の確かめを作業の置き場を消す前にし、1 つを直に畳む
+  - 兄弟の新しいテストのファイル `examples/fold-samples_tests.rs` を `#[path]` でつなぐ。テスト: `a_ghost_with_a_companion_balloon_round_trips_without_mismatches`・`fold_one_never_writes_the_vendored_archive`（どちらも `WorkDir` の下の偽の根で、本物の `vendors/` は触らない）
+  - 完了の姿: 見本の 2 本が `cargo test -p sample-ghost-kit` の中で回って緑で、写し先の式を戻すと前者が赤。`cargo test -p log-capture-kit --tests` が緑（偽の根の `vendors/sample_ghost` の綴りが検体の見張りに当たらない）。`vendors/` の差分が 0
+  - _Dispatch: standard — 見本の書き先の順を入れ替え、テストの組み方を Cargo の設定で足す_
+  - _Requirements: 3.1, 4.1, 4.2, 4.4, 4.5, 7.10, 8.3_
+- [ ] 4.4 sample-ghost-kit の抜けたテストを足す（S4: 22〜25・69）
+  - 22: 自分の実行体を子で起こす形で、私用の `CARGO_TARGET_DIR` に食い違う棚を置き、`acquire_refuses_a_tampered_fetched_archive` で `FetchedNarMismatch` を確かめる。今の 2 本の名前を中身に合わせる
+  - 23: `manual_root_refuses_a_tree_it_cannot_remove`（中のファイルを `FILE_SHARE_READ` で開いたまま、2 度目が英語の ASCII の `what` の `Io`。閉じてから消す）
+  - 24: 55 バイトと 64 バイトの既知の答え（`python -c "import hashlib"` で作って逐語で置き、作り方を説明に 1 行）
+  - 25: `every_local_header_carries_the_fixed_dos_time`・`folding_orders_entries_by_byte_order`
+  - 69: `a_blank_target_dir_falls_back_to_the_ancestor_search`・`a_checksum_path_that_is_a_folder_is_an_io_error`・`a_utf16_checksum_file_is_invalid`・`no_argument_exits_with_2`。作れない 2 つ（`target` の無い `--fetch-list`・標準出力の書き込みの失敗）は足さない理由を控える
+  - 完了の姿: 足した 10 本が緑で、ネットと本物の検体の取り寄せに頼らない。`cargo test -p sample-ghost-kit` が 2 回続けて同じ結果
+  - _Dispatch: mechanical — 期待値を設計が書くテストの足し_
+  - _Requirements: 4.1, 4.3, 4.4, 4.5_
+- [ ] 4.5 sample-ghost-kit のテストを削り、置き場を寄せる（S5: 14・31・37・60〜68・70）
+  - 14: `nar_sample_path_test` の 2 本を私用の置き場で回し、全検体の輪を 3 検体に絞り、「印字した根が私用の `CARGO_TARGET_DIR` の下」を主張に足す
+  - 31: `passes > 0` にし、掃除のスレッドの止めを破棄の守りで立てる
+  - 37: `scratch()` を消して `WorkDir::new()?` に、手の `remove_dir_all` を消す
+  - 60〜63・65・70: 設計が挙げるテストと後半と恒真の確かめを消す。64: 棚のテストを `a_sweep_leaves_the_fetched_shelf_alone` に替える。66: 古い数と主張を外す。67: 試料は `NarBuilder` のバイトを直に。68: `balloon()` の誤りは `dot_sakura` で確かめ、2 度目の展開を往復へ寄せる。62: 名前の列を 1 つに、`known` を `SAMPLES` から作り `all_eleven` を改名する
+  - 完了の姿: `cargo test -p sample-ghost-kit` が緑で、`a_sweep_leaves_the_fetched_shelf_alone` と 14 の主張が赤になりうる（棚を消す・引き継いだ置き場へ戻すで赤）。消したテストの名前の使い手が直すファイルと `completed/` の外に 0
+  - _Dispatch: mechanical — 消す・寄せる・主張を足す形を設計が書く_
+  - _Requirements: 3.1, 3.3, 4.1, 4.5, 4.8_
+
+- [ ] 5. real-run-kit の窓口
+- [ ] 5.1 読み手と公開の品と手助けを直す（R4: 12・26・35・45・47・48・49・50）
+  - 12: `read_text`（読めなければパスと理由で panic）を置いて 4 つの読み手で使い、`failure_text` は読めない旨とパスを文へ埋め込む（panic しない）
+  - 26: 決め D2 の静的なテスト `relied_targets_name_the_modules_that_emit_the_relied_lines`（`RELIED_TARGETS` の字面は変えない・赤の文に直す先の名を出す）
+  - 35: `Staged::run_dir`・`Launch::Ghost`（とそのテスト）・偽の子の `err:` を消し、`Run::stderr` と `Limits` を私用に。`RealRun::mcp_port(n)` は残す。範囲の外の使い手 0 を grep で控える
+  - 45: MCP の器を子を立てる前に組んで `Run` に渡す。47: `env_remove("AREKA_USER_ROOT")` だけに。48: 受け取りの 2 語を定数の配列に
+  - 49: 手助けを新しい `src/lib_test_support.rs` と `tests/common/mod.rs` に寄せ、手書きの止めを `KillOnDrop` に。50: 設計が挙げる「2 回の空きの番号が違う」の主張を消す
+  - `doc/testing.md` の 37 行（`Launch::Ghost` の行を消し「5 通り」を「4 通り」に）を直す
+  - テスト: `read_text_panics_with_the_path_when_the_file_cannot_be_read`・`failure_text_names_an_unreadable_file`・`relied_targets_name_the_modules_that_emit_the_relied_lines`
+  - 完了の姿: 3 本が緑で、`RELIED_TARGETS` の 1 項を存在しない段に替えると 26 のテストが赤。`cargo test -p real-run-kit`・`cargo build -p areka --tests`・`cargo test -p log-capture-kit --tests` が緑。`areka::app_exit` の名指しの字面に差分が無い
+  - _Depends: 1.1, 4.1_
+  - _Dispatch: standard — 読み手の 2 つの失敗の形と、範囲の外のソースを読む静的なテストを書く_
+  - _Requirements: 2.7, 3.1, 3.2, 3.3, 4.1, 6.2, 7.3, 7.6, 7.7_
+- [ ] 5.2 MCP の呼び口の誤りの答えと番号の上書きを直す（R1: 3・10・28・46）
+  - 3: 決め D1（`ServiceError::McpError` は新しい変種 `McpError::Refused { code, message }` の `Err`・つなぎを使い回す・猶予を待たない）
+  - 10: 最後に積まれた `AREKA_MCP_PORT` を u16 で読んで窓口が話す番号（`Run::mcp_port()` も）にし、読めなければ `.mcp_port(n)` を案内して panic。説明を直す
+  - 28: 受け口を落として生きた子でもう 1 度呼ぶと `Unreachable` のテストと、名乗りの判定の文を純関数 `not_found_reason` に割る
+  - 46: `Waits` を消して `&Limits` を渡す
+  - `doc/testing.md` の 45 行と 56〜64 行（訳の表に `McpError::Refused` の 4 つ目の行）を直す
+  - テスト: `an_mcp_error_reply_is_refused_on_the_same_link`・`an_env_override_of_the_mcp_port_is_the_port_the_kit_talks_to`・`an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint`・`a_dropped_server_with_a_living_child_is_unreachable_within_the_grace`・`another_server_answering_is_named_in_the_reason`
+  - 完了の姿: 5 本が緑で、`McpError` の腕を外すと最初の 1 本が赤（`exit_grace` より速く返る・続く呼び出しが成功、の主張を含む）。`cargo test -p real-run-kit` が緑で、範囲の外の `McpError` を受ける所（`emo2_real_run/common.rs`・`emo2_mcp_real_run.rs`）が書き換えなしで `cargo build -p areka --tests` を通る
+  - _Dispatch: standard — 誤りの答えの分け方と番号の読みの新しい枝_
+  - _Requirements: 3.1, 3.2, 4.1, 4.4, 6.2, 7.6, 7.7_
+- [ ] 5.3 取っ手の破棄と閉じ方と証拠の行を直す（R2: 6 の evidence 側・9・27・29・32 の real-run-kit 側）
+  - 6: `evidence.rs` の `CREATE_TRIES`・`create_with` と空かどうかの確かめを消し（1.1 の一意の作り直しに任せる）、`evidence_tests.rs` の 2 本を消す
+  - 9: `stop_quietly` を `stop_on_drop` に替える（design.md「取っ手の破棄」の流れ: 送り直しつつ締切まで待つ → 力ずくで止めて回収 → panic の途中なら ASCII の 1 行・違えば理由を書いて panic）。`RunDirs` は unwind の中で証拠を残す
+  - 27: 偽の子に `sleep:<ms>` と `window-linger:<ms>` の 2 つの一歩を足す（範囲の中のテストの道具・新しい機能に数えない）
+  - 29: `listen-drop` を次の一歩へ進め、`dropped_listener_is_unreachable` を閉じて確かめる形にする
+  - 32: 端末の行を `real-run-kit: kept failed run: <path>`・`real-run-kit: could not copy the failed run's sample: <from> -> <to> (<err>)`・`real-run-kit: stopped child <pid> that did not close within <deadline> (dropped while panicking)` に（`sample_ghost_kit::ascii` を通す）。`fake_evidence_test.rs` の `KEPT_HEAD` を新しい頭に
+  - `doc/testing.md` の 71・75・163 行を直す
+  - テスト: `dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence`（`catch_unwind`・残った置き場を確かめてから消す）・`a_close_sent_before_the_window_exists_is_resent`・`no_close_is_resent_after_the_acknowledgement`
+  - 完了の姿: 3 本と既存の `dropped_listener_is_unreachable`・`fake_evidence_test` が緑で、破棄の panic を外すと最初の 1 本が赤。`cargo test -p real-run-kit`（5.1・5.2 で足したテストを含む）と `cargo test -p log-capture-kit --tests` が緑。範囲の外の `close()`／`wait_exit()` を呼ばない呼び手が 0 であることを grep で控える
+  - _Depends: 1.1, 4.1_
+  - _Dispatch: standard, effort high — 破棄の中の panic と unwind の順・偽の子の時刻の一歩_
+  - _Requirements: 2.7, 3.1, 3.2, 3.4, 4.1, 4.3, 6.2, 6.3, 6.5, 7.6, 7.7_
+- [ ] 5.4 32bit の仲介を元が新しければ写し直す（R3: 11・51）
+  - 11: 先に元を決め（環境変数 → debug → release・環境変数の panic は今のまま）、隣が無い・32bit でない・元と長さか更新時刻が違うときだけ写す。元がどこにも無く隣が 32bit ならそれを使う。`i686_tests.rs` の該当のテスト（135-143 行あたり）を改める
+  - 51: `is_i686_pe` は先頭の 0x400 バイトだけ読む
+  - `doc/testing.md` の 93 行を直す
+  - テスト: `a_newer_source_replaces_a_stale_i686_neighbour`・`an_env_var_pointing_at_a_non_i686_file_panics_even_when_the_neighbour_is_i686`・`without_any_source_the_i686_neighbour_is_used`
+  - 完了の姿: 3 本が緑で、「隣が 32bit なら写さない」に戻すと最初の 1 本が赤。`smoke_boot_loop_exit.rs` の呼び手が書き換えなしでビルドできる
+  - _Depends: 5.1_
+  - _Dispatch: standard — 元を決める順と写すかの判断の枝を作り直す_
+  - _Requirements: 2.7, 3.1, 4.1, 7.6, 7.7_
+
+- [ ] 6. 検証
+- [ ] 6.1 同じ範囲へ audit をかけ直し、0 件まで直す（V1）
+  - 4 crate の全部（この spec で足した 4 ファイルを含む）へ `/ponytail:ponytail-audit` を上限なし・全部読む作法でかけ直す。直しが生んだ指摘も直し、新しい指摘が 0 件になるまで繰り返す（指摘 75 は数えない）
+  - 5 回目になっても収まらないときは要件 9.6 の打ち切りの決まりに従う（開発者に一言知らせる）
+  - 完了の姿: かけ直しの回数と各回の件数、最後の回が 0 件（または 5 回目の打ち切り）であることを検証の記録に書く
+  - _Depends: 1.1, 2.2, 3.5, 4.5, 5.3, 5.4_
+  - _Dispatch: standard — audit をかけて出た指摘を直す_
+  - _Requirements: 9.1, 9.2, 9.3, 9.6_
+- [ ] 6.2 全体テストと差分の確かめと記録（V2）
+  - `pwsh -NoProfile -File tools/test-all.ps1` を回して緑を確かめる
+  - 既定のブランチとの差分で確かめる: C22 のほかの 5 本の触るファイル・上限越えの表に載る 4 ファイル・`vendors/`・`Cargo.lock`・根の `Cargo.toml`・`.claude/`・`tools/*.ps1` に差分が無い。範囲の外の差分が design.md「範囲の外で直すファイル」の表の行だけ。`event.rs:150`・`event_tests.rs:18-19`・121 と `areka::app_exit` の名指しの字面が変わっていない。外への約束の変わった所が design.md「外への約束の変更と読み手」の表の分だけ
+  - 検証の記録（research.md の新しい節）に書く: 残す指摘 75（種類 ⑵・裁定 2026-11-17）・後へ回す指摘 0・⑶ に当たる指摘 0・件 1 と件 2 を片づけた旨（brief の件の名前で）・消す前の grep の名前と件数・消した／改名したテストの名前と挙げている完了した文書（D10）・次の機会に確かめる 1・2・8 の 3 行・完了した `areka-P0-real-run-mcp-kit` の要件 1.1⑵・2.1・2.5 を裁定で改めた旨・30 の前後の時間（参考）・範囲の外のファイルを触る前に持ち主のセッションが走っていないことを確かめた旨・足した依存 0・GPU を使うテスト 0・8.1 の操作を回していないこと・スキルの文の変更 0・ギャップ分析が要件 1 の作法（範囲・測り直し・全件・全部読む・番号・響く読み手・重い操作・件の事実）で済んでいること
+  - 完了の姿: 全体テストが緑で、記録の各項が埋まり、差分の確かめの結果が 0 件の項も 0 と書いてある
+  - _Dispatch: mechanical — 全体テストを回し、差分を確かめて記録を書く_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 4.2, 4.6, 5.4, 6.1, 6.6, 6.7, 6.8, 7.1, 7.3, 7.4, 7.5, 7.8, 7.9, 7.10, 8.1, 8.2, 8.3, 8.4, 9.4, 9.5_
