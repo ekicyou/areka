@@ -122,10 +122,7 @@ impl TempPath {
     }
 
     fn in_base(base: &Path, label: &str) -> Self {
-        let serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
-        let path = base.join(compose_name(label, std::process::id(), serial));
-        std::fs::create_dir_all(&path)
-            .unwrap_or_else(|err| panic!("一時ディレクトリ作成: {} ({err})", path.display()));
+        let path = create_fresh(base, label, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed));
         TempPath { path }
     }
 
@@ -144,8 +141,61 @@ impl TempPath {
 
 impl Drop for TempPath {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
+        // `eprintln!` は libtest が通ったテストの分を捨てるので、標準エラーへ直に書く。
+        remove_or_report(&self.path, &mut std::io::stderr());
     }
+}
+
+/// `base` の下に、この呼び出しが作った空のフォルダを 1 つ作って返す。
+///
+/// 置き場は `create_dir_all`、葉は `create_dir` で作る。同じ名前が先に残っていたら
+/// （前の走行の残りや、識別子を使い回した別のプロセス）次の連番で取り直す。
+/// 連番の出どころを引数で受けるので、残りがある場合を決定論で試せる。
+///
+/// # Panics
+///
+/// 置き場か葉を作れないとき（黙って縮退しない）。
+fn create_fresh(base: &Path, label: &str, mut next_serial: impl FnMut() -> u32) -> PathBuf {
+    std::fs::create_dir_all(base)
+        .unwrap_or_else(|err| panic!("一時ディレクトリの置き場作成: {} ({err})", base.display()));
+    loop {
+        let path = base.join(compose_name(label, std::process::id(), next_serial()));
+        match std::fs::create_dir(&path) {
+            Ok(()) => return path,
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => panic!("一時ディレクトリ作成: {} ({err})", path.display()),
+        }
+    }
+}
+
+/// `path` を中身ごと消す。消せたとき・既に無いときは何も書かず、ほかの失敗は
+/// `out` へ ASCII の 1 行だけを書く。書けなくても panic しない（破棄の中で呼ぶ）。
+fn remove_or_report(path: &Path, out: &mut dyn std::io::Write) {
+    match std::fs::remove_dir_all(path) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => {
+            let _ = writeln!(
+                out,
+                "temp-path-kit: could not remove {} ({})",
+                ascii(&path.display().to_string()),
+                ascii(&err.to_string())
+            );
+        }
+    }
+}
+
+// leaf の crate（依存 0）なので sample_ghost_kit::ascii を引けず、同じ規則をここに写す。
+fn ascii(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_ascii() && !c.is_ascii_control() {
+            out.push(c);
+        } else {
+            out.push_str(&format!("\\u{{{:04X}}}", u32::from(c)));
+        }
+    }
+    out
 }
 
 #[cfg(test)]

@@ -10,8 +10,8 @@
 - 範囲の外のファイル（design.md「範囲の外で直すファイル」の表）は、触る前に持ち主の spec のセッションが走っていないことを確かめる（要件 7.1）。表の行のほかには手を入れない（要件 7.2）。
 - `\` を含む走査語・`\u{XXXX}` の式・化けた行の継ぎ（74）は、書いた後に python でバイトを確かめる。
 
-- [ ] 1. temp-path-kit の一意の作り直しと消せなかった知らせ
-- [ ] 1.1 (P) 一時フォルダを一意に作り直し、消せなかったことを 1 行で知らせる（K1: 6 の temp 側・13・76）
+- [x] 1. temp-path-kit の一意の作り直しと消せなかった知らせ
+- [x] 1.1 (P) 一時フォルダを一意に作り直し、消せなかったことを 1 行で知らせる（K1: 6 の temp 側・13・76）
   - 6: 置き場は `create_dir_all`、葉は `create_dir` で作り、`AlreadyExists` なら次の連番で取り直す私用の作り手（連番の出どころを引数で受ける）に `new` と `under_target` の両方を通す。2 つの入口の形と呼び手は変えない（75）
   - 13: 破棄は私用の消し手を標準エラー（`std::io::stderr()` へ直に）へ向けて呼ぶ。消せたとき・既に無いときは何も書かず、ほかの失敗は `temp-path-kit: could not remove <path> (<理由>)` の ASCII の 1 行だけ。書けなくても panic しない
   - 私用の ASCII の写し（`sample-ghost-kit` の `ascii` と同じ規則の 6 行）を置き、leaf のために写す理由を 1 行のコメントに書く（決め D9）
@@ -202,3 +202,8 @@
   - 完了の姿: 全体テストが緑で、記録の各項が埋まり、差分の確かめの結果が 0 件の項も 0 と書いてある
   - _Dispatch: mechanical — 全体テストを回し、差分を確かめて記録を書く_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 4.2, 4.6, 5.4, 6.1, 6.6, 6.7, 6.8, 7.1, 7.3, 7.4, 7.5, 7.8, 7.9, 7.10, 8.1, 8.2, 8.3, 8.4, 9.4, 9.5_
+
+## Implementation Notes
+
+- 較正と消す前の grep の控え（6.2 で検証の記録へ移す）:
+  - 1.1: `create_fresh` の `create_dir` を `create_dir_all` に → `a_leftover_folder_with_the_same_name_is_never_handed_out` が赤。`remove_or_report` の `writeln!` を外す → `a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line` が赤。消したもの無し（grep 不要）

@@ -1,7 +1,7 @@
 //! [`TempPath`](super::TempPath) の自己テスト（要件 12.1）。
 //!
-//! 主張は 3 本——同一プロセス内で 2 度作っても名前が衝突しない／破棄で実体が消える／
-//! プロセス識別子が違えば別名になる。3 本目は別プロセスを起こしては決定論的に確かめられ
+//! 主な主張は、同一プロセス内で 2 度作っても名前が衝突しない／破棄で実体が消える／
+//! プロセス識別子が違えば別名になる、である。最後の 1 つは別プロセスを起こしては決定論的に確かめられ
 //! ないので、名前を組み立てる内部関数 [`compose_name`](super::compose_name) に識別子を
 //! 引数で渡して直接確かめる。**その内部関数を実際に作る側も通っている**ことは
 //! [`production_path_goes_through_compose_name`] が固定する（内部関数だけを試して
@@ -175,4 +175,79 @@ fn production_path_goes_through_compose_name() {
         compose_name("link-check", std::process::id().wrapping_add(1), serial),
         "識別子を変えても同じ名前になる（名前が識別子を含んでいない）"
     );
+}
+
+/// 同じ名前のフォルダが先に残っていても、それを配らず次の連番で空のフォルダを作る。
+///
+/// 連番 0・1 の名前を中身つきで先に置き、連番の出どころに 0, 1, 2 を順に返させると、
+/// 配られるのは連番 2 の空のフォルダになる（残りを使い回すと前の中身が混ざる）。
+#[test]
+fn a_leftover_folder_with_the_same_name_is_never_handed_out() {
+    let base = TempPath::new("leftover-base");
+    let label = "leftover";
+    for serial in [0, 1] {
+        let stale = base
+            .path()
+            .join(compose_name(label, std::process::id(), serial));
+        std::fs::create_dir(&stale).expect("残りのフォルダを置けるはず");
+        std::fs::write(stale.join("stale.txt"), "前の走行の残り").expect("残りの中身を置けるはず");
+    }
+
+    let mut serials = 0..;
+    let handed = create_fresh(base.path(), label, || {
+        serials.next().expect("連番は尽きない")
+    });
+
+    assert_eq!(
+        handed,
+        base.path().join(compose_name(label, std::process::id(), 2)),
+        "残っていた名前を配っている"
+    );
+    assert!(handed.is_dir(), "配られたフォルダが無い");
+    assert_eq!(
+        std::fs::read_dir(&handed)
+            .expect("配られたフォルダを読めるはず")
+            .count(),
+        0,
+        "配られたフォルダが空でない（残りを使い回している）"
+    );
+}
+
+/// 消せないフォルダは ASCII の 1 行で知らせ、消せたとき・既に無いときは何も書かない。
+///
+/// 中のファイルを削除を拒む共有モード（読み書きだけ共有）で開いたまま消し手を呼ぶと、
+/// Windows は削除を断る。書き先を `Vec<u8>` にして決定論で読む。
+#[test]
+fn a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ_WRITE: u32 = 0x1 | 0x2; // FILE_SHARE_DELETE (0x4) を外す
+
+    let dir = TempPath::new("unremovable");
+    let held = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .share_mode(FILE_SHARE_READ_WRITE)
+        .open(dir.child("held.txt"))
+        .expect("削除を拒む共有モードで開けるはず");
+
+    let mut out = Vec::new();
+    remove_or_report(dir.path(), &mut out);
+    drop(held);
+
+    let text = String::from_utf8(out).expect("知らせは UTF-8 のはず");
+    assert!(text.is_ascii(), "知らせに ASCII の外の字がある: {text:?}");
+    assert_eq!(text.lines().count(), 1, "知らせが 1 行でない: {text:?}");
+    assert!(
+        text.starts_with("temp-path-kit: could not remove ") && text.ends_with(")\n"),
+        "知らせの形が違う: {text:?}"
+    );
+
+    // 消せたとき（ここで閉じたので消せる）と、既に無いときは何も書かない。
+    let kept = dir.path().to_path_buf();
+    for case in ["removed", "already gone"] {
+        let mut silent = Vec::new();
+        remove_or_report(&kept, &mut silent);
+        assert!(silent.is_empty(), "{case}: 何か書いている: {silent:?}");
+    }
+    assert!(!kept.exists(), "閉じた後も消えていない");
 }
