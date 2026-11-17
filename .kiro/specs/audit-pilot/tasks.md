@@ -124,7 +124,7 @@
   - _Depends: 1_
   - _Dispatch: mechanical — 直しの形を design が与える_
   - _Requirements: 2.7, 2.8, 6.1, 3.1_
-- [ ] 12.2 (P) README と steering を直す（指摘 25・26・要件 4.7）
+- [x] 12.2 (P) README と steering を直す（指摘 25・26・要件 4.7）
   - `wintf-winmsg-executor/README.md` の「概要」3 か所（秒数・行数・依存の書き方）をその場で今の値に直す。「検証結果」は触らない
   - `crates/pilot/README.md` の配置の決まりに、独立のワークスペースを置く例外と、テストを持つ実行例は `test = true` にする決まりを design の文面で足す
   - `.kiro/steering/two-tunnel.md` の「機械チェックは defer」の節の末尾に、design の例外の段落を足す
@@ -186,3 +186,4 @@
 - タスク 8: DLL の後片付けのテストは msimg32.dll をテストの exe がほかで読んでいない前提。helper のテストで msimg32 を読む物を足したら別の DLL に替える
 - タスク 9: i686 の helper のテストは 12 本（本物の pasta.dll の 1 本を含む）で緑
 - タスク 10: 後に log-capture-kit の番人で赤は 2 本（every_over_limit_exception_is_still_over_the_limit と the_measurement_is_not_vacuous_and_matches_the_allow_table）。どちらも例外表に残る clickthrough の main.rs 1 件が原因で、タスク 11 で両方緑に戻す
+- タスク 12.2: wintf-winmsg-executor/README.md の「概要」に event-listener = "5" の書き方が残る（タスク 1 から { workspace = true }）。design の行 25 の 3 か所の外なのでタスク 14 のかけ直しで拾う
