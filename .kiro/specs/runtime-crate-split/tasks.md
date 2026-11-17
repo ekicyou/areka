@@ -200,7 +200,7 @@
   - _Dispatch: mechanical — 確かめのコマンドだけ_
   - _Requirements: 4.7, 5.4, 7.4_
 
-- [ ] 7. 1,000 行の上限を例外表を増やさずに守る（段 6）
+- [x] 7. 1,000 行の上限を例外表を増やさずに守る（段 6）
   - 番人の数え方で、`runtime_tests/frame/switch_finish_tests.rs`（口の据え付けの 1 行で 1,000 行ちょうどの見込み・`> 1000` で赤なので通るが余裕 0）・`placement_tests/transition_judge.rs`・`transition_judge_tests.rs`・本体の `main.rs`・`frame_test_support.rs`・`lib.rs`・`spine.rs`・本体の `runtime_tests/spine.rs` を名指しで測り、記録に書く
   - 1,000 行を超えたファイルだけ兄弟のファイルへ出す（`transition_judge.rs` は観測行の読み〔`optional_fields`・`parse_transition_line`・`parse_transition_log`〕を `transition_judge_parse.rs` へ）。例外表の項目は足さない
   - 完了の状態: `cargo test -p log-capture-kit --test file_length_guard_test` が緑で、例外表の項目の数が変わっていない・段 6 のコミット
@@ -296,3 +296,4 @@
 - 6.2 へ: `tick_gate_config::producers_tests` の 2 本（`the_areka_table_lists_every_file_that_marks_the_wake`・`the_wintf_module_roster_names_every_areka_zorder_producer`）は段 1 から赤のまま引き継ぐ（生産者が本体の `src` から出たため）。校正の説明は案 C で `crates/areka-runtime/src/assets_tests.rs` へ移ったので、6.2 の読む先（`../runtime_tests/assets_tests.rs`）は今の置き場に合わせて読む。
 - 後で（audit へ）: 本体の `runtime_tests/balloon_visibility_phase_tests.rs` の `world_at` は `areka-runtime` の支えと同じ中身の前からの写し。
 - 段 7（5.9）へ: 古い説明が残る — `areka-runtime/src/hit_region.rs:48-54`（probe が `#[path]` で取り込む前提）・`areka/examples/emo-present/reconcile.rs:15,25`・`areka/src/input_events/mod.rs:379`（`collision-probe.rs` を本体の example として指す）。
+- 段 6: 超えたファイルは 0 で割らなかった。`transition_judge.rs`・`transition_judge_tests.rs` は 999 行（余裕 1 行）。段 7 の説明の書き換えで行を増やさない（増えたら D9 で兄弟へ出す）。

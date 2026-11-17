@@ -509,3 +509,33 @@
 - `cargo test -p areka-placement`: 984 本緑・`#[ignore]` 1。
 - `cargo test -p log-capture-kit --test file_length_guard_test --test workspace_scan_test`: 6 本・20 本緑。
 - `cargo fmt --all -- --check`: 差分 0。
+
+## 7. 段 6（1,000 行の上限を例外表を増やさずに守る）
+
+非挙動。タスク 7。要件 1.10・設計 D9「行数」。数え方は番人（`file_length_guard_test.rs`・走査器 `LINE_LIMIT` = 1000）と同じで、1,000 を超えたものだけが超過。
+
+### 7.1 赤（分割の前の実測）
+
+| ファイル | 行数 | 上限の 1,000 に対して |
+|---|---|---|
+| `crates/areka/src/runtime_tests/frame/switch_finish_tests.rs` | 818 | 内（段 3 の案 C で割った後） |
+| `crates/areka/src/runtime_tests/frame/switch_finish_box_tests.rs`（段 3 で新設） | 201 | 内 |
+| `crates/areka-runtime/src/placement_tests/transition_judge.rs` | 999 | 内（1 行の余裕） |
+| `crates/areka-runtime/src/placement_tests/transition_judge_tests.rs` | 999 | 内（1 行の余裕） |
+| `crates/areka/src/main.rs` | 989 | 内 |
+| `crates/areka-runtime/src/frame_test_support.rs` | 955 | 内 |
+| `crates/areka-runtime/src/lib.rs` | 758 | 内 |
+| `crates/areka-runtime/src/spine.rs` | 364 | 内 |
+| `crates/areka/src/runtime_tests/spine.rs` | 659 | 内 |
+
+- 段 3 で新設・移動したほかのファイル: `areka-runtime/src/assets_tests.rs` 810・`zorder_wiring_tests.rs` 421・`examples/collision-probe/probe.rs` 326・`examples/collision-probe.rs` 310・`frame/window_state_tests.rs` 302・`strict_judges_tests.rs` 248・`frame_move_order_tests.rs` 202・`frame_schedule_tests.rs` 184。すべて 1,000 以下。
+- `crates/areka`・`crates/areka-runtime` の `*.rs` の最大は、例外表の 2 件（`frame_transition_branch_tests.rs` 1,271・`placement_tests/transition_judge_verdict_tests.rs` 1,024）を除き 999（`transition_judge.rs`・`transition_judge_tests.rs`）。
+
+### 7.2 分割
+
+- 超過しているファイルは 0 件のため、分割は行わない（`transition_judge_parse.rs` も作らない）。`transition_judge.rs` は 999 行で上限内。
+- 例外表 `OVER_LIMIT_ALLOWED` の件数: 前 4・後 4（`OVER_LIMIT_ALLOWED_COUNT = 4`・項目も同じ）。増やしていない。
+
+### 7.3 緑
+
+- `cargo test -p log-capture-kit --test file_length_guard_test`: 6 本緑。
