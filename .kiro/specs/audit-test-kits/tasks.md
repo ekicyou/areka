@@ -42,7 +42,7 @@
   - _Dispatch: mechanical — 消す・私用にする・数を外す言い直しで、形は設計が書く_
   - _Requirements: 3.1, 3.3, 5.3, 7.1, 7.2, 7.3_
 
-- [ ] 3. log-capture-kit の見張り（tests）
+- [x] 3. log-capture-kit の見張り（tests）
 - [x] 3.1 見張りの走査部品を直し、手助けを寄せる（G1: 17・19・20・30・33・72・73 の mod.rs と workspace_scan_test の分）
   - 17: 飛ばす決めを純関数 `skip_dir(name, parent_has_manifest)` に（`target` は親に `Cargo.toml` があるときだけ・`vendors` と `.git` を外す）。`workspace_scan_test.rs` の飛ばしのテスト（352-367 行あたり）を改める
   - 19: 列挙の証人を `crates/areka/examples/emo-present/balloon.rs` にする
@@ -81,7 +81,7 @@
   - 完了の姿: 2 本と既存の `a_fixed_name_built_from_the_entry_point_is_detected` が緑で、`(` を戻すと新しい 2 本が赤。今の木での違反が 0
   - _Dispatch: mechanical — 走査語の字面を変え、期待値を設計が書く較正を足す_
   - _Requirements: 2.7, 3.1, 4.1, 4.7_
-- [ ] 3.5 1,000 行の番人の空回りの確かめを直し、steering の自分の行を直す（G5: 18・34 と 73 の残り）
+- [x] 3.5 1,000 行の番人の空回りの確かめを直し、steering の自分の行を直す（G5: 18・34 と 73 の残り）
   - 18: 「上限越えが 1 件以上」を純関数 `measurement_is_plausible`（いちばん長いファイルが上限の半分を越える）に替え、較正で外す項を `OVER_LIMIT_ALLOWED.first()` にし、`CALIBRATION_DROPPED_ENTRY` を消す。例外表の 4 件と件数の定数は変えない（要件 7.5）
   - 34 の分: `assert_eq!(found, listed)` と、ファイルが在るかの輪を消す。`the_measurement_is_not_vacuous_and_matches_the_allow_table` を `the_measurement_is_not_vacuous` へ改名する
   - 73 の残り: `with_default_guard_test.rs`・`temp_path_guard_test.rs`・`sample_path_guard_test.rs`・`file_length_guard_test.rs` の説明と失敗の文の古い数・行番号・消えた例（`test_offset_default`）を直す（数と行番号は書かない・`structure.md` は節の名前で指す）。3.2〜3.4 はこの 4 ファイルの 73 の分に手を付けない
@@ -218,3 +218,5 @@
   - 3.2: ⑵ の区切りの表を `/` だけにする → `a_backslash_spelled_checked_in_tree_is_detected` が赤。⑷ の `\<名>"`・`<名>\\` を外す → `a_backslash_spelled_bundled_balloon_path_is_detected` が赤、`\<名>\`（前と後ろに `\`）を外す → 同じテストの生の文字列の途中のパスの場合が赤。後ろの語を `<名>\` の 1 字にすると `claudia\n` などの逃がしに当たって範囲の外の 5 ファイルが誤検知になるので、後ろは `<名>\\`（逃がした `\`）と前後の `\<名>\` にした（残る穴は生の文字列が `<名>\` で始まる形だけ・`shortcut:` の注記）。`removing_the_exclusion_turns_the_guard_red` は `sample_path_guard_test.rs` に在り設計の行 34 が消すとするので 3.2 で消した（3.3 の行から名前を外した）。消す前の grep: `the_guard_file_itself_is_not_a_hit` は sample 1・temp 1（3.4 の分）・本 spec の文書と completed だけ、`removing_the_exclusion_turns_the_guard_red` は定義 1・本 spec の文書 3・completed 6
   - 3.3: 照らしを引用符つき `"\"env-filter\""` に戻す → `single_quoted_env_filter_is_detected`・`env_filter_in_the_kit_default_features_is_detected`・`env_filter_in_workspace_dependencies_is_detected` が赤。2 つの例外表に重複の項を足す → `the_direct_call_allow_table_has_no_duplicate_entries`・`the_all_thread_capture_table_has_no_duplicate_entries` が赤（既存の数と理由のテストは緑のまま＝71 の穴）。ファイルが在るかの輪を消した後、表に在らないパスを足す → `every_direct_call_exception_still_has_a_real_hit` が赤。消す前の grep: `the_guard_file_itself_is_not_a_hit_because_the_tokens_are_never_spelled_out` は定義と説明 2・本 spec の文書 2・completed 6。根の `Cargo.toml` は読むだけ（全節で道具の名と `env-filter` の並ぶ行を探す＝`[workspace.dependencies]` より広い）
   - 3.4: 修飾つきの語に `(` を戻す → `the_entry_point_passed_without_a_call_is_detected`・`an_aliased_import_of_the_entry_point_is_detected` が赤（15 passed・2 failed）。消す前の grep: `the_guard_file_itself_is_not_a_hit` は定義 1・本 spec の文書 3（3.2 の数と合わせて読む）。改名: temp の見張りの `the_measurement_is_not_vacuous_and_matches_the_allow_table` → `the_measurement_is_not_vacuous`（同じ名のテストが file_length の見張りにも在り、そちらの改名は 3.5。改名の前の grep は本 spec の文書 3・completed 14 ファイル・コード 2 ファイル各 2）。残す穴（6.1 のかけ直しで見る）: 波括弧の取り込み `use std::env::{temp_dir as x}` は当たらない（タスクの文「`use … as` の行」の外）
+  - 3.5: 較正で外す項を表へ戻す（`allowed_paths_without(.., dropped)` を `allowed_paths(..)` に）→ `dropping_a_known_exception_turns_the_guard_red` が赤。`measurement_is_plausible` の `LINE_LIMIT / 2` を `LINE_LIMIT * 100` に → `the_vacuity_check_needs_no_over_limit_file`・`the_measurement_is_not_vacuous` が赤。消す前の grep: `CALIBRATION_DROPPED_ENTRY`（file_length）は同じファイルの 5 だけ（temp の見張りの同じ名の定数は別の表のもので残す＝research 18）。改名: file_length の `the_measurement_is_not_vacuous_and_matches_the_allow_table` → `the_measurement_is_not_vacuous`（completed の 15 ファイルが旧名を挙げる・直さない）。Temp Path Kit の Consumers は `Cargo.toml` から引いた 12 crate（開発用 11・`real-run-kit` は本番の依存）。各見張りに較正の対が残る: file_length・temp_path・with_default・sample_path・doc_tree・workspace_scan（3.5 の報告の一覧）
+- 完了の時（`/kiro-complete`）: main へ squash マージしたら audit-pilot のセッション（`local_7968efdc-07d1-48f5-9b97-9aaac8a5ce1b`）へ一言知らせる（file_length の例外表から 1 件と件数の行を外すのを待っている）
