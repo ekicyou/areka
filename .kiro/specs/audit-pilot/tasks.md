@@ -75,7 +75,7 @@
   - _Dispatch: standard — 終了コードの決まりは design が決め、selftest の確かめの書き直しが残る_
   - _Requirements: 3.1, 3.3, 4.3, 6.2, 6.3, 6.4_
 
-- [ ] 8. helper の入口と pasta の読みを直す（指摘 18・20 の helper の分・10・11 の `DEFAULT_TIMEOUT`）
+- [x] 8. helper の入口と pasta の読みを直す（指摘 18・20 の helper の分・10・11 の `DEFAULT_TIMEOUT`）
   - helper は引数だけを読む（1 番目＝ghostdir・無ければ検体 emo2、2 番目＝親の HWND の 10 進）。環境変数の読みを消し、引数が無いときの文と頭の説明に今のモードと終了コードの一覧（0・2・3・4・5）を書く
   - DLL のエントリが引けなかったら、DLL を解放してから失敗を返す。unload は何も返さない形にし、説明から解放の記述を消す（解放は持ち手が捨てられるときにする）。呼び元の `helper_window.rs` の後片付けも直す。i686 でテストが組めないという古い注記を消す
   - 最後の読み手を外してから `ipc::DEFAULT_TIMEOUT` を消し、`ipc.rs` の頭の `#![allow(dead_code)]` を外す（両方の組み立てで警告 0）
@@ -183,3 +183,4 @@
 - タスク 2: rustfmt は ipc.rs を LF で書き直す。作業木の CRLF に戻すこと（git には LF で入る）
 - タスク 3: main.rs の err(1) の注記に heartbeat の語が残る（HEAD から誤り）。タスク 6 で消す
 - タスク 6: err(1) の下限・上限の判定は単体テストが無い（design の Testing Strategy に行が無い）。実機の確かめ 13.1 で見る
+- タスク 8: DLL の後片付けのテストは msimg32.dll をテストの exe がほかで読んでいない前提。helper のテストで msimg32 を読む物を足したら別の DLL に替える

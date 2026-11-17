@@ -27,8 +27,6 @@
 //!
 //! `unsafe` 境界は本コンポーネントに集約する（design §489）。
 
-#![allow(dead_code)]
-
 use std::path::Path;
 
 use windows::Win32::Foundation::{FreeLibrary, GlobalFree, HGLOBAL};
@@ -76,6 +74,7 @@ pub struct ShioriByteProxy;
 impl ShioriByteProxy {
     /// `pasta.dll` を `LoadLibraryW` でロードし、3 エントリを `GetProcAddress` で解決して
     /// flat-C fn ポインタへ `transmute` する（design §476）。失敗は `ProxyError` で返す。
+    /// エントリが引けなかったら、読んだ DLL を `FreeLibrary` してから返す。
     pub fn load_dll(dll_path: &Path) -> Result<ShioriEntries, ProxyError> {
         let wide = HSTRING::from(dll_path.as_os_str());
         // SAFETY: `wide` は呼び出し中生存する有効な NUL 終端 UTF-16。
@@ -83,12 +82,18 @@ impl ShioriByteProxy {
 
         // SAFETY: `module` は直前にロードした有効ハンドル。各シンボルは pasta が
         // `#[unsafe(no_mangle)] pub extern "C"` で公開（windows.rs:50/63/76）＝装飾なし C 名。
-        let load = unsafe { GetProcAddress(module, PCSTR(b"load\0".as_ptr())) }
-            .ok_or(ProxyError::EntryNotFound("load"))?;
-        let unload = unsafe { GetProcAddress(module, PCSTR(b"unload\0".as_ptr())) }
-            .ok_or(ProxyError::EntryNotFound("unload"))?;
-        let request = unsafe { GetProcAddress(module, PCSTR(b"request\0".as_ptr())) }
-            .ok_or(ProxyError::EntryNotFound("request"))?;
+        let entry = |name: &'static str, cname: &[u8]| {
+            unsafe { GetProcAddress(module, PCSTR(cname.as_ptr())) }.ok_or_else(|| {
+                // SAFETY: `module` は上で読んだ有効ハンドルで、まだ誰にも渡していない。
+                unsafe {
+                    let _ = FreeLibrary(module);
+                }
+                ProxyError::EntryNotFound(name)
+            })
+        };
+        let load = entry("load", b"load\0")?;
+        let unload = entry("unload", b"unload\0")?;
+        let request = entry("request", b"request\0")?;
 
         // SAFETY: pasta 実ソースで確定した flat-C cdecl 署名へ transmute する（design §469–471）。
         let entries = ShioriEntries {
@@ -148,13 +153,11 @@ impl ShioriByteProxy {
         Ok(out)
     }
 
-    /// `unload()` を呼び、続けて `FreeLibrary` する（design §482）。
-    pub fn shiori_unload(e: &ShioriEntries) -> Result<(), ProxyError> {
+    /// `unload()` を呼ぶ。DLL の解放は `ShioriEntries` が捨てられるときにする。
+    pub fn shiori_unload(e: &ShioriEntries) {
         // SAFETY: `unload` は解決済み flat-C エントリ。
-        let _ok = unsafe { (e.unload)() };
-        // pasta の unload は内部エラーでも true を返す設計（windows.rs:96–105）。
-        // 先進坑では unload 自体の bool 失敗は致命としない（ライブラリ解放を優先）。
-        Ok(())
+        // pasta の unload は内部エラーでも true を返す設計（windows.rs:96–105）ゆえ戻り値は見ない。
+        let _ = unsafe { (e.unload)() };
     }
 }
 
@@ -222,15 +225,13 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
 
 /// helper の `main()` から呼べる i686 セルフテスト観測（go 基準(1) precursor・requirements 3.3）。
 ///
-/// `cargo test` 経由の観測は同 example の `ipc.rs` `#[cfg(test)]` が i686 でビルド不能
-/// （`usize >> 32` overflow・本タスク境界外＝ipc.rs は改変不可）なため、helper バイナリの
-/// 実行時セルフテストとしても `load(ghostdir)` 無 crash 完了を観測できるようにする。
+/// helper バイナリの実行時に `load(ghostdir)` が無 crash で完了することを観測する。
 /// 戻り値: 成否メッセージ（親が標準出力で観測）。
 pub fn selftest_load(ghostdir: &Path) -> Result<String, ProxyError> {
     let dll = ghostdir.join("pasta.dll");
     let entries = ShioriByteProxy::load_dll(&dll)?;
     ShioriByteProxy::shiori_load(&entries, ghostdir)?;
-    let _ = ShioriByteProxy::shiori_unload(&entries);
+    ShioriByteProxy::shiori_unload(&entries);
     Ok(format!(
         "selftest_load OK: loaded {} and load(ghostdir={}) completed without crash",
         dll.display(),
@@ -244,10 +245,8 @@ mod tests {
 
     /// go 基準(1) precursor（requirements 3.1–3.3）: i686 helper 内で pasta.dll をロードし
     /// 3 エントリを解決、`load(ghostdir)` がクラッシュせず完了することを観測する。
-    /// 完了後 `unload` で pasta の actor スレッド／ライブラリを後始末する。
+    /// 完了後 `unload` で pasta の actor スレッドを後始末する（ライブラリは `entries` を捨てるときに解放）。
     ///
-    /// 注意: 同 example の ipc.rs `#[cfg(test)]` の i686 overflow により `cargo test` 自体が
-    /// ビルド不能なため、実走観測は helper `main()` の `--selftest-load`（selftest_load）でも行う。
     /// 本物の 32bit `pasta.dll` を読むので x64 では走れない（i686 の組み立てだけで走る）。
     #[cfg(target_arch = "x86")]
     #[test]
@@ -256,7 +255,25 @@ mod tests {
         let dll = dir.join("pasta.dll");
         let entries = ShioriByteProxy::load_dll(&dll).expect("load_dll should resolve 3 entries");
         ShioriByteProxy::shiori_load(&entries, &dir).expect("shiori_load should complete (true)");
-        ShioriByteProxy::shiori_unload(&entries).expect("shiori_unload");
+        ShioriByteProxy::shiori_unload(&entries);
+    }
+
+    /// エントリが引けない DLL を読んだら、`load_dll` は解放してから `EntryNotFound("load")` を返す（指摘 18）。
+    /// `msimg32.dll` は System32（i686 では SysWOW64）にあり `load`／`unload`／`request` を出さず、
+    /// テストの exe は読まない。前後で `GetModuleHandleW` が無いことで解放を確かめる。
+    #[test]
+    fn load_dll_frees_the_dll_when_an_entry_is_missing() {
+        use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+        let name = HSTRING::from("msimg32.dll");
+        // SAFETY: `name` は呼び出し中生存する NUL 終端 UTF-16。
+        let loaded = || unsafe { GetModuleHandleW(&name) }.is_ok();
+        assert!(!loaded(), "msimg32.dll must not be loaded before the test");
+        let got = ShioriByteProxy::load_dll(Path::new("msimg32.dll"));
+        assert_eq!(got.err(), Some(ProxyError::EntryNotFound("load")));
+        assert!(
+            !loaded(),
+            "load_dll must free the DLL when an entry is missing"
+        );
     }
 
     /// ANSI(CP_ACP) エンコードが ASCII パスで UTF-8 バイト等価になること（design §493）。

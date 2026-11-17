@@ -2,7 +2,7 @@
 //!
 //! 検体は窓口 `sample-ghost-kit` から取得し、**プロセス寿命で保持**する。段 ③ で `SampleRoot` の
 //! `Drop` が展開した複製を消すため、関数内の一時値にすると借用の元がその場で消える——helper が
-//! 引数も `GHOSTDIR` も無いときに落ちる退避経路は、まさにこの寿命に依存する。
+//! 引数の ghostdir が無いときに落ちる退避経路は、まさにこの寿命に依存する。
 //!
 //! 窓口は純 Rust なので、i686 の helper ターゲットでも組める。依存は `thiserror`・`areka-nar`・
 //! `miniz_oxide` の 3 つで、`areka-nar` がさらに `areka-parsers` と `encoding_rs` を引く——

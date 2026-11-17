@@ -146,7 +146,7 @@ impl HelperMessageWindow {
     pub fn clean_unload(&self) {
         let s = self.window.state();
         if let Some(e) = s.entries.borrow().as_ref() {
-            let _ = ShioriByteProxy::shiori_unload(e);
+            ShioriByteProxy::shiori_unload(e);
         }
         *s.entries.borrow_mut() = None;
     }

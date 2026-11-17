@@ -9,9 +9,6 @@
 //! - HWND は下 32 ビット（`hwnd_to_u32`）の `to_le_bytes` で運ぶ。
 //! - 送りは `SendMessageTimeoutW`（`SMTO_ABORTIFHUNG` ＋上限）で、ハングしない。
 
-// helper だけが使う DEFAULT_TIMEOUT が残る間は外せない。
-#![allow(dead_code)]
-
 use core::cell::Cell;
 use core::time::Duration;
 use std::time::Instant;
@@ -91,9 +88,6 @@ pub enum IpcError {
     /// ほかの Win32 エラー（窓が無い 1400 など）。値は `GetLastError` のまま。
     SendFailed(u32),
 }
-
-/// 送出のデフォルトタイムアウト。
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// WM_COPYDATA を 1 通送る。`dwData`＝`tag` の下 32 ビット・`cbData`＝`payload` の長さ・
 /// `wParam`＝`self_hwnd`。`SMTO_ABORTIFHUNG` ＋ `timeout` で、相手が詰まってもハングしない。
