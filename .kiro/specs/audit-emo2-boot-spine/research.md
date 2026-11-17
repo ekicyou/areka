@@ -920,3 +920,25 @@
 - `crates/areka-runtime/src/adapter.rs`・`move_cue_move_severity_log_tests.rs`・`frame_chain_finalize_tests.rs` に `capture_logs`／`count_level` の写しが残る（`frame*` は触らない約束の中）。
 - `crates/areka-runtime/src/frame/drain_resnap_tests.rs` の「`load-repro.md` の ⑹」に持ち主の spec が無い（`frame/` は触らない約束の中）。
 - 範囲の外のファイル（`balloon_visibility.rs` など）に、持ち主の spec を名乗らない「Requirement X.Y」が残る。
+
+## 15. 仕上げの確かめ（2026-11-17・タスク 8.3／要件 9.4・9.5）
+
+### 15.1 全体テスト
+
+- `pwsh -NoProfile -File tools/test-all.ps1` を排他テストの机を持って 1 回回した（コミット `621012439`・始めの未コミットの変更 0）。21 段のうち 20 段が緑、赤は「x64 workspace tests」の 1 段だけだった。赤のテストは `ukadoc-survey` の `--test consistency` の 16 本だけで、ほかのテストの実行ファイルは全部緑（`--no-fail-fast`）。
+- 赤の原因はこの spec の直しにあった。かけ直しの 4 回目で、rustdoc の `bare_urls` の警告を消すため `consumer_ledger.rs` の `ukadoc: https://…` 27 行を `<…>` で囲んだ。`ukadoc-survey` はこの形の行を実装の証拠として読むので、証拠が読めなくなった（カタログに無い URL 27 件・証拠の無い実装 23 件）。27 行を元の裸の形へ戻した（`22627fc49`）。rustdoc の `bare_urls` の警告は直しの前からあったもので、字面の読み手（`ukadoc-survey`）があるので残す。
+- 赤のテストだけに絞って回し直した（要件 8.4）: `cargo test -p ukadoc-survey` で 601・6・113・5 本が緑、失敗 0。
+
+### 15.2 既定の枝との差分（比べた先は `origin/main` との分かれ目 `2a9fa0a0f`）
+
+- 約束のファイル（`crates/areka-runtime/src/frame/`・`frame*.rs`・`crates/areka-placement/`・`crates/log-capture-kit/tests/file_length_guard_test.rs`・`vendors/`・`Cargo.lock`）の差分: 0 件。
+- `crates/areka-emo-text/` に足したファイル: 0 件。
+- `placement_tests/transition_*` の差分: 0 件。`placement_tests/mod.rs` の差分は 69 番の宣言の 1 行だけ。同じフォルダの `reset_balloon_pos_tests.rs`・`spawn_zorder_pair_deferred_tests.rs`・`measure_bake_log_tests.rs` は範囲の中のファイルで、差分は説明の文と 69 番の印（`reset_balloon_pos_tests.rs` の 570 行の差分のほとんどは空白で、空白を見ない差分は 12 行の追加・20 行の削除）。
+- 依存: 足した依存・フォーク・`[patch]` は 0 件。`crates/areka-runtime/Cargo.toml` の差分は説明の 2 行だけ（依存の行は変わらない）。
+- 端末へ出す文: 足した `println!`／`print!`／`eprintln!`／`eprint!` は 0 件（消したのは 1 件）。
+- 範囲の外のファイルの差分と、それを入れたタスク:
+  - `crates/areka-actor/`（4 ファイル）・`crates/areka-emo-text/`（13 ファイル・足したファイルは無い）・`crates/areka/src/input_events/balloon_choice_settle_tests.rs`: タスク 2（`RecordedCall::Status` の枝を消した時の読み手と、COM の写し）。持ち主は C22 で走っていない（設計の「並走の約束」7.1）。
+  - `crates/areka/src/crate_source_test_support.rs`・`doc/COMPAT_ARCHITECTURE.md`（パスの 2 行）: タスク 6.5（102 番・設計の討議の議題 1）。`doc/` の 2 行は `collisionex-regions` のセッションへ知らせ済み。
+  - `crates/areka/src/ghost_session_switch_tests.rs`・`shell_balloon_switch_session_lap_tests.rs`・`update/worker_path_tests.rs`: タスク 3.6。
+  - `crates/areka/src/boot_config.rs`: タスク 8.2 のかけ直しの 3 回目で、`ghost_boot_options` を `session/runtime_boot.rs` の `runtime_boot_options` を 1 回呼ぶ形にした（`GhostBootOptions` の組み立ての写しを 1 か所へ・返す値は同じ）。同じ時に、説明の task 番号と持ち主の無い要件の番号を外した。条件つきで範囲の外へ触った件として、ここに記す。持ち主の `audit-areka-app` は C22 で走っていない。
+- 外への約束の変化: かけ直しで足した公開の名前は `areka_runtime::spine::{wait_until_paced, INJECT_PACE}`（テストの足場・test-support の中）。狭めた名前は `settle_bounded_with`（`pub` から `pub(super)` へ・`spine.rs` の出し直しも外した）で、読み手は `spine_wait.rs` の子のテストだけ。ログの文の変化は、`warn!`／`error!` の本文から要件の番号を外したもの（`runtime_boot.rs` の「・R7.4」、`lib.rs` の「・R7.3」、`consumer_ledger.rs` の `LedgerError` の Display の「・要件 11.3」、`zorder_cue.rs` の debug の「・要件 11.2」）と、`reload.rs` の `reload_failed` の文（`gap_cancelled` のときにも合う言い方へ）だけで、event 名は変えていない。どれも、その字面を読む物（テスト・道具）が 0 件であることを `git grep` で確かめた。
