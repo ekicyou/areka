@@ -44,8 +44,9 @@ const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 ///
 /// 発火条件を route ではなく**寸の変化**に置いているのは、どの route が最初に実表示寸を
 /// 運ぶかが frame の相順に依存するからである（`DpiReproject`／`ReportedSizeReconcile`／
-/// `Resnap` はいずれも presenter が報告した実表示寸を運び得る。`AnchorChange` だけは
-/// 現在の表示寸をそのまま渡す）。寸が変わらない書込では配置時の offset がその寸に対して
+/// `Resnap` はいずれも presenter が報告した実表示寸を運び得る。シェルの切り替えの
+/// `reseed::reanchor_char_windows` が書く `AnchorChange` だけは現在の表示寸をそのまま渡す）。
+/// 寸が変わらない書込では配置時の offset がその寸に対して
 /// 正しいままなので、素材を残して次の機会へ譲る。
 ///
 /// # 幾何は書き写さない

@@ -94,7 +94,7 @@
   - _Dispatch: mechanical — 設計が doc の中身と檻の入力と期待を与えている_
   - _Requirements: 1.5_
 
-- [ ] 7. シェルの切り替えの置き直しを整合待ちの札のある窓で見送る（4 回目）
+- [x] 7. シェルの切り替えの置き直しを整合待ちの札のある窓で見送る（4 回目）
   - 先に `reseed_tests.rs` に赤の檻を置く: 札のある窓に揃え方 `top` のシェルを入れて `reanchor_char_windows` → `debug_assert!` が `route=Some(AnchorChange)` で落ちる（`#[should_panic]` で確かめ、その結果を実装の記録に残す）
   - `reanchor_char_windows` は札のある窓を置き直さず `debug!`（`event = "reseed_held"`・scope）を残す。札の無い窓は今のまま。経路語の分け方と檻の `EXPECTED` は変えない
   - 赤の檻を設計の Testing の単体 7 の ⑵ ⑶ へ書き換える（札のある窓は前のまま・`reseed_held`・札の無い窓は動く／札を外して `DpiReproject` で新しい揃え方に置かれる）

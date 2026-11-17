@@ -127,7 +127,7 @@ pub fn move_window_with_route(
 /// # `route` 引数（Req 1.2／2.4・design「PlacementRoute 配管＋guard_visibility >
 /// Integration」・task 1.4）
 ///
-/// 本関数は複数の上流（[`anchor_changed_system`]＝[`PlacementRoute::AnchorChange`]・
+/// 本関数は複数の上流（シェルの切り替えの `reseed::reanchor_char_windows` と見本の [`anchor_changed_system`]＝[`PlacementRoute::AnchorChange`]・
 /// frame の毎フレーム再スナップ＝[`PlacementRoute::Resnap`]・frame の DPI 相＝
 /// [`PlacementRoute::DpiReproject`]・frame の drain 後段（寸法報告回収・`Changed<DPI>` 非依存）＝
 /// [`PlacementRoute::ReportedSizeReconcile`]・D13）から呼ばれる**同一の反映口**であり、どの経路が
@@ -523,10 +523,10 @@ pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool
         // 解決の条件に置く（設計 C4 の条件 2）。窓ごとではなく全窓一括で止める点だけが
         // 見送りの点と違い、覆われていることに変わりはない。ゆえに届けば漏れである。
         | PlacementRoute::ChainRealign
-        // アンカー変化トリガ。**本番では未結線**（`anchor_changed_system` は schedule へ
-        // 登録されておらず、呼ぶのは決定論テストだけ）ゆえ現に到達しないが、由来は表示環境の
-        // 変化を受けた基盤側の置き直しであり、結線されたときに見送りが要る側である。鳴る側に
-        // 置いておけば、結線した瞬間に「どちらへ倒すか」を必ず決めさせられる。
+        // 揃え方の入れ直し。本番では `reseed::reanchor_char_windows`（シェルの切り替えのたび）が書く。
+        // 札のある窓は呼び手が見送る（札が外れるフレームの拡大率の相が新しい揃え方で置く）ので
+        // 覆われている——`ChainRealign` の自前の見送りと同じ形。`anchor_changed_system` は
+        // schedule に登録しない見本（呼ぶのは決定論テストだけ）。
         | PlacementRoute::AnchorChange
         // 面の `move` のずれ（seriko-pattern-calls）。毎フレームの相が見送りの門で次のフレームへ回す。
         | PlacementRoute::PatternMove => true,
