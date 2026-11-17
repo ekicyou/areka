@@ -374,9 +374,9 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 ///
 /// # 依存方向（regression 修正）
 ///
-/// この結線は本来 `areka_placement::spawn` が担うのが素直だが、placement 本体は
-/// `crate::` パスを持てない（example が `#[path]` で私有 include するため・
-/// `window-placement.rs`／`collision-probe.rs`）。設計の依存方向も
+/// この結線は本来 `areka_placement::spawn` が担うのが素直だが、配置の crate
+/// （`areka-placement`）は本体（`areka`）に依存できず、本体の `crate::` パスを持てない
+/// （example の `window-placement.rs`／`collision-probe.rs` も crate の公開面で配置を使う）。設計の依存方向も
 /// `input_events → placement` ゆえ、ハンドラ装着は placement に依存できる
 /// **本モジュール側**が所有する（stand-in 即終了 `on_ghost_pressed` は退役）。
 ///

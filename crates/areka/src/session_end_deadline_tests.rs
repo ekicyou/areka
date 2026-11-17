@@ -399,34 +399,35 @@ fn session_end_limit_is_three_seconds() {
 /// 走査の字面: 期限つきの降ろし・見張りの張り・上限を受ける入口の呼び出し。
 const DEADLINE_CALL_TOKENS: [&str; 3] = [".shutdown_within(", ".arm(", "end_session_within("];
 
-/// 本番ソースでそれらを呼んでよい行（`src/` からの相対パス・前後の空白を落とした行）。
+/// 本番ソースでそれらを呼んでよい行（`crates/` からの相対パス＝`<crate>/<src の中のパス>`・前後の空白を落とした行）。
 /// OS のセッションの終了の受け手が定数を渡す 1 行・受け手の降ろし・`GhostSession` の委譲の 3 行だけ。
 const ALLOWED_DEADLINE_CALLS: [(&str, &str); 3] = [
     (
-        "ghost_session.rs",
+        "areka/ghost_session.rs",
         "let (result, fired) = runtime.shutdown_within(reason, budget);",
     ),
     (
-        "session_end.rs",
+        "areka/session_end.rs",
         "end_session_within(world, SESSION_END_SHIORI_LIMIT)",
     ),
     (
-        "session_end.rs",
+        "areka/session_end.rs",
         "session.shutdown_within(CloseReason::System, WaitBudget { started, limit });",
     ),
 ];
 
-/// `crates/areka/src/` の本番 `.rs`（テストとテストの土台＝`_tests.rs`・`_support.rs` を除く）を
-/// `(src/ からの相対パス, 本文)` で集める。
+/// 本体（`crates/areka/src/`）と `crates/areka-runtime/src/` の本番 `.rs`（テストとテストの土台＝
+/// `_tests.rs`・`_support.rs` を除く）を `(<crate>/<src の中のパス>, 本文)` で集める。分ける前に本体の
+/// `src` が覆っていた範囲を歩く（runtime-crate-split 要件 5.4）。
 fn production_sources() -> Vec<(String, String)> {
-    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
+    fn walk(krate: &str, root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
         let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
             panic!("木を歩けない（走査が空振りする）: {} — {e}", dir.display())
         });
         for entry in entries {
             let path = entry.expect("ディレクトリ項目が読めない").path();
             if path.is_dir() {
-                walk(root, &path, out);
+                walk(krate, root, &path, out);
                 continue;
             }
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -442,12 +443,24 @@ fn production_sources() -> Vec<(String, String)> {
                 .to_string_lossy()
                 .replace('\\', "/");
             let src = std::fs::read_to_string(&path).expect("本番ファイルが読めない");
-            out.push((rel, src));
+            out.push((format!("{krate}/{rel}"), src));
         }
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut out = Vec::new();
-    walk(&root, &root, &mut out);
+    for (krate, root) in [
+        ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
+        (
+            "areka-runtime",
+            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+    ] {
+        let before = out.len();
+        walk(krate, &root, &root, &mut out);
+        assert!(
+            out.len() > before,
+            "{krate} の src に本番ファイルが 1 つも無い（走査が空振りしている）"
+        );
+    }
     out
 }
 
@@ -500,7 +513,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
     let removed: Vec<(String, String)> = files
         .iter()
         .map(|(rel, src)| {
-            let src = if rel == "session_end.rs" {
+            let src = if rel == "areka/session_end.rs" {
                 src.replace("end_session_within(world, SESSION_END_SHIORI_LIMIT)", "")
             } else {
                 src.clone()
@@ -514,7 +527,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
         (
             vec![],
             vec![(
-                "session_end.rs".to_owned(),
+                "areka/session_end.rs".to_owned(),
                 "end_session_within(world, SESSION_END_SHIORI_LIMIT)".to_owned()
             )]
         ),
@@ -523,7 +536,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
 
     let mut added = files.clone();
     added.push((
-        "main.rs".to_owned(),
+        "areka/main.rs".to_owned(),
         "let guard = probe.arm(budget);".to_owned(),
     ));
     let (extra, missing) = deadline_call_mismatch(&deadline_call_sites(&added));
@@ -531,7 +544,7 @@ fn deadline_call_scan_turns_red_on_one_line_removed_or_added() {
         (extra, missing),
         (
             vec![(
-                "main.rs".to_owned(),
+                "areka/main.rs".to_owned(),
                 "let guard = probe.arm(budget);".to_owned()
             )],
             vec![]

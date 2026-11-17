@@ -813,3 +813,52 @@
 ### 13.3 完了の状態
 
 3 本とも緑・診断の行の抜き書きは上のとおり。タスク 9.3 の完了の状態を満たす（段 8 のコミットは進行役が行う）。
+
+## 14. 検証の差し戻しの直し（kiro-validate-impl 1 回目）
+
+`/kiro-validate-impl` の 1 回目が NO-GO を返した指摘 1 件（重要）と 3 件（軽微）を直した。直したのはテストと文書の注だけで、本番のコードは変えていない（要件 7.1）。
+
+### 14.1 木を歩く見張りの範囲を移す前と同じに戻す（重要・要件 5.4）
+
+移す前は本体の `crates/areka/src` が runtime も含んでいたので、下の 4 本の見張りは 1 つの根で両方を覆っていた。移した後は片方の木しか歩いていなかったので、4 本とも 2 つの根（本体の `src` と、読み口 `crate_source_test_support::crate_path("areka-runtime", "src")`）を歩く形に直した。見出し・許可表の道は 2 つの木の間で取り違えないよう `<crate>/<src の中のパス>` の形にそろえた（`areka/…`・`areka-runtime/…`）。それぞれの根で 1 つも読まなければ赤になる数の確かめを足した。tick_gate の照合は `==` のまま。
+
+| テスト | 直す前に歩いた根 | 直した後に歩く根 | 道の見出し |
+|---|---|---|---|
+| `crates/areka/src/tick_gate_config_producers_tests.rs`（`files_marking` を使う `the_areka_table_lists_every_file_that_marks_the_wake`・`the_wintf_module_roster_names_every_areka_zorder_producer`） | `crates/areka-runtime/src` だけ（6.2 で替えた） | `crates/areka/src`・`crates/areka-runtime/src` | `AREKA_PRODUCERS` の 8 行を `areka-runtime/adapter.rs` ほかへ |
+| `crates/areka/src/readme_tests.rs` の `only_the_os_port_spells_shell_execute` | `crates/areka/src` だけ | 同上の 2 つ | 期待を `areka/readme/os_port.rs` へ |
+| `crates/areka/src/update/worker_tests.rs` の `winhttp_is_spelled_only_in_two_production_files` | `crates/areka/src` だけ | 同上の 2 つ | 許可と期待を `areka/install/fetch_url.rs`・`areka/update/worker.rs` へ |
+| `crates/areka/src/session_end_deadline_tests.rs` の `production_sources`（`only_session_end_calls_the_bounded_shutdown`・`deadline_call_scan_turns_red_on_one_line_removed_or_added`） | `crates/areka/src` だけ | 同上の 2 つ | 許可表を `areka/ghost_session.rs`・`areka/session_end.rs` へ・較正の写しの道も `areka/session_end.rs`・`areka/main.rs` へ |
+
+注の「本体の本番ファイル」「`crates/areka/src` の下」は、どちらの木を覆うかを書く文に改めた。
+
+**ほかに歩く見張りを探した結果**: 本体の `crates/areka/src` で `read_dir` と `CARGO_MANIFEST_DIR` を両方持つファイルは上の 4 本のほか `mcp/mcp_tests.rs`・`readonly_tests.rs`・`session_end_sync_send_tests.rs` の 3 本。ほかの `read_dir` の使い手（`readonly_sites_tests.rs`・`install/procedure_branch_tests.rs`・`boot_shell_tests.rs` ほか）は一時のフォルダの木を歩くもので、ソースの木ではない。
+
+- `mcp/mcp_tests.rs` の `production_files_have_no_not_implemented_yet`: 歩くのは本体の `src/mcp/` だけ。`mcp/` は本体に残り、`areka-runtime/src` に `mcp` の木は無いので、移す前と範囲は同じ。直さない。
+- `session_end_sync_send_tests.rs`: ワークスペース全体（`crates/`）を歩く名前を付けた例外で、`areka-runtime` も覆う。直さない。
+- `readonly_tests.rs:78` の `engage_is_called_only_from_main`: 本体の `src` だけを歩く。判断は**直さない**。理由: 見張るのは本体の `readonly::engage` の呼び手で、`areka-runtime` は本体に依存できない（依存の向きが逆）ので、`areka-runtime` の中から `readonly::engage` を呼ぶコードはコンパイルが通らない。歩く範囲を広げても当たりは原理的に 0 で、範囲が狭まったことによる見落としは起きない。同じファイルの `withhold_everything_is_called_only_from_readonly` はワークスペース全体を歩いており、`areka-runtime` も覆う。
+
+**較正（広げた根が `areka-runtime/src` のファイルを実際に読むこと）**: どこからも `mod` で宣言しない一時のファイル `crates/areka-runtime/src/zz_calibration_probe.rs` に 4 本の針（Shell と Execute を繋いだ名・`WinHttpOpen`・`probe.arm(budget)`・`tick_wake::mark(tick_wake::ZORDER)`）を書いて回し、全部が `areka-runtime/zz_calibration_probe.rs` を名指して赤になることを確かめてから、ファイルを消した（`git status` で残りが無いことを確認）。
+
+- `winhttp_is_spelled_only_in_two_production_files` … FAILED（`本番の取得口の型を綴る所が増えた: [("areka-runtime/zz_calibration_probe.rs", "WinHttpOpen")]`）
+- `only_the_os_port_spells_shell_execute` … FAILED（`left: ["areka/readme/os_port.rs", "areka-runtime/zz_calibration_probe.rs"]`）
+- `the_areka_table_lists_every_file_that_marks_the_wake` … FAILED（`旗を立てているのに AREKA_PRODUCERS に載っていない: areka-runtime/zz_calibration_probe.rs`）
+- `the_wintf_module_roster_names_every_areka_zorder_producer` … FAILED（同じファイルを名指す）
+- `only_session_end_calls_the_bounded_shutdown` … FAILED（`left: ([("areka-runtime/zz_calibration_probe.rs", "let g = probe.arm(budget);")], [])`。この走査は `fn ` を含む行を定義として除くので、針は独立の 1 行で置いた）
+
+本体の根の側は、4 本とも直す前から本体の当たり（`areka/readme/os_port.rs` ほか・許可表の行）を両側から挟む形で見ており、直した後もその照合が緑であることで読んでいることを示す。
+
+### 14.2 軽微な 3 件（文書の注だけ）
+
+- `crates/areka/src/placement_tests/mod.rs` の頭の注: 遷移の観測ログの判定器の置き場という記述を外し、判定器は `areka-runtime` の `src/placement_tests/` へ移ったと書いた。本体の部品の例から `runtime` を外した（今の中身が使うのは `input_events` と `areka_runtime::`）。
+- `crates/areka/src/input_events/mod.rs` の「依存方向」の注: example が `#[path]` で私有 include するという記述を、配置の crate は本体に依存できないという今の理由に改めた。`crates/areka-placement/examples/window-placement.rs`・`crates/areka-runtime/examples/collision-probe.rs` はどちらも crate の公開面で使い、`#[path]` で配置のファイルを取り込んでいないことを確かめた（`collision-probe.rs` の `#[path]` は自分の子の `collision-probe/*.rs` だけ）。
+- `crates/areka/examples/emo-present/reconcile.rs`: ずれていた `collision-probe.rs:34` の行番号の指しを、`areka-runtime` の `examples/collision-probe.rs` 冒頭の注の「`Anchored` 欠落」の項を名で指す形に改めた。窓配置の観測の領分の文の 2 つの example も crate の名前つきで書いた。
+- `.kiro/steering/structure.md` の Placement Crate の節: Features に、`test-support` を付けるのが本体の `[dev-dependencies]` のほか `areka-runtime` の `[dev-dependencies]` と `areka-runtime` 自身の `test-support`（`areka-placement/test-support` へ連ねる）であることを書いた。Consumers に `areka-runtime`（本番の依存と、テストのときの `test-support`）を足した（`crates/areka-runtime/Cargo.toml` の 14・20・58 行で確かめた）。
+
+### 14.3 回した確かめ（机は要らないもの）
+
+- `cargo test -p areka --bin areka -- tick_gate_config only_the_os_port winhttp_is_spelled deadline --list` で、直した 4 本の 6 つのテスト（`tick_gate_config::producers_tests::*` の 5 本を含む）が当たることを確かめた。
+- `cargo test -p areka --bin areka -- tick_gate_config only_the_os_port winhttp_is_spelled deadline` → `test result: ok. 29 passed; 0 failed`。
+- 較正の一時ファイルを置いた回 → 上の 5 本が赤（14.1）・消した後にもう一度回して `29 passed; 0 failed`。
+- `cargo fmt --all -- --check` → 差分なし。
+- `cargo check -p areka --bin areka --tests` → 警告 0・エラー 0。`cargo check -p areka --examples` → 警告 0（`reconcile.rs` の注を直したため）。
+- `cargo test -p log-capture-kit --test file_length_guard_test` → `6 passed; 0 failed`。

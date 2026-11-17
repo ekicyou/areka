@@ -875,55 +875,78 @@ fn ghost_inner_balloon_target_is_written_in_place() {
 
 // ---------------------------------------------------------------- 字面の検査
 
-/// 本体の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp` で始まる識別子は
-/// `WinHttpFetch` だけで、綴るのは `install/fetch_url.rs` と `update/worker.rs` の 2 つだけ（裁定 3）。
+/// 本体と `areka-runtime` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp`
+/// で始まる識別子は `WinHttpFetch` だけで、綴るのは本体の `install/fetch_url.rs` と
+/// `update/worker.rs` の 2 つだけ（裁定 3）。分ける前に本体の `src` が覆っていた範囲を歩くため、
+/// 2 つの `src` を歩き、見出しに crate の名前を付ける（runtime-crate-split 要件 5.4）。
 #[test]
 fn winhttp_is_spelled_only_in_two_production_files() {
-    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut stack = vec![src.clone()];
     let mut spelled: Vec<(String, String)> = Vec::new();
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).expect("ソースの木を辿る") {
-            let path = entry.expect("項目を読む").path();
-            if path.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or_default();
-            if !name.ends_with(".rs")
-                || name.ends_with("_tests.rs")
-                || name.ends_with("_test_support.rs")
-            {
-                continue;
-            }
-            let text = std::fs::read_to_string(&path).expect("ソースを読む");
-            let relative = path
-                .strip_prefix(&src)
-                .expect("src の下")
-                .to_string_lossy()
-                .replace('\\', "/");
-            for (at, _) in text.match_indices("WinHttp") {
-                let before = text[..at].chars().next_back();
-                if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+    for (krate, src) in [
+        (
+            "areka",
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"),
+        ),
+        (
+            "areka-runtime",
+            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+    ] {
+        let mut stack = vec![src.clone()];
+        let mut read = 0;
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("ソースの木を辿る") {
+                let path = entry.expect("項目を読む").path();
+                if path.is_dir() {
+                    stack.push(path);
                     continue;
                 }
-                let ident: String = text[at..]
-                    .chars()
-                    .take_while(|c| c.is_alphanumeric() || *c == '_')
-                    .collect();
-                spelled.push((relative.clone(), ident));
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default();
+                if !name.ends_with(".rs")
+                    || name.ends_with("_tests.rs")
+                    || name.ends_with("_test_support.rs")
+                {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("ソースを読む");
+                read += 1;
+                let relative = format!(
+                    "{krate}/{}",
+                    path.strip_prefix(&src)
+                        .expect("src の下")
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                );
+                for (at, _) in text.match_indices("WinHttp") {
+                    let before = text[..at].chars().next_back();
+                    if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                        continue;
+                    }
+                    let ident: String = text[at..]
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_')
+                        .collect();
+                    spelled.push((relative.clone(), ident));
+                }
             }
         }
+        assert!(
+            read > 0,
+            "{krate} の本番ファイルを 1 つも読んでいない（走査が空振りしている）"
+        );
     }
 
     let strays: Vec<_> = spelled
         .iter()
         .filter(|(file, ident)| {
             ident != "WinHttpFetch"
-                || !matches!(file.as_str(), "install/fetch_url.rs" | "update/worker.rs")
+                || !matches!(
+                    file.as_str(),
+                    "areka/install/fetch_url.rs" | "areka/update/worker.rs"
+                )
         })
         .collect();
     assert!(
@@ -935,7 +958,7 @@ fn winhttp_is_spelled_only_in_two_production_files() {
     files.dedup();
     assert_eq!(
         files,
-        ["install/fetch_url.rs", "update/worker.rs"],
+        ["areka/install/fetch_url.rs", "areka/update/worker.rs"],
         "2 つとも綴っている（検査が空振りしていない）"
     );
 }

@@ -296,10 +296,10 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Location**: `/crates/areka-placement/`
 **Purpose**: 窓の生成・既定位置・ドラッグ・バルーン追従・DPI 追従（本体の `placement/` から分けた・`placement-crate-split` 2026-11-06）。ゴースト定義（shell dir＋ghost／shell descript の KV）からキャラ窓・バルーン窓の配置を解決し、窓 entity を組み立てる。座標・寸法はすべて物理 px。`publish = false`
 **Modules（役割のパターン）**: 依存の向きは `config` ← `resolver` ← `measure` ← `spawn`／`follow`（同じ段どうしは引き合ってよい）← 本体のシーム。`diag` は最下流（配置のモジュールを引かない・出所は `areka_placement::diag`）。失敗の型 `PlacementError` は `error.rs` に置き根から出し直す。正本は `lib.rs` の頭の説明。`follow.rs` はファサード形式の代表例（上の「モジュール分割パターン」）
-**Features**: `test-support`（本体のテストだけが使う支えを開ける・本体は `[dev-dependencies]` でだけ付ける）
+**Features**: `test-support`（テストだけが使う支えを開ける・本番のビルドには付かない）。付けるのは本体の `[dev-dependencies]`、`areka-runtime` の `[dev-dependencies]`、`areka-runtime` 自身の `test-support`（`areka-placement/test-support` へ連ねる）の 3 か所
 **Examples**: `examples/window-placement.rs`（crate の公開面だけで実ゴーストの窓を立てる）
 **Dependencies**: wintf, areka-parsers, emo 3 段（`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`）, areka-sylphya, areka-ghost, bevy_ecs, thiserror, tracing, windows。**本体（`areka`）には依存しない**
-**Consumers**: `areka`（本番と、`test-support` つきの `[dev-dependencies]`）
+**Consumers**: `areka`（本番と、`test-support` つきの `[dev-dependencies]`）・`areka-runtime`（本番と、`test-support` つきの `[dev-dependencies]`・自身の `test-support` から連ねる）
 
 ### Runtime Crate（areka-runtime）
 **Location**: `/crates/areka-runtime/`

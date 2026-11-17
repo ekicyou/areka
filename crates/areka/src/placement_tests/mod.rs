@@ -1,8 +1,9 @@
-//! 配置と本体のほかの部分をまたぐテストと、遷移の観測ログの判定器の置き場
-//! （spec: placement-crate-split 要件 3.7・3.9・3.10）。
+//! 配置と本体のほかの部分をまたぐテストの置き場（spec: placement-crate-split 要件 3.7・3.9・3.10）。
+//! 遷移の観測ログの判定器は `areka-runtime` の `src/placement_tests/` へ移った（spec:
+//! runtime-crate-split）。
 //!
 //! 配置の crate（`areka-placement`）は本体（`areka`）に依存できないので、本体の部品
-//! （`runtime`・`input_events` ほか）も使うテストは上の crate であるここに置く。
+//! （`input_events` ほか）や `areka-runtime` も使うテストは上の crate であるここに置く。
 //! `main.rs` が `#[cfg(test)]` の下で宣言するので、本番のビルドには入らない。
 
 mod measure_bake_count_tests;

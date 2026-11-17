@@ -15,7 +15,9 @@ use crate::crate_source_test_support::crate_source;
 
 /// 旗を立てる側（areka-runtime 内）の一覧（見出し・中身・期待する旗の名前）。並びは見出しの辞書順。
 ///
-/// 見出しは `crates/areka-runtime/src/` からの相対である（読み先は読み口 `crate_source!` で引く）。
+/// 見出しは `crates/` からの相対（crate の名前＋その `src/` の中のパス）である（読み先は読み口
+/// `crate_source!` で引く）。木の走査は本体と `areka-runtime` の 2 つの `src` を歩くので、見出しに
+/// crate の名前を付けて 2 つの木の間で取り違えないようにする。
 ///
 /// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
 /// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
@@ -23,42 +25,42 @@ use crate::crate_source_test_support::crate_source;
 /// 2 行を持っていたのは、退役したバルーン再表示の追随トリガのぶんである。）
 const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
-        "adapter.rs",
+        "areka-runtime/adapter.rs",
         crate_source!("areka-runtime", "src/adapter.rs"),
         "PRESENT",
     ),
     (
-        "balloon_visibility_phase.rs",
+        "areka-runtime/balloon_visibility_phase.rs",
         crate_source!("areka-runtime", "src/balloon_visibility_phase.rs"),
         "REARM",
     ),
     (
-        "frame/scale_text.rs",
+        "areka-runtime/frame/scale_text.rs",
         crate_source!("areka-runtime", "src/frame/scale_text.rs"),
         "REARM",
     ),
     (
-        "hover_inject.rs",
+        "areka-runtime/hover_inject.rs",
         crate_source!("areka-runtime", "src/hover_inject.rs"),
         "REARM",
     ),
     (
-        "move_cue.rs",
+        "areka-runtime/move_cue.rs",
         crate_source!("areka-runtime", "src/move_cue.rs"),
         "PRESENT",
     ),
     (
-        "talk_lifecycle.rs",
+        "areka-runtime/talk_lifecycle.rs",
         crate_source!("areka-runtime", "src/talk_lifecycle.rs"),
         "PRESENT",
     ),
     (
-        "window_state_cue.rs",
+        "areka-runtime/window_state_cue.rs",
         crate_source!("areka-runtime", "src/window_state_cue.rs"),
         "ZORDER",
     ),
     (
-        "zorder_cue.rs",
+        "areka-runtime/zorder_cue.rs",
         crate_source!("areka-runtime", "src/zorder_cue.rs"),
         "ZORDER",
     ),
@@ -120,7 +122,7 @@ fn balloon_visibility_phase_arms_the_deadline() {
 
 use std::path::{Path, PathBuf};
 
-/// `crates/areka-runtime/src/` 配下の本番 `.rs` を集める（テストのファイルは除く）。
+/// `dir` 配下の本番 `.rs` を集める（テストのファイルは除く）。
 fn production_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let entries = std::fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("木を歩けない（検査が空振りする）: {} — {e}", dir.display()));
@@ -181,35 +183,57 @@ mark(ZORDER);",
     );
 }
 
-/// `src/` からの相対パス（区切りは `/`）で、旗を立てている本番ファイルを列挙する。
+/// 本体と `areka-runtime` の 2 つの `src` を歩く（分ける前に本体の `src` が覆っていた範囲。
+/// runtime-crate-split 要件 5.4）。
+fn walk_roots() -> [(&'static str, PathBuf); 2] {
+    [
+        ("areka", Path::new(env!("CARGO_MANIFEST_DIR")).join("src")),
+        (
+            "areka-runtime",
+            crate::crate_source_test_support::crate_path("areka-runtime", "src"),
+        ),
+    ]
+}
+
+/// `crates/` からの相対パス（`<crate>/<src の中のパス>`・区切りは `/`）で、旗を立てている
+/// 本番ファイルを列挙する。
 ///
 /// `flag` が空文字なら「どれかの旗を立てている」、それ以外なら「その旗を立てている」。
 fn files_marking(flag: &str) -> Vec<String> {
-    let root = crate::crate_source_test_support::crate_path("areka-runtime", "src");
-    let mut files = Vec::new();
-    production_rs_files(&root, &mut files);
-
-    let mut found: Vec<String> = files
-        .iter()
-        .filter(|path| {
-            let src = std::fs::read_to_string(path).expect("本番ファイルが読めない");
-            let code = code_only(&src);
-            uses_tick_wake_name(&code, "mark")
-                && (flag.is_empty() || uses_tick_wake_name(&code, flag))
-        })
-        .map(|path| {
-            path.strip_prefix(&root)
-                .expect("走査の根の下に無い")
-                .to_string_lossy()
-                .replace('\\', "/")
-        })
-        .collect();
+    let mut found = Vec::new();
+    for (krate, root) in walk_roots() {
+        let mut files = Vec::new();
+        production_rs_files(&root, &mut files);
+        assert!(
+            !files.is_empty(),
+            "{krate} の src に本番ファイルが 1 つも無い（走査の根が空振りしている）"
+        );
+        found.extend(
+            files
+                .iter()
+                .filter(|path| {
+                    let src = std::fs::read_to_string(path).expect("本番ファイルが読めない");
+                    let code = code_only(&src);
+                    uses_tick_wake_name(&code, "mark")
+                        && (flag.is_empty() || uses_tick_wake_name(&code, flag))
+                })
+                .map(|path| {
+                    let rel = path
+                        .strip_prefix(&root)
+                        .expect("走査の根の下に無い")
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    format!("{krate}/{rel}")
+                }),
+        );
+    }
     found.sort();
     found.dedup();
     found
 }
 
-/// 木の中で旗を立てている areka の本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に載っている。
+/// 本体と `areka-runtime` の木の中で旗を立てている本番ファイルは、1 つ残らず `AREKA_PRODUCERS` に
+/// 載っている。
 ///
 /// 逆向きも同時に見る——表の行が現物のどのファイルにも当たらなければ、走査が壊れて
 /// 0 件を返している（そのときは何を消しても緑になる）。両側から挟んでおく。
