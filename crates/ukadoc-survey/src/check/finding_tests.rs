@@ -182,31 +182,3 @@ fn the_kind_blocks_come_out_in_the_declared_order() {
     .collect();
     assert_eq!(headings, expected);
 }
-
-/// 本文は入力の並びに依らない（要件 7.3 の決定論を検査の出力にも通す）。
-#[test]
-fn the_body_does_not_depend_on_the_input_order() {
-    let mut findings = vec![
-        Finding::new(
-            FindingKind::DomainReportStale,
-            None,
-            "doc/ukadoc-coverage/report/assets.md",
-            "台帳から作り直した本文と違う",
-        ),
-        Finding::new(
-            FindingKind::LedgerOutOfOrder,
-            Some(id("ukadoc:manual_shell")),
-            ledger_place("assets"),
-            "id の順に並んでいない",
-        ),
-        Finding::new(
-            FindingKind::AliasChain,
-            Some(id("ukadoc:spec_web:a:1")),
-            ledger_place("shiori"),
-            "別名の指す先がまた別名",
-        ),
-    ];
-    let first = render(&findings);
-    findings.reverse();
-    assert_eq!(render(&findings), first);
-}

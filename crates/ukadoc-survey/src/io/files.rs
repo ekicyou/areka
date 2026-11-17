@@ -78,6 +78,7 @@ pub(crate) fn io_error(path: &Path, reason: &str) -> SurveyError {
     }
 }
 
+// 書き場の道具（`tests::scratch_dir`）を隣の `snapshot` のテストも使うので crate に開く。
 #[cfg(test)]
 #[path = "files_tests.rs"]
-mod tests;
+pub(crate) mod tests;

@@ -741,7 +741,13 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
     let members = "members = [\n  \"ukadoc:descript_plugin:secondchangeinterval:1\",\n  \
                    \"ukadoc:list_shiori_event:OnMinuteChange:1\",\n]";
     let cases = [
-        ("空の members", bundle(members, "members = []"), "members"),
+        // hand が残るので、空の確かめを消しても「欄 hand の … が members に無い」で
+        // 落ちる。空の確かめから来たことを文で見分ける。
+        (
+            "空の members",
+            bundle(members, "members = []"),
+            "members が空",
+        ),
         (
             "hand の重複",
             bundle(

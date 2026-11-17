@@ -42,7 +42,7 @@ use std::collections::BTreeMap;
 //   9. OnGhostChanged     本文が変わった（ほかの列は 1 文字も動かない）
 //  10. OnMouseMove       本文が変わった（見出しも分類も版番号も URL も一緒に動く・
 //                        しかも 2 つのハッシュは先頭 15 桁が同じ）
-//  11. OnSecondChange     本文は同じ・見出しと分類と版番号だけ変わった
+//  11. OnSecondChange     本文は同じ・見出しと分類と版番号（したがって URL も）が変わった
 // ---------------------------------------------------------------------------
 
 const CURRENT_GHOST_NAME: &str = "ukadoc:list_propertysystem:currentghost.name:1";

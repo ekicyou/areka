@@ -272,8 +272,9 @@ fn an_insufficient_row_placed_before_the_targets_turns_the_order_arm_red() {
     let documents = Documents::load();
     let carryover = Carryover::new();
 
-    // 段階 A の先頭の行に印を付ける。対象行から外れるので順位の主張は動かないが、
-    // 「対象行より後」だけが破れる。
+    // 段階 A の先頭の行に印を付ける。対象行から外れるので次の行が先頭になり、先頭の
+    // rank が 1 でないという所見も出るが、ここでは insufficient の所見だけを絞って見る。
+    // 破れるのは「対象行より後」である。
     let mut broken = documents.briefing.clone();
     let at = broken
         .ranks

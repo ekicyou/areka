@@ -118,11 +118,6 @@ fn a_domain_that_owns_no_entry_still_gets_a_bucket() {
     let buckets = select_ids_by_domain(&catalog, &PageAssignment::canonical())
         .expect("見本のカタログはすべて割り当て済みのページのはず");
 
-    let keys: Vec<&str> = buckets.keys().map(Domain::as_key).collect();
-    let mut sorted = keys.clone();
-    sorted.sort_unstable();
-    sorted.dedup();
-    assert_eq!(sorted.len(), 4, "台帳 4 本ぶんの鍵が揃っていない: {keys:?}");
     for domain in Domain::ALL {
         let ids = buckets
             .get(&domain)

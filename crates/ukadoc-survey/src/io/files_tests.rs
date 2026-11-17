@@ -8,20 +8,12 @@
 //! 書けないときに元の本文を 1 バイトも変えず、置き換えだけが落ちたときは書きかけの
 //! 一時ファイルを残さないこと（要件 4.1）。
 //!
-//! ファイルを書くのは ⑷ の 3 本だけで、置き場はワークツリーの
+//! この crate でファイルを書くのは ⑷ の 3 本と `io/snapshot_tests.rs` の 1 本だけで、置き場はワークツリーの
 //! `target\ukadoc-survey-tests\<テスト名>\`（テストごとに別・始めに消して作る）。
 
 use std::path::PathBuf;
 
 use super::*;
-
-/// 本物の作業ツリーにある、この crate 自身の manifest。
-fn own_manifest() -> PathBuf {
-    crate::io::paths::workspace_root()
-        .join("crates")
-        .join("ukadoc-survey")
-        .join("Cargo.toml")
-}
 
 // ---- 復帰文字を落とす整形（読み書きに共通）----
 
@@ -60,28 +52,6 @@ fn strip_cr_keeps_multibyte_text() {
 }
 
 // ---- 読み込みが整形を通っていること（本物のファイルで確かめる）----
-
-#[test]
-fn read_normalized_returns_a_body_without_carriage_returns() {
-    let path = own_manifest();
-    let body = read_normalized(&path).expect("自分の manifest は読めるはず");
-    assert!(
-        !body.contains('\r'),
-        "復帰文字が残っている: {}",
-        path.display()
-    );
-    // 否定の主張だけだと、空文字列を返す実装でも緑になる。中身があることを対で示す。
-    assert!(
-        body.contains("[package]") && body.contains("ukadoc-survey"),
-        "manifest の中身が読めていない: {}",
-        path.display()
-    );
-    assert!(
-        body.lines().count() > 5,
-        "行が少なすぎる: {}",
-        path.display()
-    );
-}
 
 /// 読み込みが整形を**実際に通している**ことを、復帰文字を持つ本物のファイルで確かめる。
 ///
@@ -185,7 +155,7 @@ fn write_lf_reports_the_path_it_could_not_write() {
 // ---- 置き換え書き（隣の一時ファイルに書いて置き換える）----
 
 /// テストごとの書き場（`target\ukadoc-survey-tests\<テスト名>\`）。始めに消して作る。
-fn scratch_dir(test_name: &str) -> PathBuf {
+pub(crate) fn scratch_dir(test_name: &str) -> PathBuf {
     let dir = crate::io::paths::workspace_root()
         .join("target")
         .join("ukadoc-survey-tests")

@@ -345,7 +345,10 @@ fn every_id_cited_by_the_three_documents_exists_in_the_catalog() {
     let files = three_documents(documents);
 
     let findings = citation_findings(&files, &repo.catalog);
-    assert_no_findings("3 文書の引用 id が台帳の正典と食い違う", &findings);
+    assert_no_findings(
+        "3 文書の引用がカタログ・書き方の決まりと食い違う",
+        &findings,
+    );
 }
 
 /// ⑵ 3 文書が引用した機械の束 id が全数、報告 5 本の束の一覧に在る。
@@ -400,7 +403,7 @@ fn twisting_one_cited_id_turns_the_citation_check_red() {
     );
 }
 
-/// ⑵ 写しの由来の id（`machine` 欄）を 1 文字変えると、**ちょうどその 1 件**が
+/// ⑵ 写しが引用した機械の束 id（`machine` 欄か表の束 id の列）を 1 文字変えると、**ちょうどその 1 件**が
 /// 名指しで赤になる。
 #[test]
 fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {

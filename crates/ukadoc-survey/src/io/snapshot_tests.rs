@@ -4,13 +4,15 @@
 //! `SnapshotDoc` へ写す規則が逐語で正しいこと——鍵の綴り（`generatedAt`）と欄の値を
 //! 実際の文字列で固定する（設計 D-2・付録 B 手順 1）。⑶ 形が違うとき・読めないときに
 //! 黙って通らず、どこがどう違うかと探した絶対パスが本文に載ること（要件 1.8）。
-//! ⑷ 提供パッケージの版の読み取り（要件 1.6）が package.json の欄から来ること。
+//! ⑷ 提供パッケージの版の読み取り（要件 1.6）が package.json の欄から来て、
+//! `load_with` がその名前と版をそのまま `SnapshotDoc` へ渡すこと。
 //!
-//! **ここではスナップショットを 1 度も読まない。環境変数も 1 つも読まないし書かない**
-//! （要件 6.2・設計 Testing Strategy 19）。場所の決め方も JSON の写しも
-//! 「値を引数で受け取る純粋な関数」に切り出してあるので、値だけで確かめられる。
-//! ファイルも一時ディレクトリも作らない（読むのは実在しないパスとこの crate の
-//! `Cargo.toml` だけ）。
+//! **ここでは本物のスナップショット（既定の場所や環境変数の指す先）を 1 度も読まない。
+//! 環境変数も 1 つも読まないし書かない**（要件 6.2・設計 Testing Strategy 19）。場所の
+//! 決め方も JSON の写しも「値を引数で受け取る純粋な関数」に切り出してあるので、値だけで
+//! 確かめられる。ファイルを作るのは ⑷ の配線を見る 1 本だけで、置き場はワークツリーの
+//! `target\ukadoc-survey-tests\<テスト名>\`（`io::files` のテストの書き場の道具を使う）。
+//! ほかに読むのは実在しないパスとこの crate の `Cargo.toml` だけ。
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -395,6 +397,36 @@ fn package_fields_gives_up_on_a_version_that_is_not_a_string() {
 #[test]
 fn package_fields_gives_up_on_broken_json() {
     assert!(package_fields("{\"name\":").is_none());
+}
+
+/// `load_with` が読めた名前と版を捨てずに `SnapshotDoc` へ渡すこと（要件 1.6）。
+///
+/// `package_fields` と `package_json_path` は単体で固定してあるが、`load_with` が成功の
+/// 値を捨てて常に [`UNKNOWN`] を入れても、警告が出ないだけで単体テストは緑のまま。
+/// 書き場に `package.json` と 2 つ下の `data/index.json` を置き、警告 0 行で見本の名前と
+/// 版がそのまま返ることを見る。
+#[test]
+fn load_with_passes_the_package_name_and_version_through() {
+    let root = crate::io::files::tests::scratch_dir(
+        "load_with_passes_the_package_name_and_version_through",
+    );
+    std::fs::write(
+        root.join("package.json"),
+        r#"{"name": "some-doc-package", "version": "9.8.7"}"#,
+    )
+    .expect("package.json を書けない");
+    let data = root.join("data");
+    std::fs::create_dir_all(&data).expect("data を作れない");
+    let snapshot = data.join("index.json");
+    std::fs::write(&snapshot, MINIMAL).expect("index.json を書けない");
+
+    let mut lines = Vec::new();
+    let doc = load_with(&snapshot, &mut |line| lines.push(line.to_owned()))
+        .expect("形の整った見本なので読めるはず");
+
+    assert!(lines.is_empty(), "警告は出ないはず: {lines:?}");
+    assert_eq!(doc.package, "some-doc-package");
+    assert_eq!(doc.package_version, "9.8.7");
 }
 
 #[test]

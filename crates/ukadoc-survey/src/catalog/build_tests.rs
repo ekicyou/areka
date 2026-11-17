@@ -6,7 +6,7 @@
 //! あること（要件 1.3・9.4）。⑷ id の 2 形が同じ形で収まること（要件 1.9）。
 //! ⑸ 割り当ての無いページがページ名付きで失敗すること（要件 3.5）。⑹ 冒頭の情報が
 //! スナップショットから素通しで写ること（要件 1.6）。⑺ 同じ id・同じ URL・同じページ
-//! URL の 2 ページが黙って畳まれずに失敗すること。
+//! URL の 2 項目が黙って畳まれずに失敗すること。
 //!
 //! **スナップショットのファイルは 1 度も読まない。環境変数も読まないし書かない。
 //! ファイルも一時ディレクトリも作らない**（要件 6.2・設計 File Structure Plan）。
@@ -299,9 +299,11 @@ fn the_same_id_twice_fails_instead_of_being_folded() {
     ]);
 
     match &err {
+        // 2 件は URL も同じなので、id の確かめを消しても URL の確かめが落とす。
+        // 失敗がどちらの確かめから来たかを文で見分ける。
         SurveyError::SnapshotShape { detail } => assert!(
-            detail.contains("ukadoc:dev_bind"),
-            "どの id かが載るはず: {detail}"
+            detail.contains("同じ項目 id") && detail.contains("ukadoc:dev_bind"),
+            "同じ id の失敗として、どの id かが載るはず: {detail}"
         ),
         other => panic!("形の違いとして返るはず: {other:?}"),
     }

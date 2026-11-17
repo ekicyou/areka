@@ -44,9 +44,10 @@ use super::RepoData;
 
 /// 要件文書の置き場（ワークスペース根からの相対）。
 ///
-/// **`/kiro-complete` の書き換え対象**である。spec を `completed/` へ移す完了処理は
-/// `crates/` 全域から feature 名を grep してこの綴りを書き換える。綴りをこの定数 1 つに
-/// 集めてあるのはそのためで——本文中に散らすと、移動後にどれか 1 つが取り残されて
+/// 完了処理（`/kiro-complete`）が `completed/` の綴りへ書き換えた定数である。完了処理は
+/// spec を `completed/` へ移すとき `crates/` 全域から feature 名を grep して綴りを
+/// 書き換える。綴りをこの定数 1 つに集めてあるのはそのためで——本文中に散らすと、
+/// 移動のときにどれか 1 つが取り残されて
 /// [`read_workspace_file`] が「探した絶対パス」を添えて止まる。
 const REQUIREMENTS_MD: &str =
     ".kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md";

@@ -400,6 +400,12 @@ fn a_bundle_ranked_twice_fails() {
 
     let body = failure(priorities(&linkage(), &briefing, &ledgers()));
     assert!(body.contains(CLOCK), "束名が本文に無い: {body}");
+    // 2 度目の行を通すと「2 つの束に属している」（linkage.md を指す）でも束名つきで
+    // 落ちる。直す場所が briefing.md の順位の行であることを文で見分ける。
+    assert!(
+        body.contains("[[rank]] に 2 度現れる"),
+        "順位の行の重なりとして落ちていない: {body}"
+    );
 }
 
 /// 同じ id が 2 つの束に属していたら落ちる。
