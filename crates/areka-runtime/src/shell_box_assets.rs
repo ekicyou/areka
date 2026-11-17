@@ -65,7 +65,7 @@ impl ShellBoxAssets {
 }
 
 /// スコープごと・置き場所を持つ箱ごとに、矢印の絵をシェルのフォルダから解く
-/// （読み込みの時だけ呼ぶ・名前の順はスコープごと・要件 2.1・7.3）。
+/// （読み込みの時だけ呼ぶ・名前の順はスコープごと・balloon-scroll-arrows 要件 2.1・7.3）。
 ///
 /// 同じ (スコープ, `arrow.filename`) は 1 回だけ解いて共有する（警告を箱の数だけ出さない）。
 pub(crate) fn resolve_box_markers(
@@ -108,13 +108,13 @@ pub(crate) fn resolve_box_markers(
         .collect()
 }
 
-/// 箱のフォントを探す場所の順（シェルのフォルダ、ゴーストのフォルダの順・要件 3.10）。
+/// 箱のフォントを探す場所の順（シェルのフォルダ、ゴーストのフォルダの順・areka-P0-shell-balloon 要件 3.10）。
 pub(crate) fn box_font_search_dirs(shell_dir: &Path, ghost_dir: &Path) -> Vec<PathBuf> {
     vec![shell_dir.to_path_buf(), ghost_dir.to_path_buf()]
 }
 
 /// `\s` の鍵を seriko と同じ解決で番号にし、今のシェルの面の表に無ければ「解決できない」にする
-/// （要件 4.1・5.1・design.md「箱の束の結線」）。
+/// （areka-P0-shell-balloon 要件 4.1・5.1・design.md「箱の束の結線」）。
 ///
 /// 表示の層は面の表に無い番号へ切り替えられず前の表示を保つので、文字の層もそれに合わせて
 /// 何も変えない。記録は呼び手（seriko と文字の層）が出す。

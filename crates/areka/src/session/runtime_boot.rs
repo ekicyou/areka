@@ -1,4 +1,4 @@
-//! 実行系の側の起動（design「RuntimeBoot と CueSinkSources」・要件 4.2・13.4）。
+//! 実行系の側の起動（areka-P0-mcp-reload の design「RuntimeBoot と CueSinkSources」・要件 4.2・13.4）。
 //!
 //! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`RuntimeWiring`）と
 //! 「実行系の側」（`GhostRuntime`）の 2 段に分かれる。窓の側が受け口の送出端の束
@@ -53,7 +53,7 @@ struct RuntimeLines {
 /// 束の複製から sink の列を組む（並びは旗の順序の保証を担うので変えない）。
 ///
 /// 1. surface（seriko）2. 時刻付きの文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
-/// 起床旗 PRESENT が文字 cue より先に倒れないため・draw-load-parity 3.5）5. 重なり
+/// 起床旗 PRESENT が文字 cue より先に倒れないため・areka-P0-draw-load-parity）5. 重なり
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
 /// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。重なりから後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
@@ -191,7 +191,7 @@ fn install_lines(
         switch_rx,
         reload_rx,
     } = lines;
-    // 説明書の置き場はゴーストの根と定義の `readme` キーから起動時に 1 度だけ決まる（要件 4.5）。
+    // 説明書の置き場はゴーストの根と定義の `readme` キーから起動時に 1 度だけ決まる。
     let readme_path = crate::readme::resolve_path(ghost_root, runtime.mount().readme.as_deref());
     crate::readme::wire_readme(world, readme_path, readme_rx);
     ghost_switch::wire_change_rx(world, change_rx);

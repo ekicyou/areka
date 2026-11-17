@@ -49,7 +49,7 @@ fn production_judges_are_present() {
     assert!(!judges.command_handled("nosuchcommand", None));
 }
 
-// ---- 長い台本の strict の重さ（spec: mcp-strict-errors task 9.4・要件 3.11） ----
+// ---- 長い台本の strict の重さ（spec: mcp-strict-errors 要件 3.11） ----
 //
 // 4 MiB の台本を strict 真と偽で、本物の駆動（`talk_handler`）を別スレッド（talk スレッドの役）で回す。
 // 文字の層の受け手（`EmoTextSink`）の知らせはテストのスレッド（UI スレッドの役）で数える。
@@ -196,7 +196,7 @@ mod long_script {
     }
 
     /// 4 MiB の台本で、文字の層へ届く知らせの数は名前の形の `\b` が口付きになる分のほかは strict 真と偽で
-    /// 同じで、判定と記録は talk スレッドだけで行われる（UI スレッドの仕事は増えない・要件 3.11）。
+    /// 同じで、判定と記録は talk スレッドだけで行われる（UI スレッドの仕事は増えない・mcp-strict-errors 要件 3.11）。
     #[test]
     fn four_mib_strict_script_keeps_text_messages_and_judges_on_talk_thread() {
         let units = LEN.div_ceil(UNIT.len());

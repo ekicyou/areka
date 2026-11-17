@@ -1,5 +1,5 @@
 //! `\![change,shell,名(,--option=raise-event)]`・`\![change,balloon,名]` の受け口
-//! （design「SwitchCueSink」・要件 1.2／1.3／1.4／1.15）。
+//! （areka-P0-shell-balloon-switch design「SwitchCueSink」・要件 1.2／1.3／1.4／1.15）。
 //!
 //! 骨格は `change_cue.rs` の `ChangeCueSink` と同じ 2 段である。
 //!
@@ -9,7 +9,7 @@
 //! 2. **送り出し**——第 2 引数の名前を**無変形**で、種別と `--option=raise-event` の有無とともに
 //!    切替要求 1 件として UI へ送る。名前の突き合わせは UI 側の入口（`shell_balloon_switch`）の
 //!    仕事である。`raise-event` はシェルでだけ効き、バルーンでは知らない option と同じく
-//!    `warn!` を残して無視する（バルーンに「切り替え前」のイベントは無い・要件 1.4）。
+//!    `warn!` を残して無視する（バルーンに「切り替え前」のイベントは無い・areka-P0-shell-balloon-switch 要件 1.4）。
 //!
 //! 依存は要求の型（`skin_switch::SkinRequestRaw`）だけに閉じる。
 //!
@@ -34,7 +34,7 @@ const SELECTOR_BALLOON: &str = "balloon";
 /// `OnShellChanging` を送らせる option（シェルでだけ効く）。
 const OPTION_RAISE_EVENT: &str = "--option=raise-event";
 
-/// `\![change,shell|balloon,…]` の受け口（design「SwitchCueSink」）。
+/// `\![change,shell|balloon,…]` の受け口（areka-P0-shell-balloon-switch design「SwitchCueSink」）。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る（どの複製も単一の受信端へ届く）。
 #[derive(Clone)]

@@ -29,7 +29,7 @@
 
 - 受け持つ 125 ファイル（`research.md` の 1.1 の表）の直し: `crates/areka-runtime/` のうち `frame/`・`frame*.rs`・切替の見直しの持ち物・`placement_tests/transition_*` を除く全部（`Cargo.toml`・`examples/collision-probe*`・`placement_tests/mod.rs` の宣言の印を含む）、本体の `runtime_tests/` の受け持ちの分、本体の `session/` の `hooks.rs`・`reload*`・`runtime_boot*`・`switch_copy*`・`same_folder_pin*`・e2e の 2 本。
 - `areka-runtime` の公開の面の次の変化（議題 4 で「読み手を同じ変更で全部直す」と確定した分）: `BootWiringError::SpawnUi` の削除（4 番）・`RuntimeBootError` の削除と `BootRuntimeFn` の戻りの形（48 番）・`BootRuntimeFn` を `pub` に（49 番）・外に使い手の無い 5 項目の狭め（36 番）・`DescriptNotes.empty` の削除（71 番）・使い手の無い `pub` の狭め（46・53・59・60・68・69・77 番）・新しい event 名 `reload_shell_replay_unavailable`（62 番）。
-- テストの支え（`#[cfg(any(test, feature = "test-support"))]`）への足し算: `consumer_ledger::test_support::carrier_cue`（97 番）・`spine::settle_bounded`／`settle_bounded_with`（95 番）・`source_text_test_support::crate_path`（102 番・設計の討議の議題 1 で確定）。
+- テストの支え（`#[cfg(any(test, feature = "test-support"))]`）への足し算: `consumer_ledger::test_support::carrier_cue`（97 番）・`spine::settle_bounded`（95 番。内側の継ぎ目 `settle_bounded_with` は `pub(super)` で、出し直しに入れない）・`source_text_test_support::crate_path`（102 番・設計の討議の議題 1 で確定）。
 - 本体の spine の足場（`crates/areka/src/runtime_tests/spine.rs`）の形の変化: 目印の面を止める門（2 番）・降ろしの失敗で落ちる後片付け（3 番）・装着の前提を 1 本にした `attach_all`（99 番）。
 
 ### 範囲の外（持たないもの）
@@ -473,7 +473,7 @@ wait_until(what, Progress::Count(&probe), || {
 | 92 | 同上（短い settle） | `seriko_tick_expect_one` そのもの | T16 |
 | 93 | 進めるのを 1 か所にし、重なった if と説明を直す | — | T16 |
 | 94 | 文を直す | — | T16 |
-| 95 | `settle_bounded_with(now, pause, step)` に `pause` を足し、`settle_bounded` と一緒に `areka-runtime/src/spine_wait.rs` へ移す（`pub`・`test-support`）。本体の `spine.rs` は出し直しで引く。檻 4 本は `spine_settle_tests.rs` ごと `areka-runtime` へ移し、時計を差した檻は眠らない `pause` を渡す | — | T15 |
+| 95 | `settle_bounded_with(now, pause, step)` に `pause` を足し、`settle_bounded` と一緒に `areka-runtime/src/spine_wait.rs` へ移す（`settle_bounded` は `pub`・`test-support`、`settle_bounded_with` は `pub(super)` で檻だけが使う）。本体の `spine.rs` は `settle_bounded` を出し直しで引く。檻 4 本は `spine_settle_tests.rs` ごと `areka-runtime` へ移し、時計を差した檻は眠らない `pause` を渡す | — | T15 |
 | 96 | `CoInitializeEx` の 3 か所を消す（film の分は 102 番の移しと一緒に） | — | T17 |
 | 97 | `pub fn carrier_cue(name: &str, args: &[&str]) -> TalkCue` を `consumer_ledger_test_support.rs` に置き、範囲の中の 2 個（本体の `consumer_ledger_agreement_tests.rs`・`switch_cue_tests.rs`）を寄せる | — | T9 |
 | 98 | 本体の中では `spine.rs` の `pump_until_idle` を `pub(super)` で使う | — | T17 |

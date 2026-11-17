@@ -35,7 +35,7 @@ use self::hold_support::{HoldAt, HoldGate};
 // 進行状態の記録（第 2 系統）の型と本体
 //
 // 台本の SHIORI（下）が書き込み、本体の適合一周走行（`runtime_tests/spine_conformance_support.rs`）が
-// 読む。定義は 1 つで、⑵ と同じ所に置く（spec: runtime-crate-split 段 2 の記録「設計からの外れ」）。
+// 読む。定義は 1 つで、⑵ と同じ所に置く（spec: runtime-crate-split の記録「設計からの外れ」）。
 // ===========================================================================
 
 /// 進行状態の記録 1 件（呼出 id と、その呼出に載った**組み立て済み**の進行状態の対）。
@@ -57,7 +57,7 @@ pub type StatusLedger = Arc<Mutex<Vec<RecordedStatus>>>;
 /// 台本受け口の書き込み点の本体（照会・片道の 2 か所から呼ばれる）。
 ///
 /// **書き込み専用**である。既存の呼出記録とは別の台帳へ積むだけで、既存の読み手を 1 つも
-/// 増やさない（design D3「追補の形（挙動を変えない）」）。
+/// 増やさない（areka-P0-emo2-conformance-e2e design D3「追補の形（挙動を変えない）」）。
 pub(crate) fn record_status(ledger: &StatusLedger, id: &str, status: Option<&str>) {
     ledger
         .lock()
@@ -311,7 +311,7 @@ impl ScriptedShioriHandle {
 }
 
 // ===========================================================================
-// GPU / fixture / 有界待機ヘルパ（draw_readback_test／ghost spine 定石の踏襲）
+// 待ちの部品の出し直し・汲み出し・固まる台本・テストの口
 // ===========================================================================
 
 #[path = "spine_wait.rs"]

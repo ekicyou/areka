@@ -1,9 +1,9 @@
 //! 段の駆動器の受け入れ確認のうち、kanade を実際に起こして終了段の始まりを縛る檻
-//! （areka-P0-emo2-conformance-e2e・task 5.5・R2.10）。
+//! （areka-P0-emo2-conformance-e2e・R2.10）。
 //!
 //! `spine_conformance_support_tests.rs` が 1 ファイル 1,000 行の上限に近いため、中身を変えずに
-//! 後ろ半分の 2 本を分けた（areka-test-binary-stability・task 1.2・R10.4）。檻の趣旨は前半の
-//! ファイルの冒頭の説明と同じで、期待値は持たない。
+//! 後ろ半分の 2 本を分けた（areka-test-binary-stability 要件 10.4）。檻の趣旨は前半の
+//! ファイルの冒頭の説明と同じで、台本の期待値は持たない。
 
 use super::super::settle_bounded;
 use super::super::test_support::boot_finished;
@@ -12,18 +12,18 @@ use super::driver_tests::{second_change_calls, stage};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
 use super::{Progress, ScriptedShioriBackend, SpineHarness};
 use areka_kanade::CloseReason;
-// 私有の欄は渡し口から読み書きする（設計 D3 ⑷）。
+// 私有の欄は渡し口から読み書きする（runtime-crate-split の設計 D3 ⑷）。
 use areka_runtime::spine::test_support::status_calls;
 
 /// 受信端の開閉の探りは交信の列を **1 件も**増やさず、終了段の自己終了はその探りだけで観測できる
-/// （design D1 の終了段・`Error Handling`「解放の後も kanade の送信端が閉じない」）。
+/// （areka-P0-emo2-conformance-e2e の design D1 の終了段・`Error Handling`「解放の後も kanade の送信端が閉じない」）。
 ///
 /// 檻に入れる判断分岐:
 /// - **探りが無害であること**: kanade が生きている間に探りを 12 本投函しても、記録された照会・通知は
 ///   **1 件も増えない**。毎秒の変化通知で代用すると 1 本ごとに 1 件増えるので、ここが両者を分ける。
 /// - **探りが終了を捉えること**: 終了指示 → close 握手 → 解放 → kanade の自己終了、まで進むと探りの
 ///   投函が `Err` になり、完了条件が段の中で成立する。探りが無ければこの段は必ず有界待ち切れになる。
-/// - **握手が正典どおり 1 度ずつであること**: `OnClose` の照会 1 件・解放 1 件（R3.9）。
+/// - **握手が正典どおり 1 度ずつであること**: `OnClose` の照会 1 件・解放 1 件（areka-P0-emo2-conformance-e2e の R3.9）。
 /// - **boot 中に届いた終了指示も必ず果たされること**: 終了指示は kanade が boot に居るあいだに
 ///   届いても失われず、起動記録トークの再生完了で握手が始まる。しかも**毎秒の変化通知は 1 件も
 ///   増えない**（`OnSecondChange` 0 件）——増えていたら保留の消化経路が変わっている。
@@ -33,7 +33,7 @@ use areka_runtime::spine::test_support::status_calls;
 /// 根拠は `crates/areka-kanade/src/schedule/mod.rs` の防御アームが `warn!` を出して
 /// `(state, Vec::new())`（副作用指示 0 件）を返すことであり、上の (i) がその帰結を観測している。
 ///
-/// # 終了段の待ちが「据え置き時刻の再生側 Tick」でなければならない理由（task 5.5・R2.10）
+/// # 終了段の待ちが「据え置き時刻の再生側 Tick」でなければならない理由（areka-P0-emo2-conformance-e2e の R2.10）
 ///
 /// **前提（構造で決まっている）**——本ハーネスの起動は**必ず**起動記録トークを起こす。fixture の
 /// 永続状態は起動のたびに消され（`SpineHarness::boot_with` が検体の複製 `SampleRoot` を毎回作る・`crates/areka/src/runtime_tests/spine.rs`）、初回起動と判定
@@ -69,13 +69,13 @@ use areka_runtime::spine::test_support::status_calls;
 /// 数 ms〜数十 ms のうちに頭打ちに届く（区間を広げても直らない）。頭打ちの後は注入されないので
 /// 再生が凍り、待ちは必ず期限切れになる（[`StageSink::may_advance_clock`] の doc が同じ実測を
 /// 持つ）。据え置いた注入時刻は待っている観測を追い越しようがなく、予算も減らない——実測では
-/// 握手の開始までに 1,621 反復を要した（据え置き・静かな機械・task 5.5）。
+/// 握手の開始までに 1,621 反復を要した（据え置き・静かな機械）。
 ///
 /// **塞がれた危険（`areka-P0-kanade-boot-talkdone-drop` が受理経路を入れた）**——記録トークの
 /// 再生完了通知が kanade の `BootVersion{talk: Some}` 滞在中に届くと、以前は `schedule/boot.rs` の
 /// `step` のワイルドカード腕が**それを捨て**、以後 `Steady{talk: Some}` のまま保留が消化されな
 /// かった（`schedule/mod.rs` の `current_talk_id` が `BootVersion{Some}` を突合対象に含めておき
-/// ながら委譲先が捨てる形）。本仕様で同 `step` にガード腕を足し、通知を `on_talk_done` が受理して
+/// ながら委譲先が捨てる形）。同 `step` にガード腕を足し、通知を `on_talk_done` が受理して
 /// トーク枠を空にし `BootVersion{talk: None}` に留まるようにした。
 /// ただし本檻はアクターシェル経由であり、この相で通知を受け取る経路に構造上到達しない（`actor.rs`
 /// の `drive` が `basewareversion` の往復を同じ呼出の中で済ませ `Steady` まで進み切る）。ゆえに
@@ -187,7 +187,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
 }
 
 /// boot 系列に居るあいだに届いた終了指示が、起動記録トークの再生完了で**必ず**果たされる
-/// （task 5.5・R2.10・R9.1）。上の檻が高負荷で稀に踏んでいた交錯順を、眠りも壁時計も使わず
+/// （areka-P0-emo2-conformance-e2e の R2.10・R9.1）。上の檻が高負荷で稀に踏んでいた交錯順を、眠りも壁時計も使わず
 /// **構造で**再現する決定論の檻である。
 ///
 /// # 交錯順を決定論にする仕掛け
@@ -281,7 +281,7 @@ fn wait_close_query(
 }
 
 /// 終了挨拶の再生 → 解放 → kanade の自己終了を探りで捉える終了段を駆動し、握手が正典どおり
-/// 1 度ずつであること（`OnClose` の照会 1 件・解放 1 度・R3.9）と、毎秒の変化通知が 0 件であることを確かめる。
+/// 1 度ずつであること（`OnClose` の照会 1 件・解放 1 度・areka-P0-emo2-conformance-e2e の R3.9）と、毎秒の変化通知が 0 件であることを確かめる。
 ///
 /// 区間を広く取るのは、注入の予算が反復数の予算でもあり（1 反復 200µs）、実 async の着地に
 /// 十分な反復を与えるためである。
@@ -322,7 +322,7 @@ fn drive_close_and_assert_once(
             .filter(|c| matches!(c, RecordedCall::Unload))
             .count(),
         1,
-        "解放がちょうど 1 度でない（R3.9）: {calls:?}"
+        "解放がちょうど 1 度でない: {calls:?}"
     );
     assert_eq!(
         second_change_calls(handle),

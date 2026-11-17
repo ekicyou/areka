@@ -256,7 +256,7 @@ fn set_and_reset_position_reach_no_sink() {
     }
 }
 
-/// 本 spec が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
+/// areka-P0-mcp-reload が拾わない `\![reload,makoto]`・`\![reload,aigraph]` は表に行が無く、11 の受け口の
 /// どれにも届かない（areka-P0-mcp-reload 要件 10.3・11.1・11.3）。
 #[test]
 fn reload_makoto_and_aigraph_reach_no_sink() {

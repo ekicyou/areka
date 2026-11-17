@@ -1,5 +1,5 @@
 // =============================================================================
-// 読み直しの対象の振り分けの決定論檻（design.md Testing Strategy「reload_args_tests.rs」・
+// 読み直しの対象の振り分けの決定論檻（areka-P0-mcp-reload design.md Testing Strategy「reload_args_tests.rs」・
 // 要件 12.1 ⑴⑵⑸・1.2〜1.5・7.2・7.4・7.5・8.5・10.3）
 // =============================================================================
 
@@ -24,7 +24,7 @@ fn notes(unsupported: &[&str], unknown: &[&str]) -> DescriptNotes {
     }
 }
 
-// ── ⑴ MCP の `target`（要件 1.2・1.3・12.1 ⑴） ──
+// ── ⑴ MCP の `target`（areka-P0-mcp-reload 要件 1.2・1.3・12.1 ⑴） ──
 
 #[test]
 fn mcp_target_six_words() {
@@ -84,7 +84,7 @@ fn mcp_target_empty_and_unknown() {
     assert_eq!(McpTarget::parse("ｓｈｅｌｌ"), McpTarget::Unknown);
 }
 
-// ── ⑵ 台本の 7 綴り（要件 1.4・1.5・10.3・12.1 ⑵） ──
+// ── ⑵ 台本の 7 綴り（areka-P0-mcp-reload 要件 1.4・1.5・10.3・12.1 ⑵） ──
 
 fn script(name: &str, params: &[&str]) -> Option<ScriptReload> {
     parse_script(name, &toks(params))
@@ -152,14 +152,14 @@ fn script_descript_param_notes_are_carried() {
 
 #[test]
 fn script_descript_ignores_third_param_and_later() {
-    // `\![reload,descript,shell,balloon]` の `balloon` は見ない（要件 7.2）。
+    // `\![reload,descript,shell,balloon]` の `balloon` は見ない（areka-P0-mcp-reload 要件 7.2）。
     assert_eq!(
         script("reload", &["descript", "shell", "balloon"]),
         plain(ReloadTarget::Descript(parts(false, true, false)))
     );
 }
 
-// ── ⑸ descript のパラメータの語（要件 7.2・7.4・7.5・12.1 ⑸） ──
+// ── ⑸ descript のパラメータの語（areka-P0-mcp-reload 要件 7.2・7.4・7.5・12.1 ⑸） ──
 
 fn desc(param: &str) -> (DescriptParts, DescriptNotes) {
     parse_descript_params(param)
@@ -261,7 +261,7 @@ fn descript_extra_spaces_are_separators() {
     );
 }
 
-// ── どの入力でも panic しない（要件 8.5） ──
+// ── どの入力でも panic しない（areka-P0-mcp-reload 要件 8.5） ──
 
 #[test]
 fn never_panics_on_tricky_inputs() {

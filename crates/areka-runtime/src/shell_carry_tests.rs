@@ -25,12 +25,12 @@ fn shell_with(ids: &'static [u32]) -> impl Fn(u32) -> bool {
 /// 既定の面）の最初に在る面、どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4・7.2）。
 #[test]
 fn decide_keeps_the_carried_surface_or_falls_back_to_the_default() {
-    // 持ち越し: 控えた面が在れば、descript の既定の面が在っても替えない（要件 3.4）。
+    // 持ち越し: 控えた面が在れば、descript の既定の面が在っても替えない（descript-window-keys 要件 3.4）。
     assert_eq!(
         decide(1000, &[5, 0], shell_with(&[0, 5, 1000])),
         CarriedShow::Carried(1000)
     );
-    // descript の面へ戻る（要件 3.1）。
+    // descript の面へ戻る（descript-window-keys 要件 3.1）。
     assert_eq!(
         decide(1000, &[5, 0], shell_with(&[0, 5])),
         CarriedShow::FellBack {
@@ -48,7 +48,7 @@ fn decide_keeps_the_carried_surface_or_falls_back_to_the_default() {
             passed_over: None,
         }
     );
-    // 組み込みの面へ落ちる: 飛ばした descript の面が載る（要件 3.3）。
+    // 組み込みの面へ落ちる: 飛ばした descript の面が載る（descript-window-keys 要件 3.3）。
     assert_eq!(
         decide(2011, &[11, 10], shell_with(&[0, 10])),
         CarriedShow::FellBack {
@@ -57,7 +57,7 @@ fn decide_keeps_the_carried_surface_or_falls_back_to_the_default() {
             passed_over: Some(11),
         }
     );
-    // どれも無い: 出さず、候補の先頭（descript の既定の面）を載せる（要件 3.3）。
+    // どれも無い: 出さず、候補の先頭（descript の既定の面）を載せる（descript-window-keys 要件 3.3）。
     assert_eq!(
         decide(1000, &[11, 10], shell_with(&[0])),
         CarriedShow::Skipped {
@@ -247,7 +247,7 @@ fn names_of(shell: &str) -> BindResolver {
 }
 
 /// ⑷ スコープ 2 は自分（`char2`）の名前表で引く: 名前の在る着た服 B は着る、`char2` に名前の無い
-/// 脱いだ服 A は落とす（本体側の名前表は引かない・要件 14.2）。
+/// 脱いだ服 A は落とす（本体側の名前表は引かない・areka-P0-offline-surface-dump 要件 14.2）。
 #[test]
 fn decide_binds_looks_up_a_char_scope_in_its_own_names() {
     let decided = decide_binds(2, &set(&[101]), &set(&[100]), &set(&[100]), &char2_names());

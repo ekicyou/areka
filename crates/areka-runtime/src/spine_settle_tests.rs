@@ -13,7 +13,7 @@ use super::{SETTLE_MIN, SETTLE_QUIET_ROUNDS, SPIN_WAIT, settle_bounded, settle_b
 //
 // # 壁時計に依存しない檻の作り方
 //
-// 「時間が経つまで返らない」を実時間の計測で確かめると、並列負荷で合否が動く（本仕様が
+// 「時間が経つまで返らない」を実時間の計測で確かめると、並列負荷で合否が動く（areka-P0-test-cage-determinism が
 // まさに直そうとしている病）。そこで内側の継ぎ目 [`settle_bounded_with`] へ**注入時計**を渡し、
 // 時刻を `step` の呼出回数だけの関数にする。期待値は整数の呼出回数になり、実時間は一切
 // 判定に入らない。休み `pause` も眠らないものを渡すので、反復ごとの本物の sleep も無い。

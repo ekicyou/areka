@@ -6,14 +6,13 @@
 //
 // 確かめること: `\![enter,nouserbreakmode]`／`\![leave,nouserbreakmode]` の 2 組だけを拾う
 // こと・第 1 引数が違う `onlinemode` は拾わないこと・複製ごとに「トークが始まった」が
-// 先頭に 1 回だけ出ること・受信端が落ちていても台本を殺さず記録すること（要件 5.1・5.2・
+// 先頭に 1 回だけ出ること・受信端が落ちていても台本を殺さず記録すること（areka-P0-balloon-break 要件 5.1・5.2・
 // 5.4・7.3）。
 
 use super::*;
-use crate::consumer_ledger::test_support::carrier_cue;
+use crate::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
 use crate::frame::test_support::{capture_logs, count_level};
 use areka_ghost::sink::BootCueSink;
-use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::{Receiver, channel};
 
@@ -32,7 +31,7 @@ fn drain(rx: &Receiver<NoUserBreakSignal>) -> Vec<NoUserBreakSignal> {
 
 // ---------------------------------------------------------------- 受理
 
-/// `\![enter,nouserbreakmode]` は「トークが始まった」に続いて「入る」を送る（要件 5.1）。
+/// `\![enter,nouserbreakmode]` は「トークが始まった」に続いて「入る」を送る（areka-P0-balloon-break 要件 5.1）。
 #[test]
 fn enter_no_user_break_mode_sends_enter() {
     let (mut sink, rx) = sink();
@@ -44,7 +43,7 @@ fn enter_no_user_break_mode_sends_enter() {
     );
 }
 
-/// `\![leave,nouserbreakmode]` は「出る」を送る（要件 5.2）。
+/// `\![leave,nouserbreakmode]` は「出る」を送る（areka-P0-balloon-break 要件 5.2）。
 #[test]
 fn leave_no_user_break_mode_sends_leave() {
     let (mut sink, rx) = sink();
@@ -76,7 +75,7 @@ fn signals_follow_the_script_order() {
 // ---------------------------------------------------------------- 担当外
 
 /// 同じ `enter`／`leave` でも第 1 引数が `onlinemode` なら担当外——旗の合図は 1 件も出ない
-/// （要件 8.2）。**両側から挟む**ため `enter` と `leave` の両方を通す。
+/// （areka-P0-balloon-break 要件 8.2）。**両側から挟む**ため `enter` と `leave` の両方を通す。
 #[test]
 fn online_mode_is_benign_skip() {
     let (mut sink, rx) = sink();
@@ -85,7 +84,7 @@ fn online_mode_is_benign_skip() {
     assert_eq!(
         drain(&rx),
         vec![NoUserBreakSignal::TalkStarted],
-        "onlinemode は担当外——TalkStarted のほかには何も出ない（要件 8.2）"
+        "onlinemode は担当外——TalkStarted のほかには何も出ない"
     );
 }
 
@@ -123,15 +122,7 @@ fn non_carrier_cue_is_benign_skip() {
         command: CueCommand::Text("アヒル".into()),
         duration: 0.0,
     });
-    sink.emit(TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Custom {
-            command: "enter".into(),
-            params: DynamicValue::Null,
-        },
-        duration: 0.0,
-    });
+    sink.emit(broken_custom_cue("0", "enter"));
     assert_eq!(
         drain(&rx),
         vec![NoUserBreakSignal::TalkStarted],
@@ -141,7 +132,7 @@ fn non_carrier_cue_is_benign_skip() {
 
 // ---------------------------------------------------------------- トークの境界
 
-/// 複製ごとに「トークが始まった」が**先頭に 1 回だけ**出る（要件 5.4・旗の順序）。
+/// 複製ごとに「トークが始まった」が**先頭に 1 回だけ**出る（areka-P0-balloon-break 要件 5.4・旗の順序）。
 ///
 /// 複製＝トークの境界なので、複製した受け口は前のトークの状態を引き継がない。同じ受け口を
 /// 何度 `emit` しても TalkStarted は増えず、新しい複製では必ずもう一度先頭に出る。
@@ -182,7 +173,7 @@ fn talk_started_is_sent_once_per_clone_and_comes_first() {
 }
 
 /// 担当外の指示しか配られないトークでも、「トークが始まった」は出る（閉じ忘れた旗を解く
-/// 契機は担当のコマンドではなく最初の指示である・要件 5.4）。
+/// 契機は担当のコマンドではなく最初の指示である・areka-P0-balloon-break 要件 5.4）。
 #[test]
 fn talk_started_comes_from_any_first_cue() {
     let (mut sink, rx) = sink();
@@ -201,7 +192,7 @@ fn talk_started_comes_from_any_first_cue() {
 
 // ---------------------------------------------------------------- 送出の失敗
 
-/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない・要件 6）。
+/// 受信端が落ちていても落ちず、送れなかったことを記録する（黙って諦めない・areka-P0-balloon-break 要件 6）。
 #[test]
 fn dropped_receiver_is_logged_and_does_not_panic() {
     let (mut sink, rx) = sink();

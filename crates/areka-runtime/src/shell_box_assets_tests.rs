@@ -1,4 +1,4 @@
-//! `shell_box_assets.rs` の兄弟テスト（areka-P0-shell-balloon tasks.md 8.1・要件 3.10・4.1・5.1）。
+//! `shell_box_assets.rs` の兄弟テスト（areka-P0-shell-balloon 要件 3.10・4.1・5.1）。
 //!
 //! 面の表と箱の表はテストの中の surfaces.txt の文面から組む（検体は読まない）。別名の写しと
 //! 在るサーフェス番号は本番と同じく `EmoWorld::alias_snapshot`・`EmoWorld::surface_ids` から採る。

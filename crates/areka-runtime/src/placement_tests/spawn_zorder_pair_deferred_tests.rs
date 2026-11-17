@@ -1,5 +1,5 @@
 //! 先送りした正典語彙が areka 側の本番コードに入り込んでいないことを固定するテストの、`areka-runtime` の片割れ
-//! （要件 8.1／8.3／8.4／8.5、重なり順のグループ機構の要件 10.4／11.4、spec: placement-crate-split
+//! （areka-P0-ghost-window-zorder 要件 8.1／8.3／8.4／8.5、areka-P0-scope-zorder-pinning 要件 10.4／11.4、spec: placement-crate-split
 //! 要件 5.2・5.3）。
 //!
 //! # 片割れの分担
@@ -67,7 +67,7 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
     let code = code_only(&raw);
     assert!(
         !code.to_lowercase().contains("minimize"),
-        "最小化の語が説明文以外に現れている（要件 8.3）"
+        "最小化の語が説明文以外に現れている"
     );
     // 落とし過ぎていない（走査が中身を見ている）。
     assert!(

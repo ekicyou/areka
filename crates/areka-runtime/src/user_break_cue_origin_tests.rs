@@ -56,7 +56,7 @@ const NOT_OWNED_SSTP: ScriptOrigin = ScriptOrigin {
     ..ScriptOrigin::MCP_NOTIFY
 };
 
-/// 外部扱いのトークでは `Enter` を送らず warn が 1 件。始まり・`Leave`・終わりは今どおり（4.2・4.4・4.5）。
+/// 外部扱いのトークでは `Enter` を送らず warn が 1 件。始まり・`Leave`・終わりは今どおり（areka-P0-script-security-level 要件 4.2・4.4・4.5）。
 #[test]
 fn external_treated_talk_refuses_enter_and_keeps_other_signals() {
     for origin in [LOWERED, NOT_OWNED_SSTP] {
@@ -89,7 +89,7 @@ fn external_treated_talk_refuses_enter_and_keeps_other_signals() {
     }
 }
 
-/// ゴースト自身・MCP の SEND・MCP の NOTIFY（いずれも `local`）では今どおり `Enter` が出る（4.3）。
+/// ゴースト自身・MCP の SEND・MCP の NOTIFY（いずれも `local`）では今どおり `Enter` が出る（areka-P0-script-security-level 要件 4.3）。
 #[test]
 fn local_origins_still_send_enter() {
     for origin in [

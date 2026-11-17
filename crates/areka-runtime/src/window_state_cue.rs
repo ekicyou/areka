@@ -1,5 +1,5 @@
 //! `\v`／`\![set,windowstate,…]` の受け口——**自己選別と第 2 引数の読み分けと送り出し**だけを
-//! 行う層（design「WindowStateCueSink」・要件 1.1〜1.3／1.5〜1.7／7.1）。
+//! 行う層（stay-on-top-directives design「WindowStateCueSink」・要件 1.1〜1.3／1.5〜1.7／7.1）。
 //!
 //! 骨格は重なりの受け口 `ZOrderCueSink`（`zorder_cue.rs`）と同型で、相乗りはしない。
 //!
@@ -11,7 +11,7 @@
 //!    関わらず手前へ出す。
 //! 3. **送り出し**——指令を送り、重なりの仕事が増えた旗（兄弟と共用の `ZORDER`）を立てる。
 //!
-//! # 書いたスコープを読まない（裁定 1）
+//! # 書いたスコープを読まない（stay-on-top-directives 裁定 1）
 //!
 //! `\1\v` も `\0\v` も、そのゴーストの窓の全部に効く。ゆえに `cue` の演者の欄は読まない。
 //!
@@ -75,7 +75,7 @@ fn parse_window_state<'a>(name: &str, params: &'a [&'a str]) -> ParsedWindowStat
     if name != NAME_SET || params.first() != Some(&SELECTOR_WINDOWSTATE) {
         return ParsedWindowState::NotMine;
     }
-    // 小文字ちょうどで比べる（大文字の混じった綴りは読めない値・要件 1.7）。
+    // 小文字ちょうどで比べる（大文字の混じった綴りは読めない値・stay-on-top-directives 要件 1.7）。
     let on = match params.get(1).copied() {
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2cstayontop_5d:1
         Some("stayontop") => true,
@@ -89,7 +89,7 @@ fn parse_window_state<'a>(name: &str, params: &'a [&'a str]) -> ParsedWindowStat
     }
 }
 
-/// `\v`／`\![set,windowstate,…]` の受け口（design「WindowStateCueSink」）。
+/// `\v`／`\![set,windowstate,…]` の受け口（stay-on-top-directives design「WindowStateCueSink」）。
 #[derive(Clone)]
 pub struct WindowStateCueSink {
     /// 取り出しの相への送出端。

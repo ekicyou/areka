@@ -1,4 +1,4 @@
-//! 終了指示から窓が閉じるまでの一本道の檻（areka-P0-emo2-conformance-e2e タスク 6.9・R15.6 ⑷）。
+//! 終了指示から窓が閉じるまでの一本道の檻（areka-P0-emo2-conformance-e2e 要件 15.6 ⑷）。
 //!
 //! 症状 C（2026-09-07 走行 A の項目 13）は「終了操作が終了挨拶を素通りして即座に窓を消す」もので
 //! あった。機序は 2 つの欠落——操作が `CloseRequest` を送らないことと、握手が終わっても窓を閉じる
@@ -10,7 +10,7 @@
 //!
 //! 併せて `OnClose` が **NOTIFY ではない**ことを固定する。強制終了（`ForceQuit`）経路は `OnClose` を
 //! 片道 NOTIFY で消化して辞書の終了挨拶を照会しない——それが症状 C の見え方そのものであり、
-//! Method の取り違えは「挨拶が出ない」と同義である（R15.5 の生ログ判定も同じ語で読む）。
+//! Method の取り違えは「挨拶が出ない」と同義である（areka-P0-emo2-conformance-e2e の R15.5 の生ログ判定も同じ語で読む）。
 //!
 //! 時刻は注入 Tick だけが進める（待ちの休みの決まりは `areka-runtime` の `spine_wait.rs`）。
 
@@ -65,7 +65,7 @@ fn close_handshake_backend() -> SpineHarness {
     SpineHarness::boot_with(backend, shiori_handle, LoopDriver::Inert)
 }
 
-/// 終了指示 → `OnClose` GET → 終了挨拶 → 解放 → 停止通知 → 終了相 1 回で窓 0（R15.6 ⑷）。
+/// 終了指示 → `OnClose` GET → 終了挨拶 → 解放 → 停止通知 → 終了相 1 回で窓 0（areka-P0-emo2-conformance-e2e の R15.6 ⑷）。
 ///
 /// # 非空虚性
 ///
@@ -139,13 +139,13 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         .position(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"));
     assert!(
         get_index.is_some(),
-        "OnClose は GET で照会される（正規の握手・R15.5）: {calls:?}"
+        "OnClose は GET で照会される（正規の握手）: {calls:?}"
     );
     assert!(
         !calls
             .iter()
             .any(|c| matches!(c, RecordedCall::Notify { id, .. } if id == "OnClose")),
-        "OnClose の NOTIFY は現れない（強制終了経路を通っていない・R15.5）: {calls:?}"
+        "OnClose の NOTIFY は現れない（強制終了経路を通っていない）: {calls:?}"
     );
 
     // ⑵ 解放はちょうど 1 件で、OnClose GET より後に現れる。
@@ -177,10 +177,10 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
     assert_eq!(
         ghost_count(&mut harness),
         0,
-        "終了相 1 回で全ゴースト窓が閉じる（R15.4）"
+        "終了相 1 回で全ゴースト窓が閉じる"
     );
 
     // 後片付け（既存の有界な畳み方）。kanade は自ら停止済みゆえ `ForceQuit` の送出は失敗し、
-    // ghost 側は冪等に `debug!` で流して join を完走する（R15.4 の「以後の終了統括は冪等」）。
+    // ghost 側は冪等に `debug!` で流して join を完走する（areka-P0-emo2-conformance-e2e の R15.4 の「以後の終了統括は冪等」）。
     harness.shutdown_bounded();
 }

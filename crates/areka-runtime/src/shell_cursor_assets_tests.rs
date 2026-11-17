@@ -1,4 +1,4 @@
-//! `shell_cursor_assets.rs` の兄弟テスト（shell-mouse-cursor tasks.md 3.1・要件 1.3・1.4・5.6〜5.8・
+//! `shell_cursor_assets.rs` の兄弟テスト（shell-mouse-cursor 要件 1.3・1.4・5.6〜5.8・
 //! 6.3〜6.9・7.2）。
 //!
 //! シェルとゴーストはワークツリーの `target\test-roots\` の下に組み、`.cur` はテストの中で組んだ

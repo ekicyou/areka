@@ -70,7 +70,7 @@ pub(super) fn on_probe_pointer_moved(
     let (surface_x, surface_y) = hit.surface_point;
     let region = hit.region.as_deref().unwrap_or("None");
 
-    // 常設 greppable ログ（要件 4.1/4.5・design CollisionProbe 節）。`client=` は目視由来の狙点
+    // 常設 greppable ログ（areka-P0-collision-dpi-hittest 要件 4.1/4.5・design CollisionProbe 節）。`client=` は目視由来の狙点
     // （s2c 経路）、`surface=` はその点を presenter が ÷k 縮約した SHIORI 配信空間の値。
     tracing::info!(
         client_x = client.x,

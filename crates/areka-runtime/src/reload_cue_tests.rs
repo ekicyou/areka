@@ -1,4 +1,4 @@
-//! `ReloadCueSink` の自己選別と送り出しの決定論テスト（要件 1.4・1.5・10.3）。
+//! `ReloadCueSink` の自己選別と送り出しの決定論テスト（areka-P0-mcp-reload 要件 1.4・1.5・10.3）。
 //!
 //! 確かめること: 拾う 7 綴り（`\![reload,ghost|shiori|shell|balloon|descript(,パラメータ)]`・
 //! `\![reloadsurface]`）が `parse_script` の写しのまま 1 件送られること・`\![reload,makoto]`／
@@ -6,13 +6,12 @@
 //! 受信端が落ちていても落ちずに記録すること。
 
 use super::*;
-use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 use std::sync::mpsc::{Receiver, channel};
 
 use super::super::reload_args::{DescriptNotes, DescriptParts, ReloadTarget};
-use crate::consumer_ledger::test_support::carrier_cue;
+use crate::consumer_ledger::test_support::{broken_custom_cue, carrier_cue};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -45,7 +44,7 @@ fn plain(target: ReloadTarget) -> ScriptReload {
 
 // ---------------------------------------------------------------- 受理
 
-/// 拾う綴りはそれぞれ 1 件、`parse_script` の写しのまま送られる（要件 1.4）。
+/// 拾う綴りはそれぞれ 1 件、`parse_script` の写しのまま送られる（areka-P0-mcp-reload 要件 1.4）。
 #[test]
 fn picked_spellings_send_one_request_each() {
     let cases: [(&str, &[&str], ScriptReload); 6] = [
@@ -89,7 +88,7 @@ fn descript_with_param_carries_parts_and_notes() {
 
 // ---------------------------------------------------------------- 担当外
 
-/// makoto・aigraph・引数なしの reload・他の名前は 0 件で警告も出さない（要件 1.5・10.3）。
+/// makoto・aigraph・引数なしの reload・他の名前は 0 件で警告も出さない（areka-P0-mcp-reload 要件 1.5・10.3）。
 #[test]
 fn not_ours_is_benign_skip_without_warning() {
     let cases: [(&str, &[&str]); 5] = [
@@ -123,17 +122,7 @@ fn non_carrier_cue_is_benign_skip() {
 #[test]
 fn unopenable_reload_warns_and_sends_nothing() {
     let (mut sink, rx) = sink();
-    let ((), events) = capture(|| {
-        sink.emit(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::Custom {
-                command: "reload".into(),
-                params: DynamicValue::Null,
-            },
-            duration: 0.0,
-        })
-    });
+    let ((), events) = capture(|| sink.emit(broken_custom_cue("0", "reload")));
     assert_eq!(rx.try_iter().count(), 0);
     assert_eq!(warns(&events), vec![Some("reload_cue_unopenable")]);
 }

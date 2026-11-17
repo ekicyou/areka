@@ -2,10 +2,10 @@
 //! 要件 1.6〜1.11・1.13・12.3〜12.5・design「ShellBalloonSwitch」）。
 //!
 //! 入口（`shell_balloon_switch.rs`）が長くなるので、解決の純関数と控えをこちらへ分けた
-//! （design「File Structure Plan」の `shell_balloon_resolve.rs`）。
+//! （areka-P0-shell-balloon-switch design「File Structure Plan」の `shell_balloon_resolve.rs`）。
 //! - 候補: シェルは今のゴーストの `shell/` の下の全部（`menu,hidden` を含む）、バルーンは今のゴーストの中と
 //!   根の目録（ゴーストの中が先・areka-P0-ghost-inner-balloon 要件 2.1・9.2）。
-//!   今のものも候補に入る（自分自身への切替は作り直す＝要件 1.8・裁定 5）。
+//!   今のものも候補に入る（自分自身への切替は作り直す＝areka-P0-shell-balloon-switch 要件 1.8・裁定 5）。
 //! - 照合の順: `random`・`lastinstalled` を先に解き、次に `name` → フォルダ名（`same_folder_name`＝区別しない・`name` は区別する）。
 //!   メニューのフォルダの名指しはフォルダ名とだけ突き合わせる（特別な名前は解かない）。
 //! - 控え: このプロセスで最後に入れたシェル・バルーン（プロセスの中だけ・ファイルへは書かない）。
@@ -61,7 +61,7 @@ pub struct LastInstalledShell {
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct LastInstalledBalloon(pub String);
 
-/// シェルのインストールの完了で控えを置き換える（最後の 1 件だけ残る・要件 1.10・裁定 3）。
+/// シェルのインストールの完了で控えを置き換える（最後の 1 件だけ残る・areka-P0-shell-balloon-switch 要件 1.10・裁定 3）。
 pub fn record_installed_shell(world: &mut World, ghost_folder: Option<String>, folder: String) {
     tracing::info!(
         event = "last_installed_shell_recorded",
@@ -75,7 +75,7 @@ pub fn record_installed_shell(world: &mut World, ghost_folder: Option<String>, f
     });
 }
 
-/// バルーンのインストールの完了で控えを置き換える（要件 1.11）。
+/// バルーンのインストールの完了で控えを置き換える（areka-P0-shell-balloon-switch 要件 1.11）。
 pub fn record_installed_balloon(world: &mut World, folder: String) {
     tracing::info!(
         event = "last_installed_balloon_recorded",
@@ -123,7 +123,7 @@ pub fn balloon_candidates(roots: &BasewareRoots, ghost_dir: &Path) -> Vec<SkinCa
 ///
 /// シェルは控えのゴーストが今のゴースト（`ghost_dir` のフォルダ名・`same_folder_name`＝
 /// インストールの記録と同じ比較）のときだけフォルダ名を返し、別のゴーストなら該当なし（ゴースト切替は
-/// 起こさない＝要件 1.10・裁定 3）。
+/// 起こさない＝areka-P0-shell-balloon-switch 要件 1.10・裁定 3）。
 pub fn installed_for(
     world: &World,
     kind: SkinKind,
@@ -149,7 +149,7 @@ pub fn installed_for(
     }
 }
 
-/// 純粋: 候補と指し方から切替先を決める（要件 1.6〜1.11）。
+/// 純粋: 候補と指し方から切替先を決める（areka-P0-shell-balloon-switch 要件 1.6〜1.11）。
 ///
 /// `current`＝今のシェル／バルーンのフォルダ名、`installed`＝[`installed_for`] の答え（`lastinstalled`
 /// のときだけ読む）、`pick`＝乱数（本番は `boot_resolve::pick_index`・候補が 1 つ以上のときだけ呼ぶ）。
@@ -202,7 +202,7 @@ pub fn find_by_name_or_folder<'a>(
         })
 }
 
-/// `random`: 隠しと今のものを除いて 1 つ選ぶ。候補 0 なら今のもの（要件 1.9・裁定 4）。
+/// `random`: 隠しと今のものを除いて 1 つ選ぶ。候補 0 なら今のもの（areka-P0-shell-balloon-switch 要件 1.9・裁定 4）。
 fn pick_random(
     candidates: &[SkinCandidate],
     current: Option<&str>,

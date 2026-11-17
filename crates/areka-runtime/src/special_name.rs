@@ -55,7 +55,7 @@ impl UnresolvedReason {
     }
 }
 
-/// 純粋: 特別な名前を目録のフォルダ名へ解く（要件 2〜5・9・design「SpecialNameResolver」）。
+/// 純粋: 特別な名前を目録のフォルダ名へ解く（areka-P0-ghost-change-name-resolution 要件 2〜5・9・design「SpecialNameResolver」）。
 ///
 /// 特別な名前は `random`・`sequential`・`lastinstalled` の完全一致だけ（大文字小文字を区別）で、
 /// 目録に同じ名前のゴーストがいても特別な名前として解く。`entries` は `list_ghosts` の並び

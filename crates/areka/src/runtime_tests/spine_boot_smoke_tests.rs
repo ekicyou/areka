@@ -11,14 +11,14 @@ use super::{
 
 /// 観測可能な完了条件: ハーネスが scripted ghost を boot させ、Tick 注入に
 /// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する
-/// （areka-P0-emo2-boot 要件 8.1・8.3・8.4・8.6。下の R8.x も同じ spec の要件）。
+/// （areka-P0-emo2-boot 要件 8.1・8.3・8.4・8.6）。
 ///
 /// 檻に入れる判断分岐:
-/// - **scripted boot 発火**: boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が
+/// - **scripted boot 発火**: boot 系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）が
 ///   scripted backend へ (method,id) 順で届く（＝「scripted ghost を boot させた」直接証跡）。
 /// - **Tick 注入の疎通**: `dispatcher()` への Tick 送出が Ok（ghost スタック生存・時刻は注入だけで進める）。
 /// - **attach 到達**: 実 GPU の World（MTA）＋合成 `GhostWindows` 上で `run_attach_phase`
-///   が **panic せず** 完走し、DD-12 の縮退がバグを隠さない檻＝`planned==attached==2`（全 scope の
+///   が **panic せず** 完走し、縮退がバグを隠さない檻＝`planned==attached==2`（全 scope の
 ///   シェル装着成功）を装着サマリ `info!` で観測でき、ERROR は 0 件。
 /// - **ハンドル生存**: attach 後も seriko worker は稼働中・dispatcher は再度 Tick を受理する。
 ///
@@ -67,15 +67,15 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
         "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）で発火していない"
     );
 
-    // ── (2) Tick 注入の疎通（ghost スタック生存・時刻は注入だけで進める・R8.3） ──
+    // ── (2) Tick 注入の疎通（ghost スタック生存・時刻は注入だけで進める） ──
     harness.inject_dispatcher_tick(1);
 
     // ── 実 ClockedTextSink<EmoTextSink> の UI ドレインが headless に pump できることを裏付ける
     //    （pending なし／ありに関わらず panic しない・R8 の実 sink 経路の疎通確認）。 ──
     harness.pump_text();
 
-    // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、DD-12 の
-    //    「計画件数＝実装着件数」を装着サマリで観測する（縮退がバグを隠さない檻・R8.1）。 ──
+    // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、
+    //    「計画件数＝実装着件数」を装着サマリで観測する（縮退がバグを隠さない檻）。 ──
     harness.attach_all();
 
     // ── (4) ハンドル生存: seriko worker 稼働中・dispatcher は再度 Tick を受理する ──
@@ -85,15 +85,15 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     );
     harness.inject_dispatcher_tick(2);
 
-    // ── 後片付け: 正規終了＋全ハンドル有界 join（hang させない・R8.3 の観測点＝有界 join のみ） ──
+    // ── 後片付け: 正規終了＋全ハンドル有界 join（hang させない・観測点＝有界 join のみ） ──
     harness.shutdown_bounded();
 }
 
 // ===========================================================================
-// budoux-reveal-reflow task 6.2: 先渡しが本番の鎖を通って文字の層へ届く
+// areka-P0-budoux-reveal-reflow: 先渡しが本番の鎖を通って文字の層へ届く
 // ===========================================================================
 
-/// 観測可能な完了条件（budoux-reveal-reflow tasks.md 6.2・要件 2.1）: 本番の鎖（トークごとの写し →
+/// 観測可能な完了条件（areka-P0-budoux-reveal-reflow 要件 2.1）: 本番の鎖（トークごとの写し →
 /// 時刻の受け手の飾り `ClockedTextSink` → 文字の層の受け手 `EmoTextSink`）を通ったトークで、
 /// 文字の層が先渡しを受け取った `debug!` 行が 1 件以上あり、「先渡しが無い」の warn が 0 件である。
 ///
@@ -162,7 +162,7 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     harness.shutdown_bounded();
 }
 
-/// 足場の後片付けは、ゴーストの降ろしの失敗を隠さない（要件 3.1・4.1）。
+/// 足場の後片付けは、ゴーストの降ろしの失敗を隠さない。
 ///
 /// 標準の台本から `OnClose` だけを抜いて起こす。降ろしは `OnClose` を NOTIFY で送るので、
 /// 台本に無い呼び出しで偽の SHIORI が panic し、`shutdown` は `Err` を返す。後片付けがそれを

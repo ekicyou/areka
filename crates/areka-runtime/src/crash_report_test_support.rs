@@ -37,7 +37,7 @@ use windows::Win32::System::Threading::{
 use windows::core::PCWSTR;
 
 // ---------------------------------------------------------------------------
-// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体（設計の議題 2・
+// 今の `windows` の機能（Win32_System_Diagnostics_* が無い）に無い kernel32 の関数と構造体（areka-test-binary-stability の設計の議題 2・
 // `Cargo.toml` は触らない）。
 // ---------------------------------------------------------------------------
 
@@ -548,7 +548,7 @@ fn initializer_keeps_a_process_lifetime_mta() {
     );
 }
 
-/// 最初の受け手が書くのは AV だけ（ふだんの走行で捕まえられて続く例外は書かない・要件 10.3）。
+/// 最初の受け手が書くのは AV だけ（ふだんの走行で捕まえられて続く例外は書かない）。
 #[test]
 fn first_chance_writes_only_access_violations() {
     assert!(should_write_first_chance(0xC000_0005));
@@ -573,11 +573,11 @@ fn line_cuts_an_overlong_line_at_a_char_boundary_with_a_mark() {
     assert!(!text.contains("tail"), "切った後の書き足しは捨てる");
 }
 
-/// 較正（要件 1.2）: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
+/// 較正（areka-test-binary-stability 要件 1.2）: 許可を取り `GraphicsCore` を作った後（GPU の DLL を読み込んだ後も受け手が生きていることを
 /// 見るため）、名前の無いスレッドで例外を起こす。出力に落ちたスレッド（名前なし）・持ち手の行のこのテストの名前・
 /// 生きているスレッドの一覧が出ることを `load-flake.ps1` の summary で見る。
 #[test]
-#[ignore = "較正: わざとプロセスを落とす（要件 1.2）"]
+#[ignore = "較正: わざとプロセスを落とす"]
 fn crash_report_names_the_running_test() {
     let _gpu = crate::spine::GpuPermit::take();
     let _core = wintf::ecs::GraphicsCore::new().expect("GraphicsCore::new 失敗");

@@ -1,14 +1,14 @@
-//! 消費者台帳（コマンド名→担当消費者の宣言表＋一意性檻・design.md「dola — 名前写像 API の
-//! 退役（＋areka 消費者台帳）」・R2.2/R2.6・D10）。
+//! 消費者台帳（コマンド名→担当消費者の宣言表＋一意性檻・areka-P0-mayuna-compose design.md「dola — 名前写像 API の
+//! 退役（＋areka 消費者台帳）」・要件 2.2/2.6・D10）。
 //!
-//! dola（配送層）はコマンド名の語彙も名前写像 API も持たず（`command_target_of` 退役・D10）、
+//! dola（配送層）はコマンド名の語彙も名前写像 API も持たず（`command_target_of` 退役・areka-P0-mayuna-compose 設計 D10）、
 //! 汎用コマンド cue を完全に不透明な荷物として broadcast する。各消費者は自らのコマンド名
 //! リテラル（`MoveCueSink`＝`"move"`・seriko＝`"bind"`）で cue を**名前自己選別**する
 //! （`move_cue.rs` の `MoveCueSink::emit`）。
 //!
 //! 本台帳はその自己選別モデルの一意性不変条件を、結線層（areka app 層）で宣言・検証する単一
 //! 権威表である。dola の権威表ではない（配送層は語彙フリー）。以後のコマンド追加は
-//! 「消費者＋本表 1 行」のみで **dola 無改変**（R2.6 の構造的保証）。
+//! 「消費者＋本表 1 行」のみで **dola 無改変**（areka-P0-mayuna-compose 要件 2.6 の構造的保証）。
 //!
 //! # 登記の粒度＝「名前＋選別子」（areka-P0-scope-zorder-pinning 要件 11.2/11.3）
 //!
@@ -25,7 +25,7 @@
 //! - **選別子つき**（`(name, Some(sel))`）＝「この名前の出現のうち、第 1 引数がちょうど `sel`
 //!   のものだけがこの担当」。`("set", Some("zorder"))`・`("reset", Some("zorder"))` がこれ。
 //!   名簿に無い第 1 引数（例: `\![set,nosuch]`）は**担当なし**であり、将来 別の担当を
-//!   足せる余地として空いている（同 spec 要件 11.3）。
+//!   足せる余地として空いている（areka-P0-scope-zorder-pinning 要件 11.3）。
 //!
 //! # 一意性檻＝「1 コマンド出現に高々 1 担当」（areka-P0-scope-zorder-pinning 要件 11.3）
 //!
@@ -61,8 +61,7 @@ use std::collections::BTreeMap;
 /// 同一名の登記は「選別子なし → 選別子つき（辞書順）」の順で並ぶ。
 type LedgerKey = (String, Option<String>);
 
-/// コマンド名を消費する担当消費者の識別子（軽量・design File Structure「move→MoveCueSink・
-/// bind→seriko」）。
+/// コマンド名を消費する担当消費者の識別子（軽量・「move→MoveCueSink・bind→seriko」）。
 ///
 /// dola はコマンド名語彙を持たないため、本 enum は**結線層が誰にコマンド名を割り当てたか**を
 /// 宣言するためだけの識別子である（実際の消費は各消費者が自らの名前で自己選別する）。
@@ -82,16 +81,16 @@ pub enum CommandConsumer {
     /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetballoonpos_5d:1>
     MoveSink,
     /// `\![bind]`・`\![bind-noevent]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する
-    /// （task 7.2・script-small-tags 要件 3.7・6.4）。
+    /// （script-small-tags 要件 3.7・6.4）。
     Seriko,
     /// 重なり指定・重なり解除の担当消費者
     /// （[`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)）。名前だけでは決まらず、
-    /// 第 1 引数が `zorder` の出現だけを担当する（要件 11.2）。
+    /// 第 1 引数が `zorder` の出現だけを担当する（areka-P0-scope-zorder-pinning 要件 11.2）。
     ZOrderSink,
     /// 開く系の受け口（説明書を含む）の担当消費者
     /// （本体の `readme::readme_cue::ReadmeCueSink`）。`open` は名前だけでは決まらず、
     /// 第 1 引数が `readme`・`file`・`browser`・`explorer`・`editor`・`mailer` の出現だけを担当する
-    /// （作り付けの窓の `help` などは将来の担当の余地・要件 4.5）。運搬名 `\j` は選別子なしで
+    /// （作り付けの窓の `help` などは将来の担当の余地）。運搬名 `\j` は選別子なしで
     /// 担当する（areka-P0-open-external-tags 要件 1.5・9.2）。
     ///
     /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2creadme_5d:1>
@@ -186,7 +185,7 @@ pub enum CommandConsumer {
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
-/// 衝突が読めないため・要件 8.3 の規律）。
+/// 衝突が読めないため・areka-P0-scope-zorder-pinning 要件 8.3 の規律）。
 fn selector_label(selector: &Option<String>) -> String {
     match selector {
         Some(selector) => format!("'{selector}'"),
@@ -197,9 +196,9 @@ fn selector_label(selector: &Option<String>) -> String {
 /// 消費者台帳の構築時失敗（一意性違反の観測可能化・log-first ではなく Result で呼び手へ返す）。
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum LedgerError {
-    /// 同じ（コマンド名, 選別子）の組が二重登録された（多重結線＝要件 11.3 の禁止事項）。
+    /// 同じ（コマンド名, 選別子）の組が二重登録された（多重結線＝areka-P0-scope-zorder-pinning 要件 11.3 の禁止事項）。
     #[error(
-        "コマンド名 '{name}'（選別子: {}）が消費者台帳へ二重登録されました（1 出現=高々 1 担当・要件 11.3）",
+        "コマンド名 '{name}'（選別子: {}）が消費者台帳へ二重登録されました（1 出現=高々 1 担当）",
         selector_label(.selector)
     )]
     Duplicate {
@@ -211,10 +210,10 @@ pub enum LedgerError {
     /// 同一コマンド名について、選別子を伴う登記と伴わない登記を同居させようとした。
     ///
     /// 同居すると、選別子つきの組に当たる 1 出現へ 2 つの担当が作用してしまい
-    /// 「1 コマンド出現に高々 1 担当」（要件 11.3）が破れる。順序はどちらでも拒む。
+    /// 「1 コマンド出現に高々 1 担当」（areka-P0-scope-zorder-pinning 要件 11.3）が破れる。順序はどちらでも拒む。
     #[error(
         "コマンド名 '{name}' は選別子 {} で登記済みのため、選別子 {} を追加できません\
-         （同一名で選別子の有無は共存できない・1 出現=高々 1 担当・要件 11.3）",
+         （同一名で選別子の有無は共存できない・1 出現=高々 1 担当）",
         selector_label(.existing),
         selector_label(.incoming)
     )]
@@ -228,7 +227,7 @@ pub enum LedgerError {
     },
 }
 
-/// （コマンド名, 選別子）→ 担当消費者の宣言台帳（結線層の単一権威表・要件 11.2/11.3）。
+/// （コマンド名, 選別子）→ 担当消費者の宣言台帳（結線層の単一権威表・areka-P0-scope-zorder-pinning 要件 11.2/11.3）。
 ///
 /// 登記は [`try_register`](Self::try_register)（重複と選別子の排他違反を拒否）で行い、
 /// 照会は [`consumer_of`](Self::consumer_of)（未登記＝`None`＝自己選別モデルの良性未処理）で行う。
@@ -298,8 +297,8 @@ impl ConsumerLedger {
     ///    第 1 引数の無い出現はどちらも `None`＝担当なしになる。
     ///
     /// 相互排他（[`LedgerError::SelectorConflict`]）により 1 と 2 は同時に成り立たないので、
-    /// 1 出現が引く担当は高々 1 つである（要件 11.3）。未登記名は `None`——自己選別モデルでは
-    /// 担当のいないコマンドは良性の未処理であって、異常ではない（要件 11.2）。
+    /// 1 出現が引く担当は高々 1 つである（areka-P0-scope-zorder-pinning 要件 11.3）。未登記名は `None`——自己選別モデルでは
+    /// 担当のいないコマンドは良性の未処理であって、異常ではない（areka-P0-scope-zorder-pinning 要件 11.2）。
     pub fn consumer_of(&self, name: &str, selector: Option<&str>) -> Option<CommandConsumer> {
         if let Some(consumer) = self.table.get(&(name.to_string(), None)) {
             return Some(*consumer);
@@ -317,7 +316,7 @@ impl ConsumerLedger {
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
     /// `NoUserBreakCueSink` の関係も同じである。
     ///
-    /// 以後のコマンド追加は「消費者＋本表 1 行」のみで **dola 無改変**（R2.6）。正準表は一意ゆえ
+    /// 以後のコマンド追加は「消費者＋本表 1 行」のみで **dola 無改変**（areka-P0-mayuna-compose 要件 2.6）。正準表は一意ゆえ
     /// 登記は Ok を返す——万一将来の編集で重複や選別子の排他違反を作れば、名前と選別子を添えて
     /// 構築時に panic して回帰を止める（一意性の内部整合檻）。
     pub fn canonical() -> Self {
@@ -337,7 +336,7 @@ impl ConsumerLedger {
 /// `consumer_ledger_test_support.rs` の `samples` は、組の一致を `samples_cover_exactly_the_ledger_rows`
 /// が判定する）。
 ///
-/// `(reload, makoto)` は makoto-reload-directives が後から足す（要件 11.2）。
+/// `(reload, makoto)` は makoto-reload-directives が後から足す（areka-P0-mcp-reload 要件 11.2）。
 const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
     use CommandConsumer::*;
     &[

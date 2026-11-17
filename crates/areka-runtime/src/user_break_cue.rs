@@ -2,14 +2,14 @@
 //!
 //! 中断を禁じる区間の出入りとトークの始まりを、1 本の線で UI の側へ流す受け口がここへ入る。
 //!
-//! # 何を運ぶか（design「NoUserBreakCueSink」・要件 5.1／5.2／5.4）
+//! # 何を運ぶか（areka-P0-balloon-break design「NoUserBreakCueSink」・要件 5.1／5.2／5.4）
 //!
 //! 台本の指示は演者ごとに振り分けられずに全員へ配られるので、本受け口にも文字も演技も
 //! 他人宛のコマンドも届く。ここで行うのは次の 4 つに限る。
 //!
 //! 1. **自己選別**——コマンド名と第 1 引数の組が `("enter", "nouserbreakmode")`／
 //!    `("leave", "nouserbreakmode")` のものだけを受理し、それ以外（`\![enter,onlinemode]`
-//!    など別の第 1 引数・他の名前・運搬でない cue）は担当外として読み飛ばす（要件 8.2）。
+//!    など別の第 1 引数・他の名前・運搬でない cue）は担当外として読み飛ばす（areka-P0-balloon-break 要件 8.2）。
 //! 2. **トークの境界の自己検出**——複製で状態を初期化し、複製後の最初の指示（どの cue でも
 //!    よい）で [`NoUserBreakSignal::TalkStarted`] を 1 回だけ流す。
 //! 3. **落ちるときの終わり**——合図を 1 つでも送った複製は、落ちるときに
@@ -17,7 +17,7 @@
 //! 4. **出どころの止め**——外部扱いの出どころのトークでは `Enter` を送らず、
 //!    `script_tag_refused` の warn を 1 件残す（`leave` は止めない）。
 //!
-//! # なぜトークの始まりも同じ線に流すのか（design「旗の順序」・要件 5.4）
+//! # なぜトークの始まりも同じ線に流すのか（areka-P0-balloon-break design「旗の順序」・要件 5.4）
 //!
 //! 正典の記述例は `\![enter,nouserbreakmode]` を台本の先頭に置く。先頭のタグは台本の最初の
 //! 指示と同じ時刻に配られるので、旗を「表示の合図の線で届くトークの始まりで解く」形にすると、
@@ -31,7 +31,7 @@
 //! 骨格は `readme_cue.rs` の受け口（名前＋第 1 引数の自己選別）と `talk_lifecycle.rs` の
 //! `BalloonLifecycleSink`（複製によるトークの境界の自己検出）をそのまま組み合わせたものである。
 //!
-//! # 黙って諦めない（要件 6）
+//! # 黙って諦めない（areka-P0-balloon-break 要件 6）
 //!
 //! 読み飛ばし・送出の失敗のいずれの経路も、必ず理由を記録してから抜ける。受け口が閉じていても
 //! 台本は殺さない（記録して継続する）。
@@ -53,7 +53,7 @@ const NAME_LEAVE: &str = "leave";
 /// 第 1 引数（選別子）——本受け口が担当するのはこの選別子を伴う 2 組だけである。
 const SELECTOR_NO_USER_BREAK: &str = "nouserbreakmode";
 
-/// talk スレッドから UI スレッドへ流れる、中断の無効化の合図（design「NoUserBreakCueSink」）。
+/// talk スレッドから UI スレッドへ流れる、中断の無効化の合図（areka-P0-balloon-break design「NoUserBreakCueSink」）。
 ///
 /// 4 値は同じ 1 本の線を流れ、1 つのトークの中では台本の順に並ぶ。トークをまたぐ順序は、
 /// talk スレッドが受け口を落としてから終わり（`TalkDone`／中断の知らせ）を送ること
@@ -66,11 +66,11 @@ const SELECTOR_NO_USER_BREAK: &str = "nouserbreakmode";
 pub enum NoUserBreakSignal {
     /// このトークの最初の指示が配られた（複製後の最初の `emit` で 1 回だけ）。
     ///
-    /// 受け取った側はこれを「閉じ忘れた区間を解く」契機として使う（要件 5.4）。
+    /// 受け取った側はこれを「閉じ忘れた区間を解く」契機として使う（areka-P0-balloon-break 要件 5.4）。
     TalkStarted,
-    /// `\![enter,nouserbreakmode]`——中断の無効化の区間に入る（要件 5.1）。
+    /// `\![enter,nouserbreakmode]`——中断の無効化の区間に入る（areka-P0-balloon-break 要件 5.1）。
     Enter,
-    /// `\![leave,nouserbreakmode]`——区間から出る（要件 5.2）。
+    /// `\![leave,nouserbreakmode]`——区間から出る（areka-P0-balloon-break 要件 5.2）。
     Leave,
     /// このトークが終わった（合図を 1 つでも送ったトークごとの複製が落ちるときに 1 回だけ）。
     TalkEnded,
@@ -160,7 +160,7 @@ impl dola::cue::CueSink for NoUserBreakCueSink {
         // ⑴ トークの始まり: 複製後の最初の emit で 1 回だけ。送出の成否に依らず `started` を
         //    立てる——「トークにつき 1 回」は本受け口の契約であり、切断時に毎 cue 再送するのは
         //    無意味な繰り返しになる（失敗自体は send 内で記録済み）。自己選別より前に置くのは、
-        //    担当のコマンドを 1 つも持たない台本でも旗を解く契機が要るためである（要件 5.4）。
+        //    担当のコマンドを 1 つも持たない台本でも旗を解く契機が要るためである（areka-P0-balloon-break 要件 5.4）。
         if !self.started {
             self.started = true;
             self.send(NoUserBreakSignal::TalkStarted);
@@ -194,7 +194,7 @@ impl dola::cue::CueSink for NoUserBreakCueSink {
         };
 
         // ⑷ 出どころの止め（areka-P0-script-security-level 要件 4.2・4.4）。判定は表が持つ。
-        //    `leave` は表に無いので止めない（4.5）。台本の残りはそのまま流れる。
+        //    `leave` は表に無いので止めない（areka-P0-script-security-level 要件 4.5）。台本の残りはそのまま流れる。
         if signal == NoUserBreakSignal::Enter
             && let Some(row) = command_row(name, selector)
             && !permits(row, &self.origin)

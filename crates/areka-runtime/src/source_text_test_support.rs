@@ -18,7 +18,7 @@ pub fn index_of(haystack: &str, needle: &str) -> usize {
         .unwrap_or_else(|| panic!("檻の錨が本文に見当たらない（前提が崩れている）: {needle}"))
 }
 
-/// `crates/<krate>/<path>` の道を返す。在ることを確かめ、無ければ panic する（要件 5.5）。
+/// `crates/<krate>/<path>` の道を返す。在ることを確かめ、無ければ panic する。
 ///
 /// 本体と `areka-runtime` のテストが別の crate のファイルを読むときの、たった 1 つの読み口
 /// （`CARGO_MANIFEST_DIR` は両方で `crates/<自分>` なので、`..` の先は同じフォルダ）。

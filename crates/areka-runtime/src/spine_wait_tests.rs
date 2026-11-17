@@ -9,7 +9,7 @@ use super::wait::{
 use super::{BACKOFF_SLEEP, Progress, SPIN_WAIT, WaitFailure, run_bounded, wait_until_with};
 
 // ===========================================================================
-// 待ちの芯の檻（areka-P0-ghost-session-test-load-flake タスク 2.2・要件 2.1・2.3・2.5・3.1〜3.3）
+// 待ちの芯の檻（areka-P0-ghost-session-test-load-flake 要件 2.1・2.3・2.5・3.1〜3.3）
 //
 // [`wait_until_with`] へ偽の時計と偽の休みを渡し、打ち切りの決め方を実時間を待たずに確かめる。
 // 時刻は **条件の関数が呼ばれた回数だけ**で決まる（1 回ごとに `step` 進む）。芯が 1 回の反復で
@@ -354,7 +354,7 @@ fn panic_text(f: impl FnOnce()) -> String {
 }
 
 /// 相手のスレッドの中の数えが増え続ける間は、`SPIN_WAIT` を何倍越えても `［止まった］` で打ち切らない
-/// （要件 4.1）。中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
+/// （areka-test-binary-stability 要件 4.1）。中の数えを見ないと、終わったかの目印だけでは 30 秒で打ち切られる。
 #[test]
 fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
     let inner = Cell::new(0u64);
@@ -376,7 +376,7 @@ fn a_thread_whose_inner_count_keeps_moving_is_not_cut_off() {
     );
 }
 
-/// 終わらないスレッドの打ち切りの文は、std のスレッドでもアクターでも同じ頭で始まる（要件 4.4）。
+/// 終わらないスレッドの打ち切りの文は、std のスレッドでもアクターでも同じ頭で始まる（areka-test-binary-stability 要件 4.4）。
 /// 本物のスレッドを止めておき、読むたびに `SPIN_WAIT` 進む偽の時計で芯を回す（実時間は待たない）。
 #[test]
 fn a_thread_that_never_ends_reads_the_same_head_for_both_handles() {
@@ -410,7 +410,7 @@ fn a_thread_that_never_ends_reads_the_same_head_for_both_handles() {
 }
 
 // ===========================================================================
-// GPU の装置の許可の檻（areka-P0-ghost-session-test-load-flake タスク 5.2・檻 16・要件 2.7）
+// GPU の装置の許可の檻（areka-P0-ghost-session-test-load-flake 要件 2.7）
 //
 // プロセスに 1 つの数え（足場が使う）とは別の数えを置き、待たずに取る口だけで確かめる（実時間は待たない）。
 // ===========================================================================
@@ -434,7 +434,7 @@ fn gpu_slots_hold_at_most_the_capacity_and_a_returned_permit_frees_one() {
 }
 
 // ===========================================================================
-// 許可の待ちの上限の檻（areka-test-binary-stability タスク 5.2・要件 6.1〜6.3）
+// 許可の待ちの上限の檻（areka-test-binary-stability 要件 6.1〜6.3）
 //
 // 本物の `take` と同じ決め手 `judge_permit_wait` と同じ文の作り `GpuSlots::wait_failure` を、偽の時刻で
 // 呼ぶ（実時間は待たない）。上限 2 の数えで 2 つを取った形＝2 つ取りのテストが 1 つずつ持って待ち合った形。

@@ -1,20 +1,20 @@
 //! scope → 表示対象（TargetId）写像の正本（純関数・std のみ）。
 //!
-//! 本仕様が新たに正本として確立する唯一の契約（design.md「依存方向」の最左・R3.5）。
-//! DD-3 の採番規約（シェル表示対象＝`2*scope`／バルーン表示対象＝`2*scope+1`）で
+//! areka-P0-emo2-boot が正本として確立した契約（同 spec の design.md「依存方向」の最左・要件 3.5）。
+//! areka-P0-emo2-boot 設計 DD-3 の採番規約（シェル表示対象＝`2*scope`／バルーン表示対象＝`2*scope+1`）で
 //! scope からシェル／バルーン両表示対象への互いに素な写像を与え、`ActorKey` の数値 parse
 //! （数でない、または大きすぎる番号は `None`）を担う。
 //!
-//! 不変条件（DD-3）: `shell_target` は偶数・`balloon_target` は奇数の `TargetId` を返すため、
+//! 不変条件（areka-P0-emo2-boot 設計 DD-3）: `shell_target` は偶数・`balloon_target` は奇数の `TargetId` を返すため、
 //! 全 scope にわたりシェル表示対象とバルーン表示対象は決して衝突しない（互いに素）。
-//! この 3 関数と逆写像 `target_scope` のみが採番の正本であり、M-dual 拡張はこのモジュールだけを触る。
+//! これらの関数と逆写像 `target_scope` のみが採番の正本であり、areka-P0-emo2-boot の M-dual の拡張はこのモジュールだけを触る。
 
 use areka_emo_present::TargetId;
 use areka_sakura::ActorKey;
 
 /// scope 番号 → シェル表示対象（正本）。
 ///
-/// DD-3 の採番規約により `TargetId(2 * scope)`（常に偶数）。scope0 → `TargetId(0)`。
+/// areka-P0-emo2-boot 設計 DD-3 の採番規約により `TargetId(2 * scope)`（常に偶数）。scope0 → `TargetId(0)`。
 ///
 /// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`] が守る）。
 pub fn shell_target(scope: u32) -> TargetId {
@@ -23,7 +23,7 @@ pub fn shell_target(scope: u32) -> TargetId {
 
 /// scope 番号 → バルーン表示対象（正本）。
 ///
-/// DD-3 の採番規約により `TargetId(2 * scope + 1)`（常に奇数）。同一 scope のシェル表示対象
+/// areka-P0-emo2-boot 設計 DD-3 の採番規約により `TargetId(2 * scope + 1)`（常に奇数）。同一 scope のシェル表示対象
 /// （偶数）とは偶奇が異なるため必ず異なる id となる。
 ///
 /// 前提: `scope` は `i32::MAX` 以下（入口の [`scope_of`] が守る）。
@@ -35,7 +35,7 @@ pub fn balloon_target(scope: u32) -> TargetId {
 ///
 /// `ActorKey` は数値アクセサを持たない不透明文字列ゆえ `as_str().parse::<u32>()` で数値化する。
 /// 非数値（例 `"側"`・`"kero"`・空文字・負値・混在）と `i32::MAX` を越える番号は `None` を返し、呼び手（adapter）が
-/// `warn!` ＋当該指令 drop で握り潰さず観測する（log-first・R3 前提）。
+/// `warn!` ＋当該指令 drop で握り潰さず観測する（log-first・areka-P0-emo2-boot 要件 3 前提）。
 pub fn scope_of(key: &ActorKey) -> Option<u32> {
     // 上限 `i32::MAX`: `balloon_target` の `2*scope+1` が u32 に収まる最大。
     key.as_str()
@@ -55,7 +55,7 @@ pub enum TargetWindow {
 
 /// 表示対象 → (scope 番号, 窓の種類)。`shell_target`／`balloon_target` の逆写像。
 ///
-/// DD-3 の採番規約により、偶数ならシェル・奇数ならバルーンで、scope は `id / 2`。
+/// areka-P0-emo2-boot 設計 DD-3 の採番規約により、偶数ならシェル・奇数ならバルーンで、scope は `id / 2`。
 pub fn target_scope(target: TargetId) -> (u32, TargetWindow) {
     let window = if target.0.is_multiple_of(2) {
         TargetWindow::Shell
@@ -84,7 +84,7 @@ mod tests {
         }
     }
 
-    /// DD-3 不変条件: 全 scope でシェル（偶数）とバルーン（奇数）の TargetId は互いに素。
+    /// areka-P0-emo2-boot 設計 DD-3 不変条件: 全 scope でシェル（偶数）とバルーン（奇数）の TargetId は互いに素。
     #[test]
     fn shell_and_balloon_targets_are_disjoint_across_scopes() {
         const N: u32 = 64;

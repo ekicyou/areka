@@ -106,7 +106,7 @@ fn attach_show_and_resize(world: &mut World) {
     boot.native_size = native;
     boot.physical_size = physical;
 
-    // 常設 greppable ログ（要件 4.1/4.5・design CollisionProbe 節）。実機サインオフはこの 1 行を grep して
+    // 常設 greppable ログ（areka-P0-collision-dpi-hittest 要件 4.1/4.5・design CollisionProbe 節）。実機サインオフはこの 1 行を grep して
     // 「その水準で適用された k と実表示物理寸」を採取し、2 実行の physical が互いに異なることを照合する。
     let k_text = format_ratio(applied);
     tracing::info!(
@@ -127,7 +127,7 @@ fn attach_show_and_resize(world: &mut World) {
     assert_expected_ratio(applied);
 
     // ④ 描画一致の anchor（マウス非依存・read_back）: Head/Bust 中心の画素が不透明であることを
-    // hard assert する。**描画証跡であって判定証跡ではない**（要件 4.4）。
+    // hard assert する。**描画証跡であって判定証跡ではない**（areka-P0-collision-dpi-hittest 要件 4.4）。
     assert_drawn_anchor(&boot.presenter, target, applied, native);
 
     // donor 必須逸脱 #3: 本番の反映関数で placeholder 誤寸 → **物理寸**へ resize（戻り値 true を assert）。
@@ -246,7 +246,7 @@ fn verify_physical_size_match(world: &mut World) {
 /// `areka-P0-present-gpu-transform-scale` 要件 6.2）であるため、collision 座標を**そのまま**画素 index へ
 /// 写す（×k の写像は不要になった）。
 ///
-/// # 証跡としての位置づけ（要件 4.4）
+/// # 証跡としての位置づけ（areka-P0-collision-dpi-hittest 要件 4.4）
 ///
 /// 本検査は「その位置に絵が描かれている」ことしか語らない**描画証跡**であり、**当たり判定の証跡ではない**。
 /// 判定の証跡は ⑤ の目視由来経路（`GetCursorPos`→`ScreenToClient`→`resolve_hit_region`）だけであり、
@@ -266,7 +266,7 @@ fn assert_drawn_anchor(
     assert_eq!(
         bytes.len(),
         native_len,
-        "collision-probe: read_back バイト長 {} が native 原寸長 {native_len}（{}x{}×4）と不一致 — k={} の拡大が読み戻しへ漏れている（要件 6.2）",
+        "collision-probe: read_back バイト長 {} が native 原寸長 {native_len}（{}x{}×4）と不一致 — k={} の拡大が読み戻しへ漏れている",
         bytes.len(),
         native.0,
         native.1,

@@ -1,9 +1,9 @@
-//! 判定の表の固定（要件 4.8）と許すかの真理表（要件 4.1）。
+//! 判定の表の固定（areka-P0-script-security-level 要件 4.8）と許すかの真理表（要件 4.1）。
 
 use super::*;
 use areka_sakura::contract::{SecurityLevel, SstpKind};
 
-/// 要件 4.1 の 5 つの綴り（並びも表と同じ）。
+/// areka-P0-script-security-level 要件 4.1 の 5 つの綴り（並びも表と同じ）。
 const EXPECTED: [&str; 5] = [
     r"\![execute,filewatch,…]",
     r"\![execute,schedule-add,…]",
@@ -17,7 +17,7 @@ fn table_has_exactly_the_five_tags_of_requirement_4_1() {
     let actual: Vec<&str> = RESTRICTIONS.iter().map(|row| row.display).collect();
     assert_eq!(
         actual, EXPECTED,
-        "判定の表が要件 4.1 の 5 つのタグと食い違う。ukadoc（list_sakura_script）を引き直して表を直す"
+        "判定の表が ukadoc の制限するタグと食い違う。ukadoc（list_sakura_script）を引き直して表を直す"
     );
 }
 
@@ -102,7 +102,7 @@ fn permits_truth_table() {
     }
 }
 
-// ---------------------------------------------------------------- 実装との照合（要件 4.6・4.7）
+// ---------------------------------------------------------------- 実装との照合（areka-P0-script-security-level 要件 4.6・4.7）
 //
 // 名簿（`consumer_ledger.rs`）は読むだけ（先例 `consumer_ledger_agreement_tests.rs`）。
 
@@ -125,7 +125,7 @@ fn umsg_is_interpreted() -> bool {
     !matches!(parse(r"\m[umsg,0,0]").as_slice(), [Instruction::Raw(_)])
 }
 
-/// 表の旗が実装の有無と一致する。`\!` の行は名簿の担当の有無、`\m[…]` の行は台本の読み（4.6・4.7）。
+/// 表の旗が実装の有無と一致する。`\!` の行は名簿の担当の有無、`\m[…]` の行は台本の読み。
 #[test]
 fn enforced_flag_agrees_with_ledger_and_parser() {
     let ledger = ConsumerLedger::canonical();
@@ -200,7 +200,7 @@ fn signal_came_out(
 }
 
 /// 旗だけで済ませない：実装済みの行ごとに担当の受け口へ外部扱いの出どころでタグを流し、
-/// 合図が出ないことを確かめる。ゴースト自身では出ることも見て、照合が空振りでないことを保つ（4.7）。
+/// 合図が出ないことを確かめる。ゴースト自身では出ることも見て、照合が空振りでないことを保つ。
 #[test]
 fn enforced_rows_are_refused_by_their_sink_for_external_origin() {
     let ledger = ConsumerLedger::canonical();

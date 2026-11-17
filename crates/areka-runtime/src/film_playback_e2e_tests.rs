@@ -1,5 +1,5 @@
 //! 本物の読み手から合成まで、動く絵をシェルとバルーンで通す（spec: areka-P0-animated-image-playback
-//! task 5.4・要件 1.1・1.2・2.3・6.1・6.7・9.1・design「E2E Tests」「出番の世代」）。
+//! 要件 1.1・1.2・2.3・6.1・6.7・9.1・design「E2E Tests」「出番の世代」）。
 //!
 //! 検体は `areka-emo-compose/tests/fixtures/animated-playback/`（中身は同じフォルダの README）。
 //! 決め手の画素は写し元 `areka-emo-atlas/src/testdata/animated/README.md` の表が正本:
@@ -136,7 +136,7 @@ fn runs(frames: impl IntoIterator<Item = u32>) -> Vec<u32> {
 
 /// シェル: 本物の読み手で検体を読み、`\s[0]` を時計つきの seriko に流して刻み、出た指令の
 /// `PatternState` を合成すると、決め手の画素が APNG（`rgb.apng`）と動く WebP（`alpha.webp`・
-/// `rgb.webp`）のコマのとおりに進む。最初の指令の絵は経過 0（要件 1.1・1.2・9.1）。
+/// `rgb.webp`）のコマのとおりに進む。最初の指令の絵は経過 0（areka-P0-animated-image-playback 要件 1.1・1.2・9.1）。
 ///
 /// 刻みは 16 ms を 49 回（経過 784 ms）: 終わりなしの 2 コマ（100・100）は 8 区間、合計 3 回の
 /// `alpha.webp`（100・0・70）は 3 周（510 ms）で 2 番に止まって 6 区間。2 つの `rgb.apng` は同じ子。
@@ -214,7 +214,7 @@ fn load_balloon() -> (EmoWorld, AtlasTable) {
 
 /// バルーン: `resolve_balloon_faces` → `build_balloon_target_from_faces` の面で同じことをする。
 /// 面 0 は APNG（`rgb.apng`・終わりなし）、面 1 は動く WebP（`alpha.webp`・合計 3 回）。どちらも
-/// シェルと同じ seriko の表と同じ合成を通る（要件 6.1・6.7）。
+/// シェルと同じ seriko の表と同じ合成を通る（areka-P0-animated-image-playback 要件 6.1・6.7）。
 #[test]
 fn balloon_films_play_from_the_real_reader_to_the_composer() {
     let (world, atlas) = load_balloon();
@@ -390,7 +390,7 @@ fn gpu_world() -> (crate::spine::GpuPermit, World) {
 /// 出した指令を本番の橋渡し（`PresentBridge` → `map_display_command`）と 1 本の受け口を通して
 /// 表示層へ流す。受け口に着く順は seriko が出した順のまま（①古い 2 番の指令 → ②閉じた知らせの
 /// 戻し → ③合図 → ④新しい指令）で、④ が着くまでの全部の表示が経過 0、④ の後は 2 番になる
-/// （要件 2.3・design「出番の世代」の道が順を保つことの固定）。隠れている間に届いた指令は預かる
+/// （areka-P0-animated-image-playback 要件 2.3・design「出番の世代」の道が順を保つことの固定）。隠れている間に届いた指令は預かる
 /// だけで、`dump_balloon` の読む口は成立済みの絵を返す。
 #[test]
 fn close_then_show_race_keeps_order_through_the_bridge() {

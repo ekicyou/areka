@@ -1,5 +1,5 @@
 // =============================================================================
-// ZOrderCueSink の自己選別と指令送出の決定論テスト（task 3.1・要件 1.7／4.4／8.3／11.2）
+// ZOrderCueSink の自己選別と指令送出の決定論テスト（areka-P0-scope-zorder-pinning 要件 1.7／4.4／8.3／11.2）
 //
 // この層が受け持つのは 2 つだけである——「自分宛のタグだけを拾うこと」と「拾ったものを
 // 解釈せずそのまま送ること」。ゆえに檻も 2 方向から挟む: 受理する 2 組は指令が出ること、
@@ -105,9 +105,9 @@ fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
     );
 }
 
-// ---------------------------------------------------------------- 要件 1.7
+// ---------------------------------------------------------------- areka-P0-scope-zorder-pinning 要件 1.7
 
-/// **要件 1.7**: タグを実行したスコープを読まない。実行スコープの値を変えても、
+/// **areka-P0-scope-zorder-pinning 要件 1.7**: タグを実行したスコープを読まない。実行スコープの値を変えても、
 /// 送り出される指令は 1 バイトも変わらない（`MoveCueSink` との意図的な差はここ）。
 #[test]
 fn t_zcs4_executing_scope_does_not_change_the_directive() {
@@ -132,19 +132,19 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
         assert_eq!(
             *got,
             accepted_set(),
-            "実行スコープ {actor:?} でも重なり指定の指令は同じ（要件 1.7）"
+            "実行スコープ {actor:?} でも重なり指定の指令は同じ"
         );
     }
     for (actor, got) in actors.iter().zip(&reset_directives) {
         assert_eq!(
             *got,
             ZOrderDirective::Reset,
-            "実行スコープ {actor:?} でも重なり解除の指令は同じ（要件 1.7）"
+            "実行スコープ {actor:?} でも重なり解除の指令は同じ"
         );
     }
 }
 
-/// 要件 1.7 を字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
+/// areka-P0-scope-zorder-pinning 要件 1.7 を字面からも押さえる: 本番コードは実行スコープの欄（`cue.actor`）を読まない。
 ///
 /// 振る舞いの檻（`t_zcs4`）だけでは足りない。`let _executing_scope = cue.actor.as_str();`
 /// のように**振る舞いを 1 つも変えない**読み取りを足すと、振る舞い側の檻は全て緑のまま
@@ -167,13 +167,13 @@ fn t_zcs5_production_code_never_reads_the_executing_scope() {
     );
     assert!(
         !code.contains("actor"),
-        "本番コードは実行スコープの欄を読まない（要件 1.7・`MoveCueSink` との差）"
+        "本番コードは実行スコープの欄を読まない（`MoveCueSink` との差）"
     );
 }
 
 // ---------------------------------------------------------------- 惜しい組
 
-/// **要件 4.4／11.2**: 名前が合っていても選別子が違えば担当外——1 本も送らず、
+/// **areka-P0-scope-zorder-pinning 要件 4.4／11.2**: 名前が合っていても選別子が違えば担当外——1 本も送らず、
 /// 受け口の中身は先に流した 1 本のままである（＝重なりの状態を変えていない）。
 #[test]
 fn t_zcs6_near_miss_selectors_send_nothing() {
@@ -200,11 +200,11 @@ fn t_zcs6_near_miss_selectors_send_nothing() {
     assert_eq!(
         drain(&rx),
         vec![accepted_set()],
-        "惜しい組はどれも指令を増やさない（受理された 1 本だけが残る・要件 4.4／11.2）"
+        "惜しい組はどれも指令を増やさない（受理された 1 本だけが残る）"
     );
 }
 
-/// **要件 11.2**: 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
+/// **areka-P0-scope-zorder-pinning 要件 11.2**: 担当外のコマンド名は、第 1 引数が `zorder` であっても読み飛ばす
 /// （`\![move,zorder,…]` のような綴りを横取りしない）。
 #[test]
 fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
@@ -219,7 +219,7 @@ fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
     assert_eq!(
         drain(&rx),
         vec![accepted_set()],
-        "担当外の名前は選別子が合っていても読み飛ばす（要件 11.2）"
+        "担当外の名前は選別子が合っていても読み飛ばす"
     );
 }
 
@@ -237,7 +237,7 @@ fn t_zcs8_non_carrier_cues_send_nothing() {
     assert_eq!(
         drain(&rx),
         vec![accepted_set()],
-        "キャリアでない cue は指令を増やさない（要件 11.2）"
+        "キャリアでない cue は指令を増やさない"
     );
 }
 
@@ -323,9 +323,9 @@ fn t_zcs11_addressee_alone_decides_the_severity() {
     );
 }
 
-// ---------------------------------------------------------------- 要件 8.3
+// ---------------------------------------------------------------- areka-P0-scope-zorder-pinning 要件 8.3
 
-/// **要件 8.3**: 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
+/// **areka-P0-scope-zorder-pinning 要件 8.3**: 読み飛ばすどの経路でも、理由を残さないまま黙って諦めない。
 #[test]
 fn t_zcs12_every_skip_leaves_a_record() {
     let mut skipped: Vec<TalkCue> = vec![
@@ -343,10 +343,7 @@ fn t_zcs12_every_skip_leaves_a_record() {
         let (tx, _rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
         let logs = capture_logs(|| sink.emit(cue));
-        assert!(
-            !logs.is_empty(),
-            "読み飛ばしは必ず理由を残す（要件 8.3）: {label}"
-        );
+        assert!(!logs.is_empty(), "読み飛ばしは必ず理由を残す: {label}");
     }
 }
 
@@ -361,7 +358,7 @@ fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
     assert_eq!(only_one(&rx), ZOrderDirective::Reset);
     assert!(
         !logs.is_empty(),
-        "運ばなかったトークンがあることを記録する（要件 8.3）: {logs:?}"
+        "運ばなかったトークンがあることを記録する: {logs:?}"
     );
 }
 
@@ -371,7 +368,7 @@ fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
 ///
 /// 旗はプロセスで 1 組しか無く areka のテストは並列に走るので、動的に読むと他のテストの
 /// 巻き添えで揺れる（`tick_gate_config_producers_tests.rs` は「立っていないはず」を主張
-/// しない、と明記している）。テストの独立性（要件 10.3）を壊さずに置き場所を固定するため、
+/// しない、と明記している）。テストの独立性（areka-P0-scope-zorder-pinning 要件 10.3）を壊さずに置き場所を固定するため、
 /// ここではコメントを除いたソース上の**前後関係**を主張する。
 ///
 /// 「字面が在る」だけでは足りない。旗を `emit` の先頭（自己選別より前）へ持ち上げた実装は、
@@ -386,11 +383,11 @@ fn t_zcs14_the_zorder_wake_is_marked_after_the_self_selection() {
     assert_eq!(
         code.matches("tick_wake::mark(").count(),
         1,
-        "旗を立てる呼出はちょうど 1 つ（要件 7.4 の生産者）"
+        "旗を立てる呼出はちょうど 1 つ"
     );
     assert!(
         code.contains("tick_wake::mark(tick_wake::ZORDER)"),
-        "立てるのは重なりの旗（要件 7.4 の生産者）"
+        "立てるのは重なりの旗"
     );
 
     let mark_at = index_of(&code, "tick_wake::mark(");
@@ -426,6 +423,6 @@ fn t_zcs16_disconnected_receiver_is_recorded_and_does_not_panic() {
     assert_eq!(
         count_level(&logs, "WARN"),
         1,
-        "送れなかったことを警告として残す（黙って捨てない・要件 8.3）: {logs:?}"
+        "送れなかったことを警告として残す（黙って捨てない）: {logs:?}"
     );
 }

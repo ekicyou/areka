@@ -1,4 +1,4 @@
-//! `shell_cursor_table.rs` の兄弟テスト（shell-mouse-cursor tasks.md 2.1・要件 1.1〜1.4・1.6・5.1〜5.4・
+//! `shell_cursor_table.rs` の兄弟テスト（shell-mouse-cursor 要件 1.1〜1.4・1.6・5.1〜5.4・
 //! 5.6〜5.8・6.4・6.6・7.2）。
 //!
 //! cursorブレスはテストの中の surfaces.txt の文面を `parse_cursor_braces` で転記して使う（検体は読まない）。
@@ -211,7 +211,7 @@ mouseup0,Head,system:help
 
 #[test]
 fn region_names_are_kept_as_spelled_without_surface_check() {
-    // 面の当たり判定と突き合わせない（1.6）・綴りどおり（大小で別の鍵）。
+    // 面の当たり判定と突き合わせない・綴りどおり（大小で別の鍵）。
     let (rows, issues) = rows_of(
         "\
 sakura.cursor

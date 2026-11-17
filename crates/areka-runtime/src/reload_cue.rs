@@ -1,4 +1,4 @@
-//! `\![reload,…]`・`\![reloadsurface]` の受け口（design「ReloadCueSink」・要件 1.4・1.5・10.3）。
+//! `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload design「ReloadCueSink」・要件 1.4・1.5・10.3）。
 //!
 //! 骨格は `change_cue.rs` と同型。台本の演出は全員へ配られるので、本受け口にも他人宛のコマンドが
 //! 届く。ここで行うのは次の 2 つに限る。
@@ -6,7 +6,7 @@
 //! 1. **自己選別**——`reload_args::parse_script` が `Some` を返す綴り（`\![reload,ghost|shiori|
 //!    shell|balloon|descript(,パラメータ)]`・`\![reloadsurface]`）だけを受理する。`\![reload,makoto]`・
 //!    `\![reload,aigraph]`・引数なしの `\![reload]`・他の名前は担当外として `debug!` で読み飛ばす
-//!    （要件 1.5・10.3）。
+//!    （areka-P0-mcp-reload 要件 1.5・10.3）。
 //! 2. **送り出し**——`parse_script` の写し（対象と descript の語の仕分け）をそのまま UI へ送る。
 //!    断る・始めるの判定は UI 側の窓口（`reload::request_reload`）の仕事である。
 //!
@@ -23,7 +23,7 @@ use tracing::{debug, warn};
 
 use super::reload_args::{ScriptReload, parse_script};
 
-/// `\![reload,…]` の受け口（design「ReloadCueSink」）。
+/// `\![reload,…]` の受け口（areka-P0-mcp-reload design「ReloadCueSink」）。
 ///
 /// 配送は台本ごとに受け口を複製するため [`Clone`] が要る（どの複製も単一の受信端へ届く）。
 #[derive(Clone)]

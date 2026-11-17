@@ -2,7 +2,7 @@
 //!
 //! 待ちの部品（回収の `settle_bounded` を含む）と `GpuPermit`（⑴）・台本の SHIORI と `hold_support`（⑵）は `areka-runtime` の `spine` にあり、
 //! ここは本体の部品も使う足場（`SpineHarness`・`make_world_with_gpu` ほか）とそれを使う
-//! spine のテストを持つ（spec: runtime-crate-split 設計 D4・段 2 で `areka-runtime` の `spine.rs` の頭から移した説明）。
+//! spine のテストを持つ（spec: runtime-crate-split 設計 D4。`areka-runtime` の `spine.rs` の頭から移した説明）。
 //!
 //! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
 //! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す。
@@ -28,7 +28,7 @@
 //! 本ファイルは足場（scripted `ShioriBackend`＋実 sink 結線＋GPU World＋frame フェーズ直接駆動）だけを持ち、
 //! `#[test]` は兄弟のテストファイルに置く。
 //!
-//! # 構造上の逸脱（設計 File Structure との差分・CONCERNS 相当）
+//! # 構造上の逸脱（areka-P0-emo2-boot の設計 File Structure との差分・CONCERNS 相当）
 //!
 //! 完了した spec `areka-P0-emo2-boot` の design.md の File Structure は spine を外部結合テストに置くが、
 //! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
@@ -87,7 +87,7 @@ use areka_runtime::talk_clock::{ClockedTextSink, TalkClock};
 use areka_runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use areka_runtime::target_map::{balloon_target, shell_target};
 
-/// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU・R8.4）。
+/// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU）。
 ///
 /// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。テストのスレッドは `runtime_tests/mod.rs` が据えるプロセスの寿命の MTA に居るので、ここでは COM を初期化しない。実 GPU（`GraphicsCore::new()` は D3D の HARDWARE・WARP には落ちない）。
 fn make_world_with_gpu() -> (GpuPermit, World) {
@@ -111,7 +111,7 @@ pub(super) use areka_runtime::spine::pump_until_idle;
 // ===========================================================================
 // ログ捕捉（硬化機構の唯一の定義元 `log-capture-kit` への委譲）
 //
-// `run_attach_phase` の `info!(planned, attached, ...)`（DD-12 の縮退がバグを隠さない檻の
+// `run_attach_phase` の `info!(planned, attached, ...)`（縮退がバグを隠さない檻の
 // 観測点）をこのスレッド上で捕捉して件数一致を assert する。行の形（1 イベント 1 行・
 // `level=… target=…` に続けてフィールドを訪問順で ` name=value`）は移行前と 1 バイト変わらない。
 //
@@ -130,16 +130,16 @@ fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
 // SpineHarness（再利用可能な結線ハーネス・兄弟のテストがこの上に構築する）
 // ===========================================================================
 
-/// spine ハーネスの SERIKO ループ駆動モード（task 9.4・design「結線・資産・実機経路（spine.rs）」）。
+/// spine ハーネスの SERIKO ループ駆動モード（areka-P0-seriko-loop の design「結線・資産・実機経路（spine.rs）」）。
 ///
 /// spine は loop ticker を**起動しない**。ループ駆動は `SerikoLoopConfig`（表＋乱数）を seriko へ値渡しで
-/// 仕込み、tick は `SerikoSink::send_tick` を直接注入して制御する（決定論・時刻は注入だけで進める・R7.2/7.3）。
+/// 仕込み、tick は `SerikoSink::send_tick` を直接注入して制御する（決定論・時刻は注入だけで進める）。
 enum LoopDriver {
     /// ループ完全不活性（`SerikoLoopConfig::disabled()` 相当＝空表・ダミー乱数）。既存 spine 全テストの
-    /// 非退行経路（設計 Testing Strategy E2E-3・Implementation Notes）。send_tick を注入してもループは
+    /// 非退行経路。send_tick を注入してもループは
     /// 表示中 slot の評価対象アニメが常にゼロ＝何も発行しない（従来観測どおり）。
     Inert,
-    /// 実 emo2 表（`BootAssets.loop_tables`）＋固定注入乱数列で駆動（まばたき e2e・R7.2/7.3）。
+    /// 実 emo2 表（`BootAssets.loop_tables`）＋固定注入乱数列で駆動（まばたき e2e）。
     /// 乱数は抽選と選び（`alternative*`・spec: seriko-pattern-calls 要件 3.6・3.7）の 2 つ。
     Live(LoopRng, LoopRng),
 }
@@ -211,7 +211,7 @@ impl SurfaceOutput for GatedOutput {
 
 /// scripted ghost boot＋実 sink 結線＋GPU World＋frame 結線状態を束ねた spine ハーネス。
 ///
-/// `wire_runtime`（task 5.1・production）の結線を、headless GPU World＋合成 `GhostWindows`＋
+/// `wire_runtime`（production）の結線を、headless GPU World＋合成 `GhostWindows`＋
 /// scripted backend＋`TickerMode::Disabled` で**テスト内 in-process** に再現したもの。frame
 /// フェーズ（`run_attach_phase` 等）を直接駆動でき、`ghost`/`seriko`/`shiori_handle` で
 /// ライフサイクル・発火列を観測できる。
@@ -220,7 +220,7 @@ pub(crate) struct SpineHarness {
     world: World,
     /// frame 三相結線状態（presenter/rx/runtime/clock/assets）。`run_attach_phase` の駆動対象。
     wiring: RuntimeWiring,
-    /// 文字層ランタイムの観測用クローン（6.2/6.3 が `present_frame`/`read_back` に使う）。
+    /// 文字層ランタイムの観測用クローン（兄弟のテストが `present_frame`/`read_back` に使う）。
     runtime: Rc<RefCell<TextLayerRuntime>>,
     /// ghost ランタイム（`dispatcher()` への Tick 注入・`shutdown()` の駆動）。
     ghost: GhostRuntime,
@@ -230,12 +230,12 @@ pub(crate) struct SpineHarness {
     shiori_handle: ScriptedShioriHandle,
     /// 文字層 UI アクター（`spawn_emo_text` の pump アクター）の生存ハンドル（drain は `pump_text`）。
     text_pump: JoinHandle<()>,
-    /// SERIKO ループ tick の直接注入端（task 9.4）。`spawn_seriko` が返す `SerikoSink` の clone で、
-    /// `inject_seriko_tick`（`send_tick` 直接注入・loop ticker 不起動・R7.2/7.3）に使う。surface_sink 本体は
+    /// SERIKO ループ tick の直接注入端。`spawn_seriko` が返す `SerikoSink` の clone で、
+    /// `inject_seriko_tick`（`send_tick` 直接注入・loop ticker 不起動）に使う。surface_sink 本体は
     /// boot が sinks 第 1 要素として値消費するため、この clone をハーネスに保持する。全 clone は単一 seriko
     /// inbox への送信端で配送意味は同一。shutdown 時に drop して inbox 切断→worker 自然終了させる。
     tick_sink: SerikoSink,
-    /// この起動へ配られた検体の使い捨ての複製（要件 7.4）。値が木の寿命そのものなので、
+    /// この起動へ配られた検体の使い捨ての複製。値が木の寿命そのものなので、
     /// 起動したものより後に捨てる順（欄の最後・後片付けでも最後）に置いてある。
     ///
     /// これは**用心であって、裏付けるテストは無い**。順を入れ替えても今のテストは全て
@@ -250,19 +250,19 @@ pub(crate) struct SpineHarness {
 impl SpineHarness {
     /// 標準台本（boot 系列＋`\s[0]\e` OnBoot＋ForceQuit close 系列）で spine ハーネスを起動する。
     ///
-    /// `on_boot` は OnBoot GET が返す応答スクリプト。6.1 は最小 talk（`\s[0]\e`）を渡す。
-    /// SERIKO ループは **不活性**（`LoopDriver::Inert`）で駆動する——既存 spine 全テストの非退行経路
-    /// （設計 Testing Strategy E2E-3）。ループを実表で活性化するまばたき e2e は [`Self::boot_live`]。
+    /// `on_boot` は OnBoot GET が返す応答スクリプト。足場の煙テストは最小 talk（`\s[0]\e`）を渡す。
+    /// SERIKO ループは **不活性**（`LoopDriver::Inert`）で駆動する——既存 spine 全テストの非退行経路。
+    /// ループを実表で活性化するまばたき e2e は [`Self::boot_live`]。
     fn boot(on_boot: &str) -> SpineHarness {
         let (backend, shiori_handle) = Self::standard_backend(on_boot);
         Self::boot_with(backend, shiori_handle, LoopDriver::Inert)
     }
 
-    /// 実 emo2 表＋固定注入乱数列で SERIKO ループを**活性化**して spine ハーネスを起動する（task 9.4）。
+    /// 実 emo2 表＋固定注入乱数列で SERIKO ループを**活性化**して spine ハーネスを起動する。
     ///
-    /// `rng` は 1/N 抽選の固定注入列（決定論・実 entropy 非依存・R7.1/7.2）、`pick_rng` は選びの注入列。tick は loop ticker を起動せず
-    /// [`Self::inject_seriko_tick`]（`send_tick` 直接注入）で制御する（時刻は注入だけで進める・R7.3）。まばたき e2e が
-    /// 使う（実 kero/sakura まばたき 1 周の full golden は task 10.2）。
+    /// `rng` は 1/N 抽選の固定注入列（決定論・実 entropy 非依存）、`pick_rng` は選びの注入列。tick は loop ticker を起動せず
+    /// [`Self::inject_seriko_tick`]（`send_tick` 直接注入）で制御する（時刻は注入だけで進める）。まばたき e2e が
+    /// 使う（実 kero/sakura まばたき 1 周の full golden は `spine_seriko_loop_tests.rs`）。
     fn boot_live(on_boot: &str, rng: LoopRng, pick_rng: LoopRng) -> SpineHarness {
         let (backend, shiori_handle) = Self::standard_backend(on_boot);
         Self::boot_with(backend, shiori_handle, LoopDriver::Live(rng, pick_rng))
@@ -270,11 +270,11 @@ impl SpineHarness {
 
     /// 標準 scripted backend（boot 系列＋OnBoot talk＋ForceQuit close 系列）を組む。
     ///
-    /// boot 系列（OnInitialize→[username prefetch]→OnFirstBoot→OnBoot→basewareversion）＋ shutdown
+    /// boot 系列（OnInitialize→[username prefetch]→OnFirstBoot→OnBoot→[OnTranslate]→basewareversion）＋ shutdown
     /// （`GhostRuntime::shutdown` は常に ForceQuit 経路＝OnClose NOTIFY→Unload・ghost spine S1 と同旨）を
     /// 台本化する。OnSecondChange は kanade へ Tick を送らないため不要。
-    /// username prefetch GET（OnInitialize 後・OnFirstBoot 前・sylphya task 8.2・R9.1/9.2）は `build()` が
-    /// 既定 `Ok(None)`（NoContent＝カスタム username 無し）を自動補填するため明示台本化しない。
+    /// username prefetch GET（OnInitialize 後・OnFirstBoot 前）は `build()` が
+    /// 既定 `Ok(None)`（NoContent＝カスタム username 無し）を自動補填するため明示台本化しない。OnTranslate の GET も、台本に無ければ偽の SHIORI が 204 で答える。
     pub(crate) fn standard_backend(on_boot: &str) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
         ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
@@ -286,7 +286,7 @@ impl SpineHarness {
             .build()
     }
 
-    /// 任意の scripted backend＋ループ駆動モードで spine ハーネスを起動する（6.2/6.3 が独自台本を注入する口）。
+    /// 任意の scripted backend＋ループ駆動モードで spine ハーネスを起動する（兄弟のテストが独自台本を注入する口）。
     fn boot_with(
         backend: ScriptedShioriBackend,
         shiori_handle: ScriptedShioriHandle,
@@ -302,16 +302,16 @@ impl SpineHarness {
         driver: LoopDriver,
         gate: Option<ShowGate>,
     ) -> SpineHarness {
-        // ── headless GPU World（実 GPU・R8.4）＋合成 GhostWindows（scope [0,1]） ──
+        // ── headless GPU World（実 GPU）＋合成 GhostWindows（scope [0,1]） ──
         let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
-        // 本体の口を据える（本番の `ghost_session::register_systems` と同じ口・設計 D5）。
+        // 本体の口を据える（本番の `ghost_session::register_systems` と同じ口）。
         crate::session::hooks::install(&mut world);
 
         // ── 構築入力（実 emo2 検体・COM はプロセスの寿命の MTA（runtime_tests/mod.rs）） ──
-        // 検体はこの起動専用に取得する。起動記録の無い新品が配られるので（要件 7.4）、同じ
+        // 検体はこの起動専用に取得する。起動記録の無い新品が配られるので、同じ
         // プロセスで何度起動しても毎回 OnFirstBoot から始まる台本が成り立つ。
-        // 作者基準 DPI は emo2 検体の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        // 作者基準 DPI は emo2 検体の実測既定（shell/balloon とも無宣言＝96）。
         let sample = acquire_emo2();
         let assets = build_boot_assets(
             sample.folder(),
@@ -338,7 +338,7 @@ impl SpineHarness {
 
         // ── mpsc＋PresentBridge→spawn_seriko（実 SurfaceOutput 経路）。SurfaceResolver は
         //    非 Clone ゆえ spawn_seriko が値消費し、RuntimeWiring 側は空 alias のプレースホルダで埋める
-        //    （attach は resolver を読まない・Task 4.1 申し送り・wire_runtime 手順4 と同型）。 ──
+        //    （attach は resolver を読まない・wire_runtime 手順4 と同型）。 ──
         let (tx, rx) = mpsc::channel::<PresentCommand>();
         let bridge = PresentBridge::new(tx);
         let BootAssets {
@@ -353,17 +353,17 @@ impl SpineHarness {
             boxes,
             cursors,
         } = assets;
-        // SERIKO ループ構成（task 9.4・design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
-        // （`BootAssets.loop_tables`＝task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）＋
+        // SERIKO ループ構成（areka-P0-seriko-loop の design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
+        // （`BootAssets.loop_tables`＝`EmoWorld` スナップショットから `from_world` で構築）＋
         // 固定注入乱数列（`driver`）で `loop_config` を組む。既存 spine テストは Inert（`disabled()` 相当＝
-        // 空表・ダミー乱数）でループ完全不活性＝従来観測どおり非退行（設計 Testing Strategy E2E-3・
-        // Implementation Notes）。まばたき e2e（`boot_live`）のみ実表＋固定 rng で駆動する（本番 mod.rs は
-        // 実 entropy・spine は固定注入列で決定論・R7.1/7.2/7.3）。
+        // 空表・ダミー乱数）でループ完全不活性＝従来観測どおり非退行。
+        // まばたき e2e（`boot_live`）のみ実表＋固定 rng で駆動する（本番 mod.rs は
+        // 実 entropy・spine は固定注入列で決定論）。
         let LoopTables {
             shell: shell_table,
             balloon: balloon_scope_tables,
         } = loop_tables;
-        // バルーン表の転送（要件 5.6）: production `wire_runtime` と同型で、`build_boot_assets` が
+        // バルーン表の転送: production `wire_runtime` と同型で、`build_boot_assets` が
         // scope ごとに導出済みの写像を、scope キーだけアクタ鍵語彙へ写して渡す（値移送）。
         let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
         let loop_config = match driver {
@@ -375,8 +375,8 @@ impl SpineHarness {
                 pick_rng,
             },
         };
-        // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）＋
-        // loop_config を seriko の起動へ値渡しで配線する（production wire_runtime と同型・task 7.2/9.4）。
+        // 実名前解決表（BootAssets.bind_resolver・emo2 fixture の MountModel から構築）＋
+        // loop_config を seriko の起動へ値渡しで配線する（production wire_runtime と同型）。
         let (surface_sink, seriko) = spawn_seriko(
             resolver,
             static_binds.clone(),
@@ -387,9 +387,9 @@ impl SpineHarness {
                 gate,
             },
         );
-        // loop tick 直接注入端（task 9.4）: SerikoSink を 1 本 clone してハーネスへ保持する。surface_sink 本体は
+        // loop tick 直接注入端: SerikoSink を 1 本 clone してハーネスへ保持する。surface_sink 本体は
         // 下の boot_options が sinks 第 1 要素として値消費するため、この clone を `inject_seriko_tick`
-        // （send_tick 直接注入・loop ticker 不起動・R7.2/7.3）に使う。全 clone は単一 seriko inbox への送信端で
+        // （send_tick 直接注入・loop ticker 不起動）に使う。全 clone は単一 seriko inbox への送信端で
         // 配送意味は同一。shutdown 時に drop して inbox 切断→worker 自然終了させる（下記 shutdown_bounded）。
         let tick_sink = surface_sink.clone();
         let wiring_assets = BootAssets {
@@ -411,25 +411,25 @@ impl SpineHarness {
             cursors,
         };
 
-        // ── move channel＋実 MoveCueSink（wire_runtime 手順4 と同型・S-3 形＝task 9.3） ──
+        // ── move channel＋実 MoveCueSink（wire_runtime 手順4 と同型） ──
         // talk スレッドの MoveCueSink が送出端、UI スレッドの RuntimeWiring が受信端 move_rx（frame 相
-        // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替える。本番の sink（`runtime_boot.rs` の `runtime_sinks`）のうち、spine は先頭 4 本（surface・text・
+        // drain＝run_move_drain_phase）を保持する。送出端は throwaway でなく実 MoveCueSink を
+        // 登録する。本番の sink（`runtime_boot.rs` の `runtime_sinks`）のうち、spine は先頭 4 本（surface・text・
         // move・lifecycle）だけを同じ順で渡す（Z 順・readme・切替・読み直し・窓の状態などの残りは渡さず、その cue は
         // 届け先が無い）。
         let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
         let move_sink = MoveCueSink::new(move_tx);
 
-        // ── lifecycle channel＋実 BalloonLifecycleSink（wire_runtime 手順4 と同型・task 4.1） ──
+        // ── lifecycle channel＋実 BalloonLifecycleSink（wire_runtime 手順4 と同型） ──
         // talk スレッドの BalloonLifecycleSink が送出端、UI スレッドの RuntimeWiring が受信端
-        // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。本番の 4 本目と同じ実 sink を
+        // lifecycle_rx（バルーン可視性相が drain）を保持する。本番の 4 本目と同じ実 sink を
         // throwaway でなく登録する。
         let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
         let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx, clock.clone());
 
-        // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
+        // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動） ──
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
-        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番の `runtime_sinks` のうち先頭 4 本だけを同じ順で・残りは渡さない・S-3 形）。
+        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番の `runtime_sinks` のうち先頭 4 本だけを同じ順で・残りは渡さない）。
         // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
         // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
         let options = crate::session::runtime_boot::runtime_boot_options(
@@ -446,16 +446,16 @@ impl SpineHarness {
             None,
             TickerMode::Disabled,
         );
-        // 停止通知の channel（R15.4・本番 `wire_runtime` と同型）: 送出端は kanade へ、受信端は
+        // 停止通知の channel（本番 `wire_runtime` と同型）: 送出端は kanade へ、受信端は
         // World の受け口（`KanadeNoticeRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
         let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
         let ghost = boot_with_kanade_stop(options, Some(kanade_stop_tx))
             .expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
         // ── frame 三相結線状態（wire_runtime 手順6 相当・System 登録はせず直接駆動する） ──
-        // RuntimeWiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
-        // 備える。move の spine e2e（task 9.3）は上の実 MoveCueSink 経由で cue→channel→drain を通す。
-        // 表示ライフサイクルの受信端 lifecycle_rx も同様に保持し、可視性相（task 4.4）の drain に備える。
+        // RuntimeWiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase）に
+        // 備える。move の spine e2e は上の実 MoveCueSink 経由で cue→channel→drain を通す。
+        // 表示ライフサイクルの受信端 lifecycle_rx も同様に保持し、可視性相の drain に備える。
         let wiring = RuntimeWiring::new(
             presenter,
             rx,
@@ -482,7 +482,7 @@ impl SpineHarness {
         }
     }
 
-    /// 装着の相（`run_attach_phase`）を 1 回回し、装着の前提を確かめる（DD-12 の縮退がバグを隠さない檻・R8.1）。
+    /// 装着の相（`run_attach_phase`）を 1 回回し、装着の前提を確かめる（縮退がバグを隠さない檻）。
     ///
     /// 確かめるのは 3 つ: 装着の相のログを捕まえる・`planned=2 attached=2`（足場が立てる emo2 の
     /// 2 scope の全部が装着された）・ERROR 0 件（装着失敗・log-first）。
@@ -506,7 +506,7 @@ impl SpineHarness {
         pump_until_idle();
     }
 
-    /// seriko ループへ tick を 1 発直接注入する（loop ticker 不起動・`SerikoSink::send_tick`・R7.2/7.3）。
+    /// seriko ループへ tick を 1 発直接注入する（loop ticker 不起動・`SerikoSink::send_tick`）。
     ///
     /// 本番（mod.rs）は `spawn_loop_ticker` の worker スレッドが実時刻で `send_tick` するが、spine は
     /// 決定論のため ticker を起動せず、テストスレッドから注入時刻のみで `send_tick` を直接呼ぶ（時刻を進めるための sleep は無い）。
@@ -516,7 +516,7 @@ impl SpineHarness {
         self.tick_sink.send_tick(now_ms);
     }
 
-    /// dispatcher へ Tick を 1 発注入する（時刻は注入時刻のみで進める・R8.3）。
+    /// dispatcher へ Tick を 1 発注入する（時刻は注入時刻のみで進める）。
     fn inject_dispatcher_tick(&self, now: u64) {
         self.ghost
             .dispatcher()
@@ -546,17 +546,17 @@ impl SpineHarness {
             sample,
         } = self;
 
-        // 降ろしは偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの目印にして待つ（要件 2.1・3.2）。
+        // 降ろしは偽の SHIORI の呼び出し（OnClose・Unload）の数を進みの目印にして待つ。
         // 進んでいる限り負荷で遅いだけでは打ち切らず、30 秒進まなければ `［止まった］` で panic する。
         let calls = || shiori_handle.call_count();
         run_bounded_watching("spine ghost shutdown", Progress::Count(&calls), move || {
-            // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
+            // 正規 close（`CloseReason::User`）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
             // 降ろしの失敗は捨てずに落とす（待つ側へ `［相手が居ない］` の赤として届く）。
             ghost
                 .shutdown(CloseReason::User { scope: 0 })
                 .expect("spine ghost shutdown");
         });
-        // loop tick 直接注入端の clone を明示 drop（task 9.4）: ghost.shutdown が dispatcher 保持の
+        // loop tick 直接注入端の clone を明示 drop: ghost.shutdown が dispatcher 保持の
         // SerikoSink クローンを drop しても、ハーネス保持の tick_sink clone が生きていると seriko inbox が
         // 切断されず worker が終了しない。全 Sender drop で自然終了させるため seriko join の前に drop する。
         drop(tick_sink);
@@ -575,7 +575,7 @@ impl SpineHarness {
     }
 }
 
-// テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.1・要件 1.7 / 3.1 / 3.2）。
+// テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming 要件 1.7 / 3.1 / 3.2）。
 // 本ファイルはハーネス本体（scripted backend・fixture・有界待機・ログ捕捉・SpineHarness）を保持し、
 // 観測ケースはテーマごとの兄弟ファイル `spine_<テーマ>_tests.rs` に置く。
 #[path = "spine_boot_smoke_tests.rs"]

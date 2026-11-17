@@ -4,16 +4,16 @@ use super::{
 };
 
 // ===========================================================================
-// task 9.3 — move cue の決定論 spine e2e（cue→CueSheet→dispatch→broadcast→実 MoveCueSink→
+// move cue の決定論 spine e2e（cue→CueSheet→dispatch→broadcast→実 MoveCueSink→
 // move channel→frame 相 drain→apply→実窓移動）。
 //
-// 9.1 が置いた throwaway `(_move_tx, move_rx)` を実 `MoveCueSink`（`SpineHarness::boot_with` の
-// sinks 第 3 要素）へ差し替えた S-3 形（本番の sink の列＝`session/runtime_boot.rs` の `runtime_sinks` のうち先頭 4 本だけを同じ順で渡す——move は本番と
+// throwaway の `(_move_tx, move_rx)` でなく実 `MoveCueSink`（`SpineHarness::boot_with` の
+// sinks 第 3 要素）を登録した形（本番の sink の列＝`session/runtime_boot.rs` の `runtime_sinks` のうち先頭 4 本だけを同じ順で渡す——move は本番と
 // 同じ第 3 要素）の上で、
 // `\1\![move,...]` を含む OnBoot talk を実 sink 経路で流し、`MoveDirective` が move channel へ届き
-// frame 相 drain（`run_move_drain_phase`＝task 9.2）で対象窓が fixture 検算位置へ即時移動することを
-// 固定する。9.2 の frame 相配線が spine で end-to-end に生きていることの自動檻（headless・時刻は
-// 注入 Tick で決まる・手動実機確認は Task 11 に一本化）。
+// frame 相 drain（`run_move_drain_phase`）で対象窓が fixture 検算位置へ即時移動することを
+// 固定する。frame 相配線が spine で end-to-end に生きていることの自動檻（headless・時刻は
+// 注入 Tick で決まる）。
 // ===========================================================================
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
@@ -25,18 +25,18 @@ fn window_position(world: &World, e: Entity) -> Point {
         .expect("position があるはず")
 }
 
-/// spine move e2e（R5.1/R8.1・DD・task 9.3）: fixture 形の move script を含む OnBoot talk を実 sink 経路
+/// spine move e2e: fixture 形の move script を含む OnBoot talk を実 sink 経路
 /// （ghost→sakura compile→CueSheet→dispatch→broadcast→**実 MoveCueSink**→move channel）で流し、frame 相
-/// drain（`run_move_drain_phase`＝task 9.2）が `MoveDirective` を drain して対象キャラ窓を検算位置へ即時
-/// 移動させることを固定する。9.1 が置いた throwaway 送出端を実 MoveCueSink（sinks 第 3 要素・S-3 形）へ
-/// 差し替えた配線が spine で end-to-end に生きていることの自動檻（headless・時刻は注入 Tick で決まる・
-/// R8.3/8.4/8.6）。窓が実際に動く＝`MoveDirective` が channel へ届き drain→apply された唯一の経路ゆえ、
+/// drain（`run_move_drain_phase`）が `MoveDirective` を drain して対象キャラ窓を検算位置へ即時
+/// 移動させることを固定する。throwaway 送出端を実 MoveCueSink（sinks 第 3 要素）へ
+/// 差し替えた配線が spine で end-to-end に生きていることの自動檻（headless・時刻は注入 Tick で決まる）。
+/// 窓が実際に動く＝`MoveDirective` が channel へ届き drain→apply された唯一の経路ゆえ、
 /// 移動観測が「channel 到達＋frame 相 drain の live」を同時に証跡する。
 ///
-/// # `\1` は正典どおり scope1（エモ＝相方）へ切替（観測 scope は 1・R4.4）
+/// # `\1` は正典どおり scope1（エモ＝相方）へ切替（観測 scope は 1）
 ///
 /// fixture は `\1\![move,-353,,,0,base,base]`（kero=scope1 を sakura=scope0 基準で動かす意図）で、
-/// **bare `\1` は正典どおり sakura compile で `SpeakerScope{1}` へ写像される**（Task 12.1 で
+/// **bare `\1` は正典どおり sakura compile で `SpeakerScope{1}` へ写像される**（
 /// `decode.rs`／lexer が `\0`/`\1` を SpeakerScope へ正規化・以前の `Raw` passthrough 縮退は解消済み）。
 /// ゆえに move cue の scope は切替後の 1 として発火し（`cue.actor == "1"` → `MoveDirective.scope == 1`）、
 /// base は `0`＝**scope0（むらさき＝話者）を基準にした scope1 の移動**として反映される（対象＝scope1 char 窓・
@@ -44,7 +44,7 @@ fn window_position(world: &World, e: Entity) -> Point {
 /// `MoveDirective{ scope:1, x:Px(-353), y:Fix, base:Scope(0) }`。この e2e が `\1` の正典スコープ切替を
 /// parse→compile→cue.actor→MoveDirective.scope→対象窓解決まで end-to-end に固定する。
 ///
-/// # 検算（`two_scope_placements`・全て物理 px・R-6）
+/// # 検算（`two_scope_placements`・全て物理 px）
 ///
 /// 対象＝scope1 pos(1049,1063) size(278,357)・基準＝scope0 pos(1483,733) size(434,687)・x=Px(-353)・y=Fix。
 /// `CanonDefaultBasepos`（x=幅÷2）で
@@ -55,12 +55,12 @@ fn window_position(world: &World, e: Entity) -> Point {
 ///
 /// # RED（実 MoveCueSink 未配線時）
 ///
-/// 9.1 の throwaway `(_move_tx, move_rx)`（送出端即 drop・sinks に MoveCueSink なし）では move cue は
+/// throwaway の `(_move_tx, move_rx)`（送出端即 drop・sinks に MoveCueSink なし）では move cue は
 /// seriko/text sink へのみ broadcast され両者が良性スキップ→move channel は空のまま→窓は不動（moved=false
 /// で FAIL・実測済み）。実 MoveCueSink を 3rd sink へ配線して初めて窓が動く（GREEN）。
 #[test]
 fn spine_move_cue_drives_window_move_end_to_end() {
-    // fixture 形の move script（`\1` は正典どおり scope1 へ切替・doc 参照）。bare `\1` は Task 12.1 で
+    // fixture 形の move script（`\1` は正典どおり scope1 へ切替・doc 参照）。bare `\1` は
     // SpeakerScope へ写像されるため実 SHIORI 由来の現実的入力＝正典スコープ切替を e2e 検証する。
     let mut harness = SpineHarness::boot(r"\1\![move,-353,,,0,base,base]\e");
 
@@ -97,7 +97,7 @@ fn spine_move_cue_drives_window_move_end_to_end() {
     wait_until_paced(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
-        // 実 frame 相 drain（task 9.2）: move channel を try_iter し apply_move_directive で即時反映。
+        // 実 frame 相 drain: move channel を try_iter し apply_move_directive で即時反映。
         // 前提: 本 e2e は表示の線を GPU 無しで回すので、窓はどれも最初の面を表示済みとする読み口で流す。
         run_move_drain_with(&harness.wiring, &all_shown, &mut harness.world);
         window_position(&harness.world, target) != baseline
@@ -109,7 +109,7 @@ fn spine_move_cue_drives_window_move_end_to_end() {
     });
 
     // 検算位置（scope0 基準・CanonDefaultBasepos）へ即時移動＝MoveDirective が channel へ届き drain→apply された
-    // 非空虚な証跡（R5.1・9.2 の frame 相配線が spine で生きている）。
+    // 非空虚な証跡（frame 相配線が spine で生きている）。
     assert_eq!(
         window_position(&harness.world, target),
         Point { x: 1208, y: 1063 },

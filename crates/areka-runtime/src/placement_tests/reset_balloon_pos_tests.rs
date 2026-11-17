@@ -181,7 +181,7 @@ fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
     (ghost, balloon)
 }
 
-/// 7.1・7.2・7.3・9.5: ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
+/// areka-P0-window-link-directives 要件 7.1・7.2・7.3・9.5: ドラッグでずらしたバルーンが標準の位置（起動の準備が解いた位置）へ戻り、
 /// 部品のずらしの基準とキーワードの素材が標準どおりに入り、記憶のずらしの鍵が消え、
 /// スコープごとに 1 行記録される。キャラクターの窓・`Anchored`・`AnchorSource`・組の帳簿は変わらない。
 #[test]
@@ -251,7 +251,7 @@ fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
                 .get::<BalloonKeywordBase>(c)
                 .map(|k| (k.mode, k.adjust));
             assert_eq!(keyword, p.balloon_keyword_base, "{case}: キーワードの素材");
-            // キャラクターの窓・向き・出どころは変わらない（7.2）。
+            // キャラクターの窓・向き・出どころは変わらない。
             assert_eq!(
                 (
                     rig.pos(c),
@@ -261,14 +261,14 @@ fn dragged_balloons_return_to_standard_and_forget_the_offsets() {
                 chars_before[i],
                 "{case}: キャラクターの窓は触らない"
             );
-            // 記憶のずらしの鍵は消える（7.3）。
+            // 記憶のずらしの鍵は消える。
             let off = p.balloon_offset_base.offset;
             assert_eq!(
                 saved_offset(&store, p.scope as u32),
                 None,
                 "{case}: 記憶にずらしが残らない: {store:?}"
             );
-            // 記録の欄（9.5）。
+            // 記録の欄。
             let log = logs
                 .iter()
                 .find(|e| e.field("scope") == Some(p.scope.to_string().as_str()))

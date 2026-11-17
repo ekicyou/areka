@@ -27,17 +27,17 @@ pub(super) const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 ///
 /// **未設定なら assert しない**（実測ログのみ）。開発機で k が何であっても probe をそのまま実行できる
 /// ようにするためであり、実機サインオフの水準ごとには必ず設定して「その水準で本当にその k が適用された」
-/// ことを probe 自身に hard assert させる（要件 4.1・design Error Handling「probe 期待 k 不一致」）。
+/// ことを probe 自身に hard assert させる（areka-P0-collision-dpi-hittest 要件 4.1・design Error Handling「probe 期待 k 不一致」）。
 pub(super) const EXPECT_K_ENV: &str = "AREKA_COLLISION_PROBE_EXPECT_K";
 
 /// ④ anchor が矩形内側に確保すべき最小余裕（native px）。退化した矩形で「中心の不透明」が縁の
-/// たまたまにならないことを保証する下限（design CollisionProbe 節 #2「矩形内側 ≥2px」）。
+/// たまたまにならないことを保証する下限（areka-P0-collision-dpi-hittest design CollisionProbe 節 #2「矩形内側 ≥2px」）。
 pub(super) const ANCHOR_MARGIN_PX: u32 = 2;
 
 /// emo2 検体。`SampleRoot` の `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
 ///
 /// 窓口が返すのは**絶対パス**であり、**プロセスの作業ディレクトリに依存しない**
-/// （要件 4.6・ヘッダ「# 起動時のパス（絶対パスの要否）」節）。
+/// （areka-P0-collision-dpi-hittest 要件 4.6・ヘッダ「# 起動時のパス（絶対パスの要否）」節）。
 static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 

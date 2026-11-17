@@ -4,7 +4,7 @@
 //! 投影関数を置く（進行状態の記録〔第 2 系統〕の型と取り出し口の本体は `areka-runtime` の `spine` に
 //! ある）。台本と期待列は `spine_conformance_script.rs`、判定は `spine_conformance_lap_tests.rs` が持つ。
 //!
-//! # 進行状態の記録が要る理由（R3.8・design D3「進行状態の台帳が要る理由」）
+//! # 進行状態の記録が要る理由（areka-P0-emo2-conformance-e2e の R3.8・design D3「進行状態の台帳が要る理由」）
 //!
 //! 会話中であることは毎秒の変化通知の別（照会か片道か）と Ref3 で既に読める。**しかし選択待ちは
 //! Ref3 では会話中と区別できない**——選択待ちの間も会話の枠は占有されたままで、`talk_active` と
@@ -25,11 +25,11 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{ChoiceInput, CloseReason, KanadeMsg, MonotonicMs, MouseInput};
 
 // 進行状態の記録（第 2 系統）の型と本体は、書き込む台本の SHIORI と同じ所（`areka-runtime` の `spine`）に
-// 1 つだけ置き、ここから出し直す（spec: runtime-crate-split 段 2 の記録「設計からの外れ」）。
+// 1 つだけ置き、ここから出し直す（spec: runtime-crate-split の記録「設計からの外れ」）。
 pub(super) use areka_runtime::spine::RecordedStatus;
 
 // ===========================================================================
-// 段の駆動器（task 2.3・design D6「段の駆動器」・R2.10・R3.2）
+// 段の駆動器（areka-P0-emo2-conformance-e2e の design D6「段の駆動器」・R2.10・R3.2）
 // ===========================================================================
 
 /// 注入の投函先（`Err` のとき「どの受信端が既に閉じていたか」を名指しする）。
@@ -41,13 +41,13 @@ pub(super) enum Inbox {
     Dispatcher,
 }
 
-/// 段の頭で**1 度ずつ**投函する注入 1 件（design D6 の入力「注入の種類」）。
+/// 段の頭で**1 度ずつ**投函する注入 1 件（areka-P0-emo2-conformance-e2e の design D6 の入力「注入の種類」）。
 pub(super) enum Injection {
-    /// 毎秒の変化通知。kanade の送信端へ `KanadeMsg::Tick` を**直接**投函する（R3.2）。既存の駆動が
+    /// 毎秒の変化通知。kanade の送信端へ `KanadeMsg::Tick` を**直接**投函する（areka-P0-emo2-conformance-e2e の R3.2）。既存の駆動が
     /// 投げているのは dispatcher 側で、そちらは毎秒の変化通知を起こさない
     /// （`crates/areka-ghost/src/dispatcher.rs`）。そして **1 本につき `OnSecondChange` が
     /// ちょうど 1 件**発行される（`crates/areka-kanade/src/schedule/steady.rs`）。判定は
-    /// 等値照合ゆえ（R2.3）投函本数がそのまま期待列の本数になる——だからこの注入は
+    /// 等値照合ゆえ（areka-P0-emo2-conformance-e2e の R2.3）投函本数がそのまま期待列の本数になる——だからこの注入は
     /// [`StagePlan::once`] にしか置けない（[`WaitInjection`] が型として受け付けない）。
     KanadeTick,
     /// 再生の時刻を進める Tick。dispatcher の送信端へ投函する。再生層への中継だけを行い SHIORI
@@ -65,7 +65,7 @@ pub(super) enum Injection {
     /// **副作用指示を 1 件も返さずに捨てられる**（`crates/areka-kanade/src/schedule/mod.rs`
     /// の防御アームが `(state, Vec::new())` を返す＝SHIORI 呼出は 0 件）。ゆえに交信の列を 1 件も
     /// 増やさない。終了段の完了条件は「kanade の送信端への送信が Err になる」ことを含むが
-    /// （design D1 の段表）、`std::sync::mpsc::Sender` には開閉を問う口が無く**送ってみるほかに
+    /// （areka-P0-emo2-conformance-e2e の design D1 の段表）、`std::sync::mpsc::Sender` には開閉を問う口が無く**送ってみるほかに
     /// 観測手段が無い**——毎秒の変化通知で代用すると 1 本ごとに `OnSecondChange` が増えて等値照合が
     /// 壊れるため、副作用を持たないこの探りを別に用意する。
     ///
@@ -78,14 +78,14 @@ pub(super) enum Injection {
 ///
 /// この型が表せるのは「繰り返しても SHIORI 呼出を 1 件も増やさない」注入だけである。とりわけ
 /// [`Injection::KanadeTick`] を**この型では表せない**——駆動器を通す限り、待ちの最中に毎秒の変化
-/// 通知が増えることはない（増えると等値照合の期待列が満たせなくなる＝design D3・R2.3）。封じて
+/// 通知が増えることはない（増えると等値照合の期待列が満たせなくなる＝areka-P0-emo2-conformance-e2e の design D3・R2.3）。封じて
 /// いるのは駆動器が持つ経路であって、[`StageSink`] を直に呼ぶ経路までは縛らない。
 pub(super) enum WaitInjection {
     /// 再生の時刻を進める（SHIORI 呼出を 1 件も起こさない）。
     DispatcherTick,
     /// 再生の時刻を進めつつ、毎反復 [`Injection::KanadeProbe`] で kanade の受信端の開閉を見る。
     ///
-    /// 終了段が使う（design D1）。close 握手は OnClose の応答スクリプトを**再生し切ってから**
+    /// 終了段が使う（areka-P0-emo2-conformance-e2e の design D1）。close 握手は OnClose の応答スクリプトを**再生し切ってから**
     /// 終了系列へ進む（`crates/areka-kanade/src/schedule/close.rs` の `CloseTalkWait` が
     /// 再生完了通知を待つ）ため、再生の時刻を進めない探りだけでは kanade は永久に終了しない。
     /// ゆえに 2 つを組にする。
@@ -95,7 +95,7 @@ pub(super) enum WaitInjection {
     /// 完了条件が**初めて成立するまで**は再生側 Tick を注入し、成立した後は `settle_rounds` 回、
     /// **何も注入せず観測だけ**を続けてから段を終える。
     ///
-    /// # なぜこの待ち方が要るのか（task 3.1 のレビュー指摘・R2.10）
+    /// # なぜこの待ち方が要るのか（レビュー指摘・areka-P0-emo2-conformance-e2e の R2.10）
     ///
     /// 段の完了条件が読む観測の中には、成立した後さらに実スレッドを 2〜3 段跨いで別の状態
     /// （選択待ちの帳簿など）が整うのを待たねばならないものがある。呼び手の側で「成立してから N 回
@@ -112,7 +112,7 @@ pub(super) enum WaitInjection {
     },
 }
 
-/// 段 1 つぶんの駆動計画（design D6 の入力: 段名・注入の種類・注入時刻の上限）。区間の逐語は
+/// 段 1 つぶんの駆動計画（areka-P0-emo2-conformance-e2e の design D6 の入力: 段名・注入の種類・注入時刻の上限）。区間の逐語は
 /// `spine_conformance_script.rs` が唯一の置き場であり、本ファイルは写しを持たない。
 pub(super) struct StagePlan<'a> {
     /// 段名と注入時刻の区間。
@@ -123,7 +123,7 @@ pub(super) struct StagePlan<'a> {
     pub(super) waiting: WaitInjection,
 }
 
-/// 採取した表示指令 1 件（design D3「表示の記録の要素」の段名以外の 2 要素。段名は
+/// 採取した表示指令 1 件（areka-P0-emo2-conformance-e2e の design D3「表示の記録の要素」の段名以外の 2 要素。段名は
 /// [`StageObservation::stage`] が 1 つ持つ）。
 pub(super) struct CollectedCommand {
     /// 採取した表示指令そのもの。
@@ -133,7 +133,7 @@ pub(super) struct CollectedCommand {
 }
 
 /// 段の駆動中に観測した「受信端が既に閉じていた」事実。終了段の完了条件は kanade の自己終了の観測を
-/// 含む（design D1 の段表）ため、駆動器は投函の `Err` を握り潰さずこの形で呼び手へ渡す。
+/// 含む（areka-P0-emo2-conformance-e2e の design D1 の段表）ため、駆動器は投函の `Err` を握り潰さずこの形で呼び手へ渡す。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct ClosedInboxes {
     /// kanade の送信端への投函が `Err` を返した。
@@ -142,7 +142,7 @@ pub(super) struct ClosedInboxes {
     pub(super) dispatcher: bool,
 }
 
-/// 完了条件へ渡す途中経過（design D6 の入力「段の完了条件」が読む観測）。
+/// 完了条件へ渡す途中経過（areka-P0-emo2-conformance-e2e の design D6 の入力「段の完了条件」が読む観測）。
 pub(super) struct StageProgress<'a> {
     /// この段でここまでに採取した表示指令の列。
     pub(super) collected: &'a [CollectedCommand],
@@ -154,7 +154,7 @@ pub(super) struct StageProgress<'a> {
     pub(super) closed: ClosedInboxes,
 }
 
-/// 段の駆動の成果（design D6 の出力）。
+/// 段の駆動の成果（areka-P0-emo2-conformance-e2e の design D6 の出力）。
 pub(super) struct StageObservation {
     /// 段名。
     pub(super) stage: &'static str,
@@ -174,12 +174,12 @@ pub(super) struct StageObservation {
     pub(super) closed: ClosedInboxes,
 }
 
-/// 段の駆動の失敗（design「決定論一周テストの失敗の形」）。
+/// 段の駆動の失敗（areka-P0-emo2-conformance-e2e の design「決定論一周テストの失敗の形」）。
 ///
 /// いずれも**呼び手へ返す**。有界時間が尽きたことを「観測なし」として素通りさせない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum StageFailure {
-    /// 完了条件が成立しないまま有界時間が尽きた（R1.6）。注入の時刻列と採取件数を持つので、
+    /// 完了条件が成立しないまま有界時間が尽きた（areka-P0-emo2-conformance-e2e の R1.6）。注入の時刻列と採取件数を持つので、
     /// 「注入が届いていない」のか「注入は届いたが観測が成立しない」のかを読み分けられる。
     Timeout {
         /// 待ちの芯が打ち切った理由（文言の先頭の `［止まった］`・`［進みは不明］` など）。
@@ -201,7 +201,7 @@ pub(super) enum StageFailure {
         planned: usize,
         capacity: usize,
     },
-    /// **駆動器の自己検査の失敗**——採取時の注入時刻が段の宣言区間の外にある（design D3）。
+    /// **駆動器の自己検査の失敗**——採取時の注入時刻が段の宣言区間の外にある（areka-P0-emo2-conformance-e2e の design D3）。
     ///
     /// 製品の退行ではない。駆動器の不変条件が守られる限り必ず偽になるため、この失敗が出たら
     /// テスト自身の駆動か段の宣言（区間の逆転など）が壊れている。
@@ -256,7 +256,7 @@ impl std::fmt::Display for StageFailure {
 }
 
 /// 駆動器が注入を投函し表示指令を採取する先。本番は [`SpineHarness`]（既存の公開送信端と既存の
-/// 取り出し口だけを使う＝R2.6・R2.9）、檻は記録だけを行う偽物を差す。
+/// 取り出し口だけを使う＝areka-P0-emo2-conformance-e2e の R2.6・R2.9）、檻は記録だけを行う偽物を差す。
 pub(super) trait StageSink {
     /// 注入 1 件を投函する。`Err(inbox)` は当該受信端が既に閉じていることを表す（panic しない）。
     fn inject(&mut self, injection: &Injection, now_ms: u64) -> Result<(), Inbox>;
@@ -264,7 +264,7 @@ pub(super) trait StageSink {
     fn collect(&mut self) -> Vec<PresentCommand>;
     /// 注入時刻を進めてよいか（既定は「常に進めてよい」）。
     ///
-    /// # なぜ据え置きが要るのか（task 3.1 のレビュー指摘・R2.10・design D6 の危険欄）
+    /// # なぜ据え置きが要るのか（レビュー指摘・areka-P0-emo2-conformance-e2e の R2.10・design D6 の危険欄）
     ///
     /// 段の待ちには 2 つの相が混ざっている——⑴ 投函した入力が実スレッドを何段も渡って
     /// **着地する**のを待つ相と、⑵ 着地した再生を**時間ぶん進める**相である。⑵ だけが注入時刻を
@@ -283,7 +283,7 @@ pub(super) trait StageSink {
     /// 段の待ちの進みの目印（単調に増える数）。既定は持たず、実装の全部が書く（areka-test-binary-stability
     /// 要件 7.2・7.4）。目印を渡すと、相手が 30 秒のあいだ進まなかったときに打ち切る（`［止まった］`）。
     /// `None` は目印なしで、待ちは総時間 30 秒で打ち切る（`［進みは不明］`）——その形そのものを確かめる
-    /// 檻だけが理由の注記つきで返す（要件 7.3 の例外・`load-repro.md` の ⑵）。
+    /// 檻だけが理由の注記つきで返す（areka-test-binary-stability 要件 7.3 の例外・`load-repro.md` の ⑵）。
     fn progress_probe(&self) -> Option<Box<dyn Fn() -> u64>>;
 }
 
@@ -328,7 +328,7 @@ thread_local! {
     static TAKEN_PRESENTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-/// 段を順に駆動する駆動器（design D6）。注入時刻を走行を通じて 1 つだけ持つ。
+/// 段を順に駆動する駆動器（areka-P0-emo2-conformance-e2e の design D6）。注入時刻を走行を通じて 1 つだけ持つ。
 pub(super) struct LapDriver {
     /// 次に投函する注入の時刻。走行を通じて単調増加し、各段の上限を超えない。
     now_ms: u64,
@@ -423,7 +423,7 @@ impl LapDriver {
             name,
             progress,
             || {
-                // ── 採取（毎反復）＋駆動器の自己検査（design D3・製品の判定ではない） ──
+                // ── 採取（毎反復）＋駆動器の自己検査（areka-P0-emo2-conformance-e2e の design D3・製品の判定ではない） ──
                 for command in sink.collect() {
                     if self.now_ms < begin_ms || self.now_ms > limit_ms {
                         broken = Some(StageFailure::CollectedOutsideInterval {
@@ -466,7 +466,7 @@ impl LapDriver {
                     }
                 }
 
-                // ── 受信端の開閉の探り（design D1 の終了段） ──
+                // ── 受信端の開閉の探り（areka-P0-emo2-conformance-e2e の design D1 の終了段） ──
                 //
                 // 頭打ちの対象外である。頭打ちが在るのは注入時刻が観測を追い越すと待っている条件が
                 // 壊れるためだが、探りは**注入時刻を運ばない**ので追い越しようがない。一方で
@@ -559,10 +559,10 @@ fn injection_capacity(begin_ms: u64, limit_ms: u64) -> usize {
 }
 
 // ===========================================================================
-// 表示指令の投影（design D3「記録の突合に使う投影関数」・task 3.2）
+// 表示指令の投影（areka-P0-emo2-conformance-e2e の design D3「記録の突合に使う投影関数」）
 // ===========================================================================
 
-/// 表示指令を**等値照合できる形**へ落とした投影（design D3 の「表示の記録の要素」のうち指令の部分）。
+/// 表示指令を**等値照合できる形**へ落とした投影（areka-P0-emo2-conformance-e2e の design D3 の「表示の記録の要素」のうち指令の部分）。
 ///
 /// # なぜ投影が要るのか
 ///
@@ -601,7 +601,7 @@ pub(super) enum DisplayProjection {
     Unknown,
 }
 
-/// 表示指令を [`DisplayProjection`] へ写す（採取側の責務・design D3「採取は support」）。
+/// 表示指令を [`DisplayProjection`] へ写す（採取側の責務・areka-P0-emo2-conformance-e2e の design D3「採取は support」）。
 pub(super) fn project_display(command: &PresentCommand) -> DisplayProjection {
     match command {
         PresentCommand::ShowSurface {
@@ -618,7 +618,7 @@ pub(super) fn project_display(command: &PresentCommand) -> DisplayProjection {
     }
 }
 
-// 主題単位の分割（R2.11）: 駆動器の檻は支援層の子として置く。
+// 主題単位の分割（areka-P0-emo2-conformance-e2e の R2.11）: 駆動器と進行状態の記録の檻は支援層の子として置く。
 #[path = "spine_conformance_support_tests.rs"]
 mod driver_tests;
 #[path = "spine_conformance_support_stage_tests.rs"]

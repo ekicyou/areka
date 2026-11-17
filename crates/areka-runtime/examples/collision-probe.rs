@@ -8,7 +8,7 @@
 //!
 //! 実適用 k は**実行機の表示スケールがそのまま決める**——wintf は窓生成時に実モニタ DPI で `DPI`
 //! component を初期化するため、初回表示の時点で実 k が確定する。ゆえに本 probe は DPI 追従駆動
-//! （`run_dpi_phase` 相当）を**持たない**。要件 4.1 が要求する 2 水準は、OS の表示スケールを
+//! （`run_dpi_phase` 相当）を**持たない**。areka-P0-collision-dpi-hittest 要件 4.1 が要求する 2 水準は、OS の表示スケールを
 //! 変更して（例 125% → 200%）**2 回実行**し、各実行の `physical=` が互いに異なることを記録上で
 //! 照合して満たす。
 //!
@@ -18,7 +18,7 @@
 //! （[`EmoPresenter::applied_ratio`]）との厳密一致を hard assert する（環境設定ミスの即検出）。
 //! **未指定時は assert せず実測ログのみ**——開発機（k=1.0 でも任意 k でも）でそのまま実行できる。
 //!
-//! # 常設 greppable ログ（要件 4.1/4.5）
+//! # 常設 greppable ログ（areka-P0-collision-dpi-hittest 要件 4.1/4.5）
 //!
 //! ```text
 //! collision-probe: k=<num>/<den> native=<w>x<h> physical=<w>x<h>
@@ -44,7 +44,7 @@
 //! `pointer.rs`・`probe.rs` の `super::target_map`・`super::resolve_hit_region` は、上の `use` が
 //! example クレートルートへ持ち込んだ名前へ解決される。
 //!
-//! # donor からの必須逸脱（3点・これを欠く probe は構造的に無効・design Open Risk 6）
+//! # donor からの必須逸脱（これを欠く probe は構造的に無効・areka-P0-collision-geometry design Open Risk 6）
 //!
 //! 1. **表示対象＝`surface1000`**: emo2 で collision を持つのは `surface1000` のみ。`surface0`
 //!    （`emo-present.rs`/`window-placement.rs` の既定）は collision を1つも持たず空集合しか観測できない。
@@ -80,10 +80,10 @@
 //! （`crates/areka/src/input_events/input_events_tests.rs` の
 //! `handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_double_click`）。
 //! 強制退避は結線前の Ctrl+左ダブルクリックと Ctrl+Shift+左ダブルクリックで、これも
-//! `attach_char_pointer_handlers` が装着するハンドラが担う。probe への結線は本 spec の射程外
+//! `attach_char_pointer_handlers` が装着するハンドラが担う。probe への結線はこの probe の射程外
 //! （本体の `input_events` を runtime の example から使えるようにする仕事が要る）。
 //!
-//! # 起動時のパス（絶対パスの要否・要件 4.6）
+//! # 起動時のパス（絶対パスの要否・areka-P0-collision-dpi-hittest 要件 4.6）
 //!
 //! 実機サインオフの起動手順は [[areka-emo2-signoff-needs-absolute-paths]]（emo2 ゴーストルートと
 //! `pasta.dll` を**絶対パスで**与える。相対パスだと `pasta.dll` の LOAD が `0x8007007E` で失敗する）に
@@ -121,7 +121,7 @@
 //!    DPI awareness は wintf `WinApp` 初期化がプロセスに設定する。**dpi=96 のみの確認は不合格**
 //!    （`window-placement.rs` 前例に倣う・dpi=96 では単位混在バグが自己整合して隠れるため）。
 //!    **1 実行 = 1 水準**ゆえ、OS 表示スケールを変更して 2 回実行し、各実行の `physical=` が互いに
-//!    異なることを記録上で照合する（要件 4.1）。水準ごとに `AREKA_COLLISION_PROBE_EXPECT_K` を与えると
+//!    異なることを記録上で照合する（areka-P0-collision-dpi-hittest 要件 4.1）。水準ごとに `AREKA_COLLISION_PROBE_EXPECT_K` を与えると
 //!    「その水準で本当にその k が適用された」ことを probe 自身が hard assert する。
 //!
 //! ② **表示**: 本番 emo2 の `surface1000` を有効 bind 実値付きで shell target（scope=0 →
@@ -149,7 +149,7 @@
 //!    `native_w × native_h × 4` であることも併せて assert する。anchor は矩形内側 **≥2px** にあることを
 //!    確かめ、退化矩形で中心の不透明が縁のたまたまになるのを防ぐ。
 //!    **この検査は「collision 値の位置に絵が描かれている」ことしか語らない描画証跡であり、当たり判定の
-//!    証跡ではない**（要件 4.4）——判定の証跡は ⑤ の目視由来経路のみである。記録様式でも両者を混ぜない。
+//!    証跡ではない**（areka-P0-collision-dpi-hittest 要件 4.4）——判定の証跡は ⑤ の目視由来経路のみである。記録様式でも両者を混ぜない。
 //!
 //! ⑤ **解決一致（7.3(a)・目視が証拠力の中核）**: 点は**実表示窓の client 座標経路からのみ取得する**——
 //!    `GetCursorPos`（実カーソル位置・screen）→ `ScreenToClient` → 得られた client 点を
@@ -162,13 +162,13 @@
 //!      点をそのまま読み戻して純関数へ渡す」＝要件が「証跡と認めない」と名指しした自己整合の罠に落ちる。
 //!      狙点の供給源は**目視**（または ④ の read_back から導出した描画由来の点）に限る。本 probe は
 //!      `SetCursorPos`/`SendInput` を一切呼ばない。
-//!    - **マウス経路照合（設計討議#3）**: probe 窓へ `OnPointerMoved` ハンドラを1行装着し
+//!    - **マウス経路照合（areka-P0-collision-geometry 設計討議#3）**: probe 窓へ `OnPointerMoved` ハンドラを1行装着し
 //!      （`OnPointerPressed(on_shell_pressed)` の donor 前例＝`emo-present/input.rs` の `on_shell_pressed`）、記録行ごとに**本番
 //!      マウス経路**の `PointerState.client_point` と `ScreenToClient(GetCursorPos())` を**ペア列（client_x/y・
 //!      s2c_x/y・Δx/Δy）**で実測表へ併記する。記録行の要求は **Δ=(0,0) の厳密一致**（両者とも同一 HWND の
 //!      client 物理 px 整数＝丸め誤差の正当源が無い）。**ペア列は Head/Bust（不透明画素）行のみ**——背景
 //!      None 行はクリック透過（`WS_EX_TRANSPARENT`＋`HTTRANSPARENT`）によりイベント自体が窓へ届かず、
-//!      ペア欠測が正しい挙動である（脚注★・C-3 整合）。この照合はクエリ系 API 経路と WM_MOUSEMOVE lparam
+//!      ペア欠測が正しい挙動である（脚注★・areka-P0-collision-geometry design の C-3 と整合）。この照合はクエリ系 API 経路と WM_MOUSEMOVE lparam
 //!      経路が OS 内部でのみ合流する非トートロジー検査である。
 //!
 //! ⑥ **判定**: 全項目 PASS かつ dpi≠96 を2水準で充足したことを acceptance-record の判定行に明記する。
@@ -176,7 +176,7 @@
 //! > ★脚注: ⑤ のペア列は不透明域（Head/Bust）行のみに現れる。背景（解決 `None`）域はクリック透過で
 //! > `OnPointerMoved` が窓へ届かないため、その行にペア列が無いのは**正しい挙動**（欠測＝FAIL ではない）。
 //!
-//! # probe の証明範囲（設計討議#2/#3）
+//! # probe の証明範囲（areka-P0-collision-geometry 設計討議#2/#3）
 //!
 //! **証明する**: (a) 表示側の k 整合契約（窓 client 物理寸 ≡ `target_physical_size`）と、それを本番で
 //! 維持する反映経路（`resize_window_to`→SetWindowPos→`GetClientRect`）の単位保存性
@@ -184,7 +184,7 @@
 //! （`client_point` ≡ `ScreenToClient`・静止記録行）。**証明しない**: (1) `frame/` の resnap 検知ループ
 //! （completed `areka-P0-surface-resize-resnap` が所有）、(2) 窓**生成**経路の実 DPI 数値正しさ
 //! （completed `areka-P0-window-placement` が所有）、(3) イベント配送〜SHIORI 一周＝撫でクラスタ合流
-//! サインオフ（7.4）が所有。
+//! サインオフ（areka-P0-collision-geometry 要件 7.4）が所有。
 
 use std::path::{Path, PathBuf};
 

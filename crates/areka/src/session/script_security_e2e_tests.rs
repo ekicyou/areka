@@ -97,7 +97,7 @@ fn boot_signals(on_boot_level: Option<&'static str>) -> Vec<NoUserBreakSignal> {
     signals
 }
 
-/// 応答の `SecurityLevel: external` で起動のトークが外部扱いになり、線に `Enter` が出ない（4.2）。
+/// 応答の `SecurityLevel: external` で起動のトークが外部扱いになり、線に `Enter` が出ない（areka-P0-script-security-level 要件 4.2）。
 /// 運ぶ道のどこかが既定の値（ゴースト自身＝`local`）に落ちると `Enter` が出て赤になる。
 #[test]
 fn external_on_boot_reply_keeps_enter_off_the_line() {
@@ -107,7 +107,7 @@ fn external_on_boot_reply_keeps_enter_off_the_line() {
     );
 }
 
-/// `local` または応答のレベル無しでは今どおり `Enter` が出る（1.4・3.1・4.3）。
+/// `local` または応答のレベル無しでは今どおり `Enter` が出る（areka-P0-script-security-level 要件 1.4・3.1・4.3）。
 #[test]
 fn local_or_absent_on_boot_reply_lets_enter_through() {
     for level in [Some("local"), None] {

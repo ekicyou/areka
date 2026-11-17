@@ -8,25 +8,25 @@ use super::{
 
 /// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・`areka-seriko` の `looper_tests.rs` の `always_fire` と同旨）。
 ///
-/// 「固定注入乱数列」の最小形（発見的 entropy 非依存・R7.1/7.2）。毎境界で抽選を通すので定数 0 で足りる
+/// 「固定注入乱数列」の最小形（発見的 entropy 非依存）。毎境界で抽選を通すので定数 0 で足りる
 /// （発火の順と回数は下の golden が固定する）。
 fn always_fire_rng() -> LoopRng {
     Box::new(|_bound: u32| 0)
 }
 
 // ===========================================================================
-// task 10.2 — 実 emo2 まばたき 1 周の PresentCommand 列 golden（kero/sakura）＋ R3.4 既定 OFF 対照
+// 実 emo2 まばたき 1 周の PresentCommand 列 golden（kero/sakura）＋ fixture 既定 OFF の対照
 //
 // `boot_live`/`inject_seriko_tick`/`always_fire_rng` の上に、実 emo2 fixture の実測アニメ
 // （kero surface2100 `interval,random,4` 2106/2110/-1・sakura surface1000 `interval,bind+random,4`
 // 1400 系 1412/1411/1410）を固定注入乱数＋scripted `send_tick` で 1 周歩かせ、発行される
 // `PresentCommand` 列の **厳密 golden**（pattern 搬送 surface id の完全一致）を檻に入れる。
-// あわせて R3.4「fixture 既定 OFF」の対照——`\![bind]` を通さない既定では always_fire でも bind
-// ゲートが抽選を塞ぎ **一切発行しない**——を負の檻として固定する（design Testing Strategy E2E-1/2）。
+// あわせて「fixture 既定 OFF」の対照——`\![bind]` を通さない既定では always_fire でも bind
+// ゲートが抽選を塞ぎ **一切発行しない**——を負の檻として固定する。
 //
 // 全て決定論（実 emo2 asset fixture＋固定注入 rng＋scripted send_tick・Close→join）。
 // 時刻は注入で決まる（待ちの休みは時刻を進めない・`areka-runtime` の `spine_wait.rs`）。
-// 実 SHIORI/pasta 非依存（surface は注入 cue で表示・実機/実 DPI サインオフは task 10.3）。
+// 実 SHIORI/pasta 非依存（surface は注入 cue で表示・実機/実 DPI サインオフは別）。
 // ===========================================================================
 
 /// `cmd` が scope0 shell 宛の `ShowSurface{shown_surface}` であることを検証し、その pattern が
@@ -46,7 +46,7 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
             assert_eq!(
                 *target,
                 shell_target(0),
-                "shell 表示対象（scope0・偶数 TargetId・DD-3）"
+                "shell 表示対象（scope0・偶数 TargetId）"
             );
             assert_eq!(
                 *surface_id, shown_surface,
@@ -133,7 +133,7 @@ fn drive_shell_shown(
 
 /// `now_ms` の seriko tick を 1 発直接注入し、最初の `PresentCommand` が rx へ届くまで有界
 /// 待ち（[`wait_until`]・読むだけの待ち）、続けて [`drain_settled`] で残りを汲み切って
-/// から「ちょうど 1 件」を確かめて返す。golden の各コマ遷移 tick は変化 1 件を発行する（6.1/6.2）ため、
+/// から「ちょうど 1 件」を確かめて返す。golden の各コマ遷移 tick は変化 1 件を発行するため、
 /// この直列注入→回収で発行列の順序と内容を決定論的に照合できる。最初の 1 件で汲むのを止めると 2 件目を
 /// 見ないので、余分な指令が出る退行を通してしまう。届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`wait_until`] の
 /// 進みの目印（注入は 1 発のみで各反復は系を進めない純粋なポーリング＝反復は経過時間の代理にならない）。
@@ -164,7 +164,7 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
     buf.into_iter().next().expect("len==1 を確認済み")
 }
 
-/// spine E2E-1（kero まばたき 1 周 golden・R7.2/7.3・design Testing Strategy E2E-1）: 実 emo2 shell 表
+/// spine E2E-1（kero まばたき 1 周 golden）: 実 emo2 shell 表
 /// ＋固定注入乱数（常時発火）で `boot_live` し、`\s[2100]`（kero まばたき surface・`interval,random,4`・
 /// bind 非依存）を注入 cue で表示させたのち、`SerikoSink::send_tick` を直接注入して 1000ms 絶対グリッド
 /// 境界を跨がせ 1 周を歩かせる。発行 `PresentCommand` 列の **厳密 golden**——pattern0=2106 → pattern1=2110
@@ -172,7 +172,7 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
 /// `animation0` 2106(w0)/2110(w40)/-1(w80)・t=[0,40,120]）で固定する。
 ///
 /// send_tick→LoopRuntime→emit_display→adapter→rx の end-to-end 配線が、実 emo2 表の実測列を
-/// 忠実に運ぶことの決定論自動檻（実 SHIORI/pasta・GUI 非依存・実機/実 DPI サインオフは task 10.3）。
+/// 忠実に運ぶことの決定論自動檻（実 SHIORI/pasta・GUI 非依存・実機/実 DPI サインオフは別）。
 #[test]
 fn spine_e2e_kero_blink_one_cycle_golden() {
     // 実表＋常時発火固定 rng でループ活性化（既存 spine テストは Inert＝非退行・本テストのみ Live）。
@@ -204,13 +204,13 @@ fn spine_e2e_kero_blink_one_cycle_golden() {
     assert_eq!(
         shell_pattern_frame(&c3, 2100, 0),
         None,
-        "kero pattern3=-1 到達でコマ除去＝ベース復帰（要件 4.3）"
+        "kero pattern3=-1 到達でコマ除去＝ベース復帰"
     );
     // ベース復帰は「空 pattern の ShowSurface」——sakura の末尾残留（1410 が残る）との決定的な対照点。
     match &c3 {
         PresentCommand::ShowSurface { pattern, .. } => assert!(
             pattern.is_empty(),
-            "kero の -1 ベース復帰は空 pattern（要件 4.3・sakura 残留と対照）"
+            "kero の -1 ベース復帰は空 pattern（sakura 残留と対照）"
         ),
         other => panic!("ShowSurface を期待: {}", variant_name(other)),
     }
@@ -218,7 +218,7 @@ fn spine_e2e_kero_blink_one_cycle_golden() {
     harness.shutdown_bounded();
 }
 
-/// spine E2E-2a（sakura まばたき 1 周 golden・bind ON 貫通・R7.2/9.2・design Testing Strategy E2E-2）: 実 emo2
+/// spine E2E-2a（sakura まばたき 1 周 golden・bind ON 貫通）: 実 emo2
 /// shell 表＋固定注入乱数（常時発火）で `boot_live` し、`\s[1000]`（sakura 着せ替え surface・`bind+random,4`
 /// のまばたき animation1400 を持つ）＋`\![bind,まばたき,通常,1]`（実 sakura bindgroup 貫通）を OnBoot talk で
 /// 流して 1400 bindgroup を **ON** にしたのち、`send_tick` 直接注入で 1 周を歩かせる。発行 `PresentCommand` 列の
@@ -228,7 +228,7 @@ fn spine_e2e_kero_blink_one_cycle_golden() {
 /// `\![bind,まばたき,通常,1]` は OnBoot talk 内で sakura compile → Custom キャリア cue → broadcast →
 /// seriko `apply_bind`（`bind_resolver.resolve(Sakura,"まばたき","通常")==1400`）で current_binds へ 1400 を
 /// 書き込む実経路を通る（mayuna 成果物・read-only 参照）。`drive_shell_shown(.., Some(1400))` が binds に 1400 を
-/// 含む Show 再発行の観測で貫通を担保する。kero（`-1`→空 pattern）と対照的に末尾コマが残留する（要件 4.4）。
+/// 含む Show 再発行の観測で貫通を担保する。kero（`-1`→空 pattern）と対照的に末尾コマが残留する。
 #[test]
 fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
     // \s[1000]（sakura 着せ替え surface）＋ \![bind,まばたき,通常,1]（1400 bindgroup ON）。常時発火 rng で
@@ -262,13 +262,13 @@ fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
     assert_eq!(
         shell_pattern_frame(&c3, 1000, 1400),
         Some(1410),
-        "sakura pattern3=1410 残留（-1 なし末尾＝FinishedResidual・要件 4.4）"
+        "sakura pattern3=1410 残留（-1 なし末尾＝FinishedResidual）"
     );
     // 末尾は残留ゆえ空でない——kero の -1 ベース復帰（空 pattern）との決定的な対照点。
     match &c3 {
         PresentCommand::ShowSurface { pattern, .. } => assert!(
             !pattern.is_empty(),
-            "sakura の末尾は最終コマ残留（空でない・要件 4.4・kero の -1 と対照）"
+            "sakura の末尾は最終コマ残留（空でない・kero の -1 と対照）"
         ),
         other => panic!("ShowSurface を期待: {}", variant_name(other)),
     }
@@ -276,13 +276,13 @@ fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
     harness.shutdown_bounded();
 }
 
-/// spine E2E-2b（R3.4「fixture 既定 OFF」の対照檻・design Testing Strategy E2E-2）: fixture 既定
+/// spine E2E-2b（「fixture 既定 OFF」の対照檻）: fixture 既定
 /// （`\![bind]` を **通さない**＝まばたき bindgroup 1400/1401/1402 は全 OFF）で surface1000 を表示し、
 /// 常時発火 rng で境界を複数跨いでも **一切発行しない**ことを固定する。bind ゲート（`BindRandom` は
-/// bindgroup ON のときだけ `should_fire` を呼ぶ・要件 3.1）が抽選そのものを塞ぐため、抽選 → 再生 → pattern
+/// bindgroup ON のときだけ `should_fire` を呼ぶ）が抽選そのものを塞ぐため、抽選 → 再生 → pattern
 /// 搬送が起きない。
 ///
-/// # always_fire で「ゲートが塞ぐ」を積極証明する（R3.4 の核心）
+/// # always_fire で「ゲートが塞ぐ」を積極証明する
 ///
 /// 乱数を常時発火（1/N 抽選が呼ばれれば必ず通過）にしておくことで、もし bind ゲートが leak すれば
 /// 1400/1401/1402 は **必ず**発火し pattern 搬送指令が現れる。それが現れない＝発行ゼロは「抽選が呼ばれて
@@ -296,7 +296,7 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
         always_fire_rng(),
         areka_seriko::seeded_rng(0),
     );
-    drive_shell_shown(&mut harness, 1000, None, false); // bind なし＝1400/1401/1402 は全 OFF（R3.4 既定）
+    drive_shell_shown(&mut harness, 1000, None, false); // bind なし＝1400/1401/1402 は全 OFF（既定）
 
     // 境界を複数跨ぐ seriko tick を注入し、発行が一切現れないことを固定する（起動 tick→1000/2000/…の境界跨ぎ）。
     harness.inject_seriko_tick(0); // 起動 tick（境界初期化）
@@ -304,14 +304,14 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
     for now in [1000u64, 2000, 3000, 4000, 5000] {
         harness.inject_seriko_tick(now); // 各々 1000ms 絶対グリッド境界を跨ぐ
         // 有界 settle drain（spine_s4 の負検証と同流儀）: 打ち切りは反復回数ではなく壁時計の
-        // 最小持続と連続空観測で決まる（要件 4.2・4.5）。時刻注入は外側のこの `for` が担い、
-        // ヘルパは回収しかしない＝時刻が観測を追い越さない（要件 4.3）。
+        // 最小持続と連続空観測で決まる。時刻注入は外側のこの `for` が担い、
+        // ヘルパは回収しかしない＝時刻が観測を追い越さない。
         drain_settled(&mut harness, &mut emitted);
     }
-    // R3.4 の檻: bind ゲート OFF は always_fire でも抽選を塞ぐ＝発行ゼロ（ゲート leak なら pattern 搬送指令が漏れる）。
+    // 既定 OFF の檻: bind ゲート OFF は always_fire でも抽選を塞ぐ＝発行ゼロ（ゲート leak なら pattern 搬送指令が漏れる）。
     assert!(
         emitted.is_empty(),
-        "R3.4 既定 OFF: bind ゲート OFF は always_fire でも一切発行しない（ゲート leak 検出・実受信 {} 件・variants={:?}）",
+        "既定 OFF: bind ゲート OFF は always_fire でも一切発行しない（ゲート leak 検出・実受信 {} 件・variants={:?}）",
         emitted.len(),
         emitted.iter().map(variant_name).collect::<Vec<_>>()
     );
@@ -320,12 +320,12 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
 }
 
 // ===========================================================================
-// 要件 4.3（進行中挙動が DPI 変化を跨いで失われない）の実経路檻
+// areka-P0-emo-dpi-scaling 要件 4.3（進行中挙動が DPI 変化を跨いで失われない）の実経路檻
 //
 // 既存の DPI 変化 spine 2 本（`spine_dpi_change_refreshes_balloon_text_scale_on_real_attach`／
 // `spine_dpi_change_while_balloon_hidden_lands_on_next_show`）はいずれも `SpineHarness::boot`
 // ＝`LoopDriver::Inert` で起動しており、**活性ループと DPI 変化が一度も同居していない**。
-// ゆえに要件 4.3 の 3 つの主張のうち (a) クラッシュ・表示消失なし／(b) 文字の状態保存は檻に
+// ゆえに areka-P0-emo-dpi-scaling 要件 4.3 の主張のうち (a) クラッシュ・表示消失なし／(b) 文字の状態保存は檻に
 // 入っていたが、(c)「SERIKO ループが DPI 変化を跨いで進行し続ける」は
 // 「ループ状態は presenter の外（seriko worker）にある」という**構造からの帰結**にとどまり、
 // 一度も観測されていなかった。以下がその空白を閉じる。
@@ -367,19 +367,17 @@ fn seriko_tick_apply_one(
         .wiring
         .read_back_target(shell_target(0))
         .unwrap_or_else(|e| {
-            panic!(
-                "ループ指令適用後の shell scope0 read_back 失敗（表示が消えた・要件 4.3）: {e:?}"
-            )
+            panic!("ループ指令適用後の shell scope0 read_back 失敗（表示が消えた）: {e:?}")
         });
     assert!(
         opaque_count(&px) > 0,
-        "ループ指令適用後の shell readback が全透明（表示消失・要件 4.3）: len={}",
+        "ループ指令適用後の shell readback が全透明（表示消失）: len={}",
         px.len()
     );
     (frame, px)
 }
 
-/// **活性 SERIKO ループを跨ぐ DPI 変化**（要件 4.3 の残る主張 (c)・R7.2/8.1/8.2）: 実 emo2 表＋常時発火
+/// **活性 SERIKO ループを跨ぐ DPI 変化**（areka-P0-emo-dpi-scaling 要件 4.3 の残る主張 (c)）: 実 emo2 表＋常時発火
 /// 固定 rng で `boot_live` し、kero まばたき（surface2100 `animation0`＝2106/2110/`-1`）を 1 周の**途中まで**
 /// 歩かせた状態で**シェル窓の DPI を変える**。その後——
 ///
@@ -413,7 +411,7 @@ fn seriko_tick_apply_one(
 ///   本テスト追加前まで repo 内のどの檻も観測していなかった（exclusive）。
 /// - `apply_show` が k≠1 のとき `binds`／`pattern` を既定へ落とす変異では、本テストと
 ///   `areka-emo-present` の `show_surface_scales_layered_bind_and_pattern_content_with_single_k`
-///   （要件 2.3 の同時追加檻）が**共倒れ**（shared）。ほかは 1 本も落ちない。
+///   （同時追加檻）が**共倒れ**（shared）。ほかは 1 本も落ちない。
 #[test]
 fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。
@@ -464,12 +462,10 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     let frame1_k1 = harness
         .wiring
         .read_back_target(shell_target(0))
-        .unwrap_or_else(|e| {
-            panic!("DPI 変化直後の shell read_back 失敗（表示消失・要件 4.3）: {e:?}")
-        });
+        .unwrap_or_else(|e| panic!("DPI 変化直後の shell read_back 失敗（表示消失）: {e:?}"));
     assert!(
         opaque_count(&frame1_k1) > 0,
-        "DPI 変化直後の shell readback が全透明（表示消失・要件 4.3）: len={}",
+        "DPI 変化直後の shell readback が全透明（表示消失）: len={}",
         frame1_k1.len()
     );
     // 読み戻しは **native 原寸**（拡大は GPU の Visual 変換・`areka-P0-present-gpu-transform-scale`
@@ -478,7 +474,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     assert_eq!(
         frame1_k1.len(),
         frame1_k0.len(),
-        "DPI 変化で読み戻し長が変わった（読み戻しは native 原寸のはず＝拡大が原寸バイト列へ漏れている・要件 6.2）"
+        "DPI 変化で読み戻し長が変わった（読み戻しは native 原寸のはず＝拡大が原寸バイト列へ漏れている）"
     );
     let physical_after = shell_physical_size(&harness, 0);
     assert_ne!(
@@ -491,7 +487,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     assert_eq!(
         frame2,
         Some(2110),
-        "DPI 変化を跨いでもループは同じ 1 周の続き（pattern1=2110）を発行する（先頭 2106 へ戻さない＝リセットなし・要件 4.3）"
+        "DPI 変化を跨いでもループは同じ 1 周の続き（pattern1=2110）を発行する（先頭 2106 へ戻さない＝リセットなし）"
     );
     assert_eq!(
         shell_physical_size(&harness, 0),
@@ -506,7 +502,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     let (frame3, base_k1) = seriko_tick_apply_one(&mut harness, 1120, 2100, 0);
     assert_eq!(
         frame3, None,
-        "DPI 変化を跨いだ 1 周が実 fixture どおり `-1` 終端（ベース復帰）まで到達する（要件 4.3/4.3 終端）"
+        "DPI 変化を跨いだ 1 周が実 fixture どおり `-1` 終端（ベース復帰）まで到達する"
     );
     assert_eq!(
         shell_physical_size(&harness, 0),
@@ -519,7 +515,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     //     `refresh_scale` が pattern を捨てて素の面を出す実装なら、ここで両者が一致して落ちる。
     assert_ne!(
         frame1_k1, base_k1,
-        "DPI 変化直後の再表示が進行中コマを失いベース面へ戻っている（進行中挙動の喪失・要件 4.3）"
+        "DPI 変化直後の再表示が進行中コマを失いベース面へ戻っている（進行中挙動の喪失）"
     );
 
     harness.shutdown_bounded();

@@ -46,7 +46,7 @@ fn infos(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
         .collect()
 }
 
-/// 名前は `name` → フォルダ名の順。フォルダ名の指し方はフォルダ名とだけ突き合わせる（要件 1.6・1.7）。
+/// 名前は `name` → フォルダ名の順。フォルダ名の指し方はフォルダ名とだけ突き合わせる（areka-P0-shell-balloon-switch 要件 1.6・1.7）。
 #[test]
 fn name_then_folder_then_not_found() {
     let cands = [
@@ -78,7 +78,7 @@ fn name_then_folder_then_not_found() {
     );
 }
 
-/// `name` は大文字小文字を区別し、フォルダ名は 1 つの規則で区別しない（要件 1.6・2.8）。
+/// `name` は大文字小文字を区別し、フォルダ名は 1 つの規則で区別しない（areka-P0-shell-balloon-switch 要件 1.6）。
 #[test]
 fn name_is_case_sensitive_folder_name_is_not() {
     let cands = [cand("Plain", None, false), cand("x", Some("Beta"), false)];
@@ -93,7 +93,7 @@ fn name_is_case_sensitive_folder_name_is_not() {
 }
 
 /// `random` は隠しと今のものを除いた候補から注入の乱数で 1 つ選び、`info!` を 1 件。
-/// 同名の候補より先に解く（要件 1.9・裁定 4）。
+/// 同名の候補より先に解く（areka-P0-shell-balloon-switch 要件 1.9・裁定 4）。
 #[test]
 fn random_picks_among_visible_others_with_the_injected_pick() {
     let cands = [
@@ -160,7 +160,7 @@ fn random_with_no_other_candidate_is_the_current_one() {
     );
 }
 
-/// 特別な名前を解かない「名前 → フォルダ名」の突き合わせ（`--dump-shell` が使う・要件 2.4）。
+/// 特別な名前を解かない「名前 → フォルダ名」の突き合わせ（`--dump-shell` が使う）。
 #[test]
 fn find_by_name_or_folder_ignores_special_names() {
     let cands = [
@@ -212,7 +212,7 @@ fn plant_ghost() -> (TempPath, BasewareRoot) {
     (temp, root)
 }
 
-/// シェルの候補は隠しを含み（印つき）、隠しシェルも名指しなら切り替えられる。今のものも候補（要件 1.6・1.8）。
+/// シェルの候補は隠しを含み（印つき）、隠しシェルも名指しなら切り替えられる。今のものも候補（areka-P0-shell-balloon-switch 要件 1.6・1.8）。
 #[test]
 fn hidden_shell_by_name_and_the_current_one_are_candidates() {
     let (_temp, root) = plant_ghost();
@@ -272,7 +272,7 @@ fn shell_lastinstalled(world: &World, ghost: &Path) -> Result<String, NotFoundRe
 }
 
 /// シェルの `lastinstalled` の 4 通り。控えのゴーストが今のゴースト（大文字小文字は問わない）で先が
-/// 在るときだけ解け、控えは最後の 1 件だけ残る（要件 1.10・1.13・裁定 3）。
+/// 在るときだけ解け、控えは最後の 1 件だけ残る（areka-P0-shell-balloon-switch 要件 1.10・1.13・裁定 3）。
 #[test]
 fn shell_lastinstalled_resolves_only_within_the_current_ghost() {
     let (_temp, root) = plant_ghost();
@@ -316,7 +316,7 @@ fn shell_lastinstalled_resolves_only_within_the_current_ghost() {
     );
 }
 
-/// バルーンの `lastinstalled`: 控えが目録に在るときだけ解ける（要件 1.11）。
+/// バルーンの `lastinstalled`: 控えが目録に在るときだけ解ける（areka-P0-shell-balloon-switch 要件 1.11）。
 #[test]
 fn balloon_lastinstalled_resolves_only_when_in_the_catalog() {
     let (_temp, root) = plant_ghost();

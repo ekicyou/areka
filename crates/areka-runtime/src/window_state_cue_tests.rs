@@ -1,6 +1,6 @@
 // =============================================================================
 // WindowStateCueSink の自己選別・第 2 引数の読み分け・送り出しの決定論テスト
-// （task 1.2・要件 1.1〜1.3／1.5〜1.7／7.1）
+// （stay-on-top-directives 要件 1.1〜1.3／1.5〜1.7／7.1）
 //
 // 読み分けは純関数 `parse_window_state` で全分岐を押さえ、受け口では「送るか送らないか」
 // と記録の水準と欄（値・余り）を押さえる。「送らない」の主張が空虚にならないよう、送らない
@@ -42,7 +42,7 @@ const OFF: WindowStateDirective = WindowStateDirective::StayOnTop { on: false };
 
 // ---------------------------------------------------------------- 読み分け（純関数）
 
-/// 要件 1.2・1.3: 小文字ちょうどの `stayontop`／`!stayontop` がオン／オフになる。
+/// stay-on-top-directives 要件 1.2・1.3: 小文字ちょうどの `stayontop`／`!stayontop` がオン／オフになる。
 #[test]
 fn t_wsc1_lowercase_spellings_decide_on_and_off() {
     assert_eq!(
@@ -61,7 +61,7 @@ fn t_wsc1_lowercase_spellings_decide_on_and_off() {
     );
 }
 
-/// 要件 1.5・1.7: 大文字の混じり・`minimize`・空・無いは読めない値（値をそのまま返す）。
+/// stay-on-top-directives 要件 1.5・1.7: 大文字の混じり・`minimize`・空・無いは読めない値（値をそのまま返す）。
 #[test]
 fn t_wsc2_other_values_are_unrecognized_with_the_value_kept() {
     for value in [
@@ -85,7 +85,7 @@ fn t_wsc2_other_values_are_unrecognized_with_the_value_kept() {
     );
 }
 
-/// 要件 1.6: 第 3 引数以降は第 2 引数で決めた上で余りとして返す。
+/// stay-on-top-directives 要件 1.6: 第 3 引数以降は第 2 引数で決めた上で余りとして返す。
 #[test]
 fn t_wsc3_trailing_arguments_become_extra_after_the_decision() {
     assert_eq!(
@@ -111,7 +111,7 @@ fn t_wsc3_trailing_arguments_become_extra_after_the_decision() {
     );
 }
 
-/// 要件 1.1: `\v` は引数の有無に関わらず手前へ出す（引数は全部余り）。
+/// stay-on-top-directives 要件 1.1: `\v` は引数の有無に関わらず手前へ出す（引数は全部余り）。
 #[test]
 fn t_wsc4_raise_carrier_always_raises() {
     assert_eq!(
@@ -178,7 +178,7 @@ fn t_wsc6_directives_are_sent_one_each() {
     }
 }
 
-/// 書いたスコープは読まない（裁定 1）: `\1\v` も `\0\v` と同じ指令。コードに演者の欄の綴りも無い。
+/// 書いたスコープは読まない（stay-on-top-directives 裁定 1）: `\1\v` も `\0\v` と同じ指令。コードに演者の欄の綴りも無い。
 #[test]
 fn t_wsc7_executing_scope_does_not_change_the_directive() {
     for actor in ["0", "1", "2"] {
@@ -202,7 +202,7 @@ fn t_wsc7_executing_scope_does_not_change_the_directive() {
     );
 }
 
-/// 要件 1.5・1.7: 読めない値は送らず、値を欄に載せた警告 1 本を残す。
+/// stay-on-top-directives 要件 1.5・1.7: 読めない値は送らず、値を欄に載せた警告 1 本を残す。
 #[test]
 fn t_wsc8_unrecognized_value_warns_with_the_value_and_sends_nothing() {
     for value in ["minimize", "StayOnTop", ""] {
@@ -225,7 +225,7 @@ fn t_wsc8_unrecognized_value_warns_with_the_value_and_sends_nothing() {
     );
 }
 
-/// 要件 1.6: 余りは指令を送った上で `debug!` に欄つきで残す（警告にしない）。
+/// stay-on-top-directives 要件 1.6: 余りは指令を送った上で `debug!` に欄つきで残す（警告にしない）。
 #[test]
 fn t_wsc9_extra_arguments_are_recorded_and_the_directive_is_sent() {
     let (got, logs) = run(actor_carrier_cue(

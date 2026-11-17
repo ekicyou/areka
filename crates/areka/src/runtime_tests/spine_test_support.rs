@@ -6,7 +6,7 @@ use super::{
 
 /// BGRA 密配列（`stride=width*4`）のうち α バイト（各 4 バイト画素の index 3）が非 0 の画素数を数える。
 ///
-/// 「非全透明（初期面が実描画された）」の R8.5 述語＝`opaque_count > 0`。`read_back` は
+/// 「非全透明（初期面が実描画された）」の述語＝`opaque_count > 0`。`read_back` は
 /// premultiplied B8G8R8A8 を密（RowPitch 除去済み）で返すため、単純な 4 バイト刻みで α を見る。
 pub(super) fn opaque_count(bgra: &[u8]) -> usize {
     bgra.chunks_exact(4).filter(|px| px[3] != 0).count()
@@ -62,7 +62,7 @@ pub(super) fn bump_balloon_window_dpi(harness: &mut SpineHarness, scope: usize) 
 /// キャラ（シェル）窓の `DPI` を**現在値と必ず異なる値**へ差し替え、その新 DPI を返す
 /// （[`bump_balloon_window_dpi`] のシェル版・非空虚性の担保は同一）。
 ///
-/// SERIKO ループが載るのは**シェル**の表示スロットゆえ、ループ継続の檻（要件 4.3 の
+/// SERIKO ループが載るのは**シェル**の表示スロットゆえ、ループ継続の檻（areka-P0-emo-dpi-scaling 要件 4.3 の
 /// 「進行中挙動の喪失なし」）はシェル窓側の DPI を動かさなければ空虚になる。
 pub(super) fn bump_char_window_dpi(harness: &mut SpineHarness, scope: usize) -> u16 {
     let window = harness

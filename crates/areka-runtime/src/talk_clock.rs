@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use areka_sakura::TalkCue;
 
-/// talk 起点相対秒（`talk_time`）の時刻源（design.md「時刻源 / talk_clock」・areka-P0-emo2-boot 要件 2.2 / 2.3）。
+/// talk 起点相対秒（`talk_time`）の時刻源（areka-P0-emo2-boot design.md「時刻源 / talk_clock」・要件 2.2 / 2.3）。
 ///
 /// cue 到着観測（`observe_cue`）から talk 開始壁時刻（epoch）を**単調 max** で推定し、毎フレーム
 /// の `talk_time = frame_now − epoch`（負値は 0.0 clamp・epoch 未確立は `None`）を供給する。
@@ -34,9 +34,9 @@ impl TalkClock {
     /// cue 到着観測（worker スレッドから呼ばれる）。`epoch = max(epoch, clock() - at)`。
     ///
     /// 単調 max: 新 talk は到着壁時刻が前方へ跳ぶため epoch が自動リベースされ、talk 内ジッタ
-    /// （より小さい `clock() - at`）は max に負けて逆行しない（design.md「時刻源 / talk_clock」）。
+    /// （より小さい `clock() - at`）は max に負けて逆行しない（areka-P0-emo2-boot design.md「時刻源 / talk_clock」）。
     pub fn observe_cue(&self, at: f64) {
-        // クロック取得は Mutex の外で行い、保持は代入の一瞬のみに留める（design State Management）。
+        // クロック取得は Mutex の外で行い、保持は代入の一瞬のみに留める（areka-P0-emo2-boot design State Management）。
         let candidate = (self.clock)() - at;
         match self.epoch.lock() {
             Ok(mut guard) => {
@@ -79,7 +79,7 @@ impl TalkClock {
     }
 }
 
-/// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（design.md「時刻源 / talk_clock」）。
+/// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（areka-P0-emo2-boot design.md「時刻源 / talk_clock」）。
 ///
 /// `emit` ごとに `cue.at` を [`TalkClock::observe_cue`] へ渡して epoch を推定し、その後 cue を
 /// **非改変**で内側 sink（本番は `EmoTextSink`）へ透過転送する。`T: Send` のとき自動的に `Send`
@@ -101,7 +101,7 @@ impl<T: dola::cue::CueSink + Clone> ClockedTextSink<T> {
 
 /// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`areka_ghost::boot` の broadcast
 /// 登録先が要求する形）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
-/// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
+/// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（areka-P0-emo2-boot 設計 §Revalidation Triggers）。
 /// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送し、先渡し（`preview`）も
 /// 時刻を観測せずに内側へ通す。選択待ちの始まり（`choice_wait_began`）も同じく内側へ通す。
 impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {

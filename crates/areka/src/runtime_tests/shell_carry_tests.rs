@@ -109,7 +109,8 @@ fn replay_shows_the_decided_surfaces_and_binds_through_seriko() {
     );
     // 置き場のゴーストが持つ送り手を落とすとアクターの受信端が切れて終わる。
     drop(world);
-    seriko.join().unwrap();
+    areka_runtime::spine::join_bounded("shell carry seriko join", seriko)
+        .expect("seriko worker should end once the ghost's sink is dropped");
 
     let shown: Vec<(String, u32, Vec<u32>)> = records
         .lock()

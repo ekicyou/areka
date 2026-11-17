@@ -1,4 +1,4 @@
-//! 読み直しの対象の振り分け（design「ReloadArgs」・要件 1.2〜1.5・7.2・7.4・7.5・8.5・10.3）。
+//! 読み直しの対象の振り分け（areka-P0-mcp-reload design「ReloadArgs」・要件 1.2〜1.5・7.2・7.4・7.5・8.5・10.3）。
 //!
 //! fs・World・時計を読まない純粋関数だけを置く。panic しない。
 
@@ -13,7 +13,7 @@ pub enum ReloadTarget {
 }
 
 /// descript の読み直しで読み直す部分（空は無い＝語が 1 つも無ければ呼び手が断る）。
-// 要件 2.5: 公開の `ReloadTarget` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `ReloadTarget` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DescriptParts {
     pub ghost: bool,
@@ -22,7 +22,7 @@ pub struct DescriptParts {
 }
 
 impl DescriptParts {
-    /// すべての descript.txt（`\![reload,descript]`・MCP の `descript`・要件 7.1）。
+    /// すべての descript.txt（`\![reload,descript]`・MCP の `descript`・areka-P0-mcp-reload 要件 7.1）。
     pub const ALL: DescriptParts = DescriptParts {
         ghost: true,
         shell: true,
@@ -60,14 +60,14 @@ impl McpTarget {
     }
 }
 
-/// 台本の綴りからの写し。`None` は「本 spec が拾わない」（名前違い・aigraph・makoto・引数なしの reload）。
+/// 台本の綴りからの写し。`None` は「areka-P0-mcp-reload が拾わない」（名前違い・aigraph・makoto・引数なしの reload）。
 pub(crate) fn parse_script(name: &str, params: &[String]) -> Option<ScriptReload> {
     let plain = |target| ScriptReload {
         target,
         notes: DescriptNotes::default(),
     };
     match name {
-        // `\![reloadsurface]` は `\![reload,shell]` と同じ（要件 1.4）。
+        // `\![reloadsurface]` は `\![reload,shell]` と同じ（areka-P0-mcp-reload 要件 1.4）。
         "reloadsurface" => Some(plain(ReloadTarget::Shell)),
         "reload" => match params.first()?.as_str() {
             "ghost" => Some(plain(ReloadTarget::Ghost)),
@@ -84,7 +84,7 @@ pub(crate) fn parse_script(name: &str, params: &[String]) -> Option<ScriptReload
                     }
                 }
             }),
-            // makoto・aigraph ほかは拾わない（要件 1.5・10.3）。
+            // makoto・aigraph ほかは拾わない（areka-P0-mcp-reload 要件 1.5・10.3）。
             _ => None,
         },
         _ => None,

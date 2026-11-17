@@ -23,7 +23,7 @@ fn present_command_target(cmd: &PresentCommand) -> Option<TargetId> {
 ///
 /// scripted OnBoot talk（`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）は別スレッド群を跨いで
 /// 非同期に流れるため、Tick 注入（`DispatcherMsg::Tick`）と `try_iter` drain を有界ループで交互に
-/// 回し、必要件数が揃うまで進める（R8.3）。全 cue が `at=0.0`（`\w` なし）ゆえ最初の
+/// 回し、必要件数が揃うまで進める。全 cue が `at=0.0`（`\w` なし）ゆえ最初の
 /// 有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界待機で吸収する。揃わないまま進みが
 /// 止まれば、待ちの芯の理由を載せて panic する（hang しない）。
 ///
@@ -49,19 +49,19 @@ fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentComma
     received
 }
 
-/// spine S1（boot→表示・DD-12・R1.1/1.2/1.3/1.4/8.1/8.2/8.5）: `\b` を含まない OnBoot 台本
+/// spine S1（boot→表示）: `\b` を含まない OnBoot 台本
 /// （`\s[0]`）で boot→attach フェーズ→初回 `\s` 駆動を走らせ、(a) 装着サマリ `info!` が
-/// planned==attached==2（DD-12 の縮退が scope 導出バグを隠さない檻＝期待 scope 数の全 target 完了）・
+/// planned==attached==2（縮退が scope 導出バグを隠さない檻＝期待 scope 数の全 target 完了）・
 /// ERROR 0 件、(b) **シェルは attach 直後は非表示**（`read_back` Err＝未表示・defect #5・
 /// 2026-07-13 実機#5）で**バルーンは attach で面 0 を不可視のまま確立済み**（`opaque_count>0`＝面0 の
 /// 実描画＋文字層スロット取得。可視性そのものは付かない）、(c) 最初のさくらスクリプト `\s[0]` cue が
 /// seriko→PresentBridge→drain 経路で運ぶ
 /// `ShowSurface{shell_target(0),0}` を apply するとシェルが**非表示→surface0 の実描画**へ遷移する
-/// （`opaque_count>0`）ことを固定する。観測境界を実描画→readback まで延ばす（R8.2）。
+/// （`opaque_count>0`）ことを固定する。観測境界を実描画→readback まで延ばす。
 ///
 /// # defect #5 の檻（シェルは初回 `\s` まで非表示）
 ///
-/// 旧 DD-9 は attach 時にシェル初期面（scope0=surface0／scope>=1=surface10）を焼き込んでいたが、実機#5
+/// 以前は attach 時にシェル初期面（scope0=surface0／scope>=1=surface10）を焼き込んでいたが、実機#5
 /// で「起動時に規定面が一瞬ちらつく」欠陥が判明した。SSP 互換の既定は「シェル表示なし（-1）」であり、
 /// 初回シェル表示は最初の `\s` cue が駆動する。本ケースは attach 直後の shell `read_back` が Err
 /// （未表示＝合成面なし＝透過）であること、`\s[0]` 適用でのみシェルが非表示→実描画へ遷移する
@@ -73,18 +73,18 @@ fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentComma
 fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
     let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free（シェル面 cue \s[0] のみ）
 
-    // attach フェーズ: DD-12 の planned==attached==2 を装着サマリで観測（縮退がバグを隠さない檻）。
+    // attach フェーズ: planned==attached==2 を装着サマリで観測（縮退がバグを隠さない檻）。
     // attach は Tick 非依存（GPU 資源＋GhostWindows ゲートのみ）ゆえ boot 直後に直接駆動する。
     harness.attach_all();
 
-    // (a-2) 文字層 k 再追従の再利用源（emo-dpi-scaling D11-3・R8.1）: attach 相は装着した各 scope の
+    // (a-2) 文字層 k 再追従の再利用源: attach 相は装着した各 scope の
     //       `BalloonModel` を `RuntimeWiring` へ記憶する。文字層スケール相（`run_text_scale_phase`）はこれを再利用して
     //       binding を組み直す——記憶が無ければ再追従は model 不在で skip され、文字だけが旧 k に
-    //       取り残される（6.5 一次実走の欠陥）。実 attach 経路で保持されることをここで固定する。
+    //       取り残される（一次実走の欠陥）。実 attach 経路で保持されることをここで固定する。
     assert_eq!(
         harness.wiring.balloon_model_scopes(),
         vec![0u32, 1],
-        "attach 済み全 scope の BalloonModel が再追従用に記憶されている（D11-3）"
+        "attach 済み全 scope の BalloonModel が再追従用に記憶されている"
     );
 
     // (b-1) シェルは初回 `\s` cue まで非表示（defect #5）: attach 直後の shell target は未表示
@@ -100,7 +100,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
     }
 
     // (b-2) バルーンは attach で面 0 を不可視のまま確立する（文字層スロット取得のため `ShowSurface` を
-    //       保持）。原寸面が合成メモに入り実描画されるので readback は非全透明（R8.1/8.2/8.5）。
+    //       保持）。原寸面が合成メモに入り実描画されるので readback は非全透明。
     for (label, target) in [
         ("balloon scope0", balloon_target(0)),
         ("balloon scope1", balloon_target(1)),
@@ -110,13 +110,13 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         });
         assert!(
             opaque_count(&px) > 0,
-            "{label} の readback が全透明（attach が確立した面 0 が実描画されていない・R8.1/8.2/8.5）: len={}",
+            "{label} の readback が全透明（attach が確立した面 0 が実描画されていない）: len={}",
             px.len()
         );
     }
 
     // (c) 初回 `\s[0]` cue を実 sink 経路（ghost→sakura→seriko→PresentBridge→rx）で駆動し、shell 表示
-    //     対象（偶数 TargetId）へ ShowSurface{shell_target(0),0,static_binds} が届くことを確認する（R8.2）。
+    //     対象（偶数 TargetId）へ ShowSurface{shell_target(0),0,static_binds} が届くことを確認する。
     let mut received = tick_and_collect(&mut harness, 1);
     let show_idx = received
         .iter()
@@ -135,7 +135,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
             assert_eq!(
                 *target,
                 shell_target(0),
-                "初回 \\s[0] は shell 表示対象（偶数 TargetId・DD-3）"
+                "初回 \\s[0] は shell 表示対象（偶数 TargetId）"
             );
             assert_eq!(
                 *surface_id, 0,
@@ -145,7 +145,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         _ => unreachable!("position で ShowSurface を選別済み"),
     }
 
-    // 形状記録後に実 presenter へ apply（実描画→readback・R8.2）。初回 `\s` 適用で shell が非表示から
+    // 形状記録後に実 presenter へ apply（実描画→readback）。初回 `\s` 適用で shell が非表示から
     // surface0 の実描画へ遷移する（hidden→shown・defect #5 の正しい表示駆動）。
     harness.wiring.apply_present(&mut harness.world, show);
     let after_show = harness
@@ -154,7 +154,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         .expect("初回 \\s[0] 適用後は shell scope0 の原寸面が確立され read_back 可能");
     assert!(
         opaque_count(&after_show) > 0,
-        "初回 \\s[0] 適用で shell scope0 が surface0 の実描画へ遷移（非表示→非全透明・R8.1/8.2/8.5）"
+        "初回 \\s[0] 適用で shell scope0 が surface0 の実描画へ遷移（非表示→非全透明）"
     );
 
     harness.shutdown_bounded();
@@ -217,18 +217,18 @@ fn spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface() 
         assert_eq!(
             harness.wiring.presenter().target_visible(target),
             Some(false),
-            "scope{scope}: 起動直後のバルーンは不可視のまま（Requirement 1.1・全 scope 適用の 1.6）"
+            "scope{scope}: 起動直後のバルーンは不可視のまま"
         );
     }
 
     harness.shutdown_bounded();
 }
 
-/// spine S3（`\b` 配送・R5.4/DD-5・R8.2）: `\b[-1]`→`\b[0]` を含む scripted OnBoot 台本を実 sink 経路
+/// spine S3（`\b` 配送）: `\b[-1]`→`\b[0]` を含む scripted OnBoot 台本を実 sink 経路
 /// （`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）で流し、受信 `PresentCommand` 列に
 /// `Hide{balloon_target(0)}`→`ShowSurface{balloon_target(0), surface_id:0, binds:default}` が
 /// **順序どおり**現れることをアサートする（受信列順序＝本ケースの観測完了条件）。続けて記録済み指令を
-/// 実 presenter へ apply し、balloon target の `read_back` が非全透明（surface0 の実描画・R8.2）で
+/// 実 presenter へ apply し、balloon target の `read_back` が非全透明（surface0 の実描画）で
 /// attach 初期面と同一バイトを再駆動することを確認する。
 ///
 /// # readback 遷移の観測境界（実装事実の申し送り・CONCERNS 相当）
@@ -241,8 +241,8 @@ fn spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface() 
 /// バルーン系列（emo2-kakukaku の `balloons0.png`）は面 0 の 1 枚のみで、attach が確立する面も 0 ゆえ、
 /// `\b[-1]`→`\b[0]` の前後で readback バイトは不変（両方 surface0）。よって「Hide→全透明」型の
 /// ピクセル遷移は本経路では観測不能である。本テストは
-/// (1) 受信列順序（R5.4 の本質・観測完了条件）と (2) apply 後の balloon readback が非全透明かつ attach
-/// 初期面と同一（surface_id/binds が正しく貫通し実描画された証跡・R8.2）で `\b` 配送の貫通を檻に入れる。
+/// (1) 受信列順序（観測完了条件）と (2) apply 後の balloon readback が非全透明かつ attach
+/// 初期面と同一（surface_id/binds が正しく貫通し実描画された証跡）で `\b` 配送の貫通を檻に入れる。
 #[test]
 fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     let mut harness = SpineHarness::boot(r"\b[-1]\b[0]\e");
@@ -272,7 +272,7 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
         received.iter().map(variant_name).collect::<Vec<_>>()
     );
 
-    // 受信列順序（R5.4/DD-5）: 1 件目 Hide{balloon(0)}・2 件目 ShowSurface{balloon(0),0,default}。
+    // 受信列順序: 1 件目 Hide{balloon(0)}・2 件目 ShowSurface{balloon(0),0,default}。
     match &received[0] {
         PresentCommand::Hide { target, reply } => {
             assert_eq!(
@@ -304,13 +304,13 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
             assert_eq!(
                 *binds,
                 BindSet::default(),
-                "binds は既定（空集合＝バルーン着せ替えなし・DD-5/R5.1）"
+                "binds は既定（空集合＝バルーン着せ替えなし）"
             );
-            // 非退行（task 9.4・R5.4）: loop 不活性（Inert）経路の cue 由来 ShowSurface は pattern 寄与なし＝空
+            // 非退行: loop 不活性（Inert）経路の cue 由来 ShowSurface は pattern 寄与なし＝空
             // （PatternState 拡張前と観測等価）。ループを活性化する boot_live 経路でのみ pattern が載る。
             assert!(
                 pattern.is_empty(),
-                "loop 不活性経路の cue 由来 ShowSurface は pattern 空（従来と観測等価・R5.4）"
+                "loop 不活性経路の cue 由来 ShowSurface は pattern 空（従来と観測等価）"
             );
             assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
         }
@@ -320,7 +320,7 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
         ),
     }
 
-    // 実 presenter へ apply（実描画→readback まで観測境界を延ばす・R8.2）。形状記録後に move で流す。
+    // 実 presenter へ apply（実描画→readback まで観測境界を延ばす）。形状記録後に move で流す。
     let mut cmds = received.into_iter();
     let hide = cmds.next().expect("Hide");
     harness.wiring.apply_present(&mut harness.world, hide);
@@ -342,7 +342,7 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
         .expect("ShowSurface{0} 後の balloon read_back");
     assert!(
         opaque_count(&after_show) > 0,
-        "ShowSurface{{0}} 適用後の balloon は非全透明（surface0 の実描画・R8.2）"
+        "ShowSurface{{0}} 適用後の balloon は非全透明（surface0 の実描画）"
     );
     assert_eq!(
         after_show, baseline,
@@ -352,12 +352,12 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     harness.shutdown_bounded();
 }
 
-/// spine S4（`\b` なし完走・R5.5・R1 系）: `\b` を含まない OnBoot 台本が S1 経路（boot→表示）を完走し、
+/// spine S4（`\b` なし完走）: `\b` を含まない OnBoot 台本が S1 経路（boot→表示）を完走し、
 /// かつ受信 `PresentCommand` 列に **balloon 表示対象（奇数 TargetId）宛の指令が一切現れない**
 /// （＝`\b` 由来の面切替が無い）ことを固定する。emo2 のバルーン fixture（`emo2-kakukaku`）では scope
 /// ごとに別系列が解決され（scope0＝`balloons0.png`／scope1＝`balloonk0.png`）、いずれの系列も面 0 の
 /// 1 枚だけを持つ。加えて本ケースの OnBoot 台本自体が `\b` を含まないため、どの scope でもバルーン
-/// 面切替なしで完走する（R5.5）。`\s[0]` はシェル面指令（偶数 TargetId）を 1 件生むため、
+/// 面切替なしで完走する。`\s[0]` はシェル面指令（偶数 TargetId）を 1 件生むため、
 /// 「talk が実際に流れたが balloon 面切替は無い」を受信列で決定論的に区別できる。
 #[test]
 fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
@@ -387,23 +387,23 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
     let mut received = tick_and_collect(&mut harness, 1);
     // settle 前段（Tick 注入だけ・打ち切り条件を持たない）: 旧ループと同じ注入列
     // `1_000_000..1_000_000 + 5_000` を**毎回すべて**注入し、各注入の直後に回収する。範囲は
-    // リテラルの固定列ゆえ環境の速さに依らず常に同一で、時刻が観測を追い越さない（要件 4.3）。
+    // リテラルの固定列ゆえ環境の速さに依らず常に同一で、時刻が観測を追い越さない。
     for now in 1_000_000u64..1_000_000 + 5_000 {
         harness.inject_dispatcher_tick(now);
         received.extend(harness.wiring.drain_received());
     }
     // settle 後段（回収だけ・時刻は進めない）: 残余（万一の balloon 指令）を、反復回数ではなく
-    // 壁時計の最小持続と連続空観測で有界に回収する（要件 4.2・4.5）。負荷下でも回収機会が
+    // 壁時計の最小持続と連続空観測で有界に回収する。負荷下でも回収機会が
     // 縮まないので、この不在主張が空虚な緑になりにくい。
     drain_settled(&mut harness, &mut received);
 
-    // R5.5: 受信列に balloon 表示対象（奇数 TargetId）宛は一切現れない（`\b` 由来面切替なしで完走）。
+    // 受信列に balloon 表示対象（奇数 TargetId）宛は一切現れない（`\b` 由来面切替なしで完走）。
     for cmd in &received {
         if let Some(t) = present_command_target(cmd) {
             assert_eq!(
                 t.0 % 2,
                 0,
-                "\\b なし台本で balloon 表示対象（奇数 TargetId）宛の指令が現れた（面切替 leak・R5.5 違反）: {:?} / variant={}",
+                "\\b なし台本で balloon 表示対象（奇数 TargetId）宛の指令が現れた（面切替 leak）: {:?} / variant={}",
                 t,
                 variant_name(cmd)
             );
