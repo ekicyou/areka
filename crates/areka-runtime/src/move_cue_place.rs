@@ -167,7 +167,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: Sca
         // 窓の書込口が受けなかった（窓ハンドルがまだ無い等）。
         return skipped("write_refused");
     }
-    // 起動時の確定が台本の置いた窓を引き戻さないための印（x が既定のままでも・scg 7.3）。
+    // 起動時の確定が台本の置いた窓を引き戻さないための印（x が既定のままでも・areka-P0-scope-chain-gap 7.3）。
     world.entity_mut(target).insert(ScriptPlaced);
     let base_rect = match frame {
         BaseFrame::Window { rect, .. } | BaseFrame::Area(rect) => rect,
