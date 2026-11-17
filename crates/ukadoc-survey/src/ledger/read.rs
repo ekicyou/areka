@@ -154,7 +154,9 @@ fn read_entries(
 
     let mut entries: BTreeMap<EntryId, LedgerEntry> = BTreeMap::new();
     for (raw_id, value) in table {
-        // 綴りが 2 形のどちらでもなければ、置き場つきで落とす（要件 1.9・6.10）。
+        // `read` から来る鍵は切り分け（`blocks::split_parsed`）が見出しの id を先に
+        // 確かめているので、ここでは失敗しない（失敗の文面を決めるのは切り分けの側）。
+        // それでも素の id の失敗を外へ出さない決まりは読み手 3 つで同じにしておく。
         let id = EntryId::parse(raw_id).map_err(|err| at_ledger_file(err, file))?;
         let place = place_of(raw_id);
         let item = value

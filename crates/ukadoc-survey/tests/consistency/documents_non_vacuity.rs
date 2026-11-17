@@ -35,7 +35,9 @@ use ukadoc_survey::model::{Domain, THEMES};
 use ukadoc_survey::report::summary::render_summary;
 
 use super::RepoData;
-use super::documents::{BRIEF_FILE, Documents, Floors, OWN_SPEC_DIR, SPECS_DIR, cited_ids};
+use super::documents::{
+    BRIEF_FILE, COMPLETED_DIR, Documents, Floors, OWN_SPEC_DIR, SPECS_DIR, cited_ids,
+};
 use super::documents_checks::{bundle_ids_in_report, linkage_bundle_ids, report_bundle_ids};
 
 /// `.kiro/specs/` の直下にある brief 持ちディレクトリの数の下限。
@@ -237,8 +239,8 @@ fn the_spec_directory_listing_excludes_this_spec_and_completed() {
         "本 spec 自身 {OWN_SPEC_DIR} が一覧に混じっている"
     );
     assert!(
-        !documents.spec_dirs.contains("completed"),
-        "completed が spec の名前として一覧に混じっている"
+        !documents.spec_dirs.contains(COMPLETED_DIR),
+        "{COMPLETED_DIR} が spec の名前として一覧に混じっている"
     );
 
     // 除外の主張は、除外する相手が実在しなければ**無条件に成り立つ**（`non_vacuity.rs`

@@ -220,16 +220,18 @@ fn negative_count_is_rejected() {
     assert!(message.contains("欄 ukadoc_entries が負"), "{message}");
 }
 
-/// 項目 id が 2 形のどちらでもなければ落ちる（要件 1.9）。
+/// 項目 id が 2 形のどちらでもなければ、どのファイルかを添えて落ちる（要件 1.9）。
+/// 3 文書・台帳の読み手と同じく、綴りしか持たない素の id の失敗は外へ出さない。
 #[test]
 fn malformed_entry_id_is_rejected() {
     let body = mutated("\"ukadoc:dev_bind\" = {", "\"ukadoc\" = {");
-    let message = read_error(&body).to_string();
-    assert!(message.contains("ukadoc"), "{message}");
-    assert!(
-        matches!(read_error(&body), SurveyError::BadEntryId { .. }),
-        "id の失敗は BadEntryId で表す"
-    );
+    match read_error(&body) {
+        SurveyError::TomlParse { path, reason } => {
+            assert!(path.ends_with("catalog.toml"), "{path}");
+            assert_eq!(reason, "項目 id の形が違う: ukadoc");
+        }
+        other => panic!("置き場つきの形の崩れとして落ちること: {other}"),
+    }
 }
 
 /// `page` の欄が id のページと食い違えば落ちる。**書かれた値を捨てて id から

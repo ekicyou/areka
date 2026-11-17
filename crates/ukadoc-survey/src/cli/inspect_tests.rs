@@ -7,7 +7,8 @@
 //! - 所見の件数から終了の仕方を決める判断（[`verdict`]）
 //! - 証拠の並べ方（[`render_evidence_by_id`]・[`render_evidence`]）
 //! - 候補の並べ方と、証拠へ混ざらないこと（[`render_candidates`]・要件 5.9）
-//! - 2 つのカタログが比べられる形かどうかの見立て（[`comparability_notice`]）と差分の版面
+//! - 2 つのカタログが比べられる形かどうかの見立て（[`super::comparability_notice`]。
+//!   [`compare`] を通して見る）と差分の版面
 //! - 検査の配線（[`examine`]）——判定を呼び、本文を組み、件数を数える 3 つが噛み合って
 //!   いること。`check` から読む段だけを外した形なので、手で組んだ見本の世界で走らせられる
 //! - 差分の配線（[`compare`]）——2 つのカタログを渡す向き・注意を捨てずに渡すこと・
@@ -23,10 +24,10 @@
 use std::collections::BTreeMap;
 
 use super::{
-    comparability_notice, compare, examine, render_candidates, render_check, render_diff,
-    render_evidence, render_evidence_by_id, verdict,
+    compare, examine, render_candidates, render_check, render_diff, render_evidence,
+    render_evidence_by_id, verdict,
 };
-use crate::catalog::{Catalog, SnapshotMeta};
+use crate::catalog::Catalog;
 use crate::check::{Finding, FindingKind};
 use crate::diff::CatalogDiff;
 use crate::error::SurveyError;
@@ -53,20 +54,6 @@ fn by_id(rows: &[(&str, &[&str])]) -> BTreeMap<EntryId, Vec<String>> {
             )
         })
         .collect()
-}
-
-/// カタログ冒頭の情報を手で組む小道具（比べるのは 2 欄だけ）。
-fn meta(hash_algorithm: &str, catalog_format: u32) -> SnapshotMeta {
-    SnapshotMeta {
-        package: "ukagaka-doc-mcp".to_owned(),
-        package_version: "0.2.7".to_owned(),
-        snapshot_version: 1,
-        generated_at: "2026-08-24T04:08:57.881Z".to_owned(),
-        total_entries: 2983,
-        ukadoc_entries: 1749,
-        catalog_format,
-        hash_algorithm: hash_algorithm.to_owned(),
-    }
 }
 
 // --------------------------------------------------------------------------
@@ -583,33 +570,8 @@ fn a_catalog_of_another_shape_version_only_gets_no_claim_that_almost_every_body_
 }
 
 // --------------------------------------------------------------------------
-// 差分（要件 8.1）と、比べられる形かどうかの見立て
+// 差分の版面（要件 8.1）
 // --------------------------------------------------------------------------
-
-#[test]
-fn a_different_catalog_format_draws_a_warning_that_names_both_numbers() {
-    let notice = comparability_notice(&meta("fnv1a64", 1), &meta("fnv1a64", 2))
-        .expect("形の版が違うのに注意が出ない");
-    // 「1」「2」だけを当てると、決まった文「2 つのカタログは…」の「2」で緑になる。
-    for needle in ["現行 1", "新しい方 2"] {
-        assert!(
-            notice.contains(needle),
-            "注意の本文に形の版 {needle} が無い: {notice}"
-        );
-    }
-}
-
-#[test]
-fn the_warning_says_which_of_the_two_disagrees() {
-    // 2 つの食い違いが同じ本文になると、どちらを直せばよいか分からない。
-    let hash = comparability_notice(&meta("fnv1a64", 1), &meta("xxh3", 1)).expect("算法の注意");
-    let format =
-        comparability_notice(&meta("fnv1a64", 1), &meta("fnv1a64", 2)).expect("形の版の注意");
-    assert_ne!(
-        hash, format,
-        "算法の食い違いと形の版の食い違いが同じ本文になっている"
-    );
-}
 
 #[test]
 fn the_diff_listing_is_written_out_word_for_word() {

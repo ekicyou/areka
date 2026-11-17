@@ -137,8 +137,10 @@ fn read_entries(root: &toml::Table) -> Result<BTreeMap<EntryId, CatalogEntry>, S
     let mut id_of_url: BTreeMap<String, &str> = BTreeMap::new();
     let mut page_of_url: BTreeMap<String, PageName> = BTreeMap::new();
     for (raw_id, value) in table {
-        // 綴りが 2 形のどちらでもなければ、ここで `BadEntryId` になる（要件 1.9）。
-        let id = EntryId::parse(raw_id)?;
+        // 綴りが 2 形のどちらでもなければ、置き場つきで落とす（要件 1.9）。素の id の
+        // 失敗は綴りしか持たないので外へ出さない（3 文書・台帳の読み手と同じ決まり）。
+        let id = EntryId::parse(raw_id)
+            .map_err(|_| malformed(CATALOG_FILE, format!("項目 id の形が違う: {raw_id}")))?;
         let place = format!("[entry] の {raw_id}");
         let item = value.as_table().ok_or_else(|| {
             malformed(
