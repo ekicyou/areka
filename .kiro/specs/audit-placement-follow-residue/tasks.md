@@ -51,13 +51,13 @@
   - _Dispatch: mechanical — 設計が腕と記録と檻の期待を与えている_
   - _Requirements: 2.1, 2.3, 2.8, 9.6_
 
-- [ ] 4. 追随のテストの支えの写しを共有の部品へ寄せる
+- [x] 4. 追随のテストの支えの写しを共有の部品へ寄せる
 - [x] 4.1 `follow_test_support.rs` の写しを消して共有の部品を使う
   - 83（`assert_no_event`）・2 回目（`point`・`contained`）・511（`code_only`・`SharedFakeIo`／`SylphyaRig`）の写しを消し、使い手を `test_support`・`placement_shared_test_support` の共有へ向ける。消す前に `git grep` で使い手を全部確かめる（文字列での参照を含む）。`contained` は飽和の足し算になるので、期待が変わる檻が無いかを使い手で確かめる
   - 完了の状態: 設計の G4 の 1 つ目の grep のうち `follow_test_support.rs` の当たりが 0 行で、`cargo test -p areka-placement` が緑
   - _Dispatch: mechanical — 写しと共有の行き先を設計の表が対で与えている_
   - _Requirements: 4.1, 4.4_
-- [ ] 4.2 ほかのテストの写しを消す（358・426・220・219）
+- [x] 4.2 ほかのテストの写しを消す（358・426・220・219）
   - `follow_test_support.rs` の 5 つの部品（`position_of`・`drag_event`・`drag_end_event_at`・`window_pos_sized`・`point_of`）を `pub(crate)` にし、`spawn_follow_pipeline_tests.rs`・`balloon_limit_flip_tests.rs`・`balloon_lock_drag_tests.rs` の写しを消す
   - `follow_move_shift_tests.rs` の `k` を `placement_shared_test_support::k` へ、`follow_sticky_follow_drag_tests.rs` の `events_of` を `events_with` へ
   - 完了の状態: 設計の G4 の 1 つ目と 2 つ目の grep が 0 行で、`cargo test -p areka-placement` が緑
@@ -164,3 +164,4 @@
 ## Implementation Notes
 - 2.2: 偽の HWND では wintf が始めの位置を `None` で入れるため、`follow::drag_end_gate_tests::fast_drag_places_window_at_destination_and_persists_once` が 3.2 まで赤（進行役が認めた）。テストの仮の手伝い `follow::test_support::zero_unknown_drag_origin`（`shortcut:` 付き・`balloon_lock_drag_tests.rs` と `follow_drag_end_gate_tests.rs` の `Rig::tick` から呼ぶ）は 3.2 で窓の位置の手伝いへ替えて消す。`follow_drag_end_gate_tests.rs:204` の「(0,0) のまま入る」も 3.2 で直す
 - 3.2: 2.2 の借りは返した（`zero_unknown_drag_origin` を消し、テストの支えの `drag_origin_at_window`＝`DraggingState` の挿入の観測者で始めの位置を窓の位置にする、へ替えた・分からないの檻は手伝い無しの `Rig::unknown_origin()`）
+- 4.2: G4 の 1 つ目の grep の残り 1 行（`follow/visibility.rs` の `clamp_x_into`）は本番の写しで、8 の持ち分。8 の完了で 0 行になる

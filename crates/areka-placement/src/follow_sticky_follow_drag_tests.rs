@@ -27,7 +27,8 @@ use super::{
     AnchorSource, Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift,
 };
 use crate::resolver::{Anchor, PointPx};
-use log_capture_kit::{CapturedEvent, capture};
+use crate::shared_test_support::events_with;
+use log_capture_kit::capture;
 
 /// キャラクターの窓の大きさ（物理 px・96 の倍数を避ける）。
 const W: i32 = 434;
@@ -74,13 +75,6 @@ fn world_with_snapshot() -> World {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     world
-}
-
-fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.field_str("event") == Some(event))
-        .collect()
 }
 
 fn finish(world: World) {
@@ -135,7 +129,7 @@ fn bottom_partner_takes_only_horizontal_delta() {
         }
     );
     assert!(
-        events_of(&events, "sticky_follow").is_empty(),
+        events_with(&events, "sticky_follow").is_empty(),
         "途中の 1 回ごとは記録しない: {events:?}"
     );
     finish(world);
@@ -168,7 +162,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
     );
     assert!(world.get_resource::<CharDragSession>().is_none());
 
-    let logged = events_of(&events, "sticky_follow");
+    let logged = events_with(&events, "sticky_follow");
     assert_eq!(logged.len(), 1, "{events:?}");
     let e = logged[0];
     assert_eq!(e.field_str("trigger"), Some("drag"));
@@ -311,7 +305,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
         finish_char_drag(&mut world, a.char, point(600, 300));
     });
     assert_eq!(position_of(&world, b.char), Point { x: 900, y: 150 });
-    let skipped = events_of(&events, "sticky_follow_skipped");
+    let skipped = events_with(&events, "sticky_follow_skipped");
     assert_eq!(skipped.len(), 2, "{events:?}");
     for e in skipped {
         assert_eq!(e.field_str("reason"), Some("no_session"));
@@ -324,7 +318,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
         follow_partners_on_drag(&mut world, a.char, point(600, 300));
     });
     assert_eq!(position_of(&world, b.char), Point { x: 900, y: 150 });
-    let skipped = events_of(&events, "sticky_follow_skipped");
+    let skipped = events_with(&events, "sticky_follow_skipped");
     assert_eq!(skipped.len(), 1, "{events:?}");
     assert_eq!(skipped[0].field_str("reason"), Some("other_window"));
     assert!(world.get_resource::<CharDragSession>().is_some());
@@ -333,7 +327,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
     let ((), events) = capture(|| {
         follow_partners_on_drag(&mut world, lone.char, point(0, 0));
     });
-    assert!(events_of(&events, "sticky_follow_skipped").is_empty());
+    assert!(events_with(&events, "sticky_follow_skipped").is_empty());
     finish(world);
 }
 
@@ -346,7 +340,7 @@ fn absent_member_is_logged_at_begin_and_left_out() {
     group(&mut world, &["0", "1", "2"]);
 
     let ((), events) = capture(|| begin_char_drag(&mut world, dragged.char));
-    let absent = events_of(&events, "sticky_member_absent");
+    let absent = events_with(&events, "sticky_member_absent");
     assert_eq!(absent.len(), 1, "{events:?}");
     assert_eq!(absent[0].field("scope"), Some("2"));
     assert_eq!(absent[0].field_str("when"), Some("drag"));
@@ -354,7 +348,7 @@ fn absent_member_is_logged_at_begin_and_left_out() {
     let ((), events) = capture(|| finish_char_drag(&mut world, dragged.char, point(510, 200)));
     assert_eq!(position_of(&world, partner.char), Point { x: 910, y: 150 });
     assert_eq!(
-        events_of(&events, "sticky_follow")[0].field("partners"),
+        events_with(&events, "sticky_follow")[0].field("partners"),
         Some("[1]")
     );
     finish(world);

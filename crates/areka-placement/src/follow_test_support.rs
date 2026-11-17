@@ -8,11 +8,12 @@ use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 use super::{MonitorSnapshot, project_anchor};
-// 写しを消して共有の部品を使う（使い手は従来どおりこの経路から引ける）。
 use crate::resolver::RectPx;
-pub(crate) use crate::shared_test_support::assert_no_event;
+use crate::test_support::SharedFakeIo;
+// 写しを消して共有の部品を使う（使い手は従来どおりこの経路から引ける）。
+pub(super) use crate::shared_test_support::assert_no_event;
 pub(crate) use crate::test_support::zorder_pair_deferred::code_only;
-pub(crate) use crate::test_support::{SharedFakeIo, contained, point};
+pub(super) use crate::test_support::{contained, point};
 use log_capture_kit::CapturedEvent;
 
 // -------------------------------------------------------------------------
@@ -38,7 +39,7 @@ pub(super) fn window_pos_at(x: i32, y: i32) -> WindowPos {
 }
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
-pub(super) fn position_of(world: &World, entity: Entity) -> Point {
+pub(crate) fn position_of(world: &World, entity: Entity) -> Point {
     world
         .get::<WindowPos>(entity)
         .expect("WindowPos があるはず")
@@ -46,7 +47,7 @@ pub(super) fn position_of(world: &World, entity: Entity) -> Point {
         .expect("position があるはず")
 }
 
-pub(super) fn drag_event(target: Entity) -> DragEvent {
+pub(crate) fn drag_event(target: Entity) -> DragEvent {
     DragEvent {
         target,
         start_position: Point::new(0, 0),
@@ -125,7 +126,7 @@ pub(super) fn drag_event_at(target: Entity, start: (i32, i32), cursor: (i32, i32
 }
 
 /// 最終カーソル座標付き DragEndEvent。
-pub(super) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEvent {
+pub(crate) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEvent {
     DragEndEvent {
         target,
         position: Point::new(cursor.0, cursor.1),
@@ -135,7 +136,7 @@ pub(super) fn drag_end_event_at(target: Entity, cursor: (i32, i32)) -> DragEndEv
 }
 
 /// position＋size 付きの WindowPos（spawn の `window_pos` と同型）。
-pub(super) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
+pub(crate) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
     WindowPos {
         position: Some(Point { x, y }),
         size: Some(SizeI::new(w, h)),
@@ -311,7 +312,7 @@ pub(super) fn visible_in(layout: &MonitorSnapshot, pos: PointPx, size: SizePx) -
 }
 
 /// 現在位置を [`PointPx`] で読む（檻の比較単位を射影の単位へ揃える）。
-pub(super) fn point_of(world: &World, entity: Entity) -> PointPx {
+pub(crate) fn point_of(world: &World, entity: Entity) -> PointPx {
     let p = position_of(world, entity);
     PointPx { x: p.x, y: p.y }
 }

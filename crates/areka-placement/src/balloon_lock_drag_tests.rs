@@ -13,11 +13,11 @@ use std::time::Instant;
 use areka_sylphya::PersistKey;
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::drag::{
-    DragAccumulatorResource, DragConfig, DragEndEvent, DragTransition, OnDrag, OnDragEnd,
-    WindowDragContext, WindowDragContextResource, dispatch_drag_events,
+    DragAccumulatorResource, DragConfig, DragTransition, OnDrag, OnDragEnd, WindowDragContext,
+    WindowDragContextResource, dispatch_drag_events,
 };
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{PhysicalPoint, Point, SizeI, Window, WindowPos};
+use wintf::ecs::{PhysicalPoint, Point, Window, WindowPos};
 
 use super::super::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, on_balloon_drag, on_balloon_drag_end,
@@ -28,6 +28,7 @@ use super::super::resolver::{Anchor, PointPx, RectPx};
 use super::super::spawn::{BalloonKeywordBase, CharWindowMarker};
 use super::*;
 use crate::config::BalloonXMode;
+use crate::follow::test_support::{drag_end_event_at, window_pos_sized};
 use crate::shared_test_support::{events_with, scopes};
 use crate::test_support::fake_handle;
 use log_capture_kit::capture;
@@ -44,14 +45,6 @@ const KEYWORD_BASE: BalloonKeywordBase = BalloonKeywordBase {
     mode: BalloonXMode::CenterTop,
     adjust: PointPx { x: 13, y: -7 },
 };
-
-fn window_pos(p: Point, w: i32, h: i32) -> WindowPos {
-    WindowPos {
-        position: Some(p),
-        size: Some(SizeI::new(w, h)),
-        ..Default::default()
-    }
-}
 
 struct Rig {
     world: World,
@@ -80,7 +73,7 @@ impl Rig {
             .spawn((
                 Window::default(),
                 fake_handle(BALLOON_HWND),
-                window_pos(BALLOON_START, 223, 158),
+                window_pos_sized(BALLOON_START.x, BALLOON_START.y, 223, 158),
                 BalloonWindowMarker { scope: SCOPE },
                 DragConfig::default(),
                 OnDrag(on_balloon_drag),
@@ -91,7 +84,7 @@ impl Rig {
             .spawn((
                 Window::default(),
                 fake_handle(CHAR_HWND),
-                window_pos(CHAR_START, 434, 687),
+                window_pos_sized(CHAR_START.x, CHAR_START.y, 434, 687),
                 Anchored(Anchor::Bottom),
                 CharWindowMarker { scope: SCOPE },
                 BalloonFollow::new(balloon, OffsetBase::unpinned(OFFSET_START)),
@@ -197,12 +190,7 @@ impl Rig {
 
     /// 終わりの受け手を直に呼ぶ（wintf の控えを手で組む場合）。
     fn call_end(&mut self) {
-        let ev = DragEndEvent {
-            target: self.balloon,
-            position: PhysicalPoint::new(1711, 953),
-            cancelled: false,
-            timestamp: Instant::now(),
-        };
+        let ev = drag_end_event_at(self.balloon, (1711, 953));
         let balloon = self.balloon;
         on_balloon_drag_end(&mut self.world, balloon, balloon, &Phase::Bubble(ev));
     }

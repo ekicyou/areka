@@ -25,16 +25,13 @@ use super::{
     on_balloon_drag_end, on_char_drag_end, rebase_shift_axes, shift_is_current,
 };
 use crate::resolver::{Anchor, PointPx};
+use crate::shared_test_support::k;
 use log_capture_kit::{capture, expect_one};
 
 const W: i32 = 200;
 const H: i32 = 300;
 /// 下揃えの y（作業領域の下端 1043 − 300）。
 const BOTTOM_Y: i32 = 1043 - H;
-
-fn k(num: u32, den: u32) -> ScaleRatio {
-    ScaleRatio::new(num, den).expect("正の倍率")
-}
 
 /// キャラ窓 1 枚（バルーンなし）。
 fn char_world(anchor: Anchor, x: i32, y: i32) -> (World, Entity) {
