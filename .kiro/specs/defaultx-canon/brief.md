@@ -24,6 +24,7 @@ ukadoc（2.9.13 の版）の書き方:
   - 隣り合いの印の保存（`persist_save.rs`・左の隙間が `defaultx` なら `left`）。
   - 拡大率の後の詰め直し（`chain_realign.rs`）。
   - 本体の `runtime/frame/drain_resnap.rs`（`boot_chain` を呼ぶ 1 行）と、追随の `follow/work_area_clamp.rs` の `place_chain_in_work_area`（`JoinLeftOffset` を解く）。
+  - 記憶の戻し（`persist.rs` の `restore_and_judge`）。`ChainRule::from_terms` で全スコープの揃え方から `default_x: None` の鎖を組み、`follow/work_area_clamp.rs` の `keep_restored_groups` が `ChainView::Saved` の `prev`・`joins` だけを読む（隙間は読まない）。申し送り（audit-placement-follow-residue より・2026-11-17）: 読みを変えるときはこの道も見直す（`audit-placement-follow-residue` の design.md の RestoreGroup・決め 1）。
 - **今の読みの上に立つ裁定**: `audit-placement-core` の 485（起動の確定で `defaultx` の隙間を残す）・494 ⑵⑶（左の組は `defaultx` の隙間も隣り合い・覚えた `left` は `defaultx` の隙間で付ける）・513（大きく負の `defaultx` でも左の組）・514（±1・±2 を 0 に丸めない）。18.10 の C2・C3・C4・C11・C12・C14 の整理と、表の T9〜T13・T15・T41。読みを ukadoc に合わせると、これらは全部開け直しになる（たとえば `defaultx` が画面の座標なら、組の「隙間」という考えそのものが無くなる）。
 - **材料**: `audit-placement-core` の `research.md` 18.10 の「根拠（ukadoc）」U1〜U7（とくに U3＝`sakura.defaultx` の「表示位置の記憶が無いとき」「X座標はその設定で決まるため無効」・U4＝`kero.defaultx`／`char*.defaultx` の左隣）、「ukadoc と食い違う所」、「SSP で測るなら」S1〜S4（S2 が `kero.defaultx,36` で X 座標か本体からの量かを分ける・S1・S3・S4 は鎖の決まりの裏付け）。
 - **SHIORI リソース**: ukadoc は SHIORI リソースの `defaultx` を descript より先に置く。areka が SHIORI リソースの `sakura.defaultx` を配置に使っているかは、起票のときは確かめていない（`crates/areka-sylphya/src/vocab/shiori_resource.rs:57-65` に語の一覧はある）。

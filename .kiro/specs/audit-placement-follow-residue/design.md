@@ -644,7 +644,7 @@ graph LR
 
 ### 単体（配置の crate）
 
-1. 鎖の寄せ（`follow_work_area_clamp_restore_tests.rs`・`ChainRule::from_terms` で鎖を組む）: ⑴ T8＝0 と 2 だけ・2 の印 `right`・記憶が外で隣り合う → 1 つの組として同じ量だけ寄せる ⑵ T6 ⑴＝0 下端・1 右の辺・2 下端・2 の印 `right` → 0 と 2 を組にする ⑶ T6 ⑵＝1 右の辺で記憶の矩形が 2 と離れている・2 の印 `right` → 1 と 2 を組にしない ⑷ 0・1・2 が鎖に入り 1 が記憶に無い・2 の印 `right` → 0 と 2 を組にしない（今の `apart_or_non_consecutive_pairs_are_not_grouped` の書き直し） ⑸ T5＝0 が右の辺・1 下端・記憶の矩形が重なる → 組にする（矩形の線は辺のスコープにも当たる）。どれも印の線を (n−1, n) で引く形に戻すと落ちる。
+1. 鎖の寄せ（`follow_work_area_clamp_restore_tests.rs`・`ChainRule::from_terms` で鎖を組む）: ⑴ T8＝0 と 2 だけ・2 の印 `right`・記憶が外で隣り合う → 1 つの組として同じ量だけ寄せる ⑵ T6 ⑴＝0 下端・1 右の辺・2 下端・2 の印 `right` → 0 と 2 を組にする ⑶ T6 ⑵＝1 右の辺で記憶の矩形が 2 と離れている・2 の印 `right` → 1 と 2 を組にしない ⑷ 0・1・2 が鎖に入り 1 が記憶に無い・2 の印 `right` → 0 と 2 を組にしない（今の `apart_or_non_consecutive_pairs_are_not_grouped` の書き直し） ⑸ T5＝0 が右の辺・1 下端・記憶の矩形が重なる → 組にする（矩形の線は辺のスコープにも当たる）。印の線を (n−1, n) で引く形に戻すと ⑴〜⑶ が落ちる（⑷ は鎖の相手の取り違え、⑸ は矩形の線を鎖に入る窓だけに絞る誤りで落ちる）。
 2. 鎖の寄せの道（`persist_restore_group_tests.rs`・`apply_restored_placements` に T6・T8 の形の `ScopePlacement`（揃え方つき）と記憶を渡す）: T8 と T6 ⑴ で組の差が保たれる（要件 1.9。この道は World を持たない純関数なので、檻は配置と記憶の形で T6・T8 を組む。要件 1.9 の文もそう直した）。
 3. C14（`follow_work_area_clamp_chain_tests.rs`）: ⑴ 作業領域 0..1000・右の辺のスコープ（`Keep(DesktopEdge)`・x 400・幅 600）の左に `JoinLeft` で付けた幅 500 の窓 → 左に入らず反対の側も入らず `Edge`（x 0） ⑵ `JoinLeftOffset` の窓が入らないとき反対の側を試さず `Edge`。`opposite` を変えると落ちる。
 4. 164 の追随（`follow_drag_tests.rs`）: 吸着した組の窓に `initial_window_pos: None` の `DraggingState` と相手とバルーンを持たせて `on_char_drag` → 窓・バルーン・相手の位置が前と同じ・`CHAR_DRAG_ORIGIN_UNKNOWN_TAG` の `debug!` が 1 行。`(0,0)` で写すと落ちる。
