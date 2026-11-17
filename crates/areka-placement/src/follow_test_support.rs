@@ -8,7 +8,11 @@ use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 use super::{MonitorSnapshot, project_anchor};
+// 写しを消して共有の部品を使う（使い手は従来どおりこの経路から引ける）。
 use crate::resolver::RectPx;
+pub(crate) use crate::shared_test_support::assert_no_event;
+pub(crate) use crate::test_support::zorder_pair_deferred::code_only;
+pub(crate) use crate::test_support::{SharedFakeIo, contained, point};
 use log_capture_kit::CapturedEvent;
 
 // -------------------------------------------------------------------------
@@ -205,10 +209,6 @@ pub(super) fn balloon_size(dpi: i32) -> SizePx {
     }
 }
 
-pub(super) fn point(x: i32, y: i32) -> PointPx {
-    PointPx { x, y }
-}
-
 /// 位置＋寸 → 窓矩形（テスト側の独立実装＝実装の `rect_at` を再利用しない）。
 pub(super) fn win(pos: PointPx, size: SizePx) -> RectPx {
     rect(pos.x, pos.y, pos.x + size.w, pos.y + size.h)
@@ -331,7 +331,7 @@ pub(super) fn guard_events<'a>(
 // 範囲の中のテストに写してあった組み立て（audit-placement-follow・指摘 16）
 // -------------------------------------------------------------------------
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use areka_emo_compose::ScaleRatio;
@@ -375,14 +375,6 @@ pub(super) fn max_pos(area: RectPx, size: SizePx) -> PointPx {
         x: area.right - size.w,
         y: area.bottom - size.h,
     }
-}
-
-/// 4 辺内包しているか（檻側の独立実装）。
-pub(super) fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
-    pos.x >= area.left
-        && pos.y >= area.top
-        && pos.x + size.w <= area.right
-        && pos.y + size.h <= area.bottom
 }
 
 /// limit の檻の基準となる 1 scope ぶんの配置（恒等式 `balloon_offset ≡ balloon_pos − char_pos` 成立）。
@@ -430,19 +422,6 @@ pub(super) fn base_world(balloon_limit: bool) -> (World, Entity, Entity) {
     world_with(base_placement(balloon_limit), odd_edge_snapshot())
 }
 
-/// `needle` を含むログが 1 件も無いこと。
-pub(super) fn assert_no_event(events: &[CapturedEvent], needle: &str) {
-    let hits: Vec<&str> = events
-        .iter()
-        .map(CapturedEvent::message)
-        .filter(|m| m.contains(needle))
-        .collect();
-    assert!(
-        hits.is_empty(),
-        "`{needle}` を含むログが出ている（出てはならない）: {hits:?}"
-    );
-}
-
 /// 縦横同じ値の DPI。
 pub(super) fn dpi(v: u16) -> DPI {
     DPI::from_dpi(v, v)
@@ -477,15 +456,6 @@ pub(super) fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
     (world, e, old_pos)
 }
 
-/// 行コメントを落とした本文（説明文の中の字面を数えないため）。
-pub(crate) fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 /// 実行時のモニタ表 1 台（3200×1800・96・主モニタ。作業領域の下端だけが関心）。
 pub(crate) fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
     Monitor {
@@ -507,17 +477,6 @@ pub(crate) fn monitor_with_work_area_bottom(bottom: i32) -> Monitor {
     }
 }
 
-/// アクターへ渡す口と観測する口が同じストアを指す偽の IO。
-struct SharedFakeIo(Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 /// 実 publisher（`spawn_sylphya`）と、同じ所を読み戻す口の組。
 pub(super) struct SylphyaRig {
     pub(super) parts: SylphyaParts,
@@ -535,13 +494,13 @@ impl SylphyaRig {
         };
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo(store.clone())),
+            io: Box::new(SharedFakeIo::new(store.clone())),
             runtime_sink: None,
         });
         Self {
             parts,
             roots,
-            reader: Box::new(SharedFakeIo(store)),
+            reader: Box::new(SharedFakeIo::new(store)),
         }
     }
 

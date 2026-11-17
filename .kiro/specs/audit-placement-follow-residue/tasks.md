@@ -52,7 +52,7 @@
   - _Requirements: 2.1, 2.3, 2.8, 9.6_
 
 - [ ] 4. 追随のテストの支えの写しを共有の部品へ寄せる
-- [ ] 4.1 `follow_test_support.rs` の写しを消して共有の部品を使う
+- [x] 4.1 `follow_test_support.rs` の写しを消して共有の部品を使う
   - 83（`assert_no_event`）・2 回目（`point`・`contained`）・511（`code_only`・`SharedFakeIo`／`SylphyaRig`）の写しを消し、使い手を `test_support`・`placement_shared_test_support` の共有へ向ける。消す前に `git grep` で使い手を全部確かめる（文字列での参照を含む）。`contained` は飽和の足し算になるので、期待が変わる檻が無いかを使い手で確かめる
   - 完了の状態: 設計の G4 の 1 つ目の grep のうち `follow_test_support.rs` の当たりが 0 行で、`cargo test -p areka-placement` が緑
   - _Dispatch: mechanical — 写しと共有の行き先を設計の表が対で与えている_
