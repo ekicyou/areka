@@ -8,7 +8,7 @@
 - 消す前には、消す名前をツリー全体（`vendors/` と `target/` を除く・テスト・見本・設定・文字列・完了した spec の文書を含む）で grep し、範囲の外の実行行に読み手が無いことを確かめる。
 - 新しいテストを置くのは design の 3 本の兄弟のファイルだけ。どのファイルも 1,000 行を越えさせない。依存は足さない。`lib.rs` は空のまま。
 
-- [ ] 1. 実行例のテストを全体テストに乗せ、今まで走っていなかったテストを 1 回走らせる（指摘 5・24）
+- [x] 1. 実行例のテストを全体テストに乗せ、今まで走っていなかったテストを 1 回走らせる（指摘 5・24）
   - `crates/pilot/Cargo.toml` でテストを持つ 5 本（`pilot-balloon-asset-swap`・`pilot-clickthrough-alpha-toggle`・`pilot-dropfiles-on-wuc-window`・`shiori-host-32`・`shiori-host-32-helper`）を `[[example]]` の `test = true` にする。`_template` と `wintf-winmsg-executor` は書かない
   - 本物の 32bit `pasta.dll` を読むテスト 1 本を `#[cfg(target_arch = "x86")]` で囲む
   - `event-listener` を `{ workspace = true }` にし、「[dependencies] は空」の注記と「task 3.1」などの古い印を今の姿に直す（`Cargo.lock` が変わらないことを確かめる）
@@ -176,3 +176,7 @@
   - _Depends: 11, 14_
   - _Dispatch: mechanical — 決まった手順で回して確かめるだけ_
   - _Requirements: 4.4, 5.1, 5.2, 6.6, 7.4_
+
+## Implementation Notes
+
+- タスク 1: 初めて走った実行例のテストは x64 で 53 本（balloon-asset-swap 22・clickthrough 7・dropfiles 6・shiori-host-32 12・helper 6）。赤は本物の 32bit pasta.dll を読む 1 本だけで、x86 限定にした

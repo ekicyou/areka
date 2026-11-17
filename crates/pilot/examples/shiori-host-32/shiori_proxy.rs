@@ -241,11 +241,6 @@ pub fn selftest_load(ghostdir: &Path) -> Result<String, ProxyError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    fn ghostdir() -> PathBuf {
-        crate::sample_support::emo2_ghost_master()
-    }
 
     /// go 基準(1) precursor（requirements 3.1–3.3）: i686 helper 内で pasta.dll をロードし
     /// 3 エントリを解決、`load(ghostdir)` がクラッシュせず完了することを観測する。
@@ -253,9 +248,11 @@ mod tests {
     ///
     /// 注意: 同 example の ipc.rs `#[cfg(test)]` の i686 overflow により `cargo test` 自体が
     /// ビルド不能なため、実走観測は helper `main()` の `--selftest-load`（selftest_load）でも行う。
+    /// 本物の 32bit `pasta.dll` を読むので x64 では走れない（i686 の組み立てだけで走る）。
+    #[cfg(target_arch = "x86")]
     #[test]
     fn load_pasta_dll_and_call_load_without_crash() {
-        let dir = ghostdir();
+        let dir = crate::sample_support::emo2_ghost_master();
         let dll = dir.join("pasta.dll");
         let entries = ShioriByteProxy::load_dll(&dll).expect("load_dll should resolve 3 entries");
         ShioriByteProxy::shiori_load(&entries, &dir).expect("shiori_load should complete (true)");

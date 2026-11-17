@@ -9,25 +9,23 @@ license.workspace = true
 publish = false # 試し掘りの場
 repository.workspace = true
 
-# [dependencies] は空（最小依存）。先進坑が依存を要する場合のみ最小限追加し、
-# 葉ノード隔離（inbound ゼロ）と 32bit 可搬性を崩さないこと。
-#
-# 先進坑 wintf-winmsg-executor 用の探索依存（使い捨て前提）。
+# 依存は先進坑が要る最小限だけ。葉ノード隔離（ほかの crate は pilot に頼らない）と
+# i686 helper の組み立てを崩さないこと。
 [dependencies]
+# 先進坑 wintf-winmsg-executor・pilot-clickthrough-alpha-toggle・shiori-host-32 の窓とループ。
 # リポジトリ内の写し（crates/wintf-winmsg-executor）をワークスペースの依存で使う。
 # クラス登録の CS_DBLCLKS と既定カーソルは写しに入っている。
 wintf-winmsg-executor = { workspace = true }
-event-listener = "5"
-# host-32 先進坑の追加 features（いずれもワークスペース既定への加算・最小）:
-# - Win32_System_DataExchange: IpcChannel（ipc.rs）の COPYDATASTRUCT（WM_COPYDATA ペイロード）。
-# - Win32_System_Memory: ShioriByteProxy（shiori_proxy.rs・task 3.1）の GlobalAlloc/GlobalFree
+# pilot-clickthrough-alpha-toggle の状態変化の起床（state_changed）。
+event-listener = { workspace = true }
+# ワークスペース既定への追加 features:
+# - Win32_System_DataExchange: shiori-host-32 の ipc.rs の COPYDATASTRUCT（WM_COPYDATA）。
+# - Win32_System_Memory: shiori-host-32 の shiori_proxy.rs の GlobalAlloc/GlobalFree
 #   （pasta の HGLOBAL 規約・GMEM_FIXED）。
-# - Win32_Globalization: 同 proxy の WideCharToMultiByte(CP_ACP)＝ghostdir を ANSI(Shift_JIS)
-#   エンコード（pasta to_ansi_str との charset 対称・design §493）。
-# - Win32_Graphics_Dxgi: 先進坑 pilot-balloon-asset-swap の画面取り込み（Desktop Duplication＝
-#   IDXGIOutputDuplication・DXGI_OUTDUPL_FRAME_INFO）。D3D11 はワークスペース既定で供給済。
-# LoadLibraryW/GetProcAddress/FreeLibrary（Win32_System_LibraryLoader）と HGLOBAL/HMODULE
-# （Win32_Foundation）はワークスペース既定で供給済。
+# - Win32_Globalization: 同 shiori_proxy.rs の WideCharToMultiByte(CP_ACP)＝ghostdir の
+#   ANSI(Shift_JIS) 変換。
+# - Win32_Graphics_Dxgi: pilot-balloon-asset-swap の画面取り込み（Desktop Duplication）。
+# LoadLibraryW/GetProcAddress/FreeLibrary と HGLOBAL/HMODULE はワークスペース既定にある。
 windows = { workspace = true, features = [
     "Win32_System_DataExchange",
     "Win32_System_Memory",
@@ -36,13 +34,30 @@ windows = { workspace = true, features = [
 ] }
 windows-core = { workspace = true }
 
-# host-32 先進坑 helper（i686 別ターゲットビルドの独立バイナリ・議題 3 確定）。
-# サブフォルダの helper.rs は auto-discovery 対象外ゆえ明示宣言する。
-# 親 x64 entry（examples/shiori-host-32/main.rs）は auto-discovery で example
-# `shiori-host-32` として解決されるため宣言不要（非衝突）。
+# テストを持つ実行例は test = true にして全体テスト（cargo test --workspace）で走らせる。
+# path を書かないものは cargo の推し量り（examples/<name>/main.rs）に任せる。
+# _template と wintf-winmsg-executor はテストを持たないので書かない。
+[[example]]
+name = "pilot-balloon-asset-swap"
+test = true
+
+[[example]]
+name = "pilot-clickthrough-alpha-toggle"
+test = true
+
+[[example]]
+name = "pilot-dropfiles-on-wuc-window"
+test = true
+
+[[example]]
+name = "shiori-host-32"
+test = true
+
+# i686 で組む helper（独立のバイナリ）。サブフォルダの helper.rs は推し量られないので path を書く。
 [[example]]
 name = "shiori-host-32-helper"
 path = "examples/shiori-host-32/helper.rs"
+test = true
 
 [dev-dependencies]
 # 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
