@@ -4,12 +4,13 @@ use super::{ConsumerLedger, LedgerKey};
 use areka_ghost::prop_sink::PROP_SET_CUE_NAME;
 use areka_parsers::sakura::{JUMP_TAG_CARRIER, MARKER_COMMAND, RAISE_TAG_CARRIER};
 use areka_sakura::contract::FONT_TAG_CARRIER;
+use dola::cue::{ActorKey, CueCommand, TalkCue};
 use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------- 見本
 
 /// 絶対パスの書庫（`install_cue_tests.rs` の見本と同じ形。fs は読まない）。
-pub const ABSOLUTE: &str = r"C:\areka-install-cue-test\in\hana.nar";
+const ABSOLUTE: &str = r"C:\areka-install-cue-test\in\hana.nar";
 
 /// 表の各行の見本＝（名前, 選別子, 引数の列）。引数の列は第 1 引数から書く。
 ///
@@ -115,4 +116,14 @@ pub fn samples() -> Vec<(&'static str, Option<&'static str>, Vec<&'static str>)>
 /// 表の行の組（名前, 選別子）の全部。
 pub fn ledger_keys(ledger: &ConsumerLedger) -> BTreeSet<LedgerKey> {
     ledger.table.keys().cloned().collect()
+}
+
+/// `\![name,args...]` の汎用キャリア cue を組む（各受け口のテストと同じ正準形）。
+pub fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
+    TalkCue {
+        at: 0.0,
+        actor: ActorKey::from("0"),
+        command: CueCommand::command_carrier(name, args.iter().map(|s| s.to_string()).collect()),
+        duration: 0.0,
+    }
 }

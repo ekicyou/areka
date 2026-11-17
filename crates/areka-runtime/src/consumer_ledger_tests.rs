@@ -3,41 +3,6 @@ use areka_sakura::contract::FONT_TAG_CARRIER;
 
 use super::*;
 
-/// 正準台帳に `move`・`bind` が共に登記されている → 照会で `move`→[`CommandConsumer::MoveSink`]・
-/// `bind`→[`CommandConsumer::Seriko`] が引ける（両登録の共存・Observable の中核・task 7.2）。
-#[test]
-fn canonical_has_move_and_bind_registered() {
-    let ledger = ConsumerLedger::canonical();
-    assert_eq!(
-        ledger.consumer_of("move", None),
-        Some(CommandConsumer::MoveSink),
-        "正準台帳は move（選別子なし）→ MoveSink を登記している（R2.2）"
-    );
-    assert_eq!(
-        ledger.consumer_of("bind", None),
-        Some(CommandConsumer::Seriko),
-        "正準台帳は bind（選別子なし）→ Seriko を登記している（task 7.2・R2.2）"
-    );
-}
-
-/// 正準台帳は重なり指定・重なり解除の 2 組を [`CommandConsumer::ZOrderSink`] として登記する
-/// （名前＋選別子の粒度＝要件 11.2/11.3・task 3.2）。受け口 `ZOrderCueSink` が自己選別する
-/// 組（`("set","zorder")`・`("reset","zorder")`）とちょうど一致していること。
-#[test]
-fn canonical_registers_both_zorder_pairs() {
-    let ledger = ConsumerLedger::canonical();
-    assert_eq!(
-        ledger.consumer_of("set", Some("zorder")),
-        Some(CommandConsumer::ZOrderSink),
-        "正準台帳は (set, zorder) → ZOrderSink を登記している（要件 11.2）"
-    );
-    assert_eq!(
-        ledger.consumer_of("reset", Some("zorder")),
-        Some(CommandConsumer::ZOrderSink),
-        "正準台帳は (reset, zorder) → ZOrderSink を登記している（要件 11.2）"
-    );
-}
-
 /// 未登記のコマンド名は選別子の有無によらず `None`（自己選別モデルでは未知名は良性未処理・
 /// 要件 11.2）。
 #[test]
@@ -282,30 +247,14 @@ fn exclusion_applies_only_within_the_same_name() {
     );
 }
 
-/// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性の検査が緑）。43 件が
-/// 共存しても檻は保たれ、既登記の組の再登記は [`LedgerError::Duplicate`] で検出され、
-/// 別名の追加は独立に成功する（task 7.2・要件 11.3）。
-///
-/// **母数も判定する**（タスク 9.4・7.3 の申し送り）——件数を数えずに個々の登記だけを
-/// 見ていると、登記が黙って増えても減っても緑のままになる。件数は逐語で固定し、
-/// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
+/// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性の検査が緑）。行の増減は
+/// `samples_cover_exactly_the_ledger_rows` が見本の組との集合の比べで判定するので、ここでは件数を
+/// 数えない。既に登記された組の再登記は [`LedgerError::Duplicate`] で検出され、別名の追加は独立に
+/// 成功する（task 7.2・要件 11.3）。
 #[test]
 fn canonical_builds_without_duplicate() {
-    // canonical() は内部 try_register（43 行）が Ok（重複なら expect が panic する）。
+    // canonical() は内部 try_register が Ok（重複なら panic する）。
     let ledger = ConsumerLedger::canonical();
-    assert_eq!(
-        ledger.entry_count(),
-        43,
-        "正準台帳の登記は 43 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
-         (open,readme)／(open,file)／(open,browser)／(open,explorer)／(open,editor)／\
-         (open,mailer)／運搬名 \\j／(enter,nouserbreakmode)／(leave,nouserbreakmode)／\
-         (change,ghost)／(change,shell)／(change,balloon)／(execute,install)／(execute,resetwindowpos)／\
-         updatebymyself／update／updateother／(set,choicetimeout)／\
-         areka.prop.set／(set,balloontimeout)／(reload,ghost)／(reload,shiori)／(reload,shell)／\
-         (reload,balloon)／(reload,descript)／reloadsurface／(set,alignmenttodesktop)／\
-         (set,alignmentondesktop)／(set,sticky-window)／(reset,sticky-window)／(execute,resetballoonpos)／(lock,balloonmove)／(unlock,balloonmove)／(set,windowstate)／運搬名 \\v／\
-         bind-noevent／運搬名 *／(get,property)）——増減させたら本檻と doc の 2 か所を編集すること"
-    );
     // 待ち時間の指定は受け口 LifecycleSink に結び付く（areka-P0-balloon-lifecycle-events 要件 9.10）。
     assert_eq!(
         ledger.consumer_of("set", Some("balloontimeout")),
@@ -343,7 +292,7 @@ fn canonical_builds_without_duplicate() {
         Some(CommandConsumer::PropertyRead)
     );
 
-    // 43 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+    // 正準台帳の全行が共存する下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
     // 検出される。
     let mut ext = ledger.clone();
     let err = ext
@@ -355,7 +304,7 @@ fn canonical_builds_without_duplicate() {
             name: "bind".to_string(),
             selector: None,
         },
-        "43 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+        "正準台帳の全行が共存する下でも重複は Duplicate{{name, selector}} として観測可能"
     );
     // 既登記の担当は据え置き（上書きしない）。
     assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));

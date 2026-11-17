@@ -19,7 +19,7 @@
 //!
 //! 見本の一覧は表の行とちょうど同じ組を持つこと自体も判定する（行を足して見本を足し忘れれば赤）。
 
-use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::cue::CueSink;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::mpsc::channel;
@@ -32,7 +32,7 @@ use super::super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use super::super::window_state_cue::WindowStateCueSink;
 use super::super::zorder_cue::ZOrderCueSink;
-use super::test_support::{ledger_keys, samples};
+use super::test_support::{carrier_cue, ledger_keys, samples};
 use super::{CommandConsumer, ConsumerLedger};
 use crate::install::install_cue::{InstallCueSink, StartFetch};
 use crate::readme::readme_cue::ReadmeCueSink;
@@ -62,16 +62,6 @@ fn runtime_sink_of(consumer: CommandConsumer) -> Option<CommandConsumer> {
         | CommandConsumer::ScriptCompile
         | CommandConsumer::PropertyWrite
         | CommandConsumer::PropertyRead => None,
-    }
-}
-
-/// `\![name,args...]` の汎用キャリア cue を組む（各受け口のテストと同じ正準形）。
-fn carrier_cue(name: &str, args: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, args.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
     }
 }
 

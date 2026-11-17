@@ -38,16 +38,8 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 43 行（`move`・`bind`・
-//! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(open,file)`・`(open,browser)`・
-//! `(open,explorer)`・`(open,editor)`・`(open,mailer)`・`\j`・`(enter,nouserbreakmode)`・
-//! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
-//! `(execute,install)`・`(execute,resetwindowpos)`・`updatebymyself`・`update`・`updateother`・`(set,choicetimeout)`・
-//! `areka.prop.set`・`(set,balloontimeout)`・`(reload,ghost|shiori|shell|balloon|descript)`・
-//! `reloadsurface`・`(set,alignmenttodesktop|alignmentondesktop|sticky-window)`・`(reset,sticky-window)`・
-//! `(execute,resetballoonpos)`・`(lock,balloonmove)`・`(unlock,balloonmove)`・`(set,windowstate)`・
-//! `\v`・`bind-noevent`・`*`・`(get,property)`）を登記し、違反があれば構築時に panic する（正準表は一意
-//! ゆえ実際には発火しない・回帰檻）。
+//! 正準台帳 [`ConsumerLedger::canonical`] は表 `CANONICAL_ROWS`（行の正本）を 1 行ずつ try_register し、
+//! 違反があれば構築時に panic する（正準表は一意ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
 //!
@@ -370,186 +362,94 @@ impl ConsumerLedger {
             .copied()
     }
 
-    /// 登記の件数（母数の観測点・テスト専用）。
-    #[cfg(test)]
-    pub(crate) fn entry_count(&self) -> usize {
-        self.table.len()
-    }
-
-    /// 正準台帳を構築する（現行登記＝`move` → [`CommandConsumer::MoveSink`]・`bind` →
-    /// [`CommandConsumer::Seriko`]・`(set, zorder)` と `(reset, zorder)` →
-    /// [`CommandConsumer::ZOrderSink`]・運搬名 `\f` →
-    /// [`CommandConsumer::TextLayer`]・`(open, readme|file|browser|explorer|editor|mailer)` と
-    /// 運搬名 `\j` → [`CommandConsumer::ReadmeSink`]・
-    /// `(enter, nouserbreakmode)` と `(leave, nouserbreakmode)` →
-    /// [`CommandConsumer::UserBreakSink`]・`(change, ghost)` → [`CommandConsumer::ChangeSink`]・
-    /// `(change, shell)` と `(change, balloon)` → [`CommandConsumer::SwitchSink`]・
-    /// `(execute, install)` → [`CommandConsumer::InstallSink`]・`(execute, resetwindowpos)` →
-    /// [`CommandConsumer::MoveSink`]・`updatebymyself`・`update`・
-    /// `updateother` → [`CommandConsumer::UpdateSink`]・`(set, choicetimeout)` →
-    /// [`CommandConsumer::ScriptCompile`]・運搬名 `areka.prop.set` →
-    /// [`CommandConsumer::PropertyWrite`]・`(set, balloontimeout)` →
-    /// [`CommandConsumer::LifecycleSink`]・`(reload, ghost|shiori|shell|balloon|descript)` と
-    /// `reloadsurface` → [`CommandConsumer::ReloadSink`]・`(set, alignmenttodesktop|alignmentondesktop|
-    /// sticky-window)`・`(reset, sticky-window)`・`(execute, resetballoonpos)`・
-    /// `(lock, balloonmove)`・`(unlock, balloonmove)` → [`CommandConsumer::MoveSink`]・
-    /// `(set, windowstate)` と運搬名 `\v` → [`CommandConsumer::WindowStateSink`]・
-    /// `bind-noevent` → [`CommandConsumer::Seriko`]・印の合図 `*` →
-    /// [`CommandConsumer::TextLayer`]・`(get, property)` → [`CommandConsumer::PropertyRead`]）。
+    /// 正準台帳を構築する。行の一覧は [`CANONICAL_ROWS`] が正本で、ここは 1 行ずつ
+    /// [`try_register`](Self::try_register) するだけ（一覧を説明に写さない）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
     /// `NoUserBreakCueSink` の関係も同じである。
     ///
-    /// 以後のコマンド追加は「消費者＋本表 1 行（`try_register`）」のみで **dola 無改変**（R2.6）。
-    /// 正準表は一意ゆえ [`try_register`](Self::try_register) は Ok を返す——万一将来の編集で重複や
-    /// 選別子の排他違反を作れば `expect` が構築時に panic して回帰を止める（一意性の内部整合檻）。
+    /// 以後のコマンド追加は「消費者＋本表 1 行」のみで **dola 無改変**（R2.6）。正準表は一意ゆえ
+    /// 登記は Ok を返す——万一将来の編集で重複や選別子の排他違反を作れば、名前と選別子を添えて
+    /// 構築時に panic して回帰を止める（一意性の内部整合檻）。
     pub fn canonical() -> Self {
         let mut ledger = Self::new();
-        ledger
-            .try_register("move", None, CommandConsumer::MoveSink)
-            .expect("正準台帳: 'move'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(areka_seriko::BIND_COMMAND, None, CommandConsumer::Seriko)
-            .expect("正準台帳: 'bind'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register("set", Some("zorder"), CommandConsumer::ZOrderSink)
-            .expect("正準台帳: ('set','zorder') は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register("reset", Some("zorder"), CommandConsumer::ZOrderSink)
-            .expect("正準台帳: ('reset','zorder') は一意（重複・排他違反は編集ミス）");
-        for selector in ["readme", "file", "browser", "explorer", "editor", "mailer"] {
-            ledger
-                .try_register("open", Some(selector), CommandConsumer::ReadmeSink)
-                .expect("正準台帳: 開く系の ('open',…) 6 組は一意（重複・排他違反は編集ミス）");
-        }
-        ledger
-            .try_register(
-                areka_parsers::sakura::JUMP_TAG_CARRIER,
-                None,
-                CommandConsumer::ReadmeSink,
-            )
-            .expect("正準台帳: '\\j'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                "enter",
-                Some("nouserbreakmode"),
-                CommandConsumer::UserBreakSink,
-            )
-            .expect("正準台帳: ('enter','nouserbreakmode') は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                "leave",
-                Some("nouserbreakmode"),
-                CommandConsumer::UserBreakSink,
-            )
-            .expect("正準台帳: ('leave','nouserbreakmode') は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                areka_sakura::contract::FONT_TAG_CARRIER,
-                None,
-                CommandConsumer::TextLayer,
-            )
-            .expect("正準台帳: '\\f'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register("change", Some("ghost"), CommandConsumer::ChangeSink)
-            .expect("正準台帳: ('change','ghost') は一意（重複・排他違反は編集ミス）");
-        for selector in ["shell", "balloon"] {
-            ledger
-                .try_register("change", Some(selector), CommandConsumer::SwitchSink)
-                .expect(
-                    "正準台帳: ('change','shell'|'balloon') は一意（重複・排他違反は編集ミス）",
+        for &(name, selector, consumer) in CANONICAL_ROWS {
+            if let Err(e) = ledger.try_register(name, selector, consumer) {
+                panic!(
+                    "正準台帳: ({name:?}, {selector:?}) の登記に失敗（重複・排他違反は編集ミス）: {e:?}"
                 );
+            }
         }
-        ledger
-            .try_register("execute", Some("install"), CommandConsumer::InstallSink)
-            .expect("正準台帳: ('execute','install') は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register("execute", Some("resetwindowpos"), CommandConsumer::MoveSink)
-            .expect("正準台帳: ('execute','resetwindowpos') は一意（重複・排他違反は編集ミス）");
-        for name in ["updatebymyself", "update", "updateother"] {
-            ledger
-                .try_register(name, None, CommandConsumer::UpdateSink)
-                .expect(
-                    "正準台帳: 更新の 3 つの名前（選別子なし）は一意（重複・排他違反は編集ミス）",
-                );
-        }
-        ledger
-            .try_register("set", Some("choicetimeout"), CommandConsumer::ScriptCompile)
-            .expect("正準台帳: ('set','choicetimeout') は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                areka_ghost::prop_sink::PROP_SET_CUE_NAME,
-                None,
-                CommandConsumer::PropertyWrite,
-            )
-            .expect("正準台帳: 'areka.prop.set'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                "set",
-                Some("balloontimeout"),
-                CommandConsumer::LifecycleSink,
-            )
-            .expect("正準台帳: ('set','balloontimeout') は一意（重複・排他違反は編集ミス）");
-        // `(reload, makoto)` は makoto-reload-directives が後から足す（要件 11.2）。
-        for selector in ["ghost", "shiori", "shell", "balloon", "descript"] {
-            ledger
-                .try_register("reload", Some(selector), CommandConsumer::ReloadSink)
-                .expect("正準台帳: 読み直しの ('reload',…) 5 組は一意（重複・排他違反は編集ミス）");
-        }
-        ledger
-            .try_register("reloadsurface", None, CommandConsumer::ReloadSink)
-            .expect("正準台帳: 'reloadsurface'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        // 吸着・窓の組・バルーン位置初期化（areka-P0-window-link-directives 要件 1・3・7）。
-        for (name, selector) in [
-            ("set", "alignmenttodesktop"),
-            ("set", "alignmentondesktop"),
-            ("set", "sticky-window"),
-            ("reset", "sticky-window"),
-            ("execute", "resetballoonpos"),
-        ] {
-            ledger
-                .try_register(name, Some(selector), CommandConsumer::MoveSink)
-                .expect("正準台帳: 吸着・組・バルーン位置初期化の 5 組は一意（重複・排他違反は編集ミス）");
-        }
-        // バルーンの動かせない指定（descript-window-keys 要件 5.7）。
-        for name in ["lock", "unlock"] {
-            ledger
-                .try_register(name, Some("balloonmove"), CommandConsumer::MoveSink)
-                .expect("正準台帳: (lock|unlock, balloonmove) は一意（重複・排他違反は編集ミス）");
-        }
-        // 常に手前の指令（stay-on-top-directives 要件 1.8）。第 2 引数の読み分けは受け口が持つ。
-        ledger
-            .try_register("set", Some("windowstate"), CommandConsumer::WindowStateSink)
-            .expect("正準台帳: ('set','windowstate') は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                areka_parsers::sakura::RAISE_TAG_CARRIER,
-                None,
-                CommandConsumer::WindowStateSink,
-            )
-            .expect("正準台帳: '\\v'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                areka_seriko::BIND_NOEVENT_COMMAND,
-                None,
-                CommandConsumer::Seriko,
-            )
-            .expect("正準台帳: 'bind-noevent'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        ledger
-            .try_register(
-                areka_parsers::sakura::MARKER_COMMAND,
-                None,
-                CommandConsumer::TextLayer,
-            )
-            .expect("正準台帳: '*'（選別子なし）は一意（重複・排他違反は編集ミス）");
-        // プロパティの読み（shell-scale-linkage 要件 1.8）。受け口は runtime の外（areka_ghost）。
-        ledger
-            .try_register("get", Some("property"), CommandConsumer::PropertyRead)
-            .expect("正準台帳: ('get','property') は一意（重複・排他違反は編集ミス）");
         ledger
     }
 }
+
+/// 正準台帳の行（名前, 選別子, 担当）。表が正本——行の増減はここだけを直す（見本の表
+/// `consumer_ledger_test_support.rs` の `samples` は、組の一致を `samples_cover_exactly_the_ledger_rows`
+/// が判定する）。
+///
+/// `(reload, makoto)` は makoto-reload-directives が後から足す（要件 11.2）。
+const CANONICAL_ROWS: &[(&str, Option<&str>, CommandConsumer)] = {
+    use CommandConsumer::*;
+    &[
+        ("move", None, MoveSink),
+        (areka_seriko::BIND_COMMAND, None, Seriko),
+        ("set", Some("zorder"), ZOrderSink),
+        ("reset", Some("zorder"), ZOrderSink),
+        ("open", Some("readme"), ReadmeSink),
+        ("open", Some("file"), ReadmeSink),
+        ("open", Some("browser"), ReadmeSink),
+        ("open", Some("explorer"), ReadmeSink),
+        ("open", Some("editor"), ReadmeSink),
+        ("open", Some("mailer"), ReadmeSink),
+        (areka_parsers::sakura::JUMP_TAG_CARRIER, None, ReadmeSink),
+        ("enter", Some("nouserbreakmode"), UserBreakSink),
+        ("leave", Some("nouserbreakmode"), UserBreakSink),
+        (areka_sakura::contract::FONT_TAG_CARRIER, None, TextLayer),
+        ("change", Some("ghost"), ChangeSink),
+        ("change", Some("shell"), SwitchSink),
+        ("change", Some("balloon"), SwitchSink),
+        ("execute", Some("install"), InstallSink),
+        ("execute", Some("resetwindowpos"), MoveSink),
+        ("updatebymyself", None, UpdateSink),
+        ("update", None, UpdateSink),
+        ("updateother", None, UpdateSink),
+        ("set", Some("choicetimeout"), ScriptCompile),
+        (
+            areka_ghost::prop_sink::PROP_SET_CUE_NAME,
+            None,
+            PropertyWrite,
+        ),
+        ("set", Some("balloontimeout"), LifecycleSink),
+        ("reload", Some("ghost"), ReloadSink),
+        ("reload", Some("shiori"), ReloadSink),
+        ("reload", Some("shell"), ReloadSink),
+        ("reload", Some("balloon"), ReloadSink),
+        ("reload", Some("descript"), ReloadSink),
+        ("reloadsurface", None, ReloadSink),
+        // 吸着・窓の組・バルーン位置初期化（areka-P0-window-link-directives 要件 1・3・7）。
+        ("set", Some("alignmenttodesktop"), MoveSink),
+        ("set", Some("alignmentondesktop"), MoveSink),
+        ("set", Some("sticky-window"), MoveSink),
+        ("reset", Some("sticky-window"), MoveSink),
+        ("execute", Some("resetballoonpos"), MoveSink),
+        // バルーンの動かせない指定（descript-window-keys 要件 5.7）。
+        ("lock", Some("balloonmove"), MoveSink),
+        ("unlock", Some("balloonmove"), MoveSink),
+        // 常に手前の指令（stay-on-top-directives 要件 1.8）。第 2 引数の読み分けは受け口が持つ。
+        ("set", Some("windowstate"), WindowStateSink),
+        (
+            areka_parsers::sakura::RAISE_TAG_CARRIER,
+            None,
+            WindowStateSink,
+        ),
+        (areka_seriko::BIND_NOEVENT_COMMAND, None, Seriko),
+        (areka_parsers::sakura::MARKER_COMMAND, None, TextLayer),
+        // プロパティの読み（shell-scale-linkage 要件 1.8）。受け口は runtime の外（areka_ghost）。
+        ("get", Some("property"), PropertyRead),
+    ]
+};
 
 #[cfg(test)]
 #[path = "consumer_ledger_tests.rs"]
