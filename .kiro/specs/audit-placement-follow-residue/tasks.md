@@ -23,7 +23,7 @@
   - 完了の状態: `cargo test -p wintf` が緑で、足した 2 つの檻が `(0,0)` を入れる形に戻すと落ちる。この時点では wintf の外の crate は組めなくてよい（2.2 で戻す）
   - _Dispatch: mechanical — 設計が型・doc・配りと wndproc の形と檻の期待を与えている_
   - _Requirements: 2.1, 2.3, 2.5, 2.6, 2.7, 2.8_
-- [ ] 2.2 wintf の外の組む所と読む所を型に合わせ、ツリーを組めるようにする
+- [x] 2.2 wintf の外の組む所と読む所を型に合わせ、ツリーを組めるようにする
   - コンパイラの示す組む所を `Some(..)` で包み、`.0`／`.1` で読む所は `None` を素通しする最小の形にする（振る舞いの直しは 3 が入れる）。在る無しだけを見る所（設計が挙げる 8 か所）は変えない
   - 設計の「164」の一覧のテストの支えと檻を直す: `follow_test_support.rs` の `dragging_state`・`frame_dpi_drag_grab_tests.rs`・`frame_chain_realign_exclusion_tests.rs`・本体の `frame_chain_finalize_persist_restart_tests.rs`・`frame_chain_rule_tests.rs`・`input_events/drag_test_support.rs`（doc の「(0,0) のまま」を「`None` のまま」へ）
   - 漏れが無いことを `git grep -n "initial_window_pos" -- crates` で確かめる
@@ -160,3 +160,6 @@
   - 完了の状態: G1〜G6 が設計の形の結果で、全体テストが緑で、その結果が記録にある
   - _Dispatch: mechanical — 確かめの手順と合格の形を設計が逐語で与えている_
   - _Requirements: 7.4, 8.1, 8.2, 8.3, 8.5, 9.4, 9.7, 9.8, 10.2, 10.3, 10.4, 10.5_
+
+## Implementation Notes
+- 2.2: 偽の HWND では wintf が始めの位置を `None` で入れるため、`follow::drag_end_gate_tests::fast_drag_places_window_at_destination_and_persists_once` が 3.2 まで赤（進行役が認めた）。テストの仮の手伝い `follow::test_support::zero_unknown_drag_origin`（`shortcut:` 付き・`balloon_lock_drag_tests.rs` と `follow_drag_end_gate_tests.rs` の `Rig::tick` から呼ぶ）は 3.2 で窓の位置の手伝いへ替えて消す。`follow_drag_end_gate_tests.rs:204` の「(0,0) のまま入る」も 3.2 で直す

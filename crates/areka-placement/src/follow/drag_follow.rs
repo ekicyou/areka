@@ -273,12 +273,12 @@ fn policy_mapped_position(
         );
         return None;
     };
+    // 始めの位置が分からない（`None`）なら復元できないので写さない（振る舞いは 164 の追随で直す）
+    let origin = ds.initial_window_pos?;
     let raw = PointPx {
         // 実カーソル・窓座標の範囲で溢れないが、極端入力でも panic しない契約
-        x: (ds.initial_window_pos.0 as i32)
-            .saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),
-        y: (ds.initial_window_pos.1 as i32)
-            .saturating_add(cursor.y.saturating_sub(ds.drag_start_pos.y)),
+        x: (origin.0 as i32).saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),
+        y: (origin.1 as i32).saturating_add(cursor.y.saturating_sub(ds.drag_start_pos.y)),
     };
     let size = world
         .get::<WindowPos>(entity)

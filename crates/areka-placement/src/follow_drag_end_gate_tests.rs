@@ -121,6 +121,7 @@ impl Rig {
     /// 1 回の画面更新として配る。
     fn tick(&mut self) {
         dispatch_drag_events(&mut self.world);
+        crate::follow::test_support::zero_unknown_drag_origin(&mut self.world);
     }
 
     /// 投函済みの保存がすべて書き終わってから Ghost スコープを読む。

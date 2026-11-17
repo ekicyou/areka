@@ -90,7 +90,17 @@ pub(super) fn odd_edge_snapshot() -> MonitorSnapshot {
 pub(super) fn dragging_state(initial_window: (i32, i32), drag_start: (i32, i32)) -> DraggingState {
     DraggingState {
         drag_start_pos: Point::new(drag_start.0, drag_start.1),
-        initial_window_pos: (initial_window.0 as f32, initial_window.1 as f32),
+        initial_window_pos: Some((initial_window.0 as f32, initial_window.1 as f32)),
+    }
+}
+
+/// 偽の HWND では wintf の開始の腕が始めの窓位置を取れず `None` で入る。これまでの檻の期待
+/// （`(0,0)` 起点）を保つため `(0,0)` に置く。窓位置からの作り直しは 164 の檻で行う。
+// shortcut: 偽の HWND の rig で旧来の (0,0) 起点を戻すだけ、task 3.2 が本物の窓位置の手伝いに置き換えてこれを消す
+pub(crate) fn zero_unknown_drag_origin(world: &mut World) {
+    let mut q = world.query::<&mut DraggingState>();
+    for mut ds in q.iter_mut(world) {
+        ds.initial_window_pos.get_or_insert((0.0, 0.0));
     }
 }
 

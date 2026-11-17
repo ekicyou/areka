@@ -115,6 +115,7 @@ impl Rig {
 
     fn tick(&mut self) {
         dispatch_drag_events(&mut self.world);
+        crate::follow::test_support::zero_unknown_drag_origin(&mut self.world);
     }
 
     /// 始まり → 配る。

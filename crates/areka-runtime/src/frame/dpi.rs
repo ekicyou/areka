@@ -227,7 +227,10 @@ fn realign_drag_grab(world: &mut World, window: Entity, before: Option<SizeI>, a
         return;
     };
     let start = drag.drag_start_pos;
-    let old = drag.initial_window_pos;
+    // 始めの位置が分からない（`None`）なら置き直せない（振る舞いは 164 の追随で直す）
+    let Some(old) = drag.initial_window_pos else {
+        return;
+    };
     let new = rescale_drag_grab(start, old, before, after);
     debug!(
         entity = ?window,
@@ -237,7 +240,7 @@ fn realign_drag_grab(world: &mut World, window: Entity, before: Option<SizeI>, a
         grab_after = ?(start.x as f32 - new.0, start.y as f32 - new.1),
         "dpi reconcile: ドラッグ中のキャラ窓の大きさが変わった → 掴んだ点を窓の大きさの比で置き直す"
     );
-    drag.initial_window_pos = new;
+    drag.initial_window_pos = Some(new);
 }
 
 /// 報告された物理寸が**書込前の窓寸と違う**か（遷移後の連鎖再解決の武装条件・設計 C4）。
