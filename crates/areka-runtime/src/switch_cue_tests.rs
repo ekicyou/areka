@@ -6,8 +6,7 @@
 //! 0 件・受信端が落ちていても落ちずに記録すること。
 
 use super::*;
-use crate::session::shell_balloon_switch::SkinKind;
-use areka_runtime::consumer_ledger::test_support::carrier_cue;
+use crate::consumer_ledger::test_support::carrier_cue;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};

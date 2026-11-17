@@ -28,12 +28,10 @@ mod assets;
 mod balloon_visibility;
 mod consumer_ledger;
 mod frame;
-mod shell_balloon_resolve;
 mod shell_carry;
 // 本体の `ghost_session_{reload,restart}_tests` も背骨の足場（`SpineHarness`）を使う（設計 BodyRuntimeTests）。
 pub(crate) mod spine;
 mod strict_judges;
-mod switch_cue;
 
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を

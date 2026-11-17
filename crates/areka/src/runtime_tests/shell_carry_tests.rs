@@ -1,15 +1,15 @@
-//! ghost の読み直しでシェルの面と着せ替えを持ち越す決め方と送り方の決定論テスト
+//! ghost の読み直しでシェルの着せ替えを持ち越す決め方と送り方の決定論テスト
 //! （areka-P0-mcp-reload 要件 3.8・12.1）。
 //!
-//! ⑴ 面の決め方: 控えた面が在れば出す／無ければ既定の面へ戻す／どちらも無ければ出さない
-//! ⑵ 控えの組み方: 表示中のスコープだけ面を載せ、表示したことのあるスコープは着せ替えも載せる
-//! ⑶ 読み直しでなければ控えない（印が無い World は `None`）
-//! ⑷ 着せ替えの決め方（読み直しの前の既定との差だけを持ち越す）: 着ていたものは着る／名前の無くなった
+//! ⑴ 読み直しでなければ控えない（印が無い World は `None`）
+//! ⑵ 着せ替えの決め方（読み直しの前の既定との差だけを持ち越す）: 着ていたものは着る／名前の無くなった
 //!    ものは落とす／違いが無ければ何も送らない／脱いでいた既定は脱ぐ（同じカテゴリを着る排他の置き換え
 //!    があれば送らない）／scope 2 以降は自分（`char{N}`）の名前表で引く／descript の既定の書き換え
 //!    （1→0・0→1）は持ち越さない
-//! ⑸ 送り方: 置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図が着せ替えから先に届き、
+//! ⑶ 送り方: 置き場のゴーストの seriko へ `\![bind,…]`・`\s[面]` と同じ合図が着せ替えから先に届き、
 //!    seriko の最初の `Show` がもう着せ替えた集合を載せる
+//!
+//! 面の決め方と控えの組み方は、`areka-runtime` の同じ名前のファイルにある。
 
 use areka_seriko::{
     BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
@@ -47,7 +47,7 @@ fn wear(category: &str, part: &str, on: bool) -> BindReplay {
     }
 }
 
-/// ⑶ 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
+/// ⑴ 読み直しの印が無ければ控えない（ふつうの切替・起動は今までどおり）。控えが無ければ渡しもしない。
 #[test]
 fn nothing_is_carried_without_a_ghost_reload() {
     let mut world = World::new();
@@ -57,7 +57,7 @@ fn nothing_is_carried_without_a_ghost_reload() {
     assert!(!world.contains_non_send::<RuntimeWiring>());
 }
 
-/// ⑷ 着ていた着せ替え（既定に無い 101）は名前で着る。名前の無くなった着せ替え（999）は落とす。
+/// ⑵ 着ていた着せ替え（既定に無い 101）は名前で着る。名前の無くなった着せ替え（999）は落とす。
 #[test]
 fn decide_binds_keeps_a_worn_bind_and_drops_an_undefined_one() {
     let decided = decide_binds(0, &set(&[101, 999]), &set(&[]), &set(&[]), &names(&[]));
@@ -65,14 +65,14 @@ fn decide_binds_keeps_a_worn_bind_and_drops_an_undefined_one() {
     assert_eq!(decided.dropped, vec![999]);
 }
 
-/// ⑷ 控えと読み直したシェルの既定が同じ（着せ替えを変えていない）なら何も送らない。
+/// ⑵ 控えと読み直したシェルの既定が同じ（着せ替えを変えていない）なら何も送らない。
 #[test]
 fn decide_binds_sends_nothing_without_a_difference() {
     let decided = decide_binds(0, &set(&[100]), &set(&[100]), &set(&[100]), &names(&[]));
     assert_eq!(decided, CarriedBinds::default());
 }
 
-/// ⑷ 脱いでいた既定（200）は脱ぐ。同じカテゴリを着る合図（服 B）があり複数可でなければ、既定の服 A は
+/// ⑵ 脱いでいた既定（200）は脱ぐ。同じカテゴリを着る合図（服 B）があり複数可でなければ、既定の服 A は
 /// 脱ぐ合図を送らない（排他の置き換えが外す）。複数可のカテゴリなら脱ぐ合図も送る。
 #[test]
 fn decide_binds_sheds_a_removed_default_unless_an_exclusive_wear_covers_it() {
@@ -121,7 +121,7 @@ fn names_of(shell: &str) -> BindResolver {
     BindResolver::from_groups(&model.bindgroups)
 }
 
-/// ⑷ スコープ 2 は自分（`char2`）の名前表で引く: 名前の在る着た服 B は着る、`char2` に名前の無い
+/// ⑵ スコープ 2 は自分（`char2`）の名前表で引く: 名前の在る着た服 B は着る、`char2` に名前の無い
 /// 脱いだ服 A は落とす（本体側の名前表は引かない・要件 14.2）。
 #[test]
 fn decide_binds_looks_up_a_char_scope_in_its_own_names() {
@@ -134,7 +134,7 @@ fn decide_binds_looks_up_a_char_scope_in_its_own_names() {
     assert_eq!(sakura_only.dropped, vec![101, 100]);
 }
 
-/// ⑷ 台本で触っていない既定を descript で書き換えた（帽子 C の既定 1→0・服 B の既定 0→1）なら、
+/// ⑵ 台本で触っていない既定を descript で書き換えた（帽子 C の既定 1→0・服 B の既定 0→1）なら、
 /// 読み直したシェルの既定がそのまま効き、合図は 1 つも送らない（読み直しで書き換えが見える）。
 ///
 /// # 非空虚性
@@ -161,7 +161,7 @@ fn decide_binds_lets_an_edited_default_take_effect() {
     assert_eq!(on, CarriedBinds::default());
 }
 
-/// ⑷ 台本で着た・脱いだ分は、既定が書き換わっても持ち越す: 前の既定 {100, 200} から帽子 C を脱ぎ服 B を
+/// ⑵ 台本で着た・脱いだ分は、既定が書き換わっても持ち越す: 前の既定 {100, 200} から帽子 C を脱ぎ服 B を
 /// 着た控え {101}（服は排他なので A も外れた）を、既定 {100, 200} のままのシェルにも既定 {200} に
 /// 書き換えたシェルにも出し直す。
 #[test]
@@ -181,7 +181,7 @@ fn decide_binds_carries_a_dynamic_wear_and_shed_over_edited_defaults() {
     assert!(edited.dropped.is_empty());
 }
 
-/// ⑸ 着せ替えごとに `\![bind,…]`、決めた面ごとに `\s[面]` と同じ合図が着せ替えから先に届き、seriko の
+/// ⑶ 着せ替えごとに `\![bind,…]`、決めた面ごとに `\s[面]` と同じ合図が着せ替えから先に届き、seriko の
 /// scope 0 の**最初の** `Show` がもう着せ替えた集合（101）を載せる（既定の姿が 1 度も出ない）。出さない
 /// 面は届かない。
 ///

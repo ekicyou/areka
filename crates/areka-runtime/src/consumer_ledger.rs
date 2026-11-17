@@ -48,8 +48,9 @@
 //! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の 2 行
 //! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
 //! テストがその組を名指しで固定する。`runtime` の 11 の受け口については、表の全行と、表に
-//! 無い組の掛け合わせを実際に配って一致を固定する（`consumer_ledger_agreement_tests.rs`・
-//! areka-P0-mcp-author-tools 要件 3.11）。
+//! 無い組の掛け合わせを実際に配って一致を固定する（`areka` の `runtime_tests/consumer_ledger_agreement_tests.rs`・
+//! areka-P0-mcp-author-tools 要件 3.11）。見本の組が表の行と一致することの判定は、この crate の
+//! `consumer_ledger_agreement_tests.rs` にある。
 
 use std::collections::BTreeMap;
 

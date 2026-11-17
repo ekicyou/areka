@@ -117,3 +117,7 @@ impl dola::cue::CueSink for SwitchCueSink {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "switch_cue_tests.rs"]
+mod tests;

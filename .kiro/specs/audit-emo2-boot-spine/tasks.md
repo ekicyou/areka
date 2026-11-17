@@ -135,7 +135,7 @@
   - _Requirements: 2.5, 3.1, 3.3, 4.7, 6.1, 7.3_
 
 - [ ] 6. 本体から `areka-runtime` へテストを戻す（件 6）
-- [ ] 6.1 切替の cue のテストとシェル・バルーンの解決のテストを戻す［T15・26・27・11 番］
+- [x] 6.1 切替の cue のテストとシェル・バルーンの解決のテストを戻す［T15・26・27・11 番］
   - 27 番: 切替の cue のテストを `git mv` で `areka-runtime` へ移し、import を crate の中の型に、運び役の補助は 3.3 で置いた支えへ。切替の cue に `#[path]` のテストの宣言を足し、本体の代わりの親と宣言を消す
   - 26 番: 使わない切替中の印の 2 行を消し、4 本と植える補助を `areka-runtime` の同じ名前のテストのファイルへ 1 つにまとめ、本体の代わりの親とテストのファイルと宣言を消す
   - 11 番: 分けたテストの頭の説明を、そのファイルに本当にあるテストだけに縮め、相手の分は 1 行で名指す（台帳の説明と z 順の配線のテストの据える側の名指しを含む）
@@ -228,3 +228,4 @@
 - 3.6: 残りの行番号の注記（`areka-runtime/src/spine.rs` の `real.rs:136`／`:151`、本体の `spine_conformance_judge.rs` の `同 :449-451`）と、公開の `hold()`・`join_thread_bounded` の doc から私有になった `NO_ROW`・`wait_thread_end` へのリンク（`private_intra_doc_links`）は 8.2 のかけ直しで直す。
 - 4・78 番: 縛るテストは `reload_tests.rs` の組み立てでは shell の回が kanade と無関係に `no_context` で止まり、`accept_skin` の送り損ねの道（`reload.rs` の `end_skins(world, "kanade_gone")`）を縛れなかった。`reload_skin_tests.rs` の結線つきの組み立てへ移し、3 回目をバルーンにした（design.md の 78 番の節と行数の表を合わせた）。77 番の `SkinStep` は `pub(crate)` の `ReloadStage::Skins` の欄に出るので公開のまま（外すと `private_interfaces`）。
 - 5.2: `spine_conformance_lap_tests.rs` 末尾の「接続宣言は 3 本で確定済み」が今の数と合わない（どの指摘の対象でもない）。8.2 のかけ直しで扱う。
+- 6.1: zorder_wiring の 2 ファイルに分ける前の番号の節見出しが残る（本体の ⑶・⑷、areka-runtime の ⑴）。8.2 のかけ直しで振り直す。
