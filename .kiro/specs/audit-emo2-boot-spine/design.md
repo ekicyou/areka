@@ -304,7 +304,7 @@ pub(crate) fn boot_runtime(world: &mut World, inputs: RuntimeInputs, sources: &C
 ### 33 番 shell_carry の純粋な 6 本と補助の分け方（件 6・D4）
 
 - `decide_binds_*` の 6 本と、それだけが使う補助 `names`・`names_of`・`char2_names`・`wear` を、そのまま `areka-runtime/src/shell_carry_tests.rs` へ移す。`names_of` は `sample_ghost_kit::WorkDir` の下に descript を書いて本番と同じシェルの読み（`resolve_with_shell` → `BindResolver::from_groups`）で名前表を作る今の形のまま（`sample-ghost-kit` は `areka-runtime` の dev-dependencies にある）。
-- 本体に残る `replay_shows_the_decided_surfaces_and_binds_through_seriko` は、名前表をファイルから読まず、その 1 本の中で `BindResolver::from_groups(&BindGroupDefaults::from([(0, ScopeBinds { names: vec![BindGroupName { id: 101, category: "服".into(), part: "B".into(), thumbnail: None, line: 1 }], ..Default::default() })]))` の 1 式で組み、`wear(..)` は `BindReplay { category: "服".into(), part: "B".into(), on: true }` と書く。このテストが確かめるのは送る順（着せ替えが面より先・最初の `Show` が着せ替えた集合を載せる）で、名前の読みではない。
+- 本体に残る `replay_shows_the_decided_surfaces_and_binds_through_seriko` は、名前表をファイルから読まず、その 1 本の中で `BindResolver::from_groups(&BindGroupDefaults::from([(0, ScopeBinds { names: vec![（服 A の 100 と 服 B の 101 の 2 件の `BindGroupName`）], ..Default::default() })]))` の 1 式で組み、`wear(..)` は `BindReplay { category: "服".into(), part: "B".into(), on: true }` と書く。このテストが確かめるのは送る順（着せ替えが面より先・最初の `Show` が着せ替えた集合を載せる）で、名前の読みではない（実装の段で、既定 {100} を服 B で排他に置き換えるには 100 も服だと分かる必要があり、101 だけの表では赤になると分かった。今の `names(&[])` と同じ 2 件を 1 式に書く）。
 - 補助をテストの支え（`shell_carry_test_support.rs`）へ置く形は取らない。`names_of` が `sample-ghost-kit` を使うので `test-support` の下に置けない（dev-dependencies がリンクされない）。依存を足せば置けるが、要件 6.6 に反する。
 - 写しは生まれない（本体に残るのは 1 本だけが使う 1 式で、`names` の写しではない）。設計 D4 の「写しを作らない」を守る。
 
