@@ -37,9 +37,9 @@ fn urls(hits: &[UrlHit]) -> Vec<&str> {
 /// 「ukadoc」の語だけで URL を伴わない行は 1 件も拾われず、URL 付きの行は拾われる。
 ///
 /// 否定側だけでは何も返さない実装が素通りするので、同じ見本に肯定側を入れてある。
-/// 否定側の 5 行は現に作業ツリーにある形を写したもの——`ukadoc:` が文中に埋まった形
-/// （`crates/areka-placement/src/source_tests.rs:291`・`emo-compose/fold.rs:171`）、`ukadoc:` の後に
-/// 説明文が続く形（`sakura/decode_tests.rs:438`）、語だけの形である。
+/// 否定側の 5 行は作業ツリーにある形を写したもの——`ukadoc:` が文中に埋まった形
+/// （`crates/areka-placement/src/source_tests.rs` ほか）、`ukadoc:` の後に説明文が続く形
+/// （`crates/areka-parsers/src/sakura/decode_tests.rs`）、語だけの形である。
 #[test]
 fn a_ukadoc_word_without_a_url_is_never_evidence_but_a_url_line_is() {
     let text = body(&[

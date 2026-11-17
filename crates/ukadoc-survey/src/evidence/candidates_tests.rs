@@ -318,8 +318,8 @@ mod tests {
     );
 }
 
-/// コメント行の中の綴りは拾わない。実物の doc コメントには `debug!("…")` の綴りが
-/// 書かれている（`crates/areka/src/input_events/balloon.rs`）。
+/// コメント行の中の綴りは拾わない。実物の doc コメントにはログマクロの綴りが
+/// 書かれている。
 #[test]
 fn コメント行の中のログの綴りは拾わない() {
     let text = r##"/// **正常縮退**＝`debug!("恒等へ縮退")`＋no-op。
@@ -411,5 +411,44 @@ fn 同じ組は一件に畳む() {
         kinds_and_texts(&candidates(&sources(&[(EVENTS_PATH, text)]))),
         vec![(CandidateKind::BangCommandConsumer, "move")],
         "同じ (パス, 種類, 文字列) は 1 件"
+    );
+}
+
+/// テストの置き場の形は `_tests.rs` だけではない。`placement_tests/` のような
+/// `_tests/` の下と、`mod tests;` が読む `tests.rs` も除く。同じ本文を本番の置き場に
+/// 置けば拾われることを対にして、否定の側が空虚でないことを示す。
+#[test]
+fn テストの置き場の下と_tests_rs_も拾わない() {
+    let text = r##"pub const ALLOWED_EVENT_IDS: &[&str] = &["OnBoot"];
+"##;
+    for path in ["crates/x/src/placement_tests/a.rs", "crates/x/src/tests.rs"] {
+        assert_eq!(
+            candidates(&sources(&[(path, text)])),
+            Vec::new(),
+            "{path} はテストの置き場"
+        );
+    }
+    assert_eq!(
+        kinds_and_texts(&candidates(&sources(&[("crates/x/src/a.rs", text)]))),
+        vec![(CandidateKind::AllowListElement, "OnBoot")],
+        "本番の置き場なら拾う"
+    );
+}
+
+/// 生文字列の中の引用符は文字列を閉じない。引用符を奇数個持つ生文字列の後ろも
+/// `#[cfg(test)] mod` の範囲に入り、その中の表は拾わない。
+#[test]
+fn 生文字列の引用符で_cfg_test_の範囲がずれない() {
+    let text = r##"pub const ALLOWED_EVENT_IDS: &[&str] = &["OnBoot"];
+
+#[cfg(test)]
+mod tests {
+    const SAMPLE: &str = r#"a"b"#;
+    const FIXTURE_IDS: &[&str] = &["OnTestOnly"];
+}
+"##;
+    assert_eq!(
+        kinds_and_texts(&candidates(&sources(&[(EVENTS_PATH, text)]))),
+        vec![(CandidateKind::AllowListElement, "OnBoot")]
     );
 }

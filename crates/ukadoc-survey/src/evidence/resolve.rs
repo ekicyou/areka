@@ -10,9 +10,9 @@
 //! 3. どちらでもなければ [`EvidenceIndex::unresolved`] へ回す。ここでは赤にしない
 //!    ——赤にするのは検査の段（`SourceUrlNotInCatalog`）である。
 //!
-//! 実測（全 1,749 件）で **ある項目の URL が別の項目の URL の先頭部分になっている例は
-//! 0 件**なので、完全一致で曖昧さなく 1 件に定まる。アンカーを持たない 19 件は
-//! 項目 URL とページ URL の綴りが同じになるが、1 段目が先なので項目の証拠になる。
+//! カタログには**ある項目の URL が別の項目の URL の先頭部分になっている例が無い**
+//! ので、完全一致で曖昧さなく 1 件に定まる。アンカーを持たない項目は項目 URL と
+//! ページ URL の綴りが同じになるが、1 段目が先なので項目の証拠になる。
 //!
 //! 同じ URL が複数のファイルに現れても赤にしない（設計 D-4）。証拠は id ごとに
 //! **重複を除いた名前順**のファイルパスの一覧として並べる（要件 5.5）。
@@ -25,8 +25,8 @@
 //! （`&[&str]`・`&[(&str, SetSemantics)]`・`&[FlatEntry]`）はいずれも名前が要素の
 //! 最初の文字列なので、同じ規則で拾える。
 //!
-//! ページ URL の行の後にスライス定数が始まらない（あるいは閉じない）場合は
-//! [`NameMatchFailure::TableMissing`] として検査の出力に並べる。**赤にはしない**。
+//! ページ URL の行の後にスライス定数が始まらない（間にほかの項目が挟まる、あるいは
+//! 閉じない）場合は [`NameMatchFailure::TableMissing`] として検査の出力に並べる。**赤にはしない**。
 //!
 //! # 名前の突き合わせ（設計 D-5）
 //!
@@ -47,13 +47,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::candidates::{
+    SLICE_START, line_offsets, read_raw_string, read_string, skip_block_comment, skip_char_literal,
+    skip_line_comment, slice_element_names,
+};
 use super::extract::extract;
 use super::{EvidenceIndex, NameMatchFailure, UnmatchedName, UnresolvedUrl, UrlHit};
 use crate::catalog::Catalog;
 use crate::model::{EntryId, PageName};
-
-/// スライス定数の始まりの綴り（設計 D-5 の「`= &[` から」）。
-const SLICE_START: &[u8] = b"= &[";
 
 /// 全角空白。NFKC で半角空白 1 個になる。
 const IDEOGRAPHIC_SPACE: char = '\u{3000}';
@@ -143,8 +144,8 @@ fn match_vocabulary(
     by_id: &mut BTreeMap<EntryId, BTreeSet<String>>,
     unmatched: &mut BTreeSet<UnmatchedName>,
 ) {
-    // 見出しは正規化した綴りで引けるようにしておく。同じ綴りが 2 つ以上あるページが
-    // 実測 5 組あるので、id は一覧で持つ（設計 D-5 規則 3）。
+    // 見出しは正規化した綴りで引けるようにしておく。同じ綴りが 2 つ以上ある見出しを
+    // 持つページがあるので、id は一覧で持つ（設計 D-5 規則 3）。
     let mut titles: BTreeMap<String, Vec<&EntryId>> = BTreeMap::new();
     for (id, title) in catalog.titles_of_page(page) {
         titles.entry(normalized(title)).or_default().push(id);
@@ -158,7 +159,9 @@ fn match_vocabulary(
         found_marker = true;
         // 行の次の文字から後ろだけを見る（「直後に始まる最初のスライス定数」）。
         let after = offset + line.len();
-        let Some(names) = slice_element_names(&text.as_bytes()[after..]) else {
+        let rest = &text.as_bytes()[after..];
+        let Some(names) = find_slice_start(rest).and_then(|start| slice_element_names(rest, start))
+        else {
             unmatched.insert(UnmatchedName {
                 path: path.to_owned(),
                 page_url: page_url.to_owned(),
@@ -203,19 +206,6 @@ fn match_vocabulary(
     }
 }
 
-/// 本文を行に割り、各行の開始位置を添えて返す。
-///
-/// [`str::lines`] は行の位置を返さないので自前で持つ。行末の改行は含めない。
-fn line_offsets(text: &str) -> Vec<(usize, &str)> {
-    let mut out = Vec::new();
-    let mut offset = 0;
-    for line in text.split_inclusive('\n') {
-        out.push((offset, line.trim_end_matches('\n')));
-        offset += line.len();
-    }
-    out
-}
-
 /// その行が当のページ URL の目印かどうか。
 ///
 /// **判定は取り出しの段に任せる**（[`extract`] を 1 行だけに当てる）。行の形の規則を
@@ -227,129 +217,29 @@ fn is_marker_line(line: &str, page_url: &str) -> bool {
         .is_some_and(|hit| hit.url == page_url)
 }
 
-/// 最初のスライス定数から要素名を取り出す（設計 D-5）。
+/// 最初のスライス定数の中身が始まる位置。無ければ `None`（＝「表が続かない」）。
 ///
-/// `rest` は目印の行より後ろの本文（バイト列）。スライス定数が始まらない、または
-/// 閉じないときは `None`（＝「表が続かない」）。
-///
-/// 構造として読むのはコードだけで、**文字列リテラルの中と行コメントの中は読まない**。
-/// 語彙表の名前には角括弧を含むもの（`\![get,property,ID]` の類）があり、注記の
-/// コメントには括弧もコンマも引用符も現れるので、どちらかを構造として読むと表が
-/// そこで終わったことになって以降の要素が黙って消える。
-///
-/// 扱わない綴り: 生文字列（`r"..."`）・ブロックコメント（`/* */`）・文字リテラル
-/// （`','`）。実物の語彙表 3 本には 1 つも現れない。現れるようになったら、この関数の
-/// 走査に足すこと。
-fn slice_element_names(rest: &[u8]) -> Option<Vec<String>> {
-    let start = find_slice_start(rest)?;
-    let mut names = Vec::new();
-    let mut first: Option<String> = None;
-    let mut depth = 0usize;
-    let mut i = start;
-    while i < rest.len() {
-        match rest[i] {
-            b'"' => {
-                let (literal, next) = read_string(rest, i);
-                if first.is_none() {
-                    first = Some(literal);
-                }
-                i = next;
-            }
-            b'/' if rest.get(i + 1) == Some(&b'/') => i = skip_line_comment(rest, i),
-            b'(' | b'[' | b'{' => {
-                depth += 1;
-                i += 1;
-            }
-            b')' | b'}' => {
-                depth = depth.saturating_sub(1);
-                i += 1;
-            }
-            b']' if depth == 0 => {
-                names.extend(first);
-                return Some(names);
-            }
-            b']' => {
-                depth -= 1;
-                i += 1;
-            }
-            b',' if depth == 0 => {
-                names.extend(first.take());
-                i += 1;
-            }
-            _ => i += 1,
-        }
-    }
-    // 閉じる `]` に届かなかった。読み切れない表から証拠は採らない。
-    None
-}
-
-/// 最初のスライス定数の中身が始まる位置。無ければ `None`。
-///
-/// 型の注記（`&[&str]` の `&[`）を起点と読み違えないよう、綴りは `= &[` で見る
-/// （設計 D-5）。文字列とコメントの中は見ない。
+/// `rest` は目印の行より後ろの本文（バイト列）。型の注記（`&[&str]` の `&[`）を起点と
+/// 読み違えないよう、綴りは `= &[` で見る（設計 D-5）。文字列・生文字列・文字リテラル・
+/// コメントの外で `;` か `{` に出会ったら、目印の直後の項目はスライス定数ではないので
+/// そこで止める——止めないと、ずっと後ろの無関係な表を目印の表として読む。
 fn find_slice_start(rest: &[u8]) -> Option<usize> {
     let mut i = 0;
     while i < rest.len() {
         match rest[i] {
             b'"' => i = read_string(rest, i).1,
+            b'r' => i = read_raw_string(rest, i).map_or(i + 1, |(_, next)| next),
+            b'\'' => i = skip_char_literal(rest, i),
             b'/' if rest.get(i + 1) == Some(&b'/') => i = skip_line_comment(rest, i),
-            _ if rest[i..].starts_with(SLICE_START) => return Some(i + SLICE_START.len()),
+            b'/' if rest.get(i + 1) == Some(&b'*') => i = skip_block_comment(rest, i),
+            _ if rest[i..].starts_with(SLICE_START.as_bytes()) => {
+                return Some(i + SLICE_START.len());
+            }
+            b';' | b'{' => return None,
             _ => i += 1,
         }
     }
     None
-}
-
-/// `at` の引用符から文字列リテラルを 1 つ読み、中身と次の位置を返す。
-///
-/// 逃がした引用符（`\"`）は文字列を終わらせない。逃がし形は綴りを戻す——語彙表には
-/// `"\\![get]"` のように書かれた名前があり、戻さないと見出しと一致しない。
-/// 戻すのは `\\` `\"` `\'` `\n` `\r` `\t` `\0` の 7 つで、それ以外（`\u{..}` や
-/// `\x..`）は綴りのまま残す（実物の語彙表に 1 つも無い）。
-fn read_string(rest: &[u8], at: usize) -> (String, usize) {
-    let mut bytes = Vec::new();
-    let mut i = at + 1;
-    while i < rest.len() {
-        match rest[i] {
-            b'"' => {
-                i += 1;
-                break;
-            }
-            b'\\' => {
-                let escaped = rest.get(i + 1).copied();
-                match escaped {
-                    Some(b'\\') => bytes.push(b'\\'),
-                    Some(b'"') => bytes.push(b'"'),
-                    Some(b'\'') => bytes.push(b'\''),
-                    Some(b'n') => bytes.push(b'\n'),
-                    Some(b'r') => bytes.push(b'\r'),
-                    Some(b't') => bytes.push(b'\t'),
-                    Some(b'0') => bytes.push(0),
-                    Some(other) => {
-                        bytes.push(b'\\');
-                        bytes.push(other);
-                    }
-                    None => bytes.push(b'\\'),
-                }
-                i += 2;
-            }
-            byte => {
-                bytes.push(byte);
-                i += 1;
-            }
-        }
-    }
-    // 元が UTF-8 の本文で、切り出しは ASCII の位置でしか起きないので必ず戻る。
-    // 万一戻らなければ、その要素は名前として使えないので空にする。
-    (String::from_utf8(bytes).unwrap_or_default(), i)
-}
-
-/// `//` から行末（改行を含む）までを飛ばす。
-fn skip_line_comment(rest: &[u8], at: usize) -> usize {
-    match rest[at..].iter().position(|byte| *byte == b'\n') {
-        Some(offset) => at + offset + 1,
-        None => rest.len(),
-    }
 }
 
 /// 名前を突き合わせる前に揃える（設計 D-5 の「NFKC ＋ 連続空白の畳み込み ＋
@@ -358,31 +248,25 @@ fn skip_line_comment(rest: &[u8], at: usize) -> usize {
 /// # コーパスに合わせた正規化であること
 ///
 /// この道具は依存を増やせない（設計 D-1）ので完全な NFKC は持たない。代わりに、
-/// **実測で必要な範囲だけ**を写す。スナップショット 1,749 件の見出しと語彙表 3 本の
-/// 要素（計 1,955 本の文字列）を数えたところ、NFKC で綴りが変わる文字はちょうど
-/// **2 つ**しかなかった。
+/// スナップショットの見出しと語彙表の要素で NFKC が綴りを変える文字だけを写す。
 ///
 /// - `U+3000`（全角空白）→ `U+0020`
 /// - `U+FF5E`（全角チルダ `～`）→ `U+007E`
 ///
 /// どちらも「全角形 → ASCII」の帯（`U+FF01`〜`U+FF5E`）と全角空白に収まるので、
-/// 1 文字ずつの表ではなく**帯ごと**写す。この規則で、設計 D-5 の実測 3 つが再現する
-/// ——正規化で変わる見出しは 1,749 件中 5 件、正規化で新しく重複するページは 0 件
-/// （相異なる見出しは 1,657 種のまま）、`SHIORI_RESOURCE_IDS` の 159 要素は素のままで
-/// 158/159・正規化して 159/159 が 1 件に定まる。上記コーパスの 1,955 本すべてで、
-/// この関数の結果は完全な NFKC ＋ 空白畳みの結果と一致する。
+/// 1 文字ずつの表ではなく**帯ごと**写す。
 ///
 /// **これは一般の NFKC ではない。** 半角カナ（`U+FF61`〜`U+FF9F`）・丸囲み数字・
 /// 合字・組文字は写さない。将来のスナップショットがそういう文字を持つ見出しを
 /// 増やすと、その項目は黙って突き合わせに失敗する（赤にはならず
 /// [`NameMatchFailure::NoMatch`] に落ちる）。気付ける仕掛けは
-/// `SHIORI_RESOURCE_IDS` 159 要素の較正テストで、そのページに限っては 1 件でも
-/// 外れれば赤になる。他の 37 ページには同じ見張りが無い。
+/// `SHIORI_RESOURCE_IDS` の較正テストで、そのページに限っては 1 件でも外れれば赤に
+/// なる。他のページには同じ見張りが無い。
 ///
 /// なお `U+3000` については写しと空白の畳み込みが**二重に効く**（全角空白は
 /// [`char::is_whitespace`] でもある）。どちらか一方を外しても実データの結果は動かない
 /// ので、この 1 文字について「写しが効いていること」を単体で示すテストは書けない。
-/// 実測で残る唯一の非 ASCII 空白がこれなので、二重の守りをそのまま残す。
+/// 見出しに現れる非 ASCII 空白はこれだけなので、二重の守りをそのまま残す。
 fn normalized(raw: &str) -> String {
     let widened: String = raw.chars().map(to_ascii_form).collect();
     let mut out = String::with_capacity(widened.len());

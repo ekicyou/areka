@@ -22,14 +22,10 @@
 //!
 //! # これは当て推量である
 //!
-//! 4 種はいずれも**綴りの形**だけで拾う。実装時に実物（`crates/**/*.rs` 1,089 本）へ
-//! 当てて数えたところ、設計の挙げる 3 か所の件数と一致した——⑴ は
-//! `crates/areka-kanade/src/schedule/events.rs` の 11 件と
-//! `crates/areka-kanade/src/schedule/resources.rs` の 1 件、⑵ は
-//! `crates/areka-runtime/src/consumer_ledger.rs` の 4 件。全体では 381 件
-//! （⑴ 254・⑵ 4・⑶ 24・⑷ 99）である。
+//! 4 種はいずれも**綴りの形**だけで拾う。拾う数は実装が変わるたびに動くので、ここには
+//! 書かない。
 //!
-//! **この件数は常時走るテストでは守らない**（要件 6.2）。当て推量の出力を契約に
+//! **拾う数は常時走るテストでは守らない**（要件 6.2）。当て推量の出力を契約に
 //! すると、実装が 1 行増えるたびに赤くなる。拾えたものが正典の項目である保証は無く、
 //! 拾えなかった場所に項目が無い保証も無い。**当て推量のまま人へ渡す**のがこの出口の
 //! 役目である（要件 5.9）。
@@ -37,18 +33,15 @@
 //! # 拾わない場所
 //!
 //! - `crates/ukadoc-survey/` 自身（走査の段で除く・設計 D-3）。
-//! - テストの本文——`_tests.rs`・`_test.rs`・`tests/` 配下・`#[cfg(test)] mod … { … }`
-//!   の中（[`is_test_path`]・[`cfg_test_regions`]）。テストの見本は正典 URL を置く
-//!   場所ではない。理由は要件 5.2 の「定義箇所だけに置く」であって、件数の話では
-//!   ない——実測では `consumer_ledger.rs` の `try_register` 18 か所のうち 13 か所が
-//!   テストの中だが、名前は `canonical()` の 4 件と重なるので、除外しなくても畳んだ
-//!   後の件数は 5 件（設計の数える 4 件＋テストだけに現れる `"resize"`）にしかならない。
+//! - テストの本文——テストの置き場のファイル（[`is_test_path`]）と
+//!   `#[cfg(test)] mod … { … }` の中（[`cfg_test_regions`]）。テストの見本は正典 URL を
+//!   置く場所ではない（要件 5.2 の「定義箇所だけに置く」）。
 //! - **すでに正典 URL が置かれている場所**。直上の連続したコメントの塊に
 //!   `ukadoc: <URL>` の行があれば、そこはもう証拠であって候補ではない（要件 5.8 の
 //!   「まだ置かれていない既存コード」）。判定は [`extract`] へ委ねる——行の形の規則を
 //!   ここで書き直すと、片方だけが直されて静かにずれる。
-//! - コメント行そのもの。`debug!(…)` の綴りを説明する doc コメントが実物にあり
-//!   （`crates/areka/src/input_events/balloon.rs`）、行を選ばずに拾うと散文が候補になる。
+//! - コメント行そのもの。ログマクロの綴りを説明する doc コメントは実物にあり、行を
+//!   選ばずに拾うと散文が候補になる。
 
 use std::collections::BTreeSet;
 
@@ -58,10 +51,8 @@ use super::{Candidate, CandidateKind};
 /// ログ行を手掛かりとみなす語（要件 5.8「「縮退」「無視」「未知」など」）。
 ///
 /// 前の 3 語は要件が名指しした語。残りの 4 語は「正典の項目を十分に扱えていない」
-/// ことを述べる同族として実物から選んだ。**書かれていない語は入れない**——語を
+/// ことを述べる同族として実物のログから選んだ。**書かれていない語は入れない**——語を
 /// 増やすほど当たりは増えるが、当たった先に実物が無ければ人の手間が増えるだけである。
-/// 7 語すべてが実物のログに現れる（実装時の実測で 縮退 58・未知 18・無視 16・
-/// 未対応 5・非対応 2・対象外 2・未実装 1 件）。
 const LOG_WORDS: &[&str] = &[
     "縮退",
     "無視",
@@ -78,13 +69,15 @@ const LOG_MACROS: &[&str] = &["trace!", "debug!", "info!", "warn!", "error!"];
 
 /// 設定キーとみなさない末尾（ファイル名の拡張子）。
 ///
-/// 実物の点付き小文字リテラルの末尾を数えて選んだ。`descript.txt`（90 件）・
-/// `*.png`（665 件）のようなファイル名が最も多く、これを外さないと ⑶ はファイル名の
-/// 一覧になる。
+/// 実物の点付き小文字リテラルの末尾から選んだ。`descript.txt`・`*.png` のような
+/// ファイル名が多く、これを外さないと ⑶ はファイル名の一覧になる。
 const KEY_FILE_SUFFIXES: &[&str] = &["png", "txt", "dll", "exe", "toml", "rs", "bin", "dat"];
 
-/// スライス定数の始まりの綴り（設計 D-5 と同じ「`= &[` から」）。
-const SLICE_START: &str = "= &[";
+/// スライス定数の始まりの綴り（設計 D-5 の「`= &[` から」）。
+///
+/// ここから下の本文の読み手（[`line_offsets`]・[`slice_element_names`] ほか）は
+/// 証拠の側（`resolve`）も借りる。候補と証拠が同じ表を同じ要素に割るための 1 か所である。
+pub(super) const SLICE_START: &str = "= &[";
 
 /// 手掛かり候補を集める（要件 5.8）。
 ///
@@ -108,12 +101,15 @@ pub fn candidates(sources: &[(String, String)]) -> Vec<Candidate> {
 
 /// テストの本文を持つファイルかどうか（パスだけで決める）。
 ///
-/// 兄弟テストファイル（`*_tests.rs`）・`tests/` 配下・`*_test.rs` の 3 形。
+/// 兄弟テストファイル（`*_tests.rs`）・`*_test.rs`・`tests/` 配下・`*_tests/` 配下
+/// （`placement_tests/` の類）・`mod tests;` が読む `tests.rs` の 5 形。
 fn is_test_path(path: &str) -> bool {
     path.ends_with("_tests.rs")
         || path.ends_with("_test.rs")
         || path.contains("/tests/")
         || path.starts_with("tests/")
+        || path.contains("_tests/")
+        || path.ends_with("/tests.rs")
 }
 
 /// 1 ファイルの本文から候補を拾う。
@@ -168,7 +164,7 @@ fn allow_list_elements(bytes: &[u8], line_offset: usize, line: &str) -> Vec<Stri
     let Some(at) = line.find(SLICE_START) else {
         return Vec::new();
     };
-    slice_element_names(bytes, line_offset + at + SLICE_START.len())
+    slice_element_names(bytes, line_offset + at + SLICE_START.len()).unwrap_or_default()
 }
 
 /// ⑵ `\![...]` の消費側の登録名。
@@ -176,6 +172,7 @@ fn allow_list_elements(bytes: &[u8], line_offset: usize, line: &str) -> Vec<Stri
 /// 名前が `register` で終わる関数の呼び出しの、実引数の**最初の文字列リテラル**。
 /// 実物は `ledger.try_register("move", None, CommandConsumer::MoveSink)` の形で、
 /// 定義（`pub fn try_register(`）は実引数に文字列を持たないので拾われない。
+/// 表の行の形（`("move", None, …)`）は拾わない——広げるとほかの 3 つ組のタプルまで拾う。
 fn registration_names(bytes: &[u8], line_offset: usize, line: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut from = 0usize;
@@ -292,9 +289,9 @@ fn has_marker_above(lines: &[(usize, &str)], index: usize) -> bool {
 
 /// `#[cfg(test)]` の付いた `mod … { … }` の占める範囲（バイト位置の半開区間）。
 ///
-/// 実物の `#[cfg(test)]` は 148 か所が `mod tests {` で、残りは別ファイルへ出す
-/// `mod …;` である。中身の無い `mod …;` は範囲を持たないので何もしない。`mod` 以外の
-/// 項目に付いた `#[cfg(test)]`（実測でごく少数）は**飛ばさない**——次の中括弧まで
+/// 実物の `#[cfg(test)]` の多くは `mod tests {` で、残りは別ファイルへ出す `mod …;`
+/// である。中身の無い `mod …;` は範囲を持たないので何もしない。`mod` 以外の項目に
+/// 付いた `#[cfg(test)]` は**飛ばさない**——次の中括弧まで
 /// 読み飛ばすと、無関係な後続の項目まで消えるからである。
 fn cfg_test_regions(bytes: &[u8], lines: &[(usize, &str)]) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
@@ -386,7 +383,7 @@ fn is_dotted_key(raw: &str) -> bool {
 }
 
 /// 本文を行に割り、各行の開始位置を添えて返す（行末の改行は含めない）。
-fn line_offsets(text: &str) -> Vec<(usize, &str)> {
+pub(super) fn line_offsets(text: &str) -> Vec<(usize, &str)> {
     let mut out = Vec::new();
     let mut offset = 0;
     for line in text.split_inclusive('\n') {
@@ -396,12 +393,12 @@ fn line_offsets(text: &str) -> Vec<(usize, &str)> {
     out
 }
 
-/// スライス定数の要素ごとの最初の文字列リテラル（設計 D-5 と同じ規則）。
+/// スライス定数の要素ごとの最初の文字列リテラル（設計 D-5 の規則）。
 ///
-/// `start` は `= &[` の直後。閉じる `]` に届かなければ何も拾わない。文字列の中と
-/// コメントの中は構造として読まない——要素の名前には角括弧を含むものがあり、注記の
-/// コメントには括弧もコンマも現れる。
-fn slice_element_names(bytes: &[u8], start: usize) -> Vec<String> {
+/// `start` は `= &[` の直後。閉じる `]` に届かなければ `None`（読み切れない表から
+/// 何も採らない）。文字列・生文字列・文字リテラル・コメントの中は構造として読まない
+/// ——要素の名前には角括弧を含むものがあり、注記のコメントには括弧もコンマも現れる。
+pub(super) fn slice_element_names(bytes: &[u8], start: usize) -> Option<Vec<String>> {
     let mut names = Vec::new();
     let mut first: Option<String> = None;
     let mut depth = 0usize;
@@ -426,9 +423,18 @@ fn slice_element_names(bytes: &[u8], start: usize) -> Vec<String> {
                 depth = depth.saturating_sub(1);
                 i += 1;
             }
+            b'r' => match read_raw_string(bytes, i) {
+                Some((literal, next)) => {
+                    if first.is_none() {
+                        first = Some(literal);
+                    }
+                    i = next;
+                }
+                None => i += 1,
+            },
             b']' if depth == 0 => {
                 names.extend(first);
-                return names;
+                return Some(names);
             }
             b']' => {
                 depth -= 1;
@@ -441,7 +447,7 @@ fn slice_element_names(bytes: &[u8], start: usize) -> Vec<String> {
             _ => i += 1,
         }
     }
-    Vec::new()
+    None
 }
 
 /// `open`（`(` の位置）から始まる呼び出しの中の文字列リテラルを、現れた順に返す。
@@ -459,6 +465,13 @@ fn call_string_literals(bytes: &[u8], open: usize) -> Vec<String> {
                 out.push(literal);
                 i = next;
             }
+            b'r' => match read_raw_string(bytes, i) {
+                Some((literal, next)) => {
+                    out.push(literal);
+                    i = next;
+                }
+                None => i += 1,
+            },
             b'\'' => i = skip_char_literal(bytes, i),
             b'/' if bytes.get(i + 1) == Some(&b'/') => i = skip_line_comment(bytes, i),
             b'/' if bytes.get(i + 1) == Some(&b'*') => i = skip_block_comment(bytes, i),
@@ -486,6 +499,7 @@ fn matching_brace(bytes: &[u8], at: usize) -> Option<usize> {
     while i < bytes.len() {
         match bytes[i] {
             b'"' => i = read_string(bytes, i).1,
+            b'r' => i = read_raw_string(bytes, i).map_or(i + 1, |(_, next)| next),
             b'\'' => i = skip_char_literal(bytes, i),
             b'/' if bytes.get(i + 1) == Some(&b'/') => i = skip_line_comment(bytes, i),
             b'/' if bytes.get(i + 1) == Some(&b'*') => i = skip_block_comment(bytes, i),
@@ -510,7 +524,7 @@ fn matching_brace(bytes: &[u8], at: usize) -> Option<usize> {
 ///
 /// 逃がした引用符は文字列を終わらせない。逃がし形は綴りを戻す
 /// （`\\` `\"` `\'` `\n` `\r` `\t` `\0` の 7 つ・設計 D-5 の取り出しと同じ扱い）。
-fn read_string(bytes: &[u8], at: usize) -> (String, usize) {
+pub(super) fn read_string(bytes: &[u8], at: usize) -> (String, usize) {
     let mut out = Vec::new();
     let mut i = at + 1;
     while i < bytes.len() {
@@ -546,11 +560,45 @@ fn read_string(bytes: &[u8], at: usize) -> (String, usize) {
     (String::from_utf8(out).unwrap_or_default(), i)
 }
 
+/// `at` の `r` が生文字列（`r"…"`・`r#"…"#`・`br"…"`）の始まりなら、中身と閉じた
+/// 次の位置。識別子の途中の `r` や閉じない生文字列は `None`。
+///
+/// 生文字列は `"` を逃がさずに持てるので、普通の文字列として読むと引用符の数がずれて
+/// 括弧の数えが狂う。
+pub(super) fn read_raw_string(bytes: &[u8], at: usize) -> Option<(String, usize)> {
+    let is_ident = |i: usize| bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_';
+    let mut start = at;
+    if start > 0 && bytes[start - 1] == b'b' {
+        start -= 1;
+    }
+    if start > 0 && is_ident(start - 1) {
+        return None;
+    }
+    let hashes = bytes[at + 1..]
+        .iter()
+        .take_while(|byte| **byte == b'#')
+        .count();
+    let open = at + 1 + hashes;
+    if bytes.get(open) != Some(&b'"') {
+        return None;
+    }
+    let closing: Vec<u8> = std::iter::once(b'"')
+        .chain(std::iter::repeat_n(b'#', hashes))
+        .collect();
+    let body = open + 1;
+    let end = body
+        + bytes[body..]
+            .windows(closing.len())
+            .position(|window| window == closing.as_slice())?;
+    let literal = String::from_utf8(bytes[body..end].to_vec()).unwrap_or_default();
+    Some((literal, end + closing.len()))
+}
+
 /// `at` の `'` が文字リテラルなら、その次の位置。そうでなければ 1 つ進めた位置。
 ///
 /// 生存期間（`&'a str`）を文字リテラルと読み違えないよう、`'x'` と `'\x'` の 2 形
 /// だけを文字リテラルとみなす。`b'{'` の類が括弧の数えを狂わせるのを防ぐのが目的。
-fn skip_char_literal(bytes: &[u8], at: usize) -> usize {
+pub(super) fn skip_char_literal(bytes: &[u8], at: usize) -> usize {
     if bytes.get(at + 1) == Some(&b'\\') {
         if bytes.get(at + 3) == Some(&b'\'') {
             return at + 4;
@@ -562,7 +610,7 @@ fn skip_char_literal(bytes: &[u8], at: usize) -> usize {
 }
 
 /// `//` から行末（改行を含む）までを飛ばす。
-fn skip_line_comment(bytes: &[u8], at: usize) -> usize {
+pub(super) fn skip_line_comment(bytes: &[u8], at: usize) -> usize {
     match bytes[at..].iter().position(|byte| *byte == b'\n') {
         Some(offset) => at + offset + 1,
         None => bytes.len(),
@@ -570,7 +618,7 @@ fn skip_line_comment(bytes: &[u8], at: usize) -> usize {
 }
 
 /// `/*` から対応する `*/` の次までを飛ばす（入れ子を数える）。
-fn skip_block_comment(bytes: &[u8], at: usize) -> usize {
+pub(super) fn skip_block_comment(bytes: &[u8], at: usize) -> usize {
     let mut depth = 0usize;
     let mut i = at;
     while i + 1 < bytes.len() {

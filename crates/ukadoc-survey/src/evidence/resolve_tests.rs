@@ -19,7 +19,7 @@ use crate::model::EntryId;
 const LIST_RESOURCE: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html";
 /// `list_sakura_script` のページ URL（フラグメント無し）。
 const LIST_SAKURA: &str = "https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html";
-/// アンカーを持たない項目の URL。ページ URL と綴りが同じになる（要件 1.9 の 19 件の形）。
+/// アンカーを持たない項目の URL。ページ URL と綴りが同じになる（要件 1.9 の形）。
 const DEV_BIND: &str = "https://ssp.shillest.net/ukadoc/manual/dev_bind.html";
 /// アンカー付きの項目 URL 1 本。
 const SAKURA_CHOICE: &str =
@@ -28,8 +28,8 @@ const SAKURA_CHOICE: &str =
 /// 手で書いた見本のカタログ。
 ///
 /// 名前の突き合わせに要るものを 1 つずつ入れてある。⑴ 素直に一致する見出し
-/// （`version`・`log_path`）⑵ 全角空白を含む見出し（実測でここだけが正規化を要する）
-/// ⑶ 全角チルダを含む見出し ⑷ **同じページに 2 つある見出し**（`name`。実測 5 組の形）
+/// （`version`・`log_path`）⑵ 全角空白を含む見出し（実物で正規化を要する形）
+/// ⑶ 全角チルダを含む見出し ⑷ **同じページに 2 つある見出し**（`name`。実物にある形）
 /// ⑸ アンカー無しの項目（`ukadoc:dev_bind`）⑹ 逆斜線と引用符を含む見出し。
 const CATALOG: &str = r##"# 見本
 [snapshot]
@@ -272,7 +272,7 @@ fn a_slice_of_struct_literals_yields_only_the_first_string_of_each_element() {
 fn strings_outside_the_slice_are_not_taken() {
     let text = vocab_source(
         LIST_RESOURCE,
-        "const BEFORE: &str = \"name\";\npub const IDS: &[&str] = &[\n    \"version\",\n];\nconst AFTER: &str = \"log_path\";\n",
+        "#[doc = \"name\"]\npub const IDS: &[&str] = &[\n    \"version\",\n];\nconst AFTER: &str = \"log_path\";\n",
     );
     let index = resolve(
         &[hit("crates/v/src/ids.rs", LIST_RESOURCE)],
@@ -462,7 +462,7 @@ fn comments_inside_the_table_are_not_read_as_structure() {
 #[test]
 fn a_half_width_space_matches_a_full_width_space_after_normalization() {
     // 設計 D-5 の「素のままでは 1 件だけ食い違い（全角空白と半角空白の差）」。実データの
-    // `SHIORI_RESOURCE_IDS` 159 要素のうち、正規化を要するのはこの 1 件だけである。
+    // `SHIORI_RESOURCE_IDS` で正規化を要するのはこの形である。
     // 効いているのは**空白の畳み込み**の側で（全角空白は空白として畳まれる）、全角形の
     // 写しの側ではない。写しの側は下の全角チルダのテストが受け持つ。
     let text = vocab_source(
@@ -519,7 +519,7 @@ fn a_half_width_tilde_matches_a_full_width_tilde_after_normalization() {
     assert_eq!(
         evidence_of(&index, "ukadoc:list_shiori_resource:Reference1:1"),
         vec!["crates/v/src/ids.rs".to_owned()],
-        "全角チルダは NFKC で半角チルダになる（コーパス実測 2 文字のうちの 1 つ）"
+        "全角チルダは NFKC で半角チルダになる（正規化が写す 2 文字のうちの 1 つ）"
     );
 }
 
@@ -775,4 +775,58 @@ fn no_hits_yields_an_empty_index() {
         &catalog(),
     );
     assert_eq!(index, EvidenceIndex::default());
+}
+
+/// 目印と表の間に関数が挟まれば、その後ろのスライスは読まない（設計 D-5 の「直後に
+/// 始まる最初のスライス定数」）。文字列とコメントの外の `;` か `{` で探すのを止める。
+#[test]
+fn a_function_between_the_marker_and_a_slice_is_table_missing() {
+    let text = vocab_source(
+        LIST_RESOURCE,
+        "pub fn f() -> u32 {\n    1\n}\n\npub const X: &[&str] = &[\"version\"];\n",
+    );
+    let index = resolve(
+        &[hit("crates/v/src/late.rs", LIST_RESOURCE)],
+        &sources(&[("crates/v/src/late.rs", &text)]),
+        &catalog(),
+    );
+
+    assert!(index.by_id.is_empty(), "後ろの表は証拠にならない");
+    assert_eq!(
+        index.unmatched_names,
+        vec![UnmatchedName {
+            path: "crates/v/src/late.rs".to_owned(),
+            page_url: LIST_RESOURCE.to_owned(),
+            reason: NameMatchFailure::TableMissing,
+        }]
+    );
+}
+
+/// ブロックコメントと文字リテラルの `']'` は構造として読まない。証拠の側も候補の側と
+/// 同じ読み手を使うので、同じ表が同じ要素に割れる。
+#[test]
+fn a_block_comment_and_a_bracket_char_split_like_the_candidates() {
+    let table = "pub const IDS: &[(&str, char, char)] = &[\n    (\"version\", ']', ']'),\n    /* \"選択肢\", */\n    (\"log_path\", ',', ','),\n];\n";
+    let text = vocab_source(LIST_RESOURCE, table);
+    let index = resolve(
+        &[hit("crates/v/src/ids.rs", LIST_RESOURCE)],
+        &sources(&[("crates/v/src/ids.rs", &text)]),
+        &catalog(),
+    );
+
+    assert_eq!(
+        evidence_of(&index, "ukadoc:list_shiori_resource:version:1"),
+        vec!["crates/v/src/ids.rs".to_owned()]
+    );
+    assert_eq!(
+        evidence_of(&index, "ukadoc:list_shiori_resource:log_path:1"),
+        vec!["crates/v/src/ids.rs".to_owned()]
+    );
+    assert!(index.unmatched_names.is_empty());
+    let names: Vec<String> =
+        crate::evidence::candidates::candidates(&sources(&[("crates/v/src/ids.rs", table)]))
+            .into_iter()
+            .map(|candidate| candidate.text)
+            .collect();
+    assert_eq!(names, vec!["log_path".to_owned(), "version".to_owned()]);
 }
