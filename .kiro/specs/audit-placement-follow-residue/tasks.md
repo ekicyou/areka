@@ -103,7 +103,7 @@
   - _Dispatch: standard — 赤の確かめから見送りの腕と後で当たる檻までを組む_
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 9.2, 9.6_
 
-- [ ] 8. 本番の式の写しを共有の部品へ差し替える
+- [x] 8. 本番の式の写しを共有の部品へ差し替える
   - 設計の SharedCopies の表の本番の行のとおり: 91 の残り（`move_shift.rs` の根の `scale_signed`）・431（`clamp_x_into` を消して `resolver::clamp_axis`）・432（`from_monitors` を `work_area_px` へ・doc の `primary_work_area` を消す）・491（5 か所を `rect_at` へ・`rect_at` を `pub(crate)` にして `follow.rs` から crate へ出す）・`transition_diag::live_work_area_bottom` を `work_area_px` へ
   - `lib.rs` の「根を引く子」の文に設計の 1 行を足す。`clamp_x_into` を名指す 2 つのテストの文を直す
   - 完了の状態: 設計の G4 の 3 つ目の grep のうち `windowposition::scale_signed` が 0 行・`clamp_x_into` が 0 行で、今の limit・反転・記憶の戻し・可視・作業領域・移り変わりの記録の檻がそのまま緑（位置と矩形は変わらない）

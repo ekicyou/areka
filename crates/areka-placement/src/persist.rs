@@ -51,9 +51,9 @@ use super::chain_finalize::{AdjacencyMark, ChainRect};
 use super::chain_rule::{ChainRule, ChainTerms};
 use super::follow::{
     AnchorSource, Anchored, MonitorSnapshot, OffsetBase, RestoredWindow, keep_restored_groups,
-    project_anchor, work_area_for_window,
+    project_anchor, rect_at, work_area_for_window,
 };
-use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx, clamp_axis};
+use super::resolver::{Anchor, PointPx, ScopePlacement, SizePx, clamp_axis};
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -213,12 +213,7 @@ fn project_restore_parts(
 ) -> (PointPx, PointPx) {
     // wa＝`pos` に置いた窓矩形の中心が属するモニタの work area（最近傍規則込み）。
     // 空 snapshot は identity（架空矩形を発明しない・既存縮退流儀・Req5.1）。
-    let window = RectPx {
-        left: pos.x,
-        top: pos.y,
-        right: pos.x.saturating_add(size.w),
-        bottom: pos.y.saturating_add(size.h),
-    };
+    let window = rect_at(pos, size);
     let Some(wa) = work_area_for_window(snapshot, window) else {
         tracing::info!(
             target: "areka::persist::project",
@@ -243,12 +238,7 @@ fn project_restore_parts(
     // ——実機サインオフ検出: 端付近（右端を数十 px はみ出す）へ置いた Bottom char が、
     // 復元でだけ `wa.right − w` へ内側に寄せられて立ち位置がずれ、追従 balloon もずれた
     // （保存 x=3493・wa.right=3840・w=434 → 復元だけが 3406 へ clamp していた）。
-    let projected_rect = RectPx {
-        left: projected.x,
-        top: projected.y,
-        right: projected.x.saturating_add(size.w),
-        bottom: projected.y.saturating_add(size.h),
-    };
+    let projected_rect = rect_at(projected, size);
     let visible = projected_rect.left < wa.right
         && projected_rect.right > wa.left
         && projected_rect.top < wa.bottom

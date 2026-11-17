@@ -39,20 +39,11 @@ pub struct MonitorSnapshot {
 
 impl MonitorSnapshot {
     /// 実モニタ列挙結果から全 work area（`RECT`・物理 px）を列挙順のまま
-    /// **単位変換なしで忠実転写**する（mod.rs `primary_work_area` と同じ U 契約:
-    /// どちらも物理 px 通貨）。0 台は空 snapshot（panic しない・消費側が
+    /// **単位変換なしで忠実転写**する（物理 px 通貨）。0 台は空 snapshot（panic しない・消費側が
     /// [`work_area_for_window`] の `None` で防御）。
     pub fn from_monitors(monitors: &[Monitor]) -> Self {
         Self {
-            work_areas: monitors
-                .iter()
-                .map(|m| RectPx {
-                    left: m.work_area.left,
-                    top: m.work_area.top,
-                    right: m.work_area.right,
-                    bottom: m.work_area.bottom,
-                })
-                .collect(),
+            work_areas: monitors.iter().map(crate::work_area_px).collect(),
         }
     }
 }

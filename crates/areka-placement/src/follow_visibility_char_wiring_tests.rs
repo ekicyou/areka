@@ -663,7 +663,7 @@ fn assert_control_position_writes(dpi: i32, new: SizePx) {
 /// **位置がセンチネルの窓は log-first で打ち切る**（D15 採用案 (b)）: 戻り値 `false`・
 /// `WindowPos` 書込ゼロ・`warn!` ちょうど 1 件。
 ///
-/// 是正前はここで安全側 `ClampX` が走り、`clamp_x_into(i32::MIN, .., wa)` が返す
+/// 是正前はここで安全側 `ClampX` が走り、`clamp_axis(i32::MIN, wa.left, ..)` が返す
 /// `wa.left` が**位置権威の無い窓へ書き込まれて**いた（＝位置権威の僭称）。
 #[test]
 fn undetermined_position_aborts_resize_without_writing() {

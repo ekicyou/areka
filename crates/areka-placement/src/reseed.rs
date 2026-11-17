@@ -29,10 +29,12 @@ use super::dpi_sync::DpiSyncHold;
 use super::face_windowposition::mark_by_base;
 use super::follow::{
     AnchorSource, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
-    resize_window_to, sync_drag_writer, work_area_for_window,
+    rect_at, resize_window_to, sync_drag_writer, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
-use super::resolver::{Anchor, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement};
+use super::resolver::{
+    Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
+};
 use super::source::DescriptSource;
 use super::spawn::{BalloonKeywordBase, BalloonLimit, GhostWindows};
 use super::{ScopeWindowPositions, scale_then_merge};
@@ -359,12 +361,13 @@ fn running_scope(
         char_window,
         balloon_window,
         char_pos,
-        char_rect: RectPx {
-            left: char_pos.x,
-            top: char_pos.y,
-            right: char_pos.x.saturating_add(char_size.w),
-            bottom: char_pos.y.saturating_add(char_size.h),
-        },
+        char_rect: rect_at(
+            PointPx {
+                x: char_pos.x,
+                y: char_pos.y,
+            },
+            char_size,
+        ),
         input: ScopeInput {
             scope,
             char_size,

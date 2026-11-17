@@ -165,9 +165,11 @@ pub use self::sticky_follow::{CharDragSession, begin_char_drag};
 // `\![move]` の連れ動き。呼び手は `runtime::…` の `move_cue_place`。
 pub use self::sticky_follow::{follow_sticky_move, log_sticky_ignored};
 use self::visibility::{
-    VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard, rect_at,
+    VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard,
     route_applies_visibility_guard,
 };
+// 位置と大きさから窓の矩形を作る。crate 内の根の子（`balloon_limit`・`persist`・`reseed`）も使う。
+pub(crate) use self::visibility::rect_at;
 use self::window_move::enqueue_window_set_pos;
 // 書き込みの関門が判定へ渡す、表示しているキャラ窓の矩形の列。
 use self::other_chars::shown_char_rects;

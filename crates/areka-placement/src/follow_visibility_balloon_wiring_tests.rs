@@ -381,7 +381,7 @@ fn char_with_balloon_window_pos(
 /// # 檻の非空虚性（[[5.2 の教訓]]＝ログ側だけの守りにしない）
 ///
 /// 寸フィルタを外す変異では、位置センチネルが `old_rect = None`（不明）へ落ちるため
-/// 安全側 `ClampX` が走り、`clamp_x_into(x, i32::MIN, wa)` が `wa.left` を返す
+/// 安全側 `ClampX` が走り、`clamp_axis(x, wa.left, ..)` が `wa.left` を返す
 /// ＝**提案位置と違う座標が書かれる**。提案 X を `left_wa().left` より左へ置いてあるのは
 /// そのためで、位置 assert が第一の守りになる。
 #[test]

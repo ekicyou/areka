@@ -15,12 +15,12 @@ use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::super::balloon_limit::clamp_rect_to_work_area;
 use super::super::dpi_sync::{self, HoldSite};
-use super::super::windowposition::scale_signed;
 use super::{
     Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, PlacementRoute,
     PointPx, RectPx, SizePx, apply_visibility_guard, follow_balloon, is_char_drag_partner,
     is_char_dragging, move_window_with_route, project_anchor, rect_at, work_area_for_window,
 };
+use crate::scale_signed;
 
 const ZERO: PointPx = PointPx { x: 0, y: 0 };
 

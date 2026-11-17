@@ -3,6 +3,7 @@
 use bevy_ecs::prelude::*;
 use tracing::warn;
 
+use super::super::resolver::clamp_axis;
 use super::{
     MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WorkAreaResolution,
     work_area_for_window_with_origin,
@@ -102,13 +103,17 @@ pub(crate) fn guard_visibility(
 
     // 3. 交差→非交差の遷移（または旧矩形不明）＝X のみ引き戻す。Y は射影の所有。
     VisibilityVerdict::ClampX(PointPx {
-        x: clamp_x_into(proposed_pos.x, size.w, clamp_wa),
+        x: clamp_axis(
+            proposed_pos.x,
+            clamp_wa.left,
+            clamp_wa.right.saturating_sub(size.w),
+        ),
         y: proposed_pos.y,
     })
 }
 
 /// 位置＋寸から窓矩形を作る（`right`/`bottom` は排他側・`saturating` で溢れない）。
-pub(super) fn rect_at(pos: PointPx, size: SizePx) -> RectPx {
+pub(crate) fn rect_at(pos: PointPx, size: SizePx) -> RectPx {
     RectPx {
         left: pos.x,
         top: pos.y,
@@ -131,12 +136,6 @@ fn intersects_any_work_area(snapshot: &MonitorSnapshot, window: RectPx) -> bool 
         .work_areas
         .iter()
         .any(|wa| rects_intersect(window, *wa))
-}
-
-/// X を `wa.left ..= wa.right − w` へ引き戻す（`i32::clamp` は逆転区間で panic する
-/// ため min/max 流儀・`work_area_for_window` の最近傍 clamp と同型の防波堤）。
-fn clamp_x_into(x: i32, w: i32, wa: RectPx) -> i32 {
-    x.min(wa.right.saturating_sub(w)).max(wa.left)
 }
 
 // =============================================================================

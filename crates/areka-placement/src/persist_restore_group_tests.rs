@@ -5,6 +5,7 @@
 //! （当て直しで y=864）。記憶の x は下端中央の原点（左上 + 320）。
 
 use super::*;
+use crate::resolver::RectPx;
 use crate::shared_test_support::placement_sized;
 
 const CSZ: SizePx = SizePx { w: 640, h: 840 };

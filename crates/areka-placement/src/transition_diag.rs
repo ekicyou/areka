@@ -684,15 +684,7 @@ pub fn log_chain(
 /// モニタ 0 台・表そのものが無い World は `None`＝架空の矩形を発明しない。
 pub fn live_work_area_bottom(world: &mut World, window: RectPx) -> Option<i32> {
     let mut monitors = world.query::<&Monitor>();
-    let work_areas: Vec<RectPx> = monitors
-        .iter(world)
-        .map(|monitor| RectPx {
-            left: monitor.work_area.left,
-            top: monitor.work_area.top,
-            right: monitor.work_area.right,
-            bottom: monitor.work_area.bottom,
-        })
-        .collect();
+    let work_areas: Vec<RectPx> = monitors.iter(world).map(crate::work_area_px).collect();
     if work_areas.is_empty() {
         return None;
     }
