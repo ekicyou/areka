@@ -215,7 +215,7 @@ fn an_alias_pointing_at_another_alias_is_a_finding() {
 /// それ以外を落とす。だから**正しい台帳では 1 段と多段を原理的に区別できない**
 /// ——手前の指す先が別名でなければ、その先には `alias_of` が無くて連鎖がそこで
 /// 終わるからである。検査層は `Ledger` の値だけを受け取り、A.2 の整合は読み取りの段が
-/// 守る（`check::structure` の `LedgerDomainMismatch` と同じ役割分担）。よって段数の
+/// 守る（`[ledger].domain` の食い違いと同じ役割分担）。よって段数の
 /// 守りを試せるのは、読み取りを通っていない値を組んだこの形だけである。
 #[test]
 fn the_alias_chain_is_followed_only_one_hop() {

@@ -18,8 +18,9 @@
 //! `LedgerIdPageMismatch` は [`crate::assignment::PageAssignment`] に照らして判定する。
 //! 台帳の `[ledger].pages` を正本にすると、前置きが誤っている台帳では項目の側が
 //! 「正しい」ことになってしまい、誤りが誤りを隠す。前置きそのものの誤りは
-//! `LedgerPagesMismatch` が**集合として**別に拾う（要件 3.3a により前置きは以後
-//! バイト列のまま写されるので、ここで守らないと永久に残る）。
+//! `LedgerPagesMismatch` が**集合として**別に拾い、同じページの重複も「余分」に出す
+//! （要件 3.3a により前置きは以後バイト列のまま写されるので、ここで守らないと永久に
+//! 残る）。
 //!
 //! # 並び順は本文の順を見る
 //!
@@ -29,12 +30,12 @@
 //! 中に既存 id と同じ綴りの見出し行が隠れた場合、塊の切り分けの較正（鍵の集合との
 //! 一致）では見抜けず、この厳密さだけが穴を閉じる。
 //!
-//! # `LedgerDomainMismatch` はここでは作れない
+//! # `[ledger].domain` の食い違いはここでは見ない
 //!
-//! `[ledger].domain` の食い違いは `ledger::read` の段で落ちる。[`Ledger`] は `domain`
-//! を 1 つしか持たず、その値はファイル名から来るので、宣言された綴りが残るのは読み
-//! 取りの中だけである。[`CheckInput`] は台帳ごとのファイル名を受け取らないから、
-//! 検査層はこの判定を作り直せない——**書けないのが正しい**（設計 check 節の注記）。
+//! それは `ledger::read` の段で落ちる。[`Ledger`] は `domain` を 1 つしか持たず、その
+//! 値はファイル名から来るので、宣言された綴りが残るのは読み取りの中だけである。
+//! [`CheckInput`] は台帳ごとのファイル名を受け取らないから、検査層はこの判定を作り
+//! 直せず、そのための所見の種類も置かない。
 
 use super::{CheckInput, Finding, FindingKind};
 use crate::io::paths::CATALOG_FILE;
@@ -70,11 +71,17 @@ pub fn check(input: &CheckInput) -> Vec<Finding> {
 /// 前置きの担当ページが割り当て表と**集合として**一致するか（要件 3.1）。
 ///
 /// 集合で比べるのは、並びの正しさが初期台帳の生成の担当だからである（要件 3.3a）。
+/// ただし集合にすると重複が消えるので、2 度目に現れたページは「余分」に数える。
 fn check_preamble_pages(input: &CheckInput, ledger: &Ledger, findings: &mut Vec<Finding>) {
-    let declared: BTreeSet<&PageName> = ledger.pages.iter().collect();
+    let mut declared: BTreeSet<&PageName> = BTreeSet::new();
+    let repeated: BTreeSet<&PageName> = ledger
+        .pages
+        .iter()
+        .filter(|page| !declared.insert(*page))
+        .collect();
     let canonical = input.assignment.pages_of(ledger.domain);
     let assigned: BTreeSet<&PageName> = canonical.iter().collect();
-    if declared == assigned {
+    if declared == assigned && repeated.is_empty() {
         return;
     }
 
@@ -84,6 +91,10 @@ fn check_preamble_pages(input: &CheckInput, ledger: &Ledger, findings: &mut Vec<
         .collect();
     let extra: Vec<&str> = declared
         .difference(&assigned)
+        .copied()
+        .chain(repeated)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .map(|page| page.as_str())
         .collect();
     findings.push(Finding::new(

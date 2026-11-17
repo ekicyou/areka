@@ -20,14 +20,10 @@
 //! 不変条件なので、どんな見本でも避けられない）。この 2 つだけは 2 種類を明示して
 //! 主張する。
 //!
-//! # `LedgerDomainMismatch` のテストは無い
+//! # `[ledger].domain` の食い違いのテストは無い
 //!
-//! `[ledger].domain` の食い違いは `ledger::read` の段で落ちる。[`Ledger`] は
-//! `domain` を 1 つしか持たず、その値はファイル名から来るので、宣言された綴りが残る
-//! のは読み取りの中だけである。[`CheckInput`] は台帳ごとのファイル名を受け取らない
-//! から、検査層はこの判定を作り直せない——**書けないのが正しい**（設計 check 節の
-//! 注記）。下の各テストが「その種類は 0 件」を等式で
-//! 主張しているので、うっかり作り物の判定を足せば赤になる。
+//! それは `ledger::read` の段で落ちる。[`Ledger`] は `domain` を 1 つしか持たず、
+//! その値はファイル名から来るので、検査層には見る材料が無く、所見の種類も無い。
 
 use super::super::test_support::{details, id, kinds, ledger_place, of_kind, only_one};
 use super::super::{CheckInput, FindingKind, run};
@@ -378,6 +374,32 @@ fn an_extra_page_in_the_preamble_is_a_finding() {
     assert_eq!(
         finding.detail,
         "前置きの担当ページが割り当て表と違う（足りない: なし / 余分: descript_balloon）"
+    );
+}
+
+/// 前置きに同じページを 2 度書くと、そのページが「余分」に出る。
+///
+/// 集合にすると重複は消えて一致してしまう。前置きは以後バイト列のまま写されるので、
+/// ここで拾わないと重複は残り続ける。
+#[test]
+fn a_page_repeated_in_the_preamble_is_a_finding() {
+    let mut world = World::normal();
+    let ledger = world.ledger_mut(Domain::Property);
+    let repeated = ledger.pages[0].clone();
+    ledger.pages.push(repeated);
+    world.refresh_reports();
+
+    let outcome = run(&world.input());
+    assert_eq!(
+        kinds(&outcome.findings),
+        vec![(FindingKind::LedgerPagesMismatch, 1)]
+    );
+    let finding = only_one(&outcome.findings, FindingKind::LedgerPagesMismatch);
+    assert_eq!(finding.id, None);
+    assert_eq!(finding.place, ledger_place("property"));
+    assert_eq!(
+        finding.detail,
+        "前置きの担当ページが割り当て表と違う（足りない: なし / 余分: list_propertysystem）"
     );
 }
 

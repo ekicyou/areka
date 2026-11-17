@@ -180,9 +180,9 @@ fn findings_in_one_place_are_ordered_by_id_not_by_input_order() {
     assert!(a < z, "id の昇順で並んでいない:\n{body}");
 }
 
-/// 種類ごとの塊は [`FindingKind::ALL`] の並び（＝設計の判定表の並び）で出る。
+/// 種類ごとの塊は [`FindingKind::ALL`] の並びで出る。
 ///
-/// 入力を逆順に与えても本文の並びは変わらない。15 種すべてを 1 件ずつ与えて、
+/// 入力を逆順に与えても本文の並びは変わらない。14 種すべてを 1 件ずつ与えて、
 /// 見出しの並びを逐語で釘付けする。
 #[test]
 fn the_kind_blocks_come_out_in_the_declared_order() {
@@ -217,7 +217,6 @@ fn the_kind_blocks_come_out_in_the_declared_order() {
         "CatalogIdMissingFromLedgers",
         "CatalogIdInMultipleLedgers",
         "LedgerIdPageMismatch",
-        "LedgerDomainMismatch",
         "LedgerPagesMismatch",
         "LedgerOutOfOrder",
         "PageNotAssigned",
@@ -235,7 +234,7 @@ fn the_kind_blocks_come_out_in_the_declared_order() {
     assert_eq!(headings, expected);
 }
 
-/// 種類の綴りは設計の判定表そのままである。往復では守れないので逐語で並べる。
+/// 種類の綴りは README の所見の表と同じである。往復では守れないので逐語で並べる。
 #[test]
 fn the_kind_keys_are_pinned_verbatim() {
     let keys: Vec<&'static str> = FindingKind::ALL.iter().map(FindingKind::as_key).collect();
@@ -246,7 +245,6 @@ fn the_kind_keys_are_pinned_verbatim() {
             "CatalogIdMissingFromLedgers",
             "CatalogIdInMultipleLedgers",
             "LedgerIdPageMismatch",
-            "LedgerDomainMismatch",
             "LedgerPagesMismatch",
             "LedgerOutOfOrder",
             "PageNotAssigned",
@@ -261,13 +259,13 @@ fn the_kind_keys_are_pinned_verbatim() {
     );
 }
 
-/// 設計の判定表は 15 種。数え落としも重複も落とす。
+/// 所見の種類は 14 種。数え落としも重複も落とす。
 #[test]
-fn all_fifteen_kinds_are_declared_once_each() {
-    assert_eq!(FindingKind::ALL.len(), 15);
+fn all_fourteen_kinds_are_declared_once_each() {
+    assert_eq!(FindingKind::ALL.len(), 14);
     let distinct: BTreeSet<&'static str> =
         FindingKind::ALL.iter().map(FindingKind::as_key).collect();
-    assert_eq!(distinct.len(), 15, "同じ綴りが 2 度出ている");
+    assert_eq!(distinct.len(), 14, "同じ綴りが 2 度出ている");
 }
 
 /// 本文は入力の並びに依らない（要件 7.3 の決定論を検査の出力にも通す）。

@@ -564,7 +564,7 @@ cargo run -p ukadoc-survey -- report-summary  # 全体報告
 
 ## 検査が失敗したときの読み方
 
-`cargo test -p ukadoc-survey` や `cargo run -p ukadoc-survey -- check` が出す所見は 15 種ある。
+`cargo test -p ukadoc-survey` や `cargo run -p ukadoc-survey -- check` が出す所見は 14 種ある。
 所見にはどのファイルのどの id かが必ず付く。
 
 | 所見 | 意味 | だいたいの直し方 |
@@ -573,7 +573,6 @@ cargo run -p ukadoc-survey -- report-summary  # 全体報告
 | `CatalogIdMissingFromLedgers` | カタログの id がどの台帳にも無い | `ledger-init` を走らせる |
 | `CatalogIdInMultipleLedgers` | 同じ id が 2 つ以上の台帳にある | 担当ページの側の台帳に 1 つだけ残す |
 | `LedgerIdPageMismatch` | その id のページは別ドメインの担当 | 正しい台帳へ移す |
-| `LedgerDomainMismatch` | `[ledger].domain` がファイル名と違う | 前置きを直す |
 | `LedgerPagesMismatch` | `[ledger].pages` が担当ページと違う | 前置きを直す |
 | `LedgerOutOfOrder` | 項目が id の厳密な昇順でない | 名指しされた id の位置を直す |
 | `PageNotAssigned` | カタログに担当の無いページが現れた | 道具の担当者へ（割り当て表の追加が要る） |
