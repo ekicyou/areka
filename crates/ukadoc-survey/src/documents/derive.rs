@@ -57,14 +57,13 @@ pub fn derive_bundle(
     briefing: &Briefing,
     ledgers: &[Ledger],
 ) -> Derived {
-    // 同じ id を 2 度書いても 1 件として数える。
-    let members: BTreeSet<&EntryId> = bundle.members.iter().collect();
+    let members = &bundle.members;
 
     let mut themes = BTreeSet::new();
     let mut domains = BTreeSet::new();
     for ledger in ledgers {
-        for member in &members {
-            if let Some(entry) = ledger.entries.get(*member) {
+        for member in members {
+            if let Some(entry) = ledger.entries.get(member) {
                 domains.insert(ledger.domain);
                 themes.extend(entry.values.iter().cloned());
             }
@@ -82,7 +81,7 @@ pub fn derive_bundle(
         domains,
         assets: members
             .iter()
-            .filter(|member| vocabulary.contains(*member))
+            .filter(|member| vocabulary.contains(member))
             .count(),
         shared: shared_of(bundle, linkage),
     }
@@ -117,15 +116,15 @@ pub fn axis_key(
     (breakage_weight(breakage), themes, assets, shared)
 }
 
-/// 壊れ方の重み（設計 D-9）。黙って壊れる ＞ 明示エラー ＞ 見た目の差 ＞ 該当なし。
+/// 壊れ方の重み（設計 D-9）。[`Breakage::ALL`] は悪いほうから並ぶので、後ろから
+/// 数えた位置を重みにする——序列を持つのは `ALL` の並び 1 か所だけである。
 fn breakage_weight(breakage: Breakage) -> u8 {
-    // 既定の腕を置かない。語彙を増やしたらここが赤くなる。
-    match breakage {
-        Breakage::Silent => 3,
-        Breakage::Explicit => 2,
-        Breakage::Visual => 1,
-        Breakage::NotApplicable => 0,
-    }
+    Breakage::ALL
+        .iter()
+        .rev()
+        .zip(0u8..)
+        .find_map(|(candidate, weight)| (*candidate == breakage).then_some(weight))
+        .expect("Breakage::ALL は語彙をすべて持つ")
 }
 
 /// 全項目の `priority`（要件 7.1・7.2）。

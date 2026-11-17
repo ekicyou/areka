@@ -23,9 +23,12 @@
 //! 判定 ⑴ が拾う id の口はここに 4 つ置く——囲みの中の引用符付き（[`toml_blocks`]
 //! ＋ [`quoted_ids`]）・地の文の逆引用符付き（[`backticked_ids`]）・どちらにも
 //! 囲まれていない裸の語（[`bare_id_tokens`]・0 件であるべき）。
-//! `tests/consistency/examples.rs` が自前で持っていた 2 つはここへ寄せた。
+//! `tests/consistency/examples.rs` も囲みの中の口はここを呼ぶ。
+//!
+//! 「どこからどこまでが囲みか」の見分けは `segments` 1 本で、TOML の口と地の文の
+//! 口が同じ見分け方をする。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::fields::{
     BRIEFING_FILE, LINKAGE_FILE, ROADMAP_FILE, array_of_tables, as_table, bad_vocabulary,
@@ -39,12 +42,12 @@ use super::{
     SpecRow, Stage, StageCount, Tally,
 };
 use crate::error::SurveyError;
-use crate::model::{Domain, ID_MARK, PageName};
+use crate::model::{Domain, EntryId, ID_MARK, PageName};
 
-/// 囲みの始まりの行。
-const FENCE_OPEN: &str = "```toml";
-/// 囲みの終わりの行（どの言語の囲みでも同じ）。
+/// 囲みの区切り。開く行はこれで始まり（後ろに言語名）、閉じる行はこれちょうど。
 const FENCE: &str = "```";
+/// TOML の囲みの言語名。
+const TOML_INFO: &str = "toml";
 
 /// 囲みを連結した本文の根。失敗に添える場所として使う。
 const ROOT_PLACE: &str = "囲みの根";
@@ -53,35 +56,57 @@ const ROOT_PLACE: &str = "囲みの根";
 // 4 つの口
 // ---------------------------------------------------------------------------
 
-/// ` ```toml ` で始まり ` ``` ` で閉じる囲みの中身だけを、現れた順に返す。
+/// 本文の 1 かたまり——囲みの外の 1 行か、囲み 1 つの中身。
+enum Segment<'a> {
+    /// 囲みの外の行。
+    Prose(&'a str),
+    /// 囲みの中の行（区切りの行は含まない）。`toml` は言語名が `toml` のとき真。
+    Block { toml: bool, lines: Vec<&'a str> },
+}
+
+/// 本文を囲みの外の行と囲みに分ける。TOML の口と地の文の口はこれだけを使う。
 ///
-/// 入れ子は扱わない（Markdown の囲みは入れ子にならない）。閉じ忘れた囲みは本文の
-/// 終わりまでを 1 つの囲みとして返す——取りこぼして黙って緑になるより、中身を
-/// 検査に掛けたほうが安全側である。
-pub fn toml_blocks(markdown: &str) -> Vec<String> {
-    let mut blocks = Vec::new();
-    let mut current: Option<Vec<&str>> = None;
+/// 開くのは行頭の空白を削った行が ` ``` ` で始まるとき（字下げした囲みも囲み）、
+/// 閉じるのは前後の空白を削った行がちょうど ` ``` ` のとき——囲みの中の
+/// ` ```toml ` の行は囲みの中身で、開きも閉じもしない。閉じ忘れた囲みは本文の
+/// 終わりまでを 1 つの囲みとする——取りこぼして黙って緑になるより、中身を検査に
+/// 掛けたほうが安全側である。
+fn segments(markdown: &str) -> Vec<Segment<'_>> {
+    let mut out = Vec::new();
+    let mut open: Option<(bool, Vec<&str>)> = None;
     for line in markdown.lines() {
-        match current.as_mut() {
-            Some(lines) => {
-                if line.trim_end() == FENCE {
-                    blocks.push(lines.join("\n"));
-                    current = None;
-                } else {
-                    lines.push(line);
-                }
+        if let Some((toml, lines)) = open.as_mut() {
+            if line.trim() == FENCE {
+                out.push(Segment::Block {
+                    toml: *toml,
+                    lines: std::mem::take(lines),
+                });
+                open = None;
+            } else {
+                lines.push(line);
             }
-            None => {
-                if line.trim_end() == FENCE_OPEN {
-                    current = Some(Vec::new());
-                }
-            }
+            continue;
+        }
+        match line.trim_start().strip_prefix(FENCE) {
+            Some(info) => open = Some((info.trim() == TOML_INFO, Vec::new())),
+            None => out.push(Segment::Prose(line)),
         }
     }
-    if let Some(lines) = current {
-        blocks.push(lines.join("\n"));
+    if let Some((toml, lines)) = open {
+        out.push(Segment::Block { toml, lines });
     }
-    blocks
+    out
+}
+
+/// TOML の囲みの中身だけを、現れた順に返す（見分け方は `segments`）。
+pub fn toml_blocks(markdown: &str) -> Vec<String> {
+    segments(markdown)
+        .into_iter()
+        .filter_map(|segment| match segment {
+            Segment::Block { toml: true, lines } => Some(lines.join("\n")),
+            Segment::Block { .. } | Segment::Prose(_) => None,
+        })
+        .collect()
 }
 
 /// 本文に現れる `"ukadoc:…"` の綴りを、現れた順に返す（重複は落とさない）。
@@ -144,20 +169,15 @@ pub fn bare_id_tokens(markdown: &str) -> Vec<String> {
     tokens
 }
 
-/// 囲み（どの言語でも）の外の行だけを返す。
+/// 囲み（どの言語でも）の外の行だけを返す（見分け方は `segments`）。
 fn prose_lines(markdown: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut inside = false;
-    for line in markdown.lines() {
-        if line.trim_start().starts_with(FENCE) {
-            inside = !inside;
-            continue;
-        }
-        if !inside {
-            lines.push(line);
-        }
-    }
-    lines
+    segments(markdown)
+        .into_iter()
+        .filter_map(|segment| match segment {
+            Segment::Prose(line) => Some(line),
+            Segment::Block { .. } => None,
+        })
+        .collect()
 }
 
 /// id の綴りに現れてよい文字（`balloon.scope(ID).width` のような括弧付きも含む）。
@@ -261,6 +281,7 @@ fn read_bundle(
     if members.is_empty() {
         return Err(malformed(file, format!("{place}: 欄 members が空")));
     }
+    reject_duplicate_ids(&members, place, "members", file)?;
 
     let (machine, hand, foundation, reason) = if single {
         reject_present(item, place, file, &["machine", "hand", "foundation"])?;
@@ -273,6 +294,16 @@ fn read_bundle(
                 ),
             ));
         }
+        // 順位は単独項目を名前で引くので、名前と中の id は同じ綴りでなければならない。
+        if members[0].as_str() != name {
+            return Err(malformed(
+                file,
+                format!(
+                    "{place}: 単独項目の名前 {name} と members の {} が食い違う",
+                    members[0].as_str()
+                ),
+            ));
+        }
         let reason = string_field(item, place, "reason", file)?;
         if reason.trim().is_empty() {
             return Err(malformed(file, format!("{place}: 欄 reason が空")));
@@ -281,7 +312,9 @@ fn read_bundle(
     } else {
         reject_present(item, place, file, &["reason"])?;
         let machine = id_array_field(item, place, "machine", file)?;
+        reject_duplicate_ids(&machine, place, "machine", file)?;
         let hand = id_array_field(item, place, "hand", file)?;
+        reject_duplicate_ids(&hand, place, "hand", file)?;
         for id in &hand {
             if !members.contains(id) {
                 return Err(malformed(
@@ -302,7 +335,6 @@ fn read_bundle(
         .ok_or_else(|| bad_vocabulary(file, place, "breakage", &raw_breakage))?;
 
     Ok(NamedBundle {
-        name: name.to_owned(),
         single,
         machine,
         members,
@@ -313,6 +345,25 @@ fn read_bundle(
         themes: theme_array_field(item, place, "themes", file)?,
         reason,
     })
+}
+
+/// 同じ id を 2 度書いていないことを確かめる。畳むと導出と順位で扱いが割れる。
+fn reject_duplicate_ids(
+    ids: &[EntryId],
+    place: &str,
+    key: &str,
+    file: &str,
+) -> Result<(), SurveyError> {
+    let mut seen = BTreeSet::new();
+    for id in ids {
+        if !seen.insert(id) {
+            return Err(malformed(
+                file,
+                format!("{place}: 欄 {key} に {} が 2 度ある", id.as_str()),
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// `[tally]` を読む。ドメイン別内訳は 4 つ揃わなければ落ちる（要件 4.2・11.5）。
@@ -463,7 +514,13 @@ fn read_rank(item: &toml::Table, file: &str) -> Result<RankRow, SurveyError> {
             ));
         }
         (Some(_), None) => RankTarget::Bundle(string_field(item, place, "bundle", file)?),
-        (None, Some(_)) => RankTarget::Singles(id_array_field(item, place, "singles", file)?),
+        (None, Some(_)) => {
+            let singles = id_array_field(item, place, "singles", file)?;
+            if singles.is_empty() {
+                return Err(malformed(file, format!("{place}: 欄 singles が空")));
+            }
+            RankTarget::Singles(singles)
+        }
     };
 
     Ok(RankRow {
@@ -595,13 +652,14 @@ fn read_templates(root: &toml::Table, file: &str) -> Result<Vec<super::Template>
         let name = string_field(item, "[[template]]", "name", file)?;
         let place = &format!("[[template]] {name}");
         reject_unknown_keys(item, &TEMPLATE_FIELDS, place, file)?;
+        // 人が読むための欄。形だけ確かめて値は持たない。
+        string_field(item, place, "shiori", file)?;
+        string_field(item, place, "url", file)?;
+        string_field(item, place, "fetched_on", file)?;
+        string_array_field(item, place, "files", file)?;
+        string_field(item, place, "mapping", file)?;
+        bool_field(item, place, "fallback", file)?;
         rows.push(super::Template {
-            shiori: string_field(item, place, "shiori", file)?,
-            url: string_field(item, place, "url", file)?,
-            fetched_on: string_field(item, place, "fetched_on", file)?,
-            files: string_array_field(item, place, "files", file)?,
-            mapping: string_field(item, place, "mapping", file)?,
-            fallback: bool_field(item, place, "fallback", file)?,
             ids: id_array_field(item, place, "ids", file)?,
             name,
         });
@@ -649,8 +707,9 @@ pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
         let place = &format!("[[spec]] {name}");
         reject_unknown_keys(item, &SPEC_FIELDS, place, &file)?;
         let bundle = read_bundle_ref(item, place, &file)?;
+        // ウェーブは人が読むための欄。形だけ確かめて値は持たない。
+        string_field(item, place, "wave", &file)?;
         specs.push(SpecRow {
-            wave: string_field(item, place, "wave", &file)?,
             stage: read_stage(item, place, &file, &bundle)?,
             bundle,
             owner_count: usize_field(item, place, "owner_count", &file)?,
@@ -683,8 +742,7 @@ pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
 ///
 /// 段階は束が順位表で置かれている段階の写しなので、束の無い行に台帳から決まる段階は
 /// 無い。そこを既定値で埋めると、値でない綴りが値のふりをして段階の分布を狂わせる
-/// ——`stage = "A"` を置き字として 14 行に並べた版が実際にそうなっていた
-/// （27 行中 23 行が `A`・本物は 9 行）。だから省略を**強制**する。
+/// （置き字の `stage = "A"` が本物の `A` に混ざる）。だから省略を**強制**する。
 fn read_stage(
     item: &toml::Table,
     place: &str,
@@ -715,12 +773,13 @@ fn read_bundle_ref(item: &toml::Table, place: &str, file: &str) -> Result<Bundle
     }
 
     reject_present(item, place, file, &["reason"])?;
-    let bundle = string_field(item, place, "bundle", file).map_err(|_| {
-        malformed(
+    if !item.contains_key("bundle") {
+        return Err(malformed(
             file,
             format!("{place}: 欄 bundle が無い（属さないなら none = true と reason を書く）"),
-        )
-    })?;
+        ));
+    }
+    let bundle = string_field(item, place, "bundle", file)?;
     if bundle.trim().is_empty() {
         return Err(malformed(
             file,

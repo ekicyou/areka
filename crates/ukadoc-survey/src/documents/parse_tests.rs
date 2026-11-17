@@ -4,7 +4,7 @@
 //! 実ファイルは 1 行も読まない——実データを相手にする判定は統合テストの担当で
 //! （設計 D-3）、ここで読むと文書の書きかけがそのまま純粋層のテストを赤くする。
 //!
-//! 守るのは 4 つ（タスク 1.2 の完了状態）。
+//! 守るのは次の 4 つと、形の検査の分岐の全部である。
 //!
 //! - 囲みを**連結して 1 度だけ**読むこと（配列表を複数の囲みに分けて書ける）
 //! - 同じ鍵が 2 度現れたら落ちること（囲みをまたいでも）
@@ -33,6 +33,18 @@ domains = ["assets", "shiori"]
 foundation = "時刻イベントの発火路"
 breakage = "黙って壊れる"
 themes = ["気配"]
+```
+"#;
+
+/// 単独項目 1 つ分の囲み（名前は id そのもの）。
+const SINGLE_BLOCK: &str = r#"```toml
+[bundle."ukadoc:list_shiori_event:OnMinuteChange:1"]
+single = true
+members = ["ukadoc:list_shiori_event:OnMinuteChange:1"]
+domains = ["shiori"]
+breakage = "見た目の差"
+themes = []
+reason = "壊れる振る舞いを書けない"
 ```
 "#;
 
@@ -173,6 +185,80 @@ fn toml_blocks_returns_each_fence_body_in_order() {
     assert_eq!(toml_blocks(markdown), vec!["a = 1", "c = 3"]);
 }
 
+/// 閉じ忘れた囲みは本文の終わりまでを 1 つの囲みとする——中身は TOML の口で検査に
+/// 掛かり、地の文の口には混ざらない（取りこぼして黙って緑にしない）。
+#[test]
+fn an_unclosed_fence_runs_to_the_end_of_the_text() {
+    let id = "ukadoc:list_shiori_event:OnBoot:1";
+    let markdown = format!("地の文\n\n```toml\na = 1\nb = \"`{id}`\"\n");
+    assert_eq!(
+        toml_blocks(&markdown),
+        vec![format!("a = 1\nb = \"`{id}`\"")],
+        "閉じ忘れた囲みの中身を取りこぼしている"
+    );
+    assert!(
+        backticked_ids(&markdown).is_empty(),
+        "閉じ忘れた囲みの中を地の文として読んでいる"
+    );
+}
+
+/// 箇条書きの中で字下げした囲みも囲みである。TOML の口と地の文の口が同じ見分け方を
+/// するので、表は読まれ、中の id は地の文の口に混ざらない。
+#[test]
+fn an_indented_toml_fence_is_read_and_kept_out_of_the_prose() {
+    let markdown = "- 写真\n\n  ```toml\n  [briefs]\n  count = 4\n  snapshot_on = \"`ukadoc:list_shiori_event:OnBoot:1`\"\n  ```\n\n地の文。\n";
+
+    let draft = read_roadmap_draft(markdown).expect("字下げした囲みも読めるはず");
+    assert_eq!(draft.briefs.count, 4, "字下げした囲みの表が読まれていない");
+    assert!(
+        backticked_ids(markdown).is_empty(),
+        "囲みの中の綴りを地の文の口が拾っている: {:?}",
+        backticked_ids(markdown)
+    );
+}
+
+/// 別の言語の囲みの中に書いた「```toml」の行は、囲みを開かず、地の文の中と外も
+/// 逆さにしない（閉じるのは「```」ちょうどの行だけ）。
+#[test]
+fn a_toml_fence_line_inside_another_fence_is_just_a_line_of_that_fence() {
+    let id = "ukadoc:list_shiori_event:OnBoot:1";
+    let markdown =
+        format!("```text\n```toml\n[briefs]\ncount = 9\n```\n\n地の文で `{id}` を引く。\n");
+
+    assert!(
+        toml_blocks(&markdown).is_empty(),
+        "例の中の行を TOML の囲みとして読んでいる: {:?}",
+        toml_blocks(&markdown)
+    );
+    assert_eq!(
+        backticked_ids(&markdown),
+        vec![id],
+        "例の囲みの後ろの地の文を囲みの中として扱っている"
+    );
+}
+
+/// 見出しで始まらない囲みは、前の囲みの最後の表へ黙って混ざらずに落ちる。
+/// 空行と `#` の行の後に見出しが来る囲みは読める（較正）。
+#[test]
+fn a_block_that_does_not_open_with_a_header_is_rejected() {
+    let rank = "```toml\n[[rank]]\nstage = \"A\"\nrank = 1\nbundle = \"時刻の刻み\"\n```\n";
+    let headless = format!(
+        "{STAGE_BLOCK}\n{BLANK_BLOCK}\n{rank}\n```toml\n# 見出しを書き忘れた\n\ninsufficient = true\n```\n"
+    );
+    let body = err_body(read_briefing(&headless));
+    assert!(body.contains("briefing.md"), "文書名が本文に無い: {body}");
+    assert!(
+        body.contains("insufficient"),
+        "見出しの無い行が本文に無い: {body}"
+    );
+
+    let commented = format!(
+        "{STAGE_BLOCK}\n{BLANK_BLOCK}\n```toml\n# 段階 A\n\n[[rank]]\nstage = \"A\"\nrank = 1\nbundle = \"時刻の刻み\"\n```\n"
+    );
+    let briefing = read_briefing(&commented).expect("注記の後に見出しが来る囲みは読めるはず");
+    assert!(!briefing.ranks[0].insufficient);
+}
+
 // ---------------------------------------------------------------------------
 // 鍵の重複
 // ---------------------------------------------------------------------------
@@ -190,7 +276,7 @@ fn a_key_written_twice_across_blocks_is_rejected() {
     assert!(body.contains("tally"), "重複した表の鍵が本文に無い: {body}");
     assert!(
         !body.contains("line "),
-        "行番号を添えている（タスク 1.2・要件 12.6 の向き）: {body}"
+        "行番号を添えている（設計 Error Handling）: {body}"
     );
 
     // 母数の較正——重複を取り除けば同じ本文が読める。
@@ -284,16 +370,7 @@ fn an_unknown_field_is_rejected() {
 /// 名前付き束と単独項目は書ける欄が違う（設計 D-2）。
 #[test]
 fn a_single_item_bundle_has_its_own_shape() {
-    let single = r#"```toml
-[bundle."ukadoc:list_shiori_event:OnMinuteChange:1"]
-single = true
-members = ["ukadoc:list_shiori_event:OnMinuteChange:1"]
-domains = ["shiori"]
-breakage = "見た目の差"
-themes = []
-reason = "壊れる振る舞いを書けない"
-```
-"#;
+    let single = SINGLE_BLOCK;
     let good = format!("{single}\n{TALLY_BLOCK}");
     let linkage = read_linkage(&good).expect("単独項目の形は読めるはず");
     let bundle = &linkage.bundles["ukadoc:list_shiori_event:OnMinuteChange:1"];
@@ -339,6 +416,34 @@ fn hand_ids_must_be_members() {
     assert!(body.contains("時刻の刻み"), "束名が本文に無い: {body}");
 }
 
+/// 単独項目の名前と中の id が食い違えば、両方の綴りを挙げて落ちる——順位は名前で
+/// 引かれるので、通すと違う項目に優先度が付く。
+#[test]
+fn a_single_item_whose_member_differs_from_its_name_is_rejected() {
+    let other = "ukadoc:list_shiori_event:OnBoot:1";
+    let broken = SINGLE_BLOCK.replace(
+        "members = [\"ukadoc:list_shiori_event:OnMinuteChange:1\"]",
+        &format!("members = [\"{other}\"]"),
+    );
+    let body = err_body(read_linkage(&format!("{broken}\n{TALLY_BLOCK}")));
+    assert!(
+        body.contains("ukadoc:list_shiori_event:OnMinuteChange:1"),
+        "名前の綴りが本文に無い: {body}"
+    );
+    assert!(body.contains(other), "中の id の綴りが本文に無い: {body}");
+}
+
+/// 1 つの束の `members` に同じ id を 2 度書けば、その id と束名を挙げて落ちる。
+#[test]
+fn an_id_written_twice_in_one_bundle_is_rejected() {
+    let twice = "ukadoc:descript_plugin:secondchangeinterval:1";
+    let broken = BUNDLE_BLOCK.replace("members = [\n", &format!("members = [\n  \"{twice}\",\n"));
+    let body = err_body(read_linkage(&format!("{broken}\n{TALLY_BLOCK}")));
+    assert!(body.contains(twice), "重複した id が本文に無い: {body}");
+    assert!(body.contains("members"), "欄の名前が本文に無い: {body}");
+    assert!(body.contains("時刻の刻み"), "束名が本文に無い: {body}");
+}
+
 // ---------------------------------------------------------------------------
 // 順位の行と段階
 // ---------------------------------------------------------------------------
@@ -366,6 +471,17 @@ fn a_rank_row_names_either_a_bundle_or_singles_but_not_both() {
         format!("{head}```toml\n[[rank]]\nstage = \"A\"\nrank = 1\nbundle = \"時刻の刻み\"\n```\n");
     let briefing = read_briefing(&one).expect("ちょうど一方なら読めるはず");
     assert_eq!(briefing.ranks.len(), 1);
+}
+
+/// 中身の無い `singles = []` の順位の行は落ちる（指す相手の無い順位を残さない）。
+#[test]
+fn a_rank_row_with_empty_singles_is_rejected() {
+    let markdown = format!(
+        "{STAGE_BLOCK}\n{BLANK_BLOCK}\n```toml\n[[rank]]\nstage = \"B\"\nrank = 4\nsingles = []\n```\n"
+    );
+    let body = err_body(read_briefing(&markdown));
+    assert!(body.contains("singles"), "欄の名前が本文に無い: {body}");
+    assert!(body.contains("B4"), "どの行かが本文に無い: {body}");
 }
 
 /// `[stage.*]` は A〜E の 5 つが揃わなければ落ちる。
@@ -471,8 +587,8 @@ fn a_spec_row_carries_a_bundle_or_a_stated_none() {
 /// 段階の欄は束と一蓮托生で、片方だけを書いた行は読めない。
 ///
 /// 置き字を締め出すのはこの 2 本である——束の無い行に段階を書けば落ち、束のある行が
-/// 段階を書かなくても落ちる。どちらかが抜けると `stage = "A"` を 14 行に並べた版が
-/// また通ってしまう（27 行中 23 行が `A`・本物は 9 行）。
+/// 段階を書かなくても落ちる。どちらかが抜けると、束の無い行に置き字の `stage = "A"`
+/// を並べた版がまた通ってしまう。
 #[test]
 fn the_stage_field_follows_the_bundle() {
     let with_stage = format!(
@@ -500,6 +616,197 @@ fn the_stage_field_follows_the_bundle() {
     );
     let body = err_body(read_roadmap_draft(&bad));
     assert!(body.contains('Z'), "語彙外の綴りが本文に無い: {body}");
+}
+
+/// `bundle` の型の誤りは「欄が無い」でなく型の誤りとして告げる。
+#[test]
+fn a_bundle_of_the_wrong_type_is_reported_as_the_wrong_type() {
+    let markdown = format!(
+        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"tick-gate-adoption\"\nwave = \"W13\"\n\
+         stage = \"A\"\nbundle = [\"時刻の刻み\"]\nowner_count = 0\n```\n"
+    );
+    let body = err_body(read_roadmap_draft(&markdown));
+    assert!(
+        body.contains("文字列でない"),
+        "型の誤りと告げていない: {body}"
+    );
+    assert!(
+        !body.contains("が無い"),
+        "書いてある欄を「無い」と告げている: {body}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 形の検査を 1 か所ずつ
+// ---------------------------------------------------------------------------
+
+/// 順位の行に `override` を持たせた囲み（見本を壊す元）。
+const OVERRIDE_RANK: &str = "```toml\n[[rank]]\nstage = \"A\"\nrank = 1\nbundle = \"時刻の刻み\"\n\
+     override = { kind = \"second-stage\", ref = \"M1 の持ち越し\" }\n```\n";
+
+/// 束のある行と束の無い行の spec 表（見本を壊す元）。
+const SPEC_BLOCK: &str = "```toml\n[[spec]]\nname = \"areka-P0-present-gpu-transform-scale\"\n\
+     wave = \"W13\"\nstage = \"A\"\nbundle = \"時刻の刻み\"\nowner_count = 3\n\n\
+     [[spec]]\nname = \"tick-gate-adoption\"\nwave = \"保留\"\n\
+     none = true\nreason = \"どの束にも写らない\"\nowner_count = 0\n```\n";
+
+/// 見本を 1 か所ずつ書き換えた写しが、どれも落ち、本文に壊した欄の名前が載る。
+///
+/// 見本そのものは読める（較正）。`override` の 2 つの綴りが型へ写ることもここで見る
+/// ——実データに無い綴りの対応表が壊れても、ほかに赤にする所が無い。
+#[test]
+fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
+    let linkage = |bundle: &str, single: &str| {
+        read_linkage(&format!("{bundle}\n{single}\n{TALLY_BLOCK}")).map(|_| ())
+    };
+    let briefing =
+        |rank: &str| read_briefing(&format!("{STAGE_BLOCK}\n{BLANK_BLOCK}\n{rank}")).map(|_| ());
+    let roadmap = |spec: &str| read_roadmap_draft(&format!("{BRIEFS_BLOCK}\n{spec}")).map(|_| ());
+    let bundle = |from: &str, to: &str| linkage(&BUNDLE_BLOCK.replace(from, to), SINGLE_BLOCK);
+    let single = |from: &str, to: &str| linkage(BUNDLE_BLOCK, &SINGLE_BLOCK.replace(from, to));
+    let rank = |from: &str, to: &str| briefing(&OVERRIDE_RANK.replace(from, to));
+    let spec = |from: &str, to: &str| roadmap(&SPEC_BLOCK.replace(from, to));
+
+    linkage(BUNDLE_BLOCK, SINGLE_BLOCK).expect("見本の帰属は読めるはず");
+    roadmap(SPEC_BLOCK).expect("見本の spec 表は読めるはず");
+    for (kind, want) in [
+        ("second-stage", OverrideKind::SecondStage),
+        ("stage-rule", OverrideKind::StageRule),
+    ] {
+        let read = read_briefing(&format!(
+            "{STAGE_BLOCK}\n{BLANK_BLOCK}\n{}",
+            OVERRIDE_RANK.replace("second-stage", kind)
+        ))
+        .expect("見本の順位の行は読めるはず");
+        let exception = read.ranks[0]
+            .exception
+            .as_ref()
+            .expect("override を読むはず");
+        assert_eq!(
+            exception.kind, want,
+            "override の綴り {kind} が型へ写らない"
+        );
+        assert_eq!(exception.reference, "M1 の持ち越し");
+    }
+
+    let hand = "hand = [\"ukadoc:list_shiori_event:OnMinuteChange:1\"]";
+    let machine = "machine = [\"ukadoc:descript_plugin:secondchangeinterval:1\"]";
+    let one = "members = [\"ukadoc:list_shiori_event:OnMinuteChange:1\"]";
+    let members = "members = [\n  \"ukadoc:descript_plugin:secondchangeinterval:1\",\n  \
+                   \"ukadoc:list_shiori_event:OnMinuteChange:1\",\n]";
+    let cases = [
+        ("空の members", bundle(members, "members = []"), "members"),
+        (
+            "hand の重複",
+            bundle(
+                hand,
+                &hand.replace("\"]", "\", \"ukadoc:list_shiori_event:OnMinuteChange:1\"]"),
+            ),
+            "hand",
+        ),
+        (
+            "machine の重複",
+            bundle(
+                machine,
+                &machine.replace(
+                    "\"]",
+                    "\", \"ukadoc:descript_plugin:secondchangeinterval:1\"]",
+                ),
+            ),
+            "machine",
+        ),
+        (
+            "空白だけの foundation",
+            bundle("\"時刻イベントの発火路\"", "\"  \""),
+            "foundation",
+        ),
+        (
+            "単独項目の machine",
+            single(one, &format!("{one}\nmachine = []")),
+            "machine",
+        ),
+        (
+            "単独項目の hand",
+            single(one, &format!("{one}\nhand = []")),
+            "hand",
+        ),
+        (
+            "単独項目の foundation",
+            single(one, &format!("{one}\nfoundation = \"基盤\"")),
+            "foundation",
+        ),
+        (
+            "単独項目の 2 つの members",
+            single(
+                one,
+                &one.replace("\"]", "\", \"ukadoc:list_shiori_event:OnBoot:1\"]"),
+            ),
+            "members",
+        ),
+        (
+            "空白だけの reason",
+            single("\"壊れる振る舞いを書けない\"", "\" \""),
+            "reason",
+        ),
+        (
+            "表でない override",
+            rank(
+                "{ kind = \"second-stage\", ref = \"M1 の持ち越し\" }",
+                "\"second-stage\"",
+            ),
+            "override",
+        ),
+        (
+            "override の知らない欄",
+            rank("ref = ", "weight = 1, ref = "),
+            "weight",
+        ),
+        (
+            "override の語彙外の kind",
+            rank("second-stage", "third-stage"),
+            "third-stage",
+        ),
+        (
+            "override の ref が無い",
+            rank(", ref = \"M1 の持ち越し\"", ""),
+            "ref",
+        ),
+        (
+            "override の空の ref",
+            rank("\"M1 の持ち越し\"", "\" \""),
+            "ref",
+        ),
+        (
+            "none と bundle の両方",
+            spec("none = true\n", "none = true\nbundle = \"時刻の刻み\"\n"),
+            "bundle",
+        ),
+        (
+            "none の空白だけの reason",
+            spec("\"どの束にも写らない\"", "\" \""),
+            "reason",
+        ),
+        (
+            "束のある行の reason",
+            spec("owner_count = 3\n", "owner_count = 3\nreason = \"？\"\n"),
+            "reason",
+        ),
+        (
+            "空の bundle",
+            spec("bundle = \"時刻の刻み\"", "bundle = \"\""),
+            "bundle",
+        ),
+    ];
+    for (label, result, field) in cases {
+        let body = match result {
+            Ok(()) => panic!("{label}: 落ちるはずが読めてしまった"),
+            Err(err) => err.to_string(),
+        };
+        assert!(
+            body.contains(field),
+            "{label}: 欄の名前 {field} が本文に無い: {body}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -564,15 +871,5 @@ fn the_bare_scanner_respects_word_boundaries() {
         bare_id_tokens("（ukadoc:list_shiori_event:OnBoot:1）は拾う\n"),
         vec!["ukadoc:list_shiori_event:OnBoot:1"],
         "括弧で挟まれた裸の語を取り落としている"
-    );
-}
-
-/// 同じ本文から 2 回読めば同じ値（設計「不変条件」）。
-#[test]
-fn reading_the_same_text_twice_gives_the_same_value() {
-    let markdown = format!("{BUNDLE_BLOCK}\n{TALLY_BLOCK}");
-    assert_eq!(
-        read_linkage(&markdown).expect("読めるはず"),
-        read_linkage(&markdown).expect("読めるはず")
     );
 }

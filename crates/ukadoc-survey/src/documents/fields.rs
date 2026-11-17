@@ -64,8 +64,25 @@ pub(super) const SNIPPET_CHARS: usize = 80;
 /// 失敗の本文に `toml` の**行番号を写さない**——連結した本文の行番号は書き手の見て
 /// いる Markdown の行と一致しない。代わりに該当箇所の綴りを添える。`toml` の言う
 /// 「duplicate key」だけでは**どの鍵が重複したか**が分からないからである。
+///
+/// つなぐ前に、空行と `#` の行の後の最初の行が表の見出し（`[`）でない囲みを落とす
+/// ——TOML の決まりで、見出しの無い鍵は前の囲みの最後の表へ黙って付いてしまう。
 pub(super) fn read_blocks(markdown: &str, file: &str) -> Result<toml::Table, SurveyError> {
-    let joined = toml_blocks(markdown).join("\n");
+    let blocks = toml_blocks(markdown);
+    for block in &blocks {
+        let first = block
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty() && !line.starts_with('#'));
+        if let Some(line) = first.filter(|line| !line.starts_with('[')) {
+            let short: String = line.chars().take(SNIPPET_CHARS).collect();
+            return Err(malformed(
+                file,
+                format!("表の見出しで始まらない囲みがある（最初の行 {short}）"),
+            ));
+        }
+    }
+    let joined = blocks.join("\n");
     joined.parse::<toml::Table>().map_err(|err| {
         let at = err
             .span()
