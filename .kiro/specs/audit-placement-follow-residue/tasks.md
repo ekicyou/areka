@@ -16,7 +16,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 9.1, 10.1_
 
 - [ ] 2. ドラッグの状態の型に「始めの位置が分からない」を持たせる
-- [ ] 2.1 wintf の `DraggingState` の始めの位置を `Option` にし、wintf の中を直す
+- [x] 2.1 wintf の `DraggingState` の始めの位置を `Option` にし、wintf の中を直す
   - 欄の型と doc（`None` の意味）・配りの `unwrap_or((0,0))` をやめて取れないときは `None` を入れ、今の `warn!` 1 行（`entity`・`window`・理由）はそのまま・`debug!` の欄も `Option` で出す
   - wndproc の `dragging_window_origin` は live が在り始めの位置が `Some` のときだけそれを使い、`None` なら控えへ。`move_window` の守り（控えの `move_window && is_some()`）は変えない。中の控え `DragState::Dragging.initial_window_pos` の型はそろえない（設計の決め 2）
   - wintf のテストを直し、檻を足す: `ecs/drag/systems.rs`・`tests/drag/dispatch_test.rs`（位置の取れる窓は `Some((100.0, 200.0))`）・`ecs/drag/dispatch_order_tests.rs`（始めの位置の無い場面で `None`・`unwrap_or((0,0))` に戻すと落ちる）・`ecs/window_proc/mouse_move_drag_origin_tests.rs`（live が在り `None` → 控えの値）

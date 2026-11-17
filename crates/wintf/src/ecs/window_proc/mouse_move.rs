@@ -400,9 +400,13 @@ pub(crate) fn dragging_window_origin(
 ) -> (crate::ecs::Point, crate::ecs::pointer::PhysicalPoint) {
     match live {
         Some(s) => (
-            crate::ecs::Point {
-                x: s.initial_window_pos.0.round() as i32,
-                y: s.initial_window_pos.1.round() as i32,
+            match s.initial_window_pos {
+                Some((x, y)) => crate::ecs::Point {
+                    x: x.round() as i32,
+                    y: y.round() as i32,
+                },
+                // 始めの位置が分からない回は控えへ（控えは move_window が偽で使われない）
+                None => snapshot_origin,
             },
             s.drag_start_pos,
         ),

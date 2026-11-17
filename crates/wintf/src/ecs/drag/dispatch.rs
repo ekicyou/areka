@@ -100,7 +100,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                         None
                     }
                 };
-                let initial_window_pos = origin.unwrap_or(crate::ecs::Point { x: 0, y: 0 });
                 let mut move_window = false;
                 let mut constraint: Option<crate::ecs::drag::DragConstraint> = None;
 
@@ -128,16 +127,13 @@ pub fn dispatch_drag_events(world: &mut World) {
                 if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
                     entity_mut.insert(crate::ecs::drag::DraggingState {
                         drag_start_pos: start_pos,
-                        initial_window_pos: (
-                            initial_window_pos.x as f32,
-                            initial_window_pos.y as f32,
-                        ),
+                        initial_window_pos: origin.map(|p| (p.x as f32, p.y as f32)),
                     });
 
                     tracing::debug!(
                         entity = ?entity,
-                        initial_window_x = initial_window_pos.x,
-                        initial_window_y = initial_window_pos.y,
+                        initial_window_x = ?origin.map(|p| p.x),
+                        initial_window_y = ?origin.map(|p| p.y),
                         move_window = move_window,
                         "[dispatch_drag_events] DraggingState inserted"
                     );
