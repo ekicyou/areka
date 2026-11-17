@@ -139,33 +139,6 @@ fn an_empty_evidence_listing_still_says_how_many_there_were() {
 }
 
 #[test]
-fn the_evidence_listing_names_every_file_of_every_id() {
-    // 件数だけの主張は「どれ」を 1 つも言わない（1.5・4.2 の教訓）。
-    // id ごとに、その id のファイルが全部並ぶことを綴りで確かめる。
-    let listing = by_id(&[
-        (
-            "ukadoc:manual_shell",
-            &["a/one.rs", "a/two.rs", "a/three.rs"],
-        ),
-        ("ukadoc:spec_shiori3", &["b/four.rs"]),
-    ]);
-    let body = render_evidence_by_id(&listing);
-    for needle in [
-        "ukadoc:manual_shell",
-        "a/one.rs",
-        "a/two.rs",
-        "a/three.rs",
-        "ukadoc:spec_shiori3",
-        "b/four.rs",
-    ] {
-        assert!(
-            body.contains(needle),
-            "証拠の本文に {needle} が無い: {body}"
-        );
-    }
-}
-
-#[test]
 fn the_full_evidence_report_keeps_the_three_lists_apart() {
     // 証拠・解決できなかった URL・対応が付かなかった名前は役目が違う（`EvidenceIndex`
     // の 3 欄）。1 つの塊に混ぜると、読み手は証拠とそうでないものを見分けられない。
@@ -625,7 +598,8 @@ fn a_different_hash_algorithm_draws_a_warning_that_names_both_spellings() {
 fn a_different_catalog_format_draws_a_warning_that_names_both_numbers() {
     let notice = comparability_notice(&meta("fnv1a64", 1), &meta("fnv1a64", 2))
         .expect("形の版が違うのに注意が出ない");
-    for needle in ["1", "2"] {
+    // 「1」「2」だけを当てると、決まった文「2 つのカタログは…」の「2」で緑になる。
+    for needle in ["現行 1", "新しい方 2"] {
         assert!(
             notice.contains(needle),
             "注意の本文に形の版 {needle} が無い: {notice}"

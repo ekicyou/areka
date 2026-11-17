@@ -7,7 +7,7 @@
 //! このファイルが確かめるのは 6 つで、はじめの 3 つは入出力に 1 度も触れずに決まる。
 //!
 //! - どの id をどの台帳へ入れるか（[`select_ids_by_domain`]）
-//! - 台帳の前置きに担当ページをどの順で並べるか（[`prologue_pages`]）
+//! - 台帳の前置きに担当ページをどの順で並べるか（[`PageAssignment::pages_of`]）
 //! - 既存の台帳の本文を差し込みへ渡しているか（[`plan_ledger_init`]・要件 3.3a）
 //! - 既存の台帳を実際に取り寄せられるか（[`read_if_present`]・要件 3.3a）
 //! - repo の台帳 4 本が再実行で 1 バイトも変わらないか（[`ledger_init_with`]・要件 3.3a）
@@ -38,8 +38,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::{
-    LedgerPlan, ledger_init_with, plan_ledger_init, prologue_pages, read_if_present,
-    select_ids_by_domain,
+    LedgerPlan, ledger_init_with, plan_ledger_init, read_if_present, select_ids_by_domain,
 };
 use crate::assignment::PageAssignment;
 use crate::catalog::{Catalog, CatalogEntry};
@@ -193,7 +192,8 @@ fn an_entry_whose_page_belongs_to_no_ledger_is_named_and_refused() {
 fn the_prologue_lists_the_pages_in_name_order() {
     // 前置きは一度書いたら以後バイト列のまま写される（要件 3.3a）ので、順序の
     // 取り決めはここで凍る。期待値は実装の表を引かず、独立した綴りで書く。
-    let pages: Vec<String> = prologue_pages(&PageAssignment::canonical(), Domain::Shiori)
+    let pages: Vec<String> = PageAssignment::canonical()
+        .pages_of(Domain::Shiori)
         .iter()
         .map(|page| page.as_str().to_owned())
         .collect();
@@ -221,7 +221,7 @@ fn the_prologue_lists_the_pages_in_name_order() {
 fn the_prologue_order_is_not_the_transcription_order_of_the_requirement_table() {
     // 名前順を選んだことの対照。要件 3.1 の表の転記順（件数の多い順に近い並び）を
     // 渡す実装に差し替えると、上のテストと合わせてここが赤になる。
-    let pages = prologue_pages(&PageAssignment::canonical(), Domain::Shiori);
+    let pages = PageAssignment::canonical().pages_of(Domain::Shiori);
     let first = pages.first().expect("shiori は 12 ページ持つはず");
     assert_eq!(
         first.as_str(),
@@ -239,7 +239,7 @@ fn a_one_page_domain_still_declares_its_page() {
         (Domain::SakuraScript, "list_sakura_script"),
         (Domain::Property, "list_propertysystem"),
     ] {
-        let pages = prologue_pages(&PageAssignment::canonical(), domain);
+        let pages = PageAssignment::canonical().pages_of(domain);
         let spelled: Vec<&str> = pages.iter().map(PageName::as_str).collect();
         assert_eq!(
             spelled,

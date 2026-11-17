@@ -6,9 +6,10 @@
 //! # 標準出力に出るのは結果だけ
 //!
 //! 4 つとも**結果そのもの**を標準出力へ出す（生成側は「どこへ書いたか」の 1 行だけを
-//! 出す点が違う）。断りや失敗の本文は標準エラーで、出すのは呼び手の `main.rs` である
-//! （タスク 6.1 の取り決め）。整合検査の本文を標準エラーへ出すと、結果を別のファイルへ
-//! 流し込んだ利用者の手元に何も残らない。
+//! 出す点が違う）。断りや失敗の本文は標準エラーで、出すのは呼び手の `main.rs` である。
+//! 整合検査の本文を標準エラーへ出すと、結果を別のファイルへ流し込んだ利用者の手元に
+//! 何も残らない。標準出力へ書けなかったとき（パイプが閉じたときなど）は panic せず、
+//! `<標準出力>` を置き場にした失敗で終わる（`super::write_stdout`）。
 //!
 //! # 終了コードの決まり方
 //!
@@ -29,18 +30,15 @@
 //!   （[`super::generate::report`]）。検査側だけが `values.md` を読むと、両者が
 //!   食い違ったときに `DomainReportStale`（要件 7.4）が**別の理由で**赤くなる。
 //!   突き合わせの両側は同じ出どころでなければならない。
-//! - `values.md` の見出しと `THEMES` が順序まで一致することは、タスク 8.4 の
+//! - `values.md` の見出しと `THEMES` が順序まで一致することは、
 //!   `tests/consistency/values_md.rs` が守る（`model.rs` の注記）。定数はその写しで
 //!   あって、別の出どころではない。
-//!
-//! `values.md` を直に読む形はタスク 8.1 が入出力層に読み取りを置いてから、そちらへ
-//! 揃えるのが筋である（そのときは `report` 側も同じ値を通すこと）。
 
 use std::collections::BTreeMap;
 
+use super::{load_catalog, load_ledgers, write_stdout};
 use crate::assignment::PageAssignment;
 use crate::catalog::build::build as build_catalog;
-use crate::catalog::read::read as read_catalog;
 use crate::catalog::{Catalog, SnapshotMeta};
 use crate::check::{CheckInput, Finding, render as render_findings, run as run_check};
 use crate::diff::{CatalogDiff, diff as diff_catalogs};
@@ -51,7 +49,6 @@ use crate::evidence::resolve::resolve;
 use crate::evidence::{Candidate, CandidateKind, EvidenceIndex, NameMatchFailure};
 use crate::io::{files, paths, snapshot, sources};
 use crate::ledger::Ledger;
-use crate::ledger::read::read as read_ledger;
 use crate::model::{Domain, EntryId, THEMES};
 
 /// 台帳と正典とソースの食い違いを調べる（要件 5.5・6.3〜6.12・7.4）。
@@ -63,7 +60,7 @@ use crate::model::{Domain, EntryId, THEMES};
 /// [`verdict`] が所見の件数だけから決める。
 pub fn check() -> Result<(), SurveyError> {
     let assignment = PageAssignment::canonical();
-    let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
+    let catalog = load_catalog()?;
     let ledgers = load_ledgers()?;
     let evidence = collect_evidence(&catalog)?;
 
@@ -82,7 +79,7 @@ pub fn check() -> Result<(), SurveyError> {
         domain_reports: &domain_reports,
     };
     let (body, findings) = examine(&input);
-    print!("{body}");
+    write_stdout(&mut std::io::stdout().lock(), &body)?;
     verdict(findings)
 }
 
@@ -92,8 +89,8 @@ pub fn check() -> Result<(), SurveyError> {
 /// 檻のため**——`check` を丸ごと走らせるには repo の木（カタログ・台帳・報告）が
 /// 要るので、`tests/cli_streams.rs` の決まりでは走らせられない。判定を呼ぶ・本文を
 /// 組む・件数を数える、の 3 つをここへ集めれば、在中テストが手で組んだ入力で
-/// 配線ごと確かめられる（部品を釘付けしても入口がその部品を呼んでいるかは別に
-/// 守る必要がある・タスク 1.7 の教訓）。
+/// 配線ごと確かめられる（部品を釘付けしても、入口がその部品を呼んでいるかは別に
+/// 守らなければならない）。
 ///
 /// 証拠の索引は [`CheckInput::evidence`] から引く。`check` が判定へ渡した索引と
 /// 本文へ並べた索引が同じものであることが、こうすると構造で決まる。
@@ -109,10 +106,9 @@ pub(crate) fn examine(input: &CheckInput) -> (String, usize) {
 ///
 /// 検査は走らせない。読むのはカタログとソースだけで、台帳も報告も要らない。
 pub fn evidence() -> Result<(), SurveyError> {
-    let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
+    let catalog = load_catalog()?;
     let index = collect_evidence(&catalog)?;
-    print!("{}", render_evidence(&index));
-    Ok(())
+    write_stdout(&mut std::io::stdout().lock(), &render_evidence(&index))
 }
 
 /// 手掛かりの候補を並べる（要件 5.8・5.9）。
@@ -121,8 +117,7 @@ pub fn evidence() -> Result<(), SurveyError> {
 /// まだ無い作業ツリーでも走る。
 pub fn candidates() -> Result<(), SurveyError> {
     let found = collect_candidates(&sources::walk(&paths::workspace_root())?);
-    print!("{}", render_candidates(&found));
-    Ok(())
+    write_stdout(&mut std::io::stdout().lock(), &render_candidates(&found))
 }
 
 /// 今のカタログと新しいスナップショットの差を並べる（要件 8.1〜8.3）。
@@ -130,14 +125,16 @@ pub fn candidates() -> Result<(), SurveyError> {
 /// 4 つの副手続きの中でこれだけがスナップショットを要る（設計「入口 / cli」の表・D-7）。
 /// 比べる前に 2 つのカタログが同じ形かを見て、違えば注意を先に出す（[`comparability_notice`]）。
 pub fn diff() -> Result<(), SurveyError> {
-    let current = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
+    let current = load_catalog()?;
     let source = snapshot::default_path()?;
     let doc = snapshot::load(&source)?;
     let next = build_catalog(&doc, &PageAssignment::canonical())?;
     let ledgers = load_ledgers()?;
 
-    print!("{}", compare(&current, &next, &ledgers));
-    Ok(())
+    write_stdout(
+        &mut std::io::stdout().lock(),
+        &compare(&current, &next, &ledgers),
+    )
 }
 
 /// 読み込みの済んだ 2 つのカタログと台帳から、標準出力へ出す本文を作る。
@@ -146,8 +143,7 @@ pub fn diff() -> Result<(), SurveyError> {
 /// してあるのは檻のため**——`diff` を丸ごと走らせるにはスナップショットが要るので、
 /// 常時走るテストからは走らせられない（要件 8.4）。比べる向き・注意を出すかどうか・
 /// 版面の 3 つをここへ集めれば、在中テストが手で組んだカタログで配線ごと確かめられる
-/// （部品を釘付けしても入口がその部品を呼んでいるかは別に守る必要がある・タスク 1.7
-/// の教訓）。
+/// （部品を釘付けしても、入口がその部品を呼んでいるかは別に守らなければならない）。
 ///
 /// 守っているのは 3 つ。
 ///
@@ -357,18 +353,6 @@ pub(crate) fn render_diff(delta: &CatalogDiff, notice: Option<&str>) -> String {
         }
     }
     out
-}
-
-/// 台帳 4 本を読む（並びは [`Domain::ALL`]）。
-///
-/// 無ければ探したパスを添えて失敗する（先に `ledger-init`）。
-fn load_ledgers() -> Result<Vec<Ledger>, SurveyError> {
-    let mut ledgers = Vec::with_capacity(Domain::ALL.len());
-    for domain in Domain::ALL {
-        let path = paths::ledger_path(domain);
-        ledgers.push(read_ledger(&files::read_normalized(&path)?, domain)?);
-    }
-    Ok(ledgers)
 }
 
 /// ソースを走査して証拠の索引を組む（取り出し → 解決）。

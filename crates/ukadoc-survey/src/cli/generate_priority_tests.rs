@@ -1,12 +1,12 @@
-//! `priority-apply` の書き戻しが持つ「順番」と「1 バイトも書かない」を釘付けする
-//! （要件 7.1・7.2・7.6・1.4・12.2）。`generate_tests.rs` の子のモジュールで、台帳の
-//! 置き場の綴りと小道具をそちらと共有する。
+//! `priority-apply` の書き戻しと `report` の書き出しが持つ「順番」と「1 バイトも
+//! 書かない」を釘付けする（要件 7.1・7.2・7.6・1.4・12.2）。`generate_tests.rs` の子の
+//! モジュールで、台帳の置き場の綴りと小道具をそちらと共有する。
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use super::super::priority_apply_with;
+use super::super::{priority_apply_with, report_with};
 use super::{LEDGER_FILES, under_coverage};
 use crate::documents::fields::{self, document_file};
 use crate::error::SurveyError;
@@ -284,4 +284,60 @@ fn a_document_that_cannot_be_read_stops_with_the_absolute_path_it_looked_for() {
             "探した場所が失敗の本文に無い（{missing}）: {body}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// report（台帳 4 本を全部読んで描いてから書く）
+// ---------------------------------------------------------------------------
+
+/// 見本の台帳を読ませて報告の書き出しを 1 度走らせ、書き手が受け取った場所を返す。
+fn report_over(files: &BTreeMap<String, String>) -> (Result<(), SurveyError>, Vec<String>) {
+    let read = |path: &Path| -> Result<String, SurveyError> {
+        files
+            .get(&under_coverage(path))
+            .cloned()
+            .ok_or_else(|| files::io_error(path, "見本に無い"))
+    };
+    let mut written: Vec<String> = Vec::new();
+    let outcome = {
+        let mut record = |target: &Path, _: &str, _: usize| -> Result<(), SurveyError> {
+            written.push(under_coverage(target));
+            Ok(())
+        };
+        report_with(&read, &mut record)
+    };
+    (outcome, written)
+}
+
+#[test]
+fn an_unreadable_third_ledger_leaves_every_report_unwritten() {
+    // 1 本ずつ「読む→書く」だと、3 本目で落ちたときに前の 2 本だけが書き換わって
+    // 新旧の混ざった報告が残る。まず 4 本とも読めれば 4 本書くことを見て（母数 0 の緑を
+    // 潰す）、次に 3 本目を抜いて 1 本も書かないことを見る。
+    let (outcome, written) = report_over(&sample_files(&SAMPLE_IDS, ""));
+    outcome.expect("見本の台帳 4 本なら報告を書けるはず");
+    assert_eq!(
+        written,
+        [
+            "doc/ukadoc-coverage/report/shiori.md",
+            "doc/ukadoc-coverage/report/assets.md",
+            "doc/ukadoc-coverage/report/sakura-script.md",
+            "doc/ukadoc-coverage/report/property.md",
+        ],
+        "書き出す先が報告 4 本と違う"
+    );
+
+    let mut files = sample_files(&SAMPLE_IDS, "");
+    files.remove(LEDGER_FILES[2]);
+    let (outcome, written) = report_over(&files);
+    let err = outcome.expect_err("3 本目の台帳が読めないのに成功した");
+    assert!(
+        written.is_empty(),
+        "3 本目が読めないのに書き出している: {written:?}"
+    );
+    let body = err.to_string().replace('\\', "/");
+    assert!(
+        body.contains(LEDGER_FILES[2]),
+        "どの台帳が読めなかったかが本文に無い: {body}"
+    );
 }

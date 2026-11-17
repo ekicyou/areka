@@ -25,22 +25,23 @@
 //! 標準出力へ出すのは「どこへ何を書いたか」の結果だけで、本文そのものは出さない。
 //! 断りや失敗の本文は標準エラーへ出す（呼び手の `main.rs` が受け持つ）。
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use super::{load_catalog, load_ledgers, load_ledgers_with, write_stdout};
 
 use crate::assignment::PageAssignment;
 use crate::catalog::Catalog;
 use crate::catalog::build::{build as build_catalog, page_not_assigned};
-use crate::catalog::read::read as read_catalog;
 use crate::catalog::write::write as write_catalog;
 use crate::documents::{derive, parse};
 use crate::error::SurveyError;
 use crate::io::{files, paths, snapshot};
 use crate::ledger::Ledger;
 use crate::ledger::patch;
-use crate::ledger::read::read as read_ledger;
 use crate::ledger::write::merge_initial;
-use crate::model::{Domain, EntryId, PageName, THEMES};
+use crate::model::{Domain, EntryId, THEMES};
 use crate::report::domain::render_domain;
 use crate::report::summary::render_summary;
 
@@ -59,7 +60,7 @@ pub fn catalog() -> Result<(), SurveyError> {
     let target = paths::catalog_path();
     ensure_parent(&target)?;
     files::write_lf(&target, &body)?;
-    announce(&target, &format!("{} 項目", catalog.entries.len()));
+    announce(&target, &format!("{} 項目", catalog.entries.len()))?;
     Ok(())
 }
 
@@ -81,11 +82,8 @@ pub(crate) struct LedgerPlan {
 ///
 /// **既存本文の取り寄せを引数で受ける**のがこの関数の要点である。呼び出し側が渡した
 /// 取り寄せの結果をそのまま [`merge_initial`] へ渡すので、「既存を渡している」という
-/// 配線そのものを、ファイルを 1 つも作らずに確かめられる（要件 3.3a）。
-///
-/// 台帳が今はすべて未分類なので、既存を渡し忘れても生成物は 1 バイトも変わらない。
-/// つまり生成物の比較ではこの取り違えを 1 件も捕まえられず、調査 spec が手で書いた
-/// 状態・担当・優先度が黙って初期値へ戻る。ここを関数の境目にしたのはそのためである。
+/// 配線そのものを、ファイルを 1 つも作らずに、repo の台帳の中身に頼らずに確かめられる
+/// （要件 3.3a）。既存を渡し忘れると、手で書いた状態・担当・優先度が黙って初期値へ戻る。
 ///
 /// `read_existing` にはその台帳の置き場を渡し、本文があれば `Some`、無ければ `None` を
 /// 返してもらう。
@@ -99,7 +97,8 @@ pub(crate) fn plan_ledger_init(
     let mut plans: Vec<LedgerPlan> = Vec::new();
     for domain in Domain::ALL {
         let ids = buckets.get(&domain).map(Vec::as_slice).unwrap_or_default();
-        let pages = prologue_pages(assignment, domain);
+        // 名前順を採る（前置きは以後バイト列のまま写されるので、表の転記順でなく動かない順）。
+        let pages = assignment.pages_of(domain);
         let target = paths::ledger_path(domain);
         let existing = read_existing(&target)?;
         let body = merge_initial(existing.as_deref(), domain, &pages, ids)?;
@@ -121,14 +120,10 @@ pub(crate) fn plan_ledger_init(
 ///
 /// 残るのは**この 1 行が何を渡すか**だけである。判断も順番も [`ledger_init_with`] に
 /// あり、そちらは取り寄せも書き手も引数で受けるので、ファイルを 1 つも作らずに
-/// 確かめてある（`generate_tests.rs`）。
-///
-/// ここが渡す `&read_if_present` を「いつも `None`」を返す関数へ差し替えても、
-/// クレート全体は**今は**緑のままである。台帳が今はすべて未分類なので、既存を渡し
-/// 忘れても生成物は 1 バイトも変わらず（実測）、再実行で本文が変わらないという主張も
-/// そのまま通る。調査 spec が台帳へ手で 1 件でも記入した日から、その主張と実データでの
-/// 通し確認——`ledger-init` を走らせて 4 本が 1 バイトも変わらないことを見る——の双方が、
-/// この差し替えを赤にする。
+/// 確かめてある（`generate_tests.rs`）。そのテストは [`ledger_init_with`] を直に
+/// 呼ぶので、ここが渡す `&read_if_present` を「いつも `None`」を返す関数へ差し替えても
+/// 常時テストは緑のままである。捕まえるのは実データでの通し確認——`ledger-init` を
+/// 走らせて台帳 4 本が 1 バイトも変わらないことを見る——だけである。
 pub fn ledger_init() -> Result<(), SurveyError> {
     ledger_init_with(&read_if_present, &mut |target: &Path, body: &str| {
         ensure_parent(target)?;
@@ -154,28 +149,58 @@ pub(crate) fn ledger_init_with(
 ) -> Result<(), SurveyError> {
     // 読む段が全部済むまで、書き出しに進まない。
     let assignment = PageAssignment::canonical();
-    let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
+    let catalog = load_catalog()?;
     let plans = plan_ledger_init(&catalog, &assignment, read_existing)?;
 
     for plan in &plans {
         write(&plan.target, &plan.body)?;
-        announce(&plan.target, &format!("{} 項目", plan.count));
+        announce(&plan.target, &format!("{} 項目", plan.count))?;
     }
     Ok(())
 }
 
 /// ドメイン別の報告 4 本を作り直す（要件 7.1・7.3）。
 ///
-/// 入力はその台帳 1 本とテーマ名だけである（設計 D-11）。カタログもソースも証拠も
-/// 読まないので、4 本の調査 spec の編集集合が交わらない。
+/// 実際の読み手（[`files::read_normalized`]）と実際の書き手（置き場を作って
+/// [`files::write_lf`] を呼び、結果を 1 行告げる）を [`report_with`] へ渡すだけの
+/// 1 行である。
 pub fn report() -> Result<(), SurveyError> {
-    for domain in Domain::ALL {
-        let ledger = load_ledger(domain)?;
-        let body = render_domain(&ledger, &THEMES);
-        let target = paths::domain_report_path(domain);
-        ensure_parent(&target)?;
-        files::write_lf(&target, &body)?;
-        announce(&target, &format!("{} 項目", ledger.entries.len()));
+    report_with(
+        &files::read_normalized,
+        &mut |target: &Path, body: &str, count: usize| {
+            ensure_parent(target)?;
+            files::write_lf(target, body)?;
+            announce(target, &format!("{count} 項目"))
+        },
+    )
+}
+
+/// 台帳 4 本を全部読み、4 本の報告を全部描いてから書く（要件 7.1・7.3・1.8）。
+///
+/// 各報告の入力はその台帳 1 本とテーマ名だけである（設計 D-11）。カタログもソースも
+/// 証拠も読まない。書くのは読む段と描く段が全部済んでからなので、3 本目の台帳が
+/// 読めない走行は 1 本も書かない——1 本ずつ「読む→書く」だと、前の 2 本だけが
+/// 書き換わって新旧の混ざった報告が残る。書き手が受け取る 3 つ目は台帳の項目数で、
+/// 読み手と書き手を引数で受けるのは [`priority_apply_with`] と同じ理由である。
+pub(crate) fn report_with(
+    read: &dyn Fn(&Path) -> Result<String, SurveyError>,
+    write: &mut dyn FnMut(&Path, &str, usize) -> Result<(), SurveyError>,
+) -> Result<(), SurveyError> {
+    let ledgers = load_ledgers_with(read)?;
+    let plans: Vec<(PathBuf, String, usize)> = Domain::ALL
+        .into_iter()
+        .zip(&ledgers)
+        .map(|(domain, ledger)| {
+            (
+                paths::domain_report_path(domain),
+                render_domain(ledger, &THEMES),
+                ledger.entries.len(),
+            )
+        })
+        .collect();
+
+    for (target, body, count) in &plans {
+        write(target, body, *count)?;
     }
     Ok(())
 }
@@ -186,17 +211,14 @@ pub fn report() -> Result<(), SurveyError> {
 /// ——証拠の件数は本文から外して `evidence` 副手続きの出力に一本化したので、他の spec
 /// が正典 URL のコメントを 1 行足しても本文は変わらない。
 pub fn report_summary() -> Result<(), SurveyError> {
-    let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
-    let mut ledgers: Vec<Ledger> = Vec::new();
-    for domain in Domain::ALL {
-        ledgers.push(load_ledger(domain)?);
-    }
+    let catalog = load_catalog()?;
+    let ledgers = load_ledgers()?;
 
     let body = render_summary(&catalog, &ledgers, &THEMES);
     let target = paths::summary_report_path();
     ensure_parent(&target)?;
     files::write_lf(&target, &body)?;
-    announce(&target, &format!("台帳 {} 本", ledgers.len()));
+    announce(&target, &format!("台帳 {} 本", ledgers.len()))?;
     Ok(())
 }
 
@@ -210,7 +232,7 @@ pub fn priority_apply() -> Result<(), SurveyError> {
         &files::read_normalized,
         &mut |target: &Path, body: &str, changed: usize| {
             files::write_lf(target, body)?;
-            announce(target, &format!("変更 {changed} 項目"));
+            announce(target, &format!("変更 {changed} 項目"))?;
             Ok(())
         },
     )
@@ -242,14 +264,16 @@ pub(crate) fn priority_apply_with(
     let linkage = parse::read_linkage(&read(&paths::linkage_path())?)?;
     let briefing = parse::read_briefing(&read(&paths::briefing_path())?)?;
 
-    let mut sources: Vec<(PathBuf, String)> = Vec::new();
-    let mut ledgers: Vec<Ledger> = Vec::new();
-    for domain in Domain::ALL {
-        let target = paths::ledger_path(domain);
-        let text = read(&target)?;
-        ledgers.push(read_ledger(&text, domain)?);
-        sources.push((target, text));
-    }
+    // 台帳の本文は差し替えの元になるので、読み手に渡した場所と本文を控えておく。
+    let sources: RefCell<Vec<(PathBuf, String)>> = RefCell::new(Vec::new());
+    let ledgers = load_ledgers_with(&|path: &Path| {
+        let text = read(path)?;
+        sources
+            .borrow_mut()
+            .push((path.to_path_buf(), text.clone()));
+        Ok(text)
+    })?;
+    let sources = sources.into_inner();
 
     // 導けない id が 1 つでもあれば、ここで止まる（何も書いていない）。
     let wanted = derive::priorities(&linkage, &briefing, &ledgers)?;
@@ -316,27 +340,6 @@ pub(crate) fn select_ids_by_domain(
     Ok(buckets)
 }
 
-/// 台帳の前置きに書く担当ページの並び（要件 3.1・3.3a）。
-///
-/// **名前順**（[`PageAssignment::pages_of`]）を採る。要件 3.1 の表に書かれた転記順
-/// ではない。理由は 3 つある。
-///
-/// - 前置きは一度書いたら以後バイト列のまま写される（要件 3.3a）ので、後から
-///   選び直せない。「表の転記順」は表の書き換えで動くが、名前順は動かない。
-/// - 割り当て表の読み出しが名前順を返す唯一の公開の操作である（転記順を持つ配列は
-///   `assignment` の中に閉じている）。
-/// - 下流の検査（`LedgerPagesMismatch`）は集合として比べるので、どちらを採っても
-///   検査は通る。つまり選び直せる機会は最初の 1 度しか無い。
-pub(crate) fn prologue_pages(assignment: &PageAssignment, domain: Domain) -> Vec<PageName> {
-    assignment.pages_of(domain)
-}
-
-/// ドメインの台帳を読む。無ければ探したパスを添えて失敗する（先に `ledger-init`）。
-fn load_ledger(domain: Domain) -> Result<Ledger, SurveyError> {
-    let path = paths::ledger_path(domain);
-    read_ledger(&files::read_normalized(&path)?, domain)
-}
-
 /// 置き場が無ければ作る。
 ///
 /// [`files::write_lf`] は親ディレクトリを作らないので、書き出しの直前にここを通す。
@@ -361,8 +364,11 @@ fn read_if_present(path: &Path) -> Result<Option<String>, SurveyError> {
 }
 
 /// 何をどこへ書いたかを標準出力へ 1 行出す。本文そのものは出さない。
-fn announce(path: &Path, detail: &str) {
-    println!("書き出した: {}（{detail}）", path.display());
+fn announce(path: &Path, detail: &str) -> Result<(), SurveyError> {
+    write_stdout(
+        &mut std::io::stdout().lock(),
+        &format!("書き出した: {}（{detail}）\n", path.display()),
+    )
 }
 
 #[cfg(test)]
