@@ -7,7 +7,7 @@
 - 守る約束（どのタスクにも当たる）: 1,000 行の番人の例外表と、表に載るファイル（`follow/window_move.rs`・`transition_judge_verdict_tests.rs` ほか）を割らない。`crates/areka-runtime/src/placement_tests/` の下にファイルを足し引きしない。999 行の `transition_judge.rs`・`transition_judge_tests.rs` は行を増やさない。`Cargo.toml`・`Cargo.lock`・`vendors/` に触らない。clippy の指摘の機械的な直しをしない。
 - 設計の「作業の順」からの寄せ: `follow.rs:122-123` の古い名と番号は鎖の寄せ（6.1）が直す（古い文の 10 は触らない）。`follow.rs` は 1・6.1・8 が触るので、この 3 つは並べない。
 
-- [ ] 1. `follow/drag_follow.rs` を 2 つに分ける（移すだけの段）
+- [x] 1. `follow/drag_follow.rs` を 2 つに分ける（移すだけの段）
   - 着手の前に、brief の件の行の番号を今の枝の頭で引き直し、ずれた行を `research.md` の 9 節の終わりに書き足す
   - バルーン単独のドラッグの塊と記録の札を新しい `follow/balloon_drag.rs` へ移す。境目・`known_position` を残して `pub(super)` にすること・`CW_USEDEFAULT` の `use` を両方に置くこと・ファサードの再束縛の直しは設計の「決め 4」と Modified Files の「1,000 行」のとおり。中身・記録の文・順は変えない
   - 移した名前を名指す説明（設計が挙げる `resolver.rs`・`spawn.rs`・`windowposition.rs`・`diag.rs`・`resolver_resolve_balloon_tests.rs`・`follow/window_move.rs:168`・`follow_balloon_drag_tests.rs:7`・`follow.rs:52`・`:64`）と、設計の一覧に漏れていた `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:117`（`drag_follow.rs` に在ると書く文）を新しい置き場へ直す。説明だけで、例外表のファイルは文に要る分の行だけ・`placement_tests/` の下はファイルを足し引きしない

@@ -4,7 +4,7 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use super::drag_follow::BALLOON_DRAG_BASE_UNPINNED_TAG;
+use super::balloon_drag::BALLOON_DRAG_BASE_UNPINNED_TAG;
 use super::test_support::{
     drag_end_event_at, drag_event, drag_event_at, dragging_state, fake_handle, position_of,
     single_monitor_snapshot, window_pos_at, window_pos_sized,

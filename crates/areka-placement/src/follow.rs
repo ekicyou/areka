@@ -31,6 +31,7 @@
 //! 後続の領分（7.3）。
 
 mod anchor;
+mod balloon_drag;
 mod drag_follow;
 mod keyword_base;
 // 面の `move` のずれを窓の位置へ当てる口（seriko-pattern-calls・task 6.1）。
@@ -49,7 +50,7 @@ mod work_area_clamp;
 
 // limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
 // （`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
-// （`drag_follow::on_balloon_drag_end`・task 3.4）が消費する。
+// （`balloon_drag::on_balloon_drag_end`・task 3.4）が消費する。
 use super::balloon_limit::{
     BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonPlace, limit_correction, place_balloon_in_work_area,
@@ -61,7 +62,7 @@ use super::persist::{
 use super::resolver::{Anchor, PointPx, RectPx, SizePx, keyword_balloon_pos};
 use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, GhostWindows};
 // runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
-// （`drag_follow::on_balloon_drag_end`・task 3.4）が読む limit 値の
+// （`balloon_drag::on_balloon_drag_end`・task 3.4）が読む limit 値の
 // ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
 // `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
@@ -75,11 +76,12 @@ pub use self::anchor::AnchorSource;
 pub(crate) use self::anchor::AnchorSource;
 // 外へはテストのビルド（`test-support`）でだけ開く。crate の中は使い手がある（道と名前は同じ）。
 #[cfg(feature = "test-support")]
-pub use self::drag_follow::on_balloon_drag;
+pub use self::balloon_drag::on_balloon_drag;
 #[cfg(not(feature = "test-support"))]
-pub(crate) use self::drag_follow::on_balloon_drag;
+pub(crate) use self::balloon_drag::on_balloon_drag;
+pub(crate) use self::balloon_drag::on_balloon_drag_end;
+pub(crate) use self::drag_follow::on_char_drag;
 pub use self::drag_follow::on_char_drag_end;
-pub(crate) use self::drag_follow::{on_balloon_drag_end, on_char_drag};
 // 追従 Component の定義元は単位空間契約のモジュール（`offset_space`）へ移した
 // （areka-P0-balloon-offset-dpi・design D14／task 3.1）。外部からの参照はすべて
 // このファサードを経由するため、移設の波及はこの 1 行に閉じる。

@@ -323,3 +323,8 @@
 - 164 の偽の HWND に寄りかかった檻の数は、型を変えて `cargo test` を回すまで読み切れない（`follow_drag_end_gate_tests.rs` の `destination()` の 8 か所のほか、本体の `input_events/drag_*`）。直し方は 1 つ（開始の後に位置を入れる手伝い）なので、数が増えてもタスクは増えない見込み。
 - D3 は札のある窓だけ新しい揃え方が最大 30 フレーム遅れる。D1 を採るなら遅れは無いが、札の間に古い作業領域で射影した位置を 1 度書く。
 - 名前の無い番号は 60 ファイル・約 780 行の手の直しで、出どころの spec を決める読みが要る（`git log -S` で引く）。機械の置き換えにしない。
+
+### 9.5 実装の段・タスク 1 の行の引き直し（現在の枝の頭）
+
+- 設計のツリー（`c66f7ee54`）から `crates/` の差分は 0。brief の行は 1 節の表のとおりで、ずれた行は無かった（`drag_follow.rs` 1,000 行・`known_position` 550・`on_balloon_drag` 以降 503〜1000・`BALLOON_DRAG_BASE_UNPINNED_TAG` 26〜33・164 の読み 291／293・`on_char_drag_end` の書き手の文 135 はいずれも同じ）。
+- 設計の一覧に漏れていた名指しを 2 つ足して直した: `crates/areka-runtime/src/placement_tests/transition_judge_offset_signoff_tests.rs:117`（`drag_follow.rs` に在ると書く文）・`crates/areka-placement/src/balloon_offset_supply_tests.rs:233`（`drag_follow.rs` の `*_TAG`）。

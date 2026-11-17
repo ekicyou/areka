@@ -114,7 +114,7 @@
 //!
 //! *保存値はどこから来るのか——本手順の外の操作である*: `[balloon-offset.*]` を書く経路は
 //! リポジトリ全体で **1 本だけ**である。**バルーンを単独で掴んで動かし、離したとき**
-//! （`crates/areka-placement/src/follow/drag_follow.rs` の `on_balloon_drag_end`——ここからの
+//! （`crates/areka-placement/src/follow/balloon_drag.rs` の `on_balloon_drag_end`——ここからの
 //! `balloon_offset_entries` 呼出が、この関数の**唯一の**呼出点である。結線は
 //! `crates/areka-placement/src/spawn.rs` のバルーン窓の `OnDragEnd`）。**キャラ窓のドラッグ＝§3 手 4 の
 //! モニタ間の往復では 1 バイトも書かれない。** しかも §3 手 4 自身が「往復のあいだ、

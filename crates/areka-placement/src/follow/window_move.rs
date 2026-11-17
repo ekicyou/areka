@@ -165,7 +165,7 @@ pub fn move_window_with_route(
 /// 連続的な中央追従ではない——初期既定位置を**実際に表示される寸**から導くための一度きりの
 /// 確定である（詳細は [`BalloonKeywordBase`] の doc）。素材はリサイズを待たずに消えることも
 /// ある——利用者がバルーンをドラッグして相対位置を保存した瞬間に退役するからである
-/// （要件 4.7・`drag_follow::retire_keyword_base_on_save`）。
+/// （要件 4.7・`balloon_drag::retire_keyword_base_on_save`）。
 pub fn resize_window_to(
     world: &mut World,
     char_window: Entity,
