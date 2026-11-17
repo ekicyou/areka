@@ -76,3 +76,7 @@
 ## 2026-11-01 棚卸㉝の後の開発者の決め
 
 2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」）＝範囲から右クリックメニュー（`menu/`）の部分を外し、入力の出来事だけにする。メニューはリアクターが来れば作り直すので、見直しても捨てることになる。外した部分は windows-reactor 待ちの段の申し送り。範囲のファイルの一覧は要件の段で直す。
+
+## 2026-11-17 棚卸㊴の申し送り（`collisionex-regions` から）
+
+- `crates/areka/src/input_events/mod.rs` 518 行の説明「The Hand／collisionex は実装しない（7.4）」は、`collisionex-regions`（C22）が着地すると古くなる。`collisionex-regions` は areka 本体のファイルに触らない約束で C22 に入ったので、この 1 行はこの spec が直す（`input-crate-split` の後なら新しい crate の側の同じ行）。

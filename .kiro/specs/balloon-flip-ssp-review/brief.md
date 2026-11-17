@@ -74,3 +74,14 @@
 - **要件定義のモデル**: Opus（SSP の測りと、今ある決まりを残すかの裁定。新しい境界や並行の設計には当たらない）。
 - **規模**: S〜M（⑴ なら記録と §8 だけ。⑵ なら並べ替えを外し、檻を書き換えるので 4〜8 タスク）。
 - **要件の段の議題**: 上の 3 案のどれにするか。
+
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: 待っていた `balloon-flip-side-rules` は 11-17 に着地した（PR#469）。`place_balloon_in_work_area`（`balloon_limit.rs` 172 行）は判定に入れるキャラ窓の列 `chars` を受け、映した先がほかの窓に重なれば `BalloonPlace::PushedOverlap` で押し込みへ倒す。記録 `[balloon-limit] Clamp` に欄 `overlap_scope` が付いた。書き込みの関門は `follow/window_move.rs` の `apply_balloon_limit_gate`（984 行・列は 1078 行の `shown_char_rects`）。起動の並べ直しと鎖の寄せの後に全部のバルーンを判定し直す系（新しい `follow/other_chars.rs`・登録は本体の `ghost_session.rs` 100 行・呼び手は `reset_pos.rs` 134 行と `chain_realign.rs` 427 行）も入った。
+- **古くなった記述**: Current State の「§8 の行は 10-30 の読み（SSP は並べ替える）を前提にしている」は古い。`balloon-flip-side-rules` が §8 の「【上書き】バルーンだけが作業領域からはみ出すとき」の行（`doc/COMPAT_ARCHITECTURE.md` 431 行）に、2.9.34 の測りと、見直しをこの spec が持つことを書き足した。同じ節の「乗せる」は「乗せた」と読む。測っていない場面（はみ出しの大きい形・起動の直後・面の切り替え）は同 spec の `research.md` 9.3 のとおり今も測っていない。
+- **触るファイル**: 案 ⑴＝§8 の行だけ（記録を足すなら `balloon_limit.rs`）。案 ⑵・⑶＝`crates/areka-placement/src/balloon_limit.rs`（360 行）・`balloon_limit_flip_tests.rs`（580 行）・`follow/window_move.rs`（1,234 行・上限の例外表に載る）と §8 の行。重なりの判定と判定し直しの系も外すなら、さらに `follow/other_chars.rs`・`follow_other_chars_tests.rs`・`follow.rs`・`reset_pos.rs`・`chain_realign.rs`・本体の `crates/areka/src/ghost_session.rs`（登録の 1 行）と、`resolver_resolve_balloon_tests.rs`・`balloon_offset_supply_tests.rs` ほかの檻。
+- **規模**: S〜M（⑴ 2〜3・⑵ 4〜8・⑶ で判定し直しの系も外すと 6〜10 タスク）。20 は越えない。
+- **先に要るもの**: 働きの依存は無し。ファイルでは `audit-placement-follow-residue`（`balloon_limit.rs` の 491・`balloon_limit_flip_tests.rs` の `point_of` の写し・`window_move.rs` の文・`follow*` の範囲に入る `other_chars.rs`）を待つ＝roadmap の「v0.2.0 の作り直しと触るファイルが重なる見直しは先に済ませる」。要件の段の最初に SSP の測りがある（毎回開発者の許し・画面は排他テストの机で順を取る・同じウェーブのセッションへ知らせる）。
+- **同じウェーブに置けない相手**: `audit-placement-follow-residue`。案 ⑵・⑶ で判定し直しの登録を外すなら `session-module-gather`（`ghost_session.rs`）とも重なる。`balloon-text-visual-tree` とは、箱の文字の面の名前を `other_chars.rs` が読む所でつながる（両方が触るなら順を決める）。`window-resetwindowpos-hold` は `reset_pos.rs` を読むだけなので 0。
+- **優先度の区分**: A（開発者が起票を頼んだ・2026-11-16「そのまま＋起票」）。版は v0.2.0。
+- **要件定義のモデル**: Opus（SSP の測りと、今ある決まりを残すかの裁定。新しい境目・並行の設計・骨格の分かれ目に当たらない）。
+- **分割の案**: 無し。

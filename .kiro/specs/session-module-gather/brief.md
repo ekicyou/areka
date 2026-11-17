@@ -103,3 +103,16 @@
   MCP の `get_log` の 5 種別の分け方が前後で同じことも示す。
 - **共通の約束**: roadmap の同じ節のとおり。
 - **Fable**: Opus で足りる。
+
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: `runtime-crate-split`（11-17 着地）で、集める候補の `ghost_session.rs`・`ghost_session_runtime.rs`・`boot_config.rs`・`app_exit.rs` の `crate::runtime::` が `areka_runtime::` へ書き換わった（中身は同じ）。`session/` の切替の 9 ファイルのうち `reload_args`・`shell_balloon_resolve`・`shell_carry` は `crates/areka-runtime/src/` へ移り、今の `session/` の本番は `ghost_quit`・`ghost_switch`・`hooks`・`mod`・`reload`・`runtime_boot`・`same_folder_pin`・`shell_balloon_switch`・`switch_copy`（約 2,540 行）。
+- **数の引き直し（非空行）**: `ghost_session.rs` 875・`ghost_session_runtime.rs` 183・`boot_resolve.rs` 723・`boot_config.rs` 620・`app_exit.rs` 308・`alert.rs` 493・`log_history.rs` 501（ほかは起票のまま）。`main.rs` は 989 行（上限の 11 行下）で、外へ出す項目は 541〜923 行（`AfterRun`・`after_run` が増えた）。`register_systems` は `ghost_session.rs` 66〜86 行・呼び手は `main.rs:261`。本体だけのモジュールの登録は 11 本（input_events が `balloon_wheel` で 6 本）。
+- **触るファイル**: 起票のままに加えて、移すモジュールを `crate::…` で引く本体のファイル全部（パスだけの直し）＝`session/` のほぼ全部（`hooks.rs`・`reload*`・`runtime_boot*`・`switch_copy*`・`same_folder_pin*`・`ghost_quit*`・`ghost_switch*`・`shell_balloon_switch*`）・`runtime_tests/` の 19 本・`input_events/{mod,file_drop,file_drop_wiring_tests,shortcut_tests}.rs`・`install/`・`mcp/`・`menu/`・`offline_dump/` の多く。名前の照合は `real-run-kit` の `launch.rs`（362 行）・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs`・`doc/testing.md:48`・`tests/emo2_mcp_real_run.rs` 115 行（`areka::boot_config=info`）。`areka-runtime` には触らない（本体を引けない）。
+- **規模**: 8〜10 タスクのまま。
+- **先に要るもの**: `input-crate-split`（`ghost_session.rs`・`ghost_session_runtime.rs`・`app_exit.rs`・`input_events/mod.rs`・`file_drop.rs` を分け合う直列。働きの前後ではない）。
+- **`audit-placement-follow-residue` と同じウェーブか**: 触るファイルは 0（向こうの本体の側は `input_events/drag_test_support.rs` だけで、移すモジュールを引かない。向こうの `frame_*_tests.rs` の 4 本が `crates/areka-runtime/src/` の側なら）。ただし上の直列のため、今の並びのままでは入らない。前に出すなら、`input-crate-split` との順を入れ替える（集めた後に `input-crate-split` が `session/` の下の新しいパスを直す）ことと、`audit-test-kits` を同じウェーブから外す（`real-run-kit` の 4 ファイル）ことの 2 つが要る。
+- **見込みの C23 の誤り**: C23 に `input-crate-split` と並べているが、上の 5 ファイルで重なる＝同じウェーブに置けない。`audit-emo2-boot-spine`・`audit-emo2-boot-frame`・`audit-emo2-boot-switch` とも、`session/`・`runtime_tests/` のパスの直しで重なる（移すモジュールに元の名の出し直しを置けば避けられるが、Approach は「パスだけを直す」）。
+- **優先度の区分**: A（開発者「この際、areka crateのコードベースが大きすぎる問題をサルベージすべき」→ 一括承認）。
+- **要件定義のモデル**: Opus（crate を作らない本体の中の移動。前例は `runtime-module-untangle`）。
+- **分割の案**: 無し。
+- **古くなった記述**: Current State の `main.rs` の 531〜910 行・`register_systems` の 72〜84 行・`main.rs:253`・「系を 10 本」・切替の 9 ファイルの名前（上のとおり）。`tests/smoke_boot_loop_exit.rs` は出所の名前でなく文言で照合している（出所を名前で読むのは `real-run-kit` の側）。

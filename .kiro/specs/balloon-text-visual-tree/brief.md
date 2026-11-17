@@ -86,14 +86,15 @@
 - 要件定義のモデル: Opus。
 - 分割の案: 上限を超えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る。
 
-## 2026-11-16 棚卸㊳の再測定（main 715f5819）
-- **前提の変化**: 待っていた `wintf-visual-damage-redraw` は 11-14 に着地した。起票の後に main へ入った変更で、受け持ちのファイルを動かしたのは `runtime/frame/drain_resnap.rs`（`audit-placement-core` の直し・729 行）だけで、文字の層（`areka-emo-text`）と `mount.rs` は動いていない。
-- **`wintf-surface-auto-promotion` は待たなくてよい**: 文字の差し込み口 `emo-text-layer-slot`（`areka-emo-present/src/mount.rs` 183 行目）は窓の直下に置いた中身の無い `Visual`＝描画面の持ち主。wintf が切るのは「節の下の持ち主」だけ（`visual/world_visual.rs` 160 行目）で、根の直下の持ち主は支えている。文字の区画を描画面の持ち主の直下に置く推す形は、今の wintf のままで組める。
-- **触るファイル**: 起票時の見立てのまま。行数は `surface.rs` 960・`actor_present.rs` 872・`viewbox_draw_render.rs` 835（1,000 行の近く＝足す分は新しいファイルへ）・`mount.rs` 321・`runtime/frame/` の `attach.rs` 502・`wiring.rs` 425・`scale_text.rs` 330・`drain_resnap.rs` 729・`mcp/dump_balloon.rs` 216。wintf は使う側だけ（`visual/`・`systems/render.rs` に触らない）。使い手が 0 になれば `com/dxgi.rs`。
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: `runtime-crate-split`（11-17）で結線の 4 ファイルは `crates/areka-runtime/src/frame/{attach,wiring,scale_text,drain_resnap}.rs`（502・459・327・759 行）へ移った（中身の変更は公開の範囲だけ）。兄弟のテストは `crates/areka-runtime/src/frame_{attach,drain_text,text_scale}_tests.rs` と本体の `crates/areka/src/runtime_tests/frame_attach_carry_tests.rs`。`mcp/dump_balloon.rs`（216 行）は本体の `crates/areka/src/mcp/` に残った。`areka-emo-text` と `mount.rs` は動いていない。
+- **`wintf-surface-auto-promotion` の着地（11-17）で選べる形が増えた**: 節の下の手動の持ち主も描けるようになり（`visual/world_visual.rs` の `ScanKind::Owner`）、節を手で持ち主にする目印 `OwnSurface`（`visual/mod.rs` 120 行）と、更新の多い節を自動で持ち主へ上げる仕組み（`visual/draw/README.md`「描画面の自動の上げ下げ」）が入った。前の節の「wintf が切るのは節の下の持ち主だけ」は古い。文字の区画を `OwnSurface` で持ち主にするか、自動の上げ下げに任せるかを要件で決める。
+- **触るファイル**: 上の読み替えのほかは起票時の見立てのまま（`surface.rs` 960・`actor_present.rs` 872・`viewbox_draw_render.rs` 835＝足す分は新しいファイルへ）。`create_composition_swap_chain` を消すなら、使い手は `surface.rs` のほかに wintf の `com/wuc.rs` のテスト（216〜242 行）と `areka-emo-text/Cargo.toml` 28 行の説明がある（pilot の `q4-wuc` は写しで、wintf を引かない）。
 - **規模**: L（16〜20 タスク）のまま。
-- **先に要るもの**: 無し（働きの依存は全部着地した）。
-- **同じウェーブに置けない相手**: `runtime-crate-split`（`crates/areka/src/runtime/frame/` の 4 ファイルと `mcp/dump_balloon.rs` を `areka-runtime` へ移す）。後の見込みでは `audit-emo2-boot-frame`（`runtime/frame/`）・`window-resetwindowpos-hold`（`drain_resnap.rs`）とも重なる。`runtime-crate-split` の後に取るなら、`runtime/frame/` の 4 ファイルは `crates/areka-runtime/src/frame/` で読む。
-- **席**: 新しいファイルを足すなら emo-text の席（`lib.rs` の一覧）。
+- **先に要るもの**: 働きの依存は無し。ただし結線の 4 ファイルは見直し `audit-emo2-boot-frame`（未完了・`frame/` の持ち主）の範囲で、roadmap の「v0.2.0 の作り直しと触るファイルが重なる見直しは先に済ませる」に当たる（この spec は 10-22 の突き合わせより後の起票で、まだ突き合わせていなかった）。見直しの前に取るか（結線の触り方を小さく保つ約束をつけて）、見直しの後へ回すかを、ウェーブを組む棚卸で決める。`window-resetwindowpos-hold` は同じ理由で見直しを待っている。
+- **同じウェーブに置けない相手**: `audit-emo2-boot-frame`・`window-resetwindowpos-hold`（`drain_resnap.rs`）。`audit-test-kits` は `tests/attach_wiring_test.rs` の記録の捕まえの写しを消す＝この spec が `tests/support/mod.rs` の `read_back`（`TextSurface::read_back` を読む）と `attach_wiring_test.rs` を書き換えるなら重なる（並べるなら、どちらかが触らない約束を置く）。
+- **配置とのつながり**: 箱の文字の面の名前 `emo-text-box-surface`（`surface_window_child.rs` 163 行）を、配置の `crates/areka-placement/src/follow/other_chars.rs` 35 行が読み、「キャラ窓の子の描画面が見えているか」の判定から外している（`balloon-flip-side-rules` が足した）。箱の文字の面の置き場や名前を変えると、この判定が黙って変わる。`other_chars.rs` は `audit-placement-follow-residue` の範囲なので、変えるなら順を決め、変えないなら名前と置き場を保つ約束にする。
+- **席**: emo-text に新しいファイルを足す席は今も要る（`lib.rs` の一覧・1,000 行の近くの 3 ファイルに足せない）。
 - **優先度の区分**: A（開発者 2026-11-14「本来、バルーンが使うはず。使ってないなら使うべきですね」）。版は v0.2.0。
-- **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`。新しい境目や並行の保証は作らない）。
+- **要件定義のモデル**: Opus（描画の木の使い方の前例は emo-present の `GraphicsCommandList`、節の下の持ち主の前例も wintf に入った。新しい境目や並行の保証は作らない）。
 - **分割の案**: 上限を越えるなら、箱の文字の面（`surface_window_child.rs`）と印の面（`marker_surface.rs`）を後の 1 本に切る（起票時のまま）。

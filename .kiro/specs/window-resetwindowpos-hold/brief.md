@@ -67,14 +67,12 @@
 - **要件の段の議題**（答えで作業が変わるもの）:
   1. 並べ直しを預かるとき、前に預かった移動を捨てる今の決まりと、表示されない窓が 1 つで列が詰まらない決まりをどう合わせるか。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- **前提の変化**: 前の棚卸の後の着地が `emo2_boot/frame/` で動かしたのはテストの 2 ファイル（`balloon_face_tests.rs`・`drain_resnap_tests.rs`＝テストの待ちの直し）だけで、この spec の触るファイルは動かしていない。
-- **触るファイル**: 位置の指令の預かり `crates/areka/src/emo2_boot/frame/move_hold.rs`（270 行）・位置の指令を流す相 `emo2_boot/frame/drain_resnap.rs`（732 行）・檻 `emo2_boot/frame_move_hold_tests.rs`（385 行）。並べ直しの本体 `placement/reset_pos.rs`（141 行）は読むだけ（範囲の外）。
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: 本体の crate 分けの 3 本（`placement-crate-split`・`runtime-module-untangle`・`runtime-crate-split`）が着地し、触るファイルは移った＝預かり `crates/areka-runtime/src/frame/move_hold.rs`（271 行）・流す相 `crates/areka-runtime/src/frame/drain_resnap.rs`（759 行）・檻 `crates/areka-runtime/src/frame_move_hold_tests.rs`（382 行）。並べ直しの本体は `crates/areka-placement/src/reset_pos.rs`（141 行・読むだけ）。中身の変更は公開の範囲（`run_move_drain_with` を `pub`）と、`balloon-flip-side-rules` が `reset_window_positions` の終わりに足した全部のバルーンの判定し直し（`reset_pos.rs` 134 行の `rejudge_all_balloons`）だけ。並べ直しを預かれば判定し直しも一緒に表示の後になる（向きは合っている）。
+- **行の読み替え**: `move_hold.rs` の `touched_scopes` 84（`ResetWindowPos` は 127）・`unshown_scope` 135・`release_ready` 188・前に預かった移動を捨てる腕 207〜233（`move_hold_superseded` 219）、`drain_resnap.rs` の `run_move_drain_phase` 160・`run_move_drain_with` 165・並べ直しの腕 188、`reset_pos.rs` の `reset_window_positions` 52・`WindowPos.size` 78・`reset_window_pos_skipped` 55／90。本文の `emo2_boot/frame/` は `crates/areka-runtime/src/frame/`、`emo2_boot/frame_move_hold_tests.rs` は `crates/areka-runtime/src/frame_move_hold_tests.rs`、`placement/reset_pos.rs` は `crates/areka-placement/src/reset_pos.rs` と読む。
 - **規模**: S（3〜6 タスク）のまま。
-- **先に要るもの（見直しと crate 分け）**: 起票が 10-22 の突き合わせより後なので、今回はじめて突き合わせた。3 ファイルとも見直し `audit-emo2-boot-frame`（`emo2_boot/frame/` と `frame_*.rs`）の持ち物で、その見直しは `runtime-crate-split` の後。`move_hold.rs`・`drain_resnap.rs` は配置を引く（`crate::placement::…`）ので `placement-crate-split` が書き換え、`runtime-module-untangle` が `src/runtime/` へ改名して移し、`runtime-crate-split` が新しい crate へ移す。よってこの spec は crate 分けの 1〜3 本目と `audit-emo2-boot-frame` の着地を待つ。roadmap の行の「同じウェーブに置かない」は「着地を待つ」へ強め、見直しを足す。
-- **ほかの未完了の spec と分け合うファイル**: `balloon-script-offset-align`（台本の置き方の指令を今の位置の指令の型に足すなら、`move_hold.rs` の場合分け〔全部の型を数える〕と `drain_resnap.rs` の腕を触る見込み）・`install-live-target-hazards`（`drain_resnap.rs` を挙げる）。
-- **優先度の区分**: B（起動の直後の並べ直しで窓の間に隙間が残りうるバグ）。
-- **要件定義のモデル**: Opus（今ある預かりの判定を並べ直しにも当てる形）。
-- **分割の案**: なし。
-- **古くなった記述**: `drain_resnap.rs` の並べ直しの腕は 188 行目（起票は 176）、`run_move_drain_phase` は 159 行目（148）。
+- **先に要るもの（C24 に置いた理由）**: 3 ファイルとも見直し `audit-emo2-boot-frame`（未完了・`frame/` と `frame_*` の持ち主）の範囲＝「v0.2.0 の作り直しと重なる見直しは先に」で、その着地を待つ。見込みでは `audit-emo2-boot-frame` が C23（`audit-placement-follow-residue` の後）なので、早くて C24。`drain_resnap.rs` は `balloon-text-visual-tree` とも重なる。
+- **同じウェーブに置けない相手**: `audit-emo2-boot-frame`（待つ）・`balloon-text-visual-tree`（`drain_resnap.rs`）・`balloon-script-offset-align`（`move_hold.rs` の場合分けと `drain_resnap.rs` の腕を触る見込み）・`install-live-target-hazards`（`drain_resnap.rs` を挙げる）。
+- **優先度の区分**: B（起動の直後の並べ直しで窓の間に隙間が残りうるバグ）。版は v0.2.0。
+- **要件定義のモデル**: Opus（今ある預かりの判定を並べ直しにも当てる形で、新しい境目・並行の設計には当たらない）。
+- **分割の案**: 無し。

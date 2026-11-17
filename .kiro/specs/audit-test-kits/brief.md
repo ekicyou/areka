@@ -80,3 +80,15 @@
 ## 2026-11-15 `audit-placement-core` の完了の申し送り
 
 - **件（数の古い文）**: `crates/log-capture-kit/src/lib.rs:28` が「消費する 19 crate」と書く。`log-capture-kit` を引く `Cargo.toml` は 20 ある（2026-11-15 の数え）。数を書かない文にするか、数え直す。
+
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: 待っていた `runtime-crate-split` は 11-17 に着地した（PR#472）。受け持ちの中で動いたのは `log-capture-kit` の 4 ファイルだけで、どれもパスと出所の名前の書き換え（`src/event.rs` 146 行の出所の一覧・`src/event_tests.rs` の `areka::emo2_boot` → `areka_runtime`・`tests/file_length_guard_test.rs` の例外表の 2 件と較正の 1 件・`tests/workspace_scan_test.rs` 320 行）。`real-run-kit`・`sample-ghost-kit`・`temp-path-kit` は動いていない。範囲の説明の中のパスで古くなったものは 0 件（`input_events/`・`shiori_demo.rs`・`install/fetch_url.rs` ほか、名指しの先は全部ある）。
+- **触るファイル**: 起票のまま 4 crate の全部（今の実測は `.rs` 58 本・計 16,836 行。1,000 行に近いのは `tests/sample_path_guard_test.rs` 926）。
+- **規模**: 指摘の数で決まる（見込みは 20 未満のまま）。
+- **先に要るもの**: 無し（すぐ着手できる）。
+- **同じウェーブに置けない相手**: `tests/file_length_guard_test.rs` の例外表（4 件と件数の定数 `OVER_LIMIT_ALLOWED_COUNT`）は、表に載ったファイルを 1,000 行以下へ割る spec が必ず直す（上限内に入った項目が表に残ると赤）。表のファイルの持ち主＝`audit-pilot`（`pilot-clickthrough-alpha-toggle/main.rs` 1,006 行）・`audit-placement-follow-residue`（`placement_tests/transition_judge_verdict_tests.rs` 1,024 行・`follow/window_move.rs` 1,234 行）・`audit-emo2-boot-frame`（`frame_transition_branch_tests.rs` 1,271 行）。件数の定数の 1 行を分け合うので、同じウェーブでこの表に触れるのは 1 本だけ。`session-module-gather` とも `real-run-kit` の `launch.rs`・`launch_tests.rs`・`close_tests.rs`・`bin/real-run-fake-areka.rs`（出所 `areka::app_exit` の名指し）で重なる。
+- `input-crate-split` が `input_events/` を移すと、`src/event.rs` 150 行・`src/event_tests.rs` 18〜19 行と 121 行の説明のパスが古くなる。この spec が先に着地するなら、その直しは `input-crate-split` の側に残る。
+- **優先度の区分**: A（見直しの方針・開発者「とにかく指摘事項は全部直す方針」）。
+- **要件定義のモデル**: Opus（今ある道具の crate の中の直し。新しい境目や並行の保証は作らない）。
+- **分割の案**: 無し（越えたら Constraints のとおり、指摘の組で同じ範囲の 2 本目）。
+- **見つけた穴・古くなった記述**: `crates/log-capture-kit/src/lib.rs` 28 行の「消費する 19 crate」は、いま 21（`areka-runtime` が増えた・上の申し送りの「20」も古い）。

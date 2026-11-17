@@ -58,15 +58,15 @@ ukadoc の `collisionex` の書式（`descript_shell_surfaces`）を引き直し
 - **この spec に頼むこと**: 読み手は `region` の行も落とさずに型へ運ぶ（ファイル名・R・G・B・領域反転）。働き（画像を読んで当たり判定にする）は `hit-id-pass` が持つので、この spec では読めた `region` の行を使わずに記録だけを残す。こうしておけば `hit-id-pass` は読み手の `shell/{model,decode}.rs` に触れずに済む（`draw-methods-canon` と `draw-methods-blend` の分け方と同じ）。
 - この spec の 4 つの図形の CPU の判定は今の計画のまま。図形も ID の描き先へ寄せるかは `hit-id-pass` の議題 2。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- 前提の変化: 当たり判定を値にする `decode_collisions`（`crates/areka-parsers/src/shell/decode.rs`）は今も番号が数字だけの行しか読まない。合成の当たり判定（`crates/areka-emo-compose/src/hit.rs`・`hit_import.rs`）と表示層の `presenter/hit.rs` は棚卸㉔から変更 0。11-01 から着地した `areka-test-binary-stability` はこの spec のファイルに触れていない。働きの上で先に要るものは無い。
-- 触るファイル: 読み手 `crates/areka-parsers/src/shell/{model.rs 303 行, decode.rs 623 行}`（`Collision` の型に形の欄を足し、`region` の行も運ぶ）、`crates/areka-emo-compose/src/{hit.rs 756 行, hit_import.rs}`（形ごとの内外の判定は新しいファイルへ）、型を直書きするテスト 12 ファイル（parsers 7・emo-compose 3・emo-present の `presenter_film_tests.rs`・`presenter_test_support.rs`）、本体の `crates/areka/src/input_events/mod.rs` の説明の 1 行（518 行目「collisionex は実装しない」）、台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 2 行、`doc/COMPAT_ARCHITECTURE.md` §8。
-- 規模: 8〜11 タスクのまま。切らない。
-- 先に要るもの（見直しと crate 分け）: 見直しの `audit-parsers-sakura`・`audit-emo-compose`・`audit-emo-present`・`audit-areka-input-menu` の 4 本（ロードマップのとおり・4 本とも今も重なる）。**新しく**、本体の `input_events/` を新しい crate へ移す `input-crate-split`（とその前の本体の crate 分け 3 本）も待つ。本体に触るのは説明の 1 行だけだが、その 1 行で待ちの鎖がまるごと付く。
-- 同じ時に走らせない相手: 読み手の 2 ファイルを分け合う `animated-image-import`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`・`config-parse-diagnostics`・`shell-tooltip`・`surfaces-basepos`、`hit.rs` を分け合う `hit-id-pass`・`wintf-d2d-composite-rules`。
-- 優先度の区分: C（ロードマップの行のとおり＝正典の拾い残し。起票の根の開発者の指示「未対応の件はすべて起票」は包括のもので、この働きを名指しした頼みではない）。前の節の「A」はこれに読み替える。
-- 要件定義のモデル: Opus（正典の書式がはっきりしていて、今の型に欄を足すだけ）。
-- 分割の案: 無し。
-- 引き継ぐ決め（前の節から）: `Collision` に形の欄を足す（`collision` と `collisionex` を書いた順に 1 つの列へ並べ、「後に書いたものが手前」を保つため）。書式は `collisionex*,名前,形,座標…` で名前が 2 番目（`collision*` は最後）。形は 5 つ（矩形・楕円・円・多角形・`region`）で、`region` は読んで運び、記録だけ残す（働きは `hit-id-pass`）。`hit_import.rs` の `regions_of` は矩形の 4 辺にずれを足す作り＝形ごとにずらす。
-- 見つけた穴・古くなった記述: 本文の「4 つの形」は 5 つと読む（`region` を含む）。
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: 棚卸㉞の後、待っていた見直しのうち `audit-parsers-sakura`（PR#428）・`audit-emo-compose`（PR#430）・`audit-emo-present` が着地した。行数は `shell/model.rs` 356・`shell/decode.rs` 680・`hit.rs` 677・`hit_import.rs` 289。`collisionex` を読み飛ばすのは今も `decode_collisions`（`decode.rs` 245 行）。C21 の着地はこの spec のファイルに触れていない（`input_events/mod.rs` は `runtime-crate-split` の取り込みの直しだけ）。
+- **触るファイル**: 読み手 `crates/areka-parsers/src/shell/{model,decode}.rs`・合成 `crates/areka-emo-compose/src/{hit,hit_import}.rs`（形ごとの判定は新しいファイルへ）・`Collision {` を直書きする檻（parsers の `decode_charset_tests`・`decode_tests_append_tests`・`decode_tests_element_collision_tests`・`decode_tests_lenient_input_tests`・`parse_tests`・`validation_tests`、emo-compose の `plan_test_support.rs`、emo-present の `presenter_test_support.rs` 890 行）・`presenter/hit.rs`・台帳 `assets.toml` の 2 行・§8 への追記。本体は `crates/areka/src/input_events/mod.rs` 518 行の説明の 1 行（「The Hand／collisionex は実装しない（7.4）」）だけ。
+- **規模**: 8〜11 タスクのまま。
+- **先に要るもの（C24 に置いた理由）**: 働きの依存は無い。本体の説明の 1 行が、見直し `audit-areka-input-menu`（未完了・`input_events/` の持ち主）と crate 分け `input-crate-split`（未完了・`input_events/` を新しい crate へ移す）の範囲に入り、「v0.2.0 の作り直しと重なる見直しは先に」の決まりで両方の後になるから。読み手と合成の見直しは着地したので、残る待ちはこの 1 行だけ。シェルの element の列で前に居た `animated-image-import` は版の外（行き先は次の版を決めるとき）へ出たので待たない。
+- **早めるなら**: 説明の 1 行をこの spec の範囲から外して `audit-areka-input-menu` へ申し送れば、本体に 1 行も触らない。そうすると見込みの C22 の 5 本（`balloon-text-visual-tree`・`audit-placement-follow-residue`・`audit-test-kits`・`audit-ukadoc-survey`・`audit-pilot`）と触るファイルの重なりは 0 の見込み（`audit-placement-follow-residue` は `input_events/drag_test_support.rs` だけ・`balloon-text-visual-tree` が emo-present の `presenter_test_support.rs` に触るかは向こうの設計で確かめる）。
+- **見込みの C24 の穴**: 今の見込みは C24 でこの spec と `audit-areka-input-menu` を並べていて、説明の 1 行（`input-crate-split` の後は新しい crate の側の同じファイル）で重なる。上の申し送りの形にするか、片方をずらす。
+- **同じ時に走らせない相手**: 読み手の 2 ファイルを分け合う `animated-image-import`・`element-clipping-option`・`draw-methods-canon`・`seriko-script-triggers`・`config-parse-diagnostics`・`shell-tooltip`・`surfaces-basepos`、`hit.rs` を分け合う `hit-id-pass`（どれも未完了・どれも C22〜C24 の見込みに居ない）。
+- **優先度の区分**: C（正典の拾い残し。起票の根の開発者の指示「未対応の件はすべて起票」は包括のもので、この働きを名指しした頼みではない）。版は v0.2.0。
+- **要件定義のモデル**: Opus（正典の書式がはっきりしていて、今の型に欄を足すだけ）。
+- **分割の案**: 無し。
+- **引き継ぐ決め（前の節から）**: `Collision` に形の欄を足す（`collision` と `collisionex` を書いた順に 1 つの列へ並べ、「後に書いたものが手前」を保つ）。書式は `collisionex*,名前,形,座標…` で名前が 2 番目（`collision*` は最後）。形は 5 つ（矩形・楕円・円・多角形・`region`）で、`region` は読んで型へ運び、記録だけ残す（働きは `hit-id-pass`）。`hit_import.rs` の `regions_of` は形ごとにずらす。本文の「4 つの形」は 5 つと読む。実機の確かめ（クローディアの撫でとドラッグ）は画面を使う＝排他テストの机で順を取る。

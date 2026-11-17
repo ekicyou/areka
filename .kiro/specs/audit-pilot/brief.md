@@ -72,3 +72,15 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 2026-11-17 棚卸㊴の再測定（main 7f41b53e）
+- **前提の変化**: 待っていた `pilot-windows-rs-next` は 11-17 に着地した（PR#471）。`crates/pilot/examples/pilot-windows-rs-next/` に、本線から独立したワークスペース（member 17・自前の `Cargo.lock`・windows-rs の git の rev 固定・`.rs` 61 本 6,403 行・文書 3・証跡の画像 5・計 104 ファイル）が増えた。今までの受け持ち（31 ファイル・8,081 行）は 1 行も動いていない。
+- **新しいワークスペースは範囲から外す案（推す）**: ⑴ 本線の `crates/*` の member でなく、全体テスト（`tools/test-all.ps1`）にも乗らない＝「全体テストが緑」で直しを確かめられない。⑵ git の依存を引くので、確かめるたびにその rev を取りに行く。⑶ `README.md`（知見の正本）・`REWRITE_TABLE.md`・`UPSTREAM_DRAFT.md`・証跡は、まだ起票していない移行の本体（6〜8 本）が読む一次記録で、直すと測った時のコードと記録がずれる。⑷ 先進坑は使い捨てで、品質の基準は緩くてよい（`.kiro/steering/two-tunnel.md`）。要件の段で開発者に確かめ、範囲を「`crates/pilot/` の全部。ただし `examples/pilot-windows-rs-next/` を除く」と書き直す。
+- **入れる場合**: 指摘が増えて 20 を越えやすい。越えたら新しいワークスペースを同じ範囲の 2 本目に切る（境目は `examples/pilot-windows-rs-next/` の下かどうか）。
+- **触るファイル**: 外す案なら起票のまま（`.rs` 22 本・8,081 行。上限を越えているのは `pilot-clickthrough-alpha-toggle/main.rs` 1,006 行・近いのは `pilot-balloon-asset-swap/swap.rs` 928）。
+- **規模**: 指摘の数で決まる（外す案なら見込みは 20 未満）。
+- **先に要るもの**: 無し（すぐ着手できる）。
+- **同じウェーブに置けない相手**: `main.rs` を 1,000 行以下へ割るなら、`crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表と件数の定数から項目を外す必要がある＝`audit-test-kits`・`audit-placement-follow-residue`・`audit-emo2-boot-frame` と同じ 1 行を分け合う。同じウェーブでこの表に触れるのは 1 本だけ。
+- **優先度の区分**: A（見直しの方針・開発者「とにかく指摘事項は全部直す方針」）。
+- **要件定義のモデル**: Opus（実験コードの中の直し。新しい境目は作らない）。
+- **分割の案**: 外す案なら無し。
