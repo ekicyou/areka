@@ -15,7 +15,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use areka_parsers::shell::Collision;
+use areka_parsers::shell::{Collision, CollisionBounds, CollisionRegion, CollisionShape};
 use bevy_ecs::prelude::Component;
 
 use crate::budget::{Budget, VISIT_BUDGET, surface_rows};
@@ -275,13 +275,39 @@ fn import(
     out.extend(
         list.filter(|r| !own.contains(r.name.as_str()))
             .map(|r| Collision {
-                left: r.left.saturating_add(dx),
-                top: r.top.saturating_add(dy),
-                right: r.right.saturating_add(dx),
-                bottom: r.bottom.saturating_add(dy),
+                shape: shifted(r.shape, dx, dy),
                 ..r
             }),
     );
+}
+
+/// 形 `shape` を (dx, dy) だけ飽和の足し算でずらした形（腕は変えない）。`_` アームを置かない。
+fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape {
+    let bounds = |b: CollisionBounds| CollisionBounds {
+        left: b.left.saturating_add(dx),
+        top: b.top.saturating_add(dy),
+        right: b.right.saturating_add(dx),
+        bottom: b.bottom.saturating_add(dy),
+    };
+    match shape {
+        CollisionShape::Rect(b) => CollisionShape::Rect(bounds(b)),
+        CollisionShape::Ellipse(b) => CollisionShape::Ellipse(bounds(b)),
+        CollisionShape::Circle { x, y, radius } => CollisionShape::Circle {
+            x: x.saturating_add(dx),
+            y: y.saturating_add(dy),
+            radius,
+        },
+        CollisionShape::Polygon(v) => CollisionShape::Polygon(
+            v.into_iter()
+                .map(|(x, y)| (x.saturating_add(dx), y.saturating_add(dy)))
+                .collect(),
+        ),
+        CollisionShape::Region(r) => CollisionShape::Region(CollisionRegion {
+            x: r.x.saturating_add(dx),
+            y: r.y.saturating_add(dy),
+            ..r
+        }),
+    }
 }
 
 #[cfg(test)]
