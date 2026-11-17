@@ -261,7 +261,7 @@
   - _Requirements: 5.1, 5.9, 5.10, 5.11, 5.12, 6.7_
 
 - [ ] 9. 移しただけであることを示す（段 8）
-- [ ] 9.1 前後の比べと静的な確かめをそろえる
+- [x] 9.1 前後の比べと静的な確かめをそろえる
   - 完了の時の `cargo test --workspace --no-fail-fast -- --list` を `target/runtime-crate-split/tests-after.txt` に取り、`: test$` の行の名前の末尾の多重集合を着手の一覧と比べる。差が `emo2_boot_talk_reveals_without_moving_glyphs` −1・`runtime_talk_reveals_without_moving_glyphs` +1・`crash_filter_is_installed_before_the_tests_start` +1 だけであることを対応表で示す（文書のテストが新しく回ったら囲みを `text` にして 0 に戻す）
   - `cargo check --workspace --all-targets` の警告 0。`areka-runtime` の本番が本体を引かないこと（設計の 2.7 の `rg` が 0 件）。`cargo tree -p areka-runtime -e normal` に本体と番人の crate が出ないこと。`Cargo.lock` の差が `areka-runtime` の 1 項目と本体の依存の 1 行だけ。根の `Cargo.toml` の差が無いこと
   - 本番のファイルの差分が可視性・宣言の印・道・説明だけであることを `git diff --stat` と差分の目視で確かめて記録する。`areka-runtime` の lib のテストの実行ファイルが `--list` に現れることを確かめる
