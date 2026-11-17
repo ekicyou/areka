@@ -116,4 +116,4 @@
 - 1.2: `decode_collisionex_tests.rs` とその接続宣言（`decode.rs` の末尾の `#[path]` 形式）は 1.2 で作った。4.1 は同じファイルへ檻を足すだけで、接続宣言を二重に足さない。
 - 3: `doc/COMPAT_ARCHITECTURE.md` §8 の【上書き】の行と `assets.toml` の collision の注記はまだ「前の行を除く」のまま。5.1・5.2 で直す。`fold_merge_tests.rs` の 2 本の檻の名前は文書が参照しているので変えていない。
 - 4.4: クローディアの警告以上は 4 行（まだ働かない形の記録 1 行と `draw-methods-canon` が持つ surface28 の `base` の pattern 3 行）。設計の「ちょうど 1 行」は数え違いで、design.md と 4.4 の文を直した。`draw-methods-canon` が `base` の pattern を描けるようにしたら、この檻の期待を直す（完了の棚卸で brief へ申し送る）。
-- 6.1: クローディアは `OnMouseDragStart` に ` \s[29]` を返し、surface29 には当たり判定が無いので、`OnMouseDragEnd` の Reference4 は 4 回とも空（正しい振る舞い・要件 8.5 は DragStart で満たす）。実機の SendInput はスクリーンセーバー中は届かない（道具に確かめを足した）。
+- 6.1: クローディアは `OnMouseDragStart` に `\0\s[29]\e` を返し、surface29 には当たり判定が無いので、`OnMouseDragEnd` の Reference4 は 4 回とも空（正しい振る舞い・要件 8.5 は DragStart で満たす）。実機の SendInput はスクリーンセーバー中は届かない（道具に確かめを足した）。
