@@ -4,8 +4,8 @@
 //! 切り出したものであり、テスト本文は分割前と同一である。
 
 use super::{
-    Animation, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval, Pattern,
-    decode, lex,
+    Animation, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod, Element,
+    ElementPath, Interval, Pattern, decode, lex,
 };
 
 // --- タスク 4.2: element overlay ＋ collision 矩形の正規化 ---
@@ -106,10 +106,12 @@ fn collision_rect_with_opaque_name_is_normalized() {
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 0,
-            left: 93,
-            top: 62,
-            right: 271,
-            bottom: 130,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 93,
+                top: 62,
+                right: 271,
+                bottom: 130
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );
@@ -168,10 +170,12 @@ animation0.pattern0,overlay,100,0,0,0
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 0,
-            left: 10,
-            top: 20,
-            right: 30,
-            bottom: 40,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 10,
+                top: 20,
+                right: 30,
+                bottom: 40
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );

@@ -4,8 +4,8 @@
 //! 切り出したものであり、テスト本文は分割前と同一である。
 
 use super::{
-    Animation, AppendTarget, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval,
-    Pattern, decode, lex,
+    Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DrawMethod,
+    Element, ElementPath, Interval, Pattern, decode, lex,
 };
 
 // --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
@@ -91,10 +91,12 @@ collision1,80,140,260,300,Bust
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 1,
-            left: 80,
-            top: 140,
-            right: 260,
-            bottom: 300,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 80,
+                top: 140,
+                right: 260,
+                bottom: 300
+            }),
             name: CollisionName::new("Bust".to_string()),
         }]
     );
@@ -111,10 +113,12 @@ fn collision_with_non_numeric_fields_defaults_to_zero() {
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 0,
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );
@@ -131,10 +135,12 @@ fn short_collision_line_defaults_missing_fields() {
         shell.surfaces[0].collisions,
         vec![Collision {
             index: 0,
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0
+            }),
             name: CollisionName::new(String::new()),
         }]
     );
@@ -185,10 +191,12 @@ animation0.pattern0,overlay,2206,0,0,0
         shell.surfaces[1].collisions,
         vec![Collision {
             index: 0,
-            left: 52,
-            top: 38,
-            right: 156,
-            bottom: 80,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 52,
+                top: 38,
+                right: 156,
+                bottom: 80
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );
@@ -256,10 +264,12 @@ animation0.pattern1,overlay,901,4,0,0
         s.collisions,
         vec![Collision {
             index: 0,
-            left: 10,
-            top: 20,
-            right: 30,
-            bottom: 40,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 10,
+                top: 20,
+                right: 30,
+                bottom: 40
+            }),
             name: CollisionName::new("Head".to_string()),
         }]
     );

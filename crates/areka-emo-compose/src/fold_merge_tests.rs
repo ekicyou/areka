@@ -7,7 +7,7 @@
 //! element は両方を足す・animation は前の行が勝つ（後の行は捨てる）・collision は今のまま（後の行が勝つ）。
 //! ファイル名と座標は本テストのための作り物（えみりの資産は写さない）。
 
-use areka_parsers::shell::{Interval, parse};
+use areka_parsers::shell::{CollisionShape, Interval, parse};
 
 use crate::log_capture::capture_logs;
 use crate::world::EmoWorld;
@@ -161,7 +161,10 @@ animation9.pattern1,overlay,201,60,0,0
         collisions(&world, 7),
         vec![(1, "Keep".into()), (0, "New".into())]
     );
-    assert_eq!(face.collisions[1].right, 30, "collision0 は後の行の矩形");
+    assert!(
+        matches!(&face.collisions[1].shape, CollisionShape::Rect(b) if b.right == 30),
+        "collision0 は後の行の矩形"
+    );
 
     // animation9: 前の行が勝つ（interval も pattern も前のまま・後の pattern1 は捨てる）。
     assert_eq!(face.animations.len(), 1);

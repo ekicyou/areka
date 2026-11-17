@@ -347,3 +347,63 @@ fn memo_stops_at_its_budget_and_answers_stay_the_same() {
         "上限の後の面は覚えない"
     );
 }
+
+/// 形ごとの持ち込みのずらし: 全形が飽和の足し算で、腕は変わらない（要件 3.4）。
+#[test]
+fn shifted_moves_every_shape_saturating() {
+    use super::shifted;
+    use areka_parsers::shell::{CollisionBounds, CollisionRegion, CollisionShape};
+    let b = CollisionBounds {
+        left: 1,
+        top: 2,
+        right: i64::MAX,
+        bottom: 4,
+    };
+    let moved = CollisionBounds {
+        left: 11,
+        top: 22,
+        right: i64::MAX,
+        bottom: 24,
+    };
+    assert_eq!(
+        shifted(CollisionShape::Rect(b), 10, 20),
+        CollisionShape::Rect(moved)
+    );
+    assert_eq!(
+        shifted(CollisionShape::Ellipse(b), 10, 20),
+        CollisionShape::Ellipse(moved)
+    );
+    assert_eq!(
+        shifted(
+            CollisionShape::Circle {
+                x: 1,
+                y: i64::MIN,
+                radius: 7
+            },
+            10,
+            -20
+        ),
+        CollisionShape::Circle {
+            x: 11,
+            y: i64::MIN,
+            radius: 7
+        }
+    );
+    assert_eq!(
+        shifted(CollisionShape::Polygon(vec![(0, 0), (5, 6)]), 1, 2),
+        CollisionShape::Polygon(vec![(1, 2), (6, 8)])
+    );
+    let r = CollisionRegion {
+        file: "a.png".into(),
+        red: 1,
+        green: 2,
+        blue: 3,
+        invert: true,
+        x: 0,
+        y: 0,
+    };
+    assert_eq!(
+        shifted(CollisionShape::Region(r.clone()), 3, 4),
+        CollisionShape::Region(CollisionRegion { x: 3, y: 4, ..r })
+    );
+}

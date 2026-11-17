@@ -18,8 +18,8 @@ use areka_emo_atlas::{
 };
 use areka_emo_compose::{BindSet, ComposeMethod, FilmSheet, PatternFrame};
 use areka_parsers::shell::{
-    Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
-    Interval, Pattern, Shell, Surface,
+    Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape, DefRef,
+    DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface,
 };
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -524,10 +524,12 @@ pub(super) fn bind_overlay_surface(x: i64, y: i64) -> Surface {
 fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str) -> Collision {
     Collision {
         index,
-        left,
-        top,
-        right,
-        bottom,
+        shape: CollisionShape::Rect(CollisionBounds {
+            left,
+            top,
+            right,
+            bottom,
+        }),
         name: CollisionName::new(name.to_string()),
     }
 }
@@ -655,14 +657,7 @@ pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
                 balloon_element(1, "fin.png", 0),
                 balloon_element(2, "end.png", 4),
             ],
-            collisions: vec![Collision {
-                index: 0,
-                left: 4,
-                top: 0,
-                right: 8,
-                bottom: 4,
-                name: CollisionName::new("Body".to_string()),
-            }],
+            collisions: vec![hit_coll(0, 4, 0, 8, 4, "Body")],
             animations: Vec::new(),
         },
         Surface {

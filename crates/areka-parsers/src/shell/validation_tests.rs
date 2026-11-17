@@ -18,8 +18,9 @@
 //! - alias:     `KEY,[id,...]` → `SurfaceAlias { key(opaque), ids }`・重複キーは全保持。
 
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
-    ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape,
+    DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias,
+    SurfaceAppend,
 };
 use super::parse;
 
@@ -112,18 +113,22 @@ kero.surface.alias
             collisions: vec![
                 Collision {
                     index: 0,
-                    left: 10,
-                    top: 20,
-                    right: 110,
-                    bottom: 220,
+                    shape: CollisionShape::Rect(CollisionBounds {
+                        left: 10,
+                        top: 20,
+                        right: 110,
+                        bottom: 220,
+                    }),
                     name: CollisionName::new("Head".to_string()),
                 },
                 Collision {
                     index: 1,
-                    left: 30,
-                    top: 40,
-                    right: 130,
-                    bottom: 240,
+                    shape: CollisionShape::Rect(CollisionBounds {
+                        left: 30,
+                        top: 40,
+                        right: 130,
+                        bottom: 240,
+                    }),
                     name: CollisionName::new("Bust".to_string()),
                 },
             ],
@@ -208,10 +213,12 @@ kero.surface.alias
             elements: vec![],
             collisions: vec![Collision {
                 index: 0,
-                left: 52,
-                top: 38,
-                right: 156,
-                bottom: 80,
+                shape: CollisionShape::Rect(CollisionBounds {
+                    left: 52,
+                    top: 38,
+                    right: 156,
+                    bottom: 80,
+                }),
                 name: CollisionName::new("Head".to_string()),
             }],
             animations: vec![Animation {
@@ -417,10 +424,12 @@ kero.surface.alias
         s1000.collisions[0],
         Collision {
             index: 0,
-            left: 93,
-            top: 62,
-            right: 271,
-            bottom: 130,
+            shape: CollisionShape::Rect(CollisionBounds {
+                left: 93,
+                top: 62,
+                right: 271,
+                bottom: 130
+            }),
             name: CollisionName::new("Head".to_string()),
         }
     );
@@ -609,7 +618,10 @@ element0,overlay,tail.png,7,8
     // collision: collisionex 吸収・純 collision のみ残る。
     assert_eq!(s200.collisions.len(), 1, "collisionex が吸収されていない");
     assert_eq!(s200.collisions[0].name.as_str(), "Bust");
-    assert_eq!(s200.collisions[0].left, 30);
+    assert!(matches!(
+        &s200.collisions[0].shape,
+        CollisionShape::Rect(b) if b.left == 30
+    ));
 
     // animation: sometimes は Interval::Other へ忠実転記され、replace/overlay 双方の pattern が
     // method を落とさず残る（overlay フィルタ・fallback-Bind ともに撤去済み・要件 4.6/8.2）。

@@ -196,22 +196,55 @@ impl DrawMethod {
     }
 }
 
-/// collisionN,LEFT,TOP,RIGHT,BOTTOM,NAME（矩形・要件 6.1/6.2）。
-/// ukadoc の順序 始点X/始点Y/終点X/終点Y = left/top/right/bottom。
+/// 当たり判定 1 件（番号・形・名前）。`collision*` と `collisionex*` を同じ型で持つ。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Collision {
-    /// collisionN の N。
+    /// collisionN・collisionexN の N。
     pub index: u32,
-    /// 矩形 左（始点 X）。
-    pub left: i64,
-    /// 矩形 上（始点 Y）。
-    pub top: i64,
-    /// 矩形 右（終点 X）。
-    pub right: i64,
-    /// 矩形 下（終点 Y）。
-    pub bottom: i64,
+    /// 形（collision* は常に矩形）。
+    pub shape: CollisionShape,
     /// 領域名 opaque（Head/Bust 等・要件 6.2）。
     pub name: CollisionName,
+}
+
+/// 当たり判定の形。ukadoc が閉じて定める 5 つの集合なので `#[non_exhaustive]` を付けない
+/// （使い手の match をワイルドカードなしの網羅に保つ）。
+#[derive(Clone, Debug, PartialEq)]
+pub enum CollisionShape {
+    /// 矩形（今当たるのはこの形だけ）。
+    Rect(CollisionBounds),
+    /// 楕円（囲みの長方形）。
+    Ellipse(CollisionBounds),
+    /// 円（中心と半径・負も運ぶ）。
+    Circle { x: i64, y: i64, radius: i64 },
+    /// 多角形（書いた順の頂点）。
+    Polygon(Vec<(i64, i64)>),
+    /// 画像で塗った領域。
+    Region(CollisionRegion),
+}
+
+/// 囲みの長方形（ukadoc の順序 始点X/始点Y/終点X/終点Y = left/top/right/bottom・並べ直さない）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CollisionBounds {
+    pub left: i64,
+    pub top: i64,
+    pub right: i64,
+    pub bottom: i64,
+}
+
+/// `region` の欄と画像を置く位置。
+#[derive(Clone, Debug, PartialEq)]
+pub struct CollisionRegion {
+    /// 書いたまま（区切りも大小文字も変えない・開かない）。
+    pub file: String,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    /// 領域反転（欄が無ければ false）。
+    pub invert: bool,
+    /// 画像を置く位置（読みでは 0,0・持ち込みでずれる）。
+    pub x: i64,
+    pub y: i64,
 }
 
 /// collision 領域名の opaque 中身（意味解釈しない・要件 6.2）。

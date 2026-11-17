@@ -26,9 +26,9 @@ use std::collections::HashMap;
 
 use super::lexer::{Token, heading_text};
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
-    ElementPath, Interval, Pattern, RANGE_WIDTH_CAP, Shell, ShellIssue, SortOrder, Surface,
-    SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionBounds, CollisionName, CollisionShape,
+    DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, RANGE_WIDTH_CAP, Shell,
+    ShellIssue, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 
 /// 1 つのシェルを読む途中の状態: シェル全体の範囲の幅の合計（指摘 6）・今のブレスの見出し・積んだ崩れ。
@@ -257,10 +257,12 @@ fn decode_collisions(body: &[Vec<String>], reading: &mut Reading) -> Vec<Collisi
                 };
                 collisions.push(Collision {
                     index,
-                    left: field_i64(fields, 1),
-                    top: field_i64(fields, 2),
-                    right: field_i64(fields, 3),
-                    bottom: field_i64(fields, 4),
+                    shape: CollisionShape::Rect(CollisionBounds {
+                        left: field_i64(fields, 1),
+                        top: field_i64(fields, 2),
+                        right: field_i64(fields, 3),
+                        bottom: field_i64(fields, 4),
+                    }),
                     // 領域名（field[5]）は opaque・無加工保持（要件 6.2）。
                     name: CollisionName::new(field_string(fields, 5)),
                 });
