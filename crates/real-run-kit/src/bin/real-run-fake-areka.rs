@@ -11,11 +11,14 @@
 //! - `listen-taken`: `AREKA_MCP_PORT` の番号（無ければ空き番号）を先に自分で束ねてから `start`
 //!   （本物の「束ねられなかった」の行）。束ねた口と取っ手は立てたまま次へ。
 //! - `listen-off`: `start(&[])`（本物の「待ち受けない」の行）。
-//! - `listen-drop`: `start` の直後に取っ手を捨てて受け口を閉じ、生き続ける。
+//! - `listen-drop`: `start` の直後に取っ手を捨てて受け口を閉じ、次へ。
 //! - `window`: 表示しない最上位の窓を 1 枚作って知らせを待つ。閉じる知らせで、本物の areka と同じ形の
 //!   受け取りの行（`event="os_close_request"`）と終わり方の行（`event="app_exit" origin=KanadeStopped(Quit)`）を
 //!   出所 `areka::app_exit` で出し、`REAL_RUN_FAKE_MARK` があればそのパスへ `closed` を書いて 0 で終わる。
 //! - `window-deaf`: 同じ窓を作るが、閉じる知らせを無視する。
+//! - `window-linger:<ms>`: 同じ窓を作り、閉じる知らせで受け取りの行だけを出し、最初の知らせから `<ms>` 後に
+//!   終わり方の行を出して 0 で終わる（その間の閉じる知らせにも受け取りの行を出す＝送り直しを数えられる）。
+//! - `sleep:<ms>`: その時間だけ待ってから次へ（窓ができる前に届く閉じる知らせを作る）。
 //! - `smoke`: `AREKA_APP_SMOKE_EXIT_MS` の時間の後に `event="app_exit" origin=Smoke` の行を出して 0 で終わる。
 //! - `exit:<N>`: 終了コード N で終わる。`hang`: 何もせず生き続ける。
 //!
@@ -32,8 +35,9 @@ use tracing_subscriber::EnvFilter;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, MSG, PostQuitMessage,
-    RegisterClassW, WINDOW_EX_STYLE, WM_CLOSE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, KillTimer, MSG,
+    PostQuitMessage, RegisterClassW, SetTimer, WINDOW_EX_STYLE, WM_CLOSE, WM_TIMER, WNDCLASSW,
+    WS_OVERLAPPEDWINDOW,
 };
 use windows::core::w;
 
@@ -54,6 +58,15 @@ const EXIT_TARGET: &str = "areka::app_exit";
 
 /// `window-deaf` のとき真（窓の手続きが閉じる知らせを無視する）。
 static DEAF: AtomicBool = AtomicBool::new(false);
+
+/// `window-linger` の残る時間（ミリ秒・0 なら残らない）。
+static LINGER_MS: AtomicU64 = AtomicU64::new(0);
+
+/// `window-linger` の終わりのタイマーを掛けたら真。
+static LINGER_ARMED: AtomicBool = AtomicBool::new(false);
+
+/// `window-linger` の終わりのタイマーの番号。
+const LINGER_TIMER: usize = 1;
 
 fn main() {
     tracing_subscriber::fmt()
@@ -91,16 +104,17 @@ fn main() {
                 _alive.push(areka_mcp::start(&[port], registry(), None));
             }
             "listen-off" => _alive.push(areka_mcp::start(&[], registry(), None)),
-            "listen-drop" => {
-                drop(areka_mcp::start(
-                    &areka_mcp::read_port_candidates(),
-                    registry(),
-                    None,
-                ));
-                hang();
-            }
-            "window" => window(false),
-            "window-deaf" => window(true),
+            "listen-drop" => drop(areka_mcp::start(
+                &areka_mcp::read_port_candidates(),
+                registry(),
+                None,
+            )),
+            "window" => window(false, 0),
+            "window-deaf" => window(true, 0),
+            "window-linger" => window(false, arg.parse().unwrap_or_else(|_| bad(step))),
+            "sleep" => std::thread::sleep(Duration::from_millis(
+                arg.parse().unwrap_or_else(|_| bad(step)),
+            )),
             "smoke" => {
                 let ms = std::env::var("AREKA_APP_SMOKE_EXIT_MS")
                     .ok()
@@ -208,9 +222,11 @@ fn registry() -> ToolRegistry {
     registry
 }
 
-/// 表示しない最上位の窓を作り、知らせを回す。閉じる知らせを受けたら（`deaf` でなければ）0 で終わる。
-fn window(deaf: bool) {
+/// 表示しない最上位の窓を作り、知らせを回す。閉じる知らせを受けたら（`deaf` でなければ・`linger_ms` が
+/// 0 でなければその後に）0 で終わる。
+fn window(deaf: bool, linger_ms: u64) {
     DEAF.store(deaf, Ordering::SeqCst);
+    LINGER_MS.store(linger_ms, Ordering::SeqCst);
     // SAFETY: この関数のスレッドだけが窓を作って回す。引数はすべてこの場で作った有効な値。
     unsafe {
         let instance = GetModuleHandleW(None).expect("自分のモジュールの取っ手");
@@ -260,20 +276,39 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             kind = "ghost",
             "[os_close] OS の閉鎖要求をメニューの「終了」と同じ終了要求として kanade へ送る"
         );
-        tracing::info!(
-            target: EXIT_TARGET,
-            event = "app_exit",
-            origin = %"KanadeStopped(Quit)",
-            closed = 1usize,
-            "[quit_app] 全窓を閉じ、終了を指示した"
-        );
-        if let Some(mark) = std::env::var_os("REAL_RUN_FAKE_MARK") {
-            std::fs::write(&mark, "closed").expect("目印のファイルを書けなかった");
+        let linger = LINGER_MS.load(Ordering::SeqCst);
+        if linger == 0 {
+            exit_window();
+        } else if !LINGER_ARMED.swap(true, Ordering::SeqCst) {
+            // 最初の知らせでだけタイマーを掛ける（残る間の知らせは上の受け取りの行だけ）。
+            let ms = u32::try_from(linger).unwrap_or(u32::MAX);
+            // SAFETY: 窓を回しているスレッドの中から、その窓へ掛ける。
+            unsafe { SetTimer(Some(hwnd), LINGER_TIMER, ms, None) };
         }
-        // SAFETY: 窓を回しているスレッドの中から呼ぶ。
-        unsafe { PostQuitMessage(0) };
+        return LRESULT(0);
+    }
+    if msg == WM_TIMER && wparam.0 == LINGER_TIMER {
+        // SAFETY: 窓を回しているスレッドの中から、掛けたタイマーを外す。
+        let _ = unsafe { KillTimer(Some(hwnd), LINGER_TIMER) };
+        exit_window();
         return LRESULT(0);
     }
     // SAFETY: 受けた引数をそのまま既定の手続きへ渡す。
     unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+}
+
+/// 終わり方の行を出し、目印を書き、知らせの輪を終える（`window`・`window-linger` の終わり）。
+fn exit_window() {
+    tracing::info!(
+        target: EXIT_TARGET,
+        event = "app_exit",
+        origin = %"KanadeStopped(Quit)",
+        closed = 1usize,
+        "[quit_app] 全窓を閉じ、終了を指示した"
+    );
+    if let Some(mark) = std::env::var_os("REAL_RUN_FAKE_MARK") {
+        std::fs::write(&mark, "closed").expect("目印のファイルを書けなかった");
+    }
+    // SAFETY: 窓を回しているスレッドの中から呼ぶ。
+    unsafe { PostQuitMessage(0) };
 }

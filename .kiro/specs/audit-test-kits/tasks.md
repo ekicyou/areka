@@ -165,7 +165,7 @@
   - 完了の姿: 5 本が緑で、`McpError` の腕を外すと最初の 1 本が赤（`exit_grace` より速く返る・続く呼び出しが成功、の主張を含む）。`cargo test -p real-run-kit` が緑で、範囲の外の `McpError` を受ける所（`emo2_real_run/common.rs`・`emo2_mcp_real_run.rs`）が書き換えなしで `cargo build -p areka --tests` を通る
   - _Dispatch: standard — 誤りの答えの分け方と番号の読みの新しい枝_
   - _Requirements: 3.1, 3.2, 4.1, 4.4, 6.2, 7.6, 7.7_
-- [ ] 5.3 取っ手の破棄と閉じ方と証拠の行を直す（R2: 6 の evidence 側・9・27・29・32 の real-run-kit 側）
+- [x] 5.3 取っ手の破棄と閉じ方と証拠の行を直す（R2: 6 の evidence 側・9・27・29・32 の real-run-kit 側）
   - 6: `evidence.rs` の `CREATE_TRIES`・`create_with` と空かどうかの確かめを消し（1.1 の一意の作り直しに任せる）、`evidence_tests.rs` の 2 本を消す
   - 9: `stop_quietly` を `stop_on_drop` に替える（design.md「取っ手の破棄」の流れ: 送り直しつつ締切まで待つ → 力ずくで止めて回収 → panic の途中なら ASCII の 1 行・違えば理由を書いて panic）。`RunDirs` は unwind の中で証拠を残す
   - 27: 偽の子に `sleep:<ms>` と `window-linger:<ms>` の 2 つの一歩を足す（範囲の中のテストの道具・新しい機能に数えない）
@@ -230,3 +230,4 @@
   - 5.1 の残り（6.1 のかけ直しで見る）: D2 のテストは `RELIED_TARGETS.iter().zip(WORDS)` で、出所が増えると黙って飛ばす（数の一致の確かめが無い）
   - 5.2: 較正: `ServiceError::McpError` の腕を外す → `an_mcp_error_reply_is_refused_on_the_same_link` が赤（`Unreachable` になる）。`spawn` を `self.mcp_port.unwrap_or_else(free_port)` に戻す → `an_env_override_of_the_mcp_port_is_the_port_the_kit_talks_to` が赤。読めない上書きを黙って `.mcp_port` に落とす → `an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint` が赤。猶予の `.min(end)` を外す・生きた子の枝で `ChildExited` を返す → `a_dropped_server_with_a_living_child_is_unreachable_within_the_grace` が赤。`not_found_reason` が相手の名を落とす → `another_server_answering_is_named_in_the_reason` が赤。消す前の grep: `Waits` の使い手は real-run-kit の 9 だけ（`areka-impl-watch` と `doc/impl-watch.md` の当たりは別の語）。範囲の外の `McpError` を受ける 2 か所は書き換えなしで組める
   - 5.2 の残り（6.1 のかけ直しで見る）: `real-run-kit/src/output_tests.rs` の偽の待受行が本物の形（`url=…/api/mcp/v1`）でない
+  - 5.3: 較正: 破棄の panic を外す（いつも panic の途中の扱い）→ `dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence` が赤。送り直しを外す → `a_close_sent_before_the_window_exists_is_resent` が赤（締切切れ）。受け取りの後も送り直す → `no_close_is_resent_after_the_acknowledgement` が赤（受け取りの行 2）。29 は直す前の `dropped_listener_is_unreachable` が 61.9 秒で締切切れ（赤）。消す前の grep: 消したテスト `non_empty_handed_folder_is_neither_used_nor_deleted`・`non_empty_folders_up_to_the_limit_fail` は定義 1 だけ、`CREATE_TRIES` は evidence 4・本 spec の文書 5、`create_with` は evidence 4・本 spec 4・completed 1（ほかの 2 は同じ名の別の関数）、`stop_quietly` は close・run 3・本 spec 8・completed 4。範囲の外の、`close()`／`wait_exit()` を呼ばずに生きた子の取っ手を捨てる呼び手は 0（`crates/areka/tests` の 7 ファイル）。新しい端末の行を字面で読む `.ps1`・`.py` は 0。`doc/testing.md` は 71・75・163 と、写しの失敗の行を引く 166 を直した

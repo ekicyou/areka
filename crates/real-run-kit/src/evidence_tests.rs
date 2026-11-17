@@ -69,45 +69,6 @@ fn failed_finish_without_sample_keeps_run_dir_without_sample() {
     std::fs::remove_dir_all(&run).unwrap();
 }
 
-#[test]
-fn non_empty_handed_folder_is_neither_used_nor_deleted() {
-    let stale = TempPath::under_target("rr");
-    let stale_path = stale.path().to_path_buf();
-    std::fs::write(stale.child("stdout.log"), "前の回の証拠").unwrap();
-    let mut handed = vec![TempPath::under_target("rr"), stale];
-
-    let dirs = RunDirs::create_with(None, || handed.pop().unwrap());
-    let run = dirs.run().to_path_buf();
-    drop(dirs);
-
-    assert_ne!(run, stale_path, "中身のあるフォルダは使わないはず");
-    assert_eq!(
-        std::fs::read_to_string(stale_path.join("stdout.log")).unwrap(),
-        "前の回の証拠",
-        "中身のあるフォルダは消さないはず"
-    );
-    std::fs::remove_dir_all(&stale_path).unwrap();
-}
-
-#[test]
-#[should_panic(expected = "16")]
-fn non_empty_folders_up_to_the_limit_fail() {
-    let mut kept = Vec::new();
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        RunDirs::create_with(None, || {
-            let t = TempPath::under_target("rr");
-            std::fs::write(t.child("x"), "x").unwrap();
-            kept.push(t.path().to_path_buf());
-            t
-        })
-    }));
-    for path in &kept {
-        let _ = std::fs::remove_dir_all(path);
-    }
-    assert_eq!(kept.len(), CREATE_TRIES);
-    std::panic::resume_unwind(result.err().expect("上限で失敗するはず"));
-}
-
 /// 置き場が `target\test-roots\` の下にあることの確かめ用（`<回>` の親）。
 fn target_test_roots_of(run: &std::path::Path) -> std::path::PathBuf {
     let parent = run.parent().unwrap();

@@ -1,7 +1,8 @@
 //! 走りの取っ手（Run）・既定の時間・出力の読み口・破棄の順（要件 1.8・3.2〜3.6・4.2・4.9・5.1〜5.5）。
 //!
 //! 待ち・呼び出し・閉じ方は下の段（output・mcp・close）に任せ、既定の時間の各欄を引数として渡す。
-//! 破棄では、子が生きていれば静かに閉じてから（5.5）、欄の破棄として回の置き場が残すか消すかを決める。
+//! 破棄では、子が生きていれば閉じてから（5.5・閉じずに止めたら panic＝9）、欄の破棄として回の置き場が
+//! 残すか消すかを決める。
 
 use std::path::{Path, PathBuf};
 use std::process::Child;
@@ -207,16 +208,16 @@ impl Run {
 }
 
 impl Drop for Run {
-    /// ⑴ 子が生きていれば静かに閉じる（締切で止める・panic しない＝5.5）。⑵ この本体の後に欄が
-    /// 破棄され、`RunDirs` が残すか消すかを決める（子がファイルを掴んだまま複写・削除しない）。
+    /// ⑴ 子が生きていれば閉じる知らせで閉じる（締切で止めたら、panic の途中でなければ panic＝9）。
+    /// ⑵ この本体の後に（本体の panic の unwind の中でも）欄が破棄され、`RunDirs` が残すか消すかを
+    /// 決める（子がファイルを掴んだまま複写・削除しない）。
     fn drop(&mut self) {
         if self.ended.is_some() {
             return;
         }
         let files = [self.stdout.as_path(), self.stderr.as_path()];
-        let l = self.limits;
-        // 既に終わっていれば、stop_quietly は送らずに回収して戻る。
-        close::stop_quietly(&mut self.child, files, l.deadline, l.poll, l.close_retry);
+        // 既に終わっていれば、stop_on_drop は送らずに回収して戻る。
+        close::stop_on_drop(&mut self.child, files, &self.limits);
     }
 }
 

@@ -180,6 +180,45 @@ fn drop_closes_running_window() {
     assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
 }
 
+/// 9: `close()` も `wait_exit()` も呼ばずに捨てた取っ手の子が閉じる知らせに答えなければ、破棄が子を止めて
+/// panic し、その unwind の中で回の置き場（証拠）が残る。
+#[test]
+fn dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence() {
+    let run = fake("window-deaf").deadline(Duration::from_secs(2)).spawn();
+    let (pid, dir) = (run.pid(), run.run_dir().to_path_buf());
+    let err = catch_unwind(AssertUnwindSafe(|| drop(run))).expect_err("破棄が panic するはず");
+    let kept = dir.join("stdout.log").is_file();
+    let _ = std::fs::remove_dir_all(&dir);
+    let text = panic_message(&*err);
+    assert!(
+        kept,
+        "閉じ忘れて止めた回の証拠が残っていない: {}",
+        dir.display()
+    );
+    assert!(text.contains("wait_exit() も呼ばずに"), "{text}");
+    assert!(text.contains(&format!("PID {pid}")), "{text}");
+    assert!(!alive(pid), "破棄の後も子（PID {pid}）が生きている");
+}
+
+/// 27: 窓ができる前に届いた閉じる知らせは送り直す（最初の送りは窓の無い子に届かない）。
+#[test]
+fn a_close_sent_before_the_window_exists_is_resent() {
+    let mut run = fake("sleep:1500;window")
+        .deadline(Duration::from_secs(10))
+        .spawn();
+    assert_eq!(run.close().by, EndedBy::UserClose, "{}", run.output());
+}
+
+/// 27: 受け取りの行が出た後は送り直さない（子は受け取ってから 2.5 秒残り、その間の知らせにも行を出す）。
+#[test]
+fn no_close_is_resent_after_the_acknowledgement() {
+    let mut run = fake("window-linger:2500").spawn();
+    assert_eq!(run.close().by, EndedBy::UserClose, "{}", run.output());
+    let out = run.stdout();
+    let acks = out.matches("event=\"os_close_request\"").count();
+    assert_eq!(acks, 1, "受け取りの行がちょうど 1 行でない:\n{out}");
+}
+
 /// 9.1: 2 つの走りを同時に立てると、置き場が別（空きの番号が別であることは OS が保証しないので見ない）。
 #[test]
 fn two_runs_at_once_are_separate() {

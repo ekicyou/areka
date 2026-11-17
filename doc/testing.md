@@ -68,11 +68,11 @@ assert_eq!(ended.by, EndedBy::UserClose, "{}", run.output());
 - `run.close()` は利用者と同じ閉じ方（閉じる知らせ）で閉じる。答えを得たら保険の自動終了を待たずにこれで閉じる。
 - `run.wait_exit()` は閉じる知らせを送らず、子が自分で終わるのを待つ。保険の自動終了や、ゴーストの台本からの終了を確かめる試験で使う。
 
-どちらも締切までに終わらなければ、子を止めて回収してから panic する。返す `Ended` の `status` が終了コード、`by` が終わり方（`EndedBy::UserClose`＝利用者と同じ閉じ方・`SafetyExit`＝保険の自動終了・`Other(..)`＝ほかの出所・`Unlogged`＝終わり方の行が無い）。2 度目からは同じ答えを返す。どちらも呼ばずに取っ手を捨てると、窓口が静かに閉じる（締切で止めても panic しない）。
+どちらも締切までに終わらなければ、子を止めて回収してから panic する。返す `Ended` の `status` が終了コード、`by` が終わり方（`EndedBy::UserClose`＝利用者と同じ閉じ方・`SafetyExit`＝保険の自動終了・`Other(..)`＝ほかの出所・`Unlogged`＝終わり方の行が無い）。2 度目からは同じ答えを返す。どちらも呼ばずに取っ手を捨てると、窓口が閉じる知らせで閉じる。締切までに終わらず子を止めたときは、理由を書いて panic する（閉じ忘れて子を止めた回は赤になり、証拠が残る）。既に別の失敗で panic している途中なら panic を重ねず、標準エラーに `real-run-kit: stopped child <番号> that did not close within <締切> (dropped while panicking)` の 1 行を出す。
 
 ### 残した証拠の場所と読み方
 
-回の置き場は `target\test-roots\areka-rr-<プロセスの番号>-<連番>\` に作る。成功した回は消え、落ちた回だけが残り、標準エラーに「落ちた回の証拠を残しました: <場所>」の 1 行が出る。中身は次のとおり。
+回の置き場は `target\test-roots\areka-rr-<プロセスの番号>-<連番>\` に作る。成功した回は消え、落ちた回だけが残り、標準エラーに `real-run-kit: kept failed run: <場所>` の 1 行が出る（ASCII でない字は `\u{XXXX}` の形で出る）。中身は次のとおり。
 
 | 名前 | 中身 |
 |---|---|
@@ -160,10 +160,10 @@ emo2_first_load_repeat: condition=basic runs=20 ok=19 load_failed=1 other_failed
 
 落ちた回の置き場は消えずに残る（中身は上の「残した証拠の場所と読み方」）。次の順に読む。
 
-1. 置き場を見つける。くり返しなら落ちた回の行の `kept=` に、件 1 の試験なら標準エラーの「落ちた回の証拠を残しました: <場所>」の行に場所が出る。くり返しの赤の文の終わりにも、落ちた回の一覧が並ぶ
+1. 置き場を見つける。くり返しなら落ちた回の行の `kept=` に、件 1 の試験なら標準エラーの `real-run-kit: kept failed run: <場所>` の行に場所が出る。くり返しの赤の文の終わりにも、落ちた回の一覧が並ぶ
 2. `stderr.log` の `[helper]` の行を読む。`[helper] SHIORI 初期化の入口: ` の行で仲介が SHIORI のどの入口を呼んだかが分かり、`[helper] LOAD 失敗（観測・ack[0]）: ` の行で失敗の訳が分かる。訳が `LoadReturnedFalse { last_error: N }` なら、`N` は SHIORI の LOAD が 0 を返した直後に読んだ OS の最後のエラーの値。DLL がこの値を残す約束は無いので、手がかりとしてだけ読む（5＝アクセス拒否・32＝共有違反なら、ファイルの取り合いを疑う。0 なら手がかり無し）
 3. `stdout.log` の `event="connect_failed"` の行と、その前後を読む（areka が SHIORI とつなげなかった時刻と、その前に起きていたこと）
-4. 写しの中の SHIORI 自身の記録 `sample\ghost\emo2\ghost\master\profile\pasta\logs\` を読む。標準エラーに「落ちた回の検体の写しを複写できませんでした」の行が出ていれば、写しは途中までしか残っておらず、この記録の最後が欠けている
+4. 写しの中の SHIORI 自身の記録 `sample\ghost\emo2\ghost\master\profile\pasta\logs\` を読む。標準エラーに `real-run-kit: could not copy the failed run's sample: <元> -> <先> (<理由>)` の行が出ていれば、写しは途中までしか残っておらず、この記録の最後が欠けている
 
 #### 件 2（最初の LOAD の失敗）の結論
 

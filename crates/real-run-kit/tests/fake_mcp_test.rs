@@ -84,10 +84,9 @@ fn listen_off_is_listen_failed() {
 }
 
 /// 4.7: 待受の直後に受け口を閉じて生き続ける子は、つながらない（子の終わりではない）。
-/// 子は窓を持たないので、破棄の締切が短くなるよう締切を縮める。
 #[test]
 fn dropped_listener_is_unreachable() {
-    let mut run = fake("listen-drop").deadline(Duration::from_secs(5)).spawn();
+    let mut run = fake("listen-drop;window").spawn();
     let port = run.mcp_port();
     match run.call("echo", "{}") {
         Err(McpError::Unreachable { target, .. }) => {
@@ -95,6 +94,7 @@ fn dropped_listener_is_unreachable() {
         }
         other => panic!("Unreachable のはず: {other:?}"),
     }
+    close_ok(run);
 }
 
 /// 4.8: 答える前に終わる子は、子の終わりと終了コード。

@@ -18,7 +18,7 @@ use real_run_kit::{EndedBy, Launch};
 /// 子のプロセスで落ちる筋書きを走らせる印。
 const CHILD_FLAG: &str = "REAL_RUN_EVIDENCE_CHILD";
 /// 窓口が残した場所を名指す行の頭（evidence.rs の `finish`）。
-const KEPT_HEAD: &str = "落ちた回の証拠を残しました: ";
+const KEPT_HEAD: &str = "real-run-kit: kept failed run: ";
 
 /// ワークスペースの `target\test-roots`（temp-path-kit の置き場と同じ決め方: このクレートの 2 つ上の根）。
 /// `CARGO_TARGET_DIR` や `--target` で成果物の場所が変わっても、窓口の置き場はここに決まっている。

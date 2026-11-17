@@ -10,6 +10,7 @@ use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
 
 use crate::output::{self, WaitEnd};
+use crate::run::Limits;
 
 /// 閉じる知らせを受け取った印の行（kanade と結線した起動／未結線の起動の直ちの終了・ほかの出所の先着）。
 const ACK: [&str; 2] = ["event=\"os_close_request\"", EXIT_LINE];
@@ -97,21 +98,28 @@ pub(crate) fn close(
     }
 }
 
-/// 破棄から呼ぶ形（5.5）: `close` と同じ手順で、締切で止めても panic せず、止めた旨を標準エラーへ 1 行書く。
-pub(crate) fn stop_quietly(
-    child: &mut Child,
-    files: [&Path; 2],
-    deadline: Duration,
-    poll: Duration,
-    close_retry: Duration,
-) {
-    if let Err(stop) = close_or_kill(child, files, deadline, poll, close_retry) {
+/// 破棄から呼ぶ形（5.5・9）: `close` と同じ手順で閉じる知らせを送り直しつつ締切まで待つ。締切で子を止めて
+/// 回収したら、panic の途中なら ASCII の 1 行を標準エラーへ書くだけ（二重の panic にしない）、違えば理由を
+/// 書いて panic する（閉じ忘れて子を止めた回を緑にしない）。
+pub(crate) fn stop_on_drop(child: &mut Child, files: [&Path; 2], limits: &Limits) {
+    let Err(stop) = close_or_kill(
+        child,
+        files,
+        limits.deadline,
+        limits.poll,
+        limits.close_retry,
+    ) else {
+        return;
+    };
+    if std::thread::panicking() {
         eprintln!(
-            "real-run-kit: 締切 {deadline:?} の内に閉じる知らせで終わらなかった子（PID {}）を止めた（最後の閉じる知らせ: {}・出力: {} と {}）",
-            stop.pid,
-            stop.last_send,
-            files[0].display(),
-            files[1].display(),
+            "real-run-kit: stopped child {} that did not close within {:?} (dropped while panicking)",
+            stop.pid, limits.deadline,
+        );
+    } else {
+        panic!(
+            "{}\nclose() も wait_exit() も呼ばずに取っ手を捨てた（破棄の閉じる知らせで子が終わらなかった）",
+            stop.failure("破棄", limits.deadline, files),
         );
     }
 }
