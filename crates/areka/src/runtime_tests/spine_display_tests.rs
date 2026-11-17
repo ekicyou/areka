@@ -1,9 +1,9 @@
-use super::test_support::{opaque_count, variant_name};
+use super::test_support::{drain_settled, opaque_count, variant_name};
 use std::cell::Cell;
 
 use super::{
     BindSet, Duration, PresentCommand, Progress, SpineHarness, TargetId, balloon_target,
-    settle_bounded, shell_target, wait_until,
+    shell_target, wait_until,
 };
 
 /// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
@@ -267,12 +267,7 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     // scripted OnBoot talk を Tick 注入で駆動し、受信 PresentCommand を 2 件（Hide→ShowSurface）集め、
     // 続けて残りを汲み切る（2 件で汲むのを止めると 3 件目を見ず、「ちょうど 2 件」が空振りする）。
     let mut received = tick_and_collect(&mut harness, 2);
-    settle_bounded(|| {
-        let got = harness.wiring.drain_received();
-        let n = got.len();
-        received.extend(got);
-        n
-    });
+    drain_settled(&mut harness, &mut received);
     assert_eq!(
         received.len(),
         2,
@@ -404,12 +399,7 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
     // settle 後段（回収だけ・時刻は進めない）: 残余（万一の balloon 指令）を、反復回数ではなく
     // 壁時計の最小持続と連続空観測で有界に回収する（要件 4.2・4.5）。負荷下でも回収機会が
     // 縮まないので、この不在主張が空虚な緑になりにくい。
-    settle_bounded(|| {
-        let got = harness.wiring.drain_received();
-        let n = got.len();
-        received.extend(got);
-        n
-    });
+    drain_settled(&mut harness, &mut received);
 
     // R5.5: 受信列に balloon 表示対象（奇数 TargetId）宛は一切現れない（`\b` 由来面切替なしで完走）。
     for cmd in &received {

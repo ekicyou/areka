@@ -6,8 +6,8 @@ use areka_parsers::charset::decode;
 use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
 use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
+// bake の WIC デコードに要る COM は、テストのプロセスの寿命の MTA（`crash_report_test_support`）が持つ。
 use super::*;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
@@ -26,11 +26,6 @@ use crate::target_map::scope_of;
 /// `bake` は WIC で PNG をデコードするため COM 初期化が要る（GPU は不要・attach なし）。
 #[test]
 fn build_boot_assets_from_emo2_fixture() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
@@ -200,11 +195,6 @@ fn build_boot_assets_from_emo2_fixture() {
 /// 一致は `build_boot_assets_from_emo2_fixture` が scope ごとの再構築突合で担保する。
 #[test]
 fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -239,11 +229,6 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
 /// 先頭 scope だけを載せる旧形（`{"0"}`）はこの檻で落ちる。
 #[test]
 fn boot_seam_transfers_every_balloon_scope_as_actor_key() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let asset_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
@@ -308,11 +293,6 @@ fn actor_keyed_balloon_tables_maps_every_scope() {
 /// 空写像はループ完全不活性と等価である。
 #[test]
 fn build_boot_assets_yields_empty_balloon_table_map_for_no_scopes() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[], 96, 96)
         .expect("scope 集合が空でも組立は成功する（縮退許容）");
 
@@ -337,11 +317,6 @@ fn build_boot_assets_yields_empty_balloon_table_map_for_no_scopes() {
 /// することを固定する（R2.1／R2.2／R2.5）。共有 1 本のモデルを全 scope へ配る実装はこの檻で落ちる。
 #[test]
 fn build_boot_assets_holds_per_scope_balloon_models() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -414,11 +389,6 @@ fn build_boot_assets_holds_per_scope_balloon_models() {
 /// `info!` で出す）が 0 でないことで確かめる。
 #[test]
 fn build_boot_assets_derives_balloon_background_from_face_zero_origin_pixel() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     let (boot, lines) = capture_lines(LineFormat::LevelTargetFields, || {
         build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
             .expect("emo2 fixture の BootAssets 組立は成功する")
@@ -508,11 +478,6 @@ fn pre_spec_balloon_model(balloon_root: &Path) -> BalloonModel {
 /// 全 scope が 1 本のモデルへ畳み戻れば、あるいは scope 0 の上書き層が相方側へずれれば落ちる。
 #[test]
 fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——適用前の固定名採寸が
     /// 返していた値と同一（`areka_placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
     const SAKURA_FACE0: (u32, u32) = (400, 224);
@@ -564,11 +529,6 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
 /// で存在確認済みの (カテゴリ, パーツ)→id 対）。未宣言の組は `None`（捏造しない・R3.7）。
 #[test]
 fn build_boot_assets_bind_resolver_resolves_emo2_names() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
@@ -597,11 +557,6 @@ fn build_boot_assets_bind_resolver_resolves_emo2_names() {
 /// （bindopt 1.2・R7.1）。
 #[test]
 fn build_boot_assets_bind_resolver_carries_mustselect() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
@@ -639,11 +594,6 @@ fn build_boot_assets_bind_resolver_carries_mustselect() {
 /// 通さない——ここで検査するのは「渡した値が変質せず attach 相まで届くこと」だけである。
 #[test]
 fn build_boot_assets_carries_supplied_author_dpi() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 192, 144)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -728,11 +678,6 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 /// `bake` は WIC で PNG をデコードするため COM 初期化が要る（本ファイルの既存檻と同じ）。
 #[test]
 fn boot_read_honours_the_files_own_charset_declaration() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
     // 一時パスは共通窓口 `temp-path-kit` から受け取る（プロセス間で一意・Drop で中身ごと消える）。
     // 自前に組むと `std::env::temp_dir` の迂回を見張る番人が赤になる。
     let root = TempPath::new("areka-boot-assets-charset");

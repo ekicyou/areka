@@ -15,11 +15,10 @@
 // =============================================================================
 
 use super::*;
-use crate::frame::test_support::count_level;
+use crate::frame::test_support::{capture_logs, count_level};
 use crate::source_text_test_support::{code_only, index_of};
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 // ---------------------------------------------------------------- 道具立て
@@ -90,12 +89,6 @@ fn accepted_set() -> ZOrderDirective {
     ZOrderDirective::Set {
         tokens: vec!["1".to_string(), "0".to_string()],
     }
-}
-
-/// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
 }
 
 // ---------------------------------------------------------------- 受理する 2 組

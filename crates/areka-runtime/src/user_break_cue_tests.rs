@@ -11,11 +11,10 @@
 
 use super::*;
 use crate::consumer_ledger::test_support::carrier_cue;
-use crate::frame::test_support::count_level;
+use crate::frame::test_support::{capture_logs, count_level};
 use areka_ghost::sink::BootCueSink;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
 
 // ---------------------------------------------------------------- 道具立て
@@ -29,12 +28,6 @@ fn sink() -> (NoUserBreakCueSink, Receiver<NoUserBreakSignal>) {
 /// 受信端に溜まった合図を届いた順に取り出す。
 fn drain(rx: &Receiver<NoUserBreakSignal>) -> Vec<NoUserBreakSignal> {
     rx.try_iter().collect()
-}
-
-/// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
-fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines
 }
 
 // ---------------------------------------------------------------- 受理

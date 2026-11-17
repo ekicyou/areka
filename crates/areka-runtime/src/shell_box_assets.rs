@@ -16,7 +16,7 @@ use areka_seriko::{SurfaceResolver, SurfaceTarget};
 use bevy_ecs::world::World;
 
 /// 文字の層へ渡す箱の束（シェル 1 つぶん）。既定値は箱の無いシェル（空の表・探す場所なし）。
-// 要件 2.5: 公開の `BootAssets::boxes`・`ShellAssets::boxes` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `BootAssets::boxes`・`ShellAssets::boxes` が名指すので開ける
 #[derive(Default)]
 pub struct ShellBoxAssets {
     /// 箱の定義の表とサーフェス番号ごとの置き場所の表（`ShellTarget::boxes`）。

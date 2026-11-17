@@ -2,8 +2,8 @@
 //!
 //! 起動の結線は「窓の側」（資産・presenter・文字の層・seriko・loop ticker・`RuntimeWiring`）と
 //! 「実行系の側」（`GhostRuntime`）の 2 段に分かれる。窓の側が受け口の送出端の束
-//! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から 13 本の sink を組んで実行系を
-//! 起こす。受信端が窓の側に無い線（readme・中断を禁じる旗・ゴーストの切替・シェル／バルーンの
+//! [`CueSinkSources`] を 1 度組み、[`boot_runtime`] が束の複製から sink（並びは
+//! [`runtime_sinks`]）を組んで実行系を起こす。受信端が窓の側に無い線（readme・中断を禁じる旗・ゴーストの切替・シェル／バルーンの
 //! 切替・読み直し）はここで新しく張り、実行系が成立したときだけ World へ据える——失敗したとき
 //! World は変わらない。
 
@@ -103,8 +103,8 @@ fn runtime_sinks(
     (sinks, lines)
 }
 
-/// 実行系の側の起動: 束の複製から 13 本の sink を組んで `boot_with_origin` を呼び、成立したら
-/// 受信端を World へ据える。`Err` のとき World は変わっていない。
+/// 実行系の側の起動: 束の複製から sink（並びは [`runtime_sinks`]）を組んで `boot_with_origin` を
+/// 呼び、成立したら受信端を World へ据える。`Err` のとき World は変わっていない。
 ///
 /// 停止通知の送出端は引数 `kanade_stop` をそのまま kanade へ渡す（ここでは channel を作らない）。
 /// 起動の由来は kanade の起動の根（`OnBoot`／`OnGhostChanged`／読み直し）の選択へ渡る。

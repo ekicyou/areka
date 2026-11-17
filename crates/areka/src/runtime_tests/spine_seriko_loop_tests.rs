@@ -1,9 +1,9 @@
-use super::test_support::{bump_char_window_dpi, opaque_count, variant_name};
+use super::test_support::{bump_char_window_dpi, drain_settled, opaque_count, variant_name};
 use std::cell::Cell;
 
 use super::{
-    Duration, LoopRng, PresentCommand, Progress, SpineHarness, run_dpi_phase, settle_bounded,
-    shell_target, wait_until,
+    Duration, LoopRng, PresentCommand, Progress, SpineHarness, run_dpi_phase, shell_target,
+    wait_until,
 };
 
 /// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・`areka-seriko` の `looper_tests.rs` の `always_fire` と同旨）。
@@ -24,7 +24,8 @@ fn always_fire_rng() -> LoopRng {
 // あわせて R3.4「fixture 既定 OFF」の対照——`\![bind]` を通さない既定では always_fire でも bind
 // ゲートが抽選を塞ぎ **一切発行しない**——を負の檻として固定する（design Testing Strategy E2E-1/2）。
 //
-// 全て決定論（実 emo2 asset fixture＋固定注入 rng＋scripted send_tick・sleep 不使用・Close→join）。
+// 全て決定論（実 emo2 asset fixture＋固定注入 rng＋scripted send_tick・Close→join）。
+// 時刻は注入で決まり、待ちは poll-backoff の短い sleep を挟む（`drive_shell_shown` の doc）。
 // 実 SHIORI/pasta 非依存（surface は注入 cue で表示・実機/実 DPI サインオフは task 10.3）。
 // ===========================================================================
 
@@ -140,7 +141,7 @@ fn drive_shell_shown(
 }
 
 /// `now_ms` の seriko tick を 1 発直接注入し、最初の `PresentCommand` が rx へ届くまで有界
-/// スピンし（`wait_until` の密 yield → backoff sleep）、続けて [`settle_bounded`] で残りを汲み切って
+/// スピンし（`wait_until` の密 yield → backoff sleep）、続けて [`drain_settled`] で残りを汲み切って
 /// から「ちょうど 1 件」を確かめて返す。golden の各コマ遷移 tick は変化 1 件を発行する（6.1/6.2）ため、
 /// この直列注入→回収で発行列の順序と内容を決定論的に照合できる。最初の 1 件で汲むのを止めると 2 件目を
 /// 見ないので、余分な指令が出る退行を通してしまう。届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`wait_until`] の
@@ -161,12 +162,7 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
         },
     )
     .inspect_err(|failure| eprintln!("{failure}"));
-    settle_bounded(|| {
-        let got = harness.wiring.drain_received();
-        let n = got.len();
-        buf.extend(got);
-        n
-    });
+    drain_settled(harness, &mut buf);
     assert_eq!(
         buf.len(),
         1,
@@ -319,12 +315,7 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
         // 有界 settle drain（spine_s4 の負検証と同流儀）: 打ち切りは反復回数ではなく壁時計の
         // 最小持続と連続空観測で決まる（要件 4.2・4.5）。時刻注入は外側のこの `for` が担い、
         // ヘルパは回収しかしない＝時刻が観測を追い越さない（要件 4.3）。
-        settle_bounded(|| {
-            let got = harness.wiring.drain_received();
-            let n = got.len();
-            emitted.extend(got);
-            n
-        });
+        drain_settled(&mut harness, &mut emitted);
     }
     // R3.4 の檻: bind ゲート OFF は always_fire でも抽選を塞ぐ＝発行ゼロ（ゲート leak なら pattern 搬送指令が漏れる）。
     assert!(
@@ -416,7 +407,7 @@ fn seriko_tick_apply_one(
 /// SERIKO ループが載るのはシェル表示スロットゆえ、活性ループ×シェル窓 DPI 変化という本番の組み合わせは
 /// どこにも存在しなかった。本ケースはその 1 点だけを足す（(a)(b) の重複観測はしない）。
 ///
-/// # 決定論（sleep 不使用・注入時刻＋注入乱数のみ）
+/// # 決定論（時刻は注入・乱数も注入・待ちは poll-backoff の短い sleep を挟む）
 ///
 /// tick は `send_tick` 直接注入（loop ticker 不起動）、乱数は常時発火の固定注入列。DPI は
 /// [`bump_char_window_dpi`] が現在値と必ず異なる実機水準を選ぶ（「たまたま同値」で空虚化しない）。
@@ -425,13 +416,13 @@ fn seriko_tick_apply_one(
 ///
 /// - `EmoPresenter::refresh_scale` が再表示時に `last_show` の pattern を捨てて
 ///   `PatternState::default()` で `apply_show` する変異（＝DPI 変化で進行中の SERIKO コマを失う）:
-///   `-p areka` 522 本中**本テストのみ**が落ち（他 521 本生存）、落ちる assert も狙いどおり
+///   `-p areka` では**本テストだけ**が落ち、落ちる assert も狙いどおり
 ///   「DPI 変化直後の再表示が進行中コマを失いベース面へ戻っている」である。同変異は
-///   `-p areka-emo-present`（91 本）では **1 本も落ちない**——`refresh_scale` の pattern 保存は
+///   `-p areka-emo-present` では **1 本も落ちない**——`refresh_scale` の pattern 保存は
 ///   本テスト追加前まで repo 内のどの檻も観測していなかった（exclusive）。
 /// - `apply_show` が k≠1 のとき `binds`／`pattern` を既定へ落とす変異では、本テストと
 ///   `areka-emo-present` の `show_surface_scales_layered_bind_and_pattern_content_with_single_k`
-///   （要件 2.3 の同時追加檻）が**共倒れ**（shared）。既存 521 本は全生存。
+///   （要件 2.3 の同時追加檻）が**共倒れ**（shared）。ほかは 1 本も落ちない。
 #[test]
 fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。

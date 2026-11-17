@@ -33,7 +33,7 @@ pub struct SkinCandidate {
 }
 
 /// 切替先が決まらない理由（入口の `warn!(skin_switch_unknown)` の `reason` 欄）。
-// 要件 2.5: 公開の `installed_for`・`resolve_skin_target` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `installed_for`・`resolve_skin_target` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotFoundReason {
     /// 名前もフォルダ名も候補のどれにも一致しない。

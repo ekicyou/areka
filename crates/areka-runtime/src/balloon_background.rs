@@ -7,11 +7,12 @@
 //!
 //! 原点画素が背景色として使えないとき（面が引けない・全透明ゆえ焼かれていない・トリムで原点が
 //! bbox の外・α が 255 でない）は白（[`DEFAULT_BALLOON_BACKGROUND`]）へ落とし、理由を `debug!`
-//! で残す（log-first・記録なしの失敗経路を作らない）。
+//! で残す（log-first・記録なしの失敗経路を作らない）。配置が頁や画素を指し損ねる契約違反だけは
+//! 焼く段の故障なので `warn!` で残す。
 
 use areka_emo_atlas::{AtlasTable, SetId};
 use areka_emo_text::draw::DEFAULT_BALLOON_BACKGROUND;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// アトラスに当該ファイル名の面が無い（`resolve` が引けない）。
 const REASON_FACE_MISSING: &str = "face_missing";
@@ -34,7 +35,7 @@ const REASON_NOT_OPAQUE: &str = "not_opaque";
 /// 非 premultiplied 値は一致するので、そのまま採ってよい（これが α を 255 に限る理由でもある）。
 ///
 /// それ以外（面が無い・`placement` が `None`・原点が bbox の外・α ≠ 255・頁や画素が引けない）は
-/// [`DEFAULT_BALLOON_BACKGROUND`]（白）へ落とし、理由を `debug!` で残す。
+/// [`DEFAULT_BALLOON_BACKGROUND`]（白）へ落とし、理由を残す（契約違反の 2 理由は `warn!`・他は `debug!`）。
 pub(super) fn face_origin_color(atlas: &AtlasTable, file_name: &str) -> (u8, u8, u8) {
     let Some(id) = atlas.resolve(SetId(0), file_name) else {
         return fall_back(file_name, REASON_FACE_MISSING);
@@ -65,10 +66,17 @@ pub(super) fn face_origin_color(atlas: &AtlasTable, file_name: &str) -> (u8, u8,
 
 /// 白へ落として理由を残す（記録なしの失敗経路を作らない・log-first）。
 fn fall_back(file_name: &str, reason: &'static str) -> (u8, u8, u8) {
-    debug!(
-        file = file_name,
-        reason, "balloon_background: 面 0 の原点画素を背景色に採れないので白へ落とす"
-    );
+    match reason {
+        REASON_PAGE_MISSING | REASON_PIXEL_OUT_OF_RANGE => warn!(
+            file = file_name,
+            reason,
+            "balloon_background: 面 0 の配置が頁を指し損ねた（焼く段の契約違反）ので白へ落とす"
+        ),
+        _ => debug!(
+            file = file_name,
+            reason, "balloon_background: 面 0 の原点画素を背景色に採れないので白へ落とす"
+        ),
+    }
     DEFAULT_BALLOON_BACKGROUND
 }
 

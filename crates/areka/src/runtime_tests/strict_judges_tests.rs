@@ -247,7 +247,6 @@ element1,balloon,a,0,0
             _ => "—",
         };
         let rows = table("diagnostic-rows");
-        let mut checked = 0;
         for c in &rows {
             let row: usize = c[0].parse().expect("行の番号");
             let kind = unquote(&c[1]);
@@ -292,9 +291,8 @@ element1,balloon,a,0,0
             for script in &green {
                 assert_eq!(play(script), [], "{row} 行目 {script}");
             }
-            checked += 1;
         }
-        assert_eq!((checked, rows.len()), (17, 17), "確かめた行の数と ⑶ の行数");
+        assert_eq!(rows.len(), 17, "⑶ の行数");
     }
 
     /// 誤りを複数含む台本で、記録の種類・位置・綴り・文面・順が `check_script` の診断と同じ（7.2・2.7）。

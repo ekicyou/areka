@@ -109,6 +109,7 @@ fn build_and_spawn(world: &mut World) {
     world.insert_non_send(ProbeBoot {
         presenter: EmoPresenter::new(),
         char_window,
+        author_dpi: prepared.author_dpi.shell,
         assets: Some((emo_world, atlas)),
         phase: ProbePhase::WaitingAttach,
         native_size: (0, 0),

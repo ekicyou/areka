@@ -27,6 +27,7 @@ use super::ghost_switch::{
     GhostSpec, SwitchEnd, SwitchInFlight, SwitchRequest, SwitchTarget, SwitchVerdict,
     WelcomeAttempt, accept_switch,
 };
+use super::hooks;
 use super::shell_balloon_switch::{SwitchContext, accept_skin};
 use crate::boot_config::BootContext;
 use crate::exit_wait::{self, WorkGate};
@@ -312,10 +313,7 @@ fn overlap_or_context(world: &World) -> Option<RefusedReason> {
     if crate::install::desk::is_busy(world) {
         return Some(RefusedReason::Installing);
     }
-    let has_kanade = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .is_some_and(|session| session.kanade().is_some());
+    let has_kanade = hooks::session(world).is_some_and(|session| session.kanade().is_some());
     if !has_kanade || world.get_resource::<BootContext>().is_none() {
         return Some(RefusedReason::NoContext);
     }
@@ -405,9 +403,7 @@ fn start_shiori(world: &mut World, target: ReloadTarget, origin: ReloadOrigin, g
         references: vec!["reload".to_owned()],
         method: ShioriMethod::Notify,
     });
-    let sent = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
+    let sent = hooks::session(world)
         .and_then(|session| session.kanade())
         .is_some_and(|k| k.send(KanadeMsg::AwaitTalkGap { raise, reply }).is_ok());
     if !sent {
@@ -597,9 +593,7 @@ fn advance_skins(world: &mut World) {
 fn current_skin(world: &World, ctx: &SwitchContext, kind: SkinKind) -> Option<SkinCandidate> {
     let (dir, folder) = match kind {
         SkinKind::Shell => {
-            let dir = world
-                .get_non_send::<GhostSlot>()
-                .and_then(|slot| slot.0.as_ref())
+            let dir = hooks::session(world)
                 .and_then(|session| session.runtime())
                 .map(|runtime| runtime.mount().shell.dir.clone())?;
             (dir, ctx.current_shell.clone()?)
@@ -631,10 +625,8 @@ fn reload_names(world: &mut World) -> bool {
         .get_non_send::<ReloadInFlight>()
         .map(|f| f.ghost.clone())
         .unwrap_or_default();
-    let Some((root, shell)) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-        .map(|s| (s.ghost_dir().to_path_buf(), s.current_shell_folder()))
+    let Some((root, shell)) =
+        hooks::session(world).map(|s| (s.ghost_dir().to_path_buf(), s.current_shell_folder()))
     else {
         return false;
     };
@@ -740,10 +732,7 @@ fn discard_for_exit(world: &mut World) {
 /// 置き場のゴーストの名前（`get_active_ghost_list` と同じ綴り＝descript の `name`、無ければルート
 /// フォルダの絶対パス・末尾の区切りなし）。置き場が空なら空文字列。
 fn ghost_name(world: &World) -> String {
-    let Some(session) = world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
-    else {
+    let Some(session) = hooks::session(world) else {
         return String::new();
     };
     areka_ghost::config::listed_name(
@@ -754,9 +743,7 @@ fn ghost_name(world: &World) -> String {
 
 /// 読むゴーストのフォルダ（同梱の根から起こすと 2 回目からは写しを読むので、どこを読んだかを記録に残す）。
 fn ghost_dir(world: &World) -> String {
-    world
-        .get_non_send::<GhostSlot>()
-        .and_then(|slot| slot.0.as_ref())
+    hooks::session(world)
         .map(|session| session.ghost_dir().display().to_string())
         .unwrap_or_default()
 }

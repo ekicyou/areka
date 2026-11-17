@@ -298,4 +298,4 @@ pub(crate) fn candidate_paths(name: &str, dirs: &[&Path]) -> Option<Vec<PathBuf>
 
 #[cfg(test)]
 #[path = "shell_cursor_table_tests.rs"]
-mod tests;
+pub(crate) mod tests;

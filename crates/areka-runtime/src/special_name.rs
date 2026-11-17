@@ -20,7 +20,7 @@ pub enum NameResolution {
 }
 
 /// 解けない理由（`ghost_switch_unknown` の `reason` 欄の語彙）。
-// 要件 2.5: 公開の `NameResolution` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `NameResolution` が名指すので開ける
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnresolvedReason {
     RandomEmpty,

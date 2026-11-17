@@ -31,7 +31,7 @@ pub struct ShellCursorAssets {
     pub(crate) sized: RefCell<HashMap<(usize, u32), Option<OwnedCursor>>>,
 }
 
-// 要件 2.5: 公開の `ShellCursorAssets::files` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `ShellCursorAssets::files` が名指すので開ける
 pub enum CursorFile {
     /// 目録を確かめた .cur のバイト列（窓の DPI ごとに from_cur_bytes で作る）。
     Cur(Vec<u8>),

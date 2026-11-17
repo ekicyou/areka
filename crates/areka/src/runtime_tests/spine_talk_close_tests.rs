@@ -11,8 +11,8 @@ use super::{
 //
 // 6.1 の `SpineHarness`＋6.2 の観測ヘルパの上に構築する。S2 は実 sink 経路の末端
 // （seriko→shell 面切替の実描画 readback／emo-text typewriter の `present_frame` 駆動→
-// text 供給面 readback）まで観測境界を延ばす（R8.2/R8.5）。sleep 不使用・注入 Tick と
-// 注入 talk_time のみ（R8.3）・実 GPU（MTA・R8.4）・x64 完結（R8.6）。
+// text 供給面 readback）まで観測境界を延ばす（R8.2/R8.5）。時刻は注入 Tick と
+// 注入 talk_time で決まり、待ちは poll-backoff の短い sleep を挟む（R8.3）・実 GPU（MTA・R8.4）・x64 完結（R8.6）。
 // ===========================================================================
 
 /// 装着済み balloon text actor の供給面（emo-text `TextLayerRuntime::surface`）の非透明画素数。
@@ -101,7 +101,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 頭打ち値を再計算すること。
     const TICK_MAX_MS: u64 = 1_040;
     // ポンプ回数の上限は待ちの芯の打ち切り（下）＋200µs poll-backoff sleep で与える（R7.9・根拠は
-    // [`drive_shell_shown`] の doc）。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
+    // `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc）。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
     // （R7.8 の是正は適用済み）、待機時間の延長は観測に有利にしか働かない。
     let mut show_cmds: Vec<PresentCommand> = Vec::new();
     let mut now = TICK_BASE_MS;
@@ -244,7 +244,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
     //    打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数。Clear は文字の層へ届き、表示の
     //    指令として汲む物が無いので足さない）で、反復の末尾に 200µs の poll-backoff sleep（R7.9・根拠は
-    //    `drive_shell_shown` の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
+    //    `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
     let what = "S2: Clear cue の runtime への到達";
     let calls = || shiori.call_count();
     wait_until(what, Progress::Count(&calls), || {

@@ -100,7 +100,7 @@ impl NoUserBreakCueSink {
     }
 
     /// 1 つの合図を非ブロックで送る。受信端が閉じていても台本は殺さない
-    /// （記録して継続・既存の受け口 6 本と同じ規律）。
+    /// （記録して継続・ほかの受け口と同じ規律）。
     fn send(&self, signal: NoUserBreakSignal) {
         if self.tx.send(signal).is_err() {
             warn!(

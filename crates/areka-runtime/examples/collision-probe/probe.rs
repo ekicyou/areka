@@ -60,11 +60,10 @@ fn attach_show_and_resize(world: &mut World) {
         boot.char_window,
         emo_world,
         atlas,
-        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を供給する。
+        // 作者基準 DPI は配置の準備が shell descript（`seriko.dpi`）から読んだ値（窓寸の k₀ と同じ出所）。
         // **実適用 k は実行機の表示スケールが決める**（窓生成時に wintf が実モニタ DPI を `DPI`
-        // component へ初期化するため初回表示で確定する）——k=96/96=1.0 になるのは実行機が 100%
-        // 表示のときだけであり、125%/200% で実行すれば k は 5/4・2/1 になる（DPI 追従駆動は不要）。
-        96,
+        // component へ初期化するため初回表示で確定する・DPI 追従駆動は不要）。
+        boot.author_dpi,
     );
 
     // donor 必須逸脱 #1/#2: surface1000 を有効 bind 実値付きで表示する。
@@ -305,7 +304,7 @@ fn native_anchor((left, top, right, bottom): (i64, i64, i64, i64), label: &str) 
 }
 
 /// `read_back`（`stride = width*4`・BGRA・上端起点の密配列）の画素 `(px, py)` が不透明（α=0xFF）であることを
-/// hard assert する。範囲外・バイト長不足も loud に落とす（④ の観測失敗を silent にしない）。
+/// hard assert する。範囲外も loud に落とす（④ の観測失敗を silent にしない・バイト長は呼び手が確かめ済み）。
 fn assert_pixel_opaque(bytes: &[u8], (w, h): (u32, u32), (px, py): (u32, u32), label: &str) {
     assert!(
         px < w && py < h,
@@ -313,11 +312,6 @@ fn assert_pixel_opaque(bytes: &[u8], (w, h): (u32, u32), (px, py): (u32, u32), l
     );
     // BGRA 密配列: 画素 (px,py) の α は offset (py*w+px)*4 + 3。
     let idx = ((py * w + px) * 4 + 3) as usize;
-    assert!(
-        idx < bytes.len(),
-        "collision-probe: {label} 中心 ({px},{py}) の α index={idx} が read_back バイト長 {} の外",
-        bytes.len()
-    );
     let alpha = bytes[idx];
     assert_eq!(
         alpha, 0xFF,

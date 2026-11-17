@@ -12,7 +12,7 @@
 //!
 //! # なぜ 4 本目の sink なのか（D4＝α の裁定）
 //!
-//! `TalkDone` を配線する案（β）は `spawn_dispatcher` の 9 呼出箇所へ波及し、「会話進行の管理層の
+//! `TalkDone` を配線する案（β）は `spawn_dispatcher` のすべての呼び出し箇所へ波及し、「会話進行の管理層の
 //! 既存の通知先は変えない」という制約に反する。α は `GhostBootOptions.sinks` へ 1 本足すだけで
 //! 上流（ghost / kanade / dola）の署名を一切変えない。
 //!
@@ -20,8 +20,8 @@
 //! 選択肢バリア中の horizon は過小になりうる。そこで選択肢の合図（`CueCommand::Choice`）を
 //! 初めて見たときに [`TalkLifecycleSignal::ChoiceShown`] を 1 回送り、判断の側がそのトークを
 //! 選択肢つきと覚えられるようにする（areka-P0-balloon-text-bugs 要件 1.2〜1.4）。バリア中は
-//! トークの終わりが届かないので計測は立たない。中断（Requirement 4.6）も起点は
-//! 正常終了と同一値（占有 horizon）になる。中断の時刻を起点に採るため、受け口は落ちる瞬間の
+//! トークの終わりが届かないので計測は立たない。中断（Requirement 4.6）では起点を占有終端と
+//! 止まった時刻の早い方にするため（`balloon_visibility.rs` の表）、受け口は落ちる瞬間の
 //! talk 相対秒を [`TalkLifecycleSignal::TalkEnded`] で送る（areka-P0-balloon-lifecycle-events
 //! 要件 5.2・判断の側の採り方は `balloon_visibility_wait.rs`）。
 //!

@@ -6,7 +6,8 @@
 //! （R2.8）。注入口は既存の公開送信端だけで、製品コードへ口を新設しない（R2.9）。
 //!
 //! 台本と期待列は `spine_conformance_script.rs`（design D2）、段の駆動器は
-//! `spine_conformance_support.rs`（design D6）にあり、本ファイルは**逐語の期待値を 1 つも持たない**。
+//! `spine_conformance_support.rs`（design D6）にあり、本ファイルが持つ逐語の期待値は位置調整の着地座標
+//! （[`MOVE_LANDING`]）だけである。
 //!
 //! # 段の完了条件（design D1 の段表に対する本走行の実現形）
 //!
@@ -27,7 +28,7 @@
 //!    表示指令も生まないため、テストからは観測できない。代わりに、表示側が報告する**占有終端**
 //!    （[`TalkLifecycleSignal::DisplayEndAt`]・製品が出す値）を読み、注入時刻がその終端を越えた
 //!    ことを「再生は終端の先へ進んだ」の代理とし（[`LapObserved::played_out_since`]）、そこから
-//!    さらに [`SETTLE_ROUNDS`] 回、**注入せず観測だけ**を続けて連鎖の着地を待つ（[`settled`]）。
+//!    さらに [`SETTLE_ROUNDS`] 回、**注入せず観測だけ**を続けて連鎖の着地を待つ（[`WaitInjection::DispatcherTickThenObserve`]）。
 //!    終端の逐語はテストが持たない——台本を書き換えれば自動で追随する。
 //! 4. **「サブメニューと戻り」段は注入の窓を 2 つ使う**。選択肢 ID は**直前に再生中の台本の `\q` 帳簿**に
 //!    含まれていなければ弾かれる（`crates/areka-kanade/src/schedule/steady.rs`）ため、
@@ -511,7 +512,7 @@ impl LapStages {
 ///   kanade の送信端への投函が `Err` になる（＝受信側が閉じた＝自己終了の観測）。
 #[test]
 fn conformance_lap_walks_every_stage_to_its_completion() {
-    // ── 起動: 一周用の台本で組立を起こす（GPU World・合成窓一式・実 emo2 資産・本番と同じ 4 受け口） ──
+    // ── 起動: 一周用の台本で組立を起こす（GPU World・合成窓一式・実 emo2 資産・本番の受け口のうち先頭 4 本＝spine の足場と同じ） ──
     let (backend, handle) = lap_backend();
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
 

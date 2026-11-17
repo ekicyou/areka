@@ -70,9 +70,8 @@ use log_capture_kit::{LineFormat, capture_lines};
 use crate::sample_test_support::acquire_emo2;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::ExitKind;
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{DPI, GraphicsCore, Point, WindowPos, WucGraphicsResource};
-use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
+use wintf::executor::JoinHandle;
 
 use areka_placement::spawn::test_support::{titles, two_scope_placements};
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
@@ -111,16 +110,8 @@ fn make_world_with_gpu() -> (GpuPermit, World) {
     (gpu, world)
 }
 
-/// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
-/// （draw_readback_test/attach_wiring の決定論パターン——WM_QUIT は posted が尽きた後に配送）。
-///
-/// 実 `ClockedTextSink<EmoTextSink>` の UI ドレイン（`spawn_emo_text` の pump アクター）を
-/// headless に駆動できることを裏付ける定石。sink 生存中は複数セッション実行できる。
-pub(super) fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
-}
+// 汲み出しの定石は `areka_runtime::spine` に 1 つだけ置き、兄弟のテストへここから渡す。
+pub(super) use areka_runtime::spine::pump_until_idle;
 
 // ===========================================================================
 // ログ捕捉（硬化機構の唯一の定義元 `log-capture-kit` への委譲）
@@ -129,14 +120,9 @@ pub(super) fn pump_until_idle() {
 // 観測点）をこのスレッド上で捕捉して件数一致を assert する。行の形（1 イベント 1 行・
 // `level=… target=…` に続けてフィールドを訪問順で ` name=value`）は移行前と 1 バイト変わらない。
 //
-// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
-// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
-// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
-// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
-// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
-// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
-// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
-// 同 crate の `src/probe.rs`）。
+// 捕捉窓の機序（callsite の interest キャッシュがプロセス全体で 1 つであることと、その塞ぎ方）は
+// `areka_runtime` の `frame_test_support.rs` の解説と同じで、正本は `log_capture_kit` の crate doc。
+// 向こうの `capture_logs` は `cfg(test)` だけで立つため本体側からは読み込めず、ここに同じ 3 行を置く。
 // ===========================================================================
 
 /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
@@ -433,8 +419,9 @@ impl SpineHarness {
         // ── move channel＋実 MoveCueSink（wire_runtime 手順4 と同型・S-3 形＝task 9.3） ──
         // talk スレッドの MoveCueSink が送出端、UI スレッドの RuntimeWiring が受信端 move_rx（frame 相
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替える。本番の sink（`runtime_boot.rs` の `runtime_sinks`）13 本のうち、spine は先頭 4 本だけを
-        // 同じ順で渡す（Z 順・readme・切替・読み直し・窓の状態などの残り 9 本は渡さず、その cue は届け先が無い）。
+        // 差し替える。本番の sink（`runtime_boot.rs` の `runtime_sinks`）のうち、spine は先頭 4 本（surface・text・
+        // move・lifecycle）だけを同じ順で渡す（Z 順・readme・切替・読み直し・窓の状態などの残りは渡さず、その cue は
+        // 届け先が無い）。
         let (move_tx, move_rx) = mpsc::channel::<PositionCue>();
         let move_sink = MoveCueSink::new(move_tx);
 
@@ -447,7 +434,7 @@ impl SpineHarness {
 
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
-        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番 13 本のうち先頭 4 本だけを同じ順で・S-3 形）。
+        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（本番の `runtime_sinks` のうち先頭 4 本だけを同じ順で・残りは渡さない・S-3 形）。
         // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
         // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
         let options = crate::session::runtime_boot::runtime_boot_options(

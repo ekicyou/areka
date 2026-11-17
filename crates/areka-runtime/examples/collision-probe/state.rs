@@ -24,6 +24,8 @@ pub(super) struct ProbeBoot {
     pub(super) presenter: EmoPresenter,
     /// scope0 のキャラ窓 entity（`spawn_ghost_windows` が生成・placeholder 100×100 で spawn 済み）。
     pub(super) char_window: Entity,
+    /// shell の作者基準 DPI（`PreparedPlacement::author_dpi.shell`・`attach_target` へ渡す）。
+    pub(super) author_dpi: u16,
     /// scope0 shell アセット（`attach_target` で move 消費・装着後は `None`）。
     pub(super) assets: Option<(EmoWorld, AtlasTable)>,
     /// 駆動フェーズ。

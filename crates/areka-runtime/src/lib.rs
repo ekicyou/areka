@@ -77,33 +77,27 @@ pub(crate) mod sample_test_support;
 
 // areka-runtime のテストと本体のテストの両方が使う補助（spec: runtime-crate-split 設計「実装の中の討議の結果」1）。
 #[cfg(any(test, feature = "test-support"))]
-#[path = "source_text_test_support.rs"]
 pub mod source_text_test_support;
 
 // film の E2E（本物の読み手から合成まで・本体から移した・spec: audit-emo2-boot-spine）。
 #[cfg(test)]
-#[path = "film_playback_e2e_tests.rs"]
 mod film_playback_e2e_tests;
 
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
 #[cfg(test)]
-#[path = "zorder_wiring_tests.rs"]
 mod zorder_wiring_tests;
 
 // 毎フレームの相の登録先の檻（areka-P0-present-gpu-transform-scale task 4.2・T-N10）。
 #[cfg(test)]
-#[path = "frame_schedule_tests.rs"]
 mod frame_schedule_tests;
 
 // 実行系の結線の決定論テスト（本体の起動を引かないもの）。
 #[cfg(test)]
-#[path = "wire_tests.rs"]
 mod wire_tests;
 
 #[cfg(test)]
-#[path = "seriko_clock_tests.rs"]
 mod seriko_clock_tests;
 
 // 本体を引かず、配置と runtime だけを使うテストと判定器の置き場（spec: runtime-crate-split 要件 4.2）。
@@ -315,15 +309,8 @@ pub struct RuntimeInputs {
     pub boot_origin: BootOrigin,
 }
 
-/// M-boot の scope 集合を導出する（design DD-12「placement と同じ入力から自前導出」）。
-///
-/// emo2 fixture は sakura（scope0）＋kero（scope1）の 2 scope 構成であり、placement の
-/// `detect_scopes`（scope0 常設・`kero.*` 存在で scope1）も emo2 に対し `[0, 1]` を返す。
-/// placement の実結果は `ghost_session::prepare_ghost_windows` の async クロージャへ move 済みで同期参照不能
-/// （DD-12）ゆえ、本関数が同じ scope 集合を独立に導出する。導出の二元性（placement の動的
-/// `detect_scopes` との厳密一致は取らない）は M1 受容トレードオフとして増分申し送り（design
-/// DD-12）。窓と資産の不一致は [`frame::plan_attachments`]（DD-12）が missing/unused へ分類し
-/// 優しく縮退するため、多少のズレでも hang/crash しない。
+/// M-boot の scope 集合。placement の `detect_scopes` が返しうる最大の組 `[0, 1]` を固定で返し、
+/// ゴーストの中身は読まない（scope 1 が無いゴーストでは [`frame::plan_attachments`] が unused に分ける）。
 fn derive_scopes() -> Vec<u32> {
     vec![0, 1]
 }
@@ -407,7 +394,7 @@ const _: fn() = || {
 /// 結線＋二段の観測に徹する。
 ///
 /// # 7 手順（design「wire_runtime の統括」）
-/// 1. `build_boot_assets_for`（`scopes` は `derive_scopes` で placement と同じ入力から自前導出・
+/// 1. `build_boot_assets_for`（`scopes` は `derive_scopes` の固定の `[0, 1]`・
 ///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
 ///    task 4.3。シェルは引数 `shell`＝配置の準備が決めた起動のシェルで、手順5 の起動へも
 ///    同じ値を渡す・areka-P0-shell-balloon-switch 要件 6.4）。`Err` は `classify_wiring_error`（起点不在＝`warn!`・他＝`error!`・R7.3）の上
@@ -437,8 +424,8 @@ const _: fn() = || {
 /// # 失敗（log-first・panic しない・R7.3）
 /// いずれの手順の失敗も `warn!`／`error!`＋`RuntimeOutcome{ ghost: None, seriko: None,
 /// wired: false }` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 boot（既存 smoke 温存）へ倒し、
-/// `ghost_session::boot_ghost_strict` は `Err` を返す）。boot 成立後の
-/// spawn 済み seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
+/// `ghost_session::boot_ghost_strict` は `Err` を返す）。boot の前に
+/// 起こした seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
 /// drop（非 RAII・detach）して打ち切る（hang させない）。
 pub fn wire_runtime(
     world: &mut World,
@@ -463,7 +450,7 @@ pub fn wire_runtime(
         }
     }
 
-    // 手順1: 構築入力の一括組立（scopes は placement と同じ入力から自前導出・DD-12）。
+    // 手順1: 構築入力の一括組立（scopes は `derive_scopes` の固定の組・DD-12）。
     // 失敗（fixture 不在等）は分類 warn/error の上 wired=false を呼び手へ返す（R7.3）。
     let scopes = derive_scopes();
     // 作者基準 DPI（design Flow 3 手順1）は placement の準備が **1 度だけ**読んだ値を

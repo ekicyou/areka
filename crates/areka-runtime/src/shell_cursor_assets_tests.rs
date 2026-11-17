@@ -15,6 +15,7 @@ use tracing::Level;
 use wintf::ecs::cursor::{CursorAsk, CursorQuery, CursorReply, cursor_size_for_dpi};
 
 use super::{CursorFile, ShellCursorAssets, build_shell_cursors};
+use crate::shell_cursor_table::tests::{key, kv};
 use crate::shell_cursor_table::{CursorScene, Shape, SystemCursor};
 use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
@@ -79,13 +80,6 @@ fn put(dir: &Path, name: &str, bytes: &[u8]) {
     std::fs::write(dir.join(name), bytes).unwrap();
 }
 
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
-}
-
 fn build(fx: &Fixture, surfaces: &str, ghost_kv: &[(&str, &str)]) -> ShellCursorAssets {
     build_shell_cursors(
         &parse_cursor_braces(surfaces),
@@ -93,10 +87,6 @@ fn build(fx: &Fixture, surfaces: &str, ghost_kv: &[(&str, &str)]) -> ShellCursor
         &fx.shell,
         &fx.ghost,
     )
-}
-
-fn key(scope: u32, region: &str, scene: CursorScene) -> (u32, String, CursorScene) {
-    (scope, region.to_string(), scene)
 }
 
 fn mine(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {

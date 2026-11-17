@@ -69,7 +69,7 @@
 //! 寛大な値（例 `180000`＝3 分）を必ず与えること。
 //!
 //! **ダブルクリックでは終了しない**（2026-08-05 実機で確認）。本 probe が装着するポインタ
-//! ハンドラは [`on_probe_pointer_moved`]（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
+//! ハンドラは `pointer::on_probe_pointer_moved`（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
 //! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
 //! `areka-P0-input-events` task 2.7 で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
 //! キャラ窓のポインタハンドラは本体の `input_events::attach_char_pointer_handlers`（`pub(crate)`・
@@ -89,7 +89,7 @@
 //! `pasta.dll` を**絶対パスで**与える。相対パスだと `pasta.dll` の LOAD が `0x8007007E` で失敗する）に
 //! 従う。ただし本 probe に**その制約はかからない**——理由は次の 2 点で、混同しないこと:
 //!
-//! 1. **本 probe の fixture ルートは常に絶対解決される**: [`emo2_root`] は `sample_ghost_kit` の
+//! 1. **本 probe の fixture ルートは常に絶対解決される**: `fixture::emo2_root` は `sample_ghost_kit` の
 //!    `SampleRoot::acquire("emo2")` が用意した検体の**絶対パス**（`SampleRoot::folder`）を返す。
 //!    **プロセスの作業ディレクトリに依存しない**ため、どこから
 //!    `cargo run` しても同一の emo2 fixture を読む（起動側で絶対パスを与える必要がない）。
@@ -101,26 +101,13 @@
 //!      （`source.rs` の `load_balloon_author_dpi`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs` の `build_shell_assets` ＋ probe 自身の
-//!      [`load_shell_assets`]）
+//!      `setup::load_shell_assets`）
 //!    - **バルーンパッケージの面定義・面画像**（`measure.rs` の `measure_balloon_surface0`）と
 //!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs` の `load_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
 //!    `descript.txt` やバルーン資産も疑う**こと（`crates/areka-placement/src/lib.rs` の `prepare_stages_for_shell` が読取の全体像）。
-//!
-//! # 作者基準 DPI の出所（k 論証への影響・実測済み）
-//!
-//! 採寸経路（`crates/areka-placement/src/lib.rs` の `prepare_stages_for_shell` が `AuthorDpi` を組む所）は **descript から読んだ実 author_dpi**
-//! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
-//! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
-//! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、
-//! これは in-repo テスト `crates/areka-placement/src/source_tests.rs` の
-//! `shell_author_dpi_emo2_fixture_is_default_96`と実行ログ（`primary_dpi=192 shell_author_dpi=96
-//! balloon_author_dpi=96` ／ `apply(ShowSurface): ... author_dpi=96 window_dpi=Some((192,192))`）の
-//! 双方で確認できる。**`seriko.dpi` を宣言する別ゴーストへ差し替えると窓寸（採寸 k₀）と表示 k が
-//! 食い違う**ため、fixture を変えるときは probe の直書き 96 を `prepared.author_dpi.shell` へ
-//! 差し替えること。
 //!
 //! R4.6 が要求する「**本番ゴースト（実 emo2・実 `pasta.dll`）を絶対パスで起動**して行う実機確認」の脚は
 //! **本 probe ではなく本番 emo2 実ゴースト実行（`areka` 本体・Task 8.2）が担う**。本 probe が担うのは

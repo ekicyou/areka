@@ -12,10 +12,10 @@
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
 //! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
 //! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計で有界化してある。
-//! 打ち切り方は 3 通りある。目印のある待ち（[`Progress::Count`]）は「目印が [`SPIN_WAIT`]（30 秒）進まなければ
-//! 打ち切り・総時間は 300 秒まで」、GPU の許可の待ちは「許可が 500 秒返らなければ打ち切り」、
-//! [`run_bounded`] は総時間の `recv_timeout` である。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
-//! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（`DENSE_SPIN`（`spine_wait.rs`・60 ms）の窓）で
+//! 打ち切り方は 3 通りある。目印のある待ち（[`Progress::Count`]）は「目印が [`SPIN_WAIT`] 進まなければ
+//! 打ち切り・総時間は `WAIT_CAP` まで」、GPU の許可の待ちは「許可が `GPU_PERMIT_IDLE` 返らなければ打ち切り」、
+//! [`run_bounded`] は総時間の `recv_timeout` である（値はどれも `spine_wait.rs` の定数）。⑴ が持つ待ちの形は**純粋ポーリング**（各反復が系を進めない・
+//! 別スレッドの到着を読むだけ）→ [`wait_until`]。密 yield（`DENSE_SPIN` の窓）で
 //! 速い経路の検出遅延を犠牲にせず、窓を過ぎたら [`BACKOFF_SLEEP`] へ落としてコア占有をやめる
 //! （PR #96 で導入）。回収（settle）の形も ⑴ にあり（[`settle_bounded`]）、ハイブリッドの形は ⑶ の側（本体の `runtime_tests/spine.rs`）の説明にある。
 //!
@@ -327,6 +327,17 @@ pub use self::wait::{
     GpuPermit, Progress, WaitFailure, join_thread_bounded, run_bounded, run_bounded_watching,
     settle_bounded, settle_bounded_with, wait_recv, wait_until, wait_until_with,
 };
+
+/// このスレッドの待ち行列に積まれた伝言を全部汲み、尽きたところで抜ける有界の汲み出し
+/// （`WM_QUIT` は積まれた伝言が尽きた後に届く）。
+///
+/// 実 `ClockedTextSink<EmoTextSink>` の UI の汲み出し（`spawn_emo_text` の汲み出しのアクター）を
+/// 窓なしで進める定石。受け手が生きている間は何度でも呼べる。
+pub fn pump_until_idle() {
+    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
+    unsafe { windows::Win32::UI::WindowsAndMessaging::PostQuitMessage(0) };
+    wintf::executor::MessageLoop::run(|_, _| wintf::executor::FilterResult::Forward);
+}
 
 #[path = "spine_hold_support.rs"]
 pub mod hold_support;

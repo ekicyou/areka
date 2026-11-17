@@ -76,7 +76,7 @@ pub struct BalloonScopeAssets {
     ///
     /// 無効表示（`\f[disable]`）の文字色を「既定の文字色を背景色の側へ寄せた色」として導く
     /// ための混色の相手。原点画素が採れないとき（面が引けない・全透明・トリムで原点が bbox の
-    /// 外・α が 255 でない）は白へ落ちる（導出と記録は [`super::balloon_background`]）。
+    /// 外・α が 255 でない）は白へ落ちる（導出と記録は `balloon_background` モジュール）。
     ///
     /// 消費点は `frame/attach.rs` の `connect_balloon_text`——装着（`register_actor_view`）の
     /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（task 7.3 で結線済み。
@@ -197,7 +197,8 @@ pub struct BootAssets {
 ///
 /// # 事前条件
 /// - 呼び出しスレッドは COM 初期化済み（`WicDecoderArm` 前提・本番は MTA UI スレッド）。
-/// - `scopes` は呼び手（`wire_runtime`）が placement と同じ入力から自前導出する（DD-12）。
+/// - `scopes` は呼び手（`wire_runtime` の `derive_scopes`）が渡す固定の最大の組 `[0, 1]`（ゴーストは読まない・
+///   scope 1 が無いゴーストでは `frame::plan_attachments` が unused に分ける）。
 /// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（task 2.1 の読取器出力）。
 ///
 /// # 事後条件
@@ -358,6 +359,15 @@ pub fn build_shell_assets_with_limits(
 
     let shell_dir = model.shell.dir;
 
+    // 着せ替えの読みは descript.txt が無くても空で返るので、読めないシェルの起動の失敗は焼く前にここで残す。
+    let descript_path = shell_dir.join(DESCRIPT_TXT);
+    if let Err(source) = std::fs::read(&descript_path) {
+        return Err(BootWiringError::ShellRead {
+            path: descript_path,
+            source,
+        });
+    }
+
     // シェル: 読み込みの権威を **1 回**呼ぶ（一覧 → surfaces.txt の読取と解析 → 面の表 →
     // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
     // （`areka_emo_present::shell_target`）。採寸（`areka_placement::measure`）も同じ入口を通るので、
@@ -425,14 +435,6 @@ pub fn build_shell_assets_with_limits(
         &model.shiori.dir,
     );
 
-    // 着せ替えの読みは descript.txt が無くても空で返るので、読めないシェルの起動の失敗はここで残す。
-    let descript_path = shell_dir.join(DESCRIPT_TXT);
-    if let Err(source) = std::fs::read(&descript_path) {
-        return Err(BootWiringError::ShellRead {
-            path: descript_path,
-            source,
-        });
-    }
     // 既定の組はスコープ 0 に `sakura.*`・1 に `kero.*`・2 以上に `char*.*`（要件 14.1）。
     let static_binds = DefaultBinds::from_groups(&model.bindgroups);
 

@@ -20,7 +20,7 @@ fn rows_of(text: &str) -> (Rows, Vec<CursorIssue>) {
     (rows.rows, issues)
 }
 
-fn key(scope: u32, region: &str, scene: CursorScene) -> (u32, String, CursorScene) {
+pub(crate) fn key(scope: u32, region: &str, scene: CursorScene) -> (u32, String, CursorScene) {
     (scope, region.to_string(), scene)
 }
 
@@ -28,7 +28,7 @@ fn file(name: &str) -> Shape<String> {
     Shape::File(name.to_string())
 }
 
-fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+pub(crate) fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))

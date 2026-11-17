@@ -37,7 +37,7 @@ use areka_placement::spawn::GhostWindows;
 
 /// 控えたシェルの状態（スコープ → 表示中の面・最後に表示したときの着せ替えの集合）。
 /// 非表示・未表示のスコープは面が載らない。一度も表示していないスコープは着せ替えも載らない。
-// 要件 2.5: 公開の `capture_for_reload`・`hand_over` が名指すので開ける
+// runtime-crate-split 要件 2.5: 公開の `capture_for_reload`・`hand_over` が名指すので開ける
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ShellCarry {
     surfaces: BTreeMap<u32, u32>,

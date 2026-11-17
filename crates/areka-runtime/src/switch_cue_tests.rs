@@ -168,7 +168,7 @@ fn unopenable_change_is_skipped_without_warning() {
 
 // ---------------------------------------------------------------- 送出の失敗
 
-/// 受信端が落ちていても落ちず、送れなかったことを記録する（受信端を結ぶまでの本番もこの形）。
+/// 受信端が落ちていても落ちず、送れなかったことを記録する。
 #[test]
 fn dropped_receiver_is_logged_and_does_not_panic() {
     let (mut sink, rx) = sink();

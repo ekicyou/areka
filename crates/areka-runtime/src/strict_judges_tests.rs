@@ -69,9 +69,8 @@ mod long_script {
     };
     use dola::cue::CueSink;
     use log_capture_kit::capture;
-    use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-    use wintf::executor::{FilterResult, MessageLoop};
 
+    use crate::spine::pump_until_idle;
     use crate::strict_judges::ArekaStrictJudges;
 
     /// 1 回分: 字・誰も拾わない `\!`・知らない `\f` の鍵・名前の形の `\b`・数の `\b`・改行。
@@ -123,12 +122,6 @@ mod long_script {
         talk_records: usize,
         ui_records: usize,
         judge_threads: HashSet<ThreadId>,
-    }
-
-    fn pump_until_idle() {
-        // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-        unsafe { PostQuitMessage(0) };
-        MessageLoop::run(|_, _| FilterResult::Forward);
     }
 
     fn play(script: &Arc<str>, strict: bool) -> Seen {

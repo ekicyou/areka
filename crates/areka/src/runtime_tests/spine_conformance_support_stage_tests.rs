@@ -7,7 +7,7 @@
 
 use super::super::settle_bounded;
 use super::super::test_support::boot_finished;
-use super::super::{ExitKind, LoopDriver, wait_until};
+use super::super::{ExitKind, LoopDriver, ScriptedShioriHandle, wait_until};
 use super::driver_tests::{second_change_calls, stage};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
 use super::{Progress, ScriptedShioriBackend, SpineHarness};
@@ -64,8 +64,9 @@ use areka_runtime::spine::test_support::status_calls;
 /// 万一発行されればその場で受け口が落ちる（`spine.rs`）＝0 件の主張は恒真ではない。
 /// 握手が始まった後に遅れて届く再生側 Tick も無害である（dispatcher 側であり kanade へ渡らない）。
 ///
-/// **なぜ注入時刻を据え置くのか**——駆動器を通すと 1 反復ごとに注入時刻が進み、この段の区間
-/// （1,000ms÷刻み 1,000ms）では注入がミリ秒未満で頭打ちに達する。頭打ちの後は注入されないので
+/// **なぜ注入時刻を据え置くのか**——駆動器を通すと 1 反復（約 200µs）ごとに注入時刻が刻み
+/// （`TICK_STEP_MS`＝1,000ms）ぶん進むので、段の区間を何秒に取っても、握手の着地が遅ければ壁時計で
+/// 数 ms〜数十 ms のうちに頭打ちに届く（区間を広げても直らない）。頭打ちの後は注入されないので
 /// 再生が凍り、待ちは必ず期限切れになる（[`StageSink::may_advance_clock`] の doc が同じ実測を
 /// 持つ）。据え置いた注入時刻は待っている観測を追い越しようがなく、予算も減らない——実測では
 /// 握手の開始までに 1,621 反復を要した（据え置き・静かな機械・task 5.5）。
@@ -170,72 +171,17 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
             CLOSE_HOLD_MS,
         )
         .expect("kanade の受信端は生きている（直前の段で探りが 12 本通っている）");
-    let probe = handle.clone();
-    let mut dispatcher_closed = false;
-    let began = wait_until("OnClose の照会", Progress::Count(&*mark), || {
-        // 据え置いた注入時刻の再生側 Tick を毎反復 1 本。SHIORI 呼出は 1 件も起こさない。
-        if harness
-            .inject(&Injection::DispatcherTick, CLOSE_HOLD_MS)
-            .is_err()
-        {
-            dispatcher_closed = true;
-        }
-        probe
-            .non_status_calls()
-            .iter()
-            .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
-    })
-    .inspect_err(|failure| eprintln!("{failure}"))
-    .is_ok();
-    assert!(
-        began,
-        "終了指示のあと OnClose の照会が有界内に現れない（dispatcher の受信端が閉じたか: {dispatcher_closed}）: {:?}",
-        handle.non_status_calls()
+    wait_close_query(
+        &mut harness,
+        &handle,
+        "終了指示のあとの OnClose の照会",
+        CLOSE_HOLD_MS,
     );
 
     // ── (ii-b) 終了挨拶の再生 → 解放 → kanade の自己終了を探りが捉える ──
     //
-    //     握手が始まってから再生を進める。区間を広く取るのは、注入の予算が反復数の予算でもあり
-    //     （1 反復 200µs）、実 async の着地に十分な反復を与えるためである。
-    let closing = stage("終了", 21_000, 71_000);
-    let closed = driver
-        .run_stage(
-            &mut harness,
-            &StagePlan {
-                stage: &closing,
-                once: vec![],
-                waiting: WaitInjection::DispatcherTickAndKanadeProbe,
-            },
-            |progress| progress.closed.kanade,
-        )
-        .expect("終了挨拶の再生 → 解放 → 自己終了が探りで観測できる");
-    assert!(
-        closed.closed.kanade,
-        "kanade の自己終了が完了条件へ渡っていない"
-    );
-
-    let calls = handle.non_status_calls();
-    assert_eq!(
-        calls
-            .iter()
-            .filter(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
-            .count(),
-        1,
-        "OnClose の照会がちょうど 1 件でない: {calls:?}"
-    );
-    assert_eq!(
-        calls
-            .iter()
-            .filter(|c| matches!(c, RecordedCall::Unload))
-            .count(),
-        1,
-        "解放がちょうど 1 度でない（R3.9）: {calls:?}"
-    );
-    assert_eq!(
-        second_change_calls(&handle),
-        0,
-        "終了段の待ちが毎秒の変化通知を起こしている（kanade Tick が混ざったか、保留の消化経路が変わった）: {calls:?}"
-    );
+    //     握手が始まってから再生を進める。
+    drive_close_and_assert_once(&mut harness, &handle, &mut driver);
 
     harness.shutdown_bounded();
 }
@@ -292,36 +238,62 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
     drop(frozen);
 
     // 上の檻の (ii-a) と同じ待ち（据え置き時刻の再生側 Tick）。
-    let probe = handle.clone();
+    wait_close_query(
+        &mut harness,
+        &handle,
+        "boot 中の終了指示の OnClose の照会",
+        11_000,
+    );
+
+    // 終了挨拶の再生 → 解放 → 自己終了（上の檻の終了段と同じ駆動と assert）。
+    drive_close_and_assert_once(&mut harness, &handle, &mut LapDriver::new());
+
+    harness.shutdown_bounded();
+}
+
+/// 注入時刻を `at_ms` に据え置いた再生側 Tick を、`OnClose` の照会が記録されるまで有界に繰り返す
+/// （駆動器を通さない理由は `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc）。
+/// 再生側 Tick は SHIORI 呼出を 1 件も起こさない。打ち切りは足場の進みの目印で決まる。
+fn wait_close_query(
+    harness: &mut SpineHarness,
+    handle: &ScriptedShioriHandle,
+    what: &str,
+    at_ms: u64,
+) {
     let mark = harness.progress_probe().expect("足場は進みの目印を持つ");
     let mut dispatcher_closed = false;
-    let began = wait_until(
-        "boot 中の終了指示の OnClose の照会",
-        Progress::Count(&*mark),
-        || {
-            if harness.inject(&Injection::DispatcherTick, 11_000).is_err() {
-                dispatcher_closed = true;
-            }
-            probe
-                .non_status_calls()
-                .iter()
-                .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
-        },
-    )
+    let began = wait_until(what, Progress::Count(&*mark), || {
+        if harness.inject(&Injection::DispatcherTick, at_ms).is_err() {
+            dispatcher_closed = true;
+        }
+        handle
+            .non_status_calls()
+            .iter()
+            .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+    })
     .inspect_err(|failure| eprintln!("{failure}"))
     .is_ok();
     assert!(
         began,
-        "boot 中に届いた終了指示が握手を始めていない（dispatcher の受信端が閉じたか: {dispatcher_closed}）: {:?}",
+        "{what} が有界内に現れない（dispatcher の受信端が閉じたか: {dispatcher_closed}）: {:?}",
         handle.non_status_calls()
     );
+}
 
-    // 終了挨拶の再生 → 解放 → 自己終了（区間は上の檻の終了段と同じ）。
-    let mut driver = LapDriver::new();
+/// 終了挨拶の再生 → 解放 → kanade の自己終了を探りで捉える終了段を駆動し、握手が正典どおり
+/// 1 度ずつであること（`OnClose` の照会 1 件・解放 1 度・R3.9）と、毎秒の変化通知が 0 件であることを確かめる。
+///
+/// 区間を広く取るのは、注入の予算が反復数の予算でもあり（1 反復 200µs）、実 async の着地に
+/// 十分な反復を与えるためである。
+fn drive_close_and_assert_once(
+    harness: &mut SpineHarness,
+    handle: &ScriptedShioriHandle,
+    driver: &mut LapDriver,
+) {
     let closing = stage("終了", 21_000, 71_000);
-    driver
+    let closed = driver
         .run_stage(
-            &mut harness,
+            harness,
             &StagePlan {
                 stage: &closing,
                 once: vec![],
@@ -330,6 +302,10 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
             |progress| progress.closed.kanade,
         )
         .expect("終了挨拶の再生 → 解放 → 自己終了が探りで観測できる");
+    assert!(
+        closed.closed.kanade,
+        "kanade の自己終了が完了条件へ渡っていない"
+    );
 
     let calls = handle.non_status_calls();
     assert_eq!(
@@ -349,10 +325,8 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
         "解放がちょうど 1 度でない（R3.9）: {calls:?}"
     );
     assert_eq!(
-        second_change_calls(&handle),
+        second_change_calls(handle),
         0,
-        "boot 中の保留 close の消化に毎秒の変化通知が混ざっている: {calls:?}"
+        "終了段の待ちが毎秒の変化通知を起こしている（kanade Tick が混ざったか、保留の消化経路が変わった）: {calls:?}"
     );
-
-    harness.shutdown_bounded();
 }

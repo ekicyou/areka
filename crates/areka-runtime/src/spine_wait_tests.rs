@@ -285,29 +285,19 @@ fn a_receiver_returns_the_value_or_reports_a_vanished_sender() {
 /// panic する。古い呼び名 `run_bounded` は今の文を先頭に保ち、後ろに同じ文言を足す。
 #[test]
 fn a_vanished_worker_panics_with_the_partner_gone_text() {
-    let text = |r: std::thread::Result<()>| -> String {
-        let payload = r.expect_err("相手が居なくなったら panic する");
-        payload
-            .downcast_ref::<String>()
-            .cloned()
-            .unwrap_or_else(|| "（文字列でない panic）".into())
-    };
-
     run_bounded_watching("終わる処理", Progress::Unknown, || {});
 
-    let watched = text(std::panic::catch_unwind(|| {
+    let watched = panic_text(|| {
         run_bounded_watching("落ちる処理", Progress::Unknown, || {
             panic!("わざと落とす")
         })
-    }));
+    });
     assert!(
         watched.starts_with("待ちの打ち切り［相手が居ない］: 「落ちる処理」"),
         "{watched}"
     );
 
-    let old = text(std::panic::catch_unwind(|| {
-        run_bounded("落ちる処理", SPIN_WAIT, || panic!("わざと落とす"))
-    }));
+    let old = panic_text(|| run_bounded("落ちる処理", SPIN_WAIT, || panic!("わざと落とす")));
     assert!(
         old.starts_with("'落ちる処理' did not complete within 30s (possible hang)"),
         "今の文が先頭に無い: {old}"
@@ -355,8 +345,8 @@ fn drive_thread_end(
 
 /// `f` の panic の文（panic しなければ赤）。
 fn panic_text(f: impl FnOnce()) -> String {
-    let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
-        .expect_err("終わらないスレッドは打ち切りで panic する");
+    let payload =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).expect_err("panic するはず");
     payload
         .downcast_ref::<String>()
         .cloned()

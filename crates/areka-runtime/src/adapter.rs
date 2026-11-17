@@ -6,8 +6,8 @@
 //! 配送する（R5.1／R5.2）。送出失敗（受信端 drop）は `debug!`・数でない、または大きすぎる
 //! scope の drop は `warn!` で log-first 観測する（R3.7・design.md「Error Categories and Responses」）。
 //!
-//! 本ファイルは task 2.4（`map_display_command` 純変換）と task 2.5（`PresentBridge`＝
-//! `SurfaceOutput` 本番実装・UI 配送）を実装する。定義を替えた合図 `Rebased` は、橋渡しが持つ
+//! 本ファイルは `map_display_command`（純変換）と `PresentBridge`（`SurfaceOutput` 本番実装・
+//! UI 配送）を持つ。定義を替えた合図 `Rebased` は、橋渡しが持つ
 //! 荷物の置き場と突き合わせて scope ごとの `ReplaceTarget` へ写す（spec:
 //! areka-P0-shell-balloon-switch・design「Adapter」）。
 
@@ -103,10 +103,10 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
     })
 }
 
-/// seriko の `SurfaceOutput` 本番実装（task 2.5）。
+/// seriko の `SurfaceOutput` 本番実装。
 ///
 /// `spawn_seriko(out = PresentBridge)` で seriko worker スレッドへ move され（`O: SurfaceOutput
-/// + Send + 'static`・実結線は task 5.1）、worker 上で受けた `DisplayCommand` を
+/// + Send + 'static`）、worker 上で受けた `DisplayCommand` を
 /// [`map_display_command`] で `PresentCommand` へ純変換し、UI スレッドの表示層（frame drain 側の
 /// `Receiver`）へ `mpsc::Sender` で**非ブロック**配送する（R3.7）。
 ///
@@ -185,7 +185,7 @@ impl PresentBridge {
     /// 合図 `Rebased` を、置き場の世代の一致する荷物と突き合わせて scope ごとの
     /// `ReplaceTarget` へ写す（spec: areka-P0-shell-balloon-switch 要件 4.1・4.2・design「Adapter」）。
     ///
-    /// - 対象の番号はシェルなら `2*scope`、バルーンなら `2*scope+1`（`frame/attach.rs` と同じ写像）。
+    /// - 対象の番号は `target_map` の `shell_target`／`balloon_target`。
     /// - 最初の表示は合図の同じ scope の面と着せ替え。合図に無い scope・面の無い scope は登録だけ。
     /// - 返信の送り手は荷物の同じ scope のものを載せる。
     /// - 荷物が無い・世代が違うときは `error!(rebased_payload_missing)` を 1 件残して何も送らない
@@ -237,7 +237,7 @@ impl PresentBridge {
 }
 
 /// 静的境界表明（撃ちっぱなし檻）: `PresentBridge` は `spawn_seriko(out)` で worker スレッドへ
-/// move されるため `O: SurfaceOutput + Send + 'static` を満たす必要がある（実結線は task 5.1）。
+/// move されるため `O: SurfaceOutput + Send + 'static` を満たす必要がある。
 /// `mpsc::Sender<T>` は `T: Send` のとき `Send`・`PresentCommand` は `'static` ゆえ現状は充足するが、
 /// 将来 `!Send`／非 `'static` なフィールドが混入したらここでコンパイルを止める。
 const _: fn() = || {
@@ -483,7 +483,7 @@ mod tests {
         }
     }
 
-    // ── task 2.5: PresentBridge（SurfaceOutput 本番実装）の檻 ──────────────────────
+    // ── PresentBridge（SurfaceOutput 本番実装）の檻 ──────────────────────
     //
     // ログ発火（warn/debug）を目視でなく実行テストで決定論的に檻へ入れる（決定論網羅マンデート）。
     // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。

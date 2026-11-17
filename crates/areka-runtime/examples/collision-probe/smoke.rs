@@ -26,6 +26,7 @@ fn smoke_exit_ms() -> Option<u64> {
 
 /// env ゲート付き smoke 自動 close を結線する（window-placement donor `install_smoke_exit` と同作法）。
 /// 指定 ms 後に全 [`GhostWindowMarker`] 窓を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰。
+/// 窓が 1 枚も無いとき（準備の失敗）は空遷移が起きないので、`wintf::AppExit` へ終了を直に指示する。
 pub(super) fn install_smoke_exit(app: &WinApp) {
     let Some(ms) = smoke_exit_ms() else {
         return;
@@ -50,6 +51,16 @@ pub(super) fn install_smoke_exit(app: &WinApp) {
             .iter(w)
             .collect();
         let count = targets.len();
+        if count == 0 {
+            // 準備の失敗で窓が 1 枚も無いと空遷移が起きず `run()` が戻らないので、終了を直に指示する。
+            tracing::info!(
+                "collision-probe smoke 自動 close: ゴースト窓が無い — 終了を直に指示します"
+            );
+            if let Some(exit) = w.get_non_send::<wintf::AppExit>() {
+                exit.request_exit();
+            }
+            return;
+        }
         for e in targets {
             w.despawn(e);
         }

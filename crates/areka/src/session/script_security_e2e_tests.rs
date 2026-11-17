@@ -1,7 +1,7 @@
 //! 偽の SHIORI で起動の道を通す、台本の出どころの通しのテスト（areka-P0-script-security-level
 //! 要件 1.4・3.1・4.2・4.3・design「E2E（x64 の偽の SHIORI）」）。
 //!
-//! 親（`runtime_boot_tests.rs`）と同じ組み方（`ShioriWiring::Custom` に偽の受け手・13 本の受け口）で
+//! 親（`runtime_boot_tests.rs`）と同じ組み方（`ShioriWiring::Custom` に偽の受け手・束から組む受け口）で
 //! 起こし、`OnBoot` の台本 `\![enter,nouserbreakmode]…` の応答に `SecurityLevel` を添える。
 //! kanade → 台本の起動 → 配送 → 中断を禁じる受け口の運ぶ道が既定の値に落ちていなければ、
 //! `external` では線に `Enter` が出ず、`local`／無しでは今どおり出る。

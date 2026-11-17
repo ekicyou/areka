@@ -39,7 +39,7 @@ pub(crate) fn install(world: &mut World) {
 }
 
 /// 置き場のゴースト（無ければ `None`）。
-fn session(world: &World) -> Option<&GhostSession> {
+pub(super) fn session(world: &World) -> Option<&GhostSession> {
     world.get_non_send::<GhostSlot>()?.0.as_ref()
 }
 

@@ -12,8 +12,8 @@ use super::{
 // 同じ第 3 要素）の上で、
 // `\1\![move,...]` を含む OnBoot talk を実 sink 経路で流し、`MoveDirective` が move channel へ届き
 // frame 相 drain（`run_move_drain_phase`＝task 9.2）で対象窓が fixture 検算位置へ即時移動することを
-// 固定する。9.2 の frame 相配線が spine で end-to-end に生きていることの自動檻（headless・sleep 不使用・
-// 注入 Tick のみ・手動実機確認は Task 11 に一本化）。
+// 固定する。9.2 の frame 相配線が spine で end-to-end に生きていることの自動檻（headless・時刻は
+// 注入 Tick で決まり、待ちは poll-backoff の短い sleep を挟む・手動実機確認は Task 11 に一本化）。
 // ===========================================================================
 
 /// entity の WindowPos.position を読む（未設定は panic で検出）。
@@ -29,8 +29,8 @@ fn window_position(world: &World, e: Entity) -> Point {
 /// （ghost→sakura compile→CueSheet→dispatch→broadcast→**実 MoveCueSink**→move channel）で流し、frame 相
 /// drain（`run_move_drain_phase`＝task 9.2）が `MoveDirective` を drain して対象キャラ窓を検算位置へ即時
 /// 移動させることを固定する。9.1 が置いた throwaway 送出端を実 MoveCueSink（sinks 第 3 要素・S-3 形）へ
-/// 差し替えた配線が spine で end-to-end に生きていることの自動檻（headless・sleep 不使用・注入 Tick のみ・
-/// R8.3/8.4/8.6）。窓が実際に動く＝`MoveDirective` が channel へ届き drain→apply された唯一の経路ゆえ、
+/// 差し替えた配線が spine で end-to-end に生きていることの自動檻（headless・時刻は注入 Tick で決まり、
+/// 待ちは poll-backoff の短い sleep を挟む・R8.3/8.4/8.6）。窓が実際に動く＝`MoveDirective` が channel へ届き drain→apply された唯一の経路ゆえ、
 /// 移動観測が「channel 到達＋frame 相 drain の live」を同時に証跡する。
 ///
 /// # `\1` は正典どおり scope1（エモ＝相方）へ切替（観測 scope は 1・R4.4）

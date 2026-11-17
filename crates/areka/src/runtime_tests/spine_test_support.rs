@@ -1,4 +1,6 @@
-use super::{DPI, Entity, GhostWindows, PresentCommand, RecordedCall, SpineHarness};
+use super::{
+    DPI, Entity, GhostWindows, PresentCommand, RecordedCall, SpineHarness, settle_bounded,
+};
 
 // 観測の補助（不透明の数・variant 名・DPI の差し替え）。
 
@@ -15,6 +17,19 @@ pub(super) fn boot_finished(calls: &[RecordedCall]) -> bool {
     calls
         .iter()
         .any(|c| matches!(c, RecordedCall::Notify { id, .. } if id == "basewareversion"))
+}
+
+/// 受信済みの表示指令の残りを [`settle_bounded`] で汲み切って `buf` へ足す。
+///
+/// 期待の件数に届いた所で汲むのを止めると、その後に届く余分な指令を見ずに「ちょうど N 件」が空振りする。
+/// 打ち切りは反復回数ではなく壁時計の最小持続と連続空観測で決まり、時刻は進めない（回収だけ）。
+pub(super) fn drain_settled(harness: &mut SpineHarness, buf: &mut Vec<PresentCommand>) {
+    settle_bounded(|| {
+        let got = harness.wiring.drain_received();
+        let n = got.len();
+        buf.extend(got);
+        n
+    });
 }
 
 /// `PresentCommand` の variant 名（`PresentCommand` は `reply` を含み `Debug` 非実装ゆえ診断表示用）。
