@@ -413,7 +413,7 @@ fn a_sweeper_running_alongside_never_disturbs_a_staging_tree_or_a_live_copy() {
 
     let passes = sweeper.finish();
     // 周回数はスレッドの割り当て次第で揺れる。走ったことだけを確かめ、並走の中身は
-    // 上の周ごとの主張と 8 スレッドのテストが決定論で持つ。
+    // 上の周ごとの主張と 8 スレッドのテストが持つ（窓に当たるかは割り当てしだい）。
     assert!(passes > 0, "掃除が 1 周以上走ったこと（この検査の較正）");
 }
 

@@ -350,7 +350,7 @@ fn manual_root_refuses_a_tree_it_cannot_remove() {
 /// `os error N` を字面で読む）。
 #[test]
 fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing() {
-    let path = Path::new("held");
+    let path = Path::new("掴まれた木");
 
     let mut failed = Vec::new();
     write_cleanup(
@@ -361,10 +361,14 @@ fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing()
     );
     let failed = String::from_utf8(failed).expect("ASCII で書く");
     assert!(
-        failed.starts_with("sample-ghost-kit: cleanup failed (remove the work folder): held ("),
+        failed.starts_with("sample-ghost-kit: cleanup failed (remove the work folder): "),
         "頭の字面: {failed}"
     );
     assert!(failed.contains("os error 5"), "os error N を保つ: {failed}");
+    assert!(
+        failed.is_ascii() && failed.contains("\\u{"),
+        "日本語のパスは逃がして ASCII だけで書く: {failed}"
+    );
 
     let mut not_found = Vec::new();
     write_cleanup(
@@ -374,4 +378,67 @@ fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing()
         path,
     );
     assert!(not_found.is_empty(), "既に無いのは黙って通す");
+}
+
+/// 並走する掃除が先に消して消去待ちになった札は、`retire_lease` が何も書かない
+/// （audit-test-kits かけ直し 4 回目 S2）。
+///
+/// 削除を共有する手綱で札を開いたまま、`FILE_FLAG_DELETE_ON_CLOSE` の手綱を閉じて先に
+/// 消すと、残りの手綱を閉じるまで札は消去待ちになる——掃除が消している最中の札と同じ
+/// 状態である（`remove_file` で先に消すと、今の Windows は名前をその場で外すので消去待ちが
+/// 作れない）。
+#[test]
+fn a_lease_already_pending_deletion_by_a_sweeper_writes_no_cleanup_line() {
+    const DELETE: u32 = 0x0001_0000;
+    const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+    let namespace = WorkDir::new().expect("私有の名前空間");
+    let lock = namespace.path().join("pending.lock");
+    let sweeper = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .share_mode(FILE_SHARE_ALL)
+        .open(&lock)
+        .expect("相方の札は開けるはず");
+    drop(
+        std::fs::OpenOptions::new()
+            .access_mode(DELETE)
+            .share_mode(FILE_SHARE_ALL)
+            .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+            .open(&lock)
+            .expect("閉じたら消す手綱で開けるはず"),
+    );
+
+    // 前提の実測: 消去待ちの札への `remove_file` は os error 5 で断られる。
+    let refused = std::fs::remove_file(&lock).expect_err("消去待ちの札は消せない");
+    assert_eq!(
+        refused.raw_os_error(),
+        Some(5),
+        "消去待ちは os error 5: {refused}"
+    );
+    // 前提の実測: 消去待ちの札でも属性は読める（だから見分けは開いてみることで行う）。
+    assert!(
+        std::fs::symlink_metadata(&lock).is_ok(),
+        "消去待ちの札の属性は読める"
+    );
+
+    let mut out = Vec::new();
+    retire_lease_to(&mut out, None, &lock);
+    drop(sweeper);
+    assert!(
+        out.is_empty(),
+        "掃除が先に消した札は後始末の失敗ではない: {}",
+        String::from_utf8_lossy(&out)
+    );
+    assert!(!lock.exists(), "相方を閉じれば札は消えている");
+
+    // 較正: 持ち主が握っている札（削除を共有しない）を消せないのは本物の失敗として書く。
+    let held = WorkDir::in_namespace(namespace.path()).expect("握られた札");
+    let mut out = Vec::new();
+    retire_lease_to(&mut out, None, held.lock_path());
+    let line = String::from_utf8(out).expect("ASCII で書く");
+    assert!(
+        line.starts_with("sample-ghost-kit: cleanup failed (remove the lease file): ")
+            && line.contains("os error "),
+        "握られている札を消せないのは書く: {line}"
+    );
 }

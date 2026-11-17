@@ -1,6 +1,6 @@
 //! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
-//! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。`emily4` の 1 本は spec:
-//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3。`dot_sakura` の 1 本は spec:
+//! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。登記の往復の `emily4` の枝は spec:
+//! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3、`dot_sakura` の枝は spec:
 //! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。spec の名を添えていない番号は spec
 //! `areka-P0-nar-install` のもの（ほかの spec の番号はその場で spec の名を添える）。
 //!
@@ -13,7 +13,10 @@
 //! 登記の 1 行とちょうど一致する（登記の往復。取り出し元の無い同梱を名乗る `emily4` は
 //! 同梱を飛ばしてゴーストだけを入れ、`dot_sakura` は警告も飛ばした同梱も無くゴーストと
 //! 同梱を入れて最上位の普通のファイルを本体の直下に置く）／取得した根へ書いた起動記録が
-//! 次に取得した根に現れない。
+//! 次に取得した根に現れない／URL の行はぱすたの 1 行だけで、書庫は Vendored の行だけが
+//! リポジトリに置く（spec `areka-P0-sample-url-fetch`）／2 つ目のシェルを写すと写した先の
+//! `name` だけが変わり、元は残る（spec `areka-P0-shell-balloon-switch`）／失敗の表示は
+//! ASCII だけで書く。
 //!
 //! 「借用しか返さないので取得した値を捨てるとコンパイルできない」ことは、コンパイル自体を
 //! 判定に使うので rustdoc の `compile_fail` 例（[`SampleRoot::root`](super::SampleRoot::root)・
@@ -123,31 +126,11 @@ fn fetched_rows() -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-/// 書庫をリポジトリに置く行は `Vendored`、ほかは URL の行
-/// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。
+/// URL の行はぱすた（`pasta-in-windows`）の 1 行だけで、URL は公開の置き場を指す
+/// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。書庫をリポジトリに置く行が
+/// `Vendored` であることは `only_vendored_rows_have_a_nar_in_the_repository` が持つ。
 #[test]
-fn the_rows_with_a_nar_in_the_repository_are_vendored_and_the_rest_are_url_rows() {
-    let vendored: Vec<&str> = SAMPLES
-        .iter()
-        .filter(|s| s.source == SampleSource::Vendored)
-        .map(|s| s.name)
-        .collect();
-    assert_eq!(
-        vendored,
-        [
-            "emo2",
-            "R_POST_and_KOMAINU",
-            "emo2-kakukaku-offsetdpi",
-            "emo2-kakukaku-wplimit",
-            "konnoyayame",
-            "StayseeBalloon",
-            "claudia",
-            "emily4",
-            "dot_sakura",
-            "areka-balloon",
-        ],
-        "書庫をリポジトリに置く行は Vendored のまま"
-    );
+fn the_only_url_row_is_pasta_in_windows() {
     assert_eq!(
         fetched_rows(),
         [(
@@ -698,6 +681,11 @@ fn named_descript_replaces_the_name_line_or_appends_one() {
         named_descript(b"charset,UTF-8\nname,old\n", "x"),
         b"charset,UTF-8\nname,x\n"
     );
+    // 1 行目の頭の BOM は外して照らし、置き換えても残す（かけ直し 4 回目 S7）。
+    assert_eq!(
+        named_descript(b"\xEF\xBB\xBFname,old\r\ntype,shell\r\n", "x"),
+        b"\xEF\xBB\xBFname,x\r\ntype,shell\r\n"
+    );
 }
 
 /// 元のシェルが無ければ、写す先のフォルダを作らずに `Io`（`NotFound`）を返す（audit-test-kits 指摘 16）。
@@ -739,6 +727,7 @@ fn the_io_error_is_shown_in_ascii_only() {
     assert!(text.is_ascii(), "{text}");
     assert!(text.contains("os error 5"), "{text}");
     assert!(text.contains("create the work folder"), "{text}");
+    assert!(text.contains("\\u{"), "日本語は逃がして残る: {text}");
 }
 
 /// `Io` 以外の表示も、名前・パス・展開器の日本語の文を ASCII に写す（`nar-sample-path` が

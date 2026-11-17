@@ -182,6 +182,7 @@ fn each_corruption_changes_exactly_one_thing() {
     let size = build(Some(Corrupt::Size));
     assert_ne!(size.uncomp_size, clean.uncomp_size, "宣言サイズだけが違う");
     assert_eq!(size.crc, clean.crc);
+    assert_eq!(size.comp_size, clean.comp_size);
     assert_eq!(size.payload, clean.payload);
 
     let data = build(Some(Corrupt::Data));
@@ -342,4 +343,29 @@ fn folding_orders_entries_by_byte_order() {
         .map(|p| p.name)
         .collect();
     assert_eq!(names, vec![b"B.txt".to_vec(), b"a.txt".to_vec()]);
+}
+
+/// 名前が UTF-8 にならない（対になっていないサロゲートの）ファイルは、黙って飛ばさずに
+/// `InvalidData` で断り、文は ASCII だけで書く（audit-test-kits かけ直し 4 回目 U6）。
+#[test]
+fn folding_a_name_that_is_not_utf8_fails_with_invalid_data_in_ascii() {
+    use std::os::windows::ffi::OsStringExt;
+    let work = WorkDir::new().expect("私有の場所");
+    let root = work.path().join("ひらがな");
+    std::fs::create_dir(&root).expect("作れる");
+    let lone = std::ffi::OsString::from_wide(&[0xD800]);
+    std::fs::write(root.join(&lone), b"x")
+        .expect("NTFS は対になっていないサロゲートの名前を置ける");
+
+    let err = fold_tree(&root).expect_err("UTF-8 にならない名前は断る");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    let message = err.to_string();
+    assert!(
+        message.starts_with("name is not valid UTF-8: ") && message.is_ascii(),
+        "文は ASCII だけ: {message}"
+    );
+    assert!(
+        message.contains("\\u{3072}"),
+        "フォルダの日本語は逃がして添える: {message}"
+    );
 }

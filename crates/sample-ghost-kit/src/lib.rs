@@ -413,12 +413,19 @@ impl SampleRoot {
 /// `descript.txt` のバイト列の `name,` の行を `name,<name>` に替える。無ければ末尾に足す。
 ///
 /// 行の終わり（CRLF／LF）は元の行のものを残し、足すときはファイルに CRLF が在れば CRLF に
-/// する。他の行は 1 バイトも変えない。
+/// する。他の行は 1 バイトも変えない。1 行目の頭の BOM は外して照らし、置き換えても残す。
 fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
+    const BOM: &[u8] = b"\xEF\xBB\xBF";
     let line_of = |end: &[u8]| [b"name,", name.as_bytes(), end].concat();
     let mut out = Vec::with_capacity(bytes.len() + name.len() + 8);
     let mut found = false;
-    for line in bytes.split_inclusive(|b| *b == b'\n') {
+    for (index, mut line) in bytes.split_inclusive(|b| *b == b'\n').enumerate() {
+        if index == 0
+            && let Some(rest) = line.strip_prefix(BOM)
+        {
+            out.extend_from_slice(BOM);
+            line = rest;
+        }
         if line.starts_with(b"name,") {
             let body = line.len()
                 - line
