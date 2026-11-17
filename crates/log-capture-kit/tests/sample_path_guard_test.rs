@@ -42,11 +42,11 @@
 //! - 除外領域を走査すると、あると宣言した形の当たりが確かにあること（＝除外が飾りでない）。
 //! - 本番依存の見張りは合成マニフェストで赤を作れること。
 //!
-//! # 除外領域の実体は今日どこまであるか（恒真化への備え）
+//! # 除外領域の実体はどこまであるか（恒真化への備え）
 //!
-//! 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、**今日実体がある
-//! のは ⑶ だけである**——⑵ と ⑷ は構造的に字面にならず、⑴ は窓口が段 ③ で旧置き場を
-//! 綴らなくなって消えた。実体の無い形を黙って落とすと、除外が飾りになっても気付けない。
+//! 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、**実体の無い形がある**
+//! （構造的に字面にならない形や、窓口が綴らなくなって消えた形）。どの形に実体があるかは
+//! [`EXCLUSION_FORMS`] が宣言する。実体の無い形を黙って落とすと、除外が飾りになっても気付けない。
 //! そこで [`EXCLUSION_FORMS`] が 4 形それぞれに「今日あるか・無いならなぜか」を明示し、
 //! [`the_exclusion_declares_which_forms_it_holds`] が**両方向**で判定する——あると宣言した
 //! 形が消えたら赤、無いと宣言した形が現れたら赤（宣言を書き換えさせる）。段 ③ で ⑶ の
@@ -54,10 +54,12 @@
 //!
 //! # 走査語を逐語で書かない約束
 //!
-//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。語を逐語で書くと
-//! 見張りが自分自身を違反として拾う。⑴⑶ は `concat!` で 2 片に割り、⑵⑷ は登記表から
-//! 組み立てるので字面には現れない。守れていることは
-//! [`the_guard_file_never_spells_the_tokens_out_not_even_inside_comments`] が縛る。
+//! 本ファイルは `crates/` の下にあるので走査対象そのものでもある。語を実行行に逐語で書くと
+//! 見張りが自分自身を違反として拾う。コメントの中なら見張りは拾わない（主検査はコメントを除く）が、
+//! 綴りを `rg`／`grep` で検索して数えるときの母数が黙って動く。⑴⑶ は `concat!` で 2 片に割り、
+//! ⑵⑷ は登記表から組み立てるので字面には現れない。守れていることは
+//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が、見張りの置き場
+//! （共有 crate の `tests/`）の全ファイルを生テキストで見て縛る。
 
 mod workspace_scan;
 
@@ -66,8 +68,9 @@ use std::collections::BTreeSet;
 use sample_ghost_kit::SAMPLES;
 
 use workspace_scan::{
-    Hit, has_dev_dependency_on, manifest_fixture, production_dependencies_on, raw_occurrences,
-    read_source, render, scan_sources, scan_tokens, walk_workspace_sources, workspace_manifests,
+    Hit, files_that_must_not_spell_the_tokens, has_dev_dependency_on, manifest_fixture,
+    production_dependencies_on, raw_occurrences, raw_scan_sources, render, scan_sources,
+    scan_tokens, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -105,9 +108,6 @@ const GATEWAY_USERS: &[(&str, &str)] = &[(
 
 /// [`GATEWAY_USERS`] の件数（逐語）。表と食い違えば赤。
 const GATEWAY_USERS_COUNT: usize = 1;
-
-/// 本見張り自身の相対パス。
-const THIS_GUARD: &str = "crates/log-capture-kit/tests/sample_path_guard_test.rs";
 
 /// 走査語の 4 形。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -220,12 +220,12 @@ enum Presence {
     Retired(&'static str),
 }
 
-/// 4 形それぞれの、除外領域における実体の有無（2026-09-18 実測）。
+/// 4 形それぞれの、除外領域における実体の有無。
 ///
-/// 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、実測で実体がある
-/// のは ⑶ の 1 形だけである。⑵ と ⑷ は窓口が実行時に組むので字面にならず、⑴ は窓口が
-/// 段 ③ で旧置き場を綴らなくなって消えた。実体の無い形を黙って落とすと較正が恒真になる
-/// ので、理由つきで宣言し、現れたら赤になるようにしてある（module doc を参照）。
+/// 設計の較正は「除外領域に ⑴〜⑷ の実体があること」を求めているが、実体の無い形がある。
+/// どの形に実体があり、無い形はなぜ無いかは各項が持つ（ここには写さない）。実体の無い形を
+/// 黙って落とすと較正が恒真になるので、理由つきで宣言し、現れたら赤になるようにしてある
+/// （module doc を参照）。
 const EXCLUSION_FORMS: &[(Form, Presence)] = &[
     (
         Form::OldLocation,
@@ -883,11 +883,11 @@ fn a_production_dependency_on_a_gateway_user_is_a_violation() {
 }
 
 // ---------------------------------------------------------------------------
-// 見張り自身が走査語を逐語で持たないこと
+// 見張りの置き場のファイルが走査語を逐語で持たないこと
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
+fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     let tokens = all_tokens();
 
     // 較正: 生テキスト走査はコメントを除かない。除いてしまうと本検査は恒真になる。
@@ -898,13 +898,12 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let violations: Vec<Hit> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
-        .into_iter()
-        .map(|(line, token)| Hit::new(THIS_GUARD, line, token))
-        .collect();
+    // 本見張りの除外は窓口の定義の領域だけで、見張りの置き場に載る例外は無い。
+    let violations = raw_scan_sources(&files_that_must_not_spell_the_tokens(&[]), &tokens);
     assert!(
         violations.is_empty(),
-        "走査語はコメントの中も含めて逐語で書いてはいけない（見張りが自分自身を拾う）。\
+        "走査語はコメントの中も含めて逐語で書いてはいけない（コメントは見張りが除くが、\
+         検索で数える母数は動く）。\
          concat! で 2 片に割るか、登記表から組み立てること:\n{}",
         render(&violations)
     );

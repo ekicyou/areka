@@ -22,7 +22,8 @@
 //! `rg -l` による捕捉サイト計数の母数が動く。そこで走査語は `concat!` で 2 片から組み立て、
 //! ファイルの字面には 1 度も現れないようにする（`workspace_scan/mod.rs` の冒頭の「走査語を、開き括弧の有無を問わず 1 度も逐語で書かない」約束と同じ）。
 //! **約束そのもの**（コメントの中にも逐語で置かないこと）は
-//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が生テキストで縛る。
+//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が、見張りの置き場
+//! （共有 crate の `tests/`）のうち例外表に載らない全ファイルを生テキストで見て縛る。
 //! [`scan_tokens`] はコメントを除去するので、コメントへ逐語で植えても見張りは 1 件も
 //! 拾わないまま `rg -l` の母数だけが動く（レビューの実測で確認済み）。
 //!
@@ -50,9 +51,10 @@ mod workspace_scan;
 use std::collections::{BTreeMap, BTreeSet};
 
 use workspace_scan::{
-    Hit, allowed_paths, has_dev_dependency_on, manifest_fixture, manifest_lines, mentions_crate,
-    production_dependencies_on, raw_occurrences, read_source, render, scan_sources, scan_tokens,
-    stale_entries, unlisted, walk_workspace_sources, workspace_manifests,
+    Hit, allowed_paths, files_that_must_not_spell_the_tokens, has_dev_dependency_on,
+    manifest_fixture, manifest_lines, mentions_crate, production_dependencies_on, raw_occurrences,
+    raw_scan_sources, read_source, render, scan_sources, scan_tokens, stale_entries, unlisted,
+    walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -112,8 +114,8 @@ fn global_capture_tokens() -> Vec<&'static str> {
 
 /// 共有機構の**定義**が置かれた領域。⑴⑵ の走査から外す唯一の領域。
 ///
-/// 外すのは `src/` だけで、共有 crate の `tests/` は走査する（`tests/` には較正が
-/// 意図的な素の呼出を 1 件持っており、それは例外表の項目として扱うのが正しい）。
+/// 外すのは `src/` だけで、共有 crate の `tests/` は走査する（`tests/` の較正が持つ
+/// 意図的な素の呼出は、例外表の項目として扱うのが正しい）。
 const KIT_DEFINITION_PREFIX: &str = "crates/log-capture-kit/src/";
 
 /// ⑴ の例外表（相対パス・理由）。
@@ -255,6 +257,7 @@ fn declares_env_filter_feature(src: &str) -> bool {
 /// 共有 crate の自分の `[features]` の `default` が `env-filter` を含むか（純関数）。
 ///
 /// 複数行の配列も読むため、`default` の鍵の行から次の鍵の行までを `default` の値とみる。
+// shortcut: default の配列に直に書いた env-filter だけを見る（default が挙げる別のフィーチャが env-filter を含む形は当たらない）。共有 crate の [features] に env-filter を含むフィーチャを足すときは、たどる読みに替える
 fn kit_default_enables_env_filter(src: &str) -> bool {
     let mut in_default = false;
     manifest_lines(src).iter().any(|l| {
@@ -334,26 +337,6 @@ fn the_shared_crate_definition_really_holds_the_direct_calls() {
     );
 }
 
-/// 共有 crate の `tests/`（見張りと走査器の置き場）。
-const KIT_TESTS_PREFIX: &str = "crates/log-capture-kit/tests/";
-
-/// 本ファイルと走査器。[`files_that_must_not_spell_the_tokens`] が引けていることの陽性側。
-const THIS_GUARD_AND_THE_SCANNER: [&str; 2] = [
-    "crates/log-capture-kit/tests/with_default_guard_test.rs",
-    "crates/log-capture-kit/tests/workspace_scan/mod.rs",
-];
-
-/// 走査語を逐語で持ってはいけないファイル群。共有 crate の `tests/` の下の全部から、
-/// 2 つの例外表に載るもの（意図して走査語を書くファイル）を除く。
-fn files_that_must_not_spell_the_tokens() -> Vec<String> {
-    let mut allowed = allowed_paths(ALLOWED_DIRECT_CALLS);
-    allowed.extend(allowed_paths(ALLOWED_GLOBAL_CAPTURE));
-    walk_workspace_sources()
-        .into_iter()
-        .filter(|p| p.starts_with(KIT_TESTS_PREFIX) && !allowed.contains(&p.as_str()))
-        .collect()
-}
-
 #[test]
 fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     let mut tokens = direct_call_tokens();
@@ -374,19 +357,10 @@ fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let files = files_that_must_not_spell_the_tokens();
-    for known in THIS_GUARD_AND_THE_SCANNER {
-        assert!(
-            files.iter().any(|p| p == known),
-            "見張りの置き場の列挙に入るはずのファイルが無い（列挙が空振りしている）: {known}"
-        );
-    }
-    let mut violations = Vec::new();
-    for path in &files {
-        for (line, token) in raw_occurrences(&read_source(path), &tokens) {
-            violations.push(Hit::new(path.clone(), line, token));
-        }
-    }
+    // 2 つの例外表に載るもの（意図して走査語を書くファイル）だけを除く。
+    let mut allowed = allowed_paths(ALLOWED_DIRECT_CALLS);
+    allowed.extend(allowed_paths(ALLOWED_GLOBAL_CAPTURE));
+    let violations = raw_scan_sources(&files_that_must_not_spell_the_tokens(&allowed), &tokens);
     assert!(
         violations.is_empty(),
         "走査語はコメントの中も含めて逐語で書いてはいけない。\

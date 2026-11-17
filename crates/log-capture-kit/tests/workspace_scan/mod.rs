@@ -8,9 +8,11 @@
 //! # 部品の分け方
 //!
 //! ファイルシステムに触るのは木の読みの置き場（`sources`）・[`read_source`]・
-//! [`workspace_manifests`]（と下請けの列挙）だけで、[`walk_workspace_sources`]・
-//! [`measure_workspace_sources`] は置き場から読む。残り（[`skip_dir`]・[`strip_comments`]・
-//! [`scan_tokens`]・[`line_count`]・[`over_limit`] ほか）は**入出力だけで完結する純粋な関数**である。
+//! [`workspace_manifests`]（と下請けの列挙・読み取り）だけである。[`walk_workspace_sources`]・
+//! [`measure_workspace_sources`]・[`files_that_must_not_spell_the_tokens`] は置き場から読み、
+//! [`scan_sources`]・[`raw_scan_sources`] は置き場に無いファイルを [`read_source`] に読ませる。
+//! 残り（[`skip_dir`]・[`strip_comments`]・[`scan_tokens`]・[`line_count`]・[`over_limit`] ほか）は
+//! **入出力だけで完結する純粋な関数**である。
 //! 純粋な側は文字列の見本で自己較正できるので、「違反 0 件だから緑」という形の見張りが
 //! 道具の故障で緑になっていないことを別立てで示せる（較正は `tests/workspace_scan_test.rs`）。
 //!
@@ -30,6 +32,8 @@
 //! **本ファイルは走査語を、開き括弧の有無を問わず 1 度も逐語で書かない。** 走査の対象そのものなので、
 //! 逐語で置くと ⑴ 迂回検知の見張り（要件 8）が自分自身を拾い ⑵ 着手前インベントリの
 //! `rg -l` による捕捉サイト計数の母数が動く。以下の doc も同じ約束で書く。
+//! 約束は見張りの置き場のファイル全部のもので、走査語を持つ見張りがそれぞれ自分の語で縛る
+//!（[`files_that_must_not_spell_the_tokens`]）。
 //!
 //! # 行数の定義
 //!
@@ -148,11 +152,17 @@ fn collect_rs_files(dir: &Path, root: &Path, out: &mut Vec<String>) {
 ///
 /// 列挙に入るファイルは置き場から返し、入らないファイルだけをディスクから読む。
 pub fn read_source(rel_path: &str) -> String {
-    let all = sources();
-    match all.binary_search_by(|(path, _)| path.as_str().cmp(rel_path)) {
-        Ok(at) => all[at].1.clone(),
-        Err(_) => read_from_disk(&workspace_root(), rel_path),
+    match source_index(rel_path) {
+        Some(at) => sources()[at].1.clone(),
+        None => read_from_disk(&workspace_root(), rel_path),
     }
+}
+
+/// 列挙の中での位置（列挙に入らないファイルは `None`）。
+fn source_index(rel_path: &str) -> Option<usize> {
+    sources()
+        .binary_search_by(|(path, _)| path.as_str().cmp(rel_path))
+        .ok()
 }
 
 /// 列挙した `at` 番目のソースの、コメントを除いた本文。
@@ -637,19 +647,53 @@ impl std::fmt::Display for FileLines {
 /// 与えられたファイル群を走査する。
 ///
 /// 列挙に入るファイルは、コメントを除いた本文の置き場（[`stripped_source`]）から読む。
+/// 入らないファイルは [`read_source`] に読ませる。
 pub fn scan_sources<T: AsRef<str>>(paths: &[String], tokens: &[T]) -> Vec<Hit> {
-    let all = sources();
     let mut hits = Vec::new();
     for path in paths {
-        let found = match all.binary_search_by(|(known, _)| known.as_str().cmp(path)) {
-            Ok(at) => scan_stripped(stripped_source(at), tokens),
-            Err(_) => scan_tokens(&read_from_disk(&workspace_root(), path), tokens),
+        let found = match source_index(path) {
+            Some(at) => scan_stripped(stripped_source(at), tokens),
+            None => scan_tokens(&read_source(path), tokens),
         };
         for (line, token) in found {
             hits.push(Hit::new(path.clone(), line, token));
         }
     }
     hits
+}
+
+/// 与えられたファイル群を、コメントを**除かずに**走査する（[`raw_occurrences`] を各ファイルに当てる）。
+pub fn raw_scan_sources<T: AsRef<str>>(paths: &[String], tokens: &[T]) -> Vec<Hit> {
+    let mut hits = Vec::new();
+    for path in paths {
+        for (line, token) in raw_occurrences(&read_source(path), tokens) {
+            hits.push(Hit::new(path.clone(), line, token));
+        }
+    }
+    hits
+}
+
+/// 見張りと走査器の置き場（共有 crate の `tests/`）。
+const GUARD_HOME_PREFIX: &str = "crates/log-capture-kit/tests/";
+
+/// 本ファイル。[`files_that_must_not_spell_the_tokens`] が引けていることの陽性側。
+const THE_SCANNER: &str = "crates/log-capture-kit/tests/workspace_scan/mod.rs";
+
+/// 走査語を逐語で持ってはいけないファイル群。見張りの置き場の下の全部から、呼び手の見張りの
+/// 例外表に載るもの（`allowed`。意図して走査語を書くファイル）を除く。
+///
+/// 手書きの一覧にしないのは、見張りを足したときに黙って外れるのを防ぐため。列挙が空振りすると
+/// 呼び手の検査が恒真になるので、本ファイルが入っていなければ落とす。
+pub fn files_that_must_not_spell_the_tokens(allowed: &[&str]) -> Vec<String> {
+    let files: Vec<String> = walk_workspace_sources()
+        .into_iter()
+        .filter(|p| p.starts_with(GUARD_HOME_PREFIX) && !allowed.contains(&p.as_str()))
+        .collect();
+    assert!(
+        files.iter().any(|p| p == THE_SCANNER),
+        "見張りの置き場の列挙に入るはずのファイルが無い（列挙が空振りしている）: {THE_SCANNER}"
+    );
+    files
 }
 
 /// 例外表の 1 項（先頭がパスの組）。見張りごとに表の形が違うので、パスの取り出しだけをそろえる。

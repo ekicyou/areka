@@ -64,3 +64,17 @@
 - T1: 消せないフォルダの知らせのテストを作り直した。日本語の名前の子のフォルダ `消せない` を作り、中のファイルを読みだけ共有（FILE_SHARE_READ）で開いたまま消し手を呼ぶ。`\u{` に加え、パスを `ascii` に写した綴りが知らせに在ることを確かめる。後片付けは手綱を閉じた後に消え、`target\test-roots` に残りは無い。レビューで 5 回続けて回し、5 回とも緑だった
 - 較正: 消し手のパスの `ascii(..)` を外す → `a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line` が赤（レビューでも取り直した）
 - L1・L2・T2 は説明の直しだけ。T2 の「末尾の 3 本」は git log -S で出どころを確かめた
+
+## 束 D の直しの控え（承認済み・G1・G2 は連鎖 5 回目 G6・G5 → 6 回目 G1・G2 として Fable が直し、Fable が確かめた）
+- G1 の結論: `scan_sources` が持っていた `read_source` の写しを消した。引き当ては私有の `source_index` 1 つにまとめ、列挙に無いファイルは `read_source` に読ませる。module doc の「ファイルシステムに触るのは…だけ」も本当になった。当たりは新旧で同じ（一時テストで 2,658 ファイル・8 語、191,188 件が一致。一時テストは消した）
+- G2 の結論: `files_that_must_not_spell_the_tokens` を、除外のパスを引数に取る形で mod.rs へ移した。生テキストで走査する輪は `raw_scan_sources` の 1 つだけにした。3 つの見張りとも、同じ範囲（共有 crate の `tests/` の下から、自分の例外表に載るものを除く）を見る。手書きの除外の一覧は無い。列挙が空になれば、走査器 `THE_SCANNER` が列挙に無いことで赤になる。temp_path と sample_path の見張りが見る範囲は 1 ファイルから 8 ファイルになり、今の木の当たりは 0
+- 較正:
+  - 新しく見る範囲のファイルのコメントに、3 つの見張りの走査語を植える → 3 つとも `the_guard_files_never_spell_the_tokens_out_not_even_inside_comments` が赤。実装係は doc_tree_guard_test.rs に、レビューは file_length_guard_test.rs に植えた
+  - 接頭辞を壊す → 同じ 3 本が赤
+- 改名: temp_path と sample_path の `the_guard_file_never_spells_the_tokens_out_not_even_inside_comments` を `the_guard_files_never_spell_the_tokens_out_not_even_inside_comments` にした（見る範囲が 1 ファイルでなくなり、前の名前が偽になるため）。旧名の当たりは completed の 6 文書と reaudit-round5.md だけ（直さない）
+- 消したもの: 定数 `KIT_TESTS_PREFIX`・`THIS_GUARD_AND_THE_SCANNER`・`THIS_GUARD`（どれもファイルの外に当たりは無い）
+- G3〜G6 は説明と `shortcut:` だけで、判定は変えていない
+- 前の回の決め（1 回目 G1・G7、3 回目 G2・G3、4 回目 G3・G5、5 回目 G1・G2・G5・G6、決め D7）と矛盾しない（レビューで突き合わせた）
+
+## かけ直しの区切り
+6 回目で「必ず直す」が 0 件、道具の振る舞いの指摘が 0 件（[prod] の E5 は 2 回目の決めを打ち消す往復の組なので当てない）になった。6 回目の指摘を直したところで、要件 9.6 に従いかけ直しを区切る。指摘の件数は回ごとに 38 → 42 → 34 → 30 → 34 → 28 だった

@@ -58,15 +58,17 @@
 //! `rg`／`grep` の母数が黙って動く。そこで走査語は `concat!` で 2 片から組み立て、
 //! ファイルの字面には 1 度も現れないようにする（`with_default_guard_test.rs` の「走査語を逐語で書かない約束」と
 //! 同じ約束）。守れていることは
-//! [`the_guard_file_never_spells_the_tokens_out_not_even_inside_comments`] が縛る。
+//! [`the_guard_files_never_spell_the_tokens_out_not_even_inside_comments`] が、見張りの置き場
+//! （共有 crate の `tests/`）のうち例外表に載らない全ファイルを生テキストで見て縛る。
 
 mod workspace_scan;
 
 use std::collections::BTreeSet;
 
 use workspace_scan::{
-    Hit, allowed_paths, allowed_paths_without, raw_occurrences, read_source, render, scan_sources,
-    scan_tokens, stale_entries, unlisted, walk_workspace_sources,
+    allowed_paths, allowed_paths_without, files_that_must_not_spell_the_tokens, raw_occurrences,
+    raw_scan_sources, read_source, render, scan_sources, scan_tokens, stale_entries, unlisted,
+    walk_workspace_sources,
 };
 
 // ---------------------------------------------------------------------------
@@ -175,9 +177,6 @@ const GATEWAY_FILES: [&str; 2] = [
     "crates/temp-path-kit/src/lib.rs",
     "crates/temp-path-kit/src/lib_tests.rs",
 ];
-
-/// 本ファイル自身の相対パス（自己検査で使う）。
-const THIS_GUARD: &str = "crates/log-capture-kit/tests/temp_path_guard_test.rs";
 
 // ---------------------------------------------------------------------------
 // 走査の取り回し
@@ -542,11 +541,11 @@ fn a_fixed_name_in_a_comment_is_not_a_hit_but_the_same_line_of_code_is() {
 }
 
 // ---------------------------------------------------------------------------
-// 見張り自身が走査語を逐語で持たないこと
+// 見張りの置き場のファイルが走査語を逐語で持たないこと
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
+fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
     let mut tokens = entry_point_tokens();
     tokens.push(TOKEN_PROCESS_ID);
 
@@ -567,10 +566,9 @@ fn the_guard_file_never_spells_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
-    let violations: Vec<Hit> = raw_occurrences(&read_source(THIS_GUARD), &tokens)
-        .into_iter()
-        .map(|(line, token)| Hit::new(THIS_GUARD, line, token))
-        .collect();
+    // 例外表に載るもの（意図して入口を書くファイル）だけを除く。
+    let allowed = allowed_paths(ALLOWED_ENTRY_POINT_USES);
+    let violations = raw_scan_sources(&files_that_must_not_spell_the_tokens(&allowed), &tokens);
     assert!(
         violations.is_empty(),
         "走査語はコメントの中も含めて逐語で書いてはいけない。\
