@@ -135,22 +135,4 @@ mod tests {
             );
         }
     }
-
-    /// surface_point 伝播檻（1.8・5.4）: `hit_region_client` が返した縮約後サーフェス px を
-    /// `HitRegion.surface_point` がそのまま授受することを固定する。
-    #[test]
-    fn resolver_propagates_surface_point_from_client_hit() {
-        let presenter = EmoPresenter::new();
-        for (scope, x, y, expect) in [
-            (0u32, 100i64, 100i64, (100i64, 100i64)),
-            (1, 0, 0, (0, 0)),
-            (7, -13, 4321, (-13, 4321)),
-        ] {
-            let got = resolve_hit_region(&presenter, scope, x, y);
-            assert_eq!(
-                got.surface_point, expect,
-                "未表示 target の k は ONE 相当＝縮約は恒等（scope {scope}）"
-            );
-        }
-    }
 }

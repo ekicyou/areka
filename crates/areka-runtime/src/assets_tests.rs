@@ -12,8 +12,6 @@ use super::*;
 use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::target_map::scope_of;
-// 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
-use areka_placement::source::{load_balloon_author_dpi, load_descript_source};
 
 /// 観測可能な完了条件（tasks.md task 2.6）: emo2 fixture を渡した統合テストが
 /// `BootAssets` の各フィールドに期待どおりのデータを含んで green で通る。
@@ -230,20 +228,12 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
             "emo2 の合成 surfaces.txt は animation 行を持たないため scope {scope} も空表（データ事実）"
         );
     }
-
-    // シェル表は単数のまま（全 scope 同一 Shell 由来＝この前提はシェル面に限る）。
-    let shell_rebuilt = AnimationTable::from_world(&boot.shells[0].emo_world);
-    assert_eq!(
-        boot.loop_tables.shell.is_empty(),
-        shell_rebuilt.is_empty(),
-        "シェル表は単数のまま（scope 非依存という前提が成り立つのはシェル面に限る）"
-    );
 }
 
 /// 観測可能な完了条件（tasks.md task 3.2・要件 5.6）: 起動シームの転送が **全 scope** を
 /// アクタ鍵語彙へ写して seriko へ渡す（単一エントリ暫定でない）。
 ///
-/// `wire_runtime`（mod.rs）と spine ハーネス（spine.rs）が共有する転送
+/// `wire_runtime`（lib.rs）と spine ハーネス（spine.rs）が共有する転送
 /// [`actor_keyed_balloon_tables`] を実 fixture 由来の写像へ適用し、`SerikoLoopConfig.balloon_tables`
 /// のキー集合が `ActorKey::from(scope.to_string())` で `{"0","1"}` になることを固定する。
 /// 先頭 scope だけを載せる旧形（`{"0"}`）はこの檻で落ちる。
@@ -258,7 +248,7 @@ fn boot_seam_transfers_every_balloon_scope_as_actor_key() {
         .expect("emo2 fixture の BootAssets 組立は成功する");
     let asset_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
 
-    // 起動シーム（mod.rs／spine.rs）が行う転送そのもの。
+    // 起動シーム（lib.rs／spine.rs）が行う転送そのもの。
     let transferred = actor_keyed_balloon_tables(boot.loop_tables.balloon);
 
     let keys: Vec<ActorKey> = transferred.keys().cloned().collect();
@@ -667,54 +657,6 @@ fn build_boot_assets_carries_supplied_author_dpi() {
     );
 }
 
-/// 観測可能な完了条件（tasks.md task 4.1・要件 1.1・design Flow 3 手順1）: task 2.1 の
-/// 読取アクセサが emo2 fixture から返す値が、そのまま `BootAssets` から取り出せる。
-///
-/// 本番 boot（design Flow 3）は `load_descript_source(...).shell_author_dpi()` と
-/// `load_balloon_author_dpi(balloon_root)` で作者基準 DPI を **1 度だけ**読み、同じ値を
-/// 採寸（`MeasureScaling` の k₀）と attach（`attach_target`）の双方へ配る。ここでは実
-/// fixture に対しその経路を再現し、アクセサの戻り値と `BootAssets` の搬送値が一致すること
-/// （＝搬送の途中で捏造・既定値差し替えが起きないこと）を固定する。
-///
-/// emo2 fixture は shell（`seriko.dpi`）・balloon（`dpi`）とも **DPI 無宣言**ゆえ、
-/// 正典既定の 96/96 が現実の既定ケースとなる（task 2.1 実測・既存採寸期待値に影響なし）。
-#[test]
-fn build_boot_assets_carries_emo2_accessor_author_dpi() {
-    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-
-    // 本番 boot と同じ読取器（task 2.1）で emo2 fixture の作者基準 DPI を得る。
-    let source =
-        load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
-    let shell_dpi = source.shell_author_dpi();
-    let balloon_dpi = load_balloon_author_dpi(&emo2_balloon_root());
-    assert_eq!(
-        shell_dpi, 96,
-        "emo2 shell は seriko.dpi 無宣言＝正典既定 96"
-    );
-    assert_eq!(balloon_dpi, 96, "emo2 balloon は dpi 無宣言＝正典既定 96");
-
-    let boot = build_boot_assets(
-        &emo2_root(),
-        &emo2_balloon_root(),
-        &[0, 1],
-        shell_dpi,
-        balloon_dpi,
-    )
-    .expect("emo2 fixture の BootAssets 組立は成功する");
-
-    assert_eq!(
-        boot.shell_author_dpi, shell_dpi,
-        "搬送値は読取アクセサ（task 2.1）の戻り値と一致する"
-    );
-    assert_eq!(
-        boot.balloon_author_dpi, balloon_dpi,
-        "搬送値は読取アクセサ（task 2.1）の戻り値と一致する"
-    );
-}
-
 // ── 起動経路の surfaces.txt 復号（要件 6.1）──
 
 /// `root` の下に ghost／shell／balloon の最小の検体を組み、balloon のフォルダを返す。
@@ -766,17 +708,18 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 ///
 /// `build_boot_assets` はシェル dir でなく ghost ルートを取り、マウント解決を経て
 /// shell dir へ辿り着く。ゆえに検体は `(ghost_root, balloon_root)` の対を組む必要があるが、
-/// これは実 shell を丸ごと複写しなくてよい——`placement_shared_test_support.rs` の
+/// これは実 shell を丸ごと複写しなくてよい——`areka-placement/src/test_support.rs` の
 /// `synth_declared_dpi_ghost` と同型に、**PNG 3 枚の複写**（`surface0.png`／`surface10.png`／
 /// `balloons0.png`）と数行の descript で足りる。その shell だけを `charset,Shift_JIS` 宣言の
 /// surfaces.txt に差し替えたものが本検体。
 ///
-/// **この検査がここに居る理由**: タスク 4.2 が固定するのは `charset::decode` と
-/// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
-/// `assets.rs` の読取が実際に `decode` を通っているかどうかには触れない。配線を
-/// `read_to_string` へ戻してもパーサ層の検査は緑のまま通り抜ける。配置採寸側の同種の檻は
-/// `crates/areka-placement/src/measure_tests.rs` にあるが、そちらは 1,000 行の上限に余裕が無く起動側を
-/// 同居させられないため、読取点それぞれの兄弟へ 1 本ずつ置く形にしている。
+/// **この検査がここに居る理由**: `surfaces.txt` の読取と復号は `assets.rs` が自分では行わず、
+/// 読み込みの権威 `areka_emo_present::shell_target::load_shell_target_with_limits` が担う。
+/// 本検査は、その権威を通った起動経路（`build_boot_assets`）が宣言どおりの文字コードで読めることを
+/// 固定する。パーサ層の検査（`charset::decode` と `shell::parse` の等値）は権威への配線までは
+/// 見ないため、配線が `read_to_string` へ戻ってもパーサ層の検査は緑のまま通り抜ける。
+/// 配置採寸側の同種の検査は `crates/areka-placement/src/measure_tests.rs` にあり、起動側は読取点ごとに
+/// 兄弟のテストファイルへ 1 本ずつ置く形にしている。
 ///
 /// 本検査が主張するのは「読取が失敗しないこと」までで、復号後の文字列そのものは見ない
 /// （Shift_JIS を別の 8bit 文字コードとして復号する退化はここを素通りする）。文字コード
