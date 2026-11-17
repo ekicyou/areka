@@ -1,6 +1,7 @@
-//! [`TempPath`](super::TempPath) の自己テスト（要件 12.1）。
+//! [`TempPath`](super::TempPath) の自己テスト。
 //!
-//! 文中の要件の番号は spec `areka-P0-test-cage-determinism` のもの。
+//! 文中の要件の番号は spec `areka-P0-test-cage-determinism` のもの。末尾の 3 本（同じ名前の
+//! 残り・消せないフォルダの知らせ・`ascii` の規則）は spec `audit-test-kits` で足したテスト。
 //!
 //! 主な主張は、同一プロセス内で 2 度作っても名前が衝突しない／破棄で実体が消える／
 //! プロセス識別子が違えば別名になる、である。最後の 1 つは別プロセスを起こしては決定論的に確かめられ
@@ -211,23 +212,27 @@ fn a_leftover_folder_with_the_same_name_is_never_handed_out() {
 
 /// 消せないフォルダは ASCII の 1 行で知らせ、消せたとき・既に無いときは何も書かない。
 ///
-/// 中のファイルを削除を拒む共有モード（読み書きだけ共有）で開いたまま消し手を呼ぶと、
-/// Windows は削除を断る。書き先を `Vec<u8>` にして決定論で読む。
+/// 日本語の名前の子のフォルダに、中のファイルを削除を拒む共有モード（読みだけ共有）で
+/// 開いたまま消し手を呼ぶと、Windows は削除を断る。パスに ASCII の外の字があるので、
+/// 知らせがパスを `ascii` で写していることまで確かめられる。書き先を `Vec<u8>` にして
+/// 決定論で読む。
 #[test]
 fn a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line() {
     use std::os::windows::fs::OpenOptionsExt;
-    const FILE_SHARE_READ_WRITE: u32 = 0x1 | 0x2; // FILE_SHARE_DELETE (0x4) を外す
+    const FILE_SHARE_READ: u32 = 0x1; // FILE_SHARE_WRITE (0x2) と FILE_SHARE_DELETE (0x4) を外す
 
     let dir = TempPath::new("unremovable");
+    let kept = dir.child("消せない");
+    std::fs::create_dir(&kept).expect("日本語の名前の子のフォルダを作れるはず");
     let held = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .share_mode(FILE_SHARE_READ_WRITE)
-        .open(dir.child("held.txt"))
+        .share_mode(FILE_SHARE_READ)
+        .open(kept.join("held.txt"))
         .expect("削除を拒む共有モードで開けるはず");
 
     let mut out = Vec::new();
-    remove_or_report(dir.path(), &mut out);
+    remove_or_report(&kept, &mut out);
     drop(held);
 
     let text = String::from_utf8(out).expect("知らせは UTF-8 のはず");
@@ -237,9 +242,18 @@ fn a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line() {
         text.starts_with("temp-path-kit: could not remove ") && text.ends_with(")\n"),
         "知らせの形が違う: {text:?}"
     );
+    // `\u{` だけでは日本語の OS のエラー文でも満たされるので、パスの綴りそのものも確かめる。
+    assert!(
+        text.contains("\\u{"),
+        "パスが `\\u{{..}}` で写されていない: {text:?}"
+    );
+    let spelled = ascii(&kept.display().to_string());
+    assert!(
+        text.contains(&spelled),
+        "知らせにパスの綴り {spelled:?} が無い: {text:?}"
+    );
 
     // 消せたとき（ここで閉じたので消せる）と、既に無いときは何も書かない。
-    let kept = dir.path().to_path_buf();
     for case in ["removed", "already gone"] {
         let mut silent = Vec::new();
         remove_or_report(&kept, &mut silent);

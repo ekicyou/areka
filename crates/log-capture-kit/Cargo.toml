@@ -1,7 +1,7 @@
 [package]
 name = "log-capture-kit"
 workspace = "../.."
-description = "ログ捕捉テストの硬化機構をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-test-cage-determinism）: 常駐 probe・捕捉窓・正準イベント型・行整形・全スレッド捕捉"
+description = "ログ捕捉テストの硬化機構をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-test-cage-determinism）: 常駐 probe・捕捉窓・正準イベント型・行整形・全スレッド捕捉・判定の補助（expect_one・ExpectField）・EnvFilter 濾過つきの捕捉 capture_under_filter（feature env-filter）"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
