@@ -111,7 +111,7 @@
   - _Dispatch: mechanical — 差し替える式と行き先を設計の表が対で与えている_
   - _Requirements: 4.1, 4.4, 4.5, 4.6_
 
-- [ ] 9. 手書きの記録の捕まえに番兵を足す
+- [x] 9. 手書きの記録の捕まえに番兵を足す
   - `follow_transition_diag_tests.rs` の `resize_under_filter`・`follow_window_move_diag_tests.rs` の `window_move_output_under_filter` に、`diag_tests.rs` と同じ番兵（窓の中で 1 行出し、捕まらなければ panic）を足す。`capture_under_filter` へは寄せず、`env-filter` を宣言しない
   - 完了の状態: 2 つの番兵の檻が緑で、捕まえの窓を閉じたまま出すと panic する
   - _Dispatch: mechanical — 写す見本（`diag_tests.rs`）が形を決めている_

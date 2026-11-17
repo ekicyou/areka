@@ -273,6 +273,10 @@ fn an_unmarked_window_is_enqueued_with_sentinel_tag_fields() {
 /// （tasks.md Implementation Notes・task 1.2 が wintf 側で確立した形）。
 const CONTROL_LINE: &str = "[transition-probe] alive";
 
+/// 番兵の宛先（`diag_tests.rs` と同じ番兵。共有の `capture_under_filter` は `env-filter` の
+/// 機能の下にあり wintf 以外は有効にできないので、同じ形をここに持つ）。
+const SENTINEL_TARGET: &str = "areka_placement::follow_transition_diag_tests::sentinel";
+
 /// 与えた `RUST_LOG` 相当の directive で、遷移を 1 回起こしたときの出力を実際に濾して集める。
 ///
 /// 戻り値には必ず [`CONTROL_LINE`] が含まれる。含まれない戻り値は「濾過の結果 0 行だった」
@@ -297,8 +301,13 @@ fn resize_under_filter(directives: &str) -> String {
 
     let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let sink = buf.clone();
+    let filter = EnvFilter::new(directives).add_directive(
+        format!("{SENTINEL_TARGET}=trace")
+            .parse()
+            .expect("番兵の指令は定数から組むので常に解釈できる"),
+    );
     let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(directives))
+        .with_env_filter(filter)
         .with_ansi(false)
         .with_writer(move || VecWriter(sink.clone()))
         .finish();
@@ -306,6 +315,7 @@ fn resize_under_filter(directives: &str) -> String {
     let _residue = drain_window_pos_commands();
     let (mut world, char_window) = world_with_stale_snapshot(LIVE_WA_BOTTOM_AT_100);
     tracing::subscriber::with_default(subscriber, || {
+        tracing::trace!(target: SENTINEL_TARGET, "capture window is live");
         // 対照行は観測対象の**内側**で出す（同じ捕捉窓・同じ target・同じ directive を通る）。
         tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
         assert!(resize_window_to(
@@ -317,7 +327,17 @@ fn resize_under_filter(directives: &str) -> String {
     });
     let _drained = drain_window_pos_commands();
 
-    String::from_utf8(buf.lock().expect("捕捉バッファのロック取得に失敗").clone()).expect("UTF-8")
+    let out = String::from_utf8(buf.lock().expect("捕捉バッファのロック取得に失敗").clone())
+        .expect("UTF-8");
+    let (sentinel, rest): (Vec<&str>, Vec<&str>) = out
+        .split_inclusive('\n')
+        .partition(|line| line.contains(SENTINEL_TARGET));
+    assert_eq!(
+        sentinel.len(),
+        1,
+        "番兵が捕まらない＝捕捉の窓が生きていない: {out}"
+    );
+    rest.concat()
 }
 
 /// 既定水準（`RUST_LOG=info`）では接地点レコードが 1 行も出ない（要件 2.5）。

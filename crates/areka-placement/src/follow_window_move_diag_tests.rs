@@ -475,6 +475,9 @@ fn no_window_move_record_when_nothing_is_written() {
 /// テストが緑になる空振りを塞ぐ（`follow_transition_diag_tests.rs` の `CONTROL_LINE` と同じ置き方）。
 const CONTROL_LINE: &str = "[window-move-probe] alive";
 
+/// 番兵の宛先（`diag_tests.rs` と同じ番兵。`env-filter` の機能は wintf 以外は有効にできない）。
+const SENTINEL_TARGET: &str = "areka_placement::follow_window_move_diag_tests::sentinel";
+
 /// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag_tests.rs の
 /// `emit_all_under_filter` と同型——こちらは**単一ライター経由**で点灯を確かめる）。
 ///
@@ -500,14 +503,20 @@ fn window_move_output_under_filter(directives: &str) -> String {
 
     let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let sink = buf.clone();
+    let filter = EnvFilter::new(directives).add_directive(
+        format!("{SENTINEL_TARGET}=trace")
+            .parse()
+            .expect("番兵の指令は定数から組むので常に解釈できる"),
+    );
     let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(directives))
+        .with_env_filter(filter)
         .with_ansi(false)
         .with_writer(move || VecWriter(sink.clone()))
         .finish();
 
     let (mut world, e) = char_window_world(1, 192);
     tracing::subscriber::with_default(subscriber, || {
+        tracing::trace!(target: SENTINEL_TARGET, "capture window is live");
         // 対照の行は観測の窓の内側で出す（同じ捕捉・同じ target・同じ directive を通る）。
         tracing::info!(target: DIAG_TARGET, "{CONTROL_LINE}");
         assert!(resize_window_to(
@@ -518,7 +527,17 @@ fn window_move_output_under_filter(directives: &str) -> String {
         ));
     });
 
-    String::from_utf8(buf.lock().expect("捕捉バッファの毒化なし").clone()).expect("UTF-8")
+    let out =
+        String::from_utf8(buf.lock().expect("捕捉バッファの毒化なし").clone()).expect("UTF-8");
+    let (sentinel, rest): (Vec<&str>, Vec<&str>) = out
+        .split_inclusive('\n')
+        .partition(|line| line.contains(SENTINEL_TARGET));
+    assert_eq!(
+        sentinel.len(),
+        1,
+        "番兵が捕まらない＝捕捉の窓が生きていない: {out}"
+    );
+    rest.concat()
 }
 
 /// (4) 既定 `RUST_LOG=info`（`main.rs` のフォールバック）では窓移動レコードが
