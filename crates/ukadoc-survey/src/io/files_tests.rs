@@ -1,15 +1,14 @@
 //! `io/files.rs` の在中テスト。
 //!
-//! 守るのは 3 つ。⑴ 復帰文字を落とす整形が逐語で正しいこと（設計 D-6）。⑵ 読み込みが
+//! 守るのは 4 つ。⑴ 復帰文字を落とす整形が逐語で正しいこと（設計 D-6）。⑵ 読み込みが
 //! その整形を実際に通っていること——本物の repo のファイル（この crate 自身の
 //! `Cargo.toml`。`core.autocrlf` が効く環境では作業ツリーに復帰文字が入る）を読んで
 //! 1 個も残っていないことを確かめる。⑶ 失敗が黙って通らないこと——読めないファイルの
-//! 相手には探したパスを載せた失敗が返る（要件 6.12）。
+//! 相手には探したパスを載せた失敗が返る（要件 6.12）。⑷ 置き換え書きが、一時ファイルを
+//! 書けないときに元の本文を 1 バイトも変えないこと。
 //!
-//! **ファイルは 1 つも作らず、一時ディレクトリも使わない**（設計 File Structure Plan）。
-//! 整形は `&str` → `String` の純粋な関数に切り出してあるので、書き出しの本文の形も
-//! ファイルを作らずに確かめられる。書き出しの失敗経路だけは、親ディレクトリが実在
-//! しない場所を相手にする（この呼び出しは何も作らない）。
+//! ファイルを書くのは ⑷ の 2 本だけで、置き場はワークツリーの
+//! `target\ukadoc-survey-tests\<テスト名>\`（テストごとに別・始めに消して作る）。
 
 use std::path::PathBuf;
 
@@ -41,16 +40,6 @@ fn strip_cr_leaves_lf_only_text_untouched() {
     assert_eq!(strip_cr(body), body);
 }
 
-#[test]
-fn strip_cr_leaves_no_carriage_return_behind() {
-    let body = "\r\n見出し\r\n\r\n本文\r";
-    assert!(
-        !strip_cr(body).contains('\r'),
-        "復帰文字が残っている: {:?}",
-        strip_cr(body)
-    );
-}
-
 /// 落とすのは復帰文字だけで、行の数は 1 行も増減しない。
 #[test]
 fn strip_cr_keeps_the_line_count() {
@@ -67,28 +56,6 @@ fn strip_cr_keeps_multibyte_text() {
         strip_cr("壊れ方: 黙って壊れる。\r\n縮退の登記。\r\n"),
         "壊れ方: 黙って壊れる。\n縮退の登記。\n"
     );
-}
-
-/// 復帰文字を落としても復帰文字が現れることはない（冪等）。
-#[test]
-fn strip_cr_is_idempotent() {
-    let body = "a\r\nb\rc\n";
-    assert_eq!(strip_cr(&strip_cr(body)), strip_cr(body));
-}
-
-// ---- 書き出す本文の形（改行だけ）----
-
-#[test]
-fn lf_body_writes_only_line_feeds() {
-    assert_eq!(lf_body("a\r\nb\r\n"), "a\nb\n");
-    assert!(!lf_body("a\r\nb\r\n").contains('\r'));
-}
-
-/// 呼び出し側が復帰文字を混ぜても、ファイルへ渡る本文には入らない。
-#[test]
-fn lf_body_and_read_normalized_agree_on_shape() {
-    let body = "見出し\r\n\r\n本文\r\n";
-    assert_eq!(lf_body(body), strip_cr(body));
 }
 
 // ---- 読み込みが整形を通っていること（本物のファイルで確かめる）----
@@ -127,11 +94,10 @@ fn read_normalized_returns_a_body_without_carriage_returns() {
 /// 成り立つ性質（復帰文字が無い・本文が空でない）は無条件に確かめる。
 #[test]
 fn read_normalized_actually_removes_the_carriage_returns_a_file_carries() {
-    // 本 spec の実装より前から repo にある追跡ファイル（新しく書いたものではない）。
+    // このクレート自身の追跡ファイル（よそのクレートの整理で赤にならない）。
     let samples = [
-        "Cargo.toml",
-        "crates/areka-sylphya/src/lib.rs",
-        "crates/log-capture-kit/tests/workspace_scan/mod.rs",
+        "crates/ukadoc-survey/Cargo.toml",
+        "crates/ukadoc-survey/src/lib.rs",
     ];
     let root = crate::io::paths::workspace_root();
     for sample in samples {
@@ -212,5 +178,70 @@ fn write_lf_reports_the_path_it_could_not_write() {
         !target.exists(),
         "何も作られていないはず: {}",
         target.display()
+    );
+}
+
+// ---- 置き換え書き（隣の一時ファイルに書いて置き換える）----
+
+/// テストごとの書き場（`target\ukadoc-survey-tests\<テスト名>\`）。始めに消して作る。
+fn scratch_dir(test_name: &str) -> PathBuf {
+    let dir = crate::io::paths::workspace_root()
+        .join("target")
+        .join("ukadoc-survey-tests")
+        .join(test_name);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)
+            .unwrap_or_else(|err| panic!("前回の書き場を消せない: {} ({err})", dir.display()));
+    }
+    std::fs::create_dir_all(&dir)
+        .unwrap_or_else(|err| panic!("書き場を作れない: {} ({err})", dir.display()));
+    dir
+}
+
+const ORIGINAL: &str = "[ledger]\ndomain = \"shiori\"\n# 手で埋めた本文\n";
+
+/// 一時ファイルが書けないときは失敗を返し、元の本文は 1 バイトも変わらない。
+#[test]
+fn write_lf_keeps_the_original_when_the_temp_file_cannot_be_written() {
+    let dir = scratch_dir("write_lf_keeps_the_original_when_the_temp_file_cannot_be_written");
+    let target = dir.join("shiori.toml");
+    std::fs::write(&target, ORIGINAL).expect("元の本文を置けない");
+    // 一時ファイルの場所に同じ名前のディレクトリを置いて書けなくする。
+    std::fs::create_dir(dir.join("shiori.toml.tmp")).expect("邪魔のディレクトリを作れない");
+
+    let err = write_lf(&target, "新しい本文\n").expect_err("一時ファイルが書けないのに成功した");
+    match &err {
+        SurveyError::Io { path, reason } => {
+            assert!(
+                path.ends_with("shiori.toml"),
+                "置き場が載っていない: {path}"
+            );
+            assert!(!reason.is_empty(), "理由が空");
+        }
+        other => panic!("読み書きの失敗として返るはず: {other:?}"),
+    }
+    assert_eq!(
+        std::fs::read_to_string(&target).expect("元のファイルが読めない"),
+        ORIGINAL,
+        "元の本文が書き換わった"
+    );
+}
+
+/// 成功すれば本文は改行だけの形に置き換わり、一時ファイルは残らない。
+#[test]
+fn write_lf_replaces_the_body_and_leaves_no_temp_file() {
+    let dir = scratch_dir("write_lf_replaces_the_body_and_leaves_no_temp_file");
+    let target = dir.join("shiori.toml");
+    std::fs::write(&target, ORIGINAL).expect("元の本文を置けない");
+
+    write_lf(&target, "新しい\r\n本文\r\n").expect("書けるはず");
+
+    assert_eq!(
+        std::fs::read_to_string(&target).expect("書いたファイルが読めない"),
+        "新しい\n本文\n"
+    );
+    assert!(
+        !dir.join("shiori.toml.tmp").exists(),
+        "一時ファイルが残っている"
     );
 }

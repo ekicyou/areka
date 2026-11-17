@@ -5,14 +5,16 @@
 //! 書き出しでは改行だけを書けば、環境によって本文が変わらない。要件 7.4 の
 //! 「報告と台帳の突き合わせ」はこの整形の後の本文どうしで行う。
 //!
-//! 整形そのものは [`strip_cr`] と [`lf_body`] という `&str` → `String` の純粋な関数に
-//! 切り出してある。ファイルを 1 つも作らずに整形を確かめられるのはこのためで、
-//! 新クレートのテストは一時ディレクトリを使わない（設計 File Structure Plan）。
+//! 整形そのものは [`strip_cr`] という `&str` → `String` の純粋な関数に切り出してあり、
+//! 読み書きの両方がそれを通る。ファイルを 1 つも作らずに整形を確かめられる。
+//!
+//! 書き出しは隣の一時ファイル（`<名前>.tmp`）に書いてから置き換える。途中で止まっても
+//! 手で埋めた台帳が切れたまま残らない。
 //!
 //! 失敗は黙って通さない。読めない・書けないときは探したパスと理由を載せた
 //! [`SurveyError::Io`] を返す（要件 6.12）。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::SurveyError;
 
@@ -22,15 +24,6 @@ use crate::error::SurveyError;
 /// 単独の `\r` は消える。多バイト文字の本文はそのまま残る。
 pub fn strip_cr(text: &str) -> String {
     text.replace('\r', "")
-}
-
-/// ファイルへ書き出す本文の形。改行だけを含む本文にする。
-///
-/// 呼び出し側が復帰文字混じりの本文を渡しても、ファイルに入るのは改行だけである。
-/// 整形の中身は [`strip_cr`] と同じ——読んだ本文と書いた本文が同じ形であることが
-/// 要件 1.5（2 回続けて実行して 1 バイトも違わない）の前提になる。
-pub fn lf_body(body: &str) -> String {
-    strip_cr(body)
 }
 
 /// ファイルを読み、復帰文字を落とした本文を返す。
@@ -46,10 +39,35 @@ pub fn read_normalized(path: &Path) -> Result<String, SurveyError> {
 
 /// 本文を改行だけの形にしてファイルへ書く。
 ///
-/// 置き場が実在しないときは作らずに失敗する（探したパスを載せる）。生成の入口が
-/// どこへ書こうとしたかを隠さないためで、置き場を用意するのは呼び出し側の仕事である。
+/// 呼び出し側が復帰文字混じりの本文を渡しても、ファイルに入るのは改行だけである——
+/// 読んだ本文と書いた本文が同じ形であることが、2 回続けて実行して 1 バイトも違わない
+/// ことの前提になる。
+///
+/// 隣の [`temp_sibling`] に書いてから `rename` で置き換える。一時ファイルが書けなければ
+/// 元のファイルは 1 バイトも変わらない。書けなかった・置き換えられなかったときは、
+/// 書きかけの一時ファイルを消して、置き場を載せた失敗を返す。置き場が実在しないときは
+/// 作らずに失敗する。置き場を用意するのは呼び出し側の仕事である。
 pub fn write_lf(path: &Path, body: &str) -> Result<(), SurveyError> {
-    std::fs::write(path, lf_body(body).as_bytes()).map_err(|err| io_error(path, &err.to_string()))
+    let temp = temp_sibling(path);
+    let replaced = std::fs::write(&temp, strip_cr(body).as_bytes())
+        .and_then(|()| std::fs::rename(&temp, path));
+    replaced.map_err(|err| {
+        let mut reason = format!("{} を経て置き換えられない: {err}", temp.display());
+        // 一時ファイルの場所が別のもの（ディレクトリなど）なら、それには触らない。
+        if temp.is_file()
+            && let Err(remove) = std::fs::remove_file(&temp)
+        {
+            reason.push_str(&format!("（一時ファイルも消せない: {remove}）"));
+        }
+        io_error(path, &reason)
+    })
+}
+
+/// 置き換え書きの一時ファイル（同じディレクトリの `<名前>.tmp`）。
+fn temp_sibling(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".tmp");
+    PathBuf::from(name)
 }
 
 /// 探したパスと理由を載せた読み書きの失敗。
