@@ -138,3 +138,9 @@
   - ukadoc の `collisionex*` の節（[descript_shell_surfaces#collisionex-star](https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#collisionex-star)）と台帳の id（`collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1`）の正典 URL の綴り（証拠コメントの書き方・README 3 章）。
   - `cargo test -p ukadoc-survey` の所見のうち、`owner` に spec 名を書くときの検査（実在する spec か）・同じウェーブの `audit-ukadoc-survey` が検査の側を変えないか（触るのは `crates/ukadoc-survey/` だけで台帳には触らない見込み）。
   - 実機（要件 8.5〜8.7）: クローディアの `surface0` で矩形（`Head` など）・楕円（`Foot`）・多角形（`Fan`）のそれぞれに当たる画面の座標を、表示の拡大率込みで先に決めておく（SendInput の的）。
+
+## 8. 要件の討議での振り分け（2026-11-17）
+
+- **要件へ直した（自明）**: 5 章の 6（楕円は囲みの長方形の中を先に見る＝要件 2.2）・10（同じブレスの中の同じ番号は両方残す＝要件 3.3）・11 の「行の原文」（欄を `,` で繋いだもの＝要件 4.9）・16 ⑴（`region` の余分な欄＝要件 4.5）・陳腐化する檻 4 本の書き直し（要件 8.8）。
+- **設計の段へ回す**: 1（型の形）・2（`#[non_exhaustive]`）・3（`region` の置く位置の欄）・4（由来を型に残すか）・5（整数の算術の範囲）・7（多角形の細部）・8（持ち込みの予算の数え方）・11 の記録の型・12（新しいファイルの置き場）。
+- **開発者の議題へ**: 9（`region` と名前の規則）・13（台帳の状態）・14（SSP で測るか）・15（`region` の記録の粒度）と、要件の仮定 A1（重なりの順）・A4（読めない行の線引き）。
