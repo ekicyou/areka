@@ -43,19 +43,19 @@ pub(crate) use areka_runtime::CueSinkSources;
 struct RuntimeLines {
     readme_rx: Receiver<crate::readme::ReadmeRequest>,
     no_user_break_rx: Receiver<NoUserBreakSignal>,
-    /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製（areka-P0-balloon-break task 3.3）。
+    /// 中断を受け入れた UI が同じ線へ「中断された」を送る送出端の複製（areka-P0-balloon-break）。
     user_break_lifecycle_tx: Sender<TalkLifecycleSignal>,
     change_rx: Receiver<ChangeRequestRaw>,
     switch_rx: Receiver<SkinRequestRaw>,
     reload_rx: Receiver<ScriptReload>,
 }
 
-/// 束の複製から 13 本の sink を組む（並びは旗の順序の保証を担うので変えない）。
+/// 束の複製から sink の列を組む（並びは旗の順序の保証を担うので変えない）。
 ///
 /// 1. surface（seriko）2. 時刻付きの文字 3. `\![move]` 4. 表示ライフサイクル（文字より**後**——
 /// 起床旗 PRESENT が文字 cue より先に倒れないため・draw-load-parity 3.5）5. 重なり
 /// 6. 開く系（readme）7. 中断を禁じる旗 8. ゴーストの切替 9. インストール 10. 更新
-/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。5 本目から後ろはどれも
+/// 11. シェル／バルーンの切替 12. 読み直し（areka-P0-mcp-reload）13. 常に手前。重なりから後ろはどれも
 /// 「名前＋第 1 引数」で自分宛だけを拾い、文字 cue に依存しないため末尾に足して構わない。
 /// インストールと更新の送出端はプロセスに 1 つの窓口から借りる（窓口が無ければ受信端の無い送出端）。
 fn runtime_sinks(
@@ -135,16 +135,16 @@ pub(crate) fn boot_runtime(
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
-            // R7.4: 既存 main と同一方針で分類（起点不在＝良性 warn・他＝error）。
+            // 分類は `is_benign_boot_error`（起点が無い＝良性 warn・ほか＝error）。
             if crate::is_benign_boot_error(&err) {
                 warn!(
                     error = %err,
-                    "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
+                    "runtime: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録）"
                 );
             } else {
                 error!(
                     error = %err,
-                    "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
+                    "runtime: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録）"
                 );
             }
             return Err(err);

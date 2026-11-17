@@ -175,9 +175,9 @@ pub(crate) fn standard_script(on_boot: &str) -> ScriptedShioriBackendBuilder {
 }
 
 /// 注入する Tick 1 回で台詞の時計を進める幅（合成の ms）。
-const TICK_STEP_MS: u64 = 100;
+pub(crate) const TICK_STEP_MS: u64 = 100;
 /// Tick を注入する実時間の最小間隔（spin の反復ごとに投函して受信箱を溢れさせない）。
-const TICK_EVERY: Duration = Duration::from_millis(1);
+pub(crate) const TICK_EVERY: Duration = Duration::from_millis(1);
 
 /// 起こしたゴースト 1 回分の記録（フォルダ名と偽の SHIORI の観測口）。
 type BootLedger = Rc<RefCell<Vec<(String, ScriptedShioriHandle)>>>;

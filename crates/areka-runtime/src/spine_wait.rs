@@ -1,14 +1,17 @@
 //! spine の有界待機の部品（締切・空回しの窓・休み・待ちの芯・`run_bounded`・スレッドの終わりの待ち・回収の `settle_bounded`）。
 //!
 //! 締切から下は `spine.rs` から移したもの。親の `spine.rs` が同じ名前で出し直すので、
-//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。打ち切り方は 3 通りで、芯
-//! [`wait_until_with`] を通る待ち（進みの目印がある待ち・スレッドの終わりの待ち [`wait_thread_end`]）、
-//! GPU の許可の待ち、総時間の `recv_timeout` で切る `run_bounded` である。`run_bounded` は芯を通らず、
-//! 芯から借りるのは失敗の文言だけ。スレッドの終わりの待ちは見張りのスレッドをやめ、芯 1 本で
-//! std 版とアクター版を待つ（総時間の引数は無い）。
+//! 兄弟のテストは `super::SPIN_WAIT` などの呼び名のまま使える。打ち切りの決め方は待ちごとに、それぞれの
+//! 関数の説明に書く。芯 [`wait_until_with`] を通るのは [`wait_until`]・[`wait_until_paced`]・[`wait_recv`]・
+//! スレッドの終わりの待ち [`wait_thread_end`]（見張りのスレッドは生まず、std 版とアクター版を同じ芯で待つ・
+//! 総時間の引数は無い）。`run_bounded` は芯を通らず総時間の `recv_timeout` で切り、芯から借りるのは失敗の
+//! 文言だけ。GPU の許可の待ち（[`GpuPermit`]）と回収（[`settle_bounded`]）は自分の決め方を持つ。
 //!
 //! 待ちの芯 [`wait_until_with`] は、打ち切りを「待ち始めからの総時間」でなく「相手が状態を進めなかった
-//! 時間」で決め、届かなかった理由を [`WaitFailure`] の 4 つに分けて返す（areka-P0-ghost-session-test-load-flake）。
+//! 時間」で決め、届かなかった理由を [`WaitFailure`] の variant に分けて返す（areka-P0-ghost-session-test-load-flake）。
+//!
+//! 休みの決まり: 反復の間の休みは芯が持つ（[`wait_until`] は空回しの窓を過ぎると自分で眠る）ので、
+//! 芯へ渡す条件の中で重ねて眠らない。条件の中で Tick を入れる輪だけは [`wait_until_paced`] を使う。
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,10 +43,9 @@ use crate::crash_report_test_support as crash_report;
 ///
 /// - **対象（[`wait_until`] を使う）**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**
 ///   純粋なポーリング（`non_status_calls()` / `drain_received()` を読むだけのループ）。
-/// - **対象（本猶予の期限だけを借りる。ただし期限は十分条件ではない）**: 各反復で
+/// - **対象（[`wait_until_paced`] を使う。ただし期限は十分条件ではない）**: 各反復で
 ///   `inject_dispatcher_tick` により**系を進めつつ**、同じ反復で `drain_received()` 等により
-///   **別スレッドの結果も待つ**ハイブリッドのループ（[`wait_until`] は純粋ポーリング専用ゆえ
-///   流用しない）。ここでは打ち切りを時刻期限にするだけでは足りず、**注入する simulated time が
+///   **別スレッドの結果も待つ**ループ。ここでは打ち切りを時刻期限にするだけでは足りず、**注入する simulated time が
 ///   待っている観測を追い越さない**ことを構造で保証しなければならない。追い越しうる時刻には必ず
 ///   上限（頭打ち）を置くこと。実測: S2 Phase 1 は毎反復 `now += 5` が 210 反復（実時間 ~0.6 秒）で
 ///   Clear cue の時刻を跨ぎ、リビール観測が間に合わないと**待っている条件そのものが破壊**されて
@@ -112,7 +114,7 @@ pub enum Progress<'a> {
     Count(&'a dyn Fn() -> u64),
 }
 
-/// 待ちが届かずに終わった理由。`Display` の先頭の `［…］` で 4 つを見分ける（要件 3.1・3.2）。
+/// 待ちが届かずに終わった理由。`Display` の先頭の `［…］` で variant を見分ける（areka-P0-ghost-session-test-load-flake 要件 3.1・3.2）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WaitFailure {
     /// 相手が `idle` のあいだ 1 度も進まなかった＝止まった。
@@ -277,6 +279,38 @@ pub fn wait_until(
     cond: impl FnMut() -> bool,
 ) -> Result<(), WaitFailure> {
     wait_until_with(Instant::now, std::thread::sleep, what, progress, cond)
+}
+
+/// [`wait_until_paced`] が条件が偽の反復のたびに眠る長さ（Tick を入れる間隔）。
+///
+/// 値は `areka-kanade` のテストの `drive_ticks_until_disconnect` が開発者の裁定で採った 200µs と同じ。
+pub const INJECT_PACE: Duration = Duration::from_micros(200);
+
+/// 条件の中で Tick を入れて系を進めながら別スレッドの結果も待つ輪のための [`wait_until`]。
+///
+/// 芯の休みは渡さず、条件が偽の反復のたびに [`INJECT_PACE`] 眠る。[`wait_until`] のままだと空回しの窓
+/// （`DENSE_SPIN`）のあいだ `yield_now` の速さで Tick を入れ続け、受け手の待ち行列を溢れさせながら
+/// worker から CPU を奪う。この眠りは Tick を入れる間隔を最初の反復から保つためのもので、時刻を
+/// 進めるためのものではない（時刻を進めるのは入れる Tick だけ）。打ち切りの決め方は [`wait_until`] と同じ。
+/// 入れる時刻が観測を追い越さないこと（[`SPIN_WAIT`] の説明の頭打ち）は呼び手が別に守る。
+pub fn wait_until_paced(
+    what: &str,
+    progress: Progress<'_>,
+    mut cond: impl FnMut() -> bool,
+) -> Result<(), WaitFailure> {
+    wait_until_with(
+        Instant::now,
+        |_| {},
+        what,
+        progress,
+        || {
+            if cond() {
+                return true;
+            }
+            std::thread::sleep(INJECT_PACE);
+            false
+        },
+    )
 }
 
 /// 受け口に 1 件届くまで待ち、届いた値を返す。打ち切りの決め方は [`wait_until`] と同じ。
@@ -447,7 +481,7 @@ pub fn settle_bounded(step: impl FnMut() -> usize) {
 /// 直そうとしている当の病になる。時計を差し替えられるようにして、檻の期待値を**反復回数という
 /// 整数**へ落とし、休みも眠らないものを渡せるようにするための継ぎ目（[`wait_until_with`] と同じ型）。
 /// 本番の呼出点は常に [`settle_bounded`]（実時計・本物の `sleep`）を使う。
-pub fn settle_bounded_with(
+pub(super) fn settle_bounded_with(
     mut now: impl FnMut() -> Instant,
     mut pause: impl FnMut(Duration),
     mut step: impl FnMut() -> usize,

@@ -10,7 +10,7 @@
 //! [`BalloonLifecycleSink`] は broadcast される全 cue を観測して同じ式で最大値を集約し、
 //! その**既知最大が更新されたときだけ** UI へ送る。
 //!
-//! # なぜ 4 本目の sink なのか（D4＝α の裁定）
+//! # なぜ sink を 1 本足すのか（D4＝α の裁定）
 //!
 //! `TalkDone` を配線する案（β）は `spawn_dispatcher` のすべての呼び出し箇所へ波及し、「会話進行の管理層の
 //! 既存の通知先は変えない」という制約に反する。α は `GhostBootOptions.sinks` へ 1 本足すだけで
@@ -65,7 +65,8 @@ use super::talk_clock::TalkClock;
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
 // 判断側は `balloon_visibility.rs` の観測スナップショットで本型を運び、計測の破棄と占有終端の
 // 更新に使う。`wire_runtime`（`crates/areka-runtime/src/lib.rs`）が channel を作り、送出端を
-// `GhostBootOptions.sinks` 4 本目の [`BalloonLifecycleSink`] へ、受信端を
+// `runtime_sinks`（`crates/areka/src/session/runtime_boot.rs`）が `GhostBootOptions.sinks` に載せる
+// [`BalloonLifecycleSink`] へ、受信端を
 // `RuntimeWiring::lifecycle_rx` へ渡す。受信端は `balloon_visibility_phase.rs` の可視性の相が毎フレーム取り出す。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TalkLifecycleSignal {
@@ -132,7 +133,8 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
     }
 }
 
-/// 会話の表示終了時刻を UI へ届ける broadcast sink（`GhostBootOptions.sinks` の 4 本目・D4＝α）。
+/// 会話の表示終了時刻を UI へ届ける broadcast sink（`runtime_sinks`（`crates/areka/src/session/runtime_boot.rs`）が
+/// `GhostBootOptions.sinks` に載せる受け口の 1 本・D4＝α）。
 ///
 /// broadcast 下では担当外の cue も全て届くが、占有終端の集約は**コマンド名で選別しない**——占有区間の
 /// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `sum_on_ms_grid(at, duration)` の最大値

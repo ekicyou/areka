@@ -12,9 +12,7 @@
 //! 片道 NOTIFY で消化して辞書の終了挨拶を照会しない——それが症状 C の見え方そのものであり、
 //! Method の取り違えは「挨拶が出ない」と同義である（R15.5 の生ログ判定も同じ語で読む）。
 //!
-//! sleep は poll-backoff にのみ用い、時刻は注入 Tick だけが進める（spine の待ちの規律・R7.9）。
-
-use std::time::Duration;
+//! 時刻は注入 Tick だけが進める（待ちの休みの決まりは `areka-runtime` の `spine_wait.rs`）。
 
 use areka_kanade::KanadeMsg;
 use bevy_ecs::prelude::With;
@@ -23,7 +21,7 @@ use shiori_host32_host::ExitKind;
 use super::test_support::boot_finished;
 use super::{
     CloseReason, Entity, LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness,
-    wait_until,
+    wait_until, wait_until_paced,
 };
 use crate::session::ghost_quit::run_ghost_quit_phase;
 use areka_placement::spawn::GhostWindowMarker;
@@ -43,9 +41,6 @@ const BOOT_TALK: &str = r"\s[0]\e";
 
 /// 1 反復あたりの注入時刻の進み幅（ms）。再生を確実に終端まで運ぶため大きめに取る。
 const TICK_STEP_MS: u64 = 100;
-
-/// ポーリングの間隔（spine の「ハイブリッド待ち」の poll-backoff・R7.9）。
-const BACKOFF: Duration = Duration::from_micros(200);
 
 /// `GhostWindowMarker` 窓の現数。
 fn ghost_count(harness: &mut SpineHarness) -> usize {
@@ -116,22 +111,18 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
 
     // ── 再生を運ぶ（起動 talk の完了 → 保留していた終了指示の消化 → OnClose GET → 終了挨拶 →
     //    その再生完了 → 解放）。時刻は注入 Tick だけが進める。打ち切りは待ちの芯の進みの目印
-    //    （SHIORI の呼び出しの数。この輪は表示の指令を汲まないので足さない）。 ──
+    //    （SHIORI の呼び出しの数。この輪は表示の指令を汲まないので足さない）。Tick を入れる輪なので
+    //    [`wait_until_paced`]。 ──
     let what = "終了指示 → 終了挨拶 → 解放";
     let mut now = 0u64;
-    wait_until(what, Progress::Count(&probe), || {
+    wait_until_paced(what, Progress::Count(&probe), || {
         now += TICK_STEP_MS;
         harness.inject_dispatcher_tick(now);
-        if harness
+        harness
             .shiori_handle
             .non_status_calls()
             .iter()
             .any(|c| matches!(c, RecordedCall::Unload))
-        {
-            return true;
-        }
-        std::thread::sleep(BACKOFF);
-        false
     })
     .unwrap_or_else(|failure| {
         panic!(
@@ -177,7 +168,7 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
 
     // ⑶ 停止通知を終了相が読み、ゴースト窓が 0 になる。通知は解放の記録の直後（マイクロ秒級）に
     //    投函されるため、相を有界に回して消化を待つ（時刻は進めない＝純粋ポーリング）。汲む物が無いので
-    //    目印は SHIORI の呼び出しの数だけ（解放の後は増えない＝30 秒で［止まった］）。
+    //    目印は SHIORI の呼び出しの数だけ（解放の後は増えない）。
     let what = "kanade の停止通知の UI への到着";
     wait_until(what, Progress::Count(&probe), || {
         run_ghost_quit_phase(&mut harness.world)

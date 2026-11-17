@@ -2,8 +2,8 @@ use super::test_support::{drain_settled, opaque_count, variant_name};
 use std::cell::Cell;
 
 use super::{
-    BindSet, Duration, PresentCommand, Progress, SpineHarness, TargetId, balloon_target,
-    shell_target, wait_until,
+    BindSet, PresentCommand, Progress, SpineHarness, TargetId, balloon_target, shell_target,
+    wait_until_paced,
 };
 
 /// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
@@ -27,10 +27,10 @@ fn present_command_target(cmd: &PresentCommand) -> Option<TargetId> {
 /// 有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界待機で吸収する。揃わないまま進みが
 /// 止まれば、待ちの芯の理由を載せて panic する（hang しない）。
 ///
-/// 打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）。反復の末尾の
-/// 200µs の sleep は poll-backoff（R7.9・根拠は `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc）。
+/// 打ち切りは [`wait_until_paced`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）。Tick を入れる
+/// 輪なので休みは [`wait_until_paced`] が持つ（`areka-runtime` の `spine_wait.rs`）。
 /// 観測 `received` は累積＝ラッチであり、呼出点の台本はいずれも `\w`／`\c` を含まない（全 cue `at=0.0`）
-/// ため、注入時刻の前進が観測を壊すクラス（R7.8）ではない。
+/// ため、注入時刻の前進が観測を壊すクラス（areka-P0-kero-balloon 要件 7.8）ではない。
 fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentCommand> {
     let what = "OnBoot talk の表示指令";
     let mut received: Vec<PresentCommand> = Vec::new();
@@ -38,16 +38,12 @@ fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentComma
     let shiori = harness.shiori_handle.clone();
     let probe = || shiori.call_count() + drained.get();
     let mut now = 0u64;
-    wait_until(what, Progress::Count(&probe), || {
+    wait_until_paced(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
         received.extend(harness.wiring.drain_received());
         drained.set(received.len() as u64);
-        if received.len() >= want {
-            return true;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-        false
+        received.len() >= want
     })
     .unwrap_or_else(|failure| panic!("{failure}／{what}: {want} 件が揃わない"));
     received

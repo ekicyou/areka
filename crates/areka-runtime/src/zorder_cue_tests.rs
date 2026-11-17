@@ -15,45 +15,13 @@
 // =============================================================================
 
 use super::*;
+use crate::consumer_ledger::test_support::{actor_carrier_cue, broken_custom_cue};
 use crate::frame::test_support::{capture_logs, count_level};
 use crate::source_text_test_support::{code_only, index_of};
-use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む（正準形＝`Custom` の String 配列）。
-fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
-
-/// 開封できない `Custom`（`params` が String 配列でない）を宛名だけ差し替えて組む。
-///
-/// `DynamicValue::Null` は配列ではないので `as_command_carrier()` は `None` を返す。
-/// それでも宛名（`Custom{command}`）は読めるため、宛名規律の分岐へ入る。
-fn broken_custom_cue(actor: &str, command: &str) -> TalkCue {
-    let cue = TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command: CueCommand::Custom {
-            command: command.to_string(),
-            params: DynamicValue::Null,
-        },
-        duration: 0.0,
-    };
-    assert_eq!(
-        cue.command.as_command_carrier(),
-        None,
-        "params=Null は開封できない形である（宛名で severity を分ける枝に入る前提）"
-    );
-    cue
-}
 
 /// キャリアでない cue（文字・演技・待ち）の一覧。
 fn non_carrier_cues() -> Vec<TalkCue> {
@@ -98,7 +66,7 @@ fn accepted_set() -> ZOrderDirective {
 fn t_zcs1_set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
     assert_eq!(
         only_one(&rx),
         accepted_set(),
@@ -111,7 +79,7 @@ fn t_zcs1_set_zorder_becomes_a_set_directive_carrying_the_element_tokens() {
 fn t_zcs2_reset_zorder_becomes_a_reset_directive() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "reset", &["zorder"]));
+    sink.emit(actor_carrier_cue("0", "reset", &["zorder"]));
     assert_eq!(only_one(&rx), ZOrderDirective::Reset);
 }
 
@@ -125,7 +93,7 @@ fn t_zcs3_tokens_are_forwarded_verbatim_without_interpretation() {
 
     let mut params = vec!["zorder"];
     params.extend_from_slice(&raw);
-    sink.emit(carrier_cue("0", "set", &params));
+    sink.emit(actor_carrier_cue("0", "set", &params));
 
     let ZOrderDirective::Set { tokens } = only_one(&rx) else {
         panic!("重なり指定の指令のはず");
@@ -151,12 +119,12 @@ fn t_zcs4_executing_scope_does_not_change_the_directive() {
     for actor in actors {
         let (tx, rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
-        sink.emit(carrier_cue(actor, "set", &["zorder", "1", "0"]));
+        sink.emit(actor_carrier_cue(actor, "set", &["zorder", "1", "0"]));
         set_directives.push(only_one(&rx));
 
         let (tx, rx) = channel::<ZOrderDirective>();
         let mut sink = ZOrderCueSink::new(tx);
-        sink.emit(carrier_cue(actor, "reset", &["zorder"]));
+        sink.emit(actor_carrier_cue(actor, "reset", &["zorder"]));
         reset_directives.push(only_one(&rx));
     }
 
@@ -223,10 +191,10 @@ fn t_zcs6_near_miss_selectors_send_nothing() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
     // 受け口が生きている目印を先に 1 本置く（「出ない」の主張を空虚にしないため）。
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
 
     for (name, tokens) in near_misses {
-        sink.emit(carrier_cue("0", name, tokens));
+        sink.emit(actor_carrier_cue("0", name, tokens));
     }
 
     assert_eq!(
@@ -242,10 +210,10 @@ fn t_zcs6_near_miss_selectors_send_nothing() {
 fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
 
     for name in ["move", "bind", "raise", "zorder", "unknownfoo"] {
-        sink.emit(carrier_cue("0", name, &["zorder", "1", "0"]));
+        sink.emit(actor_carrier_cue("0", name, &["zorder", "1", "0"]));
     }
 
     assert_eq!(
@@ -260,7 +228,7 @@ fn t_zcs7_other_command_names_send_nothing_even_with_the_zorder_selector() {
 fn t_zcs8_non_carrier_cues_send_nothing() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
 
     for cue in non_carrier_cues() {
         sink.emit(cue);
@@ -361,10 +329,10 @@ fn t_zcs11_addressee_alone_decides_the_severity() {
 #[test]
 fn t_zcs12_every_skip_leaves_a_record() {
     let mut skipped: Vec<TalkCue> = vec![
-        carrier_cue("0", "set", &["surface", "1"]),
-        carrier_cue("0", "reset", &["balloon"]),
-        carrier_cue("0", "set", &[]),
-        carrier_cue("0", "move", &["zorder", "1", "0"]),
+        actor_carrier_cue("0", "set", &["surface", "1"]),
+        actor_carrier_cue("0", "reset", &["balloon"]),
+        actor_carrier_cue("0", "set", &[]),
+        actor_carrier_cue("0", "move", &["zorder", "1", "0"]),
         broken_custom_cue("0", "set"),
         broken_custom_cue("0", "noexist"),
     ];
@@ -388,7 +356,7 @@ fn t_zcs12_every_skip_leaves_a_record() {
 fn t_zcs13_reset_with_trailing_tokens_is_still_reset_and_is_recorded() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let mut sink = ZOrderCueSink::new(tx);
-    let logs = capture_logs(|| sink.emit(carrier_cue("0", "reset", &["zorder", "1", "0"])));
+    let logs = capture_logs(|| sink.emit(actor_carrier_cue("0", "reset", &["zorder", "1", "0"])));
 
     assert_eq!(only_one(&rx), ZOrderDirective::Reset);
     assert!(
@@ -444,7 +412,7 @@ fn t_zcs15_clone_reaches_the_same_receiver() {
     let (tx, rx) = channel::<ZOrderDirective>();
     let sink = ZOrderCueSink::new(tx);
     let mut cloned = sink.clone();
-    cloned.emit(carrier_cue("0", "set", &["zorder", "1", "0"]));
+    cloned.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"]));
     assert_eq!(only_one(&rx), accepted_set());
 }
 
@@ -454,7 +422,7 @@ fn t_zcs16_disconnected_receiver_is_recorded_and_does_not_panic() {
     let (tx, rx) = channel::<ZOrderDirective>();
     drop(rx);
     let mut sink = ZOrderCueSink::new(tx);
-    let logs = capture_logs(|| sink.emit(carrier_cue("0", "set", &["zorder", "1", "0"])));
+    let logs = capture_logs(|| sink.emit(actor_carrier_cue("0", "set", &["zorder", "1", "0"])));
     assert_eq!(
         count_level(&logs, "WARN"),
         1,

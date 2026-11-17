@@ -29,9 +29,9 @@ use areka_sakura::TalkId;
 use shiori_host32_host::ExitKind;
 
 use super::{
-    CloseReason, Duration, GhostWindows, LoopDriver, PresentCommand, Progress, RecordedCall,
+    CloseReason, GhostWindows, LoopDriver, PresentCommand, Progress, RecordedCall,
     ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal, shell_target, show_gate,
-    wait_until,
+    wait_until, wait_until_paced,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
 use crate::session::ghost_quit::run_ghost_quit_phase;
@@ -54,9 +54,6 @@ const TICK_STEP_MS: u64 = 100;
 /// 1 つの会話に注入する時刻の上限（ms）。台本の再生は 2 秒に届かないので十分に長い。頭打ちが効くのは
 /// dispatcher が会話の起点を付ける件（[`drive_talk`] の中の注）。
 const TALK_SPAN_CAP_MS: u64 = 10_000;
-
-/// ポーリングの間隔（spine の「ハイブリッド待ち」の poll-backoff・R7.9）。
-const BACKOFF: Duration = Duration::from_micros(200);
 
 /// 起動の台本と、`\-` で終わる終了の台本を返す台本を組む（`OnClose` は正規の握手の GET）。
 ///
@@ -110,7 +107,8 @@ impl TalkSeen {
 ///
 /// 受けた面の指令は本番の取り出しと同じく presenter へ適用する（窓の無い scope 2 の対象も含む）。
 /// 注入時刻は会話の始まり（`TalkStarted`）を見るまで据え置き、その後は `*now` から
-/// [`TALK_SPAN_CAP_MS`] で頭打ち。進みの目印は SHIORI の呼び出しの数と受けた指令・知らせの数の和で、30 秒進まなければ待ちの芯が `［止まった］` で落とす。
+/// [`TALK_SPAN_CAP_MS`] で頭打ち。進みの目印は SHIORI の呼び出しの数と受けた指令・知らせの数の和で、打ち切りは待ちの芯が決める
+/// （Tick を入れる輪なので [`wait_until_paced`]・`areka-runtime` の `spine_wait.rs`）。
 fn drive_talk(
     harness: &mut SpineHarness,
     now: &mut u64,
@@ -122,7 +120,7 @@ fn drive_talk(
     let received = Cell::new(0u64);
     let shiori = harness.shiori_handle.clone();
     let probe = || shiori.call_count() + received.get();
-    let reached = wait_until(what, Progress::Count(&probe), || {
+    let reached = wait_until_paced(what, Progress::Count(&probe), || {
         // 会話が始まるまでは時刻を据え置く。着地より先に頭打ちへ届くと、dispatcher が最初の Tick で
         // 会話の起点を頭打ちに付け、その後の時刻が動かず再生が凍る（areka-test-binary-stability/load-repro.md ⑽）。
         if seen.borrow().first_talk().is_some() {
@@ -145,11 +143,7 @@ fn drive_talk(
             received.set(received.get() + 1);
         }
         harness.pump_text();
-        if done(&seen, &harness.shiori_handle.non_status_calls()) {
-            return true;
-        }
-        std::thread::sleep(BACKOFF);
-        false
+        done(&seen, &harness.shiori_handle.non_status_calls())
     });
     if let Err(failure) = reached {
         panic!("{failure}／{what}: 会話が止まった（再生の終わりまで進まない）");
@@ -267,16 +261,12 @@ fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
     );
 
     // ── 停止の知らせを終了相が読み、終わり方が「終了」になる ──
-    // 汲む物が無いので、目印は SHIORI の呼び出しの数だけ（解放の後は増えない＝30 秒で［止まった］）。
+    // Tick は入れない（読むだけの待ち＝[`wait_until`]）。汲む物が無いので、目印は SHIORI の呼び出しの数だけ（解放の後は増えない）。
     let what = "kanade の停止の知らせの UI への到着";
     let shiori = harness.shiori_handle.clone();
     let calls = || shiori.call_count();
     wait_until(what, Progress::Count(&calls), || {
-        if run_ghost_quit_phase(&mut harness.world) {
-            return true;
-        }
-        std::thread::sleep(BACKOFF);
-        false
+        run_ghost_quit_phase(&mut harness.world)
     })
     .unwrap_or_else(|failure| panic!("{failure}／{what}"));
     let origin = harness.world.resource::<FirstExit>().0.clone();

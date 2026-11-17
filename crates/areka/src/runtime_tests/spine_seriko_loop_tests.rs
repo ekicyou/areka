@@ -2,8 +2,8 @@ use super::test_support::{bump_char_window_dpi, drain_settled, opaque_count, var
 use std::cell::Cell;
 
 use super::{
-    Duration, LoopRng, PresentCommand, Progress, SpineHarness, run_dpi_phase, shell_target,
-    wait_until,
+    LoopRng, PresentCommand, Progress, SpineHarness, run_dpi_phase, shell_target, wait_until,
+    wait_until_paced,
 };
 
 /// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・`areka-seriko` の `looper_tests.rs` の `always_fire` と同旨）。
@@ -25,7 +25,7 @@ fn always_fire_rng() -> LoopRng {
 // ゲートが抽選を塞ぎ **一切発行しない**——を負の檻として固定する（design Testing Strategy E2E-1/2）。
 //
 // 全て決定論（実 emo2 asset fixture＋固定注入 rng＋scripted send_tick・Close→join）。
-// 時刻は注入で決まり、待ちは poll-backoff の短い sleep を挟む（`drive_shell_shown` の doc）。
+// 時刻は注入で決まる（待ちの休みは時刻を進めない・`areka-runtime` の `spine_wait.rs`）。
 // 実 SHIORI/pasta 非依存（surface は注入 cue で表示・実機/実 DPI サインオフは task 10.3）。
 // ===========================================================================
 
@@ -72,28 +72,23 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 /// （`apply_bind`→`BindApplyOutcome::Changed`）を生むため、「shell surface が該当 bind id を含んで表示された」
 /// = current_binds へ当該 id が書き込まれた（＝bind ゲートが ON になった）ことの end-to-end 証跡になる。
 ///
-/// # 有界性は進みの目印つきの [`wait_until`] ＋ poll-backoff sleep（R7.9）
+/// # 有界性は進みの目印つきの [`wait_until_paced`]
 ///
 /// 本関数は**実 async（SHIORI/pasta アクタ→seriko→[`PresentBridge`]）の到着をラッチで待つ待機
 /// ループ**である。1 反復は「tick 注入＋drain」だけで極めて安価ゆえ、反復回数の上限は CPU 競合下
 /// （大規模再ビルド直後の再スキャン圧など）で**数 ms で尽き**、製品コードが正常でも早合点で赤になる
-/// （偽陽性）。ゆえに打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）で
-/// 決める（30 秒進まなければ［止まった］）。
+/// （偽陽性）。ゆえに打ち切りは [`wait_until_paced`] の進みの目印（SHIORI の呼び出しの数と汲んだ指令の数の和）で
+/// 決める（進まないまま待ちの芯の上限に届けば［止まった］）。Tick を入れる輪なので休みは
+/// [`wait_until_paced`] が持ち、条件の中では眠らない（`areka-runtime` の `spine_wait.rs`）。
 ///
 /// **目印を絞らない理由**: `LoopDriver::Live` でも loop ticker は起こさず、この輪は seriko の tick を
 /// 注入しない。ゆえにまばたきの指令は出ず、汲む指令は OnBoot talk の有限の列（条件の面へ向かう歩み）
 /// だけになる。受けた数がそのまま条件に向かう進みなので、面の数などへ絞る必要が無い。
 ///
-/// **R7.8（注入模擬時刻が観測窓を追い越して観測条件を壊すクラス）とは別クラス**であり、時刻の頭打ちでは
+/// **areka-P0-kero-balloon 要件 7.8（注入模擬時刻が観測窓を追い越して観測条件を壊すクラス）とは別クラス**であり、時刻の頭打ちでは
 /// 直らない。判別根拠は 2 点——(a) 観測 `satisfied` は**ラッチ**で、一度成立したら後続 cue に壊されない。
 /// (b) 本関数の呼出点の台本はいずれも `\s[...]\e` 系で `\w`／`\c` を含まず**全 cue が `at=0.0`** ＝観測を
 /// 壊す後続 cue が構造的に存在しない。ゆえに注入時刻の前進は観測に有利にしか働かず、頭打ちは不要。
-///
-/// 譲歩は `std::thread::yield_now()` ではなく**短い `sleep` の poll-backoff** とする。Windows の
-/// `yield_now` は `SwitchToThread`＝**同一プロセッサ**の ready スレッドにしか譲らず、飽和下では別コアの
-/// worker へ譲れずに busy-spin が worker を CPU 飢餓させる。値 200µs は `areka-kanade` の
-/// `drive_ticks_until_disconnect` で開発者裁定により根治として採用されているものと同じ。決定論檻の
-/// 「no sleep」原則に対する**明示例外**（競合飢餓の根治には必須）。
 fn drive_shell_shown(
     harness: &mut SpineHarness,
     surface_id: u32,
@@ -106,7 +101,7 @@ fn drive_shell_shown(
     let shiori = harness.shiori_handle.clone();
     let probe = || shiori.call_count() + received.get();
     let mut now = 0u64;
-    wait_until(what, Progress::Count(&probe), || {
+    wait_until_paced(what, Progress::Count(&probe), || {
         now += 1;
         harness.inject_dispatcher_tick(now);
         for cmd in harness.wiring.drain_received() {
@@ -127,11 +122,7 @@ fn drive_shell_shown(
                 harness.wiring.apply_present(&mut harness.world, cmd);
             }
         }
-        if satisfied {
-            return true;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-        false
+        satisfied
     })
     .unwrap_or_else(|failure| {
         panic!(
@@ -141,12 +132,12 @@ fn drive_shell_shown(
 }
 
 /// `now_ms` の seriko tick を 1 発直接注入し、最初の `PresentCommand` が rx へ届くまで有界
-/// スピンし（`wait_until` の密 yield → backoff sleep）、続けて [`drain_settled`] で残りを汲み切って
+/// 待ち（[`wait_until`]・読むだけの待ち）、続けて [`drain_settled`] で残りを汲み切って
 /// から「ちょうど 1 件」を確かめて返す。golden の各コマ遷移 tick は変化 1 件を発行する（6.1/6.2）ため、
 /// この直列注入→回収で発行列の順序と内容を決定論的に照合できる。最初の 1 件で汲むのを止めると 2 件目を
 /// 見ないので、余分な指令が出る退行を通してしまう。届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`wait_until`] の
 /// 進みの目印（注入は 1 発のみで各反復は系を進めない純粋なポーリング＝反復は経過時間の代理にならない）。
-/// 観測 `buf` は累積＝ラッチゆえ R7.8 の追い越しは構造的に無い。
+/// 観測 `buf` は累積＝ラッチゆえ注入時刻の追い越しは構造的に無い。
 fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
     harness.inject_seriko_tick(now_ms);
     let mut buf: Vec<PresentCommand> = Vec::new();
@@ -407,12 +398,12 @@ fn seriko_tick_apply_one(
 /// SERIKO ループが載るのはシェル表示スロットゆえ、活性ループ×シェル窓 DPI 変化という本番の組み合わせは
 /// どこにも存在しなかった。本ケースはその 1 点だけを足す（(a)(b) の重複観測はしない）。
 ///
-/// # 決定論（時刻は注入・乱数も注入・待ちは poll-backoff の短い sleep を挟む）
+/// # 決定論（時刻は注入・乱数も注入）
 ///
 /// tick は `send_tick` 直接注入（loop ticker 不起動）、乱数は常時発火の固定注入列。DPI は
 /// [`bump_char_window_dpi`] が現在値と必ず異なる実機水準を選ぶ（「たまたま同値」で空虚化しない）。
 ///
-/// # 実測の変異キル（2026-07-26・本ワークツリー）
+/// # 実測の変異キル（2026-07-26 の実測）
 ///
 /// - `EmoPresenter::refresh_scale` が再表示時に `last_show` の pattern を捨てて
 ///   `PatternState::default()` で `apply_show` する変異（＝DPI 変化で進行中の SERIKO コマを失う）:

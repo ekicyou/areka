@@ -13,7 +13,7 @@ use crate::sample_test_support::{emo2_balloon_root, emo2_root};
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::target_map::scope_of;
 
-/// 観測可能な完了条件（tasks.md task 2.6）: emo2 fixture を渡した統合テストが
+/// emo2 fixture を渡した統合テストが
 /// `BootAssets` の各フィールドに期待どおりのデータを含んで green で通る。
 ///
 /// 既知 scope 集合 `[0, 1]` に対し `build_boot_assets` が populated な `ScopeAssets`
@@ -26,7 +26,7 @@ use crate::target_map::scope_of;
 /// `bake` は WIC で PNG をデコードするため COM 初期化が要る（GPU は不要・attach なし）。
 #[test]
 fn build_boot_assets_from_emo2_fixture() {
-    // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+    // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96）。
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -44,7 +44,7 @@ fn build_boot_assets_from_emo2_fixture() {
     );
 
     // 各 scope の EmoWorld は FRESH に build 済みで、初期表示 surface を実際に内包する
-    // （scope0=surface0／scope1=surface10）。装着（task 4.x）へ手渡す前段の populated 担保。
+    // （scope0=surface0／scope1=surface10）。装着へ手渡す前段の populated 担保。
     assert!(
         boot.shells[0].emo_world.surface(0).is_some(),
         "scope0 の World は初期 surface 0 を内包する"
@@ -181,7 +181,7 @@ fn build_boot_assets_from_emo2_fixture() {
     }
 }
 
-/// 観測可能な完了条件（tasks.md task 3.2・要件 5.6）: バルーンのループ表が **scope 別の写像**
+/// （areka-P0-kero-balloon 要件 5.6）バルーンのループ表が **scope 別の写像**
 /// として導出され、そのキー集合が scope 集合と一致する。
 ///
 /// 「先頭 scope の資産から 1 本組めば全 scope に足りる」という旧前提の実装（＝写像が単一
@@ -220,7 +220,7 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
     }
 }
 
-/// 観測可能な完了条件（tasks.md task 3.2・要件 5.6）: 起動シームの転送が **全 scope** を
+/// （areka-P0-kero-balloon 要件 5.6）起動シームの転送が **全 scope** を
 /// アクタ鍵語彙へ写して seriko へ渡す（単一エントリ暫定でない）。
 ///
 /// `wire_runtime`（lib.rs）と spine ハーネス（spine.rs）が共有する転送
@@ -307,7 +307,7 @@ fn build_boot_assets_yields_empty_balloon_table_map_for_no_scopes() {
     );
 }
 
-/// 観測可能な完了条件（tasks.md task 3.1・要件 2.1／7.2）: 起動時資産が **scope ごとに
+/// （areka-P0-kero-balloon 要件 2.1／7.2）起動時資産が **scope ごとに
 /// 異なる**バルーン定義を保持する（共有 1 本ではない）。
 ///
 /// emo2-kakukaku fixture では scope0 が `balloons0.png`（→ `balloons0s.txt`）を、scope1 が
@@ -439,7 +439,7 @@ const EMO2_BACKGROUND_SCOPE0: (u8, u8, u8) = (255, 255, 255);
 /// emo2 相方側バルーン（面 0）の背景色（2026-09-12 実測・同上）。
 const EMO2_BACKGROUND_SCOPE1: (u8, u8, u8) = (255, 255, 255);
 
-/// 本仕様適用**前**の 2 層マージを再現する神託（tasks 5.1・R5.5）。
+/// 本仕様適用**前**の 2 層マージを再現する神託（areka-P0-kero-balloon 要件 5.5）。
 ///
 /// merge-base（969a9b3）の `build_balloon_model` は **固定名** `descript.txt`（基層）＋
 /// `balloons0s.txt`（面別上書き層）を `areka_parsers::balloon::parse_str` へ渡すだけの
@@ -460,7 +460,7 @@ fn pre_spec_balloon_model(balloon_root: &Path) -> BalloonModel {
     areka_parsers::balloon::parse_str(&descript, face0.as_deref())
 }
 
-/// R5.5（tasks 5.1）本体側 scope の非回帰: 本体側 scope（scope 0）の**バルーン定義**と、
+/// 本体側 scope の非回帰（areka-P0-kero-balloon 要件 5.5）: 本体側 scope（scope 0）の**バルーン定義**と、
 /// そこから解決される**文字描画領域**が本仕様適用前と同一である。
 ///
 /// 成立の理由（適用前後の経路が同じ 2 ファイルへ落ちること）:
@@ -521,15 +521,15 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
     );
 }
 
-/// 観測可能な完了条件（tasks.md task 7.1）: 名前宣言を持つ emo2 fixture を渡すと、
+/// 名前宣言を持つ emo2 fixture を渡すと、
 /// 起動時資産 `BootAssets.bind_resolver` から対応する着せ替え ID が解決できる。
 ///
 /// emo2 shell descript の `sakura.bindgroup1100.name,腕,伸び` 由来で
-/// `resolve(Sakura, "腕", "伸び") == Some(1100)`（task 1.2 の `emo2_declared_names_all_resolve`
-/// で存在確認済みの (カテゴリ, パーツ)→id 対）。未宣言の組は `None`（捏造しない・R3.7）。
+/// `resolve(Sakura, "腕", "伸び") == Some(1100)`（`emo2_declared_names_all_resolve`
+/// で存在確認済みの (カテゴリ, パーツ)→id 対）。未宣言の組は `None`（捏造しない・areka-P0-mayuna-compose 要件 3.7）。
 #[test]
 fn build_boot_assets_bind_resolver_resolves_emo2_names() {
-    // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+    // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96）。
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -543,11 +543,11 @@ fn build_boot_assets_bind_resolver_resolves_emo2_names() {
         boot.bind_resolver
             .resolve(BindNamespace::Sakura, "腕", "存在しない"),
         None,
-        "未宣言の (カテゴリ, パーツ) は None（捏造しない・R3.7）"
+        "未宣言の (カテゴリ, パーツ) は None（捏造しない）"
     );
 }
 
-/// 観測可能な完了条件（tasks.md task 10.3）: mustselect 宣言を持つ emo2 fixture を渡すと、
+/// mustselect 宣言を持つ emo2 fixture を渡すと、
 /// 起動時資産 `BootAssets.bind_resolver` から対応するカテゴリが mustselect と判別でき、
 /// そのカテゴリの ID 集合が引ける。
 ///
@@ -557,7 +557,7 @@ fn build_boot_assets_bind_resolver_resolves_emo2_names() {
 /// （bindopt 1.2・R7.1）。
 #[test]
 fn build_boot_assets_bind_resolver_carries_mustselect() {
-    // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+    // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96）。
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -585,12 +585,12 @@ fn build_boot_assets_bind_resolver_carries_mustselect() {
     );
 }
 
-/// 観測可能な完了条件（tasks.md task 4.1・要件 1.1）: 呼び手が渡した作者基準 DPI が
+/// （areka-P0-emo-dpi-scaling 要件 1.1）呼び手が渡した作者基準 DPI が
 /// `BootAssets` の `shell_author_dpi`／`balloon_author_dpi` へそのまま搬送される。
 ///
 /// shell=192／balloon=144 という **互いに異なる非 96 値**を渡し、両フィールドが宣言値
 /// そのままで届くことを固定する。96 固定のハードワイヤ（あるいは shell/balloon の取り違え）
-/// はこの檻で落ちる。搬送は純粋な値移送ゆえ縮退梯子（`parse_author_dpi`・task 2.1）は
+/// はこの檻で落ちる。搬送は純粋な値移送ゆえ縮退梯子（`parse_author_dpi`）は
 /// 通さない——ここで検査するのは「渡した値が変質せず attach 相まで届くこと」だけである。
 #[test]
 fn build_boot_assets_carries_supplied_author_dpi() {
@@ -673,7 +673,7 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 ///
 /// 本検査が主張するのは「読取が失敗しないこと」までで、復号後の文字列そのものは見ない
 /// （Shift_JIS を別の 8bit 文字コードとして復号する退化はここを素通りする）。文字コード
-/// ごとの解析結果の等値はタスク 4.2 のパーサ層が担当する分業。
+/// ごとの解析結果の等値はパーサ層（areka-P0-charset-canon）が担当する分業。
 ///
 /// `bake` は WIC で PNG をデコードするため COM 初期化が要る（本ファイルの既存檻と同じ）。
 #[test]

@@ -6,22 +6,13 @@
 //! こと・受信端が落ちていても落ちずに記録すること。
 
 use super::*;
+use crate::consumer_ledger::test_support::carrier_cue;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 use std::sync::mpsc::{Receiver, channel};
 
 // ---------------------------------------------------------------- 道具立て
-
-/// `\![name,tokens...]` の汎用キャリア cue を組む。
-fn carrier_cue(name: &str, tokens: &[&str]) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::command_carrier(name, tokens.iter().map(|s| s.to_string()).collect()),
-        duration: 0.0,
-    }
-}
 
 fn sink() -> (ChangeCueSink, Receiver<ChangeRequestRaw>) {
     let (tx, rx) = channel();

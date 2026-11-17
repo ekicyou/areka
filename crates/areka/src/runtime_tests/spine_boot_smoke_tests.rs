@@ -6,16 +6,17 @@ use super::{
 };
 
 // ===========================================================================
-// task 6.1 スモークテスト
+// 足場のスモークテスト（areka-P0-emo2-boot 要件 8）
 // ===========================================================================
 
-/// 観測可能な完了条件（tasks.md task 6.1）: ハーネスが scripted ghost を boot させ、Tick 注入に
-/// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する（R8.1/8.3/8.4/8.6）。
+/// 観測可能な完了条件: ハーネスが scripted ghost を boot させ、Tick 注入に
+/// より attach 準備状態まで **panic なく** 到達することをスモークレベルで固定する
+/// （areka-P0-emo2-boot 要件 8.1・8.3・8.4・8.6。下の R8.x も同じ spec の要件）。
 ///
 /// 檻に入れる判断分岐:
 /// - **scripted boot 発火**: boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が
 ///   scripted backend へ (method,id) 順で届く（＝「scripted ghost を boot させた」直接証跡）。
-/// - **Tick 注入の疎通**: `dispatcher()` への Tick 送出が Ok（ghost スタック生存・sleep 不使用）。
+/// - **Tick 注入の疎通**: `dispatcher()` への Tick 送出が Ok（ghost スタック生存・時刻は注入だけで進める）。
 /// - **attach 到達**: 実 GPU の World（MTA）＋合成 `GhostWindows` 上で `run_attach_phase`
 ///   が **panic せず** 完走し、DD-12 の縮退がバグを隠さない檻＝`planned==attached==2`（全 scope の
 ///   シェル装着成功）を装着サマリ `info!` で観測でき、ERROR は 0 件。
@@ -29,9 +30,9 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // [`wait_until`]（初めの 60ms は yield_now の空回し・過ぎたら反復ごとに短く眠る）で 6 呼出の到達を待ってから照合する。task 8.2 の
-    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）と、挨拶の台詞を再生の前に
-    // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が加わり boot 系列は 6 呼出。
+    // [`wait_until`]（休みは芯が持つ）で下の照合の列の到達を待ってから照合する。boot 系列には
+    // username prefetch GET（OnInitialize 後・OnFirstBoot 前）と、挨拶の台詞を再生の前に
+    // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が入る。
     // 打ち切りは反復回数でなく [`wait_until`] の進みの目印（SHIORI の呼び出しの数）で判じる。
     let mut boot_calls = Vec::new();
     let handle = harness.shiori_handle.clone();
@@ -66,7 +67,7 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
         "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）で発火していない"
     );
 
-    // ── (2) Tick 注入の疎通（ghost スタック生存・sleep 不使用・R8.3） ──
+    // ── (2) Tick 注入の疎通（ghost スタック生存・時刻は注入だけで進める・R8.3） ──
     harness.inject_dispatcher_tick(1);
 
     // ── 実 ClockedTextSink<EmoTextSink> の UI ドレインが headless に pump できることを裏付ける

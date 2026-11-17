@@ -59,7 +59,7 @@ pub mod user_break_cue;
 pub mod window_state_cue;
 pub mod zorder_cue;
 
-// 決定論 spine テストハーネス（R8・task 6.1）のうち本体を引かない待ちの部品と台本の SHIORI。
+// 決定論 spine テストハーネス（areka-P0-emo2-boot 要件 8）のうち本体を引かない待ちの部品と台本の SHIORI。
 // 自分のテストと、本体のテスト（`test-support` で付く）が使う。背骨の足場は本体の
 // `runtime_tests/spine.rs` にある（spec: runtime-crate-split 設計 D4・spine.rs 冒頭 doc 参照）。
 #[cfg(any(test, feature = "test-support"))]

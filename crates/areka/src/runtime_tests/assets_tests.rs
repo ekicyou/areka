@@ -5,9 +5,9 @@ use crate::scope_bind_fixture_test_support::{
     BLUE, CHAR2_CATEGORY, GREEN, KERO_CATEGORY, RED, SAKURA_CATEGORY, scope_bind_ghost,
 };
 
-// ── スコープごとの既定の着せ替えと名前の表（要件 14.1・14.2・14.4）──
+// ── スコープごとの既定の着せ替えと名前の表（areka-P0-offline-surface-dump 要件 14.1・14.2・14.4）──
 
-/// 要件 14.1・14.2・14.4（画面の側）: 共有の検体（research.md §10.3 の `g_scope` の形）を画面の
+/// 画面の側: 共有の検体（areka-P0-offline-surface-dump の research.md §10.3 の `g_scope` の形）を画面の
 /// 道（シェルの資産づくり → `ScopeStates` → `\![bind]` の決め方）に通すと、初めの組はスコープ
 /// 0・1・2・3 で赤（10）・緑（11）・青（12）・空になり、スコープ 1・2 への名前の着せ替えは
 /// そのスコープの名前の表だけで当たる。
@@ -77,9 +77,9 @@ fn screen_binds_split_per_scope_on_shared_scope_fixture() {
     assert_eq!(ids(&states, "0"), vec![RED], "スコープ 0 は触られない");
 }
 
-// ── シェル名つきの資産づくり（spec: areka-P0-shell-balloon-switch 要件 4.4・6.4・8.8）──
+// ── descript の既定の面（descript-window-keys 要件 1.7・3.1）──
 
-/// descript-window-keys 要件 1.7・3.1: シェルの資産の各スコープの最初の面は、渡した descript の
+/// シェルの資産の各スコープの最初の面は、渡した descript の
 /// 既定の面になる（本体側・相方側・スコープ 2 は書いた値、書いていないスコープ 3 は組み込みの 10）。
 /// 面がシェルに在るかは問わない（在るかの判断は測り・装着の相が持つ）。
 #[test]

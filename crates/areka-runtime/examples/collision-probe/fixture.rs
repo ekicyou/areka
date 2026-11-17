@@ -34,7 +34,7 @@ pub(super) const EXPECT_K_ENV: &str = "AREKA_COLLISION_PROBE_EXPECT_K";
 /// たまたまにならないことを保証する下限（design CollisionProbe 節 #2「矩形内側 ≥2px」）。
 pub(super) const ANCHOR_MARGIN_PX: u32 = 2;
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+/// emo2 検体。`SampleRoot` の `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
 ///
 /// 窓口が返すのは**絶対パス**であり、**プロセスの作業ディレクトリに依存しない**
 /// （要件 4.6・ヘッダ「# 起動時のパス（絶対パスの要否）」節）。

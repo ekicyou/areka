@@ -1,34 +1,30 @@
-//! 決定論 spine テストハーネス（R8・tasks.md task 6.1）の背骨の足場（⑶）。
+//! 決定論 spine テストハーネス（areka-P0-emo2-boot 要件 8）の背骨の足場（⑶）。
 //!
 //! 待ちの部品（回収の `settle_bounded` を含む）と `GpuPermit`（⑴）・台本の SHIORI と `hold_support`（⑵）は `areka-runtime` の `spine` にあり、
 //! ここは本体の部品も使う足場（`SpineHarness`・`make_world_with_gpu` ほか）とそれを使う
 //! spine のテストを持つ（spec: runtime-crate-split 設計 D4・段 2 で `areka-runtime` の `spine.rs` の頭から移した説明）。
 //!
 //! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
-//! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す
+//! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**実 GPU（MTA）** で通す。
 //!
-//! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: 本ファイルで言う sleep 不使用とは
+//! **「sleep 不使用」の射程（areka-P0-kero-balloon 要件 7.9・2026-07-31 に明確化）**: spine で言う sleep 不使用とは
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
-//! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
-//! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計で有界化してある
-//! （打ち切り方は `areka-runtime` の `spine.rs` の頭の説明にある 3 通り）。待機の形は**3 種**:
+//! 待ちの反復の間の短い休みはこれに当たらない。待ちは反復回数でなく壁時計で有界にしてある
+//! （反復回数のみの上限は CPU 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出す）。
+//! 待ちの形は次のとおりで、打ち切りの決め方と休みの決まりは `areka-runtime` の `spine_wait.rs` の頭と
+//! 各関数の説明にある:
 //!
-//! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`wait_until`]。
-//!   密 yield（`DENSE_SPIN`（`spine_wait.rs`）の窓）で速い経路の検出遅延を犠牲にせず、窓を過ぎたら
-//!   [`BACKOFF_SLEEP`] へ落としてコア占有をやめる（PR #96 で導入）。
-//! - **ハイブリッド**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→
-//!   こちらも [`wait_until`]（進みの目印つき・目印は SHIORI の呼び出しの数・汲みが数を返す呼出点はそれと汲んだ数の和）を使い、
-//!   条件の中で Tick を入れて汲み、末尾で `sleep(200µs)` の poll-backoff を挟む（2026-11-17 の
-//!   要件の討議で R7.9 の「ハイブリッドは各呼出点の自前ループ」を改めた）。送出ごとに `yield_now` で
-//!   回すと unbounded channel を洪水させつつ worker を CPU 飢餓させる二重の害があり、短い sleep で
-//!   ペーシングするのが根治（areka-kanade 先例）。
-//!   加えて注入時刻が観測を追い越さないこと（R7.8 の頭打ち）が別途必要。
+//! - **読むだけの待ち**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`wait_until`]。
+//!   休みは芯が持つので、条件の中では眠らない。
+//! - **Tick を入れながらの待ち**（毎反復 Tick を注入して系を進めつつ別スレッドの結果も待つ）→
+//!   [`wait_until_paced`]（進みの目印は SHIORI の呼び出しの数・汲みが数を返す呼出点はそれと汲んだ数の和）。
+//!   条件の中で Tick を入れて汲む。休みは [`wait_until_paced`] が持つので、条件の中では眠らない。
+//!   加えて注入時刻が観測を追い越さないこと（areka-P0-kero-balloon 要件 7.8 の頭打ち）が別途必要。
+//!   時計を差し替える段の駆動器（`spine_conformance_support.rs` の `run_stage_with`）だけは芯
+//!   [`wait_until_with`] を直に使い、同じ [`INJECT_PACE`] で休む。
 //! - **回収（settle）**（「尽きるのが正常」の残余回収＝負検証）→ [`settle_bounded`]。時刻前進は
-//!   呼出側が前段で注入し終えており、本体は観測しかしない。打ち切りは反復回数ではなく
-//!   **`SETTLE_MIN` の最小持続 かつ 連続 `SETTLE_QUIET_ROUNDS` 回 0 件**の両立で（どちらも `areka-runtime` の `spine_wait.rs`）、反復間は
-//!   [`BACKOFF_SLEEP`] の短い sleep のみ（要件 4.2・4.4）。負荷で回収機会が縮まないことが要点。
+//!   呼出側が前段で注入し終えており、本体は観測しかしない。
 //!
-//! 詳細な根拠は `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc を参照。
 //! 本ファイルは足場（scripted `ShioriBackend`＋実 sink 結線＋GPU World＋frame フェーズ直接駆動）だけを持ち、
 //! `#[test]` は兄弟のテストファイルに置く。
 //!
@@ -48,7 +44,6 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
-use std::time::{Duration, Instant};
 
 use areka_actor::ActorHandle;
 use areka_emo_compose::{BindSet, PatternState};
@@ -138,7 +133,7 @@ fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
 /// spine ハーネスの SERIKO ループ駆動モード（task 9.4・design「結線・資産・実機経路（spine.rs）」）。
 ///
 /// spine は loop ticker を**起動しない**。ループ駆動は `SerikoLoopConfig`（表＋乱数）を seriko へ値渡しで
-/// 仕込み、tick は `SerikoSink::send_tick` を直接注入して制御する（決定論・sleep 不使用・R7.2/7.3）。
+/// 仕込み、tick は `SerikoSink::send_tick` を直接注入して制御する（決定論・時刻は注入だけで進める・R7.2/7.3）。
 enum LoopDriver {
     /// ループ完全不活性（`SerikoLoopConfig::disabled()` 相当＝空表・ダミー乱数）。既存 spine 全テストの
     /// 非退行経路（設計 Testing Strategy E2E-3・Implementation Notes）。send_tick を注入してもループは
@@ -266,7 +261,7 @@ impl SpineHarness {
     /// 実 emo2 表＋固定注入乱数列で SERIKO ループを**活性化**して spine ハーネスを起動する（task 9.4）。
     ///
     /// `rng` は 1/N 抽選の固定注入列（決定論・実 entropy 非依存・R7.1/7.2）、`pick_rng` は選びの注入列。tick は loop ticker を起動せず
-    /// [`Self::inject_seriko_tick`]（`send_tick` 直接注入）で制御する（sleep 不使用・R7.3）。まばたき e2e が
+    /// [`Self::inject_seriko_tick`]（`send_tick` 直接注入）で制御する（時刻は注入だけで進める・R7.3）。まばたき e2e が
     /// 使う（実 kero/sakura まばたき 1 周の full golden は task 10.2）。
     fn boot_live(on_boot: &str, rng: LoopRng, pick_rng: LoopRng) -> SpineHarness {
         let (backend, shiori_handle) = Self::standard_backend(on_boot);
@@ -514,14 +509,14 @@ impl SpineHarness {
     /// seriko ループへ tick を 1 発直接注入する（loop ticker 不起動・`SerikoSink::send_tick`・R7.2/7.3）。
     ///
     /// 本番（mod.rs）は `spawn_loop_ticker` の worker スレッドが実時刻で `send_tick` するが、spine は
-    /// 決定論のため ticker を起動せず、テストスレッドから注入時刻のみで `send_tick` を直接呼ぶ（sleep 不使用）。
+    /// 決定論のため ticker を起動せず、テストスレッドから注入時刻のみで `send_tick` を直接呼ぶ（時刻を進めるための sleep は無い）。
     /// dispatcher 経路（`inject_dispatcher_tick`）は talk/cue clock を進めるのみで seriko ループには届かない
     /// （ghost 側にループ結線なし）——ループ tick はこの直接注入だけが供給する。
     fn inject_seriko_tick(&self, now_ms: u64) {
         self.tick_sink.send_tick(now_ms);
     }
 
-    /// dispatcher へ Tick を 1 発注入する（sleep 不使用・注入時刻のみで進める・R8.3）。
+    /// dispatcher へ Tick を 1 発注入する（時刻は注入時刻のみで進める・R8.3）。
     fn inject_dispatcher_tick(&self, now: u64) {
         self.ghost
             .dispatcher()

@@ -13,141 +13,21 @@
 //! （`crates/areka-kanade/src/schedule/events.rs`）ゆえ両者で同一値になる。
 //! よって進行状態そのもの（組み立て済みのヘッダ値）を記録しなければ選択待ちは観測できない。
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use super::conformance_script::{LapStage, TICK_STEP_MS};
 use super::{
-    Progress, RecordedCall, ScriptedShioriBackend, ShioriBackend, SpineHarness, WaitFailure,
-    wait_until_with,
+    INJECT_PACE, Progress, RecordedCall, ScriptedShioriBackend, ShioriBackend, SpineHarness,
+    WaitFailure, wait_until_with,
 };
 use areka_emo_present::PresentCommand;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_kanade::{
-    ChoiceInput, CloseReason, ExecutionSnapshot, KanadeMsg, MonotonicMs, MouseInput, ShioriCall,
-};
+use areka_kanade::{ChoiceInput, CloseReason, KanadeMsg, MonotonicMs, MouseInput};
 
 // 進行状態の記録（第 2 系統）の型と本体は、書き込む台本の SHIORI と同じ所（`areka-runtime` の `spine`）に
 // 1 つだけ置き、ここから出し直す（spec: runtime-crate-split 段 2 の記録「設計からの外れ」）。
 pub(super) use areka_runtime::spine::RecordedStatus;
 
-// ===========================================================================
-// 進行状態の記録（第 2 系統）の受け入れ確認（task 2.1・R3.8）
-// ===========================================================================
-
-/// 進行状態の記録が**選択待ちを会話中と区別して**読めることを固定する（R3.8）。
-///
-/// 檻に入れる判断分岐:
-/// - **付随参照だけでは足りないこと**: 会話中のみと会話中かつ選択待ちの 2 つのスナップショットから
-///   本番の構築関数が組む毎秒の変化通知は、**参照列が 1 バイトも違わない**（Ref3 の源は
-///   `talk_active` だけ）。既存の呼出記録は参照列までしか持たないので、ここで区別が消える。
-/// - **新しい取り出し口が区別を回復すること**: 同じ 3 呼出を台本受け口へ通すと、進行状態の記録には
-///   組み立て済みのヘッダ値がそのまま残り、選択待ちの回だけが `talking,choosing` として読める。
-/// - **ヘッダ行を出さない場合の表し方**: 全状態が非アクティブなら記録は `None`（＝ヘッダ行なし）。
-/// - **既存の記録が変わらないこと**: 同じ走行で `non_status_calls()` が従来どおり 3 件を返す。
-#[test]
-fn status_ledger_reads_choosing_where_references_cannot() {
-    // ── 実状態の 3 通り（いずれも本番で起こりうる組み合わせのみ） ──
-    // 選択待ちの間も会話の枠は占有されたままゆえ、選択待ちは常に talk_active と同時に真になる。
-    let idle = ExecutionSnapshot::INACTIVE;
-    let talking = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
-    let choosing = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: true,
-        ..ExecutionSnapshot::INACTIVE
-    };
-
-    // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由・R3.8） ──
-    let talking_call = areka_kanade::events::on_second_change(MonotonicMs(0), &talking);
-    let choosing_call = areka_kanade::events::on_second_change(MonotonicMs(0), &choosing);
-    assert_eq!(
-        call_references(&talking_call),
-        call_references(&choosing_call),
-        "会話中と選択待ちで参照列が違うなら Ref3 で区別できてしまい、進行状態の記録は要らない"
-    );
-
-    // ── (2) 同じ 3 呼出を台本受け口へ通す ──
-    let (mut backend, handle) = ScriptedShioriBackend::builder()
-        .get("OnSecondChange", Ok(None))
-        .notify("OnSecondChange", Ok(()))
-        .notify("OnSecondChange", Ok(()))
-        .build();
-    let idle_call = areka_kanade::events::on_second_change(MonotonicMs(0), &idle);
-    drive_call(&mut backend, &idle_call);
-    drive_call(&mut backend, &talking_call);
-    drive_call(&mut backend, &choosing_call);
-
-    // ── (3) 新しい取り出し口から進行状態が読める（選択待ちが会話中と別物として現れる） ──
-    assert_eq!(
-        handle.status_calls(),
-        vec![
-            RecordedStatus {
-                id: "OnSecondChange".to_string(),
-                status: None,
-            },
-            RecordedStatus {
-                id: "OnSecondChange".to_string(),
-                status: Some("talking".to_string()),
-            },
-            RecordedStatus {
-                id: "OnSecondChange".to_string(),
-                status: Some("talking,choosing".to_string()),
-            },
-        ],
-        "進行状態の記録が組み立て済みのヘッダ値（無いときは None）を呼出順に保持していない"
-    );
-
-    // ── (4) 既存の呼出記録は素通し（追補は書き込みのみで既存の読み手を増やさない） ──
-    let existing = handle.non_status_calls();
-    assert_eq!(
-        existing.len(),
-        3,
-        "既存の呼出記録が追補で変質している: {existing:?}"
-    );
-    assert!(
-        matches!(existing[0], RecordedCall::Get { .. })
-            && matches!(existing[1], RecordedCall::Notify { .. })
-            && matches!(existing[2], RecordedCall::Notify { .. }),
-        "既存の呼出記録の別（照会・片道）が従来どおりに残っていない: {existing:?}"
-    );
-}
-
-/// [`ShioriCall`] の参照列を借りる（照会・片道のどちらでも同じ位置にある）。
-fn call_references(call: &ShioriCall) -> &[String] {
-    match call {
-        ShioriCall::Get { references, .. } | ShioriCall::Notify { references, .. } => references,
-    }
-}
-
-/// 本番の構築関数が組んだ [`ShioriCall`] を、別と id と参照列と**組み立て済み進行状態**の
-/// まま台本受け口へ通す（`crates/areka-kanade/src/shiori/real.rs` と同じ渡し方）。
-fn drive_call(backend: &mut ScriptedShioriBackend, call: &ShioriCall) {
-    match call {
-        ShioriCall::Get {
-            id,
-            references,
-            status,
-        } => {
-            let wire = status.render();
-            backend
-                .get(id.as_str(), references, wire.as_deref())
-                .expect("台本の照会応答は Ok");
-        }
-        ShioriCall::Notify {
-            id,
-            references,
-            status,
-        } => {
-            let wire = status.render();
-            backend
-                .notify(id.as_str(), references, wire.as_deref())
-                .expect("台本の片道応答は Ok");
-        }
-    }
-}
 // ===========================================================================
 // 段の駆動器（task 2.3・design D6「段の駆動器」・R2.10・R3.2）
 // ===========================================================================
@@ -475,7 +355,7 @@ impl LapDriver {
         self.run_stage_with(Instant::now, sink, plan, complete)
     }
 
-    /// 時計を注入できる [`Self::run_stage`] の内側（檻専用の継ぎ目・`settle_bounded_with` と同旨）。
+    /// 時計を注入できる [`Self::run_stage`] の内側（檻専用の継ぎ目・待ちの芯 `wait_until_with` と同旨）。
     /// 打ち切りは待ちの芯（`wait_until_with`）が決める——目印なしは総時間 30 秒、目印ありは進まない
     /// 時間 30 秒（総時間の上限 300 秒）。実時計で「尽きる側」を檻に入れると 1 本 30 秒かかる。
     /// 反復の中身（注入・採取・完了判定）は実時計のときと 1 行も変わらない。
@@ -534,9 +414,9 @@ impl LapDriver {
         };
 
         // 1 反復（採取・完了の判定・注入）を待ちの芯で回す。打ち切りは芯が「相手が状態を進めなかった
-        // 時間」で決める（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。芯の休みは渡さない
-        // ——反復の末尾で毎回 200µs 眠って CPU を返しており（要件 2.5）、芯の最初の 60 ms の空回しの
-        // あいだも反復の速さが今までと変わらない（余韻の反復の回数が実時間で縮まない）。
+        // 時間」で決める（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2）。休みは `wait_until_paced`
+        // （`areka-runtime` の `spine_wait.rs`）と同じ形——芯の休みは渡さず、反復の末尾で毎回 [`INJECT_PACE`]
+        // 眠る（余韻の反復の回数が実時間で縮まない）。時計を差し替えるので芯を直に使う。
         let waited = wait_until_with(
             &mut clock,
             |_| {},
@@ -641,7 +521,7 @@ impl LapDriver {
                     }
                 }
 
-                std::thread::sleep(Duration::from_micros(200));
+                std::thread::sleep(INJECT_PACE);
                 false
             },
         );

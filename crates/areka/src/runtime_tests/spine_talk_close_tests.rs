@@ -2,8 +2,8 @@ use std::cell::Cell;
 
 use super::test_support::{boot_finished, opaque_count, variant_name};
 use super::{
-    ActorKey, Duration, Instant, PresentCommand, Progress, RecordedCall, SpineHarness,
-    run_text_phase, shell_target, wait_until, wait_until_with,
+    ActorKey, PresentCommand, Progress, RecordedCall, SpineHarness, run_text_phase, shell_target,
+    wait_until, wait_until_paced,
 };
 
 // ===========================================================================
@@ -12,7 +12,7 @@ use super::{
 // 6.1 の `SpineHarness`＋6.2 の観測ヘルパの上に構築する。S2 は実 sink 経路の末端
 // （seriko→shell 面切替の実描画 readback／emo-text typewriter の `present_frame` 駆動→
 // text 供給面 readback）まで観測境界を延ばす（R8.2/R8.5）。時刻は注入 Tick と
-// 注入 talk_time で決まり、待ちは poll-backoff の短い sleep を挟む（R8.3）・実 GPU（MTA・R8.4）・x64 完結（R8.6）。
+// 注入 talk_time で決まる（R8.3）・実 GPU（MTA・R8.4）・x64 完結（R8.6）。
 // ===========================================================================
 
 /// 装着済み balloon text actor の供給面（emo-text `TextLayerRuntime::surface`）の非透明画素数。
@@ -100,12 +100,11 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 観測窓の手前）。**警告**: 台本のテキスト長を変えると Clear 時刻が 0.05+文字数×0.05+1.00 で動くので、
     // 頭打ち値を再計算すること。
     const TICK_MAX_MS: u64 = 1_040;
-    // ポンプ回数の上限は待ちの芯の打ち切り（下）＋200µs poll-backoff sleep で与える（R7.9・根拠は
-    // `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc）。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
-    // （R7.8 の是正は適用済み）、待機時間の延長は観測に有利にしか働かない。
+    // ポンプ回数の上限は待ちの芯の打ち切り（下）で与える。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
+    // （areka-P0-kero-balloon 要件 7.8 の是正は適用済み）、待機時間の延長は観測に有利にしか働かない。
     let mut show_cmds: Vec<PresentCommand> = Vec::new();
     let mut now = TICK_BASE_MS;
-    // ── 是正は 2 段（PR #96 の `talk_started` ゲート ＋ 本 spec の頭打ち・R7.8） ─────────────
+    // ── 是正は 2 段（PR #96 の `talk_started` ゲート ＋ areka-P0-kero-balloon 要件 7.8 の頭打ち） ─────────────
     //
     //  (1) **talk 起動を観測するまで `now` を進めない**。dispatcher の `base_now` は「talk が active に
     //      なった後の初回 Tick」で確定する（areka-ghost `dispatcher.rs::on_tick`）ため、観測前に進めた
@@ -121,18 +120,16 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 本 spec の 1_040ms も、いずれも真の境界 1.40s の手前ゆえ**両者とも是正として正しく機能する**
     // （#96 の判定が変わるわけではない）。ここでは根拠が実測で裏取りされている本 spec の定数へ統一する。
     //
-    // 打ち切りは待ちの芯（`wait_until_with`）が決める（頭打ち後は反復が仕事量を表さないため回数では
+    // 打ち切りは待ちの芯（[`wait_until_paced`]）が決める（頭打ち後は反復が仕事量を表さないため回数では
     // 区切らない）。進みの目印は SHIORI の呼び出しの数（受け口は死活の問い合わせを記録しない）と
     // 受けた表示指令の数の和で、相手が 30 秒進まなければ `［止まった］`（areka-P0-ghost-session-test-load-flake 要件 2.1・2.2・
-    // `load-repro.md` の 4.3 で自前の締切が赤だった）。芯の休みは渡さず、反復の末尾の 200µs の sleep で
-    // CPU を返す（`run_stage_with` と同じ形・要件 2.5）。
+    // `load-repro.md` の 4.3 で自前の締切が赤だった）。Tick を入れる輪なので休みは [`wait_until_paced`] が
+    // 持つ（`areka-runtime` の `spine_wait.rs`）。
     let mut talk_started = false;
     let shiori = harness.shiori_handle.clone();
     let shown = Cell::new(0u64);
     let probe = || shiori.call_count() + shown.get();
-    let reached = wait_until_with(
-        Instant::now,
-        |_| {},
+    let reached = wait_until_paced(
         "S2: シェル面指令＋テキスト cue の到達",
         Progress::Count(&probe),
         || {
@@ -155,11 +152,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
             run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
             // 文字の面は最初に描く文字が届いた present で作られるので、作られる前は「まだ」と読む。
             let attached = harness.runtime.borrow().is_attached(&actor);
-            if talk_started && attached && text_surface_opaque(&harness, &actor) > 0 {
-                return true;
-            }
-            std::thread::sleep(Duration::from_micros(200));
-            false
+            talk_started && attached && text_surface_opaque(&harness, &actor) > 0
         },
     );
     if let Err(failure) = reached {
@@ -242,21 +235,16 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    配送する。Clear は配送即時にバッファを全消去する（state.rs apply_cue）ため、Clear 配送後は
     //    どの注入 talk_time でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
     //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
-    //    打ち切りは [`wait_until`] の進みの目印（SHIORI の呼び出しの数。Clear は文字の層へ届き、表示の
-    //    指令として汲む物が無いので足さない）で、反復の末尾に 200µs の poll-backoff sleep（R7.9・根拠は
-    //    `spine_seriko_loop_tests.rs` の `drive_shell_shown` の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
+    //    打ち切りは [`wait_until_paced`] の進みの目印（SHIORI の呼び出しの数。Clear は文字の層へ届き、表示の
+    //    指令として汲む物が無いので足さない）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
     let what = "S2: Clear cue の runtime への到達";
     let calls = || shiori.call_count();
-    wait_until(what, Progress::Count(&calls), || {
+    wait_until_paced(what, Progress::Count(&calls), || {
         now += 50; // 大きめに進め Clear（at=1.40s・上のタイムライン導出）を配送させる
         harness.inject_dispatcher_tick(now);
         harness.pump_text();
         run_text_phase(&mut harness.wiring, &mut harness.world, Some(2.0));
-        if text_surface_opaque(&harness, &actor) == 0 {
-            return true;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-        false
+        text_surface_opaque(&harness, &actor) == 0
     })
     .unwrap_or_else(|failure| panic!("{failure}／{what}: \\_w[1000]\\c の配送が完了しない"));
     // Clear 配送後は「リビール済みだった」区間の talk_time（t=0.30）でも全域透明（Clear の全消去・R8.5）。

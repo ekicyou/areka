@@ -288,7 +288,7 @@ fn the_fallback_white_is_the_text_layers_default_background() {
     );
 }
 
-/// 契約違反（頁が無い・画素が頁の外）の 2 理由は `warn!`、ふつうに起きる 3 理由は `debug!` で残す
+/// 契約違反（頁が無い・画素が頁の外）の理由は `warn!`、それ以外のふつうに起きる理由は `debug!` で残す
 /// （焼く段が壊れたことを既定のログ水準でも見えるようにする）。
 #[test]
 fn contract_violation_reasons_are_warned_and_ordinary_ones_stay_debug() {

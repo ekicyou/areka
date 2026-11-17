@@ -10,7 +10,7 @@
 //! 権威表である。dola の権威表ではない（配送層は語彙フリー）。以後のコマンド追加は
 //! 「消費者＋本表 1 行」のみで **dola 無改変**（R2.6 の構造的保証）。
 //!
-//! # 登記の粒度＝「名前＋選別子」（要件 11.2/11.3・task 3.2）
+//! # 登記の粒度＝「名前＋選別子」（areka-P0-scope-zorder-pinning 要件 11.2/11.3）
 //!
 //! 消費の粒度はコマンド名だけとは限らない。`\![move]` は名前だけで担当が決まる（`MoveCueSink`
 //! は第 1 引数を見ずに `name != "move"` で選別する）が、`\![set,zorder,…]` は**第 1 引数まで
@@ -25,9 +25,9 @@
 //! - **選別子つき**（`(name, Some(sel))`）＝「この名前の出現のうち、第 1 引数がちょうど `sel`
 //!   のものだけがこの担当」。`("set", Some("zorder"))`・`("reset", Some("zorder"))` がこれ。
 //!   名簿に無い第 1 引数（例: `\![set,nosuch]`）は**担当なし**であり、将来 別の担当を
-//!   足せる余地として空いている（要件 11.3）。
+//!   足せる余地として空いている（同 spec 要件 11.3）。
 //!
-//! # 一意性檻＝「1 コマンド出現に高々 1 担当」（要件 11.3）
+//! # 一意性檻＝「1 コマンド出現に高々 1 担当」（areka-P0-scope-zorder-pinning 要件 11.3）
 //!
 //! 不変条件は名前ではなく**実際の消費の粒度**（名前＋第 1 引数）で述べる。台帳はこれを 2 つの
 //! 規則で保つ。
@@ -43,9 +43,10 @@
 //!
 //! # 宣言する表であって、選別する機構ではない
 //!
-//! 本表は結線時の宣言・検証のためだけにあり、実行時に各消費者がここを引くわけではない
-//! （消費者は自らの名前と選別子で自己選別する）。両者は一致していなければならないが、
-//! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の 2 行
+//! 受け口（各 `*CueSink`）は自らの名前と選別子で自己選別し、ここを引かない。本表を実行中に引くのは
+//! strict の記録の判定（[`ArekaStrictJudges`](crate::strict_judges::ArekaStrictJudges)）と MCP の `check_script` で、
+//! 本表の行がそのまま「その `\!` を拾う担当がいるか」の答えになる。受け口と本表は一致していなければならないが、
+//! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の行
 //! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
 //! テストがその組を名指しで固定する。`runtime` の受け口については、表の全行と、表に
 //! 無い組の掛け合わせを実際に配って一致を固定する（`areka` の `runtime_tests/consumer_ledger_agreement_tests.rs`・
@@ -72,13 +73,13 @@ pub enum CommandConsumer {
     /// 窓の位置の指令（`\![move]`・`\![execute,resetwindowpos]`・`\![set,alignmenttodesktop,方向]`
     /// （`alignmentondesktop` も同じ）・`\![set,sticky-window,…]`・`\![reset,sticky-window]`・
     /// `\![execute,resetballoonpos]`・`\![lock,balloonmove]`・`\![unlock,balloonmove]`）の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetwindowpos_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breset_2csticky-window_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetballoonpos_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetwindowpos_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breset_2csticky-window_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cresetballoonpos_5d:1>
     MoveSink,
     /// `\![bind]`・`\![bind-noevent]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する
     /// （task 7.2・script-small-tags 要件 3.7・6.4）。
@@ -93,15 +94,15 @@ pub enum CommandConsumer {
     /// （作り付けの窓の `help` などは将来の担当の余地・要件 4.5）。運搬名 `\j` は選別子なしで
     /// 担当する（areka-P0-open-external-tags 要件 1.5・9.2）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2creadme_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2creadme_5d:1>
     ReadmeSink,
     /// 中断の無効化の区間の出入りの担当消費者
     /// （[`NoUserBreakCueSink`](super::user_break_cue::NoUserBreakCueSink)）。名前だけでは
     /// 決まらず、第 1 引数が `nouserbreakmode` の出現だけを担当する（`enter`／`leave` の
     /// 別の第 1 引数——`onlinemode` など——は将来の担当の余地・areka-P0-balloon-break 要件 8.2）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5benter_2cnouserbreakmode_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bleave_2cnouserbreakmode_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5benter_2cnouserbreakmode_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bleave_2cnouserbreakmode_5d:1>
     UserBreakSink,
     /// 文字装飾 `\f[...]` の担当消費者（文字レンダリング層——`areka_emo_text` の
     /// `state_decoration.rs` が運搬名で自己選別して適用する）。キーは第 1 引数
@@ -114,37 +115,37 @@ pub enum CommandConsumer {
     /// 第 1 引数が `ghost` の出現だけを担当する（`shell`／`balloon` は
     /// [`SwitchSink`](Self::SwitchSink) の持ち場・areka-P0-ghost-shell-balloon-switch 要件 1.10）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1>
     ChangeSink,
     /// シェル・バルーンの切替のタグの担当消費者
     /// （[`SwitchCueSink`](super::switch_cue::SwitchCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `shell`／`balloon` の出現だけを担当する（`ghost` は
     /// [`ChangeSink`](Self::ChangeSink) の持ち場・areka-P0-shell-balloon-switch 要件 1.15）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1>
     SwitchSink,
     /// 書庫を入れるタグの担当消費者
     /// （本体の `install::install_cue::InstallCueSink`）。名前だけでは決まらず、
     /// 第 1 引数が `install` の出現だけを担当する（`execute` の別の第 1 引数は担当外・
     /// areka-P0-ghost-install 要件 1.5〜1.7）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1>
     InstallSink,
     /// ネットワーク更新のタグの担当消費者
     /// （本体の `update::update_cue::UpdateCueSink`）。`updatebymyself`・`update`・
     /// `updateother` の 3 つの名前を選別子なしで担当する（第 1 引数は更新対象・指定であって担当を
     /// 分けない・areka-P0-network-update 要件 1.5〜1.8）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1>
     UpdateSink,
     /// 選択肢の時間切れの指定 `\![set,choicetimeout,時間]` の担当（台本の組み立て
     /// `areka_sakura::compile` が `set,choicetimeout` だけを読み、選択待ちの区切りへ秒を書く）。
     /// 第 1 引数が `choicetimeout` の出現だけを担当する（`set` の他の第 1 引数は別の担当か担当なし）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1>
     ScriptCompile,
     /// プロパティの書き込みの cue の担当（`areka_ghost` の `PropSetCueSink` が運搬名
     /// [`PROP_SET_CUE_NAME`](areka_ghost::prop_sink::PROP_SET_CUE_NAME) で自己選別する）。
@@ -154,33 +155,33 @@ pub enum CommandConsumer {
     /// `PropGetCueSink` が名前 `get` と第 1 引数 `property` で自己選別する）。runtime の外の担当である
     /// （shell-scale-linkage 要件 1.8）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1>
     PropertyRead,
     /// バルーンの寿命の受け口の担当消費者
     /// （[`BalloonLifecycleSink`](super::talk_lifecycle::BalloonLifecycleSink)）。名前だけでは
     /// 決まらず、第 1 引数が `balloontimeout` の `set` の出現だけを担当する（時間切れまでの待ち時間の
     /// 差し替え・areka-P0-balloon-lifecycle-events 要件 8.1・9.10）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1>
     LifecycleSink,
     /// 読み直しのタグの担当消費者（[`ReloadCueSink`](super::reload_cue::ReloadCueSink)）。`reload` は
     /// 名前だけでは決まらず、第 1 引数が `ghost`・`shiori`・`shell`・`balloon`・`descript` の出現だけを
     /// 担当する（`makoto` は makoto-reload-directives が後から足す余地・`aigraph` は担当なし・
     /// areka-P0-mcp-reload 要件 11.2）。旧い `reloadsurface` は選別子なしで担当する。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cghost_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshiori_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshell_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cballoon_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cghost_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshiori_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cshell_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cballoon_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1>
     ReloadSink,
     /// 常に手前の指令の担当消費者（[`WindowStateCueSink`](super::window_state_cue::WindowStateCueSink)）。
     /// `set` は第 1 引数が `windowstate` の出現だけを、第 2 引数（`stayontop`・`!stayontop`・
     /// `minimize` …）に関わらず担当する。運搬名の `\v` は選別子なしで担当する（stay-on-top-directives
     /// 要件 1.8）。
     ///
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2cstayontop_5d:1
-    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2cstayontop_5d:1>
+    /// ukadoc: <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1>
     WindowStateSink,
 }
 

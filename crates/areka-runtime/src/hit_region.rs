@@ -4,7 +4,7 @@
 //! # 座標空間の正準契約（areka-P0-collision-dpi-hittest・要件 5.4）
 //!
 //! areka は **DPI追従**（画面 DPI に追従してマスコットが k 倍で拡大表示される）を基本設計とする
-//! （[[areka-dpi-following-core-design]]）。ゆえに当たり判定経路には 2 つの座標空間が現れ、本
+//! （`.kiro/specs/completed/areka-P0-collision-dpi-hittest/design.md` の Purpose）。ゆえに当たり判定経路には 2 つの座標空間が現れ、本
 //! モジュールがその**境界**に立つ。次の 5 点が本経路の座標契約の全体像であり、`input_events`
 //! 側の記述は本節を参照する（正準はここ 1 箇所）。
 //!
@@ -40,24 +40,24 @@
 //! 本リゾルバは **shell 窓専用**（`super::target_map::shell_target` が返す偶数 target）であり、
 //! balloon（奇数 target・`choice-render` の領分）は扱わない。正典 `OnMouseMove` の Reference に
 //! バルーン識別子は存在せず、区別は areka 側の結線規律で担保する（design「HitRegionContract」・
-//! 研究 §10.5）。
+//! areka-P0-collision-geometry research.md §10.5）。
 //!
 //! probe（`examples/collision-probe.rs`）は `areka_runtime::hit_region`・`target_map` を crate の公開面で `use` する（`#[path]` では取り込まない）ので、このファイルの書き方に置き場所の制約は無い。
 
 use areka_emo_present::EmoPresenter;
 
-/// 当たり判定の解決結果（region/actor I/O 契約の**正本**・5.1/5.4）。
+/// 当たり判定の解決結果（region/actor I/O 契約の**正本**・areka-P0-collision-geometry 要件 5.1/5.4）。
 ///
-/// `region` は**不透明 String**であり、本層は意味解釈しない（5.2）。非該当・現サーフェス無しは
-/// `None`（5.3・4.4）。`None` → 空文字 Reference4 の転写は `input-events` の責務であり、本層は行わない
+/// `region` は**不透明 String**であり、本層は意味解釈しない（同 spec 要件 5.2）。非該当・現サーフェス無しは
+/// `None`（同 spec 要件 5.3・4.4）。`None` → 空文字 Reference4 の転写は `input-events` の責務であり、本層は行わない
 /// （design「HitRegionContract」）。
 ///
 /// **shell 窓専用**（`resolve_hit_region` が `shell_target` の偶数 target のみを解決する）であり、
-/// balloon（奇数 target・`choice-render` の領分）は扱わない（研究 §10.5）。契約の定義箇所は本
-/// モジュール1点であり、`input-events` は再定義せず本型を参照する（Coordination Notes C-1）。
+/// balloon（奇数 target・`choice-render` の領分）は扱わない（同 spec research.md §10.5）。契約の定義箇所は本
+/// モジュール1点であり、`input-events` は再定義せず本型を参照する（同 spec design.md Coordination Notes C-1）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HitRegion {
-    /// ゴースト scope（0=本体 / 1=相方 …）。型は `super::target_map` の正本（`u32`）へ揃える（研究 §10.5）。
+    /// ゴースト scope（0=本体 / 1=相方 …）。型は `super::target_map` の正本（`u32`）へ揃える（areka-P0-collision-geometry research.md §10.5）。
     pub scope: u32,
     /// 当たり判定の領域名（不透明・搬送のため所有形）。
     pub region: Option<String>,
@@ -110,7 +110,7 @@ mod tests {
     use super::*;
     use areka_emo_present::EmoPresenter;
 
-    /// Testing Strategy 項目 17（4.4 の檻）: 未表示 scope。`EmoPresenter::new()` ＋ target 未 attach では
+    /// 未表示 scope（areka-P0-collision-geometry 要件 4.4 の檻）。`EmoPresenter::new()` ＋ target 未 attach では
     /// 現サーフェス id が解決できず、`resolve_hit_region` は `region: None` を返す。GPU/表示なしで
     /// 決定論的に成立する。scope→target 写像（`shell_target`）の正しさは `target_map.rs` の既存テストが
     /// 所有する＝本 spec で再テストしない（証明済み配線）。

@@ -1,4 +1,4 @@
-//! areka collision-geometry 実 DPI 受け入れ probe（初出＝`areka-P0-collision-geometry` task 4.1・
+//! areka collision-geometry 実 DPI 受け入れ probe（初出＝`areka-P0-collision-geometry`
 //! 要件 4.3/7.3／`areka-P0-collision-dpi-hittest` 要件 4.1-4.6 で **k 対応化**）
 //!
 //! リゾルバ [`resolve_hit_region`] の座標契約（**窓 client 物理 px を presenter が ÷k してサーフェス px
@@ -28,7 +28,7 @@
 //! 前者は 1 実行に 1 回（表示成立時）、後者はカーソル解決ごとに出る。`surface=` は presenter が
 //! 縮約した `HitRegion::surface_point` の値そのものであり、probe 側で ÷k を再実装しない。
 //!
-//! 純粋層の決定論檻（task 1）とは
+//! 純粋層の決定論檻とは
 //! 別の観測（steering `tech.md` の Testing 節「examples は手動検証とグラフィックス挙動確認の補助であり、
 //! テストの代替ではない」）であり、両者は併存する（観測の2段構え）。
 //!
@@ -71,7 +71,7 @@
 //! **ダブルクリックでは終了しない**（2026-08-05 実機で確認）。本 probe が装着するポインタ
 //! ハンドラは `pointer::on_probe_pointer_moved`（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
 //! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
-//! `areka-P0-input-events` task 2.7 で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
+//! `areka-P0-input-events` で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
 //! キャラ窓のポインタハンドラは本体の `input_events::attach_char_pointer_handlers`（`pub(crate)`・
 //! 内部が `crate::` パスを使うため runtime の example からは使えない）が装着するようになったためである。
 //! 本番で利用者が終了を指示する道は右クリックメニューの「終了」（本体の `menu::request_close`）
@@ -109,13 +109,13 @@
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
 //!    `descript.txt` やバルーン資産も疑う**こと（`crates/areka-placement/src/lib.rs` の `prepare_stages_for_shell` が読取の全体像）。
 //!
-//! R4.6 が要求する「**本番ゴースト（実 emo2・実 `pasta.dll`）を絶対パスで起動**して行う実機確認」の脚は
-//! **本 probe ではなく本番 emo2 実ゴースト実行（`areka` 本体・Task 8.2）が担う**。本 probe が担うのは
+//! `areka-P0-collision-dpi-hittest` 要件 4.6 が要求する「**本番ゴースト（実 emo2・実 `pasta.dll`）を絶対パスで起動**して行う実機確認」の脚は
+//! **本 probe ではなく本番 emo2 実ゴースト実行（`areka` 本体）が担う**。本 probe が担うのは
 //! **ヒットテスト目視の脚**（実 DPI での当たり判定と目視の一致）であり、両者は同じ受け入れ記録の別項目で
 //! ある。acceptance-record では両脚の実施条件を分けて記録し、本 probe の実行を「本番ゴーストを絶対パスで
 //! 起動した証跡」として流用しないこと。
 //!
-//! # プロトコル（acceptance-record と1:1 対応・task 4.2 が実 DPI≠96 で実施し記録する）
+//! # プロトコル（acceptance-record と1:1 対応・実 DPI≠96 で実施し記録する）
 //!
 //! ① **環境**: per-monitor v2・実 DPI ≠ 96（125%/150%/200% ＝ dpi 120/144/192 のいずれか2水準以上）。
 //!    DPI awareness は wintf `WinApp` 初期化がプロセスに設定する。**dpi=96 のみの確認は不合格**
@@ -211,7 +211,7 @@ use areka_runtime::hit_region::resolve_hit_region;
 use areka_runtime::target_map;
 
 // ---------------------------------------------------------------------------
-// 本体分割の接続（`areka-P0-file-slimming` task 8.12・純移動）
+// 本体分割の接続（`areka-P0-file-slimming`・純移動）
 //
 // サンプルのルートファイルは**自分のバイナリターゲットのクレートルート**であり、素の `mod foo;`
 // は `examples/foo.rs` を探して**新しい example ターゲットを生む**。ゆえに子の接続は `#[path]`

@@ -1,17 +1,17 @@
 // =============================================================================
-// タグ入口の結線（task 6.2・要件 11.2）と、shell 設定由来の基底の起動時結線
-// （task 6.3・要件 5.1／5.2）の決定論テストのうち、本体の側にあるもの
+// タグ入口の結線（areka-P0-scope-zorder-pinning 要件 11.2）と、shell 設定由来の基底の起動時結線
+// （同 spec 要件 5.1／5.2）の決定論テストのうち、本体の側にあるもの
 //
 // 測るのは結線の字面そのもの（zwi05＝受け渡し口・入口の登録・受け渡し構造、
 // zwi08＝設定の値を起動の段まで運ぶ経路）だけである。配線の欠けは挙動に現れにくく、
-// 呼出を丸ごと削っても判断のテストは 1 本も赤くならない（task 4.2／5.1／5.2 で三度実証済み）。
+// 呼出を丸ごと削っても判断のテストは 1 本も赤くならない。
 // 設定の値を運ぶ経路は、途中の 1 行を落としても「設定を書いていないゴースト」と全く同じ挙動に
 // なるので、挙動を見る檻には**原理的に**映らない。運ぶ側（`main.rs`）の字面を名指しで押さえる。
 // 据えた値が実際に効くことは `areka-runtime` の `frame/zorder_descript_tests.rs` が挙動で受け持つ。
 //
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
 // 相手ファイルの doc の語も入るので、当てる先を間違えると検査が恒真になる
-// （task 3.1 の教訓。zwi08 の末尾に両方向の対照を置いてある。zwi05 が読む `areka-runtime` の
+// （zwi08 の末尾に両方向の対照を置いてある。zwi05 が読む `areka-runtime` の
 // `src/lib.rs` の対照は、同じ字面を `areka-runtime` の `frame_schedule_tests.rs` が持つ）。
 //
 // 到達性（zwi01／02）・相順と相の呼出（zwi06／07）・基底を据える順（zwi09）は、`areka-runtime` の
@@ -22,10 +22,10 @@ use super::source_text_test_support::{code_only, squeeze};
 use crate::crate_source_test_support::crate_source;
 
 // ---------------------------------------------------------------------------
-// ⑴ 結線の字面——削っても挙動に現れない 4 点を名指しで塞ぐ
+// ⑴ 結線の字面——削っても挙動に現れない所を名指しで塞ぐ
 // ---------------------------------------------------------------------------
 
-/// 受け渡し口・入口の登録・受け渡し構造への引き渡しが、本番の結線に在る（task 6.2 の 3 点）。
+/// 受け渡し口・入口の登録・受け渡し構造への引き渡しが、本番の結線に在る。
 ///
 /// 受け口と入口の登録は実行系の側の起動（`runtime_boot.rs`・areka-P0-mcp-reload 要件 4.2）へ
 /// 移ったので、そこは `runtime_boot.rs` の字面で押さえる（窓の側の送出端は束で渡る）。
@@ -59,7 +59,7 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 起動の段の結線——shell 設定の値が台帳まで運ばれる（task 6.3・要件 5.1／5.2）
+// ⑵ 起動の段の結線——shell 設定の値が台帳まで運ばれる（areka-P0-scope-zorder-pinning 要件 5.1／5.2）
 // ---------------------------------------------------------------------------
 
 /// 起動窓の準備が読んだ `seriko.zorder` の生の値が、`main` の 1 本道で結線へ渡る。
@@ -69,8 +69,7 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
 #[test]
 fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
     // 窓を作る側（重なりの生の値の写し）と結線へ渡す行は `ghost_session.rs`、その戻りを受けて
-    // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る（areka-P0-ghost-restart-unit
-    // task 4.2・4.3）。
+    // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る（areka-P0-ghost-restart-unit）。
     let session_raw = include_str!("../ghost_session.rs");
     let session_code = code_only(session_raw);
     let session = squeeze(&session_code);

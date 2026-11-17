@@ -79,8 +79,7 @@ pub struct BalloonScopeAssets {
     /// 外・α が 255 でない）は白へ落ちる（導出と記録は `balloon_background` モジュール）。
     ///
     /// 消費点は `frame/attach.rs` の `connect_balloon_text`——装着（`register_actor_view`）の
-    /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（task 7.3 で結線済み。
-    /// 順序は `frame_attach_tests.rs` の
+    /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（順序は `frame_attach_tests.rs` の
     /// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る）。
     /// 導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
     pub background_color: (u8, u8, u8),
@@ -170,7 +169,7 @@ pub struct BootAssets {
     pub cursors: ShellCursorAssets,
 }
 
-/// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
+/// 構築入力（[`BootAssets`]）を一括組立する（design「構築入力 / assets」）。
 ///
 /// 既定の解決のシェルを読む形で、中身は `shell: None` で [`build_boot_assets_with_shell`] へ
 /// 委ねるだけである（シェルの側は [`build_shell_assets`]、バルーンの側は [`build_balloon_assets`]）。
@@ -185,10 +184,10 @@ pub struct BootAssets {
 /// `SurfaceResolver` は `EmoWorld::alias_snapshot()` から、static bindset は shell descript KV の
 /// シェルの着せ替えの読み（`MountModel.bindgroups`）からスコープごとに組む（要件 14.1〜14.3）。
 ///
-/// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling task 4.1）は
+/// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling）は
 /// **呼び手が読んだ値をそのまま搬送する**（本関数は解釈も再読取もしない）。設計 Flow 3 手順1 が
 /// 定めるとおり、boot シームが `DescriptSource::shell_author_dpi()`／`load_balloon_author_dpi()`
-/// （areka_placement::source・task 2.1）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
+/// （areka_placement::source）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
 /// attach（`attach_target`）の双方へ配ることで、両者が同一の分母に載ることを保証する。
 /// ここで descript を読み直すと (a) 既に読んだファイルの二重 I/O になり、(b) 採寸と attach が
 /// 別々の読取結果に載る隙（読取間の差し替え）を作るため、内部読取は採らない。縮退梯子
@@ -199,7 +198,7 @@ pub struct BootAssets {
 /// - 呼び出しスレッドは COM 初期化済み（`WicDecoderArm` 前提・本番は MTA UI スレッド）。
 /// - `scopes` は呼び手（`wire_runtime` の `derive_scopes`）が渡す固定の最大の組 `[0, 1]`（ゴーストは読まない・
 ///   scope 1 が無いゴーストでは `frame::plan_attachments` が unused に分ける）。
-/// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（task 2.1 の読取器出力）。
+/// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（`DescriptSource` の読取器の出力）。
 ///
 /// # 事後条件
 /// - 返る資産だけで attach フェーズが完結する（**以後ファイル I/O なし**）。全 I/O は本関数内で完結。

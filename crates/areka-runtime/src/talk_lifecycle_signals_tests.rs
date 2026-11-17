@@ -1,5 +1,5 @@
 // =============================================================================
-// BalloonLifecycleSink の 3 つの知らせの檻（areka-P0-balloon-lifecycle-events task 4.1・
+// BalloonLifecycleSink の知らせの檻（areka-P0-balloon-lifecycle-events
 // 要件 5.2 / 5.6 / 7.5 / 9.1〜9.4 / 9.8）
 //
 //   ⑴ 配送から受け取った番号が開始の合図に載る（受け取っていなければ無し）
@@ -13,27 +13,12 @@
 
 use super::*;
 use crate::consumer_ledger::test_support::carrier_cue;
-use crate::talk_clock::TalkClock;
+use crate::talk_clock::{controllable_clock, set_now};
 use areka_ghost::sink::BootCueSink;
 use areka_sakura::TalkId;
 use dola::cue::{ActorKey, CueCommand, TalkCue};
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Receiver, channel};
-use std::sync::{Arc, Mutex};
-
-/// 壁時刻を書き換えられる時計と、それを読む `TalkClock`。
-fn controllable_clock() -> (Arc<Mutex<f64>>, TalkClock) {
-    let now = Arc::new(Mutex::new(0.0f64));
-    let now_for_clock = Arc::clone(&now);
-    let clock = TalkClock::new(Arc::new(move || {
-        *now_for_clock.lock().expect("test clock mutex poisoned")
-    }));
-    (now, clock)
-}
-
-fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
-    *now.lock().expect("test clock mutex poisoned") = wall;
-}
 
 fn text_cue(at: f64, duration: f64) -> TalkCue {
     TalkCue {

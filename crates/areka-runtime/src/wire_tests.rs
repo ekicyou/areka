@@ -10,7 +10,7 @@ fn pick_and_draw_seeds_differ() {
     assert_ne!(draw, pick);
 }
 
-/// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
+/// 取り違え防止の檻（areka-P0-emo-dpi-scaling 要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
 /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと
 /// **正しく対応**していることを、意図的に**異なる 2 値**で固定する。
 ///
@@ -43,8 +43,8 @@ fn build_boot_assets_for_pairs_shell_and_balloon_author_dpi() {
     );
 }
 
-/// 観測可能な完了条件（tasks.md task 5.1）: 存在しない ghost_root に対し
-/// `wire_runtime` は `wired=false`（帰結は呼び手が決める・R7.3）を返し、
+/// 存在しない ghost_root に対し `wire_runtime` は `wired=false`（帰結は呼び手が決める・
+/// areka-P0-emo2-boot 要件 7.3）を返し、
 /// ghost／seriko ハンドルは `None` となる（実 sink 結線を成立させない決定分岐の檻）。
 ///
 /// 素の `World::new()` で足りる。`build_boot_assets` が `resolve` 起点不在で早期 `Err` を返すため、
@@ -78,7 +78,7 @@ fn wire_runtime_falls_back_to_unwired_on_missing_ghost_root() {
 
     assert!(
         !outcome.wired,
-        "存在しない ghost_root では実 sink 結線は成立せず wired=false を返す（R7.3）"
+        "存在しない ghost_root では実 sink 結線は成立せず wired=false を返す"
     );
     assert!(
         outcome.ghost.is_none(),

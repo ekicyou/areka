@@ -2,10 +2,10 @@
 //!
 //! `spine_conformance_support.rs` は 1 ファイル 1,000 行の分量規律（R2.11・
 //! `.kiro/steering/structure.md`）に収まらないため、**主題単位に分けて接続する**——駆動器と
-//! 進行状態の記録の本体は支援層に残し、駆動器を縛る檻だけを本ファイルへ分けた。駆動器の檻は
-//! 支援層の子として置く。
+//! 進行状態の記録の取り出し口は支援層に残し、駆動器を縛る檻と進行状態の記録の檻を本ファイルへ分けた。
+//! 檻は支援層の子として置く。
 //!
-//! 本ファイルは**期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
+//! 本ファイルは**台本の期待値を持たない**。段の区間の逐語は `spine_conformance_script.rs` の領分であり、
 //! 檻は自分が使う段を自前で宣言する（借りると、台本の宣言を変えたときに檻が黙って追随する）。
 
 use std::cell::Cell;
@@ -20,8 +20,11 @@ use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
     StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection,
 };
-use super::{Progress, ScriptedShioriBackend, SpineHarness};
-use areka_kanade::{ChoiceInput, CloseReason, MouseEventKind, MouseInput};
+use super::{Progress, RecordedStatus, ScriptedShioriBackend, ShioriBackend, SpineHarness};
+use areka_kanade::{
+    ChoiceInput, CloseReason, ExecutionSnapshot, MonotonicMs, MouseEventKind, MouseInput,
+    ShioriCall,
+};
 
 /// 檻の偽物が注入を記録するときの種別名。
 fn injection_kind(injection: &Injection) -> &'static str {
@@ -201,7 +204,7 @@ fn stage_driver_returns_named_timeout_instead_of_silent_success() {
 /// 檻に入れる判断分岐:
 /// - **頭打ちで注入が止まること**: 投函の時刻列が上限の手前で終わる。止まらないと注入時刻が観測を
 ///   追い越し、待っている条件そのものが壊れて永久に不成立になる（`SPIN_WAIT` の doc の実測）。
-/// - **止まった後も観測は続くこと**: 最後の注入より 3 反復あとに払い出した 1 件が、頭打ち後の注入
+/// - **止まった後も観測は続くこと**: 頭打ちの後の反復で払い出した 1 件が、頭打ち後の注入
 ///   時刻つきで採取できている。「注入を止める」を「待つのをやめる」と取り違えると採れない。
 #[test]
 fn stage_driver_stops_injecting_at_the_limit_and_keeps_observing() {
@@ -653,7 +656,7 @@ impl StageSink for HoldingSink {
 ///   止まっているはずの台本へ再生が流し込まれ、次段の選択確定が棄却される。
 ///
 /// 期待する投函列は「据え置き 5 本（すべて下限）＋前進 4 本（刻みどおり）＋余韻 0 本」である。
-/// 区間は 19 本ぶん取ってあるので、余韻で注入が続けば必ず 4 本ぶん余計に並ぶ。
+/// 区間は期待の列より長く取ってあるので、余韻の間に注入が続けば投函列が期待の列より長くなる。
 #[test]
 fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
     let stage = LapStage {
@@ -698,4 +701,123 @@ fn stage_driver_holds_the_injection_clock_until_the_landing_is_observed() {
         "投函が段の区間の外へ出ている: {:?}",
         observed.injected_at_ms
     );
+}
+
+// ===========================================================================
+// 進行状態の記録（第 2 系統）の受け入れ確認（R3.8）
+// ===========================================================================
+
+/// 進行状態の記録が**選択待ちを会話中と区別して**読めることを固定する（R3.8）。
+///
+/// 檻に入れる判断分岐:
+/// - **付随参照だけでは足りないこと**: 会話中のみと会話中かつ選択待ちの 2 つのスナップショットから
+///   本番の構築関数が組む毎秒の変化通知は、**参照列が 1 バイトも違わない**（Ref3 の源は
+///   `talk_active` だけ）。既存の呼出記録は参照列までしか持たないので、ここで区別が消える。
+/// - **新しい取り出し口が区別を回復すること**: 同じ 3 呼出を台本受け口へ通すと、進行状態の記録には
+///   組み立て済みのヘッダ値がそのまま残り、選択待ちの回だけが `talking,choosing` として読める。
+/// - **ヘッダ行を出さない場合の表し方**: 全状態が非アクティブなら記録は `None`（＝ヘッダ行なし）。
+/// - **既存の記録が変わらないこと**: 同じ走行で `non_status_calls()` が従来どおり 3 件を返す。
+#[test]
+fn status_ledger_reads_choosing_where_references_cannot() {
+    // ── 実状態（非アクティブ・会話中・会話中かつ選択待ち。いずれも本番で起こりうる組み合わせのみ） ──
+    // 選択待ちの間も会話の枠は占有されたままゆえ、選択待ちは常に talk_active と同時に真になる。
+    let idle = ExecutionSnapshot::INACTIVE;
+    let talking = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
+    };
+    let choosing = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: true,
+        ..ExecutionSnapshot::INACTIVE
+    };
+
+    // ── (1) 付随参照は会話中と選択待ちを区別しない（＝記録の第 2 系統が要る理由・R3.8） ──
+    let talking_call = areka_kanade::events::on_second_change(MonotonicMs(0), &talking);
+    let choosing_call = areka_kanade::events::on_second_change(MonotonicMs(0), &choosing);
+    assert_eq!(
+        call_references(&talking_call),
+        call_references(&choosing_call),
+        "会話中と選択待ちで参照列が違うなら Ref3 で区別できてしまい、進行状態の記録は要らない"
+    );
+
+    // ── (2) 同じ 3 呼出を台本受け口へ通す ──
+    let (mut backend, handle) = ScriptedShioriBackend::builder()
+        .get("OnSecondChange", Ok(None))
+        .notify("OnSecondChange", Ok(()))
+        .notify("OnSecondChange", Ok(()))
+        .build();
+    let idle_call = areka_kanade::events::on_second_change(MonotonicMs(0), &idle);
+    drive_call(&mut backend, &idle_call);
+    drive_call(&mut backend, &talking_call);
+    drive_call(&mut backend, &choosing_call);
+
+    // ── (3) 新しい取り出し口から進行状態が読める（選択待ちが会話中と別物として現れる） ──
+    assert_eq!(
+        handle.status_calls(),
+        vec![
+            RecordedStatus {
+                id: "OnSecondChange".to_string(),
+                status: None,
+            },
+            RecordedStatus {
+                id: "OnSecondChange".to_string(),
+                status: Some("talking".to_string()),
+            },
+            RecordedStatus {
+                id: "OnSecondChange".to_string(),
+                status: Some("talking,choosing".to_string()),
+            },
+        ],
+        "進行状態の記録が組み立て済みのヘッダ値（無いときは None）を呼出順に保持していない"
+    );
+
+    // ── (4) 既存の呼出記録は素通し（追補は書き込みのみで既存の読み手を増やさない） ──
+    let existing = handle.non_status_calls();
+    assert_eq!(
+        existing.len(),
+        3,
+        "既存の呼出記録が追補で変質している: {existing:?}"
+    );
+    assert!(
+        matches!(existing[0], RecordedCall::Get { .. })
+            && matches!(existing[1], RecordedCall::Notify { .. })
+            && matches!(existing[2], RecordedCall::Notify { .. }),
+        "既存の呼出記録の別（照会・片道）が従来どおりに残っていない: {existing:?}"
+    );
+}
+
+/// [`ShioriCall`] の参照列を借りる（照会・片道のどちらでも同じ位置にある）。
+fn call_references(call: &ShioriCall) -> &[String] {
+    match call {
+        ShioriCall::Get { references, .. } | ShioriCall::Notify { references, .. } => references,
+    }
+}
+
+/// 本番の構築関数が組んだ [`ShioriCall`] を、別と id と参照列と**組み立て済み進行状態**の
+/// まま台本受け口へ通す（`crates/areka-kanade/src/shiori/real.rs` と同じ渡し方）。
+fn drive_call(backend: &mut ScriptedShioriBackend, call: &ShioriCall) {
+    match call {
+        ShioriCall::Get {
+            id,
+            references,
+            status,
+        } => {
+            let wire = status.render();
+            backend
+                .get(id.as_str(), references, wire.as_deref())
+                .expect("台本の照会応答は Ok");
+        }
+        ShioriCall::Notify {
+            id,
+            references,
+            status,
+        } => {
+            let wire = status.render();
+            backend
+                .notify(id.as_str(), references, wire.as_deref())
+                .expect("台本の片道応答は Ok");
+        }
+    }
 }

@@ -215,7 +215,7 @@ fn poll_destroy(world: &mut World) {
         left = ?left,
         target = ?target,
         origin = ?origin,
-        "台詞の切れ目に達しなかった（理由は left 欄）ので shiori を読み直さない"
+        "台詞の切れ目に達しなかった（利用者の取りやめ、または left 欄の理由）ので shiori を読み直さない"
     );
 }
 

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use areka_emo_present::PresentCommand;
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
@@ -27,6 +27,7 @@ use crate::input_events::user_break::UserBreakWiring;
 use crate::readme::ReadmeWiring;
 use crate::sample_test_support::acquire_emo2;
 use crate::session::ghost_switch::ChangeRx;
+use crate::session::ghost_switch_test_support::{TICK_EVERY, TICK_STEP_MS};
 use crate::session::shell_balloon_switch::SwitchRx;
 use areka_runtime::RuntimeInputs;
 use areka_runtime::adapter::PresentBridge;
@@ -103,7 +104,7 @@ fn installed(world: &World) -> usize {
     .count()
 }
 
-/// 束から 13 本が組まれ、12 本目が読み直しの受け口・13 本目が常に手前の受け口（どちらも
+/// 束から組まれる受け口の列は、最後から 2 本目が読み直しの受け口・最後が常に手前の受け口（どちらも
 /// 受信端へ届く）である。
 #[test]
 fn sinks_are_thirteen_with_reload_then_window_state_last() {
@@ -126,7 +127,7 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
     assert_eq!(
         lines.reload_rx.try_iter().count(),
         1,
-        "12 本目の受け口は読み直しの受信端へ送る"
+        "最後から 2 本目の受け口は読み直しの受信端へ送る"
     );
 
     let cue = TalkCue {
@@ -138,11 +139,11 @@ fn sinks_are_thirteen_with_reload_then_window_state_last() {
         ),
         duration: 0.0,
     };
-    sinks.last_mut().expect("13 本目").emit(cue);
+    sinks.last_mut().expect("最後の受け口").emit(cue);
     assert_eq!(
         rig.window_state_rx.try_iter().count(),
         1,
-        "13 本目の受け口は常に手前の受信端へ送る"
+        "最後の受け口は常に手前の受信端へ送る"
     );
     assert_eq!(
         lines.reload_rx.try_iter().count(),
@@ -168,11 +169,11 @@ fn rebuilt_window_state_sink_reaches_the_same_line() {
     };
 
     let (mut first, _) = runtime_sinks(&world, &rig.sources);
-    first.last_mut().expect("13 本目").emit(on());
+    first.last_mut().expect("最後の受け口").emit(on());
     // 読み直し: 前の受け口を落とし、同じ束から組み直す。
     drop(first);
     let (mut rebuilt, _) = runtime_sinks(&world, &rig.sources);
-    rebuilt.last_mut().expect("13 本目").emit(on());
+    rebuilt.last_mut().expect("最後の受け口").emit(on());
 
     assert_eq!(
         rig.window_state_rx.try_iter().count(),
@@ -264,13 +265,8 @@ fn shut_down(what: &str, runtime: GhostRuntime, handle: ScriptedShioriHandle) {
     });
 }
 
-/// 注入する Tick 1 回で台詞の時計を進める幅（合成の ms）。
-const TICK_STEP_MS: u64 = 100;
-/// Tick を注入する実時間の最小間隔（`SwitchRig` と同じ・spin の反復ごとに投函して受信箱を溢れさせない）。
-const TICK_EVERY: Duration = Duration::from_millis(1);
-
 /// 足場は `TickerMode::Disabled` なので、台詞の時計は dispatcher へ合成の Tick を注入して進める。
-/// Tick は実時間で [`TICK_EVERY`] に 1 つまでに間引き、中断の線の合図を `Leave` が届くまで読んで返す
+/// Tick の幅と間引き（実時間で [`TICK_EVERY`] に 1 つまで）は切替の足場 `SwitchRig` の定数を借り、中断の線の合図を `Leave` が届くまで読んで返す
 /// （同じ読みで後ろの合図まで入ることがある）。子の通しのテスト 2 本が使う。
 fn signals_until_leave(world: &World, runtime: &GhostRuntime) -> Vec<NoUserBreakSignal> {
     let wiring = world

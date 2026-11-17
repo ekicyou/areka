@@ -138,7 +138,7 @@ fn attach_show_and_resize(world: &mut World) {
             w: physical.0 as i32,
             h: physical.1 as i32,
         },
-        // 表示実寸への再スナップ＝毎フレーム再スナップと同一の経路（Req 1.2・task 1.4）。
+        // 表示実寸への再スナップ＝毎フレーム再スナップと同一の経路。
         areka_placement::diag::PlacementRoute::Resnap,
     );
     assert!(
