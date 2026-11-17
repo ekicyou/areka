@@ -123,7 +123,7 @@
   - _Dispatch: mechanical — 設計が直す文の中身を与えている_
   - _Requirements: 4.3, 7.1, 7.3, 9.3_
 
-- [ ] 11. 受け持つ範囲の名前の無い番号を消すか spec の名前を足す
+- [x] 11. 受け持つ範囲の名前の無い番号を消すか spec の名前を足す
 - [x] 11.1 配置の crate の本番のファイルの番号を直す
   - `crates/areka-placement/src/follow*`・`transition_*` のうち `_tests.rs`・`*test_support*` でないファイル（今の数で約 275 行）を、設計の NumberCleanup の規則 1〜6 で直す（`follow/move_shift.rs` の「監査の指摘 1」「監査の指摘 5」・`follow.rs` の「task 1.4」「task 2.4」・`follow/drag_follow.rs` の「2.4」「4.5」を含む）。`follow.rs:52`・`:64` の「task 3.4」は 1 が同じ行の名指しを直した後なので、行をその場で測り直してから直す
   - 完了の状態: 設計の G2 の 4 つの grep を本番のファイルに絞った unnamed が 0
@@ -144,7 +144,7 @@
   - _Depends: 5, 6.3, 7, 8, 9, 10_
   - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
   - _Requirements: 7.2_
-- [ ] 11.4 (P) `areka-runtime` の `placement_tests/transition_*` の番号を直す
+- [x] 11.4 (P) `areka-runtime` の `placement_tests/transition_*` の番号を直す
   - 16 ファイル（約 187 行）を同じ規則で直す。ファイルを足し引きせず、999 行の 2 ファイルは同じ行の中で書き換える。例外表の `transition_judge_verdict_tests.rs` は割らない
   - 完了の状態: G2 の 4 つの grep をこの置き場に絞った unnamed が 0・`transition_judge.rs`・`transition_judge_tests.rs` が 999 行のまま
   - _Boundary: runtime placement_tests transition_
