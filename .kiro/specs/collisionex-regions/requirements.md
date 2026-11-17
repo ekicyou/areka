@@ -35,6 +35,7 @@
   - 4 つの形（`rect`・`ellipse`・`circle`・`polygon`）の内外の判定と、`collision*` と `collisionex*` を合わせた重なりの順。
   - 子のサーフェス（element定義の入れ子）から持ち込む当たり判定を、形を保ったまま element定義の位置だけずらすこと。
   - 読めない行と、読めたが働かない `region` の行の記録。
+  - 同じサーフェスの同じ collision番号の扱いを SSP に合わせること（前の行を除かずに両方を残し、警告を出す）。`collision*` だけで書いたシェルにも及ぶ。合成の畳み込み `crates/areka-emo-compose/src/fold.rs` とその檻（`fold_tests.rs`・`fold_merge_tests.rs`）を触る（ウェーブ C22 の表の触るファイルに無いが、同じウェーブのほかの 5 本は emo-compose に触らない）。
   - `region` の行の欄（ファイル名・R・G・B・領域反転）を型へ運ぶこと（働きは持たない）。
   - 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 2 行（`collision*` と `collisionex*`）・`doc/COMPAT_ARCHITECTURE.md` §8（沈黙ルール対応表）への追記・決定論のテスト・実機の確かめ。
 - **Out of scope**:
@@ -94,10 +95,11 @@
 
 1. When 点が複数の当たり判定に当たるとき, the 当たり判定の解決 shall `collision*` と `collisionex*` の区別なく、1 つの並びの中で後に書いたものの名前を返す（今の画家の順・仮定 A1）。
 2. When `surface.append*`ブレスが当たり判定を足すとき, the 当たり判定の解決 shall 足した当たり判定を元のサーフェスの当たり判定の後ろ（手前）に置く（今の `collision*` と同じ）。
-3. When 後の `surface*`ブレスが前の行と同じ番号の当たり判定を書くとき, the 読み手と当たり判定の解決 shall `collision*` と `collisionex*` を同じ番号の並び（ukadoc の collisionID）とみなし、前の行を今の `collision*` と同じ規則で置き換える（決め A2・番号の並びが 1 つであることは SSP の測りに合わせる。置き換えは areka の既存の決め）。同じブレスの中で同じ番号が 2 度書かれたときは、今の `collision*` と同じく両方を残し、後に書いた方を手前とする。
+3. When 同じサーフェスに同じ番号の当たり判定が 2 つ以上書かれたとき（後の `surface*`ブレスが前のブレスと同じ番号を書くとき・同じブレスの中で 2 度書くときの両方）, the 読み手と当たり判定の解決 shall `collision*` と `collisionex*` を同じ番号の並び（ukadoc の collisionID）とみなし、前の行を除かずに両方を残し、並びの中の書いた順（後に書いた方が手前）に置く（決め A2・SSP の測りに合わせる。今の `collision*` の「後のブレスが前の同じ番号の行を除く」振る舞いを改める）。
 4. When サーフェスが element定義で子のサーフェスを入れ子にしているとき, the 当たり判定の解決 shall 子の当たり判定を形を保ったまま element定義の X・Y だけずらして持ち込む（矩形と楕円は始点と終点、円は中心、多角形は全部の頂点、`region` は置く位置）。
 5. The 当たり判定の解決 shall 子から持ち込む当たり判定の順と、親に同じ名前があるときに持ち込まない規則を、今の `collision*` と同じにする。親の同じ名前が `region` の当たり判定であっても同じ規則を当て、`region` のための特別扱いを作らない（決め 6）。
 6. The 当たり判定の解決 shall `collision-sort` の値で並びを変えない（今と同じ）。
+7. When 同じサーフェスで同じ番号の当たり判定が重なったとき, the 当たり判定の解決 shall 今の element番号の二重定義と同じ書き方で警告を残す（足す記述子 1 つにつき 1 行・最初の番号と重なった数を添える）。`surface.append*`ブレスが足す行は今のとおり重ねて足し、この警告の対象にしない。
 
 ### Requirement 4: 読めない行と働かない行の記録
 
@@ -135,7 +137,7 @@
 1. When 当たり判定の解決が `collisionex` の当たり判定の名前を返すとき, the areka shall その名前を、`collision*` の名前と同じく、当たり判定の名前を使うマウスのイベントの Reference4 に載せる。
 2. The areka shall マウスのイベントの種類・送る時・ほかの Reference の中身を、この仕様の前と変えない。
 3. The areka shall 当たり判定の名前ごとのカーソルの形の行を、`collisionex` の名前に対しても `collision*` の名前と同じに引く（カーソルの働きそのものは変えない）。
-4. The areka shall `collision*` だけで当たり判定を書いたシェルの当たり方と記録を、この仕様の前と変えない。
+4. The areka shall `collision*` だけで当たり判定を書いたシェルの当たり方と記録を、この仕様の前と変えない。ただし同じサーフェスに同じ collision番号を 2 つ以上のブレスで書いたシェルだけは、Requirement 3.3・3.7 のとおり両方を残して警告を出す側へ改める。
 
 ### Requirement 7: 文書と網羅台帳
 
@@ -146,7 +148,8 @@
 1. The 開発作業 shall 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `collisionex*` の行の状態・担当・説明を、着地した働きに合わせて書き直す。状態は `degraded`・担当は `collisionex-regions`・説明は「4 つの形は働く・`region` は型へ運び記録だけ」とする（決め A7）。
 2. The 開発作業 shall 同じ台帳の `collision*` の行の状態を `degraded` のままとし、説明から「`collisionex` を読み飛ばす」旨を除いて、`degraded` の理由を「重なりの順が正典（先に書いた方が上位）と逆」に書き換える（決め A7）。
 3. The 開発作業 shall `doc/COMPAT_ARCHITECTURE.md` §8 の表に、正典が沈黙する所の決め（楕円・円・多角形の境界・交差する多角形の中の決め方・形の名前の大小文字・`collision*` と `collisionex*` の番号の並び・読めない行の線引き・`region` が働かないこと）を、正典の URL と逐語の引用を添えて足す。
-4. The 開発作業 shall areka 本体のファイル（`crates/areka/src/input_events/mod.rs` の説明の 1 行を含む）を書き換えない。
+4. The 開発作業 shall `doc/COMPAT_ARCHITECTURE.md` §8 の「【上書き】同じ面の番号が 2 つ以上の `surface*`ブレスに出たとき」の行の collision の決め（前の同じ collision番号の行を除く）を、SSP の測り（両方を残し「二重定義」を警告する）に合わせて書き直し、上書きした旨と測りの根拠（`research.md` 9 節）を添える。
+5. The 開発作業 shall areka 本体のファイル（`crates/areka/src/input_events/mod.rs` の説明の 1 行を含む）を書き換えない。
 
 ### Requirement 8: 確かめ
 
@@ -155,7 +158,7 @@
 #### Acceptance Criteria
 
 1. The 開発作業 shall 決定論のテストで、4 つの形のそれぞれについて中・外・境界の上の点、反転や負の半径の形、交差する多角形の点を固定する。
-2. The 開発作業 shall 決定論のテストで、`collision*` と `collisionex*` を混ぜて重ねた並び・`surface.append*` で足した並び・同じ番号の置き換え・子のサーフェスから持ち込んでずらした形の当たり方を固定する。
+2. The 開発作業 shall 決定論のテストで、`collision*` と `collisionex*` を混ぜて重ねた並び・`surface.append*` で足した並び・同じ番号を 2 つのブレスと同じブレスの中に書いた並び（両方が残り後の方が手前・警告が 1 行）・子のサーフェスから持ち込んでずらした形の当たり方を固定し、同じ collision番号の前の行を除くと固定していた既存のテストを新しい振る舞いへ書き直す。
 3. The 開発作業 shall 決定論のテストで、Requirement 4 の読めない行と `region` の行のそれぞれについて、当たり判定になるか・記録が 1 件残るかを固定する。
 4. The 開発作業 shall 決定論のテストで、`region` の行の欄が型に運ばれることと、`region` に点が当たらず下の当たり判定が返ることを固定する。
 5. When 実機でクローディア（`sample-ghost-kit` の `claudia`）を動かすとき, the 開発作業 shall 撫で（`OnMouseMove`）とドラッグ（`OnMouseDragStart`／`OnMouseDragEnd`）の Reference4 に当たり判定の名前（`Head`・`Bust` など）が載ることを、areka の記録で確かめる。
@@ -169,7 +172,7 @@
 
 - **A1（重なりの順）**: 今の画家の順（後に書いたものが手前）を保つ。`collision*` と `collisionex*` を区別しない。正典は [caption_z-axis](https://ukatech.shillest.net/ukadoc-spec/descript_shell_surfaces.html#caption_z-axis) で「あるサーフェスの当たり判定は、基本的にsurfaces.txtにおいて先に登場したcollision定義が上位となる。」と書き、画家の順はその逆（完了 `collision-geometry` の要件の討議の議題 1 の開発者の裁定を引き継ぐ）。クローディアの `surface0` では当たる 49,222 点のうち 243 点（`Face`／`Bust` と `Hair` の重なり）で SSP と違う名前になる見込み。逸脱は `doc/COMPAT_ARCHITECTURE.md` §8 に書く。
 - **A2・A3・A5（SSP で測った・2026-11-17）**: 設計の前に SSP 2.9 で測った（手順と結果は `research.md` 9 節・試しのシェルは `evidence/ssp-probe-surfaces.txt`）。
-  - A2（番号の並び）: **1 つ**。前のブレスの `collision4` と後のブレスの `collisionex4` を、SSP は「Surface=0/Collision=4 二重定義されています。」と警告した＝同じ番号として数える。置き換えは areka の既存の決め（`doc/COMPAT_ARCHITECTURE.md` §8「同じ面の番号が 2 つ以上の `surface*`ブレスに出たとき」＝前の同じ collision番号の行を除く）に従う。なお SSP は警告のうえで**両方を残す**（`collision4`・`collisionex4` も、`collision5` どうしも、どちらの領域も当たった）。このずれは `collisionex` に固有でなく既存の `collision*` の決めなので、この仕様では変えない。
+  - A2（番号の並び）: **1 つ**。前のブレスの `collision4` と後のブレスの `collisionex4` を、SSP は「Surface=0/Collision=4 二重定義されています。」と警告した＝同じ番号として数える。SSP は警告のうえで**両方を残す**（`collision4`・`collisionex4` も、`collision5` どうしも、どちらの領域も当たった）。areka は今、後のブレスが前の同じ collision番号の行を除く（§8 の【上書き】の行・`fold.rs` の注記は「SSP で測れなかったので今のまま」）。開発者の裁定（2026-11-17「このスペックで対応せよ」）で、この仕様の中で SSP に合わせて両方を残し、element番号の二重定義と同じく警告を出す側へ改める（要件 3.3・3.7・6.4・7.4・8.2）。
   - A3（交差する多角形）: **巻き数の規則**（0 でなければ中）。五芒星（頂点を 1 つ飛ばしに結んだ多角形）の中心の五角形＝辺が 2 回回る所が当たった。偶奇の規則なら当たらない所なので、仮定（偶奇）を改めた。凸包の中で星の外の 2 点は当たらなかった＝凸包ではなく辺どおりの多角形。
   - A5（形の名前の大小文字）: **区別しない**。`Ellipse`・`RECT` と書いた行がどちらも当たった。
 - **A4（読めない行の線引き）**: 次の行は丸ごと使わずに記録を 1 件残す。数でない座標の行、多角形の座標の数が奇数の行、`region` の欄が不正な行。多すぎる座標は前から求める数だけ使い、記録を残す。今の `collision*` の振る舞い（欠けた座標を黙って 0 にする）は変えない。0 で埋めた形が別の所に当たる害を避けるため。
