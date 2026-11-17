@@ -95,9 +95,9 @@ impl CapturedEvent {
     /// フィールドの **生値**（`record_str` 経路で渡された文字列。引用符なし）。
     ///
     /// `record_debug` 経路で載ったフィールド（数値・真偽値・`Debug` で渡した値）と
-    /// 欠落は `None`。`areka-kanade`／`areka-ghost`／`areka-sylphya` の `assert_logged` は
-    /// `event`／`outcome` を生値の完全一致で判定するため、引用符を剥がす仕事はここに置く
-    /// （アダプタ側で `trim_matches('"')` を再実装すると、値そのものが引用符を含む場合に
+    /// 欠落は `None`。消費側のテストは `e.field_str("event") == Some("…")` のように
+    /// フィールドを生値の完全一致で判定するため、引用符を剥がす仕事はここに置く
+    /// （消費側で `trim_matches('"')` を再実装すると、値そのものが引用符を含む場合に
     /// 静かに壊れる）。
     pub fn field_str(&self, name: &str) -> Option<&str> {
         self.last(name).and_then(|v| v.str_raw.as_deref())

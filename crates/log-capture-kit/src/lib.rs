@@ -153,6 +153,8 @@
 //! - [`count_levels`] — レベル別の件数（[`LevelCounts`]）だけを見る。警告 0 件の主張などに使う。
 //! - [`CapturedEvent::field_names_sorted`]／[`CapturedEvent::fields_map`] — フィールド集合を
 //!   ちょうどで固定する判定に使う（いずれも Debug 表現・名前の昇順）。
+//! - [`expect_one`] — メッセージに語を含むイベントが**ちょうど 1 件**在ることを主張して返す。
+//! - [`ExpectField::expect_field`] — フィールドの Debug 表現を引き、欠落を失敗にする。
 //! - [`ensure_interest_probes`] — 常駐の仕掛けを窓を開かずに確立する（冪等）。[`capture`] が
 //!   内部で呼ぶので、通常は消費側が直接呼ぶ必要は無い。
 //! - `capture_under_filter`（feature `env-filter`）— `RUST_LOG` 相当の directive を実際に

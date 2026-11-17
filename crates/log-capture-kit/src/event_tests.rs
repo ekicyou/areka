@@ -282,8 +282,8 @@ fn field_str_returns_the_raw_value_and_field_returns_the_debug_representation() 
         .find(|e| e.target == "areka_kanade::resource")
         .expect("見本の raw probe イベント");
 
-    // `areka-kanade`／`areka-ghost`／`areka-sylphya` の `assert_logged` は生値の完全一致で
-    // 判定するため、引用符を剥がす仕事はアダプタ側ではなく kit の `field_str` が担う。
+    // 消費側のテストは `field_str(..) == Some("…")` の生値の完全一致で判定するため、
+    // 引用符を剥がす仕事は消費側ではなく kit の `field_str` が担う。
     assert_eq!(ev.field_str("event"), Some("shiori_load"));
     assert_eq!(ev.field_str("outcome"), Some("ok"));
     assert_eq!(ev.field("event"), Some("\"shiori_load\""));
