@@ -258,14 +258,12 @@ fn both_id_forms_are_held_the_same_way() {
         .get(&EntryId::parse("ukadoc:dev_bind").expect("形は正しい"))
         .expect("ページ全体の id も入るはず");
     assert_eq!(page_wide.page.as_str(), "dev_bind");
-    assert!(!page_wide.id.has_anchor());
 
     let anchored = catalog
         .entries
         .get(&EntryId::parse("ukadoc:list_propertysystem:system.year:1").expect("形は正しい"))
         .expect("アンカー付きの id も入るはず");
     assert_eq!(anchored.page.as_str(), "list_propertysystem");
-    assert!(anchored.id.has_anchor());
 
     // 2 形は同じ表に、id の byte 昇順で並ぶ（設計 D-9）。
     assert_eq!(

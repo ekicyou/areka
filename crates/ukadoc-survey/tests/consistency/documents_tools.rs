@@ -103,7 +103,7 @@ members = [\"ukadoc:list_shiori_event:OnBoot:1\", \"ukadoc:list_shiori_event:OnC
 fn twisting_an_id_changes_exactly_one_character() {
     let id = "ukadoc:list_shiori_event:OnBoot:1";
     let twisted = twisted_id(id);
-    assert_eq!(twisted, "ukadoc:list_shiori_event:OnBoot:X");
+    assert_eq!(twisted, "ukadoc:list_shiori_event:OnBoot:0");
     assert_eq!(
         twisted.chars().count(),
         id.chars().count(),

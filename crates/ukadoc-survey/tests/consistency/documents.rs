@@ -131,12 +131,21 @@ pub(super) fn cited_ids(markdown: &str) -> BTreeSet<String> {
 
 /// id の綴りを 1 文字だけ変えた綴り（末尾の 1 文字を差し替える）。
 ///
-/// 末尾は出現番号の数字なので、数字にならない `X` へ差し替えればカタログに実在しない
-/// 綴りになり、なお `ukadoc:` 始まりのままなので判定 ⑴ の網には掛かる。
+/// 数字の末尾は 0 へ（もともと 0 なら 9 へ）、数字でない末尾（ページ単位の id）は
+/// `X` へ（もともと `X` なら `Y` へ）差し替える。どちらも id の形のままなので判定 ⑴ の
+/// 網に掛かる。差し替えた綴りが実在する id に当たったときは、呼び手の「赤がちょうど
+/// 1 件」の assert が止める。
 pub(super) fn twisted_id(id: &str) -> String {
     let mut chars: Vec<char> = id.chars().collect();
     match chars.last_mut() {
-        Some(last) => *last = if *last == 'X' { 'Y' } else { 'X' },
+        Some(last) => {
+            *last = match *last {
+                '0' => '9',
+                '1'..='9' => '0',
+                'X' => 'Y',
+                _ => 'X',
+            }
+        }
         None => panic!("空の id は 1 文字変えられない"),
     }
     chars.into_iter().collect()

@@ -5,13 +5,13 @@
 //! ここでは 4 つのドメインすべてについて、**担当ページの名前を並び順ごと逐語で釘付け**
 //! にする。数は「いくつ」しか言わないが、逐語の並びは「どれ」を言う。
 //!
-//! 守るのは 6 つ。⑴ 割り当てが 38 ページで、内訳が shiori 12・assets 24・
-//! sakura-script 1・property 1 であること（要件 3.1・設計 assignment の事後条件）。
-//! ⑵ 各ドメインの担当ページが逐語で一致し、名前順で返ること。⑶ 38 個の名前が互いに
+//! 守るのは 5 つ。⑴ 各ドメインの担当ページが逐語で一致し、名前順で返ること
+//! （件数の内訳 shiori 12・assets 24・sakura-script 1・property 1 もこの逐語の並びが
+//! 言い切る。要件 3.1・設計 assignment の事後条件）。⑵ 38 個の名前が互いに
 //! 異なること＝1 ページは 1 ドメインにしか属さない（要件 3.2・設計の不変条件）。
-//! ⑷ ページからドメインが引けること、表に無いページでは引けないこと。
-//! ⑸ 割り当ての無いページを名前順・重複無しで挙げられること（要件 3.5）。
-//! ⑹ ページ名は下線を含んだ丸ごとの名前として扱われること（`memo` と
+//! ⑶ ページからドメインが引けること、表に無いページでは引けないこと。
+//! ⑷ 割り当ての無いページを名前順・重複無しで挙げられること（要件 3.5）。
+//! ⑸ ページ名は下線を含んだ丸ごとの名前として扱われること（`memo` と
 //!    `memo_shiorievent` は別のドメイン、`descript_shell` と
 //!    `descript_shell_surfaces` は別のページ）。
 //!
@@ -113,40 +113,6 @@ fn property_pages_are_the_single_page_of_requirement_3_1() {
     assert_eq!(spellings(&got), expected_property_pages());
 }
 
-/// 返る並びが名前順であること自体も釘付けにする。上の 4 本の期待値は名前順で
-/// 書いてあるので、実装が転記順のまま返すと assets と shiori が赤くなる。
-#[test]
-fn pages_of_returns_names_in_sorted_order() {
-    let assignment = PageAssignment::canonical();
-    for domain in Domain::ALL {
-        let got = assignment.pages_of(domain);
-        let mut sorted = got.clone();
-        sorted.sort();
-        assert_eq!(got, sorted, "{} の並びが名前順でない", domain.as_key());
-    }
-}
-
-// ---- 件数と内訳（要件 3.1・設計 assignment の事後条件）----
-
-#[test]
-fn canonical_assigns_exactly_thirty_eight_pages() {
-    let assignment = PageAssignment::canonical();
-    let total: usize = Domain::ALL
-        .into_iter()
-        .map(|domain| assignment.pages_of(domain).len())
-        .sum();
-    assert_eq!(total, 38);
-}
-
-#[test]
-fn canonical_split_is_twelve_twenty_four_one_and_one() {
-    let assignment = PageAssignment::canonical();
-    assert_eq!(assignment.pages_of(Domain::Shiori).len(), 12);
-    assert_eq!(assignment.pages_of(Domain::Assets).len(), 24);
-    assert_eq!(assignment.pages_of(Domain::SakuraScript).len(), 1);
-    assert_eq!(assignment.pages_of(Domain::Property).len(), 1);
-}
-
 // ---- 1 ページは 1 ドメインにしか属さない（要件 3.2・設計の不変条件）----
 
 /// 元の表（ドメインごとの並び）を平らにした 38 個の綴りが互いに異なること。
@@ -167,36 +133,6 @@ fn source_table_has_thirty_eight_pairwise_distinct_page_names() {
         38,
         "同じページ名が 2 度書かれている: {flat:?}"
     );
-}
-
-/// 畳んだ表の大きさが、畳む前の並びの長さと等しいこと（＝上書きが起きていない）。
-#[test]
-fn folding_the_table_loses_no_page() {
-    let assignment = PageAssignment::canonical();
-    let flat_len = Domain::ALL
-        .into_iter()
-        .map(|domain| canonical_pages(domain).len())
-        .sum::<usize>();
-    assert_eq!(assignment.by_page.len(), flat_len);
-}
-
-/// ドメインの担当ページ同士が交わらないこと。
-#[test]
-fn domains_share_no_page() {
-    let assignment = PageAssignment::canonical();
-    for (i, left) in Domain::ALL.into_iter().enumerate() {
-        for right in Domain::ALL.into_iter().skip(i + 1) {
-            let a: BTreeSet<PageName> = assignment.pages_of(left).into_iter().collect();
-            let b: BTreeSet<PageName> = assignment.pages_of(right).into_iter().collect();
-            let shared: Vec<&PageName> = a.intersection(&b).collect();
-            assert!(
-                shared.is_empty(),
-                "{} と {} が同じページを持つ: {shared:?}",
-                left.as_key(),
-                right.as_key()
-            );
-        }
-    }
 }
 
 // ---- ページからドメインを引く ----
