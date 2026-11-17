@@ -574,3 +574,8 @@
 - **閉じた調べもの（10 節）と決め（11 節）**: 3＝D1・26＝D2・43＝D3・15＝D4・53＝D5・13＝D6・30＝D7・2 と 8＝D8・32＝D9・34＝D10・実機の 1・2・8＝D11・37 の続き＝D12・52＝D13（中身は `design.md` の「設計の決め」）。30 の速さは測らない（判定にしない・前後の時間を記録に書くだけ）。
 - **設計の討議へ持ち越す前提**: `design.md` の「前提として置いた決め」の 6 項（D1・D9・D6・D2・D10・D5）。
 - **危うさ**: `design.md` の Risks（見張りを厳しくする 1・4・5・破棄が赤になる 9・`OnceLock` の置き場・見本の `test = true`・`ascii` の 2 つの写し・行数・逃がしの化け）。
+
+## 13. 設計の討議の決め（2026-11-17・全議題を推奨案で承認）
+
+- 指摘 3 は `McpError::Refused { code, message }` の `Err` で返す。根拠: `is_error` を見ずに `.text` を使う呼び手が範囲の外にある（`crates/areka/tests/emo2_mcp_real_run.rs:185`）。`McpError` を受ける範囲の外の `match` は、どれも何でも受ける腕を持つ（`emo2_real_run/common.rs:242`・`emo2_mcp_real_run.rs:140`）。`McpChannel::call_until` は `McpError` をその場で返す（`real-run-kit/src/mcp.rs:145`）＝直らない誤りを締切まで呼び直さない。
+- 指摘 45 は檻にしない（配線の順）。`roadmap.md:60` は完了のときに直す。ほかの 5 件（D9・D6・D2・D10・D5）は設計の前提のまま。

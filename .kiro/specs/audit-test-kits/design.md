@@ -103,7 +103,7 @@ graph LR
 
 | 決め | 項 | 選んだ形 | 理由 |
 |---|---|---|---|
-| D1 | 3 | JSON-RPC の誤り（`ServiceError::McpError`）は「答え」として `Ok(ToolReply { text: "MCP error <code>: <message>", is_error: true })` で返す。つなぎを使い回し、猶予を待たない。新しい変種は足さない | 範囲の外の `McpError` の読み手（`emo2_real_run/common.rs` ほか）を書き換えずに済む。`ToolReply::is_error` は「相手が失敗を答えた」で、引数が inputSchema に合わない・知らないツール、もそれに当たる。`call_until` は今の「失敗の答えは呼び直す」に乗る（締切で最後の答えを添えて panic） |
+| D1 | 3 | JSON-RPC の誤り（`ServiceError::McpError`）は新しい変種 `McpError::Refused { code: i32, message: String }` の `Err` で返す。つなぎを使い回し、猶予を待たない（設計の討議の議題 1） | `Ok(ToolReply { is_error: true })` で返すと、`is_error` を見ずに `.text` を使う範囲の外の呼び手（`emo2_mcp_real_run.rs:185` ほか）が誤りの文をそのまま使って後の段で的外れに落ち、`call_until` は直らない誤りを締切まで呼び直す。`Err` なら `unwrap_or_else(panic!)` の呼び手はその場で正しい文で落ち、`call_until` もその場で返す。範囲の外に `McpError` の全部の変種を並べる `match` は 0（`common.rs:241` は何でも受ける腕・`emo2_mcp_real_run.rs:124` は `ChildExited` だけを照らす） |
 | D2 | 26 | 範囲の中の静的なテスト（`launch_tests.rs`）。`RELIED_TARGETS` の各項 `<crate>::<mod 段…>` から `crates/<crate の _ を - に>/src/<段>.rs`（無ければ `<段>/mod.rs`）を引き、ファイルが在る・頼る行の語（`event = "app_exit"`・`"os_close_request"`・`"MCP: 待受を始めた"`）が在る・`target:` の上書きが無い、を確かめる | 本物の areka を起こさない。`session-module-gather` が `app_exit` を動かして `RELIED_TARGETS` を直し漏らせば赤になり、直せば新しい置き場を照らす＝名前を書き換えずに追いつく |
 | D3 | 43 | 言い直しは `event_tests.rs:3-12`・14 の見出し・102、`event.rs:89-90`・136 だけで足りる。`event.rs:150`・`event_tests.rs:18-19`・121 は 1 字も変えない（見出しを「移した時点の出所。今はどれも `capture_lines` を呼ぶ」にすれば下の並びは出自の記録として正しい） | `input-crate-split` への申し送りは要らない |
 | D4 | 15 | 設定値が相対なら、実行体の祖先のうち `Path::ends_with(値)` が真の最も近いものを使う。無ければ今の `std::path::absolute` | cargo は起こした場所で解き、テストの実行体はパッケージの場所で走る。どちらで起こしても実行体は `<target>\debug\…` の下にあるので祖先に必ず現れる。`tools/sample-fetch.ps1` は根で `cargo run` するので今と同じ答え＝README の書き方（`<CARGO_TARGET_DIR>\nar-samples\fetched\`）は古びない（要件の討議の 3） |
@@ -199,9 +199,9 @@ crates/
 | `crates/areka-emo-present/src/scale_tests.rs` | 251-263 を消し、249 行で `expect_one` を取り込む | 件 1 | 当たらない |
 | `crates/areka-emo-text/tests/attach_wiring_test.rs` | 133-166 を消し、33 行を `use log_capture_kit::{ExpectField, capture, expect_one};` に | 件 1 | 当たらない（新しいソースファイルは足さない＝要件 7.11） |
 | `crates/wintf/src/ecs/test_support.rs` | 5（「96 箇所」の数を書かない文に） | 44 | 当たらない |
-| `doc/testing.md` | 37（`Launch::Ghost` の行を消し「5 通り」を「4 通り」に）・45（`AREKA_MCP_PORT` を上書きしたときの振る舞い）・56（MCP の誤りの答えも `is_error`）・71（閉じ忘れて止めた破棄は panic）・75・163（証拠の行と写しの失敗の行の新しい文）・93（隣が 32bit でも元が新しければ写し直す） | 3・9・10・11・32・35 | 当たらない |
+| `doc/testing.md` | 37（`Launch::Ghost` の行を消し「5 通り」を「4 通り」に）・45（`AREKA_MCP_PORT` を上書きしたときの振る舞い）・56〜64（訳の表を 4 つに＝`McpError::Refused { code, message }`「相手が JSON-RPC の誤りを答えた」）・71（閉じ忘れて止めた破棄は panic）・75・163（証拠の行と写しの失敗の行の新しい文）・93（隣が 32bit でも元が新しければ写し直す） | 3・9・10・11・32・35 | 当たらない |
 | `.kiro/steering/structure.md` | log-capture-kit 節の Tests の段（見張りの本数を数で書かない言い方・4 形の綴りに `\` を含むこと）・Temp Path Kit 節の Consumers（12 crate の並びへ） | 1・73・要件の討議の 4 | steering の自分の行（要件 7.3 の例外） |
-| `.kiro/steering/roadmap.md` | 60 行の「例外表 5 件」の数を外す | 73 | 同上 |
+| `.kiro/steering/roadmap.md` | 60 行の「例外表 5 件」の数を外す。**実装の中では触らず**、この spec の `/kiro-complete` のロードマップの書き換えで `main` を取り込んだうえで直す（ウェーブ全体の行で並走の spec と `/kiro-next` も書く＝設計の討議の議題 3） | 73 | ウェーブ全体の行（完了のときに直す） |
 
 ### 確かめるだけで触らないファイル
 
@@ -238,7 +238,7 @@ flowchart TD
 flowchart LR
     Call[call_tool] --> R{結果}
     R -- Ok 結果 --> Reply[ToolReply を返す・つなぎを使い回す]
-    R -- ServiceError McpError --> Refused[ToolReply is_error 真 MCP error code message・つなぎを使い回す・猶予なし]
+    R -- ServiceError McpError --> Refused[Err McpError Refused code message・つなぎを使い回す・猶予なし]
     R -- ほかの ServiceError --> T[つなぎを捨て exit_grace まで子の終わりを見る]
     T --> X{子が終わった}
     X -- はい --> CE[ChildExited]
@@ -257,7 +257,7 @@ flowchart LR
 |---|---|---|---|---|
 | 1 | ⑷ に `\` を前に置いた語（`\` ＋バルーン名）と後ろに置いた語（バルーン名＋`\`）を、⑵ に `vendors` と `sample_ghost` と検体名を `\` で繋いだ語（終わりが `\` と `"` の 2 つ・区切りが `\` と `\\` の 2 つ）を足す。赤になる 2 か所を直す（範囲の外の表） | `sample_path_guard_test.rs` | `a_backslash_spelled_bundled_balloon_path_is_detected`・`a_backslash_spelled_checked_in_tree_is_detected`（見本の文字で赤・較正の対）＋本物の木の走査が緑 | G2 |
 | 2 | `installed_path` の同梱バルーンの写し先を `root/<store>/<manifest.directory>/balloon/<companion.directory>/<残り>` に（`areka-nar/src/plan.rs:291` と同じ置き方）。説明 37-38 行を直す | `examples/fold-samples.rs` | `a_ghost_with_a_companion_balloon_round_trips_without_mismatches`（`WorkDir` の下に組んだ同梱バルーンつきの小さな木を `fold_one` に通して不一致 0） | S3 |
-| 3 | D1 | `mcp.rs` | `an_mcp_error_reply_is_a_failed_answer_on_the_same_link`（偽の子 `listen;window` の `echo` に `{"text":5}`＝`is_error` が真で文に `-32602`・`exit_grace` より速く返る・続く正しい呼び出しが成功） | R1 |
+| 3 | D1 | `mcp.rs` | `an_mcp_error_reply_is_refused_on_the_same_link`（偽の子 `listen;window` の `echo` に `{"text":5}`＝`Err(McpError::Refused { code: -32602, .. })`・`exit_grace` より速く返る・続く正しい呼び出しが成功） | R1 |
 | 4 | 照らしを引用符なしの `env-filter` にする（`["…"]`・`['…']` の両方）。道具の自分の `Cargo.toml` の `[features]` の `default` と、根の `Cargo.toml` の `[workspace.dependencies]` の道具の項も読む | `with_default_guard_test.rs` | 判定の関数の較正 3 本 `single_quoted_env_filter_is_detected`・`env_filter_in_the_kit_default_features_is_detected`・`env_filter_in_workspace_dependencies_is_detected` ＋本物の 2 ファイルを読む `only_one_crate_declares_the_env_filter_feature` | G3 |
 | 5 | 修飾つきの語から `(` を外す（`use … as` の行と `(` 無しの渡し方に当たる）。この見張り自身の説明 5・539 行の綴りを言い換える。環境変数の読みには広げない（裁定） | `temp_path_guard_test.rs` | `the_entry_point_passed_without_a_call_is_detected`・`an_aliased_import_of_the_entry_point_is_detected` | G4 |
 
@@ -309,7 +309,7 @@ flowchart LR
 | 42 | `interest_probes_enabled` を `pub(crate)` にし、再輸出と説明の行を消す | `probe.rs`・`lib.rs` | — | L2 |
 | 43 | D3 | `event_tests.rs`・`event.rs` | — | L2 |
 | 44 | 数を書かない文にする（`lib.rs:28`＝件 2・`filter_tests.rs:3`・5・191・範囲の外の `wintf/src/ecs/test_support.rs:5`） | 同左 | — | L2 |
-| 45 | `McpChannel::new(port)` を `cmd.spawn()` の前に組み、`Run::new` に渡す | `launch.rs`・`run.rs` | 型で縛る（`Run::new` が組み終えた `McpChannel` を受ける＝子を起こした後に器を組む形は書けない） | R4 |
+| 45 | `McpChannel::new(port)` を `cmd.spawn()` の前に組み、`Run::new` に渡す | `launch.rs`・`run.rs` | —（配線の順で判断の分岐ではない＝檻にしない・設計の討議の議題 2） | R4 |
 | 46 | `Waits` を消して `&Limits` を渡す | `mcp.rs`・`run.rs`・`mcp_tests.rs` | — | R1 |
 | 47 | `cmd.env_remove("AREKA_USER_ROOT")` だけにする | `launch.rs` | 既存 `launch_tests` | R4 |
 | 48 | `const ACK: [&str; 2] = ["event=\"os_close_request\"", EXIT_LINE];` | `close.rs` | — | R4 |
@@ -391,7 +391,7 @@ fn not_found_reason(others: &[(u16, String)]) -> String; // 28
 // run.rs
 pub(crate) fn new(child: Child, dirs: RunDirs, mcp: McpChannel, port: u16, limits: Limits) -> Run;
 ```
-- 公開の品（変更後）: `Launch`（`Sample`・`SampleRoot`・`Root`・`Empty`）・`RealRun`（`mcp_port(n)` を含む今の作り手）・`Staged`（`ghost_folder`・`root`・`ensure_i686`）・`Run`（`stderr()` を除く今の読み口）・`McpError`（3 つの変種は今のまま）・`ToolReply`・`Ended`・`EndedBy`・`ChildExited`。`Limits` は `pub(crate)`。
+- 公開の品（変更後）: `Launch`（`Sample`・`SampleRoot`・`Root`・`Empty`）・`RealRun`（`mcp_port(n)` を含む今の作り手）・`Staged`（`ghost_folder`・`root`・`ensure_i686`）・`Run`（`stderr()` を除く今の読み口）・`McpError`（今の 3 つの変種に `Refused { code, message }` を足す）・`ToolReply`・`Ended`・`EndedBy`・`ChildExited`。`Limits` は `pub(crate)`。
 - 不変条件: 破棄で子を力ずくで止めたとき、panic の途中でなければ必ず panic する（9）。窓口が話す番号は子が受け取った `AREKA_MCP_PORT` と同じ（10）。
 - 偽の子の手順（範囲の中だけの約束）: `err:` を消す・`sleep:<ms>`・`window-linger:<ms>` を足す・`listen-drop` は次の一歩へ進む。
 
@@ -431,14 +431,14 @@ fn cached_root_in(namespace: &Path, name: &str, nar: &Path, bytes: &[u8]) -> Res
 | # | 変わるもの | 範囲の外の読み手 | 直し |
 |---|---|---|---|
 | 1 | 検体の見張り ⑵⑷ が `\` の綴りも赤にする | `window_link_real_run.rs:448-449`・`areka-nar/src/error_tests.rs:205`・`structure.md` | 同じ変更で直す |
-| 3 | MCP の誤りの答えが `Err(Unreachable)` から `Ok(ToolReply { is_error: true })` へ | `doc/testing.md:56`（`McpError` を照らす読み手は形が変わらない） | 文を 1 つ足す |
+| 3 | MCP の誤りの答えが `Err(Unreachable)` から `Err(McpError::Refused { code, message })` へ | `doc/testing.md:56-64` の訳の表・`crates/areka/tests/emo2_real_run/common.rs:241`（何でも受ける腕＝書き換え不要）・`emo2_mcp_real_run.rs:124`（`ChildExited` だけを照らす＝書き換え不要） | 表に 1 行足す |
 | 4 | `env-filter` の見張りが 3 つの道も赤にする | `structure.md`・`logging.md:128`（文は今のまま正しい） | 違反は 0 |
 | 5 | 一時パスの見張りが `(` 無しと別名も赤にする | `structure.md` | 違反は 0 |
 | 9 | 閉じ忘れて止めた破棄が赤になる | `doc/testing.md:71`・`close()`／`wait_exit()` を呼ばない範囲の外の呼び手（今は 0 本を grep で確かめた） | 文を直す |
 | 10 | `.env("AREKA_MCP_PORT", ..)` の番号へ話しかける | `doc/testing.md:45`（呼び手 0） | 文を直す |
 | 11 | 隣が 32bit でも元が新しければ写し直す・環境変数を必ず確かめる | `doc/testing.md:93`・`smoke_boot_loop_exit.rs:238`（影響なし） | 文を直す。完了した `areka-P0-real-run-mcp-kit` 要件 2.1・2.5 を裁定で改めた旨を記録 |
 | 15 | 相対の `CARGO_TARGET_DIR` の解き方 | `vendors/sample_ghost/README.md:154`・169（古びない）・`tools/sample-fetch.ps1`（根で走る＝同じ答え） | 触らない |
-| 18 | 1,000 行の番人が最後の項の削除で赤にならない・較正の項を表の先頭から取る | `roadmap.md:60` | 数を外す |
+| 18 | 1,000 行の番人が最後の項の削除で赤にならない・較正の項を表の先頭から取る | `roadmap.md:60` | 数を外す（完了のときに・議題 3） |
 | 32 | 端末へ出す行が英語の ASCII | `doc/testing.md:75`・163・`tools/load-flake.ps1`（頭 `sample-ghost-kit:` と `os error N` を保つ） | 文を直す |
 | 35 | `Launch::Ghost`・`Staged::run_dir`・`Run::stderr`・`Limits` の公開・偽の子の `err:` が消える | `doc/testing.md:37`（呼び手 0） | 文を直す。完了した同 spec の要件 1.1⑵ を裁定で改めた旨を記録 |
 | 42 | `interest_probes_enabled` が公開でなくなる | 呼び手 0 | — |
@@ -545,7 +545,7 @@ fn cached_root_in(namespace: &Path, name: &str, nar: &Path, bytes: &[u8]) -> Res
 | 5 | G2 検体の見張り | 1（範囲の外の 2 ファイルを含む）・34・74 の分 | G1 |
 | 6 | G3 `with_default` の見張り | 4・71・74・34 の分 | G1 |
 | 7 | G4 一時パスの見張り | 5・34 の分 | G1 |
-| 8 | G5 1,000 行の番人と steering | 18・34・73 の残り・`structure.md`・`roadmap.md:60` | G1〜G4 |
+| 8 | G5 1,000 行の番人と steering | 18・34・73 の残り・`structure.md`（`roadmap.md:60` は完了のとき） | G1〜G4 |
 | 9 | S2 窓口の誤りの文と実行体 | 16・32（sample 側）・36・55 | — |
 | 10 | S1 作業フォルダと原本 | 7・15・52・53・54・57・58・59 | S2 |
 | 11 | S3 `fold-samples` | 2・8・56・`Cargo.toml` | S1 |
@@ -567,16 +567,18 @@ fn cached_root_in(namespace: &Path, name: &str, nar: &Path, bytes: &[u8]) -> Res
 - 既定のブランチとの差分で確かめて記録に残す: C22 のほかの 5 本の触るファイルに差分が無い・`file_length_guard_test.rs` の表に載る 4 ファイルに差分が無い・`vendors/` に差分が無い・範囲の外の差分が「範囲の外で直すファイル」の表の行だけ・`event.rs:150`・`event_tests.rs:18-19`・121 と `areka::app_exit` の名指しの字面が変わっていない・外への約束の変わった所が「外への約束の変更と読み手」の表の分だけ。
 - 記録: 残す指摘 75（種類 ⑵・裁定 2026-11-17）・回す指摘 0・件 1 と件 2 を片づけた旨（brief の件の名前で）・消す前の grep の件数・消した／改名したテストの名前と挙げている完了した文書（D10）・次の機会に確かめる 1・2・8 の 3 行・完了した `areka-P0-real-run-mcp-kit` の要件 1.1⑵・2.1・2.5 を裁定で改めた旨・30 の前後の時間（参考）。
 
-## 前提として置いた決め（設計の討議で確かめる）
+## 設計の討議で確定した決め（2026-11-17・全議題を推奨案で承認）
 
-入力だけでは決め切れない所は、次の前提で書いた。討議で別の案になれば、その項の行だけを直す。
+開発者「推奨どおり承認」。議案 8 件を全部推奨案で確定した。
 
-1. **D1（指摘 3）**: MCP の誤りの答えは `McpError` の新しい変種でなく `ToolReply { is_error: true }` で返す（範囲の外の読み手を書き換えない形）。新しい変種にするなら、`McpError` を照らす `crates/areka/tests/emo2_real_run/common.rs`・`common_tests.rs`・`emo2_mcp_real_run.rs` と `doc/testing.md` の 3 変種の表を同じ変更で直す。
-2. **D9（指摘 32・13）**: `ascii` は `sample-ghost-kit` の公開の関数にして `real-run-kit` が使い、leaf の `temp-path-kit` だけが私用の写しを持つ。写しを置かないなら、`temp-path-kit` の行はパスと OS の文を ASCII に写さずに出すことになる（決まり「端末の文は ASCII だけ」に外れうる）。
-3. **D6（指摘 13）**: 消せなかった知らせは `std::io::stderr()` へ直に書き、通ったテストの出力にも残す（`eprintln!` だと libtest が捨てて誰も気付かない＝指摘の場面が残る）。
-4. **D2（指摘 26）**: 出所の照らしが赤になったとき直すのは、`app_exit` を動かす側（`session-module-gather`）。この spec からその brief へは書き足さない（C22 の外の spec の文書に触らない）。書き足すなら 1 行で足りる。
-5. **D10（指摘 34・18）**: `the_measurement_is_not_vacuous_and_matches_the_allow_table` は中身が変わるので `the_measurement_is_not_vacuous` へ改名する。8 本の完了した文書が古い名前を挙げるが、直さず記録に残す。
-6. **D5（指摘 53）**: 退け合いは「原本が消えたら 1 度だけやり直す」で閉じる（「いちばん新しい印だけを残す」は採らない）。
+1. **D1（指摘 3）**: MCP の誤りの答えは新しい変種 `McpError::Refused { code, message }` の `Err` で返す（`ToolReply { is_error: true }` の前提を改めた。検証の重い指摘 1）。読み手は `doc/testing.md` の訳の表だけ。
+2. **指摘 45**: 器を子の前に組む順は配線で判断の分岐ではない＝檻にしない（検証の重い指摘 2）。
+3. **`roadmap.md:60`**: 実装の中では触らず、この spec の完了でロードマップを書き換えるときに `main` を取り込んで直す（検証の重い指摘 3）。
+4. **D9（指摘 32・13）**: `ascii` は `sample-ghost-kit` の公開の関数にして `real-run-kit` が使い、leaf の `temp-path-kit` だけが私用の 6 行の写しを持つ（理由を 1 行のコメントに）。
+5. **D6（指摘 13）**: 消せなかった知らせは `std::io::stderr()` へ直に書く。テストは書き先を引数で受けて読む。
+6. **D2（指摘 26）**: 出所の照らしが赤になったとき直すのは `app_exit` を動かす側。その brief へは書き足さず、赤の文に直す先（`RELIED_TARGETS`）の名前を出す。
+7. **D10（指摘 34・18）**: 消す・改名するテストの名前は検証の記録に残し、`completed/` は直さない。
+8. **D5（指摘 53）**: 原本が消えたときだけ 1 度やり直す。
 
 ## Risks
 
