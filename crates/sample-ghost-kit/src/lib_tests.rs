@@ -785,3 +785,44 @@ fn a_descript_without_a_name_line_gets_one_appended() {
         b"charset,UTF-8\nname,x\n"
     );
 }
+
+/// 元のシェルが無ければ、写す先のフォルダを作らずに `Io`（`NotFound`）を返す（指摘 16）。
+#[test]
+fn copying_a_missing_shell_leaves_no_empty_folder() {
+    let sakura = SampleRoot::acquire("dot_sakura").expect("登記済みの検体");
+    let to = sakura.folder().join("shell").join("second");
+
+    let refused = sakura.add_shell_copy("no-such-shell", "second", "x");
+
+    match refused {
+        Err(SampleError::Io { source, .. }) => {
+            assert_eq!(source.kind(), std::io::ErrorKind::NotFound, "{source}");
+        }
+        other => panic!("無い元のシェルは Io（NotFound）で断ること: {other:?}"),
+    }
+    assert!(!to.exists(), "空の写す先を残さないこと: {}", to.display());
+}
+
+/// `Io` の表示は、パスと元の失敗（日本語の OS の文）を ASCII に写す。`os error N` は残る
+/// （`tools/load-flake.ps1` が字面で読む・指摘 32）。
+#[test]
+fn the_io_error_is_shown_in_ascii_only() {
+    let source = std::io::Error::new(
+        std::io::Error::from_raw_os_error(5).kind(),
+        format!(
+            "アクセスが拒否されました。 {}",
+            std::io::Error::from_raw_os_error(5)
+        ),
+    );
+    let refused = SampleError::Io {
+        what: "create the work folder",
+        path: Path::new("C:").join("作業").join("x"),
+        source,
+    };
+
+    let text = refused.to_string();
+
+    assert!(text.is_ascii(), "{text}");
+    assert!(text.contains("os error 5"), "{text}");
+    assert!(text.contains("create the work folder"), "{text}");
+}

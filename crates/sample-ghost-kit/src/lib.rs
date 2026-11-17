@@ -250,7 +250,7 @@ impl SampleRoot {
     fn from_copy(sample: &'static Sample, copy: WorkDir) -> Result<SampleRoot, SampleError> {
         check_registry(sample, copy.path())?;
         let root = copy.path().to_path_buf();
-        let folder = root.join(sample.kind.store()).join(sample.name);
+        let folder = body_folder(sample, &root);
         let balloons = sample
             .balloons
             .iter()
@@ -379,21 +379,29 @@ impl SampleRoot {
         name: &str,
     ) -> Result<(), SampleError> {
         let shell = self.folder.join("shell");
+        let source = shell.join(from);
+        if !source.is_dir() {
+            return Err(SampleError::Io {
+                what: "find the shell to copy",
+                path: source,
+                source: std::io::ErrorKind::NotFound.into(),
+            });
+        }
         let to = shell.join(to_folder);
         std::fs::create_dir(&to).map_err(|source| SampleError::Io {
-            what: "写す先のシェルのフォルダの作成",
+            what: "create the folder of the copied shell",
             path: to.clone(),
             source,
         })?;
-        devroot::copy_tree(&shell.join(from), &to)?;
+        devroot::copy_tree(&source, &to)?;
         let descript = to.join("descript.txt");
         let bytes = std::fs::read(&descript).map_err(|source| SampleError::Io {
-            what: "写したシェルの descript.txt の読み取り",
+            what: "read descript.txt of the copied shell",
             path: descript.clone(),
             source,
         })?;
         std::fs::write(&descript, named_descript(&bytes, name)).map_err(|source| SampleError::Io {
-            what: "写したシェルの descript.txt の書き込み",
+            what: "write descript.txt of the copied shell",
             path: descript,
             source,
         })
@@ -436,7 +444,8 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
     out
 }
 
-/// URL の行の書庫を置く場所（`<名前空間>\fetched\<name>.nar`）。`nar-sample-path --fetch-list` が使う。
+/// URL の行の置き場の 2 つのパス `(書庫, ハッシュのファイル)`
+/// （`<名前空間>\fetched\<name>.nar`・`<name>.nar.sha256`）。`nar-sample-path --fetch-list` が使う。
 ///
 /// 今の行（Vendored）には置き場が無いので `Ok(None)`。
 ///
@@ -444,26 +453,16 @@ fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
 ///
 /// 名前空間（ビルド成果物の置き場の下）が決まらなければ [`SampleError::TargetDirNotFound`]
 /// か [`SampleError::Io`]。
-pub fn fetched_archive_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
-    on_shelf(sample, fetched::fetched_path_in)
-}
-
-/// 同じく、置き場のハッシュのファイル（`<名前空間>\fetched\<name>.nar.sha256`）。
-///
-/// # Errors
-///
-/// [`fetched_archive_path`] と同じ。
-pub fn fetched_checksum_path(sample: &Sample) -> Result<Option<PathBuf>, SampleError> {
-    on_shelf(sample, fetched::fetched_checksum_path_in)
-}
-
-fn on_shelf(
-    sample: &Sample,
-    position: fn(&Path, &str) -> PathBuf,
-) -> Result<Option<PathBuf>, SampleError> {
+pub fn fetched_shelf(sample: &Sample) -> Result<Option<(PathBuf, PathBuf)>, SampleError> {
     match sample.source {
         SampleSource::Vendored => Ok(None),
-        SampleSource::Fetched { .. } => Ok(Some(position(&devroot::namespace_dir()?, sample.name))),
+        SampleSource::Fetched { .. } => {
+            let namespace = devroot::namespace_dir()?;
+            Ok(Some((
+                fetched::fetched_path_in(&namespace, sample.name),
+                fetched::fetched_checksum_path_in(&namespace, sample.name),
+            )))
+        }
     }
 }
 
@@ -516,10 +515,7 @@ pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
     check_registry(sample, &root)?;
     let mut printed = vec![
         ("root".to_owned(), root.clone()),
-        (
-            "folder".to_owned(),
-            root.join(sample.kind.store()).join(sample.name),
-        ),
+        ("folder".to_owned(), body_folder(sample, &root)),
     ];
     printed.extend(sample.balloons.iter().map(|balloon| {
         (
@@ -534,24 +530,32 @@ pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
 ///
 /// 本体が 1 つと同梱バルーンが 0 個以上。照合の期待値であり、位置を組み立てる式でもある。
 fn declared_elements(sample: &Sample) -> Vec<String> {
-    let mut declared = vec![format!("{}/{}", sample.kind.store(), sample.name)];
-    declared.extend(
+    let body = body_folder(sample, Path::new(""));
+    let mut elements = vec![body.clone()];
+    elements.extend(
         sample
             .balloons
             .iter()
-            .map(|balloon| format!("{}/{}/balloon/{balloon}", sample.kind.store(), sample.name)),
+            .map(|balloon| body.join("balloon").join(balloon)),
     );
+    // 照合の相手（`installed_elements`）は `/` で継ぐので、区切りを揃える。
+    let mut declared: Vec<String> = elements
+        .iter()
+        .map(|element| element.to_string_lossy().replace('\\', "/"))
+        .collect();
     declared.sort();
     declared
+}
+
+/// 本体の置かれる位置 `<根>/<格納先>/<名前>`。窓口・手で使う根・照合・同梱の位置が使う唯一の式。
+fn body_folder(sample: &Sample, root: &Path) -> PathBuf {
+    root.join(sample.kind.store()).join(sample.name)
 }
 
 /// 同梱バルーンの置かれる位置。書庫の本体の中の `balloon\<directory>`（spec:
 /// `areka-P0-ghost-inner-balloon` 要件 7.1）なので、根の `balloon/` ではない。
 fn companion_folder(sample: &Sample, root: &Path, balloon: &str) -> PathBuf {
-    root.join(sample.kind.store())
-        .join(sample.name)
-        .join("balloon")
-        .join(balloon)
+    body_folder(sample, root).join("balloon").join(balloon)
 }
 
 /// 展開された根の直下に**実際に**在る要素を `<格納先>/<名前>` の形で名前順に並べる。
@@ -583,7 +587,7 @@ fn shelf_entries(shelf: &Path) -> Result<Vec<String>, SampleError> {
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(source) => {
             return Err(SampleError::Io {
-                what: "展開結果の走査",
+                what: "list the installed tree",
                 path: shelf.to_path_buf(),
                 source,
             });
@@ -594,7 +598,7 @@ fn shelf_entries(shelf: &Path) -> Result<Vec<String>, SampleError> {
             entry
                 .map(|entry| entry.file_name().to_string_lossy().into_owned())
                 .map_err(|source| SampleError::Io {
-                    what: "展開結果の走査",
+                    what: "list the installed tree",
                     path: shelf.to_path_buf(),
                     source,
                 })
@@ -651,7 +655,11 @@ pub enum SampleError {
     #[error("sample archive refused: {0}")]
     Nar(#[from] areka_nar::NarError),
     /// 開発用の根のファイル操作の失敗。何をしようとしたのかを添える。
-    #[error("{what} failed at {path:?}: {source}")]
+    #[error(
+        "{what} failed at {}: {}",
+        ascii(&path.to_string_lossy()),
+        ascii(&source.to_string())
+    )]
     Io {
         /// 何をしようとしたか。
         what: &'static str,
@@ -700,7 +708,7 @@ pub enum SampleError {
 mod devroot;
 mod fetched;
 pub use devroot::WorkDir;
-pub use fetched::checksum_url;
+pub use fetched::{ascii, checksum_url};
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};

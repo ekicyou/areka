@@ -307,7 +307,7 @@ fn fetched_shelf_is_outside_work_and_cache() {
 fn archive_path_of_rows() {
     let vendored = crate::SAMPLES.first().expect("行がある");
     assert_eq!(vendored.source, crate::SampleSource::Vendored);
-    assert_eq!(crate::fetched_archive_path(vendored).expect("決まる"), None);
+    assert_eq!(crate::fetched_shelf(vendored).expect("決まる"), None);
     let fetched = crate::Sample {
         name: "x",
         kind: crate::SampleKind::Ghost,
@@ -316,14 +316,7 @@ fn archive_path_of_rows() {
             url: "https://example.invalid/x.nar",
         },
     };
-    assert_eq!(
-        crate::fetched_checksum_path(vendored).expect("決まる"),
-        None
-    );
-    let path = crate::fetched_archive_path(&fetched)
-        .expect("名前空間は決まる")
-        .expect("URL の行には置き場がある");
-    let sum = crate::fetched_checksum_path(&fetched)
+    let (path, sum) = crate::fetched_shelf(&fetched)
         .expect("名前空間は決まる")
         .expect("URL の行には置き場がある");
     assert!(path.is_absolute(), "{}", path.display());

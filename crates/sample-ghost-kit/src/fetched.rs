@@ -78,7 +78,7 @@ pub(crate) fn verified_nar_in(
     let (text, checksum_path) = read_shelf(
         name,
         fetched_checksum_path_in(namespace, name),
-        "取り寄せたハッシュのファイルの読み取り",
+        "read the fetched checksum file",
     )?;
     let Some(expected_sha256) = std::str::from_utf8(&text).ok().and_then(parse_checksum) else {
         return Err(SampleError::FetchedChecksumInvalid {
@@ -89,7 +89,7 @@ pub(crate) fn verified_nar_in(
     let (bytes, path) = read_shelf(
         name,
         fetched_path_in(namespace, name),
-        "取り寄せた書庫の読み取り",
+        "read the fetched archive",
     )?;
     let actual_sha256 = sha256_hex(&bytes);
     if actual_sha256 != expected_sha256 {
@@ -115,7 +115,7 @@ pub(crate) fn fetch_command() -> String {
 }
 
 /// ASCII の外の字と制御文字を `\u{XXXX}` に写す。
-pub(crate) fn ascii(text: &str) -> String {
+pub fn ascii(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         if c.is_ascii() && !c.is_ascii_control() {

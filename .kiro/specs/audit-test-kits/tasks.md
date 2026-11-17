@@ -93,7 +93,7 @@
   - _Requirements: 3.1, 3.2, 4.7, 4.8, 7.3, 7.5_
 
 - [ ] 4. sample-ghost-kit の窓口と作業フォルダと見本
-- [ ] 4.1 (P) 窓口の誤りの文を英語の ASCII にし、本体の置き場と取り寄せの棚の口を 1 つにする（S2: 16・32 の sample 側・36・55）
+- [x] 4.1 (P) 窓口の誤りの文を英語の ASCII にし、本体の置き場と取り寄せの棚の口を 1 つにする（S2: 16・32 の sample 側・36・55）
   - 32: `lib.rs`・`devroot.rs`・`fetched.rs` の `Io` の `what` を英語の ASCII に、`Io` の表示はパスと元の失敗を `ascii` に通す。`report_cleanup` の行を `sample-ghost-kit: cleanup failed (<what>): <path> (<err>)` に、`nar-sample-path` の書けない行も英語に。`ascii` を `pub` にする。頭 `sample-ghost-kit:` と `os error N` を保つ（`tools/load-flake.ps1` が字面で読む）。panic の文は家の形のまま
   - 16: シェルの写しは先に元のフォルダが在るかを確かめ、無ければフォルダを作らずに `Io`（`NotFound`）を返す
   - 36: 本体の置き場を出す私用の関数を 1 つにし、4 つの呼び手で使う
@@ -207,3 +207,6 @@
 
 - 較正と消す前の grep の控え（6.2 で検証の記録へ移す）:
   - 1.1: `create_fresh` の `create_dir` を `create_dir_all` に → `a_leftover_folder_with_the_same_name_is_never_handed_out` が赤。`remove_or_report` の `writeln!` を外す → `a_directory_that_cannot_be_removed_is_reported_in_one_ascii_line` が赤。消したもの無し（grep 不要）
+  - 4.1: `Io` の表示を `ascii` 無しに戻す → `the_io_error_is_shown_in_ascii_only` が赤。元のシェルの確かめを外す → `copying_a_missing_shell_leaves_no_empty_folder` が赤。消す前の grep（code の行）: `fetched_archive_path` 5・`fetched_checksum_path` 4・`on_shelf` 3（どれも sample-ghost-kit の中・消した後 0。ほかは本 spec の文書と `completed/areka-P0-sample-url-fetch` だけ）
+- 作業木に取り寄せの検体が無いと `sample-ghost-kit` の往復のテスト 4 本が `FetchedNarMissing` で赤になる。先に `tools/sample-fetch.ps1` を回す（4.1 で回した）
+- `doc/testing.md` の 75・163 行（32 の新しい英語の行の読み手）は 5.3 で直す

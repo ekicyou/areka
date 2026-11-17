@@ -127,7 +127,7 @@ static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, SampleError> {
     if let Some(dir) = configured.map(str::trim).filter(|dir| !dir.is_empty()) {
         return std::path::absolute(dir).map_err(|source| SampleError::Io {
-            what: "ビルド成果物の置き場の絶対化",
+            what: "make the build output directory absolute",
             path: PathBuf::from(dir),
             source,
         });
@@ -143,7 +143,7 @@ fn find_target_dir(configured: Option<&str>, exe: &Path) -> Result<PathBuf, Samp
 /// 本仕様専用の名前空間の絶対パス。
 pub(crate) fn namespace_dir() -> Result<PathBuf, SampleError> {
     let exe = std::env::current_exe().map_err(|source| SampleError::Io {
-        what: "実行ファイルの場所の取得",
+        what: "find the running executable",
         path: PathBuf::new(),
         source,
     })?;
@@ -185,7 +185,7 @@ impl WorkDir {
     fn in_namespace(namespace: &Path) -> Result<WorkDir, SampleError> {
         let work = namespace.join(WORK);
         std::fs::create_dir_all(&work).map_err(|source| SampleError::Io {
-            what: "作業フォルダの棚の作成",
+            what: "create the work shelf",
             path: work.clone(),
             source,
         })?;
@@ -197,7 +197,7 @@ impl WorkDir {
         );
         let lock = work.join(format!("{stem}{LOCK_SUFFIX}"));
         let lease = open_lease(&lock).map_err(|source| SampleError::Io {
-            what: "生存の札の作成",
+            what: "create the lease file",
             path: lock.clone(),
             source,
         })?;
@@ -207,7 +207,7 @@ impl WorkDir {
             // 札だけが残らないよう、作れなかったときはその場で畳む。
             retire_lease(Some(lease), &lock);
             return Err(SampleError::Io {
-                what: "作業フォルダの作成",
+                what: "create the work folder",
                 path,
                 source,
             });
@@ -247,7 +247,11 @@ impl WorkDir {
     fn release_with(&mut self, remove_tree: impl FnOnce(&Path) -> std::io::Result<()>) {
         // 原本として `cache/` へ移した後は木が既に無い（`NotFound`）。それは後始末の
         // 目的が達成された状態なので、札だけを閉じて消す。
-        report_cleanup("作業フォルダの後始末", remove_tree(&self.path), &self.path);
+        report_cleanup(
+            "remove the work folder",
+            remove_tree(&self.path),
+            &self.path,
+        );
         retire_lease(self.lease.take(), &self.lock);
     }
 }
@@ -264,7 +268,7 @@ fn open_lease(lock: &Path) -> std::io::Result<File> {
 /// 札を閉じてから消す（開いたままでは削除を共有していないので自分でも消せない）。
 fn retire_lease(lease: Option<File>, lock: &Path) {
     drop(lease);
-    report_cleanup("生存の札の後始末", std::fs::remove_file(lock), lock);
+    report_cleanup("remove the lease file", std::fs::remove_file(lock), lock);
 }
 
 impl Drop for WorkDir {
@@ -365,7 +369,7 @@ pub(crate) fn cached_root(name: &str) -> Result<PathBuf, SampleError> {
 /// 「原本が無い」「刻印が変わった」「名前空間ごと消えた」を作れる）。
 fn cached_root_in(namespace: &Path, name: &str, nar: &Path) -> Result<PathBuf, SampleError> {
     let bytes = std::fs::read(nar).map_err(|source| SampleError::Io {
-        what: "検体の .nar の読み取り",
+        what: "read the sample .nar",
         path: nar.to_path_buf(),
         source,
     })?;
@@ -392,7 +396,7 @@ fn stage_into_cache(
     master: &Path,
 ) -> Result<(), SampleError> {
     std::fs::create_dir_all(cache).map_err(|source| SampleError::Io {
-        what: "原本の棚の作成",
+        what: "create the cache shelf",
         path: cache.to_path_buf(),
         source,
     })?;
@@ -410,7 +414,7 @@ fn stage_into_cache(
         // 捨てて（`Drop` が消す）勝者の木を使う。
         Err(_) if master.is_dir() => Ok(()),
         Err(source) => Err(SampleError::Io {
-            what: "原本の据え付け",
+            what: "move the master copy into the cache",
             path: master.to_path_buf(),
             source,
         }),
@@ -432,14 +436,14 @@ fn stage_into_cache(
 fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
     let entries = match std::fs::read_dir(cache) {
         Ok(entries) => entries,
-        Err(err) => return report_cleanup("古い原本の走査", Err(err), cache),
+        Err(err) => return report_cleanup("list the old master copies", Err(err), cache),
     };
     let shelf = namespace.join(WORK);
     for entry in entries {
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
-                report_cleanup("古い原本の走査", Err(err), cache);
+                report_cleanup("list the old master copies", Err(err), cache);
                 continue;
             }
         };
@@ -454,11 +458,11 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
         }
         let stale = entry.path();
         if let Err(err) = std::fs::create_dir_all(&shelf) {
-            report_cleanup("回収の棚の作成", Err(err), &shelf);
+            report_cleanup("create the shelf for reclaiming", Err(err), &shelf);
             continue;
         }
         // `cache/` の外へ出すのが先。「名前が合う原本は完全」を一瞬も破らない。
-        discard_tree(&shelf, &stale, "古い原本");
+        discard_tree(&shelf, &stale, "old master copy");
     }
 }
 
@@ -497,11 +501,21 @@ fn discard_tree_with(
     let lease = match open_lease(&lock) {
         Ok(lease) => lease,
         // 札が無いまま移すと上の窓が開く。移さずに残し、次の取得の掃除に任せる。
-        Err(err) => return report_cleanup(&format!("{what}の退避の札の作成"), Err(err), &lock),
+        Err(err) => {
+            return report_cleanup(
+                &format!("create the lease for moving aside the {what}"),
+                Err(err),
+                &lock,
+            );
+        }
     };
     match std::fs::rename(tree, &gc) {
-        Ok(()) => report_cleanup(&format!("退避した{what}の削除"), remove_tree(&gc), &gc),
-        Err(err) => report_cleanup(&format!("{what}の退避"), Err(err), tree),
+        Ok(()) => report_cleanup(
+            &format!("remove the moved-aside {what}"),
+            remove_tree(&gc),
+            &gc,
+        ),
+        Err(err) => report_cleanup(&format!("move aside the {what}"), Err(err), tree),
     }
     retire_lease(Some(lease), &lock);
 }
@@ -527,7 +541,7 @@ fn sweep(namespace: &Path) {
     let entries = match std::fs::read_dir(&shelf) {
         Ok(entries) => entries,
         // 棚がまだ無いのは、片付ける残骸が無いのと同じ。
-        Err(err) => return report_cleanup("作業の棚の走査", Err(err), &shelf),
+        Err(err) => return report_cleanup("list the work shelf", Err(err), &shelf),
     };
     let mut held = std::collections::HashSet::new();
     let mut trees = Vec::new();
@@ -535,7 +549,7 @@ fn sweep(namespace: &Path) {
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
-                report_cleanup("作業の棚の走査", Err(err), &shelf);
+                report_cleanup("list the work shelf", Err(err), &shelf);
                 continue;
             }
         };
@@ -552,12 +566,12 @@ fn sweep(namespace: &Path) {
             Ok(kind) if kind.is_dir() => trees.push((name.to_owned(), entry.path())),
             // 木でないものも、この仕様が置いた物ではない（上と同じ扱い）。
             Ok(_) => {}
-            Err(err) => report_cleanup("棚の要素の種別の読み取り", Err(err), &entry.path()),
+            Err(err) => report_cleanup("read the type of a shelf entry", Err(err), &entry.path()),
         }
     }
     for (name, tree) in trees {
         if !held.contains(&name) {
-            discard_tree(&shelf, &tree, "残骸");
+            discard_tree(&shelf, &tree, "leftover tree");
         }
     }
 }
@@ -610,7 +624,7 @@ pub(crate) fn manual_root_in(
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
         Err(source) => {
             return Err(SampleError::Io {
-                what: "手動用の根の作り直し",
+                what: "remove the manual root before rebuilding it",
                 path: manual,
                 source,
             });
@@ -646,23 +660,23 @@ pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).map_err(|source| SampleError::Io {
-            what: "複製のフォルダの作成",
+            what: "create a folder of the copy",
             path: dst.clone(),
             source,
         })?;
         let entries = std::fs::read_dir(&src).map_err(|source| SampleError::Io {
-            what: "原本の走査",
+            what: "list the master copy",
             path: src.clone(),
             source,
         })?;
         for entry in entries {
             let entry = entry.map_err(|source| SampleError::Io {
-                what: "原本の走査",
+                what: "list the master copy",
                 path: src.clone(),
                 source,
             })?;
             let kind = entry.file_type().map_err(|source| SampleError::Io {
-                what: "原本の要素の種別の読み取り",
+                what: "read the type of a master copy entry",
                 path: entry.path(),
                 source,
             })?;
@@ -671,7 +685,7 @@ pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
                 stack.push((entry.path(), target));
             } else {
                 std::fs::copy(entry.path(), &target).map_err(|source| SampleError::Io {
-                    what: "原本の複写",
+                    what: "copy a file of the master copy",
                     path: target,
                     source,
                 })?;
@@ -693,9 +707,11 @@ fn report_cleanup(what: &str, result: std::io::Result<()>, path: &Path) {
         if err.kind() == std::io::ErrorKind::NotFound {
             return;
         }
+        // 頭の `sample-ghost-kit:` と `os error N` は `tools/load-flake.ps1` が字面で読む。
         eprintln!(
-            "sample-ghost-kit: {what}に失敗した（次の走行で回収する）: {} ({err})",
-            path.display()
+            "sample-ghost-kit: cleanup failed ({what}): {} ({})",
+            crate::ascii(&path.to_string_lossy()),
+            crate::ascii(&err.to_string())
         );
     }
 }

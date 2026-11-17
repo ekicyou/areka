@@ -106,13 +106,10 @@ fn fetch_list(out: &mut dyn Write, err: &mut dyn Write) -> i32 {
         let SampleSource::Fetched { url } = sample.source else {
             continue;
         };
-        let (nar, checksum) = match (
-            sample_ghost_kit::fetched_archive_path(sample),
-            sample_ghost_kit::fetched_checksum_path(sample),
-        ) {
-            (Ok(Some(nar)), Ok(Some(checksum))) => (nar, checksum),
-            (Err(refused), _) | (_, Err(refused)) => return refuse(&refused, err),
-            _ => unreachable!("URL の行には置き場が在る"),
+        let (nar, checksum) = match sample_ghost_kit::fetched_shelf(sample) {
+            Ok(Some(shelf)) => shelf,
+            Ok(None) => continue,
+            Err(refused) => return refuse(&refused, err),
         };
         lines.push(format!(
             "{}\t{url}\t{}\t{}\t{}",
@@ -140,7 +137,11 @@ fn refuse(refused: &SampleError, err: &mut dyn Write) -> i32 {
 fn write_all(lines: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
     for line in lines {
         if let Err(broken) = writeln!(out, "{line}") {
-            let _ = writeln!(err, "nar-sample-path: 標準出力へ書けない: {broken}");
+            let _ = writeln!(
+                err,
+                "nar-sample-path: cannot write to stdout: {}",
+                sample_ghost_kit::ascii(&broken.to_string())
+            );
             return 2;
         }
     }
