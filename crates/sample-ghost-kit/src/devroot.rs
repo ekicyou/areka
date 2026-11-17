@@ -177,10 +177,8 @@ pub(crate) fn namespace_dir() -> Result<PathBuf, SampleError> {
     Ok(find_target_dir(configured.as_deref(), &exe)?.join(NAMESPACE))
 }
 
-/// 破棄で木ごと消える、札付きの使い捨ての作業フォルダ。
-///
-/// テストが空の根として借りる、札付きの作業フォルダ（OS の一時フォルダを使わずに済ませる
-/// ため・要件 7.10）。
+/// テストが空の根として借りる、札付きの使い捨ての作業フォルダ。破棄で木ごと消える
+/// （OS の一時フォルダを使わずに済ませるため・要件 7.10）。
 #[derive(Debug)]
 pub struct WorkDir {
     path: PathBuf,
@@ -431,31 +429,29 @@ fn split_stamp(entry: &str) -> Option<(&str, &str)> {
     shaped.then(|| (name, &entry[name.len() + 1..]))
 }
 
-/// 検体 1 つの原本（[`CACHE`]`/<検体>-<刻印>/`）を用意して、その絶対パスを返す
-/// （要件 7.2・7.3・7.6・7.7・7.8）。
-///
-/// 原本は**誰にも配らない**。配るのは [`fresh_root`] がここから取る複製である。
-/// 掃除は取得の入口（[`fresh_root`]）が走らせるので、この関数は棚を片付けない。
-///
-/// 窓口 `SampleRoot::acquire` は複製を配る [`fresh_root`] だけを通るので、**原本を直に
-/// 求める呼び手はテストだけ**である（多重プロセスの検査が、実物の `.nar` と
-/// [`nar_dir`] の綴りを本物の経路で原本の作りへ通すのに使う）。公開したままでは「検体を得る唯一の
-/// 入口は `SampleRoot`」（要件 1.1）が嘘になるので、テスト専用と明示して閉じてある。
-///
-/// # Errors
-///
-/// `.nar` が読めない・原本を据え付けられないとき [`SampleError::Io`]、`.nar` が
-/// 受理されないとき [`SampleError::Nar`]。古い原本の回収に失敗しても**失敗にはしない**
-/// （標準エラーへ出して取得を続ける＝要件 7.3）。
+/// テストが名前から引く入口（実物の `.nar` と本当の名前空間で [`cached_root_in`] を通す）。
 #[cfg(test)]
 pub(crate) fn cached_root(name: &str) -> Result<PathBuf, SampleError> {
     cached_root_in(&namespace_dir()?, name, &sample_nar(name)?.1)
 }
 
-/// 名前空間と `.nar` のバイトを明示して原本を用意する。
+/// 名前空間と `.nar` のバイトを明示して、検体 1 つの原本（[`CACHE`]`/<検体>-<刻印>/`）を
+/// 用意し、その絶対パスを返す（要件 7.2・7.3・7.6・7.7・7.8）。
+///
+/// 原本は**誰にも配らない**。配るのは [`fresh_root_in`] と [`manual_root_in`] がここから取る
+/// 複製である。作業の棚の掃除（[`sweep`]）は [`fresh_root_in`] が走らせるのでここでは
+/// 走らせないが、原本の棚は片付ける: 同じ検体の刻印違いの原本を回収し（[`reclaim_stale`]）、
+/// 原本を据え付けるときは [`CACHE`] でない `cache…` の棚を退ける
+/// （[`discard_older_cache_shelves`]）。
 ///
 /// テストは私有の名前空間と自前で組んだ `.nar` を渡す（並走する他のテストを巻き込まずに
 /// 「原本が無い」「刻印が変わった」「名前空間ごと消えた」を作れる）。
+///
+/// # Errors
+///
+/// 原本を据え付けられないとき [`SampleError::Io`]、`.nar` が受理されないとき
+/// [`SampleError::Nar`]。古い原本の回収と古い棚の退けに失敗しても**失敗にはしない**
+/// （標準エラーへ出して取得を続ける＝要件 7.3）。
 fn cached_root_in(namespace: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, SampleError> {
     let cache = namespace.join(CACHE);
     let stamp = stamp(bytes);
@@ -526,7 +522,14 @@ fn discard_older_cache_shelves(namespace: &Path) {
         Err(err) => return report_cleanup("list the namespace", Err(err), namespace),
     };
     let shelf = namespace.join(WORK);
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                report_cleanup("list the namespace", Err(err), namespace);
+                continue;
+            }
+        };
         let older = entry
             .file_name()
             .to_str()
@@ -592,10 +595,20 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
 /// （共有モードに書き込みと削除を足しても同じ）。掴まれている木は最初の一歩で失敗する
 /// ので無傷のまま残り、次の取得で改めて片付けられる。
 fn discard_tree(shelf: &Path, tree: &Path, what: &str) {
-    discard_tree_with(shelf, tree, what, |gc| std::fs::remove_dir_all(gc));
+    discard_tree_with(
+        shelf,
+        tree,
+        what,
+        || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
+        |gc| std::fs::remove_dir_all(gc),
+    );
 }
 
-/// [`discard_tree`] の手順。木を消す関数を受け取るのは [`WorkDir::release_with`] と同じ理由。
+/// [`discard_tree`] の手順。木を消す関数を受け取るのは [`WorkDir::release_with`] と同じ理由、
+/// 連番の出どころを受け取るのは [`WorkDir::in_namespace_with`] と同じ理由。
+///
+/// 死んだプロセスの `gc-…` の札が同じ名前で残っていたら（プロセス識別子の使い回し）、
+/// [`WorkDir::in_namespace_with`] と同じに次の連番で取り直す（残りの札は消さない）。
 ///
 /// 退けた先の `gc-…` にも、移す**前に**札を作り、木を消し終えてから閉じて消す。札の無い
 /// `gc-` の木は、消している間に並走する掃除から「札の無い残骸」に見え、同じ木を別の
@@ -605,24 +618,23 @@ fn discard_tree_with(
     shelf: &Path,
     tree: &Path,
     what: &str,
+    mut next_serial: impl FnMut() -> u32,
     remove_tree: impl FnOnce(&Path) -> std::io::Result<()>,
 ) {
-    let stem = format!(
-        "gc-{}-{}",
-        std::process::id(),
-        NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-    );
-    let gc = shelf.join(&stem);
-    let lock = shelf.join(format!("{stem}{LOCK_SUFFIX}"));
-    let lease = match open_lease(&lock) {
-        Ok(lease) => lease,
-        // 札が無いまま移すと上の窓が開く。移さずに残し、次の取得の掃除に任せる。
-        Err(err) => {
-            return report_cleanup(
-                &format!("create the lease for moving aside the {what}"),
-                Err(err),
-                &lock,
-            );
+    let (gc, lock, lease) = loop {
+        let stem = format!("gc-{}-{}", std::process::id(), next_serial());
+        let lock = shelf.join(format!("{stem}{LOCK_SUFFIX}"));
+        match open_lease(&lock) {
+            Ok(lease) => break (shelf.join(&stem), lock, lease),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            // 札が無いまま移すと上の窓が開く。移さずに残し、次の取得の掃除に任せる。
+            Err(err) => {
+                return report_cleanup(
+                    &format!("create the lease for moving aside the {what}"),
+                    Err(err),
+                    &lock,
+                );
+            }
         }
     };
     match std::fs::rename(tree, &gc) {
@@ -893,7 +905,7 @@ mod cache_tests;
 #[path = "devroot_sweep_tests.rs"]
 mod sweep_tests;
 
-/// 行から書庫のパスを決める解決（`sample_nar`）の兄弟テスト。URL の行は固定入力の行と私有の
+/// 行から書庫のパスを決める解決（[`sample_nar_for`]）の兄弟テスト。URL の行は固定入力の行と私有の
 /// 名前空間で作る。
 #[cfg(test)]
 #[path = "devroot_fetched_tests.rs"]

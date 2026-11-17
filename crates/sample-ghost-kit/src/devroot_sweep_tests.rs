@@ -663,11 +663,17 @@ fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
     let namespace = private_namespace();
     let tree = leftover(namespace.path(), "777777-1", false);
     let mut during = None;
-    discard_tree_with(&namespace.path().join(WORK), &tree, "leftover tree", |gc| {
-        sweep(namespace.path());
-        during = Some((gc.to_path_buf(), gc.is_dir(), shelf(namespace.path(), WORK)));
-        std::fs::remove_dir_all(gc)
-    });
+    discard_tree_with(
+        &namespace.path().join(WORK),
+        &tree,
+        "leftover tree",
+        || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed),
+        |gc| {
+            sweep(namespace.path());
+            during = Some((gc.to_path_buf(), gc.is_dir(), shelf(namespace.path(), WORK)));
+            std::fs::remove_dir_all(gc)
+        },
+    );
 
     let (gc, stayed, listed) = during.expect("木を消す関数は呼ばれるはず");
     let name = gc.file_name().expect("gc の名前").to_string_lossy();
@@ -683,5 +689,42 @@ fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
         shelf(namespace.path(), WORK),
         Vec::<String>::new(),
         "消し終えたら gc- の木も札も棚に残らないこと"
+    );
+}
+
+/// 死んだプロセスの `gc-…` の札が同じ名前で残っていても、次の連番で取り直して木を退ける
+/// （audit-test-kits かけ直し 5 回目 S5）。残りの札は他人の物かもしれないので消さない。
+#[test]
+fn a_leftover_gc_lease_with_the_same_name_is_skipped() {
+    let namespace = private_namespace();
+    let work = namespace.path().join(WORK);
+    let tree = leftover(namespace.path(), "777777-2", false);
+    let pid = std::process::id();
+    let left_lease = work.join(format!("gc-{pid}-0{LOCK_SUFFIX}"));
+    std::fs::write(&left_lease, b"").expect("残りの札を置ける");
+
+    let mut serials = 0..;
+    let mut moved_to = None;
+    discard_tree_with(
+        &work,
+        &tree,
+        "leftover tree",
+        || serials.next().expect("連番"),
+        |gc| {
+            moved_to = Some(gc.to_path_buf());
+            std::fs::remove_dir_all(gc)
+        },
+    );
+
+    assert_eq!(
+        moved_to,
+        Some(work.join(format!("gc-{pid}-1"))),
+        "空いた連番まで進んで退ける"
+    );
+    assert!(!tree.exists(), "木は退けて消える");
+    assert_eq!(
+        shelf(namespace.path(), WORK),
+        vec![format!("gc-{pid}-0{LOCK_SUFFIX}")],
+        "残りの札だけが残る（自分の札は畳む）"
     );
 }

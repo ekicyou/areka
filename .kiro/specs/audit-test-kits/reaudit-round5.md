@@ -70,3 +70,16 @@
 - G5: 手書きの表 `FILES_THAT_MUST_NOT_SPELL_THE_TOKENS` を消し、`tests/` の下から例外表に載るものを除いて引く関数にした。見る範囲は 4 ファイルから 7 ファイルになり、今の木の当たりは 0 のまま。消す前の git grep は、このファイルの外では reaudit-round5.md と completed の tasks.md の 1 件ずつ（直さない）
 - G6: コメントを除いた本文をファイルごとの `OnceLock` に置いた。新旧の当たりを全 2,656 ファイルで比べて同じだった（一時テストは消した）。時間は揺れが大きく、速くなったとは言えない（with_default 4.4 秒 → 2.9〜3.7 秒・temp_path 4.1 秒 → 4.2〜5.4 秒・sample_path 4.6 秒 → 6.2〜8.3 秒、並走の中で 1 度ずつ測った値）
 - 足したテスト 2 本（G1・G2）。名前の付いたテストの削除・改名は無し
+
+## 束 A の直しの控え（承認済み）
+- 較正（実装係が取り、E1・S5 はレビューでも取り直した）:
+  - S5: `AlreadyExists` の取り直しの枝を外す → `a_leftover_gc_lease_with_the_same_name_is_skipped` が赤
+  - E1: `strip_folder` を古い形に戻す → `a_two_level_companion_source_with_other_case_round_trips_without_mismatches` が赤
+  - E2: panic に戻す → `no_tracked_files_is_an_ascii_error_not_a_panic` が赤
+  - E3: panic に戻す → `an_unsupported_kind_is_an_ascii_error_not_a_panic` が赤
+- S1 は項目ごとに `report_cleanup("list the namespace", ..)` を出して続ける（`reclaim_stale` と同じ形）。Windows では `read_dir` の項目の失敗を決まって作る手が無いので、テストは足していない
+- S5 の `discard_tree_with` は連番の出どころを `impl FnMut() -> u32` で受け、`AlreadyExists` なら次の連番で取り直す。git grep の当たり 3 か所（定義・`discard_tree`・掃除のテスト）を全部直した
+- E1 は段ごとに `to_uppercase` で照らす。`ß` のように大文字が 2 字になる字では areka-nar の `names::fold` より甘いので、`shortcut:` で書いた（その場合も不一致として表に出る）
+- E2・E3 は ASCII の `Err` にした（終了コードは 101 から 1）。パスは `main` の出口の `ascii` が写す。中の約束を確かめる `assert` は、1 回目 S2 のとおり家の形のまま
+- U8 の対照を `os error 32` に締めた。os error 5 の枝に檻が無いことは `shortcut:` で書いた（4 回目の「5 回目で見る」はこれで閉じる）
+- U1 の変数 `outside` を `misplaced` に改名した（テスト名ではない）。名前の付いたテストの削除・改名は無し

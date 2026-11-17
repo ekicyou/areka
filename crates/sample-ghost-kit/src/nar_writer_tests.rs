@@ -309,13 +309,13 @@ fn folding_a_tree_converts_nothing() {
 #[test]
 fn folding_a_missing_tree_fails_loudly() {
     let work = WorkDir::new().expect("私有の場所");
-    let root = work.path().join("missing");
+    let root = work.path().join("無いフォルダ");
     let err = fold_tree(&root).expect_err("無いフォルダは黙って空を返さない");
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
     let message = err.to_string();
     assert!(
-        message.starts_with("list ") && message.contains("missing"),
-        "読めなかったフォルダのパスを文に添える: {message}"
+        message.starts_with("list ") && message.is_ascii() && message.contains("\\u{"),
+        "読めなかったフォルダのパスを ASCII に逃がして文に添える: {message}"
     );
 }
 

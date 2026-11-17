@@ -431,14 +431,17 @@ fn a_lease_already_pending_deletion_by_a_sweeper_writes_no_cleanup_line() {
     );
     assert!(!lock.exists(), "相方を閉じれば札は消えている");
 
-    // 較正: 持ち主が握っている札（削除を共有しない）を消せないのは本物の失敗として書く。
+    // 較正: 持ち主が握っている札（削除を共有しない）を消せないのは本物の失敗として書く
+    // （共有違反の os error 32）。
+    // shortcut: os error 5 で断られたのに全部共有で開ける札（＝本物の失敗として書く枝）には
+    // 檻が無い。消去待ちでない札で os error 5 を決定論で作る手が見つかったら足す。
     let held = WorkDir::in_namespace(namespace.path()).expect("握られた札");
     let mut out = Vec::new();
     retire_lease_to(&mut out, None, held.lock_path());
     let line = String::from_utf8(out).expect("ASCII で書く");
     assert!(
         line.starts_with("sample-ghost-kit: cleanup failed (remove the lease file): ")
-            && line.contains("os error "),
+            && line.contains("os error 32"),
         "握られている札を消せないのは書く: {line}"
     );
 }

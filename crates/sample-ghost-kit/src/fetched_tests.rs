@@ -303,7 +303,7 @@ fn a_checksum_path_that_is_a_folder_is_an_io_error() {
     let refused = verified_nar_in(ns.path(), "dir");
     assert!(
         matches!(&refused, Err(SampleError::Io { path, what, .. })
-            if *path == folder && is_ascii_only(what)),
+            if *path == folder && *what == "read the fetched checksum file"),
         "{refused:?}"
     );
 }

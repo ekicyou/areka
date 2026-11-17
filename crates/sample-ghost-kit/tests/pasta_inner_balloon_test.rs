@@ -54,9 +54,10 @@ fn ghost_folder_with(work: &WorkDir, relative: &[&str], descript: &str) -> std::
     folder
 }
 
-/// 較正（2.7）: 判定は正しい形を通し、外に置いた形と名前の行の無い形を赤にする。
-/// 木のどこかを探すだけの判定は外の形を、ファイルの在る無しだけの判定は名前の行の無い
-/// 形を通してしまう。
+/// 較正（2.7）: 判定は正しい形を通し、ゴーストのフォルダの中でも `balloon/` でない所
+/// （`ghost/master/` の下）に置いた形と、名前の行の無い形を赤にする。木のどこかを探すだけの
+/// 判定は `balloon/` でない所の形を、ファイルの在る無しだけの判定は名前の行の無い形を
+/// 通してしまう。
 #[test]
 fn the_layout_check_passes_only_a_named_balloon_inside_the_ghost_folder() {
     let named = format!("charset,UTF-8\r\ntype,balloon\r\n{INNER_BALLOON_NAME_LINE}\r\n");
@@ -66,11 +67,11 @@ fn the_layout_check_passes_only_a_named_balloon_inside_the_ghost_folder() {
     assert_eq!(check_pasta_layout(&inside), Ok(()), "正しい形は通る");
 
     let work = WorkDir::new().expect("場所は取れるはず");
-    let outside = ghost_folder_with(&work, &["ghost", "master", INNER_BALLOON_DIR], &named);
-    let result = check_pasta_layout(&outside);
+    let misplaced = ghost_folder_with(&work, &["ghost", "master", INNER_BALLOON_DIR], &named);
+    let result = check_pasta_layout(&misplaced);
     assert!(
         result.is_err(),
-        "ゴーストのフォルダの外の縦書きのバルーンは赤のはず: {result:?}"
+        "`balloon/` でない所（`ghost/master/` の下）の縦書きのバルーンは赤のはず: {result:?}"
     );
 
     let work = WorkDir::new().expect("場所は取れるはず");

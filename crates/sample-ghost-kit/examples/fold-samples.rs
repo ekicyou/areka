@@ -132,7 +132,7 @@ fn parse_args(args: &[String]) -> Result<(Option<String>, bool), Box<dyn Error>>
 ///
 /// `.nar` の名前はフォルダ名から採る（登記表を引かない）。`tracked` は `source` からの
 /// 相対パス（`/` 区切り）の追跡ファイルの一覧。畳んだ `.nar` は作業の置き場へ書き、
-/// `vendors/` へは書かない（写すのは不一致 0 を見た `main`）。`check_only` なら畳まずに
+/// `vendors/` へは書かない（写すのは不一致 0 を見た `run`）。`check_only` なら畳まずに
 /// `vendors/` の既にある `.nar` を照らす。
 fn fold_one(
     root: &Path,
@@ -142,12 +142,14 @@ fn fold_one(
     check_only: bool,
 ) -> Result<usize, Box<dyn Error>> {
     let name = folder_name(source)?;
-    assert!(
-        !tracked.is_empty(),
-        "{} の追跡ファイルが 0 件（畳む対象が無い＝突き合わせが恒真になる。\
-         展開形が消えているなら --from で在るフォルダを指すこと）",
-        source.display()
-    );
+    // 追跡ファイルが 0 件だと畳む対象が無く、突き合わせが恒真になる。
+    if tracked.is_empty() {
+        return Err(format!(
+            "no tracked files under {} (git add the unfolded tree first)",
+            source.display()
+        )
+        .into());
+    }
 
     // 追跡ファイルだけを作業フォルダへ写す。
     let stage = scratch.join("stage").join(&name);
@@ -186,12 +188,12 @@ fn fold_one(
     let expected: BTreeMap<PathBuf, PathBuf> = tracked
         .iter()
         .map(|relative| {
-            (
-                installed_path(&dest_root, manifest, relative),
+            Ok((
+                installed_path(&dest_root, manifest, relative)?,
                 source.join(relative),
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<_, String>>()?;
     assert_eq!(
         expected.len(),
         tracked.len(),
@@ -269,30 +271,44 @@ fn resolve(root: &Path, spelled: &str) -> Result<PathBuf, Box<dyn Error>> {
 
 /// 元のツリーの相対パスが、インストール済み形でどこへ置かれるか（要件 8.4 の写像）。
 ///
-/// 同梱バルーンの取り出し元の配下は 1 階層剥がして本体のフォルダの中のバルーン格納先
+/// 同梱バルーンの取り出し元の配下は取り出し元の段を剥がして本体のフォルダの中のバルーン格納先
 /// （`<根>/<格納先>/<directory>/balloon/<バルーンの directory>/`・`areka-nar` の置き方と
 /// 同じ）へ、それ以外は本体の置き場へ。判断の元は `install.txt` の解釈結果だけで、登記の
-/// 綴りは使わない。
-fn installed_path(root: &Path, manifest: &InstallManifest, relative: &str) -> PathBuf {
+/// 綴りは使わない。検体に居ない種別（シェル・追加ファイル）は写像を持たないので断る。
+fn installed_path(
+    root: &Path,
+    manifest: &InstallManifest,
+    relative: &str,
+) -> Result<PathBuf, String> {
     let store = match manifest.kind {
         InstallKind::Ghost => "ghost",
         InstallKind::Balloon => "balloon",
-        other => panic!("検体に {other:?} は居ない（居るなら写像を足すこと）"),
+        other => return Err(format!("unsupported kind {other:?} (add a mapping for it)")),
     };
     let body = root.join(store).join(&manifest.directory);
     for companion in &manifest.companions {
         if let Some(tail) = strip_folder(relative, &companion.source_directory) {
-            return body.join("balloon").join(&companion.directory).join(tail);
+            return Ok(body.join("balloon").join(&companion.directory).join(tail));
         }
     }
-    body.join(relative.replace('/', MAIN_SEPARATOR_STR))
+    Ok(body.join(relative.replace('/', MAIN_SEPARATOR_STR)))
 }
 
-/// `relative` が `folder` の配下なら、剥がした残りを OS の区切りで返す。
+/// `relative` が `folder`（`/` 区切りで 1 段以上）の配下なら、剥がした残りを OS の区切りで返す。
+///
+/// 各段は `to_uppercase` で大小を畳んで照らす（展開器も段ごとに大小を畳む。ASCII だけを
+/// 畳むと、大小の違う非 ASCII の名前を取り出し元の外と見誤る）。
 fn strip_folder(relative: &str, folder: &str) -> Option<String> {
-    let (head, tail) = relative.split_once('/')?;
-    head.eq_ignore_ascii_case(folder)
-        .then(|| tail.replace('/', MAIN_SEPARATOR_STR))
+    let mut rest = relative;
+    for part in folder.split('/') {
+        let (head, tail) = rest.split_once('/')?;
+        // shortcut: to_uppercase は ß→SS のように 2 字になる字で areka-nar の names::fold より甘い（不一致としては表に出る）。検体にそういう字が入ったら fold と同じ 1 字対 1 字の畳みにする
+        if head.to_uppercase() != part.to_uppercase() {
+            return None;
+        }
+        rest = tail;
+    }
+    Some(rest.replace('/', MAIN_SEPARATOR_STR))
 }
 
 /// `dir` の配下の追跡ファイルを、`dir` からの相対パス（`/` 区切り）で名前順に返す。

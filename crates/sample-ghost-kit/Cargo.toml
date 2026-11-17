@@ -1,7 +1,7 @@
 [package]
 name = "sample-ghost-kit"
 workspace = "../.."
-description = "検体ゴースト／バルーンを名前で引く窓口をワークスペースで唯一定義するテスト専用の crate（本番の crate の `[dependencies]` には置かない・`[[bin]]` を持つテスト専用の real-run-kit だけは `[dependencies]` に置く・spec: areka-P0-nar-install）: 登記表 SAMPLES と SampleRoot の 3 読み口"
+description = "検体ゴースト／バルーンを名前で引く窓口をワークスペースで唯一定義するテスト専用の crate（本番の crate の `[dependencies]` には置かない・`[[bin]]` を持つテスト専用の real-run-kit だけは `[dependencies]` に置く・spec: areka-P0-nar-install）: 登記表 SAMPLES と SampleRoot の 3 読み口・固定入力の .nar を組む NarBuilder・札付きの作業フォルダ WorkDir"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

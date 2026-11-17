@@ -1,4 +1,4 @@
-//! 行から書庫のパスを決める解決（[`sample_nar`]）の兄弟テスト（spec: `areka-P0-sample-url-fetch`
+//! 行から書庫のパスを決める解決（[`sample_nar_for`]）の兄弟テスト（spec: `areka-P0-sample-url-fetch`
 //! 要件 1.4・3.1・3.2・3.4・3.8・3.9）。
 //!
 //! 登記表の URL の行（ぱすた）は取り寄せた書庫が要るので、ここでは固定入力の行

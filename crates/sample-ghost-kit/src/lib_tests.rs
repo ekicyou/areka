@@ -393,12 +393,12 @@ fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
 /// 起動記録の置き場。ゴーストのフォルダの中で、前の走行が残す物が置かれる所。
 const BOOT_RECORD: [&str; 5] = ["ghost", "master", "profile", "areka", "x.toml"];
 
-/// 新品の検査に使うゴーストの検体。登記されたゴーストのうち `.nar` が小さい方。
+/// 新品の検査に使うゴーストの検体。リポジトリに置くゴーストのうち `.nar` が最も小さいもの。
 const FRESH_SAMPLE: &str = "R_POST_and_KOMAINU";
 
 /// 登記の 1 行が主張する要素を、展開結果と同じ `<種別> <格納先>/<名前>` の形で並べる。
 ///
-/// 種別は展開器が返す [`ElementKind`](areka_nar::ElementKind) の表示と同じ綴りにする。
+/// 種別は展開器が返す [`ElementKind`](areka_nar::ElementKind) の Debug の綴りにする。
 /// 本体が 1 つ、同梱バルーンが 0 個以上。
 fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
     let kind = match sample.kind {
@@ -681,7 +681,7 @@ fn named_descript_replaces_the_name_line_or_appends_one() {
         named_descript(b"charset,UTF-8\nname,old\n", "x"),
         b"charset,UTF-8\nname,x\n"
     );
-    // 1 行目の頭の BOM は外して照らし、置き換えても残す（かけ直し 4 回目 S7）。
+    // 1 行目の頭の BOM は外して照らし、置き換えても残す（audit-test-kits かけ直し 4 回目 S7）。
     assert_eq!(
         named_descript(b"\xEF\xBB\xBFname,old\r\ntype,shell\r\n", "x"),
         b"\xEF\xBB\xBFname,x\r\ntype,shell\r\n"
