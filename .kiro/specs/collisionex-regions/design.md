@@ -130,6 +130,8 @@ crates/areka-emo-compose/src/
 - `crates/areka-emo-compose/src/plan_test_support.rs` — `coll` の中身を `CollisionShape::Rect` へ（呼び手は直さない）。
 - `crates/areka-emo-compose/src/{fold_merge_tests,row_budget_tests}.rs` — 前の行を除くと固定した檻（`later_brace_adds_same_element_number_and_drops_same_animation_number`・`append_and_second_brace_match_the_ssp_2_9_29_measurements`・`brace_drops_earlier_same_numbered_collisions_and_keeps_written_order`）を、両方を残す振る舞いと警告 1 行へ書き直し、`.right` の読み（`fold_merge_tests.rs` 164 行）を書き換える。
 - `crates/areka-emo-compose/src/hit_import_tests.rs` — 子から持ち込む 5 つの形のずらしと、親の同じ名前の `region` が子を落とす檻を足す（3.4・3.5・8.2）。
+- `crates/areka-parsers/src/shell/decode_tests_element_collision_tests.rs` — 19 行の説明「collisionex はここでは扱わない」を、`collisionex` の檻の置き場（`decode_collisionex_tests.rs`）を指す説明へ直す。
+- `crates/areka-emo-present/src/shell_target_element_base_tests.rs` — クローディアを読む `claudia_base_surfaces_are_full_size_without_warnings` に、warn 以上がちょうど 1 行で `ShapesInactive` の文言に楕円 32・円 0・多角形 28・`region` 0 が載る検査を数行足し、名前と説明（「警告は 0 件」）を事実に合わせて直す（8.6 の決定論の側）。
 - `crates/areka-emo-present/src/presenter_test_support.rs` — `hit_coll` の中身を `CollisionShape::Rect` へ。658 行の直書きは `hit_coll(..)` の呼び出しへ替える（890 行のまま・行は増やさない）。
 - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/ukadoc-coverage/report/assets.md`・`doc/ukadoc-coverage/report/summary.md` — 2 行の書き直しと報告の作り直し（報告は機械で作る）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に行を足し、【上書き】の行の collision の決めを書き直す。
@@ -224,7 +226,7 @@ flowchart TD
 | 8.3 | 読めない行とまだ働かない形の記録の檻 | 檻 | `decode_collisionex_tests.rs` | — |
 | 8.4 | 5 つの形の欄が型に運ばれる檻 | 檻 | `decode_collisionex_tests.rs` | — |
 | 8.5 | 実機でクローディアの撫でとドラッグに矩形の名前 | RealMachineCheck | `verification/real-machine.md` | — |
-| 8.6 | 楕円・多角形だけの所は名前が載らず、記録に数が出る | RealMachineCheck | `verification/real-machine.md` | — |
+| 8.6 | 楕円・多角形だけの所は名前が載らず、記録に数が出る | RealMachineCheck・檻 | `verification/real-machine.md`・`shell_target_element_base_tests.rs`（クローディアの `ShapesInactive` の数） | — |
 | 8.7 | 排他テストの机で順を取る | RealMachineCheck | `areka-impl-watch` の机 | — |
 | 8.8 | 誤った書式の既存の檻を書き直す | 檻 | `decode_tests_lenient_input_tests.rs`・`validation_tests.rs` | — |
 
@@ -503,7 +505,8 @@ fn shifted(shape: CollisionShape, dx: i64, dy: i64) -> CollisionShape;
 
 ### Unit Tests
 - `decode_collisionex_tests.rs`: 5 つの形の欄の読み（1.2〜1.5・5.1・8.4）、`Ellipse`・`RECT` が読める（1.7）、名前の空と大小文字が書いたまま（1.6）、`collision*` と `collisionex*` を交互に書いた並びが書いた順（1.8）、`surface.append*` の中の `collisionex`（1.1）、`region` の領域反転の省略が `false`（1.5）。
-- 同じファイルで Requirement 4 の各行について「並びに入るか」と「記録が 1 件か・理由・見出し・行の綴り」を固定（4.1〜4.6・4.8〜4.10・8.3）。楕円・円・多角形・`region` を混ぜて読んだシェルで `ShapesInactive` が記録の列の最後に 1 件・形ごとの数・最初の行（4.7）、`rect` と `collision*` だけのシェルでは出ない（6.4）。
+- 同じファイルで Requirement 4 の各行について「並びに入るか」と「記録が 1 件か・理由・見出し・行の綴り」を固定（4.1〜4.6・4.8〜4.10・8.3）。楕円・円・多角形・`region` を混ぜて読んだシェルで `ShapesInactive` が記録の列の最後に 1 件・形ごとの数・最初の行（4.7）、`rect` と `collision*` だけのシェルでは出ない（6.4）。4.7 の檻は `parse_all` を通す（`decode(lex(..))` の道は `Reading::finish` を呼ばないので `ShapesInactive` が出ない）。
+- `shell_target_element_base_tests.rs`: 実のクローディアのシェルで warn 以上がちょうど 1 行・`ShapesInactive` に楕円 32・円 0・多角形 28・`region` 0（8.6 の決定論の側・実の検体での数え方の退行を赤にする）。
 - `decode_tests_lenient_input_tests.rs`・`validation_tests.rs`: 名前を最後の欄に書いた誤った書式の檻を、正しい書式（名前が 2 番目の欄）で「値になる」ことを固定する檻へ書き直す（8.8）。`collision*` の欠けた座標が 0 になる今の振る舞いはそのまま固定（1.9）。
 - `hit_import_tests.rs`: 子のサーフェスの 5 つの形を element定義の X,Y だけずらして持ち込み、それぞれの欄がずれている（`Circle` の半径はそのまま・`Polygon` は全部の頂点・`Region` は `x`・`y`）・`i64::MAX` の近くで飽和する・親の同じ名前（`region` を含む）が子を落とす（3.4・3.5・8.2）。ずらした子の `rect` の中の点で子の名前が返る。
 

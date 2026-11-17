@@ -63,7 +63,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `collisionex-regions`（`collisionex` の行を読む読み手と 4 つの図形）・`wintf-d2d-composite-rules`（自前の合成の入れ物と 1 ピクセルの読み戻しの口）・完了 `event-hit-test-named-regions`（wintf の `ColorMapData`）・完了 `surface-element-nesting`（子の当たり判定の持ち込み `hit_import.rs`）。
+- **Upstream**: `collisionex-regions`（`collisionex` の行を読む読み手と 5 つの形の型・`rect` だけが当たる＝2026-11-17 の申し送りの節）・`wintf-d2d-composite-rules`（自前の合成の入れ物と 1 ピクセルの読み戻しの口）・完了 `event-hit-test-named-regions`（wintf の `ColorMapData`）・完了 `surface-element-nesting`（子の当たり判定の持ち込み `hit_import.rs`）。
 - **Downstream**: 撫で・クリック系のイベント全般（Reference4 を使うゴースト）・将来の `animation*.collisionex*`。
 
 ## Existing Spec Touchpoints
