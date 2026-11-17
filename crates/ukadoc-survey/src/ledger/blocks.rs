@@ -33,8 +33,9 @@
 //!
 //! **この較正には盲点がある**（設計 D-12）。備考の中の見出しが既にある id と同じ綴り
 //! だった場合、集合としては一致してしまうので [`split`] は素通りする。塞ぐのはここ
-//! ではなく、台帳の並びを**厳密な昇順**で確かめる側（[`SurveyError::LedgerOutOfOrder`]・
-//! `ledger::read` と整合検査）で、同じ id が 2 度現れれば重複として落ちる。
+//! ではなく、台帳の並びを**厳密な昇順**で確かめる側（差し込みの
+//! [`SurveyError::LedgerOutOfOrder`] と整合検査の `FindingKind::LedgerOutOfOrder`）で、
+//! 同じ id が 2 度現れれば重複として落ちる。読み取り（`ledger::read`）は並びを見ない。
 //!
 //! # 呼ぶ側が負う前提
 //!
@@ -47,21 +48,12 @@
 
 use std::collections::BTreeSet;
 
+use super::{ENTRY_TABLE, any_ledger_file};
 use crate::error::SurveyError;
 use crate::model::EntryId;
 
-/// 失敗の本文に添える台帳の置き場。
-///
-/// 設計の [`split`] は本文だけを受け取り、どのドメインの台帳を読んでいるかを知らない
-/// （`catalog::read` が同じ形をしている）。ドメインの部分は伏せたまま、置き場の形を
-/// 添える。実際の綴りは `io::paths::ledger_path` が決める。
-const LEDGER_FILE: &str = "doc/ukadoc-coverage/ledger/<ドメイン>.toml";
-
 /// 塊の始まりの印。**行頭**でのみ塊を始める。
 const BLOCK_HEAD: &str = "[entry.";
-
-/// 項目を置く表の名前。
-const ENTRY_TABLE: &str = "entry";
 
 /// 台帳本文の中の項目 1 つ分の塊。
 ///
@@ -186,7 +178,8 @@ fn join<'a>(ids: impl Iterator<Item = &'a &'a str>) -> String {
 /// 台帳の本文が読めないことを告げる失敗。置き場を必ず添える（要件 6.12）。
 fn unreadable(reason: String) -> SurveyError {
     SurveyError::TomlParse {
-        path: LEDGER_FILE.to_owned(),
+        // `split` は本文だけを受け取り、どのドメインの台帳かを知らないので伏せて添える。
+        path: any_ledger_file(),
         reason,
     }
 }

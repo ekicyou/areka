@@ -36,13 +36,11 @@
 //! ドメインが分かるので、置き場は `<ドメイン>` を伏せずに綴れる（[`ledger_file`]）。
 //! `io::paths::ledger_path` は呼ばない——あれはワークスペース根から組み立てた絶対
 //! パスを返すので、失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。
-//! 純粋層が入出力層に触らない形も保てる。綴りの正本は `Domain::as_key` 1 つきりで、
-//! そこは両者で共有している。
 
 use std::collections::BTreeMap;
 
 use super::blocks;
-use super::{Ledger, LedgerEntry};
+use super::{ENTRY_TABLE, Ledger, LedgerEntry, ledger_file};
 use crate::documents::fields::{
     as_table, field, malformed, reject_unknown_keys, required_table, string_array_field,
     string_field,
@@ -50,14 +48,8 @@ use crate::documents::fields::{
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status, parse_theme};
 
-/// 台帳を置くディレクトリ（`io::paths::ledger_path` と同じ場所・ワークスペース根から）。
-const LEDGER_DIR: &str = "doc/ukadoc-coverage/ledger";
-
 /// 前置きの表の名前。
 const LEDGER_TABLE: &str = "ledger";
-
-/// 項目を置く表の名前。
-const ENTRY_TABLE: &str = "entry";
 
 /// 前置きに置いてよい欄のすべて（要件付録 A.1）。
 ///
@@ -123,11 +115,6 @@ pub fn read(text: &str, domain: Domain) -> Result<Ledger, SurveyError> {
         entries: read_entries(&root, &file)?,
         file_order,
     })
-}
-
-/// 失敗の本文に添える台帳の置き場。
-fn ledger_file(domain: Domain) -> String {
-    format!("{LEDGER_DIR}/{}.toml", domain.as_key())
 }
 
 /// 前置きを読む（要件付録 A.1）。

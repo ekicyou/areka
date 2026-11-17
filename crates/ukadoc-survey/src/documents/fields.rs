@@ -16,23 +16,21 @@ use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, parse_theme};
 
 use super::parse::toml_blocks;
-
-/// 3 文書の置き場（`io::paths` と同じ場所・ワークスペース根から）。
-///
-/// `io::paths` を呼ばないのは、あれがワークスペース根から組み立てた絶対パスを返し、
-/// 失敗の本文が計算機ごとに変わってしまうからである（`ledger::read` と同じ判断）。
-pub(super) const DOCUMENT_DIR: &str = "doc/ukadoc-coverage";
+use crate::io::paths::COVERAGE_DIR;
 
 /// 帰属の正本。
-pub(super) const LINKAGE_FILE: &str = "linkage.md";
+pub(crate) const LINKAGE_FILE: &str = "linkage.md";
 /// 段階と順位。
-pub(super) const BRIEFING_FILE: &str = "briefing.md";
+pub(crate) const BRIEFING_FILE: &str = "briefing.md";
 /// ロードマップ草案。
 pub(super) const ROADMAP_FILE: &str = "roadmap-draft.md";
 
-/// 失敗の本文に添える文書の置き場。
-pub(super) fn document_file(name: &str) -> String {
-    format!("{DOCUMENT_DIR}/{name}")
+/// 失敗の本文に添える文書の置き場（ワークスペース根からの相対・区切りは `/`）。
+///
+/// `io::paths` の絶対パスの関数を呼ばないのは、失敗の本文が計算機ごとに変わって
+/// しまうからである（`ledger::ledger_file` と同じ判断）。
+pub(crate) fn document_file(name: &str) -> String {
+    format!("{COVERAGE_DIR}/{name}")
 }
 
 /// 文書の形が違うことを告げる失敗。置き場を必ず添える。

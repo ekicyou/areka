@@ -37,22 +37,13 @@
 use std::collections::BTreeSet;
 
 use super::blocks::{self, Block};
+use super::{ENTRY_TABLE, ledger_file};
 use crate::error::SurveyError;
 use crate::model::{Domain, EntryId, PageName, Status};
 use crate::tomlout::{basic_string, keyed_table_header, string_array};
 
-/// 台帳を置くディレクトリ（`io::paths::ledger_path` と同じ場所・ワークスペース根から）。
-///
-/// `io::paths` は呼ばない——あれはワークスペース根から組み立てた絶対パスを返すので、
-/// 失敗の本文が計算機ごとに変わってしまう（要件 6.1 の決定性）。純粋層が入出力層に
-/// 触らない形も保てる。綴りの正本は `Domain::as_key` 1 つきりである。
-const LEDGER_DIR: &str = "doc/ukadoc-coverage/ledger";
-
 /// 前置きの表の見出し。
 const LEDGER_HEADER: &str = "[ledger]";
-
-/// 項目を置く表の名前。
-const ENTRY_TABLE: &str = "entry";
 
 /// 冒頭の注意書きのうち、ドメインに依らない 2 行（要件付録 A.1 の逐語）。
 ///
@@ -227,11 +218,6 @@ fn push_entry(out: &mut String, id: &EntryId) {
         out.push('\n');
     }
     out.push_str(&render_initial_entry(id));
-}
-
-/// 失敗の本文に添える台帳の置き場（要件 6.12）。
-fn ledger_file(domain: Domain) -> String {
-    format!("{LEDGER_DIR}/{}.toml", domain.as_key())
 }
 
 /// `名前 = 値` の 1 行。値は組み上がった TOML の値の断片を受け取る。

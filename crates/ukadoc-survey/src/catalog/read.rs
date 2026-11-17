@@ -24,8 +24,8 @@
 //!
 //! 設計の [`read`] は本文だけを受け取り、どのファイルを読んでいるかを知らない。
 //! それでも [`SurveyError::TomlParse`] は場所を求めるので、カタログの決まった置き場
-//! （[`CATALOG_FILE`]）を添える。カタログの置き場は `io::paths::catalog_path` が
-//! 決める 1 か所きりなので、これで実際に読んでいたファイルと食い違うことはない。
+//! （`io::paths::CATALOG_FILE`）を添える。`io::paths::catalog_path` と同じ層が持つ
+//! 綴りなので、実際に読んでいたファイルと食い違うことはない。
 
 use std::collections::BTreeMap;
 
@@ -34,10 +34,8 @@ use crate::documents::fields::{
     field, malformed, reject_unknown_keys, required_table, string_array_field, string_field,
 };
 use crate::error::SurveyError;
+use crate::io::paths::CATALOG_FILE;
 use crate::model::{EntryId, PageName};
-
-/// 失敗の本文に添えるカタログの置き場（`io::paths::catalog_path` と同じ場所）。
-const CATALOG_FILE: &str = "doc/ukadoc-coverage/catalog.toml";
 
 /// 冒頭の情報を置く表の名前。
 const SNAPSHOT_TABLE: &str = "snapshot";
@@ -69,9 +67,9 @@ impl Catalog {
     /// URL から項目 id を引く逆引き（設計 D-4 の 1 段目）。
     ///
     /// **完全一致だけ**を扱う。フラグメントを外した綴りはここでは引けず、
-    /// [`Self::page_urls`] が 2 段目を受け持つ。実測で 1,749 件の URL はすべて
-    /// 相異なり、ある URL が別の URL の先頭部分になっている例も 0 件なので、
-    /// 完全一致で曖昧さなく 1 件に定まる（設計 D-4）。
+    /// [`Self::page_urls`] が 2 段目を受け持つ。実データの URL はすべて相異なり、
+    /// ある URL が別の URL の先頭部分になっている例も無いので、完全一致で曖昧さなく
+    /// 1 件に定まる（設計 D-4）。
     ///
     /// 同じ URL の項目が 2 つある壊れたカタログでは、id の大きい方だけが残る。
     pub fn by_url(&self) -> BTreeMap<&str, &EntryId> {
@@ -81,7 +79,7 @@ impl Catalog {
             .collect()
     }
 
-    /// フラグメントを外したページ URL の一覧（設計 D-4 の 2 段目・実測 38 種）。
+    /// フラグメントを外したページ URL の一覧（設計 D-4 の 2 段目）。
     ///
     /// 最初の `#` より前を採る。同じページの項目は同じ綴りに畳まれるので、返る件数は
     /// 項目数ではなくページ数になる。アンカーを持たない 19 件は `#` を含まないので

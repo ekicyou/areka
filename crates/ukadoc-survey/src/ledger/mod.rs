@@ -24,12 +24,33 @@
 
 use std::collections::BTreeMap;
 
+use crate::io::paths::COVERAGE_DIR;
 use crate::model::{Domain, EntryId, Link, PageName, Status};
 
 pub mod blocks;
 pub mod patch;
 pub mod read;
 pub mod write;
+
+/// 項目を置く表の名前。
+pub const ENTRY_TABLE: &str = "entry";
+
+/// その台帳の置き場の相対の綴り（区切りは `/`）。失敗の本文と所見の場所に載る。
+///
+/// `io::paths::ledger_path` と同じ場所を指す。あちらは絶対パスで、本文に載せると
+/// 計算機ごとに変わってしまう。
+pub fn ledger_file(domain: Domain) -> String {
+    ledger_file_named(domain.as_key())
+}
+
+/// ドメインの分からない口（塊への切り分け・`priority` の 1 行置換）が失敗に添える場所。
+pub(crate) fn any_ledger_file() -> String {
+    ledger_file_named("<ドメイン>")
+}
+
+fn ledger_file_named(name: &str) -> String {
+    format!("{COVERAGE_DIR}/ledger/{name}.toml")
+}
 
 /// 台帳の 1 項目（要件付録 A.2 の欄）。
 ///

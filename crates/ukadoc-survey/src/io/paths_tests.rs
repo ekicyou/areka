@@ -72,6 +72,11 @@ fn coverage_dir_is_verbatim() {
 #[test]
 fn catalog_path_is_verbatim() {
     assert_eq!(rel(&catalog_path()), "doc/ukadoc-coverage/catalog.toml");
+    assert_eq!(
+        CATALOG_FILE,
+        rel(&catalog_path()),
+        "相対の綴りが別の場所を指す"
+    );
 }
 
 #[test]
@@ -112,6 +117,11 @@ fn ledger_paths_are_verbatim_for_every_domain() {
     ];
     for (domain, want) in expected {
         assert_eq!(rel(&ledger_path(domain)), want, "台帳の場所: {domain:?}");
+        assert_eq!(
+            crate::ledger::ledger_file(domain),
+            want,
+            "相対の綴り: {domain:?}"
+        );
     }
     assert_eq!(
         expected.len(),
@@ -162,7 +172,7 @@ fn every_domain_gets_its_own_files() {
     assert_eq!(sorted.len(), seen.len(), "場所が重なっている: {seen:?}");
 }
 
-/// 全体報告はドメイン別報告のどれとも別（要件 7.6 で常時検査の対象外なので取り違えない）。
+/// 全体報告はドメイン別報告のどれとも別の場所にある。
 #[test]
 fn summary_report_is_not_a_domain_report() {
     for domain in Domain::ALL {

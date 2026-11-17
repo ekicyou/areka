@@ -28,7 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::fields::{BRIEFING_FILE, LINKAGE_FILE, document_file};
 use super::{Breakage, Briefing, Linkage, NamedBundle, RankTarget};
 use crate::error::SurveyError;
-use crate::ledger::Ledger;
+use crate::ledger::{Ledger, ledger_file};
 use crate::model::{Domain, EntryId, Status};
 
 /// 束ごとの、機械で決まる値（設計 `documents::derive`）。
@@ -255,11 +255,6 @@ fn wrong_slot(name: &str, want_single: bool) -> String {
     } else {
         format!("単独項目 {name} を bundle で指している（singles に並べる）")
     }
-}
-
-/// その台帳の場所（失敗の本文に載る綴り）。
-fn ledger_file(domain: Domain) -> String {
-    format!("doc/ukadoc-coverage/ledger/{}.toml", domain.as_key())
 }
 
 /// 導けないことを告げる失敗。文書名を必ず添える。

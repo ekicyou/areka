@@ -8,6 +8,7 @@ use std::path::Path;
 
 use super::super::priority_apply_with;
 use super::{LEDGER_FILES, under_coverage};
+use crate::documents::fields::{self, document_file};
 use crate::error::SurveyError;
 use crate::io::files;
 use crate::model::{Domain, EntryId};
@@ -38,11 +39,15 @@ const SAMPLE_BUNDLE: &str = "見本の束";
 /// 見本の帰属と順位から決まる `priority`（段階 A の順位 1）。
 const SAMPLE_PRIORITY: &str = "A1";
 
-/// `linkage.md` の置き場（`doc/ukadoc-coverage/` から先の綴り）。
-const LINKAGE_FILE: &str = "doc/ukadoc-coverage/linkage.md";
+/// `linkage.md` の置き場（ワークスペース根からの相対）。
+fn linkage_file() -> String {
+    document_file(fields::LINKAGE_FILE)
+}
 
 /// `briefing.md` の置き場。
-const BRIEFING_FILE: &str = "doc/ukadoc-coverage/briefing.md";
+fn briefing_file() -> String {
+    document_file(fields::BRIEFING_FILE)
+}
 
 /// 見本の台帳 1 本（項目 1 件）。備考は呼び手が決める。
 fn sample_ledger(domain: Domain, id: &str, priority: &str, note: &str) -> String {
@@ -128,8 +133,8 @@ fn sample_briefing() -> String {
 /// （備考の**行頭**に `priority = ` を置くと、その台帳の本文だけが決まらなくなる）。
 fn sample_files(members: &[&str], property_note: &str) -> BTreeMap<String, String> {
     let mut files = BTreeMap::new();
-    files.insert(LINKAGE_FILE.to_owned(), sample_linkage(members));
-    files.insert(BRIEFING_FILE.to_owned(), sample_briefing());
+    files.insert(linkage_file(), sample_linkage(members));
+    files.insert(briefing_file(), sample_briefing());
     for (index, domain) in Domain::ALL.into_iter().enumerate() {
         let note = if domain == Domain::Property {
             property_note
@@ -181,7 +186,7 @@ fn the_derived_priority_lands_in_every_one_of_the_four_ledgers() {
     let (outcome, asked, written) = apply_over(&sample_files(&SAMPLE_IDS, ""));
     outcome.expect("見本の 2 文書と台帳 4 本なら書き戻せるはず");
 
-    let mut expected_reads = vec![LINKAGE_FILE.to_owned(), BRIEFING_FILE.to_owned()];
+    let mut expected_reads = vec![linkage_file(), briefing_file()];
     expected_reads.extend(LEDGER_FILES.iter().map(|file| (*file).to_owned()));
     assert_eq!(asked, expected_reads, "読みに来た文書が 6 本と違う");
 
@@ -267,15 +272,15 @@ fn a_body_that_cannot_be_decided_on_the_fourth_ledger_leaves_the_first_three_unw
 fn a_document_that_cannot_be_read_stops_with_the_absolute_path_it_looked_for() {
     // 1 本でも読めなければ探した絶対パスを添えて止まり、1 バイトも書かない
     // （要件 1.4）。読み手の失敗を包み直して場所を落とすと、ここが赤くなる。
-    for missing in [LINKAGE_FILE, BRIEFING_FILE, LEDGER_FILES[3]] {
+    for missing in [linkage_file(), briefing_file(), LEDGER_FILES[3].to_owned()] {
         let mut files = sample_files(&SAMPLE_IDS, "");
-        files.remove(missing);
+        files.remove(&missing);
         let (outcome, _, written) = apply_over(&files);
         let err = outcome.expect_err("読めない文書があるのに書き戻せてしまった");
         assert!(written.is_empty(), "{missing} が読めないのに書き出している");
         let body = err.to_string().replace('\\', "/");
         assert!(
-            body.contains(missing),
+            body.contains(&missing),
             "探した場所が失敗の本文に無い（{missing}）: {body}"
         );
     }

@@ -7,7 +7,7 @@
 //!
 //! 根は **`CARGO_MANIFEST_DIR` の 2 段上**。この crate の manifest は
 //! `crates/ukadoc-survey/` にあるので、2 段上がワークスペース根になる
-//! （前例: `crates/log-capture-kit/tests/workspace_scan/mod.rs:64`）。
+//! （前例: `crates/log-capture-kit/tests/workspace_scan/mod.rs`）。
 //!
 //! ここで使うのは**コンパイル時に埋め込まれる `env!`** であって、実行時の環境変数
 //! ではない。実行時に読むと、テストがどのディレクトリから起動されたかで答えが変わり、
@@ -28,8 +28,22 @@ use crate::model::Domain;
 /// この crate の manifest のあるディレクトリ（コンパイル時に決まる）。
 const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
+/// 置き場のディレクトリの綴り。`concat!` で相対の綴りを組むために字句で持つ。
+macro_rules! coverage_dir {
+    () => {
+        "doc/ukadoc-coverage"
+    };
+}
+
 /// カタログ・台帳・報告を置くディレクトリの名前（ワークスペース根からの相対）。
-const COVERAGE_DIR: &str = "doc/ukadoc-coverage";
+///
+/// 失敗の本文と所見の場所に載る相対の綴りはどれもここから作る（台帳は
+/// `ledger::ledger_file`、3 文書は `documents::fields::document_file`）。絶対パスの
+/// 関数を使わないのは、本文が計算機ごとに変わってしまうからである。
+pub const COVERAGE_DIR: &str = coverage_dir!();
+
+/// カタログの置き場の相対の綴り（区切りは `/`）。[`catalog_path`] と同じ場所を指す。
+pub const CATALOG_FILE: &str = concat!(coverage_dir!(), "/catalog.toml");
 
 /// ワークスペース根の絶対パス。
 ///

@@ -37,17 +37,10 @@
 //! 検査層はこの判定を作り直せない——**書けないのが正しい**（設計 check 節の注記）。
 
 use super::{CheckInput, Finding, FindingKind};
-use crate::ledger::Ledger;
+use crate::io::paths::CATALOG_FILE;
+use crate::ledger::{Ledger, ledger_file};
 use crate::model::{Domain, EntryId, PageName};
 use std::collections::BTreeSet;
-
-/// カタログの場所（所見の「場所」に載る綴り）。
-const CATALOG_FILE: &str = "doc/ukadoc-coverage/catalog.toml";
-
-/// その台帳の場所。
-fn ledger_file(domain: Domain) -> String {
-    format!("doc/ukadoc-coverage/ledger/{}.toml", domain.as_key())
-}
 
 /// ページ名を本文へ並べる。1 つも無ければ「なし」と書く（空文字だと読めない）。
 fn list_pages(pages: &[&str]) -> String {

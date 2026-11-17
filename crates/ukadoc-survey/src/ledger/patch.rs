@@ -34,16 +34,9 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use crate::error::SurveyError;
-use crate::ledger::blocks;
+use crate::ledger::{any_ledger_file, blocks};
 use crate::model::EntryId;
 use crate::tomlout::basic_string;
-
-/// 失敗の本文に添える台帳の置き場。
-///
-/// ここは本文だけを受け取り、どのドメインの台帳を読んでいるかを知らない
-/// （`blocks::split` が同じ形をしている）。ドメインの部分は伏せたまま置き場の形を
-/// 添える。実際の綴りは `io::paths::ledger_path` が決める。
-const LEDGER_FILE: &str = "doc/ukadoc-coverage/ledger/<ドメイン>.toml";
 
 /// 置き換えの相手になる行の始まり。**行頭**でのみ当たる。
 ///
@@ -109,7 +102,8 @@ fn priority_line(body: &str, id: &EntryId) -> Result<Range<usize>, SurveyError> 
 /// 置き換える行を決められないことを告げる失敗。id を必ず添える（要件 12.6・6.12）。
 fn undecidable(id: &EntryId, reason: &str) -> SurveyError {
     SurveyError::DeriveMismatch {
-        file: LEDGER_FILE.to_owned(),
+        // 本文だけを受け取り、どのドメインの台帳かを知らないので伏せて添える。
+        file: any_ledger_file(),
         reason: format!("項目 {} の {reason}", id.as_str()),
     }
 }

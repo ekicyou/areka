@@ -45,13 +45,8 @@
 
 use super::{CheckInput, Finding, FindingKind};
 use crate::evidence::EvidenceIndex;
-use crate::ledger::{Ledger, LedgerEntry};
-use crate::model::{Domain, EntryId, Status};
-
-/// その台帳の場所（所見の「場所」に載る綴り）。
-fn ledger_file(domain: Domain) -> String {
-    format!("doc/ukadoc-coverage/ledger/{}.toml", domain.as_key())
-}
+use crate::ledger::{Ledger, LedgerEntry, ledger_file};
+use crate::model::{EntryId, Status};
 
 /// 内容の食い違いを集める。
 ///
@@ -167,9 +162,10 @@ fn check_link_endpoints(
 /// 直す人に「どこを直せばよいか」を 1 段目より的確に示せない。指す先が別名なら
 /// その先も別名の行として独立に判定される。
 ///
-/// 相手がどの台帳にも無い場合は何も言わない——その申し立ては
-/// [`FindingKind::LinkEndpointMissing`] が受け持つ（状態を引けない相手を「別名だ」と
-/// 決めつけない）。
+/// 相手がどの台帳にも無い場合は何も言わない（状態を引けない相手を「別名だ」と
+/// 決めつけない）。カタログに無ければ [`FindingKind::LinkEndpointMissing`] が、
+/// カタログにあってどの台帳にも無ければ構造の検査の
+/// [`FindingKind::CatalogIdMissingFromLedgers`] が申し立てる。
 fn check_alias_chain(
     input: &CheckInput,
     ledger: &Ledger,
