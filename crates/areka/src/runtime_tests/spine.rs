@@ -47,8 +47,8 @@ use areka_runtime::spine::*;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use areka_actor::ActorHandle;
@@ -61,8 +61,8 @@ use areka_ghost::{GhostRuntime, ShioriWiring, TickerMode, boot_with_kanade_stop}
 use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend};
 use areka_sakura::ActorKey;
 use areka_seriko::{
-    AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink, SurfaceResolver,
-    spawn_seriko,
+    AnimationTable, BindResolver, DisplayCommand, LoopRng, SerikoLoopConfig, SerikoSink,
+    SurfaceOutput, SurfaceResolver, spawn_seriko,
 };
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -281,6 +281,71 @@ enum LoopDriver {
     Live(LoopRng, LoopRng),
 }
 
+/// 1 つの面の Show を 1 回だけ、開くまで止める門（seriko のスレッドの上で待つ・テストの足場だけ）。
+///
+/// 負荷のときにだけ起きる順（別スレッドから来る面の指令が `TalkEnded` より後に届く）を毎回起こす。
+pub(crate) struct ShowGate {
+    scope: &'static str,
+    surface_id: u32,
+    open: Arc<(Mutex<bool>, Condvar)>,
+}
+
+/// 門の鍵。`open` で開く。捨てても開く（テストが落ちても seriko を止めたままにしない）。
+pub(crate) struct ShowGateKey(Arc<(Mutex<bool>, Condvar)>);
+
+impl ShowGateKey {
+    /// 門を開ける（何度呼んでもよい）。
+    pub(crate) fn open(&self) {
+        let (lock, cvar) = &*self.0;
+        *lock.lock().unwrap_or_else(PoisonError::into_inner) = true;
+        cvar.notify_all();
+    }
+}
+
+impl Drop for ShowGateKey {
+    fn drop(&mut self) {
+        self.open();
+    }
+}
+
+/// `scope` の面 `surface_id` の Show を 1 回だけ止める門と、その鍵を作る。
+pub(crate) fn show_gate(scope: &'static str, surface_id: u32) -> (ShowGate, ShowGateKey) {
+    let open = Arc::new((Mutex::new(false), Condvar::new()));
+    let gate = ShowGate {
+        scope,
+        surface_id,
+        open: Arc::clone(&open),
+    };
+    (gate, ShowGateKey(open))
+}
+
+/// `PresentBridge` を包む出力。門が無ければ今と同じ（そのまま渡す）。
+struct GatedOutput {
+    inner: PresentBridge,
+    gate: Option<ShowGate>,
+}
+
+impl SurfaceOutput for GatedOutput {
+    fn send(&mut self, command: DisplayCommand) {
+        if let DisplayCommand::Show {
+            scope, surface_id, ..
+        } = &command
+            && let Some(gate) = &self.gate
+            && scope.as_str() == gate.scope
+            && *surface_id == gate.surface_id
+        {
+            let (lock, cvar) = &*gate.open;
+            let open = lock.lock().unwrap_or_else(PoisonError::into_inner);
+            drop(
+                cvar.wait_while(open, |open| !*open)
+                    .unwrap_or_else(PoisonError::into_inner),
+            );
+            self.gate = None;
+        }
+        self.inner.send(command);
+    }
+}
+
 /// scripted ghost boot＋実 sink 結線＋GPU World＋frame 結線状態を束ねた spine ハーネス。
 ///
 /// `wire_runtime`（task 5.1・production）の結線を、headless GPU World＋合成 `GhostWindows`＋
@@ -366,6 +431,16 @@ impl SpineHarness {
         shiori_handle: ScriptedShioriHandle,
         driver: LoopDriver,
     ) -> SpineHarness {
+        Self::boot_with_gate(backend, shiori_handle, driver, None)
+    }
+
+    /// [`Self::boot_with`] に、seriko の出力の門（[`show_gate`]）を足して起動する。
+    fn boot_with_gate(
+        backend: ScriptedShioriBackend,
+        shiori_handle: ScriptedShioriHandle,
+        driver: LoopDriver,
+        gate: Option<ShowGate>,
+    ) -> SpineHarness {
         // ── headless GPU World（MTA COM＋実 GPU・R8.4）＋合成 GhostWindows（scope [0,1]） ──
         let (gpu, mut world) = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
@@ -447,7 +522,10 @@ impl SpineHarness {
             static_binds.clone(),
             bind_resolver,
             loop_config,
-            bridge,
+            GatedOutput {
+                inner: bridge,
+                gate,
+            },
         );
         // loop tick 直接注入端（task 9.4）: SerikoSink を 1 本 clone してハーネスへ保持する。surface_sink 本体は
         // 下の boot_options が sinks 第 1 要素として値消費するため、この clone を `inject_seriko_tick`

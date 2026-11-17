@@ -13,9 +13,13 @@
 //! 3. 終了の台本の後に解放（`Unload`）へ進み、最初の終了の出所が `KanadeStopped(Quit)`
 //!    （告知なし・終了コード 0）になる。期限超過（`DeadlineExceeded`）や強制終了ではない。
 //!
-//! 時刻は注入 Tick だけが進める。1 つの会話の注入時刻は [`TALK_SPAN_CAP_MS`] で頭打ちにし、
-//! 運行の終了挨拶の期限（30 秒）へ注入時刻だけで届かないようにする（注入時刻が観測を追い越さない）。
-//! 頭打ちのまま進みが止まれば待ちの芯が `［止まった］` で落とす＝会話が止まったことの赤になる。
+//! 時刻は注入 Tick だけが進める。1 つの会話の注入時刻は [`TALK_SPAN_CAP_MS`] で頭打ちにする（注入時刻が
+//! 観測を追い越さない）。頭打ちが効くのは dispatcher が会話の起点を付ける件（[`drive_talk`] の中の注）。
+//! 会話が止まれば待ちの芯が `［止まった］` で落とす＝会話が止まったことの赤になる。
+//!
+//! 会話の輪の終わりの条件は表明と同じ式（[`ran_past_scope_two`]）で、seriko のスレッドから来る目印の
+//! 面まで待つ。目印の面の Show を止める門（[`super::show_gate`]）が、目印が `TalkEnded` より後に届く順を
+//! 毎回起こす。
 
 use std::cell::{Cell, RefCell};
 
@@ -25,8 +29,8 @@ use shiori_host32_host::ExitKind;
 
 use super::{
     CloseReason, Duration, GhostWindows, Instant, LoopDriver, PresentCommand, Progress,
-    RecordedCall, SPIN_WAIT, ScriptedShioriBackend, SpineHarness, TalkLifecycleSignal,
-    capture_logs, run_attach_phase, shell_target, wait_until,
+    RecordedCall, SPIN_WAIT, ScriptedShioriBackend, ShowGateKey, SpineHarness, TalkLifecycleSignal,
+    capture_logs, run_attach_phase, shell_target, show_gate, wait_until,
 };
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
 use crate::session::ghost_quit::run_ghost_quit_phase;
@@ -46,15 +50,17 @@ const MARKER_SURFACE: u32 = 2100;
 /// 1 反復あたりの注入時刻の進み幅（ms）。
 const TICK_STEP_MS: u64 = 100;
 
-/// 1 つの会話に注入する時刻の上限（ms）。台本の再生は 2 秒に届かないので十分に長く、終了挨拶の
-/// 期限 30 秒（`KanadeConfig::close_talk_deadline_ms`）より十分に短い。
+/// 1 つの会話に注入する時刻の上限（ms）。台本の再生は 2 秒に届かないので十分に長い。頭打ちが効くのは
+/// dispatcher が会話の起点を付ける件（[`drive_talk`] の中の注）。
 const TALK_SPAN_CAP_MS: u64 = 10_000;
 
 /// ポーリングの間隔（spine の「ハイブリッド待ち」の poll-backoff・R7.9）。
 const BACKOFF: Duration = Duration::from_micros(200);
 
 /// 起動の台本と、`\-` で終わる終了の台本を返す台本を組む（`OnClose` は正規の握手の GET）。
-fn third_scope_backend() -> SpineHarness {
+///
+/// scope 0 の目印の面の Show を 1 回だけ止める門をつけて起こし、その鍵を返す。
+fn third_scope_backend() -> (SpineHarness, ShowGateKey) {
     let (backend, shiori_handle) = ScriptedShioriBackend::builder()
         .notify("OnInitialize", Ok(()))
         .get("OnFirstBoot", Ok(None))
@@ -63,7 +69,10 @@ fn third_scope_backend() -> SpineHarness {
         .get("OnClose", Ok(Some(CLOSE_TALK.to_string())))
         .unload(Ok(ExitKind::Clean))
         .build();
-    SpineHarness::boot_with(backend, shiori_handle, LoopDriver::Inert)
+    let (gate, key) = show_gate("0", MARKER_SURFACE);
+    let harness =
+        SpineHarness::boot_with_gate(backend, shiori_handle, LoopDriver::Inert, Some(gate));
+    (harness, key)
 }
 
 /// 1 つの会話の観測。面の指令は `(対象, 面)` で、来た順に残す。
@@ -147,8 +156,20 @@ fn drive_talk(
     seen.into_inner()
 }
 
-/// 1 つの会話が scope 2 の区間を越えて最後まで進んだことを確かめる。
+/// 1 つの会話が scope 2 の区間を越えて最後まで進んだか（scope 2 の面が在り・目印がその後ろに在り・
+/// `TalkStarted → TalkEnded`）。会話の輪の終わりの条件と表明が同じこの式を使う（目印は seriko の
+/// スレッドから来るので、`TalkEnded` より後に届くことがある）。
+fn ran_past_scope_two(seen: &TalkSeen, third_surface: u32) -> bool {
+    let third = seen.position(shell_target(2), third_surface);
+    let marker = seen.position(shell_target(0), MARKER_SURFACE);
+    third.is_some() && marker > third && matches!(seen.first_talk(), Some((Some(_), true)))
+}
+
+/// 1 つの会話が scope 2 の区間を越えて最後まで進んだことを確かめる（[`ran_past_scope_two`] の表明）。
 fn assert_ran_past_scope_two(seen: &TalkSeen, third_surface: u32, what: &str) {
+    if ran_past_scope_two(seen, third_surface) {
+        return;
+    }
     let third = seen.position(shell_target(2), third_surface);
     let marker = seen.position(shell_target(0), MARKER_SURFACE);
     assert!(
@@ -166,6 +187,7 @@ fn assert_ran_past_scope_two(seen: &TalkSeen, third_surface: u32, what: &str) {
         "{what}: 会話が始まって終わる（TalkStarted → TalkEnded）: {:?}",
         seen.signals
     );
+    unreachable!("{what}: 上の 3 つの表明は ran_past_scope_two と同じ式");
 }
 
 /// えみりの形の配置（scope 0・1 の窓だけ）で、`\p[2]` を挟む起動の会話が最後まで進み、`\p[2]` を
@@ -177,10 +199,12 @@ fn assert_ran_past_scope_two(seen: &TalkSeen, third_surface: u32, what: &str) {
 /// - 台本が scope 2 を通らなければ、`shell_target(2)` の面の指令が無く落ちる。
 /// - scope 2 の区間で再生が止まれば、目印の面も `TalkEnded` も来ず、頭打ちの時刻のまま待ちの芯が
 ///   `［止まった］` で落とす。
-/// - 終了の会話が終わらず期限で畳まれれば、最初の終了の出所が `DeadlineExceeded` になり落ちる。
+/// - 目印の面は seriko のスレッドから来て `TalkEnded` より後に届くことがある。門がその順を毎回起こし、
+///   会話の輪の終わりの条件が `TalkEnded` だけなら目印の表明が落ちる。
+/// - 終了の会話が `\-` まで進まず止まれば、解放（`Unload`）も来ず、待ちの芯が `［止まった］` で落とす。
 #[test]
 fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
-    let mut harness = third_scope_backend();
+    let (mut harness, key) = third_scope_backend();
 
     // ── 配置はえみりの形の固定入力が返す scope と同じ（0・1 だけ・窓もバルーンも scope 2 には無い） ──
     let fixture_scopes = emily_shaped_scopes();
@@ -209,7 +233,11 @@ fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
     // ── 起動の会話: scope 2 を越えて最後まで進み、終わりの知らせが来る ──
     let mut now = 0u64;
     let boot = drive_talk(&mut harness, &mut now, "起動の会話", |seen, _| {
-        matches!(seen.first_talk(), Some((_, true)))
+        // 門は目印の面を止めている。`TalkEnded` を見たときに開け、目印が後から届く順を毎回起こす。
+        if matches!(seen.first_talk(), Some((_, true))) {
+            key.open();
+        }
+        ran_past_scope_two(seen, 0)
     });
     assert_ran_past_scope_two(&boot, 0, "起動の会話");
 
@@ -224,7 +252,7 @@ fn spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits() {
 
     // ── 終了の会話: scope 2 を越えて `\-` まで進み、解放へ進む ──
     let close = drive_talk(&mut harness, &mut now, "終了の会話", |seen, calls| {
-        matches!(seen.first_talk(), Some((_, true)))
+        ran_past_scope_two(seen, MARKER_SURFACE)
             && calls.iter().any(|c| matches!(c, RecordedCall::Unload))
     });
     assert_ran_past_scope_two(&close, MARKER_SURFACE, "終了の会話");
