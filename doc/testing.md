@@ -90,7 +90,7 @@ assert_eq!(ended.by, EndedBy::UserClose, "{}", run.output());
 
 ### 32bit の仲介の建て方
 
-32bit の SHIORI を読むゴーストには、32bit の仲介 `shiori-host32-helper.exe` が要る。窓口は立てるたびに `areka.exe` の隣へ 32bit の物を揃える（環境変数 `HOST32_HELPER_EXE` → `target\i686-pc-windows-msvc\debug` → `release` の順に探す）。どこにも無ければ、探した場所と建て方を添えて panic するので、先に建てておく。
+32bit の SHIORI を読むゴーストには、32bit の仲介 `shiori-host32-helper.exe` が要る。窓口は立てるたびに `areka.exe` の隣へ 32bit の物を揃える（環境変数 `HOST32_HELPER_EXE` → `target\i686-pc-windows-msvc\debug` → `release` の順に元を探す）。隣が 32bit でも、元と長さか更新時刻が違えば写し直す（組み直した仲介が古い写しに隠れない）。環境変数は必ず確かめ、指す物が無いか 32bit でなければ、隣が 32bit でも panic する。元がどこにも無く隣が 32bit ならそれを使う。隣も無ければ、探した場所と建て方を添えて panic するので、先に建てておく。
 
 ```powershell
 cargo build -p shiori-host32-helper --target i686-pc-windows-msvc

@@ -142,7 +142,7 @@
   - _Dispatch: mechanical — 消す・寄せる・主張を足す形を設計が書く_
   - _Requirements: 3.1, 3.3, 4.1, 4.5, 4.8_
 
-- [ ] 5. real-run-kit の窓口
+- [x] 5. real-run-kit の窓口
 - [x] 5.1 読み手と公開の品と手助けを直す（R4: 12・26・35・45・47・48・49・50）
   - 12: `read_text`（読めなければパスと理由で panic）を置いて 4 つの読み手で使い、`failure_text` は読めない旨とパスを文へ埋め込む（panic しない）
   - 26: 決め D2 の静的なテスト `relied_targets_name_the_modules_that_emit_the_relied_lines`（`RELIED_TARGETS` の字面は変えない・赤の文に直す先の名を出す）
@@ -177,7 +177,7 @@
   - _Depends: 1.1, 4.1_
   - _Dispatch: standard, effort high — 破棄の中の panic と unwind の順・偽の子の時刻の一歩_
   - _Requirements: 2.7, 3.1, 3.2, 3.4, 4.1, 4.3, 6.2, 6.3, 6.5, 7.6, 7.7_
-- [ ] 5.4 32bit の仲介を元が新しければ写し直す（R3: 11・51）
+- [x] 5.4 32bit の仲介を元が新しければ写し直す（R3: 11・51）
   - 11: 先に元を決め（環境変数 → debug → release・環境変数の panic は今のまま）、隣が無い・32bit でない・元と長さか更新時刻が違うときだけ写す。元がどこにも無く隣が 32bit ならそれを使う。`i686_tests.rs` の該当のテスト（135-143 行あたり）を改める
   - 51: `is_i686_pe` は先頭の 0x400 バイトだけ読む
   - `doc/testing.md` の 93 行を直す
@@ -231,3 +231,5 @@
   - 5.2: 較正: `ServiceError::McpError` の腕を外す → `an_mcp_error_reply_is_refused_on_the_same_link` が赤（`Unreachable` になる）。`spawn` を `self.mcp_port.unwrap_or_else(free_port)` に戻す → `an_env_override_of_the_mcp_port_is_the_port_the_kit_talks_to` が赤。読めない上書きを黙って `.mcp_port` に落とす → `an_unreadable_mcp_port_override_panics_with_the_mcp_port_hint` が赤。猶予の `.min(end)` を外す・生きた子の枝で `ChildExited` を返す → `a_dropped_server_with_a_living_child_is_unreachable_within_the_grace` が赤。`not_found_reason` が相手の名を落とす → `another_server_answering_is_named_in_the_reason` が赤。消す前の grep: `Waits` の使い手は real-run-kit の 9 だけ（`areka-impl-watch` と `doc/impl-watch.md` の当たりは別の語）。範囲の外の `McpError` を受ける 2 か所は書き換えなしで組める
   - 5.2 の残り（6.1 のかけ直しで見る）: `real-run-kit/src/output_tests.rs` の偽の待受行が本物の形（`url=…/api/mcp/v1`）でない
   - 5.3: 較正: 破棄の panic を外す（いつも panic の途中の扱い）→ `dropping_a_run_whose_child_ignores_close_panics_and_keeps_the_evidence` が赤。送り直しを外す → `a_close_sent_before_the_window_exists_is_resent` が赤（締切切れ）。受け取りの後も送り直す → `no_close_is_resent_after_the_acknowledgement` が赤（受け取りの行 2）。29 は直す前の `dropped_listener_is_unreachable` が 61.9 秒で締切切れ（赤）。消す前の grep: 消したテスト `non_empty_handed_folder_is_neither_used_nor_deleted`・`non_empty_folders_up_to_the_limit_fail` は定義 1 だけ、`CREATE_TRIES` は evidence 4・本 spec の文書 5、`create_with` は evidence 4・本 spec 4・completed 1（ほかの 2 は同じ名の別の関数）、`stop_quietly` は close・run 3・本 spec 8・completed 4。範囲の外の、`close()`／`wait_exit()` を呼ばずに生きた子の取っ手を捨てる呼び手は 0（`crates/areka/tests` の 7 ファイル）。新しい端末の行を字面で読む `.ps1`・`.py` は 0。`doc/testing.md` は 71・75・163 と、写しの失敗の行を引く 166 を直した
+  - 5.4: 較正: 「隣が 32bit なら写さない」の早い戻りを戻す → `a_newer_source_replaces_a_stale_i686_neighbour`・`an_env_var_pointing_at_a_non_i686_file_panics_even_when_the_neighbour_is_i686` が赤。元が無いときの隣の戻りを外す → `without_any_source_the_i686_neighbour_is_used` が赤。写す条件を常に真に → 足した `a_neighbour_matching_the_source_is_not_copied_again` が赤（同じ長さと更新時刻なら写さない枝の檻）。消したテスト `dest_already_32bit_is_returned_as_is_without_looking_at_sources`（指摘 11 と逆の振る舞い）: 定義 1・completed の `runtime-module-untangle/test-name-tails-{before,after}.txt` 各 1。`smoke_boot_loop_exit.rs` は書き換えなしで組める
+  - 5.4 の残り（6.1 のかけ直しで見る）: `place` の古い逃げ道（走っている areka が古い写しを握って改名が落ち、それが 32bit なら受け入れる）では古い隣が黙って残る。6.2 で「完了した areka-P0-real-run-mcp-kit の要件 2.1・2.5 を裁定で改めた」旨を記録に書く（設計の表の行）

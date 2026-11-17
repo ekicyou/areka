@@ -125,13 +125,61 @@ fn is_i686_pe_is_false_for_missing_and_short_files() {
 // --- ensure: 置き先 ---
 
 #[test]
-fn dest_already_32bit_is_returned_as_is_without_looking_at_sources() {
+fn an_env_var_pointing_at_a_non_i686_file_panics_even_when_the_neighbour_is_i686() {
     let bed = Bed::new();
     write_pe(&bed.dest(), I386, "dest");
-    // 元を見に行けば環境変数の無い指し先で panic するはず＝見に行かないことの証。
-    let got = bed.ensure(Some(&bed.other("missing.exe")));
+    let env = bed.other("env64.exe");
+    write_pe(&env, AMD64, "env");
+    // 隣が 32bit でも環境変数を必ず確かめる（打ち間違いを黙って見逃さない）。
+    let text = panic_text(|| {
+        bed.ensure(Some(&env));
+    });
+    assert!(text.contains(SPEC.env_var), "{text}");
+    assert!(text.contains(&env.display().to_string()), "{text}");
+    assert_eq!(tag_of(&bed.dest()), "dest");
+}
+
+#[test]
+fn without_any_source_the_i686_neighbour_is_used() {
+    let bed = Bed::new();
+    write_pe(&bed.dest(), I386, "dest");
+    let got = bed.ensure(None);
     assert_eq!(got, bed.dest());
     assert_eq!(tag_of(&got), "dest");
+}
+
+#[test]
+fn a_newer_source_replaces_a_stale_i686_neighbour() {
+    let bed = Bed::new();
+    // 長さは同じ・更新時刻だけが古い隣（前の回に置いた写し）。
+    write_pe(&bed.dest(), I386, "old");
+    set_mtime(&bed.dest(), std::time::SystemTime::UNIX_EPOCH);
+    write_pe(&bed.debug(), I386, "new");
+    let got = bed.ensure(None);
+    assert_eq!(tag_of(&got), "new");
+    no_tmp_left(&bed.dest_dir);
+}
+
+#[test]
+fn a_neighbour_matching_the_source_is_not_copied_again() {
+    let bed = Bed::new();
+    write_pe(&bed.debug(), I386, "debug");
+    bed.ensure(None);
+    // 長さと更新時刻を保ったまま隣の札だけ替える。2 回目に写せば札が戻る。
+    let mtime = std::fs::metadata(bed.dest()).unwrap().modified().unwrap();
+    write_pe(&bed.dest(), I386, "debuX");
+    set_mtime(&bed.dest(), mtime);
+    bed.ensure(None);
+    assert_eq!(tag_of(&bed.dest()), "debuX");
+}
+
+fn set_mtime(path: &Path, t: std::time::SystemTime) {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
 }
 
 #[test]
