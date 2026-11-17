@@ -1,33 +1,25 @@
-//! host-32 先進坑: 親 x64 example エントリ（最小スケルトン）。
+//! host-32 先進坑: x64 親の入口。
 //!
-//! `cargo run -p pilot --example shiori-host-32`（x64）で起動する親プロセス側の
-//! プレースホルダ。サブフォルダ `main.rs` ゆえ Cargo の auto-discovery で
-//! example 名 `shiori-host-32` として解決される（要件 7.1）。
-//!
-//! 本タスク（1.1）は scaffolding のみ。helper 起動・WM_COPYDATA IPC・SHIORI/3.0
-//! 組立/parse などの実体は後続タスクで実装する（design.md「File Structure Plan」参照）。
+//! `cargo run -p pilot --example shiori-host-32`（x64）で起こす。i686 helper を起こし、
+//! WM_COPYDATA で OnBoot を 1 往復させて Value を受け（go 基準(1)）、同じ helper を N 秒
+//! 生かしてから UNLOAD で clean unload させる（go 基準(2)）。`--selftest-errors` では
+//! 異常系 err(1)・err(2) を観測する。
 //! 葉ノード隔離（命綱・要件 7.2）: コードは本フォルダ配下のみ。production クレートへの
 //! inbound 依存を作らない。
 
-// IpcChannel の WM_COPYDATA プロトコルを親/helper で共有する単一ソース
-// （design.md §150–153 / §168・物理共有は #[path] 取り込みが標準）。
-// 本タスク（1.2）では規約モジュールをコンパイルに取り込むところまで（実走は後続タスク）。
+// WM_COPYDATA の送りの決まり（親と helper が #[path] で同じファイルを取り込む）。
 #[path = "ipc.rs"]
 mod ipc;
 
-// SHIORI/3.0 ワイヤコーデック（x64 親側に閉じる・helper からは参照しない）。
-// design.md Shiori3Codec §376–411 / research.md §5.4。本タスク（2.1）では
-// 親ターゲットへ取り込むところまで（ParentDriver からの実呼び出しは後続タスク）。
+// SHIORI/3.0 の組立と Value の取り出し（x64 親に閉じる）。
 #[path = "shiori3.rs"]
 mod shiori3;
 
-// ProcessHost: helper プロセスの起動と生存監視（design.md §285–327・x64 親に閉じる）。
-// helper（i686）からは取り込まない（プロセス分離・要件 1.5）。本タスク（2.2）で実装。
+// helper プロセスの起動と生存監視（x64 親に閉じる・要件 1.5）。
 #[path = "process_host.rs"]
 mod process_host;
 
-// ParentMessageWindow: x64 親の message-only 窓（HELLO ハンドシェイク＋RESPONSE 再入受領）。
-// ParentDriver 境界の x64 側窓（design.md §176–212）。helper からは参照しない。本タスク（4.1）。
+// 親の message-only 窓（HELLO の受け・RESPONSE の再入受領・1 往復の送り）。
 #[path = "parent_window.rs"]
 mod parent_window;
 
@@ -66,16 +58,12 @@ fn helper_exe_from_process() -> Option<PathBuf> {
 }
 
 fn main() {
-    // 共有プロトコル/コーデックが親ターゲットへ取り込まれていることの最小確認（design.md §372/§376）。
-    let _ = ipc::DEFAULT_TIMEOUT;
-    let _ = shiori3::module_loaded();
-
     // ghostdir は SHIORI `load` 対象（design.md §320）。検体の窓口から**絶対パス**で得る
     // （実走は絶対パスが定石＝相対だと pasta.dll の LOAD が 0x8007007E で落ちる）。
     let ghostdir = sample_support::emo2_ghost_master();
     let ghostdir = ghostdir.as_path();
 
-    // --- 異常系セルフテストモード（task 5.2・design.md §521 IPC / §528 helper 異常終了）---
+    // --- 異常系セルフテストモード（design.md §521 IPC / §528 helper 異常終了）---
     // `--selftest-errors` で 2 つの異常系を観測する:
     //   (1) IPC タイムアウト（要件 2.3）: 無応答 target へ send_copydata が bounded に Timeout を返す。
     //   (2) helper 強制終了検出（要件 1.4/2.4）: 実 i686 helper を kill し親が異常終了を検出。
@@ -112,7 +100,7 @@ fn main() {
     //   [go 基準(1)] setup（helper 起動＋HELLO＋OnBoot 1 往復）→ Value 受領・確認。
     //   [go 基準(2)] 同一 helper を N 秒生存させ（poll_exit_kind で生存監視）→ UNLOAD → clean unload
     //               → 終了コード 0 を親が観測（design.md §230: 終了コード 0 ＋親側観測ログを一次記録）。
-    // UNLOAD は go(1) では送らず、go(2) の生存窓の**後**に送る（設計変更点・§221「N 秒後」）。
+    // UNLOAD は go(1) では送らず、go(2) の生存窓の**後**に送る（§221「N 秒後」）。
     match drive(&helper_exe, ghostdir) {
         Ok(()) => std::process::exit(0),
         Err(e) => {
@@ -153,7 +141,7 @@ fn drive(helper_exe: &Path, ghostdir: &Path) -> Result<(), String> {
         request_roundtrip.as_millis()
     );
     println!(
-        "go(2): survived {:.2}s (poll={} 回 alive / probe: 生存後 REQUEST {}) → clean unload exit={} kind={:?} [PASS]",
+        "go(2): survived {:.2}s (poll={} 回 alive / probe: 生存後 REQUEST {}) → clean unload kind={:?} [PASS]",
         go2.survived.as_secs_f64(),
         go2.polls,
         if go2.post_survival_response_bytes.is_some() {
@@ -161,7 +149,6 @@ fn drive(helper_exe: &Path, ghostdir: &Path) -> Result<(), String> {
         } else {
             "応答なし"
         },
-        go2.exit_code,
         go2.exit_kind,
     );
     println!(
@@ -185,9 +172,7 @@ struct Go2Record {
     /// 生存後の追加 REQUEST に helper が返した応答バイト数（None=応答なし）。
     /// Some ＝ pasta の actor ループが生存後も稼働継続していることの親可視な証拠。
     post_survival_response_bytes: Option<usize>,
-    /// clean unload で親が観測した終了コード。
-    exit_code: i32,
-    /// 終了コードの分類（Clean を期待）。
+    /// 終わり方の分類（Clean＝終了コード 0 を期待）。
     exit_kind: ExitKind,
 }
 
@@ -216,7 +201,7 @@ struct HelperSession<'p> {
 
 /// go 基準(1) の全体駆動（design.md §172–204）。成功で「生きた helper セッション」を返す。
 ///
-/// **設計変更点（task 5.1）**: UNLOAD はここでは送らない。go 基準(2) の生存窓の**後**に送る
+/// UNLOAD はここでは送らない。go 基準(2) の生存窓の**後**に送る
 /// （design.md §221「N 秒後」）。ゆえに戻り値は Value 文字列ではなく、UNLOAD 未送出のまま
 /// go(2) へ引き継ぐ `HelperSession`（helper 稼働中・handle 保持）とする。
 ///
@@ -262,26 +247,40 @@ fn drive_go_criterion_1<'p>(
     println!("[go(1)] HWND ハンドシェイク完了: helper hwnd(u32)={helper_hwnd_u32:#010x}");
 
     // d. OnBoot SHIORI/3.0 リクエストを組み立てる（design.md §189・要件 4.1）。
-    let onboot = shiori3::build_onboot(ghostdir);
+    let onboot = shiori3::build_onboot();
     println!("[go(1)] OnBoot 組立 OK（{} バイト）", onboot.len());
 
     // e. REQUEST 送出 → RESPONSE を受け皿セルで再入受領（design.md §209・要件 2.2/4.3）。
     //    親はここで SendMessageTimeout にブロックし、待機中に helper の RESPONSE を
     //    親 WndProc が再入受領して受け皿セルへ格納する（デッドロック回避・§210）。
-    //    ★ 観測記録（task 6.1・design.md §492/§495・research.md §6）:
+    //    ★ 観測記録（design.md §492/§495・research.md §6）:
     //      `parent.request` 直前〜直後の実時間を計測する。ここは SendMessageTimeout で
     //      helper の RESPONSE 再入受領まで**親が同期ブロック**する区間そのもの。非自明な
     //      往復時間の後に**同一同期呼び出し内で**有効な Value が返る＝親は pasta の応答を
     //      待った（GET=block-on-reply）ことの実証（fire-and-forget ではない）。
     let req_started = Instant::now();
-    let response = parent
-        .request(helper_hwnd, &onboot, REQUEST_TIMEOUT)
-        .map_err(|e| format!("OnBoot 1 往復の送りに失敗: {e:?}"))?
-        .ok_or_else(|| {
-            "OnBoot は送れたが RESPONSE が受け皿に届かなかった（再入受領が i686↔x64 で不成立の可能性・\
-             design.md §210 Revalidation Trigger＝named pipe 後退を人間判断）"
-                .to_string()
-        })?;
+    let response = match parent.request(helper_hwnd, &onboot, REQUEST_TIMEOUT) {
+        Ok(Some(r)) => r,
+        Err(ipc::IpcError::Timeout) => {
+            return Err(format!(
+                "OnBoot の送りが {REQUEST_TIMEOUT:?} で時間切れ: helper が時間内に REQUEST を捌かなかった\
+                 （helper の窓が詰まっている）"
+            ));
+        }
+        Err(ipc::IpcError::SendFailed(code)) => {
+            return Err(format!(
+                "OnBoot を送れなかった（Win32 エラー {code}）: HELLO の HWND が違うか helper の窓が無い"
+            ));
+        }
+        Ok(None) => {
+            return Err(
+                "OnBoot は送れたが RESPONSE が受け皿に届かなかった: helper の標準エラーを見る\
+                 （pasta の読み込みや request の失敗）。それでなければ再入受領が i686↔x64 で不成立\
+                 （design.md §210 Revalidation Trigger＝named pipe 後退を人間判断）"
+                    .to_string(),
+            );
+        }
+    };
     let request_roundtrip = req_started.elapsed();
     println!("[go(1)] RESPONSE 再入受領 OK（{} バイト）", response.len());
     println!(
@@ -296,7 +295,7 @@ fn drive_go_criterion_1<'p>(
         return Err("Value: が空（起動挨拶さくらスクリプトが空）".to_string());
     }
 
-    // UNLOAD はここでは送らない（設計変更点・task 5.1）。go(2) の生存窓の後に送る（§221）。
+    // UNLOAD はここでは送らない。go(2) の生存窓の後に送る（§221）。
     // helper 稼働中のまま session を go(2) へ引き継ぐ。
     let value_bytes = value.len();
     Ok(HelperSession {
@@ -355,7 +354,7 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
     );
 
     // 任意: 生存後もループが REQUEST を捌けることを示す（bounded・失敗しても致命ではない）。
-    //   ★ 観測記録（task 6.1）: これが返せば「go(1) と go(2) 生存後」の**2 応答**が揃う。
+    //   ★ 観測記録: これが返せば「go(1) と go(2) 生存後」の**2 応答**が揃う。
     //     helper 内の pasta actor ループが生存窓を跨いで稼働し続けたことの親可視な代理証拠
     //     （x64 親は helper 内スレッド数を直接観測できないため・design.md §230）。
     let post_survival_response_bytes = mid_window_probe(session).ok();
@@ -370,9 +369,8 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
     ) {
         Ok(()) => println!("[go(2)] UNLOAD 送出 OK（N 秒生存後・clean unload 指示）"),
         Err(e) => {
-            // UNLOAD 送出失敗は致命ではない（helper は backstop で自律停止する）が、観測して記録。
             eprintln!(
-                "[go(2)] UNLOAD 送出失敗（helper は backstop 上限で自律停止・観測のみ）: {e:?}"
+                "[go(2)] UNLOAD 送出失敗: {e:?}（helper は上限で抜けて終了コード 4 になり、go 基準(2) は不成立になる）"
             );
         }
     }
@@ -395,7 +393,6 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
                     survived,
                     polls,
                     post_survival_response_bytes,
-                    exit_code: 0, // Clean ＝終了コード 0
                     exit_kind: kind,
                 })
             } else {
@@ -409,7 +406,7 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
 }
 
 // ============================================================================
-// 異常系セルフテスト（task 5.2・design.md §521 IPC / §528 helper 異常終了）
+// 異常系セルフテスト（design.md §521 IPC / §528 helper 異常終了）
 //
 // 2 つの異常系を x64 親側で観測する。BOTH must NOT hang（bounded）:
 //   err(1) IPC タイムアウト（要件 2.3・design.md §340/§525）
@@ -423,10 +420,12 @@ const ERR_WEDGE_SLEEP: Duration = Duration::from_secs(3);
 /// err(1) の Timeout 判定の上限マージン（bounded ＝ ハングしない・§340）。
 /// SendMessageTimeout(500ms) が返るまでを寛容に見積もる。wedge(3s) より十分短ければ合格。
 const ERR_TIMEOUT_UPPER_BOUND: Duration = Duration::from_millis(1500);
+/// err(1) の Timeout 判定の下限（`ERR_IPC_TIMEOUT` − 100 ms）。これより早い Timeout は上限を守った証拠にならない。
+const ERR_TIMEOUT_LOWER_BOUND: Duration = Duration::from_millis(400);
 /// err(2) で helper の HELLO を待つ上限（起動確認・bounded）。
 const ERR_HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// 異常系 2 種を続けて観測する（task 5.2）。両方 PASS で `Ok(())`。
+/// 異常系 2 種を続けて観測する。両方 PASS で `Ok(())`。
 fn drive_selftest_errors(ghostdir: &Path) -> Result<(), String> {
     drive_err_ipc_timeout()?;
     drive_err_helper_abnormal_exit(ghostdir)?;
@@ -441,7 +440,7 @@ fn drive_selftest_errors(ghostdir: &Path) -> Result<(), String> {
 /// **タイムアウト時間で**返ること（wedge の 3s を待たずに abort＝ハングしない）を観測する。
 ///
 /// SendMessageTimeout は**別スレッド**宛なら caller を実際にブロックし `timeout_ms` を honor する
-/// （同一スレッド宛は deadlock ゆえ別スレッドの wedged 窓を用いる・task 指示）。SMTO_ABORTIFHUNG
+/// （同一スレッド宛は deadlock ゆえ別スレッドの wedged 窓を用いる）。SMTO_ABORTIFHUNG
 /// ＋ timeout_ms が wedge を on-time に打ち切る（ipc.rs §155–206）。
 fn drive_err_ipc_timeout() -> Result<(), String> {
     use std::sync::mpsc;
@@ -482,8 +481,8 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
         let hwnd_u32 = ipc::hwnd_to_u32(window.hwnd());
         let _ = hwnd_tx.send(hwnd_u32);
 
-        // stop まで軽くメッセージループを回す（WndProc が呼ばれるよう窓スレッドで pump）。
-        // ハートビートで GetMessage を起こし、stop フラグで抜ける（bounded）。
+        // stop まで窓スレッドでメッセージループを回す（WndProc が呼ばれるよう）。
+        // main が stop を立ててから 1 回投函する WM_NULL で起き、stop を見て抜ける。
         wintf_winmsg_executor::MessageLoop::run(|msg_loop, _msg| {
             if stop_thread.load(std::sync::atomic::Ordering::Relaxed) {
                 msg_loop.quit();
@@ -502,7 +501,7 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
         "[err(1)] wedged 窓（別スレッド・REQUEST で {ERR_WEDGE_SLEEP:?} ブロック）: hwnd(u32)={wedge_hwnd_u32:#010x}"
     );
 
-    // wedged 窓のループが回り始めるまで軽く待つ（heartbeat で WndProc が呼ばれる状態に）。
+    // wedged 窓のループが回り始めるまで軽く待つ。
     // ここは短い固定待ち（bounded）で十分。
     std::thread::sleep(Duration::from_millis(100));
 
@@ -522,8 +521,8 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
     );
     let elapsed = started.elapsed();
 
-    // wedge スレッドを停止させる（bounded・後始末）。stop → heartbeat 相当で抜ける…が
-    // MessageLoop はメッセージ駆動ゆえ、確実に起こすため自窓へ PostMessage を撃つ。
+    // wedge スレッドを停止させる（後始末）。MessageLoop はメッセージ駆動ゆえ、stop を立てた後に
+    // wedged 窓へ 1 回 PostMessage を撃って起こす。
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     unsafe {
         let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(
@@ -535,12 +534,12 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
     }
     let _ = wedge.join();
 
-    // 判定: Err(Timeout) かつ elapsed が bounded（timeout 近傍・wedge の 3s より十分短い）。
+    // 判定: Err(Timeout) かつ 下限 ≦ elapsed ≦ 上限（timeout 近傍・wedge の 3s より十分短い）。
     match result {
         Err(ipc::IpcError::Timeout) => {
-            if elapsed >= ERR_WEDGE_SLEEP {
+            if elapsed < ERR_TIMEOUT_LOWER_BOUND {
                 return Err(format!(
-                    "err(1) 不成立: Timeout は返ったが elapsed={elapsed:?} が wedge({ERR_WEDGE_SLEEP:?}) 以上＝ハングした疑い"
+                    "err(1) 不成立: Timeout は返ったが elapsed={elapsed:?} が下限 {ERR_TIMEOUT_LOWER_BOUND:?} 未満（上限まで待たずに返った）"
                 ));
             }
             if elapsed > ERR_TIMEOUT_UPPER_BOUND {
@@ -643,7 +642,7 @@ fn drive_err_helper_abnormal_exit(ghostdir: &Path) -> Result<(), String> {
 /// 生存窓の後、helper のメッセージループがまだ REQUEST を捌けることを示す任意プローブ（bounded）。
 /// 失敗しても go(2) は致命扱いしない（生存＋clean unload が本質・これは「まだ動く」補足観測）。
 fn mid_window_probe(session: &HelperSession) -> Result<usize, ()> {
-    let onboot = shiori3::build_onboot(std::path::Path::new(""));
+    let onboot = shiori3::build_onboot();
     match session
         .parent
         .request(session.helper_hwnd, &onboot, REQUEST_TIMEOUT)
