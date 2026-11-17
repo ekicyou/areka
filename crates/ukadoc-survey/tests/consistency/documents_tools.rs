@@ -1,5 +1,5 @@
-//! 母数の器（[`Floors`]）と、実データの写しを 1 か所だけ壊す道具 4 つの較正
-//! （要件 11.3・11.4・設計「入口 / `tests/consistency`」）。
+//! 母数の器（[`Floors`]）と、実データの写しの狙った綴り・1 つの欄だけを壊す道具
+//! 4 つの較正（要件 11.3・11.4・設計「入口 / `tests/consistency`」）。
 //!
 //! 道具そのものは兄弟の `documents.rs` にあり、そこにはテストの本体を 1 つも置かない。
 //! 母数の下限そのものの主張は `documents_non_vacuity.rs` にある。2 つに割ってあるのは
@@ -12,8 +12,8 @@
 //!   主張として受け付けない。
 //! - spec の一覧の絞り（[`spec_dir_names`]）の例——brief の無い名前は赤にせず落とす。
 //! - 引用 id の取り出し（[`cited_ids`]）の較正。
-//! - 写しを 1 か所だけ壊す道具 4 つの較正——狙った 1 か所だけが変わり、狙いが無ければ
-//!   止まる。道具は `&str` を受けて `String` を返すだけで、型の上で repo のファイルには
+//! - 写しの狙った綴り・1 つの欄だけを壊す道具 4 つの較正——狙ったところだけが変わり、
+//!   狙いが無ければ止まる。道具は `&str` を受けて `String` を返すだけで、型の上で repo のファイルには
 //!   触れない。
 
 use std::collections::BTreeSet;
@@ -28,7 +28,7 @@ use super::documents::{
 /// 母数の器が、下限を下回った行を**すべて**名指すこと。
 #[test]
 fn the_floor_container_reports_every_row_that_falls_short() {
-    let mut floors = Floors::new();
+    let mut floors = Floors::default();
     floors
         .at_least("足りている数", 5, 1)
         .at_least("足りない数", 0, 1)
@@ -53,7 +53,7 @@ fn the_floor_container_reports_every_row_that_falls_short() {
 /// 母数の器が、下限 0（＝何も主張していない）を違反として扱うこと。
 #[test]
 fn the_floor_container_refuses_a_floor_of_zero() {
-    let mut floors = Floors::new();
+    let mut floors = Floors::default();
     floors.at_least("母数 0 でも通る下限", 1_000, 0);
 
     let short = floors.short();
@@ -67,7 +67,7 @@ fn the_floor_container_refuses_a_floor_of_zero() {
 /// 満たしている器は止まらないこと（較正の反対側）。実数が下限ちょうどでも緑である。
 #[test]
 fn the_floor_container_stays_quiet_when_every_row_is_met() {
-    let mut floors = Floors::new();
+    let mut floors = Floors::default();
     floors
         .at_least("足りている数", 2, 1)
         .at_least("ちょうど", 1, 1);

@@ -1,8 +1,8 @@
-//! 実データの写しを 1 か所だけ壊す道具（設計 File Structure Plan）。
+//! 実データの壊してよい写しと、壊した結果の見方の道具（設計 File Structure Plan）。
 //!
 //! テストの本体はここに 1 つも無い。壊す相手（[`Perturbed`]）と、壊した結果の見方
 //! （[`expect_exactly`]）と、摂動で持ち込む綴りの定数だけを置く。使う側は
-//! `consistency/checks.rs` の ⑶ の一群である。
+//! `consistency/checks.rs` と `consistency/documents_checks.rs` の摂動である。
 //!
 //! # repo のファイルには 1 バイトも触れない
 //!
@@ -26,7 +26,7 @@ use super::RepoData;
 /// # 錨は「どの台帳からも指されていない id」でなければならない
 ///
 /// 錨を使う摂動のいくつかは「所見が**ちょうど** 1 件」を主張する（`checks.rs` の
-/// `a_ledger_id_that_left_the_catalog_turns_red` と `the_check_survives_lines_moving`）。
+/// `a_ledger_id_that_left_the_catalog_turns_red`）。
 /// 錨をカタログから抜くと、**その id を関連の相手に書いている台帳の行がもう 1 件
 /// 赤くなる**（`LinkEndpointMissing`）ので、指されている id を錨にすると期待が 1 件
 /// では足りなくなる。実際、以前の錨 `ukadoc:list_shiori_event:OnBoot:1` は
@@ -124,11 +124,10 @@ impl<'a> Perturbed<'a> {
 
     /// その台帳の項目 1 つ（写し）。
     pub(super) fn entry_mut(&mut self, domain: Domain, id: &EntryId) -> &mut LedgerEntry {
-        let key = id.clone();
         self.ledger_mut(domain)
             .entries
-            .get_mut(&key)
-            .unwrap_or_else(|| panic!("{} の台帳に {} が無い", domain.as_key(), key.as_str()))
+            .get_mut(id)
+            .unwrap_or_else(|| panic!("{} の台帳に {} が無い", domain.as_key(), id.as_str()))
     }
 }
 

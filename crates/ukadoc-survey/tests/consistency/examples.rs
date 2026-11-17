@@ -29,8 +29,8 @@
 //!
 //! # 読むだけ
 //!
-//! ファイルも一時ディレクトリも作らない（設計 File Structure Plan）。読むのは要件
-//! 文書と README とカタログと台帳 4 本だけである。
+//! ファイルも一時ディレクトリも作らない（設計 File Structure Plan）。読むのは
+//! `RepoData` の一式と要件文書・README である。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -276,7 +276,7 @@ fn every_link_target_in_the_requirements_example_exists_in_the_catalog() {
 /// 取り出しの較正——実在しない id を混ぜたら、それが名指しで挙がる。
 ///
 /// これが無いと、[`toml_blocks`] や [`quoted_ids`] が壊れて 0 件を返すだけで、
-/// 上の 4 本が「1 件も違反が無い」と言って緑になる。件数の下限だけでは、下限を
+/// 上の釘付けのテストが「1 件も違反が無い」と言って緑になる。件数の下限だけでは、下限を
 /// 満たしたうえで別の id を取りこぼす壊れ方を捕まえられない。
 #[test]
 fn the_id_scan_reports_an_id_that_the_catalog_does_not_have() {

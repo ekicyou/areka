@@ -46,7 +46,7 @@
 //! 束の一覧は 2 種類ある。`report/summary.md`「ドメインを跨いで繋がった束」は
 //! **3 列**（束 id・跨ぐドメイン・構成 id）で、ドメイン別報告 4 本「ドメイン内で関連が
 //! 閉じている束」は **2 列**（束 id・構成 id）である。列数を決め打ちすると片方を丸ごと
-//! 取り落とし、取り落とした側の束を引用した文書が「報告に無い束 id」で偽の赤になる
+//! 取り落とし、取り落とした側の束を引用した文書が「報告に無い束 id」で偽の赤になる。
 //!
 //! さらに、ドメイン別報告には**別名の一覧**という別の表があり、そちらの行も
 //! `| ukadoc:` で始まる。行の綴りだけで拾うと別名が束 id の一覧に紛れ込み、
@@ -88,6 +88,17 @@ const DEGRADED_ROW: &str = "縮退";
 /// 実在パスは `doc/ukadoc-coverage/report/summary.md` である。この綴りが 3 文書の
 /// どこかにあれば、読み手は存在しないファイルを探しに行く。
 const STALE_REPORT_SPELLING: &str = "report.md";
+
+/// 古い報告名がファイル名として現れるか。直前の 1 文字が ASCII の英数字・`-`・`_`・
+/// `.` のときは数えない（`gap-report.md` のような別のファイル名の一部）。それ以外
+/// （行頭・`/`・逆引用符・空白・全角の括弧など）は数える。
+fn names_stale_report(text: &str) -> bool {
+    text.match_indices(STALE_REPORT_SPELLING).any(|(at, _)| {
+        text[..at].chars().next_back().is_none_or(|before| {
+            !(before.is_ascii_alphanumeric() || matches!(before, '-' | '_' | '.'))
+        })
+    })
+}
 
 /// 報告の束の一覧の表の見出しの始まり（列数に依らない目印）。
 const BUNDLE_TABLE_HEADER: &str = "| 束 id |";
@@ -279,7 +290,7 @@ fn citation_findings(files: &[(&'static str, &str)], catalog: &Catalog) -> Vec<S
                 "{name}: id {token} が地の文に裸で書かれている（引用符か逆引用符で囲むこと・設計 D-1）"
             ));
         }
-        if text.contains(STALE_REPORT_SPELLING) {
+        if names_stale_report(text) {
             findings.push(format!(
                 "{name}: 実在しない報告のファイル名 {STALE_REPORT_SPELLING} が書かれている（実在パスは doc/ukadoc-coverage/report/summary.md・要件 1.2）"
             ));
@@ -334,7 +345,7 @@ fn every_machine_bundle_id_cited_by_the_three_documents_is_listed_in_the_reports
 }
 
 // ---------------------------------------------------------------------------
-// 写しを 1 か所だけ壊すと赤（要件 11.3）
+// 写しの狙った綴り・1 つの欄だけを壊すと赤（要件 11.3）
 // ---------------------------------------------------------------------------
 
 /// ⑴ 写しの id を 1 文字変えると、**ちょうどその 1 件**が名指しで赤になる。
@@ -465,33 +476,71 @@ fn a_single_bare_id_turns_the_citation_check_red() {
 }
 
 /// ⑴ の「`report.md` の綴りは 0 件」に、1 件混ぜると赤になる腕を付ける（要件 1.2）。
+///
+/// パスの後ろ・逆引用符の中に加えて、全角の括弧や鉤括弧の直後でも数える。
 #[test]
 fn the_stale_report_spelling_turns_the_citation_check_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let smuggled = format!(
-        "{}\n\n根拠は `doc/ukadoc-coverage/{STALE_REPORT_SPELLING}` にある。\n",
-        documents.briefing_text
-    );
+    for spelling in [
+        format!("`doc/ukadoc-coverage/{STALE_REPORT_SPELLING}`"),
+        format!("（{STALE_REPORT_SPELLING}）"),
+        format!("「{STALE_REPORT_SPELLING}」"),
+    ] {
+        let smuggled = format!(
+            "{}\n\n根拠は {spelling} にある。\n",
+            documents.briefing_text
+        );
 
-    let files = [
-        (LINKAGE_MD, documents.linkage_text.as_str()),
-        (BRIEFING_MD, smuggled.as_str()),
-        (ROADMAP_MD, documents.roadmap_text.as_str()),
-    ];
-    let findings = citation_findings(&files, &repo.catalog);
+        let files = [
+            (LINKAGE_MD, documents.linkage_text.as_str()),
+            (BRIEFING_MD, smuggled.as_str()),
+            (ROADMAP_MD, documents.roadmap_text.as_str()),
+        ];
+        let findings = citation_findings(&files, &repo.catalog);
 
-    assert_eq!(
-        findings.len(),
-        1,
-        "古い報告名を 1 件混ぜたのに赤が 1 件でない:\n{}",
-        findings.join("\n")
-    );
-    assert!(
-        findings[0].contains(BRIEFING_MD) && findings[0].contains(STALE_REPORT_SPELLING),
-        "失敗の本文がファイル名と綴りを名指していない: {}",
-        findings[0]
-    );
+        assert_eq!(
+            findings.len(),
+            1,
+            "古い報告名を {spelling} の形で 1 件混ぜたのに赤が 1 件でない:\n{}",
+            findings.join("\n")
+        );
+        assert!(
+            findings[0].contains(BRIEFING_MD) && findings[0].contains(STALE_REPORT_SPELLING),
+            "失敗の本文がファイル名と綴りを名指していない: {}",
+            findings[0]
+        );
+    }
+}
+
+/// ⑴ の古い報告名は**ファイル名として**現れたときだけ赤にする——直前が英数字・`-`・
+/// `_`・`.` のとき（`gap-report.md` のような別のファイル名の一部）は赤くならない
+/// （要件 1.2）。
+#[test]
+fn a_file_name_that_merely_ends_in_report_md_keeps_the_citation_check_green() {
+    let repo = RepoData::load();
+    let documents = Documents::load();
+    for spelling in [
+        "`gap-report.md`",
+        "`gap_report.md`",
+        "`old.report.md`",
+        "`myreport.md`",
+    ] {
+        let smuggled = format!(
+            "{}\n\n根拠は {spelling} にある。\n",
+            documents.briefing_text
+        );
+
+        let files = [
+            (LINKAGE_MD, documents.linkage_text.as_str()),
+            (BRIEFING_MD, smuggled.as_str()),
+            (ROADMAP_MD, documents.roadmap_text.as_str()),
+        ];
+        assert_no_findings(
+            &format!("別のファイル名の一部 {spelling} を古い報告名として数えた"),
+            &citation_findings(&files, &repo.catalog),
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

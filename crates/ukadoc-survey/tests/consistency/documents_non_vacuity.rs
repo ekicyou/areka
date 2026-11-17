@@ -7,7 +7,7 @@
 //!   届いていること。
 //!
 //! - 判定 ⑴ ⑵ の母数の下限（`linkage.md` の引用 id 数・報告 5 本から読めた機械の
-//!   束 id の数・3 文書が引用した機械の束 id の数）。
+//!   束 id の数・`linkage.md` が引用した機械の束 id の数）。
 //! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）。
 //! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・`[[barrier]]` の行数・段階 A の `items`）。
 //! - 判定 ⑸ の母数の下限（`[[spec]]` の行数・`[[owner_completed]]` の行数・
@@ -98,7 +98,7 @@ const MIN_BRIEFING_CITED_IDS: usize = 100;
 /// `links` の補修で束が合流すれば種類が減りうるからである。
 const MIN_REPORT_BUNDLE_IDS: usize = 100;
 
-/// 判定 ⑵ の母数——3 文書が引用した機械の束 id の数の下限。
+/// 判定 ⑵ の母数——`linkage.md` が引用した機械の束 id の数の下限。
 ///
 /// 束を分けると増減するので、設計「判定の一覧」⑵ に合わせて「1 件以上」だけを
 /// 主張する。
@@ -162,7 +162,7 @@ fn the_three_documents_and_the_summary_are_readable() {
     let repo = RepoData::load();
     let documents = Documents::load();
 
-    Floors::new()
+    Floors::default()
         .at_least(
             "linkage.md の本文",
             documents.linkage_text.chars().count(),
@@ -218,7 +218,7 @@ fn the_three_documents_and_the_summary_are_readable() {
 fn the_spec_directory_listing_excludes_this_spec_and_completed() {
     let documents = Documents::load();
 
-    Floors::new()
+    Floors::default()
         .at_least(
             ".kiro/specs 直下の brief 持ち",
             documents.spec_dirs.len(),
@@ -264,7 +264,7 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
     let known = report_bundle_ids(repo);
     let machine = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
 
-    Floors::new()
+    Floors::default()
         .at_least(
             "判定 ⑴: linkage.md の引用 id",
             cited.len(),
@@ -281,7 +281,7 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
             MIN_REPORT_BUNDLE_IDS,
         )
         .at_least(
-            "判定 ⑵: 3 文書が引用した機械の束 id",
+            "判定 ⑵: linkage.md が引用した機械の束 id",
             machine.len(),
             MIN_CITED_BUNDLE_IDS,
         )
@@ -303,7 +303,7 @@ fn the_attribution_check_has_something_to_judge() {
         .filter(|bundle| !bundle.single)
         .count();
 
-    Floors::new()
+    Floors::default()
         .at_least("判定 ⑶: linkage.md の名前付き束", named, MIN_NAMED_BUNDLES)
         .at_least(
             "判定 ⑶: 人手で足した構成 id（[tally].by_hand）",
@@ -322,7 +322,7 @@ fn the_attribution_check_has_something_to_judge() {
 fn the_stage_and_rank_check_has_something_to_judge() {
     let documents = Documents::load();
 
-    Floors::new()
+    Floors::default()
         .at_least(
             "判定 ⑷: briefing.md の [[rank]] の行",
             documents.briefing.ranks.len(),
@@ -356,7 +356,7 @@ fn the_stage_and_rank_check_has_something_to_judge() {
 fn the_spec_table_check_has_something_to_judge() {
     let documents = Documents::load();
 
-    Floors::new()
+    Floors::default()
         .at_least(
             "判定 ⑸: roadmap-draft.md の [[spec]] の行",
             documents.roadmap.specs.len(),
@@ -385,7 +385,7 @@ fn the_freshness_check_has_something_to_judge() {
     let repo = RepoData::load();
     let rendered = render_summary(&repo.catalog, &repo.ledgers, &THEMES);
 
-    Floors::new()
+    Floors::default()
         .at_least(
             "判定 ⑹: 作り直した全体報告の本文",
             rendered.chars().count(),

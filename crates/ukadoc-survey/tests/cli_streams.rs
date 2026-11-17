@@ -1,9 +1,9 @@
 //! 実行ファイルの入口が「どの流れへ何を出し、どの終了コードで終わるか」を守る
 //! （設計「入口 / cli」の 2 つ目の箇条書き・「Error Handling / 見張り」・要件 6.12）。
 //!
-//! 在中テストからは `cli::run` の戻り値までしか見えない。**標準出力と標準エラーの
-//! 選び分け**と、**戻り値を終了コードへ写す対応表**は `main.rs` の 3 行にあり、
-//! 実行ファイルを起こして初めて観測できる。どちらも壊しても在中テストは全部緑のまま
+//! 在中テストからは `cli::run` の戻り値までしか見えない。**標準エラーへの写し**と
+//! **戻り値を終了コードへ写す対応表**は `main.rs` にあり（標準出力へ書くのは `cli` の
+//! 側）、実行ファイルを起こして初めて観測できる。どちらも壊しても在中テストは全部緑のまま
 //! 通る——部品を釘付けしても入口の配線は別に守る必要がある。
 //!
 //! # ここへ足してよい事例の決まり
@@ -35,8 +35,7 @@ const USAGE_FIRST_LINE: &str = "使い方: cargo run -p ukadoc-survey -- <副手
 /// スナップショットの場所を指す環境変数（要件 9.7・`AREKA_` 冠）。
 const SNAPSHOT_ENV: &str = "AREKA_UKADOC_SNAPSHOT";
 
-/// 実在しない場所の固定の綴り。一時ディレクトリを引かないので、
-/// ワークスペースの一時パス検査（`log-capture-kit`）の数え上げを揺らさない。
+/// 実在しない場所の固定の綴り（読むだけなので一時ディレクトリは作らない）。
 const MISSING_SNAPSHOT: &str = "/nonexistent/ukadoc-survey-review/index.json";
 
 /// 実行ファイルを 1 度起こして、両方の流れと終了コードを受け取る。
@@ -112,9 +111,7 @@ fn candidates_writes_its_result_to_stdout_and_exits_zero() {
     assert_eq!(
         output.status.code(),
         Some(0),
-        "成功なのに終了コードが 0 でない
-標準出力: {stdout}
-標準エラー: {stderr}"
+        "成功なのに終了コードが 0 でない\n標準出力: {stdout}\n標準エラー: {stderr}"
     );
     assert!(
         !stdout.is_empty(),
@@ -214,9 +211,7 @@ fn catalog_with_a_missing_snapshot_fails_quietly_and_leaves_the_tree_untouched()
     assert_eq!(
         output.status.code(),
         Some(1),
-        "失敗なのに終了コードが 1 でない
-標準出力: {stdout}
-標準エラー: {stderr}"
+        "失敗なのに終了コードが 1 でない\n標準出力: {stdout}\n標準エラー: {stderr}"
     );
     assert_eq!(stdout, "", "失敗の本文が標準出力へ出ている: {stdout}");
     assert!(

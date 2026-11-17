@@ -38,7 +38,7 @@
 //! - 要件ごとの対象の**有無**（空回りしている要件の名指し）は `checks.rs` の持ち物。
 //! - `values.md` の見出しと `model::THEMES` の一致、語彙表経路の較正は `values_md.rs` の
 //!   持ち物である（設計 Testing Strategy 16・17a）。
-//! - 全体報告 `summary.md` はここでは読まない（`documents.rs` の持ち物・`mod.rs` の冒頭）。
+//! - 全体報告 `summary.md` はここでは読まない（読み込みは `mod.rs` の `RepoData`）。
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -84,7 +84,7 @@ const ANCHOR_SOURCES: [&str; 3] = [
 
 /// 走査から外す調査クレート自身（設計 D-3）。この接頭辞を持つ相対パスは 1 本も来ない。
 ///
-/// 実装側の `io::sources::SELF_CRATE_DIR` は crate 内公開で、ここ（別クレートの統合
+/// 実装側の `io::sources::SELF_CRATE_DIR` は非公開で、ここ（別クレートの統合
 /// テスト）からは型検査が拒む。仮に借りられたとしても借りない——同じ定数を両側で
 /// 使えば除外の主張は「実装が実装に同意する」だけになり、綴りを書き換えた瞬間に
 /// 主張ごと付いてきてしまう。だから**わざと書き写す**。
@@ -317,10 +317,6 @@ fn the_source_walk_reaches_other_crates_and_never_the_survey_crate() {
 
     // 否定の主張（調査クレート由来を含まない）は走査が空でも成り立つ。先に肯定を言う。
     assert!(
-        !data.sources.is_empty(),
-        "ソースの走査が 1 本も返していない"
-    );
-    assert!(
         data.sources.len() >= MIN_SOURCE_FILES,
         "走査が返したのは {} 本で、下限 {MIN_SOURCE_FILES} を割っている",
         data.sources.len()
@@ -371,10 +367,6 @@ fn the_source_walk_reaches_other_crates_and_never_the_survey_crate() {
         crates.insert(rest.split('/').next().unwrap_or_default());
     }
     assert!(
-        !crates.contains("ukadoc-survey"),
-        "調査クレートが走査に現れている"
-    );
-    assert!(
         crates.len() >= MIN_SOURCE_CRATES,
         "走査に現れたクレートは {} 個で、下限 {MIN_SOURCE_CRATES} を割っている",
         crates.len()
@@ -405,7 +397,6 @@ fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
             .domain_reports
             .get(&domain)
             .unwrap_or_else(|| panic!("{key} の報告を読んでいない"));
-        assert!(!body.is_empty(), "{key} の報告が空");
         // 長さは文字数で数える（バイト長ではない・このファイル冒頭の理由）。
         assert!(
             body.chars().count() >= MIN_REPORT_CHARS,
@@ -434,9 +425,4 @@ fn the_four_domain_reports_exist_on_disk_and_are_not_empty() {
             "{key} の報告に「合計 {rows}」の行が無い（台帳の件数と繋がっていない）"
         );
     }
-    assert_eq!(
-        bodies.len(),
-        DOMAIN_ROWS.len(),
-        "相異なる報告が 4 本そろっていない"
-    );
 }

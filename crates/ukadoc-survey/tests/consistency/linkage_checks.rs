@@ -52,6 +52,7 @@ use ukadoc_survey::ledger::Ledger;
 use ukadoc_survey::model::{Domain, EntryId, Status};
 
 use super::RepoData;
+use super::briefing_arms::LedgerFacts;
 use super::documents::{
     Documents, LINKAGE_MD, assert_no_findings, assert_single_finding, drop_member, shift_count,
 };
@@ -69,40 +70,21 @@ const TARGET_STATUSES: [Status; 4] = [
 // 台帳から数え直す側
 // ---------------------------------------------------------------------------
 
-/// 台帳 4 本の項目（数え直しの出どころ）。
-///
-/// 台帳を 4 本とも 1 度だけ畳んで持つ。腕ごとに台帳を歩き直すと、同じ数え方が
-/// 腕の数だけ散らばって、片方だけ直したときに気づけない。
-struct LedgerFacts {
-    /// 項目 id →（その項目を持つ台帳のドメイン, 状態）。
-    entries: BTreeMap<String, (Domain, Status)>,
-}
-
+/// 判定 ⑶ の数え方（台帳の畳みは `briefing_arms.rs` の [`LedgerFacts`] を共有する）。
 impl LedgerFacts {
-    /// 台帳 4 本から畳む。
-    fn collect(ledgers: &[Ledger]) -> Self {
-        let mut entries = BTreeMap::new();
-        for ledger in ledgers {
-            for (id, entry) in &ledger.entries {
-                entries.insert(id.as_str().to_owned(), (ledger.domain, entry.status));
-            }
-        }
-        Self { entries }
-    }
-
     /// 台帳 4 本の項目の総数（状態を問わない）。
     fn total(&self) -> usize {
-        self.entries.len()
+        self.rows.len()
     }
 
     /// その id の状態（台帳に無ければ `None`）。
     fn status_of(&self, id: &str) -> Option<Status> {
-        self.entries.get(id).map(|(_, status)| *status)
+        self.rows.get(id).map(|fact| fact.status)
     }
 
     /// その id を持つ台帳のドメイン（台帳に無ければ `None`）。
     fn domain_of(&self, id: &str) -> Option<Domain> {
-        self.entries.get(id).map(|(domain, _)| *domain)
+        self.rows.get(id).map(|fact| fact.domain)
     }
 
     /// 対象 4 状態の項目か。
@@ -113,17 +95,17 @@ impl LedgerFacts {
 
     /// 対象 4 状態の項目 id（文字順）。
     fn target_ids(&self) -> impl Iterator<Item = &str> {
-        self.entries
+        self.rows
             .iter()
-            .filter(|(_, (_, status))| TARGET_STATUSES.contains(status))
+            .filter(|(_, fact)| TARGET_STATUSES.contains(&fact.status))
             .map(|(id, _)| id.as_str())
     }
 
     /// その状態の項目数。
     fn count_of(&self, status: Status) -> usize {
-        self.entries
+        self.rows
             .values()
-            .filter(|(_, actual)| *actual == status)
+            .filter(|fact| fact.status == status)
             .count()
     }
 }
@@ -736,8 +718,24 @@ fn shifting_one_domain_of_the_singles_breaks_the_second_identity() {
     );
 }
 
+/// 報告から読んだ「束 id → 構成 id」が、実データで空でないこと。
+#[test]
+fn the_machine_bundle_members_are_read_from_the_reports() {
+    let repo = RepoData::load();
+    let machine = machine_bundle_members(repo);
+
+    assert!(
+        !machine.is_empty(),
+        "報告 5 本から機械の束を 1 つも読めていない"
+    );
+    assert!(
+        machine.values().all(|members| !members.is_empty()),
+        "構成 id が 1 つも無い機械の束がある（表の最終列を読めていない）"
+    );
+}
+
 // ---------------------------------------------------------------------------
-// 摂動の的（選び方も較正する）
+// 摂動の的
 // ---------------------------------------------------------------------------
 
 /// 抜いてよい構成 id を 1 つ選ぶ（束名, id）。
@@ -767,9 +765,9 @@ fn a_droppable_member(linkage: &Linkage, text: &str) -> (String, String) {
 /// 台帳で状態が alias か not-applicable の id を 1 つ選ぶ。
 fn an_excluded_id(facts: &LedgerFacts) -> String {
     facts
-        .entries
+        .rows
         .iter()
-        .find(|(_, (_, status))| matches!(status, Status::Alias | Status::NotApplicable))
+        .find(|(_, fact)| matches!(fact.status, Status::Alias | Status::NotApplicable))
         .map(|(id, _)| id.clone())
         .expect("alias も not-applicable も台帳に 1 つも無い（腕 b の除外を較正できない）")
 }
@@ -842,20 +840,4 @@ fn a_bundle_with_an_unfinished_member(linkage: &Linkage, facts: &LedgerFacts) ->
         }
     }
     panic!("実装済みでない構成 id を持つ束が 1 つも無い");
-}
-
-/// 報告から読んだ「束 id → 構成 id」が、実データで空でないこと。
-#[test]
-fn the_machine_bundle_members_are_read_from_the_reports() {
-    let repo = RepoData::load();
-    let machine = machine_bundle_members(repo);
-
-    assert!(
-        !machine.is_empty(),
-        "報告 5 本から機械の束を 1 つも読めていない"
-    );
-    assert!(
-        machine.values().all(|members| !members.is_empty()),
-        "構成 id が 1 つも無い機械の束がある（表の最終列を読めていない）"
-    );
 }

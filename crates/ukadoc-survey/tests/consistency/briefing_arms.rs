@@ -35,12 +35,11 @@
 //! 段階 A に落ちた項目だけの分布ではない。両者は別の数で、段階 A の側で数えると
 //! 6 行とも赤になる。
 //!
-//! # 実データでは母数 0 の腕がある（だから較正を置く）
+//! # 実データに形が無くても赤にできるよう較正を置く
 //!
-//! 実データの `override` の `kind` は `stage-rule` だけで `second-stage` の行が無く、
-//! `insufficient = true` の行も無い。`singles` の行も多くが id 1 つ（鍵を比べる相手が
-//! 無い）である。どれも腕がそのままでは恒真なので、写しに 1 行作って赤になることを
-//! 確かめる。
+//! `second-stage` の `override`・`insufficient = true` の行・id を 2 つ以上並べた
+//! `singles` の行は、実データに無ければ腕がそのままでは恒真になる。だから実データの
+//! 行数には寄りかからず、写しに 1 行作って赤になることを確かめる。
 //!
 //! # すべての束の壊れ方が同値である（順位に同着が多い）
 //!
@@ -65,7 +64,7 @@ use ukadoc_survey::documents::{
     Barrier, Briefing, Linkage, NamedBundle, OverrideKind, RankRow, RankTarget, Stage,
 };
 use ukadoc_survey::io::{files, paths};
-use ukadoc_survey::ledger::Ledger;
+use ukadoc_survey::ledger::{Ledger, ledger_file};
 use ukadoc_survey::model::{Domain, EntryId, PageName, Status};
 
 use super::documents::{BRIEFING_MD, LINKAGE_MD};
@@ -94,21 +93,25 @@ const CARRYOVER_ROWS: usize = 8;
 // 台帳から数え直す側
 // ---------------------------------------------------------------------------
 
-/// 台帳の 1 項目のうち、この判定が見る 4 つの欄。
-struct Fact {
-    domain: Domain,
-    status: Status,
-    page: PageName,
+/// 台帳の 1 項目のうち、判定 ⑶・⑷・⑸ が見る欄。
+pub(super) struct Fact {
+    pub(super) domain: Domain,
+    pub(super) status: Status,
+    pub(super) page: PageName,
     /// 台帳に**書いてある** `priority`（導出ではない。腕 c が両者を突き合わせる）。
-    priority: String,
+    pub(super) priority: String,
+    /// 宛先（空文字列なら宛先無し）。
+    pub(super) owner: String,
 }
 
-/// 台帳 4 本の項目（数え直しの出どころ）。
+/// 台帳 4 本の項目（数え直しの出どころ）。判定 ⑶（`linkage_checks.rs`）・⑷・⑸
+/// （`spec_checks.rs`）が同じ畳みを使い、それぞれの数え方は各ファイルの `impl` に置く。
 ///
-/// 台帳を 1 度だけ畳んで持ち、数え方は [`Self::count`] 1 つに集める。腕ごとに歩き
-/// 直すと、同じ数え方が腕の数だけ散らばって、片方だけ直したときに気づけない。
+/// 台帳を 1 度だけ畳んで持つ。腕ごと・判定ごとに歩き直すと、同じ数え方が散らばって、
+/// 片方だけ直したときに気づけない。
 pub(super) struct LedgerFacts {
-    rows: Vec<Fact>,
+    /// 項目 id の綴り → その項目（文字順）。
+    pub(super) rows: BTreeMap<String, Fact>,
 }
 
 impl LedgerFacts {
@@ -117,11 +120,15 @@ impl LedgerFacts {
         let rows = ledgers
             .iter()
             .flat_map(|ledger| {
-                ledger.entries.iter().map(|(id, entry)| Fact {
-                    domain: ledger.domain,
-                    status: entry.status,
-                    page: id.page(),
-                    priority: entry.priority.clone(),
+                ledger.entries.iter().map(|(id, entry)| {
+                    let fact = Fact {
+                        domain: ledger.domain,
+                        status: entry.status,
+                        page: id.page(),
+                        priority: entry.priority.clone(),
+                        owner: entry.owner.clone(),
+                    };
+                    (id.as_str().to_owned(), fact)
                 })
             })
             .collect();
@@ -130,7 +137,7 @@ impl LedgerFacts {
 
     /// 条件に合う項目の数。
     fn count(&self, keep: impl Fn(&Fact) -> bool) -> usize {
-        self.rows.iter().filter(|fact| keep(fact)).count()
+        self.rows.values().filter(|fact| keep(fact)).count()
     }
 
     /// `priority` がその段階の 1 文字で始まる項目数（腕 b の `items`・腕 f の `[[after]]`）。
@@ -171,9 +178,6 @@ fn derived_of<'a>(
 fn count_mismatch(what: &str, declared: usize, actual: usize) -> String {
     format!("{BRIEFING_MD}: {what} は {declared} と書いてあるが、数え直しは {actual}")
 }
-
-/// その台帳の場所（失敗の本文に載る綴り）。
-pub(super) use ukadoc_survey::ledger::ledger_file;
 
 // ---------------------------------------------------------------------------
 // 腕 a: 順位表の被覆
@@ -499,10 +503,9 @@ fn conformance_item(reference: &str) -> bool {
 
 /// 持ち越し 8 行の見出しの遅延読み（`second-stage` の行が現れたときだけ読む）。
 ///
-/// 実データに `second-stage` の `override` は 1 行も無いので、素直に読むと**緑の走行が
-/// 毎回よその spec の文書に寄りかかる**（読めなければ判定 ⑷ 全体が止まる）。ここで
-/// 遅らせておくと、寄りかかるのは実際にその形の `ref` を書いた行があるときと、
-/// 受け付け形を較正するテストのときだけになる。
+/// 素直に読むと**緑の走行が毎回よその spec の文書に寄りかかる**（読めなければ
+/// 判定 ⑷ 全体が止まる）。ここで遅らせておくと、寄りかかるのは実際にその形の
+/// `ref` を書いた行があるときと、受け付け形を較正するテストのときだけになる。
 pub(super) struct Carryover {
     cell: OnceCell<BTreeSet<String>>,
 }
@@ -674,10 +677,9 @@ fn any_bundle(rows: &[&RankRow], linkage: &Linkage, keep: impl Fn(&NamedBundle) 
 
 /// 腕 g: 「更新」が段階 B の先頭・`system.*` が段階 C の末尾に居ること。
 ///
-/// **どちらも「いずれか」で判定する。** 同じ段階の同じ `rank` に行が複数あるからで、
-/// 実データでは段階 B の `rank` 1 に複数の行がある（対象行の「インストール」と
-/// `override` の「更新」）。「すべての行が満たす」に読み替えると、要件 5.3 と関係の
-/// 無い束が同着で先頭に並んだだけで赤くなる。
+/// **どちらも「いずれか」で判定する。** 同じ段階の同じ `rank` に行が複数並びうる
+/// からで、「すべての行が満たす」に読み替えると、要件 5.3 と関係の無い束が同着で
+/// 先頭に並んだだけで赤くなる。
 pub(super) fn stage_rule_findings(linkage: &Linkage, briefing: &Briefing) -> Vec<String> {
     let mut findings = Vec::new();
 

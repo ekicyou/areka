@@ -20,15 +20,15 @@ use std::collections::BTreeSet;
 
 use ukadoc_survey::documents::parse::read_briefing;
 use ukadoc_survey::documents::{Briefing, Linkage, OverrideKind, RankTarget, Stage};
-use ukadoc_survey::ledger::Ledger;
+use ukadoc_survey::ledger::{Ledger, ledger_file};
 use ukadoc_survey::model::{Domain, EntryId};
 
 use super::RepoData;
 use super::briefing_arms::{
     Carryover, LedgerFacts, STAGE_RULE_REF, SYSTEM_MARK, UPDATE_THEME, distribution_findings,
-    ledger_file, override_finding, priority_findings, rank_coverage_findings,
-    rank_derived_findings, rank_order_findings, row_names, row_place, rows_at,
-    stage_and_rank_findings, stage_count_findings, stage_rule_findings,
+    override_finding, priority_findings, rank_coverage_findings, rank_derived_findings,
+    rank_order_findings, row_names, row_place, rows_at, stage_and_rank_findings,
+    stage_count_findings, stage_rule_findings,
 };
 use super::documents::{
     BRIEFING_MD, Documents, assert_no_findings, assert_single_finding, shift_count,
@@ -214,20 +214,11 @@ fn skipping_one_rank_turns_the_order_arm_red() {
     );
 }
 
-/// 腕 e: `override` の受け付け形が母数 0 の恒真でないこと（`second-stage` は実データ 0 行）。
+/// 腕 e: `override` の受け付け形が恒真でないこと（写しの 1 行の `kind`・`ref` を書き換えて確かめる）。
 #[test]
 fn an_unacceptable_override_reference_turns_the_order_arm_red() {
     let documents = Documents::load();
     let carryover = Carryover::new();
-
-    assert!(
-        documents.briefing.ranks.iter().all(|row| {
-            row.exception
-                .as_ref()
-                .is_none_or(|exception| exception.kind != OverrideKind::SecondStage)
-        }),
-        "実データに second-stage の override がある——この較正の前提（母数 0）が変わった"
-    );
 
     let at = documents
         .briefing
@@ -274,17 +265,12 @@ fn an_unacceptable_override_reference_turns_the_order_arm_red() {
     }
 }
 
-/// 腕 e: `insufficient` の行の位置の主張が母数 0 の恒真でないこと（実データ 0 行）。
+/// 腕 e: `insufficient` の行の位置の主張が恒真でないこと（写しの 1 行に印を付けて確かめる）。
 #[test]
 fn an_insufficient_row_placed_before_the_targets_turns_the_order_arm_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
     let carryover = Carryover::new();
-
-    assert!(
-        documents.briefing.ranks.iter().all(|row| !row.insufficient),
-        "実データに insufficient の行がある——この較正の前提（母数 0）が変わった"
-    );
 
     // 段階 A の先頭の行に印を付ける。対象行から外れるので順位の主張は動かないが、
     // 「対象行より後」だけが破れる。
@@ -392,8 +378,9 @@ fn dropping_one_after_domain_turns_the_distribution_arm_red() {
 
 /// 腕 g: 「更新」を落とす／`system.` を落とすと、それぞれ赤になる。
 ///
-/// 「いずれか」で判定していることも同時に見る——段階 B の `rank` 1 の 2 束のうち
-/// 1 つから「更新」を落としただけでは緑のままで、両方から落として初めて赤になる。
+/// 「いずれか」で判定していることも同時に見る——写しで段階 B の `rank` 1 に行を 1 本
+/// 足し、その段の束すべてに「更新」を持たせる。1 つから落としただけでは緑のままで、
+/// 全部から落として初めて赤になる。実データの同着の行数には寄りかからない。
 #[test]
 fn breaking_either_half_of_the_stage_rule_turns_the_g_arm_red() {
     let documents = Documents::load();
@@ -403,23 +390,48 @@ fn breaking_either_half_of_the_stage_rule_turns_the_g_arm_red() {
         &stage_rule_findings(&documents.linkage, &documents.briefing),
     );
 
-    let head = row_targets(&documents.briefing, Stage::B, 1);
-    assert!(
-        head.len() >= 2,
-        "段階 B の rank 1 が 1 行しかない——「いずれか」で判定する理由（同着）が消えた"
-    );
+    // 段階 B の rank 1 に、まだそこに居ない束の行を 1 本足して同着を写しの上で作る。
+    let mut tied = documents.briefing.clone();
+    let mut head = row_targets(&tied, Stage::B, 1);
+    let extra = documents
+        .linkage
+        .bundles
+        .keys()
+        .find(|name| !head.contains(name))
+        .expect("段階 B の rank 1 に足せる束が無い")
+        .clone();
+    let mut row = rows_at(&tied, Stage::B, 1)
+        .first()
+        .copied()
+        .expect("段階 B に rank 1 の行が無い")
+        .clone();
+    row.target = RankTarget::Bundle(extra.clone());
+    tied.ranks.push(row);
+    head.push(extra);
 
-    let mut one_left = documents.linkage.clone();
+    let mut all_have = documents.linkage.clone();
+    for name in &head {
+        let themes = &mut all_have
+            .bundles
+            .get_mut(name)
+            .unwrap_or_else(|| panic!("束 {name} が写しに無い"))
+            .themes;
+        if !themes.iter().any(|theme| theme == UPDATE_THEME) {
+            themes.push(UPDATE_THEME.to_owned());
+        }
+    }
+
+    let mut one_left = all_have.clone();
     drop_theme(&mut one_left, &head[..1]);
     assert_no_findings(
         "段階 B の rank 1 の束が 1 つでも「更新」を持つのに赤くなった",
-        &stage_rule_findings(&one_left, &documents.briefing),
+        &stage_rule_findings(&one_left, &tied),
     );
 
     let mut none_left = one_left.clone();
     drop_theme(&mut none_left, &head[1..]);
     assert_single_finding(
-        &stage_rule_findings(&none_left, &documents.briefing),
+        &stage_rule_findings(&none_left, &tied),
         "段階 B の rank 1 の束から「更新」を全部落とした",
         &[BRIEFING_MD, UPDATE_THEME],
     );
@@ -449,7 +461,7 @@ fn breaking_either_half_of_the_stage_rule_turns_the_g_arm_red() {
 }
 
 // ---------------------------------------------------------------------------
-// 摂動の的（選び方も較正する）
+// 摂動の的
 // ---------------------------------------------------------------------------
 
 /// その段階のその順位の行が指す束名。
