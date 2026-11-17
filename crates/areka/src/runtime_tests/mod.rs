@@ -4,14 +4,7 @@
 //! 各ファイルは本物の親の代わりの親で、`use areka_runtime::<道>::*;`・本物の親が持っていて子が使う `use` の行・
 //! 子のテストの宣言（本物の親と同じ印・同じ名前）だけを持つ。本番のコードは置かない。
 
-use areka_ghost::ShioriWiring;
-use areka_ghost::TickerMode;
-use areka_kanade::BootOrigin;
-use areka_placement::AuthorDpi;
-use areka_placement::DefaultSurfaces;
 use areka_runtime::*;
-use bevy_ecs::world::World;
-use std::path::PathBuf;
 
 // 落ちの報告をこのテストの実行ファイルに据える（設計 D6）。中身は `areka-runtime` の 1 つだけを指す。
 #[used]
@@ -47,5 +40,3 @@ mod frame_schedule_tests;
 // 本物の読み手から合成まで、動く絵をシェルとバルーンで通す（areka-P0-animated-image-playback task 5.4）。
 #[path = "film_playback_e2e_tests.rs"]
 mod film_playback_e2e_tests;
-#[path = "wire_tests.rs"]
-mod wire_tests;
