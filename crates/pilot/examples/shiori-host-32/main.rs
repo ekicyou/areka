@@ -170,7 +170,7 @@ struct Go2Record {
     /// 生存窓中の poll_exit_kind 回数（すべて alive=None）。
     polls: u64,
     /// 生存後の追加 REQUEST に helper が返した応答バイト数（None=応答なし）。
-    /// Some ＝ pasta の actor ループが生存後も稼働継続していることの親可視な証拠。
+    /// Some ＝ helper のリクエスト処理（メッセージ）ループが生存窓の後も動いていることの代理証拠（pasta の actor スレッドは未確認・README 学び 5）。
     post_survival_response_bytes: Option<usize>,
     /// 終わり方の分類（Clean＝終了コード 0 を期待）。
     exit_kind: ExitKind,
@@ -355,7 +355,7 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
 
     // 任意: 生存後もループが REQUEST を捌けることを示す（bounded・失敗しても致命ではない）。
     //   ★ 観測記録: これが返せば「go(1) と go(2) 生存後」の**2 応答**が揃う。
-    //     helper 内の pasta actor ループが生存窓を跨いで稼働し続けたことの親可視な代理証拠
+    //     helper のリクエスト処理（メッセージ）ループが生存窓を跨いで動いていることの代理証拠（pasta の actor スレッドは未確認・README 学び 5）
     //     （x64 親は helper 内スレッド数を直接観測できないため・design.md §230）。
     let post_survival_response_bytes = mid_window_probe(session).ok();
 
@@ -440,8 +440,8 @@ fn drive_selftest_errors(ghostdir: &Path) -> Result<(), String> {
 /// **タイムアウト時間で**返ること（wedge の 3s を待たずに abort＝ハングしない）を観測する。
 ///
 /// SendMessageTimeout は**別スレッド**宛なら caller を実際にブロックし `timeout_ms` を honor する
-/// （同一スレッド宛は deadlock ゆえ別スレッドの wedged 窓を用いる）。SMTO_ABORTIFHUNG
-/// ＋ timeout_ms が wedge を on-time に打ち切る（ipc.rs §155–206）。
+/// （同一スレッド宛は窓の手続きを直に呼び上限が効かないので、別スレッドの wedged 窓を用いる）。
+/// SMTO_ABORTIFHUNG ＋ timeout_ms が wedge を on-time に打ち切る（`ipc::send_copydata`）。
 fn drive_err_ipc_timeout() -> Result<(), String> {
     use std::sync::mpsc;
 

@@ -245,7 +245,7 @@ mod tests {
 
     /// go 基準(1) precursor（requirements 3.1–3.3）: i686 helper 内で pasta.dll をロードし
     /// 3 エントリを解決、`load(ghostdir)` がクラッシュせず完了することを観測する。
-    /// 完了後 `unload` で pasta の actor スレッドを後始末する（ライブラリは `entries` を捨てるときに解放）。
+    /// 完了後に `unload` を呼ぶ（ライブラリは `entries` を捨てるときに解放）。
     ///
     /// 本物の 32bit `pasta.dll` を読むので x64 では走れない（i686 の組み立てだけで走る）。
     #[cfg(target_arch = "x86")]

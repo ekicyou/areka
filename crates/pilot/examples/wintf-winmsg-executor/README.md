@@ -18,10 +18,10 @@
 ## 概要（何を作ったか）
 
 - 実装内容（`main.rs`・353 行・使い捨て品質）:
-  - `util::Window::new_checked_ex` で `WS_EX_NOREDIRECTIONBITMAP` 付き TopLevel 窓を 1 枚生成。
+  - `util::Window::new_checked_ex` で TopLevel 窓を生成（可視窓の `ex_style` は下記）。
     状態 S=`Rc<Shared>`（ECS の `Rc<RefCell<EcsWorld>>` 相当）をライブラリに預け、
     wndproc は `Pin<&S>` で受領（`GWLP_USERDATA` 手詰めゼロ）。
-  - 別スレッドで `DwmFlush()` 60Hz ループ → `event_listener::Event::notify(1)`。
+  - 別スレッドで `DwmFlush()` 60Hz ループ → `event_listener::Event::notify(usize::MAX)`。
   - UI スレッドで `spawn_local` した async tick タスクが `event.listen().await` で起床 →
     1 フレーム処理（interval 計測＋フレームカウンタ）→ 再 `listen().await`。`block_on` で join。
   - tick の最中に**実 `SetWindowPos`（横バウンス＝三角波で実移動）**を撃ち、OS に正当な
@@ -39,7 +39,7 @@
 - 実行法: `cargo run -p pilot --example wintf-winmsg-executor`（wall-clock 約 8 秒（`RUN_SECS = 8`）で自動終了）。
   - 依存: 木の中の写し（`crates/wintf-winmsg-executor`）を `{ workspace = true }` で使う（検証は 0.0.3 で実施・0.0.5 で再ビルド確認済み＝API 互換。
     0.0.5 は共有クラスに `CS_DBLCLKS` ＋既定カーソルを内蔵＝本坑で wintf 側 dblclick 補填が不要化）,
-    `event-listener = "5"`。
+    `event-listener` も `{ workspace = true }`。
 
 ## 検証結果
 

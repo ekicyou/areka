@@ -470,3 +470,79 @@ audit はかけていない（【仮定 1】）。入れた場合に変わるこ
 7. 18 の件のテストは、テストの exe が読んでいない System32 の DLL を 1 つ選び、前と後に `GetModuleHandleW` で「読まれていない」を確かめる（前の確かめが外れたら黙って通らず落ちる）。候補は `dciman32.dll`。仮定: この形（実装で別の DLL に替えてよい）。
 8. 一次記録の書き足しは、要件 5.3 が挙げた 1・2・3・7・11・15・16 の 7 件だけにする。6（子を止める）・9（待ちの起こし方）・12（`wait_kind`）・20（引数だけ）も走らせ方のコードを変えるが、記録の文に書かれた事柄ではないので書き足さない。仮定: 7 件だけ。
 9. `ipc.rs` のテストは親と helper の 2 つのテストの exe で 2 回走る（約 1 秒ずつ増える）。仮定: 受け入れる。
+
+## 16. かけ直しの audit（タスク 14・2026-11-17）
+
+> 要件 4.1・4.2 の確かめ。範囲は要件 1.1 と同じ（`crates/pilot/` のうち git に載ったファイルから `examples/pilot-windows-rs-next/` の下を除く。下は読んでいない）。物差しは 5 節と同じ ponytail 5.3.3 の `skills/ponytail-audit/SKILL.md`。作法も 5 節と同じ＝件数の上限を外す・範囲のファイルを全部頭から終わりまで読む（「Not checked」を残さない）・通し番号と 3 つの組・旗 (a)〜(c)（5 節の定義）。27 件と突き合わせ、直っている元の指摘は新しい指摘に数えず、それ以外（直しが生んだもの・最初の audit が拾い残したもの）を新しい指摘にした。番号は 27 件と混ざらないよう 28 から振った。
+
+### 16.1 測り直し（2 節と同じ数え方）
+
+- 測った木: このブランチの `81839219f`（取り込んだ `main` は `5749a4c7` のまま）。
+- 範囲: **34 ファイル**（`.rs` 25・文書 8・`Cargo.toml` 1）。2 節の 31 から、テストの兄弟のファイル 3 本（`main_drag_tests.rs`・`helper_window_tests.rs`・`parent_window_tests.rs`）が増えた。
+- `.rs` は **7,953 行**＝本番のコード 7,289 行・テスト 664 行（`_tests.rs` をテストに数える）。ほかに本番のファイルの中の `#[cfg(test)] mod tests` が約 806 行。文書 870 行・`Cargo.toml` 79 行。
+- `#[test]` は 62 本（`#[cfg(target_arch = "x86")]` の 1 本を含む）。x64 の `cargo test -p pilot --examples` で走るのは 69 本（`ipc.rs` の 8 本は親と helper の 2 つのテストの exe で走る）。i686 の helper は 12 本。
+- 1,000 行の近く: `pilot-clickthrough-alpha-toggle/main.rs` 995（例外表から外すのはタスク 11）・`swap.rs` 928・`observe.rs` 854。どれも 1,000 行を越えない。
+
+### 16.2 1 回目（範囲の全部を読んだ）: 新しい指摘 7 件＝必ず直す 0・直したほうがよい 1・できれば 6
+
+本番の振る舞いに関わる指摘は 0。7 件とも注記・文書・使い道の無い包みで、直した（34 はレビューで拾い残しを指された分）。
+
+**28.（直したほうがよい）クリック透過の先進坑の注記に、指摘 17 の直しの後も測った知見と逆の 1 か所と、今のコードとずれた 4 か所が残っていた** （`pilot-clickthrough-alpha-toggle/main.rs` の見張り役の中・`AppState::color_index`・`build_pipeline` の説明・`RADIUS`・`draw_circle`）
+- 何か: 見張り役の注記が「DComp は client area に合成する（窓矩形だと枠ぶんズレる）」と書いていた（REPORT の知見と同じファイルの `main` は「ウィンドウ原点から合成」）。ほかに「本タスクでは初期描画の色決定にのみ読む」（色トグルも読む）・「`GetWindowRect` は物理ピクセル」（コードは `GetClientRect`）・「円中心の算出（窓矩形中心）」2 か所（判定はクライアントの矩形）。
+- 直し: 5 か所を今の事実に書き換えた（行を足さず書き換えたので 995 行のまま）。
+- 旗: (a) なし（注記だけ・REPORT と揃う向き） ／ (b) 行数 0 ／ (c) 要らない
+
+**29.（できれば）32bit の先進坑の注記の 2 か所が古い** （`shiori-host-32/main.rs` の `drive_err_ipc_timeout` の説明・`shiori_proxy.rs` の本物の DLL のテストの説明）
+- 何か: 「（ipc.rs §155–206）」は直しの後の `ipc.rs` の行を指さない。同じ文の「同一スレッド宛は deadlock」は誤り（同じスレッドの窓へは窓の手続きを直に呼び、上限が効かない）。テストの説明の「`unload` で pasta の actor スレッドを後始末する」は、README の学び 5（actor のスレッドは未確認）と食い違う。
+- 直し: `ipc::send_copydata` を名前で指し、同一スレッドの理由を正しく書き、テストの説明を「`unload` を呼ぶ」にした。
+- 旗: (a) なし ／ (b) なし ／ (c) 要らない
+
+**30.（できれば）helper の `default_fixture_ghostdir` が `sample_support::emo2_ghost_master` をそのまま呼ぶだけの包みだった** （`shiori-host-32/helper.rs`）
+- 何か: 1 か所（`--selftest-load` の ghostdir の退避）からしか呼ばれない、呼び先を渡すだけの関数（指摘 13 で消したのは `helper_window.rs` の写しで、こちらは残っていた）。
+- 直し: 呼び元で `sample_support::emo2_ghost_master` を直に渡し、包みを消した（-5 行）。消す前にツリー全体を grep し、読み手は完了した spec の文書（過去の記録）と本 spec の文書だけだった。
+- 旗: (a) なし ／ (b) なし ／ (c) 要らない（i686 と x64 の組み立てで確かめた）
+
+**31.（できれば）`wintf-winmsg-executor/README.md` の「概要」に、今のコードとずれた所が 3 か所残っていた** （同 README の「概要」）
+- 何か: タスク 12.2 の申し送り（`event-listener = "5"`・今は `{ workspace = true }`）に加え、「`WS_EX_NOREDIRECTIONBITMAP` 付き TopLevel 窓を 1 枚生成」（今は縦 3 枚・可視窓は `ex_style=0` と同じ節の下に書いてある）と「`notify(1)`」（今は `notify(usize::MAX)`）。
+- 直し: 3 か所を今の値に書き換えた（討議の決め 5 のとおり「概要」だけ。「検証結果」は変えていない）。
+- 旗: (a) 変える（「概要」だけ・測った結果ではない） ／ (b) なし ／ (c) 要らない
+
+**32.（できれば）`pilot-clickthrough-alpha-toggle/README.md` の「概要」の窓の作りに、成立の条件だった `WS_EX_LAYERED` と枠なしが書かれていなかった** （同 README の「概要」の 1 行目）
+- 何か: 「`WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TRANSPARENT` の透過トップモスト窓」。コードと「検証結果」は `WS_EX_LAYERED`（フラグのみ）と `WS_POPUP` を持つ。
+- 直し: 「概要」の 1 行を今のコードの作りに書き換えた（「動機」の問いと「検証結果」は変えていない）。
+- 旗: (a) 変える（「概要」だけ） ／ (b) なし ／ (c) 要らない
+
+**33.（できれば）`crates/pilot/Cargo.toml` の `event-listener` の注記が、使う先進坑を 1 本しか挙げていなかった** （`Cargo.toml` の `[dependencies]`）
+- 何か: タスク 1 で書いた注記が「pilot-clickthrough-alpha-toggle の状態変化の起床」だけを挙げる。`wintf-winmsg-executor` の vsync の起床も使う。
+- 直し: 2 本とも挙げた（依存は変えていない・`Cargo.lock` は変わらない）。
+- 旗: (a) なし ／ (b) 依存は足さない ／ (c) 要らない
+
+**34.（できれば）32bit の先進坑の親の注記 2 か所が、未確認の pasta の actor のループを前提にしていた** （`shiori-host-32/main.rs` の `Go2Record::post_survival_response_bytes` の説明・`drive_go_criterion_2` の生存後の追加 REQUEST の注記）
+- 何か: 「pasta の actor ループが生存後も稼働継続していることの親可視な証拠」「helper 内の pasta actor ループが生存窓を跨いで稼働し続けたことの代理証拠」。同じファイルの一次記録サマリの出力と README の学び 5 は、actor のスレッドは利用可能なソースで未確認（`pasta_shiori/src/shiori.rs` は single-threaded）で、挙動証拠は「リクエスト処理ループが生存窓を跨いで稼働」に格下げした、と書く。29 のテストの説明と同じ種類の食い違い。
+- 直し: 2 か所を「helper のリクエスト処理（メッセージ）ループが生存窓の後も動いていることの代理証拠（pasta の actor スレッドは未確認・README 学び 5）」に書き換えた（行は足していない）。
+- 旗: (a) なし ／ (b) なし ／ (c) 要らない
+
+### 16.3 2 回目: 新しい指摘 0 件
+
+- 1 回目の直しの差分（7 ファイル・注記と文書と包み 1 つ）と、触ったファイルの周りを読み直した。34 の直しの後に、範囲の全部（README・REPORT の測った結果でない節・`swap.rs`・`observe.rs` を含む）を「actor」と「スレッド」の語で grep し、同じ前提の書き方がほかに無いことを確かめた（残るのは README の学び 5 そのものと、`main.rs` の一次記録サマリの「未確認」の出力だけ）。ほかのファイルは 1 回目に全部読んだ後に変わっていない。新しい指摘は 0 件で、本番の振る舞いに関わるものも 0 件なので、ここで区切った（開発者の決め「5 回目で区切ってよい・本番の振る舞いが 0 なら」の内）。
+
+### 16.4 見たが指摘にしなかったもの（今回）
+
+- **clippy の警告 7 件**（`shiori_proxy.rs` の `transmute` の型の書き足し 3・`helper_window.rs` と `shiori3.rs` の `collapsible_if` 2・`main.rs` の `useless_format` 1・`pilot-balloon-asset-swap/main.rs` の `type_complexity` 1）: どれも `main` の同じ行にもある既存のもので、直しが生んだものではない。機械的な直しは `clippy-199-lints` の持ち物（Boundary Context の Out of scope）。audit としてこの場所を指す件は無い。
+- **HWND の下 32 ビットを x64 で 0 で埋めて戻す**（`ipc::hwnd_from_u32`）: 32bit と 64bit のプロセスの間では HWND の下 32 ビットだけが意味を持つ（Microsoft の「Interprocess Communication Between 32-bit and 64-bit Applications」）ので、0 で埋めても同じ窓を指す。13.1 の実機でも往復が通った。
+- **helper が HELLO を送れなかったとき、pasta を `unload` せずに DLL を解放する**（`HelperMessageWindow::create` の失敗で中の `ShioriEntries` が捨てられる）: 親の窓がもう無いときだけの道で、helper はすぐ終了コード 2 で終わり、検体の木は次の取得で作り直す使い捨て＝想定の負荷（開発者が 1 回手で走らせる）で困る場面が無い。
+- **`ProcessHost::poll_exit_kind` が `try_wait` の失敗を記録なしで `Terminated` にする**: 自分が起こした子の有効なハンドルで `try_wait` が失敗する道が無い（困る場面を挙げられない）。
+- **`REPORT.md` の指摘 15 の行で「この変更の前のコードで測った」が 2 回続く**: design の書式（中身の文＋定型の文）どおりで、誤りではない。
+- **一次記録の「動機」と「作った物」に残る、測った時の事実**（クリック透過の「`WS_EX_LAYERED` 無しで…」の問い・dropfiles の「`crates/pilot/Cargo.toml` も変えていない」）: 測った時の問いと事実の記録で、今の説明ではない。
+
+### 16.5 確かめ
+
+- `cargo fmt --all -- --check`: 差分 0。
+- `cargo build -p pilot --examples`: 警告 0。`cargo test -p pilot --examples`: 緑（22・9・6・21・11 本＝69 本・警告 0）。
+- `cargo build`／`cargo test -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc`: 警告 0・12 本緑（本物の `pasta.dll` の 1 本を含む）。
+- `cargo clippy -p pilot --examples`: 範囲の警告は 16.4 の既存の 7 件だけ（新しい警告 0）。
+- 実機の走らせ直しはしていない（今回の直しは注記・文書と、`--selftest-load` の退避の包みを消しただけで、走らせ方の振る舞いは変わらない。13.1・13.2 の実機の確かめはこの前のコードで済んでいる）。
+
+### 16.6 最後のかけ直しの結果
+
+**新しい指摘 0 件・残したもの 0 件**（かけ直し 2 回・1 回目の 7 件＝28〜34 は全部直した。直さずに残す裁定が要るもの 0・先進坑をまるごと消す指摘 0・タスクの切り分けが要るほどの増え 0）。

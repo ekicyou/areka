@@ -51,7 +51,7 @@ fn main() {
             .position(|a| a == "--selftest-load")
             .and_then(|i| args.get(i + 1))
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(default_fixture_ghostdir);
+            .unwrap_or_else(sample_support::emo2_ghost_master);
         match shiori_proxy::selftest_load(&ghostdir) {
             Ok(msg) => {
                 println!("{msg}");
@@ -109,9 +109,4 @@ fn main() {
     println!("  ghostdir を省くと検体 emo2 の ghost/master");
     println!("  終了コード: 0=成功 2=selftest-load か窓/HELLO の失敗 3=selftest-loop の失敗");
     println!("              4=UNLOAD が来ず上限で抜けた 5=UNLOAD で抜けたが pasta を読めていない");
-}
-
-/// 検体の窓口から emo2 の ghostdir（pasta.dll の在処）を得る。
-fn default_fixture_ghostdir() -> std::path::PathBuf {
-    crate::sample_support::emo2_ghost_master()
 }

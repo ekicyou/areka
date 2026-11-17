@@ -57,8 +57,8 @@ use windows::core::{Interface, Result};
 
 /// 不透明円の半径（物理ピクセル, R4.1）。
 ///
-/// この定数はタスク 3.2（DComp 描画円）と**共有**する。描画円と判定円が
-/// バイト単位で一致する（R2.2/R4.1）よう、円中心の算出（窓矩形中心）と半径を
+/// この定数は描画円（`draw_circle`）と判定円（`alpha_is_opaque`）が**共有**する。両者が
+/// バイト単位で一致する（R2.2/R4.1）よう、円中心の算出（クライアント矩形の中心）と半径を
 /// 本定数経由で同一にすること。値や中心算出をここ以外で重複定義しない。
 const RADIUS: i32 = 200;
 
@@ -158,7 +158,7 @@ struct DCompPipeline {
     _visual: IDCompositionVisual2,
     /// 視覚内容を供給する surface（BeginDraw/EndDraw で D2D 描画）。再描画で使用。
     surface: IDCompositionSurface,
-    /// surface のピクセルサイズ（= 窓矩形の物理サイズ）。円中心算出に使用。
+    /// surface のピクセルサイズ（= クライアント矩形の物理サイズ）。円中心算出に使用。
     width: u32,
     height: u32,
 }
@@ -172,8 +172,8 @@ struct DCompPipeline {
 struct AppState {
     /// 窓クローズ（`WM_CLOSE`）で notify され、`block_on` の await を完了させる。
     shutdown: Event,
-    /// 現在の円色インデックス（`COLORS` への添字）。初期色＝0。クリック色トグル（3.3）が
-    /// 反転に使う。本タスクでは初期描画の色決定にのみ読む。
+    /// 現在の円色インデックス（`COLORS` への添字）。初期色＝0。初期描画の色決定と、
+    /// `WM_LBUTTONDOWN` の色トグル（`toggle_color`）が読む。
     color_index: Cell<usize>,
     /// DComp 視覚パイプライン。窓セットアップ後に `Some` が入り、以降ドロップしない
     /// （ドロップ＝合成ツリー崩壊）。初期化前は `None`。
@@ -411,12 +411,12 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
 /// `CreateSurface`(BGRA8・premultiplied) → `CreateVisual` → `SetContent(surface)` →
 /// `CreateTargetForHwnd(hwnd, topmost=true)` → `SetRoot(visual)`。Commit は初回描画後に行う。
 ///
-/// surface サイズは窓の物理矩形（PMv2 ゆえ `GetWindowRect` は物理ピクセル, R7.2）。
+/// surface サイズはクライアント矩形（PMv2 ゆえ `GetClientRect` は物理ピクセル・WS_POPUP で client==window, R7.2）。
 /// 視覚透過は DComp visual の per-pixel α が担う（`WS_EX_LAYERED` はマウス透過のための同伴フラグ
 /// として立てるだけで、レイヤード描画には使わない）。GDI/`WM_PAINT`/
 /// `DwmExtendFrameIntoClientArea` は一切使わない（NOREDIRECTIONBITMAP 窓では画面に出ない）。
 fn build_pipeline(hwnd: HWND) -> Result<DCompPipeline> {
-    // 窓の物理矩形（PMv2 ＝物理ピクセル）。surface サイズ＝矩形サイズ。
+    // クライアント矩形（PMv2 ＝物理ピクセル）。surface サイズ＝矩形サイズ。
     let mut rect = RECT::default();
     // SAFETY: Win32 境界。`hwnd` は直前に生成した有効窓。out 引数 `rect` は書き込み専用。
     // DComp の CreateTargetForHwnd は**ウィンドウ原点**から合成する。窓は WS_POPUP で client==window
@@ -533,7 +533,7 @@ fn draw_circle(pipeline: &DCompPipeline, color: D2D1_COLOR_F) -> Result<()> {
     let brush = unsafe { dc.CreateSolidColorBrush(&color, None)? };
 
     // 円中心 = surface 中心（物理px）＋ atlas オフセット。半径 = RADIUS。
-    // 中心算出は判定円（窓矩形中心）と同一基準のローカル平行移動（R2.2/R4.1）。
+    // 中心算出は判定円（クライアント矩形の中心）と同一基準のローカル平行移動（R2.2/R4.1）。
     let cx = offset.x as f32 + (pipeline.width as f32) / 2.0;
     let cy = offset.y as f32 + (pipeline.height as f32) / 2.0;
     // windows-numerics を名指しせず構築するため Default + フィールド代入。
@@ -599,10 +599,10 @@ fn spawn_cursor_worker(
                 unsafe { GetCursorPos(&mut pt).is_ok() && GetClientRect(hwnd, &mut cr).is_ok() };
 
             if read_ok {
-                // 判定はクライアント領域基準（R4.1「クライアント中央」）。DComp は client area に
-                // 合成するため、見える円（client 中心に描画）と判定円を一致させるには client 矩形を
-                // スクリーン座標へ写して中心を求める（窓矩形だと枠ぶんズレる）。GetClientRect は
-                // (0,0,cw,ch) ゆえ ClientToScreen で左上・右下をスクリーン座標へ写す。
+                // 判定はクライアント領域基準（R4.1「クライアント中央」）。DComp は**ウィンドウ原点**から
+                // 合成し、窓は WS_POPUP で client==window にしてあるので、見える円（client 中心に描画）と
+                // 判定円は client 矩形の中心で一致する。GetClientRect は (0,0,cw,ch) ゆえ
+                // ClientToScreen で左上・右下をスクリーン座標へ写す。
                 let mut tl = POINT {
                     x: cr.left,
                     y: cr.top,

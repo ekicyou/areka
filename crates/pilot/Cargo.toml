@@ -16,7 +16,7 @@ repository.workspace = true
 # リポジトリ内の写し（crates/wintf-winmsg-executor）をワークスペースの依存で使う。
 # クラス登録の CS_DBLCLKS と既定カーソルは写しに入っている。
 wintf-winmsg-executor = { workspace = true }
-# pilot-clickthrough-alpha-toggle の状態変化の起床（state_changed）。
+# pilot-clickthrough-alpha-toggle の状態変化の起床（state_changed）と wintf-winmsg-executor の vsync 起床。
 event-listener = { workspace = true }
 # ワークスペース既定への追加 features:
 # - Win32_System_DataExchange: shiori-host-32 の ipc.rs の COPYDATASTRUCT（WM_COPYDATA）。
