@@ -74,7 +74,7 @@ const README_ID_FLOOR: usize = 3;
 /// 囲みの中の id を重複を落として文字順に返す。
 ///
 /// 取り出しの実体（[`toml_blocks`]・[`quoted_ids`]）は純粋層の `documents::parse`
-/// にある。3 文書の判定も同じ取り出しを要るので、ここに写しを置くと読み方が
+/// にある。3 文書の判定も同じ取り出しが要るので、ここに写しを置くと読み方が
 /// 2 か所に割れて片方だけが直る。
 fn ids_in_toml_blocks(markdown: &str) -> BTreeSet<String> {
     toml_blocks(markdown)

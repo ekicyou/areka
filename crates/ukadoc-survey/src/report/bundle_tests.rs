@@ -52,7 +52,8 @@ fn scrambled() -> Vec<(EntryId, EntryId)> {
 ///
 /// 対の並びは 4・1・3・2 の順に入れ替えてある。向きを裏返したのは 4 対のうち
 /// 2 対（`XRAY`—`YANKEE` と `MIKE`—`NOVEMBER`）で、残る 2 対は [`scrambled`] と
-/// 同じ向きのまま——成分 A の鎖の接ぎ方（後の対が前に接ぐ）を保つためである。
+/// 同じ向きのまま。後の対が鎖のどちらの端に接いでも割れないことは
+/// [`a_chain_merges_no_matter_which_end_the_later_edge_hangs_from`] が受け持つ。
 /// 向きを見ないことそのものは [`two_links_converging_on_the_same_id_merge`] と
 /// [`two_links_leaving_the_same_id_merge`] が受け持つ。
 fn shuffled() -> Vec<(EntryId, EntryId)> {

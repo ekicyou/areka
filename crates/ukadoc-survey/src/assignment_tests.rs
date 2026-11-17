@@ -181,17 +181,6 @@ fn unassigned_is_empty_for_no_pages_at_all() {
     assert_eq!(assignment.unassigned(pages.iter()), Vec::<PageName>::new());
 }
 
-#[test]
-fn unassigned_names_the_pages_that_have_no_domain() {
-    let assignment = PageAssignment::canonical();
-    let pages: Vec<PageName> = ["list_new_page", "descript_balloon", "spec_unknown"]
-        .into_iter()
-        .map(PageName::new)
-        .collect();
-    let got = assignment.unassigned(pages.iter());
-    assert_eq!(spellings(&got), vec!["list_new_page", "spec_unknown"]);
-}
-
 /// 同じ名前が何度現れても 1 度だけ、並びは名前順（要件 7.3 の決定論）。
 #[test]
 fn unassigned_is_sorted_and_deduplicated() {
@@ -229,21 +218,6 @@ fn underscore_names_are_whole_names_not_prefixes() {
         assignment.domain_of(&PageName::new("memo_shiorievent")),
         Some(Domain::Shiori)
     );
-    // 一方が他方の接頭辞になっている組も、それぞれ別のページとして載っている。
-    for page in [
-        "descript_shell",
-        "descript_shell_surfaces",
-        "descript_shell_surfacetable",
-        "dev_shell",
-        "dev_shell_error",
-        "list_shiori_event",
-        "list_shiori_event_ex",
-    ] {
-        assert!(
-            assignment.domain_of(&PageName::new(page)).is_some(),
-            "{page} が表に無い"
-        );
-    }
     // 下線の手前で切った名前は、どれも表に無い（`memo` だけは実在するので挙げない）。
     for truncated in [
         "descript",

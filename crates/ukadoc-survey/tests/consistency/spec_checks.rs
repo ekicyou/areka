@@ -18,7 +18,7 @@
 //!
 //! 腕 b が主張するのは**表の各名前の実在**だけで、生きたディレクトリの総数との一致は
 //! 主張しない。総数と比べると他 spec が brief を 1 本足すたびにここが赤くなり、
-//! `roadmap-draft.md` が全 spec の共有ファイルになる（W13「共有ファイル 0」）。
+//! `roadmap-draft.md` が全 spec の共有ファイルになる。
 //! 赤になるのは表の spec が**改名・削除**されたときだけで、そのときは表を直す。
 //! [`adding_another_spec_directory_stays_green_and_removing_a_listed_one_turns_red`]
 //! がその両側を較正する。

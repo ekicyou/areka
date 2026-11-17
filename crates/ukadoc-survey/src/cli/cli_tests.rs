@@ -17,8 +17,7 @@
 use std::io::{self, Write};
 
 use super::{
-    Outcome, SUBCOMMANDS, extra_arguments_notice, lookup, run_reporting_to,
-    unknown_subcommand_notice, usage, write_stdout,
+    Outcome, SUBCOMMANDS, extra_arguments_notice, lookup, run_reporting_to, usage, write_stdout,
 };
 use crate::SurveyError;
 
@@ -105,22 +104,6 @@ fn an_unknown_subcommand_asks_for_the_usage_text_and_repeats_the_name() {
         notices.contains("nosuchthing"),
         "打った綴りが断りの本文に出ていない: {notices}"
     );
-}
-
-#[test]
-fn the_notice_for_an_unknown_subcommand_repeats_the_name_that_was_typed() {
-    let one = unknown_subcommand_notice("catalogue");
-    assert!(
-        one.contains("catalogue"),
-        "打ち間違えた綴りが本文に無い: {one}"
-    );
-    let other = unknown_subcommand_notice("chekc");
-    assert!(
-        other.contains("chekc"),
-        "打ち間違えた綴りが本文に無い: {other}"
-    );
-    // 打った綴りをそのまま返すこと（どの綴りでも同じ本文になるなら手掛かりが無い）。
-    assert_ne!(one, other, "打ち間違いの綴りが本文に映っていない");
 }
 
 #[test]

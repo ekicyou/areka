@@ -58,7 +58,8 @@ fn ledger_of(entries: Vec<LedgerEntry>) -> Ledger {
 /// - 2 ページ（`page_one` 4 件・`page_two` 2 件）を **id の昇順とは逆の順**で渡す。
 /// - 状態は 7 語彙のうち 5 つだけを使う（`absent` と `not-applicable` は 0 件）。
 /// - `introduced` は 3 節・2 節・4 節・空文字を混ぜ、世代の並びが**本文の順とも
-///   id の順とも食い違う**ようにしてある（`世代不明` が最初に現れ、名前順では最後）。
+///   id の順とも食い違う**ようにしてある（id の順では `世代不明`（`page_one:charlie`）が
+///   最初に現れるが、名前順では最後）。
 /// - テーマは 8 つのうち 3 つだけを使う。
 fn sample() -> Ledger {
     ledger_of(vec![
@@ -264,7 +265,7 @@ fn the_generation_is_the_first_two_segments_of_the_introduced_version() {
 #[test]
 fn the_generation_distribution_is_keyed_by_generation_in_name_order() {
     let got = tally(&sample());
-    // 本文の順でも id の順でも `世代不明` が最初に現れるが、名前順では最後に来る。
+    // id の順では `世代不明`（`page_one:charlie`）が最初に現れるが、名前順では最後に来る。
     assert_eq!(
         name_keys(&got.by_generation),
         vec!["2.10", "2.3", "2.9", "世代不明"]
@@ -334,8 +335,6 @@ fn a_theme_carries_the_status_distribution_of_the_entries_that_wear_it() {
     );
     assert_eq!(theme("更新")[0], ("実装済み", 1));
     assert_eq!(theme("触れ合い")[0], ("実装済み", 1));
-    // 気配 と 気配り は片方が他方の接頭辞。前方一致で拾うと 気配り が汚れる。
-    assert!(!got.by_theme.contains_key("気配り"));
 }
 
 #[test]

@@ -4,7 +4,7 @@
 //! 実ファイルは 1 行も読まない——実データを相手にする判定は統合テストの担当で
 //! （設計 D-3）、ここで読むと文書の書きかけがそのまま純粋層のテストを赤くする。
 //!
-//! 守るのは次の 4 つと、形の検査の分岐の全部である。
+//! 守るのは次の 4 つと、形の検査の主な分岐である。
 //!
 //! - 囲みを**連結して 1 度だけ**読むこと（配列表を複数の囲みに分けて書ける）
 //! - 同じ鍵が 2 度現れたら落ちること（囲みをまたいでも）
@@ -854,6 +854,14 @@ fn each_single_break_of_the_samples_is_rejected_naming_its_field() {
                 "domains = [\"shiori\", \"shiori\"]",
             ),
             "domains",
+        ),
+        (
+            "根の知らない表",
+            linkage(
+                BUNDLE_BLOCK,
+                &format!("{SINGLE_BLOCK}\n```toml\n[extra]\na = 1\n```\n"),
+            ),
+            "extra",
         ),
         ("同じ domain の [[after]]", twice(AFTER_ROW), "domain"),
         ("同じ page の [[barrier]]", twice(BARRIER_ROW), "page"),

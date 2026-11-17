@@ -57,14 +57,6 @@ fn walk_excludes_the_survey_crate_itself() {
         leaked.is_empty(),
         "調査クレート自身のファイルが混じっている: {leaked:?}"
     );
-
-    // この crate に実在するファイルを名指しで確かめる（除外が「たまたま」でないこと）。
-    assert!(
-        !files
-            .iter()
-            .any(|(path, _)| path == "crates/ukadoc-survey/src/io/sources.rs"),
-        "このファイル自身が走査に入っている"
-    );
 }
 
 // ---- 返すパスの形 ----

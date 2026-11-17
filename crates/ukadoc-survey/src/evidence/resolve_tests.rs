@@ -222,7 +222,8 @@ fn a_slice_of_plain_strings_yields_its_element_names() {
 
 #[test]
 fn a_slice_of_tuples_yields_only_the_first_string_of_each_element() {
-    // 2 番目の文字列（`log_path`）は拾われてはならない。
+    // 各要素の最初の文字列（`version`・`log_path`）を拾う。2 番目の欄は文字列でない
+    // （実物の `SetSemantics` の形）。2 番目の文字列を拾わないことは struct の見本が持つ。
     let text = vocab_source(
         LIST_RESOURCE,
         "pub const SET: &[(&str, Kind)] = &[\n    (\"version\", Kind::A),\n    (\"log_path\", Kind::B),\n];\n",
@@ -299,7 +300,7 @@ fn strings_outside_the_slice_are_not_taken() {
 #[test]
 fn elements_split_only_on_commas_at_the_slices_own_depth() {
     // 入れ子の括弧・波括弧・角括弧の中のコンマで割ってはならない。割ると
-    // `Kind::B` 側の断片が新しい要素になり、`log_path` が拾われてしまう。
+    // `f(1, "log_path")` の後ろの断片が新しい要素になり、`log_path` が拾われてしまう。
     let text = vocab_source(
         LIST_RESOURCE,
         "pub const SET: &[Entry] = &[\n    Entry { token: \"version\", tags: [\"a\", \"b\"], kind: f(1, \"log_path\") },\n];\n",

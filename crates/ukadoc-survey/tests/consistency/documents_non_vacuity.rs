@@ -319,8 +319,8 @@ fn the_attribution_check_has_something_to_judge() {
 /// 判定 ⑷ が数えている相手が 0 件でないこと（要件 11.4）。
 ///
 /// 見るのは 3 つ——`[[rank]]` の行数・`[[barrier]]` の行数・段階 A の `items` である。
-/// 順位表が空の `briefing.md` は、腕 a〜g のうち a・b・d・e・g が**母数 0 でそろって緑**
-/// になり、`[[barrier]]` が 0 行なら腕 f のページの分布は比べる相手が無い。
+/// 順位表が空の `briefing.md` では腕 d・e が**母数 0 で緑**になり、`[[barrier]]` が 0 行なら
+/// 腕 f のページの分布は比べる相手が無い。
 #[test]
 fn the_stage_and_rank_check_has_something_to_judge() {
     let documents = Documents::load();

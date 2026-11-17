@@ -162,6 +162,11 @@ fn apply_over(
     let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
     let from_table = reader_over(files);
     let read = |path: &Path| -> Result<String, SurveyError> {
+        // 相対の綴りで読みに来ると、失敗の本文に絶対パスが載らない（要件 1.4）。
+        assert!(
+            path.is_absolute(),
+            "絶対パスでない場所を読みに来た: {path:?}"
+        );
         asked.borrow_mut().push(under_coverage(path));
         from_table(path)
     };
