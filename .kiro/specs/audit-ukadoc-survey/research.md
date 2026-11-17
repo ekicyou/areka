@@ -679,3 +679,24 @@ Lean: -2,400 lines（おおよそ）, -0 dependencies possible.
 
 - 注: 仮 A18（テストの失敗の文の小さな直し）は **66** の中の 1 項目として扱う（番号は振らない）。
 - 畳んだ重なり: 実データの読み直し（E1・R1・F3→**5**）、台帳の場所の綴り（C8・B8・D10→**41**）、整合テストの helper（E4・F9→**48**）、言い直しのテスト（A17・B18・C5・E6・E7・E9→**66**）、注記（R2・R3・D7・A16・C11→**68**、E12・F11・A16・C11・R12・D12・B18・F10→**79**）。
+
+## 13. 設計の段の調べと決め（2026-11-17・`kiro-spec-design`）
+
+- **調べの種類**: 軽い調べ（既存の道具の直し・新しい依存なし・外の API なし）。使った決まり: `kiro-spec-design` の `rules/`（design-principles・design-discovery-light・design-synthesis・design-review-gate）と ponytail の「いちばん小さな完全な変更」。外の調べ（WebSearch）は要らなかった（標準ライブラリの `LazyLock`・`OnceLock`・`fs::rename` だけ）。
+- **確かめた事実**（コードを読んで・cargo は回していない）:
+  - `RepoData::load()`（`tests/consistency/mod.rs:136-175`）と `Documents::load()`（`documents.rs:55-89`）は読めないと `panic!` する。`Perturbed` は `&'a RepoData` を借りて欄を clone する形で、`&'static` にしても形は変わらない。所有して動かす呼び手は `spec_checks.rs:340` と `examples.rs:115・137・284` だけ。
+  - `CheckInput` を組む所は 12 か所（`cli/inspect.rs:76`・`lib_test_support.rs:489`・`tests/consistency/{mod.rs:182, perturb.rs:99}`・在中テスト 8 か所）。4 の欄を足すとここが全部直る。`documents.summary_text` の読み手は 10 か所（`documents_checks`・`linkage_checks`・`documents_non_vacuity`・`documents_tools`）。
+  - `generate_tests.rs` は 948 行で、`priority-apply` の節は 682 行からで、共有の道具は `LEDGER_FILES`（262）・`spelled_path`（320）・`under_coverage`（329）。
+  - `cli/mod.rs:126` の `write_notice<W: Write>` が 22 の `write_stdout` の型になる。`log-capture-kit` の `temp_path_guard_test.rs` は `std::env::temp_dir` の呼び出しを見張る＝2 のテストは `workspace_root()/target` の下に置けば例外表に触らない。
+  - `consumer_ledger.rs` の `register(` は今 27 回（定義を含む）。`registration_names` は `register(` の後の最初の文字列リテラルだけを拾う。
+  - README の所見の表は 565 行の「15 種」と 574 行の 1 行。`kiro-complete/SKILL.md` の 3 か所（243・457・651-653）は、どれも消すテストだけを理由にしている。
+- **消すテストの確かめ（裁定 7）**: 読み係 2 本（60・61・66 と 62・63）が 1 本ずつ読んで、同じ壊れ方を捕まえる残るテストを名指した（design.md「消すテストと残るテスト」の表）。外れは 3 件＝⑴ `cli_tests::the_usage_text_lists_every_name_in_the_dispatch_table` は代わりが無い＝残す ⑵ 61 は消す前に器のテストへ「実数＝下限で緑」の 1 行を足す ⑶ 62 の範囲は 3 か所で関数の途中に掛かっていた（`the_heading_names_this_ledgers_domain` の shiori の半分・`a_theme_name_that_only_the_argument_carries_still_gets_a_row`・`several_links_leaving_the_same_id_all_become_edges` は残す）。`assignment.rs:96` の説明がテスト名を名指している。範囲の外で消す名前が現れるのは完了 spec の記録だけ（直さない）。11 節の 61 の問い（完了 spec の tasks.md・design.md が 6 本を名指すか）は「名指していない」で閉じた。
+- **決め**:
+  - **5**: `LazyLock<Result<_, String>>` にして、`load()` が毎回同じ文で panic する（`LazyLock` の中では panic させない＝「poisoned」で理由が消えることが起きない）。10 節の議題 12 の答え。
+  - **29**: 数えるときに畳まず、`ledger::read` で拒む（書き間違いを黙って消さない・17 と同じ向き）。
+  - **35**: W1 の最初に 1 本を回して確かめる。崩れていれば `catalog.toml` は作り直さず、6.5 の議題にする。
+  - **79 の読む順**: 提案の「completed を先に読む」は逆で、移しの途中の spec がどちらにも無く見える隙間を作る。今の順（直下が先）を残し、理由を注記にする。
+  - **registration_names**: 広げない。表の行の形は拾わないと doc に書く。
+  - **7.5 の手順**: `main` の道具を `target\verify-main` の別のワークツリーで作り、同じ入力で 9 つの副手続きを回して、終了コード・標準出力・回した後の `doc/ukadoc-coverage/` の木を比べる（design.md の Testing Strategy）。
+  - **タスクの切り方**: 18 のまとまり（W1〜W18）。同じファイルを触るまとまりは必ず先後でつなぐ。
+- **合成の 3 つの見方**: ⑴ まとめ＝写しの統合先は今ある親（`cli/mod.rs`・`ledger/mod.rs`・`check/test_support.rs`・`documents/fields.rs`・`tests/consistency/documents.rs`）、`report` は `priority_apply_with` と同じ `*_with` の形にそろえた。⑵ 作るか借りるか＝全部標準ライブラリと今の依存。⑶ 削る＝新しいファイルは 2 本（`generate_priority_tests.rs`・改名の `check/test_support.rs`）だけ、`ScanStats`・`JUDGEMENTS`・`Subjects::Zero`・`LedgerDomainMismatch`・`has_anchor`・`lf_body`・`prologue_pages` を消す。
