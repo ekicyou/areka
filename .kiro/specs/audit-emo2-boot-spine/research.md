@@ -817,3 +817,73 @@
 
 - 確かめの報告（`design-validation.md`・GO）の重大な問題 2 件（3 番の使い手の数＝11 ファイル・22 か所、範囲の外の差分の条件つきの一覧）と気付き 2 件（35 番の目印・依存の一覧の書き漏れ）は、自明な直しとして design.md に入れた。
 - 議題 3 件を開発者が推奨案で承認した: 102 番は移す・54 番は `RecordedCall::Status` の枝ごと消す（型は `test-support` の下だけ＝本番の約束でない・`crates/areka-ghost/tests/ghost/` の同名の型は別物）・縛るテストは 6 件で examples の 44・45 番には置かない。
+
+## 13. 預かった件・討議の裁定・申し送りの記録（2026-11-17・タスク 8.1／要件 5.9・2.5・5.7・5.8・7.7・7.8・8.5）
+
+この節は、実装を終えた時点（`git log main..HEAD` のコミットの題名の末尾がタスクの番号）の事実を、出どころと一緒に残す。3 節は「ギャップ分析の時点の確かめ」、この節は「片づけた結果」。
+
+### 13.1 件 1〜8 の片づけ
+
+| 件 | 出どころ | 片づけ方 | どのタスクで（コミット） |
+|---|---|---|---|
+| 1 | `audit-sylphya-actor` 議題 3（audit #16） | `spawn_ui`・`spawn_emo_text` の戻りから使われない `Result`（`UiSpawnError`・`BootWiringError::SpawnUi`）を外し、呼び手 23 ファイル（範囲の外の `input_events/balloon_choice_settle_tests.rs` を含む。持ち主 `audit-areka-input-menu` は走っておらず、要件 5.1 のとおり申し合わせなしで直した）を同じ変更で直した | 2（`bf97c9f76`・指摘 4） |
+| 2 | `runtime-module-untangle` の申し送り | 揺れの根（終わりの条件が `TalkEnded` だけを待ち、seriko のスレッドから届く目印の面 2100 を待たない）を突き止め、門（`ShowGate`）で毎回赤を 5/5 で確かめてから、終わりの条件を表明と同じ式にして 5/5 緑 | 1.2（`aec1fe951`・指摘 2・31） |
+| 3 | `runtime-crate-split` 申し送り ⑵ | `build_boot_assets` の効いていない `#[allow(dead_code)]` を、テストの支えの cfg に替えた | 3.1（`a8856bc46` ほか・指摘 6） |
+| 4 | `runtime-crate-split` の申し送り（ほかに一緒に伝えること・`hit_region.rs` の説明） | `hit_region.rs` の頭の「`crate::` フリー規律」の節を、今の事実（`#[path]` の取り込み 0・`is_benign_boot_error` の呼び出し 0）の 1 文にした | 3.1（指摘 5） |
+| 5 | `runtime-crate-split` 申し送り ⑶ の 2.5・3.2・4.2 | 外に使い手の無い 5 項目（`record_status`・`snapshot_status_calls`・`wait_thread_end`・`HoldGate`・`shell_carry::decide`）を私有へ戻した。本体のテストだけが使う 62 項目は使い手に数えて戻さない（要件の討議の 4）。件 5 に数えるほかの狭め（3 節の件 5・design.md「要件の対応」5.5）も直した | 3.6（`c31ccb9f0`・指摘 36・53）・3.1（`a8856bc46`・指摘 46）・3.3（`b1af556bd`・指摘 59）・3.7（`9c235f4d7`・指摘 60）・3.4（`53a011934`・指摘 68・69）・4（`85f752e86`・指摘 77） |
+| 6 | `runtime-crate-split` 申し送り ⑶ 4.6 | この spec の持ち物の 14 本（`switch_cue_tests` 5・`shell_balloon_resolve_tests` 3・`shell_carry_tests` 6）を `areka-runtime` へ戻した。依存は足していない。残りの 3 本は 13.4 | 6.1（`641ca25f3`・指摘 26・27・11）・6.2（`12d69add7`・指摘 33） |
+| 7 | `runtime-crate-split` 申し送り ⑵ | 直さない。持ち主の `audit-placement-follow-residue` の `brief.md` 109 行に実在することを確かめた（`transition_judge.rs` の古い説明）。申し送りは要らない | 要件 5.7（確かめのみ） |
+| 8 | `runtime-crate-split` 申し送り ⑶ | 直さない。持ち主の `audit-emo2-boot-switch` の `brief.md` 98 行に実在することを確かめた（`world_at` の写し・両方のファイルとも向こうの持ち物）。申し送りは要らない | 要件 5.8（確かめのみ） |
+
+- 件 7・件 8 の確かめは、`completed/` でなく `.kiro/specs/<持ち主>/brief.md` を読んで行った（出どころ: 要件 5.7・5.8）。
+
+### 13.2 直さずに残した指摘・規模・⑶（要件 2.2・2.5・2.6）
+
+| 番号 | 種類 | 開発者の裁定（2026-11-17・要件の討議・推奨案で承認） | 出どころ |
+|---|---|---|---|
+| 25 | ⑴ 開発者の裁定に反する直し | 直さずに残す。余韻の 300 反復と根拠の文を今の形のまま置く | 完了した spec の決め R2.9「製品のコードへ観測の口を作らない」（要件の討議の 2） |
+| 81 | ⑴ 開発者の裁定に反する直し | 直さずに残す。毎秒の変化通知の応答本数の規則は、余った応答が記録に残らず害が無い | 完了した spec の task 2.2「段の上限だけから導き、駆動器から借りない」（要件の討議の 3） |
+
+- 82 番は直す側（検査を残したまま `Vec` をやめて `any` 1 回）。出どころ: 5 節の ⑴ の候補・`requirements.md`「要件の討議で確定したこと」の 3（design D3）。
+- 35 番は直す側（`wait_until` の形へそろえる・R7.9 は承認で改めた）。出どころ: 5 節の ⑴ の候補・`requirements.md`「要件の討議で確定したこと」の 1。
+- 規模: ギャップ分析の見込み 20〜24 タスクのうち、設計で 20 束（T1〜T20）にして、1 本のまま進めた。分けず・削らず、事実として記録するだけ（要件 2.6・2026-11-16 開発者の決め）。
+- ⑶（SSP 互換か ukadoc の正典に関わる振る舞いの変化）に当たった指摘は 0 件。1 番の上限（`i32::MAX`）は、今の「数でない key」と同じ扱いで ⑶ に当たらないと見て、SSP の測りは要らないと確定した（11 節の 2）。⑵（先送りの印）に当たる指摘にしたものも 0 件（5 節）。
+
+### 13.3 実装で分かった前提の崩れと設計の調整（`tasks.md` の Implementation Notes から）
+
+- **72 番の前提が崩れた**: `cargo check -p areka-runtime --lib` に「never read」の警告が出ない（`derive(PartialEq)` が全部の欄を読むため）。`cfg_attr(expect(dead_code))` は付けずに、変えないまま閉じた（タスク 3.4）。
+- **78 番の縛るテストの置き場**: `reload_tests.rs` の組み立てでは、shell の回が kanade と無関係に `no_context` で止まり、`accept_skin` の送り損ねの道を縛れなかった。`reload_skin_tests.rs` の結線つきの組み立てへ移し、3 回目をバルーンにした（design.md の 78 番の節と行数の表を合わせた・タスク 4）。
+- **33 番の名前表**: 本体に残る出し直しのテスト 1 本は、名前表を `BindResolver::from_groups(&BindGroupDefaults::from([..]))` の 1 式で組み、服の名前は 2 件（服 A の 100 と 服 B の 101）だけにした（確かめたいのは送る順で、名前の読みではない・設計 D4・タスク 6.2）。
+- **58 番の正準台帳の表**: 設計の `const CANONICAL: [...; 43]` でなく `CANONICAL_ROWS: &[...]` にした（手で持つ件数を除く趣旨・タスク 3.3）。
+- **95 番の `pause`**: 足したのは `settle_bounded_with` だけ（設計の 95 番どおり。tasks.md の「2 つの関数に」は字面の違い・タスク 6.4）。
+- **35 番の 10 か所は 8 か所になった**: 2 か所は 7.1 でまばたきのスモークと一緒に消えた（`da72765f9`）。残る 8 か所を `wait_until` にした（タスク 7.2）。`frame/switch_tests.rs` の 5 秒の輪は 35 番の対象外で残る。
+
+### 13.4 申し送りの行き先と件 6 の 3 本
+
+| 件 | 行き先 | 確かめた事実 | 出どころ |
+|---|---|---|---|
+| 件 6 の 2 本（`balloon_visibility_phase_tests.rs` L714・L789） | `audit-emo2-boot-switch` の `brief.md`「audit-emo2-boot-spine からの申し送り」のウ | 同 brief に書き足し済み | `runtime-crate-split` 申し送り ⑶ 4.6（要件 5.6・7.8） |
+| 件 6 の 1 本（`frame/window_state_tests.rs` L144） | `audit-emo2-boot-frame` の `brief.md` の同名の節のイ | 同 brief に書き足し済み（C22・走っている相手へも申し送り済み） | `runtime-crate-split` 申し送り ⑶ 4.6（要件 5.6・7.8） |
+| ア（1 番の片割れ・`frame/dpi.rs`） | `audit-emo2-boot-frame` の `brief.md` の同名の節のア | 書き足し済み | 6 節 |
+| イ | 上に同じ | 書き足し済み | 6 節 |
+| ウ | `audit-emo2-boot-switch` の `brief.md` のウ | 書き足し済み | 6 節 |
+| オ | `audit-emo2-boot-frame`・`audit-emo2-boot-switch`・`audit-areka-app` の各 brief | 書き足し済み | 6 節・要件の討議の 5 |
+| キ・ク | `audit-areka-app` の `brief.md` | 書き足し済み | 6 節・要件の討議の 5 |
+| ケ | 並走中の `audit-ukadoc-survey` のセッション | 伝え済み | 6 節・要件の討議の 5 |
+| **エ**（落ちの報告の写し 3 本） | **`/kiro-complete` の未解決の棚卸の件** | 持ち主の spec が無い（wintf と placement の見直しは完了済み）。完了のときに起票か扱いを決める | 6 節 |
+| **カ**（`carrier_cue` の写し 15 個） | **`/kiro-complete` の未解決の棚卸の件** | 97 番で `areka-runtime` の test-support に 1 本置いた（タスク 3.3）。各持ち主が寄せる先は、完了のときに扱いを決める | 6 節 |
+
+- 要件 7.7（C22 のほかの 5 本の触るファイル）に及ぶ直しは 0 件で、相手への申し送りが要るものはア・イ・ウ・オ・ケの記録のみ（出どころ: 6 節・`requirements.md`「要件の討議で確定したこと」の 5）。
+
+### 13.5 新しい申し送り（要件 7.8）
+
+- **`areka-test-wait-wording`**: 出どころはタスク 6.5。film の E2E を `crates/areka/src/runtime_tests/film_playback_e2e_tests.rs` から `crates/areka-runtime/src/film_playback_e2e_tests.rs` へ移したため、同 spec の brief の `recv_timeout` の数え方（`crates/areka/src` の下だけ）から 1 か所が外れる。
+  - 受け持つ spec の実在を確かめた: `.kiro/specs/areka-test-wait-wording/`（`completed/` でない・`brief.md` あり）。
+  - 走っているセッションは無い: 台帳（`roadmap.md`）に載る起票済みの spec で、C22 のウェーブ 6 本（`collisionex-regions`・`audit-placement-follow-residue`・`audit-emo2-boot-spine`・`audit-test-kits`・`audit-ukadoc-survey`・`audit-pilot`）に入っていない。
+  - 同 brief の末尾に「audit-emo2-boot-spine からの申し送り」の節を 1 つ足した（数えの範囲に `crates/areka-runtime/src` を加える）。
+- **`areka-test-wait-wording`（spine 系 6 本の `Instant::now() +`）**: 出どころはタスク 7.1（`da72765f9`・2 か所）と 7.2（`036c7ad44`・8 か所）。`crates/areka/src/runtime_tests/spine_{close_wiring,display,move_cue,seriko_loop,talk_close,third_scope_talk}_tests.rs` の `Instant::now() +` の締切 10 か所を消した（`git grep -c "Instant::now() +"` で `main` 10 → HEAD 0）。同 spec の brief の 2026-11-16 の節の「数え直し」（`Instant::now() +` 14）と「触るファイル」（spine 系 6 本）が今の事実と合わない。
+  - 上と同じ節に 1 項目を足した（数え直しの命令は `git grep -n "Instant::now() +" -- crates/areka/src crates/areka-runtime/src`）。持ち主の元の文は直していない。
+
+### 13.6 8.1 の操作でしか確かめられない直し（要件 8.5）
+
+- **0 件**。どの直しも、決定論のテスト（偽の SHIORI・偽の時計・門・`target` の下の写し）で筋まで縛った。静かな机の計測・画面の操作・本物の置き場への設置は回していない。効き目は、次の実機の確かめ（全体テストの段の中の emo2・pasta の実走）で見る（出どころ: 要件 8.5・9 節の要件 8 の行「決定論のテストだけで確かめられる」・`tasks.md` の各タスクの記録）。
