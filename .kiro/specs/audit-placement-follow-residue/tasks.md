@@ -137,7 +137,7 @@
   - _Depends: 5, 6.3, 7, 8, 9, 10_
   - _Dispatch: mechanical — 直し方の規則を設計が決めていて、行ごとに当てはめる_
   - _Requirements: 7.2_
-- [ ] 11.3 (P) 配置の crate のテストの番号を直す（後半）
+- [x] 11.3 (P) 配置の crate のテストの番号を直す（後半）
   - 11.2 の残りのテストのファイル（`follow_s` から後）を、同じ規則で直す
   - 完了の状態: G2 の 4 つの grep を受け持つファイルに絞った unnamed が 0
   - _Boundary: placement follow tests from follow_s_

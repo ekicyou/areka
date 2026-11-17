@@ -1,5 +1,5 @@
 //! 鎖を作業領域の中に置く純関数の核と World の口の檻（window-work-area-clamp・task 1.1・1.2・
-//! 要件 10.1 ⑴⑵⑸⑹⑺・7.4・9.1・9.2）。
+//! `window-work-area-clamp` 要件 10.1 ⑴⑵⑸⑹⑺・7.4・9.1・9.2）。
 //!
 //! 数値は開発者の机の形の合成: 主の画面（200%）の作業領域 `0..2880 × 0..1704`、その左に
 //! 150% の画面。本体は主の画面の左端に立つ。
@@ -60,7 +60,7 @@ fn run(
     resolve_chain_in_work_area(&slots, rects, snap)
 }
 
-/// 先頭（本体）は返さない＝動かさない（要件 1.3）。
+/// 先頭（本体）は返さない＝動かさない（`window-work-area-clamp` 要件 1.3）。
 fn assert_head_untouched(out: &[ChainPlacement]) {
     assert!(
         out.iter().all(|p| p.scope != 0),
@@ -91,7 +91,7 @@ fn joined_left_off_area_flips_to_right_neighbor() {
 }
 
 /// ⑴ 右にも入らない（作業領域が本体＋相方より狭い）→ 並べた位置を作業領域の端へ寄せる
-/// （本体と重なってよい・要件 1.2）。
+/// （本体と重なってよい・`window-work-area-clamp` 要件 1.2）。
 #[test]
 fn neither_side_fits_clamps_to_area_edge() {
     let snap = MonitorSnapshot {
@@ -111,7 +111,7 @@ fn neither_side_fits_clamps_to_area_edge() {
 }
 
 /// C14 ⑴ 右の辺のスコープ（x 400・幅 600）の左に `JoinLeft` で付けた窓が入らない → 反対の側も
-/// ほぼ画面の外で入らず、端へ寄せる（`opposite` の説明・要件 1.5）。
+/// ほぼ画面の外で入らず、端へ寄せる（`opposite` の説明・`audit-placement-follow-residue` 要件 1.5）。
 #[test]
 fn edge_scope_pair_flips_off_screen_and_clamps_to_edge() {
     let snap = MonitorSnapshot {
@@ -153,7 +153,7 @@ fn join_left_offset_is_not_flipped_and_clamps_to_edge() {
     assert_eq!(out[0].outcome, ChainClampOutcome::Edge);
 }
 
-/// ⑵ 3 体の鎖: 3 番目は並べ替えた**後の** 2 番目を基準に付く（要件 1.5）。
+/// ⑵ 3 体の鎖: 3 番目は並べ替えた**後の** 2 番目を基準に付く（`window-work-area-clamp` 要件 1.2）。
 #[test]
 fn third_joins_flipped_second() {
     let partner = cr(1000, 900, 1108, 800);
@@ -176,7 +176,7 @@ fn third_joins_flipped_second() {
     assert_eq!(out[1].outcome, ChainClampOutcome::Fits);
 }
 
-/// ⑸ 窓が作業領域より大きい → 左辺と上辺が作業領域の左辺と上辺に合う（要件 7.2）。
+/// ⑸ 窓が作業領域より大きい → 左辺と上辺が作業領域の左辺と上辺に合う（`window-work-area-clamp` 要件 7.2）。
 #[test]
 fn oversized_window_aligns_left_and_top() {
     let snap = MonitorSnapshot {
@@ -193,7 +193,7 @@ fn oversized_window_aligns_left_and_top() {
     assert_eq!(out[0].outcome, ChainClampOutcome::Edge);
 }
 
-/// ⑹ 空のモニタの写し → 並べた位置のまま「取れない」（要件 7.4）。
+/// ⑹ 空のモニタの写し → 並べた位置のまま「取れない」（`window-work-area-clamp` 要件 7.4）。
 #[test]
 fn empty_snapshot_leaves_joined_unresolved() {
     let partner = cr(1000, 900, 1108, 800);
@@ -222,7 +222,7 @@ fn fitting_chain_does_not_move() {
     assert_eq!(out[0].outcome, ChainClampOutcome::Fits);
 }
 
-/// 横に入る並びは y だけを同じ式で収める（要件 7.2 は両軸・x は変えない）。
+/// 横に入る並びは y だけを同じ式で収める（`window-work-area-clamp` 要件 7.2 は両軸・x は変えない）。
 #[test]
 fn fitting_x_clamps_only_y() {
     let partner = cr(640, 1000, 1108, 800);
@@ -236,7 +236,7 @@ fn fitting_x_clamps_only_y() {
 }
 
 /// 組の決めが Keep の窓（台本で置いた窓・ドラッグの窓ほか）は今の位置のまま
-/// （作業領域の外でも・モニタの写しが無くても・要件 1.4・2.3）。
+/// （作業領域の外でも・モニタの写しが無くても・`window-work-area-clamp` 要件 1.4・2.3）。
 #[test]
 fn kept_window_stays_put() {
     let partner = cr(-1500, 900, 1108, 800);
@@ -277,7 +277,7 @@ fn extreme_coordinates_do_not_panic() {
     );
 }
 
-/// 記録の 3 語と場面の 5 語（要件 9.1・9.2）。
+/// 記録の 3 語と場面の 5 語（`window-work-area-clamp` 要件 9.1・9.2）。
 #[test]
 fn vocabulary_words() {
     assert_eq!(WORK_AREA_CLAMP_TAG, "[work-area-clamp] Clamp");
@@ -306,7 +306,7 @@ fn vocabulary_words() {
 }
 
 // -------------------------------------------------------------------------
-// World の口（task 1.2）: 窓の高さを WindowPos から・作業領域を MonitorSnapshot 資源から読む
+// World の口: 窓の高さを WindowPos から・作業領域を MonitorSnapshot 資源から読む
 // -------------------------------------------------------------------------
 
 /// 窓を `rects` の矩形で生やした World と、走査の形の `(scope, 窓, 今の位置)` と組のスロット。
@@ -397,7 +397,7 @@ fn world_entry_logs_kept_reason() {
     assert!(guard_events(&events, WORK_AREA_CLAMP_TAG).is_empty());
 }
 
-/// ⑹ モニタの写しの無い World → 並べた位置のまま `Unresolved` の warn が出る（要件 7.4）。
+/// ⑹ モニタの写しの無い World → 並べた位置のまま `Unresolved` の warn が出る（`window-work-area-clamp` 要件 7.4）。
 /// 対照: 同じ捕捉窓で写しの有る World を通すと warn は出ず `Clamp` が入る（捕捉が生きている）。
 #[test]
 fn world_without_snapshot_warns_unresolved_with_contrast() {
@@ -456,7 +456,7 @@ fn unreadable_height_is_unresolved_and_others_continue() {
     assert_eq!(warn.expect_field("scope"), "1");
 }
 
-/// 指摘 11 ⑹ 写しは有るが空の World → 並べた位置のまま `Unresolved`（reason=no-work-area）。
+/// `audit-placement-follow` 指摘 11 ⑹ 写しは有るが空の World → 並べた位置のまま `Unresolved`（reason=no-work-area）。
 #[test]
 fn world_with_empty_snapshot_warns_no_work_area() {
     let rects = [HEAD, cr(1000, 900, 1108, 800)];
@@ -478,7 +478,7 @@ fn world_with_empty_snapshot_warns_no_work_area() {
     assert_eq!(warn.expect_field("reason"), "\"no-work-area\"");
 }
 
-/// 指摘 20: 高さが 0 以下（未確定の印 `CW_USEDEFAULT` を含む）のスロットは、高さが読めない
+/// `audit-placement-follow` 指摘 20: 高さが 0 以下（未確定の印 `CW_USEDEFAULT` を含む）のスロットは、高さが読めない
 /// のと同じ `Unresolved`（no-window-height）。直す前は高さ 0 の矩形で寄せを計算していた（`Flipped`）。
 #[test]
 fn sentinel_height_is_unresolved() {

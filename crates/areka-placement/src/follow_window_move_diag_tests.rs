@@ -14,18 +14,18 @@ use super::{
 use crate::resolver::{Anchor, PointPx, SizePx};
 
 // -------------------------------------------------------------------------
-// task 3.2: 消費側の存在確認と警告水準の区別（Req 6.2/6.3・design D8 消費側・
+// 消費側の存在確認と警告水準の区別（`areka-P0-dpi-window-vanish` 要件 6.2/6.3・design D8 消費側・
 // design「guard_visibility > Implementation Notes > 消費側の区別」）
 //
 // 追従層の消費入口（[`resize_window_to`]／[`resize_window_keep_position`]）は
 // **2 つの事象を混ぜてはならない**:
 //   (a) entity 不在（既に despawn 済み）＝終了処理の正常系 → `debug!` で打ち切り
 //   (b) entity は実在するが接地点規約の component（`Anchored`）が欠落＝真の異常 → `warn!`
-// (a) を warn のままにすると終了時ログが良性ノイズで埋まり（Req 6.2 違反）、(b) を
+// (a) を warn のままにすると終了時ログが良性ノイズで埋まり（`areka-P0-dpi-window-vanish` 要件 6.2 違反）、(b) を
 // debug へ落とすと本物の結線バグが観測から消える。**同じ檻の中で両方**を見る。
 // -------------------------------------------------------------------------
 
-/// Req 6.2/6.3（追従層・キャラ窓入口）: despawn 済み entity への resize は正常終了系
+/// `areka-P0-dpi-window-vanish` 要件 6.2/6.3（追従層・キャラ窓入口）: despawn 済み entity への resize は正常終了系
 /// として `debug!` 1 行で打ち切られ、**warn 以上を 1 行も出さない**。
 #[test]
 fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
@@ -54,7 +54,7 @@ fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
     // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（spawn_cleanup_tests.rs の T-V1 と同型）。
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
-        "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        "破棄済み窓に対して警告以上のログが出ている（areka-P0-dpi-window-vanish 要件 6.2 違反）: {events:?}"
     );
     let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
     assert_eq!(
@@ -64,7 +64,7 @@ fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
     );
 }
 
-/// Req 6.2 の裏面（真の異常を殺さない）: **生存している** entity の接地点規約 component
+/// `areka-P0-dpi-window-vanish` 要件 6.2 の裏面（真の異常を殺さない）: **生存している** entity の接地点規約 component
 /// （`Anchored`）欠落は従来どおり `warn!`。存在確認の導入でこちらまで静穏化してはならない。
 #[test]
 fn resize_window_to_missing_anchored_on_living_entity_still_warns() {
@@ -92,7 +92,7 @@ fn resize_window_to_missing_anchored_on_living_entity_still_warns() {
     assert_eq!(
         warned.level,
         tracing::Level::WARN,
-        "実在 entity の Anchored 欠落は真の異常＝warn のまま（Req 6.2 の区別）"
+        "実在 entity の Anchored 欠落は真の異常＝warn のまま（areka-P0-dpi-window-vanish 要件 6.2 の区別）"
     );
     assert!(
         !events
@@ -102,7 +102,7 @@ fn resize_window_to_missing_anchored_on_living_entity_still_warns() {
     );
 }
 
-/// Req 6.2/6.3（追従層・バルーン窓入口）: despawn 済み entity への位置据置きリサイズも
+/// `areka-P0-dpi-window-vanish` 要件 6.2/6.3（追従層・バルーン窓入口）: despawn 済み entity への位置据置きリサイズも
 /// 正常終了系（`debug!`）として打ち切られ、warn 以上を出さない。
 #[test]
 fn resize_window_keep_position_on_despawned_entity_is_debug_only_normal_termination() {
@@ -118,13 +118,13 @@ fn resize_window_keep_position_on_despawned_entity_is_debug_only_normal_terminat
     assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
     assert!(
         events.iter().all(|e| e.level > tracing::Level::INFO),
-        "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        "破棄済み窓に対して警告以上のログが出ている（areka-P0-dpi-window-vanish 要件 6.2 違反）: {events:?}"
     );
     let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
     assert_eq!(skipped.level, tracing::Level::DEBUG);
 }
 
-/// Req 6.2 の裏面（バルーン窓入口）: **生存している** entity の `WindowPos` 欠落
+/// `areka-P0-dpi-window-vanish` 要件 6.2 の裏面（バルーン窓入口）: **生存している** entity の `WindowPos` 欠落
 /// （窓生成前の異常系）は従来どおり `warn!`。
 #[test]
 fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns() {
@@ -144,16 +144,16 @@ fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns()
 }
 
 // -------------------------------------------------------------------------
-// 窓移動レコード（Req 1.2／2.4・task 1.4・design「placement::diag > Invariants」
+// 窓移動レコード（`areka-P0-dpi-window-vanish` 要件 1.2／2.4・design「placement::diag > Invariants」
 // ＋「PlacementRoute 配管＋guard_visibility > Integration」・D11）
 //
 // 単一ライター `enqueue_window_set_pos` の**書込成功時**に 1 レコードを専用 target
 // （`areka_placement::diag`）へ出す。檻の要点:
 //   (1) 経路名が呼出点と 1:1（route を取り違えたら赤）
 //   (2) route・entity・種別・scope・位置・寸・DPI の**全フィールド**が揃う
-//       （entity は wintf 側ログとの結合キーゆえ必ず入る＝Req 1.9 の 2 段 grep 条件）
+//       （entity は wintf 側ログとの結合キーゆえ必ず入る＝`areka-P0-dpi-window-vanish` 要件 1.9 の 2 段 grep 条件）
 //   (3) 書込が起きない経路（べき等 skip・`WindowHandle` 未付与）ではレコードが出ない
-//   (4) 既定 `RUST_LOG=info` では 1 行も出ない（Req 1.7）
+//   (4) 既定 `RUST_LOG=info` では 1 行も出ない（`areka-P0-dpi-window-vanish` 要件 1.7）
 //
 // 観測境界は tracing イベント本体（`log_capture_kit::capture`）——本レコードは
 // `WindowPos` ミラーと違い「書込が起きた事実」そのものの証跡だからである。
@@ -211,7 +211,7 @@ fn char_window_world(scope: usize, dpi: u16) -> (World, Entity) {
 
 /// (2) 全フィールドの檻: 書込成功で**ちょうど 1 行**、route・entity・kind・scope・
 /// 物理位置・物理寸・DPI が揃う（1 つでも落ちたら赤）。entity は wintf 側ログ（`entity = ?e`）と
-/// 同じ `Debug` 表現で出る——Req 1.9 の scope 別計数（2 段 grep）の結合キー。
+/// 同じ `Debug` 表現で出る——`areka-P0-dpi-window-vanish` 要件 1.9 の scope 別計数（2 段 grep）の結合キー。
 #[test]
 fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     let (mut world, e) = char_window_world(1, 192);
@@ -237,7 +237,7 @@ fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
 }
 
 /// (1) 経路名は**呼出側が渡した route と 1:1**。`resize_window_to` は多くの経路の共通の
-/// 反映口なので、ここで route を取り違えると書き手の名指し（Req 2.4）が丸ごと嘘になる。
+/// 反映口なので、ここで route を取り違えると書き手の名指し（`areka-P0-dpi-window-vanish` 要件 2.4）が丸ごと嘘になる。
 /// ここではそのうち 3 経路を渡す。
 #[test]
 fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
@@ -380,7 +380,7 @@ fn move_cue_write_is_recorded_as_move_cue_with_a_balloon_follow_companion() {
 }
 
 /// (1) ドラッグ経路（連続イベント）はキャラ窓の書込を記録しない一方、随伴バルーンは
-/// `BalloonFollow` として記録される（Req 2.5「バルーン消失は追従の随伴か」の判別材料）。
+/// `BalloonFollow` として記録される（`areka-P0-dpi-window-vanish` 要件 2.5「バルーン消失は追従の随伴か」の判別材料）。
 #[test]
 fn drag_path_records_only_the_balloon_follow_write() {
     let mut world = World::new();
@@ -427,7 +427,7 @@ fn drag_path_records_only_the_balloon_follow_write() {
 /// `WindowHandle` 未付与（失敗）の双方で 0 行。
 #[test]
 fn no_window_move_record_when_nothing_is_written() {
-    // べき等 skip（Req3.1）
+    // べき等 skip（`areka-P0-surface-resize-resnap` 要件 3.1）
     let (mut world, e) = char_window_world(0, 120);
     let (wrote, events) = capture(|| {
         resize_window_to(
@@ -443,7 +443,7 @@ fn no_window_move_record_when_nothing_is_written() {
         "書込ゼロなのにレコードが出た: {events:?}"
     );
 
-    // WindowHandle 未付与（Req3.3・enqueue が warn＋false）
+    // WindowHandle 未付与（`areka-P0-surface-resize-resnap` 要件 3.3・enqueue が warn＋false）
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
     let no_handle = world
@@ -541,7 +541,7 @@ fn window_move_output_under_filter(directives: &str) -> String {
 }
 
 /// (4) 既定 `RUST_LOG=info`（`main.rs` のフォールバック）では窓移動レコードが
-/// **1 行も出ない**（Req 1.7・恒久計装の既定 OFF）。
+/// **1 行も出ない**（`areka-P0-dpi-window-vanish` 要件 1.7・恒久計装の既定 OFF）。
 #[test]
 fn window_move_records_are_silent_under_default_info_filter() {
     let out = window_move_output_under_filter("info");
@@ -551,12 +551,12 @@ fn window_move_records_are_silent_under_default_info_filter() {
     );
     assert!(
         !out.contains(WINDOW_MOVE_RECORD_TAG),
-        "既定 RUST_LOG=info で窓移動レコードが漏れている（Req 1.7 違反）: {out}"
+        "既定 RUST_LOG=info で窓移動レコードが漏れている（areka-P0-dpi-window-vanish 要件 1.7 違反）: {out}"
     );
 }
 
 /// (4) 手順書の directive（`areka_placement::diag=debug`）で点灯する
-/// ＝単一ライター経由でも target が手順書と 1:1 で結ばれている（Req 1.5/1.7）。
+/// ＝単一ライター経由でも target が手順書と 1:1 で結ばれている（`areka-P0-dpi-window-vanish` 要件 1.5/1.7）。
 #[test]
 fn window_move_records_light_up_under_the_procedure_directive() {
     let out = window_move_output_under_filter("info,areka_placement::diag=debug");

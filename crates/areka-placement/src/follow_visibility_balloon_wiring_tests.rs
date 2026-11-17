@@ -19,9 +19,9 @@ use crate::resolver::{Anchor, PointPx, SizePx};
 use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
-// バルーン矩形への遷移ガード配線（task 6.2・S3′ 是正・Req 3.4・D6）
+// バルーン矩形への遷移ガード配線（`areka-P0-dpi-window-vanish` 要件 3.4・S3′ 是正・D6）
 //
-// task 2.2 は `guard_visibility` のバルーン矩形ケース（純関数）を、task 6.1 は
+// `areka-P0-dpi-window-vanish` のタスク 2.2 は `guard_visibility` のバルーン矩形ケース（純関数）を、タスク 6.1 は
 // キャラ窓経路の配線を固めた。本節が檻に入れるのは**バルーン随伴で実際に走るか・
 // どの引き金で走るか**である（diagnosis-report.md §1.4「純関数が在ることは S3′ の
 // 充足ではない」）。
@@ -29,15 +29,15 @@ use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 // 檻の要点（空虚化を避けるための自己検査を各檻が持つ）:
 //   (1) 探針の自己検査——ガード**無し**のバルーン提案が本当に全 work area 非交差で
 //       あること／旧バルーン矩形は可視であること（どちらかが崩れると ClampX 腕へ
-//       入らず「緑」が何も意味しない・[[2.2 の教訓]]）
+//       入らず「緑」が何も意味しない・`areka-P0-dpi-window-vanish` タスク 2.2 の教訓）
 //   (2) **キャラ窓は clamp されない**こと——キャラ側のガードが動かした結果を
 //       バルーンの成果と読み違えない（S3 と S3′ の分離）
 //   (3) 引き金による発火条件——**ドラッグ随伴では位置が素の恒等式と 1 bit も違わない**。
-//       ログ側の否定 assert だけに依存しない（[[5.2 の教訓＝空虚性 6 例目]]:
+//       ログ側の否定 assert だけに依存しない（`areka-P0-dpi-window-vanish` タスク 5.2 の教訓＝空虚性 6 例目:
 //       不変量がログ側にしか無いと別ファイルの水準変更で守りが消える）
 //   (4) 判定語のリテラル——`CLAMP_TAG`／`NEAREST_TAG`／`UNRESOLVED_TAG` を檻側にも持つ
 //
-// 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（Req 5.6）。
+// 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（`areka-P0-dpi-window-vanish` 要件 5.6）。
 // -------------------------------------------------------------------------
 
 use super::BalloonFollowTrigger;
@@ -89,7 +89,7 @@ fn char_with_far_balloon_world(
 fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
     assert!(
         !BalloonFollowTrigger::Drag.applies_visibility_guard(),
-        "ドラッグ随伴でガードが発火する（明示操作の尊重が壊れている・Req 3.1）"
+        "ドラッグ随伴でガードが発火する（明示操作の尊重が壊れている・areka-P0-dpi-window-vanish 要件 3.1）"
     );
     for route in PlacementRoute::ALL {
         assert_eq!(
@@ -100,7 +100,7 @@ fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
     }
 }
 
-/// **Req 3.4 の本体**: 非ドラッグの配置系の引き金（発火する 7 種のうちここで回す 4 経路）のとき、offset 恒等式が出した
+/// **`areka-P0-dpi-window-vanish` 要件 3.4 の本体**: 非ドラッグの配置系の引き金（発火する 7 種のうちここで回す 4 経路）のとき、offset 恒等式が出した
 /// バルーン提案位置が全 work area 非交差へ落ちるなら、X の clamp で救われる。
 ///
 /// キャラ窓は終始可視（clamp されない）＝救われたのは**バルーンだけ**である。
@@ -144,11 +144,11 @@ fn balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers() {
                 "dpi={dpi} route={route}: キャラ窓が動いた＝S3′ ではなく S3 の檻になっている"
             );
 
-            // Req 3.4: 書かれたバルーン矩形はいずれかの work area と交差する。
+            // `areka-P0-dpi-window-vanish` 要件 3.4: 書かれたバルーン矩形はいずれかの work area と交差する。
             let pos = point_of(&world, balloon);
             assert!(
                 visible_in(&layout, pos, b_size),
-                "dpi={dpi} route={route}: Req 3.4 違反——バルーン {pos:?} が全 work area と非交差"
+                "dpi={dpi} route={route}: areka-P0-dpi-window-vanish 要件 3.4 違反——バルーン {pos:?} が全 work area と非交差"
             );
             assert_eq!(
                 pos.y, bare.y,
@@ -181,7 +181,7 @@ fn balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers() {
     }
 }
 
-/// **Req 3.1 の裏面**: 明示操作系・非配置系の引き金では、バルーン位置が素の offset
+/// **`areka-P0-dpi-window-vanish` 要件 3.1 の裏面**: 明示操作系・非配置系の引き金では、バルーン位置が素の offset
 /// 恒等式と 1 bit も違わず、ガードのログも 1 行も出ない。
 #[test]
 fn balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers() {
@@ -224,15 +224,15 @@ fn balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers(
     }
 }
 
-/// **本タスクの中核の守り（[[6.1 → 6.2 の申し送り]]）**: ドラッグ随伴では発火しない。
+/// **本タスクの中核の守り（`areka-P0-dpi-window-vanish` タスク 6.1 → 6.2 の申し送り）**: ドラッグ随伴では発火しない。
 ///
 /// `follow_balloon` は配置系（[`resize_window_to`]）とドラッグ
 /// （[`on_char_drag`]／[`on_char_drag_end`]）の**双方**から呼ばれる。無条件適用すると
-/// ユーザーがキャラを画面端へ運んだときにバルーンだけが引き戻され、Req 3.1 の
+/// ユーザーがキャラを画面端へ運んだときにバルーンだけが引き戻され、`areka-P0-dpi-window-vanish` 要件 3.1 の
 /// 「明示操作の尊重」が壊れる——その変異を**位置 assert**で捕まえる（ログ側の否定
-/// assert だけに依存しない・[[5.2 の教訓]]）。
+/// assert だけに依存しない・`areka-P0-dpi-window-vanish` タスク 5.2 の教訓）。
 ///
-/// # 前提（windowposition-limit 7.3・要件 2.5／5.4）
+/// # 前提（`areka-P0-windowposition-limit` 要件 7.3・2.5／5.4）
 ///
 /// 本檻が固定するのは「**ドラッグ中は無介入**」であって「バルーンは決してクランプ
 /// されない」ではない。`windowposition.limit` が有効なバルーンでは、ドラッグ**解放時**
@@ -294,7 +294,7 @@ fn balloon_drag_trigger_neither_clamps_nor_warns() {
             assert_eq!(
                 point_of(&world, balloon),
                 bare,
-                "dpi={dpi} {entry}: ドラッグ随伴でバルーンが引き戻された（Req 3.1 違反）"
+                "dpi={dpi} {entry}: ドラッグ随伴でバルーンが引き戻された（areka-P0-dpi-window-vanish 要件 3.1 違反）"
             );
             assert!(
                 guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
@@ -305,7 +305,7 @@ fn balloon_drag_trigger_neither_clamps_nor_warns() {
 }
 
 /// ユーザーが画面外へ留置したバルーンは、配置系の引き金でも引き戻さない
-/// （キャラ窓と完全に同一の規則＝`Keep` 腕・Req 3.1 の「明示操作の尊重」）。
+/// （キャラ窓と完全に同一の規則＝`Keep` 腕・`areka-P0-dpi-window-vanish` 要件 3.1 の「明示操作の尊重」）。
 #[test]
 fn balloon_parked_off_screen_is_respected_on_placement_trigger() {
     for dpi in DPIS {
@@ -371,14 +371,14 @@ fn char_with_balloon_window_pos(
     (world, char_window, balloon)
 }
 
-/// **バルーン寸の未確定は `Option::None` だけではない**（[[4.6 の教訓]]・6.1 の
+/// **バルーン寸の未確定は `Option::None` だけではない**（`areka-P0-dpi-window-vanish` タスク 4.6 の教訓・タスク 6.1 の
 /// `old_rect` 導出と同型の罠）: `WindowPos::default()` は position・size の**両方**を
 /// `CW_USEDEFAULT`（`i32::MIN` センチネル）で持つ。
 ///
 /// センチネルを素の矩形として交差判定へ入れると `saturating_add` で逆転矩形になり、
 /// 判定そのものが意味を失う。是正版は**寸が未確定なら位置に一切手を入れず** `warn!` を残す。
 ///
-/// # 檻の非空虚性（[[5.2 の教訓]]＝ログ側だけの守りにしない）
+/// # 檻の非空虚性（`areka-P0-dpi-window-vanish` タスク 5.2 の教訓＝ログ側だけの守りにしない）
 ///
 /// 寸フィルタを外す変異では、位置センチネルが `old_rect = None`（不明）へ落ちるため
 /// 安全側 `ClampX` が走り、`clamp_axis(x, wa.left, ..)` が `wa.left` を返す
@@ -419,13 +419,13 @@ fn balloon_undetermined_size_holds_proposed_position_and_warns() {
         assert_eq!(
             warned.level,
             tracing::Level::WARN,
-            "dpi={dpi}: 判定不能が warn として残っていない（Req 3.3）"
+            "dpi={dpi}: 判定不能が warn として残っていない（areka-P0-dpi-window-vanish 要件 3.3）"
         );
         // **フィールド集合の固定**（`diagnosis-procedure.md` §3.1／§6.3 の振り分け規則が
         // これに依存する）: `route=BalloonFollow` で窓種別が引け、**`proposed` の有無**が
         // 本行（良性の判定不能）と装置異常（`MonitorSnapshot` 不在・モニタ 0 台）を分ける。
         // どちらを落としても実機判定が反転するので、literal で固定する
-        // （[[5.1 → 7.2 の申し送り＝判定語に使っているのに檻が無い型]] の再発防止）。
+        // （`areka-P0-dpi-window-vanish` タスク 5.1 → 7.2 の申し送り＝判定語に使っているのに檻が無い型の再発防止）。
         assert_eq!(
             warned.expect_field("route"),
             "BalloonFollow",
@@ -542,8 +542,8 @@ fn balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps() {
     }
 }
 
-/// 破棄済みバルーンへの随伴は**正常終了系**として `debug!` で打ち切る（Req 6.2/6.3・
-/// task 3.2 と同じ区別）。ここを `warn!` にすると終了時ログが良性ノイズで埋まり、
+/// 破棄済みバルーンへの随伴は**正常終了系**として `debug!` で打ち切る（`areka-P0-dpi-window-vanish` 要件 6.2/6.3・
+/// `areka-P0-dpi-window-vanish` タスク 3.2 と同じ区別）。ここを `warn!` にすると終了時ログが良性ノイズで埋まり、
 /// 本物の異常（実在窓の寸未確定）が読めなくなる。
 #[test]
 fn balloon_despawned_skips_guard_without_warning() {
@@ -563,18 +563,18 @@ fn balloon_despawned_skips_guard_without_warning() {
 
         assert!(
             guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
-            "dpi={dpi}: 破棄済みバルーンに対してガードが喋っている（Req 6.2 違反）: {events:?}"
+            "dpi={dpi}: 破棄済みバルーンに対してガードが喋っている（areka-P0-dpi-window-vanish 要件 6.2 違反）: {events:?}"
         );
-        // **task 7.3 で強化**: 6.2 が固定していたのは「ガードが喋らない」だけで、
+        // **`areka-P0-dpi-window-vanish` タスク 7.3 で強化**: タスク 6.2 が固定していたのは「ガードが喋らない」だけで、
         // 随伴書込そのもの（`enqueue_window_set_pos`）が破棄済みバルーンに対して
-        // `warn!` を出していた（6.2 → 7.3 の申し送り）。終了時静穏（Req 6.2）は
+        // `warn!` を出していた（`areka-P0-dpi-window-vanish` タスク 6.2 → 7.3 の申し送り）。終了時静穏（要件 6.2）は
         // **経路全体**の主張ゆえ、ここで警告以上ゼロを丸ごと見る。
         assert!(
             events.iter().all(|e| e.level > tracing::Level::INFO),
-            "dpi={dpi}: 破棄済みバルーンに対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+            "dpi={dpi}: 破棄済みバルーンに対して警告以上のログが出ている（areka-P0-dpi-window-vanish 要件 6.2 違反）: {events:?}"
         );
         // **相ごとに数える**——総数で数えると、片方の打ち切りを外しても他方が同じ
-        // 判定語を出して総数が偶然一致し、檻が空虚になる（3.2 の教訓と同型）。
+        // 判定語を出して総数が偶然一致し、檻が空虚になる（`areka-P0-dpi-window-vanish` タスク 3.2 の教訓と同型）。
         let skips = despawn_skip_lines(&events);
         assert!(
             skips.iter().all(|e| e.level == tracing::Level::DEBUG),
@@ -607,7 +607,7 @@ fn despawn_skip_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// Req 6.2 の裏面（真の異常を殺さない・随伴書込相）: **生存している** entity の
+/// `areka-P0-dpi-window-vanish` 要件 6.2 の裏面（真の異常を殺さない・随伴書込相）: **生存している** entity の
 /// `WindowHandle` 欠落（窓生成前）は従来どおり `warn!`。存在確認の導入でこちらまで
 /// 静穏化してはならない——「窓がまだ無い」は結線の異常であって終了系ではない。
 #[test]
@@ -631,7 +631,7 @@ fn balloon_without_handle_on_living_entity_still_warns_on_follow_write() {
     assert_eq!(
         warned.level,
         tracing::Level::WARN,
-        "実在 entity の WindowHandle 欠落は真の異常＝warn のまま（Req 6.2 の区別）"
+        "実在 entity の WindowHandle 欠落は真の異常＝warn のまま（areka-P0-dpi-window-vanish 要件 6.2 の区別）"
     );
     assert!(
         !despawn_skip_lines(&events)
@@ -642,11 +642,11 @@ fn balloon_without_handle_on_living_entity_still_warns_on_follow_write() {
 }
 
 // -------------------------------------------------------------------------
-// 混在 DPI・複数モニタ回帰檻の拡充（task 7.2・Req 3.4/4.4/5.1/5.2/5.3/5.6）
+// 混在 DPI・複数モニタ回帰檻の拡充（`areka-P0-dpi-window-vanish` 要件 3.4/4.4/5.1/5.2/5.3/5.6）
 //
-// task 6.1 は**キャラ窓だけ**が不可視へ落ちる合成を、task 6.2 は**バルーンだけ**が
+// `areka-P0-dpi-window-vanish` のタスク 6.1 は**キャラ窓だけ**が不可視へ落ちる合成を、タスク 6.2 は**バルーンだけ**が
 // 落ちる合成（キャラは終始可視だと明示的に assert する）を固めた。どちらの檻も
-// 「もう一方の窓は自明に安全」な世界で 1 つの連言肢を証明しており、Req 3.4 が
+// 「もう一方の窓は自明に安全」な世界で 1 つの連言肢を証明しており、`areka-P0-dpi-window-vanish` 要件 3.4 が
 // 要求する **連言**——「キャラ窓とバルーン窓の *どちらも* 不可視状態に遷移させない」
 // ——を 1 回の書込の中で見た檻は存在しない。本節が足すのはその連言と、
 // 2 つのガードが**互いの結果に依存する**接続点である。
@@ -656,12 +656,12 @@ fn balloon_without_handle_on_living_entity_still_warns_on_follow_write() {
 //       clamp 先の解決が窓ごとに独立であること（キャラの clamp_wa を流用していない
 //       こと）まで座標で固定される。
 //   (B) バルーンが追従するのは **ガード適用後**のキャラ位置であること。手順 7 が
-//       `new_pos` ではなく素の射影（`raw`／ガード前）を渡す変異は、6.2 の檻では
+//       `new_pos` ではなく素の射影（`raw`／ガード前）を渡す変異は、`areka-P0-dpi-window-vanish` タスク 6.2 の檻では
 //       **不動点**になる（あちらはキャラが clamp されない合成ゆえ両者が同値）。
 //       ここでは clamp 前後で px(40) ずれるので、恒等式の主張が実際に効く。
 //
 // 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない
-// （Req 5.6）。実 GPU・実高 DPI モニタを要さず決定論（Req 5.2）。
+// （`areka-P0-dpi-window-vanish` 要件 5.6）。実 GPU・実高 DPI モニタを要さず決定論（要件 5.2）。
 // -------------------------------------------------------------------------
 
 /// [`gap_bound_char_world`] に随伴バルーンを足した World。
@@ -689,7 +689,7 @@ fn gap_bound_char_world_with_balloon(
     (world, char_window, balloon, old_pos)
 }
 
-/// **Req 3.4／5.3 の連言**: 1 回の非ドラッグ配置書込で、キャラ窓とバルーン窓の
+/// **`areka-P0-dpi-window-vanish` 要件 3.4／5.3 の連言**: 1 回の非ドラッグ配置書込で、キャラ窓とバルーン窓の
 /// **どちらも**全 work area 非交差にならない。しかも救出先は**別々のモニタ**である。
 ///
 /// 合成の骨格（混在 DPI・複数モニタ・負座標・192 で 3200 超座標）:
@@ -701,7 +701,7 @@ fn gap_bound_char_world_with_balloon(
 ///
 /// ゆえに 2 つの clamp 先が別モニタになる——キャラの `clamp_wa` を流用する実装は
 /// バルーンを右モニタへ引き戻してしまい、`balloon.x == left_wa().left` の assert が
-/// 落ちる。6.1／6.2 の単窓檻はどちらもこの取り違えに対して不動点である
+/// 落ちる。`areka-P0-dpi-window-vanish` タスク 6.1／6.2 の単窓檻はどちらもこの取り違えに対して不動点である
 /// （両窓の clamp 先が同じ右モニタになる合成しか持っていない）。
 #[test]
 fn both_windows_survive_a_single_write_onto_different_monitors() {
@@ -713,7 +713,7 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
         // 救出後のキャラ位置から見て遥か左（左モニタよりさらに外）を指す。
         let offset = point(-px(2600, dpi), -px(600, dpi));
         // 旧バルーンは**左モニタ内**で可視（＝「遷移」であって留置ではない）。
-        // 座標は左モニタ左端からの論理オフセット×DPI で組む（絶対 px を置かない・Req 5.6）。
+        // 座標は左モニタ左端からの論理オフセット×DPI で組む（絶対 px を置かない・`areka-P0-dpi-window-vanish` 要件 5.6）。
         let old_balloon = point(left_wa().left + px(360, dpi), px(200, dpi));
 
         for route in [
@@ -725,7 +725,7 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
             let (mut world, char_window, balloon, old_pos) =
                 gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, offset);
 
-            // --- (1) 探針の自己検査（[[2.2 の教訓]]）---
+            // --- (1) 探針の自己検査（`areka-P0-dpi-window-vanish` タスク 2.2 の教訓）---
             let char_bare = unguarded_projection(dpi, old_pos, new);
             let char_saved = point(right_wa(dpi).left, char_bare.y);
             let balloon_bare = point(char_saved.x + offset.x, char_saved.y + offset.y);
@@ -752,7 +752,7 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
             let char_pos = point_of(&world, char_window);
             let balloon_pos = point_of(&world, balloon);
 
-            // --- (2) 連言そのもの（Req 3.4）: どちらも全 work area 非交差ではない ---
+            // --- (2) 連言そのもの（`areka-P0-dpi-window-vanish` 要件 3.4）: どちらも全 work area 非交差ではない ---
             assert!(
                 visible_in(&layout, char_pos, new),
                 "dpi={dpi} route={route}: キャラ窓 {char_pos:?} が全 work area と非交差"
@@ -802,11 +802,11 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
     }
 }
 
-/// **Req 4.4 の恒等式は「ガード適用後のキャラ位置」に対して成立する**。
+/// **`areka-P0-dpi-window-vanish` 要件 4.4 の恒等式は「ガード適用後のキャラ位置」に対して成立する**。
 ///
 /// [`resize_window_to`] 手順 7 は確定位置（`new_pos`＝遷移ガード適用**後**）で
 /// [`follow_balloon`] を呼ぶ。ここを素の射影（ガード前）へ差し替える変異は、
-/// 6.2 の檻ではキャラが clamp されない合成ゆえ**不動点**になる。
+/// `areka-P0-dpi-window-vanish` タスク 6.2 の檻ではキャラが clamp されない合成ゆえ**不動点**になる。
 ///
 /// 本檻はキャラだけが clamp される合成（clamp 前後で X が `px(40)` ずれる）を組み、
 /// バルーンの追従先が**ずれた後**の位置であることを座標で固定する。バルーン自身は
@@ -821,7 +821,7 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
 /// ——下の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
 /// 実機 SSP 裁定）は**是正後も真のまま**であり、主張は 1 文字も書き換えていない。
 ///
-/// 実測（task 6.4）: 追随の適用（本体の `runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// 実測（`areka-P0-balloon-offset-dpi` タスク 6.4）: 追随の適用（本体の `runtime::frame::balloon_offset_follow::rescale_balloon_follow_offset`
 /// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
 /// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
 #[test]
@@ -889,10 +889,10 @@ fn balloon_follows_the_guarded_char_position_not_the_raw_projection() {
                 "dpi={dpi} route={route}: 追従先のバルーンが全 work area と非交差"
             );
 
-            // 恒等式（Req 4.4）: `balloon − char ≡ BalloonFollow.offset`。
+            // 恒等式（`areka-P0-dpi-window-vanish` 要件 4.4）: `balloon − char ≡ BalloonFollow.offset`。
             // 比較相手は**書込前から不変の**窓相対 offset（テスト側の定数）であり、
             // world から読み直した値ではない——読み直すと「恒等式を、それを作った
-            // 当人に問う」恒真形になる（[[7.2 の空虚性 8 例目]]）。
+            // 当人に問う」恒真形になる（`areka-P0-dpi-window-vanish` タスク 7.2 の空虚性 8 例目）。
             let stored_offset = world
                 .get::<BalloonFollow>(char_window)
                 .expect("char 窓は BalloonFollow を持つ")

@@ -1,9 +1,9 @@
-//! ドラッグの控えと、組の相手を同じ量だけ動かす手続きの決定論の檻（task 3.1・要件 2.4／3.6／
-//! 4.1〜4.5／9.3・設計「sticky_follow」・設計の決め 4）。
+//! ドラッグの控えと、組の相手を同じ量だけ動かす手続きの決定論の檻（areka-P0-window-link-directives 要件 2.4／3.6／
+//! `areka-P0-window-link-directives` 要件 4.1〜4.5／9.3・設計「sticky_follow」・設計の決め 4）。
 //!
 //! 窓は偽の部品（偽 HWND・`WindowPos`・`Anchored`・`CharWindowMarker`・`DragConfig`・
-//! `BalloonFollow`）だけで組み、帳簿は 2.1 の `apply_set_sticky` で据える。関数は受け手を通さず
-//! 直接呼ぶ（受け手へのつなぎは task 3.2）。
+//! `BalloonFollow`）だけで組み、帳簿は `apply_set_sticky` で据える。関数は受け手を通さず
+//! 直接呼ぶ（受け手へのつなぎは `areka-P0-window-link-directives` タスク 3.2）。
 
 use std::collections::HashMap;
 
@@ -218,7 +218,7 @@ fn finish_persists_partner_position_without_its_pattern_shift() {
     finish(world);
 }
 
-/// 組の相手の記憶の形も descript の向きで選ぶ（指摘 11 ⑵・4.8）: descript は下吸着で台本が
+/// 組の相手の記憶の形も descript の向きで選ぶ（`audit-placement-follow` 指摘 11 ⑵・`areka-P0-window-link-directives` 要件 4.8）: descript は下吸着で台本が
 /// 揃えない置き方へ変えた相手は、左上でなく下端中央の x で書く。
 #[test]
 fn finish_persists_partner_in_descript_form_not_current_anchor() {
@@ -242,7 +242,7 @@ fn finish_persists_partner_in_descript_form_not_current_anchor() {
     finish(world);
 }
 
-/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（指摘 11 ⑵）。
+/// 組の相手に `Anchored` が無ければ、動かさず記憶にも書かず `warn!` を 1 行残す（`audit-placement-follow` 指摘 11 ⑵）。
 #[test]
 fn partner_without_anchored_is_warned_and_left_unmoved() {
     let mut world = world_with_snapshot();
@@ -456,7 +456,7 @@ fn drag_end_early_returns_do_not_leave_the_session() {
 }
 
 /// 相手 2 つの組のドラッグの終わりは、動かした窓と相手 2 つの位置を 1 つの束で記憶へ 1 回だけ
-/// 書く（要件 5.1〜5.3・設計の DragEndPersist）。束の中身は今までの N+1 回の和と同じ。
+/// 書く（`audit-placement-follow-residue` 要件 5.1〜5.3・設計の DragEndPersist）。束の中身は今までの N+1 回の和と同じ。
 /// 隣り合いの印まで見るため、窓の一式はこのファイルの偽の部品でなく本番の `spawn_ghost_windows`
 /// で組む（一式が無いと印は足されない）。組の外のスコープ 3 は鎖の次の窓として印が付く。
 #[test]

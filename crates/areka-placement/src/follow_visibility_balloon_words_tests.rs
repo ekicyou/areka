@@ -3,7 +3,7 @@
 //! バルーンには射影の段が無く、守りは入力と提案に同じ位置を渡す。動かしていない窓を
 //! 「引き寄せた」（`OffscreenPull`）と記録しないことを、寄せ（`ClampX`）と留置（`Keep`）の
 //! 2 つの腕で固める。寄せた後も縦に見えないときは `ClampX` でなく `HiddenAfterClampX` と
-//! 記録することも固める（指摘 6）。守りの関数を矩形で直接呼ぶ（バルーンの呼び口と同じ引数の形）。
+//! 記録することも固める（`audit-placement-follow` 指摘 6）。守りの関数を矩形で直接呼ぶ（バルーンの呼び口と同じ引数の形）。
 
 use super::evaluate_visibility_guard;
 use super::test_support::{

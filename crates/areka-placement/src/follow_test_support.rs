@@ -81,7 +81,7 @@ pub(super) fn odd_edge_snapshot() -> MonitorSnapshot {
 }
 
 // -------------------------------------------------------------------------
-// bottom 吸着ドラッグ（task 8.2R・4.7・DD15 v2: 単一ライター）
+// bottom 吸着ドラッグ（areka-P0-window-placement 要件 4.7・DD15 v2: 単一ライター）
 //
 // BottomSnap キャラ窓は DragConfig{move_window:false}＝wndproc は窓を動かさず、
 // on_char_drag が DraggingState（dispatch_drag_events が挿入）＋DragEvent の
@@ -146,20 +146,20 @@ pub(crate) fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 
 // -------------------------------------------------------------------------
 // work_area_for_window_with_origin ／ guard_visibility
-// （task 2.2・D6/S3・S3′・Req 3.1/3.2/5.1/5.3/5.6）
+// （areka-P0-dpi-window-vanish 要件 3.1/3.2/5.1/5.3/5.6・D6/S3・S3′）
 //
-// 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く（Req 5.6）。
+// 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く（areka-P0-dpi-window-vanish 要件 5.6）。
 // 座標は 96/120/192 の各水準へスケールした合成レイアウト上で構築し、96 の
-// 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質・Req 5.1）に依存しない。
+// 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質・areka-P0-dpi-window-vanish 要件 5.1）に依存しない。
 // -------------------------------------------------------------------------
 
 use crate::resolver::{Anchor, PointPx, SizePx};
 
-/// DPI 水準（Req 5.1: 96 のほかに 120・192 を必ず含む）。
+/// DPI 水準（areka-P0-dpi-window-vanish 要件 5.1: 96 のほかに 120・192 を必ず含む）。
 pub(super) const DPIS: [i32; 3] = [96, 120, 192];
 
 /// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制。
-/// `resolver_test_support.rs` の `px()` が donor・Req 5.6）。
+/// `resolver_test_support.rs` の `px()` が donor・areka-P0-dpi-window-vanish 要件 5.6）。
 pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     assert_eq!(
         (logical * dpi) % 96,
@@ -169,7 +169,7 @@ pub(super) fn px(logical: i32, dpi: i32) -> i32 {
     logical * dpi / 96
 }
 
-/// 混在 DPI マルチモニタの合成レイアウト（Req 5.1/5.3）。
+/// 混在 DPI マルチモニタの合成レイアウト（areka-P0-dpi-window-vanish 要件 5.1/5.3）。
 ///
 /// - index 0: 96 水準の左モニタ。**負座標**（`-1920..0`）・上端 40px の
 ///   非対称 work area（`top = -40`）
@@ -252,9 +252,9 @@ pub(super) fn size_of(world: &World, entity: Entity) -> SizeI {
 
 /// 手順書 §3.3 の grep 判定語（**本体の定数とは独立にここへ literal で置く**）。
 pub(super) const CLAMP_TAG: &str = "[visibility-guard] ClampX";
-/// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格・Req 3.2）。
+/// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格・areka-P0-dpi-window-vanish 要件 3.2）。
 pub(super) const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
-/// 同上（work area を解決できず判定不能・Req 3.3）。
+/// 同上（work area を解決できず判定不能・areka-P0-dpi-window-vanish 要件 3.3）。
 pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 /// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
 /// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
