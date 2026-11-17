@@ -731,3 +731,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "hit_order_tests.rs"]
+mod order_tests;
