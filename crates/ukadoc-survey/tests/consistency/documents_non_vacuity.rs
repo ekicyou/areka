@@ -10,7 +10,8 @@
 //!   束 id の数・3 文書が引用した機械の束 id の数）と、その下限が**下回ると赤になる**
 //!   ことの較正。
 //! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）と、同じ較正。
-//! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・段階 A の `items`）と、同じ較正。
+//! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・`[[barrier]]` の行数・段階 A の `items`）と、
+//!   同じ較正。
 //! - 判定 ⑸ の母数の下限（`[[spec]]` の行数・`[[owner_completed]]` の行数・
 //!   `completed/` の直下の数）と、同じ較正。
 //! - 判定 ⑹ の母数の下限（作り直した全体報告の本文の長さ・その束の表の行数）と、同じ較正。
@@ -85,7 +86,7 @@ const MIN_LINKAGE_CITED_IDS: usize = 1_550;
 ///
 /// **数え方は [`cited_ids`]（引用符付きと逆引用符付きの和集合・重複は畳む）**で、
 /// 実数はこの注釈に写さない。`briefing.md` は段が進むたびに id を足す文書で、ここへ
-/// 写した数はすぐに陳腐化する。いまの実数は下の [`MIN_BRIEFING_CITED_IDS`] を使う
+/// 写した数はすぐに陳腐化する。いまの実数は、下の [`MIN_BRIEFING_CITED_IDS`] を使う
 /// 腕が走るたびに [`cited_ids`] が数え直す。
 ///
 /// 下限を 100 に置くのは、束の分け直しで単独項目の並びが増減しても動かさずに済む
@@ -134,6 +135,12 @@ const MIN_RANK_ROWS: usize = 1;
 /// 「1 以上」にする。0 に落ちると、腕 b の 5 段階のうち最も大きい段階が
 /// 「数え直しも 0・宣言も 0」でそろって緑になる。
 const MIN_STAGE_A_ITEMS: usize = 1;
+
+/// 判定 ⑷ の母数——`briefing.md` の `[[barrier]]` の行数の下限。
+///
+/// 腕 f は書いてある行を 1 行ずつ数え直すので、行が 0 行に落ちると比べる相手が無く
+/// 緑になる。行はページの分け直しで増減するので「1 行以上」だけを主張する。
+const MIN_BARRIER_ROWS: usize = 1;
 
 /// 判定 ⑹ の母数——作り直した全体報告の束の表の行数の下限（設計「判定の一覧」⑹）。
 ///
@@ -512,8 +519,9 @@ fn the_floors_of_the_attribution_check_turn_red_when_the_bundles_go_empty() {
 
 /// 判定 ⑷ が数えている相手が 0 件でないこと（要件 11.4）。
 ///
-/// 見るのは 2 つ——`[[rank]]` の行数と、段階 A の `items` である。順位表が空の
-/// `briefing.md` は、腕 a〜g のうち a・b・d・e・g が**母数 0 でそろって緑**になる。
+/// 見るのは 3 つ——`[[rank]]` の行数・`[[barrier]]` の行数・段階 A の `items` である。
+/// 順位表が空の `briefing.md` は、腕 a〜g のうち a・b・d・e・g が**母数 0 でそろって緑**
+/// になり、`[[barrier]]` が 0 行なら腕 f のページの分布は比べる相手が無い。
 #[test]
 fn the_stage_and_rank_check_has_something_to_judge() {
     let documents = Documents::load();
@@ -523,6 +531,11 @@ fn the_stage_and_rank_check_has_something_to_judge() {
             "判定 ⑷: briefing.md の [[rank]] の行",
             documents.briefing.ranks.len(),
             MIN_RANK_ROWS,
+        )
+        .at_least(
+            "判定 ⑷: briefing.md の [[barrier]] の行",
+            documents.briefing.barriers.len(),
+            MIN_BARRIER_ROWS,
         )
         .at_least(
             "判定 ⑷: 段階 A の items（[stage.A]）",
@@ -550,6 +563,11 @@ fn the_floors_of_the_stage_and_rank_check_turn_red_when_the_ranks_go_empty() {
             MIN_RANK_ROWS,
         )
         .at_least(
+            "判定 ⑷: briefing.md の [[barrier]] の行",
+            empty.barriers.len(),
+            MIN_BARRIER_ROWS,
+        )
+        .at_least(
             "判定 ⑷: 段階 A の items（[stage.A]）",
             empty
                 .stages
@@ -562,15 +580,17 @@ fn the_floors_of_the_stage_and_rank_check_turn_red_when_the_ranks_go_empty() {
     let short = floors.short();
     assert_eq!(
         short.len(),
-        2,
-        "順位表が空に落ちたのに違反が 2 行そろわない: {short:?}"
+        3,
+        "順位表が空に落ちたのに違反が 3 行そろわない: {short:?}"
     );
     assert!(
         short.iter().all(|line| line.contains("0 件しかない")),
         "空に落ちたことを本文が言っていない: {short:?}"
     );
     assert!(
-        short[0].contains("[[rank]]") && short[1].contains("[stage.A]"),
+        short[0].contains("[[rank]]")
+            && short[1].contains("[[barrier]]")
+            && short[2].contains("[stage.A]"),
         "どの母数が空なのかを名指していない: {short:?}"
     );
 }

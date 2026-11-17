@@ -15,7 +15,7 @@
 //!   密に増える。`singles` の行は並べた id の鍵がすべて等しい。`override` の
 //!   `kind`・`ref` は受け付け形に収まる。`insufficient` の行は同じ段階の対象行より後。
 //! - **f 書き戻し後の分布**: `[[barrier]]`・`[[after]]`・`[priority_blank]` の数が
-//!   台帳の数え直しと一致する。
+//!   台帳の数え直しと一致し、`[[after]]` が 4 ドメインに 1 行ずつある。
 //! - **g 人の決め**: 段階 B の `rank` 1 の束の `themes` に「更新」が含まれ、段階 C の
 //!   最大 `rank` の束の `members` に `system.` を含む id がある（要件 5.3 の釘付け）。
 //!
@@ -147,7 +147,7 @@ pub(super) fn row_names(row: &RankRow) -> Vec<&str> {
     }
 }
 
-/// 失敗の本文でその行を名指す綴り（段階と順位。行番号は使わない・要件 12.6）。
+/// 失敗の本文でその行を名指す綴り（段階と順位。行番号は本文を直すたびにずれるので使わない）。
 pub(super) fn row_place(row: &RankRow) -> String {
     format!("[[rank]] {}{}", row.stage.as_key(), row.rank)
 }
@@ -596,6 +596,20 @@ pub(super) fn distribution_findings(briefing: &Briefing, facts: &LedgerFacts) ->
                 findings.push(count_mismatch(&what, declared, actual));
             }
         }
+    }
+
+    // 行の無いドメインは下の数え直しに現れないので、4 ドメインがそろうことを別に見る。
+    let present: BTreeSet<Domain> = briefing.afters.iter().map(|after| after.domain).collect();
+    let missing: Vec<&str> = Domain::ALL
+        .iter()
+        .filter(|domain| !present.contains(domain))
+        .map(Domain::as_key)
+        .collect();
+    if !missing.is_empty() {
+        findings.push(format!(
+            "{BRIEFING_MD}: [[after]] に {} の行が無い（4 ドメインに 1 行ずつ要る）",
+            missing.join("・")
+        ));
     }
 
     for after in &briefing.afters {

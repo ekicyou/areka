@@ -28,15 +28,11 @@
 //! ここでテーマの和集合や跨ぐドメインを数え直しはしない。2 か所に書くと、第二段の
 //! 組み直しで片方だけが古びる。
 //!
-//! # 「該当なし」の腕は実データでは母数 0 である
+//! # 「該当なし」の腕は写しで較正する
 //!
-//! 実データの束はどれも `breakage` が「黙って壊れる」なので、
-//! 「`該当なし` の束は全構成 id が `implemented`」は**母数 0 の恒真**である。恒真の
-//! まま置くと「判定を置いた」という記録だけが残るので、写しに「該当なし」の束を
-//! 1 つ作って腕が働くことを較正する
-//! （[`marking_a_bundle_not_applicable_turns_the_derived_arm_red`]）。同じ較正が
-//! 「実データに『該当なし』の束は無い」ことも見張るので、束が 1 つでも増えれば
-//! この段落が古びたことに気づける。
+//! 実データに「該当なし」の束が無ければ、「`該当なし` の束は全構成 id が
+//! `implemented`」は**母数 0 の恒真**になる。だから写しに「該当なし」の束を 1 つ作って
+//! 腕が働くことを較正する（[`marking_a_bundle_not_applicable_turns_the_derived_arm_red`]）。
 //!
 //! # 読むだけ
 //!
@@ -714,24 +710,14 @@ fn dropping_one_theme_turns_the_derived_arm_red() {
 
 /// 腕 e: 「該当なし」の腕が母数 0 の恒真でないこと。
 ///
-/// 実データの束はどれも「黙って壊れる」なので、この腕は**実データでは 1 件も
-/// 相手にしていない**。写しに「該当なし」の束を 1 つ作り、その構成 id に実装済みで
-/// ないものが混じっていれば赤になることを見る。これを置かないと、腕が壊れていても
+/// 実装済みでない構成 id を持つ束を写しの上で「該当なし」にし、赤になることを見る。
+/// 実データに「該当なし」の束が無いときは、これを置かないと腕が壊れていても
 /// 実データは緑のままである。
 #[test]
 fn marking_a_bundle_not_applicable_turns_the_derived_arm_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
     let facts = LedgerFacts::collect(&repo.ledgers);
-
-    assert!(
-        documents
-            .linkage
-            .bundles
-            .values()
-            .all(|bundle| bundle.breakage != Breakage::NotApplicable),
-        "実データに「該当なし」の束がある——この較正の前提（母数 0）が変わった"
-    );
 
     let (name, unfinished) = a_bundle_with_an_unfinished_member(&documents.linkage, &facts);
     let mut broken = documents.linkage.clone();

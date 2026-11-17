@@ -402,24 +402,48 @@ fn twisting_one_spec_name_turns_the_existence_arm_red() {
 /// 書き換え先はどちらの一覧にも無い名前にする。こうすると ⑴ もとの spec の
 /// `owner_count` が 1 件足りなくなり（腕 c）、⑵ 行き先の無い宛先が 1 件できる（腕 f）。
 /// 2 つの腕が別々の壊れ方を見ていることは、それぞれちょうど 1 件で赤くなることで分かる。
+///
+/// 書き換える項目は、宛先が `[[spec]]` の表にあるものから選ぶ。腕 c は表の行しか
+/// 見ないので、完了した spec（`[[owner_completed]]` の側）を宛先に持つ項目を選ぶと
+/// 腕 c は赤にならない。
 #[test]
 fn rewriting_one_owner_turns_the_count_and_destination_arms_red() {
     let fixture = Fixture::load();
     assert_no_findings("摂動の前から赤い", &fixture.findings());
 
+    let listed: BTreeSet<&str> = fixture
+        .documents
+        .roadmap
+        .specs
+        .iter()
+        .map(|row| row.name.as_str())
+        .collect();
+    let on_the_table = |owner: &str| listed.contains(owner);
     let mut ledgers = fixture.repo.ledgers.clone();
+    assert!(
+        ledgers
+            .iter()
+            .flat_map(|ledger| ledger.entries.values())
+            .any(|entry| on_the_table(&entry.owner)),
+        "宛先が [[spec]] の表にある項目が 1 件も無い——この摂動で書き換える項目を選べない"
+    );
     let stranger = "areka-P0-not-a-spec";
     let (file, id, was) = {
         let ledger = ledgers
             .iter_mut()
-            .find(|ledger| ledger.entries.values().any(|entry| !entry.owner.is_empty()))
-            .expect("非空の宛先を持つ台帳が無い");
+            .find(|ledger| {
+                ledger
+                    .entries
+                    .values()
+                    .any(|entry| on_the_table(&entry.owner))
+            })
+            .expect("選べる項目があると確かめたのに台帳が見つからない");
         let file = ledger_file(ledger.domain);
         let (id, entry) = ledger
             .entries
             .iter_mut()
-            .find(|(_, entry)| !entry.owner.is_empty())
-            .expect("非空の宛先を持つ項目が無い");
+            .find(|(_, entry)| on_the_table(&entry.owner))
+            .expect("選べる項目があると確かめたのに項目が見つからない");
         let was = std::mem::replace(&mut entry.owner, stranger.to_owned());
         (file, id.as_str().to_owned(), was)
     };

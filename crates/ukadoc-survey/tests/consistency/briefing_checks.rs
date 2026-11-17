@@ -8,7 +8,7 @@
 //! # 摂動 3 本と、残る腕の較正
 //!
 //! 摂動は「束名を 1 つ消す」「件数を 1 ずらす」「優先度を 1 件書き換える」
-//! の 3 本で、それぞれ腕 a・b・c を赤にする。残る腕 d・e・f・g にも 1 つずつ較正を
+//! の 3 本で、それぞれ腕 a・b・c を赤にする。残る腕 d・e・f・g にも較正を
 //! 置く——赤にできない腕は判定として数えない（要件 11.3）。
 //!
 //! # 読むだけ
@@ -367,6 +367,26 @@ fn shifting_one_barrier_count_turns_the_distribution_arm_red() {
         &findings,
         &format!("[[barrier]] {page} の absent を 1 ずらした"),
         &[BRIEFING_MD, &page, "absent"],
+    );
+}
+
+/// 腕 f: `[[after]]` から 1 ドメインの行を落とすと、そのドメインを名指して赤になる。
+///
+/// 腕 f は書いてある行を 1 行ずつ数え直すので、行が丸ごと無いドメインには比べる
+/// 相手が無い。4 ドメインがそろっていることを別に見ていなければ、ここは緑になる。
+#[test]
+fn dropping_one_after_domain_turns_the_distribution_arm_red() {
+    let repo = RepoData::load();
+    let documents = Documents::load();
+    let facts = LedgerFacts::collect(&repo.ledgers);
+
+    let mut broken = documents.briefing.clone();
+    let dropped = broken.afters.pop().expect("[[after]] が 1 行も無い").domain;
+
+    assert_single_finding(
+        &distribution_findings(&broken, &facts),
+        &format!("[[after]] から {} の行を落とした", dropped.as_key()),
+        &[BRIEFING_MD, "[[after]]", dropped.as_key()],
     );
 }
 
