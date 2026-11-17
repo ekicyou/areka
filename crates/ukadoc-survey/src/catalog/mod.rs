@@ -48,8 +48,8 @@ pub(super) const ENTRY_COLUMNS: [&str; 6] =
 /// カタログ冒頭に記録するスナップショットの情報（要件 1.6）。
 ///
 /// [`Self::total_entries`] と [`Self::ukadoc_entries`] は別物である。前者は
-/// スナップショットに入っていた全 entry の件数（実測 2,983 件。ukadoc 以外の出典も
-/// 含む）、後者はそのうちカタログへ残した正典由来の件数（実測 1,749 件）。
+/// スナップショットに入っていた全 entry の件数（ukadoc 以外の出典も含む）、後者は
+/// そのうちカタログへ残した正典由来の件数。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotMeta {
     /// スナップショットを配るパッケージの名前。
@@ -86,7 +86,7 @@ pub struct CatalogEntry {
     /// カテゴリ。
     pub category: String,
     /// 本文に現れた版番号のすべて。重複を除き文字列として昇順（要件 1.2）。
-    /// 1 つも無ければ空。**1 つに絞らない**——2 つ以上を持つ項目が実測 23 件ある。
+    /// 1 つも無ければ空。**1 つに絞らない**——2 つ以上を持つ項目が実データにある。
     pub versions: Vec<String>,
     /// 本文のハッシュ（16 桁の 16 進小文字）。
     pub hash: String,

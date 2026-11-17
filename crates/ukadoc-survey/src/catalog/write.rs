@@ -14,15 +14,15 @@
 //! # 1 バイトの安定（要件 1.5）
 //!
 //! 並びも区切りの空白も欄の順もここで決め打ちする。並びは `Catalog::entries` が
-//! `BTreeMap` なので id の byte 昇順に定まり（設計 D-9。実測で id はすべて ASCII）、
+//! `BTreeMap` なので id の byte 昇順に定まり（設計 D-9。実データの id はすべて ASCII）、
 //! 欄の順は [`ENTRY_COLUMNS`] の 1 か所だけが決める。同じカタログを 2 回書き出せば
 //! 同じ本文になる——分岐も並べ替えも通らないからである。
 //!
 //! # 逃がし
 //!
 //! 値はすべて [`crate::tomlout`] を通す。`toml` の書き出しは使わない（設計
-//! 「境界の要点」1 つ目。実測で `toml` 1.1.4 は逆斜線を含む文字列を単引用符の素の
-//! 文字列で書き、要件付録 A.3 が凍結した書き方と一致しない）。
+//! 「境界の要点」1 つ目。`toml` は逆斜線を含む文字列を単引用符の素の文字列で書き、
+//! 要件付録 A.3 が凍結した書き方と一致しない）。
 
 use super::{Catalog, CatalogEntry, ENTRY_COLUMNS, SNAPSHOT_FIELDS, SnapshotMeta};
 use crate::model::EntryId;

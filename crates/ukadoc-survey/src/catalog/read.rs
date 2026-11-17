@@ -11,7 +11,7 @@
 //!
 //! - TOML として読めない／`[snapshot]`・`[entry]` が無い
 //! - 冒頭の情報の欄が欠けている・型が違う・件数が負である
-//! - 知らない欄がある（形の版が違うカタログを黙って読み飛ばさないため）
+//! - 根・`[snapshot]`・項目に知らない鍵がある（形の版が違うカタログを黙って読み飛ばさないため）
 //! - 項目 id が 2 形のどちらでもない（要件 1.9）
 //! - `page` の欄が id のページと食い違う
 //!
@@ -57,10 +57,11 @@ pub fn read(text: &str) -> Result<Catalog, SurveyError> {
     let root: toml::Table = text
         .parse()
         .map_err(|err| malformed(CATALOG_FILE, format!("TOML として読めない: {err}")))?;
-    Ok(Catalog {
-        snapshot: read_snapshot(&root)?,
-        entries: read_entries(&root)?,
-    })
+    let snapshot = read_snapshot(&root)?;
+    let entries = read_entries(&root)?;
+    // 表が欠けたときはその表の名で落ちるよう、根の確かめは 2 つの表の後に置く。
+    reject_unknown_keys(&root, &[SNAPSHOT_TABLE, ENTRY_TABLE], "根", CATALOG_FILE)?;
+    Ok(Catalog { snapshot, entries })
 }
 
 impl Catalog {
@@ -69,9 +70,8 @@ impl Catalog {
     /// **完全一致だけ**を扱う。フラグメントを外した綴りはここでは引けず、
     /// [`Self::page_urls`] が 2 段目を受け持つ。実データの URL はすべて相異なり、
     /// ある URL が別の URL の先頭部分になっている例も無いので、完全一致で曖昧さなく
-    /// 1 件に定まる（設計 D-4）。
-    ///
-    /// 同じ URL の項目が 2 つある壊れたカタログでは、id の大きい方だけが残る。
+    /// 1 件に定まる（設計 D-4）。同じ URL の 2 項目はカタログの組み立て
+    /// （[`crate::catalog::build::build`]）が拒む。
     pub fn by_url(&self) -> BTreeMap<&str, &EntryId> {
         self.entries
             .iter()
@@ -82,7 +82,7 @@ impl Catalog {
     /// フラグメントを外したページ URL の一覧（設計 D-4 の 2 段目）。
     ///
     /// 最初の `#` より前を採る。同じページの項目は同じ綴りに畳まれるので、返る件数は
-    /// 項目数ではなくページ数になる。アンカーを持たない 19 件は `#` を含まないので
+    /// 項目数ではなくページ数になる。アンカーを持たない項目は `#` を含まないので
     /// URL がそのまま鍵になる。
     pub fn page_urls(&self) -> BTreeMap<String, PageName> {
         self.entries

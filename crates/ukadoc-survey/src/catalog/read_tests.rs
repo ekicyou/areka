@@ -7,7 +7,7 @@
 //! ⑷ 3 つの読み出し（[`Catalog::by_url`]・[`Catalog::page_urls`]・
 //! [`Catalog::titles_of_page`]）が具体の値で決まること。
 //!
-//! 読み戻し一致だけに頼らない（タスク 1.4 の教訓）。往復は「単射であること」しか
+//! 読み戻し一致だけに頼らない。往復は「単射であること」しか
 //! 言えず、欄を並べ替えても余計に逃がしても素通りする。逐語の主張は `write_tests.rs`
 //! が持ち、ここでは値そのものを 1 つずつ釘付けする。
 //!
@@ -19,7 +19,7 @@ use crate::model::{EntryId, PageName};
 
 /// 手で書いた見本の本文。
 ///
-/// 逆斜線を含む見出し（設計 D-10 の実測 316 件の形）・単引用符・日本語・版番号 2 つ・
+/// 逆斜線を含む見出し（設計 D-10 の形）・単引用符・日本語・版番号 2 つ・
 /// 版番号 0 個・アンカー無しの id・アンカー付きの id をすべて 1 つの本文に入れてある。
 const SAMPLE: &str = r##"# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog
 # 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md
@@ -94,7 +94,8 @@ fn round_trip_of_an_empty_entry_table() {
 
 // ---- 欄の値 ----
 
-/// 冒頭の情報が丸められずに読める。全件数と正典の件数は**別の欄**（タスク 2.1 の教訓）。
+/// 冒頭の情報が丸められずに読める。全件数と正典の件数は**別の欄**なので、見本でも
+/// 違う値を置いて取り違えを見分ける。
 #[test]
 fn snapshot_fields_are_read_without_rounding() {
     let meta = sample().snapshot;
@@ -276,6 +277,15 @@ fn unknown_snapshot_field_is_rejected() {
     );
     let message = read_error(&body).to_string();
     assert!(message.contains("future_field"), "{message}");
+}
+
+/// 根に知らない鍵があれば落ちる。読み飛ばすと書き戻した本文から消え、往復が破れる。
+#[test]
+fn unknown_root_key_is_rejected() {
+    let body = mutated("[snapshot]\n", "note = \"余計な鍵\"\n\n[snapshot]\n");
+    let message = read_error(&body).to_string();
+    assert!(message.contains("note"), "{message}");
+    assert!(message.contains("根"), "{message}");
 }
 
 /// `versions` の要素が文字列でなければ落ちる。

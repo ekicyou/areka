@@ -25,12 +25,12 @@
 //! 標準出力へ出すのは「どこへ何を書いたか」の結果だけで、本文そのものは出さない。
 //! 断りや失敗の本文は標準エラーへ出す（呼び手の `main.rs` が受け持つ）。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::assignment::PageAssignment;
 use crate::catalog::Catalog;
-use crate::catalog::build::build as build_catalog;
+use crate::catalog::build::{build as build_catalog, page_not_assigned};
 use crate::catalog::read::read as read_catalog;
 use crate::catalog::write::write as write_catalog;
 use crate::documents::{derive, parse};
@@ -43,9 +43,6 @@ use crate::ledger::write::merge_initial;
 use crate::model::{Domain, EntryId, PageName, THEMES};
 use crate::report::domain::render_domain;
 use crate::report::summary::render_summary;
-
-/// 割り当ての無いページを並べるときの区切り（`catalog::build` と同じ綴り）。
-const PAGE_SEPARATOR: &str = "・";
 
 /// 正典のカタログを作り直す（要件 1.1〜1.9）。
 ///
@@ -301,29 +298,20 @@ pub(crate) fn select_ids_by_domain(
     catalog: &Catalog,
     assignment: &PageAssignment,
 ) -> Result<BTreeMap<Domain, Vec<EntryId>>, SurveyError> {
+    let unassigned = assignment.unassigned(catalog.entries.values().map(|entry| &entry.page));
+    if !unassigned.is_empty() {
+        return Err(page_not_assigned(&unassigned));
+    }
+
     let mut buckets: BTreeMap<Domain, Vec<EntryId>> = Domain::ALL
         .into_iter()
         .map(|domain| (domain, Vec::new()))
         .collect();
-    let mut unassigned: BTreeSet<&PageName> = BTreeSet::new();
-
     for (id, entry) in &catalog.entries {
-        match assignment.domain_of(&entry.page) {
-            Some(domain) => buckets.entry(domain).or_default().push(id.clone()),
-            None => {
-                unassigned.insert(&entry.page);
-            }
+        // 割り当ての無いページは上で落としたので、ここではどのページにも担当がある。
+        if let Some(domain) = assignment.domain_of(&entry.page) {
+            buckets.entry(domain).or_default().push(id.clone());
         }
-    }
-
-    if !unassigned.is_empty() {
-        return Err(SurveyError::PageNotAssigned {
-            pages: unassigned
-                .iter()
-                .map(|page| page.as_str())
-                .collect::<Vec<&str>>()
-                .join(PAGE_SEPARATOR),
-        });
     }
     Ok(buckets)
 }
