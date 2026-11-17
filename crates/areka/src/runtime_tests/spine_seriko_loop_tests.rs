@@ -175,7 +175,7 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
 /// 忠実に運ぶことの決定論自動檻（実 SHIORI/pasta・GUI 非依存・実機/実 DPI サインオフは別）。
 #[test]
 fn spine_e2e_kero_blink_one_cycle_golden() {
-    // 実表＋常時発火固定 rng でループ活性化（既存 spine テストは Inert＝非退行・本テストのみ Live）。
+    // 実表＋常時発火固定 rng でループ活性化（既存 spine テストの多くは Inert＝非退行。Live で起こすのはこのファイルの SERIKO ループの檻だけ）。
     let mut harness = SpineHarness::boot_live(
         r"\s[2100]\e",
         always_fire_rng(),

@@ -275,7 +275,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // 起動の系列（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion・最後は
     // basewareversion）が終わるまで待つ（OnClose を起動の呼び出しと分ける）。
     // 打ち切りは待ちの芯（[`wait_until`]）が決める。進みの目印は SHIORI の呼び出しの数（受け口は
-    // 死活の問い合わせを記録しない）で、相手が 30 秒進まなければ `［止まった］`（`load-repro.md` の 4.3 で目印なしの待ちが赤だった）。
+    // 死活の問い合わせを記録しない）で、相手が 30 秒進まなければ `［止まった］`（areka-P0-ghost-session-test-load-flake の `load-repro.md` の 4.3 で目印なしの待ちが赤だった）。
     let calls = || harness.shiori_handle.call_count();
     let mut boot_calls = Vec::new();
     let waited = wait_until(

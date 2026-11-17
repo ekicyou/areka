@@ -71,7 +71,7 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     harness.inject_dispatcher_tick(1);
 
     // ── 実 ClockedTextSink<EmoTextSink> の UI ドレインが headless に pump できることを裏付ける
-    //    （pending なし／ありに関わらず panic しない・R8 の実 sink 経路の疎通確認）。 ──
+    //    （pending なし／ありに関わらず panic しない・areka-P0-emo2-boot 要件 8 の実 sink 経路の疎通確認）。 ──
     harness.pump_text();
 
     // ── (3) attach 到達: run_attach_phase を GPU World＋合成 GhostWindows 上で駆動し、

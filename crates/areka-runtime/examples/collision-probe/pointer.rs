@@ -14,7 +14,7 @@ use super::{
 /// をペア列（client_x/y・s2c_x/y・Δx/Δy）で live ログし、Δ=(0,0) の厳密一致を人手検証させる。加えて
 /// s2c で得た**目視由来**の client 点を [`resolve_hit_region`] へ渡し解決結果（Head/Bust/None）を併記する。
 ///
-/// **反トートロジー（7.3(a)）**: 狙点は `GetCursorPos`（実カーソル＝目視由来）からのみ得る。collision 実値
+/// **反トートロジー（areka-P0-collision-geometry 要件 7.3(a)）**: 狙点は `GetCursorPos`（実カーソル＝目視由来）からのみ得る。collision 実値
 /// から合成した screen 座標の `SetCursorPos`/`SendInput` 注入は**行わない**（本ハンドラも一切呼ばない）。
 ///
 /// ペア列は不透明域（Head/Bust）行のみに出る——透明域はクリック透過でイベントが窓へ届かず、本ハンドラが

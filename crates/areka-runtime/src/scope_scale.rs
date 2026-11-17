@@ -1,7 +1,7 @@
 //! スコープの倍率の表と倍率の文字（spec shell-scale-linkage 要件 3・4）。
 //!
 //! 毎フレームの相が書き、読み手（`ghost_session_scope_scale`）と倍率の通知（`frame::scale_notice`）が引く。
-//! `ghost_session_scope_scale.rs` から中身を変えずに下ろした（runtime-module-untangle 3.4）。
+//! `ghost_session_scope_scale.rs` から中身を変えずに下ろした（runtime-module-untangle）。
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};

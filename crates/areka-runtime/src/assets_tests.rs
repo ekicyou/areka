@@ -143,7 +143,7 @@ fn build_boot_assets_from_emo2_fixture() {
         "shell descript の sakura.bindgroup{{N}}.default==1"
     );
 
-    // --- loop_tables: 既に保持する EmoWorld スナップショットから from_world で構築（面種非依存・裁定 (a)） ---
+    // --- loop_tables: 既に保持する EmoWorld スナップショットから from_world で構築（面種非依存・areka-P0-seriko-loop の裁定 (a)） ---
     // 新規ファイル I/O なし＝保持済み World の再利用のみ。boot 内で組んだ表が、同じ retained World
     // から再構築した表と一致する（is_empty・当該面 surface のアニメ本数）ことを固定し、reuse を担保する。
     let shell_rebuilt = AnimationTable::from_world(&boot.shells[0].emo_world);
@@ -165,7 +165,7 @@ fn build_boot_assets_from_emo2_fixture() {
             .loop_tables
             .balloon
             .get(&balloon_assets.scope)
-            .expect("各 scope の balloon 表が存在する（不変条件 (c)）");
+            .expect("各 scope の balloon 表が存在する");
         assert_eq!(
             table.is_empty(),
             rebuilt.is_empty(),
@@ -207,7 +207,7 @@ fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
     let asset_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
     assert_eq!(
         table_scopes, asset_scopes,
-        "バルーン表のキー集合は balloons の scope 集合と一致する（不変条件 (c)）"
+        "バルーン表のキー集合は balloons の scope 集合と一致する"
     );
 
     // データ事実（合成 surfaces.txt に animation 行が無い）ゆえ emo2 は全 scope 空表。
@@ -287,7 +287,7 @@ fn actor_keyed_balloon_tables_maps_every_scope() {
     );
 }
 
-/// 空の scope 集合では balloon 表の写像も空になる（縮退・不変条件 (c) の degenerate 端）。
+/// 空の scope 集合では balloon 表の写像も空になる（縮退・areka-P0-kero-balloon 設計の不変条件 (c) の degenerate 端）。
 ///
 /// seriko 側は不在 scope を**空表意味論**（抽選対象ゼロ・乱数非消費・panic なし）で扱うため、
 /// 空写像はループ完全不活性と等価である。
@@ -299,7 +299,7 @@ fn build_boot_assets_yields_empty_balloon_table_map_for_no_scopes() {
     assert!(boot.balloons.is_empty(), "scope 資産が無い");
     assert!(
         boot.loop_tables.balloon.is_empty(),
-        "balloon 表の写像も空（キー集合⊆balloons の scope 集合・不変条件 (c)）"
+        "balloon 表の写像も空（キー集合⊆balloons の scope 集合）"
     );
     assert!(
         boot.loop_tables.shell.is_empty(),
@@ -320,12 +320,12 @@ fn build_boot_assets_holds_per_scope_balloon_models() {
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
-    // 不変条件 (a): balloons の scope 集合＝shells の scope 集合。
+    // balloons の scope 集合＝shells の scope 集合（areka-P0-kero-balloon 設計の不変条件 (a)）。
     let balloon_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
     let shell_scopes: Vec<u32> = boot.shells.iter().map(|s| s.scope).collect();
     assert_eq!(
         balloon_scopes, shell_scopes,
-        "balloons の scope 集合は shells の scope 集合と一致する（不変条件 (a)）"
+        "balloons の scope 集合は shells の scope 集合と一致する"
     );
 
     let scope0 = &boot.balloons[0].definitions.face0().model;

@@ -171,7 +171,7 @@ fn drain(world: &mut World) {
 
 /// 印が `AwaitingDestroy` なら切れ目の返事を覗く（areka-P0-mcp-reload 要件 2.4・4.1）。まだなら何もしない。`Reached` なら
 /// 印を下ろして [`start_switch`] へ（予約が立てば `Switching` の印に替わる）。それ以外は始めずに
-/// 印を下ろし、`reload_failed(gap_*)` を 1 件残す（台詞の切れ目に達しなかった＝利用者の取りやめと
+/// 印を下ろし、`reload_failed`（`gap_cancelled`／`gap_left`／`gap_not_sent`／`kanade_gone`）を 1 件残す（台詞の切れ目に達しなかった＝利用者の取りやめと
 /// `TalkGap::Left`（理由は left 欄）は `warn!`、許可表の漏れと kanade の脱落は `error!`・areka-P0-mcp-reload 要件 9.1・9.3）。
 fn poll_destroy(world: &mut World) {
     let Some(reply) = world

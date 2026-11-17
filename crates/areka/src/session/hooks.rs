@@ -1,7 +1,7 @@
 //! 本体の口の束の中身と据え付け（runtime-module-untangle design「SessionHooksImpl」）。
 //!
-//! 各関数は置き換える前の `runtime` の 1 か所のコードを移したもの。記録は持たない（記録は
-//! `runtime` の呼び手に残る）。
+//! 各関数は `areka-runtime` が口（`SessionHooks`）から引く本体の読み書き。記録は持たない（記録は
+//! `areka-runtime` の呼び手に残る）。
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;

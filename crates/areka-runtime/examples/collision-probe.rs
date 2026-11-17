@@ -151,12 +151,12 @@
 //!    **この検査は「collision 値の位置に絵が描かれている」ことしか語らない描画証跡であり、当たり判定の
 //!    証跡ではない**（areka-P0-collision-dpi-hittest 要件 4.4）——判定の証跡は ⑤ の目視由来経路のみである。記録様式でも両者を混ぜない。
 //!
-//! ⑤ **解決一致（7.3(a)・目視が証拠力の中核）**: 点は**実表示窓の client 座標経路からのみ取得する**——
+//! ⑤ **解決一致（areka-P0-collision-geometry 要件 7.3(a)・目視が証拠力の中核）**: 点は**実表示窓の client 座標経路からのみ取得する**——
 //!    `GetCursorPos`（実カーソル位置・screen）→ `ScreenToClient` → 得られた client 点を
 //!    `resolve_hit_region(presenter, 0, x, y)` へ渡し、結果を live にログする。操作者（人間または agent）は
 //!    **画面に見えているゴーストの頭／胸／背景を目視で狙って**カーソルを動かし、「視覚上その部位に
 //!    載っていること」と解決結果（`"Head"`／`"Bust"`／`None`）の一致を記録する。
-//!    - **反トートロジー禁止条件（7.3(a)）**: **collision 実値から合成した screen 座標への
+//!    - **反トートロジー禁止条件（areka-P0-collision-geometry 要件 7.3(a)）**: **collision 実値から合成した screen 座標への
 //!      `SetCursorPos`/`SendInput` を証跡としてはならない**。`ClientToScreen` と `ScreenToClient` は
 //!      client 原点の平行移動の**厳密な逆写像**であるため、collision 由来の点を狙って撃ち戻すと「注入した
 //!      点をそのまま読み戻して純関数へ渡す」＝要件が「証跡と認めない」と名指しした自己整合の罠に落ちる。

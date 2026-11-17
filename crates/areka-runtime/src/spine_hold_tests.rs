@@ -154,7 +154,7 @@ fn without_hold_at_nothing_holds() {
     assert_eq!(handle.unblock_calls(), 0);
 }
 
-/// 呼び出しの数（待ちの進みの目印・areka-P0-ghost-session-test-load-flake 3.1）は、状態の問い合わせを
+/// 呼び出しの数（待ちの進みの目印・areka-P0-ghost-session-test-load-flake）は、状態の問い合わせを
 /// 何回しても増えず、`Get`・`Notify`・`Unload` の 1 回ごとに 1 つ増える。
 #[test]
 fn call_count_skips_status_queries_and_counts_every_other_call() {

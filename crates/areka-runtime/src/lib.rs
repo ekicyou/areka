@@ -11,7 +11,7 @@ pub mod adapter;
 pub mod assets;
 /// バルーン面 0 の原点画素から背景色を導く（無効表示の混色の相手・areka-P0-text-decoration-canon 要件 4.6）。
 mod balloon_background;
-/// バルーンの上の滞在の集合（可視性の相が読み、入力の側が書く・runtime-module-untangle 3.3）。
+/// バルーンの上の滞在の集合（可視性の相が読み、入力の側が書く・runtime-module-untangle で下ろした）。
 pub mod balloon_hover;
 pub mod balloon_visibility;
 /// `\![change,ghost,…]` の受け口（areka-P0-ghost-shell-balloon-switch）。
@@ -24,7 +24,7 @@ pub mod move_cue;
 pub mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
 pub mod reload_cue;
-/// スコープの倍率の表と倍率の文字（読み手と倍率の通知が引く・runtime-module-untangle 3.4）。
+/// スコープの倍率の表と倍率の文字（読み手と倍率の通知が引く・runtime-module-untangle で下ろした）。
 pub mod scope_scale;
 /// 出どころで実行を制限するタグの判定の表（areka-P0-script-security-level）。
 pub(crate) mod script_restriction;
@@ -34,7 +34,7 @@ pub mod session_hooks;
 pub mod shell_balloon_resolve;
 /// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
 pub mod shell_box_assets;
-/// 箱の上の滞在と毎フレームの整え（可視性の相が読み、入力の側が書く・runtime-module-untangle 3.3）。
+/// 箱の上の滞在と毎フレームの整え（可視性の相が読み、入力の側が書く・runtime-module-untangle で下ろした）。
 pub mod shell_box_hover;
 /// ghost の読み直しで表示中の面を作り直した窓へ持ち越す（areka-P0-mcp-reload 要件 3.8）。
 pub mod shell_carry;
@@ -690,8 +690,8 @@ fn loop_ticker_config(clock: &SerikoClock) -> LoopTickerConfig {
 /// 毎フレームの相（`frame_system`）を `Update` へ登録する（self-gating）。
 ///
 /// 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
-/// 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
-/// （裁定 2026-09-12）。1 巡のスケジュールは
+/// 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する。
+/// 1 巡のスケジュールは
 /// `Input → Update → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup → Draw
 ///  → PreRenderSurface → RenderSurface → Composition → CommitComposition → FrameFinalize`
 /// の順で回るので、相がここで挿した描画命令と配置は、同じ巡の伝播（`PostLayout`）・面の

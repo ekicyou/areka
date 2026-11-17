@@ -377,7 +377,7 @@ fn reset_forgets_offsets_in_one_commit_and_next_boot_uses_the_keyword_standard()
     rig.finish();
 }
 
-/// 7.4: 起動の準備が置く材料と、同じシェルへ切り替えたときの資産づくりから置く材料で、
+/// areka-P0-window-link-directives 要件 7.4: 起動の準備が置く材料と、同じシェルへ切り替えたときの資産づくりから置く材料で、
 /// 初期化したバルーンの位置が同じになる（どちらも起動の標準の位置）。
 #[test]
 fn boot_basis_and_switch_basis_give_the_same_positions() {
@@ -416,7 +416,7 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
 /// 材料を 1 つ外す手。
 type Strip = fn(&mut World);
 
-/// 7.1: 材料（`DefaultPlacementBasis`・`GhostWindows`）が無ければ `warn!` だけで何もしない
+/// 材料（`DefaultPlacementBasis`・`GhostWindows`）が無ければ `warn!` だけで何もしない
 /// （バルーンは動かず、記憶のずらしも消さない）。
 #[test]
 fn missing_material_only_warns() {

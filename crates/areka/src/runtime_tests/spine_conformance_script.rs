@@ -171,9 +171,9 @@ pub(super) const MAX_SECOND_CHANGE_CALLS: usize = (LAP_INJECT_LIMIT_MS / TICK_ST
 
 /// 応答の待ち行列へ足す余裕。**必ず正**とする。
 ///
-/// 行列が尽きると台本受け口はその場で落ちる（`spine.rs` の `panic!`）。余裕が 0 だと
+/// 行列が尽きると台本受け口はその場で落ちる（`areka-runtime` の `spine.rs` の `panic!`）。余裕が 0 だと
 /// 段の境目で 1 本余分に投函されただけで受け口が落ち、「何が違ったか」が読めない失敗になる。
-/// 逆に余った応答は 1 件も記録に残らない（記録は呼出の側だけを積む＝`spine.rs`）ので
+/// 逆に余った応答は 1 件も記録に残らない（記録は呼出の側だけを積む＝`areka-runtime` の `spine.rs`）ので
 /// 害が無く、余分な**呼出**の方は記録に残って列の等値照合が読みやすい失敗として拾う
 /// （areka-P0-emo2-conformance-e2e の design D2「余裕を足しても余計な呼出は記録に残る」）。
 pub(super) const SECOND_CHANGE_SLACK: usize = 8;
@@ -181,7 +181,7 @@ pub(super) const SECOND_CHANGE_SLACK: usize = 8;
 /// 毎秒の変化通知に積む応答の本数（照会側・片道側で各々この本数）。
 ///
 /// 照会（会話可）と片道（会話中）は台本受け口では**別の待ち行列**であり
-/// （`spine.rs` の `get` と `notify` が別の表へ積む）、どちらが何本消費されるかは
+/// （`areka-runtime` の `spine.rs` の `get` と `notify` が別の表へ積む）、どちらが何本消費されるかは
 /// 会話の占有状況で決まる。ゆえに両方へ同じ上限＋余裕を積む。
 pub(super) const SECOND_CHANGE_RESPONSES: usize = MAX_SECOND_CHANGE_CALLS + SECOND_CHANGE_SLACK;
 
@@ -508,12 +508,12 @@ pub(super) const CLOSE_TALK: &str = r"\0\s[0]またね。\-";
 
 /// 一周走行の台本受け口を組む（応答の待ち行列を id ごとに積む）。
 ///
-/// 既存のビルダー（`spine.rs` の照会・片道・解放）だけを使う
+/// 既存のビルダー（`areka-runtime` の `spine.rs` の照会・片道・解放）だけを使う
 /// ——新しい仕組みを発明しない（areka-P0-emo2-conformance-e2e の R2.6）。応答は id ごとの待ち行列で、呼出のたびに先頭から
-/// 1 件消費される。**行列が尽きるとその場で受け口が落ちる**（`spine.rs`）
+/// 1 件消費される。**行列が尽きるとその場で受け口が落ちる**（`areka-runtime` の `spine.rs`）
 /// ため、本数の決まらない毎秒の変化通知には [`SECOND_CHANGE_RESPONSES`] 本を積む。
 ///
-/// 利用者名の照会は明示的に台本化する。明示しなければビルダーの既定（`spine.rs` の
+/// 利用者名の照会は明示的に台本化する。明示しなければビルダーの既定（`areka-runtime` の `spine.rs` の
 /// 値なし応答）が補われ、`%username` が既定名へ落ちて areka-P0-emo2-conformance-e2e の R3.10 の展開を確かめられなくなる。
 pub(super) fn lap_backend() -> (ScriptedShioriBackend, ScriptedShioriHandle) {
     let mut builder = ScriptedShioriBackend::builder()
@@ -582,7 +582,7 @@ fn notify(id: &str, references: &[&str]) -> RecordedCall {
 /// 組み立ては events 表の `on_translate` を通す（参照列をここで組み直さない）。Ref0 は引数 `script` の逐語
 /// （展開が要る台詞は展開後の逐語を渡す＝[`BOOT_TALK_EXPANDED`]）。
 /// 偽の SHIORI は台本に無い `OnTranslate` に 204 で答える
-/// （`spine.rs` の `ScriptedShioriBackend::get` の既定）。Ref2 には ID の綴りだけが載るので、
+/// （`areka-runtime` の `spine.rs` の `ScriptedShioriBackend::get` の既定）。Ref2 には ID の綴りだけが載るので、
 /// 元のイベントは任意名の形で運ぶ。記録は進行状態を持たないので、進行状態は何でもよい。
 fn translated(script: &str, id: &str, references: Vec<String>) -> RecordedCall {
     let source = areka_kanade::events::SourceEvent {
@@ -816,7 +816,7 @@ fn status(id: &str, status: Option<&str>) -> RecordedStatus {
 /// 一周で送られる呼出に載る進行状態の期待列（`ScriptedShioriHandle::status_calls()` と等値）。
 ///
 /// 交信の列から**解放を除いた**並びと 1 対 1 に対応する（解放は進行状態を運ばない型である
-/// ＝`spine.rs` の `unload` は記録の第 2 系統へ書かない）。
+/// ＝`areka-runtime` の `spine.rs` の `unload` は記録の第 2 系統へ書かない）。
 ///
 /// # この列だけが選択待ちを見せる（areka-P0-emo2-conformance-e2e の R3.8）
 ///

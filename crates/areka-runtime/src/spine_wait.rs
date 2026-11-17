@@ -398,7 +398,7 @@ pub fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, 
 /// 打ち切りは芯 [`wait_until`] のまま（目印が 30 秒増えなければ `［止まった］`）。どの呼び手も
 /// `'{what}' join did not complete (possible hang) — {failure}` で panic する（areka-test-binary-stability 要件 4.1・4.4）。
 /// 見張りのスレッドは生まない（生まれるスレッドもローダーの錠を待ち、負荷の下で `［進みは不明］` の赤になった・
-/// `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
+/// areka-P0-ghost-session-test-load-flake の `load-repro.md` の 4.3 の 7）。`inner` が無ければ目印は条件と同時にしか増えないので、打ち切りの文言の進みは
 /// 常に 0 回で、出口は 30 秒の `［止まった］`（相手のスレッドが終われなかった・areka-P0-ghost-session-test-load-flake 要件 2.7 の読み）だけ。
 fn wait_thread_end(what: &str, inner: Option<&dyn Fn() -> u64>, is_finished: impl Fn() -> bool) {
     wait_thread_end_with(Instant::now, std::thread::sleep, what, inner, is_finished);
@@ -509,7 +509,7 @@ pub(super) fn settle_bounded_with(
 ///
 /// D3D11 の装置は装置ごとにドライバのスレッドを生み、Windows ではスレッドの始まりと終わりがプロセスに
 /// 1 つのローダーの錠を取る。負荷の下で装置が多く並ぶと、起こしたばかりのゴーストのスレッドが始まれずに
-/// 待ちの打ち切りの赤になった（`load-repro.md` の 4.2）。数えは `std` だけで書き、どの足場からも届く
+/// 待ちの打ち切りの赤になった（areka-P0-ghost-session-test-load-flake の `load-repro.md` の 4.2）。数えは `std` だけで書き、どの足場からも届く
 /// ここに置く。
 pub(super) struct GpuSlots {
     held: Mutex<usize>,
@@ -523,8 +523,8 @@ pub(super) struct GpuSlots {
 ///
 /// 決め方（areka-test-binary-stability の設計の議題 4）: 許可の持ち時間の最長の 2 倍以上・[`SPIN_WAIT`] の
 /// 30 秒を下回らない。テストのプロセスが `STATUS_ACCESS_VIOLATION` で落ちる件の直しを当てる前に測った X1
-/// （負荷 44 本・最長 249.2 秒）が材料で、その 2 倍を丸めた 500 秒（`load-repro.md` の ⑻）。
-/// 許可の待ちには総時間の上限（[`WAIT_CAP`]）を効かせない（2026-11-02 開発者の裁定「案 2」・⑻）。返りが目印で、
+/// （負荷 44 本・最長 249.2 秒）が材料で、その 2 倍を丸めた 500 秒（areka-test-binary-stability の `load-repro.md` の ⑻）。
+/// 許可の待ちには総時間の上限（[`WAIT_CAP`]）を効かせない（2026-11-02 開発者の裁定「案 2」・areka-test-binary-stability の `load-repro.md` の ⑻）。返りが目印で、
 /// GPU のテストは有限なので、返り続ける限り待ちはいつか終わる。areka-test-binary-stability 要件 6.1 の上限はこの 500 秒の線で満たす。
 /// 許可の待ちの `［止まった］` は負荷の下でも許す赤に入れない（1 つも返らないのは本当の待ち合い）。
 pub(super) const GPU_PERMIT_IDLE: Duration = Duration::from_secs(500);
@@ -571,7 +571,7 @@ impl fmt::Display for PermitWaitFailure {
 
 /// テストのプロセスに 1 つの数え（同時に 4 つ）。2 つでは負荷の下の赤が 0 件でも静かな机の `--bin areka` の
 /// 全部が中央値 95.2 秒に延び（直す前 64.1 秒）、8 つでは 64.7 秒でも負荷の下に赤が 2 件残った。間の 4 つを、
-/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（`load-repro.md` の 5）。areka-test-binary-stability で
+/// 所要時間の線（直す前の 1.20 倍）とともに選んだ（areka-P0-ghost-session-test-load-flake の `load-repro.md` の 5）。areka-test-binary-stability で
 /// テストのプロセスが `STATUS_ACCESS_VIOLATION` で落ちる件を直した後も 4 のまま。
 static GPU_SLOTS: GpuSlots = GpuSlots::new(4);
 

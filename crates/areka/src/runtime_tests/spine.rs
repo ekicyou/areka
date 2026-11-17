@@ -25,14 +25,14 @@
 //! - **回収（settle）**（「尽きるのが正常」の残余回収＝負検証）→ [`settle_bounded`]。時刻前進は
 //!   呼出側が前段で注入し終えており、本体は観測しかしない。
 //!
-//! 本ファイルは足場（scripted `ShioriBackend`＋実 sink 結線＋GPU World＋frame フェーズ直接駆動）だけを持ち、
+//! 本ファイルは本体の部品も使う足場（`SpineHarness`＝実 sink 結線＋GPU World＋frame フェーズ直接駆動）だけを持ち、
 //! `#[test]` は兄弟のテストファイルに置く。
 //!
 //! # 構造上の逸脱（areka-P0-emo2-boot の設計 File Structure との差分・CONCERNS 相当）
 //!
 //! 完了した spec `areka-P0-emo2-boot` の design.md の File Structure は spine を外部結合テストに置くが、
 //! `areka` は `[[bin]]` のみ（`[lib]` 無し）で外部 `tests/` から bin 内部項目
-//! （`crate::{PresentBridge, RuntimeWiring, run_attach_phase, ...}`）へ到達できない。
+//! （`crate::session::{hooks, runtime_boot, ghost_quit}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
 //! （bin を起動する外部テストでは不能）、既存 repo 慣行（`areka_runtime::wire_tests`・
 //! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
@@ -252,7 +252,7 @@ impl SpineHarness {
     ///
     /// `on_boot` は OnBoot GET が返す応答スクリプト。足場の煙テストは最小 talk（`\s[0]\e`）を渡す。
     /// SERIKO ループは **不活性**（`LoopDriver::Inert`）で駆動する——既存 spine 全テストの非退行経路。
-    /// ループを実表で活性化するまばたき e2e は [`Self::boot_live`]。
+    /// ループを実表で活性化する SERIKO ループの檻は [`Self::boot_live`]。
     fn boot(on_boot: &str) -> SpineHarness {
         let (backend, shiori_handle) = Self::standard_backend(on_boot);
         Self::boot_with(backend, shiori_handle, LoopDriver::Inert)
@@ -357,8 +357,8 @@ impl SpineHarness {
         // （`BootAssets.loop_tables`＝`EmoWorld` スナップショットから `from_world` で構築）＋
         // 固定注入乱数列（`driver`）で `loop_config` を組む。既存 spine テストは Inert（`disabled()` 相当＝
         // 空表・ダミー乱数）でループ完全不活性＝従来観測どおり非退行。
-        // まばたき e2e（`boot_live`）のみ実表＋固定 rng で駆動する（本番 mod.rs は
-        // 実 entropy・spine は固定注入列で決定論）。
+        // SERIKO ループの檻（`boot_live`）だけが実表＋固定 rng で駆動する（本番の `wire_runtime`
+        //（`areka-runtime` の lib.rs）は実 entropy・spine は固定注入列で決定論）。
         let LoopTables {
             shell: shell_table,
             balloon: balloon_scope_tables,
@@ -508,7 +508,7 @@ impl SpineHarness {
 
     /// seriko ループへ tick を 1 発直接注入する（loop ticker 不起動・`SerikoSink::send_tick`）。
     ///
-    /// 本番（mod.rs）は `spawn_loop_ticker` の worker スレッドが実時刻で `send_tick` するが、spine は
+    /// 本番（`areka-runtime` の lib.rs の `wire_runtime`）は `spawn_loop_ticker` の worker スレッドが実時刻で `send_tick` するが、spine は
     /// 決定論のため ticker を起動せず、テストスレッドから注入時刻のみで `send_tick` を直接呼ぶ（時刻を進めるための sleep は無い）。
     /// dispatcher 経路（`inject_dispatcher_tick`）は talk/cue clock を進めるのみで seriko ループには届かない
     /// （ghost 側にループ結線なし）——ループ tick はこの直接注入だけが供給する。
@@ -576,7 +576,7 @@ impl SpineHarness {
 }
 
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming 要件 1.7 / 3.1 / 3.2）。
-// 本ファイルはハーネス本体（scripted backend・fixture・有界待機・ログ捕捉・SpineHarness）を保持し、
+// 本ファイルは足場（標準の台本・GPU World・SpineHarness・ログ捕捉）を保持し、
 // 観測ケースはテーマごとの兄弟ファイル `spine_<テーマ>_tests.rs` に置く。
 #[path = "spine_boot_smoke_tests.rs"]
 mod boot_smoke_tests;

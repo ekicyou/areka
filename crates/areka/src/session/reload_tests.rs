@@ -767,7 +767,7 @@ fn shiori_reload_raises_on_destroy_and_reached_reserves_the_switch() {
 }
 
 /// 切れ目の返事が `Reached` でない: 利用者の取りやめと台詞の切れ目に達しなかった（`Left`）は `warn!`、許可表の漏れ
-/// （`NotSent`）と kanade の脱落（返信端の drop）は `error!` で、どれも `reload_failed(gap_*)` を
+/// （`NotSent`）と kanade の脱落（返信端の drop）は `error!` で、どれも `reload_failed`（`gap_cancelled`／`gap_left`／`gap_not_sent`／`kanade_gone`）を
 /// `TARGET_ERROR`＋ゴースト名で 1 件残して印を下ろし、切替は送らない（areka-P0-mcp-reload 要件 4.1・9.1・9.3）。
 #[test]
 fn shiori_gap_replies_other_than_reached_drop_the_mark() {

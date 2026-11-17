@@ -61,7 +61,7 @@ use areka_runtime::spine::test_support::status_calls;
 /// SHIORI 呼出を 1 件も起こさず（[`Injection::DispatcherTick`]）、kanade Tick は 1 本も投函しない
 /// ——`Steady{talk: Some}` へ kanade Tick を投げれば毎秒の変化通知が 1 件ずつ増える
 /// （`schedule/steady.rs`）。台本に `OnSecondChange` の応答を 1 件も積んでいないので、
-/// 万一発行されればその場で受け口が落ちる（`spine.rs`）＝0 件の主張は恒真ではない。
+/// 万一発行されればその場で受け口が落ちる（`areka-runtime` の `spine.rs`）＝0 件の主張は恒真ではない。
 /// 握手が始まった後に遅れて届く再生側 Tick も無害である（dispatcher 側であり kanade へ渡らない）。
 ///
 /// **なぜ注入時刻を据え置くのか**——駆動器を通すと 1 反復（約 200µs）ごとに注入時刻が刻み
@@ -207,7 +207,7 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
 /// 檻に入れる判断分岐:
 /// - **boot 中の終了指示が失われないこと**: `OnClose` の照会がちょうど 1 件・解放がちょうど 1 度。
 /// - **消化に kanade Tick が要らないこと**: `OnSecondChange` は 0 件。台本に応答を 1 件も積んで
-///   いないため、発行されればその場で受け口が落ちる（`spine.rs`）＝0 件の主張は恒真
+///   いないため、発行されればその場で受け口が落ちる（`areka-runtime` の `spine.rs`）＝0 件の主張は恒真
 ///   ではない。
 #[test]
 fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {

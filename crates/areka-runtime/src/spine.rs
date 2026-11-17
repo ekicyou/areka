@@ -299,7 +299,7 @@ impl ScriptedShioriHandle {
     }
 
     /// 受けた呼び出し（`Get`・`Notify`・`Unload`）の数。記録の写しは作らない
-    /// （待ちの進みの目印に毎回読む口・areka-P0-ghost-session-test-load-flake 3.1）。
+    /// （待ちの進みの目印に毎回読む口・areka-P0-ghost-session-test-load-flake）。
     pub fn call_count(&self) -> u64 {
         self.calls.lock().expect("calls mutex poisoned").len() as u64
     }
