@@ -128,12 +128,12 @@ crates/areka-emo-compose/src/
 - `crates/areka-emo-compose/src/hit.rs` — 述語を `hit_shape::contains(&c.shape, x, y)` へ。モジュールと関数の説明の「矩形」を「形」へ。末尾に `hit_order_tests` の接続宣言。中の檻（`mod tests`）は `coll` 経由なので直さない。
 - `crates/areka-emo-compose/src/hit_import.rs` — `import` のずらしを `hit_shape::translated` へ。`imported`・持ち越しの切り方・`HitMemo` の数えを `budget::weights` へ。
 - `crates/areka-emo-compose/src/budget.rs` — `weight`・`weights` を足し、`surface_rows`・`rows` の説明を「行の重さ」へ。
-- `crates/areka-emo-compose/src/fold.rs` — `Numbers.cuts` と最後の除きを消し、`add_lines`（波括弧）と新設の面に collision番号の二重定義の `warn!` を足す。`body_lines` を重さへ。`add_lines` の説明の collision の段を書き直す。
+- `crates/areka-emo-compose/src/fold.rs` — `Numbers.cuts` と最後の除きを消し、`add_lines` が波括弧（`Source::Brace`）の行を足すときだけ collision番号の二重定義の `warn!` を足す（同じブレスの中だけの重なりと追記は警告しない・FoldCollisions）。`body_lines` を重さへ。`add_lines` の説明の collision の段を書き直す。
 - `crates/areka-emo-compose/src/lib.rs` — `mod hit_shape;` を足す（公開しない）。
 - `crates/areka-emo-compose/src/plan_test_support.rs` — `coll` の中身を `CollisionShape::Rect` へ（呼び手は直さない）。
 - `crates/areka-emo-compose/src/{fold_merge_tests,row_budget_tests}.rs` — 前の行を除くと固定した檻を両方を残す振る舞いと警告 1 行へ書き直し、`.right` の読みを書き換える。`row_budget_tests.rs` に多角形の重さの檻を足す。
 - `crates/areka-emo-compose/src/hit_import_tests.rs` — 子から持ち込む楕円・円・多角形・`region` のずらしと、親の同じ名前の `region` が子を落とす檻を足す（3.4・3.5）。
-- `crates/areka-emo-present/src/presenter_test_support.rs` — `hit_coll` と 658 行の直書きを `CollisionShape::Rect` へ（890 行のまま・行は増やさない）。
+- `crates/areka-emo-present/src/presenter_test_support.rs` — `hit_coll` の中身を `CollisionShape::Rect` へ。658 行の直書きは `hit_coll` を使う形へ（890 行のまま・行は増やさない）。
 - `doc/ukadoc-coverage/ledger/assets.toml`・`doc/ukadoc-coverage/report/assets.md`・`doc/ukadoc-coverage/report/summary.md` — 2 行の書き直しと報告の作り直し（報告は機械で作る）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に行を足し、【上書き】の行の collision の決めを書き直す。
 
@@ -495,7 +495,7 @@ pub(crate) fn weights(cs: &[Collision]) -> usize;
 #### RealMachineCheck（summary-only）
 - 手順は完了 `areka-P0-mouse-drag-events` の `verification/real-machine.md` の雛形（ワークツリーの `target\` の下の根・`real-machine-run.ps1 -Prepare`・`RUST_LOG=info,areka=debug,…`）に倣い、`.kiro/specs/collisionex-regions/verification/real-machine.md` に手順と結果を書く。
 - クローディア（`sample-ghost-kit` の `claudia`）の `surface0` で、矩形（`Head` など）・楕円（`Foot`）・多角形（`Fan`）の中の点を表示の拡大率込みで先に求め、`SendInput` で撫で（`OnMouseMove`）とドラッグ（`OnMouseDragStart`／`OnMouseDragEnd`）を起こし、areka の記録（`hit_region_client` の `debug!` の region と、イベントの Reference4）で名前が載ることを確かめる（8.5・8.6）。`circle`・`region` はクローディアに無いので決定論の檻だけ。
-- 画面を使う間は排他テストの机で順を取り、終わったらすぐ返す（8.7）。クローディアの読み込みで新しい `warn!` が出ないこと（既存の `shell_target_element_base_tests.rs` のクローディアの檻の「warn 以上 0 行」）も合わせて見る。
+- 画面を使う間は排他テストの机で順を取り、終わったらすぐ返す（8.7）。クローディアの読み込みで新しい `warn!` が出ないことも、実機の記録で合わせて見る（既存の `shell_target_element_base_tests.rs` のクローディアの檻は `undrawn_count` と外形を固定するだけで、`warn!` の行数は固定していない）。
 
 ## Data Models
 
@@ -505,7 +505,7 @@ pub(crate) fn weights(cs: &[Collision]) -> usize;
 - `region` は判定では当たらないが並びに残る。置く位置は持ち込みでずれる。
 
 ### Data Contracts & Integration
-- `hit-id-pass` への契約: `CollisionShape::Region(CollisionRegion { file, red, green, blue, invert, x, y })` が並びの書いた位置に在ること・`file` は書いたまま・`(x, y)` は親の面の座標での画像の左上。`hit-id-pass` は `hit_shape::contains` の `Region` の腕を書き換えて働きを足す（読み手は触らない）。
+- `hit-id-pass` への契約: `CollisionShape::Region(CollisionRegion { file, red, green, blue, invert, x, y })` が並びの書いた位置に在ること・`file` は書いたまま・`(x, y)` は親の面の座標での画像の左上。`hit-id-pass` は読み手に触らずに働きを足す。ただし `contains` は `std` と parsers の型だけを使う純関数で、画像（指定色の領域）を受け取る口が無い。働きを足すには判定の口の形を変える（領域の画像を渡す）か、面ごとの当たりの面を別に持つ必要があり、それは `hit-id-pass` の設計で決める。どちらもこの仕様の Revalidation Triggers（`hit_region_in` の入出力の形）に当たる。この仕様が約束するのは型（`CollisionRegion` の欄と置く位置）と並びの位置だけ。
 
 ## Error Handling
 
