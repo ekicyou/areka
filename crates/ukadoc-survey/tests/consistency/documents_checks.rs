@@ -32,7 +32,10 @@
 //! # ⑹ が主張すること
 //!
 //! `report/summary.md` の本文（復帰文字を落としたもの）が、カタログと台帳 4 本から
-//! 作り直した本文と**全文一致**すること（設計 D-5・要件 11.2）。
+//! 作り直した本文と**全文一致**すること（設計 D-5・要件 11.2）。判定そのものは
+//! `check::run` の新しさの検査が持ち、実データの緑は `checks.rs` の
+//! `real_repo_data_produces_no_findings` が見る。ここには写しの全体報告を壊すと赤に
+//! なる腕だけを置く。
 //!
 //! 突き合わせ相手が「証拠あり件数」を持たないのが要である。あの表はソース木を歩いて
 //! 数える値なので、判定に入れると別の spec が正典 URL のコメントを 1 行足すだけで
@@ -61,22 +64,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ukadoc_survey::catalog::Catalog;
+use ukadoc_survey::check::FindingKind;
 use ukadoc_survey::documents::Linkage;
 use ukadoc_survey::documents::parse::{bare_id_tokens, read_linkage};
-use ukadoc_survey::model::{Domain, EntryId, THEMES};
-use ukadoc_survey::report::summary::render_summary;
+use ukadoc_survey::model::{Domain, EntryId};
 
 use super::RepoData;
 use super::documents::{
     BRIEFING_MD, Documents, LINKAGE_MD, ROADMAP_MD, assert_no_findings, cited_ids, shift_row_count,
     twist_id, twisted_id,
 };
-
-/// 全体報告のワークスペース根からの相対パス（判定 ⑹ の失敗の本文はこの綴りで名指す）。
-const SUMMARY_MD: &str = "doc/ukadoc-coverage/report/summary.md";
-
-/// 全体報告を作り直す副手続き（判定 ⑹ が赤くなったときの直し方）。
-const REBUILD_SUMMARY: &str = "cargo run -p ukadoc-survey -- report-summary";
+use super::perturb::{Perturbed, SUMMARY_REPORT, expect_exactly};
 
 /// 判定 ⑹ の摂動が狙う行のラベル（「状態の分布」の表の 3 行目）。
 ///
@@ -165,8 +163,10 @@ fn is_rule_cell(cell: &str) -> bool {
 }
 
 /// 報告 5 本の束の一覧に在る束 id の全種（設計 判定 ⑵）。
-pub(super) fn report_bundle_ids(repo: &RepoData, summary_text: &str) -> BTreeSet<String> {
-    let mut ids: BTreeSet<String> = bundle_ids_in_report(summary_text).into_iter().collect();
+pub(super) fn report_bundle_ids(repo: &RepoData) -> BTreeSet<String> {
+    let mut ids: BTreeSet<String> = bundle_ids_in_report(&repo.summary_report)
+        .into_iter()
+        .collect();
     for domain in Domain::ALL {
         let report = repo
             .domain_reports
@@ -305,39 +305,6 @@ fn citation_findings(files: &[(&'static str, &str)], catalog: &Catalog) -> Vec<S
     findings
 }
 
-/// 判定 ⑹ の所見。空なら成り立っている。
-///
-/// 突き合わせるのは全文である（設計 D-5）。食い違ったら**最初に食い違った行**を行番号
-/// 付きで名指す——本文は百行を超えるので、「一致しない」とだけ言われても手の付けようが
-/// ない。行数が違うだけのときは、足りない側にその旨を書く。
-fn summary_findings(summary_text: &str, rendered: &str) -> Vec<String> {
-    if summary_text == rendered {
-        return Vec::new();
-    }
-    let mut findings = Vec::new();
-    let repo: Vec<&str> = summary_text.lines().collect();
-    let fresh: Vec<&str> = rendered.lines().collect();
-    for (at, (left, right)) in repo.iter().zip(fresh.iter()).enumerate() {
-        if left != right {
-            findings.push(format!(
-                "{SUMMARY_MD}:{}: 台帳から作り直した本文と食い違う（ファイルの側「{left}」／作り直した側「{right}」）。{REBUILD_SUMMARY} を走らせること",
-                at + 1
-            ));
-            break;
-        }
-    }
-    if findings.is_empty() {
-        findings.push(format!(
-            "{SUMMARY_MD}: 本文の量が食い違う（ファイルの側 {} 行 {} 文字／作り直した側 {} 行 {} 文字）。{REBUILD_SUMMARY} を走らせること",
-            repo.len(),
-            summary_text.chars().count(),
-            fresh.len(),
-            rendered.chars().count()
-        ));
-    }
-    findings
-}
-
 /// 判定 ⑵ の所見。空なら成り立っている。
 fn bundle_findings(
     cited: &[(&'static str, BTreeSet<String>)],
@@ -376,22 +343,11 @@ fn every_id_cited_by_the_three_documents_exists_in_the_catalog() {
 fn every_machine_bundle_id_cited_by_the_three_documents_is_listed_in_the_reports() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let known = report_bundle_ids(repo, &documents.summary_text);
+    let known = report_bundle_ids(repo);
     let cited = cited_bundle_ids(&documents.linkage, documents);
 
     let findings = bundle_findings(&cited, &known);
     assert_no_findings("3 文書の機械の束 id が報告と食い違う", &findings);
-}
-
-/// ⑹ `report/summary.md` の本文が、カタログと台帳 4 本から作り直した本文と全文一致する。
-#[test]
-fn the_summary_report_is_as_fresh_as_the_ledgers() {
-    let repo = RepoData::load();
-    let documents = Documents::load();
-    let rendered = render_summary(&repo.catalog, &repo.ledgers, &THEMES);
-
-    let findings = summary_findings(&documents.summary_text, &rendered);
-    assert_no_findings("全体報告が台帳より古い", &findings);
 }
 
 // ---------------------------------------------------------------------------
@@ -440,7 +396,7 @@ fn twisting_one_cited_id_turns_the_citation_check_red() {
 fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let known = report_bundle_ids(repo, &documents.summary_text);
+    let known = report_bundle_ids(repo);
 
     let cited = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
     let target = a_twistable_id(&cited);
@@ -473,45 +429,25 @@ fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {
     );
 }
 
-/// ⑹ 写しの本文の数字を 1 つ変えると、**その行が**行番号付きで名指されて赤になる。
+/// ⑹ 写しの全体報告の数字を 1 つ変えると、全体報告の場所で古さの所見が 1 件だけ出る。
 ///
-/// 狙うのは「状態の分布」の縮退の件数で、実データの 22 を 23 にする。1 桁だけの違いで
-/// あって行の形は変わらないので、拾い方が「行の形が同じなら一致」といった緩い比べ方に
-/// なっていればここで緑のまま残る。
+/// 狙うのは「状態の分布」の縮退の件数で、1 つ増やす。1 桁だけの違いで行の形は変わらない
+/// ので、「行の形が同じなら一致」といった緩い比べ方ならここで緑のまま残る。壊す前の写しが
+/// 緑であることは `checks.rs` の `the_untouched_copy_of_real_data_is_still_green` が見る。
 #[test]
 fn shifting_one_number_in_the_summary_turns_the_freshness_check_red() {
-    let repo = RepoData::load();
-    let documents = Documents::load();
-    let rendered = render_summary(&repo.catalog, &repo.ledgers, &THEMES);
-    let broken = shift_row_count(&documents.summary_text, DEGRADED_ROW);
+    let mut copy = Perturbed::of(RepoData::load());
+    copy.summary_report = shift_row_count(&copy.summary_report, DEGRADED_ROW);
 
-    let findings = summary_findings(&broken, &rendered);
-    assert_eq!(
-        findings.len(),
-        1,
-        "1 か所だけ壊したのに赤が 1 件でない:\n{}",
-        findings.join("\n")
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[(FindingKind::DomainReportStale, None, SUMMARY_REPORT)],
     );
     assert!(
-        findings[0].contains(SUMMARY_MD) && findings[0].contains(REBUILD_SUMMARY),
-        "失敗の本文がファイル名と直し方を名指していない: {}",
-        findings[0]
-    );
-    let row = broken
-        .lines()
-        .position(|line| line.starts_with(&format!("| {DEGRADED_ROW} |")))
-        .expect("摂動した行が写しから消えた")
-        + 1;
-    assert!(
-        findings[0].contains(&format!("{SUMMARY_MD}:{row}:")),
-        "食い違った行を行番号で名指していない（{row} 行目のはず）: {}",
-        findings[0]
-    );
-
-    // 壊す前は緑であること（赤の原因が摂動だと言い切るために要る）。
-    assert_no_findings(
-        "摂動の前から赤い（摂動が赤の原因だと言えない）",
-        &summary_findings(&documents.summary_text, &rendered),
+        findings[0].detail.contains("report-summary"),
+        "所見が直し方の副手続きを名指していない: {}",
+        findings[0].detail
     );
 }
 
@@ -632,9 +568,8 @@ fn the_bundle_list_scan_reads_both_shapes_and_skips_the_alias_table() {
 #[test]
 fn both_report_shapes_contribute_bundle_ids_in_the_real_data() {
     let repo = RepoData::load();
-    let documents = Documents::load();
 
-    let crossing = bundle_ids_in_report(&documents.summary_text);
+    let crossing = bundle_ids_in_report(&repo.summary_report);
     assert!(
         !crossing.is_empty(),
         "report/summary.md の「ドメインを跨いで繋がった束」から束 id を 1 件も拾えていない"

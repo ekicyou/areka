@@ -209,6 +209,7 @@ snapshot_on = \"2026-09-11\"
 /// 読み込みが 3 文書と全体報告に届いていること。
 #[test]
 fn the_three_documents_and_the_summary_are_readable() {
+    let repo = RepoData::load();
     let documents = Documents::load();
 
     Floors::new()
@@ -229,7 +230,7 @@ fn the_three_documents_and_the_summary_are_readable() {
         )
         .at_least(
             "report/summary.md の本文",
-            documents.summary_text.chars().count(),
+            repo.summary_report.chars().count(),
             MIN_DOCUMENT_CHARS,
         )
         .assert_met();
@@ -412,7 +413,7 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
 
     let cited = cited_ids(&documents.linkage_text);
     let briefing_cited = cited_ids(&documents.briefing_text);
-    let known = report_bundle_ids(repo, &documents.summary_text);
+    let known = report_bundle_ids(repo);
     let machine = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
 
     Floors::new()

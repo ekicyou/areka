@@ -34,7 +34,8 @@ use super::super::{CheckInput, FindingKind, run};
 use crate::catalog::CatalogEntry;
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::lib_test_support::World;
-use crate::model::{Domain, EntryId, PageName, Status};
+use crate::model::{Domain, EntryId, PageName, Status, THEMES};
+use crate::report::summary::render_summary;
 use std::collections::BTreeMap;
 
 /// カタログのファイルパス。
@@ -594,16 +595,19 @@ fn the_same_input_yields_the_same_findings_in_the_same_order() {
 /// 台帳を 1 本も渡さなければ、カタログの 12 件すべてが行き先を失う。
 ///
 /// 「どの台帳にも無い」の判定がカタログ側を走査していることを、件数の側から
-/// 裏取りする（1 件だけ抜く見本では 1 対 1 の対応しか見えない）。報告も一緒に
-/// 空にするのは、台帳の無い世界の報告が古いかどうかを別の判定に問わせないため。
+/// 裏取りする（1 件だけ抜く見本では 1 対 1 の対応しか見えない）。ドメイン別報告を
+/// 空にし、全体報告を台帳の無い世界から作り直して渡すのは、報告が古いかどうかを
+/// 別の判定に問わせないため。
 #[test]
 fn with_no_ledgers_every_catalog_id_is_missing() {
     let world = World::normal();
     let empty: Vec<Ledger> = Vec::new();
     let no_reports: BTreeMap<Domain, String> = BTreeMap::new();
+    let no_ledgers_summary = render_summary(&world.catalog, &empty, &THEMES);
     let input = CheckInput {
         ledgers: &empty,
         domain_reports: &no_reports,
+        summary_report: &no_ledgers_summary,
         ..world.input()
     };
 

@@ -1,5 +1,5 @@
-//! `freshness.rs` の在中テスト——**ドメイン別報告と台帳の突き合わせ**
-//! （要件 6.13・7.4・7.5・7.6）。
+//! `freshness.rs` の在中テスト——**報告 5 本（ドメイン別 4 本と全体報告）と台帳の
+//! 突き合わせ**（要件 6.13・7.4・7.5）。
 //!
 //! # 主張はすべて入口を通す
 //!
@@ -47,8 +47,11 @@ fn report_place(domain: &str) -> String {
     format!("doc/ukadoc-coverage/report/{domain}.md")
 }
 
-/// 全体報告の場所。**ここに所見が出てはならない**（要件 7.6）。
+/// 全体報告の場所（実装の綴りは参照しない独立したリテラル）。
 const SUMMARY_PLACE: &str = "doc/ukadoc-coverage/report/summary.md";
+
+/// 全体報告が古いときの所見の本文（直し方の副手続きを名指す）。
+const SUMMARY_STALE_DETAIL: &str = "全体報告がカタログと台帳から作り直した本文と一致しない。手で直さず `report-summary` で作り直すこと";
 
 /// 見本の報告に必ず 1 行だけ現れる注意書き（実装の定数は参照しない独立したリテラル）。
 const HAND_EDIT_LINE: &str =
@@ -145,8 +148,9 @@ fn rewriting_one_line_of_one_report_is_one_finding_for_that_domain() {
 
 /// 台帳を直して報告を作り直さないと古くなる（現場でいちばん起きる形）。
 ///
-/// 状態を 1 つ変えるだけで報告の分布表が変わる。`refresh_reports()` を呼ばないので
-/// 報告だけが古いまま残り、他の判定は 1 件も出ない。
+/// 状態を 1 つ変えるだけで、そのドメインの報告と全体報告の分布表が変わる。
+/// `refresh_reports()` を呼ばないので報告の 2 本だけが古いまま残り、他の判定は 1 件も
+/// 出ない。
 #[test]
 fn a_ledger_changed_without_regenerating_its_report_is_stale() {
     let mut world = World::normal();
@@ -161,11 +165,11 @@ fn a_ledger_changed_without_regenerating_its_report_is_stale() {
     let outcome = run(&world.input());
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::DomainReportStale, 1)]
+        vec![(FindingKind::DomainReportStale, 2)]
     );
     assert_eq!(
         places(&outcome.findings, FindingKind::DomainReportStale),
-        vec![report_place("property")]
+        vec![report_place("property").as_str(), SUMMARY_PLACE]
     );
 }
 
@@ -293,10 +297,7 @@ fn the_result_does_not_depend_on_the_order_of_the_ledgers() {
 ///
 /// 見知らぬテーマ名を 1 つ足すと、報告のテーマ別の表に 0 件の行が 1 本増える。テーマ名を
 /// 別の値（実装の定数など）から取る実装はここで赤になる。8 つは全部残すので
-/// `UnknownTheme` は出ない——出る所見は 4 本の古さだけである。
-///
-/// あわせて、所見の場所が 4 本のドメイン別報告に限られること（要件 7.6。
-/// `summary.md` は常時検査に含めない）もここで固定する。
+/// `UnknownTheme` は出ない——出る所見は報告 5 本の古さだけで、全体報告が最後に来る。
 #[test]
 fn the_themes_for_the_comparison_come_from_the_input() {
     let world = World::normal();
@@ -309,21 +310,17 @@ fn the_themes_for_the_comparison_come_from_the_input() {
     });
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::DomainReportStale, 4)]
+        vec![(FindingKind::DomainReportStale, 5)]
     );
-    let seen = places(&outcome.findings, FindingKind::DomainReportStale);
     assert_eq!(
-        seen,
+        places(&outcome.findings, FindingKind::DomainReportStale),
         vec![
-            report_place("shiori"),
-            report_place("assets"),
-            report_place("sakura-script"),
-            report_place("property"),
+            report_place("shiori").as_str(),
+            &report_place("assets"),
+            &report_place("sakura-script"),
+            &report_place("property"),
+            SUMMARY_PLACE,
         ]
-    );
-    assert!(
-        !seen.contains(&SUMMARY_PLACE),
-        "全体報告は常時検査に含めない（要件 7.6）"
     );
 }
 
@@ -359,6 +356,7 @@ fn a_domain_report_missing_from_the_input_is_a_finding() {
 ///
 /// 作り直す元が無いので「古い」とは言えない。台帳が 4 本揃っていないことは構造の検査が
 /// `CatalogIdMissingFromLedgers` として拾う（要件 6.4）ので、黙って消えるわけではない。
+/// 全体報告は 3 本の台帳から作り直した本文と比べるので、4 本で作った本文は古い。
 #[test]
 fn a_report_without_a_ledger_is_not_this_judgements_business() {
     let world = World::normal();
@@ -382,8 +380,15 @@ fn a_report_without_a_ledger_is_not_this_judgements_business() {
     });
     assert_eq!(
         kinds(&outcome.findings),
-        vec![(FindingKind::CatalogIdMissingFromLedgers, 3)],
-        "古さの所見は出ず、台帳の欠けは構造の検査が拾う"
+        vec![
+            (FindingKind::CatalogIdMissingFromLedgers, 3),
+            (FindingKind::DomainReportStale, 1),
+        ],
+        "ドメイン別報告の古さの所見は出ず、台帳の欠けは構造の検査が拾う"
+    );
+    assert_eq!(
+        places(&outcome.findings, FindingKind::DomainReportStale),
+        vec![SUMMARY_PLACE]
     );
 }
 
@@ -392,6 +397,7 @@ fn a_report_without_a_ledger_is_not_this_judgements_business() {
 /// 見本は 1 ドメイン 1 本なので、2 本目を見るか捨てるかを見分けられない。ここだけ台帳を
 /// 複製した入力を作って、`check` の doc が主張する防御そのものを釘付けする。台帳が
 /// 重なっていること自体は構造の検査が `CatalogIdInMultipleLedgers` として拾う（要件 6.4）。
+/// 全体報告は 2 本目の行も並べるので、4 本で作った本文とは食い違う。
 #[test]
 fn two_ledgers_of_the_same_domain_are_both_compared() {
     let mut world = World::normal();
@@ -417,12 +423,16 @@ fn two_ledgers_of_the_same_domain_are_both_compared() {
         kinds(&outcome.findings),
         vec![
             (FindingKind::CatalogIdInMultipleLedgers, 3),
-            (FindingKind::DomainReportStale, 2),
+            (FindingKind::DomainReportStale, 3),
         ]
     );
     assert_eq!(
         places(&outcome.findings, FindingKind::DomainReportStale),
-        vec![report_place("assets"), report_place("assets")]
+        vec![
+            report_place("assets").as_str(),
+            &report_place("assets"),
+            SUMMARY_PLACE
+        ]
     );
 }
 
@@ -510,5 +520,50 @@ fn a_report_emptied_to_zero_bytes_is_stale() {
     assert_eq!(
         finding.detail,
         "assets の報告が台帳から作り直した本文と一致しない。手で直さず作り直すこと"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 全体報告も同じ突き合わせに入る
+// ---------------------------------------------------------------------------
+
+/// 全体報告を 1 文字変えると、全体報告の場所の所見が 1 件だけ出る。
+///
+/// 本文は直し方の副手続き `report-summary` を名指す（ドメイン別報告の `report` では
+/// 全体報告は直らない）。
+#[test]
+fn changing_one_character_of_the_summary_is_one_finding_at_the_summary() {
+    let mut world = World::normal();
+    let after = world.summary_report.replacen("# ukadoc", "# Ukadoc", 1);
+    assert_ne!(world.summary_report, after, "書き換えが効いていない");
+    world.summary_report = after;
+
+    let outcome = run(&world.input());
+    assert_eq!(
+        kinds(&outcome.findings),
+        vec![(FindingKind::DomainReportStale, 1)]
+    );
+    let finding = &of_kind(&outcome.findings, FindingKind::DomainReportStale)[0];
+    assert_eq!(finding.id, None);
+    assert_eq!(finding.place, SUMMARY_PLACE);
+    assert_eq!(finding.detail, SUMMARY_STALE_DETAIL);
+}
+
+/// 全体報告が復帰文字付きでも所見は出ず、復帰文字付きで現に違えば出る（対で置く）。
+#[test]
+fn the_summary_with_carriage_returns_matches_unless_it_really_differs() {
+    let mut world = World::normal();
+    world.summary_report = world.summary_report.replace('\n', "\r\n");
+    assert!(
+        world.summary_report.contains("\r\n"),
+        "復帰文字が入っていなければ試験にならない"
+    );
+    assert_eq!(kinds(&run(&world.input()).findings), vec![]);
+
+    world.summary_report.push('x');
+    let outcome = run(&world.input());
+    assert_eq!(
+        places(&outcome.findings, FindingKind::DomainReportStale),
+        vec![SUMMARY_PLACE]
     );
 }

@@ -145,11 +145,8 @@ impl LedgerFacts {
 ///
 /// 同じ束 id が `report/summary.md` とドメイン別報告の両方に現れることがあるので、
 /// 構成 id は和集合にする（片方だけを採ると腕 c が偽の赤になる）。
-fn machine_bundle_members(
-    repo: &RepoData,
-    summary_text: &str,
-) -> BTreeMap<String, BTreeSet<String>> {
-    let mut rows: Vec<(String, Vec<String>)> = bundle_rows_in_report(summary_text);
+fn machine_bundle_members(repo: &RepoData) -> BTreeMap<String, BTreeSet<String>> {
+    let mut rows: Vec<(String, Vec<String>)> = bundle_rows_in_report(&repo.summary_report);
     for domain in Domain::ALL {
         let report = repo
             .domain_reports
@@ -524,7 +521,7 @@ fn the_attribution_of_every_target_item_splits_across_the_bundles() {
     let repo = RepoData::load();
     let documents = Documents::load();
     let facts = LedgerFacts::collect(&repo.ledgers);
-    let machine = machine_bundle_members(repo, &documents.summary_text);
+    let machine = machine_bundle_members(repo);
 
     let findings = attribution_findings(
         &documents.linkage,
@@ -626,7 +623,7 @@ fn shifting_the_tally_by_one_turns_the_tally_arm_red() {
 fn removing_one_hand_mark_turns_the_provenance_arm_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let machine = machine_bundle_members(repo, &documents.summary_text);
+    let machine = machine_bundle_members(repo);
 
     assert_no_findings(
         "摂動の前から赤い（摂動が赤の原因だと言えない）",
@@ -894,8 +891,7 @@ fn a_bundle_with_an_unfinished_member(linkage: &Linkage, facts: &LedgerFacts) ->
 #[test]
 fn the_machine_bundle_members_are_read_from_the_reports() {
     let repo = RepoData::load();
-    let documents = Documents::load();
-    let machine = machine_bundle_members(repo, &documents.summary_text);
+    let machine = machine_bundle_members(repo);
 
     assert!(
         !machine.is_empty(),

@@ -1,8 +1,8 @@
 //! repo の実データを読み込む共通処理（設計「入口 / tests/consistency」）。
 //!
-//! 読むのは 5 種類——カタログ 1 本・台帳 4 本・テーマ定義 1 本・ソース全域・
-//! ドメイン別報告 4 本である。読んだ値をそのまま [`CheckInput`] へ束ね、判定そのものは
-//! 純粋層に委ねる。**ここは 1 つも判断を持たない**——所見を数える・並べ替える・
+//! 読むのは 6 種類——カタログ 1 本・台帳 4 本・テーマ定義 1 本・ソース全域・
+//! ドメイン別報告 4 本・全体報告 1 本である。読んだ値をそのまま [`CheckInput`] へ束ね、
+//! 判定そのものは純粋層に委ねる。**ここは 1 つも判断を持たない**——所見を数える・並べ替える・
 //! 選り分ける、のいずれもしない。
 //!
 //! # 1 回の走行で 1 度だけ読む
@@ -23,14 +23,6 @@
 //! だから環境変数を書き換えるテストは置かない（テストは同一プロセスで並行に走り、
 //! Rust 2024 では `set_var` が unsafe である）。スナップショットへ手が届くのは crate の
 //! 中にある実行ファイルの入口（`cli`）だけなので、**ここからは `cli` の名前も引かない**。
-//!
-//! # 全体報告 `summary.md` は [`RepoData`] では読まない
-//!
-//! ここが読むのはドメイン別報告 4 本だけである。`summary.md` の本文は常時検査の
-//! 突き合わせ相手だが、相手は純粋層の `report::render_summary` の出力であって
-//! [`CheckInput`] の欄ではないので、持つのは [`RepoData`] ではなく
-//! [`documents::Documents`] である。`paths::summary_report_path()` はこの
-//! ファイルからは 1 度も呼ばない。
 //!
 //! # ファイルを 1 つも作らない
 //!
@@ -54,8 +46,8 @@
 //!
 //! # テストの本体はこのディレクトリの兄弟に置く
 //!
-//! 3 文書（`linkage.md`・`briefing.md`・`roadmap-draft.md`）と全体報告と spec ディレクトリ
-//! の一覧を読む道具は [`documents`]（`documents.rs`）にあり、そこにもテストの本体は
+//! 3 文書（`linkage.md`・`briefing.md`・`roadmap-draft.md`）と spec ディレクトリの
+//! 一覧を読む道具は [`documents`]（`documents.rs`）にあり、そこにもテストの本体は
 //! 1 つも無い。3 文書まわりの母数の下限は
 //! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にあり、その器と壊す道具の
 //! 較正は [`documents_tools`]（`documents_tools.rs`）にある。判定 6 種そのものは
@@ -124,6 +116,8 @@ pub struct RepoData {
     pub evidence: EvidenceIndex,
     /// ドメイン別報告 4 本の本文（復帰文字を落としたもの・設計 D-6）。
     pub domain_reports: BTreeMap<Domain, String>,
+    /// 全体報告 `report/summary.md` の本文（復帰文字を落としたもの）。
+    pub summary_report: String,
     /// 走査したソース（ワークスペース根からの相対パスと本文）。
     pub sources: Vec<(String, String)>,
     /// テーマ定義（`doc/ukadoc-coverage/values.md`）の本文。
@@ -161,6 +155,7 @@ impl RepoData {
             domain_reports.insert(domain, read_text(&paths::domain_report_path(domain))?);
         }
 
+        let summary_report = read_text(&paths::summary_report_path())?;
         let values = read_text(&paths::values_path())?;
 
         let root = paths::workspace_root();
@@ -178,6 +173,7 @@ impl RepoData {
             assignment: PageAssignment::canonical(),
             evidence,
             domain_reports,
+            summary_report,
             sources,
             values,
         })
@@ -195,6 +191,7 @@ impl RepoData {
             themes: &THEMES,
             evidence: &self.evidence,
             domain_reports: &self.domain_reports,
+            summary_report: &self.summary_report,
         }
     }
 }

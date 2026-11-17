@@ -3,7 +3,7 @@
 //!
 //! 道具そのものは兄弟の `documents.rs` にあり、そこにはテストの本体を 1 つも置かない。
 //! 母数の下限そのものの主張は `documents_non_vacuity.rs` にある。2 つに割ってあるのは
-//! 1 ファイル 1,000 行の目安を守るためである（`structure.md:176`・設計「1,000 行の
+//! 1 ファイル 1,000 行の目安を守るためである（`structure.md`・設計「1,000 行の
 //! 番人」）——判定 ⑸ の母数を足す前に、較正の側をこちらへ移した。
 //!
 //! # ここに置くもの
@@ -21,6 +21,7 @@ use std::time::SystemTime;
 use ukadoc_survey::documents::Stage;
 use ukadoc_survey::io::paths;
 
+use super::RepoData;
 use super::documents::{
     Documents, Floors, cited_ids, drop_bundle_name, drop_member, shift_count, shift_row_count,
     twist_id, twisted_id,
@@ -322,20 +323,6 @@ fn shifting_a_row_count_of_a_repeated_label_stops() {
 /// どちらの道具も「写しにちょうど 1 度だけ現れる綴り」を要求するので、実データでは
 /// 狙いを選ぶ側の理屈（どの id・どの束名なら 1 度きりか）が要る。それは帰属の判定
 /// （⑶ ⑷）の持ち物なので、選び方はそちらへ置く。
-///
-/// 2026-09-13 に段 4 の後で数え直した実測（**この段落は 2 度古びている**——初版は
-/// 3 文書が骨組みだったころの写真のまま、2026-09-12 の版は段 1 の写真のままで、
-/// どちらも `briefing.md` を 0 件と書いていた。**数を doc に書く限りこの壊れ方は
-/// 繰り返す**ので、増減したら日付ごと採り直すこと）:
-///
-/// - 3 文書の `ukadoc:` の出現: `linkage.md` **3,135 件**・`briefing.md` **337 件**・
-///   `roadmap-draft.md` **0 件**。
-/// - `linkage.md` の `members = `: **67 件**（束 63・単独項目 4）。
-/// - `briefing.md` の `bundle = `: **63 件**（段 4 が書いた。`[[rank]]` は **66 行**で、
-///   差の 3 行は単独項目を並べた `singles` の行である）。
-/// - `linkage.md` の引用符付き id で**ちょうど 1 度**現れるもの: **151 件**
-///   （`drop_member` の狙いになりうる綴り）。束名 67 のうち、その綴りを引用符付きで
-///   書いた行が 1 行きりのもの: **62 件**（`drop_bundle_name` の狙いになりうる名前）。
 #[test]
 fn the_breaking_tools_do_not_touch_the_repository_files() {
     let watched: Vec<PathBuf> = vec![
@@ -358,7 +345,7 @@ fn the_breaking_tools_do_not_touch_the_repository_files() {
     let _ = shift_row_count("| 縮退 | 22 |\n", "縮退");
     // 実データの写しの上でも働かせる（写しを取り違えて元を触る壊れ方を見る）。
     let _ = shift_count(&documents.linkage_text, "[tally]", "target");
-    let _ = shift_row_count(&documents.summary_text, "縮退");
+    let _ = shift_row_count(&RepoData::load().summary_report, "縮退");
     let cited = cited_ids(&documents.linkage_text);
     let first = cited
         .iter()

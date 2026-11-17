@@ -432,10 +432,12 @@ pub const SHIORI_RESOURCE_IDS: &[&str] = &[
 
 ```
 cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
+cargo run -p ukadoc-survey -- report-summary  # 全体報告
 ```
 
-ドメイン別報告 4 本は、対応する台帳から作り直した本文と**バイト単位で一致**していなければならない。
-食い違うと `DomainReportStale` で失敗し、どのドメインを作り直せばよいかを教えてくれる。
+ドメイン別報告 4 本は対応する台帳から、全体報告 `summary.md` はカタログと台帳 4 本から作り直した本文と
+**バイト単位で一致**していなければならない。食い違うと `DomainReportStale` で失敗し、場所としてどの報告を
+作り直せばよいかを教えてくれる。
 台帳と報告は同じコミットに入れること。
 
 ### 誰が何を作り直すか
@@ -451,7 +453,7 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 その 4 本は 2026-09-06 までに全部完了して取り合う相手が居なくなったので、**統合調査
 （`ukadoc-coverage-roadmap`）がこの除外を覆した**（完了 spec `ukadoc-survey-toolkit` の要件 7.6）。
 いま `summary.md` の本文はカタログと台帳 4 本だけから決まり、作り直した本文と 1 文字でも違えば
-標準のテスト実行が赤になる。台帳を直したら `report` と `report-summary` の両方を走らせること。
+`check` も標準のテスト実行も赤になる。台帳を直したら `report` と `report-summary` の両方を走らせること。
 
 ### ⚠ 世代別の表が全部「世代不明」なのは、正しい状態である
 
@@ -581,7 +583,7 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 | `AliasChain` | `alias_of` の指す先がまた別名 | 正典の行を直接指す |
 | `IntroducedNotInCatalogVersions` | 書いた登場版がカタログの版番号に無い | カタログの `versions` から選び直す |
 | `UnknownTheme` | テーマ名が `values.md` に無い | 綴りを直す |
-| `DomainReportStale` | 報告が台帳と食い違う | `report` を走らせ直す |
+| `DomainReportStale` | 報告が台帳と食い違う | `report` を走らせ直す（場所が `report/summary.md` なら `report-summary`） |
 
 状態の語・テーマ名・関連の種別の**綴り違い**は、これより手前の読み込みの段で落ちる。
 その場合もファイルと id が出るので、そのまま直せばよい。

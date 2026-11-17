@@ -1,4 +1,4 @@
-//! 3 文書・全体報告・spec ディレクトリの一覧を読む道具、判定が共有する所見の見方と
+//! 3 文書と spec ディレクトリの一覧を読む道具、判定が共有する所見の見方と
 //! 綴りの定数、本文の写しを 1 か所だけ壊す道具、母数の下限を集める器（設計「入口 /
 //! `tests/consistency`」→「`documents.rs`」）。
 //!
@@ -40,7 +40,7 @@ pub(super) const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
 /// 語彙表経路の較正の相手にも使う。
 pub(super) const SHIORI_RESOURCE_RS: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
 
-/// repo から読み込んだ 3 文書・全体報告・spec ディレクトリの一覧。
+/// repo から読み込んだ 3 文書と spec ディレクトリの一覧。
 pub(super) struct Documents {
     /// `doc/ukadoc-coverage/linkage.md` の本文（復帰文字を落としたもの）。
     pub(super) linkage_text: String,
@@ -48,8 +48,6 @@ pub(super) struct Documents {
     pub(super) briefing_text: String,
     /// `doc/ukadoc-coverage/roadmap-draft.md` の本文。
     pub(super) roadmap_text: String,
-    /// `doc/ukadoc-coverage/report/summary.md` の本文（判定 ⑹ の突き合わせ相手）。
-    pub(super) summary_text: String,
     /// `linkage.md` の骨組み。
     pub(super) linkage: Linkage,
     /// `briefing.md` の骨組み。
@@ -64,7 +62,7 @@ pub(super) struct Documents {
 }
 
 impl Documents {
-    /// repo の 3 文書・全体報告・spec の一覧（1 回の走行で 1 度だけ読み、全部のテストが
+    /// repo の 3 文書と spec の一覧（1 回の走行で 1 度だけ読み、全部のテストが
     /// 同じものを借りる）。読めなければ**どの呼び出しも**同じ文で止まる
     /// （[`super::RepoData::load`] と同じ形）。
     pub(super) fn load() -> &'static Self {
@@ -77,7 +75,6 @@ impl Documents {
         let linkage_text = read_text(&paths::linkage_path())?;
         let briefing_text = read_text(&paths::briefing_path())?;
         let roadmap_text = read_text(&paths::roadmap_draft_path())?;
-        let summary_text = read_text(&paths::summary_report_path())?;
 
         let linkage = read_linkage(&linkage_text)
             .map_err(|err| format!("linkage.md の骨組みを読めない: {err}"))?;
@@ -102,7 +99,6 @@ impl Documents {
             linkage_text,
             briefing_text,
             roadmap_text,
-            summary_text,
             linkage,
             briefing,
             roadmap,

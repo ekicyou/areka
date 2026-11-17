@@ -53,8 +53,8 @@ use crate::model::{Domain, EntryId, THEMES};
 
 /// 台帳と正典とソースの食い違いを調べる（要件 5.5・6.3〜6.12・7.4）。
 ///
-/// repo のカタログ・台帳 4 本・ソース・ドメイン別報告 4 本を読み、純粋層の判定へ
-/// 渡す。スナップショットには触れない（設計「入口 / cli」の表・要件 6.2）。
+/// repo のカタログ・台帳 4 本・ソース・ドメイン別報告 4 本・全体報告を読み、純粋層の
+/// 判定へ渡す。スナップショットには触れない（設計「入口 / cli」の表・要件 6.2）。
 ///
 /// 標準出力へ出すのは所見の本文と、id ごとの証拠のファイルパスである。終了の仕方は
 /// [`verdict`] が所見の件数だけから決める。
@@ -69,6 +69,7 @@ pub fn check() -> Result<(), SurveyError> {
         let body = files::read_normalized(&paths::domain_report_path(domain))?;
         domain_reports.insert(domain, body);
     }
+    let summary_report = files::read_normalized(&paths::summary_report_path())?;
 
     let input = CheckInput {
         catalog: &catalog,
@@ -77,6 +78,7 @@ pub fn check() -> Result<(), SurveyError> {
         themes: &THEMES,
         evidence: &evidence,
         domain_reports: &domain_reports,
+        summary_report: &summary_report,
     };
     let (body, findings) = examine(&input);
     write_stdout(&mut std::io::stdout().lock(), &body)?;

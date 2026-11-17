@@ -59,6 +59,9 @@ pub(super) const SHIORI_LEDGER: &str = "doc/ukadoc-coverage/ledger/shiori.toml";
 /// assets の台帳の場所。
 pub(super) const ASSETS_LEDGER: &str = "doc/ukadoc-coverage/ledger/assets.toml";
 
+/// 全体報告の場所。
+pub(super) const SUMMARY_REPORT: &str = "doc/ukadoc-coverage/report/summary.md";
+
 /// カタログにも台帳にも無い id（摂動で持ち込む綴り）。
 pub(super) const ABSENT_ID: &str = "ukadoc:list_shiori_event:OnNoSuchEventForTheTest:1";
 
@@ -79,6 +82,7 @@ pub(super) struct Perturbed<'a> {
     ledgers: Vec<Ledger>,
     pub(super) evidence: EvidenceIndex,
     pub(super) domain_reports: BTreeMap<Domain, String>,
+    pub(super) summary_report: String,
 }
 
 impl<'a> Perturbed<'a> {
@@ -90,6 +94,7 @@ impl<'a> Perturbed<'a> {
             ledgers: data.ledgers.clone(),
             evidence: data.evidence.clone(),
             domain_reports: data.domain_reports.clone(),
+            summary_report: data.summary_report.clone(),
         }
     }
 
@@ -101,6 +106,7 @@ impl<'a> Perturbed<'a> {
             ledgers: &self.ledgers,
             evidence: &self.evidence,
             domain_reports: &self.domain_reports,
+            summary_report: &self.summary_report,
             ..self.data.input()
         }
     }

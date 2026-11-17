@@ -58,7 +58,7 @@ use ukadoc_survey::model::{Domain, Link, LinkKind, Status, THEMES};
 
 use super::RepoData;
 use super::perturb::{
-    ABSENT_ID, ANCHOR_ID, ASSETS_LEDGER, CATALOG_FILE, Perturbed, SHIORI_LEDGER,
+    ABSENT_ID, ANCHOR_ID, ASSETS_LEDGER, CATALOG_FILE, Perturbed, SHIORI_LEDGER, SUMMARY_REPORT,
     UNASSIGNED_PAGE_ID, anchor_id, evidence_with_source_line, expect_exactly, fabricated_entry,
     id_of,
 };
@@ -417,9 +417,9 @@ fn a_catalog_id_in_no_ledger_turns_red() {
 
 /// 要件 6.4・3.2——同じ id が 2 本の台帳に現れると赤くなる。
 ///
-/// 巻き添えが 2 つ出るが、それは正しい——shiori のページの id を assets の台帳へ
-/// 移した状態は、担当の食い違い（要件 3.1）でもあり、assets の報告が台帳と食い違う
-/// 状態（要件 7.4）でもある。3 つとも本文に出ることをここで固定する。
+/// 巻き添えが 3 つ出るが、それは正しい——shiori のページの id を assets の台帳へ
+/// 移した状態は、担当の食い違い（要件 3.1）でもあり、assets の報告と全体報告が台帳と
+/// 食い違う状態（要件 7.4）でもある。4 つとも本文に出ることをここで固定する。
 #[test]
 fn an_id_in_two_ledgers_turns_red() {
     let data = RepoData::load();
@@ -449,6 +449,7 @@ fn an_id_in_two_ledgers_turns_red() {
                 None,
                 "doc/ukadoc-coverage/report/assets.md",
             ),
+            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
         ],
     );
 }
@@ -591,10 +592,11 @@ fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
 
 /// 要件 6.7——関連の相手がカタログに無いと、書いた側の id つきで赤くなる。
 ///
-/// **報告は古くならない。** ドメイン別報告に載る束は「構成 id が全部この台帳にある」
-/// ものだけで（`report::domain` の `closed_bundles`）、相手が台帳に無い辺の束は丸ごと
-/// 落ちるからである。つまり宙に浮いた関連は報告の側からは見えない——この判定だけが
-/// それを見つける。
+/// **ドメイン別報告は古くならず、全体報告だけが古くなる。** ドメイン別報告に載る束は
+/// 「構成 id が全部この台帳にある」ものだけで（`report::domain` の `closed_bundles`）、
+/// 相手が台帳に無い辺の束は丸ごと落ちる。全体報告は台帳に無い構成 id を持つ束を
+/// 「（台帳に無い）」を跨ぐ束として載せるので、本文が変わる。ただし全体報告の所見は
+/// 「作り直せ」としか言わない——宙に浮いた関連を名指すのはこの判定だけである。
 #[test]
 fn a_link_to_a_missing_id_turns_red() {
     let data = RepoData::load();
@@ -609,11 +611,14 @@ fn a_link_to_a_missing_id_turns_red() {
     let findings = copy.findings();
     expect_exactly(
         &findings,
-        &[(
-            FindingKind::LinkEndpointMissing,
-            Some(ANCHOR_ID),
-            SHIORI_LEDGER,
-        )],
+        &[
+            (
+                FindingKind::LinkEndpointMissing,
+                Some(ANCHOR_ID),
+                SHIORI_LEDGER,
+            ),
+            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
+        ],
     );
     assert!(
         render(&findings).contains(ABSENT_ID),
@@ -655,6 +660,7 @@ fn an_alias_chain_turns_red() {
                 None,
                 "doc/ukadoc-coverage/report/shiori.md",
             ),
+            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
         ],
     );
     assert!(
@@ -675,11 +681,14 @@ fn an_alias_chain_turns_red() {
 /// 同値をその場で確かめるので、台帳が変わったら黙って通り抜けずに赤くなる。
 ///
 /// 「台帳の `introduced` がカタログの版番号と**異なる**項目を選ぶ」道は測ったうえで
-/// 採らなかった。そういう項目は 677 行のうち 3 行しかなく、しかも 3 行とも違いは
-/// 末尾の節だけである（台帳 `2.7.26`／カタログ `2.7.25`）。`introduced` が報告へ届く
-/// 唯一の道は世代（先頭 2 節）の分布なので、戻しても世代は `2.7` のまま動かず、結局
-/// 戻した側の所見は同じく 0 件になる。得るものが無いのに、その 3 行が直された日に
-/// 選び方ごと立ち行かなくなる脆さだけが増える。
+/// 採らなかった。そういう項目は少なく、しかもどれも違いは末尾の節だけである（台帳
+/// `2.7.26`／カタログ `2.7.25` の形）。`introduced` がドメイン別報告へ届く唯一の道は
+/// 世代（先頭 2 節）の分布なので、戻しても世代は `2.7` のまま動かず、結局戻した側の
+/// 所見は同じく 0 件になる。得るものが無いのに、その行が直された日に選び方ごと
+/// 立ち行かなくなる脆さだけが増える。
+///
+/// 全体報告は登場版を載せないので、外へ動かした側でも古くならない（期待に全体報告の
+/// 行が無いのはこのため）。
 #[test]
 fn an_introduced_version_outside_the_catalog_turns_red() {
     let data = RepoData::load();
@@ -753,6 +762,7 @@ fn a_misspelled_theme_turns_red() {
         &[
             (FindingKind::UnknownTheme, Some(ANCHOR_ID), SHIORI_LEDGER),
             (FindingKind::DomainReportStale, None, report),
+            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
         ],
     );
     assert!(
@@ -760,11 +770,14 @@ fn a_misspelled_theme_turns_red() {
         "本文が綴りの違うテーマ名そのものを載せていない"
     );
 
-    // 定義にある綴りなら、テーマの所見は出ない。
+    // 定義にある綴りなら、テーマの所見は出ない（テーマの分布が変わるので報告 2 本は古い）。
     copy.entry_mut(Domain::Shiori, &anchor).values = vec!["気配り".to_owned()];
     expect_exactly(
         &copy.findings(),
-        &[(FindingKind::DomainReportStale, None, report)],
+        &[
+            (FindingKind::DomainReportStale, None, report),
+            (FindingKind::DomainReportStale, None, SUMMARY_REPORT),
+        ],
     );
 }
 
