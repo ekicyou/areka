@@ -68,11 +68,7 @@ use ukadoc_survey::io::{files, paths};
 use ukadoc_survey::ledger::Ledger;
 use ukadoc_survey::model::{Domain, EntryId, PageName, Status};
 
-/// 段階と順位の正本の相対パス（失敗の本文はこの綴りで名指す）。
-pub(super) const BRIEFING_MD: &str = "doc/ukadoc-coverage/briefing.md";
-
-/// 帰属の正本の相対パス（腕 a が「その束名が無い」と言うときの相手）。
-const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
+use super::documents::{BRIEFING_MD, LINKAGE_MD};
 
 /// 要件 5.3 が段階 B の先頭に置くと決めたテーマ。
 pub(super) const UPDATE_THEME: &str = "更新";

@@ -77,7 +77,7 @@ const ANCHOR_URL: &str =
 /// ファイルから挙がるのは正常な状態である（[`EvidenceIndex::by_id`] の並びの契約も
 /// 「重複を除いた名前順」であって件数を約束しない）。ここで確かめたいのは
 /// 「書き足した行がその項目の証拠になる」ことだけである。
-const ANCHOR_SOURCE: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
+use super::documents::SHIORI_RESOURCE_RS as ANCHOR_SOURCE;
 
 /// 書き足した 1 行が錨の項目の証拠として現れたこと（「含む」で見る）。
 ///
@@ -335,7 +335,7 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
 fn the_subject_census_says_which_requirements_are_vacuous() {
     let data = RepoData::load();
 
-    for row in census(&data) {
+    for row in census(data) {
         match row.expected {
             Subjects::NonEmpty => assert!(
                 row.count > 0,
@@ -365,7 +365,7 @@ fn the_subject_census_says_which_requirements_are_vacuous() {
 #[test]
 fn the_untouched_copy_of_real_data_is_still_green() {
     let data = RepoData::load();
-    let copy = Perturbed::of(&data);
+    let copy = Perturbed::of(data);
 
     expect_exactly(&copy.findings(), &[]);
 }
@@ -379,7 +379,7 @@ fn the_untouched_copy_of_real_data_is_still_green() {
 fn a_ledger_id_that_left_the_catalog_turns_red() {
     let data = RepoData::load();
     let anchor = anchor_id();
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     let removed = copy.catalog.entries.remove(&anchor);
     assert!(removed.is_some(), "カタログに {ANCHOR_ID} が無い");
@@ -399,7 +399,7 @@ fn a_ledger_id_that_left_the_catalog_turns_red() {
 fn a_catalog_id_in_no_ledger_turns_red() {
     let data = RepoData::load();
     let absent = id_of(ABSENT_ID);
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     copy.catalog
         .entries
@@ -424,7 +424,7 @@ fn a_catalog_id_in_no_ledger_turns_red() {
 fn an_id_in_two_ledgers_turns_red() {
     let data = RepoData::load();
     let anchor = anchor_id();
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     let borrowed = copy.entry_mut(Domain::Shiori, &anchor).clone();
     copy.ledger_mut(Domain::Assets)
@@ -460,7 +460,7 @@ fn an_id_in_two_ledgers_turns_red() {
 #[test]
 fn a_ledger_out_of_order_turns_red() {
     let data = RepoData::load();
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     let order = &mut copy.ledger_mut(Domain::Shiori).file_order;
     assert!(order.len() >= 2, "並びを崩せるだけの項目が無い");
@@ -482,7 +482,7 @@ fn a_ledger_out_of_order_turns_red() {
 fn a_page_without_an_assignment_turns_red() {
     let data = RepoData::load();
     let stray = id_of(UNASSIGNED_PAGE_ID);
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     copy.catalog
         .entries
@@ -516,9 +516,9 @@ fn an_unknown_canon_url_in_a_source_turns_red() {
     );
 
     let bogus = "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnNoSuchThing:1";
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
     copy.evidence =
-        evidence_with_source_line(&data, ANCHOR_SOURCE, &format!("// ukadoc: {bogus}"), 0);
+        evidence_with_source_line(data, ANCHOR_SOURCE, &format!("// ukadoc: {bogus}"), 0);
 
     assert_eq!(
         copy.evidence.unresolved.len(),
@@ -557,7 +557,7 @@ fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
     let data = RepoData::load();
     let anchor = anchor_id();
 
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
     assert_eq!(
         copy.entry_mut(Domain::Shiori, &anchor).status,
         Status::Implemented,
@@ -584,8 +584,8 @@ fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
 
     // 証拠が付いた側。`ImplementedWithoutEvidence` が消えて所見は 1 件も残らない。
     copy.evidence =
-        evidence_with_source_line(&data, ANCHOR_SOURCE, &format!("// ukadoc: {ANCHOR_URL}"), 0);
-    assert_the_added_line_became_evidence(&data, &copy.evidence);
+        evidence_with_source_line(data, ANCHOR_SOURCE, &format!("// ukadoc: {ANCHOR_URL}"), 0);
+    assert_the_added_line_became_evidence(data, &copy.evidence);
     expect_exactly(&copy.findings(), &[]);
 }
 
@@ -599,7 +599,7 @@ fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
 fn a_link_to_a_missing_id_turns_red() {
     let data = RepoData::load();
     let anchor = anchor_id();
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     copy.entry_mut(Domain::Shiori, &anchor).links = vec![Link {
         kind: LinkKind::SameFeature,
@@ -629,7 +629,7 @@ fn a_link_to_a_missing_id_turns_red() {
 #[test]
 fn an_alias_chain_turns_red() {
     let data = RepoData::load();
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     // shiori の台帳から実在する 2 つを取る（並びは id の byte 昇順で決まる）。
     let shiori = data
@@ -701,7 +701,7 @@ fn an_introduced_version_outside_the_catalog_turns_red() {
         })
         .expect("版番号のある項目が shiori の台帳に 1 つも無い");
 
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
     assert_eq!(
         copy.entry_mut(Domain::Shiori, &id).introduced,
         known,
@@ -744,7 +744,7 @@ fn a_misspelled_theme_turns_red() {
     let anchor = anchor_id();
     let report = "doc/ukadoc-coverage/report/shiori.md";
 
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
     copy.entry_mut(Domain::Shiori, &anchor).values = vec!["気配り ".to_owned()];
 
     let findings = copy.findings();
@@ -834,7 +834,7 @@ fn break_first_status(text: &str, bad: &str) -> (String, String) {
 #[test]
 fn a_stale_domain_report_turns_red_and_names_its_domain() {
     let data = RepoData::load();
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
 
     let body = copy
         .domain_reports
@@ -874,24 +874,24 @@ fn the_check_survives_lines_moving() {
     let data = RepoData::load();
     let line = format!("// ukadoc: {ANCHOR_URL}");
 
-    let at_top = evidence_with_source_line(&data, ANCHOR_SOURCE, &line, 0);
-    let far_down = evidence_with_source_line(&data, ANCHOR_SOURCE, &line, 40);
+    let at_top = evidence_with_source_line(data, ANCHOR_SOURCE, &line, 0);
+    let far_down = evidence_with_source_line(data, ANCHOR_SOURCE, &line, 40);
     assert_eq!(
         at_top, far_down,
         "証拠の索引が行の位置で変わった（要件 6.11・5.1）"
     );
 
     let anchor = anchor_id();
-    assert_the_added_line_became_evidence(&data, &at_top);
+    assert_the_added_line_became_evidence(data, &at_top);
 
     // 証拠が付いた状態でも、実データに食い違いは 1 件も生まれない（行が増えただけで
     // 赤にならないこと）。
-    let mut copy = Perturbed::of(&data);
+    let mut copy = Perturbed::of(data);
     copy.evidence = at_top;
     expect_exactly(&copy.findings(), &[]);
 
     // 所見の場所は行番号を持たない。1 件出る摂動で綴りを逐語に見る。
-    let mut broken = Perturbed::of(&data);
+    let mut broken = Perturbed::of(data);
     broken.catalog.entries.remove(&anchor);
     let findings = broken.findings();
     assert_eq!(findings.len(), 1);

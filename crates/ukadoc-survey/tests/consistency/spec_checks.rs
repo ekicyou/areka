@@ -29,19 +29,6 @@
 //! である。`/kiro-complete` が `completed/` へ移す際に書き換えるのは実ファイル読みの
 //! パスなので、名前だけを持つこの一群は移動の前後で同じ結果を返す。
 //!
-//! # 数えたもの（2026-09-13 の実測）
-//!
-//! - `[[spec]]`: **27 行**（`[briefs].count` と一致）。うち束を持つ 13 行・
-//!   `none = true` の 14 行。
-//! - `[[reserved]]`: **18 行**（うち `none = true` が 7 行）。
-//! - `[[owner_completed]]`: **14 行**・`items` の合計 **41 件**。
-//! - 台帳 4 本の非空の宛先: **416 件**・**27 種**（`[[spec]]` の 13 種と
-//!   `[[owner_completed]]` の 14 種でちょうど尽きる）。13 種のうち
-//!   `areka-P0-charset-canon` は既定ブランチで完了して封じる場所へ移ったが、腕 b が
-//!   照らす相手は進行中と完了済みの和なので、表に残っていても赤にならない。
-//! - `.kiro/specs/completed/`: **176 本**（数え方: 直下の**ディレクトリ**を数えた。
-//!   直下には単独の `.md` が 1 本混じっているので、`ls` の行数 177 とは 1 ずれる）。
-//!
 //! # 読むだけ
 //!
 //! 摂動は本文の**写し**（`String`）か、読み終えた骨組み・台帳の**写し**
@@ -56,14 +43,11 @@ use ukadoc_survey::ledger::Ledger;
 use ukadoc_survey::model::Status;
 
 use super::RepoData;
-use super::briefing_arms::{BRIEFING_MD, ledger_file};
-use super::documents::{Documents, shift_count};
-
-/// 失敗の本文に載る `roadmap-draft.md` の置き場。
-const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
-
-/// 失敗の本文に載る `linkage.md` の置き場。
-const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
+use super::briefing_arms::ledger_file;
+use super::documents::{
+    BRIEFING_MD, Documents, LINKAGE_MD, ROADMAP_MD, assert_no_findings, assert_single_finding,
+    shift_count,
+};
 
 // ---------------------------------------------------------------------------
 // 台帳の宛先の数え直し
@@ -304,41 +288,10 @@ fn owner_destination_findings(
         .collect()
 }
 
-// ---------------------------------------------------------------------------
-// 摂動と較正の共通の道具
-// ---------------------------------------------------------------------------
-
-/// 所見が 1 つでもあれば、その全部を名指して止まる。
-fn assert_no_findings(judgement: &str, findings: &[String]) {
-    assert!(
-        findings.is_empty(),
-        "{judgement}（{} 件）:\n{}",
-        findings.len(),
-        findings.join("\n")
-    );
-}
-
-/// 摂動の後の所見がちょうど 1 件で、その本文が指定の綴りを全部含むこと。
-fn assert_single_finding(findings: &[String], what: &str, must_name: &[&str]) {
-    assert_eq!(
-        findings.len(),
-        1,
-        "{what} で赤が 1 件でない:\n{}",
-        findings.join("\n")
-    );
-    for needle in must_name {
-        assert!(
-            findings[0].contains(needle),
-            "失敗の本文が {needle} を名指していない: {}",
-            findings[0]
-        );
-    }
-}
-
 /// 実データ一式（6 つの腕がどれも同じものを見る）。
 struct Fixture {
-    repo: RepoData,
-    documents: Documents,
+    repo: &'static RepoData,
+    documents: &'static Documents,
     owners: OwnerFacts,
 }
 
@@ -591,8 +544,9 @@ fn a_completed_owner_outside_the_completed_directory_turns_the_completed_arm_red
 
 /// 腕 e: 完了済みの宛先に実装済みでも縮退でもない項目が 1 件混じると赤になる。
 ///
-/// 実データでは 41 件すべてが実装済みか縮退なので、この主張は**母数はあるが違反が
-/// 0 件**である。1 件混ぜて赤にできなければ、何も見ていないのと同じ（要件 11.3）。
+/// 実データでは完了済みの宛先の項目がすべて実装済みか縮退なので、この主張は
+/// **母数はあるが違反が 0 件**である。1 件混ぜて赤にできなければ、何も見ていないのと
+/// 同じ（要件 11.3）。
 #[test]
 fn a_completed_owner_with_an_unfinished_item_turns_the_completed_arm_red() {
     let fixture = Fixture::load();

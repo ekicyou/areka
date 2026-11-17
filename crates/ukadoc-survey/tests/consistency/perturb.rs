@@ -17,7 +17,7 @@ use ukadoc_survey::evidence::EvidenceIndex;
 use ukadoc_survey::evidence::extract::extract;
 use ukadoc_survey::evidence::resolve::resolve;
 use ukadoc_survey::ledger::{Ledger, LedgerEntry};
-use ukadoc_survey::model::{Domain, EntryId, THEMES};
+use ukadoc_survey::model::{Domain, EntryId};
 
 use super::RepoData;
 
@@ -46,8 +46,7 @@ use super::RepoData;
 /// - テーマが `["気配り"]` **ではない**こと（`a_misspelled_theme_turns_red` が
 ///   書き換える先と同じだと摂動が空振りする）
 ///
-/// 2026-09-06 の時点でこの条件を満たす id は 5 つあり（`OnFirstBoot`・`OnInitialize`・
-/// `OnMouseDoubleClick`・`OnMouseMove`・`basewareversion`）、名前順の先頭を採った。
+/// 錨には、この条件を満たす id のうち名前順の先頭を採った。
 /// **台帳が育つと「どこからも指されていない id」は減る**ので、また同じことが起きたら
 /// 同じ条件でもう一度絞り直すこと。
 pub(super) const ANCHOR_ID: &str = "ukadoc:list_shiori_event:OnFirstBoot:1";
@@ -94,15 +93,15 @@ impl<'a> Perturbed<'a> {
         }
     }
 
-    /// 写しから検査の入力を組む。割り当て表とテーマ名は本物をそのまま借りる。
+    /// 写しから検査の入力を組む。写しの持つ欄は写しから渡し、残りの欄は
+    /// [`RepoData::input`] の組み方をそのまま借りる（欄が増えても組み方は 1 か所）。
     fn input(&self) -> CheckInput<'_> {
         CheckInput {
             catalog: &self.catalog,
             ledgers: &self.ledgers,
-            assignment: &self.data.assignment,
-            themes: &THEMES,
             evidence: &self.evidence,
             domain_reports: &self.domain_reports,
+            ..self.data.input()
         }
     }
 

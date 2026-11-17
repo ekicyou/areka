@@ -5,6 +5,13 @@
 //! 純粋層に委ねる。**ここは 1 つも判断を持たない**——所見を数える・並べ替える・
 //! 選り分ける、のいずれもしない。
 //!
+//! # 1 回の走行で 1 度だけ読む
+//!
+//! [`RepoData::load`] と [`documents::Documents::load`] は、最初の呼び出しで 1 度だけ
+//! 読み、あとは同じ値を `&'static` で貸す。どのテストも読んだ値を書き換えない
+//! （写しを壊すテストは `.clone()` してから壊す）ので、並行に走るテストが 1 つの値を
+//! 共有してよい。
+//!
 //! # スナップショットには構造として届かない（要件 6.2・設計 Testing Strategy 19）
 //!
 //! この一群は統合テストで、ライブラリとは別のクレートである。スナップショットを読む
@@ -19,12 +26,10 @@
 //!
 //! # 全体報告 `summary.md` は [`RepoData`] では読まない
 //!
-//! ここが読むのはドメイン別報告 4 本だけである。`summary.md` を常時検査から外した
-//! 理由（並走 4 本が同じファイルを取り合う・完了 spec toolkit 要件 7.6・開発者裁定
-//! 2026-09-02 議題 2）は調査 4 本の完了で消えたので、除外は本 spec の要件 11.2 が
-//! 覆した。ただし突き合わせ相手は純粋層の `report::render_summary` の出力であって
-//! [`CheckInput`] の欄ではないので、`summary.md` の本文を持つのは [`RepoData`] では
-//! なく [`documents::Documents`] である。`paths::summary_report_path()` はこの
+//! ここが読むのはドメイン別報告 4 本だけである。`summary.md` の本文は常時検査の
+//! 突き合わせ相手だが、相手は純粋層の `report::render_summary` の出力であって
+//! [`CheckInput`] の欄ではないので、持つのは [`RepoData`] ではなく
+//! [`documents::Documents`] である。`paths::summary_report_path()` はこの
 //! ファイルからは 1 度も呼ばない。
 //!
 //! # ファイルを 1 つも作らない
@@ -33,7 +38,7 @@
 //! 一時ディレクトリを使うと `log-capture-kit` の例外表への追記が要り、要件 9.1
 //! （既存クレート非接触）を破る。
 //!
-//! # テーマ名の出どころは `model::THEMES`（要件 6.8・タスク 6.3 の申し送り）
+//! # テーマ名の出どころは `model::THEMES`（要件 6.8）
 //!
 //! テーマ定義の正本は `doc/ukadoc-coverage/values.md` だが、**検査へ渡すのは
 //! [`THEMES`] である**。理由は新しさの検査（要件 7.4）が本文をバイトで比べることに
@@ -42,10 +47,10 @@
 //! を書き換えただけで `DomainReportStale`（「報告を作り直せ」）が**誤った理由で**赤く
 //! なる。突き合わせの両側は同じ出どころでなければならない。
 //!
-//! `values.md` の本文は [`RepoData::values`] として持つ（タスク 8.4 が見出しと
+//! `values.md` の本文は [`RepoData::values`] として持つ（[`values_md`] が見出しと
 //! [`THEMES`] の順序まで一致することを釘付けする）。台帳のテーマ名が定義に実在する
 //! ことは、⑴ 台帳のテーマ名が [`THEMES`] にあること（要件 6.8 の判定）と
-//! ⑵ [`THEMES`] が `values.md` の見出しと一致すること（タスク 8.4）の 2 つで守る。
+//! ⑵ [`THEMES`] が `values.md` の見出しと一致すること（[`values_md`]）の 2 つで守る。
 //!
 //! # テストの本体はこのディレクトリの兄弟に置く
 //!
@@ -59,13 +64,9 @@
 //! [`briefing_checks`]（`briefing_checks.rs`・⑷）と
 //! [`spec_checks`]（`spec_checks.rs`・⑸）が持つ。⑷ の腕そのものは
 //! [`briefing_arms`]（`briefing_arms.rs`）にあり、そこにはテストの本体を 1 つも
-//! 置かない——⑶ だけで 944 行あるので ⑷ を同じファイルへ足せず、⑷ もまた腕と摂動を
-//! 1 ファイルに収めると 1,000 行の目安（`structure.md:176`）を超えるためである。
-//! ⑸ も同じ理由で `documents_checks.rs`（773 行）へは足さず、専用の
-//! `spec_checks.rs` に置いた（設計 File Structure Plan の当初の割り付けは
-//! `documents_checks.rs` に ⑴ ⑵ ⑸ ⑹ の 4 種だったが、⑴ ⑵ ⑹ だけで 773 行に
-//! 達した——タスク 4.7 が ⑷ を 2 本に割ったのと同じ判断である）。
-//! これで判定 6 種が揃った。
+//! 置かない。判定を 1 ファイルにまとめず分けてあるのは、1 ファイル 1,000 行の目安
+//! （`structure.md`）を守るためである。3 文書の判定が使う所見の見方と 3 文書の綴りも
+//! [`documents`] に 1 つずつ置く。
 //!
 //! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
 //! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
@@ -75,7 +76,7 @@
 //! テストの本体を 1 つも置かない。どれも同じディレクトリの兄弟で、宣言は
 //! このファイルへ下の `mod checks;` と同じく素の `mod` で置ける（`#[path]` で
 //! 読み込まれたファイルの子モジュールは、そのファイル自身のディレクトリを基準に
-//! 解決される——`structure.md:141`）。
+//! 解決される——`structure.md`）。
 
 mod briefing_arms;
 mod briefing_checks;
@@ -93,6 +94,7 @@ mod values_md;
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use ukadoc_survey::assignment::PageAssignment;
 use ukadoc_survey::catalog::Catalog;
@@ -129,41 +131,48 @@ pub struct RepoData {
 }
 
 impl RepoData {
-    /// repo の実データを読む。
+    /// repo の実データ（1 回の走行で 1 度だけ読み、全部のテストが同じものを借りる）。
     ///
-    /// 読めないファイルが 1 つでもあれば、**探した絶対パスと理由を添えて**止まる
-    /// （要件 6.12。黙って飛ばすと、その 1 本を見なかった検査が緑になる）。
-    pub fn load() -> Self {
+    /// 読めないファイルが 1 つでもあれば、**どの呼び出しも**探した絶対パスと理由を
+    /// 添えた同じ文で止まる（要件 6.12。黙って飛ばすと、その 1 本を見なかった検査が
+    /// 緑になる）。読みの中では panic させないので、1 本目の失敗が [`LazyLock`] を
+    /// 毒にして 2 本目から別の文になることもない。
+    pub fn load() -> &'static Self {
+        static REPO: LazyLock<Result<RepoData, String>> = LazyLock::new(RepoData::read);
+        REPO.as_ref().unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    /// repo の実データを読む。呼ぶのは [`RepoData::load`] の 1 か所だけである。
+    fn read() -> Result<Self, String> {
         let catalog_path = paths::catalog_path();
-        let catalog = read_catalog(&read_text(&catalog_path)).unwrap_or_else(|err| {
-            panic!("カタログを読めない: {}（{err}）", catalog_path.display())
-        });
+        let catalog = read_catalog(&read_text(&catalog_path)?)
+            .map_err(|err| format!("カタログを読めない: {}（{err}）", catalog_path.display()))?;
 
         let mut ledgers = Vec::with_capacity(Domain::ALL.len());
         for domain in Domain::ALL {
             let path = paths::ledger_path(domain);
-            let ledger = read_ledger(&read_text(&path), domain)
-                .unwrap_or_else(|err| panic!("台帳を読めない: {}（{err}）", path.display()));
+            let ledger = read_ledger(&read_text(&path)?, domain)
+                .map_err(|err| format!("台帳を読めない: {}（{err}）", path.display()))?;
             ledgers.push(ledger);
         }
 
         let mut domain_reports = BTreeMap::new();
         for domain in Domain::ALL {
-            domain_reports.insert(domain, read_text(&paths::domain_report_path(domain)));
+            domain_reports.insert(domain, read_text(&paths::domain_report_path(domain))?);
         }
 
-        let values = read_text(&paths::values_path());
+        let values = read_text(&paths::values_path())?;
 
         let root = paths::workspace_root();
         let sources = sources::walk(&root)
-            .unwrap_or_else(|err| panic!("ソースを走査できない: {}（{err}）", root.display()));
+            .map_err(|err| format!("ソースを走査できない: {}（{err}）", root.display()))?;
         let hits: Vec<_> = sources
             .iter()
             .flat_map(|(path, text)| extract(path, text))
             .collect();
         let evidence = resolve(&hits, &sources, &catalog);
 
-        Self {
+        Ok(Self {
             catalog,
             ledgers,
             assignment: PageAssignment::canonical(),
@@ -171,7 +180,7 @@ impl RepoData {
             domain_reports,
             sources,
             values,
-        }
+        })
     }
 
     /// 純粋層の判定へ渡す入力を組む。
@@ -192,10 +201,10 @@ impl RepoData {
 
 /// 1 本読む。復帰文字は入出力層が落とす（設計 D-6）。
 ///
-/// 失敗したら `io::files` の本文をそのまま出して止まる（要件 6.12）。その本文には既に
+/// 失敗したら `io::files` の本文をそのまま返す（要件 6.12）。その本文には既に
 /// 探した絶対パスと理由が入っており、パスの末尾（`catalog.toml`・`ledger/<ドメイン>.toml`・
-/// `report/<ドメイン>.md`・`values.md`）がそのまま役目を名指すので、ここで包み直しても
-/// 同じパスを 2 度書くだけになる。だから包まない。
-fn read_text(path: &Path) -> String {
-    files::read_normalized(path).unwrap_or_else(|err| panic!("{err}"))
+/// `report/<ドメイン>.md`・`values.md`・3 文書・`summary.md`）がそのまま役目を名指すので、
+/// ここで包み直しても同じパスを 2 度書くだけになる。だから包まない。
+fn read_text(path: &Path) -> Result<String, String> {
+    files::read_normalized(path).map_err(|err| err.to_string())
 }

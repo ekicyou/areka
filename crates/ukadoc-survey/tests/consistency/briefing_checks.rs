@@ -3,11 +3,11 @@
 //!
 //! 腕そのもの（a〜g）と数え直しの道具は兄弟の `briefing_arms.rs` にあり、そちらには
 //! テストの本体を 1 つも置かない。2 つに割ってあるのは 1 ファイル 1,000 行の目安を
-//! 守るためである（`structure.md:176`・設計「1,000 行の番人」）。
+//! 守るためである（`structure.md`・設計「1,000 行の番人」）。
 //!
 //! # 摂動 3 本と、残る腕の較正
 //!
-//! タスクが名指す摂動は「束名を 1 つ消す」「件数を 1 ずらす」「優先度を 1 件書き換える」
+//! 摂動は「束名を 1 つ消す」「件数を 1 ずらす」「優先度を 1 件書き換える」
 //! の 3 本で、それぞれ腕 a・b・c を赤にする。残る腕 d・e・f・g にも 1 つずつ較正を
 //! 置く——赤にできない腕は判定として数えない（要件 11.3）。
 //!
@@ -25,43 +25,14 @@ use ukadoc_survey::model::{Domain, EntryId};
 
 use super::RepoData;
 use super::briefing_arms::{
-    BRIEFING_MD, Carryover, LedgerFacts, STAGE_RULE_REF, SYSTEM_MARK, UPDATE_THEME,
-    distribution_findings, ledger_file, override_finding, priority_findings,
-    rank_coverage_findings, rank_derived_findings, rank_order_findings, row_names, row_place,
-    rows_at, stage_and_rank_findings, stage_count_findings, stage_rule_findings,
+    Carryover, LedgerFacts, STAGE_RULE_REF, SYSTEM_MARK, UPDATE_THEME, distribution_findings,
+    ledger_file, override_finding, priority_findings, rank_coverage_findings,
+    rank_derived_findings, rank_order_findings, row_names, row_place, rows_at,
+    stage_and_rank_findings, stage_count_findings, stage_rule_findings,
 };
-use super::documents::{Documents, shift_count};
-
-// ---------------------------------------------------------------------------
-// 摂動と較正の共通の道具
-// ---------------------------------------------------------------------------
-
-/// 所見が 1 つでもあれば、その全部を名指して止まる。
-fn assert_no_findings(judgement: &str, findings: &[String]) {
-    assert!(
-        findings.is_empty(),
-        "{judgement}（{} 件）:\n{}",
-        findings.len(),
-        findings.join("\n")
-    );
-}
-
-/// 摂動の後の所見がちょうど 1 件で、その本文が指定の綴りを全部含むこと。
-fn assert_single_finding(findings: &[String], what: &str, must_name: &[&str]) {
-    assert_eq!(
-        findings.len(),
-        1,
-        "{what} で赤が 1 件でない:\n{}",
-        findings.join("\n")
-    );
-    for needle in must_name {
-        assert!(
-            findings[0].contains(needle),
-            "失敗の本文が {needle} を名指していない: {}",
-            findings[0]
-        );
-    }
-}
+use super::documents::{
+    BRIEFING_MD, Documents, assert_no_findings, assert_single_finding, shift_count,
+};
 
 // ---------------------------------------------------------------------------
 // 実データで緑（要件 11.1 ⑷）

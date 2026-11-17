@@ -27,21 +27,16 @@
 //! 地の文の「`…` を束 id とする」のような言い回しは相手にしない。機械の束の id は
 //! それ自体が項目 id でもあるので、地の文では束 id と構成 id を綴りで見分けられない
 //! ——拾えば構成 id を束 id として名指して必ず赤になる。地の文に書かれた綴りが実在
-//! すること自体は ⑴ が見ている。2026-09-12 時点で、この取りこぼしに当たるのは
-//! `linkage.md`「補修した関連」「機械の束の分割」「例示の 3 連鎖」の 3 節にある
-//! 言い回しで、いずれも同じ id を上の 2 つの出どころでも引用している。
+//! すること自体は ⑴ が見ている。
 //!
 //! # ⑹ が主張すること
 //!
 //! `report/summary.md` の本文（復帰文字を落としたもの）が、カタログと台帳 4 本から
-//! 作り直した本文と**全文一致**すること（設計 D-5）。上流（完了 spec
-//! `ukadoc-survey-toolkit` の要件 7.6）はこの報告を常時検査から外していたが、外した理由
-//! ——調査 4 本が並走して同じファイルを取り合う——は 4 本の完了で消えたので、本 spec の
-//! 要件 11.2 が除外を覆した。
+//! 作り直した本文と**全文一致**すること（設計 D-5・要件 11.2）。
 //!
 //! 突き合わせ相手が「証拠あり件数」を持たないのが要である。あの表はソース木を歩いて
 //! 数える値なので、判定に入れると別の spec が正典 URL のコメントを 1 行足すだけで
-//! ここが赤くなる。表は `evidence` 副手続きの出力へ一本化した（開発者裁定 2026-09-12）。
+//! ここが赤くなる。だからその表は `evidence` 副手続きの出力だけに置く。
 //!
 //! # 報告の束の一覧は「列数」ではなく「表の見出し」で見つける
 //!
@@ -49,29 +44,14 @@
 //! **3 列**（束 id・跨ぐドメイン・構成 id）で、ドメイン別報告 4 本「ドメイン内で関連が
 //! 閉じている束」は **2 列**（束 id・構成 id）である。列数を決め打ちすると片方を丸ごと
 //! 取り落とし、取り落とした側の束を引用した文書が「報告に無い束 id」で偽の赤になる
-//! （2026-09-12 の実測で、決め打ちが落とすのは 123 行のうち 48 行または 75 行）。
 //!
 //! さらに、ドメイン別報告には**別名の一覧**という別の表があり、そちらの行も
-//! `| ukadoc:` で始まる。行の綴りだけで拾うと別名 27 件が束 id の一覧に紛れ込み、
+//! `| ukadoc:` で始まる。行の綴りだけで拾うと別名が束 id の一覧に紛れ込み、
 //! 別名を束 id として引用した文書が偽の緑になる。
 //!
 //! だから拾い方は「見出しが [`BUNDLE_TABLE_HEADER`] で始まる表の 1 列目」にする。
 //! 見出しは両方の束の表に共通で（`report::domain`・`report::summary` の
 //! `push_bundle_list` が書く）、別名の表の見出し（`| 別名の id |`）とは違う。
-//!
-//! # 数えたもの（2026-09-12・段 1 の後に数え直した実測）
-//!
-//! - `linkage.md` の引用 id: **1,553 件**。内訳は `members` の和集合 1,552 件（＝
-//!   `[tally].target`）と、地の文だけに現れる別名 1 件
-//!   （`ukadoc:list_sakura_script:_5c7:1`・「過剰だった関連」の節）。
-//! - `briefing.md`・`roadmap-draft.md` の引用 id: **どちらも 0 件**（まだ骨組みで、
-//!   本文は段 4・段 5 が書く）。下限を置くのはその 2 段の持ち物である。
-//! - 裸の id: 3 文書とも **0 件**。`report.md` の綴り: 3 文書とも **0 件**。
-//! - 報告 5 本の束の一覧: **123 行・122 種**（summary 75 行・sakura-script 23 行・
-//!   shiori 25 行・assets 0 行・property 0 行）。1 種だけ summary と sakura-script の
-//!   両方に現れる。
-//! - 3 文書が引用した機械の束 id: **47 種**（すべて `linkage.md`。`machine` 欄 47 種と
-//!   表の列 3 種で、表の 3 種は `machine` 欄にも在る）。
 //!
 //! # 読むだけ
 //!
@@ -87,12 +67,10 @@ use ukadoc_survey::model::{Domain, EntryId, THEMES};
 use ukadoc_survey::report::summary::render_summary;
 
 use super::RepoData;
-use super::documents::{Documents, cited_ids, shift_row_count, twist_id, twisted_id};
-
-/// 3 文書のワークスペース根からの相対パス（失敗の本文はこの綴りで名指す）。
-const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
-const BRIEFING_MD: &str = "doc/ukadoc-coverage/briefing.md";
-const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
+use super::documents::{
+    BRIEFING_MD, Documents, LINKAGE_MD, ROADMAP_MD, assert_no_findings, cited_ids, shift_row_count,
+    twist_id, twisted_id,
+};
 
 /// 全体報告のワークスペース根からの相対パス（判定 ⑹ の失敗の本文はこの綴りで名指す）。
 const SUMMARY_MD: &str = "doc/ukadoc-coverage/report/summary.md";
@@ -330,7 +308,7 @@ fn citation_findings(files: &[(&'static str, &str)], catalog: &Catalog) -> Vec<S
 /// 判定 ⑹ の所見。空なら成り立っている。
 ///
 /// 突き合わせるのは全文である（設計 D-5）。食い違ったら**最初に食い違った行**を行番号
-/// 付きで名指す——本文は 145 行あるので、「一致しない」とだけ言われても手の付けようが
+/// 付きで名指す——本文は百行を超えるので、「一致しない」とだけ言われても手の付けようが
 /// ない。行数が違うだけのときは、足りない側にその旨を書く。
 fn summary_findings(summary_text: &str, rendered: &str) -> Vec<String> {
     if summary_text == rendered {
@@ -378,16 +356,6 @@ fn bundle_findings(
     findings
 }
 
-/// 所見が 1 つでもあれば、その全部を名指して止まる。
-fn assert_no_findings(judgement: &str, findings: &[String]) {
-    assert!(
-        findings.is_empty(),
-        "{judgement}（{} 件）:\n{}",
-        findings.len(),
-        findings.join("\n")
-    );
-}
-
 // ---------------------------------------------------------------------------
 // 実データで緑（要件 11.1 ⑴ ⑵）
 // ---------------------------------------------------------------------------
@@ -397,7 +365,7 @@ fn assert_no_findings(judgement: &str, findings: &[String]) {
 fn every_id_cited_by_the_three_documents_exists_in_the_catalog() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let files = three_documents(&documents);
+    let files = three_documents(documents);
 
     let findings = citation_findings(&files, &repo.catalog);
     assert_no_findings("3 文書の引用 id が台帳の正典と食い違う", &findings);
@@ -408,8 +376,8 @@ fn every_id_cited_by_the_three_documents_exists_in_the_catalog() {
 fn every_machine_bundle_id_cited_by_the_three_documents_is_listed_in_the_reports() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let known = report_bundle_ids(&repo, &documents.summary_text);
-    let cited = cited_bundle_ids(&documents.linkage, &documents);
+    let known = report_bundle_ids(repo, &documents.summary_text);
+    let cited = cited_bundle_ids(&documents.linkage, documents);
 
     let findings = bundle_findings(&cited, &known);
     assert_no_findings("3 文書の機械の束 id が報告と食い違う", &findings);
@@ -459,7 +427,7 @@ fn twisting_one_cited_id_turns_the_citation_check_red() {
     );
 
     // 壊す前は緑であること（赤の原因が摂動だと言い切るために要る）。
-    let untouched = three_documents(&documents);
+    let untouched = three_documents(documents);
     assert_no_findings(
         "摂動の前から赤い（摂動が赤の原因だと言えない）",
         &citation_findings(&untouched, &repo.catalog),
@@ -472,7 +440,7 @@ fn twisting_one_cited_id_turns_the_citation_check_red() {
 fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let known = report_bundle_ids(&repo, &documents.summary_text);
+    let known = report_bundle_ids(repo, &documents.summary_text);
 
     let cited = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
     let target = a_twistable_id(&cited);
@@ -501,7 +469,7 @@ fn twisting_one_machine_bundle_id_turns_the_bundle_check_red() {
     // 壊す前は緑であること。
     assert_no_findings(
         "摂動の前から赤い（摂動が赤の原因だと言えない）",
-        &bundle_findings(&cited_bundle_ids(&documents.linkage, &documents), &known),
+        &bundle_findings(&cited_bundle_ids(&documents.linkage, documents), &known),
     );
 }
 

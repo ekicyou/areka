@@ -1,19 +1,23 @@
-//! 3 文書・全体報告・spec ディレクトリの一覧を読む道具、本文の写しを 1 か所だけ壊す
-//! 道具、母数の下限を集める器（設計「入口 / `tests/consistency`」→「`documents.rs`」）。
+//! 3 文書・全体報告・spec ディレクトリの一覧を読む道具、判定が共有する所見の見方と
+//! 綴りの定数、本文の写しを 1 か所だけ壊す道具、母数の下限を集める器（設計「入口 /
+//! `tests/consistency`」→「`documents.rs`」）。
 //!
-//! **テストの本体はここに 1 つも置かない**（`structure.md:129` の流儀・`perturb.rs` と同じ）。
+//! **テストの本体はここに 1 つも置かない**（`structure.md` の流儀・`perturb.rs` と同じ）。
 //! 母数の下限は兄弟の `documents_non_vacuity.rs`、器と壊す道具の較正は
 //! `documents_tools.rs` にあり、判定 6 種は `documents_checks.rs`（⑴ ⑵ ⑹）と
 //! `linkage_checks.rs`（⑶）と `briefing_checks.rs`（⑷）と `spec_checks.rs`（⑸）が持つ。
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use ukadoc_survey::documents::parse::{
     backticked_ids, quoted_ids, read_briefing, read_linkage, read_roadmap_draft,
 };
 use ukadoc_survey::documents::{Briefing, Linkage, RoadmapDraft};
-use ukadoc_survey::io::{files, paths};
+use ukadoc_survey::io::paths;
+
+use super::read_text;
 
 /// 本 spec 自身の spec ディレクトリの**名前**（要件 12.8）。
 pub(super) const OWN_SPEC_DIR: &str = "areka-P0-ukadoc-coverage-roadmap";
@@ -26,6 +30,15 @@ const COMPLETED_DIR: &str = "completed";
 
 /// spec ディレクトリを spec だと見分ける目印（要件 10.2 の「brief 済み」）。
 const BRIEF_FILE: &str = "brief.md";
+
+/// 3 文書のワークスペース根からの相対パス（失敗の本文はこの綴りで名指す）。
+pub(super) const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
+pub(super) const BRIEFING_MD: &str = "doc/ukadoc-coverage/briefing.md";
+pub(super) const ROADMAP_MD: &str = "doc/ukadoc-coverage/roadmap-draft.md";
+
+/// 既存の語彙台帳（要件 9.2 の「置き換えない」相手）。走査が届いていることの錨にも、
+/// 語彙表経路の較正の相手にも使う。
+pub(super) const SHIORI_RESOURCE_RS: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
 
 /// repo から読み込んだ 3 文書・全体報告・spec ディレクトリの一覧。
 pub(super) struct Documents {
@@ -51,31 +64,41 @@ pub(super) struct Documents {
 }
 
 impl Documents {
-    /// repo の実データを読む。
-    pub(super) fn load() -> Self {
-        let linkage_text = read_text(&paths::linkage_path());
-        let briefing_text = read_text(&paths::briefing_path());
-        let roadmap_text = read_text(&paths::roadmap_draft_path());
-        let summary_text = read_text(&paths::summary_report_path());
+    /// repo の 3 文書・全体報告・spec の一覧（1 回の走行で 1 度だけ読み、全部のテストが
+    /// 同じものを借りる）。読めなければ**どの呼び出しも**同じ文で止まる
+    /// （[`super::RepoData::load`] と同じ形）。
+    pub(super) fn load() -> &'static Self {
+        static DOCUMENTS: LazyLock<Result<Documents, String>> = LazyLock::new(Documents::read);
+        DOCUMENTS.as_ref().unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    /// repo の実データを読む。呼ぶのは [`Documents::load`] の 1 か所だけである。
+    fn read() -> Result<Self, String> {
+        let linkage_text = read_text(&paths::linkage_path())?;
+        let briefing_text = read_text(&paths::briefing_path())?;
+        let roadmap_text = read_text(&paths::roadmap_draft_path())?;
+        let summary_text = read_text(&paths::summary_report_path())?;
 
         let linkage = read_linkage(&linkage_text)
-            .unwrap_or_else(|err| panic!("linkage.md の骨組みを読めない: {err}"));
+            .map_err(|err| format!("linkage.md の骨組みを読めない: {err}"))?;
         let briefing = read_briefing(&briefing_text)
-            .unwrap_or_else(|err| panic!("briefing.md の骨組みを読めない: {err}"));
+            .map_err(|err| format!("briefing.md の骨組みを読めない: {err}"))?;
         let roadmap = read_roadmap_draft(&roadmap_text)
-            .unwrap_or_else(|err| panic!("roadmap-draft.md の骨組みを読めない: {err}"));
+            .map_err(|err| format!("roadmap-draft.md の骨組みを読めない: {err}"))?;
 
+        // 直下を先・`completed/` を後に読む。移しは「直下→`completed/`」の 1 方向なので、
+        // 2 つの読みのどの時点で移っても、その spec は少なくとも一方に見える。
         let specs_root = paths::workspace_root().join(SPECS_DIR);
-        let spec_dirs = child_dirs(&specs_root)
+        let spec_dirs = child_dirs(&specs_root)?
             .into_iter()
             .filter(|name| name != COMPLETED_DIR && name != OWN_SPEC_DIR)
             .filter(|name| specs_root.join(name).join(BRIEF_FILE).is_file())
             .collect();
-        let completed_specs = child_dirs(&specs_root.join(COMPLETED_DIR))
+        let completed_specs = child_dirs(&specs_root.join(COMPLETED_DIR))?
             .into_iter()
             .collect();
 
-        Self {
+        Ok(Self {
             linkage_text,
             briefing_text,
             roadmap_text,
@@ -85,31 +108,31 @@ impl Documents {
             roadmap,
             spec_dirs,
             completed_specs,
-        }
+        })
     }
 }
 
-/// 1 本読む。読めなければ探した絶対パスと理由を添えて止まる（要件 6.12）。
-fn read_text(path: &Path) -> String {
-    files::read_normalized(path).unwrap_or_else(|err| panic!("{err}"))
-}
-
 /// そのディレクトリの直下にあるディレクトリの名前。
-fn child_dirs(dir: &Path) -> Vec<String> {
+fn child_dirs(dir: &Path) -> Result<Vec<String>, String> {
     let entries =
-        std::fs::read_dir(dir).unwrap_or_else(|err| panic!("{} を開けない: {err}", dir.display()));
+        std::fs::read_dir(dir).map_err(|err| format!("{} を開けない: {err}", dir.display()))?;
     let mut names = Vec::new();
     for entry in entries {
-        let entry = entry.unwrap_or_else(|err| panic!("{} の直下を読めない: {err}", dir.display()));
+        let entry = entry.map_err(|err| format!("{} の直下を読めない: {err}", dir.display()))?;
         if !entry.path().is_dir() {
             continue;
         }
         match entry.file_name().into_string() {
             Ok(name) => names.push(name),
-            Err(raw) => panic!("{} の直下に UTF-8 でない名前がある: {raw:?}", dir.display()),
+            Err(raw) => {
+                return Err(format!(
+                    "{} の直下に UTF-8 でない名前がある: {raw:?}",
+                    dir.display()
+                ));
+            }
         }
     }
-    names
+    Ok(names)
 }
 
 /// 本文が引用した項目 id（引用符と逆引用符の両方・重複は畳む）。
@@ -118,6 +141,37 @@ pub(super) fn cited_ids(markdown: &str) -> BTreeSet<String> {
         .into_iter()
         .chain(backticked_ids(markdown))
         .collect()
+}
+
+// ---------------------------------------------------------------------------
+// 判定の所見の見方（3 文書の判定がどれも同じ文で失敗を出す）
+// ---------------------------------------------------------------------------
+
+/// 所見が 1 つでもあれば、その全部を名指して止まる。
+pub(super) fn assert_no_findings(judgement: &str, findings: &[String]) {
+    assert!(
+        findings.is_empty(),
+        "{judgement}（{} 件）:\n{}",
+        findings.len(),
+        findings.join("\n")
+    );
+}
+
+/// 摂動の後の所見がちょうど 1 件で、その本文が指定の綴りを全部含むこと。
+pub(super) fn assert_single_finding(findings: &[String], what: &str, must_name: &[&str]) {
+    assert_eq!(
+        findings.len(),
+        1,
+        "{what} で赤が 1 件でない:\n{}",
+        findings.join("\n")
+    );
+    for needle in must_name {
+        assert!(
+            findings[0].contains(needle),
+            "失敗の本文が {needle} を名指していない: {}",
+            findings[0]
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

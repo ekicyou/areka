@@ -30,21 +30,13 @@
 //!
 //! # 「該当なし」の腕は実データでは母数 0 である
 //!
-//! 2026-09-12 時点で 63 束すべての `breakage` が「黙って壊れる」なので、
+//! 実データの束はどれも `breakage` が「黙って壊れる」なので、
 //! 「`該当なし` の束は全構成 id が `implemented`」は**母数 0 の恒真**である。恒真の
 //! まま置くと「判定を置いた」という記録だけが残るので、写しに「該当なし」の束を
 //! 1 つ作って腕が働くことを較正する
 //! （[`marking_a_bundle_not_applicable_turns_the_derived_arm_red`]）。同じ較正が
 //! 「実データに『該当なし』の束は無い」ことも見張るので、束が 1 つでも増えれば
 //! この段落が古びたことに気づける。
-//!
-//! # 数えたもの（2026-09-12・実データ）
-//!
-//! - 束: **67**（名前付き束 63・単独項目 4）。構成 id は延べ **1,552**。
-//! - `[tally]`: `target = 1552`・`from_machine = 195`・`by_hand = 1353`・`singles = 4`・
-//!   `alias_excluded = 27`・`not_applicable_excluded = 170`。
-//!   `[tally.singles_by_domain]` は assets 4・property 0・sakura-script 0・shiori 0。
-//! - `breakage` は 67 束すべてが「黙って壊れる」（「該当なし」は **0 束**）。
 //!
 //! # 読むだけ
 //!
@@ -61,11 +53,10 @@ use ukadoc_survey::ledger::Ledger;
 use ukadoc_survey::model::{Domain, EntryId, Status};
 
 use super::RepoData;
-use super::documents::{Documents, drop_member, shift_count};
+use super::documents::{
+    Documents, LINKAGE_MD, assert_no_findings, assert_single_finding, drop_member, shift_count,
+};
 use super::documents_checks::bundle_rows_in_report;
-
-/// 帰属の正本のワークスペース根からの相対パス（失敗の本文はこの綴りで名指す）。
-const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";
 
 /// 束の構成に入れる対象の 4 状態（要件 4.2）。
 const TARGET_STATUSES: [Status; 4] = [
@@ -523,33 +514,6 @@ fn attribution_findings(
     findings
 }
 
-/// 所見が 1 つでもあれば、その全部を名指して止まる。
-fn assert_no_findings(judgement: &str, findings: &[String]) {
-    assert!(
-        findings.is_empty(),
-        "{judgement}（{} 件）:\n{}",
-        findings.len(),
-        findings.join("\n")
-    );
-}
-
-/// 摂動の後の所見がちょうど 1 件で、その本文が指定の綴りを全部含むこと。
-fn assert_single_finding(findings: &[String], what: &str, must_name: &[&str]) {
-    assert_eq!(
-        findings.len(),
-        1,
-        "{what} で赤が 1 件でない:\n{}",
-        findings.join("\n")
-    );
-    for needle in must_name {
-        assert!(
-            findings[0].contains(needle),
-            "失敗の本文が {needle} を名指していない: {}",
-            findings[0]
-        );
-    }
-}
-
 // ---------------------------------------------------------------------------
 // 実データで緑（要件 11.1 ⑶）
 // ---------------------------------------------------------------------------
@@ -560,7 +524,7 @@ fn the_attribution_of_every_target_item_splits_across_the_bundles() {
     let repo = RepoData::load();
     let documents = Documents::load();
     let facts = LedgerFacts::collect(&repo.ledgers);
-    let machine = machine_bundle_members(&repo, &documents.summary_text);
+    let machine = machine_bundle_members(repo, &documents.summary_text);
 
     let findings = attribution_findings(
         &documents.linkage,
@@ -662,7 +626,7 @@ fn shifting_the_tally_by_one_turns_the_tally_arm_red() {
 fn removing_one_hand_mark_turns_the_provenance_arm_red() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let machine = machine_bundle_members(&repo, &documents.summary_text);
+    let machine = machine_bundle_members(repo, &documents.summary_text);
 
     assert_no_findings(
         "摂動の前から赤い（摂動が赤の原因だと言えない）",
@@ -753,7 +717,7 @@ fn dropping_one_theme_turns_the_derived_arm_red() {
 
 /// 腕 e: 「該当なし」の腕が母数 0 の恒真でないこと。
 ///
-/// 実データの 67 束はすべて「黙って壊れる」なので、この腕は**実データでは 1 件も
+/// 実データの束はどれも「黙って壊れる」なので、この腕は**実データでは 1 件も
 /// 相手にしていない**。写しに「該当なし」の束を 1 つ作り、その構成 id に実装済みで
 /// ないものが混じっていれば赤になることを見る。これを置かないと、腕が壊れていても
 /// 実データは緑のままである。
@@ -931,7 +895,7 @@ fn a_bundle_with_an_unfinished_member(linkage: &Linkage, facts: &LedgerFacts) ->
 fn the_machine_bundle_members_are_read_from_the_reports() {
     let repo = RepoData::load();
     let documents = Documents::load();
-    let machine = machine_bundle_members(&repo, &documents.summary_text);
+    let machine = machine_bundle_members(repo, &documents.summary_text);
 
     assert!(
         !machine.is_empty(),
