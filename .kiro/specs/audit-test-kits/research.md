@@ -549,3 +549,28 @@
 - 15: 相対の `CARGO_TARGET_DIR` を解く形（実行体の祖先からの探し方）。
 - 53: 親の写しを退け合わない形（いちばん新しい印だけを残すほか）。
 - 13・30・2・8・32・34: §10 の調べものと一緒に決める。
+
+## 12. 設計の段の調べと決め（2026-11-17 `/kiro-spec-design`）
+
+- **調べの種類**: light（今ある 4 crate の中の直し。新しい外の依存は 0＝外の資料の調べは要らない）。読んだもの: `kiro-spec-design` の規則 5 本・steering（`structure.md` の log-capture-kit／temp-path-kit 節・`tech.md`・`logging.md`・`roadmap.md` の C22 の行）・完了した `audit-tools-perf-run` の設計の形（指摘ごとの表・束ね方）。ponytail は user scope のプラグインのまま使った（「いちばん小さな完全な変更」の物差し）。
+- **確かめた事実**（コードを読んで）:
+  - 3: `rmcp 3.9.0` の `ServiceError` は `#[non_exhaustive]` で、JSON-RPC の誤りは `ServiceError::McpError(ErrorData { code: ErrorCode(i32), message, .. })`。偽の子の `echo` は inputSchema を持ち、`areka-mcp/src/handler.rs` の検査が `{"text":5}` に `-32602` を返す＝偽の子で決定論に作れる。`McpError` を照らす範囲の外の読み手は形を変えなければ書き換え 0。
+  - 26: 終わりの行は `crates/areka/src/app_exit.rs`（`main.rs` の `mod app_exit;`）が `target:` の上書きなしで出す＝出所は既定のモジュールのパス `areka::app_exit`。受け取りの行 `os_close_request` も同じファイル（293 行）。待受の行は `crates/areka-mcp/src/server.rs` の 78・80 行（`areka_mcp::server`）。静的なテストで「名前 → ファイル → 行の語」を照らせる。
+  - 43: 言い直しの要る行（`event_tests.rs:3-12`・14・102、`event.rs:89-90`・136）は、`input-crate-split` の持つ行（`event.rs:150`・`event_tests.rs:18-19`・121）と重ならない。見出しを「移した時点の出所」にすれば持ち主の行はそのままで正しい。
+  - 15: `tools/sample-fetch.ps1` は根で `cargo run` する（372 行）＝相対の値の答えは直しの前後で同じ。README の置き場の書き方は古びない。
+  - 13: libtest は `eprintln!` を通ったテストの分だけ捨てる。`std::io::stderr()` へ直に書けば残る。書き先を引数で受ければ `Vec<u8>` で決定論に読める。消せない木は `FILE_SHARE_READ` だけで開いたファイルで作れる（`devroot.rs` の定数と `devroot_tests.rs` の形が既にある）。
+  - 2・8: 見本は `cargo test` で組まれるが、単体テストは `[[example]] test = true` のときだけ回る。兄弟の `fold-samples_tests.rs` を見本と見なさせないには `autoexamples = false`。README 186 行が見本のパス `examples/fold-samples.rs` を名指す＝ファイルは動かさない。
+  - 32: `u{XXXX}` と `[char]0x` を解いた grep（`tools/**/*.ps1`・`*.psm1`・`*.py`・`.claude/**/*.ps1`・`.github/**/*.yml` の 55 ファイル）。字面で読むのは `tools/load-flake.ps1:194`・196（頭 `sample-ghost-kit:` と `os error 5`。自己検査の見本 245-246 は英語の ASCII）だけ。`package.ps1:473` は最後の行を throw の文へ入れるだけ、`sample-fetch.ps1` は `Show-Ascii` で逃がす。`real-run-kit` の行と `SampleError::Io` の `what` を読む台本は 0。
+  - 34: 消す・改名するテストのうち完了した文書が名前を挙げるのは `the_measurement_is_not_vacuous_and_matches_the_allow_table`（8 本）・`event_tests.rs` の 3 本（`areka-P0-test-cage-determinism`）・`every_fixture_the_testing_strategy_lists_can_be_built`（`areka-P0-nar-install`）・`registry_records_kind_and_bundled_balloons`（`areka-P0-default-balloon-nar-fold` ほか）。
+  - 9: 範囲の外の呼び手（`smoke_boot_loop_exit`・`startup_install_real_run`・`emo2_real_run/common.rs`）は `close()` か `wait_exit()` を必ず呼ぶ。範囲の中で閉じない子を破棄に任せるのは `dropped_listener_is_unreachable`（`listen-drop`）だけ＝29 と同じ束で直す。破棄の本体が panic すると残りの欄（`RunDirs`）は unwind の中で破棄される＝証拠が残る。
+  - 52: `areka-nar` の `NarArchive` はパスからしか開けない（`lib.rs:89`）＝確かめたバイトで据え付けるには、作業の札の下へ書き置いてから開く。
+  - 28: `Scan::NotFound { others: Vec<(u16, String)> }` は組める＝名乗りの判定の文を純関数に割って縛れる。
+  - 1: `vendors` と `sample_ghost` を `\` で繋いだ綴りは今のツリーの `.rs` に 0 件。赤になるのはギャップ分析の 2 か所だけ。
+  - 6: `temp-path-kit` を引く `Cargo.toml` は 12（`areka`・`areka-emo-present`・`areka-ghost`・`areka-impl-watch`・`areka-mcp-bridge`・`areka-parsers`・`areka-placement`・`areka-runtime`・`areka-sylphya`・`areka-user-data`・`real-run-kit`・`surface-compare`）。`structure.md` の Consumers は 9 のまま＝要件の討議の 4 で直す。
+- **合成（`design-synthesis.md`）**:
+  - 一般化: 指摘の多くは「同じ決まりが 2 か所に住む」の形（6・13・32・33・件 1）。新しい部品は作らず、既にある 1 か所（`temp-path-kit` の作り直し・`sample_ghost_kit::ascii`・`workspace_scan/mod.rs`・`log_capture_kit::expect_one`）へ寄せる。
+  - 作るか借りるか: std（`OnceLock`・`create_dir` の `AlreadyExists`・`share_mode`）と既に固定した `rmcp` の型だけを使う。新しい依存は 0（自作の SHA-256 は裁定のまま）。
+  - 削り: `stop_quietly`（`stop_on_drop` が置き換える）・`create_with` と `CREATE_TRIES`・`Waits`・`Launch::Ghost`・`Staged::run_dir`・偽の子の `err:`・`fetched_archive_path` と `fetched_checksum_path` と `on_shelf`（`fetched_shelf` 1 つに）・`owner_is_gone`・`scratch`・`CALIBRATION_DROPPED_ENTRY` と、なぞるだけのテスト（34・39・41・50・60・61・63・65・70）。
+- **閉じた調べもの（10 節）と決め（11 節）**: 3＝D1・26＝D2・43＝D3・15＝D4・53＝D5・13＝D6・30＝D7・2 と 8＝D8・32＝D9・34＝D10・実機の 1・2・8＝D11・37 の続き＝D12・52＝D13（中身は `design.md` の「設計の決め」）。30 の速さは測らない（判定にしない・前後の時間を記録に書くだけ）。
+- **設計の討議へ持ち越す前提**: `design.md` の「前提として置いた決め」の 6 項（D1・D9・D6・D2・D10・D5）。
+- **危うさ**: `design.md` の Risks（見張りを厳しくする 1・4・5・破棄が赤になる 9・`OnceLock` の置き場・見本の `test = true`・`ascii` の 2 つの写し・行数・逃がしの化け）。
