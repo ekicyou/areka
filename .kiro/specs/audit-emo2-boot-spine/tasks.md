@@ -24,7 +24,7 @@
   - _Boundary: 本体の spine の足場（runtime_tests/spine.rs）・spine_third_scope_talk_tests_
   - _Dispatch: standard, effort high — 門の形は設計が与えるが、赤から緑への順の確かめが細かい_
   - _Requirements: 3.1, 4.1, 4.2, 4.3, 4.6, 5.2, 6.4_
-- [ ] 1.3 足場の後片付けが、ゴーストの降ろしの失敗で赤になるようにする［T3・3 番］
+- [x] 1.3 足場の後片付けが、ゴーストの降ろしの失敗で赤になるようにする［T3・3 番］
   - 先に縛るテスト（`OnClose` を持たない台本で起こして降ろす→偽の SHIORI が panic→`should_panic`）を書き、直す前は panic せずに緑で通る＝`should_panic` が赤になることを見る
   - 足場の降ろしで、降ろしの失敗を `.expect` で落とす
   - 足場の降ろしの使い手（11 ファイル・22 か所）が全部緑のままであることを確かめる。`OnClose` を持たない 5 つの台本のどれかが赤になったら、台本に `OnClose` を足して黙らせず、降ろしの退行として根を調べる

@@ -671,7 +671,10 @@ impl SpineHarness {
         let calls = || shiori_handle.call_count();
         run_bounded_watching("spine ghost shutdown", Progress::Count(&calls), move || {
             // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
-            let _ = ghost.shutdown(CloseReason::User { scope: 0 });
+            // 降ろしの失敗は捨てずに落とす（待つ側へ `［相手が居ない］` の赤として届く・3 番）。
+            ghost
+                .shutdown(CloseReason::User { scope: 0 })
+                .expect("spine ghost shutdown");
         });
         // loop tick 直接注入端の clone を明示 drop（task 9.4）: ghost.shutdown が dispatcher 保持の
         // SerikoSink クローンを drop しても、ハーネス保持の tick_sink clone が生きていると seriko inbox が

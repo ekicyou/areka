@@ -1,6 +1,8 @@
+use shiori_host32_host::ExitKind;
+
 use super::{
-    Progress, RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase,
-    run_text_phase, wait_until,
+    LoopDriver, Progress, RecordedCall, ScriptedShioriBackend, SpineHarness, capture_logs,
+    count_level, run_attach_phase, run_text_phase, wait_until,
 };
 
 // ===========================================================================
@@ -173,4 +175,26 @@ fn spine_preview_reaches_text_layer_through_production_chain() {
     assert_eq!(missing, 0, "「先渡しが無い」の warn が出た: {logs:?}");
 
     harness.shutdown_bounded();
+}
+
+/// 足場の後片付けは、ゴーストの降ろしの失敗を隠さない（3 番・要件 3.1・4.1）。
+///
+/// 標準の台本から `OnClose` だけを抜いて起こす。降ろしは `OnClose` を NOTIFY で送るので、
+/// 台本に無い呼び出しで偽の SHIORI が panic し、`shutdown` は `Err` を返す。後片付けがそれを
+/// `.expect` で落とすので、待つ側には `［相手が居ない］` の赤として届く。
+///
+/// # 非空虚性
+///
+/// - 後片付けが `shutdown` の戻りを捨てていれば、panic せずに通り抜け、`should_panic` が落ちる。
+#[test]
+#[should_panic(expected = "［相手が居ない］: 「spine ghost shutdown」")]
+fn shutdown_bounded_fails_when_the_shiori_thread_panics() {
+    let (backend, shiori_handle) = ScriptedShioriBackend::builder()
+        .notify("OnInitialize", Ok(()))
+        .get("OnFirstBoot", Ok(None))
+        .get("OnBoot", Ok(Some(r"\s[0]\e".to_string())))
+        .notify("basewareversion", Ok(()))
+        .unload(Ok(ExitKind::Clean))
+        .build();
+    SpineHarness::boot_with(backend, shiori_handle, LoopDriver::Inert).shutdown_bounded();
 }
