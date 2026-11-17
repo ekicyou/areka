@@ -24,7 +24,7 @@
 
 ### This Spec Owns
 - `crates/ukadoc-survey/` の全ファイル（本番・在中テスト・`tests/`・テストの道具）。新しく足すファイルは `src/cli/generate_priority_tests.rs` の 1 本と、`src/check/content_test_support.rs` の改名先 `src/check/test_support.rs` の 1 本だけ。
-- 範囲の外で裁定が名指した読み手の直し: `doc/ukadoc-coverage/README.md`（565 行の「15 種」と 574 行の表の 1 行＝50）、`.claude/skills/kiro-complete/SKILL.md`（243・457・651 行＝1）。
+- 範囲の外で裁定が名指した読み手の直し: `doc/ukadoc-coverage/README.md`（565 行の「15 種」と 574 行の表の 1 行＝50、437-438 行と 584 行＝4）、`.claude/skills/kiro-complete/SKILL.md`（243・457・651 行＝1）。
 - 道具の外への約束のうち、確定した指摘の直しで変わる分（下の「外への約束の変わり方」の表）。
 
 ### Out of Boundary
@@ -141,7 +141,7 @@ crates/ukadoc-survey/
 | W12 判定の痩せ | 49・51・52・60・66(check)・68(check)・79(freshness_tests) | `src/check/{mod,content}.rs`・`src/check/*_tests.rs`・`src/check/test_support.rs`・`tests/consistency/checks.rs`（160-164 行） |
 | W13 差分 | 63 | `src/diff_tests.rs` |
 | W14 常時テストの読み込み | 5・47・48・79(documents.rs・consistency.rs) | `tests/consistency.rs`・`tests/consistency/{mod,documents,perturb,examples,spec_checks}.rs` と helper を引く各ファイル |
-| W15 判定 4・30・50 | 4・30・50 | `src/check/{mod,freshness,structure,finding}.rs` と `_tests.rs`・`src/lib_test_support.rs`・`src/cli/inspect.rs`・`CheckInput` を組む全か所・`tests/consistency/{mod,documents,documents_checks,documents_non_vacuity,documents_tools,linkage_checks}.rs`・`doc/ukadoc-coverage/README.md` |
+| W15 判定 4・30・50 | 4・30・50 | `src/check/{mod,freshness,structure,finding}.rs` と `_tests.rs`・`src/lib_test_support.rs`・`src/cli/inspect.rs`・`CheckInput` を組む全か所・`tests/consistency/{mod,documents,documents_checks,documents_non_vacuity,documents_tools,linkage_checks,checks,perturb}.rs`・`doc/ukadoc-coverage/README.md`（437-438・565・574・584 行） |
 | W16 偽の赤と見落とし | 1・10・11・12 | `tests/consistency/{documents_non_vacuity,documents,documents_tools,spec_checks,linkage_checks,briefing_arms}.rs`・`.claude/skills/kiro-complete/SKILL.md` |
 | W17 常時テストの痩せ | 43・44・54・56・58・59・61・64・65・66(consistency)・67・78・68(cli_streams)・79(consistency) | `tests/cli_streams.rs`・`tests/consistency/*.rs` |
 | W18 仕上げ | 7.1〜7.6 | 直しは出た指摘に応じて。記録は `.kiro/specs/audit-ukadoc-survey/` の下 |
@@ -207,7 +207,7 @@ sequenceDiagram
 | 指摘 | 変わるもの | 今の入力からの出力 | 読み手の直し |
 |---|---|---|---|
 | 3・23 | `candidates` の標準出力からテストのファイルの行が減る | 書き出すファイルは無い（標準出力だけ） | README は候補の中身を書いていない＝直しなし |
-| 4 | `check` が `summary.md` の古さを見る。古いと所見 `DomainReportStale`（場所 `doc/ukadoc-coverage/report/summary.md`）と終了コード 1 | 今の `summary.md` は新しい（整合テストが緑）＝今は所見 0・終了コード 0 のまま | README 52 行「同じ検査は標準のテスト実行にも入っている」が事実になる＝直しなし |
+| 4 | `check` が `summary.md` の古さを見る。古いと所見 `DomainReportStale`（場所 `doc/ukadoc-coverage/report/summary.md`）と終了コード 1 | 今の `summary.md` は新しい（整合テストが緑）＝今は所見 0・終了コード 0 のまま | README 53 行「同じ検査は標準のテスト実行にも入っている」が事実になる。437-438 行（ドメイン別報告 4 本だけの一致の説明）に全体報告を足し、584 行の直し方に `report-summary` を足す |
 | 22 | パイプが閉じたときの終了コード 101→1、panic の文→`<標準出力>` の書けなかった 1 行 | パイプを閉じない限り同じ | README の終了コードの決まり（0／1／2）に合うようになる＝直しなし |
 | 50 | 所見の種類が 15 種→14 種 | 出る所見は同じ | README 565 行「15 種」→「14 種」・574 行の行を消す |
 | 1・10・11 | 整合テストの偽の赤が消える | 同じ | `kiro-complete/SKILL.md` 243・457・651 行（1） |
@@ -225,7 +225,10 @@ fn temp_sibling(path: &Path) -> PathBuf;                                // <名�
 // src/cli/mod.rs（22・38）
 fn write_stdout<W: Write>(out: &mut W, body: &str) -> Result<(), SurveyError>; // 失敗は SurveyError::Io { path: "<標準出力>" }
 pub(super) fn load_catalog() -> Result<Catalog, SurveyError>;
-pub(super) fn load_ledgers() -> Result<Vec<Ledger>, SurveyError>;    // Domain::ALL の順・1 本でも失敗なら Err
+pub(super) fn load_ledgers_with(
+    read: &dyn Fn(&Path) -> Result<String, SurveyError>,
+) -> Result<Vec<Ledger>, SurveyError>;                                // Domain::ALL の順・1 本でも失敗なら Err
+pub(super) fn load_ledgers() -> Result<Vec<Ledger>, SurveyError>;    // load_ledgers_with(&files::read_normalized) の 1 行
 
 // src/cli/generate.rs（6）
 pub(crate) fn report_with(
@@ -258,9 +261,9 @@ impl Documents { pub(super) fn load() -> &'static Documents; fn read() -> Result
 | 1 | 必 | `documents_non_vacuity.rs:330-368` の組み直し・brief 無し 0 件・completed の brief の確かめを消す。下限 2 つと `live ^ completed` は残す。`kiro-complete/SKILL.md` の 243 行の項目・457 行の項目・651〜653 行の症状の塊を消す（理由はこのテストだけ＝消すと症状が起きない） | ＋ `documents.rs` の一覧の絞り（名前と「brief.md があるか」の組から、`completed`・本 spec・brief 無しを除いた名前を返す）を `fn spec_dir_names(entries: impl IntoIterator<Item = (String, bool)>) -> BTreeSet<String>` の純粋な形に切り出し、`documents_tools.rs` に「brief 無しの名前は赤にせず一覧から落ちる」例を 1 本。本物の `.kiro/specs` にフォルダを作るテストは置かない（並ぶテストを揺らすため・4.2） | W16 |
 | 2 | 必 | `write_lf` を「`<名前>.tmp` に書いて `std::fs::rename`」に。置き換えに失敗したら `.tmp` を消して置き場つきの `Err` | ＋ `target\ukadoc-survey-tests\<テスト名>\` に元の本文のファイルを置き、`<名前>.tmp` の場所に同じ名前のディレクトリを作って書けなくし、`write_lf` が `Err` を返し元の本文が 1 バイトも変わらないこと（今の `std::fs::write` なら上書きされて赤）。成功の側の 1 本も | W4 |
 | 3 | 必 | `is_test_path` に `path.contains("_tests/") \|\| path.ends_with("/tests.rs")` を足す | ＋ `candidates_tests.rs` に `crates/x/src/placement_tests/a.rs` と `crates/x/src/tests.rs` の 2 本が除かれる例 | W9 |
-| 4 | 必 | `CheckInput` に `summary_report` を足し、freshness が `summary.md` も比べて `DomainReportStale`（場所 `doc/ukadoc-coverage/report/summary.md`）を出す。`cli::inspect::check` は `paths::summary_report_path()` を読んで渡す。整合テストの `summary_findings` と `the_summary_report_is_as_fresh_as_the_ledgers` を消して `check::run` に任せる（`real_repo_data_produces_no_findings` が同じ合否を持つ）。`summary.md` の本文は `RepoData` が持ち（`Documents::summary_text` を移す・読みは 1 回）、`documents.summary_text` の読み手 8 か所を `repo.summary_report` に。freshness の注記 19-26 と `mod.rs:20-28` を今の事実に | ＋ `freshness_tests.rs` に全体報告を 1 文字変えると `summary.md` の場所の所見が 1 件出る例・CR つきでも緑の例。改 `shifting_one_number_in_the_summary_turns_the_freshness_check_red` は `Perturbed` の写しの `summary_report` を壊して `expect_exactly` で見る形へ（行番号の主張は外す＝research.md の指摘 4 の見立てどおり・落ちる条件は同じ） | W15 |
-| 5 | 直 | `RepoData`・`Documents` を `static … : LazyLock<Result<_, String>>` で 1 度だけ読む。`load()` は `&'static` を返し、`Err` なら毎回同じ文で panic。今の `load` の本体を `read() -> Result<_, String>` へ（`panic!` の 4 か所と `read_text`・`child_dirs` を `Err(format!(…))` に）。`spec_checks.rs:340` の `repo: RepoData` は `&'static RepoData`、`examples.rs` の `RepoData::load().catalog` 3 か所は `&RepoData::load().catalog` | 既（合否の条件は同じ・全部の整合テストが通る）。＋ `read` の失敗の文に絶対パスが載ることは今の在中テスト（`files_tests` の読み込みの失敗）が持つ | W14 |
-| 6 | 直 | `report` を `report_with(read, write)` にし、台帳 4 本を全部読み・4 本を描いてから書く。`report()` は実の読み手と書き手を渡す 1 行 | ＋ `generate_priority_tests.rs` に「3 本目の台帳が読めないと 1 本も書かない」（書き手を控えるだけに差し替え） | W8 |
+| 4 | 必 | `CheckInput` に `summary_report` を足し、freshness が `summary.md` も比べて `DomainReportStale`（場所 `doc/ukadoc-coverage/report/summary.md`）を出す。`cli::inspect::check` は `paths::summary_report_path()` を読んで渡す。整合テストの `summary_findings` と `the_summary_report_is_as_fresh_as_the_ledgers` を消して `check::run` に任せる（`real_repo_data_produces_no_findings` が同じ合否を持つ）。`summary.md` の本文は `RepoData` が持ち（`Documents::summary_text` を移す・読みは 1 回）、`documents.summary_text` の読み手 12 か所（同じ 4 ファイル）を `repo.summary_report` に。`Perturbed` に自分の `summary_report: String` の欄を持たせ（`domain_reports` と同じ扱い・47 の `input()` もこの欄を渡す）、`lib_test_support::refresh_reports` は全体報告も描き直す。台帳の中身を変える `checks.rs` の摂動（`an_id_in_two_ledgers_turns_red`・`an_alias_chain_turns_red`・導入の版の摂動・`a_misspelled_theme_turns_red` ほか、今ドメイン別報告の `DomainReportStale` を期待に持つもの全部）は、期待に `report/summary.md` の `DomainReportStale` の行を 1 つ足す（「ちょうど」の決まりは保つ）。所見の文は `report/summary.md` のとき `report-summary` を名指す。README 437-438 行（全体報告も同じ一致を求める）と 584 行（直し方に `report-summary` を足す）を同じ変更で直す（6.6）。freshness の注記 19-26 と `mod.rs:20-28` を今の事実に | ＋ `freshness_tests.rs` に全体報告を 1 文字変えると `summary.md` の場所の所見が 1 件出る例・CR つきでも緑の例。改 `shifting_one_number_in_the_summary_turns_the_freshness_check_red` は `Perturbed` の `summary_report` の欄を壊して `expect_exactly` で見る形へ（行番号の主張は外す＝research.md の指摘 4 の見立てどおり・落ちる条件は同じ）。改 上の `checks.rs` の摂動（期待の行を足す） | W15 |
+| 5 | 直 | `RepoData`・`Documents` を `static … : LazyLock<Result<_, String>>` で 1 度だけ読む。`load()` は `&'static` を返し、`Err` なら毎回同じ文で panic。今の `load` の本体を `read() -> Result<_, String>` へ（`panic!` の 4 か所と `read_text`・`child_dirs` を `Err(format!(…))` に）。`spec_checks.rs:340` の `repo: RepoData` と `:341` の `documents: Documents` は `&'static` に、`examples.rs` の `RepoData::load().catalog` 3 か所は `&RepoData::load().catalog` | 既（合否の条件は同じ・全部の整合テストが通る）。＋ `read` の失敗の文に絶対パスが載ることは今の在中テスト（`files_tests` の読み込みの失敗）が持つ | W14 |
+| 6 | 直 | `report` を `report_with(read, write)` にし、台帳 4 本を `load_ledgers_with(read)`（38）で全部読み・4 本を描いてから書く。`report()` は実の読み手と書き手を渡す 1 行 | ＋ `generate_priority_tests.rs` に「3 本目の台帳が読めないと 1 本も書かない」（書き手を控えるだけに差し替え） | W8 |
 | 7 | 直 | `replace_priority` は当たった行が `priority = ` ＋ `basic_string(今の値)` と同じかを確かめ、違えば `undecidable`。組んだ本文を `toml` で読み直し、各 id の `priority` が求めた値かを見る | ＋ `patch_tests.rs` に備考の中の行頭 `priority = "…"` の例・行末コメントの例の 2 本（どちらも `Err`） | W7 |
 | 8 | 直 | `find_slice_start` は文字列とコメントの外で `;` か `{` に出会ったら `None` | ＋ `resolve_tests.rs` に「目印→関数→スライス」が `TableMissing` になる例 | W9 |
 | 9 | 直 | `line_offsets`・`read_string`・`skip_line_comment`・`slice_element_names`・`SLICE_START` は `candidates.rs` 側を残して `pub(super)`、`slice_element_names` は `Option` を返す形に。`resolve.rs` の写しを消して借りる | ＋ `resolve_tests.rs` に `/* , */` と `']'` を含む表が候補と同じ要素に割れる例 | W9 |
@@ -292,7 +295,7 @@ impl Documents { pub(super) fn load() -> &'static Documents; fn read() -> Result
 | 35 | 直 | 整合テストに `assert_eq!(catalog::write::write(&data.catalog), 読んだ本文)` を 1 本（`checks.rs`）。W1 の最初にこの 1 本を回して確かめる | ＋（その 1 本） | W1 |
 | 36 | 直 | `files_tests` の較正はこのクレートの `Cargo.toml`・`src/lib.rs` を使う。`sources_tests` の `KNOWN_FILES` から log-capture-kit の 1 本を外す（sylphya の 2 本は残す） | 改 | W4 |
 | 37 | 直 | `catalog/build.rs` に `pub(crate) fn page_not_assigned(pages) -> SurveyError` を 1 つ置き、`select_ids_by_domain` は `assignment.unassigned(...)` とそれを使う。`generate.rs` の `PAGE_SEPARATOR` を消す | 既（`an_entry_whose_page_belongs_to_no_ledger_is_named_and_refused` が綴りを持つ） | W6 |
-| 38 | 直 | `cli/mod.rs` に `load_catalog`・`load_ledgers` を置き、`inspect`・`generate` の 5 か所と 3 か所から呼ぶ。`generate::load_ledger` と `inspect::load_ledgers` を消す | 既 | W8 |
+| 38 | 直 | `cli/mod.rs` に `load_catalog`・`load_ledgers_with(read)`（読み手を引数で受ける・`Domain::ALL` の順）と、実の読み手を渡す 1 行の `load_ledgers()` を置き、`inspect`・`generate` の 5 か所と 3 か所から呼ぶ。`priority_apply_with`（250-255 行）と `report_with`（6）の 4 本の読みの繰り返しも `load_ledgers_with(read)` に寄せる。`generate::load_ledger` と `inspect::load_ledgers` を消す | 既 | W8 |
 | 39 | 直 | `fields.rs` の `malformed`・`reject_unknown_keys`・`field`・`string_field`・`string_array_field`・`sub_table` を `pub(crate)` にし、`catalog/read.rs`・`ledger/read.rs` の写しを消して場所を渡して呼ぶ。失敗の本文は今と同じ綴り | 既（各読み手の在中テストが文面を持つ） | W2 |
 | 40 | 直 | `catalog/mod.rs` に `pub(super) const ENTRY_COLUMNS` と `SNAPSHOT_FIELDS` を 1 つずつ | 既（往復のテスト） | W2 |
 | 41 | 直 | `ledger/mod.rs` に `pub(crate) fn ledger_file(domain) -> String` と `ENTRY_TABLE`。`io/paths.rs` の `COVERAGE_DIR` を `pub` にし相対の綴りを返す関数を置く。全部をそれに寄せる。綴りは変えない | 既（所見の場所を持つ在中テスト） | W3 |
@@ -301,7 +304,7 @@ impl Documents { pub(super) fn load() -> &'static Documents; fn read() -> Result
 | 44 | 直 | `items_of(stage, keep_domain)` の 1 つにまとめ、613 行目から呼ぶ | 既 | W17 |
 | 45 | 直 | `tally.rs:133-137` の 0 件の用意をやめ、並べるのは `theme_names` だけ。`tally_tests.rs` の 3 本（318-338・384-405・410-420）と `content_link_tests.rs:709-721` の主張を改める | 改 | W11 |
 | 46 | 直 | `theme_names`・`push_status_header`・`push_status_row` を `tally.rs` に `pub(super)` で 1 つ、`domain.rs`・`summary.rs` から引く | 既（全文一致のテスト 2 本） | W11 |
-| 47 | 直 | `Perturbed::input` を `CheckInput { catalog: &self.catalog, ledgers: &self.ledgers, evidence: &self.evidence, domain_reports: &self.domain_reports, ..self.data.input() }` に（4 の新しい欄もここから流れる） | 既 | W14 |
+| 47 | 直 | `Perturbed::input` を `CheckInput { catalog: &self.catalog, ledgers: &self.ledgers, evidence: &self.evidence, domain_reports: &self.domain_reports, summary_report: &self.summary_report, ..self.data.input() }` に（4 の欄は `Perturbed` 自身の写しから渡す＝4 の摂動が壊せる） | 既 | W14 |
 | 48 | 直 | `assert_no_findings`・`assert_single_finding` と綴りの定数（`LINKAGE_MD`・`ROADMAP_MD`・sylphya のパス）を `documents.rs` に `pub(super)` で 1 つずつ、各ファイルは `use`。`documents.rs` の `read_text` は `super::read_text` を呼ぶ | 既 | W14 |
 | 49 | 直 | `content_test_support.rs` を `check/test_support.rs` に改名し `check/mod.rs` に `#[cfg(test)] mod test_support;`。structure・freshness・finding の写しを消して引く | 既 | W12 |
 | 50 | 直 | `LedgerDomainMismatch` を種類・綴り・`ALL` から消す。`finding_tests` の逐語の並び 2 つと 15 の数を改め、README 565 行を「14 種」に・574 行を消す（裁定 4） | 改 | W15 |
@@ -320,7 +323,7 @@ impl Documents { pub(super) fn load() -> &'static Documents; fn read() -> Result
 | 63 | 直 | 11 本を消し、見本の形の前提（16 桁のうち先頭 15 桁が同じ・ハッシュだけ違う行・ハッシュだけ同じ行・全欄が動いた行・各一覧が 2 件以上）を 1 本の「見本の形」テストに。453-469 の実測の注記は新しい数で書き直し、冒頭 14-16 を短く | ＋（見本の形）・既 | W13 |
 | 64 | 直 | `the_real_perturbation_target_appears_only_as_itself` と `BTreeMap` の import を消す | 既（`twist_id` の確かめ・「赤がちょうど 1 件」） | W17 |
 | 65 | 直 | 「壊す道具は repo のファイルに触れない」テストと `fingerprint` と import を消す | 既（道具は `&str`→`String` で型が触れないと決める） | W17 |
-| 66 | 直 | 下の表のテストを消す。ただし `the_usage_text_lists_every_name_in_the_dispatch_table`（`cli_tests.rs:202`）は**残す**（確かめで同じ壊れ方を捕まえる別のテストが無かった＝裁定 7 の条件を満たさない）。`assignment.rs:96` の説明の中のテスト名を直す。A18＝`generate_tests.rs:461` を `.chars().take(80).collect::<String>()` に | 既（下の表） | W1・W4・W5・W6・W8・W10・W12・W17 |
+| 66 | 直 | 下の表のテストを消す。ただし `the_usage_text_lists_every_name_in_the_dispatch_table`（`cli_tests.rs:203`）は**残す**（確かめで同じ壊れ方を捕まえる別のテストが無かった＝裁定 7 の条件を満たさない）。`assignment.rs:96` の説明の中のテスト名を直す。A18＝`generate_tests.rs:461` を `.chars().take(80).collect::<String>()` に | 既（下の表） | W1・W4・W5・W6・W8・W10・W12・W17 |
 | 67 | 直 | 2 本を 1 本にまとめ、1 回の走行で終了コード・標準出力・標準エラー・木の前後の 3 つを確かめる | 改 | W17 |
 | 68 | 直 | 挙がった注記を今の事実に直すか消す（`cli_streams.rs:22-31,101-103,142-144`・`generate.rs:131-134`・`blocks.rs:34-37`・`content.rs:170-172`・`finding_tests.rs:5-8,16-21,335-337,367-369`・`check/mod.rs:145-147`・`report/mod.rs:2-3`）。各ファイルを触るまとまりで直す | — | W7・W8・W11・W12・W17 |
 | 69 | で | `sources_tests.rs` に `static WALKED: OnceLock<Vec<(String, String)>>` | 既 | W4 |
@@ -392,7 +395,7 @@ impl Documents { pub(super) fn load() -> &'static Documents; fn read() -> Result
 
 ### 1,000 行の番人（5.1）
 - W1 の後の `generate_tests.rs` は約 680 行、`generate_priority_tests.rs` は約 290 行（W8 の 6 のテストを足しても 400 行に届かない）。
-- テストを足す先で 900 行を越えるファイルは無い（`linkage_checks.rs` 944 行・`checks.rs` 893 行は 48・58・59・66 で減る。35 の 1 本を `checks.rs` に足すのは W1 で、そのときの `checks.rs` は 900 行を越えない）。各まとまりの終わりに `wc -l` で 1,000 未満を確かめる。
+- テストを足す先で 900 行を越えるファイルは無い（`linkage_checks.rs` 944 行・`checks.rs` 893 行は 48・58・59・66 で減る。35 の 1 本を `checks.rs` に足すのは W1 で、そのときの `checks.rs` は 900 行を少し越えるが 1,000 行には届かない。W12 の 52 で減る）。各まとまりの終わりに `wc -l` で 1,000 未満を確かめる。
 
 ### 消す前の確かめ（3.3）
 - 消す関数・型・定数ごとに `git grep -n "<名前>" -- . ':!target'` を回し、上の「消すテストと残るテスト」の表と食い違わないことを確かめてから消す。
