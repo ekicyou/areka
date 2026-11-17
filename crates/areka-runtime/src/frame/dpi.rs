@@ -227,8 +227,14 @@ fn realign_drag_grab(world: &mut World, window: Entity, before: Option<SizeI>, a
         return;
     };
     let start = drag.drag_start_pos;
-    // 始めの位置が分からない（`None`）なら置き直せない（振る舞いは 164 の追随で直す）
+    // 始めの位置が分からない（`None`）なら掴んだ点が無いので置き直さない（`None` のまま）
     let Some(old) = drag.initial_window_pos else {
+        debug!(
+            entity = ?window,
+            ?before,
+            ?after,
+            "dpi reconcile: ドラッグ中のキャラ窓の始めの位置が分からない → 掴んだ点が無いので置き直さない"
+        );
         return;
     };
     let new = rescale_drag_grab(start, old, before, after);

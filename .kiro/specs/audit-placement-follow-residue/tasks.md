@@ -15,7 +15,7 @@
   - _Dispatch: mechanical — 設計が移す行の範囲と行き先と名前の開け方を決めている_
   - _Requirements: 3.1, 3.2, 3.3, 9.1, 10.1_
 
-- [ ] 2. ドラッグの状態の型に「始めの位置が分からない」を持たせる
+- [x] 2. ドラッグの状態の型に「始めの位置が分からない」を持たせる
 - [x] 2.1 wintf の `DraggingState` の始めの位置を `Option` にし、wintf の中を直す
   - 欄の型と doc（`None` の意味）・配りの `unwrap_or((0,0))` をやめて取れないときは `None` を入れ、今の `warn!` 1 行（`entity`・`window`・理由）はそのまま・`debug!` の欄も `Option` で出す
   - wndproc の `dragging_window_origin` は live が在り始めの位置が `Some` のときだけそれを使い、`None` なら控えへ。`move_window` の守り（控えの `move_window && is_some()`）は変えない。中の控え `DragState::Dragging.initial_window_pos` の型はそろえない（設計の決め 2）
@@ -31,7 +31,7 @@
   - _Dispatch: mechanical — 型を変えた後のコンパイラの示す所を設計の最小の形で直す_
   - _Requirements: 2.5, 2.6, 9.5_
 
-- [ ] 3. 始めの位置が分からないドラッグで窓を動かさない（164 の振る舞い）
+- [x] 3. 始めの位置が分からないドラッグで窓を動かさない（164 の振る舞い）
 - [x] 3.1 追随のキャラ窓のドラッグに「分からない」の腕と記録を入れる
   - `policy_mapped_position` は始めの位置が `None` のとき `None` を返し、`CHAR_DRAG_ORIGIN_UNKNOWN_TAG` の `debug!` を `entity` 付きで 1 行残す（設計の CharDragOrigin の形）。`on_char_drag` は書かずに戻り、バルーンと組の相手も動かさない。`on_char_drag_end` は今の「`DraggingState` 不在」の縮退（今の `WindowPos.position`）で確定と保存を通す
   - `follow_drag_tests.rs` に檻を足す: 吸着した組の窓に `None` の状態と相手とバルーンを持たせて `on_char_drag` → 3 つの位置が前と同じで札の `debug!` が 1 行
@@ -44,7 +44,7 @@
   - 完了の状態: `cargo test -p areka-placement` と本体の `input_events` の檻が緑で、離したときの檻が (0,0) を基準にした位置を書く形に戻すと落ちる
   - _Dispatch: standard — 寄りかかった期待を見つけて前提ごと作り直す_
   - _Requirements: 2.4, 2.6, 2.8_
-- [ ] 3.3 拡大率の相の掴みの置き直しを「分からない」で止める
+- [x] 3.3 拡大率の相の掴みの置き直しを「分からない」で止める
   - `areka-runtime` の `realign_drag_grab` は始めの位置が `None` なら置き直さず `debug!` を 1 行。`rescale_drag_grab` の形は変えない
   - `frame_dpi_drag_grab_tests.rs` に檻: 位置の分からないドラッグ中に大きさが変わっても `None` のまま・位置の分かるドラッグは今のまま
   - 完了の状態: `cargo test -p areka-runtime frame_dpi_drag_grab` が緑で、`None` を置き直す形に戻すと落ちる

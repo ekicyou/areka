@@ -178,6 +178,23 @@ fn resizing_a_window_that_is_not_dragged_keeps_the_grab_point() {
     assert_eq!(fields(drag_of(&harness, window)), fields(before_drag));
 }
 
+/// 始めの位置が分からない（`None`）ドラッグ中に大きさが変わっても、`None` のまま置き直さない
+/// （要件 2.1・2.3・2.8・9.6）。
+#[test]
+fn an_unknown_start_position_stays_none_when_the_size_changes() {
+    let (mut harness, window, _) = dragging_char0();
+    let unknown = DraggingState {
+        drag_start_pos: Point::new(10, 20),
+        initial_window_pos: None,
+    };
+    harness.world.entity_mut(window).insert(unknown);
+    assert!(
+        write_size(&mut harness, window, AFTER),
+        "前提: 大きさの書き込みが起きる"
+    );
+    assert_eq!(fields(drag_of(&harness, window)), fields(unknown));
+}
+
 /// バルーン窓の大きさの書き込みでは置き直さない。
 #[test]
 fn a_balloon_window_size_write_keeps_the_grab_point() {
