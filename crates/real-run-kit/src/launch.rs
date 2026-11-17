@@ -1,14 +1,17 @@
 //! 起動の指定（RealRun）と、子へ渡す形の組み立て・子の起こし方
 //! （要件 1.1〜1.7・1.9・1.10・2.1・2.5・3.1・4.1・4.4・8.1〜8.3・9.1）。
 //!
-//! 子へ伝える形（環境変数の名前・位置の引数の並べ方）を綴るのは `child_command` の 1 か所だけ
-//! （8.2・8.3）。起動オプションへ移すときはここを替える。
+//! 子へ伝える形（環境変数の名前・位置の引数の並べ方）を組むのは `child_command` の 1 か所だけ
+//! （8.2・8.3）。起動オプションへ移すときはここを替える。MCP の番号の環境変数の名前だけは、呼び手の
+//! `env` から同じ名前を探す `port` も使うので、どちらも `areka_mcp::PORT_ENV` を引く。
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
+
+use areka_mcp::PORT_ENV;
 
 use crate::evidence::RunDirs;
 use crate::i686::{self, I686Spec};
@@ -91,7 +94,8 @@ impl RealRun {
         self
     }
 
-    /// 記録の段（既定は `info`）。窓口が頼る行の出所が絞られていれば info を足す（4.4）。
+    /// 記録の段（既定は `info`）。全体の段が info より絞られていて、窓口が頼る行の出所を名指す指定が
+    /// 無いときは、その出所に info を足す（4.4）。名指す指定があれば、その段が何であっても足さない。
     pub fn rust_log(mut self, filter: &str) -> RealRun {
         self.rust_log = Some(filter.to_owned());
         self
@@ -194,21 +198,22 @@ impl RealRun {
             .env
             .iter()
             .rev()
-            .find(|(k, _)| k.eq_ignore_ascii_case("AREKA_MCP_PORT"));
+            .find(|(k, _)| k.eq_ignore_ascii_case(PORT_ENV));
         match set {
             Some((_, v)) => v
                 .to_str()
                 .and_then(|s| s.trim().parse().ok())
                 .unwrap_or_else(|| {
                     panic!(
-                        "env の AREKA_MCP_PORT={v:?} を番号（0〜65535）として読めない。番号は `.mcp_port(n)` で渡す"
+                        "env の {PORT_ENV}={v:?} を番号（0〜65535）として読めない。番号は `.mcp_port(n)` で渡す"
                     )
                 }),
             None => self.mcp_port.unwrap_or_else(free_port),
         }
     }
 
-    /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3）。順は
+    /// 子へ渡す形を組む。起動の約束の綴りはここだけが書く（8.2・8.3。MCP の番号の名前は
+    /// `areka_mcp::PORT_ENV` を引く）。順は
     /// ⑴ 開発者の書ける根を外す（1.5）→ ⑵ 窓口の既定 → ⑶ 呼び手の論理の指定 → ⑷ 呼び手の `env`（1.6）。
     /// ⑵⑶ は値が決まった後の 1 回の指定にまとめて書く（開発者のほかの変数はここで上書きされる）。
     /// パスはどれも絶対（`\\?\` なし＝1.9）。
@@ -224,7 +229,7 @@ impl RealRun {
         let rust_log = compose_rust_log(self.rust_log.as_deref().unwrap_or("info"));
         cmd.env("AREKA_ROOT", abs(root))
             .env("AREKA_PROFILE_DIR", abs(profile))
-            .env("AREKA_MCP_PORT", port.to_string())
+            .env(PORT_ENV, port.to_string())
             .env("AREKA_NO_ALERT", "1")
             .env("NO_COLOR", "1")
             // 開発者の PASTA_DEBUG=1 を受け継ぐと、SSP などのほかの pasta が握る 9276 とぶつかり LOAD に失敗する
@@ -367,10 +372,12 @@ fn log_file(path: &Path) -> File {
 /// 窓口が頼る行の出所（待受の行・閉じる知らせの受け取りと終わり方の行）。
 const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
 
-/// 窓口が頼る出所の実効の段が info より絞られているときだけ `,<出所>=info` を足す（D-4・4.4）。
+/// 全体の段が info より絞られていて、窓口が頼る出所を名指す指定が無いときだけ、その出所に
+/// `,<出所>=info` を足す（D-4・4.4）。
 ///
-/// ⑴ 出所そのものか親を名指していれば足さない ⑵ 全体の段が info・debug・trace（数字の 3〜5）なら
-/// 足さない ⑶ 全体の段が warn・error・off（数字の 0〜2・指定なし＝off）で名指しも無いときだけ足す。
+/// ⑴ 全体の段が info・debug・trace（数字の 3〜5）なら、どの出所にも足さない ⑵ 全体の段が warn・
+/// error・off（数字の 0〜2・指定なし＝off）なら、出所ごとに、名指す指定が無いものにだけ足す
+/// ⑶ 名指す指定がある出所には、その段が何であっても足さない（呼び手が `=off` で閉じた出所は閉じたまま）。
 /// 空は既定の `info`。span を付けた指定（`[` を含む・例 `areka_mcp::server[req]=debug`）は
 /// その span の中の行だけを開けるので名指しに数えない。
 ///

@@ -14,11 +14,18 @@ use common::{alive, fake, panic_message};
 use real_run_kit::{EndedBy, Run};
 use temp_path_kit::TempPath;
 
+/// 短い締切を渡した待ちにかかってよい時間の上限。呼び手が渡す締切と負荷の揺れよりは十分に長く置く。
+///
+/// shortcut: 既定の締切は公開していないので、結合テストからは読めず、この上限をそこから導けない。
+/// 既定の締切がこの上限より短くなると、指定が効かなくてもここは緑のまま。既定の締切を縮めるときは、
+/// この上限をそれより短く置き直す。
+const SHORT_DEADLINE_CAGE: Duration = Duration::from_secs(30);
+
 /// `f` の中の panic を捕まえて文を返す。`f` は立てた子の番号と回の置き場を `seen` へ控える。
 /// 残った回の置き場は消す（落ちた回の証拠＝6.1 は 5.3 の試験が確かめる）。
 ///
-/// 呼び手はどれも `.deadline()` で 1〜2 秒の締切を渡す。その指定が待ちに届かなければ既定の 60 秒まで
-/// 待つので、かかった時間の上限（30 秒）で落とす（3.3）。
+/// 呼び手はどれも `.deadline()` で短い締切を渡す。その指定が待ちに届かなければ窓口の既定の締切まで
+/// 待つので、かかった時間が `SHORT_DEADLINE_CAGE` に届いたら落とす（3.3）。
 fn expect_panic(f: impl FnOnce(&mut Option<(u32, PathBuf)>)) -> (String, u32) {
     let mut seen = None;
     let started = Instant::now();
@@ -27,7 +34,7 @@ fn expect_panic(f: impl FnOnce(&mut Option<(u32, PathBuf)>)) -> (String, u32) {
     let (pid, run_dir) = seen.expect("子を立てる前に落ちた");
     let _ = std::fs::remove_dir_all(&run_dir);
     assert!(
-        took < Duration::from_secs(30),
+        took < SHORT_DEADLINE_CAGE,
         "短い締切の指定が効かず {took:?} かかった（既定の締切まで待っている）"
     );
     (panic_message(&*err), pid)

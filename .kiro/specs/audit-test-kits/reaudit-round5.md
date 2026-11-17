@@ -83,3 +83,17 @@
 - E2・E3 は ASCII の `Err` にした（終了コードは 101 から 1）。パスは `main` の出口の `ascii` が写す。中の約束を確かめる `assert` は、1 回目 S2 のとおり家の形のまま
 - U8 の対照を `os error 32` に締めた。os error 5 の枝に檻が無いことは `shortcut:` で書いた（4 回目の「5 回目で見る」はこれで閉じる）
 - U1 の変数 `outside` を `misplaced` に改名した（テスト名ではない）。名前の付いたテストの削除・改名は無し
+
+## 束 B の直しの控え（承認済み・R1 は連鎖 4 回目 C2 → 5 回目 R1 として Fable が直し、Fable が回をまたいで確かめた）
+- 連鎖の結論: 秒数を外して限界を `shortcut:` で書いた。上限は定数 `SHORT_DEADLINE_CAGE`（30 秒）に出し、説明から既定の「60 秒」を外した。既定から導く案は採らなかった。既定の締切（`Limits`）は `pub(crate)` で結合テストから読めず、読み口を足すと公開の API が変わるため。`shortcut:` には「既定がこの上限より短くなると、指定が効かなくても緑のまま。既定を縮めるときは上限を置き直す」と書いた
+  - 1 回目 R5: 既定の秒数の写しは残っていない
+  - 4 回目 R4: 値を読み返す確かめは足していない
+  - 4 回目 C2: 檻は開いていない（較正をやり直した）
+- 較正（実装係とレビューの両方で取った）:
+  - R1: `launch.rs` の締切の代入を外す → `fake_wait_close_test` の締切の 3 本が赤（約 61 秒・121 秒）
+  - R4: `i686.rs` のパスの `ascii()` 2 か所を外す → `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` と `remove_tmp_reports_only_a_failure_other_than_not_found` が赤
+  - R5: 較正なし。ワークツリーのパスが ASCII なので、直す前も後も緑になる
+- R3: `launch.rs` の手書きの `"AREKA_MCP_PORT"` を `areka_mcp::PORT_ENV` に替えた。値は同じで、子へ渡す形も変わらない。結合テストは名前を字で持ったままなので、名前そのものの固定は残る
+- R5: 標準エラーの行をパスとして読むのをやめ、`target_test_roots()` の直下から `ascii` の写しが一致するものを選ぶ。一致が無ければ panic
+- 改名 R7: `sample_name_is_used_for_the_copy` → `sample_name_is_given_only_for_sample_launches`。改名の前の git grep の当たりは 4 件で、定義（直した）、`completed/runtime-module-untangle` の 2 件（直さない）、reaudit-round5.md（この回の記録）
+- レビューの気付きで文を 2 か所直した。檻のコメントの「上限以下」を「上限より短く」に、mcp_tests.rs の module doc の組の取り違えを直した

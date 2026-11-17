@@ -314,28 +314,28 @@ fn rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy() {
     let bed = Bed::new();
     let src = bed.other("src.exe");
     write_pe(&src, I386, "src");
-    write_pe(&bed.dest(), I386, "other-process");
-    let _held = hold(&bed.dest());
+    // 置き先のフォルダ名を ASCII の外の字にする（行のパスの部分が写しを通ることを見る）。
+    let dest_dir = bed.dest_dir.join("置き先");
+    let dest = dest_dir.join(SPEC.file_name);
+    write_pe(&dest, I386, "other-process");
+    let _held = hold(&dest);
     let mut out = Vec::new();
-    place(&src, &bed.dest(), &mut out);
+    place(&src, &dest, &mut out);
     let text = String::from_utf8(out).unwrap();
     let line = text
         .strip_suffix('\n')
         .expect("古い写しのまま走る旨の 1 行");
     assert_eq!(line.lines().count(), 1, "{text:?}");
     // 先に置かれた物がそのまま使われる。
-    assert_eq!(tag_of(&bed.dest()), "other-process");
-    assert!(line.is_ascii(), "{line}");
+    assert_eq!(tag_of(&dest), "other-process");
+    assert!(line.is_ascii() && line.contains("\\u{"), "{line}");
     assert!(
         line.starts_with("real-run-kit: could not replace ")
             && line.ends_with("; using the existing 32-bit copy"),
         "{line}"
     );
-    assert!(
-        line.contains(&ascii(&bed.dest().display().to_string())),
-        "{line}"
-    );
-    no_tmp_left(&bed.dest_dir);
+    assert!(line.contains(&ascii(&dest.display().to_string())), "{line}");
+    no_tmp_left(&dest_dir);
 }
 
 #[test]
@@ -358,12 +358,14 @@ fn rename_failure_fails_with_the_reason_when_dest_is_not_32bit() {
 #[test]
 fn remove_tmp_reports_only_a_failure_other_than_not_found() {
     let bed = Bed::new();
-    let tmp = bed.dest_dir.join("held.tmp");
+    // フォルダ名を ASCII の外の字にする（行のパスの部分が写しを通ることを見る）。
+    let tmp = bed.dest_dir.join("置き先").join("held.tmp");
+    std::fs::create_dir_all(tmp.parent().unwrap()).unwrap();
     std::fs::write(&tmp, b"x").unwrap();
     let held = hold(&tmp);
     let line = remove_tmp(&tmp).expect("消せない旨の行");
     drop(held);
-    assert!(line.is_ascii(), "{line}");
+    assert!(line.is_ascii() && line.contains("\\u{"), "{line}");
     assert!(
         line.starts_with("real-run-kit: could not remove ")
             && line.contains(&ascii(&tmp.display().to_string())),

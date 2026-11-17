@@ -180,7 +180,7 @@ fn launch_variants_resolve_positional_args_and_root() {
 }
 
 #[test]
-fn sample_name_is_used_for_the_copy() {
+fn sample_name_is_given_only_for_sample_launches() {
     assert_eq!(sample_name(&Launch::Empty), None);
     assert_eq!(sample_name(&Launch::Root("x".into())), None);
     let s = Launch::SampleRoot {
