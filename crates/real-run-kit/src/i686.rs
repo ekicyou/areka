@@ -4,6 +4,7 @@
 //! 32bit の前提を満たさない（x64 の仲介は 32bit の SHIORI の DLL を読めず接続に落ちる）。
 //! そこで PE の頭の機械の種類で判定し、32bit の物だけを置き先へ揃える。
 
+use sample_ghost_kit::ascii;
 use std::ffi::OsString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -102,7 +103,10 @@ pub(crate) fn ensure(
 /// `src` を `<dest>.<pid>.<連番>.tmp` へ写してから `dest` へ改名する（書きかけを起動させない・
 /// 要件 2.6）。改名に失敗したら置き先を見直し、32bit になっていれば通す（別のプロセスが先に
 /// 置いた・使用中で替えられない）。32bit でなければ理由を添えて panic する。
-fn place(src: &Path, dest: &Path) {
+///
+/// 通した置き先が元と長さか更新時刻で違う（古い写しのまま走る）ときは、その旨の ASCII の 1 行を
+/// 標準エラーへ出し、同じ行を返す（同じ写しなら黙って `None`）。
+fn place(src: &Path, dest: &Path) -> Option<String> {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
     let mut tmp = dest.as_os_str().to_owned();
@@ -120,7 +124,17 @@ fn place(src: &Path, dest: &Path) {
             tmp.display(),
             dest.display()
         );
+        if !same_copy(src, dest) {
+            let line = format!(
+                "real-run-kit: could not replace {} ({}); using the existing 32-bit copy",
+                ascii(&dest.display().to_string()),
+                ascii(&e.to_string())
+            );
+            eprintln!("{line}");
+            return Some(line);
+        }
     }
+    None
 }
 
 #[cfg(test)]

@@ -35,7 +35,7 @@ fn plain(exe: &str) -> Command {
 }
 
 #[test]
-fn removes_four_developer_vars_and_sets_defaults() {
+fn removes_the_user_root_and_sets_the_kit_defaults() {
     let cmd = plain("areka.exe");
     let e = envs(&cmd);
     // 書ける根は外したまま（1.5）。ほかの 3 つは窓口の既定で上書き（受け継がない）。
@@ -220,6 +220,9 @@ fn compose_rust_log_table() {
         ("trace", "trace".into()),
         ("debug", "debug".into()),
         ("INFO", "INFO".into()),
+        // 数字の段は出所の名ではない（3 以上は info 以上・2 以下は warn 以下）。
+        ("3", "3".into()),
+        ("2", format!("2{S}{X}")),
         // 空・未設定 → 既定の info。
         ("", "info".into()),
         ("  ", "info".into()),
@@ -265,12 +268,18 @@ fn compose_rust_log_table() {
 /// 順は `RELIED_TARGETS` と同じ（項を書き換えても照らす語は付いてくる）。
 #[test]
 fn relied_targets_name_the_modules_that_emit_the_relied_lines() {
-    const WORDS: [&[&str]; 2] = [
+    const WORDS: &[&[&str]] = &[
         &[r#""MCP: 待受を始めた"#],
         &[r#"event = "app_exit""#, r#""os_close_request""#],
     ];
+    // zip は短い方で黙って止まるので、項と語の表の数が揃っていることを先に確かめる。
+    assert_eq!(
+        RELIED_TARGETS.len(),
+        WORDS.len(),
+        "RELIED_TARGETS の項と照らす語の表の数が違う"
+    );
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    for (target, words) in RELIED_TARGETS.iter().zip(WORDS) {
+    for (target, &words) in RELIED_TARGETS.iter().zip(WORDS) {
         let mut parts = target.split("::");
         let krate = parts.next().unwrap().replace('_', "-");
         let module: PathBuf = parts.collect();

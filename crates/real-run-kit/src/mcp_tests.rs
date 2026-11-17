@@ -201,16 +201,20 @@ fn call_until_returns_listen_failed_as_is() {
     );
 }
 
-/// 同じ過程に本物の受け口を立てる。ツール `echo` はいつも `text` を答える。
+/// 同じ過程に本物の受け口を立てる。ツール `echo` はいつも `text` を答える。入力の `text` は文字の型
+/// なので、型の違う引数には受け口が JSON-RPC の誤り（`-32602`）を答える。
 fn serve(text: &'static str) -> areka_mcp::McpServer {
     let spec = areka_mcp::ToolSpec {
         name: "echo".to_owned(),
         title: None,
         description: None,
-        input_schema: serde_json::json!({ "type": "object" })
-            .as_object()
-            .unwrap()
-            .clone(),
+        input_schema: serde_json::json!({
+            "type": "object",
+            "properties": { "text": { "type": "string" } }
+        })
+        .as_object()
+        .unwrap()
+        .clone(),
     };
     let mut registry = areka_mcp::ToolRegistry::default();
     registry.register(
@@ -261,6 +265,38 @@ fn a_dropped_server_with_a_living_child_is_unreachable_within_the_grace() {
         took < Duration::from_secs(10),
         "猶予が締切を越えた: {took:?}"
     );
+}
+
+/// 3（D1）: JSON-RPC の誤りの答えは `Refused` で、輸送の失敗の猶予を待たずに返る（猶予 30 秒・
+/// 締切 10 秒にして、猶予の道へ落ちれば締切まで待って `Unreachable` になる形で確かめる）。
+#[test]
+fn an_mcp_error_reply_is_refused_without_waiting_for_the_grace() {
+    let server = serve("先の答え");
+    let port = server.local_addr().unwrap().port();
+    let dir = TempPath::under_target("mcp-refused");
+    let (out, err) = (dir.child("stdout.txt"), dir.child("stderr.txt"));
+    std::fs::write(
+        &out,
+        format!("INFO MCP: 待受を始めた url=http://127.0.0.1:{port}/api/mcp/v1\n"),
+    )
+    .unwrap();
+    let mut child = living_child();
+    let mut mcp = McpChannel::new(port);
+    let mut l = waits(Duration::from_secs(10));
+    l.exit_grace = Duration::from_secs(30);
+    // 先につないでおき、測る時間を誤りの答えの道だけにする。
+    let first = mcp.call(&mut child.0, [&out, &err], "echo", "{}", &l);
+    assert_eq!(first.expect("答える").text, "先の答え");
+    let started = Instant::now();
+    let got = mcp.call(&mut child.0, [&out, &err], "echo", r#"{"text":5}"#, &l);
+    let took = started.elapsed();
+    drop(child);
+    drop(server);
+    match got {
+        Err(McpError::Refused { code, message }) => assert_eq!(code, -32602, "{message}"),
+        other => panic!("Refused でない: {other:?}"),
+    }
+    assert!(took < Duration::from_secs(5), "猶予を待った: {took:?}");
 }
 
 /// 28: 名乗りの確かめで別の相手だけが答えたら、その番号と名乗りを訳に書く。

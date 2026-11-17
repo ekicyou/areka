@@ -369,8 +369,9 @@ const RELIED_TARGETS: [&str; 2] = ["areka_mcp::server", "areka::app_exit"];
 
 /// 窓口が頼る出所の実効の段が info より絞られているときだけ `,<出所>=info` を足す（D-4・4.4）。
 ///
-/// ⑴ 出所そのものか親を名指していれば足さない ⑵ 全体の段が info・debug・trace なら足さない
-/// ⑶ 全体の段が warn・error・off（指定なし＝off）で名指しも無いときだけ足す。空は既定の `info`。
+/// ⑴ 出所そのものか親を名指していれば足さない ⑵ 全体の段が info・debug・trace（数字の 3〜5）なら
+/// 足さない ⑶ 全体の段が warn・error・off（数字の 0〜2・指定なし＝off）で名指しも無いときだけ足す。
+/// 空は既定の `info`。
 ///
 /// 「名指し」は `EnvFilter` と同じ規則で決める。`EnvFilter` は出所を `::` の切れ目なしの素の
 /// 前方一致で照らす（tracing-subscriber 0.3.23 `filter/env/directive.rs:246`
@@ -386,8 +387,9 @@ fn compose_rust_log(base: &str) -> String {
         match d.split_once('=') {
             Some((target, _)) => named.push(target.split('[').next().unwrap_or("").trim()),
             None => match d.to_ascii_lowercase().as_str() {
-                "info" | "debug" | "trace" => global_open = true,
-                "warn" | "error" | "off" => global_open = false,
+                // 数字の段は EnvFilter の読みと同じ（0＝off・1＝error・2＝warn・3＝info・4＝debug・5＝trace）。
+                "info" | "debug" | "trace" | "3" | "4" | "5" => global_open = true,
+                "warn" | "error" | "off" | "0" | "1" | "2" => global_open = false,
                 _ => named.push(d.split('[').next().unwrap_or("")),
             },
         }

@@ -3,9 +3,8 @@
 //!
 //! 偽の子 `real-run-fake-areka` は本物の `areka_mcp::start` を呼ぶので、待受の行の綴りが受け口と
 //! 窓口の間でずれたらここが赤になる。生かす子は最後に `window` を置いて利用者と同じ閉じ方で閉じる
-//! （`hang` だと破棄が締切まで待ってから止める）。試験の側の環境変数は変えない。
-
-use std::time::{Duration, Instant};
+//! （`hang` だと破棄が締切まで待ってから止め、panic の途中でなければ panic する）。試験の側の
+//! 環境変数は変えない。
 
 mod common;
 
@@ -118,21 +117,16 @@ fn call_until_finds_on_third_call() {
     close_ok(run);
 }
 
-/// 3（D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。輸送の失敗の猶予（既定 2 秒）を待たず、
-/// つなぎを捨てないので続く正しい呼び出しも通る。
+/// 3（D1）: 受け口が JSON-RPC の誤りを答えたら `Refused`。つなぎを捨てないので続く正しい呼び出しも
+/// 通る（輸送の失敗の猶予を待たないことは `mcp_tests.rs` が確かめる）。
 #[test]
 fn an_mcp_error_reply_is_refused_on_the_same_link() {
     let mut run = fake("listen;window").spawn();
-    // 先につないでおき、測る時間を誤りの答えの道だけにする。
     run.call("echo", r#"{"text":"先"}"#).expect("答える");
-    let started = Instant::now();
     match run.call("echo", r#"{"text":5}"#) {
         Err(McpError::Refused { code, message }) => assert_eq!(code, -32602, "{message}"),
         other => panic!("Refused のはず: {other:?}"),
     }
-    let took = started.elapsed();
-    // 既定の exit_grace（2 秒）。Limits は crate の外へ出さないので値で書く。
-    assert!(took < Duration::from_secs(2), "猶予を待った: {took:?}");
     let again = run.call("echo", r#"{"text":"後"}"#).expect("続けて答える");
     assert_eq!(again.text, "後");
     close_ok(run);

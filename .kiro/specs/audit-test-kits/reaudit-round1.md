@@ -57,3 +57,7 @@
 ## 束 C の直しの控え（承認済み）
 - 較正: L3 は `trim` を戻す → `a_value_with_surrounding_spaces_is_rejected` が赤。T1 は写しの `ascii` から制御文字の枝を外す → `ascii_keeps_printable_ascii_and_escapes_the_rest` が赤
 - 改名: `ensure_interest_probes_is_idempotent_across_threads` → `ensure_interest_probes_can_be_called_from_many_threads_at_once`（completed/areka-P0-test-cage-determinism/verification/summary.md が旧名を 6 か所挙げる・直さない）。消したもの: 番兵の重なる確かめ 1 つ（名前の付いたものは無し）
+
+## 束 B の直しの控え（承認済み）
+- 較正: R1 は行を出さない形に → `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` が赤。R3 は `3|4|5` の腕を外す → `compose_rust_log_table` が赤。R5 は誤りの答えを `Transport` に → `an_mcp_error_reply_is_refused_without_waiting_for_the_grace` が赤（締切まで待つ）。D2 の数の一致は語の表の 1 行を消す → `relied_targets_name_the_modules_that_emit_the_relied_lines` が赤
+- 改名: `rename_failure_passes_when_dest_is_already_32bit` を `rename_failure_passes_silently_when_dest_is_the_same_32bit_copy` と `rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy` に分けた、`removes_four_developer_vars_and_sets_defaults` → `removes_the_user_root_and_sets_the_kit_defaults`（どちらも completed/runtime-module-untangle/test-name-tails-{before,after}.txt が旧名を挙げる・直さない）

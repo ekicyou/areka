@@ -295,15 +295,38 @@ fn hold(path: &Path) -> std::fs::File {
 }
 
 #[test]
-fn rename_failure_passes_when_dest_is_already_32bit() {
+fn rename_failure_passes_silently_when_dest_is_the_same_32bit_copy() {
+    let bed = Bed::new();
+    let src = bed.other("src.exe");
+    write_pe(&src, I386, "src");
+    // `std::fs::copy` は更新時刻も写すので、長さと更新時刻が元と同じ写しになる。
+    std::fs::copy(&src, bed.dest()).unwrap();
+    let _held = hold(&bed.dest());
+    assert_eq!(place(&src, &bed.dest()), None);
+    assert_eq!(tag_of(&bed.dest()), "src");
+    no_tmp_left(&bed.dest_dir);
+}
+
+#[test]
+fn rename_failure_passes_with_an_ascii_line_when_dest_is_another_32bit_copy() {
     let bed = Bed::new();
     let src = bed.other("src.exe");
     write_pe(&src, I386, "src");
     write_pe(&bed.dest(), I386, "other-process");
     let _held = hold(&bed.dest());
-    place(&src, &bed.dest());
+    let line = place(&src, &bed.dest()).expect("古い写しのまま走る旨の行");
     // 先に置かれた物がそのまま使われる。
     assert_eq!(tag_of(&bed.dest()), "other-process");
+    assert!(line.is_ascii(), "{line}");
+    assert!(
+        line.starts_with("real-run-kit: could not replace ")
+            && line.ends_with("; using the existing 32-bit copy"),
+        "{line}"
+    );
+    assert!(
+        line.contains(&ascii(&bed.dest().display().to_string())),
+        "{line}"
+    );
     no_tmp_left(&bed.dest_dir);
 }
 
@@ -314,7 +337,9 @@ fn rename_failure_fails_with_the_reason_when_dest_is_not_32bit() {
     write_pe(&src, I386, "src");
     write_pe(&bed.dest(), AMD64, "x64");
     let held = hold(&bed.dest());
-    let text = panic_text(|| place(&src, &bed.dest()));
+    let text = panic_text(|| {
+        place(&src, &bed.dest());
+    });
     drop(held);
     assert!(text.contains(&bed.dest().display().to_string()), "{text}");
     assert!(text.contains("改名"), "{text}");

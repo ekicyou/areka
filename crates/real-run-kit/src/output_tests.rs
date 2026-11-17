@@ -31,7 +31,10 @@ fn appended_later_needle_ends_wait() {
         let err = err.clone();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(200));
-            append(&err, "MCP: 待受を始めた 127.0.0.1:9801\n".as_bytes());
+            append(
+                &err,
+                "MCP: 待受を始めた url=http://127.0.0.1:9801/api/mcp/v1\n".as_bytes(),
+            );
         })
     };
     let mut child = living_child();

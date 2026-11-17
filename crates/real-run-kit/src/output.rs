@@ -15,7 +15,7 @@ pub(crate) const TAIL_BYTES: usize = 64 * 1024;
 
 /// 子が待ちの途中で終わった（3.5・4.8）。締切切れと見分けられる値。
 ///
-/// 下の段の close・mcp も使うので、ここで定める。run とクレートの入口が再輸出する。
+/// 下の段の close・mcp も使うので、ここで定める。クレートの入口（lib.rs）が再輸出する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChildExited {
     /// 子の終わり方（終了コードは `status.code()`）。
