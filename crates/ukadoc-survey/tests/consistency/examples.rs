@@ -261,7 +261,7 @@ fn every_link_target_in_the_requirements_example_exists_in_the_catalog() {
         .collect();
     assert!(
         !links.is_empty(),
-        "付録 A.1 の記入例には `links` の見本が 1 件以上あるはず（空だと この主張が空振りする）"
+        "付録 A.1 の記入例には `links` の見本が 1 件以上あるはず（空だとこの主張が空振りする）"
     );
 
     for to in links {

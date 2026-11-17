@@ -3,8 +3,8 @@
 //!
 //! # ここに置くもの
 //!
-//! - 読み込み（[`Documents::load`]）が 3 文書・全体報告・spec ディレクトリの一覧に
-//!   届いていること。
+//! - 読み込みが届いていること（[`Documents::load`] が 3 文書と spec ディレクトリの
+//!   一覧に、[`RepoData::load`] が全体報告に）。
 //!
 //! - 判定 ⑴ ⑵ の母数の下限（`linkage.md` の引用 id 数・報告 5 本から読めた機械の
 //!   束 id の数・`linkage.md` が引用した機械の束 id の数）。
@@ -35,7 +35,7 @@ use ukadoc_survey::model::{Domain, THEMES};
 use ukadoc_survey::report::summary::render_summary;
 
 use super::RepoData;
-use super::documents::{Documents, Floors, OWN_SPEC_DIR, cited_ids};
+use super::documents::{BRIEF_FILE, Documents, Floors, OWN_SPEC_DIR, SPECS_DIR, cited_ids};
 use super::documents_checks::{bundle_ids_in_report, linkage_bundle_ids, report_bundle_ids};
 
 /// `.kiro/specs/` の直下にある brief 持ちディレクトリの数の下限。
@@ -82,8 +82,9 @@ const MIN_LINKAGE_CITED_IDS: usize = 1_550;
 ///
 /// **数え方は [`cited_ids`]（引用符付きと逆引用符付きの和集合・重複は畳む）**で、
 /// 実数はこの注釈に写さない。`briefing.md` は段が進むたびに id を足す文書で、ここへ
-/// 写した数はすぐに陳腐化する。いまの実数は、下の [`MIN_BRIEFING_CITED_IDS`] を使う
-/// 腕が走るたびに [`cited_ids`] が数え直す。
+/// 写した数はすぐに陳腐化する。いまの実数は、この下限を使うテスト
+/// （`the_citation_and_bundle_checks_have_something_to_judge`）が走るたびに
+/// [`cited_ids`] が数え直す。
 ///
 /// 下限を 100 に置くのは、束の分け直しで単独項目の並びが増減しても動かさずに済む
 /// 余裕を採ったためである。捕まえたいのは「読み込みが別のファイルを見ている・
@@ -143,7 +144,7 @@ const MIN_BARRIER_ROWS: usize = 1;
 /// 相手は `report/summary.md`「ドメインを跨いで繋がった束」の表。設計のとおり
 /// 「1 行以上」にする。`links` の補修で束が合流すれば減りうるので実数を釘付けしない。
 /// 捕まえたいのは「束の表が丸ごと落ちた本文を全文一致で緑と読む」壊れ方だけである
-/// ——束の表は本文の 5 割強を占めるので、そこが両側で揃って落ちれば残りが一致する
+/// ——束の表は本文の大半を占めるので、そこが両側で揃って落ちれば残りが一致する
 /// かぎり判定 ⑹ は緑になる。
 const MIN_SUMMARY_BUNDLE_ROWS: usize = 1;
 
@@ -243,8 +244,8 @@ fn the_spec_directory_listing_excludes_this_spec_and_completed() {
     // 除外の主張は、除外する相手が実在しなければ**無条件に成り立つ**（`non_vacuity.rs`
     // の `SELF_CRATE_PREFIX` と同じ弱さ）。だから本 spec の綴りが今どこかを指している
     // ことを先に言う——完了手続きの前は直下の brief 持ち、後は `completed/` の直下。
-    let specs_root = paths::workspace_root().join(".kiro/specs");
-    let live = specs_root.join(OWN_SPEC_DIR).join("brief.md").is_file();
+    let specs_root = paths::workspace_root().join(SPECS_DIR);
+    let live = specs_root.join(OWN_SPEC_DIR).join(BRIEF_FILE).is_file();
     let completed = documents.completed_specs.contains(OWN_SPEC_DIR);
     assert!(
         live ^ completed,

@@ -62,7 +62,7 @@
 //! 触れない（`documents.rs` の道具は `&str` を受けて `String` を返すだけで、型の上で
 //! repo のファイルに触れない）。
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ukadoc_survey::catalog::Catalog;
 use ukadoc_survey::check::FindingKind;
@@ -136,9 +136,11 @@ pub(super) fn bundle_ids_in_report(text: &str) -> Vec<String> {
 /// `push_bundle_list`）。
 ///
 /// 構成 id まで読むのは判定 ⑶-c（`members ∖ hand` が引用した機械の束の構成 id に
-/// 含まれる）の相手を作るためで、束 id だけが要る判定 ⑵ は上の
-/// [`bundle_ids_in_report`] を通す。拾い方を 2 つ書くと片方だけが古びる。
-pub(super) fn bundle_rows_in_report(text: &str) -> Vec<(String, Vec<String>)> {
+/// 含まれる）の相手を作るためで、判定 ⑵ の束 id も [`machine_bundle_members`] を
+/// 通してここから取る。報告 1 本の束 id の列だけが要る所（読み取りの較正・全体報告の
+/// 束の表の行数）は上の [`bundle_ids_in_report`] を通す。拾い方を 2 つ書くと片方
+/// だけが古びる。
+fn bundle_rows_in_report(text: &str) -> Vec<(String, Vec<String>)> {
     let lines: Vec<&str> = text.lines().collect();
     let mut rows = Vec::new();
     let mut at = 0;
@@ -175,18 +177,32 @@ fn is_rule_cell(cell: &str) -> bool {
 }
 
 /// 報告 5 本の束の一覧に在る束 id の全種（設計 判定 ⑵）。
+///
+/// 報告の歩き方は [`machine_bundle_members`] の 1 か所にまとめる（2 か所に写すと
+/// 歩く報告の組が片方だけ変わる）。
 pub(super) fn report_bundle_ids(repo: &RepoData) -> BTreeSet<String> {
-    let mut ids: BTreeSet<String> = bundle_ids_in_report(&repo.summary_report)
-        .into_iter()
-        .collect();
+    machine_bundle_members(repo).into_keys().collect()
+}
+
+/// 報告 5 本の束の一覧から読んだ「機械の束 id → その構成 id」。
+///
+/// 同じ束 id が `report/summary.md` とドメイン別報告の両方に現れることがあるので、
+/// 構成 id は和集合にする（片方だけを採ると判定 ⑶-c が偽の赤になる）。
+pub(super) fn machine_bundle_members(repo: &RepoData) -> BTreeMap<String, BTreeSet<String>> {
+    let mut rows: Vec<(String, Vec<String>)> = bundle_rows_in_report(&repo.summary_report);
     for domain in Domain::ALL {
         let report = repo
             .domain_reports
             .get(&domain)
             .unwrap_or_else(|| panic!("{domain:?} のドメイン別報告が読み込まれていない"));
-        ids.extend(bundle_ids_in_report(report));
+        rows.extend(bundle_rows_in_report(report));
     }
-    ids
+
+    let mut by_id: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (id, members) in rows {
+        by_id.entry(id).or_default().extend(members);
+    }
+    by_id
 }
 
 /// 3 文書の表のうち、見出しが [`BUNDLE_ID_HEADER`] で終わる列に並ぶ id。

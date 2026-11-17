@@ -23,13 +23,13 @@ use super::read_text;
 pub(super) const OWN_SPEC_DIR: &str = "areka-P0-ukadoc-coverage-roadmap";
 
 /// spec を置くディレクトリ（ワークスペース根からの相対）。
-const SPECS_DIR: &str = ".kiro/specs";
+pub(super) const SPECS_DIR: &str = ".kiro/specs";
 
 /// 完了した spec を集めるディレクトリの名前（`.kiro/specs/` の直下）。
 pub(super) const COMPLETED_DIR: &str = "completed";
 
 /// spec ディレクトリを spec だと見分ける目印（要件 10.2 の「brief 済み」）。
-const BRIEF_FILE: &str = "brief.md";
+pub(super) const BRIEF_FILE: &str = "brief.md";
 
 /// 3 文書のワークスペース根からの相対パス（失敗の本文はこの綴りで名指す）。
 pub(super) const LINKAGE_MD: &str = "doc/ukadoc-coverage/linkage.md";

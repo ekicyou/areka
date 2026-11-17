@@ -56,7 +56,7 @@ use super::briefing_arms::LedgerFacts;
 use super::documents::{
     Documents, LINKAGE_MD, assert_no_findings, assert_single_finding, drop_member, shift_count,
 };
-use super::documents_checks::bundle_rows_in_report;
+use super::documents_checks::machine_bundle_members;
 
 /// 束の構成に入れる対象の 4 状態（要件 4.2）。
 const TARGET_STATUSES: [Status; 4] = [
@@ -108,27 +108,6 @@ impl LedgerFacts {
             .filter(|fact| fact.status == status)
             .count()
     }
-}
-
-/// 報告 5 本の束の一覧から読んだ「機械の束 id → その構成 id」。
-///
-/// 同じ束 id が `report/summary.md` とドメイン別報告の両方に現れることがあるので、
-/// 構成 id は和集合にする（片方だけを採ると腕 c が偽の赤になる）。
-fn machine_bundle_members(repo: &RepoData) -> BTreeMap<String, BTreeSet<String>> {
-    let mut rows: Vec<(String, Vec<String>)> = bundle_rows_in_report(&repo.summary_report);
-    for domain in Domain::ALL {
-        let report = repo
-            .domain_reports
-            .get(&domain)
-            .unwrap_or_else(|| panic!("{domain:?} のドメイン別報告が読み込まれていない"));
-        rows.extend(bundle_rows_in_report(report));
-    }
-
-    let mut by_id: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for (id, members) in rows {
-        by_id.entry(id).or_default().extend(members);
-    }
-    by_id
 }
 
 /// 引用した機械の束の構成 id の和集合。

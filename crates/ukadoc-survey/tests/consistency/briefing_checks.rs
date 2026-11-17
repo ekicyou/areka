@@ -327,7 +327,7 @@ fn mixing_a_different_key_into_a_singles_row_turns_the_order_arm_red() {
 
 /// 腕 f: `[[barrier]]` の数を 1 ずらすと、そのページと鍵を名指して赤になる。
 ///
-/// 6 行が数えるのは**ページの全項目**であって段階 A の項目ではない。ここで赤が
+/// `[[barrier]]` の各行が数えるのは**ページの全項目**であって段階 A の項目ではない。ここで赤が
 /// 1 件だけ出ることが、数え方が入れ替わっていない証拠になる。
 #[test]
 fn shifting_one_barrier_count_turns_the_distribution_arm_red() {
