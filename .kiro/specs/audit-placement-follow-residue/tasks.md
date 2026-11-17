@@ -64,7 +64,7 @@
   - _Dispatch: mechanical — 写しと共有の行き先を設計の表が対で与えている_
   - _Requirements: 4.1, 4.4_
 
-- [ ] 5. 組のドラッグの終わりで記憶へ 1 回で書く（7 回目）
+- [x] 5. 組のドラッグの終わりで記憶へ 1 回で書く（7 回目）
   - `finish_char_drag` が相手の記憶の束を返し、`on_char_drag_end` が動かした窓の束と合わせて `persist_entries` を 1 回だけ呼ぶ（設計の DragEndPersist の形・`CharWindowMarker` が無いときは今の `warn!` と相手の束だけ）。束の中身と書く時機は今と同じ
   - `follow_sticky_follow_drag_tests.rs`: 直に呼ぶ 3 本の檻を、返る束に相手の元の位置と `saved_form_anchor` の形が入ることを見る形へ書き直し、`capture` の 3 か所を戻りの型に合わせる。相手 2 つの組を `on_char_drag_end` で終えて `SharedFakeIo::commit_count` が 1・束に 3 窓の位置と今と同じ印、の檻を足す
   - 書き手の一覧の文（`persist.rs:9-12`・`persist_save.rs:33`・`follow/drag_follow.rs:135`）を 1 回の形へ直す
@@ -165,3 +165,4 @@
 - 2.2: 偽の HWND では wintf が始めの位置を `None` で入れるため、`follow::drag_end_gate_tests::fast_drag_places_window_at_destination_and_persists_once` が 3.2 まで赤（進行役が認めた）。テストの仮の手伝い `follow::test_support::zero_unknown_drag_origin`（`shortcut:` 付き・`balloon_lock_drag_tests.rs` と `follow_drag_end_gate_tests.rs` の `Rig::tick` から呼ぶ）は 3.2 で窓の位置の手伝いへ替えて消す。`follow_drag_end_gate_tests.rs:204` の「(0,0) のまま入る」も 3.2 で直す
 - 3.2: 2.2 の借りは返した（`zero_unknown_drag_origin` を消し、テストの支えの `drag_origin_at_window`＝`DraggingState` の挿入の観測者で始めの位置を窓の位置にする、へ替えた・分からないの檻は手伝い無しの `Rig::unknown_origin()`）
 - 4.2: G4 の 1 つ目の grep の残り 1 行（`follow/visibility.rs` の `clamp_x_into`）は本番の写しで、8 の持ち分。8 の完了で 0 行になる
+- 5: 隣り合いの印を確かめる檻は `GhostWindows` が要る（無いと `push_adjacency_marks` が早帰りして印 0 個どうしの比べになる）。本番の `spawn_ghost_windows` で窓の一式を組むこと

@@ -11,6 +11,7 @@
 //! - [`follow_sticky_move`]／[`log_sticky_ignored`] は `\![move]` の連れ動きと、
 //!   `ignore-sticky-window` で連れ動かさなかったことの記録（5.1〜5.5・9.3・9.4）
 
+use areka_sylphya::PersistKey;
 use bevy_ecs::prelude::*;
 use tracing::{info, warn};
 use wintf::ecs::drag::DragConfig;
@@ -22,8 +23,7 @@ use super::super::sticky_group_ledger::StickyGroupLedger;
 use super::{
     Anchor, Anchored, BalloonFollowTrigger, CharWindowMarker, MonitorSnapshot, PlacementRoute,
     PointPx, SizePx, char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos,
-    follow_balloon, move_window_to, origin_position, persist_entries, project_anchor,
-    resize_window_to,
+    follow_balloon, move_window_to, origin_position, project_anchor, resize_window_to,
 };
 
 /// 相手の新しい位置（純）: 始めの位置＋量を、相手の向きで射影する（4.2・5.2）。
@@ -287,12 +287,19 @@ pub(crate) fn follow_partners_on_drag(world: &mut World, dragged: Entity, pos: P
     move_partners(world, &session, delta_from(session.dragged_start, pos));
 }
 
-/// ドラッグの終わり: 最終の量で相手を書き、相手の位置を記憶へ書き、控えを外す（4.5・9.3）。
+/// ドラッグの終わり: 最終の量で相手を書き、相手の記憶の束を返し、控えを外す（4.5・9.3）。
 /// ドラッグ中に台本が向きを変えていれば、今の向きで当て直す（2.4）。
-pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: PointPx) {
+/// 書くのは呼び手（`on_char_drag_end`）で、動かした窓の束と合わせて 1 回にする。
+/// 控えが無い（組でない）ときは空。
+pub(crate) fn finish_char_drag(
+    world: &mut World,
+    dragged: Entity,
+    final_pos: PointPx,
+) -> Vec<(PersistKey, String)> {
     let Some(session) = session_for(world, dragged) else {
-        return;
+        return Vec::new();
     };
+    let mut entries = Vec::new();
     let delta = delta_from(session.dragged_start, final_pos);
     for (partner, pos) in move_partners(world, &session, delta) {
         // 次の起動は descript の向きで読み戻すので、記憶の形もそれにそろえる（4.8）。
@@ -308,7 +315,7 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
         // 利用者が手で置いたのは動かした窓だけ・相手のずれはまだ相手の面のアニメーションのもの。
         let pos = origin_position(world, partner.window, pos);
         let saved = char_pos_to_origin_x(form, pos, size_px(world, partner.window));
-        persist_entries(world, char_pos_entries(partner.scope as u32, saved));
+        entries.extend(char_pos_entries(partner.scope as u32, saved));
     }
     if !session.partners.is_empty()
         && let Some(scope) = scope_of(world, dragged)
@@ -332,6 +339,7 @@ pub(crate) fn finish_char_drag(world: &mut World, dragged: Entity, final_pos: Po
         let size = size_px(world, dragged);
         resize_window_to(world, dragged, size, PlacementRoute::MoveCue);
     }
+    entries
 }
 
 /// `\![move]` の連れ動き: 動かした窓が実際に動いた量 `delta` で、組の相手を今の位置から

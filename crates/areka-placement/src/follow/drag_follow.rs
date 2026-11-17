@@ -122,16 +122,18 @@ pub(crate) fn on_char_drag(
 ///
 /// # 組の相手（4.5・2.4）
 ///
-/// 窓を書いた後に [`finish_char_drag`] が最終の量で相手を書いて記憶へ書き、控えを外し、
-/// ドラッグ中に向きが変わっていれば今の向きで当て直す。
+/// 窓を書いた後に [`finish_char_drag`] が最終の量で相手を書いて相手の記憶の束を返し、控えを外し、
+/// ドラッグ中に向きが変わっていれば今の向きで当て直す。本ハンドラがその束と動かした窓の束を
+/// 合わせて [`persist_entries`] を 1 回だけ呼ぶ（相手の数によらず記憶への書き込みは 1 回）。
 ///
 /// # 保存フック（1.1/1.9/7.1・design C2）
 ///
 /// `mapped` 確定・`enqueue_window_set_pos`・`follow_balloon` の**後**に、当該窓の
 /// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`saved_form_anchor`]
-/// （descript の向き＝次の起動の読み戻しの向き・4.8）の形にして [`char_pos_entries`]→
-/// [`persist_entries`] へ渡し、Ghost 永続スコープへ即時 write-through する（fire-and-forget・
-/// 非ブロッキング）。marker 不在（防御）は「位置を保存しなかった」の `warn!`＋skip（panic しない）。キャラ窓の位置を記憶に書く時機は、
+/// （descript の向き＝次の起動の読み戻しの向き・4.8）の形にして [`char_pos_entries`] で束にし、
+/// 組の相手の束と合わせて [`persist_entries`] へ 1 回で渡し、Ghost 永続スコープへ即時 write-through
+/// する（fire-and-forget・非ブロッキング）。marker 不在（防御）は「位置を保存しなかった」の `warn!` を
+/// 出し、相手の束だけを書く（panic しない）。キャラ窓の位置を記憶に書く時機は、
 /// このドラッグの確定と、起動の最後に並べ終えた時点（[`crate::persist::persist_unremembered_char_positions`]）の
 /// 2 つ——`on_char_drag`（ドラッグ中）・[`move_window_to`]・[`resize_window_to`]・復元時再射影は書かない。
 pub fn on_char_drag_end(
@@ -186,7 +188,8 @@ pub fn on_char_drag_end(
             reset_applied(world, entity);
             // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
             follow_balloon(world, entity, mapped, BalloonFollowTrigger::Drag);
-            finish_char_drag(
+            // 相手の束は動かした窓の束と合わせて記憶へ 1 回で書く（audit-placement-follow-residue 5.1）。
+            let mut entries = finish_char_drag(
                 world,
                 entity,
                 PointPx {
@@ -196,9 +199,9 @@ pub fn on_char_drag_end(
             );
 
             // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
-            // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
+            // WindowPos entries を相手の束へ足し、Ghost 永続スコープへ 1 回で write-through 投函する。
             // スコープは CharWindowMarker から逆引き（usize→u32）。marker 不在（防御）は
-            // warn＋skip（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
+            // warn して相手の束だけを書く（panic しない）。ドラッグ中は書かない（書く時機は上の説明の 2 つ）。
             match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
                 Some(scope) => {
                     // 原点（下端中央）基準へ移してから保存する。左上 x のまま保存すると、
@@ -240,12 +243,14 @@ pub fn on_char_drag_end(
                         ?anchor,
                         "char DragEnd 保存"
                     );
-                    let entries = char_pos_entries(scope as u32, saved);
-                    persist_entries(world, entries);
+                    entries.extend(char_pos_entries(scope as u32, saved));
                 }
                 None => {
                     warn!(?entity, "CharWindowMarker が無いため位置を保存しなかった");
                 }
+            }
+            if !entries.is_empty() {
+                persist_entries(world, entries);
             }
             false
         }

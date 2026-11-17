@@ -6,16 +6,16 @@
 //! （形式・原子性・寛容読取・スコープ分離）は sylphya の領分であり、本モジュールは
 //! その契約（[`areka_sylphya::PersistKey`]／[`areka_sylphya::Axis`]）を消費するのみ。
 //!
-//! 記憶への送り口は書く [`persist_entries`] と消す [`forget_entries`] の 2 つで、書く呼び手は次の 4 か所:
-//! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置）
-//! - バルーンのドラッグの確定（同じく `on_balloon_drag_end`・バルーンのずらし）
-//! - 組のドラッグの終わり（`follow::sticky_follow` の `finish_char_drag`・組の相手の窓の位置）
+//! 記憶への送り口は書く [`persist_entries`] と消す [`forget_entries`] の 2 つで、書く呼び手は次の 3 か所:
+//! - キャラ窓のドラッグの確定（`follow::drag_follow` の `on_char_drag_end`・窓の位置と、組の相手の
+//!   窓の位置を 1 つの束で 1 回。相手の束は `follow::sticky_follow` の `finish_char_drag` が返す）
+//! - バルーンのドラッグの確定（`follow::balloon_drag` の `on_balloon_drag_end`・バルーンのずらし）
 //! - 起動の最後に並べ終えた時点と、既定の位置への並べ直し（`reset_pos` の `reset_window_positions`）
 //!   の後（どちらも [`persist_unremembered_char_positions`]・記憶に位置が無いキャラの位置と、
 //!   印の無い古い記憶の隣り合いの印）
 //!
 //! 記憶の位置を寄せて表示した起動（[`RestoredPositionsClamped`]）では、送り口（[`persist_entries`] と、
-//! 並べ終えた時点の保存が呼ぶその本体）が 4 か所のどの束からも、印の無い古い記憶へ隣り合いの印を
+//! 並べ終えた時点の保存が呼ぶその本体）が 3 か所のどの束からも、印の無い古い記憶へ隣り合いの印を
 //! 書き足さない（window-work-area-clamp 4.6）。
 //!
 //! 消す呼び手はバルーン位置の初期化（`reset_balloon_pos` の `reset_balloon_positions`・ずらしの鍵）

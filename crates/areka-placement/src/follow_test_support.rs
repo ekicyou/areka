@@ -483,6 +483,8 @@ pub(super) struct SylphyaRig {
     pub(super) parts: SylphyaParts,
     roots: ScopeRoots,
     reader: Box<dyn PersistIo>,
+    /// 偽の記憶のときだけ: アクターへ渡した口の clone（commit の回数を数える）。
+    fake_io: Option<SharedFakeIo>,
 }
 
 impl SylphyaRig {
@@ -493,15 +495,17 @@ impl SylphyaRig {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()
         };
+        let io = SharedFakeIo::new(store.clone());
         let parts = spawn_sylphya(SylphyaInit {
             roots: roots.clone(),
-            io: Box::new(SharedFakeIo::new(store.clone())),
+            io: Box::new(io.clone()),
             runtime_sink: None,
         });
         Self {
             parts,
             roots,
             reader: Box::new(SharedFakeIo::new(store)),
+            fake_io: Some(io),
         }
     }
 
@@ -520,6 +524,7 @@ impl SylphyaRig {
             parts,
             roots,
             reader: Box::new(FsPersistIo),
+            fake_io: None,
         }
     }
 
@@ -537,6 +542,18 @@ impl SylphyaRig {
             .barrier()
             .expect("barrier should resolve while actor is alive");
         load_scope(PersistScope::Ghost, &self.roots, self.reader.as_ref())
+    }
+
+    /// 投函済みの保存が書き終わってから、記憶へ commit した回数（偽の記憶のときだけ）。
+    pub(super) fn commit_count(&self) -> usize {
+        self.parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+        self.fake_io
+            .as_ref()
+            .expect("commit の回数は偽の記憶（fake）でだけ数える")
+            .commit_count()
     }
 
     /// 正典終了（アクター join）。
