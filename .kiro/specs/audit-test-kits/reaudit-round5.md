@@ -55,3 +55,18 @@
 - 較正: `parse_lossy` に戻す → `a_misspelled_directive_panics_instead_of_being_dropped` が赤
 - 呼び手は wintf の 39 ファイル（`ecs/test_support.rs` の再輸出を通す）。使う指令はどれも解釈できる。窓と GPU を立てない呼び手のテスト 252 本は緑。実窓・実 GPU の呼び手は 6.2 の全体テストで確かめる
 - L2: 「値の取り出しは 3 本」の数を外した
+
+## 束 D の直しの控え（承認済み・G1 は連鎖 4 回目 G2 → 5 回目 G1 として Fable が直し、Fable が回をまたいで確かめた）
+- 較正（実装係とレビューの両方で取った）:
+  - G1: 行そのものの名指しの条件を外す → `the_env_filter_feature_is_detected_in_a_features_array_split_over_lines` が赤
+  - G2: 下位表の `package =` の印を外す → `the_env_filter_feature_is_detected_in_a_renamed_sub_table` が赤
+  - G3: `!tree.direct.is_empty()` を外す → `an_empty_reading_is_named_and_turns_the_guard_red` が赤
+  - G5: `temp_path_guard_test.rs` のコメントに走査語を植える → `the_guard_files_never_spell_the_tokens_out_not_even_inside_comments` が赤（前の手書きの表では見ていなかったファイル）
+- 連鎖の結論: 4 回目 G2 の直しは「鍵の行から次の `=` の行まで」を足したときに、3 回目までの「行そのものが共有 crate とフィーチャ名を持つ」条件を落としていた。`declares_env_filter_feature` を 1 度だけ書き直し、次の 4 つのどれかに当たれば宣言とみる形にした。4 回目の見本と `shortcut:` の行は残り、`shortcut:` の行を 1 行足した。3 回目 G3 の `shortcut:` には触っていない
+  - 行そのものの名指し
+  - 鍵の行から次の `=` の行まで
+  - 見出しの名指し
+  - 下位表の `package =`
+- G5: 手書きの表 `FILES_THAT_MUST_NOT_SPELL_THE_TOKENS` を消し、`tests/` の下から例外表に載るものを除いて引く関数にした。見る範囲は 4 ファイルから 7 ファイルになり、今の木の当たりは 0 のまま。消す前の git grep は、このファイルの外では reaudit-round5.md と completed の tasks.md の 1 件ずつ（直さない）
+- G6: コメントを除いた本文をファイルごとの `OnceLock` に置いた。新旧の当たりを全 2,656 ファイルで比べて同じだった（一時テストは消した）。時間は揺れが大きく、速くなったとは言えない（with_default 4.4 秒 → 2.9〜3.7 秒・temp_path 4.1 秒 → 4.2〜5.4 秒・sample_path 4.6 秒 → 6.2〜8.3 秒、並走の中で 1 度ずつ測った値）
+- 足したテスト 2 本（G1・G2）。名前の付いたテストの削除・改名は無し

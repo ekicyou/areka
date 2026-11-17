@@ -209,22 +209,46 @@ const FEATURE_ENV_FILTER: &str = "env-filter";
 /// `env-filter` を宣言してよい唯一の crate。
 const ENV_FILTER_OWNER: &str = "wintf";
 
-/// 共有 crate の依存宣言で `env-filter` フィーチャを有効にしているか（純関数）。
+/// 共有 crate の `env-filter` フィーチャを有効にしているか（純関数）。
 ///
-/// インライン表の中の複数行の配列も読むため、共有 crate を名指す鍵の行から次に `=` を含む行までを
-/// その依存の値とみる（[`kit_default_enables_env_filter`] と同じ形）。下位表の形は見出しが名指す。
-// shortcut: 値は次に = を含む行で終わる（同じインライン表の後ろの鍵でも切れる）。配列を取る鍵が features のほかに増えたら鍵の名で読む
+/// フィーチャ名を含む行が、次のどれかで共有 crate に結び付けば宣言とみる。
+///
+/// - 行そのものが共有 crate を名指す（1 行の依存宣言と、`[features]` の配列の
+///   `"<共有 crate>/env-filter"` の項。配列を複数行に割った形も、項の行が自分で名指す）。
+/// - 共有 crate を名指す鍵の行から、次に `=` を含む行までの間にある（インライン表の中の
+///   複数行の配列。[`kit_default_enables_env_filter`] と同じ読み方）。
+/// - 行のある下位表が共有 crate のもの（見出しが名指すか、名前を変えた下位表の中の
+///   `package = ` の行が名指す）。
+// shortcut: 鍵の行から続く値は次に = を含む行で終わる（同じインライン表の後ろの鍵でも切れる）。配列を取る鍵が features のほかに増えたら鍵の名で読む
+// shortcut: 行そのものの名指しは項を分けて読まない（同じ行に共有 crate の名前と別の crate の env-filter が並んでも当たる＝厳しい側へ倒れる）。偽の当たりが実際に出たら項ごとに読む
 fn declares_env_filter_feature(src: &str) -> bool {
+    let lines = manifest_lines(src);
+    // 名前を変えた下位表（`[dev-dependencies.<別名>]`）は、中の `package = ` の行だけが共有 crate を名指す。
+    let renamed: BTreeSet<&str> = lines
+        .iter()
+        .filter(|l| !l.is_header)
+        .filter(|l| {
+            l.text.split_once('=').is_some_and(|(key, value)| {
+                key.trim() == "package" && mentions_crate(value, KIT_PACKAGE)
+            })
+        })
+        .map(|l| l.section.as_str())
+        .collect();
     let mut in_kit = false;
-    manifest_lines(src).iter().any(|l| {
+    lines.iter().any(|l| {
         if l.is_header {
             in_kit = false;
             return false;
         }
+        let names_kit = mentions_crate(&l.text, KIT_PACKAGE);
         if l.text.contains('=') {
-            in_kit = mentions_crate(&l.text, KIT_PACKAGE);
+            in_kit = names_kit;
         }
-        (in_kit || mentions_crate(&l.section, KIT_PACKAGE)) && l.text.contains(FEATURE_ENV_FILTER)
+        l.text.contains(FEATURE_ENV_FILTER)
+            && (names_kit
+                || in_kit
+                || mentions_crate(&l.section, KIT_PACKAGE)
+                || renamed.contains(l.section.as_str()))
     })
 }
 
@@ -310,13 +334,25 @@ fn the_shared_crate_definition_really_holds_the_direct_calls() {
     );
 }
 
-/// 走査語を逐語で持ってはいけないファイル群（見張りと走査器）。
-const FILES_THAT_MUST_NOT_SPELL_THE_TOKENS: &[&str] = &[
+/// 共有 crate の `tests/`（見張りと走査器の置き場）。
+const KIT_TESTS_PREFIX: &str = "crates/log-capture-kit/tests/";
+
+/// 本ファイルと走査器。[`files_that_must_not_spell_the_tokens`] が引けていることの陽性側。
+const THIS_GUARD_AND_THE_SCANNER: [&str; 2] = [
     "crates/log-capture-kit/tests/with_default_guard_test.rs",
     "crates/log-capture-kit/tests/workspace_scan/mod.rs",
-    "crates/log-capture-kit/tests/workspace_scan_test.rs",
-    "crates/log-capture-kit/tests/file_length_guard_test.rs",
 ];
+
+/// 走査語を逐語で持ってはいけないファイル群。共有 crate の `tests/` の下の全部から、
+/// 2 つの例外表に載るもの（意図して走査語を書くファイル）を除く。
+fn files_that_must_not_spell_the_tokens() -> Vec<String> {
+    let mut allowed = allowed_paths(ALLOWED_DIRECT_CALLS);
+    allowed.extend(allowed_paths(ALLOWED_GLOBAL_CAPTURE));
+    walk_workspace_sources()
+        .into_iter()
+        .filter(|p| p.starts_with(KIT_TESTS_PREFIX) && !allowed.contains(&p.as_str()))
+        .collect()
+}
 
 #[test]
 fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
@@ -338,10 +374,17 @@ fn the_guard_files_never_spell_the_tokens_out_not_even_inside_comments() {
         "コメントの中でも生テキスト走査は当たらねばならない（当たらないなら本検査は恒真）"
     );
 
+    let files = files_that_must_not_spell_the_tokens();
+    for known in THIS_GUARD_AND_THE_SCANNER {
+        assert!(
+            files.iter().any(|p| p == known),
+            "見張りの置き場の列挙に入るはずのファイルが無い（列挙が空振りしている）: {known}"
+        );
+    }
     let mut violations = Vec::new();
-    for path in FILES_THAT_MUST_NOT_SPELL_THE_TOKENS {
+    for path in &files {
         for (line, token) in raw_occurrences(&read_source(path), &tokens) {
-            violations.push(Hit::new(*path, line, token));
+            violations.push(Hit::new(path.clone(), line, token));
         }
     }
     assert!(
@@ -777,6 +820,52 @@ fn the_env_filter_feature_is_detected_only_when_it_is_actually_declared() {
     assert!(
         !declares_env_filter_feature(&other_crate),
         "共有 crate 以外の依存のフィーチャを拾ってはいけない"
+    );
+}
+
+#[test]
+fn the_env_filter_feature_is_detected_in_a_features_array_split_over_lines() {
+    // `[features]` の配列を複数行に割った形。鍵の行は共有 crate を名指さず、項の行が名指す。
+    let split = "[features]\nfiltered = [\n    \"log-capture-kit/env-filter\",\n]\n";
+    assert!(
+        declares_env_filter_feature(split),
+        "複数行の配列の中の項（共有 crate のフィーチャの名指し）を見落としている"
+    );
+    // 別の crate のフィーチャの名指しは宣言ではない。
+    let other = "[features]\nfiltered = [\n    \"tracing-subscriber/env-filter\",\n]\n";
+    assert!(
+        !declares_env_filter_feature(other),
+        "共有 crate ではない crate のフィーチャの名指しを拾ってはいけない"
+    );
+}
+
+#[test]
+fn the_env_filter_feature_is_detected_in_a_renamed_sub_table() {
+    // 下位表の名前を変えて共有 crate を引く形。見出しは名指さず、`package = ` の行だけが名指す。
+    // `package = ` の行は features の行の後ろにあってもよい。
+    for body in [
+        "package = \"log-capture-kit\"\nfeatures = [\"env-filter\"]\n",
+        "features = [\n    \"env-filter\",\n]\npackage = \"log-capture-kit\"\n",
+    ] {
+        let renamed = format!("[dev-dependencies.lck]\n{body}");
+        assert!(
+            declares_env_filter_feature(&renamed),
+            "名前を変えた下位表の宣言を見落としている: {renamed:?}"
+        );
+    }
+    // 別の crate の名前を変えた下位表は宣言ではない。
+    let other =
+        "[dev-dependencies.ts]\npackage = \"tracing-subscriber\"\nfeatures = [\"env-filter\"]\n";
+    assert!(
+        !declares_env_filter_feature(other),
+        "共有 crate ではない crate の下位表を拾ってはいけない"
+    );
+    // 印は下位表 1 つの中だけに効く（次の下位表のフィーチャを拾わない）。
+    let next_table = "[dev-dependencies.lck]\npackage = \"log-capture-kit\"\n\n\
+                      [dev-dependencies.tracing-subscriber]\nfeatures = [\"env-filter\"]\n";
+    assert!(
+        !declares_env_filter_feature(next_table),
+        "次の下位表のフィーチャを共有 crate の宣言と誤読している"
     );
 }
 

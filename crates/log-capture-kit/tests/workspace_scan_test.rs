@@ -111,7 +111,9 @@ fn scan_tokens_anchors_the_token_so_an_identifier_suffix_is_not_a_hit() {
 #[test]
 fn scan_tokens_finds_the_process_wide_variant_as_one_hit() {
     // この見本の 3 語のうち一番長いものが、途中で切れたり分割されたりせず 1 件で出ること。
-    // （これは「重なりの規則」ではない——この見本の 3 語はどの 2 語も重ならない。下の 2 本を参照。）
+    // （これは「重なりの規則」ではない——この見本の 3 語はどの 2 語も重ならない。重なりの規則は
+    //  `scan_tokens_returns_the_longer_of_two_tokens_that_start_at_the_same_place` と
+    //  `scan_tokens_does_not_count_one_call_twice_when_a_longer_token_contains_a_shorter_one` が縛る。）
     let src = format!("    tracing::subscriber::{TOKEN_SET_GLOBAL_DEFAULT}sub).unwrap();");
     assert_eq!(
         scan_tokens(&src, &tokens()),

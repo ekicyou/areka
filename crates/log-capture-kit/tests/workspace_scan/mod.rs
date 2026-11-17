@@ -155,6 +155,15 @@ pub fn read_source(rel_path: &str) -> String {
     }
 }
 
+/// 列挙した `at` 番目のソースの、コメントを除いた本文。
+///
+/// 見張りは同じ木を語の組を変えて何度も走査するので、除去はファイルごとに 1 度だけ行って置いておく。
+fn stripped_source(at: usize) -> &'static str {
+    static STRIPPED: OnceLock<Vec<OnceLock<String>>> = OnceLock::new();
+    let all = STRIPPED.get_or_init(|| sources().iter().map(|_| OnceLock::new()).collect());
+    all[at].get_or_init(|| strip_comments(&sources()[at].1))
+}
+
 fn read_from_disk(root: &Path, rel_path: &str) -> String {
     let full = root.join(rel_path);
     let bytes = std::fs::read(&full)
@@ -373,6 +382,11 @@ fn is_ident_char(c: char) -> bool {
 /// `scan_tokens_returns_the_longer_of_two_tokens_that_start_at_the_same_place` と
 /// `scan_tokens_does_not_count_one_call_twice_when_a_longer_token_contains_a_shorter_one`）。
 pub fn scan_tokens<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String)> {
+    scan_stripped(&strip_comments(src), tokens)
+}
+
+/// [`scan_tokens`] の中身。コメントを除いた後の本文を受ける。
+fn scan_stripped<T: AsRef<str>>(stripped: &str, tokens: &[T]) -> Vec<(usize, String)> {
     let mut order: Vec<&str> = tokens.iter().map(AsRef::as_ref).collect();
     order.sort_by_key(|t| std::cmp::Reverse(t.len()));
     // 語を頭の文字ごとの組に 1 度だけ分け（組の中は長い順のまま）、文字ごとに二分探索で引く
@@ -388,7 +402,6 @@ pub fn scan_tokens<T: AsRef<str>>(src: &str, tokens: &[T]) -> Vec<(usize, String
         }
     }
 
-    let stripped = strip_comments(src);
     let mut hits = Vec::new();
     for (index, line) in stripped.lines().enumerate() {
         let mut prev_is_ident = false;
@@ -622,10 +635,17 @@ impl std::fmt::Display for FileLines {
 }
 
 /// 与えられたファイル群を走査する。
+///
+/// 列挙に入るファイルは、コメントを除いた本文の置き場（[`stripped_source`]）から読む。
 pub fn scan_sources<T: AsRef<str>>(paths: &[String], tokens: &[T]) -> Vec<Hit> {
+    let all = sources();
     let mut hits = Vec::new();
     for path in paths {
-        for (line, token) in scan_tokens(&read_source(path), tokens) {
+        let found = match all.binary_search_by(|(known, _)| known.as_str().cmp(path)) {
+            Ok(at) => scan_stripped(stripped_source(at), tokens),
+            Err(_) => scan_tokens(&read_from_disk(&workspace_root(), path), tokens),
+        };
+        for (line, token) in found {
             hits.push(Hit::new(path.clone(), line, token));
         }
     }

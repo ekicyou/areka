@@ -259,7 +259,7 @@ fn check_all(tree: &DocTree, guide: &str, docs_exists: bool) -> BTreeSet<Finding
     if !tree.direct.is_empty() && !rows.is_empty() {
         found.extend(check_direct(&tree.direct, &rows));
     }
-    if !exceptions.is_empty() {
+    if !tree.direct.is_empty() && !exceptions.is_empty() {
         found.extend(check_names(&tree.all, &exceptions));
     }
     if docs_exists {
@@ -564,6 +564,15 @@ fn an_empty_reading_is_named_and_turns_the_guard_red() {
     assert_eq!(
         check_all(&empty, "", false),
         BTreeSet::from([DIRECT_ENTRIES, DIRECT_TABLE, EXCEPTION_TABLE].map(Finding::EmptyReading))
+    );
+    // 実物の読み取りだけが 0 件のとき、例外の表の行を「覆う破れが無い」と並べない。
+    let nothing_read = DocTree {
+        direct: BTreeSet::new(),
+        all: BTreeSet::new(),
+    };
+    assert_eq!(
+        check_all(&nothing_read, SAMPLE_GUIDE, false),
+        BTreeSet::from([Finding::EmptyReading(DIRECT_ENTRIES)])
     );
 }
 
