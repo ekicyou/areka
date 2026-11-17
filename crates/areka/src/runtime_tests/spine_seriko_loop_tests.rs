@@ -4,121 +4,18 @@ use super::{
     run_attach_phase, run_dpi_phase, settle_bounded, shell_target, wait_until,
 };
 
-// ===========================================================================
-// task 9.4 — まばたきスモーク（direct send_tick 注入 → SERIKO ループ → pattern 搬送指令）
-//
-// 本 task の主眼はハーネスの ripple 修正（spawn_seriko arity／loop_tables／ShowSurface.pattern）＋
-// 直接 tick 注入配線（`SerikoSink::send_tick`）＋既存テスト非退行（loop 不活性経路）だが、direct
-// send_tick が実 emo2 表のループへ届き pattern を載せた表示指令を生む配線を最小スモークで裏付ける。
-// 実 kero/sakura まばたき 1 周の PresentCommand 列 golden（2106→2110→-1→ベース復帰）と R3.4 default-OFF
-// 対照は task 10.2 が本スモークの上に構築する（本 task では作らない）。
-// ===========================================================================
-
 /// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・actor.rs／looper.rs `always_fire` と同旨）。
 ///
-/// 「固定注入乱数列」の最小形（発見的 entropy 非依存・R7.1/7.2）。まばたきスモークは「発火が起きること」
-/// のみを檻に入れるため定数 0 で足りる（発火順序・回数を厳密に固定する full golden は task 10.2）。
+/// 「固定注入乱数列」の最小形（発見的 entropy 非依存・R7.1/7.2）。毎境界で抽選を通すので定数 0 で足りる
+/// （発火の順と回数は下の golden が固定する）。
 fn always_fire_rng() -> LoopRng {
     Box::new(|_bound: u32| 0)
-}
-
-/// spine まばたきスモーク（R7.1/7.2/7.3・DD・task 9.4）: 実 emo2 shell 表＋固定注入乱数（常時発火）で
-/// `boot_live` し、kero まばたきの `interval,random,4` アニメ（pattern0=2106／pattern1=2110／pattern3=-1）を
-/// 持つ surface 2100 を `\s[2100]` で表示させたのち、`SerikoSink::send_tick` を**直接注入**（loop ticker
-/// 不起動・sleep 不使用）して 1000ms 絶対グリッド境界を跨がせ、seriko ループが **pattern を載せた**
-/// ShowSurface{shell_target(0),2100} を PresentBridge→rx へ発行することを固定する。direct send_tick →
-/// LoopRuntime → emit_display → adapter → rx の end-to-end 配線が spine で生きていることの最小自動檻。
-///
-/// # 表示中ゲート（loop は Show 済み slot のみ評価・R6.1/2.1）
-///
-/// ループは表示中の slot に対してのみアニメ評価する。まず `\s[2100]` cue を dispatcher tick で駆動し
-/// rx に ShowSurface{2100} が現れる（＝seriko が ScopeStates に scope0 shell=surface2100 を記録済み）まで
-/// 待ってから send_tick を注入する。dispatcher tick は talk/cue clock を進めるのみで seriko ループには
-/// 届かない（ghost 側にループ結線なし）ため、ループ発火はこの直接注入 send_tick だけが供給する。
-///
-/// # 決定論（注入時刻＋注入乱数のみ・R7.2/7.3）
-///
-/// 起動 tick（now=0・境界初期化・非跨ぎ・無発行）→ 40ms 刻みで進め、境界跨ぎ（1000/2000/…）で常時発火 rng が
-/// 抽選通過→pattern 進行。boot→talk→sink やスレッド伝播の非同期遅延は有界待機（deadline＋poll-backoff
-/// sleep・R7.9）で吸収する（時刻源は注入のみ＝壁時計は有界性にしか使わない）。
-#[test]
-fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
-    // 実表＋常時発火固定 rng でループ活性化（既存テストは Inert＝非退行・本テストのみ Live）。
-    let mut harness = SpineHarness::boot_live(
-        r"\s[2100]\e",
-        always_fire_rng(),
-        areka_seriko::seeded_rng(0),
-    );
-
-    // surface2100（kero まばたき random,4）を表示させる: \s[2100] cue を dispatcher tick で駆動し、
-    // rx に shell ShowSurface{2100} が現れる（＝seriko が表示中 slot を記録済み）まで有界待機。
-    // 有界性は壁時計 deadline（[`SPIN_WAIT`]）＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。
-    // 観測 `shown` はラッチ・台本 `\s[2100]\e` は全 cue `at=0.0`＝観測を壊す後続 cue なし（R7.8 非該当）。
-    let mut shown = false;
-    let deadline = Instant::now() + SPIN_WAIT;
-    let mut now = 0u64;
-    loop {
-        now += 1;
-        harness.inject_dispatcher_tick(now);
-        for cmd in harness.wiring.drain_received() {
-            if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id, .. }
-                if *target == shell_target(0) && *surface_id == 2100)
-            {
-                shown = true;
-            }
-        }
-        if shown || Instant::now() >= deadline {
-            break;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        shown,
-        "\\s[2100]（kero まばたき surface）の初回シェル表示が有界内に rx へ現れない（表示中ゲート前提不成立）"
-    );
-
-    // send_tick を直接注入して 1000ms 絶対グリッド境界を跨がせる（loop ticker 不起動・**時刻前進は
-    // 注入 Tick のみ**＝この意味で sleep 不使用。待機の poll-backoff sleep は R7.9 の明示例外）。
-    // pattern を載せた ShowSurface{shell_target(0),2100} が現れるまで有界待機（sub 秒進行＋境界跨ぎの双方を送る）。
-    // 有界性は壁時計 deadline（[`SPIN_WAIT`]）＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。
-    // 観測 `pattern_carrying` はラッチ（seriko tick の時刻前進は発火機会を増やすのみ＝R7.8 非該当）。
-    let mut pattern_carrying = false;
-    let mut now = 0u64;
-    harness.inject_seriko_tick(now); // 起動 tick（境界初期化・非跨ぎ・無発行）
-    let deadline = Instant::now() + SPIN_WAIT;
-    loop {
-        now += 40; // 小刻みに進め境界跨ぎ（1000ms グリッド）と pattern 進行（sub 秒）の双方を供給
-        harness.inject_seriko_tick(now);
-        for cmd in harness.wiring.drain_received() {
-            if let PresentCommand::ShowSurface {
-                target,
-                surface_id,
-                pattern,
-                ..
-            } = &cmd
-            {
-                if *target == shell_target(0) && *surface_id == 2100 && !pattern.is_empty() {
-                    pattern_carrying = true;
-                }
-            }
-        }
-        if pattern_carrying || Instant::now() >= deadline {
-            break;
-        }
-        std::thread::sleep(Duration::from_micros(200));
-    }
-    assert!(
-        pattern_carrying,
-        "direct send_tick が実 emo2 ループを駆動して pattern 搬送 ShowSurface{{shell_target(0),2100}} を発行しない（send_tick→LoopRuntime→emit→adapter→rx 配線が死んでいる？）"
-    );
-
-    harness.shutdown_bounded();
 }
 
 // ===========================================================================
 // task 10.2 — 実 emo2 まばたき 1 周の PresentCommand 列 golden（kero/sakura）＋ R3.4 既定 OFF 対照
 //
-// 9.4 の `boot_live`/`inject_seriko_tick`/`always_fire_rng` の上に、実 emo2 fixture の実測アニメ
+// `boot_live`/`inject_seriko_tick`/`always_fire_rng` の上に、実 emo2 fixture の実測アニメ
 // （kero surface2100 `interval,random,4` 2106/2110/-1・sakura surface1000 `interval,bind+random,4`
 // 1400 系 1412/1411/1410）を固定注入乱数＋scripted `send_tick` で 1 周歩かせ、発行される
 // `PresentCommand` 列の **厳密 golden**（pattern 搬送 surface id の完全一致）を檻に入れる。
@@ -221,10 +118,11 @@ fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: 
     );
 }
 
-/// `now_ms` の seriko tick を 1 発直接注入し、ちょうど 1 件の `PresentCommand` が rx へ届くまで有界
-/// スピンして返す（`wait_until` の密 yield → backoff sleep）。golden の各コマ遷移 tick は変化
-/// 1 件を発行する（6.1/6.2）ため、この直列注入→1 件回収で発行列の順序と内容を決定論的に照合できる。
-/// 届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`wait_until`] の
+/// `now_ms` の seriko tick を 1 発直接注入し、最初の `PresentCommand` が rx へ届くまで有界
+/// スピンし（`wait_until` の密 yield → backoff sleep）、続けて [`settle_bounded`] で残りを汲み切って
+/// から「ちょうど 1 件」を確かめて返す。golden の各コマ遷移 tick は変化 1 件を発行する（6.1/6.2）ため、
+/// この直列注入→回収で発行列の順序と内容を決定論的に照合できる。最初の 1 件で汲むのを止めると 2 件目を
+/// 見ないので、余分な指令が出る退行を通してしまう。届かなければ件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`wait_until`] の
 /// 進みの目印（注入は 1 発のみで各反復は系を進めない純粋なポーリング＝反復は経過時間の代理にならない）。
 /// 観測 `buf` は累積＝ラッチゆえ R7.8 の追い越しは構造的に無い。
 fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
@@ -242,6 +140,12 @@ fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCom
         },
     )
     .inspect_err(|failure| eprintln!("{failure}"));
+    settle_bounded(|| {
+        let got = harness.wiring.drain_received();
+        let n = got.len();
+        buf.extend(got);
+        n
+    });
     assert_eq!(
         buf.len(),
         1,

@@ -10,6 +10,9 @@ fn present_command_target(cmd: &PresentCommand) -> Option<TargetId> {
         PresentCommand::ShowSurface { target, .. } => Some(*target),
         PresentCommand::Hide { target, .. } => Some(*target),
         PresentCommand::InvalidateCache { target, .. } => Some(*target),
+        PresentCommand::ReplaceTarget { target, .. } => Some(*target),
+        PresentCommand::StageAck { target, .. } => Some(*target),
+        PresentCommand::MoveShift { target, .. } => Some(*target),
         _ => None,
     }
 }
@@ -271,8 +274,15 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
         "前提: attach 初期面（balloon surface0）は非全透明"
     );
 
-    // scripted OnBoot talk を Tick 注入で駆動し、受信 PresentCommand を 2 件（Hide→ShowSurface）集める。
-    let received = tick_and_collect(&mut harness, 2);
+    // scripted OnBoot talk を Tick 注入で駆動し、受信 PresentCommand を 2 件（Hide→ShowSurface）集め、
+    // 続けて残りを汲み切る（2 件で汲むのを止めると 3 件目を見ず、「ちょうど 2 件」が空振りする）。
+    let mut received = tick_and_collect(&mut harness, 2);
+    settle_bounded(|| {
+        let got = harness.wiring.drain_received();
+        let n = got.len();
+        received.extend(got);
+        n
+    });
     assert_eq!(
         received.len(),
         2,

@@ -20,6 +20,7 @@ use areka_kanade::KanadeMsg;
 use bevy_ecs::prelude::With;
 use shiori_host32_host::ExitKind;
 
+use super::test_support::boot_finished;
 use super::{
     CloseReason, Entity, Instant, LoopDriver, Progress, RecordedCall, SPIN_WAIT,
     ScriptedShioriBackend, SpineHarness, wait_until,
@@ -85,19 +86,23 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         "前提: 合成 GhostWindows でゴースト窓が立っている"
     );
 
-    // ── 起動系列（非 Status 5 呼出）の完了を待つ。終了指示を boot の途中で差し込むと、
+    // ── 起動の系列（最後は basewareversion）の完了を待つ。終了指示を boot の途中で差し込むと、
     //    再生完了通知が `BootVersion` 滞在中に届いて捨てられる狭い窓を踏み得る。 ──
     let mut boot_calls = Vec::new();
     let handle = harness.shiori_handle.clone();
     let calls = || handle.call_count();
-    let _ = wait_until("起動系列 5 呼出", Progress::Count(&calls), || {
-        boot_calls = harness.shiori_handle.non_status_calls();
-        boot_calls.len() >= 5
-    })
+    let _ = wait_until(
+        "起動の系列（最後は basewareversion）",
+        Progress::Count(&calls),
+        || {
+            boot_calls = harness.shiori_handle.non_status_calls();
+            boot_finished(&boot_calls)
+        },
+    )
     .inspect_err(|failure| eprintln!("{failure}"));
     assert!(
-        boot_calls.len() >= 5,
-        "前提: 起動系列 5 呼出が有界内に発火する: {boot_calls:?}"
+        boot_finished(&boot_calls),
+        "前提: 起動の系列（最後は basewareversion）が有界内に終わる: {boot_calls:?}"
     );
 
     // ── 終了指示（製品では右クリックメニューの「終了」が送るのと同じ 1 件） ──

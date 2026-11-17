@@ -67,6 +67,7 @@ use super::conformance_support::{
     CollectedCommand, Inbox, Injection, LapDriver, StageFailure, StageObservation, StagePlan,
     StageSink, WaitInjection,
 };
+use super::test_support::boot_finished;
 use super::{
     ActorKey, CloseReason, Entity, GhostWindows, LoopDriver, Point, PresentCommand, RecordedCall,
     RecordedStatus, ScriptedShioriHandle, SpineHarness, TalkLifecycleSignal, WindowPos, World,
@@ -497,7 +498,7 @@ impl LapStages {
 /// 一周の全段を 1 本の走行で辿り、各段を設計の完了条件まで進めて全実行主体を有界時間で畳む。
 ///
 /// 檻に入れる判断分岐（段ごとの完了条件がそのまま主張である）:
-/// - **起動**: 起動系列 5 呼出が記録に揃う。
+/// - **起動**: 起動の系列が最後の basewareversion まで記録に揃う。
 /// - **装着**: 装着の計画件数と実装着件数が一致し、起動挨拶が表示指令を出して再生し切る。
 /// - **自発会話**: 毎秒の変化通知が**照会**として出る（Ref3="1"＝会話を始められる）。
 /// - **会話中の抑止**: 同じ通知が**片道**になり Ref3 が "0" になる（会話の枠が占有されたまま）。
@@ -543,7 +544,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
         observed: Rc::clone(&observed),
     };
 
-    // ── 段 1: 起動（注入なし・組立が起こした起動系列 5 呼出が揃うのを待つ） ──
+    // ── 段 1: 起動（注入なし・組立が起こした起動の系列が最後の basewareversion まで揃うのを待つ） ──
     let probe = handle.clone();
     sink.advance_gate = AdvanceGate::Always;
     let report = handle.clone();
@@ -555,11 +556,11 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
                 once: Vec::new(),
                 waiting: WaitInjection::Idle,
             },
-            |_| probe.non_status_calls().len() >= 5,
+            |_| boot_finished(&probe.non_status_calls()),
         ),
         || {
             format!(
-                "起動系列の呼出 {} 件（5 件で成立）。**この段は注入を 1 件も行わない**ので、0 件なら組立そのものが有界時間内に走っていない——一周の駆動ではなく、既存の兄弟テストが同じ待ちで共有する起動の飢餓（`spine_boot_smoke_tests.rs` と `spine_conformance_support_tests.rs` の`non_status_calls().len() >= 5`）と同じ系統である",
+                "起動の系列の呼出 {} 件（最後の basewareversion で成立）。**この段は注入を 1 件も行わない**ので、0 件なら組立そのものが有界時間内に走っていない——一周の駆動ではなく、既存の兄弟テストが同じ待ちで共有する起動の飢餓（`spine_boot_smoke_tests.rs` と `spine_conformance_support_tests.rs` の `boot_finished`）と同じ系統である",
                 report.non_status_calls().len()
             )
         },

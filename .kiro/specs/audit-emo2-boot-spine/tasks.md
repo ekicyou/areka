@@ -168,7 +168,7 @@
   - _Requirements: 3.1, 3.2, 4.4, 7.1, 7.2_
 
 - [ ] 7. 本体の `runtime_tests/` の残りを直す
-- [ ] 7.1 表示・閉じ・seriko・移動・起動のスモークのテストを直す［T16・28〜30・32・90〜94 番］
+- [x] 7.1 表示・閉じ・seriko・移動・起動のスモークのテストを直す［T16・28〜30・32・90〜94 番］
   - 28 番: 文字の面の不透明の読みを、装着済みの面の読み戻しの形にする。29 番: 指令の宛先と種類の名前の match に 3 つの腕を足す
   - 30 番: 起動の系列が終わった（最後の basewareversion）を見る補助を置き、`>= 5` の 5 か所をそれにし、説明と失敗の文を直す
   - 32・90 番: まばたきのスモークと「二重に当てていない」の assert を消す。91・92 番: 集めた後に `settle_bounded` で残りを汲んで「ちょうど N 件」を見る
@@ -231,3 +231,4 @@
 - 6.1: zorder_wiring の 2 ファイルに分ける前の番号の節見出しが残る（本体の ⑶・⑷、areka-runtime の ⑴）。8.2 のかけ直しで振り直す。
 - 6.4: `pause` を足したのは設計の 95 番どおり `settle_bounded_with` だけ（tasks.md の「2 つの関数に」は字面の違い）。本体の足場は既にある `use areka_runtime::spine::*;` で引く。
 - 6.5: `doc/COMPAT_ARCHITECTURE.md` §8 の 2 行のパスを新しい置き場へ直した（C22 の `collisionex-regions` も §8 に追記するので、そのセッションへ知らせ済み）。`areka-test-wait-wording` の brief は `crates/areka/src` の下だけを数えるので、film の E2E が `areka-runtime` へ移ったことを 8.1 で申し送る（要件 7.8）。
+- 7.1・28 番: 文字の面は最初に描く文字が届いた present_frame で作られるので、S2 の Phase 1 の待ちの輪だけは `is_attached(&actor) && text_surface_opaque(..) > 0` で見る（強い形の `expect` は装着の後の呼び出しに残る）。

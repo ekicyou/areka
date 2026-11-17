@@ -29,7 +29,7 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // 有界スピン待機（sleep なし・yield_now のみ）で 6 呼出の到達を待ってから照合する。task 8.2 の
+    // [`wait_until`]（初めの 60ms は yield_now の空回し・過ぎたら反復ごとに短く眠る）で 6 呼出の到達を待ってから照合する。task 8.2 の
     // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）と、挨拶の台詞を再生の前に
     // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が加わり boot 系列は 6 呼出。
     // 打ち切りは反復回数でなく [`wait_until`] の進みの目印（SHIORI の呼び出しの数）で判じる。

@@ -6,6 +6,7 @@
 //! ファイルの冒頭の説明と同じで、期待値は持たない。
 
 use super::super::settle_bounded;
+use super::super::test_support::boot_finished;
 use super::driver_tests::{second_change_calls, stage};
 use super::{ExitKind, LoopDriver, ScriptedShioriBackend, SpineHarness};
 use super::{Injection, LapDriver, RecordedCall, StagePlan, StageSink, WaitInjection};
@@ -97,12 +98,14 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
     let mark = harness.progress_probe().expect("足場は進みの目印を持つ");
     assert!(
-        wait_until("起動系列 5 呼出", Progress::Count(&*mark), || {
-            handle.non_status_calls().len() >= 5
-        })
+        wait_until(
+            "起動の系列（最後は basewareversion）",
+            Progress::Count(&*mark),
+            || { boot_finished(&handle.non_status_calls()) }
+        )
         .inspect_err(|failure| eprintln!("{failure}"))
         .is_ok(),
-        "起動系列 5 呼出が有界内に揃わない"
+        "起動の系列（最後は basewareversion）が有界内に終わらない"
     );
 
     let mut driver = LapDriver::new();

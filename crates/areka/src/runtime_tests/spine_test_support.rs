@@ -1,4 +1,4 @@
-use super::{DPI, Entity, GhostWindows, PresentCommand, SpineHarness};
+use super::{DPI, Entity, GhostWindows, PresentCommand, RecordedCall, SpineHarness};
 
 // ===========================================================================
 // task 6.2 spine 観測ケース（S1 boot→表示／S3 `\b` 配送／S4 `\b` なし完走）
@@ -16,12 +16,22 @@ pub(super) fn opaque_count(bgra: &[u8]) -> usize {
     bgra.chunks_exact(4).filter(|px| px[3] != 0).count()
 }
 
+/// 起動の系列が終わった（最後の basewareversion が記録された）。OnBoot が台詞を返すと 6 呼び出し・返さないと 5 呼び出し。
+pub(super) fn boot_finished(calls: &[RecordedCall]) -> bool {
+    calls
+        .iter()
+        .any(|c| matches!(c, RecordedCall::Notify { id, .. } if id == "basewareversion"))
+}
+
 /// `PresentCommand` の variant 名（`PresentCommand` は `reply` を含み `Debug` 非実装ゆえ診断表示用）。
 pub(super) fn variant_name(cmd: &PresentCommand) -> &'static str {
     match cmd {
         PresentCommand::ShowSurface { .. } => "ShowSurface",
         PresentCommand::Hide { .. } => "Hide",
         PresentCommand::InvalidateCache { .. } => "InvalidateCache",
+        PresentCommand::ReplaceTarget { .. } => "ReplaceTarget",
+        PresentCommand::StageAck { .. } => "StageAck",
+        PresentCommand::MoveShift { .. } => "MoveShift",
         _ => "<unknown>",
     }
 }

@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use super::test_support::{opaque_count, variant_name};
+use super::test_support::{boot_finished, opaque_count, variant_name};
 use super::{
     ActorKey, CloseReason, Duration, Instant, PresentCommand, Progress, RecordedCall, SPIN_WAIT,
     SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded_watching,
@@ -18,18 +18,18 @@ use super::{
 
 /// 装着済み balloon text actor の供給面（emo-text `TextLayerRuntime::surface`）の非透明画素数。
 ///
-/// 未装着（供給面なし）は 0。S2 の typewriter リビール観測（`present_frame` 駆動後の text 供給面
-/// readback）に使う。`harness.runtime` は `wiring.runtime` と同一 `Rc<RefCell<..>>`（clone）ゆえ、
+/// 呼び手は装着の後（文字の面が作られた後）でしか使わない。供給面が無い・読み戻せないのは文字の相の
+/// 壊れなので、0 と数えず panic で落とす（0 と数えると Clear の檻と pre-reveal の檻が空振りする）。
+/// S2 の typewriter リビール観測（`present_frame` 駆動後の text 供給面 readback）に使う。`harness.runtime` は `wiring.runtime` と同一 `Rc<RefCell<..>>`（clone）ゆえ、
 /// `run_text_phase`（`present_frame`）が更新した供給面をそのまま読み戻せる（借用は逐次・非重複）。
 fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
     let rt = harness.runtime.borrow();
-    match rt.surface(actor) {
-        Some(surface) => surface
-            .read_back()
-            .map(|bytes| opaque_count(&bytes))
-            .unwrap_or(0),
-        None => 0,
-    }
+    let bytes = rt
+        .surface(actor)
+        .expect("装着済み")
+        .read_back()
+        .expect("読み戻せる");
+    opaque_count(&bytes)
 }
 
 /// spine S2（talk→typewriter・R2.1/2.2/2.3/2.4・R3.1・R8.2/R8.5）: `\s[2100]`（シェル面切替）＋
@@ -38,7 +38,7 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// shell readback が**非表示から surface2100 の実描画へ遷移**すること（初回面表示の実描画・R2.4/R3.1・
 /// defect #5 ゆえ attach 時の初期 surface0 baseline は無い＝シェルは初回 `\s` まで非表示）、
 /// (2) テキスト cue の typewriter リビールを注入 `talk_time` の階段値で駆動し、text 供給面の
-/// `opaque_count` が**単一 talk 内で単調非減少**・pre-reveal（t=0.0）全透明・`Clear`（at=0.95）後の
+/// `opaque_count` が**単一 talk 内で単調非減少**・pre-reveal（t=0.0）全透明・`Clear`（at=1.40）後の
 /// 全域透明（R8.5・R2 系の檻）を檻に入れる。
 ///
 /// # 二段配送で単一 talk 内のリビール→Clear を分離（talk_clock 既知制約に整合）
@@ -48,8 +48,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// areka-P0-cue-playback-duration で `char_wait` を撤去）確定、`Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
 /// リビールの時刻ゲートは `visible(t)=|{i:r_i≤t}|` のみ。よって単調非減少の階段は「Text 配送済み・
 /// Clear 未配送」のバッファに注入 `talk_time`（clock 非経由・R8.3）を振って観測し（Phase 1）、その後
-/// dispatcher の elapsed を Clear（`\_w[1000]`＝at=1.05）超へ進めて Clear を配送し全消去を観測する
-/// （Phase 2）。台本の `\_w[50]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
+/// dispatcher の elapsed を Clear（`\_w[1000]`＝at=0.05+D+1.00=1.40・D=0.35）超へ進めて Clear を
+/// 配送し全消去を観測する（Phase 2）。台本の `\_w[50]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
 /// 述語の適用範囲を単一 talk 内（Clear 配送前のリビール区間）に限定することで、talk 跨ぎの epoch
 /// リベース逆行（talk_clock 既知制約）を対象外にする（設計 Testing Strategy S2）。`present_frame` は
 /// 各 t で全域再描画（残渣なし・決定論・R7.3）ゆえ、注入 t に対し `opaque_count` は `visible(t)` の
@@ -164,12 +164,10 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
             harness.pump_text();
             // テキスト cue 到達確認: 完全リビール域 t=0.30 で非透明になれば runtime へ流入済み。
             run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
-            if talk_started && text_surface_opaque(&harness, &actor) > 0 {
+            // 文字の面は最初に描く文字が届いた present で作られるので、作られる前は「まだ」と読む。
+            let attached = harness.runtime.borrow().is_attached(&actor);
+            if talk_started && attached && text_surface_opaque(&harness, &actor) > 0 {
                 return true;
-            }
-            if !show_cmds.is_empty() {
-                // talk 起動を観測してから小刻みに進め、TICK_MAX_MS で頭打ちにする（Clear 域へ到達しない）。
-                now = (now + 5).min(TICK_MAX_MS);
             }
             std::thread::sleep(Duration::from_micros(200));
             false
@@ -251,14 +249,14 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
         "S2: リビールが実際に進行し text が描画される（末尾 t=0.90 で非全透明・非空虚な檻）: {counts:?}"
     );
 
-    // ── Phase 2＋Clear 後全域透明（R8.5）: dispatcher elapsed を Clear（at=1.05）超へ進めて Clear を
+    // ── Phase 2＋Clear 後全域透明（R8.5）: dispatcher elapsed を Clear（at=1.40）超へ進めて Clear を
     //    配送する。Clear は配送即時にバッファを全消去する（state.rs apply_cue）ため、Clear 配送後は
     //    どの注入 talk_time でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
     //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
     //    有界性は壁時計 deadline（[`SPIN_WAIT`]）＋200µs poll-backoff sleep（R7.9・根拠は [`drive_shell_shown`]
     //    の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
     let mut clear_reached = false;
-    // Phase 1 と同型のハイブリッド（Tick 注入＋別スレッド結果の観測）ゆえ、打ち切りは同じく時刻期限。
+    // 打ち切りは壁時計の期限（[`SPIN_WAIT`]）。確かめはループの条件の 1 か所だけ。
     let deadline = Instant::now() + SPIN_WAIT;
     while Instant::now() < deadline {
         now += 50; // 大きめに進め Clear（at=1.40s・上のタイムライン導出）を配送させる
@@ -267,9 +265,6 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
         run_text_phase(&mut harness.wiring, &mut harness.world, Some(2.0));
         if text_surface_opaque(&harness, &actor) == 0 {
             clear_reached = true;
-            break;
-        }
-        if Instant::now() >= deadline {
             break;
         }
         std::thread::sleep(Duration::from_micros(200));
@@ -307,24 +302,24 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // 標準台本（OnClose NOTIFY＋Unload(Clean)）で boot。最小 OnBoot talk（\s[0]\e）。
     let harness = SpineHarness::boot(r"\s[0]\e");
 
-    // boot 系列（非 Status 5 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
-    // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
+    // 起動の系列（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion・最後は
+    // basewareversion）が終わるまで待つ（OnClose を起動の呼び出しと分ける）。
     // 打ち切りは待ちの芯（[`wait_until`]）が決める。進みの目印は SHIORI の呼び出しの数（`Status` を除く）
     // で、相手が 30 秒進まなければ `［止まった］`（`load-repro.md` の 4.3 で目印なしの待ちが赤だった）。
     let calls = || harness.shiori_handle.call_count();
     let mut boot_calls = Vec::new();
     let waited = wait_until(
-        "S5 前提: boot 系列 5 呼出",
+        "S5 前提: 起動の系列（最後は basewareversion）",
         Progress::Count(&calls),
         || {
             boot_calls = harness.shiori_handle.non_status_calls();
-            boot_calls.len() >= 5
+            boot_finished(&boot_calls)
         },
     );
     let failure = waited.err().map(|f| format!("{f}／")).unwrap_or_default();
     assert!(
-        boot_calls.len() >= 5,
-        "{failure}S5 前提: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が有界内に発火する: {boot_calls:?}"
+        boot_finished(&boot_calls),
+        "{failure}S5 前提: 起動の系列（最後は basewareversion）が有界内に終わる: {boot_calls:?}"
     );
 
     // 分解して所有ハンドルを得る（shutdown_bounded と同型・shiori_handle は照合のため保持）。

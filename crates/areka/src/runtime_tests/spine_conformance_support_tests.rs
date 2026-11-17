@@ -15,6 +15,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use super::super::settle_bounded;
+use super::super::test_support::boot_finished;
 use super::{
     ClosedInboxes, Inbox, Injection, LapDriver, LapStage, PresentCommand, RecordedCall,
     StageFailure, StagePlan, StageSink, WaitFailure, WaitInjection, injection_kind,
@@ -488,15 +489,17 @@ fn kanade_tick_raises_one_second_change_where_the_waiting_injection_raises_none(
         .build();
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
 
-    // 起動系列 5 呼出が揃うまで待つ（目印は SHIORI の呼び出しの数）。
+    // 起動の系列が最後の basewareversion まで終わるのを待つ（目印は SHIORI の呼び出しの数）。
     let calls = || handle.call_count();
     assert!(
-        wait_until("起動系列 5 呼出", Progress::Count(&calls), || {
-            handle.non_status_calls().len() >= 5
-        })
+        wait_until(
+            "起動の系列（最後は basewareversion）",
+            Progress::Count(&calls),
+            || { boot_finished(&handle.non_status_calls()) }
+        )
         .inspect_err(|failure| eprintln!("{failure}"))
         .is_ok(),
-        "起動系列 5 呼出が有界内に揃わない"
+        "起動の系列（最後は basewareversion）が有界内に終わらない"
     );
     assert_eq!(
         second_change_calls(&handle),

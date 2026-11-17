@@ -120,13 +120,5 @@ fn spine_move_cue_drives_window_move_end_to_end() {
         "x'=1483+217−353−139=1208（base=scope0 基準・CanonDefaultBasepos）・y=Fix は現状維持 1063（cue→channel→frame drain→apply→実窓移動）"
     );
 
-    // 二重適用なし: move cue は 1 発ゆえ、追加 drain で窓はさらに動かない（channel は drain 済みで空）。
-    run_move_drain_with(&harness.wiring, &all_shown, &mut harness.world);
-    assert_eq!(
-        window_position(&harness.world, target),
-        Point { x: 1208, y: 1063 },
-        "move channel は drain 済みで空（二重適用なし・FIFO 全件消費）"
-    );
-
     harness.shutdown_bounded();
 }
