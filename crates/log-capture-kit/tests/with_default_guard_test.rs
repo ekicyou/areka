@@ -2,7 +2,7 @@
 //!
 //! # 何を見張るか（4 つ）
 //!
-//! 1. **捕捉先を直接差す呼出**（3 つの関数の、`(` つきの裸の綴りと `subscriber::` つきの綴り）が、共有 crate の定義（`crates/log-capture-kit/src/`）と
+//! 1. **捕捉先を直接差す呼出**（3 つの関数の、`(` つきの裸の綴り・`subscriber::` つきの綴り・`as` で別名にする綴り）が、共有 crate の定義（`crates/log-capture-kit/src/`）と
 //!    例外表 [`ALLOWED_DIRECT_CALLS`] の外に 1 件も無いこと（要件 2.6・8.1）。
 //! 2. **全スレッド捕捉の窓口**の利用が、別表 [`ALLOWED_GLOBAL_CAPTURE`] に載ったファイルだけで
 //!    あること（要件 1.6。既定の捕捉 API と混同させないための明示表）。
@@ -59,7 +59,8 @@ use workspace_scan::{
 
 /// 捕捉先をスレッドへ差す素の呼出。
 const TOKEN_WITH_DEFAULT: &str = concat!("with_", "default(");
-/// 同上（`tracing::dispatcher` 側の綴り）。
+/// スレッドの既定を差す素の呼出。`tracing::subscriber` 側と `tracing::dispatcher` 側の
+/// 両方の関数に当たる。
 const TOKEN_SET_DEFAULT: &str = concat!("set_", "default(");
 /// プロセス全体へ捕捉先を据える呼出。
 const TOKEN_SET_GLOBAL_DEFAULT: &str = concat!("set_global_", "default(");
@@ -70,6 +71,13 @@ const TOKEN_SUBSCRIBER_WITH_DEFAULT: &str = concat!("subscriber::with_", "defaul
 const TOKEN_SUBSCRIBER_SET_DEFAULT: &str = concat!("subscriber::set_", "default");
 /// 同上。
 const TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT: &str = concat!("subscriber::set_global_", "default");
+/// 上の 3 つの関数を `as` で別名にする綴り。`subscriber::` を前に置かない形
+/// （`use tracing::subscriber::{…}` の波括弧の中と、`tracing::dispatcher` 側の別名）に当たる。
+const TOKEN_WITH_DEFAULT_ALIAS: &str = concat!("with_", "default as");
+/// 同上。
+const TOKEN_SET_DEFAULT_ALIAS: &str = concat!("set_", "default as");
+/// 同上。
+const TOKEN_SET_GLOBAL_DEFAULT_ALIAS: &str = concat!("set_global_", "default as");
 /// 共有 crate の全スレッド捕捉の窓口。
 const TOKEN_INSTALL_GLOBAL_CAPTURE: &str = concat!("install_global_capture_", "all(");
 
@@ -82,6 +90,9 @@ fn direct_call_tokens() -> Vec<&'static str> {
         TOKEN_SUBSCRIBER_WITH_DEFAULT,
         TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT,
         TOKEN_SUBSCRIBER_SET_DEFAULT,
+        TOKEN_WITH_DEFAULT_ALIAS,
+        TOKEN_SET_GLOBAL_DEFAULT_ALIAS,
+        TOKEN_SET_DEFAULT_ALIAS,
     ]
 }
 
@@ -102,9 +113,7 @@ const KIT_DEFINITION_PREFIX: &str = "crates/log-capture-kit/src/";
 
 /// ⑴ の例外表（相対パス・理由）。
 ///
-/// **初期値は空ではない**。移行の実測で原理的に移行不能と判明した項と、較正が意図的に持つ
-/// 素の呼出の項が載る。起草時の「例外表は既定で空」は着手前の見積りで、実測と食い違っていた
-/// ため実測側へ訂正済み。件数は [`ALLOWED_DIRECT_CALLS_COUNT`] が逐語で持つ（ここには書かない）。
+/// 載る理由は各項の理由欄が持つ。件数は [`ALLOWED_DIRECT_CALLS_COUNT`] が逐語で持つ（ここには書かない）。
 const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
     (
         "crates/areka-placement/src/diag_tests.rs",
@@ -608,6 +617,20 @@ fn an_aliased_import_or_an_uncalled_direct_capture_is_detected() {
             (2usize, TOKEN_SUBSCRIBER_SET_GLOBAL_DEFAULT.to_string()),
         ],
         "呼ばずに渡す形を検知できていない"
+    );
+    // `subscriber::` を前に置かない別名（波括弧の中と、dispatcher 側）。
+    let braced = format!(
+        "use tracing::subscriber::{{{TOKEN_WITH_DEFAULT_ALIAS} scoped, {TOKEN_SET_GLOBAL_DEFAULT_ALIAS} global}};\n\
+         use tracing::dispatcher::{TOKEN_SET_DEFAULT_ALIAS} local;\n"
+    );
+    assert_eq!(
+        scan_tokens(&braced, &direct_call_tokens()),
+        vec![
+            (1usize, TOKEN_WITH_DEFAULT_ALIAS.to_string()),
+            (1usize, TOKEN_SET_GLOBAL_DEFAULT_ALIAS.to_string()),
+            (2usize, TOKEN_SET_DEFAULT_ALIAS.to_string()),
+        ],
+        "波括弧の中の別名と dispatcher 側の別名を検知できていない"
     );
 }
 

@@ -51,3 +51,7 @@
 - G6 with_default_guard_test.rs ~105-107 の例外表の説明が中身と合わない・経緯の文 → 「載る理由は各項の理由欄が持つ」
 - G7 with_default_guard_test.rs ~62 `TOKEN_SET_DEFAULT` の説明 → 両方の関数に当たると書く
 - G8 workspace_scan/mod.rs ~101・376「決め D7」→ `audit-test-kits 決め D7`
+
+## 束 D の直しの控え（承認済み）
+- 較正: G1 は足した `… as` の 3 語を外す → `an_aliased_import_or_an_uncalled_direct_capture_is_detected` が赤。今の木での当たり 0
+- 改名・消し: `every_shape_of_a_bundled_balloon_path_is_detected` → `the_non_backslash_shapes_of_a_bundled_balloon_path_are_detected`、`the_whole_doc_tree_reading_finds_something` を消した（どちらも名前の当たりはかけ直しの記録だけ）

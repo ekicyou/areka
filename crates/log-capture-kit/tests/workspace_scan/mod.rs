@@ -98,7 +98,7 @@ pub fn walk_workspace_sources() -> Vec<String> {
 
 /// 列挙した全ソースの `(相対パス, 本文)`（相対パスの昇順）。
 ///
-/// 見張りはどれも木全体を読むので、テストの実行体ごとに 1 度だけ読んで置いておく（決め D7）。
+/// 見張りはどれも木全体を読むので、テストの実行体ごとに 1 度だけ読んで置いておく（audit-test-kits 決め D7）。
 fn sources() -> &'static [(String, String)] {
     static SOURCES: OnceLock<Vec<(String, String)>> = OnceLock::new();
     SOURCES.get_or_init(|| {
@@ -373,7 +373,7 @@ fn is_ident_char(c: char) -> bool {
 pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
     let mut order: Vec<&str> = tokens.to_vec();
     order.sort_by_key(|t| std::cmp::Reverse(t.len()));
-    // 語の頭の文字で先に篩う（決め D7）。どの語の頭でもない文字では語の輪を回さない。
+    // 語の頭の文字で先に篩う（audit-test-kits 決め D7）。どの語の頭でもない文字では語の輪を回さない。
     let mut firsts: Vec<char> = order.iter().filter_map(|t| t.chars().next()).collect();
     firsts.sort_unstable();
     firsts.dedup();

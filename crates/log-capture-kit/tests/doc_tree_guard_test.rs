@@ -609,13 +609,6 @@ fn doc_tree_matches_the_guide() {
 }
 
 #[test]
-fn the_whole_doc_tree_reading_finds_something() {
-    // 直下の実物と 2 つの表が空なら主検査が EmptyReading で赤にする。主検査が見ないのは全部の読み取りだけ。
-    let (tree, _, _) = real_data();
-    assert!(!tree.all.is_empty(), "doc/ の下の全部が 0 件");
-}
-
-#[test]
 fn dropping_a_known_row_turns_the_guard_red() {
     let (tree, guide, docs_exists) = real_data();
     let baseline = check_all(&tree, &guide, docs_exists);

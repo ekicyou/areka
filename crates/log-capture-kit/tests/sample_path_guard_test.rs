@@ -545,7 +545,7 @@ fn the_extraction_namespace_is_detected() {
 }
 
 #[test]
-fn every_shape_of_a_bundled_balloon_path_is_detected() {
+fn the_non_backslash_shapes_of_a_bundled_balloon_path_are_detected() {
     let (ghost, balloon) = a_bundled_balloon();
     for token in [
         format!("join(\"{balloon}\")"),

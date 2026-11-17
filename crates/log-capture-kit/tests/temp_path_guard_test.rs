@@ -4,7 +4,7 @@
 //!
 //! 一時ディレクトリの**入口**（標準ライブラリの `env` モジュールの一時フォルダを返す関数）への言及が、例外表
 //! [`ALLOWED_ENTRY_POINT_USES`] の外に 1 件も無いこと（呼出に限らず、`use … as` の別名や呼ばずに渡す形も含む）。窓口 crate（`crates/temp-path-kit/src/`）
-//! も走査から外さない（[`the_gateway_is_scanned_and_holds_no_entry_point`]）。入口は 2 通りの綴りで書けるので両方を走査する（[`entry_point_tokens`]）。
+//! も走査から外さない（[`the_gateway_is_scanned_and_holds_no_entry_point`]）。入口の書き方の綴りはどれも走査する（[`entry_point_tokens`]）。
 //!
 //! # なぜログ捕捉 crate に住んでいるのか
 //!
