@@ -444,9 +444,12 @@ fn window_link_directives_on_pasta_in_windows() {
     let root = base.join("root");
     let profile = base.join("profile");
     copy_dir(&sample.root().join("ghost"), &root.join("ghost"));
+    let balloon = sample
+        .balloon("pasta_tategaki")
+        .unwrap_or_else(|e| panic!("同梱バルーン pasta_tategaki を引けない: {e}"));
     copy_dir(
-        &sample.folder().join(r"balloon\pasta_tategaki"),
-        &root.join(r"balloon\pasta_tategaki"),
+        balloon,
+        &root.join("balloon").join(balloon.file_name().unwrap()),
     );
     // 根は写し終えたので、配られた複製はここで返す。
     drop(sample);

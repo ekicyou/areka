@@ -56,7 +56,7 @@
   - _Depends: 1.1, 2.1, 4.1_
   - _Dispatch: standard — 純関数への割り出し・置き場の共有・3 つの見張りからの手助けの移し_
   - _Requirements: 3.1, 4.1, 4.7, 4.8_
-- [ ] 3.2 検体の見張りが `\` の綴りも赤にし、範囲の外の 2 か所を直す（G2: 1・34 と 74 の検体の分）
+- [x] 3.2 検体の見張りが `\` の綴りも赤にし、範囲の外の 2 か所を直す（G2: 1・34 と 74 の検体の分）
   - 1: ⑷ に `\` を前と後ろに置いたバルーン名の語を、⑵ に `vendors`・`sample_ghost`・検体名を `\` で繋いだ語（終わりが `\` と `"` の 2 つ・区切りが `\` と `\\` の 2 つ）を足す
   - 範囲の外の追従: `crates/areka/tests/window_link_real_run.rs:448-449` を窓口 `sample.balloon("pasta_tategaki")` から元を引く形に（写し先は `root.join("balloon").join(<元の file_name>)`）・`crates/areka-nar/src/error_tests.rs:205` を登記に無い名前の偽のパスに
   - 34 の分: 数の比べ（369-373 行あたり）・`the_guard_file_itself_is_not_a_hit`・ファイルが在るかの輪を消し、テストの名前を挙げる説明を直す
@@ -68,7 +68,7 @@
 - [ ] 3.3 `env-filter` の見張りが 3 つの道も赤にする（G3: 4・71・34 と 74 の with_default の分）
   - 4: 照らしを引用符なしの `env-filter`（`["…"]`・`['…']` の両方）にし、道具の自分の `Cargo.toml` の `[features]` の `default` と、根の `Cargo.toml` の `[workspace.dependencies]` の道具の項も読む（根の `Cargo.toml` は読むだけ）
   - 71: 2 つの例外表に重複の確かめを足す
-  - 34 の分: `removing_the_exclusion_turns_the_guard_red`・`the_guard_file_itself_is_not_a_hit_because_the_tokens_are_never_spelled_out` を消す
+  - 34 の分: `the_guard_file_itself_is_not_a_hit_because_the_tokens_are_never_spelled_out` を消す
   - 74 の分: 化けた行の継ぎと `\n`（413-419 行あたり）と、同じ形の `workspace_scan_test.rs` の 3 か所を戻し、バイトで確かめる
   - テスト: `single_quoted_env_filter_is_detected`・`env_filter_in_the_kit_default_features_is_detected`・`env_filter_in_workspace_dependencies_is_detected`・`only_one_crate_declares_the_env_filter_feature`・`the_direct_call_allow_table_has_no_duplicate_entries`・`the_all_thread_capture_table_has_no_duplicate_entries`
   - 完了の姿: 6 本が緑で、4 の照らしを引用符つきに戻すと較正の 3 本が赤。今の木での違反が 0
@@ -215,3 +215,5 @@
   - 2.2: 足したテスト無し（較正なし）。消す前の grep（コードの宣言のほかは本 spec の文書と `completed/areka-P0-test-cage-determinism/verification/` だけ）: `format_line_is_byte_identical_to_current_formatting_code` 1・`level_is_rendered_with_display_not_debug` 1・`capture_lines_does_not_leak_the_sentinel` 1・`establishing_the_probes_is_idempotent` 1・`the_switch_variable_lives_in_the_workspace_namespace` 1（completed にも 0）・`FieldCollector` は道具の外 0・`interest_probes_enabled` は道具の外 0。41 の `capture_tests.rs` は `DONE` の数の 3 行だけを消し、テストは残した。`interest_probes_enabled` は `#[cfg(test)] pub(crate)`（使い手がテストだけで、`pub(crate)` だけだと clippy の dead_code）
   - 2.2: 39 の「それに含まれる重なりの 1 本」は research.md の引く `capture_tests.rs:385-388`・389-392 が在らず（253 行）、名指しの 3 本で Lean -49 に合うので、見つからないものとして消さなかった（6.1 のかけ直しで拾う）
   - 3.1: `skip_dir` を名前だけの古い除外に戻す → `only_a_target_next_to_a_manifest_is_skipped` が赤。TOML の剥がしを 1 つの切替に戻し `\"` 飛ばしを外す → `a_hash_inside_a_quoted_value_with_the_other_quote_is_not_a_comment` が赤。生の文字列の `#` の数を 0 と数える／普通の文字列と文字の逃がしの枝を外す（3 通り）→ `strip_comments_keeps_code_after_every_literal_kind` が赤。各見張りのテスト数は移しの前後で同じ（file_length 6・sample_path 21・temp_path 16・with_default 24）。改名: `walk_excludes_build_artifacts_and_vendored_sources` → `walk_stays_inside_crates_and_skips_only_build_output`。消す前の grep: `mentions_kit` は本 spec の research.md 1・completed 1、`production_kit_dependencies` は本 spec 1・completed 3、`has_dev_kit_dependency`・`is_dev_dependency_section` は 0。30 の時間（参考）: `cargo test -p log-capture-kit --tests` の実行体の和で前 約 64 秒 → 後 約 24 秒
+  - 3.2: ⑵ の区切りの表を `/` だけにする → `a_backslash_spelled_checked_in_tree_is_detected` が赤。⑷ の `\{b}"`・`{b}\\` を外す → `a_backslash_spelled_bundled_balloon_path_is_detected` が赤、`\{b}\`（前と後ろに `\`）を外す → 同じテストの生の文字列の途中のパスの場合が赤。後ろの語を `<名>\` の 1 字にすると `claudia
+` などの逃がしに当たって範囲の外の 5 ファイルが誤検知になるので、`<名>\`（逃がした `\`）と前後の `\<名>\` にした（残る穴は生の文字列が `<名>\` で始まる形だけ・`shortcut:` の注記）。`removing_the_exclusion_turns_the_guard_red` は `sample_path_guard_test.rs` に在り設計の行 34 が消すとするので 3.2 で消した（3.3 の行から名前を外した）。消す前の grep: `the_guard_file_itself_is_not_a_hit` は sample 1・temp 1（3.4 の分）・本 spec の文書と completed だけ、`removing_the_exclusion_turns_the_guard_red` は定義 1・本 spec の文書 3・completed 6
