@@ -73,7 +73,7 @@
   - _Dispatch: standard — 戻りの型を変えて書き込みの束ね方を呼び手へ移す_
   - _Requirements: 5.1, 5.2, 5.3, 9.5_
 
-- [ ] 6. 記憶から戻した窓の寄せの組を鎖の決まりに合わせる
+- [x] 6. 記憶から戻した窓の寄せの組を鎖の決まりに合わせる
 - [x] 6.1 `keep_restored_groups` を鎖の前の窓との組のつながりの束にする
   - `chain_rule.rs` の `from_terms` の `#[cfg(test)]` を外して doc を直す（規則は変えない・C22 の触るファイルの列の外）。`restore_and_judge` が全スコープの揃え方から `ChainRule` を組んで渡す
   - `keep_restored_groups` を設計の RestoreGroup の形にする: 印の線は `chain.prev(ChainView::Saved, n)`（n が鎖に入り印が `left`／`right` で相手が記憶の窓のときだけ）、矩形の線は今の (n−1, n)。2 つをつないだ束ごとに今の判定と記録の語で寄せる。束と束の中の並びはスコープの昇順。`joined_with_prev` を消す
@@ -87,7 +87,7 @@
   - 完了の状態: 2 本の檻が緑で、6.1 の印の線を (n−1, n) に戻すと落ちる
   - _Dispatch: mechanical — 設計が入力の形と期待を与えている_
   - _Requirements: 1.2, 1.3, 1.9_
-- [ ] 6.3 `opposite`（C14）の理由を書き、端へ寄せる振る舞いを固める
+- [x] 6.3 `opposite`（C14）の理由を書き、端へ寄せる振る舞いを固める
   - `opposite` の doc に設計の ChainClamp の 2 つ（`JoinLeftOffset` は回さない・辺のスコープとの組は回すが反対の側がほぼ画面の外で端へ）と、記憶からの寄せが通らないことを書く。振る舞いは変えない
   - `follow_work_area_clamp_chain_tests.rs` に設計の Testing の単体 3 の ⑴ ⑵ を置く
   - 完了の状態: 2 本の檻が緑で、`opposite` を変えると落ちる

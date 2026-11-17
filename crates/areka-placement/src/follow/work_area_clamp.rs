@@ -296,7 +296,15 @@ fn neighbor_x(prev: ChainSlot, base: ChainRect, cur: ChainSlot, decision: PairDe
         .map_or(cur.current_x, |m| m.new_x)
 }
 
-/// 反対の側の決め。
+/// 反対の側の決め（並べた位置が横に入らないとき、反対の側を試す）。
+///
+/// - `JoinLeftOffset` は回さない（`audit-placement-core` の 7 回目の決め・C14）。`defaultx` の隙間は
+///   左の側にだけ意味があり、反対の側へ同じ隙間を持ち込めないので、入らなければ端へ寄せる（`Edge`）。
+/// - 辺のスコープとの組（詰め直しが付ける `JoinLeft`／`JoinRight`）は回す側に入る。ただ辺のスコープは
+///   作業領域の端に揃っているので反対の側はほぼ画面の外で、結果は端へ寄せる（`Edge`）。
+///
+/// 通るのは起動の確定と詰め直し（`place_chain_in_work_area`）だけで、記憶からの組の寄せ
+/// （`keep_restored_groups`）はここを通らない。
 fn opposite(decision: PairDecision) -> PairDecision {
     match decision {
         PairDecision::JoinLeft => PairDecision::JoinRight,

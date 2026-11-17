@@ -110,6 +110,49 @@ fn neither_side_fits_clamps_to_area_edge() {
     assert_eq!(out[0].outcome, ChainClampOutcome::Edge);
 }
 
+/// C14 ⑴ 右の辺のスコープ（x 400・幅 600）の左に `JoinLeft` で付けた窓が入らない → 反対の側も
+/// ほぼ画面の外で入らず、端へ寄せる（`opposite` の説明・要件 1.5）。
+#[test]
+fn edge_scope_pair_flips_off_screen_and_clamps_to_edge() {
+    let snap = MonitorSnapshot {
+        work_areas: vec![rect(0, 0, 1000, 700)],
+    };
+    let edge = cr(400, 0, 600, 600);
+    let partner = cr(100, 0, 500, 600);
+    let out = run(
+        &[edge, partner],
+        &[
+            PairDecision::Keep(KeepReason::DesktopEdge),
+            PairDecision::JoinLeft,
+        ],
+        &snap,
+    );
+    assert_eq!(out[0].joined, point(-100, 0));
+    assert_eq!(out[0].to, point(0, 0));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Edge);
+}
+
+/// C14 ⑵ `JoinLeftOffset` の窓が入らないとき反対の側を試さず端へ寄せる（回せば右の隣に入る形）。
+#[test]
+fn join_left_offset_is_not_flipped_and_clamps_to_edge() {
+    let snap = MonitorSnapshot {
+        work_areas: vec![rect(0, 0, 1000, 700)],
+    };
+    let head = cr(0, 0, 300, 600);
+    let partner = cr(300, 0, 500, 600);
+    let out = run(
+        &[head, partner],
+        &[
+            PairDecision::JoinLeft,
+            PairDecision::JoinLeftOffset { offset: 36 },
+        ],
+        &snap,
+    );
+    assert_eq!(out[0].joined, point(-536, 0));
+    assert_eq!(out[0].to, point(0, 0));
+    assert_eq!(out[0].outcome, ChainClampOutcome::Edge);
+}
+
 /// ⑵ 3 体の鎖: 3 番目は並べ替えた**後の** 2 番目を基準に付く（要件 1.5）。
 #[test]
 fn third_joins_flipped_second() {
