@@ -11,7 +11,7 @@
 //! 本ファイルは **ParentDriver 境界**の x64 側窓（main.rs からのみ `#[path]` 取り込み）。
 //! helper（i686）からは参照しない（プロセス分離）。窓/ループ/受け皿セル共有パターンは
 //! helper_window.rs（HelperMessageWindow）の鏡像であり、同一の `wintf-winmsg-executor`
-//! 窓・`MessageLoop::run` フィルタ・PostMessage ハートビートを用いる。
+//! 窓と、待ちの `ipc::pump_until` を用いる。
 
 #![allow(dead_code)] // 一部アクセサは main.rs（ParentDriver）からのみ使用。
 
@@ -19,10 +19,9 @@ use std::cell::Cell;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
+use windows::Win32::Foundation::{HWND, LRESULT};
+use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 use crate::ipc::{self, MsgTag, ResponseSlot};
 
@@ -150,45 +149,13 @@ impl ParentMessageWindow {
     }
 
     /// HELLO 受領（`helper_hwnd` 確定）まで、または `timeout` 経過までメッセージループを回す
-    /// （HWND ハンドシェイク・design.md §184）。返り値 = 受領した helper HWND（u32）。
+    /// （HWND ハンドシェイク・design.md §184・`ipc::pump_until`）。返り値 = 受領した helper HWND（u32）。
     /// 期限内に HELLO が来なければ `None`（観測可能な失敗・ハングしない）。
-    ///
-    /// helper_window.rs::run_until_unload_or と同じく、無入力でも抜けられるよう別スレッドから
-    /// 自窓へ定期 WM_NULL を撃って GetMessage を起こす（heartbeat）。
     pub fn pump_until_hello_or(&self, timeout: Duration) -> Option<u32> {
-        // 既に受領済みなら即返す（helper が先に HELLO を送っている場合）。
-        if let Some(h) = self.window.state().helper_hwnd.get() {
-            return Some(h);
-        }
-        let deadline = Instant::now() + timeout;
-        let state_ptr = self.window.state();
-
-        let hb_hwnd_u32 = ipc::hwnd_to_u32(self.window.hwnd());
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let heartbeat = {
-            let stop = stop.clone();
-            std::thread::spawn(move || {
-                let hwnd = ipc::hwnd_from_u32(hb_hwnd_u32);
-                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
-                    // WM_NULL(0) は無害な起こし用。GetMessage をブロックさせ続けない。
-                    unsafe {
-                        let _ = PostMessageW(Some(hwnd), 0, WPARAM(0), LPARAM(0));
-                    }
-                    std::thread::sleep(Duration::from_millis(50));
-                }
-            })
-        };
-
-        MessageLoop::run(|msg_loop, _msg| {
-            if state_ptr.helper_hwnd.get().is_some() || Instant::now() >= deadline {
-                msg_loop.quit();
-            }
-            FilterResult::Forward
+        let s = self.window.state();
+        ipc::pump_until(self.window.hwnd(), Instant::now() + timeout, || {
+            s.helper_hwnd.get().is_some()
         });
-
-        stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        let _ = heartbeat.join();
-
-        self.window.state().helper_hwnd.get()
+        s.helper_hwnd.get()
     }
 }

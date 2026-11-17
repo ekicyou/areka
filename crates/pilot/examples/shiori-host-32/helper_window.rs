@@ -38,7 +38,6 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{HWND, LRESULT};
 use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 use crate::ipc::{self, MsgTag};
 use crate::shiori_proxy::{ShioriByteProxy, ShioriEntries};
@@ -212,47 +211,12 @@ impl HelperMessageWindow {
     }
 
     /// UNLOAD 受領（`want_quit`）まで、または `max_run` 経過までメッセージループを回す
-    /// （要件 5.1/5.2）。戻り時は窓は生存（Drop は呼び出し側）。
-    ///
-    /// `MessageLoop::run` のフィルタクロージャで毎メッセージ `want_quit`／経過時間を検査し、
-    /// 満たせば `msg_loop.quit()`。窓が無入力で沈黙してもタイムアウトで抜けられるよう、
-    /// 別スレッドから自窓へ定期 WM_NULL を撃ってループを起こす（`heartbeat`）。
+    /// （要件 5.1/5.2・`ipc::pump_until`）。戻り時は窓は生存（Drop は呼び出し側）。
     pub fn run_until_unload_or(&self, max_run: Duration) {
-        let deadline = Instant::now() + max_run;
-        let want_quit_ptr = self.window.state();
-
-        // ループが GetMessage でブロックし続けないよう、定期的に自窓へメッセージを撃つ
-        // ハートビート（`want_quit`／deadline を必ず再評価させる）。别スレッドから PostMessage。
-        let hb_hwnd_u32 = ipc::hwnd_to_u32(self.window.hwnd());
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let heartbeat = {
-            let stop = stop.clone();
-            std::thread::spawn(move || {
-                let hwnd = ipc::hwnd_from_u32(hb_hwnd_u32);
-                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
-                    // WM_NULL(0) は無害な起こし用メッセージ。PostMessage で loop を起こすだけ。
-                    unsafe {
-                        let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(
-                            Some(hwnd),
-                            0, // WM_NULL
-                            windows::Win32::Foundation::WPARAM(0),
-                            windows::Win32::Foundation::LPARAM(0),
-                        );
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-            })
-        };
-
-        MessageLoop::run(|msg_loop, _msg| {
-            if want_quit_ptr.want_quit.get() || Instant::now() >= deadline {
-                msg_loop.quit();
-            }
-            FilterResult::Forward
+        let s = self.window.state();
+        ipc::pump_until(self.window.hwnd(), Instant::now() + max_run, || {
+            s.want_quit.get()
         });
-
-        stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        let _ = heartbeat.join();
     }
 
     /// clean unload（要件 5.3）: pasta を `shiori_unload` → `FreeLibrary`（entries Drop）。

@@ -12,12 +12,16 @@
 // 親だけが使う受け皿・1 往復の送りと、helper だけが使う DEFAULT_TIMEOUT が残る間は外せない。
 #![allow(dead_code)]
 
-use core::cell::RefCell;
+use core::cell::{Cell, RefCell};
 use core::time::Duration;
+use std::time::Instant;
 
 use windows::Win32::Foundation::{ERROR_TIMEOUT, GetLastError, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_COPYDATA};
+use windows::Win32::UI::WindowsAndMessaging::{
+    KillTimer, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetTimer, WM_COPYDATA,
+};
+use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ============================================================================
 // 1. メッセージ種別タグ（MsgTag）
@@ -245,6 +249,48 @@ pub fn send_request(
 }
 
 // ============================================================================
+// 5. 待ち（pump_until）
+// ============================================================================
+
+/// 待ちのタイマーの ID（窓ごとの ID なので、窓の持ち主のほかのタイマーと重ならない値）。
+const PUMP_TIMER_ID: usize = 0x5049;
+/// ループを起こす間隔。
+const PUMP_TICK_MS: u32 = 50;
+
+/// `hwnd` の窓に `SetTimer`（50 ms）を掛けて `MessageLoop::run` を回し、`done()` が真になるか
+/// `deadline` で抜ける。抜けた後に `KillTimer`。戻り値は抜けたときの `done()`。
+///
+/// `hwnd` はこのスレッドが作った窓で、ほかの `MessageLoop::run` のフィルタの中から呼ばない。
+/// 無入力でも `WM_TIMER` がループを起こすので、起こし役のスレッドは要らない。
+pub fn pump_until(hwnd: HWND, deadline: Instant, done: impl Fn() -> bool) -> bool {
+    let first = done();
+    if first || Instant::now() >= deadline {
+        return first;
+    }
+    // SAFETY: hwnd はこのスレッドが作った窓（呼び元の約束）。TIMERPROC 無しなので WM_TIMER が届く。
+    if unsafe { SetTimer(Some(hwnd), PUMP_TIMER_ID, PUMP_TICK_MS, None) } == 0 {
+        // SAFETY: 引数なしの Win32 呼び出し。
+        let code = unsafe { GetLastError() };
+        eprintln!("[ipc] SetTimer に失敗（待たずに戻る）: {}", code.0);
+        return first;
+    }
+    let last = Cell::new(first);
+    MessageLoop::run(|msg_loop, _msg| {
+        let d = done();
+        last.set(d);
+        if d || Instant::now() >= deadline {
+            msg_loop.quit();
+        }
+        FilterResult::Forward
+    });
+    // SAFETY: 上で掛けた同じ窓・同じ ID のタイマーを外す。
+    if let Err(e) = unsafe { KillTimer(Some(hwnd), PUMP_TIMER_ID) } {
+        eprintln!("[ipc] KillTimer に失敗: {e}");
+    }
+    last.get()
+}
+
+// ============================================================================
 // 単体テスト
 // ============================================================================
 
@@ -256,11 +302,9 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc;
-    use std::time::Instant;
 
     use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
     use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-    use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
     /// 判別子の値（1・3・4・5）が下 32 ビットに収まり、u32 を往復すること。
     #[test]
@@ -401,6 +445,50 @@ mod tests {
         assert!(
             elapsed < Duration::from_millis(900),
             "眠りの 1 秒を待たずに戻る: {elapsed:?}"
+        );
+    }
+
+    fn message_only_window() -> Window<()> {
+        Window::new_checked(
+            WindowType::MessageOnly,
+            (),
+            |_s: Pin<&()>, _m: WindowMessage| -> Option<LRESULT> { None },
+        )
+        .expect("message-only 窓を作れる")
+    }
+
+    /// 条件が偽のままなら、起こし役のスレッド無しで約 150 ms の期限に偽で抜ける。
+    #[test]
+    fn pump_until_returns_false_at_deadline_without_waker_thread() {
+        let window = message_only_window();
+        let started = Instant::now();
+        let got = pump_until(window.hwnd(), started + Duration::from_millis(150), || {
+            false
+        });
+        let elapsed = started.elapsed();
+        assert!(!got);
+        assert!(
+            elapsed >= Duration::from_millis(150) && elapsed < Duration::from_secs(2),
+            "期限の付近で抜ける: {elapsed:?}"
+        );
+    }
+
+    /// 条件が 3 回目の呼び出しで真になると、期限（5 秒）よりずっと前に真で抜ける。
+    #[test]
+    fn pump_until_returns_true_soon_after_condition_holds() {
+        let window = message_only_window();
+        let calls = core::cell::Cell::new(0u32);
+        let started = Instant::now();
+        let got = pump_until(window.hwnd(), started + Duration::from_secs(5), || {
+            calls.set(calls.get() + 1);
+            calls.get() >= 3
+        });
+        let elapsed = started.elapsed();
+        assert!(got);
+        assert_eq!(calls.get(), 3, "真になった後は呼ばない");
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "期限を待たずに抜ける: {elapsed:?}"
         );
     }
 
