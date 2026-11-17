@@ -135,7 +135,7 @@ graph TB
 | 2c | 追随の側の記録 | `policy_mapped_position` が「始めの位置が分からない」で `None` を返すたびに `debug!` を 1 行（記録の札 `CHAR_DRAG_ORIGIN_UNKNOWN_TAG`・`entity` 付き）。wintf の始めの `warn!` 1 行（`entity`・`window`・理由）はそのまま | 「どの窓か」は wintf の `warn!` が持つ。追随の側は今の「`DraggingState` 不在」の `debug!` と同じ回数と水準にそろえ、状態を足さない |
 | 3 | C14 の `opposite`（3.3） | **C1**: 振る舞いを変えず doc と檻 | 18.10 の C14 どおり。辺のスコープとの組の反対の側はほぼ画面の外で、結果は端へ寄せる |
 | 4 | `drag_follow.rs` の分け方（3.5） | バルーン単独のドラッグの塊（503〜1000 行・`known_position` を除く）と記録の札（26〜33 行）を `follow/balloon_drag.rs` へ移す。`known_position`（550 行）は残る側の `guard_balloon_position`（488 行）も呼ぶので `drag_follow.rs` に残して `pub(super)` にし、`balloon_drag.rs` は `super::drag_follow::known_position` を引く。`CW_USEDEFAULT` の `use` は両方のファイルに置く | 塊のあいだの呼び合いは、`known_position` の 1 つを除いて一方向（⑴⑵ は ⑶ を呼ばない）。外への名前は `follow.rs` から今のまま（設計の検証の指摘 2） |
-| 5 | 4 回目の直し方（3.4 の D1〜D3） | **D3**（**仮定**・未決 1）: `reanchor_char_windows` は札のある窓を見送り `debug!` を残す。札が外れるフレームの拡大率の相の書き込みが、入れ直した揃え方で置く | 札は「古い作業領域で射影した中間の矩形を書かない」ためにある（`dpi_sync.rs` の doc・要件 5.8）。シェルの置き直しも作業領域へ射影する書き込みなので見送るのが札の意味に合い、`AnchorChange` は「見送りが覆う経路」のまま正しくなる（`EXPECTED` の表も変わらない） |
+| 5 | 4 回目の直し方（3.4 の D1〜D3） | **D3**（2026-11-17 設計の討議 議題 1 で確定）: `reanchor_char_windows` は札のある窓を見送り `debug!` を残す。札が外れるフレームの拡大率の相の書き込みが、入れ直した揃え方で置く | 札は「古い作業領域で射影した中間の矩形を書かない」ためにある（`dpi_sync.rs` の doc・要件 5.8）。シェルの置き直しも作業領域へ射影する書き込みなので見送るのが札の意味に合い、`AnchorChange` は「見送りが覆う経路」のまま正しくなる（`EXPECTED` の表も変わらない） |
 | 6 | `rect_at` の開け方 | `visibility.rs:111` の `rect_at` を `pub(crate)` にし、`follow.rs:166` の私有の `use` から外して `pub(crate) use self::visibility::rect_at;` を 1 行足す | `pub(super)` の項目は広く出し直せない（research 4 節 9） |
 | 7 | 7 回目の束の印 | 相手の束と動かした窓の束を 1 つにして `persist_entries` を 1 回だけ呼ぶ。足される印は今の N+1 回の和と同じ（下の「記憶へ 1 回」） | `send_entries` は束の位置の鍵から触れる組の印を足し、同じ印の鍵を重ねない |
 | 8 | 4 回目が鳴るか（要件 6.1） | 鳴る。設計の段で配置の crate の一時の試しで確かめた（`reanchor_char_windows` を札のある窓に揃え方 `top` で呼ぶと `debug_assert!` が `route=Some(AnchorChange)` で落ちる・試しは消した）。本番で札のある間に切り替えが終わるのを止める所は無い（`frame/switch.rs` と `dpi_sync.rs` のあいだ） | 要件 6.1 の確かめは、タスクで同じ形の檻を先に赤で置いて固める（要件 6.4） |
@@ -462,7 +462,7 @@ pub struct DraggingState {
 - `wintf::ecs::drag::DraggingState`（`wintf::ecs` からも出し直し）の公開の欄 `initial_window_pos` の型が `(f32, f32)` から `Option<(f32, f32)>` へ変わる＝組む側も読む側も壊れる変更。
 - crates.io にある wintf は 0.1.0（タグ `v0.1.0`）。この変更は次のリリース（v0.2.0・まだ出していない）の wintf 0.2.0 に入る。0.x の版で 2 つ目の数を上げる版は壊れる変更を許す（cargo の版の読み）ので、版の決め方は変わらない。
 - 公開の段（`.github/workflows/crates-io.yml`・`tools/crates-io.ps1` の包む確かめ）は型の変更に関係しない。`cargo-semver-checks` のような確かめは使っていない。
-- 木の外の利用者への知らせ: PR の本文と完了の記録に「wintf 0.2.0 で `DraggingState.initial_window_pos` が `Option` になる（位置が取れないドラッグは `None`）」を書く（**仮定**・未決 4）。`doc/crates-io-publish.md` は公開の手順の文書なので直さない。
+- 木の外の利用者への知らせ: PR の本文と完了の記録に「wintf 0.2.0 で `DraggingState.initial_window_pos` が `Option` になる（位置が取れないドラッグは `None`）」を書く（設計の討議 議題 3 で確定）。`/release` が見どころ `doc/release-notes/v{版}.md` をその版の変更から書くときに拾う。`doc/crates-io-publish.md` は公開の手順の文書なので直さない。
 
 ### 配置・追随
 
@@ -549,7 +549,7 @@ pub fn reanchor_char_windows(world: &mut World, windows: &GhostWindows);
 **Implementation Notes**
 
 - 危うさ: 札のある窓だけ、新しい揃え方が当たるのが札の外れるフレーム（最大 30 フレーム後）まで遅れる。バルーンは `resize_window_to` の随伴で、そのフレームに付いて動く。
-- 未決 1 で D1（`AnchorChange` を「見送らないことが正しい経路」へ移す）を採るなら、`reseed.rs` は変えず `window_move.rs` の `deferral_covers_route` の腕 1 つと檻の `EXPECTED` の 1 行と doc を直す。
+- D1（`AnchorChange` を「見送らないことが正しい経路」へ移す）は採らない（設計の討議 議題 1）。札のある窓へ古い作業領域で射影した位置を書くことになり、札の守りに穴が開くため。
 
 ### 配置（写し・文・番号）
 
@@ -593,7 +593,7 @@ pub fn reanchor_char_windows(world: &mut World, windows: &GhostWindows);
 2. 名前を足すときは同じ行に書く（「`window-work-area-clamp` 要件 4.1」「`areka-P0-window-link-directives` タスク 6.2」の形）。行をまたがない（7.4 の仕分けは行で見る）。
 3. 番号が言いたいことを足していない（「task 1.4 で新設」のような来歴だけ）なら消す。
 4. 二重角括弧の task 番号（`[[4.6 の教訓]]` の形・16 行）は括弧をほどき、spec の名前を足すか消す。
-5. 素の要件の番号（「（4.2/4.3/4.7）」の形で grep に当たらないもの）は、同じ説明の中にある番号を直すときに同じ規則で扱う（**仮定**・未決 3）。設計の記号（`D13`・`DD15`・`C5`・「設計の決め 12」）は番号の直しの的にしない。
+5. 素の要件の番号（「（4.2/4.3/4.7）」の形で grep に当たらないもの）は、同じ説明の中にある番号を直すときに同じ規則で扱う（設計の討議 議題 2 で確定・範囲の全部を読んで探し尽くすことはしない）。設計の記号（`D13`・`DD15`・`C5`・「設計の決め 12」）は番号の直しの的にしない。
 6. 999 行の 2 ファイルは同じ行の中で書き換え、行を増やさない。例外表のファイル（`follow/window_move.rs`・`transition_judge_verdict_tests.rs`）は割らない。
 
 規模の目安（今のツリー・下の G2 の仕分けで名前の無い行）: task 190 行（45 ファイル）・指摘 36 行（17 ファイル）・二重角括弧 16 行（4 ファイル）・要件 541 行（56 ファイル）。
@@ -692,11 +692,11 @@ graph LR
 - **G6**（要件 9.4）: `git diff --stat main -- Cargo.toml '**/Cargo.toml' Cargo.lock` が空。
 - 全体テスト: `pwsh -NoProfile -File tools/test-all.ps1` が緑（要件 10.3）。G1〜G6 の結果と行の数を完了の記録に残す（要件 10.4）。
 
-## 未決（設計の討議へ）
+## 未決（2026-11-17 の設計の討議で全部閉じた・開発者「推奨どおり承認」）
 
-1. **4 回目の直し方**: 設計は D3（札のある窓は `reanchor_char_windows` が見送り、札が外れるフレームの拡大率の相が新しい揃え方で置く）で書いた。ギャップ分析は D1（`AnchorChange` を見送らない側へ移す）を推していた。D3 を推す理由は、札が「古い作業領域で射影した中間の矩形を書かない」ためにあり、シェルの置き直しも作業領域へ射影する書き込みだから。D1 なら直す所は `deferral_covers_route` の腕 1 つ・檻の `EXPECTED` の 1 行・doc で、`reseed.rs` は変えない。
+1. ~~4 回目の直し方~~: D3（議題 1）。
 2. ~~164 で離したときに位置が出せないとき~~: 今の縮退を通す（決め 2b・自明な直しで閉じた）。
-3. **素の要件の番号**: 要件 7.4 の grep に当たらない「（4.2/4.3/4.7）」の形を、同じ説明の中の番号を直すときに同じ規則で扱う形で書いた（確かめは 7.4 の 4 つの grep）。設計の記号（`D13`・`DD15`・`C5`）は的にしない。範囲を広げる（素の番号を全部探す）か狭める（grep に当たるものだけ）かを決める。
-4. **wintf の公開の段の知らせ**: `DraggingState.initial_window_pos` の型の変更を、PR の本文と完了の記録に書く形で書いた。リリースの告知や文書に載せるかを決める。
+3. ~~素の要件の番号~~: 同じ説明の中で直すときに同じ規則で扱う（議題 2）。
+4. ~~wintf の公開の段の知らせ~~: PR の本文と完了の記録に書く（議題 3）。
 5. ~~要件 1.9 の「World で」~~: 記憶の戻しの道は World を持たない純関数なので、檻は配置と記憶の形で T6・T8 を組む。要件 1.9 の文を「T6・T8 の形の入力で」に直した（自明な直しで閉じた）。
 6. ~~C22 の触るファイルの列の外~~: 触る（自明な直しで閉じた）。列の外のファイルは `chain_rule.rs`（決め 1）・`resolver.rs`・`spawn.rs`・`windowposition.rs`・`diag.rs`・`resolver_resolve_balloon_tests.rs`（`drag_follow` の名指しの文だけ）・`lib.rs`・`persist_save.rs`・`spawn_follow_pipeline_tests.rs`・`balloon_lock_drag_tests.rs`（どれも `areka-placement`）と、本体 `input_events/drag_tests.rs`（説明と、要れば檻）。C22 の 5 本のどれもこれらに触らない（約束 ⑷ で `audit-emo2-boot-spine` は `areka-placement` に触らない・本体の `input_events/` の持ち主 `input-crate-split`・`audit-areka-input-menu` は C23 以後）。
