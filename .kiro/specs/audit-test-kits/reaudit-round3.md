@@ -50,3 +50,9 @@
 ## 束 B の直しの控え（承認済み）
 - 較正: R1 は `send_close` を元の形（taskkill の文を添える）に戻す → `send_close_records_only_the_exit_code` が赤（cp932 の文が化けて入る）。R5 は `PASTA_DEBUG` の名を変える → `child_receives_env_and_args` が赤
 - 改名: `an_mcp_error_reply_is_refused_on_the_same_link` → `an_mcp_error_reply_is_refused_and_the_next_call_still_answers`（本 spec の design.md・tasks.md が旧名を挙げる・記録として残す）
+
+## 束 A の直しの控え（承認済み）
+- 較正: S1 は NotFound の早い戻りを外す → `a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing` が赤。S4 は `fold_into` の `with_path` を外す → `folding_a_missing_tree_fails_loudly` が赤（文にパスが無い）。S5 は余分な引数を黙って捨てる形に → `an_extra_argument_exits_with_2` が赤（0 で終わる）
+- 改名: `current_rows_are_registered_as_vendored` → `the_rows_with_a_nar_in_the_repository_are_vendored_and_the_rest_are_url_rows`（completed の 6 文書が旧名を挙げる・直さない）
+- S4 は `fold_into` の 3 か所と fold-samples の写しの 2 か所にパスを添えた（ほかの `?` は「少なくとも」の外として残す）
+- 範囲の外（`/kiro-complete` の棚卸で扱う）: `tools/load-flake.ps1` の 32-33 行の説明（「-NoCapture が無いと赤のテストの分しか残らない」）が S1 の後は古い

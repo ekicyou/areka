@@ -4,8 +4,8 @@
 //! # なぜ本 crate に住むか
 //!
 //! `areka-nar` の `#[cfg(test)]` に置くとテストバイナリの内側にしか存在せず、
-//! `ghost-install` の `[dev-dependencies]` から届かない。ここに置けば `areka-nar` 自身の
-//! テストも `ghost-install` のテストも `[dev-dependencies] sample-ghost-kit` の 1 行で
+//! `areka` の `[dev-dependencies]` から届かない。ここに置けば `areka-nar` 自身の
+//! テストも `areka` のテストも `[dev-dependencies] sample-ghost-kit` の 1 行で
 //! 同じ入力を得る。
 //!
 //! # 書けるもの
@@ -317,7 +317,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8> {
 /// 同じ木からは必ず同じバイト列が出る。
 ///
 /// 名前が UTF-8 で表せない場合は、黙って落とさずに [`std::io::ErrorKind::InvalidData`]
-/// を返す。
+/// を返す。読めないフォルダ・ファイルの失敗は種別をそのままに、文へパスを添える。
 pub fn fold_tree(root: &Path) -> std::io::Result<NarBuilder> {
     let mut builder = NarBuilder::new();
     fold_into(&mut builder, root, "")?;
@@ -326,7 +326,9 @@ pub fn fold_tree(root: &Path) -> std::io::Result<NarBuilder> {
 
 /// `dir` の直下を名前順に辿り、`prefix` を冠した名前で `builder` へ足す。
 fn fold_into(builder: &mut NarBuilder, dir: &Path, prefix: &str) -> std::io::Result<()> {
-    let mut children: Vec<_> = std::fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
+    let mut children: Vec<_> = std::fs::read_dir(dir)
+        .and_then(|entries| entries.collect::<std::io::Result<Vec<_>>>())
+        .map_err(|err| with_path(err, "list", dir))?;
     children.sort_by_key(|child| child.file_name());
     for child in children {
         let name = child.file_name().into_string().map_err(|raw| {
@@ -341,15 +343,31 @@ fn fold_into(builder: &mut NarBuilder, dir: &Path, prefix: &str) -> std::io::Res
         })?;
         let path = child.path();
         let joined = format!("{prefix}{name}");
-        if child.file_type()?.is_dir() {
+        if child
+            .file_type()
+            .map_err(|err| with_path(err, "read the type of", &path))?
+            .is_dir()
+        {
             *builder = std::mem::take(builder).dir(joined.clone());
             fold_into(builder, &path, &format!("{joined}/"))?;
         } else {
-            let data = std::fs::read(&path)?;
+            let data = std::fs::read(&path).map_err(|err| with_path(err, "read", &path))?;
             *builder = std::mem::take(builder).file(joined, &data).done();
         }
     }
     Ok(())
+}
+
+/// 入出力の失敗の文にパスを添える（種別は保つ・文は ASCII）。
+fn with_path(err: std::io::Error, what: &str, path: &Path) -> std::io::Error {
+    std::io::Error::new(
+        err.kind(),
+        format!(
+            "{what} {}: {}",
+            crate::ascii(&path.to_string_lossy()),
+            crate::ascii(&err.to_string())
+        ),
+    )
 }
 
 #[cfg(test)]

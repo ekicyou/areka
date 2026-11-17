@@ -1,4 +1,6 @@
-//! 複製の配布と、札による保護・掃除の兄弟テスト（要件 6.5・7.5・7.7・7.9・7.10）。
+//! 複製の配布と、札による保護・掃除の兄弟テスト（要件 1.9・6.5・7.4・7.5・7.7・7.9・9.5・9.7）。
+//!
+//! spec の名を添えていない番号は spec `areka-P0-nar-install` のもの。
 //!
 //! # 「消えていない」も「増えていない」も空振りしやすい
 //!
@@ -11,7 +13,7 @@
 //!
 //! 掃除は札だけを見て持ち主の生死を分ける。だから同じプロセスの別のスレッドから呼んで
 //! も、別のプロセスから呼ぶのと同じ経路を通る（自分の札であっても、削除を共有しない
-//! 開き方をしているので同じプロセスからは消せない）。下の 3 本は ⑴ 2 度目の**取得**が
+//! 開き方をしているので同じプロセスからは消せない）。下のテストは ⑴ 2 度目の**取得**が
 //! 走らせる掃除、⑵ 走りっぱなしの掃除のスレッド、⑶ 8 スレッドが同じ検体を同時に取りに
 //! 行く並走のいずれでも、生きている複製が消えないことを見る。
 
@@ -661,7 +663,7 @@ fn a_tree_moved_aside_keeps_a_held_lease_until_it_is_removed() {
     let namespace = private_namespace();
     let tree = leftover(namespace.path(), "777777-1", false);
     let mut during = None;
-    discard_tree_with(&namespace.path().join(WORK), &tree, "残骸", |gc| {
+    discard_tree_with(&namespace.path().join(WORK), &tree, "leftover tree", |gc| {
         sweep(namespace.path());
         during = Some((gc.to_path_buf(), gc.is_dir(), shelf(namespace.path(), WORK)));
         std::fs::remove_dir_all(gc)

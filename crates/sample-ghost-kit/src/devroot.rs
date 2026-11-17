@@ -24,7 +24,8 @@
 //! └── work/
 //!     ├── <プロセス識別子>-<連番>/       # 配る空の根・展開中の原本
 //!     ├── <プロセス識別子>-<連番>.lock   # 生存の札（開いたまま持つ）
-//!     └── gc-<プロセス識別子>-<連番>/    # `cache-2/` から退き上げた古い原本
+//!     ├── gc-<プロセス識別子>-<連番>/    # 退けた木（古い原本・残骸・前の世代の棚）
+//!     └── gc-<プロセス識別子>-<連番>.lock # 退けた木の札
 //! ```
 //!
 //! 棚の名前の数を上げる前の世代の棚（`cache/` など）は、原本を作るときに退ける。
@@ -816,13 +817,28 @@ pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
 /// 呼び手へ伝える道がここしかない。本 crate はテスト専用で記録層に依存しない
 /// （依存を足さない）ため、宛先は標準エラー出力にする。既に無いのは後始末の目的が
 /// 達成された状態なので黙って通す。残った木と札は次の走行が回収する。
+///
+/// `eprintln!` は libtest が捕まえ、通ったテストの分を捨てるので、標準エラー出力の
+/// 手綱へ直に書く（通ったテストの後始末の失敗も走行の記録に残る）。
 fn report_cleanup(what: &str, result: std::io::Result<()>, path: &Path) {
+    write_cleanup(&mut std::io::stderr(), what, result, path);
+}
+
+/// [`report_cleanup`] の本体。書き先を受け取るのは兄弟テストが字面を読むため。
+fn write_cleanup(
+    out: &mut dyn std::io::Write,
+    what: &str,
+    result: std::io::Result<()>,
+    path: &Path,
+) {
     if let Err(err) = result {
         if err.kind() == std::io::ErrorKind::NotFound {
             return;
         }
         // 頭の `sample-ghost-kit:` と `os error N` は `tools/load-flake.ps1` が字面で読む。
-        eprintln!(
+        // 書けなければ伝える先が無いので捨てる。
+        let _ = writeln!(
+            out,
             "sample-ghost-kit: cleanup failed ({what}): {} ({})",
             crate::ascii(&path.to_string_lossy()),
             crate::ascii(&err.to_string())

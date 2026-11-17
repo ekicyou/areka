@@ -71,9 +71,9 @@ fn pairs(out: &str) -> Vec<(String, String)> {
 /// 登記した検体のうち並びの要所を覆う 3 つ（同梱バルーン 2・0・バルーンの種類）で、1 行 1 組・`key=value`・絶対パス・末尾の区切り記号なしの形で
 /// 根・検体フォルダ・同梱バルーンが出る（要件 1.9）。
 ///
-/// この出力は `tools/perf/` の道具が `folder=` の 1 行として読む。鍵の綴りと並び、値の形
-/// （`..` を畳んだ絶対パス）をここで固定する——受け手は `=` の左右に割った値をそのまま別の
-/// 道具へ渡すので、綴りが揺れたら読めない。
+/// この出力は `tools/package.ps1` の `Read-SamplePaths` が鍵（`folder=`・`balloon.<名>=`）の
+/// 行として読む。鍵の綴りと並び、値の形（`..` を畳んだ絶対パス）をここで固定する——受け手は
+/// `=` の右の値をそのまま別の道具へ渡すので、綴りが揺れたら読めない。
 #[test]
 fn the_command_prints_one_absolute_path_per_line_for_the_chosen_samples() {
     let private = WorkDir::new().expect("私有の場所");
@@ -202,7 +202,8 @@ fn two_runs_in_a_row_each_hand_out_a_root_with_no_boot_record() {
 
 /// 未登録の名前は、理由を**標準エラー**に出して終了コード 2 で終わる（要件 1.4・1.9）。
 ///
-/// 標準出力は空でなければならない——`folder=` を読む側は行が来ないことで失敗に気付く。
+/// 標準出力は空でなければならない（断ったときは何も出さない約束）。読み手の
+/// `tools/package.ps1` は 0 以外の終了コードで止まる。
 #[test]
 fn an_unregistered_name_prints_the_reason_to_standard_error_and_exits_with_two() {
     let (code, out, err) = run("no-such-ghost");
@@ -228,6 +229,24 @@ fn no_argument_exits_with_2() {
     assert_eq!(code, Some(2), "引数なしの終了コード: {err}");
     assert!(out.is_empty(), "標準出力には何も出さないこと: {out:?}");
     assert!(!err.is_empty(), "理由を標準エラーに出すこと");
+}
+
+/// 2 つ目より後の引数は黙って捨てずに、標準エラーへ ASCII の理由を出して終了コード 2。
+/// 標準出力には何も出さない（`tools/package.ps1` は引数を 1 つしか渡さない）。名前は
+/// 登記済みのもの（余分な引数を捨てると 0 で終わる形を赤にする）で、根を作ってしまう
+/// 形でも私有の場所の下だけを触る。
+#[test]
+fn an_extra_argument_exits_with_2() {
+    let private = WorkDir::new().expect("私有の場所");
+    let (code, out, err) = finish(
+        std::process::Command::new(COMMAND)
+            .arg("emo2-kakukaku-wplimit")
+            .arg("extra")
+            .env("CARGO_TARGET_DIR", private.path()),
+    );
+    assert_eq!(code, Some(2), "余分な引数の終了コード: {err}");
+    assert!(out.is_empty(), "標準出力には何も出さないこと: {out:?}");
+    assert_eq!(err, "nar-sample-path: unexpected argument extra\n");
 }
 
 /// 登記の URL の行の (名前, URL)。母数 0 で緑にしない較正つき。

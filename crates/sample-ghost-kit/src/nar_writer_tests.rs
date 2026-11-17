@@ -311,6 +311,11 @@ fn folding_a_missing_tree_fails_loudly() {
     let root = work.path().join("missing");
     let err = fold_tree(&root).expect_err("無いフォルダは黙って空を返さない");
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    let message = err.to_string();
+    assert!(
+        message.starts_with("list ") && message.contains("missing"),
+        "読めなかったフォルダのパスを文に添える: {message}"
+    );
 }
 
 #[test]

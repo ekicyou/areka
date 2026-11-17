@@ -24,7 +24,7 @@
 //! - 0: 成功。
 //! - 3: URL の行の書庫かハッシュのファイルが置き場に無い・ハッシュのファイルの形が違う・
 //!   書庫と合わない。理由は ASCII の英語で標準エラーへ出る（直し方は `tools/sample-fetch.ps1`）。
-//! - 2: ほかの失敗（未登録の名前・展開や入出力の失敗・置き場が決まらない）。
+//! - 2: ほかの失敗（未登録の名前・余分な引数・展開や入出力の失敗・置き場が決まらない）。
 //!
 //! 断ったとき（終了コード 2・3）は標準出力へ何も出さない。標準出力への書き込みが途中で
 //! 失敗したとき（2）だけは、書けた行が残りうる。読み手の `tools/package.ps1` は 0 以外なら
@@ -67,12 +67,21 @@ use sample_ghost_kit::{SAMPLES, SampleError, SampleSource};
 /// 実機走行の絶対パスか、`--fetch-list` の登記を印字する。
 ///
 /// 引数が無いときは空の検体名として扱う——[`sample_ghost_kit::manual_paths`] が既知の
-/// 名前の一覧を添えて断るので、打ち間違いも指定忘れも同じ 1 本の道を通る。
+/// 名前の一覧を添えて断るので、打ち間違いも指定忘れも同じ 1 本の道を通る。2 つ目より
+/// 後の引数は黙って捨てずに 2 で断る（標準出力へは何も出さない）。
 fn main() {
-    let name = std::env::args().nth(1).unwrap_or_default();
+    let mut args = std::env::args().skip(1);
+    let name = args.next().unwrap_or_default();
     let mut out = std::io::stdout().lock();
     let mut err = std::io::stderr().lock();
-    let code = if name == "--fetch-list" {
+    let code = if let Some(extra) = args.next() {
+        let _ = writeln!(
+            err,
+            "nar-sample-path: unexpected argument {}",
+            sample_ghost_kit::ascii(&extra)
+        );
+        2
+    } else if name == "--fetch-list" {
         fetch_list(&mut out, &mut err)
     } else {
         run(&name, &mut out, &mut err)

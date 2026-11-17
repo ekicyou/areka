@@ -94,10 +94,16 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     if !check_only {
         let name = folder_name(&source)?;
-        fs::copy(folded_nar(&scratch, &name), vendored_nar(&root, &name))?;
+        let (from, to) = (folded_nar(&scratch, &name), vendored_nar(&root, &name));
+        fs::copy(&from, &to).map_err(|err| copy_failed(&from, &to, &err))?;
     }
     println!("round trip matched");
     Ok(())
+}
+
+/// 写しの失敗の文に両端のパスを添える（ASCII は `main` の出口が写す）。
+fn copy_failed(from: &Path, to: &Path, err: &io::Error) -> String {
+    format!("copy {} to {}: {err}", from.display(), to.display())
 }
 
 /// 引数を `--from <フォルダ>` と `--check` に読む。ほかの語は黙って捨てずに断る
@@ -148,7 +154,8 @@ fn fold_one(
     for relative in tracked {
         let to = stage.join(relative.replace('/', MAIN_SEPARATOR_STR));
         fs::create_dir_all(to.parent().expect("写し先には必ず親がある"))?;
-        fs::copy(source.join(relative), &to)?;
+        let from = source.join(relative);
+        fs::copy(&from, &to).map_err(|err| copy_failed(&from, &to, &err))?;
     }
     let staged = walk(&stage)?;
     assert_eq!(
@@ -334,7 +341,7 @@ fn walk(dir: &Path) -> io::Result<BTreeSet<PathBuf>> {
     Ok(found)
 }
 
-/// 根の直下の格納先ごとのファイル数を「ghost/emo2=110」の形で（同梱バルーンは本体のフォルダの中に数える）。
+/// 根の直下の格納先ごとのファイル数を「ghost/<名>=<件数>」の形で（同梱バルーンは本体のフォルダの中に数える）。
 fn folder_counts(root: &Path, files: &BTreeSet<PathBuf>) -> String {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for file in files {

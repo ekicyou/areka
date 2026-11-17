@@ -1,7 +1,8 @@
 //! 見本 `fold-samples` の写しの式と書き先の順のテスト。
 //!
-//! どれも [`WorkDir`] の下に組んだ偽のリポジトリ根で `fold_one` を回し、本物の
-//! `vendors/` には触らない。`git` を呼ぶ `main` は通らない（追跡の一覧は引数で渡す）。
+//! 引数の読み（`parse_args`）の 1 本を除き、どれも [`WorkDir`] の下に組んだ偽のリポジトリ根で
+//! `fold_one` を回し、本物の `vendors/` には触らない。`git` を呼ぶ `main` は通らない（追跡の
+//! 一覧は引数で渡す）。
 
 use super::*;
 use sample_ghost_kit::{WorkDir, install_txt};
@@ -85,6 +86,12 @@ fn check_only_counts_a_one_byte_difference_from_the_vendored_archive() {
     let vendored = vendored_nar(&fake_root, "tiny");
     fs::create_dir_all(vendored.parent().unwrap()).unwrap();
     fs::copy(folded_nar(&folded, "tiny"), &vendored).unwrap();
+    // 書き替える前は 0（0 の側を確かめないと、何でも不一致に数える形を見逃す）。
+    let same = fake_root.join("target").join("check-same");
+    assert_eq!(
+        fold_one(&fake_root, &same, &source, &tracked, true).unwrap(),
+        0
+    );
     // 元のツリーの 1 ファイルを 1 バイトだけ変え、`vendors/` の書庫と食い違わせる。
     fs::write(
         source

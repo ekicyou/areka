@@ -1,4 +1,4 @@
-//! `devroot` の兄弟テスト。
+//! `devroot` の兄弟テスト。要件の番号は spec `areka-P0-nar-install` のもの。
 //!
 //! # 「残っていない」を空振りにしない
 //!
@@ -343,4 +343,35 @@ fn manual_root_refuses_a_tree_it_cannot_remove() {
     }
     assert!(held_file.is_file(), "掴まれたファイルは消えていない");
     drop(held);
+}
+
+/// 後始末の失敗は書き先へ `sample-ghost-kit: cleanup failed (` で始まる 1 行を書き、
+/// 既に無い（`NotFound`）ときは何も書かない（`tools/load-flake.ps1` がこの頭と
+/// `os error N` を字面で読む）。
+#[test]
+fn a_cleanup_failure_is_written_to_the_given_sink_and_not_found_writes_nothing() {
+    let path = Path::new("held");
+
+    let mut failed = Vec::new();
+    write_cleanup(
+        &mut failed,
+        "remove the work folder",
+        Err(std::io::Error::from_raw_os_error(5)),
+        path,
+    );
+    let failed = String::from_utf8(failed).expect("ASCII で書く");
+    assert!(
+        failed.starts_with("sample-ghost-kit: cleanup failed (remove the work folder): held ("),
+        "頭の字面: {failed}"
+    );
+    assert!(failed.contains("os error 5"), "os error N を保つ: {failed}");
+
+    let mut not_found = Vec::new();
+    write_cleanup(
+        &mut not_found,
+        "remove the work folder",
+        Err(std::io::ErrorKind::NotFound.into()),
+        path,
+    );
+    assert!(not_found.is_empty(), "既に無いのは黙って通す");
 }

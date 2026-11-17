@@ -1,7 +1,8 @@
 //! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
 //! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5。`emily4` の 1 本は spec:
 //! `areka-P0-emily-ghost-verification` 要件 1.10・2.3・7.3。`dot_sakura` の 1 本は spec:
-//! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。
+//! `areka-P0-dot-sakura-specimen` 要件 2.4・5.7）。spec の名を添えていない番号は spec
+//! `areka-P0-nar-install` のもの（ほかの spec の番号はその場で spec の名を添える）。
 //!
 //! 窓口は検体の書庫（`vendors/sample_ghost/<名>.nar` か、URL の行なら取り寄せの置き場）を
 //! 展開した原本から**使い捨ての複製**を作って配る。
@@ -125,7 +126,7 @@ fn fetched_rows() -> Vec<(&'static str, &'static str)> {
 /// 書庫をリポジトリに置く行は `Vendored`、ほかは URL の行
 /// （spec `areka-P0-sample-url-fetch` 要件 1.1・1.4・5.2）。
 #[test]
-fn current_rows_are_registered_as_vendored() {
+fn the_rows_with_a_nar_in_the_repository_are_vendored_and_the_rest_are_url_rows() {
     let vendored: Vec<&str> = SAMPLES
         .iter()
         .filter(|s| s.source == SampleSource::Vendored)
@@ -157,7 +158,7 @@ fn current_rows_are_registered_as_vendored() {
     );
 }
 
-/// 登記表の全部の URL の行が欄の形の判定を通る（要件 1.5・5.2）。
+/// 登記表の全部の URL の行が欄の形の判定を通る（spec `areka-P0-sample-url-fetch` 要件 1.5・5.2）。
 /// 母数 0 で緑にしない較正: URL の行が 1 つ以上在る。
 #[test]
 fn every_fetched_row_has_a_well_formed_url_and_name() {
@@ -168,7 +169,7 @@ fn every_fetched_row_has_a_well_formed_url_and_name() {
     }
 }
 
-/// URL の行の書庫はリポジトリに置かず、今の行の書庫は置いてある（要件 1.3・1.4・5.3）。
+/// URL の行の書庫はリポジトリに置かず、書庫をリポジトリに置く行（Vendored）の書庫は置いてある（spec `areka-P0-sample-url-fetch` 要件 1.3・1.4・5.3）。
 #[test]
 fn only_vendored_rows_have_a_nar_in_the_repository() {
     let rows = fetched_rows();
@@ -186,7 +187,11 @@ fn only_vendored_rows_have_a_nar_in_the_repository() {
         .filter(|s| s.source == SampleSource::Vendored)
     {
         let nar = devroot::nar_dir().join(format!("{}.nar", sample.name));
-        assert!(nar.is_file(), "今の行の書庫が無い: {}", nar.display());
+        assert!(
+            nar.is_file(),
+            "Vendored の行の書庫が無い: {}",
+            nar.display()
+        );
     }
 }
 
@@ -310,7 +315,7 @@ fn unknown_balloon_fails_with_the_known_balloon_list() {
 
 /// 展開結果の要素が登記と食い違えば、理由付きの失敗になる（要件 1.1・1.3）。
 ///
-/// 食い違いは 4 通り——本体のフォルダ名・種別・同梱の欠け・同梱の余り。対照として
+/// 食い違いは本体のフォルダ名・種別・同梱の欠け・同梱の余り。対照として
 /// 登記どおりの `.nar` が通ることも見る（照合が「常に赤」ではないことの較正）。
 #[test]
 fn a_tree_that_disagrees_with_the_registry_row_is_refused() {
@@ -678,7 +683,7 @@ fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
     );
 }
 
-/// `descript.txt` の `name` の行は置き換え、無ければ足す（改行の形は元に合わせる・要件 9.1）。
+/// `descript.txt` の `name` の行は置き換え、無ければ足す（改行の形は元に合わせる・spec: `areka-P0-shell-balloon-switch` 要件 9.1）。
 #[test]
 fn named_descript_replaces_the_name_line_or_appends_one() {
     assert_eq!(
@@ -769,5 +774,7 @@ fn the_other_errors_are_shown_in_ascii_only() {
 
     for text in shown {
         assert!(text.is_ascii(), "{text}");
+        // 日本語を落とさず写したこと（`is_ascii` だけでは捨てても緑になる）。
+        assert!(text.contains("\\u{"), "{text}");
     }
 }

@@ -12,7 +12,9 @@
 //!
 //! # 引き方
 //!
-//! 消費 crate の `Cargo.toml` に 1 行加える。**`[dev-dependencies]` からのみ**引く。
+//! 消費 crate の `Cargo.toml` に 1 行加える。**`[dev-dependencies]` からのみ**引く
+//! （本番の crate の `[dependencies]` には置かない。`[[bin]]` を持つテスト専用の
+//! `real-run-kit` だけは `[dependencies]` に置く）。
 //!
 //! ```toml
 //! [dev-dependencies]
