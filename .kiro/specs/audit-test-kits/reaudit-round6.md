@@ -43,3 +43,9 @@
 - G4 with_default_guard_test.rs ~255-270 `kit_default_enables_env_filter` が別のフィーチャ経由の `env-filter` を見ない → 判定は変えず `shortcut:` を 1 行
 - G5 with_default_guard_test.rs ~115-116「1 件」→ 数を外す
 - G6 sample_path_guard_test.rs ~47-49・225-227「今日実体があるのは ⑶ だけ」→ 「どの形に実体があるかは [`EXCLUSION_FORMS`] が宣言する」の類
+
+## 束 B の直しの控え（承認済み・R5 は連鎖 3 回目 R3 → 4 回目 R2 → 5 回目 R6 → 6 回目 R5 として Fable が直し、Fable が確かめた）
+- 連鎖 R5 の結論: `mcp_tests.rs` の module doc から試験の組分けの一覧を消し、「確かめる中身は各テストの名前と説明が持ち、ここには並べない（並べた一覧はテストの足し引きで古びる）。偽の子との試験は `tests/fake_mcp_test.rs`」の 2 行にした。数も組も書かないので、テストの足し引きで偽にならない。同じ形の一覧が残っていた `output_tests.rs` の module doc も同じ 2 行の形にして、往復が移らないようにした
+- レビューの差し戻し 1 回: 初めの文「各テストの説明が持ち」が偽だった（mcp_tests.rs の 17 本のうち `///` の説明を持つのは 4 本だけ）→「各テストの名前と説明が持ち」に直した
+- R3: `run.rs` の「番犬と同じ 60 秒」を消した。`launch.rs` の公開の説明に、同じ理由の写しが 2 か所あった（`safety_exit` の「既定 45 秒」・`deadline` の「既定 60 秒」）。指摘の行の外だが、これも「既定は `run.rs` の `Limits::default`」に替えた。crate の説明に既定の秒数の写しは残っていない（1 回目 R5 と合う）
+- R1・R2・R4・R6 は説明と `shortcut:` だけ。どの差分もコメントの行だけで、振る舞いは変わらない。較正・削除・改名は無し

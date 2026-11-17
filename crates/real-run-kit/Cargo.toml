@@ -25,6 +25,7 @@ temp-path-kit = { path = "../temp-path-kit" }
 # 待受の観測（scan）と既定の時間（config::Timeouts）を中継と同じ定義から読む。
 areka-mcp-bridge = { path = "../areka-mcp-bridge" }
 # 本物の受け口（start・ToolRegistry など）。偽の子と、mcp_tests が同じプロセスに立てる受け口が使う。
+# 窓口の launch も、待受の番号の環境変数の名前（PORT_ENV）をここから引く。
 areka-mcp = { path = "../areka-mcp" }
 # 落ちた回の写しの複写（copy_tree_atomic＝D-6）。
 areka-user-data = { path = "../areka-user-data" }

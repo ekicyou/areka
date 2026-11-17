@@ -16,6 +16,8 @@ pub fn fake(steps: &str) -> RealRun {
 }
 
 /// その番号のプロセスが偽の子として生きているか（`tasklist` の行に実行ファイルの名前が在るか）。
+///
+/// shortcut: 番号と名前だけで引くので、止まった子の番号を並走する別の偽の子が使い回すと「生きている」と読んで偽の赤になる、揺れたら起動時刻でも照らす形に替える。
 pub fn alive(pid: u32) -> bool {
     let out = Command::new("tasklist")
         .args(["/FI", &format!("PID eq {pid}"), "/NH"])

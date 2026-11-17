@@ -101,13 +101,13 @@ impl RealRun {
         self
     }
 
-    /// 保険の自動終了（既定 45 秒）。
+    /// 保険の自動終了（既定は `run.rs` の `Limits::default`）。
     pub fn safety_exit(mut self, after: Duration) -> RealRun {
         self.limits.safety_exit = after;
         self
     }
 
-    /// どの待ちにも使う締切（3.3・既定 60 秒）。
+    /// どの待ちにも使う締切（3.3・既定は `run.rs` の `Limits::default`）。
     pub fn deadline(mut self, limit: Duration) -> RealRun {
         self.limits.deadline = limit;
         self
@@ -139,7 +139,8 @@ impl RealRun {
     /// # Panics
     ///
     /// 仲介が揃わない（2.3・2.4）・検体を取れない・子を起こせない（実行ファイルの場所と理由＝1.10）。
-    /// 起こせなかった回の置き場は、panic の途中で破棄されるので落ちた回として残る（6.1）。
+    /// 回の置き場を作り終えた後に落ちたときだけ、置き場は panic の途中で破棄されて落ちた回として残る（6.1）。
+    /// それより前（実行ファイル・仲介・置き場と検体の写し）で落ちた回は残らない。
     pub fn spawn(mut self) -> Run {
         let exe = abs(&self.areka_exe);
         // 仲介は exe の隣を見るので、先に exe を確かめて場所と理由で落とす（1.10）。

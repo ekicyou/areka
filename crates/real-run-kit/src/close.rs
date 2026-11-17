@@ -3,7 +3,8 @@
 //! 閉じる知らせは `taskkill /PID <番号>`（`/F` なし・`/T` なし）＝利用者が窓を閉じるのと同じ
 //! 閉じる要求。送る直前に取っ手の `try_wait` で子が生きていることを見るので、届くのは窓口が
 //! 起こした子だけ（取っ手を持つ間、OS はその番号を使い回さない＝5.6）。止めるのは取っ手への
-//! `Child::kill` だけで、名前やほかの番号では止めない。時間はすべて引数で受ける（`Limits` に頼らない）。
+//! `Child::kill` だけで、名前やほかの番号では止めない。時間は呼び手が渡す
+//! （`close`・`wait_exit` は欄ごとの値・`stop_on_drop` は `Limits`）。既定の値はここでは作らない。
 
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus};

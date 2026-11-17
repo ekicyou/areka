@@ -16,7 +16,7 @@ use crate::output::{self, ChildExited, WaitEnd};
 /// 既定の時間（D-13）。`safety_exit < deadline` を兄弟のテストが固定する（1.8）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Limits {
-    /// 各待ちの始まりから数える締切（今の番犬と同じ 60 秒）。
+    /// 各待ちの始まりから数える締切。
     pub deadline: Duration,
     /// 子の起動から数える保険の自動終了（締切より短い＝窓口が止めるより先に子が自分で終わる）。
     pub safety_exit: Duration,
